@@ -4,12 +4,17 @@ Soirée de mini-jeux multijoueurs **en ligne**, à distance, entre 2 et 4+ amis.
 
 ## Statut actuel
 
-✅ Comptes (inscription / connexion)
-✅ Création de profils (pseudo, avatar)
+✅ Comptes (inscription / connexion), profils (pseudo, avatar)
 ✅ Salons avec code à 6 caractères, joignables depuis n'importe où dans le monde
 ✅ Liste des joueurs et scores synchronisés en direct
-✅ **Quiz Éclair** jouable en réseau (1er mini-jeu branché, sert de modèle pour les 7 autres)
-⏳ Les 7 autres mini-jeux (Mot Mystère, Tour du Monde, Duel de Réflexes, Memory, Puissance 4, Simon, Calcul Express) restent à porter sur ce même modèle réseau — ils existaient déjà en local, il reste à les connecter à Supabase Realtime comme le Quiz.
+✅ Interface bilingue FR/EN (bouton en haut à droite)
+✅ **Quiz Éclair** en réseau (questions synchronisées par l'hôte, scores atomiques)
+✅ **Piano Escape Room** 🎹 — escape game coopératif : 5 salles, piano jouable, énigmes de musique classique, code final. Le premier qui résout fait avancer toute l'équipe (+3 pour lui, +1 pour les autres).
+✅ Records : chaque partie enregistre les points dans `game_results`, et les totaux de profil se mettent à jour automatiquement (trigger SQL).
+🥚 Quelques easter eggs sont cachés dans le site. Indice : les grands compositeurs ne font pas de soupe.
+⏳ Prochains portages possibles : Mot Mystère, Puissance 4, Réflexes, Memory, Simon, Calcul.
+
+> ⚠️ Après chaque mise à jour du code, pensez à exécuter les éventuels fichiers `supabase/upgrade-XXX.sql` dans le SQL Editor de Supabase. Pour cette version : `upgrade-001.sql`.
 
 ## 1. Configuration locale
 

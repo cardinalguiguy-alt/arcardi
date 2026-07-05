@@ -1,13 +1,14 @@
 "use client";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
+import { useLang } from "@/lib/i18n";
+import Brand from "@/components/Brand";
 
 const AVATARS = ["🦊", "🐙", "🦖", "🐸", "🦄", "🐼", "🤖", "👾", "🐯", "🦉"];
 
 export default function Signup() {
-  const router = useRouter();
+  const { lang, setLang, t } = useLang();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [username, setUsername] = useState("");
@@ -31,13 +32,11 @@ export default function Signup() {
   if (sent) {
     return (
       <div className="wrap">
+        <Brand lang={lang} setLang={setLang} t={t} />
         <div className="panel">
-          <h1>📬 Vérifie tes emails</h1>
-          <p className="hint">
-            On a envoyé un lien de confirmation à <b>{email}</b>. Clique dessus pour activer ton compte,
-            puis reviens te connecter.
-          </p>
-          <Link className="btn" href="/login">Aller à la connexion</Link>
+          <h1>{t("checkEmail")}</h1>
+          <p className="hint">{t("checkEmailHint")} <b>{email}</b>. {t("checkEmailHint2")}</p>
+          <Link className="btn" href="/login">{t("goLogin")}</Link>
         </div>
       </div>
     );
@@ -45,17 +44,15 @@ export default function Signup() {
 
   return (
     <div className="wrap">
-      <div className="brand">
-        <div className="tiles">{"ARCARDI".split("").map((c, i) => <span className="tile" key={i}>{c}</span>)}</div>
-      </div>
+      <Brand lang={lang} setLang={setLang} t={t} />
       <div className="panel">
-        <h1>Créer un compte</h1>
-        <p className="hint">Un compte par joueur — vos scores et records vous suivront à chaque soirée.</p>
+        <h1>{t("signup")}</h1>
+        <p className="hint">{t("signupHint")}</p>
         <form onSubmit={handleSignup}>
-          <label>Pseudo</label>
-          <input type="text" value={username} onChange={e => setUsername(e.target.value)} placeholder="Ton pseudo" maxLength={20} required />
+          <label>{t("username")}</label>
+          <input type="text" value={username} onChange={e => setUsername(e.target.value)} maxLength={20} required />
 
-          <label>Avatar</label>
+          <label>{t("avatar")}</label>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             {AVATARS.map(a => (
               <button type="button" key={a} onClick={() => setAvatar(a)}
@@ -67,16 +64,16 @@ export default function Signup() {
             ))}
           </div>
 
-          <label>Email</label>
+          <label>{t("email")}</label>
           <input type="email" value={email} onChange={e => setEmail(e.target.value)} required />
 
-          <label>Mot de passe</label>
+          <label>{t("password")}</label>
           <input type="password" value={password} onChange={e => setPassword(e.target.value)} minLength={6} required />
 
           {error && <p className="err">{error}</p>}
-          <button className="btn" disabled={loading}>{loading ? "Création…" : "🚀 Créer mon compte"}</button>
+          <button className="btn" disabled={loading}>{loading ? "…" : t("signupBtn")}</button>
         </form>
-        <p className="switch-line">Déjà un compte ? <Link href="/login">Se connecter</Link></p>
+        <p className="switch-line">{t("hasAccount")} <Link href="/login">{t("login")}</Link></p>
       </div>
     </div>
   );
