@@ -381,20 +381,38 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
   background:rgba(201,162,75,.08); border:1.5px solid var(--dia); color:var(--dia);
   font-size:12.5px; font-weight:700; margin-bottom:14px; line-height:1.4;
 }
-/* Conteneur de la scène 3D : hauteur fixe (le Canvas r3f se cale dessus en 100%/100%),
-   coins arrondis, léger relief — la scène elle-même gère son propre éclairage/brouillard. */
+/* Conteneur de la scène illustrée : hauteur fixe, coins arrondis, léger relief. */
 .diapason-stage-wrap{
   position:relative; width:100%; height:360px; border-radius:16px; overflow:hidden;
   border:1.5px solid var(--line); background:#05060b; margin-top:8px;
   box-shadow:0 10px 30px rgba(0,0,0,.4);
 }
-.diapason-stage-wrap canvas{ outline:none; }
-/* Vignette CSS posée par-dessus le canvas : assombrit les bords, unifie l'ambiance
-   sans dépendre d'un pipeline de post-processing 3D supplémentaire. */
+/* Vignette CSS posée par-dessus l'illustration : assombrit les bords, unifie
+   l'ambiance, ajoute un léger grain filmique. */
 .diapason-vignette{
   position:absolute; inset:0; pointer-events:none;
-  background:radial-gradient(ellipse at 50% 45%, rgba(0,0,0,0) 40%, rgba(0,0,0,.55) 100%);
+  background:
+    radial-gradient(ellipse at 50% 45%, rgba(0,0,0,0) 40%, rgba(0,0,0,.55) 100%),
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='matrix' values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.035 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  background-blend-mode: normal, overlay;
 }
+/* Zones cliquables de l'illustration (murs, porte, cadrans, tube, interrupteur) */
+.dia-hotspot{ cursor:pointer; }
+/* Vacillement discret de la lampe une fois allumée */
+@keyframes diaFlicker{
+  0%,100%{ opacity:1; }
+  40%{ opacity:.92; }
+  52%{ opacity:.78; }
+  60%{ opacity:.95; }
+  75%{ opacity:.85; }
+}
+.dia-lamp-glow-lit{ animation:diaFlicker 3.6s ease-in-out infinite; }
+.dia-lamp-bulb-lit{ animation:diaFlicker 3.6s ease-in-out infinite; }
+/* Brume basse, dérive lente et continue */
+@keyframes diaFogDriftA{ 0%{ transform:translateX(-24px); } 100%{ transform:translateX(24px); } }
+@keyframes diaFogDriftB{ 0%{ transform:translateX(18px); } 100%{ transform:translateX(-30px); } }
+.dia-fog-a{ animation:diaFogDriftA 14s ease-in-out infinite alternate; }
+.dia-fog-b{ animation:diaFogDriftB 19s ease-in-out infinite alternate; }
 .diapason-examine-box{
   margin-top:10px; padding:10px 14px; border-radius:12px; background:rgba(255,255,255,.04);
   border:1px solid var(--line); font-style:italic;

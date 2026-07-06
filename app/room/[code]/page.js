@@ -1,7 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import dynamic from "next/dynamic";
 import { supabase } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/i18n";
 import Brand from "@/components/Brand";
@@ -14,10 +13,7 @@ import ConnectFour from "@/components/ConnectFour";
 import PetitsChevaux from "@/components/PetitsChevaux";
 import EchoesRoom from "@/components/EchoesRoom";
 import RoomChat from "@/components/RoomChat";
-
-// Chargement dynamique SANS rendu serveur : le moteur 3D (react-three-fiber /
-// WebGL) ne doit jamais s'exécuter côté serveur.
-const DiapasonGame = dynamic(() => import("@/components/diapason/DiapasonGame"), { ssr: false });
+import DiapasonGame from "@/components/diapason/DiapasonGame";
 
 // Métadonnées d'affichage de chaque jeu : icône, couleur d'accent (variable
 // CSS existante), et clés i18n pour le nom / la description courte de la

@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import Crossfade from "@/components/Crossfade";
-import DiapasonScene from "./DiapasonScene";
+import RoomIllustration from "./RoomIllustration";
 import { genProloguePuzzle } from "./puzzle";
 import { SYMBOLS } from "./constants";
 
@@ -27,11 +27,6 @@ import { SYMBOLS } from "./constants";
    calculé en local par chaque client et n'est jamais synchronisé.
    ========================================================================== */
 
-const VIEWPOINTS = {
-  entrance: { position: [1.0, 1.6, 1.6], lookAt: [3.4, 1.5, -0.5] },
-  door: { position: [-0.4, 1.6, -1.2], lookAt: [-0.6, 1.5, -3.85] },
-};
-
 const BASE_POINTS = 15;
 
 function symbolLabelKey(sym) {
@@ -46,6 +41,7 @@ export default function DiapasonGame({ room, me, isHost, players, t, lang, onFin
   const [channelReady, setChannelReady] = useState(false);
   const [viewpointKey, setViewpointKey] = useState("entrance");
   const [dialValues, setDialValues] = useState([0, 0, 0]);
+  const [lampLit, setLampLit] = useState(false);
   const [doorOpen, setDoorOpen] = useState({ est: false, ouest: false });
   const [myDoorLocked, setMyDoorLocked] = useState(false);
   const [wrongShake, setWrongShake] = useState(false);
@@ -68,6 +64,7 @@ export default function DiapasonGame({ room, me, isHost, players, t, lang, onFin
       setDoorOpen({ est: false, ouest: false });
       setMyDoorLocked(false);
       setDialValues([0, 0, 0]);
+      setLampLit(false);
       setViewpointKey("entrance");
       setExamine(null);
       setMyGain(0);
@@ -180,10 +177,20 @@ export default function DiapasonGame({ room, me, isHost, players, t, lang, onFin
   }
 
   function examineText() {
+    if (examine === "dark-search") return t("diapasonSearchDark");
+    if (examine === "switch-found") return t("diapasonSwitchFound");
+    if (!lampLit) return t("diapasonTooDark");
     if (examine === "tube") return t("diapasonExamineTube");
     if (examine === "door") return t("diapasonExamineDoor");
     if (examine === "plaque") return t("diapasonExaminePlaque");
     return null;
+  }
+
+  function handleExamine(key) {
+    if (key === "switch-found" && !lampLit) {
+      setLampLit(true);
+    }
+    setExamine(key);
   }
 
   const accent = "#C9A24B";
@@ -192,140 +199,145 @@ export default function DiapasonGame({ room, me, isHost, players, t, lang, onFin
     <div className="panel" style={{ maxWidth: 760 }}>
       <h1>{t("diapasonTitle")}</h1>
 
-      <Crossfade id={phase === "playing" ? "playing" : phase}>
-        {phase === "intro" && (
-          <div>
-            {players.length < 2 ? (
-              <p className="muted">{t("diapasonNotEnough")}</p>
-            ) : !needsPick ? (
-              <p className="muted">{t("diapasonStarting")}</p>
-            ) : isHost ? (
-              <div>
-                <p className="hint">{t("diapasonPickHint")}</p>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, margin: "12px 0 16px" }}>
-                  {players.map((p) => {
-                    const on = selected.includes(p.profile_id);
-                    return (
-                      <button
-                        key={p.id}
-                        onClick={() => toggleSelect(p.profile_id)}
-                        style={{
-                          display: "flex", alignItems: "center", gap: 6, padding: "8px 12px", borderRadius: 99,
-                          border: `2px solid ${on ? "var(--p3)" : "var(--line)"}`,
-                          background: on ? "rgba(182,240,76,.12)" : "rgba(255,255,255,.04)",
-                          fontWeight: 700, fontSize: 13, color: "var(--ink)",
-                        }}
-                      >
-                        <span>{p.profiles?.avatar}</span><span>{p.profiles?.username}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-                <button className="btn" disabled={selected.length !== 2} onClick={confirmPick}>{t("diapasonPickConfirm")}</button>
-              </div>
-            ) : (
-              <p className="muted">{t("diapasonWaitPick")}</p>
-            )}
-          </div>
-        )}
-
-        {phase === "playing" && puzzle && (
-          <div>
-            {isPlayer && (
-              <div className="diapason-role-badge">
-                🕯️ {amEst ? t("diapasonRoleEst") : t("diapasonRoleOuest")}
-              </div>
-            )}
-            <p className="hint" style={{ marginTop: 6 }}>{t("diapasonStory")}</p>
-            <div className="diapason-comm-banner">{t("diapasonCommunicate")}</div>
-
-            {!isPlayer ? (
-              <p className="muted" style={{ marginTop: 14 }}>{t("echoesSpectatorNote")}</p>
-            ) : (
-              <>
-                <div className="diapason-stage-wrap">
-                  <DiapasonScene
-                    side={mySide}
-                    dialValues={dialValues}
-                    otherCode={otherCode}
-                    accent={accent}
-                    viewpoint={VIEWPOINTS[viewpointKey]}
-                    onExamine={setExamine}
-                    doorGlow={myDoorLocked}
-                  />
-                  <div className="diapason-vignette" />
-                </div>
-
-                <div style={{ display: "flex", gap: 8, justifyContent: "center", margin: "12px 0" }}>
-                  <button
-                    className="btn ghost"
-                    style={{ width: "auto", padding: "8px 16px", fontSize: 13 }}
-                    onClick={() => setViewpointKey("entrance")}
-                    disabled={viewpointKey === "entrance"}
-                  >
-                    ⬅ {t("diapasonViewEntrance")}
-                  </button>
-                  <button
-                    className="btn ghost"
-                    style={{ width: "auto", padding: "8px 16px", fontSize: 13 }}
-                    onClick={() => setViewpointKey("door")}
-                    disabled={viewpointKey === "door"}
-                  >
-                    {t("diapasonViewDoor")} ➡
-                  </button>
-                </div>
-
-                {examine && <p className="hint diapason-examine-box">{examineText()}</p>}
-
-                {viewpointKey === "door" && (
-                  <div style={{ marginTop: 4 }}>
-                    <p className="muted" style={{ fontSize: 13, marginBottom: 8 }}>{t("diapasonDialsHint")}</p>
-
-                    <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap", marginBottom: 10 }}>
-                      {otherCode.map((sym, i) => (
-                        <span key={i} className="diapason-symbol-chip">{t(symbolLabelKey(sym))}</span>
-                      ))}
-                    </div>
-
-                    <div className={"diapason-dial-row" + (wrongShake ? " shake" : "")}>
-                      {[0, 1, 2].map((i) => (
-                        <div key={i} className="diapason-dial-control">
-                          <button className="btn ghost" style={{ width: "auto", padding: "6px 10px" }} onClick={() => cycleDial(i, -1)} disabled={myDoorLocked}>◀</button>
-                          <span className="diapason-dial-label">{t(symbolLabelKey(SYMBOLS[dialValues[i]]))}</span>
-                          <button className="btn ghost" style={{ width: "auto", padding: "6px 10px" }} onClick={() => cycleDial(i, 1)} disabled={myDoorLocked}>▶</button>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div style={{ textAlign: "center", marginTop: 14 }}>
-                      {myDoorLocked ? (
-                        <p className="muted">{t("diapasonMyDoorOpen")}</p>
-                      ) : (
-                        <button className="btn" style={{ width: "auto", padding: "12px 26px" }} onClick={submitDoor}>
-                          {t("diapasonSubmit")}
+      {phase !== "playing" && (
+        <Crossfade id={phase}>
+          {phase === "intro" && (
+            <div>
+              {players.length < 2 ? (
+                <p className="muted">{t("diapasonNotEnough")}</p>
+              ) : !needsPick ? (
+                <p className="muted">{t("diapasonStarting")}</p>
+              ) : isHost ? (
+                <div>
+                  <p className="hint">{t("diapasonPickHint")}</p>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8, margin: "12px 0 16px" }}>
+                    {players.map((p) => {
+                      const on = selected.includes(p.profile_id);
+                      return (
+                        <button
+                          key={p.id}
+                          onClick={() => toggleSelect(p.profile_id)}
+                          style={{
+                            display: "flex", alignItems: "center", gap: 6, padding: "8px 12px", borderRadius: 99,
+                            border: `2px solid ${on ? "var(--p3)" : "var(--line)"}`,
+                            background: on ? "rgba(182,240,76,.12)" : "rgba(255,255,255,.04)",
+                            fontWeight: 700, fontSize: 13, color: "var(--ink)",
+                          }}
+                        >
+                          <span>{p.profiles?.avatar}</span><span>{p.profiles?.username}</span>
                         </button>
-                      )}
-                    </div>
+                      );
+                    })}
                   </div>
-                )}
-              </>
-            )}
-          </div>
-        )}
+                  <button className="btn" disabled={selected.length !== 2} onClick={confirmPick}>{t("diapasonPickConfirm")}</button>
+                </div>
+              ) : (
+                <p className="muted">{t("diapasonWaitPick")}</p>
+              )}
+            </div>
+          )}
 
-        {phase === "success" && (
-          <div>
-            <h2 style={{ fontSize: 22 }}>{t("diapasonEndTitle")}</h2>
-            <p className="hint">{t("diapasonEndText")}</p>
-            {isPlayer && (
-              <p style={{ fontWeight: 800 }}>
-                {t("peYourGain")} <span style={{ color: "var(--p3)", fontFamily: "'Space Mono'" }}>+{myGain} {t("pts")}</span>
-              </p>
-            )}
-            {isHost ? <button className="btn" onClick={backToLobby}>{t("backLounge")}</button> : <p className="muted">{t("hostBrings")}</p>}
-          </div>
-        )}
-      </Crossfade>
+          {phase === "success" && (
+            <div>
+              <h2 style={{ fontSize: 22 }}>{t("diapasonEndTitle")}</h2>
+              <p className="hint">{t("diapasonEndText")}</p>
+              {isPlayer && (
+                <p style={{ fontWeight: 800 }}>
+                  {t("peYourGain")} <span style={{ color: "var(--p3)", fontFamily: "'Space Mono'" }}>+{myGain} {t("pts")}</span>
+                </p>
+              )}
+              {isHost ? <button className="btn" onClick={backToLobby}>{t("backLounge")}</button> : <p className="muted">{t("hostBrings")}</p>}
+            </div>
+          )}
+        </Crossfade>
+      )}
+
+      {/* Rendu stable, JAMAIS enveloppé dans le fondu enchaîné : un canvas
+          WebGL ne doit pas être monté deux fois pendant une transition. */}
+      {phase === "playing" && puzzle && (
+        <div>
+          {isPlayer && (
+            <div className="diapason-role-badge">
+              🕯️ {amEst ? t("diapasonRoleEst") : t("diapasonRoleOuest")}
+            </div>
+          )}
+          <p className="hint" style={{ marginTop: 6 }}>{t("diapasonStory")}</p>
+          <div className="diapason-comm-banner">{t("diapasonCommunicate")}</div>
+
+          {!isPlayer ? (
+            <p className="muted" style={{ marginTop: 14 }}>{t("echoesSpectatorNote")}</p>
+          ) : (
+            <>
+              <div className="diapason-stage-wrap">
+                <RoomIllustration
+                  side={mySide}
+                  viewpoint={viewpointKey}
+                  dialValues={dialValues}
+                  otherCode={otherCode}
+                  accent={accent}
+                  lampLit={lampLit}
+                  doorGlow={myDoorLocked}
+                  onExamine={handleExamine}
+                />
+                <div className="diapason-vignette" />
+              </div>
+
+              <div style={{ display: "flex", gap: 8, justifyContent: "center", margin: "12px 0" }}>
+                <button
+                  className="btn ghost"
+                  style={{ width: "auto", padding: "8px 16px", fontSize: 13 }}
+                  onClick={() => setViewpointKey("entrance")}
+                  disabled={viewpointKey === "entrance"}
+                >
+                  ⬅ {t("diapasonViewEntrance")}
+                </button>
+                <button
+                  className="btn ghost"
+                  style={{ width: "auto", padding: "8px 16px", fontSize: 13 }}
+                  onClick={() => setViewpointKey("door")}
+                  disabled={viewpointKey === "door"}
+                >
+                  {t("diapasonViewDoor")} ➡
+                </button>
+              </div>
+
+              <p className="hint diapason-examine-box">{examine ? examineText() : t("diapasonFindLight")}</p>
+
+              {lampLit && viewpointKey === "door" && (
+                <div style={{ marginTop: 4 }}>
+                  <p className="muted" style={{ fontSize: 13, marginBottom: 8 }}>{t("diapasonDialsHint")}</p>
+
+                  <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap", marginBottom: 10 }}>
+                    {otherCode.map((sym, i) => (
+                      <span key={i} className="diapason-symbol-chip">{t(symbolLabelKey(sym))}</span>
+                    ))}
+                  </div>
+
+                  <div className={"diapason-dial-row" + (wrongShake ? " shake" : "")}>
+                    {[0, 1, 2].map((i) => (
+                      <div key={i} className="diapason-dial-control">
+                        <button className="btn ghost" style={{ width: "auto", padding: "6px 10px" }} onClick={() => cycleDial(i, -1)} disabled={myDoorLocked}>◀</button>
+                        <span className="diapason-dial-label">{t(symbolLabelKey(SYMBOLS[dialValues[i]]))}</span>
+                        <button className="btn ghost" style={{ width: "auto", padding: "6px 10px" }} onClick={() => cycleDial(i, 1)} disabled={myDoorLocked}>▶</button>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div style={{ textAlign: "center", marginTop: 14 }}>
+                    {myDoorLocked ? (
+                      <p className="muted">{t("diapasonMyDoorOpen")}</p>
+                    ) : (
+                      <button className="btn" style={{ width: "auto", padding: "12px 26px" }} onClick={submitDoor}>
+                        {t("diapasonSubmit")}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }
