@@ -6,6 +6,8 @@ import { useLang } from "@/lib/i18n";
 import Brand from "@/components/Brand";
 import QuizGame from "@/components/QuizGame";
 import PianoEscape from "@/components/PianoEscape";
+import WordGuess from "@/components/WordGuess";
+import Worldle from "@/components/Worldle";
 
 export default function Room() {
   const { code } = useParams();
@@ -102,6 +104,8 @@ export default function Room() {
         {!playing && isHost && (
           <div style={{ display: "grid", gap: 10, marginTop: 16 }}>
             <button className="btn" onClick={() => launch("quiz")}>{t("launchQuiz")}</button>
+            <button className="btn" style={{ background: "linear-gradient(135deg, var(--p4), var(--p3))" }} onClick={() => launch("wordle")}>{t("launchWordle")}</button>
+            <button className="btn" style={{ background: "linear-gradient(135deg, var(--p2), var(--p5))" }} onClick={() => launch("worldle")}>{t("launchWorldle")}</button>
             <button className="btn" style={{ background: "linear-gradient(135deg, var(--p5), var(--p2))" }} onClick={() => launch("piano")}>{t("launchPiano")}</button>
           </div>
         )}
@@ -113,6 +117,12 @@ export default function Room() {
       )}
       {playing && room.current_game === "piano" && (
         <PianoEscape room={room} me={me} isHost={isHost} t={t} lang={lang} onFinish={() => {}} />
+      )}
+      {playing && room.current_game === "wordle" && (
+        <WordGuess room={room} me={me} isHost={isHost} t={t} lang={lang} onFinish={() => {}} />
+      )}
+      {playing && room.current_game === "worldle" && (
+        <Worldle room={room} me={me} isHost={isHost} t={t} lang={lang} onFinish={() => {}} />
       )}
     </div>
   );

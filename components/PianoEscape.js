@@ -25,6 +25,17 @@ function playFanfare() {
     setTimeout(() => playNote(n, i % 4 === 3 ? 1.1 : 0.32), i * 340)
   );
 }
+function celebrate() {
+  const bits = ["🎉", "🎶", "✨", "🎵", "🎊"];
+  for (let i = 0; i < 22; i++) {
+    const s = document.createElement("span");
+    s.textContent = bits[i % bits.length];
+    s.style.cssText = `position:fixed;top:-30px;left:${Math.random() * 100}vw;font-size:${16 + Math.random() * 14}px;z-index:99;pointer-events:none;transition:transform ${2.2 + Math.random() * 1.8}s ease-in,opacity 3s;`;
+    document.body.appendChild(s);
+    requestAnimationFrame(() => { s.style.transform = `translateY(110vh) rotate(${360 + Math.random() * 360}deg)`; s.style.opacity = ".2"; });
+    setTimeout(() => s.remove(), 4500);
+  }
+}
 
 /* ---------- Données des épreuves ---------- */
 const TARGET_MOTIF = ["G4", "G4", "G4", "D#4"]; // Beethoven, 5e symphonie
@@ -71,6 +82,7 @@ export default function PianoEscape({ room, me, isHost, onFinish, t, lang }) {
       }
       if (payload.stage === 6) {
         playFanfare();
+        celebrate();
         if (!resultSent.current) {
           resultSent.current = true;
           try {
@@ -109,7 +121,19 @@ export default function PianoEscape({ room, me, isHost, onFinish, t, lang }) {
   return (
     <div className="panel" style={{ maxWidth: 560 }}>
       <h1>{t("peTitle")}</h1>
-      {solverMsg && <p style={{ color: "var(--p3)", fontWeight: 800 }}>{solverMsg}</p>}
+      {stage >= 1 && stage < 6 && (
+        <div style={{ display: "flex", gap: 6, margin: "4px 0 14px" }}>
+          {[1, 2, 3, 4, 5].map(n => (
+            <div key={n} className={"progress-dot" + (stage > n ? " done" : "")} title={"Salle " + n} />
+          ))}
+        </div>
+      )}
+      {solverMsg && (
+        <p className="solver-toast" style={{
+          color: "var(--p3)", fontWeight: 800, background: "rgba(182,240,76,.10)",
+          border: "1.5px solid var(--p3)", borderRadius: 12, padding: "8px 12px", marginBottom: 10
+        }}>{solverMsg}</p>
+      )}
       {digitsFound.length > 0 && stage < 6 && (
         <p className="muted" style={{ fontFamily: "'Space Mono'", letterSpacing: "0.2em" }}>
           {t("peCode")} {digitsFound.join(" ")} {Array(4 - digitsFound.length).fill("_").join(" ")}
@@ -117,27 +141,29 @@ export default function PianoEscape({ room, me, isHost, onFinish, t, lang }) {
       )}
 
       {stage === 0 && (
-        <>
+        <div className="stage-enter">
           <p className="hint">{t("peIntro")}</p>
           <button className="btn" onClick={enter}>{t("peEnter")}</button>
-        </>
+        </div>
       )}
 
-      {stage === 1 && <Stage1 t={t} lang={lang} onSolve={() => solve(1, t("peS1Title"))} showHint={showHint} setShowHint={setShowHint} />}
-      {stage === 2 && <Stage2 t={t} onSolve={() => solve(2, t("peS2Title"))} showHint={showHint} setShowHint={setShowHint} feedback={feedback} setFeedback={setFeedback} />}
-      {stage === 3 && <Stage3 t={t} onSolve={() => solve(3, t("peS3Title"))} showHint={showHint} setShowHint={setShowHint} feedback={feedback} setFeedback={setFeedback} />}
-      {stage === 4 && <Stage4 t={t} onSolve={() => solve(4, t("peS4Title"))} showHint={showHint} setShowHint={setShowHint} feedback={feedback} setFeedback={setFeedback} />}
-      {stage === 5 && <Stage5 t={t} onSolve={() => solve(5, t("peS5Title"))} showHint={showHint} setShowHint={setShowHint} feedback={feedback} setFeedback={setFeedback} />}
+      <div key={stage} className="stage-enter">
+        {stage === 1 && <Stage1 t={t} lang={lang} onSolve={() => solve(1, t("peS1Title"))} showHint={showHint} setShowHint={setShowHint} />}
+        {stage === 2 && <Stage2 t={t} onSolve={() => solve(2, t("peS2Title"))} showHint={showHint} setShowHint={setShowHint} feedback={feedback} setFeedback={setFeedback} />}
+        {stage === 3 && <Stage3 t={t} onSolve={() => solve(3, t("peS3Title"))} showHint={showHint} setShowHint={setShowHint} feedback={feedback} setFeedback={setFeedback} />}
+        {stage === 4 && <Stage4 t={t} onSolve={() => solve(4, t("peS4Title"))} showHint={showHint} setShowHint={setShowHint} feedback={feedback} setFeedback={setFeedback} />}
+        {stage === 5 && <Stage5 t={t} onSolve={() => solve(5, t("peS5Title"))} showHint={showHint} setShowHint={setShowHint} feedback={feedback} setFeedback={setFeedback} />}
+      </div>
 
       {stage >= 6 && (
-        <>
+        <div className="stage-enter">
           <h1 style={{ fontSize: 30 }}>{t("peVictory")}</h1>
           <p className="hint">{t("peVictoryText")}</p>
           <p style={{ fontWeight: 800 }}>{t("peYourGain")} <span style={{ color: "var(--p3)", fontFamily: "'Space Mono'" }}>+{myGain.current} {t("pts")}</span></p>
           {isHost
             ? <button className="btn" onClick={backToLobby}>{t("backLounge")}</button>
             : <p className="muted">{t("hostBrings")}</p>}
-        </>
+        </div>
       )}
     </div>
   );
@@ -145,17 +171,23 @@ export default function PianoEscape({ room, me, isHost, onFinish, t, lang }) {
 
 /* ---------- Salle 1 : le piano ---------- */
 function Stage1({ t, lang, onSolve, showHint, setShowHint }) {
-  const pressed = useRef([]);
   const solvedRef = useRef(false);
   const [flash, setFlash] = useState(null);
+  const [matchLen, setMatchLen] = useState(0);
+  const [wrongFlash, setWrongFlash] = useState(false);
 
   function press(note) {
     playNote(note);
     setFlash(note); setTimeout(() => setFlash(null), 180);
-    pressed.current = [...pressed.current, note].slice(-TARGET_MOTIF.length);
-    if (!solvedRef.current && pressed.current.join(",") === TARGET_MOTIF.join(",")) {
-      solvedRef.current = true;
-      setTimeout(onSolve, 400);
+    if (solvedRef.current) return;
+    if (note === TARGET_MOTIF[matchLen]) {
+      const next = matchLen + 1;
+      setMatchLen(next);
+      if (next === TARGET_MOTIF.length) { solvedRef.current = true; setTimeout(onSolve, 400); }
+    } else {
+      setWrongFlash(true); setTimeout(() => setWrongFlash(false), 350);
+      // Une fausse note relance depuis le début — sauf si elle correspond à un nouveau départ valide.
+      setMatchLen(note === TARGET_MOTIF[0] ? 1 : 0);
     }
   }
 
@@ -166,14 +198,29 @@ function Stage1({ t, lang, onSolve, showHint, setShowHint }) {
       <p className="hint">{t("peS1Text")}</p>
       <p className="muted" style={{ fontStyle: "italic", marginBottom: 12 }}>{t("peS1Egg")}</p>
 
-      <div style={{ position: "relative", height: 150, display: "flex", userSelect: "none", touchAction: "manipulation" }}>
+      <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+        {TARGET_MOTIF.map((_, i) => (
+          <div key={i} style={{
+            width: 12, height: 12, borderRadius: "50%",
+            background: i < matchLen ? "var(--p3)" : "rgba(255,255,255,.08)",
+            border: `2px solid ${i < matchLen ? "var(--p3)" : "var(--line)"}`,
+            transition: ".2s"
+          }} />
+        ))}
+      </div>
+
+      <div style={{
+        position: "relative", height: 150, display: "flex", userSelect: "none", touchAction: "manipulation",
+        animation: wrongFlash ? "shakeRow .35s" : "none",
+        boxShadow: wrongFlash ? "0 0 0 3px var(--p1)" : "none", borderRadius: 10, transition: "box-shadow .2s"
+      }}>
         {WHITES.map((w) => (
           <button key={w} onClick={() => press(w)}
             style={{
               flex: 1, background: flash === w ? "#ffe9a8" : "#F5F3FF", border: "2px solid #12142A",
               borderRadius: "0 0 8px 8px", position: "relative", color: "#12142A",
               display: "flex", alignItems: "flex-end", justifyContent: "center",
-              fontWeight: 800, fontSize: 12, paddingBottom: 6
+              fontWeight: 800, fontSize: 12, paddingBottom: 6, transition: "background .12s"
             }}>
             {labels[w]}
           </button>
@@ -183,7 +230,7 @@ function Stage1({ t, lang, onSolve, showHint, setShowHint }) {
             style={{
               position: "absolute", left: `calc(${(i + 1) * 12.5}% - 4.5%)`, top: 0,
               width: "9%", height: "58%", background: flash === BLACKS[w] ? "#5a5470" : "#1a1a2a",
-              border: "2px solid #000", borderRadius: "0 0 6px 6px", zIndex: 2
+              border: "2px solid #000", borderRadius: "0 0 6px 6px", zIndex: 2, transition: "background .12s"
             }} aria-label={BLACKS[w]} />
         ) : null)}
       </div>
@@ -218,12 +265,15 @@ function Stage2({ t, onSolve, showHint, setShowHint, feedback, setFeedback }) {
 /* ---------- Salle 3 : tempos dans l'ordre ---------- */
 function Stage3({ t, onSolve, showHint, setShowHint, feedback, setFeedback }) {
   const [display] = useState(() => shuffle(TEMPOS));
+  const [eggKey] = useState(() => ["peS3EggA", "peS3EggB", "peS3EggC"][Math.floor(Math.random() * 3)]);
   const [picked, setPicked] = useState([]);
+  const [wrongShake, setWrongShake] = useState(false);
   function pick(x) {
     if (picked.includes(x)) return;
     const next = [...picked, x];
     if (TEMPOS[next.length - 1] !== x) {
       setPicked([]); setFeedback(t("peS3Wrong"));
+      setWrongShake(true); setTimeout(() => setWrongShake(false), 400);
       setTimeout(() => setFeedback(""), 1800);
       return;
     }
@@ -235,8 +285,8 @@ function Stage3({ t, onSolve, showHint, setShowHint, feedback, setFeedback }) {
     <>
       <h2 style={{ fontSize: 17, margin: "10px 0 6px" }}>{t("peS3Title")}</h2>
       <p className="hint">{t("peS3Text")}</p>
-      <p className="muted" style={{ fontStyle: "italic", marginBottom: 12 }}>{t("peS3Egg")}</p>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+      <p className="muted" style={{ fontStyle: "italic", marginBottom: 12 }}>{t(eggKey)}</p>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, animation: wrongShake ? "shakeRow .4s" : "none" }}>
         {display.map(x => (
           <button key={x} onClick={() => pick(x)}
             className="btn ghost"
@@ -259,12 +309,14 @@ function Stage3({ t, onSolve, showHint, setShowHint, feedback, setFeedback }) {
 function Stage4({ t, onSolve, showHint, setShowHint, feedback, setFeedback }) {
   const [display] = useState(() => shuffle(COMPOSERS.map(c => c.n)));
   const [picked, setPicked] = useState([]);
+  const [wrongShake, setWrongShake] = useState(false);
   const order = COMPOSERS.map(c => c.n);
   function pick(x) {
     if (picked.includes(x)) return;
     const next = [...picked, x];
     if (order[next.length - 1] !== x) {
       setPicked([]); setFeedback(t("peS4Wrong"));
+      setWrongShake(true); setTimeout(() => setWrongShake(false), 400);
       setTimeout(() => setFeedback(""), 1800);
       return;
     }
@@ -276,7 +328,7 @@ function Stage4({ t, onSolve, showHint, setShowHint, feedback, setFeedback }) {
     <>
       <h2 style={{ fontSize: 17, margin: "10px 0 6px" }}>{t("peS4Title")}</h2>
       <p className="hint">{t("peS4Text")}</p>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, animation: wrongShake ? "shakeRow .4s" : "none" }}>
         {display.map(x => (
           <button key={x} onClick={() => pick(x)}
             className="btn ghost"
@@ -298,10 +350,12 @@ function Stage4({ t, onSolve, showHint, setShowHint, feedback, setFeedback }) {
 /* ---------- Salle 5 : le coffre ---------- */
 function Stage5({ t, onSolve, showHint, setShowHint, feedback, setFeedback }) {
   const [code, setCode] = useState("");
+  const [wrongShake, setWrongShake] = useState(false);
   function tryCode(e) {
     e.preventDefault();
     if (code.trim() === CODE) { onSolve(); return; }
     setFeedback(t("peS5Wrong"));
+    setWrongShake(true); setTimeout(() => setWrongShake(false), 400);
     setCode("");
     setTimeout(() => setFeedback(""), 1800);
   }
@@ -309,7 +363,7 @@ function Stage5({ t, onSolve, showHint, setShowHint, feedback, setFeedback }) {
     <>
       <h2 style={{ fontSize: 17, margin: "10px 0 6px" }}>{t("peS5Title")}</h2>
       <p className="hint">{t("peS5Text")}</p>
-      <form onSubmit={tryCode} style={{ display: "flex", gap: 10, alignItems: "center" }}>
+      <form onSubmit={tryCode} style={{ display: "flex", gap: 10, alignItems: "center", animation: wrongShake ? "shakeRow .4s" : "none" }}>
         <input
           type="text" inputMode="numeric" maxLength={4} value={code}
           onChange={e => setCode(e.target.value.replace(/\D/g, ""))}

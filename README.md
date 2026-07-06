@@ -8,13 +8,15 @@ Soirée de mini-jeux multijoueurs **en ligne**, à distance, entre 2 et 4+ amis.
 ✅ Salons avec code à 6 caractères, joignables depuis n'importe où dans le monde
 ✅ Liste des joueurs et scores synchronisés en direct
 ✅ Interface bilingue FR/EN (bouton en haut à droite)
-✅ **Quiz Éclair** en réseau (questions synchronisées par l'hôte, scores atomiques)
+✅ **Quiz Éclair** 🧠 en réseau — 20 questions de culture générale, tout le monde répond en même temps (questions synchronisées par l'hôte, scores atomiques)
+✅ **Mot Mystère** 🔤 — Wordle-like en réseau, chacun devine le même mot caché de son côté, le plus rapide marque le plus de points, progression des autres visible en direct
+✅ **Worldle** 🌍 — devine le pays mystère à l'aide de la distance, de la direction et du % de proximité (~48 pays)
 ✅ **Piano Escape Room** 🎹 — escape game coopératif : 5 salles, piano jouable, énigmes de musique classique, code final. Le premier qui résout fait avancer toute l'équipe (+3 pour lui, +1 pour les autres).
 ✅ Records : chaque partie enregistre les points dans `game_results`, et les totaux de profil se mettent à jour automatiquement (trigger SQL).
-🥚 Quelques easter eggs sont cachés dans le site. Indice : les grands compositeurs ne font pas de soupe.
-⏳ Prochains portages possibles : Mot Mystère, Puissance 4, Réflexes, Memory, Simon, Calcul.
+🥚 Quelques easter eggs sont cachés dans le site (et sont volontairement plus rares qu'avant).
+⏳ Prochains chantiers : jeux de plateau classiques (Puissance 4, Petits Chevaux, Monopoly, Échecs), puis un nouveau jeu arcade façon escape room sur le thème de la musique.
 
-> ⚠️ Après chaque mise à jour du code, pensez à exécuter les éventuels fichiers `supabase/upgrade-XXX.sql` dans le SQL Editor de Supabase. Pour cette version : `upgrade-001.sql`.
+> ⚠️ Aucun script SQL supplémentaire n'est nécessaire pour cette mise à jour — `upgrade-001.sql` (déjà exécuté) suffit toujours, `game_id` étant un simple champ texte.
 
 ## 1. Configuration locale
 
@@ -72,7 +74,7 @@ Une fois déployé, Vercel te donne une URL publique (ex: `arcardi.vercel.app`) 
 
 ## Ajouter un nouveau mini-jeu
 
-Le pattern du `QuizGame` (dans `components/QuizGame.js`) est réutilisable pour les 7 autres jeux :
+Le pattern du `QuizGame` (dans `components/QuizGame.js`, aussi utilisé par `WordGuess.js` et `Worldle.js`) est réutilisable pour les prochains jeux :
 1. Créer `components/NomDuJeu.js` sur le même modèle (canal broadcast `nomdujeu_{room.id}`)
 2. L'ajouter dans `app/room/[code]/page.js` (bouton de lancement + rendu conditionnel selon `room.current_game`)
 3. Chaque bonne action du joueur met à jour `room_players.score` via Supabase

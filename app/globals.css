@@ -63,3 +63,19 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 }
 .player-chip .pt{margin-left:auto; font-family:'Space Mono'; color:var(--p3);}
 .muted{color:var(--muted); font-size:13px;}
+
+@keyframes shakeRow{
+  10%,90%{transform:translateX(-2px);} 20%,80%{transform:translateX(4px);}
+  30%,50%,70%{transform:translateX(-8px);} 40%,60%{transform:translateX(8px);}
+}
+@keyframes fadeSlideIn{ from{opacity:0; transform:translateY(10px);} to{opacity:1; transform:translateY(0);} }
+@keyframes popIn{ 0%{transform:scale(.7); opacity:0;} 70%{transform:scale(1.08); opacity:1;} 100%{transform:scale(1);} }
+@keyframes toastSlide{ from{opacity:0; transform:translateY(-12px);} to{opacity:1; transform:translateY(0);} }
+@keyframes urgentPulse{ 0%,100%{opacity:1;} 50%{opacity:.45;} }
+.stage-enter{ animation:fadeSlideIn .35s ease both; }
+.solver-toast{ animation:toastSlide .3s ease both; }
+.progress-dot{
+  width:14px; height:14px; border-radius:50%; border:2px solid var(--line);
+  background:rgba(255,255,255,.05); transition:.25s;
+}
+.progress-dot.done{ background:var(--p3); border-color:var(--p3); }
