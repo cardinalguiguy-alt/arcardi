@@ -12,6 +12,7 @@ import Worldle from "@/components/Worldle";
 import ConnectFour from "@/components/ConnectFour";
 import PetitsChevaux from "@/components/PetitsChevaux";
 import EchoesRoom from "@/components/EchoesRoom";
+import RoomChat from "@/components/RoomChat";
 
 // Métadonnées d'affichage de chaque jeu : icône, couleur d'accent (variable
 // CSS existante), et clés i18n pour le nom / la description courte de la
@@ -205,6 +206,11 @@ export default function Room() {
           </div>
         )}
       </Crossfade>
+
+      {/* Monté ici (hors Crossfade) pour ne jamais se démonter lors des
+          transitions lobby <-> jeu : l'historique de discussion et la
+          connexion au canal restent intacts pendant toute la session. */}
+      <RoomChat room={room} me={me} t={t} />
     </div>
   );
 }
