@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { DICT_FR, DICT_EN } from "@/lib/wordDictionary";
 
 const WORD_LEN = 5;
 const MAX_TRIES = 6;
@@ -178,6 +179,14 @@ export default function WordGuess({ room, me, isHost, onFinish, t, lang }) {
     const g = normalize(current);
     if (g.length !== WORD_LEN) {
       setShake(true); setErrorMsg(t("wordleInvalid"));
+      setTimeout(() => setShake(false), 500);
+      setTimeout(() => setErrorMsg(""), 1800);
+      return;
+    }
+    // Le mot doit exister dans la langue réelle du mot à deviner (pas juste 5 lettres au hasard).
+    const dict = wordLang === "en" ? DICT_EN : DICT_FR;
+    if (!dict.has(g)) {
+      setShake(true); setErrorMsg(t("wordleNotAWord"));
       setTimeout(() => setShake(false), 500);
       setTimeout(() => setErrorMsg(""), 1800);
       return;

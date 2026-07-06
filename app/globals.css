@@ -229,3 +229,53 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 }
 .ludo-dice.rolling{ animation:ludoRoll .45s ease; }
 @keyframes ludoRoll{ 0%{transform:rotate(0) scale(1);} 50%{transform:rotate(180deg) scale(1.12);} 100%{transform:rotate(360deg) scale(1);} }
+
+/* ---------- Échos (escape room coopératif asymétrique) ---------- */
+.echo-role-badge{
+  display:inline-flex; align-items:center; gap:8px; padding:6px 12px; border-radius:99px;
+  background:rgba(167,139,250,.12); border:1.5px solid var(--p5); font-weight:800; font-size:12.5px;
+  color:var(--p5); margin-bottom:10px;
+}
+.echo-comm-banner{
+  display:flex; align-items:center; gap:8px; padding:9px 12px; border-radius:12px;
+  background:rgba(255,185,74,.10); border:1.5px solid var(--p4); color:var(--p4);
+  font-size:12.5px; font-weight:700; margin-bottom:14px; line-height:1.4;
+}
+.echo-timerbar{ height:8px; background:rgba(255,255,255,.08); border-radius:99px; overflow:hidden; margin:10px 0 16px; }
+.echo-timerbar-fill{ height:100%; transition:width .2s linear; }
+
+.echo-dial-wrap{
+  position:relative; width:180px; height:180px; margin:14px auto 18px; border-radius:50%;
+  background:radial-gradient(circle at 50% 50%, rgba(255,255,255,.06), rgba(0,0,0,.25));
+  border:3px solid var(--line);
+}
+.echo-dial-needle{
+  position:absolute; left:50%; top:50%; width:4px; height:82px; margin-left:-2px; margin-top:-82px;
+  background:linear-gradient(var(--p5), transparent); border-radius:4px; transform-origin:50% 100%;
+}
+.echo-dial-center{
+  position:absolute; left:50%; top:50%; width:14px; height:14px; margin-left:-7px; margin-top:-7px;
+  border-radius:50%; background:var(--p5); box-shadow:0 0 0 3px rgba(167,139,250,.25);
+}
+
+.echo-gear-chip{
+  display:flex; flex-direction:column; align-items:center; gap:4px; padding:14px 10px; border-radius:14px;
+  border:2.5px solid var(--line); background:rgba(255,255,255,.04); font-weight:800; cursor:pointer;
+  min-width:74px; transition:transform .15s, border-color .15s, background .15s;
+}
+.echo-gear-chip.picked{ border-color:var(--p3); background:rgba(182,240,76,.12); transform:translateY(-2px); }
+.echo-gear-chip .letter{ font-family:'Bungee'; font-size:20px; }
+
+.echo-cipher-symbol{
+  display:inline-flex; align-items:center; justify-content:center; width:42px; height:42px;
+  border-radius:10px; border:2px solid var(--line); background:rgba(255,255,255,.04);
+  font-size:20px; margin-right:6px;
+}
+
+.echo-lever-btn{
+  width:100%; padding:22px; border-radius:16px; font-family:'Bungee'; font-size:16px;
+  background:linear-gradient(135deg, var(--p5), var(--p2)); color:#12142A; border:none; cursor:pointer;
+  box-shadow:0 5px 0 rgba(0,0,0,.35); transition:transform .12s;
+}
+.echo-lever-btn:active{ transform:translateY(3px); box-shadow:0 2px 0 rgba(0,0,0,.35); }
+.echo-lever-btn:disabled{ opacity:.55; cursor:default; }

@@ -342,19 +342,38 @@ export default function QuizGame({ room, me, isHost, onFinish, t, lang }) {
   const channelRef = useRef(null);
   const myGain = useRef(0);
   const timeouts = useRef([]);
+  // Miroirs toujours à jour de q/picked pour le handler "reveal" (évite les closures figées).
+  const qRef = useRef(null);
+  const pickedRef = useRef(null);
 
   useEffect(() => {
     const ch = supabase.channel("quiz_" + room.id, { config: { broadcast: { self: true } } });
     channelRef.current = ch;
 
     ch.on("broadcast", { event: "question" }, ({ payload }) => {
+      qRef.current = payload;
+      pickedRef.current = null;
       setQ(payload);
       setRoundTotal(payload.remaining);
       setDeadline(Date.now() + payload.remaining);
       setPicked(null);
       setRevealed(false);
     });
-    ch.on("broadcast", { event: "reveal" }, () => setRevealed(true));
+    ch.on("broadcast", { event: "reveal" }, async () => {
+      setRevealed(true);
+      // Validation du résultat UNIQUEMENT à l'issue du timer, sur la dernière réponse choisie.
+      const finalPick = pickedRef.current;
+      const currentQ = qRef.current;
+      if (finalPick && currentQ && finalPick === currentQ.good) {
+        const gain = POINTS_BY_DIFF[currentQ.diff] || 2;
+        myGain.current += gain;
+        setPoints(p => p + gain);
+        try {
+          // RPC atomique : pas d'écrasement de score en cas de réponses simultanées.
+          await supabase.rpc("add_points", { p_room: room.id, p_delta: gain });
+        } catch (e) {}
+      }
+    });
     ch.on("broadcast", { event: "finished" }, async () => {
       setFinished(true);
       // Chaque joueur enregistre SON résultat (RLS : on ne peut écrire que le sien).
@@ -419,16 +438,12 @@ export default function QuizGame({ room, me, isHost, onFinish, t, lang }) {
     }, 3000));
   }
 
-  async function pick(text) {
-    if (picked || revealed || !q) return;
+  function pick(text) {
+    // Sélection libre et modifiable tant que le timer n'est pas écoulé.
+    // Aucun point n'est attribué ici : la validation se fait à la réception de "reveal".
+    if (revealed || !q) return;
+    pickedRef.current = text;
     setPicked(text);
-    if (text === q.good) {
-      const gain = POINTS_BY_DIFF[q.diff] || 2;
-      myGain.current += gain;
-      setPoints(p => p + gain);
-      // RPC atomique : pas d'écrasement de score en cas de réponses simultanées.
-      await supabase.rpc("add_points", { p_room: room.id, p_delta: gain });
-    }
   }
 
   const DIFFS = [
@@ -513,7 +528,7 @@ export default function QuizGame({ room, me, isHost, onFinish, t, lang }) {
                 else if (isWrongPick) { bg = "rgba(255,93,115,.15)"; border = "var(--p1)"; color = "var(--p1)"; }
                 else if (picked === text) { border = "var(--p2)"; }
                 return (
-                  <button key={i} disabled={!!picked || revealed} onClick={() => pick(text)}
+                  <button key={i} disabled={revealed} onClick={() => pick(text)}
                     style={{
                       minHeight: 64, padding: "14px 12px", borderRadius: 14, border: `2.5px solid ${border}`, background: bg, color, fontWeight: 800, fontSize: 15,
                       transform: `scale(${scale})`, transition: "transform .2s, background .2s, border-color .2s"

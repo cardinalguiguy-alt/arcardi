@@ -11,6 +11,7 @@ import WordGuess from "@/components/WordGuess";
 import Worldle from "@/components/Worldle";
 import ConnectFour from "@/components/ConnectFour";
 import PetitsChevaux from "@/components/PetitsChevaux";
+import EchoesRoom from "@/components/EchoesRoom";
 
 // Métadonnées d'affichage de chaque jeu : icône, couleur d'accent (variable
 // CSS existante), et clés i18n pour le nom / la description courte de la
@@ -22,8 +23,9 @@ const GAME_META = {
   piano:    { icon: "🎹", accent: "--p1", nameKey: "namePiano",   tagKey: "tagPiano" },
   connect4: { icon: "🔴", accent: "--p1", nameKey: "nameC4",      tagKey: "tagC4", minPlayers: 2 },
   ludo:     { icon: "🐴", accent: "--ludoY", nameKey: "nameLudo", tagKey: "tagLudo", minPlayers: 2 },
+  echoes:   { icon: "🌊", accent: "--p5", nameKey: "nameEchoes",  tagKey: "tagEchoes", minPlayers: 2 },
 };
-const GAME_ORDER = ["quiz", "wordle", "worldle", "piano", "connect4", "ludo"];
+const GAME_ORDER = ["quiz", "wordle", "worldle", "piano", "connect4", "ludo", "echoes"];
 
 export default function Room() {
   const { code } = useParams();
@@ -150,6 +152,9 @@ export default function Room() {
               )}
               {room.current_game === "ludo" && (
                 <PetitsChevaux room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={() => {}} />
+              )}
+              {room.current_game === "echoes" && (
+                <EchoesRoom room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={() => {}} />
               )}
             </div>
           </div>
