@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import Crossfade from "./Crossfade";
 
 const QUESTIONS_FR = {
   easy: [
@@ -224,16 +225,6 @@ export default function QuizGame({ room, me, isHost, onFinish, t, lang }) {
     }
   }
 
-  if (finished) {
-    return (
-      <div className="panel" style={{ maxWidth: 620 }}>
-        <h1>{t("quizTitle")}</h1>
-        <p className="hint">{t("quizDone")}</p>
-        <p style={{ fontWeight: 800 }}>{t("peYourGain")} <span style={{ color: "var(--p3)", fontFamily: "'Space Mono'" }}>+{points} {t("pts")}</span></p>
-      </div>
-    );
-  }
-
   const DIFFS = [
     { id: "easy", label: t("diffEasy"), color: "var(--p3)", grad: "linear-gradient(135deg, var(--p3), #7fd9c4)" },
     { id: "medium", label: t("diffMedium"), color: "var(--p4)", grad: "linear-gradient(135deg, var(--p4), var(--p2))" },
@@ -241,6 +232,8 @@ export default function QuizGame({ room, me, isHost, onFinish, t, lang }) {
   ];
   const secondsLeft = Math.ceil(timeLeft / 1000);
   const isUrgent = q && !revealed && timeLeft > 0 && timeLeft < 3000;
+  // Phase courante : sert de clé au fondu enchaîné (intro -> question N -> fin).
+  const phaseKey = finished ? "finished" : q ? "q" + q.index : "intro";
 
   return (
     <div className="panel" style={{ maxWidth: 620 }}>
@@ -254,75 +247,84 @@ export default function QuizGame({ room, me, isHost, onFinish, t, lang }) {
           }} key={points}>+{points} {t("pts")}</span>
         )}
       </div>
-      {!q && isHost && (
-        <>
-          <p className="hint">{N_QUESTIONS} {t("quizIntro")}</p>
-          <div style={{ display: "grid", gap: 10, marginTop: 6 }}>
-            {DIFFS.map(d => (
-              <button key={d.id} className="btn" style={{ background: d.grad }} onClick={() => hostStart(d.id)}>
-                {d.label} <span style={{ opacity: .75, fontWeight: 600 }}>· {Math.round(ROUND_MS_BY_DIFF[d.id] / 1000)}s · +{POINTS_BY_DIFF[d.id]}{t("pts")}</span>
-              </button>
-            ))}
-          </div>
-        </>
-      )}
-      {!q && !isHost && <p className="muted">{t("waitStart")}</p>}
 
-      {q && (
-        <div key={q.index} className="stage-enter">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-            <p className="muted" style={{ margin: 0 }}>{t("question")} {q.index + 1} / {q.total}</p>
-            <span style={{
-              fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".05em",
-              color: DIFFS.find(d => d.id === q.diff)?.color, opacity: .85
-            }}>{DIFFS.find(d => d.id === q.diff)?.label}</span>
+      <Crossfade id={phaseKey}>
+        {finished ? (
+          <div>
+            <p className="hint">{t("quizDone")}</p>
+            <p style={{ fontWeight: 800 }}>{t("peYourGain")} <span style={{ color: "var(--p3)", fontFamily: "'Space Mono'" }}>+{points} {t("pts")}</span></p>
           </div>
+        ) : !q ? (
+          isHost ? (
+            <div>
+              <p className="hint">{N_QUESTIONS} {t("quizIntro")}</p>
+              <div style={{ display: "grid", gap: 10, marginTop: 6 }}>
+                {DIFFS.map(d => (
+                  <button key={d.id} className="btn" style={{ background: d.grad }} onClick={() => hostStart(d.id)}>
+                    {d.label} <span style={{ opacity: .75, fontWeight: 600 }}>· {Math.round(ROUND_MS_BY_DIFF[d.id] / 1000)}s · +{POINTS_BY_DIFF[d.id]}{t("pts")}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <p className="muted">{t("waitStart")}</p>
+          )
+        ) : (
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <p className="muted" style={{ margin: 0 }}>{t("question")} {q.index + 1} / {q.total}</p>
+              <span style={{
+                fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".05em",
+                color: DIFFS.find(d => d.id === q.diff)?.color, opacity: .85
+              }}>{DIFFS.find(d => d.id === q.diff)?.label}</span>
+            </div>
 
-          <div style={{ position: "relative", height: 10, background: "rgba(255,255,255,.08)", borderRadius: 99, overflow: "hidden", margin: "0 0 18px" }}>
-            <div style={{
-              height: "100%", width: (timeLeft / roundTotal * 100) + "%",
-              background: timeLeft < 3000 ? "var(--p1)" : timeLeft < roundTotal * 0.4 ? "var(--p4)" : "linear-gradient(90deg,var(--p3),var(--p1))",
-              transition: "width .1s linear", animation: isUrgent ? "urgentPulse .4s ease-in-out infinite" : "none"
-            }} />
-          </div>
+            <div style={{ position: "relative", height: 10, background: "rgba(255,255,255,.08)", borderRadius: 99, overflow: "hidden", margin: "0 0 18px" }}>
+              <div style={{
+                height: "100%", width: (timeLeft / roundTotal * 100) + "%",
+                background: timeLeft < 3000 ? "var(--p1)" : timeLeft < roundTotal * 0.4 ? "var(--p4)" : "linear-gradient(90deg,var(--p3),var(--p1))",
+                transition: "width .1s linear", animation: isUrgent ? "urgentPulse .4s ease-in-out infinite" : "none"
+              }} />
+            </div>
 
-          <div style={{ position: "relative", minHeight: 78, display: "flex", alignItems: "center", marginBottom: 18 }}>
-            <p style={{ fontWeight: 800, fontSize: 21, lineHeight: 1.35, margin: 0, paddingRight: isUrgent ? 54 : 0 }}>{q.text}</p>
-            {isUrgent && (
-              <span key={secondsLeft} style={{
-                position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)",
-                fontFamily: "'Space Mono'", fontWeight: 800, fontSize: 34, color: "var(--p1)",
-                animation: "popIn .35s ease both"
-              }}>{secondsLeft}</span>
+            <div style={{ position: "relative", minHeight: 78, display: "flex", alignItems: "center", marginBottom: 18 }}>
+              <p style={{ fontWeight: 800, fontSize: 21, lineHeight: 1.35, margin: 0, paddingRight: isUrgent ? 54 : 0 }}>{q.text}</p>
+              {isUrgent && (
+                <span key={secondsLeft} style={{
+                  position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)",
+                  fontFamily: "'Space Mono'", fontWeight: 800, fontSize: 34, color: "var(--p1)",
+                  animation: "popIn .35s ease both"
+                }}>{secondsLeft}</span>
+              )}
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              {q.choices.map((text, i) => {
+                let bg = "rgba(255,255,255,.05)", border = "var(--line)", color = "var(--ink)", scale = 1;
+                const isGood = revealed && text === q.good;
+                const isWrongPick = revealed && picked === text && text !== q.good;
+                if (isGood) { bg = "rgba(182,240,76,.18)"; border = "var(--p3)"; color = "var(--p3)"; scale = 1.03; }
+                else if (isWrongPick) { bg = "rgba(255,93,115,.15)"; border = "var(--p1)"; color = "var(--p1)"; }
+                else if (picked === text) { border = "var(--p2)"; }
+                return (
+                  <button key={i} disabled={!!picked || revealed} onClick={() => pick(text)}
+                    style={{
+                      minHeight: 64, padding: "14px 12px", borderRadius: 14, border: `2.5px solid ${border}`, background: bg, color, fontWeight: 800, fontSize: 15,
+                      transform: `scale(${scale})`, transition: "transform .2s, background .2s, border-color .2s"
+                    }}>
+                    {isGood ? "✅ " : isWrongPick ? "❌ " : ""}{text}
+                  </button>
+                );
+              })}
+            </div>
+            {revealed && picked !== q.good && (
+              <p className="muted" style={{ marginTop: 14 }}>
+                {picked ? "" : t("tooSlow") + " "} {t("rightAnswer")} <b style={{ color: "var(--p3)" }}>{q.good}</b>
+              </p>
             )}
           </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            {q.choices.map((text, i) => {
-              let bg = "rgba(255,255,255,.05)", border = "var(--line)", color = "var(--ink)", scale = 1;
-              const isGood = revealed && text === q.good;
-              const isWrongPick = revealed && picked === text && text !== q.good;
-              if (isGood) { bg = "rgba(182,240,76,.18)"; border = "var(--p3)"; color = "var(--p3)"; scale = 1.03; }
-              else if (isWrongPick) { bg = "rgba(255,93,115,.15)"; border = "var(--p1)"; color = "var(--p1)"; }
-              else if (picked === text) { border = "var(--p2)"; }
-              return (
-                <button key={i} disabled={!!picked || revealed} onClick={() => pick(text)}
-                  style={{
-                    minHeight: 64, padding: "14px 12px", borderRadius: 14, border: `2.5px solid ${border}`, background: bg, color, fontWeight: 800, fontSize: 15,
-                    transform: `scale(${scale})`, transition: "transform .2s, background .2s, border-color .2s"
-                  }}>
-                  {isGood ? "✅ " : isWrongPick ? "❌ " : ""}{text}
-                </button>
-              );
-            })}
-          </div>
-          {revealed && picked !== q.good && (
-            <p className="muted" style={{ marginTop: 14 }}>
-              {picked ? "" : t("tooSlow") + " "} {t("rightAnswer")} <b style={{ color: "var(--p3)" }}>{q.good}</b>
-            </p>
-          )}
-        </div>
-      )}
+        )}
+      </Crossfade>
     </div>
   );
 }

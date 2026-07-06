@@ -12,9 +12,11 @@ Soirée de mini-jeux multijoueurs **en ligne**, à distance, entre 2 et 4+ amis.
 ✅ **Mot Mystère** 🔤 — Wordle-like en réseau, chacun devine le même mot caché de son côté, le plus rapide marque le plus de points, progression des autres visible en direct
 ✅ **Worldle** 🌍 — devine le pays mystère à l'aide de la distance, de la direction et du % de proximité (~48 pays)
 ✅ **Piano Escape Room** 🎹 — escape game coopératif : 5 salles, piano jouable, énigmes de musique classique, code final. Le premier qui résout fait avancer toute l'équipe (+3 pour lui, +1 pour les autres).
+✅ **Puissance 4** 🔴 — premier jeu de plateau à deux. Si le salon a exactement 2 joueurs, la partie démarre directement ; sinon l'hôte choisit qui affronte qui, les autres suivent le match en direct. Victoire +3, défaite +1, match nul +2.
 ✅ Records : chaque partie enregistre les points dans `game_results`, et les totaux de profil se mettent à jour automatiquement (trigger SQL).
+✅ Interface repensée : le jeu en cours prend toute la priorité visuelle (le salon se réduit en barre compacte), fondu enchaîné entre les écrans (salon ↔ jeu, changements de phase), grille de cartes pour choisir un jeu.
 🥚 Quelques easter eggs sont cachés dans le site (et sont volontairement plus rares qu'avant).
-⏳ Prochains chantiers : jeux de plateau classiques (Puissance 4, Petits Chevaux, Monopoly, Échecs), puis un nouveau jeu arcade façon escape room sur le thème de la musique.
+⏳ Prochains chantiers : jeux de plateau classiques (Petits Chevaux, Monopoly, Échecs — sur le modèle de Puissance 4), puis un nouveau jeu arcade façon escape room sur le thème de la musique.
 
 > ⚠️ Aucun script SQL supplémentaire n'est nécessaire pour cette mise à jour — `upgrade-001.sql` (déjà exécuté) suffit toujours, `game_id` étant un simple champ texte.
 
@@ -74,7 +76,18 @@ Une fois déployé, Vercel te donne une URL publique (ex: `arcardi.vercel.app`) 
 
 ## Ajouter un nouveau mini-jeu
 
-Le pattern du `QuizGame` (dans `components/QuizGame.js`, aussi utilisé par `WordGuess.js` et `Worldle.js`) est réutilisable pour les prochains jeux :
+Le pattern du `QuizGame` (dans `components/QuizGame.js`, aussi utilisé par `WordGuess.js` et `Worldle.js`) est réutilisable pour les prochains jeux "tout le monde joue en même temps" :
 1. Créer `components/NomDuJeu.js` sur le même modèle (canal broadcast `nomdujeu_{room.id}`)
-2. L'ajouter dans `app/room/[code]/page.js` (bouton de lancement + rendu conditionnel selon `room.current_game`)
+2. L'ajouter dans `GAME_META`/`GAME_ORDER` en haut de `app/room/[code]/page.js` (icône, couleur d'accent, clés i18n) + le rendu conditionnel selon `room.current_game`
 3. Chaque bonne action du joueur met à jour `room_players.score` via Supabase
+
+### Jeux de plateau à 2 joueurs (Puissance 4, Petits Chevaux, Monopoly, Échecs)
+
+`components/ConnectFour.js` sert de modèle pour tous les prochains jeux de plateau à 2 joueurs. Le principe, à répliquer :
+- Le composant reçoit maintenant une prop `players` (liste complète du salon) en plus de `room`/`me`/`isHost`/`t`/`lang`/`onFinish`.
+- **Choix des 2 joueurs** : si le salon a exactement 2 joueurs, le match démarre automatiquement dès que le canal est prêt. S'il y en a plus, l'hôte voit un écran de sélection (tape sur 2 avatars) avant de lancer — les autres suivent en spectateurs.
+- **Arbitrage** : l'hôte reste la seule source de vérité du plateau, qu'il joue ou non. Chaque coup est envoyé en broadcast (`move_attempt`), seul l'hôte le valide et rediffuse l'état à jour (`state`) ; tout le monde (y compris l'hôte) affiche uniquement ce qui revient par broadcast.
+- **Points** : comme pour les autres jeux, chaque joueur (pas l'hôte à leur place) écrit sa propre ligne dans `game_results` — obligatoire à cause des règles RLS.
+- **Fondu enchaîné** : le composant `Crossfade` (`components/Crossfade.js`) encapsule les transitions entre phases (`<Crossfade id={phase}>{contenu}</Crossfade>`) ; réutilise-le pour les prochains jeux de plateau plutôt que des coupures sèches.
+
+Ce pattern permettra d'ajouter Petits Chevaux, Monopoly et Échecs sans changer l'architecture du salon.

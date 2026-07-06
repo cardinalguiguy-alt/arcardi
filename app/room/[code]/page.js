@@ -4,10 +4,24 @@ import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/i18n";
 import Brand from "@/components/Brand";
+import Crossfade from "@/components/Crossfade";
 import QuizGame from "@/components/QuizGame";
 import PianoEscape from "@/components/PianoEscape";
 import WordGuess from "@/components/WordGuess";
 import Worldle from "@/components/Worldle";
+import ConnectFour from "@/components/ConnectFour";
+
+// Métadonnées d'affichage de chaque jeu : icône, couleur d'accent (variable
+// CSS existante), et clés i18n pour le nom / la description courte de la
+// carte de sélection dans le salon.
+const GAME_META = {
+  quiz:     { icon: "🧠", accent: "--p2", nameKey: "nameQuiz",    tagKey: "tagQuiz" },
+  wordle:   { icon: "🔤", accent: "--p4", nameKey: "nameWordle",  tagKey: "tagWordle" },
+  worldle:  { icon: "🌍", accent: "--p5", nameKey: "nameWorldle", tagKey: "tagWorldle" },
+  piano:    { icon: "🎹", accent: "--p1", nameKey: "namePiano",   tagKey: "tagPiano" },
+  connect4: { icon: "🔴", accent: "--p1", nameKey: "nameC4",      tagKey: "tagC4", minPlayers: 2 },
+};
+const GAME_ORDER = ["quiz", "wordle", "worldle", "piano", "connect4"];
 
 export default function Room() {
   const { code } = useParams();
@@ -77,6 +91,10 @@ export default function Room() {
 
   const isHost = room.host_id === me.id;
   const playing = room.status === "playing";
+  const meta = playing ? GAME_META[room.current_game] : null;
+  // Clé de vue : change dès qu'on bascule lobby <-> scène, ou de jeu à jeu.
+  // C'est ce qui déclenche le fondu enchaîné dans <Crossfade>.
+  const viewKey = playing ? "stage-" + room.current_game : "lobby";
 
   return (
     <div className="wrap">
@@ -86,44 +104,89 @@ export default function Room() {
         </button>
       } />
 
-      <div className="panel">
-        <h1>{isHost ? t("roomTitleHost") : t("roomTitle")}</h1>
-        <p className="hint">{t("shareCode")}</p>
-        <div className="code-badge">{room.code}</div>
-        <p className="muted">{players.length} {t("players")} — {t("scoreLive")} :</p>
-        <div style={{ marginTop: 10 }}>
-          {players.map(p => (
-            <div className="player-chip" key={p.id}>
-              <span style={{ fontSize: 20 }}>{p.profiles?.avatar}</span>
-              <span>{p.profiles?.username}{p.profile_id === room.host_id ? " 👑" : ""}</span>
-              <span className="pt">{p.score} {t("pts")}</span>
+      <Crossfade id={viewKey} duration={480}>
+        {playing ? (
+          // ===== MODE SCÈNE : le jeu en cours prend toute la priorité =====
+          <div style={meta ? { "--accent": `var(${meta.accent})` } : undefined}>
+            <div className="stage-bar">
+              <span className="stage-bar-code">🎪 {room.code}</span>
+              <span className="stage-bar-live">{t("liveBadge")}</span>
+              <div className="stage-bar-scores">
+                {players.map(p => (
+                  <span className={"mini-chip" + (p.profile_id === me.id ? " me" : "")} key={p.id}>
+                    <span>{p.profiles?.avatar}</span>
+                    <span>{p.profiles?.username}{p.profile_id === room.host_id ? " 👑" : ""}</span>
+                    <b>{p.score}</b>
+                  </span>
+                ))}
+              </div>
             </div>
-          ))}
-        </div>
 
-        {!playing && isHost && (
-          <div style={{ display: "grid", gap: 10, marginTop: 16 }}>
-            <button className="btn" onClick={() => launch("quiz")}>{t("launchQuiz")}</button>
-            <button className="btn" style={{ background: "linear-gradient(135deg, var(--p4), var(--p3))" }} onClick={() => launch("wordle")}>{t("launchWordle")}</button>
-            <button className="btn" style={{ background: "linear-gradient(135deg, var(--p2), var(--p5))" }} onClick={() => launch("worldle")}>{t("launchWorldle")}</button>
-            <button className="btn" style={{ background: "linear-gradient(135deg, var(--p5), var(--p2))" }} onClick={() => launch("piano")}>{t("launchPiano")}</button>
+            <div className="game-stage">
+              {room.current_game === "quiz" && (
+                <QuizGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={() => {}} />
+              )}
+              {room.current_game === "piano" && (
+                <PianoEscape room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={() => {}} />
+              )}
+              {room.current_game === "wordle" && (
+                <WordGuess room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={() => {}} />
+              )}
+              {room.current_game === "worldle" && (
+                <Worldle room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={() => {}} />
+              )}
+              {room.current_game === "connect4" && (
+                <ConnectFour room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={() => {}} />
+              )}
+            </div>
+          </div>
+        ) : (
+          // ===== MODE LOBBY : infos du salon + sélection du prochain jeu =====
+          <div className="panel">
+            <h1>{isHost ? t("roomTitleHost") : t("roomTitle")}</h1>
+            <p className="hint">{t("shareCode")}</p>
+            <div className="code-badge">{room.code}</div>
+            <p className="muted">{players.length} {t("players")} — {t("scoreLive")} :</p>
+            <div style={{ marginTop: 10 }}>
+              {players.map(p => (
+                <div className="player-chip" key={p.id}>
+                  <span style={{ fontSize: 20 }}>{p.profiles?.avatar}</span>
+                  <span>{p.profiles?.username}{p.profile_id === room.host_id ? " 👑" : ""}</span>
+                  <span className="pt">{p.score} {t("pts")}</span>
+                </div>
+              ))}
+            </div>
+
+            {isHost ? (
+              <>
+                <p className="hint" style={{ marginTop: 22, marginBottom: 10 }}>{t("gamePicker")}</p>
+                <div className="game-grid">
+                  {GAME_ORDER.map(id => {
+                    const g = GAME_META[id];
+                    const disabled = g.minPlayers ? players.length < g.minPlayers : false;
+                    return (
+                      <button
+                        key={id}
+                        className="game-card"
+                        style={{ "--accent": `var(${g.accent})`, opacity: disabled ? .45 : 1, cursor: disabled ? "not-allowed" : "pointer" }}
+                        onClick={() => { if (!disabled) launch(id); }}
+                      >
+                        <span className="game-card-icon">{g.icon}</span>
+                        <span className="game-card-title">{t(g.nameKey)}</span>
+                        <span className="game-card-tag">{t(g.tagKey)}</span>
+                        <span className="game-card-cta">{disabled ? "🔒" : t("playCta") + " →"}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="muted" style={{ marginTop: 16, textAlign: "center" }}>{t("moreGamesSoon")}</p>
+              </>
+            ) : (
+              <p className="muted" style={{ marginTop: 16 }}>{t("waitHost")}</p>
+            )}
           </div>
         )}
-        {!playing && !isHost && <p className="muted" style={{ marginTop: 16 }}>{t("waitHost")}</p>}
-      </div>
-
-      {playing && room.current_game === "quiz" && (
-        <QuizGame room={room} me={me} isHost={isHost} t={t} lang={lang} onFinish={() => {}} />
-      )}
-      {playing && room.current_game === "piano" && (
-        <PianoEscape room={room} me={me} isHost={isHost} t={t} lang={lang} onFinish={() => {}} />
-      )}
-      {playing && room.current_game === "wordle" && (
-        <WordGuess room={room} me={me} isHost={isHost} t={t} lang={lang} onFinish={() => {}} />
-      )}
-      {playing && room.current_game === "worldle" && (
-        <Worldle room={room} me={me} isHost={isHost} t={t} lang={lang} onFinish={() => {}} />
-      )}
+      </Crossfade>
     </div>
   );
 }
