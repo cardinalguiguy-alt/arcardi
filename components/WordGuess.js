@@ -72,6 +72,7 @@ export default function WordGuess({ room, me, isHost, onFinish, t, lang }) {
   const [deadline, setDeadline] = useState(null);
   const [timeLeft, setTimeLeft] = useState(ROUND_MS);
   const [secret, setSecret] = useState(null);
+  const [wordLang, setWordLang] = useState(null); // langue réelle du mot en cours ("fr" | "en")
   const [guesses, setGuesses] = useState([]); // [{ word, pattern }]
   const [current, setCurrent] = useState("");
   const [shake, setShake] = useState(false);
@@ -92,6 +93,7 @@ export default function WordGuess({ room, me, isHost, onFinish, t, lang }) {
 
     ch.on("broadcast", { event: "start" }, ({ payload }) => {
       setSecret(payload.word);
+      setWordLang(payload.wordLang || "fr");
       setDeadline(Date.now() + payload.remaining);
       setGuesses([]); setCurrent(""); setFinished(false);
       setOpponents({});
@@ -141,9 +143,10 @@ export default function WordGuess({ room, me, isHost, onFinish, t, lang }) {
   }
 
   function hostStart() {
-    const bank = lang === "en" ? WORDS_EN : WORDS_FR;
+    const wl = lang === "en" ? "en" : "fr";
+    const bank = wl === "en" ? WORDS_EN : WORDS_FR;
     const word = bank[Math.floor(Math.random() * bank.length)];
-    channelRef.current.send({ type: "broadcast", event: "start", payload: { word, remaining: ROUND_MS } });
+    channelRef.current.send({ type: "broadcast", event: "start", payload: { word, wordLang: wl, remaining: ROUND_MS } });
     roundTimeout.current = setTimeout(hostEndRound, ROUND_MS);
   }
 
@@ -201,7 +204,7 @@ export default function WordGuess({ room, me, isHost, onFinish, t, lang }) {
     else if (/^[a-zA-Z]$/.test(e.key)) typeLetter(e.key.toUpperCase());
   }
 
-  const kb = lang === "en" ? KB_EN : KB_FR;
+  const kb = wordLang === "en" ? KB_EN : KB_FR;
   const done = myResult.current.solved || guesses.length >= MAX_TRIES;
   const letterMap = letterStatuses(guesses);
   const nextTryPoints = Math.max(7 - (guesses.length + 1), 1);
@@ -210,7 +213,10 @@ export default function WordGuess({ room, me, isHost, onFinish, t, lang }) {
     const pts = pointsFor(myResult.current);
     return (
       <div className="panel">
-        <h1>{t("wordleTitle")}</h1>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+          <h1>{t("wordleTitle")}</h1>
+          <span className="lang-pill">{wordLang === "en" ? "🇬🇧 EN" : "🇫🇷 FR"}</span>
+        </div>
         {myResult.current.solved
           ? <p className="hint">{t("foundInPre")} {myResult.current.tries} {t("foundInSuffix")}</p>
           : <p className="hint">{t("wordleFailedPre")} <b style={{ color: "var(--p2)" }}>{secret}</b></p>}
@@ -221,7 +227,10 @@ export default function WordGuess({ room, me, isHost, onFinish, t, lang }) {
 
   return (
     <div className="panel" ref={panelRef} tabIndex={0} onKeyDown={onKeyDown} style={{ outline: "none", maxWidth: 460 }}>
-      <h1>{t("wordleTitle")}</h1>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+        <h1>{t("wordleTitle")}</h1>
+        {secret && <span className="lang-pill">{wordLang === "en" ? "🇬🇧 EN" : "🇫🇷 FR"}</span>}
+      </div>
       {!secret && isHost && (
         <>
           <p className="hint">{MAX_TRIES} {t("wordleIntro")}</p>

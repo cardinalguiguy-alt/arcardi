@@ -153,3 +153,9 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 .c4-cell.filled.p2{ background:var(--p4); }
 .c4-cell.last{ box-shadow:0 0 0 3px rgba(255,255,255,.55) inset; }
 @keyframes c4Drop{ from{ transform:translateY(-140%); opacity:.5; } to{ transform:translateY(0); opacity:1; } }
+
+.lang-pill{
+  font-size:12px; font-weight:800; white-space:nowrap; flex:none;
+  background:rgba(255,255,255,.06); border:1.5px solid var(--line); border-radius:99px;
+  padding:4px 10px;
+}
