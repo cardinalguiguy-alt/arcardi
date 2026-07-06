@@ -5,6 +5,7 @@
   --ink:#F5F3FF; --muted:#9FA3CE; --line:rgba(255,255,255,.09);
   --p1:#FF5D73; --p2:#3EDBF0; --p3:#B6F04C; --p4:#FFB94A; --p5:#A78BFA;
   --ludoY:#FFD23F; --ludoB:#4C8DFF;
+  --dia:#C9A24B; /* laiton vieilli — accent dédié au jeu phare Diapason */
 }
 *{box-sizing:border-box; margin:0; padding:0;}
 html,body{height:100%;}
@@ -368,3 +369,44 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 @keyframes echoFloat{ 0%,100%{ transform:translateY(0); } 50%{ transform:translateY(-9px); } }
 @keyframes echoFlicker{ 0%,100%{ opacity:1; } 50%{ opacity:.3; } }
 @keyframes echoDrift{ 0%,100%{ transform:translateX(0); } 50%{ transform:translateX(10px); } }
+
+/* ---------- Diapason (jeu phare narratif coopératif — diorama 3D) ---------- */
+.diapason-role-badge{
+  display:inline-flex; align-items:center; gap:8px; padding:6px 12px; border-radius:99px;
+  background:rgba(201,162,75,.12); border:1.5px solid var(--dia); font-weight:800; font-size:12.5px;
+  color:var(--dia); margin-bottom:10px;
+}
+.diapason-comm-banner{
+  display:flex; align-items:center; gap:8px; padding:9px 12px; border-radius:12px;
+  background:rgba(201,162,75,.08); border:1.5px solid var(--dia); color:var(--dia);
+  font-size:12.5px; font-weight:700; margin-bottom:14px; line-height:1.4;
+}
+/* Conteneur de la scène 3D : hauteur fixe (le Canvas r3f se cale dessus en 100%/100%),
+   coins arrondis, léger relief — la scène elle-même gère son propre éclairage/brouillard. */
+.diapason-stage-wrap{
+  position:relative; width:100%; height:360px; border-radius:16px; overflow:hidden;
+  border:1.5px solid var(--line); background:#05060b; margin-top:8px;
+  box-shadow:0 10px 30px rgba(0,0,0,.4);
+}
+.diapason-stage-wrap canvas{ outline:none; }
+/* Vignette CSS posée par-dessus le canvas : assombrit les bords, unifie l'ambiance
+   sans dépendre d'un pipeline de post-processing 3D supplémentaire. */
+.diapason-vignette{
+  position:absolute; inset:0; pointer-events:none;
+  background:radial-gradient(ellipse at 50% 45%, rgba(0,0,0,0) 40%, rgba(0,0,0,.55) 100%);
+}
+.diapason-examine-box{
+  margin-top:10px; padding:10px 14px; border-radius:12px; background:rgba(255,255,255,.04);
+  border:1px solid var(--line); font-style:italic;
+}
+.diapason-dial-row{ display:flex; gap:14px; justify-content:center; flex-wrap:wrap; margin:10px 0; }
+.diapason-dial-row.shake{ animation:shakeRow .4s; }
+.diapason-dial-control{
+  display:flex; flex-direction:column; align-items:center; gap:6px;
+  padding:10px; border-radius:12px; background:var(--card2); border:1px solid var(--line); min-width:96px;
+}
+.diapason-dial-label{ font-size:12px; font-weight:700; color:var(--ink); text-align:center; min-height:28px; display:flex; align-items:center; }
+.diapason-symbol-chip{
+  padding:5px 11px; border-radius:99px; border:1.5px solid var(--line); font-size:12px; font-weight:700;
+  background:rgba(255,255,255,.04); color:var(--muted);
+}

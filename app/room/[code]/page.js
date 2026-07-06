@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import { supabase } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/i18n";
 import Brand from "@/components/Brand";
@@ -14,6 +15,10 @@ import PetitsChevaux from "@/components/PetitsChevaux";
 import EchoesRoom from "@/components/EchoesRoom";
 import RoomChat from "@/components/RoomChat";
 
+// Chargement dynamique SANS rendu serveur : le moteur 3D (react-three-fiber /
+// WebGL) ne doit jamais s'exécuter côté serveur.
+const DiapasonGame = dynamic(() => import("@/components/diapason/DiapasonGame"), { ssr: false });
+
 // Métadonnées d'affichage de chaque jeu : icône, couleur d'accent (variable
 // CSS existante), et clés i18n pour le nom / la description courte de la
 // carte de sélection dans le salon.
@@ -25,8 +30,9 @@ const GAME_META = {
   connect4: { icon: "🔴", accent: "--p1", nameKey: "nameC4",      tagKey: "tagC4", minPlayers: 2 },
   ludo:     { icon: "🐴", accent: "--ludoY", nameKey: "nameLudo", tagKey: "tagLudo", minPlayers: 2 },
   echoes:   { icon: "🌊", accent: "--p5", nameKey: "nameEchoes",  tagKey: "tagEchoes", minPlayers: 2 },
+  diapason: { icon: "🎼", accent: "--dia", nameKey: "nameDiapason", tagKey: "tagDiapason", minPlayers: 2 },
 };
-const GAME_ORDER = ["quiz", "wordle", "worldle", "piano", "connect4", "ludo", "echoes"];
+const GAME_ORDER = ["quiz", "wordle", "worldle", "piano", "connect4", "ludo", "echoes", "diapason"];
 
 export default function Room() {
   const { code } = useParams();
@@ -156,6 +162,9 @@ export default function Room() {
               )}
               {room.current_game === "echoes" && (
                 <EchoesRoom room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={() => {}} />
+              )}
+              {room.current_game === "diapason" && (
+                <DiapasonGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={() => {}} />
               )}
             </div>
           </div>
