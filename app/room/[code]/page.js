@@ -10,6 +10,7 @@ import PianoEscape from "@/components/PianoEscape";
 import WordGuess from "@/components/WordGuess";
 import Worldle from "@/components/Worldle";
 import ConnectFour from "@/components/ConnectFour";
+import PetitsChevaux from "@/components/PetitsChevaux";
 
 // Métadonnées d'affichage de chaque jeu : icône, couleur d'accent (variable
 // CSS existante), et clés i18n pour le nom / la description courte de la
@@ -20,8 +21,9 @@ const GAME_META = {
   worldle:  { icon: "🌍", accent: "--p5", nameKey: "nameWorldle", tagKey: "tagWorldle" },
   piano:    { icon: "🎹", accent: "--p1", nameKey: "namePiano",   tagKey: "tagPiano" },
   connect4: { icon: "🔴", accent: "--p1", nameKey: "nameC4",      tagKey: "tagC4", minPlayers: 2 },
+  ludo:     { icon: "🐴", accent: "--ludoY", nameKey: "nameLudo", tagKey: "tagLudo", minPlayers: 2 },
 };
-const GAME_ORDER = ["quiz", "wordle", "worldle", "piano", "connect4"];
+const GAME_ORDER = ["quiz", "wordle", "worldle", "piano", "connect4", "ludo"];
 
 export default function Room() {
   const { code } = useParams();
@@ -104,13 +106,21 @@ export default function Room() {
         </button>
       } />
 
+      {playing && (
+        // Le code du salon reste consultable, mais discret : une pastille
+        // fixée en haut à droite de l'écran, hors du flux, qui ne prend
+        // pas de place au-dessus du jeu (priorité : jouabilité).
+        <div className="room-code-fab">
+          <span className="dot" />
+          {room.code}
+        </div>
+      )}
+
       <Crossfade id={viewKey} duration={480}>
         {playing ? (
           // ===== MODE SCÈNE : le jeu en cours prend toute la priorité =====
           <div style={meta ? { "--accent": `var(${meta.accent})` } : undefined}>
             <div className="stage-bar">
-              <span className="stage-bar-code">🎪 {room.code}</span>
-              <span className="stage-bar-live">{t("liveBadge")}</span>
               <div className="stage-bar-scores">
                 {players.map(p => (
                   <span className={"mini-chip" + (p.profile_id === me.id ? " me" : "")} key={p.id}>
@@ -137,6 +147,9 @@ export default function Room() {
               )}
               {room.current_game === "connect4" && (
                 <ConnectFour room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={() => {}} />
+              )}
+              {room.current_game === "ludo" && (
+                <PetitsChevaux room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={() => {}} />
               )}
             </div>
           </div>
