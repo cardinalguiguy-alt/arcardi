@@ -284,10 +284,6 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
       timeouts.current.push(setTimeout(() => {
         channelRef.current.send({ type: "broadcast", event: "finished", payload: {} });
         if (isHost) saveGameState(room.id, "ludo", { ...stateRef.current, colorOfPlayer: colorRef.current, phase: "finished" });
-        timeouts.current.push(setTimeout(async () => {
-          await supabase.from("rooms").update({ status: "lobby", current_game: null, game_state: null }).eq("id", room.id);
-          onFinish && onFinish();
-        }, 3200));
       }, 900));
       return;
     }
@@ -322,6 +318,20 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
     const map = {};
     selected.forEach((pid, i) => { map[pid] = ord[i]; });
     channelRef.current.send({ type: "broadcast", event: "match_start", payload: { order: ord, colorOfPlayer: map } });
+  }
+
+  // "Rejouer" : relance avec les mêmes joueurs / mêmes couleurs, sans repasser par le salon.
+  function rejouer() {
+    if (!isHost) return;
+    channelRef.current.send({
+      type: "broadcast", event: "match_start",
+      payload: { order: stateRef.current.order, colorOfPlayer: colorRef.current },
+    });
+  }
+
+  async function backToRoom() {
+    await supabase.from("rooms").update({ status: "lobby", current_game: null, game_state: null }).eq("id", room.id);
+    onFinish && onFinish();
   }
 
   function toggleSelect(pid) {
@@ -387,6 +397,16 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
             {t("peYourGain")} <span style={{ color: "var(--p3)", fontFamily: "'Space Mono'" }}>+{myGain} {t("pts")}</span>
           </p>
         )}
+        <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 16, flexWrap: "wrap" }}>
+          {isHost ? (
+            <>
+              <button className="btn" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={rejouer}>🔁 {t("c4Rejouer")}</button>
+              <button className="btn ghost" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={backToRoom}>🏠 {t("c4BackToRoom")}</button>
+            </>
+          ) : (
+            <p className="muted">{t("c4RejouerWait")}</p>
+          )}
+        </div>
       </div>
     );
   } else if (phase === "playing") {

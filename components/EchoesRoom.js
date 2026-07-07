@@ -661,6 +661,20 @@ export default function EchoesRoom({ room, me, isHost, players, t, lang, onFinis
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
+  // "Rejouer" : relance avec les 2 mêmes joueurs, puzzle entièrement régénéré
+  // (cohérent avec le principe procédural/rejouable d'Échos).
+  function rejouer() {
+    if (!isHost || !roles.A || !roles.B) return;
+    const [roleA, roleB] = Math.random() < 0.5 ? [roles.A, roles.B] : [roles.B, roles.A];
+    const payload = {
+      roleA, roleB,
+      ch1: genChapter1(), ch2: genChapter2(), ch3: genChapter3(),
+      ch4: genChapter4(), ch5: genChapter5(), ch6: genChapter6(lang),
+      deadline: Date.now() + TOTAL_MS,
+    };
+    channelRef.current.send({ type: "broadcast", event: "match_start", payload });
+  }
+
   async function backToLobby() {
     await supabase.from("rooms").update({ status: "lobby", current_game: null, game_state: null }).eq("id", room.id);
     onFinish && onFinish();
@@ -833,7 +847,12 @@ export default function EchoesRoom({ room, me, isHost, players, t, lang, onFinis
                 {t("peYourGain")} <span style={{ color: "var(--p3)", fontFamily: "'Space Mono'" }}>+{myGain} {t("pts")}</span>
               </p>
             )}
-            {isHost ? <button className="btn" onClick={backToLobby}>{t("backLounge")}</button> : <p className="muted">{t("hostBrings")}</p>}
+            {isHost ? (
+              <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+                <button className="btn" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={rejouer}>🔁 {t("c4Rejouer")}</button>
+                <button className="btn ghost" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={backToLobby}>{t("backLounge")}</button>
+              </div>
+            ) : <p className="muted">{t("hostBrings")}</p>}
           </div>
         )}
       </Crossfade>

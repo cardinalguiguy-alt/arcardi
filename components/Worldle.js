@@ -227,10 +227,16 @@ export default function Worldle({ room, me, isHost, players, onFinish, t, lang }
   function hostEndRound() {
     clearTimeout(roundTimeout.current);
     channelRef.current.send({ type: "broadcast", event: "finished", payload: {} });
-    setTimeout(async () => {
-      await supabase.from("rooms").update({ status: "lobby", current_game: null, game_state: null }).eq("id", room.id);
-      onFinish && onFinish();
-    }, 3000);
+  }
+
+  function rejouer() {
+    if (!isHost) return;
+    hostStart();
+  }
+
+  async function backToRoom() {
+    await supabase.from("rooms").update({ status: "lobby", current_game: null, game_state: null }).eq("id", room.id);
+    onFinish && onFinish();
   }
 
   const suggestions = useMemo(() => {
@@ -270,6 +276,16 @@ export default function Worldle({ room, me, isHost, players, onFinish, t, lang }
           ? <p className="hint">{t("foundInPre")} {myResult.current.tries} {t("foundInSuffix")}</p>
           : <p className="hint">{t("worldleFailedPre")} <b style={{ color: "var(--p2)" }}>{target["fr"]} <FlagIcon code={target.id} /></b></p>}
         <p style={{ fontWeight: 800 }}>{t("peYourGain")} <span style={{ color: "var(--p3)", fontFamily: "'Space Mono'" }}>+{pts} {t("pts")}</span></p>
+        <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 16, flexWrap: "wrap" }}>
+          {isHost ? (
+            <>
+              <button className="btn" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={rejouer}>🔁 {t("c4Rejouer")}</button>
+              <button className="btn ghost" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={backToRoom}>🏠 {t("c4BackToRoom")}</button>
+            </>
+          ) : (
+            <p className="muted">{t("c4RejouerWait")}</p>
+          )}
+        </div>
       </div>
     );
   }

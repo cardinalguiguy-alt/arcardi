@@ -359,7 +359,7 @@ export default function ConnectFour({ room, me, isHost, players, t, lang, onFini
   }
 
   return (
-    <div className="panel" style={{ maxWidth: "min(760px, 94vw)" }}>
+    <div className="panel" style={{ maxWidth: "min(920px, 96vw)" }}>
       <h1>{t("c4Title")}</h1>
       <Crossfade id={phase}>{content}</Crossfade>
     </div>

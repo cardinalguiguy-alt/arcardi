@@ -352,6 +352,7 @@ export default function QuizGame({ room, me, isHost, onFinish, t, lang }) {
   // Miroirs toujours à jour de q/picked pour le handler "reveal" (évite les closures figées).
   const qRef = useRef(null);
   const pickedRef = useRef(null);
+  const lastDiffRef = useRef("easy");
 
   function persistState(qPayload, deadlineAt, revealedFlag, finishedFlag) {
     if (!isHost) return;
@@ -375,6 +376,8 @@ export default function QuizGame({ room, me, isHost, onFinish, t, lang }) {
       setPicked(null);
       setRevealed(false);
       setRoundResults([]);
+      setFinished(false);
+      if (payload.index === 0) { myGain.current = 0; setPoints(0); }
     });
     ch.on("broadcast", { event: "reveal" }, async () => {
       setRevealed(true);
@@ -469,6 +472,7 @@ export default function QuizGame({ room, me, isHost, onFinish, t, lang }) {
   }, [deadline]);
 
   function hostStart(diff) {
+    lastDiffRef.current = diff;
     const bank = (lang === "en" ? QUESTIONS_EN : QUESTIONS_FR)[diff];
     deckRef.current = shuffle(bank).slice(0, N_QUESTIONS);
     hostSend(0, diff);
@@ -500,10 +504,16 @@ export default function QuizGame({ room, me, isHost, onFinish, t, lang }) {
 
   async function hostFinish() {
     channelRef.current.send({ type: "broadcast", event: "finished", payload: {} });
-    timeouts.current.push(setTimeout(async () => {
-      await supabase.from("rooms").update({ status: "lobby", current_game: null, game_state: null }).eq("id", room.id);
-      onFinish && onFinish();
-    }, 3000));
+  }
+
+  async function backToRoom() {
+    await supabase.from("rooms").update({ status: "lobby", current_game: null, game_state: null }).eq("id", room.id);
+    onFinish && onFinish();
+  }
+
+  function rejouer() {
+    if (!isHost) return;
+    hostStart(lastDiffRef.current);
   }
 
   function pick(text) {
@@ -542,6 +552,16 @@ export default function QuizGame({ room, me, isHost, onFinish, t, lang }) {
           <div>
             <p className="hint">{t("quizDone")}</p>
             <p style={{ fontWeight: 800 }}>{t("peYourGain")} <span style={{ color: "var(--p3)", fontFamily: "'Space Mono'" }}>+{points} {t("pts")}</span></p>
+            <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 16, flexWrap: "wrap" }}>
+              {isHost ? (
+                <>
+                  <button className="btn" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={rejouer}>🔁 {t("c4Rejouer")}</button>
+                  <button className="btn ghost" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={backToRoom}>🏠 {t("c4BackToRoom")}</button>
+                </>
+              ) : (
+                <p className="muted">{t("c4RejouerWait")}</p>
+              )}
+            </div>
           </div>
         ) : !q ? (
           isHost ? (

@@ -97,6 +97,14 @@ export default function PianoEscape({ room, me, isHost, onFinish, t, lang }) {
       }
     });
 
+    ch.on("broadcast", { event: "restart" }, () => {
+      setStage(0);
+      setShowHint(false); setFeedback(""); setSolverMsg("");
+      myGain.current = 0;
+      resultSent.current = false;
+      if (isHost) saveGameState(room.id, "piano", { stage: 0 });
+    });
+
     ch.subscribe(status => {
       if (status === "SUBSCRIBED" && !restoredRef.current) {
         restoredRef.current = true;
@@ -126,6 +134,11 @@ export default function PianoEscape({ room, me, isHost, onFinish, t, lang }) {
   async function backToLobby() {
     await supabase.from("rooms").update({ status: "lobby", current_game: null, game_state: null }).eq("id", room.id);
     onFinish && onFinish();
+  }
+
+  function rejouer() {
+    if (!isHost) return;
+    channelRef.current.send({ type: "broadcast", event: "restart", payload: {} });
   }
 
   const digitsFound = DIGITS.slice(0, Math.max(0, Math.min(stage - 1, 4)));
@@ -173,7 +186,12 @@ export default function PianoEscape({ room, me, isHost, onFinish, t, lang }) {
           <p className="hint">{t("peVictoryText")}</p>
           <p style={{ fontWeight: 800 }}>{t("peYourGain")} <span style={{ color: "var(--p3)", fontFamily: "'Space Mono'" }}>+{myGain.current} {t("pts")}</span></p>
           {isHost
-            ? <button className="btn" onClick={backToLobby}>{t("backLounge")}</button>
+            ? (
+              <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+                <button className="btn" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={rejouer}>🔁 {t("c4Rejouer")}</button>
+                <button className="btn ghost" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={backToLobby}>{t("backLounge")}</button>
+              </div>
+            )
             : <p className="muted">{t("hostBrings")}</p>}
         </div>
       )}

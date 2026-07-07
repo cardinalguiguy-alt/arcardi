@@ -216,6 +216,17 @@ export default function DiapasonGame({ room, me, isHost, players, t, lang, onFin
     onFinish && onFinish();
   }
 
+  // "Rejouer" : relance le Prologue avec les 2 mêmes joueurs, nouveau code de portes.
+  function rejouer() {
+    if (!isHost || !roles.est || !roles.ouest) return;
+    const [roleEst, roleOuest] = Math.random() < 0.5 ? [roles.est, roles.ouest] : [roles.ouest, roles.est];
+    const { estDoorCode, ouestDoorCode } = genProloguePuzzle();
+    channelRef.current.send({
+      type: "broadcast", event: "match_start",
+      payload: { roleEst, roleOuest, estDoorCode, ouestDoorCode },
+    });
+  }
+
   function examineText() {
     if (examine === "dark-search") return t("diapasonSearchDark");
     if (examine === "switch-found") return t("diapasonSwitchFound");
@@ -286,7 +297,12 @@ export default function DiapasonGame({ room, me, isHost, players, t, lang, onFin
                   {t("peYourGain")} <span style={{ color: "var(--p3)", fontFamily: "'Space Mono'" }}>+{myGain} {t("pts")}</span>
                 </p>
               )}
-              {isHost ? <button className="btn" onClick={backToLobby}>{t("backLounge")}</button> : <p className="muted">{t("hostBrings")}</p>}
+              {isHost ? (
+              <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+                <button className="btn" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={rejouer}>🔁 {t("c4Rejouer")}</button>
+                <button className="btn ghost" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={backToLobby}>{t("backLounge")}</button>
+              </div>
+            ) : <p className="muted">{t("hostBrings")}</p>}
             </div>
           )}
         </Crossfade>

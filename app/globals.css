@@ -158,10 +158,10 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 
 /* ===== Puissance 4 ===== */
 .c4-board{
-  display:grid; grid-template-columns:repeat(7, 1fr); gap:6px;
-  background:rgba(0,0,0,.35); padding:10px; border-radius:16px;
+  display:grid; grid-template-columns:repeat(7, 1fr); gap:10px;
+  background:rgba(0,0,0,.35); padding:16px; border-radius:18px;
 }
-.c4-col{ display:flex; flex-direction:column; gap:6px; }
+.c4-col{ display:flex; flex-direction:column; gap:10px; }
 .c4-cell{
   width:100%; aspect-ratio:1; border-radius:50%;
   background:rgba(0,0,0,.4); box-shadow:inset 0 2px 5px rgba(0,0,0,.55);
