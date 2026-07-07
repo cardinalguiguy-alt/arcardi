@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { saveGameState, readGameState } from "@/lib/gameSync";
+import FlagIcon from "./FlagIcon";
 
 const MAX_TRIES = 6;
 const ROUND_MS = 180000; // 3 min
@@ -122,7 +124,7 @@ const ARROWS = ["⬆️", "↗️", "➡️", "↘️", "⬇️", "↙️", "⬅
 function arrowFor(deg) { return ARROWS[Math.round(deg / 45) % 8]; }
 function proximityPct(km) { return Math.max(0, Math.round(100 - (km / 20015) * 100)); }
 
-export default function Worldle({ room, me, isHost, onFinish, t, lang }) {
+export default function Worldle({ room, me, isHost, players, onFinish, t, lang }) {
   const [deadline, setDeadline] = useState(null);
   const [timeLeft, setTimeLeft] = useState(ROUND_MS);
   const [target, setTarget] = useState(null); // objet pays
@@ -135,6 +137,8 @@ export default function Worldle({ room, me, isHost, onFinish, t, lang }) {
   const channelRef = useRef(null);
   const myResult = useRef({ solved: false, tries: 0, bestPct: 0 });
   const roundTimeout = useRef(null);
+  const doneSetRef = useRef(new Set());
+  const restoredRef = useRef(false);
 
   useEffect(() => {
     const ch = supabase.channel("worldle_" + room.id, { config: { broadcast: { self: true } } });
@@ -145,14 +149,30 @@ export default function Worldle({ room, me, isHost, onFinish, t, lang }) {
       setDeadline(Date.now() + payload.remaining);
       setGuesses([]); setQuery(""); setFinished(false); setOpponents({});
       myResult.current = { solved: false, tries: 0, bestPct: 0 };
+      doneSetRef.current = new Set();
       setTimeout(() => inputRef.current && inputRef.current.focus(), 50);
+      if (isHost) {
+        saveGameState(room.id, "worldle", {
+          phase: "playing", targetId: payload.targetId,
+          deadlineAt: Date.now() + payload.remaining, finished: false,
+        });
+      }
     });
     ch.on("broadcast", { event: "progress" }, ({ payload }) => {
+      // Fin de manche anticipée : dès que tout le monde a fini, pas besoin
+      // d'attendre le chrono complet.
+      if (payload.solved || payload.failed) {
+        doneSetRef.current.add(payload.profile_id);
+        if (isHost && players?.length > 0 && doneSetRef.current.size >= players.length) {
+          hostEndRound();
+        }
+      }
       if (payload.profile_id === me.id) return;
       setOpponents(prev => ({ ...prev, [payload.profile_id]: payload }));
     });
     ch.on("broadcast", { event: "finished" }, async () => {
       setFinished(true);
+      if (isHost) saveGameState(room.id, "worldle", { phase: "finished", finished: true });
       try {
         const pts = pointsFor(myResult.current);
         await supabase.from("game_results").insert({ room_id: room.id, profile_id: me.id, game_id: "worldle", points: pts });
@@ -160,7 +180,25 @@ export default function Worldle({ room, me, isHost, onFinish, t, lang }) {
       } catch (e) {}
     });
 
-    ch.subscribe();
+    ch.subscribe(status => {
+      if (status !== "SUBSCRIBED" || restoredRef.current) return;
+      restoredRef.current = true;
+      // Resynchronisation : le pays cible et le chrono partagés sont
+      // restaurés immédiatement après un rechargement de page. Seule la
+      // progression PRIVÉE du joueur (ses propres essais) repart de zéro
+      // (RLS : seul l'hôte écrit sur le salon).
+      const saved = readGameState(room, "worldle");
+      if (!saved) return;
+      if (saved.finished) { setFinished(true); return; }
+      if (!saved.targetId) return;
+      setTarget(COUNTRIES.find(c => c.id === saved.targetId));
+      setDeadline(saved.deadlineAt);
+      setTimeout(() => inputRef.current && inputRef.current.focus(), 50);
+      if (isHost) {
+        const msLeft = Math.max(0, saved.deadlineAt - Date.now());
+        roundTimeout.current = setTimeout(hostEndRound, msLeft);
+      }
+    });
     return () => { clearTimeout(roundTimeout.current); supabase.removeChannel(ch); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [room.id]);
@@ -190,7 +228,7 @@ export default function Worldle({ room, me, isHost, onFinish, t, lang }) {
     clearTimeout(roundTimeout.current);
     channelRef.current.send({ type: "broadcast", event: "finished", payload: {} });
     setTimeout(async () => {
-      await supabase.from("rooms").update({ status: "lobby", current_game: null }).eq("id", room.id);
+      await supabase.from("rooms").update({ status: "lobby", current_game: null, game_state: null }).eq("id", room.id);
       onFinish && onFinish();
     }, 3000);
   }
@@ -230,14 +268,14 @@ export default function Worldle({ room, me, isHost, onFinish, t, lang }) {
         <h1>{t("worldleTitle")}</h1>
         {myResult.current.solved
           ? <p className="hint">{t("foundInPre")} {myResult.current.tries} {t("foundInSuffix")}</p>
-          : <p className="hint">{t("worldleFailedPre")} <b style={{ color: "var(--p2)" }}>{target["fr"]} {target.flag}</b></p>}
+          : <p className="hint">{t("worldleFailedPre")} <b style={{ color: "var(--p2)" }}>{target["fr"]} <FlagIcon code={target.id} /></b></p>}
         <p style={{ fontWeight: 800 }}>{t("peYourGain")} <span style={{ color: "var(--p3)", fontFamily: "'Space Mono'" }}>+{pts} {t("pts")}</span></p>
       </div>
     );
   }
 
   return (
-    <div className="panel" style={{ maxWidth: 480 }}>
+    <div className="panel" style={{ maxWidth: "min(640px, 92vw)" }}>
       <h1>{t("worldleTitle")}</h1>
       {!target && isHost && (
         <>
@@ -267,7 +305,7 @@ export default function Worldle({ room, me, isHost, onFinish, t, lang }) {
                   {suggestions.map((c, i) => (
                     <button key={c.id} onClick={() => guessCountry(c)}
                       style={{ display: "flex", gap: 8, width: "100%", padding: "10px 12px", textAlign: "left", background: i === highlight ? "rgba(255,255,255,.08)" : "transparent" }}>
-                      <span>{c.flag}</span><span>{c[lang] || c.fr}</span>
+                      <span><FlagIcon code={c.id} /></span><span>{c[lang] || c.fr}</span>
                     </button>
                   ))}
                 </div>
@@ -289,7 +327,7 @@ export default function Worldle({ room, me, isHost, onFinish, t, lang }) {
                   background: "rgba(255,255,255,.03)"
                 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: g.country.id === target.id ? 0 : 6 }}>
-                    <span>{g.country.flag} {g.country[lang] || g.country.fr}</span>
+                    <span><FlagIcon code={g.country.id} /> {g.country[lang] || g.country.fr}</span>
                     {g.country.id === target.id
                       ? <span style={{ color: "var(--p3)", fontWeight: 800 }}>🎯</span>
                       : <span style={{ display: "flex", gap: 8, alignItems: "center", fontFamily: "'Space Mono'", fontSize: 13 }}>

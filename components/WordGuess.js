@@ -1,7 +1,9 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { saveGameState, readGameState } from "@/lib/gameSync";
 import { DICT_FR, DICT_EN } from "@/lib/wordDictionary";
+import FlagIcon from "./FlagIcon";
 
 const WORD_LEN = 5;
 const MAX_TRIES = 6;
@@ -69,7 +71,7 @@ function letterStatuses(guesses) {
   return map;
 }
 
-export default function WordGuess({ room, me, isHost, onFinish, t, lang }) {
+export default function WordGuess({ room, me, isHost, players, onFinish, t, lang }) {
   const [deadline, setDeadline] = useState(null);
   const [timeLeft, setTimeLeft] = useState(ROUND_MS);
   const [secret, setSecret] = useState(null);
@@ -87,6 +89,8 @@ export default function WordGuess({ room, me, isHost, onFinish, t, lang }) {
   const myResult = useRef({ solved: false, tries: 0 });
   const finishTimeout = useRef(null);
   const roundTimeout = useRef(null);
+  const doneSetRef = useRef(new Set());
+  const restoredRef = useRef(false);
 
   useEffect(() => {
     const ch = supabase.channel("wordle_" + room.id, { config: { broadcast: { self: true } } });
@@ -100,14 +104,32 @@ export default function WordGuess({ room, me, isHost, onFinish, t, lang }) {
       setOpponents({});
       setRevealState({ row: -1, count: 0 });
       myResult.current = { solved: false, tries: 0 };
+      doneSetRef.current = new Set();
       setTimeout(() => panelRef.current && panelRef.current.focus(), 50);
+      if (isHost) {
+        saveGameState(room.id, "wordle", {
+          phase: "playing", word: payload.word, wordLang: payload.wordLang || "fr",
+          deadlineAt: Date.now() + payload.remaining, finished: false,
+        });
+      }
     });
     ch.on("broadcast", { event: "progress" }, ({ payload }) => {
+      // Fin de manche anticipée : dès que tout le monde a fini (trouvé ou
+      // épuisé ses essais), pas besoin d'attendre le chrono complet.
+      if (payload.solved || payload.failed) {
+        doneSetRef.current.add(payload.profile_id);
+        if (isHost && players?.length > 0 && doneSetRef.current.size >= players.length) {
+          hostEndRound();
+        }
+      }
       if (payload.profile_id === me.id) return;
       setOpponents(prev => ({ ...prev, [payload.profile_id]: payload }));
     });
     ch.on("broadcast", { event: "finished" }, async () => {
       setFinished(true);
+      if (isHost) {
+        saveGameState(room.id, "wordle", { phase: "finished", finished: true });
+      }
       try {
         await supabase.from("game_results").insert({
           room_id: room.id, profile_id: me.id, game_id: "wordle", points: pointsFor(myResult.current)
@@ -118,7 +140,28 @@ export default function WordGuess({ room, me, isHost, onFinish, t, lang }) {
       } catch (e) {}
     });
 
-    ch.subscribe();
+    ch.subscribe(status => {
+      if (status !== "SUBSCRIBED" || restoredRef.current) return;
+      restoredRef.current = true;
+      // Resynchronisation : le mot et le chrono partagés sont restaurés
+      // immédiatement après un rechargement de page. Seule la progression
+      // PRIVÉE du joueur (ses propres essais) ne peut pas être restaurée
+      // (RLS : seul l'hôte écrit sur le salon) — il rejoint la manche en
+      // cours avec une grille vierge plutôt que de rester bloqué sur l'écran
+      // de démarrage.
+      const saved = readGameState(room, "wordle");
+      if (!saved) return;
+      if (saved.finished) { setFinished(true); return; }
+      if (!saved.word) return;
+      setSecret(saved.word);
+      setWordLang(saved.wordLang || "fr");
+      setDeadline(saved.deadlineAt);
+      setTimeout(() => panelRef.current && panelRef.current.focus(), 50);
+      if (isHost) {
+        const msLeft = Math.max(0, saved.deadlineAt - Date.now());
+        roundTimeout.current = setTimeout(hostEndRound, msLeft);
+      }
+    });
     return () => {
       clearTimeout(finishTimeout.current);
       clearTimeout(roundTimeout.current);
@@ -155,7 +198,7 @@ export default function WordGuess({ room, me, isHost, onFinish, t, lang }) {
     clearTimeout(roundTimeout.current);
     channelRef.current.send({ type: "broadcast", event: "finished", payload: {} });
     finishTimeout.current = setTimeout(async () => {
-      await supabase.from("rooms").update({ status: "lobby", current_game: null }).eq("id", room.id);
+      await supabase.from("rooms").update({ status: "lobby", current_game: null, game_state: null }).eq("id", room.id);
       onFinish && onFinish();
     }, 3000);
   }
@@ -224,7 +267,7 @@ export default function WordGuess({ room, me, isHost, onFinish, t, lang }) {
       <div className="panel">
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
           <h1>{t("wordleTitle")}</h1>
-          <span className="lang-pill">{wordLang === "en" ? "🇬🇧 EN" : "🇫🇷 FR"}</span>
+          <span className="lang-pill"><FlagIcon code={wordLang === "en" ? "gb" : "fr"} size={14} /> {wordLang === "en" ? "EN" : "FR"}</span>
         </div>
         {myResult.current.solved
           ? <p className="hint">{t("foundInPre")} {myResult.current.tries} {t("foundInSuffix")}</p>
@@ -235,10 +278,10 @@ export default function WordGuess({ room, me, isHost, onFinish, t, lang }) {
   }
 
   return (
-    <div className="panel" ref={panelRef} tabIndex={0} onKeyDown={onKeyDown} style={{ outline: "none", maxWidth: 460 }}>
+    <div className="panel" ref={panelRef} tabIndex={0} onKeyDown={onKeyDown} style={{ outline: "none", maxWidth: "min(560px, 90vw)" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
         <h1>{t("wordleTitle")}</h1>
-        {secret && <span className="lang-pill">{wordLang === "en" ? "🇬🇧 EN" : "🇫🇷 FR"}</span>}
+        {secret && <span className="lang-pill"><FlagIcon code={wordLang === "en" ? "gb" : "fr"} size={14} /> {wordLang === "en" ? "EN" : "FR"}</span>}
       </div>
       {!secret && isHost && (
         <>
@@ -266,11 +309,11 @@ export default function WordGuess({ room, me, isHost, onFinish, t, lang }) {
                     const shown = g && i < revealedCount;
                     return (
                       <div key={i} style={{
-                        width: 46, height: 46, display: "flex", alignItems: "center", justifyContent: "center",
+                        width: 56, height: 56, display: "flex", alignItems: "center", justifyContent: "center",
                         border: `2.5px solid ${shown ? COLORS[g.pattern[i]] : "var(--line)"}`,
                         background: shown ? COLORS[g.pattern[i]] : "rgba(255,255,255,.03)",
                         color: shown ? "#12142A" : "var(--ink)",
-                        borderRadius: 10, fontFamily: "'Space Mono'", fontWeight: 700, fontSize: 20,
+                        borderRadius: 10, fontFamily: "'Space Mono'", fontWeight: 700, fontSize: 24,
                         transition: "transform .22s, background-color .22s, border-color .22s",
                         transform: g && !shown ? "scale(.85) rotateX(40deg)" : "scale(1) rotateX(0deg)"
                       }}>{l.trim()}</div>

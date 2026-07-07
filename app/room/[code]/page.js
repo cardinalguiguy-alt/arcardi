@@ -38,6 +38,7 @@ export default function Room() {
   const [room, setRoom] = useState(null);
   const [players, setPlayers] = useState([]);
   const [error, setError] = useState("");
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     let roomSub, playersSub;
@@ -93,6 +94,15 @@ export default function Room() {
     router.push("/lounge");
   }
 
+  async function copyInviteLink() {
+    try {
+      const url = `${window.location.origin}/room/${room.code}`;
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2200);
+    } catch (e) {}
+  }
+
   if (error) return <div className="wrap"><div className="panel"><h1>😕</h1><p className="hint">{error}</p></div></div>;
   if (!room || !me) return <div className="wrap"><p className="muted">…</p></div>;
 
@@ -104,7 +114,7 @@ export default function Room() {
   const viewKey = playing ? "stage-" + room.current_game : "lobby";
 
   return (
-    <div className="wrap">
+    <div className="wrap wrap-room">
       <Brand lang={lang} setLang={setLang} t={t} right={
         <button className="btn ghost" style={{ width: "auto", margin: 0, padding: "8px 14px", fontSize: 13 }} onClick={leaveRoom}>
           {t("leaveRoom")}
@@ -166,10 +176,13 @@ export default function Room() {
           </div>
         ) : (
           // ===== MODE LOBBY : infos du salon + sélection du prochain jeu =====
-          <div className="panel">
+          <div className="panel" style={{ maxWidth: "min(760px, 94vw)" }}>
             <h1>{isHost ? t("roomTitleHost") : t("roomTitle")}</h1>
             <p className="hint">{t("shareCode")}</p>
             <div className="code-badge">{room.code}</div>
+            <button className="btn ghost" style={{ marginTop: 0 }} onClick={copyInviteLink}>
+              {copied ? "✅ " + t("linkCopied") : "🔗 " + t("copyInviteLink")}
+            </button>
             <p className="muted">{players.length} {t("players")} — {t("scoreLive")} :</p>
             <div style={{ marginTop: 10 }}>
               {players.map(p => (

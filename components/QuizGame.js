@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { saveGameState, readGameState } from "@/lib/gameSync";
 import Crossfade from "./Crossfade";
 
 const QUESTIONS_FR = {
@@ -327,6 +328,10 @@ function shuffle(a) { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { co
 const ROUND_MS_BY_DIFF = { easy: 11000, medium: 8500, hard: 6500 };
 const POINTS_BY_DIFF = { easy: 1, medium: 2, hard: 3 };
 const N_QUESTIONS = 10;
+// Pause de lecture entre la révélation de la bonne réponse et la question
+// suivante : allongée (2s -> 3,8s) pour laisser le temps de réagir à voix
+// haute entre amis, sans que la question suivante n'arrive déjà dessus.
+const REVEAL_PAUSE_MS = 3800;
 
 export default function QuizGame({ room, me, isHost, onFinish, t, lang }) {
   // Le paquet n'existe QUE chez l'hôte : les autres reçoivent tout par broadcast.
@@ -339,12 +344,23 @@ export default function QuizGame({ room, me, isHost, onFinish, t, lang }) {
   const [timeLeft, setTimeLeft] = useState(0);
   const [finished, setFinished] = useState(false);
   const [points, setPoints] = useState(0);
+  const [roundResults, setRoundResults] = useState([]); // qui a répondu juste/faux cette manche-ci
   const channelRef = useRef(null);
   const myGain = useRef(0);
   const timeouts = useRef([]);
+  const restoredRef = useRef(false);
   // Miroirs toujours à jour de q/picked pour le handler "reveal" (évite les closures figées).
   const qRef = useRef(null);
   const pickedRef = useRef(null);
+
+  function persistState(qPayload, deadlineAt, revealedFlag, finishedFlag) {
+    if (!isHost) return;
+    saveGameState(room.id, "quiz", {
+      phase: finishedFlag ? "finished" : "playing",
+      q: qPayload, deadlineAt, revealed: revealedFlag, finished: finishedFlag,
+      deck: deckRef.current, diff: qPayload?.diff,
+    });
+  }
 
   useEffect(() => {
     const ch = supabase.channel("quiz_" + room.id, { config: { broadcast: { self: true } } });
@@ -358,13 +374,15 @@ export default function QuizGame({ room, me, isHost, onFinish, t, lang }) {
       setDeadline(Date.now() + payload.remaining);
       setPicked(null);
       setRevealed(false);
+      setRoundResults([]);
     });
     ch.on("broadcast", { event: "reveal" }, async () => {
       setRevealed(true);
       // Validation du résultat UNIQUEMENT à l'issue du timer, sur la dernière réponse choisie.
       const finalPick = pickedRef.current;
       const currentQ = qRef.current;
-      if (finalPick && currentQ && finalPick === currentQ.good) {
+      const correct = !!(finalPick && currentQ && finalPick === currentQ.good);
+      if (correct) {
         const gain = POINTS_BY_DIFF[currentQ.diff] || 2;
         myGain.current += gain;
         setPoints(p => p + gain);
@@ -373,9 +391,22 @@ export default function QuizGame({ room, me, isHost, onFinish, t, lang }) {
           await supabase.rpc("add_points", { p_room: room.id, p_delta: gain });
         } catch (e) {}
       }
+      // Retour social : chacun diffuse SON propre résultat pour cette question,
+      // pour que tout le monde voie en direct qui a trouvé la bonne réponse.
+      if (finalPick) {
+        channelRef.current?.send({
+          type: "broadcast", event: "answer_result",
+          payload: { profile_id: me.id, username: me.username, avatar: me.avatar, correct },
+        });
+      }
+      if (isHost) persistState(currentQ, Date.now(), true, false);
+    });
+    ch.on("broadcast", { event: "answer_result" }, ({ payload }) => {
+      setRoundResults(prev => (prev.some(r => r.profile_id === payload.profile_id) ? prev : [...prev, payload]));
     });
     ch.on("broadcast", { event: "finished" }, async () => {
       setFinished(true);
+      if (isHost) persistState(null, null, false, true);
       // Chaque joueur enregistre SON résultat (RLS : on ne peut écrire que le sien).
       try {
         await supabase.from("game_results").insert({
@@ -384,7 +415,42 @@ export default function QuizGame({ room, me, isHost, onFinish, t, lang }) {
       } catch (e) {}
     });
 
-    ch.subscribe();
+    ch.subscribe(status => {
+      if (status !== "SUBSCRIBED" || restoredRef.current) return;
+      restoredRef.current = true;
+      // Resynchronisation : une manche en cours (rechargement de page) est
+      // restaurée immédiatement. Le compteur de points de CETTE partie
+      // (affiché en haut à droite) ne peut pas être restauré à l'identique
+      // (il est calculé localement au fil des révélations) — le score
+      // réel du salon, lui, n'est jamais affecté et reste intact.
+      const saved = readGameState(room, "quiz");
+      if (!saved) return;
+      if (saved.finished) { setFinished(true); return; }
+      if (!saved.q) return;
+      qRef.current = saved.q;
+      setQ(saved.q);
+      setRoundTotal(saved.q.remaining);
+      setRoundResults([]);
+      if (saved.revealed) {
+        setRevealed(true);
+        setDeadline(Date.now());
+      } else {
+        setDeadline(saved.deadlineAt);
+        setRevealed(false);
+        if (isHost && saved.deck) {
+          deckRef.current = saved.deck;
+          const msLeft = Math.max(0, saved.deadlineAt - Date.now());
+          timeouts.current.push(setTimeout(() => {
+            channelRef.current.send({ type: "broadcast", event: "reveal", payload: {} });
+            timeouts.current.push(setTimeout(() => {
+              if (saved.q.index + 1 < deckRef.current.length) hostSend(saved.q.index + 1, saved.diff);
+              else hostFinish();
+            }, REVEAL_PAUSE_MS));
+          }, msLeft));
+        }
+      }
+    });
+
     return () => {
       timeouts.current.forEach(clearTimeout);
       supabase.removeChannel(ch);
@@ -421,19 +487,21 @@ export default function QuizGame({ room, me, isHost, onFinish, t, lang }) {
       diff
     };
     channelRef.current.send({ type: "broadcast", event: "question", payload });
+    const deadlineAt = Date.now() + roundMs;
+    persistState(payload, deadlineAt, false, false);
     timeouts.current.push(setTimeout(() => {
       channelRef.current.send({ type: "broadcast", event: "reveal", payload: {} });
       timeouts.current.push(setTimeout(() => {
         if (index + 1 < deckRef.current.length) hostSend(index + 1, diff);
         else hostFinish();
-      }, 2000));
+      }, REVEAL_PAUSE_MS));
     }, roundMs));
   }
 
   async function hostFinish() {
     channelRef.current.send({ type: "broadcast", event: "finished", payload: {} });
     timeouts.current.push(setTimeout(async () => {
-      await supabase.from("rooms").update({ status: "lobby", current_game: null }).eq("id", room.id);
+      await supabase.from("rooms").update({ status: "lobby", current_game: null, game_state: null }).eq("id", room.id);
       onFinish && onFinish();
     }, 3000));
   }
@@ -457,7 +525,7 @@ export default function QuizGame({ room, me, isHost, onFinish, t, lang }) {
   const phaseKey = finished ? "finished" : q ? "q" + q.index : "intro";
 
   return (
-    <div className="panel" style={{ maxWidth: 620 }}>
+    <div className="panel" style={{ maxWidth: "min(720px, 92vw)" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
         <h1>{t("quizTitle")}</h1>
         {points > 0 && (
@@ -542,6 +610,15 @@ export default function QuizGame({ room, me, isHost, onFinish, t, lang }) {
               <p className="muted" style={{ marginTop: 14 }}>
                 {picked ? "" : t("tooSlow") + " "} {t("rightAnswer")} <b style={{ color: "var(--p3)" }}>{q.good}</b>
               </p>
+            )}
+            {revealed && roundResults.length > 0 && (
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 14 }}>
+                {roundResults.map(r => (
+                  <span key={r.profile_id} className="quiz-result-chip" style={{ borderColor: r.correct ? "var(--p3)" : "var(--p1)" }}>
+                    {r.avatar} {r.username} {r.correct ? "✅" : "❌"}
+                  </span>
+                ))}
+              </div>
             )}
           </div>
         )}

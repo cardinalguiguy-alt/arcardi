@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { saveGameState, readGameState } from "@/lib/gameSync";
 import Crossfade from "./Crossfade";
 
 /* ==========================================================================
@@ -417,12 +418,13 @@ export default function EchoesRoom({ room, me, isHost, players, t, lang, onFinis
 
   const channelRef = useRef(null);
   // Miroir toujours à jour pour les handlers de broadcast (évite les closures figées).
-  const stateRef = useRef({ chapter, deadline, phase });
+  const stateRef = useRef({ chapter, deadline, phase, roles, puzzle });
   const autoStartedRef = useRef(false);
+  const restoredRef = useRef(false);
   const savedResultRef = useRef(false);
   const feedbackTimers = useRef([]);
 
-  useEffect(() => { stateRef.current = { chapter, deadline, phase }; }, [chapter, deadline, phase]);
+  useEffect(() => { stateRef.current = { chapter, deadline, phase, roles, puzzle }; }, [chapter, deadline, phase, roles, puzzle]);
 
   useEffect(() => {
     const ch = supabase.channel("echoes_" + room.id, { config: { broadcast: { self: true } } });
@@ -440,6 +442,13 @@ export default function EchoesRoom({ room, me, isHost, players, t, lang, onFinis
       setMyGain(0);
       setEndingVariant("standard");
       savedResultRef.current = false;
+      if (isHost) {
+        saveGameState(room.id, "echoes", {
+          phase: "playing", roleA: payload.roleA, roleB: payload.roleB,
+          puzzle: { ch1: payload.ch1, ch2: payload.ch2, ch3: payload.ch3, ch4: payload.ch4, ch5: payload.ch5, ch6: payload.ch6 },
+          deadline: payload.deadline, chapter: 1,
+        });
+      }
     });
 
     ch.on("broadcast", { event: "advance" }, ({ payload }) => {
@@ -447,6 +456,14 @@ export default function EchoesRoom({ room, me, isHost, players, t, lang, onFinis
       setFeedback("");
       setPressA(null); setPressB(null); setMyPressed(false);
       if (payload.chapter >= VICTORY) setPhase("success");
+      if (isHost) {
+        const s = stateRef.current;
+        saveGameState(room.id, "echoes", {
+          phase: payload.chapter >= VICTORY ? "success" : "playing",
+          roleA: s.roles.A, roleB: s.roles.B, puzzle: s.puzzle,
+          deadline: s.deadline, chapter: payload.chapter,
+        });
+      }
     });
 
     ch.on("broadcast", { event: "penalty" }, ({ payload }) => {
@@ -457,6 +474,13 @@ export default function EchoesRoom({ room, me, isHost, players, t, lang, onFinis
       setWrongShake(true);
       feedbackTimers.current.push(setTimeout(() => setWrongShake(false), 400));
       feedbackTimers.current.push(setTimeout(() => setFeedback(""), 2400));
+      if (isHost) {
+        const s = stateRef.current;
+        saveGameState(room.id, "echoes", {
+          phase: "playing", roleA: s.roles.A, roleB: s.roles.B, puzzle: s.puzzle,
+          deadline: payload.newDeadline, chapter: s.chapter,
+        });
+      }
     });
 
     ch.on("broadcast", { event: "press_a" }, ({ payload }) => setPressA(payload.ts));
@@ -469,9 +493,34 @@ export default function EchoesRoom({ room, me, isHost, players, t, lang, onFinis
 
     ch.on("broadcast", { event: "timeout" }, () => {
       setPhase(p => (p === "playing" ? "failure" : p));
+      if (isHost) {
+        const s = stateRef.current;
+        saveGameState(room.id, "echoes", {
+          phase: "failure", roleA: s.roles.A, roleB: s.roles.B, puzzle: s.puzzle,
+          deadline: s.deadline, chapter: s.chapter,
+        });
+      }
     });
 
-    ch.subscribe(status => { if (status === "SUBSCRIBED") setChannelReady(true); });
+    ch.subscribe(status => {
+      if (status === "SUBSCRIBED") {
+        setChannelReady(true);
+        // Resynchronisation : une partie en cours (rechargement de page) est
+        // restaurée immédiatement plutôt que d'attendre un message perdu.
+        if (!restoredRef.current) {
+          restoredRef.current = true;
+          const saved = readGameState(room, "echoes");
+          if (saved) {
+            setRoles({ A: saved.roleA, B: saved.roleB });
+            setPuzzle(saved.puzzle);
+            setDeadline(saved.deadline);
+            setChapter(saved.chapter);
+            setPhase(saved.phase);
+            autoStartedRef.current = true;
+          }
+        }
+      }
+    });
 
     return () => {
       feedbackTimers.current.forEach(clearTimeout);
@@ -613,7 +662,7 @@ export default function EchoesRoom({ room, me, isHost, players, t, lang, onFinis
   }, [phase]);
 
   async function backToLobby() {
-    await supabase.from("rooms").update({ status: "lobby", current_game: null }).eq("id", room.id);
+    await supabase.from("rooms").update({ status: "lobby", current_game: null, game_state: null }).eq("id", room.id);
     onFinish && onFinish();
   }
 
@@ -712,7 +761,7 @@ export default function EchoesRoom({ room, me, isHost, players, t, lang, onFinis
   }
 
   return (
-    <div className="panel" style={{ maxWidth: 560 }}>
+    <div className="panel" style={{ maxWidth: "min(820px, 94vw)" }}>
       <h1>{t("echoesTitle")}</h1>
 
       {phase === "playing" && (

@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { saveGameState, readGameState } from "@/lib/gameSync";
 import Crossfade from "@/components/Crossfade";
 import RoomIllustration from "./RoomIllustration";
 import { genProloguePuzzle } from "./puzzle";
@@ -50,8 +51,12 @@ export default function DiapasonGame({ room, me, isHost, players, t, lang, onFin
 
   const channelRef = useRef(null);
   const autoStartedRef = useRef(false);
+  const restoredRef = useRef(false);
   const savedResultRef = useRef(false);
   const shakeTimerRef = useRef(null);
+  const stateRef = useRef({ roles, puzzle });
+
+  useEffect(() => { stateRef.current = { roles, puzzle }; }, [roles, puzzle]);
 
   useEffect(() => {
     const ch = supabase.channel("diapason_" + room.id, { config: { broadcast: { self: true } } });
@@ -69,6 +74,13 @@ export default function DiapasonGame({ room, me, isHost, players, t, lang, onFin
       setExamine(null);
       setMyGain(0);
       savedResultRef.current = false;
+      if (isHost) {
+        saveGameState(room.id, "diapason", {
+          phase: "playing", roleEst: payload.roleEst, roleOuest: payload.roleOuest,
+          estDoorCode: payload.estDoorCode, ouestDoorCode: payload.ouestDoorCode,
+          doorOpen: { est: false, ouest: false },
+        });
+      }
     });
 
     ch.on("broadcast", { event: "door_open" }, ({ payload }) => {
@@ -77,11 +89,39 @@ export default function DiapasonGame({ room, me, isHost, players, t, lang, onFin
         if (next.est && next.ouest) {
           setPhase((p) => (p === "playing" ? "success" : p));
         }
+        if (isHost) {
+          const s = stateRef.current;
+          saveGameState(room.id, "diapason", {
+            phase: next.est && next.ouest ? "success" : "playing",
+            roleEst: s.roles.est, roleOuest: s.roles.ouest,
+            estDoorCode: s.puzzle?.estDoorCode, ouestDoorCode: s.puzzle?.ouestDoorCode,
+            doorOpen: next,
+          });
+        }
         return next;
       });
     });
 
-    ch.subscribe((status) => { if (status === "SUBSCRIBED") setChannelReady(true); });
+    ch.subscribe((status) => {
+      if (status === "SUBSCRIBED") {
+        setChannelReady(true);
+        // Resynchronisation : une partie en cours (rechargement de page) est
+        // restaurée immédiatement — seule la progression PRIVÉE de chaque
+        // joueur (lampe allumée, position des cadrans) repart de zéro, le
+        // canal Supabase ne pouvant persister que l'état PARTAGÉ.
+        if (!restoredRef.current) {
+          restoredRef.current = true;
+          const saved = readGameState(room, "diapason");
+          if (saved) {
+            setRoles({ est: saved.roleEst, ouest: saved.roleOuest });
+            setPuzzle({ estDoorCode: saved.estDoorCode, ouestDoorCode: saved.ouestDoorCode });
+            setDoorOpen(saved.doorOpen || { est: false, ouest: false });
+            setPhase(saved.phase);
+            autoStartedRef.current = true;
+          }
+        }
+      }
+    });
 
     return () => {
       if (shakeTimerRef.current) clearTimeout(shakeTimerRef.current);
@@ -172,7 +212,7 @@ export default function DiapasonGame({ room, me, isHost, players, t, lang, onFin
   }, [phase]);
 
   async function backToLobby() {
-    await supabase.from("rooms").update({ status: "lobby", current_game: null }).eq("id", room.id);
+    await supabase.from("rooms").update({ status: "lobby", current_game: null, game_state: null }).eq("id", room.id);
     onFinish && onFinish();
   }
 
@@ -196,7 +236,7 @@ export default function DiapasonGame({ room, me, isHost, players, t, lang, onFin
   const accent = "#C9A24B";
 
   return (
-    <div className="panel" style={{ maxWidth: 760 }}>
+    <div className="panel" style={{ maxWidth: "min(880px, 94vw)" }}>
       <h1>{t("diapasonTitle")}</h1>
 
       {phase !== "playing" && (

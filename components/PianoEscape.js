@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { saveGameState, readGameState } from "@/lib/gameSync";
 
 /* ---------- Audio (piano simple, Web Audio) ---------- */
 const FREQ = {
@@ -63,6 +64,7 @@ export default function PianoEscape({ room, me, isHost, onFinish, t, lang }) {
   const channelRef = useRef(null);
   const myGain = useRef(0);
   const resultSent = useRef(false);
+  const restoredRef = useRef(false);
 
   useEffect(() => {
     const ch = supabase.channel("piano_" + room.id, { config: { broadcast: { self: true } } });
@@ -71,6 +73,7 @@ export default function PianoEscape({ room, me, isHost, onFinish, t, lang }) {
     ch.on("broadcast", { event: "advance" }, async ({ payload }) => {
       setStage(s => Math.max(s, payload.stage));
       setShowHint(false); setFeedback("");
+      if (isHost) saveGameState(room.id, "piano", { stage: payload.stage });
       if (payload.by && payload.byId !== me.id) {
         setSolverMsg(`✨ ${payload.roomName} ${t("peSolvedBy")} ${payload.by} !`);
         setTimeout(() => setSolverMsg(""), 3200);
@@ -94,7 +97,16 @@ export default function PianoEscape({ room, me, isHost, onFinish, t, lang }) {
       }
     });
 
-    ch.subscribe();
+    ch.subscribe(status => {
+      if (status === "SUBSCRIBED" && !restoredRef.current) {
+        restoredRef.current = true;
+        // Resynchronisation : une progression déjà entamée (rechargement de
+        // page) est restaurée immédiatement — n'importe quel joueur a pu la
+        // déclencher, mais seul l'hôte l'a persistée (voir lib/gameSync.js).
+        const saved = readGameState(room, "piano");
+        if (saved && saved.stage > 0) setStage(s => Math.max(s, saved.stage));
+      }
+    });
     return () => supabase.removeChannel(ch);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [room.id]);
@@ -112,14 +124,14 @@ export default function PianoEscape({ room, me, isHost, onFinish, t, lang }) {
     channelRef.current.send({ type: "broadcast", event: "advance", payload: { stage: 1 } });
   }
   async function backToLobby() {
-    await supabase.from("rooms").update({ status: "lobby", current_game: null }).eq("id", room.id);
+    await supabase.from("rooms").update({ status: "lobby", current_game: null, game_state: null }).eq("id", room.id);
     onFinish && onFinish();
   }
 
   const digitsFound = DIGITS.slice(0, Math.max(0, Math.min(stage - 1, 4)));
 
   return (
-    <div className="panel" style={{ maxWidth: 560 }}>
+    <div className="panel" style={{ maxWidth: "min(720px, 92vw)" }}>
       <h1>{t("peTitle")}</h1>
       {stage >= 1 && stage < 6 && (
         <div style={{ display: "flex", gap: 6, margin: "4px 0 14px" }}>

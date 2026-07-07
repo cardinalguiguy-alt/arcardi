@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { saveGameState, readGameState } from "@/lib/gameSync";
 import Crossfade from "./Crossfade";
 
 const WIN_POINTS = 3, PARTICIPATE_POINTS = 1;
@@ -123,6 +124,7 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
   const stateRef = useRef({ tokens, order, turnIdx, dice, movable, winner });
   const savedResultRef = useRef(false);
   const autoStartedRef = useRef(false);
+  const restoredRef = useRef(false);
   const timeouts = useRef([]);
   // Miroirs annexes pour l'arbitre (hôte) : évitent des closures figées et
   // gardent les compteurs de 6 d'affilée en dehors du cycle de rendu React.
@@ -151,6 +153,12 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
       setMyGain(0);
       savedResultRef.current = false;
       setPhase("playing");
+      if (isHost) {
+        saveGameState(room.id, "ludo", {
+          phase: "playing", order: payload.order, colorOfPlayer: payload.colorOfPlayer,
+          tokens: emptyTokens(), turnIdx: 0, dice: null, movable: [], lastMoved: null, lastEvent: null, winner: null,
+        });
+      }
     });
 
     ch.on("broadcast", { event: "roll_attempt" }, ({ payload }) => {
@@ -171,12 +179,35 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
       setLastMoved(payload.lastMoved);
       setLastEvent(payload.lastEvent);
       setWinner(payload.winner);
+      if (isHost) {
+        saveGameState(room.id, "ludo", {
+          phase: "playing", order: stateRef.current.order, colorOfPlayer: colorRef.current,
+          tokens: payload.tokens, turnIdx: payload.turnIdx, dice: payload.dice, movable: payload.movable,
+          lastMoved: payload.lastMoved, lastEvent: payload.lastEvent, winner: payload.winner,
+        });
+      }
     });
 
     ch.on("broadcast", { event: "finished" }, () => setPhase("finished"));
 
     ch.subscribe(status => {
-      if (status === "SUBSCRIBED") setChannelReady(true);
+      if (status === "SUBSCRIBED") {
+        setChannelReady(true);
+        // Resynchronisation : une partie en cours (rechargement de page) est
+        // restaurée immédiatement plutôt que d'attendre un message perdu.
+        if (!restoredRef.current) {
+          restoredRef.current = true;
+          const saved = readGameState(room, "ludo");
+          if (saved) {
+            setOrder(saved.order); setColorOfPlayer(saved.colorOfPlayer);
+            setTokens(saved.tokens); setTurnIdx(saved.turnIdx); setDice(saved.dice);
+            setMovable(saved.movable); setLastMoved(saved.lastMoved); setLastEvent(saved.lastEvent);
+            setWinner(saved.winner);
+            setPhase(saved.phase === "finished" ? "finished" : "playing");
+            autoStartedRef.current = true;
+          }
+        }
+      }
     });
 
     return () => {
@@ -252,8 +283,9 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
       broadcastState({ tokens: nextTokens, movable: [], lastMoved: { color: currentColor, tokenIdx: tokenIndex }, lastEvent: null, winner: currentColor });
       timeouts.current.push(setTimeout(() => {
         channelRef.current.send({ type: "broadcast", event: "finished", payload: {} });
+        if (isHost) saveGameState(room.id, "ludo", { ...stateRef.current, colorOfPlayer: colorRef.current, phase: "finished" });
         timeouts.current.push(setTimeout(async () => {
-          await supabase.from("rooms").update({ status: "lobby", current_game: null }).eq("id", room.id);
+          await supabase.from("rooms").update({ status: "lobby", current_game: null, game_state: null }).eq("id", room.id);
           onFinish && onFinish();
         }, 3200));
       }, 900));
@@ -479,7 +511,7 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
   }
 
   return (
-    <div className="panel" style={{ maxWidth: 640 }}>
+    <div className="panel" style={{ maxWidth: "min(760px, 94vw)" }}>
       <h1>{t("ludoTitle")}</h1>
       <Crossfade id={phase}>{content}</Crossfade>
     </div>

@@ -1,5 +1,6 @@
 "use client";
 import { useRef, useState } from "react";
+import FlagIcon from "./FlagIcon";
 
 export default function Brand({ lang, setLang, t, right }) {
   const clicks = useRef(0);
@@ -43,7 +44,10 @@ export default function Brand({ lang, setLang, t, right }) {
           style={{ width: "auto", margin: 0, padding: "8px 12px", fontSize: 13 }}
           onClick={() => setLang(lang === "fr" ? "en" : "fr")}
         >
-          {lang === "fr" ? "🇬🇧 EN" : "🇫🇷 FR"}
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+            <FlagIcon code={lang === "fr" ? "gb" : "fr"} size={16} />
+            {lang === "fr" ? "EN" : "FR"}
+          </span>
         </button>
         {right}
       </div>
