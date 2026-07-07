@@ -241,32 +241,6 @@ export default function WordGuess({ room, me, isHost, players, onFinish, t, lang
   const letterMap = letterStatuses(guesses);
   const nextTryPoints = Math.max(7 - (guesses.length + 1), 1);
 
-  if (finished) {
-    const pts = pointsFor(myResult.current);
-    return (
-      <div className="panel">
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-          <h1>{t("wordleTitle")}</h1>
-          <span className="lang-pill"><FlagIcon code={wordLang === "en" ? "gb" : "fr"} size={14} /> {wordLang === "en" ? "EN" : "FR"}</span>
-        </div>
-        {myResult.current.solved
-          ? <p className="hint">{t("foundInPre")} {myResult.current.tries} {t("foundInSuffix")}</p>
-          : <p className="hint">{t("wordleFailedPre")} <b style={{ color: "var(--p2)" }}>{secret}</b></p>}
-        <p style={{ fontWeight: 800 }}>{t("peYourGain")} <span style={{ color: "var(--p3)", fontFamily: "'Space Mono'" }}>+{pts} {t("pts")}</span></p>
-        <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 16, flexWrap: "wrap" }}>
-          {isHost ? (
-            <>
-              <button className="btn" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={rejouer}>🔁 {t("c4Rejouer")}</button>
-              <button className="btn ghost" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={backToRoom}>🏠 {t("c4BackToRoom")}</button>
-            </>
-          ) : (
-            <p className="muted">{t("c4RejouerWait")}</p>
-          )}
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="panel" ref={panelRef} tabIndex={0} onKeyDown={onKeyDown} style={{ outline: "none", maxWidth: "min(560px, 90vw)" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
@@ -290,7 +264,7 @@ export default function WordGuess({ room, me, isHost, players, onFinish, t, lang
               const isCurrentRow = row === guesses.length && !g;
               const revealedCount = g ? (row === revealState.row ? revealState.count : WORD_LEN) : 0;
               return (
-                <div key={row} style={{ display: "flex", gap: 6, animation: isCurrentRow && shake ? "shakeRow .5s" : "none" }}>
+                <div key={row} style={{ display: "flex", gap: 6, justifyContent: "center", animation: isCurrentRow && shake ? "shakeRow .5s" : "none" }}>
                   {letters.map((l, i) => {
                     const shown = g && i < revealedCount;
                     return (
@@ -310,13 +284,13 @@ export default function WordGuess({ room, me, isHost, players, onFinish, t, lang
             })}
           </div>
           {errorMsg && <p className="err" style={{ marginBottom: 10 }}>{errorMsg}</p>}
-          {!done && (
+          {!done && !finished && (
             <p className="muted" style={{ marginBottom: 10, fontSize: 12 }}>
               {t("wordleLiveHint")} <b style={{ color: "var(--p3)" }}>+{nextTryPoints} {t("pts")}</b>
             </p>
           )}
 
-          {!done && (
+          {!done && !finished && (
             <div style={{ display: "grid", gap: 6, marginBottom: 6 }}>
               {kb.map((row, i) => (
                 <div key={i} style={{ display: "flex", gap: 5, justifyContent: "center" }}>
@@ -341,11 +315,30 @@ export default function WordGuess({ room, me, isHost, players, onFinish, t, lang
             </div>
           )}
 
-          {done && !myResult.current.solved && (
+          {!finished && done && !myResult.current.solved && (
             <p className="muted" style={{ marginTop: 10 }}>{t("wordleWaitOthers")}</p>
           )}
-          {done && myResult.current.solved && (
+          {!finished && done && myResult.current.solved && (
             <p style={{ color: "var(--p3)", fontWeight: 800, marginTop: 10 }}>{t("foundInPre")} {myResult.current.tries} {t("foundInSuffix")}</p>
+          )}
+
+          {finished && (
+            <div style={{ marginTop: 10 }}>
+              {myResult.current.solved
+                ? <p className="hint">{t("foundInPre")} {myResult.current.tries} {t("foundInSuffix")}</p>
+                : <p className="hint">{t("wordleFailedPre")} <b style={{ color: "var(--p2)" }}>{secret}</b></p>}
+              <p style={{ fontWeight: 800 }}>{t("peYourGain")} <span style={{ color: "var(--p3)", fontFamily: "'Space Mono'" }}>+{pointsFor(myResult.current)} {t("pts")}</span></p>
+              <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 6, flexWrap: "wrap" }}>
+                {isHost ? (
+                  <>
+                    <button className="btn" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={rejouer}>🔁 {t("c4Rejouer")}</button>
+                    <button className="btn ghost" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={backToRoom}>🏠 {t("c4BackToRoom")}</button>
+                  </>
+                ) : (
+                  <p className="muted">{t("c4RejouerWait")}</p>
+                )}
+              </div>
+            </div>
           )}
 
           {Object.keys(opponents).length > 0 && (
@@ -360,7 +353,7 @@ export default function WordGuess({ room, me, isHost, players, onFinish, t, lang
               ))}
             </div>
           )}
-          {isHost && done && (
+          {isHost && !finished && (
             <button className="btn ghost" style={{ marginTop: 14 }} onClick={hostEndRound}>⏭️ {t("endRoundNow")}</button>
           )}
         </>

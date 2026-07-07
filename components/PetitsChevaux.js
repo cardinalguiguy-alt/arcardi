@@ -188,8 +188,6 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
       }
     });
 
-    ch.on("broadcast", { event: "finished" }, () => setPhase("finished"));
-
     ch.subscribe(status => {
       if (status === "SUBSCRIBED") {
         setChannelReady(true);
@@ -203,7 +201,7 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
             setTokens(saved.tokens); setTurnIdx(saved.turnIdx); setDice(saved.dice);
             setMovable(saved.movable); setLastMoved(saved.lastMoved); setLastEvent(saved.lastEvent);
             setWinner(saved.winner);
-            setPhase(saved.phase === "finished" ? "finished" : "playing");
+            setPhase("playing");
             autoStartedRef.current = true;
           }
         }
@@ -281,10 +279,6 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
 
     if (won) {
       broadcastState({ tokens: nextTokens, movable: [], lastMoved: { color: currentColor, tokenIdx: tokenIndex }, lastEvent: null, winner: currentColor });
-      timeouts.current.push(setTimeout(() => {
-        channelRef.current.send({ type: "broadcast", event: "finished", payload: {} });
-        if (isHost) saveGameState(room.id, "ludo", { ...stateRef.current, colorOfPlayer: colorRef.current, phase: "finished" });
-      }, 900));
       return;
     }
 
@@ -383,35 +377,11 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
 
   let content;
 
-  if (phase === "finished") {
+  if (phase === "playing") {
     const iWon = myColor && myColor === winner;
-    content = (
-      <div>
-        <p className="hint">
-          {isPlayer
-            ? (iWon ? t("ludoWinYou") : `${playerNameFor(winner)} ${t("ludoWinSpectator")}`)
-            : `${playerNameFor(winner)} ${t("ludoWinSpectator")}`}
-        </p>
-        {isPlayer && (
-          <p style={{ fontWeight: 800 }}>
-            {t("peYourGain")} <span style={{ color: "var(--p3)", fontFamily: "'Space Mono'" }}>+{myGain} {t("pts")}</span>
-          </p>
-        )}
-        <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 16, flexWrap: "wrap" }}>
-          {isHost ? (
-            <>
-              <button className="btn" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={rejouer}>🔁 {t("c4Rejouer")}</button>
-              <button className="btn ghost" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={backToRoom}>🏠 {t("c4BackToRoom")}</button>
-            </>
-          ) : (
-            <p className="muted">{t("c4RejouerWait")}</p>
-          )}
-        </div>
-      </div>
-    );
-  } else if (phase === "playing") {
     let statusText;
-    if (lastEvent === "threeSixes") statusText = t("ludoThreeSixes");
+    if (winner) statusText = null;
+    else if (lastEvent === "threeSixes") statusText = t("ludoThreeSixes");
     else if (lastEvent === "noMove") statusText = t("ludoNoMove");
     else if (lastEvent === "sixAgain") statusText = t("ludoSixAgain");
     else if (lastEvent && lastEvent.startsWith("captured:")) {
@@ -433,7 +403,15 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
           ))}
         </div>
 
-        <p className="muted" style={{ textAlign: "center", marginBottom: 10, minHeight: 18 }}>{statusText}</p>
+        {winner ? (
+          <p className="muted" style={{ textAlign: "center", marginBottom: 10, fontWeight: 800 }}>
+            {isPlayer
+              ? (iWon ? "🏆 " + t("ludoWinYou") : `${playerNameFor(winner)} ${t("ludoWinSpectator")}`)
+              : `${playerNameFor(winner)} ${t("ludoWinSpectator")}`}
+          </p>
+        ) : (
+          <p className="muted" style={{ textAlign: "center", marginBottom: 10, minHeight: 18 }}>{statusText}</p>
+        )}
 
         <div className="ludo-board">
           {Object.entries(CELL_TYPE).map(([key, type]) => {
@@ -458,38 +436,101 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
             })
           ))}
 
-          {COLOR_ORDER.map(color => tokens[color].map((steps, idx) => {
-            if (!order.includes(color)) return null;
-            const cell = steps === 0 ? COLORS[color].yard[idx] : cellFor(color, steps);
-            if (!cell) return null; // garde-fou, ne devrait pas arriver (steps=61 renvoie la dernière case privée)
-            const [r, c] = cell;
-            const isMine = color === myColor;
-            const canPick = isMyTurn && isMine && movable.includes(idx);
-            const isLast = !!(lastMoved && lastMoved.color === color && lastMoved.tokenIdx === idx);
-            return (
-              <div
-                key={color + "-" + idx}
-                className={"ludo-token " + color + (canPick ? " mine-movable" : "") + (isLast ? " last" : "")}
-                onClick={() => canPick && pickToken(idx)}
-                style={{
-                  top: (r / 15) * 100 + "%", left: (c / 15) * 100 + "%",
-                  width: (1 / 15) * 100 + "%", height: (1 / 15) * 100 + "%",
-                }}
-              />
-            );
-          }))}
+          {(() => {
+            // Regroupe les pions qui partagent EXACTEMENT la même case (hors
+            // enclos, où chaque pion a déjà son propre emplacement dédié).
+            // Sans ça, plusieurs <div> de la taille d'une case entière se
+            // superposent pixel pour pixel : seul le dernier du DOM reçoit
+            // les clics, et un pion pourtant "movable" devient impossible à
+            // sélectionner s'il se trouve en-dessous. On les éclate en
+            // mini-grille pour que chacun garde une zone cliquable distincte.
+            const stacks = {};
+            COLOR_ORDER.forEach(color => {
+              if (!order.includes(color)) return;
+              tokens[color].forEach((steps, idx) => {
+                if (steps === 0) return;
+                const cell = cellFor(color, steps);
+                if (!cell) return;
+                const key = cell[0] + "," + cell[1];
+                (stacks[key] = stacks[key] || []).push({ color, idx });
+              });
+            });
+            function stackLayout(n, i) {
+              if (n <= 1) return { left: 0, top: 0, size: 1 };
+              if (n === 2) {
+                const p = [[0, 0], [0.42, 0.42]][i];
+                return { left: p[0], top: p[1], size: 0.62 };
+              }
+              const p = [[0, 0], [0.5, 0], [0, 0.5], [0.5, 0.5]][i] || [0.25, 0.25];
+              return { left: p[0], top: p[1], size: 0.52 };
+            }
+
+            return COLOR_ORDER.map(color => tokens[color].map((steps, idx) => {
+              if (!order.includes(color)) return null;
+              const cell = steps === 0 ? COLORS[color].yard[idx] : cellFor(color, steps);
+              if (!cell) return null; // garde-fou, ne devrait pas arriver (steps=61 renvoie la dernière case privée)
+              const [r, c] = cell;
+              const isMine = color === myColor;
+              const canPick = isMyTurn && isMine && movable.includes(idx);
+              const isLast = !!(lastMoved && lastMoved.color === color && lastMoved.tokenIdx === idx);
+
+              let left = 0, top = 0, size = 1;
+              if (steps > 0) {
+                const key = r + "," + c;
+                const stack = stacks[key] || [{ color, idx }];
+                const posInStack = stack.findIndex(s => s.color === color && s.idx === idx);
+                const layout = stackLayout(stack.length, posInStack < 0 ? 0 : posInStack);
+                left = layout.left; top = layout.top; size = layout.size;
+              }
+
+              return (
+                <div
+                  key={color + "-" + idx}
+                  className={"ludo-token " + color + (canPick ? " mine-movable" : "") + (isLast ? " last" : "")}
+                  onClick={() => canPick && pickToken(idx)}
+                  style={{
+                    top: ((r + top) / 15) * 100 + "%",
+                    left: ((c + left) / 15) * 100 + "%",
+                    width: (size / 15) * 100 + "%",
+                    height: (size / 15) * 100 + "%",
+                    zIndex: canPick ? 5 : 1,
+                  }}
+                >
+                  <span className="ludo-token-pin" />
+                </div>
+              );
+            }));
+          })()}
         </div>
 
-        <div style={{ display: "flex", justifyContent: "center", marginTop: 14 }}>
-          {isMyTurn && dice === null ? (
-            <button className="btn" style={{ width: "auto", padding: "12px 26px" }} onClick={rollDice}>
-              {t("ludoRollDice")}
-            </button>
-          ) : (
-            <div className={"ludo-dice" + (rolling ? " rolling" : "")}>{dice ?? "🎲"}</div>
+        {winner ? (
+          <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 16, flexWrap: "wrap" }}>
+            {isPlayer && (
+              <p style={{ fontWeight: 800, width: "100%", textAlign: "center" }}>
+                {t("peYourGain")} <span style={{ color: "var(--p3)", fontFamily: "'Space Mono'" }}>+{myGain} {t("pts")}</span>
+              </p>
+            )}
+            {isHost ? (
+              <>
+                <button className="btn" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={rejouer}>🔁 {t("c4Rejouer")}</button>
+                <button className="btn ghost" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={backToRoom}>🏠 {t("c4BackToRoom")}</button>
+              </>
+            ) : (
+              <p className="muted">{t("c4RejouerWait")}</p>
+            )}
+          </div>
+        ) : (
+          <div style={{ display: "flex", justifyContent: "center", marginTop: 14 }}>
+            {isMyTurn && dice === null ? (
+              <button className="btn" style={{ width: "auto", padding: "12px 26px" }} onClick={rollDice}>
+                {t("ludoRollDice")}
+              </button>
+              ) : (
+                <div className={"ludo-dice" + (rolling ? " rolling" : "")}>{dice ?? "🎲"}</div>
+              )}
+            </div>
           )}
         </div>
-      </div>
     );
   } else {
     // phase "intro" : choix des joueurs, attente, ou pas assez de monde

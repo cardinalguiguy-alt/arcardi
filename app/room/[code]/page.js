@@ -14,6 +14,7 @@ import PetitsChevaux from "@/components/PetitsChevaux";
 import EchoesRoom from "@/components/EchoesRoom";
 import RoomChat from "@/components/RoomChat";
 import DiapasonGame from "@/components/diapason/DiapasonGame";
+import ChromatikGame from "@/components/cards/ChromatikGame";
 
 // Métadonnées d'affichage de chaque jeu : icône, couleur d'accent (variable
 // CSS existante), et clés i18n pour le nom / la description courte de la
@@ -27,8 +28,9 @@ const GAME_META = {
   ludo:     { icon: "🐴", accent: "--ludoY", nameKey: "nameLudo", tagKey: "tagLudo", minPlayers: 2 },
   echoes:   { icon: "🌊", accent: "--p5", nameKey: "nameEchoes",  tagKey: "tagEchoes", minPlayers: 2 },
   diapason: { icon: "🎼", accent: "--dia", nameKey: "nameDiapason", tagKey: "tagDiapason", minPlayers: 2 },
+  chromatik: { icon: "🃏", accent: "--p3", nameKey: "nameChromatik", tagKey: "tagChromatik" },
 };
-const GAME_ORDER = ["quiz", "wordle", "worldle", "piano", "connect4", "ludo", "echoes", "diapason"];
+const GAME_ORDER = ["quiz", "wordle", "worldle", "piano", "connect4", "ludo", "echoes", "diapason", "chromatik"];
 
 export default function Room() {
   const { code } = useParams();
@@ -45,7 +47,10 @@ export default function Room() {
 
     (async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) { router.replace("/login"); return; }
+      if (!session) {
+        router.replace("/login?redirect=" + encodeURIComponent("/room/" + String(code).toUpperCase()));
+        return;
+      }
       const { data: prof } = await supabase.from("profiles").select("*").eq("id", session.user.id).single();
       setMe(prof);
 
@@ -53,6 +58,16 @@ export default function Room() {
         .from("rooms").select("*").eq("code", String(code).toUpperCase()).single();
       if (roomErr || !roomRow) { setError(t("noRoom")); return; }
       setRoom(roomRow);
+
+      // Rejoint automatiquement le salon si ce n'est pas déjà fait — c'est
+      // ce qui manquait pour que le lien d'invitation fonctionne vraiment :
+      // avant, arriver directement sur /room/CODE affichait la page sans
+      // jamais ajouter la personne à room_players (seul le passage par le
+      // lounge le faisait). upsert = sans danger si déjà membre.
+      await supabase.from("room_players").upsert(
+        { room_id: roomRow.id, profile_id: session.user.id },
+        { onConflict: "room_id,profile_id" }
+      );
 
       await loadPlayers(roomRow.id);
 
@@ -87,6 +102,13 @@ export default function Room() {
 
   async function launch(gameId) {
     await supabase.from("rooms").update({ status: "playing", current_game: gameId }).eq("id", room.id);
+  }
+
+  // Retour au lobby DEPUIS n'importe quel moment d'une partie (pas seulement
+  // à la fin naturelle) : l'hôte peut ramener tout le monde au salon sans
+  // que personne n'ait à quitter la room elle-même.
+  async function backToLobby() {
+    await supabase.from("rooms").update({ status: "lobby", current_game: null, game_state: null }).eq("id", room.id);
   }
 
   async function leaveRoom() {
@@ -145,6 +167,11 @@ export default function Room() {
                   </span>
                 ))}
               </div>
+              {isHost && (
+                <button className="btn ghost stage-bar-lobby-btn" onClick={backToLobby} title={t("backToLobbyAnytime")}>
+                  {t("backLounge")}
+                </button>
+              )}
             </div>
 
             <div className="game-stage">
@@ -171,6 +198,9 @@ export default function Room() {
               )}
               {room.current_game === "diapason" && (
                 <DiapasonGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={() => {}} />
+              )}
+              {room.current_game === "chromatik" && (
+                <ChromatikGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={() => {}} />
               )}
             </div>
           </div>

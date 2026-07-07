@@ -1,13 +1,17 @@
 "use client";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/i18n";
 import Brand from "@/components/Brand";
 
-export default function Login() {
+// useSearchParams() exige une limite <Suspense> dans l'App Router de
+// Next.js (sinon le build échoue) : on isole donc la logique dans un
+// composant interne, enveloppé ci-dessous.
+function LoginInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { lang, setLang, t } = useLang();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -20,7 +24,11 @@ export default function Login() {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
     if (error) { setError(error.message); return; }
-    router.push("/lounge");
+    // Si on est arrivé ici via un lien d'invitation à un salon (redirigé
+    // depuis /room/CODE faute de session), on y retourne directement au
+    // lieu de systématiquement atterrir dans le lounge.
+    const redirect = searchParams.get("redirect");
+    router.push(redirect || "/lounge");
   }
 
   return (
@@ -40,5 +48,13 @@ export default function Login() {
         <p className="switch-line">{t("noAccount")} <Link href="/signup">{t("signup")}</Link></p>
       </div>
     </div>
+  );
+}
+
+export default function Login() {
+  return (
+    <Suspense fallback={<div className="wrap"><p className="muted">…</p></div>}>
+      <LoginInner />
+    </Suspense>
   );
 }
