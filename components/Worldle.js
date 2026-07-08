@@ -17,10 +17,12 @@ const CONT = {
 };
 
 // lat/lng approximatifs de la capitale — suffisant pour un jeu entre amis.
-// Liste complète des 193 États membres de l'ONU (aucun pays observateur
-// comme le Vatican, aucun État partiellement reconnu comme le Kosovo ou
-// Taïwan) : n'importe lequel peut être la cible ET n'importe lequel doit
-// pouvoir être proposé en réponse.
+// Liste : les 193 États membres de l'ONU + 4 ajouts hors ONU (les 2 États
+// observateurs — Vatican et Palestine — et 2 États partiellement reconnus
+// très connus — Kosovo et Taïwan). N'importe lequel peut être la cible ET
+// n'importe lequel doit pouvoir être proposé en réponse. Les noms anglais
+// sont les formes courtes officielles (Côte d'Ivoire, Türkiye…) avec des
+// alias de recherche (`alt`) pour les noms d'usage (Ivory Coast, Turkey…).
 const COUNTRIES = [
   // --- Afrique (54) ---
   { id: "dz", fr: "Algérie", en: "Algeria", lat: 36.7538, lng: 3.0588, c: "AF" },
@@ -29,25 +31,25 @@ const COUNTRIES = [
   { id: "bw", fr: "Botswana", en: "Botswana", lat: -24.6282, lng: 25.9231, c: "AF" },
   { id: "bf", fr: "Burkina Faso", en: "Burkina Faso", lat: 12.3714, lng: -1.5197, c: "AF" },
   { id: "bi", fr: "Burundi", en: "Burundi", lat: -3.4264, lng: 29.9306, c: "AF" },
-  { id: "cv", fr: "Cap-Vert", en: "Cabo Verde", lat: 14.9330, lng: -23.5133, c: "AF" },
+  { id: "cv", fr: "Cap-Vert", en: "Cabo Verde", alt: ["Cape Verde"], lat: 14.9330, lng: -23.5133, c: "AF" },
   { id: "cm", fr: "Cameroun", en: "Cameroon", lat: 3.8480, lng: 11.5021, c: "AF" },
   { id: "cf", fr: "République centrafricaine", en: "Central African Republic", lat: 4.3947, lng: 18.5582, c: "AF" },
   { id: "td", fr: "Tchad", en: "Chad", lat: 12.1348, lng: 15.0557, c: "AF" },
   { id: "km", fr: "Comores", en: "Comoros", lat: -11.7042, lng: 43.2402, c: "AF" },
-  { id: "cg", fr: "Congo", en: "Republic of the Congo", lat: -4.2634, lng: 15.2429, c: "AF" },
-  { id: "cd", fr: "République démocratique du Congo", en: "DR Congo", lat: -4.4419, lng: 15.2663, c: "AF" },
+  { id: "cg", fr: "Congo", en: "Republic of the Congo", alt: ["Congo-Brazzaville"], lat: -4.2634, lng: 15.2429, c: "AF" },
+  { id: "cd", fr: "République démocratique du Congo", en: "Democratic Republic of the Congo", alt: ["DR Congo", "DRC", "Congo-Kinshasa"], lat: -4.4419, lng: 15.2663, c: "AF" },
   { id: "dj", fr: "Djibouti", en: "Djibouti", lat: 11.5721, lng: 43.1456, c: "AF" },
   { id: "eg", fr: "Égypte", en: "Egypt", lat: 30.0444, lng: 31.2357, c: "AF" },
   { id: "gq", fr: "Guinée équatoriale", en: "Equatorial Guinea", lat: 3.7504, lng: 8.7371, c: "AF" },
   { id: "er", fr: "Érythrée", en: "Eritrea", lat: 15.3229, lng: 38.9251, c: "AF" },
-  { id: "sz", fr: "Eswatini", en: "Eswatini", lat: -26.3054, lng: 31.1367, c: "AF" },
+  { id: "sz", fr: "Eswatini", en: "Eswatini", alt: ["Swaziland"], lat: -26.3054, lng: 31.1367, c: "AF" },
   { id: "et", fr: "Éthiopie", en: "Ethiopia", lat: 9.0300, lng: 38.7400, c: "AF" },
   { id: "ga", fr: "Gabon", en: "Gabon", lat: 0.4162, lng: 9.4673, c: "AF" },
   { id: "gm", fr: "Gambie", en: "Gambia", lat: 13.4549, lng: -16.5790, c: "AF" },
   { id: "gh", fr: "Ghana", en: "Ghana", lat: 5.6037, lng: -0.1870, c: "AF" },
   { id: "gn", fr: "Guinée", en: "Guinea", lat: 9.6412, lng: -13.5784, c: "AF" },
   { id: "gw", fr: "Guinée-Bissau", en: "Guinea-Bissau", lat: 11.8636, lng: -15.5977, c: "AF" },
-  { id: "ci", fr: "Côte d'Ivoire", en: "Ivory Coast", lat: 6.8276, lng: -5.2893, c: "AF" },
+  { id: "ci", fr: "Côte d'Ivoire", en: "Côte d'Ivoire", alt: ["Ivory Coast"], lat: 6.8276, lng: -5.2893, c: "AF" },
   { id: "ke", fr: "Kenya", en: "Kenya", lat: -1.2921, lng: 36.8219, c: "AF" },
   { id: "ls", fr: "Lesotho", en: "Lesotho", lat: -29.3151, lng: 27.4869, c: "AF" },
   { id: "lr", fr: "Liberia", en: "Liberia", lat: 6.2907, lng: -10.7605, c: "AF" },
@@ -105,7 +107,7 @@ const COUNTRIES = [
   { id: "my", fr: "Malaisie", en: "Malaysia", lat: 3.1390, lng: 101.6869, c: "AS" },
   { id: "mv", fr: "Maldives", en: "Maldives", lat: 4.1755, lng: 73.5093, c: "AS" },
   { id: "mn", fr: "Mongolie", en: "Mongolia", lat: 47.8864, lng: 106.9057, c: "AS" },
-  { id: "mm", fr: "Myanmar", en: "Myanmar", lat: 19.7633, lng: 96.0785, c: "AS" },
+  { id: "mm", fr: "Myanmar", en: "Myanmar", alt: ["Burma", "Birmanie"], lat: 19.7633, lng: 96.0785, c: "AS" },
   { id: "np", fr: "Népal", en: "Nepal", lat: 27.7172, lng: 85.3240, c: "AS" },
   { id: "kp", fr: "Corée du Nord", en: "North Korea", lat: 39.0392, lng: 125.7625, c: "AS" },
   { id: "om", fr: "Oman", en: "Oman", lat: 23.5880, lng: 58.3829, c: "AS" },
@@ -119,10 +121,10 @@ const COUNTRIES = [
   { id: "sy", fr: "Syrie", en: "Syria", lat: 33.5138, lng: 36.2765, c: "AS" },
   { id: "tj", fr: "Tadjikistan", en: "Tajikistan", lat: 38.5598, lng: 68.7870, c: "AS" },
   { id: "th", fr: "Thaïlande", en: "Thailand", lat: 13.7563, lng: 100.5018, c: "AS" },
-  { id: "tl", fr: "Timor oriental", en: "Timor-Leste", lat: -8.5569, lng: 125.5603, c: "AS" },
-  { id: "tr", fr: "Turquie", en: "Turkey", lat: 39.9334, lng: 32.8597, c: "AS" },
+  { id: "tl", fr: "Timor oriental", en: "Timor-Leste", alt: ["East Timor", "Timor oriental"], lat: -8.5569, lng: 125.5603, c: "AS" },
+  { id: "tr", fr: "Turquie", en: "Türkiye", alt: ["Turkey"], lat: 39.9334, lng: 32.8597, c: "AS" },
   { id: "tm", fr: "Turkménistan", en: "Turkmenistan", lat: 37.9601, lng: 58.3261, c: "AS" },
-  { id: "ae", fr: "Émirats arabes unis", en: "United Arab Emirates", lat: 24.4539, lng: 54.3773, c: "AS" },
+  { id: "ae", fr: "Émirats arabes unis", en: "United Arab Emirates", alt: ["UAE"], lat: 24.4539, lng: 54.3773, c: "AS" },
   { id: "uz", fr: "Ouzbékistan", en: "Uzbekistan", lat: 41.2995, lng: 69.2401, c: "AS" },
   { id: "vn", fr: "Vietnam", en: "Vietnam", lat: 21.0285, lng: 105.8542, c: "AS" },
   { id: "ye", fr: "Yémen", en: "Yemen", lat: 15.3694, lng: 44.1910, c: "AS" },
@@ -152,7 +154,7 @@ const COUNTRIES = [
   { id: "ba", fr: "Bosnie-Herzégovine", en: "Bosnia and Herzegovina", lat: 43.8563, lng: 18.4131, c: "EU" },
   { id: "bg", fr: "Bulgarie", en: "Bulgaria", lat: 42.6977, lng: 23.3219, c: "EU" },
   { id: "hr", fr: "Croatie", en: "Croatia", lat: 45.8150, lng: 15.9819, c: "EU" },
-  { id: "cz", fr: "Tchéquie", en: "Czechia", lat: 50.0755, lng: 14.4378, c: "EU" },
+  { id: "cz", fr: "Tchéquie", en: "Czechia", alt: ["Czech Republic"], lat: 50.0755, lng: 14.4378, c: "EU" },
   { id: "dk", fr: "Danemark", en: "Denmark", lat: 55.6761, lng: 12.5683, c: "EU" },
   { id: "ee", fr: "Estonie", en: "Estonia", lat: 59.4370, lng: 24.7536, c: "EU" },
   { id: "fi", fr: "Finlande", en: "Finland", lat: 60.1699, lng: 24.9384, c: "EU" },
@@ -171,8 +173,8 @@ const COUNTRIES = [
   { id: "md", fr: "Moldavie", en: "Moldova", lat: 47.0105, lng: 28.8638, c: "EU" },
   { id: "mc", fr: "Monaco", en: "Monaco", lat: 43.7384, lng: 7.4246, c: "EU" },
   { id: "me", fr: "Monténégro", en: "Montenegro", lat: 42.4304, lng: 19.2594, c: "EU" },
-  { id: "nl", fr: "Pays-Bas", en: "Netherlands", lat: 52.3676, lng: 4.9041, c: "EU" },
-  { id: "mk", fr: "Macédoine du Nord", en: "North Macedonia", lat: 41.9981, lng: 21.4254, c: "EU" },
+  { id: "nl", fr: "Pays-Bas", en: "Netherlands", alt: ["Holland", "Hollande"], lat: 52.3676, lng: 4.9041, c: "EU" },
+  { id: "mk", fr: "Macédoine du Nord", en: "North Macedonia", alt: ["Macedonia"], lat: 41.9981, lng: 21.4254, c: "EU" },
   { id: "no", fr: "Norvège", en: "Norway", lat: 59.9139, lng: 10.7522, c: "EU" },
   { id: "pl", fr: "Pologne", en: "Poland", lat: 52.2297, lng: 21.0122, c: "EU" },
   { id: "pt", fr: "Portugal", en: "Portugal", lat: 38.7223, lng: -9.1393, c: "EU" },
@@ -186,7 +188,7 @@ const COUNTRIES = [
   { id: "se", fr: "Suède", en: "Sweden", lat: 59.3293, lng: 18.0686, c: "EU" },
   { id: "ch", fr: "Suisse", en: "Switzerland", lat: 46.9480, lng: 7.4474, c: "EU" },
   { id: "ua", fr: "Ukraine", en: "Ukraine", lat: 50.4501, lng: 30.5234, c: "EU" },
-  { id: "gb", fr: "Royaume-Uni", en: "United Kingdom", lat: 51.5074, lng: -0.1278, c: "EU" },
+  { id: "gb", fr: "Royaume-Uni", en: "United Kingdom", alt: ["UK", "Great Britain"], lat: 51.5074, lng: -0.1278, c: "EU" },
 
   // --- Amérique du Nord, Amérique centrale et Caraïbes (23) ---
   { id: "ag", fr: "Antigua-et-Barbuda", en: "Antigua and Barbuda", lat: 17.1274, lng: -61.8468, c: "NA" },
@@ -211,7 +213,7 @@ const COUNTRIES = [
   { id: "lc", fr: "Sainte-Lucie", en: "Saint Lucia", lat: 14.0101, lng: -60.9875, c: "NA" },
   { id: "vc", fr: "Saint-Vincent-et-les-Grenadines", en: "Saint Vincent and the Grenadines", lat: 13.1600, lng: -61.2248, c: "NA" },
   { id: "tt", fr: "Trinité-et-Tobago", en: "Trinidad and Tobago", lat: 10.6596, lng: -61.5019, c: "NA" },
-  { id: "us", fr: "États-Unis", en: "United States", lat: 38.9072, lng: -77.0369, c: "NA" },
+  { id: "us", fr: "États-Unis", en: "United States", alt: ["USA", "United States of America", "America"], lat: 38.9072, lng: -77.0369, c: "NA" },
 
   // --- Amérique du Sud (12) ---
   { id: "ar", fr: "Argentine", en: "Argentina", lat: -34.6037, lng: -58.3816, c: "SA" },
@@ -226,6 +228,11 @@ const COUNTRIES = [
   { id: "sr", fr: "Suriname", en: "Suriname", lat: 5.8520, lng: -55.2038, c: "SA" },
   { id: "uy", fr: "Uruguay", en: "Uruguay", lat: -34.9011, lng: -56.1645, c: "SA" },
   { id: "ve", fr: "Venezuela", en: "Venezuela", lat: 10.4806, lng: -66.9036, c: "SA" },
+  // --- Hors ONU : observateurs + partiellement reconnus (4) ---
+  { id: "va", fr: "Vatican", en: "Vatican City", alt: ["Holy See", "Saint-Siège"], lat: 41.9029, lng: 12.4534, c: "EU" },
+  { id: "ps", fr: "Palestine", en: "Palestine", alt: ["State of Palestine"], lat: 31.9038, lng: 35.2034, c: "AS" },
+  { id: "xk", fr: "Kosovo", en: "Kosovo", lat: 42.6629, lng: 21.1655, c: "EU" },
+  { id: "tw", fr: "Taïwan", en: "Taiwan", alt: ["Chinese Taipei", "Formosa"], lat: 25.0330, lng: 121.5654, c: "AS" },
 ];
 
 function normalize(s) {
@@ -366,7 +373,10 @@ export default function Worldle({ room, me, isHost, players, onFinish, t, lang }
     if (!query || query.length < 1) return [];
     const nq = normalize(query);
     const already = new Set(guesses.map(g => g.country.id));
-    return COUNTRIES.filter(c => !already.has(c.id) && normalize(c[lang] || c.fr).includes(nq)).slice(0, 6);
+    return COUNTRIES.filter(c => !already.has(c.id) && (
+      normalize(c[lang] || c.fr).includes(nq) ||
+      (c.alt || []).some(a => normalize(a).includes(nq))
+    )).slice(0, 6);
   }, [query, guesses, lang]);
 
   function guessCountry(c) {

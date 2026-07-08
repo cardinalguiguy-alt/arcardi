@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/i18n";
 import Brand from "@/components/Brand";
+import Embers from "@/components/Embers";
 
 function randomCode() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -74,12 +75,7 @@ export default function Lounge() {
 
   return (
     <div className="wrap">
-      <div className="embers" aria-hidden="true">
-        <span className="ember" style={{ left: 60, width: 5, height: 5, background: "#FFB37A", animationDuration: "5s", animationDelay: ".2s" }} />
-        <span className="ember" style={{ left: 180, width: 4, height: 4, background: "#FF9E6E", animationDuration: "6.5s", animationDelay: "1.6s" }} />
-        <span className="ember" style={{ left: "72%", width: 6, height: 6, background: "#FFC98A", animationDuration: "5.8s", animationDelay: "2.4s" }} />
-        <span className="ember" style={{ left: "88%", width: 4, height: 4, background: "#FF8F6E", animationDuration: "4.6s", animationDelay: ".9s" }} />
-      </div>
+      <Embers />
       <Brand lang={lang} setLang={setLang} t={t} onHome={() => router.push("/lounge")} right={
         <button className="btn ghost" style={{ width: "auto", margin: 0, padding: "8px 14px", fontSize: 13 }} onClick={logout}>
           {profile.avatar} {profile.username} · {t("logout")}

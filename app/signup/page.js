@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/i18n";
 import Brand from "@/components/Brand";
+import Embers from "@/components/Embers";
 
 const AVATARS = ["🦊", "🐙", "🦖", "🐸", "🦄", "🐼", "🤖", "👾", "🐯", "🦉"];
 
@@ -34,6 +35,7 @@ export default function Signup() {
   if (sent) {
     return (
       <div className="wrap">
+      <Embers />
         <Brand lang={lang} setLang={setLang} t={t} onHome={() => router.push("/")} />
         <div className="panel">
           <h1>{t("checkEmail")}</h1>
@@ -46,6 +48,7 @@ export default function Signup() {
 
   return (
     <div className="wrap">
+      <Embers />
       <Brand lang={lang} setLang={setLang} t={t} onHome={() => router.push("/")} />
       <div className="panel">
         <h1>{t("signup")}</h1>

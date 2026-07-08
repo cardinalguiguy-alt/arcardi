@@ -5,6 +5,7 @@ import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/i18n";
 import Brand from "@/components/Brand";
+import Embers from "@/components/Embers";
 
 // useSearchParams() exige une limite <Suspense> dans l'App Router de
 // Next.js (sinon le build échoue) : on isole donc la logique dans un
@@ -33,6 +34,7 @@ function LoginInner() {
 
   return (
     <div className="wrap">
+      <Embers />
       <Brand lang={lang} setLang={setLang} t={t} onHome={() => router.push("/")} />
       <div className="panel">
         <h1>{t("login")}</h1>

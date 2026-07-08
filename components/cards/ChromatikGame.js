@@ -97,6 +97,10 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
       setPhase("playing");
       setColorPickerFor(null);
       persist(payload);
+      // Si le mélange des sièges place un BOT en premier, personne d'autre
+      // ne déclenchera jamais son tour : l'hôte doit l'armer ici. (Sans ça,
+      // ~1 partie sur N démarrait figée, selon le tirage des sièges.)
+      scheduleBots();
     });
 
     ch.on("broadcast", { event: "state" }, ({ payload }) => {

@@ -14,7 +14,7 @@
   /* ===== Accents dédiés par jeu (tuiles d'icône + bordure de carte + lueur de scène) ===== */
   --acc-c4:#FF3B30; --acc-ludo:#FFB84D; --acc-quiz:#4ECDC4; --acc-wordle:#A8E063;
   --acc-worldle:#6FA8FF; --acc-piano:#C9A24B; --acc-diapason:#B388FF;
-  --acc-chromatik:#FF9F6E; --acc-yahtzee:#FFD166; --acc-echoes:#5AC8DB;
+  --acc-chromatik:#FF9F6E; --acc-yahtzee:#FFD166; --acc-echoes:#5AC8DB; --acc-president:#4CC38A;
 }
 *{box-sizing:border-box; margin:0; padding:0;}
 html,body{height:100%;}
@@ -32,10 +32,13 @@ a{color:var(--p2);}
 
 .wrap{max-width:920px; margin:0 auto; padding:24px 18px calc(60px + env(safe-area-inset-bottom, 0px)); position:relative;}
 .wrap-room{max-width:1200px;}
-.brand{display:flex; align-items:center; gap:10px; margin-bottom:26px;}
+.brand{display:flex; align-items:center; gap:10px; margin-bottom:26px; row-gap:8px;}
 .brand .tiles{display:flex; gap:4px;}
 .brand button[title="ARCARDI"]{ animation:logoBreathe 4s ease-in-out infinite; }
-.brand .tile{font-family:'Bungee'; font-size:22px; padding:6px 7px; border-radius:8px; color:var(--ink-on-accent); box-shadow:0 3px 0 rgba(0,0,0,.35);}
+/* Taille fluide : les 7 onglets du logo + les boutons de droite tiennent sur
+   une seule ligne quelle que soit la largeur d'écran (clamp = jamais plus
+   petit que lisible, jamais plus grand qu'avant). */
+.brand .tile{font-family:'Bungee'; font-size:clamp(11.5px, 3.3vw, 22px); padding:clamp(3px,.9vw,6px) clamp(3px,1vw,7px); border-radius:8px; color:var(--ink-on-accent); box-shadow:0 3px 0 rgba(0,0,0,.35);}
 .brand .tile:nth-child(4n+1){background:var(--p1);} .brand .tile:nth-child(4n+2){background:var(--p4);}
 .brand .tile:nth-child(4n+3){background:var(--p2);} .brand .tile:nth-child(4n+4){background:var(--p3);}
 
@@ -58,7 +61,8 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
   background:linear-gradient(135deg, var(--p3), var(--p2));
   box-shadow:0 5px 0 rgba(0,0,0,.35); transition:.12s;
 }
-.btn:hover{transform:translateY(-2px);}
+.btn:hover{ transform:scale(1.02); filter:brightness(1.07); }
+.btn:active{ transform:scale(.985); filter:brightness(.97); }
 .btn:disabled{opacity:.5; cursor:default; transform:none;}
 .btn.ghost{background:rgba(255,255,255,.06); color:var(--ink); box-shadow:none; border:2px solid var(--line);}
 .err{color:var(--p1); font-size:13px; margin-top:10px; font-weight:700;}
@@ -151,7 +155,7 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 }
 
 /* ===== Salon : grille de sélection de jeu (mode hôte, lobby) ===== */
-.game-grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(180px,1fr)); gap:12px; margin-top:2px; }
+.game-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(190px,1fr)); gap:12px; margin-top:2px; align-items:stretch; }
 .game-card{
   display:flex; flex-direction:column; align-items:flex-start; gap:6px; text-align:left;
   background:rgba(255,255,255,.03); border:2px solid var(--line); border-radius:16px;
@@ -164,7 +168,7 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
   background:linear-gradient(135deg, var(--accent), transparent 70%);
   transition:opacity .2s ease;
 }
-.game-card:hover{ transform:translateY(-3px); border-color:var(--accent); background:rgba(255,255,255,.06); }
+.game-card:hover{ transform:scale(1.02); border-color:var(--accent); background:rgba(255,255,255,.06); }
 .game-card:hover::before{ opacity:.14; }
 .game-card.active{ border-color:var(--accent); background:rgba(255,255,255,.07); }
 .game-card-icon{
@@ -174,7 +178,8 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 }
 .game-card-title{ font-family:'Bungee'; font-size:14px; line-height:1.3; }
 .game-card-tag{ color:var(--muted); font-size:12px; line-height:1.4; }
-.game-card-cta{ margin-top:8px; font-weight:800; font-size:12.5px; color:var(--accent); }
+.game-card-cta{ margin-top:auto; padding-top:8px; font-weight:800; font-size:12.5px; color:var(--accent); }
+.game-card{ height:100%; } /* toutes les tuiles d'une même rangée font la même hauteur */
 
 /* ===== Puissance 4 ===== */
 .c4-board{
@@ -388,7 +393,7 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 }
 .echo-memory-tile.hidden-tile{ background:rgba(0,0,0,.35); font-size:12px; color:var(--muted); font-weight:800; }
 .echo-memory-tile.pickable{ cursor:pointer; transition:transform .15s, border-color .15s; }
-.echo-memory-tile.pickable:hover{ transform:translateY(-2px); border-color:var(--p5); }
+.echo-memory-tile.pickable:hover{ transform:scale(1.03); border-color:var(--p5); }
 .echo-memory-tile.chosen{ border-color:var(--p3); background:rgba(182,240,76,.14); }
 .echo-memory-slot{
   display:inline-flex; align-items:center; justify-content:center; width:38px; height:38px;
@@ -520,7 +525,8 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 .chromatik-card.size-md{ width:60px; height:88px; font-size:20px; }
 .chromatik-card.size-lg{ width:72px; height:104px; font-size:26px; }
 .chromatik-card.clickable{ cursor:pointer; }
-.chromatik-card.clickable:hover{ transform:translateY(-6px); }
+.chromatik-card.clickable{ transform-origin:bottom center; }
+.chromatik-card.clickable:hover{ transform:scale(1.09); }
 .chromatik-card.dim{ opacity:.4; cursor:default; }
 .chromatik-card.dim:hover{ transform:none; }
 .chromatik-card.glow{ box-shadow:0 4px 0 rgba(0,0,0,.35), 0 0 18px 2px rgba(255,255,255,.25); }
@@ -578,14 +584,16 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
      `transform`, ce qui annulait d'un coup la position/rotation du dé sur la
      table ET son éventuel "gardé en l'air". Maintenant chaque état ne modifie
      qu'une variable (--lift), jamais la formule complète. */
+  transform-origin:bottom center;
   transform:
     translate(var(--tx, 0px), var(--ty, 0px))
     rotate(var(--trot, 0deg))
-    translateY(var(--lift, 0px));
+    translateY(var(--lift, 0px))
+    scale(var(--hscale, 1));
   transition:transform .18s ease, box-shadow .15s ease, outline-color .15s ease;
 }
 .yz-die.clickable{ cursor:pointer; }
-.yz-die.clickable:hover{ --lift:-10px; }
+.yz-die.clickable:hover{ --hscale:1.09; }
 .yz-die.held{
   --lift:-9px;
   outline-color:var(--p3);
@@ -687,7 +695,7 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
    (lounge embers, logo, porte d'entrée de jeu, bannière de victoire,
    confettis). Réutilisables par tous les écrans/jeux.
    ========================================================================== */
-@keyframes emberFloat{ 0%{ transform:translateY(0) translateX(0); opacity:0; } 8%{ opacity:.8; } 92%{ opacity:.5; } 100%{ transform:translateY(-160px) translateX(14px); opacity:0; } }
+@keyframes emberFloat{ 0%{ transform:translateY(0) translateX(0); opacity:0; } 8%{ opacity:.8; } 92%{ opacity:.4; } 100%{ transform:translateY(min(-320px, -45vh)) translateX(16px); opacity:0; } }
 @keyframes cardPop{ 0%{ opacity:0; transform:translateY(14px) scale(.94); } 100%{ opacity:1; transform:translateY(0) scale(1); } }
 @keyframes winGlow{ 0%,100%{ box-shadow:0 0 0 3px #fff inset, 0 0 22px 4px rgba(255,255,255,.55); } 50%{ box-shadow:0 0 0 3px #fff inset, 0 0 8px 2px rgba(255,255,255,.25); } }
 @keyframes confettiFall{ 0%{ transform:translateY(-20px) translateX(0) rotate(0deg); opacity:1; } 100%{ transform:translateY(420px) translateX(var(--drift, 0px)) rotate(680deg); opacity:0; } }
@@ -744,7 +752,7 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
   font-family:'Bungee'; font-size:13px; color:var(--ink-on-accent); background:var(--p2);
   box-shadow:0 4px 0 rgba(0,0,0,.35); cursor:pointer; transition:transform .12s ease;
 }
-.door-play-btn:hover{ transform:translateY(-2px); }
+.door-play-btn:hover{ transform:scale(1.05); filter:brightness(1.08); }
 .door-content{ position:relative; animation:povPush .7s cubic-bezier(.2,.8,.3,1) both; }
 .door-replay-btn{
   position:absolute; top:8px; right:8px; z-index:50; width:34px; height:34px; padding:0;
@@ -809,7 +817,7 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
   font-family:'Bungee'; font-size:13px; color:#fff; background:linear-gradient(135deg, #a83030, #6e1212);
   box-shadow:0 4px 0 rgba(0,0,0,.35); cursor:pointer; transition:transform .12s ease;
 }
-.curtain-play-btn:hover{ transform:translateY(-2px); }
+.curtain-play-btn:hover{ transform:scale(1.05); filter:brightness(1.08); }
 .curtain-content{ position:relative; animation:povPush .7s cubic-bezier(.2,.8,.3,1) both; }
 
 /* ----- Flash + zoom (FlashStage) -----
@@ -836,7 +844,7 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
   font-family:'Bungee'; font-size:13px; color:var(--ink-on-accent); background:var(--accent, var(--p2));
   box-shadow:0 4px 0 rgba(0,0,0,.35); cursor:pointer; transition:transform .12s ease;
 }
-.flash-play-btn:hover{ transform:translateY(-2px); }
+.flash-play-btn:hover{ transform:scale(1.05); filter:brightness(1.08); }
 .flash-white{
   position:absolute; inset:0; z-index:57; background:#fff; opacity:0; pointer-events:none;
   transition:opacity .22s ease;
@@ -910,3 +918,119 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 }
 .sql-warn b{ color:var(--p4); }
 .sql-warn code{ font-family:'Space Mono'; font-size:11.5px; color:var(--ink); }
+
+
+/* ===== Survol : uniquement sur les appareils avec un vrai pointeur =====
+   Sur tactile, iOS "colle" l'état :hover après un tap (le bouton reste
+   grossi/éclairci jusqu'au tap suivant) — on neutralise donc tous les
+   effets de survol quand il n'y a pas de souris. */
+@media (hover: none){
+  .btn:hover, .game-card:hover, .door-play-btn:hover, .curtain-play-btn:hover,
+  .flash-play-btn:hover, .chromatik-card.clickable:hover, .echo-memory-tile.pickable:hover{
+    transform:none; filter:none;
+  }
+  .yz-die.clickable:hover{ --hscale:1; }
+  .chromatik-color-btn:hover{ transform:none; }
+  .chromatik-pile.draw:hover .chromatik-card{ transform:none; }
+}
+
+/* ===== Président : cartes à jouer classiques + tapis ===== */
+.pres-card{
+  position:relative; border-radius:10px; flex:none; user-select:none;
+  background:linear-gradient(160deg, #fdfdf8, #eceadf);
+  color:#1c2430; font-family:'Space Mono'; font-weight:700;
+  border:1.5px solid rgba(0,0,0,.18);
+  box-shadow:0 3px 0 rgba(0,0,0,.28), 0 8px 16px rgba(0,0,0,.22);
+  display:flex; align-items:center; justify-content:center;
+  transition:transform .16s ease, box-shadow .16s ease, opacity .15s ease;
+}
+.pres-card.red{ color:#C7392E; }
+.pres-card.size-sm{ width:54px; height:78px; }
+.pres-card.size-md{ width:62px; height:90px; }
+.pres-corner{ position:absolute; top:5px; left:6px; font-size:11.5px; line-height:1.05; text-align:center; }
+.pres-corner.flip{ top:auto; left:auto; right:6px; bottom:5px; transform:rotate(180deg); }
+.pres-main{ font-size:26px; }
+.pres-card.back{
+  background:
+    repeating-linear-gradient(45deg, rgba(255,255,255,.06) 0 5px, transparent 5px 10px),
+    linear-gradient(160deg, #2c4a7c, #1d3152);
+  color:#9db9ea; border-color:rgba(255,255,255,.22);
+}
+.pres-back-mark{ font-size:20px; }
+/* Levée par grossissement ancré en bas (jamais de translation au survol :
+   la zone cliquable ne se dérobe pas sous le curseur — voir la note
+   anti-clignotement plus haut). La sélection, elle, est un état de CLIC :
+   la vraie levée y est donc sans risque. */
+.pres-card.clickable{ cursor:pointer; transform-origin:bottom center; }
+.pres-card.clickable:hover{ transform:scale(1.07); }
+.pres-card.sel{ transform:translateY(-14px); outline:3px solid var(--p3); outline-offset:1px;
+  box-shadow:0 8px 0 rgba(0,0,0,.22), 0 12px 22px rgba(0,0,0,.3), 0 0 16px rgba(182,240,76,.35); }
+.pres-card.sel:hover{ transform:translateY(-14px) scale(1.04); }
+.pres-card.dim{ opacity:.42; filter:saturate(.5); }
+.pres-card.dim:hover{ transform:none; }
+.pres-card.glow{ box-shadow:0 0 0 2px var(--acc-president), 0 0 20px rgba(76,195,138,.4), 0 3px 0 rgba(0,0,0,.28); }
+
+.pres-table{
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px;
+  min-height:150px; padding:16px; border-radius:18px; margin-top:6px;
+  background:
+    radial-gradient(120% 130% at 50% -10%, rgba(76,195,138,.18), transparent 60%),
+    linear-gradient(180deg, rgba(0,0,0,.2), rgba(0,0,0,.32));
+  border:2px solid rgba(76,195,138,.35);
+  box-shadow:inset 0 2px 14px rgba(0,0,0,.35);
+}
+.pres-pile{ display:flex; }
+.pres-pile .pres-card{ margin-left:-16px; }
+.pres-pile .pres-card:first-child{ margin-left:0; }
+
+.pres-hand{ display:flex; flex-wrap:wrap; justify-content:center; padding:16px 6px 4px; row-gap:16px; }
+.pres-hand .pres-card{ margin-left:-17px; }
+.pres-hand .pres-card:first-child{ margin-left:0; }
+
+.pres-actions{ display:flex; gap:10px; justify-content:center; margin-top:14px; flex-wrap:wrap; }
+.pres-actions .btn[disabled]{ opacity:.4; cursor:not-allowed; transform:none; filter:none; }
+
+.pres-badge{
+  font-size:10.5px; font-weight:800; padding:3px 9px; border-radius:99px;
+  background:rgba(255,255,255,.08); border:1.5px solid var(--line); color:var(--muted);
+}
+.pres-badge.out{ border-color:var(--acc-president); color:var(--ink); background:rgba(76,195,138,.14); }
+
+.pres-podium{ display:flex; flex-direction:column; gap:8px; max-width:420px; margin:0 auto; }
+.pres-podium-row{
+  display:flex; align-items:center; gap:10px; padding:9px 14px; border-radius:12px;
+  background:rgba(255,255,255,.04); border:2px solid var(--line); animation:cardPop .35s ease both;
+}
+.pres-podium-row.first{ border-color:var(--p2); background:rgba(255,209,102,.1); }
+.pres-podium-row.me{ outline:2px dashed rgba(182,240,76,.5); outline-offset:2px; }
+.pres-podium-row .place{ font-family:'Bungee'; font-size:15px; width:20px; color:var(--muted); }
+.pres-podium-row.first .place{ color:var(--p2); }
+.pres-podium-row .name{ font-weight:800; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.pres-podium-row .title{ font-size:12px; color:var(--muted); font-weight:700; }
+.pres-podium-row .pts{ font-family:'Space Mono'; color:var(--p3); }
+
+@media (pointer: coarse){
+  .pres-card.size-sm{ width:60px; height:86px; } /* zone tactile confortable */
+  .pres-hand .pres-card{ margin-left:-14px; }    /* chevauchement réduit au doigt */
+}
+@media (hover: none){
+  .pres-card.clickable:hover{ transform:none; }
+  .pres-card.sel:hover{ transform:translateY(-14px); }
+}
+
+
+/* Sur très petit écran, les boutons de droite du logo (langue, quitter…)
+   se resserrent légèrement pour tenir sur la même ligne que les onglets
+   ARCARDI plutôt que de retomber sur une seconde ligne. */
+@media (max-width: 400px){
+  .brand{ gap:6px; }
+  .brand .tiles, .brand > button[title="ARCARDI"]{ gap:3px; }
+  .brand > div > button.btn.ghost, .brand > div > a.btn.ghost{ padding:7px 9px !important; font-size:12px !important; }
+}
+
+/* ===== Président : ligne d'un échange en attente (fin de manche) ===== */
+.pres-exchange-row{
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  padding:9px 14px; border-radius:12px; background:rgba(255,255,255,.04);
+  border:2px solid var(--line); font-size:13px;
+}

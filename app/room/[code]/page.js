@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { resetRoomToLobby } from "@/lib/gameSync";
 import { useLang } from "@/lib/i18n";
 import Brand from "@/components/Brand";
+import Embers from "@/components/Embers";
 import Crossfade from "@/components/Crossfade";
 import QuizGame from "@/components/QuizGame";
 import PianoEscape from "@/components/PianoEscape";
@@ -16,6 +17,7 @@ import EchoesRoom from "@/components/EchoesRoom";
 import RoomChat from "@/components/RoomChat";
 import DiapasonGame from "@/components/diapason/DiapasonGame";
 import ChromatikGame from "@/components/cards/ChromatikGame";
+import PresidentGame from "@/components/president/PresidentGame";
 import YahtzeeGame from "@/components/yahtzee/YahtzeeGame";
 import DoorStage from "@/components/DoorStage";
 import CurtainStage from "@/components/CurtainStage";
@@ -40,9 +42,10 @@ const GAME_META = {
   diapason: { icon: "🎼", accent: "--acc-diapason",  nameKey: "nameDiapason", tagKey: "tagDiapason", minPlayers: 2, stage: "curtain" },
   chromatik: { icon: "🃏", accent: "--acc-chromatik", nameKey: "nameChromatik", tagKey: "tagChromatik", stage: "door" },
   yahtzee:  { icon: "🎲", accent: "--acc-yahtzee",   nameKey: "nameYahtzee", tagKey: "tagYahtzee", stage: "door" },
+  president: { icon: "🎩", accent: "--acc-president", nameKey: "namePresident", tagKey: "tagPresident", stage: "door" },
 };
 const STAGE_COMPONENT = { door: DoorStage, curtain: CurtainStage, flash: FlashStage };
-const GAME_ORDER = ["quiz", "wordle", "worldle", "piano", "connect4", "ludo", "echoes", "diapason", "chromatik", "yahtzee"];
+const GAME_ORDER = ["quiz", "wordle", "worldle", "piano", "connect4", "ludo", "echoes", "diapason", "chromatik", "president", "yahtzee"];
 
 export default function Room() {
   const { code } = useParams();
@@ -226,6 +229,7 @@ export default function Room() {
 
   return (
     <div className="wrap wrap-room">
+      <Embers />
       <Brand lang={lang} setLang={setLang} t={t} onHome={brandHome} right={
         <button className="btn ghost" style={{ width: "auto", margin: 0, padding: "8px 14px", fontSize: 13 }} onClick={leaveRoom}>
           {t("leaveRoom")}
@@ -315,6 +319,9 @@ export default function Room() {
                   {room.current_game === "yahtzee" && (
                     <YahtzeeGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
                   )}
+                  {room.current_game === "president" && (
+                    <PresidentGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
+                  )}
                 </StageComponent>
                 );
               })()}
@@ -322,7 +329,7 @@ export default function Room() {
           </div>
         ) : (
           // ===== MODE LOBBY : infos du salon + sélection du prochain jeu =====
-          <div className="panel" style={{ maxWidth: "min(760px, 94vw)" }}>
+          <div className="panel" style={{ maxWidth: "min(980px, 94vw)" }}>
             <h1>{isHost ? t("roomTitleHost") : t("roomTitle")}</h1>
             <p className="hint">{t("shareCode")}</p>
             <div className="code-badge">{room.code}</div>
