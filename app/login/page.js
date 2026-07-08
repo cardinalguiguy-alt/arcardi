@@ -33,7 +33,7 @@ function LoginInner() {
 
   return (
     <div className="wrap">
-      <Brand lang={lang} setLang={setLang} t={t} />
+      <Brand lang={lang} setLang={setLang} t={t} onHome={() => router.push("/")} />
       <div className="panel">
         <h1>{t("login")}</h1>
         <p className="hint">{t("loginHint")}</p>

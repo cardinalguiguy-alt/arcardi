@@ -80,7 +80,7 @@ export default function Lounge() {
         <span className="ember" style={{ left: "72%", width: 6, height: 6, background: "#FFC98A", animationDuration: "5.8s", animationDelay: "2.4s" }} />
         <span className="ember" style={{ left: "88%", width: 4, height: 4, background: "#FF8F6E", animationDuration: "4.6s", animationDelay: ".9s" }} />
       </div>
-      <Brand lang={lang} setLang={setLang} t={t} right={
+      <Brand lang={lang} setLang={setLang} t={t} onHome={() => router.push("/lounge")} right={
         <button className="btn ghost" style={{ width: "auto", margin: 0, padding: "8px 14px", fontSize: 13 }} onClick={logout}>
           {profile.avatar} {profile.username} · {t("logout")}
         </button>

@@ -2,15 +2,22 @@
 import { useRef, useState } from "react";
 import FlagIcon from "./FlagIcon";
 
-export default function Brand({ lang, setLang, t, right }) {
+// `onHome` (optionnel) : action de navigation déclenchée par un clic sur le
+// logo. Chaque page fournit la sienne (retour au menu principal, retour au
+// lobby du salon…). Pour ne pas casser l'easter egg des 7 clics rapides, la
+// navigation est différée de 350 ms et annulée dès qu'un nouveau clic
+// arrive : un clic simple navigue, une rafale de clics reste l'easter egg.
+export default function Brand({ lang, setLang, t, right, onHome }) {
   const clicks = useRef(0);
   const timer = useRef(null);
+  const navTimer = useRef(null);
   const [soup, setSoup] = useState(false);
   const [toast, setToast] = useState("");
 
   function onLogoClick() {
     clicks.current++;
     clearTimeout(timer.current);
+    clearTimeout(navTimer.current);
     timer.current = setTimeout(() => (clicks.current = 0), 1200);
     if (clicks.current >= 7) {
       clicks.current = 0;
@@ -19,6 +26,10 @@ export default function Brand({ lang, setLang, t, right }) {
       setToast(on ? t("eggSoup") : t("eggSoupOff"));
       setTimeout(() => setToast(""), 3500);
       if (on) rainSoup();
+      return;
+    }
+    if (onHome) {
+      navTimer.current = setTimeout(() => { clicks.current = 0; onHome(); }, 350);
     }
   }
 
@@ -35,7 +46,7 @@ export default function Brand({ lang, setLang, t, right }) {
 
   return (
     <div className="brand" style={{ justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
-      <button onClick={onLogoClick} style={{ display: "flex", gap: 4 }} title="ARCARDI" aria-label="ARCARDI">
+      <button onClick={onLogoClick} style={{ display: "flex", gap: 4, cursor: "pointer" }} title="ARCARDI" aria-label="ARCARDI">
         {"ARCARDI".split("").map((c, i) => <span className="tile" key={i}>{c}</span>)}
       </button>
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>

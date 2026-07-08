@@ -30,7 +30,7 @@ button{font-family:inherit; color:inherit; cursor:pointer; border:none; backgrou
 input,select{font-family:inherit; color:inherit;}
 a{color:var(--p2);}
 
-.wrap{max-width:920px; margin:0 auto; padding:24px 18px 60px; position:relative;}
+.wrap{max-width:920px; margin:0 auto; padding:24px 18px calc(60px + env(safe-area-inset-bottom, 0px)); position:relative;}
 .wrap-room{max-width:1200px;}
 .brand{display:flex; align-items:center; gap:10px; margin-bottom:26px;}
 .brand .tiles{display:flex; gap:4px;}
@@ -49,7 +49,7 @@ a{color:var(--p2);}
 label{display:block; font-size:13px; font-weight:700; color:var(--muted); margin:12px 0 6px;}
 input[type=email], input[type=password], input[type=text]{
   width:100%; background:rgba(0,0,0,.25); border:2px solid var(--line); border-radius:12px;
-  padding:12px 14px; font-size:15px;
+  padding:12px 14px; font-size:16px; /* >=16px : évite le zoom forcé de Safari iOS au focus */
 }
 input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 .btn{
@@ -110,12 +110,12 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 .crossfade-old.cf-fading{ opacity:0; transform:translateY(-10px) scale(.98); filter:blur(3px); }
 
 /* ===== Salon : mode "scène" quand une manche est en cours ===== */
-/* Le code du salon devient une pastille discrète, fixée en haut à droite de
-   l'écran, hors du flux normal — elle ne prend plus de place au-dessus du
+/* Le code du salon devient une pastille discrète, fixée en bas à gauche de
+   l'écran, hors du flux normal — elle ne prend pas de place au-dessus du
    jeu et ne bouge pas quand on scrolle. Priorité : jouabilité, pas de
    bandeau qui distrait pendant la partie. */
 .room-code-fab{
-  position:fixed; left:14px; bottom:14px; z-index:60;
+  position:fixed; left:14px; bottom:calc(14px + env(safe-area-inset-bottom, 0px)); z-index:60;
   display:flex; align-items:center; gap:7px;
   background:rgba(18,20,42,.78); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px);
   border:1.5px solid var(--line); border-radius:99px;
@@ -328,7 +328,7 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 
 /* ---------- Chat de salon (discret, flottant) ---------- */
 .chat-fab{
-  position:fixed; right:18px; bottom:18px; width:52px; height:52px; border-radius:50%;
+  position:fixed; right:18px; bottom:calc(18px + env(safe-area-inset-bottom, 0px)); width:52px; height:52px; border-radius:50%;
   background:linear-gradient(135deg, var(--p2), var(--p5)); border:none; cursor:pointer;
   display:flex; align-items:center; justify-content:center; font-size:22px; z-index:60;
   box-shadow:0 6px 18px rgba(0,0,0,.35);
@@ -339,7 +339,7 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
   justify-content:center; padding:0 4px;
 }
 .chat-panel{
-  position:fixed; right:18px; bottom:80px; width:270px; max-height:360px; z-index:60;
+  position:fixed; right:18px; bottom:calc(80px + env(safe-area-inset-bottom, 0px)); width:270px; max-height:360px; z-index:60;
   background:var(--card); border:2px solid var(--line); border-radius:16px;
   display:flex; flex-direction:column; overflow:hidden; box-shadow:0 12px 30px rgba(0,0,0,.4);
 }
@@ -355,7 +355,7 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 .chat-msg .bubble{ display:inline-block; padding:6px 10px; border-radius:12px; background:rgba(255,255,255,.06); word-break:break-word; }
 .chat-msg.mine .bubble{ background:rgba(182,240,76,.14); }
 .chat-input-row{ display:flex; gap:6px; padding:8px; border-top:1px solid var(--line); }
-.chat-input-row input{ flex:1; margin:0; font-size:12.5px; padding:8px 10px; border-radius:10px; }
+.chat-input-row input{ flex:1; margin:0; font-size:16px; padding:8px 10px; border-radius:10px; } /* >=16px : pas de zoom iOS */
 .chat-input-row button{ margin:0; width:auto; padding:8px 12px; border-radius:10px; font-size:16px; background:rgba(255,255,255,.06); }
 
 /* ---------- Échos : ambiance de salle scellée (mouvante, décorative) ---------- */
@@ -711,7 +711,7 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
     repeating-linear-gradient(90deg, rgba(0,0,0,.10) 0 3px, transparent 3px 30px),
     linear-gradient(175deg, #3a2818, #2a1c10 75%);
   border:2px solid var(--line); border-radius:22px;
-  padding:20px; min-height:440px; min-width:320px; width:min(960px, 94vw);
+  padding:20px; min-height:440px; min-width:min(320px, 100%); width:min(960px, 94vw); max-width:100%;
   box-shadow:0 0 0 2px var(--accent, var(--p2)) inset, 0 0 40px -12px var(--accent, var(--p2));
 }
 .door-panel{
@@ -747,8 +747,8 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 .door-play-btn:hover{ transform:translateY(-2px); }
 .door-content{ position:relative; animation:povPush .7s cubic-bezier(.2,.8,.3,1) both; }
 .door-replay-btn{
-  position:absolute; top:8px; right:8px; z-index:50; width:22px; height:22px; padding:0;
-  border:none; border-radius:50%; font-size:11px; font-weight:800; color:var(--muted);
+  position:absolute; top:8px; right:8px; z-index:50; width:34px; height:34px; padding:0;
+  border:none; border-radius:50%; font-size:13px; font-weight:800; color:var(--muted);
   background:rgba(0,0,0,.22); cursor:pointer; opacity:.4;
   display:flex; align-items:center; justify-content:center;
   transition:opacity .15s ease, background .15s ease;
@@ -769,7 +769,7 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
   position:relative; overflow:hidden;
   background:radial-gradient(120% 90% at 50% 100%, rgba(90,20,20,.32) 0%, rgba(10,7,6,.97) 70%);
   border:2px solid var(--line); border-radius:22px;
-  padding:20px; min-height:440px; min-width:320px; width:min(960px, 94vw);
+  padding:20px; min-height:440px; min-width:min(320px, 100%); width:min(960px, 94vw); max-width:100%;
   box-shadow:0 0 0 2px var(--accent, var(--p2)) inset, 0 0 40px -12px var(--accent, var(--p2));
 }
 .curtain-valance{
@@ -821,7 +821,7 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
     radial-gradient(120% 90% at 50% 12%, rgba(0,0,0,0) 0%, rgba(0,0,0,.35) 100%),
     linear-gradient(175deg, #3a2818, #2a1c10 75%);
   border:2px solid var(--line); border-radius:22px;
-  padding:20px; min-height:440px; min-width:320px; width:min(960px, 94vw);
+  padding:20px; min-height:440px; min-width:min(320px, 100%); width:min(960px, 94vw); max-width:100%;
   box-shadow:0 0 0 2px var(--accent, var(--p2)) inset, 0 0 40px -12px var(--accent, var(--p2));
 }
 .flash-cover{
@@ -863,3 +863,50 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 /* ----- Lounge : les deux panneaux côte à côte (Créer / Rejoindre) ----- */
 .lounge-panels{ display:flex; flex-wrap:wrap; gap:20px; position:relative; z-index:1; }
 .lounge-panels .panel{ flex:1 1 320px; }
+
+/* ===== Ergonomie tactile & mobile (audit 2026-07) =====
+   Sur écran tactile (pointer:coarse), les cartes en main de Chromatik
+   passent à ~60px de large pour atteindre une zone de toucher confortable
+   (recommandation ~44px minimum, ici dépassée), et la pastille "hors
+   ligne" ne dépend jamais du survol. */
+@media (pointer: coarse){
+  .chromatik-card.size-sm{ width:60px; height:88px; font-size:20px; }
+  .door-replay-btn{ opacity:.55; } /* pas de :hover au doigt : un peu plus visible d'office */
+}
+
+/* Salon (lobby) sur mobile : la sélection de jeu passe en 2 colonnes
+   compactes au lieu d'une seule interminable. */
+@media (max-width: 560px){
+  .game-grid{ grid-template-columns:1fr 1fr; gap:10px; }
+  .game-card{ padding:12px; }
+  .game-card-tag{ font-size:11px; }
+}
+
+/* ===== Présence (détection de déconnexion) ===== */
+.player-chip.off, .mini-chip.off{ opacity:.45; }
+.player-chip.off .pt{ color:var(--muted); }
+.presence-dot{
+  width:8px; height:8px; border-radius:50%; flex:none;
+  background:var(--p3); box-shadow:0 0 5px rgba(182,240,76,.7);
+}
+.presence-dot.off{ background:#8a8a8a; box-shadow:none; }
+
+/* Bandeau "hôte déconnecté" pendant une partie (côté invités) */
+.host-offline-banner{
+  position:fixed; left:50%; top:12px; transform:translateX(-50%); z-index:80;
+  display:flex; flex-direction:column; align-items:center; gap:8px;
+  background:var(--card2); border:2.5px solid var(--p1); border-radius:16px;
+  padding:12px 18px; max-width:min(480px, 92vw); text-align:center;
+  font-weight:800; font-size:13.5px; box-shadow:0 12px 34px rgba(0,0,0,.5);
+  animation:cardPop .3s ease both;
+}
+.host-offline-banner .btn{ width:auto; margin-top:0; padding:9px 16px; font-size:12.5px; }
+
+/* Avertissement hôte : migration SQL manquante (upgrade-002) */
+.sql-warn{
+  margin-top:16px; padding:10px 14px; border-radius:12px; text-align:left;
+  border:2px dashed var(--p4); background:rgba(255,185,74,.08);
+  color:var(--muted); font-size:12.5px; line-height:1.5;
+}
+.sql-warn b{ color:var(--p4); }
+.sql-warn code{ font-family:'Space Mono'; font-size:11.5px; color:var(--ink); }

@@ -24,11 +24,35 @@ export default function RoomChat({ room, me, t }) {
   const [messages, setMessages] = useState([]);
   const [draft, setDraft] = useState("");
   const [unread, setUnread] = useState(0);
+  // Hauteur occupée par le clavier virtuel (iOS/Android). Sur iPhone, un
+  // élément en position:fixed n'est PAS remonté quand le clavier s'ouvre :
+  // sans correction, le champ de saisie disparaît derrière le clavier.
+  // visualViewport donne la zone réellement visible -> on décale le panneau.
+  const [kbInset, setKbInset] = useState(0);
   const channelRef = useRef(null);
   const listRef = useRef(null);
   const openRef = useRef(open);
 
   useEffect(() => { openRef.current = open; }, [open]);
+
+  useEffect(() => {
+    if (!open || typeof window === "undefined" || !window.visualViewport) return;
+    const vv = window.visualViewport;
+    const update = () => {
+      const inset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      // Seuil de 60px : ignore les micro-variations (barres d'outils
+      // Safari qui se replient) et ne réagit qu'au vrai clavier.
+      setKbInset(inset > 60 ? inset : 0);
+    };
+    vv.addEventListener("resize", update);
+    vv.addEventListener("scroll", update);
+    update();
+    return () => {
+      vv.removeEventListener("resize", update);
+      vv.removeEventListener("scroll", update);
+      setKbInset(0);
+    };
+  }, [open]);
 
   useEffect(() => {
     const ch = supabase.channel("chat_" + room.id, { config: { broadcast: { self: true } } });
@@ -79,7 +103,10 @@ export default function RoomChat({ room, me, t }) {
   return (
     <>
       {open && (
-        <div className="chat-panel">
+        <div
+          className="chat-panel"
+          style={kbInset ? { bottom: kbInset + 12, maxHeight: "min(300px, 46vh)" } : undefined}
+        >
           <div className="chat-panel-head">
             <span>💬 {t("chatTitle")}</span>
             <button onClick={toggle} style={{ fontSize: 15, opacity: .75 }}>✕</button>

@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/i18n";
 import Brand from "@/components/Brand";
@@ -8,6 +9,7 @@ import Brand from "@/components/Brand";
 const AVATARS = ["🦊", "🐙", "🦖", "🐸", "🦄", "🐼", "🤖", "👾", "🐯", "🦉"];
 
 export default function Signup() {
+  const router = useRouter();
   const { lang, setLang, t } = useLang();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -32,7 +34,7 @@ export default function Signup() {
   if (sent) {
     return (
       <div className="wrap">
-        <Brand lang={lang} setLang={setLang} t={t} />
+        <Brand lang={lang} setLang={setLang} t={t} onHome={() => router.push("/")} />
         <div className="panel">
           <h1>{t("checkEmail")}</h1>
           <p className="hint">{t("checkEmailHint")} <b>{email}</b>. {t("checkEmailHint2")}</p>
@@ -44,7 +46,7 @@ export default function Signup() {
 
   return (
     <div className="wrap">
-      <Brand lang={lang} setLang={setLang} t={t} />
+      <Brand lang={lang} setLang={setLang} t={t} onHome={() => router.push("/")} />
       <div className="panel">
         <h1>{t("signup")}</h1>
         <p className="hint">{t("signupHint")}</p>

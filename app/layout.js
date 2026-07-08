@@ -13,6 +13,10 @@ export const metadata = {
 export const viewport = {
   width: "device-width",
   initialScale: 1,
+  // viewport-fit=cover : nécessaire pour que env(safe-area-inset-*) soit
+  // renseigné sur iPhone (encoche / barre home) — les pastilles fixées en
+  // bas (code du salon, chat) s'en servent pour ne pas être recouvertes.
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }) {

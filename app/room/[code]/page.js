@@ -53,6 +53,12 @@ export default function Room() {
   const [players, setPlayers] = useState([]);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
+  // Présence en temps réel : profile_id -> true si l'onglet du joueur est
+  // actuellement connecté au salon. Alimenté par le canal presence Supabase.
+  const [online, setOnline] = useState(null); // null = pas encore synchronisé
+  const [hostGone, setHostGone] = useState(false);
+  // La colonne rooms.game_state existe-t-elle ? (migration upgrade-002.sql)
+  const [hasGameStateCol, setHasGameStateCol] = useState(true);
 
   useEffect(() => {
     let roomSub, playersSub;
@@ -70,6 +76,11 @@ export default function Room() {
         .from("rooms").select("*").eq("code", String(code).toUpperCase()).single();
       if (roomErr || !roomRow) { setError(t("noRoom")); return; }
       setRoom(roomRow);
+      // Vérification passive de la migration upgrade-002.sql : si la colonne
+      // game_state n'apparaît pas dans la ligne renvoyée par `select *`,
+      // c'est qu'elle n'existe pas encore en base -> avertir l'hôte au lobby
+      // (la resynchronisation après rechargement ne marchera pas sans elle).
+      setHasGameStateCol(Object.prototype.hasOwnProperty.call(roomRow, "game_state"));
 
       // Rejoint automatiquement le salon si ce n'est pas déjà fait — c'est
       // ce qui manquait pour que le lien d'invitation fonctionne vraiment :
@@ -112,6 +123,41 @@ export default function Room() {
     setPlayers(data || []);
   }
 
+  // ===== Présence (détection de déconnexion) =====
+  // Chaque onglet connecté au salon se déclare sur un canal `presence` dédié
+  // (clé = profile_id). Le callback `sync` reconstruit la liste des joueurs
+  // réellement en ligne. Aucune table ni migration : c'est un mécanisme
+  // éphémère de Supabase Realtime, comme le chat.
+  useEffect(() => {
+    if (!room?.id || !me?.id) return;
+    const ch = supabase.channel("presence_" + room.id, {
+      config: { presence: { key: me.id } },
+    });
+    ch.on("presence", { event: "sync" }, () => {
+      const state = ch.presenceState();
+      const map = {};
+      Object.keys(state).forEach(k => { map[k] = true; });
+      setOnline(map);
+    });
+    ch.subscribe(status => {
+      if (status === "SUBSCRIBED") ch.track({ at: Date.now() });
+    });
+    return () => { supabase.removeChannel(ch); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room?.id, me?.id]);
+
+  // Bandeau "hôte déconnecté" côté invités, pendant une partie uniquement.
+  // Délai de grâce de 8s : la présence met quelques secondes à se
+  // synchroniser (et un simple changement d'onglet mobile peut couper la
+  // connexion une poignée de secondes) — on n'alarme pas pour si peu.
+  useEffect(() => {
+    const isGuestPlaying = room && me && room.status === "playing" && room.host_id !== me.id;
+    const hostOnline = online === null || !!online[room?.host_id];
+    if (!isGuestPlaying || hostOnline) { setHostGone(false); return; }
+    const tm = setTimeout(() => setHostGone(true), 8000);
+    return () => clearTimeout(tm);
+  }, [room, me, online]);
+
   async function launch(gameId) {
     await supabase.from("rooms").update({ status: "playing", current_game: gameId }).eq("id", room.id);
   }
@@ -135,6 +181,22 @@ export default function Room() {
     setRoom(r => (r ? { ...r, status: "lobby", current_game: null, game_state: null } : r));
   }
 
+  // Clic sur le logo ARCARDI (en haut à gauche) :
+  // - seul dans le salon  -> retour au menu principal (le lounge) ;
+  // - en groupe, en pleine partie -> retour au lobby du salon. L'hôte ramène
+  //   tout le monde (reset de la room), un invité revient à SA vue lobby
+  //   sans toucher à la partie des autres (il resynchronisera au prochain
+  //   changement d'état de la room côté hôte) ;
+  // - en groupe, déjà au lobby -> rien à faire, on y est.
+  function brandHome() {
+    if (!room || !me) return;
+    if (players.length <= 1) { router.push("/lounge"); return; }
+    if (room.status === "playing") {
+      if (room.host_id === me.id) backToLobby();
+      else handleGameFinish();
+    }
+  }
+
   async function leaveRoom() {
     if (me && room) await supabase.from("room_players").delete().eq("room_id", room.id).eq("profile_id", me.id);
     router.push("/lounge");
@@ -154,6 +216,9 @@ export default function Room() {
 
   const isHost = room.host_id === me.id;
   const playing = room.status === "playing";
+  // Tant que la présence n'a pas fait sa première synchro (online === null),
+  // on considère tout le monde en ligne pour éviter un faux "hors ligne".
+  const isOnline = pid => (online === null ? true : !!online[pid]);
   const meta = playing ? GAME_META[room.current_game] : null;
   // Clé de vue : change dès qu'on bascule lobby <-> scène, ou de jeu à jeu.
   // C'est ce qui déclenche le fondu enchaîné dans <Crossfade>.
@@ -161,7 +226,7 @@ export default function Room() {
 
   return (
     <div className="wrap wrap-room">
-      <Brand lang={lang} setLang={setLang} t={t} right={
+      <Brand lang={lang} setLang={setLang} t={t} onHome={brandHome} right={
         <button className="btn ghost" style={{ width: "auto", margin: 0, padding: "8px 14px", fontSize: 13 }} onClick={leaveRoom}>
           {t("leaveRoom")}
         </button>
@@ -169,11 +234,23 @@ export default function Room() {
 
       {playing && (
         // Le code du salon reste consultable, mais discret : une pastille
-        // fixée en haut à droite de l'écran, hors du flux, qui ne prend
+        // fixée en bas à gauche de l'écran, hors du flux, qui ne prend
         // pas de place au-dessus du jeu (priorité : jouabilité).
         <div className="room-code-fab">
           <span className="dot" />
           {room.code}
+        </div>
+      )}
+
+      {hostGone && (
+        // L'hôte est l'arbitre de tous les jeux : sans lui, la partie est
+        // réellement figée. On le dit clairement aux invités au lieu de les
+        // laisser attendre devant un jeu muet, avec une porte de sortie.
+        <div className="host-offline-banner" role="alert">
+          <span>{t("hostOffline")}</span>
+          <button className="btn ghost" onClick={handleGameFinish}>
+            🎪 {t("hostOfflineBack")}
+          </button>
         </div>
       )}
 
@@ -184,7 +261,12 @@ export default function Room() {
             <div className="stage-bar">
               <div className="stage-bar-scores">
                 {players.map(p => (
-                  <span className={"mini-chip" + (p.profile_id === me.id ? " me" : "")} key={p.id}>
+                  <span
+                    className={"mini-chip" + (p.profile_id === me.id ? " me" : "") + (isOnline(p.profile_id) ? "" : " off")}
+                    key={p.id}
+                    title={isOnline(p.profile_id) ? undefined : t("offlineTag")}
+                  >
+                    <span className={"presence-dot" + (isOnline(p.profile_id) ? "" : " off")} />
                     <span>{p.profiles?.avatar}</span>
                     <span>{p.profiles?.username}{p.profile_id === room.host_id ? " 👑" : ""}</span>
                     <b>{p.score}</b>
@@ -250,13 +332,28 @@ export default function Room() {
             <p className="muted">{players.length} {t("players")} — {t("scoreLive")} :</p>
             <div style={{ marginTop: 10 }}>
               {players.map(p => (
-                <div className="player-chip" key={p.id}>
+                <div
+                  className={"player-chip" + (isOnline(p.profile_id) ? "" : " off")}
+                  key={p.id}
+                  title={isOnline(p.profile_id) ? undefined : t("offlineTag")}
+                >
+                  <span className={"presence-dot" + (isOnline(p.profile_id) ? "" : " off")} />
                   <span style={{ fontSize: 20 }}>{p.profiles?.avatar}</span>
                   <span>{p.profiles?.username}{p.profile_id === room.host_id ? " 👑" : ""}</span>
                   <span className="pt">{p.score} {t("pts")}</span>
                 </div>
               ))}
             </div>
+
+            {isHost && !hasGameStateCol && (
+              // Avertissement visible UNIQUEMENT par l'hôte : la migration
+              // upgrade-002.sql n'a pas été exécutée, la reprise de partie
+              // après un rechargement (F5) ne fonctionnera pas.
+              <div className="sql-warn">
+                <b>{t("sqlWarnTitle")}</b><br />
+                {t("sqlWarnBody")} <code>supabase/upgrade-002.sql</code>
+              </div>
+            )}
 
             {isHost ? (
               <>
