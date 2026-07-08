@@ -17,7 +17,7 @@ const PIPS = {
   6: [1, 3, 4, 6, 7, 9],
 };
 
-export default function Die({ value, held, onClick, rolling, disabled, ghost }) {
+export default function Die({ value, held, onClick, rolling, disabled, ghost, style }) {
   const cls = "yz-die"
     + (held ? " held" : "")
     + (rolling ? " rolling" : "")
@@ -28,6 +28,7 @@ export default function Die({ value, held, onClick, rolling, disabled, ghost }) 
     <button
       type="button"
       className={cls}
+      style={style}
       onClick={disabled ? undefined : onClick}
       disabled={!!disabled && !ghost}
       aria-label={ghost ? "?" : String(value)}

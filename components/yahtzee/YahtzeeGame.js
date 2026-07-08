@@ -52,6 +52,21 @@ function rollDie() {
   return 1 + Math.floor(Math.random() * 6);
 }
 
+// Position/rotation de repos d'un dé sur la table, façon dé réellement
+// lancé qui retombe légèrement de travers plutôt que parfaitement aligné.
+// Purement cosmétique et 100% local à CHAQUE client (chacun voit une
+// dispersion différente, comme deux personnes regardant le même dé sous un
+// angle différent) — n'a aucune incidence sur la valeur réelle du dé, qui
+// elle vient toujours de l'hôte.
+function randScatter() {
+  return {
+    tx: Math.round((Math.random() - 0.5) * 22),   // ±11px
+    ty: Math.round((Math.random() - 0.35) * 18),  // légère tendance à "tomber" vers le bas
+    trot: Math.round((Math.random() - 0.5) * 30), // ±15°
+  };
+}
+const NO_SCATTER = { tx: 0, ty: 0, trot: 0 };
+
 function shuffleSeats(arr) {
   const a = arr.slice();
   for (let i = a.length - 1; i > 0; i--) {
@@ -93,6 +108,7 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
   const [myHeld, setMyHeld] = useState(NO_HELD.slice()); // dés gardés, envoyé au moment du lancer
   const [pendingCat, setPendingCat] = useState(null);     // catégorie sélectionnée avant validation
   const [rollSeq, setRollSeq] = useState(0);              // incrément à chaque lancer -> relance l'animation CSS
+  const [scatter, setScatter] = useState([0, 1, 2, 3, 4].map(() => NO_SCATTER));
   const [myGain, setMyGain] = useState(0);
   const [bonusFlash, setBonusFlash] = useState(false);    // bandeau +100 Yahtzee supplémentaire
 
@@ -118,6 +134,24 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
     setMyHeld(s.held || NO_HELD.slice());
     if (s.dice === null) setPendingCat(null); // nouveau tour = plus rien de sélectionné
     if (s.lastAction?.type === "roll") setRollSeq(n => n + 1);
+
+    // Dispersion réaliste sur la table : on se base sur les drapeaux "gardé"
+    // (held) de l'action de lancer elle-même — pas sur une comparaison des
+    // valeurs, qui se tromperait dans le cas rare où un dé relancé retombe
+    // par coïncidence sur la même face qu'avant. Seuls les dés RÉELLEMENT
+    // relancés (held=false au moment du lancer) reçoivent une nouvelle
+    // position/rotation ; les dés gardés restent exactement où ils étaient.
+    if (s.dice) {
+      const isRollAction = s.lastAction?.type === "roll";
+      setScatter(old => s.dice.map((_, i) => {
+        if (!isRollAction) return old[i] || NO_SCATTER;
+        const wasHeld = s.held ? s.held[i] === true : false;
+        return wasHeld ? (old[i] || NO_SCATTER) : randScatter();
+      }));
+    } else {
+      setScatter([0, 1, 2, 3, 4].map(() => NO_SCATTER));
+    }
+
     if (s.lastAction?.type === "score" && s.lastAction.extraYahtzee && s.lastAction.seatId === me.id) {
       setBonusFlash(true);
       clearTimeout(flashTimer.current);
@@ -375,19 +409,26 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
 
         {bonusFlash && <p className="yz-bonus-flash">✨ {t("yzExtraYahtzee")} +100 !</p>}
 
-        {/* Les dés */}
-        <div className="yz-dice">
-          {(dice || [null, null, null, null, null]).map((v, i) => (
-            <Die
-              key={rollSeq + "-" + i}
-              value={v ?? 1}
-              ghost={v === null}
-              held={hasRolled && (isMyTurn ? myHeld[i] : held[i])}
-              rolling={hasRolled && !(isMyTurn ? myHeld[i] : held[i]) && lastAction?.type === "roll"}
-              onClick={isMyTurn && hasRolled && rollsLeft > 0 ? () => toggleHold(i) : undefined}
-              disabled={!isMyTurn || !hasRolled || rollsLeft === 0}
-            />
-          ))}
+        {/* Les dés — posés sur un plateau bois cohérent avec la porte d'entrée */}
+        <div className="yz-tray">
+          <div className="yz-dice">
+            {(dice || [null, null, null, null, null]).map((v, i) => (
+              <Die
+                key={rollSeq + "-" + i}
+                value={v ?? 1}
+                ghost={v === null}
+                held={hasRolled && (isMyTurn ? myHeld[i] : held[i])}
+                rolling={hasRolled && !(isMyTurn ? myHeld[i] : held[i]) && lastAction?.type === "roll"}
+                onClick={isMyTurn && hasRolled && rollsLeft > 0 ? () => toggleHold(i) : undefined}
+                disabled={!isMyTurn || !hasRolled || rollsLeft === 0}
+                style={v === null ? undefined : {
+                  "--tx": (scatter[i]?.tx ?? 0) + "px",
+                  "--ty": (scatter[i]?.ty ?? 0) + "px",
+                  "--trot": (scatter[i]?.trot ?? 0) + "deg",
+                }}
+              />
+            ))}
+          </div>
         </div>
 
         {/* Bouton de lancer */}

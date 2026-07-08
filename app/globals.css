@@ -550,28 +550,62 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 }
 @keyframes yzFlash{ from{ transform:scale(.7); opacity:0; } to{ transform:scale(1); opacity:1; } }
 
-.yz-dice{ display:flex; gap:clamp(6px, 2vw, 14px); justify-content:center; margin:8px 0 14px; }
+.yz-dice{ display:flex; gap:clamp(6px, 2vw, 14px); justify-content:center; margin:0; position:relative; z-index:1; }
+
+/* Plateau/tapis sous les dés : même langage visuel que les portes en bois
+   (mêmes tons, même veinage en repeating-linear-gradient) pour que la table
+   de jeu se sente comme un prolongement naturel de la porte déjà ouverte. */
+.yz-tray{
+  position:relative; margin:10px 0 16px; padding:22px 14px;
+  border-radius:16px; overflow:hidden;
+  background-image:
+    radial-gradient(120% 140% at 50% 10%, rgba(0,0,0,0) 0%, rgba(0,0,0,.4) 100%),
+    repeating-linear-gradient(90deg, rgba(0,0,0,.14) 0 3px, transparent 3px 28px),
+    linear-gradient(170deg, #3a2818, #2a1c10 75%);
+  box-shadow:inset 0 3px 10px rgba(0,0,0,.5), inset 0 0 0 1px rgba(255,225,190,.08);
+}
+
 .yz-die{
   width:clamp(48px, 13vw, 64px); height:clamp(48px, 13vw, 64px);
   border-radius:14px; border:2px solid rgba(0,0,0,.25);
   background:linear-gradient(145deg, #fdfdfa, #d9d9d2);
   box-shadow:0 4px 0 rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.8);
   padding:0; display:flex; align-items:center; justify-content:center;
-  transition:transform .15s ease, box-shadow .15s ease, outline-color .15s ease;
   outline:3px solid transparent; outline-offset:2px;
+  /* Une seule formule de transform pour TOUS les états (repos sur la table,
+     survol, gardé) — pilotée par des variables CSS. C'est ce qui corrige le
+     bug de survol : avant, la règle :hover réécrivait purement et simplement
+     `transform`, ce qui annulait d'un coup la position/rotation du dé sur la
+     table ET son éventuel "gardé en l'air". Maintenant chaque état ne modifie
+     qu'une variable (--lift), jamais la formule complète. */
+  transform:
+    translate(var(--tx, 0px), var(--ty, 0px))
+    rotate(var(--trot, 0deg))
+    translateY(var(--lift, 0px));
+  transition:transform .18s ease, box-shadow .15s ease, outline-color .15s ease;
 }
 .yz-die.clickable{ cursor:pointer; }
-.yz-die.clickable:hover{ transform:translateY(-3px); }
+.yz-die.clickable:hover{ --lift:-10px; }
 .yz-die.held{
+  --lift:-9px;
   outline-color:var(--p3);
-  transform:translateY(-6px);
   box-shadow:0 8px 0 rgba(0,0,0,.3), 0 0 14px rgba(182,240,76,.35), inset 0 1px 0 rgba(255,255,255,.8);
 }
-.yz-die.rolling{ animation:yzRoll .5s ease; }
-@keyframes yzRoll{
-  0%{ transform:rotate(0) scale(.6); opacity:.2; }
-  55%{ transform:rotate(200deg) scale(1.12); opacity:1; }
-  100%{ transform:rotate(360deg) scale(1); }
+.yz-die.rolling{ animation:yzTumble .55s cubic-bezier(.3,.9,.4,1) both; }
+@keyframes yzTumble{
+  0%{ transform:translate(0, -46px) rotate(0deg) scale(.75); opacity:.35; }
+  55%{
+    transform:
+      translate(calc(var(--tx, 0px) * .5), calc(var(--ty, 0px) * .5 - 16px))
+      rotate(calc(var(--trot, 0deg) * 2.6)) scale(1.1);
+    opacity:1;
+  }
+  100%{
+    transform:
+      translate(var(--tx, 0px), var(--ty, 0px))
+      rotate(var(--trot, 0deg))
+      translateY(var(--lift, 0px)) scale(1);
+  }
 }
 .yz-die.ghost{
   background:rgba(255,255,255,.05); border:2px dashed var(--line);
@@ -662,7 +696,11 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
    contenu qui "avance vers le joueur" à l'ouverture (povPush). */
 .door-stage{
   position:relative; overflow:hidden; perspective:1400px;
-  background:rgba(0,0,0,.22); border:2px solid var(--line); border-radius:22px;
+  background-image:
+    radial-gradient(120% 90% at 50% 12%, rgba(0,0,0,0) 0%, rgba(0,0,0,.35) 100%),
+    repeating-linear-gradient(90deg, rgba(0,0,0,.10) 0 3px, transparent 3px 30px),
+    linear-gradient(175deg, #3a2818, #2a1c10 75%);
+  border:2px solid var(--line); border-radius:22px;
   padding:20px; min-height:440px; min-width:320px; width:min(960px, 94vw);
   box-shadow:0 0 0 2px var(--accent, var(--p2)) inset, 0 0 40px -12px var(--accent, var(--p2));
 }
