@@ -55,6 +55,8 @@ export default function ConnectFour({ room, me, isHost, players, t, lang, onFini
   const [selected, setSelected] = useState([]);
   const [myGain, setMyGain] = useState(0);
   const [channelReady, setChannelReady] = useState(false);
+  const [confetti, setConfetti] = useState([]);
+  const [flash, setFlash] = useState(false);
 
   const channelRef = useRef(null);
   const stateRef = useRef({ board, turn, p1, p2, winner, lastMove, winningCells });
@@ -206,6 +208,36 @@ export default function ConnectFour({ room, me, isHost, players, t, lang, onFini
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [winner]);
 
+  // Confettis + flash : uniquement sur une VRAIE victoire (jamais sur un
+  // match nul), pour tout le monde présent (joueurs et spectateurs) —
+  // effet purement visuel, ne touche à aucun score ni état de partie.
+  const confettiSpawnedRef = useRef(false);
+  useEffect(() => {
+    if (!winner) { confettiSpawnedRef.current = false; return; }
+    if (winner === "draw" || confettiSpawnedRef.current) return;
+    confettiSpawnedRef.current = true;
+    const colors = ["#FF3B30", "#FFD166", "#4ECDC4", "#A8E063", "#ffffff"];
+    const pieces = Array.from({ length: 60 }, (_, i) => {
+      const big = Math.random() < 0.3;
+      return {
+        key: "c-" + i + "-" + Date.now(),
+        left: Math.round(Math.random() * 100),
+        color: colors[i % colors.length],
+        delay: (Math.random() * 0.5).toFixed(2),
+        duration: (1.6 + Math.random() * 1.3).toFixed(2),
+        size: big ? 14 : 7 + Math.round(Math.random() * 4),
+        round: i % 3 === 0,
+        drift: Math.round((Math.random() - 0.5) * 140),
+      };
+    });
+    setConfetti(pieces);
+    setFlash(true);
+    const t1 = setTimeout(() => setFlash(false), 550);
+    const t2 = setTimeout(() => setConfetti([]), 3200);
+    timeouts.current.push(t1, t2);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [winner]);
+
   function toggleSelect(pid) {
     setSelected(prev => {
       if (prev.includes(pid)) return prev.filter(x => x !== pid);
@@ -253,14 +285,17 @@ export default function ConnectFour({ room, me, isHost, players, t, lang, onFini
 
   if (phase === "playing") {
     const iWon = (winner === "p1" && amP1) || (winner === "p2" && amP2);
+    const winnerObj = winner === "p1" ? p1 : winner === "p2" ? p2 : null;
+    const otherObj = winner === "p1" ? p2 : winner === "p2" ? p1 : null;
+    const winnerColorVar = winner === "p1" ? "--p1" : "--p2";
     content = (
-      <div>
+      <div style={{ position: "relative" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, gap: 10 }}>
           <span style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 800, fontSize: 14, color: turn === "p1" && !winner ? "var(--p1)" : "var(--muted)" }}>
             <span style={{ fontSize: 20 }}>{p1?.avatar}</span>{p1?.username}
           </span>
           <span style={{ fontFamily: "'Bungee'", fontSize: 12, opacity: .55 }}>{t("c4VsLabel")}</span>
-          <span style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 800, fontSize: 14, color: turn === "p2" && !winner ? "var(--p4)" : "var(--muted)" }}>
+          <span style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 800, fontSize: 14, color: turn === "p2" && !winner ? "var(--p2)" : "var(--muted)" }}>
             {p2?.username}<span style={{ fontSize: 20 }}>{p2?.avatar}</span>
           </span>
         </div>
@@ -317,6 +352,38 @@ export default function ConnectFour({ room, me, isHost, players, t, lang, onFini
             )}
           </div>
         )}
+
+        {/* Flash blanc + bannière de victoire flashy — jamais à la place du
+            plateau, toujours PAR-DESSUS : "ça doit être clair qui gagne
+            des points" (retour explicite de l'hôte du projet). */}
+        <div className={"door-flash" + (flash ? " on" : "")} />
+        {winner && (
+          <div
+            className="win-banner"
+            style={{ background: `radial-gradient(circle at 50% 40%, ${winner === "draw" ? "#F5F3FF" : `var(${winnerColorVar})`}26, rgba(10,7,5,.86) 72%)` }}
+          >
+            <div className="win-banner-title" style={{ textShadow: `0 0 18px ${winner === "draw" ? "#F5F3FF" : `var(${winnerColorVar})`}, 0 3px 0 rgba(0,0,0,.4)` }}>
+              {winner === "draw" ? "🤝 " + t("c4BannerDrawTitle") : `🎉 ${winnerObj?.username} ${t("c4BannerWins")}`}
+            </div>
+            <div className="win-banner-sub" style={{ color: winner === "draw" ? "#F5F3FF" : `var(${winnerColorVar})`, border: `1.5px solid ${winner === "draw" ? "#F5F3FF" : `var(${winnerColorVar})`}` }}>
+              {winner === "draw"
+                ? `+${DRAW_POINTS} ${t("pts")} ${t("c4BannerEach")}`
+                : `+${WIN_POINTS} ${t("pts")} ${t("c4BannerFor")} ${winnerObj?.username} · +${LOSE_POINTS} ${t("c4BannerFor")} ${otherObj?.username}`}
+            </div>
+          </div>
+        )}
+        {confetti.map(p => (
+          <span
+            key={p.key}
+            className="confetti-piece"
+            style={{
+              left: p.left + "%", width: p.size, height: p.size * 1.4,
+              borderRadius: p.round ? "50%" : 2, background: p.color,
+              "--drift": p.drift + "px",
+              animationDuration: p.duration + "s", animationDelay: p.delay + "s",
+            }}
+          />
+        ))}
       </div>
     );
   } else {
