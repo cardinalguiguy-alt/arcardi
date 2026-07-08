@@ -388,18 +388,21 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
   const myWaitEntry = matchPhase === "exchange" && isPlayer
     ? exchange?.pending?.find(e => e.inferior === me.id && !e.done) : null;
 
+  // Sélection ENTIÈREMENT manuelle : cliquer une carte ne fait QUE
+  // l'ajouter (jamais d'auto-complétion d'une paire/brelan à la place du
+  // joueur). Le contrôle reste au joueur — s'il doit jouer "double 6", le
+  // jeu ne lui indique rien avant qu'il ait lui-même cliqué un premier 6 ;
+  // ce n'est qu'APRÈS ce clic que les autres 6 disponibles se mettent en
+  // surbrillance pour l'inviter à compléter, sans jamais les sélectionner
+  // à sa place (voir la classe .match, calculée dans le rendu).
   function onCardClick(card) {
     if (!isMyTurn) return;
     setSelected(prev => {
-      if (prev.includes(card.id)) return current ? [] : prev.filter(x => x !== card.id);
-      if (current) {
-        const sameRank = myHand.filter(c => c.v === card.v);
-        if (sameRank.length < current.count) return prev;
-        return sameRank.slice(0, current.count).map(c => c.id);
-      }
+      if (prev.includes(card.id)) return prev.filter(x => x !== card.id);
       const prevCards = prev.map(id => myHand.find(c => c.id === id)).filter(Boolean);
-      if (prevCards.length && prevCards[0].v !== card.v) return [card.id];
-      if (prev.length >= 4) return prev;
+      if (prevCards.length && prevCards[0].v !== card.v) return [card.id]; // nouvelle valeur : on repart
+      const cap = current ? current.count : 4;
+      if (prev.length >= cap) return prev;
       return [...prev, card.id];
     });
   }
@@ -550,18 +553,28 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
         {isPlayer && !iFinished && !over && (
           <>
             <div className="pres-hand">
-              {myHand.map(card => {
-                const playableAlone = !current
-                  || (card.v >= current.v && myHand.filter(c => c.v === card.v).length >= current.count);
-                return (
-                  <PresCard
-                    key={card.id} card={card} size="sm"
-                    sel={selected.includes(card.id)}
-                    dim={!isMyTurn || !playableAlone}
-                    onClick={() => onCardClick(card)}
-                  />
-                );
-              })}
+              {(() => {
+                // Surbrillance ("match") uniquement APRÈS que le joueur a lui-même
+                // cliqué une première carte — jamais avant. Aucune indication de
+                // légalité n'est donnée en amont : toutes les cartes se présentent
+                // à égalité tant qu'aucun clic n'a eu lieu.
+                const selRank = selCards.length ? selCards[0].v : null;
+                const cap = current ? current.count : 4;
+                const capReached = selected.length >= cap;
+                return myHand.map(card => {
+                  const isSel = selected.includes(card.id);
+                  const isMatch = isMyTurn && selRank !== null && !isSel && !capReached && card.v === selRank;
+                  const isFaded = isMyTurn && selRank !== null && !isSel && !isMatch;
+                  return (
+                    <PresCard
+                      key={card.id} card={card} size="sm"
+                      sel={isSel} match={isMatch} faded={isFaded}
+                      dim={!isMyTurn}
+                      onClick={() => onCardClick(card)}
+                    />
+                  );
+                });
+              })()}
             </div>
             <div className="pres-actions">
               <button className="btn" disabled={!canPlaySel} onClick={attemptPlay}
