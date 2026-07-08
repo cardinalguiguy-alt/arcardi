@@ -15,6 +15,7 @@ import EchoesRoom from "@/components/EchoesRoom";
 import RoomChat from "@/components/RoomChat";
 import DiapasonGame from "@/components/diapason/DiapasonGame";
 import ChromatikGame from "@/components/cards/ChromatikGame";
+import YahtzeeGame from "@/components/yahtzee/YahtzeeGame";
 
 // Métadonnées d'affichage de chaque jeu : icône, couleur d'accent (variable
 // CSS existante), et clés i18n pour le nom / la description courte de la
@@ -29,8 +30,9 @@ const GAME_META = {
   echoes:   { icon: "🌊", accent: "--p5", nameKey: "nameEchoes",  tagKey: "tagEchoes", minPlayers: 2 },
   diapason: { icon: "🎼", accent: "--dia", nameKey: "nameDiapason", tagKey: "tagDiapason", minPlayers: 2 },
   chromatik: { icon: "🃏", accent: "--p3", nameKey: "nameChromatik", tagKey: "tagChromatik" },
+  yahtzee:  { icon: "🎲", accent: "--p4", nameKey: "nameYahtzee", tagKey: "tagYahtzee" },
 };
-const GAME_ORDER = ["quiz", "wordle", "worldle", "piano", "connect4", "ludo", "echoes", "diapason", "chromatik"];
+const GAME_ORDER = ["quiz", "wordle", "worldle", "piano", "connect4", "ludo", "echoes", "diapason", "chromatik", "yahtzee"];
 
 export default function Room() {
   const { code } = useParams();
@@ -201,6 +203,9 @@ export default function Room() {
               )}
               {room.current_game === "chromatik" && (
                 <ChromatikGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={() => {}} />
+              )}
+              {room.current_game === "yahtzee" && (
+                <YahtzeeGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={() => {}} />
               )}
             </div>
           </div>
