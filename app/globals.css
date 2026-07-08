@@ -849,7 +849,7 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 .win-banner{
   position:absolute; inset:0; z-index:50; display:flex; flex-direction:column; align-items:center;
   justify-content:center; text-align:center; gap:8px; border-radius:20px; backdrop-filter:blur(2px);
-  animation:bannerIn .5s cubic-bezier(.3,1.6,.4,1) both;
+  animation:bannerIn .5s cubic-bezier(.3,1.6,.4,1) both; pointer-events:none;
 }
 .win-banner-title{
   font-family:'Bungee'; font-size:26px; color:#fff; animation:victoryPulse 1.1s ease-in-out infinite;

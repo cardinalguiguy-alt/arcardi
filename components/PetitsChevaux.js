@@ -152,6 +152,9 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
       setWinner(null);
       setMyGain(0);
       savedResultRef.current = false;
+      sixesCountRef.current = {}; // sinon un reliquat de la partie précédente
+      // (ex: 2 six d'affilée juste avant la victoire) fait perdre un tour
+      // pour "3 six d'affilée" dès le 1er ou 2e six de la revanche.
       setPhase("playing");
       if (isHost) {
         saveGameState(room.id, "ludo", {
