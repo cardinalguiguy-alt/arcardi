@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { saveGameState, readGameState } from "@/lib/gameSync";
+import { saveGameState, readGameState, resetRoomToLobby } from "@/lib/gameSync";
 import Crossfade from "@/components/Crossfade";
 import CardView from "./CardView";
 import { COLORS, freshDeck, shuffle, canPlay, hasPlayable, drawCards, nextSeatIdx } from "./deck";
@@ -254,7 +254,7 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
     startWith(humanSeats);
   }
   async function backToRoom() {
-    await supabase.from("rooms").update({ status: "lobby", current_game: null, game_state: null }).eq("id", room.id);
+    await resetRoomToLobby(room.id);
     onFinish && onFinish();
   }
 

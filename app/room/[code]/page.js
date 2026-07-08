@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import { resetRoomToLobby } from "@/lib/gameSync";
 import { useLang } from "@/lib/i18n";
 import Brand from "@/components/Brand";
 import Crossfade from "@/components/Crossfade";
@@ -17,22 +18,30 @@ import DiapasonGame from "@/components/diapason/DiapasonGame";
 import ChromatikGame from "@/components/cards/ChromatikGame";
 import YahtzeeGame from "@/components/yahtzee/YahtzeeGame";
 import DoorStage from "@/components/DoorStage";
+import CurtainStage from "@/components/CurtainStage";
+import FlashStage from "@/components/FlashStage";
 
 // Métadonnées d'affichage de chaque jeu : icône, couleur d'accent (variable
-// CSS existante), et clés i18n pour le nom / la description courte de la
-// carte de sélection dans le salon.
+// CSS existante), clés i18n pour le nom / la description courte de la carte
+// de sélection dans le salon, et habillage d'entrée ("stage") :
+// - "door"    : porte en bois qui pivote (inchangée) — cartes/dés + jeux de
+//               plateau/société, ambiance chaleureuse commune.
+// - "curtain" : rideau rouge qui se lève — jeux narratifs/performance et
+//               Puissance 4.
+// - "flash"   : flash + zoom — jeux de mots (rythme plus vif).
 const GAME_META = {
-  quiz:     { icon: "🧠", accent: "--acc-quiz",      nameKey: "nameQuiz",    tagKey: "tagQuiz" },
-  wordle:   { icon: "🔤", accent: "--acc-wordle",    nameKey: "nameWordle",  tagKey: "tagWordle" },
-  worldle:  { icon: "🌍", accent: "--acc-worldle",   nameKey: "nameWorldle", tagKey: "tagWorldle" },
-  piano:    { icon: "🎹", accent: "--acc-piano",     nameKey: "namePiano",   tagKey: "tagPiano" },
-  connect4: { icon: "🔴", accent: "--acc-c4",        nameKey: "nameC4",      tagKey: "tagC4", minPlayers: 2 },
-  ludo:     { icon: "🐴", accent: "--acc-ludo",      nameKey: "nameLudo",    tagKey: "tagLudo", minPlayers: 2 },
-  echoes:   { icon: "🌊", accent: "--acc-echoes",    nameKey: "nameEchoes",  tagKey: "tagEchoes", minPlayers: 2 },
-  diapason: { icon: "🎼", accent: "--acc-diapason",  nameKey: "nameDiapason", tagKey: "tagDiapason", minPlayers: 2 },
-  chromatik: { icon: "🃏", accent: "--acc-chromatik", nameKey: "nameChromatik", tagKey: "tagChromatik" },
-  yahtzee:  { icon: "🎲", accent: "--acc-yahtzee",   nameKey: "nameYahtzee", tagKey: "tagYahtzee" },
+  quiz:     { icon: "🧠", accent: "--acc-quiz",      nameKey: "nameQuiz",    tagKey: "tagQuiz", stage: "door" },
+  wordle:   { icon: "🔤", accent: "--acc-wordle",    nameKey: "nameWordle",  tagKey: "tagWordle", stage: "flash" },
+  worldle:  { icon: "🌍", accent: "--acc-worldle",   nameKey: "nameWorldle", tagKey: "tagWorldle", stage: "flash" },
+  piano:    { icon: "🎹", accent: "--acc-piano",     nameKey: "namePiano",   tagKey: "tagPiano", stage: "curtain" },
+  connect4: { icon: "🔴", accent: "--acc-c4",        nameKey: "nameC4",      tagKey: "tagC4", minPlayers: 2, stage: "curtain" },
+  ludo:     { icon: "🐴", accent: "--acc-ludo",      nameKey: "nameLudo",    tagKey: "tagLudo", minPlayers: 2, stage: "door" },
+  echoes:   { icon: "🌊", accent: "--acc-echoes",    nameKey: "nameEchoes",  tagKey: "tagEchoes", minPlayers: 2, stage: "curtain" },
+  diapason: { icon: "🎼", accent: "--acc-diapason",  nameKey: "nameDiapason", tagKey: "tagDiapason", minPlayers: 2, stage: "curtain" },
+  chromatik: { icon: "🃏", accent: "--acc-chromatik", nameKey: "nameChromatik", tagKey: "tagChromatik", stage: "door" },
+  yahtzee:  { icon: "🎲", accent: "--acc-yahtzee",   nameKey: "nameYahtzee", tagKey: "tagYahtzee", stage: "door" },
 };
+const STAGE_COMPONENT = { door: DoorStage, curtain: CurtainStage, flash: FlashStage };
 const GAME_ORDER = ["quiz", "wordle", "worldle", "piano", "connect4", "ludo", "echoes", "diapason", "chromatik", "yahtzee"];
 
 export default function Room() {
@@ -111,7 +120,19 @@ export default function Room() {
   // à la fin naturelle) : l'hôte peut ramener tout le monde au salon sans
   // que personne n'ait à quitter la room elle-même.
   async function backToLobby() {
-    await supabase.from("rooms").update({ status: "lobby", current_game: null, game_state: null }).eq("id", room.id);
+    await resetRoomToLobby(room.id);
+    // Mise à jour locale immédiate : ne dépend pas du round-trip Realtime,
+    // donc fonctionne même si la réplication Postgres sur `rooms` a du
+    // retard (l'hôte voit l'effet de son propre clic tout de suite).
+    setRoom(r => (r ? { ...r, status: "lobby", current_game: null, game_state: null } : r));
+  }
+
+  // Callback passé à chaque jeu pour son bouton de fin de partie
+  // ("Retour au salon" / "🏠"). Avant : un onFinish={() => {}} — un no-op qui
+  // ne faisait STRICTEMENT rien, d'où le bouton qui semblait "sans effet"
+  // même quand la mise à jour Supabase avait réussi.
+  function handleGameFinish() {
+    setRoom(r => (r ? { ...r, status: "lobby", current_game: null, game_state: null } : r));
   }
 
   async function leaveRoom() {
@@ -178,40 +199,43 @@ export default function Room() {
             </div>
 
             <div className="game-stage">
-              {meta && (
-                <DoorStage gameId={room.current_game} icon={meta.icon} name={t(meta.nameKey)} accentVar={meta.accent}>
+              {meta && (() => {
+                const StageComponent = STAGE_COMPONENT[meta.stage] || DoorStage;
+                return (
+                <StageComponent gameId={room.current_game} icon={meta.icon} name={t(meta.nameKey)} accentVar={meta.accent}>
                   {room.current_game === "quiz" && (
-                    <QuizGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={() => {}} />
+                    <QuizGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
                   )}
                   {room.current_game === "piano" && (
-                    <PianoEscape room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={() => {}} />
+                    <PianoEscape room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
                   )}
                   {room.current_game === "wordle" && (
-                    <WordGuess room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={() => {}} />
+                    <WordGuess room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
                   )}
                   {room.current_game === "worldle" && (
-                    <Worldle room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={() => {}} />
+                    <Worldle room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
                   )}
                   {room.current_game === "connect4" && (
-                    <ConnectFour room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={() => {}} />
+                    <ConnectFour room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
                   )}
                   {room.current_game === "ludo" && (
-                    <PetitsChevaux room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={() => {}} />
+                    <PetitsChevaux room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
                   )}
                   {room.current_game === "echoes" && (
-                    <EchoesRoom room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={() => {}} />
+                    <EchoesRoom room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
                   )}
                   {room.current_game === "diapason" && (
-                    <DiapasonGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={() => {}} />
+                    <DiapasonGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
                   )}
                   {room.current_game === "chromatik" && (
-                    <ChromatikGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={() => {}} />
+                    <ChromatikGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
                   )}
                   {room.current_game === "yahtzee" && (
-                    <YahtzeeGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={() => {}} />
+                    <YahtzeeGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
                   )}
-                </DoorStage>
-              )}
+                </StageComponent>
+                );
+              })()}
             </div>
           </div>
         ) : (

@@ -64,7 +64,7 @@ export default function DoorStage({ gameId, icon, name, accentVar, children }) {
       )}
       {doorState === "open" && (
         <div className="door-content" key={entryKey}>
-          <button className="door-replay-btn" onClick={closeDoor} title="Revoir l'entrée">↺ Revoir l'entrée</button>
+          <button className="door-replay-btn" onClick={closeDoor} title="Revoir l'entrée" aria-label="Revoir l'entrée">↺</button>
           {children}
         </div>
       )}

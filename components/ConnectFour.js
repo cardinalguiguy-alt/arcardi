@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { saveGameState, readGameState } from "@/lib/gameSync";
+import { saveGameState, readGameState, resetRoomToLobby } from "@/lib/gameSync";
 import Crossfade from "./Crossfade";
 
 const ROWS = 6, COLS = 7;
@@ -264,7 +264,7 @@ export default function ConnectFour({ room, me, isHost, players, t, lang, onFini
   }
 
   async function backToRoom() {
-    await supabase.from("rooms").update({ status: "lobby", current_game: null, game_state: null }).eq("id", room.id);
+    await resetRoomToLobby(room.id);
     onFinish && onFinish();
   }
 

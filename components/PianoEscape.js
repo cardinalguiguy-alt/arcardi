@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { saveGameState, readGameState } from "@/lib/gameSync";
+import { saveGameState, readGameState, resetRoomToLobby } from "@/lib/gameSync";
 
 /* ---------- Audio (piano simple, Web Audio) ---------- */
 const FREQ = {
@@ -132,7 +132,7 @@ export default function PianoEscape({ room, me, isHost, onFinish, t, lang }) {
     channelRef.current.send({ type: "broadcast", event: "advance", payload: { stage: 1 } });
   }
   async function backToLobby() {
-    await supabase.from("rooms").update({ status: "lobby", current_game: null, game_state: null }).eq("id", room.id);
+    await resetRoomToLobby(room.id);
     onFinish && onFinish();
   }
 

@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { saveGameState, readGameState } from "@/lib/gameSync";
+import { saveGameState, readGameState, resetRoomToLobby } from "@/lib/gameSync";
 import Crossfade from "@/components/Crossfade";
 import Die from "./Die";
 import {
@@ -300,7 +300,7 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
     channelRef.current.send({ type: "broadcast", event: "match_start", payload: dealFreshState(shuffleSeats(seats)) });
   }
   async function backToRoom() {
-    await supabase.from("rooms").update({ status: "lobby", current_game: null, game_state: null }).eq("id", room.id);
+    await resetRoomToLobby(room.id);
     onFinish && onFinish();
   }
 
@@ -310,7 +310,11 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
   const currentSeat = seats[turnIdx];
   const isMyTurn = phase === "playing" && !finished && isPlayer && currentSeat?.id === me.id;
   const hasRolled = dice !== null;
-  const canRoll = isMyTurn && rollsLeft > 0;
+  // Si les 5 dés sont déjà gardés, une relance ne changerait strictement
+  // rien (aucun dé ne serait retiré) — inutile de laisser gaspiller un
+  // des 2 lancers restants pour zéro effet visible.
+  const allHeld = hasRolled && myHeld.every(h => h === true);
+  const canRoll = isMyTurn && rollsLeft > 0 && !allHeld;
   const canScore = isMyTurn && hasRolled;
   const myCard = cards[me.id] || null;
 
@@ -401,6 +405,7 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
                 : `🏆 ${winnerNames[0]} ${t("yzWinOther")}`
           ) : isMyTurn ? (
             !hasRolled ? t("yzRollFirst")
+              : allHeld ? t("yzAllHeld")
               : rollsLeft > 0 ? `${t("yzRollsLeft")} ${rollsLeft} — ${t("yzHoldHint")}`
                 : t("yzMustScore")
           ) : isPlayer ? `${t("chromatikWaitingFor")} ${currentSeat?.username}…`
@@ -434,7 +439,7 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
         {/* Bouton de lancer */}
         {isMyTurn && !finished && (
           <div style={{ display: "flex", justifyContent: "center", marginBottom: 14 }}>
-            <button className="btn yz-roll-btn" disabled={!canRoll} onClick={attemptRoll}>
+            <button className="btn yz-roll-btn" disabled={!canRoll} onClick={attemptRoll} title={allHeld ? t("yzAllHeld") : undefined}>
               🎲 {!hasRolled ? t("yzRoll") : t("yzReroll")} {hasRolled ? `(${rollsLeft})` : ""}
             </button>
           </div>
