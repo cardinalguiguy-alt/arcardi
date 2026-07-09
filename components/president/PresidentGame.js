@@ -6,7 +6,7 @@ import Crossfade from "@/components/Crossfade";
 import PresCard from "./PresCard";
 import {
   dealAll, shuffle, isLegalPlay, hasLegalPlay, pointsForPlace, TWO_V,
-  takeBest, sortHand, exchangeRoles, findLowestCardSeatIdx,
+  takeBest, sortHand, exchangeRoles, findLowestCardSeatIdx, dealDictatorRound,
 } from "./deck52";
 import { decideBotMove, decideBotGiveback } from "./botLogic";
 
@@ -123,6 +123,7 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
   const [lastAction, setLastAction] = useState(null);
   const [matchPhase, setMatchPhase] = useState("trick");
   const [exchange, setExchange] = useState(null);
+  const [joke, setJoke] = useState(false); // manche "Dictateur" bonus en cours (hors classement)
   const [selected, setSelected] = useState([]);
   const [giveSelected, setGiveSelected] = useState([]);
   const [myGain, setMyGain] = useState(0);
@@ -162,8 +163,8 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
   const recapTimerRef = useRef(null);
 
   useEffect(() => {
-    stateRef.current = { seats, hands, current, turnIdx, passed, finishedOrder, over, matchPhase, exchange };
-  }, [seats, hands, current, turnIdx, passed, finishedOrder, over, matchPhase, exchange]);
+    stateRef.current = { seats, hands, current, turnIdx, passed, finishedOrder, over, matchPhase, exchange, joke };
+  }, [seats, hands, current, turnIdx, passed, finishedOrder, over, matchPhase, exchange, joke]);
 
   // Miroir séparé : la valeur de `current` juste avant le PROCHAIN
   // applyLocalState (utilisé pour l'animation de burn ci-dessus).
@@ -179,6 +180,7 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
     setFinishedOrder(s.finishedOrder || []); setOver(!!s.over);
     setLastAction(s.lastAction || null);
     setMatchPhase(s.matchPhase || "trick"); setExchange(s.exchange || null);
+    setJoke(!!s.joke);
     setSelected([]); setGiveSelected([]);
     setMandates(s.mandates || {}); setTarget(s.target || 3); setChampion(s.champion || null);
     if (extra.resetGain) { setMyGain(0); savedResultRef.current = false; }
@@ -304,7 +306,7 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
       } else {
         ti = nx;
       }
-      const next = { seats: s.seats, hands: h, current: cur, turnIdx: ti, passed: ps, finishedOrder: fo, over, lastAction, matchPhase: "trick", exchange: null };
+      const next = { seats: s.seats, hands: h, current: cur, turnIdx: ti, passed: ps, finishedOrder: fo, over, lastAction, matchPhase: "trick", exchange: null, joke: s.joke };
       broadcastNewState(next);
       scheduleNext();
       return;
@@ -326,9 +328,17 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
     }
 
     if (over) {
+      // Manche "Dictateur" (bonus pour rire) : ne compte JAMAIS pour les
+      // mandats — le Dictateur en titre reste le même quoi qu'il arrive ici,
+      // matchMetaRef n'est même pas consulté.
+      if (s.joke) {
+        const next = { seats: s.seats, hands: h, current: null, turnIdx: ti, passed: [], finishedOrder: fo, over, lastAction, matchPhase: "trick", exchange: null, joke: true };
+        broadcastNewState(next);
+        return;
+      }
       // Mandats : +1 pour le Président (place 0), et +1 pour le
       // Vice-Président si la table est à 4 (place 1). Dès qu'un siège
-      // atteint la cible choisie par l'hôte, il devient champion — c'est
+      // atteint la cible choisie par l'hôte, il devient Dictateur — c'est
       // le MATCH entier qui se termine, pas seulement cette manche.
       const meta = matchMetaRef.current;
       const newMandates = { ...meta.mandates };
@@ -358,7 +368,7 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
       }
     }
 
-    const next = { seats: s.seats, hands: h, current: cur, turnIdx: ti, passed: ps, finishedOrder: fo, over, lastAction, matchPhase: "trick", exchange: null };
+    const next = { seats: s.seats, hands: h, current: cur, turnIdx: ti, passed: ps, finishedOrder: fo, over, lastAction, matchPhase: "trick", exchange: null, joke: s.joke };
     broadcastNewState(next);
     scheduleNext();
   }
@@ -487,6 +497,20 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
     if (!isHost || !seats.length) return;
     matchMetaRef.current = { mandates: Object.fromEntries(seats.map(s => [s.id, 0])), target: matchMetaRef.current.target, champion: null };
     const initial = dealFirstRound(shuffle(seats));
+    sendMatchStart(initial);
+  }
+  // Tour "Dictateur" — bonus HUMORISTIQUE demandé par l'hôte une fois le
+  // Dictateur couronné : sa main ne contient QUE des 2, il gagne quasi
+  // automatiquement. Ne touche JAMAIS aux mandats ni au titre de Dictateur
+  // (voir le garde-fou `s.joke` dans hostApplyMove).
+  function lancerTourDictateur() {
+    if (!isHost || !seats.length || !champion) return;
+    const hands = dealDictatorRound(seats, champion);
+    const dictIdx = seats.findIndex(s => s.id === champion);
+    const initial = {
+      seats, hands, current: null, turnIdx: dictIdx, passed: [], finishedOrder: [], over: false,
+      lastAction: null, matchPhase: "trick", exchange: null, joke: true,
+    };
     sendMatchStart(initial);
   }
   async function backToRoom() {
@@ -655,6 +679,10 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
 
     content = (
       <div>
+        {joke && (
+          <p className="pres-joke-banner">😈 {t("presDictatorRoundBanner")}</p>
+        )}
+
         {/* Sens du tour : toujours le même sens autour de la table (index de
             siège croissant) — une frise d'avatars reliés par des flèches le
             rend visible d'un coup d'œil, plutôt qu'un simple pictogramme. */}
@@ -787,13 +815,16 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
         {over && (
           <div style={{ marginTop: 14 }}>
             <h2 style={{ textAlign: "center", fontFamily: "'Bungee'", fontSize: 17, marginBottom: 10 }}>
-              {champion ? t("presChampionTitle") : "🏁 " + t("presRoundOverTitle")}
+              {joke ? "😈 " + t("presDictatorRoundOverTitle") : champion ? t("presChampionTitle") : "🏁 " + t("presRoundOverTitle")}
             </h2>
-            {champion && (
+            {champion && !joke && (
               <p style={{ textAlign: "center", fontWeight: 800, marginBottom: 12 }}>
                 {seats.find(x => x.id === champion)?.avatar} <b>{seats.find(x => x.id === champion)?.username}</b>{" "}
                 {t("presChampionText").replace("{n}", target)}
               </p>
+            )}
+            {joke && (
+              <p className="muted" style={{ textAlign: "center", marginBottom: 12 }}>{t("presDictatorRoundOverNote")}</p>
             )}
             <div className="pres-podium">
               {finishedOrder.map((id, place) => {
@@ -805,7 +836,7 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
                     <span className="name">{seat?.username}</span>
                     <span className="title"><RankTag place={place} nSeats={seats.length} t={t} /></span>
                     <b className="pts">+{pointsForPlace(place, seats.length)}</b>
-                    <span className="muted" style={{ fontSize: 11 }}>👑×{mandates[id] || 0}</span>
+                    {!joke && <span className="muted" style={{ fontSize: 11 }}>👑×{mandates[id] || 0}</span>}
                   </div>
                 );
               })}
@@ -815,14 +846,19 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
                 {t("peYourGain")} <span style={{ color: "var(--p3)", fontFamily: "'Space Mono'" }}>+{myGain} {t("pts")}</span>
               </p>
             )}
-            {!champion && (
+            {!champion && !joke && (
               <p className="muted" style={{ textAlign: "center", fontSize: 12, marginTop: 4 }}>{t("presNextExchangeHint")}</p>
             )}
             <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 12, flexWrap: "wrap" }}>
               {isHost ? (
                 <>
                   {champion ? (
-                    <button className="btn" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={nouveauMatch}>🔁 {t("presNewMatch")}</button>
+                    <>
+                      <button className="btn ghost" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={lancerTourDictateur}>
+                        😈 {joke ? t("presDictatorReplay") : t("presDictatorLaunch")}
+                      </button>
+                      <button className="btn" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={nouveauMatch}>🔁 {t("presNewMatch")}</button>
+                    </>
                   ) : (
                     <button className="btn" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={rejouer}>🔁 {t("c4Rejouer")}</button>
                   )}

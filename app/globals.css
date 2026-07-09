@@ -1399,6 +1399,14 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 .pres-turn-arrow{ color:var(--muted); font-size:12px; }
 .pres-turn-arrow.wrap{ margin-left:2px; }
 
+/* Bannière "manche Dictateur" — bonus humoristique, jamais compté dans les
+   mandats, juste pour prévenir que cette manche-ci est différente. */
+.pres-joke-banner{
+  text-align:center; font-weight:800; font-size:13px; color:var(--p1);
+  background:rgba(255,93,115,.1); border:2px solid var(--p1); border-radius:12px;
+  padding:6px 10px; margin:0 0 10px;
+}
+
 /* Mandats accumulés (Président/Vice-Président) — premier à la cible
    remporte le MATCH. */
 .pres-mandates-bar{ display:flex; flex-wrap:wrap; gap:6px; justify-content:center; margin-bottom:10px; }

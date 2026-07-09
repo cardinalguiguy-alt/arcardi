@@ -160,3 +160,30 @@ export function exchangeRoles(prevFinishedOrder, nSeats) {
   return roles;
 }
 
+/* ==========================================================================
+   MANCHE "DICTATEUR" — bonus HUMORISTIQUE, hors classement, que l'hôte peut
+   lancer une fois qu'un Dictateur a été couronné (cible de mandats
+   atteinte). Sa main est fabriquée pour ne contenir QUE des 2 (la carte la
+   plus forte, qui brûle le pli ET fait rejouer la même personne) — il gagne
+   donc quasi automatiquement, pour rire. Comme il n'existe que 4 vrais 2
+   dans un paquet de 52, sa main est ARTIFICIELLE (des doublons fictifs,
+   jamais un vrai paquet) : cette manche ne compte JAMAIS pour les mandats,
+   le Dictateur en titre le reste quoi qu'il arrive.
+   ========================================================================== */
+export function dealDictatorRound(seats, dictatorId) {
+  const handSize = Math.max(1, Math.floor(52 / seats.length));
+  const others = seats.filter(s => s.id !== dictatorId);
+  // Les autres se partagent un paquet privé de ses 2 (fictivement
+  // monopolisés par le Dictateur) : uniquement pour que sa main entière
+  // soit des 2, ce qui n'existe dans aucune vraie partie.
+  const rest = shuffle(freshDeck52().filter(c => c.v !== TWO_V));
+  const hands = {};
+  hands[dictatorId] = Array.from({ length: handSize }, (_, i) => ({
+    id: "joke2-" + i, rank: "2", v: TWO_V, suit: SUITS[i % SUITS.length].id,
+  }));
+  others.forEach(s => { hands[s.id] = []; });
+  rest.forEach((card, i) => { hands[others[i % others.length].id].push(card); });
+  others.forEach(s => { hands[s.id] = sortHand(hands[s.id]); });
+  return hands;
+}
+
