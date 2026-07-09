@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 /**
  * Fondu enchaîné réutilisable.
@@ -21,6 +21,17 @@ export default function Crossfade({ id, children, duration = 420, className = ""
   const [layers, setLayers] = useState(() => [{ id, node: children }]);
   const [fading, setFading] = useState(false);
   const timers = useRef([]);
+
+  // Recale le scroll tout en haut DÈS que `id` change, avant que le nouveau
+  // contenu ne soit peint (useLayoutEffect = synchrone, avant paint) : sans
+  // ça, quand le nouveau contenu est plus court que l'ancien (ex. lobby ->
+  // écran de jeu), le navigateur corrige lui-même la position de scroll
+  // après coup, ce qui produit un petit "saut" visible juste avant
+  // l'affichage de l'écran de destination. On prend les devants.
+  useLayoutEffect(() => {
+    if (typeof window !== "undefined") window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
 
   // Ajoute un nouveau calque quand `id` change ; met juste à jour le
   // contenu du calque courant sinon (pas de fondu).

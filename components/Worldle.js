@@ -3,7 +3,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { saveGameState, readGameState, resetRoomToLobby } from "@/lib/gameSync";
 import FlagIcon from "./FlagIcon";
-import WorldleMiniMap from "./WorldleMiniMap";
 
 const MAX_TRIES = 10;
 const ROUND_MS = 180000; // 3 min
@@ -445,17 +444,6 @@ export default function Worldle({ room, me, isHost, players, onFinish, t, lang }
             </p>
           )}
 
-          {guesses.length > 0 && (
-            <WorldleMiniMap
-              guess={guesses[guesses.length - 1]}
-              allCountries={COUNTRIES}
-              targetId={target.id}
-              solved={myResult.current.solved || finished}
-              lang={lang}
-              t={t}
-            />
-          )}
-
           <div style={{ display: "grid", gap: 10 }}>
             {guesses.slice().reverse().map((g, i) => {
               const isBest = g.pct === myResult.current.bestPct && g.country.id !== target.id;
@@ -497,7 +485,7 @@ export default function Worldle({ room, me, isHost, players, onFinish, t, lang }
             <div style={{ marginTop: 10 }}>
               {myResult.current.solved
                 ? <p className="hint">{t("foundInPre")} {myResult.current.tries} {t("foundInSuffix")}</p>
-                : <p className="hint">{t("worldleFailedPre")} <b style={{ color: "var(--p2)" }}>{target["fr"]} <FlagIcon code={target.id} /></b></p>}
+                : <p className="hint">{t("worldleFailedPre")} <b style={{ color: "var(--p2)" }}>{target[lang] || target.fr} <FlagIcon code={target.id} /></b></p>}
               <p style={{ fontWeight: 800 }}>{t("peYourGain")} <span style={{ color: "var(--p3)", fontFamily: "'Space Mono'" }}>+{pointsFor(myResult.current)} {t("pts")}</span></p>
               <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 6, flexWrap: "wrap" }}>
                 {isHost ? (

@@ -26,6 +26,12 @@ import { decideBotMove } from "./botLogic";
 
 const GAME_ID = "chromatik";
 const HAND_SIZE = 7;
+// Minuteur de tour humain (même convention que Président, voir
+// armHumanTurnTimer plus bas) : 20s par défaut, réduit à 5s après 2
+// dépassements consécutifs du même joueur, remis à 20s dès qu'il rejoue.
+const HUMAN_TURN_MS = 20000;
+const HUMAN_TURN_SHORT_MS = 5000;
+const HUMAN_TURN_STRIKES = 2;
 const BOT_AVATARS = ["🤖", "🦾", "👾"];
 const COLOR_VAR_MAP = { red: "--p1", green: "--p3", blue: "--ludoB", yellow: "--ludoY" };
 
@@ -64,6 +70,12 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
   const [colorPickerFor, setColorPickerFor] = useState(null); // cardId en attente de choix de couleur (joueur local)
   const [myGain, setMyGain] = useState(0);
   const [channelReady, setChannelReady] = useState(false);
+  // Minuteur de tour humain (affichage) : deadline + siège concerné,
+  // diffusés par l'hôte dans chaque état réseau — tous les clients
+  // calculent le compte à rebours localement à partir du même horodatage.
+  const [turnDeadline, setTurnDeadline] = useState(null);
+  const [turnDeadlineSeat, setTurnDeadlineSeat] = useState(null);
+  const [now, setNow] = useState(() => Date.now());
 
   const channelRef = useRef(null);
   const stateRef = useRef(null);
@@ -71,6 +83,9 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
   const autoStartedRef = useRef(false);
   const restoredRef = useRef(false);
   const botTimer = useRef(null);
+  const turnTimeoutRef = useRef(null);  // setTimeout qui déclenche l'action automatique du joueur humain actif
+  const turnStrikesRef = useRef({});    // seatId -> nombre de dépassements consécutifs
+  const turnMetaRef = useRef({ deadline: null, seatId: null });
 
   useEffect(() => {
     stateRef.current = { seats, hands, deck, discard, activeColor, turnIdx, direction, winner };
@@ -80,8 +95,15 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
     setSeats(s.seats); setHands(s.hands); setDeck(s.deck); setDiscard(s.discard);
     setActiveColor(s.activeColor); setTurnIdx(s.turnIdx); setDirection(s.direction);
     setWinner(s.winner || null); setLastAction(s.lastAction || null);
+    setTurnDeadline(s.turnDeadline || null); setTurnDeadlineSeat(s.turnDeadlineSeat || null);
     if (extra.resetGain) { setMyGain(0); savedResultRef.current = false; }
   }
+
+  useEffect(() => {
+    if (!turnDeadline) return;
+    const iv = setInterval(() => setNow(Date.now()), 250);
+    return () => clearInterval(iv);
+  }, [turnDeadline]);
 
   function persist(s) {
     if (!isHost) return;
@@ -110,6 +132,9 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
 
     ch.on("broadcast", { event: "move_attempt" }, ({ payload }) => {
       if (!isHost) return;
+      // Un message reçu de ce siège = il n'est plus AFK : bénéfice du délai
+      // complet (20s) pour son PROCHAIN tour.
+      turnStrikesRef.current[payload.seatId] = 0;
       hostApplyMove(payload.seatId, payload.action);
     });
 
@@ -130,14 +155,58 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
 
     return () => {
       clearTimeout(botTimer.current);
+      clearTimeout(turnTimeoutRef.current);
       supabase.removeChannel(ch);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [room.id, isHost]);
 
+  // Calcule, à partir d'un état sur le point d'être diffusé, la deadline du
+  // tour humain à venir (voir le pendant côté Président pour le détail).
+  function computeTurnDeadline(next) {
+    if (!next || next.winner || !next.seats || !next.seats.length) return { deadline: null, seatId: null };
+    const seat = next.seats[next.turnIdx];
+    if (!seat || seat.isBot) return { deadline: null, seatId: null };
+    const strikes = turnStrikesRef.current[seat.id] || 0;
+    const ms = strikes >= HUMAN_TURN_STRIKES ? HUMAN_TURN_SHORT_MS : HUMAN_TURN_MS;
+    return { deadline: Date.now() + ms, seatId: seat.id };
+  }
+
+  // Arme le minuteur qui, si le joueur humain actif ne fait rien, pioche à
+  // sa place à l'échéance — même mécanique que le bouton de pioche : à
+  // Chromatik, il n'existe pas de "passe" distincte, piocher termine
+  // toujours le tour, jouable ou non. Chaque dépassement incrémente le
+  // compteur de grillages consécutifs (turnStrikesRef), remis à 0 dès que
+  // le joueur agit de lui-même.
+  function armHumanTurnTimer() {
+    clearTimeout(turnTimeoutRef.current);
+    if (!isHost) return;
+    const { deadline, seatId } = turnMetaRef.current;
+    if (!deadline || !seatId) return;
+    const delay = Math.max(0, deadline - Date.now());
+    turnTimeoutRef.current = setTimeout(() => {
+      const s = stateRef.current;
+      if (!s || s.winner) return;
+      if (!s.seats[s.turnIdx] || s.seats[s.turnIdx].id !== seatId) return; // le tour a déjà changé
+      turnStrikesRef.current[seatId] = (turnStrikesRef.current[seatId] || 0) + 1;
+      hostApplyMove(seatId, { type: "draw" });
+    }, delay);
+  }
+
   // ----- Arbitrage (hôte uniquement) -----
   function broadcastNewState(next) {
-    channelRef.current.send({ type: "broadcast", event: "state", payload: next });
+    const tm = computeTurnDeadline(next);
+    turnMetaRef.current = tm;
+    channelRef.current.send({ type: "broadcast", event: "state", payload: { ...next, turnDeadline: tm.deadline, turnDeadlineSeat: tm.seatId } });
+    armHumanTurnTimer();
+  }
+  function sendMatchStart(payload) {
+    // Nouvelle manche : chacun repart avec le délai complet (20s).
+    turnStrikesRef.current = {};
+    const tm = computeTurnDeadline(payload);
+    turnMetaRef.current = tm;
+    channelRef.current.send({ type: "broadcast", event: "match_start", payload: { ...payload, turnDeadline: tm.deadline, turnDeadlineSeat: tm.seatId } });
+    armHumanTurnTimer();
   }
 
   function hostApplyMove(seatId, action) {
@@ -224,7 +293,7 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
     for (let i = humanSeats.length + 1; i <= tableSize; i++) bots.push(makeBotSeat(i - humanSeats.length));
     const seatsFull = shuffle([...humanSeats, ...bots]);
     const initial = dealFreshState(seatsFull);
-    channelRef.current.send({ type: "broadcast", event: "match_start", payload: initial });
+    sendMatchStart(initial);
   }
 
   useEffect(() => {
@@ -268,6 +337,9 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
   const myHand = hands[me.id] || [];
   const topCard = discard[discard.length - 1];
   const isMyTurn = phase === "playing" && !winner && isPlayer && seats[turnIdx]?.id === me.id;
+  // Compte à rebours du tour humain en cours, calculé localement à partir de
+  // la deadline diffusée par l'hôte — même horodatage partout.
+  const turnRemaining = turnDeadline ? Math.max(0, Math.ceil((turnDeadline - now) / 1000)) : null;
 
   function attemptDraw() {
     if (!isMyTurn) return;
@@ -317,7 +389,12 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
             <div key={s.id} className={"chromatik-opponent" + (seats[turnIdx]?.id === s.id ? " active" : "")}>
               <span className="avatar">{s.avatar}</span>
               <span className="name">{s.username}</span>
-              <span className="count">{(hands[s.id] || []).length} 🂠</span>
+              <span className="count">
+                {(hands[s.id] || []).length} 🂠
+                {turnDeadlineSeat === s.id && turnRemaining != null && (
+                  <span className={"turn-timer-chip mini" + (turnRemaining <= 5 ? " hot" : "")}>{turnRemaining}s</span>
+                )}
+              </span>
             </div>
           ))}
         </div>
@@ -333,6 +410,14 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
           </div>
         </div>
 
+        {!winner && isMyTurn && (
+          <div className="turn-banner">
+            <span className="turn-banner-badge">🫵 {t("yourTurnBadge")}</span>
+            {turnRemaining != null && (
+              <span className={"turn-timer-chip" + (turnRemaining <= 5 ? " hot" : "")}>⏱ {turnRemaining}s</span>
+            )}
+          </div>
+        )}
         <p className="muted" style={{ textAlign: "center", margin: "10px 0", minHeight: 18, fontWeight: winner ? 800 : 400 }}>
           {winner ? (
             winner === me.id ? "🏆 " + t("chromatikWinYou")

@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import GameRulesButton from "./GameRulesButton";
 
 /* ==========================================================================
    FlashStage — habillage de présentation "flash + zoom" pour les jeux de
@@ -9,7 +10,7 @@ import { useEffect, useRef, useState } from "react";
    pour ne jamais toucher aux deux autres.
    ========================================================================== */
 
-export default function FlashStage({ gameId, icon, name, accentVar, children }) {
+export default function FlashStage({ gameId, icon, name, accentVar, lang, children }) {
   const [state, setState] = useState("closed"); // 'closed' | 'opening' | 'open'
   const [entryKey, setEntryKey] = useState(0);
   const openTimer = useRef(null);
@@ -59,6 +60,7 @@ export default function FlashStage({ gameId, icon, name, accentVar, children }) 
       {state === "open" && (
         <div className="flash-content" key={entryKey}>
           <button className="door-replay-btn" onClick={closeFlash} title="Revoir l'entrée" aria-label="Revoir l'entrée">↺</button>
+          <GameRulesButton gameId={gameId} lang={lang} />
           {children}
         </div>
       )}

@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import GameRulesButton from "./GameRulesButton";
 
 /* ==========================================================================
    CurtainStage — habillage de présentation "lever de rideau" pour les jeux
@@ -16,7 +17,7 @@ import { useEffect, useRef, useState } from "react";
    est monté, avec l'animation d'entrée qui rejoue à CHAQUE ouverture).
    ========================================================================== */
 
-export default function CurtainStage({ gameId, icon, name, accentVar, children }) {
+export default function CurtainStage({ gameId, icon, name, accentVar, lang, children }) {
   const [state, setState] = useState("closed"); // 'closed' | 'opening' | 'open'
   const [entryKey, setEntryKey] = useState(0);
   const openTimer = useRef(null);
@@ -63,6 +64,7 @@ export default function CurtainStage({ gameId, icon, name, accentVar, children }
       {state === "open" && (
         <div className="curtain-content" key={entryKey}>
           <button className="door-replay-btn" onClick={closeCurtain} title="Revoir l'entrée" aria-label="Revoir l'entrée">↺</button>
+          <GameRulesButton gameId={gameId} lang={lang} />
           {children}
         </div>
       )}

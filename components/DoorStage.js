@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { playDoorOpen } from "@/lib/sfx";
+import GameRulesButton from "./GameRulesButton";
 
 /* ==========================================================================
    DoorStage — habillage de présentation "porte d'entrée" au-dessus d'un
@@ -19,7 +20,7 @@ import { playDoorOpen } from "@/lib/sfx";
    lancé par l'hôte) — on ne saute jamais la mise en scène.
    ========================================================================== */
 
-export default function DoorStage({ gameId, icon, name, accentVar, children }) {
+export default function DoorStage({ gameId, icon, name, accentVar, lang, children }) {
   const [doorState, setDoorState] = useState("closed"); // 'closed' | 'opening' | 'open'
   const [entryKey, setEntryKey] = useState(0); // change à chaque ouverture -> rejoue l'animation povPush
   const openTimer = useRef(null);
@@ -67,6 +68,7 @@ export default function DoorStage({ gameId, icon, name, accentVar, children }) {
       {doorState === "open" && (
         <div className="door-content" key={entryKey}>
           <button className="door-replay-btn" onClick={closeDoor} title="Revoir l'entrée" aria-label="Revoir l'entrée">↺</button>
+          <GameRulesButton gameId={gameId} lang={lang} />
           {children}
         </div>
       )}

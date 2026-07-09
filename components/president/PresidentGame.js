@@ -41,6 +41,13 @@ import { decideBotMove, decideBotGiveback } from "./botLogic";
 
 const GAME_ID = "president";
 const BOT_AVATARS = ["🤖", "🦾", "👾"];
+// Minuteur de tour humain (voir armHumanTurnTimer plus bas) : 20s par défaut,
+// réduit à 5s après 2 dépassements consécutifs du MÊME joueur, remis à 20s
+// dès qu'il rejoue de lui-même. Ne concerne jamais les bots (déjà tempo­risés
+// séparément par scheduleNext).
+const HUMAN_TURN_MS = 20000;
+const HUMAN_TURN_SHORT_MS = 5000;
+const HUMAN_TURN_STRIKES = 2;
 
 function makeBotSeat(n) {
   return { id: "bot" + n, username: "Bot " + n, avatar: BOT_AVATARS[(n - 1) % BOT_AVATARS.length], isBot: true };
@@ -147,6 +154,14 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
   // brûlé (cartes de l'ancien pli + le/les 2 posés) pour un fondu en
   // cendres au lieu d'une disparition sèche. Purement cosmétique/local.
   const [burningPile, setBurningPile] = useState(null); // { cards, key } | null
+  // Minuteur de tour humain (affichage) : deadline + siège concerné, diffusés
+  // par l'hôte (voir computeTurnDeadline/armHumanTurnTimer) dans chaque état
+  // réseau — tous les clients calculent le compte à rebours localement à
+  // partir de ce même horodatage, jamais de minuteur divergent d'un écran
+  // à l'autre.
+  const [turnDeadline, setTurnDeadline] = useState(null);
+  const [turnDeadlineSeat, setTurnDeadlineSeat] = useState(null);
+  const [now, setNow] = useState(() => Date.now());
 
   const channelRef = useRef(null);
   const stateRef = useRef(null);
@@ -161,6 +176,9 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
   const prevCurrentRef = useRef(null); // pli juste avant la mise à jour, pour l'animation de burn
   const burnTimerRef = useRef(null);
   const recapTimerRef = useRef(null);
+  const turnTimeoutRef = useRef(null);  // setTimeout qui déclenche l'action automatique du joueur humain actif
+  const turnStrikesRef = useRef({});    // seatId -> nombre de dépassements consécutifs (remis à 0 dès qu'il rejoue)
+  const turnMetaRef = useRef({ deadline: null, seatId: null }); // dernière deadline diffusée
 
   useEffect(() => {
     stateRef.current = { seats, hands, current, turnIdx, passed, finishedOrder, over, matchPhase, exchange, joke };
@@ -170,6 +188,12 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
   // applyLocalState (utilisé pour l'animation de burn ci-dessus).
   useEffect(() => { prevCurrentRef.current = current; }, [current]);
   useEffect(() => () => { clearTimeout(burnTimerRef.current); clearTimeout(recapTimerRef.current); }, []);
+
+  useEffect(() => {
+    if (!turnDeadline) return;
+    const iv = setInterval(() => setNow(Date.now()), 250);
+    return () => clearInterval(iv);
+  }, [turnDeadline]);
 
   function applyLocalState(s, extra = {}) {
     // Capture le pli tel qu'il était juste AVANT cette mise à jour : c'est
@@ -183,6 +207,7 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
     setJoke(!!s.joke);
     setSelected([]); setGiveSelected([]);
     setMandates(s.mandates || {}); setTarget(s.target || 3); setChampion(s.champion || null);
+    setTurnDeadline(s.turnDeadline || null); setTurnDeadlineSeat(s.turnDeadlineSeat || null);
     if (extra.resetGain) { setMyGain(0); savedResultRef.current = false; }
 
     if (!s.current && s.lastAction?.type === "burn") {
@@ -216,6 +241,10 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
 
     ch.on("broadcast", { event: "move_attempt" }, ({ payload }) => {
       if (!isHost) return;
+      // Un message reçu de ce siège = il n'est plus AFK : on lui redonne le
+      // bénéfice du délai complet (20s) pour son PROCHAIN tour, que ce
+      // coup-ci soit finalement légal ou non.
+      turnStrikesRef.current[payload.seatId] = 0;
       hostApplyMove(payload.seatId, payload.action);
     });
 
@@ -242,24 +271,80 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
 
     return () => {
       clearTimeout(botTimer.current);
+      clearTimeout(turnTimeoutRef.current);
       supabase.removeChannel(ch);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [room.id, isHost]);
 
+  // Calcule, à partir d'un état sur le point d'être diffusé, la deadline du
+  // tour humain à venir (ou { null, null } : pas de minuteur — bot, personne
+  // en jeu, manche/échange hors "trick", ou joueur déjà arrivé). Pure
+  // lecture de turnStrikesRef (jamais de mutation ici) : c'est
+  // armHumanTurnTimer(), juste après, qui arme le VRAI minuteur avec
+  // exactement cette même durée — affichage et action automatique ne
+  // peuvent donc jamais diverger.
+  function computeTurnDeadline(next) {
+    if (!next || next.over || !next.seats || !next.seats.length) return { deadline: null, seatId: null };
+    if (next.matchPhase && next.matchPhase !== "trick") return { deadline: null, seatId: null };
+    const seat = next.seats[next.turnIdx];
+    if (!seat || seat.isBot) return { deadline: null, seatId: null };
+    if ((next.finishedOrder || []).includes(seat.id)) return { deadline: null, seatId: null };
+    const strikes = turnStrikesRef.current[seat.id] || 0;
+    const ms = strikes >= HUMAN_TURN_STRIKES ? HUMAN_TURN_SHORT_MS : HUMAN_TURN_MS;
+    return { deadline: Date.now() + ms, seatId: seat.id };
+  }
+
+  // Arme le minuteur qui, si le joueur humain actif ne fait rien, joue à sa
+  // place à l'échéance : passe s'il y a un pli à suivre (comme le bouton
+  // "Passer"), ou pose sa carte la plus faible en solo s'il doit OUVRIR le
+  // pli (impossible de "passer" en tête de pli, la règle l'exige). Chaque
+  // dépassement incrémente son compteur de grillages consécutifs
+  // (turnStrikesRef), remis à 0 dès qu'il rejoue de lui-même.
+  function armHumanTurnTimer() {
+    clearTimeout(turnTimeoutRef.current);
+    if (!isHost) return;
+    const { deadline, seatId } = turnMetaRef.current;
+    if (!deadline || !seatId) return;
+    const delay = Math.max(0, deadline - Date.now());
+    turnTimeoutRef.current = setTimeout(() => {
+      const s = stateRef.current;
+      if (!s || s.over || s.matchPhase !== "trick") return;
+      if (!s.seats[s.turnIdx] || s.seats[s.turnIdx].id !== seatId) return; // le tour a déjà changé
+      turnStrikesRef.current[seatId] = (turnStrikesRef.current[seatId] || 0) + 1;
+      if (s.current) {
+        hostApplyMove(seatId, { type: "pass" });
+      } else {
+        const hand = s.hands[seatId] || [];
+        if (!hand.length) return;
+        const lowest = hand.reduce((a, b) => (b.v < a.v ? b : a), hand[0]);
+        hostApplyMove(seatId, { type: "play", cardIds: [lowest.id] });
+      }
+    }, delay);
+  }
+
   function broadcastNewState(next) {
     const meta = matchMetaRef.current;
+    const tm = computeTurnDeadline(next);
+    turnMetaRef.current = tm;
     channelRef.current.send({
       type: "broadcast", event: "state",
-      payload: { ...next, mandates: meta.mandates, target: meta.target, champion: meta.champion },
+      payload: { ...next, mandates: meta.mandates, target: meta.target, champion: meta.champion, turnDeadline: tm.deadline, turnDeadlineSeat: tm.seatId },
     });
+    armHumanTurnTimer();
   }
   function sendMatchStart(payload) {
+    // Nouvelle manche/match : chacun repart avec le délai complet (20s),
+    // aucun grillage précédent ne doit peser sur ce nouveau départ.
+    turnStrikesRef.current = {};
     const meta = matchMetaRef.current;
+    const tm = computeTurnDeadline(payload);
+    turnMetaRef.current = tm;
     channelRef.current.send({
       type: "broadcast", event: "match_start",
-      payload: { ...payload, mandates: meta.mandates, target: meta.target, champion: meta.champion },
+      payload: { ...payload, mandates: meta.mandates, target: meta.target, champion: meta.champion, turnDeadline: tm.deadline, turnDeadlineSeat: tm.seatId },
     });
+    armHumanTurnTimer();
   }
 
   function nextActiveIdx(s, idx) {
@@ -336,14 +421,15 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
         broadcastNewState(next);
         return;
       }
-      // Mandats : +1 pour le Président (place 0), et +1 pour le
-      // Vice-Président si la table est à 4 (place 1). Dès qu'un siège
-      // atteint la cible choisie par l'hôte, il devient Dictateur — c'est
-      // le MATCH entier qui se termine, pas seulement cette manche.
+      // Mandats : SEUL le Président (place 0) en gagne un. Le Vice-
+      // Président ne compte JAMAIS pour la victoire — être Vice-Président
+      // ne rapproche pas du titre de Dictateur, seule la place de
+      // Président fait avancer le compteur. Dès qu'un siège atteint la
+      // cible choisie par l'hôte, il devient Dictateur — c'est le MATCH
+      // entier qui se termine, pas seulement cette manche.
       const meta = matchMetaRef.current;
       const newMandates = { ...meta.mandates };
       newMandates[fo[0]] = (newMandates[fo[0]] || 0) + 1;
-      if (s.seats.length === 4 && fo[1]) newMandates[fo[1]] = (newMandates[fo[1]] || 0) + 1;
       let champ = null;
       for (const seat of s.seats) {
         if ((newMandates[seat.id] || 0) >= meta.target) { champ = seat.id; break; }
@@ -527,6 +613,10 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
   const canPlaySel = isMyTurn && selCards.length > 0 && isLegalPlay(selCards, current);
   const canPass = isMyTurn && !!current;
   const stuck = isMyTurn && !!current && !hasLegalPlay(myHand, current);
+  // Compte à rebours du tour humain en cours, calculé localement chez TOUS
+  // les clients à partir de la deadline diffusée (turnDeadline/turnDeadlineSeat) :
+  // même horodatage partout, jamais de minuteur qui diverge d'un écran à l'autre.
+  const turnRemaining = turnDeadline ? Math.max(0, Math.ceil((turnDeadline - now) / 1000)) : null;
 
   const myGiveEntry = matchPhase === "exchange" && isPlayer
     ? exchange?.pending?.find(e => e.superior === me.id && !e.done) : null;
@@ -698,8 +788,9 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
           <span className="pres-turn-arrow wrap">↩</span>
         </div>
 
-        {/* Mandats accumulés — Président/Vice-Président comptent, premier à
-            atteindre la cible choisie remporte le MATCH (voir écran de fin). */}
+        {/* Mandats accumulés — seules les manches terminées en PRÉSIDENT
+            comptent (jamais le Vice-Président), premier à atteindre la
+            cible choisie remporte le MATCH (voir écran de fin). */}
         <div className="pres-mandates-bar">
           {seats.map(s => (
             <div key={s.id} className={"pres-mandate-chip" + (s.id === me.id ? " me" : "")}>
@@ -723,7 +814,12 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
                   : passed.includes(x.id)
                     ? <span className="pres-badge">{t("presPassedTag")}</span>
                     : turnSeat?.id === x.id && !over
-                      ? <span className="pres-think" title={t("presThinking")}>💭<i className="d1">.</i><i className="d2">.</i><i className="d3">.</i></span>
+                      ? <span className="pres-think" title={t("presThinking")}>
+                          💭<i className="d1">.</i><i className="d2">.</i><i className="d3">.</i>
+                          {turnDeadlineSeat === x.id && turnRemaining != null && (
+                            <span className={"turn-timer-chip mini" + (turnRemaining <= 5 ? " hot" : "")}>{turnRemaining}s</span>
+                          )}
+                        </span>
                       : <span className="count">{(hands[x.id] || []).length} 🂠</span>}
               </div>
             );
@@ -759,6 +855,14 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
           )}
         </div>
 
+        {!over && isMyTurn && (
+          <div className="turn-banner">
+            <span className="turn-banner-badge">🫵 {t("yourTurnBadge")}</span>
+            {turnRemaining != null && (
+              <span className={"turn-timer-chip" + (turnRemaining <= 5 ? " hot" : "")}>⏱ {turnRemaining}s</span>
+            )}
+          </div>
+        )}
         {!over && (
           <p className="muted" style={{ textAlign: "center", margin: "10px 0 4px", minHeight: 18, fontWeight: isMyTurn ? 800 : 400, color: isMyTurn ? "var(--ink)" : undefined }}>
             {statusLine}

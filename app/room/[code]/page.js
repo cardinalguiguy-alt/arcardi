@@ -307,7 +307,7 @@ export default function Room() {
               {meta && (() => {
                 const StageComponent = STAGE_COMPONENT[meta.stage] || DoorStage;
                 return (
-                <StageComponent gameId={room.current_game} icon={meta.icon} name={t(meta.nameKey)} accentVar={meta.accent}>
+                <StageComponent gameId={room.current_game} icon={meta.icon} name={t(meta.nameKey)} accentVar={meta.accent} lang={lang}>
                   {room.current_game === "quiz" && (
                     <QuizGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
                   )}
