@@ -703,7 +703,7 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
   color:var(--ink); font-weight:800; font-size:15px;
   border-top:2px solid var(--line); margin-top:4px;
 }
-.yz-final{ margin-top:18px; }
+.yz-final{ margin-top:18px; position:relative; }
 .yz-final-board{
   max-width:min(420px, 100%); margin:0 auto; display:flex; flex-direction:column; gap:6px;
 }
@@ -714,6 +714,61 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 }
 .yz-final-row.winner{ border-color:var(--p3); background:rgba(182,240,76,.12); font-weight:800; }
 .yz-final-row b{ font-family:'Space Mono'; }
+
+/* Barre de validation du score — FIXE en bas de l'écran (même logique que
+   .room-code-fab / .chat-fab) : sur une feuille de 13 catégories, le bouton
+   pouvait finir hors écran et obliger à scroller à chaque tour pour
+   l'atteindre. Toujours accessible désormais, quel que soit le scroll.
+   Positionnée au-dessus des pastilles de coin (code du salon, chat) pour
+   ne jamais les chevaucher. */
+.yz-score-bar{
+  position:fixed; left:50%; bottom:calc(84px + env(safe-area-inset-bottom, 0px));
+  transform:translateX(-50%); z-index:65;
+  width:min(480px, 92vw);
+  background:rgba(18,20,42,.94); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
+  border:2px solid var(--line); border-radius:18px;
+  padding:10px; box-shadow:0 10px 30px rgba(0,0,0,.45);
+  animation:cardPop .25s ease both;
+}
+.yz-score-bar .btn{ width:100%; margin-top:0; padding:13px 18px; font-size:13.5px; }
+
+/* ----- Bannière de fin de partie (victoire/défaite) -----------------------
+   Se joue UNE fois par joueur, selon son propre résultat. Overlay non
+   cliquable (pointer-events:none) posé PAR-DESSUS le classement : le
+   classement et les boutons Rejouer/Retour restent utilisables pendant
+   toute son affichage, elle disparaît d'elle-même sans action requise. */
+.yz-end-banner{
+  position:absolute; inset:0; z-index:10; overflow:hidden; border-radius:18px;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:10px; text-align:center; pointer-events:none;
+  animation:yzEndBannerLife 4s ease both;
+}
+.yz-end-banner.lose{ animation-duration:3.4s; }
+@keyframes yzEndBannerLife{
+  0%{ opacity:0; transform:scale(.92); }
+  10%{ opacity:1; transform:scale(1); }
+  80%{ opacity:1; transform:scale(1); }
+  100%{ opacity:0; transform:scale(.96); }
+}
+.yz-end-banner.win{ background:radial-gradient(circle, rgba(182,240,76,.35), rgba(182,240,76,0) 65%); }
+.yz-end-banner.lose{ background:radial-gradient(circle, rgba(60,64,90,.5), rgba(60,64,90,0) 70%); }
+.yz-end-banner-text{
+  position:relative; z-index:2; font-weight:900; letter-spacing:.02em;
+  font-size:clamp(22px, 7vw, 38px);
+  text-shadow:0 3px 0 rgba(0,0,0,.4), 0 0 20px rgba(0,0,0,.5);
+}
+.yz-end-banner-text.win{ color:#fff; animation:yzTextPulse .5s ease-in-out infinite alternate; }
+.yz-end-banner-text.lose{ color:#c9c3d8; }
+.yz-end-banner-claps{ position:relative; z-index:2; display:flex; gap:12px; font-size:clamp(22px, 6vw, 32px); }
+.yz-end-banner-claps span{ display:inline-block; animation:yzEmojiDance .5s ease-in-out infinite alternate; }
+.yz-end-banner-claps span:nth-child(2){ animation-delay:.1s; }
+.yz-end-banner-claps span:nth-child(3){ animation-delay:.2s; }
+.yz-end-banner-claps span:nth-child(4){ animation-delay:.3s; }
+.yz-end-banner-claps span:nth-child(5){ animation-delay:.4s; }
+
+@media (prefers-reduced-motion: reduce){
+  .yz-end-banner, .yz-end-banner-text.win, .yz-end-banner-claps span{ animation:none !important; opacity:1; }
+}
 
 /* ----- Célébration Yahtzee -----------------------------------------------
    Contenue dans .yz-tray (déjà position:relative + overflow:hidden) : ne

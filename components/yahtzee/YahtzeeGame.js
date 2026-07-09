@@ -9,7 +9,7 @@ import {
   freshCard, scoreCategory, applyScore, upperSubtotal, hasUpperBonus,
   cardTotal, isCardComplete, filledCount, isYahtzeeRoll,
 } from "./scoring";
-import { playDiceShuffle, playConfirmChime, stopSound } from "@/lib/sfx";
+import { playDiceShuffle, playConfirmChime, stopSound, playGameWin, playGameLose } from "@/lib/sfx";
 
 /* ==========================================================================
    YAHTZEE — jeu de dés au tour par tour, 1 à N joueurs.
@@ -122,6 +122,9 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
   const [shuffleFaces, setShuffleFaces] = useState([1, 1, 1, 1, 1]);
   // Célébration Yahtzee : null, ou { kind: "yahtzee" | "yahtzeeSix", key }.
   const [celebration, setCelebration] = useState(null);
+  // Bannière de fin de partie, propre à CHAQUE joueur selon son résultat :
+  // null, "win" ou "lose" (voir l'effet "Sauvegarde du score" plus bas).
+  const [endBanner, setEndBanner] = useState(null);
 
   const channelRef = useRef(null);
   const stateRef = useRef(null);
@@ -135,6 +138,7 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
   const shuffleAudioRef = useRef(null);     // nœud <audio> en cours, pour pouvoir le couper
   const shuffleActiveRef = useRef(false);   // true dès le clic local, évite un second démarrage
   const latestRollPayloadRef = useRef(null); // vraies valeurs, dès qu'on les connaît
+  const endBannerTimerRef = useRef(null);
 
   // Miroir de l'état pour les handlers de broadcast (closures figées sinon).
   useEffect(() => {
@@ -176,7 +180,11 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
       clearTimeout(flashTimer.current);
       flashTimer.current = setTimeout(() => setBonusFlash(false), 3200);
     }
-    if (extra.resetGain) { setMyGain(0); savedResultRef.current = false; }
+    if (extra.resetGain) {
+      setMyGain(0); savedResultRef.current = false;
+      clearTimeout(endBannerTimerRef.current);
+      setEndBanner(null);
+    }
   }
 
   // Petite fête : Yahtzee (5 dés identiques) — encore plus si ce sont 5 six,
@@ -312,6 +320,7 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
       clearInterval(shuffleIntervalRef.current);
       clearTimeout(celebrationTimerRef.current);
       stopSound(shuffleAudioRef.current);
+      clearTimeout(endBannerTimerRef.current);
       supabase.removeChannel(ch);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -457,11 +466,18 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
   }
 
   // Sauvegarde du score de salon (chaque joueur enregistre le sien, RLS oblige).
+  // Même déclencheur pour la bannière + le son de fin (victoire/défaite) :
+  // une seule fois par manche, propre au résultat de CE joueur.
   useEffect(() => {
     if (!finished || savedResultRef.current || !isPlayer) return;
     savedResultRef.current = true;
-    const gain = winners.includes(me.id) ? 5 : 1;
+    const won = winners.includes(me.id);
+    const gain = won ? 5 : 1;
     setMyGain(gain);
+    setEndBanner(won ? "win" : "lose");
+    if (won) playGameWin(); else playGameLose();
+    clearTimeout(endBannerTimerRef.current);
+    endBannerTimerRef.current = setTimeout(() => setEndBanner(null), won ? 4000 : 3400);
     (async () => {
       try {
         await supabase.from("game_results").insert({ room_id: room.id, profile_id: me.id, game_id: GAME_ID, points: gain });
@@ -516,6 +532,23 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [celebration?.key]);
 
+  // Confettis de la bannière de victoire de fin de partie — même logique
+  // que ci-dessus, déclenchée une seule fois par manche.
+  const endConfettiPieces = useMemo(() => {
+    if (endBanner !== "win") return [];
+    const palette = ["#b6f04c", "#ffd166", "#4dd6ff", "#ff8a3d"];
+    return Array.from({ length: 30 }, (_, i) => ({
+      id: i,
+      left: Math.random() * 100,
+      delay: Math.random() * 1.5,
+      duration: 1.8 + Math.random() * 1.6,
+      color: palette[i % palette.length],
+      rot: Math.round(Math.random() * 360),
+      size: 6 + Math.round(Math.random() * 6),
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [endBanner]);
+
   let content;
 
   if (phase === "playing" && (myCard !== null || !isPlayer)) {
@@ -524,7 +557,7 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
     const iWon = winners.includes(me.id);
 
     content = (
-      <div>
+      <div style={{ paddingBottom: canScore ? 170 : 0 }}>
         {/* Adversaires : total vivant + progression de feuille */}
         <div className="yz-opponents">
           {seats.filter(s => s.id !== me.id).map(s => (
@@ -660,11 +693,15 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
           </div>
         )}
 
-        {/* Validation en deux temps — jamais de score inscrit par mégarde */}
+        {/* Validation en deux temps — jamais de score inscrit par mégarde.
+            Barre FIXE en bas de l'écran (comme les autres pastilles du
+            site) : sur la feuille de score complète, ce bouton pouvait se
+            retrouver hors écran et obliger à scroller à chaque tour pour
+            l'atteindre. Toujours accessible désormais, quel que soit le
+            scroll. */}
         {canScore && (
-          <div style={{ display: "flex", justifyContent: "center", marginTop: 12 }}>
-            <button className="btn" style={{ width: "auto", padding: "12px 26px", marginTop: 0 }}
-              disabled={!pendingCat} onClick={attemptScore}>
+          <div className="yz-score-bar">
+            <button className="btn" disabled={!pendingCat} onClick={attemptScore}>
               {pendingCat ? `✔️ ${t("yzConfirm")} « ${t(CAT_LABEL_KEY[pendingCat])} » (+${scoreCategory(pendingCat, dice)})` : t("yzPickCategory")}
             </button>
           </div>
@@ -673,6 +710,38 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
         {/* Fin de partie : classement complet PAR-DESSUS la table, jamais à sa place */}
         {finished && (
           <div className="yz-final">
+            {/* Bannière victoire/défaite, propre au résultat de CE joueur.
+                Overlay non-cliquable : disparaît d'elle-même après
+                quelques secondes, le classement et les boutons restent
+                utilisables pendant toute son affichage. */}
+            {endBanner && (
+              <div className={"yz-end-banner " + endBanner}>
+                {endBanner === "win" && endConfettiPieces.map(p => (
+                  <span
+                    key={p.id}
+                    className="yz-confetti-piece"
+                    style={{
+                      left: p.left + "%",
+                      width: p.size, height: p.size * 1.4,
+                      background: p.color,
+                      animationDelay: p.delay + "s",
+                      animationDuration: p.duration + "s",
+                      "--rot0": p.rot + "deg",
+                    }}
+                  />
+                ))}
+                {endBanner === "win" ? (
+                  <>
+                    <div className="yz-end-banner-text win">🎉 {t("yzEndWinBanner")}</div>
+                    <div className="yz-end-banner-claps">
+                      <span>👏</span><span>👏</span><span>👏</span><span>👏</span><span>👏</span>
+                    </div>
+                  </>
+                ) : (
+                  <div className="yz-end-banner-text lose">😔 {t("yzEndLoseBanner")}</div>
+                )}
+              </div>
+            )}
             <div className="yz-final-board">
               {seats
                 .map(s => ({ seat: s, total: cards[s.id] ? cardTotal(cards[s.id]) : 0 }))
