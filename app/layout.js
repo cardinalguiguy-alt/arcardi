@@ -1,4 +1,5 @@
 import "./globals.css";
+import SiteAmbience from "@/components/SiteAmbience";
 
 export const metadata = {
   title: "ARCARDI — soirée jeux en ligne",
@@ -22,7 +23,10 @@ export const viewport = {
 export default function RootLayout({ children }) {
   return (
     <html lang="fr">
-      <body>{children}</body>
+      <body>
+        <SiteAmbience />
+        {children}
+      </body>
     </html>
   );
 }

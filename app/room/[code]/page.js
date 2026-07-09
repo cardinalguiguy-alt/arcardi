@@ -4,6 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { resetRoomToLobby } from "@/lib/gameSync";
 import { useLang } from "@/lib/i18n";
+import { duckAmbienceForGame, resumeAmbienceForNav } from "@/lib/ambience";
 import Brand from "@/components/Brand";
 import Embers from "@/components/Embers";
 import Crossfade from "@/components/Crossfade";
@@ -162,6 +163,16 @@ export default function Room() {
     const tm = setTimeout(() => setHostGone(true), 8000);
     return () => clearTimeout(tm);
   }, [room, me, online]);
+
+  // Ambiance sonore du site : silence délicat dès qu'une partie démarre
+  // (pour host ET invités, tous les deux synchronisés sur room.status),
+  // reprise en douceur au retour au lobby — jamais un redémarrage complet
+  // (voir lib/ambience.js).
+  useEffect(() => {
+    if (!room) return;
+    if (room.status === "playing") duckAmbienceForGame();
+    else resumeAmbienceForNav();
+  }, [room?.status]);
 
   async function launch(gameId) {
     await supabase.from("rooms").update({ status: "playing", current_game: gameId }).eq("id", room.id);
