@@ -3,8 +3,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { saveGameState, readGameState, resetRoomToLobby } from "@/lib/gameSync";
 import FlagIcon from "./FlagIcon";
+import WorldleMiniMap from "./WorldleMiniMap";
 
-const MAX_TRIES = 6;
+const MAX_TRIES = 10;
 const ROUND_MS = 180000; // 3 min
 
 const CONT = {
@@ -442,6 +443,17 @@ export default function Worldle({ room, me, isHost, players, onFinish, t, lang }
             <p className="muted" style={{ marginBottom: 10, fontSize: 12 }}>
               {t("wordleLiveHint")} <b style={{ color: "var(--p3)" }}>+{Math.max(7 - (guesses.length + 1), 1)} {t("pts")}</b>
             </p>
+          )}
+
+          {guesses.length > 0 && (
+            <WorldleMiniMap
+              guess={guesses[guesses.length - 1]}
+              allCountries={COUNTRIES}
+              targetId={target.id}
+              solved={myResult.current.solved || finished}
+              lang={lang}
+              t={t}
+            />
           )}
 
           <div style={{ display: "grid", gap: 10 }}>

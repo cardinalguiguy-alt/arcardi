@@ -127,6 +127,25 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
   const [giveSelected, setGiveSelected] = useState([]);
   const [myGain, setMyGain] = useState(0);
   const [channelReady, setChannelReady] = useState(false);
+  // Système de mandats : accumulés (Président/Vice-Président) manche après
+  // manche, synchronisés dans chaque état diffusé (voir matchMetaRef plus
+  // bas). `champion` = id du siège qui a atteint la cible -> fin du MATCH
+  // (pas seulement de la manche).
+  const [mandates, setMandates] = useState({});
+  const [target, setTarget] = useState(3);
+  const [champion, setChampion] = useState(null);
+  // Choix de la cible de mandats par l'hôte, AVANT la toute première manche
+  // (écran de setup, purement local tant que le match n'a pas démarré).
+  const [pendingTarget, setPendingTarget] = useState(3);
+  const [targetConfirmed, setTargetConfirmed] = useState(false);
+  // Recap d'échange de cartes (fin de manche, hors 1ère) : qui a donné
+  // quelles cartes à qui, affiché quelques instants avant d'attaquer la
+  // manche suivante.
+  const [exchangeRecap, setExchangeRecap] = useState(null); // [{giver, receiver, cards}] | null
+  // Animation de "brûlage" (2 posé) : capture le pli qui vient d'être
+  // brûlé (cartes de l'ancien pli + le/les 2 posés) pour un fondu en
+  // cendres au lieu d'une disparition sèche. Purement cosmétique/local.
+  const [burningPile, setBurningPile] = useState(null); // { cards, key } | null
 
   const channelRef = useRef(null);
   const stateRef = useRef(null);
@@ -134,19 +153,42 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
   const autoStartedRef = useRef(false);
   const restoredRef = useRef(false);
   const botTimer = useRef(null);
+  // Mandats/cible/champion : maintenus côté hôte, rattachés automatiquement
+  // à CHAQUE état diffusé (voir broadcastNewState/sendMatchStart) — évite
+  // de devoir modifier chacun des nombreux points d'émission de `next`.
+  const matchMetaRef = useRef({ mandates: {}, target: 3, champion: null });
+  const prevCurrentRef = useRef(null); // pli juste avant la mise à jour, pour l'animation de burn
+  const burnTimerRef = useRef(null);
+  const recapTimerRef = useRef(null);
 
   useEffect(() => {
     stateRef.current = { seats, hands, current, turnIdx, passed, finishedOrder, over, matchPhase, exchange };
   }, [seats, hands, current, turnIdx, passed, finishedOrder, over, matchPhase, exchange]);
 
+  // Miroir séparé : la valeur de `current` juste avant le PROCHAIN
+  // applyLocalState (utilisé pour l'animation de burn ci-dessus).
+  useEffect(() => { prevCurrentRef.current = current; }, [current]);
+  useEffect(() => () => { clearTimeout(burnTimerRef.current); clearTimeout(recapTimerRef.current); }, []);
+
   function applyLocalState(s, extra = {}) {
+    // Capture le pli tel qu'il était juste AVANT cette mise à jour : c'est
+    // lui qui doit partir en cendres si ce coup est un "burn" (un 2 posé).
+    const prevCurrent = prevCurrentRef.current;
     setSeats(s.seats); setHands(s.hands); setCurrent(s.current || null);
     setTurnIdx(s.turnIdx); setPassed(s.passed || []);
     setFinishedOrder(s.finishedOrder || []); setOver(!!s.over);
     setLastAction(s.lastAction || null);
     setMatchPhase(s.matchPhase || "trick"); setExchange(s.exchange || null);
     setSelected([]); setGiveSelected([]);
+    setMandates(s.mandates || {}); setTarget(s.target || 3); setChampion(s.champion || null);
     if (extra.resetGain) { setMyGain(0); savedResultRef.current = false; }
+
+    if (!s.current && s.lastAction?.type === "burn") {
+      const burned = (prevCurrent?.cards || []).concat(s.lastAction.cards || []);
+      clearTimeout(burnTimerRef.current);
+      setBurningPile({ cards: burned, key: Date.now() + "" });
+      burnTimerRef.current = setTimeout(() => setBurningPile(null), 950);
+    }
   }
 
   function persist(s) {
@@ -204,7 +246,18 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
   }, [room.id, isHost]);
 
   function broadcastNewState(next) {
-    channelRef.current.send({ type: "broadcast", event: "state", payload: next });
+    const meta = matchMetaRef.current;
+    channelRef.current.send({
+      type: "broadcast", event: "state",
+      payload: { ...next, mandates: meta.mandates, target: meta.target, champion: meta.champion },
+    });
+  }
+  function sendMatchStart(payload) {
+    const meta = matchMetaRef.current;
+    channelRef.current.send({
+      type: "broadcast", event: "match_start",
+      payload: { ...payload, mandates: meta.mandates, target: meta.target, champion: meta.champion },
+    });
   }
 
   function nextActiveIdx(s, idx) {
@@ -273,6 +326,19 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
     }
 
     if (over) {
+      // Mandats : +1 pour le Président (place 0), et +1 pour le
+      // Vice-Président si la table est à 4 (place 1). Dès qu'un siège
+      // atteint la cible choisie par l'hôte, il devient champion — c'est
+      // le MATCH entier qui se termine, pas seulement cette manche.
+      const meta = matchMetaRef.current;
+      const newMandates = { ...meta.mandates };
+      newMandates[fo[0]] = (newMandates[fo[0]] || 0) + 1;
+      if (s.seats.length === 4 && fo[1]) newMandates[fo[1]] = (newMandates[fo[1]] || 0) + 1;
+      let champ = null;
+      for (const seat of s.seats) {
+        if ((newMandates[seat.id] || 0) >= meta.target) { champ = seat.id; break; }
+      }
+      matchMetaRef.current = { mandates: newMandates, target: meta.target, champion: champ };
       const next = { seats: s.seats, hands: h, current: null, turnIdx: ti, passed: [], finishedOrder: fo, over, lastAction, matchPhase: "trick", exchange: null };
       broadcastNewState(next);
       return;
@@ -312,7 +378,7 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
     h[seatId] = hand.filter(c => !givenIds.has(c.id));
     h[entry.inferior] = sortHand((h[entry.inferior] || []).concat(cards));
 
-    const pending = s.exchange.pending.map(e => e === entry ? { ...e, done: true } : e);
+    const pending = s.exchange.pending.map(e => e === entry ? { ...e, done: true, cardsGiven: cards } : e);
     const allDone = pending.every(e => e.done);
 
     const next = allDone
@@ -320,7 +386,11 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
           seats: s.seats, hands: h, current: null,
           turnIdx: s.seats.findIndex(x => x.id === s.exchange.nextLeaderId),
           passed: [], finishedOrder: [], over: false, lastAction: null,
-          matchPhase: "trick", exchange: null,
+          // Étape intermédiaire "recap" : affiche qui a donné quelles cartes
+          // à qui avant d'attaquer réellement la manche (matchPhase "trick"
+          // n'arrive qu'après, via scheduleRecapAdvance).
+          matchPhase: "recap",
+          exchange: { pending, nextLeaderId: s.exchange.nextLeaderId },
         }
       : {
           seats: s.seats, hands: h, current: null, turnIdx: s.turnIdx,
@@ -328,7 +398,21 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
           matchPhase: "exchange", exchange: { pending, nextLeaderId: s.exchange.nextLeaderId },
         };
     broadcastNewState(next);
-    scheduleNext();
+    if (allDone) scheduleRecapAdvance(next);
+    else scheduleNext();
+  }
+
+  // La manche réelle ("trick") ne démarre qu'après un court délai
+  // d'affichage du récap d'échange — le temps que tout le monde voie qui a
+  // donné quoi à qui. Seul l'hôte déclenche cette transition.
+  function scheduleRecapAdvance(recapState) {
+    if (!isHost) return;
+    clearTimeout(recapTimerRef.current);
+    recapTimerRef.current = setTimeout(() => {
+      const trickState = { ...recapState, matchPhase: "trick", exchange: null };
+      broadcastNewState(trickState);
+      scheduleNext();
+    }, 4200);
   }
 
   // Tempo "humain" des bots : entre 1 et 5 secondes, tiré au hasard à
@@ -368,19 +452,20 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
     const bots = [];
     for (let i = humanSeats.length + 1; i <= tableSize; i++) bots.push(makeBotSeat(i - humanSeats.length));
     const seatsFull = shuffle([...humanSeats, ...bots]);
+    matchMetaRef.current = { mandates: Object.fromEntries(seatsFull.map(s => [s.id, 0])), target: pendingTarget, champion: null };
     const initial = dealFirstRound(seatsFull);
-    channelRef.current.send({ type: "broadcast", event: "match_start", payload: initial });
+    sendMatchStart(initial);
   }
 
   useEffect(() => {
-    if (!isHost || phase !== "intro" || autoStartedRef.current || !channelReady || !tableSize) return;
+    if (!isHost || phase !== "intro" || autoStartedRef.current || !channelReady || !tableSize || !targetConfirmed) return;
     if (players.length <= tableSize) {
       autoStartedRef.current = true;
       const humanSeats = players.map(p => ({ id: p.profile_id, username: p.profiles?.username, avatar: p.profiles?.avatar, isBot: false }));
       startFirstRound(humanSeats);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isHost, phase, channelReady, players.length, tableSize]);
+  }, [isHost, phase, channelReady, players.length, tableSize, targetConfirmed]);
 
   function togglePick(pid) {
     setPicked(prev => prev.includes(pid) ? prev.filter(x => x !== pid) : (prev.length >= tableSize ? prev : [...prev, pid]));
@@ -392,9 +477,17 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
     startFirstRound(chosen.map(p => ({ id: p.profile_id, username: p.profiles?.username, avatar: p.profiles?.avatar, isBot: false })));
   }
   function rejouer() {
-    if (!isHost || !seats.length || !over) return;
+    if (!isHost || !seats.length || !over || champion) return; // un match déjà remporté ne se "rejoue" pas manche par manche
     const next = dealNextRound(seats, finishedOrder);
-    channelRef.current.send({ type: "broadcast", event: "match_start", payload: next });
+    sendMatchStart(next);
+  }
+  // Un champion a été couronné : on repart sur un tout nouveau match (cartes
+  // rebattues, mandats remis à zéro), mêmes sièges.
+  function nouveauMatch() {
+    if (!isHost || !seats.length) return;
+    matchMetaRef.current = { mandates: Object.fromEntries(seats.map(s => [s.id, 0])), target: matchMetaRef.current.target, champion: null };
+    const initial = dealFirstRound(shuffle(seats));
+    sendMatchStart(initial);
   }
   async function backToRoom() {
     await resetRoomToLobby(room.id);
@@ -480,7 +573,30 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
 
   let content;
 
-  if (phase === "playing" && matchPhase === "exchange") {
+  if (phase === "playing" && matchPhase === "recap") {
+    content = (
+      <div>
+        <h2 style={{ textAlign: "center", fontFamily: "'Bungee'", fontSize: 16, marginBottom: 12 }}>
+          🔄 {t("presExchangeRecapTitle")}
+        </h2>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, maxWidth: 460, margin: "0 auto 16px" }}>
+          {exchange?.pending?.map((e, i) => {
+            const sup = seats.find(x => x.id === e.superior);
+            const inf = seats.find(x => x.id === e.inferior);
+            return (
+              <div key={i} className="pres-exchange-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 6 }}>
+                <span>{inf?.avatar} <b>{inf?.username}</b> → {sup?.avatar} <b>{sup?.username}</b></span>
+                <div style={{ display: "flex", gap: 4, justifyContent: "center" }}>
+                  {(e.cardsGiven || []).map(c => <PresCard key={c.id} card={c} size="sm" />)}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <p className="muted" style={{ textAlign: "center" }}>{t("presExchangeRecapContinue")}…</p>
+      </div>
+    );
+  } else if (phase === "playing" && matchPhase === "exchange") {
     content = (
       <div>
         <h2 style={{ textAlign: "center", fontFamily: "'Bungee'", fontSize: 16, marginBottom: 12 }}>
@@ -539,6 +655,34 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
 
     content = (
       <div>
+        {/* Sens du tour : toujours le même sens autour de la table (index de
+            siège croissant) — une frise d'avatars reliés par des flèches le
+            rend visible d'un coup d'œil, plutôt qu'un simple pictogramme. */}
+        <div className="pres-turn-order" title={t("presTurnDirection")}>
+          {seats.map((s, i) => (
+            <span key={s.id} style={{ display: "contents" }}>
+              <span className={"pres-turn-seat" + (turnSeat?.id === s.id && !over ? " active" : "") + (s.id === me.id ? " me" : "")}>
+                {s.avatar}
+              </span>
+              {i < seats.length - 1 && <span className="pres-turn-arrow">➜</span>}
+            </span>
+          ))}
+          <span className="pres-turn-arrow wrap">↩</span>
+        </div>
+
+        {/* Mandats accumulés — Président/Vice-Président comptent, premier à
+            atteindre la cible choisie remporte le MATCH (voir écran de fin). */}
+        <div className="pres-mandates-bar">
+          {seats.map(s => (
+            <div key={s.id} className={"pres-mandate-chip" + (s.id === me.id ? " me" : "")}>
+              <span className="avatar">{s.avatar}</span>
+              <span className="name">{s.username}</span>
+              <b>👑×{mandates[s.id] || 0}</b>
+              <span className="muted" style={{ fontSize: 10 }}>{t("presMandatesTarget")} {target}</span>
+            </div>
+          ))}
+        </div>
+
         <div className="chromatik-opponents">
           {seats.filter(x => x.id !== me.id).map(x => {
             const place = finishedOrder.indexOf(x.id);
@@ -559,7 +703,13 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
         </div>
 
         <div className={"pres-table" + (!current && lastAction?.type === "burn" ? " burned" : "")}>
-          {current ? (
+          {burningPile ? (
+            <div className="pres-pile pres-burn-pile" key={burningPile.key}>
+              {burningPile.cards.map((c, i) => (
+                <PresCard key={c.id} card={c} size="md" style={{ animationDelay: `${i * 40}ms` }} />
+              ))}
+            </div>
+          ) : current ? (
             <>
               {/* Les cartes du pli arrivent en "vol" (animation presPlayIn,
                   échelonnée) : les clés changent à chaque nouveau coup, donc
@@ -636,7 +786,15 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
 
         {over && (
           <div style={{ marginTop: 14 }}>
-            <h2 style={{ textAlign: "center", fontFamily: "'Bungee'", fontSize: 17, marginBottom: 10 }}>🏁 {t("presOverTitle")}</h2>
+            <h2 style={{ textAlign: "center", fontFamily: "'Bungee'", fontSize: 17, marginBottom: 10 }}>
+              {champion ? t("presChampionTitle") : "🏁 " + t("presRoundOverTitle")}
+            </h2>
+            {champion && (
+              <p style={{ textAlign: "center", fontWeight: 800, marginBottom: 12 }}>
+                {seats.find(x => x.id === champion)?.avatar} <b>{seats.find(x => x.id === champion)?.username}</b>{" "}
+                {t("presChampionText").replace("{n}", target)}
+              </p>
+            )}
             <div className="pres-podium">
               {finishedOrder.map((id, place) => {
                 const seat = seats.find(x => x.id === id);
@@ -647,6 +805,7 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
                     <span className="name">{seat?.username}</span>
                     <span className="title"><RankTag place={place} nSeats={seats.length} t={t} /></span>
                     <b className="pts">+{pointsForPlace(place, seats.length)}</b>
+                    <span className="muted" style={{ fontSize: 11 }}>👑×{mandates[id] || 0}</span>
                   </div>
                 );
               })}
@@ -656,11 +815,17 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
                 {t("peYourGain")} <span style={{ color: "var(--p3)", fontFamily: "'Space Mono'" }}>+{myGain} {t("pts")}</span>
               </p>
             )}
-            <p className="muted" style={{ textAlign: "center", fontSize: 12, marginTop: 4 }}>{t("presNextExchangeHint")}</p>
+            {!champion && (
+              <p className="muted" style={{ textAlign: "center", fontSize: 12, marginTop: 4 }}>{t("presNextExchangeHint")}</p>
+            )}
             <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 12, flexWrap: "wrap" }}>
               {isHost ? (
                 <>
-                  <button className="btn" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={rejouer}>🔁 {t("c4Rejouer")}</button>
+                  {champion ? (
+                    <button className="btn" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={nouveauMatch}>🔁 {t("presNewMatch")}</button>
+                  ) : (
+                    <button className="btn" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={rejouer}>🔁 {t("c4Rejouer")}</button>
+                  )}
                   <button className="btn ghost" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={backToRoom}>🏠 {t("c4BackToRoom")}</button>
                 </>
               ) : (
@@ -683,6 +848,27 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
               </button>
             ))}
           </div>
+        </div>
+      ) : <p className="muted">{t("chromatikWaitHostSize")}</p>;
+    } else if (!targetConfirmed) {
+      content = isHost ? (
+        <div>
+          <p className="hint">{t("presMandatesHint")}</p>
+          <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 12 }}>
+            {[3, 4, 5].map(n => (
+              <button
+                key={n}
+                className={"btn" + (pendingTarget === n ? "" : " ghost")}
+                style={{ width: "auto", padding: "14px 22px" }}
+                onClick={() => setPendingTarget(n)}
+              >
+                {n} {t("presMandatesUnit")}
+              </button>
+            ))}
+          </div>
+          <button className="btn" style={{ marginTop: 16 }} onClick={() => setTargetConfirmed(true)}>
+            {t("presMandatesConfirm")}
+          </button>
         </div>
       ) : <p className="muted">{t("chromatikWaitHostSize")}</p>;
     } else if (needsPick) {

@@ -108,6 +108,26 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
   animation:popIn .25s ease both;
 }
 
+/* ----- Bonus d'enchaînement du Quiz Éclair (streak -> 50/50 / attaque) --- */
+.quiz-bonus-bar{ display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:0 0 10px; }
+.quiz-streak{
+  font-size:12px; font-weight:800; color:var(--muted); font-family:'Space Mono';
+  padding:4px 9px; border-radius:99px; border:1.5px solid var(--line); background:rgba(255,255,255,.03);
+}
+.quiz-bonus-btn{
+  padding:6px 12px; border-radius:99px; border:2px solid var(--p3); background:rgba(182,240,76,.12);
+  color:var(--p3); font-weight:800; font-size:12.5px; cursor:pointer; transition:transform .12s ease, opacity .12s ease;
+}
+.quiz-bonus-btn:hover{ transform:scale(1.05); }
+.quiz-bonus-btn:disabled{ opacity:.4; cursor:default; transform:none; }
+.quiz-bonus-btn.attack{ border-color:var(--p1); background:rgba(255,93,115,.12); color:var(--p1); }
+.quiz-token-count{ font-family:'Space Mono'; font-weight:800; color:var(--p3); font-size:12.5px; }
+.quiz-bonus-notice{
+  text-align:center; font-size:12.5px; font-weight:700; color:var(--ink);
+  background:rgba(255,255,255,.05); border-radius:10px; padding:6px 10px; margin:0 0 10px;
+  animation:popIn .25s ease both;
+}
+
 /* ===== Fondu enchaîné réutilisable (composant Crossfade) ===== */
 .crossfade-stage{ position:relative; width:100%; }
 .crossfade-current{ width:100%; }
@@ -567,14 +587,44 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 .chromatik-card-back-mark{ color:rgba(255,255,255,.55); font-size:1.4em; }
 
 /* ===== YAHTZEE ===== */
-.yz-opponents{ display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin-bottom:14px; }
-.yz-opponent{
-  display:flex; align-items:center; gap:6px; padding:6px 12px; border-radius:99px;
+
+/* Comparatif des totaux, face à face — mis en avant pour suivre l'avancement
+   de la partie d'un coup d'œil. */
+.yz-totals-bar{ display:flex; flex-wrap:wrap; gap:6px; justify-content:center; margin-bottom:5px; }
+.yz-total-chip{
+  display:flex; align-items:center; gap:6px; padding:6px 12px 6px 10px; border-radius:99px;
   border:2px solid var(--line); background:rgba(255,255,255,.04); font-size:13px; font-weight:700;
 }
-.yz-opponent.active{ border-color:var(--p3); background:rgba(182,240,76,.1); }
-.yz-opponent .count{ font-family:'Space Mono'; color:var(--muted); font-weight:400; }
-.yz-status{ text-align:center; margin:6px 0 12px; min-height:18px; }
+.yz-total-chip.active{ border-color:var(--p3); background:rgba(182,240,76,.1); }
+.yz-total-chip.me{ box-shadow:0 0 0 2px var(--accent, var(--p2)) inset; }
+.yz-total-chip .total{
+  font-family:'Space Mono'; font-size:15px; padding:1px 8px; border-radius:8px;
+  background:rgba(255,255,255,.06); color:var(--ink);
+}
+.yz-total-chip.leading .total{ color:#3a2107; background:var(--p3); }
+
+/* Mini scoring boards des adversaires — grisées, purement en lecture,
+   suivies en direct à mesure de leurs lancers/choix. */
+.yz-mini-boards{ display:flex; gap:6px; overflow-x:auto; padding-bottom:2px; margin-bottom:6px; }
+.yz-mini-board{
+  flex:0 0 auto; min-width:128px; padding:5px 7px; border-radius:11px;
+  border:2px solid var(--line); background:rgba(255,255,255,.03); opacity:.72;
+  transition:opacity .15s ease, border-color .15s ease;
+}
+.yz-mini-board.active{ opacity:1; border-color:var(--p3); background:rgba(182,240,76,.06); }
+.yz-mini-board-head{ display:flex; align-items:center; gap:4px; font-size:11px; font-weight:700; margin-bottom:2px; }
+.yz-mini-board-head b{ margin-left:auto; font-family:'Space Mono'; }
+.yz-mini-grid{ display:grid; grid-template-columns:repeat(7, 1fr); gap:2px; }
+.yz-mini-cell{
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  border-radius:4px; background:rgba(255,255,255,.04); padding:2px 0; line-height:1.1;
+}
+.yz-mini-cell em{ font-style:normal; font-size:8px; color:var(--muted); }
+.yz-mini-cell b{ font-family:'Space Mono'; font-size:10px; color:var(--muted); font-weight:600; }
+.yz-mini-cell.filled{ background:rgba(255,255,255,.09); }
+.yz-mini-cell.filled b{ color:var(--ink); font-weight:800; }
+
+.yz-status{ text-align:center; margin:2px 0 4px; min-height:16px; font-size:13px; }
 .yz-bonus-flash{
   text-align:center; font-weight:800; color:var(--p3); margin:0 0 10px;
   animation:yzFlash .5s ease;
@@ -587,7 +637,7 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
    (mêmes tons, même veinage en repeating-linear-gradient) pour que la table
    de jeu se sente comme un prolongement naturel de la porte déjà ouverte. */
 .yz-tray{
-  position:relative; margin:10px 0 16px; padding:22px 14px;
+  position:relative; margin:4px 0 6px; padding:11px 12px;
   border-radius:16px; overflow:hidden;
   background-image:
     radial-gradient(120% 140% at 50% 10%, rgba(0,0,0,0) 0%, rgba(0,0,0,.4) 100%),
@@ -597,7 +647,7 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 }
 
 .yz-die{
-  width:clamp(48px, 13vw, 64px); height:clamp(48px, 13vw, 64px);
+  width:clamp(42px, 11vw, 56px); height:clamp(42px, 11vw, 56px);
   border-radius:14px; border:2px solid rgba(0,0,0,.25);
   background:linear-gradient(145deg, #fdf6e3, #e6d8b3);
   box-shadow:0 4px 0 rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.8);
@@ -687,19 +737,19 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 }
 
 .yz-sheet{
-  display:grid; grid-template-columns:1fr 1fr; gap:14px;
+  display:grid; grid-template-columns:1fr 1fr; gap:8px;
   max-width:min(640px, 100%); margin:0 auto;
 }
 @media (max-width: 560px){ .yz-sheet{ grid-template-columns:1fr; } }
-.yz-col{ display:flex; flex-direction:column; gap:4px; }
+.yz-col{ display:flex; flex-direction:column; gap:2px; }
 .yz-col-title{
-  font-weight:800; font-size:12px; letter-spacing:.08em; text-transform:uppercase;
-  color:var(--muted); margin-bottom:2px; text-align:left;
+  font-weight:800; font-size:11px; letter-spacing:.08em; text-transform:uppercase;
+  color:var(--muted); margin-bottom:1px; text-align:left;
 }
 .yz-row{
   display:flex; justify-content:space-between; align-items:center; gap:10px;
-  padding:8px 12px; border-radius:10px; border:2px solid var(--line);
-  background:rgba(255,255,255,.03); color:var(--ink); font-size:13.5px;
+  padding:4px 12px; border-radius:9px; border:2px solid var(--line);
+  background:rgba(255,255,255,.03); color:var(--ink); font-size:13px;
   text-align:left; width:100%;
 }
 .yz-row:disabled{ cursor:default; }
@@ -715,12 +765,12 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 .yz-row-value{ font-family:'Space Mono'; }
 .yz-row-value em{ font-style:normal; color:var(--p3); }
 .yz-subtotal, .yz-total{
-  display:flex; justify-content:space-between; padding:8px 12px;
-  font-size:13px; color:var(--muted); font-family:'Space Mono';
+  display:flex; justify-content:space-between; padding:6px 12px;
+  font-size:12.5px; color:var(--muted); font-family:'Space Mono';
 }
 .yz-total{
-  color:var(--ink); font-weight:800; font-size:15px;
-  border-top:2px solid var(--line); margin-top:4px;
+  color:var(--ink); font-weight:800; font-size:14.5px;
+  border-top:2px solid var(--line); margin-top:3px;
 }
 .yz-final{ margin-top:18px; position:relative; }
 .yz-final-board{
@@ -734,7 +784,32 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 .yz-final-row.winner{ border-color:var(--p3); background:rgba(182,240,76,.12); font-weight:800; }
 .yz-final-row b{ font-family:'Space Mono'; }
 
-/* ----- Stage vidéo Worldle (VideoStage) -----
+/* ----- Mini-map naviguable Worldle (WorldleMiniMap) -----
+   Recentrée sur le dernier essai, lueur de proximité, jamais le pays cible
+   tant qu'il n'est pas trouvé. */
+.worldle-minimap{
+  position:relative; margin-bottom:14px; border-radius:14px; overflow:hidden;
+  border:2px solid var(--line); box-shadow:0 6px 18px -8px rgba(0,0,0,.5);
+}
+.worldle-minimap-svg{
+  display:block; width:100%; height:200px; touch-action:none; cursor:grab;
+  background:#0e1620;
+}
+.worldle-minimap-svg:active{ cursor:grabbing; }
+.worldle-minimap-controls{
+  position:absolute; right:6px; bottom:6px; display:grid;
+  grid-template-columns:repeat(3, 1fr); gap:4px;
+}
+.worldle-minimap-controls button{
+  width:28px; height:28px; border:none; border-radius:8px; font-size:13px;
+  background:rgba(14,22,32,.75); color:#fff; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  transition:background .12s ease;
+}
+.worldle-minimap-controls button:hover{ background:rgba(14,22,32,.92); }
+.worldle-minimap-controls button:disabled{ opacity:.35; cursor:default; }
+
+
    Pas de porte en bois ici (incohérente avec un jeu de mappemonde) : la
    vidéo d'intro joue directement, bien alignée dans l'encart, puis fondu
    croisé élégant vers le jeu réel. */
@@ -1305,6 +1380,47 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
   100%{ box-shadow:inset 0 2px 14px rgba(0,0,0,.35); border-color:rgba(76,195,138,.35); }
 }
 .pres-table.burned{ animation:presBurnFlash .8s ease-out both; }
+
+/* Sens du tour — frise visuelle : avatars reliés par des flèches dans
+   l'ordre réel de jeu (toujours le même sens, index de siège croissant),
+   plus lisible qu'un simple pictogramme statique. */
+.pres-turn-order{
+  display:flex; align-items:center; justify-content:center; flex-wrap:wrap;
+  gap:4px; margin:0 0 10px; font-size:15px;
+}
+.pres-turn-seat{
+  display:flex; align-items:center; justify-content:center;
+  width:26px; height:26px; border-radius:50%; font-size:14px;
+  border:2px solid var(--line); background:rgba(255,255,255,.04);
+  transition:border-color .15s ease, background .15s ease, transform .15s ease;
+}
+.pres-turn-seat.active{ border-color:var(--p3); background:rgba(182,240,76,.16); transform:scale(1.15); }
+.pres-turn-seat.me{ box-shadow:0 0 0 2px var(--accent, var(--p2)) inset; }
+.pres-turn-arrow{ color:var(--muted); font-size:12px; }
+.pres-turn-arrow.wrap{ margin-left:2px; }
+
+/* Mandats accumulés (Président/Vice-Président) — premier à la cible
+   remporte le MATCH. */
+.pres-mandates-bar{ display:flex; flex-wrap:wrap; gap:6px; justify-content:center; margin-bottom:10px; }
+.pres-mandate-chip{
+  display:flex; align-items:center; gap:5px; padding:5px 10px; border-radius:99px;
+  border:2px solid var(--line); background:rgba(255,255,255,.03); font-size:11.5px; font-weight:700;
+}
+.pres-mandate-chip.me{ box-shadow:0 0 0 2px var(--acc-president) inset; }
+.pres-mandate-chip b{ font-family:'Space Mono'; }
+
+/* Animation de "cendres" quand un 2 brûle le pli : les cartes brûlées
+   restent visibles un court instant, se décolorent et s'envolent en
+   fondu — bien plus lisible qu'une disparition sèche du pli. */
+.pres-burn-pile .pres-card{ animation:presAshOut .9s ease both; }
+@keyframes presAshOut{
+  0%{ opacity:1; filter:none; transform:translateY(0) scale(1); }
+  35%{ opacity:.95; filter:brightness(1.35) saturate(.4); transform:translateY(-4px) scale(1.03); }
+  100%{ opacity:0; filter:brightness(1.7) saturate(0) blur(3px); transform:translateY(-26px) scale(.88); }
+}
+@media (prefers-reduced-motion: reduce){
+  .pres-burn-pile .pres-card{ animation:none; opacity:0; }
+}
 
 /* Bulle "réfléchit…" sur l'adversaire dont c'est le tour : trois points
    qui pulsent en décalé — les bots prennent 1 à 5s, comme un humain. */

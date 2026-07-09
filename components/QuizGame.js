@@ -401,6 +401,21 @@ export default function QuizGame({ room, me, isHost, players, onFinish, t, lang 
   const [finished, setFinished] = useState(false);
   const [points, setPoints] = useState(0);
   const [roundResults, setRoundResults] = useState([]); // qui a répondu juste/faux cette manche-ci
+  // ----- Bonus d'enchaînement (streak) -----
+  // 3 bonnes réponses D'AFFILÉE = 1 jeton de bonus, utilisable UNE fois sur
+  // n'importe quelle question suivante (au choix : 50/50 ou attaque de temps).
+  // Auto-déclaré (comme le score de cette manche) : cohérent avec le modèle
+  // de confiance déjà en place pour "answer_result" — aucune vérité réseau
+  // supplémentaire nécessaire, ce n'est qu'un bonus cosmétique/social.
+  const [streak, setStreak] = useState(0);
+  const [tokens, setTokens] = useState(0);
+  const [usedBonusThisQ, setUsedBonusThisQ] = useState(false);
+  const [fiftyHidden, setFiftyHidden] = useState([]); // choix masqués localement (50/50), jamais envoyés en réseau
+  const [bonusNotice, setBonusNotice] = useState(null); // { kind, username } — notif passagère
+  const streakRef = useRef(0);
+  const tokensRef = useRef(0);
+  const roundTotalRef = useRef(ROUND_MS_BY_DIFF.easy);
+  const bonusNoticeTimerRef = useRef(null);
   // ----- Verrouillage de réponse ("lock") -----
   // Cliquer SÉLECTIONNE (modifiable) ; verrouiller (barre Espace ou bouton)
   // FIGE la réponse. Quand TOUS les joueurs du salon ont verrouillé, l'hôte
@@ -425,6 +440,7 @@ export default function QuizGame({ room, me, isHost, players, onFinish, t, lang 
 
   useEffect(() => { playersRef.current = players; }, [players]);
   useEffect(() => { lockedMineRef.current = lockedMine; }, [lockedMine]);
+  useEffect(() => { roundTotalRef.current = roundTotal; }, [roundTotal]);
 
   function persistState(qPayload, deadlineAt, revealedFlag, finishedFlag) {
     if (!isHost) return;
@@ -454,7 +470,13 @@ export default function QuizGame({ room, me, isHost, players, onFinish, t, lang 
       setLockedList([]);
       lockedIdsRef.current = new Set();
       revealFiredRef.current = false;
-      if (payload.index === 0) { myGain.current = 0; setPoints(0); }
+      setUsedBonusThisQ(false);
+      setFiftyHidden([]);
+      if (payload.index === 0) {
+        myGain.current = 0; setPoints(0);
+        streakRef.current = 0; setStreak(0);
+        tokensRef.current = 0; setTokens(0);
+      }
     });
     // Un joueur a verrouillé sa réponse : tout le monde l'affiche ; l'hôte
     // compte, et révèle immédiatement si TOUS les joueurs du salon ont
@@ -485,6 +507,15 @@ export default function QuizGame({ room, me, isHost, players, onFinish, t, lang 
           // RPC atomique : pas d'écrasement de score en cas de réponses simultanées.
           await supabase.rpc("add_points", { p_room: room.id, p_delta: gain });
         } catch (e) {}
+        const newStreak = streakRef.current + 1;
+        if (newStreak >= 3) {
+          streakRef.current = 0; setStreak(0);
+          tokensRef.current += 1; setTokens(tokensRef.current);
+        } else {
+          streakRef.current = newStreak; setStreak(newStreak);
+        }
+      } else {
+        streakRef.current = 0; setStreak(0);
       }
       // Retour social : chacun diffuse SON propre résultat pour cette question,
       // pour que tout le monde voie en direct qui a trouvé la bonne réponse.
@@ -498,6 +529,25 @@ export default function QuizGame({ room, me, isHost, players, onFinish, t, lang 
     });
     ch.on("broadcast", { event: "answer_result" }, ({ payload }) => {
       setRoundResults(prev => (prev.some(r => r.profile_id === payload.profile_id) ? prev : [...prev, payload]));
+    });
+    // Bonus utilisé par un joueur : le 50/50 est purement local à qui l'a
+    // activé (rien à propager, juste une notif sociale) ; l'attaque de
+    // temps, elle, réduit RÉELLEMENT le temps des AUTRES joueurs sur la
+    // question en cours — leur temps restant est ramené à la moitié du
+    // temps de DÉPART (pas de la moitié du temps déjà restant), sans
+    // jamais repasser sous "maintenant" (pas de révélation instantanée
+    // injuste).
+    ch.on("broadcast", { event: "bonus" }, ({ payload }) => {
+      setBonusNotice({ kind: payload.kind, username: payload.username });
+      clearTimeout(bonusNoticeTimerRef.current);
+      bonusNoticeTimerRef.current = setTimeout(() => setBonusNotice(null), 2600);
+      if (payload.kind === "attack" && payload.profile_id !== me.id) {
+        setDeadline(d => {
+          if (!d) return d;
+          const half = d - roundTotalRef.current / 2;
+          return Math.max(Date.now() + 300, Math.min(d, half));
+        });
+      }
     });
     ch.on("broadcast", { event: "finished" }, async () => {
       setFinished(true);
@@ -544,6 +594,7 @@ export default function QuizGame({ room, me, isHost, players, onFinish, t, lang 
 
     return () => {
       timeouts.current.forEach(clearTimeout);
+      clearTimeout(bonusNoticeTimerRef.current);
       supabase.removeChannel(ch);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -620,6 +671,35 @@ export default function QuizGame({ room, me, isHost, players, onFinish, t, lang 
     if (revealed || !q || lockedMineRef.current) return;
     pickedRef.current = text;
     setPicked(text);
+  }
+
+  // 50/50 : élimine 2 des 3 mauvaises réponses, purement en local (l'état
+  // "bonne réponse" est déjà connu du client — voir la validation à la
+  // révélation plus haut — donc aucune requête réseau n'est nécessaire ici).
+  function useFiftyFifty() {
+    if (!q || revealed || lockedMineRef.current || usedBonusThisQ || tokensRef.current <= 0) return;
+    const wrongs = q.choices.filter(c => c !== q.good);
+    const keepWrong = wrongs[Math.floor(Math.random() * wrongs.length)];
+    setFiftyHidden(wrongs.filter(c => c !== keepWrong));
+    setUsedBonusThisQ(true);
+    tokensRef.current -= 1; setTokens(tokensRef.current);
+    channelRef.current?.send({
+      type: "broadcast", event: "bonus",
+      payload: { profile_id: me.id, username: me.username, kind: "fifty" },
+    });
+  }
+
+  // Attaque de temps : réduit le temps des AUTRES joueurs à la moitié du
+  // temps de départ pour cette question (voir handler "bonus" plus haut).
+  // N'affecte jamais son propre chrono.
+  function useAttack() {
+    if (!q || revealed || usedBonusThisQ || tokensRef.current <= 0) return;
+    setUsedBonusThisQ(true);
+    tokensRef.current -= 1; setTokens(tokensRef.current);
+    channelRef.current?.send({
+      type: "broadcast", event: "bonus",
+      payload: { profile_id: me.id, username: me.username, kind: "attack" },
+    });
   }
 
   function lockMine() {
@@ -714,6 +794,36 @@ export default function QuizGame({ room, me, isHost, players, onFinish, t, lang 
               }}>{DIFFS.find(d => d.id === q.diff)?.label}</span>
             </div>
 
+            {/* Barre de bonus : progression de l'enchaînement (3 bonnes
+                réponses d'affilée = 1 jeton), et les 2 bonus utilisables
+                avec un jeton — 50/50 (pour soi) ou attaque de temps (contre
+                les autres). Un seul bonus utilisable par question. */}
+            <div className="quiz-bonus-bar">
+              <span className="quiz-streak" title={t("quizStreakHint")}>
+                🔥 {Math.min(streak, 3)}/3
+              </span>
+              {tokens > 0 && !revealed && (
+                <>
+                  <button type="button" className="quiz-bonus-btn" disabled={usedBonusThisQ || lockedMine}
+                    onClick={useFiftyFifty} title={t("quizBonusFiftyHint")}>
+                    🃏 50/50
+                  </button>
+                  <button type="button" className="quiz-bonus-btn attack" disabled={usedBonusThisQ}
+                    onClick={useAttack} title={t("quizBonusAttackHint")}>
+                    ⏱️ {t("quizBonusAttack")}
+                  </button>
+                  <span className="quiz-token-count">×{tokens}</span>
+                </>
+              )}
+            </div>
+            {bonusNotice && (
+              <p className="quiz-bonus-notice">
+                {bonusNotice.kind === "attack"
+                  ? `⏱️ ${bonusNotice.username} ${t("quizBonusAttackUsed")}`
+                  : `🃏 ${bonusNotice.username} ${t("quizBonusFiftyUsed")}`}
+              </p>
+            )}
+
             <div style={{ position: "relative", height: 10, background: "rgba(255,255,255,.08)", borderRadius: 99, overflow: "hidden", margin: "0 0 18px" }}>
               <div style={{
                 height: "100%", width: (timeLeft / roundTotal * 100) + "%",
@@ -734,7 +844,7 @@ export default function QuizGame({ room, me, isHost, players, onFinish, t, lang 
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              {q.choices.map((text, i) => {
+              {q.choices.filter(text => !fiftyHidden.includes(text)).map((text, i) => {
                 let bg = "rgba(255,255,255,.05)", border = "var(--line)", color = "var(--ink)", scale = 1;
                 const isGood = revealed && text === q.good;
                 const isWrongPick = revealed && picked === text && text !== q.good;

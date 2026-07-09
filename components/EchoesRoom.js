@@ -28,7 +28,7 @@ import Crossfade from "./Crossfade";
    chapitre est symétrique : les deux actionnent leur propre levier).
    ========================================================================== */
 
-const TOTAL_MS = 20 * 60 * 1000;     // 20 minutes pour les 7 chapitres
+const TOTAL_MS = 15 * 60 * 1000;     // 15 minutes pour les 7 chapitres (réduit depuis 20)
 const PENALTY_MS = 20 * 1000;        // -20s par mauvaise tentative
 const PENALTY_PEEK_MS = 15 * 1000;   // -15s par coup d'œil mémoire supplémentaire
 const DIAL_PERIOD_MS = 4200;         // durée d'un tour complet de l'aiguille (ch.4)
@@ -79,8 +79,13 @@ function genChapter2() {
     return { label, base, opText, value };
   });
   const pairIdx = shuffle([0, 1, 2]).slice(0, 2).sort();
-  const target = gears[pairIdx[0]].value + gears[pairIdx[1]].value;
-  return { gears, target, correctPair: [gears[pairIdx[0]].label, gears[pairIdx[1]].label].sort() };
+  // Variété d'une partie à l'autre : la cible est tantôt la SOMME, tantôt
+  // la DIFFÉRENCE (valeur absolue) des 2 rouages — même interaction (choisir
+  // 2 rouages), mais un calcul mental différent à chaque fois.
+  const goal = pickRandom(["sum", "diff"]);
+  const a = gears[pairIdx[0]].value, b = gears[pairIdx[1]].value;
+  const target = goal === "sum" ? a + b : Math.abs(a - b);
+  return { gears, target, goal, correctPair: [gears[pairIdx[0]].label, gears[pairIdx[1]].label].sort() };
 }
 
 // Chapitre 3 — mémoire : 5 symboles à retenir, mélangés parmi 3 leurres (8 tuiles à cliquer).
@@ -706,7 +711,8 @@ export default function EchoesRoom({ room, me, isHost, players, t, lang, onFinis
           <>
             <p className="muted">{t("echoesCh2TextA")}</p>
             <p style={{ textAlign: "center", fontWeight: 800, fontSize: 22, margin: "10px 0" }}>
-              🎯 <span style={{ fontFamily: "'Space Mono'", color: "var(--p3)" }}>{puzzle.ch2.target}</span>
+              🎯 {t(puzzle.ch2.goal === "diff" ? "echoesCh2GoalDiff" : "echoesCh2GoalSum")}{" "}
+              <span style={{ fontFamily: "'Space Mono'", color: "var(--p3)" }}>{puzzle.ch2.target}</span>
             </p>
             <GearPicker onConfirm={tryChapter2} t={t} />
           </>

@@ -5,7 +5,7 @@ import { saveGameState, readGameState, resetRoomToLobby } from "@/lib/gameSync";
 import Crossfade from "@/components/Crossfade";
 import Die from "./Die";
 import {
-  UPPER_IDS, LOWER_IDS, UPPER_BONUS_THRESHOLD, UPPER_BONUS_VALUE,
+  UPPER_IDS, LOWER_IDS, ALL_IDS, UPPER_BONUS_THRESHOLD, UPPER_BONUS_VALUE,
   freshCard, scoreCategory, applyScore, upperSubtotal, hasUpperBonus,
   cardTotal, isCardComplete, filledCount, isYahtzeeRoll,
 } from "./scoring";
@@ -47,6 +47,12 @@ const CAT_LABEL_KEY = {
   threeKind: "yzThreeKind", fourKind: "yzFourKind", fullHouse: "yzFullHouse",
   smallStraight: "yzSmallStraight", largeStraight: "yzLargeStraight",
   yahtzee: "yzYahtzee", chance: "yzChance",
+};
+// Abréviations compactes pour les mini scoring boards des adversaires.
+const CAT_ABBR = {
+  ones: "1", twos: "2", threes: "3", fours: "4", fives: "5", sixes: "6",
+  threeKind: "3K", fourKind: "4K", fullHouse: "FH",
+  smallStraight: "SS", largeStraight: "LS", yahtzee: "YZ", chance: "CH",
 };
 
 function rollDie() {
@@ -558,16 +564,58 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
 
     content = (
       <div style={{ paddingBottom: canScore ? 170 : 0 }}>
-        {/* Adversaires : total vivant + progression de feuille */}
-        <div className="yz-opponents">
-          {seats.filter(s => s.id !== me.id).map(s => (
-            <div key={s.id} className={"yz-opponent" + (currentSeat?.id === s.id && !finished ? " active" : "")}>
-              <span className="avatar">{s.avatar}</span>
-              <span className="name">{s.username}</span>
-              <span className="count">{cards[s.id] ? cardTotal(cards[s.id]) : 0} {t("pts")} · {cards[s.id] ? filledCount(cards[s.id]) : 0}/13</span>
-            </div>
-          ))}
+        {/* Comparatif des totaux — face à face, mis en avant pour suivre l'avancement */}
+        <div className="yz-totals-bar">
+          {(() => {
+            const totals = seats.map(s => (cards[s.id] ? cardTotal(cards[s.id]) : 0));
+            const maxTotal = Math.max(0, ...totals);
+            return seats.map((s, i) => (
+              <div
+                key={s.id}
+                className={"yz-total-chip"
+                  + (s.id === me.id ? " me" : "")
+                  + (currentSeat?.id === s.id && !finished ? " active" : "")
+                  + (maxTotal > 0 && totals[i] === maxTotal ? " leading" : "")}
+              >
+                <span className="avatar">{s.avatar}</span>
+                <span className="name">{s.username}</span>
+                <b className="total">{maxTotal > 0 && totals[i] === maxTotal ? "👑 " : ""}{totals[i]}</b>
+              </div>
+            ));
+          })()}
         </div>
+
+        {/* Feuilles des adversaires — compactes et grisées, suivies en direct
+            à mesure de leurs lancers/choix (purement en lecture, jamais
+            modifiables). */}
+        {seats.filter(s => s.id !== me.id).length > 0 && (
+          <div className="yz-mini-boards">
+            {seats.filter(s => s.id !== me.id).map(s => {
+              const c = cards[s.id];
+              return (
+                <div key={s.id} className={"yz-mini-board" + (currentSeat?.id === s.id && !finished ? " active" : "")}>
+                  <div className="yz-mini-board-head">
+                    <span className="avatar">{s.avatar}</span>
+                    <span className="name">{s.username}</span>
+                    <b>{c ? cardTotal(c) : 0}</b>
+                  </div>
+                  <div className="yz-mini-grid">
+                    {ALL_IDS.map(id => (
+                      <span
+                        key={id}
+                        className={"yz-mini-cell" + (c && c[id] !== null ? " filled" : "")}
+                        title={t(CAT_LABEL_KEY[id])}
+                      >
+                        <em>{CAT_ABBR[id]}</em>
+                        <b>{c && c[id] !== null ? c[id] : "—"}</b>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         {/* Statut du tour */}
         <p className="muted yz-status" style={{ fontWeight: finished ? 800 : 400 }}>
@@ -653,7 +701,7 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
 
         {/* Bouton de lancer */}
         {isMyTurn && !finished && (
-          <div style={{ display: "flex", justifyContent: "center", marginBottom: 14 }}>
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: 8 }}>
             <button
               className="btn yz-roll-btn"
               disabled={shuffling ? false : !canRoll}
