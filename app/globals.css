@@ -841,7 +841,11 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
   background-image:
     repeating-linear-gradient(90deg, rgba(0,0,0,.16) 0 3px, transparent 3px 26px),
     linear-gradient(var(--door-angle), #2a1c10, #40291a 45%, #2a1c10);
-  transition:transform 1s cubic-bezier(.62,.04,.3,1);
+  /* 3s : synchronisé pile avec door-open.mp3 (voir lib/sfx.js) et le
+     setTimeout de components/DoorStage.js — les battants arrivent sur les
+     bords de l'encart au moment exact où le son de portes coulissantes
+     s'achève. */
+  transition:transform 3s cubic-bezier(.62,.04,.3,1);
 }
 .door-panel.left{ left:0; transform-origin:left center; --door-angle:100deg; box-shadow:inset -8px 0 20px rgba(0,0,0,.5), 6px 0 24px rgba(0,0,0,.4); }
 .door-panel.right{ right:0; transform-origin:right center; --door-angle:260deg; box-shadow:inset 8px 0 20px rgba(0,0,0,.5), -6px 0 24px rgba(0,0,0,.4); }

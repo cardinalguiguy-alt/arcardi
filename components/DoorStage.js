@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { playDoorOpen } from "@/lib/sfx";
 
 /* ==========================================================================
    DoorStage — habillage de présentation "porte d'entrée" au-dessus d'un
@@ -10,9 +11,9 @@ import { useEffect, useRef, useState } from "react";
    (chaque joueur ouvre "sa" porte indépendamment, exactement comme on
    pousserait une porte différente pour entrer dans la même pièce).
 
-   États : 'closed' -> 'opening' (1s, les battants pivotent) -> 'open'
-   (le jeu réel est monté, avec une animation d'entrée qui rejoue à
-   CHAQUE ouverture, pas seulement au premier montage).
+   États : 'closed' -> 'opening' (3s, les battants pivotent, synchronisés
+   avec door-open.mp3) -> 'open' (le jeu réel est monté, avec une animation
+   d'entrée qui rejoue à CHAQUE ouverture, pas seulement au premier montage).
 
    Réinitialisé à 'closed' à chaque fois que `gameId` change (nouveau jeu
    lancé par l'hôte) — on ne saute jamais la mise en scène.
@@ -35,10 +36,11 @@ export default function DoorStage({ gameId, icon, name, accentVar, children }) {
   function openDoor() {
     if (doorState !== "closed") return;
     setDoorState("opening");
+    playDoorOpen(); // son de portes coulissantes, synchro sur les 3s de rotation
     openTimer.current = setTimeout(() => {
       setDoorState("open");
       setEntryKey(k => k + 1);
-    }, 950);
+    }, 3000); // durée EXACTE de door-open.mp3 (5s d'origine accélérées à 3s) et de la transition CSS .door-panel
   }
 
   function closeDoor() {
