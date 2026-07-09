@@ -26,20 +26,20 @@
 const EMBERS = [
   // left = site de nucléation ; w = taille ; d/delay = montée ; sway =
   // amplitude latérale (px) ; sd = période d'oscillation.
-  { left: "4%",  w: 5, c: "#FFB37A", d: "5.2s", delay: ".2s",  sway: 5, sd: ".9s"  },
-  { left: "11%", w: 3, c: "#FF8F6E", d: "7.1s", delay: "2.8s", sway: 4, sd: "1.2s" },
-  { left: "18%", w: 4, c: "#FF9E6E", d: "6.4s", delay: "1.6s", sway: 6, sd: ".8s"  },
-  { left: "26%", w: 6, c: "#FFC98A", d: "5.6s", delay: "3.4s", sway: 5, sd: "1.1s" },
-  { left: "33%", w: 3, c: "#FFB37A", d: "7.8s", delay: ".9s",  sway: 7, sd: "1.3s" },
-  { left: "41%", w: 5, c: "#FF9E6E", d: "6.0s", delay: "4.1s", sway: 4, sd: ".7s"  },
-  { left: "49%", w: 4, c: "#FFD9A8", d: "6.9s", delay: "2.2s", sway: 6, sd: "1.0s" },
-  { left: "57%", w: 3, c: "#FF8F6E", d: "5.4s", delay: "5.0s", sway: 5, sd: "1.25s"},
-  { left: "64%", w: 6, c: "#FFC98A", d: "7.4s", delay: ".5s",  sway: 4, sd: ".85s" },
-  { left: "72%", w: 4, c: "#FFB37A", d: "5.8s", delay: "2.4s", sway: 7, sd: "1.15s"},
-  { left: "79%", w: 3, c: "#FF9E6E", d: "6.6s", delay: "3.9s", sway: 5, sd: ".95s" },
-  { left: "86%", w: 5, c: "#FFD9A8", d: "5.0s", delay: "1.2s", sway: 6, sd: "1.05s"},
-  { left: "92%", w: 4, c: "#FF8F6E", d: "7.0s", delay: ".9s",  sway: 4, sd: "1.35s"},
-  { left: "97%", w: 3, c: "#FFC98A", d: "6.2s", delay: "4.6s", sway: 5, sd: ".75s" },
+  { left: "4%",  w: 5, c: "#FFB37A", d: "6.6s", delay: ".2s",  sway: 5, sd: ".9s"  },
+  { left: "11%", w: 3, c: "#FF8F6E", d: "9.2s", delay: "2.8s", sway: 4, sd: "1.2s" },
+  { left: "18%", w: 4, c: "#FF9E6E", d: "8.3s", delay: "1.6s", sway: 6, sd: ".8s"  },
+  { left: "26%", w: 6, c: "#FFC98A", d: "7.2s", delay: "3.4s", sway: 5, sd: "1.1s" },
+  { left: "33%", w: 3, c: "#FFB37A", d: "10.1s", delay: ".9s",  sway: 7, sd: "1.3s" },
+  { left: "41%", w: 5, c: "#FF9E6E", d: "7.7s", delay: "4.1s", sway: 4, sd: ".7s"  },
+  { left: "49%", w: 4, c: "#FFD9A8", d: "8.9s", delay: "2.2s", sway: 6, sd: "1.0s" },
+  { left: "57%", w: 3, c: "#FF8F6E", d: "7.0s", delay: "5.0s", sway: 5, sd: "1.25s"},
+  { left: "64%", w: 6, c: "#FFC98A", d: "9.6s", delay: ".5s",  sway: 4, sd: ".85s" },
+  { left: "72%", w: 4, c: "#FFB37A", d: "7.5s", delay: "2.4s", sway: 7, sd: "1.15s"},
+  { left: "79%", w: 3, c: "#FF9E6E", d: "8.5s", delay: "3.9s", sway: 5, sd: ".95s" },
+  { left: "86%", w: 5, c: "#FFD9A8", d: "6.5s", delay: "1.2s", sway: 6, sd: "1.05s"},
+  { left: "92%", w: 4, c: "#FF8F6E", d: "9.0s", delay: ".9s",  sway: 4, sd: "1.35s"},
+  { left: "97%", w: 3, c: "#FFC98A", d: "8.0s", delay: "4.6s", sway: 5, sd: ".75s" },
 ];
 
 export default function Embers() {

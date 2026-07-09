@@ -33,6 +33,11 @@ a{color:var(--p2);}
 
 .wrap{max-width:920px; margin:0 auto; padding:24px 18px calc(60px + env(safe-area-inset-bottom, 0px)); position:relative;}
 .wrap-room{max-width:1200px;}
+/* Page d'accueil (lounge) : on ne veut plus la même jauge étroite que les
+   formulaires de login — le logo et la barre du haut profitent de toute
+   la largeur de l'écran (garde-fou à 1400px sur très grand moniteur pour
+   que le logo ne s'étire pas à l'infini). */
+.wrap-lounge{max-width:1400px;}
 .brand{display:flex; align-items:center; gap:10px; margin-bottom:26px; row-gap:8px;}
 .brand .tiles{display:flex; gap:4px;}
 .brand button[title="ARCARDI"]{ animation:logoBreathe 4s ease-in-out infinite; }
@@ -701,7 +706,7 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
    ZIGZAG latéral (emberSway, sur .ember-dot interne) a sa propre période,
    en alternate — la composition des deux donne la trajectoire sinueuse
    d'une bulle qui se décroche de la paroi d'un verre. */
-@keyframes emberRise{ 0%{ transform:translateY(0) scale(.5); opacity:0; } 10%{ opacity:.85; } 88%{ opacity:.4; } 100%{ transform:translateY(min(-340px, -48vh)) scale(1.2); opacity:0; } }
+@keyframes emberRise{ 0%{ transform:translateY(0) scale(.5); opacity:0; } 10%{ opacity:.85; } 88%{ opacity:.4; } 100%{ transform:translateY(min(-720px, -92vh)) scale(1.2); opacity:0; } }
 @keyframes emberSway{ from{ transform:translateX(calc(var(--sway, 5px) * -1)); } to{ transform:translateX(var(--sway, 5px)); } }
 @keyframes cardPop{ 0%{ opacity:0; transform:translateY(14px) scale(.94); } 100%{ opacity:1; transform:translateY(0) scale(1); } }
 @keyframes winGlow{ 0%,100%{ box-shadow:0 0 0 3px #fff inset, 0 0 22px 4px rgba(255,255,255,.55); } 50%{ box-shadow:0 0 0 3px #fff inset, 0 0 8px 2px rgba(255,255,255,.25); } }
@@ -889,8 +894,8 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
    enfants flex pour ne rien casser sur petit écran. */
 .lounge-wrap{ min-height:100dvh; display:flex; flex-direction:column; }
 .lounge-center{ flex:1; display:flex; align-items:center; justify-content:center; min-height:0; padding:16px 0; }
-.lounge-panels{ display:flex; flex-wrap:wrap; gap:20px; position:relative; z-index:1; justify-content:center; width:100%; max-width:840px; margin:0 auto; }
-.lounge-panels .panel{ flex:1 1 320px; max-width:400px; }
+.lounge-panels{ display:flex; flex-wrap:wrap; gap:28px; position:relative; z-index:1; justify-content:center; width:100%; max-width:1100px; margin:0 auto; }
+.lounge-panels .panel{ flex:1 1 360px; max-width:480px; }
 
 /* ===== Ergonomie tactile & mobile (audit 2026-07) =====
    Sur écran tactile (pointer:coarse), les cartes en main de Chromatik

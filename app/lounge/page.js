@@ -74,7 +74,7 @@ export default function Lounge() {
   if (!profile) return <div className="wrap"><p className="muted">…</p></div>;
 
   return (
-    <div className="wrap lounge-wrap">
+    <div className="wrap wrap-lounge lounge-wrap">
       <Embers />
       <Brand lang={lang} setLang={setLang} t={t} onHome={() => router.push("/lounge")} right={
         <button className="btn ghost" style={{ width: "auto", margin: 0, padding: "8px 14px", fontSize: 13 }} onClick={logout}>
