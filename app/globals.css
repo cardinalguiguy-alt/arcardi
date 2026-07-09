@@ -734,11 +734,38 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 .yz-final-row.winner{ border-color:var(--p3); background:rgba(182,240,76,.12); font-weight:800; }
 .yz-final-row b{ font-family:'Space Mono'; }
 
-.worldle-intro-video{
-  display:block; width:100%; max-height:70vh; object-fit:cover; border-radius:16px;
+/* ----- Stage vidéo Worldle (VideoStage) -----
+   Pas de porte en bois ici (incohérente avec un jeu de mappemonde) : la
+   vidéo d'intro joue directement, bien alignée dans l'encart, puis fondu
+   croisé élégant vers le jeu réel. */
+.video-stage{
+  position:relative; overflow:hidden;
+  background:linear-gradient(175deg, #16202e, #0e1620 75%);
+  border:2px solid var(--line); border-radius:22px;
+  padding:20px; min-height:440px; min-width:min(320px, 100%); width:min(960px, 94vw); max-width:100%;
+  box-shadow:0 0 0 2px var(--accent, var(--p2)) inset, 0 0 40px -12px var(--accent, var(--p2));
+  display:flex; align-items:center; justify-content:center;
 }
-.worldle-intro-hidden{ opacity:0; position:absolute; inset:0; pointer-events:none; }
-.worldle-intro-fadein{ animation:worldleIntroFade .6s ease both; }
+.video-label{
+  position:relative; z-index:5; display:flex; flex-direction:column; align-items:center;
+  justify-content:center; gap:10px; text-align:center;
+}
+.video-label-icon{ font-size:30px; }
+.video-label-name{ font-family:'Bungee'; font-size:15px; color:#fff; text-shadow:0 2px 6px rgba(0,0,0,.6); }
+.video-play-btn{
+  margin-top:4px; padding:11px 26px; border:none; border-radius:99px;
+  font-family:'Bungee'; font-size:13px; color:var(--ink-on-accent); background:var(--p2);
+  box-shadow:0 4px 0 rgba(0,0,0,.35); cursor:pointer; transition:transform .12s ease;
+}
+.video-play-btn:hover{ transform:scale(1.05); filter:brightness(1.08); }
+.video-stage-clip{
+  position:absolute; inset:0; z-index:10; width:100%; height:100%;
+  object-fit:cover; border-radius:20px;
+  /* Fondu croisé vers le jeu à la fin : pas de coupure nette. */
+  transition:opacity .6s ease;
+}
+.video-stage-clip.fading{ opacity:0; }
+.video-stage-content{ position:relative; animation:worldleIntroFade .6s ease both; }
 @keyframes worldleIntroFade{ from{ opacity:0; } to{ opacity:1; } }
 
 /* Barre de validation du score — FIXE en bas de l'écran (même logique que

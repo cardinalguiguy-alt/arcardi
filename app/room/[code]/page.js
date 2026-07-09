@@ -13,7 +13,6 @@ import QuizGame from "@/components/QuizGame";
 import PianoEscape from "@/components/PianoEscape";
 import WordGuess from "@/components/WordGuess";
 import Worldle from "@/components/Worldle";
-import WorldleIntro from "@/components/WorldleIntro";
 import ConnectFour from "@/components/ConnectFour";
 import PetitsChevaux from "@/components/PetitsChevaux";
 import EchoesRoom from "@/components/EchoesRoom";
@@ -26,6 +25,7 @@ import YahtzeeGame from "@/components/yahtzee/YahtzeeGame";
 import DoorStage from "@/components/DoorStage";
 import CurtainStage from "@/components/CurtainStage";
 import FlashStage from "@/components/FlashStage";
+import VideoStage from "@/components/VideoStage";
 
 // Métadonnées d'affichage de chaque jeu : icône, couleur d'accent (variable
 // CSS existante), clés i18n pour le nom / la description courte de la carte
@@ -36,10 +36,13 @@ import FlashStage from "@/components/FlashStage";
 // - "curtain" : rideau rouge qui se lève — jeux narratifs/performance et
 //               Puissance 4.
 // - "flash"   : flash + zoom — réservé à Petit Bac pour l'instant.
+// - "video"   : pas de porte/rideau — la vidéo d'intro joue directement,
+//               accélérée pour tenir 3s, fondu élégant vers le jeu ensuite
+//               (voir VideoStage.js) — réservé à Worldle pour l'instant.
 const GAME_META = {
   quiz:     { icon: "🧠", accent: "--acc-quiz",      nameKey: "nameQuiz",    tagKey: "tagQuiz", stage: "door" },
   wordle:   { icon: "🔤", accent: "--acc-wordle",    nameKey: "nameWordle",  tagKey: "tagWordle", stage: "door" },
-  worldle:  { icon: "🌍", accent: "--acc-worldle",   nameKey: "nameWorldle", tagKey: "tagWorldle", stage: "door" },
+  worldle:  { icon: "🌍", accent: "--acc-worldle",   nameKey: "nameWorldle", tagKey: "tagWorldle", stage: "video" },
   piano:    { icon: "🎹", accent: "--acc-piano",     nameKey: "namePiano",   tagKey: "tagPiano", stage: "curtain" },
   connect4: { icon: "🔴", accent: "--acc-c4",        nameKey: "nameC4",      tagKey: "tagC4", minPlayers: 2, stage: "curtain" },
   ludo:     { icon: "🐴", accent: "--acc-ludo",      nameKey: "nameLudo",    tagKey: "tagLudo", minPlayers: 2, stage: "door" },
@@ -50,7 +53,7 @@ const GAME_META = {
   president: { icon: "🎩", accent: "--acc-president", nameKey: "namePresident", tagKey: "tagPresident", stage: "door" },
   petitbac: { icon: "✏️", accent: "--acc-petitbac", nameKey: "namePetitBac", tagKey: "tagPetitBac", minPlayers: 2, stage: "flash" },
 };
-const STAGE_COMPONENT = { door: DoorStage, curtain: CurtainStage, flash: FlashStage };
+const STAGE_COMPONENT = { door: DoorStage, curtain: CurtainStage, flash: FlashStage, video: VideoStage };
 const GAME_ORDER = ["quiz", "wordle", "worldle", "petitbac", "connect4", "ludo", "chromatik", "president", "yahtzee", "piano", "echoes", "diapason"];
 
 export default function Room() {
@@ -315,9 +318,7 @@ export default function Room() {
                     <WordGuess room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
                   )}
                   {room.current_game === "worldle" && (
-                    <WorldleIntro>
-                      <Worldle room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
-                    </WorldleIntro>
+                    <Worldle room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
                   )}
                   {room.current_game === "connect4" && (
                     <ConnectFour room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
