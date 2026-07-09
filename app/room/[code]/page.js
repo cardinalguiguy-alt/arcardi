@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { resetRoomToLobby } from "@/lib/gameSync";
 import { useLang } from "@/lib/i18n";
 import { duckAmbienceForGame, resumeAmbienceForNav } from "@/lib/ambience";
+import { playGameCardClick } from "@/lib/sfx";
 import Brand from "@/components/Brand";
 import Embers from "@/components/Embers";
 import Crossfade from "@/components/Crossfade";
@@ -12,6 +13,7 @@ import QuizGame from "@/components/QuizGame";
 import PianoEscape from "@/components/PianoEscape";
 import WordGuess from "@/components/WordGuess";
 import Worldle from "@/components/Worldle";
+import WorldleIntro from "@/components/WorldleIntro";
 import ConnectFour from "@/components/ConnectFour";
 import PetitsChevaux from "@/components/PetitsChevaux";
 import EchoesRoom from "@/components/EchoesRoom";
@@ -28,15 +30,16 @@ import FlashStage from "@/components/FlashStage";
 // Métadonnées d'affichage de chaque jeu : icône, couleur d'accent (variable
 // CSS existante), clés i18n pour le nom / la description courte de la carte
 // de sélection dans le salon, et habillage d'entrée ("stage") :
-// - "door"    : porte en bois qui pivote (inchangée) — cartes/dés + jeux de
-//               plateau/société, ambiance chaleureuse commune.
+// - "door"    : porte en bois qui pivote, synchronisée avec un son de
+//               portes coulissantes (voir DoorStage.js/lib/sfx.js) —
+//               cartes/dés + jeux de plateau/société + jeux de mots.
 // - "curtain" : rideau rouge qui se lève — jeux narratifs/performance et
 //               Puissance 4.
-// - "flash"   : flash + zoom — jeux de mots (rythme plus vif).
+// - "flash"   : flash + zoom — réservé à Petit Bac pour l'instant.
 const GAME_META = {
   quiz:     { icon: "🧠", accent: "--acc-quiz",      nameKey: "nameQuiz",    tagKey: "tagQuiz", stage: "door" },
-  wordle:   { icon: "🔤", accent: "--acc-wordle",    nameKey: "nameWordle",  tagKey: "tagWordle", stage: "flash" },
-  worldle:  { icon: "🌍", accent: "--acc-worldle",   nameKey: "nameWorldle", tagKey: "tagWorldle", stage: "flash" },
+  wordle:   { icon: "🔤", accent: "--acc-wordle",    nameKey: "nameWordle",  tagKey: "tagWordle", stage: "door" },
+  worldle:  { icon: "🌍", accent: "--acc-worldle",   nameKey: "nameWorldle", tagKey: "tagWorldle", stage: "door" },
   piano:    { icon: "🎹", accent: "--acc-piano",     nameKey: "namePiano",   tagKey: "tagPiano", stage: "curtain" },
   connect4: { icon: "🔴", accent: "--acc-c4",        nameKey: "nameC4",      tagKey: "tagC4", minPlayers: 2, stage: "curtain" },
   ludo:     { icon: "🐴", accent: "--acc-ludo",      nameKey: "nameLudo",    tagKey: "tagLudo", minPlayers: 2, stage: "door" },
@@ -312,7 +315,9 @@ export default function Room() {
                     <WordGuess room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
                   )}
                   {room.current_game === "worldle" && (
-                    <Worldle room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
+                    <WorldleIntro>
+                      <Worldle room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
+                    </WorldleIntro>
                   )}
                   {room.current_game === "connect4" && (
                     <ConnectFour room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
@@ -390,7 +395,7 @@ export default function Room() {
                         key={id}
                         className="game-card"
                         style={{ "--accent": `var(${g.accent})`, opacity: disabled ? .45 : 1, cursor: disabled ? "not-allowed" : "pointer" }}
-                        onClick={() => { if (!disabled) launch(id); }}
+                        onClick={() => { if (disabled) return; playGameCardClick(); launch(id); }}
                       >
                         <span className="game-card-icon">{g.icon}</span>
                         <span className="game-card-title">{t(g.nameKey)}</span>

@@ -136,6 +136,25 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
   width:7px; height:7px; border-radius:50%; background:var(--p1); flex:none;
   animation:flicker 1.6s ease-in-out infinite;
 }
+
+/* Pastille discrète pour passer à la piste d'ambiance suivante (voir
+   lib/ambience.js). Quasi invisible au repos, pleinement visible au survol
+   — sur tactile (pas de vrai hover), reste à une opacité assez visible
+   pour rester atteignable au doigt. Empilée AU-DESSUS de .room-code-fab
+   (même coin), jamais de chevauchement même si les deux s'affichent en
+   même temps. */
+.ambience-skip-btn{
+  position:fixed; left:14px; bottom:calc(52px + env(safe-area-inset-bottom, 0px)); z-index:59;
+  width:34px; height:34px; padding:0; border:1.5px solid var(--line); border-radius:50%;
+  background:rgba(18,20,42,.78); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px);
+  color:var(--muted); font-size:14px; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  opacity:.16; transition:opacity .2s ease, transform .15s ease;
+}
+.ambience-skip-btn:hover, .ambience-skip-btn:focus-visible{ opacity:1; transform:scale(1.06); }
+@media (hover: none){
+  .ambience-skip-btn{ opacity:.4; }
+}
 .stage-bar{
   display:flex; align-items:center; flex-wrap:wrap; gap:8px;
   margin-bottom:18px; overflow-x:auto; scrollbar-width:thin;
@@ -714,6 +733,13 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 }
 .yz-final-row.winner{ border-color:var(--p3); background:rgba(182,240,76,.12); font-weight:800; }
 .yz-final-row b{ font-family:'Space Mono'; }
+
+.worldle-intro-video{
+  display:block; width:100%; max-height:70vh; object-fit:cover; border-radius:16px;
+}
+.worldle-intro-hidden{ opacity:0; position:absolute; inset:0; pointer-events:none; }
+.worldle-intro-fadein{ animation:worldleIntroFade .6s ease both; }
+@keyframes worldleIntroFade{ from{ opacity:0; } to{ opacity:1; } }
 
 /* Barre de validation du score — FIXE en bas de l'écran (même logique que
    .room-code-fab / .chat-fab) : sur une feuille de 13 catégories, le bouton
