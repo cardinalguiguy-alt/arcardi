@@ -580,7 +580,7 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 .yz-die{
   width:clamp(48px, 13vw, 64px); height:clamp(48px, 13vw, 64px);
   border-radius:14px; border:2px solid rgba(0,0,0,.25);
-  background:linear-gradient(145deg, #fdfdfa, #d9d9d2);
+  background:linear-gradient(145deg, #fdf6e3, #e6d8b3);
   box-shadow:0 4px 0 rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.8);
   padding:0; display:flex; align-items:center; justify-content:center;
   outline:3px solid transparent; outline-offset:2px;
@@ -621,6 +621,25 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
       translateY(var(--lift, 0px)) scale(1);
   }
 }
+/* Mélange avant révélation : les dés non gardés "grelottent" sur place en
+   boucle pendant ~1s (faces aléatoires changées côté JS) — un mouvement
+   continu et doux, bien distinct du tumble ponctuel de révélation ci-dessus. */
+.yz-die.shuffling{
+  animation:yzShuffleShake .16s ease-in-out infinite;
+  box-shadow:0 4px 0 rgba(0,0,0,.35), 0 0 10px rgba(255,246,227,.5), inset 0 1px 0 rgba(255,255,255,.8);
+}
+@keyframes yzShuffleShake{
+  0%, 100%{
+    transform:
+      translate(var(--tx, 0px), var(--ty, 0px))
+      rotate(calc(var(--trot, 0deg) - 6deg)) scale(1.03);
+  }
+  50%{
+    transform:
+      translate(var(--tx, 0px), calc(var(--ty, 0px) - 4px))
+      rotate(calc(var(--trot, 0deg) + 6deg)) scale(1.03);
+  }
+}
 .yz-die.ghost{
   background:rgba(255,255,255,.05); border:2px dashed var(--line);
   box-shadow:none; cursor:default;
@@ -632,7 +651,7 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 }
 .yz-pip-cell{ display:flex; align-items:center; justify-content:center; }
 .yz-pip-cell.on::before{
-  content:""; width:26%; height:26%; min-width:6px; min-height:6px;
+  content:""; width:31%; height:31%; min-width:7.5px; min-height:7.5px;
   border-radius:50%; background:#20242c;
   box-shadow:inset 0 -1px 1px rgba(255,255,255,.35);
 }
@@ -695,6 +714,82 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 }
 .yz-final-row.winner{ border-color:var(--p3); background:rgba(182,240,76,.12); font-weight:800; }
 .yz-final-row b{ font-family:'Space Mono'; }
+
+/* ----- Célébration Yahtzee -----------------------------------------------
+   Contenue dans .yz-tray (déjà position:relative + overflow:hidden) : ne
+   bouscule jamais la mise en page autour. Deux paliers :
+   - "yahtzee" (5 dés identiques, valeur quelconque) : swirl doux, ~3.6s.
+   - "six" (5 six précisément, le lancer le plus rare) : palette kitsch,
+     chien qui tourbillonne, emojis qui dansent, ~10s. */
+.yz-celebrate{
+  position:absolute; inset:0; z-index:5; overflow:hidden;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:6px; text-align:center; pointer-events:none;
+  animation:yzCelebrateIn .35s ease both;
+}
+@keyframes yzCelebrateIn{ from{ opacity:0; transform:scale(.92); } to{ opacity:1; transform:scale(1); } }
+
+.yz-celebrate-bg{ position:absolute; inset:-30%; z-index:0; }
+.yz-celebrate.yahtzee .yz-celebrate-bg{
+  background:radial-gradient(circle, rgba(182,240,76,.5), rgba(182,240,76,0) 65%);
+  animation:yzSwirl 2.6s linear infinite;
+}
+.yz-celebrate.six .yz-celebrate-bg{
+  background:conic-gradient(from 0deg, #ff3d7f, #ffd166, #4dd6ff, #b6f04c, #ff8a3d, #c77dff, #ff3d7f);
+  filter:blur(3px) saturate(1.3);
+  opacity:.55;
+  animation:yzSwirl 3.2s linear infinite;
+}
+@keyframes yzSwirl{ from{ transform:rotate(0deg); } to{ transform:rotate(360deg); } }
+
+.yz-celebrate-text{
+  position:relative; z-index:2; font-weight:900; letter-spacing:.02em;
+  font-size:clamp(22px, 7vw, 42px); color:#fff;
+  text-shadow:0 3px 0 rgba(0,0,0,.35), 0 0 22px rgba(255,255,255,.5);
+  animation:yzTextPulse .5s ease-in-out infinite alternate;
+}
+.yz-celebrate.six .yz-celebrate-text{
+  background:linear-gradient(90deg, #ff3d7f, #ffd166, #4dd6ff, #b6f04c, #ff8a3d, #ff3d7f);
+  background-size:400% 100%;
+  -webkit-background-clip:text; background-clip:text; color:transparent;
+  animation:yzTextPulse .5s ease-in-out infinite alternate, yzHueSlide 2.2s linear infinite;
+}
+@keyframes yzTextPulse{ from{ transform:scale(1); } to{ transform:scale(1.07); } }
+@keyframes yzHueSlide{ from{ background-position:0% 0; } to{ background-position:400% 0; } }
+
+.yz-celebrate-dog{
+  position:relative; z-index:2; font-size:clamp(28px, 7vw, 44px);
+  animation:yzDogSpin 1.6s linear infinite;
+}
+@keyframes yzDogSpin{
+  0%{ transform:rotate(0deg) scale(1); }
+  50%{ transform:rotate(180deg) scale(1.18); }
+  100%{ transform:rotate(360deg) scale(1); }
+}
+
+.yz-celebrate-emojis{ position:relative; z-index:2; display:flex; gap:10px; font-size:clamp(18px, 4.5vw, 27px); }
+.yz-celebrate-emojis span{ display:inline-block; animation:yzEmojiDance .55s ease-in-out infinite alternate; }
+.yz-celebrate-emojis span:nth-child(2){ animation-delay:.1s; }
+.yz-celebrate-emojis span:nth-child(3){ animation-delay:.2s; }
+.yz-celebrate-emojis span:nth-child(4){ animation-delay:.3s; }
+.yz-celebrate-emojis span:nth-child(5){ animation-delay:.4s; }
+@keyframes yzEmojiDance{ from{ transform:translateY(0) rotate(-8deg); } to{ transform:translateY(-9px) rotate(8deg); } }
+
+.yz-confetti-piece{
+  position:absolute; top:-10%; z-index:1; border-radius:2px;
+  animation-name:yzConfettiFall; animation-timing-function:linear; animation-iteration-count:infinite;
+}
+@keyframes yzConfettiFall{
+  0%{ transform:translateY(0) rotate(var(--rot0, 0deg)); opacity:1; }
+  100%{ transform:translateY(420%) rotate(calc(var(--rot0, 0deg) + 540deg)); opacity:.9; }
+}
+
+@media (prefers-reduced-motion: reduce){
+  .yz-celebrate, .yz-celebrate-bg, .yz-celebrate-text, .yz-celebrate-dog,
+  .yz-celebrate-emojis span, .yz-confetti-piece, .yz-die.shuffling{
+    animation:none !important;
+  }
+}
 
 /* ==========================================================================
    REDESIGN COZY "Feu de camp" — animations & composants transverses

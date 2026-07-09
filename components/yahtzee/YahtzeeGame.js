@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { saveGameState, readGameState, resetRoomToLobby } from "@/lib/gameSync";
 import Crossfade from "@/components/Crossfade";
@@ -7,8 +7,9 @@ import Die from "./Die";
 import {
   UPPER_IDS, LOWER_IDS, UPPER_BONUS_THRESHOLD, UPPER_BONUS_VALUE,
   freshCard, scoreCategory, applyScore, upperSubtotal, hasUpperBonus,
-  cardTotal, isCardComplete, filledCount,
+  cardTotal, isCardComplete, filledCount, isYahtzeeRoll,
 } from "./scoring";
+import { playDiceShuffle, playConfirmChime, stopSound } from "@/lib/sfx";
 
 /* ==========================================================================
    YAHTZEE — jeu de dés au tour par tour, 1 à N joueurs.
@@ -112,12 +113,28 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
   const [myGain, setMyGain] = useState(0);
   const [bonusFlash, setBonusFlash] = useState(false);    // bandeau +100 Yahtzee supplémentaire
 
+  // Mélange avant révélation : ~1s de "brassage" visuel + sonore avant que
+  // les vraies valeurs (déjà connues, déjà dans `dice`) ne s'affichent.
+  // Purement cosmétique et 100% local à chaque client — la vérité du coup
+  // (dice/held/rollsLeft) est appliquée immédiatement en arrière-plan, donc
+  // aucun risque de désynchro avec l'arbitrage de l'hôte.
+  const [shuffling, setShuffling] = useState(false);
+  const [shuffleFaces, setShuffleFaces] = useState([1, 1, 1, 1, 1]);
+  // Célébration Yahtzee : null, ou { kind: "yahtzee" | "yahtzeeSix", key }.
+  const [celebration, setCelebration] = useState(null);
+
   const channelRef = useRef(null);
   const stateRef = useRef(null);
   const savedResultRef = useRef(false);
   const autoStartedRef = useRef(false);
   const restoredRef = useRef(false);
   const flashTimer = useRef(null);
+  const shuffleTimerRef = useRef(null);
+  const shuffleIntervalRef = useRef(null);
+  const celebrationTimerRef = useRef(null);
+  const shuffleAudioRef = useRef(null);     // nœud <audio> en cours, pour pouvoir le couper
+  const shuffleActiveRef = useRef(false);   // true dès le clic local, évite un second démarrage
+  const latestRollPayloadRef = useRef(null); // vraies valeurs, dès qu'on les connaît
 
   // Miroir de l'état pour les handlers de broadcast (closures figées sinon).
   useEffect(() => {
@@ -133,7 +150,9 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
     // la vérité (utile aussi après un rechargement en plein tour).
     setMyHeld(s.held || NO_HELD.slice());
     if (s.dice === null) setPendingCat(null); // nouveau tour = plus rien de sélectionné
-    if (s.lastAction?.type === "roll") setRollSeq(n => n + 1);
+    // deferReveal : la reprise/animation de tumble sera déclenchée plus tard
+    // par finishShuffle(), une fois le mélange sonore/visuel joué.
+    if (s.lastAction?.type === "roll" && !extra.deferReveal) setRollSeq(n => n + 1);
 
     // Dispersion réaliste sur la table : on se base sur les drapeaux "gardé"
     // (held) de l'action de lancer elle-même — pas sur une comparaison des
@@ -160,6 +179,68 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
     if (extra.resetGain) { setMyGain(0); savedResultRef.current = false; }
   }
 
+  // Petite fête : Yahtzee (5 dés identiques) — encore plus si ce sont 5 six,
+  // le lancer le plus rare et le plus payant du jeu.
+  function triggerCelebration(kind) {
+    clearTimeout(celebrationTimerRef.current);
+    setCelebration({ kind, key: Date.now() });
+    const duration = kind === "yahtzeeSix" ? 10000 : 3600;
+    celebrationTimerRef.current = setTimeout(() => setCelebration(null), duration);
+  }
+
+  // Mélange avant révélation : démarre DÈS LE CLIC côté acteur (zéro latence
+  // perçue), et au pire dès la réception du broadcast côté spectateurs qui
+  // n'ont rien cliqué. La vérité (dice/held/rollsLeft) est appliquée TOUT DE
+  // SUITE dès qu'elle arrive (aucun risque pour l'arbitrage de l'hôte, qui se
+  // base sur stateRef à jour) ; seule la révélation VISUELLE + le son sont
+  // repoussés d'~1s, pendant laquelle les dés non gardés affichent des faces
+  // aléatoires en boucle. Le son démarre pile avec le mélange et est coupé
+  // pile à la révélation — jamais de son qui continue sur des dés déjà posés.
+  function beginShuffle(diceCount) {
+    clearTimeout(shuffleTimerRef.current);
+    clearInterval(shuffleIntervalRef.current);
+    stopSound(shuffleAudioRef.current);
+    shuffleActiveRef.current = true;
+    setShuffling(true);
+    shuffleAudioRef.current = playDiceShuffle(diceCount);
+    shuffleIntervalRef.current = setInterval(() => {
+      setShuffleFaces([0, 1, 2, 3, 4].map(() => 1 + Math.floor(Math.random() * 6)));
+    }, 100);
+    shuffleTimerRef.current = setTimeout(finishShuffle, 1000);
+  }
+
+  function finishShuffle() {
+    if (!latestRollPayloadRef.current) {
+      // Les vraies valeurs ne sont pas encore arrivées (latence réseau
+      // inhabituelle) : on retente un peu plus tard plutôt que de révéler
+      // n'importe quoi. Le son continue jusque-là, très bref surcroît.
+      shuffleTimerRef.current = setTimeout(finishShuffle, 120);
+      return;
+    }
+    clearInterval(shuffleIntervalRef.current);
+    stopSound(shuffleAudioRef.current);
+    shuffleAudioRef.current = null;
+    shuffleActiveRef.current = false;
+    setShuffling(false);
+    setRollSeq(n => n + 1); // déclenche l'animation de tumble avec les vraies valeurs
+    const finalDice = latestRollPayloadRef.current;
+    latestRollPayloadRef.current = null;
+    if (isYahtzeeRoll(finalDice)) {
+      triggerCelebration(finalDice[0] === 6 ? "yahtzeeSix" : "yahtzee");
+    }
+  }
+
+  // Double-clic (ou clic pressé) pendant le mélange : écourte l'animation et
+  // le son, présente les dés tout de suite (dès que la vraie valeur est là).
+  function skipShuffle() {
+    if (!shuffling) return;
+    stopSound(shuffleAudioRef.current);
+    shuffleAudioRef.current = null;
+    clearInterval(shuffleIntervalRef.current);
+    clearTimeout(shuffleTimerRef.current);
+    finishShuffle();
+  }
+
   function persist(s) {
     if (!isHost) return;
     saveGameState(room.id, GAME_ID, { phase: "playing", ...s });
@@ -170,14 +251,39 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
     channelRef.current = ch;
 
     ch.on("broadcast", { event: "match_start" }, ({ payload }) => {
+      // Nouvelle manche : on coupe tout mélange/célébration en cours pour ne
+      // pas les laisser déborder sur la table fraîchement redistribuée.
+      clearTimeout(shuffleTimerRef.current);
+      clearInterval(shuffleIntervalRef.current);
+      stopSound(shuffleAudioRef.current);
+      shuffleAudioRef.current = null;
+      shuffleActiveRef.current = false;
+      latestRollPayloadRef.current = null;
+      setShuffling(false);
+      clearTimeout(celebrationTimerRef.current);
+      setCelebration(null);
       applyLocalState(payload, { resetGain: true });
       setPhase("playing");
       persist(payload);
     });
 
     ch.on("broadcast", { event: "state" }, ({ payload }) => {
-      applyLocalState(payload);
       persist(payload);
+      if (payload.lastAction?.type === "roll") {
+        applyLocalState(payload, { deferReveal: true });
+        latestRollPayloadRef.current = payload.dice;
+        // Si CE client a déjà démarré le mélange à son propre clic, on ne
+        // fait que transmettre la vraie valeur (déjà fait ci-dessus) — le
+        // mélange en cours ira jusqu'à son terme tout seul. Sinon (un autre
+        // joueur/spectateur découvre le lancer par le réseau), on démarre
+        // le mélange maintenant, avec le même dosage de son (few/many).
+        if (!shuffleActiveRef.current) {
+          const rollingCount = (payload.held || NO_HELD).filter(h => !h).length;
+          beginShuffle(rollingCount);
+        }
+      } else {
+        applyLocalState(payload);
+      }
     });
 
     ch.on("broadcast", { event: "move_attempt" }, ({ payload }) => {
@@ -202,6 +308,10 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
 
     return () => {
       clearTimeout(flashTimer.current);
+      clearTimeout(shuffleTimerRef.current);
+      clearInterval(shuffleIntervalRef.current);
+      clearTimeout(celebrationTimerRef.current);
+      stopSound(shuffleAudioRef.current);
       supabase.removeChannel(ch);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -314,8 +424,8 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
   // rien (aucun dé ne serait retiré) — inutile de laisser gaspiller un
   // des 2 lancers restants pour zéro effet visible.
   const allHeld = hasRolled && myHeld.every(h => h === true);
-  const canRoll = isMyTurn && rollsLeft > 0 && !allHeld;
-  const canScore = isMyTurn && hasRolled;
+  const canRoll = isMyTurn && rollsLeft > 0 && !allHeld && !shuffling;
+  const canScore = isMyTurn && hasRolled && !shuffling;
   const myCard = cards[me.id] || null;
 
   function toggleHold(i) {
@@ -324,6 +434,13 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
   }
   function attemptRoll() {
     if (!canRoll) return;
+    // Nombre de dés réellement concernés par CE lancer (les gardés ne
+    // bougent pas) : détermine le montage sonore (few < 4, many >= 4) et
+    // démarre le mélange visuel+sonore TOUT DE SUITE, sans attendre le
+    // retour réseau — zéro latence perçue pour la personne qui clique.
+    const rollingCount = dice === null ? DICE_COUNT : myHeld.filter(h => !h).length;
+    latestRollPayloadRef.current = null;
+    beginShuffle(rollingCount);
     channelRef.current?.send({
       type: "broadcast", event: "move_attempt",
       payload: { seatId: me.id, action: { type: "roll", held: myHeld } },
@@ -331,6 +448,7 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
   }
   function attemptScore() {
     if (!canScore || !pendingCat || !myCard || myCard[pendingCat] !== null) return;
+    playConfirmChime();
     channelRef.current?.send({
       type: "broadcast", event: "move_attempt",
       payload: { seatId: me.id, action: { type: "score", catId: pendingCat } },
@@ -377,6 +495,27 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
     );
   }
 
+  // Confettis de la célébration Yahtzee — générés une seule fois par
+  // déclenchement (clé stable), jamais recalculés à chaque re-rendu.
+  const confettiPieces = useMemo(() => {
+    if (!celebration) return [];
+    const big = celebration.kind === "yahtzeeSix";
+    const count = big ? 46 : 24;
+    const palette = big
+      ? ["#ff3d7f", "#ffd166", "#4dd6ff", "#b6f04c", "#ff8a3d", "#c77dff"]
+      : ["#b6f04c", "#ffd166", "#4dd6ff"];
+    return Array.from({ length: count }, (_, i) => ({
+      id: i,
+      left: Math.random() * 100,
+      delay: Math.random() * (big ? 3.5 : 1.2),
+      duration: 1.6 + Math.random() * 1.6,
+      color: palette[i % palette.length],
+      rot: Math.round(Math.random() * 360),
+      size: 6 + Math.round(Math.random() * 6),
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [celebration?.key]);
+
   let content;
 
   if (phase === "playing" && (myCard !== null || !isPlayer)) {
@@ -417,30 +556,78 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
         {/* Les dés — posés sur un plateau bois cohérent avec la porte d'entrée */}
         <div className="yz-tray">
           <div className="yz-dice">
-            {(dice || [null, null, null, null, null]).map((v, i) => (
-              <Die
-                key={rollSeq + "-" + i}
-                value={v ?? 1}
-                ghost={v === null}
-                held={hasRolled && (isMyTurn ? myHeld[i] : held[i])}
-                rolling={hasRolled && !(isMyTurn ? myHeld[i] : held[i]) && lastAction?.type === "roll"}
-                onClick={isMyTurn && hasRolled && rollsLeft > 0 ? () => toggleHold(i) : undefined}
-                disabled={!isMyTurn || !hasRolled || rollsLeft === 0}
-                style={v === null ? undefined : {
-                  "--tx": (scatter[i]?.tx ?? 0) + "px",
-                  "--ty": (scatter[i]?.ty ?? 0) + "px",
-                  "--trot": (scatter[i]?.trot ?? 0) + "deg",
-                }}
-              />
-            ))}
+            {(dice || [null, null, null, null, null]).map((v, i) => {
+              const isHeldNow = isMyTurn ? myHeld[i] : held[i];
+              const showShuffle = shuffling && !isHeldNow;
+              const displayValue = showShuffle ? shuffleFaces[i] : v;
+              return (
+                <Die
+                  key={rollSeq + "-" + i}
+                  value={displayValue ?? 1}
+                  ghost={displayValue === null}
+                  held={hasRolled && isHeldNow}
+                  shuffling={showShuffle}
+                  rolling={!shuffling && hasRolled && !isHeldNow && lastAction?.type === "roll"}
+                  onClick={isMyTurn && hasRolled && rollsLeft > 0 && !shuffling ? () => toggleHold(i) : undefined}
+                  disabled={!isMyTurn || !hasRolled || rollsLeft === 0 || shuffling}
+                  style={v === null ? undefined : {
+                    "--tx": (scatter[i]?.tx ?? 0) + "px",
+                    "--ty": (scatter[i]?.ty ?? 0) + "px",
+                    "--trot": (scatter[i]?.trot ?? 0) + "deg",
+                  }}
+                />
+              );
+            })}
           </div>
+
+          {/* Fête Yahtzee — contenue dans le plateau, ne bouscule aucune mise
+              en page. Le "yahtzeeSix" (5 six) hérite du même habillage en
+              plus fourni (texte YAHTZEE, chien, emojis dansants, ~10s). */}
+          {celebration && (
+            <div
+              key={celebration.key}
+              className={"yz-celebrate " + (celebration.kind === "yahtzeeSix" ? "six" : "yahtzee")}
+            >
+              <div className="yz-celebrate-bg" />
+              {confettiPieces.map(p => (
+                <span
+                  key={p.id}
+                  className="yz-confetti-piece"
+                  style={{
+                    left: p.left + "%",
+                    width: p.size, height: p.size * 1.4,
+                    background: p.color,
+                    animationDelay: p.delay + "s",
+                    animationDuration: p.duration + "s",
+                    "--rot0": p.rot + "deg",
+                  }}
+                />
+              ))}
+              <div className="yz-celebrate-text">
+                {celebration.kind === "yahtzeeSix" ? t("yzCelebrateSix") : t("yzCelebrateYahtzee")}
+              </div>
+              {celebration.kind === "yahtzeeSix" && (
+                <>
+                  <div className="yz-celebrate-dog">🐶</div>
+                  <div className="yz-celebrate-emojis">
+                    <span>🎉</span><span>🥳</span><span>🎊</span><span>💃</span><span>🕺</span>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Bouton de lancer */}
         {isMyTurn && !finished && (
           <div style={{ display: "flex", justifyContent: "center", marginBottom: 14 }}>
-            <button className="btn yz-roll-btn" disabled={!canRoll} onClick={attemptRoll} title={allHeld ? t("yzAllHeld") : undefined}>
-              🎲 {!hasRolled ? t("yzRoll") : t("yzReroll")} {hasRolled ? `(${rollsLeft})` : ""}
+            <button
+              className="btn yz-roll-btn"
+              disabled={shuffling ? false : !canRoll}
+              onClick={shuffling ? skipShuffle : attemptRoll}
+              title={allHeld ? t("yzAllHeld") : undefined}
+            >
+              {shuffling ? `🎲 ${t("yzShuffling")}` : `🎲 ${!hasRolled ? t("yzRoll") : t("yzReroll")} ${hasRolled ? `(${rollsLeft})` : ""}`}
             </button>
           </div>
         )}

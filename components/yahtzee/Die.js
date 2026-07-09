@@ -17,10 +17,11 @@ const PIPS = {
   6: [1, 3, 4, 6, 7, 9],
 };
 
-export default function Die({ value, held, onClick, rolling, disabled, ghost, style }) {
+export default function Die({ value, held, onClick, rolling, shuffling, disabled, ghost, style }) {
   const cls = "yz-die"
     + (held ? " held" : "")
     + (rolling ? " rolling" : "")
+    + (shuffling ? " shuffling" : "")
     + (onClick && !disabled ? " clickable" : "")
     + (ghost ? " ghost" : "");
 
