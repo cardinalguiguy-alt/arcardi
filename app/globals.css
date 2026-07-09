@@ -15,6 +15,7 @@
   --acc-c4:#FF3B30; --acc-ludo:#FFB84D; --acc-quiz:#4ECDC4; --acc-wordle:#A8E063;
   --acc-worldle:#6FA8FF; --acc-piano:#C9A24B; --acc-diapason:#B388FF;
   --acc-chromatik:#FF9F6E; --acc-yahtzee:#FFD166; --acc-echoes:#5AC8DB; --acc-president:#4CC38A;
+  --acc-petitbac:#F783AC;
 }
 *{box-sizing:border-box; margin:0; padding:0;}
 html,body{height:100%;}
@@ -695,7 +696,13 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
    (lounge embers, logo, porte d'entrée de jeu, bannière de victoire,
    confettis). Réutilisables par tous les écrans/jeux.
    ========================================================================== */
-@keyframes emberFloat{ 0%{ transform:translateY(0) translateX(0); opacity:0; } 8%{ opacity:.8; } 92%{ opacity:.4; } 100%{ transform:translateY(min(-320px, -45vh)) translateX(16px); opacity:0; } }
+/* Bulles façon champagne : la MONTÉE (emberRise, sur .ember) accélère
+   (ease-in) et fait grossir la bulle comme le gaz qui se dilate ; le
+   ZIGZAG latéral (emberSway, sur .ember-dot interne) a sa propre période,
+   en alternate — la composition des deux donne la trajectoire sinueuse
+   d'une bulle qui se décroche de la paroi d'un verre. */
+@keyframes emberRise{ 0%{ transform:translateY(0) scale(.5); opacity:0; } 10%{ opacity:.85; } 88%{ opacity:.4; } 100%{ transform:translateY(min(-340px, -48vh)) scale(1.2); opacity:0; } }
+@keyframes emberSway{ from{ transform:translateX(calc(var(--sway, 5px) * -1)); } to{ transform:translateX(var(--sway, 5px)); } }
 @keyframes cardPop{ 0%{ opacity:0; transform:translateY(14px) scale(.94); } 100%{ opacity:1; transform:translateY(0) scale(1); } }
 @keyframes winGlow{ 0%,100%{ box-shadow:0 0 0 3px #fff inset, 0 0 22px 4px rgba(255,255,255,.55); } 50%{ box-shadow:0 0 0 3px #fff inset, 0 0 8px 2px rgba(255,255,255,.25); } }
 @keyframes confettiFall{ 0%{ transform:translateY(-20px) translateX(0) rotate(0deg); opacity:1; } 100%{ transform:translateY(420px) translateX(var(--drift, 0px)) rotate(680deg); opacity:0; } }
@@ -705,9 +712,16 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 @keyframes flicker{ 0%,100%{ opacity:1; } 50%{ opacity:.85; } }
 @keyframes povPush{ 0%{ opacity:0; transform:scale(.88); filter:brightness(.5); } 60%{ opacity:1; filter:brightness(1.15); } 100%{ opacity:1; transform:scale(1); filter:brightness(1); } }
 
-/* ----- Lounge : braises flottantes décoratives (purement esthétique) ----- */
+/* ----- Lounge : bulles flottantes décoratives (purement esthétique) ----- */
 .embers{ position:absolute; inset:0; overflow:hidden; pointer-events:none; z-index:0; }
-.ember{ position:absolute; bottom:0; border-radius:50%; animation:emberFloat ease-in infinite; }
+.ember{ position:absolute; bottom:0; animation:emberRise ease-in infinite; }
+.ember .ember-dot{
+  display:block; width:100%; height:100%; border-radius:50%;
+  animation:emberSway ease-in-out infinite alternate;
+}
+@media (prefers-reduced-motion: reduce){
+  .ember, .ember .ember-dot{ animation:none; opacity:0; }
+}
 
 /* ----- Porte d'entrée de jeu (DoorStage) -----
    perspective sur le conteneur de scène, deux battants qui pivotent en 3D,
@@ -868,9 +882,15 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 }
 .confetti-piece{ position:absolute; top:-16px; pointer-events:none; z-index:40; animation:confettiFall cubic-bezier(.25,.7,.4,1) both; }
 
-/* ----- Lounge : les deux panneaux côte à côte (Créer / Rejoindre) ----- */
-.lounge-panels{ display:flex; flex-wrap:wrap; gap:20px; position:relative; z-index:1; }
-.lounge-panels .panel{ flex:1 1 320px; }
+/* ----- Lounge : les deux panneaux côte à côte (Créer / Rejoindre) -----
+   Centrés dans l'écran (verticalement ET horizontalement) : le wrap du
+   lounge occupe toute la hauteur visible, la zone centrale prend le reste
+   sous le logo et aligne les encarts en son milieu. min-height:0 sur les
+   enfants flex pour ne rien casser sur petit écran. */
+.lounge-wrap{ min-height:100dvh; display:flex; flex-direction:column; }
+.lounge-center{ flex:1; display:flex; align-items:center; justify-content:center; min-height:0; padding:16px 0; }
+.lounge-panels{ display:flex; flex-wrap:wrap; gap:20px; position:relative; z-index:1; justify-content:center; width:100%; max-width:840px; margin:0 auto; }
+.lounge-panels .panel{ flex:1 1 320px; max-width:400px; }
 
 /* ===== Ergonomie tactile & mobile (audit 2026-07) =====
    Sur écran tactile (pointer:coarse), les cartes en main de Chromatik
@@ -1095,4 +1115,79 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
   display:flex; align-items:center; justify-content:space-between; gap:10px;
   padding:9px 14px; border-radius:12px; background:rgba(255,255,255,.04);
   border:2px solid var(--line); font-size:13px;
+}
+
+/* ===== Petit Bac : grille d'écriture, chrono et tableau de correction ===
+   Charte : sobre et lisible (mêmes principes que le Président — pas de
+   transparence agressive, effets ancrés, pas de clignotement au survol). */
+.pb-letterbar{
+  display:flex; align-items:center; gap:12px; margin-bottom:12px;
+  padding:10px 14px; border-radius:14px;
+  background:rgba(255,255,255,.04); border:2px solid rgba(247,131,172,.4);
+}
+.pb-letter{
+  font-family:'Bungee'; font-size:34px; line-height:1; color:var(--acc-petitbac);
+  min-width:44px; text-align:center; text-shadow:0 0 14px rgba(247,131,172,.35);
+}
+.pb-letter-inline{ font-family:'Bungee'; color:var(--acc-petitbac); }
+.pb-letterinfo{ display:flex; flex-direction:column; gap:2px; flex:1; min-width:0; font-size:13px; }
+.pb-timer{
+  font-family:'Space Mono'; font-weight:700; font-size:16px; flex:none;
+  padding:6px 10px; border-radius:10px; background:rgba(255,255,255,.06);
+  border:1.5px solid var(--line);
+}
+.pb-timer.hot{ color:#FF6B6B; border-color:#FF6B6B; animation:pbPulse .5s ease-in-out infinite alternate; }
+@keyframes pbPulse{ from{ transform:scale(1); } to{ transform:scale(1.08); } }
+
+.pb-grid{ display:flex; flex-direction:column; gap:8px; max-width:520px; margin:0 auto; }
+.pb-row{ display:flex; align-items:center; gap:10px; }
+.pb-cat{ flex:0 0 44%; font-size:13px; font-weight:700; text-align:right; }
+.pb-row input{ flex:1; min-width:0; margin:0; } /* hérite du style global >=16px : pas de zoom iOS */
+
+.pb-tablewrap{ overflow-x:auto; -webkit-overflow-scrolling:touch; border-radius:14px; }
+.pb-table{
+  border-collapse:separate; border-spacing:3px; margin:0 auto; min-width:100%;
+  font-size:13px;
+}
+.pb-table thead th{
+  font-size:12px; font-weight:800; padding:6px 8px; text-align:center;
+  border-radius:10px; background:rgba(255,255,255,.05);
+}
+.pb-table thead th.me{ outline:2px dashed rgba(182,240,76,.5); outline-offset:-2px; }
+.pb-cathead{
+  font-size:11.5px; font-weight:800; text-align:right; padding:6px 8px;
+  color:var(--muted); white-space:nowrap;
+}
+.pb-cell{
+  position:relative; padding:8px 26px 8px 10px; border-radius:10px; min-width:96px;
+  background:rgba(255,255,255,.04); border:1.5px solid var(--line); text-align:left;
+}
+.pb-cell .pb-answer{ font-weight:700; overflow-wrap:anywhere; }
+.pb-cell .pb-pts{
+  position:absolute; top:4px; right:6px; font-family:'Space Mono';
+  font-size:10.5px; font-weight:700; color:var(--muted);
+}
+/* Verdicts : unique (+2) vert, partagé (+1) doré, refusé barré rouge,
+   vide neutre atténué. */
+.pb-cell.unique{ border-color:rgba(76,195,138,.6); background:rgba(76,195,138,.1); }
+.pb-cell.unique .pb-pts{ color:var(--acc-president); }
+.pb-cell.shared{ border-color:rgba(255,209,102,.55); background:rgba(255,209,102,.08); }
+.pb-cell.shared .pb-pts{ color:var(--p2); }
+.pb-cell.refused{ border-color:rgba(255,107,107,.55); background:rgba(255,107,107,.08); }
+.pb-cell.refused .pb-answer{ text-decoration:line-through; opacity:.7; }
+.pb-cell.empty{ opacity:.5; }
+/* Arbitrage de l'hôte : grossissement ancré, pas de translation. */
+.pb-cell.clickable{ cursor:pointer; }
+.pb-cell.clickable:hover{ transform:scale(1.03); }
+.pb-totalrow td{ text-align:center; font-family:'Space Mono'; font-size:15px; padding:6px; color:var(--p3); }
+
+@media (max-width: 520px){
+  .pb-cat{ flex-basis:40%; font-size:12px; }
+  .pb-cell{ min-width:84px; }
+}
+@media (hover: none){
+  .pb-cell.clickable:hover{ transform:none; }
+}
+@media (prefers-reduced-motion: reduce){
+  .pb-timer.hot{ animation:none; }
 }

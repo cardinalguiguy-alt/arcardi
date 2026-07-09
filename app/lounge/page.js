@@ -74,7 +74,7 @@ export default function Lounge() {
   if (!profile) return <div className="wrap"><p className="muted">…</p></div>;
 
   return (
-    <div className="wrap">
+    <div className="wrap lounge-wrap">
       <Embers />
       <Brand lang={lang} setLang={setLang} t={t} onHome={() => router.push("/lounge")} right={
         <button className="btn ghost" style={{ width: "auto", margin: 0, padding: "8px 14px", fontSize: 13 }} onClick={logout}>
@@ -82,7 +82,8 @@ export default function Lounge() {
         </button>
       } />
 
-      <div className="lounge-panels">
+      <div className="lounge-center">
+        <div className="lounge-panels">
         <div className="panel" style={{ margin: 0 }}>
           <h1>{t("createNight")}</h1>
           <p className="hint">{t("createNightHint")}</p>
@@ -101,6 +102,7 @@ export default function Lounge() {
             {error && <p className="err">{error}</p>}
             <button className="btn" disabled={busy || joinCode.trim().length < 4}>{busy ? "…" : t("joinBtn")}</button>
           </form>
+        </div>
         </div>
       </div>
     </div>

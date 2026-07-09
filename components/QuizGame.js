@@ -57,6 +57,15 @@ const QUESTIONS_FR = {
     ["Quelle partie du corps sert à sentir les odeurs ?", "Le nez", "La bouche", "Les oreilles", "Les yeux"],
     ["Quelle est la capitale du Portugal ?", "Lisbonne", "Porto", "Faro", "Coimbra"],
     ["Quel est le nom du satellite naturel de la Terre ?", "La Lune", "Mars", "Le Soleil", "Vénus"],
+    ["Quel est le plus grand lac d'Afrique ?", "Le lac Victoria", "Le lac Tanganyika", "Le lac Malawi", "Le lac Tchad"],
+    ["Quel volcan a détruit Pompéi en l'an 79 ?", "Le Vésuve", "L'Etna", "Le Stromboli", "Le Vulcano"],
+    ["Quelle est la capitale de la Suisse ?", "Berne", "Zurich", "Genève", "Lausanne"],
+    ["Quel grand lac sépare la France et la Suisse ?", "Le lac Léman", "Le lac d'Annecy", "Le lac du Bourget", "Le lac de Constance"],
+    ["Dans quel pays se trouve le volcan Etna ?", "L'Italie", "La Grèce", "L'Espagne", "Le Portugal"],
+    ["Quelle est la capitale de l'Autriche ?", "Vienne", "Salzbourg", "Innsbruck", "Graz"],
+    ["Quel est le plus long fleuve entièrement situé en France ?", "La Loire", "La Seine", "Le Rhône", "La Garonne"],
+    ["Quelle est la capitale du Maroc ?", "Rabat", "Casablanca", "Marrakech", "Fès"],
+    ["Quelle mer fermée est en réalité le plus grand lac du monde ?", "La mer Caspienne", "La mer Morte", "La mer d'Aral", "La mer Noire"],
   ],
   medium: [
     ["Quel pays a la forme d'une botte sur la carte de l'Europe ?", "L'Italie", "La Grèce", "Le Portugal", "La Croatie"],
@@ -109,6 +118,15 @@ const QUESTIONS_FR = {
     ["Qui a mis au point la première ampoule électrique commercialement viable ?", "Thomas Edison", "Nikola Tesla", "Alexander Graham Bell", "Benjamin Franklin"],
     ["Quel est le plus grand récif corallien du monde ?", "La Grande Barrière de corail", "Le récif de Belize", "Le triangle de corail", "La barrière de Floride"],
     ["Quelle est la capitale du Kenya ?", "Nairobi", "Mombasa", "Kisumu", "Nakuru"],
+    ["Quel lac navigable est le plus haut du monde, entre le Pérou et la Bolivie ?", "Le lac Titicaca", "Le lac Poopó", "Le lac Atitlán", "Le lac de Junín"],
+    ["Quel volcan est le point culminant du Japon ?", "Le mont Fuji", "Le mont Aso", "Le Sakurajima", "Le mont Ontake"],
+    ["Quelle est la capitale de la Nouvelle-Zélande ?", "Wellington", "Auckland", "Christchurch", "Hamilton"],
+    ["Quel volcan islandais a paralysé le trafic aérien européen en 2010 ?", "L'Eyjafjallajökull", "L'Hekla", "Le Katla", "Le Grímsvötn"],
+    ["Quel lac très salé, entre Israël et la Jordanie, est le point émergé le plus bas du globe ?", "La mer Morte", "Le lac de Tibériade", "La mer Caspienne", "Le grand lac Salé"],
+    ["Quel est le plus grand lac d'Amérique du Nord ?", "Le lac Supérieur", "Le lac Michigan", "Le lac Huron", "Le Grand lac de l'Ours"],
+    ["Quelle est la capitale de la Colombie ?", "Bogota", "Medellín", "Cali", "Carthagène"],
+    ["Quel volcan de l'État de Washington est entré en éruption de façon spectaculaire en 1980 ?", "Le mont Saint Helens", "Le mont Rainier", "Le mont Hood", "Le mont Shasta"],
+    ["Quelle ville est la capitale administrative de l'Afrique du Sud, siège du gouvernement ?", "Pretoria", "Le Cap", "Johannesburg", "Durban"],
   ],
   hard: [
     ["Quel est le seul mammifère capable de voler activement (et non de planer) ?", "La chauve-souris", "L'écureuil volant", "La roussette", "Le phalanger"],
@@ -161,6 +179,16 @@ const QUESTIONS_FR = {
     ["Quelle est la capitale de la Roumanie ?", "Bucarest", "Budapest", "Sofia", "Belgrade"],
     ["Quel explorateur portugais fut le premier Européen à atteindre l'Inde par la mer, en 1498 ?", "Vasco de Gama", "Christophe Colomb", "Magellan", "Bartolomeu Dias"],
     ["Quel est le gaz le plus abondant dans l'atmosphère terrestre ?", "L'azote", "L'oxygène", "Le dioxyde de carbone", "L'argon"],
+    ["Quelle est la capitale officielle de la Birmanie (Myanmar) depuis 2005 ?", "Naypyidaw", "Rangoun", "Mandalay", "Bago"],
+    ["Sous quel parc national américain sommeille un supervolcan ?", "Yellowstone", "Yosemite", "Le Grand Canyon", "Les Everglades"],
+    ["Quel lac d'Asie centrale a presque disparu à cause du détournement de ses fleuves pour l'irrigation ?", "La mer d'Aral", "Le lac Balkhach", "La mer Caspienne", "Le lac Issyk-Koul"],
+    ["Dans quel pays actuel a eu lieu l'éruption cataclysmique du Krakatoa en 1883 ?", "L'Indonésie", "Les Philippines", "Le Japon", "La Papouasie-Nouvelle-Guinée"],
+    ["Quel est le plus grand lac entièrement situé au Canada ?", "Le Grand lac de l'Ours", "Le Grand lac des Esclaves", "Le lac Winnipeg", "Le lac Athabasca"],
+    ["Quel est le plus haut volcan actif du monde, à la frontière Chili-Argentine ?", "L'Ojos del Salado", "Le Cotopaxi", "Le Mauna Loa", "L'Aconcagua"],
+    ["Quelle est la capitale officielle de la Tanzanie ?", "Dodoma", "Dar es Salaam", "Arusha", "Zanzibar"],
+    ["L'éruption de quel volcan indonésien, en 1815, a provoqué « l'année sans été » ?", "Le Tambora", "Le Krakatoa", "Le Merapi", "Le Sinabung"],
+    ["Quelle est la capitale du Bhoutan ?", "Thimphou", "Katmandou", "Dacca", "Paro"],
+    ["Quel lac sibérien contient à lui seul environ 20 % de l'eau douce liquide de surface du globe ?", "Le lac Baïkal", "Le lac Ladoga", "Le lac Onega", "Le lac Taïmyr"],
   ],
 };
 const QUESTIONS_EN = {
@@ -216,6 +244,15 @@ const QUESTIONS_EN = {
     ["Which body part is used to smell?", "The nose", "The mouth", "The ears", "The eyes"],
     ["What is the capital of Portugal?", "Lisbon", "Porto", "Faro", "Coimbra"],
     ["What is the name of Earth's natural satellite?", "The Moon", "Mars", "The Sun", "Venus"],
+    ["What is the largest lake in Africa?", "Lake Victoria", "Lake Tanganyika", "Lake Malawi", "Lake Chad"],
+    ["Which volcano destroyed Pompeii in 79 AD?", "Vesuvius", "Etna", "Stromboli", "Vulcano"],
+    ["What is the capital of Switzerland?", "Bern", "Zurich", "Geneva", "Lausanne"],
+    ["Which large lake lies between France and Switzerland?", "Lake Geneva", "Lake Annecy", "Lake Bourget", "Lake Constance"],
+    ["In which country is the volcano Etna located?", "Italy", "Greece", "Spain", "Portugal"],
+    ["What is the capital of Austria?", "Vienna", "Salzburg", "Innsbruck", "Graz"],
+    ["What is the longest river located entirely in France?", "The Loire", "The Seine", "The Rhône", "The Garonne"],
+    ["What is the capital of Morocco?", "Rabat", "Casablanca", "Marrakesh", "Fez"],
+    ["Which enclosed sea is actually the largest lake in the world?", "The Caspian Sea", "The Dead Sea", "The Aral Sea", "The Black Sea"],
   ],
   medium: [
     ["Which country is shaped like a boot on the map of Europe?", "Italy", "Greece", "Portugal", "Croatia"],
@@ -268,6 +305,15 @@ const QUESTIONS_EN = {
     ["Who developed the first commercially viable electric light bulb?", "Thomas Edison", "Nikola Tesla", "Alexander Graham Bell", "Benjamin Franklin"],
     ["What is the largest coral reef system in the world?", "The Great Barrier Reef", "The Belize Barrier Reef", "The Coral Triangle", "The Florida Reef"],
     ["What is the capital of Kenya?", "Nairobi", "Mombasa", "Kisumu", "Nakuru"],
+    ["Which navigable lake, between Peru and Bolivia, is the highest in the world?", "Lake Titicaca", "Lake Poopó", "Lake Atitlán", "Lake Junín"],
+    ["Which volcano is the highest peak in Japan?", "Mount Fuji", "Mount Aso", "Sakurajima", "Mount Ontake"],
+    ["What is the capital of New Zealand?", "Wellington", "Auckland", "Christchurch", "Hamilton"],
+    ["Which Icelandic volcano grounded European air traffic in 2010?", "Eyjafjallajökull", "Hekla", "Katla", "Grímsvötn"],
+    ["Which extremely salty lake, between Israel and Jordan, is the lowest point on land?", "The Dead Sea", "The Sea of Galilee", "The Caspian Sea", "The Great Salt Lake"],
+    ["What is the largest lake in North America?", "Lake Superior", "Lake Michigan", "Lake Huron", "Great Bear Lake"],
+    ["What is the capital of Colombia?", "Bogotá", "Medellín", "Cali", "Cartagena"],
+    ["Which Washington State volcano erupted spectacularly in 1980?", "Mount St. Helens", "Mount Rainier", "Mount Hood", "Mount Shasta"],
+    ["Which city is South Africa's administrative capital, seat of the government?", "Pretoria", "Cape Town", "Johannesburg", "Durban"],
   ],
   hard: [
     ["What is the only mammal capable of true powered flight (not just gliding)?", "The bat", "The flying squirrel", "The flying fox", "The sugar glider"],
@@ -320,6 +366,16 @@ const QUESTIONS_EN = {
     ["What is the capital of Romania?", "Bucharest", "Budapest", "Sofia", "Belgrade"],
     ["Which Portuguese explorer was the first European to reach India by sea, in 1498?", "Vasco da Gama", "Christopher Columbus", "Magellan", "Bartolomeu Dias"],
     ["What is the most abundant gas in Earth's atmosphere?", "Nitrogen", "Oxygen", "Carbon dioxide", "Argon"],
+    ["What has been the official capital of Myanmar (Burma) since 2005?", "Naypyidaw", "Yangon", "Mandalay", "Bago"],
+    ["Beneath which US national park lies a supervolcano?", "Yellowstone", "Yosemite", "The Grand Canyon", "The Everglades"],
+    ["Which Central Asian lake nearly vanished after its rivers were diverted for irrigation?", "The Aral Sea", "Lake Balkhash", "The Caspian Sea", "Lake Issyk-Kul"],
+    ["In which present-day country did the cataclysmic 1883 eruption of Krakatoa take place?", "Indonesia", "The Philippines", "Japan", "Papua New Guinea"],
+    ["What is the largest lake located entirely within Canada?", "Great Bear Lake", "Great Slave Lake", "Lake Winnipeg", "Lake Athabasca"],
+    ["What is the highest active volcano in the world, on the Chile-Argentina border?", "Ojos del Salado", "Cotopaxi", "Mauna Loa", "Aconcagua"],
+    ["What is the official capital of Tanzania?", "Dodoma", "Dar es Salaam", "Arusha", "Zanzibar"],
+    ["The 1815 eruption of which Indonesian volcano caused the 'Year Without a Summer'?", "Tambora", "Krakatoa", "Merapi", "Sinabung"],
+    ["What is the capital of Bhutan?", "Thimphu", "Kathmandu", "Dhaka", "Paro"],
+    ["Which Siberian lake alone holds about 20% of the world's unfrozen surface fresh water?", "Lake Baikal", "Lake Ladoga", "Lake Onega", "Lake Taymyr"],
   ],
 };
 
@@ -333,7 +389,7 @@ const N_QUESTIONS = 10;
 // haute entre amis, sans que la question suivante n'arrive déjà dessus.
 const REVEAL_PAUSE_MS = 3800;
 
-export default function QuizGame({ room, me, isHost, onFinish, t, lang }) {
+export default function QuizGame({ room, me, isHost, players, onFinish, t, lang }) {
   // Le paquet n'existe QUE chez l'hôte : les autres reçoivent tout par broadcast.
   const deckRef = useRef(null);
   const [q, setQ] = useState(null);          // { index, text, choices[], good, diff, roundMs }
@@ -345,6 +401,18 @@ export default function QuizGame({ room, me, isHost, onFinish, t, lang }) {
   const [finished, setFinished] = useState(false);
   const [points, setPoints] = useState(0);
   const [roundResults, setRoundResults] = useState([]); // qui a répondu juste/faux cette manche-ci
+  // ----- Verrouillage de réponse ("lock") -----
+  // Cliquer SÉLECTIONNE (modifiable) ; verrouiller (barre Espace ou bouton)
+  // FIGE la réponse. Quand TOUS les joueurs du salon ont verrouillé, l'hôte
+  // révèle immédiatement sans attendre la fin du chrono — pour enchaîner
+  // plus vite quand tout le monde est sûr de lui.
+  const [lockedMine, setLockedMine] = useState(false);
+  const [lockedList, setLockedList] = useState([]); // qui a verrouillé (affichage)
+  const lockedMineRef = useRef(false);
+  const lockedIdsRef = useRef(new Set());   // côté hôte : ids verrouillés
+  const revealTimeoutRef = useRef(null);    // côté hôte : chrono de révélation annulable
+  const revealFiredRef = useRef(false);     // côté hôte : garde anti double-révélation
+  const playersRef = useRef(players);
   const channelRef = useRef(null);
   const myGain = useRef(0);
   const timeouts = useRef([]);
@@ -352,7 +420,11 @@ export default function QuizGame({ room, me, isHost, onFinish, t, lang }) {
   // Miroirs toujours à jour de q/picked pour le handler "reveal" (évite les closures figées).
   const qRef = useRef(null);
   const pickedRef = useRef(null);
+  const revealedRef = useRef(false);
   const lastDiffRef = useRef("easy");
+
+  useEffect(() => { playersRef.current = players; }, [players]);
+  useEffect(() => { lockedMineRef.current = lockedMine; }, [lockedMine]);
 
   function persistState(qPayload, deadlineAt, revealedFlag, finishedFlag) {
     if (!isHost) return;
@@ -375,12 +447,32 @@ export default function QuizGame({ room, me, isHost, onFinish, t, lang }) {
       setDeadline(Date.now() + payload.remaining);
       setPicked(null);
       setRevealed(false);
+      revealedRef.current = false;
       setRoundResults([]);
       setFinished(false);
+      setLockedMine(false);
+      setLockedList([]);
+      lockedIdsRef.current = new Set();
+      revealFiredRef.current = false;
       if (payload.index === 0) { myGain.current = 0; setPoints(0); }
+    });
+    // Un joueur a verrouillé sa réponse : tout le monde l'affiche ; l'hôte
+    // compte, et révèle immédiatement si TOUS les joueurs du salon ont
+    // verrouillé (le chrono en cours est annulé).
+    ch.on("broadcast", { event: "lock" }, ({ payload }) => {
+      setLockedList(prev => (prev.some(r => r.profile_id === payload.profile_id) ? prev : [...prev, payload]));
+      if (!isHost) return;
+      lockedIdsRef.current.add(payload.profile_id);
+      const ids = (playersRef.current || []).map(p => p.profile_id);
+      if (ids.length > 0 && ids.every(id => lockedIdsRef.current.has(id))) {
+        clearTimeout(revealTimeoutRef.current);
+        const cur = qRef.current;
+        if (cur) hostReveal(cur.index, cur.diff);
+      }
     });
     ch.on("broadcast", { event: "reveal" }, async () => {
       setRevealed(true);
+      revealedRef.current = true;
       // Validation du résultat UNIQUEMENT à l'issue du timer, sur la dernière réponse choisie.
       const finalPick = pickedRef.current;
       const currentQ = qRef.current;
@@ -436,6 +528,7 @@ export default function QuizGame({ room, me, isHost, onFinish, t, lang }) {
       setRoundResults([]);
       if (saved.revealed) {
         setRevealed(true);
+        revealedRef.current = true;
         setDeadline(Date.now());
       } else {
         setDeadline(saved.deadlineAt);
@@ -443,13 +536,8 @@ export default function QuizGame({ room, me, isHost, onFinish, t, lang }) {
         if (isHost && saved.deck) {
           deckRef.current = saved.deck;
           const msLeft = Math.max(0, saved.deadlineAt - Date.now());
-          timeouts.current.push(setTimeout(() => {
-            channelRef.current.send({ type: "broadcast", event: "reveal", payload: {} });
-            timeouts.current.push(setTimeout(() => {
-              if (saved.q.index + 1 < deckRef.current.length) hostSend(saved.q.index + 1, saved.diff);
-              else hostFinish();
-            }, REVEAL_PAUSE_MS));
-          }, msLeft));
+          revealTimeoutRef.current = setTimeout(() => hostReveal(saved.q.index, saved.diff), msLeft);
+          timeouts.current.push(revealTimeoutRef.current);
         }
       }
     });
@@ -478,6 +566,20 @@ export default function QuizGame({ room, me, isHost, onFinish, t, lang }) {
     hostSend(0, diff);
   }
 
+  // Révélation côté hôte, factorisée : appelée soit par le chrono normal,
+  // soit par anticipation quand tout le monde a verrouillé. La garde
+  // revealFiredRef empêche toute double révélation de la même question
+  // (chrono ET verrouillage simultanés).
+  function hostReveal(index, diff) {
+    if (revealFiredRef.current) return;
+    revealFiredRef.current = true;
+    channelRef.current.send({ type: "broadcast", event: "reveal", payload: {} });
+    timeouts.current.push(setTimeout(() => {
+      if (index + 1 < deckRef.current.length) hostSend(index + 1, diff);
+      else hostFinish();
+    }, REVEAL_PAUSE_MS));
+  }
+
   function hostSend(index, diff) {
     const item = deckRef.current[index];
     const roundMs = ROUND_MS_BY_DIFF[diff];
@@ -493,13 +595,8 @@ export default function QuizGame({ room, me, isHost, onFinish, t, lang }) {
     channelRef.current.send({ type: "broadcast", event: "question", payload });
     const deadlineAt = Date.now() + roundMs;
     persistState(payload, deadlineAt, false, false);
-    timeouts.current.push(setTimeout(() => {
-      channelRef.current.send({ type: "broadcast", event: "reveal", payload: {} });
-      timeouts.current.push(setTimeout(() => {
-        if (index + 1 < deckRef.current.length) hostSend(index + 1, diff);
-        else hostFinish();
-      }, REVEAL_PAUSE_MS));
-    }, roundMs));
+    revealTimeoutRef.current = setTimeout(() => hostReveal(index, diff), roundMs);
+    timeouts.current.push(revealTimeoutRef.current);
   }
 
   async function hostFinish() {
@@ -517,12 +614,41 @@ export default function QuizGame({ room, me, isHost, onFinish, t, lang }) {
   }
 
   function pick(text) {
-    // Sélection libre et modifiable tant que le timer n'est pas écoulé.
+    // Sélection libre et modifiable tant que le timer n'est pas écoulé…
+    // sauf si le joueur a VERROUILLÉ sa réponse (barre Espace ou bouton).
     // Aucun point n'est attribué ici : la validation se fait à la réception de "reveal".
-    if (revealed || !q) return;
+    if (revealed || !q || lockedMineRef.current) return;
     pickedRef.current = text;
     setPicked(text);
   }
+
+  function lockMine() {
+    // Verrouiller = figer sa réponse. Quand tous les joueurs l'ont fait,
+    // l'hôte termine la question sans attendre le chrono.
+    if (!qRef.current || lockedMineRef.current || !pickedRef.current) return;
+    if (revealedRef.current) return; // pause de révélation : trop tard pour verrouiller
+    setLockedMine(true);
+    lockedMineRef.current = true;
+    channelRef.current?.send({
+      type: "broadcast", event: "lock",
+      payload: { profile_id: me.id, username: me.username, avatar: me.avatar },
+    });
+  }
+
+  // Barre Espace = verrouiller. preventDefault : sans lui, Espace
+  // ré-activerait le bouton de réponse encore focalisé après le clic
+  // (comportement natif des <button>) et ferait défiler la page.
+  useEffect(() => {
+    function onKey(e) {
+      if (e.code !== "Space" && e.key !== " ") return;
+      const tag = (e.target?.tagName || "").toLowerCase();
+      if (tag === "input" || tag === "textarea") return; // ne jamais voler l'espace d'un champ (ex: chat)
+      e.preventDefault();
+      lockMine();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
 
   const DIFFS = [
     { id: "easy", label: t("diffEasy"), color: "var(--p3)", grad: "linear-gradient(135deg, var(--p3), #7fd9c4)" },
@@ -616,16 +742,38 @@ export default function QuizGame({ room, me, isHost, onFinish, t, lang }) {
                 else if (isWrongPick) { bg = "rgba(255,93,115,.15)"; border = "var(--p1)"; color = "var(--p1)"; }
                 else if (picked === text) { border = "var(--p2)"; }
                 return (
-                  <button key={i} disabled={revealed} onClick={() => pick(text)}
+                  <button key={i} disabled={revealed || lockedMine} onClick={() => pick(text)}
                     style={{
                       minHeight: 64, padding: "14px 12px", borderRadius: 14, border: `2.5px solid ${border}`, background: bg, color, fontWeight: 800, fontSize: 15,
-                      transform: `scale(${scale})`, transition: "transform .2s, background .2s, border-color .2s"
+                      transform: `scale(${scale})`, transition: "transform .2s, background .2s, border-color .2s",
+                      opacity: lockedMine && !revealed && picked !== text ? .55 : 1
                     }}>
-                    {isGood ? "✅ " : isWrongPick ? "❌ " : ""}{text}
+                    {isGood ? "✅ " : isWrongPick ? "❌ " : lockedMine && !revealed && picked === text ? "🔒 " : ""}{text}
                   </button>
                 );
               })}
             </div>
+
+            {!revealed && (
+              <div style={{ marginTop: 14 }}>
+                <div style={{ display: "flex", justifyContent: "center" }}>
+                  <button className="btn ghost" disabled={!picked || lockedMine} onClick={lockMine}
+                    style={{ width: "auto", padding: "10px 20px", marginTop: 0, opacity: !picked && !lockedMine ? .45 : 1 }}>
+                    {lockedMine ? "🔒 " + t("quizLocked") : "🔓 " + t("quizLock")}
+                  </button>
+                </div>
+                <p className="muted" style={{ textAlign: "center", fontSize: 11.5, marginTop: 6 }}>{t("quizLockHint")}</p>
+                {lockedList.length > 0 && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8, justifyContent: "center" }}>
+                    {lockedList.map(r => (
+                      <span key={r.profile_id} className="quiz-result-chip" style={{ borderColor: "var(--p2)" }}>
+                        🔒 {r.avatar} {r.username}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             {revealed && picked !== q.good && (
               <p className="muted" style={{ marginTop: 14 }}>
                 {picked ? "" : t("tooSlow") + " "} {t("rightAnswer")} <b style={{ color: "var(--p3)" }}>{q.good}</b>

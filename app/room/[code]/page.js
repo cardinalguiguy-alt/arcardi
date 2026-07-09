@@ -18,6 +18,7 @@ import RoomChat from "@/components/RoomChat";
 import DiapasonGame from "@/components/diapason/DiapasonGame";
 import ChromatikGame from "@/components/cards/ChromatikGame";
 import PresidentGame from "@/components/president/PresidentGame";
+import PetitBacGame from "@/components/petitbac/PetitBacGame";
 import YahtzeeGame from "@/components/yahtzee/YahtzeeGame";
 import DoorStage from "@/components/DoorStage";
 import CurtainStage from "@/components/CurtainStage";
@@ -43,9 +44,10 @@ const GAME_META = {
   chromatik: { icon: "🃏", accent: "--acc-chromatik", nameKey: "nameChromatik", tagKey: "tagChromatik", stage: "door" },
   yahtzee:  { icon: "🎲", accent: "--acc-yahtzee",   nameKey: "nameYahtzee", tagKey: "tagYahtzee", stage: "door" },
   president: { icon: "🎩", accent: "--acc-president", nameKey: "namePresident", tagKey: "tagPresident", stage: "door" },
+  petitbac: { icon: "✏️", accent: "--acc-petitbac", nameKey: "namePetitBac", tagKey: "tagPetitBac", minPlayers: 2, stage: "flash" },
 };
 const STAGE_COMPONENT = { door: DoorStage, curtain: CurtainStage, flash: FlashStage };
-const GAME_ORDER = ["quiz", "wordle", "worldle", "piano", "connect4", "ludo", "echoes", "diapason", "chromatik", "president", "yahtzee"];
+const GAME_ORDER = ["quiz", "wordle", "worldle", "petitbac", "connect4", "ludo", "chromatik", "president", "yahtzee", "piano", "echoes", "diapason"];
 
 export default function Room() {
   const { code } = useParams();
@@ -321,6 +323,9 @@ export default function Room() {
                   )}
                   {room.current_game === "president" && (
                     <PresidentGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
+                  )}
+                  {room.current_game === "petitbac" && (
+                    <PetitBacGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
                   )}
                 </StageComponent>
                 );
