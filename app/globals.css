@@ -16,8 +16,9 @@
   --acc-worldle:#6FA8FF; --acc-piano:#C9A24B; --acc-diapason:#B388FF;
   --acc-chromatik:#FF9F6E; --acc-yahtzee:#FFD166; --acc-echoes:#5AC8DB; --acc-president:#4CC38A;
   --acc-petitbac:#F783AC;
-  --acc-tenk:#C24CF2; /* violet néon — jeu 10000 */
-  --tenk-pink:#FF2D95; /* rose néon — pips des dés et halo de sélection */
+  --acc-tenk:#4FD1FF; /* cyan/bleu néon HUD — jeu 10000 (grille circuit) */
+  --tenk-blue-deep:#1B6FA8; /* bleu profond — dégradés HUD, contours secondaires */
+  --tenk-pink:#FF5FB0; /* rose néon — pips des dés, halo de sélection, accents chauds */
   --tenk-felt:#0B1A3A; /* tapis bleu */
 }
 *{box-sizing:border-box; margin:0; padding:0;}
@@ -1596,27 +1597,74 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
   .pb-timer.hot{ animation:none; }
 }
 
+
 /* ==========================================================================
-   10000 (Dix Mille) — univers violet néon / tapis bleu, casino nocturne.
+   10000 (Dix Mille) — HUD cyberpunk anguleux : panneaux à coins coupés,
+   grille de circuit imprimé en fond, halos bleu/cyan nets, dés sombres
+   façon plastique usé avec pips néon roses (direction "1A — Grille
+   Circuit" retenue parmi les deux pistes proposées, cf. design fourni).
    Identité volontairement à part du Yahtzee (bois chaleureux) : ambiance
-   sombre, néons, dés noirs à pips lumineux roses, halo en rayons quand un
-   dé fait partie de la sélection en cours (inspiration fournie).
+   sombre, HUD tech, dés noirs à pips lumineux roses, halo en rayons quand
+   un dé fait partie de la sélection en cours (inspiration fournie).
+
+   Layout : mobile-first en une colonne (identique à tous les autres jeux
+   du site) ; à partir de 900px de large (laptop), la table de jeu passe en
+   format PAYSAGE : plateau de dés + actions à gauche, classement/objectif
+   dans une colonne latérale à droite (voir .tenk-layout plus bas).
    ========================================================================== */
 .tenk-stage{
-  position:relative; border-radius:22px; padding:20px;
-  background:radial-gradient(120% 90% at 50% 0%, rgba(194,76,242,.10) 0%, rgba(5,8,20,0) 55%), var(--tenk-felt);
-  border:2px solid rgba(194,76,242,.28);
-  box-shadow:0 0 0 1px rgba(194,76,242,.12) inset, 0 20px 50px -20px rgba(0,0,0,.6);
-}
-.tenk-felt{
-  position:relative; border-radius:18px; padding:26px 16px; margin-bottom:16px; overflow:hidden;
+  position:relative; border-radius:14px; padding:20px;
   background:
-    radial-gradient(120% 140% at 50% 20%, rgba(255,45,149,.08) 0%, transparent 55%),
+    radial-gradient(120% 90% at 50% 0%, rgba(79,209,255,.10) 0%, rgba(5,8,20,0) 55%),
+    var(--tenk-felt);
+  border:2px solid rgba(79,209,255,.28);
+  box-shadow:0 0 0 1px rgba(79,209,255,.12) inset, 0 20px 50px -20px rgba(0,0,0,.6);
+  clip-path:polygon(16px 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%,0 16px);
+}
+
+/* ----- En-tête HUD : titre + badge objectif ----- */
+.tenk-hud-top{
+  position:relative; z-index:1; display:flex; align-items:center; justify-content:center;
+  gap:10px; margin-bottom:14px; flex-wrap:wrap;
+}
+.tenk-target-badge{
+  font-family:'Space Mono', monospace; font-size:11px; font-weight:700; letter-spacing:.08em;
+  padding:6px 12px; color:var(--tenk-pink); background:rgba(11,26,58,.6);
+  border:1px solid rgba(255,95,176,.45); text-transform:uppercase;
+  clip-path:polygon(8px 0,100% 0,100% 100%,0 100%,0 8px);
+}
+
+/* ----- Layout paysage laptop : plateau à gauche, classement à droite ----- */
+.tenk-layout{
+  display:flex; flex-direction:column; gap:18px;
+}
+.tenk-main{ min-width:0; }
+.tenk-sidebar{ min-width:0; }
+
+@media (min-width: 900px){
+  .tenk-layout{
+    display:grid; grid-template-columns:1fr 268px; align-items:start; gap:22px;
+  }
+}
+
+/* ----- Feutre / plateau : grille circuit imprimé en fond ----- */
+.tenk-felt{
+  position:relative; border-radius:10px; padding:26px 16px; margin-bottom:16px; overflow:hidden;
+  background:
+    radial-gradient(120% 140% at 50% 20%, rgba(79,209,255,.09) 0%, transparent 55%),
     radial-gradient(140% 100% at 50% 100%, #0e2358 0%, var(--tenk-felt) 65%);
-  border:1.5px solid rgba(194,76,242,.22);
+  border:1.5px solid rgba(79,209,255,.22);
   box-shadow:inset 0 0 60px rgba(0,0,0,.55), inset 0 0 0 1px rgba(255,255,255,.03);
+  clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px);
 }
 .tenk-felt::before{
+  /* Grille de circuit imprimé, même esprit que le HUD du design retenu. */
+  content:""; position:absolute; inset:0; pointer-events:none; opacity:.55;
+  background-image:
+    repeating-linear-gradient(0deg, rgba(79,209,255,.07) 0px, transparent 1px, transparent 28px),
+    repeating-linear-gradient(90deg, rgba(79,209,255,.07) 0px, transparent 1px, transparent 28px);
+}
+.tenk-felt::after{
   /* Grain léger façon feutre, même technique que la vignette de Diapason. */
   content:""; position:absolute; inset:0; pointer-events:none; opacity:.5; mix-blend-mode:overlay;
   background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='matrix' values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.05 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
@@ -1624,15 +1672,21 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 .tenk-dice-row{
   position:relative; z-index:1; display:flex; gap:14px; justify-content:center; flex-wrap:wrap;
 }
+@media (min-width: 900px){
+  .tenk-dice-row{ gap:18px; }
+}
 
 /* ----- Dé : corps noir, pips néon rose, halo en rayons quand sélectionné ----- */
 .tenk-die{
   position:relative; width:clamp(58px, 15vw, 76px); height:clamp(58px, 15vw, 76px);
-  border-radius:16px; border:2px solid rgba(255,255,255,.08);
+  border-radius:10px; border:2px solid rgba(255,255,255,.08);
   background:linear-gradient(155deg, #26232e, #100e16 70%);
   box-shadow:0 6px 0 rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.06), inset 0 -8px 14px rgba(0,0,0,.4);
   padding:0; display:flex; align-items:center; justify-content:center;
   transition:transform .16s ease, box-shadow .18s ease, border-color .18s ease;
+}
+@media (min-width: 900px){
+  .tenk-die{ width:70px; height:70px; }
 }
 .tenk-die.clickable{ cursor:pointer; }
 .tenk-die.clickable:hover{ transform:translateY(-3px) scale(1.05); }
@@ -1648,7 +1702,16 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 .tenk-pip-cell.on::before{
   content:""; width:34%; height:34%; min-width:8px; min-height:8px; border-radius:50%;
   background:var(--tenk-pink);
-  box-shadow:0 0 6px var(--tenk-pink), 0 0 14px rgba(255,45,149,.75), 0 0 2px #fff;
+  box-shadow:0 0 6px var(--tenk-pink), 0 0 14px rgba(255,95,176,.75), 0 0 2px #fff;
+}
+/* Dé de valeur 1 : chiffre "1" en néon rose (au lieu du pip central unique),
+   même traitement lumineux que les pips — demande explicite du porteur de
+   projet pour éviter toute ambiguïté visuelle sur la face "as". */
+.tenk-die-one{
+  grid-column:1 / -1; grid-row:1 / -1; display:flex; align-items:center; justify-content:center;
+  font-family:'Space Mono', monospace; font-weight:800; line-height:1;
+  font-size:clamp(20px, 8vw, 30px); color:var(--tenk-pink);
+  text-shadow:0 0 6px var(--tenk-pink), 0 0 14px rgba(255,95,176,.75), 0 0 2px #fff;
 }
 .tenk-die-ghost{ font-family:'Space Mono'; font-size:22px; color:var(--muted); }
 
@@ -1658,7 +1721,7 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
    projet). Construit en CSS pur (conic-gradient répété), aucune image. */
 .tenk-die-burst{
   position:absolute; z-index:1; inset:-46%; border-radius:50%; pointer-events:none;
-  background:repeating-conic-gradient(from 0deg, rgba(255,45,149,.55) 0deg 4deg, transparent 4deg 18deg);
+  background:repeating-conic-gradient(from 0deg, rgba(255,95,176,.55) 0deg 4deg, transparent 4deg 18deg);
   opacity:0; filter:blur(1.5px); transition:opacity .25s ease;
   animation:tenkBurstSpin 9s linear infinite;
 }
@@ -1666,15 +1729,15 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 @keyframes tenkBurstSpin{ from{ transform:rotate(0deg); } to{ transform:rotate(360deg); } }
 
 .tenk-die.selected{
-  border-color:var(--tenk-pink);
-  box-shadow:0 6px 0 rgba(0,0,0,.5), 0 0 0 3px rgba(255,45,149,.25), 0 0 22px rgba(255,45,149,.55), inset 0 1px 0 rgba(255,255,255,.1);
+  border-color:var(--acc-tenk);
+  box-shadow:0 6px 0 rgba(0,0,0,.5), 0 0 0 3px rgba(79,209,255,.28), 0 0 22px rgba(79,209,255,.5), inset 0 1px 0 rgba(255,255,255,.1);
   transform:translateY(-5px);
 }
 .tenk-die-check{
   position:absolute; z-index:3; top:-8px; right:-8px; width:22px; height:22px; border-radius:50%;
-  background:var(--tenk-pink); color:#1a0512; font-size:13px; font-weight:900;
+  background:var(--acc-tenk); color:#031824; font-size:13px; font-weight:900;
   display:flex; align-items:center; justify-content:center;
-  box-shadow:0 0 10px rgba(255,45,149,.8); animation:popIn .18s ease both;
+  box-shadow:0 0 10px rgba(79,209,255,.8); animation:popIn .18s ease both;
 }
 
 .tenk-die.dead{ animation:tenkDeadShake .38s ease; }
@@ -1683,7 +1746,6 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
   25%{ transform:translateX(-6px) rotate(-3deg); }
   75%{ transform:translateX(6px) rotate(3deg); }
 }
-.tenk-die.dead .tenk-die-body{ }
 .tenk-die.dead{ border-color:#FF5D73; box-shadow:0 6px 0 rgba(0,0,0,.5), 0 0 16px rgba(255,93,115,.5); }
 
 .tenk-die.rolling{ animation:tenkTumble .5s cubic-bezier(.3,.9,.4,1) both; }
@@ -1698,7 +1760,7 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
   text-align:center; margin:14px 0 6px; font-family:'Space Mono'; font-weight:800;
 }
 .tenk-turn-score .n{
-  font-size:34px; color:var(--tenk-pink); text-shadow:0 0 18px rgba(255,45,149,.55);
+  font-size:34px; color:var(--tenk-pink); text-shadow:0 0 18px rgba(255,95,176,.5);
 }
 .tenk-turn-score .lbl{ display:block; font-size:11px; color:var(--muted); font-weight:700; letter-spacing:.05em; text-transform:uppercase; margin-top:2px; }
 
@@ -1708,31 +1770,95 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 .tenk-actions{ display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin:14px 0 4px; }
 .tenk-btn-roll, .tenk-btn-bank{
   width:auto; padding:13px 28px; margin-top:0; font-size:14.5px; font-weight:800; border:none;
-  border-radius:99px; cursor:pointer; transition:transform .12s ease, filter .12s ease;
+  cursor:pointer; transition:transform .12s ease, filter .12s ease;
 }
 .tenk-btn-roll{
-  background:linear-gradient(135deg, #E066FF, var(--acc-tenk) 60%, #7A1FA8);
-  color:#fff; box-shadow:0 5px 0 rgba(0,0,0,.4), 0 0 18px rgba(194,76,242,.45);
+  color:#eafcff; background:linear-gradient(135deg, rgba(79,209,255,.24), rgba(79,209,255,.1));
+  border:1.5px solid rgba(79,209,255,.6); box-shadow:0 5px 0 rgba(0,0,0,.4), 0 0 18px rgba(79,209,255,.3);
+  clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);
 }
 .tenk-btn-bank{
-  background:linear-gradient(135deg, #FF6FB5, var(--tenk-pink) 60%, #B8145E);
-  color:#fff; box-shadow:0 5px 0 rgba(0,0,0,.4), 0 0 18px rgba(255,45,149,.45);
+  background:linear-gradient(135deg, #FF8FC6, var(--tenk-pink) 60%, #B8145E);
+  color:#fff; box-shadow:0 5px 0 rgba(0,0,0,.4), 0 0 18px rgba(255,95,176,.45);
+  clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);
 }
 .tenk-btn-roll:hover, .tenk-btn-bank:hover{ transform:translateY(-2px) scale(1.03); filter:brightness(1.08); }
 .tenk-btn-roll:disabled, .tenk-btn-bank:disabled{ opacity:.35; cursor:default; transform:none; filter:none; }
 
+/* "Garder cette sélection" : bannière pleine largeur accent cyan (piste 1A). */
+.tenk-btn-keep{
+  display:block; width:100%; text-align:center; margin:14px 0 4px; padding:15px 22px;
+  font-family:'Space Mono', monospace; font-weight:800; font-size:13.5px; letter-spacing:.04em;
+  text-transform:uppercase; color:#031824; border:none; cursor:pointer;
+  background:linear-gradient(180deg, var(--acc-tenk), #29a8dd);
+  box-shadow:0 5px 0 rgba(0,0,0,.4), 0 0 18px rgba(79,209,255,.45);
+  clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px);
+  transition:transform .12s ease, filter .12s ease;
+}
+.tenk-btn-keep:hover{ transform:translateY(-2px) scale(1.01); filter:brightness(1.06); }
+.tenk-btn-keep:disabled{ opacity:.35; cursor:default; transform:none; filter:none; }
+
+/* Rangée de scores (mode mobile / repli sous le plateau) */
 .tenk-score-bar{ display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin:14px 0; }
 .tenk-score-chip{
-  display:flex; align-items:center; gap:7px; padding:7px 12px; border-radius:99px;
-  background:rgba(194,76,242,.08); border:1.5px solid rgba(194,76,242,.28); font-size:12.5px; font-weight:700;
+  display:flex; align-items:center; gap:7px; padding:7px 12px;
+  background:rgba(79,209,255,.08); border:1.5px solid rgba(79,209,255,.28); font-size:12.5px; font-weight:700;
+  clip-path:polygon(8px 0,100% 0,100% 100%,0 100%,0 8px);
 }
-.tenk-score-chip.me{ border-color:var(--tenk-pink); background:rgba(255,45,149,.1); }
-.tenk-score-chip.active{ box-shadow:0 0 12px rgba(194,76,242,.5); }
+.tenk-score-chip.me{ border-color:var(--tenk-pink); background:rgba(255,95,176,.1); }
+.tenk-score-chip.active{ box-shadow:0 0 12px rgba(79,209,255,.5); }
 .tenk-score-chip b{ font-family:'Space Mono'; color:var(--tenk-pink); }
+
+@media (min-width: 900px){
+  /* En paysage, la rangée de scores mobile cède la place au panneau
+     classement de la sidebar (.tenk-leaderboard) — pas de doublon. */
+  .tenk-main > .tenk-score-bar{ display:none; }
+}
+
+/* ----- Sidebar paysage : classement + objectif ----- */
+.tenk-leaderboard{
+  display:none;
+}
+@media (min-width: 900px){
+  .tenk-leaderboard{
+    display:flex; flex-direction:column; gap:12px; padding:18px 16px;
+    background:radial-gradient(120% 100% at 50% 0%, rgba(79,209,255,.07) 0%, transparent 60%), var(--tenk-felt);
+    border:1.5px solid rgba(79,209,255,.24); border-radius:10px;
+    clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px);
+    box-shadow:inset 0 0 40px rgba(0,0,0,.5);
+  }
+}
+.tenk-lb-title{
+  font-family:'Space Mono', monospace; font-weight:800; font-size:13px; letter-spacing:.08em;
+  text-transform:uppercase; color:#eafcff; text-shadow:0 0 6px rgba(79,209,255,.4);
+}
+.tenk-lb-row{
+  display:flex; flex-direction:column; gap:6px; padding:10px 12px;
+  background:rgba(11,26,58,.55); border:1px solid rgba(79,209,255,.22);
+  clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
+}
+.tenk-lb-row.me{ border-color:rgba(255,95,176,.5); background:rgba(255,95,176,.08); }
+.tenk-lb-row.active{ box-shadow:0 0 12px rgba(79,209,255,.4); }
+.tenk-lb-row-top{ display:flex; align-items:center; gap:8px; font-size:12.5px; font-weight:700; }
+.tenk-lb-rank{
+  width:19px; height:19px; border-radius:50%; flex:0 0 auto;
+  display:flex; align-items:center; justify-content:center;
+  font-family:'Space Mono'; font-weight:900; font-size:10.5px; color:#031824;
+  background:var(--acc-tenk);
+}
+.tenk-lb-row.me .tenk-lb-rank{ background:var(--tenk-pink); }
+.tenk-lb-name{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.tenk-lb-score{ font-family:'Space Mono'; font-weight:800; color:var(--tenk-pink); }
+.tenk-lb-bar-track{ height:5px; border-radius:3px; background:rgba(255,255,255,.08); overflow:hidden; }
+.tenk-lb-bar-fill{ height:100%; border-radius:3px; background:linear-gradient(90deg, var(--acc-tenk), var(--tenk-pink)); }
+.tenk-lb-target{
+  margin-top:2px; text-align:center; font-size:11.5px; color:var(--muted);
+  padding-top:10px; border-top:1px dashed rgba(79,209,255,.25);
+}
 
 /* ----- Farkle : flash bref sur tout le tapis ----- */
 .tenk-farkle-flash{
-  position:absolute; inset:0; z-index:5; border-radius:18px; pointer-events:none;
+  position:absolute; inset:0; z-index:5; pointer-events:none;
   background:radial-gradient(circle, rgba(255,45,80,.55), rgba(120,0,40,.35) 70%);
   opacity:0; animation:tenkFarkleFlash .7s ease-out both;
 }
@@ -1744,14 +1870,20 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 
 /* ----- Hot dice : bannière + petite explosion de particules néon ----- */
 .tenk-hotdice-banner{
-  text-align:center; font-family:'Bungee'; font-size:14px; color:var(--tenk-pink);
-  margin:10px 0; text-shadow:0 0 12px rgba(255,45,149,.6); animation:popIn .3s ease both;
+  text-align:center; font-family:'Bungee'; font-size:14px; color:var(--acc-tenk);
+  margin:10px 0; text-shadow:0 0 12px rgba(79,209,255,.6); animation:popIn .3s ease both;
 }
 .tenk-spark{ position:fixed; z-index:99; pointer-events:none; border-radius:50%; }
 .tenk-hotdice-flash{
-  position:absolute; inset:0; z-index:5; border-radius:18px; pointer-events:none;
-  background:radial-gradient(circle, rgba(194,76,242,.45), rgba(255,45,149,.25) 70%);
+  position:absolute; inset:0; z-index:5; pointer-events:none;
+  background:radial-gradient(circle, rgba(79,209,255,.4), rgba(255,95,176,.22) 70%);
   opacity:0; animation:tenkFarkleFlash .8s ease-out both;
+}
+
+/* ----- Panneau .panel dédié 10000 : plus large en paysage laptop ----- */
+.tenk-panel{ max-width:min(860px, 94vw); }
+@media (min-width: 900px){
+  .tenk-panel{ max-width:min(1180px, 96vw); }
 }
 
 @media (prefers-reduced-motion: reduce){

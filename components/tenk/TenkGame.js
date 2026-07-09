@@ -455,6 +455,11 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
 
   if (phase === "playing" && seats.length) {
     const orderedDice = activeDice || Array.from({ length: diceRemaining }, () => 1);
+    // Classement de la sidebar paysage : trié par score, indépendant de
+    // l'ordre des tours (idx d'origine conservé pour repérer le joueur actif).
+    const rankedSeats = seats
+      .map((s, i) => ({ seat: s, idx: i, score: scores[s.id] || 0 }))
+      .sort((a, b) => b.score - a.score);
     content = (
       <div className="tenk-stage">
         {!finished && currentSeat && (
@@ -463,77 +468,109 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
           </p>
         )}
 
-        <div className="tenk-felt">
-          {banner === "farkle" && <div className="tenk-farkle-flash" />}
-          {banner === "hotdice" && <div className="tenk-hotdice-flash" />}
-          <div className="tenk-dice-row">
-            {orderedDice.map((v, i) => (
-              <TenkDie
-                key={i}
-                value={v}
-                ghost={!activeDice}
-                selected={!!activeDice && selected.includes(i)}
-                dead={!!activeDice && selected.includes(i) && deadValueSet.has(v)}
-                rolling={rollFlash}
-                disabled={!isMyTurn || !activeDice}
-                onClick={activeDice ? () => toggleDie(i) : undefined}
-              />
-            ))}
-          </div>
-          {keptDice.length > 0 && (
-            <div className="tenk-dice-row" style={{ marginTop: 10 }}>
-              {keptDice.map((v, i) => (
-                <TenkDie key={"k" + i} value={v} kept style={{ transform: "scale(.7)" }} />
+        <div className="tenk-hud-top">
+          <span className="tenk-target-badge">🎯 {t("tenkTargetLabel")} · {target} {t("pts")}</span>
+        </div>
+
+        <div className="tenk-layout">
+          <div className="tenk-main">
+            <div className="tenk-felt">
+              {banner === "farkle" && <div className="tenk-farkle-flash" />}
+              {banner === "hotdice" && <div className="tenk-hotdice-flash" />}
+              <div className="tenk-dice-row">
+                {orderedDice.map((v, i) => (
+                  <TenkDie
+                    key={i}
+                    value={v}
+                    ghost={!activeDice}
+                    selected={!!activeDice && selected.includes(i)}
+                    dead={!!activeDice && selected.includes(i) && deadValueSet.has(v)}
+                    rolling={rollFlash}
+                    disabled={!isMyTurn || !activeDice}
+                    onClick={activeDice ? () => toggleDie(i) : undefined}
+                  />
+                ))}
+              </div>
+              {keptDice.length > 0 && (
+                <div className="tenk-dice-row" style={{ marginTop: 10 }}>
+                  {keptDice.map((v, i) => (
+                    <TenkDie key={"k" + i} value={v} kept style={{ transform: "scale(.7)" }} />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {banner === "farkle" && <div className="tenk-farkle-banner">💥 {t("tenkFarkleTitle")}</div>}
+            {banner === "hotdice" && <div className="tenk-hotdice-banner">🔥 {t("tenkHotDiceTitle")}</div>}
+
+            <div className="tenk-turn-score">
+              <span className="n">{turnScore}</span>
+              <span className="lbl">{t("tenkTurnScore")}</span>
+            </div>
+            {isMyTurn && activeDice && (
+              <p className="tenk-best-hint">
+                {selected.length === 0
+                  ? t("tenkSelectHint")
+                  : (selEval.valid ? "+" + selEval.points + " " + t("pts") : t("tenkNoScoreHint"))}
+              </p>
+            )}
+
+            {isMyTurn && !finished && (
+              <div className="tenk-actions">
+                {!activeDice ? (
+                  <>
+                    <button className="tenk-btn-roll" onClick={attemptRoll}>🎲 {t("tenkRoll")}</button>
+                    <button className="tenk-btn-bank" disabled={!turnScore} onClick={attemptBank}>💰 {t("tenkBank")}</button>
+                  </>
+                ) : (
+                  <button className="tenk-btn-keep" disabled={!selected.length || !selEval.valid} onClick={attemptKeep}>
+                    ✅ {t("tenkKeepSelection")}
+                  </button>
+                )}
+              </div>
+            )}
+
+            {finalRound && !finished && (
+              <p className="tenk-hotdice-banner" style={{ animation: "none" }}>
+                🏁 {t("tenkFinalRoundTitle")}
+              </p>
+            )}
+
+            <div className="tenk-score-bar">
+              {seats.map((s, i) => (
+                <div key={s.id} className={"tenk-score-chip" + (s.id === me.id ? " me" : "") + (i === turnIdx && !finished ? " active" : "")}>
+                  <span>{s.avatar} {s.username}</span>
+                  <b>{scores[s.id] || 0}</b>
+                </div>
               ))}
             </div>
-          )}
-        </div>
-
-        {banner === "farkle" && <div className="tenk-farkle-banner">💥 {t("tenkFarkleTitle")}</div>}
-        {banner === "hotdice" && <div className="tenk-hotdice-banner">🔥 {t("tenkHotDiceTitle")}</div>}
-
-        <div className="tenk-turn-score">
-          <span className="n">{turnScore}</span>
-          <span className="lbl">{t("tenkTurnScore")}</span>
-        </div>
-        {isMyTurn && activeDice && (
-          <p className="tenk-best-hint">
-            {selected.length === 0
-              ? t("tenkSelectHint")
-              : (selEval.valid ? "+" + selEval.points + " " + t("pts") : t("tenkNoScoreHint"))}
-          </p>
-        )}
-
-        {isMyTurn && !finished && (
-          <div className="tenk-actions">
-            {!activeDice ? (
-              <>
-                <button className="tenk-btn-roll" onClick={attemptRoll}>🎲 {t("tenkRoll")}</button>
-                <button className="tenk-btn-bank" disabled={!turnScore} onClick={attemptBank}>💰 {t("tenkBank")}</button>
-              </>
-            ) : (
-              <button className="tenk-btn-roll" disabled={!selected.length || !selEval.valid} onClick={attemptKeep}>
-                ✅ {t("tenkKeepSelection")}
-              </button>
-            )}
           </div>
-        )}
 
-        {finalRound && !finished && (
-          <p className="tenk-hotdice-banner" style={{ animation: "none" }}>
-            🏁 {t("tenkFinalRoundTitle")}
-          </p>
-        )}
-
-        <div className="tenk-score-bar">
-          {seats.map((s, i) => (
-            <div key={s.id} className={"tenk-score-chip" + (s.id === me.id ? " me" : "") + (i === turnIdx && !finished ? " active" : "")}>
-              <span>{s.avatar} {s.username}</span>
-              <b>{scores[s.id] || 0}</b>
+          <aside className="tenk-sidebar">
+            <div className="tenk-leaderboard">
+              <div className="tenk-lb-title">🏆 {t("tenkLeaderboard")}</div>
+              {rankedSeats.map(({ seat: s, idx, score }, rank) => {
+                const pct = Math.max(4, Math.min(100, Math.round((score / target) * 100)));
+                return (
+                  <div
+                    key={s.id}
+                    className={"tenk-lb-row" + (s.id === me.id ? " me" : "") + (idx === turnIdx && !finished ? " active" : "")}
+                  >
+                    <div className="tenk-lb-row-top">
+                      <span className="tenk-lb-rank">{rank + 1}</span>
+                      <span className="tenk-lb-name">{s.avatar} {s.username}</span>
+                      <span className="tenk-lb-score">{score}</span>
+                    </div>
+                    <div className="tenk-lb-bar-track">
+                      <div className="tenk-lb-bar-fill" style={{ width: pct + "%" }} />
+                    </div>
+                  </div>
+                );
+              })}
+              <div className="tenk-lb-target">{t("tenkTargetLabel")} · {target} {t("pts")}</div>
             </div>
-          ))}
+          </aside>
         </div>
-        <p className="tenk-best-hint">{t("tenkTargetLabel")} : {target} {t("pts")}</p>
 
         {finished && (
           <div className="yz-final">
@@ -656,7 +693,7 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
   }
 
   return (
-    <div className="panel" style={{ maxWidth: "min(860px, 94vw)" }}>
+    <div className="panel tenk-panel">
       <h1>{t("tenkTitle")}</h1>
       <Crossfade id={phase + ":" + finished}>{content}</Crossfade>
     </div>

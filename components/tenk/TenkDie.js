@@ -7,6 +7,11 @@
    (inspiration fournie par le porteur de projet : un vieux site de dés en
    ligne, halo rose en rayons autour du dé quand une combinaison apparaît).
 
+   Le dé de valeur 1 est un cas particulier demandé explicitement : au lieu
+   du pip central unique (facilement confondu avec d'autres faces au premier
+   coup d'œil), on affiche le CHIFFRE "1" en néon rose — même traitement
+   lumineux (glow) que les pips, juste un glyphe au lieu d'un point.
+
    Copie volontairement À PART de components/yahtzee/Die.js (même grille de
    points 3×3, mais identité visuelle et logique d'interaction différentes :
    ici un dé peut être "sélectionné" (fait partie du choix en cours, encore
@@ -15,7 +20,6 @@
    ========================================================================== */
 
 const PIPS = {
-  1: [5],
   2: [1, 9],
   3: [1, 5, 9],
   4: [1, 3, 7, 9],
@@ -49,9 +53,13 @@ export default function TenkDie({ value, selected, dead, rolling, kept, onClick,
           <span className="tenk-die-ghost">?</span>
         ) : (
           <span className="tenk-die-face">
-            {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((cell) => (
-              <span key={cell} className={"tenk-pip-cell" + (PIPS[value]?.includes(cell) ? " on" : "")} />
-            ))}
+            {value === 1 ? (
+              <span className="tenk-die-one" aria-hidden="true">1</span>
+            ) : (
+              [1, 2, 3, 4, 5, 6, 7, 8, 9].map((cell) => (
+                <span key={cell} className={"tenk-pip-cell" + (PIPS[value]?.includes(cell) ? " on" : "")} />
+              ))
+            )}
           </span>
         )}
       </span>
