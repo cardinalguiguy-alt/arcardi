@@ -16,6 +16,9 @@
   --acc-worldle:#6FA8FF; --acc-piano:#C9A24B; --acc-diapason:#B388FF;
   --acc-chromatik:#FF9F6E; --acc-yahtzee:#FFD166; --acc-echoes:#5AC8DB; --acc-president:#4CC38A;
   --acc-petitbac:#F783AC;
+  --acc-tenk:#C24CF2; /* violet néon — jeu 10000 */
+  --tenk-pink:#FF2D95; /* rose néon — pips des dés et halo de sélection */
+  --tenk-felt:#0B1A3A; /* tapis bleu */
 }
 *{box-sizing:border-box; margin:0; padding:0;}
 html,body{height:100%;}
@@ -38,7 +41,7 @@ a{color:var(--p2);}
    la largeur de l'écran (garde-fou à 1400px sur très grand moniteur pour
    que le logo ne s'étire pas à l'infini). */
 .wrap-lounge{max-width:1400px;}
-.brand{display:flex; align-items:center; gap:10px; margin-bottom:26px; row-gap:8px;}
+.brand{display:flex; align-items:center; gap:16px; margin-bottom:26px; row-gap:10px;}
 .brand .tiles{display:flex; gap:4px;}
 .brand button[title="ARCARDI"]{ animation:logoBreathe 4s ease-in-out infinite; }
 /* Taille fluide : les 7 onglets du logo + les boutons de droite tiennent sur
@@ -1377,8 +1380,15 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
    se resserrent légèrement pour tenir sur la même ligne que les onglets
    ARCARDI plutôt que de retomber sur une seconde ligne. */
 @media (max-width: 400px){
-  .brand{ gap:6px; }
+  /* Écart volontairement généreux entre le logo (retour accueil) et le
+     cluster de droite (langue, quitter…) : sur petit écran, un écart trop
+     serré fait misclicker le logo en visant le bouton de langue. On
+     resserre seulement CE QUI EST À L'INTÉRIEUR de chaque groupe (tuiles du
+     logo, boutons entre eux) pour gagner la place perdue par ce plus grand
+     écart, plutôt que de les rapprocher l'un de l'autre. */
+  .brand{ gap:16px; }
   .brand .tiles, .brand > button[title="ARCARDI"]{ gap:3px; }
+  .brand > div{ gap:10px !important; }
   .brand > div > button.btn.ghost, .brand > div > a.btn.ghost{ padding:7px 9px !important; font-size:12px !important; }
 }
 
@@ -1584,4 +1594,171 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 }
 @media (prefers-reduced-motion: reduce){
   .pb-timer.hot{ animation:none; }
+}
+
+/* ==========================================================================
+   10000 (Dix Mille) — univers violet néon / tapis bleu, casino nocturne.
+   Identité volontairement à part du Yahtzee (bois chaleureux) : ambiance
+   sombre, néons, dés noirs à pips lumineux roses, halo en rayons quand un
+   dé fait partie de la sélection en cours (inspiration fournie).
+   ========================================================================== */
+.tenk-stage{
+  position:relative; border-radius:22px; padding:20px;
+  background:radial-gradient(120% 90% at 50% 0%, rgba(194,76,242,.10) 0%, rgba(5,8,20,0) 55%), var(--tenk-felt);
+  border:2px solid rgba(194,76,242,.28);
+  box-shadow:0 0 0 1px rgba(194,76,242,.12) inset, 0 20px 50px -20px rgba(0,0,0,.6);
+}
+.tenk-felt{
+  position:relative; border-radius:18px; padding:26px 16px; margin-bottom:16px; overflow:hidden;
+  background:
+    radial-gradient(120% 140% at 50% 20%, rgba(255,45,149,.08) 0%, transparent 55%),
+    radial-gradient(140% 100% at 50% 100%, #0e2358 0%, var(--tenk-felt) 65%);
+  border:1.5px solid rgba(194,76,242,.22);
+  box-shadow:inset 0 0 60px rgba(0,0,0,.55), inset 0 0 0 1px rgba(255,255,255,.03);
+}
+.tenk-felt::before{
+  /* Grain léger façon feutre, même technique que la vignette de Diapason. */
+  content:""; position:absolute; inset:0; pointer-events:none; opacity:.5; mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='matrix' values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.05 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+}
+.tenk-dice-row{
+  position:relative; z-index:1; display:flex; gap:14px; justify-content:center; flex-wrap:wrap;
+}
+
+/* ----- Dé : corps noir, pips néon rose, halo en rayons quand sélectionné ----- */
+.tenk-die{
+  position:relative; width:clamp(58px, 15vw, 76px); height:clamp(58px, 15vw, 76px);
+  border-radius:16px; border:2px solid rgba(255,255,255,.08);
+  background:linear-gradient(155deg, #26232e, #100e16 70%);
+  box-shadow:0 6px 0 rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.06), inset 0 -8px 14px rgba(0,0,0,.4);
+  padding:0; display:flex; align-items:center; justify-content:center;
+  transition:transform .16s ease, box-shadow .18s ease, border-color .18s ease;
+}
+.tenk-die.clickable{ cursor:pointer; }
+.tenk-die.clickable:hover{ transform:translateY(-3px) scale(1.05); }
+.tenk-die:disabled{ cursor:default; }
+.tenk-die.kept{ opacity:.55; filter:saturate(.7); }
+
+.tenk-die-body{ position:relative; z-index:2; width:100%; height:100%; display:flex; align-items:center; justify-content:center; }
+.tenk-die-face{
+  display:grid; grid-template-columns:repeat(3, 1fr); grid-template-rows:repeat(3, 1fr);
+  width:72%; height:72%;
+}
+.tenk-pip-cell{ display:flex; align-items:center; justify-content:center; }
+.tenk-pip-cell.on::before{
+  content:""; width:34%; height:34%; min-width:8px; min-height:8px; border-radius:50%;
+  background:var(--tenk-pink);
+  box-shadow:0 0 6px var(--tenk-pink), 0 0 14px rgba(255,45,149,.75), 0 0 2px #fff;
+}
+.tenk-die-ghost{ font-family:'Space Mono'; font-size:22px; color:var(--muted); }
+
+/* Halo en rayons ("burst") : invisible au repos, apparaît en rotation lente
+   dès qu'un dé est sélectionné — c'est LE signal visuel qu'une combinaison
+   est en train de se former (voir l'inspiration fournie par le porteur de
+   projet). Construit en CSS pur (conic-gradient répété), aucune image. */
+.tenk-die-burst{
+  position:absolute; z-index:1; inset:-46%; border-radius:50%; pointer-events:none;
+  background:repeating-conic-gradient(from 0deg, rgba(255,45,149,.55) 0deg 4deg, transparent 4deg 18deg);
+  opacity:0; filter:blur(1.5px); transition:opacity .25s ease;
+  animation:tenkBurstSpin 9s linear infinite;
+}
+.tenk-die.selected .tenk-die-burst{ opacity:.85; }
+@keyframes tenkBurstSpin{ from{ transform:rotate(0deg); } to{ transform:rotate(360deg); } }
+
+.tenk-die.selected{
+  border-color:var(--tenk-pink);
+  box-shadow:0 6px 0 rgba(0,0,0,.5), 0 0 0 3px rgba(255,45,149,.25), 0 0 22px rgba(255,45,149,.55), inset 0 1px 0 rgba(255,255,255,.1);
+  transform:translateY(-5px);
+}
+.tenk-die-check{
+  position:absolute; z-index:3; top:-8px; right:-8px; width:22px; height:22px; border-radius:50%;
+  background:var(--tenk-pink); color:#1a0512; font-size:13px; font-weight:900;
+  display:flex; align-items:center; justify-content:center;
+  box-shadow:0 0 10px rgba(255,45,149,.8); animation:popIn .18s ease both;
+}
+
+.tenk-die.dead{ animation:tenkDeadShake .38s ease; }
+@keyframes tenkDeadShake{
+  0%,100%{ transform:translateX(0); }
+  25%{ transform:translateX(-6px) rotate(-3deg); }
+  75%{ transform:translateX(6px) rotate(3deg); }
+}
+.tenk-die.dead .tenk-die-body{ }
+.tenk-die.dead{ border-color:#FF5D73; box-shadow:0 6px 0 rgba(0,0,0,.5), 0 0 16px rgba(255,93,115,.5); }
+
+.tenk-die.rolling{ animation:tenkTumble .5s cubic-bezier(.3,.9,.4,1) both; }
+@keyframes tenkTumble{
+  0%{ transform:translateY(-40px) rotate(0deg) scale(.7); opacity:.3; }
+  55%{ transform:translateY(-10px) rotate(300deg) scale(1.08); opacity:1; }
+  100%{ transform:translateY(0) rotate(360deg) scale(1); }
+}
+
+/* ----- Score du tour, actions, feuille de scores ----- */
+.tenk-turn-score{
+  text-align:center; margin:14px 0 6px; font-family:'Space Mono'; font-weight:800;
+}
+.tenk-turn-score .n{
+  font-size:34px; color:var(--tenk-pink); text-shadow:0 0 18px rgba(255,45,149,.55);
+}
+.tenk-turn-score .lbl{ display:block; font-size:11px; color:var(--muted); font-weight:700; letter-spacing:.05em; text-transform:uppercase; margin-top:2px; }
+
+.tenk-best-hint{
+  text-align:center; font-size:12.5px; color:var(--muted); margin:2px 0 12px;
+}
+.tenk-actions{ display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin:14px 0 4px; }
+.tenk-btn-roll, .tenk-btn-bank{
+  width:auto; padding:13px 28px; margin-top:0; font-size:14.5px; font-weight:800; border:none;
+  border-radius:99px; cursor:pointer; transition:transform .12s ease, filter .12s ease;
+}
+.tenk-btn-roll{
+  background:linear-gradient(135deg, #E066FF, var(--acc-tenk) 60%, #7A1FA8);
+  color:#fff; box-shadow:0 5px 0 rgba(0,0,0,.4), 0 0 18px rgba(194,76,242,.45);
+}
+.tenk-btn-bank{
+  background:linear-gradient(135deg, #FF6FB5, var(--tenk-pink) 60%, #B8145E);
+  color:#fff; box-shadow:0 5px 0 rgba(0,0,0,.4), 0 0 18px rgba(255,45,149,.45);
+}
+.tenk-btn-roll:hover, .tenk-btn-bank:hover{ transform:translateY(-2px) scale(1.03); filter:brightness(1.08); }
+.tenk-btn-roll:disabled, .tenk-btn-bank:disabled{ opacity:.35; cursor:default; transform:none; filter:none; }
+
+.tenk-score-bar{ display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin:14px 0; }
+.tenk-score-chip{
+  display:flex; align-items:center; gap:7px; padding:7px 12px; border-radius:99px;
+  background:rgba(194,76,242,.08); border:1.5px solid rgba(194,76,242,.28); font-size:12.5px; font-weight:700;
+}
+.tenk-score-chip.me{ border-color:var(--tenk-pink); background:rgba(255,45,149,.1); }
+.tenk-score-chip.active{ box-shadow:0 0 12px rgba(194,76,242,.5); }
+.tenk-score-chip b{ font-family:'Space Mono'; color:var(--tenk-pink); }
+
+/* ----- Farkle : flash bref sur tout le tapis ----- */
+.tenk-farkle-flash{
+  position:absolute; inset:0; z-index:5; border-radius:18px; pointer-events:none;
+  background:radial-gradient(circle, rgba(255,45,80,.55), rgba(120,0,40,.35) 70%);
+  opacity:0; animation:tenkFarkleFlash .7s ease-out both;
+}
+@keyframes tenkFarkleFlash{ 0%{ opacity:0; } 12%{ opacity:1; } 100%{ opacity:0; } }
+.tenk-farkle-banner{
+  text-align:center; font-family:'Bungee'; font-size:16px; color:#FF5D73;
+  margin:10px 0; animation:tenkDeadShake .5s ease;
+}
+
+/* ----- Hot dice : bannière + petite explosion de particules néon ----- */
+.tenk-hotdice-banner{
+  text-align:center; font-family:'Bungee'; font-size:14px; color:var(--tenk-pink);
+  margin:10px 0; text-shadow:0 0 12px rgba(255,45,149,.6); animation:popIn .3s ease both;
+}
+.tenk-spark{ position:fixed; z-index:99; pointer-events:none; border-radius:50%; }
+.tenk-hotdice-flash{
+  position:absolute; inset:0; z-index:5; border-radius:18px; pointer-events:none;
+  background:radial-gradient(circle, rgba(194,76,242,.45), rgba(255,45,149,.25) 70%);
+  opacity:0; animation:tenkFarkleFlash .8s ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce){
+  .tenk-die-burst{ animation:none; }
+  .tenk-die.dead, .tenk-farkle-banner{ animation:none; }
+}
+
+@media (pointer: coarse){
+  .tenk-die{ width:clamp(62px, 17vw, 80px); height:clamp(62px, 17vw, 80px); }
 }

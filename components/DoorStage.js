@@ -20,7 +20,7 @@ import GameRulesButton from "./GameRulesButton";
    lancé par l'hôte) — on ne saute jamais la mise en scène.
    ========================================================================== */
 
-export default function DoorStage({ gameId, icon, name, accentVar, lang, children }) {
+export default function DoorStage({ gameId, icon, name, accentVar, lang, t, children }) {
   const [doorState, setDoorState] = useState("closed"); // 'closed' | 'opening' | 'open'
   const [entryKey, setEntryKey] = useState(0); // change à chaque ouverture -> rejoue l'animation povPush
   const openTimer = useRef(null);
@@ -61,13 +61,13 @@ export default function DoorStage({ gameId, icon, name, accentVar, lang, childre
           <div className={"door-label" + (opening ? " hidden" : "")}>
             <span className="door-label-icon">{icon}</span>
             <span className="door-label-name">{name}</span>
-            <button className="door-play-btn" onClick={openDoor}>▶ Jouer</button>
+            <button className="door-play-btn" onClick={openDoor}>{t ? t("stagePlay") : "▶ Jouer"}</button>
           </div>
         </>
       )}
       {doorState === "open" && (
         <div className="door-content" key={entryKey}>
-          <button className="door-replay-btn" onClick={closeDoor} title="Revoir l'entrée" aria-label="Revoir l'entrée">↺</button>
+          <button className="door-replay-btn" onClick={closeDoor} title={t ? t("stageReplay") : "Revoir l'entrée"} aria-label={t ? t("stageReplay") : "Revoir l'entrée"}>↺</button>
           <GameRulesButton gameId={gameId} lang={lang} />
           {children}
         </div>

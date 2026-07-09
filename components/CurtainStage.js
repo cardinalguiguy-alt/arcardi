@@ -17,7 +17,7 @@ import GameRulesButton from "./GameRulesButton";
    est monté, avec l'animation d'entrée qui rejoue à CHAQUE ouverture).
    ========================================================================== */
 
-export default function CurtainStage({ gameId, icon, name, accentVar, lang, children }) {
+export default function CurtainStage({ gameId, icon, name, accentVar, lang, t, children }) {
   const [state, setState] = useState("closed"); // 'closed' | 'opening' | 'open'
   const [entryKey, setEntryKey] = useState(0);
   const openTimer = useRef(null);
@@ -57,13 +57,13 @@ export default function CurtainStage({ gameId, icon, name, accentVar, lang, chil
           <div className={"curtain-label" + (opening ? " hidden" : "")}>
             <span className="curtain-label-icon">{icon}</span>
             <span className="curtain-label-name">{name}</span>
-            <button className="curtain-play-btn" onClick={openCurtain}>▶ Jouer</button>
+            <button className="curtain-play-btn" onClick={openCurtain}>{t ? t("stagePlay") : "▶ Jouer"}</button>
           </div>
         </>
       )}
       {state === "open" && (
         <div className="curtain-content" key={entryKey}>
-          <button className="door-replay-btn" onClick={closeCurtain} title="Revoir l'entrée" aria-label="Revoir l'entrée">↺</button>
+          <button className="door-replay-btn" onClick={closeCurtain} title={t ? t("stageReplay") : "Revoir l'entrée"} aria-label={t ? t("stageReplay") : "Revoir l'entrée"}>↺</button>
           <GameRulesButton gameId={gameId} lang={lang} />
           {children}
         </div>

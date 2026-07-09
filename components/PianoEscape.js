@@ -149,7 +149,7 @@ export default function PianoEscape({ room, me, isHost, onFinish, t, lang }) {
       {stage >= 1 && stage < 6 && (
         <div style={{ display: "flex", gap: 6, margin: "4px 0 14px" }}>
           {[1, 2, 3, 4, 5].map(n => (
-            <div key={n} className={"progress-dot" + (stage > n ? " done" : "")} title={"Salle " + n} />
+            <div key={n} className={"progress-dot" + (stage > n ? " done" : "")} title={t("peRoomLabel") + " " + n} />
           ))}
         </div>
       )}

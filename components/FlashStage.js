@@ -10,7 +10,7 @@ import GameRulesButton from "./GameRulesButton";
    pour ne jamais toucher aux deux autres.
    ========================================================================== */
 
-export default function FlashStage({ gameId, icon, name, accentVar, lang, children }) {
+export default function FlashStage({ gameId, icon, name, accentVar, lang, t, children }) {
   const [state, setState] = useState("closed"); // 'closed' | 'opening' | 'open'
   const [entryKey, setEntryKey] = useState(0);
   const openTimer = useRef(null);
@@ -52,14 +52,14 @@ export default function FlashStage({ gameId, icon, name, accentVar, lang, childr
           <div className={"flash-cover" + (opening ? " fading" : "")}>
             <span className="flash-cover-icon">{icon}</span>
             <span className="flash-cover-name">{name}</span>
-            <button className="flash-play-btn" onClick={openFlash}>▶ Jouer</button>
+            <button className="flash-play-btn" onClick={openFlash}>{t ? t("stagePlay") : "▶ Jouer"}</button>
           </div>
           <div className={"flash-white" + (opening ? " on" : "")} />
         </>
       )}
       {state === "open" && (
         <div className="flash-content" key={entryKey}>
-          <button className="door-replay-btn" onClick={closeFlash} title="Revoir l'entrée" aria-label="Revoir l'entrée">↺</button>
+          <button className="door-replay-btn" onClick={closeFlash} title={t ? t("stageReplay") : "Revoir l'entrée"} aria-label={t ? t("stageReplay") : "Revoir l'entrée"}>↺</button>
           <GameRulesButton gameId={gameId} lang={lang} />
           {children}
         </div>

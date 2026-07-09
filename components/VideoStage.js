@@ -25,7 +25,7 @@ import GameRulesButton from "./GameRulesButton";
 const TARGET_SECONDS = 3; // durée cible de l'intro, quelle que soit la durée réelle du clip exporté
 const FADE_MS = 600; // fondu croisé vidéo -> jeu, élégant plutôt qu'une coupure nette
 
-export default function VideoStage({ gameId, icon, name, accentVar, lang, children }) {
+export default function VideoStage({ gameId, icon, name, accentVar, lang, t, children }) {
   const [state, setState] = useState("closed"); // 'closed' | 'playing' | 'fading' | 'open'
   const [entryKey, setEntryKey] = useState(0);
   const videoRef = useRef(null);
@@ -76,7 +76,7 @@ export default function VideoStage({ gameId, icon, name, accentVar, lang, childr
         <div className="video-label">
           <span className="video-label-icon">{icon}</span>
           <span className="video-label-name">{name}</span>
-          <button className="video-play-btn" onClick={play}>▶ Jouer</button>
+          <button className="video-play-btn" onClick={play}>{t ? t("stagePlay") : "▶ Jouer"}</button>
         </div>
       )}
       {showVideo && (
@@ -93,7 +93,7 @@ export default function VideoStage({ gameId, icon, name, accentVar, lang, childr
       )}
       {state === "open" && (
         <div className="video-stage-content" key={entryKey}>
-          <button className="door-replay-btn" onClick={replay} title="Revoir l'entrée" aria-label="Revoir l'entrée">↺</button>
+          <button className="door-replay-btn" onClick={replay} title={t ? t("stageReplay") : "Revoir l'entrée"} aria-label={t ? t("stageReplay") : "Revoir l'entrée"}>↺</button>
           <GameRulesButton gameId={gameId} lang={lang} />
           {children}
         </div>

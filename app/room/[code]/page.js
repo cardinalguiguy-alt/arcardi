@@ -22,6 +22,7 @@ import ChromatikGame from "@/components/cards/ChromatikGame";
 import PresidentGame from "@/components/president/PresidentGame";
 import PetitBacGame from "@/components/petitbac/PetitBacGame";
 import YahtzeeGame from "@/components/yahtzee/YahtzeeGame";
+import TenkGame from "@/components/tenk/TenkGame";
 import DoorStage from "@/components/DoorStage";
 import CurtainStage from "@/components/CurtainStage";
 import FlashStage from "@/components/FlashStage";
@@ -51,10 +52,11 @@ const GAME_META = {
   chromatik: { icon: "🃏", accent: "--acc-chromatik", nameKey: "nameChromatik", tagKey: "tagChromatik", stage: "door" },
   yahtzee:  { icon: "🎲", accent: "--acc-yahtzee",   nameKey: "nameYahtzee", tagKey: "tagYahtzee", stage: "door" },
   president: { icon: "🎩", accent: "--acc-president", nameKey: "namePresident", tagKey: "tagPresident", stage: "door" },
+  tenk:      { icon: "🎰", accent: "--acc-tenk",      nameKey: "nameTenk",    tagKey: "tagTenk", stage: "door" },
   petitbac: { icon: "✏️", accent: "--acc-petitbac", nameKey: "namePetitBac", tagKey: "tagPetitBac", minPlayers: 2, stage: "flash" },
 };
 const STAGE_COMPONENT = { door: DoorStage, curtain: CurtainStage, flash: FlashStage, video: VideoStage };
-const GAME_ORDER = ["quiz", "wordle", "worldle", "petitbac", "connect4", "ludo", "chromatik", "president", "yahtzee", "piano", "echoes", "diapason"];
+const GAME_ORDER = ["quiz", "wordle", "worldle", "petitbac", "connect4", "ludo", "chromatik", "president", "yahtzee", "tenk", "piano", "echoes", "diapason"];
 
 export default function Room() {
   const { code } = useParams();
@@ -307,7 +309,7 @@ export default function Room() {
               {meta && (() => {
                 const StageComponent = STAGE_COMPONENT[meta.stage] || DoorStage;
                 return (
-                <StageComponent gameId={room.current_game} icon={meta.icon} name={t(meta.nameKey)} accentVar={meta.accent} lang={lang}>
+                <StageComponent gameId={room.current_game} icon={meta.icon} name={t(meta.nameKey)} accentVar={meta.accent} lang={lang} t={t}>
                   {room.current_game === "quiz" && (
                     <QuizGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
                   )}
@@ -340,6 +342,9 @@ export default function Room() {
                   )}
                   {room.current_game === "president" && (
                     <PresidentGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
+                  )}
+                  {room.current_game === "tenk" && (
+                    <TenkGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
                   )}
                   {room.current_game === "petitbac" && (
                     <PetitBacGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
