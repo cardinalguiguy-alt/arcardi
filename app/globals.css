@@ -1044,6 +1044,52 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
   .brand > div > button.btn.ghost, .brand > div > a.btn.ghost{ padding:7px 9px !important; font-size:12px !important; }
 }
 
+/* ===== Président : animations de cartes (jamais de téléportation) =====
+   - presPlayIn : les cartes posées "volent" sur le tapis (léger arc,
+     rotation qui se redresse). Rejouée à chaque coup car React remonte
+     les éléments (les clés = ids de cartes changent à chaque pli).
+   - presDealIn : distribution de la main en éventail au début de manche
+     (délais échelonnés en inline style, ~35ms par carte).
+   Les deux respectent prefers-reduced-motion. */
+@keyframes presPlayIn{
+  0%{ transform:translateY(-34px) rotate(-7deg) scale(1.14); opacity:0; }
+  60%{ transform:translateY(3px) rotate(1.5deg) scale(1.02); opacity:1; }
+  100%{ transform:translateY(0) rotate(0) scale(1); opacity:1; }
+}
+.pres-pile .pres-card{ animation:presPlayIn .42s cubic-bezier(.22,.85,.32,1.15) backwards; }
+
+@keyframes presDealIn{
+  from{ transform:translateY(16px) scale(.9); opacity:0; }
+  to{ transform:translateY(0) scale(1); opacity:1; }
+}
+.pres-hand .pres-card{ animation:presDealIn .32s ease backwards; }
+/* La sélection/levée reste pilotée par la transition existante : une fois
+   l'animation d'entrée finie, transform revient au flux normal. */
+.pres-hand .pres-card.sel{ animation:none; }
+
+/* Flash discret du tapis quand un 2 brûle le pli. */
+@keyframes presBurnFlash{
+  0%{ box-shadow:inset 0 0 40px rgba(255,185,74,.55), inset 0 2px 14px rgba(0,0,0,.35); border-color:rgba(255,185,74,.8); }
+  100%{ box-shadow:inset 0 2px 14px rgba(0,0,0,.35); border-color:rgba(76,195,138,.35); }
+}
+.pres-table.burned{ animation:presBurnFlash .8s ease-out both; }
+
+/* Bulle "réfléchit…" sur l'adversaire dont c'est le tour : trois points
+   qui pulsent en décalé — les bots prennent 1 à 5s, comme un humain. */
+.pres-think{ font-weight:800; color:var(--muted); display:inline-flex; align-items:baseline; }
+.pres-think i{ font-style:normal; animation:presDot 1.1s ease-in-out infinite; }
+.pres-think i.d2{ animation-delay:.18s; }
+.pres-think i.d3{ animation-delay:.36s; }
+@keyframes presDot{ 0%,60%,100%{ opacity:.25; } 30%{ opacity:1; } }
+
+/* Le 💩 du Trou en "arc-en-ciel" : cycle de teinte permanent. */
+.pres-poo{ display:inline-block; animation:presPooRainbow 2.4s linear infinite; }
+@keyframes presPooRainbow{ to{ filter:hue-rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce){
+  .pres-pile .pres-card, .pres-hand .pres-card, .pres-table.burned, .pres-poo{ animation:none; }
+}
+
 /* ===== Président : ligne d'un échange en attente (fin de manche) ===== */
 .pres-exchange-row{
   display:flex; align-items:center; justify-content:space-between; gap:10px;

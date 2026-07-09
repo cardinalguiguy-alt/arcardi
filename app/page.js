@@ -2,9 +2,11 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import { useLang } from "@/lib/i18n";
 
 export default function Home() {
   const router = useRouter();
+  const { t } = useLang();
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
@@ -21,7 +23,7 @@ export default function Home() {
           {"ARCARDI".split("").map((c, i) => <span className="tile" key={i}>{c}</span>)}
         </div>
       </div>
-      {checking && <p className="muted">Chargement…</p>}
+      {checking && <p className="muted">{t("loading")}</p>}
     </div>
   );
 }

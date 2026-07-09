@@ -88,6 +88,27 @@ function rankKey(place, nSeats) {
   return "presRankMid";
 }
 
+// Emoji attaché à chaque rang. Rendu SÉPARÉMENT du libellé i18n pour
+// pouvoir styler le 💩 du Trou en "arc-en-ciel" (animation hue-rotate,
+// classe .pres-poo dans globals.css) — impossible si l'emoji restait
+// noyé dans la chaîne de traduction.
+function rankEmoji(place, nSeats) {
+  if (place === 0) return "👑";
+  if (place === nSeats - 1) return "💩";
+  if (place === 1 && nSeats === 4) return "🎩";
+  if (nSeats === 4) return "🤡"; // Vice-Trou
+  return "😐";
+}
+function RankTag({ place, nSeats, t }) {
+  const emoji = rankEmoji(place, nSeats);
+  return (
+    <>
+      {t(rankKey(place, nSeats))}{" "}
+      <span className={emoji === "💩" ? "pres-poo" : undefined}>{emoji}</span>
+    </>
+  );
+}
+
 export default function PresidentGame({ room, me, isHost, players, t, lang, onFinish }) {
   const [phase, setPhase] = useState("intro");
   const [tableSize, setTableSize] = useState(null);
@@ -310,8 +331,15 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
     scheduleNext();
   }
 
+  // Tempo "humain" des bots : entre 1 et 5 secondes, tiré au hasard à
+  // chaque coup (un vrai joueur ne joue jamais à cadence fixe). Le timer
+  // précédent est TOUJOURS annulé avant d'en poser un nouveau : sans ça,
+  // plusieurs broadcasts rapprochés empileraient des timers périmés qui
+  // feraient jouer le bot suivant trop vite.
   function scheduleNext() {
     if (!isHost) return;
+    clearTimeout(botTimer.current);
+    const delay = 1000 + Math.floor(Math.random() * 4000); // 1s à 5s
     botTimer.current = setTimeout(() => {
       const s = stateRef.current;
       if (!s) return;
@@ -333,7 +361,7 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
         .map(x => (s.hands[x.id] || []).length));
       const move = decideBotMove(hand, s.current, { othersMin });
       hostApplyMove(seat.id, move);
-    }, 900);
+    }, delay);
   }
 
   function startFirstRound(humanSeats) {
@@ -479,8 +507,9 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
               {t("presGiveHint").replace("{n}", myGiveEntry.count).replace("{name}", seats.find(x => x.id === myGiveEntry.inferior)?.username || "")}
             </p>
             <div className="pres-hand">
-              {myHand.map(card => (
-                <PresCard key={card.id} card={card} size="sm" sel={giveSelected.includes(card.id)} onClick={() => onGiveCardClick(card)} />
+              {myHand.map((card, i) => (
+                <PresCard key={card.id} card={card} size="sm" sel={giveSelected.includes(card.id)} onClick={() => onGiveCardClick(card)}
+                  style={{ animationDelay: `${i * 35}ms` }} />
               ))}
             </div>
             <div className="pres-actions">
@@ -505,7 +534,7 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
     const turnSeat = seats[turnIdx];
     const statusLine = over ? null
       : isMyTurn ? (current ? (stuck ? t("presMustPass") : t("presYourTurnFollow")) : t("presYourTurnLead"))
-      : isPlayer ? `${t("chromatikWaitingFor")} ${turnSeat?.username}…`
+      : isPlayer ? `💭 ${turnSeat?.username} ${t("presThinking")}` // tempo humain : les bots "réfléchissent" 1 à 5s
       : t("chromatikSpectating");
 
     content = (
@@ -518,20 +547,28 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
                 <span className="avatar">{x.avatar}</span>
                 <span className="name">{x.username}</span>
                 {place !== -1
-                  ? <span className="pres-badge out">{t(rankKey(place, seats.length))}</span>
+                  ? <span className="pres-badge out"><RankTag place={place} nSeats={seats.length} t={t} /></span>
                   : passed.includes(x.id)
                     ? <span className="pres-badge">{t("presPassedTag")}</span>
-                    : <span className="count">{(hands[x.id] || []).length} 🂠</span>}
+                    : turnSeat?.id === x.id && !over
+                      ? <span className="pres-think" title={t("presThinking")}>💭<i className="d1">.</i><i className="d2">.</i><i className="d3">.</i></span>
+                      : <span className="count">{(hands[x.id] || []).length} 🂠</span>}
               </div>
             );
           })}
         </div>
 
-        <div className="pres-table">
+        <div className={"pres-table" + (!current && lastAction?.type === "burn" ? " burned" : "")}>
           {current ? (
             <>
+              {/* Les cartes du pli arrivent en "vol" (animation presPlayIn,
+                  échelonnée) : les clés changent à chaque nouveau coup, donc
+                  React remonte les éléments et l'animation se rejoue —
+                  jamais de téléportation sèche. */}
               <div className="pres-pile">
-                {current.cards.map(c => <PresCard key={c.id} card={c} size="md" glow />)}
+                {current.cards.map((c, i) => (
+                  <PresCard key={c.id} card={c} size="md" glow style={{ animationDelay: `${i * 70}ms` }} />
+                ))}
               </div>
               <p className="muted" style={{ fontSize: 12.5 }}>
                 {t("presPlayedBy")} <b>{seats.find(x => x.id === current.by)?.username}</b> — {t("presToBeat")}
@@ -561,7 +598,7 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
                 const selRank = selCards.length ? selCards[0].v : null;
                 const cap = current ? current.count : 4;
                 const capReached = selected.length >= cap;
-                return myHand.map(card => {
+                return myHand.map((card, i) => {
                   const isSel = selected.includes(card.id);
                   const isMatch = isMyTurn && selRank !== null && !isSel && !capReached && card.v === selRank;
                   const isFaded = isMyTurn && selRank !== null && !isSel && !isMatch;
@@ -571,6 +608,7 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
                       sel={isSel} match={isMatch} faded={isFaded}
                       dim={!isMyTurn}
                       onClick={() => onCardClick(card)}
+                      style={{ animationDelay: `${i * 35}ms` }}
                     />
                   );
                 });
@@ -592,7 +630,7 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
 
         {isPlayer && iFinished && !over && (
           <p style={{ textAlign: "center", fontWeight: 800, margin: "14px 0" }}>
-            ✨ {t("presFinishedYou")} {t(rankKey(finishedOrder.indexOf(me.id), seats.length))}
+            ✨ {t("presFinishedYou")} <RankTag place={finishedOrder.indexOf(me.id)} nSeats={seats.length} t={t} />
           </p>
         )}
 
@@ -607,7 +645,7 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
                     <span className="place">{place + 1}</span>
                     <span>{seat?.avatar}</span>
                     <span className="name">{seat?.username}</span>
-                    <span className="title">{t(rankKey(place, seats.length))}</span>
+                    <span className="title"><RankTag place={place} nSeats={seats.length} t={t} /></span>
                     <b className="pts">+{pointsForPlace(place, seats.length)}</b>
                   </div>
                 );
