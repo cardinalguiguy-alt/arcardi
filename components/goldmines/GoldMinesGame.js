@@ -535,7 +535,7 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
   if (phase === "playing" && mine) {
     let statusText;
     if (winner) statusText = null;
-    else if (bombArmed && isMyTurn) statusText = `💣 ${t("gmBombArm")}`;
+    else if (bombArmed && isMyTurn) statusText = `🧨 ${t("gmBombArm")}`;
     else if (lastAction?.type === "bomb") {
       statusText = `💥 ${lastAction.seatId === me.id ? t("gmBombYou") : `${lastSeat?.username} ${t("gmBombOther")}`} (+${lastAction.gained} 🪙)`;
     } else if (lastAction?.type === "dig" && lastAction.nugget) {
@@ -566,7 +566,7 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
               <span className="gm-miner-track" aria-hidden="true">
                 <span className="gm-miner-fill" style={{ width: Math.min(100, ((gold[s.id] || 0) / GM_WIN_AT) * 100) + "%" }} />
               </span>
-              {bombs[s.id] && <span className="gm-miner-bomb" title={t("gmBombHint")}>💣</span>}
+              {bombs[s.id] && <span className="gm-miner-bomb" title={t("gmBombHint")}>🧨</span>}
               {turnDeadlineSeat === s.id && turnRemaining != null && !winner && (
                 <span className={"turn-timer-chip mini" + (turnRemaining <= 5 ? " hot" : "")}>{turnRemaining}s</span>
               )}
@@ -675,14 +675,14 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
             {myBombAvailable ? (
               bombArmed ? (
                 <>
-                  <span className="gm-bomb-armed-hint">💣 {t("gmBombArm")}</span>
+                  <span className="gm-bomb-armed-hint">🧨 {t("gmBombArm")}</span>
                   <button type="button" className="btn ghost" style={{ width: "auto", padding: "8px 16px", fontSize: 13 }} onClick={() => setBombArmed(false)}>
                     {t("chromatikCancel")}
                   </button>
                 </>
               ) : (
                 <button type="button" className="gm-bomb-btn" disabled={!isMyTurn} onClick={() => setBombArmed(true)} title={t("gmBombHint")}>
-                  💣 {t("gmBomb")}
+                  🧨 {t("gmBomb")}
                 </button>
               )
             ) : (

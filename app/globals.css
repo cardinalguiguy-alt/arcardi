@@ -364,8 +364,15 @@ body.stage-focus .wrap-room{
   padding-top:10px; padding-bottom:10px;
 }
 body.stage-focus .game-stage .panel{ margin-top:4px; margin-bottom:6px; }
+/* L'ajustement du zoom GLISSE au lieu de claquer (les navigateurs qui ne
+   savent pas encore animer `zoom` appliquent simplement le saut — pas pire
+   qu'avant). Désactivé si l'utilisateur préfère réduire les animations. */
+body.stage-focus .game-stage{ transition:zoom .55s cubic-bezier(.3,.8,.3,1); }
 body.stage-focus .back-room-fab{ top:12px; }
 body.stage-focus .stage-zoom-fab{ top:60px; }
+@media (prefers-reduced-motion: reduce){
+  body.stage-focus .game-stage{ transition:none; }
+}
 
 /* Pastille discrète pour passer à la piste d'ambiance suivante (voir
    lib/ambience.js). Quasi invisible au repos, pleinement visible au survol
@@ -1356,7 +1363,9 @@ body.stage-focus .stage-zoom-fab{ top:60px; }
 }
 
 /* ----- Dynamite : bouton bâton + états ----- */
-.gm-bomb-bar{ display:flex; gap:10px; justify-content:center; align-items:center; margin-top:12px; min-height:38px; }
+/* Barre dynamite : nettement décollée de la grille (retour 2026-07 — elle
+   touchait presque les cases du bas, on croyait viser et on armait). */
+.gm-bomb-bar{ display:flex; gap:10px; justify-content:center; align-items:center; margin-top:22px; min-height:38px; }
 .gm-bomb-btn{
   padding:9px 20px; border-radius:99px; cursor:pointer;
   font-family:'Bungee'; font-size:13px; color:#fff; letter-spacing:.02em;

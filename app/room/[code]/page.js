@@ -331,16 +331,29 @@ export default function Room() {
     if (!focusActive || typeof window === "undefined") { setStageScale(1); return; }
     const el = stageRef.current;
     if (!el) return;
-    let raf = 0;
+    // Recalcul TEMPORISÉ (150 ms) : les rafales de variations de hauteur
+    // (fondu de Crossfade, cartes qui apparaissent une à une) sont
+    // coalescées en UN seul ajustement une fois le layout posé — sans ça,
+    // le cadre "sautait" instantanément à chaque micro-changement, effet
+    // lag signalé 2026-07. Le changement de zoom lui-même est ANIMÉ en CSS
+    // (transition sur zoom, voir body.stage-focus .game-stage) : quand un
+    // ajustement est vraiment nécessaire, il glisse au lieu de claquer.
+    let timer = 0;
     const compute = () => {
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
         const natural = el.offsetHeight;
         if (!natural) return;
         const avail = window.innerHeight - 20; // marge de respiration haut+bas
-        const s = Math.max(0.55, Math.min(1, avail / natural));
-        setStageScale(prev => (Math.abs(prev - s) > 0.02 ? Math.round(s * 100) / 100 : prev));
-      });
+        // "Quand c'est vraiment nécessaire" : tant que ça tient, zoom 1 tout
+        // rond ; sinon juste ce qu'il faut, avec un seuil de 3 % pour ne pas
+        // re-rendre (ni re-glisser) pour deux pixels.
+        const s = natural <= avail ? 1 : Math.max(0.55, avail / natural);
+        setStageScale(prev => {
+          if (s === 1) return 1;
+          return Math.abs(prev - s) > 0.03 ? Math.round(s * 100) / 100 : prev;
+        });
+      }, 150);
     };
     compute();
     const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(compute) : null;
@@ -349,7 +362,7 @@ export default function Room() {
     return () => {
       if (ro) ro.disconnect();
       window.removeEventListener("resize", compute);
-      cancelAnimationFrame(raf);
+      clearTimeout(timer);
     };
   }, [focusActive, room?.current_game]);
 
