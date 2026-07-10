@@ -38,34 +38,43 @@ export default function CurtainStage({ gameId, icon, name, accentVar, lang, t, c
     }, 1150);
   }
 
-  function closeCurtain() {
-    clearTimeout(openTimer.current);
-    setState("closed");
-  }
-
   const closed = state !== "open";
   const opening = state === "opening";
 
+  // Même disposition que DoorStage (retour d'expérience du porteur de
+  // projet) : titre du jeu EN HAUT, bouton "Jouer" EN DESSOUS du cadre —
+  // bien lisibles tous les deux, plus rien de fondu dans le décor du rideau.
+  // Les classes .door-title-top/.door-play-wrap sont volontairement
+  // réutilisées telles quelles (globals.css) pour une cohérence parfaite.
   return (
-    <div className="curtain-stage" style={{ "--accent": `var(${accentVar})` }}>
+    <div className="door-wrap" style={{ "--accent": `var(${accentVar})` }}>
       {closed && (
-        <>
-          <div className="curtain-valance" />
-          <div className={"curtain-panel" + (opening ? " open" : "")}>
-            <span className="curtain-fringe" />
-          </div>
-          <div className={"curtain-label" + (opening ? " hidden" : "")}>
-            <span className="curtain-label-icon">{icon}</span>
-            <span className="curtain-label-name">{name}</span>
-            <button className="curtain-play-btn" onClick={openCurtain}>{t ? t("stagePlay") : "▶ Jouer"}</button>
-          </div>
-        </>
+        <div className={"door-title-top" + (opening ? " hidden" : "")}>
+          <span className="door-title-icon">{icon}</span>
+          <span className="door-title-name">{name}</span>
+        </div>
       )}
-      {state === "open" && (
-        <div className="curtain-content" key={entryKey}>
-          <button className="door-replay-btn" onClick={closeCurtain} title={t ? t("stageReplay") : "Revoir l'entrée"} aria-label={t ? t("stageReplay") : "Revoir l'entrée"}>↺</button>
-          <GameRulesButton gameId={gameId} lang={lang} />
-          {children}
+
+      <div className="curtain-stage">
+        {closed && (
+          <>
+            <div className="curtain-valance" />
+            <div className={"curtain-panel" + (opening ? " open" : "")}>
+              <span className="curtain-fringe" />
+            </div>
+          </>
+        )}
+        {state === "open" && (
+          <div className="curtain-content" key={entryKey}>
+            <GameRulesButton gameId={gameId} lang={lang} />
+            {children}
+          </div>
+        )}
+      </div>
+
+      {closed && (
+        <div className={"door-play-wrap" + (opening ? " hidden" : "")}>
+          <button className="curtain-play-btn" onClick={openCurtain}>{t ? t("stagePlay") : "▶ Jouer"}</button>
         </div>
       )}
     </div>

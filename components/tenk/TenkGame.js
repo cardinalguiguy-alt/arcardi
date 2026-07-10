@@ -1,10 +1,10 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { saveGameState, readGameState, resetRoomToLobby } from "@/lib/gameSync";
 import Crossfade from "@/components/Crossfade";
 import TenkDie from "./TenkDie";
-import { DICE_COUNT, evaluateSelection, isFarkle, MIN_TO_BANK, FARKLE_STREAK_LIMIT, FARKLE_STREAK_PENALTY } from "./scoring";
+import { DICE_COUNT, evaluateSelection, isFarkle, listScoringGroups, MIN_TO_BANK, FARKLE_STREAK_LIMIT, FARKLE_STREAK_PENALTY } from "./scoring";
 import { decideBotSelection, decideBotContinue } from "./botLogic";
 import { playDiceShuffle, playConfirmChime, playFarkle, playHotDice, playGameWin, playGameLose } from "@/lib/sfx";
 
@@ -35,6 +35,11 @@ import { playDiceShuffle, playConfirmChime, playFarkle, playHotDice, playGameWin
    ========================================================================== */
 
 const GAME_ID = "tenk";
+// Après un hot dice (les 6 dés combinés), le bouton Lancer reste verrouillé
+// ce temps-ci pour que la petite animation de célébration ait le temps
+// d'être vue — demande explicite du porteur de projet, l'enchaînement était
+// trop rapide pour qu'on remarque qu'on venait de bien jouer.
+const HOT_DICE_PAUSE_MS = 2000;
 const BOT_AVATARS = ["🤖", "🦾", "👾"];
 
 function makeBotSeat(n) {
@@ -60,6 +65,7 @@ function dealFreshState(seats, target) {
     turnScore: 0,
     keptDice: [],          // valeurs déjà mises de côté CE tour (affichage seulement)
     farkleStreak: Object.fromEntries(seats.map(s => [s.id, 0])), // lancers blancs consécutifs par siège (voir MIN_TO_BANK/FARKLE_STREAK_* dans scoring.js)
+    hotDiceUntil: 0,       // timestamp (Date.now()) jusqu'auquel le bouton Lancer reste verrouillé après un hot dice — voir HOT_DICE_PAUSE_MS
     finalRound: null,      // { triggeredBy, remaining: [seatId,...] } une fois la cible atteinte
     finished: false,
     winners: [],
@@ -83,6 +89,8 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
   const [turnScore, setTurnScore] = useState(0);
   const [keptDice, setKeptDice] = useState([]);
   const [farkleStreak, setFarkleStreak] = useState({}); // { [seatId]: nombre de lancers blancs consécutifs }
+  const [hotDiceUntil, setHotDiceUntil] = useState(0); // timestamp jusqu'auquel Lancer reste verrouillé (pause célébration)
+  const [hotDiceLock, setHotDiceLock] = useState(false); // dérivé de hotDiceUntil, voir le useEffect dédié plus bas
   const [finalRound, setFinalRound] = useState(null);
   const [finished, setFinished] = useState(false);
   const [winners, setWinners] = useState([]);
@@ -95,6 +103,7 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
   const [rollFlash, setRollFlash] = useState(false);
   const [banner, setBanner] = useState(null); // "farkle" | "hotdice" | null, transitoire
   const [endBanner, setEndBanner] = useState(null);
+  const [penaltyPop, setPenaltyPop] = useState(false); // popup "Ayoye !" -500 (3 farkles de suite)
 
   const channelRef = useRef(null);
   const stateRef = useRef(null);
@@ -106,19 +115,43 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
   const bannerTimerRef = useRef(null);
   const rollFlashTimerRef = useRef(null);
   const endBannerTimerRef = useRef(null);
+  const penaltyPopTimerRef = useRef(null);
 
   useEffect(() => {
-    stateRef.current = { seats, scores, turnIdx, activeDice, diceRemaining, turnScore, keptDice, farkleStreak, finalRound, finished, winners, target, lastAction };
-  }, [seats, scores, turnIdx, activeDice, diceRemaining, turnScore, keptDice, farkleStreak, finalRound, finished, winners, target, lastAction]);
+    stateRef.current = { seats, scores, turnIdx, activeDice, diceRemaining, turnScore, keptDice, farkleStreak, hotDiceUntil, finalRound, finished, winners, target, lastAction };
+  }, [seats, scores, turnIdx, activeDice, diceRemaining, turnScore, keptDice, farkleStreak, hotDiceUntil, finalRound, finished, winners, target, lastAction]);
+
+  // Dérive le verrou local du bouton Lancer depuis hotDiceUntil (état
+  // partagé) : se reprogramme à chaque nouvelle valeur reçue, y compris
+  // après un reload (readGameState) où le délai peut déjà être écoulé.
+  useEffect(() => {
+    const remain = hotDiceUntil - Date.now();
+    if (remain > 0) {
+      setHotDiceLock(true);
+      const timer = setTimeout(() => setHotDiceLock(false), remain);
+      return () => clearTimeout(timer);
+    }
+    setHotDiceLock(false);
+  }, [hotDiceUntil]);
 
   function applyLocalState(s, extra = {}) {
     setSeats(s.seats); setScores(s.scores || {}); setTurnIdx(s.turnIdx || 0);
     setActiveDice(s.activeDice || null); setDiceRemaining(s.diceRemaining ?? DICE_COUNT);
     setTurnScore(s.turnScore || 0); setKeptDice(s.keptDice || []);
     setFarkleStreak(s.farkleStreak || {});
+    setHotDiceUntil(s.hotDiceUntil || 0);
     setFinalRound(s.finalRound || null); setFinished(!!s.finished); setWinners(s.winners || []);
     setTarget(s.target || 5000); setLastAction(s.lastAction || null);
-    setSelected([]);
+    // Suggestion automatique : dès qu'un nouveau lancer arrive, on pré-sélectionne
+    // la combinaison qui rapporte le plus de points (listScoringGroups est triée
+    // par points décroissants) — le joueur reste entièrement libre de la changer
+    // en cliquant un dé ou une autre ligne du panneau "Combinaisons possibles".
+    if (s.activeDice && s.activeDice.length) {
+      const rows = listScoringGroups(s.activeDice);
+      setSelected(rows.length ? rows[0].indices : []);
+    } else {
+      setSelected([]);
+    }
     if (extra.resetGain) { setMyGain(0); savedResultRef.current = false; }
   }
 
@@ -144,15 +177,25 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
         playHotDice();
         setBanner("hotdice");
         clearTimeout(bannerTimerRef.current);
-        bannerTimerRef.current = setTimeout(() => setBanner(null), 1700);
+        // Synchronisé avec HOT_DICE_PAUSE_MS (verrou du bouton Lancer) :
+        // la bannière reste affichée tout le temps de la pause célébration.
+        bannerTimerRef.current = setTimeout(() => setBanner(null), HOT_DICE_PAUSE_MS);
       } else {
         playConfirmChime();
       }
     } else if (lastAction.type === "farkle") {
-      playFarkle();
+      const penalized = lastAction.penalty > 0;
+      if (penalized) {
+        playGameLose();
+        setPenaltyPop(true);
+        clearTimeout(penaltyPopTimerRef.current);
+        penaltyPopTimerRef.current = setTimeout(() => setPenaltyPop(false), 2200);
+      } else {
+        playFarkle();
+      }
       setBanner("farkle");
       clearTimeout(bannerTimerRef.current);
-      bannerTimerRef.current = setTimeout(() => setBanner(null), 1600);
+      bannerTimerRef.current = setTimeout(() => setBanner(null), penalized ? 2200 : 1600);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lastAction]);
@@ -199,6 +242,7 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
       clearTimeout(bannerTimerRef.current);
       clearTimeout(rollFlashTimerRef.current);
       clearTimeout(endBannerTimerRef.current);
+      clearTimeout(penaltyPopTimerRef.current);
       supabase.removeChannel(ch);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -248,6 +292,7 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
     const seat = s.seats[s.turnIdx];
     if (!seat || seat.id !== seatId) return;
     if (s.activeDice) return; // un lancer est déjà en attente de sélection
+    if (Date.now() < (s.hotDiceUntil || 0)) return; // pause célébration hot dice encore active, voir HOT_DICE_PAUSE_MS
 
     const n = s.diceRemaining;
     const values = Array.from({ length: n }, () => 1 + Math.floor(Math.random() * 6));
@@ -305,13 +350,15 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
 
     const remaining = s.activeDice.length - uniq.length;
     const hotDice = remaining === 0;
+    const hotDiceUntil = hotDice ? Date.now() + HOT_DICE_PAUSE_MS : 0;
     const next = {
       ...s,
       turnScore: s.turnScore + evalRes.points,
       activeDice: null,
       diceRemaining: hotDice ? DICE_COUNT : remaining,
       keptDice: (s.keptDice || []).concat(values),
-      lastAction: { type: "keep", seatId, points: evalRes.points, shape: evalRes.shape, hotDice },
+      hotDiceUntil,
+      lastAction: { type: "keep", seatId, points: evalRes.points, shape: evalRes.shape, hotDice, hotDiceUntil },
     };
     broadcastNewState(next);
     scheduleBots();
@@ -346,9 +393,46 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
   // banquer) : chaque appel ne joue QU'UNE étape, rappelé après chaque
   // nouvel état tant que c'est le tour d'un bot — même principe que
   // Chromatik/Président, juste rejoué plusieurs fois par tour ici.
+  //
+  // Délai "réfléchi" (demande explicite du porteur de projet : un bot qui
+  // agit toujours au même rythme métronomique casse l'illusion). Trois
+  // fourchettes selon la nature de la décision — garder une sélection déjà
+  // "vue" est quasi instantané, mais choisir de relancer ou de banquer
+  // prend sensiblement plus de temps (c'est le vrai dilemme du jeu) — plus
+  // une petite chance d'hésitation supplémentaire, pour ne jamais paraître
+  // parfaitement régulier.
+  function botThinkDelay(kind) {
+    const ranges = { keep: [650, 1350], decide: [1500, 3100], roll: [850, 1650] };
+    const [min, max] = ranges[kind] || ranges.roll;
+    let d = min + Math.random() * (max - min);
+    if (Math.random() < 0.12) d += 1100 + Math.random() * 1500; // hésitation occasionnelle
+    return d;
+  }
   function scheduleBots() {
     if (!isHost) return;
     clearTimeout(botTimer.current);
+    const s0 = stateRef.current;
+    if (!s0 || s0.finished) return;
+    const seat0 = s0.seats[s0.turnIdx];
+    if (!seat0 || !seat0.isBot) return;
+
+    // Classification rapide pour choisir la fourchette de délai — la vraie
+    // décision est reprise depuis zéro dans le setTimeout (état frais).
+    let kind = "roll";
+    if (s0.activeDice) {
+      kind = decideBotSelection(s0.activeDice).length ? "keep" : "roll";
+    } else if (s0.turnScore > 0) {
+      kind = "decide";
+    }
+    // Pause célébration hot dice (voir HOT_DICE_PAUSE_MS) : hostApplyRoll
+    // la refuse de toute façon côté hôte, donc si le prochain coup peut être
+    // un lancer (kind !== "keep"), on ne programme jamais le bot avant que
+    // le verrou soit levé — sinon son coup serait silencieusement ignoré et
+    // plus rien ne le relancerait derrière.
+    const hotDiceLockRemain = Math.max(0, (s0.hotDiceUntil || 0) - Date.now());
+    const baseDelay = botThinkDelay(kind);
+    const delay = kind === "keep" ? baseDelay : Math.max(baseDelay, hotDiceLockRemain);
+
     botTimer.current = setTimeout(() => {
       const s = stateRef.current;
       if (!s || s.finished) return;
@@ -363,7 +447,7 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
       } else {
         hostApplyRoll(seat.id);
       }
-    }, 1100);
+    }, delay);
   }
 
   // ----- Démarrage : taille de table + cible, sièges bots pour compléter -----
@@ -424,8 +508,22 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
     if (!isMyTurn || !activeDice) return;
     setSelected(prev => prev.includes(i) ? prev.filter(x => x !== i) : [...prev, i]);
   }
+  // Panneau "Combinaisons possibles" : cliquer une ligne REMPLACE la
+  // sélection en cours par les dés de cette combinaison précise (le joueur
+  // garde par ailleurs toute liberté d'affiner en cliquant les dés un par
+  // un, voir toggleDie ci-dessus — les deux pilotent le même `selected`).
+  function selectCombo(row) {
+    if (!isMyTurn || !activeDice) return;
+    setSelected(row.indices.slice());
+  }
+  function isRowActive(row) {
+    if (selected.length !== row.indices.length) return false;
+    const a = selected.slice().sort((x, y) => x - y);
+    const b = row.indices.slice().sort((x, y) => x - y);
+    return a.every((v, i) => v === b[i]);
+  }
   function attemptRoll() {
-    if (!isMyTurn || activeDice) return;
+    if (!isMyTurn || activeDice || hotDiceLock) return;
     channelRef.current?.send({ type: "broadcast", event: "move_attempt", payload: { seatId: me.id, action: { type: "roll" } } });
   }
   function attemptKeep() {
@@ -470,6 +568,57 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
 
   const needsPick = players.length > (tableSize || 0);
 
+  // Dispersion façon "dés jetés sur la table" : un décalage/rotation
+  // aléatoire par dé, calculé UNE SEULE FOIS par lancer (useMemo garde la
+  // même valeur tant qu'activeDice ne change pas de référence, donc reste
+  // stable pendant que le joueur clique pour sélectionner) — demande
+  // explicite du porteur de projet pour plus de réalisme. Hook au niveau
+  // racine du composant (jamais dans une branche conditionnelle), donc
+  // calculé à chaque rendu mais quasi gratuit (6 nombres aléatoires).
+  const diceJitter = useMemo(() => {
+    if (!activeDice) return [];
+    return activeDice.map(() => ({
+      dx: Math.round((Math.random() - 0.5) * 22),  // ±11px
+      dy: Math.round((Math.random() - 0.5) * 16),  // ±8px
+      rot: Math.round((Math.random() - 0.5) * 26), // ±13deg
+    }));
+  }, [activeDice]);
+
+  // Combinaisons du lancer actif — calculées au niveau racine (pas QUE
+  // dans la branche "playing") pour piloter le raccourci clavier d'aide
+  // ci-dessous sans enfreindre les règles des hooks React (toujours au
+  // même endroit, jamais dans une branche conditionnelle).
+  const activeComboRows = useMemo(() => (activeDice ? listScoringGroups(activeDice) : []), [activeDice]);
+
+  // ----- Raccourci clavier d'aide : Cmd/Ctrl+Maj+K -----
+  // Redonne en évidence (et resélectionne) la combinaison la plus
+  // rentable du lancer en cours — pensé pour débloquer un joueur qui ne
+  // saurait pas quoi faire de ses dés, sur simple demande plutôt qu'imposé
+  // à l'écran en permanence. Choix de la touche K (et non une lettre déjà
+  // très utilisée) après vérification des raccourcis Cmd/Ctrl+Maj+ courants
+  // de Chrome/Safari/macOS (T, N, W, Q, R, S, V, Z, H sont tous pris —
+  // rechargement, incognito, fermeture, capture d'écran système, collage
+  // sans mise en forme, rétablir, page d'accueil…) : K n'entre en conflit
+  // avec aucun d'entre eux. Comparaison sur `e.code` (touche physique), pas
+  // `e.key`, même raison que AmbienceSkipButton.js (Maj change la valeur de
+  // `key` sur beaucoup de claviers).
+  const [hintPulse, setHintPulse] = useState(false);
+  const hintPulseTimerRef = useRef(null);
+  useEffect(() => {
+    function onKeyDown(e) {
+      if (!(e.metaKey || e.ctrlKey) || !e.shiftKey || e.code !== "KeyK") return;
+      if (!isMyTurn || !activeDice || !activeComboRows.length) return;
+      e.preventDefault();
+      setSelected(activeComboRows[0].indices.slice());
+      playConfirmChime();
+      setHintPulse(true);
+      clearTimeout(hintPulseTimerRef.current);
+      hintPulseTimerRef.current = setTimeout(() => setHintPulse(false), 900);
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => { document.removeEventListener("keydown", onKeyDown); clearTimeout(hintPulseTimerRef.current); };
+  }, [isMyTurn, activeDice, activeComboRows]);
+
   let content;
 
   if (phase === "playing" && seats.length) {
@@ -479,12 +628,30 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
     const rankedSeats = seats
       .map((s, i) => ({ seat: s, idx: i, score: scores[s.id] || 0 }))
       .sort((a, b) => b.score - a.score);
+    // Combinaisons proposées pour le lancer en cours (calculées au niveau
+    // racine, voir activeComboRows plus haut, partagées avec le raccourci
+    // clavier d'aide Cmd/Ctrl+Maj+K).
+    const comboRows = activeComboRows;
+    // Jauge du score du tour : 1500 = repère visuel (une suite), le score
+    // peut le dépasser (la jauge plafonne alors à 100% mais le nombre
+    // affiché, lui, ne plafonne jamais). Marqueur à 300 = seuil pour banquer.
+    const TURN_GAUGE_MAX = 1500;
+    const turnGaugeFillPct = Math.max(0, Math.min(100, Math.round((turnScore / TURN_GAUGE_MAX) * 100)));
+    const turnGaugeMarkerPct = Math.round((MIN_TO_BANK / TURN_GAUGE_MAX) * 100);
     content = (
       <div className="tenk-stage">
         {!finished && currentSeat && (
-          <p className="turn-banner">
-            {isMyTurn ? "🎲 " + t("yourTurnBadge") : (currentSeat.avatar + " " + currentSeat.username)}
-          </p>
+          <div className="turn-banner">
+            {isMyTurn ? (
+              <span className="turn-banner-badge">🎲 {t("yourTurnBadge")}</span>
+            ) : (
+              <span className="turn-banner-badge other">
+                {lang === "fr" ? t("tenkOpponentTurnPrefix") + " " : ""}
+                {currentSeat.avatar} {currentSeat.username}
+                {lang === "fr" ? "" : t("tenkOpponentTurnSuffix")}
+              </span>
+            )}
+          </div>
         )}
 
         <div className="tenk-hud-top">
@@ -492,23 +659,67 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
         </div>
 
         <div className="tenk-layout">
+          <aside className={"tenk-combos" + (hintPulse ? " hint-pulse" : "")}>
+            <div className="tenk-combos-title">💡 {t("tenkCombosTitle")}</div>
+            {!activeDice ? (
+              <p className="tenk-combos-empty">{t("tenkCombosEmptyHint")}</p>
+            ) : comboRows.length === 0 ? (
+              <p className="tenk-combos-empty">{t("tenkCombosNoneHint")}</p>
+            ) : (
+              <div className="tenk-combo-list">
+                {comboRows.map((row, i) => (
+                  <button
+                    key={row.key}
+                    type="button"
+                    className={"tenk-combo-row" + (isRowActive(row) ? " active" : "") + (i === 0 ? " best" : "")}
+                    disabled={!isMyTurn}
+                    onClick={() => selectCombo(row)}
+                  >
+                    {i === 0 && <span className="tenk-combo-best-badge">★</span>}
+                    <span className="tenk-combo-dice">{row.diceValues.join("-")}</span>
+                    <span className="tenk-combo-pts">+{row.points}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            {isMyTurn && activeDice && comboRows.length > 0 && (
+              <p className="tenk-combos-shortcut">⌘⇧K {t("tenkHintShortcutHint")}</p>
+            )}
+          </aside>
+
           <div className="tenk-main">
             <div className="tenk-felt">
               {banner === "farkle" && <div className="tenk-farkle-flash" />}
               {banner === "hotdice" && <div className="tenk-hotdice-flash" />}
+              {penaltyPop && (
+                <div className="tenk-penalty-pop">
+                  <span className="tenk-penalty-pop-face">😩</span>
+                  <span className="tenk-penalty-pop-text">{t("tenkAyoye")}</span>
+                  <span className="tenk-penalty-pop-amount">-500</span>
+                </div>
+              )}
               <div className="tenk-dice-row">
-                {orderedDice.map((v, i) => (
-                  <TenkDie
-                    key={i}
-                    value={v}
-                    ghost={!activeDice}
-                    selected={!!activeDice && selected.includes(i)}
-                    dead={!!activeDice && selected.includes(i) && deadValueSet.has(v)}
-                    rolling={rollFlash}
-                    disabled={!isMyTurn || !activeDice}
-                    onClick={activeDice ? () => toggleDie(i) : undefined}
-                  />
-                ))}
+                {orderedDice.map((v, i) => {
+                  const j = activeDice ? diceJitter[i] : null;
+                  const die = (
+                    <TenkDie
+                      value={v}
+                      ghost={!activeDice}
+                      selected={!!activeDice && selected.includes(i)}
+                      dead={!!activeDice && selected.includes(i) && deadValueSet.has(v)}
+                      rolling={rollFlash}
+                      disabled={!isMyTurn || !activeDice}
+                      onClick={activeDice ? () => toggleDie(i) : undefined}
+                    />
+                  );
+                  return j ? (
+                    <span key={i} className="tenk-die-slot" style={{ transform: "translate(" + j.dx + "px," + j.dy + "px) rotate(" + j.rot + "deg)" }}>
+                      {die}
+                    </span>
+                  ) : (
+                    <span key={i} className="tenk-die-slot">{die}</span>
+                  );
+                })}
               </div>
               {keptDice.length > 0 && (
                 <div className="tenk-dice-row" style={{ marginTop: 10 }}>
@@ -529,9 +740,15 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
             )}
             {banner === "hotdice" && <div className="tenk-hotdice-banner">🔥 {t("tenkHotDiceTitle")}</div>}
 
-            <div className="tenk-turn-score">
-              <span className="n">{turnScore}</span>
-              <span className="lbl">{t("tenkTurnScore")}</span>
+            <div className="tenk-turn-gauge">
+              <div className="tenk-turn-gauge-head">
+                <span className="n">{turnScore}</span>
+                <span className="lbl">{t("tenkTurnScore")}</span>
+              </div>
+              <div className="tenk-turn-gauge-track">
+                <div className="tenk-turn-gauge-marker" style={{ left: turnGaugeMarkerPct + "%" }} title={t("tenkBankMinHint")} />
+                <div className={"tenk-turn-gauge-fill" + (turnScore >= MIN_TO_BANK ? " ready" : "")} style={{ width: turnGaugeFillPct + "%" }} />
+              </div>
             </div>
             {isMyTurn && activeDice && (
               <p className="tenk-best-hint">
@@ -551,7 +768,9 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
               <div className="tenk-actions">
                 {!activeDice ? (
                   <>
-                    <button className="tenk-btn-roll" onClick={attemptRoll}>🎲 {t("tenkRoll")}</button>
+                    <button className={"tenk-btn-roll" + (hotDiceLock ? " celebrating" : "")} disabled={hotDiceLock} onClick={attemptRoll}>
+                      {hotDiceLock ? "🔥 " + t("tenkHotDiceTitle") : "🎲 " + t("tenkRoll")}
+                    </button>
                     <button className="tenk-btn-bank" disabled={!turnScore || turnScore < MIN_TO_BANK} onClick={attemptBank}>💰 {t("tenkBank")}</button>
                   </>
                 ) : (

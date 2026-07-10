@@ -36,32 +36,38 @@ export default function FlashStage({ gameId, icon, name, accentVar, lang, t, chi
     }, 260);
   }
 
-  function closeFlash() {
-    clearTimeout(openTimer.current);
-    clearTimeout(flashTimer.current);
-    setState("closed");
-  }
-
   const closed = state !== "open";
   const opening = state === "opening";
 
+  // Même disposition que DoorStage : titre EN HAUT, bouton "Jouer" EN
+  // DESSOUS du cadre (classes .door-title-top/.door-play-wrap réutilisées).
   return (
-    <div className="flash-stage" style={{ "--accent": `var(${accentVar})` }}>
+    <div className="door-wrap" style={{ "--accent": `var(${accentVar})` }}>
       {closed && (
-        <>
-          <div className={"flash-cover" + (opening ? " fading" : "")}>
-            <span className="flash-cover-icon">{icon}</span>
-            <span className="flash-cover-name">{name}</span>
-            <button className="flash-play-btn" onClick={openFlash}>{t ? t("stagePlay") : "▶ Jouer"}</button>
-          </div>
-          <div className={"flash-white" + (opening ? " on" : "")} />
-        </>
+        <div className={"door-title-top" + (opening ? " hidden" : "")}>
+          <span className="door-title-icon">{icon}</span>
+          <span className="door-title-name">{name}</span>
+        </div>
       )}
-      {state === "open" && (
-        <div className="flash-content" key={entryKey}>
-          <button className="door-replay-btn" onClick={closeFlash} title={t ? t("stageReplay") : "Revoir l'entrée"} aria-label={t ? t("stageReplay") : "Revoir l'entrée"}>↺</button>
-          <GameRulesButton gameId={gameId} lang={lang} />
-          {children}
+
+      <div className="flash-stage">
+        {closed && (
+          <>
+            <div className={"flash-cover" + (opening ? " fading" : "")} />
+            <div className={"flash-white" + (opening ? " on" : "")} />
+          </>
+        )}
+        {state === "open" && (
+          <div className="flash-content" key={entryKey}>
+            <GameRulesButton gameId={gameId} lang={lang} />
+            {children}
+          </div>
+        )}
+      </div>
+
+      {closed && (
+        <div className={"door-play-wrap" + (opening ? " hidden" : "")}>
+          <button className="flash-play-btn" onClick={openFlash}>{t ? t("stagePlay") : "▶ Jouer"}</button>
         </div>
       )}
     </div>

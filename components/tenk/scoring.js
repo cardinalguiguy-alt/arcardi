@@ -107,6 +107,64 @@ export function hasSmallStraightSubset(values) {
   return SMALL_STRAIGHTS.some((req) => req.every((v) => set.has(v)));
 }
 
+// Trouve, dans `values`, les INDICES d'un die par valeur requise dans
+// `pattern` (ex. [1,2,3,4,5]) — un index par valeur du pattern, jamais le
+// même index deux fois. Renvoie null si le pattern n'est pas entièrement
+// disponible. Utilisé pour la suite courte (ci-dessous) et repris tel quel
+// par botLogic.js (import direct, évite une deuxième copie de cette logique).
+export function findPatternIndices(values, pattern) {
+  const used = new Array(values.length).fill(false);
+  const idxs = [];
+  for (const v of pattern) {
+    const idx = values.findIndex((val, i) => val === v && !used[i]);
+    if (idx === -1) return null;
+    used[idx] = true;
+    idxs.push(idx);
+  }
+  return idxs;
+}
+
+// Liste, pour un lancer donné (tableau de VALEURS des dés actifs), toutes
+// les combinaisons "prêtes à cliquer" que le joueur peut choisir sur CE
+// lancer — pensé pour un panneau d'aide façon "combinaisons possibles" :
+// chaque ligne est indépendante (mêmes dés physiques parfois réutilisés
+// d'une ligne à l'autre, ex. un 1 compté à la fois dans une suite courte
+// ET dans sa propre ligne "un seul 1") puisque le joueur n'en choisit
+// jamais qu'UNE SEULE à la fois (ou compose lui-même en cliquant les dés).
+// Triée par points décroissants — la ligne [0] est donc "la combinaison
+// valide offrant le plus de points" pour ce lancer, utilisée comme
+// suggestion pré-sélectionnée par défaut (voir TenkGame.js).
+export function listScoringGroups(values) {
+  if (!values || !values.length) return [];
+  const rows = [];
+
+  if (values.length === 6 && isStraight(values)) {
+    rows.push({ key: "straight6", points: 1500, kind: "straight", diceValues: values.slice().sort((a, b) => a - b), indices: values.map((_, i) => i) });
+  }
+  if (values.length === 6 && isThreePairs(values)) {
+    const c = counts(values);
+    const pairValues = Object.keys(c).map(Number).sort((a, b) => a - b);
+    rows.push({ key: "threePairs", points: 750, kind: "threePairs", diceValues: pairValues, indices: values.map((_, i) => i) });
+  }
+  for (const pattern of SMALL_STRAIGHTS) {
+    const idxs = findPatternIndices(values, pattern);
+    if (idxs) rows.push({ key: "small" + pattern.join(""), points: 1500, kind: "smallStraight", diceValues: pattern, indices: idxs });
+  }
+
+  const c = counts(values);
+  for (const [vStr, n] of Object.entries(c)) {
+    const v = Number(vStr);
+    const pts = groupScore(v, n);
+    if (pts > 0) {
+      const idxs = values.map((val, i) => (val === v ? i : -1)).filter((i) => i !== -1);
+      rows.push({ key: "group" + v + "x" + n, points: pts, kind: "group", diceValues: Array(n).fill(v), indices: idxs });
+    }
+  }
+
+  rows.sort((a, b) => b.points - a.points);
+  return rows;
+}
+
 // Évalue une sélection de dés (tableau de VALEURS, pas d'indices — c'est à
 // l'appelant de traduire indices -> valeurs). Renvoie :
 //   { valid: true,  points, shape }               si la sélection compte

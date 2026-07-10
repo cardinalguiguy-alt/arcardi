@@ -252,20 +252,27 @@ export default function Room() {
     <div className="wrap wrap-room">
       <Embers />
       <Brand lang={lang} setLang={setLang} t={t} onHome={brandHome} right={
-        <button className="btn ghost" style={{ width: "auto", margin: 0, padding: "8px 14px", fontSize: 13 }} onClick={leaveRoom}>
-          {t("leaveRoom")}
-        </button>
-      } />
-
-      {playing && (
-        // Le code du salon reste consultable, mais discret : une pastille
-        // fixée en bas à gauche de l'écran, hors du flux, qui ne prend
-        // pas de place au-dessus du jeu (priorité : jouabilité).
-        <div className="room-code-fab">
+        // Le code du salon vit maintenant en haut à droite (échange demandé
+        // avec l'ancien bouton "Quitter le salon") : toujours consultable,
+        // sans prendre de place au-dessus du jeu.
+        <div className="room-code-pill" title={t("roomCode") ? undefined : undefined}>
           <span className="dot" />
           {room.code}
         </div>
-      )}
+      } />
+
+      {/* Quitter le salon : symbole "sortie" rouge, discret, fixé en bas à
+          gauche (ancienne place du code). Au survol, il s'allume et déplie
+          le libellé complet — au doigt (pas de hover), il reste assez
+          visible d'office. */}
+      <button className="leave-room-fab" onClick={leaveRoom} title={t("leaveRoom")} aria-label={t("leaveRoom")}>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+          <polyline points="16 17 21 12 16 7" />
+          <line x1="21" y1="12" x2="9" y2="12" />
+        </svg>
+        <span className="leave-room-label">{t("leaveRoom")}</span>
+      </button>
 
       {hostGone && (
         // L'hôte est l'arbitre de tous les jeux : sans lui, la partie est

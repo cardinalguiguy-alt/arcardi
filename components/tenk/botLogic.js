@@ -1,4 +1,4 @@
-import { evaluateSelection } from "./scoring";
+import { evaluateSelection, findPatternIndices } from "./scoring";
 
 /* ==========================================================================
    10000 — heuristique des bots (sièges vides comblés, comme Président et
@@ -15,18 +15,11 @@ const SMALL_STRAIGHTS = [
 // Repère une suite courte (1-2-3-4-5 ou 2-3-4-5-6) noyée dans le lancer,
 // même avec un doublon en trop (ex. [1,2,3,4,5,3]) — renvoie les INDICES
 // des 5 dés à garder, ou null si aucune des deux suites n'est présente.
+// (findPatternIndices est partagé avec scoring.js, source unique de vérité.)
 function findSmallStraightIndices(values) {
   for (const pattern of SMALL_STRAIGHTS) {
-    const used = new Array(values.length).fill(false);
-    const idxs = [];
-    let ok = true;
-    for (const v of pattern) {
-      const idx = values.findIndex((val, i) => val === v && !used[i]);
-      if (idx === -1) { ok = false; break; }
-      used[idx] = true;
-      idxs.push(idx);
-    }
-    if (ok) return idxs;
+    const idxs = findPatternIndices(values, pattern);
+    if (idxs) return idxs;
   }
   return null;
 }

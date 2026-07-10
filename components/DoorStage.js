@@ -18,6 +18,11 @@ import GameRulesButton from "./GameRulesButton";
 
    Réinitialisé à 'closed' à chaque fois que `gameId` change (nouveau jeu
    lancé par l'hôte) — on ne saute jamais la mise en scène.
+
+   Disposition (retour d'expérience du porteur de projet) : le titre du jeu
+   doit être EN HAUT et bien lisible, le bouton "Jouer" EN DESSOUS du cadre
+   en bois — plus l'un ni l'autre planqués/centrés à l'intérieur de l'encart
+   comme avant, où les deux se fondaient dans le décor.
    ========================================================================== */
 
 export default function DoorStage({ gameId, icon, name, accentVar, lang, t, children }) {
@@ -44,32 +49,36 @@ export default function DoorStage({ gameId, icon, name, accentVar, lang, t, chil
     }, 3000); // durée EXACTE de door-open.mp3 (5s d'origine accélérées à 3s) et de la transition CSS .door-panel
   }
 
-  function closeDoor() {
-    clearTimeout(openTimer.current);
-    setDoorState("closed");
-  }
-
   const closed = doorState !== "open";
   const opening = doorState === "opening";
 
   return (
-    <div className="door-stage" style={{ "--accent": `var(${accentVar})` }}>
+    <div className="door-wrap" style={{ "--accent": `var(${accentVar})` }}>
       {closed && (
-        <>
-          <div className={"door-panel left" + (opening ? " open" : "")}><span className="door-handle" /></div>
-          <div className={"door-panel right" + (opening ? " open" : "")}><span className="door-handle" /></div>
-          <div className={"door-label" + (opening ? " hidden" : "")}>
-            <span className="door-label-icon">{icon}</span>
-            <span className="door-label-name">{name}</span>
-            <button className="door-play-btn" onClick={openDoor}>{t ? t("stagePlay") : "▶ Jouer"}</button>
-          </div>
-        </>
+        <div className={"door-title-top" + (opening ? " hidden" : "")}>
+          <span className="door-title-icon">{icon}</span>
+          <span className="door-title-name">{name}</span>
+        </div>
       )}
-      {doorState === "open" && (
-        <div className="door-content" key={entryKey}>
-          <button className="door-replay-btn" onClick={closeDoor} title={t ? t("stageReplay") : "Revoir l'entrée"} aria-label={t ? t("stageReplay") : "Revoir l'entrée"}>↺</button>
-          <GameRulesButton gameId={gameId} lang={lang} />
-          {children}
+
+      <div className="door-stage">
+        {closed && (
+          <>
+            <div className={"door-panel left" + (opening ? " open" : "")}><span className="door-handle" /></div>
+            <div className={"door-panel right" + (opening ? " open" : "")}><span className="door-handle" /></div>
+          </>
+        )}
+        {doorState === "open" && (
+          <div className="door-content" key={entryKey}>
+            <GameRulesButton gameId={gameId} lang={lang} />
+            {children}
+          </div>
+        )}
+      </div>
+
+      {closed && (
+        <div className={"door-play-wrap" + (opening ? " hidden" : "")}>
+          <button className="door-play-btn" onClick={openDoor}>{t ? t("stagePlay") : "▶ Jouer"}</button>
         </div>
       )}
     </div>

@@ -132,7 +132,11 @@ export default function RoomChat({ room, me, t }) {
           </form>
         </div>
       )}
-      <button className="chat-fab" onClick={toggle} aria-label={t("chatTitle")}>
+      <button
+        className={"chat-fab" + (open ? " open" : "") + (unread > 0 ? " alert" : "")}
+        onClick={toggle}
+        aria-label={t("chatTitle")}
+      >
         💬
         {unread > 0 && <span className="badge">{unread > 9 ? "9+" : unread}</span>}
       </button>

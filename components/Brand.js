@@ -1,6 +1,7 @@
 "use client";
 import { useRef, useState } from "react";
 import FlagIcon from "./FlagIcon";
+import SettingsMenu from "./SettingsMenu";
 
 // `onHome` (optionnel) : action de navigation déclenchée par un clic sur le
 // logo. Chaque page fournit la sienne (retour au menu principal, retour au
@@ -50,6 +51,7 @@ export default function Brand({ lang, setLang, t, right, onHome }) {
         {"ARCARDI".split("").map((c, i) => <span className="tile" key={i}>{c}</span>)}
       </button>
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <SettingsMenu t={t} />
         <button
           className="btn ghost"
           style={{ width: "auto", margin: 0, padding: "8px 12px", fontSize: 13 }}

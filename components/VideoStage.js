@@ -62,23 +62,21 @@ export default function VideoStage({ gameId, icon, name, accentVar, lang, t, chi
     }, FADE_MS);
   }
 
-  function replay() {
-    clearTimeout(fadeTimer.current);
-    setState("closed");
-  }
-
   const closed = state === "closed";
   const showVideo = state === "playing" || state === "fading";
 
+  // Même disposition que DoorStage : titre EN HAUT, bouton "Jouer" EN
+  // DESSOUS du cadre (classes .door-title-top/.door-play-wrap réutilisées).
   return (
-    <div className="video-stage" style={{ "--accent": `var(${accentVar})` }}>
+    <div className="door-wrap" style={{ "--accent": `var(${accentVar})` }}>
       {closed && (
-        <div className="video-label">
-          <span className="video-label-icon">{icon}</span>
-          <span className="video-label-name">{name}</span>
-          <button className="video-play-btn" onClick={play}>{t ? t("stagePlay") : "▶ Jouer"}</button>
+        <div className="door-title-top">
+          <span className="door-title-icon">{icon}</span>
+          <span className="door-title-name">{name}</span>
         </div>
       )}
+
+      <div className="video-stage">
       {showVideo && (
         <video
           ref={videoRef}
@@ -93,9 +91,15 @@ export default function VideoStage({ gameId, icon, name, accentVar, lang, t, chi
       )}
       {state === "open" && (
         <div className="video-stage-content" key={entryKey}>
-          <button className="door-replay-btn" onClick={replay} title={t ? t("stageReplay") : "Revoir l'entrée"} aria-label={t ? t("stageReplay") : "Revoir l'entrée"}>↺</button>
           <GameRulesButton gameId={gameId} lang={lang} />
           {children}
+        </div>
+      )}
+      </div>
+
+      {closed && (
+        <div className="door-play-wrap">
+          <button className="video-play-btn" onClick={play}>{t ? t("stagePlay") : "▶ Jouer"}</button>
         </div>
       )}
     </div>

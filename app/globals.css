@@ -144,21 +144,48 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 .crossfade-old.cf-fading{ opacity:0; transform:translateY(-10px) scale(.98); filter:blur(3px); }
 
 /* ===== Salon : mode "scène" quand une manche est en cours ===== */
-/* Le code du salon devient une pastille discrète, fixée en bas à gauche de
-   l'écran, hors du flux normal — elle ne prend pas de place au-dessus du
-   jeu et ne bouge pas quand on scrolle. Priorité : jouabilité, pas de
-   bandeau qui distrait pendant la partie. */
-.room-code-fab{
-  position:fixed; left:14px; bottom:calc(14px + env(safe-area-inset-bottom, 0px)); z-index:60;
+/* Le code du salon vit dans une pastille EN HAUT À DROITE (slot `right` de
+   Brand), échangée avec l'ancien bouton "Quitter le salon" : toujours
+   consultable, jamais au-dessus du jeu. */
+.room-code-pill{
   display:flex; align-items:center; gap:7px;
   background:rgba(18,20,42,.78); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px);
   border:1.5px solid var(--line); border-radius:99px;
   padding:7px 13px 7px 11px; font-family:'Space Mono'; font-size:12px; font-weight:700;
   box-shadow:0 6px 18px rgba(0,0,0,.35); white-space:nowrap; letter-spacing:.04em;
 }
-.room-code-fab .dot{
+.room-code-pill .dot{
   width:7px; height:7px; border-radius:50%; background:var(--p1); flex:none;
   animation:flicker 1.6s ease-in-out infinite;
+}
+
+/* "Quitter le salon" : symbole sortie ROUGE, discret, fixé en bas à gauche
+   (ancienne place du code). Au survol il s'allume et déplie son libellé ;
+   au doigt (pas de hover) il reste assez visible d'office. */
+.leave-room-fab{
+  position:fixed; left:14px; bottom:calc(14px + env(safe-area-inset-bottom, 0px)); z-index:60;
+  display:flex; align-items:center; height:40px; padding:0 11px;
+  background:rgba(42,14,14,.8); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px);
+  border:1.5px solid rgba(214,69,69,.55); border-radius:99px;
+  color:#e05555; cursor:pointer; opacity:.55; overflow:hidden; white-space:nowrap;
+  box-shadow:0 6px 18px rgba(0,0,0,.35);
+  transition:opacity .2s ease, background .2s ease, border-color .2s ease, box-shadow .2s ease;
+}
+.leave-room-fab svg{ flex:none; }
+.leave-room-fab .leave-room-label{
+  max-width:0; opacity:0; margin-left:0; overflow:hidden;
+  font-size:12.5px; font-weight:800; letter-spacing:.02em;
+  transition:max-width .25s ease, opacity .2s ease, margin-left .25s ease;
+}
+.leave-room-fab:hover, .leave-room-fab:focus-visible{
+  opacity:1; background:rgba(70,16,16,.92); border-color:#d64545;
+  box-shadow:0 6px 18px rgba(214,69,69,.35);
+}
+.leave-room-fab:hover .leave-room-label, .leave-room-fab:focus-visible .leave-room-label{
+  max-width:150px; opacity:1; margin-left:8px;
+}
+@media (hover: none){
+  .leave-room-fab{ opacity:.75; }
 }
 
 /* Pastille discrète pour passer à la piste d'ambiance suivante (voir
@@ -381,11 +408,29 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 .echo-lever-btn:disabled{ opacity:.55; cursor:default; }
 
 /* ---------- Chat de salon (discret, flottant) ---------- */
+/* Bouton tchat : discret au repos (même famille visuelle que les autres
+   pastilles fixes — fond sombre translucide, fine bordure), il ne se révèle
+   pleinement (dégradé coloré, pleine opacité) qu'au survol, quand le panneau
+   est ouvert, ou quand une notification (badge) attend d'être lue. */
 .chat-fab{
-  position:fixed; right:18px; bottom:calc(18px + env(safe-area-inset-bottom, 0px)); width:52px; height:52px; border-radius:50%;
-  background:linear-gradient(135deg, var(--p2), var(--p5)); border:none; cursor:pointer;
-  display:flex; align-items:center; justify-content:center; font-size:22px; z-index:60;
-  box-shadow:0 6px 18px rgba(0,0,0,.35);
+  position:fixed; right:18px; bottom:calc(18px + env(safe-area-inset-bottom, 0px)); width:48px; height:48px; border-radius:50%;
+  background:rgba(18,20,42,.78); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px);
+  border:1.5px solid var(--line); cursor:pointer;
+  display:flex; align-items:center; justify-content:center; font-size:20px; z-index:60;
+  box-shadow:0 6px 18px rgba(0,0,0,.35); opacity:.45;
+  transition:opacity .2s ease, background .2s ease, transform .15s ease, border-color .2s ease;
+}
+.chat-fab:hover, .chat-fab:focus-visible, .chat-fab.open, .chat-fab.alert{
+  opacity:1; background:linear-gradient(135deg, var(--p2), var(--p5));
+  border-color:transparent; transform:scale(1.05);
+}
+.chat-fab.alert{ animation:chatFabPulse 1.6s ease-in-out infinite; }
+@keyframes chatFabPulse{
+  0%, 100%{ box-shadow:0 6px 18px rgba(0,0,0,.35); }
+  50%{ box-shadow:0 6px 22px -2px var(--p2); }
+}
+@media (hover: none){
+  .chat-fab{ opacity:.7; }
 }
 .chat-fab .badge{
   position:absolute; top:-4px; right:-4px; background:var(--p1); color:#12142A; font-weight:800;
@@ -807,18 +852,18 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
   box-shadow:0 0 0 2px var(--accent, var(--p2)) inset, 0 0 40px -12px var(--accent, var(--p2));
   display:flex; align-items:center; justify-content:center;
 }
-.video-label{
-  position:relative; z-index:5; display:flex; flex-direction:column; align-items:center;
-  justify-content:center; gap:10px; text-align:center;
-}
-.video-label-icon{ font-size:30px; }
-.video-label-name{ font-family:'Bungee'; font-size:15px; color:#fff; text-shadow:0 2px 6px rgba(0,0,0,.6); }
+/* Bouton Jouer sous le cadre (même gabarit généreux que .door-play-btn) —
+   le titre est désormais au-dessus du cadre (.door-title-top), plus de
+   .video-label centré dans l'encart. */
 .video-play-btn{
-  margin-top:4px; padding:11px 26px; border:none; border-radius:99px;
-  font-family:'Bungee'; font-size:13px; color:var(--ink-on-accent); background:var(--p2);
-  box-shadow:0 4px 0 rgba(0,0,0,.35); cursor:pointer; transition:transform .12s ease;
+  padding:16px 44px; border:none; border-radius:99px;
+  font-family:'Bungee'; font-size:17px; letter-spacing:.02em;
+  color:var(--ink-on-accent); background:var(--accent, var(--p2));
+  box-shadow:0 6px 0 rgba(0,0,0,.35), 0 10px 24px -8px var(--accent, var(--p2));
+  cursor:pointer; transition:transform .12s ease, filter .12s ease, box-shadow .12s ease;
 }
-.video-play-btn:hover{ transform:scale(1.05); filter:brightness(1.08); }
+.video-play-btn:hover{ transform:translateY(-2px) scale(1.04); filter:brightness(1.08); }
+.video-play-btn:active{ transform:translateY(3px) scale(.99); box-shadow:0 2px 0 rgba(0,0,0,.35); }
 .video-stage-clip{
   position:absolute; inset:0; z-index:10; width:100%; height:100%;
   object-fit:cover; border-radius:20px;
@@ -994,15 +1039,42 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 
 /* ----- Porte d'entrée de jeu (DoorStage) -----
    perspective sur le conteneur de scène, deux battants qui pivotent en 3D,
-   contenu qui "avance vers le joueur" à l'ouverture (povPush). */
+   contenu qui "avance vers le joueur" à l'ouverture (povPush).
+
+   Disposition : .door-wrap empile titre (en haut, bien lisible) / cadre en
+   bois / bouton Jouer (en dessous, bien visible) — plus rien de caché dans
+   l'overlay centré de l'encart comme avant. --accent posé sur .door-wrap
+   pour que titre, cadre ET bouton en héritent tous les trois. */
+.door-wrap{
+  display:flex; flex-direction:column; align-items:center;
+  width:min(960px, 94vw); max-width:100%; margin:0 auto;
+}
+.door-title-top{
+  display:flex; align-items:center; gap:12px; margin-bottom:16px;
+  transition:opacity .3s ease;
+}
+.door-title-top.hidden{ opacity:0; }
+.door-title-icon{ font-size:36px; filter:drop-shadow(0 3px 8px rgba(0,0,0,.5)); }
+.door-title-name{
+  font-family:'Bungee'; font-size:clamp(22px, 4.2vw, 30px); color:#fff; letter-spacing:.01em;
+  text-shadow:0 3px 10px rgba(0,0,0,.6), 0 0 22px var(--accent, transparent);
+}
+.door-play-wrap{ margin-top:20px; transition:opacity .3s ease; }
+.door-play-wrap.hidden{ opacity:0; pointer-events:none; }
+/* Curtain/Flash/VideoStage vivent maintenant dans le même gabarit .door-wrap
+   (titre au-dessus, Jouer en dessous) : leur largeur propre s'efface au
+   profit de celle du wrap. */
+.door-wrap .curtain-stage, .door-wrap .flash-stage, .door-wrap .video-stage{
+  width:100%; min-width:0;
+}
 .door-stage{
-  position:relative; overflow:hidden; perspective:1400px;
+  position:relative; overflow:hidden; perspective:1400px; width:100%;
   background-image:
     radial-gradient(120% 90% at 50% 12%, rgba(0,0,0,0) 0%, rgba(0,0,0,.35) 100%),
     repeating-linear-gradient(90deg, rgba(0,0,0,.10) 0 3px, transparent 3px 30px),
     linear-gradient(175deg, #3a2818, #2a1c10 75%);
   border:2px solid var(--line); border-radius:22px;
-  padding:20px; min-height:440px; min-width:min(320px, 100%); width:min(960px, 94vw); max-width:100%;
+  padding:20px; min-height:380px; min-width:min(320px, 100%); max-width:100%;
   box-shadow:0 0 0 2px var(--accent, var(--p2)) inset, 0 0 40px -12px var(--accent, var(--p2));
 }
 .door-panel{
@@ -1026,41 +1098,37 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 }
 .door-panel.left .door-handle{ right:14px; }
 .door-panel.right .door-handle{ left:14px; }
-.door-label{
-  position:absolute; inset:0; z-index:56; display:flex; flex-direction:column; align-items:center;
-  justify-content:center; gap:10px; text-align:center; pointer-events:none;
-  transition:opacity .3s ease;
-}
-.door-label.hidden{ opacity:0; }
-.door-label-icon{ font-size:30px; }
-.door-label-name{ font-family:'Bungee'; font-size:15px; color:#fff; text-shadow:0 2px 6px rgba(0,0,0,.6); }
 .door-play-btn{
-  pointer-events:auto; margin-top:4px; padding:11px 26px; border:none; border-radius:99px;
-  font-family:'Bungee'; font-size:13px; color:var(--ink-on-accent); background:var(--p2);
-  box-shadow:0 4px 0 rgba(0,0,0,.35); cursor:pointer; transition:transform .12s ease;
+  padding:16px 44px; border:none; border-radius:99px;
+  font-family:'Bungee'; font-size:17px; letter-spacing:.02em;
+  color:var(--ink-on-accent); background:var(--accent, var(--p2));
+  box-shadow:0 6px 0 rgba(0,0,0,.35), 0 10px 24px -8px var(--accent, var(--p2));
+  cursor:pointer; transition:transform .12s ease, filter .12s ease, box-shadow .12s ease;
 }
-.door-play-btn:hover{ transform:scale(1.05); filter:brightness(1.08); }
+.door-play-btn:hover{ transform:translateY(-2px) scale(1.04); filter:brightness(1.08); }
+.door-play-btn:active{ transform:translateY(3px) scale(.99); box-shadow:0 2px 0 rgba(0,0,0,.35); }
 .door-content{ position:relative; animation:povPush .7s cubic-bezier(.2,.8,.3,1) both; }
-.door-replay-btn{
-  position:absolute; top:8px; right:8px; z-index:50; width:34px; height:34px; padding:0;
-  border:none; border-radius:50%; font-size:13px; font-weight:800; color:var(--muted);
-  background:rgba(0,0,0,.22); cursor:pointer; opacity:.4;
-  display:flex; align-items:center; justify-content:center;
-  transition:opacity .15s ease, background .15s ease;
-}
-.door-replay-btn:hover{ opacity:1; background:rgba(0,0,0,.45); }
+/* (Le bouton "revoir l'entrée" a été retiré : inutile pour les joueurs,
+   il encombrait le coin de chaque jeu. .door-replay-btn n'existe plus.) */
 
-/* ----- Bouton "règles" (GameRulesButton) — coin OPPOSÉ du bouton "revoir
-   l'entrée" (.door-replay-btn), même style discret, présent dans les 4
-   stages (Door/Curtain/Flash/VideoStage) donc dans TOUS les jeux. ----- */
+/* ----- Bouton "règles" (GameRulesButton) — présent dans les 4 stages
+   (Door/Curtain/Flash/VideoStage) donc dans TOUS les jeux. Restylé façon
+   médaillon doré du thème (toujours discret, mais joli) : petit "i" serif
+   sur fond bois sombre, liseré doré, halo au survol. ----- */
 .rules-info-btn{
-  position:absolute; top:8px; left:8px; z-index:50; width:34px; height:34px; padding:0;
-  border:none; border-radius:50%; font-family:'Bungee'; font-size:14px; font-style:italic;
-  color:var(--muted); background:rgba(0,0,0,.22); cursor:pointer; opacity:.4;
+  position:absolute; top:8px; left:8px; z-index:50; width:32px; height:32px; padding:0;
+  border:1.5px solid rgba(232,201,138,.5); border-radius:50%;
+  font-family:Georgia, 'Times New Roman', serif; font-size:16px; font-style:italic; font-weight:700;
+  color:#e8c98a; background:radial-gradient(circle at 32% 28%, rgba(64,41,26,.95), rgba(26,17,9,.95));
+  cursor:pointer; opacity:.7;
   display:flex; align-items:center; justify-content:center;
-  transition:opacity .15s ease, background .15s ease;
+  box-shadow:0 2px 8px rgba(0,0,0,.4), inset 0 1px 0 rgba(232,201,138,.25);
+  transition:opacity .15s ease, transform .15s ease, box-shadow .2s ease;
 }
-.rules-info-btn:hover{ opacity:1; background:rgba(0,0,0,.45); }
+.rules-info-btn:hover{
+  opacity:1; transform:scale(1.1);
+  box-shadow:0 2px 10px rgba(0,0,0,.45), 0 0 14px rgba(232,201,138,.4), inset 0 1px 0 rgba(232,201,138,.3);
+}
 .rules-modal-overlay{
   position:fixed; inset:0; z-index:200; background:rgba(6,8,16,.72); backdrop-filter:blur(3px);
   display:flex; align-items:center; justify-content:center; padding:20px;
@@ -1139,20 +1207,18 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
   background-image:repeating-linear-gradient(90deg,#caa14a 0 6px,transparent 6px 12px);
   opacity:.85;
 }
-.curtain-label{
-  position:absolute; inset:0; z-index:56; display:flex; flex-direction:column; align-items:center;
-  justify-content:center; gap:10px; text-align:center; pointer-events:none;
-  transition:opacity .3s ease;
-}
-.curtain-label.hidden{ opacity:0; }
-.curtain-label-icon{ font-size:30px; }
-.curtain-label-name{ font-family:'Bungee'; font-size:15px; color:#fff; text-shadow:0 2px 6px rgba(0,0,0,.6); }
+/* (.curtain-label supprimé : le titre du jeu est désormais au-dessus du
+   cadre via .door-title-top, le bouton Jouer en dessous via .door-play-wrap.) */
+/* Bouton Jouer sous le cadre (même gabarit généreux que .door-play-btn) */
 .curtain-play-btn{
-  pointer-events:auto; margin-top:4px; padding:11px 26px; border:none; border-radius:99px;
-  font-family:'Bungee'; font-size:13px; color:#fff; background:linear-gradient(135deg, #a83030, #6e1212);
-  box-shadow:0 4px 0 rgba(0,0,0,.35); cursor:pointer; transition:transform .12s ease;
+  padding:16px 44px; border:none; border-radius:99px;
+  font-family:'Bungee'; font-size:17px; letter-spacing:.02em;
+  color:#fff; background:linear-gradient(135deg, #a83030, #6e1212);
+  box-shadow:0 6px 0 rgba(0,0,0,.35), 0 10px 24px -8px rgba(168,48,48,.8);
+  cursor:pointer; transition:transform .12s ease, filter .12s ease, box-shadow .12s ease;
 }
-.curtain-play-btn:hover{ transform:scale(1.05); filter:brightness(1.08); }
+.curtain-play-btn:hover{ transform:translateY(-2px) scale(1.04); filter:brightness(1.08); }
+.curtain-play-btn:active{ transform:translateY(3px) scale(.99); box-shadow:0 2px 0 rgba(0,0,0,.35); }
 .curtain-content{ position:relative; animation:povPush .7s cubic-bezier(.2,.8,.3,1) both; }
 
 /* ----- Flash + zoom (FlashStage) -----
@@ -1172,14 +1238,17 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
   justify-content:center; gap:10px; text-align:center; transition:opacity .2s ease;
 }
 .flash-cover.fading{ opacity:0; }
-.flash-cover-icon{ font-size:30px; }
-.flash-cover-name{ font-family:'Bungee'; font-size:15px; color:#fff; text-shadow:0 2px 6px rgba(0,0,0,.6); }
+/* (.flash-cover-icon/-name supprimés : titre au-dessus du cadre désormais.) */
+/* Bouton Jouer sous le cadre (même gabarit généreux que .door-play-btn) */
 .flash-play-btn{
-  margin-top:4px; padding:11px 26px; border:none; border-radius:99px;
-  font-family:'Bungee'; font-size:13px; color:var(--ink-on-accent); background:var(--accent, var(--p2));
-  box-shadow:0 4px 0 rgba(0,0,0,.35); cursor:pointer; transition:transform .12s ease;
+  padding:16px 44px; border:none; border-radius:99px;
+  font-family:'Bungee'; font-size:17px; letter-spacing:.02em;
+  color:var(--ink-on-accent); background:var(--accent, var(--p2));
+  box-shadow:0 6px 0 rgba(0,0,0,.35), 0 10px 24px -8px var(--accent, var(--p2));
+  cursor:pointer; transition:transform .12s ease, filter .12s ease, box-shadow .12s ease;
 }
-.flash-play-btn:hover{ transform:scale(1.05); filter:brightness(1.08); }
+.flash-play-btn:hover{ transform:translateY(-2px) scale(1.04); filter:brightness(1.08); }
+.flash-play-btn:active{ transform:translateY(3px) scale(.99); box-shadow:0 2px 0 rgba(0,0,0,.35); }
 .flash-white{
   position:absolute; inset:0; z-index:57; background:#fff; opacity:0; pointer-events:none;
   transition:opacity .22s ease;
@@ -1220,8 +1289,7 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
    ligne" ne dépend jamais du survol. */
 @media (pointer: coarse){
   .chromatik-card.size-sm{ width:60px; height:88px; font-size:20px; }
-  .door-replay-btn{ opacity:.55; } /* pas de :hover au doigt : un peu plus visible d'office */
-  .rules-info-btn{ opacity:.55; }
+  .rules-info-btn{ opacity:.8; } /* pas de :hover au doigt : plus visible d'office */
 }
 
 /* Salon (lobby) sur mobile : la sélection de jeu passe en 2 colonnes
@@ -1598,71 +1666,170 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 }
 
 
-/* ==========================================================================
-   10000 (Dix Mille) — HUD cyberpunk anguleux : panneaux à coins coupés,
-   grille de circuit imprimé en fond, halos bleu/cyan nets, dés sombres
-   façon plastique usé avec pips néon roses (direction "1A — Grille
-   Circuit" retenue parmi les deux pistes proposées, cf. design fourni).
-   Identité volontairement à part du Yahtzee (bois chaleureux) : ambiance
-   sombre, HUD tech, dés noirs à pips lumineux roses, halo en rayons quand
-   un dé fait partie de la sélection en cours (inspiration fournie).
 
-   Layout : mobile-first en une colonne (identique à tous les autres jeux
-   du site) ; à partir de 900px de large (laptop), la table de jeu passe en
-   format PAYSAGE : plateau de dés + actions à gauche, classement/objectif
-   dans une colonne latérale à droite (voir .tenk-layout plus bas).
+/* ==========================================================================
+   10000 (Dix Mille) — casino néon cyan/rose, esprit "meilleur jeu Flash des
+   années 2000" plutôt que HUD tech sévère : panneaux arrondis EN RELIEF
+   (lèvre claire en haut, ombre portée nette en dessous, comme un gros
+   bouton de jeu Flash), typographie ronde et lisible ('Bungee' pour les
+   titres/gros chiffres/boutons, 'Space Mono' pour les scores compacts),
+   dés noirs à pips néon roses avec halo en rayons pendant la sélection.
+
+   Redesign (retour d'expérience du porteur de projet) : l'ancienne version
+   "HUD anguleux" à coins coupés (clip-path) faisait trop sévère/technique
+   — TOUT est ici arrondi (border-radius), avec un vrai relief façon jeu
+   Flash plutôt que des angles nets. L'interface doit aussi GUIDER le
+   joueur : après chaque lancer, la combinaison la plus rentable est
+   pré-sélectionnée automatiquement (dés en surbrillance + ligne mise en
+   avant dans le panneau "Combinaisons"), sans jamais l'imposer — le joueur
+   reste libre de cliquer un autre dé ou une autre ligne à tout moment
+   (voir applyLocalState/selectCombo dans TenkGame.js).
+
+   Layout : mobile-first en une seule colonne (dés, puis panneau
+   combinaisons, puis classement — grid-template-areas permet de réordonner
+   sans dupliquer le JSX) ; à partir de 900px de large (laptop), 3 colonnes
+   côte à côte : combinaisons | plateau de dés | classement.
    ========================================================================== */
 .tenk-stage{
-  position:relative; border-radius:14px; padding:20px;
+  position:relative; border-radius:30px; padding:20px;
   background:
     radial-gradient(120% 90% at 50% 0%, rgba(79,209,255,.10) 0%, rgba(5,8,20,0) 55%),
     var(--tenk-felt);
-  border:2px solid rgba(79,209,255,.28);
-  box-shadow:0 0 0 1px rgba(79,209,255,.12) inset, 0 20px 50px -20px rgba(0,0,0,.6);
-  clip-path:polygon(16px 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%,0 16px);
+  border:2px solid rgba(79,209,255,.25);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.06),
+    inset 0 0 0 1px rgba(79,209,255,.1),
+    0 20px 50px -20px rgba(0,0,0,.65);
 }
 
-/* ----- En-tête HUD : titre + badge objectif ----- */
+/* ----- Indicateur de tour : reprend .turn-banner-badge (Président/
+   Chromatik) pour rester cohérent avec le reste du site, recoloré aux
+   teintes cyan/rose du 10000. "Mon tour" pulse et attire l'œil ; le tour
+   d'un adversaire reste lisible mais calme (pas de pulsation). ----- */
+.tenk-stage .turn-banner-badge{
+  background:linear-gradient(180deg, var(--acc-tenk), #1f9fce); color:#031824;
+  box-shadow:0 4px 0 #0d5f80;
+}
+.tenk-stage .turn-banner-badge.other{
+  background:rgba(79,209,255,.12); color:#eafcff; border:1.5px solid rgba(79,209,255,.35);
+  box-shadow:none; animation:none;
+}
+
+/* ----- En-tête HUD : titre + badge objectif (pilule bien arrondie) ----- */
 .tenk-hud-top{
   position:relative; z-index:1; display:flex; align-items:center; justify-content:center;
   gap:10px; margin-bottom:14px; flex-wrap:wrap;
 }
 .tenk-target-badge{
-  font-family:'Space Mono', monospace; font-size:11px; font-weight:700; letter-spacing:.08em;
-  padding:6px 12px; color:var(--tenk-pink); background:rgba(11,26,58,.6);
-  border:1px solid rgba(255,95,176,.45); text-transform:uppercase;
-  clip-path:polygon(8px 0,100% 0,100% 100%,0 100%,0 8px);
+  font-family:'Space Mono', monospace; font-size:12px; font-weight:700; letter-spacing:.04em;
+  padding:7px 16px; color:var(--tenk-pink); background:rgba(11,26,58,.65);
+  border:1.5px solid rgba(255,95,176,.4); border-radius:999px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.08), 0 3px 0 rgba(0,0,0,.35);
 }
 
-/* ----- Layout paysage laptop : plateau à gauche, classement à droite ----- */
+/* ----- Layout paysage laptop : combinaisons | plateau | classement ----- */
 .tenk-layout{
-  display:flex; flex-direction:column; gap:18px;
+  display:grid; grid-template-columns:1fr; grid-template-areas:"main" "combos" "sidebar";
+  gap:16px;
 }
-.tenk-main{ min-width:0; }
-.tenk-sidebar{ min-width:0; }
+.tenk-main{ grid-area:main; min-width:0; }
+.tenk-combos{ grid-area:combos; min-width:0; }
+.tenk-sidebar{ grid-area:sidebar; min-width:0; }
 
 @media (min-width: 900px){
   .tenk-layout{
-    display:grid; grid-template-columns:1fr 268px; align-items:start; gap:22px;
+    grid-template-columns:216px 1fr 240px;
+    grid-template-areas:"combos main sidebar";
+    align-items:start; gap:18px;
   }
 }
 
-/* ----- Feutre / plateau : grille circuit imprimé en fond ----- */
+/* ----- Panneau "Combinaisons possibles" (colonne de gauche en paysage) -----
+   Guide le joueur : liste chaque combinaison jouable sur CE lancer, triée
+   par points. Cliquer une ligne sélectionne exactement ces dés (alternative
+   à cliquer les dés un par un) — voir selectCombo()/isRowActive() dans
+   TenkGame.js. La meilleure ligne est pré-sélectionnée automatiquement dès
+   que les dés atterrissent. */
+.tenk-combos{
+  display:flex; flex-direction:column; gap:10px; padding:16px 14px;
+  background:radial-gradient(120% 100% at 50% 0%, rgba(79,209,255,.07) 0%, transparent 60%), var(--tenk-felt);
+  border:1.5px solid rgba(79,209,255,.22); border-radius:24px; overflow:hidden;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.05), inset 0 0 30px rgba(0,0,0,.4), 0 4px 0 rgba(0,0,0,.3);
+}
+.tenk-combos-title{
+  font-family:'Bungee'; font-size:13.5px; color:#eafcff; letter-spacing:.02em;
+  text-shadow:0 0 8px rgba(79,209,255,.45);
+}
+.tenk-combos-empty{
+  font-size:12.5px; color:var(--muted); line-height:1.5; margin:2px 0;
+}
+.tenk-combo-list{ display:flex; flex-direction:column; gap:8px; }
+.tenk-combo-row{
+  position:relative; display:flex; align-items:center; gap:8px; width:100%;
+  padding:10px 12px; border-radius:16px; cursor:pointer; text-align:left;
+  background:rgba(11,26,58,.55); border:1.5px solid rgba(79,209,255,.18);
+  box-shadow:0 3px 0 rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.04);
+  transition:transform .12s ease, box-shadow .12s ease, border-color .12s ease, background .12s ease;
+}
+.tenk-combo-row:hover:not(:disabled){ transform:translateY(-2px); border-color:rgba(79,209,255,.45); }
+.tenk-combo-row:active:not(:disabled){ transform:translateY(1px); box-shadow:0 1px 0 rgba(0,0,0,.35); }
+.tenk-combo-row:disabled{ cursor:default; opacity:.55; }
+.tenk-combo-row.best{ border-color:rgba(255,209,102,.55); }
+.tenk-combo-row.active{
+  border-color:var(--acc-tenk); background:rgba(79,209,255,.14);
+  box-shadow:0 3px 0 rgba(0,0,0,.35), 0 0 16px rgba(79,209,255,.4), inset 0 1px 0 rgba(255,255,255,.08);
+}
+.tenk-combo-best-badge{
+  position:absolute; top:-8px; left:-6px; font-size:14px;
+  filter:drop-shadow(0 0 4px rgba(255,209,102,.8));
+  animation:tenkBadgePop .4s ease both;
+}
+@keyframes tenkBadgePop{ 0%{ transform:scale(0) rotate(-20deg); opacity:0; } 70%{ transform:scale(1.25) rotate(6deg); opacity:1; } 100%{ transform:scale(1) rotate(0); } }
+.tenk-combo-dice{
+  font-family:'Space Mono', monospace; font-weight:700; font-size:13px; color:#eafcff;
+  flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.tenk-combo-pts{
+  font-family:'Bungee'; font-size:12.5px; color:var(--tenk-pink);
+  text-shadow:0 0 6px rgba(255,95,176,.5);
+}
+.tenk-combos-shortcut{
+  margin-top:2px; text-align:center; font-size:10.5px; color:var(--muted);
+  font-family:'Space Mono', monospace; letter-spacing:.02em;
+}
+
+/* Raccourci clavier d'aide (Cmd/Ctrl+Maj+K) : pulsation brève sur le
+   panneau + amplification du glow de la ligne "meilleure combinaison"
+   pour attirer l'œil d'un joueur qui ne saurait pas quoi faire. */
+.tenk-combos.hint-pulse{ animation:tenkHintPulse .9s ease; }
+@keyframes tenkHintPulse{
+  0%{ box-shadow:inset 0 1px 0 rgba(255,255,255,.05), inset 0 0 30px rgba(0,0,0,.4), 0 4px 0 rgba(0,0,0,.3); }
+  30%{ box-shadow:inset 0 1px 0 rgba(255,255,255,.05), inset 0 0 30px rgba(0,0,0,.4), 0 4px 0 rgba(0,0,0,.3), 0 0 0 3px rgba(255,209,102,.55), 0 0 26px rgba(255,209,102,.5); }
+  100%{ box-shadow:inset 0 1px 0 rgba(255,255,255,.05), inset 0 0 30px rgba(0,0,0,.4), 0 4px 0 rgba(0,0,0,.3); }
+}
+.tenk-combos.hint-pulse .tenk-combo-row.best{
+  animation:tenkHintRowPulse .9s ease;
+}
+@keyframes tenkHintRowPulse{
+  0%,100%{ transform:translateY(0) scale(1); }
+  30%{ transform:translateY(-3px) scale(1.03); box-shadow:0 3px 0 rgba(0,0,0,.35), 0 0 20px rgba(255,209,102,.6); }
+}
+
+/* ----- Feutre / plateau : grille circuit imprimé en fond, coins ronds ----- */
 .tenk-felt{
-  position:relative; border-radius:10px; padding:26px 16px; margin-bottom:16px; overflow:hidden;
+  position:relative; border-radius:24px; padding:26px 16px; margin-bottom:16px; overflow:hidden;
   background:
     radial-gradient(120% 140% at 50% 20%, rgba(79,209,255,.09) 0%, transparent 55%),
     radial-gradient(140% 100% at 50% 100%, #0e2358 0%, var(--tenk-felt) 65%);
-  border:1.5px solid rgba(79,209,255,.22);
-  box-shadow:inset 0 0 60px rgba(0,0,0,.55), inset 0 0 0 1px rgba(255,255,255,.03);
-  clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px);
+  border:1.5px solid rgba(79,209,255,.2);
+  box-shadow:inset 0 0 60px rgba(0,0,0,.55), inset 0 0 0 1px rgba(255,255,255,.03), 0 4px 0 rgba(0,0,0,.3);
 }
 .tenk-felt::before{
-  /* Grille de circuit imprimé, même esprit que le HUD du design retenu. */
-  content:""; position:absolute; inset:0; pointer-events:none; opacity:.55;
+  /* Grille de circuit imprimé, discrète — juste une texture, plus un HUD dur. */
+  content:""; position:absolute; inset:0; pointer-events:none; opacity:.4;
   background-image:
-    repeating-linear-gradient(0deg, rgba(79,209,255,.07) 0px, transparent 1px, transparent 28px),
-    repeating-linear-gradient(90deg, rgba(79,209,255,.07) 0px, transparent 1px, transparent 28px);
+    repeating-linear-gradient(0deg, rgba(79,209,255,.06) 0px, transparent 1px, transparent 30px),
+    repeating-linear-gradient(90deg, rgba(79,209,255,.06) 0px, transparent 1px, transparent 30px);
 }
 .tenk-felt::after{
   /* Grain léger façon feutre, même technique que la vignette de Diapason. */
@@ -1676,20 +1843,27 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
   .tenk-dice-row{ gap:18px; }
 }
 
-/* ----- Dé : corps noir, pips néon rose, halo en rayons quand sélectionné ----- */
+/* ----- Dé : corps noir arrondi façon plastique glacé, pips néon rose,
+   halo en rayons quand sélectionné (signal visuel de suggestion/choix) ----- */
+.tenk-die-slot{
+  display:inline-flex; transition:transform .4s cubic-bezier(.22,1.4,.36,1);
+}
 .tenk-die{
-  position:relative; width:clamp(58px, 15vw, 76px); height:clamp(58px, 15vw, 76px);
-  border-radius:10px; border:2px solid rgba(255,255,255,.08);
-  background:linear-gradient(155deg, #26232e, #100e16 70%);
-  box-shadow:0 6px 0 rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.06), inset 0 -8px 14px rgba(0,0,0,.4);
+  position:relative; width:clamp(50px, 13vw, 66px); height:clamp(50px, 13vw, 66px);
+  border-radius:16px; border:2px solid rgba(255,255,255,.08);
+  background:
+    radial-gradient(120% 90% at 30% 18%, rgba(255,255,255,.10) 0%, transparent 45%),
+    linear-gradient(155deg, #26232e, #100e16 70%);
+  box-shadow:0 6px 0 rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.08), inset 0 -8px 14px rgba(0,0,0,.4);
   padding:0; display:flex; align-items:center; justify-content:center;
   transition:transform .16s ease, box-shadow .18s ease, border-color .18s ease;
 }
 @media (min-width: 900px){
-  .tenk-die{ width:70px; height:70px; }
+  .tenk-die{ width:60px; height:60px; }
 }
 .tenk-die.clickable{ cursor:pointer; }
 .tenk-die.clickable:hover{ transform:translateY(-3px) scale(1.05); }
+.tenk-die.clickable:active{ transform:translateY(0) scale(.97); }
 .tenk-die:disabled{ cursor:default; }
 .tenk-die.kept{ opacity:.55; filter:saturate(.7); }
 
@@ -1718,8 +1892,8 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 
 /* Halo en rayons ("burst") : invisible au repos, apparaît en rotation lente
    dès qu'un dé est sélectionné — c'est LE signal visuel qu'une combinaison
-   est en train de se former (voir l'inspiration fournie par le porteur de
-   projet). Construit en CSS pur (conic-gradient répété), aucune image. */
+   est en train de se former (auto-suggérée après chaque lancer, ou choisie
+   à la main). Construit en CSS pur (conic-gradient répété), aucune image. */
 .tenk-die-burst{
   position:absolute; z-index:1; inset:-46%; border-radius:50%; pointer-events:none;
   background:repeating-conic-gradient(from 0deg, rgba(255,95,176,.55) 0deg 4deg, transparent 4deg 18deg);
@@ -1733,7 +1907,9 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
   border-color:var(--acc-tenk);
   box-shadow:0 6px 0 rgba(0,0,0,.5), 0 0 0 3px rgba(79,209,255,.28), 0 0 22px rgba(79,209,255,.5), inset 0 1px 0 rgba(255,255,255,.1);
   transform:translateY(-5px);
+  animation:tenkSelectPop .22s cubic-bezier(.34,1.56,.64,1) both;
 }
+@keyframes tenkSelectPop{ 0%{ transform:translateY(-5px) scale(.9); } 60%{ transform:translateY(-7px) scale(1.08); } 100%{ transform:translateY(-5px) scale(1); } }
 .tenk-die-check{
   position:absolute; z-index:3; top:-8px; right:-8px; width:22px; height:22px; border-radius:50%;
   background:var(--acc-tenk); color:#031824; font-size:13px; font-weight:900;
@@ -1756,55 +1932,91 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
   100%{ transform:translateY(0) rotate(360deg) scale(1); }
 }
 
-/* ----- Score du tour, actions, feuille de scores ----- */
-.tenk-turn-score{
-  text-align:center; margin:14px 0 6px; font-family:'Space Mono'; font-weight:800;
+/* ----- Score du tour : jauge à remplir (plus ludique qu'un simple chiffre),
+   avec un repère visuel au seuil des 300 pts nécessaires pour banquer ----- */
+.tenk-turn-gauge{ margin:16px 0 6px; }
+.tenk-turn-gauge-head{
+  display:flex; align-items:baseline; justify-content:center; gap:8px;
+  font-family:'Space Mono'; font-weight:800; margin-bottom:8px;
 }
-.tenk-turn-score .n{
-  font-size:34px; color:var(--tenk-pink); text-shadow:0 0 18px rgba(255,95,176,.5);
+.tenk-turn-gauge-head .n{
+  font-size:32px; color:var(--tenk-pink); text-shadow:0 0 18px rgba(255,95,176,.5);
 }
-.tenk-turn-score .lbl{ display:block; font-size:11px; color:var(--muted); font-weight:700; letter-spacing:.05em; text-transform:uppercase; margin-top:2px; }
+.tenk-turn-gauge-head .lbl{ font-size:11px; color:var(--muted); font-weight:700; letter-spacing:.05em; text-transform:uppercase; }
+.tenk-turn-gauge-track{
+  position:relative; height:16px; max-width:340px; margin:0 auto; border-radius:999px;
+  background:rgba(255,255,255,.06); border:1.5px solid rgba(255,255,255,.08);
+  box-shadow:inset 0 2px 5px rgba(0,0,0,.5);
+  overflow:hidden;
+}
+.tenk-turn-gauge-fill{
+  height:100%; border-radius:999px; min-width:16px;
+  background:linear-gradient(90deg, var(--acc-tenk), var(--tenk-pink));
+  box-shadow:0 0 10px rgba(79,209,255,.5);
+  transition:width .35s cubic-bezier(.25,.8,.3,1.2);
+}
+.tenk-turn-gauge-fill.ready{ animation:tenkGaugeReady 1.4s ease-in-out infinite; }
+@keyframes tenkGaugeReady{ 0%,100%{ filter:brightness(1); } 50%{ filter:brightness(1.35); } }
+.tenk-turn-gauge-marker{
+  position:absolute; top:-3px; bottom:-3px; width:3px; border-radius:2px;
+  background:rgba(255,255,255,.55); box-shadow:0 0 4px rgba(0,0,0,.6);
+  transform:translateX(-50%);
+}
 
 .tenk-best-hint{
-  text-align:center; font-size:12.5px; color:var(--muted); margin:2px 0 12px;
+  text-align:center; font-size:13px; color:var(--muted); margin:2px 0 12px; line-height:1.5;
 }
 .tenk-actions{ display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin:14px 0 4px; }
+
+/* ----- Boutons : gros, ronds, "3D" façon jeu Flash — lèvre en bas,
+   s'enfoncent au clic (press satisfaisant), lueur douce au survol ----- */
 .tenk-btn-roll, .tenk-btn-bank{
-  width:auto; padding:13px 28px; margin-top:0; font-size:14.5px; font-weight:800; border:none;
-  cursor:pointer; transition:transform .12s ease, filter .12s ease;
+  width:auto; padding:14px 30px; margin-top:0; font-family:'Bungee'; font-size:13.5px;
+  font-weight:400; letter-spacing:.02em; border:none; border-radius:999px; cursor:pointer;
+  transition:transform .1s ease, filter .12s ease, box-shadow .1s ease;
 }
 .tenk-btn-roll{
-  color:#eafcff; background:linear-gradient(135deg, rgba(79,209,255,.24), rgba(79,209,255,.1));
-  border:1.5px solid rgba(79,209,255,.6); box-shadow:0 5px 0 rgba(0,0,0,.4), 0 0 18px rgba(79,209,255,.3);
-  clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);
+  color:#eafcff; background:linear-gradient(180deg, #3fc9f7, #1f9fce 60%, #147ba3);
+  box-shadow:0 5px 0 #0d5f80, 0 8px 16px -6px rgba(79,209,255,.5), inset 0 1px 0 rgba(255,255,255,.25);
 }
 .tenk-btn-bank{
-  background:linear-gradient(135deg, #FF8FC6, var(--tenk-pink) 60%, #B8145E);
-  color:#fff; box-shadow:0 5px 0 rgba(0,0,0,.4), 0 0 18px rgba(255,95,176,.45);
-  clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);
+  color:#fff; background:linear-gradient(180deg, #ff8fc6, var(--tenk-pink) 60%, #c22a72);
+  box-shadow:0 5px 0 #8f0f4c, 0 8px 16px -6px rgba(255,95,176,.5), inset 0 1px 0 rgba(255,255,255,.25);
 }
-.tenk-btn-roll:hover, .tenk-btn-bank:hover{ transform:translateY(-2px) scale(1.03); filter:brightness(1.08); }
+.tenk-btn-roll:hover:not(:disabled), .tenk-btn-bank:hover:not(:disabled){ transform:translateY(-2px); filter:brightness(1.08); }
+.tenk-btn-roll:active:not(:disabled), .tenk-btn-bank:active:not(:disabled){ transform:translateY(3px); box-shadow:0 2px 0 #0d5f80, inset 0 1px 0 rgba(255,255,255,.25); }
+.tenk-btn-bank:active:not(:disabled){ box-shadow:0 2px 0 #8f0f4c, inset 0 1px 0 rgba(255,255,255,.25); }
 .tenk-btn-roll:disabled, .tenk-btn-bank:disabled{ opacity:.35; cursor:default; transform:none; filter:none; }
-
-/* "Garder cette sélection" : bannière pleine largeur accent cyan (piste 1A). */
-.tenk-btn-keep{
-  display:block; width:100%; text-align:center; margin:14px 0 4px; padding:15px 22px;
-  font-family:'Space Mono', monospace; font-weight:800; font-size:13.5px; letter-spacing:.04em;
-  text-transform:uppercase; color:#031824; border:none; cursor:pointer;
-  background:linear-gradient(180deg, var(--acc-tenk), #29a8dd);
-  box-shadow:0 5px 0 rgba(0,0,0,.4), 0 0 18px rgba(79,209,255,.45);
-  clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px);
-  transition:transform .12s ease, filter .12s ease;
+/* Pause célébration après un hot dice (HOT_DICE_PAUSE_MS côté JS) : le
+   bouton Lancer reste visible mais se met à respirer/briller au lieu de
+   juste paraître grisé — on VEUT que le joueur le remarque et savoure le
+   moment plutôt que de foncer sur le prochain lancer. */
+.tenk-btn-roll.celebrating{
+  opacity:1; cursor:default; color:#031824;
+  background:linear-gradient(180deg, #ffe27a, #ffc94a 60%, #e0a020);
+  box-shadow:0 5px 0 #8a5c0d, 0 0 22px rgba(255,201,74,.6);
+  animation:tenkCelebrateGlow 1s ease-in-out infinite;
 }
-.tenk-btn-keep:hover{ transform:translateY(-2px) scale(1.01); filter:brightness(1.06); }
+@keyframes tenkCelebrateGlow{ 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.04); } }
+
+/* "Garder cette sélection" : gros bouton pleine largeur, même famille visuelle. */
+.tenk-btn-keep{
+  display:block; width:100%; text-align:center; margin:14px 0 4px; padding:16px 22px;
+  font-family:'Bungee'; font-size:14px; letter-spacing:.02em; color:#031824; border:none;
+  border-radius:999px; cursor:pointer;
+  background:linear-gradient(180deg, #6fe0ff, var(--acc-tenk) 55%, #29a8dd);
+  box-shadow:0 5px 0 #0d6f92, 0 10px 20px -8px rgba(79,209,255,.55), inset 0 1px 0 rgba(255,255,255,.35);
+  transition:transform .1s ease, filter .12s ease, box-shadow .1s ease;
+}
+.tenk-btn-keep:hover:not(:disabled){ transform:translateY(-2px); filter:brightness(1.06); }
+.tenk-btn-keep:active:not(:disabled){ transform:translateY(3px); box-shadow:0 2px 0 #0d6f92, inset 0 1px 0 rgba(255,255,255,.3); }
 .tenk-btn-keep:disabled{ opacity:.35; cursor:default; transform:none; filter:none; }
 
 /* Rangée de scores (mode mobile / repli sous le plateau) */
 .tenk-score-bar{ display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin:14px 0; }
 .tenk-score-chip{
-  display:flex; align-items:center; gap:7px; padding:7px 12px;
+  display:flex; align-items:center; gap:7px; padding:8px 14px; border-radius:999px;
   background:rgba(79,209,255,.08); border:1.5px solid rgba(79,209,255,.28); font-size:12.5px; font-weight:700;
-  clip-path:polygon(8px 0,100% 0,100% 100%,0 100%,0 8px);
 }
 .tenk-score-chip.me{ border-color:var(--tenk-pink); background:rgba(255,95,176,.1); }
 .tenk-score-chip.active{ box-shadow:0 0 12px rgba(79,209,255,.5); }
@@ -1816,7 +2028,7 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
   .tenk-main > .tenk-score-bar{ display:none; }
 }
 
-/* ----- Sidebar paysage : classement + objectif ----- */
+/* ----- Sidebar paysage : classement + objectif, en cartes arrondies ----- */
 .tenk-leaderboard{
   display:none;
 }
@@ -1824,25 +2036,24 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
   .tenk-leaderboard{
     display:flex; flex-direction:column; gap:12px; padding:18px 16px;
     background:radial-gradient(120% 100% at 50% 0%, rgba(79,209,255,.07) 0%, transparent 60%), var(--tenk-felt);
-    border:1.5px solid rgba(79,209,255,.24); border-radius:10px;
-    clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px);
-    box-shadow:inset 0 0 40px rgba(0,0,0,.5);
+    border:1.5px solid rgba(79,209,255,.22); border-radius:24px; overflow:hidden;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.05), inset 0 0 40px rgba(0,0,0,.5), 0 4px 0 rgba(0,0,0,.3);
   }
 }
 .tenk-lb-title{
-  font-family:'Space Mono', monospace; font-weight:800; font-size:13px; letter-spacing:.08em;
-  text-transform:uppercase; color:#eafcff; text-shadow:0 0 6px rgba(79,209,255,.4);
+  font-family:'Bungee'; font-size:13.5px; letter-spacing:.02em;
+  color:#eafcff; text-shadow:0 0 6px rgba(79,209,255,.4);
 }
 .tenk-lb-row{
-  display:flex; flex-direction:column; gap:6px; padding:10px 12px;
-  background:rgba(11,26,58,.55); border:1px solid rgba(79,209,255,.22);
-  clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);
+  display:flex; flex-direction:column; gap:6px; padding:11px 13px; border-radius:16px; overflow:hidden;
+  background:rgba(11,26,58,.55); border:1px solid rgba(79,209,255,.2);
+  box-shadow:0 2px 0 rgba(0,0,0,.3);
 }
 .tenk-lb-row.me{ border-color:rgba(255,95,176,.5); background:rgba(255,95,176,.08); }
-.tenk-lb-row.active{ box-shadow:0 0 12px rgba(79,209,255,.4); }
+.tenk-lb-row.active{ box-shadow:0 2px 0 rgba(0,0,0,.3), 0 0 12px rgba(79,209,255,.4); }
 .tenk-lb-row-top{ display:flex; align-items:center; gap:8px; font-size:12.5px; font-weight:700; }
 .tenk-lb-rank{
-  width:19px; height:19px; border-radius:50%; flex:0 0 auto;
+  width:20px; height:20px; border-radius:50%; flex:0 0 auto;
   display:flex; align-items:center; justify-content:center;
   font-family:'Space Mono'; font-weight:900; font-size:10.5px; color:#031824;
   background:var(--acc-tenk);
@@ -1850,8 +2061,8 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 .tenk-lb-row.me .tenk-lb-rank{ background:var(--tenk-pink); }
 .tenk-lb-name{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .tenk-lb-score{ font-family:'Space Mono'; font-weight:800; color:var(--tenk-pink); }
-.tenk-lb-bar-track{ height:5px; border-radius:3px; background:rgba(255,255,255,.08); overflow:hidden; }
-.tenk-lb-bar-fill{ height:100%; border-radius:3px; background:linear-gradient(90deg, var(--acc-tenk), var(--tenk-pink)); }
+.tenk-lb-bar-track{ height:6px; border-radius:999px; background:rgba(255,255,255,.08); overflow:hidden; }
+.tenk-lb-bar-fill{ height:100%; border-radius:999px; background:linear-gradient(90deg, var(--acc-tenk), var(--tenk-pink)); }
 .tenk-lb-target{
   margin-top:2px; text-align:center; font-size:11.5px; color:var(--muted);
   padding-top:10px; border-top:1px dashed rgba(79,209,255,.25);
@@ -1859,7 +2070,7 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 
 /* ----- Farkle : flash bref sur tout le tapis ----- */
 .tenk-farkle-flash{
-  position:absolute; inset:0; z-index:5; pointer-events:none;
+  position:absolute; inset:0; z-index:5; border-radius:20px; pointer-events:none;
   background:radial-gradient(circle, rgba(255,45,80,.55), rgba(120,0,40,.35) 70%);
   opacity:0; animation:tenkFarkleFlash .7s ease-out both;
 }
@@ -1871,9 +2082,31 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 .tenk-farkle-penalty{
   font-family:'Space Mono', monospace; font-size:12px; font-weight:800; color:#FF8A66;
 }
-/* Avertissement "2 lancers blancs de suite déjà" avant que le 3e ne coûte
-   500 pts (voir FARKLE_STREAK_LIMIT/PENALTY dans scoring.js). */
-.tenk-streak-warn{ color:#FFB35C; font-weight:700; }
+
+/* ----- Pénalité "3 farkles de suite" : popup façon "lose" arcade, avec
+   -500 en rouge et "Ayoye !" qui pop — demande explicite du porteur de
+   projet ("ahah") pour que la sanction se ressente vraiment. ----- */
+.tenk-penalty-pop{
+  position:absolute; inset:0; z-index:6; display:flex; flex-direction:column;
+  align-items:center; justify-content:center; gap:2px; pointer-events:none;
+  animation:tenkPenaltyFade 2.2s ease both;
+}
+@keyframes tenkPenaltyFade{ 0%{ opacity:0; } 8%{ opacity:1; } 80%{ opacity:1; } 100%{ opacity:0; } }
+.tenk-penalty-pop-face{
+  font-size:40px; animation:tenkPenaltyPop .5s cubic-bezier(.34,1.56,.64,1) both;
+  filter:drop-shadow(0 4px 10px rgba(0,0,0,.6));
+}
+.tenk-penalty-pop-text{
+  font-family:'Bungee'; font-size:24px; color:#fff;
+  text-shadow:0 0 14px rgba(255,45,80,.8), 0 3px 0 rgba(0,0,0,.5);
+  animation:tenkPenaltyPop .5s .05s cubic-bezier(.34,1.56,.64,1) both, tenkDeadShake .5s .5s ease;
+}
+.tenk-penalty-pop-amount{
+  font-family:'Space Mono'; font-weight:800; font-size:22px; color:#FF3B4E;
+  text-shadow:0 0 12px rgba(255,59,78,.8);
+  animation:tenkPenaltyPop .5s .12s cubic-bezier(.34,1.56,.64,1) both;
+}
+@keyframes tenkPenaltyPop{ 0%{ transform:scale(0) rotate(-8deg); opacity:0; } 70%{ transform:scale(1.2) rotate(3deg); opacity:1; } 100%{ transform:scale(1) rotate(0); opacity:1; } }
 
 /* ----- Hot dice : bannière + petite explosion de particules néon ----- */
 .tenk-hotdice-banner{
@@ -1882,10 +2115,14 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 }
 .tenk-spark{ position:fixed; z-index:99; pointer-events:none; border-radius:50%; }
 .tenk-hotdice-flash{
-  position:absolute; inset:0; z-index:5; pointer-events:none;
+  position:absolute; inset:0; z-index:5; border-radius:20px; pointer-events:none;
   background:radial-gradient(circle, rgba(79,209,255,.4), rgba(255,95,176,.22) 70%);
   opacity:0; animation:tenkFarkleFlash .8s ease-out both;
 }
+
+/* Avertissement "2 lancers blancs de suite déjà" avant que le 3e ne coûte
+   500 pts (voir FARKLE_STREAK_LIMIT/PENALTY dans scoring.js). */
+.tenk-streak-warn{ color:#FFB35C; font-weight:700; }
 
 /* ----- Panneau .panel dédié 10000 : plus large en paysage laptop ----- */
 .tenk-panel{ max-width:min(860px, 94vw); }
@@ -1896,8 +2133,92 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 @media (prefers-reduced-motion: reduce){
   .tenk-die-burst{ animation:none; }
   .tenk-die.dead, .tenk-farkle-banner{ animation:none; }
+  .tenk-penalty-pop, .tenk-penalty-pop-face, .tenk-penalty-pop-text, .tenk-penalty-pop-amount{ animation:none; }
+  .tenk-btn-roll.celebrating{ animation:none; }
+  .tenk-combos.hint-pulse{ animation:none; }
 }
 
 @media (pointer: coarse){
   .tenk-die{ width:clamp(62px, 17vw, 80px); height:clamp(62px, 17vw, 80px); }
+}
+
+/* ==========================================================================
+   MENU PARAMÈTRES (components/SettingsMenu.js) — bouton écrou monté dans
+   Brand.js, donc visible sur toutes les pages. Modale réutilisant
+   l'habillage .rules-modal-* (GameRulesButton) pour rester cohérent avec
+   le reste du site — seules les classes ci-dessous sont propres au contenu
+   (réglages son/musique, liste des pistes, avatar, déconnexion).
+   ========================================================================== */
+.settings-gear-btn{
+  width:36px; height:36px; padding:0; border:none; border-radius:50%;
+  background:rgba(255,255,255,.06); color:var(--ink); font-size:16px; cursor:pointer;
+  display:flex; align-items:center; justify-content:center; flex:none;
+  transition:background .15s ease, transform .12s ease;
+}
+.settings-gear-btn:hover{ background:rgba(255,255,255,.12); transform:scale(1.05); }
+.settings-gear-btn:active{ transform:scale(.94); }
+.settings-gear-btn .gear-icon{ display:inline-block; }
+/* Rotation continue tant que le bouton est survolé — "écrou animé
+   rotativement au hover", demande explicite du porteur de projet. */
+.settings-gear-btn:hover .gear-icon{ animation:settingsGearSpin 1.3s linear infinite; }
+@keyframes settingsGearSpin{ from{ transform:rotate(0deg); } to{ transform:rotate(360deg); } }
+
+.settings-section{ margin:0 0 18px; }
+.settings-section:last-of-type{ margin-bottom:4px; }
+.settings-section-title{
+  font-size:13px; font-family:'Space Mono'; color:var(--p3); margin:0 0 8px;
+  text-transform:uppercase; letter-spacing:.03em;
+}
+
+.settings-toggle-row{
+  display:flex; align-items:center; justify-content:space-between;
+  padding:9px 2px; font-size:14px; font-weight:600;
+}
+
+/* Interrupteur à glissière — plus agréable à manipuler qu'une case à
+   cocher classique, feedback immédiat (couleur + knob qui glisse). */
+.settings-switch{
+  position:relative; width:46px; height:26px; border-radius:999px; border:none; padding:0; cursor:pointer;
+  background:rgba(255,255,255,.12); transition:background .18s ease; flex:none;
+}
+.settings-switch.on{ background:linear-gradient(135deg, var(--p3), var(--p2)); }
+.settings-switch-knob{
+  position:absolute; top:3px; left:3px; width:20px; height:20px; border-radius:50%;
+  background:#fff; box-shadow:0 2px 4px rgba(0,0,0,.4);
+  transition:transform .18s cubic-bezier(.34,1.56,.64,1);
+}
+.settings-switch.on .settings-switch-knob{ transform:translateX(20px); }
+
+.settings-track-list{
+  display:flex; flex-direction:column; gap:6px; max-height:230px; overflow-y:auto; padding-right:2px;
+}
+.settings-track-row{
+  display:flex; align-items:center; gap:10px; width:100%; text-align:left; padding:9px 12px;
+  border-radius:12px; border:1.5px solid var(--line); background:rgba(255,255,255,.03); cursor:pointer;
+  font-size:13.5px; color:var(--ink); transition:background .12s ease, border-color .12s ease, transform .1s ease;
+}
+.settings-track-row:hover{ background:rgba(255,255,255,.07); transform:translateX(2px); }
+.settings-track-row:active{ transform:translateX(2px) scale(.98); }
+.settings-track-row.playing{ border-color:var(--p2); background:rgba(255,209,102,.12); font-weight:700; }
+.settings-track-note{ font-size:13px; flex:none; }
+.settings-track-row.playing .settings-track-note{ animation:settingsNotePulse 1s ease-in-out infinite; }
+@keyframes settingsNotePulse{ 0%,100%{ opacity:1; } 50%{ opacity:.35; } }
+.settings-track-label{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+
+.settings-avatar-grid{ display:flex; flex-wrap:wrap; gap:8px; }
+.settings-avatar-btn{
+  width:42px; height:42px; padding:0; font-size:20px; border-radius:12px; cursor:pointer;
+  border:2px solid var(--line); background:rgba(255,255,255,.04);
+  transition:transform .12s ease, border-color .12s ease, background .12s ease;
+}
+.settings-avatar-btn:hover:not(:disabled){ transform:translateY(-2px); }
+.settings-avatar-btn:active:not(:disabled){ transform:translateY(0) scale(.94); }
+.settings-avatar-btn.active{ border-color:var(--p2); background:rgba(255,209,102,.15); }
+.settings-avatar-btn:disabled{ opacity:.5; cursor:default; }
+
+.settings-logout-btn{ margin-top:6px; }
+
+@media (prefers-reduced-motion: reduce){
+  .settings-gear-btn:hover .gear-icon{ animation:none; }
+  .settings-track-row.playing .settings-track-note{ animation:none; }
 }

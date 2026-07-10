@@ -6,8 +6,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/i18n";
 import Brand from "@/components/Brand";
 import Embers from "@/components/Embers";
-
-const AVATARS = ["🦊", "🐙", "🦖", "🐸", "🦄", "🐼", "🤖", "👾", "🐯", "🦉"];
+import { AVATARS } from "@/lib/avatars";
 
 export default function Signup() {
   const router = useRouter();
