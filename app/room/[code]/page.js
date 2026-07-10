@@ -19,6 +19,7 @@ import EchoesRoom from "@/components/EchoesRoom";
 import RoomChat from "@/components/RoomChat";
 import DiapasonGame from "@/components/diapason/DiapasonGame";
 import ChromatikGame from "@/components/cards/ChromatikGame";
+import GoldMinesGame from "@/components/goldmines/GoldMinesGame";
 import PresidentGame from "@/components/president/PresidentGame";
 import PetitBacGame from "@/components/petitbac/PetitBacGame";
 import YahtzeeGame from "@/components/yahtzee/YahtzeeGame";
@@ -50,13 +51,14 @@ const GAME_META = {
   echoes:   { icon: "🌊", accent: "--acc-echoes",    nameKey: "nameEchoes",  tagKey: "tagEchoes", minPlayers: 2, stage: "curtain" },
   diapason: { icon: "🎼", accent: "--acc-diapason",  nameKey: "nameDiapason", tagKey: "tagDiapason", minPlayers: 2, stage: "curtain" },
   chromatik: { icon: "🃏", accent: "--acc-chromatik", nameKey: "nameChromatik", tagKey: "tagChromatik", stage: "door" },
+  goldmines: { icon: "⛏️", accent: "--acc-goldmines", nameKey: "nameGoldMines", tagKey: "tagGoldMines", stage: "door" },
   yahtzee:  { icon: "🎲", accent: "--acc-yahtzee",   nameKey: "nameYahtzee", tagKey: "tagYahtzee", stage: "door" },
   president: { icon: "🎩", accent: "--acc-president", nameKey: "namePresident", tagKey: "tagPresident", stage: "door" },
   tenk:      { icon: "🎰", accent: "--acc-tenk",      nameKey: "nameTenk",    tagKey: "tagTenk", stage: "door" },
   petitbac: { icon: "✏️", accent: "--acc-petitbac", nameKey: "namePetitBac", tagKey: "tagPetitBac", minPlayers: 2, stage: "flash" },
 };
 const STAGE_COMPONENT = { door: DoorStage, curtain: CurtainStage, flash: FlashStage, video: VideoStage };
-const GAME_ORDER = ["quiz", "wordle", "worldle", "petitbac", "connect4", "ludo", "chromatik", "president", "yahtzee", "tenk", "piano", "echoes", "diapason"];
+const GAME_ORDER = ["quiz", "wordle", "worldle", "petitbac", "connect4", "ludo", "chromatik", "goldmines", "president", "yahtzee", "tenk", "piano", "echoes", "diapason"];
 
 export default function Room() {
   const { code } = useParams();
@@ -273,6 +275,21 @@ export default function Room() {
     } catch (e) {}
   }
 
+  // Ambiance "lumière éteinte" du 10000 (demande 2026-07) : pendant une
+  // partie de 10000, TOUT le thème feu de camp (fond marron, encarts,
+  // pastilles) bascule en bleu marine profond, comme si on éteignait la
+  // lumière pour jouer aux dés — ambiance clandestine, et l'encart néon du
+  // jeu redevient cohérent avec la pièce. Une simple classe posée sur
+  // <body> (les variables CSS font le reste, voir body.tenk-night dans
+  // globals.css) ; les bulles champagne restent, recolorées en froid.
+  // Hook placé AVANT les early returns (règle des hooks React).
+  const tenkNight = !!(room && me && room.status === "playing" && room.current_game === "tenk");
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    document.body.classList.toggle("tenk-night", tenkNight);
+    return () => document.body.classList.remove("tenk-night");
+  }, [tenkNight]);
+
   if (error) return <div className="wrap"><div className="panel"><h1>😕</h1><p className="hint">{error}</p></div></div>;
   if (!room || !me) return <div className="wrap"><p className="muted">…</p></div>;
 
@@ -381,6 +398,9 @@ export default function Room() {
                   )}
                   {room.current_game === "chromatik" && (
                     <ChromatikGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
+                  )}
+                  {room.current_game === "goldmines" && (
+                    <GoldMinesGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
                   )}
                   {room.current_game === "yahtzee" && (
                     <YahtzeeGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />

@@ -188,6 +188,11 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
   // événement call_uno est reçu — indépendante de la mise à jour d'état
   // (unoCalled), qui reste réservée à l'hôte.
   const [unoBubble, setUnoBubble] = useState(null); // { seatId, key } | null
+  // Annonce de pénalité (correctif lisibilité 2026-07) : overlay centré sur
+  // la table, "UNTEL pioche N cartes", affiché ~2,6s à chaque pile +2/+4
+  // soldée ou pénalité UNO — purement local, dérivé du même lastAction que
+  // l'animation de pioche.
+  const [penaltyFx, setPenaltyFx] = useState(null); // { seatId, count, key } | null
 
   const channelRef = useRef(null);
   const stateRef = useRef(null);
@@ -202,6 +207,8 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
   const drawFxTimerRef = useRef(null);
   const unoBubbleKeyRef = useRef(0);
   const unoBubbleTimerRef = useRef(null);
+  const penaltyFxKeyRef = useRef(0);
+  const penaltyFxTimerRef = useRef(null);
 
   useEffect(() => {
     stateRef.current = {
@@ -237,11 +244,23 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
     const isDraw = lastAction.type === "draw" && lastAction.count > 0;
     const isUnoPenalty = lastAction.type === "unoPenalty";
     if (!isDraw && !isUnoPenalty) return;
-    const count = Math.min(isUnoPenalty ? 2 : lastAction.count, DRAW_FX_MAX);
+    // Pénalité (pile +2/+4 soldée ou oubli d'UNO) : animation RALENTIE
+    // (correctif lisibilité 2026-07 — trop rapide, on ne voyait pas à qui
+    // elle s'appliquait) + annonce centrée "qui pioche combien" (voir
+    // penaltyFx plus bas), en plus des dos de cartes qui volent.
+    const isPenalty = (isDraw && lastAction.wasPenalty) || isUnoPenalty;
+    const realCount = isUnoPenalty ? 2 : lastAction.count;
+    const count = Math.min(realCount, DRAW_FX_MAX);
     drawFxKeyRef.current += 1;
-    setDrawFx({ seatId: lastAction.seatId, count, toMe: lastAction.seatId === me.id, key: drawFxKeyRef.current });
+    setDrawFx({ seatId: lastAction.seatId, count, toMe: lastAction.seatId === me.id, slow: isPenalty, key: drawFxKeyRef.current });
     clearTimeout(drawFxTimerRef.current);
-    drawFxTimerRef.current = setTimeout(() => setDrawFx(null), 700 + count * 90);
+    drawFxTimerRef.current = setTimeout(() => setDrawFx(null), isPenalty ? 1000 + count * 170 : 700 + count * 90);
+    if (isPenalty) {
+      penaltyFxKeyRef.current += 1;
+      setPenaltyFx({ seatId: lastAction.seatId, count: realCount, key: penaltyFxKeyRef.current });
+      clearTimeout(penaltyFxTimerRef.current);
+      penaltyFxTimerRef.current = setTimeout(() => setPenaltyFx(null), 2600);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lastAction]);
 
@@ -327,6 +346,7 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
       clearTimeout(turnTimeoutRef.current);
       clearTimeout(drawFxTimerRef.current);
       clearTimeout(unoBubbleTimerRef.current);
+      clearTimeout(penaltyFxTimerRef.current);
       supabase.removeChannel(ch);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -878,30 +898,40 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
 
     content = (
       <div>
-        <div className="chromatik-opponents">
+        <div className={"chromatik-opponents opp-" + seats.filter(s => s.id !== me.id).length}>
           {/* Flèches de sens intercalées entre les sièges (demande 2026-07) :
               les adversaires sont affichés dans l'ORDRE DE JEU (seats,
               moins soi), donc un flux gauche->droite = direction 1, et le
-              flux s'inverse visuellement avec la carte Inverse. */}
+              flux s'inverse visuellement avec la carte Inverse. Disposition
+              en ARC (retouche 2026-07) : sièges plus espacés, légèrement
+              décalés/inclinés pour dessiner le tour de table plutôt qu'une
+              rangée rigide — voir .chromatik-opponents.opp-N en CSS. */}
           {seats.filter(s => s.id !== me.id).map((s, i) => {
             const oppHand = hands[s.id] || [];
             const oppAtRisk = oppHand.length === 1 && !unoCalled[s.id];
+            const penalized = penaltyFx && penaltyFx.seatId === s.id;
             return (
               <Fragment key={s.id}>
                 {i > 0 && seats.length > 2 && <FlowArrow direction={direction} size="mini" />}
-                <div className={"chromatik-opponent" + (seats[turnIdx]?.id === s.id ? " active" : "")}>
+                <div className={"chromatik-opponent" + (seats[turnIdx]?.id === s.id ? " active" : "") + (penalized ? " penalized" : "")}>
                   <span className="avatar">{s.avatar}</span>
                   <span className="name">{s.username}</span>
                   {activeBotSeat?.id === s.id && (
                     <span className="pres-think" aria-hidden="true"><i>.</i><i className="d2">.</i><i className="d3">.</i></span>
                   )}
-                  <span className="count">
+                  {/* Compteur de cartes : pastille contrastée (retouche
+                      lisibilité 2026-07 — l'ancien texte gris se perdait),
+                      dorée quand il ne reste qu'une carte. */}
+                  <span className={"count" + (oppHand.length === 1 ? " low" : "")}>
                     {oppHand.length} 🂠
                     {oppAtRisk && <span className="chromatik-uno-warn" title="UNO">❗</span>}
                     {turnDeadlineSeat === s.id && turnRemaining != null && (
                       <span className={"turn-timer-chip mini" + (turnRemaining <= 5 ? " hot" : "")}>{turnRemaining}s</span>
                     )}
                   </span>
+                  {penalized && (
+                    <span className="chromatik-penalty-chip" key={penaltyFx.key}>+{penaltyFx.count} 🂠</span>
+                  )}
                 </div>
               </Fragment>
             );
@@ -941,23 +971,18 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
             })}
             {activeColor && <span className="chromatik-active-color" style={{ background: `var(${COLOR_VAR_MAP[activeColor]})` }} />}
           </div>
-          {/* Flux de sens au centre de la table (remplace l'ancien badge
-              statique ↻/↺) : mêmes chevrons vivants qu'entre les sièges,
-              en plus grand — masqué à 2 joueurs (sens sans effet). */}
-          {seats.length > 2 && (
-            <span className="chromatik-flow-table" title={t("chromatikDirectionTitle")}>
-              <FlowArrow direction={direction} />
-            </span>
-          )}
+          {/* Le flux central de la table a été retiré (retouche 2026-07) :
+              il doublonnait les chevrons entre les sièges, qui suffisent à
+              lire le sens du jeu. */}
 
           {drawFx && (
             <div className="chromatik-drawfx" aria-hidden="true">
               {Array.from({ length: drawFx.count }, (_, i) => (
                 <span
                   key={drawFx.key + "-" + i}
-                  className={"chromatik-drawfx-card" + (drawFx.toMe ? " toMe" : " toOpponent")}
+                  className={"chromatik-drawfx-card" + (drawFx.toMe ? " toMe" : " toOpponent") + (drawFx.slow ? " slow" : "")}
                   style={{
-                    animationDelay: (i * 80) + "ms",
+                    animationDelay: (i * (drawFx.slow ? 160 : 80)) + "ms",
                     "--dx": (Math.round((Math.random() - 0.5) * 90)) + "px",
                     "--rot": (Math.round((Math.random() - 0.5) * 40)) + "deg",
                   }}
@@ -965,6 +990,23 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
               ))}
             </div>
           )}
+
+          {/* Annonce de pénalité (correctif lisibilité 2026-07) : qui pioche
+              combien, en toutes lettres au centre de la table, le temps que
+              l'animation (ralentie) se joue. */}
+          {penaltyFx && (() => {
+            const pSeat = seats.find(s => s.id === penaltyFx.seatId);
+            if (!pSeat) return null;
+            return (
+              <div className="chromatik-penalty-shout" key={penaltyFx.key} aria-live="polite">
+                <span className="chromatik-penalty-shout-text">
+                  {pSeat.avatar} {pSeat.id === me.id
+                    ? `${t("chromatikPenaltyYou")} ${penaltyFx.count} ${t("chromatikPenaltyCards")}`
+                    : `${pSeat.username} ${t("chromatikPenaltyOther")} ${penaltyFx.count} ${t("chromatikPenaltyCards")}`}
+                </span>
+              </div>
+            );
+          })()}
 
           {unoShoutSeat && (
             <div className="chromatik-uno-shout" key={unoBubble.key} aria-live="polite">

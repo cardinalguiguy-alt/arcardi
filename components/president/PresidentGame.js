@@ -777,29 +777,25 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
             siège croissant) — une frise d'avatars reliés par des flèches le
             rend visible d'un coup d'œil, plutôt qu'un simple pictogramme. */}
         <div className="pres-turn-order" title={t("presTurnDirection")}>
+          {/* Les mandats se lisent désormais ICI (retouche 2026-07) : une
+              étoile par manche remportée en Président, directement sous
+              l'avatar de chaque siège — l'ancienne rangée de vignettes de
+              mandats doublonnait celle des adversaires et créait la
+              confusion, elle est supprimée. La cible du match reste
+              rappelée par la pastille 👑 en bout de ligne. */}
           {seats.map((s, i) => (
             <span key={s.id} style={{ display: "contents" }}>
               <span className={"pres-turn-seat" + (turnSeat?.id === s.id && !over ? " active" : "") + (s.id === me.id ? " me" : "")}>
                 {s.avatar}
+                {(mandates[s.id] || 0) > 0 && (
+                  <i className="pres-seat-stars" title={`${mandates[s.id]} 👑`}>{"⭐".repeat(Math.min(mandates[s.id] || 0, 5))}</i>
+                )}
               </span>
               {i < seats.length - 1 && <span className="pres-turn-arrow">➜</span>}
             </span>
           ))}
           <span className="pres-turn-arrow wrap">↩</span>
-        </div>
-
-        {/* Mandats accumulés — seules les manches terminées en PRÉSIDENT
-            comptent (jamais le Vice-Président), premier à atteindre la
-            cible choisie remporte le MATCH (voir écran de fin). */}
-        <div className="pres-mandates-bar">
-          {seats.map(s => (
-            <div key={s.id} className={"pres-mandate-chip" + (s.id === me.id ? " me" : "")}>
-              <span className="avatar">{s.avatar}</span>
-              <span className="name">{s.username}</span>
-              <b>👑×{mandates[s.id] || 0}</b>
-              <span className="muted" style={{ fontSize: 10 }}>{t("presMandatesTarget")} {target}</span>
-            </div>
-          ))}
+          <span className="pres-target-chip" title={t("presMandatesTarget") + " " + target}>👑 {target}</span>
         </div>
 
         <div className="chromatik-opponents">
@@ -809,6 +805,9 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
               <div key={x.id} className={"chromatik-opponent" + (turnSeat?.id === x.id && !over ? " active" : "")}>
                 <span className="avatar">{x.avatar}</span>
                 <span className="name">{x.username}</span>
+                {(mandates[x.id] || 0) > 0 && (
+                  <span className="pres-opp-stars" title={`${mandates[x.id]} 👑`}>{"⭐".repeat(Math.min(mandates[x.id] || 0, 5))}</span>
+                )}
                 {place !== -1
                   ? <span className="pres-badge out"><RankTag place={place} nSeats={seats.length} t={t} /></span>
                   : passed.includes(x.id)

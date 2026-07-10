@@ -6,7 +6,7 @@ import Crossfade from "@/components/Crossfade";
 import TenkDie from "./TenkDie";
 import { DICE_COUNT, evaluateSelection, isFarkle, listScoringGroups, MIN_TO_BANK, FARKLE_STREAK_LIMIT, FARKLE_STREAK_PENALTY } from "./scoring";
 import { decideBotSelection, decideBotContinue } from "./botLogic";
-import { playDiceShuffle, playConfirmChime, playFarkle, playHotDice, playGameWin, playGameLose } from "@/lib/sfx";
+import { playDiceShuffle, playConfirmChime, playFarkle, playHotDice, playGameWin, playGameLose, playCashRegister } from "@/lib/sfx";
 
 /* Minuteur de tour humain (anti-AFK), même convention que Président et
    Chromatik : 30s par défaut (20s jugés trop stressants à l'usage), réduit
@@ -245,6 +245,11 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
       } else {
         playConfirmChime();
       }
+    } else if (lastAction.type === "bank") {
+      // Encaissement : vrai bruit de caisse enregistreuse (demande 2026-07),
+      // joué chez TOUS les clients (humain comme bot qui banque) — même
+      // logique lastAction que les autres sons de la table.
+      playCashRegister();
     } else if (lastAction.type === "farkle") {
       const penalized = lastAction.penalty > 0;
       if (penalized) {
@@ -833,18 +838,9 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
         <div className="tenk-layout">
           <aside className={"tenk-combos" + (hintPulse ? " hint-pulse" : "")}>
             <div className="tenk-combos-title">💡 {t("tenkCombosTitle")}</div>
-            <div className="tenk-assist-row">
-              <span className="tenk-assist-label">{t("tenkAssistLabel")}</span>
-              <button
-                type="button"
-                className={"settings-switch small" + (assistOn ? " on" : "")}
-                onClick={toggleAssist}
-                aria-pressed={assistOn}
-                title={t("tenkAssistTitle")}
-              >
-                <span className="settings-switch-knob" />
-              </button>
-            </div>
+            {/* Les OPTIONS du lancer d'abord (retouche 2026-07) : ce sont
+                elles qu'on vient lire dans ce panneau — la bascule "Aide"
+                est rabattue tout en bas, en réglage discret. */}
             {!activeDice ? (
               <p className="tenk-combos-empty">{t("tenkCombosEmptyHint")}</p>
             ) : comboRows.length === 0 ? (
@@ -869,6 +865,18 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
             {isMyTurn && activeDice && comboRows.length > 0 && (
               <p className="tenk-combos-shortcut">⌘⇧K {t("tenkHintShortcutHint")}</p>
             )}
+            <div className="tenk-assist-row bottom">
+              <span className="tenk-assist-label">{t("tenkAssistLabel")}</span>
+              <button
+                type="button"
+                className={"settings-switch small" + (assistOn ? " on" : "")}
+                onClick={toggleAssist}
+                aria-pressed={assistOn}
+                title={t("tenkAssistTitle")}
+              >
+                <span className="settings-switch-knob" />
+              </button>
+            </div>
           </aside>
 
           <div className="tenk-main">

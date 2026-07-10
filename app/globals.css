@@ -16,6 +16,7 @@
   --acc-worldle:#6FA8FF; --acc-piano:#C9A24B; --acc-diapason:#B388FF;
   --acc-chromatik:#FF9F6E; --acc-yahtzee:#FFD166; --acc-echoes:#5AC8DB; --acc-president:#4CC38A;
   --acc-petitbac:#F783AC;
+  --acc-goldmines:#F2C94C; /* or — Gold Mines (démineur inversé 2v2) */
   --acc-tenk:#4FD1FF; /* cyan/bleu néon HUD — jeu 10000 (grille circuit) */
   --tenk-blue-deep:#1B6FA8; /* bleu profond — dégradés HUD, contours secondaires */
   --tenk-pink:#FF5FB0; /* rose néon — pips des dés, halo de sélection, accents chauds */
@@ -23,6 +24,21 @@
 }
 *{box-sizing:border-box; margin:0; padding:0;}
 html,body{height:100%;}
+
+/* ===== Ambiance "lumière éteinte" du 10000 (demande 2026-07) =====
+   Pendant une partie de 10000, la pièce entière passe du feu de camp au
+   BLEU MARINE PROFOND : mêmes variables, valeurs nocturnes — tout ce qui
+   rappelait le marron (fond, encarts, pastilles, lignes) suit tout seul.
+   Les bulles champagne restent mais virent au froid (hue-rotate), et la
+   transition de fond se fait en douceur : on "éteint la lumière". */
+body{ transition:background-color .8s ease; }
+body.tenk-night{
+  --bg:#070E24; --bg2:#0B1733; --card:#0F1E42; --card2:#152A56;
+  --ink:#E9F0FF; --muted:#93A7CE; --line:rgba(150,185,255,.16);
+}
+body.tenk-night .ember .ember-dot{
+  filter:hue-rotate(185deg) saturate(.75) brightness(.9);
+}
 /* ===== Tactile (audit iOS/Android 2026-07) =====
    - tap-highlight : supprime le rectangle gris/bleu que Safari iOS et
      Chrome Android flashent sur CHAQUE tap d'élément cliquable — très
@@ -629,9 +645,28 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 }
 
 /* ---------- Chromatik (jeu de cartes original) ---------- */
-.chromatik-opponents{ display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin-bottom:14px; }
+/* Tour de table en ARC (retouche 2026-07) : sièges espacés et légèrement
+   décalés/inclinés selon leur position — on lit un demi-cercle autour de la
+   table plutôt qu'une rangée rigide. Le joueur local reste "en bas" (sa
+   main), les adversaires dessinent le haut de la table. */
+.chromatik-opponents{
+  display:flex; flex-wrap:wrap; gap:clamp(12px, 5vw, 42px); justify-content:center;
+  align-items:flex-start; margin-bottom:20px; padding-top:4px;
+}
+/* 2 adversaires : tous deux relevés vers l'extérieur. 3 adversaires : les
+   côtés descendent, le centre monte — l'arc se dessine. nth-of-type(div)
+   ignore les chevrons (des <span>) intercalés. */
+.chromatik-opponents.opp-2 > div.chromatik-opponent:nth-of-type(1){ transform:translateY(10px) rotate(-3deg); }
+.chromatik-opponents.opp-2 > div.chromatik-opponent:nth-of-type(2){ transform:translateY(10px) rotate(3deg); }
+.chromatik-opponents.opp-3 > div.chromatik-opponent:nth-of-type(1){ transform:translateY(20px) rotate(-4deg); }
+.chromatik-opponents.opp-3 > div.chromatik-opponent:nth-of-type(2){ transform:translateY(-2px); }
+.chromatik-opponents.opp-3 > div.chromatik-opponent:nth-of-type(3){ transform:translateY(20px) rotate(4deg); }
+/* Les chevrons suivent la pente de l'arc entre les sièges. */
+.chromatik-opponents.opp-3 > .chromatik-flow.mini{ margin-top:14px; }
+.chromatik-opponents.opp-2 > .chromatik-flow.mini{ margin-top:16px; }
 .chromatik-opponent{
-  display:flex; align-items:center; gap:6px; padding:6px 12px; border-radius:99px;
+  position:relative;
+  display:flex; align-items:center; gap:6px; padding:7px 13px; border-radius:99px;
   background:rgba(255,255,255,.04); border:1.5px solid var(--line); font-size:12.5px; font-weight:700;
   transition:border-color .15s ease, background .15s ease;
 }
@@ -646,7 +681,40 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
   0%,100%{ box-shadow:0 0 0 0 rgba(182,240,76,.45); }
   50%{ box-shadow:0 0 0 5px rgba(182,240,76,0); }
 }
-.chromatik-opponent .count{ font-family:'Space Mono'; color:var(--muted); display:inline-flex; align-items:center; gap:4px; }
+/* Compteur de cartes adverses : pastille contrastée (retouche lisibilité
+   2026-07 — l'ancien texte gris se perdait dans la puce), dorée et pulsante
+   quand il ne reste qu'UNE carte (danger imminent). */
+.chromatik-opponent .count{
+  font-family:'Space Mono'; font-size:13.5px; font-weight:800; color:var(--ink);
+  display:inline-flex; align-items:center; gap:4px;
+  background:rgba(255,255,255,.1); border:1.5px solid var(--line);
+  border-radius:9px; padding:2px 8px;
+}
+.chromatik-opponent .count.low{
+  color:#241c14; background:linear-gradient(145deg, #ffe9a8, #f2c94c); border-color:#e8c357;
+  animation:chromatikCountLow 1.1s ease-in-out infinite;
+}
+@keyframes chromatikCountLow{
+  0%,100%{ box-shadow:0 0 0 0 rgba(232,195,87,.55); }
+  50%{ box-shadow:0 0 10px 2px rgba(232,195,87,.25); }
+}
+/* Pastille "+N 🂠" accrochée au siège pénalisé, le temps de l'annonce. */
+.chromatik-penalty-chip{
+  position:absolute; top:-14px; right:-8px; z-index:6;
+  font-family:'Space Mono'; font-size:12px; font-weight:800; white-space:nowrap;
+  color:#fff; background:linear-gradient(145deg, #e05656, #b83232);
+  border:2px solid rgba(255,255,255,.5); border-radius:99px; padding:2px 8px;
+  box-shadow:0 3px 8px rgba(0,0,0,.4);
+  animation:chromatikPenaltyChipLife 2.6s ease both;
+}
+.chromatik-opponent.penalized{ border-color:#e05656; }
+@keyframes chromatikPenaltyChipLife{
+  0%{ opacity:0; transform:translateY(6px) scale(.6); }
+  12%{ opacity:1; transform:translateY(0) scale(1.15); }
+  20%{ transform:translateY(0) scale(1); }
+  85%{ opacity:1; }
+  100%{ opacity:0; transform:translateY(-4px); }
+}
 /* Bulle "réfléchit…" sur le bot dont c'est le tour — réutilise les mêmes
    points animés que Président (.pres-think), même langage visuel d'un jeu
    à l'autre. */
@@ -736,6 +804,11 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
   animation:chromatikDrawFlyDown .68s cubic-bezier(.3,.7,.35,1) both;
 }
 .chromatik-drawfx-card.toOpponent{ animation-name:chromatikDrawFlyUp; }
+/* Pénalité +2/+4 ou UNO oublié (correctif lisibilité 2026-07) : le vol des
+   cartes est nettement RALENTI — on doit avoir le temps de voir vers QUI
+   elles partent (l'annonce centrée + la pastille "+N" sur le siège visé
+   complètent le tableau). */
+.chromatik-drawfx-card.slow{ animation-duration:1.15s; }
 @keyframes chromatikDrawFlyDown{
   0%{ transform:translate(0,0) rotate(0deg) scale(1); opacity:1; }
   100%{ transform:translate(var(--dx,0px), 170px) rotate(var(--rot,10deg)) scale(.85); opacity:0; }
@@ -775,6 +848,20 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 }
 @keyframes chromatikUnoShoutLife{ 0%{ opacity:0; } 10%{ opacity:1; } 82%{ opacity:1; } 100%{ opacity:0; } }
 @keyframes chromatikUnoShoutPulse{ 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.1); } }
+
+/* Annonce de pénalité (correctif lisibilité 2026-07) : même famille que la
+   bulle UNO mais en ROUGE — "UNTEL pioche N cartes", centré sur la table,
+   ~2,6s, pendant que les cartes volent au ralenti vers le siège visé. */
+.chromatik-penalty-shout{
+  position:absolute; inset:0; z-index:34; display:flex; align-items:flex-start; justify-content:center;
+  padding-top:2px; pointer-events:none; animation:chromatikUnoShoutLife 2.6s ease both;
+}
+.chromatik-penalty-shout-text{
+  font-family:'Bungee'; font-size:clamp(13px, 3.8vw, 17px); text-align:center; line-height:1.3;
+  max-width:min(320px, 86vw); color:#fff; background:linear-gradient(145deg, #e05656, #b83232);
+  padding:8px 16px; border-radius:16px; border:3px solid rgba(255,255,255,.45);
+  box-shadow:0 6px 0 rgba(0,0,0,.3), 0 0 22px rgba(224,86,86,.55);
+}
 
 .chromatik-hand{ display:flex; flex-wrap:wrap; gap:6px; justify-content:center; margin-top:14px; }
 /* ----- Grandes mains (demande 2026-07) -----
@@ -912,12 +999,104 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
   .chromatik-flow{ animation:none; }
   .chromatik-flow.rev{ transform:scaleX(-1); }
   .chromatik-flow i{ animation:none; opacity:.6; }
+  .chromatik-opponent .count.low{ animation:none; }
+  .chromatik-penalty-chip{ animation:none; }
+  .chromatik-penalty-shout{ animation:none; opacity:1; }
   .chromatik-drawfx-card{ animation:none; opacity:0; }
   .chromatik-discard .chromatik-card, .chromatik-hand .chromatik-card{ animation:none; }
   .chromatik-uno-btn{ animation:none; }
   .chromatik-pile.draw.urge .chromatik-card{ animation:none; }
   .chromatik-uno-shout{ animation:none; opacity:1; }
   .chromatik-uno-shout-text{ animation:none; }
+}
+
+/* ---------- Gold Mines (démineur inversé 2v2) ---------- */
+/* Deux camps face à face au-dessus de la mine — Or à gauche, Bleu à
+   droite, l'or de chaque mineur bien lisible (leçon du compteur Chromatik :
+   jamais de chiffre gris perdu dans une puce). */
+.gm-teams{ display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-bottom:12px; }
+.gm-team{
+  flex:1 1 220px; max-width:300px; padding:8px 10px; border-radius:14px;
+  background:rgba(255,255,255,.03); border:2px solid var(--line);
+}
+.gm-team.gold{ border-color:rgba(242,201,76,.55); }
+.gm-team.blue{ border-color:rgba(76,141,255,.55); }
+.gm-team.won{ box-shadow:0 0 18px 2px rgba(242,201,76,.35); }
+.gm-team-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
+.gm-team-name{ font-family:'Bungee'; font-size:12px; }
+.gm-team-total{ font-family:'Space Mono'; font-weight:800; font-size:14px; }
+.gm-player{
+  position:relative; display:flex; align-items:center; gap:6px; padding:4px 8px; border-radius:10px;
+  font-size:12.5px; font-weight:700; border:1.5px solid transparent;
+}
+.gm-player .name{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.gm-player.me{ outline:2px dashed rgba(182,240,76,.4); outline-offset:1px; }
+.gm-player.active{
+  border-color:var(--p3); background:rgba(182,240,76,.1);
+  animation:chromatikActivePulse 1.6s ease-in-out infinite;
+}
+.gm-player-gold{
+  font-family:'Space Mono'; font-size:13px; font-weight:800; color:var(--ink);
+  background:rgba(255,255,255,.1); border:1.5px solid var(--line); border-radius:9px; padding:1px 7px;
+  display:inline-flex; align-items:center; gap:4px;
+}
+/* "+1 🪙" qui saute de la puce du mineur à chaque pépite. */
+.gm-gold-pop{
+  position:absolute; top:-12px; right:4px; z-index:5; pointer-events:none;
+  font-family:'Space Mono'; font-size:12px; font-weight:800; color:#241c14; white-space:nowrap;
+  background:linear-gradient(145deg, #ffe9a8, #f2c94c); border:2px solid #e8c357;
+  border-radius:99px; padding:1px 8px; box-shadow:0 3px 8px rgba(0,0,0,.35);
+  animation:gmGoldPop 1.4s ease both;
+}
+@keyframes gmGoldPop{
+  0%{ opacity:0; transform:translateY(6px) scale(.6); }
+  15%{ opacity:1; transform:translateY(-2px) scale(1.15); }
+  30%{ transform:translateY(-4px) scale(1); }
+  80%{ opacity:1; }
+  100%{ opacity:0; transform:translateY(-14px); }
+}
+.gm-status{ text-align:center; margin:8px 0; min-height:18px; }
+.gm-left{ font-family:'Space Mono'; font-size:12px; }
+
+/* La mine : grille serrée, cases tactiles, relief de terrain non creusé. */
+.gm-grid{
+  display:grid; grid-template-columns:repeat(var(--gm-cols, 12), 1fr);
+  gap:3px; max-width:480px; margin:10px auto 4px;
+}
+.gm-cell{
+  aspect-ratio:1; border-radius:6px; display:flex; align-items:center; justify-content:center;
+  font-family:'Space Mono'; font-weight:800; font-size:clamp(11px, 2.6vw, 15px);
+  user-select:none; padding:0; border:none;
+}
+.gm-cell.hidden{
+  cursor:default; background:linear-gradient(145deg, #5a4a33, #3e3222);
+  border:1.5px solid rgba(255,255,255,.14); box-shadow:inset 0 2px 0 rgba(255,255,255,.12), 0 2px 0 rgba(0,0,0,.35);
+  transition:transform .1s ease, filter .1s ease;
+}
+.gm-grid.myturn .gm-cell.hidden{ cursor:pointer; }
+.gm-grid.myturn .gm-cell.hidden:hover{ transform:translateY(-1.5px); filter:brightness(1.25); }
+.gm-cell.open{
+  background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.07); color:var(--muted);
+  animation:gmRevealIn .25s ease backwards;
+}
+/* Couleurs de chiffres façon démineur, adaptées au thème sombre. */
+.gm-cell.open.n1{ color:#7EB3FF; } .gm-cell.open.n2{ color:#7ED9A0; }
+.gm-cell.open.n3{ color:#FF8A80; } .gm-cell.open.n4{ color:#C6A6FF; }
+.gm-cell.open.n5{ color:#FFC46B; } .gm-cell.open.n6{ color:#6BDCD6; }
+.gm-cell.open.n7{ color:#F783AC; } .gm-cell.open.n8{ color:#FFF3B0; }
+.gm-cell.nugget{
+  font-size:clamp(12px, 3vw, 17px); background:rgba(242,201,76,.14);
+  border:2px solid #e8c357; animation:gmNuggetIn .5s cubic-bezier(.3,1.5,.4,1) backwards;
+}
+.gm-cell.nugget.blue{ border-color:var(--ludoB); background:rgba(76,141,255,.14); }
+.gm-cell.nugget.fresh{ box-shadow:0 0 12px 2px rgba(242,201,76,.6); }
+@keyframes gmRevealIn{ from{ opacity:0; transform:scale(.7); } to{ opacity:1; transform:scale(1); } }
+@keyframes gmNuggetIn{ 0%{ opacity:0; transform:scale(.3) rotate(-30deg); } 100%{ opacity:1; transform:scale(1) rotate(0); } }
+
+@media (prefers-reduced-motion: reduce){
+  .gm-player.active{ animation:none; }
+  .gm-gold-pop{ animation:none; }
+  .gm-cell.open, .gm-cell.nugget{ animation:none; }
 }
 
 /* ===== YAHTZEE ===== */
@@ -1853,6 +2032,22 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 .pres-turn-seat.active{ border-color:var(--p3); background:rgba(182,240,76,.16); transform:scale(1.15); }
 .pres-turn-seat.me{ box-shadow:0 0 0 2px var(--accent, var(--p2)) inset; }
 .pres-turn-arrow{ color:var(--muted); font-size:12px; }
+/* Mandats en étoiles (retouche 2026-07) : une ⭐ par manche gagnée en
+   Président, accrochée sous l'avatar du siège (ordre de tour) et à côté du
+   nom sur la vignette adversaire — l'ancienne rangée de vignettes de
+   mandats est supprimée. */
+.pres-turn-seat{ position:relative; }
+.pres-seat-stars{
+  position:absolute; bottom:-9px; left:50%; transform:translateX(-50%);
+  font-style:normal; font-size:7.5px; letter-spacing:-1px; white-space:nowrap;
+  filter:drop-shadow(0 1px 2px rgba(0,0,0,.6));
+}
+.pres-opp-stars{ font-size:10px; letter-spacing:-1px; white-space:nowrap; }
+.pres-target-chip{
+  margin-left:6px; font-family:'Space Mono'; font-size:11px; font-weight:800;
+  color:var(--muted); border:1.5px solid var(--line); border-radius:99px; padding:2px 8px;
+  background:rgba(255,255,255,.04);
+}
 .pres-turn-arrow.wrap{ margin-left:2px; }
 
 /* Bannière "manche Dictateur" — bonus humoristique, jamais compté dans les
@@ -1865,13 +2060,7 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 
 /* Mandats accumulés (Président/Vice-Président) — premier à la cible
    remporte le MATCH. */
-.pres-mandates-bar{ display:flex; flex-wrap:wrap; gap:6px; justify-content:center; margin-bottom:10px; }
-.pres-mandate-chip{
-  display:flex; align-items:center; gap:5px; padding:5px 10px; border-radius:99px;
-  border:2px solid var(--line); background:rgba(255,255,255,.03); font-size:11.5px; font-weight:700;
-}
-.pres-mandate-chip.me{ box-shadow:0 0 0 2px var(--acc-president) inset; }
-.pres-mandate-chip b{ font-family:'Space Mono'; }
+/* (vignettes de mandats supprimées 2026-07 : remplacées par les étoiles ci-dessus) */
 
 /* Animation de "cendres" quand un 2 brûle le pli : les cartes brûlées
    restent visibles un court instant, se décolorent et s'envolent en
@@ -2542,6 +2731,14 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
   display:flex; align-items:center; justify-content:space-between; gap:8px;
   margin:2px 0 8px; padding:5px 8px;
   border:1.5px solid var(--line); border-radius:10px; background:rgba(255,255,255,.03);
+}
+/* "Aide" rabattue en BAS du panneau (retouche 2026-07) : les combinaisons
+   du lancer passent devant — la bascule devient un petit réglage discret
+   sous un fin séparateur, plus une vignette en tête de panneau. */
+.tenk-assist-row.bottom{
+  margin:10px 0 0; padding:4px 8px 2px;
+  border:none; border-top:1px dashed var(--line); border-radius:0; background:none;
+  opacity:.75;
 }
 .tenk-assist-label{ font-size:12px; font-weight:800; color:var(--muted); letter-spacing:.02em; }
 
