@@ -370,8 +370,23 @@ body.stage-focus .game-stage .panel{ margin-top:4px; margin-bottom:6px; }
 body.stage-focus .game-stage{ transition:zoom .55s cubic-bezier(.3,.8,.3,1); }
 body.stage-focus .back-room-fab{ top:12px; }
 body.stage-focus .stage-zoom-fab{ top:60px; }
+/* Mode agrandi : le chat quitte le coin bas-DROIT (où un jeu haut, ex. la
+   barre dynamite de Gold Mines, peut arriver jusqu'au bord) pour le coin
+   bas-GAUCHE — libéré par "Quitter le salon" et la pastille d'ambiance, tous
+   deux masqués en agrandi. Plus de chevauchement du jeu par le bouton chat. */
+body.stage-focus .chat-fab{ right:auto; left:14px; }
+body.stage-focus .chat-panel{ right:auto; left:14px; }
 @media (prefers-reduced-motion: reduce){
   body.stage-focus .game-stage{ transition:none; }
+}
+/* Téléphone étroit (hors agrandi) : l'en-tête (7 tuiles + langue + réglages +
+   pastille code) peut se replier sur 2–3 lignes et passer SOUS les pastilles
+   de partie fixées en haut à droite. On les descend pour dégager l'en-tête.
+   En mode agrandi, l'en-tête est masqué et `body.stage-focus .back-room-fab`
+   (plus spécifique) l'emporte : les pastilles y restent bien collées en haut. */
+@media (max-width: 560px){
+  .back-room-fab{ top:128px; }
+  .stage-zoom-fab{ top:176px; }
 }
 
 /* Pastille discrète pour passer à la piste d'ambiance suivante (voir

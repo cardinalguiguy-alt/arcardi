@@ -9,7 +9,7 @@ import {
   genMine, digResult, bombResult, nuggetsLeft, gmPointsForPlace,
 } from "./mines";
 import { decideBotMove } from "./botLogic";
-import { playCashRegister, playDynamite } from "@/lib/sfx";
+import { playCashRegister, playDynamite, primeFiles } from "@/lib/sfx";
 
 /* ==========================================================================
    GOLD MINES — démineur inversé en DUEL (refonte 2026-07, spec complète).
@@ -159,6 +159,11 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
   // sendMatchStart) — l'overlay et l'arbitrage restent synchronisés.
   const countdownEndRef = useRef(0);
 
+  // Préchargement des sons du jeu dès le montage : sans lui, le PREMIER tir de
+  // dynamite (et la première pépite) subissaient la latence de fetch/décodage
+  // du mp3 — d'où un son en retard au premier boum.
+  useEffect(() => { primeFiles("/sounds/dynamite-blast.mp3", "/sounds/cash-register.mp3"); }, []);
+
   useEffect(() => {
     stateRef.current = { seats, mine, revealed, gold, bombs, turnIdx, left, winner };
   }, [seats, mine, revealed, gold, bombs, turnIdx, left, winner]);
@@ -201,9 +206,11 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
       goldPopTimerRef.current = setTimeout(() => setGoldPop(null), 1500);
     }
     if (lastAction.type === "bomb") {
-      // Vrai tir de mine (fichier découpé + fondu, voir lib/sfx.js), joué
-      // chez TOUS les clients via le même lastAction que l'animation 💥.
-      playDynamite();
+      // Vrai tir de mine (fichier découpé + fondu, voir lib/sfx.js). Le joueur
+      // qui a tiré l'a DÉJÀ entendu au clic (jeu optimiste dans attemptCell,
+      // pour supprimer le retard dû à l'aller-retour hôte-arbitre) : on ne le
+      // (re)joue donc ici que pour les AUTRES clients, en synchro avec le 💥.
+      if (lastAction.seatId !== me.id) playDynamite();
       bombFxKeyRef.current += 1;
       setBombFx({ center: lastAction.center, key: bombFxKeyRef.current });
       clearTimeout(bombFxTimerRef.current);
@@ -450,6 +457,11 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
     if (!isMyTurn || revealed[idx]) return;
     const action = bombArmed && myBombAvailable ? { type: "bomb", idx } : { type: "dig", idx };
     setBombArmed(false);
+    // Son de dynamite joué EN OPTIMISTE dès le clic pour le joueur qui tire :
+    // sinon il ne l'entendait qu'après l'aller-retour hôte-arbitre (broadcast
+    // lastAction), d'où le retard signalé. L'effet dérivé de lastAction ne le
+    // rejoue pas pour ce joueur (garde `seatId === me.id`).
+    if (action.type === "bomb") playDynamite();
     channelRef.current?.send({ type: "broadcast", event: "move_attempt", payload: { seatId: me.id, action } });
   }
 
@@ -467,16 +479,39 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
   //      attendre le cadencement des pointermove.
   // Les pointeurs tactiles sont ignorés : au doigt, rien ne change.
   const gridRectRef = useRef(null);
+  // Échelle visuelle de la grille (mode agrandi) : .game-stage porte un
+  // `zoom` < 1 quand le jeu ne tient pas à l'écran. Un translate exprimé dans
+  // le repère LOCAL de la grille est ensuite mis à l'échelle à l'affichage :
+  // sans en tenir compte, la pioche dérivait d'un facteur (1 − zoom). On
+  // déduit l'échelle de rect.width / offsetWidth (sans avoir à connaître le
+  // zoom du parent).
+  const gridScaleRef = useRef(1);
+  // Dernière position souris connue : sert à FAIRE APPARAÎTRE la pioche tout
+  // de suite quand elle devient visible, sans attendre un premier mouvement
+  // (cause du "curseur invisible" quand pointerrawupdate ne se déclenchait
+  // pas sur la grille).
+  const lastPointerRef = useRef(null);
+
+  // Place ET révèle la pioche au pointeur (delta écran divisé par l'échelle
+  // visuelle — voir gridScaleRef).
+  function placePick(clientX, clientY) {
+    const el = pickRef.current, r = gridRectRef.current;
+    if (!el || !r) return;
+    const s = gridScaleRef.current || 1;
+    el.style.transform = "translate3d(" + ((clientX - r.left) / s) + "px," + ((clientY - r.top) / s) + "px,0)";
+    el.style.opacity = "1"; // révélée dès qu'une vraie position est connue
+  }
+
   function enterPickCursor(e) {
     if (e.pointerType && e.pointerType !== "mouse") return;
+    lastPointerRef.current = { x: e.clientX, y: e.clientY };
     setPickCursor(true);
   }
   function leavePickCursor() { setPickCursor(false); }
   function strikePickCursor(e) {
     if (e.pointerType && e.pointerType !== "mouse") return;
-    const el = pickRef.current;
-    const r = gridRectRef.current || gridRef.current?.getBoundingClientRect();
-    if (el && r) el.style.transform = "translate3d(" + (e.clientX - r.left) + "px," + (e.clientY - r.top) + "px,0)";
+    lastPointerRef.current = { x: e.clientX, y: e.clientY };
+    placePick(e.clientX, e.clientY); // révèle même sans mouvement préalable
     const axe = pickAxeRef.current;
     if (!axe) return;
     axe.classList.remove("strike");
@@ -489,21 +524,32 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
     if (!showPick) return;
     const grid = gridRef.current, el = pickRef.current;
     if (!grid || !el) return;
-    const refreshRect = () => { gridRectRef.current = grid.getBoundingClientRect(); };
+    const refreshRect = () => {
+      const rect = grid.getBoundingClientRect();
+      gridRectRef.current = rect;
+      gridScaleRef.current = grid.offsetWidth ? rect.width / grid.offsetWidth : 1;
+    };
     refreshRect();
+    // Apparition IMMÉDIATE : si la souris est déjà sur la grille (cas normal,
+    // l'entrée vient de déclencher showPick), on positionne la pioche tout de
+    // suite au lieu d'attendre un premier événement de mouvement.
+    if (lastPointerRef.current) placePick(lastPointerRef.current.x, lastPointerRef.current.y);
     const onMove = (e) => {
       if (e.pointerType && e.pointerType !== "mouse") return;
-      const r = gridRectRef.current;
-      if (!r) return;
-      el.style.transform = "translate3d(" + (e.clientX - r.left) + "px," + (e.clientY - r.top) + "px,0)";
-      el.style.opacity = "1"; // invisible tant qu'aucune vraie position n'est connue
+      lastPointerRef.current = { x: e.clientX, y: e.clientY };
+      placePick(e.clientX, e.clientY);
     };
-    const evt = "onpointerrawupdate" in window ? "pointerrawupdate" : "pointermove";
-    grid.addEventListener(evt, onMove);
+    // pointermove = socle FIABLE (toujours délivré). pointerrawupdate, quand
+    // il existe (Chrome/Edge), est ajouté EN PLUS pour la fluidité — mais on
+    // ne dépend plus de lui pour la première apparition.
+    grid.addEventListener("pointermove", onMove);
+    const hasRaw = "onpointerrawupdate" in window;
+    if (hasRaw) grid.addEventListener("pointerrawupdate", onMove);
     window.addEventListener("scroll", refreshRect, true);
     window.addEventListener("resize", refreshRect);
     return () => {
-      grid.removeEventListener(evt, onMove);
+      grid.removeEventListener("pointermove", onMove);
+      if (hasRaw) grid.removeEventListener("pointerrawupdate", onMove);
       window.removeEventListener("scroll", refreshRect, true);
       window.removeEventListener("resize", refreshRect);
     };
