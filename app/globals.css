@@ -1704,10 +1704,11 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
   background:var(--tenk-pink);
   box-shadow:0 0 6px var(--tenk-pink), 0 0 14px rgba(255,95,176,.75), 0 0 2px #fff;
 }
-/* Dé de valeur 1 : chiffre "1" en néon rose (au lieu du pip central unique),
+/* Dés de valeur 1 ET 5 : chiffre en néon rose (au lieu de la grille de pips),
    même traitement lumineux que les pips — demande explicite du porteur de
-   projet pour éviter toute ambiguïté visuelle sur la face "as". */
-.tenk-die-one{
+   projet pour repérer sans ambiguïté les deux seules faces qui rapportent
+   des points seules (100 pour le 1, 50 pour le 5), face à un 2/3/4/6. */
+.tenk-die-digit{
   grid-column:1 / -1; grid-row:1 / -1; display:flex; align-items:center; justify-content:center;
   font-family:'Space Mono', monospace; font-weight:800; line-height:1;
   font-size:clamp(20px, 8vw, 30px); color:var(--tenk-pink);
@@ -1867,6 +1868,12 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
   text-align:center; font-family:'Bungee'; font-size:16px; color:#FF5D73;
   margin:10px 0; animation:tenkDeadShake .5s ease;
 }
+.tenk-farkle-penalty{
+  font-family:'Space Mono', monospace; font-size:12px; font-weight:800; color:#FF8A66;
+}
+/* Avertissement "2 lancers blancs de suite déjà" avant que le 3e ne coûte
+   500 pts (voir FARKLE_STREAK_LIMIT/PENALTY dans scoring.js). */
+.tenk-streak-warn{ color:#FFB35C; font-weight:700; }
 
 /* ----- Hot dice : bannière + petite explosion de particules néon ----- */
 .tenk-hotdice-banner{

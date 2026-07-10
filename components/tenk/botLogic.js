@@ -7,6 +7,30 @@ import { evaluateSelection } from "./scoring";
    décision mathématiquement parfaite à chaque tour.
    ========================================================================== */
 
+const SMALL_STRAIGHTS = [
+  [1, 2, 3, 4, 5],
+  [2, 3, 4, 5, 6],
+];
+
+// Repère une suite courte (1-2-3-4-5 ou 2-3-4-5-6) noyée dans le lancer,
+// même avec un doublon en trop (ex. [1,2,3,4,5,3]) — renvoie les INDICES
+// des 5 dés à garder, ou null si aucune des deux suites n'est présente.
+function findSmallStraightIndices(values) {
+  for (const pattern of SMALL_STRAIGHTS) {
+    const used = new Array(values.length).fill(false);
+    const idxs = [];
+    let ok = true;
+    for (const v of pattern) {
+      const idx = values.findIndex((val, i) => val === v && !used[i]);
+      if (idx === -1) { ok = false; break; }
+      used[idx] = true;
+      idxs.push(idx);
+    }
+    if (ok) return idxs;
+  }
+  return null;
+}
+
 // Quels dés le bot met de côté sur CE lancer (tableau d'INDICES dans
 // `values`). Contrairement à un joueur humain (qui garde toute liberté de
 // choix, voir scoring.js), le bot prend TOUJOURS tout ce qui score sur ce
@@ -19,6 +43,9 @@ export function decideBotSelection(values) {
       return values.map((_, i) => i);
     }
   }
+  const smallStraight = findSmallStraightIndices(values);
+  if (smallStraight) return smallStraight;
+
   const counts = {};
   values.forEach((v) => { counts[v] = (counts[v] || 0) + 1; });
   const keepIdx = [];
@@ -33,6 +60,8 @@ export function decideBotSelection(values) {
 // encore actifs APRÈS la mise de côté qui vient d'avoir lieu — 6 au moment
 // d'un hot dice (pool neuf), 0 si plus aucun dé actif ET pas de hot dice
 // (ne devrait pas arriver : l'appelant traite ce cas à part).
+// Les deux seuils sont volontairement > MIN_TO_BANK (300, voir scoring.js) :
+// un bot ne cherche jamais à banquer sous le minimum autorisé.
 const BANK_THRESHOLD = 350;  // score de tour au-delà duquel le bot commence à sécuriser
 const SAFE_THRESHOLD = 1050; // score déjà confortable : le bot banque presque toujours
 const MIN_DICE_TO_PUSH = 3;  // en dessous, trop risqué de continuer sans un bon motif

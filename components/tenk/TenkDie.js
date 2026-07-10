@@ -7,10 +7,13 @@
    (inspiration fournie par le porteur de projet : un vieux site de dés en
    ligne, halo rose en rayons autour du dé quand une combinaison apparaît).
 
-   Le dé de valeur 1 est un cas particulier demandé explicitement : au lieu
-   du pip central unique (facilement confondu avec d'autres faces au premier
-   coup d'œil), on affiche le CHIFFRE "1" en néon rose — même traitement
-   lumineux (glow) que les pips, juste un glyphe au lieu d'un point.
+   Les dés de valeur 1 ET 5 sont un cas particulier demandé explicitement :
+   ce sont les deux seules valeurs qui rapportent des points seules (100 et
+   50 pts), donc les deux faces qu'un joueur doit repérer en un coup d'œil.
+   Au lieu du pip classique, on affiche le CHIFFRE ("1" ou "5") en néon
+   rose — même traitement lumineux (glow) que les pips, juste un glyphe au
+   lieu d'un point, pour les distinguer sans ambiguïté des dés de moindre
+   valeur (2, 3, 4, 6) qui eux gardent la grille de pips habituelle.
 
    Copie volontairement À PART de components/yahtzee/Die.js (même grille de
    points 3×3, mais identité visuelle et logique d'interaction différentes :
@@ -23,9 +26,10 @@ const PIPS = {
   2: [1, 9],
   3: [1, 5, 9],
   4: [1, 3, 7, 9],
-  5: [1, 3, 5, 7, 9],
   6: [1, 3, 4, 6, 7, 9],
 };
+
+const DIGIT_FACES = new Set([1, 5]);
 
 export default function TenkDie({ value, selected, dead, rolling, kept, onClick, disabled, ghost, style }) {
   const clickable = !!onClick && !disabled;
@@ -53,8 +57,8 @@ export default function TenkDie({ value, selected, dead, rolling, kept, onClick,
           <span className="tenk-die-ghost">?</span>
         ) : (
           <span className="tenk-die-face">
-            {value === 1 ? (
-              <span className="tenk-die-one" aria-hidden="true">1</span>
+            {DIGIT_FACES.has(value) ? (
+              <span className="tenk-die-digit" aria-hidden="true">{value}</span>
             ) : (
               [1, 2, 3, 4, 5, 6, 7, 8, 9].map((cell) => (
                 <span key={cell} className={"tenk-pip-cell" + (PIPS[value]?.includes(cell) ? " on" : "")} />

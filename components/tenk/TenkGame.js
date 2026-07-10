@@ -4,7 +4,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { saveGameState, readGameState, resetRoomToLobby } from "@/lib/gameSync";
 import Crossfade from "@/components/Crossfade";
 import TenkDie from "./TenkDie";
-import { DICE_COUNT, evaluateSelection, isFarkle } from "./scoring";
+import { DICE_COUNT, evaluateSelection, isFarkle, MIN_TO_BANK, FARKLE_STREAK_LIMIT, FARKLE_STREAK_PENALTY } from "./scoring";
 import { decideBotSelection, decideBotContinue } from "./botLogic";
 import { playDiceShuffle, playConfirmChime, playFarkle, playHotDice, playGameWin, playGameLose } from "@/lib/sfx";
 
@@ -59,6 +59,7 @@ function dealFreshState(seats, target) {
     diceRemaining: DICE_COUNT,
     turnScore: 0,
     keptDice: [],          // valeurs déjà mises de côté CE tour (affichage seulement)
+    farkleStreak: Object.fromEntries(seats.map(s => [s.id, 0])), // lancers blancs consécutifs par siège (voir MIN_TO_BANK/FARKLE_STREAK_* dans scoring.js)
     finalRound: null,      // { triggeredBy, remaining: [seatId,...] } une fois la cible atteinte
     finished: false,
     winners: [],
@@ -81,6 +82,7 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
   const [diceRemaining, setDiceRemaining] = useState(DICE_COUNT);
   const [turnScore, setTurnScore] = useState(0);
   const [keptDice, setKeptDice] = useState([]);
+  const [farkleStreak, setFarkleStreak] = useState({}); // { [seatId]: nombre de lancers blancs consécutifs }
   const [finalRound, setFinalRound] = useState(null);
   const [finished, setFinished] = useState(false);
   const [winners, setWinners] = useState([]);
@@ -106,13 +108,14 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
   const endBannerTimerRef = useRef(null);
 
   useEffect(() => {
-    stateRef.current = { seats, scores, turnIdx, activeDice, diceRemaining, turnScore, keptDice, finalRound, finished, winners, target, lastAction };
-  }, [seats, scores, turnIdx, activeDice, diceRemaining, turnScore, keptDice, finalRound, finished, winners, target, lastAction]);
+    stateRef.current = { seats, scores, turnIdx, activeDice, diceRemaining, turnScore, keptDice, farkleStreak, finalRound, finished, winners, target, lastAction };
+  }, [seats, scores, turnIdx, activeDice, diceRemaining, turnScore, keptDice, farkleStreak, finalRound, finished, winners, target, lastAction]);
 
   function applyLocalState(s, extra = {}) {
     setSeats(s.seats); setScores(s.scores || {}); setTurnIdx(s.turnIdx || 0);
     setActiveDice(s.activeDice || null); setDiceRemaining(s.diceRemaining ?? DICE_COUNT);
     setTurnScore(s.turnScore || 0); setKeptDice(s.keptDice || []);
+    setFarkleStreak(s.farkleStreak || {});
     setFinalRound(s.finalRound || null); setFinished(!!s.finished); setWinners(s.winners || []);
     setTarget(s.target || 5000); setLastAction(s.lastAction || null);
     setSelected([]);
@@ -250,23 +253,39 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
     const values = Array.from({ length: n }, () => 1 + Math.floor(Math.random() * 6));
 
     if (isFarkle(values)) {
-      const { finalRound, finished, winners } = resolveTurnEnd(s, seatId, s.scores);
+      // Trois lancers blancs (farkle) de suite pour ce siège -> -500 pts
+      // sur son total (jamais sous 0), puis le compteur repart de 0.
+      const streak = (s.farkleStreak?.[seatId] || 0) + 1;
+      const penalized = streak >= FARKLE_STREAK_LIMIT;
+      const newScores = penalized
+        ? { ...s.scores, [seatId]: Math.max(0, (s.scores[seatId] || 0) - FARKLE_STREAK_PENALTY) }
+        : s.scores;
+      const nextStreak = penalized ? 0 : streak;
+      const { finalRound, finished, winners } = resolveTurnEnd(s, seatId, newScores);
       const next = {
         ...s,
+        scores: newScores,
         turnScore: 0,
         activeDice: null,
         diceRemaining: DICE_COUNT,
         keptDice: [],
+        farkleStreak: { ...(s.farkleStreak || {}), [seatId]: nextStreak },
         turnIdx: finished ? s.turnIdx : (s.turnIdx + 1) % s.seats.length,
         finalRound, finished, winners,
-        lastAction: { type: "farkle", seatId, values },
+        lastAction: { type: "farkle", seatId, values, streak, penalty: penalized ? FARKLE_STREAK_PENALTY : 0 },
       };
       broadcastNewState(next);
       scheduleBots();
       return;
     }
 
-    const next = { ...s, activeDice: values, lastAction: { type: "roll", seatId, values } };
+    // Lancer valable : la série de lancers blancs de ce siège est rompue.
+    const next = {
+      ...s,
+      activeDice: values,
+      farkleStreak: { ...(s.farkleStreak || {}), [seatId]: 0 },
+      lastAction: { type: "roll", seatId, values },
+    };
     broadcastNewState(next);
     scheduleBots();
   }
@@ -304,7 +323,7 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
     const seat = s.seats[s.turnIdx];
     if (!seat || seat.id !== seatId) return;
     if (s.activeDice) return; // il faut d'abord résoudre le lancer en attente
-    if (!s.turnScore) return;
+    if (!s.turnScore || s.turnScore < MIN_TO_BANK) return; // filet de sécurité : 300 pts minimum pour banquer, voir attemptBank() côté client
 
     const newScores = { ...s.scores, [seatId]: (s.scores[seatId] || 0) + s.turnScore };
     const { finalRound, finished, winners } = resolveTurnEnd(s, seatId, newScores);
@@ -415,7 +434,7 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
     setSelected([]);
   }
   function attemptBank() {
-    if (!isMyTurn || activeDice || !turnScore) return;
+    if (!isMyTurn || activeDice || !turnScore || turnScore < MIN_TO_BANK) return;
     channelRef.current?.send({ type: "broadcast", event: "move_attempt", payload: { seatId: me.id, action: { type: "bank" } } });
   }
 
@@ -500,7 +519,14 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
               )}
             </div>
 
-            {banner === "farkle" && <div className="tenk-farkle-banner">💥 {t("tenkFarkleTitle")}</div>}
+            {banner === "farkle" && (
+              <div className="tenk-farkle-banner">
+                💥 {t("tenkFarkleTitle")}
+                {lastAction?.type === "farkle" && lastAction.penalty > 0 && (
+                  <span className="tenk-farkle-penalty"> — {t("tenkFarklePenalty")}</span>
+                )}
+              </div>
+            )}
             {banner === "hotdice" && <div className="tenk-hotdice-banner">🔥 {t("tenkHotDiceTitle")}</div>}
 
             <div className="tenk-turn-score">
@@ -514,13 +540,19 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
                   : (selEval.valid ? "+" + selEval.points + " " + t("pts") : t("tenkNoScoreHint"))}
               </p>
             )}
+            {isMyTurn && !activeDice && turnScore > 0 && turnScore < MIN_TO_BANK && (
+              <p className="tenk-best-hint">{t("tenkBankMinHint")}</p>
+            )}
+            {isMyTurn && !finished && !activeDice && (farkleStreak[me.id] || 0) >= FARKLE_STREAK_LIMIT - 1 && (
+              <p className="tenk-best-hint tenk-streak-warn">⚠️ {t("tenkFarkleStreakWarn")}</p>
+            )}
 
             {isMyTurn && !finished && (
               <div className="tenk-actions">
                 {!activeDice ? (
                   <>
                     <button className="tenk-btn-roll" onClick={attemptRoll}>🎲 {t("tenkRoll")}</button>
-                    <button className="tenk-btn-bank" disabled={!turnScore} onClick={attemptBank}>💰 {t("tenkBank")}</button>
+                    <button className="tenk-btn-bank" disabled={!turnScore || turnScore < MIN_TO_BANK} onClick={attemptBank}>💰 {t("tenkBank")}</button>
                   </>
                 ) : (
                   <button className="tenk-btn-keep" disabled={!selected.length || !selEval.valid} onClick={attemptKeep}>

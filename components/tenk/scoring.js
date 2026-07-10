@@ -11,7 +11,18 @@
    - Brelan (3 identiques) : 111 = 1000, sinon valeur × 100 (222=200 … 666=600).
    - 4 identiques = brelan × 2, 5 identiques = brelan × 4, 6 identiques = brelan × 8.
    - Suite complète 1-2-3-4-5-6 (les 6 dés à la fois) = 1500.
+   - Suite courte à 5 dés (1-2-3-4-5 OU 2-3-4-5-6, le 6e dé restant à part)
+     = 1500 également — ajoutée à la demande du porteur de projet pour
+     coller aux règles officielles du jeu (une suite n'a besoin que de 5
+     valeurs consécutives, le 6e dé du lancer n'a pas à en faire partie).
    - Trois paires (les 6 dés à la fois) = 750.
+   - Pour banquer, il faut avoir cumulé au moins 300 pts sur le tour en
+     cours (appliqué à la fois côté bouton client ET côté hôte-arbitre).
+   - Trois lancers consécutifs sans aucune combinaison valable ("blancs")
+     coûtent 500 pts au score total du joueur (jamais sous 0) — le compteur
+     est gardé dans l'état de partie (farkleStreak), remis à 0 dès qu'un
+     lancer redevient valable. Logique d'orchestration dans TenkGame.js,
+     ce fichier ne fait qu'exposer isFarkle() pour piloter ce compteur.
    - Hot dice : les 6 dés utilisés dans un même tour -> on relance les 6,
      le score du tour continue de s'accumuler (pas géré ici : orchestration
      réseau, voir TenkGame.js — ce fichier ne fait QUE évaluer un lancer ou
@@ -21,17 +32,26 @@
    pour la prochaine relecture) : le score d'une sélection est TOUJOURS la
    somme, PAR VALEUR PRÉSENTE dans la sélection, d'un score déterminé par
    LE NOMBRE de dés de cette valeur sélectionnés (jamais une "meilleure
-   décomposition" recherchée par l'algorithme) — sauf le cas spécial où la
-   sélection est EXACTEMENT les 6 dés ET qu'ils forment une suite ou trois
-   paires, auquel cas c'est ce score fixe qui s'applique à la place. Une
-   valeur 2/3/4/6 sélectionnée à 1 ou 2 exemplaires ne rapporte JAMAIS rien
-   (pas de "brelan partiel") : la sélection entière est alors invalide tant
-   que ces dés-là en font partie — c'est ce qui permet au joueur de choisir
-   LUI-MÊME quels dés garder (voir DICE_COUNT plus bas), sans qu'aucune
-   sélection "à moitié scorée" ne soit jamais acceptée par erreur.
+   décomposition" recherchée par l'algorithme) — sauf les deux cas spéciaux
+   où la sélection est EXACTEMENT les 6 dés et forme une suite/trois paires,
+   ou EXACTEMENT 5 dés et forme une suite courte, auquel cas c'est ce score
+   fixe qui s'applique à la place. Une valeur 2/3/4/6 sélectionnée à 1 ou 2
+   exemplaires ne rapporte JAMAIS rien (pas de "brelan partiel") : la
+   sélection entière est alors invalide tant que ces dés-là en font partie
+   — c'est ce qui permet au joueur de choisir LUI-MÊME quels dés garder
+   (voir DICE_COUNT plus bas), sans qu'aucune sélection "à moitié scorée"
+   ne soit jamais acceptée par erreur.
    ========================================================================== */
 
 export const DICE_COUNT = 6;
+export const MIN_TO_BANK = 300;
+export const FARKLE_STREAK_LIMIT = 3;
+export const FARKLE_STREAK_PENALTY = 500;
+
+const SMALL_STRAIGHTS = [
+  [1, 2, 3, 4, 5],
+  [2, 3, 4, 5, 6],
+];
 
 // Score d'un groupe de `count` dés identiques de valeur `value` — la SEULE
 // source de vérité pour tout score dé-par-dé de ce jeu. 0 = ce groupe ne
@@ -69,6 +89,24 @@ export function isThreePairs(values) {
   return groups.length === 3 && groups.every((n) => n === 2);
 }
 
+// Suite courte : EXACTEMENT 5 dés, dont les valeurs sont précisément
+// {1,2,3,4,5} ou {2,3,4,5,6} (aucun doublon, aucune valeur en trop dans
+// CETTE sélection — un éventuel 6e dé du lancer reste hors sélection).
+export function isSmallStraight(values) {
+  if (values.length !== 5) return false;
+  const sorted = values.slice().sort((a, b) => a - b).join(",");
+  return SMALL_STRAIGHTS.some((s) => s.join(",") === sorted);
+}
+
+// Un lancer (quel que soit son nombre de dés actifs) contient-il, en tant
+// que SOUS-ENSEMBLE de valeurs présentes, de quoi former une suite courte
+// (1-2-3-4-5 ou 2-3-4-5-6) ? Utilisé par isFarkle et par le hint "meilleur
+// score possible" — ne préjuge jamais de ce que le joueur choisit de garder.
+export function hasSmallStraightSubset(values) {
+  const set = new Set(values);
+  return SMALL_STRAIGHTS.some((req) => req.every((v) => set.has(v)));
+}
+
 // Évalue une sélection de dés (tableau de VALEURS, pas d'indices — c'est à
 // l'appelant de traduire indices -> valeurs). Renvoie :
 //   { valid: true,  points, shape }               si la sélection compte
@@ -82,6 +120,7 @@ export function evaluateSelection(values) {
     if (isStraight(values)) return { valid: true, points: 1500, shape: "straight" };
     if (isThreePairs(values)) return { valid: true, points: 750, shape: "threePairs" };
   }
+  if (isSmallStraight(values)) return { valid: true, points: 1500, shape: "smallStraight" };
 
   const c = counts(values);
   let total = 0;
@@ -98,12 +137,13 @@ export function evaluateSelection(values) {
 
 // Farkle : AUCUNE sélection non vide n'est valable parmi `values` (les dés
 // actuellement actifs). Un lancer partiel (moins de 6 dés, après une
-// première mise de côté dans le tour) est évalué exactement pareil — la
-// règle de suite/trois paires ne s'applique qu'à un groupe de 6 dés,
-// jamais moins.
+// première mise de côté dans le tour) est évalué exactement pareil — les
+// règles de suite (complète, courte) et de trois paires ne s'appliquent
+// qu'à un groupe d'exactement 6 ou 5 dés selon le cas (voir ci-dessus).
 export function isFarkle(values) {
   if (!values || values.length === 0) return false;
   if (values.length === 6 && (isStraight(values) || isThreePairs(values))) return false;
+  if (hasSmallStraightSubset(values)) return false;
   const c = counts(values);
   return Object.entries(c).every(([vStr, n]) => groupScore(Number(vStr), n) === 0);
 }
@@ -118,6 +158,7 @@ export function bestPossibleScore(values) {
     if (isStraight(values)) return 1500;
     if (isThreePairs(values)) return 750;
   }
+  if (hasSmallStraightSubset(values)) return 1500;
   const c = counts(values);
   let total = 0;
   for (const [vStr, n] of Object.entries(c)) {
