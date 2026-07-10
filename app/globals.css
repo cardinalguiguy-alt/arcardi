@@ -1266,7 +1266,16 @@ body.stage-focus .chat-panel{ right:auto; left:14px; }
 /* ----- La mine : terre brune, cases-mottes en relief ----- */
 .gm-grid{
   position:relative;
-  display:grid; grid-template-columns:repeat(var(--gm-cols, 11), 1fr);
+  /* Grille CARRÉE, rangées ET colonnes explicites : c'est la GRILLE (et non
+     chaque cellule via aspect-ratio) qui porte les dimensions. Corrige le
+     décalage cadre/cellules observé sur Safari, où des cellules en
+     `aspect-ratio` débordaient la boîte de la grille (les rangées `auto`
+     n'étaient pas dimensionnées par l'aspect-ratio). box-sizing:border-box
+     (global) => le carré = la boîte visible, bordure comprise. */
+  display:grid;
+  grid-template-columns:repeat(var(--gm-cols, 11), 1fr);
+  grid-template-rows:repeat(var(--gm-cols, 11), 1fr);
+  aspect-ratio:1;
   gap:3px; max-width:440px; margin:10px auto 4px; padding:8px;
   border-radius:14px;
 
@@ -1284,7 +1293,11 @@ body.stage-focus .chat-panel{ right:auto; left:14px; }
 }
 .gm-cell{
   position:relative;
-  aspect-ratio:1; border-radius:6px; display:flex; align-items:center; justify-content:center;
+  /* La cellule remplit exactement sa piste (la grille est carrée, voir
+     .gm-grid) — plus d'aspect-ratio par cellule, donc plus de débordement
+     Safari. min-width/height:0 pour ne jamais forcer la piste au-delà. */
+  width:100%; height:100%; min-width:0; min-height:0;
+  border-radius:6px; display:flex; align-items:center; justify-content:center;
   font-family:'Space Mono'; font-weight:800; font-size:clamp(11px, 2.6vw, 15px);
   user-select:none; padding:0; border:none;
 }
@@ -1314,10 +1327,15 @@ body.stage-focus .chat-panel{ right:auto; left:14px; }
    remplacer ce seul fichier par l'image voulue pour tout changer d'un coup.
    Point d'accroche = la pointe gauche de la tête. */
 .gm-grid.myturn,
-.gm-grid.myturn .gm-cell.hidden,
+.gm-grid.myturn .gm-cell.hidden{
+  cursor: url("/cursors/pick.png") 2 28, pointer;
+}
+/* AU CLIC : le POINTEUR lui-même bascule sur la pose "frappe" (pioche penchée),
+   pivotée autour de la pointe pour ne pas sauter — pas de 2e pioche sur la
+   case. Le point d'accroche suit la pointe après rotation (5 35). */
 .gm-grid.myturn:active,
 .gm-grid.myturn:active .gm-cell.hidden{
-  cursor: url("/cursors/pick.png") 2 28, pointer;
+  cursor: url("/cursors/pick-strike.png") 5 35, pointer;
 }
 .gm-grid.myturn .gm-cell.hidden:hover{ transform:translateY(-1.5px); filter:brightness(1.2); }
 /* Dynamite armée : la pioche devient un bâton de dynamite. */

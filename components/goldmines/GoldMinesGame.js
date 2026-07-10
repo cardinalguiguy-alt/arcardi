@@ -484,16 +484,11 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
     // lastAction), d'où le retard signalé. L'effet dérivé de lastAction ne le
     // rejoue pas pour ce joueur (garde `seatId === me.id`).
     if (action.type === "bomb") playDynamite();
-    // Frappe visible aussi pour MON coup : un curseur natif ne peut pas
-    // s'animer (il reste figé), donc on rejoue la même animation de pioche sur
-    // la case cliquée — elle recouvre le curseur le temps de la frappe. Déclenché
-    // dès le clic (pas après l'aller-retour réseau) pour rester réactif.
-    if (action.type === "dig") {
-      oppStrikeKeyRef.current += 1;
-      setOppStrike({ idx, key: oppStrikeKeyRef.current });
-      clearTimeout(oppStrikeTimerRef.current);
-      oppStrikeTimerRef.current = setTimeout(() => setOppStrike(null), STRIKE_FX_MS);
-    }
+    // NB : pour MON propre coup, on ne pose PAS d'animation sur la case (ça
+    // ferait une 2e pioche à côté du curseur). C'est le CURSEUR lui-même qui
+    // bascule sur la pose "frappe" au clic (voir .gm-grid.myturn:active dans
+    // globals.css). L'animation sur la case est réservée à l'ADVERSAIRE (effet
+    // dérivé de lastAction), pour qui il n'y a pas de curseur à animer.
     channelRef.current?.send({ type: "broadcast", event: "move_attempt", payload: { seatId: me.id, action } });
   }
 
