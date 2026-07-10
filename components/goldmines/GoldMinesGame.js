@@ -128,14 +128,11 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
   const [bombFx, setBombFx] = useState(null);        // 💥 + secousse de la grille
   // Décompte 3-2-1 de début de partie (jamais rejoué au rechargement).
   const [countingDown, setCountingDown] = useState(false);
-  // Curseur-pioche : visible seulement à la souris (jamais au doigt), il
-  // suit le pointeur au-dessus de la grille et "frappe" au clic (l'animation
-  // est rejouée via classList, voir strikePickCursor). Deux éléments : le
-  // WRAPPER est déplacé en translate3d (couche GPU, zéro layout — correctif
-  // lag 2026-07), la pioche elle-même porte rotation + animation de frappe.
-  const [pickCursor, setPickCursor] = useState(false);
-  const pickRef = useRef(null);    // wrapper : position (translate3d)
-  const pickAxeRef = useRef(null); // pioche : frappe (classe .strike)
+  // Curseur-pioche : c'est désormais un VRAI curseur CSS natif posé sur la
+  // grille (voir .gm-grid.myturn dans globals.css) — le navigateur le dessine
+  // lui-même, donc plus jamais "invisible", insensible au zoom du mode agrandi,
+  // et zéro JS/événement à synchroniser. Au doigt (tactile), rien à faire : le
+  // curseur ne s'affiche pas, on tape directement les cases.
   const gridRef = useRef(null);
 
   const channelRef = useRef(null);
@@ -465,95 +462,6 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
     channelRef.current?.send({ type: "broadcast", event: "move_attempt", payload: { seatId: me.id, action } });
   }
 
-  // ----- Curseur-pioche (souris uniquement) -----
-  // La grosse pioche remplace la flèche au-dessus de la grille et FRAPPE
-  // vers le bas au clic (demande 2026-07). Recette anti-lag (2 passes) :
-  //   1. position écrite en direct sur l'élément en translate3d (couche GPU,
-  //      will-change) — jamais par setState, jamais par left/top ;
-  //   2. le rectangle de la grille est mis en CACHE (gridRectRef) et
-  //      rafraîchi sur scroll/resize seulement : le getBoundingClientRect
-  //      par mousemove forçait une lecture de layout à chaque événement,
-  //      d'où le léger traînage résiduel ;
-  //   3. écoute de `pointerrawupdate` quand le navigateur le propose
-  //      (Chrome/Edge) : livré à la fréquence brute de la souris, sans
-  //      attendre le cadencement des pointermove.
-  // Les pointeurs tactiles sont ignorés : au doigt, rien ne change.
-  const gridRectRef = useRef(null);
-  // Échelle visuelle de la grille (mode agrandi) : .game-stage porte un
-  // `zoom` < 1 quand le jeu ne tient pas à l'écran. Un translate exprimé dans
-  // le repère LOCAL de la grille est ensuite mis à l'échelle à l'affichage :
-  // sans en tenir compte, la pioche dérivait d'un facteur (1 − zoom). On
-  // déduit l'échelle de rect.width / offsetWidth (sans avoir à connaître le
-  // zoom du parent).
-  const gridScaleRef = useRef(1);
-  // Dernière position souris connue : sert à FAIRE APPARAÎTRE la pioche tout
-  // de suite quand elle devient visible, sans attendre un premier mouvement
-  // (cause du "curseur invisible" quand pointerrawupdate ne se déclenchait
-  // pas sur la grille).
-  const lastPointerRef = useRef(null);
-
-  // Place ET révèle la pioche au pointeur (delta écran divisé par l'échelle
-  // visuelle — voir gridScaleRef).
-  function placePick(clientX, clientY) {
-    const el = pickRef.current, r = gridRectRef.current;
-    if (!el || !r) return;
-    const s = gridScaleRef.current || 1;
-    el.style.transform = "translate3d(" + ((clientX - r.left) / s) + "px," + ((clientY - r.top) / s) + "px,0)";
-    el.style.opacity = "1"; // révélée dès qu'une vraie position est connue
-  }
-
-  function enterPickCursor(e) {
-    if (e.pointerType && e.pointerType !== "mouse") return;
-    lastPointerRef.current = { x: e.clientX, y: e.clientY };
-    setPickCursor(true);
-  }
-  function leavePickCursor() { setPickCursor(false); }
-  function strikePickCursor(e) {
-    if (e.pointerType && e.pointerType !== "mouse") return;
-    lastPointerRef.current = { x: e.clientX, y: e.clientY };
-    placePick(e.clientX, e.clientY); // révèle même sans mouvement préalable
-    const axe = pickAxeRef.current;
-    if (!axe) return;
-    axe.classList.remove("strike");
-    void axe.offsetWidth; // reflow : l'animation repart de zéro à chaque coup
-    axe.classList.add("strike");
-  }
-  const showPick = pickCursor && isMyTurn && !winner;
-
-  useEffect(() => {
-    if (!showPick) return;
-    const grid = gridRef.current, el = pickRef.current;
-    if (!grid || !el) return;
-    const refreshRect = () => {
-      const rect = grid.getBoundingClientRect();
-      gridRectRef.current = rect;
-      gridScaleRef.current = grid.offsetWidth ? rect.width / grid.offsetWidth : 1;
-    };
-    refreshRect();
-    // Apparition IMMÉDIATE : si la souris est déjà sur la grille (cas normal,
-    // l'entrée vient de déclencher showPick), on positionne la pioche tout de
-    // suite au lieu d'attendre un premier événement de mouvement.
-    if (lastPointerRef.current) placePick(lastPointerRef.current.x, lastPointerRef.current.y);
-    const onMove = (e) => {
-      if (e.pointerType && e.pointerType !== "mouse") return;
-      lastPointerRef.current = { x: e.clientX, y: e.clientY };
-      placePick(e.clientX, e.clientY);
-    };
-    // pointermove = socle FIABLE (toujours délivré). pointerrawupdate, quand
-    // il existe (Chrome/Edge), est ajouté EN PLUS pour la fluidité — mais on
-    // ne dépend plus de lui pour la première apparition.
-    grid.addEventListener("pointermove", onMove);
-    const hasRaw = "onpointerrawupdate" in window;
-    if (hasRaw) grid.addEventListener("pointerrawupdate", onMove);
-    window.addEventListener("scroll", refreshRect, true);
-    window.addEventListener("resize", refreshRect);
-    return () => {
-      grid.removeEventListener("pointermove", onMove);
-      if (hasRaw) grid.removeEventListener("pointerrawupdate", onMove);
-      window.removeEventListener("scroll", refreshRect, true);
-      window.removeEventListener("resize", refreshRect);
-    };
-  }, [showPick]);
 
   // Points ARCARDI : 5 au vainqueur du duel, 0 au perdant — chacun
   // enregistre le sien (RLS), une seule fois, comme partout sur le site.
@@ -579,14 +487,19 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
 
   let content;
   if (phase === "playing" && mine) {
+    // Statut en JSX (et non plus une simple chaîne) : l'or est représenté par
+    // la MÊME pépite SVG que sur la grille (NuggetIcon), plus par l'emoji 🪙.
     let statusText;
     if (winner) statusText = null;
-    else if (bombArmed && isMyTurn) statusText = `🧨 ${t("gmBombArm")}`;
+    else if (bombArmed && isMyTurn) statusText = <>🧨 {t("gmBombArm")}</>;
     else if (lastAction?.type === "bomb") {
-      statusText = `💥 ${lastAction.seatId === me.id ? t("gmBombYou") : `${lastSeat?.username} ${t("gmBombOther")}`} (+${lastAction.gained} 🪙)`;
+      const who = lastAction.seatId === me.id ? t("gmBombYou") : `${lastSeat?.username} ${t("gmBombOther")}`;
+      statusText = <>💥 {who} (+{lastAction.gained} <NuggetIcon className="inline" />)</>;
     } else if (lastAction?.type === "dig" && lastAction.nugget) {
-      statusText = lastAction.seatId === me.id ? `🪙 ${t("gmNuggetYou")}` : `🪙 ${lastSeat?.username} ${t("gmNuggetOther")}`;
-    } else if (isMyTurn) statusText = `⛏️ ${t("gmYourTurn")}`;
+      statusText = lastAction.seatId === me.id
+        ? <><NuggetIcon className="inline" /> {t("gmNuggetYou")}</>
+        : <><NuggetIcon className="inline" /> {lastSeat?.username} {t("gmNuggetOther")}</>;
+    } else if (isMyTurn) statusText = <>⛏️ {t("gmYourTurn")}</>;
     else if (isPlayer) statusText = `${t("chromatikWaitingFor")} ${activeSeat?.username}…`;
     else statusText = t("gmSpectating");
 
@@ -639,12 +552,8 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
 
         <div
           ref={gridRef}
-          className={"gm-grid" + (isMyTurn && !winner ? " myturn" : "") + (bombArmed && isMyTurn ? " bombing" : "") + (bombFx ? " quake" : "") + (showPick ? " pickcur" : "")}
+          className={"gm-grid" + (isMyTurn && !winner ? " myturn" : "") + (bombArmed && isMyTurn ? " bombing" : "") + (bombFx ? " quake" : "")}
           style={{ "--gm-cols": GM_COLS }}
-          onPointerEnter={enterPickCursor}
-          onPointerMove={enterPickCursor}
-          onPointerLeave={leavePickCursor}
-          onPointerDown={strikePickCursor}
         >
           {Array.from({ length: GM_ROWS * GM_COLS }, (_, idx) => {
             const rev = revealed[idx];
@@ -704,16 +613,6 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
             </span>
           )}
 
-          {/* Curseur-pioche : le wrapper suit la souris (translate3d, voir
-              movePickCursor), la pioche frappe vers le bas au clic.
-              Devient 🧨 quand la dynamite est armée. */}
-          {showPick && (
-            <span ref={pickRef} className="gm-pick-wrap" aria-hidden="true">
-              <span ref={pickAxeRef} className="gm-pick-cursor">
-                {bombArmed && myBombAvailable ? "🧨" : "⛏️"}
-              </span>
-            </span>
-          )}
         </div>
 
         {/* Dynamite : un seul bâton par partie — armer, viser, boum. */}
