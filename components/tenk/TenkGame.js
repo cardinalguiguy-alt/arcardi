@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { saveGameState, readGameState, resetRoomToLobby } from "@/lib/gameSync";
 import Crossfade from "@/components/Crossfade";
+import GameCountdown, { COUNTDOWN_MS } from "@/components/GameCountdown";
 import TenkDie from "./TenkDie";
 import { DICE_COUNT, evaluateSelection, isFarkle, listScoringGroups, MIN_TO_BANK, FARKLE_STREAK_LIMIT, FARKLE_STREAK_PENALTY } from "./scoring";
 import { decideBotSelection, decideBotContinue } from "./botLogic";
@@ -152,6 +153,9 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
   const [turnDeadline, setTurnDeadline] = useState(null);
   const [turnDeadlineSeat, setTurnDeadlineSeat] = useState(null);
   const [nowTick, setNowTick] = useState(() => Date.now());
+  // Décompte 3-2-1 de début de partie (demande 2026-07) : affiché à chaque
+  // match_start (jamais lors d'une reprise sur rechargement).
+  const [countingDown, setCountingDown] = useState(false);
 
   const channelRef = useRef(null);
   const stateRef = useRef(null);
@@ -168,6 +172,10 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
   const turnStrikesRef = useRef({});    // seatId -> dépassements consécutifs (remis à 0 dès qu'il rejoue)
   const turnMetaRef = useRef({ deadline: null, seatId: null }); // dernière deadline diffusée
   const lastProgressRef = useRef(Date.now()); // watchdog anti-blocage : horodatage du dernier état reçu
+  // Fin du décompte 3-2-1 (côté hôte : les bots n'agissent jamais avant) et
+  // fin de la période "départ rapide" des bots — voir botThinkDelay.
+  const countdownEndRef = useRef(0);
+  const botFastUntilRef = useRef(0);
 
   useEffect(() => {
     stateRef.current = { seats, scores, turnIdx, activeDice, diceRemaining, turnScore, keptDice, farkleStreak, hotDiceUntil, finalRound, finished, winners, target, lastAction };
@@ -275,6 +283,13 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
       applyLocalState(payload, { resetGain: true });
       setPhase("playing");
       lastActionSeenRef.current = null;
+      // Décompte 3-2-1 avant le premier lancer (jamais au rechargement) ;
+      // pendant ~12 s après le décompte, les bots jouent nettement plus
+      // vite (demande 2026-07 : l'entame traînait), puis reprennent leur
+      // rythme "réfléchi" habituel — voir botThinkDelay.
+      countdownEndRef.current = Date.now() + COUNTDOWN_MS;
+      botFastUntilRef.current = countdownEndRef.current + 12000;
+      setCountingDown(true);
       persist(payload);
       scheduleBots();
     });
@@ -394,6 +409,9 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
   function sendMatchStart(payload) {
     lastActionSeenRef.current = null;
     const tm = computeTurnDeadline(payload);
+    // Décompte 3-2-1 : le premier tour humain ne commence à décompter ses
+    // 30 s qu'après le décompte (l'overlay bloque les clics pendant ce temps).
+    if (tm.deadline) tm.deadline += COUNTDOWN_MS;
     turnMetaRef.current = tm;
     channelRef.current.send({ type: "broadcast", event: "match_start", payload: { ...payload, turnDeadline: tm.deadline, turnDeadlineSeat: tm.seatId } });
     persist(payload);
@@ -543,10 +561,17 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
   // une petite chance d'hésitation supplémentaire, pour ne jamais paraître
   // parfaitement régulier.
   function botThinkDelay(kind) {
-    const ranges = { keep: [650, 1350], decide: [1500, 3100], roll: [850, 1650] };
+    // Départ rapide (demande 2026-07) : pendant les ~12 premières secondes
+    // d'une partie, le bot enchaîne sans tergiverser (et sans hésitation
+    // aléatoire) — l'entame était jugée trop lente. Passé ce cap, retour au
+    // rythme "réfléchi" habituel.
+    const fast = Date.now() < botFastUntilRef.current;
+    const ranges = fast
+      ? { keep: [280, 600], decide: [550, 1100], roll: [320, 700] }
+      : { keep: [650, 1350], decide: [1500, 3100], roll: [850, 1650] };
     const [min, max] = ranges[kind] || ranges.roll;
     let d = min + Math.random() * (max - min);
-    if (Math.random() < 0.12) d += 1100 + Math.random() * 1500; // hésitation occasionnelle
+    if (!fast && Math.random() < 0.12) d += 1100 + Math.random() * 1500; // hésitation occasionnelle
     return d;
   }
   function scheduleBots() {
@@ -572,7 +597,11 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
     // plus rien ne le relancerait derrière.
     const hotDiceLockRemain = Math.max(0, (s0.hotDiceUntil || 0) - Date.now());
     const baseDelay = botThinkDelay(kind);
-    const delay = kind === "keep" ? baseDelay : Math.max(baseDelay, hotDiceLockRemain);
+    let delay = kind === "keep" ? baseDelay : Math.max(baseDelay, hotDiceLockRemain);
+    // Décompte 3-2-1 en cours : le bot ne joue JAMAIS pendant que les
+    // joueurs regardent l'overlay (sinon des dés apparaîtraient déjà lancés
+    // à la fin du décompte).
+    delay = Math.max(delay, countdownEndRef.current - Date.now());
 
     botTimer.current = setTimeout(() => {
       const s = stateRef.current;
@@ -1139,6 +1168,11 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
     <div className="panel tenk-panel">
       <h1>{t("tenkTitle")}</h1>
       <Crossfade id={phase + ":" + finished}>{content}</Crossfade>
+      {/* Décompte 3-2-1 aux couleurs néon du jeu : couvre tout le panneau
+          et bloque les clics le temps que chacun soit prêt. */}
+      {countingDown && phase === "playing" && (
+        <GameCountdown variant="tenk" onDone={() => setCountingDown(false)} />
+      )}
     </div>
   );
 }

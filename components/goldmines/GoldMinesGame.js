@@ -3,11 +3,13 @@ import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { saveGameState, readGameState, resetRoomToLobby } from "@/lib/gameSync";
 import Crossfade from "@/components/Crossfade";
+import GameCountdown, { COUNTDOWN_MS } from "@/components/GameCountdown";
 import {
   GM_ROWS, GM_COLS, GM_NUGGETS, GM_WIN_AT,
   genMine, digResult, bombResult, nuggetsLeft, gmPointsForPlace,
 } from "./mines";
 import { decideBotMove } from "./botLogic";
+import { playCashRegister, playDynamite } from "@/lib/sfx";
 
 /* ==========================================================================
    GOLD MINES — démineur inversé en DUEL (refonte 2026-07, spec complète).
@@ -48,6 +50,48 @@ function makeBotSeat(n) {
   return { id: "bot" + n, username: "Bot " + n, avatar: "🤖", isBot: true };
 }
 
+// ----- Pépite d'or dessinée (SVG) -------------------------------------------
+// Remplace l'emoji 🪙 (demande 2026-07 : "jaune or, brillante, qui évoque
+// vraiment une pépite") : caillou irrégulier à facettes, dégradé or clair ->
+// or profond, reflet spéculaire — même dessin partout (grille, cartes de
+// mineur, "+N"), seule la taille change via CSS (.gm-nugget-svg).
+// Les ids de dégradé sont partagés entre toutes les instances : sans risque,
+// elles sont identiques et toujours rendues visibles.
+function NuggetIcon({ className = "" }) {
+  return (
+    <svg className={"gm-nugget-svg " + className} viewBox="0 0 32 32" aria-hidden="true">
+      <defs>
+        <linearGradient id="gmNugGrad" x1="0" y1="0" x2="0.55" y2="1">
+          <stop offset="0" stopColor="#FFF6C4" />
+          <stop offset="0.38" stopColor="#FFD23F" />
+          <stop offset="0.75" stopColor="#EFAF1E" />
+          <stop offset="1" stopColor="#C4820C" />
+        </linearGradient>
+        <linearGradient id="gmNugFacet" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#FFEE9C" />
+          <stop offset="1" stopColor="#E0A018" />
+        </linearGradient>
+      </defs>
+      {/* Le caillou : contour volontairement bosselé et asymétrique (creux à
+          droite, bosse en bas) — jamais un rond de pièce */}
+      <path
+        d="M14.5 2.5 L22.5 4 L25.5 8.5 L29.5 13 L27 18.5 L28.5 23.5 L21.5 27.5 L15 29.5 L7.5 27 L3 20.5 L2.5 13 L7 9.5 L8.5 4.5 Z"
+        fill="url(#gmNugGrad)" stroke="#8A5A06" strokeWidth="1.2" strokeLinejoin="round"
+      />
+      {/* Facettes : deux plans plus clairs qui accrochent la lumière */}
+      <path d="M14.5 2.5 L22.5 4 L19.5 11.5 L10 10 L8.5 4.5 Z" fill="url(#gmNugFacet)" opacity="0.8" />
+      <path d="M10 10 L19.5 11.5 L17 20 L7.5 18 L3 20.5 L2.5 13 L7 9.5 Z" fill="#F6C232" opacity="0.55" />
+      {/* Ombre interne, côté bas-droit */}
+      <path d="M29.5 13 L27 18.5 L28.5 23.5 L21.5 27.5 L15 29.5 L17 20 L19.5 11.5 L25.5 8.5 Z" fill="#B0770A" opacity="0.38" />
+      {/* Reflets spéculaires : l'étincelle qui fait "brillant" */}
+      <path d="M10.2 5.8 L13.8 4.8 L12.4 8.4 L9.6 8.8 Z" fill="#FFFDEB" opacity="0.95" />
+      <circle cx="21" cy="7.6" r="1.5" fill="#FFF9D6" opacity="0.9" />
+      <circle cx="13" cy="15" r="1.1" fill="#FFF3B8" opacity="0.75" />
+      <circle cx="23.5" cy="21" r="0.9" fill="#FFE68A" opacity="0.6" />
+    </svg>
+  );
+}
+
 function dealState(seats) {
   const mine = genMine();
   const gold = {}, bombs = {};
@@ -79,9 +123,17 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
   // sauter le carré 3×3 au lieu de piocher.
   const [bombArmed, setBombArmed] = useState(false);
   // Effets locaux, tous dérivés du même lastAction reçu par broadcast :
-  const [goldPop, setGoldPop] = useState(null);      // "+N 🪙" sur la carte du mineur
+  const [goldPop, setGoldPop] = useState(null);      // "+N pépite(s)" sur la carte du mineur
   const [freshNuggets, setFreshNuggets] = useState({ ids: [], key: 0 }); // pépites qui rayonnent
   const [bombFx, setBombFx] = useState(null);        // 💥 + secousse de la grille
+  // Décompte 3-2-1 de début de partie (jamais rejoué au rechargement).
+  const [countingDown, setCountingDown] = useState(false);
+  // Curseur-pioche : visible seulement à la souris (jamais au doigt), il
+  // suit le pointeur au-dessus de la grille et "frappe" au clic (l'animation
+  // est rejouée via classList, voir strikePickCursor).
+  const [pickCursor, setPickCursor] = useState(false);
+  const pickRef = useRef(null);
+  const gridRef = useRef(null);
 
   const channelRef = useRef(null);
   const stateRef = useRef(null);
@@ -99,6 +151,10 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
   const bombFxKeyRef = useRef(0);
   const bombFxTimerRef = useRef(null);
   const lastActionSeenRef = useRef(null);
+  // Fin du décompte 3-2-1 côté hôte : les bots et le minuteur de tour
+  // attendent cette échéance avant de démarrer (voir scheduleBots et
+  // sendMatchStart) — l'overlay et l'arbitrage restent synchronisés.
+  const countdownEndRef = useRef(0);
 
   useEffect(() => {
     stateRef.current = { seats, mine, revealed, gold, bombs, turnIdx, left, winner };
@@ -129,6 +185,9 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
       ? [lastAction.idx]
       : lastAction.type === "bomb" ? (lastAction.nuggetCells || []) : [];
     if (nuggetIds.length > 0) {
+      // Trouvaille : même caisse enregistreuse que la banque du 10000
+      // (demande 2026-07) — l'or qui rentre fait le même bruit partout.
+      playCashRegister();
       freshKeyRef.current += 1;
       setFreshNuggets({ ids: nuggetIds, key: freshKeyRef.current });
       clearTimeout(freshTimerRef.current);
@@ -139,6 +198,9 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
       goldPopTimerRef.current = setTimeout(() => setGoldPop(null), 1500);
     }
     if (lastAction.type === "bomb") {
+      // Vrai tir de mine (fichier découpé + fondu, voir lib/sfx.js), joué
+      // chez TOUS les clients via le même lastAction que l'animation 💥.
+      playDynamite();
       bombFxKeyRef.current += 1;
       setBombFx({ center: lastAction.center, key: bombFxKeyRef.current });
       clearTimeout(bombFxTimerRef.current);
@@ -159,6 +221,11 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
     ch.on("broadcast", { event: "match_start" }, ({ payload }) => {
       applyLocalState(payload, { resetGain: true });
       setPhase("playing");
+      // Décompte 3-2-1 avant que la mine ouvre (jamais au rechargement :
+      // seul un vrai match_start passe ici). Les bots attendent la fin du
+      // décompte via countdownEndRef (voir scheduleBots).
+      countdownEndRef.current = Date.now() + COUNTDOWN_MS;
+      setCountingDown(true);
       persist(payload);
       scheduleBots();
     });
@@ -248,6 +315,10 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
   function sendMatchStart(payload) {
     turnStrikesRef.current = {};
     const tm = computeTurnDeadline(payload);
+    // Décompte 3-2-1 : le premier tour humain ne commence à décompter ses
+    // 30 s qu'une fois le décompte terminé (équité vis-à-vis de l'overlay
+    // qui bloque les clics pendant ce temps).
+    if (tm.deadline) tm.deadline += COUNTDOWN_MS;
     turnMetaRef.current = tm;
     channelRef.current.send({ type: "broadcast", event: "match_start", payload: { ...payload, turnDeadline: tm.deadline, turnDeadlineSeat: tm.seatId } });
     armHumanTurnTimer();
@@ -302,9 +373,11 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
   }
 
   // Bot au tour suivant : l'hôte joue pour lui après un délai de lisibilité.
+  // Le délai ne descend jamais sous la fin du décompte 3-2-1 : un bot qui
+  // piocherait pendant que les joueurs regardent "3… 2… 1…" casserait tout.
   function scheduleBots() {
     if (!isHost) return;
-    const delay = 800 + Math.random() * 2200;
+    const delay = Math.max(800 + Math.random() * 2200, countdownEndRef.current - Date.now());
     botTimer.current = setTimeout(() => {
       const s = stateRef.current;
       if (!s || s.winner || !s.mine) return;
@@ -377,6 +450,38 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
     channelRef.current?.send({ type: "broadcast", event: "move_attempt", payload: { seatId: me.id, action } });
   }
 
+  // ----- Curseur-pioche (souris uniquement) -----
+  // La grosse pioche remplace la flèche au-dessus de la grille et FRAPPE
+  // vers le bas au clic (demande 2026-07). Position mise à jour en direct
+  // sur l'élément (jamais par setState : un re-rendu React par mousemove
+  // ferait ramer la grille), animation de frappe rejouée en retirant puis
+  // reposant la classe .strike (reflow forcé entre les deux). Les pointeurs
+  // tactiles sont ignorés : au doigt, pas de curseur — rien ne change.
+  function movePickCursor(e) {
+    if (e.pointerType && e.pointerType !== "mouse") return;
+    if (!pickCursor) setPickCursor(true);
+    const el = pickRef.current, grid = gridRef.current;
+    if (!el || !grid) return;
+    const r = grid.getBoundingClientRect();
+    el.style.left = (e.clientX - r.left) + "px";
+    el.style.top = (e.clientY - r.top) + "px";
+  }
+  function enterPickCursor(e) {
+    if (e.pointerType && e.pointerType !== "mouse") return;
+    setPickCursor(true);
+  }
+  function leavePickCursor() { setPickCursor(false); }
+  function strikePickCursor(e) {
+    if (e.pointerType && e.pointerType !== "mouse") return;
+    movePickCursor(e);
+    const el = pickRef.current;
+    if (!el) return;
+    el.classList.remove("strike");
+    void el.offsetWidth; // reflow : l'animation repart de zéro à chaque coup
+    el.classList.add("strike");
+  }
+  const showPick = pickCursor && isMyTurn && !winner;
+
   // Points ARCARDI : 5 au vainqueur du duel, 0 au perdant — chacun
   // enregistre le sien (RLS), une seule fois, comme partout sur le site.
   useEffect(() => {
@@ -429,7 +534,7 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
                 )}
               </span>
               <span className="gm-miner-gold">
-                {gold[s.id] || 0}<i>/{GM_WIN_AT}</i> 🪙
+                {gold[s.id] || 0}<i>/{GM_WIN_AT}</i> <NuggetIcon className="inline" />
               </span>
               <span className="gm-miner-track" aria-hidden="true">
                 <span className="gm-miner-fill" style={{ width: Math.min(100, ((gold[s.id] || 0) / GM_WIN_AT) * 100) + "%" }} />
@@ -438,7 +543,7 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
               {turnDeadlineSeat === s.id && turnRemaining != null && !winner && (
                 <span className={"turn-timer-chip mini" + (turnRemaining <= 5 ? " hot" : "")}>{turnRemaining}s</span>
               )}
-              {goldPop?.seatId === s.id && <span className="gm-gold-pop" key={goldPop.key}>+{goldPop.count} 🪙</span>}
+              {goldPop?.seatId === s.id && <span className="gm-gold-pop" key={goldPop.key}>+{goldPop.count} <NuggetIcon className="inline" /></span>}
             </div>
           ))}
           <span className="gm-vs" aria-hidden="true">⛏️</span>
@@ -460,8 +565,13 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
         )}
 
         <div
-          className={"gm-grid" + (isMyTurn && !winner ? " myturn" : "") + (bombArmed && isMyTurn ? " bombing" : "") + (bombFx ? " quake" : "")}
+          ref={gridRef}
+          className={"gm-grid" + (isMyTurn && !winner ? " myturn" : "") + (bombArmed && isMyTurn ? " bombing" : "") + (bombFx ? " quake" : "") + (showPick ? " pickcur" : "")}
           style={{ "--gm-cols": GM_COLS }}
+          onPointerEnter={enterPickCursor}
+          onPointerLeave={leavePickCursor}
+          onPointerMove={movePickCursor}
+          onPointerDown={strikePickCursor}
         >
           {Array.from({ length: GM_ROWS * GM_COLS }, (_, idx) => {
             const rev = revealed[idx];
@@ -485,7 +595,7 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
               return (
                 <span key={idx} className={"gm-cell nugget " + tone + (isFresh ? " fresh" : " settled")} title={digger?.username}>
                   {isFresh && <i className="gm-rays" aria-hidden="true" />}
-                  <b>🪙</b>
+                  <b><NuggetIcon /></b>
                 </span>
               );
             }
@@ -518,6 +628,14 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
             >
               <i className="gm-boom-wave" />
               <i className="gm-boom-flash">💥</i>
+            </span>
+          )}
+
+          {/* Curseur-pioche : suit la souris (voir movePickCursor), frappe
+              vers le bas au clic. Devient 🧨 quand la dynamite est armée. */}
+          {showPick && (
+            <span ref={pickRef} className="gm-pick-cursor" aria-hidden="true">
+              {bombArmed && myBombAvailable ? "🧨" : "⛏️"}
             </span>
           )}
         </div>
@@ -554,7 +672,7 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
                 <div key={s.id} className={"pres-podium-row" + (i === 0 ? " first" : "") + (s.id === me.id ? " me" : "")}>
                   <span className="place">{i + 1}</span>
                   <span className="name">{s.avatar} {s.username}</span>
-                  <span className="pts">{gold[s.id] || 0} 🪙</span>
+                  <span className="pts">{gold[s.id] || 0} <NuggetIcon className="inline" /></span>
                 </div>
               ))}
             </div>
@@ -614,6 +732,11 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
       <h1>{t("goldminesTitle")}</h1>
       <p className="muted gm-goal-line">🎯 {t("gmGoal")}</p>
       <Crossfade id={phase}>{content}</Crossfade>
+      {/* Décompte 3-2-1 aux couleurs or du jeu : couvre tout le panneau et
+          bloque les clics le temps que chacun soit prêt à piocher. */}
+      {countingDown && phase === "playing" && (
+        <GameCountdown variant="gm" onDone={() => setCountingDown(false)} />
+      )}
     </div>
   );
 }

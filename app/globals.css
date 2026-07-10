@@ -39,6 +39,30 @@ body.tenk-night{
 body.tenk-night .ember .ember-dot{
   filter:hue-rotate(185deg) saturate(.75) brightness(.9);
 }
+/* Les lueurs chaudes du fond de page (déclarées plus bas sur body) virent
+   elles aussi au froid — sinon un halo orangé traînait dans les coins. */
+body.tenk-night{
+  background-image:
+    radial-gradient(900px 500px at 15% -10%, rgba(79,209,255,.10), transparent 60%),
+    radial-gradient(800px 500px at 95% 0%, rgba(90,140,255,.08), transparent 60%),
+    radial-gradient(700px 600px at 50% 110%, rgba(255,95,176,.06), transparent 60%);
+}
+/* La "table en bois" (door-stage) suit aussi : ses lattes restaient MARRON
+   autour de l'encart néon (screenshot 2026-07) et juraient avec l'univers
+   graphique du jeu — recolorées en bleu nuit, battants de porte et poignées
+   compris (mêmes motifs, teintes nocturnes). */
+body.tenk-night .door-stage{
+  background-image:
+    radial-gradient(120% 90% at 50% 12%, rgba(0,0,0,0) 0%, rgba(0,0,0,.35) 100%),
+    repeating-linear-gradient(90deg, rgba(0,0,0,.10) 0 3px, transparent 3px 30px),
+    linear-gradient(175deg, #14224A, #0B1533 75%);
+}
+body.tenk-night .door-panel{
+  background-image:
+    repeating-linear-gradient(90deg, rgba(0,0,0,.16) 0 3px, transparent 3px 26px),
+    linear-gradient(var(--door-angle), #0B1533, #1A2C5E 45%, #0B1533);
+}
+body.tenk-night .door-handle{ background:linear-gradient(180deg,#8FD8FF,#2E6EA8); }
 /* ===== Tactile (audit iOS/Android 2026-07) =====
    - tap-highlight : supprime le rectangle gris/bleu que Safari iOS et
      Chrome Android flashent sur CHAQUE tap d'élément cliquable — très
@@ -1015,6 +1039,51 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
    d'un jaune doré ÉCLATANT qui rayonnent à la découverte avant de
    s'estomper en un petit résidu cerclé à la couleur du mineur. */
 .gm-panel h1{ margin-bottom:2px; }
+
+/* ===== Décompte "3, 2, 1" de début de partie (GameCountdown.js) =====
+   Voile qui couvre TOUT le panneau du jeu (les trois panneaux concernés
+   sont passés en position:relative ci-dessous) et intercepte les clics.
+   Chaque variante reprend la police et la couleur du THÈME de son jeu. */
+.gm-panel, .pres-panel, .tenk-panel{ position:relative; }
+.game-countdown{
+  position:absolute; inset:0; z-index:80;
+  display:flex; align-items:center; justify-content:center;
+  border-radius:22px; background:rgba(12,7,3,.55);
+  backdrop-filter:blur(2px); -webkit-backdrop-filter:blur(2px);
+}
+.game-countdown-digit{
+  font-size:clamp(64px, 18vw, 120px); font-weight:800; line-height:1;
+  animation:gameCountdownPop .8s cubic-bezier(.2,.9,.3,1) both;
+}
+@keyframes gameCountdownPop{
+  0%{ opacity:0; transform:scale(1.9); }
+  25%{ opacity:1; transform:scale(1); }
+  78%{ opacity:1; transform:scale(1); }
+  100%{ opacity:0; transform:scale(.82); }
+}
+/* 10000 : HUD néon cyan/rose sur bleu nuit, chiffres monospace. */
+.game-countdown.tenk{ background:rgba(4,9,26,.6); }
+.game-countdown.tenk .game-countdown-digit{
+  font-family:'Space Mono', monospace; color:var(--acc-tenk);
+  text-shadow:0 0 18px rgba(79,209,255,.85), 0 0 44px rgba(255,95,176,.35);
+}
+/* Gold Mines : or de chercheur sur pénombre de mine. */
+.game-countdown.gm{ background:rgba(18,10,4,.6); }
+.game-countdown.gm .game-countdown-digit{
+  font-family:'Bungee'; color:var(--acc-goldmines);
+  text-shadow:0 0 16px rgba(242,201,76,.75), 0 5px 0 rgba(90,55,10,.85);
+}
+/* Président : vert tapis de jeu, chiffres pleins d'aplomb. */
+.game-countdown.pres{ background:rgba(6,20,12,.55); }
+.game-countdown.pres .game-countdown-digit{
+  font-family:'Bungee'; color:var(--acc-president);
+  text-shadow:0 0 16px rgba(76,195,138,.7), 0 5px 0 rgba(10,60,35,.85);
+}
+@media (prefers-reduced-motion: reduce){
+  /* Fondu simple, sans zoom : le décompte reste lisible et séquentiel. */
+  .game-countdown-digit{ animation:gameCountdownFadeOnly .8s ease both; }
+}
+@keyframes gameCountdownFadeOnly{ 0%{opacity:0;} 15%{opacity:1;} 85%{opacity:1;} 100%{opacity:0;} }
 .gm-goal-line{ text-align:center; font-size:12px; margin:0 0 10px; font-family:'Space Mono'; }
 
 /* Duel : deux cartes de mineur face à face, pioche croisée au centre. */
@@ -1125,11 +1194,25 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 .gm-cell.open.n7{ color:#F8A0C0; } .gm-cell.open.n8{ color:#FFF3B0; }
 
 /* ----- Pépites : éclat doré rayonnant, puis résidu discret -----
-   À la découverte (.fresh) : la pièce jaillit, un halo doré pulse et des
+   À la découverte (.fresh) : la pépite jaillit, un halo doré pulse et des
    RAYONS tournent derrière elle (~2,8 s), puis tout s'estompe (.settled) en
-   un petit résidu doré cerclé à la couleur du mineur qui l'a trouvée. */
-.gm-cell.nugget{ background:rgba(20,12,6,.5); border:1.5px solid rgba(255,215,102,.25); overflow:visible; }
-.gm-cell.nugget b{ font-weight:400; font-size:clamp(12px, 3vw, 17px); line-height:1; z-index:2; }
+   un petit résidu doré cerclé à la couleur du mineur qui l'a trouvée.
+   La pépite est un SVG dessiné (NuggetIcon dans GoldMinesGame.js, remplace
+   l'emoji pièce 2026-07) : jaune or à facettes, halo doré permanent. */
+.gm-nugget-svg{ display:inline-block; width:1em; height:1em; vertical-align:-0.12em; }
+.gm-nugget-svg.inline{ width:13px; height:13px; }
+.gm-cell.nugget{
+  background:radial-gradient(circle at 50% 45%, rgba(255,210,74,.22), rgba(20,12,6,.6) 72%);
+  border:1.5px solid rgba(255,215,102,.35); overflow:visible;
+}
+.gm-cell.nugget b{
+  display:flex; align-items:center; justify-content:center;
+  width:100%; height:100%; padding:11%; line-height:1; z-index:2;
+}
+.gm-cell.nugget b .gm-nugget-svg{
+  width:100%; height:100%;
+  filter:drop-shadow(0 0 4px rgba(255,210,74,.6));
+}
 .gm-cell.nugget.amber{ box-shadow:inset 0 0 0 1.5px rgba(242,201,76,.5); }
 .gm-cell.nugget.copper{ box-shadow:inset 0 0 0 1.5px rgba(255,158,110,.55); }
 .gm-cell.nugget.settled b{ opacity:.65; filter:saturate(.85); transform:scale(.9); }
@@ -1199,6 +1282,29 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 }
 .gm-bomb-used{ font-size:12px; color:var(--muted); font-weight:700; }
 
+/* ----- Curseur-pioche (souris uniquement, voir movePickCursor) -----
+   Quand c'est mon tour, la flèche disparaît au-dessus de la grille : une
+   GROSSE pioche la remplace, pointe alignée sur le pointeur, et FRAPPE vers
+   le bas au clic (rotation autour du bout du manche). Devient 🧨 quand la
+   dynamite est armée. Jamais affichée au doigt (pointeurs tactiles ignorés
+   côté JS), donc cursor:none est sans effet de bord sur mobile. */
+.gm-grid.pickcur, .gm-grid.pickcur .gm-cell.hidden{ cursor:none; }
+.gm-pick-cursor{
+  position:absolute; z-index:30; pointer-events:none;
+  font-size:46px; line-height:1;
+  /* La pointe (haut-gauche du glyphe) colle au pointeur, l'outil pend
+     dessous-droite comme une flèche de curseur classique. */
+  transform:translate(-10%, -12%) rotate(-30deg);
+  transform-origin:82% 88%; /* bout du manche : le pivot de la frappe */
+  filter:drop-shadow(0 3px 4px rgba(0,0,0,.55));
+}
+.gm-pick-cursor.strike{ animation:gmPickStrike .3s cubic-bezier(.2,.9,.3,1); }
+@keyframes gmPickStrike{
+  0%{ transform:translate(-10%, -12%) rotate(-30deg); }
+  40%{ transform:translate(-10%, -12%) rotate(16deg) scale(1.06); }
+  100%{ transform:translate(-10%, -12%) rotate(-30deg); }
+}
+
 @media (prefers-reduced-motion: reduce){
   .gm-miner.active{ animation:none; }
   .gm-gold-pop{ animation:none; }
@@ -1208,6 +1314,7 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
   .gm-rays{ animation:none; opacity:0; }
   .gm-boom-wave, .gm-boom-flash{ animation:none; opacity:0; }
   .gm-bomb-armed-hint{ animation:none; }
+  .gm-pick-cursor.strike{ animation:none; }
 }
 
 /* ===== YAHTZEE ===== */

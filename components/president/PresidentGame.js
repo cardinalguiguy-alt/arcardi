@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { saveGameState, readGameState, resetRoomToLobby } from "@/lib/gameSync";
 import Crossfade from "@/components/Crossfade";
+import GameCountdown, { COUNTDOWN_MS } from "@/components/GameCountdown";
 import PresCard from "./PresCard";
 import {
   dealAll, shuffle, isLegalPlay, hasLegalPlay, pointsForPlace, TWO_V,
@@ -162,6 +163,10 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
   const [turnDeadline, setTurnDeadline] = useState(null);
   const [turnDeadlineSeat, setTurnDeadlineSeat] = useState(null);
   const [now, setNow] = useState(() => Date.now());
+  // Décompte 3-2-1 de début de manche (demande 2026-07) : affiché à chaque
+  // match_start (nouvelle manche, nouveau match, tour Dictateur — jamais
+  // lors d'une reprise sur rechargement).
+  const [countingDown, setCountingDown] = useState(false);
 
   const channelRef = useRef(null);
   const stateRef = useRef(null);
@@ -179,6 +184,9 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
   const turnTimeoutRef = useRef(null);  // setTimeout qui déclenche l'action automatique du joueur humain actif
   const turnStrikesRef = useRef({});    // seatId -> nombre de dépassements consécutifs (remis à 0 dès qu'il rejoue)
   const turnMetaRef = useRef({ deadline: null, seatId: null }); // dernière deadline diffusée
+  // Fin du décompte 3-2-1 côté hôte : les bots (scheduleNext) et le minuteur
+  // du premier tour humain (sendMatchStart) attendent cette échéance.
+  const countdownEndRef = useRef(0);
 
   useEffect(() => {
     stateRef.current = { seats, hands, current, turnIdx, passed, finishedOrder, over, matchPhase, exchange, joke };
@@ -230,6 +238,10 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
     ch.on("broadcast", { event: "match_start" }, ({ payload }) => {
       applyLocalState(payload, { resetGain: true });
       setPhase("playing");
+      // Décompte 3-2-1 avant la première carte (jamais au rechargement).
+      // Les bots attendent la fin du décompte via countdownEndRef.
+      countdownEndRef.current = Date.now() + COUNTDOWN_MS;
+      setCountingDown(true);
       persist(payload);
       scheduleNext();
     });
@@ -339,6 +351,9 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
     turnStrikesRef.current = {};
     const meta = matchMetaRef.current;
     const tm = computeTurnDeadline(payload);
+    // Décompte 3-2-1 : le premier tour humain ne commence à décompter ses
+    // 30 s qu'après le décompte (l'overlay bloque les clics pendant ce temps).
+    if (tm.deadline) tm.deadline += COUNTDOWN_MS;
     turnMetaRef.current = tm;
     channelRef.current.send({
       type: "broadcast", event: "match_start",
@@ -519,7 +534,9 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
   function scheduleNext() {
     if (!isHost) return;
     clearTimeout(botTimer.current);
-    const delay = 1000 + Math.floor(Math.random() * 4000); // 1s à 5s
+    // 1s à 5s — mais jamais avant la fin du décompte 3-2-1 : un bot qui
+    // jouerait sa carte pendant l'overlay casserait l'effet de départ.
+    const delay = Math.max(1000 + Math.floor(Math.random() * 4000), countdownEndRef.current - Date.now());
     botTimer.current = setTimeout(() => {
       const s = stateRef.current;
       if (!s) return;
@@ -1041,9 +1058,14 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
   }
 
   return (
-    <div className="panel" style={{ maxWidth: "min(820px, 94vw)" }}>
+    <div className="panel pres-panel" style={{ maxWidth: "min(820px, 94vw)" }}>
       <h1>{t("presTitle")}</h1>
       <Crossfade id={phase + ":" + matchPhase}>{content}</Crossfade>
+      {/* Décompte 3-2-1 aux couleurs vertes du jeu : couvre tout le panneau
+          et bloque les clics le temps que chacun ait ses cartes en main. */}
+      {countingDown && phase === "playing" && (
+        <GameCountdown variant="pres" onDone={() => setCountingDown(false)} />
+      )}
     </div>
   );
 }
