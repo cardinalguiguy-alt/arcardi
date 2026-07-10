@@ -1,6 +1,7 @@
 import "./globals.css";
 import SiteAmbience from "@/components/SiteAmbience";
 import AmbienceSkipButton from "@/components/AmbienceSkipButton";
+import LoadingIntro from "@/components/LoadingIntro";
 
 export const metadata = {
   title: "ARCARDI — soirée jeux en ligne",
@@ -27,7 +28,7 @@ export default function RootLayout({ children }) {
       <body>
         <SiteAmbience />
         <AmbienceSkipButton />
-        {children}
+        <LoadingIntro>{children}</LoadingIntro>
       </body>
     </html>
   );
