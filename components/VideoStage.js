@@ -25,7 +25,7 @@ import GameRulesButton from "./GameRulesButton";
 const TARGET_SECONDS = 3; // durée cible de l'intro, quelle que soit la durée réelle du clip exporté
 const FADE_MS = 600; // fondu croisé vidéo -> jeu, élégant plutôt qu'une coupure nette
 
-export default function VideoStage({ gameId, icon, name, accentVar, lang, t, children }) {
+export default function VideoStage({ gameId, icon, name, accentVar, lang, t, children, onRulesOpenChange, rulesReaderNames }) {
   const [state, setState] = useState("closed"); // 'closed' | 'playing' | 'fading' | 'open'
   const [entryKey, setEntryKey] = useState(0);
   const videoRef = useRef(null);
@@ -77,6 +77,7 @@ export default function VideoStage({ gameId, icon, name, accentVar, lang, t, chi
       )}
 
       <div className="video-stage">
+      <GameRulesButton gameId={gameId} lang={lang} accentVar={accentVar} onOpenChange={onRulesOpenChange} />
       {showVideo && (
         <video
           ref={videoRef}
@@ -91,7 +92,6 @@ export default function VideoStage({ gameId, icon, name, accentVar, lang, t, chi
       )}
       {state === "open" && (
         <div className="video-stage-content" key={entryKey}>
-          <GameRulesButton gameId={gameId} lang={lang} />
           {children}
         </div>
       )}
@@ -99,6 +99,11 @@ export default function VideoStage({ gameId, icon, name, accentVar, lang, t, chi
 
       {closed && (
         <div className="door-play-wrap">
+          {rulesReaderNames && rulesReaderNames.length > 0 && (
+            <p className="rules-reading-banner">
+              ⏳ {rulesReaderNames.join(", ")} {t ? t(rulesReaderNames.length > 1 ? "rulesReadingPlural" : "rulesReadingSingle") : "is reading the rules — please wait…"}
+            </p>
+          )}
           <button className="video-play-btn" onClick={play}>{t ? t("stagePlay") : "▶ Jouer"}</button>
         </div>
       )}

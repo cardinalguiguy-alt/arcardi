@@ -136,9 +136,18 @@ export default function SettingsMenu({ t }) {
                     onClick={() => playTrackByIndex(tr.index)}
                   >
                     <span className="settings-track-note">{ambience.musicIndex === tr.index ? "▶" : "🎵"}</span>
-                    <span className="settings-track-label">{tr.label}</span>
+                    <span className="settings-track-num">{String(tr.index + 1).padStart(2, "0")}</span>
+                    <span className="settings-track-text">
+                      <span className="settings-track-title">{tr.title}</span>
+                      {tr.performer && <span className="settings-track-performer">{tr.performer}</span>}
+                    </span>
                   </button>
                 ))}
+                {/* Playlist volontairement non-close : d'autres pistes viendront
+                    s'ajouter à MUSIC_TRACKS (lib/ambience.js) sans rien casser
+                    ici — cette ligne le dit clairement, dans la même langue
+                    (anglais) que le reste des références musicales ci-dessus. */}
+                <p className="settings-track-more">🎼 More to come…</p>
               </div>
             </div>
 

@@ -10,7 +10,7 @@ import GameRulesButton from "./GameRulesButton";
    pour ne jamais toucher aux deux autres.
    ========================================================================== */
 
-export default function FlashStage({ gameId, icon, name, accentVar, lang, t, children }) {
+export default function FlashStage({ gameId, icon, name, accentVar, lang, t, children, onRulesOpenChange, rulesReaderNames }) {
   const [state, setState] = useState("closed"); // 'closed' | 'opening' | 'open'
   const [entryKey, setEntryKey] = useState(0);
   const openTimer = useRef(null);
@@ -51,6 +51,7 @@ export default function FlashStage({ gameId, icon, name, accentVar, lang, t, chi
       )}
 
       <div className="flash-stage">
+        <GameRulesButton gameId={gameId} lang={lang} accentVar={accentVar} onOpenChange={onRulesOpenChange} />
         {closed && (
           <>
             <div className={"flash-cover" + (opening ? " fading" : "")} />
@@ -59,7 +60,6 @@ export default function FlashStage({ gameId, icon, name, accentVar, lang, t, chi
         )}
         {state === "open" && (
           <div className="flash-content" key={entryKey}>
-            <GameRulesButton gameId={gameId} lang={lang} />
             {children}
           </div>
         )}
@@ -67,6 +67,11 @@ export default function FlashStage({ gameId, icon, name, accentVar, lang, t, chi
 
       {closed && (
         <div className={"door-play-wrap" + (opening ? " hidden" : "")}>
+          {rulesReaderNames && rulesReaderNames.length > 0 && (
+            <p className="rules-reading-banner">
+              ⏳ {rulesReaderNames.join(", ")} {t ? t(rulesReaderNames.length > 1 ? "rulesReadingPlural" : "rulesReadingSingle") : "is reading the rules — please wait…"}
+            </p>
+          )}
           <button className="flash-play-btn" onClick={openFlash}>{t ? t("stagePlay") : "▶ Jouer"}</button>
         </div>
       )}

@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { resetRoomToLobby } from "@/lib/gameSync";
@@ -70,6 +70,14 @@ export default function Room() {
   // Présence en temps réel : profile_id -> true si l'onglet du joueur est
   // actuellement connecté au salon. Alimenté par le canal presence Supabase.
   const [online, setOnline] = useState(null); // null = pas encore synchronisé
+  // profile_id -> true si CE joueur a actuellement la fiche de règles d'un
+  // jeu ouverte (voir GameRulesButton -> onOpenChange), portée par le MÊME
+  // canal presence que la détection en ligne/hors ligne — pas besoin d'un
+  // canal de plus. Sert à afficher "untel consulte les règles, veuillez
+  // patienter" à tout le monde (dont l'hôte) sur l'écran "Jouer".
+  const [rulesReaders, setRulesReaders] = useState({});
+  const presenceChRef = useRef(null);
+  const readingRulesRef = useRef(false);
   const [hostGone, setHostGone] = useState(false);
   // La colonne rooms.game_state existe-t-elle ? (migration upgrade-002.sql)
   const [hasGameStateCol, setHasGameStateCol] = useState(true);
@@ -147,18 +155,48 @@ export default function Room() {
     const ch = supabase.channel("presence_" + room.id, {
       config: { presence: { key: me.id } },
     });
+    presenceChRef.current = ch;
     ch.on("presence", { event: "sync" }, () => {
       const state = ch.presenceState();
       const map = {};
-      Object.keys(state).forEach(k => { map[k] = true; });
+      const readingMap = {};
+      Object.keys(state).forEach(k => {
+        map[k] = true;
+        // Supabase garde un tableau de métas par clé (un par onglet ouvert
+        // pour cette même personne) : "lit les règles" dès qu'AU MOINS un
+        // de ses onglets a la fiche ouverte.
+        if ((state[k] || []).some(meta => meta.readingRules)) readingMap[k] = true;
+      });
       setOnline(map);
+      setRulesReaders(readingMap);
     });
     ch.subscribe(status => {
-      if (status === "SUBSCRIBED") ch.track({ at: Date.now() });
+      if (status === "SUBSCRIBED") ch.track({ at: Date.now(), readingRules: readingRulesRef.current });
     });
-    return () => { supabase.removeChannel(ch); };
+    return () => { presenceChRef.current = null; supabase.removeChannel(ch); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [room?.id, me?.id]);
+
+  // Passé à chaque Stage (Door/Curtain/Flash/Video) -> GameRulesButton :
+  // republie sa propre présence avec le drapeau readingRules à jour dès
+  // qu'un joueur ouvre/ferme la fiche de règles depuis l'écran "Jouer".
+  // IMPORTANT : identité STABLE (useCallback, aucune dépendance — tout ce
+  // qu'elle touche est un ref) sinon GameRulesButton (qui la surveille dans
+  // un useEffect) la relancerait à CHAQUE re-rendu de cette page (fréquents,
+  // ex. à chaque sync de présence) -> nouveau track() -> nouveau sync ->
+  // nouveau re-rendu -> boucle. Le garde-fou `isReading === ref.current`
+  // évite en plus tout appel réseau redondant.
+  const setReadingRules = useCallback((isReading) => {
+    if (readingRulesRef.current === isReading) return;
+    readingRulesRef.current = isReading;
+    presenceChRef.current?.track({ at: Date.now(), readingRules: isReading });
+  }, []);
+  // Noms des AUTRES joueurs actuellement en train de lire les règles (jamais
+  // soi-même) — c'est ce que la bannière "veuillez patienter" affiche.
+  const rulesReaderNames = players
+    .filter(p => p.profile_id !== me?.id && rulesReaders[p.profile_id])
+    .map(p => p.profiles?.username)
+    .filter(Boolean);
 
   // Bandeau "hôte déconnecté" côté invités, pendant une partie uniquement.
   // Délai de grâce de 8s : la présence met quelques secondes à se
@@ -316,7 +354,7 @@ export default function Room() {
               {meta && (() => {
                 const StageComponent = STAGE_COMPONENT[meta.stage] || DoorStage;
                 return (
-                <StageComponent gameId={room.current_game} icon={meta.icon} name={t(meta.nameKey)} accentVar={meta.accent} lang={lang} t={t}>
+                <StageComponent gameId={room.current_game} icon={meta.icon} name={t(meta.nameKey)} accentVar={meta.accent} lang={lang} t={t} onRulesOpenChange={setReadingRules} rulesReaderNames={rulesReaderNames}>
                   {room.current_game === "quiz" && (
                     <QuizGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
                   )}

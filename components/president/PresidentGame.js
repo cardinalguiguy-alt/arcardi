@@ -41,11 +41,11 @@ import { decideBotMove, decideBotGiveback } from "./botLogic";
 
 const GAME_ID = "president";
 const BOT_AVATARS = ["🤖", "🦾", "👾"];
-// Minuteur de tour humain (voir armHumanTurnTimer plus bas) : 20s par défaut,
-// réduit à 5s après 2 dépassements consécutifs du MÊME joueur, remis à 20s
-// dès qu'il rejoue de lui-même. Ne concerne jamais les bots (déjà tempo­risés
-// séparément par scheduleNext).
-const HUMAN_TURN_MS = 20000;
+// Minuteur de tour humain (voir armHumanTurnTimer plus bas) : 30s par défaut
+// (20s jugés trop stressants à l'usage), réduit à 5s après 2 dépassements
+// consécutifs du MÊME joueur, remis à 30s dès qu'il rejoue de lui-même. Ne
+// concerne jamais les bots (déjà temporisés séparément par scheduleNext).
+const HUMAN_TURN_MS = 30000;
 const HUMAN_TURN_SHORT_MS = 5000;
 const HUMAN_TURN_STRIKES = 2;
 
@@ -242,7 +242,7 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
     ch.on("broadcast", { event: "move_attempt" }, ({ payload }) => {
       if (!isHost) return;
       // Un message reçu de ce siège = il n'est plus AFK : on lui redonne le
-      // bénéfice du délai complet (20s) pour son PROCHAIN tour, que ce
+      // bénéfice du délai complet (30s) pour son PROCHAIN tour, que ce
       // coup-ci soit finalement légal ou non.
       turnStrikesRef.current[payload.seatId] = 0;
       hostApplyMove(payload.seatId, payload.action);
@@ -334,7 +334,7 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
     armHumanTurnTimer();
   }
   function sendMatchStart(payload) {
-    // Nouvelle manche/match : chacun repart avec le délai complet (20s),
+    // Nouvelle manche/match : chacun repart avec le délai complet (30s),
     // aucun grillage précédent ne doit peser sur ce nouveau départ.
     turnStrikesRef.current = {};
     const meta = matchMetaRef.current;

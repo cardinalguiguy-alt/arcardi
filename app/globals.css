@@ -581,17 +581,65 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 .chromatik-opponent{
   display:flex; align-items:center; gap:6px; padding:6px 12px; border-radius:99px;
   background:rgba(255,255,255,.04); border:1.5px solid var(--line); font-size:12.5px; font-weight:700;
+  transition:border-color .15s ease, background .15s ease;
 }
-.chromatik-opponent.active{ border-color:var(--p3); background:rgba(182,240,76,.1); }
-.chromatik-opponent .count{ font-family:'Space Mono'; color:var(--muted); }
+/* Pulsation douce sur le siège dont c'est le tour — même langage que les
+   pions jouables de Petits Chevaux (ludoPulse), pour que "à qui le tour"
+   se voie sans avoir à lire le texte de statut. */
+.chromatik-opponent.active{
+  border-color:var(--p3); background:rgba(182,240,76,.1);
+  animation:chromatikActivePulse 1.6s ease-in-out infinite;
+}
+@keyframes chromatikActivePulse{
+  0%,100%{ box-shadow:0 0 0 0 rgba(182,240,76,.45); }
+  50%{ box-shadow:0 0 0 5px rgba(182,240,76,0); }
+}
+.chromatik-opponent .count{ font-family:'Space Mono'; color:var(--muted); display:inline-flex; align-items:center; gap:4px; }
+/* Bulle "réfléchit…" sur le bot dont c'est le tour — réutilise les mêmes
+   points animés que Président (.pres-think), même langage visuel d'un jeu
+   à l'autre. */
+.chromatik-opponent .pres-think{ font-size:11px; margin-left:2px; }
+/* Alerte discrète : cet adversaire n'a plus qu'une carte et n'a PAS encore
+   annoncé UNO — invite les autres à le prendre en défaut. */
+.chromatik-uno-warn{ animation:chromatikUnoWarnPulse 1s ease-in-out infinite; }
+@keyframes chromatikUnoWarnPulse{ 0%,100%{ opacity:1; transform:scale(1); } 50%{ opacity:.5; transform:scale(1.25); } }
 
-.chromatik-table{ display:flex; align-items:center; justify-content:center; gap:28px; margin:10px 0 16px; }
+.chromatik-table{ position:relative; display:flex; align-items:center; justify-content:center; gap:28px; margin:10px 0 16px; }
 .chromatik-pile{ position:relative; }
 .chromatik-pile.draw{ cursor:pointer; }
 .chromatik-pile.draw:hover .chromatik-card{ transform:translateY(-3px); }
 .pile-count{
   position:absolute; bottom:-8px; right:-8px; background:var(--card2); border:1.5px solid var(--line);
   border-radius:99px; font-family:'Space Mono'; font-size:11px; font-weight:700; padding:2px 7px;
+}
+/* Indicateur de sens de jeu — invisible jusqu'ici alors que `direction`
+   existait déjà dans l'état ; rejoue un petit "pop" (clé React = direction)
+   à chaque Inverse, pour que le changement de sens se VOIE. */
+.chromatik-direction-badge{
+  font-size:22px; color:var(--muted); line-height:1; user-select:none;
+  animation:popIn .35s cubic-bezier(.3,1.4,.4,1) both;
+}
+/* Animation de pioche : dos de carte qui glissent depuis la pioche vers la
+   main du joueur concerné (bas de l'écran) ou vers son avatar en haut
+   (adversaire) — déclenchée uniquement quand quelqu'un pioche VRAIMENT
+   (jamais quand il contre avec son propre +2/+4, voir ChromatikGame.js). */
+.chromatik-drawfx{ position:absolute; inset:0; pointer-events:none; z-index:30; overflow:visible; }
+.chromatik-drawfx-card{
+  position:absolute; top:50%; left:50%; width:34px; height:49px; margin:-25px 0 0 -17px;
+  border-radius:7px;
+  background:repeating-linear-gradient(135deg, #2a2650, #2a2650 5px, #322c60 5px, #322c60 10px);
+  border:2px solid rgba(255,255,255,.28);
+  box-shadow:0 4px 10px rgba(0,0,0,.4);
+  animation:chromatikDrawFlyDown .68s cubic-bezier(.3,.7,.35,1) both;
+}
+.chromatik-drawfx-card.toOpponent{ animation-name:chromatikDrawFlyUp; }
+@keyframes chromatikDrawFlyDown{
+  0%{ transform:translate(0,0) rotate(0deg) scale(1); opacity:1; }
+  100%{ transform:translate(var(--dx,0px), 170px) rotate(var(--rot,10deg)) scale(.85); opacity:0; }
+}
+@keyframes chromatikDrawFlyUp{
+  0%{ transform:translate(0,0) rotate(0deg) scale(1); opacity:1; }
+  100%{ transform:translate(var(--dx,0px), -150px) rotate(var(--rot,-10deg)) scale(.8); opacity:0; }
 }
 .chromatik-discard{ position:relative; display:flex; align-items:center; }
 .chromatik-active-color{
@@ -630,6 +678,22 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 .chromatik-card.wild{
   background:conic-gradient(var(--p1) 0 25%, var(--p3) 25% 50%, var(--ludoB) 50% 75%, var(--ludoY) 75% 100%);
 }
+/* Joker "+4" : identité à part (demande explicite) — fond BLANC bariolé de
+   toutes les couleurs, contour DORÉ, pour que ce soit la carte la plus
+   reconnaissable de la main (la plus forte : surenchère + choix imposé de
+   couleur). Le texte "+4" reste lisible en sombre sur fond clair. */
+.chromatik-card.wild4{
+  background:
+    radial-gradient(circle at 20% 22%, var(--p1) 0 16%, transparent 17%),
+    radial-gradient(circle at 78% 18%, var(--p3) 0 16%, transparent 17%),
+    radial-gradient(circle at 22% 80%, var(--ludoY) 0 16%, transparent 17%),
+    radial-gradient(circle at 80% 78%, var(--ludoB) 0 16%, transparent 17%),
+    #f8f5ea;
+  border-color:#e8c357; color:#241c14;
+  box-shadow:0 4px 0 rgba(0,0,0,.35), 0 0 0 1px #e8c357 inset, 0 0 14px 1px rgba(232,195,87,.5);
+}
+.chromatik-card.wild4 .chromatik-card-main,
+.chromatik-card.wild4 .chromatik-card-corner{ text-shadow:0 1px 2px rgba(255,255,255,.7); }
 .chromatik-card-corner{ position:absolute; top:4px; left:6px; font-size:.45em; opacity:.85; }
 .chromatik-card-main{ text-shadow:0 2px 3px rgba(0,0,0,.4); }
 .chromatik-card.back{
@@ -637,6 +701,60 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
   border-color:rgba(255,255,255,.25);
 }
 .chromatik-card-back-mark{ color:rgba(255,255,255,.55); font-size:1.4em; }
+
+/* ----- Chromatik : animations de cartes (jamais de téléportation) -----
+   Même recette que Président (presPlayIn/presDealIn) : la carte posée
+   "vole" sur la défausse avec un léger arc, la main se distribue en
+   éventail au début de chaque manche. Rejoue à chaque coup car la clé
+   (topCard.id / card.id) change à chaque fois — voir ChromatikGame.js. */
+@keyframes chromatikPlayIn{
+  0%{ transform:translateY(-30px) rotate(-8deg) scale(1.12); opacity:0; }
+  60%{ transform:translateY(3px) rotate(2deg) scale(1.02); opacity:1; }
+  100%{ transform:translateY(0) rotate(0) scale(1); opacity:1; }
+}
+.chromatik-discard .chromatik-card{ animation:chromatikPlayIn .42s cubic-bezier(.22,.85,.32,1.15) backwards; }
+@keyframes chromatikDealIn{
+  from{ transform:translateY(16px) scale(.9); opacity:0; }
+  to{ transform:translateY(0) scale(1); opacity:1; }
+}
+.chromatik-hand .chromatik-card{ animation:chromatikDealIn .3s ease backwards; }
+
+/* Bouton UNO — discret, PETIT (demande explicite), pastille ronde plutôt
+   qu'un gros bouton pleine largeur comme les actions principales. Pulse
+   doucement pour attirer l'œil sans crier. */
+.chromatik-uno-btn{
+  padding:8px 20px; border-radius:99px; border:2px solid #e8c357; cursor:pointer;
+  font-family:'Bungee'; font-size:13px; letter-spacing:.02em; color:#241c14;
+  background:linear-gradient(145deg, #ffe9a8, #f2c94c);
+  box-shadow:0 3px 0 rgba(0,0,0,.3), 0 0 12px rgba(232,195,87,.5);
+  animation:chromatikUnoPulse 1.1s ease-in-out infinite;
+  transition:transform .12s ease;
+}
+.chromatik-uno-btn:hover{ transform:scale(1.06); }
+.chromatik-uno-btn:active{ transform:scale(.96); }
+@keyframes chromatikUnoPulse{ 0%,100%{ box-shadow:0 3px 0 rgba(0,0,0,.3), 0 0 10px rgba(232,195,87,.4); } 50%{ box-shadow:0 3px 0 rgba(0,0,0,.3), 0 0 18px rgba(232,195,87,.75); } }
+.chromatik-uno-called-badge{
+  text-align:center; font-size:11.5px; font-weight:700; color:var(--p3); margin:6px 0 0;
+}
+
+/* ----- Chromatik : récapitulatif de fin de manche / fin de partie -----
+   Réutilise le podium de Président (.pres-podium/.pres-podium-row) pour un
+   classement cohérent d'un jeu à l'autre, trié sur le score cumulé le plus
+   BAS (voir matchScores dans ChromatikGame.js). */
+.chromatik-round-summary{ margin-top:14px; }
+.chromatik-round-summary-title{
+  text-align:center; font-family:'Bungee'; font-size:15px; margin:0 0 12px; color:var(--ink);
+}
+.chromatik-round-delta{ font-size:11px; color:var(--muted); font-weight:600; }
+
+@media (prefers-reduced-motion: reduce){
+  .chromatik-opponent.active{ animation:none; }
+  .chromatik-uno-warn{ animation:none; }
+  .chromatik-direction-badge{ animation:none; }
+  .chromatik-drawfx-card{ animation:none; opacity:0; }
+  .chromatik-discard .chromatik-card, .chromatik-hand .chromatik-card{ animation:none; }
+  .chromatik-uno-btn{ animation:none; }
+}
 
 /* ===== YAHTZEE ===== */
 
@@ -1062,8 +1180,23 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
   font-family:'Bungee'; font-size:clamp(22px, 4.2vw, 30px); color:#fff; letter-spacing:.01em;
   text-shadow:0 3px 10px rgba(0,0,0,.6), 0 0 22px var(--accent, transparent);
 }
-.door-play-wrap{ margin-top:20px; transition:opacity .3s ease; }
+.door-play-wrap{ margin-top:20px; transition:opacity .3s ease; display:flex; flex-direction:column; align-items:center; gap:10px; }
 .door-play-wrap.hidden{ opacity:0; pointer-events:none; }
+/* Notification "untel consulte les règles" — visible de TOUS (dont l'hôte)
+   sur l'écran "Jouer", tant que la fiche de règles d'un autre joueur est
+   ouverte (voir GameRulesButton.js -> onOpenChange, relayé via la présence
+   Supabase déjà utilisée pour la détection en ligne/hors ligne). Ton calme
+   (pas une alerte), pour ne pas donner l'impression d'un problème. */
+.rules-reading-banner{
+  display:flex; align-items:center; gap:7px; margin:0; padding:7px 14px;
+  border-radius:99px; font-size:12.5px; font-weight:700; color:var(--muted);
+  background:rgba(255,255,255,.05); border:1.5px solid var(--line);
+  animation:rulesReadingPulse 1.8s ease-in-out infinite;
+}
+@keyframes rulesReadingPulse{ 0%,100%{ opacity:.75; } 50%{ opacity:1; } }
+@media (prefers-reduced-motion: reduce){
+  .rules-reading-banner{ animation:none; }
+}
 /* Curtain/Flash/VideoStage vivent maintenant dans le même gabarit .door-wrap
    (titre au-dessus, Jouer en dessous) : leur largeur propre s'efface au
    profit de celle du wrap. */
@@ -1151,18 +1284,44 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
   cursor:pointer; display:flex; align-items:center; justify-content:center; transition:background .12s ease;
 }
 .rules-modal-close:hover{ background:rgba(255,255,255,.14); }
-.rules-modal-title{ font-family:'Bungee'; font-size:17px; margin:0 26px 8px 0; }
-.rules-modal-intro{ color:var(--muted); font-size:13.5px; margin:0 0 14px; line-height:1.5; }
-.rules-modal-section{ margin:0 0 14px; }
-.rules-modal-section h3{ font-size:13px; font-family:'Space Mono'; color:var(--p3); margin:0 0 6px; text-transform:uppercase; letter-spacing:.03em; }
-.rules-modal-section ul{ margin:0; padding-left:18px; display:flex; flex-direction:column; gap:5px; }
-.rules-modal-section li{ font-size:13.5px; line-height:1.45; }
-.rules-table{ width:100%; border-collapse:collapse; margin-top:4px; font-size:12.5px; }
-.rules-table th, .rules-table td{
-  text-align:left; padding:7px 9px; border-bottom:1px solid var(--line);
+/* Titre + puces de section teintés par l'accent du JEU CONCERNÉ (--accent,
+   posée par le Stage sur .rules-modal, même variable que le cadre en bois/
+   rideau) plutôt qu'une seule couleur uniforme pour les 13 jeux : chaque
+   fiche de règles porte la couleur de son jeu, plus facile à situer d'un
+   coup d'œil et plus "vivant" — repli sur --p3 si jamais non fournie. */
+.rules-modal-title{
+  font-family:'Bungee'; font-size:17px; margin:0 26px 10px 0; color:var(--accent, var(--p3));
+  text-shadow:0 0 18px color-mix(in srgb, var(--accent, var(--p3)) 45%, transparent);
 }
-.rules-table th{ color:var(--muted); font-family:'Space Mono'; font-weight:700; font-size:11px; text-transform:uppercase; letter-spacing:.03em; }
+.rules-modal-intro{
+  color:var(--ink); font-size:13.5px; margin:0 0 16px; line-height:1.55; padding:10px 12px;
+  background:color-mix(in srgb, var(--accent, var(--p3)) 10%, transparent);
+  border:1px solid color-mix(in srgb, var(--accent, var(--p3)) 30%, transparent);
+  border-radius:12px;
+}
+.rules-modal-section{
+  margin:0 0 14px; padding-left:12px;
+  border-left:3px solid color-mix(in srgb, var(--accent, var(--p3)) 55%, transparent);
+}
+.rules-modal-section h3{
+  display:inline-block; font-size:11.5px; font-family:'Space Mono'; font-weight:700;
+  color:var(--accent, var(--p3)); margin:0 0 8px; text-transform:uppercase; letter-spacing:.04em;
+  padding:3px 10px; border-radius:99px;
+  background:color-mix(in srgb, var(--accent, var(--p3)) 16%, transparent);
+}
+.rules-modal-section ul{ margin:0; padding-left:18px; display:flex; flex-direction:column; gap:6px; }
+.rules-modal-section li{ font-size:13.5px; line-height:1.5; }
+.rules-table{ width:100%; border-collapse:collapse; margin-top:4px; font-size:12.5px; border-radius:10px; overflow:hidden; }
+.rules-table th, .rules-table td{
+  text-align:left; padding:8px 10px; border-bottom:1px solid var(--line);
+}
+.rules-table th{
+  color:var(--accent, var(--p3)); font-family:'Space Mono'; font-weight:700; font-size:11px;
+  text-transform:uppercase; letter-spacing:.03em;
+  background:color-mix(in srgb, var(--accent, var(--p3)) 12%, transparent);
+}
 .rules-table tr:last-child td{ border-bottom:none; }
+.rules-table tr:nth-child(even) td{ background:rgba(255,255,255,.02); }
 @media (max-width: 560px){
   .rules-modal{ padding:22px 16px 18px; border-radius:16px; }
   .rules-modal-title{ font-size:15px; }
@@ -2203,20 +2362,43 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 .tenk-assist-label{ font-size:12px; font-weight:800; color:var(--muted); letter-spacing:.02em; }
 
 .settings-track-list{
-  display:flex; flex-direction:column; gap:6px; max-height:230px; overflow-y:auto; padding-right:2px;
+  display:flex; flex-direction:column; gap:6px; max-height:280px; overflow-y:auto; padding-right:2px;
 }
+/* Référencement précis (compositeur/œuvre/tonalité + interprète) : la ligne
+   grandit désormais sur 2 lignes de texte au lieu d'un libellé tronqué sur
+   une seule — voir .settings-track-title/-performer plus bas. */
 .settings-track-row{
-  display:flex; align-items:center; gap:10px; width:100%; text-align:left; padding:9px 12px;
+  display:flex; align-items:flex-start; gap:9px; width:100%; text-align:left; padding:9px 12px;
   border-radius:12px; border:1.5px solid var(--line); background:rgba(255,255,255,.03); cursor:pointer;
   font-size:13.5px; color:var(--ink); transition:background .12s ease, border-color .12s ease, transform .1s ease;
 }
 .settings-track-row:hover{ background:rgba(255,255,255,.07); transform:translateX(2px); }
 .settings-track-row:active{ transform:translateX(2px) scale(.98); }
-.settings-track-row.playing{ border-color:var(--p2); background:rgba(255,209,102,.12); font-weight:700; }
-.settings-track-note{ font-size:13px; flex:none; }
+.settings-track-row.playing{ border-color:var(--p2); background:rgba(255,209,102,.12); }
+.settings-track-note{ font-size:13px; flex:none; margin-top:2px; }
 .settings-track-row.playing .settings-track-note{ animation:settingsNotePulse 1s ease-in-out infinite; }
 @keyframes settingsNotePulse{ 0%,100%{ opacity:1; } 50%{ opacity:.35; } }
-.settings-track-label{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+/* Numéro de piste façon liste de morceaux (police mono déjà utilisée pour
+   tout ce qui est numérique/score sur le site). */
+.settings-track-num{
+  flex:none; font-family:'Space Mono', monospace; font-size:11px; font-weight:700;
+  color:var(--muted); margin-top:2px; min-width:16px;
+}
+.settings-track-row.playing .settings-track-num{ color:var(--p2); }
+.settings-track-text{ flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
+.settings-track-title{
+  font-weight:700; line-height:1.32; white-space:normal; overflow-wrap:break-word;
+}
+.settings-track-row.playing .settings-track-title{ color:var(--p2); }
+.settings-track-performer{
+  font-size:11.5px; font-style:italic; color:var(--muted); line-height:1.3;
+  white-space:normal; overflow-wrap:break-word;
+}
+/* Mention finale, non cliquable : la playlist s'allongera encore. */
+.settings-track-more{
+  text-align:center; font-size:11.5px; color:var(--muted); font-style:italic;
+  margin:4px 0 0; padding:4px 0 0;
+}
 
 .settings-avatar-grid{ display:flex; flex-wrap:wrap; gap:8px; }
 .settings-avatar-btn{

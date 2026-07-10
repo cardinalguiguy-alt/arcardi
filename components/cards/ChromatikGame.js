@@ -4,7 +4,10 @@ import { supabase } from "@/lib/supabaseClient";
 import { saveGameState, readGameState, resetRoomToLobby } from "@/lib/gameSync";
 import Crossfade from "@/components/Crossfade";
 import CardView from "./CardView";
-import { COLORS, freshDeck, shuffle, canPlay, hasPlayable, drawCards, nextSeatIdx } from "./deck";
+import {
+  COLORS, freshDeck, shuffle, canPlay, hasPlayable, drawCards, nextSeatIdx,
+  canStackOn, hasStackable, handPenaltyValue, pointsForPlace,
+} from "./deck";
 import { decideBotMove } from "./botLogic";
 
 /* ==========================================================================
@@ -17,6 +20,30 @@ import { decideBotMove } from "./botLogic";
    calcule leur coup directement (decideBotMove) et l'applique exactement
    comme un coup humain reçu par broadcast — aucune infrastructure nouvelle.
 
+   PARTIE EN PLUSIEURS MANCHES (demande explicite) : l'hôte choisit un
+   nombre de manches (5/7/10) au lancement. À la fin de CHAQUE manche,
+   chaque siège ajoute à son score de PARTIE (matchScores) la valeur des
+   cartes qui lui restent en main (voir handPenaltyValue dans deck.js) —
+   objectif : le score cumulé le plus BAS à l'issue de la dernière manche.
+   Un même événement réseau "match_start" sert à distribuer CHAQUE manche
+   (round 1 comme round 2..N) ; seul le contenu du payload change (round 1
+   repart de matchScores à zéro, les suivantes les portent d'une manche à
+   l'autre) — voir dealRoundState()/startWith()/nextRound().
+
+   SURENCHÈRE +2/+4 (règle demandée, pas UNO officiel) : un +2 ne peut être
+   contré que par un +2 ; un +4 peut être contré par un +4 OU un +2. Tant
+   qu'une pile de pioche est en attente (pendingDraw = {kind, count,
+   seatId}), le siège concerné n'a que deux choix légaux : contrer avec une
+   carte qui "surenchérit" (canStackOn) ou piocher le total accumulé
+   (draw_pending, qui solde la pile). Tant que pendingDraw cible un siège,
+   c'est TOUJOURS son tour (turnIdx pointe dessus) — jamais un état à part.
+
+   ANNONCE UNO (règle demandée) : dès qu'un siège n'a plus qu'une carte,
+   unoCalled[siège] repart à false — il doit presser le bouton avant de
+   jouer cette dernière carte. S'il la joue sans l'avoir annoncée, il pioche
+   2 cartes au lieu de remporter la manche (voir le branchement dans
+   hostApplyMove). Les bots s'annoncent automatiquement (pas d'interface).
+
    Confidentialité des mains : modèle de confiance simple, comme le reste
    de la plateforme (ex: le code des portes de Diapason transite aussi en
    clair). Chaque client REÇOIT l'état complet (toutes les mains), mais
@@ -27,19 +54,31 @@ import { decideBotMove } from "./botLogic";
 const GAME_ID = "chromatik";
 const HAND_SIZE = 7;
 // Minuteur de tour humain (même convention que Président, voir
-// armHumanTurnTimer plus bas) : 20s par défaut, réduit à 5s après 2
-// dépassements consécutifs du même joueur, remis à 20s dès qu'il rejoue.
-const HUMAN_TURN_MS = 20000;
+// armHumanTurnTimer plus bas) : 30s par défaut (20s jugés trop stressants à
+// l'usage), réduit à 5s après 2 dépassements consécutifs du même joueur,
+// remis à 30s dès qu'il rejoue. S'applique aussi quand le siège actif doit
+// répondre à une pile de pioche en attente (l'échéance pioche le total pour
+// lui, exactement comme un tour normal non joué).
+const HUMAN_TURN_MS = 30000;
 const HUMAN_TURN_SHORT_MS = 5000;
 const HUMAN_TURN_STRIKES = 2;
 const BOT_AVATARS = ["🤖", "🦾", "👾"];
 const COLOR_VAR_MAP = { red: "--p1", green: "--p3", blue: "--ludoB", yellow: "--ludoY" };
+const ROUND_OPTIONS = [5, 7, 10];
+// Nombre de dos de carte affichés par l'animation de pioche (voir drawFx) —
+// plafonné pour rester lisible même si une pile de surenchère s'est
+// accumulée à 6, 8 cartes ou plus.
+const DRAW_FX_MAX = 6;
 
 function makeBotSeat(n) {
   return { id: "bot" + n, username: "Bot " + n, avatar: BOT_AVATARS[(n - 1) % BOT_AVATARS.length], isBot: true };
 }
 
-function dealFreshState(seats) {
+// Distribue UNE manche (la première comme les suivantes) : cartes fraîches
+// et mélangées, mais `matchScores`/`roundIndex`/`roundTarget` sont fournis
+// par l'appelant (startWith pour la manche 1, nextRound pour la suite) —
+// c'est ce qui fait persister le score cumulé d'une manche à l'autre.
+function dealRoundState(seats, matchInfo) {
   let deck = shuffle(freshDeck());
   const hands = {};
   seats.forEach(seat => {
@@ -51,12 +90,17 @@ function dealFreshState(seats) {
   const first = deck.pop();
   const discard = [first];
   const activeColor = first.color || COLORS[Math.floor(Math.random() * COLORS.length)];
-  return { seats, hands, deck, discard, activeColor, turnIdx: 0, direction: 1, winner: null, lastAction: null };
+  return {
+    seats, hands, deck, discard, activeColor, turnIdx: 0, direction: 1, winner: null, lastAction: null,
+    pendingDraw: null, unoCalled: {}, roundScores: {},
+    roundIndex: matchInfo.roundIndex, roundTarget: matchInfo.roundTarget, matchScores: matchInfo.matchScores,
+  };
 }
 
 export default function ChromatikGame({ room, me, isHost, players, t, lang, onFinish }) {
   const [phase, setPhase] = useState("intro"); // intro -> playing (le winner ne fait jamais disparaître la table)
   const [tableSize, setTableSize] = useState(null); // 2 | 3 | 4, choisi par l'hôte
+  const [roundTarget, setRoundTarget] = useState(null); // 5 | 7 | 10, choisi par l'hôte
   const [selected, setSelected] = useState([]);
   const [seats, setSeats] = useState([]);
   const [hands, setHands] = useState({});
@@ -65,8 +109,13 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
   const [activeColor, setActiveColor] = useState(null);
   const [turnIdx, setTurnIdx] = useState(0);
   const [direction, setDirection] = useState(1);
-  const [winner, setWinner] = useState(null);
+  const [winner, setWinner] = useState(null); // vainqueur de LA MANCHE en cours (jamais celui du match, voir matchOver)
   const [lastAction, setLastAction] = useState(null);
+  const [pendingDraw, setPendingDraw] = useState(null); // {kind:"draw2"|"wild4", count, seatId} | null
+  const [unoCalled, setUnoCalled] = useState({});
+  const [roundIndex, setRoundIndex] = useState(1);
+  const [matchScores, setMatchScores] = useState({}); // seatId -> score cumulé (manches précédentes incluses)
+  const [roundScores, setRoundScores] = useState({}); // seatId -> valeur ajoutée par LA manche qui vient de finir
   const [colorPickerFor, setColorPickerFor] = useState(null); // cardId en attente de choix de couleur (joueur local)
   const [myGain, setMyGain] = useState(0);
   const [channelReady, setChannelReady] = useState(false);
@@ -76,6 +125,10 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
   const [turnDeadline, setTurnDeadline] = useState(null);
   const [turnDeadlineSeat, setTurnDeadlineSeat] = useState(null);
   const [now, setNow] = useState(() => Date.now());
+  // Animation de pioche (voir lastAction plus bas) : purement locale à
+  // chaque client, jamais synchronisée en tant que telle — chacun la
+  // déclenche de son côté en réaction au MÊME lastAction reçu par broadcast.
+  const [drawFx, setDrawFx] = useState(null); // { seatId, count, toMe, key } | null
 
   const channelRef = useRef(null);
   const stateRef = useRef(null);
@@ -86,15 +139,23 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
   const turnTimeoutRef = useRef(null);  // setTimeout qui déclenche l'action automatique du joueur humain actif
   const turnStrikesRef = useRef({});    // seatId -> nombre de dépassements consécutifs
   const turnMetaRef = useRef({ deadline: null, seatId: null });
+  const drawFxKeyRef = useRef(0);
+  const drawFxTimerRef = useRef(null);
 
   useEffect(() => {
-    stateRef.current = { seats, hands, deck, discard, activeColor, turnIdx, direction, winner };
-  }, [seats, hands, deck, discard, activeColor, turnIdx, direction, winner]);
+    stateRef.current = {
+      seats, hands, deck, discard, activeColor, turnIdx, direction, winner,
+      pendingDraw, unoCalled, roundIndex, roundTarget, matchScores, roundScores,
+    };
+  }, [seats, hands, deck, discard, activeColor, turnIdx, direction, winner,
+      pendingDraw, unoCalled, roundIndex, roundTarget, matchScores, roundScores]);
 
   function applyLocalState(s, extra = {}) {
     setSeats(s.seats); setHands(s.hands); setDeck(s.deck); setDiscard(s.discard);
     setActiveColor(s.activeColor); setTurnIdx(s.turnIdx); setDirection(s.direction);
     setWinner(s.winner || null); setLastAction(s.lastAction || null);
+    setPendingDraw(s.pendingDraw || null); setUnoCalled(s.unoCalled || {});
+    setRoundIndex(s.roundIndex || 1); setMatchScores(s.matchScores || {}); setRoundScores(s.roundScores || {});
     setTurnDeadline(s.turnDeadline || null); setTurnDeadlineSeat(s.turnDeadlineSeat || null);
     if (extra.resetGain) { setMyGain(0); savedResultRef.current = false; }
   }
@@ -104,6 +165,24 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
     const iv = setInterval(() => setNow(Date.now()), 250);
     return () => clearInterval(iv);
   }, [turnDeadline]);
+
+  // Déclenche l'animation "cartes qui glissent depuis la pioche" quand
+  // quelqu'un pioche réellement (pénalité +2/+4 non contrée, dépassement du
+  // minuteur, pioche volontaire, ou pioche UNO manquée) — jamais quand un
+  // joueur CONTRE avec son propre +2/+4 (il ne pioche rien, la pile
+  // continue simplement vers le suivant).
+  useEffect(() => {
+    if (!lastAction) return;
+    const isDraw = lastAction.type === "draw" && lastAction.count > 0;
+    const isUnoPenalty = lastAction.type === "unoPenalty";
+    if (!isDraw && !isUnoPenalty) return;
+    const count = Math.min(isUnoPenalty ? 2 : lastAction.count, DRAW_FX_MAX);
+    drawFxKeyRef.current += 1;
+    setDrawFx({ seatId: lastAction.seatId, count, toMe: lastAction.seatId === me.id, key: drawFxKeyRef.current });
+    clearTimeout(drawFxTimerRef.current);
+    drawFxTimerRef.current = setTimeout(() => setDrawFx(null), 700 + count * 90);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastAction]);
 
   function persist(s) {
     if (!isHost) return;
@@ -133,9 +212,14 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
     ch.on("broadcast", { event: "move_attempt" }, ({ payload }) => {
       if (!isHost) return;
       // Un message reçu de ce siège = il n'est plus AFK : bénéfice du délai
-      // complet (20s) pour son PROCHAIN tour.
+      // complet (30s) pour son PROCHAIN tour.
       turnStrikesRef.current[payload.seatId] = 0;
       hostApplyMove(payload.seatId, payload.action);
+    });
+
+    ch.on("broadcast", { event: "call_uno" }, ({ payload }) => {
+      if (!isHost) return;
+      hostApplyUnoCall(payload.seatId);
     });
 
     ch.subscribe(status => {
@@ -156,6 +240,7 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
     return () => {
       clearTimeout(botTimer.current);
       clearTimeout(turnTimeoutRef.current);
+      clearTimeout(drawFxTimerRef.current);
       supabase.removeChannel(ch);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -175,9 +260,10 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
   // Arme le minuteur qui, si le joueur humain actif ne fait rien, pioche à
   // sa place à l'échéance — même mécanique que le bouton de pioche : à
   // Chromatik, il n'existe pas de "passe" distincte, piocher termine
-  // toujours le tour, jouable ou non. Chaque dépassement incrémente le
-  // compteur de grillages consécutifs (turnStrikesRef), remis à 0 dès que
-  // le joueur agit de lui-même.
+  // toujours le tour, jouable ou non (et solde une pile de surenchère en
+  // attente s'il y en a une). Chaque dépassement incrémente le compteur de
+  // grillages consécutifs (turnStrikesRef), remis à 0 dès que le joueur
+  // agit de lui-même.
   function armHumanTurnTimer() {
     clearTimeout(turnTimeoutRef.current);
     if (!isHost) return;
@@ -201,7 +287,7 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
     armHumanTurnTimer();
   }
   function sendMatchStart(payload) {
-    // Nouvelle manche : chacun repart avec le délai complet (20s).
+    // Nouvelle manche : chacun repart avec le délai complet (30s).
     turnStrikesRef.current = {};
     const tm = computeTurnDeadline(payload);
     turnMetaRef.current = tm;
@@ -215,16 +301,27 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
     const currentSeat = s.seats[s.turnIdx];
     if (!currentSeat || currentSeat.id !== seatId) return;
 
-    let { hands: h, deck: d, discard: disc, activeColor: ac, turnIdx: ti, direction: dir } = s;
+    let { hands: h, deck: d, discard: disc, activeColor: ac, turnIdx: ti, direction: dir, pendingDraw: pd } = s;
     h = { ...h }; d = d.slice(); disc = disc.slice();
     const hand = h[seatId] || [];
+    // Champs de match qu'on reporte tels quels dans CHAQUE état diffusé —
+    // seule la résolution de manche (plus bas) les fait évoluer.
+    const carry = { roundIndex: s.roundIndex, roundTarget: s.roundTarget, matchScores: s.matchScores };
+    const respondingToPending = !!(pd && pd.seatId === seatId);
 
     if (action.type === "draw") {
-      const res = drawCards(d, disc, 1);
+      // Pile de surenchère en attente pour CE siège : il pioche le TOTAL
+      // accumulé (pas 1 seule carte) et solde la pile. Sinon, pioche
+      // volontaire classique d'une carte.
+      const drawN = respondingToPending ? pd.count : 1;
+      const res = drawCards(d, disc, drawN);
       h[seatId] = hand.concat(res.cards);
-      const next = { seats: s.seats, hands: h, deck: res.deck, discard: res.discard, activeColor: ac,
+      const next = {
+        ...carry, seats: s.seats, hands: h, deck: res.deck, discard: res.discard, activeColor: ac,
         turnIdx: nextSeatIdx(ti, dir, s.seats.length), direction: dir, winner: null,
-        lastAction: { type: "draw", seatId } };
+        pendingDraw: null, unoCalled: { ...(s.unoCalled || {}), [seatId]: false },
+        lastAction: { type: "draw", seatId, count: drawN, wasPenalty: respondingToPending },
+      };
       broadcastNewState(next);
       scheduleBots();
       return;
@@ -233,7 +330,10 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
     const idx = hand.findIndex(c => c.id === action.cardId);
     if (idx === -1) return;
     const card = hand[idx];
-    if (!canPlay(card, disc[disc.length - 1], ac)) return;
+    // Légalité : en pleine surenchère, SEULE une carte qui "contre"
+    // légalement est jouable (canStackOn) ; sinon, règles normales.
+    const legal = respondingToPending ? canStackOn(card, pd.kind) : canPlay(card, disc[disc.length - 1], ac);
+    if (!legal) return;
 
     const newHand = hand.slice(0, idx).concat(hand.slice(idx + 1));
     h[seatId] = newHand;
@@ -241,38 +341,95 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
     const isWild = card.kind === "wild" || card.kind === "wild4";
     ac = isWild ? (action.chosenColor || ac) : card.color;
 
+    // Toute carte jouée "consomme" une éventuelle annonce UNO déjà faite
+    // (elle ne vaut que pour LA carte annoncée) ; un bot annonce tout seul
+    // dès qu'il tombe pile à 1 carte (pas d'interface pour lui).
+    let unoCalled = { ...(s.unoCalled || {}), [seatId]: false };
+    if (currentSeat.isBot && newHand.length === 1) unoCalled[seatId] = true;
+
     if (newHand.length === 0) {
-      const next = { seats: s.seats, hands: h, deck: d, discard: disc, activeColor: ac,
-        turnIdx: ti, direction: dir, winner: seatId, lastAction: { type: "play", seatId, card } };
+      const hadCalledUno = !!(s.unoCalled && s.unoCalled[seatId]);
+      if (!hadCalledUno) {
+        // Oubli d'annonce UNO : pioche-pénalité de 2, LA MANCHE CONTINUE
+        // (il rejoue avec 2 cartes au lieu de 0 — jamais une victoire).
+        const res = drawCards(d, disc, 2);
+        h[seatId] = res.cards;
+        const next = {
+          ...carry, seats: s.seats, hands: h, deck: res.deck, discard: res.discard, activeColor: ac,
+          turnIdx: nextSeatIdx(ti, dir, s.seats.length), direction: dir, winner: null,
+          pendingDraw: null, unoCalled,
+          lastAction: { type: "unoPenalty", seatId, card },
+        };
+        broadcastNewState(next);
+        scheduleBots();
+        return;
+      }
+      // Victoire de LA MANCHE : chaque siège ajoute la valeur de sa main
+      // restante à son score de partie (le vainqueur ajoute 0, sa main est
+      // déjà vide dans `h`).
+      const roundScores = {};
+      const matchScores = { ...(s.matchScores || {}) };
+      s.seats.forEach(seat => {
+        const val = handPenaltyValue(h[seat.id] || []);
+        roundScores[seat.id] = val;
+        matchScores[seat.id] = (matchScores[seat.id] || 0) + val;
+      });
+      const next = {
+        seats: s.seats, hands: h, deck: d, discard: disc, activeColor: ac,
+        turnIdx: ti, direction: dir, winner: seatId, pendingDraw: null, unoCalled,
+        roundIndex: s.roundIndex, roundTarget: s.roundTarget, roundScores, matchScores,
+        lastAction: { type: "play", seatId, card },
+      };
       broadcastNewState(next);
       return;
     }
 
+    // Poursuite normale de la manche, ou empilement d'une pioche en attente.
     let advance = 1;
-    let victimIdx = null, drawCount = 0;
+    let newPending = null;
     if (card.kind === "skip") advance = 2;
     else if (card.kind === "reverse") {
       if (s.seats.length === 2) advance = 2;
       else dir = -dir;
-    } else if (card.kind === "draw2") { victimIdx = nextSeatIdx(ti, dir, s.seats.length); drawCount = 2; advance = 2; }
-    else if (card.kind === "wild4") { victimIdx = nextSeatIdx(ti, dir, s.seats.length); drawCount = 4; advance = 2; }
-
-    if (victimIdx != null) {
-      const victimId = s.seats[victimIdx].id;
-      const res = drawCards(d, disc, drawCount);
-      h[victimId] = (h[victimId] || []).concat(res.cards);
-      d = res.deck; disc = res.discard;
+    } else if (card.kind === "draw2") {
+      const base = respondingToPending ? pd.count : 0;
+      newPending = { kind: "draw2", count: base + 2, seatId: nextSeatIdx(ti, dir, s.seats.length) };
+    } else if (card.kind === "wild4") {
+      const base = respondingToPending ? pd.count : 0;
+      newPending = { kind: "wild4", count: base + 4, seatId: nextSeatIdx(ti, dir, s.seats.length) };
     }
     for (let i = 0; i < advance; i++) ti = nextSeatIdx(ti, dir, s.seats.length);
 
-    const next = { seats: s.seats, hands: h, deck: d, discard: disc, activeColor: ac,
-      turnIdx: ti, direction: dir, winner: null, lastAction: { type: "play", seatId, card } };
+    const next = {
+      ...carry, seats: s.seats, hands: h, deck: d, discard: disc, activeColor: ac,
+      turnIdx: ti, direction: dir, winner: null, pendingDraw: newPending, unoCalled,
+      lastAction: { type: "play", seatId, card },
+    };
     broadcastNewState(next);
     scheduleBots();
   }
 
+  // Annonce UNO : n'importe quand (pas forcément le tour du siège), tant
+  // qu'il lui reste exactement 1 carte — pas de minuteur, pas de nouveau
+  // tour, ne perturbe JAMAIS le compte à rebours du tour en cours (on
+  // réutilise tel quel le couple deadline/siège déjà armé, voir
+  // turnMetaRef, plutôt que de le recalculer).
+  function hostApplyUnoCall(seatId) {
+    const s = stateRef.current;
+    if (!s || s.winner) return;
+    const hand = (s.hands && s.hands[seatId]) || [];
+    if (hand.length !== 1) return;
+    if (s.unoCalled && s.unoCalled[seatId]) return;
+    const next = { ...s, unoCalled: { ...(s.unoCalled || {}), [seatId]: true } };
+    const tm = turnMetaRef.current;
+    channelRef.current.send({ type: "broadcast", event: "state", payload: { ...next, turnDeadline: tm.deadline, turnDeadlineSeat: tm.seatId } });
+    persist(next);
+  }
+
   // Si le nouveau tour revient à un bot, l'hôte joue à sa place après un
   // court délai (lisibilité), en chaîne jusqu'à un tour humain ou victoire.
+  // Un bot qui doit répondre à une pile de pioche en attente contre
+  // systématiquement s'il le peut (voir decideBotMove).
   function scheduleBots() {
     if (!isHost) return;
     botTimer.current = setTimeout(() => {
@@ -282,7 +439,8 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
       if (!seat || !seat.isBot) return;
       const hand = s.hands[seat.id] || [];
       const top = s.discard[s.discard.length - 1];
-      const move = decideBotMove(hand, top, s.activeColor);
+      const pending = s.pendingDraw && s.pendingDraw.seatId === seat.id ? s.pendingDraw : null;
+      const move = decideBotMove(hand, top, s.activeColor, pending);
       hostApplyMove(seat.id, move);
     }, 950);
   }
@@ -292,19 +450,29 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
     const bots = [];
     for (let i = humanSeats.length + 1; i <= tableSize; i++) bots.push(makeBotSeat(i - humanSeats.length));
     const seatsFull = shuffle([...humanSeats, ...bots]);
-    const initial = dealFreshState(seatsFull);
+    const zeroScores = {};
+    seatsFull.forEach(seat => { zeroScores[seat.id] = 0; });
+    const initial = dealRoundState(seatsFull, { roundIndex: 1, roundTarget, matchScores: zeroScores });
+    sendMatchStart(initial);
+  }
+
+  // Manche suivante (même sièges, même score cumulé) — appelée par l'hôte
+  // depuis l'écran de fin de manche tant que roundIndex < roundTarget.
+  function nextRound() {
+    if (!isHost || !seats.length) return;
+    const initial = dealRoundState(seats, { roundIndex: roundIndex + 1, roundTarget, matchScores });
     sendMatchStart(initial);
   }
 
   useEffect(() => {
-    if (!isHost || phase !== "intro" || autoStartedRef.current || !channelReady || !tableSize) return;
+    if (!isHost || phase !== "intro" || autoStartedRef.current || !channelReady || !tableSize || !roundTarget) return;
     if (players.length <= tableSize) {
       autoStartedRef.current = true;
       const humanSeats = players.map(p => ({ id: p.profile_id, username: p.profiles?.username, avatar: p.profiles?.avatar, isBot: false }));
       startWith(humanSeats);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isHost, phase, channelReady, players.length, tableSize]);
+  }, [isHost, phase, channelReady, players.length, tableSize, roundTarget]);
 
   function toggleSelect(pid) {
     setSelected(prev => {
@@ -321,6 +489,9 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
     startWith(humanSeats);
   }
 
+  // "Rejouer" : repart d'une PARTIE ENTIÈREMENT NEUVE (manche 1, scores à
+  // zéro) — n'est proposé qu'une fois la dernière manche jouée (voir
+  // matchOver plus bas).
   function rejouer() {
     if (!isHost || !seats.length) return;
     const humanSeats = seats.filter(s => !s.isBot);
@@ -337,9 +508,14 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
   const myHand = hands[me.id] || [];
   const topCard = discard[discard.length - 1];
   const isMyTurn = phase === "playing" && !winner && isPlayer && seats[turnIdx]?.id === me.id;
+  const myPendingResponse = isMyTurn && pendingDraw && pendingDraw.seatId === me.id ? pendingDraw : null;
   // Compte à rebours du tour humain en cours, calculé localement à partir de
   // la deadline diffusée par l'hôte — même horodatage partout.
   const turnRemaining = turnDeadline ? Math.max(0, Math.ceil((turnDeadline - now) / 1000)) : null;
+  // Manche en cours terminée (winner non nul) ET c'était la DERNIÈRE manche
+  // programmée -> c'est la partie entière qui se termine (podium + points
+  // ARCARDI), pas juste une pause entre deux manches.
+  const matchOver = !!(winner && roundTarget && roundIndex >= roundTarget);
 
   function attemptDraw() {
     if (!isMyTurn) return;
@@ -347,7 +523,8 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
   }
   function attemptPlay(card) {
     if (!isMyTurn || !topCard) return;
-    if (!canPlay(card, topCard, activeColor)) return;
+    const legal = myPendingResponse ? canStackOn(card, myPendingResponse.kind) : canPlay(card, topCard, activeColor);
+    if (!legal) return;
     if (card.kind === "wild" || card.kind === "wild4") {
       setColorPickerFor(card.id);
       return;
@@ -359,13 +536,23 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
     channelRef.current?.send({ type: "broadcast", event: "move_attempt", payload: { seatId: me.id, action: { type: "play", cardId: colorPickerFor, chosenColor: color } } });
     setColorPickerFor(null);
   }
+  function callUno() {
+    if (!mySeat) return;
+    channelRef.current?.send({ type: "broadcast", event: "call_uno", payload: { seatId: me.id } });
+  }
 
-  // Sauvegarde du score (chaque joueur enregistre le sien, RLS oblige).
+  // Sauvegarde du score ARCARDI (chaque joueur enregistre le sien, RLS
+  // oblige) — UNE SEULE FOIS, à la toute fin de la PARTIE (dernière
+  // manche), jamais entre deux manches. Classement au score de match le
+  // plus BAS ; même barème de points que Président (pointsForPlace).
   useEffect(() => {
-    if (!winner || savedResultRef.current || !isPlayer) return;
+    if (!matchOver || savedResultRef.current || !isPlayer) return;
     savedResultRef.current = true;
-    const gain = winner === me.id ? 5 : 1;
+    const ranking = [...seats].sort((a, b) => (matchScores[a.id] ?? 0) - (matchScores[b.id] ?? 0));
+    const place = ranking.findIndex(s => s.id === me.id);
+    const gain = pointsForPlace(place, seats.length);
     setMyGain(gain);
+    if (gain <= 0) return;
     (async () => {
       try {
         await supabase.from("game_results").insert({ room_id: room.id, profile_id: me.id, game_id: GAME_ID, points: gain });
@@ -373,30 +560,58 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
       } catch (e) {}
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [winner]);
+  }, [matchOver]);
 
   const needsPick = players.length > (tableSize || 0);
-  const canIPlaySomething = isMyTurn && topCard && hasPlayable(myHand, topCard, activeColor);
+  const canIPlaySomething = isMyTurn && !myPendingResponse && topCard && hasPlayable(myHand, topCard, activeColor);
+  const canICounter = myPendingResponse ? hasStackable(myHand, myPendingResponse.kind) : false;
+  // Bot dont c'est le tour MAINTENANT : dérivé, jamais un état à part (tous
+  // les clients reçoivent le même seats/turnIdx/winner par broadcast).
+  const activeBotSeat = !winner && seats[turnIdx]?.isBot ? seats[turnIdx] : null;
+  const showUnoButton = isPlayer && !winner && myHand.length === 1 && !unoCalled[me.id];
 
   let content;
 
   if (phase === "playing") {
     const winnerSeat = seats.find(s => s.id === winner);
+    const ranking = winner ? [...seats].sort((a, b) => (matchScores[a.id] ?? 0) - (matchScores[b.id] ?? 0)) : [];
+
+    let statusText;
+    if (winner) statusText = null;
+    else if (isMyTurn) {
+      if (myPendingResponse) {
+        statusText = canICounter
+          ? `${t("chromatikCanCounter")} — ${t("chromatikMustDrawPile")} ${myPendingResponse.count}`
+          : `${t("chromatikMustDrawPile")} ${myPendingResponse.count}`;
+      } else {
+        statusText = canIPlaySomething ? t("chromatikYourTurn") : t("chromatikMustDraw");
+      }
+    } else if (isPlayer) statusText = `${t("chromatikWaitingFor")} ${seats[turnIdx]?.username}…`;
+    else statusText = t("chromatikSpectating");
+
     content = (
       <div>
         <div className="chromatik-opponents">
-          {seats.filter(s => s.id !== me.id).map(s => (
-            <div key={s.id} className={"chromatik-opponent" + (seats[turnIdx]?.id === s.id ? " active" : "")}>
-              <span className="avatar">{s.avatar}</span>
-              <span className="name">{s.username}</span>
-              <span className="count">
-                {(hands[s.id] || []).length} 🂠
-                {turnDeadlineSeat === s.id && turnRemaining != null && (
-                  <span className={"turn-timer-chip mini" + (turnRemaining <= 5 ? " hot" : "")}>{turnRemaining}s</span>
+          {seats.filter(s => s.id !== me.id).map(s => {
+            const oppHand = hands[s.id] || [];
+            const oppAtRisk = oppHand.length === 1 && !unoCalled[s.id];
+            return (
+              <div key={s.id} className={"chromatik-opponent" + (seats[turnIdx]?.id === s.id ? " active" : "")}>
+                <span className="avatar">{s.avatar}</span>
+                <span className="name">{s.username}</span>
+                {activeBotSeat?.id === s.id && (
+                  <span className="pres-think" aria-hidden="true"><i>.</i><i className="d2">.</i><i className="d3">.</i></span>
                 )}
-              </span>
-            </div>
-          ))}
+                <span className="count">
+                  {oppHand.length} 🂠
+                  {oppAtRisk && <span className="chromatik-uno-warn" title="UNO">❗</span>}
+                  {turnDeadlineSeat === s.id && turnRemaining != null && (
+                    <span className={"turn-timer-chip mini" + (turnRemaining <= 5 ? " hot" : "")}>{turnRemaining}s</span>
+                  )}
+                </span>
+              </div>
+            );
+          })}
         </div>
 
         <div className="chromatik-table">
@@ -405,9 +620,28 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
             <span className="pile-count">{deck.length}</span>
           </div>
           <div className="chromatik-discard">
-            {topCard && <CardView card={topCard} size="lg" glow />}
+            {topCard && <CardView key={topCard.id} card={topCard} size="lg" glow />}
             {activeColor && <span className="chromatik-active-color" style={{ background: `var(${COLOR_VAR_MAP[activeColor]})` }} />}
           </div>
+          <span key={direction} className="chromatik-direction-badge" title={t("chromatikDirectionTitle")}>
+            {direction === 1 ? "↻" : "↺"}
+          </span>
+
+          {drawFx && (
+            <div className="chromatik-drawfx" aria-hidden="true">
+              {Array.from({ length: drawFx.count }, (_, i) => (
+                <span
+                  key={drawFx.key + "-" + i}
+                  className={"chromatik-drawfx-card" + (drawFx.toMe ? " toMe" : " toOpponent")}
+                  style={{
+                    animationDelay: (i * 80) + "ms",
+                    "--dx": (Math.round((Math.random() - 0.5) * 90)) + "px",
+                    "--rot": (Math.round((Math.random() - 0.5) * 40)) + "deg",
+                  }}
+                />
+              ))}
+            </div>
+          )}
         </div>
 
         {!winner && isMyTurn && (
@@ -420,11 +654,12 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
         )}
         <p className="muted" style={{ textAlign: "center", margin: "10px 0", minHeight: 18, fontWeight: winner ? 800 : 400 }}>
           {winner ? (
-            winner === me.id ? "🏆 " + t("chromatikWinYou")
-              : `${winnerSeat?.username} ${t("chromatikWinOther")}`
-          ) : isMyTurn ? (canIPlaySomething ? t("chromatikYourTurn") : t("chromatikMustDraw"))
-            : isPlayer ? `${t("chromatikWaitingFor")} ${seats[turnIdx]?.username}…`
-              : t("chromatikSpectating")}
+            matchOver
+              ? (winner === me.id ? t("chromatikMatchWinYou") : `${winnerSeat?.username} ${t("chromatikMatchWinOther")}`)
+              : (winner === me.id ? "🏆 " + t("chromatikWinYou") : `${winnerSeat?.username} ${t("chromatikWinOther")}`)
+          ) : lastAction?.type === "unoPenalty" ? (
+            `😅 ${seats.find(s => s.id === lastAction.seatId)?.username || "?"} ${t("chromatikUnoPenalty")}`
+          ) : statusText}
         </p>
 
         {isPlayer && (
@@ -435,9 +670,26 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
                 card={card}
                 size="sm"
                 onClick={() => attemptPlay(card)}
-                dim={!isMyTurn || !canPlay(card, topCard, activeColor)}
+                dim={!isMyTurn || (myPendingResponse ? !canStackOn(card, myPendingResponse.kind) : !canPlay(card, topCard, activeColor))}
               />
             ))}
+          </div>
+        )}
+
+        {showUnoButton && (
+          <div style={{ textAlign: "center", marginTop: 8 }}>
+            <button type="button" className="chromatik-uno-btn" onClick={callUno}>{t("chromatikUnoButton")}</button>
+          </div>
+        )}
+        {isPlayer && myHand.length === 1 && unoCalled[me.id] && !winner && (
+          <p className="chromatik-uno-called-badge">{t("chromatikUnoCalledBadge")}</p>
+        )}
+
+        {myPendingResponse && !winner && (
+          <div style={{ textAlign: "center", marginTop: 4 }}>
+            <button type="button" className="btn ghost" style={{ width: "auto", padding: "8px 16px", fontSize: 13 }} onClick={attemptDraw}>
+              🂠 {t("chromatikMustDrawPile")} {myPendingResponse.count}
+            </button>
           </div>
         )}
 
@@ -456,26 +708,48 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
         )}
 
         {winner && (
-          <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 16, flexWrap: "wrap" }}>
-            {isPlayer && (
-              <p style={{ fontWeight: 800, width: "100%", textAlign: "center" }}>
+          <div className="chromatik-round-summary">
+            <h3 className="chromatik-round-summary-title">
+              {matchOver ? t("chromatikMatchOverTitle") : `${t("chromatikRoundOverTitle")} ${roundIndex} ${t("chromatikRoundOverOf")} ${roundTarget}`}
+            </h3>
+            <div className="pres-podium">
+              {ranking.map((s, i) => (
+                <div key={s.id} className={"pres-podium-row" + (i === 0 ? " first" : "") + (s.id === me.id ? " me" : "")}>
+                  <span className="place">{i + 1}</span>
+                  <span className="name">{s.avatar} {s.username}</span>
+                  <span className="pts">
+                    {matchScores[s.id] ?? 0} {t("pts")}
+                    <span className="chromatik-round-delta"> (+{roundScores[s.id] ?? 0} {t("chromatikThisRound")})</span>
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {isPlayer && matchOver && (
+              <p style={{ fontWeight: 800, textAlign: "center", marginTop: 10 }}>
                 {t("peYourGain")} <span style={{ color: "var(--p3)", fontFamily: "'Space Mono'" }}>+{myGain} {t("pts")}</span>
               </p>
             )}
-            {isHost ? (
-              <>
-                <button className="btn" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={rejouer}>🔁 {t("c4Rejouer")}</button>
-                <button className="btn ghost" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={backToRoom}>🏠 {t("c4BackToRoom")}</button>
-              </>
-            ) : (
-              <p className="muted">{t("c4RejouerWait")}</p>
-            )}
+            <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 14, flexWrap: "wrap" }}>
+              {isHost ? (
+                matchOver ? (
+                  <>
+                    <button className="btn" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={rejouer}>🔁 {t("c4Rejouer")}</button>
+                    <button className="btn ghost" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={backToRoom}>🏠 {t("c4BackToRoom")}</button>
+                  </>
+                ) : (
+                  <button className="btn" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={nextRound}>{t("chromatikNextRound")}</button>
+                )
+              ) : (
+                <p className="muted">{matchOver ? t("c4RejouerWait") : t("chromatikNextRoundWait")}</p>
+              )}
+            </div>
           </div>
         )}
       </div>
     );
   } else {
-    // phase "intro" : choix de la taille de table, puis des joueurs si besoin
+    // phase "intro" : choix de la taille de table, du nombre de manches, puis des joueurs si besoin
     if (!tableSize) {
       content = isHost ? (
         <div>
@@ -484,6 +758,19 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
             {[2, 3, 4].map(n => (
               <button key={n} className="btn" style={{ width: "auto", padding: "14px 22px" }} onClick={() => setTableSize(n)}>
                 {n} {t("chromatikSeats")}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : <p className="muted">{t("chromatikWaitHostSize")}</p>;
+    } else if (!roundTarget) {
+      content = isHost ? (
+        <div>
+          <p className="hint">{t("chromatikRoundsHint")}</p>
+          <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 12 }}>
+            {ROUND_OPTIONS.map(n => (
+              <button key={n} className="btn" style={{ width: "auto", padding: "14px 22px" }} onClick={() => setRoundTarget(n)}>
+                {n} {t("chromatikRoundsUnit")}
               </button>
             ))}
           </div>

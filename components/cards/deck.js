@@ -88,3 +88,49 @@ export function bestColorFor(hand) {
   for (const c of COLORS) if (counts[c] > counts[best]) best = c;
   return best;
 }
+
+// ==========================================================================
+// Surenchère +2/+4 (règle demandée explicitement, pas UNO officiel) :
+//   - un +2 ne peut être contré que par un autre +2 ;
+//   - un +4 peut être contré par un +4 OU par un +2 (le Joker +4 reste le
+//     seul à pouvoir "grimper" sur les deux familles, +2 reste cantonné à
+//     lui-même).
+// `pendingDraw` (porté par l'état de partie) = { kind: "draw2"|"wild4",
+// count, seatId } où `seatId` est le siège qui DOIT répondre (contrer ou
+// piocher `count` cartes) — jamais un état à part, dérivé/consommé à chaque
+// coup dans ChromatikGame.js.
+// ==========================================================================
+export function canStackOn(card, pendingKind) {
+  if (pendingKind === "draw2") return card.kind === "draw2" || card.kind === "wild4";
+  if (pendingKind === "wild4") return card.kind === "wild4";
+  return false;
+}
+export function hasStackable(hand, pendingKind) {
+  return hand.some(c => canStackOn(c, pendingKind));
+}
+
+// ==========================================================================
+// Score de fin de manche (règle demandée) : chaque joueur ajoute à son
+// score de MATCH la valeur des cartes qui lui restent en main — objectif :
+// accumuler le MOINS de points possible sur l'ensemble des manches. Les
+// jokers valent plus cher que les cartes spéciales colorées, elles-mêmes
+// plus chères qu'un chiffre, pour décourager de les garder trop longtemps.
+// ==========================================================================
+export function cardPenaltyValue(card) {
+  if (card.kind === "number") return card.value;
+  if (card.kind === "skip" || card.kind === "reverse" || card.kind === "draw2") return 20;
+  if (card.kind === "wild" || card.kind === "wild4") return 50;
+  return 0;
+}
+export function handPenaltyValue(hand) {
+  return (hand || []).reduce((sum, c) => sum + cardPenaltyValue(c), 0);
+}
+
+// Points ARCARDI attribués en fin de MATCH (toutes les manches jouées),
+// selon le classement au score cumulé le plus bas — même convention/table
+// que Président (pointsForPlace dans deck52.js), pour rester cohérent d'un
+// jeu à l'autre du site.
+export function pointsForPlace(place, nSeats) {
+  const TABLE = { 2: [5, 0], 3: [5, 3, 0], 4: [5, 3, 1, 0] };
+  return (TABLE[nSeats] || TABLE[4])[place] ?? 0;
+}

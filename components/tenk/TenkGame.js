@@ -9,12 +9,13 @@ import { decideBotSelection, decideBotContinue } from "./botLogic";
 import { playDiceShuffle, playConfirmChime, playFarkle, playHotDice, playGameWin, playGameLose } from "@/lib/sfx";
 
 /* Minuteur de tour humain (anti-AFK), même convention que Président et
-   Chromatik : 20s par défaut, réduit à 5s après 2 dépassements consécutifs
-   du MÊME joueur, remis à 20s dès qu'il rejoue de lui-même. Ne concerne
-   jamais les bots (temporisés séparément par scheduleBots). À l'échéance,
-   l'hôte joue à la place du joueur : garde la meilleure combinaison si un
-   lancer attend, banque si le score du tour le permet, relance sinon. */
-const HUMAN_TURN_MS = 20000;
+   Chromatik : 30s par défaut (20s jugés trop stressants à l'usage), réduit
+   à 5s après 2 dépassements consécutifs du MÊME joueur, remis à 30s dès
+   qu'il rejoue de lui-même. Ne concerne jamais les bots (temporisés
+   séparément par scheduleBots). À l'échéance, l'hôte joue à la place du
+   joueur : garde la meilleure combinaison si un lancer attend, banque si le
+   score du tour le permet, relance sinon. */
+const HUMAN_TURN_MS = 30000;
 const HUMAN_TURN_SHORT_MS = 5000;
 const HUMAN_TURN_STRIKES = 2;
 
@@ -281,7 +282,7 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
     ch.on("broadcast", { event: "move_attempt" }, ({ payload }) => {
       if (!isHost) return;
       // Un message reçu de ce siège = il n'est plus AFK : on lui redonne
-      // le bénéfice du délai complet (20s) pour son PROCHAIN tour, que ce
+      // le bénéfice du délai complet (30s) pour son PROCHAIN tour, que ce
       // coup-ci soit finalement légal ou non.
       turnStrikesRef.current[payload.seatId] = 0;
       hostApplyMove(payload.seatId, payload.action);

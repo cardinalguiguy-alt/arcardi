@@ -25,7 +25,7 @@ import GameRulesButton from "./GameRulesButton";
    comme avant, où les deux se fondaient dans le décor.
    ========================================================================== */
 
-export default function DoorStage({ gameId, icon, name, accentVar, lang, t, children }) {
+export default function DoorStage({ gameId, icon, name, accentVar, lang, t, children, onRulesOpenChange, rulesReaderNames }) {
   const [doorState, setDoorState] = useState("closed"); // 'closed' | 'opening' | 'open'
   const [entryKey, setEntryKey] = useState(0); // change à chaque ouverture -> rejoue l'animation povPush
   const openTimer = useRef(null);
@@ -62,6 +62,10 @@ export default function DoorStage({ gameId, icon, name, accentVar, lang, t, chil
       )}
 
       <div className="door-stage">
+        {/* Bouton "i" rendu QUELLE QUE SOIT la position de la porte —
+            consultable dès l'écran "Jouer", pas seulement une fois ouvert
+            (voir GameRulesButton.js pour le pourquoi du portail React). */}
+        <GameRulesButton gameId={gameId} lang={lang} accentVar={accentVar} onOpenChange={onRulesOpenChange} />
         {closed && (
           <>
             <div className={"door-panel left" + (opening ? " open" : "")}><span className="door-handle" /></div>
@@ -70,7 +74,6 @@ export default function DoorStage({ gameId, icon, name, accentVar, lang, t, chil
         )}
         {doorState === "open" && (
           <div className="door-content" key={entryKey}>
-            <GameRulesButton gameId={gameId} lang={lang} />
             {children}
           </div>
         )}
@@ -78,6 +81,11 @@ export default function DoorStage({ gameId, icon, name, accentVar, lang, t, chil
 
       {closed && (
         <div className={"door-play-wrap" + (opening ? " hidden" : "")}>
+          {rulesReaderNames && rulesReaderNames.length > 0 && (
+            <p className="rules-reading-banner">
+              ⏳ {rulesReaderNames.join(", ")} {t ? t(rulesReaderNames.length > 1 ? "rulesReadingPlural" : "rulesReadingSingle") : "is reading the rules — please wait…"}
+            </p>
+          )}
           <button className="door-play-btn" onClick={openDoor}>{t ? t("stagePlay") : "▶ Jouer"}</button>
         </div>
       )}

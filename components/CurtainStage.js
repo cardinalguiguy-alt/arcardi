@@ -17,7 +17,7 @@ import GameRulesButton from "./GameRulesButton";
    est monté, avec l'animation d'entrée qui rejoue à CHAQUE ouverture).
    ========================================================================== */
 
-export default function CurtainStage({ gameId, icon, name, accentVar, lang, t, children }) {
+export default function CurtainStage({ gameId, icon, name, accentVar, lang, t, children, onRulesOpenChange, rulesReaderNames }) {
   const [state, setState] = useState("closed"); // 'closed' | 'opening' | 'open'
   const [entryKey, setEntryKey] = useState(0);
   const openTimer = useRef(null);
@@ -56,6 +56,7 @@ export default function CurtainStage({ gameId, icon, name, accentVar, lang, t, c
       )}
 
       <div className="curtain-stage">
+        <GameRulesButton gameId={gameId} lang={lang} accentVar={accentVar} onOpenChange={onRulesOpenChange} />
         {closed && (
           <>
             <div className="curtain-valance" />
@@ -66,7 +67,6 @@ export default function CurtainStage({ gameId, icon, name, accentVar, lang, t, c
         )}
         {state === "open" && (
           <div className="curtain-content" key={entryKey}>
-            <GameRulesButton gameId={gameId} lang={lang} />
             {children}
           </div>
         )}
@@ -74,6 +74,11 @@ export default function CurtainStage({ gameId, icon, name, accentVar, lang, t, c
 
       {closed && (
         <div className={"door-play-wrap" + (opening ? " hidden" : "")}>
+          {rulesReaderNames && rulesReaderNames.length > 0 && (
+            <p className="rules-reading-banner">
+              ⏳ {rulesReaderNames.join(", ")} {t ? t(rulesReaderNames.length > 1 ? "rulesReadingPlural" : "rulesReadingSingle") : "is reading the rules — please wait…"}
+            </p>
+          )}
           <button className="curtain-play-btn" onClick={openCurtain}>{t ? t("stagePlay") : "▶ Jouer"}</button>
         </div>
       )}
