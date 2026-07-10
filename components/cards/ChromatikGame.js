@@ -391,9 +391,29 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
             lastAction: { type: "unoPenalty", seatId, card },
           };
         }
+        // Cas +2/+4 joué comme DERNIÈRE carte (correctif demandé) : la
+        // manche se termine immédiatement — l'adversaire visé n'a aucune
+        // occasion de surenchérir — mais l'effet de la carte doit tout de
+        // même s'appliquer avant le calcul des scores : il pioche
+        // AUTOMATIQUEMENT le total (2/4, ou plus si cette carte contrait
+        // elle-même une pile de surenchère déjà en cours — même calcul
+        // `base + 2/4` que dans la branche normale plus bas), ajouté à sa
+        // main AVANT handPenaltyValue. Exception déjà couverte au-dessus :
+        // si l'annonce UNO n'a pas été faite, on ne passe jamais ici (la
+        // manche continue, pénalité UNO classique).
+        if (card.kind === "draw2" || card.kind === "wild4") {
+          const base = respondingToPending ? pd.count : 0;
+          const finalCount = base + (card.kind === "draw2" ? 2 : 4);
+          const targetIdx = nextSeatIdx(ti, dir, s.seats.length);
+          const targetId = s.seats[targetIdx].id;
+          const forced = drawCards(d, disc, finalCount);
+          h[targetId] = (h[targetId] || []).concat(forced.cards);
+          d = forced.deck; disc = forced.discard;
+        }
         // Victoire de LA MANCHE : chaque siège ajoute la valeur de sa main
         // restante à son score de partie (le vainqueur ajoute 0, sa main
-        // est déjà vide dans `h`).
+        // est déjà vide dans `h` ; l'adversaire visé ci-dessus a déjà sa
+        // main mise à jour avec les cartes forcées).
         const roundScores = {};
         const matchScores = { ...(s.matchScores || {}) };
         s.seats.forEach(seat => {
