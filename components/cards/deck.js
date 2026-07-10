@@ -90,11 +90,33 @@ export function bestColorFor(hand) {
 }
 
 // ==========================================================================
+// Tri d'affichage de la main (demande explicite) : de gauche à droite, par
+// couleur (ordre fixe rouge, vert, bleu, jaune) puis par valeur 0→9, puis
+// les cartes spéciales de la couleur (passe, inverse, +2) ; les jokers
+// (choix de couleur) et les +4 vont TOUT À DROITE de la main. Tri PUREMENT
+// visuel : l'ordre réel des cartes dans l'état de partie ne change jamais
+// (les ids restent la référence pour jouer une carte).
+// ==========================================================================
+const KIND_ORDER = { skip: 10, reverse: 11, draw2: 12 };
+function sortKey(card) {
+  if (card.kind === "wild") return 900;   // jokers couleur : avant-dernière zone
+  if (card.kind === "wild4") return 950;  // +4 : tout à droite
+  const colorRank = COLORS.indexOf(card.color); // red < green < blue < yellow
+  const valueRank = card.kind === "number" ? card.value : KIND_ORDER[card.kind] ?? 13;
+  return colorRank * 20 + valueRank;
+}
+export function sortHandForDisplay(hand) {
+  return (hand || []).slice().sort((a, b) => sortKey(a) - sortKey(b));
+}
+
+// ==========================================================================
 // Surenchère +2/+4 (règle demandée explicitement, pas UNO officiel) :
-//   - un +2 ne peut être contré que par un autre +2 ;
-//   - un +4 peut être contré par un +4 OU par un +2 (le Joker +4 reste le
+//   - un +2 peut être contré par un autre +2 OU par un +4 ;
+//   - un +4 ne peut être contré que par un autre +4 (le Joker +4 reste le
 //     seul à pouvoir "grimper" sur les deux familles, +2 reste cantonné à
 //     lui-même).
+// (Formulation alignée sur le code et sur gameRules.js — correctif 2026-07 :
+// l'ancienne rédaction du commentaire inversait les deux familles.)
 // `pendingDraw` (porté par l'état de partie) = { kind: "draw2"|"wild4",
 // count, seatId } où `seatId` est le siège qui DOIT répondre (contrer ou
 // piocher `count` cartes) — jamais un état à part, dérivé/consommé à chaque

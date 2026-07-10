@@ -6,7 +6,7 @@ import Crossfade from "@/components/Crossfade";
 import CardView from "./CardView";
 import {
   COLORS, freshDeck, shuffle, canPlay, hasPlayable, drawCards, nextSeatIdx,
-  canStackOn, hasStackable, handPenaltyValue, pointsForPlace,
+  canStackOn, hasStackable, handPenaltyValue, pointsForPlace, sortHandForDisplay,
 } from "./deck";
 import { decideBotMove, decideBotDrawFollowUp } from "./botLogic";
 
@@ -269,6 +269,20 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
             applyLocalState(saved);
             setPhase("playing");
             autoStartedRef.current = true;
+            // Reprise après rechargement de l'HÔTE (correctif 2026-07) :
+            // sans ça, si la sauvegarde datait d'un tour de BOT (ou d'une
+            // échéance humaine en cours), plus rien ne relançait jamais
+            // l'arbitrage — ni scheduleBots ni le minuteur n'étaient
+            // réarmés — et la table restait figée pour tout le monde. On
+            // rediffuse l'état restauré (deadline fraîche, pile de pénalité
+            // éventuellement soldée par settleForcedDraw) et on réarme les
+            // deux moteurs, exactement comme après un coup normal. Entre
+            // deux manches (winner posé), rien à réarmer : le bouton
+            // "manche suivante" de l'hôte suffit.
+            if (isHost && !saved.winner) {
+              broadcastNewState(saved);
+              scheduleBots();
+            }
           }
         }
       }
@@ -917,7 +931,10 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
 
         {isPlayer && (
           <div className="chromatik-hand">
-            {myHand.map(card => (
+            {/* Tri d'affichage (demande explicite) : gauche→droite par
+                couleur puis 0-9 puis spéciales ; jokers/+4 tout à droite.
+                Purement visuel — voir sortHandForDisplay dans deck.js. */}
+            {sortHandForDisplay(myHand).map(card => (
               <CardView
                 key={card.id}
                 card={card}
