@@ -126,6 +126,10 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
   const [goldPop, setGoldPop] = useState(null);      // "+N pépite(s)" sur la carte du mineur
   const [freshNuggets, setFreshNuggets] = useState({ ids: [], key: 0 }); // pépites qui rayonnent
   const [bombFx, setBombFx] = useState(null);        // 💥 + secousse de la grille
+  // Frappe de l'ADVERSAIRE : comme on ne voit pas sa souris, on affiche
+  // l'animation de pioche générique (fondu entrée/sortie rapide) sur la case
+  // qu'il vient de creuser.
+  const [oppStrike, setOppStrike] = useState(null);  // { idx, key }
   // Décompte 3-2-1 de début de partie (jamais rejoué au rechargement).
   const [countingDown, setCountingDown] = useState(false);
   // Curseur-pioche : c'est désormais un VRAI curseur CSS natif posé sur la
@@ -150,6 +154,8 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
   const freshTimerRef = useRef(null);
   const bombFxKeyRef = useRef(0);
   const bombFxTimerRef = useRef(null);
+  const oppStrikeKeyRef = useRef(0);
+  const oppStrikeTimerRef = useRef(null);
   const lastActionSeenRef = useRef(null);
   // Fin du décompte 3-2-1 côté hôte : les bots et le minuteur de tour
   // attendent cette échéance avant de démarrer (voir scheduleBots et
@@ -201,6 +207,16 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
       setGoldPop({ seatId: lastAction.seatId, count: nuggetIds.length, key: goldPopKeyRef.current });
       clearTimeout(goldPopTimerRef.current);
       goldPopTimerRef.current = setTimeout(() => setGoldPop(null), 1500);
+    }
+    // Frappe de l'ADVERSAIRE (coup de pioche d'un AUTRE joueur/bot) : on affiche
+    // l'animation de pioche générique sur la case creusée. Pas pour mes propres
+    // coups (j'ai déjà mon curseur qui frappe), ni pour la dynamite (elle a son
+    // explosion 💥).
+    if (lastAction.type === "dig" && lastAction.seatId !== me.id && typeof lastAction.idx === "number") {
+      oppStrikeKeyRef.current += 1;
+      setOppStrike({ idx: lastAction.idx, key: oppStrikeKeyRef.current });
+      clearTimeout(oppStrikeTimerRef.current);
+      oppStrikeTimerRef.current = setTimeout(() => setOppStrike(null), 620);
     }
     if (lastAction.type === "bomb") {
       // Vrai tir de mine (fichier découpé + fondu, voir lib/sfx.js). Le joueur
@@ -279,6 +295,7 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
       clearTimeout(goldPopTimerRef.current);
       clearTimeout(freshTimerRef.current);
       clearTimeout(bombFxTimerRef.current);
+      clearTimeout(oppStrikeTimerRef.current);
       supabase.removeChannel(ch);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -595,6 +612,20 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
               </span>
             );
           })}
+
+          {/* Frappe de l'adversaire : la pioche générique tape la case qu'il a
+              creusée, fondu entrée/sortie rapide (on ne voit pas sa souris). */}
+          {oppStrike && (
+            <span
+              key={oppStrike.key}
+              className="gm-strike-fx"
+              aria-hidden="true"
+              style={{
+                left: (((oppStrike.idx % GM_COLS) + 0.5) / GM_COLS * 100) + "%",
+                top: ((Math.floor(oppStrike.idx / GM_COLS) + 0.5) / GM_ROWS * 100) + "%",
+              }}
+            />
+          )}
 
           {/* 💥 Explosion : onde de choc + éclat au centre du carré soufflé,
               pendant que la grille tremble (classe .quake). */}

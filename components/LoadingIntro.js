@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { playNoteSequence } from "@/lib/sfx";
 
 /* ==========================================================================
    LoadingIntro — écran de lancement animé façon "typing" (variante 1a
@@ -32,6 +33,12 @@ const TILE_VARS = ["--p1", "--p4", "--p2", "--p3"];
 
 const POP_DURATION = 0.5; // s, par tuile
 const POP_STAGGER = 0.1; // s entre chaque tuile
+// Une note par lettre, jouée PILE quand la lettre "claque" en place — c'est le
+// pic de l'overshoot d'introTilePop (keyframe 60% : scale max), soit à 60 % de
+// POP_DURATION après le début de CETTE lettre. Gamme ascendante ré-mi-fa-sol-
+// la-si-do (D E F G A B C), une note par lettre de ARCARDI.
+const LAND_FRACTION = 0.6;
+const LETTER_NOTES_HZ = [587.33, 659.25, 698.46, 783.99, 880.0, 987.77, 1046.5];
 const GLOW_DELAY = LETTERS.length * POP_STAGGER + 0.3; // 1.0s
 const GLOW_DURATION = 0.7;
 const TILES_FADE_DELAY = 1.9;
@@ -49,6 +56,17 @@ export default function LoadingIntro({ children }) {
     const reduced =
       typeof window !== "undefined" &&
       window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (!reduced) {
+      // Une note par lettre, calée sur l'instant où chaque lettre claque en
+      // place. Timing d'échantillon via Web Audio (voir playNoteSequence).
+      // NB : si le navigateur bloque encore l'audio (aucune interaction depuis
+      // le chargement), la séquence est silencieuse — sans erreur.
+      const seq = LETTERS.map((_, i) => ({
+        freq: LETTER_NOTES_HZ[i % LETTER_NOTES_HZ.length],
+        atMs: (i * POP_STAGGER + POP_DURATION * LAND_FRACTION) * 1000,
+      }));
+      playNoteSequence(seq);
+    }
     const timer = setTimeout(() => setPlaying(false), reduced ? 0 : TOTAL_MS);
     return () => clearTimeout(timer);
   }, []);

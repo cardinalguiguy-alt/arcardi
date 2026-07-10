@@ -1308,17 +1308,16 @@ body.stage-focus .chat-panel{ right:auto; left:14px; }
    gratuit et fiable. Dynamite armée -> 🧨. Emoji percent-encodés en UTF-8 pour
    traverser sans risque le pipeline CSS. Sur tactile, le curseur ne s'affiche
    pas : on tape directement les cases. */
-/* Pioche du logo (image fournie par le porteur, reproduite en PNG) : curseur
-   natif, donc toujours visible et insensible au zoom. Au clic, `:active`
-   bascule sur la variante PENCHÉE = mouvement de frappe (la pioche pivote).
+/* Pioche du logo, en PNG : curseur natif, toujours visible, insensible au zoom.
+   TOUT (curseur normal, curseur au clic, et l'animation de frappe adverse
+   .gm-strike-fx) utilise LE MÊME fichier /cursors/pick.png — il suffit donc de
+   remplacer ce seul fichier par l'image voulue pour tout changer d'un coup.
    Point d'accroche = la pointe gauche de la tête. */
 .gm-grid.myturn,
-.gm-grid.myturn .gm-cell.hidden{
-  cursor: url("/cursors/pick.png") 3 28, pointer;
-}
+.gm-grid.myturn .gm-cell.hidden,
 .gm-grid.myturn:active,
 .gm-grid.myturn:active .gm-cell.hidden{
-  cursor: url("/cursors/pick-strike.png") 3 28, pointer;
+  cursor: url("/cursors/pick.png") 2 28, pointer;
 }
 .gm-grid.myturn .gm-cell.hidden:hover{ transform:translateY(-1.5px); filter:brightness(1.2); }
 /* Dynamite armée : la pioche devient un bâton de dynamite. */
@@ -1388,6 +1387,27 @@ body.stage-focus .chat-panel{ right:auto; left:14px; }
 @keyframes gmBombFlip{ 0%{ opacity:0; transform:rotateY(90deg) scale(.6); } 100%{ opacity:1; transform:rotateY(0) scale(1); } }
 
 /* ----- 💥 Explosion de la dynamite ----- */
+/* Frappe de l'adversaire : la pioche générique (même image que le curseur)
+   tape la case creusée par l'autre joueur, avec fondu d'entrée/sortie rapide
+   — on ne peut pas suivre sa souris, c'est le meilleur repère visuel. Centrée
+   sur la case (left/top en % posés en JS), elle pivote une fois puis s'efface. */
+.gm-strike-fx{
+  position:absolute; z-index:24; pointer-events:none;
+  width:34px; height:34px; margin:-19px 0 0 -15px;
+  background:url("/cursors/pick.png") center/contain no-repeat;
+  filter:drop-shadow(0 2px 3px rgba(0,0,0,.5));
+  transform-origin:34% 78%;
+  animation:gmStrikeFx .6s ease both;
+}
+@keyframes gmStrikeFx{
+  0%{ opacity:0; transform:translateY(-12px) rotate(-34deg) scale(.9); }
+  28%{ opacity:1; transform:translateY(0) rotate(14deg) scale(1.06); }  /* impact */
+  46%{ transform:translateY(-1px) rotate(-4deg) scale(1); }
+  100%{ opacity:0; transform:translateY(-6px) rotate(-20deg) scale(.94); }
+}
+@media (prefers-reduced-motion: reduce){
+  .gm-strike-fx{ animation:none; opacity:0; }
+}
 .gm-boom{ position:absolute; z-index:20; pointer-events:none; width:0; height:0; }
 .gm-boom-wave{
   position:absolute; left:0; top:0; width:12px; height:12px; margin:-6px 0 0 -6px; border-radius:50%;
