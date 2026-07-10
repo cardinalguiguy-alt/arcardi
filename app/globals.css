@@ -1199,7 +1199,16 @@ body.stage-focus .chat-panel{ right:auto; left:14px; }
 .gm-goal-line{ text-align:center; font-size:12px; margin:0 0 10px; font-family:'Space Mono'; }
 
 /* Duel : deux cartes de mineur face à face, pioche croisée au centre. */
-.gm-duel{ position:relative; display:flex; gap:34px; justify-content:center; margin-bottom:12px; }
+/* Rangée des deux mineurs. Contenue à la MÊME largeur que la grille (440px)
+   et centrée : avant, `gap:34px` sans `flex-wrap` pouvait rendre la rangée
+   plus large que la grille — et donc que le cadre .door-stage (overflow:hidden),
+   qui la rognait ("hors cadre" sur fenêtre étroite, y compris hors agrandi).
+   Le gap devient fluide et la rangée peut passer les cartes l'une sous l'autre
+   sur écran vraiment étroit plutôt que de déborder. */
+.gm-duel{
+  position:relative; display:flex; flex-wrap:wrap; gap:clamp(10px, 3vw, 24px);
+  justify-content:center; margin:0 auto 12px; max-width:440px;
+}
 .gm-vs{
   position:absolute; top:50%; left:50%; transform:translate(-50%,-50%) rotate(-8deg);
   font-size:20px; opacity:.8; filter:drop-shadow(0 2px 4px rgba(0,0,0,.5));
@@ -1380,7 +1389,10 @@ body.stage-focus .chat-panel{ right:auto; left:14px; }
 /* ----- Dynamite : bouton bâton + états ----- */
 /* Barre dynamite : nettement décollée de la grille (retour 2026-07 — elle
    touchait presque les cases du bas, on croyait viser et on armait). */
-.gm-bomb-bar{ display:flex; gap:10px; justify-content:center; align-items:center; margin-top:22px; min-height:38px; }
+/* Barre dynamite : détachée de la grille (marge un peu plus généreuse pour ne
+   plus paraître "collée" à la dernière rangée) et alignée sur la largeur de la
+   grille. */
+.gm-bomb-bar{ display:flex; gap:10px; justify-content:center; align-items:center; margin:28px auto 4px; min-height:38px; max-width:440px; }
 .gm-bomb-btn{
   padding:9px 20px; border-radius:99px; cursor:pointer;
   font-family:'Bungee'; font-size:13px; color:#fff; letter-spacing:.02em;
