@@ -60,12 +60,18 @@ export function decideBotMove(mine, revealed, { bombAvailable = false, myGold = 
   const { hidden, prob, certain } = probMap(mine, revealed);
   if (hidden.length === 0) return null;
 
-  // ~15 % : coup au jugé (jamais la dynamite au jugé) — nerf 2026-07.
-  if (Math.random() < 0.15) return { type: "dig", idx: hidden[Math.floor(Math.random() * hidden.length)] };
+  // ~26 % : coup au jugé (jamais la dynamite au jugé) — NERF 2026-07 (v2).
+  // Le porteur de projet trouvait le bot "quasiment imbattable" : mesuré par
+  // simulation (voir gm_sim), l'ancien réglage (15 %) perdait déjà 73 % face
+  // à un jeu PARFAIT, mais restait redoutable face à un humain réel qui ne
+  // calcule pas au pourcent près. On monte donc franchement le taux d'erreurs
+  // VISIBLES (coups au hasard + bourdes assumées) : le bot écrase encore un
+  // joueur aléatoire (~100 %) mais un bon joueur le bat largement (~92 %).
+  if (Math.random() < 0.26) return { type: "dig", idx: hidden[Math.floor(Math.random() * hidden.length)] };
 
-  // La dynamite ne lui "vient à l'esprit" que ~80 % des tours : un humain
+  // La dynamite ne lui "vient à l'esprit" que ~65 % des tours : un humain
   // concentré sur ses chiffres oublie régulièrement son bâton dans le sac.
-  if (bombAvailable && Math.random() < 0.8) {
+  if (bombAvailable && Math.random() < 0.65) {
     // Meilleur carré 3×3 par espérance de pépites.
     let bestIdx = -1, bestExp = 0;
     for (const i of hidden) {
@@ -75,24 +81,35 @@ export function decideBotMove(mine, revealed, { bombAvailable = false, myGold = 
     }
     const oppAboutToWin = oppGold >= GM_WIN_AT - 2;
     const canFinish = GM_WIN_AT - myGold <= Math.floor(bestExp);
-    // Seuil relevé 2 -> 2.4 (nerf) : il ne dynamite plus au premier carré
-    // "correct", il attend un vrai filon.
-    if (bestIdx !== -1 && (bestExp >= 2.4 || oppAboutToWin || canFinish)) {
+    // Seuil relevé 2.4 -> 2.8 (nerf v2) : il ne dynamite plus qu'au VRAI
+    // filon, sauf coup décisif/défensif.
+    if (bestIdx !== -1 && (bestExp >= 2.8 || oppAboutToWin || canFinish)) {
       return { type: "bomb", idx: bestIdx };
     }
   }
 
-  // Contraintes certaines : jouées ~3 fois sur 4 seulement (nerf) — la
-  // lecture de grille du bot n'est plus infaillible, comme un joueur qui ne
-  // repère pas TOUTES les déductions disponibles.
-  if (certain.length > 0 && Math.random() < 0.75) {
+  // Contraintes certaines : jouées seulement ~55 % du temps (nerf v2) — le
+  // bot rate désormais souvent une déduction pourtant sûre, comme un joueur
+  // qui ne voit pas TOUT ce que la grille lui souffle.
+  if (certain.length > 0 && Math.random() < 0.55) {
     return { type: "dig", idx: certain[Math.floor(Math.random() * certain.length)] };
   }
 
   let best = -1;
   for (const i of hidden) if (prob[i] > best) best = prob[i];
-  // Fenêtre élargie (>= 85 % de la meilleure proba, nerf) : le bot joue
-  // "dans la bonne zone" plutôt que LA case optimale au pourcent près.
-  const bestCells = hidden.filter(i => prob[i] >= best * 0.85 - 1e-9);
+
+  // BOURDE assumée (~12 %, nerf v2) : au lieu de viser la bonne zone, le bot
+  // pioche franchement dans les cases les MOINS probables — l'erreur bien
+  // visible que réclamait le porteur de projet (il "creuse à côté").
+  if (Math.random() < 0.12) {
+    let worst = Infinity;
+    for (const i of hidden) if (prob[i] < worst) worst = prob[i];
+    const badCells = hidden.filter(i => prob[i] <= worst + 1e-9);
+    return { type: "dig", idx: badCells[Math.floor(Math.random() * badCells.length)] };
+  }
+
+  // Fenêtre encore élargie (>= 62 % de la meilleure proba, nerf v2) : le bot
+  // joue "à peu près dans la bonne zone", loin du choix optimal au pourcent.
+  const bestCells = hidden.filter(i => prob[i] >= best * 0.62 - 1e-9);
   return { type: "dig", idx: bestCells[Math.floor(Math.random() * bestCells.length)] };
 }

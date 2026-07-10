@@ -642,6 +642,7 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
           className={"gm-grid" + (isMyTurn && !winner ? " myturn" : "") + (bombArmed && isMyTurn ? " bombing" : "") + (bombFx ? " quake" : "") + (showPick ? " pickcur" : "")}
           style={{ "--gm-cols": GM_COLS }}
           onPointerEnter={enterPickCursor}
+          onPointerMove={enterPickCursor}
           onPointerLeave={leavePickCursor}
           onPointerDown={strikePickCursor}
         >
