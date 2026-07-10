@@ -83,6 +83,22 @@ export default function Room() {
   const [hostGone, setHostGone] = useState(false);
   // La colonne rooms.game_state existe-t-elle ? (migration upgrade-002.sql)
   const [hasGameStateCol, setHasGameStateCol] = useState(true);
+  // Mode "agrandi" (demande 2026-07) : pendant une partie, masque l'en-tête
+  // (logo, code, chips de score, fabs secondaires) pour donner TOUTE la
+  // hauteur au jeu — objectif : zéro scroll sur laptop. Préférence mémorisée
+  // dans localStorage, lue côté client uniquement (jamais au premier rendu
+  // serveur, sinon hydratation désaccordée).
+  const [stageFocus, setStageFocus] = useState(false);
+  useEffect(() => {
+    try { setStageFocus(localStorage.getItem("arcardi_stage_focus") === "1"); } catch {}
+  }, []);
+  function toggleStageFocus() {
+    setStageFocus(prev => {
+      const next = !prev;
+      try { localStorage.setItem("arcardi_stage_focus", next ? "1" : "0"); } catch {}
+      return next;
+    });
+  }
 
   useEffect(() => {
     let roomSub, playersSub;
@@ -290,6 +306,15 @@ export default function Room() {
     return () => document.body.classList.remove("tenk-night");
   }, [tenkNight]);
 
+  // Mode agrandi : même mécanique de classe sur <body> que tenk-night —
+  // uniquement pendant une partie (au lobby, l'en-tête reste toujours là).
+  const focusActive = !!(room && me && room.status === "playing" && stageFocus);
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    document.body.classList.toggle("stage-focus", focusActive);
+    return () => document.body.classList.remove("stage-focus");
+  }, [focusActive]);
+
   if (error) return <div className="wrap"><div className="panel"><h1>😕</h1><p className="hint">{error}</p></div></div>;
   if (!room || !me) return <div className="wrap"><p className="muted">…</p></div>;
 
@@ -329,6 +354,29 @@ export default function Room() {
         <span className="leave-room-label">{t("leaveRoom")}</span>
       </button>
 
+      {/* En partie : deux pastilles fixes en haut à droite (demande 2026-07).
+          - "Retour au salon" (hôte) : réduit façon "Quitter le salon" mais en
+            BLANC et toujours EN HAUT — libellé déplié au survol.
+          - Mode agrandi (tout le monde) : masque l'en-tête et les vignettes
+            pour donner toute la hauteur au jeu (voir body.stage-focus). */}
+      {playing && isHost && (
+        <button className="back-room-fab" onClick={backToLobby} title={t("backToLobbyAnytime")} aria-label={t("backLoungeShort")}>
+          <span className="back-room-icon" aria-hidden="true">🎪</span>
+          <span className="back-room-label">{t("backLoungeShort")}</span>
+        </button>
+      )}
+      {playing && (
+        <button
+          className={"stage-zoom-fab" + (stageFocus ? " on" : "")}
+          onClick={toggleStageFocus}
+          title={stageFocus ? t("stageFocusOff") : t("stageFocusOn")}
+          aria-pressed={stageFocus}
+        >
+          <span aria-hidden="true">⛶</span>
+          <span className="stage-zoom-label">{stageFocus ? t("stageFocusOff") : t("stageFocusOn")}</span>
+        </button>
+      )}
+
       {hostGone && (
         // L'hôte est l'arbitre de tous les jeux : sans lui, la partie est
         // réellement figée. On le dit clairement aux invités au lieu de les
@@ -360,11 +408,9 @@ export default function Room() {
                   </span>
                 ))}
               </div>
-              {isHost && (
-                <button className="btn ghost stage-bar-lobby-btn" onClick={backToLobby} title={t("backToLobbyAnytime")}>
-                  {t("backLounge")}
-                </button>
-              )}
+              {/* Le bouton "Retour au salon" a quitté cette barre : il vit
+                  maintenant en pastille fixe en haut à droite (.back-room-fab)
+                  pour libérer la largeur au profit des chips de score. */}
             </div>
 
             <div className="game-stage">

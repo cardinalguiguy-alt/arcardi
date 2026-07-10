@@ -130,9 +130,12 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
   const [countingDown, setCountingDown] = useState(false);
   // Curseur-pioche : visible seulement à la souris (jamais au doigt), il
   // suit le pointeur au-dessus de la grille et "frappe" au clic (l'animation
-  // est rejouée via classList, voir strikePickCursor).
+  // est rejouée via classList, voir strikePickCursor). Deux éléments : le
+  // WRAPPER est déplacé en translate3d (couche GPU, zéro layout — correctif
+  // lag 2026-07), la pioche elle-même porte rotation + animation de frappe.
   const [pickCursor, setPickCursor] = useState(false);
-  const pickRef = useRef(null);
+  const pickRef = useRef(null);    // wrapper : position (translate3d)
+  const pickAxeRef = useRef(null); // pioche : frappe (classe .strike)
   const gridRef = useRef(null);
 
   const channelRef = useRef(null);
@@ -454,17 +457,19 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
   // La grosse pioche remplace la flèche au-dessus de la grille et FRAPPE
   // vers le bas au clic (demande 2026-07). Position mise à jour en direct
   // sur l'élément (jamais par setState : un re-rendu React par mousemove
-  // ferait ramer la grille), animation de frappe rejouée en retirant puis
-  // reposant la classe .strike (reflow forcé entre les deux). Les pointeurs
-  // tactiles sont ignorés : au doigt, pas de curseur — rien ne change.
+  // ferait ramer la grille) et en translate3d sur un wrapper dédié —
+  // correctif lag 2026-07 : écrire left/top invalidait le layout à chaque
+  // mousemove, le curseur traînait derrière la souris ; une translation
+  // composée sur couche GPU (will-change) colle au pointeur. L'animation de
+  // frappe est rejouée en retirant/reposant .strike (reflow forcé entre les
+  // deux). Les pointeurs tactiles sont ignorés : au doigt, rien ne change.
   function movePickCursor(e) {
     if (e.pointerType && e.pointerType !== "mouse") return;
     if (!pickCursor) setPickCursor(true);
     const el = pickRef.current, grid = gridRef.current;
     if (!el || !grid) return;
     const r = grid.getBoundingClientRect();
-    el.style.left = (e.clientX - r.left) + "px";
-    el.style.top = (e.clientY - r.top) + "px";
+    el.style.transform = "translate3d(" + (e.clientX - r.left) + "px," + (e.clientY - r.top) + "px,0)";
   }
   function enterPickCursor(e) {
     if (e.pointerType && e.pointerType !== "mouse") return;
@@ -474,7 +479,7 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
   function strikePickCursor(e) {
     if (e.pointerType && e.pointerType !== "mouse") return;
     movePickCursor(e);
-    const el = pickRef.current;
+    const el = pickAxeRef.current;
     if (!el) return;
     el.classList.remove("strike");
     void el.offsetWidth; // reflow : l'animation repart de zéro à chaque coup
@@ -631,11 +636,14 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
             </span>
           )}
 
-          {/* Curseur-pioche : suit la souris (voir movePickCursor), frappe
-              vers le bas au clic. Devient 🧨 quand la dynamite est armée. */}
+          {/* Curseur-pioche : le wrapper suit la souris (translate3d, voir
+              movePickCursor), la pioche frappe vers le bas au clic.
+              Devient 🧨 quand la dynamite est armée. */}
           {showPick && (
-            <span ref={pickRef} className="gm-pick-cursor" aria-hidden="true">
-              {bombArmed && myBombAvailable ? "🧨" : "⛏️"}
+            <span ref={pickRef} className="gm-pick-wrap" aria-hidden="true">
+              <span ref={pickAxeRef} className="gm-pick-cursor">
+                {bombArmed && myBombAvailable ? "🧨" : "⛏️"}
+              </span>
             </span>
           )}
         </div>
