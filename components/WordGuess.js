@@ -269,11 +269,18 @@ export default function WordGuess({ room, me, isHost, players, onFinish, t, lang
                     const shown = g && i < revealedCount;
                     return (
                       <div key={i} style={{
-                        width: 56, height: 56, display: "flex", alignItems: "center", justifyContent: "center",
+                        /* Taille fluide (audit mobile 2026-07) : à 56px fixes, les 5
+                           tuiles + les écarts (304px) dépassaient la largeur interne du
+                           panneau sur iPhone/Android étroits — le rétrécissement flex ne
+                           touchait que la LARGEUR, laissant des tuiles rectangulaires
+                           écrasées. clamp + aspect-ratio = toujours carrées, sans
+                           jamais déborder. */
+                        width: "clamp(38px, 12vw, 56px)", aspectRatio: "1 / 1", flex: "0 1 auto",
+                        display: "flex", alignItems: "center", justifyContent: "center",
                         border: `2.5px solid ${shown ? COLORS[g.pattern[i]] : "var(--line)"}`,
                         background: shown ? COLORS[g.pattern[i]] : "rgba(255,255,255,.03)",
                         color: shown ? "#12142A" : "var(--ink)",
-                        borderRadius: 10, fontFamily: "'Space Mono'", fontWeight: 700, fontSize: 24,
+                        borderRadius: 10, fontFamily: "'Space Mono'", fontWeight: 700, fontSize: "clamp(17px, 5vw, 24px)",
                         transition: "transform .22s, background-color .22s, border-color .22s",
                         transform: g && !shown ? "scale(.85) rotateX(40deg)" : "scale(1) rotateX(0deg)"
                       }}>{l.trim()}</div>
@@ -299,7 +306,12 @@ export default function WordGuess({ room, me, isHost, players, onFinish, t, lang
                     return (
                       <button key={l} className={st ? "" : "btn ghost"}
                         style={{
-                          margin: 0, width: 30, padding: "10px 0", fontSize: 13, borderRadius: 8,
+                          /* Largeur fluide (audit mobile 2026-07) : la rangée AZERTY de
+                             10 touches × 30px (+ écarts) réclamait ~345px, plus que la
+                             largeur interne du panneau sur téléphone — les touches se
+                             faisaient écraser à ~24px. clamp répartit proprement. */
+                          margin: 0, flex: "1 1 0", minWidth: 0, maxWidth: 34,
+                          padding: "12px 0", fontSize: 13, borderRadius: 8,
                           background: st ? COLORS[st] : undefined, color: st ? "#12142A" : undefined,
                           fontWeight: st ? 800 : undefined, transition: "background-color .2s"
                         }}

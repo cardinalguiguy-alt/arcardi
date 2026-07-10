@@ -125,6 +125,7 @@ export default function RoomChat({ room, me, t }) {
           <form className="chat-input-row" onSubmit={send}>
             <input
               type="text" value={draft} maxLength={400}
+              autoComplete="off" enterKeyHint="send"
               onChange={e => setDraft(e.target.value)}
               placeholder={t("chatPlaceholder")}
             />

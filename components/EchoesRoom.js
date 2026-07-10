@@ -169,6 +169,7 @@ function LockInput({ sequence, onSubmit, t }) {
       <form onSubmit={e => { e.preventDefault(); onSubmit(code); setCode(""); }}
         style={{ display: "flex", gap: 10, alignItems: "center", justifyContent: "center" }}>
         <input type="text" inputMode="numeric" maxLength={4} value={code}
+          autoComplete="off" autoCorrect="off" spellCheck={false} enterKeyHint="go"
           onChange={e => setCode(e.target.value.replace(/\D/g, ""))}
           style={{ textAlign: "center", fontFamily: "'Space Mono'", fontSize: 22, letterSpacing: "0.3em", width: 140 }}
           placeholder="••••" />
@@ -383,7 +384,12 @@ function CipherEntry({ onSubmit, t, length }) {
   return (
     <form onSubmit={e => { e.preventDefault(); onSubmit(word); setWord(""); }}
       style={{ display: "flex", gap: 10, alignItems: "center", justifyContent: "center", marginTop: 10 }}>
+      {/* Audit mobile 2026-07 : l'autocorrection iOS transformait le mot
+          décodé en cours de frappe (ex. un mot de code inventé "corrigé"
+          en mot du dictionnaire) — coupée, avec majuscules au clavier. */}
       <input type="text" maxLength={length} value={word}
+        autoCapitalize="characters" autoCorrect="off" spellCheck={false}
+        autoComplete="off" enterKeyHint="go"
         onChange={e => setWord(e.target.value.toUpperCase().replace(/[^A-Z]/g, ""))}
         style={{ textAlign: "center", fontFamily: "'Space Mono'", fontSize: 20, letterSpacing: "0.22em", width: 160 }}
         placeholder={"?".repeat(length)} />

@@ -419,7 +419,11 @@ export default function Worldle({ room, me, isHost, players, onFinish, t, lang }
 
           {!done && !finished && (
             <div style={{ position: "relative", marginBottom: 16 }}>
+              {/* Audit mobile 2026-07 : l'autocorrection iOS remplaçait les noms de
+                  pays en cours de frappe et ses suggestions système faisaient
+                  doublon avec la liste d'autocomplétion maison juste en dessous. */}
               <input ref={inputRef} type="text" placeholder={t("worldlePlaceholder")} value={query}
+                autoCorrect="off" spellCheck={false} autoComplete="off" enterKeyHint="done"
                 onChange={e => { setQuery(e.target.value); setHighlight(0); }}
                 onKeyDown={e => {
                   if (e.key === "ArrowDown") { e.preventDefault(); setHighlight(h => Math.min(h + 1, suggestions.length - 1)); }

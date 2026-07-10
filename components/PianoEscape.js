@@ -396,6 +396,7 @@ function Stage5({ t, onSolve, showHint, setShowHint, feedback, setFeedback }) {
       <form onSubmit={tryCode} style={{ display: "flex", gap: 10, alignItems: "center", animation: wrongShake ? "shakeRow .4s" : "none" }}>
         <input
           type="text" inputMode="numeric" maxLength={4} value={code}
+          autoComplete="off" autoCorrect="off" spellCheck={false} enterKeyHint="go"
           onChange={e => setCode(e.target.value.replace(/\D/g, ""))}
           style={{ textAlign: "center", fontFamily: "'Space Mono'", fontSize: 24, letterSpacing: "0.35em", width: 160 }}
           placeholder="• • • •"

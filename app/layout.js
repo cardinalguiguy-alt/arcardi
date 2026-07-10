@@ -16,6 +16,10 @@ export const metadata = {
 export const viewport = {
   width: "device-width",
   initialScale: 1,
+  // Barre système (statut iOS Safari, barre d'adresse Chrome Android)
+  // teintée aux couleurs du site : sans ceci elle reste BLANCHE au-dessus
+  // du fond brun sombre — l'un des défauts les plus visibles sur mobile.
+  themeColor: "#2B1B12",
   // viewport-fit=cover : nécessaire pour que env(safe-area-inset-*) soit
   // renseigné sur iPhone (encoche / barre home) — les pastilles fixées en
   // bas (code du salon, chat) s'en servent pour ne pas être recouvertes.

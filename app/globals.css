@@ -23,6 +23,18 @@
 }
 *{box-sizing:border-box; margin:0; padding:0;}
 html,body{height:100%;}
+/* ===== Tactile (audit iOS/Android 2026-07) =====
+   - tap-highlight : supprime le rectangle gris/bleu que Safari iOS et
+     Chrome Android flashent sur CHAQUE tap d'élément cliquable — très
+     visible (et moche) sur les cartes, dés et claviers du site.
+   - touch-action:manipulation : supprime le délai/zoom du DOUBLE-TAP sur
+     les taps rapides répétés (clavier du Mot Mystère, dés, cartes) — sans
+     ceci, iOS Safari zoome la page quand on enchaîne deux taps rapides au
+     même endroit. Le pinch-zoom volontaire reste possible.
+   Appliqué aux boutons + aux rares éléments cliquables qui ne sont pas des
+   <button> (pions des Petits Chevaux, zones cliquables de Diapason). */
+html{ -webkit-tap-highlight-color:transparent; }
+button, .ludo-token, .dia-hotspot{ touch-action:manipulation; }
 body{
   font-family:'Outfit',sans-serif; color:var(--ink); background:var(--bg);
   background-image:
@@ -1479,7 +1491,10 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
    lounge occupe toute la hauteur visible, la zone centrale prend le reste
    sous le logo et aligne les encarts en son milieu. min-height:0 sur les
    enfants flex pour ne rien casser sur petit écran. */
-.lounge-wrap{ min-height:100dvh; display:flex; flex-direction:column; }
+/* min-height:100vh d'abord = repli pour les navigateurs sans unité dvh
+   (iOS < 15.4) — sinon la propriété entière est ignorée et le centrage
+   vertical du lounge disparaît silencieusement. */
+.lounge-wrap{ min-height:100vh; min-height:100dvh; display:flex; flex-direction:column; }
 .lounge-center{ flex:1; display:flex; align-items:center; justify-content:center; min-height:0; padding:16px 0; }
 .lounge-panels{ display:flex; flex-wrap:wrap; gap:28px; position:relative; z-index:1; justify-content:center; width:100%; max-width:1100px; margin:0 auto; }
 .lounge-panels .panel{ flex:1 1 360px; max-width:480px; }
@@ -1538,12 +1553,29 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
    effets de survol quand il n'y a pas de souris. */
 @media (hover: none){
   .btn:hover, .game-card:hover, .door-play-btn:hover, .curtain-play-btn:hover,
-  .flash-play-btn:hover, .chromatik-card.clickable:hover, .echo-memory-tile.pickable:hover{
+  .flash-play-btn:hover, .video-play-btn:hover,
+  .chromatik-card.clickable:hover, .echo-memory-tile.pickable:hover{
     transform:none; filter:none;
   }
   .yz-die.clickable:hover{ --hscale:1; }
   .chromatik-color-btn:hover{ transform:none; }
   .chromatik-pile.draw:hover .chromatik-card{ transform:none; }
+  /* Audit iOS/Android 2026-07 : mêmes symptômes de "hover collant" après un
+     tap sur les éléments ci-dessous — le dé/bouton restait levé, éclairci ou
+     décalé jusqu'au tap suivant. Tout est neutralisé au doigt. */
+  .tenk-die.clickable:hover,
+  .tenk-btn-roll:hover:not(:disabled), .tenk-btn-bank:hover:not(:disabled),
+  .tenk-btn-keep:hover:not(:disabled), .tenk-combo-row:hover:not(:disabled),
+  .chromatik-uno-btn:hover, .quiz-bonus-btn:hover,
+  .rules-info-btn:hover, .settings-gear-btn:hover,
+  .settings-avatar-btn:hover:not(:disabled), .settings-track-row:hover,
+  .echo-decor-object:hover{
+    transform:none; filter:none;
+  }
+  .tenk-combo-row:hover:not(:disabled){ border-color:rgba(79,209,255,.18); }
+  .echo-decor-object:hover{ box-shadow:none; }
+  /* L'écrou des Paramètres restait en rotation infinie après un tap. */
+  .settings-gear-btn:hover .gear-icon{ animation:none; }
 }
 
 /* ===== Président : cartes à jouer classiques + tapis =====

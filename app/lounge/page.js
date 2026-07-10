@@ -94,9 +94,16 @@ export default function Lounge() {
           <h1>{t("joinNight")}</h1>
           <p className="hint">{t("joinNightHint")}</p>
           <form onSubmit={joinRoom}>
+            {/* Audit mobile 2026-07 : sans les attributs autoCapitalize/
+                autoCorrect/spellCheck/autoComplete, iOS "corrigeait"
+                silencieusement le code de salon (autocorrection sur une
+                suite de lettres qui ressemble à un mot) et affichait des
+                suggestions inutiles au-dessus du clavier. */}
             <input
               type="text" value={joinCode} onChange={e => setJoinCode(e.target.value)}
               placeholder="7F2K9Q" maxLength={6}
+              autoCapitalize="characters" autoCorrect="off" spellCheck={false}
+              autoComplete="off" enterKeyHint="go"
               style={{ textAlign: "center", fontFamily: "'Space Mono'", fontSize: 20, letterSpacing: "0.15em", textTransform: "uppercase" }}
             />
             {error && <p className="err">{error}</p>}
