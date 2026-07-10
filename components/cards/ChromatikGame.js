@@ -321,7 +321,54 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
   }
 
   // ----- Arbitrage (hôte uniquement) -----
-  function broadcastNewState(next) {
+
+  // Pioche FORCÉE d'une pile de pénalité +2/+4 (correctif demandé) : dès
+  // qu'un état sur le point d'être diffusé cible un siège qui n'a
+  // RIGOUREUSEMENT AUCUNE carte pour contrer (hasStackable), il n'y a plus
+  // aucune décision à prendre — la pioche du total accumulé est donc
+  // OBLIGATOIRE et AUTOMATIQUE, réglée ici immédiatement plutôt que
+  // d'attendre un clic sur la pioche ou l'échéance du minuteur de tour.
+  // S'il PEUT contrer, on ne touche à rien : la main lui revient (contrer
+  // ou piocher volontairement restent tous les deux légaux, voir
+  // hostApplyMove).
+  //
+  // Précision (correctif demandé) : si cette pioche automatique lui donne
+  // justement une carte capable de contrer, la dette est payée (pile
+  // soldée) mais son tour NE passe PAS automatiquement au suivant — le
+  // dessus de la défausse est toujours le +2/+4 en question, donc
+  // canPlay() la reconnaît comme un coup normal légal : on le laisse
+  // simplement continuer son tour comme n'importe quel tour normal (jouer
+  // cette carte — ce qui ouvre une TOUTE NOUVELLE pile, la dette d'avant
+  // étant déjà payée — ou "passer" via la pioche volontaire habituelle,
+  // aucun bouton dédié nécessaire). Seulement s'il n'a TOUJOURS rien après
+  // avoir pioché, le tour avance réellement au siège suivant.
+  // À distinguer du cas où un joueur POUVAIT contrer mais a choisi de
+  // piocher volontairement (bouton pioche pendant pendingDraw, voir action
+  // "draw" dans hostApplyMove) : dans CE cas-là, le tour passe toujours au
+  // suivant, même si la pioche lui redonne de quoi contrer — c'est un choix
+  // assumé de passer, pas une pioche forcée, donc jamais géré ici.
+  function settleForcedDraw(next) {
+    if (!next || !next.pendingDraw || !next.seats || !next.seats.length) return next;
+    const { kind, count, seatId } = next.pendingDraw;
+    const hand = (next.hands && next.hands[seatId]) || [];
+    if (hasStackable(hand, kind)) return next;
+    const res = drawCards(next.deck, next.discard, count);
+    const newHand = hand.concat(res.cards);
+    const hands = { ...next.hands, [seatId]: newHand };
+    const targetIdx = next.seats.findIndex(seat => seat.id === seatId);
+    const turnIdx = hasStackable(newHand, kind)
+      ? next.turnIdx // pioche forcée mais désormais capable de contrer : son tour continue
+      : nextSeatIdx(targetIdx, next.direction, next.seats.length); // toujours rien : le tour avance
+    return {
+      ...next, hands, deck: res.deck, discard: res.discard, turnIdx,
+      pendingDraw: null, pendingDrawnCard: null,
+      unoCalled: { ...(next.unoCalled || {}), [seatId]: false },
+      lastAction: { type: "draw", seatId, count, wasPenalty: true },
+    };
+  }
+
+  function broadcastNewState(rawNext) {
+    const next = settleForcedDraw(rawNext);
     const tm = computeTurnDeadline(next);
     turnMetaRef.current = tm;
     channelRef.current.send({ type: "broadcast", event: "state", payload: { ...next, turnDeadline: tm.deadline, turnDeadlineSeat: tm.seatId } });
