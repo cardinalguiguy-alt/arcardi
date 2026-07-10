@@ -656,10 +656,26 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 .chromatik-uno-warn{ animation:chromatikUnoWarnPulse 1s ease-in-out infinite; }
 @keyframes chromatikUnoWarnPulse{ 0%,100%{ opacity:1; transform:scale(1); } 50%{ opacity:.5; transform:scale(1.25); } }
 
-.chromatik-table{ position:relative; display:flex; align-items:center; justify-content:center; gap:28px; margin:10px 0 16px; }
+/* Écart pioche/défausse (audit jouabilité 2026-07) : 28px -> jusqu'à 52px
+   sur écran large, jamais moins de 32px sur mobile — les deux tas doivent
+   se lire comme une vraie table, pas des cartes collées l'une à l'autre. */
+.chromatik-table{ position:relative; display:flex; align-items:center; justify-content:center; gap:clamp(32px, 9vw, 52px); margin:10px 0 16px; }
 .chromatik-pile{ position:relative; }
 .chromatik-pile.draw{ cursor:pointer; }
 .chromatik-pile.draw:hover .chromatik-card{ transform:translateY(-3px); }
+/* Surbrillance de la pioche (audit jouabilité 2026-07) : s'allume quand le
+   joueur actif n'a plus le choix — aucune carte jouable en main, ou pile de
+   pénalité +2/+4 en attente qu'il ne peut pas contrer — pour signaler sans
+   ambiguïté "c'est ici qu'il faut cliquer" (voir mustDrawPile dans
+   ChromatikGame.js). */
+.chromatik-pile.draw.urge .chromatik-card{
+  animation:chromatikDrawUrge 1.1s ease-in-out infinite;
+  box-shadow:0 4px 0 rgba(0,0,0,.35), 0 0 16px 3px rgba(255,209,102,.55);
+}
+@keyframes chromatikDrawUrge{
+  0%,100%{ transform:translateY(0); }
+  50%{ transform:translateY(-4px); }
+}
 .pile-count{
   position:absolute; bottom:-8px; right:-8px; background:var(--card2); border:1.5px solid var(--line);
   border-radius:99px; font-family:'Space Mono'; font-size:11px; font-weight:700; padding:2px 7px;
@@ -693,11 +709,37 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
   0%{ transform:translate(0,0) rotate(0deg) scale(1); opacity:1; }
   100%{ transform:translate(var(--dx,0px), -150px) rotate(var(--rot,-10deg)) scale(.8); opacity:0; }
 }
-.chromatik-discard{ position:relative; display:flex; align-items:center; }
+/* Pile de défausse (audit jouabilité 2026-07) : les 3-4 dernières cartes
+   posées restent visibles, légèrement décalées/tournées (décalage dérivé
+   de l'id de chaque carte via discardCardOffset() dans ChromatikGame.js —
+   STABLE d'un rendu à l'autre, jamais retiré au hasard), la plus récente
+   bien lisible au-dessus — effet de vraie pile posée sur la table plutôt
+   qu'une carte unique flottante. Dimensions calées sur .size-lg pour que
+   les cartes superposées (position:absolute) s'alignent exactement. */
+.chromatik-discard{ position:relative; width:72px; height:104px; }
+.chromatik-discard .chromatik-card{ position:absolute; top:0; left:0; }
 .chromatik-active-color{
   position:absolute; bottom:-8px; left:-8px; width:20px; height:20px; border-radius:50%;
-  border:3px solid var(--bg); box-shadow:0 0 0 1.5px var(--line);
+  border:3px solid var(--bg); box-shadow:0 0 0 1.5px var(--line); z-index:10;
 }
+
+/* Bulle "crie UNO" (audit jouabilité 2026-07) : overlay centré sur la
+   table, visible de TOUS (dont les spectateurs) pendant quelques secondes
+   — voir le listener call_uno dans ChromatikGame.js. Pulse zoom avant/
+   arrière pour attirer l'œil, jamais bloquant (pointer-events:none). */
+.chromatik-uno-shout{
+  position:absolute; inset:0; z-index:35; display:flex; align-items:center; justify-content:center;
+  pointer-events:none; animation:chromatikUnoShoutLife 2.2s ease both;
+}
+.chromatik-uno-shout-text{
+  font-family:'Bungee'; font-size:clamp(15px, 4.5vw, 22px); text-align:center; line-height:1.3;
+  max-width:min(320px, 86vw); color:#241c14; background:linear-gradient(145deg, #ffe9a8, #f2c94c);
+  padding:10px 20px; border-radius:20px; border:3px solid #e8c357;
+  box-shadow:0 6px 0 rgba(0,0,0,.3), 0 0 26px rgba(232,195,87,.6);
+  animation:chromatikUnoShoutPulse 1s ease-in-out infinite;
+}
+@keyframes chromatikUnoShoutLife{ 0%{ opacity:0; } 10%{ opacity:1; } 82%{ opacity:1; } 100%{ opacity:0; } }
+@keyframes chromatikUnoShoutPulse{ 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.1); } }
 
 .chromatik-hand{ display:flex; flex-wrap:wrap; gap:6px; justify-content:center; margin-top:14px; }
 
@@ -806,6 +848,9 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
   .chromatik-drawfx-card{ animation:none; opacity:0; }
   .chromatik-discard .chromatik-card, .chromatik-hand .chromatik-card{ animation:none; }
   .chromatik-uno-btn{ animation:none; }
+  .chromatik-pile.draw.urge .chromatik-card{ animation:none; }
+  .chromatik-uno-shout{ animation:none; opacity:1; }
+  .chromatik-uno-shout-text{ animation:none; }
 }
 
 /* ===== YAHTZEE ===== */

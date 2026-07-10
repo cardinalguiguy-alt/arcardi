@@ -42,3 +42,18 @@ export function decideBotMove(hand, topCard, activeColor, pending) {
   const chosenColor = bestColorFor(remaining.length > 0 ? remaining : hand);
   return { type: "play", cardId: chosen.id, chosenColor };
 }
+
+// ==========================================================================
+// Suite après une PIOCHE VOLONTAIRE (jamais après une pile de pénalité
+// +2/+4 en attente, qui ne rend jamais ses cartes immédiatement jouables —
+// voir hostApplyMove dans ChromatikGame.js) : si la carte piochée est
+// jouable, comportement par défaut demandé pour les bots — la jouer tout
+// de suite plutôt que la garder en main sans raison.
+// ==========================================================================
+export function decideBotDrawFollowUp(drawnCard, topCard, activeColor, restOfHand) {
+  if (!drawnCard || !canPlay(drawnCard, topCard, activeColor)) return { play: false };
+  const needsColor = drawnCard.kind === "wild" || drawnCard.kind === "wild4";
+  if (!needsColor) return { play: true };
+  const chosenColor = bestColorFor(restOfHand.length > 0 ? restOfHand : [drawnCard]);
+  return { play: true, chosenColor };
+}

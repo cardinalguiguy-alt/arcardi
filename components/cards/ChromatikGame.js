@@ -8,7 +8,7 @@ import {
   COLORS, freshDeck, shuffle, canPlay, hasPlayable, drawCards, nextSeatIdx,
   canStackOn, hasStackable, handPenaltyValue, pointsForPlace,
 } from "./deck";
-import { decideBotMove } from "./botLogic";
+import { decideBotMove, decideBotDrawFollowUp } from "./botLogic";
 
 /* ==========================================================================
    CHROMATIK — jeu de cartes original (pas UNO : mêmes racines de mécanique
@@ -74,6 +74,22 @@ function makeBotSeat(n) {
   return { id: "bot" + n, username: "Bot " + n, avatar: BOT_AVATARS[(n - 1) % BOT_AVATARS.length], isBot: true };
 }
 
+// Décalage/rotation de la pile de défausse (fix jouabilité 2026-07) : dérivé
+// de l'id de la carte par un petit hash déterministe — STABLE d'un rendu à
+// l'autre (jamais retiré au hasard à chaque render, sinon les cartes déjà
+// posées "sauteraient" visuellement à chaque mise à jour d'état reçue par
+// broadcast). Donne l'effet d'une vraie pile posée sur la table.
+function discardCardOffset(cardId) {
+  let h = 0;
+  for (let i = 0; i < cardId.length; i++) h = (h * 31 + cardId.charCodeAt(i)) | 0;
+  h = Math.abs(h);
+  return {
+    angle: (h % 17) - 8,      // -8..+8deg
+    dx: ((h >> 4) % 13) - 6,  // -6..+6px
+    dy: ((h >> 8) % 9) - 4,   // -4..+4px
+  };
+}
+
 // Distribue UNE manche (la première comme les suivantes) : cartes fraîches
 // et mélangées, mais `matchScores`/`roundIndex`/`roundTarget` sont fournis
 // par l'appelant (startWith pour la manche 1, nextRound pour la suite) —
@@ -92,7 +108,7 @@ function dealRoundState(seats, matchInfo) {
   const activeColor = first.color || COLORS[Math.floor(Math.random() * COLORS.length)];
   return {
     seats, hands, deck, discard, activeColor, turnIdx: 0, direction: 1, winner: null, lastAction: null,
-    pendingDraw: null, unoCalled: {}, roundScores: {},
+    pendingDraw: null, pendingDrawnCard: null, unoCalled: {}, roundScores: {},
     roundIndex: matchInfo.roundIndex, roundTarget: matchInfo.roundTarget, matchScores: matchInfo.matchScores,
   };
 }
@@ -112,6 +128,10 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
   const [winner, setWinner] = useState(null); // vainqueur de LA MANCHE en cours (jamais celui du match, voir matchOver)
   const [lastAction, setLastAction] = useState(null);
   const [pendingDraw, setPendingDraw] = useState(null); // {kind:"draw2"|"wild4", count, seatId} | null
+  // Pioche volontaire dont la carte piochée est jouable (fix jouabilité
+  // 2026-07) : le tour ne change PAS tant que ce siège n'a pas choisi de la
+  // jouer immédiatement ou de la garder (voir action "keep" côté hôte).
+  const [pendingDrawnCard, setPendingDrawnCard] = useState(null); // { seatId, cardId } | null
   const [unoCalled, setUnoCalled] = useState({});
   const [roundIndex, setRoundIndex] = useState(1);
   const [matchScores, setMatchScores] = useState({}); // seatId -> score cumulé (manches précédentes incluses)
@@ -129,6 +149,11 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
   // chaque client, jamais synchronisée en tant que telle — chacun la
   // déclenche de son côté en réaction au MÊME lastAction reçu par broadcast.
   const [drawFx, setDrawFx] = useState(null); // { seatId, count, toMe, key } | null
+  // Bulle "crie UNO" (fix jouabilité 2026-07) : purement locale à chaque
+  // client, affichée pour TOUT LE MONDE (dont les spectateurs) dès qu'un
+  // événement call_uno est reçu — indépendante de la mise à jour d'état
+  // (unoCalled), qui reste réservée à l'hôte.
+  const [unoBubble, setUnoBubble] = useState(null); // { seatId, key } | null
 
   const channelRef = useRef(null);
   const stateRef = useRef(null);
@@ -141,20 +166,22 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
   const turnMetaRef = useRef({ deadline: null, seatId: null });
   const drawFxKeyRef = useRef(0);
   const drawFxTimerRef = useRef(null);
+  const unoBubbleKeyRef = useRef(0);
+  const unoBubbleTimerRef = useRef(null);
 
   useEffect(() => {
     stateRef.current = {
       seats, hands, deck, discard, activeColor, turnIdx, direction, winner,
-      pendingDraw, unoCalled, roundIndex, roundTarget, matchScores, roundScores,
+      pendingDraw, pendingDrawnCard, unoCalled, roundIndex, roundTarget, matchScores, roundScores,
     };
   }, [seats, hands, deck, discard, activeColor, turnIdx, direction, winner,
-      pendingDraw, unoCalled, roundIndex, roundTarget, matchScores, roundScores]);
+      pendingDraw, pendingDrawnCard, unoCalled, roundIndex, roundTarget, matchScores, roundScores]);
 
   function applyLocalState(s, extra = {}) {
     setSeats(s.seats); setHands(s.hands); setDeck(s.deck); setDiscard(s.discard);
     setActiveColor(s.activeColor); setTurnIdx(s.turnIdx); setDirection(s.direction);
     setWinner(s.winner || null); setLastAction(s.lastAction || null);
-    setPendingDraw(s.pendingDraw || null); setUnoCalled(s.unoCalled || {});
+    setPendingDraw(s.pendingDraw || null); setPendingDrawnCard(s.pendingDrawnCard || null); setUnoCalled(s.unoCalled || {});
     setRoundIndex(s.roundIndex || 1); setMatchScores(s.matchScores || {}); setRoundScores(s.roundScores || {});
     setTurnDeadline(s.turnDeadline || null); setTurnDeadlineSeat(s.turnDeadlineSeat || null);
     if (extra.resetGain) { setMyGain(0); savedResultRef.current = false; }
@@ -218,6 +245,16 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
     });
 
     ch.on("broadcast", { event: "call_uno" }, ({ payload }) => {
+      // Bulle "crie UNO" : affichage LOCAL pour TOUS les clients, y compris
+      // les spectateurs — fusionnée dans le même callback que la résolution
+      // d'état plutôt qu'un second .on() séparé, pour ne dépendre d'aucune
+      // hypothèse sur le nombre d'écouteurs qu'un canal Supabase accepte
+      // pour un même événement. Seule hostApplyUnoCall (état de partie)
+      // reste réservée à l'hôte ci-dessous.
+      unoBubbleKeyRef.current += 1;
+      setUnoBubble({ seatId: payload.seatId, key: unoBubbleKeyRef.current });
+      clearTimeout(unoBubbleTimerRef.current);
+      unoBubbleTimerRef.current = setTimeout(() => setUnoBubble(null), 2200);
       if (!isHost) return;
       hostApplyUnoCall(payload.seatId);
     });
@@ -241,6 +278,7 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
       clearTimeout(botTimer.current);
       clearTimeout(turnTimeoutRef.current);
       clearTimeout(drawFxTimerRef.current);
+      clearTimeout(unoBubbleTimerRef.current);
       supabase.removeChannel(ch);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -257,13 +295,15 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
     return { deadline: Date.now() + ms, seatId: seat.id };
   }
 
-  // Arme le minuteur qui, si le joueur humain actif ne fait rien, pioche à
-  // sa place à l'échéance — même mécanique que le bouton de pioche : à
-  // Chromatik, il n'existe pas de "passe" distincte, piocher termine
-  // toujours le tour, jouable ou non (et solde une pile de surenchère en
-  // attente s'il y en a une). Chaque dépassement incrémente le compteur de
-  // grillages consécutifs (turnStrikesRef), remis à 0 dès que le joueur
-  // agit de lui-même.
+  // Arme le minuteur qui, si le joueur humain actif ne fait rien, agit à sa
+  // place à l'échéance : pioche à sa place (mécanique historique — à
+  // Chromatik il n'existe pas de "passe" distincte, piocher termine
+  // toujours le tour, jouable ou non), SAUF s'il a déjà une carte piochée
+  // en attente de décision (voir pendingDrawnCard/fix "jouer ou garder"),
+  // auquel cas une pioche de plus serait illégale (voir hostApplyMove) et
+  // bloquerait la partie : l'échéance "garde" alors la carte à sa place.
+  // Chaque dépassement incrémente le compteur de grillages consécutifs
+  // (turnStrikesRef), remis à 0 dès que le joueur agit de lui-même.
   function armHumanTurnTimer() {
     clearTimeout(turnTimeoutRef.current);
     if (!isHost) return;
@@ -275,7 +315,8 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
       if (!s || s.winner) return;
       if (!s.seats[s.turnIdx] || s.seats[s.turnIdx].id !== seatId) return; // le tour a déjà changé
       turnStrikesRef.current[seatId] = (turnStrikesRef.current[seatId] || 0) + 1;
-      hostApplyMove(seatId, { type: "draw" });
+      const awaitingDecision = !!(s.pendingDrawnCard && s.pendingDrawnCard.seatId === seatId);
+      hostApplyMove(seatId, awaitingDecision ? { type: "keep" } : { type: "draw" });
     }, delay);
   }
 
@@ -308,19 +349,169 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
     // seule la résolution de manche (plus bas) les fait évoluer.
     const carry = { roundIndex: s.roundIndex, roundTarget: s.roundTarget, matchScores: s.matchScores };
     const respondingToPending = !!(pd && pd.seatId === seatId);
+    // Pioche volontaire dont la carte est jouable, en attente que CE siège
+    // choisisse de la jouer ou de la garder (voir action "keep" plus bas) —
+    // tant qu'elle est active, aucune nouvelle pioche n'est légale, et un
+    // "play" n'est légal QUE sur cette carte précise.
+    const drawDecision = s.pendingDrawnCard && s.pendingDrawnCard.seatId === seatId ? s.pendingDrawnCard : null;
+
+    // Résout la conséquence d'une carte JOUÉE (retirée de `activeHand`, qui
+    // peut être la main d'avant tour normale OU la main incluant la carte
+    // tout juste piochée) : légalité déjà vérifiée par l'appelant. Centralisé
+    // ici pour être appelé aussi bien depuis un coup "play" classique que
+    // depuis l'auto-jeu d'un bot sur sa propre carte piochée (voir plus bas)
+    // — jamais dupliqué, et jamais via un second hostApplyMove imbriqué (qui
+    // lirait un stateRef pas encore à jour, toujours l'état d'AVANT ce coup).
+    function resolvePlayedCard(activeHand, card, chosenColor) {
+      const idx = activeHand.findIndex(c => c.id === card.id);
+      if (idx === -1) return null;
+      const newHand = activeHand.slice(0, idx).concat(activeHand.slice(idx + 1));
+      h[seatId] = newHand;
+      disc = disc.concat([card]);
+      const isWild = card.kind === "wild" || card.kind === "wild4";
+      ac = isWild ? (chosenColor || ac) : card.color;
+
+      // Toute carte jouée "consomme" une éventuelle annonce UNO déjà faite
+      // (elle ne vaut que pour LA carte annoncée) ; un bot annonce tout seul
+      // dès qu'il tombe pile à 1 carte (pas d'interface pour lui).
+      let unoCalledNext = { ...(s.unoCalled || {}), [seatId]: false };
+      if (currentSeat.isBot && newHand.length === 1) unoCalledNext[seatId] = true;
+
+      if (newHand.length === 0) {
+        const hadCalledUno = !!(s.unoCalled && s.unoCalled[seatId]);
+        if (!hadCalledUno) {
+          // Oubli d'annonce UNO : pioche-pénalité de 2, LA MANCHE CONTINUE
+          // (il rejoue avec 2 cartes au lieu de 0 — jamais une victoire).
+          const res2 = drawCards(d, disc, 2);
+          h[seatId] = res2.cards;
+          return {
+            ...carry, seats: s.seats, hands: h, deck: res2.deck, discard: res2.discard, activeColor: ac,
+            turnIdx: nextSeatIdx(ti, dir, s.seats.length), direction: dir, winner: null,
+            pendingDraw: null, pendingDrawnCard: null, unoCalled: unoCalledNext,
+            lastAction: { type: "unoPenalty", seatId, card },
+          };
+        }
+        // Victoire de LA MANCHE : chaque siège ajoute la valeur de sa main
+        // restante à son score de partie (le vainqueur ajoute 0, sa main
+        // est déjà vide dans `h`).
+        const roundScores = {};
+        const matchScores = { ...(s.matchScores || {}) };
+        s.seats.forEach(seat => {
+          const val = handPenaltyValue(h[seat.id] || []);
+          roundScores[seat.id] = val;
+          matchScores[seat.id] = (matchScores[seat.id] || 0) + val;
+        });
+        return {
+          seats: s.seats, hands: h, deck: d, discard: disc, activeColor: ac,
+          turnIdx: ti, direction: dir, winner: seatId, pendingDraw: null, pendingDrawnCard: null, unoCalled: unoCalledNext,
+          roundIndex: s.roundIndex, roundTarget: s.roundTarget, roundScores, matchScores,
+          lastAction: { type: "play", seatId, card },
+        };
+      }
+
+      // Poursuite normale de la manche, ou empilement d'une pioche en attente.
+      let advance = 1;
+      let newPending = null;
+      if (card.kind === "skip") advance = 2;
+      else if (card.kind === "reverse") {
+        if (s.seats.length === 2) advance = 2;
+        else dir = -dir;
+      } else if (card.kind === "draw2") {
+        const base = respondingToPending ? pd.count : 0;
+        const targetIdx = nextSeatIdx(ti, dir, s.seats.length);
+        // CORRECTIF : pendingDraw.seatId doit être l'ID du siège visé (chaîne),
+        // jamais son INDEX numérique — sinon aucune comparaison seatId===id
+        // ne matche jamais nulle part (myPendingResponse toujours null côté
+        // client, respondingToPending toujours false côté hôte), et TOUTE la
+        // règle de surenchère +2/+4 est silencieusement contournée : personne
+        // n'est jamais forcé de contrer ou de piocher la pile, et cliquer la
+        // pioche pendant qu'elle est censée être active ne tire qu'1 carte
+        // au lieu du total accumulé.
+        newPending = { kind: "draw2", count: base + 2, seatId: s.seats[targetIdx].id };
+      } else if (card.kind === "wild4") {
+        const base = respondingToPending ? pd.count : 0;
+        const targetIdx = nextSeatIdx(ti, dir, s.seats.length);
+        newPending = { kind: "wild4", count: base + 4, seatId: s.seats[targetIdx].id };
+      }
+      for (let i = 0; i < advance; i++) ti = nextSeatIdx(ti, dir, s.seats.length);
+
+      return {
+        ...carry, seats: s.seats, hands: h, deck: d, discard: disc, activeColor: ac,
+        turnIdx: ti, direction: dir, winner: null, pendingDraw: newPending, pendingDrawnCard: null, unoCalled: unoCalledNext,
+        lastAction: { type: "play", seatId, card },
+      };
+    }
 
     if (action.type === "draw") {
+      // Décision "jouer ou garder" déjà en attente pour ce siège : une
+      // pioche de plus n'est jamais légale tant qu'elle n'est pas tranchée
+      // (voir aussi armHumanTurnTimer, qui "garde" plutôt que de reproduire
+      // cette pioche à l'échéance, pour ne jamais bloquer la partie ici).
+      if (drawDecision) return;
       // Pile de surenchère en attente pour CE siège : il pioche le TOTAL
       // accumulé (pas 1 seule carte) et solde la pile. Sinon, pioche
       // volontaire classique d'une carte.
       const drawN = respondingToPending ? pd.count : 1;
       const res = drawCards(d, disc, drawN);
       h[seatId] = hand.concat(res.cards);
+      d = res.deck; disc = res.discard;
+
+      if (!respondingToPending) {
+        // Pioche volontaire (jamais le cas d'une pile de pénalité, qui ne
+        // rend jamais ses cartes immédiatement jouables) : si la carte
+        // piochée peut être jouée tout de suite, le tour ne se termine PAS
+        // encore — ce siège doit choisir de la jouer ou de la garder.
+        const drawnCard = res.cards[0];
+        const topAfterDraw = disc[disc.length - 1];
+        if (drawnCard && canPlay(drawnCard, topAfterDraw, ac)) {
+          if (currentSeat.isBot) {
+            // Comportement bot par défaut (demande explicite) : joue
+            // immédiatement la carte piochée si elle est jouable.
+            const followUp = decideBotDrawFollowUp(drawnCard, topAfterDraw, ac, h[seatId].filter(c => c.id !== drawnCard.id));
+            if (followUp.play) {
+              const next = resolvePlayedCard(h[seatId], drawnCard, followUp.chosenColor);
+              if (next) { broadcastNewState(next); scheduleBots(); return; }
+            }
+          } else {
+            // Humain : décision différée, le tour reste le sien — voir
+            // pendingDrawnCard (bouton "Garder" côté UI ; jouer se fait en
+            // cliquant la carte normalement, comme n'importe quelle carte
+            // jouable de la main).
+            const next = {
+              ...carry, seats: s.seats, hands: h, deck: d, discard: disc, activeColor: ac,
+              turnIdx: ti, direction: dir, winner: null,
+              pendingDraw: null, pendingDrawnCard: { seatId, cardId: drawnCard.id },
+              unoCalled: { ...(s.unoCalled || {}), [seatId]: false },
+              lastAction: { type: "draw", seatId, count: drawN, wasPenalty: false },
+            };
+            broadcastNewState(next);
+            // Pas de scheduleBots() ici : c'est TOUJOURS le tour de ce même
+            // siège humain, en attente de son choix.
+            return;
+          }
+        }
+      }
+
       const next = {
-        ...carry, seats: s.seats, hands: h, deck: res.deck, discard: res.discard, activeColor: ac,
+        ...carry, seats: s.seats, hands: h, deck: d, discard: disc, activeColor: ac,
         turnIdx: nextSeatIdx(ti, dir, s.seats.length), direction: dir, winner: null,
-        pendingDraw: null, unoCalled: { ...(s.unoCalled || {}), [seatId]: false },
+        pendingDraw: null, pendingDrawnCard: null, unoCalled: { ...(s.unoCalled || {}), [seatId]: false },
         lastAction: { type: "draw", seatId, count: drawN, wasPenalty: respondingToPending },
+      };
+      broadcastNewState(next);
+      scheduleBots();
+      return;
+    }
+
+    if (action.type === "keep") {
+      // Garder la carte tout juste piochée plutôt que de la jouer (voir
+      // ci-dessus) : termine le tour sans rien jouer de plus.
+      if (!drawDecision) return;
+      const next = {
+        ...carry, seats: s.seats, hands: h, deck: d, discard: disc, activeColor: ac,
+        turnIdx: nextSeatIdx(ti, dir, s.seats.length), direction: dir, winner: null,
+        pendingDraw: null, pendingDrawnCard: null, unoCalled: { ...(s.unoCalled || {}), [seatId]: false },
+        lastAction: { type: "keep", seatId },
       };
       broadcastNewState(next);
       scheduleBots();
@@ -331,80 +522,16 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
     if (idx === -1) return;
     const card = hand[idx];
     // Légalité : en pleine surenchère, SEULE une carte qui "contre"
-    // légalement est jouable (canStackOn) ; sinon, règles normales.
-    const legal = respondingToPending ? canStackOn(card, pd.kind) : canPlay(card, disc[disc.length - 1], ac);
+    // légalement est jouable (canStackOn) ; une décision jouer/garder en
+    // attente restreint de même à la SEULE carte tout juste piochée ;
+    // sinon, règles normales.
+    const legal = respondingToPending
+      ? canStackOn(card, pd.kind)
+      : (drawDecision ? card.id === drawDecision.cardId : canPlay(card, disc[disc.length - 1], ac));
     if (!legal) return;
 
-    const newHand = hand.slice(0, idx).concat(hand.slice(idx + 1));
-    h[seatId] = newHand;
-    disc = disc.concat([card]);
-    const isWild = card.kind === "wild" || card.kind === "wild4";
-    ac = isWild ? (action.chosenColor || ac) : card.color;
-
-    // Toute carte jouée "consomme" une éventuelle annonce UNO déjà faite
-    // (elle ne vaut que pour LA carte annoncée) ; un bot annonce tout seul
-    // dès qu'il tombe pile à 1 carte (pas d'interface pour lui).
-    let unoCalled = { ...(s.unoCalled || {}), [seatId]: false };
-    if (currentSeat.isBot && newHand.length === 1) unoCalled[seatId] = true;
-
-    if (newHand.length === 0) {
-      const hadCalledUno = !!(s.unoCalled && s.unoCalled[seatId]);
-      if (!hadCalledUno) {
-        // Oubli d'annonce UNO : pioche-pénalité de 2, LA MANCHE CONTINUE
-        // (il rejoue avec 2 cartes au lieu de 0 — jamais une victoire).
-        const res = drawCards(d, disc, 2);
-        h[seatId] = res.cards;
-        const next = {
-          ...carry, seats: s.seats, hands: h, deck: res.deck, discard: res.discard, activeColor: ac,
-          turnIdx: nextSeatIdx(ti, dir, s.seats.length), direction: dir, winner: null,
-          pendingDraw: null, unoCalled,
-          lastAction: { type: "unoPenalty", seatId, card },
-        };
-        broadcastNewState(next);
-        scheduleBots();
-        return;
-      }
-      // Victoire de LA MANCHE : chaque siège ajoute la valeur de sa main
-      // restante à son score de partie (le vainqueur ajoute 0, sa main est
-      // déjà vide dans `h`).
-      const roundScores = {};
-      const matchScores = { ...(s.matchScores || {}) };
-      s.seats.forEach(seat => {
-        const val = handPenaltyValue(h[seat.id] || []);
-        roundScores[seat.id] = val;
-        matchScores[seat.id] = (matchScores[seat.id] || 0) + val;
-      });
-      const next = {
-        seats: s.seats, hands: h, deck: d, discard: disc, activeColor: ac,
-        turnIdx: ti, direction: dir, winner: seatId, pendingDraw: null, unoCalled,
-        roundIndex: s.roundIndex, roundTarget: s.roundTarget, roundScores, matchScores,
-        lastAction: { type: "play", seatId, card },
-      };
-      broadcastNewState(next);
-      return;
-    }
-
-    // Poursuite normale de la manche, ou empilement d'une pioche en attente.
-    let advance = 1;
-    let newPending = null;
-    if (card.kind === "skip") advance = 2;
-    else if (card.kind === "reverse") {
-      if (s.seats.length === 2) advance = 2;
-      else dir = -dir;
-    } else if (card.kind === "draw2") {
-      const base = respondingToPending ? pd.count : 0;
-      newPending = { kind: "draw2", count: base + 2, seatId: nextSeatIdx(ti, dir, s.seats.length) };
-    } else if (card.kind === "wild4") {
-      const base = respondingToPending ? pd.count : 0;
-      newPending = { kind: "wild4", count: base + 4, seatId: nextSeatIdx(ti, dir, s.seats.length) };
-    }
-    for (let i = 0; i < advance; i++) ti = nextSeatIdx(ti, dir, s.seats.length);
-
-    const next = {
-      ...carry, seats: s.seats, hands: h, deck: d, discard: disc, activeColor: ac,
-      turnIdx: ti, direction: dir, winner: null, pendingDraw: newPending, unoCalled,
-      lastAction: { type: "play", seatId, card },
-    };
+    const next = resolvePlayedCard(hand, card, action.chosenColor);
+    if (!next) return;
     broadcastNewState(next);
     scheduleBots();
   }
@@ -427,11 +554,14 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
   }
 
   // Si le nouveau tour revient à un bot, l'hôte joue à sa place après un
-  // court délai (lisibilité), en chaîne jusqu'à un tour humain ou victoire.
-  // Un bot qui doit répondre à une pile de pioche en attente contre
-  // systématiquement s'il le peut (voir decideBotMove).
+  // délai (lisibilité), en chaîne jusqu'à un tour humain ou victoire. Un
+  // bot qui doit répondre à une pile de pioche en attente contre
+  // systématiquement s'il le peut (voir decideBotMove). Délai aléatoire
+  // (500ms-4s) plutôt que fixe (demande explicite) : rythme moins
+  // mécanique, moins "un bot répond instantanément comme une horloge".
   function scheduleBots() {
     if (!isHost) return;
+    const delay = 500 + Math.random() * 3500;
     botTimer.current = setTimeout(() => {
       const s = stateRef.current;
       if (!s || s.winner) return;
@@ -442,7 +572,7 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
       const pending = s.pendingDraw && s.pendingDraw.seatId === seat.id ? s.pendingDraw : null;
       const move = decideBotMove(hand, top, s.activeColor, pending);
       hostApplyMove(seat.id, move);
-    }, 950);
+    }, delay);
   }
 
   // ----- Démarrage : choix de la taille de table, sièges bots pour compléter -----
@@ -509,6 +639,9 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
   const topCard = discard[discard.length - 1];
   const isMyTurn = phase === "playing" && !winner && isPlayer && seats[turnIdx]?.id === me.id;
   const myPendingResponse = isMyTurn && pendingDraw && pendingDraw.seatId === me.id ? pendingDraw : null;
+  // Pioche volontaire jouable en attente de décision (jouer ou garder) —
+  // voir pendingDrawnCard/action "keep" côté hôte.
+  const myDrawDecision = isMyTurn && pendingDrawnCard && pendingDrawnCard.seatId === me.id ? pendingDrawnCard : null;
   // Compte à rebours du tour humain en cours, calculé localement à partir de
   // la deadline diffusée par l'hôte — même horodatage partout.
   const turnRemaining = turnDeadline ? Math.max(0, Math.ceil((turnDeadline - now) / 1000)) : null;
@@ -518,12 +651,16 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
   const matchOver = !!(winner && roundTarget && roundIndex >= roundTarget);
 
   function attemptDraw() {
-    if (!isMyTurn) return;
+    // Une décision jouer/garder est déjà en attente : une pioche de plus
+    // serait rejetée côté hôte de toute façon (voir hostApplyMove).
+    if (!isMyTurn || myDrawDecision) return;
     channelRef.current?.send({ type: "broadcast", event: "move_attempt", payload: { seatId: me.id, action: { type: "draw" } } });
   }
   function attemptPlay(card) {
     if (!isMyTurn || !topCard) return;
-    const legal = myPendingResponse ? canStackOn(card, myPendingResponse.kind) : canPlay(card, topCard, activeColor);
+    const legal = myPendingResponse
+      ? canStackOn(card, myPendingResponse.kind)
+      : (myDrawDecision ? card.id === myDrawDecision.cardId : canPlay(card, topCard, activeColor));
     if (!legal) return;
     if (card.kind === "wild" || card.kind === "wild4") {
       setColorPickerFor(card.id);
@@ -535,6 +672,12 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
     if (!colorPickerFor) return;
     channelRef.current?.send({ type: "broadcast", event: "move_attempt", payload: { seatId: me.id, action: { type: "play", cardId: colorPickerFor, chosenColor: color } } });
     setColorPickerFor(null);
+  }
+  // Garder la carte tout juste piochée plutôt que de la jouer (fix
+  // jouabilité 2026-07) : termine le tour sans la poser.
+  function keepDrawnCard() {
+    if (!myDrawDecision) return;
+    channelRef.current?.send({ type: "broadcast", event: "move_attempt", payload: { seatId: me.id, action: { type: "keep" } } });
   }
   function callUno() {
     if (!mySeat) return;
@@ -565,6 +708,11 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
   const needsPick = players.length > (tableSize || 0);
   const canIPlaySomething = isMyTurn && !myPendingResponse && topCard && hasPlayable(myHand, topCard, activeColor);
   const canICounter = myPendingResponse ? hasStackable(myHand, myPendingResponse.kind) : false;
+  // Surbrillance de la pioche (fix jouabilité 2026-07) : le joueur actif
+  // n'a plus le choix — aucune carte jouable, ou pile de pénalité qu'il ne
+  // peut pas contrer — jamais pendant une décision jouer/garder déjà en
+  // cours (il a déjà pioché ce tour-ci).
+  const mustDrawPile = isMyTurn && !winner && !myDrawDecision && (myPendingResponse ? !canICounter : !canIPlaySomething);
   // Bot dont c'est le tour MAINTENANT : dérivé, jamais un état à part (tous
   // les clients reçoivent le même seats/turnIdx/winner par broadcast).
   const activeBotSeat = !winner && seats[turnIdx]?.isBot ? seats[turnIdx] : null;
@@ -583,11 +731,17 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
         statusText = canICounter
           ? `${t("chromatikCanCounter")} — ${t("chromatikMustDrawPile")} ${myPendingResponse.count}`
           : `${t("chromatikMustDrawPile")} ${myPendingResponse.count}`;
+      } else if (myDrawDecision) {
+        statusText = t("chromatikDrawnPlayableHint");
       } else {
         statusText = canIPlaySomething ? t("chromatikYourTurn") : t("chromatikMustDraw");
       }
     } else if (isPlayer) statusText = `${t("chromatikWaitingFor")} ${seats[turnIdx]?.username}…`;
     else statusText = t("chromatikSpectating");
+
+    // Bulle "crie UNO" (fix jouabilité 2026-07) : siège concerné, résolu
+    // depuis unoBubble pour afficher avatar + pseudo.
+    const unoShoutSeat = unoBubble ? seats.find(s => s.id === unoBubble.seatId) : null;
 
     content = (
       <div>
@@ -615,12 +769,36 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
         </div>
 
         <div className="chromatik-table">
-          <div className="chromatik-pile draw" onClick={attemptDraw} title={t("chromatikDrawPile")}>
+          <div
+            className={"chromatik-pile draw" + (mustDrawPile ? " urge" : "")}
+            onClick={attemptDraw}
+            title={t("chromatikDrawPile")}
+          >
             <CardView faceDown size="md" />
             <span className="pile-count">{deck.length}</span>
           </div>
           <div className="chromatik-discard">
-            {topCard && <CardView key={topCard.id} card={topCard} size="lg" glow />}
+            {/* Pile réaliste (fix jouabilité 2026-07) : les 3-4 dernières
+                cartes défaussées restent visibles, légèrement décalées/
+                tournées (offset STABLE par carte, voir discardCardOffset),
+                la plus récente bien lisible au-dessus. */}
+            {discard.slice(-4).map((c, i, arr) => {
+              const isTop = i === arr.length - 1;
+              const off = isTop ? { dx: 0, dy: 0, angle: 0 } : discardCardOffset(c.id);
+              return (
+                <CardView
+                  key={c.id}
+                  card={c}
+                  size="lg"
+                  glow={isTop}
+                  style={{
+                    transform: `translate(${off.dx}px, ${off.dy}px) rotate(${off.angle}deg)`,
+                    zIndex: i + 1,
+                    opacity: isTop ? 1 : .92,
+                  }}
+                />
+              );
+            })}
             {activeColor && <span className="chromatik-active-color" style={{ background: `var(${COLOR_VAR_MAP[activeColor]})` }} />}
           </div>
           <span key={direction} className="chromatik-direction-badge" title={t("chromatikDirectionTitle")}>
@@ -640,6 +818,14 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
                   }}
                 />
               ))}
+            </div>
+          )}
+
+          {unoShoutSeat && (
+            <div className="chromatik-uno-shout" key={unoBubble.key} aria-live="polite">
+              <span className="chromatik-uno-shout-text">
+                {unoShoutSeat.avatar} {unoShoutSeat.id === me.id ? t("chromatikUnoShoutYou") : `${unoShoutSeat.username} ${t("chromatikUnoShoutOther")}`}
+              </span>
             </div>
           )}
         </div>
@@ -670,7 +856,9 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
                 card={card}
                 size="sm"
                 onClick={() => attemptPlay(card)}
-                dim={!isMyTurn || (myPendingResponse ? !canStackOn(card, myPendingResponse.kind) : !canPlay(card, topCard, activeColor))}
+                dim={!isMyTurn || (myPendingResponse
+                  ? !canStackOn(card, myPendingResponse.kind)
+                  : (myDrawDecision ? card.id !== myDrawDecision.cardId : !canPlay(card, topCard, activeColor)))}
               />
             ))}
           </div>
@@ -689,6 +877,14 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
           <div style={{ textAlign: "center", marginTop: 4 }}>
             <button type="button" className="btn ghost" style={{ width: "auto", padding: "8px 16px", fontSize: 13 }} onClick={attemptDraw}>
               🂠 {t("chromatikMustDrawPile")} {myPendingResponse.count}
+            </button>
+          </div>
+        )}
+
+        {myDrawDecision && !winner && (
+          <div style={{ textAlign: "center", marginTop: 4 }}>
+            <button type="button" className="btn ghost" style={{ width: "auto", padding: "8px 16px", fontSize: 13 }} onClick={keepDrawnCard}>
+              🤚 {t("chromatikKeepDrawn")}
             </button>
           </div>
         )}

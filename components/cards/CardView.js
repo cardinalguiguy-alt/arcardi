@@ -3,7 +3,7 @@ import { COLOR_VARS } from "./deck";
 
 const KIND_LABEL = { skip: "⊘", reverse: "⇄", draw2: "+2", wild4: "+4" };
 
-export default function CardView({ card, faceDown, size = "md", onClick, dim, glow }) {
+export default function CardView({ card, faceDown, size = "md", onClick, dim, glow, style }) {
   const cls = "chromatik-card size-" + size
     + (faceDown ? " back" : "")
     + (onClick ? " clickable" : "")
@@ -11,7 +11,7 @@ export default function CardView({ card, faceDown, size = "md", onClick, dim, gl
     + (glow ? " glow" : "");
 
   if (faceDown) {
-    return <div className={cls} onClick={onClick}><span className="chromatik-card-back-mark">✦</span></div>;
+    return <div className={cls} style={style} onClick={onClick}><span className="chromatik-card-back-mark">✦</span></div>;
   }
 
   const isWild = card.kind === "wild" || card.kind === "wild4";
@@ -19,11 +19,11 @@ export default function CardView({ card, faceDown, size = "md", onClick, dim, gl
   // doré) — bien distinct du Joker simple, pour signaler d'un coup d'œil
   // la carte la plus forte du jeu (surenchère + choix de couleur imposé).
   const isWild4 = card.kind === "wild4";
-  const style = isWild ? {} : { "--card-color": `var(${COLOR_VARS[card.color]})` };
+  const cardStyle = isWild ? {} : { "--card-color": `var(${COLOR_VARS[card.color]})` };
   const label = card.kind === "number" ? String(card.value) : KIND_LABEL[card.kind] || "?";
 
   return (
-    <div className={cls + (isWild ? " wild" : "") + (isWild4 ? " wild4" : "")} style={style} onClick={onClick}>
+    <div className={cls + (isWild ? " wild" : "") + (isWild4 ? " wild4" : "")} style={{ ...cardStyle, ...style }} onClick={onClick}>
       <span className="chromatik-card-corner">{label}</span>
       <span className="chromatik-card-main">{label}</span>
     </div>
