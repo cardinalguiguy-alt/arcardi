@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { saveGameState, readGameState, resetRoomToLobby } from "@/lib/gameSync";
 import Crossfade from "@/components/Crossfade";
@@ -63,6 +63,15 @@ const HUMAN_TURN_MS = 30000;
 const HUMAN_TURN_SHORT_MS = 5000;
 const HUMAN_TURN_STRIKES = 2;
 const BOT_AVATARS = ["🤖", "🦾", "👾"];
+// Nerf bots (demande 2026-07) : probabilité qu'un bot OUBLIE d'annoncer
+// UNO en tombant à 1 carte — comme un humain, ~1,5 fois sur 10. S'il joue
+// ensuite sa dernière carte sans annonce, pénalité classique de 2 cartes.
+const BOT_UNO_FORGET_RATE = 0.15;
+// Seuils "grande main" (demande 2026-07) : au-delà, les cartes de la main
+// locale rétrécissent, puis la main passe en défilement latéral — voir
+// .chromatik-hand.crowded/.packed dans globals.css.
+const HAND_CROWDED_AT = 13;
+const HAND_PACKED_AT = 19;
 const COLOR_VAR_MAP = { red: "--p1", green: "--p3", blue: "--ludoB", yellow: "--ludoY" };
 const ROUND_OPTIONS = [5, 7, 10];
 // Nombre de dos de carte affichés par l'animation de pioche (voir drawFx) —
@@ -90,6 +99,25 @@ function discardCardOffset(cardId) {
   };
 }
 
+// Flèches de sens de jeu (demande 2026-07) : chevrons translucides et
+// "vivants" (vague de lumière qui court dans le sens du jeu), intercalés
+// ENTRE les joueurs plutôt qu'un badge statique dans un coin. Quand une
+// carte Inverse passe, la clé React (= direction) remonte le composant et
+// rejoue l'animation de bascule (morph scaleX -1 -> 1), donc l'inversion
+// se VOIT. Uniquement à 3-4 joueurs : à 2, le sens n'a aucun effet
+// (Inverse = rejouer), une flèche serait du bruit visuel.
+function FlowArrow({ direction, size }) {
+  return (
+    <span
+      key={direction}
+      className={"chromatik-flow" + (direction === -1 ? " rev" : "") + (size ? " " + size : "")}
+      aria-hidden="true"
+    >
+      <i>❯</i><i>❯</i><i>❯</i>
+    </span>
+  );
+}
+
 // Distribue UNE manche (la première comme les suivantes) : cartes fraîches
 // et mélangées, mais `matchScores`/`roundIndex`/`roundTarget` sont fournis
 // par l'appelant (startWith pour la manche 1, nextRound pour la suite) —
@@ -106,8 +134,14 @@ function dealRoundState(seats, matchInfo) {
   const first = deck.pop();
   const discard = [first];
   const activeColor = first.color || COLORS[Math.floor(Math.random() * COLORS.length)];
+  // Rotation du premier joueur (équité, correctif 2026-07) : mesuré sur
+  // 90 000 manches simulées, le siège qui ouvre gagne sensiblement plus
+  // souvent (51,2 % à 2 joueurs) — et sans rotation le MÊME siège ouvrait
+  // toutes les manches du match. Manche 1 -> siège 0, manche 2 -> siège 1,
+  // etc. (l'ordre des sièges, lui, a déjà été mélangé au lancement).
+  const openerIdx = ((matchInfo.roundIndex || 1) - 1) % seats.length;
   return {
-    seats, hands, deck, discard, activeColor, turnIdx: 0, direction: 1, winner: null, lastAction: null,
+    seats, hands, deck, discard, activeColor, turnIdx: openerIdx, direction: 1, winner: null, lastAction: null,
     pendingDraw: null, pendingDrawnCard: null, unoCalled: {}, roundScores: {},
     roundIndex: matchInfo.roundIndex, roundTarget: matchInfo.roundTarget, matchScores: matchInfo.matchScores,
   };
@@ -388,6 +422,19 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
     channelRef.current.send({ type: "broadcast", event: "state", payload: { ...next, turnDeadline: tm.deadline, turnDeadlineSeat: tm.seatId } });
     armHumanTurnTimer();
   }
+  // Bulle "crie UNO" pour les BOTS (nerf 2026-07) : quand un bot annonce
+  // (il "oublie" parfois, voir BOT_UNO_FORGET_RATE), l'hôte diffuse le même
+  // événement call_uno qu'un clic humain — tous les clients voient la même
+  // bulle, et hostApplyUnoCall côté hôte est un no-op inoffensif (l'annonce
+  // est déjà posée dans l'état diffusé juste avant).
+  function maybeAnnounceBotUno(prevState, next, seatId, seat) {
+    if (!seat?.isBot || !next) return;
+    if (!next.unoCalled || !next.unoCalled[seatId]) return;
+    if ((prevState.unoCalled || {})[seatId]) return; // déjà annoncé avant ce coup
+    if ((next.hands[seatId] || []).length !== 1) return;
+    channelRef.current?.send({ type: "broadcast", event: "call_uno", payload: { seatId } });
+  }
+
   function sendMatchStart(payload) {
     // Nouvelle manche : chacun repart avec le délai complet (30s).
     turnStrikesRef.current = {};
@@ -434,9 +481,13 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
 
       // Toute carte jouée "consomme" une éventuelle annonce UNO déjà faite
       // (elle ne vaut que pour LA carte annoncée) ; un bot annonce tout seul
-      // dès qu'il tombe pile à 1 carte (pas d'interface pour lui).
+      // dès qu'il tombe pile à 1 carte (pas d'interface pour lui) — MAIS il
+      // "oublie" parfois, comme un humain (nerf demandé 2026-07) : ~15 % du
+      // temps il n'annonce pas et mangera la pénalité de 2 cartes s'il pose
+      // sa dernière carte sans s'être rattrapé. Le "❗" côté adversaires
+      // s'affiche alors sur lui, exactement comme pour un humain distrait.
       let unoCalledNext = { ...(s.unoCalled || {}), [seatId]: false };
-      if (currentSeat.isBot && newHand.length === 1) unoCalledNext[seatId] = true;
+      if (currentSeat.isBot && newHand.length === 1) unoCalledNext[seatId] = Math.random() >= BOT_UNO_FORGET_RATE;
 
       if (newHand.length === 0) {
         const hadCalledUno = !!(s.unoCalled && s.unoCalled[seatId]);
@@ -551,7 +602,7 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
             const followUp = decideBotDrawFollowUp(drawnCard, topAfterDraw, ac, h[seatId].filter(c => c.id !== drawnCard.id));
             if (followUp.play) {
               const next = resolvePlayedCard(h[seatId], drawnCard, followUp.chosenColor);
-              if (next) { broadcastNewState(next); scheduleBots(); return; }
+              if (next) { broadcastNewState(next); maybeAnnounceBotUno(s, next, seatId, currentSeat); scheduleBots(); return; }
             }
           } else {
             // Humain : décision différée, le tour reste le sien — voir
@@ -614,6 +665,7 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
     const next = resolvePlayedCard(hand, card, action.chosenColor);
     if (!next) return;
     broadcastNewState(next);
+    maybeAnnounceBotUno(s, next, seatId, currentSeat);
     scheduleBots();
   }
 
@@ -827,24 +879,31 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
     content = (
       <div>
         <div className="chromatik-opponents">
-          {seats.filter(s => s.id !== me.id).map(s => {
+          {/* Flèches de sens intercalées entre les sièges (demande 2026-07) :
+              les adversaires sont affichés dans l'ORDRE DE JEU (seats,
+              moins soi), donc un flux gauche->droite = direction 1, et le
+              flux s'inverse visuellement avec la carte Inverse. */}
+          {seats.filter(s => s.id !== me.id).map((s, i) => {
             const oppHand = hands[s.id] || [];
             const oppAtRisk = oppHand.length === 1 && !unoCalled[s.id];
             return (
-              <div key={s.id} className={"chromatik-opponent" + (seats[turnIdx]?.id === s.id ? " active" : "")}>
-                <span className="avatar">{s.avatar}</span>
-                <span className="name">{s.username}</span>
-                {activeBotSeat?.id === s.id && (
-                  <span className="pres-think" aria-hidden="true"><i>.</i><i className="d2">.</i><i className="d3">.</i></span>
-                )}
-                <span className="count">
-                  {oppHand.length} 🂠
-                  {oppAtRisk && <span className="chromatik-uno-warn" title="UNO">❗</span>}
-                  {turnDeadlineSeat === s.id && turnRemaining != null && (
-                    <span className={"turn-timer-chip mini" + (turnRemaining <= 5 ? " hot" : "")}>{turnRemaining}s</span>
+              <Fragment key={s.id}>
+                {i > 0 && seats.length > 2 && <FlowArrow direction={direction} size="mini" />}
+                <div className={"chromatik-opponent" + (seats[turnIdx]?.id === s.id ? " active" : "")}>
+                  <span className="avatar">{s.avatar}</span>
+                  <span className="name">{s.username}</span>
+                  {activeBotSeat?.id === s.id && (
+                    <span className="pres-think" aria-hidden="true"><i>.</i><i className="d2">.</i><i className="d3">.</i></span>
                   )}
-                </span>
-              </div>
+                  <span className="count">
+                    {oppHand.length} 🂠
+                    {oppAtRisk && <span className="chromatik-uno-warn" title="UNO">❗</span>}
+                    {turnDeadlineSeat === s.id && turnRemaining != null && (
+                      <span className={"turn-timer-chip mini" + (turnRemaining <= 5 ? " hot" : "")}>{turnRemaining}s</span>
+                    )}
+                  </span>
+                </div>
+              </Fragment>
             );
           })}
         </div>
@@ -882,9 +941,14 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
             })}
             {activeColor && <span className="chromatik-active-color" style={{ background: `var(${COLOR_VAR_MAP[activeColor]})` }} />}
           </div>
-          <span key={direction} className="chromatik-direction-badge" title={t("chromatikDirectionTitle")}>
-            {direction === 1 ? "↻" : "↺"}
-          </span>
+          {/* Flux de sens au centre de la table (remplace l'ancien badge
+              statique ↻/↺) : mêmes chevrons vivants qu'entre les sièges,
+              en plus grand — masqué à 2 joueurs (sens sans effet). */}
+          {seats.length > 2 && (
+            <span className="chromatik-flow-table" title={t("chromatikDirectionTitle")}>
+              <FlowArrow direction={direction} />
+            </span>
+          )}
 
           {drawFx && (
             <div className="chromatik-drawfx" aria-hidden="true">
@@ -930,10 +994,15 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
         </p>
 
         {isPlayer && (
-          <div className="chromatik-hand">
+          <div className={"chromatik-hand"
+            + (myHand.length >= HAND_PACKED_AT ? " packed" : myHand.length >= HAND_CROWDED_AT ? " crowded" : "")}>
             {/* Tri d'affichage (demande explicite) : gauche→droite par
                 couleur puis 0-9 puis spéciales ; jokers/+4 tout à droite.
-                Purement visuel — voir sortHandForDisplay dans deck.js. */}
+                Purement visuel — voir sortHandForDisplay dans deck.js.
+                Grande main (demande 2026-07) : cartes réduites dès
+                HAND_CROWDED_AT, puis rangée unique à défilement latéral dès
+                HAND_PACKED_AT — une main de 25+ cartes (grosse surenchère)
+                reste jouable sans écraser toute la table. */}
             {sortHandForDisplay(myHand).map(card => (
               <CardView
                 key={card.id}
@@ -992,17 +1061,32 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
             <h3 className="chromatik-round-summary-title">
               {matchOver ? t("chromatikMatchOverTitle") : `${t("chromatikRoundOverTitle")} ${roundIndex} ${t("chromatikRoundOverOf")} ${roundTarget}`}
             </h3>
-            <div className="pres-podium">
-              {ranking.map((s, i) => (
-                <div key={s.id} className={"pres-podium-row" + (i === 0 ? " first" : "") + (s.id === me.id ? " me" : "")}>
-                  <span className="place">{i + 1}</span>
-                  <span className="name">{s.avatar} {s.username}</span>
-                  <span className="pts">
-                    {matchScores[s.id] ?? 0} {t("pts")}
-                    <span className="chromatik-round-delta"> (+{roundScores[s.id] ?? 0} {t("chromatikThisRound")})</span>
-                  </span>
-                </div>
-              ))}
+            <div className="pres-podium chromatik-podium">
+              {/* Mains finales en miniature (demande 2026-07) : sous chaque
+                  ligne du classement, les cartes restées en main à la fin de
+                  la manche (triées comme une main), en tout petit mais avec
+                  leurs vraies couleurs — on VOIT d'où viennent les points.
+                  Le vainqueur n'a rien à montrer (main vide, +0). */}
+              {ranking.map((s, i) => {
+                const finalHand = sortHandForDisplay(hands[s.id] || []);
+                return (
+                  <div key={s.id} className={"chromatik-podium-block" + (i === 0 ? " first" : "") + (s.id === me.id ? " me" : "")}>
+                    <div className={"pres-podium-row" + (i === 0 ? " first" : "") + (s.id === me.id ? " me" : "")}>
+                      <span className="place">{i + 1}</span>
+                      <span className="name">{s.avatar} {s.username}</span>
+                      <span className="pts">
+                        {matchScores[s.id] ?? 0} {t("pts")}
+                        <span className="chromatik-round-delta"> (+{roundScores[s.id] ?? 0} {t("chromatikThisRound")})</span>
+                      </span>
+                    </div>
+                    {finalHand.length > 0 && (
+                      <div className="chromatik-final-hand">
+                        {finalHand.map(c => <CardView key={c.id} card={c} size="xs" />)}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
             {isPlayer && matchOver && (

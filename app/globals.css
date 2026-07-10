@@ -680,12 +680,47 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
   position:absolute; bottom:-8px; right:-8px; background:var(--card2); border:1.5px solid var(--line);
   border-radius:99px; font-family:'Space Mono'; font-size:11px; font-weight:700; padding:2px 7px;
 }
-/* Indicateur de sens de jeu — invisible jusqu'ici alors que `direction`
-   existait déjà dans l'état ; rejoue un petit "pop" (clé React = direction)
-   à chaque Inverse, pour que le changement de sens se VOIE. */
-.chromatik-direction-badge{
-  font-size:22px; color:var(--muted); line-height:1; user-select:none;
-  animation:popIn .35s cubic-bezier(.3,1.4,.4,1) both;
+/* ----- Sens de jeu : flèches vivantes (refonte 2026-07) -----
+   Chevrons translucides intercalés ENTRE les sièges adverses + un flux
+   plus grand au centre de la table (remplace l'ancien badge ↻/↺ statique).
+   Une "vague" de lumière court le long des chevrons dans le sens du jeu ;
+   quand une carte Inverse passe, la clé React (= direction) remonte le
+   composant et rejoue l'animation de bascule (morph scaleX -1 -> 1) : le
+   demi-tour se voit, littéralement. Volontairement discret au repos
+   (opacité faible), jamais rigide. Masqué à 2 joueurs (aucun effet). */
+.chromatik-flow{
+  display:inline-flex; align-items:center; gap:1px; user-select:none; pointer-events:none;
+  animation:chromatikFlowFlipR .55s cubic-bezier(.3,1.3,.4,1) both;
+}
+.chromatik-flow.rev{ animation-name:chromatikFlowFlipL; }
+.chromatik-flow i{
+  font-style:normal; font-size:16px; line-height:1; color:var(--p3); opacity:.2;
+  animation:chromatikFlowWave 1.35s ease-in-out infinite;
+}
+.chromatik-flow i:nth-child(2){ animation-delay:.18s; }
+.chromatik-flow i:nth-child(3){ animation-delay:.36s; }
+/* Entre deux sièges : plus petit, encore plus discret. */
+.chromatik-flow.mini{ gap:0; }
+.chromatik-flow.mini i{ font-size:11.5px; }
+/* Au centre de la table : conteneur séparé pour ne pas perturber le flex
+   pioche/défausse (l'écart clamp() reste le même qu'avant). */
+.chromatik-flow-table{ display:inline-flex; align-items:center; }
+.chromatik-flow-table .chromatik-flow i{ font-size:20px; }
+/* La vague : chaque chevron s'allume puis s'éteint, décalé de son voisin —
+   la lumière "coule" dans le sens du jeu. */
+@keyframes chromatikFlowWave{
+  0%,100%{ opacity:.14; transform:translateX(0); }
+  50%{ opacity:.85; transform:translateX(2.5px); }
+}
+/* Bascule à l'Inverse : le bloc se retourne en douceur (morph horizontal),
+   deux variantes pour finir figé dans le bon sens (fill:both). */
+@keyframes chromatikFlowFlipR{
+  0%{ opacity:0; transform:scaleX(-1) scale(.55); }
+  100%{ opacity:1; transform:scaleX(1) scale(1); }
+}
+@keyframes chromatikFlowFlipL{
+  0%{ opacity:0; transform:scaleX(1) scale(.55); }
+  100%{ opacity:1; transform:scaleX(-1) scale(1); }
 }
 /* Animation de pioche : dos de carte qui glissent depuis la pioche vers la
    main du joueur concerné (bas de l'écran) ou vers son avatar en haut
@@ -742,6 +777,23 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 @keyframes chromatikUnoShoutPulse{ 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.1); } }
 
 .chromatik-hand{ display:flex; flex-wrap:wrap; gap:6px; justify-content:center; margin-top:14px; }
+/* ----- Grandes mains (demande 2026-07) -----
+   Après une grosse surenchère, une main peut dépasser 20-25 cartes (max
+   observé en simulation : 29). Deux paliers, voir HAND_CROWDED_AT /
+   HAND_PACKED_AT dans ChromatikGame.js :
+   - crowded (13+) : cartes réduites, l'éventail reste sur plusieurs lignes ;
+   - packed (19+)  : rangée UNIQUE à défilement latéral — on fait glisser la
+     main comme de vraies cartes tenues trop nombreuses entre les doigts. */
+.chromatik-hand.crowded{ gap:4px; }
+.chromatik-hand.crowded .chromatik-card.size-sm{ width:44px; height:64px; font-size:15px; }
+.chromatik-hand.packed{
+  flex-wrap:nowrap; overflow-x:auto; justify-content:flex-start;
+  gap:4px; padding:10px 6px 12px; -webkit-overflow-scrolling:touch; scrollbar-width:thin;
+}
+.chromatik-hand.packed .chromatik-card.size-sm{ width:42px; height:60px; font-size:14px; }
+/* Le zoom au survol serait rogné par l'overflow du conteneur : on le
+   remplace par une simple levée, qui reste lisible dans la rangée. */
+.chromatik-hand.packed .chromatik-card.clickable:hover{ transform:translateY(-4px); }
 
 .chromatik-color-picker{
   margin-top:14px; padding:14px; border-radius:14px; background:rgba(255,255,255,.04); border:1px solid var(--line);
@@ -760,6 +812,10 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
   transition:transform .15s ease;
   flex:none;
 }
+/* xs : mains finales en miniature dans le récap de fin de manche — assez
+   petit pour montrer 4 mains complètes, mais vraies couleurs/valeurs. */
+.chromatik-card.size-xs{ width:27px; height:39px; font-size:12px; border-radius:7px; border-width:1.5px; box-shadow:0 2px 0 rgba(0,0,0,.3); }
+.chromatik-card.size-xs .chromatik-card-corner{ display:none; }
 .chromatik-card.size-sm{ width:52px; height:76px; font-size:18px; }
 .chromatik-card.size-md{ width:60px; height:88px; font-size:20px; }
 .chromatik-card.size-lg{ width:72px; height:104px; font-size:26px; }
@@ -840,11 +896,22 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
   text-align:center; font-family:'Bungee'; font-size:15px; margin:0 0 12px; color:var(--ink);
 }
 .chromatik-round-delta{ font-size:11px; color:var(--muted); font-weight:600; }
+/* Mains finales en miniature (demande 2026-07) : sous chaque ligne du
+   classement, les cartes restées en main — on voit d'où viennent les
+   points. Le podium s'élargit un peu pour loger les grosses mains. */
+.chromatik-podium{ max-width:480px; }
+.chromatik-podium-block{ display:flex; flex-direction:column; gap:4px; }
+.chromatik-final-hand{
+  display:flex; flex-wrap:wrap; gap:3px; padding:0 6px 2px 34px; /* aligné sous le nom, après le rang */
+}
+.chromatik-final-hand .chromatik-card{ animation:cardPop .3s ease both; }
 
 @media (prefers-reduced-motion: reduce){
   .chromatik-opponent.active{ animation:none; }
   .chromatik-uno-warn{ animation:none; }
-  .chromatik-direction-badge{ animation:none; }
+  .chromatik-flow{ animation:none; }
+  .chromatik-flow.rev{ transform:scaleX(-1); }
+  .chromatik-flow i{ animation:none; opacity:.6; }
   .chromatik-drawfx-card{ animation:none; opacity:0; }
   .chromatik-discard .chromatik-card, .chromatik-hand .chromatik-card{ animation:none; }
   .chromatik-uno-btn{ animation:none; }
