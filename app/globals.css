@@ -195,7 +195,10 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
    (même coin), jamais de chevauchement même si les deux s'affichent en
    même temps. */
 .ambience-skip-btn{
-  position:fixed; left:14px; bottom:calc(52px + env(safe-area-inset-bottom, 0px)); z-index:59;
+  /* 74px : nettement AU-DESSUS du bouton "Quitter le salon" (40px de haut à
+     14px du bas) — assez d'air pour ne plus risquer le missclick vers la
+     sortie du salon. */
+  position:fixed; left:14px; bottom:calc(74px + env(safe-area-inset-bottom, 0px)); z-index:59;
   width:34px; height:34px; padding:0; border:1.5px solid var(--line); border-radius:50%;
   background:rgba(18,20,42,.78); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px);
   color:var(--muted); font-size:14px; cursor:pointer;
@@ -2188,6 +2191,16 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
   transition:transform .18s cubic-bezier(.34,1.56,.64,1);
 }
 .settings-switch.on .settings-switch-knob{ transform:translateX(20px); }
+/* Variante compacte (curseur "Aide" du 10000, dans le panneau Combinaisons) */
+.settings-switch.small{ width:38px; height:22px; }
+.settings-switch.small .settings-switch-knob{ width:16px; height:16px; }
+.settings-switch.small.on .settings-switch-knob{ transform:translateX(16px); }
+.tenk-assist-row{
+  display:flex; align-items:center; justify-content:space-between; gap:8px;
+  margin:2px 0 8px; padding:5px 8px;
+  border:1.5px solid var(--line); border-radius:10px; background:rgba(255,255,255,.03);
+}
+.tenk-assist-label{ font-size:12px; font-weight:800; color:var(--muted); letter-spacing:.02em; }
 
 .settings-track-list{
   display:flex; flex-direction:column; gap:6px; max-height:230px; overflow-y:auto; padding-right:2px;
@@ -2216,7 +2229,21 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 .settings-avatar-btn.active{ border-color:var(--p2); background:rgba(255,209,102,.15); }
 .settings-avatar-btn:disabled{ opacity:.5; cursor:default; }
 
-.settings-logout-btn{ margin-top:6px; }
+/* Déconnexion : volontairement PETIT et excentré (aligné à droite), à
+   l'opposé de l'ancien gros bouton pleine largeur — le missclick juste
+   sous la grille d'avatars devenait trop facile. */
+.settings-logout-btn{
+  display:flex; align-items:center; gap:6px; width:fit-content;
+  margin:10px 0 0 auto; padding:7px 14px;
+  font-family:inherit; font-size:12.5px; font-weight:700;
+  color:var(--muted); background:transparent; border:1.5px solid var(--line);
+  border-radius:99px; box-shadow:none; cursor:pointer;
+  transition:color .15s ease, border-color .15s ease, background .15s ease;
+}
+.settings-logout-btn:hover{
+  color:#e05555; border-color:rgba(214,69,69,.55); background:rgba(214,69,69,.08);
+  transform:none; filter:none;
+}
 
 @media (prefers-reduced-motion: reduce){
   .settings-gear-btn:hover .gear-icon{ animation:none; }

@@ -255,7 +255,7 @@ export default function Room() {
         // Le code du salon vit maintenant en haut à droite (échange demandé
         // avec l'ancien bouton "Quitter le salon") : toujours consultable,
         // sans prendre de place au-dessus du jeu.
-        <div className="room-code-pill" title={t("roomCode") ? undefined : undefined}>
+        <div className="room-code-pill">
           <span className="dot" />
           {room.code}
         </div>

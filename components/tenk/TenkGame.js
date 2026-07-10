@@ -8,6 +8,16 @@ import { DICE_COUNT, evaluateSelection, isFarkle, listScoringGroups, MIN_TO_BANK
 import { decideBotSelection, decideBotContinue } from "./botLogic";
 import { playDiceShuffle, playConfirmChime, playFarkle, playHotDice, playGameWin, playGameLose } from "@/lib/sfx";
 
+/* Minuteur de tour humain (anti-AFK), même convention que Président et
+   Chromatik : 20s par défaut, réduit à 5s après 2 dépassements consécutifs
+   du MÊME joueur, remis à 20s dès qu'il rejoue de lui-même. Ne concerne
+   jamais les bots (temporisés séparément par scheduleBots). À l'échéance,
+   l'hôte joue à la place du joueur : garde la meilleure combinaison si un
+   lancer attend, banque si le score du tour le permet, relance sinon. */
+const HUMAN_TURN_MS = 20000;
+const HUMAN_TURN_SHORT_MS = 5000;
+const HUMAN_TURN_STRIKES = 2;
+
 /* ==========================================================================
    10 000 (TENK) — jeu de dés au tour par tour, 2 à 4 joueurs, bots pour
    compléter la table (même écran de setup que Chromatik). Objectif de
@@ -98,12 +108,49 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
   const [lastAction, setLastAction] = useState(null);
 
   const [selected, setSelected] = useState([]); // indices dans activeDice choisis pour la sélection en cours
+  // ----- Mode assisté ("Aide") : pré-sélection automatique de la meilleure
+  // combinaison à chaque lancer. DÉSACTIVÉ par défaut (retour du porteur de
+  // projet : l'ordi ne doit pas "faire tout le taff" d'office), activable
+  // par un curseur on/off dans le panneau Combinaisons, préférence
+  // mémorisée dans localStorage. Lu uniquement côté client (useEffect) pour
+  // ne jamais désaccorder serveur/client au premier rendu. assistRef évite
+  // les fermetures obsolètes dans applyLocalState (appelé depuis le canal).
+  const [assistOn, setAssistOn] = useState(false);
+  const assistRef = useRef(false);
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("arcardi_tenk_assist") === "1";
+      setAssistOn(saved); assistRef.current = saved;
+    } catch { /* localStorage indisponible : reste off */ }
+  }, []);
+  function toggleAssist() {
+    setAssistOn(prev => {
+      const next = !prev;
+      assistRef.current = next;
+      try { localStorage.setItem("arcardi_tenk_assist", next ? "1" : "0"); } catch {}
+      // Activation en plein tour : on applique l'aide tout de suite au
+      // lancer en cours (sinon elle ne servirait qu'au prochain lancer).
+      if (next && activeDice && activeDice.length) {
+        const rows = listScoringGroups(activeDice);
+        if (rows.length) setSelected(rows[0].indices.slice());
+      }
+      return next;
+    });
+  }
   const [myGain, setMyGain] = useState(0);
   const [channelReady, setChannelReady] = useState(false);
   const [rollFlash, setRollFlash] = useState(false);
   const [banner, setBanner] = useState(null); // "farkle" | "hotdice" | null, transitoire
   const [endBanner, setEndBanner] = useState(null);
   const [penaltyPop, setPenaltyPop] = useState(false); // popup "Ayoye !" -500 (3 farkles de suite)
+  // Minuteur de tour humain (affichage) : deadline + siège concerné,
+  // diffusés par l'hôte dans chaque état réseau — tous les clients
+  // calculent le compte à rebours localement à partir du même horodatage,
+  // jamais de minuteur qui diverge d'un écran à l'autre (même mécanique
+  // que Président, voir computeTurnDeadline/armHumanTurnTimer).
+  const [turnDeadline, setTurnDeadline] = useState(null);
+  const [turnDeadlineSeat, setTurnDeadlineSeat] = useState(null);
+  const [nowTick, setNowTick] = useState(() => Date.now());
 
   const channelRef = useRef(null);
   const stateRef = useRef(null);
@@ -116,6 +163,10 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
   const rollFlashTimerRef = useRef(null);
   const endBannerTimerRef = useRef(null);
   const penaltyPopTimerRef = useRef(null);
+  const turnTimeoutRef = useRef(null);  // setTimeout qui joue à la place du joueur humain AFK
+  const turnStrikesRef = useRef({});    // seatId -> dépassements consécutifs (remis à 0 dès qu'il rejoue)
+  const turnMetaRef = useRef({ deadline: null, seatId: null }); // dernière deadline diffusée
+  const lastProgressRef = useRef(Date.now()); // watchdog anti-blocage : horodatage du dernier état reçu
 
   useEffect(() => {
     stateRef.current = { seats, scores, turnIdx, activeDice, diceRemaining, turnScore, keptDice, farkleStreak, hotDiceUntil, finalRound, finished, winners, target, lastAction };
@@ -134,6 +185,12 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
     setHotDiceLock(false);
   }, [hotDiceUntil]);
 
+  useEffect(() => {
+    if (!turnDeadline) return;
+    const iv = setInterval(() => setNowTick(Date.now()), 250);
+    return () => clearInterval(iv);
+  }, [turnDeadline]);
+
   function applyLocalState(s, extra = {}) {
     setSeats(s.seats); setScores(s.scores || {}); setTurnIdx(s.turnIdx || 0);
     setActiveDice(s.activeDice || null); setDiceRemaining(s.diceRemaining ?? DICE_COUNT);
@@ -142,11 +199,15 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
     setHotDiceUntil(s.hotDiceUntil || 0);
     setFinalRound(s.finalRound || null); setFinished(!!s.finished); setWinners(s.winners || []);
     setTarget(s.target || 5000); setLastAction(s.lastAction || null);
-    // Suggestion automatique : dès qu'un nouveau lancer arrive, on pré-sélectionne
-    // la combinaison qui rapporte le plus de points (listScoringGroups est triée
-    // par points décroissants) — le joueur reste entièrement libre de la changer
-    // en cliquant un dé ou une autre ligne du panneau "Combinaisons possibles".
-    if (s.activeDice && s.activeDice.length) {
+    setTurnDeadline(s.turnDeadline || null); setTurnDeadlineSeat(s.turnDeadlineSeat || null);
+    lastProgressRef.current = Date.now();
+    // Suggestion automatique : seulement si le mode assisté ("Aide") est
+    // activé, on pré-sélectionne à chaque nouveau lancer la combinaison qui
+    // rapporte le plus (listScoringGroups est triée par points décroissants)
+    // — le joueur reste entièrement libre de la changer. Aide désactivée :
+    // aucune pré-sélection, le joueur choisit tout lui-même (le raccourci
+    // Cmd/Ctrl+Maj+K reste disponible ponctuellement dans les deux cas).
+    if (assistRef.current && s.activeDice && s.activeDice.length) {
       const rows = listScoringGroups(s.activeDice);
       setSelected(rows.length ? rows[0].indices : []);
     } else {
@@ -219,6 +280,10 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
 
     ch.on("broadcast", { event: "move_attempt" }, ({ payload }) => {
       if (!isHost) return;
+      // Un message reçu de ce siège = il n'est plus AFK : on lui redonne
+      // le bénéfice du délai complet (20s) pour son PROCHAIN tour, que ce
+      // coup-ci soit finalement légal ou non.
+      turnStrikesRef.current[payload.seatId] = 0;
       hostApplyMove(payload.seatId, payload.action);
     });
 
@@ -232,6 +297,19 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
             applyLocalState(saved);
             setPhase("playing");
             autoStartedRef.current = true;
+            // CORRECTIF BLOCAGE : au rechargement de l'hôte en pleine
+            // partie, il faut relancer la boucle des bots (comme le fait
+            // Président avec scheduleNext()) — sinon, si c'était le tour
+            // d'un bot au moment du reload, plus rien ne le rejouait et la
+            // partie restait figée pour tout le monde. Même chose pour le
+            // minuteur du joueur humain actif (deadline recalculée à
+            // neuf : il récupère un délai complet, ce qui est équitable).
+            if (isHost) {
+              stateRef.current = { ...saved };
+              scheduleBots();
+              turnMetaRef.current = computeTurnDeadline(saved);
+              armHumanTurnTimer();
+            }
           }
         }
       }
@@ -239,6 +317,7 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
 
     return () => {
       clearTimeout(botTimer.current);
+      clearTimeout(turnTimeoutRef.current);
       clearTimeout(bannerTimerRef.current);
       clearTimeout(rollFlashTimerRef.current);
       clearTimeout(endBannerTimerRef.current);
@@ -249,14 +328,70 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
   }, [room.id, isHost]);
 
   // ----- Arbitrage (hôte uniquement) -----
+  // Calcule, à partir d'un état sur le point d'être diffusé, la deadline du
+  // tour humain à venir ({ null, null } : pas de minuteur — bot, partie
+  // finie). Pure lecture de turnStrikesRef : c'est armHumanTurnTimer(),
+  // juste après, qui arme le VRAI minuteur avec exactement cette durée —
+  // affichage et action automatique ne divergent donc jamais.
+  function computeTurnDeadline(next) {
+    if (!next || next.finished || !next.seats || !next.seats.length) return { deadline: null, seatId: null };
+    const seat = next.seats[next.turnIdx];
+    if (!seat || seat.isBot) return { deadline: null, seatId: null };
+    const strikes = turnStrikesRef.current[seat.id] || 0;
+    const ms = strikes >= HUMAN_TURN_STRIKES ? HUMAN_TURN_SHORT_MS : HUMAN_TURN_MS;
+    return { deadline: Date.now() + ms, seatId: seat.id };
+  }
+
+  // Arme le minuteur qui, si le joueur humain actif ne fait rien avant la
+  // deadline, joue à sa place : garde la meilleure combinaison si un lancer
+  // attend une sélection, banque si le score du tour atteint le minimum,
+  // relance sinon. Chaque dépassement incrémente son compteur de grillages
+  // consécutifs (turnStrikesRef), remis à 0 dès qu'il rejoue de lui-même.
+  function armHumanTurnTimer() {
+    clearTimeout(turnTimeoutRef.current);
+    if (!isHost) return;
+    const { deadline, seatId } = turnMetaRef.current;
+    if (!deadline || !seatId) return;
+    const delay = Math.max(0, deadline - Date.now());
+    turnTimeoutRef.current = setTimeout(() => {
+      const s = stateRef.current;
+      if (!s || s.finished) return;
+      const seat = s.seats[s.turnIdx];
+      if (!seat || seat.id !== seatId || seat.isBot) return; // le tour a déjà changé
+      // Pause célébration hot dice encore active : hostApplyRoll refuserait
+      // le coup — on se re-arme juste après la fin du verrou plutôt que de
+      // griller le joueur sur un refus technique.
+      if (!s.activeDice && Date.now() < (s.hotDiceUntil || 0)) {
+        turnMetaRef.current = { deadline: (s.hotDiceUntil || 0) + 400, seatId };
+        armHumanTurnTimer();
+        return;
+      }
+      turnStrikesRef.current[seatId] = (turnStrikesRef.current[seatId] || 0) + 1;
+      if (s.activeDice) {
+        const rows = listScoringGroups(s.activeDice);
+        if (rows.length) hostApplyKeep(seatId, rows[0].indices);
+      } else if (s.turnScore >= MIN_TO_BANK) {
+        hostApplyBank(seatId);
+      } else {
+        hostApplyRoll(seatId);
+      }
+    }, delay);
+  }
+
   function broadcastNewState(next) {
-    channelRef.current.send({ type: "broadcast", event: "state", payload: next });
+    const tm = computeTurnDeadline(next);
+    turnMetaRef.current = tm;
+    channelRef.current.send({ type: "broadcast", event: "state", payload: { ...next, turnDeadline: tm.deadline, turnDeadlineSeat: tm.seatId } });
     persist(next);
+    armHumanTurnTimer();
   }
   function sendMatchStart(payload) {
     lastActionSeenRef.current = null;
-    channelRef.current.send({ type: "broadcast", event: "match_start", payload });
+    const tm = computeTurnDeadline(payload);
+    turnMetaRef.current = tm;
+    channelRef.current.send({ type: "broadcast", event: "match_start", payload: { ...payload, turnDeadline: tm.deadline, turnDeadlineSeat: tm.seatId } });
     persist(payload);
+    armHumanTurnTimer();
   }
 
   // Retire seatId de la liste "dernier tour" en cours si applicable, ou
@@ -440,7 +575,16 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
       if (!seat || !seat.isBot) return;
       if (s.activeDice) {
         const idx = decideBotSelection(s.activeDice);
-        if (!idx.length) { hostApplyRoll(seat.id); return; }
+        if (!idx.length) {
+          // Ne devrait jamais arriver (un lancer sans aucune sélection
+          // possible est un farkle, traité au moment du lancer) — mais
+          // l'ancien repli hostApplyRoll était un BLOCAGE garanti (refusé
+          // tant qu'un lancer attend). Filet de sécurité : on garde la
+          // meilleure combinaison listée par le moteur de score.
+          const rows = listScoringGroups(s.activeDice);
+          if (rows.length) hostApplyKeep(seat.id, rows[0].indices);
+          return;
+        }
         hostApplyKeep(seat.id, idx);
       } else if (s.turnScore > 0 && !decideBotContinue(s.turnScore, s.diceRemaining)) {
         hostApplyBank(seat.id);
@@ -449,6 +593,24 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
       }
     }, delay);
   }
+
+  // ----- Watchdog anti-blocage (hôte) -----
+  // Les setTimeout d'un onglet en arrière-plan peuvent être étranglés ou
+  // perdus par le navigateur : si c'est le tour d'un bot et que RIEN ne
+  // s'est passé depuis 8s (aucun nouvel état), on relance scheduleBots().
+  // Sans effet dans le cas nominal (le bot joue bien avant 8s).
+  useEffect(() => {
+    if (!isHost || phase !== "playing") return;
+    const iv = setInterval(() => {
+      const s = stateRef.current;
+      if (!s || s.finished) return;
+      const seat = s.seats[s.turnIdx];
+      if (!seat || !seat.isBot) return;
+      if (Date.now() - lastProgressRef.current > 8000) scheduleBots();
+    }, 4000);
+    return () => clearInterval(iv);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isHost, phase]);
 
   // ----- Démarrage : taille de table + cible, sièges bots pour compléter -----
   function startWith(humanSeats) {
@@ -636,6 +798,12 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
     // peut le dépasser (la jauge plafonne alors à 100% mais le nombre
     // affiché, lui, ne plafonne jamais). Marqueur à 300 = seuil pour banquer.
     const TURN_GAUGE_MAX = 1500;
+    // Compte à rebours du tour humain en cours, calculé localement chez
+    // TOUS les clients à partir de la deadline diffusée par l'hôte — même
+    // horodatage partout (mêmes classes CSS que Président : .turn-timer-chip).
+    const turnRemaining = turnDeadline && currentSeat && turnDeadlineSeat === currentSeat.id
+      ? Math.max(0, Math.ceil((turnDeadline - nowTick) / 1000))
+      : null;
     const turnGaugeFillPct = Math.max(0, Math.min(100, Math.round((turnScore / TURN_GAUGE_MAX) * 100)));
     const turnGaugeMarkerPct = Math.round((MIN_TO_BANK / TURN_GAUGE_MAX) * 100);
     content = (
@@ -651,6 +819,9 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
                 {lang === "fr" ? "" : t("tenkOpponentTurnSuffix")}
               </span>
             )}
+            {turnRemaining !== null && (
+              <span className={"turn-timer-chip" + (turnRemaining <= 5 ? " hot" : "")}>⏱ {turnRemaining}s</span>
+            )}
           </div>
         )}
 
@@ -661,6 +832,18 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
         <div className="tenk-layout">
           <aside className={"tenk-combos" + (hintPulse ? " hint-pulse" : "")}>
             <div className="tenk-combos-title">💡 {t("tenkCombosTitle")}</div>
+            <div className="tenk-assist-row">
+              <span className="tenk-assist-label">{t("tenkAssistLabel")}</span>
+              <button
+                type="button"
+                className={"settings-switch small" + (assistOn ? " on" : "")}
+                onClick={toggleAssist}
+                aria-pressed={assistOn}
+                title={t("tenkAssistTitle")}
+              >
+                <span className="settings-switch-knob" />
+              </button>
+            </div>
             {!activeDice ? (
               <p className="tenk-combos-empty">{t("tenkCombosEmptyHint")}</p>
             ) : comboRows.length === 0 ? (
@@ -671,11 +854,11 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
                   <button
                     key={row.key}
                     type="button"
-                    className={"tenk-combo-row" + (isRowActive(row) ? " active" : "") + (i === 0 ? " best" : "")}
+                    className={"tenk-combo-row" + (isRowActive(row) ? " active" : "") + (assistOn && i === 0 ? " best" : "")}
                     disabled={!isMyTurn}
                     onClick={() => selectCombo(row)}
                   >
-                    {i === 0 && <span className="tenk-combo-best-badge">★</span>}
+                    {assistOn && i === 0 && <span className="tenk-combo-best-badge">★</span>}
                     <span className="tenk-combo-dice">{row.diceValues.join("-")}</span>
                     <span className="tenk-combo-pts">+{row.points}</span>
                   </button>
