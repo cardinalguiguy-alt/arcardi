@@ -88,16 +88,14 @@ input,select{font-family:inherit; color:inherit;}
 a{color:var(--p2);}
 
 .wrap{max-width:920px; margin:0 auto; padding:24px 18px calc(60px + env(safe-area-inset-bottom, 0px)); position:relative;}
-/* Salle de jeu : PLEINE largeur (2026-07) — plus de gouttières "effet
-   marge" sur laptop : logo à gauche, code à droite et chips de score collés
-   aux bords, paddings verticaux resserrés. Les panneaux de jeu gardent
-   chacun leur propre max-width (centrés par .game-stage), donc rien ne
-   s'étire bizarrement sur grand moniteur : seul l'habillage respire. */
+/* Salle de jeu : largeur CENTRÉE restaurée (2026-07) — la pleine largeur
+   collait le logo ARCARDI au coin pour un gain réel modeste, et c'est le
+   MODE AGRANDI (body.stage-focus, plus bas) qui règle vraiment le problème
+   du scroll en partie. On garde seulement le padding vertical resserré. */
 .wrap-room{
-  max-width:none;
-  padding:14px 16px calc(40px + env(safe-area-inset-bottom, 0px));
+  max-width:1200px;
+  padding-top:16px;
 }
-.wrap-room .brand{ margin-bottom:14px; }
 /* Page d'accueil (lounge) : on ne veut plus la même jauge étroite que les
    formulaires de login — le logo et la barre du haut profitent de toute
    la largeur de l'écran (garde-fou à 1400px sur très grand moniteur pour
@@ -169,7 +167,9 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 .btn{
   display:block; width:100%; margin-top:18px; padding:14px; border-radius:14px;
   font-family:'Bungee'; font-size:16px; color:var(--ink-on-accent);
-  background:linear-gradient(135deg, var(--p3), var(--p2));
+  /* Or élégant (2026-07) : fini le vert fluo — dégradé depuis le jaune du
+     "I" du logo ARCARDI (--p2) vers l'ambre (--p4), plus chic au lancement. */
+  background:linear-gradient(135deg, var(--p2), var(--p4));
   box-shadow:0 5px 0 rgba(0,0,0,.35); transition:.12s;
 }
 .btn:hover{ transform:scale(1.02); filter:brightness(1.07); }
@@ -352,8 +352,18 @@ body.stage-focus .wrap-room > .brand,
 body.stage-focus .stage-bar,
 body.stage-focus .leave-room-fab,
 body.stage-focus .ambience-skip-btn{ display:none; }
-body.stage-focus .wrap-room{ padding-top:10px; padding-bottom:16px; }
-body.stage-focus .game-stage .panel{ margin-top:4px; margin-bottom:8px; }
+/* TOUT doit tenir sur une page (consigne 2026-07) :
+   - le jeu est CENTRÉ verticalement dans l'écran (flex + min-height:100svh)
+     au lieu d'être collé en haut ;
+   - s'il est PLUS HAUT que l'écran, un zoom automatique le rétrécit juste
+     assez (voir stageScale dans app/room/[code]/page.js) — le mode agrandi
+     élimine réellement le scroll, quel que soit le jeu. */
+body.stage-focus .wrap-room{
+  min-height:100vh; min-height:100svh;
+  display:flex; flex-direction:column; justify-content:center;
+  padding-top:10px; padding-bottom:10px;
+}
+body.stage-focus .game-stage .panel{ margin-top:4px; margin-bottom:6px; }
 body.stage-focus .back-room-fab{ top:12px; }
 body.stage-focus .stage-zoom-fab{ top:60px; }
 
@@ -1375,6 +1385,8 @@ body.stage-focus .stage-zoom-fab{ top:60px; }
 .gm-pick-wrap{
   position:absolute; left:0; top:0; z-index:30; pointer-events:none;
   will-change:transform;
+  opacity:0; /* révélée par le premier vrai mouvement (voir onMove) — jamais
+                de pioche fantôme en haut-gauche de la grille */
 }
 .gm-pick-cursor{
   display:block; font-size:46px; line-height:1;

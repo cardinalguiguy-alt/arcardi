@@ -455,22 +455,18 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
 
   // ----- Curseur-pioche (souris uniquement) -----
   // La grosse pioche remplace la flèche au-dessus de la grille et FRAPPE
-  // vers le bas au clic (demande 2026-07). Position mise à jour en direct
-  // sur l'élément (jamais par setState : un re-rendu React par mousemove
-  // ferait ramer la grille) et en translate3d sur un wrapper dédié —
-  // correctif lag 2026-07 : écrire left/top invalidait le layout à chaque
-  // mousemove, le curseur traînait derrière la souris ; une translation
-  // composée sur couche GPU (will-change) colle au pointeur. L'animation de
-  // frappe est rejouée en retirant/reposant .strike (reflow forcé entre les
-  // deux). Les pointeurs tactiles sont ignorés : au doigt, rien ne change.
-  function movePickCursor(e) {
-    if (e.pointerType && e.pointerType !== "mouse") return;
-    if (!pickCursor) setPickCursor(true);
-    const el = pickRef.current, grid = gridRef.current;
-    if (!el || !grid) return;
-    const r = grid.getBoundingClientRect();
-    el.style.transform = "translate3d(" + (e.clientX - r.left) + "px," + (e.clientY - r.top) + "px,0)";
-  }
+  // vers le bas au clic (demande 2026-07). Recette anti-lag (2 passes) :
+  //   1. position écrite en direct sur l'élément en translate3d (couche GPU,
+  //      will-change) — jamais par setState, jamais par left/top ;
+  //   2. le rectangle de la grille est mis en CACHE (gridRectRef) et
+  //      rafraîchi sur scroll/resize seulement : le getBoundingClientRect
+  //      par mousemove forçait une lecture de layout à chaque événement,
+  //      d'où le léger traînage résiduel ;
+  //   3. écoute de `pointerrawupdate` quand le navigateur le propose
+  //      (Chrome/Edge) : livré à la fréquence brute de la souris, sans
+  //      attendre le cadencement des pointermove.
+  // Les pointeurs tactiles sont ignorés : au doigt, rien ne change.
+  const gridRectRef = useRef(null);
   function enterPickCursor(e) {
     if (e.pointerType && e.pointerType !== "mouse") return;
     setPickCursor(true);
@@ -478,14 +474,40 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
   function leavePickCursor() { setPickCursor(false); }
   function strikePickCursor(e) {
     if (e.pointerType && e.pointerType !== "mouse") return;
-    movePickCursor(e);
-    const el = pickAxeRef.current;
-    if (!el) return;
-    el.classList.remove("strike");
-    void el.offsetWidth; // reflow : l'animation repart de zéro à chaque coup
-    el.classList.add("strike");
+    const el = pickRef.current;
+    const r = gridRectRef.current || gridRef.current?.getBoundingClientRect();
+    if (el && r) el.style.transform = "translate3d(" + (e.clientX - r.left) + "px," + (e.clientY - r.top) + "px,0)";
+    const axe = pickAxeRef.current;
+    if (!axe) return;
+    axe.classList.remove("strike");
+    void axe.offsetWidth; // reflow : l'animation repart de zéro à chaque coup
+    axe.classList.add("strike");
   }
   const showPick = pickCursor && isMyTurn && !winner;
+
+  useEffect(() => {
+    if (!showPick) return;
+    const grid = gridRef.current, el = pickRef.current;
+    if (!grid || !el) return;
+    const refreshRect = () => { gridRectRef.current = grid.getBoundingClientRect(); };
+    refreshRect();
+    const onMove = (e) => {
+      if (e.pointerType && e.pointerType !== "mouse") return;
+      const r = gridRectRef.current;
+      if (!r) return;
+      el.style.transform = "translate3d(" + (e.clientX - r.left) + "px," + (e.clientY - r.top) + "px,0)";
+      el.style.opacity = "1"; // invisible tant qu'aucune vraie position n'est connue
+    };
+    const evt = "onpointerrawupdate" in window ? "pointerrawupdate" : "pointermove";
+    grid.addEventListener(evt, onMove);
+    window.addEventListener("scroll", refreshRect, true);
+    window.addEventListener("resize", refreshRect);
+    return () => {
+      grid.removeEventListener(evt, onMove);
+      window.removeEventListener("scroll", refreshRect, true);
+      window.removeEventListener("resize", refreshRect);
+    };
+  }, [showPick]);
 
   // Points ARCARDI : 5 au vainqueur du duel, 0 au perdant — chacun
   // enregistre le sien (RLS), une seule fois, comme partout sur le site.
@@ -575,7 +597,6 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
           style={{ "--gm-cols": GM_COLS }}
           onPointerEnter={enterPickCursor}
           onPointerLeave={leavePickCursor}
-          onPointerMove={movePickCursor}
           onPointerDown={strikePickCursor}
         >
           {Array.from({ length: GM_ROWS * GM_COLS }, (_, idx) => {

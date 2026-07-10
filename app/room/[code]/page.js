@@ -315,6 +315,44 @@ export default function Room() {
     return () => document.body.classList.remove("stage-focus");
   }, [focusActive]);
 
+  // Mode agrandi, volet "zéro scroll" : si le jeu est plus HAUT que
+  // l'écran, on le rétrécit d'un zoom CSS calculé pour tout faire tenir
+  // (jamais sous 55 % : en-deçà, mieux vaut un peu de scroll qu'un jeu
+  // illisible). Mesure via offsetHeight — exprimé dans les unités LOCALES
+  // de l'élément, donc insensible au zoom qu'on lui applique : pas de
+  // boucle de rétroaction avec le ResizeObserver. Le seuil de 2 % évite de
+  // re-rendre pour des variations d'un pixel, et fait aussi office de
+  // garde-fou anti-oscillation. Recalculé à chaque changement de jeu, de
+  // taille de fenêtre, et de hauteur du contenu (mains qui grossissent,
+  // récap de manche...) — l'ajustement suit le gameplay tout seul.
+  const stageRef = useRef(null);
+  const [stageScale, setStageScale] = useState(1);
+  useEffect(() => {
+    if (!focusActive || typeof window === "undefined") { setStageScale(1); return; }
+    const el = stageRef.current;
+    if (!el) return;
+    let raf = 0;
+    const compute = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const natural = el.offsetHeight;
+        if (!natural) return;
+        const avail = window.innerHeight - 20; // marge de respiration haut+bas
+        const s = Math.max(0.55, Math.min(1, avail / natural));
+        setStageScale(prev => (Math.abs(prev - s) > 0.02 ? Math.round(s * 100) / 100 : prev));
+      });
+    };
+    compute();
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(compute) : null;
+    if (ro) ro.observe(el);
+    window.addEventListener("resize", compute);
+    return () => {
+      if (ro) ro.disconnect();
+      window.removeEventListener("resize", compute);
+      cancelAnimationFrame(raf);
+    };
+  }, [focusActive, room?.current_game]);
+
   if (error) return <div className="wrap"><div className="panel"><h1>😕</h1><p className="hint">{error}</p></div></div>;
   if (!room || !me) return <div className="wrap"><p className="muted">…</p></div>;
 
@@ -413,7 +451,13 @@ export default function Room() {
                   pour libérer la largeur au profit des chips de score. */}
             </div>
 
-            <div className="game-stage">
+            <div
+              className="game-stage"
+              ref={stageRef}
+              /* Mode agrandi : zoom auto pour tout faire tenir à l'écran
+                 (1 = taille normale, voir l'effet stageScale plus haut). */
+              style={focusActive && stageScale < 1 ? { zoom: stageScale } : undefined}
+            >
               {meta && (() => {
                 const StageComponent = STAGE_COMPONENT[meta.stage] || DoorStage;
                 return (
