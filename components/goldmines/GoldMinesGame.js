@@ -3,56 +3,59 @@ import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { saveGameState, readGameState, resetRoomToLobby } from "@/lib/gameSync";
 import Crossfade from "@/components/Crossfade";
-import { GM_ROWS, GM_COLS, GM_NUGGETS, genMine, digResult, nuggetsLeft, gmPointsForPlace } from "./mines";
-import { decideBotDig } from "./botLogic";
+import {
+  GM_ROWS, GM_COLS, GM_NUGGETS, GM_WIN_AT,
+  genMine, digResult, bombResult, nuggetsLeft, gmPointsForPlace,
+} from "./mines";
+import { decideBotMove } from "./botLogic";
 
 /* ==========================================================================
-   GOLD MINES — démineur inversé en 2 contre 2 (demande 2026-07).
+   GOLD MINES — démineur inversé en DUEL (refonte 2026-07, spec complète).
 
-   La grille cache des PÉPITES D'OR ; un coup de pioche révèle soit un
-   chiffre (pépites voisines, indices classiques du démineur), soit une
-   pépite : +1 or pour le mineur ET il REJOUE immédiatement. Les tours
-   alternent entre les deux équipes (sièges entrelacés Or/Bleu). Quand la
-   dernière pépite est extraite, on compte l'or : équipe gagnante au total
-   (le nombre de pépites est IMPAIR — jamais d'égalité), classement
-   individuel pour les points ARCARDI.
+   Ambiance chercheur d'or : terre brune, pioches, et des PÉPITES dorées qui
+   RAYONNENT à la découverte (éclat + rayons tournants ~2,8 s) avant de
+   s'estomper en un petit résidu doré cerclé à la couleur du découvreur.
+
+   Règles : chacun son tour, un clic = un coup de pioche.
+   - pépite  -> +1 or au mineur, il REJOUE ;
+   - chiffre -> nombre de pépites dans les 8 cases voisines, tour à l'autre ;
+   - case vide -> toute la zone vide voisine se dégage (indices offerts à
+     l'adversaire !), tour à l'autre.
+   PREMIER À 13 PÉPITES (sur 25) : victoire immédiate — 13 est la majorité
+   absolue de 25, un vainqueur est garanti, jamais d'égalité.
+   DYNAMITE : une par joueur et par partie, remplace le coup, révèle le
+   carré 3×3 visé (sans propagation), rafle ses pépites, et fait rejouer si
+   au moins une pépite en sort. À utiliser au bon moment : mal placée, elle
+   n'offre que des indices à l'adversaire.
 
    Pattern réseau : hôte arbitre, identique à Chromatik (match_start /
-   state / move_attempt, bots calculés côté hôte, minuteur de tour 30s→5s,
-   reprise sur rechargement avec réarmement bots+minuteur). Même modèle de
-   confiance : l'état complet (dont la position des pépites) transite chez
-   tous les clients, seule l'UI cache ce qui doit l'être — comme les mains
-   de Chromatik ou le code des portes de Diapason.
+   state / move_attempt, bot calculé côté hôte, minuteur de tour 30s→5s,
+   reprise sur rechargement avec réarmement bot+minuteur). Même modèle de
+   confiance que le reste du site : l'état complet transite chez tous les
+   clients, l'UI cache ce qui doit l'être.
    ========================================================================== */
 
 const GAME_ID = "goldmines";
-const TABLE_SIZE = 4;
+const TABLE_SIZE = 2; // duel — un bot complète si on joue seul
 const HUMAN_TURN_MS = 30000;
 const HUMAN_TURN_SHORT_MS = 5000;
 const HUMAN_TURN_STRIKES = 2;
-const BOT_AVATARS = ["🤖", "🦾", "👾"];
-// Sièges pairs = équipe Or, impairs = équipe Bleu : l'ordre des sièges EST
-// l'ordre des tours, donc les équipes alternent naturellement un coup de
-// pioche chacun (A1, B1, A2, B2, A1…).
-export function teamOf(seatIdx) { return seatIdx % 2 === 0 ? "gold" : "blue"; }
+// Couleur d'identification de chaque mineur (cercle du résidu de pépite,
+// liseré de sa carte joueur) : ambre pour le siège 0, cuivre pour le 1.
+const SEAT_TONES = ["amber", "copper"];
 
 function makeBotSeat(n) {
-  return { id: "bot" + n, username: "Bot " + n, avatar: BOT_AVATARS[(n - 1) % BOT_AVATARS.length], isBot: true };
+  return { id: "bot" + n, username: "Bot " + n, avatar: "🤖", isBot: true };
 }
 
 function dealState(seats) {
   const mine = genMine();
-  const gold = {};
-  seats.forEach(seat => { gold[seat.id] = 0; });
+  const gold = {}, bombs = {};
+  seats.forEach(seat => { gold[seat.id] = 0; bombs[seat.id] = true; });
   return {
-    seats, mine, revealed: {}, gold, turnIdx: 0, left: GM_NUGGETS,
+    seats, mine, revealed: {}, gold, bombs, turnIdx: 0, left: GM_NUGGETS,
     winner: null, lastAction: null,
   };
-}
-
-// Or d'une équipe, à partir du tableau de sièges et du sac d'or individuel.
-function teamGold(seats, gold, team) {
-  return seats.reduce((s, seat, i) => s + (teamOf(i) === team ? (gold[seat.id] || 0) : 0), 0);
 }
 
 export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFinish }) {
@@ -62,18 +65,23 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
   const [mine, setMine] = useState(null);
   const [revealed, setRevealed] = useState({});
   const [gold, setGold] = useState({});
+  const [bombs, setBombs] = useState({});
   const [turnIdx, setTurnIdx] = useState(0);
   const [left, setLeft] = useState(GM_NUGGETS);
-  const [winner, setWinner] = useState(null); // "gold" | "blue" | null
+  const [winner, setWinner] = useState(null); // seatId | null
   const [lastAction, setLastAction] = useState(null);
   const [myGain, setMyGain] = useState(0);
   const [channelReady, setChannelReady] = useState(false);
   const [turnDeadline, setTurnDeadline] = useState(null);
   const [turnDeadlineSeat, setTurnDeadlineSeat] = useState(null);
   const [now, setNow] = useState(() => Date.now());
-  // "+1 🪙" qui saute sur la puce du mineur quand une pépite sort — effet
-  // purement local, dérivé du même lastAction reçu par tous.
-  const [goldPop, setGoldPop] = useState(null); // { seatId, key } | null
+  // Dynamite armée (local) : le prochain clic sur une case cachée fait
+  // sauter le carré 3×3 au lieu de piocher.
+  const [bombArmed, setBombArmed] = useState(false);
+  // Effets locaux, tous dérivés du même lastAction reçu par broadcast :
+  const [goldPop, setGoldPop] = useState(null);      // "+N 🪙" sur la carte du mineur
+  const [freshNuggets, setFreshNuggets] = useState({ ids: [], key: 0 }); // pépites qui rayonnent
+  const [bombFx, setBombFx] = useState(null);        // 💥 + secousse de la grille
 
   const channelRef = useRef(null);
   const stateRef = useRef(null);
@@ -86,17 +94,22 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
   const turnMetaRef = useRef({ deadline: null, seatId: null });
   const goldPopKeyRef = useRef(0);
   const goldPopTimerRef = useRef(null);
+  const freshKeyRef = useRef(0);
+  const freshTimerRef = useRef(null);
+  const bombFxKeyRef = useRef(0);
+  const bombFxTimerRef = useRef(null);
+  const lastActionSeenRef = useRef(null);
 
   useEffect(() => {
-    stateRef.current = { seats, mine, revealed, gold, turnIdx, left, winner };
-  }, [seats, mine, revealed, gold, turnIdx, left, winner]);
+    stateRef.current = { seats, mine, revealed, gold, bombs, turnIdx, left, winner };
+  }, [seats, mine, revealed, gold, bombs, turnIdx, left, winner]);
 
   function applyLocalState(s, extra = {}) {
     setSeats(s.seats); setMine(s.mine); setRevealed(s.revealed || {});
-    setGold(s.gold || {}); setTurnIdx(s.turnIdx); setLeft(s.left);
+    setGold(s.gold || {}); setBombs(s.bombs || {}); setTurnIdx(s.turnIdx); setLeft(s.left);
     setWinner(s.winner || null); setLastAction(s.lastAction || null);
     setTurnDeadline(s.turnDeadline || null); setTurnDeadlineSeat(s.turnDeadlineSeat || null);
-    if (extra.resetGain) { setMyGain(0); savedResultRef.current = false; }
+    if (extra.resetGain) { setMyGain(0); savedResultRef.current = false; setBombArmed(false); }
   }
 
   useEffect(() => {
@@ -105,12 +118,32 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
     return () => clearInterval(iv);
   }, [turnDeadline]);
 
+  // ----- Effets locaux dérivés de lastAction (jamais rejoués au reload) -----
   useEffect(() => {
-    if (!lastAction || lastAction.type !== "dig" || !lastAction.nugget) return;
-    goldPopKeyRef.current += 1;
-    setGoldPop({ seatId: lastAction.seatId, key: goldPopKeyRef.current });
-    clearTimeout(goldPopTimerRef.current);
-    goldPopTimerRef.current = setTimeout(() => setGoldPop(null), 1400);
+    if (!lastAction) return;
+    const key = lastAction.type + ":" + lastAction.seatId + ":" + (lastAction.idx ?? lastAction.center ?? "") + ":" + (lastAction.gained ?? "");
+    if (lastActionSeenRef.current === key) return;
+    lastActionSeenRef.current = key;
+
+    const nuggetIds = lastAction.type === "dig" && lastAction.nugget
+      ? [lastAction.idx]
+      : lastAction.type === "bomb" ? (lastAction.nuggetCells || []) : [];
+    if (nuggetIds.length > 0) {
+      freshKeyRef.current += 1;
+      setFreshNuggets({ ids: nuggetIds, key: freshKeyRef.current });
+      clearTimeout(freshTimerRef.current);
+      freshTimerRef.current = setTimeout(() => setFreshNuggets({ ids: [], key: freshKeyRef.current }), 2900);
+      goldPopKeyRef.current += 1;
+      setGoldPop({ seatId: lastAction.seatId, count: nuggetIds.length, key: goldPopKeyRef.current });
+      clearTimeout(goldPopTimerRef.current);
+      goldPopTimerRef.current = setTimeout(() => setGoldPop(null), 1500);
+    }
+    if (lastAction.type === "bomb") {
+      bombFxKeyRef.current += 1;
+      setBombFx({ center: lastAction.center, key: bombFxKeyRef.current });
+      clearTimeout(bombFxTimerRef.current);
+      bombFxTimerRef.current = setTimeout(() => setBombFx(null), 1100);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lastAction]);
 
@@ -127,7 +160,7 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
       applyLocalState(payload, { resetGain: true });
       setPhase("playing");
       persist(payload);
-      scheduleBots(); // si un bot ouvre la mine, l'hôte doit l'armer ici
+      scheduleBots();
     });
 
     ch.on("broadcast", { event: "state" }, ({ payload }) => {
@@ -148,12 +181,15 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
           restoredRef.current = true;
           const saved = readGameState(room, GAME_ID);
           if (saved) {
+            // Marque le lastAction restauré comme déjà vu : jamais de
+            // re-explosion ni de pépites qui re-rayonnent au rechargement.
+            if (saved.lastAction) {
+              lastActionSeenRef.current = saved.lastAction.type + ":" + saved.lastAction.seatId + ":" + (saved.lastAction.idx ?? saved.lastAction.center ?? "") + ":" + (saved.lastAction.gained ?? "");
+            }
             applyLocalState(saved);
             setPhase("playing");
             autoStartedRef.current = true;
-            // Reprise hôte : réarmer bots + minuteur, sinon table figée si
-            // la sauvegarde datait d'un tour de bot (même correctif que
-            // Chromatik 2026-07).
+            // Reprise hôte : réarmer bot + minuteur (correctif Chromatik 2026-07).
             if (isHost && !saved.winner) {
               broadcastNewState(saved);
               scheduleBots();
@@ -167,6 +203,8 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
       clearTimeout(botTimer.current);
       clearTimeout(turnTimeoutRef.current);
       clearTimeout(goldPopTimerRef.current);
+      clearTimeout(freshTimerRef.current);
+      clearTimeout(bombFxTimerRef.current);
       supabase.removeChannel(ch);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -181,8 +219,8 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
     return { deadline: Date.now() + ms, seatId: seat.id };
   }
 
-  // Échéance dépassée : l'hôte pioche AU HASARD parmi les cases cachées à
-  // la place du joueur — le jeu ne se fige jamais sur un distrait.
+  // Échéance dépassée : pioche AU HASARD (jamais la dynamite) à la place du
+  // joueur — la partie ne se fige jamais sur un distrait.
   function armHumanTurnTimer() {
     clearTimeout(turnTimeoutRef.current);
     if (!isHost) return;
@@ -221,65 +259,73 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
     if (!s || s.winner || !s.mine) return;
     const currentSeat = s.seats[s.turnIdx];
     if (!currentSeat || currentSeat.id !== seatId) return;
-    if (action.type !== "dig") return;
     const idx = action.idx;
     if (typeof idx !== "number" || idx < 0 || idx >= s.mine.nugget.length) return;
-    if (s.revealed[idx]) return; // déjà pioché : coup illégal, ignoré
+    if (s.revealed[idx]) return; // case déjà creusée : coup illégal, ignoré
 
-    const res = digResult(s.mine, s.revealed, idx);
     const revealed = { ...s.revealed };
-    // Pépite : marquée à l'id du mineur (pour colorer la case à son équipe) ;
-    // chiffres/zéros : simple `true`.
-    for (const c of res.cells) revealed[c] = res.nugget ? seatId : true;
     const gold = { ...s.gold };
-    if (res.nugget) gold[seatId] = (gold[seatId] || 0) + 1;
-    const left = nuggetsLeft(s.mine, revealed);
+    const bombs = { ...s.bombs };
+    let replay = false;
+    let last = null;
 
+    if (action.type === "bomb") {
+      if (!bombs[seatId]) return; // dynamite déjà utilisée : coup illégal
+      const res = bombResult(s.mine, s.revealed, idx);
+      for (const c of res.cells) revealed[c] = s.mine.nugget[c] ? seatId : true;
+      gold[seatId] = (gold[seatId] || 0) + res.nuggets.length;
+      bombs[seatId] = false;
+      replay = res.nuggets.length > 0; // au moins une pépite soufflée : il rejoue
+      last = { type: "bomb", seatId, center: idx, cells: res.cells, nuggetCells: res.nuggets, gained: res.nuggets.length };
+    } else if (action.type === "dig") {
+      const res = digResult(s.mine, s.revealed, idx);
+      for (const c of res.cells) revealed[c] = res.nugget ? seatId : true;
+      if (res.nugget) { gold[seatId] = (gold[seatId] || 0) + 1; replay = true; }
+      last = { type: "dig", seatId, idx, nugget: res.nugget, count: res.cells.length };
+    } else return;
+
+    const left = nuggetsLeft(s.mine, revealed);
+    // Victoire : PREMIER À 13 PÉPITES (garanti avant l'épuisement des 25) ;
+    // filet de sécurité si la mine se vide quand même : le plus riche gagne
+    // (25 est impair, jamais d'égalité).
     let winner = null;
-    if (left === 0) {
-      // Le nombre de pépites est impair : jamais d'égalité d'équipes.
-      winner = teamGold(s.seats, gold, "gold") > teamGold(s.seats, gold, "blue") ? "gold" : "blue";
-    }
-    // Pépite trouvée -> le mineur REJOUE (le tour ne bouge pas) ; sinon le
-    // tour passe au siège suivant (l'ordre des sièges alterne les équipes).
-    const turnIdx = res.nugget ? s.turnIdx : (s.turnIdx + 1) % s.seats.length;
+    if ((gold[seatId] || 0) >= GM_WIN_AT) winner = seatId;
+    else if (left === 0) winner = [...s.seats].sort((a, b) => (gold[b.id] || 0) - (gold[a.id] || 0))[0].id;
 
     const next = {
-      seats: s.seats, mine: s.mine, revealed, gold, left, winner,
-      turnIdx: winner ? s.turnIdx : turnIdx,
-      lastAction: { type: "dig", seatId, idx, nugget: res.nugget, count: res.cells.length },
+      seats: s.seats, mine: s.mine, revealed, gold, bombs, left, winner,
+      turnIdx: winner || replay ? s.turnIdx : (s.turnIdx + 1) % s.seats.length,
+      lastAction: last,
     };
     broadcastNewState(next);
     scheduleBots();
   }
 
-  // Bot au tour suivant : l'hôte pioche pour lui après un délai de
-  // lisibilité (même respiration aléatoire que Chromatik).
+  // Bot au tour suivant : l'hôte joue pour lui après un délai de lisibilité.
   function scheduleBots() {
     if (!isHost) return;
-    const delay = 700 + Math.random() * 2300;
+    const delay = 800 + Math.random() * 2200;
     botTimer.current = setTimeout(() => {
       const s = stateRef.current;
       if (!s || s.winner || !s.mine) return;
       const seat = s.seats[s.turnIdx];
       if (!seat || !seat.isBot) return;
-      const idx = decideBotDig(s.mine, s.revealed);
-      if (idx == null) return;
-      hostApplyMove(seat.id, { type: "dig", idx });
+      const opp = s.seats.find(x => x.id !== seat.id);
+      const move = decideBotMove(s.mine, s.revealed, {
+        bombAvailable: !!s.bombs[seat.id],
+        myGold: s.gold[seat.id] || 0,
+        oppGold: opp ? (s.gold[opp.id] || 0) : 0,
+      });
+      if (!move) return;
+      hostApplyMove(seat.id, move);
     }, delay);
   }
 
-  // ----- Démarrage : 4 sièges fixes, bots pour compléter, équipes entrelacées -----
+  // ----- Démarrage : duel, un bot complète si besoin -----
   function startWith(humanSeats) {
-    const bots = [];
-    for (let i = humanSeats.length + 1; i <= TABLE_SIZE; i++) bots.push(makeBotSeat(i - humanSeats.length));
-    // Mélange puis entrelacement implicite : l'ordre mélangé DEVIENT l'ordre
-    // des tours, sièges pairs = Or, impairs = Bleu (voir teamOf).
-    const all = [...humanSeats, ...bots];
-    for (let i = all.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [all[i], all[j]] = [all[j], all[i]];
-    }
+    const all = [...humanSeats];
+    for (let i = all.length + 1; i <= TABLE_SIZE; i++) all.push(makeBotSeat(i - humanSeats.length));
+    if (Math.random() < 0.5) all.reverse(); // qui ouvre la mine : pile ou face
     sendMatchStart(dealState(all));
   }
 
@@ -322,21 +368,21 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
   const isPlayer = mySeatIdx !== -1;
   const isMyTurn = phase === "playing" && !winner && isPlayer && seats[turnIdx]?.id === me.id;
   const turnRemaining = turnDeadline ? Math.max(0, Math.ceil((turnDeadline - now) / 1000)) : null;
+  const myBombAvailable = isPlayer && !!bombs[me.id];
 
-  function attemptDig(idx) {
+  function attemptCell(idx) {
     if (!isMyTurn || revealed[idx]) return;
-    channelRef.current?.send({ type: "broadcast", event: "move_attempt", payload: { seatId: me.id, action: { type: "dig", idx } } });
+    const action = bombArmed && myBombAvailable ? { type: "bomb", idx } : { type: "dig", idx };
+    setBombArmed(false);
+    channelRef.current?.send({ type: "broadcast", event: "move_attempt", payload: { seatId: me.id, action } });
   }
 
-  // Points ARCARDI en fin de partie : classement individuel à l'or récolté,
-  // équipe gagnante prioritaire sur les ex æquo — chacun enregistre le sien
-  // (RLS), une seule fois, comme partout ailleurs sur le site.
+  // Points ARCARDI : 5 au vainqueur du duel, 0 au perdant — chacun
+  // enregistre le sien (RLS), une seule fois, comme partout sur le site.
   useEffect(() => {
     if (!winner || savedResultRef.current || !isPlayer) return;
     savedResultRef.current = true;
-    const ranking = rankSeats();
-    const place = ranking.findIndex(x => x.seat.id === me.id);
-    const gain = gmPointsForPlace(place);
+    const gain = gmPointsForPlace(winner === me.id ? 0 : 1);
     setMyGain(gain);
     if (gain <= 0) return;
     (async () => {
@@ -348,64 +394,59 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [winner]);
 
-  function rankSeats() {
-    return seats
-      .map((seat, i) => ({ seat, i, team: teamOf(i), g: gold[seat.id] || 0 }))
-      .sort((a, b) => (b.g - a.g) || ((b.team === winner) - (a.team === winner)));
-  }
-
   const needsPick = players.length > TABLE_SIZE;
   const activeSeat = seats[turnIdx];
   const lastSeat = lastAction ? seats.find(s => s.id === lastAction.seatId) : null;
+  const winnerSeat = winner ? seats.find(s => s.id === winner) : null;
 
   let content;
   if (phase === "playing" && mine) {
     let statusText;
     if (winner) statusText = null;
-    else if (lastAction?.nugget) {
-      statusText = lastAction.seatId === me.id
-        ? `🪙 ${t("gmNuggetYou")}`
-        : `🪙 ${lastSeat?.username} ${t("gmNuggetOther")}`;
+    else if (bombArmed && isMyTurn) statusText = `💣 ${t("gmBombArm")}`;
+    else if (lastAction?.type === "bomb") {
+      statusText = `💥 ${lastAction.seatId === me.id ? t("gmBombYou") : `${lastSeat?.username} ${t("gmBombOther")}`} (+${lastAction.gained} 🪙)`;
+    } else if (lastAction?.type === "dig" && lastAction.nugget) {
+      statusText = lastAction.seatId === me.id ? `🪙 ${t("gmNuggetYou")}` : `🪙 ${lastSeat?.username} ${t("gmNuggetOther")}`;
     } else if (isMyTurn) statusText = `⛏️ ${t("gmYourTurn")}`;
     else if (isPlayer) statusText = `${t("chromatikWaitingFor")} ${activeSeat?.username}…`;
     else statusText = t("gmSpectating");
 
-    const tg = teamGold(seats, gold, "gold");
-    const tb = teamGold(seats, gold, "blue");
-
     content = (
       <div>
-        {/* Deux camps face à face, sièges dans l'ordre des tours. */}
-        <div className="gm-teams">
-          {["gold", "blue"].map(team => (
-            <div key={team} className={"gm-team " + team + (winner === team ? " won" : "")}>
-              <div className="gm-team-head">
-                <span className="gm-team-name">{team === "gold" ? `🟡 ${t("gmTeamGold")}` : `🔵 ${t("gmTeamBlue")}`}</span>
-                <span className="gm-team-total">{team === "gold" ? tg : tb} 🪙</span>
-              </div>
-              {seats.map((s, i) => teamOf(i) === team && (
-                <div key={s.id} className={"gm-player" + (activeSeat?.id === s.id && !winner ? " active" : "") + (s.id === me.id ? " me" : "")}>
-                  <span className="avatar">{s.avatar}</span>
-                  <span className="name">{s.username}</span>
-                  {activeSeat?.id === s.id && s.isBot && !winner && (
-                    <span className="pres-think" aria-hidden="true"><i>.</i><i className="d2">.</i><i className="d3">.</i></span>
-                  )}
-                  <span className="gm-player-gold">
-                    {gold[s.id] || 0} 🪙
-                    {turnDeadlineSeat === s.id && turnRemaining != null && !winner && (
-                      <span className={"turn-timer-chip mini" + (turnRemaining <= 5 ? " hot" : "")}>{turnRemaining}s</span>
-                    )}
-                  </span>
-                  {goldPop?.seatId === s.id && <span className="gm-gold-pop" key={goldPop.key}>+1 🪙</span>}
-                </div>
-              ))}
+        {/* Duel : deux cartes de mineur face à face, progression vers 13. */}
+        <div className="gm-duel">
+          {seats.map((s, i) => (
+            <div key={s.id} className={"gm-miner " + SEAT_TONES[i]
+              + (activeSeat?.id === s.id && !winner ? " active" : "")
+              + (s.id === me.id ? " me" : "")
+              + (winner === s.id ? " won" : "")}>
+              <span className="gm-miner-avatar">{s.avatar}</span>
+              <span className="gm-miner-name">
+                {s.username}
+                {activeSeat?.id === s.id && s.isBot && !winner && (
+                  <span className="pres-think" aria-hidden="true"><i>.</i><i className="d2">.</i><i className="d3">.</i></span>
+                )}
+              </span>
+              <span className="gm-miner-gold">
+                {gold[s.id] || 0}<i>/{GM_WIN_AT}</i> 🪙
+              </span>
+              <span className="gm-miner-track" aria-hidden="true">
+                <span className="gm-miner-fill" style={{ width: Math.min(100, ((gold[s.id] || 0) / GM_WIN_AT) * 100) + "%" }} />
+              </span>
+              {bombs[s.id] && <span className="gm-miner-bomb" title={t("gmBombHint")}>💣</span>}
+              {turnDeadlineSeat === s.id && turnRemaining != null && !winner && (
+                <span className={"turn-timer-chip mini" + (turnRemaining <= 5 ? " hot" : "")}>{turnRemaining}s</span>
+              )}
+              {goldPop?.seatId === s.id && <span className="gm-gold-pop" key={goldPop.key}>+{goldPop.count} 🪙</span>}
             </div>
           ))}
+          <span className="gm-vs" aria-hidden="true">⛏️</span>
         </div>
 
         <p className="muted gm-status">
           {winner
-            ? <strong>{winner === "gold" ? `🟡 ${t("gmTeamGold")}` : `🔵 ${t("gmTeamBlue")}`} {t("gmWinTeam")}</strong>
+            ? <strong>🏆 {winner === me.id ? t("gmWinYou") : `${winnerSeat?.username} ${t("gmWinOther")}`}</strong>
             : <>{statusText} <span className="gm-left">— {left} {t("gmNuggetsLeft")}</span></>}
         </p>
 
@@ -418,7 +459,10 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
           </div>
         )}
 
-        <div className={"gm-grid" + (isMyTurn && !winner ? " myturn" : "")} style={{ "--gm-cols": GM_COLS }}>
+        <div
+          className={"gm-grid" + (isMyTurn && !winner ? " myturn" : "") + (bombArmed && isMyTurn ? " bombing" : "") + (bombFx ? " quake" : "")}
+          style={{ "--gm-cols": GM_COLS }}
+        >
           {Array.from({ length: GM_ROWS * GM_COLS }, (_, idx) => {
             const rev = revealed[idx];
             if (!rev) {
@@ -427,7 +471,7 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
                   key={idx}
                   type="button"
                   className="gm-cell hidden"
-                  onClick={() => attemptDig(idx)}
+                  onClick={() => attemptCell(idx)}
                   disabled={!isMyTurn || !!winner}
                   aria-label={"case " + idx}
                 />
@@ -435,35 +479,82 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
             }
             if (mine.nugget[idx]) {
               const diggerIdx = seats.findIndex(s => s.id === rev);
-              const team = diggerIdx !== -1 ? teamOf(diggerIdx) : "gold";
+              const tone = SEAT_TONES[diggerIdx] || "amber";
               const digger = seats[diggerIdx];
-              const isLast = lastAction?.idx === idx && lastAction?.nugget;
+              const isFresh = freshNuggets.ids.includes(idx);
               return (
-                <span key={idx} className={"gm-cell nugget " + team + (isLast ? " fresh" : "")} title={digger?.username}>
-                  🪙
+                <span key={idx} className={"gm-cell nugget " + tone + (isFresh ? " fresh" : " settled")} title={digger?.username}>
+                  {isFresh && <i className="gm-rays" aria-hidden="true" />}
+                  <b>🪙</b>
                 </span>
               );
             }
             const n = mine.adj[idx];
+            const bombedNow = bombFx && lastAction?.type === "bomb" && lastAction.cells?.includes(idx);
+            // Retournement en vague depuis le centre de l'explosion.
+            const delay = bombedNow
+              ? Math.max(Math.abs(Math.floor(idx / GM_COLS) - Math.floor(lastAction.center / GM_COLS)),
+                         Math.abs((idx % GM_COLS) - (lastAction.center % GM_COLS))) * 130
+              : 0;
             return (
-              <span key={idx} className={"gm-cell open n" + n}>
+              <span key={idx} className={"gm-cell open n" + n + (bombedNow ? " bombed" : "")}
+                style={bombedNow ? { animationDelay: delay + "ms" } : undefined}>
                 {n > 0 ? n : ""}
               </span>
             );
           })}
+
+          {/* 💥 Explosion : onde de choc + éclat au centre du carré soufflé,
+              pendant que la grille tremble (classe .quake). */}
+          {bombFx && (
+            <span
+              key={bombFx.key}
+              className="gm-boom"
+              aria-hidden="true"
+              style={{
+                left: (((bombFx.center % GM_COLS) + 0.5) / GM_COLS * 100) + "%",
+                top: ((Math.floor(bombFx.center / GM_COLS) + 0.5) / GM_ROWS * 100) + "%",
+              }}
+            >
+              <i className="gm-boom-wave" />
+              <i className="gm-boom-flash">💥</i>
+            </span>
+          )}
         </div>
+
+        {/* Dynamite : un seul bâton par partie — armer, viser, boum. */}
+        {!winner && isPlayer && (
+          <div className="gm-bomb-bar">
+            {myBombAvailable ? (
+              bombArmed ? (
+                <>
+                  <span className="gm-bomb-armed-hint">💣 {t("gmBombArm")}</span>
+                  <button type="button" className="btn ghost" style={{ width: "auto", padding: "8px 16px", fontSize: 13 }} onClick={() => setBombArmed(false)}>
+                    {t("chromatikCancel")}
+                  </button>
+                </>
+              ) : (
+                <button type="button" className="gm-bomb-btn" disabled={!isMyTurn} onClick={() => setBombArmed(true)} title={t("gmBombHint")}>
+                  💣 {t("gmBomb")}
+                </button>
+              )
+            ) : (
+              <span className="gm-bomb-used">💨 {t("gmBombUsed")}</span>
+            )}
+          </div>
+        )}
 
         {winner && (
           <div className="chromatik-round-summary">
             <h3 className="chromatik-round-summary-title">
-              {winner === "gold" ? "🟡" : "🔵"} {winner === "gold" ? t("gmTeamGold") : t("gmTeamBlue")} {t("gmWinTeam")}
+              🏆 {winnerSeat?.avatar} {winnerSeat?.username} {t("gmWinOther")}
             </h3>
             <div className="pres-podium">
-              {rankSeats().map((x, i) => (
-                <div key={x.seat.id} className={"pres-podium-row" + (i === 0 ? " first" : "") + (x.seat.id === me.id ? " me" : "")}>
+              {[...seats].sort((a, b) => (gold[b.id] || 0) - (gold[a.id] || 0)).map((s, i) => (
+                <div key={s.id} className={"pres-podium-row" + (i === 0 ? " first" : "") + (s.id === me.id ? " me" : "")}>
                   <span className="place">{i + 1}</span>
-                  <span className="name">{x.team === "gold" ? "🟡" : "🔵"} {x.seat.avatar} {x.seat.username}</span>
-                  <span className="pts">{x.g} 🪙</span>
+                  <span className="name">{s.avatar} {s.username}</span>
+                  <span className="pts">{gold[s.id] || 0} 🪙</span>
                 </div>
               ))}
             </div>
@@ -487,11 +578,11 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
       </div>
     );
   } else {
-    // phase "intro" : choix des 4 joueurs si la salle en compte plus
+    // phase "intro" : choix des 2 mineurs si la salle en compte plus
     if (needsPick) {
       content = isHost ? (
         <div>
-          <p className="hint">{t("gmPickHint")} ({TABLE_SIZE} {t("chromatikSeats")})</p>
+          <p className="hint">{t("gmPickHint")}</p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, margin: "12px 0 16px" }}>
             {players.map(p => {
               const on = selected.includes(p.profile_id);
@@ -519,8 +610,9 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
   }
 
   return (
-    <div className="panel" style={{ maxWidth: "min(720px, 94vw)" }}>
+    <div className="panel gm-panel" style={{ maxWidth: "min(640px, 94vw)" }}>
       <h1>{t("goldminesTitle")}</h1>
+      <p className="muted gm-goal-line">🎯 {t("gmGoal")}</p>
       <Crossfade id={phase}>{content}</Crossfade>
     </div>
   );

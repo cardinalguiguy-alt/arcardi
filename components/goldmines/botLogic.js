@@ -1,39 +1,36 @@
-import { neighborsOf, nuggetsLeft } from "./mines";
+import { neighborsOf, bombSquare, nuggetsLeft, GM_WIN_AT } from "./mines";
 
 // ==========================================================================
-// Décision d'un bot pour son coup de pioche. Renvoie l'INDEX de la case à
-// piocher. Heuristique de démineur inversé, volontairement lisible :
+// Décision d'un bot pour son coup. Renvoie { type:"dig", idx } ou
+// { type:"bomb", idx } (idx = case visée / centre du carré de dynamite).
 //
-//   1. Contraintes certaines : pour chaque chiffre révélé, si le nombre de
-//      pépites qui lui manquent égale son nombre de voisines cachées,
-//      TOUTES ces voisines sont des pépites -> le bot pioche dedans.
-//   2. Sinon, probabilité estimée par case cachée : le max de
-//      (pépites manquantes / voisines cachées) sur les contraintes qui la
-//      touchent, sinon la densité globale restante. Le bot pioche une case
-//      parmi les meilleures (choix aléatoire entre ex æquo, pour ne pas
-//      être une horloge).
-//   3. Imperfection assumée (~10%) : un coup "au jugé" dans une case
-//      cachée quelconque — un bot infaillible serait insupportable en
-//      face, exactement comme l'oubli d'UNO des bots de Chromatik.
+// Heuristique de démineur inversé, volontairement lisible :
+//   1. Carte de probabilités par case cachée : pour chaque chiffre révélé,
+//      (pépites manquantes / voisines cachées) ; une contrainte satisfaite
+//      met ses voisines cachées à 0 (sûrement vides) ; ailleurs, densité
+//      globale restante.
+//   2. Contraintes certaines (proba 1) : le bot pioche dedans.
+//   3. Dynamite : si elle est encore disponible, le bot la garde pour un
+//      moment RENTABLE ou DÉCISIF — espérance >= 2 pépites dans le meilleur
+//      carré 3×3, OU l'adversaire est à 1-2 pépites de la victoire (coup de
+//      poker défensif), OU il peut lui-même conclure la partie avec.
+//   4. Sinon, pioche la case la plus probable (choix aléatoire entre
+//      ex æquo, pour ne pas être une horloge).
+//   5. Imperfection assumée (~8 %) : un coup "au jugé" — un bot infaillible
+//      serait insupportable en face.
 //
-// `revealed` : map idx -> truthy pour toute case déjà révélée.
-// La triche est structurellement impossible : le bot ne lit QUE adj des
-// cases révélées et la densité restante — jamais mine.nugget des cachées
-// (sauf via nuggetsLeft, un simple compteur global connu de tous).
+// Triche structurellement impossible : le bot ne lit QUE les chiffres des
+// cases révélées et le compteur global de pépites restantes — jamais
+// mine.nugget des cases cachées.
 // ==========================================================================
-export function decideBotDig(mine, revealed) {
+
+function probMap(mine, revealed) {
   const n = mine.nugget.length;
   const hidden = [];
   for (let i = 0; i < n; i++) if (!revealed[i]) hidden.push(i);
-  if (hidden.length === 0) return null;
-
-  // ~10% : coup au jugé.
-  if (Math.random() < 0.1) return hidden[Math.floor(Math.random() * hidden.length)];
-
   const prob = {};
-  const baseP = nuggetsLeft(mine, revealed) / hidden.length;
+  const baseP = hidden.length ? nuggetsLeft(mine, revealed) / hidden.length : 0;
   for (const i of hidden) prob[i] = baseP;
-
   const certain = [];
   for (let i = 0; i < n; i++) {
     if (!revealed[i] || mine.nugget[i] || mine.adj[i] === 0) continue;
@@ -42,20 +39,40 @@ export function decideBotDig(mine, revealed) {
     if (hiddenNbs.length === 0) continue;
     const foundNbs = nbs.filter(j => revealed[j] && mine.nugget[j]).length;
     const remaining = mine.adj[i] - foundNbs;
-    if (remaining <= 0) {
-      // Contrainte satisfaite : ses voisines cachées sont SÛREMENT vides.
-      for (const j of hiddenNbs) prob[j] = 0;
-      continue;
-    }
+    if (remaining <= 0) { for (const j of hiddenNbs) prob[j] = 0; continue; }
     const p = remaining / hiddenNbs.length;
     if (p >= 1) certain.push(...hiddenNbs);
     else for (const j of hiddenNbs) prob[j] = Math.max(prob[j], p);
   }
+  return { hidden, prob, certain };
+}
 
-  if (certain.length > 0) return certain[Math.floor(Math.random() * certain.length)];
+export function decideBotMove(mine, revealed, { bombAvailable = false, myGold = 0, oppGold = 0 } = {}) {
+  const { hidden, prob, certain } = probMap(mine, revealed);
+  if (hidden.length === 0) return null;
+
+  // ~8 % : coup au jugé (jamais la dynamite au jugé).
+  if (Math.random() < 0.08) return { type: "dig", idx: hidden[Math.floor(Math.random() * hidden.length)] };
+
+  if (bombAvailable) {
+    // Meilleur carré 3×3 par espérance de pépites.
+    let bestIdx = -1, bestExp = 0;
+    for (const i of hidden) {
+      let exp = 0;
+      for (const c of bombSquare(i)) if (!revealed[c]) exp += prob[c] || 0;
+      if (exp > bestExp) { bestExp = exp; bestIdx = i; }
+    }
+    const oppAboutToWin = oppGold >= GM_WIN_AT - 2;
+    const canFinish = GM_WIN_AT - myGold <= Math.floor(bestExp);
+    if (bestIdx !== -1 && (bestExp >= 2 || oppAboutToWin || canFinish)) {
+      return { type: "bomb", idx: bestIdx };
+    }
+  }
+
+  if (certain.length > 0) return { type: "dig", idx: certain[Math.floor(Math.random() * certain.length)] };
 
   let best = -1;
   for (const i of hidden) if (prob[i] > best) best = prob[i];
   const bestCells = hidden.filter(i => prob[i] >= best - 1e-9);
-  return bestCells[Math.floor(Math.random() * bestCells.length)];
+  return { type: "dig", idx: bestCells[Math.floor(Math.random() * bestCells.length)] };
 }

@@ -1010,93 +1010,204 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
   .chromatik-uno-shout-text{ animation:none; }
 }
 
-/* ---------- Gold Mines (démineur inversé 2v2) ---------- */
-/* Deux camps face à face au-dessus de la mine — Or à gauche, Bleu à
-   droite, l'or de chaque mineur bien lisible (leçon du compteur Chromatik :
-   jamais de chiffre gris perdu dans une puce). */
-.gm-teams{ display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-bottom:12px; }
-.gm-team{
-  flex:1 1 220px; max-width:300px; padding:8px 10px; border-radius:14px;
-  background:rgba(255,255,255,.03); border:2px solid var(--line);
+/* ---------- Gold Mines (démineur inversé en duel, refonte 2026-07) ----------
+   Thème CHERCHEUR D'OR : terre brune, planches, poussière — et des pépites
+   d'un jaune doré ÉCLATANT qui rayonnent à la découverte avant de
+   s'estomper en un petit résidu cerclé à la couleur du mineur. */
+.gm-panel h1{ margin-bottom:2px; }
+.gm-goal-line{ text-align:center; font-size:12px; margin:0 0 10px; font-family:'Space Mono'; }
+
+/* Duel : deux cartes de mineur face à face, pioche croisée au centre. */
+.gm-duel{ position:relative; display:flex; gap:34px; justify-content:center; margin-bottom:12px; }
+.gm-vs{
+  position:absolute; top:50%; left:50%; transform:translate(-50%,-50%) rotate(-8deg);
+  font-size:20px; opacity:.8; filter:drop-shadow(0 2px 4px rgba(0,0,0,.5));
 }
-.gm-team.gold{ border-color:rgba(242,201,76,.55); }
-.gm-team.blue{ border-color:rgba(76,141,255,.55); }
-.gm-team.won{ box-shadow:0 0 18px 2px rgba(242,201,76,.35); }
-.gm-team-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; }
-.gm-team-name{ font-family:'Bungee'; font-size:12px; }
-.gm-team-total{ font-family:'Space Mono'; font-weight:800; font-size:14px; }
-.gm-player{
-  position:relative; display:flex; align-items:center; gap:6px; padding:4px 8px; border-radius:10px;
-  font-size:12.5px; font-weight:700; border:1.5px solid transparent;
+.gm-miner{
+  position:relative; flex:1 1 200px; max-width:250px;
+  display:grid; grid-template-columns:auto 1fr auto; grid-template-areas:"av name gold" "track track track";
+  align-items:center; column-gap:8px; row-gap:6px; padding:9px 12px; border-radius:14px;
+  background:linear-gradient(160deg, rgba(90,66,40,.5), rgba(52,36,20,.6));
+  border:2px solid rgba(214,168,96,.35);
 }
-.gm-player .name{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.gm-player.me{ outline:2px dashed rgba(182,240,76,.4); outline-offset:1px; }
-.gm-player.active{
-  border-color:var(--p3); background:rgba(182,240,76,.1);
-  animation:chromatikActivePulse 1.6s ease-in-out infinite;
+.gm-miner.amber{ border-color:rgba(242,201,76,.55); }
+.gm-miner.copper{ border-color:rgba(255,158,110,.55); }
+.gm-miner.me{ outline:2px dashed rgba(182,240,76,.4); outline-offset:2px; }
+.gm-miner.active{ animation:chromatikActivePulse 1.6s ease-in-out infinite; }
+.gm-miner.won{ box-shadow:0 0 20px 3px rgba(242,201,76,.5); }
+.gm-miner-avatar{ grid-area:av; font-size:20px; }
+.gm-miner-name{
+  grid-area:name; font-weight:800; font-size:13px; min-width:0;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
 }
-.gm-player-gold{
-  font-family:'Space Mono'; font-size:13px; font-weight:800; color:var(--ink);
-  background:rgba(255,255,255,.1); border:1.5px solid var(--line); border-radius:9px; padding:1px 7px;
-  display:inline-flex; align-items:center; gap:4px;
+.gm-miner-gold{
+  grid-area:gold; font-family:'Space Mono'; font-weight:800; font-size:15px; color:#FFDF80;
+  display:inline-flex; align-items:baseline; gap:1px;
 }
-/* "+1 🪙" qui saute de la puce du mineur à chaque pépite. */
+.gm-miner-gold i{ font-style:normal; font-size:10.5px; color:var(--muted); }
+/* Jauge de course vers 13 pépites. */
+.gm-miner-track{
+  grid-area:track; height:6px; border-radius:99px; background:rgba(0,0,0,.35); overflow:hidden;
+}
+.gm-miner-fill{
+  display:block; height:100%; border-radius:99px;
+  background:linear-gradient(90deg, #b8842e, #ffd766); transition:width .4s ease;
+}
+.gm-miner-bomb{ position:absolute; top:-10px; right:-6px; font-size:15px; filter:drop-shadow(0 2px 3px rgba(0,0,0,.5)); }
+.gm-miner .turn-timer-chip.mini{ position:absolute; top:-10px; left:-6px; }
+/* "+N 🪙" qui saute de la carte du mineur à chaque trouvaille. */
 .gm-gold-pop{
-  position:absolute; top:-12px; right:4px; z-index:5; pointer-events:none;
+  position:absolute; top:-14px; left:50%; transform:translateX(-50%); z-index:5; pointer-events:none;
   font-family:'Space Mono'; font-size:12px; font-weight:800; color:#241c14; white-space:nowrap;
   background:linear-gradient(145deg, #ffe9a8, #f2c94c); border:2px solid #e8c357;
   border-radius:99px; padding:1px 8px; box-shadow:0 3px 8px rgba(0,0,0,.35);
-  animation:gmGoldPop 1.4s ease both;
+  animation:gmGoldPop 1.5s ease both;
 }
 @keyframes gmGoldPop{
-  0%{ opacity:0; transform:translateY(6px) scale(.6); }
-  15%{ opacity:1; transform:translateY(-2px) scale(1.15); }
-  30%{ transform:translateY(-4px) scale(1); }
+  0%{ opacity:0; transform:translateX(-50%) translateY(6px) scale(.6); }
+  15%{ opacity:1; transform:translateX(-50%) translateY(-2px) scale(1.15); }
+  30%{ transform:translateX(-50%) translateY(-4px) scale(1); }
   80%{ opacity:1; }
-  100%{ opacity:0; transform:translateY(-14px); }
+  100%{ opacity:0; transform:translateX(-50%) translateY(-14px); }
 }
 .gm-status{ text-align:center; margin:8px 0; min-height:18px; }
 .gm-left{ font-family:'Space Mono'; font-size:12px; }
 
-/* La mine : grille serrée, cases tactiles, relief de terrain non creusé. */
+/* ----- La mine : terre brune, cases-mottes en relief ----- */
 .gm-grid{
-  display:grid; grid-template-columns:repeat(var(--gm-cols, 12), 1fr);
-  gap:3px; max-width:480px; margin:10px auto 4px;
+  position:relative;
+  display:grid; grid-template-columns:repeat(var(--gm-cols, 11), 1fr);
+  gap:3px; max-width:440px; margin:10px auto 4px; padding:8px;
+  border-radius:14px;
+
+  background:linear-gradient(160deg, rgba(74,53,32,.55), rgba(51,36,20,.6));
+  border:2px solid rgba(150,110,64,.4);
+  box-shadow:inset 0 2px 10px rgba(0,0,0,.35);
+}
+.gm-grid.quake{ animation:gmQuake .5s ease; }
+@keyframes gmQuake{
+  0%,100%{ transform:translate(0,0); }
+  20%{ transform:translate(-3px,2px) rotate(-.4deg); }
+  40%{ transform:translate(3px,-2px) rotate(.4deg); }
+  60%{ transform:translate(-2px,-1px); }
+  80%{ transform:translate(2px,1px); }
 }
 .gm-cell{
+  position:relative;
   aspect-ratio:1; border-radius:6px; display:flex; align-items:center; justify-content:center;
   font-family:'Space Mono'; font-weight:800; font-size:clamp(11px, 2.6vw, 15px);
   user-select:none; padding:0; border:none;
 }
+/* Terre non creusée : motte brune en relief, paillettes discrètes. */
 .gm-cell.hidden{
-  cursor:default; background:linear-gradient(145deg, #5a4a33, #3e3222);
-  border:1.5px solid rgba(255,255,255,.14); box-shadow:inset 0 2px 0 rgba(255,255,255,.12), 0 2px 0 rgba(0,0,0,.35);
+  cursor:default;
+  background:
+    radial-gradient(circle at 30% 25%, rgba(255,220,160,.14) 0 18%, transparent 20%),
+    linear-gradient(145deg, #7a5a36, #52381e);
+  border:1.5px solid rgba(255,225,180,.16);
+  box-shadow:inset 0 2px 0 rgba(255,235,200,.18), 0 2px 0 rgba(0,0,0,.4);
   transition:transform .1s ease, filter .1s ease;
 }
 .gm-grid.myturn .gm-cell.hidden{ cursor:pointer; }
-.gm-grid.myturn .gm-cell.hidden:hover{ transform:translateY(-1.5px); filter:brightness(1.25); }
+.gm-grid.myturn .gm-cell.hidden:hover{ transform:translateY(-1.5px); filter:brightness(1.2); }
+/* Dynamite armée : curseur "viseur" sur toute la mine. */
+.gm-grid.bombing .gm-cell.hidden{ cursor:crosshair; }
+.gm-grid.bombing .gm-cell.hidden:hover{ filter:brightness(1.35) saturate(1.2); }
+/* Terre creusée : fond sombre, chiffres façon démineur (tons chauds). */
 .gm-cell.open{
-  background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.07); color:var(--muted);
+  background:rgba(20,12,6,.5); border:1px solid rgba(255,225,180,.08); color:var(--muted);
   animation:gmRevealIn .25s ease backwards;
 }
-/* Couleurs de chiffres façon démineur, adaptées au thème sombre. */
-.gm-cell.open.n1{ color:#7EB3FF; } .gm-cell.open.n2{ color:#7ED9A0; }
-.gm-cell.open.n3{ color:#FF8A80; } .gm-cell.open.n4{ color:#C6A6FF; }
-.gm-cell.open.n5{ color:#FFC46B; } .gm-cell.open.n6{ color:#6BDCD6; }
-.gm-cell.open.n7{ color:#F783AC; } .gm-cell.open.n8{ color:#FFF3B0; }
-.gm-cell.nugget{
-  font-size:clamp(12px, 3vw, 17px); background:rgba(242,201,76,.14);
-  border:2px solid #e8c357; animation:gmNuggetIn .5s cubic-bezier(.3,1.5,.4,1) backwards;
+.gm-cell.open.bombed{ animation:gmBombFlip .4s cubic-bezier(.3,1.3,.4,1) backwards; }
+.gm-cell.open.n1{ color:#8FC1FF; } .gm-cell.open.n2{ color:#8FE0A8; }
+.gm-cell.open.n3{ color:#FF9A8C; } .gm-cell.open.n4{ color:#CBAAFF; }
+.gm-cell.open.n5{ color:#FFC46B; } .gm-cell.open.n6{ color:#7BE0D8; }
+.gm-cell.open.n7{ color:#F8A0C0; } .gm-cell.open.n8{ color:#FFF3B0; }
+
+/* ----- Pépites : éclat doré rayonnant, puis résidu discret -----
+   À la découverte (.fresh) : la pièce jaillit, un halo doré pulse et des
+   RAYONS tournent derrière elle (~2,8 s), puis tout s'estompe (.settled) en
+   un petit résidu doré cerclé à la couleur du mineur qui l'a trouvée. */
+.gm-cell.nugget{ background:rgba(20,12,6,.5); border:1.5px solid rgba(255,215,102,.25); overflow:visible; }
+.gm-cell.nugget b{ font-weight:400; font-size:clamp(12px, 3vw, 17px); line-height:1; z-index:2; }
+.gm-cell.nugget.amber{ box-shadow:inset 0 0 0 1.5px rgba(242,201,76,.5); }
+.gm-cell.nugget.copper{ box-shadow:inset 0 0 0 1.5px rgba(255,158,110,.55); }
+.gm-cell.nugget.settled b{ opacity:.65; filter:saturate(.85); transform:scale(.9); }
+.gm-cell.nugget.fresh{ z-index:5; border-color:#ffd766; }
+.gm-cell.nugget.fresh b{ animation:gmNuggetPop 2.8s cubic-bezier(.3,1.4,.4,1) both; }
+/* Les rayons : cône doré répété qui tourne, fondu en fin de course. */
+.gm-rays{
+  position:absolute; inset:-70%; z-index:1; border-radius:50%; pointer-events:none;
+  background:repeating-conic-gradient(rgba(255,215,102,.5) 0 9deg, transparent 9deg 24deg);
+  -webkit-mask-image:radial-gradient(circle, #000 0 42%, transparent 68%);
+  mask-image:radial-gradient(circle, #000 0 42%, transparent 68%);
+  animation:gmRaysSpin 2.8s linear both;
 }
-.gm-cell.nugget.blue{ border-color:var(--ludoB); background:rgba(76,141,255,.14); }
-.gm-cell.nugget.fresh{ box-shadow:0 0 12px 2px rgba(242,201,76,.6); }
+@keyframes gmRaysSpin{
+  0%{ opacity:0; transform:rotate(0deg) scale(.4); }
+  10%{ opacity:1; }
+  70%{ opacity:.8; }
+  100%{ opacity:0; transform:rotate(160deg) scale(1.15); }
+}
+@keyframes gmNuggetPop{
+  0%{ opacity:0; transform:scale(.2) rotate(-40deg); filter:brightness(2) drop-shadow(0 0 10px #ffd766); }
+  12%{ opacity:1; transform:scale(1.5) rotate(6deg); filter:brightness(1.8) drop-shadow(0 0 14px #ffd766); }
+  30%{ transform:scale(1.15) rotate(0); }
+  75%{ filter:brightness(1.4) drop-shadow(0 0 8px #ffd766aa); }
+  100%{ opacity:.85; transform:scale(1); filter:brightness(1) drop-shadow(0 0 0 transparent); }
+}
 @keyframes gmRevealIn{ from{ opacity:0; transform:scale(.7); } to{ opacity:1; transform:scale(1); } }
-@keyframes gmNuggetIn{ 0%{ opacity:0; transform:scale(.3) rotate(-30deg); } 100%{ opacity:1; transform:scale(1) rotate(0); } }
+@keyframes gmBombFlip{ 0%{ opacity:0; transform:rotateY(90deg) scale(.6); } 100%{ opacity:1; transform:rotateY(0) scale(1); } }
+
+/* ----- 💥 Explosion de la dynamite ----- */
+.gm-boom{ position:absolute; z-index:20; pointer-events:none; width:0; height:0; }
+.gm-boom-wave{
+  position:absolute; left:0; top:0; width:12px; height:12px; margin:-6px 0 0 -6px; border-radius:50%;
+  border:3px solid rgba(255,200,110,.9); box-shadow:0 0 18px 4px rgba(255,160,60,.6);
+  animation:gmBoomWave .9s cubic-bezier(.2,.8,.3,1) both;
+}
+.gm-boom-flash{
+  position:absolute; left:0; top:0; transform:translate(-50%,-50%);
+  font-style:normal; font-size:26px; filter:drop-shadow(0 0 10px rgba(255,160,60,.8));
+  animation:gmBoomFlash 1s ease both;
+}
+@keyframes gmBoomWave{
+  0%{ transform:scale(.4); opacity:1; }
+  100%{ transform:scale(11); opacity:0; border-width:1px; }
+}
+@keyframes gmBoomFlash{
+  0%{ opacity:0; transform:translate(-50%,-50%) scale(.3) rotate(-15deg); }
+  15%{ opacity:1; transform:translate(-50%,-50%) scale(1.5) rotate(5deg); }
+  45%{ transform:translate(-50%,-50%) scale(1.1) rotate(0); opacity:1; }
+  100%{ opacity:0; transform:translate(-50%,-50%) scale(.9) translateY(-8px); }
+}
+
+/* ----- Dynamite : bouton bâton + états ----- */
+.gm-bomb-bar{ display:flex; gap:10px; justify-content:center; align-items:center; margin-top:12px; min-height:38px; }
+.gm-bomb-btn{
+  padding:9px 20px; border-radius:99px; cursor:pointer;
+  font-family:'Bungee'; font-size:13px; color:#fff; letter-spacing:.02em;
+  background:linear-gradient(145deg, #c0512e, #8e321a); border:2px solid #e8845a;
+  box-shadow:0 3px 0 rgba(0,0,0,.35), 0 0 12px rgba(232,132,90,.4);
+  transition:transform .12s ease;
+}
+.gm-bomb-btn:hover:not(:disabled){ transform:scale(1.05); }
+.gm-bomb-btn:disabled{ opacity:.45; cursor:default; }
+.gm-bomb-armed-hint{
+  font-size:13px; font-weight:800; color:#ffb18c;
+  animation:chromatikUnoShoutPulse 1s ease-in-out infinite;
+}
+.gm-bomb-used{ font-size:12px; color:var(--muted); font-weight:700; }
 
 @media (prefers-reduced-motion: reduce){
-  .gm-player.active{ animation:none; }
+  .gm-miner.active{ animation:none; }
   .gm-gold-pop{ animation:none; }
-  .gm-cell.open, .gm-cell.nugget{ animation:none; }
+  .gm-grid.quake{ animation:none; }
+  .gm-cell.open, .gm-cell.open.bombed{ animation:none; }
+  .gm-cell.nugget.fresh b{ animation:none; }
+  .gm-rays{ animation:none; opacity:0; }
+  .gm-boom-wave, .gm-boom-flash{ animation:none; opacity:0; }
+  .gm-bomb-armed-hint{ animation:none; }
 }
 
 /* ===== YAHTZEE ===== */
