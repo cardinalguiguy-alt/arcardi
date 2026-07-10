@@ -9,7 +9,7 @@ import {
   genMine, digResult, bombResult, nuggetsLeft, gmPointsForPlace,
 } from "./mines";
 import { decideBotMove } from "./botLogic";
-import { playCashRegister, playDynamite, primeFiles } from "@/lib/sfx";
+import { playCashRegister, playDynamite, playDigDirt, primeFiles } from "@/lib/sfx";
 
 /* ==========================================================================
    GOLD MINES — démineur inversé en DUEL (refonte 2026-07, spec complète).
@@ -45,6 +45,9 @@ const HUMAN_TURN_STRIKES = 2;
 // Couleur d'identification de chaque mineur (cercle du résidu de pépite,
 // liseré de sa carte joueur) : ambre pour le siège 0, cuivre pour le 1.
 const SEAT_TONES = ["amber", "copper"];
+// Durée de l'animation de frappe de pioche sur une case (mienne ou adverse) —
+// doit rester >= à la durée de l'animation CSS gmStrikeFx (voir globals.css).
+const STRIKE_FX_MS = 860;
 
 function makeBotSeat(n) {
   return { id: "bot" + n, username: "Bot " + n, avatar: "🤖", isBot: true };
@@ -165,7 +168,7 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
   // Préchargement des sons du jeu dès le montage : sans lui, le PREMIER tir de
   // dynamite (et la première pépite) subissaient la latence de fetch/décodage
   // du mp3 — d'où un son en retard au premier boum.
-  useEffect(() => { primeFiles("/sounds/dynamite-blast.mp3", "/sounds/cash-register.mp3"); }, []);
+  useEffect(() => { primeFiles("/sounds/dynamite-blast.mp3", "/sounds/cash-register.mp3", "/sounds/dig-dirt.mp3"); }, []);
 
   useEffect(() => {
     stateRef.current = { seats, mine, revealed, gold, bombs, turnIdx, left, winner };
@@ -208,6 +211,11 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
       clearTimeout(goldPopTimerRef.current);
       goldPopTimerRef.current = setTimeout(() => setGoldPop(null), 1500);
     }
+    // Coup de pioche sur une case SANS pépite (un chiffre ou une case vide) :
+    // bruit de terre creusée, pour TOUS les coups (miens comme adverses), en
+    // pendant de la caisse enregistreuse des pépites (bloc ci-dessus). La pépite
+    // garde son "cha-ching" et n'a donc jamais le bruit de terre.
+    if (lastAction.type === "dig" && !lastAction.nugget) playDigDirt();
     // Frappe de l'ADVERSAIRE (coup de pioche d'un AUTRE joueur/bot) : on affiche
     // l'animation de pioche générique sur la case creusée. Pas pour mes propres
     // coups (j'ai déjà mon curseur qui frappe), ni pour la dynamite (elle a son
@@ -216,7 +224,7 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
       oppStrikeKeyRef.current += 1;
       setOppStrike({ idx: lastAction.idx, key: oppStrikeKeyRef.current });
       clearTimeout(oppStrikeTimerRef.current);
-      oppStrikeTimerRef.current = setTimeout(() => setOppStrike(null), 620);
+      oppStrikeTimerRef.current = setTimeout(() => setOppStrike(null), STRIKE_FX_MS);
     }
     if (lastAction.type === "bomb") {
       // Vrai tir de mine (fichier découpé + fondu, voir lib/sfx.js). Le joueur
@@ -476,6 +484,16 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
     // lastAction), d'où le retard signalé. L'effet dérivé de lastAction ne le
     // rejoue pas pour ce joueur (garde `seatId === me.id`).
     if (action.type === "bomb") playDynamite();
+    // Frappe visible aussi pour MON coup : un curseur natif ne peut pas
+    // s'animer (il reste figé), donc on rejoue la même animation de pioche sur
+    // la case cliquée — elle recouvre le curseur le temps de la frappe. Déclenché
+    // dès le clic (pas après l'aller-retour réseau) pour rester réactif.
+    if (action.type === "dig") {
+      oppStrikeKeyRef.current += 1;
+      setOppStrike({ idx, key: oppStrikeKeyRef.current });
+      clearTimeout(oppStrikeTimerRef.current);
+      oppStrikeTimerRef.current = setTimeout(() => setOppStrike(null), STRIKE_FX_MS);
+    }
     channelRef.current?.send({ type: "broadcast", event: "move_attempt", payload: { seatId: me.id, action } });
   }
 

@@ -1397,13 +1397,14 @@ body.stage-focus .chat-panel{ right:auto; left:14px; }
   background:url("/cursors/pick.png") center/contain no-repeat;
   filter:drop-shadow(0 2px 3px rgba(0,0,0,.5));
   transform-origin:34% 78%;
-  animation:gmStrikeFx .6s ease both;
+  animation:gmStrikeFx .8s ease both;
 }
 @keyframes gmStrikeFx{
-  0%{ opacity:0; transform:translateY(-12px) rotate(-34deg) scale(.9); }
-  28%{ opacity:1; transform:translateY(0) rotate(14deg) scale(1.06); }  /* impact */
-  46%{ transform:translateY(-1px) rotate(-4deg) scale(1); }
-  100%{ opacity:0; transform:translateY(-6px) rotate(-20deg) scale(.94); }
+  0%{ opacity:0; transform:translateY(-14px) rotate(-40deg) scale(.9); }
+  26%{ opacity:1; transform:translateY(-9px) rotate(-32deg) scale(.98); } /* levée de la pioche */
+  50%{ opacity:1; transform:translateY(0) rotate(16deg) scale(1.07); }    /* impact */
+  66%{ transform:translateY(-2px) rotate(2deg) scale(1); }                /* rebond */
+  100%{ opacity:0; transform:translateY(-6px) rotate(-16deg) scale(.95); }
 }
 @media (prefers-reduced-motion: reduce){
   .gm-strike-fx{ animation:none; opacity:0; }
