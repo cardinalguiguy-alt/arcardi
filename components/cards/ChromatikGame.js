@@ -896,17 +896,33 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
     // depuis unoBubble pour afficher avatar + pseudo.
     const unoShoutSeat = unoBubble ? seats.find(s => s.id === unoBubble.seatId) : null;
 
+    // CORRECTIF (zip 83) — chevrons inversés côté INVITÉ : avant, on
+    // retirait simplement "moi" de la liste globale des sièges. Pour l'hôte
+    // (siège 0), les adversaires restants étaient bien consécutifs dans
+    // l'ordre du tour ; mais pour un invité assis AU MILIEU de la liste,
+    // deux sièges affichés côte à côte n'étaient PAS consécutifs (le sien
+    // manquait entre eux), et les chevrons lumineux semblaient indiquer le
+    // sens inverse du tour. On fait donc TOURNER le tour de table pour
+    // qu'il commence au siège qui joue juste APRÈS moi : gauche -> droite
+    // = ordre de jeu en direction 1, pour tout le monde. Les spectateurs
+    // (sans siège, myIdx = -1) gardent la liste brute, déjà correcte.
+    const myIdx = seats.findIndex(s => s.id === me.id);
+    const displayedOpponents = myIdx < 0
+      ? seats
+      : Array.from({ length: seats.length - 1 }, (_, k) => seats[(myIdx + 1 + k) % seats.length]);
+
     content = (
       <div>
-        <div className={"chromatik-opponents opp-" + seats.filter(s => s.id !== me.id).length}>
+        <div className={"chromatik-opponents opp-" + displayedOpponents.length}>
           {/* Flèches de sens intercalées entre les sièges (demande 2026-07) :
-              les adversaires sont affichés dans l'ORDRE DE JEU (seats,
-              moins soi), donc un flux gauche->droite = direction 1, et le
-              flux s'inverse visuellement avec la carte Inverse. Disposition
-              en ARC (retouche 2026-07) : sièges plus espacés, légèrement
-              décalés/inclinés pour dessiner le tour de table plutôt qu'une
-              rangée rigide — voir .chromatik-opponents.opp-N en CSS. */}
-          {seats.filter(s => s.id !== me.id).map((s, i) => {
+              les adversaires sont affichés dans l'ORDRE DE JEU vu de MON
+              siège (rotation ci-dessus), donc un flux gauche->droite =
+              direction 1, et le flux s'inverse visuellement avec la carte
+              Inverse. Disposition en ARC (retouche 2026-07) : sièges plus
+              espacés, légèrement décalés/inclinés pour dessiner le tour de
+              table plutôt qu'une rangée rigide — voir
+              .chromatik-opponents.opp-N en CSS. */}
+          {displayedOpponents.map((s, i) => {
             const oppHand = hands[s.id] || [];
             const oppAtRisk = oppHand.length === 1 && !unoCalled[s.id];
             const penalized = penaltyFx && penaltyFx.seatId === s.id;

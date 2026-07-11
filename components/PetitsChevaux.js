@@ -31,6 +31,21 @@ const COLORS = {
 const COLOR_ORDER = ["red", "green", "yellow", "blue"];
 const SAFE_ABS = new Set([0, 8, 14, 22, 28, 36, 42, 50]);
 
+// Attribution des couleurs selon le nombre de joueurs (retouche 2026-07 /
+// zip 83) : en 1 CONTRE 1, les deux joueurs partent DIAGONALEMENT opposés
+// (rouge haut-gauche / jaune bas-droite — départs distants d'exactement une
+// demi-piste, 28 cases sur 56) : duel face-à-face lisible et équitable, au
+// lieu de deux enclos voisins. À 3-4 joueurs, ordre horaire classique.
+function colorsForCount(count) {
+  return count === 2 ? ["red", "yellow"] : COLOR_ORDER.slice(0, count);
+}
+
+// Zone d'ARRIVÉE centrale élargie (zip 83) : coin haut-gauche (en cases
+// fractionnaires) du quadrant de chaque couleur, où se rangent ses pions
+// arrivés (steps = 61), en mini-grille 2×2. Quadrants orientés comme les
+// enclos : rouge NO, vert NE, jaune SE, bleu SO.
+const GOAL_QUADRANT = { red: [6.55, 6.55], green: [6.55, 7.55], yellow: [7.55, 7.55], blue: [7.55, 6.55] };
+
 // --- Classification statique des 225 cases du plateau (calculée une seule fois) ---
 const CELL_TYPE = {};
 for (let r = 0; r < 15; r++) {
@@ -119,6 +134,9 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
   const [myGain, setMyGain] = useState(0);
   const [channelReady, setChannelReady] = useState(false);
   const [rolling, setRolling] = useState(false);
+  // Zone d'arrivée (zip 83) : rayons de lumière tournants pendant 5 s quand
+  // un pion vient d'arriver au centre — { key, color } ou null.
+  const [goalBurst, setGoalBurst] = useState(null);
 
   const channelRef = useRef(null);
   const stateRef = useRef({ tokens, order, turnIdx, dice, movable, winner });
@@ -182,6 +200,17 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
       setLastMoved(payload.lastMoved);
       setLastEvent(payload.lastEvent);
       setWinner(payload.winner);
+      // Zone d'arrivée (zip 83) : si ce coup vient de faire ENTRER un pion
+      // au centre (61), déclenche les rayons tournants pendant 5 secondes —
+      // même rendu chez tous les clients, spectateurs compris. Jamais lors
+      // d'une restauration (on ne passe pas par cet événement).
+      if (payload.lastMoved) {
+        const { color: gbColor, tokenIdx: gbIdx } = payload.lastMoved;
+        if (payload.tokens?.[gbColor]?.[gbIdx] === 61) {
+          setGoalBurst({ key: Date.now(), color: gbColor });
+          timeouts.current.push(setTimeout(() => setGoalBurst(null), 5000));
+        }
+      }
       if (isHost) {
         saveGameState(room.id, "ludo", {
           phase: "playing", order: stateRef.current.order, colorOfPlayer: colorRef.current,
@@ -301,7 +330,7 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
     if (!isHost || phase !== "intro" || autoStartedRef.current || !channelReady) return;
     if (players.length >= 2 && players.length <= 4) {
       autoStartedRef.current = true;
-      const ord = COLOR_ORDER.slice(0, players.length);
+      const ord = colorsForCount(players.length);
       const map = {};
       players.forEach((p, i) => { map[p.profile_id] = ord[i]; });
       channelRef.current.send({ type: "broadcast", event: "match_start", payload: { order: ord, colorOfPlayer: map } });
@@ -311,7 +340,7 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
 
   function confirmPick() {
     if (selected.length < 2 || selected.length > 4 || !channelReady) return;
-    const ord = COLOR_ORDER.slice(0, selected.length);
+    const ord = colorsForCount(selected.length);
     const map = {};
     selected.forEach((pid, i) => { map[pid] = ord[i]; });
     channelRef.current.send({ type: "broadcast", event: "match_start", payload: { order: ord, colorOfPlayer: map } });
@@ -444,6 +473,22 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
             return <div key={key} className={"ludo-cell " + type + (isSafe ? " safe" : "")} style={style} />;
           })}
 
+          {/* Zone d'ARRIVÉE centrale élargie (zip 83) : ~2 cases de côté,
+              quadrants aux 4 couleurs (mêmes coins que les enclos), les
+              pions arrivés (61) viennent s'y ranger. Rendue APRÈS les cases
+              (elle les recouvre) mais AVANT les pions (qui passent devant).
+              Les rayons tournants s'affichent 5 s à chaque arrivée. */}
+          <div className="ludo-goal-zone" aria-hidden="true">
+            {goalBurst && (
+              <span
+                key={goalBurst.key}
+                className="ludo-goal-burst"
+                style={{ "--burst-color": `var(${COLORS[goalBurst.color].css})` }}
+              />
+            )}
+            <span className="ludo-goal-flag">🏁</span>
+          </div>
+
           {COLOR_ORDER.map(color => (
             [0, 1, 2, 3].map(slot => {
               const [yr, yc] = COLORS[color].yard[slot];
@@ -468,7 +513,10 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
             COLOR_ORDER.forEach(color => {
               if (!order.includes(color)) return;
               tokens[color].forEach((steps, idx) => {
-                if (steps === 0) return;
+                // 0 = enclos (emplacements dédiés) ; 61 = zone d'arrivée
+                // centrale (quadrants dédiés, zip 83) — ni l'un ni l'autre
+                // ne participent à l'empilement des cases de piste.
+                if (steps === 0 || steps >= 61) return;
                 const cell = cellFor(color, steps);
                 if (!cell) return;
                 const key = cell[0] + "," + cell[1];
@@ -487,6 +535,30 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
 
             return COLOR_ORDER.map(color => tokens[color].map((steps, idx) => {
               if (!order.includes(color)) return null;
+              // Pions ARRIVÉS (zip 83) : ils quittent le couloir privé pour
+              // se ranger dans le quadrant de leur couleur au centre élargi
+              // (mini-grille 2×2 par couleur) — l'arrivée se voit de loin et
+              // la dernière case du couloir reste dégagée.
+              if (steps >= 61) {
+                const [qr, qc] = GOAL_QUADRANT[color];
+                const fr = qr + (idx >> 1) * 0.47, fc = qc + (idx & 1) * 0.47;
+                const isLastFinished = !!(lastMoved && lastMoved.color === color && lastMoved.tokenIdx === idx);
+                return (
+                  <div
+                    key={color + "-" + idx}
+                    className={"ludo-token finished " + color + (isLastFinished ? " last" : "")}
+                    style={{
+                      top: (fr / 15) * 100 + "%",
+                      left: (fc / 15) * 100 + "%",
+                      width: (0.44 / 15) * 100 + "%",
+                      height: (0.44 / 15) * 100 + "%",
+                      zIndex: 2,
+                    }}
+                  >
+                    <span className="ludo-token-pin" />
+                  </div>
+                );
+              }
               const cell = steps === 0 ? COLORS[color].yard[idx] : cellFor(color, steps);
               if (!cell) return null; // garde-fou, ne devrait pas arriver (steps=61 renvoie la dernière case privée)
               const [r, c] = cell;

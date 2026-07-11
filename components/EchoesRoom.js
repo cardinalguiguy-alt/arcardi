@@ -456,7 +456,7 @@ function DecorRoom({ objects, onPick }) {
   );
 }
 
-// ----- Vannes : côté info, la configuration cible en lecture seule -----
+// ----- Vannes (v3) : côté info, la configuration cible en lecture seule -----
 function ValveTargets({ valves, t }) {
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: 4, justifyContent: "center", margin: "12px 0" }}>
@@ -470,7 +470,7 @@ function ValveTargets({ valves, t }) {
   );
 }
 
-// ----- Vannes : côté action, 5 volants à basculer puis un levier de confirmation -----
+// ----- Vannes (v3) : côté action, 5 volants à basculer puis un levier de confirmation -----
 function ValveBoard({ labels, onConfirm, t }) {
   const [states, setStates] = useState(labels.map(() => false));
   function toggle(i) { setStates(prev => prev.map((s, j) => (j === i ? !s : s))); }
@@ -492,7 +492,7 @@ function ValveBoard({ labels, onConfirm, t }) {
   );
 }
 
-// ----- Lampisterie : côté info, la disposition cible des lampes -----
+// ----- Lampisterie (v3) : côté info, la disposition cible des lampes -----
 function LightsTarget({ target }) {
   return (
     <div className="echo-lamp-grid">
@@ -503,7 +503,7 @@ function LightsTarget({ target }) {
   );
 }
 
-// ----- Lampisterie : côté action, presser une lampe bascule aussi ses voisines -----
+// ----- Lampisterie (v3) : côté action, presser une lampe bascule aussi ses voisines -----
 function LightsBoard({ onConfirm, t }) {
   const [grid, setGrid] = useState(Array(9).fill(false));
   function press(i) {
@@ -545,7 +545,7 @@ function LightsBoard({ onConfirm, t }) {
 // Coordonnée parlée d'une case 3×3 : rangées A–C (haut->bas), colonnes 1–3.
 function starCoord(i) { return "ABC"[Math.floor(i / 3)] + (i % 3 + 1); }
 
-// ----- Constellation : côté info, le tracé dessiné sur la carte repérée -----
+// ----- Constellation (v3) : côté info, le tracé dessiné sur la carte repérée -----
 function PatternClue({ path, t }) {
   const pos = i => ({ x: 40 + (i % 3) * 60, y: 34 + Math.floor(i / 3) * 60 });
   const pts = path.map(pos);
@@ -572,7 +572,7 @@ function PatternClue({ path, t }) {
   );
 }
 
-// ----- Constellation : côté action, cliquer les étoiles dans l'ordre dicté -----
+// ----- Constellation (v3) : côté action, cliquer les étoiles dans l'ordre dicté -----
 function PatternInput({ length, onConfirm, t }) {
   const [seq, setSeq] = useState([]);
   function tap(i) {

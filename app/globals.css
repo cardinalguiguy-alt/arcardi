@@ -629,6 +629,54 @@ body.stage-focus .chat-panel{ right:auto; left:14px; }
 .ludo-dice.rolling{ animation:ludoRoll .45s ease; }
 @keyframes ludoRoll{ 0%{transform:rotate(0) scale(1);} 50%{transform:rotate(180deg) scale(1.12);} 100%{transform:rotate(360deg) scale(1);} }
 
+/* ===== Zone d'ARRIVÉE centrale élargie (zip 83) =====
+   ~2,1 cases de côté, centrée sur la case centrale : quadrants aux 4
+   couleurs (mêmes coins que les enclos — rouge NO, vert NE, jaune SE,
+   bleu SO), drapeau au centre. Rendue au-dessus des cases, sous les pions.
+   Coordonnées : le plateau fait 15 cases, la zone va de 6,45 à 8,55 —
+   soit top/left 43% et taille 14%. */
+.ludo-goal-zone{
+  position:absolute; top:43%; left:43%; width:14%; height:14%;
+  border-radius:28%; pointer-events:none;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(0,0,0,.12), rgba(0,0,0,.5)),
+    conic-gradient(from 0deg,
+      rgba(182,240,76,.38) 0 25%,
+      rgba(255,210,63,.38) 25% 50%,
+      rgba(76,141,255,.38) 50% 75%,
+      rgba(255,59,48,.38) 75% 100%);
+  border:2px solid rgba(255,225,190,.4);
+  box-shadow:0 0 16px rgba(255,209,102,.28), inset 0 0 16px rgba(0,0,0,.45);
+  display:flex; align-items:center; justify-content:center;
+}
+.ludo-goal-flag{ font-size:clamp(13px, 2.6vw, 20px); opacity:.85; filter:drop-shadow(0 2px 2px rgba(0,0,0,.5)); }
+/* Rayons de lumière TOURNANTS, aux couleurs du pion qui vient d'arriver :
+   montés 5 s (le composant retire l'élément ensuite), rotation continue +
+   fondu d'apparition/disparition sur deux animations séparées (transform
+   d'un côté, opacity de l'autre — elles ne se marchent pas dessus). */
+.ludo-goal-burst{
+  position:absolute; inset:-38%; border-radius:50%; pointer-events:none;
+  background:repeating-conic-gradient(from 0deg, var(--burst-color, var(--p2)) 0deg 9deg, transparent 9deg 30deg);
+  -webkit-mask-image:radial-gradient(circle, rgba(0,0,0,.95) 26%, transparent 72%);
+  mask-image:radial-gradient(circle, rgba(0,0,0,.95) 26%, transparent 72%);
+  opacity:0;
+  animation:ludoGoalSpin 1.5s linear infinite, ludoGoalLife 5s ease forwards;
+}
+@keyframes ludoGoalSpin{ from{ transform:rotate(0deg); } to{ transform:rotate(360deg); } }
+@keyframes ludoGoalLife{ 0%{ opacity:0; } 10%{ opacity:.55; } 75%{ opacity:.45; } 100%{ opacity:0; } }
+/* Pion arrivé : liseré doré + petit "pop" d'installation dans la zone. */
+.ludo-token.finished .ludo-token-pin{
+  box-shadow:0 0 0 2px rgba(255,209,102,.85), 0 0 10px rgba(255,209,102,.45),
+    0 3px 0 rgba(0,0,0,.42), inset 0 2px 3px rgba(255,255,255,.5);
+}
+.ludo-token.finished.last{ animation:ludoFinishPop .5s ease; }
+@keyframes ludoFinishPop{ 0%{ transform:scale(1.7); } 100%{ transform:scale(1); } }
+@media (prefers-reduced-motion: reduce){
+  /* Halo fixe qui s'estompe, sans rotation ni pop. */
+  .ludo-goal-burst{ animation:ludoGoalLife 5s ease forwards; }
+  .ludo-token.finished.last{ animation:none; }
+}
+
 /* ---------- Échos (escape room coopératif asymétrique) ---------- */
 /* Audit couleurs 2026-07 : l'identité en jeu d'Échos était violette (--p5)
    alors que l'accent officiel du jeu (carte du salon, lueur de scène) est le
@@ -1052,8 +1100,12 @@ body.stage-focus .chat-panel{ right:auto; left:14px; }
    décalés/inclinés selon leur position — on lit un demi-cercle autour de la
    table plutôt qu'une rangée rigide. Le joueur local reste "en bas" (sa
    main), les adversaires dessinent le haut de la table. */
+/* Réalignement (zip 83) : écart MINIMAL garanti plus large entre les
+   vignettes (18px au lieu de 12) pour que le chevron lumineux intercalé ait
+   toujours sa place, et row-gap séparé pour les retours à la ligne sur
+   petits écrans. */
 .chromatik-opponents{
-  display:flex; flex-wrap:wrap; gap:clamp(12px, 5vw, 42px); justify-content:center;
+  display:flex; flex-wrap:wrap; gap:14px clamp(18px, 5.5vw, 48px); justify-content:center;
   align-items:flex-start; margin-bottom:20px; padding-top:4px;
 }
 /* 2 adversaires : tous deux relevés vers l'extérieur. 3 adversaires : les
@@ -1073,6 +1125,9 @@ body.stage-focus .chat-panel{ right:auto; left:14px; }
   background:rgba(255,255,255,.04); border:1.5px solid var(--line); font-size:12.5px; font-weight:700;
   transition:border-color .15s ease, background .15s ease;
 }
+/* Pseudo tronqué avec ellipse (zip 83) : un pseudo long ne doit jamais
+   pousser les vignettes au point d'avaler le couloir du chevron. */
+.chromatik-opponent .name{ max-width:110px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 /* Pulsation douce sur le siège dont c'est le tour — même langage que les
    pions jouables de Petits Chevaux (ludoPulse), pour que "à qui le tour"
    se voie sans avoir à lire le texte de statut. */
@@ -1170,9 +1225,11 @@ body.stage-focus .chat-panel{ right:auto; left:14px; }
 }
 .chromatik-flow i:nth-child(2){ animation-delay:.18s; }
 .chromatik-flow i:nth-child(3){ animation-delay:.36s; }
-/* Entre deux sièges : plus petit, encore plus discret. */
-.chromatik-flow.mini{ gap:0; }
-.chromatik-flow.mini i{ font-size:11.5px; }
+/* Entre deux sièges : plus petit, encore plus discret. Largeur MINIMALE
+   réservée + centrage (zip 83) : le chevron garde son couloir même quand
+   les vignettes se resserrent, au lieu d'être écrasé entre elles. */
+.chromatik-flow.mini{ gap:0; min-width:34px; justify-content:center; }
+.chromatik-flow.mini i{ font-size:13px; }
 /* Au centre de la table : conteneur séparé pour ne pas perturber le flex
    pioche/défausse (l'écart clamp() reste le même qu'avant). */
 .chromatik-flow-table{ display:inline-flex; align-items:center; }
