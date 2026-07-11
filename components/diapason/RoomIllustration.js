@@ -132,94 +132,38 @@ function DoorContent({ dialSymbols, otherCode, accent, doorGlow, onDoor, onPlaqu
   );
 }
 
-// Position de chaque cachette dans le débarras (épreuve 2 "La Clé") — fixe,
-// identique côté Est/Ouest (seule la palette de fond change) : quatre
-// objets distincts, chacun tatoué d'un petit sceau indiquant son symbole,
-// pour qu'on puisse s'y retrouver une fois le bon symbole communiqué par
-// le partenaire.
-const KEY_SPOTS = [
-  { symbol: "note", x: 130, y: 250, shape: "vase" },
-  { symbol: "rest", x: 670, y: 250, shape: "shelf" },
-  { symbol: "sharp", x: 260, y: 130, shape: "mirror" },
-  { symbol: "fermata", x: 540, y: 130, shape: "curtain" },
-];
+/* Note (zip 79) : l'ancienne épreuve 2 "La Clé" (cachettes à fouiller dans un
+   débarras + grille verrouillée) a été remplacée par "L'Accord" (boîte à
+   musique + intervalle sonore), rendue hors du diorama SVG par DiapasonGame.
+   Les composants StorageContent/GateContent ont donc été retirés. */
 
-function KeySpotShape({ shape, x, y, tint }) {
-  if (shape === "vase") {
-    return <path d={`M ${x - 16} ${y + 22} Q ${x - 20} ${y - 6} ${x - 8} ${y - 22} L ${x + 8} ${y - 22} Q ${x + 20} ${y - 6} ${x + 16} ${y + 22} Z`} fill={tint} stroke="#8a7a5a" strokeWidth="2" />;
-  }
-  if (shape === "shelf") {
-    return (
-      <>
-        <rect x={x - 34} y={y - 6} width="68" height="10" rx="2" fill={tint} stroke="#8a7a5a" strokeWidth="1.5" />
-        <rect x={x - 34} y={y - 30} width="68" height="10" rx="2" fill={tint} stroke="#8a7a5a" strokeWidth="1.5" />
-      </>
-    );
-  }
-  if (shape === "mirror") {
-    return <ellipse cx={x} cy={y} rx="26" ry="34" fill={tint} stroke="#8a7a5a" strokeWidth="2.5" />;
-  }
-  // curtain
-  return <path d={`M ${x - 26} ${y - 30} Q ${x} ${y - 10} ${x - 26} ${y + 34} L ${x + 26} ${y + 34} Q ${x} ${y - 10} ${x + 26} ${y - 30} Z`} fill={tint} stroke="#8a7a5a" strokeWidth="2" />;
-}
-
-function StorageContent({ foundSpot, onSpotClick }) {
-  return (
-    <>
-      {KEY_SPOTS.map(({ symbol, x, y, shape }) => {
-        const found = foundSpot === symbol;
-        return (
-          <g key={symbol} className="dia-hotspot" onClick={() => onSpotClick(symbol)}>
-            <KeySpotShape shape={shape} x={x} y={y} tint={found ? "#4a3d20" : "#241d13"} />
-            <g transform={`translate(${x - 12}, ${y - 46})`}>
-              <SymbolIcon type={symbol} size={24} color={found ? "#f2d9a0" : "#5a5040"} />
-            </g>
-            {found && (
-              <circle cx={x} cy={y} r="46" fill="none" stroke="#f2d9a0" strokeWidth="2" opacity="0.5" filter="url(#dia-soft-glow)" />
-            )}
-          </g>
-        );
-      })}
-    </>
-  );
-}
-
-function GateContent({ otherKeySpot, keyFound, gateGlow, accent, onGate, onSigil }) {
-  return (
-    <>
-      {gateGlow && (
-        <rect x="296" y="96" width="208" height="288" rx="12" fill={accent} opacity="0.35" filter="url(#dia-soft-glow)" />
-      )}
-
-      {/* Grille verrouillée */}
-      <g className="dia-hotspot" onClick={onGate}>
-        <rect x="300" y="100" width="200" height="280" rx="8" fill="#181410" stroke={accent} strokeWidth="4" />
-        {[0, 1, 2, 3].map(i => (
-          <rect key={i} x={318 + i * 44} y="112" width="10" height="256" fill="#2c2418" />
-        ))}
-        {!keyFound && (
-          <circle cx="400" cy="240" r="16" fill="#3a3320" stroke={accent} strokeWidth="2" />
-        )}
-      </g>
-
-      {/* Sceau gravé : indique la cachette du PARTENAIRE */}
-      <g className="dia-hotspot" onClick={onSigil}>
-        <circle cx="220" cy="235" r="34" fill="#1a1712" stroke={accent} strokeWidth="2" />
-      </g>
-      <g transform="translate(203, 218)">
-        <SymbolIcon type={otherKeySpot} size={34} color="#d8cdb0" />
-      </g>
-    </>
-  );
-}
-
-function SanctuaryContent({ dialSymbols, otherCode, accent, lockGlow, onLock, onTablet }) {
+function SanctuaryContent({ dialSymbols, otherCode, accent, lockGlow, candelabraLit, onLock, onTablet, onCandelabra }) {
   const dialX = [320, 373, 426, 479];
   return (
     <>
       {lockGlow && (
         <rect x="280" y="106" width="240" height="278" rx="16" fill={accent} opacity="0.35" filter="url(#dia-soft-glow)" />
       )}
+
+      {/* Candélabre (mur gauche) : allumé, il rend lisible la tablette. */}
+      <g className="dia-hotspot" onClick={onCandelabra}>
+        {candelabraLit && (
+          <circle cx="96" cy="150" r="60" fill="url(#dia-lamp-glow)" filter="url(#dia-soft-glow)" opacity="0.9" />
+        )}
+        <rect x="90" y="150" width="12" height="150" rx="3" fill="#5a4d36" />
+        <rect x="66" y="146" width="60" height="10" rx="3" fill="#6a5a40" />
+        {[74, 96, 118].map((cx, i) => (
+          <g key={i}>
+            <rect x={cx - 3} y="132" width="6" height="16" fill="#e8e2d0" />
+            {candelabraLit && (
+              <>
+                <ellipse cx={cx} cy="126" rx="4" ry="8" fill="#f2d9a0" className="dia-lamp-bulb-lit" />
+                <ellipse cx={cx} cy="128" rx="2" ry="4" fill="#fff6e0" />
+              </>
+            )}
+          </g>
+        ))}
+      </g>
 
       {/* Corps du cadenas */}
       <g className="dia-hotspot" onClick={onLock}>
@@ -237,37 +181,40 @@ function SanctuaryContent({ dialSymbols, otherCode, accent, lockGlow, onLock, on
         </g>
       ))}
 
-      {/* Tablette gravée : code du PARTENAIRE (4 symboles) */}
+      {/* Tablette gravée : code du PARTENAIRE (4 symboles), ILLISIBLE tant que
+          le candélabre n'est pas allumé (marques floues) — c'est l'interaction
+          de décor propre à l'épreuve 3. */}
       <g className="dia-hotspot" onClick={onTablet}>
         <rect x="580" y="150" width="140" height="180" rx="8" fill="#1a1712" stroke={accent} strokeWidth="2" />
       </g>
-      {otherCode.map((sym, i) => (
-        <g key={i} transform={`translate(${600 + (i % 2) * 50}, ${185 + Math.floor(i / 2) * 60})`}>
-          <SymbolIcon type={sym} size={26} color="#d8cdb0" />
-        </g>
-      ))}
+      {candelabraLit
+        ? otherCode.map((sym, i) => (
+            <g key={i} transform={`translate(${600 + (i % 2) * 50}, ${185 + Math.floor(i / 2) * 60})`}>
+              <SymbolIcon type={sym} size={26} color="#d8cdb0" />
+            </g>
+          ))
+        : [0, 1, 2, 3].map((i) => (
+            <rect key={i} x={600 + (i % 2) * 50} y={190 + Math.floor(i / 2) * 60} width="26" height="20" rx="4" fill="#2a2418" opacity="0.7" />
+          ))}
     </>
   );
 }
 
 export default function RoomIllustration({
   side, viewpoint, dialValues, otherCode, lockValues, otherLockCode,
-  foundKeySpot, otherKeySpot, keyFound, gateGlow, lockGlow,
-  accent, lampLit, doorGlow, onExamine, onSpotClick, onGateClick,
+  lockGlow, accent, lampLit, candelabraLit, doorGlow, onExamine,
 }) {
-  // Clics "flavor" simples (juste un texte d'examen, aucune décision de jeu) :
-  // gérés ici, directement via onExamine. Les clics qui font AVANCER le jeu
-  // (cachette de la clé, grille) demandent de connaître le puzzle — ce sont
-  // des callbacks dédiés (onSpotClick/onGateClick) fournis par DiapasonGame,
-  // qui seul sait si c'est la bonne cachette / si la clé a été trouvée.
+  // Clics "flavor" (juste un texte d'examen) et INTERACTIONS DE DÉCOR (allumer
+  // la lampe en ép.1, le candélabre en ép.3) : tout passe par onExamine, que
+  // DiapasonGame interprète (il allume la lampe/le candélabre selon la clé).
   function touchDark() { if (!lampLit) onExamine("dark-search"); }
   function handleSwitch() { if (!lampLit) onExamine("switch-found"); }
   function handleTube() { if (lampLit) onExamine("tube"); else touchDark(); }
   function handleDoor() { if (lampLit) onExamine("door"); else touchDark(); }
   function handlePlaque() { if (lampLit) onExamine("plaque"); else touchDark(); }
-  function handleSigil() { onExamine("sigil"); }
   function handleLock() { onExamine("lock"); }
   function handleTablet() { onExamine("tablet"); }
+  function handleCandelabra() { onExamine("candelabra-found"); }
 
   return (
     <SceneShell side={side} lampLit={lampLit} onWallClick={touchDark}>
@@ -282,27 +229,16 @@ export default function RoomIllustration({
           onPlaque={handlePlaque}
         />
       )}
-      {viewpoint === "storage" && (
-        <StorageContent foundSpot={foundKeySpot} onSpotClick={onSpotClick} />
-      )}
-      {viewpoint === "gate" && (
-        <GateContent
-          otherKeySpot={otherKeySpot}
-          keyFound={keyFound}
-          gateGlow={gateGlow}
-          accent={accent}
-          onGate={onGateClick}
-          onSigil={handleSigil}
-        />
-      )}
       {viewpoint === "sanctuary" && (
         <SanctuaryContent
           dialSymbols={lockValues.map((v) => SYMBOLS[v])}
           otherCode={otherLockCode}
           accent={accent}
           lockGlow={lockGlow}
+          candelabraLit={candelabraLit}
           onLock={handleLock}
           onTablet={handleTablet}
+          onCandelabra={handleCandelabra}
         />
       )}
     </SceneShell>

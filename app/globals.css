@@ -18,6 +18,7 @@
   --acc-petitbac:#F783AC;
   --acc-goldmines:#F2C94C; /* or — Gold Mines (démineur inversé 2v2) */
   --acc-tenk:#4FD1FF; /* cyan/bleu néon HUD — jeu 10000 (grille circuit) */
+  --acc-heist:#FF2E63; /* rouge laser — Le Casse (escape coop nerveux) */
   --tenk-blue-deep:#1B6FA8; /* bleu profond — dégradés HUD, contours secondaires */
   --tenk-pink:#FF5FB0; /* rose néon — pips des dés, halo de sélection, accents chauds */
   --tenk-felt:#0B1A3A; /* tapis bleu */
@@ -717,9 +718,105 @@ body.stage-focus .chat-panel{ right:auto; left:14px; }
 .echo-decor-object.anim-flicker{ animation:echoFlicker 1.3s steps(2) infinite; }
 .echo-decor-object.anim-drift{ animation:echoDrift 3.2s ease-in-out infinite; }
 .echo-decor-object.anim-pulse{ animation:popIn 1.5s ease-in-out infinite; }
+.echo-decor-object.anim-spin{ animation:echoSpin 3s linear infinite; }
 @keyframes echoFloat{ 0%,100%{ transform:translateY(0); } 50%{ transform:translateY(-9px); } }
 @keyframes echoFlicker{ 0%,100%{ opacity:1; } 50%{ opacity:.3; } }
 @keyframes echoDrift{ 0%,100%{ transform:translateX(0); } 50%{ transform:translateX(10px); } }
+@keyframes echoSpin{ 0%{ transform:rotate(0); } 100%{ transform:rotate(360deg); } }
+
+/* ---------- Le Casse (heist coop asymétrique nerveux) ---------- */
+.heist-role-badge{
+  display:inline-flex; align-items:center; gap:8px; padding:6px 12px; border-radius:99px;
+  background:rgba(255,46,99,.12); border:1.5px solid var(--acc-heist); font-weight:800; font-size:12.5px;
+  color:var(--acc-heist); margin-bottom:10px;
+}
+.heist-comm-banner{
+  display:flex; align-items:center; gap:8px; padding:9px 12px; border-radius:12px;
+  background:rgba(255,185,74,.10); border:1.5px solid var(--p4); color:var(--p4);
+  font-size:12.5px; font-weight:700; margin-bottom:14px; line-height:1.4;
+}
+/* Atmosphère : gardien qui patrouille de gauche à droite, sac de butin */
+.heist-atmosphere{
+  position:relative; height:58px; border-radius:14px; overflow:hidden; margin-bottom:10px;
+  background:linear-gradient(180deg, rgba(30,10,18,.6), rgba(10,6,10,.85));
+  border:1.5px solid var(--line);
+}
+.heist-atmo-beam{
+  position:absolute; inset:0;
+  background:linear-gradient(100deg, transparent 40%, rgba(255,46,99,.10) 50%, transparent 60%);
+  background-size:220% 100%; animation:heistScan 5s linear infinite;
+}
+@keyframes heistScan{ 0%{ background-position:120% 0; } 100%{ background-position:-120% 0; } }
+.heist-atmo-guard{
+  position:absolute; top:12px; font-size:24px; animation:heistPatrol 5s ease-in-out infinite alternate;
+  filter:drop-shadow(0 0 5px rgba(255,46,99,.4));
+}
+@keyframes heistPatrol{ 0%{ left:8px; transform:scaleX(1); } 49%{ transform:scaleX(1); } 50%{ transform:scaleX(-1); } 100%{ left:calc(100% - 40px); transform:scaleX(-1); } }
+.heist-atmo-haul{ position:absolute; bottom:6px; right:12px; font-size:16px; letter-spacing:2px; opacity:.85; }
+/* Jauge d'alerte */
+.heist-alert{ margin:2px 0 8px; }
+.heist-alert-head{ display:flex; justify-content:space-between; font-size:11.5px; font-weight:800; color:var(--muted); margin-bottom:3px; text-transform:uppercase; letter-spacing:.04em; }
+.heist-alert-bar{ height:9px; background:rgba(255,255,255,.08); border-radius:99px; overflow:hidden; }
+.heist-alert-fill{ height:100%; background:linear-gradient(90deg, var(--p4), var(--acc-heist)); transition:width .35s ease; }
+.heist-alert-fill.critical{ animation:heistAlertPulse .7s ease-in-out infinite; }
+@keyframes heistAlertPulse{ 0%,100%{ filter:brightness(1); } 50%{ filter:brightness(1.5); } }
+/* Champ de lasers */
+.heist-laser-grid{ display:flex; flex-direction:column; gap:6px; align-items:center; margin:12px 0; }
+.heist-laser-row{ display:flex; gap:6px; }
+.heist-laser-cell{
+  width:48px; height:40px; border-radius:8px; display:flex; align-items:center; justify-content:center;
+  font-size:18px; border:2px solid var(--line);
+}
+.heist-laser-cell.safe{ background:rgba(76,195,138,.18); border-color:var(--p3); color:var(--p3); }
+.heist-laser-cell.beam{ background:rgba(255,46,99,.10); border-color:rgba(255,46,99,.4); }
+.heist-laser-cell.action{ cursor:pointer; background:rgba(255,255,255,.03); transition:transform .1s, box-shadow .15s; }
+.heist-laser-cell.action.locked{ opacity:.4; cursor:default; }
+.heist-laser-cell.action.live{ border-color:var(--p4); box-shadow:0 0 0 2px rgba(255,185,74,.25) inset; }
+.heist-laser-cell.action.live:hover{ transform:scale(1.05); }
+.heist-laser-cell.action.crossed{ background:rgba(76,195,138,.18); border-color:var(--p3); }
+/* Coffre : cadran rotatif */
+.heist-combo-slot{
+  display:inline-flex; align-items:center; justify-content:center; width:40px; height:40px;
+  border-radius:10px; border:2px dashed var(--line); font-family:'Space Mono'; font-size:18px; color:var(--muted);
+}
+.heist-combo-slot.set{ border-style:solid; border-color:var(--p3); color:var(--ink); background:rgba(182,240,76,.08); }
+.heist-safe-wrap{ position:relative; width:150px; height:150px; margin:8px auto; }
+.heist-safe-dial{
+  position:absolute; inset:0; border-radius:50%; border:4px solid var(--line);
+  background:radial-gradient(circle at 50% 40%, rgba(255,255,255,.06), rgba(0,0,0,.3));
+  transition:transform .12s ease-out;
+}
+.heist-safe-mark{ position:absolute; left:50%; top:4px; width:6px; height:22px; margin-left:-3px; border-radius:3px; background:var(--acc-heist); }
+.heist-safe-readout{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-family:'Space Mono'; font-size:34px; font-weight:800; color:var(--ink); }
+/* Butin : pièces à voler */
+.heist-loot-item{
+  display:flex; flex-direction:column; align-items:center; gap:4px; padding:12px 10px; min-width:70px;
+  border-radius:14px; border:2.5px solid var(--line); background:rgba(255,255,255,.04); cursor:pointer;
+  transition:transform .15s, border-color .15s;
+}
+.heist-loot-item:hover{ transform:translateY(-3px); border-color:var(--acc-heist); }
+/* Fenêtre du gardien (timing) */
+.heist-guard-wrap{
+  position:relative; width:170px; height:170px; margin:14px auto 16px; border-radius:50%;
+  background:radial-gradient(circle at 50% 50%, rgba(255,255,255,.05), rgba(0,0,0,.28));
+  border:3px solid var(--line);
+}
+.heist-guard-needle{
+  position:absolute; left:50%; top:50%; width:4px; height:78px; margin-left:-2px; margin-top:-78px;
+  background:linear-gradient(var(--acc-heist), transparent); border-radius:4px; transform-origin:50% 100%;
+}
+.heist-guard-center{ position:absolute; left:50%; top:50%; width:30px; height:30px; margin-left:-15px; margin-top:-15px; display:flex; align-items:center; justify-content:center; font-size:20px; }
+/* Sortie synchronisée */
+.heist-exit-btn{
+  width:100%; padding:22px; border-radius:16px; font-family:'Bungee'; font-size:16px;
+  background:linear-gradient(135deg, var(--acc-heist), #FF7AA0); color:#160308; border:none; cursor:pointer;
+  box-shadow:0 5px 0 rgba(0,0,0,.35); transition:transform .12s;
+}
+.heist-exit-btn:active{ transform:translateY(3px); box-shadow:0 2px 0 rgba(0,0,0,.35); }
+.heist-exit-btn:disabled{ opacity:.55; cursor:default; }
+@media (prefers-reduced-motion: reduce){
+  .heist-atmo-beam, .heist-atmo-guard, .heist-alert-fill.critical{ animation:none; }
+}
 
 /* ---------- Diapason (jeu phare narratif coopératif — diorama 3D) ---------- */
 .diapason-role-badge{
@@ -778,6 +875,27 @@ body.stage-focus .chat-panel{ right:auto; left:14px; }
 .diapason-symbol-chip{
   padding:5px 11px; border-radius:99px; border:1.5px solid var(--line); font-size:12px; font-weight:700;
   background:rgba(255,255,255,.04); color:var(--muted);
+}
+/* Barre du haut : badge de rôle + cordes (vies) */
+.diapason-topbar{ display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+.diapason-cordes{ display:flex; gap:4px; }
+.diapason-corde{ font-size:18px; filter:drop-shadow(0 0 4px rgba(201,162,75,.4)); }
+.diapason-corde.broken{ filter:grayscale(1); opacity:.75; }
+.diapason-stage-wrap.shake{ animation:shakeRow .42s; }
+/* Épreuve 2 — les deux cartes de la boîte à musique */
+.diapason-accord-wrap{ display:flex; gap:12px; flex-wrap:wrap; justify-content:center; margin-top:8px; }
+.diapason-music-card{
+  flex:1 1 240px; max-width:360px; padding:14px; border-radius:16px;
+  border:2px solid var(--line); background:rgba(255,255,255,.03);
+}
+.diapason-music-card.ear{ border-color:rgba(201,162,75,.35); background:rgba(201,162,75,.05); }
+.diapason-music-card.ear.heard{ animation:diapasonHeard .8s ease-out; }
+@keyframes diapasonHeard{ 0%{ box-shadow:0 0 0 0 rgba(201,162,75,.5); } 100%{ box-shadow:0 0 0 14px rgba(201,162,75,0); } }
+.diapason-music-title{ font-weight:800; font-size:14px; text-align:center; margin-bottom:6px; color:var(--ink); }
+.diapason-interval-row{ display:flex; gap:8px; justify-content:center; flex-wrap:wrap; }
+.diapason-interval-btn{ width:auto !important; padding:9px 14px !important; margin:0 !important; font-size:13px; }
+@media (prefers-reduced-motion: reduce){
+  .diapason-stage-wrap.shake, .diapason-music-card.ear.heard{ animation:none; }
 }
 
 /* ---------- Chromatik (jeu de cartes original) ---------- */

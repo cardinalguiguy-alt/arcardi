@@ -18,6 +18,7 @@ import PetitsChevaux from "@/components/PetitsChevaux";
 import EchoesRoom from "@/components/EchoesRoom";
 import RoomChat from "@/components/RoomChat";
 import DiapasonGame from "@/components/diapason/DiapasonGame";
+import HeistRoom from "@/components/heist/HeistRoom";
 import ChromatikGame from "@/components/cards/ChromatikGame";
 import GoldMinesGame from "@/components/goldmines/GoldMinesGame";
 import PresidentGame from "@/components/president/PresidentGame";
@@ -50,6 +51,7 @@ const GAME_META = {
   ludo:     { icon: "🐴", accent: "--acc-ludo",      nameKey: "nameLudo",    tagKey: "tagLudo", minPlayers: 2, stage: "door" },
   echoes:   { icon: "🌊", accent: "--acc-echoes",    nameKey: "nameEchoes",  tagKey: "tagEchoes", minPlayers: 2, stage: "curtain" },
   diapason: { icon: "🎼", accent: "--acc-diapason",  nameKey: "nameDiapason", tagKey: "tagDiapason", minPlayers: 2, stage: "curtain" },
+  heist:    { icon: "💎", accent: "--acc-heist",     nameKey: "nameHeist",   tagKey: "tagHeist", minPlayers: 2, stage: "curtain" },
   chromatik: { icon: "🃏", accent: "--acc-chromatik", nameKey: "nameChromatik", tagKey: "tagChromatik", stage: "door" },
   goldmines: { icon: "⛏️", accent: "--acc-goldmines", nameKey: "nameGoldMines", tagKey: "tagGoldMines", stage: "door" },
   yahtzee:  { icon: "🎲", accent: "--acc-yahtzee",   nameKey: "nameYahtzee", tagKey: "tagYahtzee", stage: "door" },
@@ -58,7 +60,7 @@ const GAME_META = {
   petitbac: { icon: "✏️", accent: "--acc-petitbac", nameKey: "namePetitBac", tagKey: "tagPetitBac", minPlayers: 2, stage: "flash" },
 };
 const STAGE_COMPONENT = { door: DoorStage, curtain: CurtainStage, flash: FlashStage, video: VideoStage };
-const GAME_ORDER = ["quiz", "wordle", "worldle", "petitbac", "connect4", "ludo", "chromatik", "goldmines", "president", "yahtzee", "tenk", "piano", "echoes", "diapason"];
+const GAME_ORDER = ["quiz", "wordle", "worldle", "petitbac", "connect4", "ludo", "chromatik", "goldmines", "president", "yahtzee", "tenk", "piano", "echoes", "diapason", "heist"];
 
 export default function Room() {
   const { code } = useParams();
@@ -498,6 +500,9 @@ export default function Room() {
                   )}
                   {room.current_game === "diapason" && (
                     <DiapasonGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
+                  )}
+                  {room.current_game === "heist" && (
+                    <HeistRoom room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
                   )}
                   {room.current_game === "chromatik" && (
                     <ChromatikGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />

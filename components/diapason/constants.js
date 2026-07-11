@@ -12,3 +12,15 @@ export const SYMBOL_COLORS = {
   sharp: "#e0a458",
   fermata: "#b79ce0",
 };
+
+// Épreuve 2 "L'Accord" — trois intervalles nettement distincts à l'oreille.
+// La note fondamentale et le nombre de demi-tons servent à synthétiser les
+// deux sons (Web Audio) : freq = base × 2^(demi-tons/12).
+export const INTERVALS = ["third", "fifth", "octave"];
+export const INTERVAL_SEMITONES = { third: 4, fifth: 7, octave: 12 };
+export const INTERVAL_BASE_HZ = 220; // La3
+
+// Nombre de "cordes" (vies) partagées : chaque mauvaise tentative en casse
+// une. À zéro, l'instrument est brisé — la partie est perdue (on peut la
+// relancer). Empêche d'enchaîner les essais au hasard sur les cadrans.
+export const MAX_CORDES = 3;

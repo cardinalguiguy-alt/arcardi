@@ -41,14 +41,23 @@ const BASE_POINTS = 14;
 const MAX_BONUS = 10;
 
 const COLOR_EMOJIS = ["🔴", "🔵", "🟢", "🟡", "🟣", "🟠"];
+// Deuxième "vocabulaire" pour la légende du chapitre 1 : au lieu de lanternes
+// colorées, des glyphes gravés. Change visiblement l'énigme d'une partie à
+// l'autre sans rien changer à l'interaction (lire une légende → composer un
+// code). Rendu par un simple <span> texte comme les emojis.
+const GLYPH_EMOJIS = ["✦", "✚", "❖", "⬢", "◆", "✱"];
 const CIPHER_SYMBOLS = ["▲", "●", "■", "♦", "★", "✚", "◆", "▼", "♣", "☾"];
 const SECRET_WORDS = {
-  fr: ["PHARE", "VAGUE", "ORAGE", "VOILE", "MAREE", "ECUME", "RECIF", "FANAL", "ROCHE", "BRUME", "ALGUE", "NUAGE"],
-  en: ["STORM", "WAVES", "OCEAN", "LIGHT", "CLIFF", "REEFS", "ROCKS", "SHORE", "TIDES", "FLARE"],
+  fr: ["PHARE", "VAGUE", "ORAGE", "VOILE", "MAREE", "ECUME", "RECIF", "FANAL", "ROCHE", "BRUME",
+       "ALGUE", "NUAGE", "HOULE", "LARGE", "QUART", "NORD", "SUD", "CAP", "MOUSSE", "HUNIER",
+       "AMER", "DIGUE", "SABLE", "GALET", "CORNE", "LAMPE", "SIGNE", "PROUE", "POUPE", "GREER"],
+  en: ["STORM", "WAVES", "OCEAN", "LIGHT", "CLIFF", "REEFS", "ROCKS", "SHORE", "TIDES", "FLARE",
+       "SWELL", "NORTH", "SOUTH", "COAST", "BEACH", "FOAMY", "MISTY", "CHART", "SAILS", "BUOYS",
+       "GLINT", "SPRAY", "WATCH", "DEPTH", "WRECK"],
 };
-const MEMORY_ICONS = ["⚓", "🕯️", "🔔", "🗝️", "⚙️", "📜", "🧭", "🪵"];
-const DECOR_ICONS = ["🕯️", "⚙️", "🔔", "🪞", "🗝️"];
-const ANIM_TYPES = ["float", "swing", "flicker", "drift", "pulse"];
+const MEMORY_ICONS = ["⚓", "🕯️", "🔔", "🗝️", "⚙️", "📜", "🧭", "🪵", "🪝", "🕰️", "🧵", "🪗"];
+const DECOR_ICONS = ["🕯️", "⚙️", "🔔", "🪞", "🗝️", "🧭", "🪝", "🕰️"];
+const ANIM_TYPES = ["float", "swing", "flicker", "drift", "pulse", "spin"];
 
 function shuffle(a) { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1));[a[i], a[j]] = [a[j], a[i]]; } return a; }
 function pickRandom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
@@ -58,27 +67,34 @@ function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 /* ---------- Génération des 6 énigmes (données pures, indépendantes du rendu) ---------- */
 
 function genChapter1() {
-  const colors = shuffle(COLOR_EMOJIS).slice(0, 4);
+  // Variante : lanternes colorées OU glyphes gravés, code de 4 OU 5 signes.
+  const pool = Math.random() < 0.5 ? COLOR_EMOJIS : GLYPH_EMOJIS;
+  const codeLen = pickRandom([4, 5]);
+  const colors = shuffle(pool).slice(0, 4);
   const digits = shuffle([1, 2, 3, 4, 5, 6, 7, 8, 9]).slice(0, 4);
   const legend = colors.map((c, i) => ({ emoji: c, digit: digits[i] }));
-  const sequence = Array.from({ length: 4 }, () => pickRandom(colors));
+  const sequence = Array.from({ length: codeLen }, () => pickRandom(colors));
   const solution = sequence.map(c => String(legend.find(l => l.emoji === c).digit)).join("");
   return { legend, sequence, solution };
 }
 
 function genChapter2() {
+  // Variante : 3 OU 4 rouages (plus de rouages = plus de couples possibles).
+  const gearCount = pickRandom([3, 4]);
+  const labels = ["A", "B", "C", "D"].slice(0, gearCount);
   const ops = [
     { type: "mult", n: 2 }, { type: "mult", n: 3 },
     { type: "add", n: randInt(3, 15) }, { type: "sub", n: randInt(2, 8) }
   ];
-  const gears = ["A", "B", "C"].map(label => {
+  const gears = labels.map(label => {
     const base = randInt(10, 30);
     const op = pickRandom(ops);
     const value = op.type === "mult" ? base * op.n : op.type === "add" ? base + op.n : base - op.n;
     const opText = op.type === "mult" ? `× ${op.n}` : op.type === "add" ? `+ ${op.n}` : `− ${op.n}`;
     return { label, base, opText, value };
   });
-  const pairIdx = shuffle([0, 1, 2]).slice(0, 2).sort();
+  const idxPool = labels.map((_, i) => i);
+  const pairIdx = shuffle(idxPool).slice(0, 2).sort((a, b) => a - b);
   // Variété d'une partie à l'autre : la cible est tantôt la SOMME, tantôt
   // la DIFFÉRENCE (valeur absolue) des 2 rouages — même interaction (choisir
   // 2 rouages), mais un calcul mental différent à chaque fois.
@@ -88,26 +104,32 @@ function genChapter2() {
   return { gears, target, goal, correctPair: [gears[pairIdx[0]].label, gears[pairIdx[1]].label].sort() };
 }
 
-// Chapitre 3 — mémoire : 5 symboles à retenir, mélangés parmi 3 leurres (8 tuiles à cliquer).
+// Chapitre 3 — mémoire : 5 OU 6 symboles à retenir, mélangés parmi 3 leurres.
 function genChapter3() {
+  const seqLen = pickRandom([5, 6]);
   const pool = shuffle(MEMORY_ICONS);
-  const sequence = pool.slice(0, 5);
-  const decoys = pool.slice(5, 8);
+  const sequence = pool.slice(0, seqLen);
+  const decoys = pool.slice(seqLen, seqLen + 3);
   const tiles = shuffle([...sequence, ...decoys]);
-  return { sequence, tiles };
+  return { sequence, tiles, seqLen };
 }
 
-// Chapitre 4 — alignement (habileté / timing).
+// Chapitre 4 — alignement (habileté / timing). Variante : sens horaire ou
+// anti-horaire, vitesse et largeur de fenêtre variables.
 function genChapter4() {
-  const size = 40;
-  const start = randInt(0, 319);
-  return { start, end: start + size };
+  const size = pickRandom([30, 40, 50]);
+  const start = randInt(0, 359 - size);
+  const dir = pickRandom(["cw", "ccw"]);
+  const period = pickRandom([3400, 4200, 5200]);
+  return { start, end: start + size, dir, period };
 }
 
-// Chapitre 5 — décor interactif et mouvant : 5 objets, une seule animation-cible.
+// Chapitre 5 — décor interactif et mouvant : 5 OU 6 objets, une seule
+// animation-cible (pool d'icônes et d'animations élargi).
 function genChapter5() {
-  const icons = shuffle(DECOR_ICONS);
-  const anims = shuffle(ANIM_TYPES);
+  const count = pickRandom([5, 6]);
+  const icons = shuffle(DECOR_ICONS).slice(0, count);
+  const anims = shuffle(ANIM_TYPES).slice(0, count);
   const objects = icons.map((icon, i) => ({ icon, anim: anims[i] }));
   const target = pickRandom(objects);
   return { objects, targetAnim: target.anim };
@@ -168,11 +190,11 @@ function LockInput({ sequence, onSubmit, t }) {
       </div>
       <form onSubmit={e => { e.preventDefault(); onSubmit(code); setCode(""); }}
         style={{ display: "flex", gap: 10, alignItems: "center", justifyContent: "center" }}>
-        <input type="text" inputMode="numeric" maxLength={4} value={code}
+        <input type="text" inputMode="numeric" maxLength={sequence.length} value={code}
           autoComplete="off" autoCorrect="off" spellCheck={false} enterKeyHint="go"
           onChange={e => setCode(e.target.value.replace(/\D/g, ""))}
           style={{ textAlign: "center", fontFamily: "'Space Mono'", fontSize: 22, letterSpacing: "0.3em", width: 140 }}
-          placeholder="••••" />
+          placeholder={"•".repeat(sequence.length)} />
         <button className="btn" style={{ margin: 0, width: "auto", padding: "12px 18px" }}>{t("echoesCh1Enter")}</button>
       </form>
     </div>
@@ -192,7 +214,7 @@ function GearInfo({ gears }) {
   );
 }
 
-function GearPicker({ onConfirm, t }) {
+function GearPicker({ onConfirm, t, labels = ["A", "B", "C"] }) {
   const [picked, setPicked] = useState([]);
   function toggle(label) {
     setPicked(prev => {
@@ -204,8 +226,8 @@ function GearPicker({ onConfirm, t }) {
   return (
     <div>
       <p className="hint">{t("echoesCh2Pick")}</p>
-      <div style={{ display: "flex", gap: 10, justifyContent: "center", margin: "14px 0" }}>
-        {["A", "B", "C"].map(label => (
+      <div style={{ display: "flex", gap: 10, justifyContent: "center", margin: "14px 0", flexWrap: "wrap" }}>
+        {labels.map(label => (
           <div key={label} className={"echo-gear-chip" + (picked.includes(label) ? " picked" : "")} onClick={() => toggle(label)}>
             <span className="letter">{label}</span>
             <span style={{ fontSize: 20 }}>⚙️</span>
@@ -256,19 +278,19 @@ function MemoryInfo({ sequence, t, onPeek }) {
 }
 
 // Chapitre 3 (mémoire) — celui qui n'a pas vu doit reconstituer l'ordre d'après la description.
-function MemoryInput({ tiles, onConfirm, t }) {
+function MemoryInput({ tiles, onConfirm, t, count = 5 }) {
   const [picks, setPicks] = useState([]);
   function toggle(icon) {
     setPicks(prev => {
       if (prev.includes(icon)) return prev.filter(x => x !== icon);
-      if (prev.length >= 5) return prev;
+      if (prev.length >= count) return prev;
       return [...prev, icon];
     });
   }
   return (
     <div>
       <div style={{ textAlign: "center", marginBottom: 10 }}>
-        {[0, 1, 2, 3, 4].map(i => (
+        {Array.from({ length: count }, (_, i) => i).map(i => (
           <span key={i} className={"echo-memory-slot" + (picks[i] ? " filled" : "")}>{picks[i] || ""}</span>
         ))}
       </div>
@@ -283,7 +305,7 @@ function MemoryInput({ tiles, onConfirm, t }) {
       </div>
       <div style={{ textAlign: "center", marginTop: 12, display: "flex", gap: 8, justifyContent: "center" }}>
         <button className="btn ghost" style={{ width: "auto", padding: "10px 16px" }} onClick={() => setPicks([])}>{t("echoesCh3Clear")}</button>
-        <button className="btn" style={{ width: "auto", padding: "10px 16px" }} disabled={picks.length !== 5}
+        <button className="btn" style={{ width: "auto", padding: "10px 16px" }} disabled={picks.length !== count}
           onClick={() => { onConfirm(picks); setPicks([]); }}>{t("echoesCh3Confirm")}</button>
       </div>
     </div>
@@ -301,25 +323,33 @@ function ZoneClue({ start, end, t }) {
   );
 }
 
-function DialStopper({ period, onStop, t }) {
+function DialStopper({ period, onStop, t, dir = "cw" }) {
   const needleRef = useRef(null);
   const startRef = useRef(Date.now());
   const rafRef = useRef(null);
 
+  // Angle réel du marqueur : horaire (cw) ou anti-horaire (ccw). L'angle
+  // renvoyé à onStop est TOUJOURS l'angle réel affiché, pour que la
+  // vérification [start,end] reste valable quel que soit le sens.
+  function angleAt(elapsed) {
+    const a = (elapsed / period) * 360;
+    return dir === "ccw" ? (360 - a) % 360 : a;
+  }
+
   useEffect(() => {
     function tick() {
       const elapsed = (Date.now() - startRef.current) % period;
-      const angle = (elapsed / period) * 360;
-      if (needleRef.current) needleRef.current.style.transform = `rotate(${angle}deg)`;
+      if (needleRef.current) needleRef.current.style.transform = `rotate(${angleAt(elapsed)}deg)`;
       rafRef.current = requestAnimationFrame(tick);
     }
     rafRef.current = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafRef.current);
-  }, [period]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [period, dir]);
 
   function stop() {
     const elapsed = (Date.now() - startRef.current) % period;
-    onStop((elapsed / period) * 360);
+    onStop(angleAt(elapsed));
   }
 
   return (
@@ -617,7 +647,7 @@ export default function EchoesRoom({ room, me, isHost, players, t, lang, onFinis
   }
   function tryChapter3(picks) {
     const seq = puzzle.ch3.sequence;
-    const ok = picks.length === 5 && picks.every((v, i) => v === seq[i]);
+    const ok = picks.length === seq.length && picks.every((v, i) => v === seq[i]);
     ok ? advance(4) : applyPenalty();
   }
   function peekChapter3() { applyPenalty(PENALTY_PEEK_MS, "peek"); }
@@ -720,7 +750,7 @@ export default function EchoesRoom({ room, me, isHost, players, t, lang, onFinis
               🎯 {t(puzzle.ch2.goal === "diff" ? "echoesCh2GoalDiff" : "echoesCh2GoalSum")}{" "}
               <span style={{ fontFamily: "'Space Mono'", color: "var(--p3)" }}>{puzzle.ch2.target}</span>
             </p>
-            <GearPicker onConfirm={tryChapter2} t={t} />
+            <GearPicker onConfirm={tryChapter2} t={t} labels={puzzle.ch2.gears.map(g => g.label)} />
           </>
         ) : (
           <><p className="muted">{t("echoesCh2TextB")}</p><GearInfo gears={puzzle.ch2.gears} /></>
@@ -734,7 +764,7 @@ export default function EchoesRoom({ room, me, isHost, players, t, lang, onFinis
         {!isPlayer ? <p className="muted">{t("echoesSpectatorNote")}</p> : amA ? (
           <><p className="muted">{t("echoesCh3TextInfo")}</p><MemoryInfo sequence={puzzle.ch3.sequence} t={t} onPeek={peekChapter3} /></>
         ) : (
-          <><p className="muted">{t("echoesCh3TextInput")}</p><MemoryInput tiles={puzzle.ch3.tiles} onConfirm={tryChapter3} t={t} /></>
+          <><p className="muted">{t("echoesCh3TextInput")}</p><MemoryInput tiles={puzzle.ch3.tiles} onConfirm={tryChapter3} t={t} count={puzzle.ch3.sequence.length} /></>
         )}
       </div>
     );
@@ -745,7 +775,7 @@ export default function EchoesRoom({ room, me, isHost, players, t, lang, onFinis
         {!isPlayer ? <p className="muted">{t("echoesSpectatorNote")}</p> : amA ? (
           <><p className="muted">{t("echoesCh4TextA")}</p><ZoneClue start={puzzle.ch4.start} end={puzzle.ch4.end} t={t} /></>
         ) : (
-          <><p className="muted">{t("echoesCh4TextB")}</p><DialStopper period={DIAL_PERIOD_MS} onStop={tryChapter4} t={t} /></>
+          <><p className="muted">{t("echoesCh4TextB")}</p><DialStopper period={puzzle.ch4.period || DIAL_PERIOD_MS} dir={puzzle.ch4.dir || "cw"} onStop={tryChapter4} t={t} /></>
         )}
       </div>
     );

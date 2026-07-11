@@ -2,46 +2,46 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { saveGameState, readGameState, resetRoomToLobby } from "@/lib/gameSync";
+import { playNoteSequence } from "@/lib/sfx";
 import Crossfade from "@/components/Crossfade";
 import RoomIllustration from "./RoomIllustration";
 import { genProloguePuzzle } from "./puzzle";
-import { SYMBOLS } from "./constants";
+import { SYMBOLS, INTERVALS, INTERVAL_SEMITONES, INTERVAL_BASE_HZ, MAX_CORDES } from "./constants";
 
 /* ==========================================================================
    DIAPASON — Prologue "Le Réveil" (jeu phare narratif coopératif d'ARCARDI)
    ==========================================================================
-   Pattern n°3 (coopératif asymétrique, sans arbitre), même conventions
+   Pattern n°3 (coopératif asymétrique, sans arbitre), mêmes conventions
    qu'Échos :
-     - "match_start" : l'hôte génère les TROIS épreuves ENTIÈRES (rôles +
-       codes des portes + cachettes des clés + codes du cadenas final) et
-       les diffuse une fois pour toutes ; les deux clients adoptent
-       exactement les mêmes données, seul le RENDU diffère selon le rôle.
-     - "door_open" / "gate_open" / "lock_open" : chacun diffusé par le
-       joueur qui vient de réussir SA part de l'épreuve en cours (vérifiée
+     - "match_start" : l'hôte génère les TROIS épreuves ENTIÈRES et les
+       diffuse une fois pour toutes ; les deux clients adoptent exactement
+       les mêmes données, seul le RENDU diffère selon le rôle.
+     - "door_open" / "box_open" / "lock_open" : chacun diffusé par le joueur
+       qui vient de réussir SA moitié de l'épreuve en cours (vérifiée
        localement) ; les deux clients l'appliquent (self:true) et chacun
-       calcule de son côté si les deux moitiés sont réunies pour passer à
-       l'épreuve suivante.
+       calcule de son côté si les deux moitiés sont réunies.
+     - "life_lost" : une mauvaise tentative CASSE UNE CORDE partagée (vies).
+       Diffusée par l'auteur de la faute, appliquée partout (−1). À zéro
+       corde, l'instrument est brisé → échec. Empêche d'enchaîner les essais
+       au hasard sur les cadrans / les intervalles.
+     - "interval_play" : la manivelle de l'épreuve 2. Quand JE tourne MA
+       manivelle, le son de MON accord ne se joue QUE chez mon partenaire
+       (asymétrie sonore) : c'est lui l'oreille, il me dit lequel c'est.
 
-   Trois épreuves, même structure narrative à chaque fois (voir puzzle.js) :
-   ce que je vois chez MOI ne me sert jamais à MOI, seulement à décrire à
-   mon partenaire ce qu'IL doit faire chez LUI, et réciproquement — aucun
-   des deux ne peut donc progresser seul.
-     1. "Le Réveil"  (entrance + door)    : trouver l'interrupteur, régler
-        les 3 cadrans de la porte scellée sur le code décrit par l'autre.
-     2. "La Clé"     (storage + gate)     : trouver la clé dans la bonne
-        cachette du débarras (décrite par l'autre via le sceau de SA
-        grille), puis déverrouiller la grille.
-     3. "Le Cadenas" (sanctuary)          : régler les 4 anneaux du cadenas
-        final sur le code décrit par l'autre (tablette gravée).
+   Trois épreuves, chacune avec une INTERACTION DE DÉCOR propre :
+     1. "Le Réveil"  (entrance + door)  : trouver l'INTERRUPTEUR, allumer la
+        lampe, puis régler les 3 cadrans de la porte sur le code décrit par
+        l'autre.
+     2. "L'Accord"   (musicroom)        : la clé est enfermée dans une BOÎTE
+        À MUSIQUE. On tourne la MANIVELLE → l'accord se joue chez le
+        partenaire, qui l'identifie ; on valide l'intervalle → la boîte
+        s'ouvre. (Épreuve entièrement sonore, cœur "diapason" du jeu.)
+     3. "Le Cadenas" (sanctuary)        : allumer le CANDÉLABRE pour rendre
+        lisible la tablette gravée (code du partenaire), puis régler les 4
+        anneaux du cadenas final.
 
-   Aucun chronomètre dans ce prologue (volontaire) : c'est une scène
-   d'ouverture atmosphérique, pas une épreuve contre la montre.
-
-   Règle Supabase respectée : seule la RÉSOLUTION des puzzles transite par
-   le réseau (rôles, codes, cachette trouvée ou non, porte/grille/cadenas
-   ouvert ou non). Tout le reste — la caméra, le vacillement de la lampe,
-   l'animation des cadrans — est calculé en local par chaque client et
-   n'est jamais synchronisé.
+   Règle Supabase respectée : réutilise rooms / game_results / add_points ;
+   game_id = "diapason". Aucune manip Supabase.
    ========================================================================== */
 
 const BASE_POINTS = 20;
@@ -49,19 +49,21 @@ const BASE_POINTS = 20;
 function symbolLabelKey(sym) {
   return "diapasonSymbol" + sym.charAt(0).toUpperCase() + sym.slice(1);
 }
+function intervalLabelKey(iv) {
+  return "diapasonInterval" + iv.charAt(0).toUpperCase() + iv.slice(1);
+}
 
 const VIEWPOINT_LABEL_KEY = {
   entrance: "diapasonViewEntrance",
   door: "diapasonViewDoor",
-  storage: "diapasonViewStorage",
-  gate: "diapasonViewGate",
+  musicroom: "diapasonViewMusicroom",
   sanctuary: "diapasonViewSanctuary",
 };
 
 const CLOSED_SIDES = { est: false, ouest: false };
 
 export default function DiapasonGame({ room, me, isHost, players, t, lang, onFinish }) {
-  const [phase, setPhase] = useState("intro"); // intro -> playing -> success
+  const [phase, setPhase] = useState("intro"); // intro -> playing -> success | failure
   const [roles, setRoles] = useState({ est: null, ouest: null });
   const [puzzle, setPuzzle] = useState(null);
   const [selected, setSelected] = useState([]);
@@ -70,20 +72,20 @@ export default function DiapasonGame({ room, me, isHost, players, t, lang, onFin
   const [dialValues, setDialValues] = useState([0, 0, 0]);
   const [lockValues, setLockValues] = useState([0, 0, 0, 0]);
   const [lampLit, setLampLit] = useState(false);
+  const [candelabraLit, setCandelabraLit] = useState(false); // épreuve 3, décor
   // Progression PARTAGÉE des 3 épreuves : { est, ouest } -> true dès que ce
-  // siège a réussi SA moitié de l'épreuve. Épreuve suivante débloquée dès
-  // que les deux valent true.
+  // siège a réussi SA moitié. Épreuve suivante débloquée quand les deux valent true.
   const [ch1Open, setCh1Open] = useState(CLOSED_SIDES); // "Le Réveil" (portes)
-  const [ch2Open, setCh2Open] = useState(CLOSED_SIDES); // "La Clé" (grilles)
+  const [ch2Open, setCh2Open] = useState(CLOSED_SIDES); // "L'Accord" (boîtes à musique)
   const [ch3Open, setCh3Open] = useState(CLOSED_SIDES); // "Le Cadenas" (final)
-  // Progression PRIVÉE (jamais restaurée après un rechargement, comme le
-  // reste de l'état privé de ce jeu — voir la resynchronisation plus bas).
+  const [cordes, setCordes] = useState(MAX_CORDES);      // vies PARTAGÉES
+  // Progression PRIVÉE (jamais restaurée après un rechargement).
   const [myDoorLocked, setMyDoorLocked] = useState(false);
-  const [myKeyFound, setMyKeyFound] = useState(null); // symbole trouvé, ou null
-  const [myGateOpen, setMyGateOpen] = useState(false);
+  const [myBoxOpen, setMyBoxOpen] = useState(false);
   const [myLockSubmitted, setMyLockSubmitted] = useState(false);
   const [wrongShake, setWrongShake] = useState(false);
   const [examine, setExamine] = useState(null);
+  const [heardPulse, setHeardPulse] = useState(0); // anim "j'entends l'accord"
   const [myGain, setMyGain] = useState(0);
 
   const channelRef = useRef(null);
@@ -91,11 +93,40 @@ export default function DiapasonGame({ room, me, isHost, players, t, lang, onFin
   const restoredRef = useRef(false);
   const savedResultRef = useRef(false);
   const shakeTimerRef = useRef(null);
-  const stateRef = useRef({ roles, puzzle, ch1Open, ch2Open, ch3Open });
+  const mySideRef = useRef(null);
+  const stateRef = useRef({ roles, puzzle, ch1Open, ch2Open, ch3Open, cordes });
 
   useEffect(() => {
-    stateRef.current = { roles, puzzle, ch1Open, ch2Open, ch3Open };
-  }, [roles, puzzle, ch1Open, ch2Open, ch3Open]);
+    stateRef.current = { roles, puzzle, ch1Open, ch2Open, ch3Open, cordes };
+  }, [roles, puzzle, ch1Open, ch2Open, ch3Open, cordes]);
+
+  function saveShared(patch) {
+    const s = stateRef.current;
+    saveGameState(room.id, "diapason", {
+      phase: "playing",
+      roleEst: s.roles.est, roleOuest: s.roles.ouest,
+      estDoorCode: s.puzzle?.estDoorCode, ouestDoorCode: s.puzzle?.ouestDoorCode,
+      estBoxInterval: s.puzzle?.estBoxInterval, ouestBoxInterval: s.puzzle?.ouestBoxInterval,
+      estLockCode: s.puzzle?.estLockCode, ouestLockCode: s.puzzle?.ouestLockCode,
+      ch1Open: s.ch1Open, ch2Open: s.ch2Open, ch3Open: s.ch3Open, cordes: s.cordes,
+      ...patch,
+    });
+  }
+
+  // ---- Audio épreuve 2 : synthèse d'un intervalle (2 notes) via Web Audio ----
+  function playInterval(interval) {
+    const semis = INTERVAL_SEMITONES[interval];
+    if (semis == null) return;
+    const root = INTERVAL_BASE_HZ;
+    const top = root * Math.pow(2, semis / 12);
+    playNoteSequence(
+      [
+        { freq: root, atMs: 0, durMs: 520, type: "sine" },
+        { freq: top, atMs: 380, durMs: 640, type: "sine" },
+      ],
+      { gain: 0.2 }
+    );
+  }
 
   useEffect(() => {
     const ch = supabase.channel("diapason_" + room.id, { config: { broadcast: { self: true } } });
@@ -105,14 +136,15 @@ export default function DiapasonGame({ room, me, isHost, players, t, lang, onFin
       setRoles({ est: payload.roleEst, ouest: payload.roleOuest });
       setPuzzle({
         estDoorCode: payload.estDoorCode, ouestDoorCode: payload.ouestDoorCode,
-        estKeySpot: payload.estKeySpot, ouestKeySpot: payload.ouestKeySpot,
+        estBoxInterval: payload.estBoxInterval, ouestBoxInterval: payload.ouestBoxInterval,
         estLockCode: payload.estLockCode, ouestLockCode: payload.ouestLockCode,
       });
       setPhase("playing");
       setCh1Open(CLOSED_SIDES); setCh2Open(CLOSED_SIDES); setCh3Open(CLOSED_SIDES);
-      setMyDoorLocked(false); setMyKeyFound(null); setMyGateOpen(false); setMyLockSubmitted(false);
+      setCordes(MAX_CORDES);
+      setMyDoorLocked(false); setMyBoxOpen(false); setMyLockSubmitted(false);
       setDialValues([0, 0, 0]); setLockValues([0, 0, 0, 0]);
-      setLampLit(false);
+      setLampLit(false); setCandelabraLit(false);
       setViewpointKey("entrance");
       setExamine(null);
       setMyGain(0);
@@ -121,9 +153,9 @@ export default function DiapasonGame({ room, me, isHost, players, t, lang, onFin
         saveGameState(room.id, "diapason", {
           phase: "playing", roleEst: payload.roleEst, roleOuest: payload.roleOuest,
           estDoorCode: payload.estDoorCode, ouestDoorCode: payload.ouestDoorCode,
-          estKeySpot: payload.estKeySpot, ouestKeySpot: payload.ouestKeySpot,
+          estBoxInterval: payload.estBoxInterval, ouestBoxInterval: payload.ouestBoxInterval,
           estLockCode: payload.estLockCode, ouestLockCode: payload.ouestLockCode,
-          ch1Open: CLOSED_SIDES, ch2Open: CLOSED_SIDES, ch3Open: CLOSED_SIDES,
+          ch1Open: CLOSED_SIDES, ch2Open: CLOSED_SIDES, ch3Open: CLOSED_SIDES, cordes: MAX_CORDES,
         });
       }
     });
@@ -131,35 +163,15 @@ export default function DiapasonGame({ room, me, isHost, players, t, lang, onFin
     ch.on("broadcast", { event: "door_open" }, ({ payload }) => {
       setCh1Open((prev) => {
         const next = { ...prev, [payload.side]: true };
-        if (isHost) {
-          const s = stateRef.current;
-          saveGameState(room.id, "diapason", {
-            phase: "playing",
-            roleEst: s.roles.est, roleOuest: s.roles.ouest,
-            estDoorCode: s.puzzle?.estDoorCode, ouestDoorCode: s.puzzle?.ouestDoorCode,
-            estKeySpot: s.puzzle?.estKeySpot, ouestKeySpot: s.puzzle?.ouestKeySpot,
-            estLockCode: s.puzzle?.estLockCode, ouestLockCode: s.puzzle?.ouestLockCode,
-            ch1Open: next, ch2Open: s.ch2Open, ch3Open: s.ch3Open,
-          });
-        }
+        if (isHost) saveShared({ ch1Open: next });
         return next;
       });
     });
 
-    ch.on("broadcast", { event: "gate_open" }, ({ payload }) => {
+    ch.on("broadcast", { event: "box_open" }, ({ payload }) => {
       setCh2Open((prev) => {
         const next = { ...prev, [payload.side]: true };
-        if (isHost) {
-          const s = stateRef.current;
-          saveGameState(room.id, "diapason", {
-            phase: "playing",
-            roleEst: s.roles.est, roleOuest: s.roles.ouest,
-            estDoorCode: s.puzzle?.estDoorCode, ouestDoorCode: s.puzzle?.ouestDoorCode,
-            estKeySpot: s.puzzle?.estKeySpot, ouestKeySpot: s.puzzle?.ouestKeySpot,
-            estLockCode: s.puzzle?.estLockCode, ouestLockCode: s.puzzle?.ouestLockCode,
-            ch1Open: s.ch1Open, ch2Open: next, ch3Open: s.ch3Open,
-          });
-        }
+        if (isHost) saveShared({ ch2Open: next });
         return next;
       });
     });
@@ -169,30 +181,37 @@ export default function DiapasonGame({ room, me, isHost, players, t, lang, onFin
         const next = { ...prev, [payload.side]: true };
         const done = next.est && next.ouest;
         if (done) setPhase((p) => (p === "playing" ? "success" : p));
-        if (isHost) {
-          const s = stateRef.current;
-          saveGameState(room.id, "diapason", {
-            phase: done ? "success" : "playing",
-            roleEst: s.roles.est, roleOuest: s.roles.ouest,
-            estDoorCode: s.puzzle?.estDoorCode, ouestDoorCode: s.puzzle?.ouestDoorCode,
-            estKeySpot: s.puzzle?.estKeySpot, ouestKeySpot: s.puzzle?.ouestKeySpot,
-            estLockCode: s.puzzle?.estLockCode, ouestLockCode: s.puzzle?.ouestLockCode,
-            ch1Open: s.ch1Open, ch2Open: s.ch2Open, ch3Open: next,
-          });
-        }
+        if (isHost) saveShared({ ch3Open: next, phase: done ? "success" : "playing" });
         return next;
       });
+    });
+
+    // Une corde se casse (mauvaise tentative). Le compteur descend d'exactement
+    // 1 partout (self:true), l'auteur ne l'émet qu'une fois par faute.
+    ch.on("broadcast", { event: "life_lost" }, () => {
+      setCordes((prev) => {
+        const next = Math.max(0, prev - 1);
+        if (next <= 0) setPhase((p) => (p === "playing" ? "failure" : p));
+        if (isHost) saveShared({ cordes: next, phase: next <= 0 ? "failure" : "playing" });
+        return next;
+      });
+      setWrongShake(true);
+      if (shakeTimerRef.current) clearTimeout(shakeTimerRef.current);
+      shakeTimerRef.current = setTimeout(() => setWrongShake(false), 420);
+    });
+
+    // Manivelle de l'épreuve 2 : je reçois l'accord d'un partenaire dont c'est
+    // MOI l'oreille -> je le joue localement (Web Audio).
+    ch.on("broadcast", { event: "interval_play" }, ({ payload }) => {
+      if (payload.listenSide && mySideRef.current === payload.listenSide) {
+        playInterval(payload.interval);
+        setHeardPulse((n) => n + 1);
+      }
     });
 
     ch.subscribe((status) => {
       if (status === "SUBSCRIBED") {
         setChannelReady(true);
-        // Resynchronisation : une partie en cours (rechargement de page) est
-        // restaurée immédiatement — seule la progression PRIVÉE de chaque
-        // joueur (lampe allumée, position des cadrans, clé trouvée…) repart
-        // de zéro, le canal Supabase ne pouvant persister que l'état
-        // PARTAGÉ. Rejouer son propre coup déjà validé est sans danger
-        // (idempotent : le siège est déjà à `true` côté partagé).
         if (!restoredRef.current) {
           restoredRef.current = true;
           const saved = readGameState(room, "diapason");
@@ -200,12 +219,13 @@ export default function DiapasonGame({ room, me, isHost, players, t, lang, onFin
             setRoles({ est: saved.roleEst, ouest: saved.roleOuest });
             setPuzzle({
               estDoorCode: saved.estDoorCode, ouestDoorCode: saved.ouestDoorCode,
-              estKeySpot: saved.estKeySpot, ouestKeySpot: saved.ouestKeySpot,
+              estBoxInterval: saved.estBoxInterval, ouestBoxInterval: saved.ouestBoxInterval,
               estLockCode: saved.estLockCode, ouestLockCode: saved.ouestLockCode,
             });
             setCh1Open(saved.ch1Open || CLOSED_SIDES);
             setCh2Open(saved.ch2Open || CLOSED_SIDES);
             setCh3Open(saved.ch3Open || CLOSED_SIDES);
+            setCordes(saved.cordes == null ? MAX_CORDES : saved.cordes);
             setPhase(saved.phase);
             autoStartedRef.current = true;
           }
@@ -224,16 +244,10 @@ export default function DiapasonGame({ room, me, isHost, players, t, lang, onFin
     const p1 = { id: pRow1.profile_id, username: pRow1.profiles?.username, avatar: pRow1.profiles?.avatar };
     const p2 = { id: pRow2.profile_id, username: pRow2.profiles?.username, avatar: pRow2.profiles?.avatar };
     const [roleEst, roleOuest] = Math.random() < 0.5 ? [p1, p2] : [p2, p1];
-    const { estDoorCode, ouestDoorCode, estKeySpot, ouestKeySpot, estLockCode, ouestLockCode } = genProloguePuzzle();
-    channelRef.current.send({
-      type: "broadcast",
-      event: "match_start",
-      payload: { roleEst, roleOuest, estDoorCode, ouestDoorCode, estKeySpot, ouestKeySpot, estLockCode, ouestLockCode },
-    });
+    const p = genProloguePuzzle();
+    channelRef.current.send({ type: "broadcast", event: "match_start", payload: { roleEst, roleOuest, ...p } });
   }
 
-  // Démarrage auto si le salon compte exactement 2 joueurs (même convention
-  // que Puissance 4 / Petits Chevaux / Échos).
   useEffect(() => {
     if (!isHost || phase !== "intro" || autoStartedRef.current || !channelReady) return;
     if (players.length === 2) {
@@ -261,31 +275,35 @@ export default function DiapasonGame({ room, me, isHost, players, t, lang, onFin
   const amOuest = !!(roles.ouest && me.id === roles.ouest.id);
   const isPlayer = amEst || amOuest;
   const mySide = amEst ? "est" : amOuest ? "ouest" : null;
+  const otherSide = mySide === "est" ? "ouest" : "est";
   const needsPick = players.length > 2;
+
+  useEffect(() => { mySideRef.current = mySide; }, [mySide]);
 
   const myDoorCode = puzzle ? (mySide === "est" ? puzzle.estDoorCode : puzzle.ouestDoorCode) : null;
   const otherCode = puzzle ? (mySide === "est" ? puzzle.ouestDoorCode : puzzle.estDoorCode) : null;
-  const myKeySpot = puzzle ? (mySide === "est" ? puzzle.estKeySpot : puzzle.ouestKeySpot) : null;
-  const otherKeySpot = puzzle ? (mySide === "est" ? puzzle.ouestKeySpot : puzzle.estKeySpot) : null;
+  const myBoxInterval = puzzle ? (mySide === "est" ? puzzle.estBoxInterval : puzzle.ouestBoxInterval) : null;
   const myLockCode = puzzle ? (mySide === "est" ? puzzle.estLockCode : puzzle.ouestLockCode) : null;
   const otherLockCode = puzzle ? (mySide === "est" ? puzzle.ouestLockCode : puzzle.estLockCode) : null;
 
-  // Épreuve courante, dérivée de la progression PARTAGÉE (jamais un état à
-  // part : impossible que ça diverge de ch1Open/ch2Open/ch3Open).
   const ch1Done = ch1Open.est && ch1Open.ouest;
   const ch2Done = ch2Open.est && ch2Open.ouest;
   const ch3Done = ch3Open.est && ch3Open.ouest;
   const chapter = !ch1Done ? 1 : !ch2Done ? 2 : !ch3Done ? 3 : 4;
 
-  // Lieux accessibles à la navigation ⬅➡, en fonction de l'épreuve atteinte.
-  const VIEWPOINTS_BY_CHAPTER = { 1: ["entrance", "door"], 2: ["storage", "gate"], 3: ["sanctuary"] };
-  const availableViewpoints = [
-    ...VIEWPOINTS_BY_CHAPTER[1],
-    ...(chapter >= 2 ? VIEWPOINTS_BY_CHAPTER[2] : []),
-    ...(chapter >= 3 ? VIEWPOINTS_BY_CHAPTER[3] : []),
-  ];
+  const VIEWPOINTS_BY_CHAPTER = { 1: ["entrance", "door"], 2: ["musicroom"], 3: ["sanctuary"] };
+  const availableViewpoints = VIEWPOINTS_BY_CHAPTER[Math.min(chapter, 3)] || [];
   const vpIdx = Math.max(0, availableViewpoints.indexOf(viewpointKey));
-  const hasMoreAhead = vpIdx < availableViewpoints.length - 1;
+
+  // À chaque changement d'épreuve, recentrer la vue sur un lieu valide.
+  useEffect(() => {
+    if (phase !== "playing") return;
+    if (!availableViewpoints.includes(viewpointKey)) {
+      setViewpointKey(availableViewpoints[0] || "entrance");
+      setExamine(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chapter, phase]);
 
   function goViewpoint(dir) {
     const next = vpIdx + dir;
@@ -294,6 +312,11 @@ export default function DiapasonGame({ room, me, isHost, players, t, lang, onFin
     setExamine(null);
   }
 
+  function loseLife() {
+    channelRef.current?.send({ type: "broadcast", event: "life_lost", payload: {} });
+  }
+
+  // ---- Épreuve 1 : cadrans de la porte ----
   function cycleDial(i, dir) {
     if (myDoorLocked) return;
     setDialValues((prev) => {
@@ -302,7 +325,6 @@ export default function DiapasonGame({ room, me, isHost, players, t, lang, onFin
       return next;
     });
   }
-
   function submitDoor() {
     if (!myDoorCode || myDoorLocked) return;
     const ok = dialValues.every((v, i) => SYMBOLS[v] === myDoorCode[i]);
@@ -310,35 +332,27 @@ export default function DiapasonGame({ room, me, isHost, players, t, lang, onFin
       setMyDoorLocked(true);
       channelRef.current?.send({ type: "broadcast", event: "door_open", payload: { side: mySide } });
     } else {
-      setWrongShake(true);
-      shakeTimerRef.current = setTimeout(() => setWrongShake(false), 420);
+      loseLife();
     }
   }
 
-  // Épreuve 2 "La Clé" : chercher la bonne cachette (décrite par le
-  // partenaire via le sceau de SA grille), puis déverrouiller SA propre
-  // grille avec la clé trouvée.
-  function trySpot(sym) {
-    if (myKeyFound) { setExamine("spot-already"); return; }
-    if (sym === myKeySpot) {
-      setMyKeyFound(sym);
-      setExamine("spot-found");
+  // ---- Épreuve 2 : boîte à musique / intervalle ----
+  // Je tourne MA manivelle -> l'accord se joue chez mon partenaire (lui l'oreille).
+  function crankMyBox() {
+    if (myBoxOpen || !myBoxInterval) return;
+    channelRef.current?.send({ type: "broadcast", event: "interval_play", payload: { listenSide: otherSide, interval: myBoxInterval } });
+  }
+  function submitBox(guess) {
+    if (myBoxOpen) return;
+    if (guess === myBoxInterval) {
+      setMyBoxOpen(true);
+      channelRef.current?.send({ type: "broadcast", event: "box_open", payload: { side: mySide } });
     } else {
-      setExamine("spot-empty");
-      setWrongShake(true);
-      shakeTimerRef.current = setTimeout(() => setWrongShake(false), 420);
+      loseLife();
     }
   }
-  function tryGate() {
-    if (!myKeyFound) { setExamine("gate-locked"); return; }
-    if (myGateOpen) { setExamine("gate-open-already"); return; }
-    setMyGateOpen(true);
-    channelRef.current?.send({ type: "broadcast", event: "gate_open", payload: { side: mySide } });
-    setExamine("gate-open");
-  }
 
-  // Épreuve 3 "Le Cadenas" : même mécanique que la porte scellée (épreuve
-  // 1), mais 4 symboles au lieu de 3, dans le sanctuaire final.
+  // ---- Épreuve 3 : cadenas final (révélé par le candélabre) ----
   function cycleLock(i, dir) {
     if (myLockSubmitted) return;
     setLockValues((prev) => {
@@ -354,8 +368,7 @@ export default function DiapasonGame({ room, me, isHost, players, t, lang, onFin
       setMyLockSubmitted(true);
       channelRef.current?.send({ type: "broadcast", event: "lock_open", payload: { side: mySide } });
     } else {
-      setWrongShake(true);
-      shakeTimerRef.current = setTimeout(() => setWrongShake(false), 420);
+      loseLife();
     }
   }
 
@@ -378,51 +391,40 @@ export default function DiapasonGame({ room, me, isHost, players, t, lang, onFin
     onFinish && onFinish();
   }
 
-  // "Rejouer" : relance le Prologue avec les 2 mêmes joueurs, nouvelles
-  // épreuves (codes/cachettes redistribués).
   function rejouer() {
     if (!isHost || !roles.est || !roles.ouest) return;
     const [roleEst, roleOuest] = Math.random() < 0.5 ? [roles.est, roles.ouest] : [roles.ouest, roles.est];
-    const { estDoorCode, ouestDoorCode, estKeySpot, ouestKeySpot, estLockCode, ouestLockCode } = genProloguePuzzle();
-    channelRef.current.send({
-      type: "broadcast", event: "match_start",
-      payload: { roleEst, roleOuest, estDoorCode, ouestDoorCode, estKeySpot, ouestKeySpot, estLockCode, ouestLockCode },
-    });
+    const p = genProloguePuzzle();
+    channelRef.current.send({ type: "broadcast", event: "match_start", payload: { roleEst, roleOuest, ...p } });
   }
 
   function examineText() {
     if (examine === "dark-search") return t("diapasonSearchDark");
     if (examine === "switch-found") return t("diapasonSwitchFound");
-    if (!lampLit) return t("diapasonTooDark");
+    if (!lampLit && (examine === "tube" || examine === "door" || examine === "plaque")) return t("diapasonTooDark");
     if (examine === "tube") return t("diapasonExamineTube");
     if (examine === "door") return t("diapasonExamineDoor");
     if (examine === "plaque") return t("diapasonExaminePlaque");
-    if (examine === "spot-found") return t("diapasonKeySpotFound");
-    if (examine === "spot-empty") return t("diapasonKeySpotEmpty");
-    if (examine === "spot-already") return t("diapasonKeyCarrying");
-    if (examine === "sigil") return t("diapasonExamineSigil");
-    if (examine === "gate-locked") return t("diapasonGateLocked");
-    if (examine === "gate-open") return t("diapasonGateOpenFlavor");
-    if (examine === "gate-open-already") return t("diapasonMyGateOpen");
+    if (examine === "candelabra-found") return t("diapasonCandelabraFound");
     if (examine === "lock") return t("diapasonExamineLock");
-    if (examine === "tablet") return t("diapasonExamineTablet");
+    if (examine === "tablet") return candelabraLit ? t("diapasonExamineTablet") : t("diapasonTabletDark");
     return null;
   }
 
   function handleExamine(key) {
-    if (key === "switch-found" && !lampLit) {
-      setLampLit(true);
-    }
+    if (key === "switch-found" && !lampLit) setLampLit(true);
+    if (key === "candelabra-found" && !candelabraLit) setCandelabraLit(true);
     setExamine(key);
   }
 
   const accent = "#C9A24B";
   const storyLine = chapter === 1 ? t("diapasonStory") : chapter === 2 ? t("diapasonCh2Story") : t("diapasonCh3Story");
   const defaultHint =
-    viewpointKey === "storage" ? t("diapasonKeyHint")
-    : viewpointKey === "gate" ? t("diapasonSigilHint")
-    : viewpointKey === "sanctuary" ? t("diapasonLockHint")
+    chapter === 2 ? t("diapasonBoxHint")
+    : viewpointKey === "sanctuary" ? (candelabraLit ? t("diapasonLockHint") : t("diapasonCandelabraHint"))
     : t("diapasonFindLight");
+
+  const showDiorama = chapter !== 2;
 
   return (
     <div className="panel" style={{ maxWidth: "min(880px, 94vw)" }}>
@@ -466,6 +468,19 @@ export default function DiapasonGame({ room, me, isHost, players, t, lang, onFin
             </div>
           )}
 
+          {phase === "failure" && (
+            <div>
+              <h2 style={{ fontSize: 22 }}>{t("diapasonFailTitle")}</h2>
+              <p className="hint">{t("diapasonFailText")}</p>
+              {isHost ? (
+                <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+                  <button className="btn" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={rejouer}>🔁 {t("c4Rejouer")}</button>
+                  <button className="btn ghost" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={backToLobby}>{t("backLounge")}</button>
+                </div>
+              ) : <p className="muted">{t("hostBrings")}</p>}
+            </div>
+          )}
+
           {phase === "success" && (
             <div>
               <h2 style={{ fontSize: 22 }}>{t("diapasonEndTitle")}</h2>
@@ -476,23 +491,28 @@ export default function DiapasonGame({ room, me, isHost, players, t, lang, onFin
                 </p>
               )}
               {isHost ? (
-              <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
-                <button className="btn" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={rejouer}>🔁 {t("c4Rejouer")}</button>
-                <button className="btn ghost" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={backToLobby}>{t("backLounge")}</button>
-              </div>
-            ) : <p className="muted">{t("hostBrings")}</p>}
+                <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
+                  <button className="btn" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={rejouer}>🔁 {t("c4Rejouer")}</button>
+                  <button className="btn ghost" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={backToLobby}>{t("backLounge")}</button>
+                </div>
+              ) : <p className="muted">{t("hostBrings")}</p>}
             </div>
           )}
         </Crossfade>
       )}
 
-      {/* Rendu stable, JAMAIS enveloppé dans le fondu enchaîné : un canvas
-          WebGL ne doit pas être monté deux fois pendant une transition. */}
       {phase === "playing" && puzzle && (
         <div>
           {isPlayer && (
-            <div className="diapason-role-badge">
-              🕯️ {amEst ? t("diapasonRoleEst") : t("diapasonRoleOuest")}
+            <div className="diapason-topbar">
+              <div className="diapason-role-badge">
+                🕯️ {amEst ? t("diapasonRoleEst") : t("diapasonRoleOuest")}
+              </div>
+              <div className="diapason-cordes" title={t("diapasonCordesLabel")}>
+                {Array.from({ length: MAX_CORDES }, (_, i) => (
+                  <span key={i} className={"diapason-corde" + (i < cordes ? "" : " broken")}>{i < cordes ? "🎻" : "💔"}</span>
+                ))}
+              </div>
             </div>
           )}
           <p className="hint" style={{ marginTop: 6 }}>{storyLine}</p>
@@ -502,55 +522,54 @@ export default function DiapasonGame({ room, me, isHost, players, t, lang, onFin
             <p className="muted" style={{ marginTop: 14 }}>{t("echoesSpectatorNote")}</p>
           ) : (
             <>
-              <div className="diapason-stage-wrap">
-                <RoomIllustration
-                  side={mySide}
-                  viewpoint={viewpointKey}
-                  dialValues={dialValues}
-                  otherCode={otherCode}
-                  lockValues={lockValues}
-                  otherLockCode={otherLockCode}
-                  foundKeySpot={myKeyFound}
-                  otherKeySpot={otherKeySpot}
-                  keyFound={!!myKeyFound}
-                  gateGlow={myGateOpen}
-                  lockGlow={myLockSubmitted}
-                  accent={accent}
-                  lampLit={lampLit}
-                  doorGlow={myDoorLocked}
-                  onExamine={handleExamine}
-                  onSpotClick={trySpot}
-                  onGateClick={tryGate}
-                />
-                <div className="diapason-vignette" />
-              </div>
+              {showDiorama && (
+                <>
+                  <div className={"diapason-stage-wrap" + (wrongShake ? " shake" : "")}>
+                    <RoomIllustration
+                      side={mySide}
+                      viewpoint={viewpointKey}
+                      dialValues={dialValues}
+                      otherCode={otherCode}
+                      lockValues={lockValues}
+                      otherLockCode={otherLockCode}
+                      accent={accent}
+                      lampLit={lampLit}
+                      candelabraLit={candelabraLit}
+                      doorGlow={myDoorLocked}
+                      lockGlow={myLockSubmitted}
+                      onExamine={handleExamine}
+                    />
+                    <div className="diapason-vignette" />
+                  </div>
 
-              <div style={{ display: "flex", gap: 8, justifyContent: "center", margin: "12px 0", flexWrap: "wrap" }}>
-                {vpIdx > 0 && (
-                  <button className="btn ghost" style={{ width: "auto", padding: "8px 16px", fontSize: 13 }} onClick={() => goViewpoint(-1)}>
-                    ⬅ {t(VIEWPOINT_LABEL_KEY[availableViewpoints[vpIdx - 1]])}
-                  </button>
-                )}
-                {vpIdx < availableViewpoints.length - 1 && (
-                  <button className="btn ghost" style={{ width: "auto", padding: "8px 16px", fontSize: 13 }} onClick={() => goViewpoint(1)}>
-                    {t(VIEWPOINT_LABEL_KEY[availableViewpoints[vpIdx + 1]])} ➡
-                  </button>
-                )}
-              </div>
+                  {availableViewpoints.length > 1 && (
+                    <div style={{ display: "flex", gap: 8, justifyContent: "center", margin: "12px 0", flexWrap: "wrap" }}>
+                      {vpIdx > 0 && (
+                        <button className="btn ghost" style={{ width: "auto", padding: "8px 16px", fontSize: 13 }} onClick={() => goViewpoint(-1)}>
+                          ⬅ {t(VIEWPOINT_LABEL_KEY[availableViewpoints[vpIdx - 1]])}
+                        </button>
+                      )}
+                      {vpIdx < availableViewpoints.length - 1 && (
+                        <button className="btn ghost" style={{ width: "auto", padding: "8px 16px", fontSize: 13 }} onClick={() => goViewpoint(1)}>
+                          {t(VIEWPOINT_LABEL_KEY[availableViewpoints[vpIdx + 1]])} ➡
+                        </button>
+                      )}
+                    </div>
+                  )}
 
-              <p className="hint diapason-examine-box">{examine ? examineText() : defaultHint}</p>
-              {hasMoreAhead && <p className="muted" style={{ textAlign: "center", fontSize: 12, marginTop: -4 }}>{t("diapasonMoreAhead")}</p>}
+                  <p className="hint diapason-examine-box">{examine ? examineText() : defaultHint}</p>
+                </>
+              )}
 
-              {lampLit && viewpointKey === "door" && (
+              {/* ---------- Épreuve 1 : cadrans de la porte ---------- */}
+              {chapter === 1 && lampLit && viewpointKey === "door" && (
                 <div style={{ marginTop: 4 }}>
                   <p className="muted" style={{ fontSize: 13, marginBottom: 8 }}>{t("diapasonDialsHint")}</p>
-
                   <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap", marginBottom: 10 }}>
                     {otherCode.map((sym, i) => (
                       <span key={i} className="diapason-symbol-chip">{t(symbolLabelKey(sym))}</span>
                     ))}
                   </div>
-
                   <div className={"diapason-dial-row" + (wrongShake ? " shake" : "")}>
                     {[0, 1, 2].map((i) => (
                       <div key={i} className="diapason-dial-control">
@@ -560,39 +579,67 @@ export default function DiapasonGame({ room, me, isHost, players, t, lang, onFin
                       </div>
                     ))}
                   </div>
-
                   <div style={{ textAlign: "center", marginTop: 14 }}>
                     {myDoorLocked ? (
                       <p className="muted">{t("diapasonMyDoorOpen")}</p>
                     ) : (
-                      <button className="btn" style={{ width: "auto", padding: "12px 26px" }} onClick={submitDoor}>
-                        {t("diapasonSubmit")}
-                      </button>
+                      <button className="btn" style={{ width: "auto", padding: "12px 26px" }} onClick={submitDoor}>{t("diapasonSubmit")}</button>
                     )}
                   </div>
                 </div>
               )}
 
-              {viewpointKey === "storage" && myKeyFound && (
-                <p className="diapason-comm-banner" style={{ marginTop: 10 }}>🔑 {t("diapasonKeyCarrying")}</p>
+              {/* ---------- Épreuve 2 : la boîte à musique (intervalle sonore) ---------- */}
+              {chapter === 2 && (
+                <div className="diapason-accord-wrap">
+                  {/* Carte 1 — MA boîte : mon partenaire est mon oreille. */}
+                  <div className={"diapason-music-card" + (wrongShake ? " shake" : "")}>
+                    <div className="diapason-music-title">🎁 {t("diapasonMyBox")}</div>
+                    {myBoxOpen ? (
+                      <p className="muted" style={{ textAlign: "center", margin: "10px 0" }}>🗝️ {t("diapasonBoxOpen")}</p>
+                    ) : (
+                      <>
+                        <p className="muted" style={{ fontSize: 12.5, textAlign: "center" }}>{t("diapasonMyBoxHint")}</p>
+                        <div style={{ textAlign: "center", margin: "10px 0" }}>
+                          <button className="btn" style={{ width: "auto", padding: "12px 22px" }} onClick={crankMyBox}>🔄 {t("diapasonCrank")}</button>
+                        </div>
+                        <p className="muted" style={{ fontSize: 12, textAlign: "center", marginBottom: 6 }}>{t("diapasonSubmitInterval")}</p>
+                        <div className="diapason-interval-row">
+                          {INTERVALS.map((iv) => (
+                            <button key={iv} className="btn ghost diapason-interval-btn" onClick={() => submitBox(iv)}>
+                              {t(intervalLabelKey(iv))}
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Carte 2 — je suis l'oreille de la boîte du partenaire. */}
+                  <div className={"diapason-music-card ear" + (heardPulse ? " heard" : "")} key={"ear" + heardPulse}>
+                    <div className="diapason-music-title">🎧 {t("diapasonEarTitle")}</div>
+                    <p className="muted" style={{ fontSize: 12.5, textAlign: "center" }}>{t("diapasonEarHint")}</p>
+                    <p className="muted" style={{ fontSize: 12, textAlign: "center", marginBottom: 6 }}>{t("diapasonReferences")}</p>
+                    <div className="diapason-interval-row">
+                      {INTERVALS.map((iv) => (
+                        <button key={iv} className="btn ghost diapason-interval-btn" onClick={() => playInterval(iv)}>
+                          🔊 {t(intervalLabelKey(iv))}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
               )}
 
-              {viewpointKey === "gate" && (
-                <p className="muted" style={{ textAlign: "center", fontSize: 13, marginTop: 4 }}>
-                  {myGateOpen ? t("diapasonMyGateOpen") : myKeyFound ? "🔑 " + t("diapasonKeyCarrying") : null}
-                </p>
-              )}
-
-              {lampLit && viewpointKey === "sanctuary" && (
+              {/* ---------- Épreuve 3 : cadenas final (candélabre) ---------- */}
+              {chapter === 3 && viewpointKey === "sanctuary" && candelabraLit && (
                 <div style={{ marginTop: 4 }}>
                   <p className="muted" style={{ fontSize: 13, marginBottom: 8 }}>{t("diapasonLockHint")}</p>
-
                   <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap", marginBottom: 10 }}>
                     {otherLockCode.map((sym, i) => (
                       <span key={i} className="diapason-symbol-chip">{t(symbolLabelKey(sym))}</span>
                     ))}
                   </div>
-
                   <div className={"diapason-dial-row" + (wrongShake ? " shake" : "")}>
                     {[0, 1, 2, 3].map((i) => (
                       <div key={i} className="diapason-dial-control">
@@ -602,14 +649,11 @@ export default function DiapasonGame({ room, me, isHost, players, t, lang, onFin
                       </div>
                     ))}
                   </div>
-
                   <div style={{ textAlign: "center", marginTop: 14 }}>
                     {myLockSubmitted ? (
                       <p className="muted">{t("diapasonMyLockOpen")}</p>
                     ) : (
-                      <button className="btn" style={{ width: "auto", padding: "12px 26px" }} onClick={submitLock}>
-                        {t("diapasonSubmitLock")}
-                      </button>
+                      <button className="btn" style={{ width: "auto", padding: "12px 26px" }} onClick={submitLock}>{t("diapasonSubmitLock")}</button>
                     )}
                   </div>
                 </div>
