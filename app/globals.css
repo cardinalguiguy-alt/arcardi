@@ -64,6 +64,33 @@ body.tenk-night .door-panel{
     linear-gradient(var(--door-angle), #0B1533, #1A2C5E 45%, #0B1533);
 }
 body.tenk-night .door-handle{ background:linear-gradient(180deg,#8FD8FF,#2E6EA8); }
+/* CORRECTIF (2026-07) : deux boutons "flottants" restaient au look bois/or
+   feu de camp par-dessus l'ambiance bleu nuit néon du 10000 — détonnaient
+   nettement dans ce jeu (contraste fort avec le reste des accents cyan/rose
+   du HUD). Recolorés en cyan --acc-tenk pour les fondre dans le thème :
+   - .rules-info-btn ("i" règles, medaillon bois -> médaillon bleu nuit/cyan).
+   - .stage-zoom-fab (mode agrandi) : couleur d'accent au survol/à l'état actif. */
+body.tenk-night .rules-info-btn{
+  border-color:rgba(79,209,255,.55);
+  color:var(--acc-tenk);
+  background:radial-gradient(circle at 32% 28%, rgba(21,42,86,.95), rgba(7,14,36,.95));
+}
+body.tenk-night .rules-info-btn:hover{
+  box-shadow:0 2px 10px rgba(0,0,0,.45), 0 0 14px rgba(79,209,255,.5), inset 0 1px 0 rgba(79,209,255,.3);
+}
+body.tenk-night .stage-zoom-fab:hover, body.tenk-night .stage-zoom-fab:focus-visible{ border-color:var(--acc-tenk); }
+body.tenk-night .stage-zoom-fab.on{ color:var(--acc-tenk); border-color:rgba(79,209,255,.6); }
+/* CORRECTIF (2026-07) : le badge "i" (médaillon rond, ancré au coin
+   haut-gauche du cadre en bois .door-stage, voir .rules-info-btn plus bas)
+   débordait visiblement SUR le cadre néon du plateau (.tenk-stage, son
+   propre encart cyan arrondi qui démarre pile au bord du padding) — les deux
+   coins arrondis (cadre bois 22px / plateau néon 30px) laissaient trop peu
+   de marge pour un badge de 32px, qui chevauchait donc le plateau. On donne
+   au 10000 seul un peu plus de marge en haut-gauche (calcul : il faut que le
+   centre du badge s'éloigne d'au moins 46px du coin arrondi du plateau, voir
+   note de calcul dans l'historique de commit) pour que le badge reste
+   entièrement sur le bois, sans toucher le plateau. */
+body.tenk-night .door-stage{ padding:30px; }
 /* ===== Tactile (audit iOS/Android 2026-07) =====
    - tap-highlight : supprime le rectangle gris/bleu que Safari iOS et
      Chrome Android flashent sur CHAQUE tap d'élément cliquable — très
