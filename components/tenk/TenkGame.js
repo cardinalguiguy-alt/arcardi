@@ -803,6 +803,20 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
   const hintPulseTimerRef = useRef(null);
   useEffect(() => {
     function onKeyDown(e) {
+      // Raccourci "lancer les dés" à la barre d'espace (demande 2026-07) :
+      // vient S'AJOUTER au bouton 🎲 existant, ne le remplace pas. Ignoré
+      // si le focus est sur un champ de saisie (ex. le chat du salon,
+      // toujours accessible pendant une partie) pour ne jamais voler un
+      // espace tapé dans un message. Mêmes garde-fous qu'attemptRoll
+      // (son tour, pas de dés déjà lancés, pas verrouillé en "dés chauds").
+      if (e.code === "Space") {
+        const tag = (document.activeElement?.tagName || "").toLowerCase();
+        if (tag === "input" || tag === "textarea" || document.activeElement?.isContentEditable) return;
+        if (!isMyTurn || activeDice || hotDiceLock) return;
+        e.preventDefault();
+        attemptRoll();
+        return;
+      }
       if (!(e.metaKey || e.ctrlKey) || !e.shiftKey || e.code !== "KeyK") return;
       if (!isMyTurn || !activeDice || !activeComboRows.length) return;
       e.preventDefault();
@@ -814,7 +828,7 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
     }
     document.addEventListener("keydown", onKeyDown);
     return () => { document.removeEventListener("keydown", onKeyDown); clearTimeout(hintPulseTimerRef.current); };
-  }, [isMyTurn, activeDice, activeComboRows]);
+  }, [isMyTurn, activeDice, activeComboRows, hotDiceLock]);
 
   let content;
 
@@ -989,7 +1003,7 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
               <div className="tenk-actions">
                 {!activeDice ? (
                   <>
-                    <button className={"tenk-btn-roll" + (hotDiceLock ? " celebrating" : "")} disabled={hotDiceLock} onClick={attemptRoll}>
+                    <button className={"tenk-btn-roll" + (hotDiceLock ? " celebrating" : "")} disabled={hotDiceLock} onClick={attemptRoll} title={t("tenkRollSpaceHint")}>
                       {hotDiceLock ? "🔥 " + t("tenkHotDiceTitle") : "🎲 " + t("tenkRoll")}
                     </button>
                     <button className="tenk-btn-bank" disabled={!turnScore || turnScore < MIN_TO_BANK} onClick={attemptBank}>💰 {t("tenkBank")}</button>

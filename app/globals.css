@@ -91,6 +91,39 @@ body.tenk-night .stage-zoom-fab.on{ color:var(--acc-tenk); border-color:rgba(79,
    note de calcul dans l'historique de commit) pour que le badge reste
    entièrement sur le bois, sans toucher le plateau. */
 body.tenk-night .door-stage{ padding:30px; }
+
+/* ===== Ambiances dédiées Categories (Petit Bac) & Ludo (2026-07) =====
+   Même principe que tenk-night ci-dessus mais en plus doux : ces deux jeux
+   n'ont pas d'encart à fort contraste comme le plateau néon du 10000 (leur
+   grille/plateau reste discrète), donc pas besoin d'un changement radical —
+   un glissement de teinte du fond feu de camp vers la couleur d'accent du
+   jeu (--acc-petitbac rose, --acc-ludo orangé) suffit à leur donner une
+   identité cohérente pendant la partie, sans retoucher le cadre en bois
+   (.door-stage) qui reste harmonieux avec les deux. */
+body.pb-theme{
+  --bg:#24101B; --bg2:#341829; --card:#3D1C2F; --card2:#472239;
+  --ink:#FDEFF5; --muted:#D9A9C0; --line:rgba(255,190,220,.16);
+}
+body.pb-theme .ember .ember-dot{ filter:hue-rotate(300deg) saturate(.9) brightness(.95); }
+body.pb-theme{
+  background-image:
+    radial-gradient(900px 500px at 15% -10%, rgba(247,131,172,.12), transparent 60%),
+    radial-gradient(800px 500px at 95% 0%, rgba(180,90,140,.10), transparent 60%),
+    radial-gradient(700px 600px at 50% 110%, rgba(255,209,102,.05), transparent 60%);
+}
+
+body.ludo-theme{
+  --bg:#241505; --bg2:#301C08; --card:#38230C; --card2:#432A10;
+  --ink:#FFF4E3; --muted:#D9B98B; --line:rgba(255,210,140,.16);
+}
+body.ludo-theme .ember .ember-dot{ filter:hue-rotate(20deg) saturate(1.05) brightness(1.05); }
+body.ludo-theme{
+  background-image:
+    radial-gradient(900px 500px at 15% -10%, rgba(255,184,77,.12), transparent 60%),
+    radial-gradient(800px 500px at 95% 0%, rgba(76,141,255,.08), transparent 60%),
+    radial-gradient(700px 600px at 50% 110%, rgba(182,240,76,.06), transparent 60%);
+}
+
 /* ===== Tactile (audit iOS/Android 2026-07) =====
    - tap-highlight : supprime le rectangle gris/bleu que Safari iOS et
      Chrome Android flashent sur CHAQUE tap d'élément cliquable — très
@@ -2704,6 +2737,48 @@ body.stage-focus .chat-panel{ right:auto; left:14px; }
   .turn-banner-badge, .turn-timer-chip.hot{ animation:none; }
 }
 
+/* ----- Écran d'accueil (choix des catégories, demande 2026-07) -----
+   Même famille visuelle que le reste du Petit Bac (lignes arrondies,
+   accent --acc-petitbac), pensé pour rester lisible même avec 14 lignes
+   à défiler sur mobile. */
+.pb-setup{ max-width:560px; margin:0 auto; }
+.pb-setup-lead{ text-align:center; font-size:13px; color:var(--muted); margin:0 0 16px; }
+.pb-setup-counts{ display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
+.pb-setup-list{ display:flex; flex-direction:column; gap:7px; max-height:52vh; overflow-y:auto; padding-right:2px; }
+.pb-setup-row{
+  display:flex; align-items:center; gap:8px; padding:6px 8px;
+  border-radius:12px; background:rgba(255,255,255,.04); border:1.5px solid var(--line);
+}
+.pb-setup-icon{ font-size:18px; flex:none; width:26px; text-align:center; }
+.pb-setup-input{
+  flex:1; min-width:0; margin:0; border:1.5px solid transparent; border-radius:8px;
+  background:rgba(255,255,255,.04); color:var(--ink); font-size:13.5px; font-weight:600;
+  padding:8px 10px; transition:border-color .15s ease, background .15s ease;
+}
+.pb-setup-input:focus{ border-color:var(--acc-petitbac); background:rgba(255,255,255,.07); outline:none; }
+.pb-setup-swap{
+  flex:none; width:34px; height:34px; border:1.5px solid var(--line); border-radius:50%;
+  background:rgba(255,255,255,.05); font-size:15px; cursor:pointer;
+  display:flex; align-items:center; justify-content:center; transition:transform .15s ease, border-color .15s ease;
+}
+.pb-setup-swap:hover{ transform:rotate(140deg); border-color:var(--acc-petitbac); }
+.pb-setup-actions{ display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:14px; }
+.pb-setup-savebar{ display:flex; gap:8px; margin-top:16px; align-items:center; }
+.pb-setup-favinput{
+  flex:1; min-width:0; margin:0; padding:10px 12px; border-radius:10px;
+  border:1.5px solid var(--line); background:rgba(255,255,255,.04); color:var(--ink); font-size:13px;
+}
+.pb-fav-toggle{ display:block; margin-left:auto; margin-right:auto; }
+.pb-fav-list{ display:flex; flex-direction:column; gap:6px; margin-top:12px; }
+.pb-fav-row{
+  display:flex; align-items:center; gap:8px; padding:7px 10px; border-radius:10px;
+  background:rgba(255,255,255,.04); border:1.5px solid var(--line); font-size:12.5px;
+}
+.pb-fav-name{ font-weight:800; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.pb-fav-count{ font-size:11px; flex:none; }
+.pb-fav-del{ opacity:.6; }
+.pb-fav-del:hover{ opacity:1; }
+
 .pb-grid{ display:flex; flex-direction:column; gap:8px; max-width:520px; margin:0 auto; }
 .pb-row{ display:flex; align-items:center; gap:10px; }
 .pb-cat{ flex:0 0 44%; font-size:13px; font-weight:700; text-align:right; }
@@ -2732,8 +2807,8 @@ body.stage-focus .chat-panel{ right:auto; left:14px; }
   position:absolute; top:4px; right:6px; font-family:'Space Mono';
   font-size:10.5px; font-weight:700; color:var(--muted);
 }
-/* Verdicts : unique (+2) vert, partagé (+1) doré, refusé barré rouge,
-   vide neutre atténué. */
+/* Verdicts : unique (+4, retouche 2026-07) vert, partagé (+1) doré, refusé
+   barré rouge, vide neutre atténué. */
 .pb-cell.unique{ border-color:rgba(76,195,138,.6); background:rgba(76,195,138,.1); }
 .pb-cell.unique .pb-pts{ color:var(--acc-president); }
 .pb-cell.shared{ border-color:rgba(255,209,102,.55); background:rgba(255,209,102,.08); }

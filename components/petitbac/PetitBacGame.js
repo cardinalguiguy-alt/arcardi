@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { saveGameState, readGameState, resetRoomToLobby } from "@/lib/gameSync";
 import Crossfade from "@/components/Crossfade";
+import { CATEGORY_POOL, CAT_COUNT_OPTIONS, DEFAULT_CAT_COUNT, drawCategories, drawOne, catLabel } from "@/lib/petitbacCategories";
+import { loadFavorites, saveFavorite, deleteFavorite } from "@/lib/petitbacFavorites";
 
 /* ==========================================================================
    PETIT BAC (Scattergories) — 2 joueurs et plus, FR/EN.
@@ -11,6 +13,21 @@ import Crossfade from "@/components/Crossfade";
    Les joueurs envoient des tentatives en broadcast ; SEUL l'hôte fait
    évoluer l'état et rediffuse `state`. Pas de bots : ce jeu repose sur
    le jugement humain des réponses.
+
+   Écran d'accueil (demande 2026-07, AVANT la 1ère manche uniquement) :
+   purement LOCAL à l'hôte, même pattern que le choix de table/objectif
+   de Yahtzee/10000 (rien ne transite tant que ce n'est pas confirmé) :
+   1. il choisit un NOMBRE de catégories (CAT_COUNT_OPTIONS) ou charge une
+      liste favorite sauvegardée (voir lib/petitbacFavorites.js) ;
+   2. un tirage aléatoire de ce nombre de catégories est proposé (banque
+      commune, voir lib/petitbacCategories.js — inspirée de Scattergories,
+      savoir commun uniquement) ; l'hôte peut PERMUTER (🔀) n'importe
+      quelle ligne pour une autre catégorie au hasard (= la désapprouver
+      et la remplacer), ou la PERSONNALISER en tapant son propre libellé ;
+   3. il peut sauvegarder la liste obtenue comme favorite, ou lancer la
+      partie — qui diffuse alors `categories` dans l'état initial, comme
+      `letter`. Les manches suivantes (rejouer) réutilisent la même liste
+      de catégories pour toute la session, seule la lettre change.
 
    Déroulé d'une manche (stage diffusé dans l'état) :
    - "write"  : une lettre est tirée, chacun remplit sa grille en local
@@ -23,15 +40,16 @@ import Crossfade from "@/components/Crossfade";
                 clients muets/déconnectés (réponses vides).
    - "review" : toutes les grilles sont révélées dans un tableau commun.
                 Barème LIBRE, arbitré par les humains : réponse unique
-                acceptée = 2 pts, réponses identiques = 1 pt chacun,
-                vide ou refusée = 0. Proposition automatique : vide → 0,
-                ne commence pas par la lettre → refusée, doublons
-                (comparaison sans accents/majuscules) → 1 pt. L'HÔTE peut
-                toucher n'importe quelle case non vide pour inverser
-                accepté/refusé (c'est lui qui tranche les litiges à voix
-                haute avec les autres). Les points se recalculent en
-                direct chez tout le monde (calcul déterministe côté
-                client à partir de answers + letter + overrides).
+                acceptée = 4 pts (retouche 2026-07, était 2), réponses
+                identiques = 1 pt chacun, vide ou refusée = 0. Proposition
+                automatique : vide → 0, ne commence pas par la lettre →
+                refusée, doublons (comparaison sans accents/majuscules) →
+                1 pt. L'HÔTE peut toucher n'importe quelle case non vide
+                pour inverser accepté/refusé (c'est lui qui tranche les
+                litiges à voix haute avec les autres). Les points se
+                recalculent en direct chez tout le monde (calcul
+                déterministe côté client à partir de answers + letter +
+                overrides).
    - "done"   : points gelés dans l'état (gains) et versés au score du
                 salon (chaque client insère SON gain, comme au Président).
                 Rejouer = nouvelle lettre jamais tirée dans la session.
@@ -43,6 +61,9 @@ import Crossfade from "@/components/Crossfade";
    Reprise après rechargement (gameSync) : l'état diffusé est persisté par
    l'hôte ; un joueur qui recharge PENDANT l'écriture perd sa saisie
    locale (compromis assumé, cf. lib/gameSync.js) mais retrouve la manche.
+   L'écran d'accueil, lui, N'EST PAS persisté (comme le choix de table de
+   10000/Yahtzee) : un hôte qui recharge PENDANT la configuration recommence
+   simplement ce petit écran, sans conséquence sur une partie déjà lancée.
    ========================================================================== */
 
 const GAME_ID = "petitbac";
@@ -50,18 +71,6 @@ const GAME_ID = "petitbac";
 // Lettres classiques du petit bac : on écarte K, Q, W, X, Y, Z (trop
 // punitives dans les deux langues).
 const LETTERS = "ABCDEFGHIJLMNOPRSTUV".split("");
-
-// Catégories fixes de la grille (libellés via i18n, ids stables réseau).
-const CATS = [
-  { id: "fname", key: "pbCatFName", icon: "👩" },
-  { id: "mname", key: "pbCatMName", icon: "👨" },
-  { id: "job", key: "pbCatJob", icon: "🛠️" },
-  { id: "sport", key: "pbCatSport", icon: "⚽" },
-  { id: "place", key: "pbCatPlace", icon: "🗺️" },
-  { id: "brand", key: "pbCatBrand", icon: "🏷️" },
-  { id: "animal", key: "pbCatAnimal", icon: "🐾" },
-  { id: "food", key: "pbCatFood", icon: "🍎" },
-];
 
 // Normalisation pour comparer les réponses : minuscules, sans accents,
 // espaces réduits. "Émilie " et "emilie" comptent comme identiques.
@@ -80,12 +89,17 @@ function pickLetter(used) {
 /* Calcul DÉTERMINISTE des statuts et points d'une manche, identique chez
    tous les clients (aucun tirage, aucune horloge) :
    - status par case : "empty" | "ok" | "no"
-   - pts par case : 0 / 1 / 2 selon le barème libre décrit en tête.
+   - pts par case : 0 / 1 / 4 selon le barème libre décrit en tête (retouche
+     2026-07 : une réponse unique/rare vaut désormais 4 pts, était 2 ; les
+     réponses partagées restent à 1 pt chacun, inchangé).
+   `categories` = liste de catégories de LA manche (choisies sur l'écran
+   d'accueil, diffusées dans l'état réseau — voir startRound plus bas).
    `overrides` = décisions manuelles de l'hôte ({ "pid|catId": "ok"|"no" }). */
-function computeReview(seats, answers, letter, overrides) {
+function computeReview(seats, answers, letter, overrides, categories) {
+  const cats = categories || [];
   const L = letter.toLowerCase();
   const cells = {}; // "pid|cat" -> { raw, status }
-  for (const cat of CATS) {
+  for (const cat of cats) {
     for (const seat of seats) {
       const raw = (answers[seat.id] || {})[cat.id] || "";
       const n = norm(raw);
@@ -102,7 +116,7 @@ function computeReview(seats, answers, letter, overrides) {
   const pts = {};
   const totals = {};
   seats.forEach(s => { totals[s.id] = 0; });
-  for (const cat of CATS) {
+  for (const cat of cats) {
     // Doublons parmi les réponses ACCEPTÉES de cette catégorie uniquement.
     const counts = {};
     for (const seat of seats) {
@@ -112,7 +126,7 @@ function computeReview(seats, answers, letter, overrides) {
     for (const seat of seats) {
       const kk = "" + seat.id + "|" + cat.id;
       const c = cells[kk];
-      const p = c.status === "ok" ? (counts[c.n] > 1 ? 1 : 2) : 0;
+      const p = c.status === "ok" ? (counts[c.n] > 1 ? 1 : 4) : 0;
       pts[kk] = p;
       totals[seat.id] += p;
     }
@@ -131,7 +145,21 @@ export default function PetitBacGame({ room, me, isHost, players, t, lang, onFin
   const [deadline, setDeadline] = useState(null);  // ts hôte du couperet 10s
   const [firstBy, setFirstBy] = useState(null);
   const [gains, setGains] = useState(null);        // gelés au stage "done"
+  const [categories, setCategories] = useState([]); // liste choisie sur l'écran d'accueil, figée pour la session
   const [channelReady, setChannelReady] = useState(false);
+
+  // ----- Écran d'accueil (hôte uniquement, avant la 1ère manche) --------
+  // Tout ce bloc est LOCAL, jamais diffusé tant que l'hôte n'a pas cliqué
+  // "Lancer la partie" (voir startRound). "count" = choix du nombre de
+  // catégories ; "review" = tirage proposé, approuvable/permutable/
+  // personnalisable ligne par ligne.
+  const [setupStep, setSetupStep] = useState("count"); // "count" | "review"
+  const [setupCandidates, setSetupCandidates] = useState([]); // [{id,icon,fr,en,custom}]
+  const [favorites, setFavorites] = useState([]);
+  const [favNameDraft, setFavNameDraft] = useState("");
+  const [showFavPanel, setShowFavPanel] = useState(false);
+
+  useEffect(() => { setFavorites(loadFavorites()); }, []);
 
   // Saisie STRICTEMENT locale pendant l'écriture (rien ne transite).
   const [draft, setDraft] = useState({});
@@ -142,20 +170,21 @@ export default function PetitBacGame({ room, me, isHost, players, t, lang, onFin
   const draftRef = useRef({});
   const submittedRef = useRef(false);
   const savedResultRef = useRef(false);
-  const autoStartedRef = useRef(false);
+  const autoStartedRef = useRef(false); // posé à true dès qu'on est passé en "playing" (restore ou lancement hôte)
   const restoredRef = useRef(false);
   const failsafeTimer = useRef(null);
 
   useEffect(() => { draftRef.current = draft; }, [draft]);
   useEffect(() => {
-    stateRef.current = { seats, letter, used, stage, answers, overrides, deadline, firstBy, gains };
-  }, [seats, letter, used, stage, answers, overrides, deadline, firstBy, gains]);
+    stateRef.current = { seats, letter, used, stage, answers, overrides, deadline, firstBy, gains, categories };
+  }, [seats, letter, used, stage, answers, overrides, deadline, firstBy, gains, categories]);
 
   function applyLocalState(s, opts = {}) {
     setSeats(s.seats || []); setLetter(s.letter || null); setUsed(s.used || []);
     setStage(s.stage || "write"); setAnswers(s.answers || {});
     setOverrides(s.overrides || {}); setDeadline(s.deadline || null);
     setFirstBy(s.firstBy || null); setGains(s.gains || null);
+    setCategories(s.categories || []);
     if (opts.newRound) { setDraft({}); submittedRef.current = false; savedResultRef.current = false; }
   }
 
@@ -282,7 +311,7 @@ export default function PetitBacGame({ room, me, isHost, players, t, lang, onFin
     const [pid, catId] = cellKey.split("|");
     const raw = (s.answers[pid] || {})[catId] || "";
     if (!norm(raw)) return; // une case vide reste à 0, rien à arbitrer
-    const { cells } = computeReview(s.seats, s.answers, s.letter, s.overrides);
+    const { cells } = computeReview(s.seats, s.answers, s.letter, s.overrides, s.categories);
     const cur = cells[cellKey]?.status;
     const overrides = { ...s.overrides, [cellKey]: cur === "ok" ? "no" : "ok" };
     broadcastNewState({ ...s, overrides });
@@ -291,11 +320,14 @@ export default function PetitBacGame({ room, me, isHost, players, t, lang, onFin
   function hostValidateScores() {
     const s = stateRef.current;
     if (!s || s.stage !== "review") return;
-    const { totals } = computeReview(s.seats, s.answers, s.letter, s.overrides);
+    const { totals } = computeReview(s.seats, s.answers, s.letter, s.overrides, s.categories);
     broadcastNewState({ ...s, stage: "done", gains: totals });
   }
 
-  function startRound(prev) {
+  // `cats` : liste de catégories de la manche — obligatoire au tout premier
+  // lancement (fournie par l'écran d'accueil), sinon reprise de la session
+  // précédente (rejouer garde la même liste, seule la lettre change).
+  function startRound(prev, cats) {
     const usedPrev = prev?.used || [];
     const seatsNow = prev?.seats
       || players.map(p => ({ id: p.profile_id, username: p.profiles?.username, avatar: p.profiles?.avatar }));
@@ -304,19 +336,52 @@ export default function PetitBacGame({ room, me, isHost, players, t, lang, onFin
       seats: seatsNow, letter: L,
       used: (usedPrev.length >= LETTERS.length ? [] : usedPrev).concat(L),
       stage: "write", answers: {}, overrides: {}, deadline: null, firstBy: null, gains: null,
+      categories: cats || prev?.categories || [],
     };
+    autoStartedRef.current = true;
     channelRef.current.send({ type: "broadcast", event: "match_start", payload: initial });
   }
 
-  // Démarrage automatique dès que le canal est prêt : tous les joueurs du
-  // salon jouent (pas de sélection de table, pas de bots).
-  useEffect(() => {
-    if (!isHost || phase !== "intro" || autoStartedRef.current || !channelReady) return;
-    if (players.length < 2) return;
-    autoStartedRef.current = true;
-    startRound(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isHost, phase, channelReady, players.length]);
+  // ----- Écran d'accueil : actions de l'hôte -----------------------------
+  function pickCount(n) {
+    setSetupCandidates(drawCategories(n));
+    setSetupStep("review");
+  }
+  function regenerateAll() {
+    setSetupCandidates(cands => drawCategories(cands.length));
+  }
+  function swapOne(idx) {
+    setSetupCandidates(cands => {
+      const next = cands.slice();
+      next[idx] = drawOne(cands.map(c => c.id));
+      return next;
+    });
+  }
+  function customizeOne(idx, text) {
+    setSetupCandidates(cands => {
+      const next = cands.slice();
+      next[idx] = { ...next[idx], custom: text };
+      return next;
+    });
+  }
+  function loadFavoriteList(fav) {
+    setSetupCandidates(fav.categories.map(c => ({ ...c })));
+    setSetupStep("review");
+    setShowFavPanel(false);
+  }
+  function saveCurrentAsFavorite() {
+    const name = favNameDraft.trim();
+    if (!name) return;
+    setFavorites(saveFavorite(name, setupCandidates));
+    setFavNameDraft("");
+  }
+  function removeFavorite(id) {
+    setFavorites(deleteFavorite(id));
+  }
+  function confirmSetupAndStart() {
+    if (!setupCandidates.length || !channelReady) return;
+    startRound(null, setupCandidates);
+  }
 
   // ----- Côté joueur ----------------------------------------------------
 
@@ -362,14 +427,88 @@ export default function PetitBacGame({ room, me, isHost, players, t, lang, onFin
   const isPlayer = !!seats.find(x => x.id === me.id);
   const iSubmitted = submittedRef.current || !!answers[me.id];
   const review = stage !== "write" && letter
-    ? computeReview(seats, answers, letter, overrides) : null;
+    ? computeReview(seats, answers, letter, overrides, categories) : null;
 
   let content;
 
-  if (phase !== "playing") {
+  if (phase !== "playing" && isHost) {
+    // ----- Écran d'accueil (hôte) : choix du nombre puis revue du tirage --
+    if (players.length < 2) {
+      content = <p className="muted">{t("pbNeedTwo")}</p>;
+    } else if (setupStep === "count") {
+      content = (
+        <div className="pb-setup">
+          <p className="pb-setup-lead">{t("pbSetupCountLead")}</p>
+          <div className="pb-setup-counts">
+            {CAT_COUNT_OPTIONS.map(n => (
+              <button key={n} className={"btn" + (n === DEFAULT_CAT_COUNT ? "" : " ghost")} style={{ width: "auto", padding: "12px 20px" }} onClick={() => pickCount(n)}>
+                {n}
+              </button>
+            ))}
+          </div>
+          {favorites.length > 0 && (
+            <button className="btn ghost pb-fav-toggle" style={{ width: "auto", padding: "10px 18px", marginTop: 14 }} onClick={() => setShowFavPanel(v => !v)}>
+              📂 {t("pbFavToggle")} ({favorites.length})
+            </button>
+          )}
+          {showFavPanel && (
+            <div className="pb-fav-list">
+              {favorites.map(f => (
+                <div key={f.id} className="pb-fav-row">
+                  <span className="pb-fav-name">⭐ {f.name}</span>
+                  <span className="muted pb-fav-count">{f.categories.length} {t("pbCatsWord")}</span>
+                  <button className="btn ghost" style={{ width: "auto", padding: "6px 12px" }} onClick={() => loadFavoriteList(f)}>{t("pbFavLoad")}</button>
+                  <button className="btn ghost pb-fav-del" style={{ width: "auto", padding: "6px 10px" }} onClick={() => removeFavorite(f.id)}>🗑</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    } else {
+      content = (
+        <div className="pb-setup">
+          <p className="pb-setup-lead">{t("pbSetupReviewLead")}</p>
+          <div className="pb-setup-list">
+            {setupCandidates.map((cat, idx) => (
+              <div className="pb-setup-row" key={cat.id + "_" + idx}>
+                <span className="pb-setup-icon">{cat.icon}</span>
+                <input
+                  type="text"
+                  className="pb-setup-input"
+                  maxLength={40}
+                  value={cat.custom != null ? cat.custom : catLabel(cat, lang)}
+                  onChange={e => customizeOne(idx, e.target.value)}
+                />
+                <button className="pb-setup-swap" title={t("pbSetupSwap")} onClick={() => swapOne(idx)}>🔀</button>
+              </div>
+            ))}
+          </div>
+          <div className="pb-setup-actions">
+            <button className="btn ghost" style={{ width: "auto", padding: "10px 18px" }} onClick={regenerateAll}>🎲 {t("pbSetupRegenAll")}</button>
+            <button className="btn ghost" style={{ width: "auto", padding: "10px 18px" }} onClick={() => setSetupStep("count")}>↩ {t("pbSetupBack")}</button>
+          </div>
+          <div className="pb-setup-savebar">
+            <input
+              type="text"
+              className="pb-setup-favinput"
+              placeholder={t("pbSetupFavPlaceholder")}
+              maxLength={30}
+              value={favNameDraft}
+              onChange={e => setFavNameDraft(e.target.value)}
+            />
+            <button className="btn ghost" style={{ width: "auto", padding: "10px 16px" }} disabled={!favNameDraft.trim()} onClick={saveCurrentAsFavorite}>⭐ {t("pbSetupFavSave")}</button>
+          </div>
+          <button className="btn" style={{ marginTop: 16 }} onClick={confirmSetupAndStart}>▶ {t("pbSetupStart")}</button>
+        </div>
+      );
+    }
+  } else if (phase !== "playing") {
+    // Invités : l'hôte configure l'écran d'accueil (choix des catégories),
+    // rien à faire ici qu'attendre — voir bloc host ci-dessus.
     content = players.length < 2
       ? <p className="muted">{t("pbNeedTwo")}</p>
-      : <p className="muted">{t("chromatikStarting")}</p>;
+      : <p className="muted">{t("pbWaitingHostSetup")}</p>;
   } else if (stage === "write") {
     content = (
       <div>
@@ -393,9 +532,9 @@ export default function PetitBacGame({ room, me, isHost, players, t, lang, onFin
         {isPlayer && !iSubmitted && (
           <>
             <div className="pb-grid">
-              {CATS.map(cat => (
+              {categories.map(cat => (
                 <label key={cat.id} className="pb-row">
-                  <span className="pb-cat">{cat.icon} {t(cat.key)}</span>
+                  <span className="pb-cat">{cat.icon} {catLabel(cat, lang)}</span>
                   <input
                     type="text"
                     maxLength={40}
@@ -453,9 +592,9 @@ export default function PetitBacGame({ room, me, isHost, players, t, lang, onFin
               </tr>
             </thead>
             <tbody>
-              {CATS.map(cat => (
+              {categories.map(cat => (
                 <tr key={cat.id}>
-                  <th className="pb-cathead">{cat.icon} {t(cat.key)}</th>
+                  <th className="pb-cathead">{cat.icon} {catLabel(cat, lang)}</th>
                   {seats.map(s => {
                     const kk = "" + s.id + "|" + cat.id;
                     const cell = review.cells[kk];

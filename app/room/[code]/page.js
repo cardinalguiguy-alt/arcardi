@@ -308,6 +308,27 @@ export default function Room() {
     return () => document.body.classList.remove("tenk-night");
   }, [tenkNight]);
 
+  // Ambiances dédiées Petit Bac (Categories) et Petits Chevaux (Ludo)
+  // (demande 2026-07) : même mécanique que tenk-night, en plus discret —
+  // ces deux jeux n'ont pas d'encart à fort contraste comme le 10000, un
+  // simple glissement de teinte du fond (rose pour Categories, orangé
+  // pour Ludo, voir body.pb-theme / body.ludo-theme dans globals.css)
+  // suffit à leur donner une identité cohérente sans dénaturer le thème
+  // feu de camp du reste du site.
+  const pbTheme = !!(room && me && room.status === "playing" && room.current_game === "petitbac");
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    document.body.classList.toggle("pb-theme", pbTheme);
+    return () => document.body.classList.remove("pb-theme");
+  }, [pbTheme]);
+
+  const ludoTheme = !!(room && me && room.status === "playing" && room.current_game === "ludo");
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    document.body.classList.toggle("ludo-theme", ludoTheme);
+    return () => document.body.classList.remove("ludo-theme");
+  }, [ludoTheme]);
+
   // Mode agrandi : même mécanique de classe sur <body> que tenk-night —
   // uniquement pendant une partie (au lobby, l'en-tête reste toujours là).
   const focusActive = !!(room && me && room.status === "playing" && stageFocus);

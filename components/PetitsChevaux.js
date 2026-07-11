@@ -372,6 +372,23 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
   const currentColor = order[turnIdx];
   const isMyTurn = phase === "playing" && !winner && isPlayer && currentColor === myColor;
   const needsPick = players.length > 4;
+
+  // Raccourci "lancer les dés" à la barre d'espace (demande 2026-07) :
+  // s'AJOUTE au bouton existant, ne le remplace pas. Ignoré si le focus
+  // est sur un champ de saisie (ex. le chat du salon) pour ne jamais voler
+  // un espace tapé dans un message. Mêmes garde-fous que rollDice().
+  useEffect(() => {
+    function onKeyDown(e) {
+      if (e.code !== "Space") return;
+      const tag = (document.activeElement?.tagName || "").toLowerCase();
+      if (tag === "input" || tag === "textarea" || document.activeElement?.isContentEditable) return;
+      if (!isMyTurn || dice !== null) return;
+      e.preventDefault();
+      rollDice();
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [isMyTurn, dice]);
   const playerNameFor = (color) => {
     const pid = Object.keys(colorOfPlayer).find(id => colorOfPlayer[id] === color);
     const p = players.find(pp => pp.profile_id === pid);
@@ -525,7 +542,7 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
         ) : (
           <div style={{ display: "flex", justifyContent: "center", marginTop: 14 }}>
             {isMyTurn && dice === null ? (
-              <button className="btn" style={{ width: "auto", padding: "12px 26px" }} onClick={rollDice}>
+              <button className="btn" style={{ width: "auto", padding: "12px 26px" }} onClick={rollDice} title={t("ludoRollSpaceHint")}>
                 {t("ludoRollDice")}
               </button>
               ) : (
