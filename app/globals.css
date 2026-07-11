@@ -10,6 +10,10 @@
   --ludoY:#FFD23F; --ludoB:#4C8DFF;
   --dia:#C9A24B; /* laiton vieilli — accent dédié au jeu phare Diapason */
   --ink-on-accent:#2B1B12; /* texte sombre lisible sur les boutons/tuiles clairs */
+  /* Audit couleurs 2026-07 : vert "réussite" SÉMANTIQUE partagé entre jeux
+     (même valeur que --acc-president, mais nom neutre : un jeu ne doit
+     jamais emprunter l'ACCENT d'un autre jeu pour dire "correct/validé"). */
+  --ok:#4CC38A;
 
   /* ===== Accents dédiés par jeu (tuiles d'icône + bordure de carte + lueur de scène) ===== */
   --acc-c4:#FF3B30; --acc-ludo:#FFB84D; --acc-quiz:#4ECDC4; --acc-wordle:#A8E063;
@@ -18,7 +22,7 @@
   --acc-petitbac:#F783AC;
   --acc-goldmines:#F2C94C; /* or — Gold Mines (démineur inversé 2v2) */
   --acc-tenk:#4FD1FF; /* cyan/bleu néon HUD — jeu 10000 (grille circuit) */
-  --acc-heist:#FF2E63; /* rouge laser — Le Casse (escape coop nerveux) */
+  --acc-heist:#FF2E63; /* rouge laser — Le Louvre (escape coop nerveux, ex-Le Casse) */
   --tenk-blue-deep:#1B6FA8; /* bleu profond — dégradés HUD, contours secondaires */
   --tenk-pink:#FF5FB0; /* rose néon — pips des dés, halo de sélection, accents chauds */
   --tenk-felt:#0B1A3A; /* tapis bleu */
@@ -626,10 +630,14 @@ body.stage-focus .chat-panel{ right:auto; left:14px; }
 @keyframes ludoRoll{ 0%{transform:rotate(0) scale(1);} 50%{transform:rotate(180deg) scale(1.12);} 100%{transform:rotate(360deg) scale(1);} }
 
 /* ---------- Échos (escape room coopératif asymétrique) ---------- */
+/* Audit couleurs 2026-07 : l'identité en jeu d'Échos était violette (--p5)
+   alors que l'accent officiel du jeu (carte du salon, lueur de scène) est le
+   cyan --acc-echoes — recalé sur le cyan partout où le violet servait
+   d'accent (badge de rôle, cadran, survols, levier). */
 .echo-role-badge{
   display:inline-flex; align-items:center; gap:8px; padding:6px 12px; border-radius:99px;
-  background:rgba(167,139,250,.12); border:1.5px solid var(--p5); font-weight:800; font-size:12.5px;
-  color:var(--p5); margin-bottom:10px;
+  background:rgba(90,200,219,.12); border:1.5px solid var(--acc-echoes); font-weight:800; font-size:12.5px;
+  color:var(--acc-echoes); margin-bottom:10px;
 }
 .echo-comm-banner{
   display:flex; align-items:center; gap:8px; padding:9px 12px; border-radius:12px;
@@ -646,11 +654,11 @@ body.stage-focus .chat-panel{ right:auto; left:14px; }
 }
 .echo-dial-needle{
   position:absolute; left:50%; top:50%; width:4px; height:82px; margin-left:-2px; margin-top:-82px;
-  background:linear-gradient(var(--p5), transparent); border-radius:4px; transform-origin:50% 100%;
+  background:linear-gradient(var(--acc-echoes), transparent); border-radius:4px; transform-origin:50% 100%;
 }
 .echo-dial-center{
   position:absolute; left:50%; top:50%; width:14px; height:14px; margin-left:-7px; margin-top:-7px;
-  border-radius:50%; background:var(--p5); box-shadow:0 0 0 3px rgba(167,139,250,.25);
+  border-radius:50%; background:var(--acc-echoes); box-shadow:0 0 0 3px rgba(90,200,219,.25);
 }
 
 .echo-gear-chip{
@@ -669,7 +677,7 @@ body.stage-focus .chat-panel{ right:auto; left:14px; }
 
 .echo-lever-btn{
   width:100%; padding:22px; border-radius:16px; font-family:'Bungee'; font-size:16px;
-  background:linear-gradient(135deg, var(--p5), var(--p2)); color:#12142A; border:none; cursor:pointer;
+  background:linear-gradient(135deg, var(--acc-echoes), var(--p2)); color:#12142A; border:none; cursor:pointer;
   box-shadow:0 5px 0 rgba(0,0,0,.35); transition:transform .12s;
 }
 .echo-lever-btn:active{ transform:translateY(3px); box-shadow:0 2px 0 rgba(0,0,0,.35); }
@@ -755,7 +763,7 @@ body.stage-focus .chat-panel{ right:auto; left:14px; }
 }
 .echo-memory-tile.hidden-tile{ background:rgba(0,0,0,.35); font-size:12px; color:var(--muted); font-weight:800; }
 .echo-memory-tile.pickable{ cursor:pointer; transition:transform .15s, border-color .15s; }
-.echo-memory-tile.pickable:hover{ transform:scale(1.03); border-color:var(--p5); }
+.echo-memory-tile.pickable:hover{ transform:scale(1.03); border-color:var(--acc-echoes); }
 .echo-memory-tile.chosen{ border-color:var(--p3); background:rgba(182,240,76,.14); }
 .echo-memory-slot{
   display:inline-flex; align-items:center; justify-content:center; width:38px; height:38px;
@@ -772,7 +780,7 @@ body.stage-focus .chat-panel{ right:auto; left:14px; }
   font-size:32px; cursor:pointer; background:none; border:none; padding:10px; border-radius:12px;
   transition:transform .15s, box-shadow .15s;
 }
-.echo-decor-object:hover{ box-shadow:0 0 0 2px var(--p5) inset; }
+.echo-decor-object:hover{ box-shadow:0 0 0 2px var(--acc-echoes) inset; }
 .echo-decor-object.anim-float{ animation:echoFloat 2.6s ease-in-out infinite; }
 .echo-decor-object.anim-swing{ animation:echoLampSwing 2.2s ease-in-out infinite; }
 .echo-decor-object.anim-flicker{ animation:echoFlicker 1.3s steps(2) infinite; }
@@ -784,7 +792,57 @@ body.stage-focus .chat-panel{ right:auto; left:14px; }
 @keyframes echoDrift{ 0%,100%{ transform:translateX(0); } 50%{ transform:translateX(10px); } }
 @keyframes echoSpin{ 0%{ transform:rotate(0); } 100%{ transform:rotate(360deg); } }
 
-/* ---------- Le Casse (heist coop asymétrique nerveux) ---------- */
+/* ===== Échos v3 (zip 82) : trois nouvelles épreuves ===== */
+/* Chapitre vannes : 5 volants de vapeur à ouvrir/fermer */
+.echo-valve{
+  display:flex; flex-direction:column; align-items:center; gap:4px; padding:12px 10px; min-width:72px;
+  border-radius:14px; border:2.5px solid var(--line); background:rgba(255,255,255,.04); cursor:pointer;
+  font-weight:800; transition:transform .15s, border-color .15s, background .15s; color:var(--ink);
+}
+.echo-valve .letter{ font-family:'Bungee'; font-size:18px; }
+.echo-valve .wheel{ font-size:26px; transition:transform .35s ease; display:inline-block; }
+.echo-valve.open{ border-color:var(--acc-echoes); background:rgba(90,200,219,.12); }
+.echo-valve.open .wheel{ transform:rotate(140deg); }
+.echo-valve .state{ font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); }
+.echo-valve.open .state{ color:var(--acc-echoes); }
+/* Côté info : petites étiquettes cible (lecture seule) */
+.echo-valve-target{
+  display:inline-flex; align-items:center; gap:8px; padding:8px 12px; border-radius:10px;
+  border:1.5px solid var(--line); background:rgba(255,255,255,.04); font-weight:800; margin:4px;
+}
+.echo-valve-target .letter{ font-family:'Bungee'; }
+.echo-valve-target.open{ border-color:rgba(90,200,219,.55); color:var(--acc-echoes); }
+.echo-valve-target.closed{ color:var(--muted); }
+
+/* Chapitre constellation : grille 3×3 repérée A–C / 1–3, tracé d'étoiles */
+.echo-star-grid{ display:grid; grid-template-columns:repeat(3, 56px); gap:8px; justify-content:center; margin:10px 0 4px; }
+.echo-star-cell{
+  width:56px; height:56px; border-radius:12px; border:2px solid var(--line); cursor:pointer;
+  background:rgba(255,255,255,.04); font-size:22px; position:relative;
+  display:flex; align-items:center; justify-content:center; transition:transform .12s, border-color .15s;
+}
+.echo-star-cell:hover{ transform:scale(1.04); border-color:var(--acc-echoes); }
+.echo-star-cell.lit{ border-color:var(--acc-echoes); background:rgba(90,200,219,.14); }
+.echo-star-cell .ord{
+  position:absolute; top:2px; right:5px; font-family:'Space Mono'; font-size:11px; color:var(--acc-echoes);
+}
+.echo-star-coord{ font-family:'Space Mono'; font-size:11px; color:var(--muted); text-align:center; }
+
+/* Chapitre lampisterie : 3×3 lampes, une pression bascule aussi les voisines */
+.echo-lamp-grid{ display:grid; grid-template-columns:repeat(3, 56px); gap:8px; justify-content:center; margin:10px 0 4px; }
+.echo-lamp{
+  width:56px; height:56px; border-radius:12px; border:2px solid var(--line);
+  background:rgba(0,0,0,.3); font-size:24px; display:flex; align-items:center; justify-content:center;
+  transition:background .2s, border-color .2s, box-shadow .2s;
+}
+.echo-lamp.lit{
+  background:rgba(255,185,74,.16); border-color:var(--p4);
+  box-shadow:0 0 12px rgba(255,185,74,.35) inset;
+}
+.echo-lamp.pressable{ cursor:pointer; }
+.echo-lamp.pressable:hover{ border-color:var(--acc-echoes); }
+
+/* ---------- Le Louvre (heist coop asymétrique nerveux — ex-Le Casse) ---------- */
 .heist-role-badge{
   display:inline-flex; align-items:center; gap:8px; padding:6px 12px; border-radius:99px;
   background:rgba(255,46,99,.12); border:1.5px solid var(--acc-heist); font-weight:800; font-size:12.5px;
@@ -827,13 +885,15 @@ body.stage-focus .chat-panel{ right:auto; left:14px; }
   width:48px; height:40px; border-radius:8px; display:flex; align-items:center; justify-content:center;
   font-size:18px; border:2px solid var(--line);
 }
-.heist-laser-cell.safe{ background:rgba(76,195,138,.18); border-color:var(--p3); color:var(--p3); }
+/* Audit couleurs 2026-07 : le fond vert (--ok) était bordé de vert LIME
+   (--p3), deux verts différents sur le même élément — unifiés sur --ok. */
+.heist-laser-cell.safe{ background:rgba(76,195,138,.18); border-color:var(--ok); color:var(--ok); }
 .heist-laser-cell.beam{ background:rgba(255,46,99,.10); border-color:rgba(255,46,99,.4); }
 .heist-laser-cell.action{ cursor:pointer; background:rgba(255,255,255,.03); transition:transform .1s, box-shadow .15s; }
 .heist-laser-cell.action.locked{ opacity:.4; cursor:default; }
 .heist-laser-cell.action.live{ border-color:var(--p4); box-shadow:0 0 0 2px rgba(255,185,74,.25) inset; }
 .heist-laser-cell.action.live:hover{ transform:scale(1.05); }
-.heist-laser-cell.action.crossed{ background:rgba(76,195,138,.18); border-color:var(--p3); }
+.heist-laser-cell.action.crossed{ background:rgba(76,195,138,.18); border-color:var(--ok); }
 /* Coffre : cadran rotatif */
 .heist-combo-slot{
   display:inline-flex; align-items:center; justify-content:center; width:40px; height:40px;
@@ -874,6 +934,35 @@ body.stage-focus .chat-panel{ right:auto; left:14px; }
 }
 .heist-exit-btn:active{ transform:translateY(3px); box-shadow:0 2px 0 rgba(0,0,0,.35); }
 .heist-exit-btn:disabled{ opacity:.55; cursor:default; }
+
+/* ===== Le Louvre (zip 82) : finale "La Joconde" — double verrou croisé ===== */
+/* Chaque complice compose SON code de 5 symboles sur SON pupitre ; l'indice
+   de chacun est affiché chez L'AUTRE (information croisée). */
+.heist-final-clue{
+  display:flex; gap:6px; justify-content:center; flex-wrap:wrap; margin:10px 0;
+  padding:10px; border-radius:12px; border:1.5px dashed rgba(255,46,99,.45);
+  background:rgba(255,46,99,.06);
+}
+.heist-final-clue .sym{ font-size:24px; }
+.heist-final-slots{ display:flex; gap:6px; justify-content:center; margin:10px 0 6px; }
+.heist-final-slot{
+  display:inline-flex; align-items:center; justify-content:center; width:42px; height:42px;
+  border-radius:10px; border:2px dashed var(--line); font-size:20px; color:var(--muted);
+}
+.heist-final-slot.filled{ border-style:solid; border-color:var(--acc-heist); color:var(--ink); background:rgba(255,46,99,.08); }
+.heist-final-pad{ display:grid; grid-template-columns:repeat(3, 56px); gap:8px; justify-content:center; margin:8px 0; }
+.heist-final-key{
+  width:56px; height:56px; border-radius:12px; border:2px solid var(--line); cursor:pointer;
+  background:rgba(255,255,255,.04); font-size:24px; display:flex; align-items:center; justify-content:center;
+  transition:transform .12s, border-color .15s;
+}
+.heist-final-key:hover{ transform:scale(1.05); border-color:var(--acc-heist); }
+.heist-final-key:disabled{ opacity:.4; cursor:default; }
+.heist-final-done{
+  display:inline-flex; align-items:center; gap:8px; padding:8px 14px; border-radius:99px;
+  border:1.5px solid var(--ok); color:var(--ok); background:rgba(76,195,138,.1);
+  font-weight:800; font-size:13px; margin:8px 0;
+}
 @media (prefers-reduced-motion: reduce){
   .heist-atmo-beam, .heist-atmo-guard, .heist-alert-fill.critical{ animation:none; }
 }
@@ -2810,7 +2899,7 @@ body.stage-focus .chat-panel{ right:auto; left:14px; }
 /* Verdicts : unique (+4, retouche 2026-07) vert, partagé (+1) doré, refusé
    barré rouge, vide neutre atténué. */
 .pb-cell.unique{ border-color:rgba(76,195,138,.6); background:rgba(76,195,138,.1); }
-.pb-cell.unique .pb-pts{ color:var(--acc-president); }
+.pb-cell.unique .pb-pts{ color:var(--ok); } /* audit 2026-07 : n'emprunte plus l'accent du Président */
 .pb-cell.shared{ border-color:rgba(255,209,102,.55); background:rgba(255,209,102,.08); }
 .pb-cell.shared .pb-pts{ color:var(--p2); }
 .pb-cell.refused{ border-color:rgba(255,107,107,.55); background:rgba(255,107,107,.08); }

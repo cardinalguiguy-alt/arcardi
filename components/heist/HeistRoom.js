@@ -5,15 +5,19 @@ import { saveGameState, readGameState, resetRoomToLobby } from "@/lib/gameSync";
 import Crossfade from "@/components/Crossfade";
 
 /* ==========================================================================
-   LE CASSE (heist) — escape room coopératif ASYMÉTRIQUE à 2 joueurs, version
-   NERVEUSE (pattern n°3, mêmes conventions qu'Échos).
+   LE LOUVRE (heist) — escape room coopératif ASYMÉTRIQUE à 2 joueurs,
+   version NERVEUSE (pattern n°3, mêmes conventions qu'Échos).
    ==========================================================================
-   Deux cambrioleurs infiltrés dans le même musée, chacun dans une aile
-   différente, reliés seulement par oreillette : aucune vue partagée, aucun
-   arbitre. La seule vérité commune est un petit historique d'événements
-   (broadcast, self:true) que les deux clients appliquent de façon
-   idempotente :
-     - "match_start" : l'hôte génère la partie ENTIÈRE (rôles + 5 coups +
+   Renommé "Le Casse" -> "Le Louvre" (zip 82). L'identifiant technique
+   game_id RESTE "heist" (canal, saveGameState, game_results) : le renommage
+   est purement d'AFFICHAGE (i18n) — aucune manip Supabase.
+
+   Deux cambrioleurs infiltrés dans le Louvre, chacun dans une aile
+   différente (Denon / Richelieu), reliés seulement par oreillette : aucune
+   vue partagée, aucun arbitre. La seule vérité commune est un petit
+   historique d'événements (broadcast, self:true) que les deux clients
+   appliquent de façon idempotente :
+     - "match_start" : l'hôte génère la partie ENTIÈRE (rôles + 6 coups +
        horodatage de fin de ronde) et l'envoie une fois pour toutes. Les deux
        clients adoptent exactement les mêmes données ; seul le RENDU diffère
        selon le rôle — aucune re-génération locale, donc aucun risque de
@@ -23,15 +27,23 @@ import Crossfade from "@/components/Crossfade";
        partagé ET grignote l'horodatage de fin (double pression). Toujours
        par diffusion, jamais localement, pour que le compteur d'alerte et le
        chrono restent identiques partout. À 100 % → repérés, échec.
-     - "press_a" / "press_b" : la sortie synchronisée finale. Aucun arbitre :
-       les deux clients reçoivent les deux horodatages (self:true) et
-       calculent chacun de leur côté si la descente est assez synchrone.
+     - "final_ok" : finale "La Joconde" (zip 82), phase 1 — le complice qui
+       vient d'ouvrir SON verrou (vérifié localement) le déclare aux deux
+       clients ; quand les DEUX verrous sont ouverts, la phase 2 s'affiche.
+     - "press_a" / "press_b" : le décrochage synchronisé final. Aucun
+       arbitre : les deux clients reçoivent les deux horodatages (self:true)
+       et calculent chacun si le décrochage est assez synchrone.
 
-   6 chapitres, rôle "info"/"action" équilibré entre A et B (le 6e chapitre
-   est symétrique : les deux se laissent glisser en rappel en même temps).
+   6 chapitres, rôle "info"/"action" équilibré entre A et B. Le 6e — LA
+   JOCONDE — est la finale, voulue PLUS LONGUE ET PLUS DURE que les coups
+   précédents (zip 82) : deux codes de 5 symboles à information CROISÉE
+   (l'indice de chacun s'affiche chez l'AUTRE, les deux dictent et composent
+   en même temps, pupitres mélangés différemment pour que décrire une
+   position ne serve à rien), puis un décrochage synchronisé à fenêtre
+   RÉDUITE (700 ms au lieu de 900).
 
-   Ce qui rend LE CASSE plus stressant qu'Échos :
-     - ronde plus courte (8 min au lieu de 15) ;
+   Ce qui rend LE LOUVRE plus stressant qu'Échos :
+     - ronde plus courte (6 min — resserrée depuis 8, zip 82) ;
      - DEUX façons de perdre (temps écoulé OU jauge d'alerte pleine) ;
      - un gardien qui patrouille en fond (barre d'atmosphère) et accélère à
        mesure que l'alerte monte ;
@@ -41,12 +53,12 @@ import Crossfade from "@/components/Crossfade";
    game_id = "heist" (simple chaîne). Aucune manip Supabase.
    ========================================================================== */
 
-const TOTAL_MS = 8 * 60 * 1000;        // 8 minutes : la ronde du gardien
+const TOTAL_MS = 6 * 60 * 1000;        // 6 minutes : la ronde du gardien (resserrée, zip 82)
 const TIME_PENALTY_MS = 15 * 1000;     // temps grignoté par mauvaise tentative
 const ALERT_MAX = 100;                 // jauge pleine => repérés
 const ALERT_STEP = 20;                 // +20 % par mauvaise tentative (≈5 fautes)
 const ALERT_STEP_LASER = 12;           // frôlement de laser : moins puni (mais reset)
-const SYNC_WINDOW_MS = 900;            // fenêtre de synchro de la sortie (ch.6)
+const SYNC_WINDOW_MS = 700;            // fenêtre de synchro du décrochage (ch.6, resserrée)
 const GUARD_PERIOD_MS = 4000;          // période du marqueur de garde (ch.5)
 const TOTAL_CHAPTERS = 6;
 const VICTORY = TOTAL_CHAPTERS + 1;    // "chapter" atteint 7 => victoire
@@ -114,6 +126,20 @@ function genC5() {
   const size = 52;
   const start = randInt(0, 359 - size);
   return { start, end: start + size };
+}
+
+// Ch6 — LA JOCONDE (finale, zip 82) : la vitrine à DOUBLE VERROU. Chaque
+// complice doit composer un code de 5 symboles sur SON pupitre, mais
+// l'indice de chaque code s'affiche dans l'aile de L'AUTRE (information
+// croisée : les deux dictent ET composent en même temps). Les pupitres sont
+// mélangés différemment pour chacun — décrire une position ("en haut à
+// gauche") ne sert à rien, il faut NOMMER les symboles. Symboles choisis
+// faciles à nommer à voix haute dans les deux langues.
+const FINAL_SYMBOLS = ["🌙", "⭐", "☀️", "🔥", "🌊", "🗝️", "👁️", "🌹", "🐍"];
+const FINAL_CODE_LEN = 5;
+function genC6() {
+  const draw = () => Array.from({ length: FINAL_CODE_LEN }, () => pickRandom(FINAL_SYMBOLS));
+  return { codeA: draw(), codeB: draw(), padA: shuffle(FINAL_SYMBOLS), padB: shuffle(FINAL_SYMBOLS) };
 }
 
 /* ---------- Atmosphère : gardien qui patrouille + jauge d'alerte ---------- */
@@ -362,6 +388,45 @@ function ExitButton({ onPress, pressed, t }) {
   );
 }
 
+// Ch6 phase 1 — le pupitre du verrou : composer SON code de 5 symboles
+// (dicté par le complice). La vérification est LOCALE (chacun connaît tout
+// le puzzle depuis match_start), seule la réussite est diffusée (final_ok).
+function FinalVault({ pad, expected, onSuccess, onWrong, t }) {
+  const [entry, setEntry] = useState([]);
+  function tap(sym) {
+    setEntry(prev => (prev.length >= expected.length ? prev : [...prev, sym]));
+  }
+  function submit() {
+    const ok = entry.length === expected.length && entry.every((s, i) => s === expected[i]);
+    setEntry([]);
+    ok ? onSuccess() : onWrong();
+  }
+  return (
+    <div>
+      <div className="heist-final-slots">
+        {Array.from({ length: expected.length }, (_, i) => (
+          <span key={i} className={"heist-final-slot" + (entry[i] ? " filled" : "")}>{entry[i] || "·"}</span>
+        ))}
+      </div>
+      <div className="heist-final-pad">
+        {pad.map(sym => (
+          <button key={sym} className="heist-final-key" onClick={() => tap(sym)} disabled={entry.length >= expected.length}>
+            {sym}
+          </button>
+        ))}
+      </div>
+      <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 10 }}>
+        <button className="btn ghost" style={{ width: "auto", padding: "10px 16px" }} onClick={() => setEntry([])}>
+          {t("heistC6Clear")}
+        </button>
+        <button className="btn" style={{ width: "auto", padding: "10px 16px" }} disabled={entry.length !== expected.length} onClick={submit}>
+          {t("heistC6Validate")}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /* ---------- Composant principal ---------- */
 
 export default function HeistRoom({ room, me, isHost, players, t, lang, onFinish }) {
@@ -381,21 +446,26 @@ export default function HeistRoom({ room, me, isHost, players, t, lang, onFinish
   const [pressA, setPressA] = useState(null);
   const [pressB, setPressB] = useState(null);
   const [myPressed, setMyPressed] = useState(false);
+  // Finale "La Joconde" (zip 82) : chaque verrou ouvert est déclaré par
+  // broadcast (final_ok) et mémorisé chez les DEUX clients.
+  const [finalA, setFinalA] = useState(false);
+  const [finalB, setFinalB] = useState(false);
 
   const channelRef = useRef(null);
-  const stateRef = useRef({ chapter, deadline, phase, roles, puzzle, alert });
+  const stateRef = useRef({ chapter, deadline, phase, roles, puzzle, alert, finalA, finalB });
   const autoStartedRef = useRef(false);
   const restoredRef = useRef(false);
   const savedResultRef = useRef(false);
   const feedbackTimers = useRef([]);
 
-  useEffect(() => { stateRef.current = { chapter, deadline, phase, roles, puzzle, alert }; }, [chapter, deadline, phase, roles, puzzle, alert]);
+  useEffect(() => { stateRef.current = { chapter, deadline, phase, roles, puzzle, alert, finalA, finalB }; }, [chapter, deadline, phase, roles, puzzle, alert, finalA, finalB]);
 
   function saveState(patch) {
     const s = stateRef.current;
     saveGameState(room.id, "heist", {
       phase: s.phase, roleA: s.roles.A, roleB: s.roles.B, puzzle: s.puzzle,
-      deadline: s.deadline, chapter: s.chapter, alert: s.alert, ...patch,
+      deadline: s.deadline, chapter: s.chapter, alert: s.alert,
+      finalA: s.finalA, finalB: s.finalB, ...patch,
     });
   }
 
@@ -404,21 +474,23 @@ export default function HeistRoom({ room, me, isHost, players, t, lang, onFinish
     channelRef.current = ch;
 
     ch.on("broadcast", { event: "match_start" }, ({ payload }) => {
+      const puz = { c1: payload.c1, c2: payload.c2, c3: payload.c3, c4: payload.c4, c5: payload.c5, c6: payload.c6 };
       setRoles({ A: payload.roleA, B: payload.roleB });
-      setPuzzle({ c1: payload.c1, c2: payload.c2, c3: payload.c3, c4: payload.c4, c5: payload.c5 });
+      setPuzzle(puz);
       setDeadline(payload.deadline);
       setChapter(1);
       setAlert(0);
       setPhase("playing");
       setFeedback(""); setSelected([]);
       setPressA(null); setPressB(null); setMyPressed(false);
+      setFinalA(false); setFinalB(false);
       setMyGain(0); setEndingVariant("standard");
       savedResultRef.current = false;
       if (isHost) {
         saveGameState(room.id, "heist", {
           phase: "playing", roleA: payload.roleA, roleB: payload.roleB,
-          puzzle: { c1: payload.c1, c2: payload.c2, c3: payload.c3, c4: payload.c4, c5: payload.c5 },
-          deadline: payload.deadline, chapter: 1, alert: 0,
+          puzzle: puz, deadline: payload.deadline, chapter: 1, alert: 0,
+          finalA: false, finalB: false,
         });
       }
     });
@@ -429,6 +501,14 @@ export default function HeistRoom({ room, me, isHost, players, t, lang, onFinish
       setPressA(null); setPressB(null); setMyPressed(false);
       if (payload.chapter >= VICTORY) setPhase("success");
       if (isHost) saveState({ phase: payload.chapter >= VICTORY ? "success" : "playing", chapter: payload.chapter });
+    });
+
+    // Finale "La Joconde" : un verrou vient de s'ouvrir (phase 1). Réception
+    // idempotente (passer un booléen à true est stable) — quand les deux
+    // sont ouverts, chaque client affiche la phase 2 de lui-même.
+    ch.on("broadcast", { event: "final_ok" }, ({ payload }) => {
+      if (payload.role === "A") setFinalA(true); else setFinalB(true);
+      if (isHost) saveState(payload.role === "A" ? { finalA: true } : { finalB: true });
     });
 
     ch.on("broadcast", { event: "alarm" }, ({ payload }) => {
@@ -466,12 +546,18 @@ export default function HeistRoom({ room, me, isHost, players, t, lang, onFinish
         if (!restoredRef.current) {
           restoredRef.current = true;
           const saved = readGameState(room, "heist");
-          if (saved) {
+          // Garde-fou zip 82 : une sauvegarde d'AVANT la finale "La Joconde"
+          // (sans puzzle.c6) est ignorée — la restaurer ferait planter le
+          // rendu du chapitre 6.
+          if (saved && (!saved.puzzle || !saved.puzzle.c6)) {
+            // rien : retour propre à l'écran d'intro
+          } else if (saved) {
             setRoles({ A: saved.roleA, B: saved.roleB });
             setPuzzle(saved.puzzle);
             setDeadline(saved.deadline);
             setChapter(saved.chapter);
             setAlert(saved.alert || 0);
+            setFinalA(!!saved.finalA); setFinalB(!!saved.finalB);
             setPhase(saved.phase);
             autoStartedRef.current = true;
           }
@@ -492,7 +578,7 @@ export default function HeistRoom({ room, me, isHost, players, t, lang, onFinish
     const [roleA, roleB] = Math.random() < 0.5 ? [pa, pb] : [pb, pa];
     const payload = {
       roleA, roleB,
-      c1: genC1(), c2: genC2(), c3: genC3(), c4: genC4(), c5: genC5(),
+      c1: genC1(), c2: genC2(), c3: genC3(), c4: genC4(), c5: genC5(), c6: genC6(),
       deadline: Date.now() + TOTAL_MS,
     };
     channelRef.current.send({ type: "broadcast", event: "match_start", payload });
@@ -556,6 +642,11 @@ export default function HeistRoom({ room, me, isHost, players, t, lang, onFinish
     const { start, end } = puzzle.c5;
     (angle >= start && angle <= end) ? advance(6) : applyAlarm();
   }
+  // Finale phase 1 : MON verrou vient de s'ouvrir (vérifié localement par
+  // FinalVault) — on le déclare aux deux clients.
+  function sendFinalOk(role) {
+    channelRef.current?.send({ type: "broadcast", event: "final_ok", payload: { role } });
+  }
 
   function pressLever(role) {
     if (myPressed) return;
@@ -579,8 +670,10 @@ export default function HeistRoom({ room, me, isHost, players, t, lang, onFinish
 
     let variant, gain;
     if (phase === "success") {
-      variant = (alert <= 20 && timeLeft > 3 * 60 * 1000) ? "clean" : (alert >= 60 || timeLeft < 60 * 1000) ? "narrow" : "standard";
-      const timeBonus = Math.min(6, Math.floor(timeLeft / 40000));
+      // Seuils recalés sur la ronde de 6 min (zip 82) : "clean" au-delà de
+      // 2 min 30 restantes, "narrow" sous 45 s ou à forte alerte.
+      variant = (alert <= 20 && timeLeft > 150 * 1000) ? "clean" : (alert >= 60 || timeLeft < 45 * 1000) ? "narrow" : "standard";
+      const timeBonus = Math.min(6, Math.floor(timeLeft / 30000));
       const alertBonus = Math.max(0, Math.floor((ALERT_MAX - alert) / 25)); // 0..4
       gain = BASE_POINTS + Math.min(MAX_BONUS, timeBonus + alertBonus);
     } else {
@@ -603,7 +696,7 @@ export default function HeistRoom({ room, me, isHost, players, t, lang, onFinish
     const [roleA, roleB] = Math.random() < 0.5 ? [roles.A, roles.B] : [roles.B, roles.A];
     const payload = {
       roleA, roleB,
-      c1: genC1(), c2: genC2(), c3: genC3(), c4: genC4(), c5: genC5(),
+      c1: genC1(), c2: genC2(), c3: genC3(), c4: genC4(), c5: genC5(), c6: genC6(),
       deadline: Date.now() + TOTAL_MS,
     };
     channelRef.current.send({ type: "broadcast", event: "match_start", payload });
@@ -678,14 +771,53 @@ export default function HeistRoom({ room, me, isHost, players, t, lang, onFinish
         )}
       </div>
     );
-    if (chapter === 6) return (
-      <div>
-        <h2 style={{ fontSize: 17, margin: "10px 0 6px" }}>{t("heistC6Title")}</h2>
-        <p className="hint">{t("heistC6Story")}</p>
-        {!isPlayer ? <p className="muted">{t("heistSpectatorNote")}</p> :
-          <ExitButton onPress={() => pressLever(amA ? "A" : "B")} pressed={myPressed} t={t} />}
-      </div>
-    );
+    if (chapter === 6) {
+      // FINALE "La Joconde" (zip 82) — deux phases, voulues plus longues et
+      // plus dures que les coups précédents :
+      //   1. double verrou à codes croisés (chacun compose SON code de 5
+      //      symboles, dicté par l'autre, pupitres mélangés différemment) ;
+      //   2. décrochage synchronisé, fenêtre resserrée à 700 ms.
+      const bothOpen = finalA && finalB;
+      const myDone = amA ? finalA : finalB;
+      const clue = amA ? puzzle.c6.codeB : puzzle.c6.codeA;
+      return (
+        <div>
+          <h2 style={{ fontSize: 17, margin: "10px 0 6px" }}>{t("heistC6Title")}</h2>
+          {!isPlayer ? (
+            <><p className="hint">{t("heistC6Story")}</p><p className="muted">{t("heistSpectatorNote")}</p></>
+          ) : bothOpen ? (
+            <>
+              <p className="hint">{t("heistC6Phase2Story")}</p>
+              <ExitButton onPress={() => pressLever(amA ? "A" : "B")} pressed={myPressed} t={t} />
+            </>
+          ) : (
+            <>
+              <p className="hint">{t("heistC6Story")}</p>
+              <p className="muted" style={{ marginTop: 8 }}>{t("heistC6ClueLead")}</p>
+              <div className="heist-final-clue">
+                {clue.map((s, i) => <span key={i} className="sym">{s}</span>)}
+              </div>
+              {myDone ? (
+                <div style={{ textAlign: "center" }}>
+                  <span className="heist-final-done">✅ {t("heistC6Done")}</span>
+                </div>
+              ) : (
+                <>
+                  <p className="muted">{t("heistC6PadLead")}</p>
+                  <FinalVault
+                    pad={amA ? puzzle.c6.padA : puzzle.c6.padB}
+                    expected={amA ? puzzle.c6.codeA : puzzle.c6.codeB}
+                    onSuccess={() => sendFinalOk(amA ? "A" : "B")}
+                    onWrong={() => applyAlarm()}
+                    t={t}
+                  />
+                </>
+              )}
+            </>
+          )}
+        </div>
+      );
+    }
     return null;
   }
 
@@ -701,7 +833,7 @@ export default function HeistRoom({ room, me, isHost, players, t, lang, onFinish
           <div className="echo-timerbar">
             <div className="echo-timerbar-fill" style={{
               width: (timeLeft / TOTAL_MS * 100) + "%",
-              background: timeLeft < 60000 ? "var(--p1)" : timeLeft < TOTAL_MS * 0.35 ? "var(--p4)" : "linear-gradient(90deg,#FF2E63,#FF7AA0)"
+              background: timeLeft < 60000 ? "var(--p1)" : timeLeft < TOTAL_MS * 0.35 ? "var(--p4)" : "linear-gradient(90deg,var(--acc-heist),#FF7AA0)"
             }} />
           </div>
           <div style={{ display: "flex", gap: 5, margin: "0 0 12px", flexWrap: "wrap" }}>

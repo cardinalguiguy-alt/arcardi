@@ -51,7 +51,7 @@ const GAME_META = {
   ludo:     { icon: "🐴", accent: "--acc-ludo",      nameKey: "nameLudo",    tagKey: "tagLudo", minPlayers: 2, stage: "door" },
   echoes:   { icon: "🌊", accent: "--acc-echoes",    nameKey: "nameEchoes",  tagKey: "tagEchoes", minPlayers: 2, stage: "curtain" },
   diapason: { icon: "🎼", accent: "--acc-diapason",  nameKey: "nameDiapason", tagKey: "tagDiapason", minPlayers: 2, stage: "curtain" },
-  heist:    { icon: "💎", accent: "--acc-heist",     nameKey: "nameHeist",   tagKey: "tagHeist", minPlayers: 2, stage: "curtain" },
+  heist:    { icon: "🖼️", accent: "--acc-heist",     nameKey: "nameHeist",   tagKey: "tagHeist", minPlayers: 2, stage: "curtain" }, // "Le Louvre" (ex-Le Casse) — id technique inchangé
   chromatik: { icon: "🃏", accent: "--acc-chromatik", nameKey: "nameChromatik", tagKey: "tagChromatik", stage: "door" },
   goldmines: { icon: "⛏️", accent: "--acc-goldmines", nameKey: "nameGoldMines", tagKey: "tagGoldMines", stage: "door" },
   yahtzee:  { icon: "🎲", accent: "--acc-yahtzee",   nameKey: "nameYahtzee", tagKey: "tagYahtzee", stage: "door" },

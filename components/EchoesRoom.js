@@ -5,13 +5,13 @@ import { saveGameState, readGameState, resetRoomToLobby } from "@/lib/gameSync";
 import Crossfade from "./Crossfade";
 
 /* ==========================================================================
-   ÉCHOS v2 — escape room coopératif ASYMÉTRIQUE à 2 joueurs (pattern n°3)
+   ÉCHOS v3 — escape room coopératif ASYMÉTRIQUE à 2 joueurs (pattern n°3)
    ==========================================================================
    Chaque rôle (A / B) est ENFERMÉ dans sa propre pièce scellée : aucune vue
    partagée, aucun arbitre. La seule vérité commune est un petit historique
    d'événements (broadcast, self:true) que les deux clients appliquent
    chacun de leur côté, de façon idempotente :
-     - "match_start" : l'hôte génère la partie ENTIÈRE (rôles + 6 énigmes +
+     - "match_start" : l'hôte génère la partie ENTIÈRE (rôles + 9 énigmes +
        horodatage de fin) et l'envoie une fois pour toutes. Les deux clients
        adoptent exactement les mêmes données ; seul le RENDU diffère ensuite
        selon le rôle — aucune re-génération locale, donc aucun risque de
@@ -24,21 +24,31 @@ import Crossfade from "./Crossfade";
      - "press_a" / "press_b" : le levier final. Aucun arbitre nécessaire :
        les deux clients reçoivent les deux horodatages (self:true) et
        calculent chacun de leur côté si la synchronisation est assez bonne.
-   7 chapitres, rôle "info" / "input" équilibré 3×/3× entre A et B (le 7e
-   chapitre est symétrique : les deux actionnent leur propre levier).
+   v3 (zip 82, demande "allonger le jeu") : 3 nouvelles épreuves à mécaniques
+   INÉDITES — vannes à configurer (Salle des Machines), lampes à bascule
+   croisée façon lights-out (Lampisterie), tracé de constellation sur grille
+   repérée (Carte des Étoiles) — soit 10 chapitres en 18 minutes. L'ordre du
+   flux ALTERNE le joueur qui manipule à chaque chapitre (B,A,B,A…), le 10e
+   restant symétrique : les deux actionnent leur propre levier.
    ========================================================================== */
 
-const TOTAL_MS = 15 * 60 * 1000;     // 15 minutes pour les 7 chapitres (réduit depuis 20)
+const TOTAL_MS = 18 * 60 * 1000;     // 18 minutes pour les 10 chapitres (v3, allongé avec les 3 nouvelles épreuves)
 const PENALTY_MS = 20 * 1000;        // -20s par mauvaise tentative
 const PENALTY_PEEK_MS = 15 * 1000;   // -15s par coup d'œil mémoire supplémentaire
 const DIAL_PERIOD_MS = 4200;         // durée d'un tour complet de l'aiguille (ch.4)
 const SYNC_WINDOW_MS = 900;          // fenêtre de synchro du levier final (ch.7)
 const MEMORY_REVEAL_MS = 6000;       // durée d'affichage initial de la séquence (ch.3)
 const MEMORY_PEEK_MS = 3000;         // durée d'un coup d'œil supplémentaire (ch.3)
-const TOTAL_CHAPTERS = 7;
-const VICTORY = TOTAL_CHAPTERS + 1;  // "chapter" atteint 8 => victoire
-const BASE_POINTS = 14;
+const TOTAL_CHAPTERS = 10;
+const VICTORY = TOTAL_CHAPTERS + 1;  // "chapter" atteint 11 => victoire
+const BASE_POINTS = 16;              // relevé (14 -> 16) : partie v3 plus longue
 const MAX_BONUS = 10;
+
+// Ordre du flux v3 : le numéro de chapitre (1..10) est mappé sur un TYPE
+// d'épreuve. Les 3 nouvelles mécaniques sont intercalées de sorte que le
+// joueur qui MANIPULE alterne à chaque chapitre (B,A,B,A,B,A,B,A,B) :
+// personne ne reste "lecteur d'indices" deux étapes de suite.
+const CHAPTER_FLOW = ["code", "gears", "memory", "valves", "dial", "decor", "lights", "cipher", "pattern", "lever"];
 
 const COLOR_EMOJIS = ["🔴", "🔵", "🟢", "🟡", "🟣", "🟠"];
 // Deuxième "vocabulaire" pour la légende du chapitre 1 : au lieu de lanternes
@@ -133,6 +143,64 @@ function genChapter5() {
   const objects = icons.map((icon, i) => ({ icon, anim: anims[i] }));
   const target = pickRandom(objects);
   return { objects, targetAnim: target.anim };
+}
+
+// ===== v3 — trois nouvelles épreuves à mécaniques inédites =====
+
+// Vannes (Salle des Machines) — 5 vannes de vapeur, chacune à laisser
+// OUVERTE ou FERMÉE. Mécanique nouvelle : configuration d'interrupteurs
+// (ni saisie de code, ni choix d'un élément). Au moins une vanne de chaque
+// état, sinon l'énigme se décrit en un seul mot ("tout ouvert").
+function genValves() {
+  let states;
+  do { states = Array.from({ length: 5 }, () => Math.random() < 0.5); }
+  while (states.every(s => s) || states.every(s => !s));
+  return { labels: ["A", "B", "C", "D", "E"], states };
+}
+
+// Lampisterie — grille 3×3 de lampes façon "lights-out" : presser une lampe
+// bascule AUSSI ses voisines orthogonales. La cible est générée en appliquant
+// 3 ou 4 pressions distinctes depuis "tout éteint" : elle est donc toujours
+// atteignable, et jamais vide (la matrice lights-out 3×3 est inversible —
+// un ensemble de pressions non vide ne peut pas redonner l'état éteint).
+function genLights() {
+  const presses = shuffle([0, 1, 2, 3, 4, 5, 6, 7, 8]).slice(0, pickRandom([3, 4]));
+  const target = Array(9).fill(false);
+  const tog = k => { target[k] = !target[k]; };
+  presses.forEach(p => {
+    const r = Math.floor(p / 3), c = p % 3;
+    tog(p);
+    if (r > 0) tog(p - 3);
+    if (r < 2) tog(p + 3);
+    if (c > 0) tog(p - 1);
+    if (c < 2) tog(p + 1);
+  });
+  return { target, pressCount: presses.length };
+}
+
+// Carte des Étoiles — un tracé de 5 étoiles adjacentes (8-voisinage, sans
+// repasser deux fois par la même) sur une grille 3×3 repérée A–C / 1–3.
+// Mécanique nouvelle : tracer un CHEMIN ORDONNÉ dicté case par case.
+// La marche aléatoire peut se coincer (aucun voisin libre) : on retire.
+function genPattern() {
+  for (;;) {
+    const path = [randInt(0, 8)];
+    while (path.length < 5) {
+      const cur = path[path.length - 1];
+      const r = Math.floor(cur / 3), c = cur % 3;
+      const nbrs = [];
+      for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+        if (!dr && !dc) continue;
+        const nr = r + dr, nc = c + dc;
+        if (nr < 0 || nr > 2 || nc < 0 || nc > 2) continue;
+        const idx = nr * 3 + nc;
+        if (!path.includes(idx)) nbrs.push(idx);
+      }
+      if (!nbrs.length) break;
+      path.push(pickRandom(nbrs));
+    }
+    if (path.length === 5) return { path };
+  }
 }
 
 // Chapitre 6 — chiffre du gardien (cipher).
@@ -388,6 +456,155 @@ function DecorRoom({ objects, onPick }) {
   );
 }
 
+// ----- Vannes : côté info, la configuration cible en lecture seule -----
+function ValveTargets({ valves, t }) {
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 4, justifyContent: "center", margin: "12px 0" }}>
+      {valves.labels.map((label, i) => (
+        <span key={label} className={"echo-valve-target" + (valves.states[i] ? " open" : " closed")}>
+          <span className="letter">{label}</span>
+          <span>{valves.states[i] ? "🔓 " + t("echoesValveOpen") : "🔒 " + t("echoesValveClosed")}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+// ----- Vannes : côté action, 5 volants à basculer puis un levier de confirmation -----
+function ValveBoard({ labels, onConfirm, t }) {
+  const [states, setStates] = useState(labels.map(() => false));
+  function toggle(i) { setStates(prev => prev.map((s, j) => (j === i ? !s : s))); }
+  return (
+    <div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, justifyContent: "center", margin: "12px 0" }}>
+        {labels.map((label, i) => (
+          <button key={label} className={"echo-valve" + (states[i] ? " open" : "")} onClick={() => toggle(i)}>
+            <span className="letter">{label}</span>
+            <span className="wheel">☸️</span>
+            <span className="state">{states[i] ? t("echoesValveOpen") : t("echoesValveClosed")}</span>
+          </button>
+        ))}
+      </div>
+      <button className="btn" style={{ width: "auto", padding: "10px 18px" }} onClick={() => onConfirm(states)}>
+        {t("echoesValvesConfirm")}
+      </button>
+    </div>
+  );
+}
+
+// ----- Lampisterie : côté info, la disposition cible des lampes -----
+function LightsTarget({ target }) {
+  return (
+    <div className="echo-lamp-grid">
+      {target.map((lit, i) => (
+        <div key={i} className={"echo-lamp" + (lit ? " lit" : "")}>{lit ? "🏮" : "·"}</div>
+      ))}
+    </div>
+  );
+}
+
+// ----- Lampisterie : côté action, presser une lampe bascule aussi ses voisines -----
+function LightsBoard({ onConfirm, t }) {
+  const [grid, setGrid] = useState(Array(9).fill(false));
+  function press(i) {
+    setGrid(prev => {
+      const g = prev.slice();
+      const r = Math.floor(i / 3), c = i % 3;
+      const tog = k => { g[k] = !g[k]; };
+      tog(i);
+      if (r > 0) tog(i - 3);
+      if (r < 2) tog(i + 3);
+      if (c > 0) tog(i - 1);
+      if (c < 2) tog(i + 1);
+      return g;
+    });
+  }
+  return (
+    <div>
+      <div className="echo-lamp-grid">
+        {grid.map((lit, i) => (
+          <button key={i} className={"echo-lamp pressable" + (lit ? " lit" : "")} onClick={() => press(i)}>
+            {lit ? "🏮" : "·"}
+          </button>
+        ))}
+      </div>
+      <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 12 }}>
+        {/* Remise à zéro GRATUITE : repartir de "tout éteint" fait partie de la
+            résolution normale d'un lights-out, la pénaliser serait injuste. */}
+        <button className="btn ghost" style={{ width: "auto", padding: "10px 16px" }} onClick={() => setGrid(Array(9).fill(false))}>
+          {t("echoesLightsReset")}
+        </button>
+        <button className="btn" style={{ width: "auto", padding: "10px 16px" }} onClick={() => onConfirm(grid)}>
+          {t("echoesLightsConfirm")}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Coordonnée parlée d'une case 3×3 : rangées A–C (haut->bas), colonnes 1–3.
+function starCoord(i) { return "ABC"[Math.floor(i / 3)] + (i % 3 + 1); }
+
+// ----- Constellation : côté info, le tracé dessiné sur la carte repérée -----
+function PatternClue({ path, t }) {
+  const pos = i => ({ x: 40 + (i % 3) * 60, y: 34 + Math.floor(i / 3) * 60 });
+  const pts = path.map(pos);
+  return (
+    <div style={{ textAlign: "center" }}>
+      <svg width="210" height="190" viewBox="0 0 200 180" style={{ maxWidth: "100%" }} role="img" aria-label={path.map(starCoord).join(" → ")}>
+        {[1, 2, 3].map((n, i) => (
+          <text key={"c" + n} x={40 + i * 60} y={12} textAnchor="middle" fill="var(--muted)" fontSize="11" fontFamily="'Space Mono'">{n}</text>
+        ))}
+        {["A", "B", "C"].map((l, i) => (
+          <text key={"r" + l} x={12} y={38 + i * 60} textAnchor="middle" fill="var(--muted)" fontSize="11" fontFamily="'Space Mono'">{l}</text>
+        ))}
+        <polyline points={pts.map(p => p.x + "," + p.y).join(" ")} fill="none"
+          stroke="var(--acc-echoes)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" opacity="0.85" />
+        {Array.from({ length: 9 }, (_, i) => i).map(i => {
+          const p = pos(i);
+          const on = path.includes(i);
+          return <circle key={i} cx={p.x} cy={p.y} r={on ? 7 : 4.5} fill={on ? "var(--acc-echoes)" : "var(--line)"} />;
+        })}
+        <circle cx={pts[0].x} cy={pts[0].y} r={12} fill="none" stroke="var(--p2)" strokeWidth="2.5" />
+      </svg>
+      <p className="hint" style={{ fontSize: 12.5 }}>⭐ {t("echoesPatternStart")}</p>
+    </div>
+  );
+}
+
+// ----- Constellation : côté action, cliquer les étoiles dans l'ordre dicté -----
+function PatternInput({ length, onConfirm, t }) {
+  const [seq, setSeq] = useState([]);
+  function tap(i) {
+    setSeq(prev => (prev.includes(i) || prev.length >= length ? prev : [...prev, i]));
+  }
+  return (
+    <div>
+      <div className="echo-star-grid">
+        {Array.from({ length: 9 }, (_, i) => i).map(i => {
+          const ord = seq.indexOf(i);
+          return (
+            <button key={i} className={"echo-star-cell" + (ord >= 0 ? " lit" : "")} onClick={() => tap(i)}>
+              {ord >= 0 ? "⭐" : "✦"}
+              {ord >= 0 && <span className="ord">{ord + 1}</span>}
+              <span className="echo-star-coord" style={{ position: "absolute", bottom: 2, left: 5 }}>{starCoord(i)}</span>
+            </button>
+          );
+        })}
+      </div>
+      <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 12 }}>
+        <button className="btn ghost" style={{ width: "auto", padding: "10px 16px" }} onClick={() => setSeq([])}>
+          {t("echoesPatternClear")}
+        </button>
+        <button className="btn" style={{ width: "auto", padding: "10px 16px" }} disabled={seq.length !== length}
+          onClick={() => { onConfirm(seq); setSeq([]); }}>
+          {t("echoesPatternConfirm")}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function CipherLegend({ legend }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8, margin: "14px 0" }}>
@@ -472,8 +689,12 @@ export default function EchoesRoom({ room, me, isHost, players, t, lang, onFinis
     channelRef.current = ch;
 
     ch.on("broadcast", { event: "match_start" }, ({ payload }) => {
+      const puz = {
+        ch1: payload.ch1, ch2: payload.ch2, ch3: payload.ch3, ch4: payload.ch4, ch5: payload.ch5, ch6: payload.ch6,
+        chValves: payload.chValves, chLights: payload.chLights, chPattern: payload.chPattern,
+      };
       setRoles({ A: payload.roleA, B: payload.roleB });
-      setPuzzle({ ch1: payload.ch1, ch2: payload.ch2, ch3: payload.ch3, ch4: payload.ch4, ch5: payload.ch5, ch6: payload.ch6 });
+      setPuzzle(puz);
       setDeadline(payload.deadline);
       setChapter(1);
       setPhase("playing");
@@ -486,8 +707,7 @@ export default function EchoesRoom({ room, me, isHost, players, t, lang, onFinis
       if (isHost) {
         saveGameState(room.id, "echoes", {
           phase: "playing", roleA: payload.roleA, roleB: payload.roleB,
-          puzzle: { ch1: payload.ch1, ch2: payload.ch2, ch3: payload.ch3, ch4: payload.ch4, ch5: payload.ch5, ch6: payload.ch6 },
-          deadline: payload.deadline, chapter: 1,
+          puzzle: puz, deadline: payload.deadline, chapter: 1,
         });
       }
     });
@@ -551,7 +771,12 @@ export default function EchoesRoom({ room, me, isHost, players, t, lang, onFinis
         if (!restoredRef.current) {
           restoredRef.current = true;
           const saved = readGameState(room, "echoes");
-          if (saved) {
+          // Garde-fou v3 : une sauvegarde d'AVANT le zip 82 (sans les 3
+          // nouvelles épreuves) est ignorée — la restaurer ferait planter le
+          // rendu (puzzle.chValves absent) avec un flux de chapitres décalé.
+          if (saved && (!saved.puzzle || !saved.puzzle.chValves)) {
+            // rien : on repart proprement sur l'écran d'intro
+          } else if (saved) {
             setRoles({ A: saved.roleA, B: saved.roleB });
             setPuzzle(saved.puzzle);
             setDeadline(saved.deadline);
@@ -578,6 +803,7 @@ export default function EchoesRoom({ room, me, isHost, players, t, lang, onFinis
       roleA, roleB,
       ch1: genChapter1(), ch2: genChapter2(), ch3: genChapter3(),
       ch4: genChapter4(), ch5: genChapter5(), ch6: genChapter6(lang),
+      chValves: genValves(), chLights: genLights(), chPattern: genPattern(),
       deadline: Date.now() + TOTAL_MS,
     };
     channelRef.current.send({ type: "broadcast", event: "match_start", payload });
@@ -640,23 +866,40 @@ export default function EchoesRoom({ room, me, isHost, players, t, lang, onFinis
     channelRef.current?.send({ type: "broadcast", event: "advance", payload: { chapter: toChapter } });
   }
 
-  function tryChapter1(code) { code === puzzle.ch1.solution ? advance(2) : applyPenalty(); }
+  // v3 : le flux étant réordonné (CHAPTER_FLOW), chaque réussite avance vers
+  // "le chapitre suivant" plutôt que vers un numéro codé en dur — lu dans
+  // stateRef pour ne jamais dépendre d'une closure figée.
+  function advanceNext() { advance(stateRef.current.chapter + 1); }
+
+  function tryChapter1(code) { code === puzzle.ch1.solution ? advanceNext() : applyPenalty(); }
   function tryChapter2(pair) {
     const sorted = pair.slice().sort();
-    (sorted[0] === puzzle.ch2.correctPair[0] && sorted[1] === puzzle.ch2.correctPair[1]) ? advance(3) : applyPenalty();
+    (sorted[0] === puzzle.ch2.correctPair[0] && sorted[1] === puzzle.ch2.correctPair[1]) ? advanceNext() : applyPenalty();
   }
   function tryChapter3(picks) {
     const seq = puzzle.ch3.sequence;
     const ok = picks.length === seq.length && picks.every((v, i) => v === seq[i]);
-    ok ? advance(4) : applyPenalty();
+    ok ? advanceNext() : applyPenalty();
   }
   function peekChapter3() { applyPenalty(PENALTY_PEEK_MS, "peek"); }
   function tryChapter4(angle) {
     const { start, end } = puzzle.ch4;
-    (angle >= start && angle <= end) ? advance(5) : applyPenalty();
+    (angle >= start && angle <= end) ? advanceNext() : applyPenalty();
   }
-  function tryChapter5(anim) { anim === puzzle.ch5.targetAnim ? advance(6) : applyPenalty(); }
-  function tryChapter6(word) { word.toUpperCase() === puzzle.ch6.word ? advance(7) : applyPenalty(); }
+  function tryChapter5(anim) { anim === puzzle.ch5.targetAnim ? advanceNext() : applyPenalty(); }
+  function tryChapter6(word) { word.toUpperCase() === puzzle.ch6.word ? advanceNext() : applyPenalty(); }
+  function tryValves(states) {
+    const tgt = puzzle.chValves.states;
+    (states.length === tgt.length && states.every((v, i) => v === tgt[i])) ? advanceNext() : applyPenalty();
+  }
+  function tryLights(grid) {
+    const tgt = puzzle.chLights.target;
+    (grid.length === tgt.length && grid.every((v, i) => v === tgt[i])) ? advanceNext() : applyPenalty();
+  }
+  function tryPattern(seq) {
+    const tgt = puzzle.chPattern.path;
+    (seq.length === tgt.length && seq.every((v, i) => v === tgt[i])) ? advanceNext() : applyPenalty();
+  }
 
   function pressLever(role) {
     if (myPressed) return;
@@ -684,7 +927,8 @@ export default function EchoesRoom({ room, me, isHost, players, t, lang, onFinis
 
     let variant, gain;
     if (phase === "success") {
-      variant = timeLeft > 5 * 60 * 1000 ? "perfect" : timeLeft > 60 * 1000 ? "standard" : "narrow";
+      // Seuil "perfect" recalé sur le nouveau total de 18 min (1/3 restant).
+      variant = timeLeft > 6 * 60 * 1000 ? "perfect" : timeLeft > 60 * 1000 ? "standard" : "narrow";
       const bonus = Math.min(MAX_BONUS, Math.floor(timeLeft / 30000));
       gain = BASE_POINTS + bonus;
     } else {
@@ -711,6 +955,7 @@ export default function EchoesRoom({ room, me, isHost, players, t, lang, onFinis
       roleA, roleB,
       ch1: genChapter1(), ch2: genChapter2(), ch3: genChapter3(),
       ch4: genChapter4(), ch5: genChapter5(), ch6: genChapter6(lang),
+      chValves: genValves(), chLights: genLights(), chPattern: genPattern(),
       deadline: Date.now() + TOTAL_MS,
     };
     channelRef.current.send({ type: "broadcast", event: "match_start", payload });
@@ -728,7 +973,11 @@ export default function EchoesRoom({ room, me, isHost, players, t, lang, onFinis
 
   function renderChapterContent() {
     if (!puzzle) return null;
-    if (chapter === 1) return (
+    // v3 : le numéro de chapitre est traduit en TYPE d'épreuve via
+    // CHAPTER_FLOW — les blocs ci-dessous sont inchangés pour les 6 énigmes
+    // historiques, seuls leurs déclencheurs (type au lieu de numéro) bougent.
+    const type = CHAPTER_FLOW[chapter - 1];
+    if (type === "code") return (
       <div>
         <h2 style={{ fontSize: 17, margin: "10px 0 6px" }}>{t("echoesCh1Title")}</h2>
         <p className="hint">{t("echoesCh1Story")}</p>
@@ -739,7 +988,7 @@ export default function EchoesRoom({ room, me, isHost, players, t, lang, onFinis
         )}
       </div>
     );
-    if (chapter === 2) return (
+    if (type === "gears") return (
       <div>
         <h2 style={{ fontSize: 17, margin: "10px 0 6px" }}>{t("echoesCh2Title")}</h2>
         <p className="hint">{t("echoesCh2Story")}</p>
@@ -757,7 +1006,7 @@ export default function EchoesRoom({ room, me, isHost, players, t, lang, onFinis
         )}
       </div>
     );
-    if (chapter === 3) return (
+    if (type === "memory") return (
       <div>
         <h2 style={{ fontSize: 17, margin: "10px 0 6px" }}>{t("echoesCh3Title")}</h2>
         <p className="hint">{t("echoesCh3Story")}</p>
@@ -768,7 +1017,20 @@ export default function EchoesRoom({ room, me, isHost, players, t, lang, onFinis
         )}
       </div>
     );
-    if (chapter === 4) return (
+    if (type === "valves") return (
+      // NOUVEAU (v3) — Salle des Machines : B lit la configuration cible,
+      // A manœuvre les volants. Mécanique : configuration d'interrupteurs.
+      <div>
+        <h2 style={{ fontSize: 17, margin: "10px 0 6px" }}>{t("echoesChValvesTitle")}</h2>
+        <p className="hint">{t("echoesChValvesStory")}</p>
+        {!isPlayer ? <p className="muted">{t("echoesSpectatorNote")}</p> : amB ? (
+          <><p className="muted">{t("echoesChValvesTextInfo")}</p><ValveTargets valves={puzzle.chValves} t={t} /></>
+        ) : (
+          <><p className="muted">{t("echoesChValvesTextInput")}</p><ValveBoard labels={puzzle.chValves.labels} onConfirm={tryValves} t={t} /></>
+        )}
+      </div>
+    );
+    if (type === "dial") return (
       <div>
         <h2 style={{ fontSize: 17, margin: "10px 0 6px" }}>{t("echoesCh4Title")}</h2>
         <p className="hint">{t("echoesCh4Story")}</p>
@@ -779,7 +1041,7 @@ export default function EchoesRoom({ room, me, isHost, players, t, lang, onFinis
         )}
       </div>
     );
-    if (chapter === 5) return (
+    if (type === "decor") return (
       <div>
         <h2 style={{ fontSize: 17, margin: "10px 0 6px" }}>{t("echoesCh5Title")}</h2>
         <p className="hint">{t("echoesCh5Story")}</p>
@@ -790,7 +1052,20 @@ export default function EchoesRoom({ room, me, isHost, players, t, lang, onFinis
         )}
       </div>
     );
-    if (chapter === 6) return (
+    if (type === "lights") return (
+      // NOUVEAU (v3) — Lampisterie : A lit la disposition cible, B presse des
+      // lampes qui basculent aussi leurs voisines (lights-out coopératif).
+      <div>
+        <h2 style={{ fontSize: 17, margin: "10px 0 6px" }}>{t("echoesChLightsTitle")}</h2>
+        <p className="hint">{t("echoesChLightsStory")}</p>
+        {!isPlayer ? <p className="muted">{t("echoesSpectatorNote")}</p> : amA ? (
+          <><p className="muted">{t("echoesChLightsTextInfo")}</p><LightsTarget target={puzzle.chLights.target} /></>
+        ) : (
+          <><p className="muted">{t("echoesChLightsTextInput")}</p><LightsBoard onConfirm={tryLights} t={t} /></>
+        )}
+      </div>
+    );
+    if (type === "cipher") return (
       <div>
         <h2 style={{ fontSize: 17, margin: "10px 0 6px" }}>{t("echoesCh6Title")}</h2>
         <p className="hint">{t("echoesCh6Story")}</p>
@@ -805,7 +1080,20 @@ export default function EchoesRoom({ room, me, isHost, players, t, lang, onFinis
         )}
       </div>
     );
-    if (chapter === 7) return (
+    if (type === "pattern") return (
+      // NOUVEAU (v3) — Carte des Étoiles : A lit le tracé sur la carte
+      // repérée (A–C / 1–3), B le reproduit étoile par étoile, dans l'ordre.
+      <div>
+        <h2 style={{ fontSize: 17, margin: "10px 0 6px" }}>{t("echoesChPatternTitle")}</h2>
+        <p className="hint">{t("echoesChPatternStory")}</p>
+        {!isPlayer ? <p className="muted">{t("echoesSpectatorNote")}</p> : amA ? (
+          <><p className="muted">{t("echoesChPatternTextInfo")}</p><PatternClue path={puzzle.chPattern.path} t={t} /></>
+        ) : (
+          <><p className="muted">{t("echoesChPatternTextInput")}</p><PatternInput length={puzzle.chPattern.path.length} onConfirm={tryPattern} t={t} /></>
+        )}
+      </div>
+    );
+    if (type === "lever") return (
       <div>
         <h2 style={{ fontSize: 17, margin: "10px 0 6px" }}>{t("echoesCh7Title")}</h2>
         <p className="hint">{t("echoesCh7Story")}</p>
@@ -827,7 +1115,7 @@ export default function EchoesRoom({ room, me, isHost, players, t, lang, onFinis
           <div className="echo-timerbar">
             <div className="echo-timerbar-fill" style={{
               width: (timeLeft / TOTAL_MS * 100) + "%",
-              background: timeLeft < 60000 ? "var(--p1)" : timeLeft < TOTAL_MS * 0.35 ? "var(--p4)" : "linear-gradient(90deg,var(--p3),var(--p2))"
+              background: timeLeft < 60000 ? "var(--p1)" : timeLeft < TOTAL_MS * 0.35 ? "var(--p4)" : "linear-gradient(90deg,var(--acc-echoes),var(--p3))"
             }} />
           </div>
           <div style={{ display: "flex", gap: 5, margin: "0 0 12px", flexWrap: "wrap" }}>
