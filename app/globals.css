@@ -983,9 +983,9 @@ button.ludo-roman.selected{
   animation:ludoWheelEnter .3s ease forwards;
 }
 @keyframes ludoWheelEnter{ from{ opacity:0; transform:scale(.94); } to{ opacity:1; transform:scale(1); } }
-.ludo-wheel-overlay.spinning{ animation:ludoWheelSpinLife var(--wheel-life, 3200ms) ease both; }
+.ludo-wheel-overlay.spinning{ animation:ludoWheelSpinLife var(--wheel-life, 4150ms) ease both; }
 @keyframes ludoWheelSpinLife{
-  0%{ opacity:1; } 84%{ opacity:1; } 100%{ opacity:0; }
+  0%{ opacity:1; } 87%{ opacity:1; } 100%{ opacity:0; }
 }
 .ludo-wheel-card{
   display:flex; flex-direction:column; align-items:center; gap:10px; padding:16px;
@@ -999,10 +999,33 @@ button.ludo-roman.selected{
   width:0; height:0; border-left:9px solid transparent; border-right:9px solid transparent;
   border-top:14px solid #fff; z-index:2; filter:drop-shadow(0 2px 2px rgba(0,0,0,.5));
 }
+/* Correctif 2026-07 (demande explicite "faire tourner la roue plus vite,
+   puis ralentir jusqu'à s'arrêter") : l'ancienne courbe cubic-bezier
+   (.15,.85,.25,1) était en fait bien plus extrême qu'il n'y paraît — le
+   calcul montre qu'elle atteignait déjà ~95 % de la rotation totale à
+   moins de la moitié de la durée, puis rampait presque immobile sur le
+   reste : un "snap" quasi instantané suivi d'un arrêt qui semblait figé,
+   pas une décélération. Remplacée par une animation à étapes explicites
+   (ludoWheelSpin, pilotée par --wheel-rot) qui répartit la vitesse de façon
+   bien plus progressive : franc démarrage, large part de la rotation
+   couverte pendant le premier tiers (rapide), puis un ralentissement
+   continu et perceptible jusqu'à l'arrêt nét — une vraie décélération, pas
+   un arrêt brutal. */
 .ludo-wheel-disc{
   position:relative; width:100%; height:100%; border-radius:50%;
   border:4px solid rgba(255,255,255,.7); box-shadow:0 6px 18px rgba(0,0,0,.4), inset 0 0 0 2px rgba(0,0,0,.25);
-  transition:transform var(--wheel-spin, 2400ms) cubic-bezier(.15,.85,.25,1);
+  transform:rotate(var(--wheel-rot, 0deg));
+}
+.ludo-wheel-overlay.spinning .ludo-wheel-disc{
+  animation:ludoWheelSpin var(--wheel-spin, 2100ms) both;
+}
+@keyframes ludoWheelSpin{
+  0%{ transform:rotate(0deg); animation-timing-function:ease-in; }
+  12%{ transform:rotate(calc(var(--wheel-rot) * 0.22)); animation-timing-function:linear; }
+  35%{ transform:rotate(calc(var(--wheel-rot) * 0.55)); animation-timing-function:ease-out; }
+  65%{ transform:rotate(calc(var(--wheel-rot) * 0.83)); animation-timing-function:ease-out; }
+  85%{ transform:rotate(calc(var(--wheel-rot) * 0.955)); animation-timing-function:ease-out; }
+  100%{ transform:rotate(var(--wheel-rot)); }
 }
 .ludo-wheel-icon{
   position:absolute; top:50%; left:50%; margin:-13px 0 0 -13px; width:26px; height:26px;
@@ -1014,10 +1037,31 @@ button.ludo-roman.selected{
   filter:drop-shadow(0 0 4px rgba(255,209,102,.9)) drop-shadow(0 1px 2px rgba(0,0,0,.6));
 }
 .ludo-wheel-btn{ width:auto; padding:10px 22px; margin-top:0; }
+/* Correctif 2026-07 : bouton-texte de révélation du résultat — apparaît une
+   fois la roue immobilisée (voir `revealed` dans MysteryWheel), non
+   cliquable (rien à faire, juste très visible), même langage visuel que
+   .ludo-wheel-btn pour que ça se lise clairement comme la SUITE logique du
+   bouton "Lancer la roue" qui vient de disparaître. */
+.ludo-wheel-result{
+  display:flex; flex-direction:column; align-items:center; gap:2px;
+  padding:10px 20px; border-radius:14px; text-align:center;
+  background:linear-gradient(145deg, #FFE49A, var(--accent, #FFD166) 55%, #E0A526);
+  color:#3a2107; box-shadow:0 6px 0 rgba(0,0,0,.3), 0 0 18px rgba(255,209,102,.4);
+  animation:ludoWheelResultPop .35s cubic-bezier(.34,1.4,.64,1) both;
+}
+.ludo-wheel-result.extreme{
+  background:linear-gradient(145deg, #ffe0f0, var(--acc-ludo, #ff6bd6) 55%, #c23fa0);
+  color:#3a0f2c;
+}
+@keyframes ludoWheelResultPop{ from{ opacity:0; transform:scale(.8) translateY(6px); } to{ opacity:1; transform:scale(1) translateY(0); } }
+.ludo-wheel-result-icon{ font-size:26px; line-height:1; }
+.ludo-wheel-result-text{ font-family:'Bungee'; font-size:12.5px; line-height:1.3; }
+.ludo-wheel-result-timing{ font-size:11px; font-weight:700; opacity:.85; }
 @media (prefers-reduced-motion: reduce){
   .ludo-wheel-overlay{ animation:none; opacity:1; }
   .ludo-wheel-overlay.spinning{ animation:none; opacity:1; }
-  .ludo-wheel-disc{ transition:none; }
+  .ludo-wheel-overlay.spinning .ludo-wheel-disc{ animation:none; transform:rotate(var(--wheel-rot, 0deg)); }
+  .ludo-wheel-result{ animation:none; }
 }
 
 /* ===== Zone d'ARRIVÉE centrale élargie (zip 83) =====
@@ -2332,13 +2376,23 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
 }
 @keyframes yzFlash{ from{ transform:scale(.7); opacity:0; } to{ transform:scale(1); opacity:1; } }
 
-.yz-dice{ display:flex; gap:clamp(6px, 2vw, 14px); justify-content:center; margin:0; position:relative; z-index:1; }
+/* Correctif 2026-07 (demande explicite "les dés ne doivent pas être coupés
+   par les bords... et ne peuvent pas se superposer, il faut qu'ils
+   s'entrechoquent") : .yz-dice n'est plus une simple rangée flex — elle
+   REMPLIT tout l'intérieur (rembourré) de son .yz-tray, et chaque dé s'y
+   positionne en absolu, à des coordonnées calculées côté JS (voir
+   resolveDiceLayout dans YahtzeeGame.js) qui : 1) bornent chaque dé
+   strictement à l'intérieur de cette zone (rebond sur le bord = jamais de
+   dépassement) et 2) écartent les dés qui se chevauchent (collision = les
+   dés se repoussent) via un petit algorithme de relaxation basé sur la
+   taille RÉELLE mesurée du plateau et d'un dé (responsive, clamp() inclus). */
+.yz-dice{ position:absolute; inset:0; z-index:1; }
 
 /* Plateau/tapis sous les dés : même langage visuel que les portes en bois
    (mêmes tons, même veinage en repeating-linear-gradient) pour que la table
    de jeu se sente comme un prolongement naturel de la porte déjà ouverte. */
 .yz-tray{
-  position:relative; margin:4px 0 6px; padding:11px 12px;
+  position:relative; margin:4px 0 6px; padding:11px 12px; min-height:150px;
   border-radius:16px; overflow:hidden;
   display:flex; align-items:center; justify-content:center;
   background-image:
@@ -2353,15 +2407,17 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
    maintenant toute la hauteur disponible au-dessus du bouton Roll, au lieu
    d'un min-height fixe trop court) et les dés sont légèrement RÉDUITS pour
    laisser la place à la dispersion façon "vrais dés lancés" (voir
-   randScatter côté JS) sans jamais toucher les bords. "standalone" :
-   plateau des spectateurs (pas de feuille perso, pas de colonne dédiée),
-   taille d'origine. */
+   resolveDiceLayout côté JS) sans jamais toucher les bords ni se
+   chevaucher. "standalone" : plateau des spectateurs (pas de feuille
+   perso, pas de colonne dédiée), taille d'origine — min-height hérité de
+   la règle de base ci-dessus (les dés y sont absolus désormais, donc ne
+   donnent plus eux-mêmes de hauteur à leur conteneur). */
 .yz-tray.big{ min-height:300px; padding:26px 16px 34px; }
 .yz-tray.big .yz-die{ width:clamp(44px, 7vw, 68px); height:clamp(44px, 7vw, 68px); border-radius:16px; }
-.yz-tray.big .yz-dice{ gap:clamp(8px, 2vw, 16px); }
 .yz-tray.standalone{ max-width:min(420px, 100%); margin:4px auto 6px; }
 
 .yz-die{
+  position:absolute; top:50%; left:50%;
   width:clamp(42px, 11vw, 56px); height:clamp(42px, 11vw, 56px);
   border-radius:14px; border:2px solid rgba(0,0,0,.25);
   background:linear-gradient(145deg, #fdf6e3, #e6d8b3);
@@ -2373,9 +2429,14 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
      bug de survol : avant, la règle :hover réécrivait purement et simplement
      `transform`, ce qui annulait d'un coup la position/rotation du dé sur la
      table ET son éventuel "gardé en l'air". Maintenant chaque état ne modifie
-     qu'une variable (--lift), jamais la formule complète. */
+     qu'une variable (--lift), jamais la formule complète.
+     Correctif 2026-07 : top/left:50% + le premier translate(-50%,-50%)
+     centrent le dé sur son ancre — --tx/--ty (calculés côté JS en pixels
+     RÉELS par rapport au centre de la zone de lancer, voir resolveDiceLayout)
+     le déplacent ensuite à sa position posée, bornée et sans chevauchement. */
   transform-origin:bottom center;
   transform:
+    translate(-50%, -50%)
     translate(var(--tx, 0px), var(--ty, 0px))
     rotate(var(--trot, 0deg))
     translateY(var(--lift, 0px))
@@ -2391,15 +2452,17 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
 }
 .yz-die.rolling{ animation:yzTumble .55s cubic-bezier(.3,.9,.4,1) both; }
 @keyframes yzTumble{
-  0%{ transform:translate(0, -46px) rotate(0deg) scale(.75); opacity:.35; }
+  0%{ transform:translate(-50%, -50%) translate(0, -46px) rotate(0deg) scale(.75); opacity:.35; }
   55%{
     transform:
+      translate(-50%, -50%)
       translate(calc(var(--tx, 0px) * .5), calc(var(--ty, 0px) * .5 - 16px))
       rotate(calc(var(--trot, 0deg) * 2.6)) scale(1.1);
     opacity:1;
   }
   100%{
     transform:
+      translate(-50%, -50%)
       translate(var(--tx, 0px), var(--ty, 0px))
       rotate(var(--trot, 0deg))
       translateY(var(--lift, 0px)) scale(1);
@@ -2415,11 +2478,13 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
 @keyframes yzShuffleShake{
   0%, 100%{
     transform:
+      translate(-50%, -50%)
       translate(var(--tx, 0px), var(--ty, 0px))
       rotate(calc(var(--trot, 0deg) - 6deg)) scale(1.03);
   }
   50%{
     transform:
+      translate(-50%, -50%)
       translate(var(--tx, 0px), calc(var(--ty, 0px) - 4px))
       rotate(calc(var(--trot, 0deg) + 6deg)) scale(1.03);
   }

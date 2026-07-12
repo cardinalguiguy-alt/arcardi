@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { saveGameState, readGameState, resetRoomToLobby } from "@/lib/gameSync";
 import Crossfade from "@/components/Crossfade";
@@ -61,21 +61,81 @@ function rollDie() {
 
 // Position/rotation de repos d'un dé sur la table, façon dé réellement
 // lancé qui retombe de travers, à une distance variable de ses voisins —
-// jamais parfaitement alignés en rangée (correctif 2026-07, demande
-// explicite "plus aléatoire et réaliste, pas seulement alignés" : l'ancienne
-// dispersion, ±11px/±15°, restait trop discrète pour se voir à l'œil nu).
-// Purement cosmétique et 100% local à CHAQUE client (chacun voit une
-// dispersion différente, comme deux personnes regardant le même dé sous un
-// angle différent) — n'a aucune incidence sur la valeur réelle du dé, qui
-// elle vient toujours de l'hôte.
-function randScatter() {
-  return {
-    tx: Math.round((Math.random() - 0.5) * 64),         // ±32px
-    ty: Math.round((Math.random() - 0.32) * 70),         // tombe plutôt vers le bas, jusqu'à ~45px
-    trot: Math.round((Math.random() - 0.5) * 84),        // ±42°
-  };
+// jamais parfaitement alignés en rangée. Purement cosmétique et 100% local
+// à CHAQUE client (chacun voit une dispersion différente, comme deux
+// personnes regardant le même dé sous un angle différent) — n'a aucune
+// incidence sur la valeur réelle du dé, qui elle vient toujours de l'hôte.
+//
+// Correctif 2026-07 (demande explicite "les dés ne doivent pas être coupés
+// par les bords... c'est une bordure sur laquelle les dés doivent
+// rebondir. Et pareil entre eux, les dés ne peuvent pas se superposer, il
+// faut qu'ils s'entrechoquent") : avant, chaque dé recevait un décalage
+// ALÉATOIRE INDÉPENDANT (±32px/±45px), sans la moindre notion de la taille
+// réelle de la zone de lancer ni des autres dés — rien n'empêchait deux dés
+// de se chevaucher, ni un dé de déborder du plateau sur un petit écran.
+// resolveDiceLayout() calcule maintenant la position de TOUS les dés d'un
+// coup, en pixels RÉELS (mesurés dans le DOM, donc toujours justes quel que
+// soit le clamp() responsive appliqué), avec deux contraintes : rester
+// strictement à l'intérieur de la zone ("rebond" = simple bornage, jamais
+// de dépassement) et ne jamais se chevaucher (les dés qui se chevauchent —
+// assimilés à des cercles — se "repoussent" à l'écart l'un de l'autre par
+// petites touches, jusqu'à convergence). Les dés GARDÉS (lockedMask) ne
+// bougent jamais eux-mêmes ; les autres dés doivent les contourner.
+const DIE_GAP_PX = 5;     // écart minimal visible entre deux dés une fois posés
+const TRAY_EDGE_PX = 4;   // marge de sécurité avant le bord de la zone
+
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+function resolveDiceLayout({ trayW, trayH, dieSize, prev, lockedMask }) {
+  const r = dieSize / 2;
+  const maxX = Math.max(4, trayW / 2 - r - TRAY_EDGE_PX);
+  const maxY = Math.max(4, trayH / 2 - r - TRAY_EDGE_PX);
+  const minDist = dieSize + DIE_GAP_PX;
+
+  const pts = prev.map((p, i) => {
+    if (lockedMask[i]) {
+      // Dé gardé : reste où il était, juste re-borné (au cas où la zone
+      // aurait changé de taille entre-temps, ex. redimensionnement fenêtre).
+      return { tx: clamp(p?.tx || 0, -maxX, maxX), ty: clamp(p?.ty || 0, -maxY, maxY) };
+    }
+    // Dé qui vient d'être (re)lancé : nouveau départ aléatoire dans la zone.
+    return { tx: (Math.random() * 2 - 1) * maxX * 0.75, ty: (Math.random() * 2 - 1) * maxY * 0.75 };
+  });
+
+  for (let iter = 0; iter < 150; iter++) {
+    let moved = false;
+    for (let i = 0; i < pts.length; i++) {
+      for (let j = i + 1; j < pts.length; j++) {
+        const dx = pts[j].tx - pts[i].tx, dy = pts[j].ty - pts[i].ty;
+        let dist = Math.hypot(dx, dy);
+        if (dist < minDist) {
+          moved = true;
+          if (dist < 0.01) dist = 0.01;
+          const push = (minDist - dist) / 2;
+          const ux = dx / dist, uy = dy / dist;
+          if (!lockedMask[i]) { pts[i].tx -= ux * push; pts[i].ty -= uy * push; }
+          if (!lockedMask[j]) { pts[j].tx += ux * push; pts[j].ty += uy * push; }
+        }
+      }
+      if (!lockedMask[i]) {
+        pts[i].tx = clamp(pts[i].tx, -maxX, maxX);
+        pts[i].ty = clamp(pts[i].ty, -maxY, maxY);
+      }
+    }
+    if (!moved) break;
+  }
+
+  return pts.map((p, i) => ({
+    tx: Math.round(p.tx), ty: Math.round(p.ty),
+    trot: lockedMask[i] ? (prev[i]?.trot ?? 0) : Math.round((Math.random() - 0.5) * 84),
+  }));
 }
-const NO_SCATTER = { tx: 0, ty: 0, trot: 0 };
+// Rangée par défaut AVANT le premier lancer (dés "?" fantômes) ou entre deux
+// tours (dice===null) : un simple alignement propre, sans avoir besoin de
+// mesurer le DOM (pas encore de vrais dés à disperser/faire collisionner).
+// Espacement fixe raisonnable — la zone de lancer est toujours assez large
+// pour l'accueillir confortablement (voir .yz-tray min-height/padding).
+const GHOST_ROW = [-92, -46, 0, 46, 92].map(tx => ({ tx, ty: 0, trot: 0 }));
 
 function shuffleSeats(arr) {
   const a = arr.slice();
@@ -122,7 +182,18 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
   // ("message parasite en dessous de la zone de jeu") a été supprimée avec
   // l'état pendingCat qui la pilotait.
   const [rollSeq, setRollSeq] = useState(0);              // incrément à chaque lancer -> relance l'animation CSS
-  const [scatter, setScatter] = useState([0, 1, 2, 3, 4].map(() => NO_SCATTER));
+  const [scatter, setScatter] = useState(GHOST_ROW);
+  // Correctif 2026-07 : la dispersion des dés se calcule désormais en deux
+  // temps — applyLocalState() note QUELS dés viennent d'être relancés
+  // (freshMaskRef) et incrémente scatterJob ; un useLayoutEffect séparé
+  // (plus bas) mesure alors la vraie taille DOM de la zone de lancer et
+  // d'un dé, et appelle resolveDiceLayout() pour poser tous les dés sans
+  // dépassement ni chevauchement. Deux passes nécessaires car le calcul a
+  // besoin du DOM déjà rendu (tailles réelles), inaccessible au moment où
+  // applyLocalState() reçoit l'état réseau.
+  const [scatterJob, setScatterJob] = useState(0);
+  const freshMaskRef = useRef([true, true, true, true, true]); // true = doit être repositionné
+  const trayElRef = useRef(null);
   const [myGain, setMyGain] = useState(0);
   const [bonusFlash, setBonusFlash] = useState(false);    // bandeau +100 Yahtzee supplémentaire
 
@@ -175,16 +246,19 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
     // valeurs, qui se tromperait dans le cas rare où un dé relancé retombe
     // par coïncidence sur la même face qu'avant. Seuls les dés RÉELLEMENT
     // relancés (held=false au moment du lancer) reçoivent une nouvelle
-    // position/rotation ; les dés gardés restent exactement où ils étaient.
+    // position ; les dés gardés restent exactement où ils étaient.
+    // Correctif 2026-07 : le calcul RÉEL (bornage + anti-chevauchement) a
+    // besoin du DOM déjà rendu (voir resolveDiceLayout) — on se contente ici
+    // de noter quels dés sont "frais" et de déclencher le useLayoutEffect
+    // dédié (scatterJob) qui fera le calcul juste après.
     if (s.dice) {
       const isRollAction = s.lastAction?.type === "roll";
-      setScatter(old => s.dice.map((_, i) => {
-        if (!isRollAction) return old[i] || NO_SCATTER;
-        const wasHeld = s.held ? s.held[i] === true : false;
-        return wasHeld ? (old[i] || NO_SCATTER) : randScatter();
-      }));
+      if (isRollAction) {
+        freshMaskRef.current = s.dice.map((_, i) => !(s.held ? s.held[i] === true : false));
+        setScatterJob(n => n + 1);
+      }
     } else {
-      setScatter([0, 1, 2, 3, 4].map(() => NO_SCATTER));
+      setScatter(GHOST_ROW);
     }
 
     if (s.lastAction?.type === "score" && s.lastAction.extraYahtzee && s.lastAction.seatId === me.id) {
@@ -198,6 +272,27 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
       setEndBanner(null);
     }
   }
+
+  // Correctif 2026-07 : calcule la position RÉELLE des dés (bornée à la
+  // zone de lancer, sans chevauchement) une fois le DOM à jour — measure
+  // en pixels via trayElRef (la zone .yz-dice remplit maintenant tout
+  // l'intérieur rembourré de sa .yz-tray, voir CSS) et la taille d'un dé
+  // déjà rendu. useLayoutEffect plutôt que useEffect : la nouvelle position
+  // est appliquée AVANT la peinture du navigateur, donc pas de flash visible
+  // à une position provisoire.
+  useLayoutEffect(() => {
+    if (scatterJob === 0) return;
+    const trayEl = trayElRef.current;
+    if (!trayEl) return;
+    const dieEl = trayEl.querySelector(".yz-die");
+    const dieSize = dieEl ? dieEl.getBoundingClientRect().width : 56;
+    const trayW = trayEl.clientWidth, trayH = trayEl.clientHeight;
+    if (!trayW || !trayH) return;
+    setScatter(prev => resolveDiceLayout({
+      trayW, trayH, dieSize, prev, lockedMask: freshMaskRef.current.map(fresh => !fresh),
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scatterJob]);
 
   // Petite fête : Yahtzee (5 dés identiques) — encore plus si ce sont 5 six,
   // le lancer le plus rare et le plus payant du jeu.
@@ -680,7 +775,7 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
           );
 
           const diceRow = (
-            <div className="yz-dice">
+            <div className="yz-dice" ref={trayElRef}>
               {(dice || [null, null, null, null, null]).map((v, i) => {
                 const isHeldNow = isMyTurn ? myHeld[i] : held[i];
                 const showShuffle = shuffling && !isHeldNow;

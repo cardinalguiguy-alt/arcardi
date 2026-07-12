@@ -53,11 +53,16 @@ const MYSTERY_ABS = new Set([4, 11, 18, 25, 32, 39, 46, 53]);
 // - sendHome     : renvoie le pion tiré directement à l'enclos ;
 // - doubleSetback: -8 cases (plancher case 1, capture possible).
 // `swatch` = couleur de la tranche sur la roue, `pop` = texte du pop-up bref
-// après résolution, `labelKey` = clé i18n du statut détaillé.
+// après résolution, `labelKey` = clé i18n du statut détaillé. `deferred:true`
+// (correctif 2026-07, voir MysteryWheel) = effet qui ne s'applique PAS tout
+// de suite mais au prochain tour concerné (ici : le joueur SUIVANT n'aura
+// qu'un dé à SON prochain lancer) — affiché dans le bouton-texte de
+// révélation pour que ce soit limpide, tous les autres effets s'appliquant
+// immédiatement (déjà visible sur le plateau dès la fin de la roue).
 const MYSTERY_KINDS = [
   { id: "boost",         weight: 22, tier: "common",  icon: "🎁", pop: "🎁 +3",  labelKey: "ludoMysteryBoost",         swatch: "var(--ok)" },
   { id: "setback",       weight: 22, tier: "common",  icon: "💫", pop: "💫 -4",  labelKey: "ludoMysterySetback",       swatch: "#FF5D73" },
-  { id: "oppOneDie",     weight: 22, tier: "common",  icon: "🎲", pop: "🎲½",   labelKey: "ludoMysteryOppOneDie",     swatch: "var(--ludoB)" },
+  { id: "oppOneDie",     weight: 22, tier: "common",  icon: "🎲", pop: "🎲½",   labelKey: "ludoMysteryOppOneDie",     swatch: "var(--ludoB)", deferred: true },
   { id: "reroll",        weight: 22, tier: "common",  icon: "🔁", pop: "🔁",    labelKey: "ludoMysteryReroll",        swatch: "var(--ludoY)" },
   { id: "superBoost",    weight: 3,  tier: "extreme", icon: "🚀", pop: "🚀 +8",  labelKey: "ludoMysterySuperBoost",    swatch: "var(--p3)" },
   { id: "freeToken",     weight: 3,  tier: "extreme", icon: "🔓", pop: "🔓",    labelKey: "ludoMysteryFreeToken",     swatch: "#4ECDC4" },
@@ -82,13 +87,23 @@ function pickMysteryKind() {
 // de lancer (ROLL_ANIM_MS) pour ne pas grignoter le temps de jeu réel.
 const MOVE_MS = 20000;
 const ROLL_ANIM_MS = 950;
-// Roue de la fortune (2026-07) : durée totale VISIBLE (fondu d'entrée +
-// rotation + tenue + fondu de sortie) et durée de la seule rotation
-// (sous-partie, pilotée par transition CSS). L'hôte attend exactement
-// MYSTERY_SPIN_MS avant de révéler/appliquer l'effet — pile calé sur la fin
-// de l'animation cliente, comme les faces de dés factices pendant le roulis.
-const MYSTERY_SPIN_MS = 3200;
-const MYSTERY_ROT_MS = 2400;
+// Roue de la fortune (2026-07, correctif 2026-07 sur le rythme + la
+// révélation) : durée totale VISIBLE = rotation + TENUE (le résultat tiré
+// s'affiche enfin en toutes lettres, voir MysteryWheel — c'était l'un des
+// bugs de l'audit : la roue s'arrêtait pile sur l'icône gagnante SANS
+// jamais dire ce qu'elle signifiait, tant que le petit texte de statut
+// au-dessus du plateau n'avait pas pris le relais après coup) + fondu de
+// sortie. MYSTERY_ROT_MS ne couvre plus que la ROTATION elle-même
+// (raccourcie et redessinée avec une décélération plus marquée — voir
+// ludoWheelSpin en CSS — pour "tourner plus vite puis ralentir jusqu'à
+// s'arrêter", demande explicite). L'hôte attend exactement MYSTERY_SPIN_MS
+// (somme des trois phases) avant de révéler/appliquer l'effet — pile calé
+// sur la fin de l'animation cliente, comme les faces de dés factices
+// pendant le roulis.
+const MYSTERY_ROT_MS = 2100;     // rotation seule : rapide puis décélération étalée
+const MYSTERY_REVEAL_MS = 1500;  // tenue : le résultat reste affiché, lisible
+const MYSTERY_FADE_MS = 550;     // fondu de sortie final
+const MYSTERY_SPIN_MS = MYSTERY_ROT_MS + MYSTERY_REVEAL_MS + MYSTERY_FADE_MS;
 
 // Attribution des couleurs selon le nombre de joueurs (retouche 2026-07 /
 // zip 83) : en 1 CONTRE 1, les deux joueurs partent DIAGONALEMENT opposés
@@ -341,24 +356,39 @@ function DieFace({ value, colorVar, size, selected, dim, onClick, animClass }) {
   );
 }
 
-// ===== Roue de la fortune des cases « ? » (2026-07) =====
+// ===== Roue de la fortune des cases « ? » (2026-07, révisée 2026-07) =====
 // Remplace la révélation immédiate par un tirage ANIMÉ, visible de TOUS
 // les joueurs/spectateurs (elle vit dans le state broadcast, pas un state
-// local) : fondu d'entrée, rotation, tenue, fondu de sortie — même principe
-// que les faces de dés factices pendant le roulis : le `kind` tiré par
-// l'hôte voyage déjà dans le payload réseau, mais seul l'angle final de la
-// roue le révèle VISUELLEMENT (le texte de statut, lui, n'apparaît qu'à la
-// résolution côté hôte, une fois l'anim terminée).
+// local) : fondu d'entrée, rotation (rapide puis décélération marquée
+// jusqu'à l'arrêt — voir ludoWheelSpin en CSS), RÉVÉLATION du résultat en
+// toutes lettres via un bouton-texte, tenue, fondu de sortie.
+// Correctif audit 2026-07 : la roue s'arrêtait auparavant pile sur l'icône
+// gagnante SANS jamais dire ce qu'elle voulait dire — seul le minuscule
+// texte de statut au-dessus du plateau le révélait, et seulement une fois
+// l'overlay déjà refermé. `revealed` (local, retardé de MYSTERY_ROT_MS —
+// pile la fin de la rotation) affiche maintenant un bouton-texte bien
+// visible avec l'icône + le libellé complet, et précise si l'effet est
+// déjà appliqué ou s'il ne jouera qu'au prochain tour concerné (voir
+// `deferred` sur MYSTERY_KINDS).
 function MysteryWheel({ pending, isOwner, onSpin, t }) {
   const spin = pending.spin;
   const segAngle = 360 / MYSTERY_KINDS.length;
   const targetIdx = spin ? MYSTERY_KINDS.findIndex(k => k.id === spin.kind) : -1;
+  const resultInfo = targetIdx >= 0 ? MYSTERY_KINDS[targetIdx] : null;
   // 5 tours complets pour le suspense, puis pile sur le centre de la tranche
   // gagnante (le repère fixe pointe vers le haut, 0°).
   const rot = spin && targetIdx >= 0
     ? 5 * 360 + (360 - (targetIdx * segAngle + segAngle / 2))
     : 0;
   const gradient = MYSTERY_KINDS.map((k, i) => `${k.swatch} ${i * segAngle}deg ${(i + 1) * segAngle}deg`).join(", ");
+
+  const [revealed, setRevealed] = useState(false);
+  useEffect(() => {
+    if (!spin) { setRevealed(false); return; }
+    const tm = setTimeout(() => setRevealed(true), MYSTERY_ROT_MS);
+    return () => clearTimeout(tm);
+  }, [spin?.key]);
+
   return (
     <div
       className={"ludo-wheel-overlay" + (spin ? " spinning" : "")}
@@ -370,7 +400,7 @@ function MysteryWheel({ pending, isOwner, onSpin, t }) {
           <span className="ludo-wheel-pointer" aria-hidden="true" />
           <div
             className="ludo-wheel-disc"
-            style={{ background: `conic-gradient(${gradient})`, transform: `rotate(${rot}deg)` }}
+            style={{ background: `conic-gradient(${gradient})`, "--wheel-rot": rot + "deg" }}
           >
             {MYSTERY_KINDS.map((k, i) => (
               <span
@@ -387,6 +417,21 @@ function MysteryWheel({ pending, isOwner, onSpin, t }) {
           <button type="button" className="btn ludo-wheel-btn" onClick={onSpin}>{t("ludoMysterySpin")}</button>
         )}
         {!spin && !isOwner && <p className="muted">{t("ludoMysteryWaitSpin")}</p>}
+        {/* Correctif 2026-07 : le résultat, enfin dit en toutes lettres — un
+            bouton-texte (non cliquable : rien à faire, juste très visible)
+            qui apparaît pile quand la roue s'immobilise. */}
+        {spin && revealed && resultInfo && (
+          <div
+            className={"ludo-wheel-result" + (resultInfo.tier === "extreme" ? " extreme" : "")}
+            role="status" aria-live="polite"
+          >
+            <span className="ludo-wheel-result-icon">{resultInfo.icon}</span>
+            <span className="ludo-wheel-result-text">{t(resultInfo.labelKey)}</span>
+            <span className="ludo-wheel-result-timing">
+              {resultInfo.deferred ? t("ludoMysteryTimingNext") : t("ludoMysteryTimingNow")}
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );
