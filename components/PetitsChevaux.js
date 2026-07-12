@@ -938,8 +938,16 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
     if (effectsPatch) {
       effects[effectsPatch.color] = { ...(effects[effectsPatch.color] || {}), ...effectsPatch.patch };
     }
-    const mysteryEvent = "mystery:" + kind + ":" + color;
-    const captureEvent = captured.length > 0 ? "captured:" + color : null;
+    // Correctif 2026-07 (audit jouabilité) : BUG — quand l'effet de la roue
+    // capturait AUSSI un pion adverse (boost/superBoost/setback/
+    // doubleSetback qui retombent sur un adversaire), le message affiché
+    // était TOUJOURS celui de la roue seule (mysteryEvent, une chaîne non
+    // vide donc toujours "vraie") : `mysteryEvent || captureEvent` ne
+    // laissait jamais la moindre chance à captureEvent de s'afficher, alors
+    // que le pion était bel et bien capturé en jeu. Le suffixe ":captured"
+    // porte maintenant cette info DANS le même événement (un seul "slot"
+    // lastEvent existe) ; voir son décodage côté rendu (mysteryCaptured).
+    const mysteryEvent = "mystery:" + kind + ":" + color + (captured.length > 0 ? ":captured" : "");
     const movedInfo = { color, tokenIdx: info.freedIdx != null ? info.freedIdx : tokenIdx };
 
     if (info.won) {
@@ -956,7 +964,7 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
       const deadline = Date.now() + MOVE_MS;
       broadcastState({
         tokens: nextTokens, dice: diceAfter, movablePlan: planAfter, effects,
-        moveDeadline: deadline, lastMoved: movedInfo, lastEvent: mysteryEvent || captureEvent, pendingMystery: null,
+        moveDeadline: deadline, lastMoved: movedInfo, lastEvent: mysteryEvent, pendingMystery: null,
       });
       armMoveTimer(deadline);
       return;
@@ -964,7 +972,7 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
 
     finishDiceTurn({
       color, tokens: nextTokens, effects, diceAfter,
-      extraReroll, lastMoved: movedInfo, baseLastEvent: mysteryEvent || captureEvent,
+      extraReroll, lastMoved: movedInfo, baseLastEvent: mysteryEvent,
     });
   }
 
@@ -1109,6 +1117,11 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
     let statusText;
     const mysteryMatch = typeof lastEvent === "string" && lastEvent.startsWith("mystery:") ? lastEvent.split(":") : null;
     const mysteryInfo = mysteryMatch ? MYSTERY_KINDS.find(k => k.id === mysteryMatch[1]) : null;
+    // Correctif 2026-07 : la roue peut AUSSI capturer un pion adverse
+    // (boost/setback qui retombent sur un adversaire) — cette info voyage
+    // désormais dans le même événement (suffixe ":captured", voir
+    // resolveMysterySpin) plutôt que d'être silencieusement perdue.
+    const mysteryCaptured = mysteryMatch && mysteryMatch[3] === "captured";
     if (winner) statusText = null;
     else if (pendingMystery && pendingMystery.spin) statusText = t("ludoMysterySpinning");
     else if (pendingMystery && !pendingMystery.spin) {
@@ -1122,7 +1135,10 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
     else if (lastEvent === "sixAgain") statusText = t("ludoSixAgain");
     else if (lastEvent === "extraRoll") statusText = t("ludoExtraRoll");
     else if (lastEvent === "oneDieTurn") statusText = t("ludoOneDieTurn");
-    else if (mysteryInfo) statusText = t(mysteryInfo.labelKey);
+    else if (mysteryInfo) {
+      statusText = t(mysteryInfo.labelKey);
+      if (mysteryCaptured) statusText += ` · 💥 ${playerNameFor(mysteryMatch[2])} ${t("ludoCapturedSuffix")}`;
+    }
     else if (lastEvent && lastEvent.startsWith("captured:")) {
       const moverColor = lastEvent.split(":")[1];
       statusText = `💥 ${playerNameFor(moverColor)} ${t("ludoCapturedSuffix")}`;
@@ -1169,6 +1185,11 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
           </p>
         )}
 
+        {/* Correctif 2026-07 : cadre (bordure/ombre/rognage) et grille de
+            coordonnées désormais séparés — voir le commentaire CSS sur
+            .ludo-board-frame/.ludo-board (corrige les pions tronqués en
+            haut du plateau). */}
+        <div className="ludo-board-frame">
         <div className="ludo-board">
           {Object.entries(CELL_TYPE).map(([key, type]) => {
             const [r, c] = key.split("_").map(Number);
@@ -1375,6 +1396,7 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
               </>
             );
           })()}
+        </div>
         </div>
 
         {winner ? (

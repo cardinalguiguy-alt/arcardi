@@ -116,7 +116,11 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
 
   // Locaux au joueur (jamais diffusés tels quels) :
   const [myHeld, setMyHeld] = useState(NO_HELD.slice()); // dés gardés, envoyé au moment du lancer
-  const [pendingCat, setPendingCat] = useState(null);     // catégorie sélectionnée avant validation
+  // Correctif 2026-07 (demande explicite "aussi simple que ça") : plus de
+  // sélection en deux temps — cliquer une case du tableau score IMMÉDIATEMENT
+  // et termine le tour. L'ancienne barre de confirmation fixe en bas d'écran
+  // ("message parasite en dessous de la zone de jeu") a été supprimée avec
+  // l'état pendingCat qui la pilotait.
   const [rollSeq, setRollSeq] = useState(0);              // incrément à chaque lancer -> relance l'animation CSS
   const [scatter, setScatter] = useState([0, 1, 2, 3, 4].map(() => NO_SCATTER));
   const [myGain, setMyGain] = useState(0);
@@ -162,7 +166,6 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
     // Sync des dés gardés locaux : après MON lancer, l'état qui revient est
     // la vérité (utile aussi après un rechargement en plein tour).
     setMyHeld(s.held || NO_HELD.slice());
-    if (s.dice === null) setPendingCat(null); // nouveau tour = plus rien de sélectionné
     // deferReveal : la reprise/animation de tumble sera déclenchée plus tard
     // par finishShuffle(), une fois le mélange sonore/visuel joué.
     if (s.lastAction?.type === "roll" && !extra.deferReveal) setRollSeq(n => n + 1);
@@ -464,14 +467,15 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
       payload: { seatId: me.id, action: { type: "roll", held: myHeld } },
     });
   }
-  function attemptScore() {
-    if (!canScore || !pendingCat || !myCard || myCard[pendingCat] !== null) return;
+  // Correctif 2026-07 : un seul clic sur une case libre du tableau la score
+  // ET termine le tour, sans étape de confirmation intermédiaire.
+  function scoreCategoryClick(catId) {
+    if (!canScore || !myCard || myCard[catId] !== null) return;
     playConfirmChime();
     channelRef.current?.send({
       type: "broadcast", event: "move_attempt",
-      payload: { seatId: me.id, action: { type: "score", catId: pendingCat } },
+      payload: { seatId: me.id, action: { type: "score", catId } },
     });
-    setPendingCat(null);
   }
 
   // Sauvegarde du score de salon (chaque joueur enregistre le sien, RLS oblige).
@@ -503,13 +507,12 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
     const isFree = myCard && filled === null;
     const potential = canScore && isFree ? scoreCategory(catId, dice) : null;
     const selectable = canScore && isFree;
-    const selected = pendingCat === catId;
     return (
       <button
         type="button"
         key={catId}
-        className={"yz-row" + (selected ? " selected" : "") + (selectable ? " selectable" : "") + (filled !== null ? " done" : "")}
-        onClick={() => { if (selectable) setPendingCat(selected ? null : catId); }}
+        className={"yz-row" + (selectable ? " selectable" : "") + (filled !== null ? " done" : "")}
+        onClick={() => { if (selectable) scoreCategoryClick(catId); }}
         disabled={!selectable}
       >
         <span className="yz-row-label">{t(CAT_LABEL_KEY[catId])}</span>
@@ -566,7 +569,7 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
     const iWon = winners.includes(me.id);
 
     content = (
-      <div style={{ paddingBottom: canScore && pendingCat ? 170 : 0 }}>
+      <div>
         {/* Comparatif des totaux — face à face, mis en avant pour suivre l'avancement */}
         <div className="yz-totals-bar">
           {(() => {
@@ -780,22 +783,11 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
           );
         })()}
 
-        {/* Validation en deux temps — jamais de score inscrit par mégarde.
-            N'apparaît qu'UNE FOIS une catégorie sélectionnée (2026-07 :
-            l'ancien texte "choisis une case…" affiché en permanence
-            n'apportait rien — inutile de l'afficher tant qu'il n'y a rien à
-            valider). Barre FIXE en bas de l'écran (comme les autres
-            pastilles du site) : sur la feuille de score complète, ce bouton
-            pouvait se retrouver hors écran et obliger à scroller à chaque
-            tour pour l'atteindre. Toujours accessible désormais, quel que
-            soit le scroll. */}
-        {canScore && pendingCat && (
-          <div className="yz-score-bar">
-            <button className="btn" onClick={attemptScore}>
-              ✔️ {t("yzConfirm")} « {t(CAT_LABEL_KEY[pendingCat])} » (+{scoreCategory(pendingCat, dice)})
-            </button>
-          </div>
-        )}
+        {/* Correctif 2026-07 (demande explicite "aussi simple que ça") : plus
+            de barre de confirmation ici — cliquer une case du tableau score
+            directement (voir renderScoreRow/scoreCategoryClick) au lieu de
+            l'ancien clic-puis-confirme, qui affichait une barre fixe en bas
+            d'écran ressentie comme un message parasite. */}
 
         {/* Fin de partie : classement complet PAR-DESSUS la table, jamais à sa place */}
         {finished && (
