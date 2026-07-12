@@ -7,6 +7,10 @@ import FlagIcon from "./FlagIcon";
 const MAX_TRIES = 10;
 const ROUND_MS = 180000; // 3 min
 
+// Confettis de victoire (demande 2026-07) : palette VERT/BLEU du thème
+// Worldle — mêmes pièces réutilisables que Puissance 4 (.confetti-piece).
+const CONFETTI_COLORS = ["#4CC38A", "#6FA8FF", "#8FE0A8", "#4C8DFF", "#ffffff"];
+
 const CONT = {
   EU: { fr: "Europe", en: "Europe" },
   NA: { fr: "Amérique du Nord", en: "North America" },
@@ -263,6 +267,8 @@ export default function Worldle({ room, me, isHost, players, onFinish, t, lang }
   const [finished, setFinished] = useState(false);
   const [opponents, setOpponents] = useState({});
   const [highlight, setHighlight] = useState(0);
+  const [confetti, setConfetti] = useState([]); // pièces locales, victoire uniquement
+  const confettiTimer = useRef(null);
   const inputRef = useRef(null);
   const channelRef = useRef(null);
   const myResult = useRef({ solved: false, tries: 0, bestPct: 0 });
@@ -343,9 +349,14 @@ export default function Worldle({ room, me, isHost, players, onFinish, t, lang }
     return () => clearInterval(iv);
   }, [deadline]);
 
+  useEffect(() => () => clearTimeout(confettiTimer.current), []);
+
+  // Barème dégressif (demande 2026-07) : 10 points au 1er essai, -1 par
+  // essai supplémentaire (jusqu'à 1 point au 10e), 0 en cas d'échec — plus
+  // de "consolation de proximité", le pays doit être TROUVÉ pour marquer.
   function pointsFor(res) {
-    if (res.solved) return Math.max(7 - res.tries, 1);
-    return Math.max(0, Math.floor(res.bestPct / 25) - 2); // petite consolation si on s'est approché
+    if (res.solved) return Math.max(11 - res.tries, 1);
+    return 0;
   }
 
   function hostStart() {
@@ -391,6 +402,26 @@ export default function Worldle({ room, me, isHost, players, onFinish, t, lang }
     const solved = c.id === target.id;
     const bestPct = Math.max(myResult.current.bestPct, pct);
     myResult.current = { solved, tries: nextGuesses.length, bestPct };
+    // Confettis (demande 2026-07) : pluie vert/bleu locale au joueur qui
+    // vient de trouver le bon pays — même recette que Puissance 4.
+    if (solved) {
+      const pieces = Array.from({ length: 55 }, (_, i) => {
+        const big = Math.random() < 0.3;
+        return {
+          key: "w-" + i + "-" + Date.now(),
+          left: Math.round(Math.random() * 100),
+          color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
+          delay: (Math.random() * 0.5).toFixed(2),
+          duration: (1.6 + Math.random() * 1.3).toFixed(2),
+          size: big ? 13 : 7 + Math.round(Math.random() * 4),
+          round: i % 3 === 0,
+          drift: Math.round((Math.random() - 0.5) * 140),
+        };
+      });
+      setConfetti(pieces);
+      clearTimeout(confettiTimer.current);
+      confettiTimer.current = setTimeout(() => setConfetti([]), 3200);
+    }
     const failed = !solved && nextGuesses.length >= MAX_TRIES;
     channelRef.current.send({
       type: "broadcast", event: "progress",
@@ -401,7 +432,9 @@ export default function Worldle({ room, me, isHost, players, onFinish, t, lang }
   const done = myResult.current.solved || guesses.length >= MAX_TRIES;
 
   return (
-    <div className="panel" style={{ maxWidth: "min(640px, 92vw)" }}>
+    // position:relative + overflow:hidden : contient la pluie de confettis
+    // de victoire dans le panneau (jamais par-dessus le reste de la page).
+    <div className="panel worldle-panel" style={{ maxWidth: "min(640px, 92vw)", position: "relative", overflow: "hidden" }}>
       <h1>{t("worldleTitle")}</h1>
       {!target && isHost && (
         <>
@@ -413,8 +446,11 @@ export default function Worldle({ room, me, isHost, players, onFinish, t, lang }
 
       {target && (
         <>
+          {/* Thème vert/bleu (harmonisation 2026-07) : la barre de temps suit
+              l'identité du jeu (vert -> bleu) au lieu du duo générique
+              vert fluo / rouge. */}
           <div style={{ height: 8, background: "rgba(255,255,255,.08)", borderRadius: 99, overflow: "hidden", margin: "10px 0 16px" }}>
-            <div style={{ height: "100%", width: (timeLeft / ROUND_MS * 100) + "%", background: "linear-gradient(90deg,var(--p3),var(--p1))", transition: "width .1s linear" }} />
+            <div style={{ height: "100%", width: (timeLeft / ROUND_MS * 100) + "%", background: "linear-gradient(90deg, var(--ok), var(--acc-worldle))", transition: "width .1s linear" }} />
           </div>
 
           {!done && !finished && (
@@ -444,7 +480,7 @@ export default function Worldle({ room, me, isHost, players, onFinish, t, lang }
           )}
           {!done && !finished && (
             <p className="muted" style={{ marginBottom: 10, fontSize: 12 }}>
-              {t("wordleLiveHint")} <b style={{ color: "var(--p3)" }}>+{Math.max(7 - (guesses.length + 1), 1)} {t("pts")}</b>
+              {t("wordleLiveHint")} <b style={{ color: "var(--ok)" }}>+{Math.max(11 - (guesses.length + 1), 1)} {t("pts")}</b>
             </p>
           )}
 
@@ -453,22 +489,24 @@ export default function Worldle({ room, me, isHost, players, onFinish, t, lang }
               const isBest = g.pct === myResult.current.bestPct && g.country.id !== target.id;
               return (
                 <div key={i} className="stage-enter" style={{
-                  padding: "10px 12px", borderRadius: 12, border: `2px solid ${g.country.id === target.id ? "var(--p3)" : isBest ? "var(--p4)" : "var(--line)"}`,
+                  /* Harmonisation vert/bleu (2026-07) : trouvé = vert --ok,
+                     meilleur essai = bleu --acc-worldle (fini le doré --p4). */
+                  padding: "10px 12px", borderRadius: 12, border: `2px solid ${g.country.id === target.id ? "var(--ok)" : isBest ? "var(--acc-worldle)" : "var(--line)"}`,
                   background: "rgba(255,255,255,.03)"
                 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: g.country.id === target.id ? 0 : 6 }}>
                     <span><FlagIcon code={g.country.id} /> {g.country[lang] || g.country.fr}</span>
                     {g.country.id === target.id
-                      ? <span style={{ color: "var(--p3)", fontWeight: 800 }}>🎯</span>
+                      ? <span style={{ color: "var(--ok)", fontWeight: 800 }}>🎯</span>
                       : <span style={{ display: "flex", gap: 8, alignItems: "center", fontFamily: "'Space Mono'", fontSize: 13 }}>
                           <span>{g.km} km</span><span>{arrowFor(g.deg)}</span>
-                          <span style={{ color: isBest ? "var(--p4)" : "var(--p3)" }}>{g.pct}%</span>
+                          <span style={{ color: isBest ? "var(--acc-worldle)" : "var(--ok)" }}>{g.pct}%</span>
                         </span>}
                   </div>
                   {g.country.id !== target.id && (
                     <>
                       <div style={{ height: 6, background: "rgba(255,255,255,.08)", borderRadius: 99, overflow: "hidden" }}>
-                        <div style={{ height: "100%", width: g.pct + "%", background: isBest ? "var(--p4)" : "var(--p2)", transition: "width .4s ease" }} />
+                        <div style={{ height: "100%", width: g.pct + "%", background: isBest ? "var(--acc-worldle)" : "var(--ok)", transition: "width .4s ease" }} />
                       </div>
                       <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
                         {g.sameContinent ? "🌍 " + t("worldleSameCont") : "🌐 " + t("worldleDiffCont")}
@@ -520,6 +558,21 @@ export default function Worldle({ room, me, isHost, players, onFinish, t, lang }
           )}
         </>
       )}
+
+      {/* Confettis de victoire (vert/bleu) : purement décoratifs, locaux au
+          joueur qui a trouvé — voir guessCountry. */}
+      {confetti.map(p => (
+        <span
+          key={p.key}
+          className="confetti-piece"
+          style={{
+            left: p.left + "%", width: p.size, height: p.size * 1.4,
+            borderRadius: p.round ? "50%" : 2, background: p.color,
+            "--drift": p.drift + "px",
+            animationDuration: p.duration + "s", animationDelay: p.delay + "s",
+          }}
+        />
+      ))}
     </div>
   );
 }

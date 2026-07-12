@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { saveGameState, readGameState, resetRoomToLobby } from "@/lib/gameSync";
 import { DICT_FR, DICT_EN } from "@/lib/wordDictionary";
+import { playWordleGreen, playWordleYellow } from "@/lib/sfx";
 import FlagIcon from "./FlagIcon";
 
 const WORD_LEN = 5;
@@ -222,7 +223,18 @@ export default function WordGuess({ room, me, isHost, players, onFinish, t, lang
     setCurrent("");
     setRevealState({ row: rowIndex, count: 0 });
     for (let i = 0; i <= WORD_LEN; i++) {
-      revealTimers.current.push(setTimeout(() => setRevealState({ row: rowIndex, count: i }), i * 230));
+      revealTimers.current.push(setTimeout(() => {
+        setRevealState({ row: rowIndex, count: i });
+        // Sons de révélation (demande 2026-07) : à l'instant où la lettre i-1
+        // se retourne, un son AIGU si elle est verte (bien placée), un son
+        // plus GRAVE si elle est jaune (présente ailleurs) — rien pour une
+        // lettre absente, le silence est déjà une information.
+        if (i >= 1) {
+          const st = pattern[i - 1];
+          if (st === "correct") playWordleGreen();
+          else if (st === "present") playWordleYellow();
+        }
+      }, i * 230));
     }
     const solved = g === secret;
     const failed = !solved && nextGuesses.length >= MAX_TRIES;

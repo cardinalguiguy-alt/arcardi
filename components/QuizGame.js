@@ -4,6 +4,51 @@ import { supabase } from "@/lib/supabaseClient";
 import { saveGameState, readGameState, resetRoomToLobby } from "@/lib/gameSync";
 import Crossfade from "./Crossfade";
 
+/* ==========================================================================
+   Catégories de questions (demande 2026-07) : chaque question porte une
+   CHIP de catégorie (Musique, Arts, Histoire, Langues, Géographie, Maths,
+   Sports…). Deux sources :
+   - un 6e élément optionnel dans la question ([texte, bonne, m1, m2, m3,
+     "cat"]) — utilisé par toutes les questions AJOUTÉES en 2026-07 ;
+   - sinon, une déduction par mots-clés (guessQuizCategory) pour les ~360
+     questions historiques, plutôt que d'éditer chaque ligne à la main —
+     déterministe, même résultat chez tous les clients (la catégorie est de
+     toute façon calculée UNE fois par l'hôte et diffusée dans le payload).
+   ========================================================================== */
+const QUIZ_CATS = {
+  geo:     { icon: "🌍", fr: "Géographie", en: "Geography" },
+  hist:    { icon: "🏛️", fr: "Histoire", en: "History" },
+  sci:     { icon: "🔬", fr: "Sciences", en: "Science" },
+  music:   { icon: "🎵", fr: "Musique", en: "Music" },
+  arts:    { icon: "🎨", fr: "Arts", en: "Arts" },
+  lit:     { icon: "📖", fr: "Littérature", en: "Literature" },
+  sport:   { icon: "⚽", fr: "Sports", en: "Sports" },
+  lang:    { icon: "🗣️", fr: "Langues", en: "Languages" },
+  maths:   { icon: "🔢", fr: "Maths", en: "Maths" },
+  nature:  { icon: "🐾", fr: "Nature", en: "Nature" },
+  culture: { icon: "💡", fr: "Culture G", en: "Trivia" },
+};
+
+// Déduction par mots-clés (FR + EN mélangés : une seule fonction pour les
+// deux banques). ORDRE IMPORTANT : du plus spécifique au plus générique —
+// "langue la plus parlée au monde" doit tomber sur Langues, pas Géographie.
+const QUIZ_CAT_RULES = [
+  ["music", /compos|opéra|opera|musiq|music|instrument|piano|guitare|guitar|cordes|strings|touches|keys|symphon|orchestr|chant[ée]/i],
+  ["arts",  /peint|paint|joconde|mona lisa|courant artistique|art movement|sculpt|tableau/i],
+  ["lit",   /écrit « |wrote '|roman|novel|poète|poet|sherlock|bd |comic/i],
+  ["sport", /sport|football|soccer|match|équipe|team|olympique|olympic|judo|sumo|baseball|tennis|raquette|racket/i],
+  ["lang",  /langue|language|locuteurs|speakers|dit-on|say ['"«]/i],
+  ["maths", /zéros|zeros|hexagone|hexagon|côtés|sides|triangle|théorème|theorem|mathémat|mathemat|chiffres romains|roman numeral|nombre premier|prime number|carré \(|squared/i],
+  ["hist",  /guerre|war |traité|treaty|bataille|battle|roi |king|reine|queen of|empereur|emperor|empire|révolution|revolution|dynastie|dynasty|napoléon|napoleon|mur de berlin|berlin wall|onu|united nations|expédition|expedition|explorateur|explorer|civilisation|civilization|colomb|columbus|pompéi|pompeii|en quelle année|in what year|1[0-9]{3}|monde en bateau|circumnavigate/i],
+  ["sci",   /planète|planet|chimique|chemical|élément|element|corps humain|human body|os |bone|organe|organ|cerveau|brain|cœur|heart|poumon|lung|étoile|star|supernova|espace|space|vaisseau|spacecraft|vitesse|speed|gaz|gas|photosynthèse|photosynthesis|radioactivité|radioactivity|particule|particle|scientifique|scientist|physicien|physicist|dents|teeth|grossesse|pregnancy|satellite|lune|moon|soleil|sun |lumière|sunlight|boson|évolution|evolution|pénicilline|penicillin|ampoule|light bulb|nucléaire|nuclear|fusion|supercontinent|pangée|pangaea|thermomètre|thermometer|température|temperature|sang|blood|veines|veins|doigts|fingers|pattes|legs does an insect/i],
+  ["nature", /animal|mammifère|mammal|insecte|insect|oiseau|bird|chauve-souris|bat |guépard|cheetah|fruit|légume|vegetable|oignon|onion|chien|dog|jungle|arc-en-ciel|rainbow|saison|season/i],
+  ["geo",   /capitale|capital|pays|country|fleuve|river|lac |lake|mer |sea|océan|ocean|désert|desert|montagne|mountain|sommet|peak|alpes|alps|volcan|volcano|île|island|continent|détroit|strait|récif|reef|fuseaux|time zones|ville|city|monnaie|currency|tour eiffel|eiffel|statue de la liberté|statue of liberty|grande muraille|great wall|botte|boot/i],
+];
+function guessQuizCategory(text) {
+  for (const [id, re] of QUIZ_CAT_RULES) { if (re.test(text)) return id; }
+  return "culture";
+}
+
 const QUESTIONS_FR = {
   easy: [
     ["Combien y a-t-il de continents sur Terre ?", "7", "5", "6", "8"],
@@ -66,6 +111,17 @@ const QUESTIONS_FR = {
     ["Quel est le plus long fleuve entièrement situé en France ?", "La Loire", "La Seine", "Le Rhône", "La Garonne"],
     ["Quelle est la capitale du Maroc ?", "Rabat", "Casablanca", "Marrakech", "Fès"],
     ["Quelle mer fermée est en réalité le plus grand lac du monde ?", "La mer Caspienne", "La mer Morte", "La mer d'Aral", "La mer Noire"],
+    // ----- Ajouts 2026-07 (catégorie explicite en 6e position) -----
+    ["Combien font 7 × 8 ?", "56", "54", "48", "64", "maths"],
+    ["Combien font 100 divisé par 4 ?", "25", "20", "40", "50", "maths"],
+    ["Quel sport se joue avec une raquette et un volant ?", "Le badminton", "Le tennis", "Le squash", "Le ping-pong", "sport"],
+    ["Dans quel sport marque-t-on des paniers ?", "Le basket-ball", "Le handball", "Le volley", "Le rugby", "sport"],
+    ["Quelle note de musique vient juste après le do ?", "Ré", "Mi", "Fa", "Si", "music"],
+    ["Quel instrument le batteur d'un groupe joue-t-il ?", "La batterie", "La basse", "Le clavier", "Le triangle", "music"],
+    ["Qui a peint des tournesols célèbres ?", "Van Gogh", "Picasso", "Monet", "Dalí", "arts"],
+    ["Quelle couleur obtient-on en mélangeant du rouge et du blanc ?", "Le rose", "Le violet", "L'orange", "Le marron", "arts"],
+    ["Comment dit-on « merci » en espagnol ?", "Gracias", "Grazie", "Danke", "Obrigado", "lang"],
+    ["Quelle langue parle-t-on au Mexique ?", "L'espagnol", "Le portugais", "Le mexicain", "Le français", "lang"],
   ],
   medium: [
     ["Quel pays a la forme d'une botte sur la carte de l'Europe ?", "L'Italie", "La Grèce", "Le Portugal", "La Croatie"],
@@ -127,6 +183,17 @@ const QUESTIONS_FR = {
     ["Quelle est la capitale de la Colombie ?", "Bogota", "Medellín", "Cali", "Carthagène"],
     ["Quel volcan de l'État de Washington est entré en éruption de façon spectaculaire en 1980 ?", "Le mont Saint Helens", "Le mont Rainier", "Le mont Hood", "Le mont Shasta"],
     ["Quelle ville est la capitale administrative de l'Afrique du Sud, siège du gouvernement ?", "Pretoria", "Le Cap", "Johannesburg", "Durban"],
+    // ----- Ajouts 2026-07 (catégorie explicite en 6e position) -----
+    ["Combien font 12 au carré ?", "144", "124", "132", "154", "maths"],
+    ["Quel est le seul nombre premier pair ?", "2", "1", "4", "9", "maths"],
+    ["Quel compositeur a écrit la « Lettre à Élise » ?", "Beethoven", "Mozart", "Chopin", "Liszt", "music"],
+    ["Quel groupe britannique a chanté « Hey Jude » ?", "Les Beatles", "Les Rolling Stones", "Queen", "Pink Floyd", "music"],
+    ["Quel peintre est célèbre pour ses nénuphars ?", "Claude Monet", "Édouard Manet", "Auguste Renoir", "Paul Cézanne", "arts"],
+    ["Quel sculpteur a réalisé « Le Penseur » ?", "Auguste Rodin", "Camille Claudel", "Michel-Ange", "Constantin Brancusi", "arts"],
+    ["Dans quel sport peut-on réussir un « grand chelem » de quatre tournois majeurs ?", "Le tennis", "Le golf", "La boxe", "L'escrime", "sport"],
+    ["Tous les combien d'années ont lieu les Jeux olympiques d'été ?", "4 ans", "2 ans", "5 ans", "6 ans", "sport"],
+    ["Combien de langues officielles compte la Suisse ?", "4", "2", "3", "5", "lang"],
+    ["Comment dit-on « bonjour » en italien ?", "Buongiorno", "Buenos días", "Guten Tag", "Bom dia", "lang"],
   ],
   hard: [
     ["Quel est le seul mammifère capable de voler activement (et non de planer) ?", "La chauve-souris", "L'écureuil volant", "La roussette", "Le phalanger"],
@@ -189,6 +256,17 @@ const QUESTIONS_FR = {
     ["L'éruption de quel volcan indonésien, en 1815, a provoqué « l'année sans été » ?", "Le Tambora", "Le Krakatoa", "Le Merapi", "Le Sinabung"],
     ["Quelle est la capitale du Bhoutan ?", "Thimphou", "Katmandou", "Dacca", "Paro"],
     ["Quel lac sibérien contient à lui seul environ 20 % de l'eau douce liquide de surface du globe ?", "Le lac Baïkal", "Le lac Ladoga", "Le lac Onega", "Le lac Taïmyr"],
+    // ----- Ajouts 2026-07 (catégorie explicite en 6e position) -----
+    ["Combien vaut la somme des angles d'un triangle ?", "180 degrés", "90 degrés", "270 degrés", "360 degrés", "maths"],
+    ["Quel nombre est représenté par la lettre M en chiffres romains ?", "1000", "500", "100", "50", "maths"],
+    ["Quel compositeur français a écrit le « Boléro » ?", "Maurice Ravel", "Claude Debussy", "Erik Satie", "Gabriel Fauré", "music"],
+    ["Combien de symphonies Beethoven a-t-il achevées ?", "9", "7", "10", "12", "music"],
+    ["Quel peintre néerlandais a réalisé « La Jeune Fille à la perle » ?", "Vermeer", "Rembrandt", "Van Eyck", "Bruegel", "arts"],
+    ["Quel mouvement artistique Claude Monet a-t-il contribué à fonder ?", "L'impressionnisme", "Le cubisme", "Le romantisme", "Le réalisme", "arts"],
+    ["Quel pays a remporté la première Coupe du monde de football, en 1930 ?", "L'Uruguay", "Le Brésil", "L'Argentine", "L'Italie", "sport"],
+    ["En tennis, combien de tournois composent le Grand Chelem ?", "4", "3", "5", "6", "sport"],
+    ["Quelle est la langue officielle de l'Iran ?", "Le persan", "L'arabe", "Le turc", "Le kurde", "lang"],
+    ["Quelle famille de langues comprend le finnois et le hongrois ?", "Les langues ouraliennes", "Les langues slaves", "Les langues germaniques", "Les langues romanes", "lang"],
   ],
 };
 const QUESTIONS_EN = {
@@ -253,6 +331,17 @@ const QUESTIONS_EN = {
     ["What is the longest river located entirely in France?", "The Loire", "The Seine", "The Rhône", "The Garonne"],
     ["What is the capital of Morocco?", "Rabat", "Casablanca", "Marrakesh", "Fez"],
     ["Which enclosed sea is actually the largest lake in the world?", "The Caspian Sea", "The Dead Sea", "The Aral Sea", "The Black Sea"],
+    // ----- Added 2026-07 (explicit category as 6th item) -----
+    ["What is 7 × 8?", "56", "54", "48", "64", "maths"],
+    ["What is 100 divided by 4?", "25", "20", "40", "50", "maths"],
+    ["Which sport is played with a racket and a shuttlecock?", "Badminton", "Tennis", "Squash", "Table tennis", "sport"],
+    ["In which sport do you score baskets?", "Basketball", "Handball", "Volleyball", "Rugby", "sport"],
+    ["Which musical note comes right after do (C)?", "Re (D)", "Mi (E)", "Fa (F)", "Ti (B)", "music"],
+    ["Which instrument does a band's drummer play?", "The drums", "The bass", "The keyboard", "The triangle", "music"],
+    ["Who painted famous sunflowers?", "Van Gogh", "Picasso", "Monet", "Dalí", "arts"],
+    ["What colour do you get by mixing red and white?", "Pink", "Purple", "Orange", "Brown", "arts"],
+    ["How do you say 'thank you' in Spanish?", "Gracias", "Grazie", "Danke", "Obrigado", "lang"],
+    ["What language is spoken in Mexico?", "Spanish", "Portuguese", "Mexican", "French", "lang"],
   ],
   medium: [
     ["Which country is shaped like a boot on the map of Europe?", "Italy", "Greece", "Portugal", "Croatia"],
@@ -314,6 +403,17 @@ const QUESTIONS_EN = {
     ["What is the capital of Colombia?", "Bogotá", "Medellín", "Cali", "Cartagena"],
     ["Which Washington State volcano erupted spectacularly in 1980?", "Mount St. Helens", "Mount Rainier", "Mount Hood", "Mount Shasta"],
     ["Which city is South Africa's administrative capital, seat of the government?", "Pretoria", "Cape Town", "Johannesburg", "Durban"],
+    // ----- Added 2026-07 (explicit category as 6th item) -----
+    ["What is 12 squared?", "144", "124", "132", "154", "maths"],
+    ["What is the only even prime number?", "2", "1", "4", "9", "maths"],
+    ["Which composer wrote 'Für Elise'?", "Beethoven", "Mozart", "Chopin", "Liszt", "music"],
+    ["Which British band sang 'Hey Jude'?", "The Beatles", "The Rolling Stones", "Queen", "Pink Floyd", "music"],
+    ["Which painter is famous for his water lilies?", "Claude Monet", "Édouard Manet", "Auguste Renoir", "Paul Cézanne", "arts"],
+    ["Which sculptor created 'The Thinker'?", "Auguste Rodin", "Camille Claudel", "Michelangelo", "Constantin Brancusi", "arts"],
+    ["In which sport can you win a 'Grand Slam' of four major tournaments?", "Tennis", "Golf", "Boxing", "Fencing", "sport"],
+    ["How often are the Summer Olympic Games held?", "Every 4 years", "Every 2 years", "Every 5 years", "Every 6 years", "sport"],
+    ["How many official languages does Switzerland have?", "4", "2", "3", "5", "lang"],
+    ["How do you say 'good morning' in Italian?", "Buongiorno", "Buenos días", "Guten Tag", "Bom dia", "lang"],
   ],
   hard: [
     ["What is the only mammal capable of true powered flight (not just gliding)?", "The bat", "The flying squirrel", "The flying fox", "The sugar glider"],
@@ -376,6 +476,17 @@ const QUESTIONS_EN = {
     ["The 1815 eruption of which Indonesian volcano caused the 'Year Without a Summer'?", "Tambora", "Krakatoa", "Merapi", "Sinabung"],
     ["What is the capital of Bhutan?", "Thimphu", "Kathmandu", "Dhaka", "Paro"],
     ["Which Siberian lake alone holds about 20% of the world's unfrozen surface fresh water?", "Lake Baikal", "Lake Ladoga", "Lake Onega", "Lake Taymyr"],
+    // ----- Added 2026-07 (explicit category as 6th item) -----
+    ["What is the sum of the angles of a triangle?", "180 degrees", "90 degrees", "270 degrees", "360 degrees", "maths"],
+    ["Which number does the letter M represent in Roman numerals?", "1000", "500", "100", "50", "maths"],
+    ["Which French composer wrote the 'Boléro'?", "Maurice Ravel", "Claude Debussy", "Erik Satie", "Gabriel Fauré", "music"],
+    ["How many symphonies did Beethoven complete?", "9", "7", "10", "12", "music"],
+    ["Which Dutch painter created 'Girl with a Pearl Earring'?", "Vermeer", "Rembrandt", "Van Eyck", "Bruegel", "arts"],
+    ["Which art movement did Claude Monet help to found?", "Impressionism", "Cubism", "Romanticism", "Realism", "arts"],
+    ["Which country won the first football World Cup, in 1930?", "Uruguay", "Brazil", "Argentina", "Italy", "sport"],
+    ["In tennis, how many tournaments make up the Grand Slam?", "4", "3", "5", "6", "sport"],
+    ["What is the official language of Iran?", "Persian", "Arabic", "Turkish", "Kurdish", "lang"],
+    ["Which language family includes Finnish and Hungarian?", "The Uralic languages", "The Slavic languages", "The Germanic languages", "The Romance languages", "lang"],
   ],
 };
 
@@ -639,7 +750,14 @@ export default function QuizGame({ room, me, isHost, players, onFinish, t, lang 
       total: deckRef.current.length,
       text: item[0],
       good: item[1],
-      choices: shuffle(item.slice(1)),
+      // slice(1, 5) et JAMAIS slice(1) : le 6e élément optionnel est la
+      // CATÉGORIE (chip), pas une proposition de réponse — sans cette borne,
+      // "maths" apparaîtrait comme 5e choix cliquable.
+      choices: shuffle(item.slice(1, 5)),
+      // Chip de catégorie (demande 2026-07) : explicite (6e élément) pour les
+      // questions récentes, déduite par mots-clés pour les historiques —
+      // calculée UNE fois ici par l'hôte, identique chez tous les clients.
+      cat: item[5] || guessQuizCategory(item[0]),
       remaining: roundMs,
       diff
     };
@@ -786,8 +904,19 @@ export default function QuizGame({ room, me, isHost, players, onFinish, t, lang 
           )
         ) : (
           <div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-              <p className="muted" style={{ margin: 0 }}>{t("question")} {q.index + 1} / {q.total}</p>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+              <p className="muted" style={{ margin: 0, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                {t("question")} {q.index + 1} / {q.total}
+                {/* Chip de catégorie (demande 2026-07) : Musique, Arts,
+                    Histoire, Langues, Géographie, Maths, Sports… — remonte
+                    avec la question elle-même (payload.cat, calculé par
+                    l'hôte), remontée à chaque question via key. */}
+                {q.cat && QUIZ_CATS[q.cat] && (
+                  <span className="quiz-cat-chip" key={q.index}>
+                    {QUIZ_CATS[q.cat].icon} {lang === "en" ? QUIZ_CATS[q.cat].en : QUIZ_CATS[q.cat].fr}
+                  </span>
+                )}
+              </p>
               <span style={{
                 fontSize: 11, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".05em",
                 color: DIFFS.find(d => d.id === q.diff)?.color, opacity: .85

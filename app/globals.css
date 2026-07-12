@@ -104,16 +104,36 @@ body.tenk-night .door-stage{ padding:30px; }
    jeu (--acc-petitbac rose, --acc-ludo orangé) suffit à leur donner une
    identité cohérente pendant la partie, sans retoucher le cadre en bois
    (.door-stage) qui reste harmonieux avec les deux. */
+/* Harmonisation 2026-07 : la teinte glisse du "prune rosé" vers un VRAI
+   VIOLET — pendant la partie, plus aucun encart ne doit rester marron/rosé,
+   tout le thème (fond, encarts, cadre de scène ci-dessous) parle violet. */
 body.pb-theme{
-  --bg:#24101B; --bg2:#341829; --card:#3D1C2F; --card2:#472239;
-  --ink:#FDEFF5; --muted:#D9A9C0; --line:rgba(255,190,220,.16);
+  --bg:#1E1430; --bg2:#2A1C42; --card:#33224E; --card2:#3C2A5A;
+  --ink:#F4EDFF; --muted:#BFA8DC; --line:rgba(210,180,255,.16);
 }
-body.pb-theme .ember .ember-dot{ filter:hue-rotate(300deg) saturate(.9) brightness(.95); }
+body.pb-theme .ember .ember-dot{ filter:hue-rotate(260deg) saturate(.9) brightness(.95); }
 body.pb-theme{
   background-image:
-    radial-gradient(900px 500px at 15% -10%, rgba(247,131,172,.12), transparent 60%),
-    radial-gradient(800px 500px at 95% 0%, rgba(180,90,140,.10), transparent 60%),
+    radial-gradient(900px 500px at 15% -10%, rgba(167,139,250,.13), transparent 60%),
+    radial-gradient(800px 500px at 95% 0%, rgba(247,131,172,.09), transparent 60%),
     radial-gradient(700px 600px at 50% 110%, rgba(255,209,102,.05), transparent 60%);
+}
+/* Le CADRE de scène du Petit Bac (FlashStage) restait au bois MARRON du feu
+   de camp par-dessus le thème du jeu (signalé 2026-07 : "l'encart marron
+   doit être un type de violet") — recoloré en violet profond, même recette
+   que la table bleu nuit du 10000. */
+body.pb-theme .flash-stage{
+  background-image:
+    radial-gradient(120% 90% at 50% 12%, rgba(0,0,0,0) 0%, rgba(0,0,0,.35) 100%),
+    linear-gradient(175deg, #352452, #241736 75%);
+}
+body.pb-theme .rules-info-btn{
+  border-color:rgba(200,160,255,.5);
+  color:#D9C2FF;
+  background:radial-gradient(circle at 32% 28%, rgba(60,42,90,.95), rgba(30,20,48,.95));
+}
+body.pb-theme .rules-info-btn:hover{
+  box-shadow:0 2px 10px rgba(0,0,0,.45), 0 0 14px rgba(200,160,255,.45), inset 0 1px 0 rgba(200,160,255,.3);
 }
 
 body.ludo-theme{
@@ -127,6 +147,37 @@ body.ludo-theme{
     radial-gradient(800px 500px at 95% 0%, rgba(76,141,255,.08), transparent 60%),
     radial-gradient(700px 600px at 50% 110%, rgba(182,240,76,.06), transparent 60%);
 }
+
+/* ===== Ambiance Worldle (harmonisation 2026-07) =====
+   Le fond feu de camp jurait avec la zone de jeu bleutée de Worldle
+   (mappemonde) : pendant une partie, la pièce glisse vers un VERT/BLEU
+   planétaire — océan profond en fond, encarts bleu-vert, bulles refroidies.
+   Même mécanique de classe <body> que tenk-night/pb-theme/ludo-theme. */
+body.worldle-theme{
+  --bg:#0D1F26; --bg2:#122B33; --card:#16333C; --card2:#1B3E46;
+  --ink:#EAF7F2; --muted:#9CC4BC; --line:rgba(160,230,210,.16);
+}
+body.worldle-theme .ember .ember-dot{ filter:hue-rotate(160deg) saturate(.85) brightness(.95); }
+body.worldle-theme{
+  background-image:
+    radial-gradient(900px 500px at 15% -10%, rgba(111,168,255,.12), transparent 60%),
+    radial-gradient(800px 500px at 95% 0%, rgba(76,195,138,.10), transparent 60%),
+    radial-gradient(700px 600px at 50% 110%, rgba(90,200,219,.07), transparent 60%);
+}
+/* Le bouton "i" des règles restait au médaillon BOIS/OR du thème feu de camp
+   par-dessus l'encart océan de Worldle (signalé 2026-07 : "mauvaise
+   couleur") — recalé sur le duo vert/bleu du jeu, même recette que la
+   variante tenk-night. */
+body.worldle-theme .rules-info-btn{
+  border-color:rgba(111,168,255,.55);
+  color:var(--acc-worldle);
+  background:radial-gradient(circle at 32% 28%, rgba(27,62,70,.95), rgba(13,31,38,.95));
+}
+body.worldle-theme .rules-info-btn:hover{
+  box-shadow:0 2px 10px rgba(0,0,0,.45), 0 0 14px rgba(111,168,255,.5), inset 0 1px 0 rgba(111,168,255,.3);
+}
+body.worldle-theme .stage-zoom-fab:hover, body.worldle-theme .stage-zoom-fab:focus-visible{ border-color:var(--acc-worldle); }
+body.worldle-theme .stage-zoom-fab.on{ color:var(--acc-worldle); border-color:rgba(111,168,255,.6); }
 
 /* ===== Tactile (audit iOS/Android 2026-07) =====
    - tap-highlight : supprime le rectangle gris/bleu que Safari iOS et
@@ -297,6 +348,14 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
   background:rgba(255,255,255,.05); border-radius:10px; padding:6px 10px; margin:0 0 10px;
   animation:popIn .25s ease both;
 }
+/* Chip de catégorie de la question (demande 2026-07) : teinte de l'accent
+   du Quiz, remontée avec chaque nouvelle question (popIn via key). */
+.quiz-cat-chip{
+  display:inline-flex; align-items:center; gap:5px; padding:3px 10px; border-radius:99px;
+  border:1.5px solid rgba(78,205,196,.55); background:rgba(78,205,196,.10);
+  color:var(--acc-quiz); font-size:11.5px; font-weight:800; letter-spacing:.02em;
+  white-space:nowrap; animation:popIn .25s ease both;
+}
 
 /* ===== Fondu enchaîné réutilisable (composant Crossfade) ===== */
 .crossfade-stage{ position:relative; width:100%; }
@@ -384,24 +443,31 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 .back-room-fab:hover .back-room-label, .back-room-fab:focus-visible .back-room-label{
   max-width:170px; opacity:1; margin-left:8px;
 }
+/* Harmonisation (demande 2026-07) : à l'état REPLIÉ, "Retour au salon" et
+   la bascule du mode agrandi partagent désormais EXACTEMENT le même gabarit
+   (40px de haut, même fond, même bordure blanche, même opacité) — deux
+   pastilles jumelles empilées dans le coin, quel que soit le thème du jeu. */
 .stage-zoom-fab{
   position:fixed; right:14px; top:138px; z-index:60;
-  display:flex; align-items:center; height:36px; padding:0 9px;
+  display:flex; align-items:center; height:40px; padding:0 10px;
   background:rgba(28,24,36,.82); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px);
-  border:1.5px solid var(--line); border-radius:99px;
-  color:var(--ink); font-size:16px; line-height:1; cursor:pointer;
-  opacity:.55; overflow:hidden; white-space:nowrap;
+  border:1.5px solid rgba(255,255,255,.6); border-radius:99px;
+  color:#fff; font-size:17px; line-height:1; cursor:pointer;
+  opacity:.6; overflow:hidden; white-space:nowrap;
   box-shadow:0 6px 18px rgba(0,0,0,.35);
   transition:opacity .2s ease, background .2s ease, border-color .2s ease, top .25s ease;
 }
 .stage-zoom-fab .stage-zoom-label{
   max-width:0; opacity:0; margin-left:0; overflow:hidden;
-  font-size:12px; font-weight:800; letter-spacing:.02em;
+  font-size:12.5px; font-weight:800; letter-spacing:.02em;
   transition:max-width .25s ease, opacity .2s ease, margin-left .25s ease;
 }
-.stage-zoom-fab:hover, .stage-zoom-fab:focus-visible{ opacity:1; border-color:var(--p2); }
+.stage-zoom-fab:hover, .stage-zoom-fab:focus-visible{
+  opacity:1; background:rgba(50,44,64,.94); border-color:#fff;
+  box-shadow:0 6px 18px rgba(255,255,255,.22);
+}
 .stage-zoom-fab:hover .stage-zoom-label, .stage-zoom-fab:focus-visible .stage-zoom-label{
-  max-width:180px; opacity:1; margin-left:7px;
+  max-width:180px; opacity:1; margin-left:8px;
 }
 .stage-zoom-fab.on{ opacity:.9; color:var(--p2); border-color:rgba(255,209,102,.6); }
 @media (hover: none){
@@ -413,10 +479,13 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
    secondaires — le panneau du jeu récupère toute la hauteur de l'écran
    (objectif : zéro scroll sur laptop). Les deux pastilles de droite restent
    (retour salon + sortie du mode) et remontent au ras du bord. */
+/* Retouche 2026-07 : la pastille d'ambiance (⏭ piste suivante) RESTE
+   visible en mode agrandi (elle était masquée à tort — on veut pouvoir
+   passer un morceau sans quitter le jeu), et la barre de score n'est plus
+   masquée mais déplacée en COLONNE sur la marge gauche (voir .stage-bar
+   plus bas) : les vignettes joueurs ne prennent plus aucune hauteur. */
 body.stage-focus .wrap-room > .brand,
-body.stage-focus .stage-bar,
-body.stage-focus .leave-room-fab,
-body.stage-focus .ambience-skip-btn{ display:none; }
+body.stage-focus .leave-room-fab{ display:none; }
 /* TOUT doit tenir sur une page (consigne 2026-07) :
    - le jeu est CENTRÉ verticalement dans l'écran (flex + min-height:100svh)
      au lieu d'être collé en haut ;
@@ -480,6 +549,34 @@ body.stage-focus .chat-panel{ right:auto; left:14px; }
   margin-bottom:12px; overflow-x:auto; scrollbar-width:thin;
 }
 .stage-bar-scores{ display:flex; gap:8px; overflow-x:auto; flex:1 1 auto; min-width:140px; scrollbar-width:thin; }
+/* ----- Vignettes joueurs sur la MARGE GAUCHE (demande 2026-07) -----
+   Sur écran assez large pour avoir une vraie marge (>=1100px : le panneau
+   de jeu fait au plus ~960px dans un wrap de 1200), la rangée de chips de
+   score quitte le HAUT de la page (où elle repoussait le jeu vers le bas,
+   donc vers le scroll) pour une COLONNE fixe le long du bord gauche. La
+   zone de jeu remonte d'autant. Sous 1100px (tablette/mobile), pas de
+   marge disponible : rangée horizontale d'origine conservée. */
+@media (min-width: 1100px){
+  .stage-bar{
+    position:fixed; left:10px; top:96px; z-index:58;
+    display:flex; flex-direction:column; align-items:flex-start;
+    width:auto; max-width:180px; margin:0; overflow:visible;
+    max-height:calc(100vh - 180px); overflow-y:auto; scrollbar-width:thin;
+  }
+  .stage-bar-scores{
+    display:flex; flex-direction:column; gap:6px; overflow:visible;
+    flex:none; min-width:0;
+  }
+  .stage-bar .mini-chip{ max-width:180px; }
+  .stage-bar .mini-chip span{ overflow:hidden; text-overflow:ellipsis; }
+  /* Mode agrandi : l'en-tête disparaît, la colonne remonte au ras du bord. */
+  body.stage-focus .stage-bar{ top:12px; }
+}
+/* Sous 1100px, le mode agrandi masque la rangée comme avant (chaque pixel
+   de hauteur compte, et il n'y a pas de marge latérale où la loger). */
+@media (max-width: 1099.98px){
+  body.stage-focus .stage-bar{ display:none; }
+}
 .mini-chip{
   display:flex; align-items:center; gap:5px; white-space:nowrap; flex:none;
   background:rgba(0,0,0,.25); border:1.5px solid var(--line); border-radius:99px;
@@ -621,13 +718,121 @@ body.stage-focus .chat-panel{ right:auto; left:14px; }
   50%{ box-shadow:0 3px 0 rgba(0,0,0,.42), inset 0 2px 3px rgba(255,255,255,.5), 0 0 0 6px rgba(255,255,255,0); }
 }
 
-.ludo-dice{
-  width:52px; height:52px; border-radius:14px; background:var(--card2); border:2px solid var(--line);
-  display:flex; align-items:center; justify-content:center; font-size:24px; font-weight:800;
-  box-shadow:0 5px 0 rgba(0,0,0,.35);
+/* ===== DEUX DÉS (2026-07) : plateau de dés ancré près du camp actif =====
+   Deux dés à pips COLORÉS à la couleur du camp qui les lance, qui roulent,
+   rebondissent puis s'immobilisent (3 variantes de roulis pour la variété,
+   choisies par rollKey % 3 — voir PetitsChevaux.js), avec l'addition en
+   chiffres romains en dessous (III + V = VIII). Taille calée sur le plateau
+   (clamp) : bien visibles sans jamais recouvrir plus d'un enclos. */
+.ludo-dice-tray{
+  /* Ancré par top/left/right/bottom en % selon le camp actif (voir
+     DICE_TRAY_POS dans PetitsChevaux.js) : ~13 % le place dans l'enclos du
+     joueur sans jamais recouvrir la piste. */
+  position:absolute; z-index:8; display:flex; flex-direction:column; align-items:center; gap:5px;
+  pointer-events:none;
 }
-.ludo-dice.rolling{ animation:ludoRoll .45s ease; }
-@keyframes ludoRoll{ 0%{transform:rotate(0) scale(1);} 50%{transform:rotate(180deg) scale(1.12);} 100%{transform:rotate(360deg) scale(1);} }
+.ludo-dice-tray > *{ pointer-events:auto; }
+.ludo-dice-row{ display:flex; gap:8px; }
+.ludo-die{
+  position:relative; width:clamp(34px, 6.5vw, 48px); height:clamp(34px, 6.5vw, 48px);
+  border-radius:22%; border:2px solid rgba(0,0,0,.25); padding:0; cursor:default;
+  background:linear-gradient(145deg, #fdf6e9, #e8dcc8);
+  box-shadow:0 4px 0 rgba(0,0,0,.4), 0 6px 12px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.8);
+}
+.ludo-die .ludo-die-grid{
+  position:absolute; inset:14%; display:grid; grid-template-columns:repeat(3,1fr); grid-template-rows:repeat(3,1fr);
+  place-items:center;
+}
+.ludo-die .pip{ width:62%; height:62%; border-radius:50%; opacity:0; }
+.ludo-die .pip.on{
+  opacity:1; background:var(--die-pip, #333);
+  box-shadow:inset 0 1px 1px rgba(0,0,0,.45), 0 1px 0 rgba(255,255,255,.5);
+}
+.ludo-die.pickable{ cursor:pointer; }
+.ludo-die.pickable:hover{ transform:translateY(-2px); }
+.ludo-die.selected{
+  border-color:var(--die-pip, var(--p2));
+  box-shadow:0 4px 0 rgba(0,0,0,.4), 0 0 12px 2px var(--die-pip, var(--p2)), inset 0 1px 0 rgba(255,255,255,.8);
+}
+.ludo-die.dim{ opacity:.4; }
+/* Roulis : 3 variantes (rotation + rebond, tonneaux, chute-rebond) — les
+   faces défilent en JS pendant ~1 s, l'immobilisation se fait en douceur. */
+.ludo-die.rolling.v0{ animation:ludoDiceTumble .95s cubic-bezier(.3,.7,.4,1) both; }
+.ludo-die.rolling.v1{ animation:ludoDiceSpinBounce .95s cubic-bezier(.35,.6,.3,1) both; }
+.ludo-die.rolling.v2{ animation:ludoDiceDropRoll .95s cubic-bezier(.3,.8,.35,1) both; }
+.ludo-dice-row .ludo-die:nth-child(2){ animation-delay:.07s; }
+.ludo-die.settle{ animation:ludoDiceSettle .28s ease both; }
+@keyframes ludoDiceTumble{
+  0%{ transform:translate(-26px,-34px) rotate(-160deg) scale(.8); }
+  38%{ transform:translate(8px,6px) rotate(40deg) scale(1.05); }
+  58%{ transform:translate(-4px,-10px) rotate(-14deg) scale(1); }
+  74%{ transform:translate(2px,3px) rotate(8deg); }
+  88%{ transform:translate(0,-3px) rotate(-3deg); }
+  100%{ transform:translate(0,0) rotate(0); }
+}
+@keyframes ludoDiceSpinBounce{
+  0%{ transform:translateY(-42px) rotate(300deg) scale(.7); }
+  45%{ transform:translateY(5px) rotate(-40deg) scale(1.08); }
+  64%{ transform:translateY(-12px) rotate(18deg) scale(.98); }
+  80%{ transform:translateY(3px) rotate(-6deg); }
+  92%{ transform:translateY(-2px) rotate(2deg); }
+  100%{ transform:translateY(0) rotate(0); }
+}
+@keyframes ludoDiceDropRoll{
+  0%{ transform:translate(30px,-28px) rotate(220deg) scale(.75); }
+  40%{ transform:translate(-6px,5px) rotate(-30deg) scale(1.06); }
+  62%{ transform:translate(4px,-8px) rotate(12deg); }
+  78%{ transform:translate(-2px,2px) rotate(-5deg); }
+  100%{ transform:translate(0,0) rotate(0); }
+}
+@keyframes ludoDiceSettle{ 0%{ transform:scale(1.12); } 100%{ transform:scale(1); } }
+/* Addition en chiffres romains : pastille sous les dés — cliquable quand la
+   somme est jouable (elle devient alors l'option sélectionnée). */
+.ludo-roman{
+  display:inline-block; padding:3px 10px; border-radius:99px; border:1.5px solid var(--line);
+  background:rgba(0,0,0,.45); color:var(--ink); font-family:'Space Mono'; font-weight:800;
+  font-size:clamp(10px, 1.8vw, 13px); letter-spacing:.04em; white-space:nowrap;
+  animation:popIn .25s ease both;
+}
+button.ludo-roman{ cursor:default; }
+button.ludo-roman.pickable{ cursor:pointer; border-color:var(--p2); }
+button.ludo-roman.pickable:hover{ background:rgba(255,209,102,.16); }
+button.ludo-roman.selected{
+  color:var(--ink-on-accent); background:linear-gradient(135deg, var(--p2), var(--p4));
+  border-color:transparent; box-shadow:0 0 10px rgba(255,209,102,.5);
+}
+/* Cases mystère « ? » : point d'interrogation doré discret, petit halo. */
+.ludo-cell.mystery{ display:flex; align-items:center; justify-content:center; }
+.ludo-cell.mystery::after{
+  content:"?"; font-family:'Bungee'; font-size:clamp(9px, 1.8vw, 14px); line-height:1;
+  color:rgba(255,209,102,.75); text-shadow:0 0 8px rgba(255,209,102,.5);
+  animation:ludoMysteryGlow 2.2s ease-in-out infinite;
+}
+@keyframes ludoMysteryGlow{ 0%,100%{ opacity:.55; } 50%{ opacity:1; } }
+/* Révélation d'une case mystère : pop bref au centre du plateau. */
+.ludo-mystery-pop{
+  position:absolute; inset:0; z-index:12; display:flex; align-items:center; justify-content:center;
+  pointer-events:none; animation:ludoMysteryPopLife 2.4s ease both;
+}
+.ludo-mystery-pop-text{
+  font-family:'Bungee'; font-size:clamp(22px, 5vw, 34px); color:#241c14;
+  background:linear-gradient(145deg, #ffe9a8, #f2c94c); border:3px solid #e8c357;
+  border-radius:18px; padding:8px 18px;
+  box-shadow:0 6px 0 rgba(0,0,0,.3), 0 0 26px rgba(232,195,87,.6);
+}
+@keyframes ludoMysteryPopLife{
+  0%{ opacity:0; transform:scale(.6); }
+  12%{ opacity:1; transform:scale(1.08); }
+  20%{ transform:scale(1); }
+  80%{ opacity:1; }
+  100%{ opacity:0; transform:scale(.94); }
+}
+@media (prefers-reduced-motion: reduce){
+  .ludo-die.rolling.v0, .ludo-die.rolling.v1, .ludo-die.rolling.v2, .ludo-die.settle{ animation:none; }
+  .ludo-cell.mystery::after{ animation:none; opacity:.85; }
+  .ludo-mystery-pop{ animation:ludoMysteryPopLife 2.4s step-end both; opacity:1; }
+  .ludo-roman{ animation:none; }
+}
 
 /* ===== Zone d'ARRIVÉE centrale élargie (zip 83) =====
    ~2,1 cases de côté, centrée sur la case centrale : quadrants aux 4
@@ -1096,29 +1301,36 @@ body.stage-focus .chat-panel{ right:auto; left:14px; }
 }
 
 /* ---------- Chromatik (jeu de cartes original) ---------- */
-/* Tour de table en ARC (retouche 2026-07) : sièges espacés et légèrement
-   décalés/inclinés selon leur position — on lit un demi-cercle autour de la
-   table plutôt qu'une rangée rigide. Le joueur local reste "en bas" (sa
-   main), les adversaires dessinent le haut de la table. */
-/* Réalignement (zip 83) : écart MINIMAL garanti plus large entre les
-   vignettes (18px au lieu de 12) pour que le chevron lumineux intercalé ait
-   toujours sa place, et row-gap séparé pour les retours à la ligne sur
-   petits écrans. */
+/* Refonte table 2026-07 : fini l'"arc" incliné — les vignettes de la rangée
+   du haut sont bien HORIZONTALES et alignées (2-3 joueurs, spectateurs).
+   À 2 joueurs : face-à-face Nord/Sud (adversaire unique centré en haut).
+   À 4 joueurs : disposition Nord/Sud/Est/Ouest (voir .chromatik-arena-four),
+   mon point de vue restant au Sud. */
 .chromatik-opponents{
   display:flex; flex-wrap:wrap; gap:14px clamp(18px, 5.5vw, 48px); justify-content:center;
-  align-items:flex-start; margin-bottom:20px; padding-top:4px;
+  align-items:center; margin-bottom:20px; padding-top:4px;
 }
-/* 2 adversaires : tous deux relevés vers l'extérieur. 3 adversaires : les
-   côtés descendent, le centre monte — l'arc se dessine. nth-of-type(div)
-   ignore les chevrons (des <span>) intercalés. */
-.chromatik-opponents.opp-2 > div.chromatik-opponent:nth-of-type(1){ transform:translateY(10px) rotate(-3deg); }
-.chromatik-opponents.opp-2 > div.chromatik-opponent:nth-of-type(2){ transform:translateY(10px) rotate(3deg); }
-.chromatik-opponents.opp-3 > div.chromatik-opponent:nth-of-type(1){ transform:translateY(20px) rotate(-4deg); }
-.chromatik-opponents.opp-3 > div.chromatik-opponent:nth-of-type(2){ transform:translateY(-2px); }
-.chromatik-opponents.opp-3 > div.chromatik-opponent:nth-of-type(3){ transform:translateY(20px) rotate(4deg); }
-/* Les chevrons suivent la pente de l'arc entre les sièges. */
-.chromatik-opponents.opp-3 > .chromatik-flow.mini{ margin-top:14px; }
-.chromatik-opponents.opp-2 > .chromatik-flow.mini{ margin-top:16px; }
+/* ----- Table à 4 : Nord / Ouest+table+Est / (Sud = ma main) ----- */
+.chromatik-arena-four{ display:flex; flex-direction:column; }
+.chromatik-north{ display:flex; justify-content:center; margin-bottom:10px; }
+.chromatik-mid{
+  display:flex; align-items:center; justify-content:center;
+  gap:clamp(10px, 2.5vw, 24px);
+}
+.chromatik-mid .chromatik-table{ flex:0 1 auto; margin:14px 0; }
+.chromatik-side{ flex:0 1 auto; min-width:0; display:flex; justify-content:center; }
+/* Vignettes latérales : même pilule que partout, mais compacte (le pseudo
+   se tronque plus court) pour ne jamais écraser la table au centre. */
+.chromatik-side .chromatik-opponent{ flex-wrap:wrap; justify-content:center; max-width:150px; row-gap:4px; }
+.chromatik-side .chromatik-opponent .name{ max-width:84px; }
+@media (max-width: 640px){
+  /* Écran étroit : plus de place pour Est/Ouest de part et d'autre de la
+     table — l'arène à 4 se replie en colonne (Nord, Ouest, table, Est),
+     chaque vignette restant bien lisible. */
+  .chromatik-mid{ flex-direction:column; gap:8px; }
+  .chromatik-side .chromatik-opponent{ max-width:none; }
+  .chromatik-side .chromatik-opponent .name{ max-width:110px; }
+}
 .chromatik-opponent{
   position:relative;
   display:flex; align-items:center; gap:6px; padding:7px 13px; border-radius:99px;
@@ -1284,7 +1496,7 @@ body.stage-focus .chat-panel{ right:auto; left:14px; }
    bien lisible au-dessus — effet de vraie pile posée sur la table plutôt
    qu'une carte unique flottante. Dimensions calées sur .size-lg pour que
    les cartes superposées (position:absolute) s'alignent exactement. */
-.chromatik-discard{ position:relative; width:72px; height:104px; }
+.chromatik-discard{ position:relative; width:80px; height:116px; }
 .chromatik-discard .chromatik-card{ position:absolute; top:0; left:0; }
 .chromatik-active-color{
   position:absolute; bottom:-8px; left:-8px; width:20px; height:20px; border-radius:50%;
@@ -1332,12 +1544,12 @@ body.stage-focus .chat-panel{ right:auto; left:14px; }
    - packed (19+)  : rangée UNIQUE à défilement latéral — on fait glisser la
      main comme de vraies cartes tenues trop nombreuses entre les doigts. */
 .chromatik-hand.crowded{ gap:4px; }
-.chromatik-hand.crowded .chromatik-card.size-sm{ width:44px; height:64px; font-size:15px; }
+.chromatik-hand.crowded .chromatik-card.size-sm{ width:48px; height:70px; font-size:16px; }
 .chromatik-hand.packed{
   flex-wrap:nowrap; overflow-x:auto; justify-content:flex-start;
   gap:4px; padding:10px 6px 12px; -webkit-overflow-scrolling:touch; scrollbar-width:thin;
 }
-.chromatik-hand.packed .chromatik-card.size-sm{ width:42px; height:60px; font-size:14px; }
+.chromatik-hand.packed .chromatik-card.size-sm{ width:46px; height:66px; font-size:15px; }
 /* Le zoom au survol serait rogné par l'overflow du conteneur : on le
    remplace par une simple levée, qui reste lisible dans la rangée. */
 .chromatik-hand.packed .chromatik-card.clickable:hover{ transform:translateY(-4px); }
@@ -1352,10 +1564,14 @@ body.stage-focus .chat-panel{ right:auto; left:14px; }
 }
 .chromatik-color-btn:hover{ transform:scale(1.12); }
 
+/* Cartes agrandies (demande 2026-07) : la zone de jeu gagnée par le mode
+   agrandi permet des cartes ~10 % plus grandes, chiffres/symboles grossis
+   d'autant (tailles em) et OMBRES PORTÉES plus contrastées pour la
+   lisibilité. */
 .chromatik-card{
   position:relative; border-radius:12px; display:flex; align-items:center; justify-content:center;
   background:var(--card-color, #444); color:#fff; font-family:'Space Mono'; font-weight:800;
-  box-shadow:0 4px 0 rgba(0,0,0,.35), 0 6px 12px rgba(0,0,0,.25); border:2.5px solid rgba(255,255,255,.55);
+  box-shadow:0 4px 0 rgba(0,0,0,.45), 0 7px 14px rgba(0,0,0,.35); border:2.5px solid rgba(255,255,255,.55);
   transition:transform .15s ease;
   flex:none;
 }
@@ -1363,9 +1579,9 @@ body.stage-focus .chat-panel{ right:auto; left:14px; }
    petit pour montrer 4 mains complètes, mais vraies couleurs/valeurs. */
 .chromatik-card.size-xs{ width:27px; height:39px; font-size:12px; border-radius:7px; border-width:1.5px; box-shadow:0 2px 0 rgba(0,0,0,.3); }
 .chromatik-card.size-xs .chromatik-card-corner{ display:none; }
-.chromatik-card.size-sm{ width:52px; height:76px; font-size:18px; }
-.chromatik-card.size-md{ width:60px; height:88px; font-size:20px; }
-.chromatik-card.size-lg{ width:72px; height:104px; font-size:26px; }
+.chromatik-card.size-sm{ width:58px; height:84px; font-size:20px; }
+.chromatik-card.size-md{ width:66px; height:96px; font-size:22px; }
+.chromatik-card.size-lg{ width:80px; height:116px; font-size:29px; }
 .chromatik-card.clickable{ cursor:pointer; }
 .chromatik-card.clickable{ transform-origin:bottom center; }
 .chromatik-card.clickable:hover{ transform:scale(1.09); }
@@ -1391,8 +1607,9 @@ body.stage-focus .chat-panel{ right:auto; left:14px; }
 }
 .chromatik-card.wild4 .chromatik-card-main,
 .chromatik-card.wild4 .chromatik-card-corner{ text-shadow:0 1px 2px rgba(255,255,255,.7); }
-.chromatik-card-corner{ position:absolute; top:4px; left:6px; font-size:.45em; opacity:.85; }
-.chromatik-card-main{ text-shadow:0 2px 3px rgba(0,0,0,.4); }
+.chromatik-card-corner{ position:absolute; top:4px; left:6px; font-size:.45em; opacity:.9; text-shadow:0 1px 2px rgba(0,0,0,.55); }
+/* Ombre du symbole central renforcée (lisibilité 2026-07). */
+.chromatik-card-main{ text-shadow:0 2px 4px rgba(0,0,0,.6); }
 .chromatik-card.back{
   background:repeating-linear-gradient(135deg, #2a2650, #2a2650 6px, #322c60 6px, #322c60 12px);
   border-color:rgba(255,255,255,.25);
@@ -1453,6 +1670,17 @@ body.stage-focus .chat-panel{ right:auto; left:14px; }
 }
 .chromatik-final-hand .chromatik-card{ animation:cardPop .3s ease both; }
 
+/* ----- Mode agrandi : la table Chromatik respire en VERTICAL (2026-07) ---
+   L'en-tête masqué libère de la hauteur : plutôt que de la laisser vide,
+   les trois étages de la table (adversaires / tapis / main) s'espacent —
+   jusqu'au point où le zoom automatique du mode agrandi (stageScale)
+   reprendrait la main si ça devait déborder : jamais de scroll. */
+body.stage-focus .chromatik-panel .chromatik-opponents{ margin-bottom:30px; }
+body.stage-focus .chromatik-panel .chromatik-table{ margin:24px 0 28px; }
+body.stage-focus .chromatik-panel .chromatik-north{ margin-bottom:20px; }
+body.stage-focus .chromatik-panel .chromatik-mid{ gap:clamp(16px, 3.5vw, 40px); }
+body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
+
 @media (prefers-reduced-motion: reduce){
   .chromatik-opponent.active{ animation:none; }
   .chromatik-uno-warn{ animation:none; }
@@ -1503,11 +1731,16 @@ body.stage-focus .chat-panel{ right:auto; left:14px; }
   font-family:'Space Mono', monospace; color:var(--acc-tenk);
   text-shadow:0 0 18px rgba(79,209,255,.85), 0 0 44px rgba(255,95,176,.35);
 }
-/* Gold Mines : or de chercheur sur pénombre de mine. */
-.game-countdown.gm{ background:rgba(18,10,4,.6); }
+/* Gold Mines : or de chercheur sur pénombre de mine.
+   Lisibilité (correctif 2026-07) : l'ancien halo doré (blur 16px, alpha .75)
+   "mangeait" littéralement le contour des chiffres — remplacé par une ombre
+   portée NETTE (relief) + un halo résiduel très discret, et un voile de fond
+   plus opaque pour renforcer le contraste. */
+.game-countdown.gm{ background:rgba(18,10,4,.74); }
 .game-countdown.gm .game-countdown-digit{
   font-family:'Bungee'; color:var(--acc-goldmines);
-  text-shadow:0 0 16px rgba(242,201,76,.75), 0 5px 0 rgba(90,55,10,.85);
+  -webkit-text-stroke:1.5px rgba(60,36,6,.9);
+  text-shadow:0 5px 0 rgba(90,55,10,.9), 0 0 5px rgba(242,201,76,.25);
 }
 /* Président : vert tapis de jeu, chiffres pleins d'aplomb. */
 .game-countdown.pres{ background:rgba(6,20,12,.55); }
@@ -2069,8 +2302,15 @@ body.stage-focus .chat-panel{ right:auto; left:14px; }
   object-fit:cover; border-radius:20px;
   /* Fondu croisé vers le jeu à la fin : pas de coupure nette. */
   transition:opacity .6s ease;
+  /* Fondu enchaîné AUSSI au lancement (demande 2026-07) : la vidéo d'intro
+     apparaissait d'un coup au clic sur Jouer — elle fond désormais depuis
+     l'écran d'attente, symétrique du fondu de sortie vers le jeu. */
+  animation:worldleIntroFade .55s ease both;
 }
 .video-stage-clip.fading{ opacity:0; }
+@media (prefers-reduced-motion: reduce){
+  .video-stage-clip{ animation:none; }
+}
 .video-stage-content{ position:relative; animation:worldleIntroFade .6s ease both; }
 @keyframes worldleIntroFade{ from{ opacity:0; } to{ opacity:1; } }
 
@@ -2532,7 +2772,7 @@ body.stage-focus .chat-panel{ right:auto; left:14px; }
    (recommandation ~44px minimum, ici dépassée), et la pastille "hors
    ligne" ne dépend jamais du survol. */
 @media (pointer: coarse){
-  .chromatik-card.size-sm{ width:60px; height:88px; font-size:20px; }
+  .chromatik-card.size-sm{ width:64px; height:94px; font-size:21px; }
   .rules-info-btn{ opacity:.8; } /* pas de :hover au doigt : plus visible d'office */
 }
 
@@ -2925,9 +3165,13 @@ body.stage-focus .chat-panel{ right:auto; left:14px; }
 .pb-fav-del{ opacity:.6; }
 .pb-fav-del:hover{ opacity:1; }
 
-.pb-grid{ display:flex; flex-direction:column; gap:8px; max-width:520px; margin:0 auto; }
-.pb-row{ display:flex; align-items:center; gap:10px; }
-.pb-cat{ flex:0 0 44%; font-size:13px; font-weight:700; text-align:right; }
+/* Grille d'écriture (retouche 2026-07) : les champs étaient poussés trop à
+   DROITE par la colonne de libellés (44 %, alignée à droite). La colonne
+   catégorie rétrécit (36 %, alignée à GAUCHE) et sa police grossit
+   (13 -> 15px) — l'ensemble libellé+champ se lit recentré dans le panneau. */
+.pb-grid{ display:flex; flex-direction:column; gap:8px; max-width:560px; margin:0 auto; }
+.pb-row{ display:flex; align-items:center; gap:12px; }
+.pb-cat{ flex:0 0 36%; font-size:15px; font-weight:700; text-align:left; line-height:1.3; }
 .pb-row input{ flex:1; min-width:0; margin:0; } /* hérite du style global >=16px : pas de zoom iOS */
 
 .pb-tablewrap{ overflow-x:auto; -webkit-overflow-scrolling:touch; border-radius:14px; }
@@ -2966,9 +3210,20 @@ body.stage-focus .chat-panel{ right:auto; left:14px; }
 .pb-cell.clickable{ cursor:pointer; }
 .pb-cell.clickable:hover{ transform:scale(1.03); }
 .pb-totalrow td{ text-align:center; font-family:'Space Mono'; font-size:15px; padding:6px; color:var(--p3); }
+/* Bonus hôte +1 (demande 2026-07) : étoile discrète en bas à droite de la
+   case, visible par l'hôte seul en phase de revue — s'allume quand le bonus
+   est accordé (la case gagne aussi un léger liseré doré via .bonused). */
+.pb-bonus-btn{
+  position:absolute; bottom:2px; right:4px; padding:1px 3px; border:none; background:none;
+  font-size:12px; line-height:1; cursor:pointer; opacity:.3; filter:grayscale(1);
+  transition:opacity .15s ease, transform .12s ease, filter .15s ease;
+}
+.pb-bonus-btn:hover{ opacity:1; filter:none; transform:scale(1.25); }
+.pb-bonus-btn.on{ opacity:1; filter:none; }
+.pb-cell.bonused{ box-shadow:0 0 0 1.5px rgba(255,209,102,.55) inset; }
 
 @media (max-width: 520px){
-  .pb-cat{ flex-basis:40%; font-size:12px; }
+  .pb-cat{ flex-basis:38%; font-size:13px; }
   .pb-cell{ min-width:84px; }
 }
 @media (hover: none){

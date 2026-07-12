@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { saveGameState, readGameState, resetRoomToLobby } from "@/lib/gameSync";
 import Crossfade from "@/components/Crossfade";
-import { CATEGORY_POOL, CAT_COUNT_OPTIONS, DEFAULT_CAT_COUNT, drawCategories, drawOne, catLabel } from "@/lib/petitbacCategories";
+import { CATEGORY_POOL, CAT_COUNT_OPTIONS, DEFAULT_CAT_COUNT, drawCategories, drawOne, catLabel, guessIcon } from "@/lib/petitbacCategories";
 import { loadFavorites, saveFavorite, deleteFavorite } from "@/lib/petitbacFavorites";
 
 /* ==========================================================================
@@ -68,6 +68,11 @@ import { loadFavorites, saveFavorite, deleteFavorite } from "@/lib/petitbacFavor
 
 const GAME_ID = "petitbac";
 
+// Jouable de 2 à 10 joueurs HUMAINS (demande 2026-07) : au-delà de 10, les
+// premiers arrivés jouent, les suivants regardent (spectateurs) — le tableau
+// de correction resterait illisible à 12+ colonnes.
+const MAX_SEATS = 10;
+
 // Lettres classiques du petit bac : on écarte K, Q, W, X, Y, Z (trop
 // punitives dans les deux langues).
 const LETTERS = "ABCDEFGHIJLMNOPRSTUV".split("");
@@ -89,13 +94,16 @@ function pickLetter(used) {
 /* Calcul DÉTERMINISTE des statuts et points d'une manche, identique chez
    tous les clients (aucun tirage, aucune horloge) :
    - status par case : "empty" | "ok" | "no"
-   - pts par case : 0 / 1 / 4 selon le barème libre décrit en tête (retouche
-     2026-07 : une réponse unique/rare vaut désormais 4 pts, était 2 ; les
-     réponses partagées restent à 1 pt chacun, inchangé).
+   - pts par case, BARÈME 2026-07 (demande explicite) : réponse correcte
+     unique +2, réponse identique à un autre joueur +1 chacun, vide ou
+     refusée 0 — et l'HÔTE peut accorder un BONUS de +1 sur n'importe quelle
+     réponse acceptée (réponse brillante/originale, tranché à voix haute).
    `categories` = liste de catégories de LA manche (choisies sur l'écran
    d'accueil, diffusées dans l'état réseau — voir startRound plus bas).
-   `overrides` = décisions manuelles de l'hôte ({ "pid|catId": "ok"|"no" }). */
-function computeReview(seats, answers, letter, overrides, categories) {
+   `overrides` = décisions manuelles de l'hôte ({ "pid|catId": "ok"|"no" }).
+   `bonuses`   = bonus hôte ({ "pid|catId": true }), +1 par case acceptée. */
+function computeReview(seats, answers, letter, overrides, categories, bonuses) {
+  const bon = bonuses || {};
   const cats = categories || [];
   const L = letter.toLowerCase();
   const cells = {}; // "pid|cat" -> { raw, status }
@@ -126,7 +134,7 @@ function computeReview(seats, answers, letter, overrides, categories) {
     for (const seat of seats) {
       const kk = "" + seat.id + "|" + cat.id;
       const c = cells[kk];
-      const p = c.status === "ok" ? (counts[c.n] > 1 ? 1 : 4) : 0;
+      const p = c.status === "ok" ? (counts[c.n] > 1 ? 1 : 2) + (bon[kk] ? 1 : 0) : 0;
       pts[kk] = p;
       totals[seat.id] += p;
     }
@@ -142,6 +150,7 @@ export default function PetitBacGame({ room, me, isHost, players, t, lang, onFin
   const [stage, setStage] = useState("write");
   const [answers, setAnswers] = useState({});      // pid -> {catId: raw}
   const [overrides, setOverrides] = useState({});  // "pid|cat" -> "ok"|"no"
+  const [bonuses, setBonuses] = useState({});      // "pid|cat" -> true (bonus hôte +1)
   const [deadline, setDeadline] = useState(null);  // ts hôte du couperet 10s
   const [firstBy, setFirstBy] = useState(null);
   const [gains, setGains] = useState(null);        // gelés au stage "done"
@@ -176,13 +185,13 @@ export default function PetitBacGame({ room, me, isHost, players, t, lang, onFin
 
   useEffect(() => { draftRef.current = draft; }, [draft]);
   useEffect(() => {
-    stateRef.current = { seats, letter, used, stage, answers, overrides, deadline, firstBy, gains, categories };
-  }, [seats, letter, used, stage, answers, overrides, deadline, firstBy, gains, categories]);
+    stateRef.current = { seats, letter, used, stage, answers, overrides, bonuses, deadline, firstBy, gains, categories };
+  }, [seats, letter, used, stage, answers, overrides, bonuses, deadline, firstBy, gains, categories]);
 
   function applyLocalState(s, opts = {}) {
     setSeats(s.seats || []); setLetter(s.letter || null); setUsed(s.used || []);
     setStage(s.stage || "write"); setAnswers(s.answers || {});
-    setOverrides(s.overrides || {}); setDeadline(s.deadline || null);
+    setOverrides(s.overrides || {}); setBonuses(s.bonuses || {}); setDeadline(s.deadline || null);
     setFirstBy(s.firstBy || null); setGains(s.gains || null);
     setCategories(s.categories || []);
     if (opts.newRound) { setDraft({}); submittedRef.current = false; savedResultRef.current = false; }
@@ -216,6 +225,11 @@ export default function PetitBacGame({ room, me, isHost, players, t, lang, onFin
     ch.on("broadcast", { event: "mark_attempt" }, ({ payload }) => {
       if (!isHost) return;
       hostToggleMark(payload.cellKey);
+    });
+
+    ch.on("broadcast", { event: "bonus_attempt" }, ({ payload }) => {
+      if (!isHost) return;
+      hostToggleBonus(payload.cellKey);
     });
 
     ch.subscribe(status => {
@@ -283,7 +297,7 @@ export default function PetitBacGame({ room, me, isHost, players, t, lang, onFin
 
   function hostGoReview(s) {
     clearTimeout(failsafeTimer.current);
-    const next = { ...s, stage: "review", deadline: null, overrides: {} };
+    const next = { ...s, stage: "review", deadline: null, overrides: {}, bonuses: {} };
     broadcastNewState(next);
   }
 
@@ -311,16 +325,33 @@ export default function PetitBacGame({ room, me, isHost, players, t, lang, onFin
     const [pid, catId] = cellKey.split("|");
     const raw = (s.answers[pid] || {})[catId] || "";
     if (!norm(raw)) return; // une case vide reste à 0, rien à arbitrer
-    const { cells } = computeReview(s.seats, s.answers, s.letter, s.overrides, s.categories);
+    const { cells } = computeReview(s.seats, s.answers, s.letter, s.overrides, s.categories, s.bonuses);
     const cur = cells[cellKey]?.status;
     const overrides = { ...s.overrides, [cellKey]: cur === "ok" ? "no" : "ok" };
-    broadcastNewState({ ...s, overrides });
+    // Une réponse refusée perd son éventuel bonus (jamais de +1 sur un 0).
+    const bonuses = { ...s.bonuses };
+    if (cur === "ok") delete bonuses[cellKey];
+    broadcastNewState({ ...s, overrides, bonuses });
+  }
+
+  // Bonus hôte +1 (demande 2026-07) : l'hôte peut distinguer une réponse
+  // particulièrement brillante d'un +1 supplémentaire — uniquement sur une
+  // case ACCEPTÉE, à bascule (re-cliquer retire le bonus).
+  function hostToggleBonus(cellKey) {
+    const s = stateRef.current;
+    if (!s || s.stage !== "review") return;
+    const { cells } = computeReview(s.seats, s.answers, s.letter, s.overrides, s.categories, s.bonuses);
+    if (cells[cellKey]?.status !== "ok") return;
+    const bonuses = { ...s.bonuses };
+    if (bonuses[cellKey]) delete bonuses[cellKey];
+    else bonuses[cellKey] = true;
+    broadcastNewState({ ...s, bonuses });
   }
 
   function hostValidateScores() {
     const s = stateRef.current;
     if (!s || s.stage !== "review") return;
-    const { totals } = computeReview(s.seats, s.answers, s.letter, s.overrides, s.categories);
+    const { totals } = computeReview(s.seats, s.answers, s.letter, s.overrides, s.categories, s.bonuses);
     broadcastNewState({ ...s, stage: "done", gains: totals });
   }
 
@@ -329,13 +360,15 @@ export default function PetitBacGame({ room, me, isHost, players, t, lang, onFin
   // précédente (rejouer garde la même liste, seule la lettre change).
   function startRound(prev, cats) {
     const usedPrev = prev?.used || [];
+    // Plafond de 10 sièges (demande 2026-07) : les joueurs au-delà des 10
+    // premiers suivent la manche en spectateurs.
     const seatsNow = prev?.seats
-      || players.map(p => ({ id: p.profile_id, username: p.profiles?.username, avatar: p.profiles?.avatar }));
+      || players.slice(0, MAX_SEATS).map(p => ({ id: p.profile_id, username: p.profiles?.username, avatar: p.profiles?.avatar }));
     const L = pickLetter(usedPrev);
     const initial = {
       seats: seatsNow, letter: L,
       used: (usedPrev.length >= LETTERS.length ? [] : usedPrev).concat(L),
-      stage: "write", answers: {}, overrides: {}, deadline: null, firstBy: null, gains: null,
+      stage: "write", answers: {}, overrides: {}, bonuses: {}, deadline: null, firstBy: null, gains: null,
       categories: cats || prev?.categories || [],
     };
     autoStartedRef.current = true;
@@ -360,7 +393,19 @@ export default function PetitBacGame({ room, me, isHost, players, t, lang, onFin
   function customizeOne(idx, text) {
     setSetupCandidates(cands => {
       const next = cands.slice();
-      next[idx] = { ...next[idx], custom: text };
+      const cur = next[idx];
+      // Emoji "intelligent" (demande 2026-07) : l'emoji suit la NATURE de la
+      // saisie de l'hôte — "Titre de chanson" -> "Prénom féminin" remplace
+      // 🎵 par 👩 automatiquement. baseIcon conserve l'emoji d'origine pour
+      // le restaurer si l'hôte efface son texte ou si rien ne matche mieux.
+      const baseIcon = cur.baseIcon || cur.icon;
+      const guessed = text.trim() ? guessIcon(text) : null;
+      next[idx] = {
+        ...cur,
+        custom: text,
+        baseIcon,
+        icon: guessed && guessed !== "✏️" ? guessed : (text.trim() ? (guessed || baseIcon) : baseIcon),
+      };
       return next;
     });
   }
@@ -427,7 +472,12 @@ export default function PetitBacGame({ room, me, isHost, players, t, lang, onFin
   const isPlayer = !!seats.find(x => x.id === me.id);
   const iSubmitted = submittedRef.current || !!answers[me.id];
   const review = stage !== "write" && letter
-    ? computeReview(seats, answers, letter, overrides, categories) : null;
+    ? computeReview(seats, answers, letter, overrides, categories, bonuses) : null;
+
+  function askBonus(cellKey) {
+    if (!isHost) return;
+    channelRef.current?.send({ type: "broadcast", event: "bonus_attempt", payload: { cellKey } });
+  }
 
   let content;
 
@@ -439,6 +489,11 @@ export default function PetitBacGame({ room, me, isHost, players, t, lang, onFin
       content = (
         <div className="pb-setup">
           <p className="pb-setup-lead">{t("pbSetupCountLead")}</p>
+          {players.length > MAX_SEATS && (
+            <p className="muted" style={{ textAlign: "center", fontSize: 12, margin: "0 0 12px" }}>
+              {t("pbMaxSeatsNote")}
+            </p>
+          )}
           <div className="pb-setup-counts">
             {CAT_COUNT_OPTIONS.map(n => (
               <button key={n} className={"btn" + (n === DEFAULT_CAT_COUNT ? "" : " ghost")} style={{ width: "auto", padding: "12px 20px" }} onClick={() => pickCount(n)}>
@@ -599,15 +654,32 @@ export default function PetitBacGame({ room, me, isHost, players, t, lang, onFin
                     const kk = "" + s.id + "|" + cat.id;
                     const cell = review.cells[kk];
                     const p = review.pts[kk];
+                    const hasBonus = !!bonuses[kk];
+                    // Barème 2026-07 : partagé = 1 (2 avec bonus), unique = 2
+                    // (3 avec bonus) — la classe suit le statut de PARTAGE,
+                    // pas le total (le bonus a sa propre étoile).
+                    const isShared = cell.status === "ok" && p - (hasBonus ? 1 : 0) === 1;
                     const cls = "pb-cell "
-                      + (cell.status === "empty" ? "empty" : cell.status === "no" ? "refused" : p === 1 ? "shared" : "unique")
+                      + (cell.status === "empty" ? "empty" : cell.status === "no" ? "refused" : isShared ? "shared" : "unique")
+                      + (hasBonus ? " bonused" : "")
                       + (isHost && stage === "review" && cell.status !== "empty" ? " clickable" : "");
                     return (
                       <td key={kk} className={cls}
                         onClick={() => stage === "review" && askMark(kk)}
                         title={isHost && stage === "review" && cell.status !== "empty" ? t("pbTapToToggle") : undefined}>
                         <span className="pb-answer">{cell.raw || "—"}</span>
-                        <span className="pb-pts">{cell.status === "no" ? "🚫" : p > 0 ? "+" + p : "0"}</span>
+                        <span className="pb-pts">{cell.status === "no" ? "🚫" : p > 0 ? "+" + p : "0"}{hasBonus ? " ⭐" : ""}</span>
+                        {/* Bonus hôte +1 (demande 2026-07) : petite étoile
+                            cliquable, distincte du basculement accepté/refusé
+                            (stopPropagation) — hôte, en revue, cases OK. */}
+                        {isHost && stage === "review" && cell.status === "ok" && (
+                          <button
+                            type="button"
+                            className={"pb-bonus-btn" + (hasBonus ? " on" : "")}
+                            title={t("pbBonusTip")}
+                            onClick={e => { e.stopPropagation(); askBonus(kk); }}
+                          >⭐</button>
+                        )}
                       </td>
                     );
                   })}

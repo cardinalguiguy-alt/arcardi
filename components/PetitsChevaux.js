@@ -31,6 +31,25 @@ const COLORS = {
 const COLOR_ORDER = ["red", "green", "yellow", "blue"];
 const SAFE_ABS = new Set([0, 8, 14, 22, 28, 36, 42, 50]);
 
+// ===== Cases MYSTÈRE « ? » (2026-07) =====
+// 8 cases fixes réparties sur la piste commune (jamais un départ ni une
+// case sûre) : y ATTERRIR — pile — révèle un bonus ou un malus au hasard
+// (tiré par l'hôte, voir MYSTERY_KINDS/hostHandleMove). Positions choisies
+// à mi-chemin entre les étoiles pour rythmer chaque quart de plateau.
+const MYSTERY_ABS = new Set([4, 11, 18, 25, 32, 39, 46, 53]);
+// Effets possibles (équiprobables) — pensés pour pimenter sans casser :
+// - boost    : le pion qui vient d'atterrir avance de 3 cases en plus ;
+// - setback  : il recule de 4 cases (jamais plus bas que la case 1) ;
+// - oppOneDie: le joueur SUIVANT ne lancera qu'UN dé à son prochain tour ;
+// - reroll   : relance immédiate (comme un 6) une fois le tour fini.
+const MYSTERY_KINDS = ["boost", "setback", "oppOneDie", "reroll"];
+
+// Minuteur de COUP (2026-07) : 20 s pour jouer après chaque tirage,
+// réinitialisé à chaque déplacement (un coup = 20 s pleines). Dépassement =
+// tour passé. Le décompte ne démarre qu'après l'animation de lancer.
+const MOVE_MS = 20000;
+const ROLL_ANIM_MS = 950;
+
 // Attribution des couleurs selon le nombre de joueurs (retouche 2026-07 /
 // zip 83) : en 1 CONTRE 1, les deux joueurs partent DIAGONALEMENT opposés
 // (rouge haut-gauche / jaune bas-droite — départs distants d'exactement une
@@ -45,6 +64,15 @@ function colorsForCount(count) {
 // arrivés (steps = 61), en mini-grille 2×2. Quadrants orientés comme les
 // enclos : rouge NO, vert NE, jaune SE, bleu SO.
 const GOAL_QUADRANT = { red: [6.55, 6.55], green: [6.55, 7.55], yellow: [7.55, 7.55], blue: [7.55, 6.55] };
+
+// Ancrage du PLATEAU DE DÉS (2026-07) : près du camp du joueur dont c'est
+// le tour (même coin que son enclos), en % du plateau.
+const DICE_TRAY_POS = {
+  red:    { top: "13%", left: "13%" },
+  green:  { top: "13%", right: "13%" },
+  yellow: { bottom: "13%", right: "13%" },
+  blue:   { bottom: "13%", left: "13%" },
+};
 
 // --- Classification statique des 225 cases du plateau (calculée une seule fois) ---
 const CELL_TYPE = {};
@@ -66,8 +94,9 @@ for (let r = 0; r < 15; r++) {
     CELL_TYPE[r + "_" + c] = type;
   }
 }
-// Cases sûres (étoiles) en coordonnées, pour l'affichage
+// Cases sûres (étoiles) et cases mystère (?) en coordonnées, pour l'affichage
 const SAFE_CELLS = new Set([...SAFE_ABS].map(i => TRACK[i].join("_")));
+const MYSTERY_CELLS = new Set([...MYSTERY_ABS].map(i => TRACK[i].join("_")));
 
 function absIndex(color, steps) {
   return (COLORS[color].start + steps - 1) % 56;
@@ -78,13 +107,15 @@ function cellFor(color, steps) {
   if (steps <= 61) return COLORS[color].home[steps - 56];
   return null;
 }
-function canMoveToken(steps, roll) {
-  if (steps === 0) return roll === 6;
+// Sortie d'enclos : uniquement avec un dé affichant 6 (JAMAIS la somme —
+// règle conservée du jeu à un dé, adaptée : le 6 doit être lu sur UN dé).
+function canMoveToken(steps, roll, isSum) {
+  if (steps === 0) return roll === 6 && !isSum;
   if (steps >= 61) return false;
   return steps + roll <= 61;
 }
-function movableIndices(tokensOfColor, roll) {
-  return tokensOfColor.map((s, i) => i).filter(i => canMoveToken(tokensOfColor[i], roll));
+function movableIndices(tokensOfColor, roll, isSum) {
+  return tokensOfColor.map((s, i) => i).filter(i => canMoveToken(tokensOfColor[i], roll, isSum));
 }
 // Applique un mouvement sur une copie profonde de `tokens` ; renvoie le
 // nouvel état, la liste des captures ([couleur, index]) et si la couleur
@@ -113,10 +144,78 @@ function applyMove(tokens, color, tokenIdx, roll) {
   const won = next[color].every(s => s === 61);
   return { tokens: next, captured, won };
 }
+// Recul (case mystère "setback") : -4 cases sur la piste, plancher à la
+// case 1 — capture à l'arrivée comme un coup normal (hors case sûre).
+function applySetback(tokens, color, tokenIdx) {
+  const next = {};
+  for (const c of COLOR_ORDER) next[c] = tokens[c].slice();
+  const steps = next[color][tokenIdx];
+  if (steps < 1 || steps > 55) return { tokens: next, captured: [] };
+  const newSteps = Math.max(1, steps - 4);
+  const captured = [];
+  const abs = absIndex(color, newSteps);
+  if (!SAFE_ABS.has(abs)) {
+    for (const other of COLOR_ORDER) {
+      if (other === color) continue;
+      next[other].forEach((s, i) => {
+        if (s >= 1 && s <= 55 && absIndex(other, s) === abs) {
+          captured.push([other, i]);
+          next[other][i] = 0;
+        }
+      });
+    }
+  }
+  next[color][tokenIdx] = newSteps;
+  return { tokens: next, captured };
+}
 function emptyTokens() {
   const t = {};
   for (const c of COLOR_ORDER) t[c] = [0, 0, 0, 0];
   return t;
+}
+
+// Chiffres romains 1-12 (affichage de l'addition des dés : "III + V = VIII").
+const ROMANS = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII"];
+function toRoman(n) { return ROMANS[n] || String(n); }
+
+// Plan des coups légaux pour un tirage : indices jouables par dé + par la
+// somme (somme = un SEUL déplacement de a+b, uniquement si les deux dés
+// sont encore inutilisés — jamais pour sortir de l'enclos).
+function buildPlan(tokensOfColor, dice) {
+  const d0 = dice.used[0] ? [] : movableIndices(tokensOfColor, dice.a, false);
+  const d1 = dice.b == null || dice.used[1] ? [] : movableIndices(tokensOfColor, dice.b, false);
+  const sum = dice.b != null && !dice.used[0] && !dice.used[1]
+    ? movableIndices(tokensOfColor, dice.a + dice.b, true)
+    : [];
+  return { d0, d1, sum };
+}
+function planHasMove(plan) {
+  return plan.d0.length > 0 || plan.d1.length > 0 || plan.sum.length > 0;
+}
+
+// ----- Dé visuel : pips en grille 3×3, colorés à la couleur du camp -----
+const PIP_MAP = {
+  1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8],
+};
+function DieFace({ value, colorVar, size, selected, dim, onClick, animClass }) {
+  return (
+    <button
+      type="button"
+      className={
+        "ludo-die" + (animClass ? " " + animClass : "") + (selected ? " selected" : "")
+        + (dim ? " dim" : "") + (onClick ? " pickable" : "")
+      }
+      style={{ "--die-pip": `var(${colorVar})`, width: size, height: size }}
+      onClick={onClick || undefined}
+      disabled={!onClick}
+    >
+      <span className="ludo-die-grid">
+        {Array.from({ length: 9 }, (_, i) => (
+          <i key={i} className={PIP_MAP[value]?.includes(i) ? "pip on" : "pip"} />
+        ))}
+      </span>
+    </button>
+  );
 }
 
 export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFinish }) {
@@ -125,21 +224,32 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
   const [colorOfPlayer, setColorOfPlayer] = useState({}); // profile_id -> couleur
   const [tokens, setTokens] = useState(emptyTokens());
   const [turnIdx, setTurnIdx] = useState(0);
+  // DEUX DÉS (2026-07) : dice = { a, b (null si tour à un dé), used:[bool,
+  // bool], rollKey } | null. movablePlan = { d0, d1, sum } (indices de pions
+  // jouables par option). effects = malus/bonus persistants par couleur.
   const [dice, setDice] = useState(null);
-  const [movable, setMovable] = useState([]);
+  const [movablePlan, setMovablePlan] = useState(null);
+  const [effects, setEffects] = useState({});
+  const [moveDeadline, setMoveDeadline] = useState(null);
   const [lastMoved, setLastMoved] = useState(null); // { color, tokenIdx } pour l'anim
   const [lastEvent, setLastEvent] = useState(null); // texte de statut transitoire
   const [winner, setWinner] = useState(null);       // null | couleur
   const [selected, setSelected] = useState([]);     // sélection du picker (>4 joueurs)
   const [myGain, setMyGain] = useState(0);
   const [channelReady, setChannelReady] = useState(false);
-  const [rolling, setRolling] = useState(false);
+  // Choix LOCAL du dé à jouer (0 | 1 | "sum") — jamais diffusé : seul le
+  // move_attempt (pion + dé) part en réseau.
+  const [selectedDie, setSelectedDie] = useState(null);
+  // Animation de lancer : phase locale ("rolling" pendant ~1 s, puis
+  // "settled"), avec faces aléatoires qui défilent pendant le roulis.
+  const [rollAnim, setRollAnim] = useState(null); // { key, phase, faces:[a,b], variant }
+  const [now, setNow] = useState(() => Date.now());
   // Zone d'arrivée (zip 83) : rayons de lumière tournants pendant 5 s quand
   // un pion vient d'arriver au centre — { key, color } ou null.
   const [goalBurst, setGoalBurst] = useState(null);
 
   const channelRef = useRef(null);
-  const stateRef = useRef({ tokens, order, turnIdx, dice, movable, winner });
+  const stateRef = useRef({ tokens, order, turnIdx, dice, movablePlan, effects, winner });
   const savedResultRef = useRef(false);
   const autoStartedRef = useRef(false);
   const restoredRef = useRef(false);
@@ -148,11 +258,83 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
   // gardent les compteurs de 6 d'affilée en dehors du cycle de rendu React.
   const colorRef = useRef({});
   const sixesCountRef = useRef({});
+  const moveTimerRef = useRef(null);   // couperet 20 s côté hôte
+  const rollAnimTimerRef = useRef(null);
+  const rollAnimIvRef = useRef(null);
 
   useEffect(() => {
-    stateRef.current = { tokens, order, turnIdx, dice, movable, winner };
-  }, [tokens, order, turnIdx, dice, movable, winner]);
+    stateRef.current = { tokens, order, turnIdx, dice, movablePlan, effects, winner };
+  }, [tokens, order, turnIdx, dice, movablePlan, effects, winner]);
   useEffect(() => { colorRef.current = colorOfPlayer; }, [colorOfPlayer]);
+
+  // Horloge d'affichage du compte à rebours de coup (250 ms suffit).
+  useEffect(() => {
+    if (!moveDeadline) return;
+    const iv = setInterval(() => setNow(Date.now()), 250);
+    return () => clearInterval(iv);
+  }, [moveDeadline]);
+
+  // Animation de lancer : déclenchée par CHAQUE nouveau rollKey reçu (tous
+  // les clients la voient, spectateurs compris). Trois variantes de roulis
+  // pour la variété (rollKey % 3), faces aléatoires pendant ~1 s, puis les
+  // vraies valeurs se posent.
+  useEffect(() => {
+    if (!dice || dice.rollKey == null) { setRollAnim(null); return; }
+    const key = dice.rollKey;
+    setRollAnim({ key, phase: "rolling", faces: [1 + Math.floor(Math.random() * 6), 1 + Math.floor(Math.random() * 6)], variant: key % 3 });
+    clearInterval(rollAnimIvRef.current);
+    rollAnimIvRef.current = setInterval(() => {
+      setRollAnim(prev => prev && prev.phase === "rolling"
+        ? { ...prev, faces: [1 + Math.floor(Math.random() * 6), 1 + Math.floor(Math.random() * 6)] }
+        : prev);
+    }, 90);
+    clearTimeout(rollAnimTimerRef.current);
+    rollAnimTimerRef.current = setTimeout(() => {
+      clearInterval(rollAnimIvRef.current);
+      setRollAnim({ key, phase: "settled", faces: null, variant: key % 3 });
+    }, ROLL_ANIM_MS);
+    return () => { clearInterval(rollAnimIvRef.current); clearTimeout(rollAnimTimerRef.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dice?.rollKey]);
+
+  // Choix par défaut du dé à jouer, recalculé quand le tirage ou le plan
+  // change : la somme si c'est la seule option, sinon le premier dé encore
+  // jouable — le joueur peut toujours cliquer un autre dé/la somme.
+  useEffect(() => {
+    if (!dice || !movablePlan) { setSelectedDie(null); return; }
+    setSelectedDie(prev => {
+      const valid = (d) => d === "sum" ? movablePlan.sum.length > 0
+        : d === 0 ? movablePlan.d0.length > 0
+        : d === 1 ? movablePlan.d1.length > 0 : false;
+      if (prev != null && valid(prev)) return prev;
+      if (movablePlan.d0.length) return 0;
+      if (movablePlan.d1.length) return 1;
+      if (movablePlan.sum.length) return "sum";
+      return null;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dice?.rollKey, movablePlan]);
+
+  function applyBroadcastState(payload) {
+    setTokens(payload.tokens);
+    setTurnIdx(payload.turnIdx);
+    setDice(payload.dice || null);
+    setMovablePlan(payload.movablePlan || null);
+    setEffects(payload.effects || {});
+    setMoveDeadline(payload.moveDeadline || null);
+    setLastMoved(payload.lastMoved);
+    setLastEvent(payload.lastEvent);
+    setWinner(payload.winner);
+    // Zone d'arrivée (zip 83) : si ce coup vient de faire ENTRER un pion
+    // au centre (61), déclenche les rayons tournants pendant 5 secondes.
+    if (payload.lastMoved) {
+      const { color: gbColor, tokenIdx: gbIdx } = payload.lastMoved;
+      if (payload.tokens?.[gbColor]?.[gbIdx] === 61) {
+        setGoalBurst({ key: Date.now(), color: gbColor });
+        timeouts.current.push(setTimeout(() => setGoalBurst(null), 5000));
+      }
+    }
+  }
 
   useEffect(() => {
     const ch = supabase.channel("ludo_" + room.id, { config: { broadcast: { self: true } } });
@@ -164,7 +346,9 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
       setTokens(emptyTokens());
       setTurnIdx(0);
       setDice(null);
-      setMovable([]);
+      setMovablePlan(null);
+      setEffects({});
+      setMoveDeadline(null);
       setLastMoved(null);
       setLastEvent(null);
       setWinner(null);
@@ -175,9 +359,11 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
       // pour "3 six d'affilée" dès le 1er ou 2e six de la revanche.
       setPhase("playing");
       if (isHost) {
+        clearTimeout(moveTimerRef.current);
         saveGameState(room.id, "ludo", {
-          phase: "playing", order: payload.order, colorOfPlayer: payload.colorOfPlayer,
-          tokens: emptyTokens(), turnIdx: 0, dice: null, movable: [], lastMoved: null, lastEvent: null, winner: null,
+          v2: true, phase: "playing", order: payload.order, colorOfPlayer: payload.colorOfPlayer,
+          tokens: emptyTokens(), turnIdx: 0, dice: null, movablePlan: null, effects: {},
+          moveDeadline: null, lastMoved: null, lastEvent: null, winner: null,
         });
       }
     });
@@ -193,28 +379,13 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
     });
 
     ch.on("broadcast", { event: "state" }, ({ payload }) => {
-      setTokens(payload.tokens);
-      setTurnIdx(payload.turnIdx);
-      setDice(payload.dice);
-      setMovable(payload.movable);
-      setLastMoved(payload.lastMoved);
-      setLastEvent(payload.lastEvent);
-      setWinner(payload.winner);
-      // Zone d'arrivée (zip 83) : si ce coup vient de faire ENTRER un pion
-      // au centre (61), déclenche les rayons tournants pendant 5 secondes —
-      // même rendu chez tous les clients, spectateurs compris. Jamais lors
-      // d'une restauration (on ne passe pas par cet événement).
-      if (payload.lastMoved) {
-        const { color: gbColor, tokenIdx: gbIdx } = payload.lastMoved;
-        if (payload.tokens?.[gbColor]?.[gbIdx] === 61) {
-          setGoalBurst({ key: Date.now(), color: gbColor });
-          timeouts.current.push(setTimeout(() => setGoalBurst(null), 5000));
-        }
-      }
+      applyBroadcastState(payload);
       if (isHost) {
         saveGameState(room.id, "ludo", {
-          phase: "playing", order: stateRef.current.order, colorOfPlayer: colorRef.current,
-          tokens: payload.tokens, turnIdx: payload.turnIdx, dice: payload.dice, movable: payload.movable,
+          v2: true, phase: "playing", order: stateRef.current.order, colorOfPlayer: colorRef.current,
+          tokens: payload.tokens, turnIdx: payload.turnIdx, dice: payload.dice || null,
+          movablePlan: payload.movablePlan || null, effects: payload.effects || {},
+          moveDeadline: payload.moveDeadline || null,
           lastMoved: payload.lastMoved, lastEvent: payload.lastEvent, winner: payload.winner,
         });
       }
@@ -225,16 +396,35 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
         setChannelReady(true);
         // Resynchronisation : une partie en cours (rechargement de page) est
         // restaurée immédiatement plutôt que d'attendre un message perdu.
+        // GARDE-FOU : une sauvegarde d'AVANT le passage aux deux dés (sans
+        // le drapeau v2) est ignorée — son format (dice numérique, movable
+        // à plat) ferait crasher le moteur ; on repart proprement du choix
+        // des joueurs plutôt que de restaurer un état incompatible.
         if (!restoredRef.current) {
           restoredRef.current = true;
           const saved = readGameState(room, "ludo");
-          if (saved) {
+          if (saved && saved.v2) {
             setOrder(saved.order); setColorOfPlayer(saved.colorOfPlayer);
-            setTokens(saved.tokens); setTurnIdx(saved.turnIdx); setDice(saved.dice);
-            setMovable(saved.movable); setLastMoved(saved.lastMoved); setLastEvent(saved.lastEvent);
+            setTokens(saved.tokens); setTurnIdx(saved.turnIdx);
+            setDice(saved.dice || null); setMovablePlan(saved.movablePlan || null);
+            setEffects(saved.effects || {}); setMoveDeadline(saved.moveDeadline || null);
+            setLastMoved(saved.lastMoved); setLastEvent(saved.lastEvent);
             setWinner(saved.winner);
             setPhase("playing");
             autoStartedRef.current = true;
+            // Reprise HÔTE avec un tirage en cours : rediffuse l'état avec
+            // une échéance fraîche et réarme le couperet 20 s (sans ça, le
+            // tour resterait figé pour tout le monde).
+            if (isHost && !saved.winner && saved.dice) {
+              const deadline = Date.now() + MOVE_MS;
+              broadcastState({
+                tokens: saved.tokens, turnIdx: saved.turnIdx, dice: saved.dice,
+                movablePlan: saved.movablePlan, effects: saved.effects || {},
+                moveDeadline: deadline, lastMoved: saved.lastMoved, lastEvent: saved.lastEvent,
+                winner: saved.winner,
+              });
+              armMoveTimer(deadline);
+            }
           }
         }
       }
@@ -242,6 +432,9 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
 
     return () => {
       timeouts.current.forEach(clearTimeout);
+      clearTimeout(moveTimerRef.current);
+      clearTimeout(rollAnimTimerRef.current);
+      clearInterval(rollAnimIvRef.current);
       supabase.removeChannel(ch);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -253,7 +446,9 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
       tokens: patch.tokens ?? s.tokens,
       turnIdx: patch.turnIdx ?? s.turnIdx,
       dice: "dice" in patch ? patch.dice : s.dice,
-      movable: patch.movable ?? [],
+      movablePlan: "movablePlan" in patch ? patch.movablePlan : null,
+      effects: "effects" in patch ? patch.effects : s.effects,
+      moveDeadline: "moveDeadline" in patch ? patch.moveDeadline : null,
       lastMoved: "lastMoved" in patch ? patch.lastMoved : null,
       lastEvent: "lastEvent" in patch ? patch.lastEvent : null,
       winner: "winner" in patch ? patch.winner : s.winner,
@@ -261,7 +456,26 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
     channelRef.current.send({ type: "broadcast", event: "state", payload });
   }
 
-  // ----- Arbitrage du lancer de dé : seul l'hôte y répond -----
+  // Couperet 20 s (hôte) : si le joueur n'a pas fini de jouer son tirage à
+  // l'échéance, son tour passe — dés restants perdus, pas de relance même
+  // avec un 6 (la relance se mérite en jouant).
+  function armMoveTimer(deadline) {
+    clearTimeout(moveTimerRef.current);
+    if (!isHost || !deadline) return;
+    moveTimerRef.current = setTimeout(() => {
+      const s = stateRef.current;
+      if (!s || s.winner || !s.dice) return;
+      const currentColor = s.order[s.turnIdx];
+      sixesCountRef.current[currentColor] = 0;
+      broadcastState({
+        turnIdx: (s.turnIdx + 1) % s.order.length,
+        dice: null, movablePlan: null, moveDeadline: null,
+        effects: s.effects, lastEvent: "timeout",
+      });
+    }, Math.max(0, deadline - Date.now()));
+  }
+
+  // ----- Arbitrage du lancer des dés : seul l'hôte y répond -----
   function hostHandleRoll({ by }) {
     const s = stateRef.current;
     if (s.winner || s.dice !== null) return;
@@ -269,58 +483,157 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
     const ownerId = Object.keys(colorRef.current).find(pid => colorRef.current[pid] === currentColor);
     if (by !== ownerId) return;
 
-    const roll = 1 + Math.floor(Math.random() * 6);
-    const consecutive = roll === 6 ? (sixesCountRef.current[currentColor] || 0) + 1 : 0;
+    // Malus "un seul dé" (case mystère oppOneDie) : consommé par CE lancer.
+    const eff = { ...(s.effects || {}) };
+    const single = !!(eff[currentColor] && eff[currentColor].oneDie);
+    if (single) eff[currentColor] = {};
+
+    const a = 1 + Math.floor(Math.random() * 6);
+    const b = single ? null : 1 + Math.floor(Math.random() * 6);
+    const hasSix = a === 6 || b === 6;
+    // Règle des 6 adaptée aux deux dés : on compte les LANCERS consécutifs
+    // contenant au moins un 6 (l'esprit "trois 6 d'affilée = tour perdu"
+    // est conservé tel quel).
+    const consecutive = hasSix ? (sixesCountRef.current[currentColor] || 0) + 1 : 0;
     sixesCountRef.current[currentColor] = consecutive;
 
+    const rollKey = Date.now();
+    const dicePayload = { a, b, used: [false, b == null], rollKey };
+
     if (consecutive === 3) {
-      // Trois 6 d'affilée : tour perdu immédiatement, sans bouger.
-      broadcastState({ dice: roll, movable: [], lastEvent: "threeSixes" });
+      // Trois lancers avec 6 d'affilée : tour perdu immédiatement.
+      broadcastState({ dice: dicePayload, movablePlan: { d0: [], d1: [], sum: [] }, effects: eff, lastEvent: "threeSixes" });
       timeouts.current.push(setTimeout(() => {
         sixesCountRef.current[currentColor] = 0;
-        broadcastState({ turnIdx: (s.turnIdx + 1) % s.order.length, dice: null, movable: [], lastEvent: null });
-      }, 1300));
+        broadcastState({ turnIdx: (s.turnIdx + 1) % s.order.length, dice: null, movablePlan: null, effects: eff, lastEvent: null });
+      }, ROLL_ANIM_MS + 1300));
       return;
     }
 
-    const mv = movableIndices(s.tokens[currentColor], roll);
-    if (mv.length === 0) {
-      broadcastState({ dice: roll, movable: [], lastEvent: "noMove" });
+    const plan = buildPlan(s.tokens[currentColor], dicePayload);
+    if (!planHasMove(plan)) {
+      broadcastState({ dice: dicePayload, movablePlan: { d0: [], d1: [], sum: [] }, effects: eff, lastEvent: "noMove" });
       timeouts.current.push(setTimeout(() => {
-        const next = roll === 6 ? s.turnIdx : (s.turnIdx + 1) % s.order.length;
-        broadcastState({ turnIdx: next, dice: null, movable: [], lastEvent: null });
-      }, 1300));
+        // Un 6 sans coup possible garde la relance (règle historique).
+        const next = hasSix ? s.turnIdx : (s.turnIdx + 1) % s.order.length;
+        broadcastState({ turnIdx: next, dice: null, movablePlan: null, effects: eff, lastEvent: null });
+      }, ROLL_ANIM_MS + 1300));
       return;
     }
 
-    broadcastState({ dice: roll, movable: mv, lastEvent: null });
+    // Échéance de coup : 20 s APRÈS l'animation de lancer.
+    const deadline = Date.now() + ROLL_ANIM_MS + MOVE_MS;
+    broadcastState({
+      dice: dicePayload, movablePlan: plan, effects: eff,
+      moveDeadline: deadline, lastEvent: single ? "oneDieTurn" : null,
+    });
+    armMoveTimer(deadline);
   }
 
   // ----- Arbitrage d'un déplacement de pion : seul l'hôte y répond -----
-  function hostHandleMove({ by, tokenIndex }) {
+  // `die` : 0 (1er dé), 1 (2e dé) ou "sum" (les deux d'un coup).
+  function hostHandleMove({ by, tokenIndex, die }) {
     const s = stateRef.current;
-    if (s.winner || s.dice === null) return;
+    if (s.winner || s.dice === null || !s.movablePlan) return;
     const currentColor = s.order[s.turnIdx];
     const ownerId = Object.keys(colorRef.current).find(pid => colorRef.current[pid] === currentColor);
     if (by !== ownerId) return;
-    if (!s.movable.includes(tokenIndex)) return;
 
-    const { tokens: nextTokens, captured, won } = applyMove(s.tokens, currentColor, tokenIndex, s.dice);
-    const rolledSixForEvent = s.dice === 6;
-    const event = won ? null : (captured.length > 0 ? "captured:" + currentColor : (rolledSixForEvent ? "sixAgain" : null));
+    const d = s.dice;
+    // Légalité stricte : dé encore disponible + pion listé dans le plan.
+    let value;
+    if (die === "sum") {
+      if (d.b == null || d.used[0] || d.used[1]) return;
+      if (!s.movablePlan.sum.includes(tokenIndex)) return;
+      value = d.a + d.b;
+    } else if (die === 0) {
+      if (d.used[0]) return;
+      if (!s.movablePlan.d0.includes(tokenIndex)) return;
+      value = d.a;
+    } else if (die === 1) {
+      if (d.b == null || d.used[1]) return;
+      if (!s.movablePlan.d1.includes(tokenIndex)) return;
+      value = d.b;
+    } else return;
+
+    let { tokens: nextTokens, captured, won } = applyMove(s.tokens, currentColor, tokenIndex, value);
+    let effects = { ...(s.effects || {}) };
+    let mysteryEvent = null;
+    let extraRoll = false;
+
+    // Case mystère « ? » : uniquement en atterrissant PILE dessus (piste
+    // commune 1-55), jamais en la survolant. Un seul effet par coup.
+    if (!won) {
+      const landed = nextTokens[currentColor][tokenIndex];
+      if (landed >= 1 && landed <= 55 && MYSTERY_ABS.has(absIndex(currentColor, landed))) {
+        const kind = MYSTERY_KINDS[Math.floor(Math.random() * MYSTERY_KINDS.length)];
+        mysteryEvent = "mystery:" + kind + ":" + currentColor;
+        if (kind === "boost") {
+          // +3 cases dans la foulée, si le couloir le permet (capture
+          // possible à l'arrivée du boost, comme un coup normal).
+          if (landed + 3 <= 61) {
+            const res2 = applyMove(nextTokens, currentColor, tokenIndex, 3);
+            nextTokens = res2.tokens;
+            captured = captured.concat(res2.captured);
+            won = res2.won;
+          }
+        } else if (kind === "setback") {
+          const res2 = applySetback(nextTokens, currentColor, tokenIndex);
+          nextTokens = res2.tokens;
+          captured = captured.concat(res2.captured);
+        } else if (kind === "oppOneDie") {
+          const nextColor = s.order[(s.turnIdx + 1) % s.order.length];
+          effects[nextColor] = { ...(effects[nextColor] || {}), oneDie: true };
+        } else if (kind === "reroll") {
+          extraRoll = true;
+        }
+      }
+    }
 
     if (won) {
-      broadcastState({ tokens: nextTokens, movable: [], lastMoved: { color: currentColor, tokenIdx: tokenIndex }, lastEvent: null, winner: currentColor });
+      clearTimeout(moveTimerRef.current);
+      broadcastState({
+        tokens: nextTokens, dice: null, movablePlan: null, moveDeadline: null, effects,
+        lastMoved: { color: currentColor, tokenIdx: tokenIndex }, lastEvent: null, winner: currentColor,
+      });
       return;
     }
 
-    const rolledSix = s.dice === 6;
-    const nextTurnIdx = rolledSix ? s.turnIdx : (s.turnIdx + 1) % s.order.length;
-    if (!rolledSix) sixesCountRef.current[currentColor] = 0;
+    // Consommation du/des dé(s) joué(s).
+    const used = die === "sum" ? [true, true] : [die === 0 ? true : d.used[0], die === 1 ? true : (d.b == null ? true : d.used[1])];
+    const diceAfter = { ...d, used };
+    const planAfter = buildPlan(nextTokens[currentColor], diceAfter);
+    const stillToPlay = planHasMove(planAfter);
 
+    const hadSix = d.a === 6 || d.b === 6;
+    const captureEvent = captured.length > 0 ? "captured:" + currentColor : null;
+
+    if (stillToPlay) {
+      // Il reste un dé jouable : même joueur, échéance REMISE à 20 s
+      // (réinitialisation à chaque coup, demande explicite).
+      const deadline = Date.now() + MOVE_MS;
+      broadcastState({
+        tokens: nextTokens, dice: diceAfter, movablePlan: planAfter, effects,
+        moveDeadline: deadline,
+        lastMoved: { color: currentColor, tokenIdx: tokenIndex },
+        lastEvent: mysteryEvent || captureEvent,
+      });
+      armMoveTimer(deadline);
+      return;
+    }
+
+    // Tirage épuisé (ou plus aucun coup possible) : fin du tour. La relance
+    // est accordée si le lancer contenait un 6 (règle historique conservée)
+    // OU si une case mystère "reroll" vient d'être décrochée.
+    clearTimeout(moveTimerRef.current);
+    const goAgain = hadSix || extraRoll;
+    if (!hadSix) sixesCountRef.current[currentColor] = 0;
+    const nextTurnIdx = goAgain ? s.turnIdx : (s.turnIdx + 1) % s.order.length;
     broadcastState({
-      tokens: nextTokens, movable: [], dice: null, turnIdx: nextTurnIdx,
-      lastMoved: { color: currentColor, tokenIdx: tokenIndex }, lastEvent: event
+      tokens: nextTokens, dice: null, movablePlan: null, moveDeadline: null, effects,
+      turnIdx: nextTurnIdx,
+      lastMoved: { color: currentColor, tokenIdx: tokenIndex },
+      lastEvent: mysteryEvent || captureEvent || (goAgain ? (hadSix ? "sixAgain" : "extraRoll") : null),
     });
   }
 
@@ -387,13 +700,14 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
 
   function rollDice() {
     if (!isMyTurn || dice !== null) return;
-    setRolling(true);
-    setTimeout(() => setRolling(false), 500);
     channelRef.current?.send({ type: "broadcast", event: "roll_attempt", payload: { by: me.id } });
   }
   function pickToken(idx) {
-    if (!isMyTurn || dice === null || !movable.includes(idx)) return;
-    channelRef.current?.send({ type: "broadcast", event: "move_attempt", payload: { by: me.id, tokenIndex: idx } });
+    if (!isMyTurn || dice === null || selectedDie == null) return;
+    if (rollAnim && rollAnim.phase === "rolling") return; // laisse les dés s'immobiliser
+    const list = selectedDie === "sum" ? movablePlan?.sum : selectedDie === 0 ? movablePlan?.d0 : movablePlan?.d1;
+    if (!list || !list.includes(idx)) return;
+    channelRef.current?.send({ type: "broadcast", event: "move_attempt", payload: { by: me.id, tokenIndex: idx, die: selectedDie } });
   }
 
   const myColor = colorOfPlayer[me.id];
@@ -401,6 +715,12 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
   const currentColor = order[turnIdx];
   const isMyTurn = phase === "playing" && !winner && isPlayer && currentColor === myColor;
   const needsPick = players.length > 4;
+  const settled = !rollAnim || rollAnim.phase === "settled";
+  const moveRemaining = moveDeadline ? Math.max(0, Math.ceil((moveDeadline - now) / 1000)) : null;
+  // Pions cliquables = ceux du plan de l'option sélectionnée.
+  const movableNow = isMyTurn && dice && movablePlan && settled
+    ? (selectedDie === "sum" ? movablePlan.sum : selectedDie === 0 ? movablePlan.d0 : selectedDie === 1 ? movablePlan.d1 : [])
+    : [];
 
   // Raccourci "lancer les dés" à la barre d'espace (demande 2026-07) :
   // s'AJOUTE au bouton existant, ne le remplace pas. Ignoré si le focus
@@ -417,6 +737,7 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isMyTurn, dice]);
   const playerNameFor = (color) => {
     const pid = Object.keys(colorOfPlayer).find(id => colorOfPlayer[id] === color);
@@ -429,10 +750,21 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
   if (phase === "playing") {
     const iWon = myColor && myColor === winner;
     let statusText;
+    const mysteryMatch = typeof lastEvent === "string" && lastEvent.startsWith("mystery:") ? lastEvent.split(":") : null;
     if (winner) statusText = null;
     else if (lastEvent === "threeSixes") statusText = t("ludoThreeSixes");
     else if (lastEvent === "noMove") statusText = t("ludoNoMove");
+    else if (lastEvent === "timeout") statusText = t("ludoTimeout");
     else if (lastEvent === "sixAgain") statusText = t("ludoSixAgain");
+    else if (lastEvent === "extraRoll") statusText = t("ludoExtraRoll");
+    else if (lastEvent === "oneDieTurn") statusText = t("ludoOneDieTurn");
+    else if (mysteryMatch) {
+      const kind = mysteryMatch[1];
+      statusText = kind === "boost" ? t("ludoMysteryBoost")
+        : kind === "setback" ? t("ludoMysterySetback")
+        : kind === "oppOneDie" ? t("ludoMysteryOppOneDie")
+        : t("ludoMysteryReroll");
+    }
     else if (lastEvent && lastEvent.startsWith("captured:")) {
       const moverColor = lastEvent.split(":")[1];
       statusText = `💥 ${playerNameFor(moverColor)} ${t("ludoCapturedSuffix")}`;
@@ -441,6 +773,13 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
     else if (isPlayer) statusText = `${t("ludoWaitingFor")} ${playerNameFor(currentColor)}…`;
     else statusText = t("ludoSpectating");
 
+    // Plateau de dés : ancré près du camp du joueur ACTIF, pips à sa couleur.
+    const trayPos = currentColor ? DICE_TRAY_POS[currentColor] : null;
+    const trayColorVar = currentColor ? COLORS[currentColor].css : "--p2";
+    const dieValues = dice ? [dice.a, dice.b] : [];
+    const showTray = phase === "playing" && !winner && dice !== null;
+    const sumAvailable = !!(isMyTurn && settled && movablePlan && movablePlan.sum.length > 0 && dice && dice.b != null && !dice.used[0] && !dice.used[1]);
+
     content = (
       <div>
         <div className="ludo-players-row" style={{ marginBottom: 12 }}>
@@ -448,6 +787,7 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
             <span key={color} className={"ludo-turn-chip" + (color === currentColor ? " active" : "")} style={{ "--accent-color": `var(${COLORS[color].css})` }}>
               <span className="swatch" style={{ background: `var(${COLORS[color].css})` }} />
               {playerNameFor(color)}
+              {effects[color]?.oneDie && <span title={t("ludoOneDieTurn")} style={{ marginLeft: 4 }}>🎲½</span>}
             </span>
           ))}
         </div>
@@ -459,25 +799,27 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
               : `${playerNameFor(winner)} ${t("ludoWinSpectator")}`}
           </p>
         ) : (
-          <p className="muted" style={{ textAlign: "center", marginBottom: 10, minHeight: 18 }}>{statusText}</p>
+          <p className="muted" style={{ textAlign: "center", marginBottom: 10, minHeight: 18 }}>
+            {statusText}
+            {moveRemaining != null && dice !== null && settled && (
+              <span className={"turn-timer-chip" + (moveRemaining <= 5 ? " hot" : "")} style={{ marginLeft: 8 }}>⏱ {moveRemaining}s</span>
+            )}
+          </p>
         )}
 
         <div className="ludo-board">
           {Object.entries(CELL_TYPE).map(([key, type]) => {
             const [r, c] = key.split("_").map(Number);
             const isSafe = SAFE_CELLS.has(key);
+            const isMystery = MYSTERY_CELLS.has(key);
             const style = {
               top: (r / 15) * 100 + "%", left: (c / 15) * 100 + "%",
               width: (1 / 15) * 100 + "%", height: (1 / 15) * 100 + "%",
             };
-            return <div key={key} className={"ludo-cell " + type + (isSafe ? " safe" : "")} style={style} />;
+            return <div key={key} className={"ludo-cell " + type + (isSafe ? " safe" : "") + (isMystery ? " mystery" : "")} style={style} />;
           })}
 
-          {/* Zone d'ARRIVÉE centrale élargie (zip 83) : ~2 cases de côté,
-              quadrants aux 4 couleurs (mêmes coins que les enclos), les
-              pions arrivés (61) viennent s'y ranger. Rendue APRÈS les cases
-              (elle les recouvre) mais AVANT les pions (qui passent devant).
-              Les rayons tournants s'affichent 5 s à chaque arrivée. */}
+          {/* Zone d'ARRIVÉE centrale élargie (zip 83). */}
           <div className="ludo-goal-zone" aria-hidden="true">
             {goalBurst && (
               <span
@@ -501,21 +843,67 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
             })
           ))}
 
+          {/* ----- Plateau de dés (2026-07) : deux dés qui ROULENT près du
+              camp du joueur actif, pips à sa couleur, puis l'addition en
+              chiffres romains (III + V = VIII). Cliquer un dé (à son tour)
+              choisit lequel jouer ; cliquer l'addition choisit la somme. */}
+          {showTray && trayPos && (
+            <div className="ludo-dice-tray" style={trayPos} key={dice.rollKey}>
+              <div className="ludo-dice-row">
+                {dieValues.map((v, di) => {
+                  if (v == null) return null;
+                  const rolling = rollAnim && rollAnim.phase === "rolling";
+                  const shown = rolling ? rollAnim.faces[di] : v;
+                  const isUsed = dice.used[di];
+                  const listOk = di === 0 ? movablePlan?.d0?.length : movablePlan?.d1?.length;
+                  const clickable = isMyTurn && settled && !isUsed && !!listOk;
+                  return (
+                    <DieFace
+                      key={di}
+                      value={shown}
+                      colorVar={trayColorVar}
+                      selected={settled && selectedDie === di}
+                      dim={settled && (isUsed || (!clickable && isMyTurn))}
+                      onClick={clickable ? () => setSelectedDie(di) : null}
+                      animClass={rolling ? "rolling v" + rollAnim.variant : "settle"}
+                    />
+                  );
+                })}
+              </div>
+              {settled && dice.b != null && (
+                <button
+                  type="button"
+                  className={"ludo-roman" + (sumAvailable ? " pickable" : "") + (selectedDie === "sum" ? " selected" : "")}
+                  onClick={sumAvailable ? () => setSelectedDie("sum") : undefined}
+                  disabled={!sumAvailable}
+                  title={sumAvailable ? t("ludoUseSum") : undefined}
+                >
+                  {toRoman(dice.a)} + {toRoman(dice.b)} = {toRoman(dice.a + dice.b)}
+                </button>
+              )}
+              {settled && dice.b == null && (
+                <span className="ludo-roman">{toRoman(dice.a)}</span>
+              )}
+            </div>
+          )}
+
+          {/* Révélation de case mystère : pop central bref, aux couleurs du
+              jeu — purement décoratif (le statut texte dit la même chose). */}
+          {mysteryMatch && !winner && (
+            <div className="ludo-mystery-pop" key={lastEvent + "-" + (lastMoved ? lastMoved.tokenIdx : "")} aria-hidden="true">
+              <span className="ludo-mystery-pop-text">
+                {mysteryMatch[1] === "boost" ? "🎁 +3" : mysteryMatch[1] === "setback" ? "💫 -4" : mysteryMatch[1] === "oppOneDie" ? "🎲½" : "🎁 🎲"}
+              </span>
+            </div>
+          )}
+
           {(() => {
             // Regroupe les pions qui partagent EXACTEMENT la même case (hors
             // enclos, où chaque pion a déjà son propre emplacement dédié).
-            // Sans ça, plusieurs <div> de la taille d'une case entière se
-            // superposent pixel pour pixel : seul le dernier du DOM reçoit
-            // les clics, et un pion pourtant "movable" devient impossible à
-            // sélectionner s'il se trouve en-dessous. On les éclate en
-            // mini-grille pour que chacun garde une zone cliquable distincte.
             const stacks = {};
             COLOR_ORDER.forEach(color => {
               if (!order.includes(color)) return;
               tokens[color].forEach((steps, idx) => {
-                // 0 = enclos (emplacements dédiés) ; 61 = zone d'arrivée
-                // centrale (quadrants dédiés, zip 83) — ni l'un ni l'autre
-                // ne participent à l'empilement des cases de piste.
                 if (steps === 0 || steps >= 61) return;
                 const cell = cellFor(color, steps);
                 if (!cell) return;
@@ -535,10 +923,7 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
 
             return COLOR_ORDER.map(color => tokens[color].map((steps, idx) => {
               if (!order.includes(color)) return null;
-              // Pions ARRIVÉS (zip 83) : ils quittent le couloir privé pour
-              // se ranger dans le quadrant de leur couleur au centre élargi
-              // (mini-grille 2×2 par couleur) — l'arrivée se voit de loin et
-              // la dernière case du couloir reste dégagée.
+              // Pions ARRIVÉS (zip 83) : rangés dans le quadrant central.
               if (steps >= 61) {
                 const [qr, qc] = GOAL_QUADRANT[color];
                 const fr = qr + (idx >> 1) * 0.47, fc = qc + (idx & 1) * 0.47;
@@ -560,10 +945,10 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
                 );
               }
               const cell = steps === 0 ? COLORS[color].yard[idx] : cellFor(color, steps);
-              if (!cell) return null; // garde-fou, ne devrait pas arriver (steps=61 renvoie la dernière case privée)
+              if (!cell) return null; // garde-fou, ne devrait pas arriver
               const [r, c] = cell;
               const isMine = color === myColor;
-              const canPick = isMyTurn && isMine && movable.includes(idx);
+              const canPick = isMyTurn && isMine && movableNow.includes(idx);
               const isLast = !!(lastMoved && lastMoved.color === color && lastMoved.tokenIdx === idx);
 
               let left = 0, top = 0, size = 1;
@@ -613,16 +998,14 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
           </div>
         ) : (
           <div style={{ display: "flex", justifyContent: "center", marginTop: 14 }}>
-            {isMyTurn && dice === null ? (
+            {isMyTurn && dice === null && (
               <button className="btn" style={{ width: "auto", padding: "12px 26px" }} onClick={rollDice} title={t("ludoRollSpaceHint")}>
                 {t("ludoRollDice")}
               </button>
-              ) : (
-                <div className={"ludo-dice" + (rolling ? " rolling" : "")}>{dice ?? "🎲"}</div>
-              )}
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
+      </div>
     );
   } else {
     // phase "intro" : choix des joueurs, attente, ou pas assez de monde

@@ -409,7 +409,11 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
   // piocherait pendant que les joueurs regardent "3… 2… 1…" casserait tout.
   function scheduleBots() {
     if (!isHost) return;
-    const delay = Math.max(800 + Math.random() * 2200, countdownEndRef.current - Date.now());
+    // Plancher relevé 800 -> 1500 ms (correctif 2026-07) : à 800 ms, un bot
+    // qui enchaînait (pépite = rejouer) donnait parfois l'impression de
+    // répondre INSTANTANÉMENT après le coup du joueur — le délai minimal
+    // garantit désormais un vrai temps de "réflexion" perceptible.
+    const delay = Math.max(1500 + Math.random() * 2300, countdownEndRef.current - Date.now());
     botTimer.current = setTimeout(() => {
       const s = stateRef.current;
       if (!s || s.winner || !s.mine) return;

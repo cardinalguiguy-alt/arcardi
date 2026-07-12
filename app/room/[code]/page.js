@@ -86,20 +86,17 @@ export default function Room() {
   // La colonne rooms.game_state existe-t-elle ? (migration upgrade-002.sql)
   const [hasGameStateCol, setHasGameStateCol] = useState(true);
   // Mode "agrandi" (demande 2026-07) : pendant une partie, masque l'en-tête
-  // (logo, code, chips de score, fabs secondaires) pour donner TOUTE la
-  // hauteur au jeu — objectif : zéro scroll sur laptop. Préférence mémorisée
-  // dans localStorage, lue côté client uniquement (jamais au premier rendu
-  // serveur, sinon hydratation désaccordée).
+  // (logo, code, fabs secondaires) pour donner TOUTE la hauteur au jeu —
+  // objectif : zéro scroll sur laptop.
+  // PAR DÉFAUT (demande 2026-07) : le mode agrandi est ACTIF à chaque
+  // chargement/rechargement de la page de jeu — plus de préférence
+  // localStorage : la bascule ne vaut que pour la session de l'onglet
+  // (activé au montage client uniquement, jamais au rendu serveur, sinon
+  // hydratation désaccordée).
   const [stageFocus, setStageFocus] = useState(false);
-  useEffect(() => {
-    try { setStageFocus(localStorage.getItem("arcardi_stage_focus") === "1"); } catch {}
-  }, []);
+  useEffect(() => { setStageFocus(true); }, []);
   function toggleStageFocus() {
-    setStageFocus(prev => {
-      const next = !prev;
-      try { localStorage.setItem("arcardi_stage_focus", next ? "1" : "0"); } catch {}
-      return next;
-    });
+    setStageFocus(prev => !prev);
   }
 
   useEffect(() => {
@@ -328,6 +325,17 @@ export default function Room() {
     document.body.classList.toggle("ludo-theme", ludoTheme);
     return () => document.body.classList.remove("ludo-theme");
   }, [ludoTheme]);
+
+  // Ambiance Worldle (harmonisation 2026-07) : même mécanique — le fond
+  // feu de camp glisse vers un VERT/BLEU planétaire pendant une partie de
+  // Worldle, pour que le fond et la zone de jeu racontent le même thème
+  // (voir body.worldle-theme dans globals.css).
+  const worldleTheme = !!(room && me && room.status === "playing" && room.current_game === "worldle");
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    document.body.classList.toggle("worldle-theme", worldleTheme);
+    return () => document.body.classList.remove("worldle-theme");
+  }, [worldleTheme]);
 
   // Mode agrandi : même mécanique de classe sur <body> que tenk-night —
   // uniquement pendant une partie (au lobby, l'en-tête reste toujours là).

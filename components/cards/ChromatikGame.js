@@ -911,49 +911,48 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
       ? seats
       : Array.from({ length: seats.length - 1 }, (_, k) => seats[(myIdx + 1 + k) % seats.length]);
 
-    content = (
-      <div>
-        <div className={"chromatik-opponents opp-" + displayedOpponents.length}>
-          {/* Flèches de sens intercalées entre les sièges (demande 2026-07) :
-              les adversaires sont affichés dans l'ORDRE DE JEU vu de MON
-              siège (rotation ci-dessus), donc un flux gauche->droite =
-              direction 1, et le flux s'inverse visuellement avec la carte
-              Inverse. Disposition en ARC (retouche 2026-07) : sièges plus
-              espacés, légèrement décalés/inclinés pour dessiner le tour de
-              table plutôt qu'une rangée rigide — voir
-              .chromatik-opponents.opp-N en CSS. */}
-          {displayedOpponents.map((s, i) => {
-            const oppHand = hands[s.id] || [];
-            const oppAtRisk = oppHand.length === 1 && !unoCalled[s.id];
-            const penalized = penaltyFx && penaltyFx.seatId === s.id;
-            return (
-              <Fragment key={s.id}>
-                {i > 0 && seats.length > 2 && <FlowArrow direction={direction} size="mini" />}
-                <div className={"chromatik-opponent" + (seats[turnIdx]?.id === s.id ? " active" : "") + (penalized ? " penalized" : "")}>
-                  <span className="avatar">{s.avatar}</span>
-                  <span className="name">{s.username}</span>
-                  {activeBotSeat?.id === s.id && (
-                    <span className="pres-think" aria-hidden="true"><i>.</i><i className="d2">.</i><i className="d3">.</i></span>
-                  )}
-                  {/* Compteur de cartes : pastille contrastée (retouche
-                      lisibilité 2026-07 — l'ancien texte gris se perdait),
-                      dorée quand il ne reste qu'une carte. */}
-                  <span className={"count" + (oppHand.length === 1 ? " low" : "")}>
-                    {oppHand.length} 🂠
-                    {oppAtRisk && <span className="chromatik-uno-warn" title="UNO">❗</span>}
-                    {turnDeadlineSeat === s.id && turnRemaining != null && (
-                      <span className={"turn-timer-chip mini" + (turnRemaining <= 5 ? " hot" : "")}>{turnRemaining}s</span>
-                    )}
-                  </span>
-                  {penalized && (
-                    <span className="chromatik-penalty-chip" key={penaltyFx.key}>+{penaltyFx.count} 🂠</span>
-                  )}
-                </div>
-              </Fragment>
-            );
-          })}
+    // Vignette d'adversaire FACTORISÉE (refonte table 2026-07) : exactement
+    // le même rendu partout — rangée du haut (2-3 joueurs, spectateurs) ou
+    // positions Nord/Est/Ouest de la table à 4 — pour un design harmonisé.
+    const renderOpponent = (s) => {
+      if (!s) return null;
+      const oppHand = hands[s.id] || [];
+      const oppAtRisk = oppHand.length === 1 && !unoCalled[s.id];
+      const penalized = penaltyFx && penaltyFx.seatId === s.id;
+      return (
+        <div key={s.id} className={"chromatik-opponent" + (seats[turnIdx]?.id === s.id ? " active" : "") + (penalized ? " penalized" : "")}>
+          <span className="avatar">{s.avatar}</span>
+          <span className="name">{s.username}</span>
+          {activeBotSeat?.id === s.id && (
+            <span className="pres-think" aria-hidden="true"><i>.</i><i className="d2">.</i><i className="d3">.</i></span>
+          )}
+          {/* Compteur de cartes : pastille contrastée (retouche lisibilité
+              2026-07 — l'ancien texte gris se perdait), dorée quand il ne
+              reste qu'une carte. */}
+          <span className={"count" + (oppHand.length === 1 ? " low" : "")}>
+            {oppHand.length} 🂠
+            {oppAtRisk && <span className="chromatik-uno-warn" title="UNO">❗</span>}
+            {turnDeadlineSeat === s.id && turnRemaining != null && (
+              <span className={"turn-timer-chip mini" + (turnRemaining <= 5 ? " hot" : "")}>{turnRemaining}s</span>
+            )}
+          </span>
+          {penalized && (
+            <span className="chromatik-penalty-chip" key={penaltyFx.key}>+{penaltyFx.count} 🂠</span>
+          )}
         </div>
+      );
+    };
 
+    // Table à 4 joueurs (demande 2026-07) : disposition Nord/Sud/Est/Ouest,
+    // MON point de vue restant au SUD (ma main en bas). displayedOpponents
+    // est déjà tourné dans l'ordre du tour après moi : en direction 1 le
+    // tour circule moi (Sud) -> Ouest -> Nord -> Est — un cycle horaire à
+    // l'écran, et gauche -> droite en haut de table = sens du jeu (les
+    // chevrons du centre de table le confirment). Les spectateurs (4
+    // vignettes, pas de main au sud) gardent la rangée classique.
+    const fourTable = isPlayer && displayedOpponents.length === 3;
+
+    const tableJsx = (
         <div className="chromatik-table">
           <div
             className={"chromatik-pile draw" + (mustDrawPile ? " urge" : "")}
@@ -963,6 +962,12 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
             <CardView faceDown size="md" />
             <span className="pile-count">{deck.length}</span>
           </div>
+          {/* Table à 4 (2026-07) : les chevrons de sens reviennent au CENTRE
+              de la table (ils n'ont plus de rangée où s'intercaler) — le
+              flux gauche->droite en haut de table = direction 1. */}
+          {fourTable && (
+            <div className="chromatik-flow-table"><FlowArrow direction={direction} /></div>
+          )}
           <div className="chromatik-discard">
             {/* Pile réaliste (fix jouabilité 2026-07) : les 3-4 dernières
                 cartes défaussées restent visibles, légèrement décalées/
@@ -1032,6 +1037,41 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
             </div>
           )}
         </div>
+    );
+
+    content = (
+      <div>
+        {fourTable ? (
+          /* ----- Table à 4 : Nord en haut, Ouest/Est de part et d'autre de
+             la table, moi au Sud (ma main, déjà en bas). Le tour circule
+             moi -> Ouest -> Nord -> Est en direction 1. ----- */
+          <div className="chromatik-arena-four">
+            <div className="chromatik-north">{renderOpponent(displayedOpponents[1])}</div>
+            <div className="chromatik-mid">
+              <div className="chromatik-side west">{renderOpponent(displayedOpponents[0])}</div>
+              {tableJsx}
+              <div className="chromatik-side east">{renderOpponent(displayedOpponents[2])}</div>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className={"chromatik-opponents opp-" + displayedOpponents.length}>
+              {/* Rangée du haut (2-3 joueurs, ou spectateurs) : vignettes
+                  bien HORIZONTALES et alignées (les inclinaisons "arc" de
+                  l'ancienne version ont été retirées, retouche 2026-07),
+                  chevrons de sens intercalés dans l'ordre du tour. À une
+                  table de 2, face-à-face Nord/Sud : l'adversaire unique est
+                  centré en haut, ma main en bas. */}
+              {displayedOpponents.map((s, i) => (
+                <Fragment key={s.id}>
+                  {i > 0 && seats.length > 2 && <FlowArrow direction={direction} size="mini" />}
+                  {renderOpponent(s)}
+                </Fragment>
+              ))}
+            </div>
+            {tableJsx}
+          </>
+        )}
 
         {!winner && isMyTurn && (
           <div className="turn-banner">
@@ -1229,7 +1269,10 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
   }
 
   return (
-    <div className="panel" style={{ maxWidth: "min(820px, 94vw)" }}>
+    // .chromatik-panel : accroche du mode agrandi (voir globals.css) — en
+    // stage-focus, la table gagne de la hauteur (espacements élargis) et un
+    // peu de largeur pour la disposition Nord/Sud/Est/Ouest à 4 joueurs.
+    <div className="panel chromatik-panel" style={{ maxWidth: "min(940px, 94vw)" }}>
       <h1>{t("chromatikTitle")}</h1>
       <Crossfade id={phase}>{content}</Crossfade>
     </div>
