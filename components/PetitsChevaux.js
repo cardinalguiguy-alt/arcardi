@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { saveGameState, readGameState, resetRoomToLobby } from "@/lib/gameSync";
+import { playDiceShuffle } from "@/lib/sfx";
 import Crossfade from "./Crossfade";
 
 const WIN_POINTS = 3, PARTICIPATE_POINTS = 1;
@@ -33,22 +34,61 @@ const SAFE_ABS = new Set([0, 8, 14, 22, 28, 36, 42, 50]);
 
 // ===== Cases MYSTÈRE « ? » (2026-07) =====
 // 8 cases fixes réparties sur la piste commune (jamais un départ ni une
-// case sûre) : y ATTERRIR — pile — révèle un bonus ou un malus au hasard
-// (tiré par l'hôte, voir MYSTERY_KINDS/hostHandleMove). Positions choisies
-// à mi-chemin entre les étoiles pour rythmer chaque quart de plateau.
+// case sûre) : y ATTERRIR — pile — ouvre désormais une ROUE DE LA FORTUNE
+// (voir MYSTERY_KINDS/pickMysteryKind/applyMysteryKind plus bas) au lieu de
+// révéler l'effet immédiatement. Positions choisies à mi-chemin entre les
+// étoiles pour rythmer chaque quart de plateau.
 const MYSTERY_ABS = new Set([4, 11, 18, 25, 32, 39, 46, 53]);
-// Effets possibles (équiprobables) — pensés pour pimenter sans casser :
-// - boost    : le pion qui vient d'atterrir avance de 3 cases en plus ;
-// - setback  : il recule de 4 cases (jamais plus bas que la case 1) ;
-// - oppOneDie: le joueur SUIVANT ne lancera qu'UN dé à son prochain tour ;
-// - reroll   : relance immédiate (comme un 6) une fois le tour fini.
-const MYSTERY_KINDS = ["boost", "setback", "oppOneDie", "reroll"];
 
-// Minuteur de COUP (2026-07) : 20 s pour jouer après chaque tirage,
-// réinitialisé à chaque déplacement (un coup = 20 s pleines). Dépassement =
-// tour passé. Le décompte ne démarre qu'après l'animation de lancer.
+// Effets de la roue (2026-07) : 4 bonus/malus CLASSIQUES (probabilité
+// élevée, poids 22 chacun) + 4 bonus/malus EXTRÊMES (bien plus puissants,
+// beaucoup plus rares — poids 3 chacun, ~12 % cumulés) :
+// - boost        : +3 cases (capture possible à l'arrivée) ;
+// - setback      : -4 cases (plancher case 1, capture possible) ;
+// - oppOneDie    : le joueur SUIVANT ne lancera qu'UN dé à son prochain tour ;
+// - reroll       : relance complète (2 dés) immédiate en fin de tour ;
+// - superBoost   : +8 cases d'un bond (capture possible) ;
+// - freeToken    : libère directement un AUTRE pion de l'enclos (repli sur
+//                  un petit +2 si tous les pions de la couleur sont déjà sortis) ;
+// - sendHome     : renvoie le pion tiré directement à l'enclos ;
+// - doubleSetback: -8 cases (plancher case 1, capture possible).
+// `swatch` = couleur de la tranche sur la roue, `pop` = texte du pop-up bref
+// après résolution, `labelKey` = clé i18n du statut détaillé.
+const MYSTERY_KINDS = [
+  { id: "boost",         weight: 22, tier: "common",  icon: "🎁", pop: "🎁 +3",  labelKey: "ludoMysteryBoost",         swatch: "var(--ok)" },
+  { id: "setback",       weight: 22, tier: "common",  icon: "💫", pop: "💫 -4",  labelKey: "ludoMysterySetback",       swatch: "#FF5D73" },
+  { id: "oppOneDie",     weight: 22, tier: "common",  icon: "🎲", pop: "🎲½",   labelKey: "ludoMysteryOppOneDie",     swatch: "var(--ludoB)" },
+  { id: "reroll",        weight: 22, tier: "common",  icon: "🔁", pop: "🔁",    labelKey: "ludoMysteryReroll",        swatch: "var(--ludoY)" },
+  { id: "superBoost",    weight: 3,  tier: "extreme", icon: "🚀", pop: "🚀 +8",  labelKey: "ludoMysterySuperBoost",    swatch: "var(--p3)" },
+  { id: "freeToken",     weight: 3,  tier: "extreme", icon: "🔓", pop: "🔓",    labelKey: "ludoMysteryFreeToken",     swatch: "#4ECDC4" },
+  { id: "sendHome",      weight: 3,  tier: "extreme", icon: "💀", pop: "💀",    labelKey: "ludoMysterySendHome",      swatch: "var(--acc-c4)" },
+  { id: "doubleSetback", weight: 3,  tier: "extreme", icon: "⚡", pop: "⚡ -8",  labelKey: "ludoMysteryDoubleSetback", swatch: "var(--acc-ludo)" },
+];
+const MYSTERY_KIND_TOTAL_WEIGHT = MYSTERY_KINDS.reduce((sum, k) => sum + k.weight, 0);
+function pickMysteryKind() {
+  let r = Math.random() * MYSTERY_KIND_TOTAL_WEIGHT;
+  for (const k of MYSTERY_KINDS) {
+    if (r < k.weight) return k;
+    r -= k.weight;
+  }
+  return MYSTERY_KINDS[0];
+}
+
+// Minuteur de TOUR (2026-07) : 20 s, désormais actif en PERMANENCE dès le
+// début du tour d'un joueur (lancer ou déplacement) et réarmé à chaque
+// nouvelle phase (lancer -> jouer -> relance méritée -> etc.), jusqu'à ce
+// que le tour passe réellement au joueur suivant. Dépassement = tour passé
+// (voir armMoveTimer). Le décompte AFFICHÉ ne démarre qu'après l'animation
+// de lancer (ROLL_ANIM_MS) pour ne pas grignoter le temps de jeu réel.
 const MOVE_MS = 20000;
 const ROLL_ANIM_MS = 950;
+// Roue de la fortune (2026-07) : durée totale VISIBLE (fondu d'entrée +
+// rotation + tenue + fondu de sortie) et durée de la seule rotation
+// (sous-partie, pilotée par transition CSS). L'hôte attend exactement
+// MYSTERY_SPIN_MS avant de révéler/appliquer l'effet — pile calé sur la fin
+// de l'animation cliente, comme les faces de dés factices pendant le roulis.
+const MYSTERY_SPIN_MS = 3200;
+const MYSTERY_ROT_MS = 2400;
 
 // Attribution des couleurs selon le nombre de joueurs (retouche 2026-07 /
 // zip 83) : en 1 CONTRE 1, les deux joueurs partent DIAGONALEMENT opposés
@@ -120,6 +160,14 @@ function movableIndices(tokensOfColor, roll, isSum) {
 // Applique un mouvement sur une copie profonde de `tokens` ; renvoie le
 // nouvel état, la liste des captures ([couleur, index]) et si la couleur
 // vient de terminer (ses 4 pions à la maison).
+// ----- Capture (vérifiée 2026-07, cf. tâche "captures") -----------------
+// La capture est calculée UNIQUEMENT sur la case d'ARRIVÉE finale du pion
+// (jamais en survolant une case intermédiaire) : quel que soit le chemin
+// pour y parvenir — un seul dé, la somme des deux, ou un bonus mystère
+// (boost/superBoost, qui rappellent cette même fonction pour leur propre
+// avancée) — TOUS les pions adverses présents sur cette case, capturés en
+// une seule fois via `.forEach` (pas juste le premier trouvé), sauf case
+// sûre. Couverte par 100 000 tirages aléatoires dans harness_zip85.mjs.
 function applyMove(tokens, color, tokenIdx, roll) {
   const next = {};
   for (const c of COLOR_ORDER) next[c] = tokens[c].slice();
@@ -144,14 +192,16 @@ function applyMove(tokens, color, tokenIdx, roll) {
   const won = next[color].every(s => s === 61);
   return { tokens: next, captured, won };
 }
-// Recul (case mystère "setback") : -4 cases sur la piste, plancher à la
-// case 1 — capture à l'arrivée comme un coup normal (hors case sûre).
-function applySetback(tokens, color, tokenIdx) {
+// Recul (case mystère "setback"/"doubleSetback") : `amount` cases en
+// arrière, plancher à la case 1 — capture à l'arrivée comme un coup normal
+// (hors case sûre). `amount` par défaut 4 (setback classique) ; 8 pour la
+// variante extrême doubleSetback (voir applyMysteryKind).
+function applySetback(tokens, color, tokenIdx, amount = 4) {
   const next = {};
   for (const c of COLOR_ORDER) next[c] = tokens[c].slice();
   const steps = next[color][tokenIdx];
   if (steps < 1 || steps > 55) return { tokens: next, captured: [] };
-  const newSteps = Math.max(1, steps - 4);
+  const newSteps = Math.max(1, steps - amount);
   const captured = [];
   const abs = absIndex(color, newSteps);
   if (!SAFE_ABS.has(abs)) {
@@ -167,6 +217,79 @@ function applySetback(tokens, color, tokenIdx) {
   }
   next[color][tokenIdx] = newSteps;
   return { tokens: next, captured };
+}
+// Applique l'effet d'une case mystère déjà TIRÉ par la roue (kind connu,
+// choisi par pickMysteryKind() au lancement — voir hostHandleSpin) sur une
+// copie des pions. Retourne { tokens, captured, extraRoll, effectsPatch,
+// info } : `info.won` si l'effet fait terminer le pion (boost/superBoost
+// jusqu'à 61), `info.freedIdx` si un AUTRE pion est concerné (freeToken).
+function applyMysteryKind(tokens, color, tokenIdx, kind, nextColor) {
+  let next = tokens, captured = [], extraRoll = false, effectsPatch = null;
+  const info = {};
+  switch (kind) {
+    case "boost": {
+      const steps = next[color][tokenIdx];
+      const gain = Math.min(3, 61 - steps);
+      if (gain > 0) {
+        const r = applyMove(next, color, tokenIdx, gain);
+        next = r.tokens; captured = r.captured; info.won = r.won;
+      }
+      break;
+    }
+    case "setback": {
+      const r = applySetback(next, color, tokenIdx, 4);
+      next = r.tokens; captured = r.captured;
+      break;
+    }
+    case "oppOneDie": {
+      effectsPatch = { color: nextColor, patch: { oneDie: true } };
+      break;
+    }
+    case "reroll": {
+      extraRoll = true;
+      break;
+    }
+    case "superBoost": {
+      const steps = next[color][tokenIdx];
+      const gain = Math.min(8, 61 - steps);
+      if (gain > 0) {
+        const r = applyMove(next, color, tokenIdx, gain);
+        next = r.tokens; captured = r.captured; info.won = r.won;
+      }
+      break;
+    }
+    case "doubleSetback": {
+      const r = applySetback(next, color, tokenIdx, 8);
+      next = r.tokens; captured = r.captured;
+      break;
+    }
+    case "sendHome": {
+      const t2 = {};
+      for (const c of COLOR_ORDER) t2[c] = next[c].slice();
+      t2[color][tokenIdx] = 0;
+      next = t2;
+      break;
+    }
+    case "freeToken": {
+      const idxInYard = next[color].findIndex((s, i) => s === 0 && i !== tokenIdx);
+      if (idxInYard >= 0) {
+        const r = applyMove(next, color, idxInYard, 0); // steps===0 -> sortie directe, roll ignoré
+        next = r.tokens; captured = r.captured; info.won = r.won; info.freedIdx = idxInYard;
+      } else {
+        // Repli si tous les pions de la couleur sont déjà sortis de l'enclos :
+        // petit boost de consolation plutôt qu'un effet qui ne ferait rien.
+        const steps = next[color][tokenIdx];
+        const gain = Math.min(2, 61 - steps);
+        if (gain > 0) {
+          const r = applyMove(next, color, tokenIdx, gain);
+          next = r.tokens; captured = r.captured; info.won = r.won;
+        }
+      }
+      break;
+    }
+    default: break;
+  }
+  return { tokens: next, captured, extraRoll, effectsPatch, info };
 }
 function emptyTokens() {
   const t = {};
@@ -218,6 +341,57 @@ function DieFace({ value, colorVar, size, selected, dim, onClick, animClass }) {
   );
 }
 
+// ===== Roue de la fortune des cases « ? » (2026-07) =====
+// Remplace la révélation immédiate par un tirage ANIMÉ, visible de TOUS
+// les joueurs/spectateurs (elle vit dans le state broadcast, pas un state
+// local) : fondu d'entrée, rotation, tenue, fondu de sortie — même principe
+// que les faces de dés factices pendant le roulis : le `kind` tiré par
+// l'hôte voyage déjà dans le payload réseau, mais seul l'angle final de la
+// roue le révèle VISUELLEMENT (le texte de statut, lui, n'apparaît qu'à la
+// résolution côté hôte, une fois l'anim terminée).
+function MysteryWheel({ pending, isOwner, onSpin, t }) {
+  const spin = pending.spin;
+  const segAngle = 360 / MYSTERY_KINDS.length;
+  const targetIdx = spin ? MYSTERY_KINDS.findIndex(k => k.id === spin.kind) : -1;
+  // 5 tours complets pour le suspense, puis pile sur le centre de la tranche
+  // gagnante (le repère fixe pointe vers le haut, 0°).
+  const rot = spin && targetIdx >= 0
+    ? 5 * 360 + (360 - (targetIdx * segAngle + segAngle / 2))
+    : 0;
+  const gradient = MYSTERY_KINDS.map((k, i) => `${k.swatch} ${i * segAngle}deg ${(i + 1) * segAngle}deg`).join(", ");
+  return (
+    <div
+      className={"ludo-wheel-overlay" + (spin ? " spinning" : "")}
+      style={{ "--wheel-life": MYSTERY_SPIN_MS + "ms", "--wheel-spin": MYSTERY_ROT_MS + "ms" }}
+    >
+      <div className="ludo-wheel-card">
+        <p className="ludo-wheel-title">🎡 {t("ludoMysteryWheelTitle")}</p>
+        <div className="ludo-wheel-wrap" onClick={!spin && isOwner ? onSpin : undefined}>
+          <span className="ludo-wheel-pointer" aria-hidden="true" />
+          <div
+            className="ludo-wheel-disc"
+            style={{ background: `conic-gradient(${gradient})`, transform: `rotate(${rot}deg)` }}
+          >
+            {MYSTERY_KINDS.map((k, i) => (
+              <span
+                key={k.id}
+                className={"ludo-wheel-icon" + (k.tier === "extreme" ? " extreme" : "")}
+                style={{ transform: `rotate(${i * segAngle + segAngle / 2}deg) translate(0, -70px) rotate(${-(i * segAngle + segAngle / 2)}deg)` }}
+              >
+                {k.icon}
+              </span>
+            ))}
+          </div>
+        </div>
+        {!spin && isOwner && (
+          <button type="button" className="btn ludo-wheel-btn" onClick={onSpin}>{t("ludoMysterySpin")}</button>
+        )}
+        {!spin && !isOwner && <p className="muted">{t("ludoMysteryWaitSpin")}</p>}
+      </div>
+    </div>
+  );
+}
+
 export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFinish }) {
   const [phase, setPhase] = useState("intro"); // intro (choix/attente) -> playing -> finished
   const [order, setOrder] = useState([]);           // couleurs en jeu, dans l'ordre du tour
@@ -247,9 +421,18 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
   // Zone d'arrivée (zip 83) : rayons de lumière tournants pendant 5 s quand
   // un pion vient d'arriver au centre — { key, color } ou null.
   const [goalBurst, setGoalBurst] = useState(null);
+  // Case mystère EN ATTENTE (2026-07) : { color, tokenIdx, dice, key,
+  // spin:null|{key,kind} } — non-null dès qu'un pion atterrit pile dessus,
+  // jusqu'à ce que la roue ait fini de tourner (voir hostHandleSpin /
+  // resolveMysterySpin). Bloque tout déplacement tant qu'elle est active.
+  const [pendingMystery, setPendingMystery] = useState(null);
+  // Aperçu au survol (2026-07, confort de jeu) : { tokenIdx, cell:[r,c],
+  // captureCount } — purement LOCAL (jamais diffusé), recalculé à chaque
+  // survol d'un pion jouable en fonction du dé actuellement sélectionné.
+  const [hoverPreview, setHoverPreview] = useState(null);
 
   const channelRef = useRef(null);
-  const stateRef = useRef({ tokens, order, turnIdx, dice, movablePlan, effects, winner });
+  const stateRef = useRef({ tokens, order, turnIdx, dice, movablePlan, effects, winner, pendingMystery: null });
   const savedResultRef = useRef(false);
   const autoStartedRef = useRef(false);
   const restoredRef = useRef(false);
@@ -258,13 +441,13 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
   // gardent les compteurs de 6 d'affilée en dehors du cycle de rendu React.
   const colorRef = useRef({});
   const sixesCountRef = useRef({});
-  const moveTimerRef = useRef(null);   // couperet 20 s côté hôte
+  const moveTimerRef = useRef(null);   // couperet du minuteur de tour (hôte)
   const rollAnimTimerRef = useRef(null);
   const rollAnimIvRef = useRef(null);
 
   useEffect(() => {
-    stateRef.current = { tokens, order, turnIdx, dice, movablePlan, effects, winner };
-  }, [tokens, order, turnIdx, dice, movablePlan, effects, winner]);
+    stateRef.current = { tokens, order, turnIdx, dice, movablePlan, effects, winner, pendingMystery };
+  }, [tokens, order, turnIdx, dice, movablePlan, effects, winner, pendingMystery]);
   useEffect(() => { colorRef.current = colorOfPlayer; }, [colorOfPlayer]);
 
   // Horloge d'affichage du compte à rebours de coup (250 ms suffit).
@@ -275,12 +458,14 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
   }, [moveDeadline]);
 
   // Animation de lancer : déclenchée par CHAQUE nouveau rollKey reçu (tous
-  // les clients la voient, spectateurs compris). Trois variantes de roulis
-  // pour la variété (rollKey % 3), faces aléatoires pendant ~1 s, puis les
-  // vraies valeurs se posent.
+  // les clients la voient, spectateurs compris). Le son playDiceShuffle(2)
+  // démarre PILE avec l'animation (2026-07) ; trois variantes de roulis pour
+  // la variété (rollKey % 3), faces aléatoires pendant ~1 s, puis les vraies
+  // valeurs se posent — le résultat ne se révèle donc qu'à la fin.
   useEffect(() => {
     if (!dice || dice.rollKey == null) { setRollAnim(null); return; }
     const key = dice.rollKey;
+    playDiceShuffle(2);
     setRollAnim({ key, phase: "rolling", faces: [1 + Math.floor(Math.random() * 6), 1 + Math.floor(Math.random() * 6)], variant: key % 3 });
     clearInterval(rollAnimIvRef.current);
     rollAnimIvRef.current = setInterval(() => {
@@ -315,6 +500,13 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dice?.rollKey, movablePlan]);
 
+  // L'aperçu de survol (confort de jeu) devient obsolète dès que le dé
+  // sélectionné, le tirage ou le plan changent — on l'efface plutôt que de
+  // laisser un fantôme pointer vers une case qui n'est plus la bonne.
+  useEffect(() => {
+    setHoverPreview(null);
+  }, [selectedDie, dice?.rollKey, movablePlan]);
+
   function applyBroadcastState(payload) {
     setTokens(payload.tokens);
     setTurnIdx(payload.turnIdx);
@@ -325,6 +517,7 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
     setLastMoved(payload.lastMoved);
     setLastEvent(payload.lastEvent);
     setWinner(payload.winner);
+    setPendingMystery(payload.pendingMystery || null);
     // Zone d'arrivée (zip 83) : si ce coup vient de faire ENTRER un pion
     // au centre (61), déclenche les rayons tournants pendant 5 secondes.
     if (payload.lastMoved) {
@@ -348,7 +541,13 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
       setDice(null);
       setMovablePlan(null);
       setEffects({});
-      setMoveDeadline(null);
+      setPendingMystery(null);
+      // Minuteur dès le DÉBUT du tour (2026-07, demande explicite) : calculé
+      // localement par CHAQUE client (un écart de quelques dizaines de ms
+      // entre eux est sans conséquence sur une fenêtre de 20 s) — seul
+      // l'hôte fait vraiment foi côté arbitrage (armMoveTimer ci-dessous).
+      const initialDeadline = Date.now() + MOVE_MS;
+      setMoveDeadline(initialDeadline);
       setLastMoved(null);
       setLastEvent(null);
       setWinner(null);
@@ -363,8 +562,9 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
         saveGameState(room.id, "ludo", {
           v2: true, phase: "playing", order: payload.order, colorOfPlayer: payload.colorOfPlayer,
           tokens: emptyTokens(), turnIdx: 0, dice: null, movablePlan: null, effects: {},
-          moveDeadline: null, lastMoved: null, lastEvent: null, winner: null,
+          moveDeadline: initialDeadline, lastMoved: null, lastEvent: null, winner: null, pendingMystery: null,
         });
+        armMoveTimer(initialDeadline);
       }
     });
 
@@ -378,6 +578,11 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
       hostHandleMove(payload);
     });
 
+    ch.on("broadcast", { event: "spin_attempt" }, ({ payload }) => {
+      if (!isHost) return;
+      hostHandleSpin(payload);
+    });
+
     ch.on("broadcast", { event: "state" }, ({ payload }) => {
       applyBroadcastState(payload);
       if (isHost) {
@@ -387,6 +592,7 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
           movablePlan: payload.movablePlan || null, effects: payload.effects || {},
           moveDeadline: payload.moveDeadline || null,
           lastMoved: payload.lastMoved, lastEvent: payload.lastEvent, winner: payload.winner,
+          pendingMystery: payload.pendingMystery || null,
         });
       }
     });
@@ -410,20 +616,29 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
             setEffects(saved.effects || {}); setMoveDeadline(saved.moveDeadline || null);
             setLastMoved(saved.lastMoved); setLastEvent(saved.lastEvent);
             setWinner(saved.winner);
+            setPendingMystery(saved.pendingMystery || null);
             setPhase("playing");
             autoStartedRef.current = true;
-            // Reprise HÔTE avec un tirage en cours : rediffuse l'état avec
-            // une échéance fraîche et réarme le couperet 20 s (sans ça, le
-            // tour resterait figé pour tout le monde).
-            if (isHost && !saved.winner && saved.dice) {
+            // Reprise HÔTE : le minuteur tourne désormais en PERMANENCE tant
+            // que la partie n'est pas finie (2026-07) — on le réarme donc à
+            // CHAQUE rechargement avec une échéance fraîche, plutôt que
+            // seulement quand un tirage était en cours comme avant.
+            if (isHost && !saved.winner) {
               const deadline = Date.now() + MOVE_MS;
               broadcastState({
-                tokens: saved.tokens, turnIdx: saved.turnIdx, dice: saved.dice,
-                movablePlan: saved.movablePlan, effects: saved.effects || {},
+                tokens: saved.tokens, turnIdx: saved.turnIdx, dice: saved.dice || null,
+                movablePlan: saved.movablePlan || null, effects: saved.effects || {},
                 moveDeadline: deadline, lastMoved: saved.lastMoved, lastEvent: saved.lastEvent,
-                winner: saved.winner,
+                winner: saved.winner, pendingMystery: saved.pendingMystery || null,
               });
-              armMoveTimer(deadline);
+              if (saved.pendingMystery && saved.pendingMystery.spin) {
+                // Reprise EN PLEIN tirage de la roue (fenêtre de quelques
+                // secondes, rare) : on relance la résolution depuis le
+                // début plutôt que de laisser la partie bloquée.
+                timeouts.current.push(setTimeout(() => resolveMysterySpin(saved.pendingMystery), MYSTERY_SPIN_MS));
+              } else {
+                armMoveTimer(deadline);
+              }
             }
           }
         }
@@ -452,38 +667,105 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
       lastMoved: "lastMoved" in patch ? patch.lastMoved : null,
       lastEvent: "lastEvent" in patch ? patch.lastEvent : null,
       winner: "winner" in patch ? patch.winner : s.winner,
+      pendingMystery: "pendingMystery" in patch ? patch.pendingMystery : null,
     };
     channelRef.current.send({ type: "broadcast", event: "state", payload });
   }
 
-  // Couperet 20 s (hôte) : si le joueur n'a pas fini de jouer son tirage à
-  // l'échéance, son tour passe — dés restants perdus, pas de relance même
-  // avec un 6 (la relance se mérite en jouant).
+  // Couperet du minuteur de TOUR (hôte) : si le joueur n'a pas agi à
+  // l'échéance — que ce soit pour LANCER les dés, JOUER un coup, ou LANCER
+  // LA ROUE d'une case mystère — le tour est réputé perdu. Se réarme lui-
+  // même pour le joueur suivant : le minuteur ne s'arrête donc jamais tant
+  // que la partie continue (corrige l'angle mort "personne ne lance jamais
+  // les dés" signalé à l'audit du zip 84).
   function armMoveTimer(deadline) {
     clearTimeout(moveTimerRef.current);
     if (!isHost || !deadline) return;
     moveTimerRef.current = setTimeout(() => {
       const s = stateRef.current;
-      if (!s || s.winner || !s.dice) return;
+      if (!s || s.winner) return;
+      // Roue mystère en attente de lancer : le temps presse aussi CE
+      // geste — on lance la roue à la place du joueur plutôt que d'annuler
+      // le coup déjà joué qui l'a amené sur cette case.
+      if (s.pendingMystery && !s.pendingMystery.spin) {
+        const ownerId = Object.keys(colorRef.current).find(pid => colorRef.current[pid] === s.pendingMystery.color);
+        hostHandleSpin({ by: ownerId });
+        return;
+      }
+      // Sinon (en attente d'un lancer de dés OU d'un déplacement) : tour
+      // passé, minuteur tout neuf réarmé pour le joueur suivant.
       const currentColor = s.order[s.turnIdx];
       sixesCountRef.current[currentColor] = 0;
+      const nextTurnIdx = (s.turnIdx + 1) % s.order.length;
+      const deadline2 = Date.now() + MOVE_MS;
       broadcastState({
-        turnIdx: (s.turnIdx + 1) % s.order.length,
-        dice: null, movablePlan: null, moveDeadline: null,
-        effects: s.effects, lastEvent: "timeout",
+        turnIdx: nextTurnIdx, dice: null, movablePlan: null, moveDeadline: deadline2,
+        effects: s.effects, lastEvent: "timeout", pendingMystery: null,
       });
+      armMoveTimer(deadline2);
     }, Math.max(0, deadline - Date.now()));
+  }
+
+  // Termine un tirage (plus aucun dé jouable) : décide si le joueur rejoue
+  // — et avec COMBIEN de dés, cf. règle du 6 simple/double ci-dessous — ou
+  // fait avancer le tour sinon, puis réarme systématiquement le minuteur
+  // pour la PHASE SUIVANTE (nouveau lancer du même joueur, ou tour du
+  // joueur suivant). Partagée par hostHandleMove ET resolveMysterySpin pour
+  // ne jamais dupliquer cette logique de fin de tour.
+  function finishDiceTurn({ color, tokens, effects, diceAfter, extraReroll, lastMoved, baseLastEvent }) {
+    const s = stateRef.current;
+    const colorIdx = s.order.indexOf(color);
+    // Règle du 6 simple/double (2026-07, demande explicite) : UN SEUL 6 dans
+    // le tirage ne relance QUE ce dé (le prochain lancer du joueur n'aura
+    // qu'un dé — même drapeau "oneDie" que le malus mystère, sémantique
+    // identique) ; DEUX 6 — ou une case mystère "reroll" — relancent les
+    // deux dés normalement.
+    const sixCount = (diceAfter.a === 6 ? 1 : 0) + (diceAfter.b === 6 ? 1 : 0);
+    const hadSix = sixCount > 0;
+    const goAgain = hadSix || extraReroll;
+    let nextEffects = effects;
+    if (!hadSix) sixesCountRef.current[color] = 0;
+    clearTimeout(moveTimerRef.current);
+
+    if (goAgain) {
+      if (!extraReroll && sixCount === 1) {
+        nextEffects = { ...nextEffects, [color]: { ...(nextEffects[color] || {}), oneDie: true } };
+      }
+      const deadline = Date.now() + MOVE_MS;
+      broadcastState({
+        tokens, dice: null, movablePlan: null, effects: nextEffects,
+        moveDeadline: deadline, turnIdx: colorIdx,
+        lastMoved, lastEvent: baseLastEvent || (extraReroll && !hadSix ? "extraRoll" : "sixAgain"),
+        pendingMystery: null,
+      });
+      armMoveTimer(deadline);
+      return;
+    }
+
+    const nextTurnIdx = (colorIdx + 1) % s.order.length;
+    const deadline = Date.now() + MOVE_MS;
+    broadcastState({
+      tokens, dice: null, movablePlan: null, effects: nextEffects,
+      moveDeadline: deadline, turnIdx: nextTurnIdx,
+      lastMoved, lastEvent: baseLastEvent, pendingMystery: null,
+    });
+    armMoveTimer(deadline);
   }
 
   // ----- Arbitrage du lancer des dés : seul l'hôte y répond -----
   function hostHandleRoll({ by }) {
     const s = stateRef.current;
-    if (s.winner || s.dice !== null) return;
+    if (s.winner || s.dice !== null || s.pendingMystery) return;
     const currentColor = s.order[s.turnIdx];
     const ownerId = Object.keys(colorRef.current).find(pid => colorRef.current[pid] === currentColor);
     if (by !== ownerId) return;
+    // Le joueur vient d'agir avant l'échéance "en attente de lancer" :
+    // on neutralise ce minuteur-là tout de suite (les branches ci-dessous
+    // en réarment un nouveau, adapté à la phase qui suit).
+    clearTimeout(moveTimerRef.current);
 
-    // Malus "un seul dé" (case mystère oppOneDie) : consommé par CE lancer.
+    // Malus "un seul dé" (case mystère oppOneDie OU 6 simple du tour
+    // précédent) : consommé par CE lancer.
     const eff = { ...(s.effects || {}) };
     const single = !!(eff[currentColor] && eff[currentColor].oneDie);
     if (single) eff[currentColor] = {};
@@ -502,21 +784,26 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
 
     if (consecutive === 3) {
       // Trois lancers avec 6 d'affilée : tour perdu immédiatement.
-      broadcastState({ dice: dicePayload, movablePlan: { d0: [], d1: [], sum: [] }, effects: eff, lastEvent: "threeSixes" });
+      broadcastState({ dice: dicePayload, movablePlan: { d0: [], d1: [], sum: [] }, effects: eff, moveDeadline: null, lastEvent: "threeSixes", pendingMystery: null });
       timeouts.current.push(setTimeout(() => {
         sixesCountRef.current[currentColor] = 0;
-        broadcastState({ turnIdx: (s.turnIdx + 1) % s.order.length, dice: null, movablePlan: null, effects: eff, lastEvent: null });
+        const nextTurnIdx = (s.turnIdx + 1) % s.order.length;
+        const deadline = Date.now() + MOVE_MS;
+        broadcastState({ turnIdx: nextTurnIdx, dice: null, movablePlan: null, moveDeadline: deadline, effects: eff, lastEvent: null, pendingMystery: null });
+        armMoveTimer(deadline);
       }, ROLL_ANIM_MS + 1300));
       return;
     }
 
     const plan = buildPlan(s.tokens[currentColor], dicePayload);
     if (!planHasMove(plan)) {
-      broadcastState({ dice: dicePayload, movablePlan: { d0: [], d1: [], sum: [] }, effects: eff, lastEvent: "noMove" });
+      broadcastState({ dice: dicePayload, movablePlan: { d0: [], d1: [], sum: [] }, effects: eff, moveDeadline: null, lastEvent: "noMove", pendingMystery: null });
       timeouts.current.push(setTimeout(() => {
         // Un 6 sans coup possible garde la relance (règle historique).
-        const next = hasSix ? s.turnIdx : (s.turnIdx + 1) % s.order.length;
-        broadcastState({ turnIdx: next, dice: null, movablePlan: null, effects: eff, lastEvent: null });
+        const nextTurnIdx = hasSix ? s.turnIdx : (s.turnIdx + 1) % s.order.length;
+        const deadline = Date.now() + MOVE_MS;
+        broadcastState({ turnIdx: nextTurnIdx, dice: null, movablePlan: null, moveDeadline: deadline, effects: eff, lastEvent: null, pendingMystery: null });
+        armMoveTimer(deadline);
       }, ROLL_ANIM_MS + 1300));
       return;
     }
@@ -525,7 +812,7 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
     const deadline = Date.now() + ROLL_ANIM_MS + MOVE_MS;
     broadcastState({
       dice: dicePayload, movablePlan: plan, effects: eff,
-      moveDeadline: deadline, lastEvent: single ? "oneDieTurn" : null,
+      moveDeadline: deadline, lastEvent: single ? "oneDieTurn" : null, pendingMystery: null,
     });
     armMoveTimer(deadline);
   }
@@ -534,7 +821,7 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
   // `die` : 0 (1er dé), 1 (2e dé) ou "sum" (les deux d'un coup).
   function hostHandleMove({ by, tokenIndex, die }) {
     const s = stateRef.current;
-    if (s.winner || s.dice === null || !s.movablePlan) return;
+    if (s.winner || s.dice === null || !s.movablePlan || s.pendingMystery) return;
     const currentColor = s.order[s.turnIdx];
     const ownerId = Object.keys(colorRef.current).find(pid => colorRef.current[pid] === currentColor);
     if (by !== ownerId) return;
@@ -556,84 +843,128 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
       value = d.b;
     } else return;
 
-    let { tokens: nextTokens, captured, won } = applyMove(s.tokens, currentColor, tokenIndex, value);
-    let effects = { ...(s.effects || {}) };
-    let mysteryEvent = null;
-    let extraRoll = false;
-
-    // Case mystère « ? » : uniquement en atterrissant PILE dessus (piste
-    // commune 1-55), jamais en la survolant. Un seul effet par coup.
-    if (!won) {
-      const landed = nextTokens[currentColor][tokenIndex];
-      if (landed >= 1 && landed <= 55 && MYSTERY_ABS.has(absIndex(currentColor, landed))) {
-        const kind = MYSTERY_KINDS[Math.floor(Math.random() * MYSTERY_KINDS.length)];
-        mysteryEvent = "mystery:" + kind + ":" + currentColor;
-        if (kind === "boost") {
-          // +3 cases dans la foulée, si le couloir le permet (capture
-          // possible à l'arrivée du boost, comme un coup normal).
-          if (landed + 3 <= 61) {
-            const res2 = applyMove(nextTokens, currentColor, tokenIndex, 3);
-            nextTokens = res2.tokens;
-            captured = captured.concat(res2.captured);
-            won = res2.won;
-          }
-        } else if (kind === "setback") {
-          const res2 = applySetback(nextTokens, currentColor, tokenIndex);
-          nextTokens = res2.tokens;
-          captured = captured.concat(res2.captured);
-        } else if (kind === "oppOneDie") {
-          const nextColor = s.order[(s.turnIdx + 1) % s.order.length];
-          effects[nextColor] = { ...(effects[nextColor] || {}), oneDie: true };
-        } else if (kind === "reroll") {
-          extraRoll = true;
-        }
-      }
-    }
+    const { tokens: nextTokens, captured, won } = applyMove(s.tokens, currentColor, tokenIndex, value);
+    const effects = { ...(s.effects || {}) };
+    const captureEvent = captured.length > 0 ? "captured:" + currentColor : null;
+    const movedInfo = { color: currentColor, tokenIdx: tokenIndex };
 
     if (won) {
       clearTimeout(moveTimerRef.current);
       broadcastState({
         tokens: nextTokens, dice: null, movablePlan: null, moveDeadline: null, effects,
-        lastMoved: { color: currentColor, tokenIdx: tokenIndex }, lastEvent: null, winner: currentColor,
+        lastMoved: movedInfo, lastEvent: captureEvent, winner: currentColor, pendingMystery: null,
       });
       return;
     }
 
-    // Consommation du/des dé(s) joué(s).
+    // Consommation du/des dé(s) joué(s) : le coup a bien eu lieu, qu'il
+    // tombe ou non sur une case mystère (elle ne fait que DIFFÉRER
+    // l'application du bonus/malus, jamais le déplacement lui-même).
     const used = die === "sum" ? [true, true] : [die === 0 ? true : d.used[0], die === 1 ? true : (d.b == null ? true : d.used[1])];
     const diceAfter = { ...d, used };
-    const planAfter = buildPlan(nextTokens[currentColor], diceAfter);
-    const stillToPlay = planHasMove(planAfter);
 
-    const hadSix = d.a === 6 || d.b === 6;
-    const captureEvent = captured.length > 0 ? "captured:" + currentColor : null;
+    const landed = nextTokens[currentColor][tokenIndex];
+    const isMystery = landed >= 1 && landed <= 55 && MYSTERY_ABS.has(absIndex(currentColor, landed));
 
-    if (stillToPlay) {
-      // Il reste un dé jouable : même joueur, échéance REMISE à 20 s
-      // (réinitialisation à chaque coup, demande explicite).
+    if (isMystery) {
+      // Case « ? » : la ROUE DE LA FORTUNE s'ouvre (2026-07) — voir
+      // hostHandleSpin/resolveMysterySpin. Plus aucun coup n'est jouable
+      // tant qu'elle n'a pas tranché ; le joueur (ou le minuteur, en
+      // dernier recours) doit d'abord la lancer.
+      const pending = { color: currentColor, tokenIdx: tokenIndex, dice: diceAfter, key: Date.now(), spin: null };
       const deadline = Date.now() + MOVE_MS;
       broadcastState({
-        tokens: nextTokens, dice: diceAfter, movablePlan: planAfter, effects,
-        moveDeadline: deadline,
-        lastMoved: { color: currentColor, tokenIdx: tokenIndex },
-        lastEvent: mysteryEvent || captureEvent,
+        tokens: nextTokens, dice: diceAfter, movablePlan: { d0: [], d1: [], sum: [] }, effects,
+        moveDeadline: deadline, pendingMystery: pending,
+        lastMoved: movedInfo, lastEvent: captureEvent,
       });
       armMoveTimer(deadline);
       return;
     }
 
-    // Tirage épuisé (ou plus aucun coup possible) : fin du tour. La relance
-    // est accordée si le lancer contenait un 6 (règle historique conservée)
-    // OU si une case mystère "reroll" vient d'être décrochée.
+    const planAfter = buildPlan(nextTokens[currentColor], diceAfter);
+    if (planHasMove(planAfter)) {
+      // Il reste un dé jouable : même joueur, échéance REMISE à 20 s
+      // (réinitialisation à chaque coup, demande explicite).
+      const deadline = Date.now() + MOVE_MS;
+      broadcastState({
+        tokens: nextTokens, dice: diceAfter, movablePlan: planAfter, effects,
+        moveDeadline: deadline, lastMoved: movedInfo, lastEvent: captureEvent, pendingMystery: null,
+      });
+      armMoveTimer(deadline);
+      return;
+    }
+
+    finishDiceTurn({
+      color: currentColor, tokens: nextTokens, effects, diceAfter,
+      extraReroll: false, lastMoved: movedInfo, baseLastEvent: captureEvent,
+    });
+  }
+
+  // ----- Arbitrage du lancer de la roue de la fortune : seul l'hôte y répond -----
+  function hostHandleSpin({ by }) {
+    const s = stateRef.current;
+    if (s.winner || !s.pendingMystery || s.pendingMystery.spin) return;
+    const ownerId = Object.keys(colorRef.current).find(pid => colorRef.current[pid] === s.pendingMystery.color);
+    if (by !== ownerId) return;
     clearTimeout(moveTimerRef.current);
-    const goAgain = hadSix || extraRoll;
-    if (!hadSix) sixesCountRef.current[currentColor] = 0;
-    const nextTurnIdx = goAgain ? s.turnIdx : (s.turnIdx + 1) % s.order.length;
+    const kind = pickMysteryKind().id;
+    const pending = { ...s.pendingMystery, spin: { key: Date.now(), kind } };
+    // Aucune échéance pendant l'animation : personne n'a d'action à faire,
+    // seule la résolution différée (ci-dessous) fait avancer la partie.
     broadcastState({
-      tokens: nextTokens, dice: null, movablePlan: null, moveDeadline: null, effects,
-      turnIdx: nextTurnIdx,
-      lastMoved: { color: currentColor, tokenIdx: tokenIndex },
-      lastEvent: mysteryEvent || captureEvent || (goAgain ? (hadSix ? "sixAgain" : "extraRoll") : null),
+      dice: s.dice, movablePlan: { d0: [], d1: [], sum: [] }, effects: s.effects,
+      moveDeadline: null, pendingMystery: pending,
+    });
+    timeouts.current.push(setTimeout(() => resolveMysterySpin(pending), MYSTERY_SPIN_MS));
+  }
+
+  // Résolution de la roue une fois l'animation terminée (délai
+  // MYSTERY_SPIN_MS après le lancer) : applique l'effet déjà tiré, puis
+  // reprend exactement le fil du tour (dé(s) restant à jouer, relance
+  // méritée ou passage au joueur suivant) via finishDiceTurn.
+  function resolveMysterySpin(pending) {
+    const s = stateRef.current;
+    // Garde-fou : si la partie a changé entretemps (nouvelle partie, victoire
+    // déclarée autrement, etc.), on abandonne proprement.
+    if (s.winner || !s.pendingMystery || s.pendingMystery.key !== pending.key) return;
+    const { color, tokenIdx, dice: diceAfter } = pending;
+    const kind = pending.spin && pending.spin.kind;
+    const colorIdx = s.order.indexOf(color);
+    const nextColor = s.order[(colorIdx + 1) % s.order.length];
+    const { tokens: nextTokens, captured, extraRoll, effectsPatch, info } =
+      applyMysteryKind(s.tokens, color, tokenIdx, kind, nextColor);
+    let effects = { ...(s.effects || {}) };
+    if (effectsPatch) {
+      effects[effectsPatch.color] = { ...(effects[effectsPatch.color] || {}), ...effectsPatch.patch };
+    }
+    const mysteryEvent = "mystery:" + kind + ":" + color;
+    const captureEvent = captured.length > 0 ? "captured:" + color : null;
+    const movedInfo = { color, tokenIdx: info.freedIdx != null ? info.freedIdx : tokenIdx };
+
+    if (info.won) {
+      clearTimeout(moveTimerRef.current);
+      broadcastState({
+        tokens: nextTokens, dice: null, movablePlan: null, moveDeadline: null, effects,
+        lastMoved: movedInfo, lastEvent: mysteryEvent, winner: color, pendingMystery: null,
+      });
+      return;
+    }
+
+    const planAfter = buildPlan(nextTokens[color], diceAfter);
+    if (planHasMove(planAfter)) {
+      const deadline = Date.now() + MOVE_MS;
+      broadcastState({
+        tokens: nextTokens, dice: diceAfter, movablePlan: planAfter, effects,
+        moveDeadline: deadline, lastMoved: movedInfo, lastEvent: mysteryEvent || captureEvent, pendingMystery: null,
+      });
+      armMoveTimer(deadline);
+      return;
+    }
+
+    finishDiceTurn({
+      color, tokens: nextTokens, effects, diceAfter,
+      extraReroll, lastMoved: movedInfo, baseLastEvent: mysteryEvent || captureEvent,
     });
   }
 
@@ -699,15 +1030,22 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
   }, [winner]);
 
   function rollDice() {
-    if (!isMyTurn || dice !== null) return;
+    if (!isMyTurn || dice !== null || pendingMystery) return;
     channelRef.current?.send({ type: "broadcast", event: "roll_attempt", payload: { by: me.id } });
   }
   function pickToken(idx) {
-    if (!isMyTurn || dice === null || selectedDie == null) return;
+    if (!isMyTurn || dice === null || selectedDie == null || pendingMystery) return;
     if (rollAnim && rollAnim.phase === "rolling") return; // laisse les dés s'immobiliser
     const list = selectedDie === "sum" ? movablePlan?.sum : selectedDie === 0 ? movablePlan?.d0 : movablePlan?.d1;
     if (!list || !list.includes(idx)) return;
     channelRef.current?.send({ type: "broadcast", event: "move_attempt", payload: { by: me.id, tokenIndex: idx, die: selectedDie } });
+  }
+  // Déclenche la roue (clic sur la roue/le bouton, ou barre d'espace) —
+  // uniquement le propriétaire du pion concerné peut la lancer.
+  function requestSpin() {
+    if (!pendingMystery || pendingMystery.spin) return;
+    if (colorOfPlayer[me.id] !== pendingMystery.color) return;
+    channelRef.current?.send({ type: "broadcast", event: "spin_attempt", payload: { by: me.id } });
   }
 
   const myColor = colorOfPlayer[me.id];
@@ -718,27 +1056,46 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
   const settled = !rollAnim || rollAnim.phase === "settled";
   const moveRemaining = moveDeadline ? Math.max(0, Math.ceil((moveDeadline - now) / 1000)) : null;
   // Pions cliquables = ceux du plan de l'option sélectionnée.
-  const movableNow = isMyTurn && dice && movablePlan && settled
+  const movableNow = isMyTurn && dice && movablePlan && settled && !pendingMystery
     ? (selectedDie === "sum" ? movablePlan.sum : selectedDie === 0 ? movablePlan.d0 : selectedDie === 1 ? movablePlan.d1 : [])
     : [];
 
-  // Raccourci "lancer les dés" à la barre d'espace (demande 2026-07) :
-  // s'AJOUTE au bouton existant, ne le remplace pas. Ignoré si le focus
-  // est sur un champ de saisie (ex. le chat du salon) pour ne jamais voler
-  // un espace tapé dans un message. Mêmes garde-fous que rollDice().
+  // Aperçu de destination au survol (confort de jeu, 2026-07) : simule
+  // localement le coup (même fonction PURE applyMove que l'arbitre hôte),
+  // sans rien diffuser — juste de quoi afficher un fantôme discret sur la
+  // case d'arrivée, et un 💥 si ce coup capturerait un ou plusieurs pions.
+  function previewFor(tokenIdx) {
+    if (!dice || selectedDie == null || !myColor) return null;
+    const value = selectedDie === "sum" ? dice.a + dice.b : selectedDie === 0 ? dice.a : dice.b;
+    if (value == null) return null;
+    const { tokens: simTokens, captured } = applyMove(tokens, myColor, tokenIdx, value);
+    const cell = cellFor(myColor, simTokens[myColor][tokenIdx]);
+    if (!cell) return null;
+    return { tokenIdx, cell, captureCount: captured.length };
+  }
+
+  // Raccourci clavier (barre d'Espace, demande 2026-07) : lance les dés à
+  // son tour, ET lance la roue de la fortune quand une case mystère
+  // l'exige — ignoré si le focus est sur un champ de saisie (ex. le chat du
+  // salon) pour ne jamais voler un espace tapé dans un message.
   useEffect(() => {
     function onKeyDown(e) {
       if (e.code !== "Space") return;
       const tag = (document.activeElement?.tagName || "").toLowerCase();
       if (tag === "input" || tag === "textarea" || document.activeElement?.isContentEditable) return;
-      if (!isMyTurn || dice !== null) return;
+      if (pendingMystery && !pendingMystery.spin && colorOfPlayer[me.id] === pendingMystery.color) {
+        e.preventDefault();
+        requestSpin();
+        return;
+      }
+      if (!isMyTurn || dice !== null || pendingMystery) return;
       e.preventDefault();
       rollDice();
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isMyTurn, dice]);
+  }, [isMyTurn, dice, pendingMystery, myColor]);
   const playerNameFor = (color) => {
     const pid = Object.keys(colorOfPlayer).find(id => colorOfPlayer[id] === color);
     const p = players.find(pp => pp.profile_id === pid);
@@ -751,20 +1108,21 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
     const iWon = myColor && myColor === winner;
     let statusText;
     const mysteryMatch = typeof lastEvent === "string" && lastEvent.startsWith("mystery:") ? lastEvent.split(":") : null;
+    const mysteryInfo = mysteryMatch ? MYSTERY_KINDS.find(k => k.id === mysteryMatch[1]) : null;
     if (winner) statusText = null;
+    else if (pendingMystery && pendingMystery.spin) statusText = t("ludoMysterySpinning");
+    else if (pendingMystery && !pendingMystery.spin) {
+      statusText = myColor === pendingMystery.color
+        ? t("ludoMysterySpinPrompt")
+        : `${t("ludoWaitingFor")} ${playerNameFor(pendingMystery.color)} (🎡)…`;
+    }
     else if (lastEvent === "threeSixes") statusText = t("ludoThreeSixes");
     else if (lastEvent === "noMove") statusText = t("ludoNoMove");
     else if (lastEvent === "timeout") statusText = t("ludoTimeout");
     else if (lastEvent === "sixAgain") statusText = t("ludoSixAgain");
     else if (lastEvent === "extraRoll") statusText = t("ludoExtraRoll");
     else if (lastEvent === "oneDieTurn") statusText = t("ludoOneDieTurn");
-    else if (mysteryMatch) {
-      const kind = mysteryMatch[1];
-      statusText = kind === "boost" ? t("ludoMysteryBoost")
-        : kind === "setback" ? t("ludoMysterySetback")
-        : kind === "oppOneDie" ? t("ludoMysteryOppOneDie")
-        : t("ludoMysteryReroll");
-    }
+    else if (mysteryInfo) statusText = t(mysteryInfo.labelKey);
     else if (lastEvent && lastEvent.startsWith("captured:")) {
       const moverColor = lastEvent.split(":")[1];
       statusText = `💥 ${playerNameFor(moverColor)} ${t("ludoCapturedSuffix")}`;
@@ -774,11 +1132,12 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
     else statusText = t("ludoSpectating");
 
     // Plateau de dés : ancré près du camp du joueur ACTIF, pips à sa couleur.
+    // Caché pendant la roue de la fortune (2026-07) pour ne pas encombrer.
     const trayPos = currentColor ? DICE_TRAY_POS[currentColor] : null;
     const trayColorVar = currentColor ? COLORS[currentColor].css : "--p2";
     const dieValues = dice ? [dice.a, dice.b] : [];
-    const showTray = phase === "playing" && !winner && dice !== null;
-    const sumAvailable = !!(isMyTurn && settled && movablePlan && movablePlan.sum.length > 0 && dice && dice.b != null && !dice.used[0] && !dice.used[1]);
+    const showTray = phase === "playing" && !winner && dice !== null && !pendingMystery;
+    const sumAvailable = !!(isMyTurn && settled && movablePlan && movablePlan.sum.length > 0 && dice && dice.b != null && !dice.used[0] && !dice.used[1] && !pendingMystery);
 
     content = (
       <div>
@@ -801,7 +1160,10 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
         ) : (
           <p className="muted" style={{ textAlign: "center", marginBottom: 10, minHeight: 18 }}>
             {statusText}
-            {moveRemaining != null && dice !== null && settled && (
+            {/* Le minuteur tourne dès le DÉBUT du tour (2026-07) : la
+                pastille est donc visible même AVANT le premier lancer
+                (dice === null), pas seulement une fois les dés posés. */}
+            {moveRemaining != null && settled && !pendingMystery && (
               <span className={"turn-timer-chip" + (moveRemaining <= 5 ? " hot" : "")} style={{ marginLeft: 8 }}>⏱ {moveRemaining}s</span>
             )}
           </p>
@@ -889,12 +1251,21 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
 
           {/* Révélation de case mystère : pop central bref, aux couleurs du
               jeu — purement décoratif (le statut texte dit la même chose). */}
-          {mysteryMatch && !winner && (
+          {mysteryMatch && !winner && !pendingMystery && (
             <div className="ludo-mystery-pop" key={lastEvent + "-" + (lastMoved ? lastMoved.tokenIdx : "")} aria-hidden="true">
-              <span className="ludo-mystery-pop-text">
-                {mysteryMatch[1] === "boost" ? "🎁 +3" : mysteryMatch[1] === "setback" ? "💫 -4" : mysteryMatch[1] === "oppOneDie" ? "🎲½" : "🎁 🎲"}
-              </span>
+              <span className="ludo-mystery-pop-text">{mysteryInfo ? mysteryInfo.pop : "🎁"}</span>
             </div>
+          )}
+
+          {/* Roue de la fortune (2026-07) : visible de TOUS dès qu'un pion
+              atterrit pile sur une case « ? », jusqu'à résolution. */}
+          {pendingMystery && (
+            <MysteryWheel
+              pending={pendingMystery}
+              isOwner={myColor === pendingMystery.color}
+              onSpin={requestSpin}
+              t={t}
+            />
           )}
 
           {(() => {
@@ -965,6 +1336,8 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
                   key={color + "-" + idx}
                   className={"ludo-token " + color + (canPick ? " mine-movable" : "") + (isLast ? " last" : "")}
                   onClick={() => canPick && pickToken(idx)}
+                  onMouseEnter={() => canPick && setHoverPreview(previewFor(idx))}
+                  onMouseLeave={() => setHoverPreview(prev => (prev && prev.tokenIdx === idx ? null : prev))}
                   style={{
                     top: ((r + top) / 15) * 100 + "%",
                     left: ((c + left) / 15) * 100 + "%",
@@ -977,6 +1350,30 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
                 </div>
               );
             }));
+          })()}
+
+          {/* Aperçu de destination au survol (confort de jeu, 2026-07) :
+              anneau discret sur la case d'arrivée du pion survolé, + 💥 si
+              ce coup capturerait un ou plusieurs pions adverses. */}
+          {hoverPreview && (() => {
+            const [pr, pc] = hoverPreview.cell;
+            return (
+              <>
+                <div
+                  className={"ludo-preview" + (hoverPreview.captureCount > 0 ? " capture" : "")}
+                  style={{
+                    top: (pr / 15) * 100 + "%", left: (pc / 15) * 100 + "%",
+                    width: (0.82 / 15) * 100 + "%", height: (0.82 / 15) * 100 + "%",
+                  }}
+                />
+                {hoverPreview.captureCount > 0 && (
+                  <span
+                    className="ludo-preview-capture"
+                    style={{ top: (pr / 15) * 100 + "%", left: ((pc + 0.5) / 15) * 100 + "%" }}
+                  >💥</span>
+                )}
+              </>
+            );
           })()}
         </div>
 
@@ -998,7 +1395,7 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
           </div>
         ) : (
           <div style={{ display: "flex", justifyContent: "center", marginTop: 14 }}>
-            {isMyTurn && dice === null && (
+            {isMyTurn && dice === null && !pendingMystery && (
               <button className="btn" style={{ width: "auto", padding: "12px 26px" }} onClick={rollDice} title={t("ludoRollSpaceHint")}>
                 {t("ludoRollDice")}
               </button>
@@ -1047,7 +1444,7 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
   }
 
   return (
-    <div className="panel" style={{ maxWidth: "min(760px, 94vw)" }}>
+    <div className="panel ludo-panel" style={{ maxWidth: "min(660px, 94vw)" }}>
       <h1>{t("ludoTitle")}</h1>
       <Crossfade id={phase}>{content}</Crossfade>
     </div>
