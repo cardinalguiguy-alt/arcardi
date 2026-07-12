@@ -179,6 +179,74 @@ body.worldle-theme .rules-info-btn:hover{
 body.worldle-theme .stage-zoom-fab:hover, body.worldle-theme .stage-zoom-fab:focus-visible{ border-color:var(--acc-worldle); }
 body.worldle-theme .stage-zoom-fab.on{ color:var(--acc-worldle); border-color:rgba(111,168,255,.6); }
 
+/* ===== Worldle : liste des tentatives + révélation (2026-07) =====
+   Liste qui se COMPACTE progressivement (voir GUESS_COMPACT_AT/TINY_AT dans
+   Worldle.js) : jamais de scroll vertical même à 10/10 essais — seuls le
+   détachement du continent (palier "compact") puis la barre de progression
+   (palier "tiny") disparaissent, le plus important (pays, distance,
+   direction, %) reste toujours affiché et lisible. */
+.worldle-guesses{ display:grid; gap:10px; }
+.worldle-guesses.compact{ gap:6px; }
+.worldle-guesses.tiny{ gap:4px; }
+.worldle-guess-row{
+  padding:10px 12px; border-radius:12px; border:2px solid var(--line);
+  background:rgba(255,255,255,.03);
+  transition:padding .2s ease, border-color .2s ease;
+}
+/* Harmonisation vert/bleu (2026-07) : trouvé = vert --ok, meilleur essai
+   restant = bleu --acc-worldle (fini le doré --p4). */
+.worldle-guess-row.hit{ border-color:var(--ok); }
+.worldle-guess-row.best{ border-color:var(--acc-worldle); }
+.worldle-guesses.compact .worldle-guess-row{ padding:6px 10px; font-size:12.5px; }
+.worldle-guesses.tiny .worldle-guess-row{ padding:4px 10px; font-size:11.5px; }
+.worldle-guess-top{ display:flex; justify-content:space-between; align-items:center; }
+.worldle-guess-row:not(.hit) .worldle-guess-top{ margin-bottom:6px; }
+.worldle-guesses.compact .worldle-guess-row:not(.hit) .worldle-guess-top,
+.worldle-guesses.tiny .worldle-guess-row:not(.hit) .worldle-guess-top{ margin-bottom:3px; }
+.worldle-guess-name{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.worldle-guess-hitmark{ color:var(--ok); font-weight:800; }
+.worldle-guess-meta{ display:flex; gap:8px; align-items:center; font-family:'Space Mono'; font-size:13px; flex:none; }
+.worldle-guesses.compact .worldle-guess-meta{ font-size:12px; gap:6px; }
+.worldle-guesses.tiny .worldle-guess-meta{ font-size:11px; gap:5px; }
+.worldle-guess-meta .best{ color:var(--acc-worldle); }
+.worldle-guess-meta span:not(.best){ color:var(--ok); }
+.worldle-guess-bar-track{ height:6px; background:rgba(255,255,255,.08); border-radius:99px; overflow:hidden; }
+.worldle-guesses.compact .worldle-guess-bar-track{ height:4px; }
+.worldle-guess-bar{ height:100%; background:var(--ok); transition:width .4s ease; }
+.worldle-guess-bar.best{ background:var(--acc-worldle); }
+.worldle-guess-continent{ color:var(--muted); font-size:12px; margin-top:4px; }
+.worldle-guesses.compact .worldle-guess-continent,
+.worldle-guesses.tiny .worldle-guess-continent{ display:none; }
+.worldle-guesses.tiny .worldle-guess-bar-track{ display:none; }
+
+/* Révélation de fin de manche : OVERLAY par-dessus tout le panneau (jamais
+   un bloc dans le flux normal, demande explicite) — apparition ET
+   disparition en fondu (le composant reste MONTÉ dès qu'un instantané
+   existe, seule la classe .show — pilotée par `finished` — bascule la
+   visibilité, ce qui permet la transition CSS dans les deux sens). */
+.worldle-reveal-overlay{
+  position:absolute; inset:0; z-index:20;
+  display:flex; align-items:center; justify-content:center; padding:16px;
+  background:rgba(10,14,20,0); backdrop-filter:blur(0px); -webkit-backdrop-filter:blur(0px);
+  opacity:0; pointer-events:none;
+  transition:opacity .4s ease, background .4s ease, backdrop-filter .4s ease;
+}
+.worldle-reveal-overlay.show{
+  opacity:1; pointer-events:auto;
+  background:rgba(10,14,20,.78); backdrop-filter:blur(3px); -webkit-backdrop-filter:blur(3px);
+}
+.worldle-reveal-card{
+  width:100%; max-width:min(420px, 100%); text-align:center;
+  background:linear-gradient(180deg, var(--card), var(--bg2)); border:2px solid var(--line);
+  border-radius:18px; padding:20px; box-shadow:0 18px 44px rgba(0,0,0,.5);
+  transform:scale(.92) translateY(14px); opacity:0;
+  transition:transform .4s cubic-bezier(.2,.9,.25,1), opacity .35s ease;
+}
+.worldle-reveal-overlay.show .worldle-reveal-card{ transform:scale(1) translateY(0); opacity:1; }
+@media (prefers-reduced-motion: reduce){
+  .worldle-reveal-overlay, .worldle-reveal-card{ transition:none; }
+}
+
 /* ===== Tactile (audit iOS/Android 2026-07) =====
    - tap-highlight : supprime le rectangle gris/bleu que Safari iOS et
      Chrome Android flashent sur CHAQUE tap d'élément cliquable — très
@@ -1430,8 +1498,16 @@ button.ludo-roman.selected{
 /* Pulsation douce sur le siège dont c'est le tour — même langage que les
    pions jouables de Petits Chevaux (ludoPulse), pour que "à qui le tour"
    se voie sans avoir à lire le texte de statut. */
+.chromatik-opponent{ transition:border-color .15s ease, background .15s ease, transform .2s ease; }
+/* Vignette légèrement AGRANDIE pendant que c'est son tour (2026-07, demande
+   explicite) : `transform` seul (jamais une variation de padding/font-size)
+   pour ne RIEN faire bouger dans la disposition — les vignettes voisines ne
+   se décalent jamais quand le tour change. z-index en prime pour qu'elle
+   passe proprement au-dessus si l'agrandissement empiète un peu sur sa
+   voisine (rangée serrée à 3-4 joueurs). */
 .chromatik-opponent.active{
   border-color:var(--p3); background:rgba(182,240,76,.1);
+  transform:scale(1.1); z-index:3;
   animation:chromatikActivePulse 1.6s ease-in-out infinite;
 }
 @keyframes chromatikActivePulse{
@@ -1741,8 +1817,31 @@ button.ludo-roman.selected{
 /* ----- Chromatik : récapitulatif de fin de manche / fin de partie -----
    Réutilise le podium de Président (.pres-podium/.pres-podium-row) pour un
    classement cohérent d'un jeu à l'autre, trié sur le score cumulé le plus
-   BAS (voir matchScores dans ChromatikGame.js). */
-.chromatik-round-summary{ margin-top:14px; }
+   BAS (voir matchScores dans ChromatikGame.js).
+   OVERLAY (2026-07, demande explicite) : le récap flotte désormais par-
+   dessus la table (position:absolute dans .chromatik-stage), au lieu d'être
+   un bloc dans le flux normal — à 4 joueurs surtout, il poussait la table
+   vers le bas et déclenchait le zoom automatique du mode agrandi. La table
+   ne change donc plus JAMAIS de taille quand une manche se termine. */
+.chromatik-stage{ position:relative; }
+.chromatik-round-overlay{
+  position:absolute; inset:0; z-index:30;
+  display:flex; align-items:center; justify-content:center; padding:14px;
+  background:rgba(15,10,20,.72); backdrop-filter:blur(3px); -webkit-backdrop-filter:blur(3px);
+  border-radius:20px;
+  animation:chromatikSummaryFade .35s ease both;
+}
+.chromatik-round-card{
+  width:100%; max-width:min(480px, 100%); max-height:100%; overflow-y:auto;
+  background:linear-gradient(180deg, var(--card), var(--bg2)); border:2px solid var(--line);
+  border-radius:18px; padding:18px 20px; box-shadow:0 18px 44px rgba(0,0,0,.5);
+  animation:chromatikSummaryPop .4s cubic-bezier(.2,.9,.25,1) both;
+}
+@keyframes chromatikSummaryFade{ from{ opacity:0; } to{ opacity:1; } }
+@keyframes chromatikSummaryPop{
+  0%{ opacity:0; transform:scale(.9) translateY(14px); }
+  100%{ opacity:1; transform:scale(1) translateY(0); }
+}
 .chromatik-round-summary-title{
   text-align:center; font-family:'Bungee'; font-size:15px; margin:0 0 12px; color:var(--ink);
 }
@@ -1770,6 +1869,8 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
 
 @media (prefers-reduced-motion: reduce){
   .chromatik-opponent.active{ animation:none; }
+  .chromatik-round-overlay{ animation:none; }
+  .chromatik-round-card{ animation:none; }
   .chromatik-uno-warn{ animation:none; }
   .chromatik-flow{ animation:none; }
   .chromatik-flow.rev{ transform:scaleX(-1); }
@@ -2208,12 +2309,21 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
 .yz-tray{
   position:relative; margin:4px 0 6px; padding:11px 12px;
   border-radius:16px; overflow:hidden;
+  display:flex; align-items:center; justify-content:center;
   background-image:
     radial-gradient(120% 140% at 50% 10%, rgba(0,0,0,0) 0%, rgba(0,0,0,.4) 100%),
     repeating-linear-gradient(90deg, rgba(0,0,0,.14) 0 3px, transparent 3px 28px),
     linear-gradient(170deg, #3a2818, #2a1c10 75%);
   box-shadow:inset 0 3px 10px rgba(0,0,0,.5), inset 0 0 0 1px rgba(255,225,190,.08);
 }
+/* "big" : zone de lancer/sélection dans la moitié droite de la table
+   (2026-07, demande explicite "beaucoup plus grande") — plateau plus haut,
+   dés nettement agrandis. "standalone" : plateau des spectateurs (pas de
+   feuille perso, pas de colonne dédiée), taille d'origine. */
+.yz-tray.big{ min-height:220px; padding:22px 16px; }
+.yz-tray.big .yz-die{ width:clamp(52px, 8.5vw, 84px); height:clamp(52px, 8.5vw, 84px); border-radius:18px; }
+.yz-tray.big .yz-dice{ gap:clamp(10px, 2.6vw, 22px); }
+.yz-tray.standalone{ max-width:min(420px, 100%); margin:4px auto 6px; }
 
 .yz-die{
   width:clamp(42px, 11vw, 56px); height:clamp(42px, 11vw, 56px);
@@ -2293,23 +2403,71 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
   border-radius:50%; background:#20242c;
   box-shadow:inset 0 -1px 1px rgba(255,255,255,.35);
 }
-.yz-roll-btn{
-  width:auto; padding:13px 30px; margin-top:0; font-size:15px;
-  background:linear-gradient(135deg, #FFE49A, var(--accent, #FFD166) 55%, #E0A526);
-  color:#3a2107; box-shadow:0 5px 0 rgba(0,0,0,.35), 0 0 0 0 rgba(255,209,102,.55);
-  animation:yzRollGlow 1.7s ease-in-out infinite;
-}
-.yz-roll-btn:disabled{ animation:none; box-shadow:0 5px 0 rgba(0,0,0,.35); }
 @keyframes yzRollGlow{
   0%, 100%{ box-shadow:0 5px 0 rgba(0,0,0,.35), 0 0 0 0 rgba(255,209,102,.5); }
   50%{ box-shadow:0 5px 0 rgba(0,0,0,.35), 0 0 16px 4px rgba(255,209,102,.5); }
 }
 
-.yz-sheet{
-  display:grid; grid-template-columns:1fr 1fr; gap:8px;
-  max-width:min(640px, 100%); margin:0 auto;
+/* ===== Zone de jeu (2026-07, refonte complète demandée) =====
+   Moitié GAUCHE = feuille de score (Upper + Lower EMPILÉES verticalement,
+   réparties sur toute la hauteur via space-between) ; moitié DROITE =
+   entièrement dédiée aux dés — grande zone de lancer en haut-centre, bouton
+   Roll carré ancré en bas à droite (voir .yz-roll-fab). En dessous d'une
+   certaine largeur, la grille repasse en UNE colonne (dés d'abord, feuille
+   ensuite — l'action se joue avant la lecture du score). */
+.yz-arena{
+  display:grid; grid-template-columns:1fr 1fr; gap:18px;
+  align-items:stretch; margin:10px 0 14px;
 }
-@media (max-width: 560px){ .yz-sheet{ grid-template-columns:1fr; } }
+.yz-arena-left{ display:flex; flex-direction:column; justify-content:space-between; gap:10px; }
+.yz-arena-right{
+  display:flex; flex-direction:column; align-items:center;
+  position:relative; min-height:300px;
+}
+.yz-arena-right .yz-tray{ width:100%; }
+@media (max-width: 720px){
+  .yz-arena{ grid-template-columns:1fr; }
+  .yz-arena-right{ order:-1; min-height:0; }
+  .yz-roll-fab{ align-self:center; margin-top:12px; }
+}
+
+/* Bouton de lancer — carré aux coins arrondis, ANCRÉ en bas à droite de la
+   moitié dés (margin-top:auto le pousse tout en bas de la colonne flex,
+   align-self:flex-end à droite). C'est désormais l'action PRINCIPALE de
+   l'interface : très visible dès qu'il est activable (dégradé doré + halo
+   pulsé, réutilise yzRollGlow), grisé sinon plutôt que masqué (repère visuel
+   constant) — qu'il n'y ait plus de lancer disponible OU que ce soit le
+   tour de l'adversaire. */
+.yz-roll-fab{
+  position:relative; flex:none; margin-top:auto; align-self:flex-end;
+  width:clamp(84px, 13vw, 122px); height:clamp(84px, 13vw, 122px);
+  border-radius:24px; border:2px solid var(--line); cursor:pointer;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
+  background:rgba(255,255,255,.05); color:var(--muted);
+  box-shadow:0 4px 0 rgba(0,0,0,.3);
+  transition:transform .15s ease, box-shadow .2s ease, background .2s ease, border-color .2s ease, color .2s ease, opacity .2s ease;
+}
+.yz-roll-fab-icon{ font-size:clamp(26px, 4.2vw, 38px); line-height:1; }
+.yz-roll-fab-label{ font-family:'Bungee'; font-size:10px; letter-spacing:.03em; text-transform:uppercase; text-align:center; }
+.yz-roll-fab-count{
+  position:absolute; top:-8px; right:-8px; min-width:23px; height:23px; padding:0 5px;
+  border-radius:99px; background:var(--p3); color:#1c1425; font-family:'Space Mono'; font-weight:800;
+  font-size:12.5px; display:flex; align-items:center; justify-content:center;
+  box-shadow:0 2px 6px rgba(0,0,0,.4), 0 0 0 2px var(--card);
+}
+.yz-roll-fab.active, .yz-roll-fab.shuffling{
+  background:linear-gradient(145deg, #FFE49A, var(--accent, #FFD166) 55%, #E0A526);
+  border-color:transparent; color:#3a2107;
+  box-shadow:0 6px 0 rgba(0,0,0,.35), 0 0 0 0 rgba(255,209,102,.55);
+}
+.yz-roll-fab.active{ animation:yzRollGlow 1.7s ease-in-out infinite; transform:scale(1.05); }
+.yz-roll-fab.active:hover{ transform:scale(1.1); }
+.yz-roll-fab.active:active{ transform:scale(1.02); }
+.yz-roll-fab:disabled{ cursor:default; opacity:.5; box-shadow:0 4px 0 rgba(0,0,0,.3); }
+@media (prefers-reduced-motion: reduce){
+  .yz-roll-fab.active{ animation:none; }
+}
+
 .yz-col{ display:flex; flex-direction:column; gap:2px; }
 .yz-col-title{
   font-weight:800; font-size:11px; letter-spacing:.08em; text-transform:uppercase;

@@ -1041,37 +1041,107 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
 
     content = (
       <div>
-        {fourTable ? (
-          /* ----- Table à 4 : Nord en haut, Ouest/Est de part et d'autre de
-             la table, moi au Sud (ma main, déjà en bas). Le tour circule
-             moi -> Ouest -> Nord -> Est en direction 1. ----- */
-          <div className="chromatik-arena-four">
-            <div className="chromatik-north">{renderOpponent(displayedOpponents[1])}</div>
-            <div className="chromatik-mid">
-              <div className="chromatik-side west">{renderOpponent(displayedOpponents[0])}</div>
+        {/* .chromatik-stage : ancre de position POUR l'overlay de fin de
+            manche ci-dessous (position:relative) — la table elle-même ne
+            change jamais de taille selon qu'une manche vient de se
+            terminer ou non (voir chromatik-round-overlay). */}
+        <div className="chromatik-stage">
+          {fourTable ? (
+            /* ----- Table à 4 : Nord en haut, Ouest/Est de part et d'autre de
+               la table, moi au Sud (ma main, déjà en bas). Le tour circule
+               moi -> Ouest -> Nord -> Est en direction 1. ----- */
+            <div className="chromatik-arena-four">
+              <div className="chromatik-north">{renderOpponent(displayedOpponents[1])}</div>
+              <div className="chromatik-mid">
+                <div className="chromatik-side west">{renderOpponent(displayedOpponents[0])}</div>
+                {tableJsx}
+                <div className="chromatik-side east">{renderOpponent(displayedOpponents[2])}</div>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className={"chromatik-opponents opp-" + displayedOpponents.length}>
+                {/* Rangée du haut (2-3 joueurs, ou spectateurs) : vignettes
+                    bien HORIZONTALES et alignées (les inclinaisons "arc" de
+                    l'ancienne version ont été retirées, retouche 2026-07),
+                    chevrons de sens intercalés dans l'ordre du tour. À une
+                    table de 2, face-à-face Nord/Sud : l'adversaire unique est
+                    centré en haut, ma main en bas. */}
+                {displayedOpponents.map((s, i) => (
+                  <Fragment key={s.id}>
+                    {i > 0 && seats.length > 2 && <FlowArrow direction={direction} size="mini" />}
+                    {renderOpponent(s)}
+                  </Fragment>
+                ))}
+              </div>
               {tableJsx}
-              <div className="chromatik-side east">{renderOpponent(displayedOpponents[2])}</div>
+            </>
+          )}
+
+          {/* Récap de fin de manche (2026-07, demande explicite) : OVERLAY
+              par-dessus la table plutôt qu'un bloc dans le flux normal — à 4
+              joueurs surtout, il poussait la table vers le bas et déclenchait
+              le zoom automatique du mode agrandi (toute la scène rétrécissait
+              juste pour afficher le récap). Apparition en fondu + léger pop
+              (voir chromatikSummaryFade/Pop) ; la disposition de la table ne
+              bouge donc plus JAMAIS entre deux manches. */}
+          {winner && (
+            <div className="chromatik-round-overlay">
+              <div className="chromatik-round-card">
+                <h3 className="chromatik-round-summary-title">
+                  {matchOver ? t("chromatikMatchOverTitle") : `${t("chromatikRoundOverTitle")} ${roundIndex} ${t("chromatikRoundOverOf")} ${roundTarget}`}
+                </h3>
+                <div className="pres-podium chromatik-podium">
+                  {/* Mains finales en miniature (demande 2026-07) : sous chaque
+                      ligne du classement, les cartes restées en main à la fin de
+                      la manche (triées comme une main), en tout petit mais avec
+                      leurs vraies couleurs — on VOIT d'où viennent les points.
+                      Le vainqueur n'a rien à montrer (main vide, +0). */}
+                  {ranking.map((s, i) => {
+                    const finalHand = sortHandForDisplay(hands[s.id] || []);
+                    return (
+                      <div key={s.id} className={"chromatik-podium-block" + (i === 0 ? " first" : "") + (s.id === me.id ? " me" : "")}>
+                        <div className={"pres-podium-row" + (i === 0 ? " first" : "") + (s.id === me.id ? " me" : "")}>
+                          <span className="place">{i + 1}</span>
+                          <span className="name">{s.avatar} {s.username}</span>
+                          <span className="pts">
+                            {matchScores[s.id] ?? 0} {t("pts")}
+                            <span className="chromatik-round-delta"> (+{roundScores[s.id] ?? 0} {t("chromatikThisRound")})</span>
+                          </span>
+                        </div>
+                        {finalHand.length > 0 && (
+                          <div className="chromatik-final-hand">
+                            {finalHand.map(c => <CardView key={c.id} card={c} size="xs" />)}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {isPlayer && matchOver && (
+                  <p style={{ fontWeight: 800, textAlign: "center", marginTop: 10 }}>
+                    {t("peYourGain")} <span style={{ color: "var(--p3)", fontFamily: "'Space Mono'" }}>+{myGain} {t("pts")}</span>
+                  </p>
+                )}
+                <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 14, flexWrap: "wrap" }}>
+                  {isHost ? (
+                    matchOver ? (
+                      <>
+                        <button className="btn" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={rejouer}>🔁 {t("c4Rejouer")}</button>
+                        <button className="btn ghost" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={backToRoom}>🏠 {t("c4BackToRoom")}</button>
+                      </>
+                    ) : (
+                      <button className="btn" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={nextRound}>{t("chromatikNextRound")}</button>
+                    )
+                  ) : (
+                    <p className="muted">{matchOver ? t("c4RejouerWait") : t("chromatikNextRoundWait")}</p>
+                  )}
+                </div>
+              </div>
             </div>
-          </div>
-        ) : (
-          <>
-            <div className={"chromatik-opponents opp-" + displayedOpponents.length}>
-              {/* Rangée du haut (2-3 joueurs, ou spectateurs) : vignettes
-                  bien HORIZONTALES et alignées (les inclinaisons "arc" de
-                  l'ancienne version ont été retirées, retouche 2026-07),
-                  chevrons de sens intercalés dans l'ordre du tour. À une
-                  table de 2, face-à-face Nord/Sud : l'adversaire unique est
-                  centré en haut, ma main en bas. */}
-              {displayedOpponents.map((s, i) => (
-                <Fragment key={s.id}>
-                  {i > 0 && seats.length > 2 && <FlowArrow direction={direction} size="mini" />}
-                  {renderOpponent(s)}
-                </Fragment>
-              ))}
-            </div>
-            {tableJsx}
-          </>
-        )}
+          )}
+        </div>
 
         {!winner && isMyTurn && (
           <div className="turn-banner">
@@ -1151,61 +1221,6 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
             <button className="btn ghost" style={{ width: "auto", padding: "6px 14px", marginTop: 10, fontSize: 12 }} onClick={() => setColorPickerFor(null)}>
               {t("chromatikCancel")}
             </button>
-          </div>
-        )}
-
-        {winner && (
-          <div className="chromatik-round-summary">
-            <h3 className="chromatik-round-summary-title">
-              {matchOver ? t("chromatikMatchOverTitle") : `${t("chromatikRoundOverTitle")} ${roundIndex} ${t("chromatikRoundOverOf")} ${roundTarget}`}
-            </h3>
-            <div className="pres-podium chromatik-podium">
-              {/* Mains finales en miniature (demande 2026-07) : sous chaque
-                  ligne du classement, les cartes restées en main à la fin de
-                  la manche (triées comme une main), en tout petit mais avec
-                  leurs vraies couleurs — on VOIT d'où viennent les points.
-                  Le vainqueur n'a rien à montrer (main vide, +0). */}
-              {ranking.map((s, i) => {
-                const finalHand = sortHandForDisplay(hands[s.id] || []);
-                return (
-                  <div key={s.id} className={"chromatik-podium-block" + (i === 0 ? " first" : "") + (s.id === me.id ? " me" : "")}>
-                    <div className={"pres-podium-row" + (i === 0 ? " first" : "") + (s.id === me.id ? " me" : "")}>
-                      <span className="place">{i + 1}</span>
-                      <span className="name">{s.avatar} {s.username}</span>
-                      <span className="pts">
-                        {matchScores[s.id] ?? 0} {t("pts")}
-                        <span className="chromatik-round-delta"> (+{roundScores[s.id] ?? 0} {t("chromatikThisRound")})</span>
-                      </span>
-                    </div>
-                    {finalHand.length > 0 && (
-                      <div className="chromatik-final-hand">
-                        {finalHand.map(c => <CardView key={c.id} card={c} size="xs" />)}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-
-            {isPlayer && matchOver && (
-              <p style={{ fontWeight: 800, textAlign: "center", marginTop: 10 }}>
-                {t("peYourGain")} <span style={{ color: "var(--p3)", fontFamily: "'Space Mono'" }}>+{myGain} {t("pts")}</span>
-              </p>
-            )}
-            <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 14, flexWrap: "wrap" }}>
-              {isHost ? (
-                matchOver ? (
-                  <>
-                    <button className="btn" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={rejouer}>🔁 {t("c4Rejouer")}</button>
-                    <button className="btn ghost" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={backToRoom}>🏠 {t("c4BackToRoom")}</button>
-                  </>
-                ) : (
-                  <button className="btn" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={nextRound}>{t("chromatikNextRound")}</button>
-                )
-              ) : (
-                <p className="muted">{matchOver ? t("c4RejouerWait") : t("chromatikNextRoundWait")}</p>
-              )}
-            </div>
           </div>
         )}
       </div>

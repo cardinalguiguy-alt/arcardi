@@ -258,6 +258,15 @@ const ARROWS = ["⬆️", "↗️", "➡️", "↘️", "⬇️", "↙️", "⬅
 function arrowFor(deg) { return ARROWS[Math.round(deg / 45) % 8]; }
 function proximityPct(km) { return Math.max(0, Math.round(100 - (km / 20015) * 100)); }
 
+// Seuils de compacité de la liste des tentatives (2026-07, demande
+// explicite) : plus il y a d'essais, plus chaque ligne se réduit — jamais
+// de scroll vertical même à 10/10 essais (MAX_TRIES). Trois paliers :
+// normal (<5), compact (5-7, l'indice continent disparaît), tiny (8-10,
+// barre de progression retirée aussi — ne reste que l'essentiel lisible :
+// pays, distance, direction, %).
+const GUESS_COMPACT_AT = 5;
+const GUESS_TINY_AT = 8;
+
 export default function Worldle({ room, me, isHost, players, onFinish, t, lang }) {
   const [deadline, setDeadline] = useState(null);
   const [timeLeft, setTimeLeft] = useState(ROUND_MS);
@@ -268,6 +277,14 @@ export default function Worldle({ room, me, isHost, players, onFinish, t, lang }
   const [opponents, setOpponents] = useState({});
   const [highlight, setHighlight] = useState(0);
   const [confetti, setConfetti] = useState([]); // pièces locales, victoire uniquement
+  // Instantané de révélation (2026-07, demande explicite) : la carte de fin
+  // de manche vit maintenant dans un OVERLAY monté en permanence dès qu'une
+  // cible existe (classe .show togglée par `finished`) pour permettre une
+  // disparition en fondu, pas seulement une apparition — sans ce cliché,
+  // le contenu affiché pendant le fondu de SORTIE serait déjà celui de la
+  // manche SUIVANTE (target/myResult sont remis à zéro dès le "start"
+  // suivant, qui arrive en même temps que finished repasse à false).
+  const [revealSnapshot, setRevealSnapshot] = useState(null);
   const confettiTimer = useRef(null);
   const inputRef = useRef(null);
   const channelRef = useRef(null);
@@ -350,6 +367,20 @@ export default function Worldle({ room, me, isHost, players, onFinish, t, lang }
   }, [deadline]);
 
   useEffect(() => () => clearTimeout(confettiTimer.current), []);
+
+  // Capture le cliché de révélation UNE FOIS, au moment précis où la manche
+  // se termine — jamais mis à jour ensuite tant qu'une nouvelle manche n'est
+  // pas elle-même terminée (voir commentaire sur revealSnapshot plus haut).
+  useEffect(() => {
+    if (!finished || !target) return;
+    setRevealSnapshot({
+      solved: myResult.current.solved,
+      tries: myResult.current.tries,
+      gain: pointsFor(myResult.current),
+      target,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [finished]);
 
   // Barème dégressif (demande 2026-07) : 10 points au 1er essai, -1 par
   // essai supplémentaire (jusqu'à 1 point au 10e), 0 en cas d'échec — plus
@@ -484,31 +515,34 @@ export default function Worldle({ room, me, isHost, players, onFinish, t, lang }
             </p>
           )}
 
-          <div style={{ display: "grid", gap: 10 }}>
+          {/* Liste des tentatives : se COMPACTE progressivement à mesure
+              qu'elle grandit (voir GUESS_COMPACT_AT/GUESS_TINY_AT) — jamais
+              de scroll vertical même à 10/10 essais, l'info essentielle
+              (pays, distance, direction, %) reste lisible dans tous les cas,
+              seuls le détachement du continent puis la barre de progression
+              disparaissent aux paliers les plus serrés. */}
+          <div className={"worldle-guesses"
+            + (guesses.length >= GUESS_TINY_AT ? " tiny" : guesses.length >= GUESS_COMPACT_AT ? " compact" : "")}>
             {guesses.slice().reverse().map((g, i) => {
-              const isBest = g.pct === myResult.current.bestPct && g.country.id !== target.id;
+              const isHit = g.country.id === target.id;
+              const isBest = !isHit && g.pct === myResult.current.bestPct;
               return (
-                <div key={i} className="stage-enter" style={{
-                  /* Harmonisation vert/bleu (2026-07) : trouvé = vert --ok,
-                     meilleur essai = bleu --acc-worldle (fini le doré --p4). */
-                  padding: "10px 12px", borderRadius: 12, border: `2px solid ${g.country.id === target.id ? "var(--ok)" : isBest ? "var(--acc-worldle)" : "var(--line)"}`,
-                  background: "rgba(255,255,255,.03)"
-                }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: g.country.id === target.id ? 0 : 6 }}>
-                    <span><FlagIcon code={g.country.id} /> {g.country[lang] || g.country.fr}</span>
-                    {g.country.id === target.id
-                      ? <span style={{ color: "var(--ok)", fontWeight: 800 }}>🎯</span>
-                      : <span style={{ display: "flex", gap: 8, alignItems: "center", fontFamily: "'Space Mono'", fontSize: 13 }}>
+                <div key={i} className={"worldle-guess-row stage-enter" + (isHit ? " hit" : isBest ? " best" : "")}>
+                  <div className="worldle-guess-top">
+                    <span className="worldle-guess-name"><FlagIcon code={g.country.id} /> {g.country[lang] || g.country.fr}</span>
+                    {isHit
+                      ? <span className="worldle-guess-hitmark">🎯</span>
+                      : <span className="worldle-guess-meta">
                           <span>{g.km} km</span><span>{arrowFor(g.deg)}</span>
-                          <span style={{ color: isBest ? "var(--acc-worldle)" : "var(--ok)" }}>{g.pct}%</span>
+                          <span className={isBest ? "best" : ""}>{g.pct}%</span>
                         </span>}
                   </div>
-                  {g.country.id !== target.id && (
+                  {!isHit && (
                     <>
-                      <div style={{ height: 6, background: "rgba(255,255,255,.08)", borderRadius: 99, overflow: "hidden" }}>
-                        <div style={{ height: "100%", width: g.pct + "%", background: isBest ? "var(--acc-worldle)" : "var(--ok)", transition: "width .4s ease" }} />
+                      <div className="worldle-guess-bar-track">
+                        <div className={"worldle-guess-bar" + (isBest ? " best" : "")} style={{ width: g.pct + "%" }} />
                       </div>
-                      <p className="muted" style={{ fontSize: 12, marginTop: 4 }}>
+                      <p className="worldle-guess-continent">
                         {g.sameContinent ? "🌍 " + t("worldleSameCont") : "🌐 " + t("worldleDiffCont")}
                       </p>
                     </>
@@ -521,25 +555,6 @@ export default function Worldle({ room, me, isHost, players, onFinish, t, lang }
           {!finished && done && !myResult.current.solved && <p className="muted" style={{ marginTop: 10 }}>{t("wordleWaitOthers")}</p>}
           {!finished && done && myResult.current.solved && (
             <p style={{ color: "var(--p3)", fontWeight: 800, marginTop: 10 }}>{t("foundInPre")} {myResult.current.tries} {t("foundInSuffix")}</p>
-          )}
-
-          {finished && (
-            <div style={{ marginTop: 10 }}>
-              {myResult.current.solved
-                ? <p className="hint">{t("foundInPre")} {myResult.current.tries} {t("foundInSuffix")}</p>
-                : <p className="hint">{t("worldleFailedPre")} <b style={{ color: "var(--p2)" }}>{target[lang] || target.fr} <FlagIcon code={target.id} /></b></p>}
-              <p style={{ fontWeight: 800 }}>{t("peYourGain")} <span style={{ color: "var(--p3)", fontFamily: "'Space Mono'" }}>+{pointsFor(myResult.current)} {t("pts")}</span></p>
-              <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 6, flexWrap: "wrap" }}>
-                {isHost ? (
-                  <>
-                    <button className="btn" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={rejouer}>🔁 {t("c4Rejouer")}</button>
-                    <button className="btn ghost" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={backToRoom}>🏠 {t("c4BackToRoom")}</button>
-                  </>
-                ) : (
-                  <p className="muted">{t("c4RejouerWait")}</p>
-                )}
-              </div>
-            </div>
           )}
 
           {Object.keys(opponents).length > 0 && (
@@ -557,6 +572,35 @@ export default function Worldle({ room, me, isHost, players, onFinish, t, lang }
             <button className="btn ghost" style={{ marginTop: 14 }} onClick={hostEndRound}>⏭️ {t("endRoundNow")}</button>
           )}
         </>
+      )}
+
+      {/* Révélation de fin de manche (2026-07, demande explicite) : OVERLAY
+          dédié par-dessus le panneau (jamais un bloc dans le flux normal),
+          avec une apparition ET une disparition en fondu — monté dès qu'un
+          instantané existe (voir revealSnapshot), sa VISIBILITÉ (classe
+          .show) suit `finished` pour permettre la transition CSS dans les
+          deux sens. Le contenu vient du cliché, jamais de `target`/
+          `myResult` en direct, pour ne jamais flasher la manche suivante
+          pendant le fondu de sortie. */}
+      {revealSnapshot && (
+        <div className={"worldle-reveal-overlay" + (finished ? " show" : "")}>
+          <div className="worldle-reveal-card">
+            {revealSnapshot.solved
+              ? <p className="hint">{t("foundInPre")} {revealSnapshot.tries} {t("foundInSuffix")}</p>
+              : <p className="hint">{t("worldleFailedPre")} <b style={{ color: "var(--p2)" }}>{revealSnapshot.target[lang] || revealSnapshot.target.fr} <FlagIcon code={revealSnapshot.target.id} /></b></p>}
+            <p style={{ fontWeight: 800 }}>{t("peYourGain")} <span style={{ color: "var(--p3)", fontFamily: "'Space Mono'" }}>+{revealSnapshot.gain} {t("pts")}</span></p>
+            <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 6, flexWrap: "wrap" }}>
+              {isHost ? (
+                <>
+                  <button className="btn" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={rejouer}>🔁 {t("c4Rejouer")}</button>
+                  <button className="btn ghost" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={backToRoom}>🏠 {t("c4BackToRoom")}</button>
+                </>
+              ) : (
+                <p className="muted">{t("c4RejouerWait")}</p>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Confettis de victoire (vert/bleu) : purement décoratifs, locaux au

@@ -405,15 +405,18 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
   }
 
   // Bot au tour suivant : l'hôte joue pour lui après un délai de lisibilité.
-  // Le délai ne descend jamais sous la fin du décompte 3-2-1 : un bot qui
-  // piocherait pendant que les joueurs regardent "3… 2… 1…" casserait tout.
+  // Le délai de RÉFLEXION proprement dit reste TOUJOURS entre 0,8 et 2 s
+  // (correctif 2026-07, demande explicite — ni plus court ni plus long) ;
+  // il s'ajoute à une éventuelle attente de fin de décompte 3-2-1 plutôt que
+  // d'être plafonné par elle (ancien Math.max, qui pouvait pousser le délai
+  // au-delà de 2 s juste après un match_start) : un bot qui piocherait
+  // pendant que les joueurs regardent "3… 2… 1…" casserait tout, mais cette
+  // attente-là n'est pas de la "réflexion" et ne doit pas compter dedans.
   function scheduleBots() {
     if (!isHost) return;
-    // Plancher relevé 800 -> 1500 ms (correctif 2026-07) : à 800 ms, un bot
-    // qui enchaînait (pépite = rejouer) donnait parfois l'impression de
-    // répondre INSTANTANÉMENT après le coup du joueur — le délai minimal
-    // garantit désormais un vrai temps de "réflexion" perceptible.
-    const delay = Math.max(1500 + Math.random() * 2300, countdownEndRef.current - Date.now());
+    const thinkDelay = 800 + Math.random() * 1200; // toujours 0,8–2 s
+    const waitForCountdown = Math.max(0, countdownEndRef.current - Date.now());
+    const delay = waitForCountdown + thinkDelay;
     botTimer.current = setTimeout(() => {
       const s = stateRef.current;
       if (!s || s.winner || !s.mine) return;

@@ -563,7 +563,7 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
     const iWon = winners.includes(me.id);
 
     content = (
-      <div style={{ paddingBottom: canScore ? 170 : 0 }}>
+      <div style={{ paddingBottom: canScore && pendingCat ? 170 : 0 }}>
         {/* Comparatif des totaux — face à face, mis en avant pour suivre l'avancement */}
         <div className="yz-totals-bar">
           {(() => {
@@ -634,37 +634,12 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
 
         {bonusFlash && <p className="yz-bonus-flash">✨ {t("yzExtraYahtzee")} +100 !</p>}
 
-        {/* Les dés — posés sur un plateau bois cohérent avec la porte d'entrée */}
-        <div className="yz-tray">
-          <div className="yz-dice">
-            {(dice || [null, null, null, null, null]).map((v, i) => {
-              const isHeldNow = isMyTurn ? myHeld[i] : held[i];
-              const showShuffle = shuffling && !isHeldNow;
-              const displayValue = showShuffle ? shuffleFaces[i] : v;
-              return (
-                <Die
-                  key={rollSeq + "-" + i}
-                  value={displayValue ?? 1}
-                  ghost={displayValue === null}
-                  held={hasRolled && isHeldNow}
-                  shuffling={showShuffle}
-                  rolling={!shuffling && hasRolled && !isHeldNow && lastAction?.type === "roll"}
-                  onClick={isMyTurn && hasRolled && rollsLeft > 0 && !shuffling ? () => toggleHold(i) : undefined}
-                  disabled={!isMyTurn || !hasRolled || rollsLeft === 0 || shuffling}
-                  style={v === null ? undefined : {
-                    "--tx": (scatter[i]?.tx ?? 0) + "px",
-                    "--ty": (scatter[i]?.ty ?? 0) + "px",
-                    "--trot": (scatter[i]?.trot ?? 0) + "deg",
-                  }}
-                />
-              );
-            })}
-          </div>
-
-          {/* Fête Yahtzee — contenue dans le plateau, ne bouscule aucune mise
-              en page. Le "yahtzeeSix" (5 six) hérite du même habillage en
-              plus fourni (texte YAHTZEE, chien, emojis dansants, ~10s). */}
-          {celebration && (
+        {/* Fête Yahtzee — sortie du plateau (elle doit pouvoir se jouer aussi
+            bien au-dessus de la grande zone de dés qu'au-dessus du plateau
+            "standalone" des spectateurs, voir plus bas) : composant JSX
+            local pour ne jamais dupliquer son balisage. */}
+        {(() => {
+          const celebrationFx = celebration && (
             <div
               key={celebration.key}
               className={"yz-celebrate " + (celebration.kind === "yahtzeeSix" ? "six" : "yahtzee")}
@@ -696,61 +671,125 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
                 </>
               )}
             </div>
-          )}
-        </div>
+          );
 
-        {/* Bouton de lancer */}
-        {isMyTurn && !finished && (
-          <div style={{ display: "flex", justifyContent: "center", marginBottom: 8 }}>
+          const diceRow = (
+            <div className="yz-dice">
+              {(dice || [null, null, null, null, null]).map((v, i) => {
+                const isHeldNow = isMyTurn ? myHeld[i] : held[i];
+                const showShuffle = shuffling && !isHeldNow;
+                const displayValue = showShuffle ? shuffleFaces[i] : v;
+                return (
+                  <Die
+                    key={rollSeq + "-" + i}
+                    value={displayValue ?? 1}
+                    ghost={displayValue === null}
+                    held={hasRolled && isHeldNow}
+                    shuffling={showShuffle}
+                    rolling={!shuffling && hasRolled && !isHeldNow && lastAction?.type === "roll"}
+                    onClick={isMyTurn && hasRolled && rollsLeft > 0 && !shuffling ? () => toggleHold(i) : undefined}
+                    disabled={!isMyTurn || !hasRolled || rollsLeft === 0 || shuffling}
+                    style={v === null ? undefined : {
+                      "--tx": (scatter[i]?.tx ?? 0) + "px",
+                      "--ty": (scatter[i]?.ty ?? 0) + "px",
+                      "--trot": (scatter[i]?.trot ?? 0) + "deg",
+                    }}
+                  />
+                );
+              })}
+            </div>
+          );
+
+          // Bouton de lancer (2026-07, refonte complète demandée) : carré aux
+          // coins arrondis, ancré en bas à droite de la moitié dés — l'action
+          // PRINCIPALE de l'interface. Reste affiché même quand ce n'est pas
+          // mon tour ou qu'il n'y a plus de lancer : il se GRISE au lieu de
+          // disparaître (on garde un repère visuel constant), et ne redevient
+          // vif que quand un coup est réellement possible. Pendant le
+          // mélange, cliquer écourte l'animation (skipShuffle) — pour
+          // n'IMPORTE qui regarde, pas seulement le joueur actif.
+          const rollFab = isPlayer && !finished && (
             <button
-              className="btn yz-roll-btn"
+              type="button"
+              className={"yz-roll-fab" + (canRoll ? " active" : "") + (shuffling ? " shuffling" : "")}
               disabled={shuffling ? false : !canRoll}
               onClick={shuffling ? skipShuffle : attemptRoll}
-              title={allHeld ? t("yzAllHeld") : undefined}
+              title={
+                !isMyTurn ? `${t("chromatikWaitingFor")} ${currentSeat?.username || ""}…`
+                  : allHeld ? t("yzAllHeld")
+                  : shuffling ? t("yzShuffling")
+                  : !hasRolled ? t("yzRoll") : t("yzReroll")
+              }
             >
-              {shuffling ? `🎲 ${t("yzShuffling")}` : `🎲 ${!hasRolled ? t("yzRoll") : t("yzReroll")} ${hasRolled ? `(${rollsLeft})` : ""}`}
+              <span className="yz-roll-fab-icon" aria-hidden="true">🎲</span>
+              <span className="yz-roll-fab-label">
+                {shuffling ? t("yzShuffling") : !hasRolled ? t("yzRoll") : t("yzReroll")}
+              </span>
+              {hasRolled && !shuffling && <span className="yz-roll-fab-count">{rollsLeft}</span>}
             </button>
-          </div>
-        )}
+          );
 
-        {/* Ma feuille de score */}
-        {isPlayer && myCard && (
-          <div className="yz-sheet">
-            <div className="yz-col">
-              <div className="yz-col-title">{t("yzUpperSection")}</div>
-              {UPPER_IDS.map(renderScoreRow)}
-              <div className="yz-subtotal">
-                <span>{t("yzUpperBonus")} ({upper}/{UPPER_BONUS_THRESHOLD})</span>
-                <span>{hasUpperBonus(myCard) ? "+" + UPPER_BONUS_VALUE : "—"}</span>
-              </div>
-            </div>
-            <div className="yz-col">
-              <div className="yz-col-title">{t("yzLowerSection")}</div>
-              {LOWER_IDS.map(renderScoreRow)}
-              {myCard.bonus100 > 0 && (
-                <div className="yz-subtotal">
-                  <span>{t("yzExtraYahtzee")} ×{myCard.bonus100}</span>
-                  <span>+{myCard.bonus100 * 100}</span>
+          // Zone de jeu (2026-07, refonte complète demandée) : moitié GAUCHE
+          // = feuille de score (Upper + Lower empilées verticalement, toute
+          // la hauteur) ; moitié DROITE = tout pour les dés (grande zone de
+          // lancer/sélection en haut-centre, bouton Roll carré en bas à
+          // droite). Les spectateurs (pas de feuille perso) gardent un
+          // plateau de dés simple, centré, sans colonne de score ni bouton.
+          return isPlayer && myCard ? (
+            <div className="yz-arena">
+              <div className="yz-arena-left">
+                <div className="yz-col">
+                  <div className="yz-col-title">{t("yzUpperSection")}</div>
+                  {UPPER_IDS.map(renderScoreRow)}
+                  <div className="yz-subtotal">
+                    <span>{t("yzUpperBonus")} ({upper}/{UPPER_BONUS_THRESHOLD})</span>
+                    <span>{hasUpperBonus(myCard) ? "+" + UPPER_BONUS_VALUE : "—"}</span>
+                  </div>
                 </div>
-              )}
-              <div className="yz-total">
-                <span>{t("yzTotal")}</span>
-                <span>{cardTotal(myCard)}</span>
+                <div className="yz-col">
+                  <div className="yz-col-title">{t("yzLowerSection")}</div>
+                  {LOWER_IDS.map(renderScoreRow)}
+                  {myCard.bonus100 > 0 && (
+                    <div className="yz-subtotal">
+                      <span>{t("yzExtraYahtzee")} ×{myCard.bonus100}</span>
+                      <span>+{myCard.bonus100 * 100}</span>
+                    </div>
+                  )}
+                  <div className="yz-total">
+                    <span>{t("yzTotal")}</span>
+                    <span>{cardTotal(myCard)}</span>
+                  </div>
+                </div>
+              </div>
+              <div className="yz-arena-right">
+                <div className="yz-tray big">
+                  {diceRow}
+                  {celebrationFx}
+                </div>
+                {rollFab}
               </div>
             </div>
-          </div>
-        )}
+          ) : (
+            <div className="yz-tray standalone">
+              {diceRow}
+              {celebrationFx}
+            </div>
+          );
+        })()}
 
         {/* Validation en deux temps — jamais de score inscrit par mégarde.
-            Barre FIXE en bas de l'écran (comme les autres pastilles du
-            site) : sur la feuille de score complète, ce bouton pouvait se
-            retrouver hors écran et obliger à scroller à chaque tour pour
-            l'atteindre. Toujours accessible désormais, quel que soit le
-            scroll. */}
-        {canScore && (
+            N'apparaît qu'UNE FOIS une catégorie sélectionnée (2026-07 :
+            l'ancien texte "choisis une case…" affiché en permanence
+            n'apportait rien — inutile de l'afficher tant qu'il n'y a rien à
+            valider). Barre FIXE en bas de l'écran (comme les autres
+            pastilles du site) : sur la feuille de score complète, ce bouton
+            pouvait se retrouver hors écran et obliger à scroller à chaque
+            tour pour l'atteindre. Toujours accessible désormais, quel que
+            soit le scroll. */}
+        {canScore && pendingCat && (
           <div className="yz-score-bar">
-            <button className="btn" disabled={!pendingCat} onClick={attemptScore}>
-              {pendingCat ? `✔️ ${t("yzConfirm")} « ${t(CAT_LABEL_KEY[pendingCat])} » (+${scoreCategory(pendingCat, dice)})` : t("yzPickCategory")}
+            <button className="btn" onClick={attemptScore}>
+              ✔️ {t("yzConfirm")} « {t(CAT_LABEL_KEY[pendingCat])} » (+{scoreCategory(pendingCat, dice)})
             </button>
           </div>
         )}

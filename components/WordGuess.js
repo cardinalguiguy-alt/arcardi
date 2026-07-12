@@ -225,10 +225,13 @@ export default function WordGuess({ room, me, isHost, players, onFinish, t, lang
     for (let i = 0; i <= WORD_LEN; i++) {
       revealTimers.current.push(setTimeout(() => {
         setRevealState({ row: rowIndex, count: i });
-        // Sons de révélation (demande 2026-07) : à l'instant où la lettre i-1
-        // se retourne, un son AIGU si elle est verte (bien placée), un son
-        // plus GRAVE si elle est jaune (présente ailleurs) — rien pour une
-        // lettre absente, le silence est déjà une information.
+        // Sons de révélation (correctif 2026-07) : déclenchés dans le MÊME
+        // tick que le changement d'état qui retourne la tuile (donc pile à
+        // l'instant où la lettre apparaît, cf. sfx.js pour le détail du
+        // calage fin) — un son grave et doux si elle est verte (bien
+        // placée), un son plus creux/mat si elle est jaune (présente
+        // ailleurs) — rien pour une lettre absente, le silence est déjà une
+        // information.
         if (i >= 1) {
           const st = pattern[i - 1];
           if (st === "correct") playWordleGreen();
