@@ -2317,12 +2317,17 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
   box-shadow:inset 0 3px 10px rgba(0,0,0,.5), inset 0 0 0 1px rgba(255,225,190,.08);
 }
 /* "big" : zone de lancer/sélection dans la moitié droite de la table
-   (2026-07, demande explicite "beaucoup plus grande") — plateau plus haut,
-   dés nettement agrandis. "standalone" : plateau des spectateurs (pas de
-   feuille perso, pas de colonne dédiée), taille d'origine. */
-.yz-tray.big{ min-height:220px; padding:22px 16px; }
-.yz-tray.big .yz-die{ width:clamp(52px, 8.5vw, 84px); height:clamp(52px, 8.5vw, 84px); border-radius:18px; }
-.yz-tray.big .yz-dice{ gap:clamp(10px, 2.6vw, 22px); }
+   (2026-07, demande explicite "beaucoup plus grande"). Correctif 2026-07 :
+   agrandie encore verticalement (flex:1 sur .yz-arena-right, elle occupe
+   maintenant toute la hauteur disponible au-dessus du bouton Roll, au lieu
+   d'un min-height fixe trop court) et les dés sont légèrement RÉDUITS pour
+   laisser la place à la dispersion façon "vrais dés lancés" (voir
+   randScatter côté JS) sans jamais toucher les bords. "standalone" :
+   plateau des spectateurs (pas de feuille perso, pas de colonne dédiée),
+   taille d'origine. */
+.yz-tray.big{ min-height:300px; padding:26px 16px 34px; }
+.yz-tray.big .yz-die{ width:clamp(44px, 7vw, 68px); height:clamp(44px, 7vw, 68px); border-radius:16px; }
+.yz-tray.big .yz-dice{ gap:clamp(8px, 2vw, 16px); }
 .yz-tray.standalone{ max-width:min(420px, 100%); margin:4px auto 6px; }
 
 .yz-die{
@@ -2424,7 +2429,7 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
   display:flex; flex-direction:column; align-items:center;
   position:relative; min-height:300px;
 }
-.yz-arena-right .yz-tray{ width:100%; }
+.yz-arena-right .yz-tray{ width:100%; flex:1; }
 @media (max-width: 720px){
   .yz-arena{ grid-template-columns:1fr; }
   .yz-arena-right{ order:-1; min-height:0; }

@@ -60,16 +60,19 @@ function rollDie() {
 }
 
 // Position/rotation de repos d'un dé sur la table, façon dé réellement
-// lancé qui retombe légèrement de travers plutôt que parfaitement aligné.
+// lancé qui retombe de travers, à une distance variable de ses voisins —
+// jamais parfaitement alignés en rangée (correctif 2026-07, demande
+// explicite "plus aléatoire et réaliste, pas seulement alignés" : l'ancienne
+// dispersion, ±11px/±15°, restait trop discrète pour se voir à l'œil nu).
 // Purement cosmétique et 100% local à CHAQUE client (chacun voit une
 // dispersion différente, comme deux personnes regardant le même dé sous un
 // angle différent) — n'a aucune incidence sur la valeur réelle du dé, qui
 // elle vient toujours de l'hôte.
 function randScatter() {
   return {
-    tx: Math.round((Math.random() - 0.5) * 22),   // ±11px
-    ty: Math.round((Math.random() - 0.35) * 18),  // légère tendance à "tomber" vers le bas
-    trot: Math.round((Math.random() - 0.5) * 30), // ±15°
+    tx: Math.round((Math.random() - 0.5) * 64),         // ±32px
+    ty: Math.round((Math.random() - 0.32) * 70),         // tombe plutôt vers le bas, jusqu'à ~45px
+    trot: Math.round((Math.random() - 0.5) * 84),        // ±42°
   };
 }
 const NO_SCATTER = { tx: 0, ty: 0, trot: 0 };
