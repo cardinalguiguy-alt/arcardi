@@ -525,27 +525,41 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
   .leave-room-fab{ opacity:.75; }
 }
 
-/* ===== Pastilles fixes de partie, coin haut-DROIT (2026-07) =====
-   - .back-room-fab : "Terminer la partie" (demande 2026-07 : annule la
-     partie EN COURS et en relance une nouvelle — voir endCurrentGame dans
-     app/room/[code]/page.js — jamais un retour au salon, exclusivité du
-     bouton "Retour au salon" affiché en fin de partie par chaque jeu).
-     Repliée en bulle CIRCULAIRE (largeur fixe = hauteur, voir plus bas) au
-     contour teinté par l'accent du jeu en cours (--accent, posé en style
-     inline sur le bouton lui-même, voir JSX) plutôt qu'une couleur fixe —
-     demande explicite. Libellé déplié au survol ; ancrée au bord droit.
-   - .stage-zoom-fab : bascule du mode agrandi (voir body.stage-focus).
-   Positionnées SOUS la rangée logo/code (~90px) ; en mode agrandi, cette
-   rangée disparaît et les pastilles remontent au ras du bord. */
-.back-room-fab{
+/* ===== Pastilles fixes de partie, coin haut-DROIT (2026-07, révisé) =====
+   .stage-fabs : conteneur unique qui porte TOUT le positionnement (fixed +
+   colonne flex, ancrée au bord droit) — avant, chaque bouton portait son
+   propre `position:fixed; top:NNpx` codé en dur, ce qui obligeait à
+   recalculer un `top` par bouton ET par mode (normal / agrandi / mobile) à
+   chaque fois qu'on ajoutait une pastille (passé de 2 à 3 avec "Retour au
+   salon" ci-dessous). Désormais les boutons eux-mêmes n'ont plus AUCUN
+   positionnement propre (`position:relative`, simples enfants de la colonne)
+   et s'empilent tout seuls avec un `gap` régulier — un seul `top` à
+   ajuster par mode, sur le conteneur, quel que soit le nombre de pastilles
+   effectivement affichées (l'hôte en voit jusqu'à 3, un invité une seule,
+   voir JSX).
+   - .back-room-fab (réutilisée pour les DEUX pastilles hôte, "Terminer la
+     partie" ET "Retour au salon" — même gabarit, seule l'icône diffère) :
+     bulle CIRCULAIRE (largeur fixe = hauteur, voir plus bas) au contour
+     teinté par l'accent du jeu en cours (--accent, posé en style inline sur
+     le bouton lui-même, voir JSX) plutôt qu'une couleur fixe — demande
+     explicite. Libellé déplié au survol.
+   - .stage-zoom-fab : bascule du mode agrandi (voir body.stage-focus),
+     contour blanc universel, visible de tout le monde (pas seulement
+     l'hôte). */
+.stage-fabs{
   position:fixed; right:14px; top:90px; z-index:60;
+  display:flex; flex-direction:column; align-items:flex-end; gap:8px;
+  transition:top .25s ease;
+}
+.back-room-fab{
+  position:relative;
   display:flex; align-items:center; justify-content:center;
   width:40px; height:40px; padding:0 10px;
   background:rgba(28,24,36,.82); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px);
   border:1.5px solid rgba(255,255,255,.6); border-radius:99px;
   color:#fff; cursor:pointer; opacity:.6; overflow:hidden; white-space:nowrap;
   box-shadow:0 6px 18px rgba(0,0,0,.35);
-  transition:opacity .2s ease, background .2s ease, border-color .2s ease, box-shadow .2s ease, top .25s ease, width .25s ease;
+  transition:opacity .2s ease, background .2s ease, border-color .2s ease, box-shadow .2s ease, width .25s ease;
 }
 .back-room-fab .back-room-icon{ flex:none; font-size:17px; line-height:1; }
 .back-room-fab .back-room-label{
@@ -561,14 +575,15 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 .back-room-fab:hover .back-room-label, .back-room-fab:focus-visible .back-room-label{
   max-width:170px; opacity:1; margin-left:8px;
 }
-/* Harmonisation (demande 2026-07) : à l'état REPLIÉ, "Terminer la partie" et
+/* Harmonisation (demande 2026-07) : à l'état REPLIÉ, les pastilles hôte et
    la bascule du mode agrandi partagent EXACTEMENT le même gabarit — bulle
    circulaire de 40px de diamètre (largeur fixe désormais, pas seulement la
-   hauteur), même fond, même opacité — deux pastilles jumelles empilées dans
-   le coin. Seul le contour de "Terminer la partie" varie avec le thème du
-   jeu (voir plus haut) ; celui du mode agrandi reste blanc, universel. */
+   hauteur), même fond, même opacité — jusqu'à trois pastilles jumelles
+   empilées dans le coin (voir .stage-fabs plus haut). Seul le contour des
+   pastilles hôte varie avec le thème du jeu (voir plus haut) ; celui du
+   mode agrandi reste blanc, universel. */
 .stage-zoom-fab{
-  position:fixed; right:14px; top:138px; z-index:60;
+  position:relative;
   display:flex; align-items:center; justify-content:center;
   width:40px; height:40px; padding:0 10px;
   background:rgba(28,24,36,.82); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px);
@@ -576,7 +591,7 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
   color:#fff; font-size:17px; line-height:1; cursor:pointer;
   opacity:.6; overflow:hidden; white-space:nowrap;
   box-shadow:0 6px 18px rgba(0,0,0,.35);
-  transition:opacity .2s ease, background .2s ease, border-color .2s ease, top .25s ease, width .25s ease;
+  transition:opacity .2s ease, background .2s ease, border-color .2s ease, width .25s ease;
 }
 .stage-zoom-fab .stage-zoom-label{
   max-width:0; opacity:0; margin-left:0; overflow:hidden;
@@ -624,25 +639,22 @@ body.stage-focus .game-stage .panel{ margin-top:4px; margin-bottom:6px; }
    savent pas encore animer `zoom` appliquent simplement le saut — pas pire
    qu'avant). Désactivé si l'utilisateur préfère réduire les animations. */
 body.stage-focus .game-stage{ transition:zoom .55s cubic-bezier(.3,.8,.3,1); }
-body.stage-focus .back-room-fab{ top:12px; }
-body.stage-focus .stage-zoom-fab{ top:60px; }
-/* Mode agrandi : le chat quitte le coin bas-DROIT (où un jeu haut, ex. la
-   barre dynamite de Gold Mines, peut arriver jusqu'au bord) pour le coin
-   bas-GAUCHE — libéré par "Quitter le salon" et la pastille d'ambiance, tous
-   deux masqués en agrandi. Plus de chevauchement du jeu par le bouton chat. */
-body.stage-focus .chat-fab{ right:auto; left:14px; }
-body.stage-focus .chat-panel{ right:auto; left:14px; }
+body.stage-focus .stage-fabs{ top:12px; }
+/* Correctif (demande explicite 2026-07) : le tchat reste ANCRÉ en bas-DROIT
+   en permanence, y compris en mode agrandi — avant, il quittait ce coin pour
+   le bas-GAUCHE en agrandi (au profit d'un jeu haut type barre dynamite de
+   Gold Mines) ; ce n'est plus le comportement voulu, le tchat garde
+   désormais la même position partout. */
 @media (prefers-reduced-motion: reduce){
   body.stage-focus .game-stage{ transition:none; }
 }
 /* Téléphone étroit (hors agrandi) : l'en-tête (7 tuiles + langue + réglages +
    pastille code) peut se replier sur 2–3 lignes et passer SOUS les pastilles
    de partie fixées en haut à droite. On les descend pour dégager l'en-tête.
-   En mode agrandi, l'en-tête est masqué et `body.stage-focus .back-room-fab`
+   En mode agrandi, l'en-tête est masqué et `body.stage-focus .stage-fabs`
    (plus spécifique) l'emporte : les pastilles y restent bien collées en haut. */
 @media (max-width: 560px){
-  .back-room-fab{ top:128px; }
-  .stage-zoom-fab{ top:176px; }
+  .stage-fabs{ top:128px; }
 }
 
 /* Pastille discrète pour passer à la piste d'ambiance suivante (voir
@@ -2475,16 +2487,20 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
   box-shadow:inset 0 3px 10px rgba(0,0,0,.5), inset 0 0 0 1px rgba(255,225,190,.08);
 }
 /* "big" : zone de lancer/sélection dans la moitié droite de la table
-   (2026-07, demande explicite "beaucoup plus grande"). Correctif 2026-07 :
-   agrandie encore verticalement (flex:1 sur .yz-arena-right, elle occupe
-   maintenant toute la hauteur disponible au-dessus du bouton Roll, au lieu
-   d'un min-height fixe trop court) et les dés sont légèrement RÉDUITS pour
-   laisser la place à la dispersion façon "vrais dés lancés" (voir
-   resolveDiceLayout côté JS) sans jamais toucher les bords ni se
-   chevaucher. "standalone" : plateau des spectateurs (pas de feuille
-   perso, pas de colonne dédiée), taille d'origine — min-height hérité de
-   la règle de base ci-dessus (les dés y sont absolus désormais, donc ne
-   donnent plus eux-mêmes de hauteur à leur conteneur). */
+   (2026-07, demande explicite "beaucoup plus grande"). "standalone" :
+   plateau des spectateurs (pas de feuille perso, pas de colonne dédiée),
+   taille d'origine — min-height hérité de la règle de base ci-dessus (les
+   dés y sont absolus désormais, donc ne donnent plus eux-mêmes de hauteur
+   à leur conteneur).
+   Correctif (demande explicite "raccourcir cette zone pour que ses côtés
+   soient égaux... décoller le bas de la zone de lancer du bouton Lancer") :
+   la zone occupait auparavant TOUTE la hauteur disponible (flex:1 sur
+   .yz-arena-right .yz-tray, plus bas) jusqu'à toucher directement le bouton
+   Roll en dessous. Elle est maintenant CARRÉE (aspect-ratio:1, calculé sur
+   sa propre largeur) au lieu de s'étirer verticalement : l'espace qu'elle
+   ne remplit plus profite à la marge automatique du bouton Roll
+   (margin-top:auto sur .yz-roll-fab), qui se retrouve donc naturellement
+   décollé du bas de la zone de lancer. */
 .yz-tray.big{ min-height:300px; padding:26px 16px 34px; }
 .yz-tray.big .yz-die{ width:clamp(44px, 7vw, 68px); height:clamp(44px, 7vw, 68px); border-radius:16px; }
 .yz-tray.standalone{ max-width:min(420px, 100%); margin:4px auto 6px; }
@@ -2598,7 +2614,7 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
   display:flex; flex-direction:column; align-items:center;
   position:relative; min-height:300px;
 }
-.yz-arena-right .yz-tray{ width:100%; flex:1; }
+.yz-arena-right .yz-tray{ width:100%; aspect-ratio:1; flex:none; }
 @media (max-width: 720px){
   .yz-arena{ grid-template-columns:1fr; }
   .yz-arena-right{ order:-1; min-height:0; }
@@ -3065,6 +3081,32 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
   .rules-modal-title{ font-size:15px; }
 }
 
+/* Confirmation "voulez-vous avorter la partie ?" (demande 2026-07, pastille
+   "Terminer la partie") — même langage visuel que .rules-modal-overlay/
+   .rules-modal (réutilise directement leurs animations rulesFadeIn/
+   rulesPopIn) mais en version compacte, sans défilement, centrée sur du
+   texte plutôt que des règles à lire : la question posée doit rester
+   immédiatement lisible, jamais scrollée hors champ. Contour teinté par
+   l'accent du jeu en cours, comme le reste de l'habillage par thème. */
+.confirm-modal-overlay{
+  position:fixed; inset:0; z-index:220; background:rgba(6,8,16,.72); backdrop-filter:blur(3px);
+  display:flex; align-items:center; justify-content:center; padding:20px;
+  animation:rulesFadeIn .18s ease both;
+}
+.confirm-modal{
+  position:relative; width:min(380px, 100%);
+  background:var(--card2); border:2px solid var(--accent, var(--p3)); border-radius:20px;
+  padding:26px 22px 20px; box-shadow:0 20px 50px -12px rgba(0,0,0,.6);
+  text-align:center; animation:rulesPopIn .22s cubic-bezier(.3,1.4,.4,1) both;
+}
+.confirm-modal-title{
+  font-family:'Bungee'; font-size:16px; margin:0 0 10px; color:var(--accent, var(--p3));
+  text-shadow:0 0 18px color-mix(in srgb, var(--accent, var(--p3)) 45%, transparent);
+}
+.confirm-modal-text{ color:var(--ink); font-size:13.5px; line-height:1.5; margin:0 0 22px; }
+.confirm-modal-actions{ display:flex; gap:10px; justify-content:center; }
+.confirm-modal-actions .btn{ width:auto; margin-top:0; padding:10px 24px; font-size:13px; }
+
 .door-flash{
   position:absolute; inset:0; z-index:45; border-radius:20px; pointer-events:none;
   background:#fff; opacity:0; transition:opacity .45s ease;
@@ -3222,6 +3264,21 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
   animation:cardPop .3s ease both;
 }
 .host-offline-banner .btn{ width:auto; margin-top:0; padding:9px 16px; font-size:12.5px; }
+
+/* Toast d'information "la partie est terminée" (demande 2026-07) — même
+   habillage visuel que .host-offline-banner (bannière centrée, haut d'écran)
+   mais sans bouton : purement informatif, disparaît tout seul après ~3,4s
+   (voir showEndNotice dans app/room/[code]/page.js). Classe dédiée plutôt
+   que réutiliser .host-offline-banner telle quelle : les deux bannières
+   n'ont rien de sémantiquement lié, seul leur habillage se ressemble. */
+.system-notice-banner{
+  position:fixed; left:50%; top:12px; transform:translateX(-50%); z-index:210;
+  display:flex; align-items:center; gap:8px;
+  background:var(--card2); border:2.5px solid var(--p1); border-radius:16px;
+  padding:12px 18px; max-width:min(480px, 92vw); text-align:center;
+  font-weight:800; font-size:13.5px; box-shadow:0 12px 34px rgba(0,0,0,.5);
+  animation:cardPop .3s ease both;
+}
 
 /* Avertissement hôte : migration SQL manquante (upgrade-002) */
 .sql-warn{

@@ -1,8 +1,9 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-import { resetRoomToLobby, launchGame, nominateHost, leaveRoomAndHandoff, claimAbandonedHost } from "@/lib/gameSync";
+import { resetRoomToLobby, launchGame, clearGameState, nominateHost, leaveRoomAndHandoff, claimAbandonedHost } from "@/lib/gameSync";
 import { useLang } from "@/lib/i18n";
 import { duckAmbienceForGame, resumeAmbienceForNav } from "@/lib/ambience";
 import { playGameCardClick } from "@/lib/sfx";
@@ -219,6 +220,13 @@ export default function Room() {
       setOnline(map);
       setRulesReaders(readingMap);
     });
+    // "Terminer la partie" (avortée par l'hôte, demande 2026-07) : diffusée
+    // sur ce MÊME canal presence déjà ouvert pour tout le monde — pas besoin
+    // d'un canal dédié de plus pour ce simple message d'information, purement
+    // cosmétique (voir showEndNotice). broadcast.self n'étant pas activé sur
+    // ce canal, l'hôte lui-même déclenche son propre toast localement, voir
+    // confirmEndGame plus bas.
+    ch.on("broadcast", { event: "game_ended" }, () => { showEndNotice(); });
     ch.subscribe(status => {
       if (status === "SUBSCRIBED") ch.track({ at: Date.now(), readingRules: readingRulesRef.current });
     });
@@ -336,25 +344,64 @@ export default function Room() {
     setRoom(r => (r ? { ...r, status: "lobby", current_game: null, game_state: null } : r));
   }
 
-  // "Terminer la partie" (demande 2026-07) : ANNULE la partie EN COURS pour
-  // en relancer une NOUVELLE, sans jamais quitter la scène ni toucher
-  // room.status/current_game — sémantique volontairement distincte de
-  // backToLobby ci-dessus (qui, lui, ramène tout le monde au salon). `n+1`
-  // (compteur strictement croissant, jamais Date.now() : deux clics dans la
-  // même milliseconde produiraient sinon la même valeur et le second
-  // n'aurait aucun effet) est transmis en prop `restartToken` au jeu
-  // actuellement affiché (voir plus bas, chaque <XxxGame .../>) ; CHAQUE jeu
-  // écoute ce changement et rappelle alors sa propre fonction interne
-  // `rejouer()` — exactement le même mécanisme que son bouton "🔁 Rejouer"
-  // déjà affiché en fin de partie, simplement déclenché depuis cette
-  // pastille plutôt que depuis l'écran de victoire. `rejouer()` est déjà
-  // gardée par `isHost` dans chaque jeu : seul l'hôte peut réellement agir,
-  // les autres clients reçoivent la nouvelle partie via le broadcast
-  // `match_start`/`restart` normal de ce jeu, comme n'importe quelle relance.
-  const [restartToken, setRestartToken] = useState(0);
+  // "Terminer la partie" (demande 2026-07, révisée) : ANNULE la partie EN
+  // COURS — avec CONFIRMATION explicite (risque de perte de progression pour
+  // tout le monde, pas un geste anodin) — puis prévient tous les joueurs et
+  // ramène TOUT LE MONDE à l'écran de lancement du jeu (porte/rideau fermé,
+  // bouton "Jouer" du Stage), jamais jusqu'au salon de sélection — cette
+  // dernière action reste l'exclusivité de la pastille "Retour au salon"
+  // (🎪, voir backToLobby plus haut).
+  //
+  // Mécanisme : on réutilise TEL QUEL le palier de lancement synchronisé
+  // déjà en place pour le bouton "Jouer" du salon (launchGame écrit un
+  // launch_at proche dans le futur ; TOUS les clients, hôte compris,
+  // affichent alors le palier "Ça commence…" puis démontent et remontent
+  // .game-stage une fois l'horodatage atteint — voir plus bas, `launching`).
+  // Remonter .game-stage crée une INSTANCE FRAÎCHE du Stage (porte/rideau
+  // toujours fermée à l'initialisation) SANS remonter le jeu qu'elle
+  // contient : DoorStage/CurtainStage/etc. ne rendent leurs `children` que
+  // lorsque doorState==='open', donc le composant de jeu réel (YahtzeeGame
+  // etc.) ne se monte qu'au clic LOCAL sur "Jouer" de chaque joueur, comme au
+  // tout premier lancement — exactement l'écran demandé. `clearGameState`
+  // (déjà existant dans gameSync.js, utilisé jusqu'ici seulement en
+  // filet de sécurité) efface au passage l'ancienne partie persistée : sans
+  // ça, le jeu la restaurerait telle quelle à la réouverture de la porte
+  // (voir readGameState dans chaque XxxGame.js) au lieu d'attendre un
+  // nouveau `match_start` — l'aurait "annulée" en apparence seulement, la
+  // vraie progression aurait repris pile où elle en était. Zéro changement
+  // de schéma Supabase : les deux colonnes utilisées (game_state, launch_at)
+  // existent déjà et servent déjà à d'autres mécaniques du site.
+  const [confirmEndOpen, setConfirmEndOpen] = useState(false);
+  const [endNotice, setEndNotice] = useState(false);
+  const noticeTimerRef = useRef(null);
+  const showEndNotice = useCallback(() => {
+    setEndNotice(true);
+    clearTimeout(noticeTimerRef.current);
+    noticeTimerRef.current = setTimeout(() => setEndNotice(false), 3400);
+  }, []);
   function endCurrentGame() {
     if (!isHost) return;
-    setRestartToken(n => n + 1);
+    setConfirmEndOpen(true);
+  }
+  function cancelEndGame() {
+    setConfirmEndOpen(false);
+  }
+  async function confirmEndGame() {
+    setConfirmEndOpen(false);
+    if (!isHost || !room?.current_game) return;
+    const gameId = room.current_game;
+    // Le message d'information part IMMÉDIATEMENT (avant même les écritures
+    // réseau ci-dessous) : c'est un simple avertissement cosmétique, il n'a
+    // aucune raison d'attendre le round-trip Supabase. Diffusé aux autres via
+    // le canal presence déjà ouvert ; déclenché localement pour l'hôte
+    // lui-même (ce canal n'a pas broadcast.self activé, voir plus haut).
+    presenceChRef.current?.send({ type: "broadcast", event: "game_ended", payload: {} });
+    showEndNotice();
+    await clearGameState(room.id);
+    const launchAt = await launchGame(room.id, gameId);
+    // Mise à jour locale immédiate côté hôte (même filet que backToLobby) :
+    // ne dépend pas du round-trip Realtime pour voir l'effet de son propre clic.
+    setRoom(r => (r ? { ...r, status: "playing", current_game: gameId, launch_at: launchAt, game_state: null } : r));
   }
 
   // Callback passé à chaque jeu pour son bouton de fin de partie
@@ -582,39 +629,90 @@ export default function Room() {
         <span className="leave-room-label">{t("leaveRoom")}</span>
       </button>
 
-      {/* En partie : deux pastilles fixes en haut à droite (demande 2026-07).
-          - "Terminer la partie" (hôte SEUL, à tout moment) : ANNULE la
-            partie en cours et en relance une NOUVELLE (endCurrentGame,
-            même mécanique que le "Rejouer" propre à chaque jeu) — reste sur
-            la scène, ne ramène JAMAIS au salon. Repliée en bulle circulaire
-            au contour teinté par l'accent du jeu en cours (voir
-            .back-room-fab dans globals.css). Le retour effectif au salon
-            reste l'exclusivité du bouton "Retour au salon" affiché par
-            chaque jeu en fin de partie (c4BackToRoom).
+      {/* En partie : jusqu'à trois pastilles fixes empilées en haut à droite
+          (demande 2026-07, révisée) — regroupées dans .stage-fabs (voir
+          globals.css) qui gère à elle seule le positionnement (colonne,
+          ancrée à droite) : chaque bouton n'a plus qu'à s'empiler dedans,
+          plus besoin de coordonner un `top` par bouton et par mode.
+          - "Terminer la partie" (hôte SEUL, à tout moment) : demande
+            confirmation (voulez-vous avorter la partie ?), PUIS prévient
+            tous les joueurs et ramène TOUT LE MONDE à l'écran de lancement
+            du jeu (porte/rideau fermé, bouton "Jouer") — jamais jusqu'au
+            salon de sélection (voir confirmEndGame plus haut).
+          - "Retour au salon" (hôte SEUL, 🎪) : ELLE, à l'inverse, quitte
+            réellement la scène et ramène tout le monde au salon de
+            sélection de jeu — même action que backToLobby (logo ARCARDI),
+            simplement accessible sans repasser par la fin de partie.
           - Mode agrandi (tout le monde) : masque l'en-tête et les vignettes
             pour donner toute la hauteur au jeu (voir body.stage-focus). */}
-      {playing && isHost && (
-        <button
-          className="back-room-fab"
-          onClick={endCurrentGame}
-          title={t("endGameTooltip")}
-          aria-label={t("endGameShort")}
-          style={meta ? { borderColor: `var(${meta.accent})` } : undefined}
-        >
-          <span className="back-room-icon" aria-hidden="true">⏹️</span>
-          <span className="back-room-label">{t("endGameShort")}</span>
-        </button>
-      )}
       {playing && (
-        <button
-          className={"stage-zoom-fab" + (stageFocus ? " on" : "")}
-          onClick={toggleStageFocus}
-          title={stageFocus ? t("stageFocusOff") : t("stageFocusOn")}
-          aria-pressed={stageFocus}
-        >
-          <span aria-hidden="true">⛶</span>
-          <span className="stage-zoom-label">{stageFocus ? t("stageFocusOff") : t("stageFocusOn")}</span>
-        </button>
+        <div className="stage-fabs">
+          {isHost && (
+            <button
+              className="back-room-fab"
+              onClick={endCurrentGame}
+              title={t("endGameTooltip")}
+              aria-label={t("endGameShort")}
+              style={meta ? { borderColor: `var(${meta.accent})` } : undefined}
+            >
+              <span className="back-room-icon" aria-hidden="true">⏹️</span>
+              <span className="back-room-label">{t("endGameShort")}</span>
+            </button>
+          )}
+          {isHost && (
+            <button
+              className="back-room-fab"
+              onClick={backToLobby}
+              title={t("backSalonTooltip")}
+              aria-label={t("c4BackToRoom")}
+              style={meta ? { borderColor: `var(${meta.accent})` } : undefined}
+            >
+              <span className="back-room-icon" aria-hidden="true">🎪</span>
+              <span className="back-room-label">{t("c4BackToRoom")}</span>
+            </button>
+          )}
+          <button
+            className={"stage-zoom-fab" + (stageFocus ? " on" : "")}
+            onClick={toggleStageFocus}
+            title={stageFocus ? t("stageFocusOff") : t("stageFocusOn")}
+            aria-pressed={stageFocus}
+          >
+            <span aria-hidden="true">⛶</span>
+            <span className="stage-zoom-label">{stageFocus ? t("stageFocusOff") : t("stageFocusOn")}</span>
+          </button>
+        </div>
+      )}
+
+      {/* Confirmation avant d'avorter la partie (demande 2026-07) : portée
+          hors de l'arborescence de la scène via un portail React — même
+          raison que GameRulesButton (un ancêtre en `transform` casserait le
+          `position:fixed` de l'overlay, voir ce fichier pour le détail). */}
+      {confirmEndOpen && typeof document !== "undefined" && createPortal(
+        <div className="confirm-modal-overlay" onClick={cancelEndGame}>
+          <div
+            className="confirm-modal"
+            onClick={e => e.stopPropagation()}
+            style={meta ? { "--accent": `var(${meta.accent})` } : undefined}
+          >
+            <h2 className="confirm-modal-title">{t("endGameConfirmTitle")}</h2>
+            <p className="confirm-modal-text">{t("endGameConfirmText")}</p>
+            <div className="confirm-modal-actions">
+              <button className="btn ghost" onClick={cancelEndGame}>{t("endGameConfirmNo")}</button>
+              <button className="btn" onClick={confirmEndGame}>{t("endGameConfirmYes")}</button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Message d'information à TOUS les joueurs (demande 2026-07) : "la
+          partie est terminée" — diffusé par confirmEndGame, reçu ici via le
+          canal presence (voir l'effet ci-dessus, event "game_ended").
+          Toast auto-disparaissant, jamais bloquant. */}
+      {endNotice && (
+        <div className="system-notice-banner" role="status">
+          <span>🏳️ {t("gameEndedNotice")}</span>
+        </div>
       )}
 
       {hostGone && (
@@ -680,49 +778,49 @@ export default function Room() {
                 return (
                 <StageComponent gameId={room.current_game} icon={meta.icon} name={t(meta.nameKey)} accentVar={meta.accent} lang={lang} t={t} onRulesOpenChange={setReadingRules} rulesReaderNames={rulesReaderNames}>
                   {room.current_game === "quiz" && (
-                    <QuizGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} restartToken={restartToken} />
+                    <QuizGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
                   )}
                   {room.current_game === "piano" && (
-                    <PianoEscape room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} restartToken={restartToken} />
+                    <PianoEscape room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
                   )}
                   {room.current_game === "wordle" && (
-                    <WordGuess room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} restartToken={restartToken} />
+                    <WordGuess room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
                   )}
                   {room.current_game === "worldle" && (
-                    <Worldle room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} restartToken={restartToken} />
+                    <Worldle room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
                   )}
                   {room.current_game === "connect4" && (
-                    <ConnectFour room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} restartToken={restartToken} />
+                    <ConnectFour room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
                   )}
                   {room.current_game === "ludo" && (
-                    <PetitsChevaux room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} restartToken={restartToken} />
+                    <PetitsChevaux room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
                   )}
                   {room.current_game === "echoes" && (
-                    <EchoesRoom room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} restartToken={restartToken} />
+                    <EchoesRoom room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
                   )}
                   {room.current_game === "diapason" && (
-                    <DiapasonGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} restartToken={restartToken} />
+                    <DiapasonGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
                   )}
                   {room.current_game === "heist" && (
-                    <HeistRoom room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} restartToken={restartToken} />
+                    <HeistRoom room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
                   )}
                   {room.current_game === "chromatik" && (
-                    <ChromatikGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} restartToken={restartToken} />
+                    <ChromatikGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
                   )}
                   {room.current_game === "goldmines" && (
-                    <GoldMinesGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} restartToken={restartToken} />
+                    <GoldMinesGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
                   )}
                   {room.current_game === "yahtzee" && (
-                    <YahtzeeGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} restartToken={restartToken} />
+                    <YahtzeeGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
                   )}
                   {room.current_game === "president" && (
-                    <PresidentGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} restartToken={restartToken} />
+                    <PresidentGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
                   )}
                   {room.current_game === "tenk" && (
-                    <TenkGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} restartToken={restartToken} />
+                    <TenkGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
                   )}
                   {room.current_game === "petitbac" && (
-                    <PetitBacGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} restartToken={restartToken} />
+                    <PetitBacGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
                   )}
                 </StageComponent>
                 );

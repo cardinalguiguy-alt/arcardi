@@ -142,7 +142,7 @@ function computeReview(seats, answers, letter, overrides, categories, bonuses) {
   return { cells, pts, totals };
 }
 
-export default function PetitBacGame({ room, me, isHost, players, t, lang, onFinish, restartToken }) {
+export default function PetitBacGame({ room, me, isHost, players, t, lang, onFinish }) {
   const [phase, setPhase] = useState("intro");
   const [seats, setSeats] = useState([]);
   const [letter, setLetter] = useState(null);
@@ -448,20 +448,6 @@ export default function PetitBacGame({ room, me, isHost, players, t, lang, onFin
     if (!isHost || stage !== "done") return;
     startRound(stateRef.current);
   }
-
-  // "Terminer la partie" (demande 2026-07, page du salon) : contrairement au
-  // bouton "Rejouer" habituel (gardé par `stage === "done"`, cohérent avec
-  // l'UI qui ne l'affiche qu'en fin de manche), cette pastille globale doit
-  // pouvoir annuler la manche à TOUT moment, écriture en cours comprise. On
-  // appelle donc directement startRound(stateRef.current) — la même
-  // primitive que rejouer(), qui ne dépend elle-même d'aucun stage — plutôt
-  // que rejouer() lui-même, dont la garde bloquerait silencieusement l'appel
-  // en pleine manche.
-  useEffect(() => {
-    if (!restartToken || !isHost) return;
-    startRound(stateRef.current);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [restartToken]);
 
   async function backToRoom() {
     await resetRoomToLobby(room.id);

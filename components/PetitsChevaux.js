@@ -436,7 +436,7 @@ function MysteryWheel({ pending, isOwner, onSpin, t }) {
   );
 }
 
-export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFinish, restartToken }) {
+export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFinish }) {
   const [phase, setPhase] = useState("intro"); // intro (choix/attente) -> playing -> finished
   const [order, setOrder] = useState([]);           // couleurs en jeu, dans l'ordre du tour
   const [colorOfPlayer, setColorOfPlayer] = useState({}); // profile_id -> couleur
@@ -1062,14 +1062,6 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
     });
   }
 
-  // "Terminer la partie" (demande 2026-07, page du salon) : la pastille
-  // globale rappelle rejouer() via ce jeton — voir DiapasonGame.js pour le
-  // détail du mécanisme (identique dans tous les jeux).
-  useEffect(() => {
-    if (!restartToken) return;
-    rejouer();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [restartToken]);
 
   async function backToRoom() {
     await resetRoomToLobby(room.id);

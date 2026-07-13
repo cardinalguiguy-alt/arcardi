@@ -500,7 +500,7 @@ const N_QUESTIONS = 10;
 // haute entre amis, sans que la question suivante n'arrive déjà dessus.
 const REVEAL_PAUSE_MS = 3800;
 
-export default function QuizGame({ room, me, isHost, players, onFinish, t, lang, restartToken }) {
+export default function QuizGame({ room, me, isHost, players, onFinish, t, lang }) {
   // Le paquet n'existe QUE chez l'hôte : les autres reçoivent tout par broadcast.
   const deckRef = useRef(null);
   const [q, setQ] = useState(null);          // { index, text, choices[], good, diff, roundMs }
@@ -798,14 +798,6 @@ export default function QuizGame({ room, me, isHost, players, onFinish, t, lang,
     hostStart(lastDiffRef.current);
   }
 
-  // "Terminer la partie" (demande 2026-07, page du salon) : la pastille
-  // globale rappelle rejouer() via ce jeton — voir DiapasonGame.js pour le
-  // détail du mécanisme (identique dans tous les jeux).
-  useEffect(() => {
-    if (!restartToken) return;
-    rejouer();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [restartToken]);
 
   function pick(text) {
     // Sélection libre et modifiable tant que le timer n'est pas écoulé…

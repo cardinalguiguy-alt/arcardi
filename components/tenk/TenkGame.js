@@ -86,7 +86,7 @@ function dealFreshState(seats, target) {
   };
 }
 
-export default function TenkGame({ room, me, isHost, players, t, lang, onFinish, restartToken }) {
+export default function TenkGame({ room, me, isHost, players, t, lang, onFinish }) {
   const [phase, setPhase] = useState("intro"); // intro -> playing
   const [tableSize, setTableSize] = useState(null);
   const [pendingTarget, setPendingTarget] = useState(5000);
@@ -687,14 +687,6 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish,
     startWith(humanSeats);
   }
 
-  // "Terminer la partie" (demande 2026-07, page du salon) : la pastille
-  // globale rappelle rejouer() via ce jeton — voir DiapasonGame.js pour le
-  // détail du mécanisme (identique dans tous les jeux).
-  useEffect(() => {
-    if (!restartToken) return;
-    rejouer();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [restartToken]);
   async function backToRoom() {
     await resetRoomToLobby(room.id);
     onFinish && onFinish();

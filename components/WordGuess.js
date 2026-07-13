@@ -71,7 +71,7 @@ function letterStatuses(guesses) {
   return map;
 }
 
-export default function WordGuess({ room, me, isHost, players, onFinish, t, lang, restartToken }) {
+export default function WordGuess({ room, me, isHost, players, onFinish, t, lang }) {
   const [secret, setSecret] = useState(null);
   const [wordLang, setWordLang] = useState(null); // langue réelle du mot en cours ("fr" | "en")
   const [guesses, setGuesses] = useState([]); // [{ word, pattern }]
@@ -168,14 +168,6 @@ export default function WordGuess({ room, me, isHost, players, onFinish, t, lang
     hostStart();
   }
 
-  // "Terminer la partie" (demande 2026-07, page du salon) : la pastille
-  // globale rappelle rejouer() via ce jeton — voir DiapasonGame.js pour le
-  // détail du mécanisme (identique dans tous les jeux).
-  useEffect(() => {
-    if (!restartToken) return;
-    rejouer();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [restartToken]);
 
   async function backToRoom() {
     await resetRoomToLobby(room.id);

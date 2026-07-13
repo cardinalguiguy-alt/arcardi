@@ -161,7 +161,7 @@ function dealFreshState(seats) {
   };
 }
 
-export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFinish, restartToken }) {
+export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFinish }) {
   const [phase, setPhase] = useState("intro"); // intro -> playing (la table ne disparaît jamais)
   const [seats, setSeats] = useState([]);
   const [cards, setCards] = useState({});
@@ -174,8 +174,23 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
   const [lastAction, setLastAction] = useState(null);
   const [channelReady, setChannelReady] = useState(false);
 
-  // Locaux au joueur (jamais diffusés tels quels) :
+  // Locaux au joueur (jamais diffusés TELS QUELS au sens "état de vérité" —
+  // myHeld part bien sur le réseau au moment du lancer, ET, depuis le
+  // correctif ci-dessous, à chaque clic aussi, mais purement à titre
+  // d'aperçu cosmétique, voir livePreview) :
   const [myHeld, setMyHeld] = useState(NO_HELD.slice()); // dés gardés, envoyé au moment du lancer
+  // Correctif (demande explicite "cette information doit aussi être visible
+  // pour les autres joueurs, en direct") : avant, la sélection des dés
+  // gardés (myHeld) était purement locale au joueur actif jusqu'au PROCHAIN
+  // lancer — les autres joueurs/spectateurs ne voyaient donc rien bouger
+  // tant que le lancer suivant n'était pas arrivé. `livePreview` (reçu via
+  // l'événement broadcast "hold_preview", envoyé à chaque clic par
+  // toggleHold) porte { seatId, held } du joueur actif EN TEMPS RÉEL, purement
+  // cosmétique (n'affecte jamais l'arbitrage — la vérité du coup reste le
+  // `held` envoyé avec le move_attempt "roll") : réinitialisé dès qu'un
+  // nouvel état de vérité arrive (nouveau lancer, nouveau tour, nouvelle
+  // manche), pour ne jamais laisser un aperçu obsolète traîner.
+  const [livePreview, setLivePreview] = useState(null);
   // Correctif 2026-07 (demande explicite "aussi simple que ça") : plus de
   // sélection en deux temps — cliquer une case du tableau score IMMÉDIATEMENT
   // et termine le tour. L'ancienne barre de confirmation fixe en bas d'écran
@@ -230,6 +245,10 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
   }, [seats, cards, turnIdx, dice, held, rollsLeft, finished, winners]);
 
   function applyLocalState(s, extra = {}) {
+    // Un nouvel état de VÉRITÉ arrive (nouveau lancer, nouveau tour, nouvelle
+    // manche) : tout aperçu "en direct" plus ancien (livePreview) est
+    // désormais obsolète — le `held` qui vient d'arriver fait foi.
+    setLivePreview(null);
     setSeats(s.seats); setCards(s.cards); setTurnIdx(s.turnIdx);
     setDice(s.dice); setHeld(s.held || NO_HELD.slice());
     setRollsLeft(s.rollsLeft); setFinished(!!s.finished);
@@ -406,6 +425,16 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
       hostApplyMove(payload.seatId, payload.action);
     });
 
+    // Aperçu EN DIRECT de la sélection des dés (demande explicite) : envoyé
+    // par n'importe quel client (pas seulement l'hôte — purement cosmétique,
+    // n'affecte jamais l'arbitrage réel du coup), reçu par tous, y compris
+    // l'émetteur lui-même (self:true) — sans conséquence puisque ce dernier
+    // affiche toujours SA propre sélection via myHeld, jamais via
+    // livePreview (voir diceRow plus bas).
+    ch.on("broadcast", { event: "hold_preview" }, ({ payload }) => {
+      setLivePreview(payload);
+    });
+
     ch.subscribe(status => {
       if (status === "SUBSCRIBED") {
         setChannelReady(true);
@@ -526,14 +555,6 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
     channelRef.current.send({ type: "broadcast", event: "match_start", payload: dealFreshState(shuffleSeats(seats)) });
   }
 
-  // "Terminer la partie" (demande 2026-07, page du salon) : la pastille
-  // globale rappelle rejouer() via ce jeton — voir DiapasonGame.js pour le
-  // détail du mécanisme (identique dans tous les jeux).
-  useEffect(() => {
-    if (!restartToken) return;
-    rejouer();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [restartToken]);
   async function backToRoom() {
     await resetRoomToLobby(room.id);
     onFinish && onFinish();
@@ -555,7 +576,13 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
 
   function toggleHold(i) {
     if (!isMyTurn || !hasRolled || rollsLeft === 0) return; // plus de relance = garder n'a plus de sens
-    setMyHeld(prev => prev.map((h, idx) => (idx === i ? !h : h)));
+    const next = myHeld.map((h, idx) => (idx === i ? !h : h));
+    setMyHeld(next);
+    // Diffusion EN DIRECT (demande explicite) : les autres joueurs/
+    // spectateurs voient cette sélection tout de suite, sans attendre le
+    // prochain lancer — purement un aperçu cosmétique (voir livePreview),
+    // jamais une action d'arbitrage.
+    channelRef.current?.send({ type: "broadcast", event: "hold_preview", payload: { seatId: me.id, held: next } });
   }
   function attemptRoll() {
     if (!canRoll) return;
@@ -800,21 +827,36 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
 
           const diceRow = (
             <div className="yz-dice" ref={trayElRef}>
-              {(dice || [null, null, null, null, null]).map((v, i) => {
-                const isHeldNow = isMyTurn ? myHeld[i] : held[i];
+              {/* Correctif (demande explicite) : plus de dés fantômes "?"
+                  avant le premier lancer — la zone de lancer reste vide
+                  plutôt que d'afficher 5 dés fantômes tous superposés au
+                  centre (leur `style` valait `undefined` tant que `v` était
+                  null, donc aucun des GHOST_ROW.tx n'était jamais appliqué :
+                  visuellement, un seul "?" au lieu de cinq côte à côte). */}
+              {(dice || []).map((v, i) => {
+                const isHeldNow = isMyTurn
+                  ? myHeld[i]
+                  // Correctif (demande explicite, sélection visible en
+                  // direct) : les AUTRES joueurs/spectateurs voient l'aperçu
+                  // en direct de la sélection du joueur actif (livePreview,
+                  // diffusé à chaque clic sur un dé — voir toggleHold), pas
+                  // seulement le dernier `held` connu depuis le lancer
+                  // précédent. Repli sur `held` tant qu'aucun aperçu n'a
+                  // encore été reçu pour ce tour (ex. spectateur qui vient
+                  // d'arriver).
+                  : (livePreview && livePreview.seatId === currentSeat?.id ? livePreview.held[i] : held[i]);
                 const showShuffle = shuffling && !isHeldNow;
                 const displayValue = showShuffle ? shuffleFaces[i] : v;
                 return (
                   <Die
                     key={rollSeq + "-" + i}
-                    value={displayValue ?? 1}
-                    ghost={displayValue === null}
+                    value={displayValue}
                     held={hasRolled && isHeldNow}
                     shuffling={showShuffle}
                     rolling={!shuffling && hasRolled && !isHeldNow && lastAction?.type === "roll"}
                     onClick={isMyTurn && hasRolled && rollsLeft > 0 && !shuffling ? () => toggleHold(i) : undefined}
                     disabled={!isMyTurn || !hasRolled || rollsLeft === 0 || shuffling}
-                    style={v === null ? undefined : {
+                    style={{
                       "--tx": (scatter[i]?.tx ?? 0) + "px",
                       "--ty": (scatter[i]?.ty ?? 0) + "px",
                       "--trot": (scatter[i]?.trot ?? 0) + "deg",
