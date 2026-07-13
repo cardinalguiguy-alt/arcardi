@@ -427,7 +427,7 @@ function FinalVault({ pad, expected, onSuccess, onWrong, t }) {
 
 /* ---------- Composant principal ---------- */
 
-export default function HeistRoom({ room, me, isHost, players, t, lang, onFinish }) {
+export default function HeistRoom({ room, me, isHost, players, t, lang, onFinish, restartToken }) {
   const [phase, setPhase] = useState("intro"); // intro -> playing -> success | failure
   const [roles, setRoles] = useState({ A: null, B: null });
   const [puzzle, setPuzzle] = useState(null);
@@ -691,6 +691,15 @@ export default function HeistRoom({ room, me, isHost, players, t, lang, onFinish
     };
     channelRef.current.send({ type: "broadcast", event: "match_start", payload });
   }
+
+  // "Terminer la partie" (demande 2026-07, page du salon) : la pastille
+  // globale rappelle rejouer() via ce jeton — voir DiapasonGame.js pour le
+  // détail du mécanisme (identique dans tous les jeux).
+  useEffect(() => {
+    if (!restartToken) return;
+    rejouer();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [restartToken]);
 
   async function backToLobby() {
     await resetRoomToLobby(room.id);

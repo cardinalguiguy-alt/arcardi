@@ -105,7 +105,7 @@ function dealState(seats) {
   };
 }
 
-export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFinish }) {
+export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFinish, restartToken }) {
   const [phase, setPhase] = useState("intro");
   const [selected, setSelected] = useState([]);
   const [seats, setSeats] = useState([]);
@@ -470,6 +470,15 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
     if (!isHost || !seats.length) return;
     startWith(seats.filter(s => !s.isBot));
   }
+
+  // "Terminer la partie" (demande 2026-07, page du salon) : la pastille
+  // globale rappelle rejouer() via ce jeton — voir DiapasonGame.js pour le
+  // détail du mécanisme (identique dans tous les jeux).
+  useEffect(() => {
+    if (!restartToken) return;
+    rejouer();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [restartToken]);
   async function backToRoom() {
     await resetRoomToLobby(room.id);
     onFinish && onFinish();

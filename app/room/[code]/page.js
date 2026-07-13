@@ -62,6 +62,35 @@ const GAME_META = {
 const STAGE_COMPONENT = { door: DoorStage, curtain: CurtainStage, flash: FlashStage, video: VideoStage };
 const GAME_ORDER = ["quiz", "wordle", "worldle", "petitbac", "connect4", "ludo", "chromatik", "goldmines", "president", "yahtzee", "tenk", "piano", "echoes", "diapason", "heist"];
 
+// Victoires/Défaites, en discret (demande 2026-07) : remplace les deux chips
+// "✓N/✕N" auparavant affichées EN PERMANENCE sur chaque ligne joueur du
+// salon par une seule petite icône trophée — le détail n'apparaît qu'au
+// survol (overlay miniature), jamais affiché par défaut. Uniquement sur la
+// page de la room (ici, vue lobby) : les vignettes joueurs affichées PENDANT
+// une partie (.stage-bar/.mini-chip, plus bas dans ce fichier) n'affichent
+// plus aucune info de record, même pas ce trophée — demande explicite.
+// `pinned` (état local) permet aussi un TAP sur tactile (pas de vrai hover)
+// pour ouvrir/fermer l'overlay, en plus du survol classique en CSS pur.
+function TrophyBadge({ wins, losses, t }) {
+  const [pinned, setPinned] = useState(false);
+  return (
+    <span
+      className={"trophy-wl" + (pinned ? " pinned" : "")}
+      onClick={() => setPinned(p => !p)}
+      onMouseLeave={() => setPinned(false)}
+      title={`${t("winsLabel")} ✓${wins} · ${t("lossesLabel")} ✕${losses}`}
+      role="button"
+      tabIndex={0}
+    >
+      <span className="trophy-wl-icon" aria-hidden="true">🏆</span>
+      <span className="trophy-wl-pop" role="status">
+        <b className="win">✓ {wins} {t("winsLabel")}</b>
+        <b className="loss">✕ {losses} {t("lossesLabel")}</b>
+      </span>
+    </span>
+  );
+}
+
 export default function Room() {
   const { code } = useParams();
   const router = useRouter();
@@ -294,13 +323,38 @@ export default function Room() {
 
   // Retour au lobby DEPUIS n'importe quel moment d'une partie (pas seulement
   // à la fin naturelle) : l'hôte peut ramener tout le monde au salon sans
-  // que personne n'ait à quitter la room elle-même.
+  // que personne n'ait à quitter la room elle-même. Utilisé par le logo
+  // ARCARDI (brandHome ci-dessous) — PAS par la pastille "Terminer la
+  // partie" (voir endCurrentGame juste après), qui a une sémantique
+  // volontairement différente depuis la demande 2026-07 (ne quitte jamais
+  // la scène).
   async function backToLobby() {
     await resetRoomToLobby(room.id);
     // Mise à jour locale immédiate : ne dépend pas du round-trip Realtime,
     // donc fonctionne même si la réplication Postgres sur `rooms` a du
     // retard (l'hôte voit l'effet de son propre clic tout de suite).
     setRoom(r => (r ? { ...r, status: "lobby", current_game: null, game_state: null } : r));
+  }
+
+  // "Terminer la partie" (demande 2026-07) : ANNULE la partie EN COURS pour
+  // en relancer une NOUVELLE, sans jamais quitter la scène ni toucher
+  // room.status/current_game — sémantique volontairement distincte de
+  // backToLobby ci-dessus (qui, lui, ramène tout le monde au salon). `n+1`
+  // (compteur strictement croissant, jamais Date.now() : deux clics dans la
+  // même milliseconde produiraient sinon la même valeur et le second
+  // n'aurait aucun effet) est transmis en prop `restartToken` au jeu
+  // actuellement affiché (voir plus bas, chaque <XxxGame .../>) ; CHAQUE jeu
+  // écoute ce changement et rappelle alors sa propre fonction interne
+  // `rejouer()` — exactement le même mécanisme que son bouton "🔁 Rejouer"
+  // déjà affiché en fin de partie, simplement déclenché depuis cette
+  // pastille plutôt que depuis l'écran de victoire. `rejouer()` est déjà
+  // gardée par `isHost` dans chaque jeu : seul l'hôte peut réellement agir,
+  // les autres clients reçoivent la nouvelle partie via le broadcast
+  // `match_start`/`restart` normal de ce jeu, comme n'importe quelle relance.
+  const [restartToken, setRestartToken] = useState(0);
+  function endCurrentGame() {
+    if (!isHost) return;
+    setRestartToken(n => n + 1);
   }
 
   // Callback passé à chaque jeu pour son bouton de fin de partie
@@ -410,11 +464,32 @@ export default function Room() {
   // garde-fou anti-oscillation. Recalculé à chaque changement de jeu, de
   // taille de fenêtre, et de hauteur du contenu (mains qui grossissent,
   // récap de manche...) — l'ajustement suit le gameplay tout seul.
-  const stageRef = useRef(null);
+  //
+  // Correctif (dimensionnement ignoré au lancement) : `.game-stage` (voir
+  // plus bas, `ref={stageRef}`) ne monte QU'une fois le palier de lancement
+  // synchronisé terminé (`playing && !launching`, voir plus bas), alors que
+  // `focusActive` (donc cet effet) devient vrai dès `room.status ===
+  // "playing"` — c'est-à-dire PENDANT ce palier, avant que `.game-stage`
+  // n'existe dans le DOM. Avec un simple `useRef`, l'effet se déclenchait
+  // alors une fois, trouvait `stageRef.current === null`, et abandonnait
+  // (`if (!el) return;`) SANS jamais installer le ResizeObserver — et comme
+  // les refs ne font pas partie des dépendances de l'effet, React ne le
+  // relançait jamais quand `.game-stage` apparaissait enfin quelques
+  // centaines de ms plus tard : plus aucun recalcul de zoom pour toute la
+  // partie, le jeu restait à la taille (souvent incorrecte) figée au tout
+  // premier essai. Décrit exactement le symptôme signalé : la mise à
+  // l'échelle "ignore" la vraie taille de page au lancement, mais se
+  // recalibre dès qu'on rebascule le mode agrandi (ce qui refait tourner cet
+  // effet à un moment où `.game-stage` est, lui, déjà bien monté).
+  // Remplacé par une ref-callback (état React) : `stageEl` entre dans le
+  // tableau de dépendances, donc l'effet se relance de lui-même dès que
+  // `.game-stage` apparaît (ou disparaît) dans le DOM, plus besoin de
+  // rebasculer quoi que ce soit manuellement.
+  const [stageEl, setStageEl] = useState(null);
   const [stageScale, setStageScale] = useState(1);
   useEffect(() => {
     if (!focusActive || typeof window === "undefined") { setStageScale(1); return; }
-    const el = stageRef.current;
+    const el = stageEl;
     if (!el) return;
     // Recalcul TEMPORISÉ (150 ms) : les rafales de variations de hauteur
     // (fondu de Crossfade, cartes qui apparaissent une à une) sont
@@ -449,7 +524,7 @@ export default function Room() {
       window.removeEventListener("resize", compute);
       clearTimeout(timer);
     };
-  }, [focusActive, room?.current_game]);
+  }, [focusActive, stageEl, room?.current_game]);
 
   // Lancement synchronisé (demande 2026-07, point 2) : tant que l'horodatage
   // cible `launch_at` écrit par l'hôte n'est pas atteint, on réaffiche un
@@ -508,13 +583,24 @@ export default function Room() {
       </button>
 
       {/* En partie : deux pastilles fixes en haut à droite (demande 2026-07).
-          - "Terminer la partie" (hôte SEUL, à tout moment) : ferme proprement
-            la partie en cours, ramène tout le monde à l'écran de lancement
-            (bouton "Jouer" pour l'hôte) et réinitialise l'état de jeu.
+          - "Terminer la partie" (hôte SEUL, à tout moment) : ANNULE la
+            partie en cours et en relance une NOUVELLE (endCurrentGame,
+            même mécanique que le "Rejouer" propre à chaque jeu) — reste sur
+            la scène, ne ramène JAMAIS au salon. Repliée en bulle circulaire
+            au contour teinté par l'accent du jeu en cours (voir
+            .back-room-fab dans globals.css). Le retour effectif au salon
+            reste l'exclusivité du bouton "Retour au salon" affiché par
+            chaque jeu en fin de partie (c4BackToRoom).
           - Mode agrandi (tout le monde) : masque l'en-tête et les vignettes
             pour donner toute la hauteur au jeu (voir body.stage-focus). */}
       {playing && isHost && (
-        <button className="back-room-fab" onClick={backToLobby} title={t("endGameTooltip")} aria-label={t("endGameShort")}>
+        <button
+          className="back-room-fab"
+          onClick={endCurrentGame}
+          title={t("endGameTooltip")}
+          aria-label={t("endGameShort")}
+          style={meta ? { borderColor: `var(${meta.accent})` } : undefined}
+        >
           <span className="back-room-icon" aria-hidden="true">⏹️</span>
           <span className="back-room-label">{t("endGameShort")}</span>
         </button>
@@ -570,10 +656,10 @@ export default function Room() {
                     <span className={"presence-dot" + (isOnline(p.profile_id) ? "" : " off")} />
                     <span>{p.profiles?.avatar}</span>
                     <span>{p.profiles?.username}{p.profile_id === room.host_id ? " 👑" : ""}</span>
-                    <span className="mini-wl">
-                      <b className="win">✓{p.wins}</b>
-                      <b className="loss">✕{p.losses}</b>
-                    </span>
+                    {/* Victoires/Défaites retirées d'ici (demande 2026-07) :
+                        jamais affichées sur les chips joueurs pendant une
+                        partie, disponibles uniquement sur la page du salon
+                        via le trophée discret (voir TrophyBadge plus haut). */}
                   </span>
                 ))}
               </div>
@@ -584,7 +670,7 @@ export default function Room() {
 
             <div
               className="game-stage"
-              ref={stageRef}
+              ref={setStageEl}
               /* Mode agrandi : zoom auto pour tout faire tenir à l'écran
                  (1 = taille normale, voir l'effet stageScale plus haut). */
               style={focusActive && stageScale < 1 ? { zoom: stageScale } : undefined}
@@ -594,49 +680,49 @@ export default function Room() {
                 return (
                 <StageComponent gameId={room.current_game} icon={meta.icon} name={t(meta.nameKey)} accentVar={meta.accent} lang={lang} t={t} onRulesOpenChange={setReadingRules} rulesReaderNames={rulesReaderNames}>
                   {room.current_game === "quiz" && (
-                    <QuizGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
+                    <QuizGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} restartToken={restartToken} />
                   )}
                   {room.current_game === "piano" && (
-                    <PianoEscape room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
+                    <PianoEscape room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} restartToken={restartToken} />
                   )}
                   {room.current_game === "wordle" && (
-                    <WordGuess room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
+                    <WordGuess room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} restartToken={restartToken} />
                   )}
                   {room.current_game === "worldle" && (
-                    <Worldle room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
+                    <Worldle room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} restartToken={restartToken} />
                   )}
                   {room.current_game === "connect4" && (
-                    <ConnectFour room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
+                    <ConnectFour room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} restartToken={restartToken} />
                   )}
                   {room.current_game === "ludo" && (
-                    <PetitsChevaux room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
+                    <PetitsChevaux room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} restartToken={restartToken} />
                   )}
                   {room.current_game === "echoes" && (
-                    <EchoesRoom room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
+                    <EchoesRoom room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} restartToken={restartToken} />
                   )}
                   {room.current_game === "diapason" && (
-                    <DiapasonGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
+                    <DiapasonGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} restartToken={restartToken} />
                   )}
                   {room.current_game === "heist" && (
-                    <HeistRoom room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
+                    <HeistRoom room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} restartToken={restartToken} />
                   )}
                   {room.current_game === "chromatik" && (
-                    <ChromatikGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
+                    <ChromatikGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} restartToken={restartToken} />
                   )}
                   {room.current_game === "goldmines" && (
-                    <GoldMinesGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
+                    <GoldMinesGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} restartToken={restartToken} />
                   )}
                   {room.current_game === "yahtzee" && (
-                    <YahtzeeGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
+                    <YahtzeeGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} restartToken={restartToken} />
                   )}
                   {room.current_game === "president" && (
-                    <PresidentGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
+                    <PresidentGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} restartToken={restartToken} />
                   )}
                   {room.current_game === "tenk" && (
-                    <TenkGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
+                    <TenkGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} restartToken={restartToken} />
                   )}
                   {room.current_game === "petitbac" && (
-                    <PetitBacGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
+                    <PetitBacGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} restartToken={restartToken} />
                   )}
                 </StageComponent>
                 );
@@ -663,8 +749,7 @@ export default function Room() {
                   <span className={"presence-dot" + (isOnline(p.profile_id) ? "" : " off")} />
                   <span style={{ fontSize: 20 }}>{p.profiles?.avatar}</span>
                   <span>{p.profiles?.username}{p.profile_id === room.host_id ? " 👑" : ""}</span>
-                  <span className="pt win">✓ {p.wins} {t("winsLabel")}</span>
-                  <span className="pt loss">✕ {p.losses} {t("lossesLabel")}</span>
+                  <TrophyBadge wins={p.wins} losses={p.losses} t={t} />
                   {/* "Nommer comme host" (demande 2026-07, point 4) : action de
                       transfert visible uniquement pour l'hôte actuel, sur les
                       AUTRES joueurs en ligne — se transférer le rôle à

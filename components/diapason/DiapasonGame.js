@@ -61,7 +61,7 @@ const VIEWPOINT_LABEL_KEY = {
 
 const CLOSED_SIDES = { est: false, ouest: false };
 
-export default function DiapasonGame({ room, me, isHost, players, t, lang, onFinish }) {
+export default function DiapasonGame({ room, me, isHost, players, t, lang, onFinish, restartToken }) {
   const [phase, setPhase] = useState("intro"); // intro -> playing -> success | failure
   const [roles, setRoles] = useState({ est: null, ouest: null });
   const [puzzle, setPuzzle] = useState(null);
@@ -392,6 +392,17 @@ export default function DiapasonGame({ room, me, isHost, players, t, lang, onFin
     const p = genProloguePuzzle();
     channelRef.current.send({ type: "broadcast", event: "match_start", payload: { roleEst, roleOuest, ...p } });
   }
+
+  // "Terminer la partie" (demande 2026-07, page du salon) : la pastille
+  // globale rappelle rejouer() via ce jeton, exactement comme un clic sur le
+  // bouton "Rejouer" habituel — rejouer() reste gardée par isHost, donc seul
+  // l'hôte agit réellement ; les autres clients reçoivent la nouvelle partie
+  // via le broadcast match_start normal.
+  useEffect(() => {
+    if (!restartToken) return;
+    rejouer();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [restartToken]);
 
   function examineText() {
     if (examine === "dark-search") return t("diapasonSearchDark");

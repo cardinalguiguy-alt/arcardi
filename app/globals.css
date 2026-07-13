@@ -374,12 +374,37 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
   border-radius:12px; border:2px solid var(--line); background:rgba(255,255,255,.03);
   flex-wrap:wrap;
 }
-/* Victoires (vert) / Défaites (rouge) — remplace l'ancien "Points Arcardi"
-   (demande 2026-07). Le premier .pt (victoires) hérite du margin-left:auto
-   pour rester collé à droite comme avant ; le second (défaites) le suit. */
-.player-chip .pt{font-family:'Space Mono'; font-weight:700; font-size:12.5px;}
-.player-chip .pt.win{margin-left:auto; color:var(--ok);}
-.player-chip .pt.loss{color:#e05555;}
+/* Victoires/Défaites, en discret (demande 2026-07) : remplace les deux chips
+   "✓N/✕N" auparavant affichées en permanence par une seule icône trophée —
+   voir TrophyBadge dans app/room/[code]/page.js. Bulle ronde, collée à
+   droite (margin-left:auto, comme l'ancien .pt.win) ; le détail vit dans
+   .trophy-wl-pop, un mini-overlay révélé au survol (ou au tap, `.pinned`,
+   pour le tactile qui n'a pas de vrai hover). */
+.trophy-wl{
+  position:relative; margin-left:auto; flex:none;
+  display:flex; align-items:center; justify-content:center;
+  width:26px; height:26px; border-radius:50%; cursor:pointer;
+  background:rgba(255,255,255,.05); border:1.5px solid var(--line);
+  font-size:13px; transition:background .15s ease, border-color .15s ease, transform .12s ease;
+}
+.trophy-wl:hover, .trophy-wl:focus-visible, .trophy-wl.pinned{
+  background:rgba(255,209,102,.14); border-color:var(--p2); transform:scale(1.08);
+}
+.trophy-wl-pop{
+  position:absolute; right:0; bottom:calc(100% + 8px); z-index:5;
+  display:flex; flex-direction:column; gap:3px; white-space:nowrap;
+  padding:8px 12px; border-radius:10px; border:1.5px solid var(--line);
+  background:rgba(18,20,42,.96); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px);
+  box-shadow:0 10px 30px rgba(0,0,0,.45);
+  font-family:'Space Mono'; font-size:12px; font-weight:700;
+  opacity:0; transform:translateY(4px) scale(.94); pointer-events:none;
+  transition:opacity .15s ease, transform .15s ease;
+}
+.trophy-wl:hover .trophy-wl-pop, .trophy-wl:focus-visible .trophy-wl-pop, .trophy-wl.pinned .trophy-wl-pop{
+  opacity:1; transform:translateY(0) scale(1);
+}
+.trophy-wl-pop .win{color:var(--ok);}
+.trophy-wl-pop .loss{color:#e05555;}
 .muted{color:var(--muted); font-size:13px;}
 
 /* "Nommer comme host" (demande 2026-07, point 4) : petit bouton discret,
@@ -501,21 +526,26 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 }
 
 /* ===== Pastilles fixes de partie, coin haut-DROIT (2026-07) =====
-   - .back-room-fab : le gros bouton "Retour au salon" de la barre de scène
-     est devenu cette pastille compacte façon "Quitter le salon", mais en
-     BLANC et toujours en haut. Libellé déplié au survol ; ancrée au bord
-     droit, elle se déplie donc vers la gauche.
+   - .back-room-fab : "Terminer la partie" (demande 2026-07 : annule la
+     partie EN COURS et en relance une nouvelle — voir endCurrentGame dans
+     app/room/[code]/page.js — jamais un retour au salon, exclusivité du
+     bouton "Retour au salon" affiché en fin de partie par chaque jeu).
+     Repliée en bulle CIRCULAIRE (largeur fixe = hauteur, voir plus bas) au
+     contour teinté par l'accent du jeu en cours (--accent, posé en style
+     inline sur le bouton lui-même, voir JSX) plutôt qu'une couleur fixe —
+     demande explicite. Libellé déplié au survol ; ancrée au bord droit.
    - .stage-zoom-fab : bascule du mode agrandi (voir body.stage-focus).
    Positionnées SOUS la rangée logo/code (~90px) ; en mode agrandi, cette
    rangée disparaît et les pastilles remontent au ras du bord. */
 .back-room-fab{
   position:fixed; right:14px; top:90px; z-index:60;
-  display:flex; align-items:center; height:40px; padding:0 10px;
+  display:flex; align-items:center; justify-content:center;
+  width:40px; height:40px; padding:0 10px;
   background:rgba(28,24,36,.82); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px);
   border:1.5px solid rgba(255,255,255,.6); border-radius:99px;
   color:#fff; cursor:pointer; opacity:.6; overflow:hidden; white-space:nowrap;
   box-shadow:0 6px 18px rgba(0,0,0,.35);
-  transition:opacity .2s ease, background .2s ease, border-color .2s ease, box-shadow .2s ease, top .25s ease;
+  transition:opacity .2s ease, background .2s ease, border-color .2s ease, box-shadow .2s ease, top .25s ease, width .25s ease;
 }
 .back-room-fab .back-room-icon{ flex:none; font-size:17px; line-height:1; }
 .back-room-fab .back-room-label{
@@ -524,25 +554,29 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
   transition:max-width .25s ease, opacity .2s ease, margin-left .25s ease;
 }
 .back-room-fab:hover, .back-room-fab:focus-visible{
-  opacity:1; background:rgba(50,44,64,.94); border-color:#fff;
+  opacity:1; background:rgba(50,44,64,.94);
+  width:auto; justify-content:flex-start;
   box-shadow:0 6px 18px rgba(255,255,255,.22);
 }
 .back-room-fab:hover .back-room-label, .back-room-fab:focus-visible .back-room-label{
   max-width:170px; opacity:1; margin-left:8px;
 }
-/* Harmonisation (demande 2026-07) : à l'état REPLIÉ, "Retour au salon" et
-   la bascule du mode agrandi partagent désormais EXACTEMENT le même gabarit
-   (40px de haut, même fond, même bordure blanche, même opacité) — deux
-   pastilles jumelles empilées dans le coin, quel que soit le thème du jeu. */
+/* Harmonisation (demande 2026-07) : à l'état REPLIÉ, "Terminer la partie" et
+   la bascule du mode agrandi partagent EXACTEMENT le même gabarit — bulle
+   circulaire de 40px de diamètre (largeur fixe désormais, pas seulement la
+   hauteur), même fond, même opacité — deux pastilles jumelles empilées dans
+   le coin. Seul le contour de "Terminer la partie" varie avec le thème du
+   jeu (voir plus haut) ; celui du mode agrandi reste blanc, universel. */
 .stage-zoom-fab{
   position:fixed; right:14px; top:138px; z-index:60;
-  display:flex; align-items:center; height:40px; padding:0 10px;
+  display:flex; align-items:center; justify-content:center;
+  width:40px; height:40px; padding:0 10px;
   background:rgba(28,24,36,.82); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px);
   border:1.5px solid rgba(255,255,255,.6); border-radius:99px;
   color:#fff; font-size:17px; line-height:1; cursor:pointer;
   opacity:.6; overflow:hidden; white-space:nowrap;
   box-shadow:0 6px 18px rgba(0,0,0,.35);
-  transition:opacity .2s ease, background .2s ease, border-color .2s ease, top .25s ease;
+  transition:opacity .2s ease, background .2s ease, border-color .2s ease, top .25s ease, width .25s ease;
 }
 .stage-zoom-fab .stage-zoom-label{
   max-width:0; opacity:0; margin-left:0; overflow:hidden;
@@ -551,6 +585,7 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 }
 .stage-zoom-fab:hover, .stage-zoom-fab:focus-visible{
   opacity:1; background:rgba(50,44,64,.94); border-color:#fff;
+  width:auto; justify-content:flex-start;
   box-shadow:0 6px 18px rgba(255,255,255,.22);
 }
 .stage-zoom-fab:hover .stage-zoom-label, .stage-zoom-fab:focus-visible .stage-zoom-label{
@@ -669,13 +704,9 @@ body.stage-focus .chat-panel{ right:auto; left:14px; }
   background:rgba(0,0,0,.25); border:1.5px solid var(--line); border-radius:99px;
   padding:5px 11px; font-size:12px; font-weight:700;
 }
-.mini-chip b{ font-family:'Space Mono'; color:var(--p3); font-weight:700; }
-/* Victoires (vert) / Défaites (rouge) dans la barre de scène — remplace
-   l'ancien score unique "Points Arcardi" (demande 2026-07). */
-.mini-wl{ display:flex; align-items:center; gap:5px; margin-left:2px; }
-.mini-wl b{ font-family:'Space Mono'; font-weight:700; font-size:11.5px; }
-.mini-wl b.win{ color:var(--ok); }
-.mini-wl b.loss{ color:#e05555; }
+/* Victoires/Défaites retirées d'ici (demande 2026-07) : plus aucune info de
+   record sur les chips joueurs pendant une partie — voir .trophy-wl plus
+   haut pour l'unique emplacement autorisé (page du salon, hors partie). */
 .stage-bar-lobby-btn{
   display:inline-flex; align-items:center; gap:6px; width:auto; flex:none;
   margin-top:0; padding:8px 14px; font-family:inherit; font-size:12.5px; font-weight:800;
@@ -4105,6 +4136,15 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
    le reste du site — seules les classes ci-dessous sont propres au contenu
    (réglages son/musique, liste des pistes, avatar, déconnexion).
    ========================================================================== */
+/* Correctif thème (demande explicite) : .rules-modal-title (titre "⚙️
+   Paramètres") retombe sur `color:var(--accent, var(--p3))` — un repli
+   pensé pour les fiches de règles de JEU, colorées par le Stage concerné via
+   `--accent` (voir app/room/[code]/page.js). Le menu Paramètres n'a pas de
+   jeu associé et ne fournit donc jamais cette variable : sans ce correctif,
+   son titre retombait sur --p3, le vert fluo abandonné ailleurs sur le site
+   (voir le commentaire "fini le vert fluo" sur .btn plus haut). Fixé sur
+   l'accent doré (--p2) déjà utilisé partout ailleurs dans ce même menu. */
+.settings-modal{ --accent: var(--p2); }
 .settings-gear-btn{
   width:36px; height:36px; padding:0; border:none; border-radius:50%;
   background:rgba(255,255,255,.06); color:var(--ink); font-size:16px; cursor:pointer;
@@ -4122,7 +4162,11 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
 .settings-section{ margin:0 0 18px; }
 .settings-section:last-of-type{ margin-bottom:4px; }
 .settings-section-title{
-  font-size:13px; font-family:'Space Mono'; color:var(--p3); margin:0 0 8px;
+  /* Correctif thème (demande explicite) : Arcardi n'utilise plus le vert
+     fluo (--p3) pour ce type de texte — harmonisé sur l'accent doré (--p2)
+     déjà utilisé partout ailleurs dans ce même menu (pistes en cours,
+     avatar actif, voir plus bas). */
+  font-size:13px; font-family:'Space Mono'; color:var(--p2); margin:0 0 8px;
   text-transform:uppercase; letter-spacing:.03em;
 }
 
@@ -4137,7 +4181,10 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
   position:relative; width:46px; height:26px; border-radius:999px; border:none; padding:0; cursor:pointer;
   background:rgba(255,255,255,.12); transition:background .18s ease; flex:none;
 }
-.settings-switch.on{ background:linear-gradient(135deg, var(--p3), var(--p2)); }
+/* Correctif thème (demande explicite) : même remplacement que .btn plus
+   haut ("fini le vert fluo") — dégradé or (--p2) -> ambre (--p4) au lieu de
+   vert fluo (--p3) -> or, pour l'état activé des interrupteurs Son/Musique. */
+.settings-switch.on{ background:linear-gradient(135deg, var(--p2), var(--p4)); }
 .settings-switch-knob{
   position:absolute; top:3px; left:3px; width:20px; height:20px; border-radius:50%;
   background:#fff; box-shadow:0 2px 4px rgba(0,0,0,.4);

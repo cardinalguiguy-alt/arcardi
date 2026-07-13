@@ -117,7 +117,7 @@ function RankTag({ place, nSeats, t }) {
   );
 }
 
-export default function PresidentGame({ room, me, isHost, players, t, lang, onFinish }) {
+export default function PresidentGame({ room, me, isHost, players, t, lang, onFinish, restartToken }) {
   const [phase, setPhase] = useState("intro");
   const [tableSize, setTableSize] = useState(null);
   const [picked, setPicked] = useState([]);
@@ -602,6 +602,19 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
     const initial = dealFirstRound(shuffle(seats));
     sendMatchStart(initial);
   }
+
+  // "Terminer la partie" (demande 2026-07, page du salon) : contrairement au
+  // bouton "Rejouer" habituel (rejouer() ci-dessus, gardé par `over` — n'a de
+  // sens QU'ENTRE deux manches d'un même match), cette pastille globale doit
+  // pouvoir annuler à TOUT moment, manche en cours comprise. On appelle donc
+  // nouveauMatch() (mandats et champion remis à zéro, tout redistribué) plutôt
+  // que rejouer(), dont la garde `!over` bloquerait silencieusement l'appel
+  // en pleine manche.
+  useEffect(() => {
+    if (!restartToken) return;
+    nouveauMatch();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [restartToken]);
   // Tour "Dictateur" — bonus HUMORISTIQUE demandé par l'hôte une fois le
   // Dictateur couronné : sa main ne contient QUE des 2, il gagne quasi
   // automatiquement. Ne touche JAMAIS aux mandats ni au titre de Dictateur

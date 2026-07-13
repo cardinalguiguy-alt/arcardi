@@ -436,7 +436,7 @@ function MysteryWheel({ pending, isOwner, onSpin, t }) {
   );
 }
 
-export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFinish }) {
+export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFinish, restartToken }) {
   const [phase, setPhase] = useState("intro"); // intro (choix/attente) -> playing -> finished
   const [order, setOrder] = useState([]);           // couleurs en jeu, dans l'ordre du tour
   const [colorOfPlayer, setColorOfPlayer] = useState({}); // profile_id -> couleur
@@ -1014,9 +1014,20 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
       return;
     }
 
+    // Correctif (freeze après la roue) : `finishDiceTurn` attend une clé
+    // `extraReroll`, alors que la valeur tirée d'applyMysteryKind s'appelle
+    // `extraRoll`. L'ancien code passait `extraReroll` en raccourci d'objet
+    // SANS que cette variable existe dans ce scope, ce qui levait un
+    // ReferenceError non intercepté à chaque fois que la roue mystère
+    // terminait un tour (aucun dé restant à jouer) — précisément le cas le
+    // plus fréquent. L'exception, levée dans le setTimeout de
+    // resolveMysterySpin, ne cassait pas React mais empêchait tout
+    // broadcastState/armMoveTimer de s'exécuter ensuite : plus aucune
+    // échéance active, pendingMystery.spin déjà posé (donc requestSpin ne
+    // relance rien) -> partie figée en permanence.
     finishDiceTurn({
       color, tokens: nextTokens, effects, diceAfter,
-      extraReroll, lastMoved: movedInfo, baseLastEvent: mysteryEvent,
+      extraReroll: extraRoll, lastMoved: movedInfo, baseLastEvent: mysteryEvent,
     });
   }
 
@@ -1050,6 +1061,15 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
       payload: { order: stateRef.current.order, colorOfPlayer: colorRef.current },
     });
   }
+
+  // "Terminer la partie" (demande 2026-07, page du salon) : la pastille
+  // globale rappelle rejouer() via ce jeton — voir DiapasonGame.js pour le
+  // détail du mécanisme (identique dans tous les jeux).
+  useEffect(() => {
+    if (!restartToken) return;
+    rejouer();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [restartToken]);
 
   async function backToRoom() {
     await resetRoomToLobby(room.id);

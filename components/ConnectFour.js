@@ -41,7 +41,7 @@ function isBoardFull(board) {
   return board[0].every(cell => cell !== null);
 }
 
-export default function ConnectFour({ room, me, isHost, players, t, lang, onFinish }) {
+export default function ConnectFour({ room, me, isHost, players, t, lang, onFinish, restartToken }) {
   const [phase, setPhase] = useState("intro"); // intro (choix/attente) -> playing (le plateau reste affiché même après la victoire)
   const [p1, setP1] = useState(null);
   const [p2, setP2] = useState(null);
@@ -259,6 +259,15 @@ export default function ConnectFour({ room, me, isHost, players, t, lang, onFini
     const [first, second] = Math.random() < 0.5 ? [p1, p2] : [p2, p1];
     channelRef.current.send({ type: "broadcast", event: "match_start", payload: { p1: first, p2: second, turn: "p1" } });
   }
+
+  // "Terminer la partie" (demande 2026-07, page du salon) : la pastille
+  // globale rappelle rejouer() via ce jeton — voir DiapasonGame.js pour le
+  // détail du mécanisme (identique dans tous les jeux).
+  useEffect(() => {
+    if (!restartToken) return;
+    rejouer();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [restartToken]);
 
   async function backToRoom() {
     await resetRoomToLobby(room.id);

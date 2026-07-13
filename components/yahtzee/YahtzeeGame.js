@@ -161,7 +161,7 @@ function dealFreshState(seats) {
   };
 }
 
-export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFinish }) {
+export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFinish, restartToken }) {
   const [phase, setPhase] = useState("intro"); // intro -> playing (la table ne disparaît jamais)
   const [seats, setSeats] = useState([]);
   const [cards, setCards] = useState({});
@@ -525,6 +525,15 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
     if (!isHost || !seats.length) return;
     channelRef.current.send({ type: "broadcast", event: "match_start", payload: dealFreshState(shuffleSeats(seats)) });
   }
+
+  // "Terminer la partie" (demande 2026-07, page du salon) : la pastille
+  // globale rappelle rejouer() via ce jeton — voir DiapasonGame.js pour le
+  // détail du mécanisme (identique dans tous les jeux).
+  useEffect(() => {
+    if (!restartToken) return;
+    rejouer();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [restartToken]);
   async function backToRoom() {
     await resetRoomToLobby(room.id);
     onFinish && onFinish();
@@ -562,6 +571,27 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
       payload: { seatId: me.id, action: { type: "roll", held: myHeld } },
     });
   }
+
+  // Raccourci clavier (barre d'Espace, demande 2026-07) : lance/relance les
+  // dés — UNIQUEMENT quand `canRoll` est vrai (c'est mon tour, il reste un
+  // lancer, tous les dés ne sont pas gardés, pas de mélange en cours),
+  // exactement la même garde que le bouton 🎲 lui-même. Ignoré si le focus
+  // est sur un champ de saisie (ex. le chat du salon) pour ne jamais voler
+  // un espace tapé dans un message — même précaution que le Ludo.
+  useEffect(() => {
+    function onKeyDown(e) {
+      if (e.code !== "Space") return;
+      const tag = (document.activeElement?.tagName || "").toLowerCase();
+      if (tag === "input" || tag === "textarea" || document.activeElement?.isContentEditable) return;
+      if (!canRoll) return;
+      e.preventDefault();
+      attemptRoll();
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canRoll, dice, myHeld]);
+
   // Correctif 2026-07 : un seul clic sur une case libre du tableau la score
   // ET termine le tour, sans étape de confirmation intermédiaire.
   function scoreCategoryClick(catId) {

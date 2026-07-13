@@ -267,7 +267,7 @@ function proximityPct(km) { return Math.max(0, Math.round(100 - (km / 20015) * 1
 const GUESS_COMPACT_AT = 5;
 const GUESS_TINY_AT = 8;
 
-export default function Worldle({ room, me, isHost, players, onFinish, t, lang }) {
+export default function Worldle({ room, me, isHost, players, onFinish, t, lang, restartToken }) {
   const [deadline, setDeadline] = useState(null);
   const [timeLeft, setTimeLeft] = useState(ROUND_MS);
   const [target, setTarget] = useState(null); // objet pays
@@ -393,6 +393,15 @@ export default function Worldle({ room, me, isHost, players, onFinish, t, lang }
     if (!isHost) return;
     hostStart();
   }
+
+  // "Terminer la partie" (demande 2026-07, page du salon) : la pastille
+  // globale rappelle rejouer() via ce jeton — voir DiapasonGame.js pour le
+  // détail du mécanisme (identique dans tous les jeux).
+  useEffect(() => {
+    if (!restartToken) return;
+    rejouer();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [restartToken]);
 
   async function backToRoom() {
     await resetRoomToLobby(room.id);

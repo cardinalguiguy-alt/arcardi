@@ -56,7 +56,7 @@ const DIGITS = ["1", "6", "8", "5"]; // révélé salle par salle
 
 function shuffle(a) { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1));[a[i], a[j]] = [a[j], a[i]]; } return a; }
 
-export default function PianoEscape({ room, me, isHost, onFinish, t, lang }) {
+export default function PianoEscape({ room, me, isHost, onFinish, t, lang, restartToken }) {
   const [stage, setStage] = useState(0);        // 0 intro, 1..5 salles, 6 victoire
   const [solverMsg, setSolverMsg] = useState("");
   const [feedback, setFeedback] = useState("");
@@ -128,6 +128,15 @@ export default function PianoEscape({ room, me, isHost, onFinish, t, lang }) {
     if (!isHost) return;
     channelRef.current.send({ type: "broadcast", event: "restart", payload: {} });
   }
+
+  // "Terminer la partie" (demande 2026-07, page du salon) : la pastille
+  // globale rappelle rejouer() via ce jeton — voir DiapasonGame.js pour le
+  // détail du mécanisme (identique dans tous les jeux).
+  useEffect(() => {
+    if (!restartToken) return;
+    rejouer();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [restartToken]);
 
   const digitsFound = DIGITS.slice(0, Math.max(0, Math.min(stage - 1, 4)));
 
