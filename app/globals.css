@@ -372,9 +372,28 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 .player-chip{
   display:flex; align-items:center; gap:10px; padding:10px 12px; margin-bottom:8px;
   border-radius:12px; border:2px solid var(--line); background:rgba(255,255,255,.03);
+  flex-wrap:wrap;
 }
-.player-chip .pt{margin-left:auto; font-family:'Space Mono'; color:var(--p3);}
+/* Victoires (vert) / Défaites (rouge) — remplace l'ancien "Points Arcardi"
+   (demande 2026-07). Le premier .pt (victoires) hérite du margin-left:auto
+   pour rester collé à droite comme avant ; le second (défaites) le suit. */
+.player-chip .pt{font-family:'Space Mono'; font-weight:700; font-size:12.5px;}
+.player-chip .pt.win{margin-left:auto; color:var(--ok);}
+.player-chip .pt.loss{color:#e05555;}
 .muted{color:var(--muted); font-size:13px;}
+
+/* "Nommer comme host" (demande 2026-07, point 4) : petit bouton discret,
+   visible uniquement par l'hôte, sur les autres joueurs en ligne. */
+.nominate-host-btn{
+  display:flex; align-items:center; gap:4px; margin-left:8px;
+  padding:5px 10px; border-radius:99px; border:1.5px solid var(--line);
+  background:rgba(255,255,255,.04); color:var(--muted);
+  font-size:11.5px; font-weight:700; cursor:pointer; white-space:nowrap;
+  transition:color .15s ease, border-color .15s ease, background .15s ease;
+}
+.nominate-host-btn:hover, .nominate-host-btn:focus-visible{
+  color:var(--ink); border-color:var(--p2); background:rgba(255,209,102,.12);
+}
 
 @keyframes shakeRow{
   10%,90%{transform:translateX(-2px);} 20%,80%{transform:translateX(4px);}
@@ -651,6 +670,12 @@ body.stage-focus .chat-panel{ right:auto; left:14px; }
   padding:5px 11px; font-size:12px; font-weight:700;
 }
 .mini-chip b{ font-family:'Space Mono'; color:var(--p3); font-weight:700; }
+/* Victoires (vert) / Défaites (rouge) dans la barre de scène — remplace
+   l'ancien score unique "Points Arcardi" (demande 2026-07). */
+.mini-wl{ display:flex; align-items:center; gap:5px; margin-left:2px; }
+.mini-wl b{ font-family:'Space Mono'; font-weight:700; font-size:11.5px; }
+.mini-wl b.win{ color:var(--ok); }
+.mini-wl b.loss{ color:#e05555; }
 .stage-bar-lobby-btn{
   display:inline-flex; align-items:center; gap:6px; width:auto; flex:none;
   margin-top:0; padding:8px 14px; font-family:inherit; font-size:12.5px; font-weight:800;
@@ -1987,6 +2012,23 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
   25%{ opacity:1; transform:scale(1); }
   78%{ opacity:1; transform:scale(1); }
   100%{ opacity:0; transform:scale(.82); }
+}
+
+/* Palier de lancement synchronisé (demande 2026-07, point 2) : affiché chez
+   TOUS les clients (hôte compris) le temps que l'horodatage `launch_at`
+   soit atteint partout — voir `launching` dans app/room/[code]/page.js. */
+.game-launch-panel{
+  text-align:center; display:flex; flex-direction:column; align-items:center;
+  gap:6px; padding:48px 24px;
+}
+.game-launch-icon{
+  font-size:52px; line-height:1;
+  animation:gameLaunchPulse 1.1s ease-in-out infinite;
+  filter:drop-shadow(0 0 14px var(--accent, var(--p2)));
+}
+@keyframes gameLaunchPulse{
+  0%, 100%{ transform:scale(1); opacity:.85; }
+  50%{ transform:scale(1.12); opacity:1; }
 }
 /* 10000 : HUD néon cyan/rose sur bleu nuit, chiffres monospace. */
 .game-countdown.tenk{ background:rgba(4,9,26,.6); }

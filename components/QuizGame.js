@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { saveGameState, readGameState, resetRoomToLobby } from "@/lib/gameSync";
+import { saveGameState, readGameState, resetRoomToLobby, recordMatchResult } from "@/lib/gameSync";
 import Crossfade from "./Crossfade";
 
 /* ==========================================================================
@@ -510,6 +510,7 @@ export default function QuizGame({ room, me, isHost, players, onFinish, t, lang 
   const [revealed, setRevealed] = useState(false);
   const [timeLeft, setTimeLeft] = useState(0);
   const [finished, setFinished] = useState(false);
+  const [myWin, setMyWin] = useState(false);
   const [points, setPoints] = useState(0);
   const [roundResults, setRoundResults] = useState([]); // qui a répondu juste/faux cette manche-ci
   // ----- Bonus d'enchaînement (streak) -----
@@ -541,6 +542,13 @@ export default function QuizGame({ room, me, isHost, players, onFinish, t, lang 
   const playersRef = useRef(players);
   const channelRef = useRef(null);
   const myGain = useRef(0);
+  // Victoire/défaite ARCARDI (remplace l'ancien add_points par question) :
+  // total de points de CHAQUE joueur, reconstruit localement à partir des
+  // broadcasts "answer_result" (diffusés à tous, self:true inclus) — tous
+  // les clients reçoivent exactement les mêmes messages, donc calculent le
+  // même classement final. Gagne qui a le total le plus haut à la fin des
+  // N_QUESTIONS (égalité = tous gagnants).
+  const totalsRef = useRef({});
   const timeouts = useRef([]);
   const restoredRef = useRef(false);
   // Miroirs toujours à jour de q/picked pour le handler "reveal" (évite les closures figées).
@@ -587,6 +595,8 @@ export default function QuizGame({ room, me, isHost, players, onFinish, t, lang 
         myGain.current = 0; setPoints(0);
         streakRef.current = 0; setStreak(0);
         tokensRef.current = 0; setTokens(0);
+        totalsRef.current = {};
+        setMyWin(false);
       }
     });
     // Un joueur a verrouillé sa réponse : tout le monde l'affiche ; l'hôte
@@ -614,10 +624,6 @@ export default function QuizGame({ room, me, isHost, players, onFinish, t, lang 
         const gain = POINTS_BY_DIFF[currentQ.diff] || 2;
         myGain.current += gain;
         setPoints(p => p + gain);
-        try {
-          // RPC atomique : pas d'écrasement de score en cas de réponses simultanées.
-          await supabase.rpc("add_points", { p_room: room.id, p_delta: gain });
-        } catch (e) {}
         const newStreak = streakRef.current + 1;
         if (newStreak >= 3) {
           streakRef.current = 0; setStreak(0);
@@ -640,6 +646,14 @@ export default function QuizGame({ room, me, isHost, players, onFinish, t, lang 
     });
     ch.on("broadcast", { event: "answer_result" }, ({ payload }) => {
       setRoundResults(prev => (prev.some(r => r.profile_id === payload.profile_id) ? prev : [...prev, payload]));
+      // Tally partagé (identique chez tous les clients, mêmes messages
+      // reçus par tous) : sert à déterminer le/les gagnant(s) à la fin.
+      if (payload.correct) {
+        const gain = POINTS_BY_DIFF[qRef.current?.diff] || 2;
+        totalsRef.current[payload.profile_id] = (totalsRef.current[payload.profile_id] || 0) + gain;
+      } else if (totalsRef.current[payload.profile_id] === undefined) {
+        totalsRef.current[payload.profile_id] = 0;
+      }
     });
     // Bonus utilisé par un joueur : le 50/50 est purement local à qui l'a
     // activé (rien à propager, juste une notif sociale) ; l'attaque de
@@ -663,12 +677,14 @@ export default function QuizGame({ room, me, isHost, players, onFinish, t, lang 
     ch.on("broadcast", { event: "finished" }, async () => {
       setFinished(true);
       if (isHost) persistState(null, null, false, true);
-      // Chaque joueur enregistre SON résultat (RLS : on ne peut écrire que le sien).
-      try {
-        await supabase.from("game_results").insert({
-          room_id: room.id, profile_id: me.id, game_id: "quiz", points: myGain.current
-        });
-      } catch (e) {}
+      // Victoire/défaite ARCARDI : gagne qui a le plus haut total sur les
+      // N_QUESTIONS (calculé depuis le même tally reçu par tous les
+      // clients ci-dessus) — égalité = tous gagnants.
+      const ids = (playersRef.current || []).map(p => p.profile_id);
+      const best = Math.max(0, ...ids.map(id => totalsRef.current[id] || 0));
+      const won = (totalsRef.current[me.id] || 0) === best;
+      setMyWin(won);
+      recordMatchResult(room.id, won);
     });
 
     ch.subscribe(status => {
@@ -875,7 +891,10 @@ export default function QuizGame({ room, me, isHost, players, onFinish, t, lang 
         {finished ? (
           <div>
             <p className="hint">{t("quizDone")}</p>
-            <p style={{ fontWeight: 800 }}>{t("peYourGain")} <span style={{ color: "var(--p3)", fontFamily: "'Space Mono'" }}>+{points} {t("pts")}</span></p>
+            <p style={{ fontWeight: 800 }}>
+              <span style={{ color: myWin ? "var(--ok)" : "#e05555" }}>{myWin ? t("yzEndWinBanner") : t("yzEndLoseBanner")}</span>
+              {" — "}<span style={{ fontFamily: "'Space Mono'" }}>{points} {t("pts")}</span>
+            </p>
             <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 16, flexWrap: "wrap" }}>
               {isHost ? (
                 <>

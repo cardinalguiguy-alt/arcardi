@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { saveGameState, readGameState, resetRoomToLobby } from "@/lib/gameSync";
+import { saveGameState, readGameState, resetRoomToLobby, recordMatchResult } from "@/lib/gameSync";
 import Crossfade from "@/components/Crossfade";
 import Die from "./Die";
 import {
@@ -194,7 +194,7 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
   const [scatterJob, setScatterJob] = useState(0);
   const freshMaskRef = useRef([true, true, true, true, true]); // true = doit être repositionné
   const trayElRef = useRef(null);
-  const [myGain, setMyGain] = useState(0);
+  const [myWin, setMyWin] = useState(false);
   const [bonusFlash, setBonusFlash] = useState(false);    // bandeau +100 Yahtzee supplémentaire
 
   // Mélange avant révélation : ~1s de "brassage" visuel + sonore avant que
@@ -267,7 +267,7 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
       flashTimer.current = setTimeout(() => setBonusFlash(false), 3200);
     }
     if (extra.resetGain) {
-      setMyGain(0); savedResultRef.current = false;
+      setMyWin(false); savedResultRef.current = false;
       clearTimeout(endBannerTimerRef.current);
       setEndBanner(null);
     }
@@ -580,18 +580,12 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
     if (!finished || savedResultRef.current || !isPlayer) return;
     savedResultRef.current = true;
     const won = winners.includes(me.id);
-    const gain = won ? 5 : 1;
-    setMyGain(gain);
+    setMyWin(won);
     setEndBanner(won ? "win" : "lose");
     if (won) playGameWin(); else playGameLose();
     clearTimeout(endBannerTimerRef.current);
     endBannerTimerRef.current = setTimeout(() => setEndBanner(null), won ? 4000 : 3400);
-    (async () => {
-      try {
-        await supabase.from("game_results").insert({ room_id: room.id, profile_id: me.id, game_id: GAME_ID, points: gain });
-        await supabase.rpc("add_points", { p_room: room.id, p_delta: gain });
-      } catch (e) {}
-    })();
+    recordMatchResult(room.id, won);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [finished]);
 
@@ -931,11 +925,6 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
                   </div>
                 ))}
             </div>
-            {isPlayer && (
-              <p style={{ fontWeight: 800, textAlign: "center", marginTop: 10 }}>
-                {t("peYourGain")} <span style={{ color: "var(--p3)", fontFamily: "'Space Mono'" }}>+{myGain} {t("pts")}</span>
-              </p>
-            )}
             <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 12, flexWrap: "wrap" }}>
               {isHost ? (
                 <>

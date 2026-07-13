@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { saveGameState, readGameState, resetRoomToLobby } from "@/lib/gameSync";
+import { saveGameState, readGameState, resetRoomToLobby, recordMatchResult } from "@/lib/gameSync";
 import Crossfade from "@/components/Crossfade";
 
 /* ==========================================================================
@@ -9,8 +9,8 @@ import Crossfade from "@/components/Crossfade";
    version NERVEUSE (pattern n°3, mêmes conventions qu'Échos).
    ==========================================================================
    Renommé "Le Casse" -> "Le Louvre" (zip 82). L'identifiant technique
-   game_id RESTE "heist" (canal, saveGameState, game_results) : le renommage
-   est purement d'AFFICHAGE (i18n) — aucune manip Supabase.
+   game_id RESTE "heist" (canal, saveGameState) : le renommage est
+   purement d'AFFICHAGE (i18n) — aucune manip Supabase.
 
    Deux cambrioleurs infiltrés dans le Louvre, chacun dans une aile
    différente (Denon / Richelieu), reliés seulement par oreillette : aucune
@@ -49,7 +49,7 @@ import Crossfade from "@/components/Crossfade";
        mesure que l'alerte monte ;
      - le champ de lasers se REFERME sur une erreur (on repart au bord).
 
-   Règle Supabase respectée : réutilise rooms / game_results / add_points ;
+   Règle Supabase respectée : réutilise rooms / recordMatchResult ;
    game_id = "heist" (simple chaîne). Aucune manip Supabase.
    ========================================================================== */
 
@@ -62,8 +62,6 @@ const SYNC_WINDOW_MS = 700;            // fenêtre de synchro du décrochage (ch
 const GUARD_PERIOD_MS = 4000;          // période du marqueur de garde (ch.5)
 const TOTAL_CHAPTERS = 6;
 const VICTORY = TOTAL_CHAPTERS + 1;    // "chapter" atteint 7 => victoire
-const BASE_POINTS = 16;
-const MAX_BONUS = 10;
 
 const WIRE_COLORS = ["🔴", "🔵", "🟢", "🟡", "🟣", "🟠", "⚪", "🟤"];
 const LOOT_ICONS = ["💎", "👑", "🏺", "💍", "🗿", "⚱️", "🖼️", "⌛"];
@@ -441,7 +439,7 @@ export default function HeistRoom({ room, me, isHost, players, t, lang, onFinish
   const [wrongShake, setWrongShake] = useState(false);
   const [selected, setSelected] = useState([]);
   const [channelReady, setChannelReady] = useState(false);
-  const [myGain, setMyGain] = useState(0);
+  const [myWin, setMyWin] = useState(false);
   const [endingVariant, setEndingVariant] = useState("standard");
   const [pressA, setPressA] = useState(null);
   const [pressB, setPressB] = useState(null);
@@ -484,7 +482,7 @@ export default function HeistRoom({ room, me, isHost, players, t, lang, onFinish
       setFeedback(""); setSelected([]);
       setPressA(null); setPressB(null); setMyPressed(false);
       setFinalA(false); setFinalB(false);
-      setMyGain(0); setEndingVariant("standard");
+      setMyWin(false); setEndingVariant("standard");
       savedResultRef.current = false;
       if (isHost) {
         saveGameState(room.id, "heist", {
@@ -668,26 +666,18 @@ export default function HeistRoom({ room, me, isHost, players, t, lang, onFinish
     if (!amAr && !amBr) return;
     savedResultRef.current = true;
 
-    let variant, gain;
-    if (phase === "success") {
+    let variant;
+    const won = phase === "success";
+    if (won) {
       // Seuils recalés sur la ronde de 6 min (zip 82) : "clean" au-delà de
       // 2 min 30 restantes, "narrow" sous 45 s ou à forte alerte.
       variant = (alert <= 20 && timeLeft > 150 * 1000) ? "clean" : (alert >= 60 || timeLeft < 45 * 1000) ? "narrow" : "standard";
-      const timeBonus = Math.min(6, Math.floor(timeLeft / 30000));
-      const alertBonus = Math.max(0, Math.floor((ALERT_MAX - alert) / 25)); // 0..4
-      gain = BASE_POINTS + Math.min(MAX_BONUS, timeBonus + alertBonus);
     } else {
       variant = alert >= ALERT_MAX ? "caught" : "spotted";
-      gain = 2 * Math.max(0, chapter - 1);
     }
     setEndingVariant(variant);
-    setMyGain(gain);
-    (async () => {
-      try {
-        await supabase.from("game_results").insert({ room_id: room.id, profile_id: me.id, game_id: "heist", points: gain });
-        if (gain > 0) await supabase.rpc("add_points", { p_room: room.id, p_delta: gain });
-      } catch (e) {}
-    })();
+    setMyWin(won);
+    recordMatchResult(room.id, won);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
@@ -890,11 +880,6 @@ export default function HeistRoom({ room, me, isHost, players, t, lang, onFinish
           <div>
             <h2 style={{ fontSize: 22 }}>{t("heistEnd" + endingVariant.charAt(0).toUpperCase() + endingVariant.slice(1) + "Title")}</h2>
             <p className="hint">{t("heistEnd" + endingVariant.charAt(0).toUpperCase() + endingVariant.slice(1) + "Text")}</p>
-            {isPlayer && (
-              <p style={{ fontWeight: 800 }}>
-                {t("peYourGain")} <span style={{ color: "var(--p3)", fontFamily: "'Space Mono'" }}>+{myGain} {t("pts")}</span>
-              </p>
-            )}
             {isHost ? (
               <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
                 <button className="btn" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={rejouer}>🔁 {t("c4Rejouer")}</button>

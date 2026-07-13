@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { saveGameState, readGameState, resetRoomToLobby } from "@/lib/gameSync";
+import { saveGameState, readGameState, resetRoomToLobby, recordMatchResult } from "@/lib/gameSync";
 import Crossfade from "@/components/Crossfade";
 import { CATEGORY_POOL, CAT_COUNT_OPTIONS, DEFAULT_CAT_COUNT, drawCategories, drawOne, catLabel, guessIcon } from "@/lib/petitbacCategories";
 import { loadFavorites, saveFavorite, deleteFavorite } from "@/lib/petitbacFavorites";
@@ -453,19 +453,16 @@ export default function PetitBacGame({ room, me, isHost, players, t, lang, onFin
     onFinish && onFinish();
   }
 
-  // Versement des points au score du salon, une fois, à la validation.
+  // Victoire/défaite ARCARDI du salon, une fois, à la validation finale.
+  // Gagne qui a le total le plus haut (le meilleur des totaux gains[]) —
+  // égalité = tous gagnants, comme ailleurs sur le site.
   useEffect(() => {
     if (stage !== "done" || !gains || savedResultRef.current) return;
     if (!seats.find(x => x.id === me.id)) return;
     savedResultRef.current = true;
-    const gain = gains[me.id] || 0;
-    if (gain <= 0) return;
-    (async () => {
-      try {
-        await supabase.from("game_results").insert({ room_id: room.id, profile_id: me.id, game_id: GAME_ID, points: gain });
-        await supabase.rpc("add_points", { p_room: room.id, p_delta: gain });
-      } catch (e) {}
-    })();
+    const best = Math.max(...seats.map(s => gains[s.id] || 0));
+    const won = (gains[me.id] || 0) === best;
+    recordMatchResult(room.id, won);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stage, gains]);
 

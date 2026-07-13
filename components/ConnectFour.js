@@ -1,11 +1,10 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { saveGameState, readGameState, resetRoomToLobby } from "@/lib/gameSync";
+import { saveGameState, readGameState, resetRoomToLobby, recordMatchResult } from "@/lib/gameSync";
 import Crossfade from "./Crossfade";
 
 const ROWS = 6, COLS = 7;
-const WIN_POINTS = 3, DRAW_POINTS = 2, LOSE_POINTS = 1;
 const GAME_ID = "connect4";
 
 function emptyBoard() {
@@ -53,7 +52,7 @@ export default function ConnectFour({ room, me, isHost, players, t, lang, onFini
   const [winningCells, setWinningCells] = useState(null);
   const [hoverCol, setHoverCol] = useState(null);
   const [selected, setSelected] = useState([]);
-  const [myGain, setMyGain] = useState(0);
+  const [myWin, setMyWin] = useState(false);
   const [channelReady, setChannelReady] = useState(false);
   const [confetti, setConfetti] = useState([]);
   const [flash, setFlash] = useState(false);
@@ -95,7 +94,7 @@ export default function ConnectFour({ room, me, isHost, players, t, lang, onFini
       setWinner(null);
       setLastMove(null);
       setWinningCells(null);
-      setMyGain(0);
+      setMyWin(false);
       savedResultRef.current = false;
       setPhase("playing");
       if (isHost) {
@@ -191,20 +190,18 @@ export default function ConnectFour({ room, me, isHost, players, t, lang, onFini
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isHost, phase, channelReady, players.length]);
 
-  // Chaque joueur (p1 ou p2) enregistre SON propre résultat (RLS oblige).
+  // Chaque joueur (p1 ou p2) enregistre SON propre résultat (RLS/RPC
+  // oblige). Un match nul n'est ni une victoire ni une défaite : rien
+  // n'est enregistré dans ce cas.
   useEffect(() => {
     if (!winner || savedResultRef.current || !p1 || !p2) return;
     const amP1 = me.id === p1.id, amP2 = me.id === p2.id;
     if (!amP1 && !amP2) return;
     savedResultRef.current = true;
-    const gain = winner === "draw" ? DRAW_POINTS : ((winner === "p1" && amP1) || (winner === "p2" && amP2)) ? WIN_POINTS : LOSE_POINTS;
-    setMyGain(gain);
-    (async () => {
-      try {
-        await supabase.from("game_results").insert({ room_id: room.id, profile_id: me.id, game_id: "connect4", points: gain });
-        await supabase.rpc("add_points", { p_room: room.id, p_delta: gain });
-      } catch (e) {}
-    })();
+    if (winner === "draw") return;
+    const won = (winner === "p1" && amP1) || (winner === "p2" && amP2);
+    setMyWin(won);
+    recordMatchResult(room.id, won);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [winner]);
 
@@ -337,11 +334,6 @@ export default function ConnectFour({ room, me, isHost, players, t, lang, onFini
 
         {winner && (
           <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 16, flexWrap: "wrap" }}>
-            {isPlayer && (
-              <p style={{ fontWeight: 800, width: "100%", textAlign: "center" }}>
-                {t("peYourGain")} <span style={{ color: "var(--p3)", fontFamily: "'Space Mono'" }}>+{myGain} {t("pts")}</span>
-              </p>
-            )}
             {isHost ? (
               <>
                 <button className="btn" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={rejouer}>🔁 {t("c4Rejouer")}</button>

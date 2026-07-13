@@ -1,12 +1,12 @@
 "use client";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { saveGameState, readGameState, resetRoomToLobby } from "@/lib/gameSync";
+import { saveGameState, readGameState, resetRoomToLobby, recordMatchResult } from "@/lib/gameSync";
 import Crossfade from "@/components/Crossfade";
 import CardView from "./CardView";
 import {
   COLORS, freshDeck, shuffle, canPlay, hasPlayable, drawCards, nextSeatIdx,
-  canStackOn, hasStackable, handPenaltyValue, pointsForPlace, sortHandForDisplay,
+  canStackOn, hasStackable, handPenaltyValue, sortHandForDisplay,
 } from "./deck";
 import { decideBotMove, decideBotDrawFollowUp } from "./botLogic";
 
@@ -171,7 +171,7 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
   const [matchScores, setMatchScores] = useState({}); // seatId -> score cumulé (manches précédentes incluses)
   const [roundScores, setRoundScores] = useState({}); // seatId -> valeur ajoutée par LA manche qui vient de finir
   const [colorPickerFor, setColorPickerFor] = useState(null); // cardId en attente de choix de couleur (joueur local)
-  const [myGain, setMyGain] = useState(0);
+  const [myWin, setMyWin] = useState(false);
   const [channelReady, setChannelReady] = useState(false);
   // Minuteur de tour humain (affichage) : deadline + siège concerné,
   // diffusés par l'hôte dans chaque état réseau — tous les clients
@@ -225,7 +225,7 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
     setPendingDraw(s.pendingDraw || null); setPendingDrawnCard(s.pendingDrawnCard || null); setUnoCalled(s.unoCalled || {});
     setRoundIndex(s.roundIndex || 1); setMatchScores(s.matchScores || {}); setRoundScores(s.roundScores || {});
     setTurnDeadline(s.turnDeadline || null); setTurnDeadlineSeat(s.turnDeadlineSeat || null);
-    if (extra.resetGain) { setMyGain(0); savedResultRef.current = false; }
+    if (extra.resetGain) { setMyWin(false); savedResultRef.current = false; }
   }
 
   useEffect(() => {
@@ -837,24 +837,18 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
     channelRef.current?.send({ type: "broadcast", event: "call_uno", payload: { seatId: me.id } });
   }
 
-  // Sauvegarde du score ARCARDI (chaque joueur enregistre le sien, RLS
+  // Victoire/défaite ARCARDI (chaque joueur enregistre la sienne, RLS/RPC
   // oblige) — UNE SEULE FOIS, à la toute fin de la PARTIE (dernière
   // manche), jamais entre deux manches. Classement au score de match le
-  // plus BAS ; même barème de points que Président (pointsForPlace).
+  // plus BAS ; le premier (place 0) gagne, tous les autres perdent.
   useEffect(() => {
     if (!matchOver || savedResultRef.current || !isPlayer) return;
     savedResultRef.current = true;
     const ranking = [...seats].sort((a, b) => (matchScores[a.id] ?? 0) - (matchScores[b.id] ?? 0));
     const place = ranking.findIndex(s => s.id === me.id);
-    const gain = pointsForPlace(place, seats.length);
-    setMyGain(gain);
-    if (gain <= 0) return;
-    (async () => {
-      try {
-        await supabase.from("game_results").insert({ room_id: room.id, profile_id: me.id, game_id: GAME_ID, points: gain });
-        await supabase.rpc("add_points", { p_room: room.id, p_delta: gain });
-      } catch (e) {}
-    })();
+    const won = place === 0;
+    setMyWin(won);
+    recordMatchResult(room.id, won);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matchOver]);
 
@@ -1119,11 +1113,6 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
                   })}
                 </div>
 
-                {isPlayer && matchOver && (
-                  <p style={{ fontWeight: 800, textAlign: "center", marginTop: 10 }}>
-                    {t("peYourGain")} <span style={{ color: "var(--p3)", fontFamily: "'Space Mono'" }}>+{myGain} {t("pts")}</span>
-                  </p>
-                )}
                 <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 14, flexWrap: "wrap" }}>
                   {isHost ? (
                     matchOver ? (

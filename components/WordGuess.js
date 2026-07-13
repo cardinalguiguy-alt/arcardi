@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { saveGameState, readGameState, resetRoomToLobby } from "@/lib/gameSync";
+import { saveGameState, readGameState, resetRoomToLobby, recordMatchResult } from "@/lib/gameSync";
 import { DICT_FR, DICT_EN } from "@/lib/wordDictionary";
 import { playWordleGreen, playWordleYellow } from "@/lib/sfx";
 import FlagIcon from "./FlagIcon";
@@ -124,14 +124,8 @@ export default function WordGuess({ room, me, isHost, players, onFinish, t, lang
       if (isHost) {
         saveGameState(room.id, "wordle", { phase: "finished", finished: true });
       }
-      try {
-        await supabase.from("game_results").insert({
-          room_id: room.id, profile_id: me.id, game_id: "wordle", points: pointsFor(myResult.current)
-        });
-        if (pointsFor(myResult.current) > 0) {
-          await supabase.rpc("add_points", { p_room: room.id, p_delta: pointsFor(myResult.current) });
-        }
-      } catch (e) {}
+      // Victoire/défaite ARCARDI : gagné = mot trouvé avant la fin du chrono.
+      recordMatchResult(room.id, myResult.current.solved);
     });
 
     ch.subscribe(status => {
@@ -157,11 +151,6 @@ export default function WordGuess({ room, me, isHost, players, onFinish, t, lang
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [room.id]);
-
-  function pointsFor(res) {
-    if (!res.solved) return 0;
-    return Math.max(7 - res.tries, 1);
-  }
 
   function hostStart() {
     const wl = lang === "en" ? "en" : "fr";
@@ -354,7 +343,6 @@ export default function WordGuess({ room, me, isHost, players, onFinish, t, lang
               {myResult.current.solved
                 ? <p className="hint">{t("foundInPre")} {myResult.current.tries} {t("foundInSuffix")}</p>
                 : <p className="hint">{t("wordleFailedPre")} <b style={{ color: "var(--p2)" }}>{secret}</b></p>}
-              <p style={{ fontWeight: 800 }}>{t("peYourGain")} <span style={{ color: "var(--p3)", fontFamily: "'Space Mono'" }}>+{pointsFor(myResult.current)} {t("pts")}</span></p>
               <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 6, flexWrap: "wrap" }}>
                 {isHost ? (
                   <>

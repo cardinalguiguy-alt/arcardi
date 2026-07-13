@@ -1,12 +1,12 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { saveGameState, readGameState, resetRoomToLobby } from "@/lib/gameSync";
+import { saveGameState, readGameState, resetRoomToLobby, recordMatchResult } from "@/lib/gameSync";
 import Crossfade from "@/components/Crossfade";
 import GameCountdown, { COUNTDOWN_MS } from "@/components/GameCountdown";
 import {
   GM_ROWS, GM_COLS, GM_NUGGETS, GM_WIN_AT,
-  genMine, digResult, bombResult, nuggetsLeft, gmPointsForPlace,
+  genMine, digResult, bombResult, nuggetsLeft,
 } from "./mines";
 import { decideBotMove } from "./botLogic";
 import { playCashRegister, playDynamite, playDigDirt, primeFiles } from "@/lib/sfx";
@@ -117,7 +117,7 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
   const [left, setLeft] = useState(GM_NUGGETS);
   const [winner, setWinner] = useState(null); // seatId | null
   const [lastAction, setLastAction] = useState(null);
-  const [myGain, setMyGain] = useState(0);
+  const [myWin, setMyWin] = useState(false);
   const [channelReady, setChannelReady] = useState(false);
   const [turnDeadline, setTurnDeadline] = useState(null);
   const [turnDeadlineSeat, setTurnDeadlineSeat] = useState(null);
@@ -179,7 +179,7 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
     setGold(s.gold || {}); setBombs(s.bombs || {}); setTurnIdx(s.turnIdx); setLeft(s.left);
     setWinner(s.winner || null); setLastAction(s.lastAction || null);
     setTurnDeadline(s.turnDeadline || null); setTurnDeadlineSeat(s.turnDeadlineSeat || null);
-    if (extra.resetGain) { setMyGain(0); savedResultRef.current = false; setBombArmed(false); }
+    if (extra.resetGain) { setMyWin(false); savedResultRef.current = false; setBombArmed(false); }
   }
 
   useEffect(() => {
@@ -500,20 +500,14 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
   }
 
 
-  // Points ARCARDI : 5 au vainqueur du duel, 0 au perdant — chacun
-  // enregistre le sien (RLS), une seule fois, comme partout sur le site.
+  // Victoire/défaite ARCARDI du salon : chacun enregistre SON résultat
+  // (RLS/RPC oblige), une seule fois, comme partout sur le site.
   useEffect(() => {
     if (!winner || savedResultRef.current || !isPlayer) return;
     savedResultRef.current = true;
-    const gain = gmPointsForPlace(winner === me.id ? 0 : 1);
-    setMyGain(gain);
-    if (gain <= 0) return;
-    (async () => {
-      try {
-        await supabase.from("game_results").insert({ room_id: room.id, profile_id: me.id, game_id: GAME_ID, points: gain });
-        await supabase.rpc("add_points", { p_room: room.id, p_delta: gain });
-      } catch (e) {}
-    })();
+    const won = winner === me.id;
+    setMyWin(won);
+    recordMatchResult(room.id, won);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [winner]);
 
@@ -702,11 +696,6 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
                 </div>
               ))}
             </div>
-            {isPlayer && (
-              <p style={{ fontWeight: 800, textAlign: "center", marginTop: 10 }}>
-                {t("peYourGain")} <span style={{ color: "var(--p3)", fontFamily: "'Space Mono'" }}>+{myGain} {t("pts")}</span>
-              </p>
-            )}
             <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 14, flexWrap: "wrap" }}>
               {isHost ? (
                 <>

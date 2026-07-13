@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { saveGameState, readGameState, resetRoomToLobby } from "@/lib/gameSync";
+import { saveGameState, readGameState, resetRoomToLobby, recordMatchResult } from "@/lib/gameSync";
 
 /* ---------- Audio (piano simple, Web Audio) ---------- */
 const FREQ = {
@@ -62,7 +62,6 @@ export default function PianoEscape({ room, me, isHost, onFinish, t, lang }) {
   const [feedback, setFeedback] = useState("");
   const [showHint, setShowHint] = useState(false);
   const channelRef = useRef(null);
-  const myGain = useRef(0);
   const resultSent = useRef(false);
   const restoredRef = useRef(false);
 
@@ -77,22 +76,15 @@ export default function PianoEscape({ room, me, isHost, onFinish, t, lang }) {
       if (payload.by && payload.byId !== me.id) {
         setSolverMsg(`✨ ${payload.roomName} ${t("peSolvedBy")} ${payload.by} !`);
         setTimeout(() => setSolverMsg(""), 3200);
-        // Les non-résolveurs gagnent +1 par salle franchie
-        if (payload.stage >= 2 && payload.stage <= 6) {
-          myGain.current += 1;
-          await supabase.rpc("add_points", { p_room: room.id, p_delta: 1 });
-        }
       }
+      // Salle d'évasion coopérative : pas de perdant, toute l'équipe gagne
+      // ensemble en atteignant la dernière salle.
       if (payload.stage === 6) {
         playFanfare();
         celebrate();
         if (!resultSent.current) {
           resultSent.current = true;
-          try {
-            await supabase.from("game_results").insert({
-              room_id: room.id, profile_id: me.id, game_id: "piano", points: myGain.current
-            });
-          } catch (e) {}
+          recordMatchResult(room.id, true);
         }
       }
     });
@@ -100,7 +92,6 @@ export default function PianoEscape({ room, me, isHost, onFinish, t, lang }) {
     ch.on("broadcast", { event: "restart" }, () => {
       setStage(0);
       setShowHint(false); setFeedback(""); setSolverMsg("");
-      myGain.current = 0;
       resultSent.current = false;
       if (isHost) saveGameState(room.id, "piano", { stage: 0 });
     });
@@ -120,9 +111,6 @@ export default function PianoEscape({ room, me, isHost, onFinish, t, lang }) {
   }, [room.id]);
 
   async function solve(currentStage, roomName) {
-    // Le résolveur gagne +3 (les autres recevront +1 via le broadcast)
-    myGain.current += 3;
-    await supabase.rpc("add_points", { p_room: room.id, p_delta: 3 });
     channelRef.current.send({
       type: "broadcast", event: "advance",
       payload: { stage: currentStage + 1, by: me.username, byId: me.id, roomName }
@@ -184,7 +172,6 @@ export default function PianoEscape({ room, me, isHost, onFinish, t, lang }) {
         <div className="stage-enter">
           <h1 style={{ fontSize: 30 }}>{t("peVictory")}</h1>
           <p className="hint">{t("peVictoryText")}</p>
-          <p style={{ fontWeight: 800 }}>{t("peYourGain")} <span style={{ color: "var(--p3)", fontFamily: "'Space Mono'" }}>+{myGain.current} {t("pts")}</span></p>
           {isHost
             ? (
               <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>

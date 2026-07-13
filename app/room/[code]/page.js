@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-import { resetRoomToLobby } from "@/lib/gameSync";
+import { resetRoomToLobby, launchGame, nominateHost, leaveRoomAndHandoff, claimAbandonedHost } from "@/lib/gameSync";
 import { useLang } from "@/lib/i18n";
 import { duckAmbienceForGame, resumeAmbienceForNav } from "@/lib/ambience";
 import { playGameCardClick } from "@/lib/sfx";
@@ -83,6 +83,9 @@ export default function Room() {
   const presenceChRef = useRef(null);
   const readingRulesRef = useRef(false);
   const [hostGone, setHostGone] = useState(false);
+  // Garde anti-double-appel pour la succession automatique de l'hôte
+  // (point 5) : un seul essai par période "hôte disparu" détectée.
+  const hostSuccessionRef = useRef(false);
   // La colonne rooms.game_state existe-t-elle ? (migration upgrade-002.sql)
   const [hasGameStateCol, setHasGameStateCol] = useState(true);
   // Mode "agrandi" (demande 2026-07) : pendant une partie, masque l'en-tête
@@ -156,9 +159,9 @@ export default function Room() {
   async function loadPlayers(roomId) {
     const { data } = await supabase
       .from("room_players")
-      .select("id, score, profile_id, profiles(username, avatar)")
+      .select("id, wins, losses, joined_at, profile_id, profiles(username, avatar)")
       .eq("room_id", roomId)
-      .order("score", { ascending: false });
+      .order("wins", { ascending: false });
     setPlayers(data || []);
   }
 
@@ -227,6 +230,37 @@ export default function Room() {
     return () => clearTimeout(tm);
   }, [room, me, online]);
 
+  // Succession automatique de l'hôte (demande 2026-07, point 5) : une room
+  // vivante ne doit jamais rester sans hôte. Si la présence Realtime montre
+  // que l'hôte est hors ligne depuis 8s (même délai de grâce que la bannière
+  // ci-dessus, pour ne pas réagir à une simple coupure d'un instant), le
+  // joueur en ligne présent depuis le plus longtemps (joined_at le plus
+  // ancien) se revendique lui-même hôte via une RPC dédiée. Chaque client en
+  // ligne fait le même calcul déterministe à partir des mêmes données
+  // (room_players + presence) : un seul d'entre eux se reconnaît comme le
+  // "prochain" et agit, les autres ne font rien. Fonctionne quel que soit
+  // l'état de la room (lobby ou en pleine partie) — contrairement à la
+  // bannière "hôte hors ligne" ci-dessus, réservée à l'affichage en jeu.
+  useEffect(() => {
+    if (!room || !me || online === null) return;
+    if (room.host_id === me.id) { hostSuccessionRef.current = false; return; }
+    if (online[room.host_id]) { hostSuccessionRef.current = false; return; }
+    const tm = setTimeout(() => {
+      if (hostSuccessionRef.current) return;
+      const onlineOthers = players.filter(p => p.profile_id !== room.host_id && online[p.profile_id]);
+      if (!onlineOthers.length) return;
+      const successor = [...onlineOthers].sort(
+        (a, b) => new Date(a.joined_at).getTime() - new Date(b.joined_at).getTime()
+      )[0];
+      if (successor.profile_id !== me.id) return;
+      hostSuccessionRef.current = true;
+      claimAbandonedHost(room.id).then(ok => {
+        if (ok) setRoom(r => (r ? { ...r, host_id: me.id } : r));
+      });
+    }, 8000);
+    return () => clearTimeout(tm);
+  }, [room, me, online, players]);
+
   // Ambiance sonore du site : silence délicat dès qu'une partie démarre
   // (pour host ET invités, tous les deux synchronisés sur room.status),
   // reprise en douceur au retour au lobby — jamais un redémarrage complet
@@ -237,8 +271,25 @@ export default function Room() {
     else resumeAmbienceForNav();
   }, [room?.status]);
 
+  // Lancement d'une partie (demande 2026-07, point 2) : seul l'hôte a accès
+  // au sélecteur de jeu (voir plus bas, `isHost ? ... : t("waitHost")`), donc
+  // ce bouton EST le bouton "Jouer" unique de l'hôte. `launchGame` écrit en
+  // même temps un horodatage cible (`launch_at`) que tous les clients (hôte
+  // compris) attendent avant de révéler le jeu — voir `launching` plus bas —
+  // pour une ouverture réellement simultanée, tolérante à un léger délai
+  // réseau sur la réception du changement.
   async function launch(gameId) {
-    await supabase.from("rooms").update({ status: "playing", current_game: gameId }).eq("id", room.id);
+    await launchGame(room.id, gameId);
+  }
+
+  // "Nommer comme host" (demande 2026-07, point 4) : transfert volontaire et
+  // immédiat, via une RPC dédiée (la policy RLS empêcherait sinon l'hôte
+  // d'écrire un host_id différent du sien). Mise à jour locale immédiate en
+  // plus du round-trip Realtime, comme backToLobby ci-dessous.
+  async function doNominateHost(profileId) {
+    if (!room || !me || room.host_id !== me.id || profileId === me.id) return;
+    const ok = await nominateHost(room.id, profileId);
+    if (ok) setRoom(r => (r ? { ...r, host_id: profileId } : r));
   }
 
   // Retour au lobby DEPUIS n'importe quel moment d'une partie (pas seulement
@@ -277,7 +328,10 @@ export default function Room() {
   }
 
   async function leaveRoom() {
-    if (me && room) await supabase.from("room_players").delete().eq("room_id", room.id).eq("profile_id", me.id);
+    // Remplace le simple DELETE : si le partant est l'hôte, la RPC
+    // `leave_room` promeut automatiquement le joueur présent depuis le plus
+    // longtemps parmi ceux qui restent (demande 2026-07, point 5).
+    if (me && room) await leaveRoomAndHandoff(room.id);
     router.push("/lounge");
   }
 
@@ -397,11 +451,28 @@ export default function Room() {
     };
   }, [focusActive, room?.current_game]);
 
+  // Lancement synchronisé (demande 2026-07, point 2) : tant que l'horodatage
+  // cible `launch_at` écrit par l'hôte n'est pas atteint, on réaffiche un
+  // court palier d'attente au lieu du jeu (voir `launching` plus bas) — le
+  // recalcul par intervalle est ce qui permet à ce palier de se refermer
+  // tout seul, pile au même instant chez tous les clients qui ont reçu le
+  // changement à temps.
+  const [launchTick, setLaunchTick] = useState(0);
+  useEffect(() => {
+    if (!room?.launch_at || room.status !== "playing") return;
+    const target = new Date(room.launch_at).getTime();
+    if (Date.now() >= target) return;
+    const iv = setInterval(() => setLaunchTick(t => t + 1), 100);
+    return () => clearInterval(iv);
+  }, [room?.launch_at, room?.status]);
+
   if (error) return <div className="wrap"><div className="panel"><h1>😕</h1><p className="hint">{error}</p></div></div>;
   if (!room || !me) return <div className="wrap"><p className="muted">…</p></div>;
 
   const isHost = room.host_id === me.id;
   const playing = room.status === "playing";
+  const launchTargetMs = room.launch_at ? new Date(room.launch_at).getTime() : 0;
+  const launching = playing && launchTargetMs > Date.now();
   // Tant que la présence n'a pas fait sa première synchro (online === null),
   // on considère tout le monde en ligne pour éviter un faux "hors ligne".
   const isOnline = pid => (online === null ? true : !!online[pid]);
@@ -437,14 +508,15 @@ export default function Room() {
       </button>
 
       {/* En partie : deux pastilles fixes en haut à droite (demande 2026-07).
-          - "Retour au salon" (hôte) : réduit façon "Quitter le salon" mais en
-            BLANC et toujours EN HAUT — libellé déplié au survol.
+          - "Terminer la partie" (hôte SEUL, à tout moment) : ferme proprement
+            la partie en cours, ramène tout le monde à l'écran de lancement
+            (bouton "Jouer" pour l'hôte) et réinitialise l'état de jeu.
           - Mode agrandi (tout le monde) : masque l'en-tête et les vignettes
             pour donner toute la hauteur au jeu (voir body.stage-focus). */}
       {playing && isHost && (
-        <button className="back-room-fab" onClick={backToLobby} title={t("backToLobbyAnytime")} aria-label={t("backLoungeShort")}>
-          <span className="back-room-icon" aria-hidden="true">🎪</span>
-          <span className="back-room-label">{t("backLoungeShort")}</span>
+        <button className="back-room-fab" onClick={backToLobby} title={t("endGameTooltip")} aria-label={t("endGameShort")}>
+          <span className="back-room-icon" aria-hidden="true">⏹️</span>
+          <span className="back-room-label">{t("endGameShort")}</span>
         </button>
       )}
       {playing && (
@@ -472,7 +544,19 @@ export default function Room() {
       )}
 
       <Crossfade id={viewKey} duration={480}>
-        {playing ? (
+        {playing && launching ? (
+          // ===== PALIER DE LANCEMENT SYNCHRONISÉ (demande 2026-07, point 2) =====
+          // Affiché chez TOUS les clients (hôte compris) tant que l'horodatage
+          // `launch_at` écrit par l'hôte n'est pas atteint localement — le jeu
+          // en dessous ne monte donc jamais avant cet instant commun, même si
+          // ce client a reçu le changement Realtime un peu en avance sur les
+          // autres.
+          <div className="panel game-launch-panel" style={meta ? { "--accent": `var(${meta.accent})` } : undefined}>
+            <span className="game-launch-icon">{meta?.icon}</span>
+            <h1>{meta ? t(meta.nameKey) : ""}</h1>
+            <p className="hint">{t("gameLaunchingIn")}</p>
+          </div>
+        ) : playing ? (
           // ===== MODE SCÈNE : le jeu en cours prend toute la priorité =====
           <div style={meta ? { "--accent": `var(${meta.accent})` } : undefined}>
             <div className="stage-bar">
@@ -486,7 +570,10 @@ export default function Room() {
                     <span className={"presence-dot" + (isOnline(p.profile_id) ? "" : " off")} />
                     <span>{p.profiles?.avatar}</span>
                     <span>{p.profiles?.username}{p.profile_id === room.host_id ? " 👑" : ""}</span>
-                    <b>{p.score}</b>
+                    <span className="mini-wl">
+                      <b className="win">✓{p.wins}</b>
+                      <b className="loss">✕{p.losses}</b>
+                    </span>
                   </span>
                 ))}
               </div>
@@ -576,7 +663,22 @@ export default function Room() {
                   <span className={"presence-dot" + (isOnline(p.profile_id) ? "" : " off")} />
                   <span style={{ fontSize: 20 }}>{p.profiles?.avatar}</span>
                   <span>{p.profiles?.username}{p.profile_id === room.host_id ? " 👑" : ""}</span>
-                  <span className="pt">{p.score} {t("pts")}</span>
+                  <span className="pt win">✓ {p.wins} {t("winsLabel")}</span>
+                  <span className="pt loss">✕ {p.losses} {t("lossesLabel")}</span>
+                  {/* "Nommer comme host" (demande 2026-07, point 4) : action de
+                      transfert visible uniquement pour l'hôte actuel, sur les
+                      AUTRES joueurs en ligne — se transférer le rôle à
+                      soi-même n'a pas de sens, et un joueur hors ligne ne
+                      peut pas assumer le rôle tout de suite. */}
+                  {isHost && p.profile_id !== me.id && isOnline(p.profile_id) && (
+                    <button
+                      className="nominate-host-btn"
+                      onClick={() => doNominateHost(p.profile_id)}
+                      title={t("nominateHostAction")}
+                    >
+                      👑 {t("nominateHostAction")}
+                    </button>
+                  )}
                 </div>
               ))}
             </div>

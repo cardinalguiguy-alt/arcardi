@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { saveGameState, readGameState, resetRoomToLobby } from "@/lib/gameSync";
+import { saveGameState, readGameState, resetRoomToLobby, recordMatchResult } from "@/lib/gameSync";
 import { playNoteSequence } from "@/lib/sfx";
 import Crossfade from "@/components/Crossfade";
 import RoomIllustration from "./RoomIllustration";
@@ -40,11 +40,10 @@ import { SYMBOLS, INTERVALS, INTERVAL_SEMITONES, INTERVAL_BASE_HZ, MAX_CORDES } 
         lisible la tablette gravée (code du partenaire), puis régler les 4
         anneaux du cadenas final.
 
-   Règle Supabase respectée : réutilise rooms / game_results / add_points ;
+   Règle Supabase respectée : réutilise rooms / recordMatchResult ;
    game_id = "diapason". Aucune manip Supabase.
    ========================================================================== */
 
-const BASE_POINTS = 20;
 
 function symbolLabelKey(sym) {
   return "diapasonSymbol" + sym.charAt(0).toUpperCase() + sym.slice(1);
@@ -86,7 +85,7 @@ export default function DiapasonGame({ room, me, isHost, players, t, lang, onFin
   const [wrongShake, setWrongShake] = useState(false);
   const [examine, setExamine] = useState(null);
   const [heardPulse, setHeardPulse] = useState(0); // anim "j'entends l'accord"
-  const [myGain, setMyGain] = useState(0);
+  const [myWin, setMyWin] = useState(false);
 
   const channelRef = useRef(null);
   const autoStartedRef = useRef(false);
@@ -147,7 +146,7 @@ export default function DiapasonGame({ room, me, isHost, players, t, lang, onFin
       setLampLit(false); setCandelabraLit(false);
       setViewpointKey("entrance");
       setExamine(null);
-      setMyGain(0);
+      setMyWin(false);
       savedResultRef.current = false;
       if (isHost) {
         saveGameState(room.id, "diapason", {
@@ -372,17 +371,13 @@ export default function DiapasonGame({ room, me, isHost, players, t, lang, onFin
     }
   }
 
-  // Sauvegarde du résultat (une fois), points partagés entre les deux joueurs.
+  // Victoire/défaite ARCARDI (une fois), partagée entre les deux joueurs.
   useEffect(() => {
-    if (phase !== "success" || savedResultRef.current || !isPlayer) return;
+    if ((phase !== "success" && phase !== "failure") || savedResultRef.current || !isPlayer) return;
     savedResultRef.current = true;
-    setMyGain(BASE_POINTS);
-    (async () => {
-      try {
-        await supabase.from("game_results").insert({ room_id: room.id, profile_id: me.id, game_id: "diapason", points: BASE_POINTS });
-        await supabase.rpc("add_points", { p_room: room.id, p_delta: BASE_POINTS });
-      } catch (e) {}
-    })();
+    const won = phase === "success";
+    setMyWin(won);
+    recordMatchResult(room.id, won);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
@@ -485,11 +480,6 @@ export default function DiapasonGame({ room, me, isHost, players, t, lang, onFin
             <div>
               <h2 style={{ fontSize: 22 }}>{t("diapasonEndTitle")}</h2>
               <p className="hint">{t("diapasonEndText")}</p>
-              {isPlayer && (
-                <p style={{ fontWeight: 800 }}>
-                  {t("peYourGain")} <span style={{ color: "var(--p3)", fontFamily: "'Space Mono'" }}>+{myGain} {t("pts")}</span>
-                </p>
-              )}
               {isHost ? (
                 <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
                   <button className="btn" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={rejouer}>🔁 {t("c4Rejouer")}</button>

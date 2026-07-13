@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { saveGameState, readGameState, resetRoomToLobby } from "@/lib/gameSync";
+import { saveGameState, readGameState, resetRoomToLobby, recordMatchResult } from "@/lib/gameSync";
 import Crossfade from "./Crossfade";
 
 /* ==========================================================================
@@ -41,8 +41,6 @@ const MEMORY_REVEAL_MS = 6000;       // durée d'affichage initial de la séquen
 const MEMORY_PEEK_MS = 3000;         // durée d'un coup d'œil supplémentaire (ch.3)
 const TOTAL_CHAPTERS = 10;
 const VICTORY = TOTAL_CHAPTERS + 1;  // "chapter" atteint 11 => victoire
-const BASE_POINTS = 16;              // relevé (14 -> 16) : partie v3 plus longue
-const MAX_BONUS = 10;
 
 // Ordre du flux v3 : le numéro de chapitre (1..10) est mappé sur un TYPE
 // d'épreuve. Les 3 nouvelles mécaniques sont intercalées de sorte que le
@@ -668,7 +666,7 @@ export default function EchoesRoom({ room, me, isHost, players, t, lang, onFinis
   const [wrongShake, setWrongShake] = useState(false);
   const [selected, setSelected] = useState([]);
   const [channelReady, setChannelReady] = useState(false);
-  const [myGain, setMyGain] = useState(0);
+  const [myWin, setMyWin] = useState(false);
   const [endingVariant, setEndingVariant] = useState("standard");
   const [pressA, setPressA] = useState(null);
   const [pressB, setPressB] = useState(null);
@@ -701,7 +699,7 @@ export default function EchoesRoom({ room, me, isHost, players, t, lang, onFinis
       setFeedback("");
       setSelected([]);
       setPressA(null); setPressB(null); setMyPressed(false);
-      setMyGain(0);
+      setMyWin(false);
       setEndingVariant("standard");
       savedResultRef.current = false;
       if (isHost) {
@@ -925,24 +923,17 @@ export default function EchoesRoom({ room, me, isHost, players, t, lang, onFinis
     if (!amAr && !amBr) return;
     savedResultRef.current = true;
 
-    let variant, gain;
-    if (phase === "success") {
+    let variant;
+    const won = phase === "success";
+    if (won) {
       // Seuil "perfect" recalé sur le nouveau total de 18 min (1/3 restant).
       variant = timeLeft > 6 * 60 * 1000 ? "perfect" : timeLeft > 60 * 1000 ? "standard" : "narrow";
-      const bonus = Math.min(MAX_BONUS, Math.floor(timeLeft / 30000));
-      gain = BASE_POINTS + bonus;
     } else {
       variant = chapter >= TOTAL_CHAPTERS ? "close" : "storm";
-      gain = 2 * Math.max(0, chapter - 1);
     }
     setEndingVariant(variant);
-    setMyGain(gain);
-    (async () => {
-      try {
-        await supabase.from("game_results").insert({ room_id: room.id, profile_id: me.id, game_id: "echoes", points: gain });
-        if (gain > 0) await supabase.rpc("add_points", { p_room: room.id, p_delta: gain });
-      } catch (e) {}
-    })();
+    setMyWin(won);
+    recordMatchResult(room.id, won);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
@@ -1172,11 +1163,6 @@ export default function EchoesRoom({ room, me, isHost, players, t, lang, onFinis
           <div>
             <h2 style={{ fontSize: 22 }}>{t("echoesEnd" + cap(endingVariant) + "Title")}</h2>
             <p className="hint">{t("echoesEnd" + cap(endingVariant) + "Text")}</p>
-            {isPlayer && (
-              <p style={{ fontWeight: 800 }}>
-                {t("peYourGain")} <span style={{ color: "var(--p3)", fontFamily: "'Space Mono'" }}>+{myGain} {t("pts")}</span>
-              </p>
-            )}
             {isHost ? (
               <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
                 <button className="btn" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={rejouer}>🔁 {t("c4Rejouer")}</button>

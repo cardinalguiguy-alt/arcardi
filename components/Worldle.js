@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { saveGameState, readGameState, resetRoomToLobby } from "@/lib/gameSync";
+import { saveGameState, readGameState, resetRoomToLobby, recordMatchResult } from "@/lib/gameSync";
 import FlagIcon from "./FlagIcon";
 
 const MAX_TRIES = 10;
@@ -326,11 +326,8 @@ export default function Worldle({ room, me, isHost, players, onFinish, t, lang }
     ch.on("broadcast", { event: "finished" }, async () => {
       setFinished(true);
       if (isHost) saveGameState(room.id, "worldle", { phase: "finished", finished: true });
-      try {
-        const pts = pointsFor(myResult.current);
-        await supabase.from("game_results").insert({ room_id: room.id, profile_id: me.id, game_id: "worldle", points: pts });
-        if (pts > 0) await supabase.rpc("add_points", { p_room: room.id, p_delta: pts });
-      } catch (e) {}
+      // Victoire/défaite ARCARDI : gagné = pays trouvé avant la fin du chrono.
+      recordMatchResult(room.id, myResult.current.solved);
     });
 
     ch.subscribe(status => {
@@ -376,19 +373,10 @@ export default function Worldle({ room, me, isHost, players, onFinish, t, lang }
     setRevealSnapshot({
       solved: myResult.current.solved,
       tries: myResult.current.tries,
-      gain: pointsFor(myResult.current),
       target,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [finished]);
-
-  // Barème dégressif (demande 2026-07) : 10 points au 1er essai, -1 par
-  // essai supplémentaire (jusqu'à 1 point au 10e), 0 en cas d'échec — plus
-  // de "consolation de proximité", le pays doit être TROUVÉ pour marquer.
-  function pointsFor(res) {
-    if (res.solved) return Math.max(11 - res.tries, 1);
-    return 0;
-  }
 
   function hostStart() {
     const targetC = COUNTRIES[Math.floor(Math.random() * COUNTRIES.length)];
@@ -588,7 +576,6 @@ export default function Worldle({ room, me, isHost, players, onFinish, t, lang }
             {revealSnapshot.solved
               ? <p className="hint">{t("foundInPre")} {revealSnapshot.tries} {t("foundInSuffix")}</p>
               : <p className="hint">{t("worldleFailedPre")} <b style={{ color: "var(--p2)" }}>{revealSnapshot.target[lang] || revealSnapshot.target.fr} <FlagIcon code={revealSnapshot.target.id} /></b></p>}
-            <p style={{ fontWeight: 800 }}>{t("peYourGain")} <span style={{ color: "var(--p3)", fontFamily: "'Space Mono'" }}>+{revealSnapshot.gain} {t("pts")}</span></p>
             <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 6, flexWrap: "wrap" }}>
               {isHost ? (
                 <>

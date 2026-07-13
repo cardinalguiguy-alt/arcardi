@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { saveGameState, readGameState, resetRoomToLobby } from "@/lib/gameSync";
+import { saveGameState, readGameState, resetRoomToLobby, recordMatchResult } from "@/lib/gameSync";
 import Crossfade from "@/components/Crossfade";
 import GameCountdown, { COUNTDOWN_MS } from "@/components/GameCountdown";
 import TenkDie from "./TenkDie";
@@ -139,7 +139,7 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
       return next;
     });
   }
-  const [myGain, setMyGain] = useState(0);
+  const [myWin, setMyWin] = useState(false);
   const [channelReady, setChannelReady] = useState(false);
   const [rollFlash, setRollFlash] = useState(false);
   const [banner, setBanner] = useState(null); // "farkle" | "hotdice" | null, transitoire
@@ -222,7 +222,7 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
     } else {
       setSelected([]);
     }
-    if (extra.resetGain) { setMyGain(0); savedResultRef.current = false; }
+    if (extra.resetGain) { setMyWin(false); savedResultRef.current = false; }
   }
 
   function persist(s) {
@@ -733,23 +733,17 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
     channelRef.current?.send({ type: "broadcast", event: "move_attempt", payload: { seatId: me.id, action: { type: "bank" } } });
   }
 
-  // ----- Fin de match : bannière + son + insertion du score (une fois) -----
+  // ----- Fin de match : bannière + son + victoire/défaite ARCARDI (une fois) -----
   useEffect(() => {
     if (!finished || savedResultRef.current || !isPlayer) return;
     savedResultRef.current = true;
     const won = winners.includes(me.id);
-    const gain = won ? 5 : 1;
-    setMyGain(gain);
+    setMyWin(won);
     setEndBanner(won ? "win" : "lose");
     if (won) playGameWin(); else playGameLose();
     clearTimeout(endBannerTimerRef.current);
     endBannerTimerRef.current = setTimeout(() => setEndBanner(null), won ? 4000 : 3400);
-    (async () => {
-      try {
-        await supabase.from("game_results").insert({ room_id: room.id, profile_id: me.id, game_id: GAME_ID, points: gain });
-        await supabase.rpc("add_points", { p_room: room.id, p_delta: gain });
-      } catch (e) {}
-    })();
+    recordMatchResult(room.id, won);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [finished]);
 
@@ -1095,11 +1089,6 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
                   </div>
                 ))}
             </div>
-            {isPlayer && (
-              <p style={{ fontWeight: 800, textAlign: "center", marginTop: 10 }}>
-                {t("peYourGain")} <span style={{ color: "var(--tenk-pink)", fontFamily: "'Space Mono'" }}>+{myGain} {t("pts")}</span>
-              </p>
-            )}
             <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 12, flexWrap: "wrap" }}>
               {isHost ? (
                 <>

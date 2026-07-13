@@ -1,12 +1,12 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { saveGameState, readGameState, resetRoomToLobby } from "@/lib/gameSync";
+import { saveGameState, readGameState, resetRoomToLobby, recordMatchResult } from "@/lib/gameSync";
 import Crossfade from "@/components/Crossfade";
 import GameCountdown, { COUNTDOWN_MS } from "@/components/GameCountdown";
 import PresCard from "./PresCard";
 import {
-  dealAll, shuffle, isLegalPlay, hasLegalPlay, pointsForPlace, TWO_V,
+  dealAll, shuffle, isLegalPlay, hasLegalPlay, TWO_V,
   takeBest, sortHand, exchangeRoles, findLowestCardSeatIdx, dealDictatorRound,
 } from "./deck52";
 import { decideBotMove, decideBotGiveback } from "./botLogic";
@@ -134,7 +134,7 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
   const [joke, setJoke] = useState(false); // manche "Dictateur" bonus en cours (hors classement)
   const [selected, setSelected] = useState([]);
   const [giveSelected, setGiveSelected] = useState([]);
-  const [myGain, setMyGain] = useState(0);
+  const [myWin, setMyWin] = useState(false);
   const [channelReady, setChannelReady] = useState(false);
   // Système de mandats : accumulés (Président/Vice-Président) manche après
   // manche, synchronisés dans chaque état diffusé (voir matchMetaRef plus
@@ -216,7 +216,7 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
     setSelected([]); setGiveSelected([]);
     setMandates(s.mandates || {}); setTarget(s.target || 3); setChampion(s.champion || null);
     setTurnDeadline(s.turnDeadline || null); setTurnDeadlineSeat(s.turnDeadlineSeat || null);
-    if (extra.resetGain) { setMyGain(0); savedResultRef.current = false; }
+    if (extra.resetGain) { setMyWin(false); savedResultRef.current = false; }
 
     if (!s.current && s.lastAction?.type === "burn") {
       const burned = (prevCurrent?.cards || []).concat(s.lastAction.cards || []);
@@ -688,15 +688,9 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
     if (!over || savedResultRef.current || !isPlayer) return;
     savedResultRef.current = true;
     const place = finishedOrder.indexOf(me.id);
-    const gain = pointsForPlace(place, seats.length);
-    setMyGain(gain);
-    if (gain <= 0) return;
-    (async () => {
-      try {
-        await supabase.from("game_results").insert({ room_id: room.id, profile_id: me.id, game_id: GAME_ID, points: gain });
-        await supabase.rpc("add_points", { p_room: room.id, p_delta: gain });
-      } catch (e) {}
-    })();
+    const won = place === 0;
+    setMyWin(won);
+    recordMatchResult(room.id, won);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [over]);
 
@@ -955,17 +949,11 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
                     <span>{seat?.avatar}</span>
                     <span className="name">{seat?.username}</span>
                     <span className="title"><RankTag place={place} nSeats={seats.length} t={t} /></span>
-                    <b className="pts">+{pointsForPlace(place, seats.length)}</b>
                     {!joke && <span className="muted" style={{ fontSize: 11 }}>👑×{mandates[id] || 0}</span>}
                   </div>
                 );
               })}
             </div>
-            {isPlayer && (
-              <p style={{ fontWeight: 800, textAlign: "center", marginTop: 12 }}>
-                {t("peYourGain")} <span style={{ color: "var(--p3)", fontFamily: "'Space Mono'" }}>+{myGain} {t("pts")}</span>
-              </p>
-            )}
             {!champion && !joke && (
               <p className="muted" style={{ textAlign: "center", fontSize: 12, marginTop: 4 }}>{t("presNextExchangeHint")}</p>
             )}

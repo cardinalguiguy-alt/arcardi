@@ -1,11 +1,10 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { saveGameState, readGameState, resetRoomToLobby } from "@/lib/gameSync";
+import { saveGameState, readGameState, resetRoomToLobby, recordMatchResult } from "@/lib/gameSync";
 import { playDiceShuffle } from "@/lib/sfx";
 import Crossfade from "./Crossfade";
 
-const WIN_POINTS = 3, PARTICIPATE_POINTS = 1;
 
 // ===================================================================
 // Géométrie du plateau (15x15), dérivée et vérifiée case par case.
@@ -454,7 +453,7 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
   const [lastEvent, setLastEvent] = useState(null); // texte de statut transitoire
   const [winner, setWinner] = useState(null);       // null | couleur
   const [selected, setSelected] = useState([]);     // sélection du picker (>4 joueurs)
-  const [myGain, setMyGain] = useState(0);
+  const [myWin, setMyWin] = useState(false);
   const [channelReady, setChannelReady] = useState(false);
   // Choix LOCAL du dé à jouer (0 | 1 | "sum") — jamais diffusé : seul le
   // move_attempt (pion + dé) part en réseau.
@@ -596,7 +595,7 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
       setLastMoved(null);
       setLastEvent(null);
       setWinner(null);
-      setMyGain(0);
+      setMyWin(false);
       savedResultRef.current = false;
       sixesCountRef.current = {}; // sinon un reliquat de la partie précédente
       // (ex: 2 six d'affilée juste avant la victoire) fait perdre un tour
@@ -1065,20 +1064,15 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
     });
   }
 
-  // Chaque joueur enregistre SON propre résultat (RLS oblige).
+  // Chaque joueur enregistre SON propre résultat (RLS/RPC oblige).
   useEffect(() => {
     if (!winner || savedResultRef.current) return;
     const myColor = colorOfPlayer[me.id];
     if (!myColor) return;
     savedResultRef.current = true;
-    const gain = myColor === winner ? WIN_POINTS : PARTICIPATE_POINTS;
-    setMyGain(gain);
-    (async () => {
-      try {
-        await supabase.from("game_results").insert({ room_id: room.id, profile_id: me.id, game_id: "ludo", points: gain });
-        await supabase.rpc("add_points", { p_room: room.id, p_delta: gain });
-      } catch (e) {}
-    })();
+    const won = myColor === winner;
+    setMyWin(won);
+    recordMatchResult(room.id, won);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [winner]);
 
@@ -1446,11 +1440,6 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
 
         {winner ? (
           <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 16, flexWrap: "wrap" }}>
-            {isPlayer && (
-              <p style={{ fontWeight: 800, width: "100%", textAlign: "center" }}>
-                {t("peYourGain")} <span style={{ color: "var(--p3)", fontFamily: "'Space Mono'" }}>+{myGain} {t("pts")}</span>
-              </p>
-            )}
             {isHost ? (
               <>
                 <button className="btn" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={rejouer}>🔁 {t("c4Rejouer")}</button>
