@@ -584,6 +584,101 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
     // jamais une action d'arbitrage.
     channelRef.current?.send({ type: "broadcast", event: "hold_preview", payload: { seatId: me.id, held: next } });
   }
+
+  // Glisser-déposer des dés (demande explicite 2026-07, "grave problème de
+  // lisibilité... en cas de superposition des dés") : resolveDiceLayout()
+  // fait de son mieux pour écarter les dés automatiquement, mais dans une
+  // zone de lancer réduite (petit écran, plusieurs dés déjà gardés) le
+  // placement automatique peut rester imparfait — le joueur actif peut
+  // désormais réajuster À LA MAIN la position d'un dé sur SON PROPRE écran
+  // pour retrouver une lecture claire. Purement cosmétique et 100% local
+  // (exactement la même philosophie que `scatter` lui-même, voir plus haut,
+  // "chacun voit une dispersion différente") : jamais diffusé, jamais
+  // synchronisé, n'affecte à AUCUN degré l'arbitrage — juste un dé qu'on
+  // pousse du doigt sur la table pour mieux le voir. Réservé au joueur actif
+  // (comme le reste de l'interaction avec les dés), pas aux spectateurs.
+  //
+  // Implémenté en Pointer Events (souris + tactile unifiés via
+  // setPointerCapture, qui garde les événements pointermove/pointerup
+  // rattachés au dé même si le doigt/curseur sort de ses limites visuelles
+  // pendant le geste) plutôt qu'un vrai HTML5 drag-and-drop natif — celui-ci
+  // est pensé pour déplacer des ÉLÉMENTS ENTRE zones (avec une image
+  // fantôme, un dropzone...), pas pour du glisser libre borné avec un
+  // algorithme anti-chevauchement ; nettement moins fluide au doigt et plus
+  // difficile à contraindre proprement aux limites de la zone de lancer.
+  const DRAG_THRESHOLD_PX = 6; // en-deçà : un simple clic (garder/libérer), pas un glisser
+  const dragRef = useRef(null); // session de glisser en cours : { index, pointerId, startX, startY, baseTx, baseTy, maxX, maxY, moved }
+  const suppressNextClickRef = useRef(false); // un glisser qui vient de finir ne doit jamais aussi valoir un clic
+  const [draggingIndex, setDraggingIndex] = useState(null); // pilote la classe CSS .dragging (transition coupée, z-index)
+
+  function dieTrayBounds(dieEl) {
+    const trayEl = trayElRef.current;
+    if (!trayEl || !dieEl) return null;
+    const dieSize = dieEl.getBoundingClientRect().width || 56;
+    const trayW = trayEl.clientWidth, trayH = trayEl.clientHeight;
+    const r = dieSize / 2;
+    return {
+      maxX: Math.max(4, trayW / 2 - r - TRAY_EDGE_PX),
+      maxY: Math.max(4, trayH / 2 - r - TRAY_EDGE_PX),
+    };
+  }
+
+  function handleDiePointerDown(e, i) {
+    if (!isMyTurn || !hasRolled) return; // rien à réajuster hors de son propre tour
+    const bounds = dieTrayBounds(e.currentTarget);
+    if (!bounds) return;
+    const current = scatter[i] || { tx: 0, ty: 0, trot: 0 };
+    dragRef.current = {
+      index: i, pointerId: e.pointerId,
+      startX: e.clientX, startY: e.clientY,
+      baseTx: current.tx, baseTy: current.ty,
+      maxX: bounds.maxX, maxY: bounds.maxY,
+      moved: false,
+    };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }
+
+  function handleDiePointerMove(e, i) {
+    const d = dragRef.current;
+    if (!d || d.index !== i || d.pointerId !== e.pointerId) return;
+    const dx = e.clientX - d.startX, dy = e.clientY - d.startY;
+    if (!d.moved) {
+      if (Math.hypot(dx, dy) < DRAG_THRESHOLD_PX) return; // sous le seuil : encore un simple clic potentiel
+      d.moved = true;
+      setDraggingIndex(i);
+    }
+    e.preventDefault();
+    const tx = clamp(d.baseTx + dx, -d.maxX, d.maxX);
+    const ty = clamp(d.baseTy + dy, -d.maxY, d.maxY);
+    setScatter(prev => {
+      const next = prev.slice();
+      next[i] = { ...(next[i] || { trot: 0 }), tx, ty };
+      return next;
+    });
+  }
+
+  function endDieDrag(i) {
+    const d = dragRef.current;
+    if (!d || d.index !== i) return;
+    dragRef.current = null;
+    setDraggingIndex(null);
+    // Le "clic" de souris/tactile qui suit systématiquement un pointerup se
+    // déclenche APRÈS ce handler : s'il y a eu un vrai glisser, on prévient
+    // handleDieClick (ci-dessous) de l'ignorer plutôt que de garder/libérer
+    // le dé par erreur en fin de geste.
+    if (d.moved) suppressNextClickRef.current = true;
+  }
+  function handleDiePointerUp(e, i) { endDieDrag(i); }
+  function handleDiePointerCancel(e, i) { endDieDrag(i); }
+
+  function handleDieClick(i, action) {
+    if (suppressNextClickRef.current) {
+      suppressNextClickRef.current = false;
+      return; // ce clic clôt un glisser-déposer, pas une sélection
+    }
+    action?.();
+  }
+
   function attemptRoll() {
     if (!canRoll) return;
     // Nombre de dés réellement concernés par CE lancer (les gardés ne
@@ -847,6 +942,19 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
                   : (livePreview && livePreview.seatId === currentSeat?.id ? livePreview.held[i] : held[i]);
                 const showShuffle = shuffling && !isHeldNow;
                 const displayValue = showShuffle ? shuffleFaces[i] : v;
+                // canToggle : mêmes gardes qu'avant (mon tour, un lancer
+                // déjà fait, un lancer restant, pas de mélange en cours) —
+                // pilote maintenant SEULEMENT si un clic garde/libère le dé
+                // (via handleDieClick) ; canDrag pilote SEULEMENT si on peut
+                // le réajuster à la main (handleDiePointerDown) — les deux
+                // gardes sont identiques ici (glisser réservé au joueur
+                // actif) mais restent volontairement deux booléens séparés,
+                // la garde du clic dépendant en plus de rollsLeft > 0
+                // (garder n'a plus de sens sans relance restante) alors que
+                // le glisser reste utile même à ce moment-là (dernier
+                // lancer, dés encore mal lisibles).
+                const canToggle = isMyTurn && hasRolled && rollsLeft > 0 && !shuffling;
+                const canDrag = isMyTurn && hasRolled;
                 return (
                   <Die
                     key={rollSeq + "-" + i}
@@ -854,8 +962,15 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
                     held={hasRolled && isHeldNow}
                     shuffling={showShuffle}
                     rolling={!shuffling && hasRolled && !isHeldNow && lastAction?.type === "roll"}
-                    onClick={isMyTurn && hasRolled && rollsLeft > 0 && !shuffling ? () => toggleHold(i) : undefined}
-                    disabled={!isMyTurn || !hasRolled || rollsLeft === 0 || shuffling}
+                    onClick={() => handleDieClick(i, canToggle ? () => toggleHold(i) : undefined)}
+                    onPointerDown={canDrag ? (e) => handleDiePointerDown(e, i) : undefined}
+                    onPointerMove={canDrag ? (e) => handleDiePointerMove(e, i) : undefined}
+                    onPointerUp={canDrag ? (e) => handleDiePointerUp(e, i) : undefined}
+                    onPointerCancel={canDrag ? (e) => handleDiePointerCancel(e, i) : undefined}
+                    clickable={canToggle}
+                    draggable={canDrag}
+                    dragging={draggingIndex === i}
+                    title={canDrag ? t("yzDragHint") : undefined}
                     style={{
                       "--tx": (scatter[i]?.tx ?? 0) + "px",
                       "--ty": (scatter[i]?.ty ?? 0) + "px",

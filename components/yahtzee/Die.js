@@ -17,32 +17,46 @@ const PIPS = {
   6: [1, 3, 4, 6, 7, 9],
 };
 
-export default function Die({ value, held, onClick, rolling, shuffling, disabled, ghost, style }) {
+export default function Die({
+  value, held, onClick, onPointerDown, onPointerMove, onPointerUp, onPointerCancel,
+  rolling, shuffling, clickable, draggable, dragging, title, style,
+}) {
   const cls = "yz-die"
     + (held ? " held" : "")
     + (rolling ? " rolling" : "")
     + (shuffling ? " shuffling" : "")
-    + (onClick && !disabled ? " clickable" : "")
-    + (ghost ? " ghost" : "");
+    + (clickable ? " clickable" : "")
+    + (draggable ? " draggable" : "")
+    + (dragging ? " dragging" : "");
 
+  // Correctif 2026-07 (demande explicite, glisser-déposer pour la
+  // lisibilité) : le dé n'utilise plus l'attribut HTML natif `disabled` —
+  // il empêcherait `pointerdown`/`pointermove` de se déclencher de façon
+  // fiable selon les navigateurs, ce qui casserait le glisser. Le clic
+  // (garder/libérer) et le glisser (réajuster) sont désormais chacun gardés
+  // en JS par l'appelant (voir canToggle/canDrag dans YahtzeeGame.js) ;
+  // `tabIndex` retire simplement le dé de l'ordre de tabulation quand ni
+  // l'un ni l'autre n'est possible, pour ne pas laisser un élément inerte
+  // "attrapable" au clavier.
   return (
     <button
       type="button"
       className={cls}
       style={style}
-      onClick={disabled ? undefined : onClick}
-      disabled={!!disabled && !ghost}
-      aria-label={ghost ? "?" : String(value)}
+      title={title}
+      onClick={onClick}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerCancel}
+      tabIndex={clickable || draggable ? 0 : -1}
+      aria-label={String(value)}
     >
-      {ghost ? (
-        <span className="yz-die-ghost">?</span>
-      ) : (
-        <span className="yz-die-face">
-          {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(cell => (
-            <span key={cell} className={"yz-pip-cell" + (PIPS[value]?.includes(cell) ? " on" : "")} />
-          ))}
-        </span>
-      )}
+      <span className="yz-die-face">
+        {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(cell => (
+          <span key={cell} className={"yz-pip-cell" + (PIPS[value]?.includes(cell) ? " on" : "")} />
+        ))}
+      </span>
     </button>
   );
 }

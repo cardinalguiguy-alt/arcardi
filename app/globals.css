@@ -2534,6 +2534,21 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
 }
 .yz-die.clickable{ cursor:pointer; }
 .yz-die.clickable:hover{ --hscale:1.09; }
+/* Glisser-déposer (demande explicite 2026-07, "grave problème de
+   lisibilité... en cas de superposition des dés") : le joueur actif peut
+   réajuster à la main la position d'un dé (voir handleDiePointerDown/Move
+   dans YahtzeeGame.js). `touch-action:none` empêche le navigateur de
+   scroller la page pendant le geste au doigt — indispensable dès qu'on
+   capture soi-même le pointeur sur mobile. `.draggable` l'emporte sur
+   `.clickable` (curseur "attraper" plutôt que "cliquer") : le geste de
+   réajustement est la nouveauté à signaler en priorité, le clic pour
+   garder/libérer reste, lui, implicite (comportement déjà connu du joueur).
+   Pendant le glisser actif (`.dragging`) : plus de transition CSS sur
+   `transform` (le dé doit suivre le pointeur instantanément, sans le petit
+   flottement de.18s ease habituel) et z-index rehaussé pour rester lisible
+   par-dessus les autres dés le temps du geste. */
+.yz-die.draggable{ cursor:grab; touch-action:none; }
+.yz-die.dragging{ transition:none; z-index:5; cursor:grabbing; --hscale:1.12; }
 .yz-die.held{
   --lift:-9px;
   outline-color:var(--p3);
@@ -2578,11 +2593,6 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
       rotate(calc(var(--trot, 0deg) + 6deg)) scale(1.03);
   }
 }
-.yz-die.ghost{
-  background:rgba(255,255,255,.05); border:2px dashed var(--line);
-  box-shadow:none; cursor:default;
-}
-.yz-die-ghost{ font-family:'Space Mono'; font-size:22px; color:var(--muted); }
 .yz-die-face{
   display:grid; grid-template-columns:repeat(3, 1fr); grid-template-rows:repeat(3, 1fr);
   width:72%; height:72%;
