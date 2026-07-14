@@ -9,29 +9,57 @@ import { neighborsOf, bombSquare, nuggetsLeft, GM_WIN_AT } from "./mines";
 //      (pépites manquantes / voisines cachées) ; une contrainte satisfaite
 //      met ses voisines cachées à 0 (sûrement vides) ; ailleurs, densité
 //      globale restante.
-//   2. Contraintes certaines (proba 1) : le bot pioche dedans... la plupart
-//      du temps — il lui arrive d'en RATER une (voir plus bas).
+//   2. Contraintes certaines (proba 1) : le bot pioche dedans... plus ou
+//      moins souvent selon le niveau.
 //   3. Dynamite : si elle est encore disponible, le bot la garde pour un
 //      moment RENTABLE ou DÉCISIF — espérance suffisante dans le meilleur
 //      carré 3×3, OU l'adversaire est à 1-2 pépites de la victoire (coup de
-//      poker défensif), OU il peut lui-même conclure la partie avec. Et il
-//      lui arrive de ne même pas y penser ce tour-ci.
+//      poker défensif), OU il peut lui-même conclure la partie avec.
 //   4. Sinon, pioche parmi les cases les PLUS probables — pas forcément LA
-//      meilleure : tout le voisinage des bonnes probabilités est éligible,
-//      comme un humain qui joue "dans la bonne zone" sans calculer au %.
-//   5. Imperfection assumée (~15 %) : un coup "au jugé".
+//      meilleure : le voisinage des bonnes probabilités est éligible, comme
+//      un humain qui joue "dans la bonne zone" sans calculer au %.
+//   5. Imperfection assumée : des coups "au jugé" et des bourdes visibles.
 //
-// NERF 2026-07 (retour du porteur de projet : "bots trop cheatés") : coups
-// au jugé 8 % -> 15 %, contraintes certaines ratées 1 fois sur 4, fenêtre
-// d'ex æquo élargie (85 % de la meilleure proba), dynamite plus exigeante
-// (espérance >= 2.4) et oubliée ~20 % des tours. Mesuré par simulation :
-// le bot nerfé perd nettement plus souvent face à l'ancien (voir zip 60),
-// tout en restant un adversaire crédible.
+// ---------------------------------------------------------------------------
+// TROIS NIVEAUX DE DIFFICULTÉ (ajout 2026-07) — pilotés par un simple jeu de
+// paramètres (GM_BOT_PARAMS), la logique ci-dessous étant IDENTIQUE pour les
+// trois. Le niveau MOYEN reproduit À L'IDENTIQUE le bot historique (mêmes
+// constantes que le réglage "nerf v2" précédent) : c'est la référence
+// explicitement demandée. FACILE affaiblit franchement le bot (beaucoup de
+// coups au hasard, déductions sûres souvent manquées, bourdes fréquentes,
+// dynamite quasi jamais bien employée) ; EXPERT le rend quasi optimal (zéro
+// coup au hasard, zéro bourde, TOUTES les déductions certaines jouées,
+// toujours la meilleure case, dynamite dégainée dès un filon rentable).
 //
-// Triche structurellement impossible : le bot ne lit QUE les chiffres des
-// cases révélées et le compteur global de pépites restantes — jamais
-// mine.nugget des cases cachées.
+//   - randomGuess : proba d'un coup au hasard pur (jamais la dynamite).
+//   - bombConsider : proba que la dynamite lui "vienne à l'esprit" ce tour.
+//   - bombThreshold : espérance minimale de pépites dans le meilleur carré 3×3
+//     pour qu'il la dégaine (hors coup décisif/défensif).
+//   - certainPlay : proba de jouer une déduction certaine quand il en existe.
+//   - blunder : proba d'une bourde (creuse franchement dans les pires cases).
+//   - window : largeur de la "bonne zone" (fraction de la meilleure proba
+//     encore jugée éligible — 1 = uniquement la toute meilleure case).
+//
+// Triche structurellement impossible à tous les niveaux : le bot ne lit QUE
+// les chiffres des cases révélées et le compteur global de pépites restantes
+// — jamais mine.nugget des cases cachées.
 // ==========================================================================
+
+export const GM_DIFFICULTIES = ["easy", "medium", "expert"];
+export const GM_DEFAULT_DIFFICULTY = "medium";
+
+export const GM_BOT_PARAMS = {
+  // FACILE — nettement battable : joue souvent au hasard, rate la plupart des
+  // déductions sûres, se trompe volontiers de zone, et n'exploite presque
+  // jamais correctement sa dynamite.
+  easy:   { randomGuess: 0.55, bombConsider: 0.30, bombThreshold: 3.6, certainPlay: 0.25, blunder: 0.32, window: 0.30 },
+  // MOYEN — le bot historique, inchangé (référence demandée).
+  medium: { randomGuess: 0.26, bombConsider: 0.65, bombThreshold: 2.8, certainPlay: 0.55, blunder: 0.12, window: 0.62 },
+  // EXPERT — quasi optimal : aucun coup au hasard ni bourde, toutes les
+  // déductions certaines jouées, toujours la meilleure case, dynamite
+  // dégainée dès un filon vraiment rentable.
+  expert: { randomGuess: 0.0,  bombConsider: 1.0,  bombThreshold: 2.4, certainPlay: 1.0,  blunder: 0.0,  window: 1.0  },
+};
 
 function probMap(mine, revealed) {
   const n = mine.nugget.length;
@@ -56,22 +84,18 @@ function probMap(mine, revealed) {
   return { hidden, prob, certain };
 }
 
-export function decideBotMove(mine, revealed, { bombAvailable = false, myGold = 0, oppGold = 0 } = {}) {
+export function decideBotMove(mine, revealed, { bombAvailable = false, myGold = 0, oppGold = 0, difficulty = GM_DEFAULT_DIFFICULTY } = {}) {
+  const P = GM_BOT_PARAMS[difficulty] || GM_BOT_PARAMS[GM_DEFAULT_DIFFICULTY];
   const { hidden, prob, certain } = probMap(mine, revealed);
   if (hidden.length === 0) return null;
 
-  // ~26 % : coup au jugé (jamais la dynamite au jugé) — NERF 2026-07 (v2).
-  // Le porteur de projet trouvait le bot "quasiment imbattable" : mesuré par
-  // simulation (voir gm_sim), l'ancien réglage (15 %) perdait déjà 73 % face
-  // à un jeu PARFAIT, mais restait redoutable face à un humain réel qui ne
-  // calcule pas au pourcent près. On monte donc franchement le taux d'erreurs
-  // VISIBLES (coups au hasard + bourdes assumées) : le bot écrase encore un
-  // joueur aléatoire (~100 %) mais un bon joueur le bat largement (~92 %).
-  if (Math.random() < 0.26) return { type: "dig", idx: hidden[Math.floor(Math.random() * hidden.length)] };
+  // Coup au jugé (jamais la dynamite au jugé). Fréquence selon le niveau :
+  // très fréquent en FACILE, jamais en EXPERT.
+  if (Math.random() < P.randomGuess) return { type: "dig", idx: hidden[Math.floor(Math.random() * hidden.length)] };
 
-  // La dynamite ne lui "vient à l'esprit" que ~65 % des tours : un humain
-  // concentré sur ses chiffres oublie régulièrement son bâton dans le sac.
-  if (bombAvailable && Math.random() < 0.65) {
+  // La dynamite ne lui "vient à l'esprit" qu'une fraction des tours (selon le
+  // niveau) : un humain concentré sur ses chiffres oublie son bâton dans le sac.
+  if (bombAvailable && Math.random() < P.bombConsider) {
     // Meilleur carré 3×3 par espérance de pépites.
     let bestIdx = -1, bestExp = 0;
     for (const i of hidden) {
@@ -81,35 +105,32 @@ export function decideBotMove(mine, revealed, { bombAvailable = false, myGold = 
     }
     const oppAboutToWin = oppGold >= GM_WIN_AT - 2;
     const canFinish = GM_WIN_AT - myGold <= Math.floor(bestExp);
-    // Seuil relevé 2.4 -> 2.8 (nerf v2) : il ne dynamite plus qu'au VRAI
-    // filon, sauf coup décisif/défensif.
-    if (bestIdx !== -1 && (bestExp >= 2.8 || oppAboutToWin || canFinish)) {
+    if (bestIdx !== -1 && (bestExp >= P.bombThreshold || oppAboutToWin || canFinish)) {
       return { type: "bomb", idx: bestIdx };
     }
   }
 
-  // Contraintes certaines : jouées seulement ~55 % du temps (nerf v2) — le
-  // bot rate désormais souvent une déduction pourtant sûre, comme un joueur
-  // qui ne voit pas TOUT ce que la grille lui souffle.
-  if (certain.length > 0 && Math.random() < 0.55) {
+  // Contraintes certaines : jouées selon le niveau (toujours en EXPERT,
+  // rarement en FACILE) — le bot peut "ne pas voir" une déduction pourtant sûre.
+  if (certain.length > 0 && Math.random() < P.certainPlay) {
     return { type: "dig", idx: certain[Math.floor(Math.random() * certain.length)] };
   }
 
   let best = -1;
   for (const i of hidden) if (prob[i] > best) best = prob[i];
 
-  // BOURDE assumée (~12 %, nerf v2) : au lieu de viser la bonne zone, le bot
-  // pioche franchement dans les cases les MOINS probables — l'erreur bien
-  // visible que réclamait le porteur de projet (il "creuse à côté").
-  if (Math.random() < 0.12) {
+  // BOURDE assumée : au lieu de viser la bonne zone, le bot pioche franchement
+  // dans les cases les MOINS probables ("il creuse à côté"). Jamais en EXPERT.
+  if (Math.random() < P.blunder) {
     let worst = Infinity;
     for (const i of hidden) if (prob[i] < worst) worst = prob[i];
     const badCells = hidden.filter(i => prob[i] <= worst + 1e-9);
     return { type: "dig", idx: badCells[Math.floor(Math.random() * badCells.length)] };
   }
 
-  // Fenêtre encore élargie (>= 62 % de la meilleure proba, nerf v2) : le bot
-  // joue "à peu près dans la bonne zone", loin du choix optimal au pourcent.
-  const bestCells = hidden.filter(i => prob[i] >= best * 0.62 - 1e-9);
+  // Fenêtre de la "bonne zone" (fraction de la meilleure proba). En EXPERT
+  // (window = 1) le bot ne retient que la toute meilleure case ; en FACILE il
+  // joue "à peu près par là", très loin de l'optimum.
+  const bestCells = hidden.filter(i => prob[i] >= best * P.window - 1e-9);
   return { type: "dig", idx: bestCells[Math.floor(Math.random() * bestCells.length)] };
 }

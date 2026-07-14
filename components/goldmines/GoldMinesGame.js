@@ -8,7 +8,7 @@ import {
   GM_ROWS, GM_COLS, GM_NUGGETS, GM_WIN_AT,
   genMine, digResult, bombResult, nuggetsLeft,
 } from "./mines";
-import { decideBotMove } from "./botLogic";
+import { decideBotMove, GM_DIFFICULTIES, GM_DEFAULT_DIFFICULTY } from "./botLogic";
 import { playCashRegister, playDynamite, playDigDirt, primeFiles } from "@/lib/sfx";
 
 /* ==========================================================================
@@ -95,13 +95,13 @@ function NuggetIcon({ className = "" }) {
   );
 }
 
-function dealState(seats) {
+function dealState(seats, difficulty = GM_DEFAULT_DIFFICULTY) {
   const mine = genMine();
   const gold = {}, bombs = {};
   seats.forEach(seat => { gold[seat.id] = 0; bombs[seat.id] = true; });
   return {
     seats, mine, revealed: {}, gold, bombs, turnIdx: 0, left: GM_NUGGETS,
-    winner: null, lastAction: null,
+    winner: null, lastAction: null, botDifficulty: difficulty,
   };
 }
 
@@ -125,6 +125,12 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
   // Dynamite armée (local) : le prochain clic sur une case cachée fait
   // sauter le carré 3×3 au lieu de piocher.
   const [bombArmed, setBombArmed] = useState(false);
+  // Niveau du bot en solo (facile / moyen / expert). Sert À LA FOIS de
+  // sélection dans l'écran d'intro ET de difficulté active de la partie :
+  // transportée dans l'état de jeu (broadcast + reprise sur reload) pour que
+  // l'hôte arbitre les coups du bot au bon niveau. Sans incidence en duel
+  // 100 % humain (aucun bot ne la lit).
+  const [botDifficulty, setBotDifficulty] = useState(GM_DEFAULT_DIFFICULTY);
   // Effets locaux, tous dérivés du même lastAction reçu par broadcast :
   const [goldPop, setGoldPop] = useState(null);      // "+N pépite(s)" sur la carte du mineur
   const [freshNuggets, setFreshNuggets] = useState({ ids: [], key: 0 }); // pépites qui rayonnent
@@ -171,13 +177,14 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
   useEffect(() => { primeFiles("/sounds/dynamite-blast.mp3", "/sounds/cash-register.mp3", "/sounds/dig-dirt.mp3"); }, []);
 
   useEffect(() => {
-    stateRef.current = { seats, mine, revealed, gold, bombs, turnIdx, left, winner };
-  }, [seats, mine, revealed, gold, bombs, turnIdx, left, winner]);
+    stateRef.current = { seats, mine, revealed, gold, bombs, turnIdx, left, winner, botDifficulty };
+  }, [seats, mine, revealed, gold, bombs, turnIdx, left, winner, botDifficulty]);
 
   function applyLocalState(s, extra = {}) {
     setSeats(s.seats); setMine(s.mine); setRevealed(s.revealed || {});
     setGold(s.gold || {}); setBombs(s.bombs || {}); setTurnIdx(s.turnIdx); setLeft(s.left);
     setWinner(s.winner || null); setLastAction(s.lastAction || null);
+    if (s.botDifficulty) setBotDifficulty(s.botDifficulty);
     setTurnDeadline(s.turnDeadline || null); setTurnDeadlineSeat(s.turnDeadlineSeat || null);
     if (extra.resetGain) { setMyWin(false); savedResultRef.current = false; setBombArmed(false); }
   }
@@ -398,7 +405,7 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
     const next = {
       seats: s.seats, mine: s.mine, revealed, gold, bombs, left, winner,
       turnIdx: winner || replay ? s.turnIdx : (s.turnIdx + 1) % s.seats.length,
-      lastAction: last,
+      lastAction: last, botDifficulty: s.botDifficulty,
     };
     broadcastNewState(next);
     scheduleBots();
@@ -427,6 +434,7 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
         bombAvailable: !!s.bombs[seat.id],
         myGold: s.gold[seat.id] || 0,
         oppGold: opp ? (s.gold[opp.id] || 0) : 0,
+        difficulty: s.botDifficulty || GM_DEFAULT_DIFFICULTY,
       });
       if (!move) return;
       hostApplyMove(seat.id, move);
@@ -434,22 +442,37 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
   }
 
   // ----- Démarrage : duel, un bot complète si besoin -----
-  function startWith(humanSeats) {
+  // `difficulty` : niveau du bot quand un bot complète la table (ignoré en
+  // duel 100 % humain). On la fige dans l'état de partie via dealState.
+  function startWith(humanSeats, difficulty = botDifficulty) {
     const all = [...humanSeats];
     for (let i = all.length + 1; i <= TABLE_SIZE; i++) all.push(makeBotSeat(i - humanSeats.length));
     if (Math.random() < 0.5) all.reverse(); // qui ouvre la mine : pile ou face
-    sendMatchStart(dealState(all));
+    setBotDifficulty(difficulty);
+    sendMatchStart(dealState(all, difficulty));
   }
 
+  // Auto-démarrage UNIQUEMENT quand la table se remplit d'humains (aucun bot
+  // à compléter) : le duel humain démarre tout seul comme avant. En solo (moins
+  // d'humains que de sièges → un bot complète), on n'auto-démarre PAS : l'hôte
+  // choisit d'abord le niveau du bot dans l'écran d'intro (voir startSolo).
   useEffect(() => {
     if (!isHost || phase !== "intro" || autoStartedRef.current || !channelReady) return;
-    if (players.length <= TABLE_SIZE) {
+    if (players.length === TABLE_SIZE) {
       autoStartedRef.current = true;
       const humanSeats = players.map(p => ({ id: p.profile_id, username: p.profiles?.username, avatar: p.profiles?.avatar, isBot: false }));
       startWith(humanSeats);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isHost, phase, channelReady, players.length]);
+
+  // Solo contre l'ordinateur : l'hôte a choisi un niveau, on lance.
+  function startSolo() {
+    if (!channelReady || autoStartedRef.current) return;
+    const humanSeats = players.map(p => ({ id: p.profile_id, username: p.profiles?.username, avatar: p.profiles?.avatar, isBot: false }));
+    autoStartedRef.current = true;
+    startWith(humanSeats, botDifficulty);
+  }
 
   function toggleSelect(pid) {
     setSelected(prev => {
@@ -463,12 +486,15 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
     const chosen = selected.map(pid => players.find(p => p.profile_id === pid)).filter(Boolean);
     const humanSeats = chosen.map(p => ({ id: p.profile_id, username: p.profiles?.username, avatar: p.profiles?.avatar, isBot: false }));
     autoStartedRef.current = true;
-    startWith(humanSeats);
+    // Si moins de joueurs choisis que de sièges, un bot complète : au niveau
+    // sélectionné (botDifficulty), sinon niveau par défaut sans incidence.
+    startWith(humanSeats, botDifficulty);
   }
 
   function rejouer() {
     if (!isHost || !seats.length) return;
-    startWith(seats.filter(s => !s.isBot));
+    // Rejouer conserve le même niveau de bot que la partie précédente.
+    startWith(seats.filter(s => !s.isBot), botDifficulty);
   }
 
   async function backToRoom() {
@@ -516,6 +542,34 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
   const activeSeat = seats[turnIdx];
   const lastSeat = lastAction ? seats.find(s => s.id === lastAction.seatId) : null;
   const winnerSeat = winner ? seats.find(s => s.id === winner) : null;
+  // Solo contre l'ordinateur = moins d'humains que de sièges, personne à choisir.
+  const soloVsBot = !needsPick && players.length < TABLE_SIZE;
+
+  // Métadonnées d'affichage des trois niveaux + sélecteur réutilisable (écran
+  // d'intro solo, et écran de choix des joueurs quand un bot complètera).
+  const DIFF_META = {
+    easy:   { key: "gmDiffEasy",   descKey: "gmDiffEasyDesc",   icon: "🌱" },
+    medium: { key: "gmDiffMedium", descKey: "gmDiffMediumDesc", icon: "⚖️" },
+    expert: { key: "gmDiffExpert", descKey: "gmDiffExpertDesc", icon: "🔥" },
+  };
+  const difficultyPicker = (
+    <div className="gm-diff-picker">
+      <p className="gm-diff-title">🤖 {t("gmDifficultyLabel")}</p>
+      <div className="gm-diff-options">
+        {GM_DIFFICULTIES.map(d => {
+          const on = botDifficulty === d;
+          const m = DIFF_META[d];
+          return (
+            <button key={d} type="button" className={"gm-diff-btn" + (on ? " on" : "")}
+              aria-pressed={on} onClick={() => setBotDifficulty(d)}>
+              <span className="gm-diff-btn-name">{m.icon} {t(m.key)}</span>
+              <span className="gm-diff-btn-desc">{t(m.descKey)}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
 
   let content;
   if (phase === "playing" && mine) {
@@ -547,6 +601,9 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
               <span className="gm-miner-avatar">{s.avatar}</span>
               <span className="gm-miner-name">
                 {s.username}
+                {s.isBot && DIFF_META[botDifficulty] && (
+                  <span className={"gm-bot-diff " + botDifficulty}>{DIFF_META[botDifficulty].icon} {t(DIFF_META[botDifficulty].key)}</span>
+                )}
                 {activeSeat?.id === s.id && s.isBot && !winner && (
                   <span className="pres-think" aria-hidden="true"><i>.</i><i className="d2">.</i><i className="d3">.</i></span>
                 )}
@@ -733,11 +790,25 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
               );
             })}
           </div>
+          {/* Moins de joueurs choisis que de sièges : un bot complètera —
+              on propose alors le choix de son niveau. */}
+          {selected.length > 0 && selected.length < TABLE_SIZE && difficultyPicker}
           <button className="btn" disabled={selected.length === 0 || selected.length > TABLE_SIZE} onClick={confirmPick}>
             {t("chromatikPickConfirm")}
           </button>
         </div>
       ) : <p className="muted">{t("chromatikWaitPick")}</p>;
+    } else if (soloVsBot) {
+      // Solo contre l'ordinateur : l'hôte choisit le niveau du bot puis lance.
+      content = isHost ? (
+        <div className="gm-solo-intro">
+          <p className="hint">{t("gmSoloIntro")}</p>
+          {difficultyPicker}
+          <button className="btn" disabled={!channelReady} onClick={startSolo}>
+            ⛏️ {t("gmStartSolo")}
+          </button>
+        </div>
+      ) : <p className="muted">{t("gmStarting")}</p>;
     } else {
       content = <p className="muted">{t("gmStarting")}</p>;
     }
