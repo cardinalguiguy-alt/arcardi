@@ -269,6 +269,12 @@ export default function TuPreferesGame({ room, me, isHost, players, t, lang, onF
   function applyReveal(payload) {
     clearPhaseTimer();
     setReveal(payload);
+    // IMPORTANT : mémoriser le score CUMULÉ de la manche (bug zip 102 : sans
+    // ça, `scores` restait figé au score d'avant-manche → la manche suivante
+    // repartait des mêmes points, les scores semblaient se réinitialiser et
+    // la cible n'était jamais atteinte, la partie ne s'arrêtait jamais).
+    // L'animation, elle, part de scoresBefore (scoreAnim) puis monte.
+    setScores(payload.scores);
     setScoreAnim(payload.scoresBefore);
     setDeadline(null);
     setPhase(payload.gameover ? "over" : "reveal");
