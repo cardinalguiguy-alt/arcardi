@@ -284,7 +284,6 @@ export default function ConnectFour({ room, me, isHost, players, t, lang, onFini
   if (phase === "playing") {
     const iWon = (winner === "p1" && amP1) || (winner === "p2" && amP2);
     const winnerObj = winner === "p1" ? p1 : winner === "p2" ? p2 : null;
-    const otherObj = winner === "p1" ? p2 : winner === "p2" ? p1 : null;
     const winnerColorVar = winner === "p1" ? "--p1" : "--p2";
     content = (
       <div style={{ position: "relative" }}>
@@ -357,11 +356,6 @@ export default function ConnectFour({ room, me, isHost, players, t, lang, onFini
           >
             <div className="win-banner-title" style={{ textShadow: `0 0 18px ${winner === "draw" ? "#F5F3FF" : `var(${winnerColorVar})`}, 0 3px 0 rgba(0,0,0,.4)` }}>
               {winner === "draw" ? "🤝 " + t("c4BannerDrawTitle") : `🎉 ${winnerObj?.username} ${t("c4BannerWins")}`}
-            </div>
-            <div className="win-banner-sub" style={{ color: winner === "draw" ? "#F5F3FF" : `var(${winnerColorVar})`, border: `1.5px solid ${winner === "draw" ? "#F5F3FF" : `var(${winnerColorVar})`}` }}>
-              {winner === "draw"
-                ? `+${DRAW_POINTS} ${t("pts")} ${t("c4BannerEach")}`
-                : `+${WIN_POINTS} ${t("pts")} ${t("c4BannerFor")} ${winnerObj?.username} · +${LOSE_POINTS} ${t("c4BannerFor")} ${otherObj?.username}`}
             </div>
           </div>
         )}

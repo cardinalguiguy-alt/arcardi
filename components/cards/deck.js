@@ -4,7 +4,11 @@
 // réutilisable telle quelle côté hôte (arbitre) comme côté simple lecture.
 // ==========================================================================
 export const COLORS = ["red", "green", "blue", "yellow"];
-export const COLOR_VARS = { red: "--p1", green: "--p3", blue: "--ludoB", yellow: "--ludoY" };
+// Vert dédié aux cartes (2026-07, demande explicite "vert trop vif/fluo") :
+// --chromatik-green (vert pomme plus foncé) plutôt que --p3 (accent général
+// du site, un vert fluo qui reste inchangé partout ailleurs — pions Ludo,
+// boutons, podiums, etc.).
+export const COLOR_VARS = { red: "--p1", green: "--chromatik-green", blue: "--ludoB", yellow: "--ludoY" };
 
 // Paquet complet : par couleur, un 0, deux exemplaires de 1 à 9, deux
 // "passe", deux "inverse", deux "+2". Plus 4 jokers (couleur au choix) et

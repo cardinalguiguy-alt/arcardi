@@ -8,6 +8,12 @@
   --p2:#FFD166; /* Puissance 4 disc 2 / accent général, boutons */
   --p3:#B6F04C; --p4:#FFB94A; --p5:#A78BFA;
   --ludoY:#FFD23F; --ludoB:#4C8DFF;
+  /* Vert dédié aux cartes Chromatik (2026-07, demande explicite) : le vert
+     "réussite"/accent général --p3 est un vert fluo très vif — parfait pour
+     un accent ponctuel, mais trop agressif tenu à l'écran en pleine carte à
+     jouer. Vert pomme plus foncé, dédié, pour ne RIEN changer ailleurs sur
+     le site (pions Ludo, boutons, podiums… continuent d'utiliser --p3). */
+  --chromatik-green:#5FA83C;
   --dia:#C9A24B; /* laiton vieilli — accent dédié au jeu phare Diapason */
   --ink-on-accent:#2B1B12; /* texte sombre lisible sur les boutons/tuiles clairs */
   /* Audit couleurs 2026-07 : vert "réussite" SÉMANTIQUE partagé entre jeux
@@ -819,8 +825,14 @@ body.stage-focus .stage-fabs{ top:12px; }
    .ludo-board-frame porte maintenant le cadre + le rognage ; .ludo-board
    (même système de % pour tous ses enfants, inchangé) est légèrement
    retiré à l'intérieur (inset) pour laisser cette respiration. */
+/* Agrandissement 2026-07 (demande explicite "le plateau est un peu trop
+   petit") : plafonds relevés (largeur, vw et vh) en mode normal ET en mode
+   agrandi. Le zoom automatique de secours (voir room/[code]/page.js) reste
+   le filet de sécurité pour les tout petits écrans : ces plafonds plus
+   généreux profitent des écrans qui ont de la marge sans jamais forcer de
+   scroll (le zoom réduit proportionnellement si ça déborde encore). */
 .ludo-board-frame{
-  position:relative; width:min(620px, 92vw, 58vh); aspect-ratio:1; margin:0 auto;
+  position:relative; width:min(760px, 95vw, 68vh); aspect-ratio:1; margin:0 auto;
   background:rgba(0,0,0,.32); border-radius:16px; overflow:hidden;
   border:3px solid var(--line); box-shadow:inset 0 0 0 6px rgba(0,0,0,.18), 0 14px 34px rgba(0,0,0,.4);
 }
@@ -831,7 +843,7 @@ body.stage-focus .stage-fabs{ top:12px; }
 body.stage-focus .ludo-panel{ padding:16px; }
 body.stage-focus .ludo-panel h1{ margin-bottom:4px; }
 body.stage-focus .ludo-panel .ludo-players-row{ margin-bottom:6px !important; }
-body.stage-focus .ludo-panel .ludo-board-frame{ width:min(560px, 90vw, 54vh); }
+body.stage-focus .ludo-panel .ludo-board-frame{ width:min(680px, 92vw, 62vh); }
 .ludo-cell{ position:absolute; box-sizing:border-box; border:1px solid rgba(255,255,255,.04); }
 .ludo-cell.path{ background:rgba(255,255,255,.05); }
 .ludo-cell.center{ background:rgba(255,255,255,.1); }
@@ -1130,6 +1142,30 @@ button.ludo-roman.selected{
   .ludo-wheel-overlay.spinning{ animation:none; opacity:1; }
   .ludo-wheel-overlay.spinning .ludo-wheel-disc{ animation:none; transform:rotate(var(--wheel-rot, 0deg)); }
   .ludo-wheel-result{ animation:none; }
+}
+
+/* ===== Décision "Épargner ?" à la capture (2026-07) =====
+   Même langage visuel que la roue de la fortune (overlay plein plateau,
+   fondu d'entrée) : dès qu'un pion atterrit sur une case occupée par un ou
+   plusieurs pions adverses, tout le monde voit l'overlay, seul le
+   propriétaire du pion arrivant a les deux boutons (les autres attendent). */
+.ludo-capture-overlay{
+  position:absolute; inset:0; z-index:20; display:flex; align-items:center; justify-content:center;
+  background:rgba(10,8,16,.58); backdrop-filter:blur(2px); -webkit-backdrop-filter:blur(2px);
+  border-radius:16px; opacity:0;
+  animation:ludoWheelEnter .3s ease forwards;
+}
+.ludo-capture-card{
+  display:flex; flex-direction:column; align-items:center; gap:10px; padding:18px 22px;
+  background:rgba(28,24,36,.92); border:2px solid rgba(255,93,115,.5); border-radius:18px;
+  box-shadow:0 14px 34px rgba(0,0,0,.5), 0 0 22px rgba(255,93,115,.25); max-width:88%; text-align:center;
+}
+.ludo-capture-title{ font-family:'Bungee'; font-size:15px; color:var(--ink); margin:0; }
+.ludo-capture-desc{ font-size:12.5px; color:var(--ink); opacity:.85; margin:0; font-weight:700; }
+.ludo-capture-actions{ display:flex; gap:10px; margin-top:2px; }
+.ludo-capture-actions .btn{ width:auto; padding:10px 18px; margin-top:0; font-size:12.5px; }
+@media (prefers-reduced-motion: reduce){
+  .ludo-capture-overlay{ animation:none; opacity:1; }
 }
 
 /* ===== Zone d'ARRIVÉE centrale élargie (zip 83) =====
@@ -1707,18 +1743,31 @@ button.ludo-roman.selected{
 .chromatik-pile{ position:relative; }
 .chromatik-pile.draw{ cursor:pointer; }
 .chromatik-pile.draw:hover .chromatik-card{ transform:translateY(-3px); }
-/* Surbrillance de la pioche (audit jouabilité 2026-07) : s'allume quand le
-   joueur actif n'a plus le choix — aucune carte jouable en main, ou pile de
-   pénalité +2/+4 en attente qu'il ne peut pas contrer — pour signaler sans
-   ambiguïté "c'est ici qu'il faut cliquer" (voir mustDrawPile dans
-   ChromatikGame.js). */
+/* Surbrillance de la pioche (audit jouabilité 2026-07, renforcée 2026-07) :
+   s'allume quand le joueur actif n'a plus le choix — aucune carte jouable en
+   main, ou pile de pénalité +2/+4 en attente qu'il ne peut pas contrer —
+   pour signaler sans ambiguïté "c'est ici qu'il faut cliquer" (voir
+   mustDrawPile dans ChromatikGame.js). Renforcée (demande explicite "donner
+   encore plus de surbrillance") : lueur plus large/intense sur la carte ET
+   un anneau pulsé autour de TOUTE la pioche (pas seulement la carte) —
+   beaucoup plus dur à manquer, même en train de regarder ailleurs sur la
+   table. */
 .chromatik-pile.draw.urge .chromatik-card{
-  animation:chromatikDrawUrge 1.1s ease-in-out infinite;
-  box-shadow:0 4px 0 rgba(0,0,0,.35), 0 0 16px 3px rgba(255,209,102,.55);
+  animation:chromatikDrawUrge 1s ease-in-out infinite;
+  box-shadow:0 4px 0 rgba(0,0,0,.35), 0 0 30px 9px rgba(255,209,102,.9);
+}
+.chromatik-pile.draw.urge::after{
+  content:""; position:absolute; inset:-14px; border-radius:18px;
+  border:3px solid rgba(255,209,102,.85); pointer-events:none;
+  animation:chromatikDrawUrgeRing 1.15s ease-out infinite;
 }
 @keyframes chromatikDrawUrge{
-  0%,100%{ transform:translateY(0); }
-  50%{ transform:translateY(-4px); }
+  0%,100%{ transform:translateY(0) scale(1); }
+  50%{ transform:translateY(-6px) scale(1.06); }
+}
+@keyframes chromatikDrawUrgeRing{
+  0%{ opacity:.95; transform:scale(.94); }
+  100%{ opacity:0; transform:scale(1.28); }
 }
 .pile-count{
   position:absolute; bottom:-8px; right:-8px; background:var(--card2); border:1.5px solid var(--line);
@@ -1961,23 +2010,30 @@ button.ludo-roman.selected{
    Réutilise le podium de Président (.pres-podium/.pres-podium-row) pour un
    classement cohérent d'un jeu à l'autre, trié sur le score cumulé le plus
    BAS (voir matchScores dans ChromatikGame.js).
-   OVERLAY (2026-07, demande explicite) : le récap flotte désormais par-
-   dessus la table (position:absolute dans .chromatik-stage), au lieu d'être
-   un bloc dans le flux normal — à 4 joueurs surtout, il poussait la table
-   vers le bas et déclenchait le zoom automatique du mode agrandi. La table
-   ne change donc plus JAMAIS de taille quand une manche se termine. */
+   OVERLAY (2026-07, demande explicite) : le récap flotte par-dessus la
+   table plutôt que d'être un bloc dans le flux normal — à 4 joueurs surtout,
+   il poussait la table vers le bas et déclenchait le zoom automatique du
+   mode agrandi. La table ne change donc jamais de taille quand une manche
+   se termine.
+   Agrandissement + anti-scroll (2026-07, demande explicite) : l'overlay
+   était auparavant absolute DANS .chromatik-stage — sa hauteur disponible
+   était donc plafonnée par la hauteur de la table elle-même (souvent
+   modeste à 2-3 joueurs), ce qui déclenchait un scroll dès que le récap
+   contenait plusieurs lignes de classement + mains finales. Passé en fixed
+   PLEIN ÉCRAN (comme les modales Paramètres/Règles, mêmes z-index) : la
+   carte dispose désormais de toute la hauteur de l'écran, le scroll interne
+   ne sert plus que de filet de sécurité pour les tout petits écrans. */
 .chromatik-stage{ position:relative; }
 .chromatik-round-overlay{
-  position:absolute; inset:0; z-index:30;
-  display:flex; align-items:center; justify-content:center; padding:14px;
-  background:rgba(15,10,20,.72); backdrop-filter:blur(3px); -webkit-backdrop-filter:blur(3px);
-  border-radius:20px;
+  position:fixed; inset:0; z-index:150;
+  display:flex; align-items:center; justify-content:center; padding:16px;
+  background:rgba(15,10,20,.78); backdrop-filter:blur(3px); -webkit-backdrop-filter:blur(3px);
   animation:chromatikSummaryFade .35s ease both;
 }
 .chromatik-round-card{
-  width:100%; max-width:min(480px, 100%); max-height:100%; overflow-y:auto;
+  width:100%; max-width:min(640px, 94vw); max-height:min(88vh, 900px); overflow-y:auto;
   background:linear-gradient(180deg, var(--card), var(--bg2)); border:2px solid var(--line);
-  border-radius:18px; padding:18px 20px; box-shadow:0 18px 44px rgba(0,0,0,.5);
+  border-radius:20px; padding:24px 28px; box-shadow:0 18px 44px rgba(0,0,0,.5);
   animation:chromatikSummaryPop .4s cubic-bezier(.2,.9,.25,1) both;
 }
 @keyframes chromatikSummaryFade{ from{ opacity:0; } to{ opacity:1; } }
@@ -1986,13 +2042,40 @@ button.ludo-roman.selected{
   100%{ opacity:1; transform:scale(1) translateY(0); }
 }
 .chromatik-round-summary-title{
-  text-align:center; font-family:'Bungee'; font-size:15px; margin:0 0 12px; color:var(--ink);
+  text-align:center; font-family:'Bungee'; font-size:18px; margin:0 0 16px; color:var(--ink);
+}
+/* Repère de manche pendant la partie (demande explicite "manche 1/3") :
+   petit badge discret, position ABSOLUE dans .chromatik-stage — n'affecte
+   jamais la taille de la table (même logique que le récap ci-dessus). */
+.chromatik-round-indicator{
+  position:absolute; top:-6px; left:50%; transform:translateX(-50%); z-index:5;
+  background:var(--card2); border:1.5px solid var(--line); border-radius:99px;
+  padding:3px 12px; font-family:'Space Mono'; font-weight:700; font-size:11.5px;
+  color:var(--muted); white-space:nowrap;
+}
+/* Bouton "Continuer" (manche suivante) — demande explicite "rendre le
+   bouton continuer plus visible pour l'hôte" : gabarit nettement plus
+   généreux que les boutons standards + lueur pulsée dorée (même langage
+   visuel que .chromatik-uno-btn), impossible à manquer au milieu du récap. */
+.chromatik-next-round-btn{
+  width:auto !important; padding:16px 34px !important; margin-top:0 !important;
+  font-family:'Bungee'; font-size:14px; letter-spacing:.02em;
+  border:2px solid #e8c357; border-radius:14px; color:#241c14;
+  background:linear-gradient(145deg, #ffe9a8, #f2c94c);
+  box-shadow:0 4px 0 rgba(0,0,0,.3), 0 0 22px rgba(232,195,87,.6);
+  animation:chromatikNextRoundPulse 1.3s ease-in-out infinite;
+}
+.chromatik-next-round-btn:hover{ transform:translateY(-1px); }
+@keyframes chromatikNextRoundPulse{
+  0%,100%{ box-shadow:0 4px 0 rgba(0,0,0,.3), 0 0 16px rgba(232,195,87,.45); }
+  50%{ box-shadow:0 4px 0 rgba(0,0,0,.3), 0 0 30px rgba(232,195,87,.85); }
 }
 .chromatik-round-delta{ font-size:11px; color:var(--muted); font-weight:600; }
 /* Mains finales en miniature (demande 2026-07) : sous chaque ligne du
    classement, les cartes restées en main — on voit d'où viennent les
-   points. Le podium s'élargit un peu pour loger les grosses mains. */
-.chromatik-podium{ max-width:480px; }
+   points. Le podium s'élargit un peu pour loger les grosses mains
+   (agrandissement 2026-07 : suit le nouveau gabarit de .chromatik-round-card). */
+.chromatik-podium{ max-width:600px; }
 .chromatik-podium-block{ display:flex; flex-direction:column; gap:4px; }
 .chromatik-final-hand{
   display:flex; flex-wrap:wrap; gap:3px; padding:0 6px 2px 34px; /* aligné sous le nom, après le rang */
@@ -2025,6 +2108,8 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
   .chromatik-discard .chromatik-card, .chromatik-hand .chromatik-card{ animation:none; }
   .chromatik-uno-btn{ animation:none; }
   .chromatik-pile.draw.urge .chromatik-card{ animation:none; }
+  .chromatik-pile.draw.urge::after{ animation:none; opacity:.7; }
+  .chromatik-next-round-btn{ animation:none; }
   .chromatik-uno-shout{ animation:none; opacity:1; }
   .chromatik-uno-shout-text{ animation:none; }
 }

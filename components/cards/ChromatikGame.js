@@ -72,8 +72,10 @@ const BOT_UNO_FORGET_RATE = 0.15;
 // .chromatik-hand.crowded/.packed dans globals.css.
 const HAND_CROWDED_AT = 13;
 const HAND_PACKED_AT = 19;
-const COLOR_VAR_MAP = { red: "--p1", green: "--p3", blue: "--ludoB", yellow: "--ludoY" };
-const ROUND_OPTIONS = [5, 7, 10];
+// Vert dédié aux cartes (voir COLOR_VARS dans deck.js pour le détail) — pas
+// --p3, réservé à l'accent général du site.
+const COLOR_VAR_MAP = { red: "--p1", green: "--chromatik-green", blue: "--ludoB", yellow: "--ludoY" };
+const ROUND_OPTIONS = [1, 3, 5];
 // Nombre de dos de carte affichés par l'animation de pioche (voir drawFx) —
 // plafonné pour rester lisible même si une pile de surenchère s'est
 // accumulée à 6, 8 cartes ou plus.
@@ -1073,6 +1075,15 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
             </>
           )}
 
+          {/* Repère de manche (demande explicite "afficher le numéro de la
+              manche pendant la partie") : petit badge en position ABSOLUE
+              (comme le récap ci-dessous) pour ne jamais pousser la table ni
+              déclencher le zoom automatique. Masqué en partie à une seule
+              manche (rien à repérer). */}
+          {roundTarget > 1 && (
+            <div className="chromatik-round-indicator">{t("chromatikRoundOverTitle")} {roundIndex}/{roundTarget}</div>
+          )}
+
           {/* Récap de fin de manche (2026-07, demande explicite) : OVERLAY
               par-dessus la table plutôt qu'un bloc dans le flux normal — à 4
               joueurs surtout, il poussait la table vers le bas et déclenchait
@@ -1122,7 +1133,7 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
                         <button className="btn ghost" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={backToRoom}>🏠 {t("c4BackToRoom")}</button>
                       </>
                     ) : (
-                      <button className="btn" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={nextRound}>{t("chromatikNextRound")}</button>
+                      <button className="btn chromatik-next-round-btn" onClick={nextRound}>{t("chromatikNextRound")}</button>
                     )
                   ) : (
                     <p className="muted">{matchOver ? t("c4RejouerWait") : t("chromatikNextRoundWait")}</p>
