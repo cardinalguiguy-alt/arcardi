@@ -29,6 +29,9 @@
   --acc-goldmines:#F2C94C; /* or — Gold Mines (démineur inversé 2v2) */
   --acc-tenk:#4FD1FF; /* cyan/bleu néon HUD — jeu 10000 (grille circuit) */
   --acc-heist:#FF2E63; /* rouge laser — Le Louvre (escape coop nerveux, ex-Le Casse) */
+  --acc-tupreferes:#FF8A3D; /* orange — Tu préfères ? (duel de dilemmes, code couleur orange/bleu) */
+  --tp-orange:#FF8A3D; /* option A */
+  --tp-blue:#3D9BFF;   /* option B */
   --tenk-blue-deep:#1B6FA8; /* bleu profond — dégradés HUD, contours secondaires */
   --tenk-pink:#FF5FB0; /* rose néon — pips des dés, halo de sélection, accents chauds */
   --tenk-felt:#0B1A3A; /* tapis bleu */
@@ -4467,4 +4470,141 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
 @media (prefers-reduced-motion: reduce){
   .settings-gear-btn:hover .gear-icon{ animation:none; }
   .settings-track-row.playing .settings-track-note{ animation:none; }
+}
+
+/* ==========================================================================
+   TU PRÉFÈRES ? — duel de dilemmes à deux (code couleur orange/bleu).
+   ========================================================================== */
+.tp-panel{ position:relative; overflow:hidden; }
+.tp-panel::before{
+  content:""; position:absolute; inset:0; pointer-events:none; opacity:.5;
+  background:
+    radial-gradient(60% 45% at 12% 0%, rgba(255,138,61,.14), transparent 70%),
+    radial-gradient(60% 45% at 88% 0%, rgba(61,155,255,.14), transparent 70%);
+}
+.tp-panel > *{ position:relative; z-index:1; }
+
+/* --- en-tête joueurs + score --- */
+.tp-header{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:14px; }
+.tp-player{ display:flex; align-items:center; gap:8px; padding:6px 10px; border-radius:14px; border:1.5px solid var(--line); min-width:0; }
+.tp-player.p1{ background:rgba(255,138,61,.08); }
+.tp-player.p2{ background:rgba(61,155,255,.08); }
+.tp-player.me{ box-shadow:0 0 0 2px rgba(255,255,255,.14) inset; }
+.tp-player .tp-avatar{ font-size:22px; line-height:1; }
+.tp-player .tp-name{ font-weight:800; font-size:13px; color:var(--ink); max-width:96px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.tp-score{ font-family:'Bungee',sans-serif; font-size:22px; line-height:1; min-width:26px; text-align:center; }
+.tp-player.p1 .tp-score{ color:var(--tp-orange); }
+.tp-player.p2 .tp-score{ color:var(--tp-blue); }
+.tp-score.bump{ animation:tpBump .6s cubic-bezier(.2,1.4,.4,1); }
+.tp-round-badge{ font-size:11.5px; font-weight:800; letter-spacing:.03em; color:var(--muted); text-align:center; white-space:nowrap; }
+
+/* --- question --- */
+.tp-question{ text-align:center; margin:6px 0 16px; }
+.tp-question-lead{ font-family:'Bungee',sans-serif; font-size:clamp(20px,4.5vw,30px); letter-spacing:.01em;
+  background:linear-gradient(90deg,var(--tp-orange),var(--tp-blue)); -webkit-background-clip:text; background-clip:text; color:transparent; }
+
+/* --- timer --- */
+.tp-timer{ display:inline-block; margin:0 auto 12px; padding:5px 14px; border-radius:99px; font-weight:800; font-size:14px;
+  color:var(--ink); background:rgba(255,255,255,.05); border:1.5px solid var(--line); }
+.tp-round .tp-timer{ display:block; width:max-content; }
+.tp-timer.urgent{ color:#fff; background:rgba(255,59,48,.18); border-color:rgba(255,59,48,.5); animation:tpPulse .8s ease-in-out infinite; }
+
+/* --- cartes d'option --- */
+.tp-options{ display:flex; align-items:stretch; justify-content:center; gap:12px; margin:8px 0 18px; }
+.tp-option{
+  position:relative; flex:1 1 0; min-width:0; min-height:120px; padding:18px 16px 20px;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; text-align:center;
+  border-radius:20px; border:2.5px solid color-mix(in srgb, var(--opt) 55%, transparent);
+  background:linear-gradient(160deg, color-mix(in srgb, var(--opt) 16%, var(--card)), var(--card));
+  color:var(--ink); cursor:pointer; font-family:inherit;
+  transition:transform .16s ease, box-shadow .2s ease, border-color .2s ease, filter .2s ease;
+}
+.tp-option:hover:not(:disabled){ transform:translateY(-3px); box-shadow:0 10px 26px -12px var(--opt); border-color:var(--opt); }
+.tp-option.active{ border-color:var(--opt); box-shadow:0 0 0 3px color-mix(in srgb, var(--opt) 45%, transparent), 0 12px 30px -14px var(--opt); transform:translateY(-2px); }
+.tp-option.locked{ cursor:default; filter:saturate(.5) brightness(.9); }
+.tp-option:disabled{ cursor:default; }
+.tp-option-letter{
+  width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+  font-family:'Bungee',sans-serif; font-size:15px; color:#1a120b; background:var(--opt);
+  box-shadow:0 2px 8px -2px var(--opt);
+}
+.tp-option-text{ font-weight:700; font-size:clamp(14px,2.4vw,17px); line-height:1.25; }
+.tp-or{ align-self:center; flex:0 0 auto; font-family:'Bungee',sans-serif; font-size:13px; color:var(--muted);
+  width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+  border:1.5px solid var(--line); background:var(--bg2); }
+.tp-options-spectate .tp-option{ cursor:default; }
+
+.tp-validate{ max-width:340px; margin-left:auto; margin-right:auto; }
+
+/* --- attente / verrous --- */
+.tp-waiting{ text-align:center; }
+.tp-locked-badge{ display:inline-block; margin:6px 0 10px; padding:8px 18px; border-radius:99px; font-weight:800;
+  color:var(--ink); background:rgba(76,195,138,.14); border:1.5px solid rgba(76,195,138,.5); animation:tpPop .4s ease; }
+.tp-lockdots{ display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:12px; }
+.tp-lockdot{ font-size:12.5px; font-weight:700; color:var(--muted); padding:5px 12px; border-radius:99px; border:1.5px solid var(--line); background:rgba(255,255,255,.03); }
+.tp-lockdot.on{ color:var(--ink); border-color:rgba(76,195,138,.5); background:rgba(76,195,138,.1); }
+.tp-guess-lead{ text-align:center; font-size:15px; margin:2px 0 12px; color:var(--ink); }
+.tp-guess-lead b{ color:var(--tp-blue); }
+
+/* --- révélation --- */
+.tp-reveal-grid{ display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:6px 0 14px; }
+.tp-reveal-side{ padding:12px; border-radius:18px; border:1.5px solid var(--line); background:rgba(255,255,255,.03); text-align:center; }
+.tp-reveal-side.me{ box-shadow:0 0 0 2px rgba(255,255,255,.14) inset; }
+.tp-reveal-head{ display:flex; align-items:center; justify-content:center; gap:6px; margin-bottom:10px; }
+.tp-reveal-head .tp-avatar{ font-size:20px; }
+.tp-reveal-head .tp-name{ font-weight:800; font-size:13px; color:var(--ink); }
+.tp-reveal-card{
+  position:relative; border-radius:16px; padding:16px 12px; margin-bottom:10px;
+  display:flex; flex-direction:column; align-items:center; gap:8px;
+  border:2.5px solid var(--opt); background:linear-gradient(160deg, color-mix(in srgb, var(--opt) 20%, var(--card)), var(--card));
+  transform-origin:center top; animation:tpFlipIn .6s cubic-bezier(.2,.9,.3,1.2) both;
+}
+.tp-guess-result{ font-size:12.5px; font-weight:800; padding:6px 10px; border-radius:99px; display:inline-block; }
+.tp-guess-result.ok{ color:#bff3d5; background:rgba(76,195,138,.16); border:1.5px solid rgba(76,195,138,.5); }
+.tp-guess-result.ko{ color:#ffc9c4; background:rgba(255,59,48,.12); border:1.5px solid rgba(255,59,48,.4); }
+.tp-delta{ margin-top:8px; font-family:'Bungee',sans-serif; font-size:20px; color:var(--acc-president); animation:tpPop .5s ease .3s both; }
+.tp-match-line{ text-align:center; font-weight:800; font-size:15px; padding:10px; border-radius:14px; margin:4px 0 14px; }
+.tp-match-line.same{ color:#bff3d5; background:rgba(76,195,138,.12); border:1.5px solid rgba(76,195,138,.4); }
+.tp-match-line.diff{ color:var(--muted); background:rgba(255,255,255,.03); border:1.5px solid var(--line); }
+
+/* --- fin de partie / suite --- */
+.tp-next{ text-align:center; }
+.tp-next-btn{ display:inline-flex; width:auto; padding:12px 26px; margin-top:0; }
+.tp-over{ text-align:center; }
+.tp-over-banner{ font-family:'Bungee',sans-serif; font-size:clamp(18px,4vw,26px); padding:14px; border-radius:16px; margin-bottom:10px;
+  color:var(--ink); background:rgba(255,255,255,.04); border:1.5px solid var(--line); }
+.tp-over-banner.win{ color:#1a120b; background:linear-gradient(120deg,var(--tp-orange),var(--tp-blue)); border-color:transparent; animation:tpPop .5s ease; }
+.tp-final-score{ font-weight:800; font-size:16px; color:var(--ink); margin-bottom:14px; }
+.tp-btn-row{ display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
+
+/* --- écran de réglages (hôte) --- */
+.tp-setup{ max-width:520px; margin:0 auto; }
+.tp-setup-block{ margin-bottom:16px; }
+.tp-seg{ display:flex; gap:8px; flex-wrap:wrap; }
+.tp-seg-btn{ min-width:52px; padding:9px 14px; border-radius:12px; font-weight:800; font-size:14px; color:var(--ink);
+  background:rgba(255,255,255,.04); border:1.5px solid var(--line); cursor:pointer; font-family:inherit; transition:all .15s ease; }
+.tp-seg-btn:hover{ border-color:var(--tp-orange); }
+.tp-seg-btn.on{ background:linear-gradient(120deg, color-mix(in srgb, var(--tp-orange) 30%, transparent), color-mix(in srgb, var(--tp-blue) 30%, transparent)); border-color:var(--tp-blue); color:#fff; }
+.tp-chip-row{ display:flex; gap:8px; flex-wrap:wrap; }
+.tp-chip{ display:flex; align-items:center; gap:6px; padding:8px 13px; border-radius:99px; font-weight:700; font-size:13px; color:var(--ink);
+  background:rgba(255,255,255,.04); border:2px solid var(--line); cursor:pointer; font-family:inherit; transition:all .15s ease; }
+.tp-chip:hover{ border-color:var(--tp-blue); }
+.tp-chip.on{ border-color:var(--tp-orange); background:rgba(255,138,61,.12); }
+.tp-warn{ margin-top:8px; font-size:12.5px; font-weight:700; color:#ffb4aa; }
+.tp-start{ margin-top:6px; }
+
+@media (max-width:560px){
+  .tp-options{ flex-direction:column; }
+  .tp-or{ margin:-4px auto; }
+  .tp-reveal-grid{ grid-template-columns:1fr; }
+  .tp-player .tp-name{ max-width:70px; }
+}
+
+@keyframes tpBump{ 0%{ transform:scale(1); } 40%{ transform:scale(1.5); } 100%{ transform:scale(1); } }
+@keyframes tpPop{ 0%{ transform:scale(.6); opacity:0; } 60%{ transform:scale(1.12); } 100%{ transform:scale(1); opacity:1; } }
+@keyframes tpPulse{ 0%,100%{ transform:scale(1); } 50%{ transform:scale(1.08); } }
+@keyframes tpFlipIn{ 0%{ transform:rotateX(-88deg); opacity:0; } 100%{ transform:rotateX(0); opacity:1; } }
+
+@media (prefers-reduced-motion: reduce){
+  .tp-score.bump,.tp-locked-badge,.tp-reveal-card,.tp-delta,.tp-over-banner.win,.tp-timer.urgent{ animation:none; }
 }

@@ -26,6 +26,7 @@ import PresidentGame from "@/components/president/PresidentGame";
 import PetitBacGame from "@/components/petitbac/PetitBacGame";
 import YahtzeeGame from "@/components/yahtzee/YahtzeeGame";
 import TenkGame from "@/components/tenk/TenkGame";
+import TuPreferesGame from "@/components/tupreferes/TuPreferesGame";
 import DoorStage from "@/components/DoorStage";
 import CurtainStage from "@/components/CurtainStage";
 import FlashStage from "@/components/FlashStage";
@@ -59,9 +60,10 @@ const GAME_META = {
   president: { icon: "🎩", accent: "--acc-president", nameKey: "namePresident", tagKey: "tagPresident", stage: "door" },
   tenk:      { icon: "🎰", accent: "--acc-tenk",      nameKey: "nameTenk",    tagKey: "tagTenk", stage: "door" },
   petitbac: { icon: "✏️", accent: "--acc-petitbac", nameKey: "namePetitBac", tagKey: "tagPetitBac", minPlayers: 2, stage: "flash" },
+  tupreferes: { icon: "🤔", accent: "--acc-tupreferes", nameKey: "nameTuPreferes", tagKey: "tagTuPreferes", minPlayers: 2, stage: "curtain" },
 };
 const STAGE_COMPONENT = { door: DoorStage, curtain: CurtainStage, flash: FlashStage, video: VideoStage };
-const GAME_ORDER = ["quiz", "wordle", "worldle", "petitbac", "connect4", "ludo", "chromatik", "goldmines", "president", "yahtzee", "tenk", "piano", "echoes", "diapason", "heist"];
+const GAME_ORDER = ["quiz", "wordle", "worldle", "petitbac", "tupreferes", "connect4", "ludo", "chromatik", "goldmines", "president", "yahtzee", "tenk", "piano", "echoes", "diapason", "heist"];
 
 // Victoires/Défaites, en discret (demande 2026-07) : remplace les deux chips
 // "✓N/✕N" auparavant affichées EN PERMANENCE sur chaque ligne joueur du
@@ -821,6 +823,9 @@ export default function Room() {
                   )}
                   {room.current_game === "petitbac" && (
                     <PetitBacGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
+                  )}
+                  {room.current_game === "tupreferes" && (
+                    <TuPreferesGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
                   )}
                 </StageComponent>
                 );
