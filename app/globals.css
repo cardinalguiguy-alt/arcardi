@@ -2276,12 +2276,14 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
 .gm-diff-btn-name{ font-weight:800; font-size:14px; }
 .gm-diff-btn-desc{ font-size:11.5px; line-height:1.35; color:var(--muted); }
 
-/* Badge du niveau du bot affiché à côté de son nom pendant la partie. */
+/* Étiquette du niveau du bot, épinglée en haut-centre de sa carte de mineur —
+   toujours visible pendant la partie (hors du flux du nom, donc jamais rognée). */
 .gm-bot-diff{
-  display:inline-block; margin-left:6px; padding:1px 7px; border-radius:99px;
+  position:absolute; top:-11px; left:50%; transform:translateX(-50%); z-index:4; white-space:nowrap;
+  padding:1px 8px; border-radius:99px;
   font-family:'Space Mono'; font-size:10px; font-weight:800; letter-spacing:.02em;
-  vertical-align:middle; border:1px solid rgba(255,255,255,.18); color:#241c14;
-  background:#e8c357;
+  border:1px solid rgba(0,0,0,.25); color:#241c14; background:#e8c357;
+  box-shadow:0 2px 5px rgba(0,0,0,.35);
 }
 .gm-bot-diff.easy{ background:#9fe06a; }
 .gm-bot-diff.medium{ background:#e8c357; }

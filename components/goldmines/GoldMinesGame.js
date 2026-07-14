@@ -599,11 +599,13 @@ export default function GoldMinesGame({ room, me, isHost, players, t, lang, onFi
               + (s.id === me.id ? " me" : "")
               + (winner === s.id ? " won" : "")}>
               <span className="gm-miner-avatar">{s.avatar}</span>
+              {s.isBot && DIFF_META[botDifficulty] && (
+                <span className={"gm-bot-diff " + botDifficulty} title={t("gmDifficultyLabel")}>
+                  {DIFF_META[botDifficulty].icon} {t(DIFF_META[botDifficulty].key)}
+                </span>
+              )}
               <span className="gm-miner-name">
                 {s.username}
-                {s.isBot && DIFF_META[botDifficulty] && (
-                  <span className={"gm-bot-diff " + botDifficulty}>{DIFF_META[botDifficulty].icon} {t(DIFF_META[botDifficulty].key)}</span>
-                )}
                 {activeSeat?.id === s.id && s.isBot && !winner && (
                   <span className="pres-think" aria-hidden="true"><i>.</i><i className="d2">.</i><i className="d3">.</i></span>
                 )}
