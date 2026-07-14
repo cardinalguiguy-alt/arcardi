@@ -106,6 +106,11 @@ export default function TuPreferesGame({ room, me, isHost, players, t, lang, onF
   const savedResultRef = useRef(false);
   const timers = useRef([]);          // timeouts génériques
   const phaseTimerRef = useRef(null); // timer d'arbitrage de phase (hôte)
+  // Filet de sécurité de hostGoReveal (correctif 2026-07, audit "double
+  // révélation") : référence DÉDIÉE (au lieu de `timers.current`, qui n'est
+  // vidé qu'au démontage) pour pouvoir l'annuler explicitement dès que
+  // hostComputeReveal calcule réellement — voir hostGoReveal/hostComputeReveal.
+  const revealFallbackTimerRef = useRef(null);
 
   useEffect(() => { stateRef.current = { p1, p2, settings, round, scores, question }; }, [p1, p2, settings, round, scores, question]);
   useEffect(() => { myRef.current = { choice: myChoice, guess: myGuess }; }, [myChoice, myGuess]);
@@ -222,6 +227,7 @@ export default function TuPreferesGame({ room, me, isHost, players, t, lang, onF
     return () => {
       timers.current.forEach(clearTimeout);
       clearPhaseTimer();
+      clearTimeout(revealFallbackTimerRef.current);
       supabase.removeChannel(ch);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -240,6 +246,12 @@ export default function TuPreferesGame({ room, me, isHost, players, t, lang, onF
   function applyRoundStart(payload) {
     clearPhaseTimer();
     computedRef.current = false;
+    // Défensif : si une nouvelle manche démarre pendant que le filet de
+    // sécurité de l'ancienne révélation était encore en vol (cas rare, ex.
+    // hôte qui enchaîne très vite sur "Manche suivante"), on l'annule ici —
+    // sinon il se déclencherait plus tard avec des valeurs qui n'ont plus
+    // rien à voir avec CETTE manche (voir hostGoReveal/hostComputeReveal).
+    clearTimeout(revealFallbackTimerRef.current);
     hostRef.current = { phase: "choose", lockChoose: { p1: false, p2: false }, lockGuess: { p1: false, p2: false }, values: { p1: null, p2: null } };
     setP1(payload.p1 || stateRef.current.p1);
     setP2(payload.p2 || stateRef.current.p2);
@@ -330,11 +342,25 @@ export default function TuPreferesGame({ room, me, isHost, players, t, lang, onF
     hostRef.current.phase = "reveal";
     clearPhaseTimer();
     hostRef.current.values = { p1: null, p2: null };
+    // Nouveau cycle de révélation : (ré)ouvre explicitement le verrou de
+    // calcul ici, jamais via un délai fixe indépendant (voir le correctif
+    // ci-dessous sur hostComputeReveal — c'était la cause de la double
+    // révélation : l'ancien reset à 1500ms rouvrait le verrou AVANT que ce
+    // filet de sécurité de 2200ms ait eu une chance de s'annuler).
+    computedRef.current = false;
     channelRef.current?.send({ type: "broadcast", event: "reveal_request", payload: {} });
     // Filet de sécurité : si un joueur est hors ligne et ne renvoie pas ses
     // valeurs, l'hôte complète au hasard après un court délai et calcule.
-    const t = setTimeout(() => hostComputeReveal(true), 2200);
-    timers.current.push(t);
+    // Référence DÉDIÉE (pas `timers.current`) pour pouvoir l'annuler
+    // explicitement dès que la révélation aboutit par le chemin rapide (voir
+    // hostComputeReveal) : sans ça, ce timer se déclenchait QUAND MÊME ~2,2s
+    // après une révélation déjà résolue normalement (chemin de loin le plus
+    // fréquent), et recalculait/rediffusait une SECONDE fois la même manche
+    // — score doublé, ou pire, "reveal" fantôme injecté dans la manche
+    // suivante si elle avait déjà démarré (bug corrigé au zip 105, trouvé et
+    // reproduit lors de l'audit).
+    clearTimeout(revealFallbackTimerRef.current);
+    revealFallbackTimerRef.current = setTimeout(() => hostComputeReveal(true), 2200);
   }
 
   function hostOnValues({ slot, choice, guess }) {
@@ -348,6 +374,11 @@ export default function TuPreferesGame({ room, me, isHost, players, t, lang, onF
     if (computedRef.current) return;
     const v = hostRef.current.values;
     if (!fillMissing && (!v.p1 || !v.p2)) return;
+    // La révélation va bel et bien être calculée MAINTENANT (chemin rapide
+    // via les deux valeurs, ou filet de sécurité) : plus besoin du filet de
+    // sécurité, quelle que soit la branche qui a déclenché ce calcul —
+    // l'annuler ici (idempotent si c'est déjà lui qui vient de se déclencher).
+    clearTimeout(revealFallbackTimerRef.current);
     const vp1 = v.p1 || { choice: randChoice(), guess: randChoice() };
     const vp2 = v.p2 || { choice: randChoice(), guess: randChoice() };
     computedRef.current = true;
@@ -372,7 +403,12 @@ export default function TuPreferesGame({ room, me, isHost, players, t, lang, onF
         scoresBefore: before, scores: after, gameover, winnerSlot,
       },
     });
-    setTimeout(() => { computedRef.current = false; }, 1500);
+    // (correctif 2026-07) : computedRef ne se réinitialise plus ici via un
+    // délai fixe indépendant du cycle — c'est hostGoReveal, au début du
+    // PROCHAIN cycle de révélation, qui le remet à false. Un reset basé sur
+    // un simple timeout rouvrait la porte au filet de sécurité de 2200ms
+    // alors que la manche était déjà résolue, provoquant une double
+    // révélation quasi systématique (voir commentaire dans hostGoReveal).
   }
 
   // Relance propre de la manche courante (hôte qui recharge en phase secrète).

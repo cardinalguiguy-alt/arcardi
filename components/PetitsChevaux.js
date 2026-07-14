@@ -527,6 +527,31 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
   const moveTimerRef = useRef(null);   // couperet du minuteur de tour (hôte)
   const rollAnimTimerRef = useRef(null);
   const rollAnimIvRef = useRef(null);
+  // Verrou anti-double-action (correctif 2026-07, audit) : rollDice/pickToken/
+  // requestSpin/requestSpare ne s'appuient QUE sur l'état React local (dice,
+  // pendingMystery, pendingCapture) pour décider si une action est déjà en
+  // cours — or cet état ne se met à jour qu'après l'aller-retour Supabase du
+  // propre broadcast "state" de l'action (broadcast.self=true), jamais de
+  // façon synchrone au clic. Un double-clic (ou un Espace + clic) plus rapide
+  // que cet aller-retour (souvent quelques dizaines à ~200 ms) pouvait donc
+  // envoyer une SECONDE action avant que la première n'ait mis à jour l'état
+  // local, et l'hôte l'arbitrait alors sur la base d'un `stateRef` pas encore
+  // rafraîchi — au mieux un clic silencieusement perdu, jamais une triche
+  // exploitable, mais une action "avalée" sans retour visuel. Le verrou se
+  // pose à l'ENVOI (synchrone, avant tout aller-retour) et se lève dès que le
+  // prochain "state" (ou "match_start") est appliqué — plus un filet de
+  // sécurité (1,5 s) si jamais aucun état ne revenait (message perdu).
+  const actionLockRef = useRef(false);
+  const actionLockTimerRef = useRef(null);
+  function lockAction() {
+    actionLockRef.current = true;
+    clearTimeout(actionLockTimerRef.current);
+    actionLockTimerRef.current = setTimeout(() => { actionLockRef.current = false; }, 1500);
+  }
+  function unlockAction() {
+    actionLockRef.current = false;
+    clearTimeout(actionLockTimerRef.current);
+  }
 
   useEffect(() => {
     stateRef.current = { tokens, order, turnIdx, dice, movablePlan, effects, winner, pendingMystery, pendingCapture };
@@ -591,6 +616,10 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
   }, [selectedDie, dice?.rollKey, movablePlan]);
 
   function applyBroadcastState(payload) {
+    // Le prochain "state" reçu (le mien ou celui d'un autre) prouve que
+    // l'arbitre a bien traité une action et que l'état local est frais :
+    // libère le verrou anti-double-action (voir actionLockRef ci-dessus).
+    unlockAction();
     setTokens(payload.tokens);
     setTurnIdx(payload.turnIdx);
     setDice(payload.dice || null);
@@ -618,6 +647,7 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
     channelRef.current = ch;
 
     ch.on("broadcast", { event: "match_start" }, ({ payload }) => {
+      unlockAction();
       setOrder(payload.order);
       setColorOfPlayer(payload.colorOfPlayer);
       setTokens(emptyTokens());
@@ -744,6 +774,7 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
       clearTimeout(moveTimerRef.current);
       clearTimeout(rollAnimTimerRef.current);
       clearInterval(rollAnimIvRef.current);
+      clearTimeout(actionLockTimerRef.current);
       supabase.removeChannel(ch);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1239,6 +1270,8 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
 
   function rollDice() {
     if (!isMyTurn || dice !== null || pendingMystery || pendingCapture) return;
+    if (actionLockRef.current) return; // double-clic/Espace trop rapide : ignoré (voir actionLockRef)
+    lockAction();
     channelRef.current?.send({ type: "broadcast", event: "roll_attempt", payload: { by: me.id } });
   }
   // Options de dé permettant de jouer CE pion précis, dans l'état actuel du
@@ -1268,9 +1301,11 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
   function pickToken(idx) {
     if (!isMyTurn || dice === null || pendingMystery || pendingCapture) return;
     if (rollAnim && rollAnim.phase === "rolling") return; // laisse les dés s'immobiliser
+    if (actionLockRef.current) return; // double-clic trop rapide sur un pion : ignoré
     const opts = dieOptionsFor(idx);
     if (!opts.length) return;
     const die = opts.includes(selectedDie) ? selectedDie : opts[0];
+    lockAction();
     channelRef.current?.send({ type: "broadcast", event: "move_attempt", payload: { by: me.id, tokenIndex: idx, die } });
   }
   // Déclenche la roue (clic sur la roue/le bouton, ou barre d'espace) —
@@ -1278,6 +1313,8 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
   function requestSpin() {
     if (!pendingMystery || pendingMystery.spin || pendingCapture) return;
     if (colorOfPlayer[me.id] !== pendingMystery.color) return;
+    if (actionLockRef.current) return;
+    lockAction();
     channelRef.current?.send({ type: "broadcast", event: "spin_attempt", payload: { by: me.id } });
   }
   // Décision "Épargner ?" (2026-07) : seul le propriétaire du pion arrivé
@@ -1286,6 +1323,8 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
   function requestSpare(spare) {
     if (!pendingCapture) return;
     if (colorOfPlayer[me.id] !== pendingCapture.color) return;
+    if (actionLockRef.current) return;
+    lockAction();
     channelRef.current?.send({ type: "broadcast", event: "spare_attempt", payload: { by: me.id, spare } });
   }
 
@@ -1531,9 +1570,19 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
           )}
 
           {/* Révélation de case mystère : pop central bref, aux couleurs du
-              jeu — purement décoratif (le statut texte dit la même chose). */}
+              jeu — purement décoratif (le statut texte dit la même chose).
+              Traitement renforcé pour les 4 effets EXTRÊMES (2026-07, demande
+              créative "plus de poids") : amplitude plus marquée + onde de
+              choc colorée à la teinte propre de l'effet (mysteryInfo.swatch,
+              la même que sa tranche sur la roue), pour que la rareté d'un
+              gros bonus/malus se RESSENTE, pas seulement se lise. */}
           {mysteryMatch && !winner && !pendingMystery && (
-            <div className="ludo-mystery-pop" key={lastEvent + "-" + (lastMoved ? lastMoved.tokenIdx : "")} aria-hidden="true">
+            <div
+              className={"ludo-mystery-pop" + (mysteryInfo?.tier === "extreme" ? " extreme" : "")}
+              key={lastEvent + "-" + (lastMoved ? lastMoved.tokenIdx : "")}
+              style={mysteryInfo?.tier === "extreme" ? { "--pop-color": mysteryInfo.swatch } : undefined}
+              aria-hidden="true"
+            >
               <span className="ludo-mystery-pop-text">{mysteryInfo ? mysteryInfo.pop : "🎁"}</span>
             </div>
           )}
