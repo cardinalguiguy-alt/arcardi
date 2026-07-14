@@ -74,6 +74,29 @@ export default function TuPreferesGame({ room, me, isHost, players, t, lang, onF
   const [cfg, setCfg] = useState(DEFAULT_SETTINGS);
   const [pick, setPick] = useState([]); // ids des 2 duellistes si >2 joueurs
 
+  // Liste "indésirables" de l'hôte : dilemmes marqués 🚩 pour suppression
+  // ultérieure. Stockée en localStorage (côté hôte), consultable/copiable —
+  // aucune table Supabase (Guillaume copie la liste puis me demande de les
+  // retirer de lib/tuPreferesQuestions.js).
+  const [flagged, setFlagged] = useState([]);
+  const [flagOpen, setFlagOpen] = useState(false);
+  const [flagCopied, setFlagCopied] = useState(false);
+  const FLAG_KEY = "arcardi_tp_flagged";
+  useEffect(() => {
+    try { const raw = localStorage.getItem(FLAG_KEY); if (raw) setFlagged(JSON.parse(raw)); } catch (e) {}
+  }, []);
+  function saveFlagged(list) { setFlagged(list); try { localStorage.setItem(FLAG_KEY, JSON.stringify(list)); } catch (e) {} }
+  function toggleFlag() {
+    if (!question) return;
+    if (flagged.some(f => f.id === question.id)) saveFlagged(flagged.filter(f => f.id !== question.id));
+    else saveFlagged([...flagged, { id: question.id, cat: question.cat, fr: question.fr.join(" / "), en: question.en.join(" / ") }]);
+  }
+  function clearFlags() { saveFlagged([]); }
+  function copyFlags() {
+    const text = flagged.map(f => `${f.id} [${f.cat}] — ${f.fr}`).join("\n");
+    try { navigator.clipboard.writeText(text); setFlagCopied(true); setTimeout(() => setFlagCopied(false), 1600); } catch (e) {}
+  }
+
   const channelRef = useRef(null);
   const stateRef = useRef({});
   const myRef = useRef({ choice: null, guess: null });
@@ -442,25 +465,7 @@ export default function TuPreferesGame({ room, me, isHost, players, t, lang, onF
   }, [players.length]);
 
   // ============================== RENDU ====================================
-  const OPT_COLORS = ["--tp-orange", "--tp-blue"];
   const optText = (side) => (question ? (question[lang] || question.fr)[side] : "");
-
-  function OptionCard({ side, active, disabled, onClick, badge }) {
-    const cvar = OPT_COLORS[side];
-    return (
-      <button
-        type="button"
-        className={"tp-option" + (active ? " active" : "") + (disabled ? " locked" : "")}
-        style={{ "--opt": `var(${cvar})` }}
-        onClick={() => { if (disabled) return; playGameCardClick(); onClick(); }}
-        disabled={disabled}
-      >
-        <span className="tp-option-letter">{side === 0 ? "A" : "B"}</span>
-        <span className="tp-option-text">{optText(side)}</span>
-        {badge && <span className="tp-option-badge">{badge}</span>}
-      </button>
-    );
-  }
 
   const slot = mySlot();
   const opp = slot === "p1" ? p2 : slot === "p2" ? p1 : null;
@@ -468,6 +473,8 @@ export default function TuPreferesGame({ room, me, isHost, players, t, lang, onF
   const iLockedGuess = slot ? locks.guess[slot] : false;
   const oppLockedChoose = oppSlot() ? locks.choose[oppSlot()] : false;
   const oppLockedGuess = oppSlot() ? locks.guess[oppSlot()] : false;
+  const isFlagged = question ? flagged.some(f => f.id === question.id) : false;
+  const inRound = !!question && (phase === "choose" || phase === "guess" || phase === "reveal" || phase === "over");
 
   let content;
 
@@ -553,9 +560,9 @@ export default function TuPreferesGame({ room, me, isHost, players, t, lang, onF
           !iLockedChoose ? (
             <>
               <div className="tp-options">
-                <OptionCard side={0} active={sel === 0} onClick={() => setSel(0)} />
+                <OptionCard side={0} active={sel === 0} onPick={() => setSel(0)} text={optText(0)} />
                 <div className="tp-or">{t("tpOr")}</div>
-                <OptionCard side={1} active={sel === 1} onClick={() => setSel(1)} />
+                <OptionCard side={1} active={sel === 1} onPick={() => setSel(1)} text={optText(1)} />
               </div>
               <button className="btn tp-validate" disabled={sel === null} onClick={lockChoice}>🔒 {t("tpLockChoice")}</button>
             </>
@@ -569,9 +576,9 @@ export default function TuPreferesGame({ room, me, isHost, players, t, lang, onF
         ) : (
           <div className="tp-waiting">
             <div className="tp-options tp-options-spectate">
-              <OptionCard side={0} disabled onClick={() => {}} />
+              <OptionCard side={0} disabled onPick={() => {}} text={optText(0)} />
               <div className="tp-or">{t("tpOr")}</div>
-              <OptionCard side={1} disabled onClick={() => {}} />
+              <OptionCard side={1} disabled onPick={() => {}} text={optText(1)} />
             </div>
             <p className="muted">👀 {t("tpSpectateChoose")}</p>
             <TpLockDots a={locks.choose.p1} b={locks.choose.p2} an={p1?.username} bn={p2?.username} />
@@ -593,9 +600,9 @@ export default function TuPreferesGame({ room, me, isHost, players, t, lang, onF
             <>
               <p className="tp-guess-lead">🔮 {t("tpGuessLead")} <b>{opp?.username}</b>{t("tpGuessTail")}</p>
               <div className="tp-options">
-                <OptionCard side={0} active={sel === 0} onClick={() => setSel(0)} />
+                <OptionCard side={0} active={sel === 0} onPick={() => setSel(0)} text={optText(0)} />
                 <div className="tp-or">{t("tpOr")}</div>
-                <OptionCard side={1} active={sel === 1} onClick={() => setSel(1)} />
+                <OptionCard side={1} active={sel === 1} onPick={() => setSel(1)} text={optText(1)} />
               </div>
               <button className="btn tp-validate" disabled={sel === null} onClick={lockGuess}>🔒 {t("tpLockGuess")}</button>
             </>
@@ -665,12 +672,77 @@ export default function TuPreferesGame({ room, me, isHost, players, t, lang, onF
   return (
     <div className="panel tp-panel" style={{ maxWidth: "min(880px, 96vw)" }}>
       <h1>{t("tpTitle")}</h1>
+
+      {isHost && (
+        <div className="tp-flagbar">
+          {inRound && (
+            <button type="button" className={"tp-flag-btn" + (isFlagged ? " on" : "")} onClick={toggleFlag} title={t("tpFlagHint")}>
+              {isFlagged ? "🚩" : "⚐"}
+            </button>
+          )}
+          <button type="button" className="tp-flag-list-btn" onClick={() => setFlagOpen(o => !o)} title={t("tpFlagListTitle")}>
+            🚩 {flagged.length}
+          </button>
+        </div>
+      )}
+
       <Crossfade id={phase + (reveal ? "-r" : "")}>{content}</Crossfade>
+
+      {isHost && flagOpen && (
+        <div className="tp-flag-panel">
+          <div className="tp-flag-panel-head">
+            <b>🚩 {t("tpFlagListTitle")}</b>
+            <button type="button" className="tp-flag-close" onClick={() => setFlagOpen(false)}>✕</button>
+          </div>
+          {flagged.length === 0 ? (
+            <p className="muted" style={{ margin: "10px 0" }}>{t("tpFlagEmpty")}</p>
+          ) : (
+            <>
+              <ul className="tp-flag-ul">
+                {flagged.map(f => (
+                  <li key={f.id}>
+                    <button type="button" className="tp-flag-remove" onClick={() => saveFlagged(flagged.filter(x => x.id !== f.id))} title={t("tpFlagRemove")}>✕</button>
+                    <span className="tp-flag-id">{f.id}</span> {f.fr}
+                  </li>
+                ))}
+              </ul>
+              <div className="tp-flag-actions">
+                <button type="button" className="btn" style={{ width: "auto", marginTop: 0 }} onClick={copyFlags}>{flagCopied ? "✅ " + t("tpFlagCopied") : "📋 " + t("tpFlagCopy")}</button>
+                <button type="button" className="btn ghost" style={{ width: "auto", marginTop: 0 }} onClick={clearFlags}>🗑 {t("tpFlagClear")}</button>
+              </div>
+              <p className="tp-flag-note">{t("tpFlagNote")}</p>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
 /* --------------------------- sous-composants ---------------------------- */
+const OPT_COLORS = ["--tp-orange", "--tp-blue"];
+
+// Carte d'option — définie AU NIVEAU MODULE (jamais dans le corps du jeu) :
+// une fonction redéfinie à chaque rendu serait vue par React comme un type
+// neuf et remonterait les boutons à chaque tick du chrono (toutes les
+// 200 ms), ce qui rendait la sélection instable/inopérante. `onPick` est
+// appelé AVANT le son, pour qu'un éventuel souci audio ne bloque jamais le
+// clic.
+function OptionCard({ side, active, disabled, onPick, text }) {
+  return (
+    <button
+      type="button"
+      className={"tp-option" + (active ? " active" : "") + (disabled ? " locked" : "")}
+      style={{ "--opt": `var(${OPT_COLORS[side]})` }}
+      onClick={() => { if (disabled) return; onPick(); try { playGameCardClick(); } catch (e) {} }}
+      disabled={disabled}
+    >
+      <span className="tp-option-letter">{side === 0 ? "A" : "B"}</span>
+      <span className="tp-option-text">{text}</span>
+    </button>
+  );
+}
+
 function TpHeader({ p1, p2, scores, round, target, slot, t, animated }) {
   return (
     <div className="tp-header">

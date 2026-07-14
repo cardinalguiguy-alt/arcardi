@@ -4593,6 +4593,28 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
 .tp-warn{ margin-top:8px; font-size:12.5px; font-weight:700; color:#ffb4aa; }
 .tp-start{ margin-top:6px; }
 
+/* --- flag "indésirables" (hôte) --- */
+.tp-flagbar{ position:absolute; top:12px; right:14px; z-index:3; display:flex; gap:6px; align-items:center; }
+.tp-flag-btn,.tp-flag-list-btn{ font-family:inherit; cursor:pointer; border-radius:99px; border:1.5px solid var(--line);
+  background:rgba(255,255,255,.05); color:var(--muted); transition:all .15s ease; }
+.tp-flag-btn{ width:30px; height:30px; font-size:14px; line-height:1; display:flex; align-items:center; justify-content:center; padding:0; }
+.tp-flag-btn:hover{ border-color:#ff5b4d; color:#ffb4aa; }
+.tp-flag-btn.on{ border-color:#ff5b4d; background:rgba(255,59,48,.16); color:#fff; }
+.tp-flag-list-btn{ padding:5px 11px; font-size:12px; font-weight:800; }
+.tp-flag-list-btn:hover{ border-color:#ff5b4d; color:var(--ink); }
+.tp-flag-panel{ position:absolute; top:50px; right:14px; z-index:6; width:min(360px,86vw); max-height:70%; overflow:auto;
+  background:var(--card2); border:1.5px solid var(--line); border-radius:16px; padding:14px; box-shadow:0 18px 44px -16px rgba(0,0,0,.7); }
+.tp-flag-panel-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; font-size:14px; color:var(--ink); }
+.tp-flag-close{ width:26px; height:26px; border-radius:8px; border:1.5px solid var(--line); background:transparent; color:var(--muted); cursor:pointer; }
+.tp-flag-close:hover{ color:var(--ink); border-color:var(--ink); }
+.tp-flag-ul{ list-style:none; padding:0; margin:0 0 10px; display:flex; flex-direction:column; gap:6px; }
+.tp-flag-ul li{ font-size:12.5px; line-height:1.35; color:var(--ink); padding:6px 8px; border-radius:10px; background:rgba(255,255,255,.04); border:1px solid var(--line); }
+.tp-flag-remove{ float:right; margin-left:8px; width:20px; height:20px; border-radius:6px; border:1px solid var(--line); background:transparent; color:var(--muted); cursor:pointer; font-size:11px; line-height:1; }
+.tp-flag-remove:hover{ color:#ffb4aa; border-color:#ff5b4d; }
+.tp-flag-id{ font-family:'Space Mono',monospace; font-size:11px; color:var(--tp-orange); font-weight:700; }
+.tp-flag-actions{ display:flex; gap:8px; flex-wrap:wrap; }
+.tp-flag-note{ margin-top:10px; font-size:11.5px; color:var(--muted); }
+
 @media (max-width:560px){
   .tp-options{ flex-direction:column; }
   .tp-or{ margin:-4px auto; }
