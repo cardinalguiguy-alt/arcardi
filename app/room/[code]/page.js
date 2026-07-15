@@ -28,6 +28,7 @@ import YahtzeeGame from "@/components/yahtzee/YahtzeeGame";
 import TenkGame from "@/components/tenk/TenkGame";
 import TuPreferesGame from "@/components/tupreferes/TuPreferesGame";
 import ChessGame from "@/components/chess/ChessGame";
+import RamiGame from "@/components/rami/RamiGame";
 import GameErrorBoundary from "@/components/GameErrorBoundary";
 import DoorStage from "@/components/DoorStage";
 import CurtainStage from "@/components/CurtainStage";
@@ -64,9 +65,10 @@ const GAME_META = {
   petitbac: { icon: "✏️", accent: "--acc-petitbac", nameKey: "namePetitBac", tagKey: "tagPetitBac", minPlayers: 2, stage: "flash" },
   tupreferes: { icon: "🤔", accent: "--acc-tupreferes", nameKey: "nameTuPreferes", tagKey: "tagTuPreferes", minPlayers: 2, stage: "curtain" },
   chess:    { icon: "♟️", accent: "--acc-chess",     nameKey: "nameChess",   tagKey: "tagChess", minPlayers: 2, maxPlayers: 2, stage: "door" },
+  rami:     { icon: "🃏", accent: "--acc-rami",      nameKey: "nameRami",    tagKey: "tagRami", minPlayers: 2, maxPlayers: 6, stage: "door" },
 };
 const STAGE_COMPONENT = { door: DoorStage, curtain: CurtainStage, flash: FlashStage, video: VideoStage };
-const GAME_ORDER = ["quiz", "wordle", "worldle", "petitbac", "tupreferes", "connect4", "chess", "ludo", "chromatik", "goldmines", "president", "yahtzee", "tenk", "piano", "echoes", "diapason", "heist"];
+const GAME_ORDER = ["quiz", "wordle", "worldle", "petitbac", "tupreferes", "connect4", "chess", "ludo", "chromatik", "president", "rami", "goldmines", "yahtzee", "tenk", "piano", "echoes", "diapason", "heist"];
 
 // Victoires/Défaites, en discret (demande 2026-07) : remplace les deux chips
 // "✓N/✕N" auparavant affichées EN PERMANENCE sur chaque ligne joueur du
@@ -970,6 +972,9 @@ export default function Room() {
                   )}
                   {room.current_game === "chess" && (
                     <ChessGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} solo={soloChess} />
+                  )}
+                  {room.current_game === "rami" && (
+                    <RamiGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
                   )}
                 </StageComponent>
                 </GameErrorBoundary>
