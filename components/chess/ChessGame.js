@@ -15,8 +15,12 @@ const CLOCK_SEC = 10 * 60; // pendule par défaut : 10 min (sans incrément en v
 
 // Glyphes Unicode des pièces (rendu CSS "vrai plateau", cohérent avec la
 // maquette validée). Blancs et noirs coloriés en CSS (voir .chess-piece).
+// On utilise les glyphes SOLIDES pour les DEUX camps : les pièces blanches
+// sont ainsi "pleines" (coloriées en ivoire + liseré sombre côté CSS), et non
+// plus des contours creux. La distinction blanc/noir se fait uniquement par la
+// couleur CSS (voir .chess-piece.w / .chess-piece.b).
 const GLYPH = {
-  w: { k: "♔", q: "♕", r: "♖", b: "♗", n: "♘", p: "♙" },
+  w: { k: "♚", q: "♛", r: "♜", b: "♝", n: "♞", p: "♟" },
   b: { k: "♚", q: "♛", r: "♜", b: "♝", n: "♞", p: "♟" },
 };
 const FILES = "abcdefgh";
@@ -597,7 +601,7 @@ export default function ChessGame({ room, me, isHost, players, t, lang, onFinish
                     onClick={() => onSquareClick(sq)}
                     style={{ cursor: isMyTurn && (cell?.color === myColor || target) ? "pointer" : "default" }}
                   >
-                    {cell && <span className={"chess-piece " + cell.color}>{GLYPH[cell.color][cell.type]}</span>}
+                    {cell && <span className={"chess-piece " + cell.color + " t-" + cell.type}>{GLYPH[cell.color][cell.type]}</span>}
                     {target && !cell && <span className="chess-dot" />}
                     {isCap && <span className="chess-ring" />}
                   </div>

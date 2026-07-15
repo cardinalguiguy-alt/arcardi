@@ -5341,16 +5341,29 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
     linear-gradient(160deg,#96682f 0%,#6e4a20 42%,#7f5526 68%,#563a18 100%) border-box;
   box-shadow:inset 0 0 0 2px rgba(0,0,0,.6), inset 0 4px 12px rgba(0,0,0,.5), 0 16px 40px -14px rgba(0,0,0,.7);
 }
-.chess-grid{ position:absolute; inset:0; display:grid; grid-template-columns:repeat(8,1fr); grid-template-rows:repeat(8,1fr); }
+.chess-grid{ position:absolute; inset:0; display:grid; grid-template-columns:repeat(8,1fr); grid-template-rows:repeat(8,1fr); box-shadow:0 0 0 2px #0B0704; }
 .chess-sq{ position:relative; display:flex; align-items:center; justify-content:center; }
-.chess-sq.l{ background:#E8CFA6; }
-.chess-sq.d{ background:#8A5A32; }
+.chess-sq.l{ background:linear-gradient(145deg,#EAD3AB,#E0C79A); box-shadow:inset 1px 1px 0 rgba(255,255,255,.18), inset -1px -1px 2px rgba(0,0,0,.13); }
+.chess-sq.d{ background:linear-gradient(145deg,#916034,#7F5024); box-shadow:inset 1px 1px 0 rgba(255,255,255,.09), inset -1px -1px 2px rgba(0,0,0,.22); }
 .chess-sq.last::before{ content:''; position:absolute; inset:0; background:rgba(255,209,102,.26); }
 .chess-sq.sel::before{ content:''; position:absolute; inset:0; background:rgba(255,209,102,.5); }
 .chess-sq.check::before{ content:''; position:absolute; inset:0; background:rgba(214,60,40,.5); }
-.chess-piece{ position:relative; font-size:min(8vw,44px); line-height:1; pointer-events:none; }
-.chess-piece.w{ color:#FBF3E3; text-shadow:0 2px 2px rgba(0,0,0,.55), 0 0 1px rgba(0,0,0,.4); }
-.chess-piece.b{ color:#241206; text-shadow:0 1px 0 rgba(255,255,255,.14); }
+.chess-piece{ position:relative; font-size:min(9.6vw,57px); line-height:1; pointer-events:none; }
+.chess-piece.w{
+  color:#F4EAD2;
+  text-shadow:
+    1px 0 0 #3a2412, -1px 0 0 #3a2412, 0 1px 0 #3a2412, 0 -1px 0 #3a2412,
+    1px 1px 0 #3a2412, -1px -1px 0 #3a2412, 1px -1px 0 #3a2412, -1px 1px 0 #3a2412,
+    0 3px 4px rgba(0,0,0,.42);
+}
+.chess-piece.b{
+  color:#1B0F05;
+  text-shadow:0 1px 0 rgba(255,255,255,.16), 0 3px 4px rgba(0,0,0,.4);
+}
+/* Le glyphe du fou est naturellement plus fin : on l'agrandit un peu et on
+   épaissit légèrement son tracé (text-stroke dans sa propre couleur) pour
+   qu'il ne paraisse pas "maigre" à côté des autres pièces. */
+.chess-piece.t-b{ font-size:min(10.4vw,62px); -webkit-text-stroke:1px currentColor; }
 .chess-dot{ position:absolute; width:26%; height:26%; border-radius:50%; background:rgba(20,10,0,.34); pointer-events:none; }
 .chess-ring{ position:absolute; inset:8%; border-radius:12%; box-shadow:inset 0 0 0 4px rgba(20,10,0,.4); pointer-events:none; }
 .chess-coords-files{ display:grid; grid-template-columns:repeat(8,1fr); margin-top:4px; padding:0 13px; }
