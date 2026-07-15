@@ -1,11 +1,4 @@
 @import url('https://fonts.googleapis.com/css2?family=Bungee&family=Outfit:wght@400;600;800&family=Space+Mono:wght@700&display=swap');
-/* Polices d'ambiance des vignettes de jeu (refonte 2026-07) : une graisse
-   unique par famille, servies en woff2 léger, display=swap (le titre
-   s'affiche en Bungee le temps du chargement). Attribution par jeu dans
-   les règles .game-card--<id> plus bas — plusieurs jeux partagent une
-   même famille quand leurs ambiances sont proches (piano/diapason,
-   connect4/tupreferes...). */
-@import url('https://fonts.googleapis.com/css2?family=Alfa+Slab+One&family=Audiowide&family=Caveat:wght@700&family=Cinzel:wght@700&family=Comfortaa:wght@700&family=Cormorant+Garamond:ital,wght@0,700;1,700&family=Fredoka:wght@600&family=Limelight&family=Luckiest+Guy&family=Righteous&family=Rye&family=Staatliches&display=swap');
 
 :root{
   /* ===== Palette "Feu de camp" (redesign cozy, 2026) ===== */
@@ -932,86 +925,34 @@ body.stage-focus .stage-fabs{ top:12px; }
 }
 
 /* ===== Salon : grille de sélection de jeu (mode hôte, lobby) =====
-   Refonte 2026-07 ("vignettes moins textuelles") : chaque carte est une
-   VIGNETTE ILLUSTRÉE. Une scène SVG propre au jeu
-   (components/GameCardArt.js) remplit toute la carte ; le titre repose
-   dessus dans une police adaptée à l'ambiance du jeu (règles
-   .game-card--<id> plus bas) ; la description (.game-card-tag) n'apparaît
-   plus qu'au survol/focus, en surimpression ; le "Jouer →" conserve sa
-   couleur d'accent par jeu (--accent posé en inline par page.js, comme
-   avant). L'ancien badge emoji 40×40 (.game-card-icon) disparaît. */
+   (Refonte "vignettes illustrées" tentée puis RETIRÉE à la demande de
+   Guillaume, 2026-07 : retour à l'identique aux cartes du zip 108 —
+   badge emoji, titre Bungee, description courte, CTA coloré.) */
 .game-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(190px,1fr)); gap:12px; margin-top:2px; align-items:stretch; }
 .game-card{
-  position:relative; display:flex; flex-direction:column; justify-content:flex-end;
-  align-items:stretch; text-align:left; height:100%;
-  aspect-ratio:16/10; min-height:130px; padding:12px 12px 10px;
-  background:#0d1120; border:2px solid var(--line); border-radius:16px; overflow:hidden;
-  transition:transform .15s ease, border-color .15s ease, box-shadow .2s ease;
+  display:flex; flex-direction:column; align-items:flex-start; gap:6px; text-align:left;
+  background:rgba(255,255,255,.03); border:2px solid var(--line); border-radius:16px;
+  padding:16px; position:relative; overflow:hidden;
+  transition:transform .15s ease, border-color .15s ease, background .15s ease;
   animation:cardPop .4s ease both;
 }
-.game-card:hover{
-  transform:scale(1.02); border-color:var(--accent);
-  box-shadow:0 12px 28px -14px var(--accent);
+.game-card::before{
+  content:""; position:absolute; inset:0; opacity:0; pointer-events:none;
+  background:linear-gradient(135deg, var(--accent), transparent 70%);
+  transition:opacity .2s ease;
 }
-.game-card.active{ border-color:var(--accent); }
-/* l'illustration : plein cadre, léger zoom "vivant" au survol */
-.game-card-art{ position:absolute; inset:0; transition:transform .35s ease; }
-.game-card-art svg{ display:block; width:100%; height:100%; }
-.game-card:hover .game-card-art{ transform:scale(1.06); }
-/* voile de lisibilité : l'illustration reste la star, seul le bas
-   s'assombrit pour que titre + CTA se détachent sur n'importe quelle scène */
-.game-card-veil{
-  position:absolute; inset:0; pointer-events:none;
-  background:linear-gradient(180deg, rgba(5,8,18,0) 42%, rgba(5,8,18,.4) 72%, rgba(5,8,18,.8) 100%);
+.game-card:hover{ transform:scale(1.02); border-color:var(--accent); background:rgba(255,255,255,.06); }
+.game-card:hover::before{ opacity:.14; }
+.game-card.active{ border-color:var(--accent); background:rgba(255,255,255,.07); }
+.game-card-icon{
+  width:40px; height:40px; border-radius:12px; display:flex; align-items:center; justify-content:center;
+  font-size:20px; background:linear-gradient(160deg, color-mix(in srgb, var(--accent) 55%, #fff 45%), var(--accent) 65%);
+  box-shadow:inset 0 2px 3px rgba(255,255,255,.45), 0 3px 0 rgba(0,0,0,.28);
 }
-.game-card-title{
-  position:relative; z-index:1; font-family:'Bungee'; font-size:17px; line-height:1.15;
-  color:#fff; text-shadow:0 2px 6px rgba(0,0,0,.85), 0 0 18px rgba(0,0,0,.5);
-}
-/* description : masquée par défaut (c'est ça, "moins textuel"), se déplie
-   en douceur au survol de la carte ou au focus clavier */
-.game-card-tag{
-  position:relative; z-index:1; color:#dfe4f2; font-size:11.5px; line-height:1.35;
-  max-height:0; opacity:0; overflow:hidden; margin-top:0;
-  text-shadow:0 1px 3px rgba(0,0,0,.9);
-  transition:max-height .25s ease, opacity .25s ease, margin-top .25s ease;
-}
-.game-card:hover .game-card-tag, .game-card:focus-visible .game-card-tag{
-  max-height:4.2em; opacity:1; margin-top:2px;
-}
-.game-card-cta{
-  position:relative; z-index:1; align-self:flex-end; margin-top:3px;
-  font-family:'Outfit'; font-weight:800; font-size:12.5px; color:var(--accent);
-  text-shadow:0 1px 4px rgba(0,0,0,.9); white-space:nowrap;
-}
-/* verrou minPlayers : mêmes conditions qu'avant (garde dans onClick),
-   habillage adapté à la vignette illustrée — scène éteinte, pas de zoom */
-.game-card.locked{ cursor:not-allowed; }
-.game-card.locked .game-card-art{ filter:grayscale(.85) brightness(.5); }
-.game-card.locked:hover{ transform:none; box-shadow:none; border-color:var(--line); }
-.game-card.locked:hover .game-card-art{ transform:none; }
-.game-card.locked .game-card-title{ opacity:.75; }
-
-/* ---- Typographies par jeu : le titre prend la voix du jeu ---- */
-.game-card--quiz .game-card-title{ font-family:'Luckiest Guy'; font-size:19px; letter-spacing:.02em; }
-.game-card--wordle .game-card-title{ font-family:'Space Mono', monospace; font-size:16px; letter-spacing:.04em; }
-.game-card--worldle .game-card-title{ font-family:'Staatliches'; font-size:21px; letter-spacing:.06em; }
-.game-card--petitbac .game-card-title{ font-family:'Caveat', cursive; font-weight:700; font-size:25px; line-height:1; }
-.game-card--tupreferes .game-card-title{ font-family:'Fredoka'; font-weight:600; font-size:18px; }
-.game-card--connect4 .game-card-title{ font-family:'Fredoka'; font-weight:600; font-size:18px; }
-.game-card--ludo .game-card-title{ font-family:'Alfa Slab One'; font-size:16.5px; }
-.game-card--chromatik .game-card-title{ font-family:'Bungee'; font-size:17px; }
-.game-card--goldmines .game-card-title{ font-family:'Rye'; font-size:16.5px; }
-.game-card--president .game-card-title{ font-family:'Cinzel'; font-weight:700; font-size:18px; letter-spacing:.04em; }
-.game-card--yahtzee .game-card-title{ font-family:'Righteous'; font-size:19px; letter-spacing:.03em; }
-.game-card--tenk .game-card-title{
-  font-family:'Audiowide'; font-size:16px; letter-spacing:.05em; color:#CDEFFF;
-  text-shadow:0 0 12px rgba(79,209,255,.65), 0 2px 6px rgba(0,0,0,.9);
-}
-.game-card--piano .game-card-title{ font-family:'Cormorant Garamond', serif; font-style:italic; font-weight:700; font-size:20px; }
-.game-card--echoes .game-card-title{ font-family:'Comfortaa'; font-weight:700; font-size:16px; }
-.game-card--diapason .game-card-title{ font-family:'Cormorant Garamond', serif; font-weight:700; font-size:20px; letter-spacing:.03em; }
-.game-card--heist .game-card-title{ font-family:'Limelight'; font-size:17px; }
+.game-card-title{ font-family:'Bungee'; font-size:14px; line-height:1.3; }
+.game-card-tag{ color:var(--muted); font-size:12px; line-height:1.4; }
+.game-card-cta{ margin-top:auto; padding-top:8px; font-weight:800; font-size:12.5px; color:var(--accent); }
+.game-card{ height:100%; } /* toutes les tuiles d'une même rangée font la même hauteur */
 
 /* ===== Puissance 4 =====
    Refonte 2026-07 (demande explicite "jetons bien trop amateurs") : cadre

@@ -28,7 +28,6 @@ import YahtzeeGame from "@/components/yahtzee/YahtzeeGame";
 import TenkGame from "@/components/tenk/TenkGame";
 import TuPreferesGame from "@/components/tupreferes/TuPreferesGame";
 import GameErrorBoundary from "@/components/GameErrorBoundary";
-import GameCardArt from "@/components/GameCardArt";
 import DoorStage from "@/components/DoorStage";
 import CurtainStage from "@/components/CurtainStage";
 import FlashStage from "@/components/FlashStage";
@@ -926,28 +925,17 @@ export default function Room() {
                     // verrou au chargement de la page.
                     const onlineCount = players.filter(p => isOnline(p.profile_id)).length;
                     const disabled = g.minPlayers ? onlineCount < g.minPlayers : false;
-                    // Vignettes illustrées (refonte 2026-07, "moins
-                    // textuelles") : l'illustration SVG du jeu
-                    // (GameCardArt) remplit toute la carte, le titre
-                    // repose dessus dans une police propre au jeu (voir
-                    // .game-card--<id> dans globals.css), et la
-                    // description ne s'affiche plus qu'au survol/focus.
-                    // Le "Jouer →" garde sa couleur d'accent par jeu.
-                    // L'emoji de GAME_META ne sert plus ici (toujours
-                    // utilisé par le palier de lancement et les Stages).
                     return (
                       <button
                         key={id}
-                        className={"game-card game-card--" + id + (disabled ? " locked" : "")}
-                        style={{ "--accent": `var(${g.accent})` }}
+                        className="game-card"
+                        style={{ "--accent": `var(${g.accent})`, opacity: disabled ? .45 : 1, cursor: disabled ? "not-allowed" : "pointer" }}
                         onClick={() => { if (disabled) return; playGameCardClick(); launch(id); }}
-                        title={t(g.tagKey)}
                       >
-                        <span className="game-card-art" aria-hidden="true"><GameCardArt id={id} /></span>
-                        <span className="game-card-veil" aria-hidden="true" />
+                        <span className="game-card-icon">{g.icon}</span>
                         <span className="game-card-title">{t(g.nameKey)}</span>
                         <span className="game-card-tag">{t(g.tagKey)}</span>
-                        <span className="game-card-cta">{disabled ? "🔒 " + t("playCta") : t("playCta") + " →"}</span>
+                        <span className="game-card-cta">{disabled ? "🔒" : t("playCta") + " →"}</span>
                       </button>
                     );
                   })}
