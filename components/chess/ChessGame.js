@@ -6,8 +6,10 @@ import { saveGameState, readGameState, resetRoomToLobby, recordMatchResult } fro
 import Crossfade from "../Crossfade";
 import GameCountdown, { COUNTDOWN_MS } from "../GameCountdown";
 import { sanForLang, PIECE_VALUE } from "./notation";
+import { chooseBotMove } from "./engine";
 
 const GAME_ID = "chess";
+const BOT_ID = "__arcardi_bot__"; // identifiant du siège tenu par l'ordinateur (mode solo)
 const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 const CLOCK_SEC = 10 * 60; // pendule par défaut : 10 min (sans incrément en v1)
 
@@ -37,7 +39,7 @@ function deriveStatus(game, moverColor) {
   return { status: "playing", winner: null };
 }
 
-export default function ChessGame({ room, me, isHost, players, t, lang, onFinish }) {
+export default function ChessGame({ room, me, isHost, players, t, lang, onFinish, solo = false }) {
   const [phase, setPhase] = useState("intro"); // intro -> playing
   const [white, setWhite] = useState(null); // { id, username, avatar }
   const [black, setBlack] = useState(null);
@@ -56,6 +58,7 @@ export default function ChessGame({ room, me, isHost, players, t, lang, onFinish
   const [channelReady, setChannelReady] = useState(false);
   const [myWin, setMyWin] = useState(false);
   const [confetti, setConfetti] = useState([]);
+  const [botThinking, setBotThinking] = useState(false); // solo : l'ordinateur calcule son coup
 
   const channelRef = useRef(null);
   const gameRef = useRef(null);          // instance chess.js FAISANT AUTORITÉ (hôte)
@@ -70,6 +73,8 @@ export default function ChessGame({ room, me, isHost, players, t, lang, onFinish
   const restoredRef = useRef(false);
   const confettiRef = useRef(false);
   const timeouts = useRef([]);
+  const soloRef = useRef(false);        // partie contre le bot (siège BOT_ID tenu par l'IA)
+  const botTimerRef = useRef(null);     // minuteur du coup du bot (pour l'annuler : takeback/abandon/démontage)
 
   useEffect(() => { statusRef.current = status; }, [status]);
   useEffect(() => { whiteRef.current = white; blackRef.current = black; }, [white, black]);
@@ -114,6 +119,7 @@ export default function ChessGame({ room, me, isHost, players, t, lang, onFinish
       status: statusRef.current, winner,
       lastMove,
       clockW: clockRef.current.w, clockB: clockRef.current.b,
+      solo: soloRef.current,
       ...extra,
     });
   }
@@ -124,6 +130,8 @@ export default function ChessGame({ room, me, isHost, players, t, lang, onFinish
     channelRef.current = ch;
 
     ch.on("broadcast", { event: "match_start" }, ({ payload }) => {
+      soloRef.current = !!payload.solo;
+      clearBotTimer();
       setWhite(payload.white);
       setBlack(payload.black);
       setFen(START_FEN);
@@ -144,6 +152,7 @@ export default function ChessGame({ room, me, isHost, players, t, lang, onFinish
       setPhase("playing");
       setCountingDown(true);
       if (isHost) {
+        whiteRef.current = payload.white; blackRef.current = payload.black;
         gameRef.current = new Chess();
         movesRef.current = [];
         clockRef.current = { w: payload.clockSec, b: payload.clockSec };
@@ -152,8 +161,9 @@ export default function ChessGame({ room, me, isHost, players, t, lang, onFinish
         saveGameState(room.id, GAME_ID, {
           phase: "playing", white: payload.white, black: payload.black, fen: START_FEN,
           moves: [], status: "playing", winner: null, lastMove: null,
-          clockW: payload.clockSec, clockB: payload.clockSec,
+          clockW: payload.clockSec, clockB: payload.clockSec, solo: soloRef.current,
         });
+        scheduleBotIfNeeded(); // solo : si l'ordinateur a les Blancs, il ouvre
       }
     });
 
@@ -201,6 +211,7 @@ export default function ChessGame({ room, me, isHost, players, t, lang, onFinish
           restoredRef.current = true;
           const saved = readGameState(room, GAME_ID);
           if (saved) {
+            soloRef.current = !!saved.solo;
             setWhite(saved.white); setBlack(saved.black);
             setFen(saved.fen || START_FEN); setMoves(saved.moves || []);
             setStatus(saved.status || "playing"); setWinner(saved.winner ?? null);
@@ -216,6 +227,8 @@ export default function ChessGame({ room, me, isHost, players, t, lang, onFinish
               clockRef.current = { w: saved.clockW ?? CLOCK_SEC, b: saved.clockB ?? CLOCK_SEC };
               clockStartRef.current = Date.now(); // pas de décompte à la reprise
               statusRef.current = saved.status || "playing";
+              whiteRef.current = saved.white; blackRef.current = saved.black;
+              scheduleBotIfNeeded(); // solo : reprendre la main du bot si c'est son trait
             }
           }
         }
@@ -224,6 +237,7 @@ export default function ChessGame({ room, me, isHost, players, t, lang, onFinish
 
     return () => {
       timeouts.current.forEach(clearTimeout);
+      if (botTimerRef.current) clearTimeout(botTimerRef.current);
       supabase.removeChannel(ch);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -246,6 +260,56 @@ export default function ChessGame({ room, me, isHost, players, t, lang, onFinish
     const { status: st, winner: wn } = deriveStatus(g, mv.color);
     statusRef.current = st;
     channelRef.current.send({
+      type: "broadcast", event: "state",
+      payload: {
+        fen: g.fen(), moves: movesRef.current.slice(), status: st, winner: wn,
+        lastMove: { from: mv.from, to: mv.to },
+        clockW: clockRef.current.w, clockB: clockRef.current.b,
+      },
+    });
+    scheduleBotIfNeeded(); // solo : si c'est maintenant au bot, il répond
+  }
+
+  // ---- Bot (mode solo) : l'hôte tient le siège BOT_ID et joue via engine.js ----
+  function clearBotTimer() {
+    if (botTimerRef.current) { clearTimeout(botTimerRef.current); botTimerRef.current = null; }
+    setBotThinking(false);
+  }
+  function botSeatToMove() {
+    const g = gameRef.current;
+    if (!g) return false;
+    const seat = g.turn() === "w" ? whiteRef.current : blackRef.current;
+    return !!(seat && seat.id === BOT_ID);
+  }
+  function scheduleBotIfNeeded() {
+    if (!isHost || !soloRef.current) return;
+    if (TERMINAL.includes(statusRef.current)) return;
+    if (!botSeatToMove()) return;
+    clearBotTimer();
+    // Attendre la fin du décompte 3-2-1 si besoin, puis un court temps de
+    // "réflexion" pour que le coup ne soit pas instantané.
+    const waitCountdown = Math.max(0, clockStartRef.current - Date.now());
+    const think = 550 + Math.floor(Math.random() * 500);
+    setBotThinking(true);
+    botTimerRef.current = setTimeout(() => {
+      botTimerRef.current = null;
+      setBotThinking(false);
+      hostBotMove();
+    }, waitCountdown + think);
+  }
+  function hostBotMove() {
+    const g = gameRef.current;
+    if (!g || TERMINAL.includes(statusRef.current) || !botSeatToMove()) return;
+    let mv;
+    try {
+      const choice = chooseBotMove(g.fen(), { timeMs: 1000, maxDepth: 4 });
+      if (!choice) return;
+      mv = g.move({ from: choice.from, to: choice.to, promotion: choice.promotion || undefined });
+    } catch (e) { return; }
+    movesRef.current = [...movesRef.current, { san: mv.san, color: mv.color, captured: mv.captured || null, from: mv.from, to: mv.to }];
+    const { status: st, winner: wn } = deriveStatus(g, mv.color);
+    statusRef.current = st;
+    channelRef.current?.send({
       type: "broadcast", event: "state",
       payload: {
         fen: g.fen(), moves: movesRef.current.slice(), status: st, winner: wn,
@@ -326,7 +390,15 @@ export default function ChessGame({ room, me, isHost, players, t, lang, onFinish
   // ---- Démarrage auto (exactement 2 joueurs) ----
   useEffect(() => {
     if (!isHost || phase !== "intro" || autoStartedRef.current || !channelReady) return;
-    if (players.length === 2) {
+    if (solo && players.length === 1) {
+      // Mode solo : le seul joueur humain affronte le bot, qui prend l'autre siège.
+      autoStartedRef.current = true;
+      const a = players[0];
+      const human = { id: a.profile_id, username: a.profiles?.username, avatar: a.profiles?.avatar };
+      const bot = { id: BOT_ID, username: t("chessBot"), avatar: "\uD83E\uDD16" };
+      const [w, bl] = Math.random() < 0.5 ? [human, bot] : [bot, human];
+      channelRef.current.send({ type: "broadcast", event: "match_start", payload: { white: w, black: bl, clockSec: CLOCK_SEC, solo: true } });
+    } else if (!solo && players.length === 2) {
       autoStartedRef.current = true;
       const [a, b] = players;
       const pa = { id: a.profile_id, username: a.profiles?.username, avatar: a.profiles?.avatar };
@@ -335,7 +407,7 @@ export default function ChessGame({ room, me, isHost, players, t, lang, onFinish
       channelRef.current.send({ type: "broadcast", event: "match_start", payload: { white: w, black: bl, clockSec: CLOCK_SEC } });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isHost, phase, channelReady, players.length]);
+  }, [isHost, phase, channelReady, players.length, solo]);
 
   // ---- Enregistrement du résultat (chaque joueur enregistre le sien) ----
   useEffect(() => {
@@ -344,6 +416,7 @@ export default function ChessGame({ room, me, isHost, players, t, lang, onFinish
     savedResultRef.current = true;
     const won = winner === myColor;
     setMyWin(won);
+    if (soloRef.current) return; // pas d'enregistrement ARCARDI en partie contre le bot
     recordMatchResult(room.id, won);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [winner]);
@@ -402,6 +475,13 @@ export default function ChessGame({ room, me, isHost, players, t, lang, onFinish
   }
   function requestTakeback() {
     if (!isPlayer || terminal || moves.length === 0) return;
+    if (soloRef.current) {
+      // Contre le bot : aucun consentement à demander, on annule directement
+      // (l'hôte fait autorité) et on stoppe un éventuel coup du bot en attente.
+      clearBotTimer();
+      if (isHost) hostDoTakeback(myColor);
+      return;
+    }
     channelRef.current?.send({ type: "broadcast", event: "takeback_request", payload: { by: myColor } });
     setTakebackFrom(myColor);
   }
@@ -416,7 +496,7 @@ export default function ChessGame({ room, me, isHost, players, t, lang, onFinish
   function rematch() {
     if (!isHost || !white || !black) return;
     const [w, bl] = Math.random() < 0.5 ? [white, black] : [black, white];
-    channelRef.current.send({ type: "broadcast", event: "match_start", payload: { white: w, black: bl, clockSec: CLOCK_SEC } });
+    channelRef.current.send({ type: "broadcast", event: "match_start", payload: { white: w, black: bl, clockSec: CLOCK_SEC, solo: soloRef.current } });
   }
   async function backToRoom() {
     await resetRoomToLobby(room.id);
@@ -452,6 +532,7 @@ export default function ChessGame({ room, me, isHost, players, t, lang, onFinish
     if (status === "timeout") return t("chessTimeout").replace("{w}", winner === "w" ? t("chessWhite") : t("chessBlack"));
     if (status === "resign") return t("chessResign").replace("{w}", winner === "w" ? t("chessWhite") : t("chessBlack"));
     if (status === "check") return t("chessCheck");
+    if (botThinking) return t("chessBotThinking");
     if (isMyTurn) return t("chessYourTurn");
     if (isPlayer) return t("chessOpponentTurn");
     return t("chessSpectating");
@@ -487,7 +568,8 @@ export default function ChessGame({ room, me, isHost, players, t, lang, onFinish
 
   let content;
   if (phase === "intro") {
-    if (players.length < 2) content = <p className="muted">{t("chessWaitPlayers")}</p>;
+    if (solo) content = <p className="muted">{t("chessStarting")}</p>;
+    else if (players.length < 2) content = <p className="muted">{t("chessWaitPlayers")}</p>;
     else content = <p className="muted">{t("chessStarting")}</p>;
   } else {
     content = (

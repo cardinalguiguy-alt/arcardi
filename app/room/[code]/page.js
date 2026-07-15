@@ -358,12 +358,13 @@ export default function Room() {
   // (`ok:false`), on ANNULE la transition optimiste (rollback) et on
   // prévient l'hôte, au lieu de le laisser avancer seul pendant que les
   // invités ne reçoivent jamais rien.
-  async function launch(gameId) {
+  async function launch(gameId, opts = {}) {
     const prevRoom = room;
+    setSoloChess(!!opts.solo);
     const launchAt = new Date(Date.now() + GAME_LAUNCH_BUFFER_MS).toISOString();
     setRoom(r => (r ? { ...r, status: "playing", current_game: gameId, launch_at: launchAt, stage_launch_at: null, game_state: null } : r));
     const { ok } = await launchGame(room.id, gameId, launchAt);
-    if (!ok) { setRoom(prevRoom); setLaunchWriteError(true); }
+    if (!ok) { setRoom(prevRoom); setSoloChess(false); setLaunchWriteError(true); }
   }
 
   // Ouverture synchronisée de la scène (demande 2026-07) : le bouton
@@ -464,6 +465,11 @@ export default function Room() {
   // réel (voir lib/gameSync.js) — au lieu de le laisser avancer seul en
   // silence pendant que ses invités restent bloqués sans explication.
   const [launchWriteError, setLaunchWriteError] = useState(false);
+  // Mode solo échecs (demande 2026-07) : mémorise que le prochain lancement
+  // d'échecs se fait contre le bot (siège tenu par l'IA côté hôte). Passé en
+  // prop à ChessGame ; la persistance en cas de rechargement vient du
+  // game_state (flag solo) lu par ChessGame lui-même.
+  const [soloChess, setSoloChess] = useState(false);
   const noticeTimerRef = useRef(null);
   const showEndNotice = useCallback(() => {
     setEndNotice(true);
@@ -686,13 +692,21 @@ export default function Room() {
   const [launchHold, setLaunchHold] = useState(false);
   useEffect(() => {
     if (!room?.launch_at || room.status !== "playing") { setLaunchHold(false); return; }
+    // Correctif latence hôte 2026-07 : l'HÔTE vient de cliquer "Jouer" et a
+    // déjà appliqué la transition optimiste (voir launch/openStage) -> il ne
+    // doit subir AUCUN palier d'attente, sa scène se révèle instantanément.
+    // Le tampon GAME_LAUNCH_BUFFER_MS n'a de sens que pour laisser les INVITÉS
+    // se resynchroniser sur l'horodatage cible ; il ne s'applique donc qu'à
+    // eux. La synchro des animations (porte/rideau) reste pilotée séparément
+    // par stage_launch_at, inchangée.
+    if (me && room.host_id === me.id) { setLaunchHold(false); return; }
     const target = new Date(room.launch_at).getTime();
     const delay = Math.max(0, Math.min(target - Date.now(), GAME_LAUNCH_BUFFER_MS));
     if (!delay) { setLaunchHold(false); return; }
     setLaunchHold(true);
     const tm = setTimeout(() => setLaunchHold(false), delay);
     return () => clearTimeout(tm);
-  }, [room?.launch_at, room?.status]);
+  }, [room?.launch_at, room?.status, room?.host_id, me?.id]);
 
   if (error) return <div className="wrap"><div className="panel"><h1>😕</h1><p className="hint">{error}</p></div></div>;
   if (!room || !me) return <div className="wrap"><p className="muted">…</p></div>;
@@ -955,7 +969,7 @@ export default function Room() {
                     <TuPreferesGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
                   )}
                   {room.current_game === "chess" && (
-                    <ChessGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
+                    <ChessGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} solo={soloChess} />
                   )}
                 </StageComponent>
                 </GameErrorBoundary>
@@ -1035,18 +1049,23 @@ export default function Room() {
                     const onlineCount = players.filter(p => isOnline(p.profile_id)).length;
                     // Échecs : jeu à DEUX joueurs pile (g.maxPlayers) — verrouillé
                     // aussi quand le salon dépasse le maximum, en plus du minimum.
-                    const disabled = (g.minPlayers && onlineCount < g.minPlayers) || (g.maxPlayers && onlineCount > g.maxPlayers) || false;
+                    // Solo (demande 2026-07) : quand l'hôte est SEUL en ligne, la
+                    // carte Échecs devient "vs Ordinateur" et lance une partie
+                    // contre le bot au lieu d'afficher le cadenas.
+                    const soloEligible = id === "chess" && onlineCount === 1;
+                    const disabled = soloEligible ? false : ((g.minPlayers && onlineCount < g.minPlayers) || (g.maxPlayers && onlineCount > g.maxPlayers) || false);
+                    const cta = disabled ? "🔒" : soloEligible ? ("🤖 " + t("chessVsBot")) : (t("playCta") + " →");
                     return (
                       <button
                         key={id}
                         className="game-card"
                         style={{ "--accent": `var(${g.accent})`, opacity: disabled ? .45 : 1, cursor: disabled ? "not-allowed" : "pointer" }}
-                        onClick={() => { if (disabled) return; playGameCardClick(); launch(id); }}
+                        onClick={() => { if (disabled) return; playGameCardClick(); launch(id, { solo: soloEligible }); }}
                       >
                         <span className="game-card-icon">{g.icon}</span>
                         <span className="game-card-title">{t(g.nameKey)}</span>
                         <span className="game-card-tag">{t(g.tagKey)}</span>
-                        <span className="game-card-cta">{disabled ? "🔒" : t("playCta") + " →"}</span>
+                        <span className="game-card-cta">{cta}</span>
                       </button>
                     );
                   })}
