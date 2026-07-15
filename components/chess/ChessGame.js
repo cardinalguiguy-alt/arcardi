@@ -12,6 +12,12 @@ const GAME_ID = "chess";
 const BOT_ID = "__arcardi_bot__"; // identifiant du siège tenu par l'ordinateur (mode solo)
 const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 const CLOCK_SEC = 10 * 60; // pendule par défaut : 10 min (sans incrément en v1)
+// Cadences proposées au démarrage (secondes par joueur, sans incrément).
+const CADENCES = [
+  { min: 3, sec: 3 * 60, tagKey: "chessBlitz" },
+  { min: 5, sec: 5 * 60, tagKey: "chessRapid" },
+  { min: 10, sec: 10 * 60, tagKey: "chessClassic" },
+];
 
 // Glyphes Unicode des pièces (rendu CSS "vrai plateau", cohérent avec la
 // maquette validée). Blancs et noirs coloriés en CSS (voir .chess-piece).
@@ -63,6 +69,8 @@ export default function ChessGame({ room, me, isHost, players, t, lang, onFinish
   const [myWin, setMyWin] = useState(false);
   const [confetti, setConfetti] = useState([]);
   const [botThinking, setBotThinking] = useState(false); // solo : l'ordinateur calcule son coup
+  const [perms, setPerms] = useState({});                // analyse : { profileId: true } autorisés à bouger
+  const [analysisFlip, setAnalysisFlip] = useState(false); // orientation locale du plateau d'analyse
 
   const channelRef = useRef(null);
   const gameRef = useRef(null);          // instance chess.js FAISANT AUTORITÉ (hôte)
@@ -79,9 +87,13 @@ export default function ChessGame({ room, me, isHost, players, t, lang, onFinish
   const timeouts = useRef([]);
   const soloRef = useRef(false);        // partie contre le bot (siège BOT_ID tenu par l'IA)
   const botTimerRef = useRef(null);     // minuteur du coup du bot (pour l'annuler : takeback/abandon/démontage)
+  const permsRef = useRef({});          // miroir de `perms` pour l'arbitrage hôte
+  const modeRef = useRef("game");       // "game" (partie chronométrée) | "analysis" (échiquier d'analyse)
+  const cadenceRef = useRef(CLOCK_SEC); // cadence choisie (le bot y adapte son temps de réflexion)
 
   useEffect(() => { statusRef.current = status; }, [status]);
   useEffect(() => { whiteRef.current = white; blackRef.current = black; }, [white, black]);
+  useEffect(() => { permsRef.current = perms; }, [perms]);
 
   const myColor = useMemo(() => {
     if (white && me.id === white.id) return "w";
@@ -113,6 +125,29 @@ export default function ChessGame({ room, me, isHost, players, t, lang, onFinish
     return map;
   }, [selSquare, isMyTurn, view]);
 
+  // Analyse : ce client peut-il bouger les pièces ? (hôte toujours, sinon perm)
+  const canAnalysisMove = phase === "analysis" && (isHost || !!perms[me.id]);
+
+  // Analyse : coups légaux de la pièce sélectionnée, quelle que soit sa couleur
+  // (on aligne le trait sur la couleur de la pièce, comme pour l'arbitrage hôte).
+  const analysisTargets = useMemo(() => {
+    if (phase !== "analysis" || !selSquare || !canAnalysisMove) return {};
+    const piece = view.get(selSquare);
+    if (!piece) return {};
+    let src = view, ms = [];
+    try {
+      if (view.turn() !== piece.color) {
+        const tmp = new Chess();
+        const parts = fen.split(" "); parts[1] = piece.color; parts[3] = "-";
+        tmp.load(parts.join(" ")); src = tmp;
+      }
+      ms = src.moves({ square: selSquare, verbose: true });
+    } catch (e) { ms = []; }
+    const map = {};
+    ms.forEach(m => { map[m.to] = !!m.captured; });
+    return map;
+  }, [phase, selSquare, canAnalysisMove, view, fen]);
+
   function persist(extra = {}) {
     if (!isHost) return;
     saveGameState(room.id, GAME_ID, {
@@ -135,6 +170,10 @@ export default function ChessGame({ room, me, isHost, players, t, lang, onFinish
 
     ch.on("broadcast", { event: "match_start" }, ({ payload }) => {
       soloRef.current = !!payload.solo;
+      modeRef.current = "game";
+      cadenceRef.current = payload.clockSec;
+      setPerms({}); permsRef.current = {};
+      setAnalysisFlip(false);
       clearBotTimer();
       setWhite(payload.white);
       setBlack(payload.black);
@@ -165,7 +204,7 @@ export default function ChessGame({ room, me, isHost, players, t, lang, onFinish
         saveGameState(room.id, GAME_ID, {
           phase: "playing", white: payload.white, black: payload.black, fen: START_FEN,
           moves: [], status: "playing", winner: null, lastMove: null,
-          clockW: payload.clockSec, clockB: payload.clockSec, solo: soloRef.current,
+          clockW: payload.clockSec, clockB: payload.clockSec, solo: soloRef.current, cadence: payload.clockSec,
         });
         scheduleBotIfNeeded(); // solo : si l'ordinateur a les Blancs, il ouvre
       }
@@ -208,14 +247,59 @@ export default function ChessGame({ room, me, isHost, players, t, lang, onFinish
       if (isHost) persist();
     });
 
+    // ---- Échiquier d'analyse (sans pendules, sans moteur) ----
+    ch.on("broadcast", { event: "analysis_start" }, ({ payload }) => {
+      modeRef.current = "analysis";
+      soloRef.current = false;
+      clearBotTimer();
+      setPerms(payload.perms || {}); permsRef.current = payload.perms || {};
+      setWhite(null); setBlack(null);
+      setFen(START_FEN); setMoves([]); setStatus("playing"); setWinner(null); setLastMove(null);
+      setSelSquare(null); setPromo(null); setTakebackFrom(null); setConfirmResign(false);
+      setMyWin(false); savedResultRef.current = false; confettiRef.current = false; setConfetti([]);
+      setAnalysisFlip(false);
+      setPhase("analysis");
+      if (isHost) {
+        gameRef.current = new Chess();
+        movesRef.current = [];
+        statusRef.current = "playing";
+        saveGameState(room.id, GAME_ID, { mode: "analysis", perms: payload.perms || {}, fen: START_FEN, moves: [], lastMove: null });
+      }
+    });
+    ch.on("broadcast", { event: "analysis_move" }, ({ payload }) => { if (isHost) hostAnalysisMove(payload); });
+    ch.on("broadcast", { event: "analysis_cmd" }, ({ payload }) => { if (isHost) hostAnalysisCmd(payload); });
+    ch.on("broadcast", { event: "analysis_perms" }, ({ payload }) => {
+      setPerms(payload.perms || {}); permsRef.current = payload.perms || {};
+      if (isHost) persistAnalysis();
+    });
+    ch.on("broadcast", { event: "analysis_state" }, ({ payload }) => {
+      setFen(payload.fen); setMoves(payload.moves); setLastMove(payload.lastMove); setSelSquare(null);
+      if (isHost) persistAnalysis();
+    });
+
     ch.subscribe(s => {
       if (s === "SUBSCRIBED") {
         setChannelReady(true);
         if (!restoredRef.current) {
           restoredRef.current = true;
           const saved = readGameState(room, GAME_ID);
-          if (saved) {
+          if (saved && saved.mode === "analysis") {
+            // Reprise d'un échiquier d'analyse après rechargement.
+            modeRef.current = "analysis";
+            setPerms(saved.perms || {}); permsRef.current = saved.perms || {};
+            setFen(saved.fen || START_FEN); setMoves(saved.moves || []); setLastMove(saved.lastMove || null);
+            setPhase("analysis");
+            autoStartedRef.current = true;
+            if (isHost) {
+              const g = new Chess();
+              try { g.load(saved.fen || START_FEN); } catch (e) { g.reset(); }
+              gameRef.current = g;
+              movesRef.current = (saved.moves || []).slice();
+              statusRef.current = "playing";
+            }
+          } else if (saved) {
             soloRef.current = !!saved.solo;
+            cadenceRef.current = saved.cadence ?? CLOCK_SEC;
             setWhite(saved.white); setBlack(saved.black);
             setFen(saved.fen || START_FEN); setMoves(saved.moves || []);
             setStatus(saved.status || "playing"); setWinner(saved.winner ?? null);
@@ -293,7 +377,9 @@ export default function ChessGame({ room, me, isHost, players, t, lang, onFinish
     // Attendre la fin du décompte 3-2-1 si besoin, puis un court temps de
     // "réflexion" pour que le coup ne soit pas instantané.
     const waitCountdown = Math.max(0, clockStartRef.current - Date.now());
-    const think = 550 + Math.floor(Math.random() * 500);
+    const cad = cadenceRef.current;
+    const base = cad <= 180 ? 280 : cad <= 300 ? 430 : 550;
+    const think = base + Math.floor(Math.random() * (cad <= 180 ? 260 : 460));
     setBotThinking(true);
     botTimerRef.current = setTimeout(() => {
       botTimerRef.current = null;
@@ -306,7 +392,10 @@ export default function ChessGame({ room, me, isHost, players, t, lang, onFinish
     if (!g || TERMINAL.includes(statusRef.current) || !botSeatToMove()) return;
     let mv;
     try {
-      const choice = chooseBotMove(g.fen(), { timeMs: 1000, maxDepth: 4 });
+      const cad = cadenceRef.current;
+      const timeMs = cad <= 180 ? 550 : cad <= 300 ? 800 : 1000;
+      const maxDepth = cad <= 180 ? 3 : 4;
+      const choice = chooseBotMove(g.fen(), { timeMs, maxDepth });
       if (!choice) return;
       mv = g.move({ from: choice.from, to: choice.to, promotion: choice.promotion || undefined });
     } catch (e) { return; }
@@ -391,27 +480,90 @@ export default function ChessGame({ room, me, isHost, players, t, lang, onFinish
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isHost, phase]);
 
-  // ---- Démarrage auto (exactement 2 joueurs) ----
-  useEffect(() => {
-    if (!isHost || phase !== "intro" || autoStartedRef.current || !channelReady) return;
+  // ---- Écran de réglage (l'hôte choisit la cadence ou l'échiquier d'analyse) ----
+  // Plus de démarrage automatique : l'hôte voit un écran de choix. Les invités
+  // patientent jusqu'à ce qu'un mode soit lancé (match_start / analysis_start).
+  function seatsForGame() {
     if (solo && players.length === 1) {
-      // Mode solo : le seul joueur humain affronte le bot, qui prend l'autre siège.
-      autoStartedRef.current = true;
       const a = players[0];
       const human = { id: a.profile_id, username: a.profiles?.username, avatar: a.profiles?.avatar };
       const bot = { id: BOT_ID, username: t("chessBot"), avatar: "\uD83E\uDD16" };
-      const [w, bl] = Math.random() < 0.5 ? [human, bot] : [bot, human];
-      channelRef.current.send({ type: "broadcast", event: "match_start", payload: { white: w, black: bl, clockSec: CLOCK_SEC, solo: true } });
-    } else if (!solo && players.length === 2) {
-      autoStartedRef.current = true;
-      const [a, b] = players;
-      const pa = { id: a.profile_id, username: a.profiles?.username, avatar: a.profiles?.avatar };
-      const pb = { id: b.profile_id, username: b.profiles?.username, avatar: b.profiles?.avatar };
-      const [w, bl] = Math.random() < 0.5 ? [pa, pb] : [pb, pa];
-      channelRef.current.send({ type: "broadcast", event: "match_start", payload: { white: w, black: bl, clockSec: CLOCK_SEC } });
+      return Math.random() < 0.5 ? [human, bot] : [bot, human];
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isHost, phase, channelReady, players.length, solo]);
+    const [a, b] = players;
+    const pa = { id: a.profile_id, username: a.profiles?.username, avatar: a.profiles?.avatar };
+    const pb = { id: b.profile_id, username: b.profiles?.username, avatar: b.profiles?.avatar };
+    return Math.random() < 0.5 ? [pa, pb] : [pb, pa];
+  }
+  function startTimed(sec) {
+    if (!isHost) return;
+    const [w, bl] = seatsForGame();
+    channelRef.current.send({ type: "broadcast", event: "match_start", payload: { white: w, black: bl, clockSec: sec, solo: !!(solo && players.length === 1) } });
+  }
+  function startAnalysis() {
+    if (!isHost) return;
+    const initPerms = { [me.id]: true }; // au départ, seul l'hôte peut bouger les pièces
+    channelRef.current.send({ type: "broadcast", event: "analysis_start", payload: { perms: initPerms } });
+  }
+
+  // ---- Arbitrage de l'échiquier d'analyse (hôte) ----
+  function broadcastAnalysisState() {
+    const g = gameRef.current; if (!g) return;
+    const lm = movesRef.current[movesRef.current.length - 1];
+    channelRef.current.send({
+      type: "broadcast", event: "analysis_state",
+      payload: { fen: g.fen(), moves: movesRef.current.slice(), lastMove: lm ? { from: lm.from, to: lm.to } : null },
+    });
+  }
+  function persistAnalysis() {
+    if (!isHost) return;
+    const g = gameRef.current;
+    const lm = movesRef.current[movesRef.current.length - 1];
+    saveGameState(room.id, GAME_ID, {
+      mode: "analysis", perms: permsRef.current,
+      fen: g ? g.fen() : fen, moves: movesRef.current.slice(),
+      lastMove: lm ? { from: lm.from, to: lm.to } : null,
+    });
+  }
+  function analysisAllowed(by) { return by === room.host_id || !!permsRef.current[by]; }
+  function hostAnalysisMove({ by, from, to, promotion }) {
+    const g = gameRef.current; if (!g) return;
+    if (!analysisAllowed(by)) return;
+    const piece = g.get(from); if (!piece) return;
+    // Échiquier libre : on peut jouer les DEUX camps. Si ce n'est pas le trait
+    // de la pièce déplacée, on aligne le trait sur sa couleur (comme lichess),
+    // puis chess.js valide la légalité du coup pour cette couleur.
+    if (g.turn() !== piece.color) {
+      const parts = g.fen().split(" ");
+      parts[1] = piece.color; parts[3] = "-";
+      try { g.load(parts.join(" ")); } catch (e) { return; }
+    }
+    let mv;
+    try { mv = g.move({ from, to, promotion: promotion || "q" }); } catch (e) { return; }
+    movesRef.current = [...movesRef.current, { san: mv.san, color: mv.color, captured: mv.captured || null, from: mv.from, to: mv.to }];
+    broadcastAnalysisState();
+  }
+  function hostAnalysisCmd({ by, cmd }) {
+    const g = gameRef.current; if (!g) return;
+    if (!analysisAllowed(by)) return;
+    if (cmd === "undo") { if (movesRef.current.length > 0) { g.undo(); movesRef.current = movesRef.current.slice(0, -1); } }
+    else if (cmd === "reset") { g.reset(); movesRef.current = []; }
+    broadcastAnalysisState();
+  }
+  // Actions locales (envoyées à l'hôte)
+  function analysisAttemptMove(from, to, promotion) {
+    channelRef.current?.send({ type: "broadcast", event: "analysis_move", payload: { by: me.id, from, to, promotion } });
+    setSelSquare(null);
+  }
+  function analysisCmd(cmd) {
+    channelRef.current?.send({ type: "broadcast", event: "analysis_cmd", payload: { by: me.id, cmd } });
+  }
+  function togglePerm(pid) {
+    if (!isHost || pid === me.id) return; // l'hôte est toujours autorisé (verrouillé)
+    const next = { ...permsRef.current };
+    if (next[pid]) delete next[pid]; else next[pid] = true;
+    channelRef.current?.send({ type: "broadcast", event: "analysis_perms", payload: { perms: next } });
+  }
 
   // ---- Enregistrement du résultat (chaque joueur enregistre le sien) ----
   useEffect(() => {
@@ -449,6 +601,7 @@ export default function ChessGame({ room, me, isHost, players, t, lang, onFinish
 
   // ---- Interactions ----
   function onSquareClick(square) {
+    if (phase === "analysis") return onAnalysisSquareClick(square);
     if (!isMyTurn || promo) return;
     const piece = view.get(square);
     if (selSquare) {
@@ -468,13 +621,34 @@ export default function ChessGame({ room, me, isHost, players, t, lang, onFinish
     if (piece && piece.color === myColor) setSelSquare(square);
   }
 
+  function onAnalysisSquareClick(square) {
+    if (!canAnalysisMove || promo) return;
+    const piece = view.get(square);
+    if (selSquare) {
+      if (square === selSquare) { setSelSquare(null); return; }
+      if (square in analysisTargets) {
+        const sel = view.get(selSquare);
+        const rank = square[1];
+        const isPromo = sel && sel.type === "p" && ((sel.color === "w" && rank === "8") || (sel.color === "b" && rank === "1"));
+        if (isPromo) { setPromo({ from: selSquare, to: square, color: sel.color }); return; }
+        analysisAttemptMove(selSquare, square);
+        return;
+      }
+      if (piece) { setSelSquare(square); return; } // en analyse : sélectionner n'importe quelle pièce
+      setSelSquare(null);
+      return;
+    }
+    if (piece) setSelSquare(square);
+  }
+
   function sendMove(from, to, promotion) {
     channelRef.current?.send({ type: "broadcast", event: "move_attempt", payload: { by: me.id, from, to, promotion } });
     setSelSquare(null);
   }
   function choosePromotion(type) {
     if (!promo) return;
-    sendMove(promo.from, promo.to, type);
+    if (phase === "analysis") analysisAttemptMove(promo.from, promo.to, type);
+    else sendMove(promo.from, promo.to, type);
     setPromo(null);
   }
   function requestTakeback() {
@@ -517,16 +691,20 @@ export default function ChessGame({ room, me, isHost, players, t, lang, onFinish
     movePairs.push({ num: i / 2 + 1, w: sanForLang(moves[i].san, lang), b: moves[i + 1] ? sanForLang(moves[i + 1].san, lang) : "" });
   }
 
-  // Cases dans l'ordre d'affichage (le camp du joueur local en bas).
+  // Cases dans l'ordre d'affichage. En partie : camp du joueur local en bas ;
+  // en analyse : orientation locale (bouton Retourner).
   const rows = view.board(); // rangée 8 -> rangée 1
-  const flip = myColor === "b";
+  const flip = phase === "analysis" ? analysisFlip : (myColor === "b");
   const displayRows = flip ? rows.slice().reverse().map(r => r.slice().reverse()) : rows;
+  const activeTargets = phase === "analysis" ? analysisTargets : legalTargets;
 
   // Roi en échec à surligner
   let checkedKingSq = null;
   if (status === "check" || status === "checkmate") {
     const side = status === "checkmate" ? winner === "w" ? "b" : "w" : turnColor;
     for (const row of rows) for (const cell of row) if (cell && cell.type === "k" && cell.color === side) checkedKingSq = cell.square;
+  } else if (phase === "analysis") {
+    try { if (view.isCheck()) { const side = view.turn(); for (const row of rows) for (const cell of row) if (cell && cell.type === "k" && cell.color === side) checkedKingSq = cell.square; } } catch (e) {}
   }
 
   function statusMessage() {
@@ -570,11 +748,142 @@ export default function ChessGame({ room, me, isHost, players, t, lang, onFinish
     );
   }
 
+  // ---- Plateau réutilisable (partie ET analyse), avec numéros de rangées ----
+  function BoardGrid({ interactable }) {
+    return (
+      <div className="chess-board-frame">
+        <div className="chess-grid">
+          {displayRows.map((row, ri) => row.map((cell, ci) => {
+            const sq = cell ? cell.square : squareFromDisplay(ri, ci, flip);
+            const isLight = (ri + ci) % 2 === 0;
+            const sel = sq === selSquare;
+            const target = sq in activeTargets;
+            const isCap = target && activeTargets[sq];
+            const last = lastMove && (lastMove.from === sq || lastMove.to === sq);
+            const check = sq === checkedKingSq;
+            const rankNum = (flip ? ri : 7 - ri) + 1; // numéro de rangée (1-8), tient compte du flip
+            return (
+              <div
+                key={sq}
+                className={"chess-sq " + (isLight ? "l" : "d") + (sel ? " sel" : "") + (last ? " last" : "") + (check ? " check" : "")}
+                onClick={() => onSquareClick(sq)}
+                style={{ cursor: interactable(cell, target) ? "pointer" : "default" }}
+              >
+                {ci === 0 && <span className="chess-coord-rank">{rankNum}</span>}
+                {cell && <span className={"chess-piece " + cell.color + " t-" + cell.type}>{GLYPH[cell.color][cell.type]}</span>}
+                {target && !cell && <span className="chess-dot" />}
+                {isCap && <span className="chess-ring" />}
+              </div>
+            );
+          }))}
+        </div>
+      </div>
+    );
+  }
+
+  const filesRow = (
+    <div className="chess-coords-files">
+      {(flip ? FILES.split("").reverse() : FILES.split("")).map(f => <span key={f}>{f}</span>)}
+    </div>
+  );
+
+  const promoModal = promo ? (
+    <div className="chess-overlay" onClick={() => setPromo(null)}>
+      <div className="chess-promo" onClick={e => e.stopPropagation()}>
+        <div className="chess-promo-title">{t("chessPromoTitle")}</div>
+        <div className="chess-promo-row">
+          {["q", "r", "b", "n"].map(type => (
+            <button key={type} className="chess-promo-btn" onClick={() => choosePromotion(type)}>
+              {GLYPH[(promo && promo.color) || myColor || "w"][type]}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  ) : null;
+
   let content;
   if (phase === "intro") {
-    if (solo) content = <p className="muted">{t("chessStarting")}</p>;
-    else if (players.length < 2) content = <p className="muted">{t("chessWaitPlayers")}</p>;
-    else content = <p className="muted">{t("chessStarting")}</p>;
+    const ready = channelReady && ((solo && players.length === 1) || (!solo && players.length === 2));
+    if (isHost && ready) {
+      // Écran de choix (hôte) : cadence 3/5/10 min ou échiquier d'analyse.
+      content = (
+        <div className="chess-setup">
+          <div className="chess-setup-title">{t("chessChooseCadence")}</div>
+          <div className="chess-cadence-grid">
+            {CADENCES.map(c => (
+              <button key={c.min} className="chess-cad" onClick={() => startTimed(c.sec)}>
+                <span className="chess-cad-n">{c.min}</span>
+                <span className="chess-cad-unit">min</span>
+                <span className="chess-cad-tag">{t(c.tagKey)}</span>
+              </button>
+            ))}
+            <button className="chess-cad analysis" onClick={startAnalysis}>
+              <span className="chess-cad-ico">♞</span>
+              <span className="chess-cad-tag">{t("chessAnalysisBoard")}</span>
+            </button>
+          </div>
+          <p className="muted" style={{ fontSize: 12, marginTop: 12 }}>{t("chessGuestsWait")}</p>
+        </div>
+      );
+    } else if (!solo && players.length < 2) {
+      content = <p className="muted">{t("chessWaitPlayers")}</p>;
+    } else {
+      content = <p className="muted">{t("chessHostChoosing")}</p>;
+    }
+  } else if (phase === "analysis") {
+    content = (
+      <div className="chess-layout analysis">
+        <div className="chess-board-wrap">
+          <div className="chess-status">{t("chessAnalysisBoard")}{!canAnalysisMove ? " · " + t("chessAnalysisLocked") : ""}</div>
+          <BoardGrid interactable={(cell, target) => canAnalysisMove && (!!cell || target)} />
+          {filesRow}
+          <div className="chess-btnrow" style={{ marginTop: 12, justifyContent: "center", flexWrap: "wrap" }}>
+            <button className="chess-btn" onClick={() => analysisCmd("undo")} disabled={!canAnalysisMove || moves.length === 0}>{t("chessUndo")}</button>
+            <button className="chess-btn" onClick={() => analysisCmd("reset")} disabled={!canAnalysisMove || moves.length === 0}>{t("chessReset")}</button>
+            <button className="chess-btn" onClick={() => setAnalysisFlip(f => !f)}>{t("chessFlip")}</button>
+            {isHost && <button className="chess-btn" onClick={backToRoom}>{t("chessBackRoom")}</button>}
+          </div>
+        </div>
+
+        <div className="chess-side-bot">
+          {isHost && (
+            <div className="chess-perms">
+              <div className="chess-perms-head">{t("chessWhoCanMove")}</div>
+              {players.map(p => {
+                const on = p.profile_id === me.id || !!perms[p.profile_id];
+                const locked = p.profile_id === me.id;
+                return (
+                  <div
+                    key={p.id}
+                    className={"chess-perm-row" + (on ? " on" : "")}
+                    onClick={() => togglePerm(p.profile_id)}
+                    style={{ cursor: locked ? "default" : "pointer" }}
+                  >
+                    <span className="chess-avatar">{p.profiles?.avatar}</span>
+                    <span className="chess-perm-name">{p.profiles?.username}{p.profile_id === room.host_id ? " 👑" : ""}</span>
+                    <span className={"chess-check" + (on ? " on" : "")}>{on ? "✓" : ""}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <div className="chess-histbox">
+            <div className="chess-histhead"><span>{t("chessHistory")}</span></div>
+            {movePairs.length === 0 && <div className="chess-hrow empty">·</div>}
+            {movePairs.map(mp => (
+              <div key={mp.num} className="chess-hrow">
+                <span className="chess-hnum">{mp.num}.</span>
+                <span className="chess-hcell">{mp.w}</span>
+                <span className="chess-hcell">{mp.b}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {promoModal}
+      </div>
+    );
   } else {
     content = (
       <div className="chess-layout">
@@ -584,34 +893,8 @@ export default function ChessGame({ room, me, isHost, players, t, lang, onFinish
 
         <div className="chess-board-wrap">
           <div className="chess-status">{statusMessage()}</div>
-          <div className="chess-board-frame">
-            <div className="chess-grid">
-              {displayRows.map((row, ri) => row.map((cell, ci) => {
-                const sq = cell ? cell.square : squareFromDisplay(ri, ci, flip);
-                const isLight = (ri + ci) % 2 === 0;
-                const sel = sq === selSquare;
-                const target = sq in legalTargets;
-                const isCap = target && legalTargets[sq];
-                const last = lastMove && (lastMove.from === sq || lastMove.to === sq);
-                const check = sq === checkedKingSq;
-                return (
-                  <div
-                    key={sq}
-                    className={"chess-sq " + (isLight ? "l" : "d") + (sel ? " sel" : "") + (last ? " last" : "") + (check ? " check" : "")}
-                    onClick={() => onSquareClick(sq)}
-                    style={{ cursor: isMyTurn && (cell?.color === myColor || target) ? "pointer" : "default" }}
-                  >
-                    {cell && <span className={"chess-piece " + cell.color + " t-" + cell.type}>{GLYPH[cell.color][cell.type]}</span>}
-                    {target && !cell && <span className="chess-dot" />}
-                    {isCap && <span className="chess-ring" />}
-                  </div>
-                );
-              }))}
-            </div>
-          </div>
-          <div className="chess-coords-files">
-            {(flip ? FILES.split("").reverse() : FILES.split("")).map(f => <span key={f}>{f}</span>)}
-          </div>
+          <BoardGrid interactable={(cell, target) => isMyTurn && (cell?.color === myColor || target)} />
+          {filesRow}
         </div>
 
         <div className="chess-side-bot">
@@ -657,7 +940,7 @@ export default function ChessGame({ room, me, isHost, players, t, lang, onFinish
 
           <div className="chess-histbox">
             <div className="chess-histhead"><span>{t("chessHistory")}</span></div>
-            {movePairs.length === 0 && <div className="chess-hrow empty">—</div>}
+            {movePairs.length === 0 && <div className="chess-hrow empty">·</div>}
             {movePairs.map(mp => (
               <div key={mp.num} className="chess-hrow">
                 <span className="chess-hnum">{mp.num}.</span>
@@ -668,20 +951,7 @@ export default function ChessGame({ room, me, isHost, players, t, lang, onFinish
           </div>
         </div>
 
-        {promo && (
-          <div className="chess-overlay" onClick={() => setPromo(null)}>
-            <div className="chess-promo" onClick={e => e.stopPropagation()}>
-              <div className="chess-promo-title">{t("chessPromoTitle")}</div>
-              <div className="chess-promo-row">
-                {["q", "r", "b", "n"].map(type => (
-                  <button key={type} className="chess-promo-btn" onClick={() => choosePromotion(type)}>
-                    {GLYPH[myColor || "w"][type]}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
+        {promoModal}
 
         {winner && (
           <div className="win-banner" style={{ background: "radial-gradient(circle at 50% 40%, rgba(255,209,102,.18), rgba(10,7,5,.86) 72%)" }}>
@@ -696,7 +966,6 @@ export default function ChessGame({ room, me, isHost, players, t, lang, onFinish
       </div>
     );
   }
-
   return (
     <div className="panel chess-panel" style={{ maxWidth: "min(1080px, 96vw)" }}>
       <h1>{t("chessTitle")}</h1>
