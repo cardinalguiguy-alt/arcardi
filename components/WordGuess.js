@@ -5,6 +5,7 @@ import { saveGameState, readGameState, resetRoomToLobby, recordMatchResult } fro
 import { DICT_FR, DICT_EN } from "@/lib/wordDictionary";
 import { playWordleGreen, playWordleYellow } from "@/lib/sfx";
 import FlagIcon from "./FlagIcon";
+import GameCountdown from "./GameCountdown";
 
 const WORD_LEN = 5;
 const MAX_TRIES = 6;
@@ -87,6 +88,11 @@ export default function WordGuess({ room, me, isHost, players, onFinish, t, lang
   const myResult = useRef({ solved: false, tries: 0 });
   const doneSetRef = useRef(new Set());
   const restoredRef = useRef(false);
+  // Décompte 3-2-1 (2026-07) : Mot Mystère n'a pas de chrono de manche à
+  // décaler — mais SAISIE AU CLAVIER PHYSIQUE (onKeyDown sur le panneau,
+  // pas de simples boutons), donc l'overlay seul ne bloque rien : typeLetter/
+  // submit/backspace vérifient explicitement ce drapeau (voir plus bas).
+  const [countingDown, setCountingDown] = useState(false);
 
   useEffect(() => {
     const ch = supabase.channel("wordle_" + room.id, { config: { broadcast: { self: true } } });
@@ -100,6 +106,7 @@ export default function WordGuess({ room, me, isHost, players, onFinish, t, lang
       setRevealState({ row: -1, count: 0 });
       myResult.current = { solved: false, tries: 0 };
       doneSetRef.current = new Set();
+      setCountingDown(true);
       setTimeout(() => panelRef.current && panelRef.current.focus(), 50);
       if (isHost) {
         saveGameState(room.id, "wordle", {
@@ -182,13 +189,15 @@ export default function WordGuess({ room, me, isHost, players, onFinish, t, lang
   }
 
   function typeLetter(l) {
+    if (countingDown) return;
     if (myResult.current.solved || finished) return;
     if (current.length >= WORD_LEN) return;
     setCurrent(c => c + l);
   }
-  function backspace() { setCurrent(c => c.slice(0, -1)); }
+  function backspace() { if (!countingDown) setCurrent(c => c.slice(0, -1)); }
 
   function submit() {
+    if (countingDown) return;
     if (myResult.current.solved || finished) return;
     const g = normalize(current);
     if (g.length !== WORD_LEN) {
@@ -247,11 +256,16 @@ export default function WordGuess({ room, me, isHost, players, onFinish, t, lang
   const nextTryPoints = Math.max(7 - (guesses.length + 1), 1);
 
   return (
-    <div className="panel" ref={panelRef} tabIndex={0} onKeyDown={onKeyDown} style={{ outline: "none", maxWidth: "min(560px, 90vw)" }}>
+    <div className="panel wg-panel" ref={panelRef} tabIndex={0} onKeyDown={onKeyDown} style={{ outline: "none", maxWidth: "min(560px, 90vw)" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
         <h1>{t("wordleTitle")}</h1>
         {secret && <span className="lang-pill"><FlagIcon code={wordLang === "en" ? "gb" : "fr"} size={14} /> {wordLang === "en" ? "EN" : "FR"}</span>}
       </div>
+      {/* Décompte 3-2-1 : couvre le plateau ET bloque la saisie clavier (voir
+          typeLetter/submit/backspace) le temps que chacun soit prêt. */}
+      {countingDown && secret && (
+        <GameCountdown variant="wg" onDone={() => setCountingDown(false)} />
+      )}
       {!secret && isHost && (
         <>
           <p className="hint">{MAX_TRIES} {t("wordleIntro")}</p>

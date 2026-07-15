@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { saveGameState, readGameState, resetRoomToLobby, recordMatchResult } from "@/lib/gameSync";
 import Crossfade from "@/components/Crossfade";
+import GameCountdown from "@/components/GameCountdown";
 import Die from "./Die";
 import {
   UPPER_IDS, LOWER_IDS, ALL_IDS, UPPER_BONUS_THRESHOLD, UPPER_BONUS_VALUE,
@@ -173,6 +174,10 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
   const [winners, setWinners] = useState([]);
   const [lastAction, setLastAction] = useState(null);
   const [channelReady, setChannelReady] = useState(false);
+  // Décompte 3-2-1 (2026-07, extension explicitement demandée) : pas de
+  // minuteur de tour à décaler ici (contrairement à Ludo/Gold Mines...),
+  // l'overlay plein-panneau suffit à bloquer les clics sur les dés/la table.
+  const [countingDown, setCountingDown] = useState(false);
 
   // Locaux au joueur (jamais diffusés TELS QUELS au sens "état de vérité" —
   // myHeld part bien sur le réseau au moment du lancer, ET, depuis le
@@ -398,6 +403,7 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
       setCelebration(null);
       applyLocalState(payload, { resetGain: true });
       setPhase("playing");
+      setCountingDown(true);
       persist(payload);
     });
 
@@ -1131,9 +1137,14 @@ export default function YahtzeeGame({ room, me, isHost, players, t, lang, onFini
   }
 
   return (
-    <div className="panel" style={{ maxWidth: "min(860px, 94vw)" }}>
+    <div className="panel yz-panel" style={{ maxWidth: "min(860px, 94vw)" }}>
       <h1>{t("yzTitle")}</h1>
       <Crossfade id={phase}>{content}</Crossfade>
+      {/* Décompte 3-2-1 : couvre la table et bloque les clics le temps que
+          chacun soit prêt à lancer les dés. */}
+      {countingDown && phase === "playing" && (
+        <GameCountdown variant="yz" onDone={() => setCountingDown(false)} />
+      )}
     </div>
   );
 }

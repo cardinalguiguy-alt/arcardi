@@ -3,6 +3,7 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { saveGameState, readGameState, resetRoomToLobby, recordMatchResult } from "@/lib/gameSync";
 import Crossfade from "@/components/Crossfade";
+import GameCountdown, { COUNTDOWN_MS } from "@/components/GameCountdown";
 import CardView from "./CardView";
 import {
   COLORS, freshDeck, shuffle, canPlay, hasPlayable, drawCards, nextSeatIdx,
@@ -181,6 +182,12 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
   const [turnDeadline, setTurnDeadline] = useState(null);
   const [turnDeadlineSeat, setTurnDeadlineSeat] = useState(null);
   const [now, setNow] = useState(() => Date.now());
+  // Décompte 3-2-1 (2026-07) : déclenché au MÊME moment que match_start,
+  // c'est-à-dire seulement APRÈS que l'hôte a choisi les sièges (humains +
+  // bots) — voir startWith/sendMatchStart plus bas, aucun changement de
+  // logique de démarrage nécessaire, juste un voile posé au bon moment.
+  const [countingDown, setCountingDown] = useState(false);
+  const countdownEndRef = useRef(0);
   // Animation de pioche (voir lastAction plus bas) : purement locale à
   // chaque client, jamais synchronisée en tant que telle — chacun la
   // déclenche de son côté en réaction au MÊME lastAction reçu par broadcast.
@@ -279,6 +286,11 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
       applyLocalState(payload, { resetGain: true });
       setPhase("playing");
       setColorPickerFor(null);
+      // Décompte 3-2-1 : posé pile au démarrage de la manche (après le choix
+      // des sièges par l'hôte, jamais avant — voir startWith). Les bots
+      // attendent sa fin via countdownEndRef (voir scheduleBots).
+      countdownEndRef.current = Date.now() + COUNTDOWN_MS;
+      setCountingDown(true);
       persist(payload);
       // Si le mélange des sièges place un BOT en premier, personne d'autre
       // ne déclenchera jamais son tour : l'hôte doit l'armer ici. (Sans ça,
@@ -461,6 +473,10 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
     // Nouvelle manche : chacun repart avec le délai complet (30s).
     turnStrikesRef.current = {};
     const tm = computeTurnDeadline(payload);
+    // Décompte 3-2-1 (2026-07) : le premier tour humain ne commence à
+    // décompter ses 30 s qu'une fois le décompte terminé (équité vis-à-vis
+    // de l'overlay qui bloque les clics pendant ce temps).
+    if (tm.deadline) tm.deadline += COUNTDOWN_MS;
     turnMetaRef.current = tm;
     channelRef.current.send({ type: "broadcast", event: "match_start", payload: { ...payload, turnDeadline: tm.deadline, turnDeadlineSeat: tm.seatId } });
     armHumanTurnTimer();
@@ -716,7 +732,9 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
   // mécanique, moins "un bot répond instantanément comme une horloge".
   function scheduleBots() {
     if (!isHost) return;
-    const delay = 500 + Math.random() * 3500;
+    const thinkDelay = 500 + Math.random() * 3500;
+    const waitForCountdown = Math.max(0, countdownEndRef.current - Date.now());
+    const delay = waitForCountdown + thinkDelay;
     botTimer.current = setTimeout(() => {
       const s = stateRef.current;
       if (!s || s.winner) return;
@@ -1291,6 +1309,12 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
     <div className="panel chromatik-panel" style={{ maxWidth: "min(940px, 94vw)" }}>
       <h1>{t("chromatikTitle")}</h1>
       <Crossfade id={phase}>{content}</Crossfade>
+      {/* Décompte 3-2-1 : posé après le choix des sièges par l'hôte (voir
+          match_start), couvre la table et bloque les clics le temps que
+          chacun soit prêt à jouer sa première carte. */}
+      {countingDown && phase === "playing" && (
+        <GameCountdown variant="chromatik" onDone={() => setCountingDown(false)} />
+      )}
     </div>
   );
 }

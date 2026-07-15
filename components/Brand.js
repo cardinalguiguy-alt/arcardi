@@ -52,16 +52,32 @@ export default function Brand({ lang, setLang, t, right, onHome }) {
       </button>
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
         <SettingsMenu t={t} />
-        <button
-          className="btn ghost"
-          style={{ width: "auto", margin: 0, padding: "8px 12px", fontSize: 13 }}
-          onClick={() => setLang(lang === "fr" ? "en" : "fr")}
-        >
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <FlagIcon code={lang === "fr" ? "gb" : "fr"} size={16} />
-            {lang === "fr" ? "EN" : "FR"}
-          </span>
-        </button>
+        {/* Sélecteur de langue (2026-07) : l'ancien bouton unique affichait la
+            langue CIBLE ("EN" pendant qu'on lit en français) — ambigu, on ne
+            sait pas d'un coup d'œil dans quelle langue on est. Remplacé par
+            un double bouton FR/EN toujours visible : la langue active est en
+            évidence (pastille pleine), l'autre reste cliquable en retrait —
+            plus aucune lecture à faire, l'état est montré, pas déduit. */}
+        <div className="lang-switch" role="group" aria-label={t("langSwitchLabel")}>
+          <button
+            type="button"
+            className={"lang-switch-opt" + (lang === "fr" ? " active" : "")}
+            onClick={() => setLang("fr")}
+            aria-pressed={lang === "fr"}
+          >
+            <FlagIcon code="fr" size={15} />
+            <span>FR</span>
+          </button>
+          <button
+            type="button"
+            className={"lang-switch-opt" + (lang === "en" ? " active" : "")}
+            onClick={() => setLang("en")}
+            aria-pressed={lang === "en"}
+          >
+            <FlagIcon code="gb" size={15} />
+            <span>EN</span>
+          </button>
+        </div>
         {right}
       </div>
       {toast && (

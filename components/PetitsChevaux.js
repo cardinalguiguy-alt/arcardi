@@ -4,6 +4,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { saveGameState, readGameState, resetRoomToLobby, recordMatchResult } from "@/lib/gameSync";
 import { playDiceShuffle } from "@/lib/sfx";
 import Crossfade from "./Crossfade";
+import GameCountdown, { COUNTDOWN_MS } from "./GameCountdown";
 
 
 // ===================================================================
@@ -485,6 +486,11 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
   const [winner, setWinner] = useState(null);       // null | couleur
   const [selected, setSelected] = useState([]);     // sélection du picker (>4 joueurs)
   const [myWin, setMyWin] = useState(false);
+  // Décompte 3-2-1 (2026-07, extension du mécanisme déjà en place sur
+  // 10000/Gold Mines/Président) : voile bloquant posé au lancement d'une
+  // manche, le minuteur de tour du premier joueur est décalé d'autant (voir
+  // initialDeadline dans match_start ci-dessous) pour rester équitable.
+  const [countingDown, setCountingDown] = useState(false);
   const [channelReady, setChannelReady] = useState(false);
   // Choix LOCAL du dé à jouer (0 | 1 | "sum") — jamais diffusé : seul le
   // move_attempt (pion + dé) part en réseau.
@@ -661,8 +667,13 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
       // localement par CHAQUE client (un écart de quelques dizaines de ms
       // entre eux est sans conséquence sur une fenêtre de 20 s) — seul
       // l'hôte fait vraiment foi côté arbitrage (armMoveTimer ci-dessous).
-      const initialDeadline = Date.now() + MOVE_MS;
+      // Décalé de COUNTDOWN_MS (2026-07) : le décompte 3-2-1 bloque déjà les
+      // clics via l'overlay, mais sans ce décalage les 20 s du tout premier
+      // tour commençaient à courir PENDANT le "3… 2… 1…", grignotées avant
+      // même que quiconque puisse agir.
+      const initialDeadline = Date.now() + MOVE_MS + COUNTDOWN_MS;
       setMoveDeadline(initialDeadline);
+      setCountingDown(true);
       setLastMoved(null);
       setLastEvent(null);
       setWinner(null);
@@ -1787,6 +1798,11 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
     <div className="panel ludo-panel" style={{ maxWidth: "min(800px, 96vw)" }}>
       <h1>{t("ludoTitle")}</h1>
       <Crossfade id={phase}>{content}</Crossfade>
+      {/* Décompte 3-2-1 aux couleurs du plateau : couvre le panneau et
+          bloque les clics le temps que chacun soit prêt à lancer les dés. */}
+      {countingDown && phase === "playing" && (
+        <GameCountdown variant="ludo" onDone={() => setCountingDown(false)} />
+      )}
     </div>
   );
 }

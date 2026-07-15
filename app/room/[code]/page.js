@@ -447,52 +447,40 @@ export default function Room() {
     } catch (e) {}
   }
 
-  // Ambiance "lumière éteinte" du 10000 (demande 2026-07) : pendant une
-  // partie de 10000, TOUT le thème feu de camp (fond marron, encarts,
-  // pastilles) bascule en bleu marine profond, comme si on éteignait la
-  // lumière pour jouer aux dés — ambiance clandestine, et l'encart néon du
-  // jeu redevient cohérent avec la pièce. Une simple classe posée sur
-  // <body> (les variables CSS font le reste, voir body.tenk-night dans
-  // globals.css) ; les bulles champagne restent, recolorées en froid.
+  // Ambiances de pièce (généralisé 2026-07) : pendant une partie, le thème
+  // feu de camp (fond, encarts, pastilles, bulles champagne) glisse vers une
+  // teinte propre au jeu en cours — mécanique unique pour les 15 jeux
+  // concernés, une classe sur <body>, les variables CSS font le reste (voir
+  // body.<x>-theme dans globals.css). Le 10000 ("lumière éteinte", bleu
+  // marine) et les 3 autres ambiances d'origine (Petit Bac, Ludo, Worldle)
+  // gardent exactement leurs noms de classe historiques ; les 11 nouveaux
+  // jeux reprennent le même schéma <gameId>-theme. Yahtzee est volontairement
+  // exclu (garde le feu de camp par défaut, demande explicite).
   // Hook placé AVANT les early returns (règle des hooks React).
-  const tenkNight = !!(room && me && room.status === "playing" && room.current_game === "tenk");
+  const ROOM_THEME_CLASS = {
+    tenk: "tenk-night",
+    petitbac: "pb-theme",
+    ludo: "ludo-theme",
+    worldle: "worldle-theme",
+    quiz: "quiz-theme",
+    wordle: "wordle-theme",
+    piano: "piano-theme",
+    connect4: "connect4-theme",
+    echoes: "echoes-theme",
+    diapason: "diapason-theme",
+    heist: "heist-theme",
+    chromatik: "chromatik-theme",
+    goldmines: "goldmines-theme",
+    president: "president-theme",
+    tupreferes: "tupreferes-theme",
+    // yahtzee : pas d'entrée — reste au thème feu de camp par défaut.
+  };
+  const playingThemeClass = (room && me && room.status === "playing" && ROOM_THEME_CLASS[room.current_game]) || null;
   useEffect(() => {
     if (typeof document === "undefined") return;
-    document.body.classList.toggle("tenk-night", tenkNight);
-    return () => document.body.classList.remove("tenk-night");
-  }, [tenkNight]);
-
-  // Ambiances dédiées Petit Bac (Categories) et Petits Chevaux (Ludo)
-  // (demande 2026-07) : même mécanique que tenk-night, en plus discret —
-  // ces deux jeux n'ont pas d'encart à fort contraste comme le 10000, un
-  // simple glissement de teinte du fond (rose pour Categories, orangé
-  // pour Ludo, voir body.pb-theme / body.ludo-theme dans globals.css)
-  // suffit à leur donner une identité cohérente sans dénaturer le thème
-  // feu de camp du reste du site.
-  const pbTheme = !!(room && me && room.status === "playing" && room.current_game === "petitbac");
-  useEffect(() => {
-    if (typeof document === "undefined") return;
-    document.body.classList.toggle("pb-theme", pbTheme);
-    return () => document.body.classList.remove("pb-theme");
-  }, [pbTheme]);
-
-  const ludoTheme = !!(room && me && room.status === "playing" && room.current_game === "ludo");
-  useEffect(() => {
-    if (typeof document === "undefined") return;
-    document.body.classList.toggle("ludo-theme", ludoTheme);
-    return () => document.body.classList.remove("ludo-theme");
-  }, [ludoTheme]);
-
-  // Ambiance Worldle (harmonisation 2026-07) : même mécanique — le fond
-  // feu de camp glisse vers un VERT/BLEU planétaire pendant une partie de
-  // Worldle, pour que le fond et la zone de jeu racontent le même thème
-  // (voir body.worldle-theme dans globals.css).
-  const worldleTheme = !!(room && me && room.status === "playing" && room.current_game === "worldle");
-  useEffect(() => {
-    if (typeof document === "undefined") return;
-    document.body.classList.toggle("worldle-theme", worldleTheme);
-    return () => document.body.classList.remove("worldle-theme");
-  }, [worldleTheme]);
+    if (playingThemeClass) document.body.classList.add(playingThemeClass);
+    return () => { if (playingThemeClass) document.body.classList.remove(playingThemeClass); };
+  }, [playingThemeClass]);
 
   // Mode agrandi : même mécanique de classe sur <body> que tenk-night —
   // uniquement pendant une partie (au lobby, l'en-tête reste toujours là).
@@ -657,7 +645,9 @@ export default function Room() {
               aria-label={t("endGameShort")}
               style={meta ? { borderColor: `var(${meta.accent})` } : undefined}
             >
-              <span className="back-room-icon" aria-hidden="true">⏹️</span>
+              <svg className="back-room-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <rect x="5" y="5" width="14" height="14" rx="2.5" />
+              </svg>
               <span className="back-room-label">{t("endGameShort")}</span>
             </button>
           )}

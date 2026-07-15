@@ -188,6 +188,142 @@ body.worldle-theme .rules-info-btn:hover{
 body.worldle-theme .stage-zoom-fab:hover, body.worldle-theme .stage-zoom-fab:focus-visible{ border-color:var(--acc-worldle); }
 body.worldle-theme .stage-zoom-fab.on{ color:var(--acc-worldle); border-color:rgba(111,168,255,.6); }
 
+/* ===== Ambiances de pièce généralisées (2026-07) : un thème par jeu,
+   même mécanisme que tenk-night/pb-theme/ludo-theme/worldle-theme
+   ci-dessus. Yahtzee est volontairement exclu (garde le "feu de camp"
+   par défaut). ===== */
+body.quiz-theme{
+  --bg:#0A171A; --bg2:#102528; --card:#173336; --card2:#1E4143;
+  --ink:#E5F5F4; --muted:#95C6C2; --line:rgba(176,232,227,0.16);
+}
+body.quiz-theme .ember .ember-dot{ filter:hue-rotate(155deg) saturate(0.85) brightness(0.95); }
+body.quiz-theme{
+  background-image:
+    radial-gradient(900px 500px at 15% -10%, rgba(60,194,221,0.12), transparent 60%),
+    radial-gradient(800px 500px at 95% 0%, rgba(237,201,94,0.08), transparent 60%),
+    radial-gradient(700px 600px at 50% 110%, rgba(77,151,203,0.06), transparent 60%);
+}
+
+body.wordle-theme{
+  --bg:#141604; --bg2:#1C1F08; --card:#282C10; --card2:#333811;
+  --ink:#F3F4E3; --muted:#B9BE95; --line:rgba(211,219,158,0.16);
+}
+body.wordle-theme .ember .ember-dot{ filter:hue-rotate(65deg) saturate(0.9) brightness(0.95); }
+body.wordle-theme{
+  background-image:
+    radial-gradient(900px 500px at 15% -10%, rgba(166,214,63,0.12), transparent 60%),
+    radial-gradient(800px 500px at 95% 0%, rgba(237,201,94,0.08), transparent 60%),
+    radial-gradient(700px 600px at 50% 110%, rgba(123,163,49,0.06), transparent 60%);
+}
+
+body.piano-theme{
+  --bg:#120B1A; --bg2:#1B1027; --card:#271735; --card2:#321F44;
+  --ink:#EFE6F7; --muted:#B49FCB; --line:rgba(196,169,224,0.16);
+}
+body.piano-theme .ember .ember-dot{ filter:hue-rotate(265deg) saturate(0.85) brightness(0.95); }
+body.piano-theme{
+  background-image:
+    radial-gradient(900px 500px at 15% -10%, rgba(159,102,222,0.12), transparent 60%),
+    radial-gradient(800px 500px at 95% 0%, rgba(237,201,94,0.08), transparent 60%),
+    radial-gradient(700px 600px at 50% 110%, rgba(121,73,181,0.06), transparent 60%);
+}
+
+body.connect4-theme{
+  --bg:#0C1420; --bg2:#11192B; --card:#182742; --card2:#1F3153;
+  --ink:#E6EDFA; --muted:#9AAECF; --line:rgba(163,189,232,0.16);
+}
+body.connect4-theme .ember .ember-dot{ filter:hue-rotate(205deg) saturate(0.9) brightness(0.95); }
+body.connect4-theme{
+  background-image:
+    radial-gradient(900px 500px at 15% -10%, rgba(69,120,222,0.12), transparent 60%),
+    radial-gradient(800px 500px at 95% 0%, rgba(237,201,94,0.08), transparent 60%),
+    radial-gradient(700px 600px at 50% 110%, rgba(219,79,79,0.06), transparent 60%);
+}
+
+body.echoes-theme{
+  --bg:#160D14; --bg2:#20111C; --card:#2E1826; --card2:#3B1E30;
+  --ink:#F5E7EF; --muted:#C89FB8; --line:rgba(218,170,199,0.16);
+}
+body.echoes-theme .ember .ember-dot{ filter:hue-rotate(320deg) saturate(0.85) brightness(0.95); }
+body.echoes-theme{
+  background-image:
+    radial-gradient(900px 500px at 15% -10%, rgba(221,89,166,0.12), transparent 60%),
+    radial-gradient(800px 500px at 95% 0%, rgba(237,201,94,0.08), transparent 60%),
+    radial-gradient(700px 600px at 50% 110%, rgba(168,63,124,0.06), transparent 60%);
+}
+
+body.diapason-theme{
+  --bg:#0B1712; --bg2:#0F221A; --card:#153327; --card2:#1B4232;
+  --ink:#E4F5EC; --muted:#93C6AC; --line:rgba(163,224,192,0.16);
+}
+body.diapason-theme .ember .ember-dot{ filter:hue-rotate(150deg) saturate(0.8) brightness(0.95); }
+body.diapason-theme{
+  background-image:
+    radial-gradient(900px 500px at 15% -10%, rgba(63,194,140,0.12), transparent 60%),
+    radial-gradient(800px 500px at 95% 0%, rgba(237,201,94,0.08), transparent 60%),
+    radial-gradient(700px 600px at 50% 110%, rgba(47,148,105,0.06), transparent 60%);
+}
+
+body.heist-theme{
+  --bg:#141013; --bg2:#1E171B; --card:#2B2025; --card2:#382A30;
+  --ink:#F2E8EA; --muted:#C1A0A9; --line:rgba(210,168,180,0.16);
+}
+body.heist-theme .ember .ember-dot{ filter:hue-rotate(340deg) saturate(0.6) brightness(0.85); }
+body.heist-theme{
+  background-image:
+    radial-gradient(900px 500px at 15% -10%, rgba(158,55,73,0.14), transparent 60%),
+    radial-gradient(800px 500px at 95% 0%, rgba(237,201,94,0.08), transparent 60%),
+    radial-gradient(700px 600px at 50% 110%, rgba(30,26,28,0.3), transparent 60%);
+}
+
+body.chromatik-theme{
+  --bg:#170E0A; --bg2:#22140D; --card:#331D12; --card2:#432717;
+  --ink:#F7EAE1; --muted:#D0A487; --line:rgba(228,182,152,0.16);
+}
+body.chromatik-theme .ember .ember-dot{ filter:hue-rotate(15deg) saturate(1.05) brightness(1.02); }
+body.chromatik-theme{
+  background-image:
+    radial-gradient(900px 500px at 15% -10%, rgba(230,111,49,0.14), transparent 60%),
+    radial-gradient(800px 500px at 95% 0%, rgba(237,201,94,0.09), transparent 60%),
+    radial-gradient(700px 600px at 50% 110%, rgba(200,74,74,0.07), transparent 60%);
+}
+
+body.goldmines-theme{
+  --bg:#171207; --bg2:#221A09; --card:#33260D; --card2:#433110;
+  --ink:#F7EFDD; --muted:#CDB57F; --line:rgba(224,196,140,0.16);
+}
+body.goldmines-theme .ember .ember-dot{ filter:hue-rotate(35deg) saturate(1) brightness(1); }
+body.goldmines-theme{
+  background-image:
+    radial-gradient(900px 500px at 15% -10%, rgba(224,172,58,0.14), transparent 60%),
+    radial-gradient(800px 500px at 95% 0%, rgba(237,201,94,0.09), transparent 60%),
+    radial-gradient(700px 600px at 50% 110%, rgba(151,110,32,0.07), transparent 60%);
+}
+
+body.president-theme{
+  --bg:#0E0F17; --bg2:#141628; --card:#1D2038; --card2:#262A48;
+  --ink:#E8E9F7; --muted:#A2A6CE; --line:rgba(178,183,224,0.16);
+}
+body.president-theme .ember .ember-dot{ filter:hue-rotate(235deg) saturate(0.85) brightness(0.95); }
+body.president-theme{
+  background-image:
+    radial-gradient(900px 500px at 15% -10%, rgba(91,79,209,0.13), transparent 60%),
+    radial-gradient(800px 500px at 95% 0%, rgba(237,201,94,0.08), transparent 60%),
+    radial-gradient(700px 600px at 50% 110%, rgba(196,171,58,0.06), transparent 60%);
+}
+
+body.tupreferes-theme{
+  --bg:#170B14; --bg2:#210F1D; --card:#30162A; --card2:#3E1C36;
+  --ink:#F7E7F2; --muted:#CB9AC0; --line:rgba(223,166,209,0.16);
+}
+body.tupreferes-theme .ember .ember-dot{ filter:hue-rotate(300deg) saturate(0.95) brightness(0.98); }
+body.tupreferes-theme{
+  background-image:
+    radial-gradient(900px 500px at 15% -10%, rgba(206,72,177,0.13), transparent 60%),
+    radial-gradient(800px 500px at 95% 0%, rgba(237,201,94,0.08), transparent 60%),
+    radial-gradient(700px 600px at 50% 110%, rgba(154,54,133,0.06), transparent 60%);
+}
+
 /* ===== Worldle : liste des tentatives + révélation (2026-07) =====
    Liste qui se COMPACTE progressivement (voir GUESS_COMPACT_AT/TINY_AT dans
    Worldle.js) : jamais de scroll vertical même à 10/10 essais — seuls le
@@ -369,6 +505,27 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 .btn:active{ transform:scale(.985); filter:brightness(.97); }
 .btn:disabled{opacity:.5; cursor:default; transform:none;}
 .btn.ghost{background:rgba(255,255,255,.06); color:var(--ink); box-shadow:none; border:2px solid var(--line);}
+/* Sélecteur de langue FR/EN (2026-07) : double bouton, jamais un seul —
+   fini l'ambiguïté "est-ce que ce libellé montre ma langue actuelle ou
+   celle que je vais obtenir en cliquant ?". La langue active porte un fond
+   plein (même couleur que .settings-avatar-btn.active, cohérence du site),
+   l'autre reste en retrait mais cliquable directement (pas de bascule à
+   deux étapes). */
+.lang-switch{
+  display:flex; align-items:center; gap:2px; padding:3px;
+  background:rgba(255,255,255,.06); border:2px solid var(--line); border-radius:99px;
+}
+.lang-switch-opt{
+  display:flex; align-items:center; gap:5px;
+  padding:5px 10px; border-radius:99px; border:none;
+  background:transparent; color:var(--muted); font-size:12.5px; font-weight:800;
+  cursor:pointer; transition:background .15s ease, color .15s ease;
+}
+.lang-switch-opt:hover{ color:var(--ink); }
+.lang-switch-opt.active{
+  background:rgba(255,209,102,.15); color:var(--ink);
+  box-shadow:inset 0 0 0 1.5px var(--p2);
+}
 .err{color:var(--p1); font-size:13px; margin-top:10px; font-weight:700;}
 .ok{color:var(--p3); font-size:13px; margin-top:10px; font-weight:700;}
 .switch-line{text-align:center; margin-top:16px; font-size:13px; color:var(--muted);}
@@ -2255,7 +2412,7 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
    Voile qui couvre TOUT le panneau du jeu (les trois panneaux concernés
    sont passés en position:relative ci-dessous) et intercepte les clics.
    Chaque variante reprend la police et la couleur du THÈME de son jeu. */
-.gm-panel, .pres-panel, .tenk-panel{ position:relative; }
+.gm-panel, .pres-panel, .tenk-panel, .ludo-panel, .c4-panel, .wg-panel, .yz-panel, .chromatik-panel{ position:relative; }
 .game-countdown{
   position:absolute; inset:0; z-index:80;
   display:flex; align-items:center; justify-content:center;
@@ -2311,6 +2468,41 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
 .game-countdown.pres .game-countdown-digit{
   font-family:'Bungee'; color:var(--acc-president);
   text-shadow:0 0 16px rgba(76,195,138,.7), 0 5px 0 rgba(10,60,35,.85);
+}
+/* Extension du décompte à 5 jeux de plus (2026-07) : mêmes recettes
+   (fond teinté très sombre + chiffres relief à l'accent du jeu). */
+/* Ludo : bois chaud, chiffres ambrés. */
+.game-countdown.ludo{ background:rgba(28,16,4,.6); }
+.game-countdown.ludo .game-countdown-digit{
+  font-family:'Bungee'; color:var(--acc-ludo);
+  -webkit-text-stroke:1.5px rgba(80,42,4,.85);
+  text-shadow:0 5px 0 rgba(90,50,10,.85), 0 0 16px rgba(255,184,77,.4);
+}
+/* Puissance 4 : plastique rouge/bleu, contour net. */
+.game-countdown.c4{ background:rgba(6,10,22,.6); }
+.game-countdown.c4 .game-countdown-digit{
+  font-family:'Bungee'; color:var(--acc-c4);
+  -webkit-text-stroke:1.5px rgba(50,10,8,.85);
+  text-shadow:0 5px 0 rgba(90,15,10,.85), 0 0 16px rgba(255,59,48,.4);
+}
+/* Mot Mystère : vert tuile, même famille que les cases trouvées. */
+.game-countdown.wg{ background:rgba(10,16,4,.6); }
+.game-countdown.wg .game-countdown-digit{
+  font-family:'Bungee'; color:var(--acc-wordle);
+  text-shadow:0 0 16px rgba(168,224,99,.65), 0 5px 0 rgba(35,60,15,.85);
+}
+/* Yahtzee : or de casino, même esprit que le 10000. */
+.game-countdown.yz{ background:rgba(20,14,2,.62); }
+.game-countdown.yz .game-countdown-digit{
+  font-family:'Bungee'; color:var(--acc-yahtzee);
+  -webkit-text-stroke:1.5px rgba(80,58,6,.85);
+  text-shadow:0 5px 0 rgba(90,65,10,.85), 0 0 16px rgba(255,209,102,.4);
+}
+/* Chromatik : pêche chaleureux, cartes en main. */
+.game-countdown.chromatik{ background:rgba(22,10,6,.6); }
+.game-countdown.chromatik .game-countdown-digit{
+  font-family:'Bungee'; color:var(--acc-chromatik);
+  text-shadow:0 0 16px rgba(255,159,110,.55), 0 5px 0 rgba(90,40,15,.85);
 }
 @media (prefers-reduced-motion: reduce){
   /* Fondu simple, sans zoom : le décompte reste lisible et séquentiel. */
@@ -3698,6 +3890,7 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
   .brand .tiles, .brand > button[title="ARCARDI"]{ gap:3px; }
   .brand > div{ gap:10px !important; }
   .brand > div > button.btn.ghost, .brand > div > a.btn.ghost{ padding:7px 9px !important; font-size:12px !important; }
+  .lang-switch-opt{ padding:5px 8px !important; font-size:11.5px !important; }
 }
 
 /* ===== Président : animations de cartes (jamais de téléportation) =====

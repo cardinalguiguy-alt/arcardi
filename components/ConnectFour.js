@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { saveGameState, readGameState, resetRoomToLobby, recordMatchResult } from "@/lib/gameSync";
 import Crossfade from "./Crossfade";
+import GameCountdown from "./GameCountdown";
 
 const ROWS = 6, COLS = 7;
 const GAME_ID = "connect4";
@@ -54,6 +55,10 @@ export default function ConnectFour({ room, me, isHost, players, t, lang, onFini
   const [selected, setSelected] = useState([]);
   const [myWin, setMyWin] = useState(false);
   const [channelReady, setChannelReady] = useState(false);
+  // Décompte 3-2-1 (2026-07) : Puissance 4 n'a pas de minuteur de tour à
+  // décaler (contrairement à Ludo/Gold Mines/Président/10000) — l'overlay
+  // suffit à retarder le premier coup, aucune autre échéance à recalculer.
+  const [countingDown, setCountingDown] = useState(false);
   const [confetti, setConfetti] = useState([]);
   const [flash, setFlash] = useState(false);
 
@@ -97,6 +102,7 @@ export default function ConnectFour({ room, me, isHost, players, t, lang, onFini
       setMyWin(false);
       savedResultRef.current = false;
       setPhase("playing");
+      setCountingDown(true);
       if (isHost) {
         saveGameState(room.id, GAME_ID, {
           phase: "playing", p1: payload.p1, p2: payload.p2, board: emptyBoard(),
@@ -413,9 +419,14 @@ export default function ConnectFour({ room, me, isHost, players, t, lang, onFini
   }
 
   return (
-    <div className="panel" style={{ maxWidth: "min(920px, 96vw)" }}>
+    <div className="panel c4-panel" style={{ maxWidth: "min(920px, 96vw)" }}>
       <h1>{t("c4Title")}</h1>
       <Crossfade id={phase}>{content}</Crossfade>
+      {/* Décompte 3-2-1 : couvre le plateau et bloque les clics le temps que
+          chacun soit prêt à jouer le premier jeton. */}
+      {countingDown && phase === "playing" && (
+        <GameCountdown variant="c4" onDone={() => setCountingDown(false)} />
+      )}
     </div>
   );
 }
