@@ -27,6 +27,7 @@ import PetitBacGame from "@/components/petitbac/PetitBacGame";
 import YahtzeeGame from "@/components/yahtzee/YahtzeeGame";
 import TenkGame from "@/components/tenk/TenkGame";
 import TuPreferesGame from "@/components/tupreferes/TuPreferesGame";
+import ChessGame from "@/components/chess/ChessGame";
 import GameErrorBoundary from "@/components/GameErrorBoundary";
 import DoorStage from "@/components/DoorStage";
 import CurtainStage from "@/components/CurtainStage";
@@ -62,9 +63,10 @@ const GAME_META = {
   tenk:      { icon: "🎰", accent: "--acc-tenk",      nameKey: "nameTenk",    tagKey: "tagTenk", stage: "door" },
   petitbac: { icon: "✏️", accent: "--acc-petitbac", nameKey: "namePetitBac", tagKey: "tagPetitBac", minPlayers: 2, stage: "flash" },
   tupreferes: { icon: "🤔", accent: "--acc-tupreferes", nameKey: "nameTuPreferes", tagKey: "tagTuPreferes", minPlayers: 2, stage: "curtain" },
+  chess:    { icon: "♟️", accent: "--acc-chess",     nameKey: "nameChess",   tagKey: "tagChess", minPlayers: 2, maxPlayers: 2, stage: "door" },
 };
 const STAGE_COMPONENT = { door: DoorStage, curtain: CurtainStage, flash: FlashStage, video: VideoStage };
-const GAME_ORDER = ["quiz", "wordle", "worldle", "petitbac", "tupreferes", "connect4", "ludo", "chromatik", "goldmines", "president", "yahtzee", "tenk", "piano", "echoes", "diapason", "heist"];
+const GAME_ORDER = ["quiz", "wordle", "worldle", "petitbac", "tupreferes", "connect4", "chess", "ludo", "chromatik", "goldmines", "president", "yahtzee", "tenk", "piano", "echoes", "diapason", "heist"];
 
 // Victoires/Défaites, en discret (demande 2026-07) : remplace les deux chips
 // "✓N/✕N" auparavant affichées EN PERMANENCE sur chaque ligne joueur du
@@ -952,6 +954,9 @@ export default function Room() {
                   {room.current_game === "tupreferes" && (
                     <TuPreferesGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
                   )}
+                  {room.current_game === "chess" && (
+                    <ChessGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
+                  )}
                 </StageComponent>
                 </GameErrorBoundary>
                 );
@@ -1028,7 +1033,9 @@ export default function Room() {
                     // ligne : même comportement qu'avant, jamais de faux
                     // verrou au chargement de la page.
                     const onlineCount = players.filter(p => isOnline(p.profile_id)).length;
-                    const disabled = g.minPlayers ? onlineCount < g.minPlayers : false;
+                    // Échecs : jeu à DEUX joueurs pile (g.maxPlayers) — verrouillé
+                    // aussi quand le salon dépasse le maximum, en plus du minimum.
+                    const disabled = (g.minPlayers && onlineCount < g.minPlayers) || (g.maxPlayers && onlineCount > g.maxPlayers) || false;
                     return (
                       <button
                         key={id}
