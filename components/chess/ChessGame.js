@@ -148,6 +148,89 @@ export default function ChessGame({ room, me, isHost, players, t, lang, onFinish
     return map;
   }, [phase, selSquare, canAnalysisMove, view, fen]);
 
+  // ---- Revue de partie (après mat/pat/nulle/temps/abandon) : rejeu coup par
+  // coup + export PGN. Entièrement LOCAL à chaque client (aucun réseau) : on
+  // reconstruit toutes les positions depuis l'historique déjà reçu. ----
+  const [reviewing, setReviewing] = useState(false);
+  const [reviewPly, setReviewPly] = useState(0); // 0 = position de départ, moves.length = position finale
+
+  const reviewData = useMemo(() => {
+    const fens = [START_FEN]; const lasts = [null];
+    const g = new Chess();
+    for (const m of moves) {
+      let ok = false;
+      try { g.move(m.san); ok = true; } catch (e) {}
+      if (!ok) { try { g.move({ from: m.from, to: m.to, promotion: "q" }); ok = true; } catch (e) {} }
+      fens.push(g.fen()); lasts.push({ from: m.from, to: m.to });
+    }
+    return { fens, lasts };
+  }, [moves]);
+
+  const reviewChess = useMemo(() => {
+    if (!reviewing) return null;
+    const c = new Chess();
+    const idx = Math.max(0, Math.min(reviewPly, reviewData.fens.length - 1));
+    try { c.load(reviewData.fens[idx]); } catch (e) {}
+    return c;
+  }, [reviewing, reviewPly, reviewData]);
+
+  function jumpTo(ply) { setReviewing(true); setReviewPly(Math.max(0, Math.min(ply, moves.length))); }
+  function openReview() { setReviewing(true); setReviewPly(moves.length); }
+
+  // Sortie automatique de la revue dès que la partie n'est plus terminée
+  // (rematch, nouvelle manche, passage en analyse) : on ne fige pas le plateau.
+  useEffect(() => { if (!terminal) setReviewing(false); }, [terminal]);
+
+  // Navigation clavier pendant la revue (flèches, début/fin).
+  useEffect(() => {
+    if (!reviewing) return;
+    const onKey = (e) => {
+      if (e.key === "ArrowLeft") setReviewPly(p => Math.max(0, p - 1));
+      else if (e.key === "ArrowRight") setReviewPly(p => Math.min(moves.length, p + 1));
+      else if (e.key === "Home") setReviewPly(0);
+      else if (e.key === "End") setReviewPly(moves.length);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [reviewing, moves.length]);
+
+  function pgnResult() {
+    if (status === "stalemate" || status === "draw") return "1/2-1/2";
+    if (status === "checkmate" || status === "timeout" || status === "resign") {
+      return winner === "w" ? "1-0" : winner === "b" ? "0-1" : "*";
+    }
+    return "*";
+  }
+  function buildPgn() {
+    const d = new Date();
+    const dd = d.getFullYear() + "." + String(d.getMonth() + 1).padStart(2, "0") + "." + String(d.getDate()).padStart(2, "0");
+    const res = pgnResult();
+    const head = [
+      ["Event", "ARCARDI"], ["Site", "ARCARDI"], ["Date", dd],
+      ["White", (white && white.username) || "Blancs"], ["Black", (black && black.username) || "Noirs"],
+      ["Result", res],
+    ].map(([k, v]) => "[" + k + " \"" + String(v).replace(/"/g, "'") + "\"]").join("\n");
+    let body = "";
+    for (let i = 0; i < moves.length; i++) {
+      if (i % 2 === 0) body += (i / 2 + 1) + ". ";
+      body += moves[i].san + " ";
+    }
+    body += res;
+    return head + "\n\n" + body.trim() + "\n";
+  }
+  function downloadPgn() {
+    try {
+      const d = new Date();
+      const stamp = d.getFullYear() + String(d.getMonth() + 1).padStart(2, "0") + String(d.getDate()).padStart(2, "0");
+      const blob = new Blob([buildPgn()], { type: "application/x-chess-pgn" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = "arcardi-echecs-" + stamp + ".pgn";
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+    } catch (e) {}
+  }
+
   function persist(extra = {}) {
     if (!isHost) return;
     saveGameState(room.id, GAME_ID, {
@@ -601,6 +684,7 @@ export default function ChessGame({ room, me, isHost, players, t, lang, onFinish
 
   // ---- Interactions ----
   function onSquareClick(square) {
+    if (reviewing) return; // en revue, le plateau est en lecture seule
     if (phase === "analysis") return onAnalysisSquareClick(square);
     if (!isMyTurn || promo) return;
     const piece = view.get(square);
@@ -693,14 +777,20 @@ export default function ChessGame({ room, me, isHost, players, t, lang, onFinish
 
   // Cases dans l'ordre d'affichage. En partie : camp du joueur local en bas ;
   // en analyse : orientation locale (bouton Retourner).
-  const rows = view.board(); // rangée 8 -> rangée 1
+  const boardView = reviewing && reviewChess ? reviewChess : view; // en revue : position au demi-coup choisi
+  const rows = boardView.board(); // rangée 8 -> rangée 1
   const flip = phase === "analysis" ? analysisFlip : (myColor === "b");
   const displayRows = flip ? rows.slice().reverse().map(r => r.slice().reverse()) : rows;
-  const activeTargets = phase === "analysis" ? analysisTargets : legalTargets;
+  const activeTargets = reviewing ? {} : (phase === "analysis" ? analysisTargets : legalTargets);
+  const effLastMove = reviewing
+    ? reviewData.lasts[Math.max(0, Math.min(reviewPly, reviewData.lasts.length - 1))]
+    : lastMove;
 
   // Roi en échec à surligner
   let checkedKingSq = null;
-  if (status === "check" || status === "checkmate") {
+  if (reviewing && reviewChess) {
+    try { if (reviewChess.isCheck()) { const side = reviewChess.turn(); for (const row of rows) for (const cell of row) if (cell && cell.type === "k" && cell.color === side) checkedKingSq = cell.square; } } catch (e) {}
+  } else if (status === "check" || status === "checkmate") {
     const side = status === "checkmate" ? winner === "w" ? "b" : "w" : turnColor;
     for (const row of rows) for (const cell of row) if (cell && cell.type === "k" && cell.color === side) checkedKingSq = cell.square;
   } else if (phase === "analysis") {
@@ -756,10 +846,10 @@ export default function ChessGame({ room, me, isHost, players, t, lang, onFinish
           {displayRows.map((row, ri) => row.map((cell, ci) => {
             const sq = cell ? cell.square : squareFromDisplay(ri, ci, flip);
             const isLight = (ri + ci) % 2 === 0;
-            const sel = sq === selSquare;
+            const sel = !reviewing && sq === selSquare;
             const target = sq in activeTargets;
             const isCap = target && activeTargets[sq];
-            const last = lastMove && (lastMove.from === sq || lastMove.to === sq);
+            const last = effLastMove && (effLastMove.from === sq || effLastMove.to === sq);
             const check = sq === checkedKingSq;
             const rankNum = (flip ? ri : 7 - ri) + 1; // numéro de rangée (1-8), tient compte du flip
             return (
@@ -892,9 +982,18 @@ export default function ChessGame({ room, me, isHost, players, t, lang, onFinish
         </div>
 
         <div className="chess-board-wrap">
-          <div className="chess-status">{statusMessage()}</div>
+          <div className="chess-status">{reviewing ? t("chessReviewing") : statusMessage()}</div>
           <BoardGrid interactable={(cell, target) => isMyTurn && (cell?.color === myColor || target)} />
           {filesRow}
+          {reviewing && (
+            <div className="chess-review-nav">
+              <button className="chess-btn" onClick={() => setReviewPly(0)} disabled={reviewPly === 0} aria-label={t("chessReviewFirst")}>⏮</button>
+              <button className="chess-btn" onClick={() => setReviewPly(p => Math.max(0, p - 1))} disabled={reviewPly === 0} aria-label={t("chessReviewPrev")}>◀</button>
+              <span className="chess-review-ply">{t("chessMove")} {reviewPly} / {moves.length}</span>
+              <button className="chess-btn" onClick={() => setReviewPly(p => Math.min(moves.length, p + 1))} disabled={reviewPly === moves.length} aria-label={t("chessReviewNext")}>▶</button>
+              <button className="chess-btn" onClick={() => setReviewPly(moves.length)} disabled={reviewPly === moves.length} aria-label={t("chessReviewLast")}>⏭</button>
+            </div>
+          )}
         </div>
 
         <div className="chess-side-bot">
@@ -927,6 +1026,14 @@ export default function ChessGame({ room, me, isHost, players, t, lang, onFinish
 
           {terminal && (
             <div className="chess-actions">
+              {/* Revue + export : disponibles pour TOUT LE MONDE (joueurs et
+                  spectateurs), chacun de son côté. */}
+              <div className="chess-btnrow">
+                {!reviewing
+                  ? <button className="chess-btn" onClick={openReview} disabled={moves.length === 0}>{t("chessAnalyze")}</button>
+                  : <button className="chess-btn" onClick={() => setReviewing(false)}>{t("chessCloseReview")}</button>}
+                <button className="chess-btn" onClick={downloadPgn} disabled={moves.length === 0}>{t("chessDownloadPgn")}</button>
+              </div>
               {isHost ? (
                 <div className="chess-btnrow">
                   <button className="chess-btn primary" onClick={rematch}>{t("chessRematch")}</button>
@@ -941,26 +1048,36 @@ export default function ChessGame({ room, me, isHost, players, t, lang, onFinish
           <div className="chess-histbox">
             <div className="chess-histhead"><span>{t("chessHistory")}</span></div>
             {movePairs.length === 0 && <div className="chess-hrow empty">·</div>}
-            {movePairs.map(mp => (
-              <div key={mp.num} className="chess-hrow">
-                <span className="chess-hnum">{mp.num}.</span>
-                <span className="chess-hcell">{mp.w}</span>
-                <span className="chess-hcell">{mp.b}</span>
-              </div>
-            ))}
+            {movePairs.map(mp => {
+              const wPly = mp.num * 2 - 1, bPly = mp.num * 2;
+              const clickable = terminal && moves.length > 0;
+              return (
+                <div key={mp.num} className="chess-hrow">
+                  <span className="chess-hnum">{mp.num}.</span>
+                  <span
+                    className={"chess-hcell" + (clickable ? " clk" : "") + (reviewing && reviewPly === wPly ? " cur" : "")}
+                    onClick={clickable ? () => jumpTo(wPly) : undefined}
+                  >{mp.w}</span>
+                  <span
+                    className={"chess-hcell" + (clickable && mp.b ? " clk" : "") + (reviewing && reviewPly === bPly ? " cur" : "")}
+                    onClick={clickable && mp.b ? () => jumpTo(bPly) : undefined}
+                  >{mp.b}</span>
+                </div>
+              );
+            })}
           </div>
         </div>
 
         {promoModal}
 
-        {winner && (
+        {winner && !reviewing && (
           <div className="win-banner" style={{ background: "radial-gradient(circle at 50% 40%, rgba(255,209,102,.18), rgba(10,7,5,.86) 72%)" }}>
             <div className="win-banner-title" style={{ textShadow: "0 0 18px rgba(255,209,102,.8), 0 3px 0 rgba(0,0,0,.4)" }}>
               {isPlayer ? (myWin ? "🏆 " + t("chessWinYou") : t("chessWinOpponent")) : t("chessGameOver")}
             </div>
           </div>
         )}
-        {confetti.map(p => (
+        {!reviewing && confetti.map(p => (
           <span key={p.key} className="confetti-piece" style={{ left: p.left + "%", width: p.size, height: p.size * 1.4, borderRadius: p.round ? "50%" : 2, background: p.color, "--drift": p.drift + "px", animationDuration: p.duration + "s", animationDelay: p.delay + "s" }} />
         ))}
       </div>

@@ -5520,3 +5520,11 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
 }
 .rami-sort-btn:hover{ background:rgba(224,122,95,.2); }
 .rami-sort-btn:active{ transform:scale(.96); }
+
+/* Échecs : revue de partie (rejeu coup par coup + liste cliquable). */
+.chess-review-nav{ display:flex; align-items:center; justify-content:center; gap:6px; margin-top:12px; flex-wrap:wrap; }
+.chess-review-nav .chess-btn{ min-width:40px; padding:8px 10px; }
+.chess-review-ply{ font-family:'Space Mono'; font-size:13px; color:var(--muted); min-width:104px; text-align:center; }
+.chess-hcell.clk{ cursor:pointer; border-radius:5px; transition:background .12s ease; }
+.chess-hcell.clk:hover{ background:rgba(232,183,90,.16); }
+.chess-hcell.cur{ background:var(--acc-chess); color:#2B1B12; font-weight:800; border-radius:5px; }
