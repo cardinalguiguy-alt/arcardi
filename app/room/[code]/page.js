@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-import { resetRoomToLobby, launchGame, clearGameState, nominateHost, leaveRoomAndHandoff, claimAbandonedHost } from "@/lib/gameSync";
+import { resetRoomToLobby, launchGame, launchStage, clearGameState, nominateHost, leaveRoomAndHandoff, claimAbandonedHost } from "@/lib/gameSync";
 import { useLang } from "@/lib/i18n";
 import { duckAmbienceForGame, resumeAmbienceForNav } from "@/lib/ambience";
 import { playGameCardClick } from "@/lib/sfx";
@@ -321,6 +321,21 @@ export default function Room() {
     await launchGame(room.id, gameId);
   }
 
+  // Ouverture synchronisée de la scène (demande 2026-07) : le bouton
+  // "Jouer" de la porte/rideau/flash/vidéo (DoorStage.js et copies) n'est
+  // plus un simple clic LOCAL qui n'ouvrait que la porte de celui qui
+  // cliquait — seul l'hôte peut désormais cliquer, et `launchStage` écrit
+  // l'horodatage cible que chaque Stage (hôte compris) attend avant de
+  // faire pivoter sa porte, exactement le même principe que `launch`
+  // ci-dessus pour le lancement de la partie. Mise à jour locale
+  // immédiate : l'hôte n'attend pas le round-trip Realtime pour voir sa
+  // propre porte s'animer.
+  async function openStage() {
+    if (!isHost) return;
+    const openAt = await launchStage(room.id);
+    setRoom(r => (r ? { ...r, stage_launch_at: openAt } : r));
+  }
+
   // "Nommer comme host" (demande 2026-07, point 4) : transfert volontaire et
   // immédiat, via une RPC dédiée (la policy RLS empêcherait sinon l'hôte
   // d'écrire un host_id différent du sien). Mise à jour locale immédiate en
@@ -403,7 +418,9 @@ export default function Room() {
     const launchAt = await launchGame(room.id, gameId);
     // Mise à jour locale immédiate côté hôte (même filet que backToLobby) :
     // ne dépend pas du round-trip Realtime pour voir l'effet de son propre clic.
-    setRoom(r => (r ? { ...r, status: "playing", current_game: gameId, launch_at: launchAt, game_state: null } : r));
+    // stage_launch_at repart à null : la scène redémarre porte fermée, en
+    // attente d'un nouveau clic "Jouer" (voir launchGame dans gameSync.js).
+    setRoom(r => (r ? { ...r, status: "playing", current_game: gameId, launch_at: launchAt, game_state: null, stage_launch_at: null } : r));
   }
 
   // Callback passé à chaque jeu pour son bouton de fin de partie
@@ -768,7 +785,7 @@ export default function Room() {
               {meta && (() => {
                 const StageComponent = STAGE_COMPONENT[meta.stage] || DoorStage;
                 return (
-                <StageComponent gameId={room.current_game} icon={meta.icon} name={t(meta.nameKey)} accentVar={meta.accent} lang={lang} t={t} onRulesOpenChange={setReadingRules} rulesReaderNames={rulesReaderNames}>
+                <StageComponent gameId={room.current_game} icon={meta.icon} name={t(meta.nameKey)} accentVar={meta.accent} lang={lang} t={t} onRulesOpenChange={setReadingRules} rulesReaderNames={rulesReaderNames} isHost={isHost} stageLaunchAt={room.stage_launch_at} onHostOpen={openStage}>
                   {room.current_game === "quiz" && (
                     <QuizGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
                   )}

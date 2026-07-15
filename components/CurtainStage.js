@@ -9,34 +9,51 @@ import GameRulesButton from "./GameRulesButton";
    NE TOUCHE PAS à DoorStage.js — copie volontaire pour ne jamais risquer de
    régression sur les jeux de cartes/dés qui gardent la porte en bois.
 
-   Purement une couche de présentation LOCALE au client, comme DoorStage :
-   cet état n'est jamais envoyé en réseau et ne touche à rien de l'état de
-   partie réel.
+   Ouverture synchronisée (2026-07) : cet état reste LOCAL à chaque client,
+   jamais envoyé en réseau, mais son DÉCLENCHEMENT ne l'est plus — seul
+   l'hôte peut cliquer sur "Jouer", et le rideau se lève au même instant
+   chez tout le monde grâce à `stageLaunchAt` (voir DoorStage.js pour le
+   détail complet du mécanisme, identique ici).
 
    États : 'closed' -> 'opening' (rideau qui monte) -> 'open' (le jeu réel
    est monté, avec l'animation d'entrée qui rejoue à CHAQUE ouverture).
    ========================================================================== */
 
-export default function CurtainStage({ gameId, icon, name, accentVar, lang, t, children, onRulesOpenChange, rulesReaderNames }) {
+export default function CurtainStage({ gameId, icon, name, accentVar, lang, t, children, onRulesOpenChange, rulesReaderNames, isHost, stageLaunchAt, onHostOpen }) {
   const [state, setState] = useState("closed"); // 'closed' | 'opening' | 'open'
   const [entryKey, setEntryKey] = useState(0);
   const openTimer = useRef(null);
+  const waitTimer = useRef(null);
 
   useEffect(() => {
     clearTimeout(openTimer.current);
+    clearTimeout(waitTimer.current);
     setState("closed");
   }, [gameId]);
 
-  useEffect(() => () => clearTimeout(openTimer.current), []);
+  useEffect(() => () => { clearTimeout(openTimer.current); clearTimeout(waitTimer.current); }, []);
 
-  function openCurtain() {
-    if (state !== "closed") return;
-    setState("opening");
-    openTimer.current = setTimeout(() => {
+  // Même mécanisme que DoorStage : attend `stageLaunchAt` avant de lever le
+  // rideau, chez tout le monde y compris l'hôte. Un client en retard
+  // (rejoint/rechargé après coup) saute directement à 'open'.
+  useEffect(() => {
+    clearTimeout(waitTimer.current);
+    if (!stageLaunchAt || state !== "closed") return;
+    const delay = new Date(stageLaunchAt).getTime() - Date.now();
+    if (delay <= 0) {
       setState("open");
       setEntryKey(k => k + 1);
-    }, 1150);
-  }
+      return;
+    }
+    waitTimer.current = setTimeout(() => {
+      setState("opening");
+      openTimer.current = setTimeout(() => {
+        setState("open");
+        setEntryKey(k => k + 1);
+      }, 1150);
+    }, delay);
+    return () => clearTimeout(waitTimer.current);
+  }, [stageLaunchAt, state]);
 
   const closed = state !== "open";
   const opening = state === "opening";
@@ -79,7 +96,11 @@ export default function CurtainStage({ gameId, icon, name, accentVar, lang, t, c
               ⏳ {rulesReaderNames.join(", ")} {t ? t(rulesReaderNames.length > 1 ? "rulesReadingPlural" : "rulesReadingSingle") : "is reading the rules — please wait…"}
             </p>
           )}
-          <button className="curtain-play-btn" onClick={openCurtain}>{t ? t("stagePlay") : "▶ Jouer"}</button>
+          {isHost ? (
+            <button className="curtain-play-btn" onClick={onHostOpen} disabled={!!stageLaunchAt}>{t ? t("stagePlay") : "▶ Jouer"}</button>
+          ) : (
+            <p className="stage-wait-host">{t ? t("stageWaitHost") : "Waiting for the host…"}</p>
+          )}
         </div>
       )}
     </div>

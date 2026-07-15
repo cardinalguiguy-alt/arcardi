@@ -32,6 +32,7 @@
   --acc-tupreferes:#FF8A3D; /* orange — Tu préfères ? (duel de dilemmes, code couleur orange/bleu) */
   --tp-orange:#FF8A3D; /* option A */
   --tp-blue:#3D9BFF;   /* option B */
+  --tp-guess:#B98CFF;  /* devinette (ni A ni B : la couleur de l'ACTE de deviner) */
   --tenk-blue-deep:#1B6FA8; /* bleu profond — dégradés HUD, contours secondaires */
   --tenk-pink:#FF5FB0; /* rose néon — pips des dés, halo de sélection, accents chauds */
   --tenk-felt:#0B1A3A; /* tapis bleu */
@@ -928,24 +929,62 @@ body.stage-focus .stage-fabs{ top:12px; }
 .game-card-cta{ margin-top:auto; padding-top:8px; font-weight:800; font-size:12.5px; color:var(--accent); }
 .game-card{ height:100%; } /* toutes les tuiles d'une même rangée font la même hauteur */
 
-/* ===== Puissance 4 ===== */
+/* ===== Puissance 4 =====
+   Refonte 2026-07 (demande explicite "jetons bien trop amateurs") : cadre
+   du plateau façon châssis plastique bleu (au lieu d'un simple aplat noir),
+   trous creusés en vrai relief (dégradé radial + double liseré), et jetons
+   redessinés en plusieurs couches (base mate, dôme brillant décalé, reflet
+   spéculaire, liseré de bord) plutôt qu'un dégradé plat à deux couleurs —
+   même logique "matière en couches" que .gm-cell/.ludo-token pris comme
+   référence de qualité. */
 .c4-board{
   display:grid; grid-template-columns:repeat(7, 1fr); gap:10px;
-  background:rgba(0,0,0,.35); padding:16px; border-radius:18px;
+  padding:16px; border-radius:18px;
+  background:
+    repeating-linear-gradient(135deg, rgba(255,255,255,.025) 0px, rgba(255,255,255,.025) 1px, transparent 1px, transparent 8px),
+    linear-gradient(165deg, rgba(84,130,220,.16), rgba(10,16,28,.4) 60%);
+  border:3px solid rgba(120,160,230,.35);
+  box-shadow:
+    inset 0 0 0 2px rgba(255,255,255,.06),
+    inset 0 0 0 5px rgba(0,0,0,.28),
+    inset 0 10px 24px rgba(0,0,0,.35),
+    0 12px 28px rgba(0,0,0,.4);
 }
 .c4-col{ display:flex; flex-direction:column; gap:10px; }
 .c4-cell{
-  width:100%; aspect-ratio:1; border-radius:50%;
-  background:rgba(0,0,0,.4); box-shadow:inset 0 2px 5px rgba(0,0,0,.55);
+  position:relative; width:100%; aspect-ratio:1; border-radius:50%;
+  background:radial-gradient(circle at 50% 42%, rgba(0,0,0,.55), rgba(0,0,0,.7) 70%);
+  box-shadow:inset 0 3px 6px rgba(0,0,0,.65), inset 0 -1px 0 rgba(255,255,255,.05), 0 1px 0 rgba(255,255,255,.04);
 }
 .c4-cell.filled{ animation:c4Drop .4s ease both; }
-.c4-cell.filled.p1{ background:linear-gradient(160deg, color-mix(in srgb, var(--p1) 55%, #fff 45%), var(--p1) 65%); }
-.c4-cell.filled.p2{ background:linear-gradient(160deg, color-mix(in srgb, var(--p2) 55%, #fff 45%), var(--p2) 65%); }
-.c4-cell.last{ box-shadow:0 0 0 3px rgba(255,255,255,.55) inset; }
-.c4-cell.win{ box-shadow:0 0 0 3px #fff inset, 0 0 22px 4px rgba(255,255,255,.55); animation:c4Drop .4s ease both, winGlow 1s ease-in-out infinite; }
+/* Jeton : base en dégradé radial DÉCENTRÉ (dôme lumineux en haut-gauche,
+   assombri vers le bord, pas un simple aplat linéaire) + liseré de bord
+   sombre pour le détacher du trou, plus un petit reflet spéculaire ponctuel
+   (::after) — lu comme un vrai palet en plastique brillant plutôt qu'un
+   rond de couleur plat. */
+.c4-cell.filled.p1, .c4-cell.filled.p2{
+  box-shadow:
+    inset 0 0 0 2px rgba(0,0,0,.22),
+    inset 0 3px 4px rgba(255,255,255,.35),
+    inset 0 -4px 6px rgba(0,0,0,.28),
+    0 3px 0 rgba(0,0,0,.35), 0 5px 8px rgba(0,0,0,.35);
+}
+.c4-cell.filled.p1{ background:radial-gradient(circle at 38% 32%, color-mix(in srgb, var(--p1) 45%, #fff 55%), var(--p1) 55%, color-mix(in srgb, var(--p1) 78%, #000 22%) 100%); }
+.c4-cell.filled.p2{ background:radial-gradient(circle at 38% 32%, color-mix(in srgb, var(--p2) 45%, #fff 55%), var(--p2) 55%, color-mix(in srgb, var(--p2) 78%, #000 22%) 100%); }
+.c4-cell.filled.p1::after, .c4-cell.filled.p2::after{
+  content:""; position:absolute; top:14%; left:18%; width:34%; height:22%; border-radius:50%;
+  background:radial-gradient(ellipse at center, rgba(255,255,255,.85), transparent 72%);
+  filter:blur(.3px);
+}
+.c4-cell.last{ box-shadow:0 0 0 3px rgba(255,255,255,.55) inset, 0 3px 0 rgba(0,0,0,.35), 0 5px 8px rgba(0,0,0,.35); }
+.c4-cell.win{
+  box-shadow:0 0 0 3px #fff inset, 0 0 22px 4px rgba(255,255,255,.55), 0 3px 0 rgba(0,0,0,.35);
+  animation:c4Drop .4s ease both, winGlow 1s ease-in-out infinite;
+}
 .c4-cell.ghost{ opacity:.4; }
-.c4-cell.ghost.p1{ background:var(--p1); }
-.c4-cell.ghost.p2{ background:var(--p2); }
+.c4-cell.ghost.p1{ background:radial-gradient(circle at 38% 32%, color-mix(in srgb, var(--p1) 45%, #fff 55%), var(--p1) 70%); }
+.c4-cell.ghost.p2{ background:radial-gradient(circle at 38% 32%, color-mix(in srgb, var(--p2) 45%, #fff 55%), var(--p2) 70%); }
+.c4-cell.ghost::after{ content:none; }
 @keyframes c4Drop{ 0%{ transform:translateY(-260%); } 65%{ transform:translateY(6%); } 82%{ transform:translateY(-2%); } 100%{ transform:translateY(0); } }
 
 .lang-pill{
@@ -999,15 +1038,29 @@ body.stage-focus .stage-fabs{ top:12px; }
    conservée en dessous. Purement décoratif (CSS pur, aucune image, aucun
    poids ajouté) — n'affecte ni la géométrie ni le clic des cases/pions, qui
    restent des éléments positionnés par-dessus. */
+/* Matière du plateau v2 (2026-07, demande explicite "encore améliorer les
+   textures, trop amateur, le Gold Mines est super pro en comparaison") :
+   ajout d'un grain fin (petits points, façon feutrine/toile) sous le
+   tissage diagonal déjà en place, vignette réchauffée (teinte ambrée plutôt
+   que gris neutre) et cadre à double liseré (clair puis sombre) façon
+   insert de boîte de jeu, au lieu d'un simple anneau. Toujours du CSS pur
+   (dégradés + ombres), aucune image, même esprit "couches superposées" que
+   .gm-grid/.gm-cell (Gold Mines) pris comme référence. */
 .ludo-board-frame{
   position:relative; width:min(760px, 95vw, 68vh); aspect-ratio:1; margin:0 auto;
   background:
-    repeating-linear-gradient(135deg, rgba(255,255,255,.028) 0px, rgba(255,255,255,.028) 1px, transparent 1px, transparent 7px),
-    repeating-linear-gradient(45deg, rgba(0,0,0,.05) 0px, rgba(0,0,0,.05) 1px, transparent 1px, transparent 7px),
-    radial-gradient(ellipse at 50% 50%, rgba(255,255,255,.05) 0%, rgba(0,0,0,0) 55%, rgba(0,0,0,.22) 100%),
-    rgba(0,0,0,.32);
+    radial-gradient(circle at 1px 1px, rgba(255,255,255,.05) .9px, transparent 1px) 0 0/9px 9px,
+    repeating-linear-gradient(135deg, rgba(255,255,255,.03) 0px, rgba(255,255,255,.03) 1px, transparent 1px, transparent 7px),
+    repeating-linear-gradient(45deg, rgba(0,0,0,.055) 0px, rgba(0,0,0,.055) 1px, transparent 1px, transparent 7px),
+    radial-gradient(ellipse at 50% 50%, rgba(130,95,50,.07) 0%, rgba(0,0,0,0) 55%, rgba(0,0,0,.26) 100%),
+    rgba(18,14,10,.34);
   border-radius:16px; overflow:hidden;
-  border:3px solid var(--line); box-shadow:inset 0 0 0 6px rgba(0,0,0,.18), 0 14px 34px rgba(0,0,0,.4);
+  border:3px solid var(--line);
+  box-shadow:
+    inset 0 0 0 2px rgba(255,255,255,.06),
+    inset 0 0 0 6px rgba(0,0,0,.22),
+    inset 0 0 0 8px rgba(255,255,255,.03),
+    0 14px 34px rgba(0,0,0,.4);
 }
 .ludo-board{ position:absolute; inset:1.8%; }
 /* Mode agrandi : encore un peu plus compact — l'en-tête est masqué, mais on
@@ -1022,12 +1075,32 @@ body.stage-focus .ludo-panel .ludo-board-frame{ width:min(680px, 92vw, 62vh); }
    ombre interne en bas-droite — suggère des cases gravées/en léger relief
    plutôt que des rectangles plats, sans aucune texture bitmap. */
 .ludo-cell.path{
-  background:rgba(255,255,255,.05);
-  box-shadow: inset 1px 1px 0 rgba(255,255,255,.035), inset -1px -1px 3px rgba(0,0,0,.15);
+  background:linear-gradient(160deg, rgba(255,255,255,.055), rgba(255,255,255,.018));
+  box-shadow: inset 1px 1px 0 rgba(255,255,255,.06), inset -1.5px -1.5px 4px rgba(0,0,0,.22);
 }
-.ludo-cell.center{ background:rgba(255,255,255,.1); box-shadow: inset 0 0 10px rgba(0,0,0,.25); }
+/* Médaillon central (2026-07, détail créatif) : pinwheel discret en
+   conic-gradient, confiné à la seule case centrale (pas d'élément séparé à
+   ajouter au JSX) — marque le "cœur" du plateau sans rien déplacer. */
+.ludo-cell.center{
+  background:
+    conic-gradient(from 0deg,
+      rgba(255,209,102,.18) 0deg, rgba(255,255,255,.05) 22.5deg,
+      rgba(255,209,102,.18) 45deg, rgba(255,255,255,.05) 67.5deg,
+      rgba(255,209,102,.18) 90deg, rgba(255,255,255,.05) 112.5deg,
+      rgba(255,209,102,.18) 135deg, rgba(255,255,255,.05) 157.5deg,
+      rgba(255,209,102,.18) 180deg, rgba(255,255,255,.05) 202.5deg,
+      rgba(255,209,102,.18) 225deg, rgba(255,255,255,.05) 247.5deg,
+      rgba(255,209,102,.18) 270deg, rgba(255,255,255,.05) 292.5deg,
+      rgba(255,209,102,.18) 315deg, rgba(255,255,255,.05) 337.5deg, rgba(255,209,102,.18) 360deg),
+    rgba(255,255,255,.1);
+  box-shadow: inset 0 0 10px rgba(0,0,0,.25), inset 0 0 0 2px rgba(255,209,102,.22);
+}
 .ludo-cell.safe{ display:flex; align-items:center; justify-content:center; }
 .ludo-cell.safe::after{ content:"★"; color:rgba(255,255,255,.32); font-size:9px; line-height:1; }
+.ludo-cell.yard-red, .ludo-cell.yard-green, .ludo-cell.yard-yellow, .ludo-cell.yard-blue,
+.ludo-cell.home-red, .ludo-cell.home-green, .ludo-cell.home-yellow, .ludo-cell.home-blue{
+  box-shadow: inset 1px 1px 0 rgba(255,255,255,.07), inset -1.5px -1.5px 4px rgba(0,0,0,.22);
+}
 .ludo-cell.yard-red{ background:rgba(255,93,115,.13); border-color:transparent; }
 .ludo-cell.yard-green{ background:rgba(182,240,76,.13); border-color:transparent; }
 .ludo-cell.yard-yellow{ background:rgba(255,210,63,.13); border-color:transparent; }
@@ -1061,9 +1134,14 @@ body.stage-focus .ludo-panel .ludo-board-frame{ width:min(680px, 92vw, 62vh); }
   50%{ opacity:.85; }
 }
 
+/* Socle "creusé" (2026-07, détail) : dégradé radial + ombre interne pour que
+   chaque emplacement d'enclos ressemble à une vraie alvéole gravée dans le
+   plateau plutôt qu'un simple cercle plat. */
 .ludo-yard-slot{
-  position:absolute; border-radius:50%; background:rgba(0,0,0,.22);
-  border:2px dashed rgba(255,255,255,.14); box-sizing:border-box;
+  position:absolute; border-radius:50%; box-sizing:border-box;
+  background:radial-gradient(circle at 38% 32%, rgba(255,255,255,.09), rgba(0,0,0,.28) 72%);
+  border:2px dashed rgba(255,255,255,.18);
+  box-shadow:inset 0 2px 4px rgba(0,0,0,.4), inset 0 -1px 0 rgba(255,255,255,.05);
 }
 
 /* Le pion : une zone de clic (redimensionnée / éclatée en cas de
@@ -1075,9 +1153,19 @@ body.stage-focus .ludo-panel .ludo-board-frame{ width:min(680px, 92vw, 62vh); }
   transition: top .38s cubic-bezier(.34,1.4,.64,1), left .38s cubic-bezier(.34,1.4,.64,1), width .25s ease, height .25s ease;
   display:flex; align-items:center; justify-content:center;
 }
+/* Ombre de contact au sol (2026-07, demande explicite "pions plus détaillés
+   et réalistes") : ellipse floue sous le pion, séparée de l'ombre propre à
+   .ludo-token-pin (qui dessine le relief du pion) — suggère qu'il repose
+   vraiment sur le plateau plutôt que d'y flotter à plat. */
+.ludo-token::before{
+  content:""; position:absolute; left:50%; bottom:6%; width:62%; height:22%;
+  transform:translateX(-50%); border-radius:50%;
+  background:radial-gradient(ellipse at center, rgba(0,0,0,.42), transparent 72%);
+  z-index:-1;
+}
 .ludo-token-pin{
   position:relative; width:78%; height:78%; border-radius:50%; box-sizing:border-box;
-  box-shadow:0 3px 0 rgba(0,0,0,.42), 0 4px 6px rgba(0,0,0,.3), inset 0 2px 3px rgba(255,255,255,.5), inset 0 -3px 4px rgba(0,0,0,.25);
+  box-shadow:0 3px 0 rgba(0,0,0,.42), 0 4px 6px rgba(0,0,0,.3), inset 0 2px 3px rgba(255,255,255,.5), inset 0 -3px 4px rgba(0,0,0,.25), inset 0 0 0 1.5px rgba(0,0,0,.15);
   transition: box-shadow .2s ease;
 }
 .ludo-token-pin::after{
@@ -1090,7 +1178,23 @@ body.stage-focus .ludo-panel .ludo-board-frame{ width:min(680px, 92vw, 62vh); }
 .ludo-token.green .ludo-token-pin{ background:radial-gradient(circle at 35% 28%, #d7ffa0, var(--p3) 68%); }
 .ludo-token.yellow .ludo-token-pin{ background:radial-gradient(circle at 35% 28%, #ffe89a, var(--ludoY) 68%); }
 .ludo-token.blue .ludo-token-pin{ background:radial-gradient(circle at 35% 28%, #9cc2ff, var(--ludoB) 68%); }
-.ludo-token.last .ludo-token-pin{ box-shadow:0 0 0 3px var(--ink), 0 3px 0 rgba(0,0,0,.42), inset 0 2px 3px rgba(255,255,255,.5); }
+/* Rebond d'atterrissage (2026-07, demande explicite "meilleures animations") :
+   dès qu'un pion devient "le dernier joué" (nouvel élément qui reçoit la
+   classe .last, voir lastMoved dans PetitsChevaux.js), un léger effet
+   d'écrasement/rebond joue UNE fois — suggère un vrai impact sur le
+   plateau plutôt qu'un simple glissement qui s'arrête net. Rejoue à chaque
+   fois qu'un pion DIFFÉRENT devient le dernier joué (la classe arrive sur
+   un nouvel élément à chaque fois), jamais en boucle. */
+.ludo-token.last .ludo-token-pin{
+  box-shadow:0 0 0 3px var(--ink), 0 3px 0 rgba(0,0,0,.42), inset 0 2px 3px rgba(255,255,255,.5);
+  animation: ludoTokenLand .42s cubic-bezier(.34,1.6,.5,1) both;
+}
+@keyframes ludoTokenLand{
+  0%{ transform:scale(1); }
+  35%{ transform:scale(1.22, .8); }
+  65%{ transform:scale(.92, 1.08); }
+  100%{ transform:scale(1); }
+}
 .ludo-token.mine-movable{ cursor:pointer; }
 .ludo-token.mine-movable .ludo-token-pin{ animation:ludoPulse 1s ease-in-out infinite; }
 @keyframes ludoPulse{
@@ -1243,6 +1347,7 @@ button.ludo-roman.selected{
 }
 @media (prefers-reduced-motion: reduce){
   .ludo-die.rolling.v0, .ludo-die.rolling.v1, .ludo-die.rolling.v2, .ludo-die.settle{ animation:none; }
+  .ludo-token.last .ludo-token-pin{ animation:none; }
   .ludo-cell.mystery::after{ animation:none; opacity:.85; }
   .ludo-mystery-pop{ animation:ludoMysteryPopLife 2.4s step-end both; opacity:1; }
   .ludo-mystery-pop.extreme{ animation:ludoMysteryPopLife 2.4s step-end both; opacity:1; }
@@ -1342,43 +1447,56 @@ button.ludo-roman.selected{
   box-shadow:0 14px 34px rgba(0,0,0,.5); max-width:88%;
 }
 .ludo-wheel-title{ font-family:'Bungee'; font-size:13px; color:var(--ink); text-align:center; margin:0; }
-.ludo-wheel-wrap{ position:relative; width:176px; height:176px; }
-.ludo-wheel-pointer{
-  position:absolute; top:-6px; left:50%; transform:translateX(-50%);
-  width:0; height:0; border-left:9px solid transparent; border-right:9px solid transparent;
-  border-top:14px solid #fff; z-index:2; filter:drop-shadow(0 2px 2px rgba(0,0,0,.5));
+/* Détail 2026-07 (demande explicite "la roue peut être plus détaillée") :
+   bezel métallique autour du disque (anneaux concentriques via box-shadow,
+   sans image), traits de séparation discrets entre les 8 tranches (pseudo-
+   élément en repeating-conic-gradient), moyeu central façon capuchon
+   métallique (élément fixe, ne tourne pas avec le disque) et un reflet en
+   croissant posé sur .ludo-wheel-wrap (donc lui non plus ne tourne pas) pour
+   suggérer une vitre bombée au-dessus — même esprit "matière" que Gold
+   Mines (pépites/curseur en couches de dégradés + ombres), décliné ici pour
+   la roue. La rotation elle-même n'est plus pilotée en CSS : voir
+   PetitsChevaux.js/MysteryWheel (requestAnimationFrame, correctif "lag"). */
+.ludo-wheel-wrap{
+  position:relative; width:188px; height:188px;
+  filter:drop-shadow(0 10px 16px rgba(0,0,0,.45));
 }
-/* Correctif 2026-07 (demande explicite "faire tourner la roue plus vite,
-   puis ralentir jusqu'à s'arrêter") : l'ancienne courbe cubic-bezier
-   (.15,.85,.25,1) était en fait bien plus extrême qu'il n'y paraît — le
-   calcul montre qu'elle atteignait déjà ~95 % de la rotation totale à
-   moins de la moitié de la durée, puis rampait presque immobile sur le
-   reste : un "snap" quasi instantané suivi d'un arrêt qui semblait figé,
-   pas une décélération. Remplacée par une animation à étapes explicites
-   (ludoWheelSpin, pilotée par --wheel-rot) qui répartit la vitesse de façon
-   bien plus progressive : franc démarrage, large part de la rotation
-   couverte pendant le premier tiers (rapide), puis un ralentissement
-   continu et perceptible jusqu'à l'arrêt nét — une vraie décélération, pas
-   un arrêt brutal. */
+.ludo-wheel-wrap::before{
+  content:""; position:absolute; inset:-2px; z-index:3; border-radius:50%; pointer-events:none;
+  background:radial-gradient(circle at 32% 24%, rgba(255,255,255,.35), transparent 42%);
+  mix-blend-mode:screen;
+}
+.ludo-wheel-pointer{
+  position:absolute; top:-8px; left:50%; transform:translateX(-50%);
+  width:0; height:0; border-left:10px solid transparent; border-right:10px solid transparent;
+  border-top:16px solid #fff; z-index:4; filter:drop-shadow(0 2px 2px rgba(0,0,0,.5));
+}
+.ludo-wheel-pointer::after{
+  content:""; position:absolute; top:-15px; left:-6px; width:12px; height:12px; border-radius:50%;
+  background:radial-gradient(circle at 35% 30%, #fff, #c9c9c9 70%);
+  box-shadow:0 1px 3px rgba(0,0,0,.5);
+}
 .ludo-wheel-disc{
   position:relative; width:100%; height:100%; border-radius:50%;
-  border:4px solid rgba(255,255,255,.7); box-shadow:0 6px 18px rgba(0,0,0,.4), inset 0 0 0 2px rgba(0,0,0,.25);
-  transform:rotate(var(--wheel-rot, 0deg));
+  box-shadow:
+    0 0 0 2px rgba(0,0,0,.4),
+    0 0 0 5px rgba(255,255,255,.65),
+    0 0 0 7px rgba(0,0,0,.3),
+    0 8px 20px rgba(0,0,0,.45),
+    inset 0 0 0 2px rgba(0,0,0,.25);
 }
-.ludo-wheel-overlay.spinning .ludo-wheel-disc{
-  animation:ludoWheelSpin var(--wheel-spin, 2100ms) both;
+.ludo-wheel-disc::before{
+  content:""; position:absolute; inset:0; border-radius:50%; pointer-events:none; z-index:1;
+  background:repeating-conic-gradient(rgba(0,0,0,.28) 0deg .8deg, transparent .8deg 45deg);
 }
-@keyframes ludoWheelSpin{
-  0%{ transform:rotate(0deg); animation-timing-function:ease-in; }
-  12%{ transform:rotate(calc(var(--wheel-rot) * 0.22)); animation-timing-function:linear; }
-  35%{ transform:rotate(calc(var(--wheel-rot) * 0.55)); animation-timing-function:ease-out; }
-  65%{ transform:rotate(calc(var(--wheel-rot) * 0.83)); animation-timing-function:ease-out; }
-  85%{ transform:rotate(calc(var(--wheel-rot) * 0.955)); animation-timing-function:ease-out; }
-  100%{ transform:rotate(var(--wheel-rot)); }
+.ludo-wheel-hub{
+  position:absolute; top:50%; left:50%; width:22px; height:22px; margin:-11px 0 0 -11px; z-index:5;
+  border-radius:50%; background:radial-gradient(circle at 35% 30%, #fff6dc, #c9a44a 55%, #7a5a22 100%);
+  box-shadow:0 2px 4px rgba(0,0,0,.5), inset 0 1px 1px rgba(255,255,255,.7), inset 0 -2px 3px rgba(0,0,0,.35);
 }
 .ludo-wheel-icon{
   position:absolute; top:50%; left:50%; margin:-13px 0 0 -13px; width:26px; height:26px;
-  display:flex; align-items:center; justify-content:center; font-size:16px;
+  display:flex; align-items:center; justify-content:center; font-size:16px; z-index:2;
   filter:drop-shadow(0 1px 2px rgba(0,0,0,.6));
 }
 .ludo-wheel-icon.extreme{
@@ -1427,7 +1545,8 @@ button.ludo-roman.selected{
 @media (prefers-reduced-motion: reduce){
   .ludo-wheel-overlay{ animation:none; opacity:1; }
   .ludo-wheel-overlay.spinning{ animation:none; opacity:1; }
-  .ludo-wheel-overlay.spinning .ludo-wheel-disc{ animation:none; transform:rotate(var(--wheel-rot, 0deg)); }
+  /* La rotation elle-même saute directement au résultat final : gérée en JS
+     (MysteryWheel vérifie prefers-reduced-motion avant de lancer le rAF). */
   .ludo-wheel-result{ animation:none; }
   .ludo-wheel-result.extreme{ animation:none; box-shadow:0 6px 0 rgba(0,0,0,.3), 0 0 22px rgba(255,107,214,.55); }
 }
@@ -3451,6 +3570,29 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
 }
 .door-play-btn:hover{ transform:translateY(-2px) scale(1.04); filter:brightness(1.08); }
 .door-play-btn:active{ transform:translateY(3px) scale(.99); box-shadow:0 2px 0 rgba(0,0,0,.35); }
+/* Message d'attente affiché à la place du bouton "Jouer" pour les invités
+   (2026-07, ouverture de scène synchronisée) : mêmes 4 stages
+   (Door/Curtain/Flash/VideoStage), même emplacement que le bouton qu'il
+   remplace, mais en retrait (pointillés, teinte neutre) — jamais cliquable,
+   jamais confondu avec une action possible. Pulsation douce pour rester
+   "vivant" sans distraire. */
+.stage-wait-host{
+  margin:0; padding:14px 30px; border-radius:99px;
+  font-size:13.5px; font-weight:700; letter-spacing:.02em; text-align:center;
+  color:var(--muted); background:rgba(255,255,255,.05); border:1.5px dashed var(--line);
+  animation:stageWaitPulse 1.8s ease-in-out infinite;
+}
+@keyframes stageWaitPulse{ 0%, 100%{ opacity:.6; } 50%{ opacity:1; } }
+@media (prefers-reduced-motion: reduce){
+  .stage-wait-host{ animation:none; opacity:.85; }
+}
+/* Bouton "Jouer" de l'hôte, juste après son propre clic (2026-07) : reste
+   affiché (pas de saut brusque vers le message d'attente, réservé aux
+   invités) mais se fige le temps que `stageLaunchAt` revienne du serveur
+   et fasse pivoter sa propre porte, comme tout le monde. */
+.door-play-btn:disabled, .curtain-play-btn:disabled, .flash-play-btn:disabled, .video-play-btn:disabled{
+  opacity:.55; cursor:default; filter:none; transform:none;
+}
 .door-content{ position:relative; animation:povPush .7s cubic-bezier(.2,.8,.3,1) both; }
 /* (Le bouton "revoir l'entrée" a été retiré : inutile pour les joueurs,
    il encombrait le coin de chaque jeu. .door-replay-btn n'existe plus.) */
@@ -4867,6 +5009,31 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
 .tp-guess-lead{ text-align:center; font-size:15px; margin:2px 0 12px; color:var(--ink); }
 .tp-guess-lead b{ color:var(--tp-blue); }
 
+/* --- distinction visuelle "mon choix" vs "ma devinette" (2026-07) : avant,
+   les écrans CHOOSE et GUESS se ressemblaient trait pour trait (mêmes
+   cartes A/B, seul un petit texte changeait) — on ajoute une étiquette de
+   phase nettement colorée (ambre = ton choix, violet = ta devinette,
+   --tp-guess, une TROISIÈME couleur qui n'est ni A ni B) au-dessus des
+   cartes, et un léger cadre teinté autour des cartes en phase deviner. --- */
+.tp-phase-badge{
+  display:block; width:max-content; margin:0 auto 12px; padding:5px 16px; border-radius:99px;
+  font-size:11px; font-weight:800; letter-spacing:.04em; text-transform:uppercase;
+  border:1.5px solid var(--line); background:rgba(255,255,255,.05); color:var(--ink);
+}
+.tp-phase-badge.choose{
+  color:var(--p2); border-color:color-mix(in srgb, var(--p2) 50%, transparent);
+  background:color-mix(in srgb, var(--p2) 14%, transparent);
+}
+.tp-phase-badge.guess{
+  color:var(--tp-guess); border-color:color-mix(in srgb, var(--tp-guess) 50%, transparent);
+  background:color-mix(in srgb, var(--tp-guess) 16%, transparent);
+}
+.tp-options-guess{
+  padding:10px; border-radius:26px; margin-left:auto; margin-right:auto;
+  border:1.5px dashed color-mix(in srgb, var(--tp-guess) 45%, transparent);
+  background:color-mix(in srgb, var(--tp-guess) 6%, transparent);
+}
+
 /* --- révélation --- */
 .tp-reveal-grid{ display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:6px 0 14px; }
 .tp-reveal-side{ padding:12px; border-radius:18px; border:1.5px solid var(--line); background:rgba(255,255,255,.03); text-align:center; }
@@ -4875,10 +5042,24 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
 .tp-reveal-head .tp-avatar{ font-size:20px; }
 .tp-reveal-head .tp-name{ font-weight:800; font-size:13px; color:var(--ink); }
 .tp-reveal-card{
-  position:relative; border-radius:16px; padding:16px 12px; margin-bottom:10px;
-  display:flex; flex-direction:column; align-items:center; gap:8px;
+  position:relative; border-radius:16px; padding:16px 12px; margin-bottom:8px;
+  display:flex; flex-direction:column; align-items:center; gap:6px;
   border:2.5px solid var(--opt); background:linear-gradient(160deg, color-mix(in srgb, var(--opt) 20%, var(--card)), var(--card));
   transform-origin:center top; animation:tpFlipIn .6s cubic-bezier(.2,.9,.3,1.2) both;
+}
+.tp-reveal-eyebrow{ font-size:9.5px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; color:var(--muted); }
+.tp-reveal-card .tp-reveal-eyebrow{ color:color-mix(in srgb, var(--opt) 85%, var(--muted)); }
+/* Pastille "devinette" (2026-07) : nettement plus PETITE et en pointillés
+   que la grande carte de choix ci-dessus — hiérarchie visuelle voulue,
+   une devinette reste secondaire par rapport au choix réel de la personne. */
+.tp-reveal-guess{
+  display:flex; align-items:center; justify-content:center; gap:8px; margin-bottom:10px;
+  padding:7px 12px; border-radius:12px; border:1.5px dashed var(--opt);
+  background:color-mix(in srgb, var(--opt) 8%, transparent);
+}
+.tp-reveal-guess-letter{
+  width:20px; height:20px; border-radius:50%; display:flex; align-items:center; justify-content:center; flex:none;
+  font-family:'Bungee',sans-serif; font-size:10.5px; color:#1a120b; background:var(--opt);
 }
 .tp-guess-result{ font-size:12.5px; font-weight:800; padding:6px 10px; border-radius:99px; display:inline-block; }
 .tp-guess-result.ok{ color:#bff3d5; background:rgba(76,195,138,.16); border:1.5px solid rgba(76,195,138,.5); }

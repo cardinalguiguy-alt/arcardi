@@ -20,30 +20,48 @@ import GameRulesButton from "./GameRulesButton";
    États : 'closed' -> 'playing' (vidéo accélérée) -> 'fading' (fondu
    croisé vidéo -> jeu) -> 'open' (jeu réel monté, animation d'entrée qui
    rejoue à CHAQUE ouverture).
+
+   Ouverture synchronisée (2026-07) : seul l'hôte peut cliquer sur "Jouer",
+   et la vidéo démarre au même instant chez tout le monde grâce à
+   `stageLaunchAt` (voir DoorStage.js pour le détail complet du mécanisme).
+   Un client en retard (rejoint/rechargé après coup) saute directement à
+   'open', sans lancer la vidéo pour lui tout seul.
    ========================================================================== */
 
 const TARGET_SECONDS = 3; // durée cible de l'intro, quelle que soit la durée réelle du clip exporté
 const FADE_MS = 600; // fondu croisé vidéo -> jeu, élégant plutôt qu'une coupure nette
 
-export default function VideoStage({ gameId, icon, name, accentVar, lang, t, children, onRulesOpenChange, rulesReaderNames }) {
+export default function VideoStage({ gameId, icon, name, accentVar, lang, t, children, onRulesOpenChange, rulesReaderNames, isHost, stageLaunchAt, onHostOpen }) {
   const [state, setState] = useState("closed"); // 'closed' | 'playing' | 'fading' | 'open'
   const [entryKey, setEntryKey] = useState(0);
   const videoRef = useRef(null);
   const fadeTimer = useRef(null);
+  const waitTimer = useRef(null);
 
   // Nouveau jeu lancé par l'hôte : on repart toujours de zéro, jamais de
   // mise en scène court-circuitée.
   useEffect(() => {
     clearTimeout(fadeTimer.current);
+    clearTimeout(waitTimer.current);
     setState("closed");
   }, [gameId]);
 
-  useEffect(() => () => clearTimeout(fadeTimer.current), []);
+  useEffect(() => () => { clearTimeout(fadeTimer.current); clearTimeout(waitTimer.current); }, []);
 
-  function play() {
-    if (state !== "closed") return;
-    setState("playing");
-  }
+  // Même mécanisme que DoorStage : attend `stageLaunchAt` avant de lancer
+  // la vidéo, chez tout le monde y compris l'hôte.
+  useEffect(() => {
+    clearTimeout(waitTimer.current);
+    if (!stageLaunchAt || state !== "closed") return;
+    const delay = new Date(stageLaunchAt).getTime() - Date.now();
+    if (delay <= 0) {
+      setState("open");
+      setEntryKey(k => k + 1);
+      return;
+    }
+    waitTimer.current = setTimeout(() => setState("playing"), delay);
+    return () => clearTimeout(waitTimer.current);
+  }, [stageLaunchAt, state]);
 
   function handleLoadedMetadata() {
     const v = videoRef.current;
@@ -104,7 +122,11 @@ export default function VideoStage({ gameId, icon, name, accentVar, lang, t, chi
               ⏳ {rulesReaderNames.join(", ")} {t ? t(rulesReaderNames.length > 1 ? "rulesReadingPlural" : "rulesReadingSingle") : "is reading the rules — please wait…"}
             </p>
           )}
-          <button className="video-play-btn" onClick={play}>{t ? t("stagePlay") : "▶ Jouer"}</button>
+          {isHost ? (
+            <button className="video-play-btn" onClick={onHostOpen} disabled={!!stageLaunchAt}>{t ? t("stagePlay") : "▶ Jouer"}</button>
+          ) : (
+            <p className="stage-wait-host">{t ? t("stageWaitHost") : "Waiting for the host…"}</p>
+          )}
         </div>
       )}
     </div>

@@ -490,6 +490,36 @@ export default function TuPreferesGame({ room, me, isHost, players, t, lang, onF
     setSel(null);
   }
 
+  // Raccourcis clavier A/B (2026-07, demande explicite) : on lit
+  // `e.key` (le CARACTÈRE réellement produit par la touche), jamais
+  // `e.code` (la position physique) — c'est déjà ce qui rend ce raccourci
+  // correct sur AZERTY comme sur QWERTY sans détection de disposition : la
+  // touche qui affiche/produit "A" envoie key==="a" quel que soit
+  // l'endroit où elle se trouve sur le clavier. Entrée valide la sélection
+  // en cours, comme un clic sur le bouton "Verrouiller". Actif uniquement
+  // pendant que ce joueur peut encore agir (phase choose/guess, pas déjà
+  // verrouillé) — jamais quand il regarde en spectateur ou attend l'autre.
+  // Recalcule `s`/verrous ICI via `mySlot()`/`locks` (état) plutôt que via
+  // les constantes dérivées plus bas dans le rendu (slot/iLockedChoose...) :
+  // ce Hook est déclaré avant elles, les référencer ici lèverait une
+  // erreur d'initialisation.
+  useEffect(() => {
+    const s = mySlot();
+    const inChoose = phase === "choose" && s !== null && !locks.choose[s];
+    const inGuess = phase === "guess" && s !== null && !locks.guess[s];
+    if (!inChoose && !inGuess) return;
+    function onKeyDown(e) {
+      if (e.key === "a" || e.key === "A") { setSel(0); return; }
+      if (e.key === "b" || e.key === "B") { setSel(1); return; }
+      if (e.key === "Enter" && sel !== null) {
+        if (inChoose) lockChoice(); else lockGuess();
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, locks, sel]);
+
   // Enregistrement du résultat (Victoires/Défaites du salon) à la fin.
   useEffect(() => {
     if (phase !== "over" || !reveal || savedResultRef.current) return;
@@ -601,6 +631,7 @@ export default function TuPreferesGame({ room, me, isHost, players, t, lang, onF
         {amPlayer() ? (
           !iLockedChoose ? (
             <>
+              <div className="tp-phase-badge choose">{t("tpChoosePhaseTag")}</div>
               <div className="tp-options">
                 <OptionCard side={0} active={sel === 0} onPick={() => setSel(0)} text={optText(0)} />
                 <div className="tp-or">{t("tpOr")}</div>
@@ -640,8 +671,9 @@ export default function TuPreferesGame({ room, me, isHost, players, t, lang, onF
         {amPlayer() ? (
           !iLockedGuess ? (
             <>
+              <div className="tp-phase-badge guess">{t("tpGuessPhaseTag")}</div>
               <p className="tp-guess-lead">🔮 {t("tpGuessLead")} <b>{opp?.username}</b>{t("tpGuessTail")}</p>
-              <div className="tp-options">
+              <div className="tp-options tp-options-guess">
                 <OptionCard side={0} active={sel === 0} onPick={() => setSel(0)} text={optText(0)} />
                 <div className="tp-or">{t("tpOr")}</div>
                 <OptionCard side={1} active={sel === 1} onPick={() => setSel(1)} text={optText(1)} />
@@ -814,15 +846,26 @@ function TpLockDots({ a, b, an, bn, me }) {
 
 function RevealSide({ who, choice, guessOfOpp, oppChoice, right, delta, optText, isMe, t }) {
   const cvar = choice === 0 ? "--tp-orange" : "--tp-blue";
+  const gvar = guessOfOpp === 0 ? "--tp-orange" : "--tp-blue";
   return (
     <div className={"tp-reveal-side" + (isMe ? " me" : "")}>
       <div className="tp-reveal-head">
         <span className="tp-avatar">{who?.avatar}</span>
         <span className="tp-name">{who?.username}{isMe ? " ·" + t("tpYouTag") : ""}</span>
       </div>
+      {/* Choix réel (2026-07) : eyebrow "Choix" ajouté pour rester lisible
+          maintenant que la devinette apparaît juste en dessous, avec son
+          propre eyebrow "Devinette" — les deux valeurs (A/B) sont
+          désormais TOUJOURS affichées littéralement, plus seulement
+          déductibles du badge ✅/❌. */}
       <div className="tp-reveal-card" style={{ "--opt": `var(${cvar})` }}>
+        <span className="tp-reveal-eyebrow">{t("tpChoiceValueLabel")}</span>
         <span className="tp-option-letter">{choice === 0 ? "A" : "B"}</span>
         <span className="tp-option-text">{optText(choice)}</span>
+      </div>
+      <div className="tp-reveal-guess" style={{ "--opt": `var(${gvar})` }}>
+        <span className="tp-reveal-eyebrow">🔮 {t("tpGuessValueLabel")}</span>
+        <span className="tp-reveal-guess-letter">{guessOfOpp === 0 ? "A" : "B"}</span>
       </div>
       <div className={"tp-guess-result" + (right ? " ok" : " ko")}>
         {right ? "✅ " + t("tpGuessRight") : "❌ " + t("tpGuessWrong")}

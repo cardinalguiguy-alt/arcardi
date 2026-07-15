@@ -383,24 +383,66 @@ function MysteryWheel({ pending, isOwner, onSpin, t }) {
   const gradient = MYSTERY_KINDS.map((k, i) => `${k.swatch} ${i * segAngle}deg ${(i + 1) * segAngle}deg`).join(", ");
 
   const [revealed, setRevealed] = useState(false);
+  const discRef = useRef(null);
+  const rafRef = useRef(null);
+
   useEffect(() => {
     if (!spin) { setRevealed(false); return; }
     const tm = setTimeout(() => setRevealed(true), MYSTERY_ROT_MS);
     return () => clearTimeout(tm);
   }, [spin?.key]);
 
+  // Rotation pilotée en JS (correctif 2026-07, demande explicite "ralentir de
+  // manière plus fluide sans lag") : l'ancienne version enchaînait plusieurs
+  // portions de courbe CSS (ease-in puis linear puis trois ease-out) sur des
+  // paliers de %, chacune avec sa PROPRE fonction de timing — or une courbe
+  // "ease-out" repart toujours à pleine vitesse à son propre départ, ce qui
+  // recréait un petit à-coup de vitesse à chaque raccord de palier (12 %,
+  // 35 %, 65 %, 85 %) au lieu d'un ralentissement continu : la cause exacte
+  // du "lag" perçu. Remplacé par une seule courbe continue (quintique,
+  // décélération franche puis régulière, sans aucun raccord) qui pilote
+  // `transform` directement à chaque frame via requestAnimationFrame, calée
+  // sur le temps RÉEL écoulu (performance.now, pas un compte de frames) :
+  // robuste même si l'onglet rame un instant, jamais de saut visible.
+  // Écrit directement en style DOM (pas via le style React ci-dessous, qui
+  // ne déclare volontairement pas `transform`) pour rester à 60 fps sans
+  // repasser par le rendu React à chaque frame.
+  useEffect(() => {
+    cancelAnimationFrame(rafRef.current);
+    if (!spin || !discRef.current) return;
+    const el = discRef.current;
+    const target = rot;
+    const reduceMotion = typeof window !== "undefined" && window.matchMedia
+      && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduceMotion) {
+      el.style.transform = `rotate(${target}deg)`;
+      return;
+    }
+    el.style.transform = "rotate(0deg)";
+    const start = performance.now();
+    function tick(now) {
+      const t = Math.min(1, (now - start) / MYSTERY_ROT_MS);
+      const eased = 1 - Math.pow(1 - t, 5); // décélération quintique continue
+      el.style.transform = `rotate(${target * eased}deg)`;
+      if (t < 1) rafRef.current = requestAnimationFrame(tick);
+    }
+    rafRef.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [spin?.key]);
+
   return (
     <div
       className={"ludo-wheel-overlay" + (spin ? " spinning" : "")}
-      style={{ "--wheel-life": MYSTERY_SPIN_MS + "ms", "--wheel-spin": MYSTERY_ROT_MS + "ms" }}
+      style={{ "--wheel-life": MYSTERY_SPIN_MS + "ms" }}
     >
       <div className="ludo-wheel-card">
         <p className="ludo-wheel-title">🎡 {t("ludoMysteryWheelTitle")}</p>
         <div className="ludo-wheel-wrap" onClick={!spin && isOwner ? onSpin : undefined}>
           <span className="ludo-wheel-pointer" aria-hidden="true" />
           <div
+            ref={discRef}
             className="ludo-wheel-disc"
-            style={{ background: `conic-gradient(${gradient})`, "--wheel-rot": rot + "deg" }}
+            style={{ background: `conic-gradient(${gradient})` }}
           >
             {MYSTERY_KINDS.map((k, i) => (
               <span
@@ -412,6 +454,7 @@ function MysteryWheel({ pending, isOwner, onSpin, t }) {
               </span>
             ))}
           </div>
+          <span className="ludo-wheel-hub" aria-hidden="true" />
         </div>
         {!spin && isOwner && (
           <button type="button" className="btn ludo-wheel-btn" onClick={onSpin}>{t("ludoMysterySpin")}</button>
