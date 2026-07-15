@@ -606,13 +606,26 @@ export default function Room() {
         const natural = el.offsetHeight;
         if (!natural) return;
         const avail = window.innerHeight - 20; // marge de respiration haut+bas
-        // "Quand c'est vraiment nécessaire" : tant que ça tient, zoom 1 tout
-        // rond ; sinon juste ce qu'il faut, avec un seuil de 3 % pour ne pas
-        // re-rendre (ni re-glisser) pour deux pixels.
-        const s = natural <= avail ? 1 : Math.max(0.55, avail / natural);
         setStageScale(prev => {
-          if (s === 1) return 1;
-          return Math.abs(prev - s) > 0.03 ? Math.round(s * 100) / 100 : prev;
+          if (natural > avail) {
+            // Ça déborde : on réduit tout de suite, jamais de zone tampon
+            // ici (mieux vaut un jeu clairement réduit que du contenu coupé
+            // en bas d'écran) — seuil de 3 % pour ne pas re-rendre (ni
+            // re-glisser) pour deux pixels.
+            const s = Math.max(0.55, avail / natural);
+            return Math.abs(prev - s) > 0.03 ? Math.round(s * 100) / 100 : prev;
+          }
+          // Ça tient dans l'écran : AVANT de remonter à l'échelle 1 tout
+          // rond, exige une vraie marge de confort (HYSTERESIS_PX) quand on
+          // était déjà réduit — correctif "aller-retour" 2026-07. Sans
+          // cette marge, un contenu qui gagne/perd quelques pixels PILE au
+          // seuil (ex. Ludo : le plateau de dés se cache et le texte de
+          // statut change pendant la roue de la fortune) faisait osciller
+          // le zoom entre 1 et une échelle réduite à chaque petite
+          // variation, au lieu de se stabiliser.
+          if (prev === 1) return 1;
+          const HYSTERESIS_PX = 32;
+          return (avail - natural) > HYSTERESIS_PX ? 1 : prev;
         });
       }, 150);
     };

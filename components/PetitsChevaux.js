@@ -607,10 +607,20 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
   }, [tokens, order, turnIdx, dice, movablePlan, effects, winner, pendingMystery, pendingCapture]);
   useEffect(() => { colorRef.current = colorOfPlayer; }, [colorOfPlayer]);
 
-  // Horloge d'affichage du compte à rebours de coup (250 ms suffit).
+  // Horloge d'affichage du compte à rebours de coup — correctif "lag"
+  // 2026-07 : ce `setNow` est LA SEULE utilisation de `now` dans tout le
+  // fichier (voir `moveRemaining` plus bas), et l'affichage arrondit déjà à
+  // la seconde entière (Math.ceil(.../1000)). Le tourner à 250 ms ne
+  // gagnait donc RIEN à l'écran (3 rendus sur 4 ne changeaient même pas le
+  // chiffre affiché) mais re-rendait tout le composant — plateau, 15x15
+  // cases, écuries, pions — 4 fois par seconde en PERMANENCE pendant
+  // chaque tour de jeu, sur tout le temps de la partie : la cause la plus
+  // probable du lag général signalé sur le Ludo. 1000 ms suffit très
+  // exactement à la granularité réellement affichée, sans aucune perte
+  // visuelle, pour 4x moins de rendus.
   useEffect(() => {
     if (!moveDeadline) return;
-    const iv = setInterval(() => setNow(Date.now()), 250);
+    const iv = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(iv);
   }, [moveDeadline]);
 
