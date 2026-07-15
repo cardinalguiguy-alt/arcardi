@@ -730,7 +730,10 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
     setSelected([]);
   }
   function attemptBank() {
-    if (!isMyTurn || activeDice || !turnScore || turnScore < MIN_TO_BANK) return;
+    // hotDiceLock : bank neutralisé pendant la pause de célébration hot dice
+    // (même verrou que le bouton, voir .tenk-actions dans le rendu) — on ne
+    // laisse pas banquer par réflexe au moment où il faut poursuivre le tour.
+    if (!isMyTurn || activeDice || hotDiceLock || !turnScore || turnScore < MIN_TO_BANK) return;
     channelRef.current?.send({ type: "broadcast", event: "move_attempt", payload: { seatId: me.id, action: { type: "bank" } } });
   }
 
@@ -998,10 +1001,22 @@ export default function TenkGame({ room, me, isHost, players, t, lang, onFinish 
               <div className="tenk-actions">
                 {!activeDice ? (
                   <>
+                    {/* Hot dice : le bouton reste le bouton RELANCER (jamais
+                        remplacé par le libellé "HOT DICE" — l'indication du
+                        bonus vit déjà dans la bannière .tenk-hotdice-banner,
+                        le flash et le son). La lueur dorée `celebrating` le
+                        met dynamiquement en avant pendant la pause : c'est
+                        LUI qu'on veut que le joueur remarque, pas le bank. */}
                     <button className={"tenk-btn-roll" + (hotDiceLock ? " celebrating" : "")} disabled={hotDiceLock} onClick={attemptRoll} title={t("tenkRollSpaceHint")}>
-                      {hotDiceLock ? "🔥 " + t("tenkHotDiceTitle") : "🎲 " + t("tenkRoll")}
+                      {hotDiceLock ? "🔥 " + t("tenkRoll") : "🎲 " + t("tenkRoll")}
                     </button>
-                    <button className="tenk-btn-bank" disabled={!turnScore || turnScore < MIN_TO_BANK} onClick={attemptBank}>💰 {t("tenkBank")}</button>
+                    {/* Bank verrouillé PENDANT la pause hot dice (hotDiceLock) :
+                        sinon il serait la seule action cliquable au moment
+                        même où le joueur DOIT être incité à poursuivre son
+                        tour — un joueur inattentif ou novice banquerait par
+                        réflexe et perdrait le bonus. Il redevient disponible
+                        dès la fin de la célébration (~HOT_DICE_PAUSE_MS). */}
+                    <button className="tenk-btn-bank" disabled={!turnScore || turnScore < MIN_TO_BANK || hotDiceLock} onClick={attemptBank}>💰 {t("tenkBank")}</button>
                   </>
                 ) : (
                   <button className="tenk-btn-keep" disabled={!selected.length || !selEval.valid} onClick={attemptKeep}>

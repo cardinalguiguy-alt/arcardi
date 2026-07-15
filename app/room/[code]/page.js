@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-import { resetRoomToLobby, launchGame, launchStage, clearGameState, nominateHost, leaveRoomAndHandoff, claimAbandonedHost, GAME_LAUNCH_BUFFER_MS } from "@/lib/gameSync";
+import { resetRoomToLobby, launchGame, launchStage, clearGameState, nominateHost, leaveRoomAndHandoff, claimAbandonedHost, GAME_LAUNCH_BUFFER_MS, STAGE_LAUNCH_BUFFER_MS } from "@/lib/gameSync";
 import { useLang } from "@/lib/i18n";
 import { duckAmbienceForGame, resumeAmbienceForNav } from "@/lib/ambience";
 import { playGameCardClick } from "@/lib/sfx";
@@ -343,10 +343,25 @@ export default function Room() {
   // échec d'écriture réel (jamais vu en pratique si les migrations sont à
   // jour) : dans ce cas on n'avance pas et on prévient l'hôte au lieu de le
   // laisser croire que la partie a démarré pour tout le monde.
+  // Correctif latence hôte 2026-07 : AVANT, la mise à jour locale n'était
+  // appliquée qu'APRÈS le await de l'écriture Supabase — l'hôte attendait
+  // donc le round-trip réseau (100-400 ms, davantage sur une connexion
+  // lente) avant de voir sa propre transition démarrer, d'où le "délai au
+  // clic Jouer" signalé. Or l'horodatage cible (`launch_at`) est calculé
+  // CÔTÉ CLIENT : on peut l'appliquer TOUT DE SUITE (l'animation part au
+  // clic) puis lancer l'écriture en arrière-plan, en repassant le MÊME
+  // horodatage à launchGame pour que la base écrive la valeur exacte que
+  // l'hôte utilise déjà (invités parfaitement synchrones). Le garde-fou du
+  // zip 111 est préservé autrement : si l'écriture échoue VRAIMENT
+  // (`ok:false`), on ANNULE la transition optimiste (rollback) et on
+  // prévient l'hôte, au lieu de le laisser avancer seul pendant que les
+  // invités ne reçoivent jamais rien.
   async function launch(gameId) {
-    const { launchAt, ok } = await launchGame(room.id, gameId);
-    if (!ok) { setLaunchWriteError(true); return; }
+    const prevRoom = room;
+    const launchAt = new Date(Date.now() + GAME_LAUNCH_BUFFER_MS).toISOString();
     setRoom(r => (r ? { ...r, status: "playing", current_game: gameId, launch_at: launchAt, stage_launch_at: null, game_state: null } : r));
+    const { ok } = await launchGame(room.id, gameId, launchAt);
+    if (!ok) { setRoom(prevRoom); setLaunchWriteError(true); }
   }
 
   // Ouverture synchronisée de la scène (demande 2026-07) : le bouton
@@ -370,11 +385,22 @@ export default function Room() {
   // ci-dessous empêche cette divergence silencieuse : si l'écriture échoue
   // vraiment, l'hôte reste bloqué lui aussi (comme ses invités) et voit un
   // message clair au lieu d'avancer seul sans le savoir.
+  // Correctif latence hôte 2026-07 (même principe que `launch` ci-dessus,
+  // appliqué à l'ouverture de la scène) : c'est CE clic qui déclenche
+  // l'animation d'ouverture de la porte/rideau, et il était le plus ressenti
+  // comme "mort" — buffer scène de 900 ms n'affichant rien, PRÉCÉDÉ du
+  // round-trip réseau avant même de démarrer. On applique désormais
+  // l'horodatage local immédiatement (la porte de l'hôte commence à pivoter
+  // au clic), on écrit en arrière-plan avec le même `openAt`, et on annule
+  // (rollback à l'état porte fermée précédent) uniquement si l'écriture
+  // échoue vraiment — garde-fou anti-blocage du zip 111 préservé.
   async function openStage() {
     if (!isHost) return;
-    const { openAt, ok } = await launchStage(room.id);
-    if (!ok) { setLaunchWriteError(true); return; }
+    const prevStageLaunchAt = room?.stage_launch_at ?? null;
+    const openAt = new Date(Date.now() + STAGE_LAUNCH_BUFFER_MS).toISOString();
     setRoom(r => (r ? { ...r, stage_launch_at: openAt } : r));
+    const { ok } = await launchStage(room.id, openAt);
+    if (!ok) { setRoom(r => (r ? { ...r, stage_launch_at: prevStageLaunchAt } : r)); setLaunchWriteError(true); }
   }
 
   // "Nommer comme host" (demande 2026-07, point 4) : transfert volontaire et
