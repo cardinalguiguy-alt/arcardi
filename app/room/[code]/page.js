@@ -119,8 +119,18 @@ export default function Room() {
   // Garde anti-double-appel pour la succession automatique de l'hôte
   // (point 5) : un seul essai par période "hôte disparu" détectée.
   const hostSuccessionRef = useRef(false);
-  // La colonne rooms.game_state existe-t-elle ? (migration upgrade-002.sql)
-  const [hasGameStateCol, setHasGameStateCol] = useState(true);
+  // Migrations Supabase optionnelles dont l'absence casse silencieusement le
+  // lancement d'une partie : liste les fichiers upgrade-00N.sql manquants,
+  // détectés en regardant si leurs colonnes apparaissent dans la ligne
+  // `rooms` reçue au chargement (voir plus bas, `select *`). AVANT ce
+  // correctif (2026-07), seule rooms.game_state (upgrade-002.sql) était
+  // vérifiée : si launch_at (upgrade-003.sql) ou surtout stage_launch_at
+  // (upgrade-004.sql) manquait, RIEN ne le signalait à l'hôte — l'écriture
+  // de stage_launch_at échouait en silence (voir openStage plus bas),
+  // l'hôte avançait seul (mise à jour locale optimiste) tandis que ses
+  // invités restaient bloqués pour toujours sur "En attente que l'hôte
+  // lance la partie…", sans que personne ne comprenne pourquoi.
+  const [missingMigrations, setMissingMigrations] = useState([]);
   // Mode "agrandi" (demande 2026-07) : pendant une partie, masque l'en-tête
   // (logo, code, fabs secondaires) pour donner TOUTE la hauteur au jeu —
   // objectif : zéro scroll sur laptop.
@@ -151,11 +161,16 @@ export default function Room() {
         .from("rooms").select("*").eq("code", String(code).toUpperCase()).single();
       if (roomErr || !roomRow) { setError(t("noRoom")); return; }
       setRoom(roomRow);
-      // Vérification passive de la migration upgrade-002.sql : si la colonne
-      // game_state n'apparaît pas dans la ligne renvoyée par `select *`,
-      // c'est qu'elle n'existe pas encore en base -> avertir l'hôte au lobby
-      // (la resynchronisation après rechargement ne marchera pas sans elle).
-      setHasGameStateCol(Object.prototype.hasOwnProperty.call(roomRow, "game_state"));
+      // Vérification passive des migrations 002/003/004 : si une colonne
+      // n'apparaît pas dans la ligne renvoyée par `select *`, c'est qu'elle
+      // n'existe pas encore en base -> avertir l'hôte au lobby AVANT qu'il
+      // ne lance quoi que ce soit, plutôt que de le laisser découvrir la
+      // panne en pleine soirée avec des invités bloqués.
+      const missing = [];
+      if (!Object.prototype.hasOwnProperty.call(roomRow, "game_state")) missing.push("supabase/upgrade-002.sql");
+      if (!Object.prototype.hasOwnProperty.call(roomRow, "launch_at")) missing.push("supabase/upgrade-003.sql");
+      if (!Object.prototype.hasOwnProperty.call(roomRow, "stage_launch_at")) missing.push("supabase/upgrade-004.sql");
+      setMissingMigrations(missing);
 
       // Rejoint automatiquement le salon si ce n'est pas déjà fait — c'est
       // ce qui manquait pour que le lien d'invitation fonctionne vraiment :
@@ -318,8 +333,20 @@ export default function Room() {
   // compris) attendent avant de révéler le jeu — voir `launching` plus bas —
   // pour une ouverture réellement simultanée, tolérante à un léger délai
   // réseau sur la réception du changement.
+  // Correctif URGENT 2026-07 (site injouable : invités bloqués sur "En
+  // attente que l'hôte lance la partie…", hôte seul en jeu) : cette
+  // fonction n'appliquait AVANT aucune mise à jour locale, contrairement à
+  // openStage/backToLobby/confirmEndGame juste en dessous — l'hôte
+  // attendait donc lui aussi le round-trip Realtime complet avant de voir
+  // quoi que ce soit changer, d'où la latence perçue au premier clic
+  // "Jouer" du salon. `ok:false` (voir lib/gameSync.js) signale en plus un
+  // échec d'écriture réel (jamais vu en pratique si les migrations sont à
+  // jour) : dans ce cas on n'avance pas et on prévient l'hôte au lieu de le
+  // laisser croire que la partie a démarré pour tout le monde.
   async function launch(gameId) {
-    await launchGame(room.id, gameId);
+    const { launchAt, ok } = await launchGame(room.id, gameId);
+    if (!ok) { setLaunchWriteError(true); return; }
+    setRoom(r => (r ? { ...r, status: "playing", current_game: gameId, launch_at: launchAt, stage_launch_at: null, game_state: null } : r));
   }
 
   // Ouverture synchronisée de la scène (demande 2026-07) : le bouton
@@ -331,9 +358,22 @@ export default function Room() {
   // ci-dessus pour le lancement de la partie. Mise à jour locale
   // immédiate : l'hôte n'attend pas le round-trip Realtime pour voir sa
   // propre porte s'animer.
+  // Correctif URGENT 2026-07 (CAUSE RACINE du blocage) : `launchStage`
+  // renvoyait AVANT un simple horodatage, présenté comme valide même quand
+  // l'écriture Supabase avait réellement échoué (typiquement : colonne
+  // rooms.stage_launch_at absente faute d'avoir exécuté
+  // supabase/upgrade-004.sql). La ligne `setRoom` locale s'exécutait alors
+  // quand même : la porte de L'HÔTE s'ouvrait (état local, sans dépendre du
+  // réseau), mais comme RIEN n'avait été écrit en base, aucun invité ne
+  // recevait jamais le moindre changement par Realtime -> porte fermée pour
+  // toujours de leur côté, hôte seul en jeu. Le garde `if (!ok) return`
+  // ci-dessous empêche cette divergence silencieuse : si l'écriture échoue
+  // vraiment, l'hôte reste bloqué lui aussi (comme ses invités) et voit un
+  // message clair au lieu d'avancer seul sans le savoir.
   async function openStage() {
     if (!isHost) return;
-    const openAt = await launchStage(room.id);
+    const { openAt, ok } = await launchStage(room.id);
+    if (!ok) { setLaunchWriteError(true); return; }
     setRoom(r => (r ? { ...r, stage_launch_at: openAt } : r));
   }
 
@@ -391,6 +431,11 @@ export default function Room() {
   // existent déjà et servent déjà à d'autres mécaniques du site.
   const [confirmEndOpen, setConfirmEndOpen] = useState(false);
   const [endNotice, setEndNotice] = useState(false);
+  // Correctif URGENT 2026-07 : bannière visible par l'hôte SEUL (lui seul
+  // peut agir) quand launchGame/launchStage signalent un échec d'écriture
+  // réel (voir lib/gameSync.js) — au lieu de le laisser avancer seul en
+  // silence pendant que ses invités restent bloqués sans explication.
+  const [launchWriteError, setLaunchWriteError] = useState(false);
   const noticeTimerRef = useRef(null);
   const showEndNotice = useCallback(() => {
     setEndNotice(true);
@@ -416,7 +461,8 @@ export default function Room() {
     presenceChRef.current?.send({ type: "broadcast", event: "game_ended", payload: {} });
     showEndNotice();
     await clearGameState(room.id);
-    const launchAt = await launchGame(room.id, gameId);
+    const { launchAt, ok } = await launchGame(room.id, gameId);
+    if (!ok) { setLaunchWriteError(true); return; }
     // Mise à jour locale immédiate côté hôte (même filet que backToLobby) :
     // ne dépend pas du round-trip Realtime pour voir l'effet de son propre clic.
     // stage_launch_at repart à null : la scène redémarre porte fermée, en
@@ -747,6 +793,19 @@ export default function Room() {
         </div>
       )}
 
+      {launchWriteError && isHost && (
+        // Correctif URGENT 2026-07 : visible UNIQUEMENT par l'hôte (lui
+        // seul peut agir, en exécutant la migration Supabase manquante) —
+        // évite qu'il avance seul en jeu sans savoir que ses invités, eux,
+        // ne recevront jamais rien (voir openStage/launch plus haut).
+        <div className="host-offline-banner" role="alert">
+          <span>{t("launchWriteErrorBanner")}</span>
+          <button className="btn ghost" onClick={() => setLaunchWriteError(false)}>
+            {t("launchWriteErrorDismiss")}
+          </button>
+        </div>
+      )}
+
       <Crossfade id={viewKey} duration={480}>
         {playing && launching ? (
           // ===== PALIER DE LANCEMENT SYNCHRONISÉ (demande 2026-07, point 2) =====
@@ -899,13 +958,19 @@ export default function Room() {
               ))}
             </div>
 
-            {isHost && !hasGameStateCol && (
-              // Avertissement visible UNIQUEMENT par l'hôte : la migration
-              // upgrade-002.sql n'a pas été exécutée, la reprise de partie
-              // après un rechargement (F5) ne fonctionnera pas.
+            {isHost && missingMigrations.length > 0 && (
+              // Avertissement visible UNIQUEMENT par l'hôte : une ou
+              // plusieurs migrations n'ont pas été exécutées. AVANT ce
+              // correctif, seule rooms.game_state (upgrade-002.sql) était
+              // vérifiée ici -> une migration 003/004 manquante (celle qui a
+              // rendu le site injouable, voir openStage dans ce fichier)
+              // passait totalement inaperçue, sans le moindre signal.
               <div className="sql-warn">
                 <b>{t("sqlWarnTitle")}</b><br />
-                {t("sqlWarnBody")} <code>supabase/upgrade-002.sql</code>
+                {t("sqlWarnBody")}{" "}
+                {missingMigrations.map((m, i) => (
+                  <span key={m}>{i > 0 ? ", " : ""}<code>{m}</code></span>
+                ))}
               </div>
             )}
 
