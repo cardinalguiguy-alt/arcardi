@@ -1,4 +1,11 @@
 @import url('https://fonts.googleapis.com/css2?family=Bungee&family=Outfit:wght@400;600;800&family=Space+Mono:wght@700&display=swap');
+/* Polices d'ambiance des vignettes de jeu (refonte 2026-07) : une graisse
+   unique par famille, servies en woff2 léger, display=swap (le titre
+   s'affiche en Bungee le temps du chargement). Attribution par jeu dans
+   les règles .game-card--<id> plus bas — plusieurs jeux partagent une
+   même famille quand leurs ambiances sont proches (piano/diapason,
+   connect4/tupreferes...). */
+@import url('https://fonts.googleapis.com/css2?family=Alfa+Slab+One&family=Audiowide&family=Caveat:wght@700&family=Cinzel:wght@700&family=Comfortaa:wght@700&family=Cormorant+Garamond:ital,wght@0,700;1,700&family=Fredoka:wght@600&family=Limelight&family=Luckiest+Guy&family=Righteous&family=Rye&family=Staatliches&display=swap');
 
 :root{
   /* ===== Palette "Feu de camp" (redesign cozy, 2026) ===== */
@@ -662,6 +669,19 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
   width:7px; height:7px; border-radius:50%; background:var(--p1); flex:none;
   animation:flicker 1.6s ease-in-out infinite;
 }
+/* Chip d'identité du lounge (correctif 2026-07) : remplace l'ancien bouton
+   "nom · Se déconnecter" trop facile à cliquer par erreur — même gabarit
+   que .room-code-pill, mais un simple <div> informatif, aucune action.
+   La déconnexion vit tout en bas du menu paramètres (SettingsMenu). */
+.lounge-user-chip{
+  display:flex; align-items:center; gap:8px;
+  background:rgba(18,20,42,.78); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px);
+  border:1.5px solid var(--line); border-radius:99px;
+  padding:7px 14px 7px 10px; font-size:13px; font-weight:700;
+  box-shadow:0 6px 18px rgba(0,0,0,.35); white-space:nowrap;
+  max-width:46vw; overflow:hidden; text-overflow:ellipsis;
+}
+.lounge-user-chip .lounge-user-avatar{ font-size:17px; line-height:1; }
 
 /* "Quitter le salon" : symbole sortie ROUGE, discret, fixé en bas à gauche
    (ancienne place du code). Au survol il s'allume et déplie son libellé ;
@@ -892,6 +912,15 @@ body.stage-focus .stage-fabs{ top:12px; }
 }
 .mini-chip.me{ border-color:var(--p2); }
 .game-stage{ display:flex; justify-content:center; }
+/* Filet de sécurité (GameErrorBoundary, 2026-07) : encart affiché à la
+   place du jeu si son moteur plante — sobre, centré, une seule issue. */
+.game-crash-panel{
+  display:flex; flex-direction:column; align-items:center; gap:10px;
+  text-align:center; max-width:420px; margin-top:24px; padding:28px 26px;
+}
+.game-crash-panel .game-crash-icon{ font-size:40px; line-height:1; }
+.game-crash-panel h2{ font-family:'Bungee'; font-size:17px; margin:0; }
+.game-crash-panel .btn{ width:auto; padding:10px 22px; }
 .game-stage .panel{
   /* marges verticales resserrées (2026-07) : chaque pixel de hauteur gagné
      recule le moment où il faut scroller en pleine partie. */
@@ -902,32 +931,87 @@ body.stage-focus .stage-fabs{ top:12px; }
     0 0 55px -14px var(--accent, var(--p2));
 }
 
-/* ===== Salon : grille de sélection de jeu (mode hôte, lobby) ===== */
+/* ===== Salon : grille de sélection de jeu (mode hôte, lobby) =====
+   Refonte 2026-07 ("vignettes moins textuelles") : chaque carte est une
+   VIGNETTE ILLUSTRÉE. Une scène SVG propre au jeu
+   (components/GameCardArt.js) remplit toute la carte ; le titre repose
+   dessus dans une police adaptée à l'ambiance du jeu (règles
+   .game-card--<id> plus bas) ; la description (.game-card-tag) n'apparaît
+   plus qu'au survol/focus, en surimpression ; le "Jouer →" conserve sa
+   couleur d'accent par jeu (--accent posé en inline par page.js, comme
+   avant). L'ancien badge emoji 40×40 (.game-card-icon) disparaît. */
 .game-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(190px,1fr)); gap:12px; margin-top:2px; align-items:stretch; }
 .game-card{
-  display:flex; flex-direction:column; align-items:flex-start; gap:6px; text-align:left;
-  background:rgba(255,255,255,.03); border:2px solid var(--line); border-radius:16px;
-  padding:16px; position:relative; overflow:hidden;
-  transition:transform .15s ease, border-color .15s ease, background .15s ease;
+  position:relative; display:flex; flex-direction:column; justify-content:flex-end;
+  align-items:stretch; text-align:left; height:100%;
+  aspect-ratio:16/10; min-height:130px; padding:12px 12px 10px;
+  background:#0d1120; border:2px solid var(--line); border-radius:16px; overflow:hidden;
+  transition:transform .15s ease, border-color .15s ease, box-shadow .2s ease;
   animation:cardPop .4s ease both;
 }
-.game-card::before{
-  content:""; position:absolute; inset:0; opacity:0; pointer-events:none;
-  background:linear-gradient(135deg, var(--accent), transparent 70%);
-  transition:opacity .2s ease;
+.game-card:hover{
+  transform:scale(1.02); border-color:var(--accent);
+  box-shadow:0 12px 28px -14px var(--accent);
 }
-.game-card:hover{ transform:scale(1.02); border-color:var(--accent); background:rgba(255,255,255,.06); }
-.game-card:hover::before{ opacity:.14; }
-.game-card.active{ border-color:var(--accent); background:rgba(255,255,255,.07); }
-.game-card-icon{
-  width:40px; height:40px; border-radius:12px; display:flex; align-items:center; justify-content:center;
-  font-size:20px; background:linear-gradient(160deg, color-mix(in srgb, var(--accent) 55%, #fff 45%), var(--accent) 65%);
-  box-shadow:inset 0 2px 3px rgba(255,255,255,.45), 0 3px 0 rgba(0,0,0,.28);
+.game-card.active{ border-color:var(--accent); }
+/* l'illustration : plein cadre, léger zoom "vivant" au survol */
+.game-card-art{ position:absolute; inset:0; transition:transform .35s ease; }
+.game-card-art svg{ display:block; width:100%; height:100%; }
+.game-card:hover .game-card-art{ transform:scale(1.06); }
+/* voile de lisibilité : l'illustration reste la star, seul le bas
+   s'assombrit pour que titre + CTA se détachent sur n'importe quelle scène */
+.game-card-veil{
+  position:absolute; inset:0; pointer-events:none;
+  background:linear-gradient(180deg, rgba(5,8,18,0) 42%, rgba(5,8,18,.4) 72%, rgba(5,8,18,.8) 100%);
 }
-.game-card-title{ font-family:'Bungee'; font-size:14px; line-height:1.3; }
-.game-card-tag{ color:var(--muted); font-size:12px; line-height:1.4; }
-.game-card-cta{ margin-top:auto; padding-top:8px; font-weight:800; font-size:12.5px; color:var(--accent); }
-.game-card{ height:100%; } /* toutes les tuiles d'une même rangée font la même hauteur */
+.game-card-title{
+  position:relative; z-index:1; font-family:'Bungee'; font-size:17px; line-height:1.15;
+  color:#fff; text-shadow:0 2px 6px rgba(0,0,0,.85), 0 0 18px rgba(0,0,0,.5);
+}
+/* description : masquée par défaut (c'est ça, "moins textuel"), se déplie
+   en douceur au survol de la carte ou au focus clavier */
+.game-card-tag{
+  position:relative; z-index:1; color:#dfe4f2; font-size:11.5px; line-height:1.35;
+  max-height:0; opacity:0; overflow:hidden; margin-top:0;
+  text-shadow:0 1px 3px rgba(0,0,0,.9);
+  transition:max-height .25s ease, opacity .25s ease, margin-top .25s ease;
+}
+.game-card:hover .game-card-tag, .game-card:focus-visible .game-card-tag{
+  max-height:4.2em; opacity:1; margin-top:2px;
+}
+.game-card-cta{
+  position:relative; z-index:1; align-self:flex-end; margin-top:3px;
+  font-family:'Outfit'; font-weight:800; font-size:12.5px; color:var(--accent);
+  text-shadow:0 1px 4px rgba(0,0,0,.9); white-space:nowrap;
+}
+/* verrou minPlayers : mêmes conditions qu'avant (garde dans onClick),
+   habillage adapté à la vignette illustrée — scène éteinte, pas de zoom */
+.game-card.locked{ cursor:not-allowed; }
+.game-card.locked .game-card-art{ filter:grayscale(.85) brightness(.5); }
+.game-card.locked:hover{ transform:none; box-shadow:none; border-color:var(--line); }
+.game-card.locked:hover .game-card-art{ transform:none; }
+.game-card.locked .game-card-title{ opacity:.75; }
+
+/* ---- Typographies par jeu : le titre prend la voix du jeu ---- */
+.game-card--quiz .game-card-title{ font-family:'Luckiest Guy'; font-size:19px; letter-spacing:.02em; }
+.game-card--wordle .game-card-title{ font-family:'Space Mono', monospace; font-size:16px; letter-spacing:.04em; }
+.game-card--worldle .game-card-title{ font-family:'Staatliches'; font-size:21px; letter-spacing:.06em; }
+.game-card--petitbac .game-card-title{ font-family:'Caveat', cursive; font-weight:700; font-size:25px; line-height:1; }
+.game-card--tupreferes .game-card-title{ font-family:'Fredoka'; font-weight:600; font-size:18px; }
+.game-card--connect4 .game-card-title{ font-family:'Fredoka'; font-weight:600; font-size:18px; }
+.game-card--ludo .game-card-title{ font-family:'Alfa Slab One'; font-size:16.5px; }
+.game-card--chromatik .game-card-title{ font-family:'Bungee'; font-size:17px; }
+.game-card--goldmines .game-card-title{ font-family:'Rye'; font-size:16.5px; }
+.game-card--president .game-card-title{ font-family:'Cinzel'; font-weight:700; font-size:18px; letter-spacing:.04em; }
+.game-card--yahtzee .game-card-title{ font-family:'Righteous'; font-size:19px; letter-spacing:.03em; }
+.game-card--tenk .game-card-title{
+  font-family:'Audiowide'; font-size:16px; letter-spacing:.05em; color:#CDEFFF;
+  text-shadow:0 0 12px rgba(79,209,255,.65), 0 2px 6px rgba(0,0,0,.9);
+}
+.game-card--piano .game-card-title{ font-family:'Cormorant Garamond', serif; font-style:italic; font-weight:700; font-size:20px; }
+.game-card--echoes .game-card-title{ font-family:'Comfortaa'; font-weight:700; font-size:16px; }
+.game-card--diapason .game-card-title{ font-family:'Cormorant Garamond', serif; font-weight:700; font-size:20px; letter-spacing:.03em; }
+.game-card--heist .game-card-title{ font-family:'Limelight'; font-size:17px; }
 
 /* ===== Puissance 4 =====
    Refonte 2026-07 (demande explicite "jetons bien trop amateurs") : cadre
@@ -1038,29 +1122,51 @@ body.stage-focus .stage-fabs{ top:12px; }
    conservée en dessous. Purement décoratif (CSS pur, aucune image, aucun
    poids ajouté) — n'affecte ni la géométrie ni le clic des cases/pions, qui
    restent des éléments positionnés par-dessus. */
-/* Matière du plateau v2 (2026-07, demande explicite "encore améliorer les
-   textures, trop amateur, le Gold Mines est super pro en comparaison") :
-   ajout d'un grain fin (petits points, façon feutrine/toile) sous le
-   tissage diagonal déjà en place, vignette réchauffée (teinte ambrée plutôt
-   que gris neutre) et cadre à double liseré (clair puis sombre) façon
-   insert de boîte de jeu, au lieu d'un simple anneau. Toujours du CSS pur
-   (dégradés + ombres), aucune image, même esprit "couches superposées" que
-   .gm-grid/.gm-cell (Gold Mines) pris comme référence. */
+/* Matière du plateau v3 (2026-07, demande explicite "la texture est très
+   messy, rendu pro et réaliste") : la v2 empilait CINQ couches (points de
+   grain 9px + DEUX quadrillages diagonaux croisés + vignette + teinte) —
+   les interférences entre le grain et le double hachurage produisaient un
+   moiré brouillon, précisément le "messy" reproché. La v3 fait l'inverse :
+   PEU de couches, chacune avec un vrai rôle physique.
+   - Le CADRE est un vrai rebord de bois : bordure épaisse peinte en
+     `border-box` (teinte noyer + fil du bois en bandes irrégulières),
+     séparée de la surface par un liseré sombre (le "joint" de la boîte).
+   - La SURFACE est une feutrine calme : fond brun profond, UN seul tissage
+     diagonal à peine perceptible (période large : aucun moiré possible),
+     et une lumière douce venant du haut + vignettage périphérique
+     (la surface est légèrement en retrait dans le cadre, d'où l'ombre
+     interne portée par le rebord).
+   Toujours du CSS pur, aucune image.
+   Agrandissement (2026-07, demandé) : plafonds relevés de 760px/95vw/68vh à
+   820px/96vw/74vh (mode normal) et de 680/92vw/62vh à 740/94vw/68vh (mode
+   agrandi). POURQUOI pas plus : la limite en vh garantit "zéro scroll" —
+   au-delà de ~74vh, plateau + titre + statut + boutons dépassent la hauteur
+   d'un laptop courant et le zoom automatique de secours (stageScale,
+   room/[code]/page.js) re-rétrécirait aussitôt le plateau : on gagnerait
+   des pixels sur le papier pour les reperdre à l'écran. Ces nouveaux
+   plafonds sont donc le maximum utile sans déclencher le filet. */
 .ludo-board-frame{
-  position:relative; width:min(760px, 95vw, 68vh); aspect-ratio:1; margin:0 auto;
+  position:relative; width:min(820px, 96vw, 74vh); aspect-ratio:1; margin:0 auto;
+  border:14px solid transparent; border-radius:18px; overflow:hidden;
   background:
-    radial-gradient(circle at 1px 1px, rgba(255,255,255,.05) .9px, transparent 1px) 0 0/9px 9px,
-    repeating-linear-gradient(135deg, rgba(255,255,255,.03) 0px, rgba(255,255,255,.03) 1px, transparent 1px, transparent 7px),
-    repeating-linear-gradient(45deg, rgba(0,0,0,.055) 0px, rgba(0,0,0,.055) 1px, transparent 1px, transparent 7px),
-    radial-gradient(ellipse at 50% 50%, rgba(130,95,50,.07) 0%, rgba(0,0,0,0) 55%, rgba(0,0,0,.26) 100%),
-    rgba(18,14,10,.34);
-  border-radius:16px; overflow:hidden;
-  border:3px solid var(--line);
+    /* surface : lumière douce + vignette (une seule couche radiale) */
+    radial-gradient(ellipse at 50% 38%, rgba(255,220,160,.06) 0%, rgba(0,0,0,0) 48%, rgba(0,0,0,.34) 100%) padding-box,
+    /* tissage feutrine unique, période large : discret, jamais de moiré */
+    repeating-linear-gradient(45deg, rgba(255,244,222,.02) 0px, rgba(255,244,222,.02) 2px, transparent 2px, transparent 7px) padding-box,
+    /* fond de feutrine, brun profond légèrement dégradé */
+    linear-gradient(180deg, #241a10 0%, #1c130a 60%, #170f07 100%) padding-box,
+    /* cadre : fil du bois (bandes fines irrégulières le long du cadre) */
+    repeating-linear-gradient(92deg,
+      rgba(0,0,0,.24) 0px, rgba(0,0,0,.24) 2px, transparent 2px, transparent 6px,
+      rgba(255,231,190,.05) 6px, rgba(255,231,190,.05) 8px, transparent 8px, transparent 15px) border-box,
+    /* cadre : teinte noyer chaleureuse */
+    linear-gradient(160deg, #96682f 0%, #6e4a20 42%, #7f5526 68%, #563a18 100%) border-box;
   box-shadow:
-    inset 0 0 0 2px rgba(255,255,255,.06),
-    inset 0 0 0 6px rgba(0,0,0,.22),
-    inset 0 0 0 8px rgba(255,255,255,.03),
-    0 14px 34px rgba(0,0,0,.4);
+    inset 0 0 0 2px rgba(0,0,0,.6),        /* joint sombre entre bois et feutrine */
+    inset 0 4px 12px rgba(0,0,0,.5),        /* la surface est en retrait du rebord */
+    inset 0 -1px 0 rgba(255,255,255,.04),
+    0 2px 0 rgba(255,255,255,.06),          /* arête haute du cadre qui accroche la lumière */
+    0 18px 42px rgba(0,0,0,.48);
 }
 .ludo-board{ position:absolute; inset:1.8%; }
 /* Mode agrandi : encore un peu plus compact — l'en-tête est masqué, mais on
@@ -1069,14 +1175,16 @@ body.stage-focus .stage-fabs{ top:12px; }
 body.stage-focus .ludo-panel{ padding:16px; }
 body.stage-focus .ludo-panel h1{ margin-bottom:4px; }
 body.stage-focus .ludo-panel .ludo-players-row{ margin-bottom:6px !important; }
-body.stage-focus .ludo-panel .ludo-board-frame{ width:min(680px, 92vw, 62vh); }
+body.stage-focus .ludo-panel .ludo-board-frame{ width:min(740px, 94vw, 68vh); }
 .ludo-cell{ position:absolute; box-sizing:border-box; border:1px solid rgba(255,255,255,.04); }
 /* Léger biseau par case (matière) : un filet clair en haut-gauche, une
    ombre interne en bas-droite — suggère des cases gravées/en léger relief
    plutôt que des rectangles plats, sans aucune texture bitmap. */
 .ludo-cell.path{
-  background:linear-gradient(160deg, rgba(255,255,255,.055), rgba(255,255,255,.018));
-  box-shadow: inset 1px 1px 0 rgba(255,255,255,.06), inset -1.5px -1.5px 4px rgba(0,0,0,.22);
+  /* Cases ivoire légèrement chaudes sur la feutrine sombre (v3) : le
+     contraste piste/surface fait "plateau imprimé" plutôt qu'interface. */
+  background:linear-gradient(160deg, rgba(255,243,219,.085), rgba(255,243,219,.03));
+  box-shadow: inset 1px 1px 0 rgba(255,248,230,.08), inset -1.5px -1.5px 4px rgba(0,0,0,.24);
 }
 /* Médaillon central (2026-07, détail créatif) : pinwheel discret en
    conic-gradient, confiné à la seule case centrale (pas d'élément séparé à
@@ -1097,14 +1205,51 @@ body.stage-focus .ludo-panel .ludo-board-frame{ width:min(680px, 92vw, 62vh); }
 }
 .ludo-cell.safe{ display:flex; align-items:center; justify-content:center; }
 .ludo-cell.safe::after{ content:"★"; color:rgba(255,255,255,.32); font-size:9px; line-height:1; }
-.ludo-cell.yard-red, .ludo-cell.yard-green, .ludo-cell.yard-yellow, .ludo-cell.yard-blue,
 .ludo-cell.home-red, .ludo-cell.home-green, .ludo-cell.home-yellow, .ludo-cell.home-blue{
   box-shadow: inset 1px 1px 0 rgba(255,255,255,.07), inset -1.5px -1.5px 4px rgba(0,0,0,.22);
 }
-.ludo-cell.yard-red{ background:rgba(255,93,115,.13); border-color:transparent; }
-.ludo-cell.yard-green{ background:rgba(182,240,76,.13); border-color:transparent; }
-.ludo-cell.yard-yellow{ background:rgba(255,210,63,.13); border-color:transparent; }
-.ludo-cell.yard-blue{ background:rgba(76,141,255,.13); border-color:transparent; }
+/* Écuries v2 (2026-07) : les cases yard-* s'effacent complètement — la
+   texture vit sur la PLAQUE métallique continue en dessous
+   (.ludo-yard-plate, un élément par quadrant, voir PetitsChevaux.js) :
+   impossible de raccorder un brossage case par case sans coutures. */
+.ludo-cell.yard-red, .ludo-cell.yard-green, .ludo-cell.yard-yellow, .ludo-cell.yard-blue{
+  background:transparent; border-color:transparent; box-shadow:none;
+}
+/* Plaque d'acier brossé, teintée à la couleur du camp (--plate) : brossage
+   horizontal fin, deux bandes de reflet diagonales (la "lumière" qui
+   accroche le métal), teinte de fond mêlée d'acier neutre (color-mix),
+   chant biseauté (liseré clair en haut, ombre en bas) et quatre têtes de
+   vis dans les coins (4 dégradés radiaux ponctuels, aucun élément en plus).
+   Le coin EXTÉRIEUR de chaque plaque épouse l'arrondi du plateau. */
+.ludo-yard-plate{
+  position:absolute; box-sizing:border-box; border-radius:6px;
+  --plate:#888;
+  background:
+    /* têtes de vis (coins) */
+    radial-gradient(circle 4.5px at 11px 11px, rgba(255,255,255,.5) 0 1.5px, rgba(20,22,26,.9) 2.5px 4px, transparent 4.5px),
+    radial-gradient(circle 4.5px at calc(100% - 11px) 11px, rgba(255,255,255,.5) 0 1.5px, rgba(20,22,26,.9) 2.5px 4px, transparent 4.5px),
+    radial-gradient(circle 4.5px at 11px calc(100% - 11px), rgba(255,255,255,.5) 0 1.5px, rgba(20,22,26,.9) 2.5px 4px, transparent 4.5px),
+    radial-gradient(circle 4.5px at calc(100% - 11px) calc(100% - 11px), rgba(255,255,255,.5) 0 1.5px, rgba(20,22,26,.9) 2.5px 4px, transparent 4.5px),
+    /* reflet du métal : deux bandes diagonales douces */
+    linear-gradient(115deg, rgba(255,255,255,.13) 0%, rgba(255,255,255,0) 26%, rgba(255,255,255,.09) 44%, rgba(255,255,255,0) 60%, rgba(255,255,255,.06) 100%),
+    /* brossage horizontal fin */
+    repeating-linear-gradient(0deg, rgba(255,255,255,.05) 0px, rgba(255,255,255,.05) 1px, rgba(0,0,0,.06) 2px, transparent 3px, transparent 4px),
+    /* acier teinté au camp */
+    linear-gradient(165deg,
+      color-mix(in srgb, var(--plate) 30%, #4a515c) 0%,
+      color-mix(in srgb, var(--plate) 22%, #343a44) 55%,
+      color-mix(in srgb, var(--plate) 26%, #262b33) 100%);
+  border:2px solid color-mix(in srgb, var(--plate) 40%, #5c646f);
+  box-shadow:
+    inset 0 1.5px 0 rgba(255,255,255,.22),
+    inset 0 -2px 6px rgba(0,0,0,.38),
+    inset 0 0 24px rgba(0,0,0,.16),
+    0 2px 5px rgba(0,0,0,.3);
+}
+.ludo-yard-plate.red{    --plate:var(--p1);   border-top-left-radius:12px; }
+.ludo-yard-plate.green{  --plate:var(--p3);   border-top-right-radius:12px; }
+.ludo-yard-plate.yellow{ --plate:var(--ludoY); border-bottom-right-radius:12px; }
+.ludo-yard-plate.blue{   --plate:var(--ludoB); border-bottom-left-radius:12px; }
 .ludo-cell.home-red{ background:rgba(255,93,115,.4); }
 .ludo-cell.home-green{ background:rgba(182,240,76,.4); }
 .ludo-cell.home-yellow{ background:rgba(255,210,63,.4); }
@@ -1134,72 +1279,119 @@ body.stage-focus .ludo-panel .ludo-board-frame{ width:min(680px, 92vw, 62vh); }
   50%{ opacity:.85; }
 }
 
-/* Socle "creusé" (2026-07, détail) : dégradé radial + ombre interne pour que
-   chaque emplacement d'enclos ressemble à une vraie alvéole gravée dans le
-   plateau plutôt qu'un simple cercle plat. */
+/* Alvéole d'enclos v2 (2026-07) : creusée dans la PLAQUE MÉTALLIQUE
+   (voir .ludo-yard-plate) — cuvette emboutie à fond sombre, chanfrein
+   clair en bas (le bord qui rattrape la lumière) et ombre portée interne
+   en haut : lisible comme un logement usiné, plus un pointillé d'UI. */
 .ludo-yard-slot{
   position:absolute; border-radius:50%; box-sizing:border-box;
-  background:radial-gradient(circle at 38% 32%, rgba(255,255,255,.09), rgba(0,0,0,.28) 72%);
-  border:2px dashed rgba(255,255,255,.18);
-  box-shadow:inset 0 2px 4px rgba(0,0,0,.4), inset 0 -1px 0 rgba(255,255,255,.05);
+  background:radial-gradient(circle at 42% 34%, rgba(0,0,0,.14), rgba(0,0,0,.4) 68%, rgba(0,0,0,.5) 100%);
+  border:1.5px solid rgba(10,12,16,.55);
+  box-shadow:
+    inset 0 3px 6px rgba(0,0,0,.5),
+    inset 0 -1.5px 0 rgba(255,255,255,.14),
+    0 1px 0 rgba(255,255,255,.1);
 }
 
-/* Le pion : une zone de clic (redimensionnée / éclatée en cas de
-   superposition, voir le calcul dans PetitsChevaux.js), qui contient un
-   "vrai" pion dessiné en CSS pur — base sphérique en dégradé + petite tête,
-   plutôt qu'un simple rond plat. */
+/* Le pion v2 (2026-07, demande explicite "apparence bien plus réaliste") :
+   une zone de clic (redimensionnée / éclatée en cas de superposition, voir
+   le calcul dans PetitsChevaux.js) qui contient une vraie SILHOUETTE de
+   pion de jeu de plateau, vue de trois-quarts, en trois pièces CSS pures :
+   - le SOCLE (.ludo-token-pin::before) : galette elliptique, bord éclairé
+     en haut, tranche sombre en bas ;
+   - le CORPS (.ludo-token-pin) : fût fuselé, ombré comme un tour de bois
+     (clair sur le flanc gauche où vient la lumière, sombre à droite) ;
+   - la TÊTE (.ludo-token-pin::after) : sphère avec point spéculaire net
+     décalé haut-gauche, la même lumière que tout le plateau.
+   La couleur du camp vit dans --tok : toutes les nuances (flanc clair,
+   cœur, ombre) en sont dérivées par color-mix — une seule ligne par camp. */
 .ludo-token{
   position:absolute; box-sizing:border-box;
   transition: top .38s cubic-bezier(.34,1.4,.64,1), left .38s cubic-bezier(.34,1.4,.64,1), width .25s ease, height .25s ease;
-  display:flex; align-items:center; justify-content:center;
+  display:flex; align-items:flex-end; justify-content:center;
 }
-/* Ombre de contact au sol (2026-07, demande explicite "pions plus détaillés
-   et réalistes") : ellipse floue sous le pion, séparée de l'ombre propre à
-   .ludo-token-pin (qui dessine le relief du pion) — suggère qu'il repose
-   vraiment sur le plateau plutôt que d'y flotter à plat. */
+/* Ombre de contact au sol : ellipse floue sous le socle — le pion repose
+   sur le plateau au lieu d'y flotter. */
 .ludo-token::before{
-  content:""; position:absolute; left:50%; bottom:6%; width:62%; height:22%;
+  content:""; position:absolute; left:50%; bottom:2%; width:72%; height:20%;
   transform:translateX(-50%); border-radius:50%;
-  background:radial-gradient(ellipse at center, rgba(0,0,0,.42), transparent 72%);
+  background:radial-gradient(ellipse at center, rgba(0,0,0,.45), transparent 70%);
   z-index:-1;
 }
 .ludo-token-pin{
-  position:relative; width:78%; height:78%; border-radius:50%; box-sizing:border-box;
-  box-shadow:0 3px 0 rgba(0,0,0,.42), 0 4px 6px rgba(0,0,0,.3), inset 0 2px 3px rgba(255,255,255,.5), inset 0 -3px 4px rgba(0,0,0,.25), inset 0 0 0 1.5px rgba(0,0,0,.15);
-  transition: box-shadow .2s ease;
+  /* le CORPS : fût fuselé (plus étroit en haut, épaules arrondies) */
+  position:relative; box-sizing:border-box;
+  width:44%; height:64%; margin-bottom:9%;
+  border-radius:48% 48% 34% 34% / 62% 62% 20% 20%;
+  background:
+    linear-gradient(90deg, rgba(0,0,0,.28) 0%, rgba(255,255,255,.3) 26%, rgba(255,255,255,.06) 46%, rgba(0,0,0,.14) 74%, rgba(0,0,0,.38) 100%),
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--tok) 68%, #fff) 0%,
+      var(--tok) 42%,
+      color-mix(in srgb, var(--tok) 74%, #000) 100%);
+}
+.ludo-token-pin::before{
+  /* le SOCLE : galette elliptique sous le fût */
+  content:""; position:absolute; bottom:-13%; left:50%; transform:translateX(-50%);
+  width:205%; height:36%; border-radius:50%; z-index:-1;
+  background:
+    linear-gradient(90deg, rgba(0,0,0,.22), rgba(255,255,255,.18) 28%, rgba(255,255,255,0) 52%, rgba(0,0,0,.3) 100%),
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--tok) 62%, #fff) 0%,
+      var(--tok) 45%,
+      color-mix(in srgb, var(--tok) 62%, #000) 100%);
+  box-shadow:
+    inset 0 -2.5px 3px rgba(0,0,0,.4),
+    inset 0 1.5px 1.5px rgba(255,255,255,.4),
+    0 1.5px 2px rgba(0,0,0,.35);
 }
 .ludo-token-pin::after{
-  content:""; position:absolute; top:-32%; left:50%; transform:translateX(-50%);
-  width:44%; height:44%; border-radius:50%;
-  box-shadow:0 2px 0 rgba(0,0,0,.35), inset 0 1px 2px rgba(255,255,255,.55), inset 0 -2px 3px rgba(0,0,0,.2);
-  background:inherit;
+  /* la TÊTE : sphère, point spéculaire net haut-gauche */
+  content:""; position:absolute; top:-38%; left:50%; transform:translateX(-50%);
+  width:128%; aspect-ratio:1/1; border-radius:50%;
+  background:radial-gradient(circle at 33% 27%,
+    rgba(255,255,255,.95) 0%, rgba(255,255,255,.55) 9%,
+    color-mix(in srgb, var(--tok) 58%, #fff) 26%,
+    var(--tok) 58%,
+    color-mix(in srgb, var(--tok) 66%, #000) 100%);
+  box-shadow:
+    0 2px 3px rgba(0,0,0,.32),
+    inset 0 -2.5px 4px rgba(0,0,0,.28);
 }
-.ludo-token.red .ludo-token-pin{ background:radial-gradient(circle at 35% 28%, #ff8c9c, var(--p1) 68%); }
-.ludo-token.green .ludo-token-pin{ background:radial-gradient(circle at 35% 28%, #d7ffa0, var(--p3) 68%); }
-.ludo-token.yellow .ludo-token-pin{ background:radial-gradient(circle at 35% 28%, #ffe89a, var(--ludoY) 68%); }
-.ludo-token.blue .ludo-token-pin{ background:radial-gradient(circle at 35% 28%, #9cc2ff, var(--ludoB) 68%); }
-/* Rebond d'atterrissage (2026-07, demande explicite "meilleures animations") :
-   dès qu'un pion devient "le dernier joué" (nouvel élément qui reçoit la
-   classe .last, voir lastMoved dans PetitsChevaux.js), un léger effet
-   d'écrasement/rebond joue UNE fois — suggère un vrai impact sur le
-   plateau plutôt qu'un simple glissement qui s'arrête net. Rejoue à chaque
-   fois qu'un pion DIFFÉRENT devient le dernier joué (la classe arrive sur
-   un nouvel élément à chaque fois), jamais en boucle. */
+.ludo-token.red{    --tok:var(--p1); }
+.ludo-token.green{  --tok:var(--p3); }
+.ludo-token.yellow{ --tok:var(--ludoY); }
+.ludo-token.blue{   --tok:var(--ludoB); }
+/* Rebond d'atterrissage : dès qu'un pion devient "le dernier joué" (classe
+   .last posée sur un nouvel élément, voir lastMoved dans PetitsChevaux.js),
+   un écrasement/rebond joue UNE fois — l'impact du pion qu'on repose.
+   L'origine de l'écrasement est la BASE du pion (transform-origin bas) :
+   socle, fût et tête se compriment vers le sol comme une vraie pièce. */
 .ludo-token.last .ludo-token-pin{
-  box-shadow:0 0 0 3px var(--ink), 0 3px 0 rgba(0,0,0,.42), inset 0 2px 3px rgba(255,255,255,.5);
+  filter:drop-shadow(0 0 5px rgba(255,255,255,.55));
   animation: ludoTokenLand .42s cubic-bezier(.34,1.6,.5,1) both;
+  transform-origin:50% 100%;
 }
 @keyframes ludoTokenLand{
   0%{ transform:scale(1); }
-  35%{ transform:scale(1.22, .8); }
-  65%{ transform:scale(.92, 1.08); }
+  35%{ transform:scale(1.18, .78); }
+  65%{ transform:scale(.94, 1.08); }
   100%{ transform:scale(1); }
 }
 .ludo-token.mine-movable{ cursor:pointer; }
-.ludo-token.mine-movable .ludo-token-pin{ animation:ludoPulse 1s ease-in-out infinite; }
+/* Pion jouable : anneau lumineux qui pulse AU SOL, autour du socle — le
+   fût/la tête ne clignotent plus (l'ancien halo box-shadow épousait un
+   cercle qui n'existe plus depuis la silhouette v2). */
+.ludo-token.mine-movable::after{
+  content:""; position:absolute; left:50%; bottom:0; width:88%; height:26%;
+  transform:translateX(-50%); border-radius:50%; pointer-events:none;
+  border:2px solid rgba(255,255,255,.8);
+  box-shadow:0 0 8px rgba(255,255,255,.35);
+  animation:ludoPulse 1s ease-in-out infinite;
+}
 @keyframes ludoPulse{
-  0%,100%{ box-shadow:0 3px 0 rgba(0,0,0,.42), inset 0 2px 3px rgba(255,255,255,.5), 0 0 0 0 rgba(255,255,255,.65); }
-  50%{ box-shadow:0 3px 0 rgba(0,0,0,.42), inset 0 2px 3px rgba(255,255,255,.5), 0 0 0 6px rgba(255,255,255,0); }
+  0%,100%{ opacity:.95; transform:translateX(-50%) scale(1); }
+  50%{ opacity:.35; transform:translateX(-50%) scale(1.16); }
 }
 
 /* ===== DEUX DÉS (2026-07) : plateau de dés ancré près du camp actif =====
@@ -1610,10 +1802,12 @@ button.ludo-roman.selected{
 }
 @keyframes ludoGoalSpin{ from{ transform:rotate(0deg); } to{ transform:rotate(360deg); } }
 @keyframes ludoGoalLife{ 0%{ opacity:0; } 10%{ opacity:.55; } 75%{ opacity:.45; } 100%{ opacity:0; } }
-/* Pion arrivé : liseré doré + petit "pop" d'installation dans la zone. */
+/* Pion arrivé : halo doré + petit "pop" d'installation dans la zone.
+   v2 (2026-07) : drop-shadow au lieu de l'ancien anneau box-shadow — le
+   halo épouse la vraie silhouette du pion (socle + fût + tête), un anneau
+   circulaire n'aurait plus aucun sens sur cette forme. */
 .ludo-token.finished .ludo-token-pin{
-  box-shadow:0 0 0 2px rgba(255,209,102,.85), 0 0 10px rgba(255,209,102,.45),
-    0 3px 0 rgba(0,0,0,.42), inset 0 2px 3px rgba(255,255,255,.5);
+  filter:drop-shadow(0 0 3.5px rgba(255,209,102,.85)) drop-shadow(0 0 8px rgba(255,209,102,.35));
 }
 .ludo-token.finished.last{ animation:ludoFinishPop .5s ease; }
 @keyframes ludoFinishPop{ 0%{ transform:scale(1.7); } 100%{ transform:scale(1); } }
@@ -2596,6 +2790,23 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
   font-family:'Bungee'; color:var(--acc-ludo);
   -webkit-text-stroke:1.5px rgba(80,42,4,.85);
   text-shadow:0 5px 0 rgba(90,50,10,.85), 0 0 16px rgba(255,184,77,.4);
+}
+/* Ludo, chiffres aux couleurs du plateau (demande 2026-07) : le 3 JAUNE,
+   le 2 ROUGE, le 1 BLEU — les teintes des camps (--ludoY/--p1/--ludoB)
+   enchaînées pendant le décompte ; le vert du 4e camp reste celui du
+   plateau lui-même. Le relief ambré générique ci-dessus est remplacé par
+   une ombre portée neutre + halo à la teinte du chiffre. */
+.game-countdown.ludo .game-countdown-digit[data-n="3"]{
+  color:var(--ludoY); -webkit-text-stroke:1.5px rgba(84,62,4,.9);
+  text-shadow:0 5px 0 rgba(60,42,6,.9), 0 0 18px rgba(255,210,63,.45);
+}
+.game-countdown.ludo .game-countdown-digit[data-n="2"]{
+  color:var(--p1); -webkit-text-stroke:1.5px rgba(84,14,24,.9);
+  text-shadow:0 5px 0 rgba(60,10,18,.9), 0 0 18px rgba(255,93,115,.45);
+}
+.game-countdown.ludo .game-countdown-digit[data-n="1"]{
+  color:var(--ludoB); -webkit-text-stroke:1.5px rgba(10,34,84,.9);
+  text-shadow:0 5px 0 rgba(8,26,62,.9), 0 0 18px rgba(76,141,255,.45);
 }
 /* Puissance 4 : plastique rouge/bleu, contour net. */
 .game-countdown.c4{ background:rgba(6,10,22,.6); }
@@ -3589,9 +3800,25 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
 /* Bouton "Jouer" de l'hôte, juste après son propre clic (2026-07) : reste
    affiché (pas de saut brusque vers le message d'attente, réservé aux
    invités) mais se fige le temps que `stageLaunchAt` revienne du serveur
-   et fasse pivoter sa propre porte, comme tout le monde. */
+   et fasse pivoter sa propre porte, comme tout le monde.
+   Correctif fluidité 2026-07 : le clic donne maintenant un retour VISIBLE
+   immédiat (enfoncement + pulsation lumineuse) — avant, le bouton se
+   contentait de pâlir pendant le tampon de synchronisation, et l'hôte
+   avait l'impression d'un bouton mort. */
 .door-play-btn:disabled, .curtain-play-btn:disabled, .flash-play-btn:disabled, .video-play-btn:disabled{
-  opacity:.55; cursor:default; filter:none; transform:none;
+  opacity:.8; cursor:default; filter:none;
+  transform:translateY(3px) scale(.99);
+  box-shadow:0 2px 0 rgba(0,0,0,.35);
+  animation:stagePlayArming .5s ease-in-out infinite;
+}
+@keyframes stagePlayArming{
+  0%, 100%{ filter:brightness(.92); }
+  50%{ filter:brightness(1.15); }
+}
+@media (prefers-reduced-motion: reduce){
+  .door-play-btn:disabled, .curtain-play-btn:disabled, .flash-play-btn:disabled, .video-play-btn:disabled{
+    animation:none;
+  }
 }
 .door-content{ position:relative; animation:povPush .7s cubic-bezier(.2,.8,.3,1) both; }
 /* (Le bouton "revoir l'entrée" a été retiré : inutile pour les joueurs,

@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { playDoorOpen } from "@/lib/sfx";
+import { SYNC_MAX_WAIT_MS } from "@/lib/gameSync";
 import GameRulesButton from "./GameRulesButton";
 
 /* ==========================================================================
@@ -49,18 +50,34 @@ export default function DoorStage({ gameId, icon, name, accentVar, lang, t, chil
 
   // Attend `stageLaunchAt` (écrit par l'hôte au clic sur "Jouer") avant de
   // faire pivoter la porte — TOUS les clients passent par ce même effet, y
-  // compris l'hôte, pour une ouverture réellement simultanée. Si l'instant
-  // cible est déjà passé (rejoint/rechargé en retard), on saute directement
-  // à 'open' plutôt que de rejouer une animation que plus personne n'attend.
+  // compris l'hôte, pour une ouverture réellement simultanée.
+  //
+  // Correctif URGENT 2026-07 (blocage invités) : le `delay` est calculé en
+  // comparant l'horloge de l'HÔTE (qui a écrit l'horodatage) à l'horloge
+  // LOCALE — à la moindre dérive entre machines, il devenait gigantesque
+  // (porte fermée à jamais chez l'invité) ou très négatif (animation sautée
+  // à tort). Deux gardes désormais :
+  // - `justLaunched` (l'horodatage vient d'APPARAÎTRE alors qu'on regardait
+  //   la porte fermée = déclenchement reçu en direct) : on anime TOUJOURS,
+  //   avec une attente bornée entre 0 et SYNC_MAX_WAIT_MS, même si l'horloge
+  //   locale prétend que l'instant est déjà passé.
+  // - horodatage déjà présent au montage (rejoint/rechargé après coup) : on
+  //   saute à 'open' si l'instant est passé, comme avant — et s'il est
+  //   "dans le futur", on borne aussi l'attente (horloge locale en retard).
+  const prevLaunchRef = useRef(stageLaunchAt);
   useEffect(() => {
+    const prev = prevLaunchRef.current;
+    prevLaunchRef.current = stageLaunchAt;
     clearTimeout(waitTimer.current);
     if (!stageLaunchAt || doorState !== "closed") return;
-    const delay = new Date(stageLaunchAt).getTime() - Date.now();
-    if (delay <= 0) {
+    const raw = new Date(stageLaunchAt).getTime() - Date.now();
+    const justLaunched = !prev;
+    if (raw <= 0 && !justLaunched) {
       setDoorState("open");
       setEntryKey(k => k + 1);
       return;
     }
+    const delay = Math.max(0, Math.min(raw, SYNC_MAX_WAIT_MS));
     waitTimer.current = setTimeout(() => {
       setDoorState("opening");
       playDoorOpen(); // son de portes coulissantes, synchro sur les 3s de rotation

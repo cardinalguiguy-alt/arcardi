@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { SYNC_MAX_WAIT_MS } from "@/lib/gameSync";
 import GameRulesButton from "./GameRulesButton";
 
 /* ==========================================================================
@@ -34,17 +35,25 @@ export default function CurtainStage({ gameId, icon, name, accentVar, lang, t, c
   useEffect(() => () => { clearTimeout(openTimer.current); clearTimeout(waitTimer.current); }, []);
 
   // Même mécanisme que DoorStage : attend `stageLaunchAt` avant de lever le
-  // rideau, chez tout le monde y compris l'hôte. Un client en retard
-  // (rejoint/rechargé après coup) saute directement à 'open'.
+  // rideau, chez tout le monde y compris l'hôte. Correctif URGENT 2026-07
+  // (dérive d'horloge entre machines, voir DoorStage.js pour le détail) :
+  // attente BORNÉE par SYNC_MAX_WAIT_MS, et un déclenchement reçu en direct
+  // (`justLaunched`) anime toujours au lieu de sauter à 'open'. Un client en
+  // retard (rejoint/rechargé après coup) saute directement à 'open'.
+  const prevLaunchRef = useRef(stageLaunchAt);
   useEffect(() => {
+    const prev = prevLaunchRef.current;
+    prevLaunchRef.current = stageLaunchAt;
     clearTimeout(waitTimer.current);
     if (!stageLaunchAt || state !== "closed") return;
-    const delay = new Date(stageLaunchAt).getTime() - Date.now();
-    if (delay <= 0) {
+    const raw = new Date(stageLaunchAt).getTime() - Date.now();
+    const justLaunched = !prev;
+    if (raw <= 0 && !justLaunched) {
       setState("open");
       setEntryKey(k => k + 1);
       return;
     }
+    const delay = Math.max(0, Math.min(raw, SYNC_MAX_WAIT_MS));
     waitTimer.current = setTimeout(() => {
       setState("opening");
       openTimer.current = setTimeout(() => {

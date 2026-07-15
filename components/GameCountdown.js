@@ -35,8 +35,11 @@ export default function GameCountdown({ variant = "", onDone }) {
   if (n <= 0) return null;
   return (
     <div className={"game-countdown " + variant} role="status" aria-live="assertive">
-      {/* key={n} : remonte le <span> à chaque chiffre pour rejouer l'animation */}
-      <span key={n} className="game-countdown-digit">{n}</span>
+      {/* key={n} : remonte le <span> à chaque chiffre pour rejouer l'animation.
+          data-n (2026-07) : permet aux variantes CSS de colorer CHAQUE
+          chiffre différemment (ex. Ludo : 3 jaune, 2 rouge, 1 bleu — les
+          couleurs du plateau) — inerte pour les variantes qui l'ignorent. */}
+      <span key={n} className="game-countdown-digit" data-n={n}>{n}</span>
     </div>
   );
 }

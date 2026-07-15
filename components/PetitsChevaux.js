@@ -1544,6 +1544,29 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
             haut du plateau). */}
         <div className="ludo-board-frame">
         <div className="ludo-board">
+          {/* Plaques d'ÉCURIE (2026-07, demande explicite "texture différente
+              des cases, style légèrement métallique") : une plaque d'acier
+              brossé teintée à la couleur du camp, UNE par quadrant d'enclos,
+              rendue AVANT les cases (donc derrière elles dans l'ordre de
+              superposition). Une seule surface continue par écurie : la
+              texture brossée est impossible à raccorder proprement case par
+              case (36 origines de dégradés différentes = coutures visibles),
+              d'où cet élément dédié — les cases yard-* deviennent
+              transparentes en CSS et laissent la plaque s'exprimer. */}
+          {COLOR_ORDER.map(color => {
+            const [r1, c1, r2, c2] = COLORS[color].yardBox;
+            return (
+              <div
+                key={color + "-plate"}
+                className={"ludo-yard-plate " + color}
+                aria-hidden="true"
+                style={{
+                  top: (r1 / 15) * 100 + "%", left: (c1 / 15) * 100 + "%",
+                  width: ((c2 - c1 + 1) / 15) * 100 + "%", height: ((r2 - r1 + 1) / 15) * 100 + "%",
+                }}
+              />
+            );
+          })}
           {Object.entries(CELL_TYPE).map(([key, type]) => {
             const [r, c] = key.split("_").map(Number);
             const isSafe = SAFE_CELLS.has(key);

@@ -66,20 +66,22 @@ export default function Lounge() {
     router.push("/room/" + room.code);
   }
 
-  async function logout() {
-    await supabase.auth.signOut();
-    router.replace("/login");
-  }
-
   if (!profile) return <div className="wrap"><p className="muted">…</p></div>;
 
   return (
     <div className="wrap wrap-lounge lounge-wrap">
       <Embers />
+      {/* Correctif 2026-07 (demande explicite) : l'ancien bouton
+          "avatar nom · Se déconnecter" en haut à droite déconnectait au
+          moindre clic — bien trop facile à toucher par erreur. Remplacé
+          par une simple chip d'identité, sans AUCUNE action au clic ; la
+          déconnexion vit désormais uniquement tout en bas du menu
+          paramètres (voir SettingsMenu.js, déjà en place). */}
       <Brand lang={lang} setLang={setLang} t={t} onHome={() => router.push("/lounge")} right={
-        <button className="btn ghost" style={{ width: "auto", margin: 0, padding: "8px 14px", fontSize: 13 }} onClick={logout}>
-          {profile.avatar} {profile.username} · {t("logout")}
-        </button>
+        <div className="lounge-user-chip" title={profile.username}>
+          <span className="lounge-user-avatar">{profile.avatar}</span>
+          <span>{profile.username}</span>
+        </div>
       } />
 
       <div className="lounge-center">

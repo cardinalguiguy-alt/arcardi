@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-import { resetRoomToLobby, launchGame, launchStage, clearGameState, nominateHost, leaveRoomAndHandoff, claimAbandonedHost } from "@/lib/gameSync";
+import { resetRoomToLobby, launchGame, launchStage, clearGameState, nominateHost, leaveRoomAndHandoff, claimAbandonedHost, GAME_LAUNCH_BUFFER_MS } from "@/lib/gameSync";
 import { useLang } from "@/lib/i18n";
 import { duckAmbienceForGame, resumeAmbienceForNav } from "@/lib/ambience";
 import { playGameCardClick } from "@/lib/sfx";
@@ -27,6 +27,8 @@ import PetitBacGame from "@/components/petitbac/PetitBacGame";
 import YahtzeeGame from "@/components/yahtzee/YahtzeeGame";
 import TenkGame from "@/components/tenk/TenkGame";
 import TuPreferesGame from "@/components/tupreferes/TuPreferesGame";
+import GameErrorBoundary from "@/components/GameErrorBoundary";
+import GameCardArt from "@/components/GameCardArt";
 import DoorStage from "@/components/DoorStage";
 import CurtainStage from "@/components/CurtainStage";
 import FlashStage from "@/components/FlashStage";
@@ -581,18 +583,29 @@ export default function Room() {
   }, [focusActive, stageEl, room?.current_game]);
 
   // Lancement synchronisé (demande 2026-07, point 2) : tant que l'horodatage
-  // cible `launch_at` écrit par l'hôte n'est pas atteint, on réaffiche un
-  // court palier d'attente au lieu du jeu (voir `launching` plus bas) — le
-  // recalcul par intervalle est ce qui permet à ce palier de se refermer
-  // tout seul, pile au même instant chez tous les clients qui ont reçu le
-  // changement à temps.
-  const [launchTick, setLaunchTick] = useState(0);
+  // cible `launch_at` écrit par l'hôte n'est pas atteint, on affiche un
+  // court palier d'attente au lieu du jeu (voir `launching` plus bas).
+  //
+  // Réécrit (correctifs 2026-07) : un simple booléen posé par timeout, au
+  // lieu de l'ancien intervalle de 100 ms qui, une fois la cible atteinte,
+  // ne se coupait jamais (ses dépendances ne changeaient pas à cet instant)
+  // et re-rendait toute la page 10 fois par seconde pendant TOUTE la partie.
+  // La durée est de plus BORNÉE par GAME_LAUNCH_BUFFER_MS : `launch_at` est
+  // écrit avec l'horloge de l'HÔTE et comparé à l'horloge LOCALE — à la
+  // moindre dérive entre machines, un invité pouvait rester coincé sur
+  // "Ça commence…" pendant des minutes (l'un des deux visages du blocage
+  // signalé). Au pire, le palier dure maintenant son budget nominal, puis
+  // s'efface. Un client qui (re)charge après coup (delay nul) n'a aucun
+  // palier, comme avant.
+  const [launchHold, setLaunchHold] = useState(false);
   useEffect(() => {
-    if (!room?.launch_at || room.status !== "playing") return;
+    if (!room?.launch_at || room.status !== "playing") { setLaunchHold(false); return; }
     const target = new Date(room.launch_at).getTime();
-    if (Date.now() >= target) return;
-    const iv = setInterval(() => setLaunchTick(t => t + 1), 100);
-    return () => clearInterval(iv);
+    const delay = Math.max(0, Math.min(target - Date.now(), GAME_LAUNCH_BUFFER_MS));
+    if (!delay) { setLaunchHold(false); return; }
+    setLaunchHold(true);
+    const tm = setTimeout(() => setLaunchHold(false), delay);
+    return () => clearTimeout(tm);
   }, [room?.launch_at, room?.status]);
 
   if (error) return <div className="wrap"><div className="panel"><h1>😕</h1><p className="hint">{error}</p></div></div>;
@@ -600,8 +613,7 @@ export default function Room() {
 
   const isHost = room.host_id === me.id;
   const playing = room.status === "playing";
-  const launchTargetMs = room.launch_at ? new Date(room.launch_at).getTime() : 0;
-  const launching = playing && launchTargetMs > Date.now();
+  const launching = playing && launchHold;
   // Tant que la présence n'a pas fait sa première synchro (online === null),
   // on considère tout le monde en ligne pour éviter un faux "hors ligne".
   const isOnline = pid => (online === null ? true : !!online[pid]);
@@ -785,6 +797,15 @@ export default function Room() {
               {meta && (() => {
                 const StageComponent = STAGE_COMPONENT[meta.stage] || DoorStage;
                 return (
+                // Filet de sécurité (2026-07) : si le moteur du jeu (ou sa
+                // scène) lève une exception, seul cet encart est remplacé
+                // par un message + un bouton de sortie, au lieu d'un écran
+                // blanc pour toute la page. La `key` (jeu + launch_at) jette
+                // le boundary cassé dès que l'hôte relance : instance
+                // fraîche, plus d'état "planté" résiduel. onBack : l'hôte
+                // ramène tout le monde au salon (reset room), un invité ne
+                // quitte que SA vue (même distinction que brandHome).
+                <GameErrorBoundary key={room.current_game + "|" + (room.launch_at || "")} t={t} onBack={() => { if (isHost) backToLobby(); else handleGameFinish(); }}>
                 <StageComponent gameId={room.current_game} icon={meta.icon} name={t(meta.nameKey)} accentVar={meta.accent} lang={lang} t={t} onRulesOpenChange={setReadingRules} rulesReaderNames={rulesReaderNames} isHost={isHost} stageLaunchAt={room.stage_launch_at} onHostOpen={openStage}>
                   {room.current_game === "quiz" && (
                     <QuizGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
@@ -835,6 +856,7 @@ export default function Room() {
                     <TuPreferesGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
                   )}
                 </StageComponent>
+                </GameErrorBoundary>
                 );
               })()}
             </div>
@@ -894,18 +916,38 @@ export default function Room() {
                 <div className="game-grid">
                   {GAME_ORDER.map(id => {
                     const g = GAME_META[id];
-                    const disabled = g.minPlayers ? players.length < g.minPlayers : false;
+                    // Correctif 2026-07 : le verrou minPlayers compte les
+                    // joueurs EN LIGNE (map presence), plus room_players
+                    // brut — avant, un salon de 2 inscrits dont 1 déconnecté
+                    // laissait lancer un jeu à 2 joueurs qui démarrait figé.
+                    // Tant que la presence n'a pas fait sa première synchro
+                    // (online === null), isOnline considère tout le monde en
+                    // ligne : même comportement qu'avant, jamais de faux
+                    // verrou au chargement de la page.
+                    const onlineCount = players.filter(p => isOnline(p.profile_id)).length;
+                    const disabled = g.minPlayers ? onlineCount < g.minPlayers : false;
+                    // Vignettes illustrées (refonte 2026-07, "moins
+                    // textuelles") : l'illustration SVG du jeu
+                    // (GameCardArt) remplit toute la carte, le titre
+                    // repose dessus dans une police propre au jeu (voir
+                    // .game-card--<id> dans globals.css), et la
+                    // description ne s'affiche plus qu'au survol/focus.
+                    // Le "Jouer →" garde sa couleur d'accent par jeu.
+                    // L'emoji de GAME_META ne sert plus ici (toujours
+                    // utilisé par le palier de lancement et les Stages).
                     return (
                       <button
                         key={id}
-                        className="game-card"
-                        style={{ "--accent": `var(${g.accent})`, opacity: disabled ? .45 : 1, cursor: disabled ? "not-allowed" : "pointer" }}
+                        className={"game-card game-card--" + id + (disabled ? " locked" : "")}
+                        style={{ "--accent": `var(${g.accent})` }}
                         onClick={() => { if (disabled) return; playGameCardClick(); launch(id); }}
+                        title={t(g.tagKey)}
                       >
-                        <span className="game-card-icon">{g.icon}</span>
+                        <span className="game-card-art" aria-hidden="true"><GameCardArt id={id} /></span>
+                        <span className="game-card-veil" aria-hidden="true" />
                         <span className="game-card-title">{t(g.nameKey)}</span>
                         <span className="game-card-tag">{t(g.tagKey)}</span>
-                        <span className="game-card-cta">{disabled ? "🔒" : t("playCta") + " →"}</span>
+                        <span className="game-card-cta">{disabled ? "🔒 " + t("playCta") : t("playCta") + " →"}</span>
                       </button>
                     );
                   })}
