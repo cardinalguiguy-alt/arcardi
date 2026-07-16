@@ -5902,12 +5902,14 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
 .chess-hcell.cur{ background:var(--acc-chess); color:#2B1B12; font-weight:800; border-radius:5px; }
 
 /* ============================================================
-   BATAILLE NAVALE (jeu n°19, 2026-07)
-   Deux rendus du MÊME DOM : vue 2D de dessus (défaut) et vue 3D
-   isométrique (bascule à tout moment). Les cases sont de vrais éléments
-   DOM => clic pixel-précis dans les deux vues. Navires & FX positionnés en
-   POURCENTAGES du plateau (chaque case = 10%), donc responsive et cohérents
-   sous la transformation isométrique.
+   BATAILLE NAVALE (jeu n°19, 2026-07 ; refonte SVG 2026)
+   Rendu SVG PAR SCENE : deux vues dessinees (2D de dessus + 3D iso
+   volumique), basculables a tout moment. Le plateau complet est un SVG
+   injecte (eau, tranche, cases data-r/data-c, navires, epaves, marques
+   flamme/fumee). Une couche SVG overlay (viewBox identique) porte les FX
+   transitoires (boom, gerbe, missile) et les badges de rotation. Cases
+   cliquables au pixel dans les deux vues, net sur mobile.
+   Navires & epaves : voir components/naval/navalArt.js.
    ============================================================ */
 .naval-panel{ text-align:center; }
 .naval-panel h1{ color:var(--acc-naval); }
@@ -5943,43 +5945,58 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
 .naval-timer.hot{ background:var(--p1); border-color:transparent; color:#fff; animation:navalPulse .8s infinite; }
 @keyframes navalPulse{ 50%{ filter:brightness(1.3); } }
 
-/* --- arène (plateaux côte à côte) --- */
+/* --- arene (plateaux cote a cote) --- */
 .naval-arena{ display:flex; gap:26px; justify-content:center; align-items:flex-start; flex-wrap:wrap; }
-.naval-board-wrap{ width:min(360px, 92vw); }
-.naval-arena.placing .naval-board-wrap{ width:min(340px, 90vw); }
-.naval-board-title{ font-weight:800; font-size:12.5px; text-transform:uppercase; letter-spacing:.6px; color:var(--muted); margin:0 0 10px; }
+.naval-board-wrap{ width:min(420px, 94vw); }
+.naval-arena.placing .naval-board-wrap{ width:min(400px, 92vw); }
+.naval-board-title{ font-weight:800; font-size:12.5px; text-transform:uppercase; letter-spacing:.6px; color:var(--muted); margin:0 0 8px; }
 .naval-enemy-lbl{ color:var(--acc-naval); }
-.naval-scene{ position:relative; }
 
-/* --- la grille --- */
-.naval-grid{ position:relative; width:100%; aspect-ratio:1; display:grid;
-  grid-template-columns:repeat(10, 1fr); grid-template-rows:repeat(10, 1fr);
-  background:linear-gradient(160deg, #123a54, #0e2c42); border-radius:8px;
-  box-shadow:0 10px 26px rgba(0,0,0,.4), inset 0 0 0 2px rgba(0,0,0,.25); }
-.naval-cell{ border-right:1px solid rgba(150,210,255,.14); border-bottom:1px solid rgba(150,210,255,.14);
-  position:relative; transition:background .12s; }
-.naval-cell.aim{ cursor:crosshair; }
-.naval-cell.aim:hover{ background:rgba(63,169,214,.30); box-shadow:inset 0 0 0 2px var(--acc-naval); }
-.naval-cell.sea-lo{ background:#0a2233; }
-.naval-cell.ghost-ok{ background:rgba(76,195,138,.30); }
-.naval-cell.ghost-bad{ background:rgba(255,59,48,.32); }
-.naval-mark{ position:absolute; inset:0; display:grid; place-items:center; pointer-events:none; }
-.naval-miss{ width:26%; height:26%; border-radius:50%; background:rgba(180,220,255,.5); box-shadow:0 0 0 2px rgba(180,220,255,.18); }
-.naval-hit{ position:absolute; inset:0; display:grid; place-items:center; pointer-events:none; font-size:min(3.4vw,18px);
-  filter:drop-shadow(0 2px 3px rgba(0,0,0,.5)); }
-.naval-hit .em, .naval-fx-flash .em{ display:inline-block; }
+/* --- la scene SVG (base injectee + overlay FX) --- */
+.naval-scene{ position:relative; width:100%; }
+.naval-svg-host{ width:100%; }
+.naval-svg-host svg.naval-svg{ display:block; width:100%; height:auto; touch-action:none;
+  filter:drop-shadow(0 12px 26px rgba(0,0,0,.42)); overflow:visible; }
+.naval-svg .nvCell{ transition:fill .12s; }
+.naval-svg.aim{ cursor:crosshair; }
+.naval-svg.aim .nvCell:not([data-state]):hover{ fill:rgba(63,169,214,.45); }
+.naval-svg .nvShipDrag{ cursor:grab; }
+/* animations SVG des navires / ecume / flammes / fumee (portees par navalArt) */
+.nvFoam{ animation:nvFoam 3.6s ease-in-out infinite; }
+@keyframes nvFoam{ 0%,100%{ opacity:.55; } 50%{ opacity:.95; } }
+.nvBob{ animation:nvBob 3s ease-in-out infinite; }
+@keyframes nvBob{ 0%,100%{ transform:translateY(0); } 50%{ transform:translateY(2.2px); } }
+.nvShipG{ animation:nvShip 4.4s ease-in-out infinite; }
+@keyframes nvShip{ 0%,100%{ transform:translateY(0); } 50%{ transform:translateY(1.8px); } }
+.nvFlameIn{ animation:nvFlick .42s ease-in-out infinite alternate; }
+@keyframes nvFlick{ from{ transform:scale(1,1); } to{ transform:scale(.88,1.14); } }
+.nvSmokeP{ animation:nvSmoke 2.6s linear infinite; }
+@keyframes nvSmoke{ 0%{ transform:translate(0,0) scale(.5); opacity:0; } 12%{ opacity:.5; }
+  100%{ transform:translate(4px,-30px) scale(1.7); opacity:0; } }
 
-/* --- navires (VUE 2D DE DESSUS par défaut) --- */
-.naval-ship{ position:absolute; padding:5%; pointer-events:none; z-index:2; }
-.naval-ship-body{ display:block; width:100%; height:100%; border-radius:min(2.2vw,10px);
-  background:linear-gradient(160deg, #6b7a63, #414d3d);
-  border:1px solid rgba(0,0,0,.4);
-  box-shadow:inset 0 2px 0 rgba(255,255,255,.14), inset 0 -3px 7px rgba(0,0,0,.4), 0 3px 7px rgba(0,0,0,.4); }
-.naval-ship-body::before{ content:""; position:absolute; inset:22%; border-radius:6px;
-  background:linear-gradient(160deg, rgba(255,255,255,.10), transparent); }
-.naval-ship.carrier .naval-ship-body{ background:linear-gradient(160deg, #77796e, #4a4c44); } /* pont plat du porte-avions */
-.naval-ship.carrier .naval-ship-body::before{ inset:14%; border-radius:4px; background:repeating-linear-gradient(90deg, rgba(255,255,255,.08) 0 6%, transparent 6% 12%); }
-.naval-ship.sunk .naval-ship-body{ background:linear-gradient(160deg, #7a2f26, #4a1c17); filter:grayscale(.3); }
+/* --- overlay FX + badges de rotation --- */
+.naval-ov{ position:absolute; inset:0; width:100%; height:100%; pointer-events:none; overflow:visible; }
+.naval-ov .nvRot{ pointer-events:auto; cursor:pointer; }
+.naval-ov .nvRot circle{ transition:filter .15s; }
+.naval-ov .nvRot:hover circle{ filter:brightness(1.2); }
+.nvfx-ring{ animation:nvfxRing .62s cubic-bezier(.2,.8,.3,1) forwards; }
+@keyframes nvfxRing{ from{ transform:scale(.3); opacity:1; } to{ transform:scale(5); opacity:0; } }
+.nvfx-flash{ animation:nvfxFlash .56s forwards; }
+@keyframes nvfxFlash{ 0%{ transform:scale(.4); opacity:1; } 35%{ transform:scale(1.6); opacity:1; } 100%{ transform:scale(1.1); opacity:0; } }
+.nvfx-spark{ animation:nvfxSpark .6s ease-out forwards; }
+@keyframes nvfxSpark{ from{ transform:translate(0,0); opacity:1; } to{ transform:translate(var(--dx),var(--dy)); opacity:0; } }
+.nvfx-sring{ animation:nvfxSring .56s cubic-bezier(.2,.8,.3,1) forwards; }
+@keyframes nvfxSring{ from{ transform:scale(1); opacity:1; } to{ transform:scale(4.5); opacity:0; } }
+.nvfx-drop{ animation:nvfxDrop .62s ease-out forwards; }
+@keyframes nvfxDrop{ from{ transform:translate(0,0); opacity:1; } 50%{ opacity:1; } to{ transform:translate(var(--dx),var(--dy)); opacity:0; } }
+.nvfx-msfall{ animation:nvfxMs .52s cubic-bezier(.5,0,.85,.55) forwards; }
+.nvfx-msfall.big{ animation-duration:.9s; }
+@keyframes nvfxMs{ from{ transform:translate(var(--sx),var(--sy)); opacity:.9; } to{ transform:translate(0,0); opacity:1; } }
+
+/* --- fantome de drag (suivi du pointeur) --- */
+.naval-drag-ghost{ position:fixed; z-index:60; pointer-events:none; transform:translate(-50%,-55%);
+  opacity:.9; filter:drop-shadow(0 6px 8px rgba(0,0,0,.5)); }
+.naval-drag-ghost svg{ display:block; }
 
 /* --- inventaire de flotte (roster) --- */
 .naval-roster{ display:flex; align-items:center; gap:6px; justify-content:center; flex-wrap:wrap; margin-top:10px; }
@@ -5988,71 +6005,40 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
 .naval-roster-ship i{ width:9px; height:11px; border-radius:2px; background:linear-gradient(160deg,#6b7a63,#414d3d); }
 .naval-roster-ship.sunk i{ background:#6b3a34; }
 
-/* --- tray de placement --- */
-.naval-tray{ width:min(200px, 90vw); background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px; text-align:left; }
+/* --- tray de placement (pickup drag & drop) --- */
+.naval-tray{ width:min(220px, 92vw); background:var(--card); border:1px solid var(--line); border-radius:14px; padding:12px; text-align:left; }
 .naval-tray-title{ margin:0 0 9px; font-size:12px; text-transform:uppercase; letter-spacing:.6px; color:var(--muted); }
-.naval-tray-ship{ display:flex; align-items:center; gap:9px; padding:7px 9px; border-radius:9px; cursor:pointer; margin-bottom:5px; border:1px solid transparent; }
-.naval-tray-ship:hover{ background:var(--card2); }
-.naval-tray-ship.sel{ border-color:var(--acc-naval); background:rgba(63,169,214,.14); }
-.naval-tray-ship.done{ opacity:.45; }
-.naval-tray-ship.done .nm::after{ content:" ✓"; color:var(--ok); }
-.naval-tray-pips{ display:flex; gap:2px; flex-wrap:wrap; max-width:64px; }
-.naval-tray-pips i{ width:11px; height:11px; border-radius:3px; background:linear-gradient(160deg,#6b7a63,#414d3d); box-shadow:inset 0 1px 0 rgba(255,255,255,.15); }
+.naval-tray-ship{ display:flex; align-items:center; gap:10px; padding:7px 9px; border-radius:10px; cursor:grab; margin-bottom:5px;
+  border:1px solid transparent; background:rgba(255,255,255,.03); transition:.15s; touch-action:none; }
+.naval-tray-ship:hover{ border-color:var(--acc-naval); background:rgba(63,169,214,.10); }
+.naval-tray-ship.gone{ opacity:.3; pointer-events:none; }
+.naval-tray-thumb{ display:inline-flex; flex-shrink:0; }
+.naval-tray-thumb svg{ display:block; }
 .naval-tray-ship .nm{ font-size:12.5px; font-weight:700; color:var(--ink); }
-.naval-tray-ship .nm em{ font-style:normal; color:var(--muted); font-size:11px; }
+.naval-tray-ship .nm em{ display:block; font-style:normal; color:var(--muted); font-size:11px; font-weight:600; }
 .naval-tray-btns{ display:flex; gap:6px; margin:8px 0 6px; }
 .naval-tray-btns .btn{ flex:1; margin-top:0; padding:8px 6px; font-size:12px; }
 .naval-done-btn{ background:var(--acc-naval); color:#04202e; border-color:transparent; margin-top:4px; }
+.naval-tray-hint{ margin:8px 0 0; font-size:11px; color:var(--muted); line-height:1.45; }
 .naval-place-progress{ text-align:center; color:var(--muted); font-size:12px; margin-top:10px; font-weight:700; }
 
-/* --- FX : explosion (touché, façon dynamite) & gerbe d'eau (raté) --- */
-.naval-fx{ position:absolute; width:0; height:0; z-index:6; pointer-events:none; }
-.naval-fx-wave{ position:absolute; left:0; top:0; width:14px; height:14px; margin:-7px 0 0 -7px; border-radius:50%;
-  border:3px solid rgba(255,200,110,.95); box-shadow:0 0 20px 5px rgba(255,150,50,.65); animation:navalWave .8s cubic-bezier(.2,.8,.3,1) both; }
-.naval-fx-flash{ position:absolute; left:0; top:0; transform:translate(-50%,-50%); font-size:26px; animation:navalFlash .85s ease both; }
-.naval-fx-flash .em{ filter:drop-shadow(0 0 12px rgba(255,150,50,.95)); }
-.naval-fx-spark{ position:absolute; left:0; top:0; width:7px; height:7px; margin:-3px 0 0 -3px; border-radius:50%;
-  background:radial-gradient(circle at 40% 35%, #fff3c4, #ff7a1a 70%); box-shadow:0 0 8px 2px rgba(255,140,40,.6); animation:navalScatter .7s ease-out both; }
-.naval-fx-ring{ position:absolute; left:0; top:0; width:14px; height:14px; margin:-7px 0 0 -7px; border-radius:50%;
-  border:3px solid rgba(150,215,255,.9); box-shadow:0 0 16px 4px rgba(90,170,255,.55); animation:navalWave .75s cubic-bezier(.2,.8,.3,1) both; }
-.naval-fx-drop{ position:absolute; left:0; top:0; width:8px; height:8px; margin:-4px 0 0 -4px; border-radius:50% 50% 50% 0;
-  background:radial-gradient(circle at 40% 30%, #f2fbff, #6fb2ff 75%); box-shadow:0 0 6px 1px rgba(120,190,255,.5); animation:navalScatter .72s ease-out both; }
-@keyframes navalWave{ 0%{ transform:scale(.35); opacity:1; } 100%{ transform:scale(9); opacity:0; border-width:1px; } }
-@keyframes navalFlash{ 0%{ opacity:0; transform:translate(-50%,-50%) scale(.3) rotate(-15deg); }
-  15%{ opacity:1; transform:translate(-50%,-50%) scale(1.6) rotate(6deg); }
-  45%{ opacity:1; transform:translate(-50%,-50%) scale(1.08) rotate(0); }
-  100%{ opacity:0; transform:translate(-50%,-50%) scale(.85) translateY(-10px); } }
-@keyframes navalScatter{ 0%{ opacity:1; transform:translate(0,0) scale(1); } 60%{ opacity:1; } 100%{ opacity:0; transform:translate(var(--dx),var(--dy)) scale(.45); } }
-
-/* ========== VUE 3D ISOMÉTRIQUE (bascule) ==========
-   La grille se replie en perspective ; les cases restent de vrais éléments
-   DOM (clic exact). Les navires prennent une allure EXTRUDÉE (hauteur de
-   coque simulée par des ombres portées empilées, robuste sans depth-buffer
-   3D). Les icônes 💥/🔥 sont redressées face caméra. */
-.naval-arena.view-iso .naval-board-wrap{ padding:26px 30px 30px; }
-.naval-arena.view-iso .naval-scene{ perspective:1300px; }
-.naval-arena.view-iso .naval-grid{ transform:rotateX(55deg) rotateZ(-45deg); transform-style:preserve-3d;
-  box-shadow:0 30px 44px rgba(0,0,0,.5), inset 0 0 0 2px rgba(0,0,0,.25); }
-.naval-arena.view-iso .naval-hit .em, .naval-arena.view-iso .naval-fx-flash .em{ transform:rotateZ(45deg) rotateX(-55deg); }
-/* Coque relevée : empilement d'ombres = flanc du navire vu en iso. */
-.naval-arena.view-iso .naval-ship-body{
-  box-shadow:
-    inset 0 2px 0 rgba(255,255,255,.16),
-    2px 3px 0 #2f382b, 4px 6px 0 #2a3227, 6px 9px 0 #232a20,
-    8px 13px 14px rgba(0,0,0,.45); }
-.naval-arena.view-iso .naval-ship.carrier .naval-ship-body{
-  box-shadow:
-    inset 0 2px 0 rgba(255,255,255,.18),
-    3px 4px 0 #3a3c33, 6px 8px 0 #33352d, 9px 12px 0 #2c2e27, 12px 16px 16px rgba(0,0,0,.5); }
-.naval-arena.view-iso .naval-ship.sunk .naval-ship-body{
-  box-shadow:inset 0 2px 0 rgba(255,255,255,.1), 2px 3px 0 #3a1712, 4px 6px 10px rgba(0,0,0,.45); }
+/* --- bonus (missile lourd / pluie de missiles) --- */
+.naval-bonus-bar{ display:flex; gap:10px; justify-content:center; align-items:center; margin-top:14px; flex-wrap:wrap; }
+.naval-bonus-btn{ display:flex; align-items:center; gap:6px; padding:9px 15px; border-radius:12px; font-weight:800; font-size:13px;
+  color:var(--ink); border:2px solid var(--line); background:rgba(255,255,255,.04); cursor:pointer; transition:.15s; }
+.naval-bonus-btn:hover:not(:disabled){ filter:brightness(1.12); border-color:var(--acc-naval); }
+.naval-bonus-btn.on{ border-color:#f0a026; background:rgba(240,160,38,.16); box-shadow:0 0 0 1px #f0a026 inset; }
+.naval-bonus-btn:disabled{ opacity:.4; cursor:default; }
+.naval-bonus-btn b{ font-family:'Space Mono',monospace; color:var(--acc-naval); }
+.naval-bonus-hint{ font-size:12px; font-weight:700; color:#f0c98a; }
 
 @media (prefers-reduced-motion: reduce){
   .naval-timer.hot{ animation:none; }
-  .naval-fx-wave,.naval-fx-flash,.naval-fx-spark,.naval-fx-ring,.naval-fx-drop{ animation-duration:.01s; }
+  .nvFoam,.nvBob,.nvShipG,.nvFlameIn,.nvSmokeP{ animation:none; }
+  .nvfx-ring,.nvfx-flash,.nvfx-spark,.nvfx-sring,.nvfx-drop,.nvfx-msfall{ animation-duration:.01s; }
 }
-@media (max-width: 560px){
+@media (max-width: 620px){
   .naval-arena{ gap:16px; }
   .naval-arena.placing{ flex-direction:column; align-items:center; }
-  .naval-tray{ width:min(340px,90vw); }
+  .naval-tray{ width:min(400px,92vw); }
 }
