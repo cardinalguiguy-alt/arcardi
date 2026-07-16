@@ -2,6 +2,7 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { saveGameState, readGameState, resetRoomToLobby, recordMatchResult } from "@/lib/gameSync";
+import { playCardPlace, playCardSlide, playGameWin, playGameLose } from "@/lib/sfx";
 import Crossfade from "@/components/Crossfade";
 import GameCountdown, { COUNTDOWN_MS } from "@/components/GameCountdown";
 import CardView from "./CardView";
@@ -299,6 +300,16 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
     });
 
     ch.on("broadcast", { event: "state" }, ({ payload }) => {
+      // SFX (2026-07) : comparaison avec l'état ENCORE affiché (stateRef,
+      // valeurs fraîches) — défausse qui grandit = carte posée ; total des
+      // mains qui grandit = pioche. Uniquement sur un event réseau reçu en
+      // direct, jamais au rechargement (la restauration ne passe pas ici).
+      const prev = stateRef.current;
+      const prevDiscard = (prev.discard || []).length;
+      const nextDiscard = (payload.discard || []).length;
+      const handSum = (h) => Object.values(h || {}).reduce((n, cards) => n + (cards?.length || 0), 0);
+      if (nextDiscard > prevDiscard) playCardPlace();
+      else if (handSum(payload.hands) > handSum(prev.hands)) playCardSlide();
       applyLocalState(payload);
       persist(payload);
     });
@@ -869,6 +880,7 @@ export default function ChromatikGame({ room, me, isHost, players, t, lang, onFi
     const place = ranking.findIndex(s => s.id === me.id);
     const won = place === 0;
     setMyWin(won);
+    if (won) playGameWin(); else playGameLose(); // SFX fin de match (2026-07)
     recordMatchResult(room.id, won);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matchOver]);

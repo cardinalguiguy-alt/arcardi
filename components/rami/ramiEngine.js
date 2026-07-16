@@ -265,6 +265,120 @@ export function drawFromStock(stock, discard) {
   return { card, stock: s, discard: d };
 }
 
+// ---------------------------------------------------------------------------
+// ASSISTANCE (2026-07, demande Guillaume) : détecte dans une MAIN les
+// combinaisons complètes (brelan/carré/suite valides, jokers inclus) pour les
+// surligner à l'écran. Purement INFORMATIF et LOCAL : ne joue rien, ne
+// modifie rien — validateCombination reste l'unique oracle de validité (tout
+// candidat généré ici lui est soumis avant d'être retenu).
+// Renvoie une liste de groupes DISJOINTS (une carte n'appartient qu'à un
+// seul groupe, pour un surlignage par couleur sans ambiguïté), choisis
+// gloutonnement par points décroissants : [{ ids, type, points }].
+// ---------------------------------------------------------------------------
+export function detectHandCombos(hand) {
+  const normals = (hand || []).filter(c => !isJoker(c));
+  const jokers = (hand || []).filter(isJoker);
+  const probe = jokers[0] || null; // joker "sonde" pour valider les candidats
+  const candidates = []; // { cards (sans joker), needJoker }
+
+  // --- Brelans / carrés : une carte par enseigne distincte d'une même valeur.
+  const byRank = {};
+  for (const c of normals) (byRank[c.rank] = byRank[c.rank] || []).push(c);
+  for (const rank of Object.keys(byRank)) {
+    const seen = new Set(), uniq = [];
+    for (const c of byRank[rank]) if (!seen.has(c.suit)) { seen.add(c.suit); uniq.push(c); }
+    if (uniq.length >= 3) candidates.push({ cards: uniq.slice(0, 4), needJoker: false });
+    // Sous-ensembles de 3 d'un carré naturel : libèrent une carte qui peut
+    // valoir plus dans une suite (la recherche exacte choisira).
+    if (uniq.length === 4) {
+      for (let skip = 0; skip < 4; skip++) candidates.push({ cards: uniq.filter((_, i) => i !== skip), needJoker: false });
+    }
+    if (uniq.length === 3 && probe) candidates.push({ cards: uniq.slice(), needJoker: true }); // carré via joker
+    if (uniq.length === 2 && probe) candidates.push({ cards: uniq.slice(), needJoker: true }); // brelan via joker
+  }
+
+  // --- Suites : par enseigne, positions 1..14 (As bas ET haut).
+  const bySuit = {};
+  for (const c of normals) (bySuit[c.suit] = bySuit[c.suit] || []).push(c);
+  for (const suit of Object.keys(bySuit)) {
+    const byPos = {}; // position -> carte (une seule par position)
+    for (const c of bySuit[suit]) {
+      const n = rankNum(c.rank);
+      if (!byPos[n]) byPos[n] = c;
+      if (n === 1 && !byPos[14]) byPos[14] = c; // le même As peut servir haut OU bas (jamais les deux)
+    }
+    // Tronçons maximaux de positions consécutives présentes.
+    const stretches = [];
+    let cur = null;
+    for (let p = 1; p <= 14; p++) {
+      if (byPos[p]) { if (!cur) cur = { from: p, cards: [] }; cur.cards.push(byPos[p]); }
+      else if (cur) { stretches.push(cur); cur = null; }
+    }
+    if (cur) stretches.push(cur);
+    const pure = s => { // dédoublonne l'As présent à la fois en 1 et 14
+      const ids = new Set(); return s.cards.filter(c => !ids.has(c.id) && ids.add(c.id));
+    };
+    for (let i = 0; i < stretches.length; i++) {
+      const cards = pure(stretches[i]);
+      // Toutes les sous-fenêtres contiguës de 3+ cartes (une suite plus
+      // courte peut libérer des cartes plus utiles ailleurs — la recherche
+      // exacte tranche), plus le tronçon complet avec joker en extension.
+      for (let from = 0; from < cards.length; from++) {
+        for (let to = from + 3; to <= cards.length; to++) {
+          candidates.push({ cards: cards.slice(from, to), needJoker: false });
+        }
+      }
+      if (cards.length >= 2 && probe) candidates.push({ cards, needJoker: true }); // extension/allongement par joker
+      // Pontage par joker : tronçon suivant séparé d'exactement UNE position.
+      if (probe && i + 1 < stretches.length) {
+        const a = stretches[i], b = stretches[i + 1];
+        if (b.from === a.from + a.cards.length + 1) {
+          const merged = pure({ cards: a.cards.concat(b.cards) });
+          if (merged.length + 1 >= 3) candidates.push({ cards: merged, needJoker: true });
+        }
+      }
+    }
+  }
+
+  // --- Validation par l'oracle, puis choix EXACT du meilleur ensemble de
+  // groupes DISJOINTS (branch and bound : les candidats sont peu nombreux
+  // pour une main de 13-14 cartes ; le glouton, lui, ratait des cas — ex.
+  // fusionner 9 + J-Q-K via joker au lieu de brelan de 9 + suite au joker).
+  const scored = [];
+  for (const cand of candidates) {
+    const full = cand.needJoker ? cand.cards.concat([probe]) : cand.cards;
+    const r = validateCombination(full);
+    if (r.valid) scored.push({ ...cand, type: r.type, points: r.points });
+  }
+  scored.sort((a, b) => b.points - a.points || b.cards.length - a.cards.length);
+  if (scored.length > 48) scored.length = 48; // garde-fou perf (jamais atteint en pratique)
+  const suffixMax = new Array(scored.length + 1).fill(0); // borne haute restante
+  for (let i = scored.length - 1; i >= 0; i--) suffixMax[i] = suffixMax[i + 1] + scored[i].points;
+  let best = { total: -1, picks: [] };
+  const usedIds = new Set();
+  (function search(i, total, jokersLeft, picks) {
+    if (total + suffixMax[i] <= best.total) return; // élagage
+    if (i === scored.length) { if (total > best.total) best = { total, picks: picks.slice() }; return; }
+    const s = scored[i];
+    const usable = !s.cards.some(c => usedIds.has(c.id)) && (!s.needJoker || jokersLeft > 0);
+    if (usable) {
+      s.cards.forEach(c => usedIds.add(c.id));
+      picks.push(i);
+      search(i + 1, total + s.points, jokersLeft - (s.needJoker ? 1 : 0), picks);
+      picks.pop();
+      s.cards.forEach(c => usedIds.delete(c.id));
+    }
+    search(i + 1, total, jokersLeft, picks);
+  })(0, 0, jokers.length, []);
+
+  const freeJokers = jokers.slice();
+  return best.picks.map(i => {
+    const s = scored[i];
+    const cards = s.needJoker ? s.cards.concat([freeJokers.pop()]) : s.cards;
+    return { ids: cards.map(c => c.id), type: s.type, points: s.points };
+  });
+}
+
 // Points ARCARDI de fin de MATCH selon le classement (score cumulé le plus
 // bas). Même table que Président/Chromatik pour rester cohérent.
 export function pointsForPlace(place, nSeats) {

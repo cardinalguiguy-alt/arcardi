@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { saveGameState, readGameState, resetRoomToLobby, recordMatchResult } from "@/lib/gameSync";
+import { playWordleGreen, playWordleYellow, playGameWin, playGameLose } from "@/lib/sfx";
 import FlagIcon from "./FlagIcon";
 
 const MAX_TRIES = 10;
@@ -326,6 +327,8 @@ export default function Worldle({ room, me, isHost, players, onFinish, t, lang }
     ch.on("broadcast", { event: "finished" }, async () => {
       setFinished(true);
       if (isHost) saveGameState(room.id, "worldle", { phase: "finished", finished: true });
+      // SFX fin de manche (2026-07) : selon MON propre résultat.
+      if (myResult.current.solved) playGameWin(); else playGameLose();
       // Victoire/défaite ARCARDI : gagné = pays trouvé avant la fin du chrono.
       recordMatchResult(room.id, myResult.current.solved);
     });
@@ -422,6 +425,8 @@ export default function Worldle({ room, me, isHost, players, onFinish, t, lang }
     const solved = c.id === target.id;
     const bestPct = Math.max(myResult.current.bestPct, pct);
     myResult.current = { solved, tries: nextGuesses.length, bestPct };
+    // SFX (2026-07) : feedback immédiat de MA tentative (local à moi).
+    if (solved) playWordleGreen(); else playWordleYellow();
     // Confettis (demande 2026-07) : pluie vert/bleu locale au joueur qui
     // vient de trouver le bon pays — même recette que Puissance 4.
     if (solved) {

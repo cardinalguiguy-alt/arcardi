@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { saveGameState, readGameState, resetRoomToLobby, recordMatchResult } from "@/lib/gameSync";
+import { playConfirmChime, playAnswerWrong, playGameWin, playGameLose } from "@/lib/sfx";
 import Crossfade from "@/components/Crossfade";
 
 /* ==========================================================================
@@ -494,6 +495,7 @@ export default function HeistRoom({ room, me, isHost, players, t, lang, onFinish
     });
 
     ch.on("broadcast", { event: "advance" }, ({ payload }) => {
+      playConfirmChime(); // SFX (2026-07) : étape franchie, chez les deux joueurs
       setChapter(c => Math.max(c, payload.chapter));
       setFeedback("");
       setPressA(null); setPressB(null); setMyPressed(false);
@@ -510,6 +512,7 @@ export default function HeistRoom({ room, me, isHost, players, t, lang, onFinish
     });
 
     ch.on("broadcast", { event: "alarm" }, ({ payload }) => {
+      playAnswerWrong(); // SFX (2026-07) : alarme déclenchée, chez les deux joueurs
       setAlert(a => Math.max(a, payload.newAlert));
       setDeadline(d => (d == null ? payload.newDeadline : Math.min(d, payload.newDeadline)));
       const secs = Math.round(TIME_PENALTY_MS / 1000);
@@ -677,6 +680,7 @@ export default function HeistRoom({ room, me, isHost, players, t, lang, onFinish
     }
     setEndingVariant(variant);
     setMyWin(won);
+    if (won) playGameWin(); else playGameLose(); // SFX fin de partie (2026-07)
     recordMatchResult(room.id, won);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);

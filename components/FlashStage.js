@@ -55,7 +55,10 @@ export default function FlashStage({ gameId, icon, name, accentVar, lang, t, chi
       setEntryKey(k => k + 1);
       return;
     }
-    const delay = Math.max(0, Math.min(raw, SYNC_MAX_WAIT_MS));
+    // Correctif latence hôte 2026-07 : le clic "Jouer" de l'hôte déclenche
+    // SON flash immédiatement (délai 0) — le tampon ne sert qu'aux invités.
+    // Voir DoorStage.js pour le détail.
+    const delay = isHost && justLaunched ? 0 : Math.max(0, Math.min(raw, SYNC_MAX_WAIT_MS));
     waitTimer.current = setTimeout(() => {
       setState("opening");
       flashTimer.current = setTimeout(() => {
@@ -64,7 +67,7 @@ export default function FlashStage({ gameId, icon, name, accentVar, lang, t, chi
       }, 260);
     }, delay);
     return () => clearTimeout(waitTimer.current);
-  }, [stageLaunchAt, state]);
+  }, [stageLaunchAt, state, isHost]);
 
   const closed = state !== "open";
   const opening = state === "opening";

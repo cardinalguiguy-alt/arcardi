@@ -2,10 +2,11 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { saveGameState, readGameState, resetRoomToLobby, recordMatchResult } from "@/lib/gameSync";
+import { playCardPlace, playCardSlide, playConfirmChime, playGameWin, playGameLose } from "@/lib/sfx";
 import Crossfade from "../Crossfade";
 import {
   SUITS, deal, sortHand, sortHandByRank, isJoker, validateCombination, combosPoints, canOpen,
-  canAppend, handPenalty, drawFromStock, OPEN_THRESHOLD, pointsForPlace,
+  canAppend, handPenalty, drawFromStock, OPEN_THRESHOLD, pointsForPlace, detectHandCombos,
 } from "./ramiEngine";
 
 const GAME_ID = "rami";
@@ -14,12 +15,15 @@ const TURN_MS = 60000;
 
 /* Carte à jouer : mêmes classes CSS que le Président (pres-card) pour le
    rendu, plus une variante joker. Purement présentational. */
-function RCard({ card, faceDown, size = "sm", onClick, sel, dim, style }) {
+function RCard({ card, faceDown, size = "sm", onClick, sel, dim, style, assist }) {
   const cls = "pres-card size-" + size
     + (faceDown ? " back" : "")
     + (onClick ? " clickable" : "")
     + (sel ? " sel" : "")
-    + (dim ? " dim" : "");
+    + (dim ? " dim" : "")
+    // Assistance (2026-07) : liseré coloré par groupe détecté dans la main —
+    // 4 teintes qui tournent, voir .pres-card.assist-N dans globals.css.
+    + (assist != null ? " assist-" + (assist % 4) : "");
   if (faceDown) {
     return <div className={cls} onClick={onClick} style={style}><span className="pres-back-mark">✦</span></div>;
   }
@@ -67,6 +71,20 @@ export default function RamiGame({ room, me, isHost, players, t, lang, onFinish 
   // Réglage de l'hôte avant le lancement (par défaut : fin à 51, canonique).
   const [setupThreshold, setSetupThreshold] = useState(51);
   const [sortMode, setSortMode] = useState("color"); // "color" | "rank"
+  // Assistance : surligne les combinaisons complètes détectées dans MA main.
+  // Purement locale et personnelle (jamais diffusée), persistée d'une partie
+  // à l'autre en localStorage.
+  const ASSIST_KEY = "arcardi:ramiAssist";
+  const [assistOn, setAssistOn] = useState(false);
+  useEffect(() => {
+    try { if (localStorage.getItem(ASSIST_KEY) === "1") setAssistOn(true); } catch (e) {}
+  }, []);
+  function toggleAssist() {
+    setAssistOn(v => {
+      try { localStorage.setItem(ASSIST_KEY, v ? "0" : "1"); } catch (e) {}
+      return !v;
+    });
+  }
 
   // État d'interaction local (jamais diffusé) : sélection + poses en préparation.
   const [sel, setSel] = useState([]);        // ids de cartes sélectionnées dans la main
@@ -169,6 +187,20 @@ export default function RamiGame({ room, me, isHost, players, t, lang, onFinish 
     });
 
     ch.on("broadcast", { event: "state" }, ({ payload }) => {
+      // SFX (2026-07) : comparaison avec l'état ENCORE affiché (stateRef,
+      // valeurs fraîches). Tapis qui grandit = pose/complétion (chime) ;
+      // défausse qui grandit = défausse (carte posée) ; total des mains qui
+      // grandit = pioche (glissement). Un seul son par event (priorité au
+      // plus signifiant). Jamais rejoué au rechargement (la restauration
+      // n'emprunte pas ce handler).
+      {
+        const prev = stateRef.current;
+        const tableSum = (tb) => (tb || []).reduce((n, m) => n + (m.cards?.length || 0), 0);
+        const handSum = (h) => Object.values(h || {}).reduce((n, cards) => n + (cards?.length || 0), 0);
+        if (tableSum(payload.table) > tableSum(prev.table)) playConfirmChime();
+        else if ((payload.discard || []).length > (prev.discard || []).length) playCardPlace();
+        else if (handSum(payload.hands) > handSum(prev.hands)) playCardSlide();
+      }
       applyState(payload, "playing");
       // Le joueur actif garde sa sélection tant que c'est son tour ; sinon on
       // nettoie (l'état a bougé, la préparation n'a plus de sens).
@@ -405,6 +437,7 @@ export default function RamiGame({ room, me, isHost, players, t, lang, onFinish 
     savedResultRef.current = true;
     const min = ranking[0].score;
     const won = (scores[me.id] ?? Infinity) === min;
+    if (won) playGameWin(); else playGameLose(); // SFX fin de match (2026-07)
     recordMatchResult(room.id, won);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [matchOver]);
@@ -424,6 +457,14 @@ export default function RamiGame({ room, me, isHost, players, t, lang, onFinish 
   // Cartes de la main non encore placées dans une combinaison en préparation.
   const stagedIds = new Set(staged.flat().map(c => c.id));
   const availableHand = myHand.filter(c => !stagedIds.has(c.id));
+
+  // Assistance : groupes DISJOINTS détectés dans les cartes encore en main
+  // (detectHandCombos < 1 ms pour 14 cartes, recalcul à chaque rendu sans
+  // enjeu). id de carte -> index de groupe, pour la teinte du liseré.
+  const assistIdx = new Map();
+  if (assistOn && isPlayer && !matchOver) {
+    detectHandCombos(availableHand).forEach((g, i) => g.ids.forEach(id => assistIdx.set(id, i)));
+  }
 
   function toggleSel(id) {
     setSel(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
@@ -597,14 +638,20 @@ export default function RamiGame({ room, me, isHost, players, t, lang, onFinish 
 
             <div className="rami-hand-head">
               <span className="rami-hand-lbl">{t("ramiYourHand")} · {myHand.length}</span>
-              <button className="rami-sort-btn" onClick={() => setSortMode(m => m === "color" ? "rank" : "color")}>
-                🔀 {sortMode === "color" ? t("ramiSortByRank") : t("ramiSortByColor")}
-              </button>
+              <span className="rami-hand-btns">
+                <button className={"rami-sort-btn" + (assistOn ? " on" : "")} onClick={toggleAssist}
+                  title={t("ramiAssistHint")}>
+                  💡 {t("ramiAssist")}
+                </button>
+                <button className="rami-sort-btn" onClick={() => setSortMode(m => m === "color" ? "rank" : "color")}>
+                  🔀 {sortMode === "color" ? t("ramiSortByRank") : t("ramiSortByColor")}
+                </button>
+              </span>
             </div>
             <div className="rami-hand">
               {(sortMode === "rank" ? sortHandByRank(availableHand) : sortHand(availableHand)).map(c => (
                 <RCard key={c.id} card={c} size="sm" onClick={isMyTurn ? () => toggleSel(c.id) : undefined}
-                  sel={sel.includes(c.id)} dim={!isMyTurn} />
+                  sel={sel.includes(c.id)} dim={!isMyTurn} assist={assistIdx.get(c.id)} />
               ))}
             </div>
 

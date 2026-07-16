@@ -68,10 +68,13 @@ export default function VideoStage({ gameId, icon, name, accentVar, lang, t, chi
       setEntryKey(k => k + 1);
       return;
     }
-    const delay = Math.max(0, Math.min(raw, SYNC_MAX_WAIT_MS));
+    // Correctif latence hôte 2026-07 : le clic "Jouer" de l'hôte lance SA
+    // vidéo immédiatement (délai 0) — le tampon ne sert qu'aux invités.
+    // Voir DoorStage.js pour le détail.
+    const delay = isHost && justLaunched ? 0 : Math.max(0, Math.min(raw, SYNC_MAX_WAIT_MS));
     waitTimer.current = setTimeout(() => setState("playing"), delay);
     return () => clearTimeout(waitTimer.current);
-  }, [stageLaunchAt, state]);
+  }, [stageLaunchAt, state, isHost]);
 
   function handleLoadedMetadata() {
     const v = videoRef.current;

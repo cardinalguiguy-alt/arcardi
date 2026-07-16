@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { saveGameState, readGameState, resetRoomToLobby, recordMatchResult } from "@/lib/gameSync";
+import { playAnswerRight, playAnswerWrong } from "@/lib/sfx";
 import Crossfade from "./Crossfade";
 
 /* ==========================================================================
@@ -1484,6 +1485,9 @@ export default function QuizGame({ room, me, isHost, players, onFinish, t, lang 
       const finalPick = pickedRef.current;
       const currentQ = qRef.current;
       const correct = !!(finalPick && currentQ && finalPick === currentQ.good);
+      // SFX (2026-07) : mon propre verdict à la révélation — seulement si
+      // j'ai répondu (un spectateur ou un joueur sans réponse reste muet).
+      if (finalPick) { if (correct) playAnswerRight(); else playAnswerWrong(); }
       if (correct) {
         const gain = POINTS_BY_DIFF[currentQ.diff] || 2;
         myGain.current += gain;

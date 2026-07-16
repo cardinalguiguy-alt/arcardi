@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Chess } from "chess.js";
 import { supabase } from "@/lib/supabaseClient";
 import { saveGameState, readGameState, resetRoomToLobby, recordMatchResult } from "@/lib/gameSync";
+import { playChessMove, playChessCapture, playGameWin, playGameLose, playConfirmChime } from "@/lib/sfx";
 import Crossfade from "../Crossfade";
 import GameCountdown, { COUNTDOWN_MS } from "../GameCountdown";
 import { sanForLang, PIECE_VALUE } from "./notation";
@@ -648,6 +649,21 @@ export default function ChessGame({ room, me, isHost, players, t, lang, onFinish
     channelRef.current?.send({ type: "broadcast", event: "analysis_perms", payload: { perms: next } });
   }
 
+  // ---- SFX coups (2026-07) : un tap de bois à chaque coup appliqué (les
+  // deux joueurs ET les spectateurs l'entendent), plus grave et appuyé sur
+  // une capture. Déclenché UNIQUEMENT quand l'historique grandit d'exactement
+  // UN coup : jamais à la restauration d'une partie rechargée (l'historique y
+  // arrive d'un bloc), jamais en revue de partie (l'historique n'y bouge pas).
+  const prevMovesLenRef = useRef(0);
+  useEffect(() => {
+    const n = moves.length;
+    if (n === prevMovesLenRef.current + 1) {
+      const last = moves[n - 1];
+      if (last?.captured) playChessCapture(); else playChessMove();
+    }
+    prevMovesLenRef.current = n;
+  }, [moves]);
+
   // ---- Enregistrement du résultat (chaque joueur enregistre le sien) ----
   useEffect(() => {
     if (!winner || savedResultRef.current || !white || !black) return;
@@ -655,10 +671,20 @@ export default function ChessGame({ room, me, isHost, players, t, lang, onFinish
     savedResultRef.current = true;
     const won = winner === myColor;
     setMyWin(won);
+    if (won) playGameWin(); else playGameLose(); // SFX fin de partie (2026-07, aussi contre le bot)
     if (soloRef.current) return; // pas d'enregistrement ARCARDI en partie contre le bot
     recordMatchResult(room.id, won);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [winner]);
+
+  // ---- SFX nulle (2026-07) : pat/nulle n'a pas de `winner`, l'effet
+  // ci-dessus ne joue donc rien — petit carillon neutre à la place.
+  const prevStatusRef = useRef("playing");
+  useEffect(() => {
+    if ((status === "stalemate" || status === "draw") && prevStatusRef.current === "playing" && isPlayer) playConfirmChime();
+    prevStatusRef.current = status;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status]);
 
   // ---- Confettis + flash sur une victoire (jamais sur une nulle) ----
   useEffect(() => {

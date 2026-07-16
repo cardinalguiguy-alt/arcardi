@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { saveGameState, readGameState, resetRoomToLobby, recordMatchResult } from "@/lib/gameSync";
+import { playCardPlace, playGameWin, playGameLose } from "@/lib/sfx";
 import Crossfade from "@/components/Crossfade";
 import GameCountdown, { COUNTDOWN_MS } from "@/components/GameCountdown";
 import PresCard from "./PresCard";
@@ -247,6 +248,12 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
     });
 
     ch.on("broadcast", { event: "state" }, ({ payload }) => {
+      // SFX (2026-07) : un event "state" = une action arbitrée — carte(s)
+      // posée(s) (y compris brûlée), chez tout le monde. Le "passe" reste
+      // muet (sobre). Jamais rejoué au rechargement (la restauration ne
+      // passe pas par ce handler).
+      const at = payload.lastAction?.type;
+      if (at === "play" || at === "burn") playCardPlace();
       applyLocalState(payload);
       persist(payload);
     });
@@ -691,6 +698,7 @@ export default function PresidentGame({ room, me, isHost, players, t, lang, onFi
     const place = finishedOrder.indexOf(me.id);
     const won = place === 0;
     setMyWin(won);
+    if (won) playGameWin(); else playGameLose(); // SFX fin de partie (2026-07)
     recordMatchResult(room.id, won);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [over]);

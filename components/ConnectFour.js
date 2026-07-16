@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { saveGameState, readGameState, resetRoomToLobby, recordMatchResult } from "@/lib/gameSync";
+import { playTokenDrop, playGameWin, playGameLose } from "@/lib/sfx";
 import Crossfade from "./Crossfade";
 import GameCountdown from "./GameCountdown";
 
@@ -118,6 +119,9 @@ export default function ConnectFour({ room, me, isHost, players, t, lang, onFini
     });
 
     ch.on("broadcast", { event: "state" }, ({ payload }) => {
+      // SFX (2026-07) : un event "state" = exactement un coup joué (voir
+      // hostHandleMove) — jeton qui tombe, chez tout le monde.
+      if (payload.lastMove) playTokenDrop();
       setBoard(payload.board);
       setTurn(payload.turn);
       setWinner(payload.winner);
@@ -207,6 +211,7 @@ export default function ConnectFour({ room, me, isHost, players, t, lang, onFini
     if (winner === "draw") return;
     const won = (winner === "p1" && amP1) || (winner === "p2" && amP2);
     setMyWin(won);
+    if (won) playGameWin(); else playGameLose(); // SFX fin de partie (2026-07)
     recordMatchResult(room.id, won);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [winner]);

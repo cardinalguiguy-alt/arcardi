@@ -151,14 +151,41 @@ export function listScoringGroups(values) {
     if (idxs) rows.push({ key: "small" + pattern.join(""), points: 1500, kind: "smallStraight", diceValues: pattern, indices: idxs });
   }
 
+  // Correctif "panneau incomplet" 2026-07 : avant, une seule ligne par
+  // valeur, avec TOUS les dés de cette valeur (ex. deux 1 -> seulement
+  // "1-1 +200", jamais "1 +100") — le joueur ne pouvait pas cliquer toutes
+  // les sélections pourtant valides. Désormais on liste TOUS les
+  // sous-effectifs sélectionnables d'une valeur : chaque compte k (de 1 à n
+  // pour les 1 et les 5, de 3 à n pour les 2/3/4/6) qui rapporte des points
+  // a sa propre ligne (les k premiers dés de la valeur).
   const c = counts(values);
+  const allScoringIdxs = [];
+  let allScoringPts = 0;
   for (const [vStr, n] of Object.entries(c)) {
     const v = Number(vStr);
-    const pts = groupScore(v, n);
-    if (pts > 0) {
-      const idxs = values.map((val, i) => (val === v ? i : -1)).filter((i) => i !== -1);
-      rows.push({ key: "group" + v + "x" + n, points: pts, kind: "group", diceValues: Array(n).fill(v), indices: idxs });
+    const idxsOfV = values.map((val, i) => (val === v ? i : -1)).filter((i) => i !== -1);
+    for (let k = 1; k <= n; k++) {
+      const pts = groupScore(v, k);
+      if (pts > 0) rows.push({ key: "group" + v + "x" + k, points: pts, kind: "group", diceValues: Array(k).fill(v), indices: idxsOfV.slice(0, k) });
     }
+    // Contribution de la valeur à la ligne "tous les dés qui comptent" :
+    // l'effectif COMPLET s'il rapporte (union toujours valide, chaque
+    // groupe scorant indépendamment — voir evaluateSelection, shape atomic).
+    const full = groupScore(v, n);
+    if (full > 0) { allScoringIdxs.push(...idxsOfV); allScoringPts += full; }
+  }
+
+  // Ligne combinée "tous les dés qui comptent" (ex. brelan de 3 + un 5 =
+  // 3-3-3-5 +350) : c'est la meilleure sélection ATOMIQUE possible — ajoutée
+  // seulement si elle réunit plusieurs groupes (sinon elle doublonnerait la
+  // ligne du groupe unique). Triée avec les autres : quand elle domine, elle
+  // devient rows[0], donc la présélection par défaut ET l'auto-garde du
+  // minuteur (TenkGame.js) — conformément à l'intention d'origine ("la ligne
+  // [0] est la combinaison valide offrant le plus de points").
+  const scoringValues = Object.entries(c).filter(([vStr, n]) => groupScore(Number(vStr), n) > 0);
+  if (scoringValues.length > 1) {
+    const diceVals = allScoringIdxs.map((i) => values[i]).sort((a, b) => a - b);
+    rows.push({ key: "all", points: allScoringPts, kind: "all", diceValues: diceVals, indices: allScoringIdxs });
   }
 
   rows.sort((a, b) => b.points - a.points);

@@ -77,7 +77,13 @@ export default function DoorStage({ gameId, icon, name, accentVar, lang, t, chil
       setEntryKey(k => k + 1);
       return;
     }
-    const delay = Math.max(0, Math.min(raw, SYNC_MAX_WAIT_MS));
+    // Correctif latence hôte 2026-07 : quand c'est l'HÔTE lui-même qui vient
+    // de cliquer "Jouer" (justLaunched, l'horodatage sort de SA machine), sa
+    // porte pivote IMMÉDIATEMENT — le tampon STAGE_LAUNCH_BUFFER_MS n'existe
+    // que pour laisser aux INVITÉS le temps de recevoir l'horodatage. Avant
+    // ce correctif, l'hôte voyait son bouton grisé ~0,9s sans aucun effet.
+    // Même principe que l'exemption launchHold de l'hôte (page.js, zip 115).
+    const delay = isHost && justLaunched ? 0 : Math.max(0, Math.min(raw, SYNC_MAX_WAIT_MS));
     waitTimer.current = setTimeout(() => {
       setDoorState("opening");
       playDoorOpen(); // son de portes coulissantes, synchro sur les 3s de rotation
@@ -87,7 +93,7 @@ export default function DoorStage({ gameId, icon, name, accentVar, lang, t, chil
       }, 3000); // durée EXACTE de door-open.mp3 (5s d'origine accélérées à 3s) et de la transition CSS .door-panel
     }, delay);
     return () => clearTimeout(waitTimer.current);
-  }, [stageLaunchAt, doorState]);
+  }, [stageLaunchAt, doorState, isHost]);
 
   const closed = doorState !== "open";
   const opening = doorState === "opening";

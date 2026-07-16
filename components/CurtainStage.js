@@ -53,7 +53,10 @@ export default function CurtainStage({ gameId, icon, name, accentVar, lang, t, c
       setEntryKey(k => k + 1);
       return;
     }
-    const delay = Math.max(0, Math.min(raw, SYNC_MAX_WAIT_MS));
+    // Correctif latence hôte 2026-07 : le clic "Jouer" de l'hôte lève SON
+    // rideau immédiatement (délai 0) — le tampon ne sert qu'aux invités.
+    // Voir DoorStage.js pour le détail.
+    const delay = isHost && justLaunched ? 0 : Math.max(0, Math.min(raw, SYNC_MAX_WAIT_MS));
     waitTimer.current = setTimeout(() => {
       setState("opening");
       openTimer.current = setTimeout(() => {
@@ -62,7 +65,7 @@ export default function CurtainStage({ gameId, icon, name, accentVar, lang, t, c
       }, 1150);
     }, delay);
     return () => clearTimeout(waitTimer.current);
-  }, [stageLaunchAt, state]);
+  }, [stageLaunchAt, state, isHost]);
 
   const closed = state !== "open";
   const opening = state === "opening";

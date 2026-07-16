@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { saveGameState, readGameState, resetRoomToLobby, recordMatchResult } from "@/lib/gameSync";
+import { playConfirmChime, playPanicClock } from "@/lib/sfx";
 import Crossfade from "@/components/Crossfade";
 import { CATEGORY_POOL, CAT_COUNT_OPTIONS, DEFAULT_CAT_COUNT, drawCategories, drawOne, catLabel, guessIcon } from "@/lib/petitbacCategories";
 import { loadFavorites, saveFavorite, deleteFavorite } from "@/lib/petitbacFavorites";
@@ -207,6 +208,7 @@ export default function PetitBacGame({ room, me, isHost, players, t, lang, onFin
     channelRef.current = ch;
 
     ch.on("broadcast", { event: "match_start" }, ({ payload }) => {
+      playConfirmChime(); // SFX (2026-07) : la lettre de la manche est tirée
       applyLocalState(payload, { newRound: true });
       setPhase("playing");
       persist(payload);
@@ -263,6 +265,15 @@ export default function PetitBacGame({ room, me, isHost, players, t, lang, onFin
     if (!deadline || stage !== "write") return;
     const iv = setInterval(() => setNow(Date.now()), 250);
     return () => clearInterval(iv);
+  }, [deadline, stage]);
+
+  // SFX (2026-07) : montée d'urgence au moment où la deadline APPARAÎT
+  // (= quelqu'un vient de finir, 10 secondes de panique pour tout le monde).
+  // Jouée une seule fois par manche, à l'apparition, jamais au tick.
+  const prevDeadlineRef = useRef(null);
+  useEffect(() => {
+    if (deadline && !prevDeadlineRef.current && stage === "write") playPanicClock();
+    prevDeadlineRef.current = deadline;
   }, [deadline, stage]);
 
   // Couperet côté client : à zéro, je soumets automatiquement ma grille

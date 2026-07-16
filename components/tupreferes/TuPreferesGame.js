@@ -62,6 +62,10 @@ export default function TuPreferesGame({ room, me, isHost, players, t, lang, onF
   const [remaining, setRemaining] = useState(null);  // secondes restantes (cosmétique)
   const [locks, setLocks] = useState({ choose: { p1: false, p2: false }, guess: { p1: false, p2: false } });
   const [reveal, setReveal] = useState(null);        // { choices, guesses, deltas, scores, gameover, winnerSlot }
+  // Révélation en 2 temps (refonte lisibilité 2026-07, validée par le
+  // porteur de projet) : 1 = les choix + ligne de compatibilité, 2 = les
+  // devinettes (apparaissent ~1,4s plus tard). Purement local/cosmétique.
+  const [revealStep, setRevealStep] = useState(1);
   const [channelReady, setChannelReady] = useState(false);
 
   // Choix/devinette LOCAUX (secrets jusqu'à la révélation) — jamais persistés.
@@ -209,6 +213,7 @@ export default function TuPreferesGame({ room, me, isHost, players, t, lang, onF
       autoSetupRef.current = true;
       if (saved.phase === "reveal" || saved.phase === "over") {
         setReveal(saved.reveal || null);
+        setRevealStep(2); // rechargement en pleine révélation : tout montrer d'un coup
         setScoreAnim(saved.reveal ? saved.reveal.scores : (saved.scores || { p1: 0, p2: 0 }));
         setPhase(saved.phase);
       } else {
@@ -290,17 +295,23 @@ export default function TuPreferesGame({ room, me, isHost, players, t, lang, onF
     setScoreAnim(payload.scoresBefore);
     setDeadline(null);
     setPhase(payload.gameover ? "over" : "reveal");
-    // Animation des scores : on part de scoresBefore puis on monte.
-    const t1 = setTimeout(() => setScoreAnim(payload.scores), 650);
+    // Révélation en 2 temps : d'abord les choix (+ compatibilité), puis les
+    // devinettes 1,4s plus tard — le bump des scores et le son de fin de
+    // partie n'arrivent qu'une fois TOUT révélé (sinon ils vendraient la
+    // mèche pendant le temps 1).
+    setRevealStep(1);
+    const tStep = setTimeout(() => setRevealStep(2), 1400);
+    timers.current.push(tStep);
+    const t1 = setTimeout(() => setScoreAnim(payload.scores), 2100);
     timers.current.push(t1);
-    // SFX légers de révélation.
+    // SFX légers de révélation (temps 1 : compatibilité des choix).
     const same = payload.choices.p1 === payload.choices.p2;
     const t2 = setTimeout(() => { if (same) playWordleGreen(); else playWordleYellow(); }, 350);
     timers.current.push(t2);
     if (payload.gameover) {
       const sl = slotOf();
       const iWon = sl && payload.winnerSlot === sl;
-      const t3 = setTimeout(() => { if (sl) { iWon ? playGameWin() : playGameLose(); } }, 900);
+      const t3 = setTimeout(() => { if (sl) { iWon ? playGameWin() : playGameLose(); } }, 2400);
       timers.current.push(t3);
     }
     if (isHost) {
@@ -698,26 +709,71 @@ export default function TuPreferesGame({ room, me, isHost, players, t, lang, onF
   }
 
   // ---------- REVEAL / OVER ----------
+  // Refonte lisibilité 2026-07 (validée) : révélation en DEUX TEMPS et du
+  // POINT DE VUE du joueur qui regarde. Temps 1 : les deux CHOIX côte à
+  // côte (le mien TOUJOURS à gauche, étiqueté "Toi") + la ligne de
+  // compatibilité. Temps 2 (1,4s après) : les DEVINETTES, en phrases
+  // explicites ("Tu pensais que X choisirait : B ❌") — plus aucun
+  // croisement mental entre colonnes à faire. Un spectateur voit p1 à
+  // gauche et des phrases neutres ("X pensait que Y choisirait...").
   else if ((phase === "reveal" || phase === "over") && reveal) {
     const winner = phase === "over" ? (reveal.winnerSlot === "p1" ? p1 : p2) : null;
     const iWon = slot && reveal.winnerSlot === slot;
+    const leftSlot = slot || "p1";
+    const rightSlot = leftSlot === "p1" ? "p2" : "p1";
+    const P = (s) => (s === "p1" ? p1 : p2);
+    const step2 = revealStep >= 2;
     content = (
       <div className="tp-round tp-reveal">
         <TpHeader p1={p1} p2={p2} scores={scoreAnim} round={round} target={settings.target} slot={slot} t={t} animated />
         <div className="tp-question"><span className="tp-question-lead">{t("tpPrompt")}</span></div>
 
+        {/* Temps 1 : les choix */}
+        <div className="tp-step-title">{t("tpStepChoices")}</div>
         <div className="tp-reveal-grid">
-          <RevealSide who={p1} choice={reveal.choices.p1} guessOfOpp={reveal.guesses.p1} oppChoice={reveal.choices.p2}
-            right={reveal.right.p1} delta={reveal.deltas.p1} optText={optText} isMe={slot === "p1"} t={t} />
-          <RevealSide who={p2} choice={reveal.choices.p2} guessOfOpp={reveal.guesses.p2} oppChoice={reveal.choices.p1}
-            right={reveal.right.p2} delta={reveal.deltas.p2} optText={optText} isMe={slot === "p2"} t={t} />
+          {[leftSlot, rightSlot].map((s) => (
+            <div key={s} className={"tp-reveal-side" + (slot === s ? " me" : "")}>
+              <div className="tp-reveal-head">
+                <span className="tp-avatar">{P(s)?.avatar}</span>
+                <span className="tp-name">{slot === s ? t("tpChoiceLabelYou") : P(s)?.username}</span>
+              </div>
+              <div className="tp-reveal-card" style={{ "--opt": `var(${reveal.choices[s] === 0 ? "--tp-orange" : "--tp-blue"})` }}>
+                <span className="tp-option-letter">{reveal.choices[s] === 0 ? "A" : "B"}</span>
+                <span className="tp-option-text">{optText(reveal.choices[s])}</span>
+              </div>
+            </div>
+          ))}
         </div>
-
         <div className={"tp-match-line" + (reveal.same ? " same" : " diff")}>
           {reveal.same ? "💞 " + t("tpSameChoice") : "🔀 " + t("tpDiffChoice")}
         </div>
 
-        {phase === "over" ? (
+        {/* Temps 2 : les devinettes, en phrases explicites */}
+        <div className={"tp-guess-step" + (step2 ? " shown" : "")}>
+          <div className="tp-step-title">🔮 {t("tpStepGuesses")}</div>
+          {[leftSlot, rightSlot].map((s) => {
+            const other = s === "p1" ? "p2" : "p1";
+            const g = reveal.guesses[s];
+            const right = reveal.right[s];
+            const sentence = slot === s
+              ? <>{t("tpYouThoughtPrefix")}<b>{P(other)?.username}</b>{t("tpYouThoughtSuffix")}</>
+              : slot === other
+                ? <><b>{P(s)?.username}</b>{t("tpTheyThoughtMid")}</>
+                : <><b>{P(s)?.username}</b>{t("tpSpecThoughtMid")}<b>{P(other)?.username}</b>{t("tpYouThoughtSuffix")}</>;
+            return (
+              <div key={s} className={"tp-guess-line" + (right ? " ok" : " ko")}>
+                <span className="tp-guess-sentence">{sentence}</span>
+                <span className="tp-guess-letter-chip" style={{ "--opt": `var(${g === 0 ? "--tp-orange" : "--tp-blue"})` }}>{g === 0 ? "A" : "B"}</span>
+                <span className="tp-guess-verdict">{right ? "✅ +1" : "❌"}</span>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Fin de manche/partie : n'apparaît qu'une fois les devinettes
+            révélées (temps 2), pour ne pas vendre le résultat pendant le
+            temps 1. */}
+        {step2 && (phase === "over" ? (
           <div className="tp-over">
             <div className={"tp-over-banner" + (iWon && amPlayer() ? " win" : "")}>
               {amPlayer() ? (iWon ? "🏆 " + t("tpYouWin") : "😅 " + t("tpYouLose")) : `🏆 ${winner?.username} ${t("tpWinsSpectator")}`}
@@ -736,7 +792,7 @@ export default function TuPreferesGame({ room, me, isHost, players, t, lang, onF
               <button className="btn tp-next-btn" onClick={nextRound}>{t("tpNextRound")} →</button>
             ) : <p className="muted">{t("tpWaitNext")}</p>}
           </div>
-        )}
+        ))}
       </div>
     );
   } else {
@@ -844,33 +900,6 @@ function TpLockDots({ a, b, an, bn, me }) {
   );
 }
 
-function RevealSide({ who, choice, guessOfOpp, oppChoice, right, delta, optText, isMe, t }) {
-  const cvar = choice === 0 ? "--tp-orange" : "--tp-blue";
-  const gvar = guessOfOpp === 0 ? "--tp-orange" : "--tp-blue";
-  return (
-    <div className={"tp-reveal-side" + (isMe ? " me" : "")}>
-      <div className="tp-reveal-head">
-        <span className="tp-avatar">{who?.avatar}</span>
-        <span className="tp-name">{who?.username}{isMe ? " ·" + t("tpYouTag") : ""}</span>
-      </div>
-      {/* Choix réel (2026-07) : eyebrow "Choix" ajouté pour rester lisible
-          maintenant que la devinette apparaît juste en dessous, avec son
-          propre eyebrow "Devinette" — les deux valeurs (A/B) sont
-          désormais TOUJOURS affichées littéralement, plus seulement
-          déductibles du badge ✅/❌. */}
-      <div className="tp-reveal-card" style={{ "--opt": `var(${cvar})` }}>
-        <span className="tp-reveal-eyebrow">{t("tpChoiceValueLabel")}</span>
-        <span className="tp-option-letter">{choice === 0 ? "A" : "B"}</span>
-        <span className="tp-option-text">{optText(choice)}</span>
-      </div>
-      <div className="tp-reveal-guess" style={{ "--opt": `var(${gvar})` }}>
-        <span className="tp-reveal-eyebrow">🔮 {t("tpGuessValueLabel")}</span>
-        <span className="tp-reveal-guess-letter">{guessOfOpp === 0 ? "A" : "B"}</span>
-      </div>
-      <div className={"tp-guess-result" + (right ? " ok" : " ko")}>
-        {right ? "✅ " + t("tpGuessRight") : "❌ " + t("tpGuessWrong")}
-      </div>
-      {delta > 0 && <div className="tp-delta">+{delta}</div>}
-    </div>
-  );
-}
+// (RevealSide supprimé à la refonte "révélation en 2 temps" 2026-07 : le
+// rendu de la révélation vit désormais directement dans le bloc REVEAL/OVER
+// ci-dessus, orienté "Toi à gauche" + phrases explicites.)
