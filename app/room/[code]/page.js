@@ -67,7 +67,7 @@ const GAME_META = {
   tupreferes: { icon: "🤔", accent: "--acc-tupreferes", nameKey: "nameTuPreferes", tagKey: "tagTuPreferes", minPlayers: 2, stage: "curtain" },
   chess:    { icon: "♟️", accent: "--acc-chess",     nameKey: "nameChess",   tagKey: "tagChess", minPlayers: 2, maxPlayers: 2, stage: "door" },
   rami:     { icon: "🃏", accent: "--acc-rami",      nameKey: "nameRami",    tagKey: "tagRami", minPlayers: 2, maxPlayers: 6, stage: "door" },
-  naval:    { icon: "⚓", accent: "--acc-naval",     nameKey: "nameNaval",   tagKey: "tagNaval", minPlayers: 2, maxPlayers: 2, stage: "curtain" },
+  naval:    { icon: "⚓", accent: "--acc-naval",     nameKey: "nameNaval",   tagKey: "tagNaval", maxPlayers: 2, stage: "curtain" }, // pas de minPlayers : jouable en solo contre un bot (comme Gold Mines)
 };
 const STAGE_COMPONENT = { door: DoorStage, curtain: CurtainStage, flash: FlashStage, video: VideoStage };
 const GAME_ORDER = ["quiz", "wordle", "worldle", "petitbac", "tupreferes", "connect4", "chess", "ludo", "naval", "chromatik", "president", "rami", "goldmines", "yahtzee", "tenk", "piano", "echoes", "diapason", "heist"];

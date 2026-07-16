@@ -9,11 +9,21 @@ import {
   N, FLEET, shipDef, shipCells, autoPlace, emptyShots, occupiedSet, cellsFit,
   validPlacements, resolveFire, fleetStatus, randomShot,
 } from "./navalEngine";
+import { decideBotShot, NAVAL_DIFFICULTIES, NAVAL_DEFAULT_DIFFICULTY } from "./botLogic";
 
 const GAME_ID = "naval";
 const PLACE_MS = 45000;   // temps de placement
 const TURN_MS = 30000;    // temps par tir en combat
 const VIEW_KEY = "arcardi:navalView";
+const TABLE = 2;          // duel : un bot complète en solo
+const BOT_SHOT_DELAY = 850; // délai de lisibilité avant chaque tir du bot
+
+function makeBotSeat() { return { id: "bot1", username: "Bot", avatar: "🤖", isBot: true }; }
+const DIFF_META = {
+  easy:   { icon: "🟢", key: "navalDiffEasy" },
+  medium: { icon: "🟡", key: "navalDiffMedium" },
+  expert: { icon: "🔴", key: "navalDiffExpert" },
+};
 
 // ---- petites aides de rendu (positions en % du plateau, responsive) ----
 function pctPos(r, c, rows, cols) {
@@ -54,6 +64,7 @@ export default function NavalGame({ room, me, isHost, players, t, lang, onFinish
   const [hoverCell, setHoverCell] = useState(null); // [r,c] au placement
   const [view, setView] = useState("2d");
   const [fx, setFx] = useState([]);                 // effets transitoires
+  const [botDifficulty, setBotDifficulty] = useState(NAVAL_DEFAULT_DIFFICULTY);
 
   const channelRef = useRef(null);
   const stateRef = useRef({});
@@ -63,12 +74,14 @@ export default function NavalGame({ room, me, isHost, players, t, lang, onFinish
   const timeouts = useRef([]);
   const placeTimerRef = useRef(null);
   const turnTimerRef = useRef(null);
+  const botTimerRef = useRef(null);
   const fxSeq = useRef(0);
   const lastShotSeenRef = useRef(null);
 
   useEffect(() => {
-    stateRef.current = { phase, sub, p1, p2, boards, ready, shots, turn, winner, scores, placeDeadline, turnDeadline };
+    stateRef.current = { phase, sub, p1, p2, boards, ready, shots, turn, winner, scores, placeDeadline, turnDeadline, botDifficulty };
   });
+
 
   useEffect(() => { try { const v = localStorage.getItem(VIEW_KEY); if (v === "iso" || v === "2d") setView(v); } catch (e) {} }, []);
   function toggleView() {
@@ -100,6 +113,7 @@ export default function NavalGame({ room, me, isHost, players, t, lang, onFinish
       setShots({ [payload.p1.id]: emptyShots(), [payload.p2.id]: emptyShots() });
       setTurn(null); setWinner(null); setSub("place");
       setScores(payload.scores || { [payload.p1.id]: 0, [payload.p2.id]: 0 });
+      setBotDifficulty(payload.botDifficulty || NAVAL_DEFAULT_DIFFICULTY);
       setLastShot(null); lastShotSeenRef.current = null;
       setPlaceDeadline(payload.placeDeadline);
       setTurnDeadline(null);
@@ -107,11 +121,11 @@ export default function NavalGame({ room, me, isHost, players, t, lang, onFinish
       setMyWin(false); savedResultRef.current = false;
       setPhase("playing"); setCountingDown(true);
       if (isHost) {
-        clearTimeout(placeTimerRef.current); clearTimeout(turnTimerRef.current);
+        clearTimeout(placeTimerRef.current); clearTimeout(turnTimerRef.current); clearTimeout(botTimerRef.current);
         persist({ sub: "place", p1: payload.p1, p2: payload.p2, boards: {}, ready: {},
           shots: { [payload.p1.id]: emptyShots(), [payload.p2.id]: emptyShots() },
           turn: null, winner: null, scores: payload.scores || { [payload.p1.id]: 0, [payload.p2.id]: 0 },
-          placeDeadline: payload.placeDeadline, turnDeadline: null, lastShot: null });
+          placeDeadline: payload.placeDeadline, turnDeadline: null, lastShot: null, botDifficulty: payload.botDifficulty || NAVAL_DEFAULT_DIFFICULTY });
         armPlaceTimer(payload.placeDeadline);
       }
     });
@@ -149,7 +163,7 @@ export default function NavalGame({ room, me, isHost, players, t, lang, onFinish
 
     return () => {
       timeouts.current.forEach(clearTimeout);
-      clearTimeout(placeTimerRef.current); clearTimeout(turnTimerRef.current);
+      clearTimeout(placeTimerRef.current); clearTimeout(turnTimerRef.current); clearTimeout(botTimerRef.current);
       supabase.removeChannel(ch);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -160,7 +174,9 @@ export default function NavalGame({ room, me, isHost, players, t, lang, onFinish
     setShots(s.shots || {}); setTurn(s.turn); setWinner(s.winner);
     setScores(s.scores || {}); setPlaceDeadline(s.placeDeadline || null);
     setTurnDeadline(s.turnDeadline || null); setLastShot(s.lastShot || null);
+    if (s.botDifficulty) setBotDifficulty(s.botDifficulty);
     if (s.p1) setP1(s.p1); if (s.p2) setP2(s.p2);
+    if (isHost) maybeScheduleBot(s);
     // SFX + effets, une seule fois par tir
     if (s.lastShot && s.lastShot.key && s.lastShot.key !== lastShotSeenRef.current) {
       lastShotSeenRef.current = s.lastShot.key;
@@ -171,6 +187,7 @@ export default function NavalGame({ room, me, isHost, players, t, lang, onFinish
   }
 
   function broadcast(payload) {
+    if (payload.botDifficulty == null) payload.botDifficulty = stateRef.current.botDifficulty;
     channelRef.current.send({ type: "broadcast", event: "state", payload });
   }
 
@@ -182,6 +199,10 @@ export default function NavalGame({ room, me, isHost, players, t, lang, onFinish
     if (!validPlacements(placements)) return;
     const boards2 = { ...s.boards, [by]: placements };
     const ready2 = { ...s.ready, [by]: true };
+    // Solo : si l'adversaire est un bot pas encore prêt, il place sa flotte
+    // automatiquement dès que l'humain valide (pas d'attente inutile).
+    const oppSeat = by === s.p1.id ? s.p2 : s.p1;
+    if (oppSeat && oppSeat.isBot && !ready2[oppSeat.id]) { boards2[oppSeat.id] = autoPlace(); ready2[oppSeat.id] = true; }
     if (ready2[s.p1.id] && ready2[s.p2.id]) { startCombat(boards2); return; }
     broadcast({ sub: "place", p1: s.p1, p2: s.p2, boards: boards2, ready: ready2, shots: s.shots,
       turn: null, winner: null, scores: s.scores, placeDeadline: s.placeDeadline, turnDeadline: null, lastShot: null });
@@ -212,30 +233,56 @@ export default function NavalGame({ room, me, isHost, players, t, lang, onFinish
     }, Math.max(0, deadline - Date.now()));
   }
 
-  // ---- arbitrage tir ----
+  // ---- arbitrage tir (humain via fire_attempt) ----
   function hostHandleFire({ by, r, c }) {
     const s = stateRef.current;
-    if (s.winner || s.sub !== "combat") return;
-    if (by !== s.turn) return;
+    if (s.winner || s.sub !== "combat" || by !== s.turn) return;
+    applyShot(s, by, r, c, false);
+  }
+
+  // Résolution partagée d'un tir (humain OU bot). timeout=true pour un tir de
+  // pénalité (le tour passe même sur un touché).
+  function applyShot(s, by, r, c, timeout) {
     const target = by === s.p1.id ? s.p2.id : s.p1.id;
     const res = resolveFire(s.boards[target], s.shots[target], r, c);
     if (res.already) return;
     const shots2 = { ...s.shots, [target]: res.shots };
     const key = Date.now() + "-" + Math.random().toString(36).slice(2, 6);
-    const ls = { key, by, target, r, c, result: res.result, sunkId: res.sunk ? res.shipId : null };
+    const ls = { key, by, target, r, c, result: res.result, sunkId: res.sunk ? res.shipId : null, timeout: !!timeout };
     if (res.allSunk) {
       const scores2 = { ...s.scores, [by]: (s.scores[by] || 0) + 1 };
-      clearTimeout(turnTimerRef.current);
+      clearTimeout(turnTimerRef.current); clearTimeout(botTimerRef.current);
       broadcast({ sub: "combat", p1: s.p1, p2: s.p2, boards: s.boards, ready: s.ready, shots: shots2,
         turn: by, winner: by, scores: scores2, placeDeadline: null, turnDeadline: null, lastShot: ls });
       return;
     }
-    // touché = on rejoue ; manqué = au tour de l'adversaire
-    const nextTurn = res.result === "hit" ? by : target;
+    // touché = on rejoue (sauf tir de pénalité) ; manqué = à l'adversaire
+    const nextTurn = (res.result === "hit" && !timeout) ? by : target;
     const dl = Date.now() + TURN_MS;
     broadcast({ sub: "combat", p1: s.p1, p2: s.p2, boards: s.boards, ready: s.ready, shots: shots2,
       turn: nextTurn, winner: null, scores: s.scores, placeDeadline: null, turnDeadline: dl, lastShot: ls });
     armTurnTimer(dl);
+  }
+
+  // ---- bot : l'hôte joue pour lui quand c'est son tour ----
+  function seatTurnIsBot(s) {
+    const seat = s.turn === s.p1?.id ? s.p1 : (s.turn === s.p2?.id ? s.p2 : null);
+    return !!(seat && seat.isBot);
+  }
+  function maybeScheduleBot(s) {
+    clearTimeout(botTimerRef.current);
+    if (!isHost || s.winner || s.sub !== "combat") return;
+    if (!seatTurnIsBot(s)) return;
+    botTimerRef.current = setTimeout(botFire, BOT_SHOT_DELAY);
+  }
+  function botFire() {
+    const s = stateRef.current;
+    if (s.winner || s.sub !== "combat" || !seatTurnIsBot(s)) return;
+    const by = s.turn;
+    const target = by === s.p1.id ? s.p2.id : s.p1.id; // la grille de l'humain
+    const rc = decideBotShot(s.boards[target], s.shots[target], { difficulty: s.botDifficulty || NAVAL_DEFAULT_DIFFICULTY });
+    if (!rc) return;
+    applyShot(s, by, rc[0], rc[1], false);
   }
 
   function armTurnTimer(deadline) {
@@ -244,26 +291,13 @@ export default function NavalGame({ room, me, isHost, players, t, lang, onFinish
     turnTimerRef.current = setTimeout(() => {
       const s = stateRef.current;
       if (s.winner || s.sub !== "combat") return;
-      // le joueur au tour n'a pas tiré : tir aléatoire à sa place, puis le
-      // tour passe (pas de relance sur un tir automatique de pénalité).
+      // le joueur au tour n'a pas tiré : tir aléatoire à sa place, le tour
+      // passe (pas de relance sur ce tir de pénalité, timeout=true).
       const by = s.turn;
       const target = by === s.p1.id ? s.p2.id : s.p1.id;
       const rc = randomShot(s.shots[target]);
       if (!rc) return;
-      const res = resolveFire(s.boards[target], s.shots[target], rc[0], rc[1]);
-      const shots2 = { ...s.shots, [target]: res.shots };
-      const key = Date.now() + "-to";
-      const ls = { key, by, target, r: rc[0], c: rc[1], result: res.result, sunkId: res.sunk ? res.shipId : null, timeout: true };
-      if (res.allSunk) {
-        const scores2 = { ...s.scores, [by]: (s.scores[by] || 0) + 1 };
-        broadcast({ sub: "combat", p1: s.p1, p2: s.p2, boards: s.boards, ready: s.ready, shots: shots2,
-          turn: by, winner: by, scores: scores2, placeDeadline: null, turnDeadline: null, lastShot: ls });
-        return;
-      }
-      const dl = Date.now() + TURN_MS;
-      broadcast({ sub: "combat", p1: s.p1, p2: s.p2, boards: s.boards, ready: s.ready, shots: shots2,
-        turn: target, winner: null, scores: s.scores, placeDeadline: null, turnDeadline: dl, lastShot: ls });
-      armTurnTimer(dl);
+      applyShot(s, by, rc[0], rc[1], true);
     }, Math.max(0, deadline - Date.now()));
   }
 
@@ -296,11 +330,23 @@ export default function NavalGame({ room, me, isHost, players, t, lang, onFinish
       payload: { p1: first, p2: second, placeDeadline: Date.now() + PLACE_MS, scores: { [first.id]: 0, [second.id]: 0 } } });
   }
 
+  // Solo contre l'ordinateur : l'hôte a choisi un niveau, un bot complète.
+  function startSolo() {
+    if (!channelReady || autoStartedRef.current || players.length !== 1) return;
+    autoStartedRef.current = true;
+    const a = players[0];
+    const human = { id: a.profile_id, username: a.profiles?.username, avatar: a.profiles?.avatar, isBot: false };
+    const bot = makeBotSeat();
+    const [first, second] = Math.random() < 0.5 ? [human, bot] : [bot, human];
+    channelRef.current.send({ type: "broadcast", event: "match_start",
+      payload: { p1: first, p2: second, placeDeadline: Date.now() + PLACE_MS, scores: { [human.id]: 0, [bot.id]: 0 }, botDifficulty } });
+  }
+
   function rejouer() {
     if (!isHost || !p1 || !p2) return;
     const [first, second] = Math.random() < 0.5 ? [p1, p2] : [p2, p1];
     channelRef.current.send({ type: "broadcast", event: "match_start",
-      payload: { p1: first, p2: second, placeDeadline: Date.now() + PLACE_MS, scores } });
+      payload: { p1: first, p2: second, placeDeadline: Date.now() + PLACE_MS, scores, botDifficulty } });
   }
   async function backToRoom() { await resetRoomToLobby(room.id); onFinish && onFinish(); }
 
@@ -381,7 +427,8 @@ export default function NavalGame({ room, me, isHost, players, t, lang, onFinish
   const isPlayer = amP1 || amP2;
   const oppId = opponentId(me.id);
   const isMyTurn = sub === "combat" && !winner && turn === me.id;
-  const needsPick = players.length > 2;
+  const needsPick = players.length > TABLE;
+  const soloVsBot = !needsPick && players.length < TABLE; // 1 humain -> un bot complète
   const placeLeft = placeDeadline ? Math.max(0, Math.ceil((placeDeadline - now) / 1000)) : null;
   const turnLeft = turnDeadline ? Math.max(0, Math.ceil((turnDeadline - now) / 1000)) : null;
 
@@ -465,7 +512,26 @@ export default function NavalGame({ room, me, isHost, players, t, lang, onFinish
   // ---------- contenu ----------
   let content;
   if (phase === "intro") {
-    if (players.length < 2) content = <p className="muted">{t("navalNotEnough")}</p>;
+    if (soloVsBot) {
+      // Solo : choix du niveau du bot puis lancement (seul l'hôte décide).
+      content = isHost ? (
+        <div>
+          <p className="hint">{t("navalSoloHint")}</p>
+          <div className="naval-diff-row">
+            {NAVAL_DIFFICULTIES.map(d => {
+              const on = botDifficulty === d;
+              return (
+                <button key={d} className={"naval-diff-btn" + (on ? " on" : "")} aria-pressed={on} onClick={() => setBotDifficulty(d)}>
+                  <span className="naval-diff-icon">{DIFF_META[d].icon}</span>{t(DIFF_META[d].key)}
+                </button>
+              );
+            })}
+          </div>
+          <button className="btn" disabled={!channelReady} onClick={startSolo}>🤖 {t("navalStartBot")}</button>
+        </div>
+      ) : <p className="muted">{t("navalStarting")}</p>;
+    }
+    else if (players.length < 2) content = <p className="muted">{t("navalNotEnough")}</p>;
     else if (!needsPick) content = <p className="muted">{t("navalStarting")}</p>;
     else if (isHost) {
       content = (
@@ -497,11 +563,15 @@ export default function NavalGame({ room, me, isHost, players, t, lang, onFinish
       <div className="naval-topbar">
         <div className="naval-scoreline">
           <span className={"naval-pchip" + (turn === p1?.id && sub === "combat" && !winner ? " active" : "")}>
-            <span className="av">{p1?.avatar}</span>{p1?.username} <b>{scores[p1?.id] || 0}</b>
+            <span className="av">{p1?.avatar}</span>{p1?.username}
+            {p1?.isBot && DIFF_META[botDifficulty] && <span className={"naval-bot-diff " + botDifficulty}>{DIFF_META[botDifficulty].icon}</span>}
+            <b>{scores[p1?.id] || 0}</b>
           </span>
           <span className="naval-vs">{t("navalVs")}</span>
           <span className={"naval-pchip" + (turn === p2?.id && sub === "combat" && !winner ? " active" : "")}>
-            <span className="av">{p2?.avatar}</span>{p2?.username} <b>{scores[p2?.id] || 0}</b>
+            <span className="av">{p2?.avatar}</span>{p2?.username}
+            {p2?.isBot && DIFF_META[botDifficulty] && <span className={"naval-bot-diff " + botDifficulty}>{DIFF_META[botDifficulty].icon}</span>}
+            <b>{scores[p2?.id] || 0}</b>
           </span>
         </div>
         <button className="naval-view-btn" onClick={toggleView} title={t("navalViewToggle")}>

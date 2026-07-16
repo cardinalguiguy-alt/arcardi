@@ -5925,6 +5925,15 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
 .naval-view-btn{ border:2px solid var(--line); background:var(--card2); color:var(--ink); font-weight:800; font-size:12.5px;
   padding:7px 13px; border-radius:99px; cursor:pointer; transition:.15s; white-space:nowrap; }
 .naval-view-btn:hover{ border-color:var(--acc-naval); filter:brightness(1.1); }
+.naval-bot-diff{ font-size:12px; margin:0 3px; }
+
+/* --- choix du niveau du bot (solo) --- */
+.naval-diff-row{ display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin:14px 0 16px; }
+.naval-diff-btn{ display:flex; align-items:center; gap:6px; padding:9px 15px; border-radius:12px; font-weight:800; font-size:13px;
+  color:var(--ink); border:2px solid var(--line); background:rgba(255,255,255,.04); cursor:pointer; transition:.15s; }
+.naval-diff-btn:hover{ filter:brightness(1.1); }
+.naval-diff-btn.on{ border-color:var(--acc-naval); background:rgba(63,169,214,.14); box-shadow:0 0 0 1px var(--acc-naval) inset; }
+.naval-diff-icon{ font-size:14px; }
 
 /* --- statut + minuteur --- */
 .naval-status{ text-align:center; font-weight:700; color:var(--muted); min-height:20px; margin:4px 0 12px;
