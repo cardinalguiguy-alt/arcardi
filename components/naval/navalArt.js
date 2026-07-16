@@ -649,6 +649,119 @@ export function boardSVG(opts) {
   return `<svg class="naval-svg${aimCls}" xmlns="http://www.w3.org/2000/svg" viewBox="${vb.map(f1).join(" ")}" preserveAspectRatio="xMidYMid meet"><g data-layer="base">${base}</g><g data-layer="cells">${cellsHtml}</g><g data-layer="ships">${shipsHtml}</g><g data-layer="marks" pointer-events="none">${marks}</g></svg>`;
 }
 
+/* ============================================================
+   DEUX PLATEAUX ACCOLES (combat) — un SEUL svg, les deux grilles
+   partagent le meme bord en diagonale (disposition "video de
+   reference"). Le plateau ENNEMI (celui qu'on attaque) est en
+   haut-gauche, notre FLOTTE en bas-droite. Comme tout est projete
+   dans un unique repere (memes constantes K/M), le raccord est
+   geometriquement exact : la grille ennemie (gy dans [gyOff, gyOff+N])
+   colle pile au bord haut-gauche de notre grille (gy dans [0, N]).
+   `gap` (en cases) menage un petit canal tampon entre les deux pour
+   qu'aucun mat de navire au bord ne chevauche l'autre plateau.
+   Rend UN svg avec des cases data-side="enemy"|"own" + data-r/data-c :
+   le composant sait ainsi quel plateau a ete clique. boardSVG (plateau
+   unique, ecran de placement) reste inchange.
+   ============================================================ */
+export function dualBoardGeom(mode, u, headroom, gap) {
+  const iso = mode === "iso";
+  const art = Art(u);
+  const E = 0.6 * u, MG = 0.5 * u;
+  headroom = headroom == null ? 120 : headroom;
+  gap = gap == null ? 0.6 : gap;
+  const gyOff = -(NGRID + gap); // plateau ennemi decale vers le haut-gauche
+  const pt = iso ? (gx, gy) => art.pr(gx, gy, 0)
+                 : (gx, gy) => [MG + gx * u, MG + gy * u];
+  const corners = [];
+  [[gyOff, gyOff + NGRID], [0, NGRID]].forEach(([g0, g1]) => {
+    corners.push(pt(0, g0), pt(NGRID, g0), pt(NGRID, g1), pt(0, g1));
+  });
+  const xs = corners.map(p => p[0]), ys = corners.map(p => p[1]);
+  const minX = Math.min(...xs) - 8, maxX = Math.max(...xs) + 8;
+  const minY = Math.min(...ys) - headroom, maxY = Math.max(...ys) + (iso ? E : 6) + 8;
+  const vb = [minX, minY, maxX - minX, maxY - minY];
+  const off = (role) => (role === "enemy" ? gyOff : 0);
+  const center = (role, r, c, z) => iso
+    ? art.pr(c + 0.5, r + 0.5 + off(role), z || 0)
+    : [MG + (c + 0.5) * u, MG + (r + 0.5 + off(role)) * u];
+  const shipMap = (role, r, c, horiz) => {
+    const o2 = off(role);
+    return iso
+      ? (horiz ? (x, y) => [c + x, r + o2 + y] : (x, y) => [c + y, r + o2 + x])
+      : (horiz ? (x, y) => pt(c + x, r + o2 + y) : (x, y) => pt(c + y, r + o2 + x));
+  };
+  return { iso, art, E, MG, u, gyOff, vb, pt, center, shipMap, W: vb[2], H: vb[3] };
+}
+
+export function dualBoardSVG(opts) {
+  const o = Object.assign({
+    mode: "iso", u: 30, headroom: 120, gap: 0.6, idSalt: "d",
+    own: { shots: null, ships: [] },
+    enemy: { shots: null, ships: [], aim: false, aoe: null },
+  }, opts || {});
+  const G = dualBoardGeom(o.mode, o.u, o.headroom, o.gap);
+  const { iso, art, E, pt, shipMap, gyOff } = G;
+  const u = o.u;
+  const gid = "wat_" + o.idSalt;
+  const defs = `<defs><linearGradient id="${gid}" x1="0" y1="0" x2="0.4" y2="1"><stop offset="0" stop-color="#1d5a80"/><stop offset="1" stop-color="#0c2940"/></linearGradient></defs>`;
+  const fills = { miss: "rgba(2,13,23,.55)", hit: "rgba(168,34,18,.82)", aoe: "rgba(255,140,50,.38)" };
+
+  function drawBoard(role) {
+    const isEnemy = role === "enemy";
+    const gOff = isEnemy ? gyOff : 0;
+    const spec = isEnemy ? o.enemy : o.own;
+    let base = "";
+    if (iso) {
+      const cornL = pt(0, gOff), cornB = pt(0, gOff + NGRID), cornR = pt(NGRID, gOff + NGRID);
+      const cL = isEnemy ? "#232c33" : "#8c2f22", cL2 = isEnemy ? "#181f25" : "#6d241a";
+      base += poly([cornL, cornB, [cornB[0], cornB[1] + E], [cornL[0], cornL[1] + E]], cL);
+      base += poly([cornB, cornR, [cornR[0], cornR[1] + E], [cornB[0], cornB[1] + E]], cL2);
+      base += poly([[cornL[0], cornL[1] + E], [cornB[0], cornB[1] + E + 4], [cornR[0], cornR[1] + E]], "rgba(0,0,0,.35)");
+      base += poly([pt(0, gOff), pt(NGRID, gOff), pt(NGRID, gOff + NGRID), pt(0, gOff + NGRID)], `url(#${gid})`);
+    } else {
+      const tl = pt(0, gOff);
+      base += `<rect x="${f1(tl[0] - 6)}" y="${f1(tl[1] - 6)}" width="${f1(NGRID * u + 12)}" height="${f1(NGRID * u + 12)}" rx="10" fill="${isEnemy ? "#0a1d2c" : "#160d0a"}"/>`;
+      base += `<rect x="${f1(tl[0])}" y="${f1(tl[1])}" width="${f1(NGRID * u)}" height="${f1(NGRID * u)}" rx="4" fill="url(#${gid})"/>`;
+    }
+    const aoeSet = new Set((spec.aoe || []).map(([r, c]) => r + "," + c));
+    let cells = "", marks = "";
+    for (let r = 0; r < NGRID; r++) for (let c = 0; c < NGRID; c++) {
+      const P = [pt(c, r + gOff), pt(c + 1, r + gOff), pt(c + 1, r + 1 + gOff), pt(c, r + 1 + gOff)];
+      const tint = ((r * 7 + c * 13) % 4) * 0.012 + ((r + c) % 2 ? 0.030 : 0.004);
+      const sh = spec.shots && spec.shots[r] ? spec.shots[r][c] : null;
+      let fill = `rgba(255,255,255,${tint.toFixed(3)})`, state = "";
+      if (sh === "miss") { fill = fills.miss; state = "miss"; }
+      else if (sh === "hit") { fill = fills.hit; state = "hit"; }
+      if (aoeSet.has(r + "," + c) && !sh) { fill = fills.aoe; state = "aoe"; }
+      cells += `<polygon class="nvCell" data-side="${role}" data-r="${r}" data-c="${c}" points="${p2s(P)}" fill="${fill}"` + (state ? ` data-state="${state}"` : "") + ` stroke="rgba(150,215,255,.16)" stroke-width="0.9"/>`;
+      if (sh === "miss") { const ct = G.center(role, r, c); marks += `<circle cx="${f1(ct[0])}" cy="${f1(ct[1])}" r="${f1(0.13 * u)}" fill="rgba(190,225,250,.65)"/>`; }
+      else if (sh === "hit") { const ct = G.center(role, r, c); marks += flameG(ct[0], ct[1] + 0.14 * u, (iso ? 0.52 : 0.44) * u, true) + smokeG(ct[0] + 0.06 * u, ct[1] - 0.3 * u, u * (iso ? 0.9 : 0.75), true); }
+    }
+    const sorted = (spec.ships || []).slice().sort((a, b) => (a.r - a.c) - (b.r - b.c));
+    let ships = "";
+    for (const sp of sorted) {
+      const def = SHIPS[sp.id]; if (!def) continue;
+      const map = shipMap(role, sp.r, sp.c, sp.horiz);
+      let inner;
+      if (iso) inner = sp.wreck ? shipWreckIsoG(art, def, map, { anim: true }) : shipIsoG(art, def, map, { anim: true, cls: sp.still ? "" : "nvShipG" });
+      else inner = sp.wreck ? shipWreck2dG(def, u, map, { anim: true, uid: sp.id + role + o.idSalt }) : ship2dG(def, u, map, { uid: sp.id + role + o.idSalt });
+      ships += `<g data-ship="${sp.id}">${inner}</g>`;
+    }
+    return { base, cells, ships, marks };
+  }
+
+  const enemy = drawBoard("enemy");
+  const own = drawBoard("own");
+  const aimCls = o.enemy.aim ? " aim" : "";
+  // Ordre peintre : ennemi (loin, haut-gauche) DERRIERE, notre flotte (pres,
+  // bas-droite) DEVANT — au raccord, notre plateau l'emporte.
+  return `<svg class="naval-svg naval-svg-duo${aimCls}" xmlns="http://www.w3.org/2000/svg" viewBox="${G.vb.map(f1).join(" ")}" preserveAspectRatio="xMidYMid meet" width="${f1(G.W)}" height="${f1(G.H)}">` +
+    `<g data-layer="base">${defs}${enemy.base}${own.base}</g>` +
+    `<g data-layer="cells">${enemy.cells}${own.cells}</g>` +
+    `<g data-layer="ships">${enemy.ships}${own.ships}</g>` +
+    `<g data-layer="marks" pointer-events="none">${enemy.marks}${own.marks}</g></svg>`;
+}
+
 /* --- sprite missile (pointe en bas, origine = point d'impact) --- */
 export function missileSVG(len) {
   const w = len * 0.24;

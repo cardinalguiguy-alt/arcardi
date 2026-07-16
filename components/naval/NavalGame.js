@@ -10,7 +10,7 @@ import {
   validPlacements, resolveFire, fleetStatus, randomShot,
 } from "./navalEngine";
 import { decideBotShot, NAVAL_DIFFICULTIES, NAVAL_DEFAULT_DIFFICULTY } from "./botLogic";
-import { boardSVG, boardGeom, topSpriteSVG, missileSVG, FLEET_ORDER } from "./navalArt";
+import { boardSVG, boardGeom, dualBoardSVG, dualBoardGeom, topSpriteSVG, missileSVG, FLEET_ORDER } from "./navalArt";
 
 const GAME_ID = "naval";
 const PLACE_MS = 45000;   // temps de placement
@@ -114,6 +114,46 @@ function NavalBoard({
   );
 }
 
+// Combat : les DEUX plateaux dans UN seul svg accolé (disposition "vidéo de
+// référence"). Un seul overlay FX porte les effets des deux plateaux (chacun
+// repéré par son rôle own|enemy). Les cases portent data-side, on route donc
+// le clic/survol vers le bon plateau (seul l'ennemi est ciblable).
+function DualBoard({ mode, u, headroom, gap, own, enemy, fxOwn, fxEnemy, onCellClick, onCellHover, onCellLeave }) {
+  const geom = useMemo(() => dualBoardGeom(mode, u, headroom, gap), [mode, u, headroom, gap]);
+  const html = useMemo(
+    () => dualBoardSVG({ mode, u, headroom, gap, own, enemy, idSalt: "duel" }),
+    [mode, u, headroom, gap, own, enemy]
+  );
+  function sideRc(e) {
+    const el = e.target.closest && e.target.closest("[data-r]");
+    if (!el) return null;
+    return { side: el.getAttribute("data-side"), r: +el.getAttribute("data-r"), c: +el.getAttribute("data-c") };
+  }
+  return (
+    <div className="naval-scene naval-scene-duo"
+      onClick={(e) => { const h = sideRc(e); if (h && onCellClick) onCellClick(h.side, h.r, h.c); }}
+      onMouseMove={(e) => { const h = sideRc(e); if (h && onCellHover) onCellHover(h.side, h.r, h.c); }}
+      onMouseLeave={() => onCellLeave && onCellLeave()}
+    >
+      <div className="naval-svg-host" dangerouslySetInnerHTML={{ __html: html }} />
+      <svg className="naval-ov" viewBox={geom.vb.map(n => (Math.round(n * 10) / 10)).join(" ")} preserveAspectRatio="xMidYMid meet">
+        <g pointerEvents="none">
+          {fxEnemy && fxEnemy.map(f => {
+            const [x, y] = geom.center("enemy", f.r, f.c, mode === "iso" ? 0.1 : 0);
+            return <g key={"e" + f.id} transform={`translate(${x.toFixed(1)},${y.toFixed(1)})`}
+              className={"nvfx nvfx-" + f.kind} dangerouslySetInnerHTML={{ __html: fxMarkup(f.kind, f.big, u) }} />;
+          })}
+          {fxOwn && fxOwn.map(f => {
+            const [x, y] = geom.center("own", f.r, f.c, mode === "iso" ? 0.1 : 0);
+            return <g key={"o" + f.id} transform={`translate(${x.toFixed(1)},${y.toFixed(1)})`}
+              className={"nvfx nvfx-" + f.kind} dangerouslySetInnerHTML={{ __html: fxMarkup(f.kind, f.big, u) }} />;
+          })}
+        </g>
+      </svg>
+    </div>
+  );
+}
+
 export default function NavalGame({ room, me, isHost, players, t, lang, onFinish }) {
   const [phase, setPhase] = useState("intro");
   const [sub, setSub] = useState("place");
@@ -147,6 +187,7 @@ export default function NavalGame({ room, me, isHost, players, t, lang, onFinish
   const [oris, setOris] = useState({});              // orientation mémorisée par navire
   const [drag, setDrag] = useState(null);            // { id, horiz, r, c, valid }
   const [dragPos, setDragPos] = useState(null);      // { x, y } du fantôme
+  const [sceneMaxH, setSceneMaxH] = useState(null);  // plafond de hauteur du scène combat (zéro scroll)
 
   const channelRef = useRef(null);
   const stateRef = useRef({});
@@ -161,6 +202,8 @@ export default function NavalGame({ room, me, isHost, players, t, lang, onFinish
   const lastShotSeenRef = useRef(null);
   const setupBoardRef = useRef(null);
   const dragRef = useRef(null);
+  const navalPanelRef = useRef(null);
+  const sceneWrapRef = useRef(null);
 
   useEffect(() => {
     stateRef.current = { phase, sub, p1, p2, boards, ready, shots, turn, winner, scores, bonuses, placeDeadline, turnDeadline, botDifficulty };
@@ -172,6 +215,47 @@ export default function NavalGame({ room, me, isHost, players, t, lang, onFinish
   }
 
   useEffect(() => { const iv = setInterval(() => setNow(Date.now()), 250); return () => clearInterval(iv); }, []);
+
+  // ---- Fit du scène de combat : ZÉRO SCROLL sur laptop/tablette (bornage par
+  // la HAUTEUR de viewport, pas seulement la largeur — c'était la cause du bug
+  // de la disposition précédente). Le scène (svg accolé unique) a une largeur
+  // 100 % ; on lui pose en plus un plafond de HAUTEUR = hauteur d'écran − tout
+  // le reste (titre, barre de score, statut, barre de bonus, inventaires,
+  // marges). Le svg garde son ratio et se cale sur la contrainte la plus
+  // serrée (largeur OU hauteur). `reserved` = panneau − scène : les deux
+  // varient ensemble quand on change le plafond, donc `reserved` est stable
+  // (pas de boucle de rétroaction). Sur TÉLÉPHONE (largeur <= 620) on n'impose
+  // aucun plafond : léger scroll toléré plutôt que des grilles minuscules
+  // (choix validé).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const isCombatDuo = phase === "playing" && sub === "combat";
+    if (!isCombatDuo) { setSceneMaxH(null); return; }
+    let raf = 0;
+    const compute = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const panel = navalPanelRef.current, scene = sceneWrapRef.current;
+        if (!panel || !scene) return;
+        if (window.innerWidth <= 620) { setSceneMaxH(null); return; }
+        const reserved = panel.offsetHeight - scene.offsetHeight;
+        const budget = Math.round(window.innerHeight - reserved - 24);
+        setSceneMaxH(prev => (prev == null || Math.abs(prev - budget) > 4) ? Math.max(220, budget) : prev);
+      });
+    };
+    compute();
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(compute) : null;
+    if (ro && navalPanelRef.current) ro.observe(navalPanelRef.current);
+    window.addEventListener("resize", compute);
+    window.addEventListener("orientationchange", compute);
+    return () => {
+      cancelAnimationFrame(raf);
+      if (ro) ro.disconnect();
+      window.removeEventListener("resize", compute);
+      window.removeEventListener("orientationchange", compute);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, sub, winner, view]);
 
   const opponentId = (pid) => (p1 && pid === p1.id ? p2?.id : p1?.id);
   const playerObj = (pid) => (p1 && pid === p1.id ? p1 : p2);
@@ -561,6 +645,14 @@ export default function NavalGame({ room, me, isHost, players, t, lang, onFinish
     const d = { id, horiz, r: -1, c: -1, valid: false };
     dragRef.current = d; setDrag(d);
     setDragPos({ x: e.clientX, y: e.clientY });
+    // Capture du pointeur sur le plateau (élément STABLE, jamais démonté) :
+    // au doigt (tablette/smartphone), les pointermove/up continuent d'arriver
+    // même quand on déplace un navire DÉJÀ posé — son <g> est retiré du DOM au
+    // pointerdown, ce qui, sans capture explicite, pouvait couper le suivi du
+    // drag sur mobile (capture implicite perdue avec l'élément retiré).
+    if (e.pointerId != null && setupBoardRef.current) {
+      try { setupBoardRef.current.setPointerCapture(e.pointerId); dragRef.current.pointerId = e.pointerId; } catch (err) {}
+    }
     window.addEventListener("pointermove", onDragMove);
     window.addEventListener("pointerup", onDragUp, { once: true });
   }
@@ -578,6 +670,9 @@ export default function NavalGame({ room, me, isHost, players, t, lang, onFinish
   function onDragUp() {
     window.removeEventListener("pointermove", onDragMove);
     const d = dragRef.current;
+    if (d && d.pointerId != null && setupBoardRef.current) {
+      try { setupBoardRef.current.releasePointerCapture(d.pointerId); } catch (err) {}
+    }
     if (d && d.valid) {
       setMyPlacements(prev => [...prev.filter(p => p.id !== d.id), { id: d.id, r: d.r, c: d.c, horiz: d.horiz }]);
       setOris(o => ({ ...o, [d.id]: d.horiz }));
@@ -654,6 +749,18 @@ export default function NavalGame({ room, me, isHost, players, t, lang, onFinish
     }
     return { cells: cs, ok: drag.valid };
   }, [drag]);
+
+  // Specs mémoïsés des deux plateaux du combat (références stables : le SVG
+  // accolé n'est reconstruit que quand l'état de jeu change vraiment, pas à
+  // chaque tick d'horloge — même précaution que ownShips/enemyShips).
+  const ownSpec = useMemo(
+    () => ({ shots: myShotsRecv, ships: ownShips }),
+    [myShotsRecv, ownShips]
+  );
+  const enemySpec = useMemo(
+    () => ({ shots: enemyShotsRecv, ships: enemyShips, aim: isMyTurn, aoe: armed === "missile" ? aoeHover : null }),
+    [enemyShotsRecv, enemyShips, isMyTurn, armed, aoeHover]
+  );
 
   function fireAt(r, c) {
     if (!isMyTurn) return;
@@ -838,26 +945,26 @@ export default function NavalGame({ room, me, isHost, players, t, lang, onFinish
               : `${t("navalWaitingFor")} ${playerObj(turn)?.username || ""}…`}
             {!winner && turnLeft != null && isPlayer && <span className={"naval-timer" + (turnLeft <= 6 ? " hot" : "")}>0:{String(turnLeft).padStart(2, "0")}</span>}
           </p>
-          <div className={"naval-arena view-" + view}>
-            {/* Zone ennemie en HAUT (celle qu'on attaque), sa flotte à SOI en
-                BAS — plateaux empilés verticalement (et non côte à côte) pour
-                que chaque grille profite de toute la largeur disponible,
-                surtout en mode étendu où les marges latérales étaient
-                perdues. */}
-            <div className="naval-board-wrap naval-board-enemy">
-              <p className="naval-board-title"><b className="naval-enemy-lbl">{isPlayer ? t("navalEnemyWaters") : (p2?.username || "")}</b></p>
-              <NavalBoard mode={view} edge="enemy" u={view === "iso" ? 30 : 38} headroom={150}
-                shots={enemyShots} ships={enemyShips} aim={isMyTurn} aoe={armed === "missile" ? aoeHover : null}
-                idSalt="enemy" fx={fxEnemy}
-                onCellClick={isMyTurn ? fireAt : null}
-                onCellHover={isMyTurn ? enemyHover : null}
-                onCellLeave={() => { if (aoeHover) setAoeHover(null); }} />
-              {renderRoster(boards[targetForMe], enemyShots, t("navalEnemyShips"))}
+          {/* Disposition "vidéo de référence" : les DEUX grilles dans un seul
+              scène accolé (ennemi en haut-gauche, notre flotte en bas-droite,
+              même bord partagé en diagonale). Le scène est borné en HAUTEUR
+              (sceneMaxH) pour zéro scroll en paysage laptop/tablette ; il
+              profite de toute la largeur du mode agrandi. */}
+          <div className={"naval-arena-duo view-" + view}>
+            <div className="naval-duo-labels">
+              <span className="naval-duo-lbl enemy"><b className="naval-enemy-lbl">{isPlayer ? t("navalEnemyWaters") : (p2?.username || "")}</b></span>
+              <span className="naval-duo-lbl own">{isPlayer ? t("navalYourFleet") : (p1?.username || "")}</span>
             </div>
-            <div className="naval-board-wrap naval-board-own">
-              <p className="naval-board-title">{isPlayer ? t("navalYourFleet") : (p1?.username || "")}</p>
-              <NavalBoard mode={view} edge="own" u={view === "iso" ? 30 : 38} headroom={150}
-                shots={myShotsRecv} ships={ownShips} aim={false} idSalt="own" fx={fxOwn} />
+            <div className="naval-duo-scene" ref={sceneWrapRef}
+              style={sceneMaxH ? { "--duo-maxh": sceneMaxH + "px" } : undefined}>
+              <DualBoard mode={view} u={view === "iso" ? 30 : 34} headroom={view === "iso" ? 16 : 10} gap={view === "iso" ? 0.6 : 0.5}
+                own={ownSpec} enemy={enemySpec} fxOwn={fxOwn} fxEnemy={fxEnemy}
+                onCellClick={(side, r, c) => { if (side === "enemy" && isMyTurn) fireAt(r, c); }}
+                onCellHover={(side, r, c) => { if (side === "enemy" && isMyTurn) enemyHover(r, c); else if (aoeHover) setAoeHover(null); }}
+                onCellLeave={() => { if (aoeHover) setAoeHover(null); }} />
+            </div>
+            <div className="naval-rosters">
+              {renderRoster(boards[targetForMe], enemyShots, t("navalEnemyShips"))}
               {renderRoster(boards[myBoard], myShotsRecv, t("navalYourShips"))}
             </div>
           </div>
@@ -889,7 +996,7 @@ export default function NavalGame({ room, me, isHost, players, t, lang, onFinish
   }
 
   return (
-    <div className="panel naval-panel" style={{ maxWidth: "min(1040px, 98vw)" }}>
+    <div className="panel naval-panel" ref={navalPanelRef} style={{ maxWidth: "min(1040px, 98vw)" }}>
       <h1>{t("navalTitle")}</h1>
       <Crossfade id={phase + "-" + sub + (winner ? "-over" : "")}>{content}</Crossfade>
       {drag && dragPos && (

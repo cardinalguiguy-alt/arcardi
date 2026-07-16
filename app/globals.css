@@ -5945,31 +5945,52 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
 .naval-timer.hot{ background:var(--p1); border-color:transparent; color:#fff; animation:navalPulse .8s infinite; }
 @keyframes navalPulse{ 50%{ filter:brightness(1.3); } }
 
-/* --- arene : plateaux EMPILÉS verticalement (ennemi en haut, flotte perso
-   en bas — même disposition qu'une référence fournie), au lieu de côte à
-   côte : chaque grille profite alors de toute la largeur du panneau, ce qui
-   la rend beaucoup plus grande, surtout en mode étendu où la largeur
-   dispo était jusque-là coupée en deux pour rien. Le placement (un seul
-   plateau + tray à côté) garde lui son disposition côte à côte. */
+/* --- ÉCRAN DE PLACEMENT : un seul plateau + tray à côté (inchangé). --- */
 .naval-arena{ display:flex; gap:26px; justify-content:center; align-items:flex-start; flex-wrap:wrap; }
-.naval-arena:not(.placing){ flex-direction:column; align-items:center; gap:18px; }
 .naval-board-wrap{ width:min(420px, 94vw); }
 .naval-arena.placing .naval-board-wrap{ width:min(400px, 92vw); }
-.naval-arena:not(.placing) .naval-board-wrap{ width:min(600px, 96vw); }
 @media (min-width: 900px){
   .naval-panel{ max-width:min(1320px, 98vw) !important; }
   .naval-arena.placing .naval-board-wrap{ width:min(520px, 42vw); }
-  .naval-arena:not(.placing) .naval-board-wrap{ width:min(860px, 74vw); }
 }
 @media (min-width: 1300px){
   .naval-panel{ max-width:min(1600px, 98vw) !important; }
-  .naval-arena:not(.placing) .naval-board-wrap{ width:min(1000px, 68vw); }
 }
 .naval-board-title{ font-weight:800; font-size:12.5px; text-transform:uppercase; letter-spacing:.6px; color:var(--muted); margin:0 0 8px; }
 .naval-enemy-lbl{ color:var(--acc-naval); }
 
+/* --- COMBAT : les DEUX grilles dans UN seul svg accolé (disposition "vidéo
+   de référence" : plateau ennemi en haut-gauche, notre flotte en bas-droite,
+   bord partagé en diagonale). Le scène profite de toute la largeur du mode
+   agrandi ; sa HAUTEUR est plafonnée en JS (--duo-maxh) pour ZÉRO scroll en
+   paysage laptop/tablette. Le svg est traité comme une image (attributs
+   width/height + max-width/max-height) : il garde son ratio et se cale sur la
+   contrainte la plus serrée. Sur téléphone (<=620px), aucun plafond n'est
+   posé : léger scroll toléré plutôt que des grilles minuscules. --- */
+.naval-arena-duo{ display:flex; flex-direction:column; align-items:center; gap:8px; }
+.naval-duo-labels{ display:flex; justify-content:space-between; align-items:baseline; gap:12px;
+  width:min(1100px, 96vw); max-width:100%; font-size:12.5px; font-weight:800;
+  text-transform:uppercase; letter-spacing:.5px; color:var(--muted); }
+.naval-duo-lbl.enemy{ text-align:left; }
+.naval-duo-lbl.own{ text-align:right; }
+.naval-duo-scene{ width:100%; text-align:center; }
+/* inline-block + width auto : le conteneur se réduit EXACTEMENT à la taille
+   affichée du svg (annule le width:100% de la règle .naval-scene de base),
+   pour que l'overlay FX (inset:0) épouse pile la boîte du svg. */
+.naval-scene-duo{ position:relative; display:inline-block; vertical-align:top; width:auto; max-width:100%; }
+.naval-scene-duo .naval-svg-host{ display:block; width:auto; }
+.naval-scene-duo .naval-svg-host svg.naval-svg-duo{
+  display:block; width:auto; height:auto; max-width:100%; max-height:var(--duo-maxh, none);
+  filter:drop-shadow(0 12px 26px rgba(0,0,0,.42)); overflow:visible; touch-action:none;
+}
+.naval-scene-duo .naval-ov{ position:absolute; inset:0; width:100%; height:100%; }
+.naval-rosters{ display:flex; flex-wrap:wrap; justify-content:center; gap:8px 26px; margin-top:2px; }
+
 /* --- la scene SVG (base injectee + overlay FX) --- */
-.naval-scene{ position:relative; width:100%; }
+/* touch-action:none sur le conteneur ENTIER (pas seulement le svg) : le
+   drag & drop de placement au doigt (tablette/smartphone) ne déclenche plus
+   le scroll/zoom de page pendant qu'on déplace un navire. */
+.naval-scene{ position:relative; width:100%; touch-action:none; }
 .naval-svg-host{ width:100%; }
 .naval-svg-host svg.naval-svg{ display:block; width:100%; height:auto; touch-action:none;
   filter:drop-shadow(0 12px 26px rgba(0,0,0,.42)); overflow:visible; }
