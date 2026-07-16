@@ -33,6 +33,7 @@
   --acc-chess:#E8B75A; /* ambre/or chaud — Échecs (plateau noyer + ivoire, jeu n°17) */
   --acc-rami:#E07A5F; /* terracotta chaud — Rami (jeu de cartes n°18) */
   --acc-naval:#3FA9D6; /* bleu radar — Bataille navale (jeu n°19) */
+  --acc-calcrace:#FF5A36; /* orange-rouge course — Course de calcul mental (jeu n°20) */
   --tp-orange:#FF8A3D; /* option A */
   --tp-blue:#3D9BFF;   /* option B */
   --tp-guess:#B98CFF;  /* devinette (ni A ni B : la couleur de l'ACTE de deviner) */
@@ -2984,6 +2985,13 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
 .game-countdown.chromatik .game-countdown-digit{
   font-family:'Bungee'; color:var(--acc-chromatik);
   text-shadow:0 0 16px rgba(255,159,110,.55), 0 5px 0 rgba(90,40,15,.85);
+}
+/* Course de calcul mental : asphalte de nuit, chiffres orange-rouge feu de départ. */
+.game-countdown.calcrace{ background:rgba(10,8,6,.66); }
+.game-countdown.calcrace .game-countdown-digit{
+  font-family:'Bungee'; color:var(--acc-calcrace);
+  -webkit-text-stroke:1.5px rgba(70,20,8,.85);
+  text-shadow:0 5px 0 rgba(70,20,8,.85), 0 0 16px rgba(255,90,54,.45);
 }
 @media (prefers-reduced-motion: reduce){
   /* Fondu simple, sans zoom : le décompte reste lisible et séquentiel. */
@@ -6096,4 +6104,117 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
   .naval-arena{ gap:16px; }
   .naval-arena.placing{ flex-direction:column; align-items:center; }
   .naval-tray{ width:min(400px,92vw); }
+}
+
+/* ============================================================
+   COURSE DE CALCUL MENTAL (jeu n°20, 2026-07)
+   Vue de dessus : chaque joueur a un couloir horizontal (route asphalte
+   bordée d'herbe des deux côtés, ligne centrale pointillée, kerbs
+   rouge/blanc), sa voiture de F1 (SVG pur, components/calcrace/
+   CalcRaceGame.js) avance en `left` % avec transition CSS — aucune boucle
+   JS par frame, l'avancée ne bouge qu'aux événements réseau reçus.
+   `--lane-h` (posée par .calcrace-lanes-N) pilote la hauteur du couloir ET
+   la taille de la voiture (calc()), pour rester lisible jusqu'à 10 joueurs
+   sans jamais scroller.
+   ============================================================ */
+.calcrace-panel{ text-align:center; }
+.calcrace-panel h1{ color:var(--acc-calcrace); }
+
+.calcrace-intro{ display:flex; flex-direction:column; align-items:center; gap:4px; }
+.calcrace-diff-group{ display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin:14px 0 18px; }
+.calcrace-diff-btn{ padding:9px 16px; border-radius:12px; font-weight:800; font-size:13px;
+  color:var(--ink); border:2px solid var(--line); background:rgba(255,255,255,.04); cursor:pointer; transition:.15s; }
+.calcrace-diff-btn:hover{ filter:brightness(1.1); }
+.calcrace-diff-btn.on{ border-color:var(--acc-calcrace); background:rgba(255,90,54,.14); box-shadow:0 0 0 1px var(--acc-calcrace) inset; }
+
+.calcrace-stage{ position:relative; }
+.calcrace-timer{ display:block; text-align:center; font-family:'Space Mono',monospace; font-weight:800;
+  font-size:20px; letter-spacing:.04em; color:var(--acc-calcrace); margin-bottom:8px; }
+
+.calcrace-lanes{ display:flex; flex-direction:column; gap:4px; margin:6px 0 16px; }
+.calcrace-lanes-1{ --lane-h:88px; }
+.calcrace-lanes-2{ --lane-h:64px; }
+.calcrace-lanes-3{ --lane-h:56px; }
+.calcrace-lanes-4{ --lane-h:48px; }
+.calcrace-lanes-5{ --lane-h:42px; }
+.calcrace-lanes-6{ --lane-h:38px; }
+.calcrace-lanes-7{ --lane-h:34px; }
+.calcrace-lanes-8{ --lane-h:31px; }
+.calcrace-lanes-9{ --lane-h:29px; }
+.calcrace-lanes-10{ --lane-h:27px; }
+
+.calcrace-lane{
+  position:relative; display:flex; align-items:center; height:var(--lane-h, 54px);
+  border-radius:8px; overflow:hidden;
+  /* herbe des deux côtés de la route : rayures fauchées, sombres et discrètes */
+  background:repeating-linear-gradient(90deg, #2c4a1c 0 26px, #33531f 26px 52px);
+}
+.calcrace-lane-solo{ height:96px; }
+
+.calcrace-lane-tag{ flex:none; display:flex; align-items:center; gap:6px; padding:0 8px; z-index:2; min-width:70px; }
+.calcrace-dot{ width:14px; height:14px; border-radius:50%; flex:none; box-shadow:0 0 0 2px rgba(0,0,0,.3); }
+.calcrace-name{ font-size:11px; font-weight:700; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:70px; }
+.calcrace-lanes-7 .calcrace-name, .calcrace-lanes-8 .calcrace-name,
+.calcrace-lanes-9 .calcrace-name, .calcrace-lanes-10 .calcrace-name{ font-size:9.5px; max-width:56px; }
+
+/* --- la route elle-même : asphalte + kerbs + ligne centrale épaissie --- */
+.calcrace-track{ flex:1; align-self:center; position:relative; height:78%; margin:0 3px;
+  border-radius:4px; overflow:hidden; background:#332C26; }
+.calcrace-track::before, .calcrace-track::after{
+  content:''; position:absolute; left:0; right:0; height:6px;
+  background:repeating-linear-gradient(90deg, #E0473C 0 10px, #F3ECDD 10px 20px);
+}
+.calcrace-track::before{ top:0; }
+.calcrace-track::after{ bottom:0; }
+.calcrace-lanes-7 .calcrace-track::before, .calcrace-lanes-7 .calcrace-track::after,
+.calcrace-lanes-8 .calcrace-track::before, .calcrace-lanes-8 .calcrace-track::after,
+.calcrace-lanes-9 .calcrace-track::before, .calcrace-lanes-9 .calcrace-track::after,
+.calcrace-lanes-10 .calcrace-track::before, .calcrace-lanes-10 .calcrace-track::after{ height:4px; }
+.calcrace-centerline{
+  position:absolute; left:0; right:0; top:50%; height:3.5px; transform:translateY(-50%);
+  background:repeating-linear-gradient(90deg, rgba(255,255,255,.62) 0 15px, transparent 15px 30px);
+  z-index:1;
+}
+.calcrace-lanes-7 .calcrace-centerline, .calcrace-lanes-8 .calcrace-centerline,
+.calcrace-lanes-9 .calcrace-centerline, .calcrace-lanes-10 .calcrace-centerline{ height:2.5px; }
+.calcrace-progress{
+  position:absolute; right:32px; top:50%; transform:translateY(-50%); z-index:2;
+  font-family:'Space Mono',monospace; font-size:10.5px; color:var(--muted);
+}
+.calcrace-lanes-7 .calcrace-progress, .calcrace-lanes-8 .calcrace-progress,
+.calcrace-lanes-9 .calcrace-progress, .calcrace-lanes-10 .calcrace-progress{ font-size:9px; right:26px; }
+.calcrace-finish{
+  position:absolute; right:0; top:0; bottom:0; width:8px; z-index:1;
+  background:repeating-linear-gradient(45deg, #eee 0 4px, #222 4px 8px);
+}
+
+/* --- la voiture : taille dérivée de --lane-h, transition douce sur `left` --- */
+.calcrace-car-wrap{ position:absolute; top:50%; left:0; transform:translate(-50%,-50%); transition:left .5s ease; z-index:2; }
+.calcrace-car{ display:block; width:calc(var(--lane-h, 54px) * 1.35); height:auto; filter:drop-shadow(0 1px 1px rgba(0,0,0,.4)); }
+
+/* --- carte opération : validation automatique, pas de bouton --- */
+.calcrace-op-card{
+  margin-top:10px; background:var(--card2); border-radius:16px; border:1px solid var(--line);
+  padding:20px; text-align:center;
+}
+.calcrace-op-expr{ font-family:'Space Mono',monospace; font-weight:700; font-size:clamp(22px, 5vw, 30px);
+  margin-bottom:14px; letter-spacing:.02em; color:var(--ink); animation:popIn .3s ease both; }
+.calcrace-op-input{
+  width:130px; font-family:'Space Mono',monospace; font-size:22px; font-weight:700; text-align:center;
+  background:var(--bg2); border:1px solid var(--line); color:var(--ink); border-radius:10px; padding:10px 6px;
+}
+.calcrace-op-input:focus{ outline:2px solid var(--acc-calcrace); outline-offset:1px; }
+
+.calcrace-standings{ list-style:none; margin:14px auto; padding:0; max-width:360px; text-align:left; }
+.calcrace-standings li{ display:flex; align-items:center; justify-content:space-between; gap:10px;
+  padding:7px 12px; border-radius:10px; font-weight:700; font-size:13px; color:var(--ink); }
+.calcrace-standings li.win{ background:rgba(255,90,54,.14); box-shadow:0 0 0 1px var(--acc-calcrace) inset; }
+.calcrace-standings-ops{ font-family:'Space Mono',monospace; color:var(--muted); font-size:12px; }
+
+@media (prefers-reduced-motion: reduce){
+  .calcrace-car-wrap{ transition:none; }
+  .calcrace-op-expr{ animation:none; }
+}
+@media (max-width: 480px){
+  .calcrace-op-input{ width:110px; font-size:19px; }
 }
