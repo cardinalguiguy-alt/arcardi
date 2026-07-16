@@ -28,9 +28,12 @@ const PIP_LAYOUTS = {
   4: [[32, 22], [68, 22], [32, 78, 1], [68, 78, 1]],
   5: [[32, 22], [68, 22], [50, 50], [32, 78, 1], [68, 78, 1]],
   6: [[32, 22], [68, 22], [32, 50], [68, 50], [32, 78, 1], [68, 78, 1]],
-  7: [[32, 22], [68, 22], [50, 36], [32, 50], [68, 50], [32, 78, 1], [68, 78, 1]],
-  8: [[32, 22], [68, 22], [50, 36], [32, 50], [68, 50], [50, 64, 1], [32, 78, 1], [68, 78, 1]],
-  9: [[32, 20], [68, 20], [32, 44], [68, 44], [50, 50], [32, 62, 1], [68, 62, 1], [32, 84, 1], [68, 84, 1]],
+  // 7/8/9 (2026-07) : symboles centraux ré-espacés (colonnes 30/70, rangées
+  // mieux réparties) + classe ".hi" en CSS qui élargit la boîte et réduit un
+  // peu les glyphes — les pips de ces cartes hautes ne se touchent plus.
+  7: [[30, 18], [70, 18], [50, 33], [30, 52], [70, 52], [30, 84, 1], [70, 84, 1]],
+  8: [[30, 16], [70, 16], [50, 31], [30, 50], [70, 50], [50, 69, 1], [30, 84, 1], [70, 84, 1]],
+  9: [[30, 16], [70, 16], [30, 37], [70, 37], [50, 50], [30, 63, 1], [70, 63, 1], [30, 84, 1], [70, 84, 1]],
   10: [[32, 20], [68, 20], [50, 31], [32, 44], [68, 44], [32, 62, 1], [68, 62, 1], [50, 73, 1], [32, 84, 1], [68, 84, 1]],
 };
 const FIGURE_GLYPHS = { J: "♞", Q: "♛", K: "♚" };
@@ -58,12 +61,15 @@ function RCard({ card, faceDown, size = "sm", onClick, sel, dim, style, assist }
   }
   const suit = SUITS.find(s => s.id === card.suit);
   const pips = PIP_LAYOUTS[card.rank];
+  // Cartes hautes (7/8/9) : boîte de pips élargie + glyphes réduits (".hi")
+  // pour aérer les symboles qui se serraient au centre (demande 2026-07).
+  const densePips = pips && (card.rank === "7" || card.rank === "8" || card.rank === "9");
   return (
     <div className={cls + (suit.red ? " red" : "")} onClick={onClick} style={style}>
       <span className="rami-card-corner"><b>{card.rank}</b><i>{suit.sym}</i></span>
       <span className="rami-card-corner flip"><b>{card.rank}</b><i>{suit.sym}</i></span>
       {pips ? (
-        <span className={"rami-card-pips" + (card.rank === "A" ? " ace" : "")}>
+        <span className={"rami-card-pips" + (card.rank === "A" ? " ace" : "") + (densePips ? " hi" : "")}>
           {pips.map(([x, y, f], i) => (
             <i key={i} style={{ left: x + "%", top: y + "%", transform: "translate(-50%,-50%)" + (f ? " rotate(180deg)" : "") }}>{suit.sym}</i>
           ))}
@@ -114,6 +120,21 @@ export default function RamiGame({ room, me, isHost, players, t, lang, onFinish 
   function toggleAssist() {
     setAssistOn(v => {
       try { localStorage.setItem(ASSIST_KEY, v ? "0" : "1"); } catch (e) {}
+      return !v;
+    });
+  }
+  // Aide textuelle par étape (activable/désactivable façon 10000) : un bandeau
+  // qui rappelle quoi faire à l'instant (piocher, ouvrir/poser, défausser, ou
+  // attendre l'adversaire). Personnelle, persistée en localStorage. Distincte
+  // du 💡 (assistance qui surligne les combinaisons dans la main).
+  const HELP_KEY = "arcardi:ramiHelp";
+  const [helpOn, setHelpOn] = useState(false);
+  useEffect(() => {
+    try { if (localStorage.getItem(HELP_KEY) === "1") setHelpOn(true); } catch (e) {}
+  }, []);
+  function toggleHelp() {
+    setHelpOn(v => {
+      try { localStorage.setItem(HELP_KEY, v ? "0" : "1"); } catch (e) {}
       return !v;
     });
   }
@@ -571,6 +592,14 @@ export default function RamiGame({ room, me, isHost, players, t, lang, onFinish 
     // phase playing
     const topDiscard = discard[discard.length - 1];
     const turnSeat = seats[turnIdx];
+    // Aide textuelle par étape (bandeau, activable via le bouton "?").
+    let helpText = null;
+    if (helpOn && !roundOver) {
+      if (!isPlayer) helpText = t("ramiHelpSpectate");
+      else if (!isMyTurn) helpText = `${t("ramiHelpWait")} ${turnSeat?.username || ""}`.trim();
+      else if (turnPhase === "draw") helpText = t("ramiHelpDraw");
+      else helpText = iOpened ? t("ramiHelpAct") : t("ramiHelpOpen").replace("{n}", OPEN_THRESHOLD);
+    }
     content = (
       <div>
         {/* Bandeau des joueurs */}
@@ -585,6 +614,9 @@ export default function RamiGame({ room, me, isHost, players, t, lang, onFinish 
             </div>
           ))}
         </div>
+
+        {/* Aide textuelle par étape (activable/désactivable, bouton "?") */}
+        {helpText && <div className="rami-help">💡 {helpText}</div>}
 
         {/* Tapis : combinaisons posées */}
         <div className="rami-table">
@@ -696,6 +728,10 @@ export default function RamiGame({ room, me, isHost, players, t, lang, onFinish 
                 <button className={"rami-square-btn" + (assistOn ? " on" : "")}
                   onClick={toggleAssist} title={t("ramiAssistHint")}>
                   <span style={{ fontSize: 17 }}>💡</span>
+                </button>
+                <button className={"rami-square-btn" + (helpOn ? " on" : "")}
+                  onClick={toggleHelp} title={t("ramiHelpToggle")}>
+                  <span style={{ fontSize: 17, fontWeight: 900 }}>?</span>
                 </button>
               </div>
             </div>
