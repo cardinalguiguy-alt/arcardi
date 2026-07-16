@@ -839,13 +839,12 @@ export default function NavalGame({ room, me, isHost, players, t, lang, onFinish
             {!winner && turnLeft != null && isPlayer && <span className={"naval-timer" + (turnLeft <= 6 ? " hot" : "")}>0:{String(turnLeft).padStart(2, "0")}</span>}
           </p>
           <div className={"naval-arena view-" + view}>
-            <div className="naval-board-wrap">
-              <p className="naval-board-title">{isPlayer ? t("navalYourFleet") : (p1?.username || "")}</p>
-              <NavalBoard mode={view} edge="own" u={view === "iso" ? 30 : 38} headroom={150}
-                shots={myShotsRecv} ships={ownShips} aim={false} idSalt="own" fx={fxOwn} />
-              {renderRoster(boards[myBoard], myShotsRecv, t("navalYourShips"))}
-            </div>
-            <div className="naval-board-wrap">
+            {/* Zone ennemie en HAUT (celle qu'on attaque), sa flotte à SOI en
+                BAS — plateaux empilés verticalement (et non côte à côte) pour
+                que chaque grille profite de toute la largeur disponible,
+                surtout en mode étendu où les marges latérales étaient
+                perdues. */}
+            <div className="naval-board-wrap naval-board-enemy">
               <p className="naval-board-title"><b className="naval-enemy-lbl">{isPlayer ? t("navalEnemyWaters") : (p2?.username || "")}</b></p>
               <NavalBoard mode={view} edge="enemy" u={view === "iso" ? 30 : 38} headroom={150}
                 shots={enemyShots} ships={enemyShips} aim={isMyTurn} aoe={armed === "missile" ? aoeHover : null}
@@ -854,6 +853,12 @@ export default function NavalGame({ room, me, isHost, players, t, lang, onFinish
                 onCellHover={isMyTurn ? enemyHover : null}
                 onCellLeave={() => { if (aoeHover) setAoeHover(null); }} />
               {renderRoster(boards[targetForMe], enemyShots, t("navalEnemyShips"))}
+            </div>
+            <div className="naval-board-wrap naval-board-own">
+              <p className="naval-board-title">{isPlayer ? t("navalYourFleet") : (p1?.username || "")}</p>
+              <NavalBoard mode={view} edge="own" u={view === "iso" ? 30 : 38} headroom={150}
+                shots={myShotsRecv} ships={ownShips} aim={false} idSalt="own" fx={fxOwn} />
+              {renderRoster(boards[myBoard], myShotsRecv, t("navalYourShips"))}
             </div>
           </div>
           {isPlayer && !winner && (
