@@ -31,6 +31,7 @@ import ChessGame from "@/components/chess/ChessGame";
 import RamiGame from "@/components/rami/RamiGame";
 import NavalGame from "@/components/naval/NavalGame";
 import CalcRaceGame from "@/components/calcrace/CalcRaceGame";
+import PuzzleGame from "@/components/puzzle/PuzzleGame";
 import GameErrorBoundary from "@/components/GameErrorBoundary";
 import DoorStage from "@/components/DoorStage";
 import CurtainStage from "@/components/CurtainStage";
@@ -70,9 +71,10 @@ const GAME_META = {
   rami:     { icon: "🃏", accent: "--acc-rami",      nameKey: "nameRami",    tagKey: "tagRami", minPlayers: 2, maxPlayers: 6, stage: "door" },
   naval:    { icon: "⚓", accent: "--acc-naval",     nameKey: "nameNaval",   tagKey: "tagNaval", maxPlayers: 2, stage: "curtain" }, // pas de minPlayers : jouable en solo contre un bot (comme Gold Mines)
   calcrace: { icon: "🏎️", accent: "--acc-calcrace", nameKey: "nameCalcRace", tagKey: "tagCalcRace", maxPlayers: 10, stage: "curtain" }, // pas de minPlayers : jouable seul en contre-la-montre (jeu n°20)
+  puzzle:   { icon: "🧩", accent: "--acc-puzzle", nameKey: "namePuzzle", tagKey: "tagPuzzle", stage: "door" }, // pas de minPlayers : jouable seul (jeu n°21) ; mode collaboratif prévu dans un prochain zip
 };
 const STAGE_COMPONENT = { door: DoorStage, curtain: CurtainStage, flash: FlashStage, video: VideoStage };
-const GAME_ORDER = ["quiz", "wordle", "worldle", "petitbac", "tupreferes", "connect4", "chess", "ludo", "naval", "chromatik", "president", "rami", "goldmines", "yahtzee", "tenk", "piano", "echoes", "diapason", "heist", "calcrace"];
+const GAME_ORDER = ["quiz", "wordle", "worldle", "petitbac", "tupreferes", "connect4", "chess", "ludo", "naval", "chromatik", "president", "rami", "goldmines", "yahtzee", "tenk", "piano", "echoes", "diapason", "heist", "calcrace", "puzzle"];
 
 // Victoires/Défaites, en discret (demande 2026-07) : remplace les deux chips
 // "✓N/✕N" auparavant affichées EN PERMANENCE sur chaque ligne joueur du
@@ -985,6 +987,9 @@ export default function Room() {
                   )}
                   {room.current_game === "calcrace" && (
                     <CalcRaceGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
+                  )}
+                  {room.current_game === "puzzle" && (
+                    <PuzzleGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
                   )}
                 </StageComponent>
                 </GameErrorBoundary>

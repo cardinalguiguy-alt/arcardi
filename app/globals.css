@@ -34,6 +34,7 @@
   --acc-rami:#E07A5F; /* terracotta chaud — Rami (jeu de cartes n°18) */
   --acc-naval:#3FA9D6; /* bleu radar — Bataille navale (jeu n°19) */
   --acc-calcrace:#FF5A36; /* orange-rouge course — Course de calcul mental (jeu n°20) */
+  --acc-puzzle:#7B6EF6; /* indigo — Puzzle Race (jeu n°21) */
   --tp-orange:#FF8A3D; /* option A */
   --tp-blue:#3D9BFF;   /* option B */
   --tp-guess:#B98CFF;  /* devinette (ni A ni B : la couleur de l'ACTE de deviner) */
@@ -2992,6 +2993,13 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
   font-family:'Bungee'; color:var(--acc-calcrace);
   -webkit-text-stroke:1.5px rgba(70,20,8,.85);
   text-shadow:0 5px 0 rgba(70,20,8,.85), 0 0 16px rgba(255,90,54,.45);
+}
+/* Puzzle Race : indigo doux, chiffres arrondis. */
+.game-countdown.puzzle{ background:rgba(14,10,26,.62); }
+.game-countdown.puzzle .game-countdown-digit{
+  font-family:'Bungee'; color:var(--acc-puzzle);
+  -webkit-text-stroke:1.5px rgba(38,30,80,.85);
+  text-shadow:0 5px 0 rgba(38,30,80,.85), 0 0 16px rgba(123,110,246,.45);
 }
 @media (prefers-reduced-motion: reduce){
   /* Fondu simple, sans zoom : le décompte reste lisible et séquentiel. */
@@ -6217,4 +6225,75 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
 }
 @media (max-width: 480px){
   .calcrace-op-input{ width:110px; font-size:19px; }
+}
+
+/* ============================================================
+   PUZZLE RACE (jeu n°21, 2026-07 ; mode COMPÉTITIF pour cette livraison,
+   mode collaboratif prévu dans un prochain zip)
+   Plateau construit en DOM SVG direct (components/puzzle/PuzzleGame.js) :
+   chaque pièce est un <g> clippé sur l'illustration de référence
+   (components/puzzle/puzzleArt.js), déplaçable au pointeur. Couches
+   décoratives (image fantôme, contours, pointillés d'emplacement) en
+   `pointer-events:none` pour ne jamais intercepter le drag (même piège
+   que la bataille navale, session 134).
+   ============================================================ */
+.puzzle-panel{ text-align:center; }
+.puzzle-panel h1{ color:var(--acc-puzzle); }
+
+.puzzle-intro{ display:flex; flex-direction:column; align-items:center; gap:4px; }
+.puzzle-thumb-row{ display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin:12px 0; }
+.puzzle-thumb{
+  display:flex; flex-direction:column; align-items:center; gap:6px; width:130px;
+  background:var(--bg2); border:2px solid var(--line); border-radius:12px; padding:8px; cursor:pointer; transition:.15s;
+}
+.puzzle-thumb:hover{ filter:brightness(1.1); }
+.puzzle-thumb.on{ border-color:var(--acc-puzzle); box-shadow:0 0 0 1px var(--acc-puzzle) inset; }
+.puzzle-thumb-svg{ width:100%; display:block; border-radius:6px; }
+.puzzle-thumb span{ font-size:11.5px; font-weight:700; color:var(--ink); }
+
+.puzzle-diff-group{ display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin:6px 0 18px; }
+.puzzle-diff-btn{ padding:9px 16px; border-radius:12px; font-weight:800; font-size:13px;
+  color:var(--ink); border:2px solid var(--line); background:rgba(255,255,255,.04); cursor:pointer; transition:.15s; }
+.puzzle-diff-btn:hover{ filter:brightness(1.1); }
+.puzzle-diff-btn.on{ border-color:var(--acc-puzzle); background:rgba(123,110,246,.16); box-shadow:0 0 0 1px var(--acc-puzzle) inset; }
+
+.puzzle-stage{ position:relative; }
+.puzzle-hud{ display:flex; justify-content:center; gap:14px; align-items:center; margin-bottom:8px; }
+.puzzle-progress-badge{ font-family:'Space Mono',monospace; font-weight:800; font-size:14px; background:var(--bg2); padding:4px 12px; border-radius:999px; color:var(--ink); }
+.puzzle-timer{ font-family:'Space Mono',monospace; font-weight:800; font-size:14px; color:var(--acc-puzzle); }
+
+.puzzle-leaderboard{ display:flex; flex-wrap:wrap; gap:6px; justify-content:center; margin-bottom:10px; }
+.puzzle-lb-row{ display:flex; align-items:center; gap:6px; background:var(--bg2); border-radius:999px; padding:4px 10px; font-size:12px; font-weight:700; color:var(--ink); }
+.puzzle-lb-row.done{ background:rgba(76,195,138,.18); }
+.puzzle-lb-row.done .puzzle-lb-pct{ color:var(--ok); }
+.puzzle-lb-pct{ font-family:'Space Mono',monospace; color:var(--muted); }
+
+.puzzle-board{ width:100%; height:auto; touch-action:none; display:block; border-radius:12px; background:var(--bg2); }
+.puzzle-slot{ fill:none; stroke:rgba(255,255,255,.18); stroke-width:1.5; stroke-dasharray:3 4; pointer-events:none; }
+.puzzle-ghost{ opacity:.14; pointer-events:none; }
+.puzzle-piece{ cursor:grab; }
+.puzzle-piece.puzzle-settled{ cursor:default; }
+.puzzle-piece.puzzle-dragging{ cursor:grabbing; }
+.puzzle-outline{ fill:none; stroke:rgba(0,0,0,.4); stroke-width:1.4; pointer-events:none; }
+
+/* Surbrillance aux joints à la pose correcte (demande de Guillaume) : un
+   contour lumineux qui pulse puis s'estompe le long des pattes de la
+   pièce, une seule fois par pose. */
+.puzzle-snap-glow{ fill:none; stroke:var(--acc-puzzle); stroke-width:4; pointer-events:none; animation:puzzleSnapGlow .75s ease-out forwards; }
+@keyframes puzzleSnapGlow{
+  0%{ opacity:.95; stroke-width:6; filter:drop-shadow(0 0 6px var(--acc-puzzle)); }
+  100%{ opacity:0; stroke-width:2; filter:drop-shadow(0 0 0 transparent); }
+}
+
+.puzzle-standings{ list-style:none; margin:14px auto; padding:0; max-width:360px; text-align:left; }
+.puzzle-standings li{ display:flex; align-items:center; justify-content:space-between; gap:10px;
+  padding:7px 12px; border-radius:10px; font-weight:700; font-size:13px; color:var(--ink); }
+.puzzle-standings li.win{ background:rgba(123,110,246,.16); box-shadow:0 0 0 1px var(--acc-puzzle) inset; }
+.puzzle-standings-time{ font-family:'Space Mono',monospace; color:var(--muted); font-size:12px; }
+
+@media (prefers-reduced-motion: reduce){
+  .puzzle-snap-glow{ animation:none; opacity:0; }
+}
+@media (max-width: 620px){
+  .puzzle-thumb{ width:100px; }
 }
