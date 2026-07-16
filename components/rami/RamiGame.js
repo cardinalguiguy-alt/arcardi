@@ -34,7 +34,7 @@ const PIP_LAYOUTS = {
   7: [[30, 18], [70, 18], [50, 33], [30, 52], [70, 52], [30, 84, 1], [70, 84, 1]],
   8: [[30, 16], [70, 16], [50, 31], [30, 50], [70, 50], [50, 69, 1], [30, 84, 1], [70, 84, 1]],
   9: [[30, 16], [70, 16], [30, 37], [70, 37], [50, 50], [30, 63, 1], [70, 63, 1], [30, 84, 1], [70, 84, 1]],
-  10: [[32, 20], [68, 20], [50, 31], [32, 44], [68, 44], [32, 62, 1], [68, 62, 1], [50, 73, 1], [32, 84, 1], [68, 84, 1]],
+  10: [[30, 15], [70, 15], [50, 26], [30, 40], [70, 40], [30, 60, 1], [70, 60, 1], [50, 74, 1], [30, 85, 1], [70, 85, 1]],
 };
 const FIGURE_GLYPHS = { J: "♞", Q: "♛", K: "♚" };
 
@@ -61,9 +61,9 @@ function RCard({ card, faceDown, size = "sm", onClick, sel, dim, style, assist }
   }
   const suit = SUITS.find(s => s.id === card.suit);
   const pips = PIP_LAYOUTS[card.rank];
-  // Cartes hautes (7/8/9) : boîte de pips élargie + glyphes réduits (".hi")
+  // Cartes hautes (7/8/9/10) : boîte de pips élargie + glyphes réduits (".hi")
   // pour aérer les symboles qui se serraient au centre (demande 2026-07).
-  const densePips = pips && (card.rank === "7" || card.rank === "8" || card.rank === "9");
+  const densePips = pips && (card.rank === "7" || card.rank === "8" || card.rank === "9" || card.rank === "10");
   return (
     <div className={cls + (suit.red ? " red" : "")} onClick={onClick} style={style}>
       <span className="rami-card-corner"><b>{card.rank}</b><i>{suit.sym}</i></span>

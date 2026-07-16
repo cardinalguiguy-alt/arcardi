@@ -1336,6 +1336,17 @@ body.stage-focus .ludo-panel .ludo-board-frame{ width:min(740px, 94vw, 68vh); }
   0%,100%{ opacity:.95; transform:translateX(-50%) scale(1); }
   50%{ opacity:.35; transform:translateX(-50%) scale(1.16); }
 }
+/* Pion ADVERSE désignable (renvoi ciblé / échange, 2026-07) : anneau ROUGE
+   au sol qui pulse + curseur cible, pour distinguer nettement une cible d'un
+   pion jouable (halo blanc). */
+.ludo-token.targetable{ cursor:crosshair; }
+.ludo-token.targetable::after{
+  content:""; position:absolute; left:50%; bottom:0; width:96%; height:30%;
+  transform:translateX(-50%); border-radius:50%; pointer-events:none;
+  border:2.5px solid rgba(255,80,80,.95);
+  box-shadow:0 0 12px rgba(255,60,60,.6);
+  animation:ludoPulse .85s ease-in-out infinite;
+}
 
 /* ===== DEUX DÉS (2026-07) : plateau de dés ancré près du camp actif =====
    Deux dés à pips COLORÉS à la couleur du camp qui les lance, qui roulent,
@@ -1709,6 +1720,19 @@ button.ludo-roman.selected{
 @media (prefers-reduced-motion: reduce){
   .ludo-capture-overlay{ animation:none; opacity:1; }
 }
+
+/* Bandeau de consigne pour la sélection de cible (renvoi ciblé / échange,
+   2026-07) : NON bloquant (pointer-events:none) pour laisser cliquer les
+   pions du plateau ; posé en haut, les pions désignables clignotent en rouge. */
+.ludo-target-banner{
+  position:absolute; top:8px; left:50%; transform:translateX(-50%); z-index:22;
+  display:flex; align-items:center; gap:8px; pointer-events:none; max-width:90%;
+  padding:8px 14px; border-radius:99px; text-align:center;
+  background:rgba(28,24,36,.92); border:2px solid rgba(255,80,80,.6);
+  box-shadow:0 8px 22px rgba(0,0,0,.45), 0 0 18px rgba(255,60,60,.25);
+  font-size:12.5px; font-weight:800; color:var(--ink);
+}
+.ludo-target-badge{ font-size:16px; }
 
 /* ===== Zone d'ARRIVÉE centrale élargie (zip 83) =====
    ~2,1 cases de côté, centrée sur la case centrale : quadrants aux 4
@@ -5660,7 +5684,10 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
   background:linear-gradient(168deg, #fffdf8, #f4ecdd);
   border:2px solid #2a2118; box-shadow:0 3px 0 rgba(0,0,0,.25), 0 6px 12px rgba(0,0,0,.22);
   color:#232323; user-select:none;
-  transition:transform .14s ease, box-shadow .14s ease, outline-color .14s;
+  /* Interaction plus fluide (2026-07) : courbe douce + will-change pour un
+     survol/sélection sans à-coups, y compris en main chargée. */
+  transition:transform .2s cubic-bezier(.22,.68,.24,1), box-shadow .2s ease, outline-color .15s;
+  will-change:transform;
 }
 .rami-card.red{ color:#d23b2e; }
 .rami-card-corner{
@@ -5697,12 +5724,27 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
 /* Interaction : la carte SE LÈVE au survol (référence capture 2), davantage
    quand elle est sélectionnée. */
 .rami-card.clickable{ cursor:pointer; }
-.rami-card.clickable:hover{ transform:translateY(-12px); box-shadow:0 8px 0 rgba(0,0,0,.18), 0 14px 18px rgba(0,0,0,.28); z-index:3; }
-.rami-card.sel{
-  transform:translateY(-18px); outline:3px solid var(--p2); outline-offset:1px;
-  box-shadow:0 10px 0 rgba(0,0,0,.16), 0 16px 20px rgba(0,0,0,.3); z-index:4;
+.rami-card.clickable:hover{
+  transform:translateY(-16px) scale(1.05);
+  box-shadow:0 10px 0 rgba(0,0,0,.16), 0 16px 22px rgba(0,0,0,.3); z-index:6;
 }
-.rami-card.sel:hover{ transform:translateY(-18px); }
+/* Sélection (2026-07) : nettement plus lisible — la carte se détache du reste
+   de la main (lift + léger zoom), double liseré jaune + halo, et une pastille
+   ✓ au coin pour lever toute ambiguïté même en éventail serré. */
+.rami-card.sel{
+  transform:translateY(-20px) scale(1.05);
+  outline:3px solid var(--p2); outline-offset:2px;
+  box-shadow:0 0 0 1.5px rgba(43,27,18,.9), 0 12px 0 rgba(0,0,0,.14),
+    0 18px 22px rgba(0,0,0,.32), 0 0 16px rgba(255,209,102,.55);
+  z-index:7;
+}
+.rami-card.sel::after{
+  content:"✓"; position:absolute; top:-9px; right:-7px;
+  width:18px; height:18px; border-radius:50%; background:var(--p2); color:#2b1b12;
+  font-size:12px; font-weight:900; display:grid; place-items:center;
+  box-shadow:0 2px 4px rgba(0,0,0,.4); z-index:8;
+}
+.rami-card.sel:hover{ transform:translateY(-24px) scale(1.06); }
 .rami-card.dim{ opacity:.72; }
 .rami-card.dim:hover{ transform:none; }
 /* Assistance (zip 125) : liseré coloré par combinaison détectée. */

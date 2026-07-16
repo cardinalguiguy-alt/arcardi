@@ -68,6 +68,15 @@ const MYSTERY_KINDS = [
   { id: "freeToken",     weight: 3,  tier: "extreme", icon: "🔓", pop: "🔓",    labelKey: "ludoMysteryFreeToken",     swatch: "#4ECDC4" },
   { id: "sendHome",      weight: 3,  tier: "extreme", icon: "💀", pop: "💀",    labelKey: "ludoMysterySendHome",      swatch: "var(--acc-c4)" },
   { id: "doubleSetback", weight: 3,  tier: "extreme", icon: "⚡", pop: "⚡ -8",  labelKey: "ludoMysteryDoubleSetback", swatch: "var(--acc-ludo)" },
+  // Variété ajoutée (2026-07) : deux effets courants basés sur la valeur des
+  // DEUX dés du tirage (avance ou recul = a+b), et deux effets rares CIBLÉS
+  // qui demandent au joueur de désigner un pion adverse (voir pendingTarget /
+  // hostHandleTarget). `targeted:true` = l'effet met le tour en pause pour la
+  // sélection au lieu de s'appliquer tout de suite.
+  { id: "doubleMove",    weight: 10, tier: "common",  icon: "⏩", pop: "⏩ +", labelKey: "ludoMysteryDoubleMove",    swatch: "#6FD3C9" },
+  { id: "recoil",        weight: 10, tier: "common",  icon: "🪃", pop: "🪃 -", labelKey: "ludoMysteryRecoil",        swatch: "#FF7A5C" },
+  { id: "sendEnemy",     weight: 3,  tier: "extreme", icon: "🎯", pop: "🎯",   labelKey: "ludoMysterySendEnemy",     swatch: "var(--acc-c4)", targeted: true },
+  { id: "swapPlaces",    weight: 3,  tier: "extreme", icon: "🔄", pop: "🔄",   labelKey: "ludoMysterySwapPlaces",    swatch: "var(--p5)",     targeted: true },
 ];
 const MYSTERY_KIND_TOTAL_WEIGHT = MYSTERY_KINDS.reduce((sum, k) => sum + k.weight, 0);
 function pickMysteryKind() {
@@ -238,7 +247,7 @@ function applySetback(tokens, color, tokenIdx, amount = 4) {
 // copie des pions. Retourne { tokens, captured, extraRoll, effectsPatch,
 // info } : `info.won` si l'effet fait terminer le pion (boost/superBoost
 // jusqu'à 61), `info.freedIdx` si un AUTRE pion est concerné (freeToken).
-function applyMysteryKind(tokens, color, tokenIdx, kind, nextColor) {
+function applyMysteryKind(tokens, color, tokenIdx, kind, nextColor, dice) {
   let next = tokens, captured = [], extraRoll = false, effectsPatch = null;
   const info = {};
   switch (kind) {
@@ -283,6 +292,27 @@ function applyMysteryKind(tokens, color, tokenIdx, kind, nextColor) {
       for (const c of COLOR_ORDER) t2[c] = next[c].slice();
       t2[color][tokenIdx] = 0;
       next = t2;
+      break;
+    }
+    // Double avance : le pion progresse de la somme des DEUX dés du tirage
+    // (a + b ; b peut être absent sur un tour à un dé). Peut capturer/gagner
+    // comme un coup normal (via applyMove).
+    case "doubleMove": {
+      const amt = (dice && dice.a ? dice.a : 0) + (dice && dice.b ? dice.b : 0);
+      const steps = next[color][tokenIdx];
+      const gain = Math.min(amt, 61 - steps);
+      if (gain > 0) {
+        const r = applyMove(next, color, tokenIdx, gain);
+        next = r.tokens; captured = r.captured; info.won = r.won;
+      }
+      break;
+    }
+    // Recul : le pion recule de la somme des deux dés (plancher case 1),
+    // capture à l'arrivée comme un setback classique.
+    case "recoil": {
+      const amt = (dice && dice.a ? dice.a : 0) + (dice && dice.b ? dice.b : 0);
+      const r = applySetback(next, color, tokenIdx, amt);
+      next = r.tokens; captured = r.captured;
       break;
     }
     case "freeToken": {
@@ -471,7 +501,7 @@ function MysteryWheel({ pending, isOwner, onSpin, t }) {
             <span className="ludo-wheel-result-icon">{resultInfo.icon}</span>
             <span className="ludo-wheel-result-text">{t(resultInfo.labelKey)}</span>
             <span className="ludo-wheel-result-timing">
-              {resultInfo.deferred ? t("ludoMysteryTimingNext") : t("ludoMysteryTimingNow")}
+              {resultInfo.targeted ? t("ludoMysteryTimingTarget") : resultInfo.deferred ? t("ludoMysteryTimingNext") : t("ludoMysteryTimingNow")}
             </span>
           </div>
         )}
@@ -507,6 +537,20 @@ function CaptureChoice({ pending, isOwner, onDecide, t, playerNameFor }) {
           <p className="muted">{t("ludoSpareWait")}</p>
         )}
       </div>
+    </div>
+  );
+}
+
+// ===== Sélection de cible (renvoi ciblé / échange) : bandeau NON bloquant
+// (contrairement à la décision "Épargner ?", le joueur doit pouvoir cliquer
+// les pions du plateau, donc pas d'overlay opaque) : simple consigne posée
+// en haut du plateau, les pions désignables clignotent d'eux-mêmes. =====
+function TargetPrompt({ pending, isOwner, t }) {
+  const swap = pending.kind === "swapPlaces";
+  return (
+    <div className="ludo-target-banner">
+      <span className="ludo-target-badge">{swap ? "🔄" : "🎯"}</span>
+      <span>{isOwner ? t(swap ? "ludoSwapDesc" : "ludoTargetDesc") : t("ludoTargetWait")}</span>
     </div>
   );
 }
@@ -558,13 +602,19 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
   // hostHandleSpare/requestSpare). Bloque tout autre coup tant qu'elle est
   // active, comme pendingMystery.
   const [pendingCapture, setPendingCapture] = useState(null);
+  // Sélection de cible EN ATTENTE (2026-07) : { key, color, tokenIdx, kind,
+  // dice } — non-null quand la roue tire un effet CIBLÉ (sendEnemy /
+  // swapPlaces) : le tour est mis en pause jusqu'à ce que le propriétaire
+  // désigne un pion adverse (voir requestTarget / hostHandleTarget), même
+  // logique de pause/arbitrage que pendingCapture.
+  const [pendingTarget, setPendingTarget] = useState(null);
   // Aperçu au survol (2026-07, confort de jeu) : { tokenIdx, cell:[r,c],
   // captureCount } — purement LOCAL (jamais diffusé), recalculé à chaque
   // survol d'un pion jouable en fonction du dé actuellement sélectionné.
   const [hoverPreview, setHoverPreview] = useState(null);
 
   const channelRef = useRef(null);
-  const stateRef = useRef({ tokens, order, turnIdx, dice, movablePlan, effects, winner, pendingMystery: null, pendingCapture: null });
+  const stateRef = useRef({ tokens, order, turnIdx, dice, movablePlan, effects, winner, pendingMystery: null, pendingCapture: null, pendingTarget: null });
   const savedResultRef = useRef(false);
   const autoStartedRef = useRef(false);
   const restoredRef = useRef(false);
@@ -603,8 +653,8 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
   }
 
   useEffect(() => {
-    stateRef.current = { tokens, order, turnIdx, dice, movablePlan, effects, winner, pendingMystery, pendingCapture };
-  }, [tokens, order, turnIdx, dice, movablePlan, effects, winner, pendingMystery, pendingCapture]);
+    stateRef.current = { tokens, order, turnIdx, dice, movablePlan, effects, winner, pendingMystery, pendingCapture, pendingTarget };
+  }, [tokens, order, turnIdx, dice, movablePlan, effects, winner, pendingMystery, pendingCapture, pendingTarget]);
   useEffect(() => { colorRef.current = colorOfPlayer; }, [colorOfPlayer]);
 
   // Horloge d'affichage du compte à rebours de coup — correctif "lag"
@@ -690,6 +740,7 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
     setWinner(payload.winner);
     setPendingMystery(payload.pendingMystery || null);
     setPendingCapture(payload.pendingCapture || null);
+    setPendingTarget(payload.pendingTarget || null);
     // Zone d'arrivée (zip 83) : si ce coup vient de faire ENTRER un pion
     // au centre (61), déclenche les rayons tournants pendant 5 secondes.
     if (payload.lastMoved) {
@@ -716,6 +767,7 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
       setEffects({});
       setPendingMystery(null);
       setPendingCapture(null);
+      setPendingTarget(null);
       // Minuteur dès le DÉBUT du tour (2026-07, demande explicite) : calculé
       // localement par CHAQUE client (un écart de quelques dizaines de ms
       // entre eux est sans conséquence sur une fenêtre de 20 s) — seul
@@ -742,7 +794,7 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
           v2: true, phase: "playing", order: payload.order, colorOfPlayer: payload.colorOfPlayer,
           tokens: emptyTokens(), turnIdx: 0, dice: null, movablePlan: null, effects: {},
           moveDeadline: initialDeadline, lastMoved: null, lastEvent: null, winner: null, pendingMystery: null,
-          pendingCapture: null,
+          pendingCapture: null, pendingTarget: null,
         });
         armMoveTimer(initialDeadline);
       }
@@ -768,6 +820,11 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
       hostHandleSpare(payload);
     });
 
+    ch.on("broadcast", { event: "target_attempt" }, ({ payload }) => {
+      if (!isHost) return;
+      hostHandleTarget(payload);
+    });
+
     ch.on("broadcast", { event: "state" }, ({ payload }) => {
       applyBroadcastState(payload);
       if (isHost) {
@@ -779,6 +836,7 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
           lastMoved: payload.lastMoved, lastEvent: payload.lastEvent, winner: payload.winner,
           pendingMystery: payload.pendingMystery || null,
           pendingCapture: payload.pendingCapture || null,
+          pendingTarget: payload.pendingTarget || null,
         });
       }
     });
@@ -804,6 +862,7 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
             setWinner(saved.winner);
             setPendingMystery(saved.pendingMystery || null);
             setPendingCapture(saved.pendingCapture || null);
+            setPendingTarget(saved.pendingTarget || null);
             setPhase("playing");
             autoStartedRef.current = true;
             // Reprise HÔTE : le minuteur tourne désormais en PERMANENCE tant
@@ -818,6 +877,7 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
                 moveDeadline: deadline, lastMoved: saved.lastMoved, lastEvent: saved.lastEvent,
                 winner: saved.winner, pendingMystery: saved.pendingMystery || null,
                 pendingCapture: saved.pendingCapture || null,
+                pendingTarget: saved.pendingTarget || null,
               });
               if (saved.pendingMystery && saved.pendingMystery.spin) {
                 // Reprise EN PLEIN tirage de la roue (fenêtre de quelques
@@ -858,6 +918,7 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
       winner: "winner" in patch ? patch.winner : s.winner,
       pendingMystery: "pendingMystery" in patch ? patch.pendingMystery : null,
       pendingCapture: "pendingCapture" in patch ? patch.pendingCapture : null,
+      pendingTarget: "pendingTarget" in patch ? patch.pendingTarget : null,
     };
     channelRef.current.send({ type: "broadcast", event: "state", payload });
   }
@@ -890,6 +951,21 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
       if (s.pendingCapture) {
         const ownerId = Object.keys(colorRef.current).find(pid => colorRef.current[pid] === s.pendingCapture.color);
         hostHandleSpare({ by: ownerId, spare: false });
+        return;
+      }
+      // Sélection de cible non faite à temps : filet de sécurité, on désigne
+      // une cible valide au hasard à la place du joueur (ou l'effet fait
+      // pschitt s'il n'y a plus aucune cible sur le tronçon partagé).
+      if (s.pendingTarget) {
+        const pt = s.pendingTarget;
+        const ownerId = Object.keys(colorRef.current).find(pid => colorRef.current[pid] === pt.color);
+        const cands = [];
+        for (const oc of s.order) {
+          if (oc === pt.color) continue;
+          s.tokens[oc].forEach((st, i) => { if (st >= 1 && st <= 55) cands.push([oc, i]); });
+        }
+        const pick = cands.length ? cands[Math.floor(Math.random() * cands.length)] : [null, -1];
+        hostHandleTarget({ by: ownerId, targetColor: pick[0], targetIdx: pick[1] });
         return;
       }
       // Sinon (en attente d'un lancer de dés OU d'un déplacement) : tour
@@ -1189,6 +1265,52 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
     });
   }
 
+  // ----- Arbitrage de la sélection de cible (renvoi ciblé / échange) : seul
+  // l'hôte y répond -----
+  function hostHandleTarget({ by, targetColor, targetIdx }) {
+    const s = stateRef.current;
+    if (s.winner || !s.pendingTarget) return;
+    const pt = s.pendingTarget;
+    const ownerId = Object.keys(colorRef.current).find(pid => colorRef.current[pid] === pt.color);
+    if (by !== ownerId) return;
+    clearTimeout(moveTimerRef.current);
+    // Cible valide = pion adverse (couleur différente) sur le tronçon partagé
+    // (1..55, la zone où les captures ont lieu). Sinon l'effet fait pschitt.
+    const t = s.tokens;
+    const valid = targetColor && targetColor !== pt.color
+      && t[targetColor] && t[targetColor][targetIdx] >= 1 && t[targetColor][targetIdx] <= 55;
+    const next = {};
+    for (const c of COLOR_ORDER) next[c] = t[c].slice();
+    let captured = [];
+    if (valid) {
+      if (pt.kind === "sendEnemy") {
+        next[targetColor][targetIdx] = 0;      // renvoyé à l'écurie
+        captured = [[targetColor, targetIdx]];
+      } else if (pt.kind === "swapPlaces") {
+        // Échange des PROGRESSIONS (chaque valeur reste lue dans le repère de
+        // sa propre couleur, donc toujours légale) — pas de capture annexe.
+        const mine = next[pt.color][pt.tokenIdx];
+        next[pt.color][pt.tokenIdx] = next[targetColor][targetIdx];
+        next[targetColor][targetIdx] = mine;
+      }
+    }
+    const movedInfo = { color: pt.color, tokenIdx: pt.tokenIdx };
+    const ev = "mystery:" + pt.kind + ":" + pt.color + (captured.length ? ":captured" : ":none");
+    // Reprend exactement le fil de fin de tour (dé restant / fin de tour).
+    const diceAfter = pt.dice;
+    const planAfter = buildPlan(next[pt.color], diceAfter);
+    if (planHasMove(planAfter)) {
+      const deadline = Date.now() + MOVE_MS;
+      broadcastState({
+        tokens: next, dice: diceAfter, movablePlan: planAfter, effects: s.effects,
+        moveDeadline: deadline, lastMoved: movedInfo, lastEvent: ev, pendingTarget: null,
+      });
+      armMoveTimer(deadline);
+      return;
+    }
+    finishDiceTurn({ color: pt.color, tokens: next, effects: s.effects, diceAfter, extraReroll: false, lastMoved: movedInfo, baseLastEvent: ev });
+  }
+
   // ----- Arbitrage du lancer de la roue de la fortune : seul l'hôte y répond -----
   function hostHandleSpin({ by }) {
     const s = stateRef.current;
@@ -1220,8 +1342,45 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
     const kind = pending.spin && pending.spin.kind;
     const colorIdx = s.order.indexOf(color);
     const nextColor = s.order[(colorIdx + 1) % s.order.length];
+
+    // Effet CIBLÉ (renvoi ciblé / échange) : au lieu de s'appliquer tout de
+    // suite, on met le tour en PAUSE et on demande au joueur de désigner un
+    // pion adverse (voir requestTarget/hostHandleTarget). S'il n'y a aucune
+    // cible sur le tronçon partagé (cases 1..55), l'effet fait pschitt et on
+    // enchaîne le tour normalement.
+    const kindInfo = MYSTERY_KINDS.find(k => k.id === kind);
+    if (kindInfo && kindInfo.targeted) {
+      const hasTarget = s.order.some(oc => oc !== color && s.tokens[oc].some(st => st >= 1 && st <= 55));
+      const movedInfo = { color, tokenIdx };
+      if (hasTarget) {
+        const pendingT = { key: Date.now(), color, tokenIdx, kind, dice: diceAfter };
+        const deadline = Date.now() + MOVE_MS;
+        broadcastState({
+          tokens: s.tokens, dice: diceAfter, movablePlan: { d0: [], d1: [], sum: [] }, effects: s.effects,
+          moveDeadline: deadline, lastMoved: movedInfo, lastEvent: "mystery:" + kind + ":" + color + ":await",
+          pendingMystery: null, pendingTarget: pendingT,
+        });
+        armMoveTimer(deadline);
+        return;
+      }
+      // aucune cible : effet nul, on reprend le fil du tour
+      const ev = "mystery:" + kind + ":" + color + ":none";
+      const planNone = buildPlan(s.tokens[color], diceAfter);
+      if (planHasMove(planNone)) {
+        const deadline = Date.now() + MOVE_MS;
+        broadcastState({
+          tokens: s.tokens, dice: diceAfter, movablePlan: planNone, effects: s.effects,
+          moveDeadline: deadline, lastMoved: movedInfo, lastEvent: ev, pendingMystery: null,
+        });
+        armMoveTimer(deadline);
+        return;
+      }
+      finishDiceTurn({ color, tokens: s.tokens, effects: s.effects, diceAfter, extraReroll: false, lastMoved: movedInfo, baseLastEvent: ev });
+      return;
+    }
+
     const { tokens: nextTokens, captured, extraRoll, effectsPatch, info } =
-      applyMysteryKind(s.tokens, color, tokenIdx, kind, nextColor);
+      applyMysteryKind(s.tokens, color, tokenIdx, kind, nextColor, diceAfter);
     let effects = { ...(s.effects || {}) };
     if (effectsPatch) {
       effects[effectsPatch.color] = { ...(effects[effectsPatch.color] || {}), ...effectsPatch.patch };
@@ -1333,7 +1492,7 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
   }, [winner]);
 
   function rollDice() {
-    if (!isMyTurn || dice !== null || pendingMystery || pendingCapture) return;
+    if (!isMyTurn || dice !== null || pendingMystery || pendingCapture || pendingTarget) return;
     if (actionLockRef.current) return; // double-clic/Espace trop rapide : ignoré (voir actionLockRef)
     lockAction();
     channelRef.current?.send({ type: "broadcast", event: "roll_attempt", payload: { by: me.id } });
@@ -1363,7 +1522,7 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
   // convient, sinon la première option valide pour CE pion (déterministe,
   // ne change jamais un coup ambigu déjà couvert par la présélection).
   function pickToken(idx) {
-    if (!isMyTurn || dice === null || pendingMystery || pendingCapture) return;
+    if (!isMyTurn || dice === null || pendingMystery || pendingCapture || pendingTarget) return;
     if (rollAnim && rollAnim.phase === "rolling") return; // laisse les dés s'immobiliser
     if (actionLockRef.current) return; // double-clic trop rapide sur un pion : ignoré
     const opts = dieOptionsFor(idx);
@@ -1391,6 +1550,15 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
     lockAction();
     channelRef.current?.send({ type: "broadcast", event: "spare_attempt", payload: { by: me.id, spare } });
   }
+  // Sélection de cible (renvoi ciblé / échange) : seul le propriétaire de
+  // l'effet peut désigner un pion adverse (clic sur le pion, voir le rendu).
+  function requestTarget(targetColor, targetIdx) {
+    if (!pendingTarget) return;
+    if (colorOfPlayer[me.id] !== pendingTarget.color) return;
+    if (actionLockRef.current) return;
+    lockAction();
+    channelRef.current?.send({ type: "broadcast", event: "target_attempt", payload: { by: me.id, targetColor, targetIdx } });
+  }
 
   const myColor = colorOfPlayer[me.id];
   const isPlayer = !!myColor;
@@ -1405,7 +1573,7 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
   // — corrige le cas où un pion (ex. sortie d'enclos, uniquement via un 6)
   // n'était affiché comme jouable QUE si le joueur avait explicitement
   // sélectionné le bon dé au préalable.
-  const canPlayNow = isMyTurn && dice && movablePlan && settled && !pendingMystery && !pendingCapture;
+  const canPlayNow = isMyTurn && dice && movablePlan && settled && !pendingMystery && !pendingCapture && !pendingTarget;
   const movableNow = canPlayNow
     ? [...new Set([...(movablePlan.d0 || []), ...(movablePlan.d1 || []), ...(movablePlan.sum || [])])]
     : [];
@@ -1443,7 +1611,7 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
       if (e.code !== "Space") return;
       const tag = (document.activeElement?.tagName || "").toLowerCase();
       if (tag === "input" || tag === "textarea" || document.activeElement?.isContentEditable) return;
-      if (pendingCapture) return; // décision à la souris (overlay Épargner ?)
+      if (pendingCapture || pendingTarget) return; // décision à la souris (overlay Épargner ? / cible)
       if (pendingMystery && !pendingMystery.spin && colorOfPlayer[me.id] === pendingMystery.color) {
         e.preventDefault();
         requestSpin();
@@ -1487,6 +1655,11 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
         ? t("ludoSpareTitle")
         : `${t("ludoWaitingFor")} ${playerNameFor(pendingCapture.color)} (⚔️)…`;
     }
+    else if (pendingTarget) {
+      statusText = myColor === pendingTarget.color
+        ? t(pendingTarget.kind === "swapPlaces" ? "ludoSwapPrompt" : "ludoTargetPrompt")
+        : `${t("ludoWaitingFor")} ${playerNameFor(pendingTarget.color)} (🎯)…`;
+    }
     else if (lastEvent === "threeSixes") statusText = t("ludoThreeSixes");
     else if (lastEvent === "noMove") statusText = t("ludoNoMove");
     else if (lastEvent === "timeout") statusText = t("ludoTimeout");
@@ -1515,8 +1688,8 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
     const trayPos = currentColor ? DICE_TRAY_POS[currentColor] : null;
     const trayColorVar = currentColor ? COLORS[currentColor].css : "--p2";
     const dieValues = dice ? [dice.a, dice.b] : [];
-    const showTray = phase === "playing" && !winner && dice !== null && !pendingMystery && !pendingCapture;
-    const sumAvailable = !!(isMyTurn && settled && movablePlan && movablePlan.sum.length > 0 && dice && dice.b != null && !dice.used[0] && !dice.used[1] && !pendingMystery && !pendingCapture);
+    const showTray = phase === "playing" && !winner && dice !== null && !pendingMystery && !pendingCapture && !pendingTarget;
+    const sumAvailable = !!(isMyTurn && settled && movablePlan && movablePlan.sum.length > 0 && dice && dice.b != null && !dice.used[0] && !dice.used[1] && !pendingMystery && !pendingCapture && !pendingTarget);
 
     content = (
       <div>
@@ -1542,7 +1715,7 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
             {/* Le minuteur tourne dès le DÉBUT du tour (2026-07) : la
                 pastille est donc visible même AVANT le premier lancer
                 (dice === null), pas seulement une fois les dés posés. */}
-            {moveRemaining != null && settled && !pendingMystery && !pendingCapture && (
+            {moveRemaining != null && settled && !pendingMystery && !pendingCapture && !pendingTarget && (
               <span className={"turn-timer-chip" + (moveRemaining <= 5 ? " hot" : "")} style={{ marginLeft: 8 }}>⏱ {moveRemaining}s</span>
             )}
           </p>
@@ -1699,6 +1872,12 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
             />
           )}
 
+          {/* Sélection de cible (renvoi ciblé / échange) : consigne non
+              bloquante, les pions adverses désignables clignotent. */}
+          {pendingTarget && (
+            <TargetPrompt pending={pendingTarget} isOwner={myColor === pendingTarget.color} t={t} />
+          )}
+
           {(() => {
             // Regroupe les pions qui partagent EXACTEMENT la même case (hors
             // enclos, où chaque pion a déjà son propre emplacement dédié).
@@ -1751,6 +1930,11 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
               const [r, c] = cell;
               const isMine = color === myColor;
               const canPick = isMyTurn && isMine && movableNow.includes(idx);
+              // Cible désignable (renvoi ciblé / échange) : pion ADVERSE sur le
+              // tronçon partagé (1..55), cliquable seulement par le propriétaire
+              // de l'effet en attente.
+              const isTargetable = !!pendingTarget && myColor === pendingTarget.color
+                && color !== myColor && steps >= 1 && steps <= 55;
               const isLast = !!(lastMoved && lastMoved.color === color && lastMoved.tokenIdx === idx);
 
               let left = 0, top = 0, size = 1;
@@ -1765,8 +1949,8 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
               return (
                 <div
                   key={color + "-" + idx}
-                  className={"ludo-token " + color + (canPick ? " mine-movable" : "") + (isLast ? " last" : "")}
-                  onClick={() => canPick && pickToken(idx)}
+                  className={"ludo-token " + color + (canPick ? " mine-movable" : "") + (isTargetable ? " targetable" : "") + (isLast ? " last" : "")}
+                  onClick={() => { if (isTargetable) requestTarget(color, idx); else if (canPick) pickToken(idx); }}
                   onMouseEnter={() => canPick && setHoverPreview(previewFor(idx))}
                   onMouseLeave={() => setHoverPreview(prev => (prev && prev.tokenIdx === idx ? null : prev))}
                   style={{
@@ -1774,7 +1958,7 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
                     left: ((c + left) / 15) * 100 + "%",
                     width: (size / 15) * 100 + "%",
                     height: (size / 15) * 100 + "%",
-                    zIndex: canPick ? 5 : 1,
+                    zIndex: canPick || isTargetable ? 5 : 1,
                   }}
                 >
                   <span className="ludo-token-pin" />
