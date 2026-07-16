@@ -5637,72 +5637,184 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
 .game-countdown.chess .game-countdown-digit{ color:var(--acc-chess); }
 
 /* ==========================================================================
-   RAMI (jeu de cartes n°18) — réutilise le rendu de carte du Président
-   (.pres-card) ; ci-dessous : variante joker, bandeau des joueurs, tapis des
-   combinaisons, pioche/défausse, main et zone de préparation.
+   RAMI (jeu de cartes n°18) — refonte visuelle 2026-07 d'après les captures
+   de référence fournies par Guillaume : TABLE ROUGE feutrée, cartes dédiées
+   `rami-card` (gros indices de coin + vrais pips au centre), main en
+   éventail qui SE LÈVE AU HOVER, pioche/défausse étiquetées à gauche,
+   bouton principal jaune, tris en petits boutons carrés empilés à droite.
    ========================================================================== */
-.rami-panel h1{ color:var(--acc-rami); }
-.pres-card.joker{
-  background:linear-gradient(160deg, #fff7f2, #ffe3d3);
-  color:#C24B2E; border-color:rgba(194,75,46,.4);
-}
-.pres-card.joker .pres-main{ font-size:24px; }
-
-.rami-seats{ display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin-bottom:10px; }
-.rami-seat{
-  display:flex; align-items:center; gap:6px; padding:6px 10px; border-radius:99px;
-  background:rgba(255,255,255,.04); border:2px solid var(--line); font-size:12.5px; font-weight:700;
-}
-.rami-seat.active{ border-color:var(--acc-rami); background:rgba(224,122,95,.14); box-shadow:0 0 10px rgba(224,122,95,.25); }
-.rami-seat.me{ outline:2px dashed rgba(182,240,76,.5); outline-offset:2px; }
-.rami-seat .av{ font-size:16px; }
-.rami-seat .nm{ max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.rami-seat .ct{ font-family:'Space Mono'; color:var(--muted); }
-.rami-seat .sc{ font-family:'Space Mono'; color:var(--p3); }
-.rami-seat .op{ color:var(--acc-rami); }
-
-.rami-table{
-  display:flex; flex-wrap:wrap; gap:10px; justify-content:center; align-items:flex-start;
-  min-height:120px; padding:14px; border-radius:18px; margin:6px 0;
+.rami-panel{
   background:
-    radial-gradient(120% 130% at 50% -10%, rgba(224,122,95,.16), transparent 60%),
-    linear-gradient(180deg, rgba(0,0,0,.2), rgba(0,0,0,.32));
-  border:2px solid rgba(224,122,95,.3);
-  box-shadow:inset 0 2px 14px rgba(0,0,0,.35);
+    radial-gradient(120% 90% at 50% 40%, rgba(255,255,255,.05), transparent 55%),
+    repeating-conic-gradient(from 0deg at 50% 42%, rgba(255,255,255,.022) 0deg 9deg, transparent 9deg 18deg),
+    linear-gradient(180deg, #b23f36, #8e2d27 70%, #7c2620);
+  border-color:rgba(0,0,0,.35);
+}
+.rami-panel h1{ color:#ffe9d8; text-shadow:0 2px 0 rgba(0,0,0,.25); }
+.rami-panel .muted{ color:#f3d9cd; opacity:.85; }
+.rami-panel .hint{ color:#ffe3cf; }
+
+/* ----- La carte de Rami (classes dédiées, plus aucun lien avec .pres-card) */
+.rami-card{
+  position:relative; width:58px; height:82px; border-radius:9px; flex:0 0 auto;
+  background:linear-gradient(168deg, #fffdf8, #f4ecdd);
+  border:2px solid #2a2118; box-shadow:0 3px 0 rgba(0,0,0,.25), 0 6px 12px rgba(0,0,0,.22);
+  color:#232323; user-select:none;
+  transition:transform .14s ease, box-shadow .14s ease, outline-color .14s;
+}
+.rami-card.red{ color:#d23b2e; }
+.rami-card-corner{
+  position:absolute; top:3px; left:5px; display:flex; flex-direction:column; align-items:center;
+  line-height:1;
+}
+.rami-card-corner b{ font-family:'Bungee'; font-weight:400; font-size:15px; letter-spacing:-.5px; }
+.rami-card-corner i{ font-style:normal; font-size:11px; margin-top:1px; }
+.rami-card-corner.flip{ top:auto; left:auto; bottom:3px; right:5px; transform:rotate(180deg); }
+.rami-card-pips{ position:absolute; inset:14px 12px; }
+.rami-card-pips i{ position:absolute; font-style:normal; font-size:12px; }
+.rami-card-pips.ace i{ font-size:30px; }
+.rami-card-face{
+  position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+  font-size:30px; line-height:1;
+}
+.rami-card-face i{ font-style:normal; font-size:13px; margin-top:2px; }
+.rami-card.joker{
+  background:linear-gradient(160deg, #fff7f2, #ffe3d3);
+  color:#C24B2E; border-color:rgba(122,45,28,.75);
+}
+.rami-card.joker .rami-card-face{ font-size:26px; }
+.rami-card.back{
+  background:
+    repeating-linear-gradient(45deg, rgba(255,255,255,.06) 0 6px, transparent 6px 12px),
+    linear-gradient(168deg, #a03028, #6e1f1a);
+  border-color:#3a0f0c; display:flex; align-items:center; justify-content:center;
+}
+.rami-card-backmark{ color:rgba(255,230,200,.55); font-size:20px; }
+/* Interaction : la carte SE LÈVE au survol (référence capture 2), davantage
+   quand elle est sélectionnée. */
+.rami-card.clickable{ cursor:pointer; }
+.rami-card.clickable:hover{ transform:translateY(-12px); box-shadow:0 8px 0 rgba(0,0,0,.18), 0 14px 18px rgba(0,0,0,.28); z-index:3; }
+.rami-card.sel{
+  transform:translateY(-18px); outline:3px solid var(--p2); outline-offset:1px;
+  box-shadow:0 10px 0 rgba(0,0,0,.16), 0 16px 20px rgba(0,0,0,.3); z-index:4;
+}
+.rami-card.sel:hover{ transform:translateY(-18px); }
+.rami-card.dim{ opacity:.72; }
+.rami-card.dim:hover{ transform:none; }
+/* Assistance (zip 125) : liseré coloré par combinaison détectée. */
+.rami-card.assist-0{ box-shadow:0 0 0 2.5px #59b0f6, 0 0 10px rgba(89,176,246,.45), 0 3px 0 rgba(0,0,0,.25); }
+.rami-card.assist-1{ box-shadow:0 0 0 2.5px #b66df2, 0 0 10px rgba(182,109,242,.45), 0 3px 0 rgba(0,0,0,.25); }
+.rami-card.assist-2{ box-shadow:0 0 0 2.5px #4fc98a, 0 0 10px rgba(79,201,138,.45), 0 3px 0 rgba(0,0,0,.25); }
+.rami-card.assist-3{ box-shadow:0 0 0 2.5px #f2a93b, 0 0 10px rgba(242,169,59,.45), 0 3px 0 rgba(0,0,0,.25); }
+
+.rami-seats{ display:flex; flex-wrap:wrap; gap:10px; justify-content:center; margin-bottom:10px; }
+/* Bandeaux joueurs façon capture : avatar + barre horizontale nom/score. */
+.rami-seat{
+  display:flex; align-items:center; gap:0; border-radius:12px; font-size:12.5px; font-weight:800;
+  background:transparent; border:none; padding:0;
+}
+.rami-seat .av{
+  font-size:18px; width:34px; height:34px; display:flex; align-items:center; justify-content:center;
+  background:#f4ecdd; border:3px solid #2a2118; border-radius:10px; z-index:1;
+}
+.rami-seat .nm{
+  max-width:130px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  background:linear-gradient(180deg, #e9dcc4, #cdbf9f); color:#2a2118;
+  padding:6px 10px 6px 12px; margin-left:-6px; border:3px solid #2a2118; border-right:none;
+  border-radius:8px 0 0 8px; text-transform:uppercase; letter-spacing:.03em;
+}
+.rami-seat .ct{
+  font-family:'Space Mono'; color:#5a4a35; background:linear-gradient(180deg, #e9dcc4, #cdbf9f);
+  border-top:3px solid #2a2118; border-bottom:3px solid #2a2118; padding:6px 6px;
+}
+.rami-seat .sc{
+  font-family:'Space Mono'; color:#2a2118; background:linear-gradient(180deg, #e9dcc4, #cdbf9f);
+  border:3px solid #2a2118; border-left:none; border-radius:0 8px 8px 0; padding:6px 10px 6px 4px;
+}
+.rami-seat .op{
+  margin-left:6px; color:#1b5e34; background:#bde6c8; border:2px solid #1b5e34;
+  border-radius:99px; width:20px; height:20px; display:flex; align-items:center; justify-content:center; font-size:11px;
+}
+.rami-seat.active .av{ border-color:var(--p2); box-shadow:0 0 0 2px var(--p2), 0 0 14px rgba(255,209,102,.5); }
+.rami-seat.active .nm{ background:linear-gradient(180deg, #ffe9a8, #f2c94c); }
+.rami-seat.me .av{ outline:2px dashed rgba(182,240,76,.6); outline-offset:2px; }
+
+/* Tapis central : les combinaisons posées directement sur le feutre. */
+.rami-table{
+  display:flex; flex-wrap:wrap; gap:14px; justify-content:center; align-items:flex-start;
+  min-height:130px; padding:16px 10px; border-radius:18px; margin:6px 0;
+  background:transparent; border:none; box-shadow:none;
 }
 .rami-meld{
-  display:flex; flex-direction:column; align-items:center; gap:4px; padding:8px 8px 5px;
-  border-radius:12px; background:rgba(255,255,255,.03); border:2px solid transparent; transition:border-color .16s ease;
+  display:flex; flex-direction:column; align-items:center; gap:4px; padding:6px 8px 4px;
+  border-radius:12px; border:2px solid transparent; transition:border-color .16s ease, background .16s ease;
 }
-.rami-meld.picked{ border-color:var(--acc-rami); background:rgba(224,122,95,.12); }
+.rami-meld.picked{ border-color:var(--p2); background:rgba(255,209,102,.14); }
 .rami-meld-cards{ display:flex; }
-.rami-meld-cards .pres-card{ margin-left:-16px; }
-.rami-meld-cards .pres-card:first-child{ margin-left:0; }
-.rami-meld-tag{ font-size:10.5px; font-weight:800; color:var(--muted); }
+.rami-meld-cards .rami-card{ margin-left:-30px; }
+.rami-meld-cards .rami-card:first-child{ margin-left:0; }
+.rami-meld-tag{ font-size:10.5px; font-weight:800; color:#f3d9cd; opacity:.85; }
 
-.rami-piles{ display:flex; gap:22px; justify-content:center; margin:12px 0 4px; }
-.rami-pile{ display:flex; flex-direction:column; align-items:center; gap:5px; }
+/* Pioche + défausse : ancrées à GAUCHE, libellés au-dessus (capture 1). */
+.rami-piles{ display:flex; gap:20px; justify-content:flex-start; margin:12px 0 4px; padding-left:8px; }
+.rami-pile{ display:flex; flex-direction:column; align-items:center; gap:6px; }
 .rami-pile-slot{ border-radius:10px; }
-.rami-pile-slot.live{ cursor:pointer; box-shadow:0 0 0 2px var(--acc-rami), 0 0 12px rgba(224,122,95,.35); border-radius:12px; }
-.rami-pile-lbl{ font-size:11px; font-weight:800; color:var(--muted); font-family:'Space Mono'; }
-.rami-empty{ width:54px; height:78px; border-radius:10px; border:2px dashed var(--line); opacity:.5; }
+.rami-pile-slot.live{ cursor:pointer; box-shadow:0 0 0 3px var(--p2), 0 0 16px rgba(255,209,102,.5); border-radius:11px; }
+.rami-pile-lbl{ font-size:12px; font-weight:800; color:#f3d9cd; opacity:.9; letter-spacing:.02em; }
+.rami-empty{ width:58px; height:82px; border-radius:10px; border:2px dashed rgba(255,255,255,.35); opacity:.6; }
 
 .rami-me{ margin-top:10px; }
-.rami-staged{ margin:6px 0 10px; padding:10px; border-radius:12px; background:rgba(224,122,95,.08); border:1.5px solid rgba(224,122,95,.28); }
-.rami-staged-lbl{ font-size:12px; font-weight:800; color:var(--acc-rami); }
+.rami-staged{ margin:6px 0 10px; padding:10px; border-radius:12px; background:rgba(0,0,0,.16); border:1.5px solid rgba(255,255,255,.18); }
+.rami-staged-lbl{ font-size:12px; font-weight:800; color:#ffe3cf; }
 .rami-staged-rows{ display:flex; flex-wrap:wrap; gap:12px; margin-top:8px; }
 .rami-staged-row{ position:relative; display:flex; cursor:pointer; }
-.rami-staged-row .pres-card{ margin-left:-16px; }
-.rami-staged-row .pres-card:first-child{ margin-left:0; }
-.rami-staged-row .rami-x{ position:absolute; top:-8px; right:-8px; font-size:12px; background:var(--acc-rami); color:#fff; border-radius:99px; width:18px; height:18px; display:flex; align-items:center; justify-content:center; }
+.rami-staged-row .rami-card{ margin-left:-30px; }
+.rami-staged-row .rami-card:first-child{ margin-left:0; }
+.rami-staged-row .rami-x{ position:absolute; top:-8px; right:-8px; font-size:12px; background:#2a2118; color:#ffe3cf; border-radius:99px; width:18px; height:18px; display:flex; align-items:center; justify-content:center; z-index:5; }
 
-.rami-hand{ display:flex; flex-wrap:wrap; justify-content:center; padding:14px 6px 4px; row-gap:16px; }
-.rami-hand .pres-card{ margin-left:-17px; }
-.rami-hand .pres-card:first-child{ margin-left:0; }
+/* Main en éventail + pile de boutons carrés à droite (capture 2). */
+.rami-hand-row{ display:flex; align-items:flex-end; gap:10px; }
+.rami-hand{ flex:1; display:flex; flex-wrap:wrap; justify-content:center; padding:20px 6px 6px; row-gap:22px; min-width:0; }
+.rami-hand .rami-card{ margin-left:-24px; }
+.rami-hand .rami-card:first-child{ margin-left:0; }
+.rami-side-btns{ display:flex; flex-direction:column; gap:8px; padding-bottom:6px; }
+.rami-square-btn{
+  width:46px; height:42px; border-radius:10px; border:3px solid #2a2118; cursor:pointer;
+  background:linear-gradient(180deg, #ffd94f, #f2b53a);
+  display:flex; flex-direction:column; align-items:center; justify-content:center; line-height:1;
+  box-shadow:0 3px 0 rgba(0,0,0,.3); transition:transform .1s ease, filter .15s ease;
+  color:#2a2118; font-weight:800;
+}
+.rami-square-btn:hover{ filter:brightness(1.07); }
+.rami-square-btn:active{ transform:translateY(2px); box-shadow:0 1px 0 rgba(0,0,0,.3); }
+.rami-square-btn.on{ outline:3px solid #fff; outline-offset:-6px; }
+.rami-square-top{ font-family:'Space Mono'; font-size:12px; font-weight:700; }
+.rami-square-bottom{ font-size:12px; margin-top:-1px; }
+.rami-square-suits{ display:grid; grid-template-columns:1fr 1fr; font-size:11px; }
+.rami-square-suits i{ font-style:normal; color:#2a2118; }
+.rami-square-suits b{ font-weight:400; color:#c22a1d; }
 
-.rami-actions{ display:flex; gap:8px; justify-content:center; margin-top:12px; flex-wrap:wrap; }
-.rami-actions .btn{ padding:10px 16px; margin-top:0; font-size:13px; }
+/* Boutons d'action : le principal en JAUNE façon "DÉPOSER", la défausse en
+   sombre, le reste discret. */
+.rami-actions{ display:flex; gap:8px; justify-content:center; margin-top:12px; flex-wrap:wrap; align-items:center; }
+.rami-actions .btn{ padding:10px 16px; margin-top:0; font-size:13px; width:auto; }
 .rami-actions .btn[disabled]{ opacity:.4; cursor:not-allowed; transform:none; filter:none; }
+.rami-main-btn{
+  background:linear-gradient(180deg, #ffd94f, #f2b53a) !important; color:#2a2118 !important;
+  border:3px solid #2a2118 !important; font-family:'Bungee'; font-weight:400; letter-spacing:.03em;
+  box-shadow:0 4px 0 rgba(0,0,0,.3);
+}
+.rami-main-btn:not([disabled]):hover{ filter:brightness(1.06); }
+.rami-discard-btn{
+  background:#3a2a22 !important; color:#ffe3cf !important; border:3px solid #2a2118 !important;
+}
+.rami-timer-chip{
+  display:inline-block; font-family:'Space Mono'; font-weight:700; font-size:18px;
+  color:#7c2620; background:rgba(255,240,230,.85); border-radius:12px; padding:3px 12px;
+  box-shadow:inset 0 0 0 2px rgba(124,38,32,.25);
+}
+.rami-timer-chip.urgent{ color:#fff; background:var(--p1); animation:ramiTickPulse 1s ease-in-out infinite; }
+@keyframes ramiTickPulse{ 50%{ transform:scale(1.08); } }
 
 .rami-podium{ display:flex; flex-direction:column; gap:8px; max-width:440px; margin:10px auto 0; }
 .rami-podium-row{ display:flex; align-items:center; gap:10px; padding:9px 14px; border-radius:12px;
@@ -5716,30 +5828,13 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
 .rami-podium-row .pts{ font-family:'Space Mono'; color:var(--p3); }
 
 @media (pointer: coarse){
-  .rami-hand .pres-card{ margin-left:-14px; }
+  .rami-hand .rami-card{ margin-left:-20px; }
 }
 
-/* Rami : en-tête de la main (libellé + bouton de tri croissant/couleur). */
+/* Rami : en-tête de la main (libellé seul, les boutons de tri/assistance
+   sont désormais les boutons carrés empilés à droite de la main). */
 .rami-hand-head{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:8px; padding:0 4px; }
-.rami-hand-lbl{ font-size:12px; font-weight:800; color:var(--muted); font-family:'Space Mono'; }
-.rami-sort-btn{
-  padding:7px 12px; border-radius:99px; font-size:12px; font-weight:800; color:var(--ink);
-  background:rgba(224,122,95,.12); border:2px solid rgba(224,122,95,.35); cursor:pointer;
-  transition:background .16s ease, transform .1s ease;
-}
-.rami-sort-btn:hover{ background:rgba(224,122,95,.2); }
-.rami-sort-btn:active{ transform:scale(.96); }
-.rami-hand-btns{ display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
-.rami-sort-btn.on{ background:rgba(224,122,95,.32); border-color:var(--acc-rami); box-shadow:0 0 8px rgba(224,122,95,.3); }
-
-/* Rami : assistance (2026-07) — liseré coloré par combinaison complète
-   détectée dans la main (groupes DISJOINTS, voir detectHandCombos dans
-   ramiEngine.js). 4 teintes qui tournent, choisies pour rester lisibles sur
-   fond de carte claire ET distinctes de la sélection (.sel) et du joker. */
-.pres-card.assist-0{ box-shadow:0 0 0 2.5px #59b0f6, 0 0 10px rgba(89,176,246,.45); }
-.pres-card.assist-1{ box-shadow:0 0 0 2.5px #b66df2, 0 0 10px rgba(182,109,242,.45); }
-.pres-card.assist-2{ box-shadow:0 0 0 2.5px #4fc98a, 0 0 10px rgba(79,201,138,.45); }
-.pres-card.assist-3{ box-shadow:0 0 0 2.5px #f2a93b, 0 0 10px rgba(242,169,59,.45); }
+.rami-hand-lbl{ font-size:12px; font-weight:800; color:#f3d9cd; opacity:.9; font-family:'Space Mono'; }
 
 /* Échecs : revue de partie (rejeu coup par coup + liste cliquable). */
 .chess-review-nav{ display:flex; align-items:center; justify-content:center; gap:6px; margin-top:12px; flex-wrap:wrap; }

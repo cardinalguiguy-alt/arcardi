@@ -13,35 +13,67 @@ const GAME_ID = "rami";
 // Temps imparti par tour (auto-défausse à l'expiration, arbitrée par l'hôte).
 const TURN_MS = 60000;
 
-/* Carte à jouer : mêmes classes CSS que le Président (pres-card) pour le
-   rendu, plus une variante joker. Purement présentational. */
+/* Carte à jouer — refonte visuelle 2026-07 (captures de référence fournies
+   par Guillaume : organisation type "table rouge", cartes épurées à GROS
+   indices de coin et VRAIS pips dessinés au centre pour les numérales).
+   Classes DÉDIÉES `rami-card` (on ne réutilise plus le rendu du Président,
+   demande explicite). Purement présentational. */
+
+// Disposition des pips (enseignes) au centre de la carte, par valeur :
+// [x%, y%, retourné]. Dispositions classiques des cartes françaises.
+const PIP_LAYOUTS = {
+  A: [[50, 50]],
+  2: [[50, 22], [50, 78, 1]],
+  3: [[50, 22], [50, 50], [50, 78, 1]],
+  4: [[32, 22], [68, 22], [32, 78, 1], [68, 78, 1]],
+  5: [[32, 22], [68, 22], [50, 50], [32, 78, 1], [68, 78, 1]],
+  6: [[32, 22], [68, 22], [32, 50], [68, 50], [32, 78, 1], [68, 78, 1]],
+  7: [[32, 22], [68, 22], [50, 36], [32, 50], [68, 50], [32, 78, 1], [68, 78, 1]],
+  8: [[32, 22], [68, 22], [50, 36], [32, 50], [68, 50], [50, 64, 1], [32, 78, 1], [68, 78, 1]],
+  9: [[32, 20], [68, 20], [32, 44], [68, 44], [50, 50], [32, 62, 1], [68, 62, 1], [32, 84, 1], [68, 84, 1]],
+  10: [[32, 20], [68, 20], [50, 31], [32, 44], [68, 44], [32, 62, 1], [68, 62, 1], [50, 73, 1], [32, 84, 1], [68, 84, 1]],
+};
+const FIGURE_GLYPHS = { J: "♞", Q: "♛", K: "♚" };
+
 function RCard({ card, faceDown, size = "sm", onClick, sel, dim, style, assist }) {
-  const cls = "pres-card size-" + size
+  const cls = "rami-card"
     + (faceDown ? " back" : "")
     + (onClick ? " clickable" : "")
     + (sel ? " sel" : "")
     + (dim ? " dim" : "")
-    // Assistance (2026-07) : liseré coloré par groupe détecté dans la main —
-    // 4 teintes qui tournent, voir .pres-card.assist-N dans globals.css.
+    // Assistance (zip 125) : liseré coloré par groupe détecté dans la main —
+    // 4 teintes qui tournent, voir .rami-card.assist-N dans globals.css.
     + (assist != null ? " assist-" + (assist % 4) : "");
   if (faceDown) {
-    return <div className={cls} onClick={onClick} style={style}><span className="pres-back-mark">✦</span></div>;
+    return <div className={cls} onClick={onClick} style={style}><span className="rami-card-backmark">✦</span></div>;
   }
   if (isJoker(card)) {
     return (
       <div className={cls + " joker"} onClick={onClick} style={style}>
-        <span className="pres-corner">★</span>
-        <span className="pres-main">🃏</span>
-        <span className="pres-corner flip">★</span>
+        <span className="rami-card-corner"><b>★</b></span>
+        <span className="rami-card-face">🃏</span>
+        <span className="rami-card-corner flip"><b>★</b></span>
       </div>
     );
   }
   const suit = SUITS.find(s => s.id === card.suit);
+  const pips = PIP_LAYOUTS[card.rank];
   return (
     <div className={cls + (suit.red ? " red" : "")} onClick={onClick} style={style}>
-      <span className="pres-corner">{card.rank}<br />{suit.sym}</span>
-      <span className="pres-main">{suit.sym}</span>
-      <span className="pres-corner flip">{card.rank}<br />{suit.sym}</span>
+      <span className="rami-card-corner"><b>{card.rank}</b><i>{suit.sym}</i></span>
+      <span className="rami-card-corner flip"><b>{card.rank}</b><i>{suit.sym}</i></span>
+      {pips ? (
+        <span className={"rami-card-pips" + (card.rank === "A" ? " ace" : "")}>
+          {pips.map(([x, y, f], i) => (
+            <i key={i} style={{ left: x + "%", top: y + "%", transform: "translate(-50%,-50%)" + (f ? " rotate(180deg)" : "") }}>{suit.sym}</i>
+          ))}
+        </span>
+      ) : (
+        <span className="rami-card-face">
+          {FIGURE_GLYPHS[card.rank]}
+          <i>{suit.sym}</i>
+        </span>
+      )}
     </div>
   );
 }
@@ -522,8 +554,8 @@ export default function RamiGame({ room, me, isHost, players, t, lang, onFinish 
               return (
                 <button key={String(opt.v)} onClick={() => setSetupThreshold(opt.v)}
                   style={{ padding: "10px 16px", borderRadius: 12, fontWeight: 800, fontSize: 13, color: "var(--ink)",
-                    border: `2px solid ${on ? "var(--acc-rami)" : "var(--line)"}`,
-                    background: on ? "rgba(224,122,95,.14)" : "rgba(255,255,255,.04)" }}>
+                    border: `2px solid ${on ? "var(--p2)" : "rgba(255,255,255,.35)"}`,
+                    background: on ? "rgba(255,209,102,.18)" : "rgba(0,0,0,.15)" }}>
                   {t(opt.k)}
                 </button>
               );
@@ -573,19 +605,20 @@ export default function RamiGame({ room, me, isHost, players, t, lang, onFinish 
           })}
         </div>
 
-        {/* Pioche + défausse */}
+        {/* Pioche + défausse : libellés AU-DESSUS des talons, ancrés à gauche
+            (organisation des captures de référence, refonte 2026-07). */}
         <div className="rami-piles">
           <div className="rami-pile">
+            <span className="rami-pile-lbl">{t("ramiStock")} · {stock.length}</span>
             <div className={"rami-pile-slot" + (isMyTurn && turnPhase === "draw" ? " live" : "")} onClick={drawStock}>
               {stock.length > 0 ? <RCard faceDown size="sm" /> : <div className="rami-empty" />}
             </div>
-            <span className="rami-pile-lbl">{t("ramiStock")} · {stock.length}</span>
           </div>
           <div className="rami-pile">
+            <span className="rami-pile-lbl">{t("ramiDiscard")}</span>
             <div className={"rami-pile-slot" + (isMyTurn && turnPhase === "draw" && topDiscard ? " live" : "")} onClick={drawDiscard}>
               {topDiscard ? <RCard card={topDiscard} size="sm" /> : <div className="rami-empty" />}
             </div>
-            <span className="rami-pile-lbl">{t("ramiDiscard")}</span>
           </div>
         </div>
 
@@ -598,9 +631,10 @@ export default function RamiGame({ room, me, isHost, players, t, lang, onFinish 
               : (isPlayer ? `${t("ramiWaitingFor")} ${turnSeat?.username || ""}…` : t("ramiSpectating"))}
         </p>
         {secsLeft != null && (
-          <p style={{ textAlign: "center", marginTop: 2, fontFamily: "'Space Mono'", fontWeight: 800,
-            color: secsLeft <= 10 ? "var(--p1)" : "var(--muted)" }}>
-            ⏱ {secsLeft}s
+          <p style={{ textAlign: "center", marginTop: 4 }}>
+            <span className={"rami-timer-chip" + (secsLeft <= 10 ? " urgent" : "")}>
+              {Math.floor(secsLeft / 60)}:{String(secsLeft % 60).padStart(2, "0")}
+            </span>
           </p>
         )}
 
@@ -638,30 +672,41 @@ export default function RamiGame({ room, me, isHost, players, t, lang, onFinish 
 
             <div className="rami-hand-head">
               <span className="rami-hand-lbl">{t("ramiYourHand")} · {myHand.length}</span>
-              <span className="rami-hand-btns">
-                <button className={"rami-sort-btn" + (assistOn ? " on" : "")} onClick={toggleAssist}
-                  title={t("ramiAssistHint")}>
-                  💡 {t("ramiAssist")}
-                </button>
-                <button className="rami-sort-btn" onClick={() => setSortMode(m => m === "color" ? "rank" : "color")}>
-                  🔀 {sortMode === "color" ? t("ramiSortByRank") : t("ramiSortByColor")}
-                </button>
-              </span>
             </div>
-            <div className="rami-hand">
-              {(sortMode === "rank" ? sortHandByRank(availableHand) : sortHand(availableHand)).map(c => (
-                <RCard key={c.id} card={c} size="sm" onClick={isMyTurn ? () => toggleSel(c.id) : undefined}
-                  sel={sel.includes(c.id)} dim={!isMyTurn} assist={assistIdx.get(c.id)} />
-              ))}
+            {/* Main en éventail + pile de petits boutons carrés à droite
+                (tri par valeur "789→", tri par couleur "enseignes", assistance),
+                organisation des captures de référence (refonte 2026-07). */}
+            <div className="rami-hand-row">
+              <div className="rami-hand">
+                {(sortMode === "rank" ? sortHandByRank(availableHand) : sortHand(availableHand)).map(c => (
+                  <RCard key={c.id} card={c} size="sm" onClick={isMyTurn ? () => toggleSel(c.id) : undefined}
+                    sel={sel.includes(c.id)} dim={!isMyTurn} assist={assistIdx.get(c.id)} />
+                ))}
+              </div>
+              <div className="rami-side-btns">
+                <button className={"rami-square-btn" + (sortMode === "rank" ? " on" : "")}
+                  onClick={() => setSortMode("rank")} title={t("ramiSortByRank")}>
+                  <span className="rami-square-top">789</span>
+                  <span className="rami-square-bottom">→</span>
+                </button>
+                <button className={"rami-square-btn" + (sortMode === "color" ? " on" : "")}
+                  onClick={() => setSortMode("color")} title={t("ramiSortByColor")}>
+                  <span className="rami-square-suits"><i>♠</i><b>♥</b><b>♦</b><i>♣</i></span>
+                </button>
+                <button className={"rami-square-btn" + (assistOn ? " on" : "")}
+                  onClick={toggleAssist} title={t("ramiAssistHint")}>
+                  <span style={{ fontSize: 17 }}>💡</span>
+                </button>
+              </div>
             </div>
 
             {isMyTurn && turnPhase === "act" && (
               <div className="rami-actions">
+                <button className="btn rami-main-btn" disabled={!canSubmit} onClick={submitMelds}>
+                  ⬆ {iOpened ? t("ramiPlace") : t("ramiOpen")}
+                </button>
                 <button className="btn" style={{ width: "auto" }} disabled={!selCombo.valid} onClick={addStaged}>
                   ➕ {t("ramiAddCombo")}{selCombo.valid ? ` (${selCombo.points})` : ""}
-                </button>
-                <button className="btn" style={{ width: "auto" }} disabled={!canSubmit} onClick={submitMelds}>
-                  📥 {iOpened ? t("ramiPlace") : t("ramiOpen")}
                 </button>
                 <button className="btn ghost" style={{ width: "auto" }} disabled={!iOpened || !pickMeld || !sel.length} onClick={doAppend}>
                   🔗 {t("ramiAppend")}
@@ -669,7 +714,7 @@ export default function RamiGame({ room, me, isHost, players, t, lang, onFinish 
                 <button className="btn ghost" style={{ width: "auto" }} disabled={!iOpened || !pickMeld || sel.length !== 1} onClick={doSwap}>
                   🃏 {t("ramiSwap")}
                 </button>
-                <button className="btn" style={{ width: "auto", background: "var(--acc-rami)" }} disabled={sel.length !== 1} onClick={doDiscard}>
+                <button className="btn rami-discard-btn" disabled={sel.length !== 1} onClick={doDiscard}>
                   🗑️ {t("ramiDiscardBtn")}
                 </button>
               </div>
