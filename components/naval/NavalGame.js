@@ -118,7 +118,7 @@ function NavalBoard({
 // référence"). Un seul overlay FX porte les effets des deux plateaux (chacun
 // repéré par son rôle own|enemy). Les cases portent data-side, on route donc
 // le clic/survol vers le bon plateau (seul l'ennemi est ciblable).
-function DualBoard({ mode, u, headroom, gap, own, enemy, fxOwn, fxEnemy, onCellClick, onCellHover, onCellLeave }) {
+function DualBoard({ mode, u, headroom, gap, maxH, own, enemy, fxOwn, fxEnemy, onCellClick, onCellHover, onCellLeave }) {
   const geom = useMemo(() => dualBoardGeom(mode, u, headroom, gap), [mode, u, headroom, gap]);
   const html = useMemo(
     () => dualBoardSVG({ mode, u, headroom, gap, own, enemy, idSalt: "duel" }),
@@ -129,8 +129,15 @@ function DualBoard({ mode, u, headroom, gap, own, enemy, fxOwn, fxEnemy, onCellC
     if (!el) return null;
     return { side: el.getAttribute("data-side"), r: +el.getAttribute("data-r"), c: +el.getAttribute("data-c") };
   }
+  // La boîte a le MÊME ratio que le dessin (aspect-ratio = W/H) : quand le
+  // plafond de hauteur borne le scène, la LARGEUR suit (max-width = maxH·W/H),
+  // donc la boîte reste calée sur le dessin — plus de décalage à gauche, et
+  // l'overlay FX (inset:0) épouse pile le svg (fin des animations décalées au
+  // clic). Centrée par margin auto.
+  const boxStyle = { aspectRatio: `${Math.round(geom.W)} / ${Math.round(geom.H)}` };
+  if (maxH) { boxStyle.maxHeight = maxH + "px"; boxStyle.maxWidth = Math.round(maxH * geom.W / geom.H) + "px"; }
   return (
-    <div className="naval-scene naval-scene-duo"
+    <div className="naval-scene naval-scene-duo" style={boxStyle}
       onClick={(e) => { const h = sideRc(e); if (h && onCellClick) onCellClick(h.side, h.r, h.c); }}
       onMouseMove={(e) => { const h = sideRc(e); if (h && onCellHover) onCellHover(h.side, h.r, h.c); }}
       onMouseLeave={() => onCellLeave && onCellLeave()}
@@ -945,29 +952,56 @@ export default function NavalGame({ room, me, isHost, players, t, lang, onFinish
               : `${t("navalWaitingFor")} ${playerObj(turn)?.username || ""}…`}
             {!winner && turnLeft != null && isPlayer && <span className={"naval-timer" + (turnLeft <= 6 ? " hot" : "")}>0:{String(turnLeft).padStart(2, "0")}</span>}
           </p>
-          {/* Disposition "vidéo de référence" : les DEUX grilles dans un seul
-              scène accolé (ennemi en haut-gauche, notre flotte en bas-droite,
-              même bord partagé en diagonale). Le scène est borné en HAUTEUR
-              (sceneMaxH) pour zéro scroll en paysage laptop/tablette ; il
-              profite de toute la largeur du mode agrandi. */}
-          <div className={"naval-arena-duo view-" + view}>
-            <div className="naval-duo-labels">
-              <span className="naval-duo-lbl enemy"><b className="naval-enemy-lbl">{isPlayer ? t("navalEnemyWaters") : (p2?.username || "")}</b></span>
-              <span className="naval-duo-lbl own">{isPlayer ? t("navalYourFleet") : (p1?.username || "")}</span>
+          {view === "iso" ? (
+            /* ISO : disposition "vidéo de référence" — les DEUX grilles dans un
+               seul scène accolé (ennemi en haut-gauche, notre flotte en
+               bas-droite, même bord partagé en diagonale). Borné en hauteur
+               (sceneMaxH) => zéro scroll paysage ; profite de toute la largeur
+               du mode agrandi. */
+            <div className="naval-arena-duo view-iso">
+              <div className="naval-duo-labels">
+                <span className="naval-duo-lbl enemy"><b className="naval-enemy-lbl">{isPlayer ? t("navalEnemyWaters") : (p2?.username || "")}</b></span>
+                <span className="naval-duo-lbl own">{isPlayer ? t("navalYourFleet") : (p1?.username || "")}</span>
+              </div>
+              <div className="naval-duo-scene" ref={sceneWrapRef}>
+                <DualBoard mode="iso" u={30} headroom={16} gap={0.6} maxH={sceneMaxH}
+                  own={ownSpec} enemy={enemySpec} fxOwn={fxOwn} fxEnemy={fxEnemy}
+                  onCellClick={(side, r, c) => { if (side === "enemy" && isMyTurn) fireAt(r, c); }}
+                  onCellHover={(side, r, c) => { if (side === "enemy" && isMyTurn) enemyHover(r, c); else if (aoeHover) setAoeHover(null); }}
+                  onCellLeave={() => { if (aoeHover) setAoeHover(null); }} />
+              </div>
+              <div className="naval-rosters">
+                {renderRoster(boards[targetForMe], enemyShots, t("navalEnemyShips"))}
+                {renderRoster(boards[myBoard], myShotsRecv, t("navalYourShips"))}
+              </div>
             </div>
-            <div className="naval-duo-scene" ref={sceneWrapRef}
-              style={sceneMaxH ? { "--duo-maxh": sceneMaxH + "px" } : undefined}>
-              <DualBoard mode={view} u={view === "iso" ? 30 : 34} headroom={view === "iso" ? 16 : 10} gap={view === "iso" ? 0.6 : 0.5}
-                own={ownSpec} enemy={enemySpec} fxOwn={fxOwn} fxEnemy={fxEnemy}
-                onCellClick={(side, r, c) => { if (side === "enemy" && isMyTurn) fireAt(r, c); }}
-                onCellHover={(side, r, c) => { if (side === "enemy" && isMyTurn) enemyHover(r, c); else if (aoeHover) setAoeHover(null); }}
-                onCellLeave={() => { if (aoeHover) setAoeHover(null); }} />
+          ) : (
+            /* 2D : grille ADVERSE (celle qu'on attaque) en GRAND au centre,
+               notre propre grille en PETIT sur le côté. Mêmes animations (chaque
+               plateau garde son overlay FX). Le grand plateau est borné pour
+               tenir en hauteur sans scroll. */
+            <div className="naval-arena-2d">
+              <div className="naval-2d-main">
+                <p className="naval-board-title"><b className="naval-enemy-lbl">{isPlayer ? t("navalEnemyWaters") : (p2?.username || "")}</b></p>
+                <div className="naval-2d-boardbox" ref={sceneWrapRef}
+                  style={sceneMaxH ? { maxWidth: sceneMaxH } : undefined}>
+                  <NavalBoard mode="2d" edge="enemy" u={40} headroom={12}
+                    shots={enemyShots} ships={enemyShips} aim={isMyTurn} aoe={armed === "missile" ? aoeHover : null}
+                    idSalt="enemy2d" fx={fxEnemy}
+                    onCellClick={isMyTurn ? fireAt : null}
+                    onCellHover={isMyTurn ? enemyHover : null}
+                    onCellLeave={() => { if (aoeHover) setAoeHover(null); }} />
+                </div>
+                {renderRoster(boards[targetForMe], enemyShots, t("navalEnemyShips"))}
+              </div>
+              <div className="naval-2d-mini">
+                <p className="naval-board-title">{isPlayer ? t("navalYourFleet") : (p1?.username || "")}</p>
+                <NavalBoard mode="2d" edge="own" u={34} headroom={10}
+                  shots={myShotsRecv} ships={ownShips} aim={false} idSalt="own2d" fx={fxOwn} />
+                {renderRoster(boards[myBoard], myShotsRecv, t("navalYourShips"))}
+              </div>
             </div>
-            <div className="naval-rosters">
-              {renderRoster(boards[targetForMe], enemyShots, t("navalEnemyShips"))}
-              {renderRoster(boards[myBoard], myShotsRecv, t("navalYourShips"))}
-            </div>
-          </div>
+          )}
           {isPlayer && !winner && (
             <div className="naval-bonus-bar">
               <button className={"naval-bonus-btn" + (armed === "missile" ? " on" : "")} disabled={!isMyTurn || myBonus.missile <= 0}
