@@ -165,6 +165,15 @@ const MYSTERY_CELLS = new Set([...MYSTERY_ABS].map(i => TRACK[i].join("_")));
 function absIndex(color, steps) {
   return (COLORS[color].start + steps - 1) % 56;
 }
+// Inverse d'absIndex : convertit une case ABSOLUE du tronçon partagé (0..55)
+// en "steps" exprimés dans le repère de départ propre à `color`. Sert au
+// bonus mystère "swap" (échanger les positions) : les deux pions doivent
+// finir sur la case de l'autre EN VRAI, ce qui suppose de repasser par la
+// case absolue plutôt que de recopier `steps` tel quel (chaque couleur a
+// un décalage de départ différent sur l'anneau de 56 cases).
+function stepsFromAbs(color, abs) {
+  return ((abs - COLORS[color].start + 56) % 56) + 1;
+}
 function cellFor(color, steps) {
   if (steps <= 0) return null;
   if (steps <= 55) return TRACK[absIndex(color, steps)];
@@ -1287,11 +1296,16 @@ export default function PetitsChevaux({ room, me, isHost, players, t, lang, onFi
         next[targetColor][targetIdx] = 0;      // renvoyé à l'écurie
         captured = [[targetColor, targetIdx]];
       } else if (pt.kind === "swapPlaces") {
-        // Échange des PROGRESSIONS (chaque valeur reste lue dans le repère de
-        // sa propre couleur, donc toujours légale) — pas de capture annexe.
-        const mine = next[pt.color][pt.tokenIdx];
-        next[pt.color][pt.tokenIdx] = next[targetColor][targetIdx];
-        next[targetColor][targetIdx] = mine;
+        // Échange des CASES ABSOLUES (pas des "steps" bruts : ceux-ci sont
+        // exprimés dans le repère de départ propre à chaque couleur, donc
+        // recopier le nombre tel quel n'envoyait pas réellement les pions
+        // l'un sur la case de l'autre — sauf coïncidence — c'était le bug).
+        // On passe par absIndex/stepsFromAbs pour que les deux pions
+        // finissent vraiment sur la case de l'autre — pas de capture annexe.
+        const myAbs = absIndex(pt.color, next[pt.color][pt.tokenIdx]);
+        const targetAbs = absIndex(targetColor, next[targetColor][targetIdx]);
+        next[pt.color][pt.tokenIdx] = stepsFromAbs(pt.color, targetAbs);
+        next[targetColor][targetIdx] = stepsFromAbs(targetColor, myAbs);
       }
     }
     const movedInfo = { color: pt.color, tokenIdx: pt.tokenIdx };

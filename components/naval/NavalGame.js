@@ -620,6 +620,41 @@ export default function NavalGame({ room, me, isHost, players, t, lang, onFinish
   const turnLeft = turnDeadline ? Math.max(0, Math.ceil((turnDeadline - now) / 1000)) : null;
   const myBonus = (bonuses && bonuses[me.id]) || { missile: 0, rain: 0 };
 
+  // ---- données de plateau mémoïsées : évite de reconstruire le SVG entier
+  // (dangerouslySetInnerHTML) à chaque tick de l'horloge (setInterval 250ms),
+  // seule cause du clignotement et du "délai" ressenti au clic.
+  const myBoardId = isPlayer ? me.id : p1?.id;
+  const targetBoardId = isPlayer ? oppId : p2?.id;
+  const myShotsRecv = shots[myBoardId];
+  const enemyShotsRecv = shots[targetBoardId];
+  const ownShips = useMemo(
+    () => shipsForBoard(boards[myBoardId], myShotsRecv, false, false),
+    [boards, myBoardId, myShotsRecv]
+  );
+  const enemyShips = useMemo(
+    () => shipsForBoard(boards[targetBoardId], enemyShotsRecv, true, false),
+    [boards, targetBoardId, enemyShotsRecv]
+  );
+  const setupShips = useMemo(
+    () => shipsForBoard(myPlacements, null, false, !submitted),
+    [myPlacements, submitted]
+  );
+  const placeBadges = useMemo(
+    () => (!submitted ? myPlacements.map(p => ({ id: p.id, r: p.r, c: p.c, horiz: p.horiz, onRotate: rotateShip })) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [myPlacements, submitted]
+  );
+  const placeGhost = useMemo(() => {
+    if (!(drag && drag.r >= 0)) return null;
+    const [rows, cols] = dims(drag.id, drag.horiz);
+    const cs = [];
+    for (let dr = 0; dr < rows; dr++) for (let dc = 0; dc < cols; dc++) {
+      const rr = drag.r + dr, cc = drag.c + dc;
+      if (inB(rr, cc)) cs.push([rr, cc]);
+    }
+    return { cells: cs, ok: drag.valid };
+  }, [drag]);
+
   function fireAt(r, c) {
     if (!isMyTurn) return;
     const target = oppId;
@@ -741,12 +776,8 @@ export default function NavalGame({ room, me, isHost, players, t, lang, onFinish
 
     if (sub === "place" && isPlayer) {
       const ready1 = ready[p1?.id], ready2 = ready[p2?.id];
-      const setupShips = shipsForBoard(myPlacements, null, false, !submitted);
-      const badges = !submitted ? myPlacements.map(p => ({ id: p.id, r: p.r, c: p.c, horiz: p.horiz, onRotate: rotateShip })) : null;
-      const ghost = (drag && drag.r >= 0) ? {
-        cells: (() => { const [rows, cols] = dims(drag.id, drag.horiz); const cs = []; for (let dr = 0; dr < rows; dr++) for (let dc = 0; dc < cols; dc++) { const rr = drag.r + dr, cc = drag.c + dc; if (inB(rr, cc)) cs.push([rr, cc]); } return cs; })(),
-        ok: drag.valid,
-      } : null;
+      const badges = placeBadges;
+      const ghost = placeGhost;
       content = (
         <div>
           {viewToggle}
@@ -794,12 +825,9 @@ export default function NavalGame({ room, me, isHost, players, t, lang, onFinish
       );
     } else {
       const iWon = winner && winner === me.id;
-      const targetForMe = isPlayer ? oppId : p2?.id;
-      const myBoard = isPlayer ? me.id : p1?.id;
-      const myShotsRecv = shots[myBoard];
-      const enemyShots = shots[targetForMe];
-      const ownShips = shipsForBoard(boards[myBoard], myShotsRecv, false, false);
-      const enemyShips = shipsForBoard(boards[targetForMe], enemyShots, true, false);
+      const targetForMe = targetBoardId;
+      const myBoard = myBoardId;
+      const enemyShots = enemyShotsRecv;
       content = (
         <div style={{ position: "relative" }}>
           {viewToggle}
