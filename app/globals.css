@@ -6012,7 +6012,10 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
 .naval-svg .nvCell{ transition:fill .12s; }
 .naval-svg.aim{ cursor:crosshair; }
 .naval-svg.aim .nvCell:not([data-state]):hover{ fill:rgba(63,169,214,.45); }
-.naval-svg .nvShipDrag{ cursor:grab; }
+/* la couche navires est pointer-events:none (les cases dessous restent
+   cliquables sous une coque/épave) ; SEULS les navires déplaçables du
+   placement réactivent les événements pour rester saisissables. */
+.naval-svg .nvShipDrag{ cursor:grab; pointer-events:auto; }
 /* animations SVG des navires / ecume / flammes / fumee (portees par navalArt) */
 .nvFoam{ animation:nvFoam 3.6s ease-in-out infinite; }
 @keyframes nvFoam{ 0%,100%{ opacity:.55; } 50%{ opacity:.95; } }

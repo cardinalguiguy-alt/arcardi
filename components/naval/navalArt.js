@@ -646,7 +646,11 @@ export function boardSVG(opts) {
   }
 
   const aimCls = o.aim ? " aim" : "";
-  return `<svg class="naval-svg${aimCls}" xmlns="http://www.w3.org/2000/svg" viewBox="${vb.map(f1).join(" ")}" preserveAspectRatio="xMidYMid meet"><g data-layer="base">${base}</g><g data-layer="cells">${cellsHtml}</g><g data-layer="ships">${shipsHtml}</g><g data-layer="marks" pointer-events="none">${marks}</g></svg>`;
+  // Couche navires transparente aux clics (pointer-events:none) : les cases
+  // dessous restent cliquables/survolables MÊME sous une coque ou l'ombre
+  // d'une épave. Les navires DÉPLAÇABLES (placement) réactivent les événements
+  // via .nvShipDrag (CSS) pour rester saisissables.
+  return `<svg class="naval-svg${aimCls}" xmlns="http://www.w3.org/2000/svg" viewBox="${vb.map(f1).join(" ")}" preserveAspectRatio="xMidYMid meet"><g data-layer="base">${base}</g><g data-layer="cells">${cellsHtml}</g><g data-layer="ships" pointer-events="none">${shipsHtml}</g><g data-layer="marks" pointer-events="none">${marks}</g></svg>`;
 }
 
 /* ============================================================
@@ -758,7 +762,7 @@ export function dualBoardSVG(opts) {
   return `<svg class="naval-svg naval-svg-duo${aimCls}" xmlns="http://www.w3.org/2000/svg" viewBox="${G.vb.map(f1).join(" ")}" preserveAspectRatio="xMidYMid meet" width="${f1(G.W)}" height="${f1(G.H)}">` +
     `<g data-layer="base">${defs}${enemy.base}${own.base}</g>` +
     `<g data-layer="cells">${enemy.cells}${own.cells}</g>` +
-    `<g data-layer="ships">${enemy.ships}${own.ships}</g>` +
+    `<g data-layer="ships" pointer-events="none">${enemy.ships}${own.ships}</g>` +
     `<g data-layer="marks" pointer-events="none">${enemy.marks}${own.marks}</g></svg>`;
 }
 
