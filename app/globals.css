@@ -6537,8 +6537,17 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
 .ferme-energy-wrap{ position:fixed; bottom:78px; right:14px; width:26px; height:140px; z-index:10; padding:3px; }
 .ferme-energy-bar{ position:absolute; bottom:3px; left:3px; right:3px; background:linear-gradient(#f4d442, #e8a83a); border-radius:3px; }
 
-/* Boutons flottants (téléport, carte, quitter) */
-.ferme-actions{ position:fixed; top:10px; right:10px; z-index:12; display:flex; gap:8px; }
+/* Boutons flottants (téléport, carte, changer de perso, quitter) */
+.ferme-actions{ position:fixed; top:10px; right:10px; z-index:41; display:flex; flex-wrap:wrap; justify-content:flex-end; gap:8px; max-width:min(66vw, 520px); }
+
+/* Masque le chrome ARCARDI (FABs haut/droite, barre de scores, logo) pendant
+   la ferme : elle est plein écran et ces boutons (surtout le mode agrandi, qui
+   applique un zoom/transform au stage) pourraient interférer avec le rendu ou
+   la sortie. La ferme fournit ses propres boutons (Quitter, etc.). */
+body.ferme-active .stage-fabs,
+body.ferme-active .leave-room-fab,
+body.ferme-active .stage-bar,
+body.ferme-active .wrap-room > .brand{ display:none !important; }
 
 /* Barre d'outils */
 .ferme-toolbar{ position:fixed; bottom:12px; left:50%; transform:translateX(-50%); display:flex; gap:6px; z-index:10; padding:8px; }

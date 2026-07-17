@@ -14,9 +14,18 @@
 
 export const FERME_STR = {
   fr: {
+    // Écran de code de ferme (hôte)
+    codeTitle: "🌾 Ferme Vallée",
+    codePrompt: "Entre un code de ferme pour continuer une partie existante, ou un nouveau code pour démarrer une nouvelle ferme. Le même code recharge toujours la même ferme.",
+    codePlaceholder: "Code de la ferme (ex: potager)",
+    codeLoad: "Ouvrir la ferme",
+    codeLoading: "Chargement de la ferme…",
+    codeEmpty: "Choisis un code de ferme.",
+    codeDbError: "Sauvegarde des fermes indisponible. As-tu exécuté supabase/upgrade-005.sql ?",
     // Sélection de personnage
     csTitle: "🌾 Ferme Vallée",
     csSub: "Ferme coopérative : cultive, coupe, mine et vends avec ton équipe.",
+    btnChangeChar: "🧑‍🌾 Changer de perso",
     namePlaceholder: "Ton prénom de fermier·e",
     fermier: "Fermier",
     fermiere: "Fermière",
@@ -93,8 +102,16 @@ export const FERME_STR = {
     chatSend: "Message… (Entrée pour envoyer)",
   },
   en: {
+    codeTitle: "🌾 Valley Farm",
+    codePrompt: "Enter a farm code to continue an existing game, or a new code to start a new farm. The same code always reloads the same farm.",
+    codePlaceholder: "Farm code (e.g. garden)",
+    codeLoad: "Open the farm",
+    codeLoading: "Loading the farm…",
+    codeEmpty: "Choose a farm code.",
+    codeDbError: "Farm saves unavailable. Did you run supabase/upgrade-005.sql?",
     csTitle: "🌾 Valley Farm",
     csSub: "Co-op farm: grow, chop, mine and sell with your team.",
+    btnChangeChar: "🧑‍🌾 Change character",
     namePlaceholder: "Your farmer name",
     fermier: "Farmer (M)",
     fermiere: "Farmer (F)",

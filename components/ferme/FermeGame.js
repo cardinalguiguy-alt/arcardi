@@ -28,7 +28,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "@/lib/supabaseClient";
-import { saveGameState, readGameState, resetRoomToLobby } from "@/lib/gameSync";
+import { resetRoomToLobby } from "@/lib/gameSync";
 import * as C from "./fermeConstants";
 import * as E from "./fermeEngine";
 import { buildSprites } from "./fermeArt";
@@ -48,9 +48,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const L = fstr(lang);
 
   // -------- État React (piloté par évènements, basse fréquence) --------
-  const [phase, setPhase] = useState("select"); // select | connecting | playing
+  // Phases : "code" (hôte : saisit le code de ferme) -> "select" (choix du
+  // perso, sauté si déjà mémorisé) -> "playing". L'invité démarre en "select"
+  // (il attend l'instantané de l'hôte, sans saisir de code).
+  const [phase, setPhase] = useState(isHost ? "code" : "select");
   const [gender, setGender] = useState("m");
   const [nameVal, setNameVal] = useState((me?.username || "Fermier").slice(0, 14));
+  const [codeInput, setCodeInput] = useState("");
+  const [codeError, setCodeError] = useState("");
+  const [codeLoading, setCodeLoading] = useState(false);
   const [worldReady, setWorldReady] = useState(false);
   const [hud, setHud] = useState({ money: C.START_MONEY, day: 1, timeMin: C.DAY_START_MIN, players: 1 });
   const [myEnergy, setMyEnergy] = useState(C.MAX_ENERGY);
@@ -101,6 +107,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const binOpenRef = useRef(false);
   const toastIdRef = useRef(0);
   const chatIdRef = useRef(0);
+  const farmCodeRef = useRef("");      // code de la ferme durable en cours
+  const autoJoinTriedRef = useRef(false);
 
   useEffect(() => { mapOpenRef.current = mapOpen; }, [mapOpen]);
   useEffect(() => { shopOpenRef.current = shopOpen; }, [shopOpen]);
@@ -115,12 +123,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     return (i < 0 ? 0 : i) % C.OUTFITS.length;
   })();
 
-  // -------- Sprites (client uniquement) --------
+  // -------- Sprites (client uniquement) + habillage --------
   useEffect(() => {
     if (typeof document === "undefined") return;
     setMounted(true);
     spritesRef.current = buildSprites();
     setSpritesReady(true);
+    // Masque le chrome ARCARDI (FABs haut/droite, barre de scores, logo) tant
+    // que la ferme est ouverte : elle est plein écran et ces boutons (mode
+    // agrandi surtout) pourraient interférer avec le rendu / la sortie.
+    document.body.classList.add("ferme-active");
+    // Pré-remplit le dernier code de ferme utilisé sur cette machine.
+    try { const c = window.localStorage.getItem("ferme_lastcode"); if (c) setCodeInput(c); } catch (e) { /* localStorage indispo */ }
+    return () => document.body.classList.remove("ferme-active");
   }, []);
 
   // Rend le jeu dans un PORTAL vers document.body. INDISPENSABLE : le jeu est
@@ -131,44 +146,49 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // viewport, comme dans la maquette plein écran.
   const wrap = (node) => (mounted && typeof document !== "undefined" ? createPortal(node, document.body) : null);
 
-  // -------- Hôte : génération / restauration du monde dès le montage --------
-  // Ne PAS attendre l'abonnement Realtime pour pouvoir jouer. On lit l'état
-  // sauvegardé DIRECTEMENT depuis la base (pas seulement la prop `room`, qui
-  // peut avoir été remise à null localement au moment du relancement) : ainsi
-  // la ferme est bien restaurée après avoir quitté puis relancé le jeu.
-  useEffect(() => {
-    if (!isHost || worldRef.current) return;
-    let cancelled = false;
-    (async () => {
-      let saved = readGameState(room, GAME_ID); // repli sur la prop
-      try {
-        const { data } = await supabase.from("rooms").select("game_state").eq("id", room.id).single();
-        const gs = data?.game_state;
-        if (gs && gs.gameId === GAME_ID && gs.state) saved = gs.state;
-      } catch (e) { /* la lecture DB a échoué : on garde le repli prop */ }
-      if (cancelled || worldRef.current) return;
-      if (saved && typeof saved.seed === "number") {
-        const w = E.generateWorld(saved.seed);
-        E.applyOverrides(w, { groundOv: saved.groundOv, objectOv: saved.objectOv, crops: saved.crops });
-        worldRef.current = w;
-        overridesRef.current = { ground: { ...(saved.groundOv || {}) }, object: { ...(saved.objectOv || {}) } };
-        sharedRef.current = { seed: saved.seed, money: saved.money, day: saved.day, dayStartAt: saved.dayStartAt, totalEarned: saved.totalEarned };
-        farmersRef.current = saved.farmers || {};
-      } else {
-        const seed = hashSeed(String(room.id));
-        worldRef.current = E.generateWorld(seed);
-        overridesRef.current = { ground: {}, object: {} };
-        sharedRef.current = { seed, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0 };
-        farmersRef.current = {};
-      }
-      minimapDirtyRef.current = true;
-      restoredRef.current = true;
-      setHud(h => ({ ...h, money: sharedRef.current.money, day: sharedRef.current.day }));
-      setWorldReady(true);
-    })();
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isHost]);
+  // -------- Hôte : charge (ou crée) une ferme durable depuis son CODE --------
+  // Charge la sauvegarde de la table ferme_saves indexée par le code saisi.
+  // Si le code n'existe pas encore, crée une nouvelle ferme (seed dérivée du
+  // code, donc reproductible). Puis diffuse un instantané aux invités.
+  async function loadFarmByCode(rawCode) {
+    const code = String(rawCode || "").trim().toLowerCase();
+    if (!code) { setCodeError(L.codeEmpty); return; }
+    setCodeError(""); setCodeLoading(true);
+    let saved = null;
+    try {
+      const { data, error } = await supabase.from("ferme_saves").select("state").eq("code", code).maybeSingle();
+      if (error) throw error;
+      if (data && data.state) saved = data.state;
+    } catch (e) {
+      console.error("[FERME] Lecture ferme_saves impossible (table absente ? exécute supabase/upgrade-005.sql).", e);
+      setCodeError(L.codeDbError); setCodeLoading(false); return;
+    }
+    farmCodeRef.current = code;
+    try { window.localStorage.setItem("ferme_lastcode", code); } catch (e) { /* ignore */ }
+    if (saved && typeof saved.seed === "number") {
+      const w = E.generateWorld(saved.seed);
+      E.applyOverrides(w, { groundOv: saved.groundOv, objectOv: saved.objectOv, crops: saved.crops });
+      worldRef.current = w;
+      overridesRef.current = { ground: { ...(saved.groundOv || {}) }, object: { ...(saved.objectOv || {}) } };
+      sharedRef.current = { seed: saved.seed, money: saved.money, day: saved.day, dayStartAt: saved.dayStartAt, totalEarned: saved.totalEarned };
+      farmersRef.current = saved.farmers || {};
+    } else {
+      const seed = hashSeed(code);
+      worldRef.current = E.generateWorld(seed);
+      overridesRef.current = { ground: {}, object: {} };
+      sharedRef.current = { seed, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0 };
+      farmersRef.current = {};
+      // Crée tout de suite l'enregistrement pour réserver le code.
+      persistFarm();
+    }
+    minimapDirtyRef.current = true;
+    restoredRef.current = true;
+    setCodeLoading(false);
+    setHud(h => ({ ...h, money: sharedRef.current.money, day: sharedRef.current.day }));
+    setWorldReady(true);
+    setPhase("select"); // l'effet d'auto-spawn décidera de sauter cet écran
+    setTimeout(() => broadcastSnapshot(), 0);
+  }
 
   // -------- Helpers --------
   const idxOf = (x, y) => y * C.MAP_W + x;
@@ -243,7 +263,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       applySnapshot(payload);
     });
     ch.on("broadcast", { event: "join" }, ({ payload }) => {
-      if (isHost) hostEnsureFarmer(payload.id, payload.name);
+      if (isHost) {
+        // Mémorise le personnage choisi (nom/genre/tenue) dans le fermier,
+        // pour l'entrée directe la prochaine fois.
+        const f = hostEnsureFarmer(payload.id, payload.name, payload.gender, payload.outfit);
+        f.name = payload.name; f.gender = payload.gender; f.outfit = payload.outfit;
+        dirtyRef.current = true;
+      }
       if (payload.id !== me.id) {
         ensureRemote(payload);
         addChat("🌱", L.chatJoin(payload.name));
@@ -310,14 +336,28 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (!worldRef.current) return;
     channelRef.current?.send({ type: "broadcast", event: "snapshot", payload: currentSnapshot() });
   }
-  function hostEnsureFarmer(id, name) {
+  function hostEnsureFarmer(id, name, gender, outfit) {
     if (farmersRef.current[id]) return farmersRef.current[id];
-    const f = E.newFarmer(id, name, "m", 0);
+    const f = E.newFarmer(id, name, gender || "m", outfit | 0);
     farmersRef.current[id] = f;
     dirtyRef.current = true;
     // Renvoie l'état privé de départ au nouveau venu.
     channelRef.current?.send({ type: "broadcast", event: "apply", payload: { farmer: { id, energy: f.energy, tools: f.tools, inv: f.inv } } });
     return f;
+  }
+  // Sauvegarde DURABLE de la ferme dans la table ferme_saves (indexée par le
+  // code). Remplace l'ancien rooms.game_state éphémère : survit au retour au
+  // salon et se recharge par le même code, sur des semaines.
+  async function persistFarm() {
+    if (!isHost || !farmCodeRef.current || !worldRef.current) return;
+    try {
+      await supabase.from("ferme_saves").upsert(
+        { code: farmCodeRef.current, state: currentSnapshot(), updated_at: new Date().toISOString() },
+        { onConflict: "code" }
+      );
+    } catch (e) {
+      console.error("[FERME] Sauvegarde impossible (table ferme_saves absente ? exécute supabase/upgrade-005.sql).", e);
+    }
   }
 
   // Enregistre les tuiles changées dans les overrides de persistance.
@@ -410,13 +450,26 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
     }, 1000);
     const saveTimer = setInterval(() => {
-      if (!dirtyRef.current || !worldRef.current) return;
+      if (!dirtyRef.current || !worldRef.current || !farmCodeRef.current) return;
       dirtyRef.current = false;
-      saveGameState(room.id, GAME_ID, currentSnapshot());
+      persistFarm();
     }, 3000);
     return () => { clearInterval(dayTimer); clearInterval(saveTimer); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isHost]);
+
+  // Entrée directe si le personnage est déjà mémorisé pour cette ferme : dès
+  // que le monde est prêt, si mon fermier existe déjà (nom enregistré), on
+  // saute l'écran de choix et on rejoint directement avec ce personnage.
+  useEffect(() => {
+    if (!worldReady || phase === "playing" || autoJoinTriedRef.current) return;
+    const saved = farmersRef.current[me.id];
+    if (saved && saved.name && saved.gender) {
+      autoJoinTriedRef.current = true;
+      doJoinWith(saved.name, saved.gender, saved.outfit ?? myOutfit);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [worldReady, phase]);
 
   // Invité : retente `hello` tant que le monde n'est pas arrivé (au cas où
   // l'hôte se soit abonné après nous et ait raté notre premier `hello`).
@@ -440,10 +493,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   }, []);
 
   // -------- Rejoindre (spawn) --------
-  function doJoin() {
+  function doJoin() { doJoinWith((nameVal || "Fermier").trim().slice(0, 14) || "Fermier", gender, myOutfit); }
+  function doJoinWith(name, g, outfit) {
     if (!worldReady) return;
-    const name = (nameVal || "Fermier").trim().slice(0, 14) || "Fermier";
-    meRef.current = { id: me.id, name, gender, outfit: myOutfit, x: C.SPAWN.x, y: C.SPAWN.y, dir: 0, moving: false, animT: 0 };
+    meRef.current = { id: me.id, name, gender: g === "f" ? "f" : "m", outfit: outfit | 0, x: C.SPAWN.x, y: C.SPAWN.y, dir: 0, moving: false, animT: 0 };
     invRef.current = invRef.current || { wood: 0, stone: 0, food: 0, seeds: [5, 0, 0, 0], crops: [0, 0, 0, 0] };
     if (!myInv) { setMyInv(invRef.current); }
     joinedRef.current = true;
@@ -452,6 +505,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     channelRef.current?.send({ type: "broadcast", event: "hello", payload: { id: me.id } }); // s'assure d'un snapshot frais
     addChat("★", L.chatWelcome);
   }
+  // "Changer de perso" en jeu : revient à l'écran de choix sans quitter la ferme.
+  function changeCharacter() { autoJoinTriedRef.current = true; joinedRef.current = false; setPhase("select"); }
   function pubMe() {
     const m = meRef.current;
     return { id: m.id, name: m.name, gender: m.gender, outfit: m.outfit, x: +m.x.toFixed(2), y: +m.y.toFixed(2), dir: m.dir, moving: m.moving, tool: slotRef.current };
@@ -769,15 +824,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     joinedRef.current = false;
     channelRef.current?.send({ type: "broadcast", event: "leave", payload: { id: me.id } });
     if (isHost) {
-      // Sauvegarde la ferme AVANT de revenir au salon, puis fait un retour au
-      // salon qui PRÉSERVE game_state (contrairement à resetRoomToLobby qui le
-      // met à null) : sans ça, quitter le jeu effaçait toute la ferme. Ainsi
-      // relancer "Ferme Vallée" plus tard restaure exactement le monde laissé.
-      if (worldRef.current) { try { await saveGameState(room.id, GAME_ID, currentSnapshot()); } catch (e) { /* non bloquant */ } }
-      try {
-        const { error } = await supabase.from("rooms").update({ status: "lobby", current_game: null, launch_at: null, stage_launch_at: null }).eq("id", room.id);
-        if (error) await supabase.from("rooms").update({ status: "lobby", current_game: null }).eq("id", room.id);
-      } catch (e) { await resetRoomToLobby(room.id); }
+      // La ferme est stockée DURABLEMENT dans ferme_saves (par code), pas dans
+      // rooms.game_state : on sauvegarde une dernière fois, puis le retour au
+      // salon standard n'efface PLUS la ferme. Elle se recharge par son code.
+      try { await persistFarm(); } catch (e) { /* non bloquant */ }
+      await resetRoomToLobby(room.id);
     }
     onFinish && onFinish();
   }
@@ -795,6 +846,26 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     { key: "pick", icon: "pick" }, { key: "seeds", icon: "seeds" }, { key: "food", icon: "food" },
   ];
   const clockStr = (() => { const h = Math.floor(hud.timeMin / 60) % 24, mn = hud.timeMin % 60; return `${h}h${String(mn).padStart(2, "0")}`; })();
+
+  // Écran de code de ferme (hôte uniquement) : choisit quelle ferme durable ouvrir.
+  if (phase === "code") {
+    return wrap(
+      <div className="ferme-root">
+        <div className="ferme-join-screen">
+          <div className="ferme-join-box panel">
+            <h1>{L.codeTitle}</h1>
+            <div className="ferme-join-sub">{L.codePrompt}</div>
+            <input className="ferme-name-input" maxLength={24} value={codeInput}
+              onChange={e => { setCodeInput(e.target.value); setCodeError(""); }}
+              onKeyDown={e => { if (e.key === "Enter") loadFarmByCode(codeInput); }}
+              placeholder={L.codePlaceholder} autoFocus />
+            <button className="ferme-btn ferme-join-btn" disabled={codeLoading} onClick={() => loadFarmByCode(codeInput)}>{codeLoading ? L.codeLoading : L.codeLoad}</button>
+            <div className="ferme-join-err">{codeError}</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Sélection de personnage
   if (phase === "select") {
@@ -841,6 +912,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       <div className="ferme-actions">
         <button className="ferme-btn" onClick={teleportHome}>{L.btnHome}</button>
         <button className="ferme-btn" onClick={() => setMapOpen(true)}>{L.btnMap}</button>
+        <button className="ferme-btn ferme-btn-ghost" onClick={changeCharacter}>{L.btnChangeChar}</button>
         <button className="ferme-btn ferme-btn-ghost" onClick={leaveGame}>{L.btnLeave}</button>
       </div>
 
