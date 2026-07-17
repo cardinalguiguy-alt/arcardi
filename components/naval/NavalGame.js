@@ -67,6 +67,7 @@ function NavalBoard({
     [mode, u, edge, headroom, shots, ships, ghost, aoe, aim, idSalt]
   );
   const wrapRef = useRef(null);
+  const tapRef = useRef(null);
   useEffect(() => { if (boardRef) boardRef.current = wrapRef.current; });
 
   function rcFromEvent(e) {
@@ -81,10 +82,18 @@ function NavalBoard({
 
   return (
     <div className="naval-scene" ref={wrapRef}
-      onClick={(e) => { const rc = rcFromEvent(e); if (rc && onCellClick) onCellClick(rc[0], rc[1]); }}
       onPointerDown={(e) => {
-        if (onShipPointerDown) { const sid = shipFromEvent(e); if (sid) { onShipPointerDown(sid, e); return; } }
+        if (onShipPointerDown) { const sid = shipFromEvent(e); if (sid) { onShipPointerDown(sid, e); tapRef.current = null; return; } }
+        const rc = rcFromEvent(e); tapRef.current = rc ? { r: rc[0], c: rc[1], x: e.clientX, y: e.clientY } : null;
       }}
+      onPointerUp={(e) => {
+        const tp = tapRef.current; tapRef.current = null;
+        if (!tp || !onCellClick) return;
+        if (Math.hypot(e.clientX - tp.x, e.clientY - tp.y) > 12) return; // c'était un drag, pas un tir
+        const rc = rcFromEvent(e);
+        onCellClick(rc ? rc[0] : tp.r, rc ? rc[1] : tp.c);
+      }}
+      onPointerCancel={() => { tapRef.current = null; }}
       onMouseMove={(e) => { const rc = rcFromEvent(e); if (rc && onCellHover) onCellHover(rc[0], rc[1]); }}
       onMouseLeave={() => onCellLeave && onCellLeave()}
     >
@@ -124,6 +133,7 @@ function DualBoard({ mode, u, headroom, gap, maxH, own, enemy, fxOwn, fxEnemy, o
     () => dualBoardSVG({ mode, u, headroom, gap, own, enemy, idSalt: "duel" }),
     [mode, u, headroom, gap, own, enemy]
   );
+  const tapRef = useRef(null);
   function sideRc(e) {
     const el = e.target.closest && e.target.closest("[data-r]");
     if (!el) return null;
@@ -138,7 +148,15 @@ function DualBoard({ mode, u, headroom, gap, maxH, own, enemy, fxOwn, fxEnemy, o
   if (maxH) { boxStyle.maxHeight = maxH + "px"; boxStyle.maxWidth = Math.round(maxH * geom.W / geom.H) + "px"; }
   return (
     <div className="naval-scene naval-scene-duo" style={boxStyle}
-      onClick={(e) => { const h = sideRc(e); if (h && onCellClick) onCellClick(h.side, h.r, h.c); }}
+      onPointerDown={(e) => { const h = sideRc(e); tapRef.current = h ? { ...h, x: e.clientX, y: e.clientY } : null; }}
+      onPointerUp={(e) => {
+        const tp = tapRef.current; tapRef.current = null;
+        if (!tp || !onCellClick) return;
+        if (Math.hypot(e.clientX - tp.x, e.clientY - tp.y) > 12) return; // drag, pas un tir
+        const h = sideRc(e) || tp;
+        onCellClick(h.side, h.r, h.c);
+      }}
+      onPointerCancel={() => { tapRef.current = null; }}
       onMouseMove={(e) => { const h = sideRc(e); if (h && onCellHover) onCellHover(h.side, h.r, h.c); }}
       onMouseLeave={() => onCellLeave && onCellLeave()}
     >
