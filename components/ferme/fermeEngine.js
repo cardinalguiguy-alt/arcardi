@@ -127,8 +127,23 @@ export function newFarmer(id, name, gender, outfit) {
     x: C.SPAWN.x, y: C.SPAWN.y, dir: 0, moving: false, tool: 0,
     energy: C.MAX_ENERGY,
     tools: { hoe: 1, can: 1, axe: 1, pick: 1 },
-    inv: { wood: 0, stone: 0, food: 0, seeds: [5, 0, 0, 0], crops: [0, 0, 0, 0] },
+    inv: {
+      wood: 0, stone: 0, food: 0,
+      seeds: [5, 0, 0, 0], crops: [0, 0, 0, 0],
+      gems: C.GEMS.map(() => 0),   // gemmes rares trouvées au minage
+      fish: C.FISH.map(() => 0),   // poissons pêchés
+    },
+    quests: {}, // id de quête -> true quand accomplie
   };
+}
+
+// Tirage pondéré d'un index dans une liste d'objets ayant un champ `weight`.
+function weightedPick(list, rnd) {
+  let total = 0;
+  for (const it of list) total += it.weight || 0;
+  let r = (rnd || Math.random)() * total;
+  for (let i = 0; i < list.length; i++) { r -= list[i].weight || 0; if (r <= 0) return i; }
+  return list.length - 1;
 }
 
 const canReach = (f, x, y) =>
@@ -151,7 +166,7 @@ function useEnergy(f, action, toolKey) {
    messages tile/crop et met à jour ses overrides de persistance.
    ------------------------------------------------------------------------- */
 export function resolveAct(world, f, m) {
-  const res = { tiles: [], cropTiles: [], fx: [], invChanged: false, toast: null };
+  const res = { tiles: [], cropTiles: [], fx: [], invChanged: false, toast: null, did: null };
   const x = m.x | 0, y = m.y | 0;
   if (!inMap(x, y) || !canReach(f, x, y)) return res;
   const i = idx(x, y), g = world.ground[i], o = world.objects[i];
@@ -213,12 +228,31 @@ export function resolveAct(world, f, m) {
           world.objects[i] = C.O_NONE; world.objHp.delete(i);
           f.inv.stone += C.ROCK_STONE;
           res.tiles.push(i); res.fx.push({ k: "rockdown", x, y });
+          // Gemme rare : chance de trouver une pierre précieuse dans le rocher.
+          if (Math.random() < C.GEM_DROP_CHANCE) {
+            const gt = weightedPick(C.GEMS);
+            f.inv.gems[gt] = (f.inv.gems[gt] || 0) + 1;
+            res.fx.push({ k: "gem", x, y, gem: gt });
+          }
         } else world.objHp.set(i, hp);
         res.invChanged = true;
       }
       break;
+    case "fish":
+      // Pêche : la case ciblée doit être de l'eau (rivière) et à portée.
+      if (g === C.G_WATER) {
+        if (!useEnergy(f, "fish", null)) { res.toast = "tired"; return res; }
+        const ft = weightedPick(C.FISH);
+        f.inv.fish[ft] = (f.inv.fish[ft] || 0) + 1;
+        res.fx.push({ k: "fish", x, y, fish: ft });
+        res.invChanged = true;
+      } else {
+        res.toast = "needWater";
+      }
+      break;
     default: break;
   }
+  if (res.invChanged) res.did = m.action; // pour la détection des quêtes
   return res;
 }
 
@@ -264,17 +298,39 @@ export function resolveSell(f, m) {
   } else if (m.item === "stone") {
     const n = Math.min(f.inv.stone, Math.max(1, (m.n | 0) || f.inv.stone));
     f.inv.stone -= n; gain = n * C.STONE_SELL;
+  } else if (m.item === "gem") {
+    const gt = m.gem | 0;
+    if (gt < 0 || gt >= C.GEMS.length) return res;
+    const n = Math.min(f.inv.gems[gt], Math.max(1, (m.n | 0) || f.inv.gems[gt]));
+    f.inv.gems[gt] -= n; gain = n * C.GEMS[gt].sell;
+  } else if (m.item === "fish") {
+    const ft = m.fish | 0;
+    if (ft < 0 || ft >= C.FISH.length) return res;
+    const n = Math.min(f.inv.fish[ft], Math.max(1, (m.n | 0) || f.inv.fish[ft]));
+    f.inv.fish[ft] -= n; gain = n * C.FISH[ft].sell;
   }
   if (gain > 0) { res.moneyDelta = gain; res.earnedDelta = gain; res.invChanged = true; res.gain = gain; }
   return res;
 }
 
-// Repas : rend de l'énergie contre un casse-croûte. Renvoie { invChanged, fx }.
+// Repas : rend de l'énergie. Mange un casse-croûte en priorité ; sinon, mange
+// le poisson le moins précieux disponible (la pêche sert donc aussi à se
+// nourrir). Renvoie { invChanged, fx }.
 export function resolveEat(f) {
   const res = { invChanged: false, fx: null };
-  if (f.inv.food > 0 && f.energy < C.MAX_ENERGY) {
+  if (f.energy >= C.MAX_ENERGY) return res;
+  if (f.inv.food > 0) {
     f.inv.food--; f.energy = Math.min(C.MAX_ENERGY, f.energy + C.FOOD_ENERGY);
     res.invChanged = true; res.fx = { k: "eat", x: f.x, y: f.y };
+    return res;
+  }
+  // Pas de casse-croûte : manger un poisson (du moins cher au plus cher).
+  for (let ft = 0; ft < C.FISH.length; ft++) {
+    if ((f.inv.fish[ft] || 0) > 0) {
+      f.inv.fish[ft]--; f.energy = Math.min(C.MAX_ENERGY, f.energy + C.FISH[ft].energy);
+      res.invChanged = true; res.fx = { k: "eat", x: f.x, y: f.y };
+      return res;
+    }
   }
   return res;
 }

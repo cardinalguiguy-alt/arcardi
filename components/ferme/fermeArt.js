@@ -291,8 +291,33 @@ export function buildSprites() {
       case "energy":
         g.fillStyle = "#e8a83a"; g.beginPath();
         g.moveTo(9, 1); g.lineTo(4, 9); g.lineTo(7, 9); g.lineTo(6, 15); g.lineTo(12, 6); g.lineTo(9, 6); g.fill(); break;
+      case "rod": // canne à pêche : manche en bois, fil et flotteur
+        P(g, 3, 13, 10, 2, "#8a6340"); P(g, 4, 12, 8, 1, "#a87745");
+        for (let i = 0; i < 10; i++) P(g, 12 - i, 12 - i, 1, 1, "#c8c8d0"); // canne diagonale
+        P(g, 2, 2, 1, 8, "#d8d8e0"); // fil
+        P(g, 1, 9, 3, 3, "#e03e2e"); P(g, 2, 10, 1, 1, "#fff"); // flotteur
+        break;
       default: break;
     }
+    return c;
+  }
+  // Gemme (losange) d'une couleur donnée, pour l'inventaire / le bac.
+  function gemIcon(col) {
+    const [c, g] = cv(T, T);
+    g.fillStyle = col; g.beginPath();
+    g.moveTo(8, 2); g.lineTo(13, 7); g.lineTo(8, 14); g.lineTo(3, 7); g.closePath(); g.fill();
+    g.fillStyle = "rgba(255,255,255,.55)"; g.beginPath();
+    g.moveTo(8, 2); g.lineTo(11, 6); g.lineTo(8, 8); g.lineTo(5, 6); g.closePath(); g.fill();
+    P(g, 6, 9, 1, 1, "rgba(255,255,255,.5)");
+    return c;
+  }
+  // Poisson d'une couleur donnée.
+  function fishIcon(col) {
+    const [c, g] = cv(T, T);
+    g.fillStyle = col; g.beginPath(); g.ellipse(8, 8, 5, 3, 0, 0, 7); g.fill();
+    g.beginPath(); g.moveTo(12, 8); g.lineTo(15, 5); g.lineTo(15, 11); g.closePath(); g.fill(); // queue
+    P(g, 4, 7, 1, 1, "#1a1a1a"); // oeil
+    g.fillStyle = "rgba(255,255,255,.35)"; P(g, 7, 6, 3, 1);
     return c;
   }
 
@@ -315,12 +340,16 @@ export function buildSprites() {
     crops: [],
     chars: {},
     icons: {},
+    gemIcons: [],
+    fishIcons: [],
   };
   for (let t = 0; t < C.CROPS.length; t++) {
     S.crops[t] = [];
     for (let s = 0; s < C.CROP_STAGES; s++) S.crops[t][s] = cropSprite(t, s);
   }
-  for (const k of ["hoe", "can", "axe", "pick", "seeds", "wood", "stone", "food", "gold", "energy"]) S.icons[k] = icon(k);
+  for (const k of ["hoe", "can", "axe", "pick", "seeds", "wood", "stone", "food", "gold", "energy", "rod"]) S.icons[k] = icon(k);
+  S.gemIcons = C.GEMS.map(gm => gemIcon(gm.color));
+  S.fishIcons = C.FISH.map(fs => fishIcon(fs.color));
   S.getChar = (gender, outfit) => {
     const key = gender + ":" + outfit;
     if (!S.chars[key]) S.chars[key] = charSheet(gender, outfit);

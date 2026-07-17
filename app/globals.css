@@ -6561,6 +6561,19 @@ body.ferme-active .wrap-room > .brand{ display:none !important; }
 .ferme-slot-count{ position:absolute; bottom:0; right:3px; font-size:12px; font-weight:bold; color:var(--f-ink); text-shadow:0 0 2px #fff; }
 .ferme-slot-lvl{ position:absolute; top:-2px; right:3px; font-size:10px; font-weight:bold; color:var(--f-accent); }
 
+/* Panneau des quêtes de découverte (checklist), sous le HUD à gauche */
+.ferme-quests{ position:fixed; top:96px; left:10px; z-index:11; width:250px; max-width:70vw; padding:8px 10px; font-size:12px; }
+.ferme-quests-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
+.ferme-quests-head b{ font-size:13px; }
+.ferme-quests-x{ background:var(--f-accent); color:#fff; border:2px solid var(--f-wood); border-radius:5px; font-family:inherit; font-weight:bold; cursor:pointer; padding:1px 7px; }
+.ferme-quest-row{ display:flex; align-items:center; gap:6px; padding:3px 2px; border-bottom:1px solid var(--f-paper-d); }
+.ferme-quest-row.done .ferme-quest-label{ text-decoration:line-through; opacity:.6; }
+.ferme-quest-check{ flex:none; }
+.ferme-quest-label{ flex:1; }
+.ferme-quest-reward{ flex:none; font-weight:bold; color:#b06a00; }
+.ferme-quest-alldone{ margin-top:6px; font-weight:bold; text-align:center; color:#2f7a2f; }
+.ferme-quests-fab{ position:fixed; top:96px; left:10px; z-index:11; padding:5px 10px; font-size:12px; }
+
 /* Modales boutique / bac */
 .ferme-modal{
   position:fixed; inset:0; display:flex; align-items:center; justify-content:center;

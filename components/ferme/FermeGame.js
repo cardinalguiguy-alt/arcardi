@@ -62,6 +62,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [myEnergy, setMyEnergy] = useState(C.MAX_ENERGY);
   const [myTools, setMyTools] = useState({ hoe: 1, can: 1, axe: 1, pick: 1 });
   const [myInv, setMyInv] = useState(null);
+  const [myQuests, setMyQuests] = useState(null); // {questId: true}
+  const [questOpen, setQuestOpen] = useState(true);
   const [slot, setSlot] = useState(0);
   const [seedSel, setSeedSel] = useState(0);
   const [shopOpen, setShopOpen] = useState(false);
@@ -241,7 +243,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (payload.farmers) farmersRef.current = payload.farmers;
     // Mon propre fermier (reprise) si présent
     const mine = payload.farmers && payload.farmers[me.id];
-    if (mine) { invRef.current = mine.inv; toolsRef.current = mine.tools; energyRef.current = mine.energy; setMyInv(mine.inv); setMyTools(mine.tools); setMyEnergy(mine.energy); }
+    if (mine) { invRef.current = mine.inv; toolsRef.current = mine.tools; energyRef.current = mine.energy; setMyInv(mine.inv); setMyTools(mine.tools); setMyEnergy(mine.energy); if (mine.quests) setMyQuests(mine.quests); }
     minimapDirtyRef.current = true;
     setHud(h => ({ ...h, money: payload.money, day: payload.day }));
     setWorldReady(true);
@@ -377,6 +379,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (typeof req.px === "number") { f.x = req.px; f.y = req.py; }
     const s = sharedRef.current;
     const out = { tiles: [], crops: [], fx: [], state: null, farmer: null, toast: null, chat: null };
+    let questId = null; // action réussie -> quête à valider éventuellement
 
     if (req.kind === "act") {
       const r = E.resolveAct(w, f, req);
@@ -385,6 +388,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       out.fx = r.fx;
       if (r.invChanged) out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
       if (r.toast) out.toast = { id: f.id, key: r.toast };
+      if (r.did) questId = r.did;
     } else if (req.kind === "buy") {
       const r = E.resolveBuy(f, s.money, req);
       if (r.moneyDelta) { s.money += r.moneyDelta; out.state = shareState(); }
@@ -396,12 +400,28 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (r.moneyDelta) { s.money += r.moneyDelta; s.totalEarned += r.earnedDelta; out.state = shareState(); }
       if (r.invChanged) out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
       if (r.toast) out.toast = { id: f.id, key: r.toast };
-      if (r.gain > 0) { out.fx.push({ k: "sell", x: C.BIN.x, y: C.BIN.y, gain: r.gain }); out.chat = { from: "💰", msg: L.chatSell(r.gain, s.money) }; }
+      if (r.gain > 0) { out.fx.push({ k: "sell", x: C.BIN.x, y: C.BIN.y, gain: r.gain }); out.chat = { from: "💰", msg: L.chatSell(r.gain, s.money) }; questId = "sell"; }
     } else if (req.kind === "eat") {
       const r = E.resolveEat(f);
       if (r.invChanged) out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
       if (r.fx) out.fx.push(r.fx);
     }
+
+    // Quêtes de découverte : première réussite d'une action listée -> or commun.
+    if (questId && !f.quests[questId]) {
+      const q = C.QUESTS.find(x => x.id === questId);
+      if (q) {
+        f.quests[questId] = true;
+        s.money += q.reward; out.state = shareState();
+        if (!out.farmer) out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
+        const label = (L.questLabels && L.questLabels[questId]) || questId;
+        channelRef.current?.send({ type: "broadcast", event: "chat", payload: { from: "🎯", msg: L.questDone(label, q.reward) } });
+        dirtyRef.current = true;
+      }
+    }
+    // Les quêtes accomplies voyagent avec l'état privé du fermier.
+    if (out.farmer) out.farmer.quests = f.quests;
+
     if (out.tiles.length) dirtyRef.current = true;
     channelRef.current?.send({ type: "broadcast", event: "apply", payload: out });
   }
@@ -414,7 +434,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (w && p.tiles) for (const tl of p.tiles) { w.ground[idxOf(E.xOf(tl.i), E.yOf(tl.i))] = tl.g; w.objects[tl.i] = tl.o; if (tl.o === C.O_STUMP) w.objHp.set(tl.i, 2); minimapDirtyRef.current = true; }
     if (w && p.crops) for (const cr of p.crops) { if (cr.c) w.crops.set(cr.i, { ...(w.crops.get(cr.i) || {}), t: cr.c.t, s: cr.c.s }); else w.crops.delete(cr.i); }
     if (p.state) { const s = sharedRef.current; s.money = p.state.money; s.day = p.state.day; s.dayStartAt = p.state.dayStartAt; s.totalEarned = p.state.totalEarned; setHud(h => ({ ...h, money: s.money, day: s.day })); }
-    if (p.farmer && p.farmer.id === me.id) { invRef.current = p.farmer.inv; toolsRef.current = p.farmer.tools; energyRef.current = p.farmer.energy; setMyInv(p.farmer.inv); setMyTools(p.farmer.tools); setMyEnergy(p.farmer.energy); }
+    if (p.farmer && p.farmer.id === me.id) { invRef.current = p.farmer.inv; toolsRef.current = p.farmer.tools; energyRef.current = p.farmer.energy; setMyInv(p.farmer.inv); setMyTools(p.farmer.tools); setMyEnergy(p.farmer.energy); if (p.farmer.quests) setMyQuests(p.farmer.quests); }
     if (p.toast && p.toast.id === me.id) pushToast(toastMsg(p.toast.key));
     if (p.chat) addChat(p.chat.from, p.chat.msg);
     if (p.fx) for (const f of p.fx) spawnFx(f);
@@ -430,7 +450,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     pushToast(L.toastNewDay(p.day));
   }
   function toastMsg(key) {
-    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax }[key] || "";
+    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater }[key] || "";
   }
 
   // -------- Hôte : boucle temps + persistance --------
@@ -497,8 +517,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function doJoinWith(name, g, outfit) {
     if (!worldReady) return;
     meRef.current = { id: me.id, name, gender: g === "f" ? "f" : "m", outfit: outfit | 0, x: C.SPAWN.x, y: C.SPAWN.y, dir: 0, moving: false, animT: 0 };
-    invRef.current = invRef.current || { wood: 0, stone: 0, food: 0, seeds: [5, 0, 0, 0], crops: [0, 0, 0, 0] };
+    invRef.current = invRef.current || { wood: 0, stone: 0, food: 0, seeds: [5, 0, 0, 0], crops: [0, 0, 0, 0], gems: C.GEMS.map(() => 0), fish: C.FISH.map(() => 0) };
     if (!myInv) { setMyInv(invRef.current); }
+    if (!myQuests) setMyQuests((farmersRef.current[me.id] && farmersRef.current[me.id].quests) || {});
     joinedRef.current = true;
     setPhase("playing");
     channelRef.current?.send({ type: "broadcast", event: "join", payload: pubMe() });
@@ -538,6 +559,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     else if (sl === 3) sendReq({ kind: "act", action: "mine", x: tt.x, y: tt.y });
     else if (sl === 4) sendReq({ kind: "act", action: "plant", seed: seedSelRef.current, x: tt.x, y: tt.y });
     else if (sl === 5) sendReq({ kind: "eat" });
+    else if (sl === 6) sendReq({ kind: "act", action: "fish", x: tt.x, y: tt.y });
   }
 
   // -------- Téléport maison (nouveauté) --------
@@ -563,7 +585,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     function onKeyDown(e) {
       if (document.activeElement === chatInputRef.current) return;
       keysRef.current[e.code] = true;
-      if (e.code >= "Digit1" && e.code <= "Digit6") selectSlot(+e.code.slice(5) - 1);
+      if (e.code >= "Digit1" && e.code <= "Digit7") selectSlot(+e.code.slice(5) - 1);
       if (e.code === "Space") { e.preventDefault(); doAction(); }
       if (e.code === "KeyE") tryOpenNearby();
       if (e.code === "KeyT") { e.preventDefault(); setChatOpen(true); setTimeout(() => chatInputRef.current?.focus(), 0); }
@@ -807,6 +829,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       case "harvest": fx.push({ ...base, kind: "txt", txt: L.fxHarvest(cropName(m.crop)), col: "#a8f080", life: 1.4 }); break;
       case "sell": fx.push({ ...base, kind: "txt", txt: L.fxGold(m.gain), col: "#ffe060", life: 1.8 }); break;
       case "eat": fx.push({ ...base, kind: "txt", txt: L.fxEat, col: "#ffd0a0", life: 1 }); break;
+      case "gem": {
+        const gm = C.GEMS[m.gem] || C.GEMS[0];
+        fx.push({ ...base, kind: "txt", txt: L.fxGem(lang === "en" ? gm.nameEn : gm.name), col: gm.color, life: 1.8 });
+        for (let i = 0; i < 8; i++) fx.push({ ...base, kind: "p", col: gm.color, vx: (Math.random() - .5) * 3, vy: -Math.random() * 3.5, life: .7 });
+        break;
+      }
+      case "fish": {
+        const fs = C.FISH[m.fish] || C.FISH[0];
+        fx.push({ ...base, kind: "txt", txt: L.fxFish(lang === "en" ? fs.nameEn : fs.name), col: "#a8d4f0", life: 1.4 });
+        for (let i = 0; i < 5; i++) fx.push({ ...base, kind: "p", col: "#5a9be0", vx: (Math.random() - .5) * 2, vy: -Math.random() * 2, life: .5 });
+        break;
+      }
       default: break;
     }
   }
@@ -838,12 +872,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const buyFood = () => sendReq({ kind: "buy", item: "food" });
   const buyTool = (k) => sendReq({ kind: "buy", item: "tool", tool: k });
   const sellItem = (item, crop) => sendReq({ kind: "sell", item, crop, n: 9999 });
+  const sellFish = (fishId) => sendReq({ kind: "sell", item: "fish", fish: fishId, n: 9999 });
+  const sellGem = (gemId) => sendReq({ kind: "sell", item: "gem", gem: gemId, n: 9999 });
 
   // -------- Rendu React (UI par-dessus le canvas) --------
   const TOOL_NAMES = lang === "en" ? C.TOOL_NAMES_EN : C.TOOL_NAMES;
   const slots = [
     { key: "hoe", icon: "hoe" }, { key: "can", icon: "can" }, { key: "axe", icon: "axe" },
     { key: "pick", icon: "pick" }, { key: "seeds", icon: "seeds" }, { key: "food", icon: "food" },
+    { key: "rod", icon: "rod" },
   ];
   const clockStr = (() => { const h = Math.floor(hud.timeMin / 60) % 24, mn = hud.timeMin % 60; return `${h}h${String(mn).padStart(2, "0")}`; })();
 
@@ -922,13 +959,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       {/* Barre d'outils */}
       <div className="ferme-toolbar panel">
         {slots.map((s, i) => {
-          const isSeed = s.key === "seeds", isFood = s.key === "food";
+          const isSeed = s.key === "seeds", isFood = s.key === "food", isRod = s.key === "rod";
           let count = "", lvl = "", img = spritesReady ? spritesRef.current.icons[s.icon] : null;
           if (isSeed) { count = myInv ? myInv.seeds[seedSel] : ""; img = spritesReady ? spritesRef.current.crops[seedSel][C.CROP_STAGES - 1] : null; }
           else if (isFood) count = myInv ? myInv.food : "";
+          else if (isRod) { /* pas de niveau ni de compteur */ }
           else lvl = "N" + (myTools[s.key] || 1);
+          const title = isSeed ? L.seedTip(seedName(seedSel)) : isFood ? L.foodTip(C.FOOD_ENERGY) : isRod ? L.rodTip : TOOL_NAMES[s.key];
           return (
-            <div key={s.key} className={"ferme-slot" + (i === slot ? " sel" : "")} onClick={() => selectSlot(i)} title={isSeed ? L.seedTip(seedName(seedSel)) : isFood ? L.foodTip(C.FOOD_ENERGY) : TOOL_NAMES[s.key]}>
+            <div key={s.key} className={"ferme-slot" + (i === slot ? " sel" : "")} onClick={() => selectSlot(i)} title={title}>
               <span className="ferme-slot-key">{i + 1}</span>
               <Sprite img={img} w={32} h={32} />
               {count !== "" && <span className="ferme-slot-count">{count}</span>}
@@ -937,6 +976,28 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           );
         })}
       </div>
+
+      {/* Panneau des quêtes de découverte (checklist cochable) */}
+      {questOpen && myQuests && (
+        <div className="ferme-quests panel">
+          <div className="ferme-quests-head">
+            <b>{L.questTitle}</b>
+            <button className="ferme-quests-x" onClick={() => setQuestOpen(false)}>✕</button>
+          </div>
+          {C.QUESTS.map(q => {
+            const done = !!myQuests[q.id];
+            return (
+              <div key={q.id} className={"ferme-quest-row" + (done ? " done" : "")}>
+                <span className="ferme-quest-check">{done ? "✅" : "⬜"}</span>
+                <span className="ferme-quest-label">{L.questLabels[q.id]}</span>
+                <span className="ferme-quest-reward">{L.questReward(q.reward)}</span>
+              </div>
+            );
+          })}
+          {C.QUESTS.every(q => myQuests[q.id]) && <div className="ferme-quest-alldone">{L.questAllDone}</div>}
+        </div>
+      )}
+      {!questOpen && <button className="ferme-btn ferme-quests-fab" onClick={() => setQuestOpen(true)}>{L.questBtn}</button>}
 
       {/* Chat */}
       <div className="ferme-chatlog">{[...chat].reverse().map(c => <div key={c.id}><b>{c.from}</b> {c.msg}</div>)}</div>
@@ -1009,6 +1070,27 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               <div className="info"><b>{L.stoneRowTitle(myInv ? myInv.stone : 0)}</b><span>{L.perPiece(C.STONE_SELL)}</span></div>
               <button disabled={!myInv || myInv.stone === 0} onClick={() => sellItem("stone")}>{L.sellAll}</button>
             </div>
+            {C.FISH.map(fs => {
+              const n = myInv && myInv.fish ? myInv.fish[fs.id] : 0;
+              return (
+                <div className="ferme-shop-row" key={"f" + fs.id}>
+                  <Sprite img={spritesReady ? spritesRef.current.fishIcons[fs.id] : null} w={32} h={32} />
+                  <div className="info"><b>{(lang === "en" ? fs.nameEn : fs.name)} × {n}</b><span>{L.perPiece(fs.sell)}</span></div>
+                  <button disabled={!n} onClick={() => sellFish(fs.id)}>{L.sellAll}</button>
+                </div>
+              );
+            })}
+            {C.GEMS.map(gm => {
+              const n = myInv && myInv.gems ? myInv.gems[gm.id] : 0;
+              if (!n) return null;
+              return (
+                <div className="ferme-shop-row" key={"g" + gm.id}>
+                  <Sprite img={spritesReady ? spritesRef.current.gemIcons[gm.id] : null} w={32} h={32} />
+                  <div className="info"><b>{(lang === "en" ? gm.nameEn : gm.name)} × {n}</b><span>{L.perPiece(gm.sell)}</span></div>
+                  <button disabled={!n} onClick={() => sellGem(gm.id)}>{L.sellAll}</button>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

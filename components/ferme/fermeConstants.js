@@ -31,13 +31,34 @@ export const O_TREE2 = 7;   // variante d'arbre (pin)
 
 // --- Cultures ---
 // stages: 0=semis ... maxStage=récoltable ; growDays = jours (arrosés) pour mûrir
+// Durées RACCOURCIES (demande 2026-07 : "2 jours par plant c'est un peu long")
+// -> navet 1, patate 2, tomate 2, citrouille 3 (au lieu de 2/3/4/5). Prix et
+// coûts inchangés.
 export const CROPS = [
-  { id: 0, name: "Navet",          nameEn: "Turnip",   seedName: "Graine de navet",       seedNameEn: "Turnip seeds",   growDays: 2, seedCost: 20, sell: 60,  color: "#e8d8f0", top: "#b46ee0" },
-  { id: 1, name: "Pomme de terre", nameEn: "Potato",   seedName: "Graine de p. de terre", seedNameEn: "Potato seeds",   growDays: 3, seedCost: 35, sell: 110, color: "#d9b380", top: "#c49a62" },
-  { id: 2, name: "Tomate",         nameEn: "Tomato",   seedName: "Graine de tomate",      seedNameEn: "Tomato seeds",   growDays: 4, seedCost: 50, sell: 170, color: "#e03e2e", top: "#c22b1c" },
-  { id: 3, name: "Citrouille",     nameEn: "Pumpkin",  seedName: "Graine de citrouille",  seedNameEn: "Pumpkin seeds",  growDays: 5, seedCost: 80, sell: 320, color: "#e8842a", top: "#cc6d14" },
+  { id: 0, name: "Navet",          nameEn: "Turnip",   seedName: "Graine de navet",       seedNameEn: "Turnip seeds",   growDays: 1, seedCost: 20, sell: 60,  color: "#e8d8f0", top: "#b46ee0" },
+  { id: 1, name: "Pomme de terre", nameEn: "Potato",   seedName: "Graine de p. de terre", seedNameEn: "Potato seeds",   growDays: 2, seedCost: 35, sell: 110, color: "#d9b380", top: "#c49a62" },
+  { id: 2, name: "Tomate",         nameEn: "Tomato",   seedName: "Graine de tomate",      seedNameEn: "Tomato seeds",   growDays: 2, seedCost: 50, sell: 170, color: "#e03e2e", top: "#c22b1c" },
+  { id: 3, name: "Citrouille",     nameEn: "Pumpkin",  seedName: "Graine de citrouille",  seedNameEn: "Pumpkin seeds",  growDays: 3, seedCost: 80, sell: 320, color: "#e8842a", top: "#cc6d14" },
 ];
 export const CROP_STAGES = 5; // 0..4, stage 4 = mûr
+
+// --- Gemmes rares (trouvées en cassant des rochers) ---
+// Chance de tomber sur une gemme quand un rocher est détruit. Tirage pondéré :
+// l'améthyste est commune, le diamant très rare. Vendues très cher au bac.
+export const GEMS = [
+  { id: 0, name: "Améthyste", nameEn: "Amethyst", sell: 200,  color: "#b46ee0", weight: 0.62 },
+  { id: 1, name: "Émeraude",  nameEn: "Emerald",  sell: 500,  color: "#3fbf6a", weight: 0.30 },
+  { id: 2, name: "Diamant",   nameEn: "Diamond",  sell: 1200, color: "#a8e8f4", weight: 0.08 },
+];
+export const GEM_DROP_CHANCE = 0.16; // proba qu'un rocher détruit lâche une gemme
+
+// --- Poissons (pêche à la rivière) ---
+// Se mangent (rendent de l'énergie) OU se revendent au bac. Tirage pondéré.
+export const FISH = [
+  { id: 0, name: "Gardon",  nameEn: "Roach",  sell: 30,  energy: 20, color: "#9fb4c4", weight: 0.58 },
+  { id: 1, name: "Truite",  nameEn: "Trout",  sell: 80,  energy: 30, color: "#d98a5a", weight: 0.34 },
+  { id: 2, name: "Brochet", nameEn: "Pike",   sell: 180, energy: 45, color: "#6a8f5a", weight: 0.08 },
+];
 
 // --- Outils ---
 export const TOOLS = ["hoe", "can", "axe", "pick"];
@@ -48,7 +69,21 @@ export const TOOL_UPGRADE_COST = [0, 500, 2000]; // coût pour passer au niveau 
 
 // Énergie
 export const MAX_ENERGY = 100;
-export const ENERGY_COST = { till: 2, water: 1, chop: 3, mine: 3, harvest: 0, plant: 0 };
+export const ENERGY_COST = { till: 2, water: 1, chop: 3, mine: 3, harvest: 0, plant: 0, fish: 1 };
+
+// --- Quêtes de découverte (checklist guidée) ---
+// Chaque quête se valide la PREMIÈRE fois que le joueur réussit l'action
+// correspondante, et crédite la caisse commune. `act` = valeur de l'action
+// (ou "sell") détectée côté hôte. Ordre = ordre d'affichage/apprentissage.
+export const QUESTS = [
+  { id: "till",  reward: 40 },
+  { id: "plant", reward: 40 },
+  { id: "water", reward: 40 },
+  { id: "chop",  reward: 50 },
+  { id: "mine",  reward: 50 },
+  { id: "fish",  reward: 60 },
+  { id: "sell",  reward: 80 },
+];
 export const FOOD_COST = 50;    // prix du casse-croûte
 export const FOOD_ENERGY = 40;  // énergie rendue
 
