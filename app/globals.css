@@ -6028,11 +6028,15 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
 .naval-board-wrap{ width:min(420px, 94vw); }
 .naval-arena.placing .naval-board-wrap{ width:min(400px, 92vw); }
 @media (min-width: 900px){
-  .naval-panel{ max-width:min(1320px, 98vw) !important; }
+  /* Élargi (2026-07) : la scène ISO en combat est bornée en largeur par le
+     panel avant de l'être en hauteur — relever ce plafond laisse les grilles
+     grossir dans la marge latérale du mode agrandi, puis sceneMaxH borne la
+     hauteur (zéro scroll). */
+  .naval-panel{ max-width:min(1560px, 99vw) !important; }
   .naval-arena.placing .naval-board-wrap{ width:min(520px, 42vw); }
 }
 @media (min-width: 1300px){
-  .naval-panel{ max-width:min(1600px, 98vw) !important; }
+  .naval-panel{ max-width:min(1960px, 99vw) !important; }
 }
 .naval-board-title{ font-weight:800; font-size:12.5px; text-transform:uppercase; letter-spacing:.6px; color:var(--muted); margin:0 0 8px; }
 .naval-enemy-lbl{ color:var(--acc-naval); }
@@ -6048,7 +6052,7 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
    posé : léger scroll toléré plutôt que des grilles minuscules. --- */
 .naval-arena-duo{ display:flex; flex-direction:column; align-items:center; gap:8px; }
 .naval-duo-labels{ display:flex; justify-content:space-between; align-items:baseline; gap:12px;
-  width:min(1100px, 96vw); max-width:100%; font-size:12.5px; font-weight:800;
+  width:min(1560px, 96vw); max-width:100%; font-size:12.5px; font-weight:800;
   text-transform:uppercase; letter-spacing:.5px; color:var(--muted); }
 .naval-duo-lbl.enemy{ text-align:left; }
 .naval-duo-lbl.own{ text-align:right; }
@@ -6083,7 +6087,12 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
 /* touch-action:none sur le conteneur ENTIER (pas seulement le svg) : le
    drag & drop de placement au doigt (tablette/smartphone) ne déclenche plus
    le scroll/zoom de page pendant qu'on déplace un navire. */
-.naval-scene{ position:relative; width:100%; touch-action:none; }
+/* user-select:none sur toute la scène (base svg + overlay) : un micro-glissement
+   au clic ne sélectionne plus le texte SVG (coordonnées, libellés) — ce qui,
+   sinon, "avale" le clic de tir et fait clignoter la sélection sous le curseur.
+   Correctif 2026-07 (clic pas toujours enregistré + sélection parasite). */
+.naval-scene{ position:relative; width:100%; touch-action:none;
+  user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; }
 .naval-svg-host{ width:100%; }
 .naval-svg-host svg.naval-svg{ display:block; width:100%; height:auto; touch-action:none;
   filter:drop-shadow(0 12px 26px rgba(0,0,0,.42)); overflow:visible; }

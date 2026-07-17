@@ -542,7 +542,7 @@ function MazeChapter({ role, maze, net, avatar, onMove, onSolve, onFail, t }) {
     if (d > R) return 0;
     const fa = Math.atan2(sim.face.y, sim.face.x), ca = Math.atan2(cy - ay, cx - ax);
     let diff = Math.abs(ca - fa); if (diff > Math.PI) diff = 2 * Math.PI - diff;
-    const cone = 0.8;
+    const cone = 0.44;   // demi-angle ~25° => faisceau total ~50° (2026-07, resserré)
     if (diff > cone) return 0;
     return Math.max(0, Math.min(1, (1 - d / R) * (1 - diff / cone) * 1.3));
   }
@@ -645,7 +645,7 @@ function MazeChapter({ role, maze, net, avatar, onMove, onSolve, onFail, t }) {
         if (sim.phase !== "dark") {
           const R = CELL * 2.5 * (1 + Math.sin(performance.now() / 120) * 0.03);
           const fa = Math.atan2(sim.face.y, sim.face.x);
-          ctx.save(); ctx.beginPath(); ctx.moveTo(ax, ay); ctx.arc(ax, ay, R, fa - 0.8, fa + 0.8); ctx.closePath(); ctx.clip();
+          ctx.save(); ctx.beginPath(); ctx.moveTo(ax, ay); ctx.arc(ax, ay, R, fa - 0.44, fa + 0.44); ctx.closePath(); ctx.clip();
           const g = ctx.createRadialGradient(ax, ay, 3, ax, ay, R);
           g.addColorStop(0, "rgba(255,240,205,.95)"); g.addColorStop(.5, "rgba(255,228,175,.45)"); g.addColorStop(1, "rgba(0,0,0,0)");
           ctx.fillStyle = g; ctx.fillRect(0, 0, CANVAS, CANVAS); ctx.restore();
