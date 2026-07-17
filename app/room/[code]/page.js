@@ -37,6 +37,7 @@ import DoorStage from "@/components/DoorStage";
 import CurtainStage from "@/components/CurtainStage";
 import FlashStage from "@/components/FlashStage";
 import VideoStage from "@/components/VideoStage";
+import OceanStage from "@/components/OceanStage";
 
 // Métadonnées d'affichage de chaque jeu : icône, couleur d'accent (variable
 // CSS existante), clés i18n pour le nom / la description courte de la carte
@@ -69,11 +70,11 @@ const GAME_META = {
   tupreferes: { icon: "🤔", accent: "--acc-tupreferes", nameKey: "nameTuPreferes", tagKey: "tagTuPreferes", minPlayers: 2, stage: "curtain" },
   chess:    { icon: "♟️", accent: "--acc-chess",     nameKey: "nameChess",   tagKey: "tagChess", minPlayers: 2, maxPlayers: 2, stage: "door" },
   rami:     { icon: "🃏", accent: "--acc-rami",      nameKey: "nameRami",    tagKey: "tagRami", minPlayers: 2, maxPlayers: 6, stage: "door" },
-  naval:    { icon: "⚓", accent: "--acc-naval",     nameKey: "nameNaval",   tagKey: "tagNaval", maxPlayers: 2, stage: "curtain" }, // pas de minPlayers : jouable en solo contre un bot (comme Gold Mines)
+  naval:    { icon: "⚓", accent: "--acc-naval",     nameKey: "nameNaval",   tagKey: "tagNaval", maxPlayers: 2, stage: "ocean" }, // pas de minPlayers : jouable en solo contre un bot (comme Gold Mines) ; stage "ocean" (sonar puis vague, 2026-07)
   calcrace: { icon: "🏎️", accent: "--acc-calcrace", nameKey: "nameCalcRace", tagKey: "tagCalcRace", maxPlayers: 10, stage: "curtain" }, // pas de minPlayers : jouable seul en contre-la-montre (jeu n°20)
   puzzle:   { icon: "🧩", accent: "--acc-puzzle", nameKey: "namePuzzle", tagKey: "tagPuzzle", stage: "door" }, // pas de minPlayers : jouable seul (jeu n°21) ; mode collaboratif prévu dans un prochain zip
 };
-const STAGE_COMPONENT = { door: DoorStage, curtain: CurtainStage, flash: FlashStage, video: VideoStage };
+const STAGE_COMPONENT = { door: DoorStage, curtain: CurtainStage, flash: FlashStage, video: VideoStage, ocean: OceanStage };
 const GAME_ORDER = ["quiz", "wordle", "worldle", "petitbac", "tupreferes", "connect4", "chess", "ludo", "naval", "chromatik", "president", "rami", "goldmines", "yahtzee", "tenk", "piano", "echoes", "diapason", "heist", "calcrace", "puzzle"];
 
 // Victoires/Défaites, en discret (demande 2026-07) : remplace les deux chips

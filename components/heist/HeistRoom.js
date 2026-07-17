@@ -54,15 +54,63 @@ import Crossfade from "@/components/Crossfade";
    game_id = "heist" (simple chaîne). Aucune manip Supabase.
    ========================================================================== */
 
-const TOTAL_MS = 6 * 60 * 1000;        // 6 minutes : la ronde du gardien (resserrée, zip 82)
+const TOTAL_MS = 8 * 60 * 1000;        // 8 minutes : ronde rallongée pour absorber le chapitre labyrinthe (2026-07)
 const TIME_PENALTY_MS = 15 * 1000;     // temps grignoté par mauvaise tentative
 const ALERT_MAX = 100;                 // jauge pleine => repérés
 const ALERT_STEP = 20;                 // +20 % par mauvaise tentative (≈5 fautes)
 const ALERT_STEP_LASER = 12;           // frôlement de laser : moins puni (mais reset)
-const SYNC_WINDOW_MS = 700;            // fenêtre de synchro du décrochage (ch.6, resserrée)
+const SYNC_WINDOW_MS = 700;            // fenêtre de synchro du décrochage (finale, resserrée)
 const GUARD_PERIOD_MS = 4000;          // période du marqueur de garde (ch.5)
-const TOTAL_CHAPTERS = 6;
-const VICTORY = TOTAL_CHAPTERS + 1;    // "chapter" atteint 7 => victoire
+const TOTAL_CHAPTERS = 7;              // +1 : chapitre labyrinthe inséré en ch.6, La Joconde passe en ch.7 (2026-07)
+const VICTORY = TOTAL_CHAPTERS + 1;    // "chapter" atteint 8 => victoire
+
+/* ---------- Chapitre 6 : LABYRINTHE à la lampe torche (2026-07) ----------
+   Escape room asymétrique : un joueur (l'EXPLORATEUR) avance dans un
+   labyrinthe sombre, torche à la main ; l'autre (le GUIDE) voit le plan
+   complet et le garde, et dicte le chemin. La torche tombe en panne à
+   mi-parcours (guidage à la voix, 3 erreurs = perdu) et se rallume sur la
+   dernière ligne droite. Un garde SOMNOLANT part du fond et remonte vers le
+   joueur ; combinaison de camouflage activable 20 s. La géométrie du
+   labyrinthe est générée par l'hôte au match_start et partagée (les DEUX
+   clients bâtissent la même grille) ; l'explorateur fait AUTORITÉ sur la
+   simulation (position, garde) et diffuse `maze_pos`, que le guide affiche. */
+const MAZE_N = 11;
+const MAZE_BIT = { N: 1, S: 2, E: 4, W: 8 };
+function genMaze(n = MAZE_N) {
+  const cells = new Array(n * n).fill(0);
+  const seen = new Array(n * n).fill(false);
+  const idx = (x, y) => y * n + x;
+  const D = [[0, -1, MAZE_BIT.N, MAZE_BIT.S], [0, 1, MAZE_BIT.S, MAZE_BIT.N], [1, 0, MAZE_BIT.E, MAZE_BIT.W], [-1, 0, MAZE_BIT.W, MAZE_BIT.E]];
+  const st = [[0, 0]]; seen[0] = true;
+  while (st.length) {
+    const [cx, cy] = st[st.length - 1];
+    const opts = D.filter(([dx, dy]) => { const nx = cx + dx, ny = cy + dy; return nx >= 0 && ny >= 0 && nx < n && ny < n && !seen[idx(nx, ny)]; });
+    if (!opts.length) { st.pop(); continue; }
+    const [dx, dy, bf, bt] = opts[Math.floor(Math.random() * opts.length)];
+    const nx = cx + dx, ny = cy + dy;
+    cells[idx(cx, cy)] |= bf; cells[idx(nx, ny)] |= bt; seen[idx(nx, ny)] = true; st.push([nx, ny]);
+  }
+  return { n, cells, start: [0, 0], exit: [n - 1, n - 1] };
+}
+function mazePassable(maze, x, y, dx, dy) {
+  const bit = dx === 1 ? MAZE_BIT.E : dx === -1 ? MAZE_BIT.W : dy === 1 ? MAZE_BIT.S : MAZE_BIT.N;
+  return (maze.cells[y * maze.n + x] & bit) !== 0;
+}
+function mazeBfs(maze, tx, ty) {
+  const n = maze.n;
+  const d = new Array(n * n).fill(Infinity);
+  d[ty * n + tx] = 0;
+  const q = [[tx, ty]];
+  while (q.length) {
+    const [x, y] = q.shift();
+    [[0, -1], [0, 1], [1, 0], [-1, 0]].forEach(([dx, dy]) => {
+      const nx = x + dx, ny = y + dy;
+      if (nx < 0 || ny < 0 || nx >= n || ny >= n) return;
+      if (mazePassable(maze, x, y, dx, dy) && d[ny * n + nx] > d[y * n + x] + 1) { d[ny * n + nx] = d[y * n + x] + 1; q.push([nx, ny]); }
+    });
+  }
+  return d;
+}
 
 const WIRE_COLORS = ["🔴", "🔵", "🟢", "🟡", "🟣", "🟠", "⚪", "🟤"];
 const LOOT_ICONS = ["💎", "👑", "🏺", "💍", "🗿", "⚱️", "🖼️", "⌛"];
@@ -428,6 +476,269 @@ function FinalVault({ pad, expected, onSuccess, onWrong, t }) {
 
 /* ---------- Composant principal ---------- */
 
+// Overlay "Salle des États" : texte sur fond noir affiché à la résolution du
+// labyrinthe, avant La Joconde (demande de Guillaume, 2026-07).
+function SalleOverlay({ t, onClose }) {
+  return (
+    <div className="heist-salle-overlay">
+      <div className="heist-salle-card">
+        <h3>{t("heistSalleTitle")}</h3>
+        <p>{t("heistSalleText")}</p>
+        <button className="btn" style={{ width: "auto", padding: "12px 20px", margin: "18px auto 0" }} onClick={onClose}>{t("heistSalleContinue")}</button>
+      </div>
+    </div>
+  );
+}
+
+/* Chapitre 6 — LABYRINTHE. Composant temps réel autonome (canvas), rôles
+   asymétriques. L'EXPLORATEUR simule tout (mouvement clavier/pavé, garde
+   somnolant, torche directionnelle qui meurt à mi-parcours puis se rallume,
+   camouflage 20 s) et diffuse `maze_pos` via onMove ; le GUIDE (et les
+   spectateurs) n'affichent que le plan complet à partir de `net`. Rendu au
+   canvas (pas de state React par frame) — même discipline que Puzzle/Naval. */
+function MazeChapter({ role, maze, net, avatar, onMove, onSolve, onFail, t }) {
+  const canvasRef = useRef(null);
+  const simRef = useRef(null);
+  const netRef = useRef(net);
+  const cbRef = useRef({ onMove, onSolve, onFail });
+  const rafRef = useRef(0);
+  const [hud, setHud] = useState({ phase: "torch", strikes: 0, camo: "ready", camoLeft: 0, guardTxt: "", batt: 100 });
+
+  useEffect(() => { netRef.current = net; }, [net]);
+  useEffect(() => { cbRef.current = { onMove, onSolve, onFail }; }, [onMove, onSolve, onFail]);
+
+  const N = maze.n;
+  const CANVAS = 330, OX = 6, OY = 6, CELL = (CANVAS - 2 * OX) / N;
+  const isExplorer = role === "explorer";
+
+  function cellCenter(x, y) { return [OX + x * CELL + CELL / 2, OY + y * CELL + CELL / 2]; }
+
+  function drawWalls(ctx, litFn) {
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      const a = litFn(x, y); if (a <= 0.02) continue;
+      const X = OX + x * CELL, Y = OY + y * CELL, bits = maze.cells[y * N + x];
+      const seg = (x1, y1, x2, y2) => {
+        ctx.globalAlpha = a; ctx.lineCap = "round";
+        ctx.strokeStyle = "#6b6257"; ctx.lineWidth = 5.5; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+        ctx.strokeStyle = "#a79c86"; ctx.lineWidth = 2.2; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+        ctx.strokeStyle = "rgba(255,247,220,.5)"; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+      };
+      if (!(bits & MAZE_BIT.N)) seg(X, Y, X + CELL, Y);
+      if (!(bits & MAZE_BIT.S)) seg(X, Y + CELL, X + CELL, Y + CELL);
+      if (!(bits & MAZE_BIT.W)) seg(X, Y, X, Y + CELL);
+      if (!(bits & MAZE_BIT.E)) seg(X + CELL, Y, X + CELL, Y + CELL);
+      ctx.globalAlpha = a; ctx.fillStyle = "#8a8072";
+      [[X, Y], [X + CELL, Y], [X, Y + CELL], [X + CELL, Y + CELL]].forEach(([jx, jy]) => { ctx.beginPath(); ctx.arc(jx, jy, 3, 0, 7); ctx.fill(); });
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // Facteur d'éclairage torche directionnelle (amplitude volontairement courte).
+  function litFactor(sim, x, y) {
+    const [cx, cy] = cellCenter(x, y); const [ax, ay] = cellCenter(sim.px, sim.py);
+    const d = Math.hypot(cx - ax, cy - ay);
+    const spill = CELL * 0.95, R = CELL * 2.5;
+    if (d < spill) return 1;
+    if (d > R) return 0;
+    const fa = Math.atan2(sim.face.y, sim.face.x), ca = Math.atan2(cy - ay, cx - ax);
+    let diff = Math.abs(ca - fa); if (diff > Math.PI) diff = 2 * Math.PI - diff;
+    const cone = 0.8;
+    if (diff > cone) return 0;
+    return Math.max(0, Math.min(1, (1 - d / R) * (1 - diff / cone) * 1.3));
+  }
+
+  useEffect(() => {
+    const cv = canvasRef.current; if (!cv) return;
+    const ctx = cv.getContext("2d");
+    const dist = mazeBfs(maze, maze.exit[0], maze.exit[1]);
+    const distStart = mazeBfs(maze, maze.start[0], maze.start[1]);
+    const total = dist[maze.start[1] * N + maze.start[0]] || 1;
+    let guardTimer = 0, hudTimer = 0;
+
+    // ----- EXPLORATEUR : simulation autoritaire -----
+    if (isExplorer) {
+      const now0 = performance.now();
+      const sim = {
+        px: maze.start[0], py: maze.start[1], face: { x: 0, y: 1 },
+        phase: "torch", strikes: 0, maxProg: 0, camoUntil: 0, camoCoolUntil: 0, done: false,
+        guard: { x: maze.exit[0], y: maze.exit[1], from: { x: maze.exit[0], y: maze.exit[1] }, sleepUntil: 0, nextSleepAt: now0 + (14000 + Math.random() * 16000) },
+      };
+      simRef.current = sim;
+      const camoActive = () => performance.now() < sim.camoUntil;
+      const guardAwake = () => performance.now() >= sim.guard.sleepUntil;
+
+      function pushNet() {
+        cbRef.current.onMove && cbRef.current.onMove({
+          px: sim.px, py: sim.py, fx: sim.face.x, fy: sim.face.y,
+          gx: sim.guard.x, gy: sim.guard.y, asleep: !guardAwake(), phase: sim.phase,
+          camo: camoActive(), strikes: sim.strikes,
+        });
+      }
+      function refreshHud() {
+        const nowp = performance.now();
+        const batt = sim.phase === "dark" ? 0 : sim.phase === "last" ? 60 : Math.max(0, Math.round((1 - sim.maxProg / 0.5) * 100));
+        let camo = "ready", camoLeft = 0;
+        if (camoActive()) { camo = "on"; camoLeft = Math.ceil((sim.camoUntil - nowp) / 1000); }
+        else if (nowp < sim.camoCoolUntil) { camo = "cool"; camoLeft = Math.ceil((sim.camoCoolUntil - nowp) / 1000); }
+        const gd = Math.abs(sim.guard.x - sim.px) + Math.abs(sim.guard.y - sim.py);
+        const guardTxt = !guardAwake() ? "sleep" : (gd <= 2 ? "near" : "far");
+        setHud({ phase: sim.phase, strikes: sim.strikes, camo, camoLeft, guardTxt, batt });
+      }
+      function fail() { if (sim.done) return; sim.done = true; cbRef.current.onFail && cbRef.current.onFail(); }
+      function solve() { if (sim.done) return; sim.done = true; cbRef.current.onSolve && cbRef.current.onSolve(); }
+      function checkGuard() {
+        if (sim.done || !guardAwake() || camoActive()) return;
+        const gd = Math.abs(sim.guard.x - sim.px) + Math.abs(sim.guard.y - sim.py);
+        if (gd === 0) { fail(); return; }
+        if (gd === 1) { const dx = sim.px - sim.guard.x, dy = sim.py - sim.guard.y; if (mazePassable(maze, sim.guard.x, sim.guard.y, dx, dy)) fail(); }
+      }
+      function move(dx, dy) {
+        if (sim.done) return;
+        sim.face = { x: dx, y: dy };
+        if (!mazePassable(maze, sim.px, sim.py, dx, dy)) {
+          if (sim.phase === "dark") { sim.strikes++; if (sim.strikes >= 3) { refreshHud(); fail(); return; } }
+          refreshHud(); pushNet(); return;
+        }
+        sim.px += dx; sim.py += dy;
+        const prog = (total - dist[sim.py * N + sim.px]) / total;
+        if (prog > sim.maxProg) sim.maxProg = prog;
+        sim.phase = sim.maxProg < 0.5 ? "torch" : (sim.maxProg < 0.82 ? "dark" : "last");
+        checkGuard();
+        if (sim.px === maze.exit[0] && sim.py === maze.exit[1]) { refreshHud(); pushNet(); solve(); return; }
+        refreshHud(); pushNet();
+      }
+      function camo() {
+        const nowp = performance.now();
+        if (nowp < sim.camoCoolUntil || camoActive()) return;
+        sim.camoUntil = nowp + 20000; sim.camoCoolUntil = sim.camoUntil + 8000; refreshHud(); pushNet();
+      }
+      function guardStep() {
+        if (sim.done) return;
+        const nowp = performance.now();
+        if (nowp < sim.guard.sleepUntil) { refreshHud(); return; }
+        if (nowp >= sim.guard.nextSleepAt) { sim.guard.sleepUntil = nowp + (7000 + Math.random() * 3000); sim.guard.nextSleepAt = sim.guard.sleepUntil + (25000 + Math.random() * 25000); refreshHud(); pushNet(); return; }
+        const g = sim.guard;
+        let opts = [[0, -1], [0, 1], [1, 0], [-1, 0]].filter(([dx, dy]) => mazePassable(maze, g.x, g.y, dx, dy)).map(([dx, dy]) => ({ x: g.x + dx, y: g.y + dy }));
+        if (!opts.length) return;
+        opts.sort((a, b) => distStart[a.y * N + a.x] - distStart[b.y * N + b.x]);
+        let nxt;
+        if (Math.random() < 0.72) nxt = opts[0];
+        else { const nb = opts.filter(o => !(o.x === g.from.x && o.y === g.from.y)); const pool = nb.length ? nb : opts; nxt = pool[Math.floor(Math.random() * pool.length)]; }
+        g.from = { x: g.x, y: g.y }; g.x = nxt.x; g.y = nxt.y;
+        checkGuard(); refreshHud(); pushNet();
+      }
+
+      simRef.current.move = move; simRef.current.camo = camo;
+      const onKey = e => {
+        const m = { ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
+        if (m[e.key]) { e.preventDefault(); move(m[e.key][0], m[e.key][1]); }
+        else if (e.key === " ") { e.preventDefault(); camo(); }
+      };
+      window.addEventListener("keydown", onKey);
+      guardTimer = setInterval(guardStep, 1150);
+      hudTimer = setInterval(refreshHud, 500);
+      refreshHud(); pushNet();
+
+      function draw() {
+        ctx.fillStyle = "#000"; ctx.fillRect(0, 0, CANVAS, CANVAS);
+        const [ax, ay] = cellCenter(sim.px, sim.py);
+        if (sim.phase !== "dark") {
+          const R = CELL * 2.5 * (1 + Math.sin(performance.now() / 120) * 0.03);
+          const fa = Math.atan2(sim.face.y, sim.face.x);
+          ctx.save(); ctx.beginPath(); ctx.moveTo(ax, ay); ctx.arc(ax, ay, R, fa - 0.8, fa + 0.8); ctx.closePath(); ctx.clip();
+          const g = ctx.createRadialGradient(ax, ay, 3, ax, ay, R);
+          g.addColorStop(0, "rgba(255,240,205,.95)"); g.addColorStop(.5, "rgba(255,228,175,.45)"); g.addColorStop(1, "rgba(0,0,0,0)");
+          ctx.fillStyle = g; ctx.fillRect(0, 0, CANVAS, CANVAS); ctx.restore();
+          const g2 = ctx.createRadialGradient(ax, ay, 2, ax, ay, CELL * 0.95);
+          g2.addColorStop(0, "rgba(255,240,205,.6)"); g2.addColorStop(1, "rgba(0,0,0,0)");
+          ctx.fillStyle = g2; ctx.beginPath(); ctx.arc(ax, ay, CELL * 0.95, 0, 7); ctx.fill();
+          drawWalls(ctx, (x, y) => litFactor(sim, x, y));
+        } else {
+          const g2 = ctx.createRadialGradient(ax, ay, 2, ax, ay, CELL * 0.7);
+          g2.addColorStop(0, "rgba(120,120,140,.35)"); g2.addColorStop(1, "rgba(0,0,0,0)");
+          ctx.fillStyle = g2; ctx.beginPath(); ctx.arc(ax, ay, CELL * 0.7, 0, 7); ctx.fill();
+        }
+        // garde : lampe rouge (visible même dans le noir), silhouette si éclairée
+        const [gx, gy] = cellCenter(sim.guard.x, sim.guard.y);
+        const asleep = !guardAwake();
+        const rr = ctx.createRadialGradient(gx, gy, 2, gx, gy, CELL * 1.35);
+        rr.addColorStop(0, "rgba(255,55,45," + (asleep ? 0.14 : 0.42) + ")"); rr.addColorStop(1, "rgba(255,55,45,0)");
+        ctx.fillStyle = rr; ctx.beginPath(); ctx.arc(gx, gy, CELL * 1.35, 0, 7); ctx.fill();
+        const gLit = sim.phase !== "dark" ? litFactor(sim, sim.guard.x, sim.guard.y) : 0;
+        ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        if (gLit > 0.12) { ctx.globalAlpha = Math.min(1, gLit * 1.5); ctx.font = "18px serif"; ctx.fillText("👮", gx, gy); ctx.globalAlpha = 1; }
+        ctx.globalAlpha = camoActive() ? 0.5 : 1; ctx.font = "18px serif"; ctx.fillText(avatar || "🙂", ax, ay); ctx.globalAlpha = 1;
+        rafRef.current = requestAnimationFrame(draw);
+      }
+      rafRef.current = requestAnimationFrame(draw);
+      return () => { window.removeEventListener("keydown", onKey); clearInterval(guardTimer); clearInterval(hudTimer); cancelAnimationFrame(rafRef.current); };
+    }
+
+    // ----- GUIDE / SPECTATEUR : plan complet à partir de `net` -----
+    function draw() {
+      const nt = netRef.current;
+      ctx.fillStyle = "#0b0a07"; ctx.fillRect(0, 0, CANVAS, CANVAS);
+      drawWalls(ctx, () => 1);
+      ctx.textAlign = "center"; ctx.textBaseline = "middle";
+      const [exx, exy] = cellCenter(maze.exit[0], maze.exit[1]);
+      ctx.font = "17px serif"; ctx.fillText("🖼️", exx, exy);
+      if (nt) {
+        const [gx, gy] = cellCenter(nt.gx, nt.gy);
+        const rg = ctx.createRadialGradient(gx, gy, 2, gx, gy, CELL * 1.6);
+        rg.addColorStop(0, "rgba(255,60,50," + (nt.asleep ? 0.10 : 0.34) + ")"); rg.addColorStop(1, "rgba(255,60,50,0)");
+        ctx.fillStyle = rg; ctx.beginPath(); ctx.arc(gx, gy, CELL * 1.6, 0, 7); ctx.fill();
+        ctx.font = "18px serif"; ctx.fillText("👮", gx, gy);
+        if (nt.asleep) { ctx.font = "13px serif"; ctx.fillText("💤", gx + CELL * 0.55, gy - CELL * 0.45); }
+        const [ax, ay] = cellCenter(nt.px, nt.py);
+        ctx.globalAlpha = nt.camo ? 0.5 : 1; ctx.font = "18px serif"; ctx.fillText(avatar || "🙂", ax, ay); ctx.globalAlpha = 1;
+      }
+      rafRef.current = requestAnimationFrame(draw);
+    }
+    rafRef.current = requestAnimationFrame(draw);
+    return () => { cancelAnimationFrame(rafRef.current); clearInterval(guardTimer); clearInterval(hudTimer); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [role, maze]);
+
+  const nt = net;
+  return (
+    <div className="heist-maze">
+      <canvas ref={canvasRef} width={CANVAS} height={CANVAS} className="heist-maze-canvas" />
+      {isExplorer ? (
+        <div className="heist-maze-controls">
+          <div className="heist-maze-hud">
+            <span className={"heist-maze-chip" + (hud.phase === "dark" ? " warn" : hud.phase === "last" ? " ok" : "")}>
+              {hud.phase === "dark" ? "🌑 " + t("heistMazeTorchOut") : hud.phase === "last" ? "🔦 " + t("heistMazeTorchBack") : "🔦 " + t("heistMazeTorchOn")}
+            </span>
+            <span className="heist-maze-batt"><i style={{ width: hud.batt + "%" }} /></span>
+            <span className={"heist-maze-chip" + (hud.guardTxt === "near" ? " warn" : hud.guardTxt === "sleep" ? " ok" : "")}>
+              {hud.guardTxt === "sleep" ? "👮 💤" : hud.guardTxt === "near" ? "👮 ‼" : "👮"}
+            </span>
+            <span className="heist-maze-strikes">{["", "❌", "❌❌", "❌❌❌"][Math.min(3, hud.strikes)]}</span>
+          </div>
+          <div className="heist-maze-dpad">
+            <span />
+            <button onClick={() => simRef.current && simRef.current.move(0, -1)}>▲</button>
+            <span />
+            <button onClick={() => simRef.current && simRef.current.move(-1, 0)}>◀</button>
+            <button className="camo" disabled={hud.camo !== "ready"} onClick={() => simRef.current && simRef.current.camo()}>
+              {hud.camo === "on" ? "🫥" + hud.camoLeft : hud.camo === "cool" ? "…" + hud.camoLeft : "🫥"}
+            </button>
+            <button onClick={() => simRef.current && simRef.current.move(1, 0)}>▶</button>
+            <span />
+            <button onClick={() => simRef.current && simRef.current.move(0, 1)}>▼</button>
+            <span />
+          </div>
+        </div>
+      ) : (
+        <p className="muted heist-maze-guidenote">
+          {t("heistMazeGuideNote")}
+          {nt && nt.asleep ? " " + t("heistMazeGuardSleeps") : nt && nt.phase === "dark" ? " " + t("heistMazeDarkNote") : ""}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export default function HeistRoom({ room, me, isHost, players, t, lang, onFinish }) {
   const [phase, setPhase] = useState("intro"); // intro -> playing -> success | failure
   const [roles, setRoles] = useState({ A: null, B: null });
@@ -449,6 +760,10 @@ export default function HeistRoom({ room, me, isHost, players, t, lang, onFinish
   // broadcast (final_ok) et mémorisé chez les DEUX clients.
   const [finalA, setFinalA] = useState(false);
   const [finalB, setFinalB] = useState(false);
+  // Chapitre 6 labyrinthe (2026-07) : état réseau diffusé par l'explorateur
+  // (affiché par le guide), et texte "Salle des États" montré à la résolution.
+  const [mazeNet, setMazeNet] = useState(null);
+  const [showSalleText, setShowSalleText] = useState(false);
 
   const channelRef = useRef(null);
   const stateRef = useRef({ chapter, deadline, phase, roles, puzzle, alert, finalA, finalB });
@@ -473,7 +788,7 @@ export default function HeistRoom({ room, me, isHost, players, t, lang, onFinish
     channelRef.current = ch;
 
     ch.on("broadcast", { event: "match_start" }, ({ payload }) => {
-      const puz = { c1: payload.c1, c2: payload.c2, c3: payload.c3, c4: payload.c4, c5: payload.c5, c6: payload.c6 };
+      const puz = { c1: payload.c1, c2: payload.c2, c3: payload.c3, c4: payload.c4, c5: payload.c5, c6: payload.c6, maze: payload.maze };
       setRoles({ A: payload.roleA, B: payload.roleB });
       setPuzzle(puz);
       setDeadline(payload.deadline);
@@ -483,6 +798,7 @@ export default function HeistRoom({ room, me, isHost, players, t, lang, onFinish
       setFeedback(""); setSelected([]);
       setPressA(null); setPressB(null); setMyPressed(false);
       setFinalA(false); setFinalB(false);
+      setMazeNet(null); setShowSalleText(false);
       setMyWin(false); setEndingVariant("standard");
       savedResultRef.current = false;
       if (isHost) {
@@ -494,11 +810,16 @@ export default function HeistRoom({ room, me, isHost, players, t, lang, onFinish
       }
     });
 
+    // Chapitre 6 : position temps réel diffusée par l'explorateur, affichée par
+    // le guide (et les spectateurs).
+    ch.on("broadcast", { event: "maze_pos" }, ({ payload }) => setMazeNet(payload));
+
     ch.on("broadcast", { event: "advance" }, ({ payload }) => {
       playConfirmChime(); // SFX (2026-07) : étape franchie, chez les deux joueurs
       setChapter(c => Math.max(c, payload.chapter));
       setFeedback("");
       setPressA(null); setPressB(null); setMyPressed(false);
+      if (payload.chapter === 7) setShowSalleText(true); // sortie du labyrinthe -> Salle des États
       if (payload.chapter >= VICTORY) setPhase("success");
       if (isHost) saveState({ phase: payload.chapter >= VICTORY ? "success" : "playing", chapter: payload.chapter });
     });
@@ -547,10 +868,10 @@ export default function HeistRoom({ room, me, isHost, players, t, lang, onFinish
         if (!restoredRef.current) {
           restoredRef.current = true;
           const saved = readGameState(room, "heist");
-          // Garde-fou zip 82 : une sauvegarde d'AVANT la finale "La Joconde"
-          // (sans puzzle.c6) est ignorée — la restaurer ferait planter le
-          // rendu du chapitre 6.
-          if (saved && (!saved.puzzle || !saved.puzzle.c6)) {
+          // Garde-fou : une sauvegarde d'un ANCIEN format (sans la finale
+          // "La Joconde" puzzle.c6, ou sans le labyrinthe puzzle.maze ajouté au
+          // zip 138) est ignorée — la restaurer ferait planter le rendu.
+          if (saved && (!saved.puzzle || !saved.puzzle.c6 || !saved.puzzle.maze)) {
             // rien : retour propre à l'écran d'intro
           } else if (saved) {
             setRoles({ A: saved.roleA, B: saved.roleB });
@@ -579,7 +900,7 @@ export default function HeistRoom({ room, me, isHost, players, t, lang, onFinish
     const [roleA, roleB] = Math.random() < 0.5 ? [pa, pb] : [pb, pa];
     const payload = {
       roleA, roleB,
-      c1: genC1(), c2: genC2(), c3: genC3(), c4: genC4(), c5: genC5(), c6: genC6(),
+      c1: genC1(), c2: genC2(), c3: genC3(), c4: genC4(), c5: genC5(), c6: genC6(), maze: genMaze(),
       deadline: Date.now() + TOTAL_MS,
     };
     channelRef.current.send({ type: "broadcast", event: "match_start", payload });
@@ -690,7 +1011,7 @@ export default function HeistRoom({ room, me, isHost, players, t, lang, onFinish
     const [roleA, roleB] = Math.random() < 0.5 ? [roles.A, roles.B] : [roles.B, roles.A];
     const payload = {
       roleA, roleB,
-      c1: genC1(), c2: genC2(), c3: genC3(), c4: genC4(), c5: genC5(), c6: genC6(),
+      c1: genC1(), c2: genC2(), c3: genC3(), c4: genC4(), c5: genC5(), c6: genC6(), maze: genMaze(),
       deadline: Date.now() + TOTAL_MS,
     };
     channelRef.current.send({ type: "broadcast", event: "match_start", payload });
@@ -767,6 +1088,30 @@ export default function HeistRoom({ room, me, isHost, players, t, lang, onFinish
       </div>
     );
     if (chapter === 6) {
+      // CHAPITRE LABYRINTHE (2026-07) — escape room asymétrique à la lampe
+      // torche (voir le composant MazeChapter en tête de fichier).
+      const explorerAvatar = (roles.A && roles.A.avatar) || "🙂";
+      const myRole = amA ? "explorer" : amB ? "guide" : "spectator";
+      return (
+        <div>
+          <h2 style={{ fontSize: 17, margin: "10px 0 6px" }}>{t("heistMazeTitle")}</h2>
+          <p className="hint">{t("heistMazeStory")}</p>
+          {!isPlayer ? <p className="muted">{t("heistSpectatorNote")}</p>
+            : <p className="muted">{amA ? t("heistMazeYouExplorer") : t("heistMazeYouGuide")}</p>}
+          <MazeChapter
+            role={myRole}
+            maze={puzzle.maze}
+            net={mazeNet}
+            avatar={explorerAvatar}
+            onMove={p => channelRef.current?.send({ type: "broadcast", event: "maze_pos", payload: p })}
+            onSolve={() => advance(7)}
+            onFail={() => applyAlarm(ALERT_MAX)}
+            t={t}
+          />
+        </div>
+      );
+    }
+    if (chapter === 7) {
       // FINALE "La Joconde" (zip 82) — deux phases, voulues plus longues et
       // plus dures que les coups précédents :
       //   1. double verrou à codes croisés (chacun compose SON code de 5
@@ -777,6 +1122,7 @@ export default function HeistRoom({ room, me, isHost, players, t, lang, onFinish
       const clue = amA ? puzzle.c6.codeB : puzzle.c6.codeA;
       return (
         <div>
+          {showSalleText && <SalleOverlay t={t} onClose={() => setShowSalleText(false)} />}
           <h2 style={{ fontSize: 17, margin: "10px 0 6px" }}>{t("heistC6Title")}</h2>
           {!isPlayer ? (
             <><p className="hint">{t("heistC6Story")}</p><p className="muted">{t("heistSpectatorNote")}</p></>

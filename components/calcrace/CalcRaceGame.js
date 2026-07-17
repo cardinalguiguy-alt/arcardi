@@ -54,6 +54,41 @@ function F1Car({ color }) {
   );
 }
 
+// Confettis de fin de course (2026-07) : petit canvas en surimpression qui
+// éclate une seule fois au montage, puis s'éteint. Isolé (son propre rAF) pour
+// ne pas re-rendre l'écran de fin. Aucune dépendance ajoutée.
+function Confetti() {
+  const ref = useRef(null);
+  useEffect(() => {
+    const cv = ref.current; if (!cv) return;
+    const ctx = cv.getContext("2d");
+    const parent = cv.parentElement;
+    cv.width = Math.max(1, parent.clientWidth);
+    cv.height = Math.max(1, parent.clientHeight);
+    const reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduce) return;
+    const cx = cv.width / 2, cy = cv.height * 0.30;
+    const parts = [];
+    for (let i = 0; i < 160; i++) {
+      const a = Math.random() * Math.PI * 2, sp = 2 + Math.random() * 7;
+      parts.push({ x: cx, y: cy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 4, g: 0.12 + Math.random() * 0.1, s: 4 + Math.random() * 5, rot: Math.random() * 6, vr: -0.2 + Math.random() * 0.4, c: CAR_COLORS[i % CAR_COLORS.length], life: 90 + Math.random() * 55 });
+    }
+    let raf;
+    function step() {
+      ctx.clearRect(0, 0, cv.width, cv.height);
+      let alive = false;
+      parts.forEach(p => {
+        if (p.life <= 0) return; alive = true; p.life--; p.vy += p.g; p.x += p.vx; p.y += p.vy; p.rot += p.vr;
+        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot); ctx.globalAlpha = Math.max(0, Math.min(1, p.life / 45)); ctx.fillStyle = p.c; ctx.fillRect(-p.s / 2, -p.s / 2, p.s, p.s * 0.6); ctx.restore();
+      });
+      if (alive) raf = requestAnimationFrame(step); else ctx.clearRect(0, 0, cv.width, cv.height);
+    }
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  return <canvas ref={ref} className="calcrace-confetti" aria-hidden="true" />;
+}
+
 // Chrono du mode solo, ISOLÉ dans son propre composant avec son propre
 // setInterval local (piège de re-render identifié à la session 133, sur la
 // bataille navale : un minuteur affiché qui tourne au niveau du composant
@@ -370,6 +405,17 @@ export default function CalcRaceGame({ room, me, isHost, players, onFinish, t, l
 
         {phase === "finished" && (
           <div className="calcrace-finished">
+            {/* Franchissement plus réaliste : ligne à damier, voiture du gagnant
+                qui passe la ligne avec un léger zoom photo-finish, drapeau à
+                damier agité, le tout saupoudré de confettis (2026-07). */}
+            <div className="calcrace-fin-scene" aria-hidden="true">
+              <div className="calcrace-fin-line" />
+              <div className="calcrace-fin-car">
+                <F1Car color={(() => { const wi = (players || []).findIndex(p => p.profile_id === (winner && winner.profile_id)); return CAR_COLORS[(wi >= 0 ? wi : 0) % CAR_COLORS.length]; })()} />
+              </div>
+              <div className="calcrace-checkflag"><span /></div>
+            </div>
+            <Confetti />
             <p style={{ fontWeight: 800 }}>
               <span style={{ color: myWin ? "var(--ok)" : "#e05555" }}>
                 {myWin ? t("calcraceWinBanner") : t("calcraceLoseBanner")}

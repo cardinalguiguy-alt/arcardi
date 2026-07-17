@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { saveGameState, readGameState, resetRoomToLobby, recordMatchResult } from "@/lib/gameSync";
-import { playDynamite, playSplash, playTokenDrop, playPanicClock, playGameWin, playGameLose, playNavalWhistle, playNavalSink } from "@/lib/sfx";
+import { playDynamite, playNavalSplash, playTokenDrop, playPanicClock, playGameWin, playGameLose, playNavalWhistle, playNavalSink, primeFiles } from "@/lib/sfx";
 import Crossfade from "../Crossfade";
 import GameCountdown from "../GameCountdown";
 import {
@@ -215,6 +215,9 @@ export default function NavalGame({ room, me, isHost, players, t, lang, onFinish
   useEffect(() => {
     stateRef.current = { phase, sub, p1, p2, boards, ready, shots, turn, winner, scores, bonuses, placeDeadline, turnDeadline, botDifficulty };
   });
+
+  // Préchargement du mp3 de splash (tir dans l'eau) pour une lecture instantanée.
+  useEffect(() => { primeFiles("/sounds/naval-splash.mp3"); }, []);
 
   useEffect(() => { try { const v = localStorage.getItem(VIEW_KEY); if (v === "iso" || v === "2d") setView(v); } catch (e) {} }, []);
   function toggleView() {
@@ -586,7 +589,7 @@ export default function NavalGame({ room, me, isHost, players, t, lang, onFinish
     const doCell = (cell, delay) => {
       const tm = setTimeout(() => {
         if (cell.result === "hit") { playDynamite(); spawnFx(side, cell.r, cell.c, "boom", ls.kind !== "shot"); if (cell.sunkId) playNavalSink(); }
-        else if (cell.result === "miss") { playSplash(); spawnFx(side, cell.r, cell.c, "splash"); }
+        else if (cell.result === "miss") { playNavalSplash(); spawnFx(side, cell.r, cell.c, "splash"); }
       }, delay);
       timeouts.current.push(tm);
     };

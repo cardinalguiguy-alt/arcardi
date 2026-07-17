@@ -32,8 +32,32 @@ import { IMAGE_BANK, PUZZLE_VIEWBOX } from "./puzzleArt";
    une pièce qui SE VERROUILLE déclenche un vrai setState (peu fréquent).
    ========================================================================== */
 
-const SCENE_W = 1000, SCENE_H = 640;
-const BOARD_X = 50, BOARD_Y = 20, BOARD_W = 900, BOARD_H = 600;
+// Dimensions natives de l'illustration (PUZZLE_VIEWBOX = "0 0 900 600").
+const ART_W = 900, ART_H = 600;
+
+// Disposition ADAPTATIVE (2026-07) : le plateau et un BAC DE TRI cohabitent
+// dans la scène SVG. En portrait le bac est en bas, en paysage il est à droite.
+// Le plateau garde le ratio 3:2 de l'illustration ; les pièces gardent leur
+// TAILLE PLATEAU en toute circonstance (le drag & drop n'est pas modifié), le
+// bac est simplement dimensionné pour les accueillir (léger recouvrement en
+// pile pour les grosses difficultés, ce que le shuffle aide à démêler).
+function computeLayout(orientation) {
+  const M = 20, GAP = 20, AR = ART_W / ART_H;
+  if (orientation === "portrait") {
+    const SCENE_W = 680;
+    const bw = SCENE_W - 2 * M;         // 640
+    const bh = bw / AR;                 // 426.7
+    const th = 300;
+    const SCENE_H = Math.round(M + bh + GAP + th + M);
+    return { SCENE_W, SCENE_H, board: { x: M, y: M, w: bw, h: bh }, tray: { x: M, y: M + bh + GAP, w: bw, h: th } };
+  }
+  const SCENE_H = 480;
+  const bh = SCENE_H - 2 * M;           // 440
+  const bw = bh * AR;                   // 660
+  const tw = 480;
+  const SCENE_W = Math.round(M + bw + GAP + tw + M);
+  return { SCENE_W, SCENE_H, board: { x: M, y: M, w: bw, h: bh }, tray: { x: M + bw + GAP, y: M, w: tw, h: bh } };
+}
 
 function formatMs(ms) {
   const totalCs = Math.floor(Math.max(0, ms) / 10);
@@ -80,10 +104,17 @@ export default function PuzzleGame({ room, me, isHost, players, onFinish, t, lan
   const [solvedCount, setSolvedCount] = useState(0);
   const [totalPieces, setTotalPieces] = useState(0);
   const [raceStartAt, setRaceStartAt] = useState(0);
+  const [solved, setSolved] = useState(false);
+  const [orientation, setOrientation] = useState(() =>
+    (typeof window !== "undefined" && window.matchMedia && window.matchMedia("(orientation: portrait)").matches) ? "portrait" : "landscape"
+  );
 
   const channelRef = useRef(null);
   const boardSvgRef = useRef(null);
   const puzzleRef = useRef(null);
+  const settledRef = useRef(new Set());   // pièces posées, clés "r-c" (survit à un reflow d'orientation)
+  const shuffleRef = useRef(() => {});     // mélange du bac, appelé par le bouton
+  const solvedFiredRef = useRef(false);
   const raceStartRef = useRef(0);
   const finishedFiredRef = useRef(false);
   const raceOverFiredRef = useRef(false);
@@ -93,6 +124,16 @@ export default function PuzzleGame({ room, me, isHost, players, onFinish, t, lan
   const lastSettingsRef = useRef({ imageId: IMAGE_BANK[0].id, pieceCount: 24 });
 
   useEffect(() => { playersRef.current = players; }, [players]);
+
+  // Bascule portrait/paysage : on rebâtit le plateau au changement d'orientation
+  // (la progression est préservée via settledRef).
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const mq = window.matchMedia("(orientation: portrait)");
+    const onChange = () => setOrientation(mq.matches ? "portrait" : "landscape");
+    mq.addEventListener ? mq.addEventListener("change", onChange) : mq.addListener(onChange);
+    return () => { mq.removeEventListener ? mq.removeEventListener("change", onChange) : mq.removeListener(onChange); };
+  }, []);
 
   function updateRacer(pid, patch) {
     setRacers(prev => {
@@ -129,6 +170,10 @@ export default function PuzzleGame({ room, me, isHost, players, onFinish, t, lan
       // l'image et le nombre de pièces viennent du réseau.
       const puzzle = generatePuzzle(payload.pieceCount);
       puzzleRef.current = puzzle;
+      settledRef.current = new Set();
+      raceStartRef.current = 0;
+      solvedFiredRef.current = false;
+      setSolved(false);
       setTotalPieces(puzzle.pieces.length);
       setSolvedCount(0);
       setPhase("countdown");
@@ -197,19 +242,27 @@ export default function PuzzleGame({ room, me, isHost, players, onFinish, t, lan
     onFinish && onFinish();
   }
 
-  // Construction impérative du plateau, une fois par entrée en course
-  // (voir commentaire d'en-tête).
+  // Construction impérative du plateau. Rejouée à l'entrée en course ET au
+  // changement d'orientation (la progression est préservée via settledRef —
+  // voir commentaire d'en-tête pour le choix du DOM SVG direct).
   useEffect(() => {
     if (phase !== "racing" || !boardSvgRef.current || !puzzleRef.current) return;
     const svg = boardSvgRef.current;
     const puzzle = puzzleRef.current;
     const { rows, cols, edges, pieces } = puzzle;
-    const cellW = BOARD_W / cols, cellH = BOARD_H / rows;
+    const layout = computeLayout(orientation);
+    const board = layout.board, tray = layout.tray;
+    const cellW = board.w / cols, cellH = board.h / rows;
+    const sx = board.w / ART_W, sy = board.h / ART_H;                 // échelle image -> plateau
+    const artTransform = `translate(${board.x},${board.y}) scale(${sx.toFixed(5)},${sy.toFixed(5)})`;
     const bank = IMAGE_BANK.find(b => b.id === imageId) || IMAGE_BANK[0];
     const ns = "http://www.w3.org/2000/svg";
     const xlink = "http://www.w3.org/1999/xlink";
     const masterId = "pz-master-" + room.id;
+    const total = pieces.length;
 
+    svg.setAttribute("viewBox", `0 0 ${layout.SCENE_W} ${layout.SCENE_H}`);
+    svg.classList.remove("solved");
     svg.innerHTML = "";
     const defs = document.createElementNS(ns, "defs");
     const artG = document.createElementNS(ns, "g");
@@ -218,12 +271,27 @@ export default function PuzzleGame({ room, me, isHost, players, onFinish, t, lan
     defs.appendChild(artG);
     svg.appendChild(defs);
 
-    // Image de référence, très pâle, visible sous les pièces pour se
-    // repérer pendant l'assemblage (pratique courante des puzzles réels).
+    // Cadre du bac de tri (zone où se rangent les pièces non posées).
+    const trayBg = document.createElementNS(ns, "rect");
+    trayBg.setAttribute("class", "puzzle-tray-bg");
+    trayBg.setAttribute("x", tray.x); trayBg.setAttribute("y", tray.y);
+    trayBg.setAttribute("width", tray.w); trayBg.setAttribute("height", tray.h);
+    trayBg.setAttribute("rx", 14);
+    svg.appendChild(trayBg);
+
+    // Cadre du plateau.
+    const boardBg = document.createElementNS(ns, "rect");
+    boardBg.setAttribute("class", "puzzle-board-bg");
+    boardBg.setAttribute("x", board.x); boardBg.setAttribute("y", board.y);
+    boardBg.setAttribute("width", board.w); boardBg.setAttribute("height", board.h);
+    boardBg.setAttribute("rx", 8);
+    svg.appendChild(boardBg);
+
+    // Image de référence, très pâle, sous les pièces (repère d'assemblage).
     const ghost = document.createElementNS(ns, "use");
     ghost.setAttributeNS(xlink, "href", "#" + masterId);
     ghost.setAttribute("href", "#" + masterId);
-    ghost.setAttribute("transform", `translate(${BOARD_X},${BOARD_Y})`);
+    ghost.setAttribute("transform", artTransform);
     ghost.setAttribute("class", "puzzle-ghost");
     svg.appendChild(ghost);
 
@@ -232,14 +300,51 @@ export default function PuzzleGame({ room, me, isHost, players, onFinish, t, lan
     svg.appendChild(slotsLayer);
     svg.appendChild(piecesLayer);
 
-    raceStartRef.current = Date.now();
+    if (!raceStartRef.current) { raceStartRef.current = Date.now(); }
     setRaceStartAt(raceStartRef.current);
-    let settled = 0;
-    const total = pieces.length;
+
+    // Répartition des pièces NON posées dans le bac (grille étalée, léger
+    // recouvrement pour les grosses difficultés). `order` permet le shuffle.
+    function trayPositions(count) {
+      const tcols = Math.max(1, Math.floor(tray.w / (cellW * 0.8)));
+      const trows = Math.max(1, Math.ceil(count / tcols));
+      const spanX = tray.w - cellW, spanY = tray.h - cellH;
+      const pos = [];
+      for (let i = 0; i < count; i++) {
+        const cc = i % tcols, rr = Math.floor(i / tcols);
+        const jx = (Math.random() - 0.5) * cellW * 0.12, jy = (Math.random() - 0.5) * cellH * 0.12;
+        pos.push({
+          x: tray.x + (tcols > 1 ? cc * spanX / (tcols - 1) : spanX / 2) + jx,
+          y: tray.y + (trows > 1 ? rr * spanY / (trows - 1) : spanY / 2) + jy,
+        });
+      }
+      return pos;
+    }
+
+    const pieceObjs = [];   // pièces NON posées (pour le shuffle)
+
+    function setPieceTransform(g, piece) {
+      g.setAttribute("transform", `translate(${(piece.curX - piece.homeX).toFixed(2)},${(piece.curY - piece.homeY).toFixed(2)})`);
+    }
+
+    function doReveal() {
+      if (solvedFiredRef.current) return;
+      solvedFiredRef.current = true;
+      svg.classList.add("solved");
+      const reveal = document.createElementNS(ns, "use");
+      reveal.setAttributeNS(xlink, "href", "#" + masterId);
+      reveal.setAttribute("href", "#" + masterId);
+      reveal.setAttribute("transform", artTransform);
+      reveal.setAttribute("class", "puzzle-reveal");
+      svg.appendChild(reveal);
+      setSolved(true);
+    }
 
     pieces.forEach(({ r, c }) => {
-      const homeX = BOARD_X + c * cellW, homeY = BOARD_Y + r * cellH;
+      const key = r + "-" + c;
+      const homeX = board.x + c * cellW, homeY = board.y + r * cellH;
       const d = piecePath(r, c, rows, cols, cellW, cellH, edges);
+      const wasSettled = settledRef.current.has(key);
 
       const slot = document.createElementNS(ns, "rect");
       slot.setAttribute("class", "puzzle-slot");
@@ -256,19 +361,15 @@ export default function PuzzleGame({ room, me, isHost, players, onFinish, t, lan
       clip.appendChild(clipPathEl);
       defs.appendChild(clip);
 
-      const scatterX = Math.random() * (SCENE_W - cellW * 1.2);
-      const scatterY = Math.random() * (SCENE_H - cellH * 1.2);
-
       const g = document.createElementNS(ns, "g");
-      g.setAttribute("class", "puzzle-piece");
-      g.setAttribute("transform", `translate(${(scatterX - homeX).toFixed(2)},${(scatterY - homeY).toFixed(2)})`);
+      g.setAttribute("class", "puzzle-piece" + (wasSettled ? " puzzle-settled" : ""));
 
       const pic = document.createElementNS(ns, "g");
       pic.setAttribute("clip-path", `url(#${clipId})`);
       const use = document.createElementNS(ns, "use");
       use.setAttributeNS(xlink, "href", "#" + masterId);
       use.setAttribute("href", "#" + masterId);
-      use.setAttribute("transform", `translate(${BOARD_X},${BOARD_Y})`);
+      use.setAttribute("transform", artTransform);
       pic.appendChild(use);
       g.appendChild(pic);
 
@@ -280,9 +381,11 @@ export default function PuzzleGame({ room, me, isHost, players, onFinish, t, lan
 
       piecesLayer.appendChild(g);
 
-      const piece = { homeX, homeY, curX: scatterX, curY: scatterY, settled: false };
-      let dragging = false, offX = 0, offY = 0;
+      const piece = { homeX, homeY, curX: homeX, curY: homeY, settled: wasSettled, g };
+      if (wasSettled) { setPieceTransform(g, piece); }   // reste à sa place (translate 0,0)
+      else { pieceObjs.push(piece); }
 
+      let dragging = false, offX = 0, offY = 0;
       g.addEventListener("pointerdown", e => {
         if (piece.settled) return;
         dragging = true;
@@ -296,7 +399,7 @@ export default function PuzzleGame({ room, me, isHost, players, onFinish, t, lan
         if (!dragging) return;
         const pt = toSvgPoint(svg, e);
         piece.curX = pt.x - offX; piece.curY = pt.y - offY;
-        g.setAttribute("transform", `translate(${(piece.curX - piece.homeX).toFixed(2)},${(piece.curY - piece.homeY).toFixed(2)})`);
+        setPieceTransform(g, piece);
       });
       function release() {
         if (!dragging) return;
@@ -308,12 +411,9 @@ export default function PuzzleGame({ room, me, isHost, players, onFinish, t, lan
           g.setAttribute("transform", "translate(0,0)");
           piece.settled = true;
           g.classList.add("puzzle-settled");
+          settledRef.current.add(key);
           playTokenDrop();
 
-          // Surbrillance aux joints (demande de Guillaume) : contour
-          // lumineux rejoué une fois via une classe animée CSS (aucun
-          // minuteur JS de nettoyage requis pour l'animation elle-même,
-          // seulement pour retirer l'élément du DOM une fois estompé).
           const glow = document.createElementNS(ns, "path");
           glow.setAttribute("class", "puzzle-snap-glow");
           glow.setAttribute("d", d);
@@ -321,10 +421,10 @@ export default function PuzzleGame({ room, me, isHost, players, onFinish, t, lan
           svg.appendChild(glow);
           setTimeout(() => glow.remove(), 750);
 
-          settled += 1;
+          const settled = settledRef.current.size;
           setSolvedCount(settled);
-          const progress = settled / total;
           if (settled >= total) {
+            doReveal();
             if (!finishedFiredRef.current) {
               finishedFiredRef.current = true;
               const timeMs = Date.now() - raceStartRef.current;
@@ -334,7 +434,7 @@ export default function PuzzleGame({ room, me, isHost, players, onFinish, t, lan
               });
             }
           } else {
-            channelRef.current?.send({ type: "broadcast", event: "progress", payload: { profile_id: me.id, progress } });
+            channelRef.current?.send({ type: "broadcast", event: "progress", payload: { profile_id: me.id, progress: settled / total } });
           }
         }
       }
@@ -342,12 +442,25 @@ export default function PuzzleGame({ room, me, isHost, players, onFinish, t, lan
       g.addEventListener("pointercancel", release);
     });
 
-    return () => { svg.innerHTML = ""; };
+    // Placement initial dans le bac (ordre mélangé) + exposition du shuffle.
+    function layoutTray(order) {
+      const pos = trayPositions(order.length);
+      order.forEach((piece, i) => { piece.curX = pos[i].x; piece.curY = pos[i].y; setPieceTransform(piece.g, piece); piece.g.parentNode && piece.g.parentNode.appendChild(piece.g); });
+    }
+    function shuffleArr(a) { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+    layoutTray(shuffleArr(pieceObjs));
+    shuffleRef.current = () => layoutTray(shuffleArr(pieceObjs.filter(p => !p.settled)));
+
+    setSolvedCount(settledRef.current.size);
+    if (settledRef.current.size >= total && total > 0) doReveal();
+
+    return () => { shuffleRef.current = () => {}; svg.innerHTML = ""; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [phase, imageId, pieceCount, room.id, me.id]);
+  }, [phase, imageId, pieceCount, room.id, me.id, orientation]);
 
   const myProgress = totalPieces > 0 ? solvedCount / totalPieces : 0;
   const phaseKey = phase === "intro" ? "intro" : phase === "finished" ? "finished" : "race";
+  const layout0 = computeLayout(orientation);
 
   return (
     <div className="panel puzzle-panel" style={{ maxWidth: "min(880px, 96vw)" }}>
@@ -399,6 +512,11 @@ export default function PuzzleGame({ room, me, isHost, players, onFinish, t, lan
             <div className="puzzle-hud">
               <span className="puzzle-progress-badge">{solvedCount}/{totalPieces}</span>
               {phase === "racing" && <ElapsedClock startAt={raceStartAt} running={phase === "racing"} />}
+              {phase === "racing" && !solved && (
+                <button type="button" className="puzzle-shuffle-btn" onClick={() => shuffleRef.current()}>
+                  🔀 {t("puzzleShuffle")}
+                </button>
+              )}
             </div>
             {!isSolo && (
               <div className="puzzle-leaderboard">
@@ -414,7 +532,7 @@ export default function PuzzleGame({ room, me, isHost, players, onFinish, t, lan
                 })}
               </div>
             )}
-            <svg ref={boardSvgRef} viewBox={`0 0 ${SCENE_W} ${SCENE_H}`} className="puzzle-board" />
+            <svg ref={boardSvgRef} viewBox={`0 0 ${layout0.SCENE_W} ${layout0.SCENE_H}`} className="puzzle-board" />
           </div>
         )}
 
