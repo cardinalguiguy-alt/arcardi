@@ -598,6 +598,7 @@ input:focus, select:focus{outline:2px solid var(--p2); border-color:var(--p2);}
 }
 @keyframes fadeSlideIn{ from{opacity:0; transform:translateY(10px);} to{opacity:1; transform:translateY(0);} }
 @keyframes popIn{ 0%{transform:scale(.7); opacity:0;} 70%{transform:scale(1.08); opacity:1;} 100%{transform:scale(1);} }
+@keyframes fadeIn{ from{ opacity:0; } to{ opacity:1; } }
 @keyframes toastSlide{ from{opacity:0; transform:translateY(-12px);} to{opacity:1; transform:translateY(0);} }
 @keyframes urgentPulse{ 0%,100%{opacity:1;} 50%{opacity:.45;} }
 .stage-enter{ animation:fadeSlideIn .35s ease both; }
@@ -4196,10 +4197,16 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
 .ocean-sea.rise{ animation:oceanRise 1s cubic-bezier(.5,0,.3,1) forwards; }
 .ocean-body{ position:absolute; inset:0; background:linear-gradient(180deg,#1d7099,#0b3a52 45%,#062333); }
 .ocean-crest{ position:absolute; top:-38px; left:0; width:200%; height:46px; }
-.ocean-crest.front{ animation:oceanDrift 3s linear infinite; }
-.ocean-crest.back{ top:-30px; opacity:.5; animation:oceanDrift 4.4s linear infinite reverse; }
-.ocean-fishwrap{ position:absolute; inset:0; z-index:3; display:flex; align-items:center; justify-content:center; pointer-events:none; }
-.ocean-fish{ width:120px; transform:scale(.05); filter:drop-shadow(0 6px 10px rgba(0,0,0,.5)); animation:oceanFish .62s cubic-bezier(.5,0,.9,1) .9s forwards; }
+/* houle : dérive horizontale (transform) + ondulation verticale (margin-top,
+   pour ne pas entrer en conflit avec le transform de la dérive) */
+.ocean-crest.back{ top:-30px; opacity:.5; animation:oceanDrift 5.2s linear infinite reverse, oceanSwell 3.4s ease-in-out infinite; }
+.ocean-crest.mid{ top:-23px; opacity:.85; animation:oceanDrift 4s linear infinite, oceanSwell 2.7s ease-in-out infinite .2s; }
+.ocean-crest.front{ top:-16px; animation:oceanDrift 3s linear infinite reverse, oceanSwell 2.2s ease-in-out infinite .4s; }
+.ocean-fishwrap{ position:absolute; inset:0; z-index:3; pointer-events:none; }
+.ocean-fish{ position:absolute; left:50%; bottom:38%; width:52px; transform-origin:center bottom; opacity:0;
+  filter:drop-shadow(0 4px 7px rgba(0,0,0,.45)); animation:oceanFishHop 1s cubic-bezier(.3,.7,.4,1) .5s both; }
+.ocean-splash{ position:absolute; left:50%; bottom:34%; width:42px; transform:translateX(-50%); opacity:0; z-index:2; pointer-events:none;
+  animation:oceanSplash .38s ease-out 1.3s both; }
 .ocean-content{ position:relative; z-index:4; animation:povPush .7s cubic-bezier(.2,.8,.3,1) both; }
 .ocean-play-btn{
   padding:16px 44px; border:none; border-radius:99px;
@@ -4213,7 +4220,16 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
 .ocean-play-btn:disabled{ opacity:.55; cursor:default; }
 @keyframes oceanRise{ from{ height:0; } to{ height:122%; } }
 @keyframes oceanDrift{ from{ transform:translateX(0); } to{ transform:translateX(-50%); } }
-@keyframes oceanFish{ 0%{ transform:scale(.05); opacity:0; } 35%{ transform:scale(1); opacity:1; } 100%{ transform:scale(7); opacity:1; } }
+@keyframes oceanSwell{ 0%,100%{ margin-top:0; } 50%{ margin-top:6px; } }
+/* petit poisson : saut discret (clin d'oeil) puis replonge */
+@keyframes oceanFishHop{
+  0%{ opacity:0; transform:translate(-50%,22px) scale(.5) rotate(-18deg); }
+  22%{ opacity:1; transform:translate(-50%,-40px) scale(1) rotate(-13deg); }
+  52%{ transform:translate(-44%,-52px) scale(1) rotate(8deg); }
+  80%{ opacity:1; transform:translate(-40%,-18px) scale(.95) rotate(26deg); }
+  100%{ opacity:0; transform:translate(-38%,20px) scale(.7) rotate(36deg); }
+}
+@keyframes oceanSplash{ 0%{ opacity:.9; transform:translateX(-50%) scaleX(.4); } 100%{ opacity:0; transform:translateX(-50%) scaleX(1.6); } }
 
 /* ----- Flash + zoom (FlashStage) -----
    Même gabarit que .door-stage / .curtain-stage, rythme plus vif : réservé
@@ -4265,6 +4281,20 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
   border-radius:99px; padding:6px 14px;
 }
 .confetti-piece{ position:absolute; top:-16px; pointer-events:none; z-index:40; animation:confettiFall cubic-bezier(.25,.7,.4,1) both; }
+
+/* ----- Verrou de jeu par code (Tu Préfères) : modale centrée ----- */
+.code-gate-ov{ position:fixed; inset:0; z-index:300; display:flex; align-items:center; justify-content:center;
+  background:rgba(6,8,16,.72); backdrop-filter:blur(3px); -webkit-backdrop-filter:blur(3px); padding:20px;
+  animation:fadeIn .2s ease both; }
+.code-gate{ width:min(360px,92vw); background:var(--card2,#1b1622); border:1px solid var(--line); border-radius:18px;
+  padding:24px 22px; text-align:center; box-shadow:0 20px 60px rgba(0,0,0,.5); animation:popIn .28s cubic-bezier(.3,1.4,.5,1) both; }
+.code-gate-icon{ font-size:34px; margin-bottom:6px; }
+.code-gate h3{ margin:0 0 6px; font-family:'Bungee'; font-size:19px; }
+.code-gate-input{ width:100%; margin-top:14px; text-align:center; font-family:'Space Mono',monospace; font-size:18px; font-weight:700;
+  letter-spacing:.06em; background:var(--bg2,#0f0b14); border:1px solid var(--line); color:var(--ink); border-radius:12px; padding:12px 10px; }
+.code-gate-input:focus{ outline:2px solid var(--acc-tupreferes,#c58cff); outline-offset:1px; }
+.code-gate-error{ color:#ff6d6d; font-weight:700; font-size:13px; margin:10px 0 0; }
+.code-gate-actions{ display:flex; gap:10px; justify-content:center; margin-top:16px; flex-wrap:wrap; }
 
 /* ----- Lounge : les deux panneaux côte à côte (Créer / Rejoindre) -----
    Centrés dans l'écran (verticalement ET horizontalement) : le wrap du
@@ -6131,9 +6161,8 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
 @keyframes nvfxSring{ from{ transform:scale(1); opacity:1; } to{ transform:scale(4.5); opacity:0; } }
 .nvfx-drop{ animation:nvfxDrop .62s ease-out forwards; }
 @keyframes nvfxDrop{ from{ transform:translate(0,0); opacity:1; } 50%{ opacity:1; } to{ transform:translate(var(--dx),var(--dy)); opacity:0; } }
-.nvfx-msfall{ animation:nvfxMs .52s cubic-bezier(.5,0,.85,.55) forwards; }
-.nvfx-msfall.big{ animation-duration:.9s; }
-@keyframes nvfxMs{ from{ transform:translate(var(--sx),var(--sy)); opacity:.9; } to{ transform:translate(0,0); opacity:1; } }
+/* Le missile (🚀 et pluie 🌧) est désormais animé en JS (MissileFx, rAF) pour
+   une vraie plongée sur la case ; plus de keyframes CSS pour lui. */
 
 /* --- fantome de drag (suivi du pointeur) --- */
 .naval-drag-ghost{ position:fixed; z-index:60; pointer-events:none; transform:translate(-50%,-55%);
@@ -6177,7 +6206,7 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
 @media (prefers-reduced-motion: reduce){
   .naval-timer.hot{ animation:none; }
   .nvFoam,.nvBob,.nvShipG,.nvFlameIn,.nvSmokeP{ animation:none; }
-  .nvfx-ring,.nvfx-flash,.nvfx-spark,.nvfx-sring,.nvfx-drop,.nvfx-msfall{ animation-duration:.01s; }
+  .nvfx-ring,.nvfx-flash,.nvfx-spark,.nvfx-sring,.nvfx-drop{ animation-duration:.01s; }
 }
 @media (max-width: 620px){
   .naval-arena{ gap:16px; }
@@ -6267,9 +6296,14 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
   background:repeating-linear-gradient(45deg, #eee 0 4px, #222 4px 8px);
 }
 
-/* --- la voiture : taille dérivée de --lane-h, transition douce sur `left` --- */
-.calcrace-car-wrap{ position:absolute; top:50%; left:0; transform:translate(-50%,-50%); transition:left .5s ease; z-index:2; }
-.calcrace-car{ display:block; width:calc(var(--lane-h, 54px) * 1.35); height:auto; filter:drop-shadow(0 1px 1px rgba(0,0,0,.4)); }
+/* --- la voiture : taille dérivée de --lane-h, transition douce sur `left`.
+   Position calée par le BORD (retrait de la largeur voiture) et non par le
+   centre : la voiture reste ENTIÈREMENT visible du départ (--p:0, bord gauche)
+   jusqu'au franchissement (--p:1, bord droit qui touche la ligne d'arrivée),
+   sans sortir de la piste, tout en gardant l'impression de progression. --- */
+.calcrace-car-wrap{ position:absolute; top:50%; --carw:calc(var(--lane-h, 54px) * 1.35);
+  left:calc(var(--p, 0) * (100% - var(--carw))); transform:translateY(-50%); transition:left .5s ease; z-index:2; }
+.calcrace-car{ display:block; width:var(--carw); height:auto; filter:drop-shadow(0 1px 1px rgba(0,0,0,.4)); }
 
 /* --- carte opération : validation automatique, pas de bouton --- */
 .calcrace-op-card{
@@ -6297,6 +6331,9 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
   background:repeating-linear-gradient(90deg, #E0473C 0 10px, #F3ECDD 10px 20px);
 }
 .calcrace-fin-scene::before{ top:0; } .calcrace-fin-scene::after{ bottom:0; }
+/* lignes blanches centrales (mêmes pointillés que la piste de course) */
+.calcrace-fin-centerline{ position:absolute; left:0; right:0; top:50%; height:3.5px; transform:translateY(-50%); z-index:1;
+  background:repeating-linear-gradient(90deg, rgba(255,255,255,.62) 0 15px, transparent 15px 30px); }
 .calcrace-fin-line{ position:absolute; right:52px; top:0; bottom:0; width:12px;
   background:repeating-linear-gradient(45deg, #eee 0 5px, #222 5px 10px); }
 .calcrace-fin-car{ position:absolute; top:50%; left:-44px; transform:translateY(-50%); animation:calcraceCross 1s cubic-bezier(.3,.6,.3,1) both; z-index:2; }
@@ -6370,7 +6407,10 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
 
 .puzzle-board{ width:100%; height:auto; touch-action:none; display:block; border-radius:12px; background:var(--bg2); }
 .puzzle-slot{ fill:none; stroke:rgba(255,255,255,.18); stroke-width:1.5; stroke-dasharray:3 4; pointer-events:none; }
-.puzzle-ghost{ opacity:.14; pointer-events:none; }
+/* Image guide : masquée par défaut (2026-07), révélée en fond seulement
+   pendant un bonus "indice image" (classe guide-on posée 15 s sur le plateau). */
+.puzzle-ghost{ opacity:0; pointer-events:none; transition:opacity .4s ease; }
+.puzzle-board.guide-on .puzzle-ghost{ opacity:.5; }
 .puzzle-piece{ cursor:grab; }
 .puzzle-piece.puzzle-settled{ cursor:default; }
 .puzzle-piece.puzzle-dragging{ cursor:grabbing; }
@@ -6390,6 +6430,21 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
 }
 .puzzle-shuffle-btn:hover{ transform:translateY(-1px); filter:brightness(1.06); }
 .puzzle-shuffle-btn:active{ transform:translateY(1px); }
+
+/* Bouton "indice image" (révèle l'image guide en fond 15 s ; quota par joueur). */
+.puzzle-guide-btn{
+  font-family:inherit; font-weight:700; font-size:13px; cursor:pointer;
+  background:rgba(123,110,246,.16); color:var(--ink); border:1px solid var(--acc-puzzle); border-radius:999px; padding:5px 13px;
+  transition:transform .12s ease, filter .12s ease;
+}
+.puzzle-guide-btn b{ font-family:'Space Mono',monospace; }
+.puzzle-guide-btn:hover:not(:disabled){ transform:translateY(-1px); filter:brightness(1.1); }
+.puzzle-guide-btn:active:not(:disabled){ transform:translateY(1px); }
+.puzzle-guide-btn:disabled{ opacity:.45; cursor:default; }
+
+/* Réglage hôte du nombre d'indices image (0 à 5). */
+.puzzle-bonus-group{ display:flex; flex-wrap:wrap; gap:6px; align-items:center; justify-content:center; margin:2px 0 14px; }
+.puzzle-bonus-label{ font-size:13px; font-weight:700; color:var(--muted); margin-right:4px; }
 
 /* Image reconstituée révélée à la résolution : copie nette de l'illustration
    qui apparaît par-dessus les pièces, pendant qu'on efface les coutures. */

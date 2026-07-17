@@ -145,20 +145,29 @@ export default function OceanStage({ gameId, icon, name, accentVar, lang, t, chi
             <canvas ref={canvasRef} className="ocean-sonar" />
             <div className={"ocean-sea" + (opening ? " rise" : "")}>
               <div className="ocean-body" />
-              <svg className="ocean-crest back" viewBox="0 0 1200 46" preserveAspectRatio="none"><path d="M0 28 Q150 8 300 28 T600 28 T900 28 T1200 28 V46 H0Z" fill="#1d7099" /></svg>
-              <svg className="ocean-crest front" viewBox="0 0 1200 46" preserveAspectRatio="none"><path d="M0 26 Q150 46 300 26 T600 26 T900 26 T1200 26 V46 H0Z" fill="#2b86b0" /><path d="M0 26 Q150 46 300 26 T600 26 T900 26 T1200 26" fill="none" stroke="#dff3ff" strokeWidth="3" opacity=".55" /></svg>
+              {/* 3 couches de houle : dérives et ondulations (swell) décalées =
+                  mouvement d'eau plus souple qu'un simple glissement horizontal. */}
+              <svg className="ocean-crest back" viewBox="0 0 1200 46" preserveAspectRatio="none"><path d="M0 30 Q150 8 300 30 T600 30 T900 30 T1200 30 V46 H0Z" fill="#1d7099" /></svg>
+              <svg className="ocean-crest mid" viewBox="0 0 1200 46" preserveAspectRatio="none"><path d="M0 28 Q150 46 300 28 T600 28 T900 28 T1200 28 V46 H0Z" fill="#2b86b0" /></svg>
+              <svg className="ocean-crest front" viewBox="0 0 1200 46" preserveAspectRatio="none"><path d="M0 26 Q150 46 300 26 T600 26 T900 26 T1200 26 V46 H0Z" fill="#2b86b0" opacity=".85" /><path d="M0 26 Q150 46 300 26 T600 26 T900 26 T1200 26" fill="none" stroke="#dff3ff" strokeWidth="3" opacity=".55" /></svg>
             </div>
             {opening && (
-              <div className="ocean-fishwrap">
-                <svg className="ocean-fish" viewBox="0 0 140 80">
-                  <defs><linearGradient id="oceanFishGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#8fd3ea" /><stop offset="1" stopColor="#2c6f92" /></linearGradient></defs>
-                  <path d="M8 40 Q28 8 78 16 Q112 22 128 40 Q112 58 78 64 Q28 72 8 40Z" fill="url(#oceanFishGrad)" stroke="#0c2a3a" strokeWidth="2" />
-                  <path d="M118 40 L140 22 L136 40 L140 58 Z" fill="#2c6f92" stroke="#0c2a3a" strokeWidth="2" />
-                  <path d="M56 20 Q64 6 78 14 Z" fill="#57a9c9" />
-                  <path d="M56 60 Q64 74 78 66 Z" fill="#57a9c9" />
-                  <circle cx="30" cy="36" r="6" fill="#fff" /><circle cx="30" cy="36" r="3" fill="#0c2a3a" />
-                </svg>
-              </div>
+              <>
+                <div className="ocean-fishwrap">
+                  {/* poisson réduit : un petit saut discret (clin d'oeil) puis replonge */}
+                  <svg className="ocean-fish" viewBox="0 0 140 80">
+                    <defs><linearGradient id="oceanFishGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#8fd3ea" /><stop offset="1" stopColor="#2c6f92" /></linearGradient></defs>
+                    <path d="M8 40 Q28 8 78 16 Q112 22 128 40 Q112 58 78 64 Q28 72 8 40Z" fill="url(#oceanFishGrad)" stroke="#0c2a3a" strokeWidth="2" />
+                    <path d="M118 40 L140 22 L136 40 L140 58 Z" fill="#2c6f92" stroke="#0c2a3a" strokeWidth="2" />
+                    <path d="M56 20 Q64 6 78 14 Z" fill="#57a9c9" />
+                    <path d="M56 60 Q64 74 78 66 Z" fill="#57a9c9" />
+                    <circle cx="30" cy="36" r="6" fill="#fff" /><circle cx="30" cy="36" r="3" fill="#0c2a3a" />
+                  </svg>
+                </div>
+                <div className="ocean-splash">
+                  <svg viewBox="0 0 40 14"><path d="M2 12 Q8 2 12 12 Q16 4 20 12 Q24 2 28 12 Q32 5 38 12" fill="none" stroke="#dff3ff" strokeWidth="2" /></svg>
+                </div>
+              </>
             )}
           </>
         )}

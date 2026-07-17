@@ -105,6 +105,13 @@ export default function PuzzleGame({ room, me, isHost, players, onFinish, t, lan
   const [totalPieces, setTotalPieces] = useState(0);
   const [raceStartAt, setRaceStartAt] = useState(0);
   const [solved, setSolved] = useState(false);
+  // Bonus "indice image" (2026-07) : l'image guide n'est PLUS affichée en fond
+  // par défaut. L'hôte règle un nombre d'indices (0 à 5, défaut 2) au départ ;
+  // en course, chaque joueur peut révéler l'image en fond pendant 15 s, dans la
+  // limite de son quota (décompté localement, progression personnelle).
+  const [imageBonus, setImageBonus] = useState(2); // réglage hôte
+  const [bonusLeft, setBonusLeft] = useState(2);   // restant pour ce joueur
+  const [guideOn, setGuideOn] = useState(false);   // révélation en cours
   const [orientation, setOrientation] = useState(() =>
     (typeof window !== "undefined" && window.matchMedia && window.matchMedia("(orientation: portrait)").matches) ? "portrait" : "landscape"
   );
@@ -121,7 +128,28 @@ export default function PuzzleGame({ room, me, isHost, players, onFinish, t, lan
   const playersRef = useRef(players);
   const racersRef = useRef({});
   const restoredRef = useRef(false);
-  const lastSettingsRef = useRef({ imageId: IMAGE_BANK[0].id, pieceCount: 24 });
+  const guideTimerRef = useRef(null);
+  const lastSettingsRef = useRef({ imageId: IMAGE_BANK[0].id, pieceCount: 24, imageBonus: 2 });
+
+  // Nettoyage du minuteur de révélation au démontage.
+  useEffect(() => () => { if (guideTimerRef.current) clearTimeout(guideTimerRef.current); }, []);
+
+  // Révèle l'image guide en fond pendant 15 s (consomme un indice).
+  function revealGuide() {
+    if (guideOn || bonusLeft <= 0) return;
+    const svg = boardSvgRef.current;
+    if (!svg) return;
+    setBonusLeft(n => n - 1);
+    setGuideOn(true);
+    svg.classList.add("guide-on");
+    if (guideTimerRef.current) clearTimeout(guideTimerRef.current);
+    guideTimerRef.current = setTimeout(() => {
+      const s = boardSvgRef.current;
+      if (s) s.classList.remove("guide-on");
+      setGuideOn(false);
+      guideTimerRef.current = null;
+    }, 15000);
+  }
 
   useEffect(() => { playersRef.current = players; }, [players]);
 
@@ -160,6 +188,11 @@ export default function PuzzleGame({ room, me, isHost, players, onFinish, t, lan
       setMyWin(false);
       setImageId(payload.imageId);
       setPieceCount(payload.pieceCount);
+      // quota d'indices image pour ce joueur (défaut 2 si l'hôte n'en envoie pas)
+      const nb = payload.imageBonus ?? 2;
+      setBonusLeft(nb);
+      setGuideOn(false);
+      if (guideTimerRef.current) { clearTimeout(guideTimerRef.current); guideTimerRef.current = null; }
       const initRacers = {};
       (playersRef.current || []).forEach(p => {
         initRacers[p.profile_id] = { username: p.profiles?.username, avatar: p.profiles?.avatar, progress: 0, finished: false };
@@ -225,16 +258,17 @@ export default function PuzzleGame({ room, me, isHost, players, onFinish, t, lan
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [room.id]);
 
-  function hostStart(pickedImageId, pickedPieceCount) {
+  function hostStart(pickedImageId, pickedPieceCount, pickedImageBonus) {
     if (!isHost || !channelRef.current) return;
-    lastSettingsRef.current = { imageId: pickedImageId, pieceCount: pickedPieceCount };
-    channelRef.current.send({ type: "broadcast", event: "match_start", payload: { imageId: pickedImageId, pieceCount: pickedPieceCount } });
-    persistState({ phase: "racing", imageId: pickedImageId, pieceCount: pickedPieceCount });
+    const nb = pickedImageBonus ?? 2;
+    lastSettingsRef.current = { imageId: pickedImageId, pieceCount: pickedPieceCount, imageBonus: nb };
+    channelRef.current.send({ type: "broadcast", event: "match_start", payload: { imageId: pickedImageId, pieceCount: pickedPieceCount, imageBonus: nb } });
+    persistState({ phase: "racing", imageId: pickedImageId, pieceCount: pickedPieceCount, imageBonus: nb });
   }
 
   function rejouer() {
     if (!isHost) return;
-    hostStart(lastSettingsRef.current.imageId, lastSettingsRef.current.pieceCount);
+    hostStart(lastSettingsRef.current.imageId, lastSettingsRef.current.pieceCount, lastSettingsRef.current.imageBonus);
   }
 
   async function backToRoom() {
@@ -495,7 +529,20 @@ export default function PuzzleGame({ room, me, isHost, players, onFinish, t, lan
                   </button>
                 ))}
               </div>
-              <button className="btn" onClick={() => hostStart(imageId, pieceCount)}>
+              <div className="puzzle-bonus-group">
+                <span className="puzzle-bonus-label">{t("puzzleBonusLabel")}</span>
+                {[0, 1, 2, 3, 4, 5].map(n => (
+                  <button
+                    key={n}
+                    type="button"
+                    className={"puzzle-diff-btn" + (imageBonus === n ? " on" : "")}
+                    onClick={() => setImageBonus(n)}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+              <button className="btn" onClick={() => hostStart(imageId, pieceCount, imageBonus)}>
                 {t("puzzleStart")}
               </button>
             </div>
@@ -515,6 +562,11 @@ export default function PuzzleGame({ room, me, isHost, players, onFinish, t, lan
               {phase === "racing" && !solved && (
                 <button type="button" className="puzzle-shuffle-btn" onClick={() => shuffleRef.current()}>
                   🔀 {t("puzzleShuffle")}
+                </button>
+              )}
+              {phase === "racing" && !solved && (
+                <button type="button" className="puzzle-guide-btn" disabled={bonusLeft <= 0 || guideOn} onClick={revealGuide}>
+                  🖼️ {t("puzzleGuide")} <b>×{bonusLeft}</b>
                 </button>
               )}
             </div>

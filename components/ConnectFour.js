@@ -454,7 +454,7 @@ export default function ConnectFour({ room, me, isHost, players, t, lang, onFini
         </div>
 
         {winner && (
-          <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 16, flexWrap: "wrap" }}>
+          <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 16, flexWrap: "wrap", position: "relative", zIndex: 60 }}>
             {isHost ? (
               <>
                 <button className="btn" style={{ width: "auto", padding: "12px 22px", marginTop: 0 }} onClick={rejouer}>🔁 {t("c4Rejouer")}</button>

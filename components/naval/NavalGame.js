@@ -49,12 +49,65 @@ function fxMarkup(kind, big, u) {
     }
     return g;
   }
-  if (kind === "missile") {
-    const len = (big ? 2.6 : 1.15) * u;
-    const sx = (big ? 4.2 : 2.1) * u, sy = -(big ? 9 : 5.4) * u;
-    return `<g class="nvfx-msfall${big ? " big" : ""}" style="--sx:${sx.toFixed(1)}px;--sy:${sy.toFixed(1)}px">${missileSVG(len)}</g>`;
-  }
+  // "missile" n'est plus rendu ici : il a sa propre animation (MissileFx).
   return "";
+}
+
+// Missile animé au rAF (et non plus par simple glissement CSS) pour un rendu
+// réaliste de "plongée" sur la case cible, IDENTIQUE en ISO et en 2D : tout se
+// joue en unités du viewBox (translate/rotate), et la case cible est déjà
+// positionnée par geom.center, donc une descente verticale reste verticale à
+// l'écran quel que soit le mode (l'overlay a un preserveAspectRatio uniforme).
+//   - big  (missile 🚀)  : plongée VERTICALE avec un petit wiggle aléatoire.
+//   - petit (pluie 🌧)   : trajectoire en COURBE (arc), nez orienté vers la cible.
+// Le dessin missileSVG a déjà son nez à l'origine (0,0) : la rotation se fait
+// donc autour du nez, qui suit exactement la trajectoire jusqu'à la case.
+function MissileFx({ u, big }) {
+  const ref = useRef(null);
+  const len = (big ? 3.8 : 1.2) * u;      // missile principal nettement plus gros
+  useEffect(() => {
+    const g = ref.current;
+    if (!g) return;
+    const dur = big ? 500 : 470;
+    const H = (big ? 10.5 : 8) * u;          // hauteur de départ (au-dessus de la case)
+    const amp = (0.32 + Math.random() * 0.3) * u; // amplitude du wiggle
+    const freq = 2 + Math.random() * 2;
+    const phase = Math.random() * 6.28;
+    const sx = (Math.random() < 0.5 ? -1 : 1) * 3.4 * u; // côté d'arrivée de l'arc
+    const peakY = -H - 1.4 * u;
+    const t0 = performance.now();
+    let raf = 0;
+    function frame(now) {
+      let k = (now - t0) / dur;
+      if (k > 1) k = 1;
+      let x, y, a = 0;
+      if (big) {
+        y = -H * (1 - k);
+        x = Math.sin(phase + k * freq * 6.28) * amp * (1 - k);
+      } else {
+        x = sx + (0 - sx) * k;                                   // x : arrivée latérale -> cible
+        y = (1 - k) * (1 - k) * (-H) + 2 * (1 - k) * k * peakY;  // Bézier quad (fin en 0)
+        const dxdt = 0 - sx;
+        const dydt = 2 * (1 - k) * (peakY - (-H)) + 2 * k * (0 - peakY);
+        a = Math.atan2(dydt, dxdt) * 180 / Math.PI - 90;         // nez le long de la tangente
+      }
+      g.setAttribute("transform", `translate(${x.toFixed(2)},${y.toFixed(2)}) rotate(${a.toFixed(1)})`);
+      if (k < 1) raf = requestAnimationFrame(frame);
+    }
+    raf = requestAnimationFrame(frame);
+    return () => cancelAnimationFrame(raf);
+  }, [u, big]);
+  return <g ref={ref} dangerouslySetInnerHTML={{ __html: missileSVG(len) }} />;
+}
+
+// Routeur de rendu d'un FX : le missile a son composant animé, le reste garde
+// le markup CSS d'origine (boom, splash).
+function FxNode({ f, x, y, u }) {
+  const transform = `translate(${x.toFixed(1)},${y.toFixed(1)})`;
+  if (f.kind === "missile")
+    return <g transform={transform}><MissileFx u={u} big={f.big} /></g>;
+  return <g transform={transform} className={"nvfx nvfx-" + f.kind}
+    dangerouslySetInnerHTML={{ __html: fxMarkup(f.kind, f.big, u) }} />;
 }
 
 function NavalBoard({
@@ -102,8 +155,7 @@ function NavalBoard({
         <g pointerEvents="none">
           {fx && fx.map(f => {
             const [x, y] = geom.center(f.r, f.c, mode === "iso" ? 0.1 : 0);
-            return <g key={f.id} transform={`translate(${x.toFixed(1)},${y.toFixed(1)})`}
-              className={"nvfx nvfx-" + f.kind} dangerouslySetInnerHTML={{ __html: fxMarkup(f.kind, f.big, u) }} />;
+            return <FxNode key={f.id} f={f} x={x} y={y} u={u} />;
           })}
         </g>
         {badges && badges.map(b => {
@@ -165,13 +217,11 @@ function DualBoard({ mode, u, headroom, gap, maxH, own, enemy, fxOwn, fxEnemy, o
         <g pointerEvents="none">
           {fxEnemy && fxEnemy.map(f => {
             const [x, y] = geom.center("enemy", f.r, f.c, mode === "iso" ? 0.1 : 0);
-            return <g key={"e" + f.id} transform={`translate(${x.toFixed(1)},${y.toFixed(1)})`}
-              className={"nvfx nvfx-" + f.kind} dangerouslySetInnerHTML={{ __html: fxMarkup(f.kind, f.big, u) }} />;
+            return <FxNode key={"e" + f.id} f={f} x={x} y={y} u={u} />;
           })}
           {fxOwn && fxOwn.map(f => {
             const [x, y] = geom.center("own", f.r, f.c, mode === "iso" ? 0.1 : 0);
-            return <g key={"o" + f.id} transform={`translate(${x.toFixed(1)},${y.toFixed(1)})`}
-              className={"nvfx nvfx-" + f.kind} dangerouslySetInnerHTML={{ __html: fxMarkup(f.kind, f.big, u) }} />;
+            return <FxNode key={"o" + f.id} f={f} x={x} y={y} u={u} />;
           })}
         </g>
       </svg>

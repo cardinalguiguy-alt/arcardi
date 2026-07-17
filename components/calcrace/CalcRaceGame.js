@@ -354,7 +354,7 @@ export default function CalcRaceGame({ room, me, isHost, players, onFinish, t, l
                     <div className="calcrace-centerline" />
                     <div className="calcrace-progress">{myIdx}/{opsTotal}</div>
                     <div className="calcrace-finish" />
-                    <div className="calcrace-car-wrap" style={{ left: `${((myRacer.progress || 0) * 100).toFixed(1)}%` }}>
+                    <div className="calcrace-car-wrap" style={{ "--p": (myRacer.progress || 0).toFixed(3) }}>
                       <F1Car color={CAR_COLORS[0]} />
                     </div>
                   </div>
@@ -374,7 +374,7 @@ export default function CalcRaceGame({ room, me, isHost, players, onFinish, t, l
                         <div className="calcrace-centerline" />
                         <div className="calcrace-progress">{r.index || 0}/{opsTotal}</div>
                         <div className="calcrace-finish" />
-                        <div className="calcrace-car-wrap" style={{ left: `${((r.progress || 0) * 100).toFixed(1)}%` }}>
+                        <div className="calcrace-car-wrap" style={{ "--p": (r.progress || 0).toFixed(3) }}>
                           <F1Car color={CAR_COLORS[i % CAR_COLORS.length]} />
                         </div>
                       </div>
@@ -409,6 +409,7 @@ export default function CalcRaceGame({ room, me, isHost, players, onFinish, t, l
                 qui passe la ligne avec un léger zoom photo-finish, drapeau à
                 damier agité, le tout saupoudré de confettis (2026-07). */}
             <div className="calcrace-fin-scene" aria-hidden="true">
+              <div className="calcrace-fin-centerline" />
               <div className="calcrace-fin-line" />
               <div className="calcrace-fin-car">
                 <F1Car color={(() => { const wi = (players || []).findIndex(p => p.profile_id === (winner && winner.profile_id)); return CAR_COLORS[(wi >= 0 ? wi : 0) % CAR_COLORS.length]; })()} />

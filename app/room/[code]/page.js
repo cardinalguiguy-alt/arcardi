@@ -474,6 +474,23 @@ export default function Room() {
   // réel (voir lib/gameSync.js) — au lieu de le laisser avancer seul en
   // silence pendant que ses invités restent bloqués sans explication.
   const [launchWriteError, setLaunchWriteError] = useState(false);
+  // Verrou "Tu Préfères" (demande 2026-07) : ce jeu ne se lance pas librement.
+  // Au clic sur sa carte, l'hôte doit saisir un code secret ("grenadine") dans
+  // une modale ; code redemandé à CHAQUE lancement (aucune persistance).
+  const [codeGate, setCodeGate] = useState(null); // { gameId, solo } | null
+  const [codeInput, setCodeInput] = useState("");
+  const [codeError, setCodeError] = useState(false);
+  const TUPREF_CODE = "grenadine";
+  function submitCodeGate() {
+    if (!codeGate) return;
+    if (codeInput.trim().toLowerCase() === TUPREF_CODE) {
+      const { gameId, solo } = codeGate;
+      setCodeGate(null); setCodeInput(""); setCodeError(false);
+      launch(gameId, { solo });
+    } else {
+      setCodeError(true);
+    }
+  }
   // Mode solo échecs (demande 2026-07) : mémorise que le prochain lancement
   // d'échecs se fait contre le bot (siège tenu par l'IA côté hôte). Passé en
   // prop à ChessGame ; la persistance en cas de rechargement vient du
@@ -1081,7 +1098,13 @@ export default function Room() {
                         key={id}
                         className="game-card"
                         style={{ "--accent": `var(${g.accent})`, opacity: disabled ? .45 : 1, cursor: disabled ? "not-allowed" : "pointer" }}
-                        onClick={() => { if (disabled) return; playGameCardClick(); launch(id, { solo: soloEligible }); }}
+                        onClick={() => {
+                          if (disabled) return;
+                          playGameCardClick();
+                          // Tu Préfères : verrouillé par code, on ouvre la modale au lieu de lancer.
+                          if (id === "tupreferes") { setCodeInput(""); setCodeError(false); setCodeGate({ gameId: id, solo: soloEligible }); return; }
+                          launch(id, { solo: soloEligible });
+                        }}
                       >
                         <span className="game-card-icon">{g.icon}</span>
                         <span className="game-card-title">{t(g.nameKey)}</span>
@@ -1099,6 +1122,32 @@ export default function Room() {
           </div>
         )}
       </Crossfade>
+
+      {/* Verrou "Tu Préfères" : modale de code (hôte). Le bon code lance la
+          partie ; il est redemandé à chaque lancement. */}
+      {codeGate && (
+        <div className="code-gate-ov" onClick={() => { setCodeGate(null); setCodeError(false); }}>
+          <div className="code-gate" onClick={e => e.stopPropagation()}>
+            <div className="code-gate-icon">🔒</div>
+            <h3>{t("tuprefCodeTitle")}</h3>
+            <p className="muted">{t("tuprefCodePrompt")}</p>
+            <input
+              autoFocus
+              className="code-gate-input"
+              value={codeInput}
+              onChange={e => { setCodeInput(e.target.value); setCodeError(false); }}
+              onKeyDown={e => { if (e.key === "Enter") submitCodeGate(); }}
+              placeholder={t("tuprefCodePlaceholder")}
+              aria-label={t("tuprefCodeTitle")}
+            />
+            {codeError && <p className="code-gate-error">{t("tuprefCodeWrong")}</p>}
+            <div className="code-gate-actions">
+              <button className="btn" style={{ width: "auto", padding: "10px 20px", marginTop: 0 }} onClick={submitCodeGate}>{t("tuprefCodeValidate")}</button>
+              <button className="btn ghost" style={{ width: "auto", padding: "10px 20px", marginTop: 0 }} onClick={() => { setCodeGate(null); setCodeError(false); }}>{t("tuprefCodeCancel")}</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Monté ici (hors Crossfade) pour ne jamais se démonter lors des
           transitions lobby <-> jeu : l'historique de discussion et la
