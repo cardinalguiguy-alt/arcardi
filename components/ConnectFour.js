@@ -43,6 +43,80 @@ function isBoardFull(board) {
   return board[0].every(cell => cell !== null);
 }
 
+/* ==========================================================================
+   BOT (2026-07) — deux niveaux : "medium" (gagne/bloque en 1 coup, évite de
+   donner une victoire immédiate, préfère le centre) et "strong" (minimax
+   alpha-bêta profondeur 5 avec heuristique de fenêtres, précédé du gain/blocage
+   immédiat). Fonctions PURES, testées en Node. Le bot ne joue qu'en SOLO ;
+   l'hôte (le seul humain) exécute ses coups localement via hostHandleMove.
+   ========================================================================== */
+const C4_LINES = (() => {
+  const lines = [];
+  for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+    if (c + 3 < COLS) lines.push([[r, c], [r, c + 1], [r, c + 2], [r, c + 3]]);
+    if (r + 3 < ROWS) lines.push([[r, c], [r + 1, c], [r + 2, c], [r + 3, c]]);
+    if (r + 3 < ROWS && c + 3 < COLS) lines.push([[r, c], [r + 1, c + 1], [r + 2, c + 2], [r + 3, c + 3]]);
+    if (r + 3 < ROWS && c - 3 >= 0) lines.push([[r, c], [r + 1, c - 1], [r + 2, c - 2], [r + 3, c - 3]]);
+  }
+  return lines;
+})();
+function c4ValidCols(board) { const cols = []; for (let c = 0; c < COLS; c++) if (dropRow(board, c) !== -1) cols.push(c); return cols; }
+function c4Drop(board, col, mark) { const r = dropRow(board, col); if (r === -1) return null; const b = board.map(row => row.slice()); b[r][col] = mark; return { b, r }; }
+function c4Won(board, mark) { for (const ln of C4_LINES) { if (board[ln[0][0]][ln[0][1]] === mark && ln.every(([r, c]) => board[r][c] === mark)) return true; } return false; }
+// Colonne qui GAGNE immédiatement pour `mark`, ou -1.
+function c4FindWin(board, mark) { for (const c of c4ValidCols(board)) { const d = c4Drop(board, c, mark); if (d && checkWin(d.b, d.r, c, mark)) return c; } return -1; }
+function c4Heur(board, botMark, humanMark) {
+  let score = 0;
+  for (let r = 0; r < ROWS; r++) { const v = board[r][3]; if (v === botMark) score += 3; else if (v === humanMark) score -= 3; }
+  for (const ln of C4_LINES) {
+    let b = 0, h = 0, e = 0;
+    for (const [r, c] of ln) { const v = board[r][c]; if (v === botMark) b++; else if (v === humanMark) h++; else e++; }
+    if (b && h) continue;
+    if (b === 3 && e === 1) score += 8; else if (b === 2 && e === 2) score += 3;
+    else if (h === 3 && e === 1) score -= 11; else if (h === 2 && e === 2) score -= 3;
+  }
+  return score;
+}
+function c4Minimax(board, depth, alpha, beta, maxing, botMark, humanMark) {
+  if (c4Won(board, botMark)) return 100000 + depth;      // gain rapide privilégié
+  if (c4Won(board, humanMark)) return -100000 - depth;
+  const valid = c4ValidCols(board);
+  if (depth === 0 || valid.length === 0) return c4Heur(board, botMark, humanMark);
+  valid.sort((a, b) => Math.abs(a - 3) - Math.abs(b - 3));
+  if (maxing) {
+    let best = -Infinity;
+    for (const c of valid) { const d = c4Drop(board, c, botMark); const v = c4Minimax(d.b, depth - 1, alpha, beta, false, botMark, humanMark); if (v > best) best = v; if (v > alpha) alpha = v; if (alpha >= beta) break; }
+    return best;
+  }
+  let best = Infinity;
+  for (const c of valid) { const d = c4Drop(board, c, humanMark); const v = c4Minimax(d.b, depth - 1, alpha, beta, true, botMark, humanMark); if (v < best) best = v; if (v < beta) beta = v; if (alpha >= beta) break; }
+  return best;
+}
+function pickC4MoveMedium(board, botMark, humanMark) {
+  const win = c4FindWin(board, botMark); if (win >= 0) return win;
+  const block = c4FindWin(board, humanMark); if (block >= 0) return block;
+  const valid = c4ValidCols(board);
+  const safe = valid.filter(c => { const d = c4Drop(board, c, botMark); return d && c4FindWin(d.b, humanMark) < 0; });
+  const pool = safe.length ? safe : valid;
+  const bestDist = Math.min(...pool.map(c => Math.abs(c - 3)));
+  const best = pool.filter(c => Math.abs(c - 3) === bestDist);
+  return best[Math.floor(Math.random() * best.length)];
+}
+function pickC4MoveStrong(board, botMark, humanMark) {
+  const win = c4FindWin(board, botMark); if (win >= 0) return win;
+  const block = c4FindWin(board, humanMark); if (block >= 0) return block;
+  const valid = c4ValidCols(board);
+  valid.sort((a, b) => Math.abs(a - 3) - Math.abs(b - 3));
+  let bestCol = valid[0], bestVal = -Infinity;
+  for (const c of valid) { const d = c4Drop(board, c, botMark); const v = c4Minimax(d.b, 5, -Infinity, Infinity, false, botMark, humanMark); if (v > bestVal) { bestVal = v; bestCol = c; } }
+  return bestCol;
+}
+function pickC4Move(board, botMark, humanMark, level) {
+  const valid = c4ValidCols(board);
+  if (!valid.length) return -1;
+  return level === "strong" ? pickC4MoveStrong(board, botMark, humanMark) : pickC4MoveMedium(board, botMark, humanMark);
+}
+
 export default function ConnectFour({ room, me, isHost, players, t, lang, onFinish }) {
   const [phase, setPhase] = useState("intro"); // intro (choix/attente) -> playing (le plateau reste affiché même après la victoire)
   const [p1, setP1] = useState(null);
@@ -62,9 +136,11 @@ export default function ConnectFour({ room, me, isHost, players, t, lang, onFini
   const [countingDown, setCountingDown] = useState(false);
   const [confetti, setConfetti] = useState([]);
   const [flash, setFlash] = useState(false);
+  const [botLevel, setBotLevel] = useState(null);        // "medium" | "strong" | null (partie entre humains)
+  const [botDifficulty, setBotDifficulty] = useState("medium"); // choix de l'hôte avant lancement solo
 
   const channelRef = useRef(null);
-  const stateRef = useRef({ board, turn, p1, p2, winner, lastMove, winningCells });
+  const stateRef = useRef({ board, turn, p1, p2, winner, lastMove, winningCells, botLevel });
   const savedResultRef = useRef(false);
   const autoStartedRef = useRef(false);
   const restoredRef = useRef(false);
@@ -74,8 +150,8 @@ export default function ConnectFour({ room, me, isHost, players, t, lang, onFini
   // valeurs fraîches dans le handler de broadcast (évite les closures figées),
   // et pour pouvoir persister un instantané complet à tout moment.
   useEffect(() => {
-    stateRef.current = { board, turn, p1, p2, winner, lastMove, winningCells };
-  }, [board, turn, p1, p2, winner, lastMove, winningCells]);
+    stateRef.current = { board, turn, p1, p2, winner, lastMove, winningCells, botLevel };
+  }, [board, turn, p1, p2, winner, lastMove, winningCells, botLevel]);
 
   function persistSnapshot(extra = {}) {
     if (!isHost) return;
@@ -101,13 +177,14 @@ export default function ConnectFour({ room, me, isHost, players, t, lang, onFini
       setLastMove(null);
       setWinningCells(null);
       setMyWin(false);
+      setBotLevel(payload.botLevel || null);
       savedResultRef.current = false;
       setPhase("playing");
       setCountingDown(true);
       if (isHost) {
         saveGameState(room.id, GAME_ID, {
           phase: "playing", p1: payload.p1, p2: payload.p2, board: emptyBoard(),
-          turn: payload.turn, winner: null, lastMove: null, winningCells: null,
+          turn: payload.turn, winner: null, lastMove: null, winningCells: null, botLevel: payload.botLevel || null,
         });
       }
     });
@@ -131,7 +208,7 @@ export default function ConnectFour({ room, me, isHost, players, t, lang, onFini
         saveGameState(room.id, GAME_ID, {
           phase: "playing", p1: stateRef.current.p1, p2: stateRef.current.p2,
           board: payload.board, turn: payload.turn, winner: payload.winner,
-          lastMove: payload.lastMove, winningCells: payload.winningCells || null,
+          lastMove: payload.lastMove, winningCells: payload.winningCells || null, botLevel: stateRef.current.botLevel || null,
         });
       }
     });
@@ -148,6 +225,7 @@ export default function ConnectFour({ room, me, isHost, players, t, lang, onFini
           if (saved) {
             setP1(saved.p1); setP2(saved.p2); setBoard(saved.board); setTurn(saved.turn);
             setWinner(saved.winner); setLastMove(saved.lastMove); setWinningCells(saved.winningCells || null);
+            setBotLevel(saved.botLevel || null);
             setPhase("playing");
             autoStartedRef.current = true;
           }
@@ -200,6 +278,26 @@ export default function ConnectFour({ room, me, isHost, players, t, lang, onFini
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isHost, phase, channelReady, players.length]);
 
+  // Bot (solo) : quand c'est au tour du bot, l'hôte (le seul humain) calcule et
+  // joue son coup après un court délai de lisibilité, via hostHandleMove (pas de
+  // round-trip réseau puisque l'hôte EST l'arbitre).
+  const botSeat = p1?.isBot ? "p1" : p2?.isBot ? "p2" : null;
+  useEffect(() => {
+    if (!isHost || winner || countingDown || !botSeat) return;
+    if (turn !== botSeat) return;
+    const botId = botSeat === "p1" ? p1.id : p2.id;
+    const humanMark = botSeat === "p1" ? "p2" : "p1";
+    const tm = setTimeout(() => {
+      const s = stateRef.current;
+      if (s.winner || s.turn !== botSeat) return;
+      const col = pickC4Move(s.board, botSeat, humanMark, s.botLevel || "medium");
+      if (col != null && col >= 0) hostHandleMove({ by: botId, col });
+    }, 700);
+    timeouts.current.push(tm);
+    return () => clearTimeout(tm);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [turn, winner, countingDown, botSeat, isHost]);
+
   // Chaque joueur (p1 ou p2) enregistre SON propre résultat (RLS/RPC
   // oblige). Un match nul n'est ni une victoire ni une défaite : rien
   // n'est enregistré dans ce cas.
@@ -212,6 +310,8 @@ export default function ConnectFour({ room, me, isHost, players, t, lang, onFini
     const won = (winner === "p1" && amP1) || (winner === "p2" && amP2);
     setMyWin(won);
     if (won) playGameWin(); else playGameLose(); // SFX fin de partie (2026-07)
+    // Solo contre le bot : pas de trophée comptabilisé (comme la navale/Gold Mines).
+    if (p1?.isBot || p2?.isBot) return;
     recordMatchResult(room.id, won);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [winner]);
@@ -268,9 +368,19 @@ export default function ConnectFour({ room, me, isHost, players, t, lang, onFini
   function rejouer() {
     if (!isHost || !p1 || !p2) return;
     const [first, second] = Math.random() < 0.5 ? [p1, p2] : [p2, p1];
-    channelRef.current.send({ type: "broadcast", event: "match_start", payload: { p1: first, p2: second, turn: "p1" } });
+    channelRef.current.send({ type: "broadcast", event: "match_start", payload: { p1: first, p2: second, turn: "p1", botLevel } });
   }
 
+
+  // Solo : lance une partie contre le bot (niveau choisi). Un siège bot
+  // (isBot:true) complète la table ; l'hôte joue à sa place (voir l'effet bot).
+  function startSolo(level) {
+    if (!channelReady) return;
+    const human = { id: me.id, username: me.username, avatar: me.avatar };
+    const bot = { id: "c4bot", username: t("c4BotName"), avatar: "🤖", isBot: true };
+    const [first, second] = Math.random() < 0.5 ? [human, bot] : [bot, human];
+    channelRef.current.send({ type: "broadcast", event: "match_start", payload: { p1: first, p2: second, turn: "p1", botLevel: level } });
+  }
 
   async function backToRoom() {
     await resetRoomToLobby(room.id);
@@ -385,9 +495,27 @@ export default function ConnectFour({ room, me, isHost, players, t, lang, onFini
       </div>
     );
   } else {
-    // phase "intro" : choix des joueurs, attente, ou pas assez de monde
+    // phase "intro" : solo contre le bot, choix des joueurs, attente, ou pas assez de monde
     if (players.length < 2) {
-      content = <p className="muted">{t("c4NotEnough")}</p>;
+      content = (isHost && players.length === 1) ? (
+        <div style={{ textAlign: "center" }}>
+          <p className="hint">{t("c4SoloHint")}</p>
+          <div style={{ display: "flex", gap: 8, justifyContent: "center", margin: "12px 0 16px", flexWrap: "wrap" }}>
+            {[["medium", t("c4BotMedium")], ["strong", t("c4BotStrong")]].map(([lvl, label]) => (
+              <button key={lvl} type="button"
+                onClick={() => setBotDifficulty(lvl)}
+                style={{
+                  padding: "8px 16px", borderRadius: 99, fontWeight: 700, fontSize: 13, cursor: "pointer",
+                  border: `2px solid ${botDifficulty === lvl ? "var(--p2)" : "var(--line)"}`,
+                  background: botDifficulty === lvl ? "rgba(79,209,255,.14)" : "rgba(255,255,255,.04)", color: "var(--ink)"
+                }}>
+                {label}
+              </button>
+            ))}
+          </div>
+          <button className="btn" disabled={!channelReady} onClick={() => startSolo(botDifficulty)}>🤖 {t("c4StartBot")}</button>
+        </div>
+      ) : <p className="muted">{t("c4NotEnough")}</p>;
     } else if (!needsPick) {
       content = <p className="muted">{t("c4Starting")}</p>;
     } else if (isHost) {
