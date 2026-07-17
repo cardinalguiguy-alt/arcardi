@@ -131,31 +131,42 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // viewport, comme dans la maquette plein écran.
   const wrap = (node) => (mounted && typeof document !== "undefined" ? createPortal(node, document.body) : null);
 
-  // -------- Hôte : génération du monde dès le montage (indépendant du canal) --------
-  // Ne PAS attendre l'abonnement Realtime pour pouvoir jouer : l'hôte génère /
-  // restaure le monde tout de suite, donc le bouton "Rejoindre" s'active
-  // immédiatement même si le canal met du temps à s'abonner.
+  // -------- Hôte : génération / restauration du monde dès le montage --------
+  // Ne PAS attendre l'abonnement Realtime pour pouvoir jouer. On lit l'état
+  // sauvegardé DIRECTEMENT depuis la base (pas seulement la prop `room`, qui
+  // peut avoir été remise à null localement au moment du relancement) : ainsi
+  // la ferme est bien restaurée après avoir quitté puis relancé le jeu.
   useEffect(() => {
     if (!isHost || worldRef.current) return;
-    const saved = readGameState(room, GAME_ID);
-    if (saved) {
-      const w = E.generateWorld(saved.seed);
-      E.applyOverrides(w, { groundOv: saved.groundOv, objectOv: saved.objectOv, crops: saved.crops });
-      worldRef.current = w;
-      overridesRef.current = { ground: { ...(saved.groundOv || {}) }, object: { ...(saved.objectOv || {}) } };
-      sharedRef.current = { seed: saved.seed, money: saved.money, day: saved.day, dayStartAt: saved.dayStartAt, totalEarned: saved.totalEarned };
-      farmersRef.current = saved.farmers || {};
-    } else {
-      const seed = hashSeed(String(room.id));
-      worldRef.current = E.generateWorld(seed);
-      overridesRef.current = { ground: {}, object: {} };
-      sharedRef.current = { seed, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0 };
-      farmersRef.current = {};
-    }
-    minimapDirtyRef.current = true;
-    restoredRef.current = true;
-    setHud(h => ({ ...h, money: sharedRef.current.money, day: sharedRef.current.day }));
-    setWorldReady(true);
+    let cancelled = false;
+    (async () => {
+      let saved = readGameState(room, GAME_ID); // repli sur la prop
+      try {
+        const { data } = await supabase.from("rooms").select("game_state").eq("id", room.id).single();
+        const gs = data?.game_state;
+        if (gs && gs.gameId === GAME_ID && gs.state) saved = gs.state;
+      } catch (e) { /* la lecture DB a échoué : on garde le repli prop */ }
+      if (cancelled || worldRef.current) return;
+      if (saved && typeof saved.seed === "number") {
+        const w = E.generateWorld(saved.seed);
+        E.applyOverrides(w, { groundOv: saved.groundOv, objectOv: saved.objectOv, crops: saved.crops });
+        worldRef.current = w;
+        overridesRef.current = { ground: { ...(saved.groundOv || {}) }, object: { ...(saved.objectOv || {}) } };
+        sharedRef.current = { seed: saved.seed, money: saved.money, day: saved.day, dayStartAt: saved.dayStartAt, totalEarned: saved.totalEarned };
+        farmersRef.current = saved.farmers || {};
+      } else {
+        const seed = hashSeed(String(room.id));
+        worldRef.current = E.generateWorld(seed);
+        overridesRef.current = { ground: {}, object: {} };
+        sharedRef.current = { seed, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0 };
+        farmersRef.current = {};
+      }
+      minimapDirtyRef.current = true;
+      restoredRef.current = true;
+      setHud(h => ({ ...h, money: sharedRef.current.money, day: sharedRef.current.day }));
+      setWorldReady(true);
+    })();
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isHost]);
 
@@ -757,7 +768,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   async function leaveGame() {
     joinedRef.current = false;
     channelRef.current?.send({ type: "broadcast", event: "leave", payload: { id: me.id } });
-    if (isHost) { await resetRoomToLobby(room.id); }
+    if (isHost) {
+      // Sauvegarde la ferme AVANT de revenir au salon, puis fait un retour au
+      // salon qui PRÉSERVE game_state (contrairement à resetRoomToLobby qui le
+      // met à null) : sans ça, quitter le jeu effaçait toute la ferme. Ainsi
+      // relancer "Ferme Vallée" plus tard restaure exactement le monde laissé.
+      if (worldRef.current) { try { await saveGameState(room.id, GAME_ID, currentSnapshot()); } catch (e) { /* non bloquant */ } }
+      try {
+        const { error } = await supabase.from("rooms").update({ status: "lobby", current_game: null, launch_at: null, stage_launch_at: null }).eq("id", room.id);
+        if (error) await supabase.from("rooms").update({ status: "lobby", current_game: null }).eq("id", room.id);
+      } catch (e) { await resetRoomToLobby(room.id); }
+    }
     onFinish && onFinish();
   }
 
