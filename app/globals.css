@@ -6522,8 +6522,9 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
   background:var(--f-paper-d); transition:transform .1s;
 }
 .ferme-char-card.sel{ background:var(--f-gold); transform:scale(1.08); box-shadow:0 0 0 3px var(--f-accent); }
-.ferme-char-card canvas{ image-rendering:pixelated; }
-.ferme-char-card div{ font-weight:bold; font-size:13px; margin-top:4px; }
+.ferme-char-card{ display:flex; flex-direction:column; align-items:center; }
+.ferme-char-card canvas{ image-rendering:pixelated; display:block; margin:0 auto; }
+.ferme-char-card div{ font-weight:bold; font-size:13px; margin-top:4px; text-align:center; }
 .ferme-join-btn{ font-size:17px; padding:10px 34px; }
 .ferme-join-err{ color:var(--f-accent); font-size:13px; margin-top:10px; min-height:16px; font-weight:bold; }
 

@@ -26,6 +26,7 @@
    Aucune migration Supabase : s'appuie sur rooms.game_state déjà existant.
    ========================================================================== */
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { saveGameState, readGameState, resetRoomToLobby } from "@/lib/gameSync";
 import * as C from "./fermeConstants";
@@ -65,6 +66,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [toasts, setToasts] = useState([]); // {id, msg}
   const [spritesReady, setSpritesReady] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   // -------- Refs (état du jeu, lus par la boucle de rendu) --------
   const canvasRef = useRef(null);
@@ -116,9 +118,46 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // -------- Sprites (client uniquement) --------
   useEffect(() => {
     if (typeof document === "undefined") return;
+    setMounted(true);
     spritesRef.current = buildSprites();
     setSpritesReady(true);
   }, []);
+
+  // Rend le jeu dans un PORTAL vers document.body. INDISPENSABLE : le jeu est
+  // plein écran en position:fixed, mais le conteneur du stage (.door-content a
+  // un transform via l'animation povPush, .door-stage a perspective +
+  // overflow:hidden) crée un bloc englobant qui "capturerait" et rognerait un
+  // position:fixed. Le portal vers body fait résoudre le fixed par rapport au
+  // viewport, comme dans la maquette plein écran.
+  const wrap = (node) => (mounted && typeof document !== "undefined" ? createPortal(node, document.body) : null);
+
+  // -------- Hôte : génération du monde dès le montage (indépendant du canal) --------
+  // Ne PAS attendre l'abonnement Realtime pour pouvoir jouer : l'hôte génère /
+  // restaure le monde tout de suite, donc le bouton "Rejoindre" s'active
+  // immédiatement même si le canal met du temps à s'abonner.
+  useEffect(() => {
+    if (!isHost || worldRef.current) return;
+    const saved = readGameState(room, GAME_ID);
+    if (saved) {
+      const w = E.generateWorld(saved.seed);
+      E.applyOverrides(w, { groundOv: saved.groundOv, objectOv: saved.objectOv, crops: saved.crops });
+      worldRef.current = w;
+      overridesRef.current = { ground: { ...(saved.groundOv || {}) }, object: { ...(saved.objectOv || {}) } };
+      sharedRef.current = { seed: saved.seed, money: saved.money, day: saved.day, dayStartAt: saved.dayStartAt, totalEarned: saved.totalEarned };
+      farmersRef.current = saved.farmers || {};
+    } else {
+      const seed = hashSeed(String(room.id));
+      worldRef.current = E.generateWorld(seed);
+      overridesRef.current = { ground: {}, object: {} };
+      sharedRef.current = { seed, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0 };
+      farmersRef.current = {};
+    }
+    minimapDirtyRef.current = true;
+    restoredRef.current = true;
+    setHud(h => ({ ...h, money: sharedRef.current.money, day: sharedRef.current.day }));
+    setWorldReady(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isHost]);
 
   // -------- Helpers --------
   const idxOf = (x, y) => y * C.MAP_W + x;
@@ -223,29 +262,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     ch.subscribe(status => {
       if (status !== "SUBSCRIBED") return;
       channelReadyRef.current = true;
-      if (restoredRef.current) return;
-      restoredRef.current = true;
       if (isHost) {
-        const saved = readGameState(room, GAME_ID);
-        if (saved) {
-          const w = E.generateWorld(saved.seed);
-          E.applyOverrides(w, { groundOv: saved.groundOv, objectOv: saved.objectOv, crops: saved.crops });
-          worldRef.current = w;
-          overridesRef.current = { ground: { ...(saved.groundOv || {}) }, object: { ...(saved.objectOv || {}) } };
-          sharedRef.current = { seed: saved.seed, money: saved.money, day: saved.day, dayStartAt: saved.dayStartAt, totalEarned: saved.totalEarned };
-          farmersRef.current = saved.farmers || {};
-        } else {
-          const seed = hashSeed(String(room.id));
-          worldRef.current = E.generateWorld(seed);
-          overridesRef.current = { ground: {}, object: {} };
-          sharedRef.current = { seed, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0 };
-          farmersRef.current = {};
-        }
-        minimapDirtyRef.current = true;
-        setHud(h => ({ ...h, money: sharedRef.current.money, day: sharedRef.current.day }));
-        setWorldReady(true);
-        // Diffuse un instantané tout de suite : tout invité déjà en attente le
-        // reçoit sans avoir à retenter son `hello`.
+        // Le monde est déjà généré par l'effet de montage ci-dessus ; on
+        // diffuse juste un instantané pour tout invité déjà en attente.
         setTimeout(() => broadcastSnapshot(), 0);
       } else {
         ch.send({ type: "broadcast", event: "hello", payload: { id: me.id } });
@@ -411,7 +430,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
 
   // -------- Rejoindre (spawn) --------
   function doJoin() {
-    if (!channelReadyRef.current) return;
+    if (!worldReady) return;
     const name = (nameVal || "Fermier").trim().slice(0, 14) || "Fermier";
     meRef.current = { id: me.id, name, gender, outfit: myOutfit, x: C.SPAWN.x, y: C.SPAWN.y, dir: 0, moving: false, animT: 0 };
     invRef.current = invRef.current || { wood: 0, stone: 0, food: 0, seeds: [5, 0, 0, 0], crops: [0, 0, 0, 0] };
@@ -758,7 +777,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
 
   // Sélection de personnage
   if (phase === "select") {
-    return (
+    return wrap(
       <div className="ferme-root">
         <div className="ferme-join-screen">
           <div className="ferme-join-box panel">
@@ -783,7 +802,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     );
   }
 
-  return (
+  return wrap(
     <div className="ferme-root">
       <canvas id="ferme-game" ref={canvasRef} className="ferme-canvas" />
 
