@@ -67,6 +67,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [slot, setSlot] = useState(0);
   const [seedSel, setSeedSel] = useState(0);
   const [seedMenuOpen, setSeedMenuOpen] = useState(false); // mini-menu de choix de graine
+  const [fenceDir, setFenceDir] = useState("auto"); // orientation affichée dans la barre d'outils (miroir de fenceDirRef)
   const [buildings, setBuildings] = useState({ horseOwned: false, wellBuilt: false, animalCount: 0 });
   const [onHorse, setOnHorse] = useState(false);
   const [fishMini, setFishMini] = useState(null); // {mode, fish} pendant le minijeu, sinon null
@@ -119,6 +120,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const fishTileRef = useRef(null);    // case d'eau ciblée par le minijeu de pêche
   const fishMiniRef = useRef(false);   // minijeu de pêche en cours (bloque le reste)
   const autoHarvestPendingRef = useRef(new Set()); // tuiles de récolte auto déjà demandées (anti-spam)
+  const autoWaterPendingRef = useRef(new Set());   // tuiles d'arrosage auto déjà demandées (anti-spam)
+  const autoCollectPendingRef = useRef(new Set()); // animaux de collecte auto déjà demandés (anti-spam)
+  const fenceDirRef = useRef("auto"); // orientation choisie pour la prochaine clôture posée ("auto"|"h"|"v")
 
   useEffect(() => { fishMiniRef.current = !!fishMini; }, [fishMini]);
   useEffect(() => { mapOpenRef.current = mapOpen; }, [mapOpen]);
@@ -195,6 +199,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // silencieux côté hôte sur la première action qui touche un champ
       // manquant (voir normalizeFarmer dans fermeEngine.js).
       for (const id in farmersRef.current) E.normalizeFarmer(farmersRef.current[id]);
+      // Même filet pour les animaux (schéma `hasProduct` -> `readyAt` en temps
+      // réel depuis le zip 151, voir normalizeAnimals).
+      E.normalizeAnimals(sharedRef.current.animals);
     } else {
       const seed = hashSeed(code);
       worldRef.current = E.generateWorld(seed);
@@ -272,6 +279,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // un instantané peut porter des fermiers au format d'un zip antérieur.
       for (const id in farmersRef.current) E.normalizeFarmer(farmersRef.current[id]);
     }
+    E.normalizeAnimals(sharedRef.current.animals);
     // Mon propre fermier (reprise) si présent
     const mine = payload.farmers && payload.farmers[me.id];
     if (mine) { invRef.current = mine.inv; toolsRef.current = mine.tools; energyRef.current = mine.energy; setMyInv(mine.inv); setMyTools(mine.tools); setMyEnergy(mine.energy); if (mine.quests) setMyQuests(mine.quests); }
@@ -441,7 +449,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (req.kind === "act") {
       const r = E.resolveAct(w, f, req);
       for (const i of r.tiles) { recordTileOverride(i); out.tiles.push({ i, g: w.ground[i], o: w.objects[i] }); }
-      for (const i of r.cropTiles) { const c = w.crops.get(i); out.crops.push({ i, c: c ? { t: c.t, s: c.s } : null }); }
+      for (const i of r.cropTiles) { const c = w.crops.get(i); out.crops.push({ i, c: c ? { t: c.t, bankedMs: c.bankedMs, wateredAt: c.wateredAt } : null }); }
       out.fx = r.fx;
       if (r.invChanged) out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
       if (r.toast) out.toast = { id: f.id, key: r.toast };
@@ -491,7 +499,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           s.money -= C.ANIMALS[at].cost;
           const ax = C.PEN.x + 1 + Math.floor(Math.random() * (C.PEN.w - 2));
           const ay = C.PEN.y + 1 + Math.floor(Math.random() * (C.PEN.h - 2));
-          s.animals.push({ type: at, x: ax, y: ay, hasProduct: true });
+          s.animals.push({ type: at, x: ax, y: ay, readyAt: Date.now() });
           out.state = shareState(); out.animals = s.animals;
           out.chat = { from: "🐮", msg: L.chatAnimalBought(lang === "en" ? C.ANIMALS[at].nameEn : C.ANIMALS[at].name) };
         }
@@ -504,8 +512,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (h.rider === req.id) { h.rider = null; h.x = px; h.y = py; out.horse = h; }
     } else if (req.kind === "collect") {
       const ai = req.animal | 0, an = s.animals[ai];
-      if (an && an.hasProduct && Math.abs(px - an.x) <= C.COLLECT_RANGE && Math.abs(py - an.y) <= C.COLLECT_RANGE) {
-        an.hasProduct = false;
+      if (an && E.animalReady(an, Date.now()) && Math.abs(px - an.x) <= C.COLLECT_RANGE && Math.abs(py - an.y) <= C.COLLECT_RANGE) {
+        an.readyAt = Date.now() + ((C.ANIMALS[an.type] && C.ANIMALS[an.type].prodMs) || 0);
         f.inv.products[an.type] = (f.inv.products[an.type] || 0) + 1;
         out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
         out.animals = s.animals;
@@ -538,7 +546,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function applyDeltas(p) {
     const w = worldRef.current;
     if (w && p.tiles) for (const tl of p.tiles) { w.ground[idxOf(E.xOf(tl.i), E.yOf(tl.i))] = tl.g; w.objects[tl.i] = tl.o; if (tl.o === C.O_STUMP) w.objHp.set(tl.i, 2); minimapDirtyRef.current = true; }
-    if (w && p.crops) for (const cr of p.crops) { if (cr.c) w.crops.set(cr.i, { ...(w.crops.get(cr.i) || {}), t: cr.c.t, s: cr.c.s }); else w.crops.delete(cr.i); }
+    if (w && p.crops) for (const cr of p.crops) { if (cr.c) w.crops.set(cr.i, { t: cr.c.t, bankedMs: cr.c.bankedMs || 0, wateredAt: cr.c.wateredAt || null }); else w.crops.delete(cr.i); }
     if (p.state) { const s = sharedRef.current; s.money = p.state.money; s.day = p.state.day; s.dayStartAt = p.state.dayStartAt; s.totalEarned = p.state.totalEarned; setHud(h => ({ ...h, money: s.money, day: s.day })); }
     if (p.farmer && p.farmer.id === me.id) { invRef.current = p.farmer.inv; toolsRef.current = p.farmer.tools; energyRef.current = p.farmer.energy; setMyInv(p.farmer.inv); setMyTools(p.farmer.tools); setMyEnergy(p.farmer.energy); if (p.farmer.quests) setMyQuests(p.farmer.quests); }
     if (p.toast && p.toast.id === me.id) pushToast(toastMsg(p.toast.key));
@@ -552,7 +560,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const w = worldRef.current; if (!w) return;
     const s = sharedRef.current; s.day = p.day; s.dayStartAt = p.dayStartAt;
     if (p.tiles) for (const tl of p.tiles) { w.ground[tl.i] = tl.g; w.objects[tl.i] = tl.o; if (tl.o !== C.O_NONE && tl.o !== C.O_STUMP) w.objHp.set(tl.i, tl.o === C.O_ROCK ? C.ROCK_HP : C.TREE_HP); minimapDirtyRef.current = true; }
-    if (p.crops) for (const cr of p.crops) { if (cr.c) w.crops.set(cr.i, { ...(w.crops.get(cr.i) || {}), t: cr.c.t, s: cr.c.s, watered: false }); else w.crops.delete(cr.i); }
+    if (p.crops) for (const cr of p.crops) { if (cr.c) w.crops.set(cr.i, { t: cr.c.t, bankedMs: cr.c.bankedMs || 0, wateredAt: cr.c.wateredAt || null }); else w.crops.delete(cr.i); }
     // Énergie restaurée pour tous (accord avec l'hôte).
     energyRef.current = C.MAX_ENERGY; setMyEnergy(C.MAX_ENERGY);
     if (p.animals) { sharedRef.current.animals = p.animals; syncBuildings(); }
@@ -570,14 +578,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const s = sharedRef.current, w = worldRef.current;
       if (!w) return;
       if (Date.now() - s.dayStartAt >= C.DAY_REAL_MS) {
-        const { tiles, cropTiles } = E.newDay(w, farmersRef.current, s.day, s.seed);
+        const { tiles } = E.newDay(w, farmersRef.current, s.day, s.seed);
         s.day += 1; s.dayStartAt = Date.now();
         const tilesOut = tiles.map(i => { recordTileOverride(i); return { i, g: w.ground[i], o: w.objects[i] }; });
-        const cropsOut = cropTiles.map(i => { const c = w.crops.get(i); return { i, c: c ? { t: c.t, s: c.s } : null }; });
-        // Chaque animal produit son bien du matin.
-        for (const an of s.animals) an.hasProduct = true;
+        // Depuis le zip 151, la pousse/l'arrosage/la production animale sont en
+        // temps réel (voir cropGrowState/animalReady) : ce passage de jour ne
+        // fait plus produire les animaux, il ne fait que régénérer un peu de
+        // nature et restaurer l'énergie (voir E.newDay).
         dirtyRef.current = true;
-        channelRef.current?.send({ type: "broadcast", event: "newday", payload: { day: s.day, dayStartAt: s.dayStartAt, tiles: tilesOut, crops: cropsOut, animals: s.animals } });
+        channelRef.current?.send({ type: "broadcast", event: "newday", payload: { day: s.day, dayStartAt: s.dayStartAt, tiles: tilesOut, crops: [], animals: s.animals } });
         channelRef.current?.send({ type: "broadcast", event: "chat", payload: { from: "☀", msg: L.chatNewDay(s.day) } });
       }
     }, 1000);
@@ -668,21 +677,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (sl === 6) { startFishing(tt); return; } // pêche = minijeu
     actAnimRef.current = 0.28;
     const c = w.crops.get(i);
-    if (c && c.s >= C.CROP_STAGES - 1) return sendReq({ kind: "act", action: "harvest", x: tt.x, y: tt.y });
+    if (c && E.cropGrowState(c, Date.now()).mature) return sendReq({ kind: "act", action: "harvest", x: tt.x, y: tt.y });
     if (sl === 0) sendReq({ kind: "act", action: "till", x: tt.x, y: tt.y });
     else if (sl === 1) sendReq({ kind: "act", action: "water", x: tt.x, y: tt.y });
     else if (sl === 2) sendReq({ kind: "act", action: "chop", x: tt.x, y: tt.y });
     else if (sl === 3) sendReq({ kind: "act", action: "mine", x: tt.x, y: tt.y });
     else if (sl === 4) sendReq({ kind: "act", action: "plant", seed: seedSelRef.current, x: tt.x, y: tt.y });
     else if (sl === 5) sendReq({ kind: "eat" });
-    else if (sl === 7) sendReq({ kind: "act", action: "fence", x: tt.x, y: tt.y });
+    else if (sl === 7) sendReq({ kind: "act", action: "fence", x: tt.x, y: tt.y, dir: fenceDirRef.current });
   }
   // Index d'un animal (dans sharedRef.animals) à portée et prêt à ramasser.
   function nearestCollectable() {
     const m = meRef.current, animals = sharedRef.current.animals || [];
+    const now = Date.now();
     let best = -1, bd = C.COLLECT_RANGE;
     for (let i = 0; i < animals.length; i++) {
-      const a = animals[i]; if (!a.hasProduct) continue;
+      const a = animals[i]; if (!E.animalReady(a, now)) continue;
       const d = Math.abs(m.x - a.x) + Math.abs(m.y - a.y);
       if (d <= bd) { bd = d; best = i; }
     }
@@ -750,6 +760,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (e.code === "Space") { e.preventDefault(); doAction(); }
       if (e.code === "KeyE") tryOpenNearby();
       if (e.code === "KeyF") toggleMount();
+      if (e.code === "KeyR" && slotRef.current === 7) {
+        fenceDirRef.current = fenceDirRef.current === "auto" ? "h" : fenceDirRef.current === "h" ? "v" : "auto";
+        setFenceDir(fenceDirRef.current);
+        pushToast(L.fenceDirToast(fenceDirRef.current));
+      }
       if (e.code === "KeyT") { e.preventDefault(); setChatOpen(true); setTimeout(() => chatInputRef.current?.focus(), 0); }
       if (e.code === "KeyM") setMapOpen(o => !o);
       if (e.code === "Escape") { setShopOpen(false); setBinOpen(false); setMapOpen(false); setSeedMenuOpen(false); }
@@ -768,12 +783,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     function loop() {
       raf = requestAnimationFrame(loop);
       const now = performance.now();
+      const epochNow = Date.now(); // pousse/arrosage/production animale sont en temps réel (horloge murale)
       const dt = Math.min(0.05, (now - last) / 1000); last = now;
       const w = worldRef.current, m = meRef.current, sprites = spritesRef.current;
       if (!w || !m || !sprites) return;
 
       updateMe(dt);
       checkWalkOverHarvest();
+      checkWalkOverWater();
+      checkWalkOverCollect();
       if (actAnimRef.current > 0) actAnimRef.current -= dt;
       for (const p of playersRef.current.values()) {
         p.x += (p.tx - p.x) * Math.min(1, dt * 12);
@@ -801,30 +819,30 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         ctx.drawImage(img, x * T, y * T);
         const c = w.crops.get(i);
         if (c) {
-          ctx.drawImage(sprites.crops[c.t][c.s], x * T, y * T);
-          if (c.s >= C.CROP_STAGES - 1) {
+          const gs = E.cropGrowState(c, epochNow);
+          ctx.drawImage(sprites.crops[c.t][gs.stage], x * T, y * T);
+          if (gs.mature) {
             // Bulle "prête à récolter" : flotte doucement au-dessus de la case.
             const bob = Math.sin(now / 260) * 1.5;
             ctx.drawImage(sprites.icons.ready, x * T + 2, y * T - 11 + bob, 12, 12);
-          } else if (!c.watered) {
-            // Goutte barrée : cette culture n'a pas été arrosée aujourd'hui.
+          } else if (gs.needsWater) {
+            // Goutte barrée : l'arrosage a expiré (ou jamais eu lieu), la
+            // pousse est en pause tant qu'on ne réarrose pas (touche 2).
             ctx.drawImage(sprites.icons.thirst, x * T + 2, y * T - 10, 12, 12);
           }
         }
         const o = w.objects[i];
         if (o === C.O_ROCK) ctx.drawImage(sprites.rock, x * T, y * T);
         else if (o === C.O_STUMP) ctx.drawImage(sprites.stump, x * T, y * T);
-        else if (o === C.O_FENCE) {
-          // Clôture posée librement par un joueur : le sprite dépend des
-          // sections voisines pour que les lisses se prolongent bien d'une
-          // tuile à l'autre, quelle que soit la forme dessinée.
+        else if (o === C.O_FENCE || o === C.O_FENCE_H || o === C.O_FENCE_V) {
+          // Clôture (posée librement par un joueur, OU section de l'enclos de
+          // départ, désormais unifiés) : orientation FORCÉE si le joueur a
+          // tourné l'aperçu avant de poser (O_FENCE_H/O_FENCE_V), sinon le
+          // sprite dépend des sections voisines pour que les lisses se
+          // prolongent bien d'une tuile à l'autre.
           const fk = fenceKindAt(w, x, y);
           ctx.drawImage(fk === "corner" ? sprites.fenceCorner : fk === "v" ? sprites.fenceV : fk === "post" ? sprites.fencePost : sprites.fence, x * T, y * T);
         }
-        // Clôture décorative de l'enclos de départ (bordure fixe), pareil
-        // choix de sprite selon l'orientation du segment (voir penBorderKind).
-        const penEdge = penBorderKind(x, y);
-        if (penEdge) ctx.drawImage(penEdge === "corner" ? sprites.fenceCorner : penEdge === "v" ? sprites.fenceV : sprites.fence, x * T, y * T);
       }
 
       const tt = targetTile();
@@ -844,7 +862,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       for (const an of (sharedRef.current.animals || [])) {
         draws.push({ y: (an.y + 1) * T, fn: () => {
           ctx.drawImage(sprites.animals[an.type], an.x * T, an.y * T);
-          if (an.hasProduct) { const bob = Math.sin(now / 260) * 1.5; ctx.drawImage(sprites.products[an.type], an.x * T + 3, an.y * T - 12 + bob, 12, 12); }
+          if (E.animalReady(an, epochNow)) { const bob = Math.sin(now / 260) * 1.5; ctx.drawImage(sprites.products[an.type], an.x * T + 3, an.y * T - 12 + bob, 12, 12); }
         } });
       }
       // Cheval libre (non monté).
@@ -903,11 +921,41 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (!inMap(tx, ty)) return;
       const i = idxOf(tx, ty);
       const c = w.crops.get(i);
-      if (!c || c.s < C.CROP_STAGES - 1) return; // pas mûr : passer dessus ne fait rien
+      if (!c || !E.cropGrowState(c, Date.now()).mature) return; // pas mûr : passer dessus ne fait rien
       if (autoHarvestPendingRef.current.has(i)) return;
       autoHarvestPendingRef.current.add(i);
       setTimeout(() => autoHarvestPendingRef.current.delete(i), 1500);
       sendReq({ kind: "act", action: "harvest", x: tx, y: ty });
+    }
+    // Arrosage automatique en marchant sur une culture qui en a besoin, à
+    // condition d'avoir l'arrosoir équipé (case 2) : cohérent avec l'arrosage
+    // manuel, qui exige toujours cet outil. Même anti-spam que la récolte.
+    function checkWalkOverWater() {
+      const m = meRef.current, w = worldRef.current;
+      if (!m || !w || slotRef.current !== 1 || fishMiniRef.current || shopOpenRef.current || binOpenRef.current || mapOpenRef.current) return;
+      const tx = Math.floor(m.x + 0.5), ty = Math.floor(m.y + 0.5);
+      if (!inMap(tx, ty)) return;
+      const i = idxOf(tx, ty);
+      const c = w.crops.get(i);
+      if (!c) return;
+      const gs = E.cropGrowState(c, Date.now());
+      if (gs.mature || !gs.needsWater) return;
+      if (autoWaterPendingRef.current.has(i)) return;
+      autoWaterPendingRef.current.add(i);
+      setTimeout(() => autoWaterPendingRef.current.delete(i), 1500);
+      sendReq({ kind: "act", action: "water", x: tx, y: ty });
+    }
+    // Collecte automatique d'une production d'élevage en marchant à portée
+    // d'un animal prêt (aucun outil requis, comme la collecte manuelle
+    // prioritaire dans doAction). Même anti-spam, par index d'animal.
+    function checkWalkOverCollect() {
+      if (fishMiniRef.current || shopOpenRef.current || binOpenRef.current || mapOpenRef.current) return;
+      const ai = nearestCollectable();
+      if (ai < 0) return;
+      if (autoCollectPendingRef.current.has(ai)) return;
+      autoCollectPendingRef.current.add(ai);
+      setTimeout(() => autoCollectPendingRef.current.delete(ai), 1500);
+      sendReq({ kind: "collect", animal: ai });
     }
     function updateMe(dt) {
       const m = meRef.current, w = worldRef.current, keys = keysRef.current;
@@ -1041,27 +1089,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     return facingTile();
   }
   function nearTile(tl, d = 2.5) { const m = meRef.current; return m && Math.abs(m.x - tl.x) <= d && Math.abs(m.y - tl.y) <= d; }
-  // Bordure de l'enclos (clôture décorative), avec une ouverture en bas au
-  // centre. Renvoie le TYPE de segment ("h" horizontal, "v" vertical, "corner"
-  // à l'angle) afin que le rendu choisisse le sprite dont les lisses se
-  // prolongent dans le bon sens d'une tuile à l'autre : utiliser le même
-  // sprite horizontal partout laissait les bords verticaux visuellement
-  // "ouverts" entre deux tuiles (bug signalé).
-  function penBorderKind(x, y) {
-    const p = C.PEN;
-    if (x < p.x || x >= p.x + p.w || y < p.y || y >= p.y + p.h) return null;
-    const onLeft = x === p.x, onRight = x === p.x + p.w - 1;
-    const onTop = y === p.y, onBottom = y === p.y + p.h - 1;
-    if (!onLeft && !onRight && !onTop && !onBottom) return null; // intérieur
-    if (onBottom && x === p.x + Math.floor(p.w / 2)) return null; // portail
-    if ((onLeft || onRight) && (onTop || onBottom)) return "corner";
-    return (onLeft || onRight) ? "v" : "h";
-  }
-  // Clôture posée librement (O_FENCE) : le sprite choisi dépend des sections
-  // DÉJÀ voisines (haut/bas/gauche/droite), pour que les lisses se
-  // prolongent bien quelle que soit la forme dessinée par le joueur.
+  // Clôture (posée librement par un joueur, OU section de l'enclos de départ,
+  // désormais unifiés en un seul système d'objets, voir generateWorld) : si le
+  // joueur a FORCÉ l'orientation en posant (touche R -> O_FENCE_H/O_FENCE_V),
+  // cette orientation est utilisée directement ; sinon (O_FENCE, "auto"), le
+  // sprite choisi dépend des sections DÉJÀ voisines (haut/bas/gauche/droite),
+  // pour que les lisses se prolongent bien quelle que soit la forme dessinée.
   function fenceKindAt(w, x, y) {
-    const has = (xx, yy) => inMap(xx, yy) && w.objects[idxOf(xx, yy)] === C.O_FENCE;
+    const o = w.objects[idxOf(x, y)];
+    if (o === C.O_FENCE_H) return "h";
+    if (o === C.O_FENCE_V) return "v";
+    const isFence = (oo) => oo === C.O_FENCE || oo === C.O_FENCE_H || oo === C.O_FENCE_V;
+    const has = (xx, yy) => inMap(xx, yy) && isFence(w.objects[idxOf(xx, yy)]);
     const horiz = has(x - 1, y) || has(x + 1, y), vert = has(x, y - 1) || has(x, y + 1);
     if (horiz && vert) return "corner";
     if (vert) return "v";
@@ -1232,7 +1271,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           if (isSeed) { count = myInv ? myInv.seeds[seedSel] : ""; img = spritesReady ? spritesRef.current.crops[seedSel][C.CROP_STAGES - 1] : null; }
           else if (isFood) count = myInv ? myInv.food : "";
           else if (isRod) { /* pas de niveau ni de compteur */ }
-          else if (isFence) { count = myInv ? (myInv.fence || 0) : ""; img = spritesReady ? spritesRef.current.fence : null; }
+          else if (isFence) { count = myInv ? (myInv.fence || 0) : ""; img = spritesReady ? spritesRef.current.fence : null; lvl = fenceDir === "h" ? "↔" : fenceDir === "v" ? "↕" : "R"; }
           else lvl = "N" + (myTools[s.key] || 1);
           const title = isSeed ? L.seedTip(seedName(seedSel)) : isFood ? L.foodTip(C.FOOD_ENERGY) : isRod ? L.rodTip : isFence ? L.fenceTip : TOOL_NAMES[s.key];
           return (
@@ -1349,7 +1388,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             {C.ANIMALS.map(a => (
               <div className="ferme-shop-row" key={"an" + a.id}>
                 <Sprite img={spritesReady ? spritesRef.current.animals[a.id] : null} w={32} h={28} />
-                <div className="info"><b>{L.animalRowTitle(lang === "en" ? a.nameEn : a.name, a.cost)}</b><span>{L.animalRowSub(lang === "en" ? a.prodEn : a.prod, a.sell)}</span></div>
+                <div className="info"><b>{L.animalRowTitle(lang === "en" ? a.nameEn : a.name, a.cost)}</b><span>{L.animalRowSub(lang === "en" ? a.prodEn : a.prod, a.sell, Math.round(a.prodMs / 3600000))}</span></div>
                 <button disabled={hud.money < a.cost || buildings.animalCount >= C.MAX_ANIMALS} onClick={() => buyAnimal(a.id)}>{L.buyLabel}</button>
               </div>
             ))}

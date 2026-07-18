@@ -94,6 +94,30 @@ export function generateWorld(seed) {
       if (o === C.O_TREE || o === C.O_TREE2 || o === C.O_ROCK) { objects[idx(x, y)] = C.O_NONE; objHp.delete(idx(x, y)); }
     }
 
+  // Enclos de départ : construit avec de VRAIES sections de clôture (comme
+  // celles posées librement par les joueurs), plutôt qu'un simple décor sans
+  // collision. Permet de le retirer/replacer pièce par pièce avec le même
+  // outil clôture (zip 151, demande "modifier l'enclos fixe pour le déplacer
+  // pièce par pièce"). Une ouverture reste laissée en bas au centre.
+  // Placé APRÈS la génération des arbres/rochers et leur nettoyage aux abords
+  // de la ferme (ci-dessus), pour ne pas être écrasé par eux.
+  {
+    const p = C.PEN;
+    const midX = p.x + Math.floor(p.w / 2);
+    for (let y = p.y; y < p.y + p.h; y++) {
+      for (let x = p.x; x < p.x + p.w; x++) {
+        const onLeft = x === p.x, onRight = x === p.x + p.w - 1;
+        const onTop = y === p.y, onBottom = y === p.y + p.h - 1;
+        if (!onLeft && !onRight && !onTop && !onBottom) continue; // intérieur
+        if (onBottom && x === midX) continue; // portail
+        const i = idx(x, y);
+        const type = (onLeft || onRight) && (onTop || onBottom) ? C.O_FENCE
+          : (onLeft || onRight) ? C.O_FENCE_V : C.O_FENCE_H;
+        objects[i] = type; objHp.set(i, 1);
+      }
+    }
+  }
+
   return { w: W, h: H, ground, objects, objHp, crops };
 }
 
@@ -108,14 +132,64 @@ export function applyOverrides(world, saved) {
     if (o === C.O_NONE) world.objHp.delete(+k); else world.objHp.set(+k, hp);
   }
   world.crops.clear();
-  if (saved.crops) for (const [i, t, s, prog, watered] of saved.crops) world.crops.set(i, { t, s, prog, watered: !!watered });
+  if (saved.crops) for (const row of saved.crops) {
+    const [i, t] = row;
+    if (row.length >= 5) {
+      // Format d'un zip antérieur au 151 ([i,t,s,prog,watered], pousse par
+      // jour de jeu) : pas de conversion fiable vers le nouveau modèle en
+      // temps réel, on redémarre la pousse de cette culture à zéro (elle
+      // garde son type/emplacement, juste sa progression repart de zéro).
+      world.crops.set(i, { t, bankedMs: 0, wateredAt: null });
+    } else {
+      const [, , bankedMs, wateredAt] = row;
+      world.crops.set(i, { t, bankedMs: bankedMs || 0, wateredAt: wateredAt || null });
+    }
+  }
   return world;
 }
 
 export function serializeCrops(world) {
   const out = [];
-  for (const [i, c] of world.crops) out.push([i, c.t, c.s, c.prog, c.watered ? 1 : 0]);
+  for (const [i, c] of world.crops) out.push([i, c.t, c.bankedMs || 0, c.wateredAt || 0]);
   return out;
+}
+
+// État de pousse d'une culture au temps `now` (ms epoch), calculé PUREMENT à
+// partir de son horodatage d'arrosage et de sa progression déjà "banquée" :
+// aucun état supplémentaire à synchroniser, chaque client peut le recalculer
+// localement à tout instant (comme gameTimeMin). L'arrosage reste valable
+// C.WATER_VALID_MS : passé ce délai sans réarroser, la pousse est mise en
+// pause (elle ne recule jamais) jusqu'au prochain arrosage.
+export function cropGrowState(crop, now) {
+  const def = C.CROPS[crop.t];
+  const dur = def.growMs;
+  const extra = crop.wateredAt ? Math.min(now - crop.wateredAt, C.WATER_VALID_MS) : 0;
+  const grown = Math.min(dur, (crop.bankedMs || 0) + extra);
+  const stage = Math.min(C.CROP_STAGES - 1, Math.floor((grown / dur) * (C.CROP_STAGES - 1)));
+  const mature = grown >= dur;
+  const stale = !crop.wateredAt || (now - crop.wateredAt) >= C.WATER_VALID_MS;
+  const needsWater = !mature && stale;
+  return { stage, mature, needsWater, grown };
+}
+
+// Idem pour un animal d'élevage : prêt à ramasser si `now` a dépassé
+// `readyAt`. Purement dérivé, comme cropGrowState.
+export function animalReady(an, now) {
+  return !!an && now >= (an.readyAt || 0);
+}
+
+// Filet de sécurité pour les animaux restaurés d'une sauvegarde antérieure au
+// zip 151 (schéma `hasProduct` au lieu de `readyAt`), même principe que
+// normalizeFarmer : ne jamais perdre ce qui existe déjà.
+export function normalizeAnimals(animals) {
+  const now = Date.now();
+  for (const a of (animals || [])) {
+    if (typeof a.readyAt !== "number") {
+      const prodMs = (C.ANIMALS[a.type] && C.ANIMALS[a.type].prodMs) || 0;
+      a.readyAt = a.hasProduct ? now : now + prodMs;
+    }
+  }
+  return animals || [];
 }
 
 /* -------------------------------------------------------------------------
@@ -209,6 +283,7 @@ export function resolveAct(world, f, m) {
   const x = m.x | 0, y = m.y | 0;
   if (!inMap(x, y) || !canReach(f, x, y)) return res;
   const i = idx(x, y), g = world.ground[i], o = world.objects[i];
+  const now = Date.now();
 
   switch (m.action) {
     case "till":
@@ -218,25 +293,30 @@ export function resolveAct(world, f, m) {
       }
       break;
     case "water":
-      if (g === C.G_TILLED) {
+      // Arrosage temps réel (zip 151) : recharge la validité de l'arrosage
+      // (C.WATER_VALID_MS) pour la culture présente sur la case, en banquant
+      // d'abord sa progression déjà acquise (jamais de recul). Sans culture,
+      // l'action reste possible (effet visuel seulement) mais n'a pas d'effet
+      // durable à sauvegarder.
+      if (g === C.G_TILLED || g === C.G_WATERED) {
         if (!useEnergy(f, "water", "can")) { res.toast = "tired"; return res; }
-        world.ground[i] = C.G_WATERED;
-        const c = world.crops.get(i); if (c) c.watered = true;
-        res.tiles.push(i); res.fx.push({ k: "water", x, y }); res.invChanged = true;
+        const c = world.crops.get(i);
+        if (c) { c.bankedMs = cropGrowState(c, now).grown; c.wateredAt = now; res.cropTiles.push(i); }
+        res.fx.push({ k: "water", x, y }); res.invChanged = true;
       }
       break;
     case "plant": {
       const st = m.seed | 0;
       if ((g === C.G_TILLED || g === C.G_WATERED) && !world.crops.has(i) && st >= 0 && st < C.CROPS.length && f.inv.seeds[st] > 0) {
         f.inv.seeds[st]--;
-        world.crops.set(i, { t: st, s: 0, prog: 0, watered: g === C.G_WATERED });
+        world.crops.set(i, { t: st, bankedMs: 0, wateredAt: null });
         res.cropTiles.push(i); res.invChanged = true;
       }
       break;
     }
     case "harvest": {
       const c = world.crops.get(i);
-      if (c && c.s >= C.CROP_STAGES - 1) {
+      if (c && cropGrowState(c, now).mature) {
         world.crops.delete(i); world.ground[i] = C.G_TILLED;
         f.inv.crops[c.t]++;
         res.cropTiles.push(i); res.tiles.push(i); res.fx.push({ k: "harvest", x, y, crop: c.t }); res.invChanged = true;
@@ -277,22 +357,31 @@ export function resolveAct(world, f, m) {
         res.invChanged = true;
       }
       break;
-    case "fence":
+    case "fence": {
       // Clôture posée librement par le joueur (achetée à la boutique, une
-      // section à la fois) : pose sur une case libre et constructible, ou
-      // retire (et récupère) une section déjà posée. Aucun coût en énergie,
-      // comme planter/récolter.
-      if (o === C.O_FENCE) {
+      // section à la fois), OU section de l'enclos de départ (désormais
+      // construit avec de vraies sections, voir generateWorld) : pose sur une
+      // case libre et constructible, ou retire (et récupère) une section déjà
+      // posée, quelle que soit son orientation. Aucun coût en énergie, comme
+      // planter/récolter.
+      // Orientation : par défaut automatique (selon les sections voisines,
+      // voir fenceKindAt côté rendu), ou FORCÉE horizontale/verticale si le
+      // joueur a tourné l'aperçu avec la touche R avant de poser (m.dir).
+      const isFence = o === C.O_FENCE || o === C.O_FENCE_H || o === C.O_FENCE_V;
+      if (isFence) {
         world.objects[i] = C.O_NONE; world.objHp.delete(i);
         f.inv.fence = (f.inv.fence || 0) + 1;
         res.tiles.push(i); res.invChanged = true;
       } else if ((g === C.G_GRASS || g === C.G_TILLED || g === C.G_WATERED) && o === C.O_NONE && !world.crops.has(i)) {
         if (f.inv.fence > 0) {
-          f.inv.fence--; world.objects[i] = C.O_FENCE; world.objHp.set(i, 1);
+          f.inv.fence--;
+          world.objects[i] = m.dir === "h" ? C.O_FENCE_H : m.dir === "v" ? C.O_FENCE_V : C.O_FENCE;
+          world.objHp.set(i, 1);
           res.tiles.push(i); res.invChanged = true;
         } else res.toast = "noFence";
       }
       break;
+    }
     case "fish":
       // Pêche : la case ciblée doit être de l'eau (rivière) et à portée. Le
       // TYPE de poisson est décidé par le minijeu côté client (m.fish) : on
@@ -417,24 +506,18 @@ export function resolveEat(f) {
 }
 
 /* -------------------------------------------------------------------------
-   Passage au jour suivant (hôte uniquement). Fait pousser les cultures
-   arrosées, assèche la terre, fait repousser un peu de nature loin du spawn,
-   restaure l'énergie de tous les fermiers. MUTE world + farmers, renvoie les
-   tuiles/cultures à diffuser.
+   Passage au jour suivant (hôte uniquement). Depuis le zip 151, la pousse des
+   cultures, l'arrosage et la production animale sont en temps RÉEL et ne
+   dépendent plus de ce passage de jour (voir cropGrowState/animalReady) :
+   celui-ci ne fait plus que repousser un peu de nature loin du spawn et
+   restaurer l'énergie de tous les fermiers. Le cycle jour/nuit visuel (8 min
+   réelles) continue de tourner pour l'ambiance. MUTE world + farmers, renvoie
+   les tuiles à diffuser.
    ------------------------------------------------------------------------- */
 export function newDay(world, farmers, day, seed) {
   const W = C.MAP_W, H = C.MAP_H;
   const rnd = makeRng((seed ^ (day * 2654435761)) & 0x7fffffff);
-  const tiles = [], cropTiles = [];
-  for (const [i, c] of world.crops) {
-    if (c.watered) {
-      c.prog++;
-      c.s = Math.min(C.CROP_STAGES - 1, Math.round((c.prog / C.CROPS[c.t].growDays) * (C.CROP_STAGES - 1)));
-      c.watered = false;
-      cropTiles.push(i);
-    }
-  }
-  for (let i = 0; i < world.ground.length; i++) if (world.ground[i] === C.G_WATERED) { world.ground[i] = C.G_TILLED; tiles.push(i); }
+  const tiles = [];
   for (let k = 0; k < 14; k++) {
     const x = Math.floor(rnd() * W), y = Math.floor(rnd() * H), i = idx(x, y);
     if (world.ground[i] === C.G_GRASS && world.objects[i] === C.O_NONE && !world.crops.has(i)
@@ -445,7 +528,7 @@ export function newDay(world, farmers, day, seed) {
     }
   }
   for (const id in farmers) farmers[id].energy = C.MAX_ENERGY;
-  return { tiles, cropTiles };
+  return { tiles, cropTiles: [] };
 }
 
 // Temps de jeu (minutes) à partir de l'horodatage de début de journée partagé.
@@ -461,7 +544,7 @@ export function blockedTile(world, x, y) {
   const i = idx(fx, fy);
   const g = world.ground[i], o = world.objects[i];
   if (g === C.G_WATER) return true;
-  if (o === C.O_TREE || o === C.O_TREE2 || o === C.O_ROCK || o === C.O_HOUSE || o === C.O_SHOP || o === C.O_BIN || o === C.O_STUMP || o === C.O_WELL || o === C.O_FENCE) return true;
+  if (o === C.O_TREE || o === C.O_TREE2 || o === C.O_ROCK || o === C.O_HOUSE || o === C.O_SHOP || o === C.O_BIN || o === C.O_STUMP || o === C.O_WELL || o === C.O_FENCE || o === C.O_FENCE_H || o === C.O_FENCE_V) return true;
   return false;
 }
 

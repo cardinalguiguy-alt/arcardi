@@ -29,20 +29,27 @@ export const O_BIN = 5;     // bac de vente
 export const O_STUMP = 6;   // souche (reste d'arbre)
 export const O_TREE2 = 7;   // variante d'arbre (pin)
 export const O_WELL = 8;    // puits (bâtiment achetable, 2e point de téléport)
-export const O_FENCE = 9;   // section de clôture posée librement par un joueur
+export const O_FENCE = 9;   // section de clôture, orientation automatique (voisinage)
+export const O_FENCE_H = 10; // section de clôture, orientation FORCÉE horizontale (touche R)
+export const O_FENCE_V = 11; // section de clôture, orientation FORCÉE verticale (touche R)
 
 // --- Cultures ---
-// stages: 0=semis ... maxStage=récoltable ; growDays = jours (arrosés) pour mûrir
-// Durées RACCOURCIES (demande 2026-07 : "2 jours par plant c'est un peu long")
-// -> navet 1, patate 2, tomate 2, citrouille 3 (au lieu de 2/3/4/5). Prix et
-// coûts inchangés.
+// stages: 0=semis ... maxStage=récoltable ; growMs = durée RÉELLE (arrosée) pour
+// mûrir, indépendante du cycle jour/nuit (voir zip 151, demande 2026-07 :
+// "12h réelles pour la tomate"). navet 6h, patate 12h, tomate 12h, citrouille 18h
+// (proportionnel aux anciens ratios de croissance 1/2/2/3). Prix et coûts inchangés.
+const H = 60 * 60 * 1000; // 1 heure en ms, pour lisibilité des durées ci-dessous
 export const CROPS = [
-  { id: 0, name: "Navet",          nameEn: "Turnip",   seedName: "Graine de navet",       seedNameEn: "Turnip seeds",   growDays: 1, seedCost: 20, sell: 60,  color: "#e8d8f0", top: "#b46ee0" },
-  { id: 1, name: "Pomme de terre", nameEn: "Potato",   seedName: "Graine de p. de terre", seedNameEn: "Potato seeds",   growDays: 2, seedCost: 35, sell: 110, color: "#d9b380", top: "#c49a62" },
-  { id: 2, name: "Tomate",         nameEn: "Tomato",   seedName: "Graine de tomate",      seedNameEn: "Tomato seeds",   growDays: 2, seedCost: 50, sell: 170, color: "#e03e2e", top: "#c22b1c" },
-  { id: 3, name: "Citrouille",     nameEn: "Pumpkin",  seedName: "Graine de citrouille",  seedNameEn: "Pumpkin seeds",  growDays: 3, seedCost: 80, sell: 320, color: "#e8842a", top: "#cc6d14" },
+  { id: 0, name: "Navet",          nameEn: "Turnip",   seedName: "Graine de navet",       seedNameEn: "Turnip seeds",   growMs: 6 * H,  seedCost: 20, sell: 60,  color: "#e8d8f0", top: "#b46ee0" },
+  { id: 1, name: "Pomme de terre", nameEn: "Potato",   seedName: "Graine de p. de terre", seedNameEn: "Potato seeds",   growMs: 12 * H, seedCost: 35, sell: 110, color: "#d9b380", top: "#c49a62" },
+  { id: 2, name: "Tomate",         nameEn: "Tomato",   seedName: "Graine de tomate",      seedNameEn: "Tomato seeds",   growMs: 12 * H, seedCost: 50, sell: 170, color: "#e03e2e", top: "#c22b1c" },
+  { id: 3, name: "Citrouille",     nameEn: "Pumpkin",  seedName: "Graine de citrouille",  seedNameEn: "Pumpkin seeds",  growMs: 18 * H, seedCost: 80, sell: 320, color: "#e8842a", top: "#cc6d14" },
 ];
 export const CROP_STAGES = 5; // 0..4, stage 4 = mûr
+// Durée réelle pendant laquelle un arrosage reste valable : passé ce délai sans
+// réarroser, la pousse se met en pause (elle reprend dès le prochain arrosage,
+// sans perdre la progression déjà acquise).
+export const WATER_VALID_MS = 10 * H;
 
 // --- Gemmes rares (trouvées en cassant des rochers) ---
 // Chance de tomber sur une gemme quand un rocher est détruit. Tirage pondéré :
@@ -137,16 +144,19 @@ export const FENCE_COST = 15; // prix d'une section de clôture à la boutique
 // --- Élevage ---
 // Enclos près de la maison (dans la zone déjà dégagée autour de la ferme).
 export const PEN = { x: 48, y: 38, w: 8, h: 6 };
-// Chaque animal produit chaque matin un bien à ramasser puis vendre.
+// Chaque animal produit un bien à ramasser puis vendre (ou manger), toutes les
+// `prodMs` (durée RÉELLE, indépendante du cycle jour/nuit, voir zip 151).
+// Prix d'achat très nettement augmentés (demande 2026-07 : "pas du tout assez
+// chers, sauf les poules") ; seule la poule reste au même prix qu'avant.
 // `edible`/`energy` : la production peut aussi être mangée (comme un poisson)
 // pour rendre de l'énergie, SAUF la laine qui n'est pas un aliment et reste
 // uniquement vendable.
 export const ANIMALS = [
-  { id: 0, name: "Poule",  nameEn: "Hen",   cost: 120,  prod: "Œuf",             prodEn: "Egg",         sell: 25,  edible: true,  energy: 15, body: "#f0e8d8", accent: "#d44a3f" },
-  { id: 1, name: "Chèvre", nameEn: "Goat",  cost: 400,  prod: "Lait de chèvre",  prodEn: "Goat milk",   sell: 60,  edible: true,  energy: 22, body: "#d8cbb0", accent: "#7a6a52" },
-  { id: 2, name: "Brebis", nameEn: "Sheep", cost: 500,  prod: "Laine",           prodEn: "Wool",        sell: 90,  edible: false, energy: 0,  body: "#f2f0ea", accent: "#c8c0b0" },
-  { id: 3, name: "Cochon", nameEn: "Pig",   cost: 700,  prod: "Truffe",          prodEn: "Truffle",     sell: 140, edible: true,  energy: 28, body: "#e8a8b0", accent: "#c07882" },
-  { id: 4, name: "Vache",  nameEn: "Cow",   cost: 1200, prod: "Lait",            prodEn: "Milk",        sell: 120, edible: true,  energy: 26, body: "#efe7dc", accent: "#5a4634" },
+  { id: 0, name: "Poule",  nameEn: "Hen",   cost: 120,  prodMs: 4 * H,  prod: "Œuf",             prodEn: "Egg",         sell: 25,  edible: true,  energy: 15, body: "#f0e8d8", accent: "#d44a3f" },
+  { id: 1, name: "Chèvre", nameEn: "Goat",  cost: 1600, prodMs: 8 * H,  prod: "Lait de chèvre",  prodEn: "Goat milk",   sell: 60,  edible: true,  energy: 22, body: "#d8cbb0", accent: "#7a6a52" },
+  { id: 2, name: "Brebis", nameEn: "Sheep", cost: 2000, prodMs: 14 * H, prod: "Laine",           prodEn: "Wool",        sell: 90,  edible: false, energy: 0,  body: "#f2f0ea", accent: "#c8c0b0" },
+  { id: 3, name: "Cochon", nameEn: "Pig",   cost: 3000, prodMs: 16 * H, prod: "Truffe",          prodEn: "Truffle",     sell: 140, edible: true,  energy: 28, body: "#e8a8b0", accent: "#c07882" },
+  { id: 4, name: "Vache",  nameEn: "Cow",   cost: 5000, prodMs: 10 * H, prod: "Lait",            prodEn: "Milk",        sell: 120, edible: true,  energy: 26, body: "#efe7dc", accent: "#5a4634" },
 ];
 export const MAX_ANIMALS = 12;      // limite d'animaux dans l'enclos
 export const COLLECT_RANGE = 1.5;   // distance pour ramasser une production
