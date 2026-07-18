@@ -66,6 +66,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [questOpen, setQuestOpen] = useState(true);
   const [slot, setSlot] = useState(0);
   const [seedSel, setSeedSel] = useState(0);
+  const [seedMenuOpen, setSeedMenuOpen] = useState(false); // mini-menu de choix de graine
   const [buildings, setBuildings] = useState({ horseOwned: false, wellBuilt: false, animalCount: 0 });
   const [onHorse, setOnHorse] = useState(false);
   const [fishMini, setFishMini] = useState(null); // {mode, fish} pendant le minijeu, sinon null
@@ -117,6 +118,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const autoJoinTriedRef = useRef(false);
   const fishTileRef = useRef(null);    // case d'eau ciblée par le minijeu de pêche
   const fishMiniRef = useRef(false);   // minijeu de pêche en cours (bloque le reste)
+  const autoHarvestPendingRef = useRef(new Set()); // tuiles de récolte auto déjà demandées (anti-spam)
 
   useEffect(() => { fishMiniRef.current = !!fishMini; }, [fishMini]);
   useEffect(() => { mapOpenRef.current = mapOpen; }, [mapOpen]);
@@ -187,6 +189,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // Le cavalier repart à pied à la reprise (aucun joueur monté au chargement).
       if (sharedRef.current.horse) sharedRef.current.horse.rider = null;
       farmersRef.current = saved.farmers || {};
+      // Une ferme peut avoir été sauvegardée par un zip plus ancien, avant
+      // l'ajout des gemmes/poissons/productions/quêtes : on remet chaque
+      // fermier au format actuel (sans rien perdre) pour éviter tout crash
+      // silencieux côté hôte sur la première action qui touche un champ
+      // manquant (voir normalizeFarmer dans fermeEngine.js).
+      for (const id in farmersRef.current) E.normalizeFarmer(farmersRef.current[id]);
     } else {
       const seed = hashSeed(code);
       worldRef.current = E.generateWorld(seed);
@@ -258,7 +266,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       horse: payload.horse || { owned: false, x: C.SPAWN.x + 2, y: C.SPAWN.y, rider: null },
       animals: payload.animals || [], wellBuilt: !!payload.wellBuilt,
     };
-    if (payload.farmers) farmersRef.current = payload.farmers;
+    if (payload.farmers) {
+      farmersRef.current = payload.farmers;
+      // Même filet de sécurité qu'au chargement par code (voir loadFarmByCode) :
+      // un instantané peut porter des fermiers au format d'un zip antérieur.
+      for (const id in farmersRef.current) E.normalizeFarmer(farmersRef.current[id]);
+    }
     // Mon propre fermier (reprise) si présent
     const mine = payload.farmers && payload.farmers[me.id];
     if (mine) { invRef.current = mine.inv; toolsRef.current = mine.tools; energyRef.current = mine.energy; setMyInv(mine.inv); setMyTools(mine.tools); setMyEnergy(mine.energy); if (mine.quests) setMyQuests(mine.quests); }
@@ -364,7 +377,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     channelRef.current?.send({ type: "broadcast", event: "snapshot", payload: currentSnapshot() });
   }
   function hostEnsureFarmer(id, name, gender, outfit) {
-    if (farmersRef.current[id]) return farmersRef.current[id];
+    // Filet de sécurité systématique (même pour un fermier déjà existant) :
+    // couvre le cas d'une ferme restaurée par un chemin qui n'aurait pas
+    // encore été normalisé (ex. ancien apply reçu en cache, etc.).
+    if (farmersRef.current[id]) return E.normalizeFarmer(farmersRef.current[id]);
     const f = E.newFarmer(id, name, gender || "m", outfit | 0);
     farmersRef.current[id] = f;
     dirtyRef.current = true;
@@ -398,7 +414,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   }
 
   // -------- Hôte : traitement d'une requête d'action --------
+  // Filet de sécurité : toute la logique est enveloppée dans un try/catch.
+  // Sans lui, une exception (schéma de fermier inattendu, etc.) interrompait
+  // silencieusement la fonction AVANT le channelRef.current.send(apply) final :
+  // aucune mise à jour (inventaire, tuiles, quêtes...) n'était alors diffusée,
+  // et rien ne le signalait au joueur (symptôme observé : pêche qui ne
+  // remplit jamais l'inventaire, quêtes qui ne se cochent jamais). Même si
+  // normalizeFarmer() corrige la cause connue, ce filet évite qu'un futur
+  // changement de schéma reproduise le même échec totalement silencieux.
   function hostHandleReq(req) {
+    try { hostHandleReqUnsafe(req); }
+    catch (e) {
+      console.error("[FERME] hostHandleReq: échec de traitement, action ignorée.", req, e);
+      channelRef.current?.send({ type: "broadcast", event: "apply", payload: { toast: { id: req.id, key: "actionFailed" } } });
+    }
+  }
+  function hostHandleReqUnsafe(req) {
     const w = worldRef.current; if (!w) return;
     const f = hostEnsureFarmer(req.id, req.name);
     if (typeof req.px === "number") { f.x = req.px; f.y = req.py; }
@@ -529,7 +560,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     pushToast(L.toastNewDay(p.day));
   }
   function toastMsg(key) {
-    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull }[key] || "";
+    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, actionFailed: L.toastActionFailed }[key] || "";
   }
 
   // -------- Hôte : boucle temps + persistance --------
@@ -644,6 +675,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     else if (sl === 3) sendReq({ kind: "act", action: "mine", x: tt.x, y: tt.y });
     else if (sl === 4) sendReq({ kind: "act", action: "plant", seed: seedSelRef.current, x: tt.x, y: tt.y });
     else if (sl === 5) sendReq({ kind: "eat" });
+    else if (sl === 7) sendReq({ kind: "act", action: "fence", x: tt.x, y: tt.y });
   }
   // Index d'un animal (dans sharedRef.animals) à portée et prêt à ramasser.
   function nearestCollectable() {
@@ -714,13 +746,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (document.activeElement === chatInputRef.current) return;
       if (fishMiniRef.current) return; // le minijeu de pêche gère ses entrées
       keysRef.current[e.code] = true;
-      if (e.code >= "Digit1" && e.code <= "Digit7") selectSlot(+e.code.slice(5) - 1);
+      if (e.code >= "Digit1" && e.code <= "Digit8") selectSlot(+e.code.slice(5) - 1);
       if (e.code === "Space") { e.preventDefault(); doAction(); }
       if (e.code === "KeyE") tryOpenNearby();
       if (e.code === "KeyF") toggleMount();
       if (e.code === "KeyT") { e.preventDefault(); setChatOpen(true); setTimeout(() => chatInputRef.current?.focus(), 0); }
       if (e.code === "KeyM") setMapOpen(o => !o);
-      if (e.code === "Escape") { setShopOpen(false); setBinOpen(false); setMapOpen(false); }
+      if (e.code === "Escape") { setShopOpen(false); setBinOpen(false); setMapOpen(false); setSeedMenuOpen(false); }
     }
     function onKeyUp(e) { keysRef.current[e.code] = false; }
     function onMove(e) { mouseRef.current.x = e.clientX; mouseRef.current.y = e.clientY; }
@@ -741,6 +773,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (!w || !m || !sprites) return;
 
       updateMe(dt);
+      checkWalkOverHarvest();
       if (actAnimRef.current > 0) actAnimRef.current -= dt;
       for (const p of playersRef.current.values()) {
         p.x += (p.tx - p.x) * Math.min(1, dt * 12);
@@ -767,12 +800,31 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         else img = sprites.path;
         ctx.drawImage(img, x * T, y * T);
         const c = w.crops.get(i);
-        if (c) ctx.drawImage(sprites.crops[c.t][c.s], x * T, y * T);
+        if (c) {
+          ctx.drawImage(sprites.crops[c.t][c.s], x * T, y * T);
+          if (c.s >= C.CROP_STAGES - 1) {
+            // Bulle "prête à récolter" : flotte doucement au-dessus de la case.
+            const bob = Math.sin(now / 260) * 1.5;
+            ctx.drawImage(sprites.icons.ready, x * T + 2, y * T - 11 + bob, 12, 12);
+          } else if (!c.watered) {
+            // Goutte barrée : cette culture n'a pas été arrosée aujourd'hui.
+            ctx.drawImage(sprites.icons.thirst, x * T + 2, y * T - 10, 12, 12);
+          }
+        }
         const o = w.objects[i];
         if (o === C.O_ROCK) ctx.drawImage(sprites.rock, x * T, y * T);
         else if (o === C.O_STUMP) ctx.drawImage(sprites.stump, x * T, y * T);
-        // Clôture de l'enclos (bordure), décorative et plate.
-        if (onPenBorder(x, y)) ctx.drawImage(sprites.fence, x * T, y * T);
+        else if (o === C.O_FENCE) {
+          // Clôture posée librement par un joueur : le sprite dépend des
+          // sections voisines pour que les lisses se prolongent bien d'une
+          // tuile à l'autre, quelle que soit la forme dessinée.
+          const fk = fenceKindAt(w, x, y);
+          ctx.drawImage(fk === "corner" ? sprites.fenceCorner : fk === "v" ? sprites.fenceV : fk === "post" ? sprites.fencePost : sprites.fence, x * T, y * T);
+        }
+        // Clôture décorative de l'enclos de départ (bordure fixe), pareil
+        // choix de sprite selon l'orientation du segment (voir penBorderKind).
+        const penEdge = penBorderKind(x, y);
+        if (penEdge) ctx.drawImage(penEdge === "corner" ? sprites.fenceCorner : penEdge === "v" ? sprites.fenceV : sprites.fence, x * T, y * T);
       }
 
       const tt = targetTile();
@@ -839,6 +891,23 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       let cx = (m.x + 0.5) * T - vw / 2, cy = (m.y + 0.5) * T - vh / 2;
       cx = Math.max(0, Math.min(w.w * T - vw, cx)); cy = Math.max(0, Math.min(w.h * T - vh, cy));
       return { x: cx, y: cy, vw, vh };
+    }
+    // Récolte automatique en marchant sur une culture mûre (en plus du
+    // clic/Espace, qui reste actif). Une tuile déjà demandée n'est pas
+    // redemandée tant que la réponse n'est pas revenue (anti-spam), avec
+    // une expiration de secours si jamais l'hôte ne répondait pas.
+    function checkWalkOverHarvest() {
+      const m = meRef.current, w = worldRef.current;
+      if (!m || !w || fishMiniRef.current || shopOpenRef.current || binOpenRef.current || mapOpenRef.current) return;
+      const tx = Math.floor(m.x + 0.5), ty = Math.floor(m.y + 0.5);
+      if (!inMap(tx, ty)) return;
+      const i = idxOf(tx, ty);
+      const c = w.crops.get(i);
+      if (!c || c.s < C.CROP_STAGES - 1) return; // pas mûr : passer dessus ne fait rien
+      if (autoHarvestPendingRef.current.has(i)) return;
+      autoHarvestPendingRef.current.add(i);
+      setTimeout(() => autoHarvestPendingRef.current.delete(i), 1500);
+      sendReq({ kind: "act", action: "harvest", x: tx, y: ty });
     }
     function updateMe(dt) {
       const m = meRef.current, w = worldRef.current, keys = keysRef.current;
@@ -972,13 +1041,32 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     return facingTile();
   }
   function nearTile(tl, d = 2.5) { const m = meRef.current; return m && Math.abs(m.x - tl.x) <= d && Math.abs(m.y - tl.y) <= d; }
-  // Bordure de l'enclos (clôture décorative), avec une ouverture en bas au centre.
-  function onPenBorder(x, y) {
+  // Bordure de l'enclos (clôture décorative), avec une ouverture en bas au
+  // centre. Renvoie le TYPE de segment ("h" horizontal, "v" vertical, "corner"
+  // à l'angle) afin que le rendu choisisse le sprite dont les lisses se
+  // prolongent dans le bon sens d'une tuile à l'autre : utiliser le même
+  // sprite horizontal partout laissait les bords verticaux visuellement
+  // "ouverts" entre deux tuiles (bug signalé).
+  function penBorderKind(x, y) {
     const p = C.PEN;
-    if (x < p.x || x >= p.x + p.w || y < p.y || y >= p.y + p.h) return false;
-    const border = x === p.x || x === p.x + p.w - 1 || y === p.y || y === p.y + p.h - 1;
-    if (y === p.y + p.h - 1 && x === p.x + Math.floor(p.w / 2)) return false; // portail
-    return border;
+    if (x < p.x || x >= p.x + p.w || y < p.y || y >= p.y + p.h) return null;
+    const onLeft = x === p.x, onRight = x === p.x + p.w - 1;
+    const onTop = y === p.y, onBottom = y === p.y + p.h - 1;
+    if (!onLeft && !onRight && !onTop && !onBottom) return null; // intérieur
+    if (onBottom && x === p.x + Math.floor(p.w / 2)) return null; // portail
+    if ((onLeft || onRight) && (onTop || onBottom)) return "corner";
+    return (onLeft || onRight) ? "v" : "h";
+  }
+  // Clôture posée librement (O_FENCE) : le sprite choisi dépend des sections
+  // DÉJÀ voisines (haut/bas/gauche/droite), pour que les lisses se
+  // prolongent bien quelle que soit la forme dessinée par le joueur.
+  function fenceKindAt(w, x, y) {
+    const has = (xx, yy) => inMap(xx, yy) && w.objects[idxOf(xx, yy)] === C.O_FENCE;
+    const horiz = has(x - 1, y) || has(x + 1, y), vert = has(x, y - 1) || has(x, y + 1);
+    if (horiz && vert) return "corner";
+    if (vert) return "v";
+    if (horiz) return "h";
+    return "post";
   }
   function tryOpenNearby() { if (nearTile(C.SHOP)) setShopOpen(true); else if (nearTile(C.BIN)) setBinOpen(true); }
 
@@ -1017,7 +1105,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function cropName(t) { return lang === "en" ? C.CROPS[t].nameEn : C.CROPS[t].name; }
 
   // -------- Interactions UI --------
-  function selectSlot(s) { if (s === 4 && slotRef.current === 4) setSeedSel(v => (v + 1) % C.CROPS.length); setSlot(s); }
+  // Case graines : au lieu de cycler à l'aveugle, un clic ouvre/ferme un
+  // petit menu listant chaque graine (icône, nom, quantité) pour choisir
+  // directement. Les autres emplacements ferment le menu s'il était ouvert.
+  function selectSlot(s) {
+    if (s === 4) setSeedMenuOpen(o => (slotRef.current === 4 ? !o : true));
+    else setSeedMenuOpen(false);
+    setSlot(s);
+  }
   function submitChat() {
     const v = chatInputRef.current?.value.trim();
     if (v) channelRef.current?.send({ type: "broadcast", event: "chat", payload: { from: meRef.current.name, msg: v.slice(0, 120) } });
@@ -1041,6 +1136,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const buySeed = (t2, n) => sendReq({ kind: "buy", item: "seed", crop: t2, n });
   const buyFood = () => sendReq({ kind: "buy", item: "food" });
   const buyTool = (k) => sendReq({ kind: "buy", item: "tool", tool: k });
+  const buyFence = (n) => sendReq({ kind: "buy", item: "fence", n });
   const sellItem = (item, crop) => sendReq({ kind: "sell", item, crop, n: 9999 });
   const sellFish = (fishId) => sendReq({ kind: "sell", item: "fish", fish: fishId, n: 9999 });
   const sellGem = (gemId) => sendReq({ kind: "sell", item: "gem", gem: gemId, n: 9999 });
@@ -1050,7 +1146,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const slots = [
     { key: "hoe", icon: "hoe" }, { key: "can", icon: "can" }, { key: "axe", icon: "axe" },
     { key: "pick", icon: "pick" }, { key: "seeds", icon: "seeds" }, { key: "food", icon: "food" },
-    { key: "rod", icon: "rod" },
+    { key: "rod", icon: "rod" }, { key: "fence", icon: "fence" },
   ];
   const clockStr = (() => { const h = Math.floor(hud.timeMin / 60) % 24, mn = hud.timeMin % 60; return `${h}h${String(mn).padStart(2, "0")}`; })();
 
@@ -1131,13 +1227,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       {/* Barre d'outils */}
       <div className="ferme-toolbar panel">
         {slots.map((s, i) => {
-          const isSeed = s.key === "seeds", isFood = s.key === "food", isRod = s.key === "rod";
+          const isSeed = s.key === "seeds", isFood = s.key === "food", isRod = s.key === "rod", isFence = s.key === "fence";
           let count = "", lvl = "", img = spritesReady ? spritesRef.current.icons[s.icon] : null;
           if (isSeed) { count = myInv ? myInv.seeds[seedSel] : ""; img = spritesReady ? spritesRef.current.crops[seedSel][C.CROP_STAGES - 1] : null; }
           else if (isFood) count = myInv ? myInv.food : "";
           else if (isRod) { /* pas de niveau ni de compteur */ }
+          else if (isFence) { count = myInv ? (myInv.fence || 0) : ""; img = spritesReady ? spritesRef.current.fence : null; }
           else lvl = "N" + (myTools[s.key] || 1);
-          const title = isSeed ? L.seedTip(seedName(seedSel)) : isFood ? L.foodTip(C.FOOD_ENERGY) : isRod ? L.rodTip : TOOL_NAMES[s.key];
+          const title = isSeed ? L.seedTip(seedName(seedSel)) : isFood ? L.foodTip(C.FOOD_ENERGY) : isRod ? L.rodTip : isFence ? L.fenceTip : TOOL_NAMES[s.key];
           return (
             <div key={s.key} className={"ferme-slot" + (i === slot ? " sel" : "")} onClick={() => selectSlot(i)} title={title}>
               <span className="ferme-slot-key">{i + 1}</span>
@@ -1148,6 +1245,24 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           );
         })}
       </div>
+
+      {/* Mini-menu de choix de graine (clic sur la case graines) : liste
+          cliquable avec icône, nom et quantité, plutôt qu'un cycle à l'aveugle. */}
+      {seedMenuOpen && (
+        <div className="ferme-seed-menu-ov" onClick={() => setSeedMenuOpen(false)}>
+          <div className="ferme-seed-menu panel" onClick={e => e.stopPropagation()}>
+            <div className="ferme-seed-menu-title">{L.seedMenuTitle}</div>
+            {C.CROPS.map(cr => (
+              <div key={cr.id} className={"ferme-seed-menu-row" + (cr.id === seedSel ? " sel" : "")}
+                onClick={() => { setSeedSel(cr.id); setSeedMenuOpen(false); }}>
+                <Sprite img={spritesReady ? spritesRef.current.crops[cr.id][C.CROP_STAGES - 1] : null} w={26} h={26} />
+                <span className="name">{seedName(cr.id)}</span>
+                <span className="count">× {myInv ? myInv.seeds[cr.id] : 0}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Panneau des quêtes de découverte (checklist cochable) */}
       {questOpen && myQuests && (
@@ -1188,6 +1303,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           <div className="panel ferme-modal-panel" onClick={e => e.stopPropagation()}>
             <button className="ferme-close-x" onClick={() => setShopOpen(false)}>✕</button>
             <h2>{L.shopTitle}</h2><div className="ferme-hint">{L.shopHint}</div>
+            <div className="ferme-usage">{L.seedsUsageHint}</div>
             {C.CROPS.map(cr => (
               <div className="ferme-shop-row" key={"s" + cr.id}>
                 <Sprite img={spritesReady ? spritesRef.current.crops[cr.id][C.CROP_STAGES - 1] : null} w={32} h={32} />
@@ -1207,7 +1323,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               return (
                 <div className="ferme-shop-row" key={"t" + k}>
                   <Sprite img={spritesReady ? spritesRef.current.icons[k] : null} w={32} h={32} />
-                  <div className="info"><b>{L.toolRowTitle(TOOL_NAMES[k], lvl)}</b><span>{max ? L.toolMaxSub : L.toolUpSub(lvl + 1, cost)}</span></div>
+                  <div className="info"><b>{L.toolRowTitle(TOOL_NAMES[k], lvl)}</b><span>{max ? L.toolMaxSub : L.toolUpSub(lvl + 1, cost)}</span><span className="ferme-usage">{L.toolUsage[k]}</span></div>
                   <button disabled={max || hud.money < cost} onClick={() => buyTool(k)}>{max ? L.maxLabel : L.upgrade}</button>
                 </div>
               );
@@ -1222,6 +1338,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               <Sprite img={spritesReady ? spritesRef.current.well : null} w={26} h={32} />
               <div className="info"><b>{L.shopWellTitle(C.WELL_COST)}</b><span>{buildings.wellBuilt ? L.shopWellOwned : L.shopWellSub}</span></div>
               <button disabled={buildings.wellBuilt || hud.money < C.WELL_COST} onClick={buyWell}>{buildings.wellBuilt ? L.maxLabel : L.buyLabel}</button>
+            </div>
+            <div className="ferme-shop-row">
+              <Sprite img={spritesReady ? spritesRef.current.fence : null} w={32} h={32} />
+              <div className="info"><b>{L.fenceRowTitle(C.FENCE_COST)}</b><span>{L.fenceRowSub(myInv ? (myInv.fence || 0) : 0)}</span></div>
+              <button disabled={hud.money < C.FENCE_COST} onClick={() => buyFence(1)}>{L.buy1}</button>
+              <button disabled={hud.money < C.FENCE_COST * 5} onClick={() => buyFence(5)}>{L.buy5}</button>
             </div>
             <div className="ferme-tools-header">{L.shopAnimalsHeader}</div>
             {C.ANIMALS.map(a => (

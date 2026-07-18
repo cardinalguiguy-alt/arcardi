@@ -128,7 +128,7 @@ export function newFarmer(id, name, gender, outfit) {
     energy: C.MAX_ENERGY,
     tools: { hoe: 1, can: 1, axe: 1, pick: 1 },
     inv: {
-      wood: 0, stone: 0, food: 0,
+      wood: 0, stone: 0, food: 0, fence: 0,
       seeds: [5, 0, 0, 0], crops: [0, 0, 0, 0],
       gems: C.GEMS.map(() => 0),      // gemmes rares trouvées au minage
       fish: C.FISH.map(() => 0),      // poissons pêchés
@@ -136,6 +136,43 @@ export function newFarmer(id, name, gender, outfit) {
     },
     quests: {}, // id de quête -> true quand accomplie
   };
+}
+
+// Complète un tableau numérique à la longueur attendue (préserve les valeurs
+// déjà présentes). Sert à faire évoluer le schéma d'inventaire sans jamais
+// perdre ce qu'un fermier possède déjà.
+function padArray(arr, len) {
+  const out = Array.isArray(arr) ? arr.slice(0, len) : [];
+  while (out.length < len) out.push(0);
+  return out;
+}
+
+// Remet un fermier (potentiellement restauré d'une sauvegarde ANCIENNE, d'avant
+// l'ajout des gemmes/poissons/productions/quêtes) au format attendu par le
+// moteur actuel, SANS jamais perdre ce qu'il possède déjà. Indispensable :
+// une ferme durable (table ferme_saves) peut avoir été créée par un zip bien
+// antérieur à l'ajout d'un champ ; sans ce filet, la moindre lecture d'un
+// champ absent (ex. f.inv.fish[i]) fait planter resolveAct/resolveSell en
+// pleine résolution côté hôte, ce qui empêche l'envoi du message `apply` et
+// donne l'impression que RIEN ne se passe (pêche invisible, quêtes jamais
+// cochées, etc.) alors que l'action a pourtant réussi.
+export function normalizeFarmer(f) {
+  if (!f) return f;
+  f.tools = f.tools || {};
+  for (const k of C.TOOLS) if (typeof f.tools[k] !== "number") f.tools[k] = 1;
+  if (typeof f.energy !== "number") f.energy = C.MAX_ENERGY;
+  f.inv = f.inv || {};
+  if (typeof f.inv.wood !== "number") f.inv.wood = 0;
+  if (typeof f.inv.stone !== "number") f.inv.stone = 0;
+  if (typeof f.inv.food !== "number") f.inv.food = 0;
+  if (typeof f.inv.fence !== "number") f.inv.fence = 0;
+  f.inv.seeds = padArray(f.inv.seeds, C.CROPS.length);
+  f.inv.crops = padArray(f.inv.crops, C.CROPS.length);
+  f.inv.gems = padArray(f.inv.gems, C.GEMS.length);
+  f.inv.fish = padArray(f.inv.fish, C.FISH.length);
+  f.inv.products = padArray(f.inv.products, C.ANIMALS.length);
+  f.quests = f.quests || {};
+  return f;
 }
 
 // Tirage pondéré d'un index dans une liste d'objets ayant un champ `weight`.
@@ -167,6 +204,7 @@ function useEnergy(f, action, toolKey) {
    messages tile/crop et met à jour ses overrides de persistance.
    ------------------------------------------------------------------------- */
 export function resolveAct(world, f, m) {
+  normalizeFarmer(f);
   const res = { tiles: [], cropTiles: [], fx: [], invChanged: false, toast: null, did: null };
   const x = m.x | 0, y = m.y | 0;
   if (!inMap(x, y) || !canReach(f, x, y)) return res;
@@ -239,6 +277,22 @@ export function resolveAct(world, f, m) {
         res.invChanged = true;
       }
       break;
+    case "fence":
+      // Clôture posée librement par le joueur (achetée à la boutique, une
+      // section à la fois) : pose sur une case libre et constructible, ou
+      // retire (et récupère) une section déjà posée. Aucun coût en énergie,
+      // comme planter/récolter.
+      if (o === C.O_FENCE) {
+        world.objects[i] = C.O_NONE; world.objHp.delete(i);
+        f.inv.fence = (f.inv.fence || 0) + 1;
+        res.tiles.push(i); res.invChanged = true;
+      } else if ((g === C.G_GRASS || g === C.G_TILLED || g === C.G_WATERED) && o === C.O_NONE && !world.crops.has(i)) {
+        if (f.inv.fence > 0) {
+          f.inv.fence--; world.objects[i] = C.O_FENCE; world.objHp.set(i, 1);
+          res.tiles.push(i); res.invChanged = true;
+        } else res.toast = "noFence";
+      }
+      break;
     case "fish":
       // Pêche : la case ciblée doit être de l'eau (rivière) et à portée. Le
       // TYPE de poisson est décidé par le minijeu côté client (m.fish) : on
@@ -262,6 +316,7 @@ export function resolveAct(world, f, m) {
 
 // Achat à la boutique. Renvoie { moneyDelta, invChanged, toast, chat }.
 export function resolveBuy(f, money, m) {
+  normalizeFarmer(f);
   const res = { moneyDelta: 0, invChanged: false, toast: null, chat: null };
   if (!nearT(f, C.SHOP)) { res.toast = "farShop"; return res; }
   if (m.item === "seed") {
@@ -273,6 +328,11 @@ export function resolveBuy(f, money, m) {
   } else if (m.item === "food") {
     if (money < C.FOOD_COST) { res.toast = "noGold"; return res; }
     res.moneyDelta = -C.FOOD_COST; f.inv.food++; res.invChanged = true;
+  } else if (m.item === "fence") {
+    const n = Math.max(1, Math.min(50, (m.n | 0) || 1));
+    const cost = C.FENCE_COST * n;
+    if (money < cost) { res.toast = "noGold"; return res; }
+    res.moneyDelta = -cost; f.inv.fence += n; res.invChanged = true;
   } else if (m.item === "tool") {
     const key = m.tool;
     if (!C.TOOLS.includes(key)) return res;
@@ -288,6 +348,7 @@ export function resolveBuy(f, money, m) {
 
 // Vente au bac. Renvoie { moneyDelta, earnedDelta, invChanged, toast, gain }.
 export function resolveSell(f, m) {
+  normalizeFarmer(f);
   const res = { moneyDelta: 0, earnedDelta: 0, invChanged: false, toast: null, gain: 0 };
   if (!nearT(f, C.BIN)) { res.toast = "farBin"; return res; }
   let gain = 0;
@@ -326,6 +387,7 @@ export function resolveSell(f, m) {
 // le poisson le moins précieux disponible (la pêche sert donc aussi à se
 // nourrir). Renvoie { invChanged, fx }.
 export function resolveEat(f) {
+  normalizeFarmer(f);
   const res = { invChanged: false, fx: null };
   if (f.energy >= C.MAX_ENERGY) return res;
   if (f.inv.food > 0) {
@@ -337,6 +399,16 @@ export function resolveEat(f) {
   for (let ft = 0; ft < C.FISH.length; ft++) {
     if ((f.inv.fish[ft] || 0) > 0) {
       f.inv.fish[ft]--; f.energy = Math.min(C.MAX_ENERGY, f.energy + C.FISH[ft].energy);
+      res.invChanged = true; res.fx = { k: "eat", x: f.x, y: f.y };
+      return res;
+    }
+  }
+  // Ni casse-croûte ni poisson : manger une production d'élevage comestible
+  // (œuf, lait, truffe...). La laine n'est pas un aliment (edible:false).
+  for (let pt = 0; pt < C.ANIMALS.length; pt++) {
+    const a = C.ANIMALS[pt];
+    if (a.edible && (f.inv.products[pt] || 0) > 0) {
+      f.inv.products[pt]--; f.energy = Math.min(C.MAX_ENERGY, f.energy + (a.energy || 0));
       res.invChanged = true; res.fx = { k: "eat", x: f.x, y: f.y };
       return res;
     }
@@ -389,7 +461,7 @@ export function blockedTile(world, x, y) {
   const i = idx(fx, fy);
   const g = world.ground[i], o = world.objects[i];
   if (g === C.G_WATER) return true;
-  if (o === C.O_TREE || o === C.O_TREE2 || o === C.O_ROCK || o === C.O_HOUSE || o === C.O_SHOP || o === C.O_BIN || o === C.O_STUMP || o === C.O_WELL) return true;
+  if (o === C.O_TREE || o === C.O_TREE2 || o === C.O_ROCK || o === C.O_HOUSE || o === C.O_SHOP || o === C.O_BIN || o === C.O_STUMP || o === C.O_WELL || o === C.O_FENCE) return true;
   return false;
 }
 

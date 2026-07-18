@@ -6561,6 +6561,22 @@ body.ferme-active .wrap-room > .brand{ display:none !important; }
 .ferme-slot-count{ position:absolute; bottom:0; right:3px; font-size:12px; font-weight:bold; color:var(--f-ink); text-shadow:0 0 2px #fff; }
 .ferme-slot-lvl{ position:absolute; top:-2px; right:3px; font-size:10px; font-weight:bold; color:var(--f-accent); }
 
+/* Mini-menu de choix de graine (clic sur la case graines) */
+.ferme-seed-menu-ov{ position:fixed; inset:0; z-index:12; }
+.ferme-seed-menu{
+  position:fixed; bottom:72px; left:50%; transform:translateX(-50%);
+  width:min(260px, 80vw); max-height:60vh; overflow-y:auto; padding:8px;
+}
+.ferme-seed-menu-title{ font-weight:bold; font-size:13px; padding:2px 4px 6px; }
+.ferme-seed-menu-row{
+  display:flex; align-items:center; gap:8px; padding:6px 4px; border-radius:6px; cursor:pointer;
+}
+.ferme-seed-menu-row:hover{ background:var(--f-paper-d); }
+.ferme-seed-menu-row.sel{ background:var(--f-gold); }
+.ferme-seed-menu-row canvas{ image-rendering:pixelated; }
+.ferme-seed-menu-row .name{ flex:1; font-size:13px; }
+.ferme-seed-menu-row .count{ font-size:12px; font-weight:bold; opacity:.8; }
+
 /* Panneau des quêtes de découverte (checklist), sous le HUD à gauche */
 .ferme-quests{ position:fixed; top:96px; left:10px; z-index:11; width:250px; max-width:70vw; padding:8px 10px; font-size:12px; }
 .ferme-quests-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
@@ -6595,6 +6611,10 @@ body.ferme-active .wrap-room > .brand{ display:none !important; }
 .ferme-shop-row button:hover{ filter:brightness(1.08); }
 .ferme-shop-row button:disabled{ opacity:.45; cursor:default; }
 .ferme-tools-header{ margin-top:10px; font-weight:bold; }
+/* Phrase d'utilité d'un outil/d'une graine, directement dans la boutique
+   (marche au tactile comme au clic, pas seulement au survol). */
+.ferme-usage{ display:block; font-size:11.5px; font-style:italic; opacity:.68; margin-top:2px; }
+div.ferme-usage{ margin-bottom:10px; }
 .ferme-close-x{
   float:right; background:var(--f-accent); color:#fff; font-family:inherit; font-weight:bold;
   cursor:pointer; border:3px solid var(--f-wood); border-radius:6px; padding:4px 10px; box-shadow:0 3px 0 var(--f-wood-d);

@@ -297,6 +297,19 @@ export function buildSprites() {
         P(g, 2, 2, 1, 8, "#d8d8e0"); // fil
         P(g, 1, 9, 3, 3, "#e03e2e"); P(g, 2, 10, 1, 1, "#fff"); // flotteur
         break;
+      case "ready": // bulle "prêt à récolter" (culture mûre)
+        g.fillStyle = "#ffe060"; g.beginPath(); g.arc(8, 7, 6, 0, 7); g.fill();
+        g.fillStyle = "#c8a83a"; g.beginPath(); g.arc(8, 7, 6, 0, 7); g.lineWidth = 1; g.stroke();
+        P(g, 5, 12, 4, 3, "#ffe060"); // pointe de la bulle
+        g.fillStyle = "#5a3e00"; P(g, 7, 3, 2, 5, "#5a3e00"); P(g, 7, 9, 2, 2, "#5a3e00"); // "!"
+        break;
+      case "thirst": // goutte barrée : culture plantée non arrosée
+        g.fillStyle = "#5a9be0";
+        g.beginPath(); g.moveTo(8, 2); g.quadraticCurveTo(13, 9, 8, 14); g.quadraticCurveTo(3, 9, 8, 2); g.fill();
+        g.fillStyle = "#a8d4f0"; g.beginPath(); g.arc(6, 9, 1.4, 0, 7); g.fill();
+        g.strokeStyle = "#d43a2e"; g.lineWidth = 2.4;
+        g.beginPath(); g.moveTo(2, 3); g.lineTo(14, 13); g.stroke();
+        break;
       default: break;
     }
     return c;
@@ -354,11 +367,47 @@ export function buildSprites() {
     P(g, 10, 12, 4, 8, "#8a6340"); // seau/corde au centre
     return c;
   }
+  // Clôture HORIZONTALE : les deux lisses courent sur toute la LARGEUR de la
+  // tuile (y=6 et y=11), donc se prolongent sans coupure d'une tuile à
+  // l'autre quand plusieurs tuiles sont posées côte à côte horizontalement.
   function fenceTile() {
     const [c, g] = cv(T, T);
     P(g, 0, 6, T, 2, "#a87745"); P(g, 0, 11, T, 2, "#8a6038"); // lisses
     P(g, 2, 3, 2, 11, "#9a6b3f"); P(g, 10, 3, 2, 11, "#9a6b3f"); // poteaux
     P(g, 2, 3, 2, 1, "#b8834f"); P(g, 10, 3, 2, 1, "#b8834f");
+    return c;
+  }
+  // Clôture VERTICALE (miroir de la précédente, x<->y) : les deux lisses
+  // courent sur toute la HAUTEUR de la tuile, donc se prolongent sans coupure
+  // d'une tuile à l'autre quand la clôture descend/monte verticalement.
+  // Corrige le bug signalé : utiliser le sprite horizontal sur un bord
+  // vertical laissait un vide entre chaque tuile (la clôture ne semblait
+  // jamais se refermer).
+  function fenceTileV() {
+    const [c, g] = cv(T, T);
+    P(g, 6, 0, 2, T, "#a87745"); P(g, 11, 0, 2, T, "#8a6038"); // lisses
+    P(g, 3, 2, 11, 2, "#9a6b3f"); P(g, 3, 10, 11, 2, "#9a6b3f"); // traverses
+    P(g, 3, 2, 11, 1, "#b8834f"); P(g, 3, 10, 11, 1, "#b8834f");
+    return c;
+  }
+  // Poteau d'angle : jonction d'un bord horizontal ET vertical (les 4 coins
+  // de l'enclos). Un poteau plein + un moignon de lisse dans les deux
+  // directions, pour que le coin se lise comme un vrai point d'ancrage.
+  function fenceTileCorner() {
+    const [c, g] = cv(T, T);
+    P(g, 0, 6, T, 2, "#a87745"); P(g, 6, 0, 2, T, "#a87745"); // lisses (croix)
+    P(g, 0, 11, T, 2, "#8a6038"); P(g, 11, 0, 2, T, "#8a6038");
+    P(g, 4, 4, 8, 8, "#9a6b3f"); // poteau plein
+    P(g, 4, 4, 8, 2, "#b8834f");
+    return c;
+  }
+  // Poteau isolé : section de clôture posée librement par le joueur sans
+  // aucune section voisine encore adjacente.
+  function fenceTilePost() {
+    const [c, g] = cv(T, T);
+    P(g, 6, 3, 4, 11, "#9a6b3f");
+    P(g, 6, 3, 4, 2, "#b8834f");
+    P(g, 5, 13, 6, 2, "#7a5330");
     return c;
   }
   // Animal de profil (16x14) : forme simple déclinée par type.
@@ -424,6 +473,9 @@ export function buildSprites() {
     horse: horseSprite(),
     well: well(),
     fence: fenceTile(),
+    fenceV: fenceTileV(),
+    fenceCorner: fenceTileCorner(),
+    fencePost: fenceTilePost(),
     animals: [],
     products: [],
   };
@@ -431,7 +483,7 @@ export function buildSprites() {
     S.crops[t] = [];
     for (let s = 0; s < C.CROP_STAGES; s++) S.crops[t][s] = cropSprite(t, s);
   }
-  for (const k of ["hoe", "can", "axe", "pick", "seeds", "wood", "stone", "food", "gold", "energy", "rod"]) S.icons[k] = icon(k);
+  for (const k of ["hoe", "can", "axe", "pick", "seeds", "wood", "stone", "food", "gold", "energy", "rod", "ready", "thirst"]) S.icons[k] = icon(k);
   S.gemIcons = C.GEMS.map(gm => gemIcon(gm.color));
   S.fishIcons = C.FISH.map(fs => fishIcon(fs.color));
   S.animals = C.ANIMALS.map(a => animalSprite(a.id));
