@@ -26,9 +26,20 @@ const CADENCES = [
 // sont ainsi "pleines" (coloriées en ivoire + liseré sombre côté CSS), et non
 // plus des contours creux. La distinction blanc/noir se fait uniquement par la
 // couleur CSS (voir .chess-piece.w / .chess-piece.b).
+// BUG CORRIGÉ (signalé 2026-07, "affichage des pions sur smartphone") : ces 6
+// glyphes (U+265A à U+265F) sont détournés par les polices emoji couleur des
+// téléphones (Apple Color Emoji sur iOS/Safari, et certaines polices Android) :
+// le système les remplace TOUS par sa propre petite image générique, quasi
+// identique d'une pièce à l'autre (d'où l'impression que "tout devient un pion
+// noir"), en ignorant en plus la couleur CSS (.chess-piece.w/.b) et la taille
+// de police, ce qui déforme aussi visuellement la case. Le correctif standard
+// est d'ajouter le sélecteur de variation TEXTE Unicode U+FE0E après chaque
+// glyphe : il indique explicitement au système d'utiliser le rendu TEXTE (donc
+// la police du site, colorable en CSS) plutôt que le rendu emoji couleur.
+const VS_TEXT = "︎"; // variation selector-15 : force le rendu texte, jamais emoji
 const GLYPH = {
-  w: { k: "♚", q: "♛", r: "♜", b: "♝", n: "♞", p: "♟" },
-  b: { k: "♚", q: "♛", r: "♜", b: "♝", n: "♞", p: "♟" },
+  w: { k: "♚" + VS_TEXT, q: "♛" + VS_TEXT, r: "♜" + VS_TEXT, b: "♝" + VS_TEXT, n: "♞" + VS_TEXT, p: "♟" + VS_TEXT },
+  b: { k: "♚" + VS_TEXT, q: "♛" + VS_TEXT, r: "♜" + VS_TEXT, b: "♝" + VS_TEXT, n: "♞" + VS_TEXT, p: "♟" + VS_TEXT },
 };
 const FILES = "abcdefgh";
 const TERMINAL = ["checkmate", "stalemate", "draw", "timeout", "resign"];

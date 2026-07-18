@@ -5692,6 +5692,13 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
 .chess-sq.last::before{ content:''; position:absolute; inset:0; background:rgba(255,209,102,.26); }
 .chess-sq.sel::before{ content:''; position:absolute; inset:0; background:rgba(255,209,102,.5); }
 .chess-sq.check::before{ content:''; position:absolute; inset:0; background:rgba(214,60,40,.5); }
+/* Correctif mobile (signalé 2026-07) : sur certains téléphones, la police
+   emoji couleur du système (Apple Color Emoji notamment) essaie de reprendre
+   la main sur les glyphes d'échecs Unicode malgré le sélecteur de variation
+   texte (voir VS_TEXT dans ChessGame.js). `font-variant-emoji:text` est le
+   filet de sécurité CSS correspondant (dégradation silencieuse si non
+   supporté par le navigateur). */
+.chess-piece, .chess-cap, .chess-promo-btn{ font-variant-emoji:text; }
 .chess-piece{ position:relative; font-size:min(9.6vw,57px); line-height:1; pointer-events:none; }
 .chess-piece.w{
   color:#F4EAD2;
