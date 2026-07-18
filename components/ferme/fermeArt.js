@@ -303,6 +303,12 @@ export function buildSprites() {
         P(g, 5, 12, 4, 3, "#ffe060"); // pointe de la bulle
         g.fillStyle = "#5a3e00"; P(g, 7, 3, 2, 5, "#5a3e00"); P(g, 7, 9, 2, 2, "#5a3e00"); // "!"
         break;
+      case "herd": // main ouverte : outil pour attraper/déposer un animal
+        P(g, 5, 7, 7, 6, "#e8b888"); // paume
+        P(g, 4, 3, 2, 5, "#e8b888"); P(g, 6, 2, 2, 6, "#e8b888");
+        P(g, 8, 2, 2, 6, "#e8b888"); P(g, 10, 4, 2, 5, "#e8b888");
+        P(g, 4, 7, 2, 1, "#c89468"); P(g, 6, 7, 6, 1, "#c89468"); // ombre paume/doigts
+        break;
       case "thirst": // goutte barrée : culture plantée non arrosée
         g.fillStyle = "#5a9be0";
         g.beginPath(); g.moveTo(8, 2); g.quadraticCurveTo(13, 9, 8, 14); g.quadraticCurveTo(3, 9, 8, 2); g.fill();
@@ -483,7 +489,7 @@ export function buildSprites() {
     S.crops[t] = [];
     for (let s = 0; s < C.CROP_STAGES; s++) S.crops[t][s] = cropSprite(t, s);
   }
-  for (const k of ["hoe", "can", "axe", "pick", "seeds", "wood", "stone", "food", "gold", "energy", "rod", "ready", "thirst"]) S.icons[k] = icon(k);
+  for (const k of ["hoe", "can", "axe", "pick", "seeds", "wood", "stone", "food", "gold", "energy", "rod", "ready", "thirst", "herd"]) S.icons[k] = icon(k);
   S.gemIcons = C.GEMS.map(gm => gemIcon(gm.color));
   S.fishIcons = C.FISH.map(fs => fishIcon(fs.color));
   S.animals = C.ANIMALS.map(a => animalSprite(a.id));

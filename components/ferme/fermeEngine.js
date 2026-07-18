@@ -178,9 +178,28 @@ export function animalReady(an, now) {
   return !!an && now >= (an.readyAt || 0);
 }
 
+// Position réelle/affichée d'un animal (zip 152) : dérivée PUREMENT de son
+// ancrage (`hx`/`hy`, seule valeur synchronisée) et de l'horodatage, comme
+// cropGrowState/gameTimeMin. Chaque client calcule exactement la même
+// position sans le moindre message réseau supplémentaire. Un animal en
+// cours de transport (`carriedBy`) n'a pas de position propre : l'appelant
+// doit alors utiliser la position du fermier qui le porte.
+export function animalPos(an, now) {
+  if (!an) return { x: 0, y: 0 };
+  if (an.carriedBy) return { x: an.hx, y: an.hy };
+  const seed = Math.abs(Math.round(an.hx * 97 + an.hy * 131 + an.type * 17)) % 1000;
+  const period = C.ANIMAL_WANDER_PERIOD_MS + (seed % 5) * 700; // légère variété par animal
+  const amp = C.ANIMAL_WANDER_RADIUS;
+  const t = now / period;
+  const dx = Math.sin(t * 2 * Math.PI + seed) * amp;
+  const dy = Math.cos(t * 1.7 * Math.PI + seed * 0.6) * amp * 0.7;
+  return { x: an.hx + dx, y: an.hy + dy };
+}
+
 // Filet de sécurité pour les animaux restaurés d'une sauvegarde antérieure au
-// zip 151 (schéma `hasProduct` au lieu de `readyAt`), même principe que
-// normalizeFarmer : ne jamais perdre ce qui existe déjà.
+// zip 151/152 (schéma `hasProduct` au lieu de `readyAt`, ou `x`/`y` au lieu
+// de l'ancrage `hx`/`hy` introduit au zip 152), même principe que
+// normalizeFarmer : ne jamais rien perdre de ce qui existe déjà.
 export function normalizeAnimals(animals) {
   const now = Date.now();
   for (const a of (animals || [])) {
@@ -188,6 +207,8 @@ export function normalizeAnimals(animals) {
       const prodMs = (C.ANIMALS[a.type] && C.ANIMALS[a.type].prodMs) || 0;
       a.readyAt = a.hasProduct ? now : now + prodMs;
     }
+    if (typeof a.hx !== "number") { a.hx = typeof a.x === "number" ? a.x : 0; a.hy = typeof a.y === "number" ? a.y : 0; }
+    if (a.carriedBy === undefined) a.carriedBy = null;
   }
   return animals || [];
 }

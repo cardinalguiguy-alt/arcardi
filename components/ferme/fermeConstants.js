@@ -151,12 +151,21 @@ export const PEN = { x: 48, y: 38, w: 8, h: 6 };
 // `edible`/`energy` : la production peut aussi être mangée (comme un poisson)
 // pour rendre de l'énergie, SAUF la laine qui n'est pas un aliment et reste
 // uniquement vendable.
+// Prix multipliés par 5 au zip 152 (hors Poule, déjà revue au zip 151).
 export const ANIMALS = [
-  { id: 0, name: "Poule",  nameEn: "Hen",   cost: 120,  prodMs: 4 * H,  prod: "Œuf",             prodEn: "Egg",         sell: 25,  edible: true,  energy: 15, body: "#f0e8d8", accent: "#d44a3f" },
-  { id: 1, name: "Chèvre", nameEn: "Goat",  cost: 1600, prodMs: 8 * H,  prod: "Lait de chèvre",  prodEn: "Goat milk",   sell: 60,  edible: true,  energy: 22, body: "#d8cbb0", accent: "#7a6a52" },
-  { id: 2, name: "Brebis", nameEn: "Sheep", cost: 2000, prodMs: 14 * H, prod: "Laine",           prodEn: "Wool",        sell: 90,  edible: false, energy: 0,  body: "#f2f0ea", accent: "#c8c0b0" },
-  { id: 3, name: "Cochon", nameEn: "Pig",   cost: 3000, prodMs: 16 * H, prod: "Truffe",          prodEn: "Truffle",     sell: 140, edible: true,  energy: 28, body: "#e8a8b0", accent: "#c07882" },
-  { id: 4, name: "Vache",  nameEn: "Cow",   cost: 5000, prodMs: 10 * H, prod: "Lait",            prodEn: "Milk",        sell: 120, edible: true,  energy: 26, body: "#efe7dc", accent: "#5a4634" },
+  { id: 0, name: "Poule",  nameEn: "Hen",   cost: 120,   prodMs: 4 * H,  prod: "Œuf",             prodEn: "Egg",         sell: 25,  edible: true,  energy: 15, body: "#f0e8d8", accent: "#d44a3f" },
+  { id: 1, name: "Chèvre", nameEn: "Goat",  cost: 8000,  prodMs: 8 * H,  prod: "Lait de chèvre",  prodEn: "Goat milk",   sell: 60,  edible: true,  energy: 22, body: "#d8cbb0", accent: "#7a6a52" },
+  { id: 2, name: "Brebis", nameEn: "Sheep", cost: 10000, prodMs: 14 * H, prod: "Laine",           prodEn: "Wool",        sell: 90,  edible: false, energy: 0,  body: "#f2f0ea", accent: "#c8c0b0" },
+  { id: 3, name: "Cochon", nameEn: "Pig",   cost: 15000, prodMs: 16 * H, prod: "Truffe",          prodEn: "Truffle",     sell: 140, edible: true,  energy: 28, body: "#e8a8b0", accent: "#c07882" },
+  { id: 4, name: "Vache",  nameEn: "Cow",   cost: 25000, prodMs: 10 * H, prod: "Lait",            prodEn: "Milk",        sell: 120, edible: true,  energy: 26, body: "#efe7dc", accent: "#5a4634" },
 ];
 export const MAX_ANIMALS = 12;      // limite d'animaux dans l'enclos
 export const COLLECT_RANGE = 1.5;   // distance pour ramasser une production
+// Déambulation lente (zip 152) : purement dérivée de l'horodatage (comme
+// cropGrowState), aucun message réseau supplémentaire. `hx`/`hy` (ancrage,
+// synchronisé) restent fixes ; la position affichée/logique oscille autour
+// de cet ancrage. Rayon volontairement petit pour rester dans l'enclos de
+// départ (les animaux y naissent à au moins 1 case des clôtures).
+export const ANIMAL_WANDER_RADIUS = 0.55;    // amplitude en tuiles
+export const ANIMAL_WANDER_PERIOD_MS = 7000; // période de base (variée par animal)
+export const ANIMAL_PICK_RANGE = 1.8;        // portée pour attraper/déposer un animal (= ACT_RANGE)

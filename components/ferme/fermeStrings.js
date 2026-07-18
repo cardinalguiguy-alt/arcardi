@@ -44,6 +44,7 @@ export const FERME_STR = {
     foodTip: (e) => `Manger (casse-croûte, poisson ou production animale comestible)`,
     rodTip: "Canne à pêche : vise l'eau de la rivière pour pêcher",
     fenceTip: "Clôture : pose ou retire une section sur la case visée (touche R pour choisir son orientation avant de poser)",
+    herdTip: "Déplacer : clique un animal pour l'attraper, clique à nouveau pour le déposer où tu veux",
     fenceDirToast: (kind) => `Orientation de la clôture : ${kind === "h" ? "horizontale" : kind === "v" ? "verticale" : "automatique"}`,
     // Menu de sélection des graines (clic sur la case graines)
     seedMenuTitle: "Choisir une graine",
@@ -198,6 +199,7 @@ export const FERME_STR = {
     foodTip: (e) => `Eat (snack, fish, or an edible animal product)`,
     rodTip: "Fishing rod: aim at the river water to fish",
     fenceTip: "Fence: place or remove a section on the targeted tile (press R to pick its orientation before placing)",
+    herdTip: "Move: click an animal to pick it up, click again to drop it wherever you want",
     fenceDirToast: (kind) => `Fence orientation: ${kind === "h" ? "horizontal" : kind === "v" ? "vertical" : "automatic"}`,
     seedMenuTitle: "Choose a seed",
     toastNeedWater: "Get close to the water and aim at the river to fish!",

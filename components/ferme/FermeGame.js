@@ -68,6 +68,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [seedSel, setSeedSel] = useState(0);
   const [seedMenuOpen, setSeedMenuOpen] = useState(false); // mini-menu de choix de graine
   const [fenceDir, setFenceDir] = useState("auto"); // orientation affichée dans la barre d'outils (miroir de fenceDirRef)
+  const [carryingAnimal, setCarryingAnimal] = useState(false); // vrai si un animal est actuellement porté (miroir de heldAnimalRef)
   const [buildings, setBuildings] = useState({ horseOwned: false, wellBuilt: false, animalCount: 0 });
   const [onHorse, setOnHorse] = useState(false);
   const [fishMini, setFishMini] = useState(null); // {mode, fish} pendant le minijeu, sinon null
@@ -123,6 +124,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const autoWaterPendingRef = useRef(new Set());   // tuiles d'arrosage auto déjà demandées (anti-spam)
   const autoCollectPendingRef = useRef(new Set()); // animaux de collecte auto déjà demandés (anti-spam)
   const fenceDirRef = useRef("auto"); // orientation choisie pour la prochaine clôture posée ("auto"|"h"|"v")
+  const heldAnimalRef = useRef(-1);   // index (dans sharedRef.animals) de l'animal actuellement porté par CE joueur, -1 sinon
 
   useEffect(() => { fishMiniRef.current = !!fishMini; }, [fishMini]);
   useEffect(() => { mapOpenRef.current = mapOpen; }, [mapOpen]);
@@ -200,8 +202,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // manquant (voir normalizeFarmer dans fermeEngine.js).
       for (const id in farmersRef.current) E.normalizeFarmer(farmersRef.current[id]);
       // Même filet pour les animaux (schéma `hasProduct` -> `readyAt` en temps
-      // réel depuis le zip 151, voir normalizeAnimals).
+      // réel depuis le zip 151, `hx`/`hy` depuis le zip 152, voir normalizeAnimals).
       E.normalizeAnimals(sharedRef.current.animals);
+      // Personne ne porte un animal à la reprise (comme le cavalier ci-dessus).
+      for (const a of sharedRef.current.animals) a.carriedBy = null;
     } else {
       const seed = hashSeed(code);
       worldRef.current = E.generateWorld(seed);
@@ -324,6 +328,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       playersRef.current.delete(payload.id);
       if (r) addChat("👋", L.chatLeave(r.name));
       setHud(h => ({ ...h, players: playersRef.current.size + 1 }));
+      // Un animal porté par un joueur qui quitte est relâché sur place, pour
+      // ne jamais rester "coincé" en main de personne.
+      if (isHost) {
+        let changed = false;
+        for (const a of (sharedRef.current.animals || [])) if (a.carriedBy === payload.id) { a.carriedBy = null; changed = true; }
+        if (changed) dirtyRef.current = true;
+      }
     });
     ch.on("broadcast", { event: "pos" }, ({ payload }) => {
       if (isHost && farmersRef.current[payload.id]) { farmersRef.current[payload.id].x = payload.x; farmersRef.current[payload.id].y = payload.y; }
@@ -499,7 +510,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           s.money -= C.ANIMALS[at].cost;
           const ax = C.PEN.x + 1 + Math.floor(Math.random() * (C.PEN.w - 2));
           const ay = C.PEN.y + 1 + Math.floor(Math.random() * (C.PEN.h - 2));
-          s.animals.push({ type: at, x: ax, y: ay, readyAt: Date.now() });
+          s.animals.push({ type: at, hx: ax, hy: ay, readyAt: Date.now(), carriedBy: null });
           out.state = shareState(); out.animals = s.animals;
           out.chat = { from: "🐮", msg: L.chatAnimalBought(lang === "en" ? C.ANIMALS[at].nameEn : C.ANIMALS[at].name) };
         }
@@ -512,13 +523,35 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (h.rider === req.id) { h.rider = null; h.x = px; h.y = py; out.horse = h; }
     } else if (req.kind === "collect") {
       const ai = req.animal | 0, an = s.animals[ai];
-      if (an && E.animalReady(an, Date.now()) && Math.abs(px - an.x) <= C.COLLECT_RANGE && Math.abs(py - an.y) <= C.COLLECT_RANGE) {
+      const apos = an ? E.animalPos(an, Date.now()) : null;
+      if (an && !an.carriedBy && E.animalReady(an, Date.now()) && Math.abs(px - apos.x) <= C.COLLECT_RANGE && Math.abs(py - apos.y) <= C.COLLECT_RANGE) {
         an.readyAt = Date.now() + ((C.ANIMALS[an.type] && C.ANIMALS[an.type].prodMs) || 0);
         f.inv.products[an.type] = (f.inv.products[an.type] || 0) + 1;
         out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
         out.animals = s.animals;
-        out.fx.push({ k: "product", x: an.x, y: an.y, product: an.type });
+        out.fx.push({ k: "product", x: apos.x, y: apos.y, product: an.type });
       }
+    } else if (req.kind === "pickAnimal") {
+      // Attraper un animal (outil "déplacer") : doit être libre et à portée
+      // (portée calculée sur sa position dérivée actuelle, donc mobile).
+      const ai = req.animal | 0, an = s.animals[ai];
+      const apos = an ? E.animalPos(an, Date.now()) : null;
+      if (an && !an.carriedBy && Math.abs(px - apos.x) <= C.ANIMAL_PICK_RANGE && Math.abs(py - apos.y) <= C.ANIMAL_PICK_RANGE) {
+        an.carriedBy = req.id;
+        out.animals = s.animals;
+      } else out.toast = { id: f.id, key: "actionFailed" };
+    } else if (req.kind === "placeAnimal") {
+      // Déposer l'animal porté : n'importe où sur la ferme, hors case bloquée.
+      const ai = req.animal | 0, an = s.animals[ai];
+      const tx = req.x | 0, ty = req.y | 0;
+      if (an && an.carriedBy === req.id && inMap(tx, ty) && !E.blockedTile(w, tx + 0.5, ty + 0.5)) {
+        an.hx = tx + 0.5; an.hy = ty + 0.5; an.carriedBy = null;
+        out.animals = s.animals;
+      } else out.toast = { id: f.id, key: "actionFailed" };
+    } else if (req.kind === "dropAnimal") {
+      // Annulation (changement d'outil) : relâche l'animal sans le déplacer.
+      const ai = req.animal | 0, an = s.animals[ai];
+      if (an && an.carriedBy === req.id) { an.carriedBy = null; out.animals = s.animals; }
     }
 
     // Quêtes de découverte : première réussite d'une action listée -> or commun.
@@ -685,6 +718,35 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     else if (sl === 4) sendReq({ kind: "act", action: "plant", seed: seedSelRef.current, x: tt.x, y: tt.y });
     else if (sl === 5) sendReq({ kind: "eat" });
     else if (sl === 7) sendReq({ kind: "act", action: "fence", x: tt.x, y: tt.y, dir: fenceDirRef.current });
+    else if (sl === 8) {
+      // Outil "déplacer" : premier clic attrape l'animal visé, second clic
+      // le dépose sur la case visée (n'importe où sur la ferme, hors case
+      // bloquée). Aucune limite d'enclos : le joueur choisit librement.
+      if (heldAnimalRef.current === -1) {
+        const ai = nearestPickableAnimal(tt);
+        if (ai >= 0) { heldAnimalRef.current = ai; setCarryingAnimal(true); sendReq({ kind: "pickAnimal", animal: ai }); }
+        else actAnimRef.current = 0;
+      } else {
+        sendReq({ kind: "placeAnimal", animal: heldAnimalRef.current, x: tt.x, y: tt.y });
+        heldAnimalRef.current = -1; setCarryingAnimal(false);
+      }
+    }
+  }
+  // Animal (non porté) le plus proche de la case visée `tt`, pour l'outil
+  // "déplacer" (attraper). Même style que nearestCollectable, mais basé sur
+  // la case ciblée par la souris plutôt que sur la position du joueur, pour
+  // pouvoir viser un animal précis parmi plusieurs proches.
+  function nearestPickableAnimal(tt) {
+    const animals = sharedRef.current.animals || [];
+    const now = Date.now();
+    let best = -1, bd = 1.3;
+    for (let i = 0; i < animals.length; i++) {
+      const a = animals[i]; if (a.carriedBy) continue;
+      const apos = E.animalPos(a, now);
+      const d = Math.abs((tt.x + 0.5) - apos.x) + Math.abs((tt.y + 0.5) - apos.y);
+      if (d <= bd) { bd = d; best = i; }
+    }
+    return best;
   }
   // Index d'un animal (dans sharedRef.animals) à portée et prêt à ramasser.
   function nearestCollectable() {
@@ -692,8 +754,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const now = Date.now();
     let best = -1, bd = C.COLLECT_RANGE;
     for (let i = 0; i < animals.length; i++) {
-      const a = animals[i]; if (!E.animalReady(a, now)) continue;
-      const d = Math.abs(m.x - a.x) + Math.abs(m.y - a.y);
+      const a = animals[i]; if (a.carriedBy || !E.animalReady(a, now)) continue;
+      const apos = E.animalPos(a, now);
+      const d = Math.abs(m.x - apos.x) + Math.abs(m.y - apos.y);
       if (d <= bd) { bd = d; best = i; }
     }
     return best;
@@ -756,7 +819,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (document.activeElement === chatInputRef.current) return;
       if (fishMiniRef.current) return; // le minijeu de pêche gère ses entrées
       keysRef.current[e.code] = true;
-      if (e.code >= "Digit1" && e.code <= "Digit8") selectSlot(+e.code.slice(5) - 1);
+      if (e.code >= "Digit1" && e.code <= "Digit9") selectSlot(+e.code.slice(5) - 1);
       if (e.code === "Space") { e.preventDefault(); doAction(); }
       if (e.code === "KeyE") tryOpenNearby();
       if (e.code === "KeyF") toggleMount();
@@ -858,11 +921,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (o === C.O_TREE || o === C.O_TREE2) { const img = o === C.O_TREE ? sprites.oak : sprites.pine; draws.push({ y: (y + 1) * T, fn: () => ctx.drawImage(img, x * T - 8, (y + 1) * T - 48) }); }
         else if (o === C.O_WELL) draws.push({ y: (y + 1) * T, fn: () => ctx.drawImage(sprites.well, x * T - 4, (y + 1) * T - 30) });
       }
-      // Animaux d'élevage (+ indicateur de production à ramasser).
+      // Animaux d'élevage (+ indicateur de production à ramasser). Position
+      // dérivée du temps (déambulation, zip 152) sauf si l'animal est
+      // porté : dans ce cas il suit le fermier qui le porte (position déjà
+      // interpolée, moi-même ou un autre joueur via playersRef).
       for (const an of (sharedRef.current.animals || [])) {
-        draws.push({ y: (an.y + 1) * T, fn: () => {
-          ctx.drawImage(sprites.animals[an.type], an.x * T, an.y * T);
-          if (E.animalReady(an, epochNow)) { const bob = Math.sin(now / 260) * 1.5; ctx.drawImage(sprites.products[an.type], an.x * T + 3, an.y * T - 12 + bob, 12, 12); }
+        let ax, ay;
+        if (an.carriedBy) {
+          const carrier = an.carriedBy === me.id ? m : playersRef.current.get(an.carriedBy);
+          if (!carrier) continue; // porteur pas encore connu de ce client : ignore ce tour-ci
+          ax = carrier.x; ay = carrier.y - 0.55;
+        } else {
+          const apos = E.animalPos(an, epochNow); ax = apos.x; ay = apos.y;
+        }
+        draws.push({ y: (ay + 1) * T, fn: () => {
+          ctx.drawImage(sprites.animals[an.type], ax * T, ay * T);
+          if (!an.carriedBy && E.animalReady(an, epochNow)) { const bob = Math.sin(now / 260) * 1.5; ctx.drawImage(sprites.products[an.type], ax * T + 3, ay * T - 12 + bob, 12, 12); }
         } });
       }
       // Cheval libre (non monté).
@@ -1150,6 +1224,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function selectSlot(s) {
     if (s === 4) setSeedMenuOpen(o => (slotRef.current === 4 ? !o : true));
     else setSeedMenuOpen(false);
+    // Changer d'outil en portant un animal l'annule (relâché sans être
+    // déplacé), pour ne jamais le laisser "coincé" en main d'un joueur.
+    if (s !== 8 && heldAnimalRef.current !== -1) {
+      sendReq({ kind: "dropAnimal", animal: heldAnimalRef.current });
+      heldAnimalRef.current = -1; setCarryingAnimal(false);
+    }
     setSlot(s);
   }
   function submitChat() {
@@ -1185,7 +1265,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const slots = [
     { key: "hoe", icon: "hoe" }, { key: "can", icon: "can" }, { key: "axe", icon: "axe" },
     { key: "pick", icon: "pick" }, { key: "seeds", icon: "seeds" }, { key: "food", icon: "food" },
-    { key: "rod", icon: "rod" }, { key: "fence", icon: "fence" },
+    { key: "rod", icon: "rod" }, { key: "fence", icon: "fence" }, { key: "herd", icon: "herd" },
   ];
   const clockStr = (() => { const h = Math.floor(hud.timeMin / 60) % 24, mn = hud.timeMin % 60; return `${h}h${String(mn).padStart(2, "0")}`; })();
 
@@ -1266,14 +1346,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       {/* Barre d'outils */}
       <div className="ferme-toolbar panel">
         {slots.map((s, i) => {
-          const isSeed = s.key === "seeds", isFood = s.key === "food", isRod = s.key === "rod", isFence = s.key === "fence";
+          const isSeed = s.key === "seeds", isFood = s.key === "food", isRod = s.key === "rod", isFence = s.key === "fence", isHerd = s.key === "herd";
           let count = "", lvl = "", img = spritesReady ? spritesRef.current.icons[s.icon] : null;
           if (isSeed) { count = myInv ? myInv.seeds[seedSel] : ""; img = spritesReady ? spritesRef.current.crops[seedSel][C.CROP_STAGES - 1] : null; }
           else if (isFood) count = myInv ? myInv.food : "";
           else if (isRod) { /* pas de niveau ni de compteur */ }
           else if (isFence) { count = myInv ? (myInv.fence || 0) : ""; img = spritesReady ? spritesRef.current.fence : null; lvl = fenceDir === "h" ? "↔" : fenceDir === "v" ? "↕" : "R"; }
+          else if (isHerd) { if (carryingAnimal) lvl = "●"; }
           else lvl = "N" + (myTools[s.key] || 1);
-          const title = isSeed ? L.seedTip(seedName(seedSel)) : isFood ? L.foodTip(C.FOOD_ENERGY) : isRod ? L.rodTip : isFence ? L.fenceTip : TOOL_NAMES[s.key];
+          const title = isSeed ? L.seedTip(seedName(seedSel)) : isFood ? L.foodTip(C.FOOD_ENERGY) : isRod ? L.rodTip : isFence ? L.fenceTip : isHerd ? L.herdTip : TOOL_NAMES[s.key];
           return (
             <div key={s.key} className={"ferme-slot" + (i === slot ? " sel" : "")} onClick={() => selectSlot(i)} title={title}>
               <span className="ferme-slot-key">{i + 1}</span>
