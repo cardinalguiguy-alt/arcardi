@@ -171,12 +171,50 @@ export const PEN = { x: 48, y: 38, w: 8, h: 6 };
 // pour rendre de l'énergie, SAUF la laine qui n'est pas un aliment et reste
 // uniquement vendable.
 // Prix multipliés par 5 au zip 152 (hors Poule, déjà revue au zip 151).
+// Prix de vente des productions (œuf, lait, laine, truffe) à nouveau
+// multipliés par 5 (demande 2026-07, zip 156). Coûts d'achat (cost)
+// inchangés.
 export const ANIMALS = [
-  { id: 0, name: "Poule",  nameEn: "Hen",   cost: 120,   prodMs: 4 * H,  prod: "Œuf",             prodEn: "Egg",         sell: 25,  edible: true,  energy: 15, body: "#f0e8d8", accent: "#d44a3f" },
-  { id: 1, name: "Chèvre", nameEn: "Goat",  cost: 8000,  prodMs: 8 * H,  prod: "Lait de chèvre",  prodEn: "Goat milk",   sell: 60,  edible: true,  energy: 22, body: "#d8cbb0", accent: "#7a6a52" },
-  { id: 2, name: "Brebis", nameEn: "Sheep", cost: 10000, prodMs: 14 * H, prod: "Laine",           prodEn: "Wool",        sell: 90,  edible: false, energy: 0,  body: "#f2f0ea", accent: "#c8c0b0" },
-  { id: 3, name: "Cochon", nameEn: "Pig",   cost: 15000, prodMs: 16 * H, prod: "Truffe",          prodEn: "Truffle",     sell: 140, edible: true,  energy: 28, body: "#e8a8b0", accent: "#c07882" },
-  { id: 4, name: "Vache",  nameEn: "Cow",   cost: 25000, prodMs: 10 * H, prod: "Lait",            prodEn: "Milk",        sell: 120, edible: true,  energy: 26, body: "#efe7dc", accent: "#5a4634" },
+  { id: 0, name: "Poule",  nameEn: "Hen",   cost: 120,   prodMs: 4 * H,  prod: "Œuf",             prodEn: "Egg",         sell: 125, edible: true,  energy: 15, body: "#f0e8d8", accent: "#d44a3f" },
+  { id: 1, name: "Chèvre", nameEn: "Goat",  cost: 8000,  prodMs: 8 * H,  prod: "Lait de chèvre",  prodEn: "Goat milk",   sell: 300, edible: true,  energy: 22, body: "#d8cbb0", accent: "#7a6a52" },
+  { id: 2, name: "Brebis", nameEn: "Sheep", cost: 10000, prodMs: 14 * H, prod: "Laine",           prodEn: "Wool",        sell: 450, edible: false, energy: 0,  body: "#f2f0ea", accent: "#c8c0b0" },
+  { id: 3, name: "Cochon", nameEn: "Pig",   cost: 15000, prodMs: 16 * H, prod: "Truffe",          prodEn: "Truffle",     sell: 700, edible: true,  energy: 28, body: "#e8a8b0", accent: "#c07882" },
+  { id: 4, name: "Vache",  nameEn: "Cow",   cost: 25000, prodMs: 10 * H, prod: "Lait",            prodEn: "Milk",        sell: 600, edible: true,  energy: 26, body: "#efe7dc", accent: "#5a4634" },
+];
+// --- Missions collaboratives (v1, "grandes lignes" — demande 2026-07) ---
+// Se déclenchent automatiquement dès que 2 fermiers sont en ligne en même
+// temps (voir hostMaybeStartCoop dans FermeGame.js) : une caisse commune de
+// chantier, matérialisée par un point sur la carte (COOP_SITE), avec 2
+// "parties" à remplir (chacune une ressource différente, bois ou pierre).
+// Un fermier qui s'approche du chantier (touche E, comme la boutique/le bac)
+// et qui porte la ressource d'une partie pas encore terminée y dépose
+// automatiquement ce qu'il faut (jusqu'au manquant) : en pratique, celui qui
+// apporte du bois avance une partie, celui qui apporte de la pierre avance
+// l'autre, donc à 2 chacun a naturellement "sa" partie. Version volontaire-
+// ment simple : pas d'assignation stricte par joueur, pas encore de variété
+// dans les chantiers au-delà de bois/pierre — à affiner ensuite.
+export const COOP_SITE = { x: 44, y: 42 };
+export const COOP_MISSIONS = [
+  {
+    id: "irrigation",
+    name: "Système d'irrigation",
+    nameEn: "Irrigation system",
+    parts: [
+      { id: "A", resource: "wood", target: 40, label: "Canalisations (bois)", labelEn: "Piping (wood)" },
+      { id: "B", resource: "stone", target: 30, label: "Bassin (pierre)", labelEn: "Basin (stone)" },
+    ],
+    reward: 400,
+  },
+  {
+    id: "houseext",
+    name: "Agrandir la maison",
+    nameEn: "House extension",
+    parts: [
+      { id: "A", resource: "wood", target: 60, label: "Charpente (bois)", labelEn: "Framing (wood)" },
+      { id: "B", resource: "stone", target: 40, label: "Fondations (pierre)", labelEn: "Foundations (stone)" },
+    ],
+    reward: 600,
+  },
 ];
 export const MAX_ANIMALS = 12;      // limite d'animaux dans l'enclos
 export const COLLECT_RANGE = 1.5;   // distance pour ramasser une production

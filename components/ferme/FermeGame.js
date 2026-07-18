@@ -89,6 +89,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [spritesReady, setSpritesReady] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [coop, setCoop] = useState(null); // miroir React de sharedRef.current.coop (mission d'équipe en cours)
 
   // -------- Refs (état du jeu, lus par la boucle de rendu) --------
   const canvasRef = useRef(null);
@@ -100,7 +101,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const meRef = useRef(null);
   const playersRef = useRef(new Map()); // id -> remote farmer render data
   const farmersRef = useRef({});        // hôte : id -> état privé arbitré
-  const sharedRef = useRef({ seed: 0, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horse: { owned: false, x: C.SPAWN.x + 2, y: C.SPAWN.y, rider: null }, animals: [], wellBuilt: false });
+  const sharedRef = useRef({ seed: 0, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horse: { owned: false, x: C.SPAWN.x + 2, y: C.SPAWN.y, rider: null }, animals: [], wellBuilt: false, coop: null });
   const invRef = useRef(null);
   const toolsRef = useRef({ hoe: 1, can: 1, axe: 1, pick: 1 });
   const energyRef = useRef(C.MAX_ENERGY);
@@ -198,7 +199,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       sharedRef.current = {
         seed: saved.seed, money: saved.money, day: saved.day, dayStartAt: saved.dayStartAt, totalEarned: saved.totalEarned,
         horse: saved.horse || { owned: false, x: C.SPAWN.x + 2, y: C.SPAWN.y, rider: null },
-        animals: saved.animals || [], wellBuilt: !!saved.wellBuilt,
+        animals: saved.animals || [], wellBuilt: !!saved.wellBuilt, coop: saved.coop || null,
       };
       // Le cavalier repart à pied à la reprise (aucun joueur monté au chargement).
       if (sharedRef.current.horse) sharedRef.current.horse.rider = null;
@@ -218,7 +219,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const seed = hashSeed(code);
       worldRef.current = E.generateWorld(seed);
       overridesRef.current = { ground: {}, object: {} };
-      sharedRef.current = { seed, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horse: { owned: false, x: C.SPAWN.x + 2, y: C.SPAWN.y, rider: null }, animals: [], wellBuilt: false };
+      sharedRef.current = { seed, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horse: { owned: false, x: C.SPAWN.x + 2, y: C.SPAWN.y, rider: null }, animals: [], wellBuilt: false, coop: null };
       farmersRef.current = {};
       // Crée tout de suite l'enregistrement pour réserver le code.
       persistFarm();
@@ -227,6 +228,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     restoredRef.current = true;
     setCodeLoading(false);
     setHud(h => ({ ...h, money: sharedRef.current.money, day: sharedRef.current.day }));
+    setCoop(sharedRef.current.coop);
     syncBuildings();
     setWorldReady(true);
     setPhase("select"); // l'effet d'auto-spawn décidera de sauter cet écran
@@ -283,7 +285,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     sharedRef.current = {
       seed: payload.seed, money: payload.money, day: payload.day, dayStartAt: payload.dayStartAt, totalEarned: payload.totalEarned,
       horse: payload.horse || { owned: false, x: C.SPAWN.x + 2, y: C.SPAWN.y, rider: null },
-      animals: payload.animals || [], wellBuilt: !!payload.wellBuilt,
+      animals: payload.animals || [], wellBuilt: !!payload.wellBuilt, coop: payload.coop || null,
     };
     if (payload.farmers) {
       farmersRef.current = payload.farmers;
@@ -297,6 +299,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (mine) { invRef.current = mine.inv; toolsRef.current = mine.tools; energyRef.current = mine.energy; setMyInv(mine.inv); setMyTools(mine.tools); setMyEnergy(mine.energy); if (mine.quests) setMyQuests(mine.quests); }
     minimapDirtyRef.current = true;
     setHud(h => ({ ...h, money: payload.money, day: payload.day }));
+    setCoop(sharedRef.current.coop);
     syncBuildings();
     setWorldReady(true);
   }
@@ -391,7 +394,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       groundOv: overridesRef.current.ground, objectOv: overridesRef.current.object,
       crops: worldRef.current ? E.serializeCrops(worldRef.current) : [],
       farmers: farmersRef.current,
-      horse: s.horse, animals: s.animals, wellBuilt: s.wellBuilt,
+      horse: s.horse, animals: s.animals, wellBuilt: s.wellBuilt, coop: s.coop,
     };
   }
   function syncBuildings() {
@@ -461,7 +464,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const f = hostEnsureFarmer(req.id, req.name);
     if (typeof req.px === "number") { f.x = req.px; f.y = req.py; }
     const s = sharedRef.current;
-    const out = { tiles: [], crops: [], fx: [], state: null, farmer: null, toast: null, chat: null, horse: null, animals: null, wellBuilt: false };
+    const out = { tiles: [], crops: [], fx: [], state: null, farmer: null, toast: null, chat: null, horse: null, animals: null, wellBuilt: false, coop: undefined };
     let questId = null; // action réussie -> quête à valider éventuellement
     const px = typeof req.px === "number" ? req.px : f.x, py = typeof req.py === "number" ? req.py : f.y;
 
@@ -564,6 +567,24 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // Annulation (changement d'outil) : relâche l'animal sans le déplacer.
       const ai = req.animal | 0, an = s.animals[ai];
       if (an && an.carriedBy === req.id) { an.carriedBy = null; out.animals = s.animals; }
+    } else if (req.kind === "coopDeposit") {
+      const r = E.resolveCoopDeposit(f, s.coop, req);
+      if (r.invChanged) out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
+      if (r.toast) out.toast = { id: f.id, key: r.toast };
+      if (r.deposited > 0) {
+        out.coop = s.coop;
+        out.chat = { from: "🚧", msg: L.coopDeposited(f.name, r.deposited, r.resource === "wood" ? L.woodLabel : L.stoneLabel) };
+        if (r.completed) {
+          const def = C.COOP_MISSIONS.find(m2 => m2.id === s.coop.id);
+          const reward = (def && def.reward) || 0;
+          s.money += reward; out.state = shareState();
+          channelRef.current?.send({ type: "broadcast", event: "chat", payload: { from: "🎉", msg: L.coopDone(lang === "en" ? def.nameEn : def.name, reward) } });
+          // Nouvelle mission tirée aussitôt (tant que 2+ fermiers sont en ligne).
+          s.coop = (playersRef.current.size + 1) >= 2 ? E.pickCoopMission() : null;
+          out.coop = s.coop;
+        }
+        dirtyRef.current = true;
+      }
     }
 
     // Quêtes de découverte : première réussite d'une action listée -> or commun.
@@ -600,6 +621,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (p.horse) { sharedRef.current.horse = p.horse; syncBuildings(); }
     if (p.animals) { sharedRef.current.animals = p.animals; syncBuildings(); }
     if (p.wellBuilt) { sharedRef.current.wellBuilt = true; minimapDirtyRef.current = true; syncBuildings(); }
+    if (p.coop !== undefined) { sharedRef.current.coop = p.coop; setCoop(p.coop); }
   }
   function applyNewDay(p) {
     const w = worldRef.current; if (!w) return;
@@ -613,7 +635,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     pushToast(L.toastNewDay(p.day));
   }
   function toastMsg(key) {
-    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, actionFailed: L.toastActionFailed }[key] || "";
+    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, actionFailed: L.toastActionFailed, coopNone: L.toastCoopNone, farCoop: L.toastFarCoop, coopNothing: L.toastCoopNothing }[key] || "";
   }
 
   // -------- Hôte : boucle temps + persistance --------
@@ -622,6 +644,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const dayTimer = setInterval(() => {
       const s = sharedRef.current, w = worldRef.current;
       if (!w) return;
+      // Mission collaborative : démarre automatiquement dès que 2 fermiers
+      // (ou plus) sont en ligne en même temps, si aucune n'est déjà en cours.
+      // S'arrête (sans perdre la progression) si tout le monde repart sauf un.
+      const online = playersRef.current.size + 1;
+      if (!s.coop && online >= 2) {
+        s.coop = E.pickCoopMission();
+        const def = C.COOP_MISSIONS.find(m2 => m2.id === s.coop.id);
+        channelRef.current?.send({ type: "broadcast", event: "apply", payload: { coop: s.coop } });
+        channelRef.current?.send({ type: "broadcast", event: "chat", payload: { from: "🚧", msg: L.coopStarted(lang === "en" ? def.nameEn : def.name) } });
+        dirtyRef.current = true;
+      }
       if (Date.now() - s.dayStartAt >= C.DAY_REAL_MS) {
         const { tiles } = E.newDay(w, farmersRef.current, s.day, s.seed);
         s.day += 1; s.dayStartAt = Date.now();
@@ -936,6 +969,24 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       draws.push({ y: (C.HOUSE.y + C.HOUSE.h) * T, fn: () => ctx.drawImage(sprites.house, C.HOUSE.x * T, (C.HOUSE.y + C.HOUSE.h) * T - 96) });
       draws.push({ y: (C.SHOP.y + 1) * T, fn: () => ctx.drawImage(sprites.shop, C.SHOP.x * T - 4, (C.SHOP.y + 1) * T - 28) });
       draws.push({ y: (C.BIN.y + 1) * T, fn: () => ctx.drawImage(sprites.bin, C.BIN.x * T - 2, (C.BIN.y + 1) * T - 18) });
+      // Chantier de la mission d'équipe en cours (marqueur simple, v1 : pas
+      // de sprite dédié, juste un repère + mini-jauges par ressource).
+      if (sharedRef.current.coop) {
+        const cs = C.COOP_SITE, coopNow = sharedRef.current.coop;
+        draws.push({ y: (cs.y + 1) * T, fn: () => {
+          const bob = Math.sin(now / 300) * 1.5;
+          ctx.font = "14px monospace"; ctx.textAlign = "center";
+          ctx.fillText("🚧", cs.x * T + 8, cs.y * T + 4 + bob);
+          const barW = 20;
+          coopNow.parts.forEach((p, pi) => {
+            const bx = cs.x * T + 8 - barW / 2, by = cs.y * T + 8 + pi * 5;
+            const frac = Math.max(0, Math.min(1, p.got / p.target));
+            ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(bx, by, barW, 3);
+            ctx.fillStyle = p.resource === "wood" ? "#a9773f" : "#9aa0a8";
+            ctx.fillRect(bx, by, barW * frac, 3);
+          });
+        } });
+      }
       for (let y = y0 - 1; y <= Math.min(w.h - 1, y1 + 2); y++) for (let x = x0 - 1; x <= Math.min(w.w - 1, x1 + 1); x++) {
         if (!inMap(x, y)) continue;
         const o = w.objects[idxOf(x, y)];
@@ -983,6 +1034,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // Invite boutique/bac
       let pk = null;
       if (nearTile(C.SHOP)) pk = "shop"; else if (nearTile(C.BIN)) pk = "bin";
+      else if (nearTile(C.COOP_SITE) && sharedRef.current.coop) pk = "coop";
       setPromptKeyThrottled(pk);
       // Invite cheval (monter/descendre)
       const hh = sharedRef.current.horse; let mp = null;
@@ -1202,7 +1254,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (horiz) return "h";
     return "post";
   }
-  function tryOpenNearby() { if (nearTile(C.SHOP)) setShopOpen(true); else if (nearTile(C.BIN)) setBinOpen(true); }
+  function tryOpenNearby() {
+    if (nearTile(C.SHOP)) setShopOpen(true);
+    else if (nearTile(C.BIN)) setBinOpen(true);
+    else if (nearTile(C.COOP_SITE) && sharedRef.current.coop) sendReq({ kind: "coopDeposit" });
+  }
 
   function spawnFx(m) {
     const fx = fxRef.current, base = { x: m.x, y: m.y, t: 0 };
@@ -1378,7 +1434,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       </div>
 
       {/* Invite proximité */}
-      {promptKey && <div className="ferme-prompt">{promptKey === "shop" ? L.promptShop : L.promptBin}</div>}
+      {promptKey && <div className="ferme-prompt">{promptKey === "shop" ? L.promptShop : promptKey === "coop" ? L.promptCoop : L.promptBin}</div>}
       {mountPrompt && <div className="ferme-prompt ferme-prompt-mount">{mountPrompt === "mount" ? L.mountPrompt : L.dismountPrompt}</div>}
 
       {/* Barre d'outils */}
@@ -1493,6 +1549,29 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         </div>
       )}
       {!questOpen && <button className="ferme-btn ferme-quests-fab" onClick={() => setQuestOpen(true)}>{L.questBtn}</button>}
+
+      {/* Panneau de la mission d'équipe en cours (v1 : bois/pierre à déposer au chantier) */}
+      {coop && (() => {
+        const def = C.COOP_MISSIONS.find(m2 => m2.id === coop.id);
+        if (!def) return null;
+        return (
+          <div className="ferme-coop panel">
+            <div className="ferme-quests-head"><b>{L.coopTitle}</b></div>
+            <div className="ferme-coop-name">{lang === "en" ? def.nameEn : def.name}</div>
+            {coop.parts.map((p, pi) => {
+              const pd = def.parts[pi] || def.parts.find(x => x.id === p.id);
+              const done = p.got >= p.target;
+              return (
+                <div key={p.id} className={"ferme-quest-row" + (done ? " done" : "")}>
+                  <span className="ferme-quest-check">{done ? "✅" : (p.resource === "wood" ? "🪵" : "🪨")}</span>
+                  <span className="ferme-quest-label">{lang === "en" ? pd.labelEn : pd.label}</span>
+                  <span className="ferme-quest-reward">{p.got}/{p.target}</span>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })()}
 
       {/* Chat */}
       <div className="ferme-chatlog">{[...chat].reverse().map(c => <div key={c.id}><b>{c.from}</b> {c.msg}</div>)}</div>

@@ -464,6 +464,44 @@ export function resolveAct(world, f, m) {
   return res;
 }
 
+/* -------------------------------------------------------------------------
+   Missions collaboratives (v1 "grandes lignes", voir COOP_MISSIONS/COOP_SITE
+   dans fermeConstants.js). État partagé minimal : { id, parts:[{id,resource,
+   target,got}] }, tiré au hasard parmi COOP_MISSIONS, régénéré une fois
+   terminé (voir FermeGame.js/hostMaybeStartCoop).
+   ------------------------------------------------------------------------- */
+export function pickCoopMission(rnd) {
+  const list = C.COOP_MISSIONS;
+  const def = list[Math.floor((rnd ? rnd() : Math.random()) * list.length)];
+  return { id: def.id, parts: def.parts.map(p => ({ id: p.id, resource: p.resource, target: p.target, got: 0 })) };
+}
+
+// Dépôt au chantier (touche E à proximité de COOP_SITE, comme la boutique/le
+// bac). `m.part` optionnel (partie visée) ; à défaut, on prend la première
+// partie inachevée pour laquelle le fermier porte la ressource. Dépose le
+// MAXIMUM possible (comme resolveSell/resolveCraft) plutôt que de tout
+// refuser si le fermier a plus que le manquant. Renvoie { invChanged, toast,
+// deposited, resource, partId, completed }.
+export function resolveCoopDeposit(f, coop, m) {
+  normalizeFarmer(f);
+  const res = { invChanged: false, toast: null, deposited: 0, resource: null, partId: null, completed: false };
+  if (!coop) { res.toast = "coopNone"; return res; }
+  if (!nearT(f, C.COOP_SITE)) { res.toast = "farCoop"; return res; }
+  let part = null;
+  if (m.part) part = coop.parts.find(p => p.id === m.part && p.got < p.target);
+  if (!part) part = coop.parts.find(p => p.got < p.target && (f.inv[p.resource] || 0) > 0);
+  if (!part) { res.toast = "coopNothing"; return res; }
+  const have = f.inv[part.resource] || 0;
+  const need = part.target - part.got;
+  const n = Math.min(have, need);
+  if (n <= 0) { res.toast = "coopNothing"; return res; }
+  f.inv[part.resource] -= n;
+  part.got += n;
+  res.invChanged = true; res.deposited = n; res.resource = part.resource; res.partId = part.id;
+  if (coop.parts.every(p => p.got >= p.target)) res.completed = true;
+  return res;
+}
+
 // Achat à la boutique. Renvoie { moneyDelta, invChanged, toast, chat }.
 export function resolveBuy(f, money, m) {
   normalizeFarmer(f);
