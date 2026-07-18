@@ -474,6 +474,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       for (const i of r.cropTiles) { const c = w.crops.get(i); out.crops.push({ i, c: c ? { t: c.t, bankedMs: c.bankedMs, wateredAt: c.wateredAt } : null }); }
       out.fx = r.fx;
       if (r.invChanged) out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
+      if (r.gold) { s.money += r.gold; out.state = shareState(); }
       if (r.toast) out.toast = { id: f.id, key: r.toast };
       if (r.did) questId = r.did;
     } else if (req.kind === "buy") {
@@ -602,7 +603,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // Les quêtes accomplies voyagent avec l'état privé du fermier.
     if (out.farmer) out.farmer.quests = f.quests;
 
-    if (out.tiles.length || out.state || out.horse || out.animals || out.wellBuilt) dirtyRef.current = true;
+    // Important : out.farmer doit aussi déclencher la sauvegarde. Sans ce cas,
+    // les actions qui changent seulement l'inventaire d'un fermier sans toucher
+    // une tuile/l'argent/un animal (ex. "craft" : fabriquer clôture/mur/chemin
+    // depuis du bois/de la pierre, ou tout ajout futur du même genre) n'étaient
+    // JAMAIS marquées "dirty" : le bois/la pierre dépensés (et la ressource
+    // fabriquée en échange) pouvaient être perdus au rechargement si aucune
+    // autre action "dirty" n'avait lieu entre-temps (bug de persistance signalé
+    // par Guillaume).
+    if (out.tiles.length || out.state || out.horse || out.animals || out.wellBuilt || out.farmer) dirtyRef.current = true;
     channelRef.current?.send({ type: "broadcast", event: "apply", payload: out });
   }
   function shareState() { const s = sharedRef.current; return { money: s.money, day: s.day, dayStartAt: s.dayStartAt, totalEarned: s.totalEarned }; }
@@ -1282,6 +1291,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const fs = C.FISH[m.fish] || C.FISH[0];
         fx.push({ ...base, kind: "txt", txt: L.fxFish(lang === "en" ? fs.nameEn : fs.name), col: "#a8d4f0", life: 1.4 });
         for (let i = 0; i < 5; i++) fx.push({ ...base, kind: "p", col: "#5a9be0", vx: (Math.random() - .5) * 2, vy: -Math.random() * 2, life: .5 });
+        break;
+      }
+      case "goldfound": {
+        fx.push({ ...base, y: m.y - 0.5, kind: "txt", txt: L.fxGold(m.gold), col: "#ffe060", life: 1.8 });
+        for (let i = 0; i < 8; i++) fx.push({ ...base, kind: "p", col: "#ffe060", vx: (Math.random() - .5) * 3, vy: -Math.random() * 3.5, life: .7 });
         break;
       }
       case "product": {

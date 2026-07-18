@@ -320,14 +320,24 @@ export function buildSprites() {
     }
     return c;
   }
-  // Gemme (losange) d'une couleur donnée, pour l'inventaire / le bac.
-  function gemIcon(col) {
+  // Gemme (losange) d'une couleur donnée, pour l'inventaire / le bac. `gm`
+  // peut porter `glow: true` (ex. l'émeraude) pour un rendu vert luisant :
+  // halo lumineux (shadowBlur) derrière la pierre + petit éclat blanc en plus
+  // de la facette existante.
+  function gemIcon(gm) {
+    const col = gm.color;
     const [c, g] = cv(T, T);
+    if (gm.glow) { g.shadowColor = col; g.shadowBlur = 7; }
     g.fillStyle = col; g.beginPath();
     g.moveTo(8, 2); g.lineTo(13, 7); g.lineTo(8, 14); g.lineTo(3, 7); g.closePath(); g.fill();
+    if (gm.glow) { g.shadowBlur = 0; }
     g.fillStyle = "rgba(255,255,255,.55)"; g.beginPath();
     g.moveTo(8, 2); g.lineTo(11, 6); g.lineTo(8, 8); g.lineTo(5, 6); g.closePath(); g.fill();
     P(g, 6, 9, 1, 1, "rgba(255,255,255,.5)");
+    if (gm.glow) {
+      g.fillStyle = "rgba(255,255,255,.9)";
+      g.beginPath(); g.arc(9.5, 5, 1.1, 0, 7); g.fill(); // petit éclat lumineux
+    }
     return c;
   }
   // Poisson d'une couleur donnée.
@@ -505,7 +515,7 @@ export function buildSprites() {
     for (let s = 0; s < C.CROP_STAGES; s++) S.crops[t][s] = cropSprite(t, s);
   }
   for (const k of ["hoe", "can", "axe", "pick", "seeds", "wood", "stone", "food", "gold", "energy", "rod", "ready", "thirst", "herd"]) S.icons[k] = icon(k);
-  S.gemIcons = C.GEMS.map(gm => gemIcon(gm.color));
+  S.gemIcons = C.GEMS.map(gm => gemIcon(gm));
   S.fishIcons = C.FISH.map(fs => fishIcon(fs.color));
   S.animals = C.ANIMALS.map(a => animalSprite(a.id));
   S.products = C.ANIMALS.map(a => productIcon(a.id));

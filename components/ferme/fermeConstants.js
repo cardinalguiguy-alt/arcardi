@@ -60,10 +60,16 @@ export const WATER_VALID_MS = 10 * H;
 // l'améthyste est commune, le diamant très rare. Vendues très cher au bac.
 export const GEMS = [
   { id: 0, name: "Améthyste", nameEn: "Amethyst", sell: 200,  color: "#b46ee0", weight: 0.62 },
-  { id: 1, name: "Émeraude",  nameEn: "Emerald",  sell: 500,  color: "#3fbf6a", weight: 0.30 },
+  { id: 1, name: "Émeraude",  nameEn: "Emerald",  sell: 500,  color: "#2ee673", weight: 0.30, glow: true },
   { id: 2, name: "Diamant",   nameEn: "Diamond",  sell: 1200, color: "#a8e8f4", weight: 0.08 },
 ];
 export const GEM_DROP_CHANCE = 0.16; // proba qu'un rocher détruit lâche une gemme
+
+// --- Or trouvé dans la rivière (pêche) ---
+// Petite chance de trouver un peu d'or en pêchant, en plus du poisson.
+export const GOLD_FIND_CHANCE = 0.12;
+export const GOLD_FIND_MIN = 15;
+export const GOLD_FIND_MAX = 60;
 
 // --- Poissons (pêche à la rivière) ---
 // Se mangent (rendent de l'énergie) OU se revendent au bac. Tirage pondéré.

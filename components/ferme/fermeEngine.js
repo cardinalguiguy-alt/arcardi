@@ -454,6 +454,11 @@ export function resolveAct(world, f, m) {
         f.inv.fish[ft] = (f.inv.fish[ft] || 0) + 1;
         res.fx.push({ k: "fish", x, y, fish: ft });
         res.invChanged = true;
+        // Un peu d'or trouvé dans la rivière, en plus du poisson (chance faible).
+        if (Math.random() < C.GOLD_FIND_CHANCE) {
+          res.gold = C.GOLD_FIND_MIN + Math.floor(Math.random() * (C.GOLD_FIND_MAX - C.GOLD_FIND_MIN + 1));
+          res.fx.push({ k: "goldfound", x, y, gold: res.gold });
+        }
       } else {
         res.toast = "needWater";
       }
