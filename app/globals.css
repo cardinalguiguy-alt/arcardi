@@ -6607,8 +6607,11 @@ body.ferme-active .wrap-room > .brand{ display:none !important; }
 .ferme-craft-row button{ font-size:12px; padding:4px 8px; }
 .ferme-craft-sell{ width:100%; margin-top:6px; }
 
-/* Panneau des quêtes de découverte (checklist), sous le HUD à gauche */
-.ferme-quests{ position:fixed; top:96px; left:10px; z-index:11; width:250px; max-width:70vw; padding:8px 10px; font-size:12px; }
+/* Panneau des quêtes de découverte (checklist), sous le HUD à gauche.
+   top:150px (au lieu de 96px) : signalé par Guillaume, le bouton/panneau
+   chevauchait le HUD depuis que celui-ci s'est agrandi (lignes bois/pierre
+   ajoutées au chantier construction). */
+.ferme-quests{ position:fixed; top:150px; left:10px; z-index:11; width:250px; max-width:70vw; padding:8px 10px; font-size:12px; }
 .ferme-quests-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
 .ferme-quests-head b{ font-size:13px; }
 .ferme-quests-x{ background:var(--f-accent); color:#fff; border:2px solid var(--f-wood); border-radius:5px; font-family:inherit; font-weight:bold; cursor:pointer; padding:1px 7px; }
@@ -6618,7 +6621,7 @@ body.ferme-active .wrap-room > .brand{ display:none !important; }
 .ferme-quest-label{ flex:1; }
 .ferme-quest-reward{ flex:none; font-weight:bold; color:#b06a00; }
 .ferme-quest-alldone{ margin-top:6px; font-weight:bold; text-align:center; color:#2f7a2f; }
-.ferme-quests-fab{ position:fixed; top:96px; left:10px; z-index:11; padding:5px 10px; font-size:12px; }
+.ferme-quests-fab{ position:fixed; top:150px; left:10px; z-index:11; padding:5px 10px; font-size:12px; }
 
 /* Modales boutique / bac */
 .ferme-modal{
