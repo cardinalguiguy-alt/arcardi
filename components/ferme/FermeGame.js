@@ -68,6 +68,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [seedSel, setSeedSel] = useState(0);
   const [seedMenuOpen, setSeedMenuOpen] = useState(false); // mini-menu de choix de graine
   const [fenceDir, setFenceDir] = useState("auto"); // orientation affichée dans la barre d'outils (miroir de fenceDirRef)
+  // Construction (chantier 2026-07) : l'outil clôture (case 8) devient un
+  // outil "Construction" générique à 3 variantes choisies depuis le menu
+  // Construire/Vendre (clic sur bois/pierre du HUD) : "fence" (clôture, en
+  // bois), "wall" (mur, en pierre) ou "path" (chemin dallé, en pierre).
+  const [buildKind, setBuildKind] = useState("fence");
+  // craftMenuOpen : null (fermé) | "wood" | "stone" — quelle popup Construire/Vendre est ouverte.
+  const [craftMenuOpen, setCraftMenuOpen] = useState(null);
   const [carryingAnimal, setCarryingAnimal] = useState(false); // vrai si un animal est actuellement porté (miroir de heldAnimalRef)
   const [buildings, setBuildings] = useState({ horseOwned: false, wellBuilt: false, animalCount: 0 });
   const [onHorse, setOnHorse] = useState(false);
@@ -124,6 +131,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const autoWaterPendingRef = useRef(new Set());   // tuiles d'arrosage auto déjà demandées (anti-spam)
   const autoCollectPendingRef = useRef(new Set()); // animaux de collecte auto déjà demandés (anti-spam)
   const fenceDirRef = useRef("auto"); // orientation choisie pour la prochaine clôture posée ("auto"|"h"|"v")
+  const buildKindRef = useRef("fence"); // miroir synchrone de buildKind ("fence"|"wall"|"path")
   const heldAnimalRef = useRef(-1);   // index (dans sharedRef.animals) de l'animal actuellement porté par CE joueur, -1 sinon
 
   useEffect(() => { fishMiniRef.current = !!fishMini; }, [fishMini]);
@@ -252,9 +260,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (gr === C.G_WATER) col = [58, 123, 200];
       else if (gr === C.G_SAND) col = [216, 192, 122];
       else if (gr === C.G_TILLED || gr === C.G_WATERED) col = [138, 92, 53];
-      else if (gr === C.G_BRIDGE || gr === C.G_PATH) col = [154, 107, 63];
+      else if (gr === C.G_BRIDGE || gr === C.G_PATH || gr === C.G_PATH_STONE) col = [154, 107, 63];
       if (o === C.O_TREE || o === C.O_TREE2) col = [46, 106, 40];
-      else if (o === C.O_ROCK) col = [130, 130, 138];
+      else if (o === C.O_ROCK || o === C.O_WALL) col = [130, 130, 138];
       else if (o === C.O_HOUSE) col = [192, 74, 60];
       else if (o === C.O_SHOP || o === C.O_BIN) col = [232, 200, 90];
       im.data.set([col[0], col[1], col[2], 255], i * 4);
@@ -477,6 +485,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (r.invChanged) out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
       if (r.toast) out.toast = { id: f.id, key: r.toast };
       if (r.gain > 0) { out.fx.push({ k: "sell", x: C.BIN.x, y: C.BIN.y, gain: r.gain }); out.chat = { from: "💰", msg: L.chatSell(r.gain, s.money) }; questId = "sell"; }
+    } else if (req.kind === "craft") {
+      const r = E.resolveCraft(f, req);
+      if (r.invChanged) out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
+      if (r.toast) out.toast = { id: f.id, key: r.toast };
     } else if (req.kind === "eat") {
       const r = E.resolveEat(f);
       if (r.invChanged) out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
@@ -601,7 +613,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     pushToast(L.toastNewDay(p.day));
   }
   function toastMsg(key) {
-    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, actionFailed: L.toastActionFailed }[key] || "";
+    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, actionFailed: L.toastActionFailed }[key] || "";
   }
 
   // -------- Hôte : boucle temps + persistance --------
@@ -671,7 +683,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function doJoinWith(name, g, outfit) {
     if (!worldReady) return;
     meRef.current = { id: me.id, name, gender: g === "f" ? "f" : "m", outfit: outfit | 0, x: C.SPAWN.x, y: C.SPAWN.y, dir: 0, moving: false, animT: 0 };
-    invRef.current = invRef.current || { wood: 0, stone: 0, food: 0, seeds: [5, 0, 0, 0], crops: [0, 0, 0, 0], gems: C.GEMS.map(() => 0), fish: C.FISH.map(() => 0) };
+    invRef.current = invRef.current || { wood: 0, stone: 0, food: 0, fence: 0, wall: 0, path: 0, seeds: [5, 0, 0, 0], crops: [0, 0, 0, 0], gems: C.GEMS.map(() => 0), fish: C.FISH.map(() => 0) };
     if (!myInv) { setMyInv(invRef.current); }
     if (!myQuests) setMyQuests((farmersRef.current[me.id] && farmersRef.current[me.id].quests) || {});
     joinedRef.current = true;
@@ -717,7 +729,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     else if (sl === 3) sendReq({ kind: "act", action: "mine", x: tt.x, y: tt.y });
     else if (sl === 4) sendReq({ kind: "act", action: "plant", seed: seedSelRef.current, x: tt.x, y: tt.y });
     else if (sl === 5) sendReq({ kind: "eat" });
-    else if (sl === 7) sendReq({ kind: "act", action: "fence", x: tt.x, y: tt.y, dir: fenceDirRef.current });
+    else if (sl === 7) {
+      // Outil "Construction" (case 8) : variante choisie via le menu
+      // Construire/Vendre (fence = clôture bois, wall = mur pierre,
+      // path = chemin dallé). L'orientation (dir) n'a de sens que pour la
+      // clôture ; l'envoyer pour les autres variantes est sans effet.
+      const bk = buildKindRef.current;
+      const action = bk === "wall" ? "wall" : bk === "path" ? "path" : "fence";
+      sendReq({ kind: "act", action, x: tt.x, y: tt.y, dir: fenceDirRef.current });
+    }
     else if (sl === 8) {
       // Outil "déplacer" : premier clic attrape l'animal visé, second clic
       // le dépose sur la case visée (n'importe où sur la ferme, hors case
@@ -823,14 +843,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (e.code === "Space") { e.preventDefault(); doAction(); }
       if (e.code === "KeyE") tryOpenNearby();
       if (e.code === "KeyF") toggleMount();
-      if (e.code === "KeyR" && slotRef.current === 7) {
+      if (e.code === "KeyR" && slotRef.current === 7 && buildKindRef.current === "fence") {
         fenceDirRef.current = fenceDirRef.current === "auto" ? "h" : fenceDirRef.current === "h" ? "v" : "auto";
         setFenceDir(fenceDirRef.current);
         pushToast(L.fenceDirToast(fenceDirRef.current));
       }
       if (e.code === "KeyT") { e.preventDefault(); setChatOpen(true); setTimeout(() => chatInputRef.current?.focus(), 0); }
       if (e.code === "KeyM") setMapOpen(o => !o);
-      if (e.code === "Escape") { setShopOpen(false); setBinOpen(false); setMapOpen(false); setSeedMenuOpen(false); }
+      if (e.code === "Escape") { setShopOpen(false); setBinOpen(false); setMapOpen(false); setSeedMenuOpen(false); setCraftMenuOpen(null); }
     }
     function onKeyUp(e) { keysRef.current[e.code] = false; }
     function onMove(e) { mouseRef.current.x = e.clientX; mouseRef.current.y = e.clientY; }
@@ -906,6 +926,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           const fk = fenceKindAt(w, x, y);
           ctx.drawImage(fk === "corner" ? sprites.fenceCorner : fk === "v" ? sprites.fenceV : fk === "post" ? sprites.fencePost : sprites.fence, x * T, y * T);
         }
+        else if (o === C.O_WALL) ctx.drawImage(sprites.wall, x * T, y * T);
       }
 
       const tt = targetTile();
@@ -1224,6 +1245,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function selectSlot(s) {
     if (s === 4) setSeedMenuOpen(o => (slotRef.current === 4 ? !o : true));
     else setSeedMenuOpen(false);
+    setCraftMenuOpen(null);
     // Changer d'outil en portant un animal l'annule (relâché sans être
     // déplacé), pour ne jamais le laisser "coincé" en main d'un joueur.
     if (s !== 8 && heldAnimalRef.current !== -1) {
@@ -1257,6 +1279,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const buyTool = (k) => sendReq({ kind: "buy", item: "tool", tool: k });
   const buyFence = (n) => sendReq({ kind: "buy", item: "fence", n });
   const sellItem = (item, crop) => sendReq({ kind: "sell", item, crop, n: 9999 });
+  // Menu Construire (clic sur bois/pierre du HUD) : fabrique `n` sections de
+  // `item` (fence/wall/path) depuis le bois/la pierre récoltés, puis équipe
+  // directement l'outil Construction (case 8) sur cette variante, prêt à
+  // poser au prochain clic sur une case.
+  function craftBuild(item, n) {
+    sendReq({ kind: "craft", item, n });
+    buildKindRef.current = item; setBuildKind(item);
+    selectSlot(7);
+    setCraftMenuOpen(null);
+  }
   const sellFish = (fishId) => sendReq({ kind: "sell", item: "fish", fish: fishId, n: 9999 });
   const sellGem = (gemId) => sendReq({ kind: "sell", item: "gem", gem: gemId, n: 9999 });
 
@@ -1325,6 +1357,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         <div className="row"><Sprite img={spritesReady ? spritesRef.current.icons.gold : null} w={18} h={18} /> <span>{hud.money}</span> <span className="ferme-hud-sub">{L.goldCommon}</span></div>
         <div className="row">📅 {L.day} {hud.day} &nbsp; 🕐 {clockStr}</div>
         <div className="row ferme-hud-players">👥 {L.playersOnline(hud.players)}</div>
+        <div className="row ferme-hud-res" title={L.woodResTip} onClick={() => setCraftMenuOpen(o => o === "wood" ? null : "wood")}>
+          <Sprite img={spritesReady ? spritesRef.current.icons.wood : null} w={16} h={16} /> <span>{myInv ? myInv.wood : 0}</span>
+        </div>
+        <div className="row ferme-hud-res" title={L.stoneResTip} onClick={() => setCraftMenuOpen(o => o === "stone" ? null : "stone")}>
+          <Sprite img={spritesReady ? spritesRef.current.icons.stone : null} w={16} h={16} /> <span>{myInv ? myInv.stone : 0}</span>
+        </div>
       </div>
 
       {/* Énergie */}
@@ -1351,10 +1389,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           if (isSeed) { count = myInv ? myInv.seeds[seedSel] : ""; img = spritesReady ? spritesRef.current.crops[seedSel][C.CROP_STAGES - 1] : null; }
           else if (isFood) count = myInv ? myInv.food : "";
           else if (isRod) { /* pas de niveau ni de compteur */ }
-          else if (isFence) { count = myInv ? (myInv.fence || 0) : ""; img = spritesReady ? spritesRef.current.fence : null; lvl = fenceDir === "h" ? "↔" : fenceDir === "v" ? "↕" : "R"; }
+          else if (isFence) {
+            // Outil "Construction" générique (chantier 2026-07) : icône,
+            // compteur et infobulle dépendent de la variante choisie via le
+            // menu Construire/Vendre (fence/wall/path), pas seulement clôture.
+            const bkImg = buildKind === "wall" ? "wall" : buildKind === "path" ? "path" : "fence";
+            count = myInv ? (buildKind === "wall" ? (myInv.wall || 0) : buildKind === "path" ? (myInv.path || 0) : (myInv.fence || 0)) : "";
+            img = spritesReady ? spritesRef.current[bkImg] : null;
+            lvl = buildKind === "fence" ? (fenceDir === "h" ? "↔" : fenceDir === "v" ? "↕" : "R") : "";
+          }
           else if (isHerd) { if (carryingAnimal) lvl = "●"; }
           else lvl = "N" + (myTools[s.key] || 1);
-          const title = isSeed ? L.seedTip(seedName(seedSel)) : isFood ? L.foodTip(C.FOOD_ENERGY) : isRod ? L.rodTip : isFence ? L.fenceTip : isHerd ? L.herdTip : TOOL_NAMES[s.key];
+          const title = isSeed ? L.seedTip(seedName(seedSel)) : isFood ? L.foodTip(C.FOOD_ENERGY) : isRod ? L.rodTip
+            : isFence ? (buildKind === "wall" ? L.wallTip : buildKind === "path" ? L.pathTip : L.fenceTip)
+            : isHerd ? L.herdTip : TOOL_NAMES[s.key];
           return (
             <div key={s.key} className={"ferme-slot" + (i === slot ? " sel" : "")} onClick={() => selectSlot(i)} title={title}>
               <span className="ferme-slot-key">{i + 1}</span>
@@ -1380,6 +1428,46 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 <span className="count">× {myInv ? myInv.seeds[cr.id] : 0}</span>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Menu Construire/Vendre (clic sur bois ou pierre du HUD) : choisir de
+          fabriquer des sections de construction (clôture/mur/chemin) depuis
+          la ressource récoltée, ou de tout vendre au bac (chantier 2026-07). */}
+      {craftMenuOpen && (
+        <div className="ferme-seed-menu-ov" onClick={() => setCraftMenuOpen(null)}>
+          <div className="ferme-seed-menu panel ferme-craft-menu" onClick={e => e.stopPropagation()}>
+            <div className="ferme-seed-menu-title">
+              {craftMenuOpen === "wood" ? L.craftMenuTitleWood(myInv ? myInv.wood : 0) : L.craftMenuTitleStone(myInv ? myInv.stone : 0)}
+            </div>
+            {craftMenuOpen === "wood" && (
+              <div className="ferme-craft-row">
+                <Sprite img={spritesReady ? spritesRef.current.fence : null} w={26} h={26} />
+                <span className="name">{L.buildFenceLabel}<br /><span className="cost">{L.buildCostWood(C.BUILD_COSTS.fence)}</span></span>
+                <button disabled={!myInv || myInv.wood < C.BUILD_COSTS.fence} onClick={() => craftBuild("fence", 1)}>{L.buy1}</button>
+                <button disabled={!myInv || myInv.wood < C.BUILD_COSTS.fence * 5} onClick={() => craftBuild("fence", 5)}>{L.buy5}</button>
+              </div>
+            )}
+            {craftMenuOpen === "stone" && (
+              <>
+                <div className="ferme-craft-row">
+                  <Sprite img={spritesReady ? spritesRef.current.wall : null} w={26} h={26} />
+                  <span className="name">{L.buildWallLabel}<br /><span className="cost">{L.buildCostStone(C.BUILD_COSTS.wall)}</span></span>
+                  <button disabled={!myInv || myInv.stone < C.BUILD_COSTS.wall} onClick={() => craftBuild("wall", 1)}>{L.buy1}</button>
+                  <button disabled={!myInv || myInv.stone < C.BUILD_COSTS.wall * 5} onClick={() => craftBuild("wall", 5)}>{L.buy5}</button>
+                </div>
+                <div className="ferme-craft-row">
+                  <Sprite img={spritesReady ? spritesRef.current.path : null} w={26} h={26} />
+                  <span className="name">{L.buildPathLabel}<br /><span className="cost">{L.buildCostPath(C.BUILD_COSTS.path)}</span></span>
+                  <button disabled={!myInv || myInv.stone < C.BUILD_COSTS.path} onClick={() => craftBuild("path", 1)}>{L.buy1}</button>
+                  <button disabled={!myInv || myInv.stone < C.BUILD_COSTS.path * 5} onClick={() => craftBuild("path", 5)}>{L.buy5}</button>
+                </div>
+              </>
+            )}
+            <button className="ferme-btn ferme-craft-sell"
+              disabled={!myInv || myInv[craftMenuOpen] === 0}
+              onClick={() => { sellItem(craftMenuOpen); setCraftMenuOpen(null); }}>{L.sellAll}</button>
           </div>
         </div>
       )}

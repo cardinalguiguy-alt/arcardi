@@ -223,7 +223,7 @@ export function newFarmer(id, name, gender, outfit) {
     energy: C.MAX_ENERGY,
     tools: { hoe: 1, can: 1, axe: 1, pick: 1 },
     inv: {
-      wood: 0, stone: 0, food: 0, fence: 0,
+      wood: 0, stone: 0, food: 0, fence: 0, wall: 0, path: 0,
       seeds: [5, 0, 0, 0], crops: [0, 0, 0, 0],
       gems: C.GEMS.map(() => 0),      // gemmes rares trouvées au minage
       fish: C.FISH.map(() => 0),      // poissons pêchés
@@ -261,6 +261,8 @@ export function normalizeFarmer(f) {
   if (typeof f.inv.stone !== "number") f.inv.stone = 0;
   if (typeof f.inv.food !== "number") f.inv.food = 0;
   if (typeof f.inv.fence !== "number") f.inv.fence = 0;
+  if (typeof f.inv.wall !== "number") f.inv.wall = 0;
+  if (typeof f.inv.path !== "number") f.inv.path = 0;
   f.inv.seeds = padArray(f.inv.seeds, C.CROPS.length);
   f.inv.crops = padArray(f.inv.crops, C.CROPS.length);
   f.inv.gems = padArray(f.inv.gems, C.GEMS.length);
@@ -403,6 +405,44 @@ export function resolveAct(world, f, m) {
       }
       break;
     }
+    case "wall": {
+      // Mur en pierre (construction, zip 154+) : même mécanique que "fence"
+      // (pose sur case libre / retire et récupère la section), mais son
+      // propre stock (f.inv.wall, fabriqué à partir de pierre, voir
+      // resolveCraft) et aucune orientation (un seul sprite, pas de sections
+      // qui se prolongent). Ne coûte aucune énergie, comme la clôture.
+      if (o === C.O_WALL) {
+        world.objects[i] = C.O_NONE; world.objHp.delete(i);
+        f.inv.wall = (f.inv.wall || 0) + 1;
+        res.tiles.push(i); res.invChanged = true;
+      } else if ((g === C.G_GRASS || g === C.G_TILLED || g === C.G_WATERED) && o === C.O_NONE && !world.crops.has(i)) {
+        if (f.inv.wall > 0) {
+          f.inv.wall--;
+          world.objects[i] = C.O_WALL; world.objHp.set(i, 1);
+          res.tiles.push(i); res.invChanged = true;
+        } else res.toast = "noWallStock";
+      }
+      break;
+    }
+    case "path": {
+      // Chemin dallé (construction, zip 154+) : agit sur le SOL (pas un
+      // objet), avec son propre type G_PATH_STONE, DISTINCT du chemin fixe
+      // G_PATH devant la maison/le puits (généré par generateWorld/buyWell) :
+      // ainsi un joueur ne peut jamais "récupérer" le chemin fixe pour de la
+      // pierre gratuite, seul un chemin qu'il a lui-même posé est retirable.
+      if (g === C.G_PATH_STONE) {
+        world.ground[i] = C.G_GRASS;
+        f.inv.path = (f.inv.path || 0) + 1;
+        res.tiles.push(i); res.invChanged = true;
+      } else if (g === C.G_GRASS && o === C.O_NONE && !world.crops.has(i)) {
+        if (f.inv.path > 0) {
+          f.inv.path--;
+          world.ground[i] = C.G_PATH_STONE;
+          res.tiles.push(i); res.invChanged = true;
+        } else res.toast = "noPathStock";
+      }
+      break;
+    }
     case "fish":
       // Pêche : la case ciblée doit être de l'eau (rivière) et à portée. Le
       // TYPE de poisson est décidé par le minijeu côté client (m.fish) : on
@@ -452,6 +492,38 @@ export function resolveBuy(f, money, m) {
     if (money < cost) { res.toast = "noGold"; return res; }
     res.moneyDelta = -cost; f.tools[key] = lvl + 1; res.invChanged = true;
     res.chat = { from: "⚒", key: "toolUp", tool: key, lvl: lvl + 1 };
+  }
+  return res;
+}
+
+// Fabrication (bois/pierre -> sections de construction prêtes à poser).
+// Déclenchée depuis le menu Construire (clic sur l'icône bois/pierre du HUD),
+// PAS liée à une case précise (juste une conversion dans l'inventaire du
+// fermier), donc pas de contrainte de portée/proximité contrairement à
+// resolveAct. `m.item` = "fence" (coûte du bois) | "wall" | "path" (coûtent
+// de la pierre). `m.n` = quantité souhaitée (1 ou 5 dans l'UI) ; si les
+// ressources ne suffisent pas pour tout fabriquer, on fabrique le maximum
+// possible (comme resolveSell qui vend le maximum disponible) plutôt que de
+// tout refuser. Renvoie { invChanged, toast }.
+export function resolveCraft(f, m) {
+  normalizeFarmer(f);
+  const res = { invChanged: false, toast: null };
+  const item = m.item, wanted = Math.max(1, Math.min(50, (m.n | 0) || 1));
+  if (item === "fence") {
+    const unit = C.BUILD_COSTS.fence;
+    const n = Math.min(wanted, Math.floor(f.inv.wood / unit));
+    if (n <= 0) { res.toast = "noWood"; return res; }
+    f.inv.wood -= n * unit; f.inv.fence = (f.inv.fence || 0) + n; res.invChanged = true;
+  } else if (item === "wall") {
+    const unit = C.BUILD_COSTS.wall;
+    const n = Math.min(wanted, Math.floor(f.inv.stone / unit));
+    if (n <= 0) { res.toast = "noStone"; return res; }
+    f.inv.stone -= n * unit; f.inv.wall = (f.inv.wall || 0) + n; res.invChanged = true;
+  } else if (item === "path") {
+    const unit = C.BUILD_COSTS.path;
+    const n = Math.min(wanted, Math.floor(f.inv.stone / unit));
+    if (n <= 0) { res.toast = "noStone"; return res; }
+    f.inv.stone -= n * unit; f.inv.path = (f.inv.path || 0) + n; res.invChanged = true;
   }
   return res;
 }
@@ -565,7 +637,7 @@ export function blockedTile(world, x, y) {
   const i = idx(fx, fy);
   const g = world.ground[i], o = world.objects[i];
   if (g === C.G_WATER) return true;
-  if (o === C.O_TREE || o === C.O_TREE2 || o === C.O_ROCK || o === C.O_HOUSE || o === C.O_SHOP || o === C.O_BIN || o === C.O_STUMP || o === C.O_WELL || o === C.O_FENCE || o === C.O_FENCE_H || o === C.O_FENCE_V) return true;
+  if (o === C.O_TREE || o === C.O_TREE2 || o === C.O_ROCK || o === C.O_HOUSE || o === C.O_SHOP || o === C.O_BIN || o === C.O_STUMP || o === C.O_WELL || o === C.O_FENCE || o === C.O_FENCE_H || o === C.O_FENCE_V || o === C.O_WALL) return true;
   return false;
 }
 

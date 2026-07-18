@@ -17,7 +17,10 @@ export const G_WATERED = 2;  // labouré + arrosé
 export const G_WATER = 3;    // rivière
 export const G_SAND = 4;     // berge
 export const G_BRIDGE = 5;   // pont en bois
-export const G_PATH = 6;     // chemin devant la maison
+export const G_PATH = 6;     // chemin devant la maison (fixe, jamais retirable par un joueur)
+export const G_PATH_STONE = 7; // chemin dallé posé/retiré par les joueurs (construction, coûte de la pierre) ;
+                                // rendu visuellement IDENTIQUE au chemin fixe (même sprite), mais un type de
+                                // sol distinct pour ne jamais pouvoir "miner" le chemin fixe de la maison/du puits.
 
 // Objets
 export const O_NONE = 0;
@@ -32,6 +35,7 @@ export const O_WELL = 8;    // puits (bâtiment achetable, 2e point de télépor
 export const O_FENCE = 9;   // section de clôture, orientation automatique (voisinage)
 export const O_FENCE_H = 10; // section de clôture, orientation FORCÉE horizontale (touche R)
 export const O_FENCE_V = 11; // section de clôture, orientation FORCÉE verticale (touche R)
+export const O_WALL = 12;    // mur en pierre, construit par les joueurs (bloque le passage, pas d'orientation)
 
 // --- Cultures ---
 // stages: 0=semis ... maxStage=récoltable ; growMs = durée RÉELLE (arrosée) pour
@@ -139,7 +143,22 @@ export const WELL = { x: 30, y: 62 }; // emplacement du puits (champs à l'ouest
 export const WELL_SPAWN = { x: 30, y: 64 }; // cible du téléport puits (dégagée à l'achat)
 
 // --- Clôture (posée librement par les joueurs, section par section) ---
-export const FENCE_COST = 15; // prix d'une section de clôture à la boutique
+export const FENCE_COST = 15; // prix d'une section de clôture à la boutique (payée en or, inchangé)
+
+// --- Constructions bois/pierre (chantier 2026-07) ---
+// Le joueur convertit du bois/de la pierre récoltés en sections prêtes à poser
+// (clic sur l'icône bois/pierre du HUD -> menu Construire/Vendre), puis les
+// pose avec l'outil clôture (case 8), qui devient un outil "Construction"
+// générique à 3 variantes (clôture/mur/chemin, voir buildKind côté client).
+// La clôture en bois rejoint le MÊME stock que celle achetée en or (f.inv.fence) :
+// une section reste une section, quelle que soit son origine. Le mur et le
+// chemin ont chacun leur propre stock (f.inv.wall / f.inv.path). Valeurs
+// choisies par extrapolation (aucun chiffre précis demandé), à ajuster.
+export const BUILD_COSTS = {
+  fence: 4, // bois par section de clôture fabriquée
+  wall: 5,  // pierre par section de mur
+  path: 2,  // pierre par dalle de chemin
+};
 
 // --- Élevage ---
 // Enclos près de la maison (dans la zone déjà dégagée autour de la ferme).

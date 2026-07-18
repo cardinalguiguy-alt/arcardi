@@ -6552,6 +6552,9 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
 .ferme-hud canvas{ image-rendering:pixelated; }
 .ferme-hud-sub{ opacity:.6; font-size:11px; }
 .ferme-hud-players{ font-size:11px; opacity:.7; }
+.ferme-hud-res{ font-size:12px; cursor:pointer; border-radius:5px; padding:1px 3px; margin:0 -3px; }
+.ferme-hud-res:hover{ background:var(--f-paper-d); }
+.ferme-hud-res canvas{ image-rendering:pixelated; }
 .ferme-energy-wrap{ position:fixed; bottom:78px; right:14px; width:26px; height:140px; z-index:10; padding:3px; }
 .ferme-energy-bar{ position:absolute; bottom:3px; left:3px; right:3px; background:linear-gradient(#f4d442, #e8a83a); border-radius:3px; }
 
@@ -6594,6 +6597,15 @@ body.ferme-active .wrap-room > .brand{ display:none !important; }
 .ferme-seed-menu-row canvas{ image-rendering:pixelated; }
 .ferme-seed-menu-row .name{ flex:1; font-size:13px; }
 .ferme-seed-menu-row .count{ font-size:12px; font-weight:bold; opacity:.8; }
+
+/* Menu Construire/Vendre (clic sur bois/pierre du HUD, chantier 2026-07) */
+.ferme-craft-menu{ width:min(300px, 88vw); }
+.ferme-craft-row{ display:flex; align-items:center; gap:8px; padding:6px 4px; }
+.ferme-craft-row canvas{ image-rendering:pixelated; flex-shrink:0; }
+.ferme-craft-row .name{ flex:1; font-size:13px; line-height:1.5; }
+.ferme-craft-row .cost{ font-size:11px; opacity:.7; font-weight:normal; }
+.ferme-craft-row button{ font-size:12px; padding:4px 8px; }
+.ferme-craft-sell{ width:100%; margin-top:6px; }
 
 /* Panneau des quêtes de découverte (checklist), sous le HUD à gauche */
 .ferme-quests{ position:fixed; top:96px; left:10px; z-index:11; width:250px; max-width:70vw; padding:8px 10px; font-size:12px; }

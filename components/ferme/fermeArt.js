@@ -416,6 +416,20 @@ export function buildSprites() {
     P(g, 5, 13, 6, 2, "#7a5330");
     return c;
   }
+  // Mur en pierre (construction joueur, zip 154+) : blocs de pierre empilés,
+  // un seul sprite (pas d'orientation, contrairement à la clôture) puisque
+  // des blocs de pierre s'enchaînent visuellement dans n'importe quel sens.
+  function wallTile() {
+    const [c, g] = cv(T, T);
+    P(g, 0, 0, T, T, "#8a8a92");
+    P(g, 0, 0, T, 5, "#9a9aa2"); P(g, 0, 5, T, 1, "#66666e");
+    P(g, 0, 10, T, 1, "#66666e");
+    P(g, 1, 1, 5, 3, "#a2a2aa"); P(g, 8, 1, 6, 3, "#7a7a82");
+    P(g, 0, 6, 7, 4, "#7a7a82"); P(g, 8, 6, 8, 4, "#9a9aa2");
+    P(g, 1, 11, 6, 4, "#a2a2aa"); P(g, 9, 11, 6, 4, "#72727a");
+    P(g, 0, 15, T, 1, "#54545c");
+    return c;
+  }
   // Animal de profil (16x14) : forme simple déclinée par type.
   function animalSprite(type) {
     const a = C.ANIMALS[type], [c, g] = cv(16, 14);
@@ -482,6 +496,7 @@ export function buildSprites() {
     fenceV: fenceTileV(),
     fenceCorner: fenceTileCorner(),
     fencePost: fenceTilePost(),
+    wall: wallTile(),
     animals: [],
     products: [],
   };
