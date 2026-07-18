@@ -5686,7 +5686,18 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
   box-shadow:inset 0 0 0 2px rgba(0,0,0,.6), inset 0 4px 12px rgba(0,0,0,.5), 0 16px 40px -14px rgba(0,0,0,.7);
 }
 .chess-grid{ position:absolute; inset:0; display:grid; grid-template-columns:repeat(8,1fr); grid-template-rows:repeat(8,1fr); box-shadow:0 0 0 2px #0B0704; }
-.chess-sq{ position:relative; display:flex; align-items:center; justify-content:center; }
+/* CORRECTIF (signalé 2026-07, "les cases se déforment en jouant") : sans
+   min-width/height:0, une case CSS Grid ne peut jamais être réduite
+   en dessous de la taille intrinsèque de son contenu (comportement par
+   défaut min-width/height:auto des éléments de grille). Or certains
+   glyphes de pièces (Roi jusqu'à 85px, Dame 76px) dépassent la taille
+   nominale d'une case sur un plateau serré : sans ce correctif, la
+   LIGNE/COLONNE entière contenant la pièce était forcée à grossir pour
+   l'accueillir, déformant le carré — et comme Roi/Dame changent de case
+   à chaque coup (roque, promotion, captures), la déformation "se
+   recalibrait" en cours de partie. Même correctif déjà appliqué à
+   .gm-cell (Gold Mines) pour le même type de grille carrée 1fr. */
+.chess-sq{ position:relative; display:flex; align-items:center; justify-content:center; min-width:0; min-height:0; }
 .chess-sq.l{ background:linear-gradient(145deg,#EAD3AB,#E0C79A); box-shadow:inset 1px 1px 0 rgba(255,255,255,.18), inset -1px -1px 2px rgba(0,0,0,.13); }
 .chess-sq.d{ background:linear-gradient(145deg,#916034,#7F5024); box-shadow:inset 1px 1px 0 rgba(255,255,255,.09), inset -1px -1px 2px rgba(0,0,0,.22); }
 .chess-sq.last::before{ content:''; position:absolute; inset:0; background:rgba(255,209,102,.26); }
