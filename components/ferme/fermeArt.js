@@ -321,6 +321,85 @@ export function buildSprites() {
     return c;
   }
 
+  /* ---------------- Bâtiments et animaux ---------------- */
+  function horseSprite() {
+    const [c, g] = cv(28, 24); // vu de profil (regarde à droite)
+    const body = "#8a5a34", dark = "#6a4426", mane = "#3a2a18";
+    P(g, 6, 10, 15, 7, body);          // corps
+    P(g, 6, 10, 15, 2, "#9a6a44");
+    P(g, 19, 6, 6, 7, body);           // encolure
+    P(g, 23, 3, 5, 6, body);           // tête
+    P(g, 27, 5, 1, 3, dark);           // museau
+    P(g, 24, 4, 3, 2, mane);           // toupet
+    P(g, 19, 5, 2, 6, mane);           // crinière
+    P(g, 1, 11, 6, 3, mane);           // queue
+    P(g, 7, 17, 2, 6, dark); P(g, 12, 17, 2, 6, body);  // pattes avant/gauche
+    P(g, 16, 17, 2, 6, dark); P(g, 19, 17, 2, 6, body); // pattes arrière
+    P(g, 7, 22, 2, 1, "#2a2018"); P(g, 12, 22, 2, 1, "#2a2018");
+    P(g, 16, 22, 2, 1, "#2a2018"); P(g, 19, 22, 2, 1, "#2a2018");
+    P(g, 25, 5, 1, 1, "#1a1a1a");      // oeil
+    return c;
+  }
+  function well() {
+    const [c, g] = cv(24, 30);
+    // toit
+    g.fillStyle = "#a83c30"; g.beginPath(); g.moveTo(1, 12); g.lineTo(12, 3); g.lineTo(23, 12); g.fill();
+    P(g, 1, 11, 22, 2, "#8a3028");
+    P(g, 4, 12, 2, 10, "#7a5330"); P(g, 18, 12, 2, 10, "#7a5330"); // poteaux
+    // margelle en pierre
+    P(g, 3, 20, 18, 8, "#9a9aa2"); P(g, 3, 20, 18, 2, "#b2b2ba");
+    for (let x = 4; x < 21; x += 4) P(g, x, 22, 1, 6, "#7a7a82");
+    P(g, 6, 22, 12, 5, "#2a3a4a"); // eau sombre
+    P(g, 8, 23, 4, 1, "#4a6a8a");
+    P(g, 10, 12, 4, 8, "#8a6340"); // seau/corde au centre
+    return c;
+  }
+  function fenceTile() {
+    const [c, g] = cv(T, T);
+    P(g, 0, 6, T, 2, "#a87745"); P(g, 0, 11, T, 2, "#8a6038"); // lisses
+    P(g, 2, 3, 2, 11, "#9a6b3f"); P(g, 10, 3, 2, 11, "#9a6b3f"); // poteaux
+    P(g, 2, 3, 2, 1, "#b8834f"); P(g, 10, 3, 2, 1, "#b8834f");
+    return c;
+  }
+  // Animal de profil (16x14) : forme simple déclinée par type.
+  function animalSprite(type) {
+    const a = C.ANIMALS[type], [c, g] = cv(16, 14);
+    const body = a.body, acc = a.accent;
+    if (type === 0) { // poule
+      P(g, 4, 6, 7, 5, body); P(g, 9, 3, 4, 4, body); // corps + tête
+      P(g, 12, 4, 2, 1, "#e8a83a"); // bec
+      P(g, 10, 2, 3, 2, acc);       // crête
+      P(g, 12, 4, 1, 1, "#1a1a1a");
+      P(g, 3, 8, 3, 2, body);       // queue
+      P(g, 6, 11, 1, 2, "#e8a83a"); P(g, 9, 11, 1, 2, "#e8a83a");
+    } else if (type === 2) { // brebis (laineuse)
+      P(g, 3, 4, 10, 7, body); P(g, 4, 3, 8, 2, body);
+      P(g, 2, 5, 2, 5, body); P(g, 12, 5, 2, 5, body);
+      P(g, 11, 6, 4, 4, acc);       // tête
+      P(g, 13, 7, 1, 1, "#1a1a1a");
+      P(g, 5, 11, 1, 2, "#5a4a3a"); P(g, 10, 11, 1, 2, "#5a4a3a");
+    } else { // chèvre / cochon / vache (corps allongé)
+      P(g, 3, 5, 9, 6, body); P(g, 3, 5, 9, 2, tint(body));
+      P(g, 10, 3, 4, 5, body);      // tête
+      P(g, 13, 5, 1, 1, "#1a1a1a");
+      if (type === 3) { P(g, 13, 6, 2, 1, "#c07882"); } // groin cochon
+      if (type === 1) { P(g, 10, 1, 1, 3, acc); P(g, 12, 1, 1, 3, acc); } // cornes chèvre
+      if (type === 4) { P(g, 3, 6, 9, 4, body); P(g, 5, 7, 2, 2, acc); P(g, 8, 8, 2, 2, acc); } // taches vache
+      P(g, 4, 11, 2, 2, "#5a4636"); P(g, 9, 11, 2, 2, "#5a4636");
+      P(g, 2, 6, 2, 3, body);       // queue
+    }
+    return c;
+  }
+  // Icône de production d'élevage (par type d'animal).
+  function productIcon(type) {
+    const [c, g] = cv(T, T);
+    if (type === 0) { g.fillStyle = "#fff8ec"; g.beginPath(); g.ellipse(8, 9, 4, 5, 0, 0, 7); g.fill(); P(g, 6, 5, 2, 1, "#e8e0d0"); } // oeuf
+    else if (type === 2) { g.fillStyle = "#f2f0ea"; g.beginPath(); g.arc(6, 9, 4, 0, 7); g.arc(10, 9, 4, 0, 7); g.arc(8, 6, 4, 0, 7); g.fill(); } // laine
+    else if (type === 3) { g.fillStyle = "#3a2a22"; g.beginPath(); g.arc(8, 9, 5, 0, 7); g.fill(); P(g, 6, 6, 2, 2, "#5a463a"); } // truffe
+    else { P(g, 5, 3, 6, 10, "#eef2f5"); P(g, 5, 3, 6, 2, "#cfd8dd"); P(g, 6, 1, 4, 2, "#9fb0b8"); P(g, 6, 5, 4, 2, "#4a8ad0"); } // bouteille de lait
+    return c;
+  }
+
   /* ---------------- Atlas ---------------- */
   const S = {
     grass: [grassTile(0), grassTile(1), grassTile(2)],
@@ -342,6 +421,11 @@ export function buildSprites() {
     icons: {},
     gemIcons: [],
     fishIcons: [],
+    horse: horseSprite(),
+    well: well(),
+    fence: fenceTile(),
+    animals: [],
+    products: [],
   };
   for (let t = 0; t < C.CROPS.length; t++) {
     S.crops[t] = [];
@@ -350,6 +434,8 @@ export function buildSprites() {
   for (const k of ["hoe", "can", "axe", "pick", "seeds", "wood", "stone", "food", "gold", "energy", "rod"]) S.icons[k] = icon(k);
   S.gemIcons = C.GEMS.map(gm => gemIcon(gm.color));
   S.fishIcons = C.FISH.map(fs => fishIcon(fs.color));
+  S.animals = C.ANIMALS.map(a => animalSprite(a.id));
+  S.products = C.ANIMALS.map(a => productIcon(a.id));
   S.getChar = (gender, outfit) => {
     const key = gender + ":" + outfit;
     if (!S.chars[key]) S.chars[key] = charSheet(gender, outfit);

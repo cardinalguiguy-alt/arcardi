@@ -28,6 +28,7 @@ export const O_SHOP = 4;    // étal de la boutique
 export const O_BIN = 5;     // bac de vente
 export const O_STUMP = 6;   // souche (reste d'arbre)
 export const O_TREE2 = 7;   // variante d'arbre (pin)
+export const O_WELL = 8;    // puits (bâtiment achetable, 2e point de téléport)
 
 // --- Cultures ---
 // stages: 0=semis ... maxStage=récoltable ; growDays = jours (arrosés) pour mûrir
@@ -120,3 +121,25 @@ export const HOUSE = { x: 40, y: 30, w: 6, h: 5 };
 export const SHOP = { x: 49, y: 33 };
 export const BIN = { x: 52, y: 33 };
 export const SPAWN = { x: 43, y: 37 }; // chemin devant la maison (cible du téléport)
+
+// --- Bâtiments / déplacements ---
+export const HORSE_COST = 800;
+export const HORSE_SPEED_MULT = 1.9; // vitesse à cheval
+export const MOUNT_RANGE = 1.6;      // distance pour enfourcher le cheval
+export const WELL_COST = 600;
+export const WELL = { x: 30, y: 62 }; // emplacement du puits (champs à l'ouest)
+export const WELL_SPAWN = { x: 30, y: 64 }; // cible du téléport puits (dégagée à l'achat)
+
+// --- Élevage ---
+// Enclos près de la maison (dans la zone déjà dégagée autour de la ferme).
+export const PEN = { x: 48, y: 38, w: 8, h: 6 };
+// Chaque animal produit chaque matin un bien à ramasser puis vendre.
+export const ANIMALS = [
+  { id: 0, name: "Poule",  nameEn: "Hen",   cost: 120,  prod: "Œuf",             prodEn: "Egg",         sell: 25,  body: "#f0e8d8", accent: "#d44a3f" },
+  { id: 1, name: "Chèvre", nameEn: "Goat",  cost: 400,  prod: "Lait de chèvre",  prodEn: "Goat milk",   sell: 60,  body: "#d8cbb0", accent: "#7a6a52" },
+  { id: 2, name: "Brebis", nameEn: "Sheep", cost: 500,  prod: "Laine",           prodEn: "Wool",        sell: 90,  body: "#f2f0ea", accent: "#c8c0b0" },
+  { id: 3, name: "Cochon", nameEn: "Pig",   cost: 700,  prod: "Truffe",          prodEn: "Truffle",     sell: 140, body: "#e8a8b0", accent: "#c07882" },
+  { id: 4, name: "Vache",  nameEn: "Cow",   cost: 1200, prod: "Lait",            prodEn: "Milk",        sell: 120, body: "#efe7dc", accent: "#5a4634" },
+];
+export const MAX_ANIMALS = 12;      // limite d'animaux dans l'enclos
+export const COLLECT_RANGE = 1.5;   // distance pour ramasser une production

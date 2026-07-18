@@ -66,10 +66,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [questOpen, setQuestOpen] = useState(true);
   const [slot, setSlot] = useState(0);
   const [seedSel, setSeedSel] = useState(0);
+  const [buildings, setBuildings] = useState({ horseOwned: false, wellBuilt: false, animalCount: 0 });
+  const [onHorse, setOnHorse] = useState(false);
+  const [fishMini, setFishMini] = useState(null); // {mode, fish} pendant le minijeu, sinon null
   const [shopOpen, setShopOpen] = useState(false);
   const [binOpen, setBinOpen] = useState(false);
   const [mapOpen, setMapOpen] = useState(false);
   const [promptKey, setPromptKey] = useState(null); // 'shop' | 'bin' | null
+  const [mountPrompt, setMountPrompt] = useState(null); // 'mount' | 'dismount' | null
   const [chat, setChat] = useState([]);   // {id, from, msg}
   const [toasts, setToasts] = useState([]); // {id, msg}
   const [spritesReady, setSpritesReady] = useState(false);
@@ -86,7 +90,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const meRef = useRef(null);
   const playersRef = useRef(new Map()); // id -> remote farmer render data
   const farmersRef = useRef({});        // hôte : id -> état privé arbitré
-  const sharedRef = useRef({ seed: 0, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0 });
+  const sharedRef = useRef({ seed: 0, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horse: { owned: false, x: C.SPAWN.x + 2, y: C.SPAWN.y, rider: null }, animals: [], wellBuilt: false });
   const invRef = useRef(null);
   const toolsRef = useRef({ hoe: 1, can: 1, axe: 1, pick: 1 });
   const energyRef = useRef(C.MAX_ENERGY);
@@ -111,7 +115,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const chatIdRef = useRef(0);
   const farmCodeRef = useRef("");      // code de la ferme durable en cours
   const autoJoinTriedRef = useRef(false);
+  const fishTileRef = useRef(null);    // case d'eau ciblée par le minijeu de pêche
+  const fishMiniRef = useRef(false);   // minijeu de pêche en cours (bloque le reste)
 
+  useEffect(() => { fishMiniRef.current = !!fishMini; }, [fishMini]);
   useEffect(() => { mapOpenRef.current = mapOpen; }, [mapOpen]);
   useEffect(() => { shopOpenRef.current = shopOpen; }, [shopOpen]);
   useEffect(() => { binOpenRef.current = binOpen; }, [binOpen]);
@@ -172,13 +179,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       E.applyOverrides(w, { groundOv: saved.groundOv, objectOv: saved.objectOv, crops: saved.crops });
       worldRef.current = w;
       overridesRef.current = { ground: { ...(saved.groundOv || {}) }, object: { ...(saved.objectOv || {}) } };
-      sharedRef.current = { seed: saved.seed, money: saved.money, day: saved.day, dayStartAt: saved.dayStartAt, totalEarned: saved.totalEarned };
+      sharedRef.current = {
+        seed: saved.seed, money: saved.money, day: saved.day, dayStartAt: saved.dayStartAt, totalEarned: saved.totalEarned,
+        horse: saved.horse || { owned: false, x: C.SPAWN.x + 2, y: C.SPAWN.y, rider: null },
+        animals: saved.animals || [], wellBuilt: !!saved.wellBuilt,
+      };
+      // Le cavalier repart à pied à la reprise (aucun joueur monté au chargement).
+      if (sharedRef.current.horse) sharedRef.current.horse.rider = null;
       farmersRef.current = saved.farmers || {};
     } else {
       const seed = hashSeed(code);
       worldRef.current = E.generateWorld(seed);
       overridesRef.current = { ground: {}, object: {} };
-      sharedRef.current = { seed, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0 };
+      sharedRef.current = { seed, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horse: { owned: false, x: C.SPAWN.x + 2, y: C.SPAWN.y, rider: null }, animals: [], wellBuilt: false };
       farmersRef.current = {};
       // Crée tout de suite l'enregistrement pour réserver le code.
       persistFarm();
@@ -187,6 +200,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     restoredRef.current = true;
     setCodeLoading(false);
     setHud(h => ({ ...h, money: sharedRef.current.money, day: sharedRef.current.day }));
+    syncBuildings();
     setWorldReady(true);
     setPhase("select"); // l'effet d'auto-spawn décidera de sauter cet écran
     setTimeout(() => broadcastSnapshot(), 0);
@@ -239,13 +253,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     E.applyOverrides(w, { groundOv: payload.groundOv, objectOv: payload.objectOv, crops: payload.crops });
     worldRef.current = w;
     overridesRef.current = { ground: { ...(payload.groundOv || {}) }, object: { ...(payload.objectOv || {}) } };
-    sharedRef.current = { seed: payload.seed, money: payload.money, day: payload.day, dayStartAt: payload.dayStartAt, totalEarned: payload.totalEarned };
+    sharedRef.current = {
+      seed: payload.seed, money: payload.money, day: payload.day, dayStartAt: payload.dayStartAt, totalEarned: payload.totalEarned,
+      horse: payload.horse || { owned: false, x: C.SPAWN.x + 2, y: C.SPAWN.y, rider: null },
+      animals: payload.animals || [], wellBuilt: !!payload.wellBuilt,
+    };
     if (payload.farmers) farmersRef.current = payload.farmers;
     // Mon propre fermier (reprise) si présent
     const mine = payload.farmers && payload.farmers[me.id];
     if (mine) { invRef.current = mine.inv; toolsRef.current = mine.tools; energyRef.current = mine.energy; setMyInv(mine.inv); setMyTools(mine.tools); setMyEnergy(mine.energy); if (mine.quests) setMyQuests(mine.quests); }
     minimapDirtyRef.current = true;
     setHud(h => ({ ...h, money: payload.money, day: payload.day }));
+    syncBuildings();
     setWorldReady(true);
   }
 
@@ -332,7 +351,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       groundOv: overridesRef.current.ground, objectOv: overridesRef.current.object,
       crops: worldRef.current ? E.serializeCrops(worldRef.current) : [],
       farmers: farmersRef.current,
+      horse: s.horse, animals: s.animals, wellBuilt: s.wellBuilt,
     };
+  }
+  function syncBuildings() {
+    const s = sharedRef.current;
+    setBuildings({ horseOwned: !!(s.horse && s.horse.owned), wellBuilt: !!s.wellBuilt, animalCount: (s.animals || []).length });
+    setOnHorse(!!(s.horse && s.horse.rider === me.id));
   }
   function broadcastSnapshot() {
     if (!worldRef.current) return;
@@ -378,8 +403,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const f = hostEnsureFarmer(req.id, req.name);
     if (typeof req.px === "number") { f.x = req.px; f.y = req.py; }
     const s = sharedRef.current;
-    const out = { tiles: [], crops: [], fx: [], state: null, farmer: null, toast: null, chat: null };
+    const out = { tiles: [], crops: [], fx: [], state: null, farmer: null, toast: null, chat: null, horse: null, animals: null, wellBuilt: false };
     let questId = null; // action réussie -> quête à valider éventuellement
+    const px = typeof req.px === "number" ? req.px : f.x, py = typeof req.py === "number" ? req.py : f.y;
 
     if (req.kind === "act") {
       const r = E.resolveAct(w, f, req);
@@ -405,6 +431,55 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const r = E.resolveEat(f);
       if (r.invChanged) out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
       if (r.fx) out.fx.push(r.fx);
+    } else if (req.kind === "buyHorse") {
+      const h = s.horse;
+      if (!h.owned && s.money >= C.HORSE_COST) {
+        s.money -= C.HORSE_COST; h.owned = true; h.x = C.SPAWN.x + 2; h.y = C.SPAWN.y; h.rider = null;
+        out.state = shareState(); out.horse = h;
+        out.chat = { from: "🐴", msg: L.chatAnimalBought(lang === "en" ? "Horse" : "Cheval") };
+      } else if (!h.owned) out.toast = { id: f.id, key: "noGold" };
+    } else if (req.kind === "buyWell") {
+      const w2 = worldRef.current;
+      if (!s.wellBuilt && s.money >= C.WELL_COST && w2) {
+        s.money -= C.WELL_COST; s.wellBuilt = true;
+        for (let yy = C.WELL.y - 1; yy <= C.WELL.y + 3; yy++) for (let xx = C.WELL.x - 1; xx <= C.WELL.x + 1; xx++) {
+          const i = idxOf(xx, yy); if (i < 0 || i >= w2.ground.length) continue;
+          w2.ground[i] = C.G_PATH; if (w2.objects[i] !== C.O_NONE) { w2.objects[i] = C.O_NONE; w2.objHp.delete(i); }
+          recordTileOverride(i); out.tiles.push({ i, g: w2.ground[i], o: w2.objects[i] });
+        }
+        const wi = idxOf(C.WELL.x, C.WELL.y); w2.objects[wi] = C.O_WELL; recordTileOverride(wi); out.tiles.push({ i: wi, g: w2.ground[wi], o: C.O_WELL });
+        out.state = shareState(); out.wellBuilt = true;
+        out.chat = { from: "🪣", msg: lang === "en" ? "The well is built!" : "Le puits est construit !" };
+      } else if (!s.wellBuilt) out.toast = { id: f.id, key: "noGold" };
+    } else if (req.kind === "buyAnimal") {
+      const at = req.animal | 0;
+      if (at >= 0 && at < C.ANIMALS.length) {
+        if (s.animals.length >= C.MAX_ANIMALS) out.toast = { id: f.id, key: "penFull" };
+        else if (s.money < C.ANIMALS[at].cost) out.toast = { id: f.id, key: "noGold" };
+        else {
+          s.money -= C.ANIMALS[at].cost;
+          const ax = C.PEN.x + 1 + Math.floor(Math.random() * (C.PEN.w - 2));
+          const ay = C.PEN.y + 1 + Math.floor(Math.random() * (C.PEN.h - 2));
+          s.animals.push({ type: at, x: ax, y: ay, hasProduct: true });
+          out.state = shareState(); out.animals = s.animals;
+          out.chat = { from: "🐮", msg: L.chatAnimalBought(lang === "en" ? C.ANIMALS[at].nameEn : C.ANIMALS[at].name) };
+        }
+      }
+    } else if (req.kind === "mount") {
+      const h = s.horse;
+      if (h.owned && !h.rider && Math.abs(px - h.x) <= C.MOUNT_RANGE && Math.abs(py - h.y) <= C.MOUNT_RANGE) { h.rider = req.id; out.horse = h; }
+    } else if (req.kind === "dismount") {
+      const h = s.horse;
+      if (h.rider === req.id) { h.rider = null; h.x = px; h.y = py; out.horse = h; }
+    } else if (req.kind === "collect") {
+      const ai = req.animal | 0, an = s.animals[ai];
+      if (an && an.hasProduct && Math.abs(px - an.x) <= C.COLLECT_RANGE && Math.abs(py - an.y) <= C.COLLECT_RANGE) {
+        an.hasProduct = false;
+        f.inv.products[an.type] = (f.inv.products[an.type] || 0) + 1;
+        out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
+        out.animals = s.animals;
+        out.fx.push({ k: "product", x: an.x, y: an.y, product: an.type });
+      }
     }
 
     // Quêtes de découverte : première réussite d'une action listée -> or commun.
@@ -422,7 +497,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // Les quêtes accomplies voyagent avec l'état privé du fermier.
     if (out.farmer) out.farmer.quests = f.quests;
 
-    if (out.tiles.length) dirtyRef.current = true;
+    if (out.tiles.length || out.state || out.horse || out.animals || out.wellBuilt) dirtyRef.current = true;
     channelRef.current?.send({ type: "broadcast", event: "apply", payload: out });
   }
   function shareState() { const s = sharedRef.current; return { money: s.money, day: s.day, dayStartAt: s.dayStartAt, totalEarned: s.totalEarned }; }
@@ -438,6 +513,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (p.toast && p.toast.id === me.id) pushToast(toastMsg(p.toast.key));
     if (p.chat) addChat(p.chat.from, p.chat.msg);
     if (p.fx) for (const f of p.fx) spawnFx(f);
+    if (p.horse) { sharedRef.current.horse = p.horse; syncBuildings(); }
+    if (p.animals) { sharedRef.current.animals = p.animals; syncBuildings(); }
+    if (p.wellBuilt) { sharedRef.current.wellBuilt = true; minimapDirtyRef.current = true; syncBuildings(); }
   }
   function applyNewDay(p) {
     const w = worldRef.current; if (!w) return;
@@ -446,11 +524,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (p.crops) for (const cr of p.crops) { if (cr.c) w.crops.set(cr.i, { ...(w.crops.get(cr.i) || {}), t: cr.c.t, s: cr.c.s, watered: false }); else w.crops.delete(cr.i); }
     // Énergie restaurée pour tous (accord avec l'hôte).
     energyRef.current = C.MAX_ENERGY; setMyEnergy(C.MAX_ENERGY);
+    if (p.animals) { sharedRef.current.animals = p.animals; syncBuildings(); }
     setHud(h => ({ ...h, day: p.day }));
     pushToast(L.toastNewDay(p.day));
   }
   function toastMsg(key) {
-    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater }[key] || "";
+    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull }[key] || "";
   }
 
   // -------- Hôte : boucle temps + persistance --------
@@ -464,8 +543,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         s.day += 1; s.dayStartAt = Date.now();
         const tilesOut = tiles.map(i => { recordTileOverride(i); return { i, g: w.ground[i], o: w.objects[i] }; });
         const cropsOut = cropTiles.map(i => { const c = w.crops.get(i); return { i, c: c ? { t: c.t, s: c.s } : null }; });
+        // Chaque animal produit son bien du matin.
+        for (const an of s.animals) an.hasProduct = true;
         dirtyRef.current = true;
-        channelRef.current?.send({ type: "broadcast", event: "newday", payload: { day: s.day, dayStartAt: s.dayStartAt, tiles: tilesOut, crops: cropsOut } });
+        channelRef.current?.send({ type: "broadcast", event: "newday", payload: { day: s.day, dayStartAt: s.dayStartAt, tiles: tilesOut, crops: cropsOut, animals: s.animals } });
         channelRef.current?.send({ type: "broadcast", event: "chat", payload: { from: "☀", msg: L.chatNewDay(s.day) } });
       }
     }, 1000);
@@ -544,23 +625,70 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     channelRef.current?.send({ type: "broadcast", event: "req", payload: { ...payload, id: me.id, name: m.name, px: +m.x.toFixed(2), py: +m.y.toFixed(2) } });
   }
   function doAction() {
-    const m = meRef.current; if (!m || actAnimRef.current > 0) return;
+    const m = meRef.current; if (!m || actAnimRef.current > 0 || fishMiniRef.current) return;
     const w = worldRef.current; if (!w) return;
+    // Priorité : ramasser la production d'un animal proche.
+    const ai = nearestCollectable();
+    if (ai >= 0) { actAnimRef.current = 0.28; sendReq({ kind: "collect", animal: ai }); return; }
     const tt = targetTile();
     if (!inMap(tt.x, tt.y)) return;
-    actAnimRef.current = 0.28;
     const i = idxOf(tt.x, tt.y);
+    const sl = slotRef.current;
+    if (sl === 6) { startFishing(tt); return; } // pêche = minijeu
+    actAnimRef.current = 0.28;
     const c = w.crops.get(i);
     if (c && c.s >= C.CROP_STAGES - 1) return sendReq({ kind: "act", action: "harvest", x: tt.x, y: tt.y });
-    const sl = slotRef.current;
     if (sl === 0) sendReq({ kind: "act", action: "till", x: tt.x, y: tt.y });
     else if (sl === 1) sendReq({ kind: "act", action: "water", x: tt.x, y: tt.y });
     else if (sl === 2) sendReq({ kind: "act", action: "chop", x: tt.x, y: tt.y });
     else if (sl === 3) sendReq({ kind: "act", action: "mine", x: tt.x, y: tt.y });
     else if (sl === 4) sendReq({ kind: "act", action: "plant", seed: seedSelRef.current, x: tt.x, y: tt.y });
     else if (sl === 5) sendReq({ kind: "eat" });
-    else if (sl === 6) sendReq({ kind: "act", action: "fish", x: tt.x, y: tt.y });
   }
+  // Index d'un animal (dans sharedRef.animals) à portée et prêt à ramasser.
+  function nearestCollectable() {
+    const m = meRef.current, animals = sharedRef.current.animals || [];
+    let best = -1, bd = C.COLLECT_RANGE;
+    for (let i = 0; i < animals.length; i++) {
+      const a = animals[i]; if (!a.hasProduct) continue;
+      const d = Math.abs(m.x - a.x) + Math.abs(m.y - a.y);
+      if (d <= bd) { bd = d; best = i; }
+    }
+    return best;
+  }
+  // Pêche : tire un poisson (pondéré), ouvre le minijeu correspondant.
+  function startFishing(tt) {
+    const w = worldRef.current, m = meRef.current; if (!w || !m) return;
+    if (!inMap(tt.x, tt.y) || w.ground[idxOf(tt.x, tt.y)] !== C.G_WATER) { pushToast(L.toastNeedWater); return; }
+    let total = 0; for (const fs of C.FISH) total += fs.weight;
+    let r = Math.random() * total, ft = 0;
+    for (let i = 0; i < C.FISH.length; i++) { r -= C.FISH[i].weight; if (r <= 0) { ft = i; break; } }
+    fishTileRef.current = { x: tt.x, y: tt.y };
+    pushToast(L.fishBite(lang === "en" ? C.FISH[ft].nameEn : C.FISH[ft].name));
+    setFishMini({ mode: ft, fish: ft });
+  }
+  function fishWon() {
+    const ft = fishMini ? fishMini.fish : 0, tt = fishTileRef.current;
+    setFishMini(null);
+    if (tt) sendReq({ kind: "act", action: "fish", x: tt.x, y: tt.y, fish: ft });
+  }
+  function fishLost(tooSoon) { setFishMini(null); pushToast(tooSoon ? L.fishTooSoon : L.fishFail); }
+
+  // Monter / descendre du cheval (touche F).
+  function toggleMount() {
+    const h = sharedRef.current.horse, m = meRef.current; if (!h || !h.owned || !m) return;
+    if (h.rider === me.id) { sendReq({ kind: "dismount" }); }
+    else if (!h.rider && Math.abs(m.x - h.x) <= C.MOUNT_RANGE && Math.abs(m.y - h.y) <= C.MOUNT_RANGE) { sendReq({ kind: "mount" }); }
+  }
+  function teleportWell() {
+    const m = meRef.current; if (!m || !sharedRef.current.wellBuilt) return;
+    m.x = C.WELL_SPAWN.x; m.y = C.WELL_SPAWN.y; m.moving = false;
+    sendPos(); pushToast(L.wellToast);
+  }
+  const buyHorse = () => sendReq({ kind: "buyHorse" });
+  const buyWell = () => sendReq({ kind: "buyWell" });
+  const buyAnimal = (type) => sendReq({ kind: "buyAnimal", animal: type });
+  const sellProduct = (type) => sendReq({ kind: "sell", item: "product", product: type, n: 9999 });
 
   // -------- Téléport maison (nouveauté) --------
   function teleportHome() {
@@ -584,17 +712,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // ----- entrées -----
     function onKeyDown(e) {
       if (document.activeElement === chatInputRef.current) return;
+      if (fishMiniRef.current) return; // le minijeu de pêche gère ses entrées
       keysRef.current[e.code] = true;
       if (e.code >= "Digit1" && e.code <= "Digit7") selectSlot(+e.code.slice(5) - 1);
       if (e.code === "Space") { e.preventDefault(); doAction(); }
       if (e.code === "KeyE") tryOpenNearby();
+      if (e.code === "KeyF") toggleMount();
       if (e.code === "KeyT") { e.preventDefault(); setChatOpen(true); setTimeout(() => chatInputRef.current?.focus(), 0); }
       if (e.code === "KeyM") setMapOpen(o => !o);
       if (e.code === "Escape") { setShopOpen(false); setBinOpen(false); setMapOpen(false); }
     }
     function onKeyUp(e) { keysRef.current[e.code] = false; }
     function onMove(e) { mouseRef.current.x = e.clientX; mouseRef.current.y = e.clientY; }
-    function onDown(e) { if (e.button === 0 && !mapOpenRef.current && !shopOpenRef.current && !binOpenRef.current) doAction(); }
+    function onDown(e) { if (e.button === 0 && !mapOpenRef.current && !shopOpenRef.current && !binOpenRef.current && !fishMiniRef.current) doAction(); }
     function onWheel() { }
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
@@ -641,6 +771,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const o = w.objects[i];
         if (o === C.O_ROCK) ctx.drawImage(sprites.rock, x * T, y * T);
         else if (o === C.O_STUMP) ctx.drawImage(sprites.stump, x * T, y * T);
+        // Clôture de l'enclos (bordure), décorative et plate.
+        if (onPenBorder(x, y)) ctx.drawImage(sprites.fence, x * T, y * T);
       }
 
       const tt = targetTile();
@@ -654,7 +786,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (!inMap(x, y)) continue;
         const o = w.objects[idxOf(x, y)];
         if (o === C.O_TREE || o === C.O_TREE2) { const img = o === C.O_TREE ? sprites.oak : sprites.pine; draws.push({ y: (y + 1) * T, fn: () => ctx.drawImage(img, x * T - 8, (y + 1) * T - 48) }); }
+        else if (o === C.O_WELL) draws.push({ y: (y + 1) * T, fn: () => ctx.drawImage(sprites.well, x * T - 4, (y + 1) * T - 30) });
       }
+      // Animaux d'élevage (+ indicateur de production à ramasser).
+      for (const an of (sharedRef.current.animals || [])) {
+        draws.push({ y: (an.y + 1) * T, fn: () => {
+          ctx.drawImage(sprites.animals[an.type], an.x * T, an.y * T);
+          if (an.hasProduct) { const bob = Math.sin(now / 260) * 1.5; ctx.drawImage(sprites.products[an.type], an.x * T + 3, an.y * T - 12 + bob, 12, 12); }
+        } });
+      }
+      // Cheval libre (non monté).
+      const horse = sharedRef.current.horse;
+      if (horse && horse.owned && !horse.rider) draws.push({ y: (horse.y + 1) * T, fn: () => ctx.drawImage(sprites.horse, horse.x * T - 6, horse.y * T - 10) });
       draws.push({ y: (m.y + 1) * T, fn: () => drawSelf(m) });
       for (const p of playersRef.current.values()) draws.push({ y: (p.y + 1) * T, fn: () => drawRemote(p) });
       draws.sort((a, b) => a.y - b.y);
@@ -676,6 +819,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       let pk = null;
       if (nearTile(C.SHOP)) pk = "shop"; else if (nearTile(C.BIN)) pk = "bin";
       setPromptKeyThrottled(pk);
+      // Invite cheval (monter/descendre)
+      const hh = sharedRef.current.horse; let mp = null;
+      if (hh && hh.owned) {
+        if (hh.rider === me.id) mp = "dismount";
+        else if (!hh.rider && Math.abs(m.x - hh.x) <= C.MOUNT_RANGE && Math.abs(m.y - hh.y) <= C.MOUNT_RANGE) mp = "mount";
+      }
+      setMountPromptThrottled(mp);
 
       if (mapOpenRef.current) drawFullMap();
     }
@@ -692,7 +842,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     function updateMe(dt) {
       const m = meRef.current, w = worldRef.current, keys = keysRef.current;
-      const uiBlocked = shopOpenRef.current || binOpenRef.current || mapOpenRef.current || document.activeElement === chatInputRef.current;
+      const uiBlocked = shopOpenRef.current || binOpenRef.current || mapOpenRef.current || fishMiniRef.current || document.activeElement === chatInputRef.current;
       let dx = 0, dy = 0;
       if (!uiBlocked) {
         if (keys["ArrowUp"] || keys["KeyW"] || keys["KeyZ"]) dy -= 1;
@@ -700,10 +850,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (keys["ArrowLeft"] || keys["KeyA"] || keys["KeyQ"]) dx -= 1;
         if (keys["ArrowRight"] || keys["KeyD"]) dx += 1;
       }
+      const mounted = sharedRef.current.horse && sharedRef.current.horse.rider === me.id;
       const moving = (dx || dy) && actAnimRef.current <= 0;
       if (moving) {
         const len = Math.hypot(dx, dy); dx /= len; dy /= len;
-        const sp = C.PLAYER_SPEED * dt;
+        const sp = C.PLAYER_SPEED * (mounted ? C.HORSE_SPEED_MULT : 1) * dt;
         const nx = m.x + dx * sp, ny = m.y + dy * sp;
         if (canStand(w, nx, m.y)) m.x = nx;
         if (canStand(w, m.x, ny)) m.y = ny;
@@ -732,10 +883,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const frame = p.moving ? Math.floor((p.animT || 0) % 4) : 0;
       const px = Math.round(p.x * T), py = Math.round(p.y * T);
       const flip = p.dir === 2;
-      ctx.fillStyle = "rgba(0,0,0,0.25)"; ctx.beginPath(); ctx.ellipse(px + 8, py + 15, 6, 2.5, 0, 0, 7); ctx.fill();
+      const horse = sharedRef.current.horse;
+      const riding = horse && horse.rider === p.id;
+      const lift = riding ? 8 : 0; // le cavalier est surélevé sur la monture
+      ctx.fillStyle = "rgba(0,0,0,0.25)"; ctx.beginPath(); ctx.ellipse(px + 8, py + 15, riding ? 9 : 6, riding ? 3 : 2.5, 0, 0, 7); ctx.fill();
+      if (riding) ctx.drawImage(spritesRef.current.horse, px - 6, py - 6);
       ctx.save();
-      if (flip) { ctx.translate(px + 16, py - 8); ctx.scale(-1, 1); ctx.drawImage(sheet, frame * 16, row * 24, 16, 24, 0, 0, 16, 24); }
-      else ctx.drawImage(sheet, frame * 16, row * 24, 16, 24, px, py - 8, 16, 24);
+      if (flip) { ctx.translate(px + 16, py - 8 - lift); ctx.scale(-1, 1); ctx.drawImage(sheet, frame * 16, row * 24, 16, 24, 0, 0, 16, 24); }
+      else ctx.drawImage(sheet, frame * 16, row * 24, 16, 24, px, py - 8 - lift, 16, 24);
       ctx.restore();
       ctx.font = "bold 7px monospace"; ctx.textAlign = "center";
       ctx.fillStyle = "#00000090"; ctx.fillText(p.name, px + 8 + 1, py - 10 + 1);
@@ -788,6 +943,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // Throttle du prompt (évite un setState par frame)
   const promptRef = useRef(null);
   function setPromptKeyThrottled(pk) { if (promptRef.current !== pk) { promptRef.current = pk; setPromptKey(pk); } }
+  const mountPromptRef = useRef(null);
+  function setMountPromptThrottled(mp) { if (mountPromptRef.current !== mp) { mountPromptRef.current = mp; setMountPrompt(mp); } }
 
   // -------- Utilitaires partagés (hors boucle) --------
   function inMap(x, y) { const w = worldRef.current; return w && x >= 0 && y >= 0 && x < w.w && y < w.h; }
@@ -815,6 +972,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     return facingTile();
   }
   function nearTile(tl, d = 2.5) { const m = meRef.current; return m && Math.abs(m.x - tl.x) <= d && Math.abs(m.y - tl.y) <= d; }
+  // Bordure de l'enclos (clôture décorative), avec une ouverture en bas au centre.
+  function onPenBorder(x, y) {
+    const p = C.PEN;
+    if (x < p.x || x >= p.x + p.w || y < p.y || y >= p.y + p.h) return false;
+    const border = x === p.x || x === p.x + p.w - 1 || y === p.y || y === p.y + p.h - 1;
+    if (y === p.y + p.h - 1 && x === p.x + Math.floor(p.w / 2)) return false; // portail
+    return border;
+  }
   function tryOpenNearby() { if (nearTile(C.SHOP)) setShopOpen(true); else if (nearTile(C.BIN)) setBinOpen(true); }
 
   function spawnFx(m) {
@@ -839,6 +1004,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const fs = C.FISH[m.fish] || C.FISH[0];
         fx.push({ ...base, kind: "txt", txt: L.fxFish(lang === "en" ? fs.nameEn : fs.name), col: "#a8d4f0", life: 1.4 });
         for (let i = 0; i < 5; i++) fx.push({ ...base, kind: "p", col: "#5a9be0", vx: (Math.random() - .5) * 2, vy: -Math.random() * 2, life: .5 });
+        break;
+      }
+      case "product": {
+        const a = C.ANIMALS[m.product] || C.ANIMALS[0];
+        fx.push({ ...base, kind: "txt", txt: L.fxProduct(lang === "en" ? a.prodEn : a.prod), col: "#fff0c0", life: 1.4 });
         break;
       }
       default: break;
@@ -948,6 +1118,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       {/* Boutons flottants (nouveautés incluses) */}
       <div className="ferme-actions">
         <button className="ferme-btn" onClick={teleportHome}>{L.btnHome}</button>
+        {buildings.wellBuilt && <button className="ferme-btn" onClick={teleportWell}>{L.btnWell}</button>}
         <button className="ferme-btn" onClick={() => setMapOpen(true)}>{L.btnMap}</button>
         <button className="ferme-btn ferme-btn-ghost" onClick={changeCharacter}>{L.btnChangeChar}</button>
         <button className="ferme-btn ferme-btn-ghost" onClick={leaveGame}>{L.btnLeave}</button>
@@ -955,6 +1126,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
 
       {/* Invite proximité */}
       {promptKey && <div className="ferme-prompt">{promptKey === "shop" ? L.promptShop : L.promptBin}</div>}
+      {mountPrompt && <div className="ferme-prompt ferme-prompt-mount">{mountPrompt === "mount" ? L.mountPrompt : L.dismountPrompt}</div>}
 
       {/* Barre d'outils */}
       <div className="ferme-toolbar panel">
@@ -1040,6 +1212,25 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 </div>
               );
             })}
+            <div className="ferme-tools-header">🏗️</div>
+            <div className="ferme-shop-row">
+              <Sprite img={spritesReady ? spritesRef.current.horse : null} w={36} h={30} />
+              <div className="info"><b>{L.shopHorseTitle(C.HORSE_COST)}</b><span>{buildings.horseOwned ? L.shopHorseOwned : L.shopHorseSub}</span></div>
+              <button disabled={buildings.horseOwned || hud.money < C.HORSE_COST} onClick={buyHorse}>{buildings.horseOwned ? L.maxLabel : L.buyLabel}</button>
+            </div>
+            <div className="ferme-shop-row">
+              <Sprite img={spritesReady ? spritesRef.current.well : null} w={26} h={32} />
+              <div className="info"><b>{L.shopWellTitle(C.WELL_COST)}</b><span>{buildings.wellBuilt ? L.shopWellOwned : L.shopWellSub}</span></div>
+              <button disabled={buildings.wellBuilt || hud.money < C.WELL_COST} onClick={buyWell}>{buildings.wellBuilt ? L.maxLabel : L.buyLabel}</button>
+            </div>
+            <div className="ferme-tools-header">{L.shopAnimalsHeader}</div>
+            {C.ANIMALS.map(a => (
+              <div className="ferme-shop-row" key={"an" + a.id}>
+                <Sprite img={spritesReady ? spritesRef.current.animals[a.id] : null} w={32} h={28} />
+                <div className="info"><b>{L.animalRowTitle(lang === "en" ? a.nameEn : a.name, a.cost)}</b><span>{L.animalRowSub(lang === "en" ? a.prodEn : a.prod, a.sell)}</span></div>
+                <button disabled={hud.money < a.cost || buildings.animalCount >= C.MAX_ANIMALS} onClick={() => buyAnimal(a.id)}>{L.buyLabel}</button>
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -1091,9 +1282,23 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 </div>
               );
             })}
+            {C.ANIMALS.map(a => {
+              const n = myInv && myInv.products ? myInv.products[a.id] : 0;
+              if (!n) return null;
+              return (
+                <div className="ferme-shop-row" key={"pr" + a.id}>
+                  <Sprite img={spritesReady ? spritesRef.current.products[a.id] : null} w={32} h={32} />
+                  <div className="info"><b>{L.prodRowTitle(lang === "en" ? a.prodEn : a.prod, n)}</b><span>{L.perPiece(a.sell)}</span></div>
+                  <button disabled={!n} onClick={() => sellProduct(a.id)}>{L.sellAll}</button>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
+
+      {/* Minijeu de pêche (difficulté selon le type de poisson) */}
+      {fishMini && <FishMinigame mode={fishMini.mode} fish={fishMini.fish} L={L} lang={lang} onWin={fishWon} onFail={fishLost} />}
 
       {/* Carte plein écran (nouveauté) : positions live, fermeture au clic/Échap/M */}
       {mapOpen && (
@@ -1124,4 +1329,100 @@ function Sprite({ img, w = 32, h = 32, sx, sy }) {
     g.drawImage(img, 0, 0, sw, sh, 0, 0, sw, sh);
   }, [img, sx, sy]);
   return <canvas ref={ref} style={{ width: w, height: h, imageRendering: "pixelated" }} />;
+}
+
+/* ============================================================================
+   Minijeu de pêche : la difficulté dépend du type de poisson.
+   mode 0 (gardon)  : barre de timing, cliquer dans la zone verte.
+   mode 1 (truite)  : maintenir la barre sur le poisson jusqu'à remplir la jauge.
+   mode 2 (brochet) : réaction, cliquer dès que le cadre devient vert.
+   Entièrement local (clic ou Espace) ; sur victoire, le parent envoie la prise.
+   ============================================================================ */
+function FishMinigame({ mode, fish, L, lang, onWin, onFail }) {
+  const [, force] = useState(0);
+  const s = useRef(null);
+  const done = useRef(false);
+  const held = useRef(false);
+  const fishInfo = C.FISH[fish] || C.FISH[0];
+
+  const finish = (kind, tooSoon) => { if (done.current) return; done.current = true; if (kind === "win") onWin(); else onFail(!!tooSoon); };
+  const press = () => {
+    const st = s.current; if (!st || done.current) return;
+    if (mode === 0) finish(st.cursor >= 0.37 && st.cursor <= 0.63 ? "win" : "fail");
+    else if (mode === 2) finish(st.phase === "wait" ? "fail" : "win", st.phase === "wait");
+  };
+
+  useEffect(() => {
+    const st = { t0: performance.now() };
+    if (mode === 0) { st.cursor = 0; st.dir = 1; st.speed = 0.95; }
+    else if (mode === 1) { st.fish = 0.5; st.fishV = 0; st.bar = 0.5; st.barV = 0; st.prog = 0.28; }
+    else { st.phase = "wait"; st.goAt = performance.now() + 1200 + Math.random() * 1500; st.goShownAt = 0; }
+    s.current = st;
+    let raf = 0, last = performance.now();
+    const loop = () => {
+      raf = requestAnimationFrame(loop);
+      const now = performance.now(), dt = Math.min(0.05, (now - last) / 1000); last = now;
+      const st2 = s.current; if (!st2 || done.current) return;
+      if (mode === 0) {
+        st2.cursor += st2.dir * st2.speed * dt;
+        if (st2.cursor > 1) { st2.cursor = 1; st2.dir = -1; } if (st2.cursor < 0) { st2.cursor = 0; st2.dir = 1; }
+        if (now - st2.t0 > 8000) return finish("fail");
+      } else if (mode === 1) {
+        st2.fishV += (Math.random() - 0.5) * 1.1 * dt; st2.fishV *= 0.95; st2.fish += st2.fishV * dt;
+        if (st2.fish < 0.06) { st2.fish = 0.06; st2.fishV = Math.abs(st2.fishV); } if (st2.fish > 0.94) { st2.fish = 0.94; st2.fishV = -Math.abs(st2.fishV); }
+        st2.barV += (held.current ? -1.5 : 1.5) * dt; st2.barV *= 0.9; st2.bar += st2.barV * dt;
+        if (st2.bar < 0.05) { st2.bar = 0.05; st2.barV = 0; } if (st2.bar > 0.95) { st2.bar = 0.95; st2.barV = 0; }
+        const overlap = Math.abs(st2.bar - st2.fish) < 0.12;
+        st2.prog += (overlap ? 0.55 : -0.32) * dt; st2.prog = Math.max(0, Math.min(1, st2.prog));
+        if (st2.prog >= 1) return finish("win");
+        if (now - st2.t0 > 13000) return finish("fail");
+      } else {
+        if (st2.phase === "wait" && now >= st2.goAt) { st2.phase = "go"; st2.goShownAt = now; }
+        if (st2.phase === "go" && now - st2.goShownAt > 700) return finish("fail");
+      }
+      force(v => (v + 1) % 1000000);
+    };
+    raf = requestAnimationFrame(loop);
+    const onKey = (e) => { if (e.code === "Space") { e.preventDefault(); if (!e.repeat) { held.current = true; press(); } } };
+    const onKeyUp = (e) => { if (e.code === "Space") held.current = false; };
+    const onUp = () => { held.current = false; };
+    window.addEventListener("keydown", onKey); window.addEventListener("keyup", onKeyUp); window.addEventListener("pointerup", onUp);
+    return () => { cancelAnimationFrame(raf); window.removeEventListener("keydown", onKey); window.removeEventListener("keyup", onKeyUp); window.removeEventListener("pointerup", onUp); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode]);
+
+  const st = s.current;
+  const title = mode === 0 ? L.fishTimingTitle : mode === 1 ? L.fishHoldTitle : L.fishReactTitle;
+  const hint = mode === 0 ? L.fishTimingHint : mode === 1 ? L.fishHoldHint : L.fishReactHint;
+  const onDown = (e) => { e.preventDefault(); held.current = true; press(); };
+
+  return (
+    <div className="ferme-fish-ov" onPointerDown={onDown}>
+      <div className="ferme-fish-box panel" onPointerDown={onDown}>
+        <div className="ferme-fish-title">{title}</div>
+        <div className="ferme-fish-sub">{lang === "en" ? fishInfo.nameEn : fishInfo.name}</div>
+        {mode === 0 && (
+          <div className="ferme-fish-bar">
+            <div className="ferme-fish-zone" />
+            <div className="ferme-fish-cursor" style={{ left: `${(st ? st.cursor : 0) * 100}%` }} />
+          </div>
+        )}
+        {mode === 1 && (
+          <div className="ferme-fish-vwrap">
+            <div className="ferme-fish-vbar">
+              <div className="ferme-fish-vfish" style={{ top: `${(st ? st.fish : 0.5) * 100}%` }}>🐟</div>
+              <div className="ferme-fish-vbracket" style={{ top: `${(st ? st.bar : 0.5) * 100}%` }} />
+            </div>
+            <div className="ferme-fish-prog"><div style={{ height: `${(st ? st.prog : 0) * 100}%` }} /></div>
+          </div>
+        )}
+        {mode === 2 && (
+          <div className={"ferme-fish-react" + (st && st.phase === "go" ? " go" : "")}>
+            {st && st.phase === "go" ? L.fishReactNow : "..."}
+          </div>
+        )}
+        <div className="ferme-fish-hint">{hint}</div>
+      </div>
+    </div>
+  );
 }

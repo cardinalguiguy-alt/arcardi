@@ -130,8 +130,9 @@ export function newFarmer(id, name, gender, outfit) {
     inv: {
       wood: 0, stone: 0, food: 0,
       seeds: [5, 0, 0, 0], crops: [0, 0, 0, 0],
-      gems: C.GEMS.map(() => 0),   // gemmes rares trouvées au minage
-      fish: C.FISH.map(() => 0),   // poissons pêchés
+      gems: C.GEMS.map(() => 0),      // gemmes rares trouvées au minage
+      fish: C.FISH.map(() => 0),      // poissons pêchés
+      products: C.ANIMALS.map(() => 0), // productions d'élevage ramassées
     },
     quests: {}, // id de quête -> true quand accomplie
   };
@@ -239,10 +240,13 @@ export function resolveAct(world, f, m) {
       }
       break;
     case "fish":
-      // Pêche : la case ciblée doit être de l'eau (rivière) et à portée.
+      // Pêche : la case ciblée doit être de l'eau (rivière) et à portée. Le
+      // TYPE de poisson est décidé par le minijeu côté client (m.fish) : on
+      // ajoute exactement ce poisson (repli sur un tirage si absent/invalide).
       if (g === C.G_WATER) {
         if (!useEnergy(f, "fish", null)) { res.toast = "tired"; return res; }
-        const ft = weightedPick(C.FISH);
+        let ft = m.fish | 0;
+        if (!(ft >= 0 && ft < C.FISH.length)) ft = weightedPick(C.FISH);
         f.inv.fish[ft] = (f.inv.fish[ft] || 0) + 1;
         res.fx.push({ k: "fish", x, y, fish: ft });
         res.invChanged = true;
@@ -308,6 +312,11 @@ export function resolveSell(f, m) {
     if (ft < 0 || ft >= C.FISH.length) return res;
     const n = Math.min(f.inv.fish[ft], Math.max(1, (m.n | 0) || f.inv.fish[ft]));
     f.inv.fish[ft] -= n; gain = n * C.FISH[ft].sell;
+  } else if (m.item === "product") {
+    const pt = m.product | 0;
+    if (pt < 0 || pt >= C.ANIMALS.length) return res;
+    const n = Math.min(f.inv.products[pt], Math.max(1, (m.n | 0) || f.inv.products[pt]));
+    f.inv.products[pt] -= n; gain = n * C.ANIMALS[pt].sell;
   }
   if (gain > 0) { res.moneyDelta = gain; res.earnedDelta = gain; res.invChanged = true; res.gain = gain; }
   return res;
@@ -380,7 +389,7 @@ export function blockedTile(world, x, y) {
   const i = idx(fx, fy);
   const g = world.ground[i], o = world.objects[i];
   if (g === C.G_WATER) return true;
-  if (o === C.O_TREE || o === C.O_TREE2 || o === C.O_ROCK || o === C.O_HOUSE || o === C.O_SHOP || o === C.O_BIN || o === C.O_STUMP) return true;
+  if (o === C.O_TREE || o === C.O_TREE2 || o === C.O_ROCK || o === C.O_HOUSE || o === C.O_SHOP || o === C.O_BIN || o === C.O_STUMP || o === C.O_WELL) return true;
   return false;
 }
 

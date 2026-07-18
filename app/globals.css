@@ -6646,3 +6646,26 @@ body.ferme-active .wrap-room > .brand{ display:none !important; }
   .ferme-slot{ width:40px; height:40px; }
   .ferme-help{ display:none; }
 }
+
+/* ----- Ferme : invite monter à cheval, minijeu de pêche (jeu 22) ----- */
+.ferme-prompt-mount{ bottom:160px; background:rgba(20,16,8,.8); color:#ffe9a8; }
+
+.ferme-fish-ov{ position:fixed; inset:0; z-index:47; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,.5); touch-action:none; cursor:pointer; }
+.ferme-fish-box{ padding:16px 20px; text-align:center; width:min(360px,92vw); user-select:none; }
+.ferme-fish-title{ font-weight:bold; font-size:16px; }
+.ferme-fish-sub{ font-size:12px; opacity:.7; margin-bottom:12px; }
+.ferme-fish-hint{ font-size:11px; opacity:.7; margin-top:12px; }
+/* mode timing */
+.ferme-fish-bar{ position:relative; height:26px; margin:8px 0; border:3px solid var(--f-wood); border-radius:6px; background:#cfe3ef; overflow:hidden; }
+.ferme-fish-zone{ position:absolute; top:0; bottom:0; left:37%; width:26%; background:rgba(80,190,90,.6); border-left:2px solid #2f8a3f; border-right:2px solid #2f8a3f; }
+.ferme-fish-cursor{ position:absolute; top:-2px; bottom:-2px; width:6px; background:#3a2a1e; transform:translateX(-50%); border-radius:3px; }
+/* mode maintien */
+.ferme-fish-vwrap{ display:flex; gap:14px; justify-content:center; align-items:center; margin:6px 0; }
+.ferme-fish-vbar{ position:relative; width:44px; height:210px; border:3px solid var(--f-wood); border-radius:8px; background:linear-gradient(#bfe0f0,#7fb6d8); overflow:hidden; }
+.ferme-fish-vfish{ position:absolute; left:50%; transform:translate(-50%,-50%); font-size:18px; }
+.ferme-fish-vbracket{ position:absolute; left:2px; right:2px; height:24%; transform:translateY(-50%); border:3px solid rgba(232,200,90,.95); border-radius:6px; background:rgba(232,200,90,.18); }
+.ferme-fish-prog{ position:relative; width:18px; height:210px; border:3px solid var(--f-wood); border-radius:6px; background:#e0cc9e; overflow:hidden; }
+.ferme-fish-prog>div{ position:absolute; bottom:0; left:0; right:0; background:linear-gradient(#f4d442,#e8a83a); }
+/* mode réaction */
+.ferme-fish-react{ height:90px; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:22px; color:#fff; background:#c0453c; border:3px solid var(--f-wood); border-radius:8px; margin:8px 0; }
+.ferme-fish-react.go{ background:#3fa653; }
