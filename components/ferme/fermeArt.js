@@ -387,6 +387,23 @@ export function buildSprites() {
     P(g, 6, 2, 4, 1, "#3a3a40");
     return c;
   }
+  // Épouvantail (chantier 2026-07, achetable/posable par les joueurs) : croix
+  // de bois habillée de paille/vieux vêtements, chapeau de paille. Dessiné
+  // plus haut qu'une tuile (comme le lampadaire/le puits), donc dans le
+  // calque "draws" trié par profondeur, pas la boucle de sol.
+  function scarecrowSprite() {
+    const [c, g] = cv(16, 32);
+    P(g, 7, 20, 2, 8, "#7a5330"); // piquet planté au sol
+    P(g, 2, 12, 12, 2, "#8a6038"); // traverse (bras)
+    P(g, 4, 10, 8, 12, "#d4b25a"); // torse en paille
+    P(g, 3, 12, 2, 6, "#c49a4a"); P(g, 11, 12, 2, 6, "#c49a4a"); // manches
+    P(g, 5, 22, 3, 4, "#8a6a3a"); P(g, 8, 22, 3, 4, "#6a5230"); // jambes en paille
+    g.fillStyle = "#e8d8b0"; g.beginPath(); g.arc(8, 7, 4, 0, 7); g.fill(); // tête (sac de toile)
+    P(g, 5, 6, 2, 1, "#2a2a30"); P(g, 9, 6, 2, 1, "#2a2a30"); // yeux cousus
+    P(g, 6, 9, 4, 1, "#a83c30"); // bouche cousue
+    P(g, 3, 2, 10, 3, "#c9a227"); P(g, 2, 4, 12, 2, "#b8912a"); // chapeau de paille
+    return c;
+  }
   function well() {
     const [c, g] = cv(24, 30);
     // toit
@@ -619,6 +636,7 @@ export function buildSprites() {
     fencePost: fenceTilePost(),
     wall: wallTile(),
     lamp: lampSprite(),
+    scarecrow: scarecrowSprite(),
     barn: [barnSprite(1), barnSprite(2), barnSprite(3)],
     animals: [],
     products: [],

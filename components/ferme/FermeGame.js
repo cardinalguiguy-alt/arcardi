@@ -147,7 +147,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const autoWaterPendingRef = useRef(new Set());   // tuiles d'arrosage auto déjà demandées (anti-spam)
   const autoCollectPendingRef = useRef(new Set()); // animaux de collecte auto déjà demandés (anti-spam)
   const fenceDirRef = useRef("auto"); // orientation choisie pour la prochaine clôture posée ("auto"|"h"|"v")
-  const buildKindRef = useRef("fence"); // miroir synchrone de buildKind ("fence"|"wall"|"path"|"lamp")
+  const buildKindRef = useRef("fence"); // miroir synchrone de buildKind ("fence"|"wall"|"path"|"lamp"|"scarecrow")
   const heldAnimalRef = useRef(-1);   // index (dans sharedRef.animals) de l'animal actuellement porté par CE joueur, -1 sinon
   // Dormir dans la maison (chantier 2026-07) : sleepStartedAtRef (performance.now(),
   // horloge locale) + sleepStartEnergyRef permettent d'interpoler localement l'énergie
@@ -320,6 +320,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (o === C.O_TREE || o === C.O_TREE2) col = [46, 106, 40];
       else if (o === C.O_ROCK || o === C.O_WALL) col = [130, 130, 138];
       else if (o === C.O_LAMP) col = [230, 200, 100];
+      else if (o === C.O_SCARECROW) col = [212, 178, 90];
       else if (o === C.O_HOUSE) col = [192, 74, 60];
       else if (o === C.O_SHOP || o === C.O_BIN) col = [232, 200, 90];
       im.data.set([col[0], col[1], col[2], 255], i * 4);
@@ -649,7 +650,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // Déposer l'animal porté : n'importe où sur la ferme, hors case bloquée.
       const ai = req.animal | 0, an = s.animals[ai];
       const tx = req.x | 0, ty = req.y | 0;
-      if (an && an.carriedBy === req.id && inMap(tx, ty) && !E.blockedTile(w, tx + 0.5, ty + 0.5)) {
+      if (an && an.carriedBy === req.id && inMap(tx, ty) && !E.blockedTile(w, tx + 0.5, ty + 0.5, Date.now())) {
         an.hx = tx + 0.5; an.hy = ty + 0.5; an.carriedBy = null;
         out.animals = s.animals;
       } else out.toast = { id: f.id, key: "actionFailed" };
@@ -754,7 +755,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     pushToast(L.toastNewDay(p.day));
   }
   function toastMsg(key) {
-    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, actionFailed: L.toastActionFailed, coopNone: L.toastCoopNone, farCoop: L.toastFarCoop, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull }[key] || "";
+    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, actionFailed: L.toastActionFailed, coopNone: L.toastCoopNone, farCoop: L.toastFarCoop, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull }[key] || "";
   }
 
   // -------- Hôte : boucle temps + persistance --------
@@ -884,11 +885,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     else if (sl === 7) {
       // Outil "Construction" (case 8) : variante choisie via le menu
       // Construire/Vendre (fence = clôture bois, wall = mur pierre,
-      // path = chemin dallé, lamp = lampadaire acheté en or). L'orientation
-      // (dir) n'a de sens que pour la clôture ; l'envoyer pour les autres
-      // variantes est sans effet.
+      // path = chemin dallé, lamp = lampadaire acheté en or, scarecrow =
+      // épouvantail acheté en or). L'orientation (dir) n'a de sens que pour
+      // la clôture ; l'envoyer pour les autres variantes est sans effet.
       const bk = buildKindRef.current;
-      const action = bk === "wall" ? "wall" : bk === "path" ? "path" : bk === "lamp" ? "lamp" : "fence";
+      const action = bk === "wall" ? "wall" : bk === "path" ? "path" : bk === "lamp" ? "lamp" : bk === "scarecrow" ? "scarecrow" : "fence";
       sendReq({ kind: "act", action, x: tt.x, y: tt.y, dir: fenceDirRef.current });
     }
     else if (sl === 8) {
@@ -1265,6 +1266,35 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             } });
           }
         }
+        else if (o === C.O_SCARECROW) {
+          const readyAt = w.objHp.get(idxOf(x, y));
+          const ready = E.buildReady(readyAt, epochNow);
+          if (ready) {
+            // Aucun effet de jeu actif pour l'instant (contre les oiseaux,
+            // pas encore implémentés) : sprite simplement affiché plein.
+            draws.push({ y: (y + 1) * T, fn: () => ctx.drawImage(sprites.scarecrow, x * T, (y + 1) * T - 32) });
+          } else {
+            // Chantier en cours (10s réelles) : même traitement visuel que le
+            // lampadaire (sprite assombri + jauge + compte à rebours mm:ss).
+            const totalMs = C.BUILD_TIMES.scarecrow;
+            const remaining = E.buildRemainingMs(readyAt, epochNow);
+            const frac = Math.max(0, Math.min(1, 1 - remaining / totalMs));
+            draws.push({ y: (y + 1) * T, fn: () => {
+              ctx.save(); ctx.globalAlpha = 0.55;
+              ctx.drawImage(sprites.scarecrow, x * T, (y + 1) * T - 32);
+              ctx.restore();
+              const barW = 20, bx = x * T + 8 - barW / 2, by = (y + 1) * T - 38;
+              ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(bx, by, barW, 3);
+              ctx.fillStyle = "#d4b25a"; ctx.fillRect(bx, by, barW * frac, 3);
+              const totalSec = Math.ceil(remaining / 1000);
+              const mm = String(Math.floor(totalSec / 60)).padStart(2, "0");
+              const ss = String(totalSec % 60).padStart(2, "0");
+              ctx.font = "bold 8px monospace"; ctx.textAlign = "center";
+              ctx.fillStyle = "#00000090"; ctx.fillText(`${mm}:${ss}`, x * T + 8 + 1, by - 3 + 1);
+              ctx.fillStyle = "#fff"; ctx.fillText(`${mm}:${ss}`, x * T + 8, by - 3);
+            } });
+          }
+        }
       }
       // Animaux d'élevage (+ indicateur de production à ramasser). Position
       // dérivée du temps (déambulation, zip 152) sauf si l'animal est
@@ -1548,7 +1578,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
 
   // -------- Utilitaires partagés (hors boucle) --------
   function inMap(x, y) { const w = worldRef.current; return w && x >= 0 && y >= 0 && x < w.w && y < w.h; }
-  function blocked(w, x, y) { return E.blockedTile(w, x, y); }
+  function blocked(w, x, y) { return E.blockedTile(w, x, y, Date.now()); }
   function canStand(w, x, y) {
     const r = 0.3;
     return !blocked(w, x - r, y) && !blocked(w, x + r, y) && !blocked(w, x - r, y + 0.35) && !blocked(w, x + r, y + 0.35);
@@ -1681,6 +1711,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // l'outil Construction sur la variante "lamp", prêt à poser au clic suivant
   // (même confort que craftBuild pour clôture/mur/chemin).
   const buyLamp = (n) => { sendReq({ kind: "buy", item: "lamp", n }); buildKindRef.current = "lamp"; setBuildKind("lamp"); };
+  // Achat d'un épouvantail (payé en or, comme le lampadaire) : équipe
+  // directement l'outil Construction sur la variante "scarecrow", prêt à
+  // poser au clic suivant.
+  const buyScarecrow = (n) => { sendReq({ kind: "buy", item: "scarecrow", n }); buildKindRef.current = "scarecrow"; setBuildKind("scarecrow"); };
   const sellItem = (item, crop) => sendReq({ kind: "sell", item, crop, n: 9999 });
   // Menu Construire (clic sur bois/pierre du HUD) : fabrique `n` sections de
   // `item` (fence/wall/path) depuis le bois/la pierre récoltés, puis équipe
@@ -1796,16 +1830,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           else if (isFence) {
             // Outil "Construction" générique (chantier 2026-07) : icône,
             // compteur et infobulle dépendent de la variante choisie via le
-            // menu Construire/Vendre (fence/wall/path/lamp), pas seulement clôture.
-            const bkImg = buildKind === "wall" ? "wall" : buildKind === "path" ? "path" : buildKind === "lamp" ? "lamp" : "fence";
-            count = myInv ? (buildKind === "wall" ? (myInv.wall || 0) : buildKind === "path" ? (myInv.path || 0) : buildKind === "lamp" ? (myInv.lamp || 0) : (myInv.fence || 0)) : "";
+            // menu Construire/Vendre (fence/wall/path/lamp/scarecrow), pas
+            // seulement clôture.
+            const bkImg = buildKind === "wall" ? "wall" : buildKind === "path" ? "path" : buildKind === "lamp" ? "lamp" : buildKind === "scarecrow" ? "scarecrow" : "fence";
+            count = myInv ? (buildKind === "wall" ? (myInv.wall || 0) : buildKind === "path" ? (myInv.path || 0) : buildKind === "lamp" ? (myInv.lamp || 0) : buildKind === "scarecrow" ? (myInv.scarecrow || 0) : (myInv.fence || 0)) : "";
             img = spritesReady ? spritesRef.current[bkImg] : null;
             lvl = buildKind === "fence" ? (fenceDir === "h" ? "↔" : fenceDir === "v" ? "↕" : "R") : "";
           }
           else if (isHerd) { if (carryingAnimal) lvl = "●"; }
           else lvl = "N" + (myTools[s.key] || 1);
           const title = isSeed ? L.seedTip(seedName(seedSel)) : isFood ? L.foodTip(C.FOOD_ENERGY) : isRod ? L.rodTip
-            : isFence ? (buildKind === "wall" ? L.wallTip : buildKind === "path" ? L.pathTip : buildKind === "lamp" ? L.lampTip : L.fenceTip)
+            : isFence ? (buildKind === "wall" ? L.wallTip : buildKind === "path" ? L.pathTip : buildKind === "lamp" ? L.lampTip : buildKind === "scarecrow" ? L.scarecrowTip : L.fenceTip)
             : isHerd ? L.herdTip : TOOL_NAMES[s.key];
           return (
             <div key={s.key} className={"ferme-slot" + (i === slot ? " sel" : "")} onClick={() => selectSlot(i)} title={title}>
@@ -1985,6 +2020,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               <div className="info"><b>{L.lampRowTitle(C.LAMP_COST)}</b><span>{L.lampRowSub(myInv ? (myInv.lamp || 0) : 0)}</span></div>
               <button disabled={hud.money < C.LAMP_COST} onClick={() => buyLamp(1)}>{L.buy1}</button>
               <button disabled={hud.money < C.LAMP_COST * 5} onClick={() => buyLamp(5)}>{L.buy5}</button>
+            </div>
+            <div className="ferme-shop-row">
+              <Sprite img={spritesReady ? spritesRef.current.scarecrow : null} w={20} h={32} />
+              <div className="info"><b>{L.scarecrowRowTitle(C.SCARECROW_COST)}</b><span>{L.scarecrowRowSub(myInv ? (myInv.scarecrow || 0) : 0)}</span></div>
+              <button disabled={hud.money < C.SCARECROW_COST} onClick={() => buyScarecrow(1)}>{L.buy1}</button>
+              <button disabled={hud.money < C.SCARECROW_COST * 5} onClick={() => buyScarecrow(5)}>{L.buy5}</button>
             </div>
             <div className="ferme-tools-header">{L.shopAnimalsHeader}</div>
             {C.ANIMALS.map(a => (

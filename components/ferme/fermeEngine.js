@@ -250,7 +250,7 @@ export function newFarmer(id, name, gender, outfit) {
     sleepStartedAt: null, sleepStartEnergy: 0, // dort actuellement ? (voir resolveSleepStart/End)
     tools: { hoe: 1, can: 1, axe: 1, pick: 1 },
     inv: {
-      wood: 0, stone: 0, food: 0, fence: 0, wall: 0, path: 0, lamp: 0,
+      wood: 0, stone: 0, food: 0, fence: 0, wall: 0, path: 0, lamp: 0, scarecrow: 0,
       seeds: [5, 0, 0, 0], crops: [0, 0, 0, 0],
       gems: C.GEMS.map(() => 0),      // gemmes rares trouvées au minage
       fish: C.FISH.map(() => 0),      // poissons pêchés
@@ -293,6 +293,7 @@ export function normalizeFarmer(f) {
   if (typeof f.inv.wall !== "number") f.inv.wall = 0;
   if (typeof f.inv.path !== "number") f.inv.path = 0;
   if (typeof f.inv.lamp !== "number") f.inv.lamp = 0;
+  if (typeof f.inv.scarecrow !== "number") f.inv.scarecrow = 0;
   f.inv.seeds = padArray(f.inv.seeds, C.CROPS.length);
   f.inv.crops = padArray(f.inv.crops, C.CROPS.length);
   f.inv.gems = padArray(f.inv.gems, C.GEMS.length);
@@ -497,6 +498,26 @@ export function resolveAct(world, f, m) {
       }
       break;
     }
+    case "scarecrow": {
+      // Épouvantail (chantier 2026-07) : même mécanique que "lamp" (achetée à
+      // la boutique en or, pose/retrait sur une case libre, chantier réel de
+      // 10s avant d'être considéré comme prêt, voir BUILD_TIMES.scarecrow),
+      // mais NE bloque PAS le passage (voir blockedTile, fermeEngine.js) :
+      // pensé pour être posé au milieu d'un champ de cultures. Pas encore
+      // d'effet de jeu actif (contre les oiseaux, pas encore implémentés).
+      if (o === C.O_SCARECROW) {
+        world.objects[i] = C.O_NONE; world.objHp.delete(i);
+        f.inv.scarecrow = (f.inv.scarecrow || 0) + 1;
+        res.tiles.push(i); res.invChanged = true;
+      } else if ((g === C.G_GRASS || g === C.G_TILLED || g === C.G_WATERED) && o === C.O_NONE && !world.crops.has(i)) {
+        if (f.inv.scarecrow > 0) {
+          f.inv.scarecrow--;
+          world.objects[i] = C.O_SCARECROW; world.objHp.set(i, now + C.BUILD_TIMES.scarecrow);
+          res.tiles.push(i); res.invChanged = true;
+        } else res.toast = "noScarecrowStock";
+      }
+      break;
+    }
     case "fish":
       // Pêche : la case ciblée doit être de l'eau (rivière) et à portée. Le
       // TYPE de poisson est décidé par le minijeu côté client (m.fish) : on
@@ -661,6 +682,11 @@ export function resolveBuy(f, money, m) {
     const cost = C.LAMP_COST * n;
     if (money < cost) { res.toast = "noGold"; return res; }
     res.moneyDelta = -cost; f.inv.lamp = (f.inv.lamp || 0) + n; res.invChanged = true;
+  } else if (m.item === "scarecrow") {
+    const n = Math.max(1, Math.min(50, (m.n | 0) || 1));
+    const cost = C.SCARECROW_COST * n;
+    if (money < cost) { res.toast = "noGold"; return res; }
+    res.moneyDelta = -cost; f.inv.scarecrow = (f.inv.scarecrow || 0) + n; res.invChanged = true;
   } else if (m.item === "tool") {
     const key = m.tool;
     if (!C.TOOLS.includes(key)) return res;
@@ -845,13 +871,23 @@ export function gameTimeMin(dayStartAt, now) {
 }
 
 // Collision : true si la tuile bloque le déplacement d'un fermier.
-export function blockedTile(world, x, y) {
+// `now` (correctif chantier 2026-07) : une infrastructure encore EN CHANTIER
+// (temps de construction réel, voir BUILD_TIMES/buildReady) ne bloque PAS le
+// passage — seule l'infrastructure TERMINÉE devient un obstacle solide. Sans
+// ce correctif, poser un lampadaire (ou toute future infrastructure
+// chronométrée) juste devant/sous soi rendait la case immédiatement solide
+// dès la pose, ce qui pouvait figer le fermier qui vient de la poser (bloqué
+// par sa propre construction en cours, incapable de circuler librement).
+// `now` par défaut à `Date.now()` pour ne rien casser aux appels existants qui
+// ne le précisent pas encore.
+export function blockedTile(world, x, y, now = Date.now()) {
   const fx = Math.floor(x), fy = Math.floor(y);
   if (!inMap(fx, fy)) return true;
   const i = idx(fx, fy);
   const g = world.ground[i], o = world.objects[i];
   if (g === C.G_WATER) return true;
-  if (o === C.O_TREE || o === C.O_TREE2 || o === C.O_ROCK || o === C.O_HOUSE || o === C.O_SHOP || o === C.O_BIN || o === C.O_STUMP || o === C.O_WELL || o === C.O_FENCE || o === C.O_FENCE_H || o === C.O_FENCE_V || o === C.O_WALL || o === C.O_LAMP) return true;
+  if (o === C.O_LAMP) return buildReady(world.objHp.get(i), now);
+  if (o === C.O_TREE || o === C.O_TREE2 || o === C.O_ROCK || o === C.O_HOUSE || o === C.O_SHOP || o === C.O_BIN || o === C.O_STUMP || o === C.O_WELL || o === C.O_FENCE || o === C.O_FENCE_H || o === C.O_FENCE_V || o === C.O_WALL) return true;
   return false;
 }
 

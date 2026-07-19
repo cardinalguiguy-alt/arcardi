@@ -37,6 +37,8 @@ export const O_FENCE_H = 10; // section de clôture, orientation FORCÉE horizon
 export const O_FENCE_V = 11; // section de clôture, orientation FORCÉE verticale (touche R)
 export const O_WALL = 12;    // mur en pierre, construit par les joueurs (bloque le passage, pas d'orientation)
 export const O_LAMP = 13;    // lampadaire, achetable et posé par les joueurs (éclaire la nuit, bloque le passage)
+export const O_SCARECROW = 14; // épouvantail, achetable et posé par les joueurs (chantier 2026-07, contre les oiseaux -
+                                // pas encore implémentés ; ne bloque pas le passage, posé au milieu des cultures)
 
 // --- Cultures ---
 // stages: 0=semis ... maxStage=récoltable ; growMs = durée RÉELLE (arrosée) pour
@@ -179,6 +181,18 @@ export const FENCE_COST = 15; // prix d'une section de clôture à la boutique (
 export const LAMP_COST = 5000;         // prix d'un lampadaire à la boutique (or)
 export const LAMP_LIGHT_RADIUS = 4.5;  // rayon éclairé autour du lampadaire, en tuiles
 
+// --- Épouvantail (chantier 2026-07, demandé par Guillaume) ---
+// Achetable à la boutique (payé en or, même principe que le lampadaire) puis
+// posé librement avec l'outil Construction (case 8, nouvelle variante
+// "scarecrow"). Pensé pour effrayer les oiseaux, PAS ENCORE IMPLÉMENTÉS
+// (instructions à venir) : pour l'instant purement posable, sans effet de jeu
+// actif. Ne bloque PAS le passage (contrairement au mur/lampadaire, qui sont
+// des poteaux) : il est pensé pour être planté au milieu d'un champ de
+// cultures sans gêner la circulation entre les rangs — à confirmer par
+// Guillaume, à ajuster librement si un blocage est finalement souhaité.
+// Prix extrapolé (aucun chiffre précis demandé), à ajuster librement.
+export const SCARECROW_COST = 400; // prix d'un épouvantail à la boutique (or)
+
 // --- Temps de construction réels (chantier 2026-07, "modèle Clash of Clans") ---
 // Toute infrastructure posée par un joueur (lampadaire pour l'instant, et
 // toute future construction similaire) n'est PAS fonctionnelle immédiatement :
@@ -195,7 +209,8 @@ export const LAMP_LIGHT_RADIUS = 4.5;  // rayon éclairé autour du lampadaire, 
 // poser en stockant `now + BUILD_TIMES.<kind>` dans objHp, et vérifier
 // `E.buildReady(...)` avant de la considérer fonctionnelle côté rendu.
 export const BUILD_TIMES = {
-  lamp: 15 * 60 * 1000, // lampadaire niveau 1 : 15 minutes réelles (valeur donnée par Guillaume)
+  lamp: 15 * 60 * 1000,     // lampadaire niveau 1 : 15 minutes réelles (valeur donnée par Guillaume)
+  scarecrow: 10 * 1000,     // épouvantail : 10 secondes réelles (valeur donnée par Guillaume)
 };
 
 // --- Constructions bois/pierre (chantier 2026-07) ---
