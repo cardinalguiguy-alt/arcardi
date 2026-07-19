@@ -109,6 +109,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // -------- Refs (état du jeu, lus par la boucle de rendu) --------
   const canvasRef = useRef(null);
   const mapCanvasRef = useRef(null);
+  // Canvas hors-écran dédié à l'overlay nocturne (correctif chantier
+  // 2026-07, voir nightAlpha/lampsInView) : le voile sombre + les halos
+  // "destination-out" des lampadaires sont composés ICI, séparément du
+  // canvas principal, puis le résultat est plaqué par-dessus en une seule
+  // fois (drawImage, composite normal). Sans ce détour, appliquer
+  // "destination-out" directement sur le canvas principal n'aurait pas
+  // seulement percé le voile sombre : ça aurait aussi effacé le terrain/les
+  // sprites déjà dessinés dessous dans le rayon du lampadaire, laissant un
+  // trou transparent (fond de la page visible) plutôt qu'un cercle éclairé
+  // — c'était la cause du bug "les lampadaires restent éteints la nuit".
+  const nightCanvasRef = useRef(null);
   const chatInputRef = useRef(null);
   const channelRef = useRef(null);
   const spritesRef = useRef(null);
@@ -1130,15 +1141,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const c = w.crops.get(i);
         if (c) {
           const gs = E.cropGrowState(c, epochNow);
+          if (gs.wetness > 0) {
+            // Indication visuelle d'humidité (chantier 2026-07, remplace la
+            // goutte d'eau barrée) : la terre s'assombrit dès l'arrosage,
+            // reste foncée ~3h réelles, puis s'éclaircit progressivement
+            // jusqu'à sa teinte claire d'origine PILE quand il faut
+            // réarroser — ce retour à la couleur claire EST l'indicateur de
+            // manque d'eau, aucune icône superposée n'est plus nécessaire.
+            ctx.fillStyle = `rgba(40,26,12,${gs.wetness * 0.55})`;
+            ctx.fillRect(x * T, y * T, T, T);
+          }
           ctx.drawImage(sprites.crops[c.t][gs.stage], x * T, y * T);
           if (gs.mature) {
             // Bulle "prête à récolter" : flotte doucement au-dessus de la case.
             const bob = Math.sin(now / 260) * 1.5;
             ctx.drawImage(sprites.icons.ready, x * T + 2, y * T - 11 + bob, 12, 12);
-          } else if (gs.needsWater) {
-            // Goutte barrée : l'arrosage a expiré (ou jamais eu lieu), la
-            // pousse est en pause tant qu'on ne réarrose pas (touche 2).
-            ctx.drawImage(sprites.icons.thirst, x * T + 2, y * T - 10, 12, 12);
           }
         }
         const o = w.objects[i];
@@ -1351,26 +1368,49 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
 
       const na = nightAlpha();
       if (na > 0) {
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.fillStyle = `rgba(16,20,60,${na})`;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        // Correctif chantier 2026-07 ("les lampadaires restent éteints la
+        // nuit") : le voile sombre + les halos des lampadaires sont
+        // composés sur un canvas HORS-ÉCRAN dédié, PAS directement sur le
+        // canvas principal. Raison : "destination-out" efface les pixels
+        // sur lesquels il est appliqué ; utilisé directement sur le canvas
+        // principal, il n'aurait pas seulement percé le voile sombre mais
+        // aussi le terrain/les sprites déjà dessinés dessous, laissant un
+        // trou transparent (fond de page visible) au lieu d'un cercle
+        // éclairé. En composant d'abord sur un calque séparé, puis en le
+        // plaquant par-dessus (drawImage, composite normal), seul le voile
+        // est percé — le terrain en dessous reste intact et redevient
+        // visible, normalement éclairé.
+        let nc = nightCanvasRef.current;
+        if (!nc) { nc = document.createElement("canvas"); nightCanvasRef.current = nc; }
+        if (nc.width !== canvas.width || nc.height !== canvas.height) { nc.width = canvas.width; nc.height = canvas.height; }
+        const nctx = nc.getContext("2d");
+        nctx.setTransform(1, 0, 0, 1, 0, 0);
+        nctx.globalCompositeOperation = "source-over";
+        nctx.clearRect(0, 0, nc.width, nc.height);
+        nctx.fillStyle = `rgba(8,10,30,${na})`;
+        nctx.fillRect(0, 0, nc.width, nc.height);
         if (lampsInView.length) {
           // Halo lumineux : perce l'obscurité autour de chaque lampadaire
           // allumé (composite "destination-out", dégradé radial du centre au
-          // bord pour une transition douce plutôt qu'un cercle net).
-          ctx.save();
-          ctx.globalCompositeOperation = "destination-out";
+          // bord pour une transition douce plutôt qu'un cercle net) — mais
+          // uniquement sur le calque nocturne hors-écran (voir ci-dessus).
+          nctx.save();
+          nctx.globalCompositeOperation = "destination-out";
           const radiusPx = C.LAMP_LIGHT_RADIUS * T * ZOOM;
           for (const lamp of lampsInView) {
             const sx = (lamp.x * T - cam.x) * ZOOM, sy = (lamp.y * T - cam.y) * ZOOM;
-            const grad = ctx.createRadialGradient(sx, sy, 0, sx, sy, radiusPx);
+            const grad = nctx.createRadialGradient(sx, sy, 0, sx, sy, radiusPx);
             grad.addColorStop(0, `rgba(0,0,0,${na})`);
+            grad.addColorStop(0.7, `rgba(0,0,0,${na * 0.9})`);
             grad.addColorStop(1, "rgba(0,0,0,0)");
-            ctx.fillStyle = grad;
-            ctx.beginPath(); ctx.arc(sx, sy, radiusPx, 0, Math.PI * 2); ctx.fill();
+            nctx.fillStyle = grad;
+            nctx.beginPath(); nctx.arc(sx, sy, radiusPx, 0, Math.PI * 2); nctx.fill();
           }
-          ctx.restore();
+          nctx.restore();
         }
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.globalCompositeOperation = "source-over";
+        ctx.drawImage(nc, 0, 0);
       }
 
       // Invite boutique/bac
@@ -1526,10 +1566,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       ctx.fillStyle = isSelf ? "#ffffff" : "#ffe9a8"; ctx.fillText(p.name, px + 8, py - 10);
     }
     function nightAlpha() {
+      // Demande Guillaume (chantier 2026-07) : nuit sensiblement plus sombre
+      // qu'avant (0.6 d'opacité max jusqu'ici, jugé trop clair) — plafond
+      // relevé à 0.85. Mêmes paliers horaires qu'avant (tombée de la nuit
+      // 17h-20h, obscurité max atteinte 5h de jeu plus tard), seule
+      // l'intensité change.
       const tmin = E.gameTimeMin(sharedRef.current.dayStartAt, Date.now());
       if (tmin < 17 * 60) return 0;
-      if (tmin < 20 * 60) return ((tmin - 17 * 60) / 180) * 0.25;
-      return 0.25 + Math.min(1, (tmin - 20 * 60) / 300) * 0.35;
+      if (tmin < 20 * 60) return ((tmin - 17 * 60) / 180) * 0.3;
+      return 0.3 + Math.min(1, (tmin - 20 * 60) / 300) * 0.55;
     }
     function drawFullMap() {
       const mc = mapCanvasRef.current; if (!mc) return;

@@ -182,7 +182,20 @@ export function cropGrowState(crop, now) {
   const mature = grown >= dur;
   const stale = !crop.wateredAt || (now - crop.wateredAt) >= C.WATER_VALID_MS;
   const needsWater = !mature && stale;
-  return { stage, mature, needsWater, grown };
+  // Humidité visuelle du sol (chantier 2026-07, remplace la goutte d'eau
+  // barrée) : 1 = sol le plus foncé (juste arrosé), 0 = teinte claire
+  // d'origine (arrosage expiré = "il faut réarroser", seule indication
+  // désormais). Reste à 1 pendant WATER_DARK_MS, puis décroît linéairement
+  // jusqu'à 0 pile à WATER_VALID_MS — jamais recalculée/stockée, purement
+  // dérivée de `wateredAt` comme le reste de cette fonction.
+  let wetness = 0;
+  if (crop.wateredAt) {
+    const elapsed = now - crop.wateredAt;
+    if (elapsed <= C.WATER_DARK_MS) wetness = 1;
+    else if (elapsed >= C.WATER_VALID_MS) wetness = 0;
+    else wetness = 1 - (elapsed - C.WATER_DARK_MS) / (C.WATER_VALID_MS - C.WATER_DARK_MS);
+  }
+  return { stage, mature, needsWater, grown, wetness };
 }
 
 // Idem pour un animal d'élevage : prêt à ramasser si `now` a dépassé

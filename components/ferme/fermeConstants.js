@@ -57,6 +57,13 @@ export const CROP_STAGES = 5; // 0..4, stage 4 = mûr
 // réarroser, la pousse se met en pause (elle reprend dès le prochain arrosage,
 // sans perdre la progression déjà acquise).
 export const WATER_VALID_MS = 10 * H;
+// Indication visuelle d'humidité du sol (demande Guillaume 2026-07, remplace
+// la goutte d'eau barrée) : la case arrosée reste au plus foncé pendant
+// WATER_DARK_MS après l'arrosage, puis s'éclaircit progressivement jusqu'à
+// retrouver sa teinte claire d'origine PILE au moment où l'arrosage expire
+// (WATER_VALID_MS) — voir E.cropGrowState (champ `wetness`) et le rendu du
+// sol dans FermeGame.js.
+export const WATER_DARK_MS = 3 * H;
 
 // --- Gemmes rares (trouvées en cassant des rochers) ---
 // Chance de tomber sur une gemme quand un rocher est détruit. Tirage pondéré :
