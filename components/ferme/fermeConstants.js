@@ -21,6 +21,12 @@ export const G_PATH = 6;     // chemin devant la maison (fixe, jamais retirable 
 export const G_PATH_STONE = 7; // chemin dallé posé/retiré par les joueurs (construction, coûte de la pierre) ;
                                 // rendu visuellement IDENTIQUE au chemin fixe (même sprite), mais un type de
                                 // sol distinct pour ne jamais pouvoir "miner" le chemin fixe de la maison/du puits.
+export const G_BRIDGE_SITE = 8; // site de pont à construire (chantier 2026-07) : case de rivière/berge, aux 2
+                                 // emplacements fixes de traversée, pas encore bâtie. Bloque le passage comme
+                                 // G_WATER tant qu'elle n'est pas construite (voir blockedTile). Une fois payée
+                                 // (bois OU pierre, voir BRIDGE_COST_WOOD/BRIDGE_COST_STONE), devient G_BRIDGE,
+                                 // définitivement (pas de retrait, pour ne jamais piéger un joueur en pleine
+                                 // rivière en retirant la case sous ses pieds).
 
 // Objets
 export const O_NONE = 0;
@@ -83,7 +89,23 @@ export const GEMS = [
   { id: 1, name: "Émeraude",  nameEn: "Emerald",  sell: 500,  color: "#3fbf6a", weight: 0.30 },
   { id: 2, name: "Diamant",   nameEn: "Diamond",  sell: 1200, color: "#a8e8f4", weight: 0.08 },
 ];
-export const GEM_DROP_CHANCE = 0.16; // proba qu'un rocher détruit lâche une gemme
+export const GEM_DROP_CHANCE = 0.16; // proba de base qu'un rocher détruit lâche une gemme
+
+// Abondance des gemmes selon la distance à la maison (demande Guillaume 2026-07) :
+// "les ressources rares doivent être un peu plus abondantes quand on est très
+// éloigné de la maison [...] et quasi jamais trouvable autour de la maison".
+// GEM_DROP_CHANCE reste la base ; un multiplicateur est appliqué dessus selon
+// la distance (en cases) au centre de la maison, interpolé linéairement entre
+// les deux paliers ci-dessous puis appliqué à TOUT rocher cassé, où qu'il
+// soit sur la carte (donc aussi bien sur la rive droite de la rivière que
+// n'importe où ailleurs d'aussi loin de la maison — pas de règle spécifique
+// à la rivière, juste une conséquence de la distance, comme demandé "par
+// exemple"). Voir E.gemChanceAt(x,y) dans fermeEngine.js.
+// Valeurs extrapolées (aucun chiffre précis demandé), à ajuster librement.
+export const GEM_HOUSE_NEAR_RADIUS = 22; // en dessous (en cases) : gemmes quasi absentes
+export const GEM_HOUSE_NEAR_MULT = 0.08; // multiplicateur appliqué à GEM_DROP_CHANCE tout près de la maison
+export const GEM_HOUSE_FAR_RADIUS = 95;  // au-delà (en cases) : abondance maximale (plateau, ne monte plus)
+export const GEM_HOUSE_FAR_MULT = 1.6;   // multiplicateur maximal, loin de la maison
 
 // --- Poissons (pêche à la rivière) ---
 // Se mangent (rendent de l'énergie) OU se revendent au bac. Tirage pondéré.
@@ -251,6 +273,19 @@ export const BUILD_COSTS = {
   wall: 5,  // pierre par section de mur
   path: 2,  // pierre par dalle de chemin
 };
+
+// --- Ponts (chantier 2026-07, demande Guillaume) ---
+// Les 2 ponts fixes générés à la carte (voir generateWorld) ne sont plus déjà
+// construits : chaque case de la traversée est un site à bâtir (G_BRIDGE_SITE),
+// au choix en bois OU en pierre (2 types de pont, pas un coût combiné des
+// deux). Contrairement à la clôture/au mur/au chemin, PAS de section à
+// fabriquer au préalable via le menu Construire : le coût est prélevé
+// directement sur l'inventaire de bois/pierre récolté au moment de poser
+// chaque case (voir resolveAct cas "bridge"). Une fois posée, une case de
+// pont est PERMANENTE (pas de retrait/remboursement, pour ne jamais risquer
+// de piéger un joueur en pleine rivière en retirant la case sous ses pieds).
+export const BRIDGE_COST_WOOD = 20;  // bois par case de pont en bois
+export const BRIDGE_COST_STONE = 15; // pierre par case de pont en pierre
 
 // --- Élevage ---
 // Enclos près de la maison (dans la zone déjà dégagée autour de la ferme).

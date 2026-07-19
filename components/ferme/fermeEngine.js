@@ -64,11 +64,16 @@ export function generateWorld(seed) {
       else if (d < half + 1.6) ground[idx(x, y)] = C.G_SAND;
     }
   }
-  // Deux ponts
+  // Deux sites de pont (chantier 2026-07, demande Guillaume) : les ponts ne
+  // sont plus déjà construits à la génération, ce sont des chantiers
+  // (G_BRIDGE_SITE) que les joueurs bâtissent case par case, en bois ou en
+  // pierre (voir resolveAct cas "bridge"). Mêmes 2 emplacements et la même
+  // largeur de traversée qu'avant (aucun changement de géométrie), seul le
+  // type de sol posé change (site à construire au lieu de pont fini).
   for (const by of [42, 100]) for (let y = by; y < by + 3; y++) {
     const cx = Math.round(riverCenter[y]);
     for (let x = cx - 6; x <= cx + 6; x++)
-      if (inMap(x, y) && (ground[idx(x, y)] === C.G_WATER || ground[idx(x, y)] === C.G_SAND)) ground[idx(x, y)] = C.G_BRIDGE;
+      if (inMap(x, y) && (ground[idx(x, y)] === C.G_WATER || ground[idx(x, y)] === C.G_SAND)) ground[idx(x, y)] = C.G_BRIDGE_SITE;
   }
   // Maison, boutique, bac, chemin
   for (let y = C.HOUSE.y; y < C.HOUSE.y + C.HOUSE.h; y++) for (let x = C.HOUSE.x; x < C.HOUSE.x + C.HOUSE.w; x++) objects[idx(x, y)] = C.O_HOUSE;
@@ -215,6 +220,24 @@ export function buildReady(readyAt, now) {
 }
 export function buildRemainingMs(readyAt, now) {
   return Math.max(0, (readyAt || 0) - now);
+}
+
+// Rareté des gemmes selon la distance à la maison (chantier 2026-07, demande
+// Guillaume) : purement dérivée de la position de la case minée, comme
+// cropGrowState/animalReady/buildReady sont dérivés d'un horodatage — aucun
+// état supplémentaire à synchroniser. Multiplicateur interpolé linéairement
+// entre GEM_HOUSE_NEAR_MULT (à GEM_HOUSE_NEAR_RADIUS cases ou moins du centre
+// de la maison) et GEM_HOUSE_FAR_MULT (à GEM_HOUSE_FAR_RADIUS cases ou plus),
+// appliqué à GEM_DROP_CHANCE. Voir fermeConstants.js pour le détail/les
+// valeurs (extrapolées, à ajuster librement).
+const HOUSE_CX = C.HOUSE.x + C.HOUSE.w / 2;
+const HOUSE_CY = C.HOUSE.y + C.HOUSE.h / 2;
+export function gemChanceAt(x, y) {
+  const d = Math.hypot(x - HOUSE_CX, y - HOUSE_CY);
+  const span = C.GEM_HOUSE_FAR_RADIUS - C.GEM_HOUSE_NEAR_RADIUS;
+  const t = span > 0 ? Math.max(0, Math.min(1, (d - C.GEM_HOUSE_NEAR_RADIUS) / span)) : 1;
+  const mult = C.GEM_HOUSE_NEAR_MULT + t * (C.GEM_HOUSE_FAR_MULT - C.GEM_HOUSE_NEAR_MULT);
+  return C.GEM_DROP_CHANCE * mult;
 }
 
 // Position réelle/affichée d'un animal (zip 152) : dérivée PUREMENT de son
@@ -422,8 +445,10 @@ export function resolveAct(world, f, m) {
           world.objects[i] = C.O_NONE; world.objHp.delete(i);
           f.inv.stone += toolYield(C.ROCK_STONE, f.tools.pick);
           res.tiles.push(i); res.fx.push({ k: "rockdown", x, y });
-          // Gemme rare : chance de trouver une pierre précieuse dans le rocher.
-          if (Math.random() < C.GEM_DROP_CHANCE) {
+          // Gemme rare : chance de trouver une pierre précieuse dans le rocher,
+          // modulée par la distance à la maison (chantier 2026-07, voir
+          // gemChanceAt ci-dessus).
+          if (Math.random() < gemChanceAt(x, y)) {
             const gt = weightedPick(C.GEMS);
             f.inv.gems[gt] = (f.inv.gems[gt] || 0) + 1;
             res.fx.push({ k: "gem", x, y, gem: gt });
@@ -432,6 +457,30 @@ export function resolveAct(world, f, m) {
         res.invChanged = true;
       }
       break;
+    case "bridge": {
+      // Construction d'une case de pont (chantier 2026-07, demande Guillaume) :
+      // uniquement sur un site de chantier existant (G_BRIDGE_SITE, les 2
+      // emplacements fixes de traversée posés par generateWorld), au choix en
+      // bois ou en pierre (m.material). Coût prélevé DIRECTEMENT sur
+      // l'inventaire récolté (pas de section à fabriquer au préalable,
+      // contrairement à fence/wall/path). Permanent une fois posée : pas de
+      // branche de retrait, contrairement à "fence"/"wall"/"path" ci-dessous
+      // (retirer la case sous les pieds d'un joueur en pleine rivière serait
+      // dangereux/déroutant, volontairement évité).
+      if (g === C.G_BRIDGE_SITE) {
+        const mat = m.material === "stone" ? "stone" : "wood";
+        if (mat === "stone") {
+          if (f.inv.stone < C.BRIDGE_COST_STONE) { res.toast = "noStone"; return res; }
+          f.inv.stone -= C.BRIDGE_COST_STONE;
+        } else {
+          if (f.inv.wood < C.BRIDGE_COST_WOOD) { res.toast = "noWood"; return res; }
+          f.inv.wood -= C.BRIDGE_COST_WOOD;
+        }
+        world.ground[i] = C.G_BRIDGE;
+        res.tiles.push(i); res.fx.push({ k: "bridge", x, y, mat }); res.invChanged = true;
+      }
+      break;
+    }
     case "fence": {
       // Clôture posée librement par le joueur (achetée à la boutique, une
       // section à la fois), OU section de l'enclos de départ (désormais
@@ -906,7 +955,7 @@ export function blockedTile(world, x, y, now = Date.now()) {
   if (!inMap(fx, fy)) return true;
   const i = idx(fx, fy);
   const g = world.ground[i], o = world.objects[i];
-  if (g === C.G_WATER) return true;
+  if (g === C.G_WATER || g === C.G_BRIDGE_SITE) return true;
   if (o === C.O_LAMP) return buildReady(world.objHp.get(i), now);
   if (o === C.O_TREE || o === C.O_TREE2 || o === C.O_ROCK || o === C.O_HOUSE || o === C.O_SHOP || o === C.O_BIN || o === C.O_STUMP || o === C.O_WELL || o === C.O_FENCE || o === C.O_FENCE_H || o === C.O_FENCE_V || o === C.O_WALL) return true;
   return false;

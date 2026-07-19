@@ -158,7 +158,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const autoWaterPendingRef = useRef(new Set());   // tuiles d'arrosage auto déjà demandées (anti-spam)
   const autoCollectPendingRef = useRef(new Set()); // animaux de collecte auto déjà demandés (anti-spam)
   const fenceDirRef = useRef("auto"); // orientation choisie pour la prochaine clôture posée ("auto"|"h"|"v")
-  const buildKindRef = useRef("fence"); // miroir synchrone de buildKind ("fence"|"wall"|"path"|"lamp"|"scarecrow")
+  const buildKindRef = useRef("fence"); // miroir synchrone de buildKind ("fence"|"wall"|"path"|"lamp"|"scarecrow"|"bridgeWood"|"bridgeStone")
   const heldAnimalRef = useRef(-1);   // index (dans sharedRef.animals) de l'animal actuellement porté par CE joueur, -1 sinon
   // Dormir dans la maison (chantier 2026-07) : sleepStartedAtRef (performance.now(),
   // horloge locale) + sleepStartEnergyRef permettent d'interpoler localement l'énergie
@@ -328,6 +328,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       else if (gr === C.G_SAND) col = [216, 192, 122];
       else if (gr === C.G_TILLED || gr === C.G_WATERED) col = [138, 92, 53];
       else if (gr === C.G_BRIDGE || gr === C.G_PATH || gr === C.G_PATH_STONE) col = [154, 107, 63];
+      else if (gr === C.G_BRIDGE_SITE) col = [200, 160, 60];
       if (o === C.O_TREE || o === C.O_TREE2) col = [46, 106, 40];
       else if (o === C.O_ROCK || o === C.O_WALL) col = [130, 130, 138];
       else if (o === C.O_LAMP) col = [230, 200, 100];
@@ -897,11 +898,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // Outil "Construction" (case 8) : variante choisie via le menu
       // Construire/Vendre (fence = clôture bois, wall = mur pierre,
       // path = chemin dallé, lamp = lampadaire acheté en or, scarecrow =
-      // épouvantail acheté en or). L'orientation (dir) n'a de sens que pour
-      // la clôture ; l'envoyer pour les autres variantes est sans effet.
+      // épouvantail acheté en or, bridgeWood/bridgeStone = case de pont,
+      // chantier 2026-07). L'orientation (dir) n'a de sens que pour la
+      // clôture ; l'envoyer pour les autres variantes est sans effet. Le
+      // pont n'a pas de stock à part : le coût (bois ou pierre) est prélevé
+      // directement à la pose côté hôte (voir resolveAct cas "bridge").
       const bk = buildKindRef.current;
-      const action = bk === "wall" ? "wall" : bk === "path" ? "path" : bk === "lamp" ? "lamp" : bk === "scarecrow" ? "scarecrow" : "fence";
-      sendReq({ kind: "act", action, x: tt.x, y: tt.y, dir: fenceDirRef.current });
+      const action = bk === "wall" ? "wall" : bk === "path" ? "path" : bk === "lamp" ? "lamp" : bk === "scarecrow" ? "scarecrow"
+        : (bk === "bridgeWood" || bk === "bridgeStone") ? "bridge" : "fence";
+      sendReq({ kind: "act", action, x: tt.x, y: tt.y, dir: fenceDirRef.current, material: bk === "bridgeStone" ? "stone" : "wood" });
     }
     else if (sl === 8) {
       // Outil "déplacer" : premier clic attrape l'animal visé, second clic
@@ -1136,8 +1141,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         else if (g === C.G_WATER) img = sprites.water[waterFrame];
         else if (g === C.G_SAND) img = sprites.sand;
         else if (g === C.G_BRIDGE) img = sprites.bridge;
+        else if (g === C.G_BRIDGE_SITE) img = sprites.sand;
         else img = sprites.path;
         ctx.drawImage(img, x * T, y * T);
+        if (g === C.G_BRIDGE_SITE) {
+          // Site de pont à construire (chantier 2026-07) : voile hachuré
+          // semi-transparent par-dessus le sol (même technique que le voile
+          // d'humidité, un simple fillRect) pour signaler visuellement un
+          // chantier plutôt qu'une berge normale. Rendu réel non validé par
+          // Guillaume (le sandbox ne peut pas juger visuellement une teinte).
+          ctx.fillStyle = "rgba(120, 90, 40, 0.45)";
+          ctx.fillRect(x * T, y * T, T, T);
+          ctx.strokeStyle = "rgba(60, 40, 10, 0.6)";
+          ctx.lineWidth = 1;
+          ctx.strokeRect(x * T + 0.5, y * T + 0.5, T - 1, T - 1);
+        }
         const c = w.crops.get(i);
         if (c) {
           const gs = E.cropGrowState(c, epochNow);
@@ -1707,6 +1725,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         fx.push({ ...base, kind: "txt", txt: L.fxProduct(lang === "en" ? a.prodEn : a.prod), col: "#fff0c0", life: 1.4 });
         break;
       }
+      case "bridge": fx.push({ ...base, kind: "txt", txt: L.fxBridge, col: "#d9b380", life: 1.2 }); break;
       default: break;
     }
   }
@@ -1768,6 +1787,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function craftBuild(item, n) {
     sendReq({ kind: "craft", item, n });
     buildKindRef.current = item; setBuildKind(item);
+    selectSlot(7);
+    setCraftMenuOpen(null);
+  }
+  // Équiper le pont (chantier 2026-07) : contrairement à craftBuild, aucune
+  // fabrication de section au préalable — le coût (BRIDGE_COST_WOOD ou
+  // BRIDGE_COST_STONE) est prélevé directement à la pose de chaque case, sur
+  // un site de chantier (voir resolveAct cas "bridge"). Cette fonction se
+  // contente d'équiper l'outil Construction sur la bonne variante.
+  function equipBridge(mat) {
+    buildKindRef.current = mat === "stone" ? "bridgeStone" : "bridgeWood";
+    setBuildKind(mat === "stone" ? "bridgeStone" : "bridgeWood");
     selectSlot(7);
     setCraftMenuOpen(null);
   }
@@ -1877,15 +1907,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             // compteur et infobulle dépendent de la variante choisie via le
             // menu Construire/Vendre (fence/wall/path/lamp/scarecrow), pas
             // seulement clôture.
-            const bkImg = buildKind === "wall" ? "wall" : buildKind === "path" ? "path" : buildKind === "lamp" ? "lamp" : buildKind === "scarecrow" ? "scarecrow" : "fence";
-            count = myInv ? (buildKind === "wall" ? (myInv.wall || 0) : buildKind === "path" ? (myInv.path || 0) : buildKind === "lamp" ? (myInv.lamp || 0) : buildKind === "scarecrow" ? (myInv.scarecrow || 0) : (myInv.fence || 0)) : "";
+            const bkImg = buildKind === "wall" ? "wall" : buildKind === "path" ? "path" : buildKind === "lamp" ? "lamp" : buildKind === "scarecrow" ? "scarecrow"
+              : (buildKind === "bridgeWood" || buildKind === "bridgeStone") ? "bridge" : "fence";
+            // Pour le pont, pas de stock dédié (voir craft menu) : le compteur
+            // affiche directement le bois/la pierre disponible pour la
+            // variante choisie, cohérent avec le coût prélevé à la pose.
+            count = myInv ? (buildKind === "wall" ? (myInv.wall || 0) : buildKind === "path" ? (myInv.path || 0) : buildKind === "lamp" ? (myInv.lamp || 0) : buildKind === "scarecrow" ? (myInv.scarecrow || 0)
+              : buildKind === "bridgeWood" ? (myInv.wood || 0) : buildKind === "bridgeStone" ? (myInv.stone || 0) : (myInv.fence || 0)) : "";
             img = spritesReady ? spritesRef.current[bkImg] : null;
             lvl = buildKind === "fence" ? (fenceDir === "h" ? "↔" : fenceDir === "v" ? "↕" : "R") : "";
           }
           else if (isHerd) { if (carryingAnimal) lvl = "●"; }
           else lvl = "N" + (myTools[s.key] || 1);
           const title = isSeed ? L.seedTip(seedName(seedSel)) : isFood ? L.foodTip(C.FOOD_ENERGY) : isRod ? L.rodTip
-            : isFence ? (buildKind === "wall" ? L.wallTip : buildKind === "path" ? L.pathTip : buildKind === "lamp" ? L.lampTip : buildKind === "scarecrow" ? L.scarecrowTip : L.fenceTip)
+            : isFence ? (buildKind === "wall" ? L.wallTip : buildKind === "path" ? L.pathTip : buildKind === "lamp" ? L.lampTip : buildKind === "scarecrow" ? L.scarecrowTip
+              : (buildKind === "bridgeWood" || buildKind === "bridgeStone") ? L.bridgeTip : L.fenceTip)
             : isHerd ? L.herdTip : TOOL_NAMES[s.key];
           return (
             <div key={s.key} className={"ferme-slot" + (i === slot ? " sel" : "")} onClick={() => selectSlot(i)} title={title}>
@@ -1933,6 +1969,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 <button disabled={!myInv || myInv.wood < C.BUILD_COSTS.fence * 5} onClick={() => craftBuild("fence", 5)}>{L.buy5}</button>
               </div>
             )}
+            {craftMenuOpen === "wood" && (
+              <div className="ferme-craft-row">
+                <Sprite img={spritesReady ? spritesRef.current.bridge : null} w={26} h={26} />
+                <span className="name">{L.buildBridgeWoodLabel}<br /><span className="cost">{L.buildCostBridgeWood(C.BRIDGE_COST_WOOD)}</span></span>
+                <button disabled={!myInv || myInv.wood < C.BRIDGE_COST_WOOD} onClick={() => equipBridge("wood")}>{L.equipBtn}</button>
+              </div>
+            )}
             {craftMenuOpen === "stone" && (
               <>
                 <div className="ferme-craft-row">
@@ -1946,6 +1989,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   <span className="name">{L.buildPathLabel}<br /><span className="cost">{L.buildCostPath(C.BUILD_COSTS.path)}</span></span>
                   <button disabled={!myInv || myInv.stone < C.BUILD_COSTS.path} onClick={() => craftBuild("path", 1)}>{L.buy1}</button>
                   <button disabled={!myInv || myInv.stone < C.BUILD_COSTS.path * 5} onClick={() => craftBuild("path", 5)}>{L.buy5}</button>
+                </div>
+                <div className="ferme-craft-row">
+                  <Sprite img={spritesReady ? spritesRef.current.bridge : null} w={26} h={26} />
+                  <span className="name">{L.buildBridgeStoneLabel}<br /><span className="cost">{L.buildCostBridgeStone(C.BRIDGE_COST_STONE)}</span></span>
+                  <button disabled={!myInv || myInv.stone < C.BRIDGE_COST_STONE} onClick={() => equipBridge("stone")}>{L.equipBtn}</button>
                 </div>
               </>
             )}
