@@ -273,6 +273,14 @@ export function newFarmer(id, name, gender, outfit) {
   };
 }
 
+// Bonus de ressources par niveau de hache/pioche (demande Guillaume 2026-07) :
+// niveau 1 = quantité de base inchangée, chaque niveau supplémentaire multiplie
+// par C.TOOL_YIELD_MULT (1.5 par défaut). Fonction pure, arrondie à l'entier
+// le plus proche (au moins 1 pour ne jamais tomber à 0 sur une petite base).
+function toolYield(base, level) {
+  return Math.max(1, Math.round(base * Math.pow(C.TOOL_YIELD_MULT, Math.max(0, level - 1))));
+}
+
 // Complète un tableau numérique à la longueur attendue (préserve les valeurs
 // déjà présentes). Sert à faire évoluer le schéma d'inventaire sans jamais
 // perdre ce qu'un fermier possède déjà.
@@ -396,7 +404,7 @@ export function resolveAct(world, f, m) {
         const hp = (world.objHp.get(i) || 1) - f.tools.axe;
         res.fx.push({ k: "chop", x, y });
         if (hp <= 0) {
-          const wood = o === C.O_STUMP ? 2 : C.TREE_WOOD;
+          const wood = toolYield(o === C.O_STUMP ? 2 : C.TREE_WOOD, f.tools.axe);
           if (o === C.O_STUMP) { world.objects[i] = C.O_NONE; world.objHp.delete(i); }
           else { world.objects[i] = C.O_STUMP; world.objHp.set(i, 2); }
           f.inv.wood += wood;
@@ -412,7 +420,7 @@ export function resolveAct(world, f, m) {
         res.fx.push({ k: "mine", x, y });
         if (hp <= 0) {
           world.objects[i] = C.O_NONE; world.objHp.delete(i);
-          f.inv.stone += C.ROCK_STONE;
+          f.inv.stone += toolYield(C.ROCK_STONE, f.tools.pick);
           res.tiles.push(i); res.fx.push({ k: "rockdown", x, y });
           // Gemme rare : chance de trouver une pierre précieuse dans le rocher.
           if (Math.random() < C.GEM_DROP_CHANCE) {

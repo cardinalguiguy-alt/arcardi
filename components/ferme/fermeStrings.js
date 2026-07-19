@@ -165,8 +165,8 @@ export const FERME_STR = {
     toolUsage: {
       hoe: "Laboure une case d'herbe pour pouvoir y semer une graine.",
       can: "Arrose une culture plantée pour qu'elle continue de pousser. L'arrosage reste valable 10h réelles, puis il faut réarroser (marcher dessus avec l'arrosoir équipé suffit).",
-      axe: "Coupe les arbres pour récolter du bois.",
-      pick: "Casse les rochers pour récolter de la pierre (et parfois une gemme).",
+      axe: "Coupe les arbres pour récolter du bois. Chaque niveau donne aussi ×1,5 plus de bois par arbre.",
+      pick: "Casse les rochers pour récolter de la pierre (et parfois une gemme). Chaque niveau donne aussi ×1,5 plus de pierre par rocher.",
     },
     toolRowTitle: (name, lvl) => `${name} : niveau ${lvl}`,
     toolMaxSub: "Niveau maximum atteint !",
@@ -369,8 +369,8 @@ export const FERME_STR = {
     toolUsage: {
       hoe: "Tills a grass tile so you can plant a seed on it.",
       can: "Waters a planted crop so it keeps growing. Watering stays valid for 10 real hours, then it needs renewing (walking over it with the can equipped is enough).",
-      axe: "Chops trees to harvest wood.",
-      pick: "Breaks rocks to harvest stone (and sometimes a gem).",
+      axe: "Chops trees to harvest wood. Each level also gives ×1.5 more wood per tree.",
+      pick: "Breaks rocks to harvest stone (and sometimes a gem). Each level also gives ×1.5 more stone per rock.",
     },
     toolRowTitle: (name, lvl) => `${name}: level ${lvl}`,
     toolMaxSub: "Maximum level reached!",

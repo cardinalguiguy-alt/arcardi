@@ -51,6 +51,16 @@ export const CROPS = [
   { id: 1, name: "Pomme de terre", nameEn: "Potato",   seedName: "Graine de p. de terre", seedNameEn: "Potato seeds",   growMs: 12 * H, seedCost: 35, sell: 110, color: "#d9b380", top: "#c49a62" },
   { id: 2, name: "Tomate",         nameEn: "Tomato",   seedName: "Graine de tomate",      seedNameEn: "Tomato seeds",   growMs: 12 * H, seedCost: 50, sell: 170, color: "#e03e2e", top: "#c22b1c" },
   { id: 3, name: "Citrouille",     nameEn: "Pumpkin",  seedName: "Graine de citrouille",  seedNameEn: "Pumpkin seeds",  growMs: 18 * H, seedCost: 80, sell: 320, color: "#e8842a", top: "#cc6d14" },
+  // Blé et maïs (demande Guillaume 2026-07) : pousse longue (2 jours réels),
+  // même règle d'arrosage que les autres cultures (WATER_VALID_MS = 10h réelles,
+  // déjà global à toutes les cultures, rien de spécifique à coder ici). Coût/prix
+  // extrapolés en poursuivant la progression des cultures existantes (aucun
+  // chiffre précis demandé au-delà du temps de pousse et de l'arrosage) —
+  // à ajuster librement. Ajoutées SEULEMENT à la boutique : la liste CROPS
+  // est entièrement pilotée par les données (boutique, inventaire, vente,
+  // sprite), aucun autre fichier n'a besoin d'être modifié pour ces 2 entrées.
+  { id: 4, name: "Blé",  nameEn: "Wheat", seedName: "Graine de blé",  seedNameEn: "Wheat seeds", growMs: 48 * H, seedCost: 120, sell: 480, color: "#e8d24a", top: "#c2a82a" },
+  { id: 5, name: "Maïs", nameEn: "Corn",  seedName: "Graine de maïs", seedNameEn: "Corn seeds",  growMs: 48 * H, seedCost: 140, sell: 560, color: "#f0c93a", top: "#d9a91a" },
 ];
 export const CROP_STAGES = 5; // 0..4, stage 4 = mûr
 // Durée réelle pendant laquelle un arrosage reste valable : passé ce délai sans
@@ -89,6 +99,13 @@ export const TOOL_NAMES = { hoe: "Houe", can: "Arrosoir", axe: "Hache", pick: "P
 export const TOOL_NAMES_EN = { hoe: "Hoe", can: "Watering can", axe: "Axe", pick: "Pickaxe" };
 export const TOOL_MAX_LEVEL = 3;
 export const TOOL_UPGRADE_COST = [0, 500, 2000]; // coût pour passer au niveau 2, puis 3
+// Bonus de RESSOURCES récoltées (pas seulement la vitesse déjà existante via
+// f.tools[key] utilisé comme dégâts/coup) : chaque niveau de hache/pioche au
+// dessus de 1 multiplie le bois/la pierre obtenus par ×1.5 (demande Guillaume
+// 2026-07 : "1,5x plus par niveau"). Niveau 1 = base inchangée, niveau 2 = ×1.5,
+// niveau 3 = ×1.5² (×2.25). Arrondi à l'entier le plus proche au moment de la
+// récolte (voir `toolYield()` dans fermeEngine.js).
+export const TOOL_YIELD_MULT = 1.5;
 
 // Énergie
 export const MAX_ENERGY = 100;
