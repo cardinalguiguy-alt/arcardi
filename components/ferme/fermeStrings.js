@@ -101,6 +101,10 @@ export const FERME_STR = {
     mountPrompt: "[F] Monter à cheval",
     dismountPrompt: "[F] Descendre du cheval",
     wellToast: "🪣 Téléport au puits !",
+    // Torche / loups (chantier 2026-07)
+    torchTipOn: "Éteindre la torche",
+    torchTipOff: "Sortir une torche (éloigne les loups)",
+    wolfAteAnimal: () => "Un loup a emporté un animal de l'enclos, cette nuit !",
     // Boutique : bâtiments et animaux
     buyLabel: "Acheter",
     shopHorseTitle: (cost) => `🐴 Cheval : ${cost} or`,
@@ -327,6 +331,9 @@ export const FERME_STR = {
     mountPrompt: "[F] Mount the horse",
     dismountPrompt: "[F] Dismount",
     wellToast: "🪣 Teleported to the well!",
+    torchTipOn: "Put out the torch",
+    torchTipOff: "Take out a torch (scares wolves away)",
+    wolfAteAnimal: () => "A wolf carried off a pen animal tonight!",
     buyLabel: "Buy",
     shopHorseTitle: (cost) => `🐴 Horse: ${cost} gold`,
     shopHorseSub: "Moves much faster once mounted. Walk up to it and press F (can carry two riders).",

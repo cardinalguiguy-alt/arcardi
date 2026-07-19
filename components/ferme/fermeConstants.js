@@ -430,3 +430,37 @@ export const COLLECT_RANGE = 1.5;   // distance pour ramasser une production
 export const ANIMAL_WANDER_RADIUS = 0.55;    // amplitude en tuiles
 export const ANIMAL_WANDER_PERIOD_MS = 7000; // période de base (variée par animal)
 export const ANIMAL_PICK_RANGE = 1.8;        // portée pour attraper/déposer un animal (= ACT_RANGE)
+
+// --- Cycle jour/nuit (seuils partagés) ---
+// Extraits ici (au lieu de rester en constantes locales dans nightAlpha,
+// FermeGame.js) pour que la logique des loups (chantier 2026-07, demande
+// Guillaume) puisse déterminer "est-ce la nuit ?" avec EXACTEMENT les mêmes
+// paliers que le voile visuel, sans dupliquer les valeurs à deux endroits.
+export const DAWN_START_MIN = 5 * 60 + 30, DAWN_END_MIN = 6 * 60 + 30;   // 5h30 → 6h30
+export const DUSK_START_MIN = 17 * 60, DUSK_MID_MIN = 20 * 60, DEEP_END_MIN = 23 * 60; // 17h / 20h / 23h
+
+// --- Loups (chantier 2026-07, demande Guillaume : "loups assez détaillés,
+// rive droite de la rivière, ponts non fermés, torche pour les éloigner") ---
+// Simulation PUREMENT hôte (comme les chevaux sifflés) : les loups
+// apparaissent chaque nuit rive droite (côté opposé à la ferme, x plus grand
+// que le centre de la rivière à leur rangée), rôdent, et ne peuvent tenter
+// de traverser vers l'enclos QUE par un pont construit ET ouvert (G_BRIDGE,
+// jamais G_BRIDGE_SITE ni G_BRIDGE_CLOSED — même règle de collision que les
+// fermiers). Ils repartent à l'aube, quel que soit leur avancement.
+export const WOLF_COUNT = 3;              // loups actifs par nuit
+export const WOLF_SPEED_STOP = 0;         // état 1/3 : à l'arrêt (guet, repas)
+export const WOLF_SPEED_SLOW = 1.05;      // état 2/3 : marche lente (rôde / approche)
+export const WOLF_SPEED_FAST = 3.5;       // état 3/3 : marche rapide (chasse, fuite de la torche)
+export const WOLF_MAX_KILLS_PER_NIGHT = 2; // perte maximale d'animaux d'élevage, par nuit
+export const WOLF_EAT_RANGE = 0.9;        // portée d'attaque sur un animal de l'enclos
+export const WOLF_EAT_MS = 3500;          // durée d'un repas avant que l'animal disparaisse
+export const WOLF_HUNT_TRIGGER_MS = 9000; // délai moyen avant qu'un loup au repos décide de partir chasser
+export const WOLF_SPAWN_MARGIN = 5;       // marge (tuiles) au-delà de la berge est pour l'apparition
+export const WOLF_ROAM_RADIUS = 7;        // amplitude de rôdaille rive droite
+export const WOLF_TORCH_RANGE = 6;        // rayon d'effroi autour d'une torche allumée
+export const WOLF_FLEE_COOLDOWN_MS = 4000; // temps avant de reprendre son activité après une fuite
+
+// --- Torche (chantier 2026-07) : objet équipable (bouton dédié, comme le
+// sifflet à chevaux), pas un slot d'outil numéroté. Éclaire comme un
+// lampadaire portatif (rayon plus modeste) et fait fuir les loups à portée.
+export const TORCH_LIGHT_RADIUS = 4.5; // rayon éclairé autour du porteur (tuiles)

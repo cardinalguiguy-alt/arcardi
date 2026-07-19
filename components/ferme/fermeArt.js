@@ -390,6 +390,61 @@ export function buildSprites() {
     P(g, 25, 4, 1, 1, "#e8dcc8");      // reflet dans l'oeil
     return c;
   }
+  // Loup (chantier 2026-07, demande Guillaume : "loups assez détaillés... avec
+  // mouvements de pattes"). Vu de profil (regarde à droite, comme le cheval),
+  // silhouette basse et fine typique du loup (dos qui remonte vers l'arrière-
+  // train, grandes oreilles pointues, museau allongé, queue touffue tombante).
+  // 4 frames de marche (cycle classique quadrupède : les pattes avant/arrière
+  // opposées avancent ensemble, puis l'autre paire) pour une démarche crédible
+  // aux 2 vitesses de déplacement (marche lente/rapide n'utilisent que le
+  // TIMING du cycle, pas des frames différentes — voir FermeGame.js). frame=0
+  // sert aussi de pose "à l'arrêt" (pattes jointes), utilisée pour l'état
+  // arrêté (guet, repas).
+  function wolfSprite(frame) {
+    const [c, g] = cv(30, 22);
+    const body = "#6b6b6d", light = "#8a8a8c", dark = "#4a4a4c", shade = "#3a3a3c",
+      belly = "#a8a8a2", ear = "#3a3a3c", snoutDark = "#232325", eye = "#e0b840", paw = "#2a2a2c";
+    // Décalage des pattes selon la frame (0 = jointes/arrêt, 1..3 = cycle).
+    const off = [0, 3, 0, -3][frame % 4]; // avant-gauche/arrière-droite
+    const off2 = -off;                    // avant-droite/arrière-gauche (opposées)
+    // Queue touffue, tombante, qui suit légèrement le mouvement.
+    P(g, 1, 8, 5, 3, dark); P(g, 1, 8, 5, 1, body);
+    P(g, 0, 10, 3, 3, shade);
+    // Corps (dos qui remonte vers l'arrière-train, silhouette louve).
+    P(g, 5, 9, 15, 6, body);
+    P(g, 5, 9, 15, 2, light);           // reflet sur le dos
+    P(g, 5, 14, 15, 1, shade);          // ombre sous le ventre
+    P(g, 8, 13, 9, 2, belly);           // ventre plus clair
+    // Encolure + tête (museau allongé pointant vers l'avant/bas, typique loup).
+    P(g, 18, 5, 7, 7, body);
+    P(g, 18, 5, 7, 2, light);
+    P(g, 24, 4, 5, 5, body);            // tête
+    P(g, 27, 6, 3, 2, snoutDark);       // museau sombre
+    P(g, 29, 7, 1, 1, "#151517");       // truffe
+    P(g, 20, 1, 2, 4, ear); P(g, 20, 1, 1, 3, dark);   // oreille (grande, pointue)
+    P(g, 24, 1, 2, 4, ear); P(g, 25, 1, 1, 3, dark);   // 2e oreille
+    P(g, 25, 6, 1, 1, eye);             // oeil (jaune, typique loup)
+    // Pattes avant (2), décalées en frame pour l'animation de marche.
+    P(g, (7 + off) | 0, 15, 2, 6, dark); P(g, (7 + off) | 0, 20, 2, 2, paw);
+    P(g, (12 + off2) | 0, 15, 2, 6, body); P(g, (12 + off2) | 0, 20, 2, 2, paw);
+    // Pattes arrière (2, plus musclées à l'arrière-train), même logique.
+    P(g, (17 + off2) | 0, 14, 3, 7, dark); P(g, (17 + off2) | 0, 20, 3, 2, paw);
+    P(g, (21 + off) | 0, 14, 3, 7, body); P(g, (21 + off) | 0, 20, 3, 2, paw);
+    return c;
+  }
+  // Torche portative (chantier 2026-07) : bouton dédié (comme le sifflet à
+  // chevaux), pas un slot d'outil numéroté. Flamme dessinée séparément de la
+  // hampe pour pouvoir la faire vaciller légèrement à l'affichage (voir
+  // FermeGame.js, qui redessine juste la pointe avec un décalage variable).
+  function torchSprite() {
+    const [c, g] = cv(14, 20);
+    P(g, 5, 9, 3, 10, "#7a5330");  // manche en bois
+    P(g, 5, 9, 1, 10, "#9a6f42");
+    P(g, 3, 6, 7, 4, "#5a4020");   // tête ficelée
+    g.fillStyle = "#f0a838"; g.beginPath(); g.moveTo(7, 0); g.lineTo(11, 6); g.lineTo(7, 5); g.lineTo(3, 6); g.fill(); // flamme
+    g.fillStyle = "#ffe27a"; g.beginPath(); g.moveTo(7, 2); g.lineTo(9, 6); g.lineTo(7, 5); g.lineTo(5, 6); g.fill();  // coeur clair de la flamme
+    return c;
+  }
   // Lampadaire (chantier 2026-07, achetable/posable par les joueurs) : poteau
   // fin surmonté d'une lanterne. Dessiné plus haut qu'une tuile (comme le
   // puits), donc dans le calque "draws" trié par profondeur, pas la boucle de
@@ -667,6 +722,8 @@ export function buildSprites() {
     gemIcons: [],
     fishIcons: [],
     horse: horseSprite(),
+    wolf: [wolfSprite(0), wolfSprite(1), wolfSprite(2), wolfSprite(3)],
+    torch: torchSprite(),
     well: well(),
     fence: fenceTile(),
     fenceV: fenceTileV(),

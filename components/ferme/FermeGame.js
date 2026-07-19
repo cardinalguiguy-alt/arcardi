@@ -113,6 +113,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [carryingAnimal, setCarryingAnimal] = useState(false); // vrai si un animal est actuellement porté (miroir de heldAnimalRef)
   const [buildings, setBuildings] = useState({ horseCount: 0, wellBuilt: false, animalCount: 0 });
   const [onHorse, setOnHorse] = useState(false);
+  const [torchOn, setTorchOn] = useState(false); // torche allumée (chantier 2026-07) : éloigne les loups, éclaire un rayon autour du porteur
   const [fishMini, setFishMini] = useState(null); // {mode, fish} pendant le minijeu, sinon null
   const [barnMini, setBarnMini] = useState(null); // {level} pendant le mini-jeu de construction de la grange, sinon null
   const [shopOpen, setShopOpen] = useState(false);
@@ -150,7 +151,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const meRef = useRef(null);
   const playersRef = useRef(new Map()); // id -> remote farmer render data
   const farmersRef = useRef({});        // hôte : id -> état privé arbitré
-  const sharedRef = useRef({ seed: 0, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState() });
+  const sharedRef = useRef({ seed: 0, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), wolves: [], wolfNight: { active: false, kills: 0 } });
   const invRef = useRef(null);
   const toolsRef = useRef({ hoe: 1, can: 1, axe: 1, pick: 1 });
   const energyRef = useRef(C.MAX_ENERGY);
@@ -184,6 +185,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const buildKindRef = useRef("fence"); // miroir synchrone de buildKind ("fence"|"wall"|"path"|"lamp"|"scarecrow"|"grass"|"bridgeWood"|"bridgeStone")
   const heldAnimalRef = useRef(-1);   // index (dans sharedRef.animals) de l'animal actuellement porté par CE joueur, -1 sinon
   const horseCallAccumRef = useRef(0); // accumulateur (secondes) pour throttler la diffusion réseau des chevaux sifflés en course
+  const wolfAccumRef = useRef(0);      // accumulateur (secondes), même throttle réseau pour les loups simulés côté hôte
+  const torchOnRef = useRef(false);    // miroir synchrone de torchOn (lu dans la boucle de rendu / diffusé avec la position)
   // Dormir dans la maison (chantier 2026-07) : sleepStartedAtRef (performance.now(),
   // horloge locale) + sleepStartEnergyRef permettent d'interpoler localement l'énergie
   // affichée pendant les 60s, même principe que cropGrowState mais côté client pour
@@ -289,6 +292,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         animals: saved.animals || [], wellBuilt: !!saved.wellBuilt, coop: saved.coop || null,
         barn: saved.barn || E.newBarnState(),
         gems: migrateGems(saved),
+        wolves: [], wolfNight: { active: false, kills: 0 }, // repartent à zéro à la reprise, respawn dérivé de l'heure courante
       };
       // Les cavaliers repartent à pied à la reprise (aucun joueur monté au chargement).
       for (const h of sharedRef.current.horses) { h.rider = null; h.rider2 = null; h.callTarget = null; }
@@ -308,7 +312,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const seed = hashSeed(code);
       worldRef.current = E.generateWorld(seed);
       overridesRef.current = { ground: {}, object: {} };
-      sharedRef.current = { seed, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), gems: C.GEMS.map(() => 0) };
+      sharedRef.current = { seed, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), gems: C.GEMS.map(() => 0), wolves: [], wolfNight: { active: false, kills: 0 } };
       farmersRef.current = {};
       // Crée tout de suite l'enregistrement pour réserver le code.
       persistFarm();
@@ -384,6 +388,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       animals: payload.animals || [], wellBuilt: !!payload.wellBuilt, coop: payload.coop || null,
       barn: payload.barn || E.newBarnState(),
       gems: migrateGems(payload),
+      wolves: payload.wolves || [], wolfNight: { active: !!(payload.wolves && payload.wolves.length), kills: 0 },
     };
     if (payload.farmers) {
       farmersRef.current = payload.farmers;
@@ -454,6 +459,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const r = playersRef.current.get(payload.id);
       r.tx = payload.x; r.ty = payload.y; r.dir = payload.dir; r.moving = payload.moving; r.tool = payload.tool;
       r.gender = payload.gender; r.outfit = payload.outfit; r.name = payload.name; r.sleeping = !!payload.sleeping;
+      r.torch = !!payload.torch;
     });
     ch.on("broadcast", { event: "req" }, ({ payload }) => { if (isHost) hostHandleReq(payload); });
     ch.on("broadcast", { event: "apply" }, ({ payload }) => applyDeltas(payload));
@@ -482,7 +488,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function ensureRemote(p) {
     if (p.id === me.id) return;
     if (!playersRef.current.has(p.id)) {
-      playersRef.current.set(p.id, { id: p.id, name: p.name, gender: p.gender || "m", outfit: p.outfit || 0, x: p.x ?? C.SPAWN.x, y: p.y ?? C.SPAWN.y, tx: p.x ?? C.SPAWN.x, ty: p.y ?? C.SPAWN.y, dir: p.dir || 0, moving: false, tool: 0, animT: 0, sleeping: false });
+      playersRef.current.set(p.id, { id: p.id, name: p.name, gender: p.gender || "m", outfit: p.outfit || 0, x: p.x ?? C.SPAWN.x, y: p.y ?? C.SPAWN.y, tx: p.x ?? C.SPAWN.x, ty: p.y ?? C.SPAWN.y, dir: p.dir || 0, moving: false, tool: 0, animT: 0, sleeping: false, torch: false });
     }
   }
 
@@ -494,7 +500,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       groundOv: overridesRef.current.ground, objectOv: overridesRef.current.object,
       crops: worldRef.current ? E.serializeCrops(worldRef.current) : [],
       farmers: farmersRef.current,
-      horses: s.horses, animals: s.animals, wellBuilt: s.wellBuilt, coop: s.coop, barn: s.barn, gems: s.gems,
+      horses: s.horses, animals: s.animals, wellBuilt: s.wellBuilt, coop: s.coop, barn: s.barn, gems: s.gems, wolves: s.wolves,
     };
   }
   function syncBuildings() {
@@ -812,6 +818,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (p.fx) for (const f of p.fx) spawnFx(f);
     if (p.horses) { sharedRef.current.horses = p.horses; syncBuildings(); }
     if (p.animals) { sharedRef.current.animals = p.animals; syncBuildings(); }
+    if (p.wolves) { sharedRef.current.wolves = p.wolves; minimapDirtyRef.current = true; }
     if (p.wellBuilt) { sharedRef.current.wellBuilt = true; minimapDirtyRef.current = true; syncBuildings(); }
     if (p.coop !== undefined) { sharedRef.current.coop = p.coop; setCoop(p.coop); }
     if (p.barn !== undefined) { sharedRef.current.barn = p.barn; setBarn(p.barn); minimapDirtyRef.current = true; }
@@ -945,7 +952,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function changeCharacter() { autoJoinTriedRef.current = true; joinedRef.current = false; setPhase("select"); }
   function pubMe() {
     const m = meRef.current;
-    return { id: m.id, name: m.name, gender: m.gender, outfit: m.outfit, x: +m.x.toFixed(2), y: +m.y.toFixed(2), dir: m.dir, moving: m.moving, tool: slotRef.current, sleeping: !!m.sleeping };
+    return { id: m.id, name: m.name, gender: m.gender, outfit: m.outfit, x: +m.x.toFixed(2), y: +m.y.toFixed(2), dir: m.dir, moving: m.moving, tool: slotRef.current, sleeping: !!m.sleeping, torch: !!torchOnRef.current };
   }
   function sendPos() { channelRef.current?.send({ type: "broadcast", event: "pos", payload: pubMe() }); }
 
@@ -1098,6 +1105,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // Guillaume) : envoie la requête au hôte, qui fixe `callTarget` sur chaque
   // cheval libre (voir req.kind === "whistle" dans hostHandleReqUnsafe).
   function whistleHorses() { sendReq({ kind: "whistle" }); }
+  // Torche (chantier 2026-07, demande Guillaume : "on doit pouvoir éloigner
+  // les loups en sortant une torche et en s'approchant d'eux") : simple
+  // bascule locale, diffusée avec la position (voir pubMe/sendPos) comme
+  // dir/moving/tool/sleeping. Aucun arbitrage hôte nécessaire : la torche ne
+  // consomme ni n'use rien, elle change seulement le comportement des loups
+  // (updateWolves, simulé côté hôte) et perce un halo dans le voile nocturne
+  // (voir lampsInView plus bas, qui inclut aussi les porteurs de torche).
+  function toggleTorch() {
+    torchOnRef.current = !torchOnRef.current;
+    setTorchOn(torchOnRef.current);
+    sendPos();
+  }
   // Fait progresser, HÔTE UNIQUEMENT, chaque cheval ayant reçu un `callTarget`
   // (sifflement) vers cette cible, à la même vitesse qu'un cheval monté
   // (PLAYER_SPEED * HORSE_SPEED_MULT, "au galop"). Purement une simulation de
@@ -1124,6 +1143,163 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         horseCallAccumRef.current = 0;
         channelRef.current?.send({ type: "broadcast", event: "apply", payload: { horses: hs } });
       }
+    }
+  }
+  // Loups (chantier 2026-07, demande Guillaume). Simulation HÔTE UNIQUEMENT,
+  // même esprit que updateWhistledHorses : positions dérivées frame par
+  // frame, diffusées en throttle (~150ms). Apparaissent rive droite
+  // (E.riverSideOf) à la tombée de la nuit (E.isNightTime), tentent de
+  // traverser par un pont OUVERT (E.nearestOpenBridge/E.bridgeIsOpen) pour
+  // aller chasser dans l'enclos, repartent à l'aube. Une torche allumée à
+  // portée (C.WOLF_TORCH_RANGE) prime sur tout le reste : le loup fuit et
+  // abandonne sa proie/son repas en cours (l'animal est alors sauvé).
+  function updateWolves(dt) {
+    const w = worldRef.current; if (!w) return;
+    const s = sharedRef.current;
+    const now = Date.now();
+    const tmin = E.gameTimeMin(s.dayStartAt, now);
+    const night = E.isNightTime(tmin);
+    if (!s.wolfNight) s.wolfNight = { active: false, kills: 0 };
+    if (night && !s.wolfNight.active) {
+      s.wolfNight = { active: true, kills: 0 };
+      s.wolves = [];
+      for (let i = 0; i < C.WOLF_COUNT; i++) {
+        const p = E.wolfSpawnPos(w, Math.random);
+        s.wolves.push({
+          id: "wolf" + i + "_" + now, x: p.x, y: p.y, tx: p.x, ty: p.y, dir: 2, animT: 0,
+          state: "stop", phase: "roam", roamAnchor: { x: p.x, y: p.y }, roamTarget: null, nextRoamAt: 0,
+          nextHuntCheckAt: now + 3000 + Math.random() * C.WOLF_HUNT_TRIGGER_MS,
+          bridgeIdx: -1, huntAnimalIdx: -1, eatUntil: 0, fleeUntil: 0,
+        });
+      }
+      channelRef.current?.send({ type: "broadcast", event: "apply", payload: { wolves: s.wolves } });
+      minimapDirtyRef.current = true;
+      return;
+    } else if (!night && s.wolfNight.active) {
+      s.wolfNight = { active: false, kills: 0 };
+      s.wolves = [];
+      channelRef.current?.send({ type: "broadcast", event: "apply", payload: { wolves: s.wolves } });
+      minimapDirtyRef.current = true;
+      return;
+    }
+    if (!s.wolves || !s.wolves.length) return;
+
+    // Porteurs de torche allumée (soi-même + distants), pour la fuite.
+    const torchBearers = [];
+    const mm = meRef.current;
+    if (mm && torchOnRef.current) torchBearers.push({ x: mm.x, y: mm.y });
+    for (const p of playersRef.current.values()) if (p.torch) torchBearers.push({ x: p.x, y: p.y });
+
+    let animalsChanged = false, moved = false;
+    for (const wf of s.wolves) {
+      let scare = null, scareD = Infinity;
+      for (const t of torchBearers) {
+        const d = Math.hypot(t.x - wf.x, t.y - wf.y);
+        if (d < C.WOLF_TORCH_RANGE && d < scareD) { scareD = d; scare = t; }
+      }
+      let speed = 0;
+      if (scare) {
+        // Repas en cours interrompu par la torche : l'animal visé est sauvé.
+        wf.huntAnimalIdx = -1;
+        wf.phase = "flee"; wf.fleeUntil = now + C.WOLF_FLEE_COOLDOWN_MS;
+        const dx = wf.x - scare.x, dy = wf.y - scare.y, d = Math.hypot(dx, dy) || 1;
+        wf.tx = wf.x + (dx / d) * 4; wf.ty = wf.y + (dy / d) * 4;
+        wf.state = "run"; speed = C.WOLF_SPEED_FAST;
+      } else if (wf.phase === "flee") {
+        if (now < wf.fleeUntil) { wf.state = "run"; speed = C.WOLF_SPEED_FAST; }
+        else wf.phase = E.riverSideOf(w, wf.x, wf.y) === "west" ? "return" : "roam";
+      }
+      if (!scare && wf.phase !== "flee") {
+        if (wf.phase === "roam") {
+          wf.state = "walk"; speed = C.WOLF_SPEED_SLOW;
+          if (!wf.roamTarget || Math.hypot(wf.roamTarget.x - wf.x, wf.roamTarget.y - wf.y) < 0.3 || now >= wf.nextRoamAt) {
+            const a = Math.random() * Math.PI * 2, d = Math.random() * C.WOLF_ROAM_RADIUS;
+            wf.roamTarget = { x: wf.roamAnchor.x + Math.cos(a) * d, y: wf.roamAnchor.y + Math.sin(a) * d };
+            wf.nextRoamAt = now + 3000 + Math.random() * 3000;
+          }
+          wf.tx = wf.roamTarget.x; wf.ty = wf.roamTarget.y;
+          if (now >= wf.nextHuntCheckAt) {
+            if (s.wolfNight.kills < C.WOLF_MAX_KILLS_PER_NIGHT && (s.animals || []).some(a => !a.carriedBy)) wf.phase = "toBridge";
+            wf.nextHuntCheckAt = now + C.WOLF_HUNT_TRIGGER_MS + Math.random() * 4000;
+          }
+        } else if (wf.phase === "toBridge") {
+          wf.state = "walk"; speed = C.WOLF_SPEED_SLOW;
+          if (wf.bridgeIdx < 0 || !E.bridgeIsOpen(w, wf.bridgeIdx)) wf.bridgeIdx = E.nearestOpenBridge(w, wf.x, wf.y);
+          if (wf.bridgeIdx < 0) wf.phase = "roam";
+          else {
+            const p = E.bridgeCrossPoint(w, wf.bridgeIdx);
+            wf.tx = p.x; wf.ty = p.y;
+            if (Math.hypot(p.x - wf.x, p.y - wf.y) < 0.6) wf.phase = "cross";
+          }
+        } else if (wf.phase === "cross") {
+          wf.state = "walk"; speed = C.WOLF_SPEED_SLOW;
+          if (!E.bridgeIsOpen(w, wf.bridgeIdx)) { wf.phase = "toBridge"; wf.bridgeIdx = -1; }
+          else {
+            const p = E.bridgeCrossPoint(w, wf.bridgeIdx);
+            const westX = p.x - 4;
+            wf.tx = westX; wf.ty = p.y;
+            if (E.riverSideOf(w, wf.x, wf.y) === "west" && Math.abs(wf.x - westX) < 0.6) wf.phase = "hunt";
+          }
+        } else if (wf.phase === "hunt") {
+          wf.state = "run"; speed = C.WOLF_SPEED_FAST;
+          const animals = s.animals || [];
+          let an = wf.huntAnimalIdx >= 0 ? animals[wf.huntAnimalIdx] : null;
+          if (!an || an.carriedBy) {
+            let bi = -1, bd = Infinity;
+            for (let i = 0; i < animals.length; i++) { const a = animals[i]; if (a.carriedBy) continue; const d = Math.hypot(a.hx - wf.x, a.hy - wf.y); if (d < bd) { bd = d; bi = i; } }
+            wf.huntAnimalIdx = bi; an = bi >= 0 ? animals[bi] : null;
+          }
+          if (!an) wf.phase = "return";
+          else {
+            const ap = E.animalPos(an, now);
+            wf.tx = ap.x; wf.ty = ap.y;
+            if (Math.hypot(ap.x - wf.x, ap.y - wf.y) < C.WOLF_EAT_RANGE) { wf.phase = "eat"; wf.eatUntil = now + C.WOLF_EAT_MS; }
+          }
+        } else if (wf.phase === "eat") {
+          wf.state = "stop"; speed = 0; wf.tx = wf.x; wf.ty = wf.y;
+          if (now >= wf.eatUntil) {
+            const animals = s.animals || [];
+            const an = wf.huntAnimalIdx >= 0 ? animals[wf.huntAnimalIdx] : null;
+            if (an && !an.carriedBy) {
+              animals.splice(wf.huntAnimalIdx, 1);
+              s.wolfNight.kills++;
+              animalsChanged = true;
+              addChat("🐺", L.wolfAteAnimal());
+            }
+            wf.huntAnimalIdx = -1; wf.phase = "return";
+          }
+        } else if (wf.phase === "return") {
+          wf.state = "walk"; speed = C.WOLF_SPEED_SLOW;
+          if (E.riverSideOf(w, wf.x, wf.y) === "east") { wf.phase = "roam"; wf.roamAnchor = { x: wf.x, y: wf.y }; }
+          else {
+            if (wf.bridgeIdx < 0 || !E.bridgeIsOpen(w, wf.bridgeIdx)) wf.bridgeIdx = E.nearestOpenBridge(w, wf.x, wf.y);
+            if (wf.bridgeIdx < 0) { wf.tx = wf.x; wf.ty = wf.y; speed = 0; wf.state = "stop"; }
+            else { const p = E.bridgeCrossPoint(w, wf.bridgeIdx); wf.tx = p.x + 4; wf.ty = p.y; }
+          }
+        }
+      }
+      if (speed > 0 && wf.tx !== undefined) {
+        const dx = wf.tx - wf.x, dy = wf.ty - wf.y, d = Math.hypot(dx, dy);
+        if (d > 0.02) {
+          const step = Math.min(speed * dt, d);
+          wf.x += (dx / d) * step; wf.y += (dy / d) * step;
+          wf.dir = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 2 : 3) : (dy < 0 ? 1 : 0);
+          wf.animT += dt * (speed >= C.WOLF_SPEED_FAST ? 10 : 5);
+          moved = true;
+        }
+      } else wf.animT = 0;
+    }
+    if (moved) minimapDirtyRef.current = true;
+    if (animalsChanged) {
+      dirtyRef.current = true;
+      channelRef.current?.send({ type: "broadcast", event: "apply", payload: { animals: s.animals, wolves: s.wolves } });
+      wolfAccumRef.current = 0;
+      return;
+    }
+    wolfAccumRef.current += dt;
+    if (wolfAccumRef.current >= 0.15) {
+      wolfAccumRef.current = 0;
+      channelRef.current?.send({ type: "broadcast", event: "apply", payload: { wolves: s.wolves } });
     }
   }
   function teleportWell() {
@@ -1229,6 +1405,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
 
       updateMe(dt);
       if (isHost) updateWhistledHorses(dt);
+      if (isHost) updateWolves(dt);
       checkWalkOverHarvest();
       checkWalkOverWater();
       checkWalkOverCollect();
@@ -1403,6 +1580,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         } });
       }
       const lampsInView = []; // positions des lampadaires visibles, pour percer l'overlay nocturne
+      // Torches portées par les fermiers (chantier 2026-07) : même mécanique
+      // de halo que les lampadaires, rayon plus modeste (C.TORCH_LIGHT_RADIUS),
+      // et qui SUIT le porteur au lieu d'être fixe.
+      if (torchOnRef.current) lampsInView.push({ x: m.x + 0.5, y: m.y + 0.5, r: C.TORCH_LIGHT_RADIUS });
+      for (const p of playersRef.current.values()) if (p.torch) lampsInView.push({ x: p.x + 0.5, y: p.y + 0.5, r: C.TORCH_LIGHT_RADIUS });
       for (let y = y0 - 1; y <= Math.min(w.h - 1, y1 + 2); y++) for (let x = x0 - 1; x <= Math.min(w.w - 1, x1 + 1); x++) {
         if (!inMap(x, y)) continue;
         const o = w.objects[idxOf(x, y)];
@@ -1511,6 +1693,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       for (const horse of (sharedRef.current.horses || [])) {
         if (!horse.rider) draws.push({ y: (horse.y + 1) * T, fn: () => ctx.drawImage(sprites.horse, horse.x * T - 6, horse.y * T - 10) });
       }
+      // Loups (chantier 2026-07) : 4 frames de marche, vitesse du cycle
+      // dépendante de l'état (arrêté/lent/rapide, voir updateWolves) plutôt
+      // que des frames différentes — même mécanique que l'animation des
+      // fermiers (animT).
+      for (const wf of (sharedRef.current.wolves || [])) {
+        draws.push({ y: (wf.y + 1) * T, fn: () => {
+          const frame = wf.state === "stop" ? 0 : Math.floor((wf.animT || 0) % 4);
+          const img = sprites.wolf[frame];
+          const px = Math.round(wf.x * T - 14), py = Math.round(wf.y * T - 9);
+          if (wf.dir === 2) { ctx.save(); ctx.translate(px + 30, py); ctx.scale(-1, 1); ctx.drawImage(img, 0, 0); ctx.restore(); }
+          else ctx.drawImage(img, px, py);
+        } });
+      }
       if (!m.sleeping) draws.push({ y: (m.y + 1) * T, fn: () => drawSelf(m) });
       for (const p of playersRef.current.values()) if (!p.sleeping) draws.push({ y: (p.y + 1) * T, fn: () => drawRemote(p) });
       // Sommeil : aucune animation d'entrée, le dormeur disparaît juste de la
@@ -1572,8 +1767,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           // uniquement sur le calque nocturne hors-écran (voir ci-dessus).
           nctx.save();
           nctx.globalCompositeOperation = "destination-out";
-          const radiusPx = C.LAMP_LIGHT_RADIUS * T * ZOOM;
           for (const lamp of lampsInView) {
+            const radiusPx = (lamp.r || C.LAMP_LIGHT_RADIUS) * T * ZOOM;
             const sx = (lamp.x * T - cam.x) * ZOOM, sy = (lamp.y * T - cam.y) * ZOOM;
             const grad = nctx.createRadialGradient(sx, sy, 0, sx, sy, radiusPx);
             grad.addColorStop(0, `rgba(0,0,0,${na})`);
@@ -1737,6 +1932,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (flip) { ctx.translate(px + 16, py - 8 - lift); ctx.scale(-1, 1); ctx.drawImage(sheet, frame * 16, row * 24, 16, 24, 0, 0, 16, 24); }
       else ctx.drawImage(sheet, frame * 16, row * 24, 16, 24, px, py - 8 - lift, 16, 24);
       ctx.restore();
+      // Torche allumée (chantier 2026-07) : dessinée collée à la main côté
+      // sens de la marche, flamme qui vacille légèrement.
+      const carryingTorch = isSelf ? torchOnRef.current : !!p.torch;
+      if (carryingTorch) {
+        const tx = px + (flip ? -4 : 12), ty = py - 4 - lift;
+        const flicker = Math.sin(performance.now() / 90 + px) * 1;
+        ctx.drawImage(sprites.torch, tx + flicker, ty);
+      }
       ctx.font = "bold 7px monospace"; ctx.textAlign = "center";
       ctx.fillStyle = "#00000090"; ctx.fillText(p.name, px + 8 + 1, py - 10 + 1);
       ctx.fillStyle = isSelf ? "#ffffff" : "#ffe9a8"; ctx.fillText(p.name, px + 8, py - 10);
@@ -1752,8 +1955,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // amorce, 20h-23h approfondissement jusqu'au plafond).
       const tmin = E.gameTimeMin(sharedRef.current.dayStartAt, Date.now());
       const NIGHT_MAX = 0.85;
-      const DAWN_START = 5 * 60 + 30, DAWN_END = 6 * 60 + 30;   // 5h30 → 6h30
-      const DUSK_START = 17 * 60, DUSK_MID = 20 * 60, DEEP_END = 23 * 60; // 17h / 20h / 23h
+      const DAWN_START = C.DAWN_START_MIN, DAWN_END = C.DAWN_END_MIN;
+      const DUSK_START = C.DUSK_START_MIN, DUSK_MID = C.DUSK_MID_MIN, DEEP_END = C.DEEP_END_MIN;
       if (tmin < DAWN_START) return NIGHT_MAX; // cœur de nuit, avant l'aube
       if (tmin < DAWN_END) return NIGHT_MAX * (1 - (tmin - DAWN_START) / (DAWN_END - DAWN_START)); // aube progressive
       if (tmin < DUSK_START) return 0; // plein jour
@@ -2061,6 +2264,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           libres de la ferme, qui reviennent en courant vers qui a sifflé. */}
       <button className="ferme-whistle-btn" title={L.whistleTip} onClick={whistleHorses}>
         <Sprite img={spritesReady ? spritesRef.current.horse : null} w={36} h={30} />
+      </button>
+      <button className={"ferme-torch-btn" + (torchOn ? " lit" : "")} title={torchOn ? L.torchTipOn : L.torchTipOff} onClick={toggleTorch}>
+        <Sprite img={spritesReady ? spritesRef.current.torch : null} w={22} h={30} />
       </button>
 
       {/* Boutons flottants (nouveautés incluses) */}

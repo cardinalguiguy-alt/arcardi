@@ -6564,6 +6564,11 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
 .ferme-whistle-btn:hover{ filter:brightness(1.08); }
 .ferme-whistle-btn:active{ transform:translateY(calc(-50% + 2px)); box-shadow:0 1px 0 var(--f-wood-d); }
 .ferme-whistle-btn canvas{ image-rendering:pixelated; }
+.ferme-torch-btn{ position:fixed; left:10px; top:calc(50% + 64px); z-index:41; width:52px; height:52px; display:flex; align-items:center; justify-content:center; border-radius:50%; border:3px solid var(--f-wood); background:#4a4238; box-shadow:0 3px 0 var(--f-wood-d); cursor:pointer; padding:0; transition:background .15s, box-shadow .15s; }
+.ferme-torch-btn:hover{ filter:brightness(1.12); }
+.ferme-torch-btn:active{ transform:translateY(2px); box-shadow:0 1px 0 var(--f-wood-d); }
+.ferme-torch-btn canvas{ image-rendering:pixelated; }
+.ferme-torch-btn.lit{ background:#f0a838; box-shadow:0 0 12px 3px rgba(240,168,56,0.7), 0 3px 0 var(--f-wood-d); }
 
 /* Masque le chrome ARCARDI (FABs haut/droite, barre de scores, logo) pendant
    la ferme : elle est plein écran et ces boutons (surtout le mode agrandi, qui

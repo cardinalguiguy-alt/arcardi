@@ -161,7 +161,7 @@ export function generateWorld(seed) {
     }
   }
 
-  return { w: W, h: H, ground, objects, objHp, crops, bridgeSites, bridgeLeverPos };
+  return { w: W, h: H, ground, objects, objHp, crops, bridgeSites, bridgeLeverPos, riverCenter };
 }
 
 // Applique des overrides persistés (reprise après rechargement) sur un monde
@@ -1074,3 +1074,80 @@ export function blockedTile(world, x, y, now = Date.now()) {
 }
 
 export const idxOf = idx;
+
+/* -------------------------------------------------------------------------
+   Loups (chantier 2026-07, demande Guillaume). Fonctions PURES réutilisées
+   par la simulation hôte dans FermeGame.js (updateWolves) : déterminer la
+   nuit, le côté de la rivière, et l'état d'un pont à un point donné.
+   ------------------------------------------------------------------------- */
+
+// Vrai entre le crépuscule (17h) et l'aube (6h30), mêmes paliers que le
+// voile visuel nightAlpha (voir C.DUSK_START_MIN/DAWN_END_MIN).
+export function isNightTime(tmin) {
+  return tmin < C.DAWN_END_MIN || tmin >= C.DUSK_START_MIN;
+}
+
+// Centre de la rivière à la rangée y (clampée aux bords de la carte).
+export function riverCenterAt(world, y) {
+  if (!world.riverCenter || !world.riverCenter.length) return world.w / 2;
+  const row = Math.max(0, Math.min(world.riverCenter.length - 1, Math.round(y)));
+  return world.riverCenter[row];
+}
+
+// "east" = rive droite (sauvage, où les loups apparaissent), "west" = rive
+// gauche (côté ferme/enclos). Correspond à x plus grand ou plus petit que le
+// centre de la rivière à cette rangée.
+export function riverSideOf(world, x, y) {
+  return x > riverCenterAt(world, y) ? "east" : "west";
+}
+
+// Un pont (index k dans world.bridgeSites) est franchissable seulement si
+// TOUTES ses cases sont posées en G_BRIDGE (jamais G_BRIDGE_SITE, jamais
+// G_BRIDGE_CLOSED — même règle de collision que blockedTile pour les
+// fermiers). Vérifier la première case suffit : le levier (resolveAct cas
+// "lever") bascule toutes les cases d'une même traversée ensemble.
+export function bridgeIsOpen(world, k) {
+  const sites = world.bridgeSites && world.bridgeSites[k];
+  if (!sites || !sites.length) return false;
+  return world.ground[sites[0]] === C.G_BRIDGE;
+}
+
+// Point de passage (centre) d'un pont, pour servir de point de cheminement
+// intermédiaire aux loups qui doivent changer de rive.
+export function bridgeCrossPoint(world, k) {
+  const sites = world.bridgeSites[k];
+  let sx = 0, sy = 0;
+  for (const si of sites) { sx += xOf(si); sy += yOf(si); }
+  return { x: sx / sites.length, y: sy / sites.length };
+}
+
+// Pont ouvert le plus proche d'un point donné (n'importe quelle rive) :
+// renvoie son index, ou -1 si aucun pont n'est actuellement ouvert.
+export function nearestOpenBridge(world, x, y) {
+  let best = -1, bestD = Infinity;
+  for (let k = 0; k < (world.bridgeSites ? world.bridgeSites.length : 0); k++) {
+    if (!bridgeIsOpen(world, k)) continue;
+    const p = bridgeCrossPoint(world, k);
+    const d = Math.hypot(p.x - x, p.y - y);
+    if (d < bestD) { bestD = d; best = k; }
+  }
+  return best;
+}
+
+// Position d'apparition d'un loup, rive droite (sauvage), à une distance
+// raisonnable de la berge (C.WOLF_SPAWN_MARGIN) et de la rivière, tirée
+// aléatoirement le long d'une rangée valide. `rnd` = générateur 0..1 fourni
+// par l'appelant (Math.random côté hôte, la seed du monde n'a pas besoin
+// d'être respectée ici : les loups ne font pas partie du monde persistant).
+export function wolfSpawnPos(world, rnd) {
+  for (let tries = 0; tries < 40; tries++) {
+    const y = Math.floor(rnd() * world.h);
+    const cx = riverCenterAt(world, y);
+    const x = Math.round(cx + C.WOLF_SPAWN_MARGIN + rnd() * C.WOLF_ROAM_RADIUS);
+    if (x < 0 || x >= world.w) continue;
+    if (!blockedTile(world, x, y)) return { x: x + 0.5, y: y + 0.5 };
+  }
+  // Repli : juste à l'est du centre de la rivière au milieu de la carte.
+  const y = Math.floor(world.h / 2);
+  return { x: riverCenterAt(world, y) + C.WOLF_SPAWN_MARGIN + 1, y: y + 0.5 };
+}
