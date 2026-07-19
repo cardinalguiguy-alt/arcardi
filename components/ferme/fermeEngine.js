@@ -44,6 +44,11 @@ export function generateWorld(seed) {
   const objects = new Array(W * H).fill(C.O_NONE);
   const objHp = new Map();
   const crops = new Map();
+  // Moulins (chantier 2026-07) : idx -> { wheat, nextAt }, même famille que
+  // `crops` (Map hôte, sérialisée séparément, voir serializeMills/
+  // applyOverrides). Vide à la génération : aucun moulin n'est jamais posé
+  // par generateWorld, seulement par les joueurs (voir resolveAct cas "mill").
+  const mills = new Map();
 
   function placeObj(x, y, type, hp) {
     if (!inMap(x, y)) return;
@@ -161,7 +166,7 @@ export function generateWorld(seed) {
     }
   }
 
-  return { w: W, h: H, ground, objects, objHp, crops, bridgeSites, bridgeLeverPos, riverCenter };
+  return { w: W, h: H, ground, objects, objHp, crops, mills, bridgeSites, bridgeLeverPos, riverCenter };
 }
 
 // Applique des overrides persistés (reprise après rechargement) sur un monde
@@ -188,12 +193,30 @@ export function applyOverrides(world, saved) {
       world.crops.set(i, { t, bankedMs: bankedMs || 0, wateredAt: wateredAt || null });
     }
   }
+  world.mills = world.mills || new Map();
+  world.mills.clear();
+  if (saved.mills) for (const row of saved.mills) {
+    const [i, wheat, nextAt] = row;
+    world.mills.set(i, { wheat: wheat || 0, nextAt: nextAt || 0 });
+  }
   return world;
 }
 
 export function serializeCrops(world) {
   const out = [];
   for (const [i, c] of world.crops) out.push([i, c.t, c.bankedMs || 0, c.wateredAt || 0]);
+  return out;
+}
+
+// Sérialisation des moulins (chantier 2026-07), même principe que
+// serializeCrops : seuls les moulins avec un état non trivial (du blé en
+// stock ou une transformation en cours) sont écrits, un moulin fraîchement
+// posé (wheat:0, nextAt:0) est recréé avec ces valeurs par défaut au besoin
+// (voir resolveAct cas "millDeposit"/millTick, qui utilisent `world.mills.get(i)
+// || { wheat: 0, nextAt: 0 }`).
+export function serializeMills(world) {
+  const out = [];
+  for (const [i, ms] of world.mills) if ((ms.wheat || 0) > 0 || (ms.nextAt || 0) > 0) out.push([i, ms.wheat || 0, ms.nextAt || 0]);
   return out;
 }
 
@@ -245,6 +268,30 @@ export function buildReady(readyAt, now) {
 }
 export function buildRemainingMs(readyAt, now) {
   return Math.max(0, (readyAt || 0) - now);
+}
+
+// Production continue d'un moulin (chantier 2026-07, transformation
+// artisanale demandée par Guillaume) : consomme C.MILL_WHEAT_PER_SACK blé
+// toutes les C.MILL_BATCH_MS ms tant qu'il reste assez de blé en stock,
+// tourne en continu sans intervention du joueur une fois amorcé (dès qu'il y
+// a assez de blé). Fonction PURE (comme cropGrowState/buildReady) : ne mute
+// rien, appelée par le tick hôte 1 Hz existant (voir FermeGame.js, qui mute
+// ensuite world.mills avec le résultat). La boucle `while` rattrape
+// plusieurs sacs d'un coup si l'hôte n'a pas pu tourner pendant un moment
+// (tab en veille, etc.), même esprit que cropGrowState qui ne perd jamais de
+// progression. Renvoie le nouvel état ({ wheat, nextAt }) et `sacks`
+// (nombre de sacs produits depuis le dernier appel).
+export function millTick(ms, now) {
+  let wheat = (ms && ms.wheat) || 0;
+  let nextAt = (ms && ms.nextAt) || 0;
+  let sacks = 0;
+  if (wheat >= C.MILL_WHEAT_PER_SACK && !nextAt) nextAt = now + C.MILL_BATCH_MS;
+  while (nextAt && now >= nextAt && wheat >= C.MILL_WHEAT_PER_SACK) {
+    wheat -= C.MILL_WHEAT_PER_SACK; sacks++;
+    nextAt = wheat >= C.MILL_WHEAT_PER_SACK ? nextAt + C.MILL_BATCH_MS : 0;
+  }
+  if (wheat < C.MILL_WHEAT_PER_SACK) nextAt = 0;
+  return { wheat, nextAt, sacks };
 }
 
 // Rareté des gemmes selon la distance à la maison (chantier 2026-07, demande
@@ -311,7 +358,7 @@ export function newFarmer(id, name, gender, outfit) {
     sleepStartedAt: null, sleepStartEnergy: 0, // dort actuellement ? (voir resolveSleepStart/End)
     tools: { hoe: 1, can: 1, axe: 1, pick: 1 },
     inv: {
-      wood: 0, stone: 0, food: 0, fence: 0, wall: 0, path: 0, lamp: 0, scarecrow: 0, grass: 0,
+      wood: 0, stone: 0, food: 0, fence: 0, wall: 0, path: 0, lamp: 0, scarecrow: 0, grass: 0, mill: 0,
       seeds: [5, 0, 0, 0], crops: [0, 0, 0, 0],
       gems: C.GEMS.map(() => 0),      // gemmes rares trouvées au minage
       fish: C.FISH.map(() => 0),      // poissons pêchés
@@ -364,6 +411,7 @@ export function normalizeFarmer(f) {
   if (typeof f.inv.lamp !== "number") f.inv.lamp = 0;
   if (typeof f.inv.scarecrow !== "number") f.inv.scarecrow = 0;
   if (typeof f.inv.grass !== "number") f.inv.grass = 0;
+  if (typeof f.inv.mill !== "number") f.inv.mill = 0;
   f.inv.seeds = padArray(f.inv.seeds, C.CROPS.length);
   f.inv.crops = padArray(f.inv.crops, C.CROPS.length);
   f.inv.gems = padArray(f.inv.gems, C.GEMS.length);
@@ -403,7 +451,7 @@ function useEnergy(f, action, toolKey) {
    ------------------------------------------------------------------------- */
 export function resolveAct(world, f, m) {
   normalizeFarmer(f);
-  const res = { tiles: [], cropTiles: [], fx: [], invChanged: false, toast: null, did: null };
+  const res = { tiles: [], cropTiles: [], fx: [], invChanged: false, toast: null, did: null, millTiles: [] };
   const x = m.x | 0, y = m.y | 0;
   if (!inMap(x, y) || !canReach(f, x, y)) return res;
   const i = idx(x, y), g = world.ground[i], o = world.objects[i];
@@ -680,6 +728,57 @@ export function resolveAct(world, f, m) {
       }
       break;
     }
+    case "mill": {
+      // Moulin (chantier 2026-07, transformation artisanale demandée par
+      // Guillaume) : même mécanique que "lamp" (achetée à la boutique en or,
+      // posée librement avec l'outil Construction, chantier réel d'1h avant
+      // d'être fonctionnel, voir BUILD_TIMES.mill), mais avec un stock de blé
+      // COMMUN et une production continue en plus (voir cas "millDeposit"
+      // ci-dessous et E.millTick, appelée par le tick hôte de FermeGame.js).
+      // Retrait (pour récupérer le moulin en inventaire, comme lamp/wall)
+      // IMPOSSIBLE tant qu'il contient encore du blé non transformé : par
+      // prudence, pour ne jamais faire disparaître du blé qu'un autre joueur
+      // aurait déposé (même logique de précaution que le pont permanent,
+      // zip 169, "ne jamais piéger/pénaliser un joueur").
+      if (o === C.O_MILL) {
+        const ms = world.mills.get(i);
+        if (ms && (ms.wheat || 0) > 0) { res.toast = "millNotEmpty"; break; }
+        world.objects[i] = C.O_NONE; world.objHp.delete(i); world.mills.delete(i);
+        f.inv.mill = (f.inv.mill || 0) + 1;
+        res.tiles.push(i); res.invChanged = true;
+      } else if ((g === C.G_GRASS || g === C.G_TILLED || g === C.G_WATERED) && o === C.O_NONE && !world.crops.has(i)) {
+        if (f.inv.mill > 0) {
+          f.inv.mill--;
+          world.objects[i] = C.O_MILL; world.objHp.set(i, now + C.BUILD_TIMES.mill);
+          world.mills.set(i, { wheat: 0, nextAt: 0 });
+          res.tiles.push(i); res.invChanged = true;
+        } else res.toast = "noMillStock";
+      }
+      break;
+    }
+    case "millDeposit": {
+      // Dépôt de blé dans un moulin CONSTRUIT (chantier terminé, voir
+      // buildReady) : cliquable directement, quel que soit l'outil équipé
+      // (voir doAction/FermeGame.js — seule exception : l'outil Construction
+      // en variante "mill", réservé au retrait/repose du moulin lui-même, cas
+      // "mill" ci-dessus). Transfère le blé récolté de l'inventaire PRIVÉ du
+      // fermier (f.inv.crops[C.MILL_WHEAT_CROP]) vers le stock COMMUN du
+      // moulin (world.mills, partagé entre tous les joueurs de la ferme,
+      // même esprit que les gemmes/la grange), plafonné à C.MILL_STOCK_CAP.
+      if (o !== C.O_MILL || !buildReady(world.objHp.get(i), now)) break;
+      const have = f.inv.crops[C.MILL_WHEAT_CROP] || 0;
+      if (have <= 0) { res.toast = "noWheatToDeposit"; break; }
+      const ms = world.mills.get(i) || { wheat: 0, nextAt: 0 };
+      const room = C.MILL_STOCK_CAP - (ms.wheat || 0);
+      if (room <= 0) { res.toast = "millFull"; break; }
+      const n = Math.min(have, room);
+      f.inv.crops[C.MILL_WHEAT_CROP] -= n;
+      ms.wheat = (ms.wheat || 0) + n;
+      world.mills.set(i, ms);
+      res.invChanged = true; res.millTiles.push(i);
+      res.fx.push({ k: "millDeposit", x, y, n });
+      break;
+    }
     case "fish":
       // Pêche : la case ciblée doit être de l'eau (rivière) et à portée. Le
       // TYPE de poisson est décidé par le minijeu côté client (m.fish) : on
@@ -854,6 +953,11 @@ export function resolveBuy(f, money, m) {
     const cost = C.GRASS_COST * n;
     if (money < cost) { res.toast = "noGold"; return res; }
     res.moneyDelta = -cost; f.inv.grass = (f.inv.grass || 0) + n; res.invChanged = true;
+  } else if (m.item === "mill") {
+    const n = Math.max(1, Math.min(50, (m.n | 0) || 1));
+    const cost = C.MILL_COST * n;
+    if (money < cost) { res.toast = "noGold"; return res; }
+    res.moneyDelta = -cost; f.inv.mill = (f.inv.mill || 0) + n; res.invChanged = true;
   } else if (m.item === "tool") {
     const key = m.tool;
     if (!C.TOOLS.includes(key)) return res;
@@ -948,6 +1052,24 @@ export function resolveSellGem(gems, m) {
   gems[gt] -= n;
   const gain = n * C.GEMS[gt].sell;
   res.moneyDelta = gain; res.earnedDelta = gain; res.gemsChanged = true; res.gain = gain;
+  return res;
+}
+
+// Vente d'un sac de farine depuis le pool COMMUN à la salle (chantier
+// 2026-07, transformation artisanale demandée par Guillaume) : même principe
+// que resolveSellGem, mais `shared.flour` est un simple compteur (pas un
+// tableau par type, un seul produit pour l'instant). `shared` = sharedRef.current
+// côté FermeGame.js, muté directement. Renvoie { moneyDelta, earnedDelta,
+// flourChanged, toast, gain }, même forme que resolveSell/resolveSellGem.
+export function resolveSellFlour(shared, m) {
+  const res = { moneyDelta: 0, earnedDelta: 0, flourChanged: false, toast: null, gain: 0 };
+  if (!shared) return res;
+  const have = shared.flour || 0;
+  const n = Math.min(have, Math.max(1, (m.n | 0) || have));
+  if (n <= 0) return res;
+  shared.flour = have - n;
+  const gain = n * C.FLOUR_SELL;
+  res.moneyDelta = gain; res.earnedDelta = gain; res.flourChanged = true; res.gain = gain;
   return res;
 }
 
@@ -1068,7 +1190,7 @@ export function blockedTile(world, x, y, now = Date.now()) {
   const i = idx(fx, fy);
   const g = world.ground[i], o = world.objects[i];
   if (g === C.G_WATER || g === C.G_BRIDGE_SITE || g === C.G_BRIDGE_CLOSED) return true;
-  if (o === C.O_LAMP) return buildReady(world.objHp.get(i), now);
+  if (o === C.O_LAMP || o === C.O_MILL) return buildReady(world.objHp.get(i), now);
   if (o === C.O_TREE || o === C.O_TREE2 || o === C.O_ROCK || o === C.O_HOUSE || o === C.O_SHOP || o === C.O_BIN || o === C.O_STUMP || o === C.O_WELL || o === C.O_FENCE || o === C.O_FENCE_H || o === C.O_FENCE_V || o === C.O_WALL) return true;
   return false;
 }

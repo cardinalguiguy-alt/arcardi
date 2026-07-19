@@ -129,6 +129,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [coop, setCoop] = useState(null); // miroir React de sharedRef.current.coop (mission d'équipe en cours)
   const [barn, setBarn] = useState(null); // miroir React de sharedRef.current.barn (grange persistante)
   const [gems, setGems] = useState(() => C.GEMS.map(() => 0)); // miroir React de sharedRef.current.gems (pool commun à la salle)
+  const [flour, setFlour] = useState(0); // miroir React de sharedRef.current.flour (sacs de farine, pool commun à la salle, chantier 2026-07)
 
   // -------- Refs (état du jeu, lus par la boucle de rendu) --------
   const canvasRef = useRef(null);
@@ -151,7 +152,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const meRef = useRef(null);
   const playersRef = useRef(new Map()); // id -> remote farmer render data
   const farmersRef = useRef({});        // hôte : id -> état privé arbitré
-  const sharedRef = useRef({ seed: 0, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), wolves: [], wolfNight: { active: false, kills: 0 } });
+  const sharedRef = useRef({ seed: 0, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), flour: 0, wolves: [], wolfNight: { active: false, kills: 0 } });
   const invRef = useRef(null);
   const toolsRef = useRef({ hoe: 1, can: 1, axe: 1, pick: 1 });
   const energyRef = useRef(C.MAX_ENERGY);
@@ -182,7 +183,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const autoWaterPendingRef = useRef(new Set());   // tuiles d'arrosage auto déjà demandées (anti-spam)
   const autoCollectPendingRef = useRef(new Set()); // animaux de collecte auto déjà demandés (anti-spam)
   const fenceDirRef = useRef("auto"); // orientation choisie pour la prochaine clôture posée ("auto"|"h"|"v")
-  const buildKindRef = useRef("fence"); // miroir synchrone de buildKind ("fence"|"wall"|"path"|"lamp"|"scarecrow"|"grass"|"bridgeWood"|"bridgeStone")
+  const buildKindRef = useRef("fence"); // miroir synchrone de buildKind ("fence"|"wall"|"path"|"lamp"|"scarecrow"|"grass"|"mill"|"bridgeWood"|"bridgeStone")
   const heldAnimalRef = useRef(-1);   // index (dans sharedRef.animals) de l'animal actuellement porté par CE joueur, -1 sinon
   const horseCallAccumRef = useRef(0); // accumulateur (secondes) pour throttler la diffusion réseau des chevaux sifflés en course
   const wolfAccumRef = useRef(0);      // accumulateur (secondes), même throttle réseau pour les loups simulés côté hôte
@@ -283,7 +284,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     try { window.localStorage.setItem("ferme_lastcode", code); } catch (e) { /* ignore */ }
     if (saved && typeof saved.seed === "number") {
       const w = E.generateWorld(saved.seed);
-      E.applyOverrides(w, { groundOv: saved.groundOv, objectOv: saved.objectOv, crops: saved.crops });
+      E.applyOverrides(w, { groundOv: saved.groundOv, objectOv: saved.objectOv, crops: saved.crops, mills: saved.mills });
       worldRef.current = w;
       overridesRef.current = { ground: { ...(saved.groundOv || {}) }, object: { ...(saved.objectOv || {}) } };
       sharedRef.current = {
@@ -292,6 +293,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         animals: saved.animals || [], wellBuilt: !!saved.wellBuilt, coop: saved.coop || null,
         barn: saved.barn || E.newBarnState(),
         gems: migrateGems(saved),
+        flour: saved.flour || 0,
         wolves: [], wolfNight: { active: false, kills: 0 }, // repartent à zéro à la reprise, respawn dérivé de l'heure courante
       };
       // Les cavaliers repartent à pied à la reprise (aucun joueur monté au chargement).
@@ -312,7 +314,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const seed = hashSeed(code);
       worldRef.current = E.generateWorld(seed);
       overridesRef.current = { ground: {}, object: {} };
-      sharedRef.current = { seed, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), gems: C.GEMS.map(() => 0), wolves: [], wolfNight: { active: false, kills: 0 } };
+      sharedRef.current = { seed, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), gems: C.GEMS.map(() => 0), flour: 0, wolves: [], wolfNight: { active: false, kills: 0 } };
       farmersRef.current = {};
       // Crée tout de suite l'enregistrement pour réserver le code.
       persistFarm();
@@ -324,6 +326,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     setCoop(sharedRef.current.coop);
     setBarn(sharedRef.current.barn);
     setGems(sharedRef.current.gems);
+    setFlour(sharedRef.current.flour || 0);
     syncBuildings();
     setWorldReady(true);
     setPhase("select"); // l'effet d'auto-spawn décidera de sauter cet écran
@@ -365,6 +368,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       else if (o === C.O_LAMP) col = [230, 200, 100];
       else if (o === C.O_SCARECROW) col = [212, 178, 90];
       else if (o === C.O_LEVER) col = [80, 80, 88];
+      else if (o === C.O_MILL) col = [169, 119, 63];
       else if (o === C.O_HOUSE) col = [192, 74, 60];
       else if (o === C.O_SHOP || o === C.O_BIN) col = [232, 200, 90];
       im.data.set([col[0], col[1], col[2], 255], i * 4);
@@ -379,7 +383,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // reprise.
   function applySnapshot(payload) {
     const w = E.generateWorld(payload.seed);
-    E.applyOverrides(w, { groundOv: payload.groundOv, objectOv: payload.objectOv, crops: payload.crops });
+    E.applyOverrides(w, { groundOv: payload.groundOv, objectOv: payload.objectOv, crops: payload.crops, mills: payload.mills });
     worldRef.current = w;
     overridesRef.current = { ground: { ...(payload.groundOv || {}) }, object: { ...(payload.objectOv || {}) } };
     sharedRef.current = {
@@ -388,6 +392,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       animals: payload.animals || [], wellBuilt: !!payload.wellBuilt, coop: payload.coop || null,
       barn: payload.barn || E.newBarnState(),
       gems: migrateGems(payload),
+      flour: payload.flour || 0,
       wolves: payload.wolves || [], wolfNight: { active: !!(payload.wolves && payload.wolves.length), kills: 0 },
     };
     if (payload.farmers) {
@@ -405,6 +410,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     setCoop(sharedRef.current.coop);
     setBarn(sharedRef.current.barn);
     setGems(sharedRef.current.gems);
+    setFlour(sharedRef.current.flour || 0);
     syncBuildings();
     setWorldReady(true);
   }
@@ -499,8 +505,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       seed: s.seed, money: s.money, day: s.day, dayStartAt: s.dayStartAt, totalEarned: s.totalEarned,
       groundOv: overridesRef.current.ground, objectOv: overridesRef.current.object,
       crops: worldRef.current ? E.serializeCrops(worldRef.current) : [],
+      mills: worldRef.current ? E.serializeMills(worldRef.current) : [],
       farmers: farmersRef.current,
-      horses: s.horses, animals: s.animals, wellBuilt: s.wellBuilt, coop: s.coop, barn: s.barn, gems: s.gems, wolves: s.wolves,
+      horses: s.horses, animals: s.animals, wellBuilt: s.wellBuilt, coop: s.coop, barn: s.barn, gems: s.gems, flour: s.flour, wolves: s.wolves,
     };
   }
   function syncBuildings() {
@@ -571,7 +578,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const f = hostEnsureFarmer(req.id, req.name);
     if (typeof req.px === "number") { f.x = req.px; f.y = req.py; }
     const s = sharedRef.current;
-    const out = { tiles: [], crops: [], fx: [], state: null, farmer: null, toast: null, chat: null, horses: null, animals: null, wellBuilt: false, coop: undefined, barn: undefined };
+    const out = { tiles: [], crops: [], mills: null, fx: [], state: null, farmer: null, toast: null, chat: null, horses: null, animals: null, wellBuilt: false, coop: undefined, barn: undefined };
     let questId = null; // action réussie -> quête à valider éventuellement
     const px = typeof req.px === "number" ? req.px : f.x, py = typeof req.py === "number" ? req.py : f.y;
 
@@ -589,6 +596,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         s.gems[r.gemFound] = (s.gems[r.gemFound] || 0) + 1;
         out.gems = s.gems;
       }
+      // Moulin (chantier 2026-07) : dépôt de blé -> remonte le nouveau stock
+      // de la/des tuile(s) de moulin touchée(s) à tout le monde (même
+      // mécanique que out.crops ci-dessus, sur w.mills).
+      if (r.millTiles && r.millTiles.length) {
+        out.mills = r.millTiles.map(i => { const ms = w.mills.get(i) || { wheat: 0, nextAt: 0 }; return [i, ms.wheat, ms.nextAt]; });
+      }
     } else if (req.kind === "buy") {
       const r = E.resolveBuy(f, s.money, req);
       if (r.moneyDelta) { s.money += r.moneyDelta; out.state = shareState(); }
@@ -603,6 +616,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const r = E.resolveSellGem(s.gems, req);
       if (r.moneyDelta) { s.money += r.moneyDelta; s.totalEarned += r.earnedDelta; out.state = shareState(); }
       if (r.gemsChanged) out.gems = s.gems;
+      if (r.gain > 0) { out.fx.push({ k: "sell", x: px, y: py, gain: r.gain }); out.chat = { from: "💰", msg: L.chatSell(r.gain, s.money) }; questId = "sell"; }
+    } else if (req.kind === "sell" && req.item === "flour") {
+      // Vente de sacs de farine du pool COMMUN (chantier 2026-07), même
+      // principe que la vente de gemmes juste au-dessus.
+      const r = E.resolveSellFlour(s, req);
+      if (r.moneyDelta) { s.money += r.moneyDelta; s.totalEarned += r.earnedDelta; out.state = shareState(); }
+      if (r.flourChanged) out.flour = s.flour;
       if (r.gain > 0) { out.fx.push({ k: "sell", x: px, y: py, gain: r.gain }); out.chat = { from: "💰", msg: L.chatSell(r.gain, s.money) }; questId = "sell"; }
     } else if (req.kind === "sell") {
       const r = E.resolveSell(f, req);
@@ -794,7 +814,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // Les quêtes accomplies voyagent avec l'état privé du fermier.
     if (out.farmer) out.farmer.quests = f.quests;
 
-    if (out.tiles.length || out.state || out.horses || out.animals || out.wellBuilt || out.gems) dirtyRef.current = true;
+    if (out.tiles.length || out.state || out.horses || out.animals || out.wellBuilt || out.gems || out.mills || out.flour !== undefined) dirtyRef.current = true;
     channelRef.current?.send({ type: "broadcast", event: "apply", payload: out });
   }
   function shareState() { const s = sharedRef.current; return { money: s.money, day: s.day, dayStartAt: s.dayStartAt, totalEarned: s.totalEarned }; }
@@ -811,6 +831,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       minimapDirtyRef.current = true;
     }
     if (w && p.crops) for (const cr of p.crops) { if (cr.c) w.crops.set(cr.i, { t: cr.c.t, bankedMs: cr.c.bankedMs || 0, wateredAt: cr.c.wateredAt || null }); else w.crops.delete(cr.i); }
+    // Moulins (chantier 2026-07) : [i, wheat, nextAt] par tuile changée
+    // (dépôt de blé côté joueur, ou production côté tick hôte 1 Hz — voir
+    // hostHandleReqUnsafe et le dayTimer plus bas). Même mécanique que
+    // p.crops ci-dessus, mais sur w.mills.
+    if (w && p.mills) for (const [i, wheat, nextAt] of p.mills) w.mills.set(i, { wheat, nextAt });
     if (p.state) { const s = sharedRef.current; s.money = p.state.money; s.day = p.state.day; s.dayStartAt = p.state.dayStartAt; s.totalEarned = p.state.totalEarned; setHud(h => ({ ...h, money: s.money, day: s.day })); }
     if (p.farmer && p.farmer.id === me.id) { invRef.current = p.farmer.inv; toolsRef.current = p.farmer.tools; energyRef.current = p.farmer.energy; setMyInv(p.farmer.inv); setMyTools(p.farmer.tools); setMyEnergy(p.farmer.energy); if (p.farmer.quests) setMyQuests(p.farmer.quests); }
     if (p.toast && p.toast.id === me.id) pushToast(toastMsg(p.toast.key));
@@ -823,6 +848,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (p.coop !== undefined) { sharedRef.current.coop = p.coop; setCoop(p.coop); }
     if (p.barn !== undefined) { sharedRef.current.barn = p.barn; setBarn(p.barn); minimapDirtyRef.current = true; }
     if (p.gems) { sharedRef.current.gems = p.gems; setGems(p.gems); }
+    if (p.flour !== undefined) { sharedRef.current.flour = p.flour; setFlour(p.flour); }
   }
   function applyNewDay(p) {
     const w = worldRef.current; if (!w) return;
@@ -836,7 +862,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     pushToast(L.toastNewDay(p.day));
   }
   function toastMsg(key) {
-    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, actionFailed: L.toastActionFailed, coopNone: L.toastCoopNone, farCoop: L.toastFarCoop, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull }[key] || "";
+    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, noMillStock: L.toastNoMillStock, millNotEmpty: L.toastMillNotEmpty, noWheatToDeposit: L.toastNoWheatToDeposit, millFull: L.toastMillFull, actionFailed: L.toastActionFailed, coopNone: L.toastCoopNone, farCoop: L.toastFarCoop, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull }[key] || "";
   }
 
   // -------- Hôte : boucle temps + persistance --------
@@ -876,6 +902,36 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (grassTiles.length) {
           minimapDirtyRef.current = true; dirtyRef.current = true;
           channelRef.current?.send({ type: "broadcast", event: "apply", payload: { tiles: grassTiles } });
+        }
+      }
+      // Production continue des moulins (chantier 2026-07, transformation
+      // artisanale demandée par Guillaume) : même esprit que la repousse
+      // d'herbe ci-dessus (état réellement muté côté hôte à chaque tick, pas
+      // purement dérivé), mais via E.millTick (fonction pure, voir
+      // fermeEngine.js) qui calcule le nouvel état + les sacs produits depuis
+      // le dernier tick. w.mills ne contient que les moulins avec un état non
+      // trivial n'est PAS garanti ici (un moulin fraîchement posé y est
+      // ajouté à wheat:0 par resolveAct/"mill") : on parcourt donc toute la
+      // Map, son cardinal reste minuscule (quelques moulins par ferme tout au
+      // plus) contrairement au parcours de carte ci-dessus.
+      {
+        const now = Date.now();
+        const millTilesOut = [];
+        let sacksProduced = 0;
+        for (const [mi, ms] of w.mills) {
+          const r = E.millTick(ms, now);
+          if (r.wheat !== ms.wheat || r.nextAt !== ms.nextAt) {
+            w.mills.set(mi, { wheat: r.wheat, nextAt: r.nextAt });
+            millTilesOut.push([mi, r.wheat, r.nextAt]);
+          }
+          if (r.sacks > 0) sacksProduced += r.sacks;
+        }
+        if (sacksProduced > 0) s.flour = (s.flour || 0) + sacksProduced;
+        if (millTilesOut.length) {
+          dirtyRef.current = true;
+          const payload = { mills: millTilesOut };
+          if (sacksProduced > 0) payload.flour = s.flour;
+          channelRef.current?.send({ type: "broadcast", event: "apply", payload });
         }
       }
       if (Date.now() - s.dayStartAt >= C.DAY_REAL_MS) {
@@ -983,6 +1039,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // directement, quel que soit l'outil équipé (aucun objet à équiper),
     // même priorité que la récolte ci-dessus.
     if (w.objects[i] === C.O_LEVER) return sendReq({ kind: "act", action: "lever", x: tt.x, y: tt.y });
+    // Moulin construit (chantier 2026-07, demande Guillaume) : cliquable
+    // directement pour y déposer son blé, même priorité que le levier
+    // ci-dessus — SAUF si l'outil Construction est équipé en variante "mill"
+    // (case 8), auquel cas le clic sert à retirer/reposer le moulin lui-même
+    // (voir resolveAct cas "mill", branche sl===7 plus bas).
+    if (w.objects[i] === C.O_MILL && E.buildReady(w.objHp.get(i), Date.now()) && !(sl === 7 && buildKindRef.current === "mill")) {
+      return sendReq({ kind: "act", action: "millDeposit", x: tt.x, y: tt.y });
+    }
     if (sl === 0) sendReq({ kind: "act", action: "till", x: tt.x, y: tt.y });
     else if (sl === 1) sendReq({ kind: "act", action: "water", x: tt.x, y: tt.y });
     else if (sl === 2) sendReq({ kind: "act", action: "chop", x: tt.x, y: tt.y });
@@ -1000,7 +1064,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // directement à la pose côté hôte (voir resolveAct cas "bridge").
       const bk = buildKindRef.current;
       const action = bk === "wall" ? "wall" : bk === "path" ? "path" : bk === "lamp" ? "lamp" : bk === "scarecrow" ? "scarecrow"
-        : bk === "grass" ? "grass"
+        : bk === "grass" ? "grass" : bk === "mill" ? "mill"
         : (bk === "bridgeWood" || bk === "bridgeStone") ? "bridge" : "fence";
       sendReq({ kind: "act", action, x: tt.x, y: tt.y, dir: fenceDirRef.current, material: bk === "bridgeStone" ? "stone" : "wood" });
     }
@@ -1670,6 +1734,62 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           const closed = k >= 0 && w.ground[w.bridgeSites[k][0]] === C.G_BRIDGE_CLOSED;
           draws.push({ y: (y + 1) * T, fn: () => ctx.drawImage(closed ? sprites.leverClosed : sprites.leverOpen, x * T, (y + 1) * T - 24) });
         }
+        else if (o === C.O_MILL) {
+          // Moulin (chantier 2026-07, transformation artisanale demandée par
+          // Guillaume). Chantier en cours : même traitement visuel que
+          // lampadaire/épouvantail (sprite assombri + jauge + mm:ss).
+          // Fonctionnel : sprite plein + une jauge de stock de blé (marron,
+          // sous le sprite) et, si une transformation est en cours, une
+          // seconde jauge/compte à rebours (couleur farine) jusqu'au
+          // prochain sac — état lu directement dans w.mills (idx -> {wheat,
+          // nextAt}), synchronisé par resolveAct/"millDeposit" et le tick
+          // hôte 1 Hz (voir FermeGame.js, dayTimer).
+          const ii = idxOf(x, y);
+          const readyAt = w.objHp.get(ii);
+          const ready = E.buildReady(readyAt, epochNow);
+          if (!ready) {
+            const totalMs = C.BUILD_TIMES.mill;
+            const remaining = E.buildRemainingMs(readyAt, epochNow);
+            const frac = Math.max(0, Math.min(1, 1 - remaining / totalMs));
+            draws.push({ y: (y + 1) * T, fn: () => {
+              ctx.save(); ctx.globalAlpha = 0.55;
+              ctx.drawImage(sprites.mill, x * T - 7, (y + 1) * T - 36);
+              ctx.restore();
+              const barW = 24, bx = x * T + 8 - barW / 2, by = (y + 1) * T - 42;
+              ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(bx, by, barW, 3);
+              ctx.fillStyle = "#c9a25a"; ctx.fillRect(bx, by, barW * frac, 3);
+              const totalSec = Math.ceil(remaining / 1000);
+              const mm = String(Math.floor(totalSec / 60)).padStart(2, "0");
+              const ss = String(totalSec % 60).padStart(2, "0");
+              ctx.font = "bold 8px monospace"; ctx.textAlign = "center";
+              ctx.fillStyle = "#00000090"; ctx.fillText(`${mm}:${ss}`, x * T + 8 + 1, by - 3 + 1);
+              ctx.fillStyle = "#fff"; ctx.fillText(`${mm}:${ss}`, x * T + 8, by - 3);
+            } });
+          } else {
+            const ms = w.mills.get(ii) || { wheat: 0, nextAt: 0 };
+            draws.push({ y: (y + 1) * T, fn: () => {
+              ctx.drawImage(sprites.mill, x * T - 7, (y + 1) * T - 36);
+              const barW = 24, bx = x * T + 8 - barW / 2;
+              const stockFrac = Math.max(0, Math.min(1, ms.wheat / C.MILL_STOCK_CAP));
+              const stockY = (y + 1) * T - 42;
+              ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(bx, stockY, barW, 3);
+              ctx.fillStyle = "#a9773f"; ctx.fillRect(bx, stockY, barW * stockFrac, 3);
+              if (ms.nextAt) {
+                const remaining = Math.max(0, ms.nextAt - epochNow);
+                const frac = Math.max(0, Math.min(1, 1 - remaining / C.MILL_BATCH_MS));
+                const by2 = stockY - 5;
+                ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(bx, by2, barW, 3);
+                ctx.fillStyle = "#ede0c4"; ctx.fillRect(bx, by2, barW * frac, 3);
+                const totalSec = Math.ceil(remaining / 1000);
+                const mm = String(Math.floor(totalSec / 60)).padStart(2, "0");
+                const ss = String(totalSec % 60).padStart(2, "0");
+                ctx.font = "bold 8px monospace"; ctx.textAlign = "center";
+                ctx.fillStyle = "#00000090"; ctx.fillText(`${mm}:${ss}`, x * T + 8 + 1, by2 - 3 + 1);
+                ctx.fillStyle = "#fff"; ctx.fillText(`${mm}:${ss}`, x * T + 8, by2 - 3);
+              }
+            } });
+          }
+        }
       }
       // Animaux d'élevage (+ indicateur de production à ramasser). Position
       // dérivée du temps (déambulation, zip 152) sauf si l'animal est
@@ -2097,6 +2217,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
       case "bridge": fx.push({ ...base, kind: "txt", txt: L.fxBridge, col: "#d9b380", life: 1.2 }); break;
       case "lever": fx.push({ ...base, kind: "txt", txt: m.closed ? L.fxLeverClosed : L.fxLeverOpen, col: m.closed ? "#e06a50" : "#8ac25a", life: 1.2 }); break;
+      case "millDeposit": fx.push({ ...base, kind: "txt", txt: L.fxMillDeposit(m.n), col: "#c9a25a", life: 1.2 }); break;
       default: break;
     }
   }
@@ -2154,6 +2275,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // l'outil Construction sur la variante "grass", prêt à poser au clic
   // suivant (herbe = replanter sur une case labourée, chantier 2026-07).
   const buyGrass = (n) => { sendReq({ kind: "buy", item: "grass", n }); buildKindRef.current = "grass"; setBuildKind("grass"); };
+  const buyMill = (n) => { sendReq({ kind: "buy", item: "mill", n }); buildKindRef.current = "mill"; setBuildKind("mill"); };
+  const sellFlour = () => sendReq({ kind: "sell", item: "flour", n: 9999 });
   const sellItem = (item, crop) => sendReq({ kind: "sell", item, crop, n: 9999 });
   // Menu Construire (clic sur bois/pierre du HUD) : fabrique `n` sections de
   // `item` (fence/wall/path) depuis le bois/la pierre récoltés, puis équipe
@@ -2254,6 +2377,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         <div className="row ferme-hud-res" title={L.gemsResTip} onClick={() => setCraftMenuOpen(o => o === "gems" ? null : "gems")}>
           <Sprite img={spritesReady ? spritesRef.current.gemIcons[2] : null} w={16} h={16} /> <span>{gems ? gems.reduce((a, b) => a + b, 0) : 0}</span>
         </div>
+        <div className="row ferme-hud-res" title={L.flourResTip} onClick={() => setCraftMenuOpen(o => o === "flour" ? null : "flour")}>
+          <Sprite img={spritesReady ? spritesRef.current.icons.flour : null} w={16} h={16} /> <span>{flour || 0}</span>
+        </div>
       </div>
 
       {/* Énergie */}
@@ -2296,13 +2422,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             // menu Construire/Vendre (fence/wall/path/lamp/scarecrow), pas
             // seulement clôture.
             const bkImg = buildKind === "wall" ? "wall" : buildKind === "path" ? "path" : buildKind === "lamp" ? "lamp" : buildKind === "scarecrow" ? "scarecrow"
-              : buildKind === "grass" ? "grassPatch"
+              : buildKind === "grass" ? "grassPatch" : buildKind === "mill" ? "mill"
               : (buildKind === "bridgeWood" || buildKind === "bridgeStone") ? "bridge" : "fence";
             // Pour le pont, pas de stock dédié (voir craft menu) : le compteur
             // affiche directement le bois/la pierre disponible pour la
             // variante choisie, cohérent avec le coût prélevé à la pose.
             count = myInv ? (buildKind === "wall" ? (myInv.wall || 0) : buildKind === "path" ? (myInv.path || 0) : buildKind === "lamp" ? (myInv.lamp || 0) : buildKind === "scarecrow" ? (myInv.scarecrow || 0)
-              : buildKind === "grass" ? (myInv.grass || 0)
+              : buildKind === "grass" ? (myInv.grass || 0) : buildKind === "mill" ? (myInv.mill || 0)
               : buildKind === "bridgeWood" ? (myInv.wood || 0) : buildKind === "bridgeStone" ? (myInv.stone || 0) : (myInv.fence || 0)) : "";
             img = spritesReady ? spritesRef.current[bkImg] : null;
             lvl = buildKind === "fence" ? (fenceDir === "h" ? "↔" : fenceDir === "v" ? "↕" : "R") : "";
@@ -2311,7 +2437,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           else lvl = "N" + (myTools[s.key] || 1);
           const title = isSeed ? L.seedTip(seedName(seedSel)) : isFood ? L.foodTip(C.FOOD_ENERGY) : isRod ? L.rodTip
             : isFence ? (buildKind === "wall" ? L.wallTip : buildKind === "path" ? L.pathTip : buildKind === "lamp" ? L.lampTip : buildKind === "scarecrow" ? L.scarecrowTip
-              : buildKind === "grass" ? L.grassTip
+              : buildKind === "grass" ? L.grassTip : buildKind === "mill" ? L.millTip
               : (buildKind === "bridgeWood" || buildKind === "bridgeStone") ? L.bridgeTip : L.fenceTip)
             : isHerd ? L.herdTip : TOOL_NAMES[s.key];
           return (
@@ -2350,7 +2476,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         <div className="ferme-seed-menu-ov" onClick={() => setCraftMenuOpen(null)}>
           <div className="ferme-seed-menu panel ferme-craft-menu" onClick={e => e.stopPropagation()}>
             <div className="ferme-seed-menu-title">
-              {craftMenuOpen === "wood" ? L.craftMenuTitleWood(myInv ? myInv.wood : 0) : craftMenuOpen === "stone" ? L.craftMenuTitleStone(myInv ? myInv.stone : 0) : L.craftMenuTitleGems()}
+              {craftMenuOpen === "wood" ? L.craftMenuTitleWood(myInv ? myInv.wood : 0) : craftMenuOpen === "stone" ? L.craftMenuTitleStone(myInv ? myInv.stone : 0) : craftMenuOpen === "flour" ? L.craftMenuTitleFlour() : L.craftMenuTitleGems()}
             </div>
             {craftMenuOpen === "wood" && (
               <div className="ferme-craft-row">
@@ -2402,7 +2528,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 })}
               </>
             )}
-            {craftMenuOpen !== "gems" && (
+            {craftMenuOpen === "flour" && (
+              <div className="ferme-craft-row">
+                <Sprite img={spritesReady ? spritesRef.current.icons.flour : null} w={26} h={26} />
+                <span className="name">{L.flourItemName} × {flour || 0}<br /><span className="cost">{L.perPiece(C.FLOUR_SELL)}</span></span>
+                <button disabled={!flour} onClick={() => sellFlour()}>{L.sellAll}</button>
+              </div>
+            )}
+            {craftMenuOpen !== "gems" && craftMenuOpen !== "flour" && (
               <button className="ferme-btn ferme-craft-sell"
                 disabled={!myInv || myInv[craftMenuOpen] === 0}
                 onClick={() => { sellItem(craftMenuOpen); setCraftMenuOpen(null); }}>{L.sellAll}</button>
@@ -2532,6 +2665,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               <div className="info"><b>{L.grassRowTitle(C.GRASS_COST)}</b><span>{L.grassRowSub(myInv ? (myInv.grass || 0) : 0)}</span></div>
               <button disabled={hud.money < C.GRASS_COST} onClick={() => buyGrass(1)}>{L.buy1}</button>
               <button disabled={hud.money < C.GRASS_COST * 5} onClick={() => buyGrass(5)}>{L.buy5}</button>
+            </div>
+            <div className="ferme-shop-row">
+              <Sprite img={spritesReady ? spritesRef.current.mill : null} w={30} h={36} />
+              <div className="info"><b>{L.millRowTitle(C.MILL_COST)}</b><span>{L.millRowSub(myInv ? (myInv.mill || 0) : 0)}</span></div>
+              <button disabled={hud.money < C.MILL_COST} onClick={() => buyMill(1)}>{L.buy1}</button>
             </div>
             <div className="ferme-tools-header">{L.shopAnimalsHeader}</div>
             {C.ANIMALS.map(a => (

@@ -335,6 +335,15 @@ export function buildSprites() {
         g.strokeStyle = "#d43a2e"; g.lineWidth = 2.4;
         g.beginPath(); g.moveTo(2, 3); g.lineTo(14, 13); g.stroke();
         break;
+      case "flour": // sac de farine (chantier 2026-07, transformation artisanale demandée par Guillaume)
+        g.fillStyle = "#ede0c4"; // toile du sac
+        g.beginPath(); g.moveTo(4, 4); g.quadraticCurveTo(2, 9, 4, 14); g.lineTo(12, 14); g.quadraticCurveTo(14, 9, 12, 4); g.fill();
+        P(g, 5, 2, 6, 3, "#c9a25a");   // liseré noué en haut
+        P(g, 6, 1, 4, 1, "#8a6340");   // ficelle
+        g.strokeStyle = "rgba(140,110,70,.5)"; g.lineWidth = 1;
+        g.beginPath(); g.moveTo(5, 8); g.lineTo(11, 8); g.moveTo(5, 11); g.lineTo(11, 11); g.stroke(); // coutures
+        P(g, 3, 12, 1, 1, "#fff6e6"); // grain de farine échappé
+        break;
       default: break;
     }
     return c;
@@ -493,6 +502,48 @@ export function buildSprites() {
     g.stroke();
     g.fillStyle = up ? "#8ac25a" : "#e06a50"; // boule au bout du manche, couleur = état
     g.beginPath(); g.arc(up ? 13 : 3, up ? 4 : 6, 2, 0, 7); g.fill();
+    return c;
+  }
+  // Moulin (chantier 2026-07, transformation artisanale demandée par
+  // Guillaume : "prévoir la construction de bâtiments simples (fût, presse,
+  // four)"). Premier bâtiment de cette famille : petite bâtisse en bois sur
+  // soubassement de pierre, toit en pente, avec une roue à aubes sur le
+  // flanc (symbole lisible de "moulin" même sans rotation animée, gardé
+  // simple comme demandé) et un sac de blé/farine posé contre l'entrée pour
+  // l'ambiance artisanale. Dessiné plus haut qu'une tuile (comme le puits/le
+  // lampadaire), donc dans le calque "draws" trié par profondeur, pas la
+  // boucle de sol. Taille intermédiaire (ni trop grand, ni trop petit,
+  // demande explicite de Guillaume) : un peu plus large qu'une case, un peu
+  // moins haut que la maison.
+  function millSprite() {
+    const [c, g] = cv(30, 36);
+    // soubassement en pierre
+    P(g, 2, 26, 26, 8, "#9a9aa2"); P(g, 2, 26, 26, 2, "#b2b2ba");
+    for (let x = 3; x < 27; x += 5) P(g, x, 28, 1, 6, "#7a7a82");
+    // corps en bois
+    P(g, 3, 12, 24, 15, "#a9773f");
+    P(g, 3, 12, 24, 2, "#c08c4f"); // reflet du haut
+    for (let y = 15; y < 26; y += 4) P(g, 3, y, 24, 1, "#8a6038"); // planches horizontales
+    // toit en pente (deux pans, style grange simple)
+    g.fillStyle = "#7a3a2a"; g.beginPath(); g.moveTo(0, 13); g.lineTo(15, 2); g.lineTo(30, 13); g.fill();
+    g.fillStyle = "#8a4632"; g.beginPath(); g.moveTo(0, 13); g.lineTo(15, 2); g.lineTo(15, 5); g.lineTo(2, 13.5); g.fill(); // pan éclairé
+    P(g, 0, 12, 30, 2, "#5a2c20"); // rive de toit
+    // porte + petite fenêtre
+    P(g, 12, 19, 7, 8, "#5a3d24"); P(g, 12, 19, 7, 1, "#6a4a2c");
+    P(g, 22, 16, 4, 4, "#cfe0e8"); P(g, 22, 16, 4, 1, "#3a3a40");
+    // roue à aubes sur le flanc gauche (symbole du moulin, statique)
+    g.strokeStyle = "#5a3d24"; g.lineWidth = 2;
+    g.beginPath(); g.arc(4, 24, 7, 0, 7); g.stroke();
+    g.fillStyle = "#7a5330";
+    for (let a = 0; a < 8; a++) {
+      const ang = (a / 8) * Math.PI * 2;
+      g.beginPath(); g.moveTo(4, 24); g.lineTo(4 + Math.cos(ang) * 7, 24 + Math.sin(ang) * 7); g.stroke();
+    }
+    g.fillStyle = "#5a3d24"; g.beginPath(); g.arc(4, 24, 2, 0, 7); g.fill(); // moyeu
+    // sac de blé/farine posé contre l'entrée
+    g.fillStyle = "#d8b878"; g.beginPath();
+    g.moveTo(20, 34); g.quadraticCurveTo(18, 28, 20, 24); g.lineTo(25, 24); g.quadraticCurveTo(27, 28, 25, 34); g.fill();
+    P(g, 20, 22, 5, 2, "#b8912a");
     return c;
   }
   function well() {
@@ -734,6 +785,7 @@ export function buildSprites() {
     scarecrow: scarecrowSprite(),
     leverOpen: leverSprite(true),
     leverClosed: leverSprite(false),
+    mill: millSprite(),
     barn: [barnSprite(1), barnSprite(2), barnSprite(3)],
     animals: [],
     products: [],
@@ -742,7 +794,7 @@ export function buildSprites() {
     S.crops[t] = [];
     for (let s = 0; s < C.CROP_STAGES; s++) S.crops[t][s] = cropSprite(t, s);
   }
-  for (const k of ["hoe", "can", "axe", "pick", "seeds", "wood", "stone", "food", "gold", "energy", "rod", "ready", "thirst", "herd"]) S.icons[k] = icon(k);
+  for (const k of ["hoe", "can", "axe", "pick", "seeds", "wood", "stone", "food", "gold", "energy", "rod", "ready", "thirst", "herd", "flour"]) S.icons[k] = icon(k);
   S.gemIcons = C.GEMS.map(gm => gemIcon(gm.color));
   S.fishIcons = C.FISH.map(fs => fishIcon(fs.color));
   S.animals = C.ANIMALS.map(a => animalSprite(a.id));

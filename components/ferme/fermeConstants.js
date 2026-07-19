@@ -67,6 +67,11 @@ export const O_LEVER = 15;     // levier d'un pont (chantier 2026-07, demande Gu
                                 // pose automatique). Cliquable directement (aucun outil à équiper, aucun coût),
                                 // voir resolveAct cas "lever". Ne bloque PAS le passage lui-même (comme
                                 // l'épouvantail) : seul le pont qu'il commande se ferme/s'ouvre.
+export const O_MILL = 16;      // moulin (chantier 2026-07, demande Guillaume : "transformation artisanale",
+                                // premier bâtiment de la famille four/fût/presse/moulin). Achetable/posable comme
+                                // le lampadaire (voir MILL_COST/BUILD_TIMES.mill ci-dessous), bloque le passage une
+                                // fois construit. Transforme en continu le blé déposé en sacs de farine, voir
+                                // resolveAct cas "mill"/"millDeposit" et E.millTick (fermeEngine.js).
 
 // --- Cultures ---
 // stages: 0=semis ... maxStage=récoltable ; growMs = durée RÉELLE (arrosée) pour
@@ -272,6 +277,33 @@ export const SCARECROW_COST = 400; // prix d'un épouvantail à la boutique (or)
 // Définitif, pas de retrait (contrairement à fence/wall/lamp/scarecrow).
 export const GRASS_COST = 5; // prix d'une unité d'herbe à la boutique (or)
 
+// --- Moulin (chantier 2026-07, demande Guillaume : "transformation artisanale :
+// prévoir la construction de bâtiments simples (fût, presse, four), qui
+// transformeront une récolte brute en produit à plus forte valeur (fruits ->
+// confiture, lait -> fromages, blé -> farine puis pain, laine -> vêtements)").
+// Premier bâtiment de cette famille : transforme le Blé récolté (CROPS[
+// MILL_WHEAT_CROP]) en sacs de farine. Achetable à la boutique (payé en or,
+// même principe que le lampadaire) puis posé librement avec l'outil
+// Construction (case 8, nouvelle variante "mill"), chantier réel d'1h avant
+// d'être fonctionnel (voir BUILD_TIMES.mill). Une fois construit : stock de
+// blé COMMUN à la case (world.mills, alimenté par n'importe quel joueur d'un
+// simple clic dessus, voir resolveAct cas "millDeposit"), transformation EN
+// CONTINU tant qu'il reste au moins MILL_WHEAT_PER_SACK blé en stock, au
+// rythme fixe d'un sac toutes les MILL_BATCH_MS (voir E.millTick,
+// fermeEngine.js). Les sacs de farine produits rejoignent un pool COMMUN à la
+// salle (comme les gemmes, voir sharedRef.current.flour côté FermeGame.js),
+// affiché dans le HUD en haut à gauche. Coût/temps de chantier/cadence/
+// quantité par sac DONNÉS EXPLICITEMENT par Guillaume, appliqués tels quels ;
+// MILL_STOCK_CAP (plafond de blé stockable dans un moulin) et FLOUR_SELL
+// (prix de vente d'un sac) sont EXTRAPOLÉS (aucun chiffre précis demandé au-
+// delà de la mécanique elle-même), à ajuster librement.
+export const MILL_COST = 30000;              // prix d'un moulin niveau 1 à la boutique (or), donné par Guillaume
+export const MILL_WHEAT_CROP = 4;            // index de "Blé" dans C.CROPS ci-dessus
+export const MILL_WHEAT_PER_SACK = 3;        // blé consommé par sac de farine produit, donné par Guillaume
+export const MILL_BATCH_MS = 15 * 60 * 1000; // 15 minutes réelles par sac, donné par Guillaume
+export const MILL_STOCK_CAP = 90;            // stock de blé max qu'un moulin peut contenir (extrapolé, ~30 sacs d'avance)
+export const FLOUR_SELL = 55;                // prix de vente d'un sac de farine (extrapolé)
+
 // --- Temps de construction réels (chantier 2026-07, "modèle Clash of Clans") ---
 // Toute infrastructure posée par un joueur (lampadaire pour l'instant, et
 // toute future construction similaire) n'est PAS fonctionnelle immédiatement :
@@ -291,6 +323,7 @@ export const BUILD_TIMES = {
   lamp: 15 * 60 * 1000,     // lampadaire niveau 1 : 15 minutes réelles (valeur donnée par Guillaume)
   scarecrow: 10 * 1000,     // épouvantail : 10 secondes réelles (valeur donnée par Guillaume)
   grass: 5 * 1000,          // repousse de l'herbe sur une case labourée : 5 secondes réelles (valeur donnée par Guillaume)
+  mill: 60 * 60 * 1000,     // moulin niveau 1 : 1 heure réelle (valeur donnée par Guillaume)
 };
 
 // --- Constructions bois/pierre (chantier 2026-07) ---
