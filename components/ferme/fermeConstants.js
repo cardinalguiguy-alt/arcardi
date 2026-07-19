@@ -27,6 +27,13 @@ export const G_BRIDGE_SITE = 8; // site de pont à construire (chantier 2026-07)
                                  // (bois OU pierre, voir BRIDGE_COST_WOOD/BRIDGE_COST_STONE), devient G_BRIDGE,
                                  // définitivement (pas de retrait, pour ne jamais piéger un joueur en pleine
                                  // rivière en retirant la case sous ses pieds).
+export const G_BRIDGE_CLOSED = 9; // pont FERMÉ via le levier (chantier 2026-07, demande Guillaume : "les ponts
+                                   // doivent pouvoir être refermés et ouverts à l'aide d'un levier", pensé pour
+                                   // bloquer plus tard des ennemis/animaux dangereux sur la rive droite). Même
+                                   // pont qu'un G_BRIDGE construit (le pont lui-même reste PERMANENT, jamais
+                                   // retiré/remboursé) : seul cet état de passage bascule, G_BRIDGE <-> 
+                                   // G_BRIDGE_CLOSED, via resolveAct cas "lever". Bloque le passage comme
+                                   // G_WATER tant qu'il n'est pas rouvert (voir blockedTile).
 
 // Objets
 export const O_NONE = 0;
@@ -45,6 +52,12 @@ export const O_WALL = 12;    // mur en pierre, construit par les joueurs (bloque
 export const O_LAMP = 13;    // lampadaire, achetable et posé par les joueurs (éclaire la nuit, bloque le passage)
 export const O_SCARECROW = 14; // épouvantail, achetable et posé par les joueurs (chantier 2026-07, contre les oiseaux -
                                 // pas encore implémentés ; ne bloque pas le passage, posé au milieu des cultures)
+export const O_LEVER = 15;     // levier d'un pont (chantier 2026-07, demande Guillaume) : posé AUTOMATIQUEMENT sur
+                                // la berge, côté maison, dès qu'une traversée de pont est ENTIÈREMENT construite
+                                // (voir generateWorld pour l'emplacement réservé, resolveAct cas "bridge" pour la
+                                // pose automatique). Cliquable directement (aucun outil à équiper, aucun coût),
+                                // voir resolveAct cas "lever". Ne bloque PAS le passage lui-même (comme
+                                // l'épouvantail) : seul le pont qu'il commande se ferme/s'ouvre.
 
 // --- Cultures ---
 // stages: 0=semis ... maxStage=récoltable ; growMs = durée RÉELLE (arrosée) pour
@@ -286,6 +299,23 @@ export const BUILD_COSTS = {
 // de piéger un joueur en pleine rivière en retirant la case sous ses pieds).
 export const BRIDGE_COST_WOOD = 20;  // bois par case de pont en bois
 export const BRIDGE_COST_STONE = 15; // pierre par case de pont en pierre
+
+// --- Levier de pont (chantier 2026-07, demande Guillaume) ---
+// "les ponts en pierre et en bois doivent pouvoir être refermés et ouverts à
+// l'aide d'un levier [...] car on ajoutera des ennemis et des animaux
+// dangereux sur la rive droite, il faudra donc que le pont puisse être ouvert
+// et fermé à notre guise pour les bloquer". Décisions validées par Guillaume
+// (3 questions à choix multiples, conformément à la section 3) : le levier
+// est posé AUTOMATIQUEMENT dès qu'une traversée est entièrement construite
+// (aucun coût, aucun objet à équiper) ; le pont fermé reste VISIBLE (une
+// barrière apparaît par-dessus, il ne redevient pas un chantier) ; il bloque
+// TOUT LE MONDE, joueurs compris (pas seulement les futurs ennemis/animaux).
+// Aucune position précise de levier n'a été demandée : posé sur la berge,
+// côté maison (ouest), au milieu de la largeur de la traversée — extrapolé,
+// à ajuster librement. Le pont bâti (G_BRIDGE) reste toujours PERMANENT au
+// sens du chantier précédent (jamais retiré/remboursé en ressources) : seul
+// son état de passage bascule via le levier, voir G_BRIDGE_CLOSED plus haut.
+export const BRIDGE_LEVER_OFFSET = 7; // décalage (en cases) du levier par rapport au bord ouest de la traversée
 
 // --- Élevage ---
 // Enclos près de la maison (dans la zone déjà dégagée autour de la ferme).

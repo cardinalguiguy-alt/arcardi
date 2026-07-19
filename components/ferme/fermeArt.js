@@ -404,6 +404,23 @@ export function buildSprites() {
     P(g, 3, 2, 10, 3, "#c9a227"); P(g, 2, 4, 12, 2, "#b8912a"); // chapeau de paille
     return c;
   }
+  // Levier de pont (chantier 2026-07, demande Guillaume) : petit poteau planté
+  // dans la berge avec un manche articulé. `up` = manche levé vers la droite
+  // (pont ouvert), `down` = manche baissé vers la gauche (pont fermé) — un
+  // repère visuel simple et lisible à distance, sans nouveau concept d'anim.
+  function leverSprite(up) {
+    const [c, g] = cv(16, 24);
+    P(g, 6, 14, 4, 8, "#5a5a62");  // socle planté au sol
+    P(g, 6, 20, 4, 2, "#3a3a40");
+    g.fillStyle = "#7a5330"; g.beginPath(); g.arc(8, 13, 2, 0, 7); g.fill(); // articulation
+    g.strokeStyle = "#8a6038"; g.lineWidth = 2; g.lineCap = "round";
+    g.beginPath(); g.moveTo(8, 13);
+    if (up) g.lineTo(13, 4); else g.lineTo(3, 6);
+    g.stroke();
+    g.fillStyle = up ? "#8ac25a" : "#e06a50"; // boule au bout du manche, couleur = état
+    g.beginPath(); g.arc(up ? 13 : 3, up ? 4 : 6, 2, 0, 7); g.fill();
+    return c;
+  }
   function well() {
     const [c, g] = cv(24, 30);
     // toit
@@ -637,6 +654,8 @@ export function buildSprites() {
     wall: wallTile(),
     lamp: lampSprite(),
     scarecrow: scarecrowSprite(),
+    leverOpen: leverSprite(true),
+    leverClosed: leverSprite(false),
     barn: [barnSprite(1), barnSprite(2), barnSprite(3)],
     animals: [],
     products: [],

@@ -70,10 +70,27 @@ export function generateWorld(seed) {
   // pierre (voir resolveAct cas "bridge"). Mêmes 2 emplacements et la même
   // largeur de traversée qu'avant (aucun changement de géométrie), seul le
   // type de sol posé change (site à construire au lieu de pont fini).
-  for (const by of [42, 100]) for (let y = by; y < by + 3; y++) {
-    const cx = Math.round(riverCenter[y]);
-    for (let x = cx - 6; x <= cx + 6; x++)
-      if (inMap(x, y) && (ground[idx(x, y)] === C.G_WATER || ground[idx(x, y)] === C.G_SAND)) ground[idx(x, y)] = C.G_BRIDGE_SITE;
+  // bridgeSites[k] retient les indices de TOUTES les cases de la traversée k
+  // (pour savoir quand elle est ENTIÈREMENT construite et faire apparaître le
+  // levier, chantier 2026-07 "pont ouvrable/fermable") ; bridgeLeverPos[k]
+  // retient l'emplacement réservé (berge côté maison) où ce levier apparaîtra
+  // automatiquement une fois la traversée achevée (voir resolveAct cas
+  // "bridge"). Ces deux tableaux sont PUREMENT dérivés de la seed (comme
+  // riverCenter), recalculés à l'identique à chaque generateWorld : rien à
+  // persister séparément.
+  const bridgeSites = [];
+  const bridgeLeverPos = [];
+  for (const by of [42, 100]) {
+    const sites = [];
+    const midY = by + 1;
+    for (let y = by; y < by + 3; y++) {
+      const cx = Math.round(riverCenter[y]);
+      for (let x = cx - 6; x <= cx + 6; x++)
+        if (inMap(x, y) && (ground[idx(x, y)] === C.G_WATER || ground[idx(x, y)] === C.G_SAND)) { ground[idx(x, y)] = C.G_BRIDGE_SITE; sites.push(idx(x, y)); }
+    }
+    bridgeSites.push(sites);
+    const cxMid = Math.round(riverCenter[midY]);
+    bridgeLeverPos.push(idx(cxMid - C.BRIDGE_LEVER_OFFSET, midY));
   }
   // Maison, boutique, bac, chemin
   for (let y = C.HOUSE.y; y < C.HOUSE.y + C.HOUSE.h; y++) for (let x = C.HOUSE.x; x < C.HOUSE.x + C.HOUSE.w; x++) objects[idx(x, y)] = C.O_HOUSE;
@@ -98,6 +115,14 @@ export function generateWorld(seed) {
       const o = objects[idx(x, y)];
       if (o === C.O_TREE || o === C.O_TREE2 || o === C.O_ROCK) { objects[idx(x, y)] = C.O_NONE; objHp.delete(idx(x, y)); }
     }
+  // Dégager les emplacements réservés des leviers de pont (chantier 2026-07) :
+  // posés dynamiquement en jeu une fois chaque traversée achevée (voir
+  // resolveAct cas "bridge"), on s'assure ici qu'aucun arbre/rocher généré
+  // juste au-dessus ne vienne bloquer la case.
+  for (const lp of bridgeLeverPos) {
+    const o = objects[lp];
+    if (o === C.O_TREE || o === C.O_TREE2 || o === C.O_ROCK) { objects[lp] = C.O_NONE; objHp.delete(lp); }
+  }
   // Dégager aussi l'emplacement (fixe) de la grange, à droite de l'enclos de
   // départ (zip 161) : sol forcé en herbe (au cas où la rivière serpenterait
   // par là) et arbres/rochers retirés, sur une zone assez large pour
@@ -136,7 +161,7 @@ export function generateWorld(seed) {
     }
   }
 
-  return { w: W, h: H, ground, objects, objHp, crops };
+  return { w: W, h: H, ground, objects, objHp, crops, bridgeSites, bridgeLeverPos };
 }
 
 // Applique des overrides persistés (reprise après rechargement) sur un monde
@@ -478,6 +503,44 @@ export function resolveAct(world, f, m) {
         }
         world.ground[i] = C.G_BRIDGE;
         res.tiles.push(i); res.fx.push({ k: "bridge", x, y, mat }); res.invChanged = true;
+        // Levier (chantier 2026-07, demande Guillaume) : dès que TOUTES les
+        // cases de la MÊME traversée sont posées (G_BRIDGE), un levier
+        // apparaît automatiquement sur la berge réservée à côté (voir
+        // bridgeSites/bridgeLeverPos, generateWorld), sans coût ni pose
+        // manuelle. Permet ensuite de fermer/rouvrir tout le pont d'un coup
+        // (resolveAct cas "lever" ci-dessous).
+        for (let k = 0; k < world.bridgeSites.length; k++) {
+          const sites = world.bridgeSites[k];
+          if (sites.indexOf(i) === -1) continue;
+          if (sites.every((si) => world.ground[si] === C.G_BRIDGE)) {
+            const lp = world.bridgeLeverPos[k];
+            if (world.objects[lp] !== C.O_LEVER) {
+              world.objects[lp] = C.O_LEVER; world.objHp.set(lp, 1);
+              res.tiles.push(lp);
+            }
+          }
+          break;
+        }
+      }
+      break;
+    }
+    case "lever": {
+      // Ferme/ouvre TOUTE une traversée de pont d'un coup (chantier 2026-07,
+      // demande Guillaume). Le pont lui-même reste PERMANENT (aucun retrait,
+      // aucun remboursement) : seul l'état de passage bascule entre G_BRIDGE
+      // (ouvert) et G_BRIDGE_CLOSED (fermé, bloque tout le monde comme
+      // G_WATER, voir blockedTile). Bloque bel et bien les joueurs eux-mêmes,
+      // pas seulement les futurs ennemis/animaux (décision validée par
+      // Guillaume).
+      if (o === C.O_LEVER) {
+        const k = world.bridgeLeverPos.indexOf(i);
+        if (k >= 0) {
+          const sites = world.bridgeSites[k];
+          const closed = world.ground[sites[0]] === C.G_BRIDGE_CLOSED;
+          const newG = closed ? C.G_BRIDGE : C.G_BRIDGE_CLOSED;
+          for (const si of sites) { world.ground[si] = newG; res.tiles.push(si); }
+          res.fx.push({ k: "lever", x, y, closed: !closed });
+        }
       }
       break;
     }
@@ -955,7 +1018,7 @@ export function blockedTile(world, x, y, now = Date.now()) {
   if (!inMap(fx, fy)) return true;
   const i = idx(fx, fy);
   const g = world.ground[i], o = world.objects[i];
-  if (g === C.G_WATER || g === C.G_BRIDGE_SITE) return true;
+  if (g === C.G_WATER || g === C.G_BRIDGE_SITE || g === C.G_BRIDGE_CLOSED) return true;
   if (o === C.O_LAMP) return buildReady(world.objHp.get(i), now);
   if (o === C.O_TREE || o === C.O_TREE2 || o === C.O_ROCK || o === C.O_HOUSE || o === C.O_SHOP || o === C.O_BIN || o === C.O_STUMP || o === C.O_WELL || o === C.O_FENCE || o === C.O_FENCE_H || o === C.O_FENCE_V || o === C.O_WALL) return true;
   return false;

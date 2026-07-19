@@ -329,10 +329,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       else if (gr === C.G_TILLED || gr === C.G_WATERED) col = [138, 92, 53];
       else if (gr === C.G_BRIDGE || gr === C.G_PATH || gr === C.G_PATH_STONE) col = [154, 107, 63];
       else if (gr === C.G_BRIDGE_SITE) col = [200, 160, 60];
+      else if (gr === C.G_BRIDGE_CLOSED) col = [176, 74, 58];
       if (o === C.O_TREE || o === C.O_TREE2) col = [46, 106, 40];
       else if (o === C.O_ROCK || o === C.O_WALL) col = [130, 130, 138];
       else if (o === C.O_LAMP) col = [230, 200, 100];
       else if (o === C.O_SCARECROW) col = [212, 178, 90];
+      else if (o === C.O_LEVER) col = [80, 80, 88];
       else if (o === C.O_HOUSE) col = [192, 74, 60];
       else if (o === C.O_SHOP || o === C.O_BIN) col = [232, 200, 90];
       im.data.set([col[0], col[1], col[2], 255], i * 4);
@@ -888,6 +890,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     actAnimRef.current = 0.28;
     const c = w.crops.get(i);
     if (c && E.cropGrowState(c, Date.now()).mature) return sendReq({ kind: "act", action: "harvest", x: tt.x, y: tt.y });
+    // Levier de pont (chantier 2026-07, demande Guillaume) : cliquable
+    // directement, quel que soit l'outil équipé (aucun objet à équiper),
+    // même priorité que la récolte ci-dessus.
+    if (w.objects[i] === C.O_LEVER) return sendReq({ kind: "act", action: "lever", x: tt.x, y: tt.y });
     if (sl === 0) sendReq({ kind: "act", action: "till", x: tt.x, y: tt.y });
     else if (sl === 1) sendReq({ kind: "act", action: "water", x: tt.x, y: tt.y });
     else if (sl === 2) sendReq({ kind: "act", action: "chop", x: tt.x, y: tt.y });
@@ -1141,6 +1147,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         else if (g === C.G_WATER) img = sprites.water[waterFrame];
         else if (g === C.G_SAND) img = sprites.sand;
         else if (g === C.G_BRIDGE) img = sprites.bridge;
+        else if (g === C.G_BRIDGE_CLOSED) img = sprites.bridge;
         else if (g === C.G_BRIDGE_SITE) img = sprites.sand;
         else img = sprites.path;
         ctx.drawImage(img, x * T, y * T);
@@ -1155,6 +1162,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           ctx.strokeStyle = "rgba(60, 40, 10, 0.6)";
           ctx.lineWidth = 1;
           ctx.strokeRect(x * T + 0.5, y * T + 0.5, T - 1, T - 1);
+        }
+        if (g === C.G_BRIDGE_CLOSED) {
+          // Pont fermé via le levier (chantier 2026-07, demande Guillaume) :
+          // le pont reste VISIBLE (décision validée), une barrière
+          // hachurée rouge/blanche (signal "fermé", même technique de fillRect
+          // que le voile de chantier ci-dessus, teinte distincte pour ne pas
+          // le confondre avec un chantier en cours) apparaît par-dessus.
+          ctx.fillStyle = "rgba(160, 40, 30, 0.4)";
+          ctx.fillRect(x * T, y * T, T, T);
+          ctx.strokeStyle = "rgba(255, 220, 60, 0.85)";
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.moveTo(x * T + 1, y * T + T - 1); ctx.lineTo(x * T + T - 1, y * T + 1);
+          ctx.stroke();
         }
         const c = w.crops.get(i);
         if (c) {
@@ -1329,6 +1350,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               ctx.fillStyle = "#fff"; ctx.fillText(`${mm}:${ss}`, x * T + 8, by - 3);
             } });
           }
+        }
+        else if (o === C.O_LEVER) {
+          // Levier de pont (chantier 2026-07, demande Guillaume) : posé
+          // automatiquement, aucun chantier/délai (contrairement au
+          // lampadaire/épouvantail) : cliquable et fonctionnel dès son
+          // apparition. Position du manche (haut/bas) reflète l'état actuel
+          // du pont qu'il commande, lu directement sur la case de référence
+          // de sa traversée (w.bridgeSites/w.bridgeLeverPos, voir
+          // fermeEngine.js), aucun état séparé à stocker.
+          const k = w.bridgeLeverPos ? w.bridgeLeverPos.indexOf(idxOf(x, y)) : -1;
+          const closed = k >= 0 && w.ground[w.bridgeSites[k][0]] === C.G_BRIDGE_CLOSED;
+          draws.push({ y: (y + 1) * T, fn: () => ctx.drawImage(closed ? sprites.leverClosed : sprites.leverOpen, x * T, (y + 1) * T - 24) });
         }
       }
       // Animaux d'élevage (+ indicateur de production à ramasser). Position
@@ -1726,6 +1759,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         break;
       }
       case "bridge": fx.push({ ...base, kind: "txt", txt: L.fxBridge, col: "#d9b380", life: 1.2 }); break;
+      case "lever": fx.push({ ...base, kind: "txt", txt: m.closed ? L.fxLeverClosed : L.fxLeverOpen, col: m.closed ? "#e06a50" : "#8ac25a", life: 1.2 }); break;
       default: break;
     }
   }

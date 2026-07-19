@@ -73,6 +73,8 @@ export const FERME_STR = {
     toastNeedWater: "Approche-toi de l'eau et vise la rivière pour pêcher !",
     fxGem: (name) => `Gemme : ${name} !`,
     fxBridge: "Pont !",
+    fxLeverOpen: "Pont ouvert !",
+    fxLeverClosed: "Pont fermé !",
     fxFish: (name) => `+1 ${name.toLowerCase()}`,
     // Quêtes de découverte
     questTitle: "🎯 À faire : découvre la ferme",
@@ -291,6 +293,8 @@ export const FERME_STR = {
     toastNeedWater: "Get close to the water and aim at the river to fish!",
     fxGem: (name) => `Gem: ${name}!`,
     fxBridge: "Bridge!",
+    fxLeverOpen: "Bridge open!",
+    fxLeverClosed: "Bridge closed!",
     fxFish: (name) => `+1 ${name.toLowerCase()}`,
     questTitle: "🎯 To do: discover the farm",
     questBtn: "🎯 To do",
