@@ -191,6 +191,19 @@ export function animalReady(an, now) {
   return !!an && now >= (an.readyAt || 0);
 }
 
+// Temps de construction réels d'une infrastructure (lampadaire, et futures
+// constructions similaires — chantier 2026-07, "modèle Clash of Clans") :
+// `readyAt` est l'horodatage stocké dans `world.objHp` au moment de la pose
+// (voir BUILD_TIMES dans fermeConstants.js). Purement dérivé de `now`, même
+// principe que cropGrowState/animalReady : aucun message réseau
+// supplémentaire nécessaire pour faire avancer un chantier.
+export function buildReady(readyAt, now) {
+  return now >= (readyAt || 0);
+}
+export function buildRemainingMs(readyAt, now) {
+  return Math.max(0, (readyAt || 0) - now);
+}
+
 // Position réelle/affichée d'un animal (zip 152) : dérivée PUREMENT de son
 // ancrage (`hx`/`hy`, seule valeur synchronisée) et de l'horodatage, comme
 // cropGrowState/gameTimeMin. Chaque client calcule exactement la même
@@ -463,9 +476,14 @@ export function resolveAct(world, f, m) {
     case "lamp": {
       // Lampadaire (chantier 2026-07) : même mécanique que "wall" (achetée à
       // la boutique en or, pose/retrait sur une case libre, un seul sprite
-      // sans orientation), mais fonctionnel : une fois posé, il éclaire un
-      // rayon autour de lui dès que la nuit tombe (voir nightAlpha/
-      // lampsInView côté rendu, FermeGame.js). Aucun coût en énergie.
+      // sans orientation), mais fonctionnel : une fois posé ET construit, il
+      // éclaire un rayon autour de lui dès que la nuit tombe (voir
+      // nightAlpha/lampsInView côté rendu, FermeGame.js). Aucun coût en
+      // énergie. Chantier réel (2026-07, "modèle Clash of Clans") : posé, il
+      // n'est PAS immédiatement fonctionnel, `objHp` reçoit l'horodatage de
+      // fin de chantier (`now + BUILD_TIMES.lamp`, 15 min réelles pour le
+      // niveau 1) plutôt qu'une simple valeur 1 ; voir E.buildReady/
+      // E.buildRemainingMs pour dériver l'état du chantier à l'affichage.
       if (o === C.O_LAMP) {
         world.objects[i] = C.O_NONE; world.objHp.delete(i);
         f.inv.lamp = (f.inv.lamp || 0) + 1;
@@ -473,7 +491,7 @@ export function resolveAct(world, f, m) {
       } else if ((g === C.G_GRASS || g === C.G_TILLED || g === C.G_WATERED) && o === C.O_NONE && !world.crops.has(i)) {
         if (f.inv.lamp > 0) {
           f.inv.lamp--;
-          world.objects[i] = C.O_LAMP; world.objHp.set(i, 1);
+          world.objects[i] = C.O_LAMP; world.objHp.set(i, now + C.BUILD_TIMES.lamp);
           res.tiles.push(i); res.invChanged = true;
         } else res.toast = "noLampStock";
       }

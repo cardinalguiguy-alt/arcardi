@@ -76,6 +76,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [myInv, setMyInv] = useState(null);
   const [myQuests, setMyQuests] = useState(null); // {questId: true}
   const [questOpen, setQuestOpen] = useState(true);
+  const [questsHidden, setQuestsHidden] = useState(false); // true = checklist remplie depuis plus de 30 min -> disparition définitive
   const [slot, setSlot] = useState(0);
   const [seedSel, setSeedSel] = useState(0);
   const [seedMenuOpen, setSeedMenuOpen] = useState(false); // mini-menu de choix de graine
@@ -186,6 +187,34 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     try { const c = window.localStorage.getItem("ferme_lastcode"); if (c) setCodeInput(c); } catch (e) { /* localStorage indispo */ }
     return () => document.body.classList.remove("ferme-active");
   }, []);
+
+  // Checklist des quêtes de découverte (nouveaux joueurs) : une fois toutes
+  // les quêtes cochées, elle n'a plus d'utilité. Demande 2026-07: elle doit
+  // disparaître (icône + panneau) 30 minutes après avoir été entièrement
+  // remplie, pour ne pas rester affichée indéfiniment. L'horodatage de fin
+  // est gardé en localStorage (par machine) pour survivre à un rechargement.
+  useEffect(() => {
+    const QUESTS_DONE_KEY = "ferme_quests_done_at";
+    const checkQuestsHidden = () => {
+      try {
+        const doneAt = window.localStorage.getItem(QUESTS_DONE_KEY);
+        if (doneAt && Date.now() - Number(doneAt) > 30 * 60 * 1000) setQuestsHidden(true);
+      } catch (e) { /* localStorage indispo */ }
+    };
+    checkQuestsHidden();
+    const iv = setInterval(checkQuestsHidden, 30 * 1000);
+    return () => clearInterval(iv);
+  }, []);
+
+  useEffect(() => {
+    if (!myQuests || questsHidden) return;
+    if (!C.QUESTS.every(q => myQuests[q.id])) return;
+    try {
+      if (!window.localStorage.getItem("ferme_quests_done_at")) {
+        window.localStorage.setItem("ferme_quests_done_at", String(Date.now()));
+      }
+    } catch (e) { /* localStorage indispo */ }
+  }, [myQuests, questsHidden]);
 
   // Rend le jeu dans un PORTAL vers document.body. INDISPENSABLE : le jeu est
   // plein écran en position:fixed, mais le conteneur du stage (.door-content a
@@ -499,7 +528,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
 
     if (req.kind === "act") {
       const r = E.resolveAct(w, f, req);
-      for (const i of r.tiles) { recordTileOverride(i); out.tiles.push({ i, g: w.ground[i], o: w.objects[i] }); }
+      for (const i of r.tiles) { recordTileOverride(i); out.tiles.push({ i, g: w.ground[i], o: w.objects[i], hp: w.objHp.get(i) }); }
       for (const i of r.cropTiles) { const c = w.crops.get(i); out.crops.push({ i, c: c ? { t: c.t, bankedMs: c.bankedMs, wateredAt: c.wateredAt } : null }); }
       out.fx = r.fx;
       if (r.invChanged) out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
@@ -694,7 +723,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // -------- Tous : application des deltas reçus --------
   function applyDeltas(p) {
     const w = worldRef.current;
-    if (w && p.tiles) for (const tl of p.tiles) { w.ground[idxOf(E.xOf(tl.i), E.yOf(tl.i))] = tl.g; w.objects[tl.i] = tl.o; if (tl.o === C.O_STUMP) w.objHp.set(tl.i, 2); minimapDirtyRef.current = true; }
+    if (w && p.tiles) for (const tl of p.tiles) {
+      w.ground[idxOf(E.xOf(tl.i), E.yOf(tl.i))] = tl.g; w.objects[tl.i] = tl.o;
+      if (tl.o === C.O_NONE) w.objHp.delete(tl.i);
+      else if (typeof tl.hp === "number") w.objHp.set(tl.i, tl.hp);
+      else if (tl.o === C.O_STUMP) w.objHp.set(tl.i, 2);
+      minimapDirtyRef.current = true;
+    }
     if (w && p.crops) for (const cr of p.crops) { if (cr.c) w.crops.set(cr.i, { t: cr.c.t, bankedMs: cr.c.bankedMs || 0, wateredAt: cr.c.wateredAt || null }); else w.crops.delete(cr.i); }
     if (p.state) { const s = sharedRef.current; s.money = p.state.money; s.day = p.state.day; s.dayStartAt = p.state.dayStartAt; s.totalEarned = p.state.totalEarned; setHud(h => ({ ...h, money: s.money, day: s.day })); }
     if (p.farmer && p.farmer.id === me.id) { invRef.current = p.farmer.inv; toolsRef.current = p.farmer.tools; energyRef.current = p.farmer.energy; setMyInv(p.farmer.inv); setMyTools(p.farmer.tools); setMyEnergy(p.farmer.energy); if (p.farmer.quests) setMyQuests(p.farmer.quests); }
@@ -1192,17 +1227,43 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (o === C.O_TREE || o === C.O_TREE2) { const img = o === C.O_TREE ? sprites.oak : sprites.pine; draws.push({ y: (y + 1) * T, fn: () => ctx.drawImage(img, x * T - 8, (y + 1) * T - 48) }); }
         else if (o === C.O_WELL) draws.push({ y: (y + 1) * T, fn: () => ctx.drawImage(sprites.well, x * T - 4, (y + 1) * T - 30) });
         else if (o === C.O_LAMP) {
-          lampsInView.push({ x: x + 0.5, y: y + 0.5 });
-          draws.push({ y: (y + 1) * T, fn: () => {
-            ctx.drawImage(sprites.lamp, x * T, (y + 1) * T - 32);
-            if (nightAlpha() > 0.05) {
-              // Lanterne allumée : petit point lumineux sur la vitre, en plus
-              // du halo percé dans l'overlay nocturne (voir plus bas).
-              ctx.save(); ctx.globalAlpha = 0.9; ctx.fillStyle = "#ffe27a";
-              ctx.beginPath(); ctx.arc(x * T + 8, (y + 1) * T - 27, 3, 0, 7); ctx.fill();
+          const readyAt = w.objHp.get(idxOf(x, y));
+          const ready = E.buildReady(readyAt, epochNow);
+          if (ready) {
+            lampsInView.push({ x: x + 0.5, y: y + 0.5 });
+            draws.push({ y: (y + 1) * T, fn: () => {
+              ctx.drawImage(sprites.lamp, x * T, (y + 1) * T - 32);
+              if (nightAlpha() > 0.05) {
+                // Lanterne allumée : petit point lumineux sur la vitre, en plus
+                // du halo percé dans l'overlay nocturne (voir plus bas).
+                ctx.save(); ctx.globalAlpha = 0.9; ctx.fillStyle = "#ffe27a";
+                ctx.beginPath(); ctx.arc(x * T + 8, (y + 1) * T - 27, 3, 0, 7); ctx.fill();
+                ctx.restore();
+              }
+            } });
+          } else {
+            // Chantier en cours (temps réel, "modèle Clash of Clans") : sprite
+            // assombri (pas encore fonctionnel, aucun halo) + jauge de
+            // progression et compte à rebours mm:ss, même esprit que le
+            // marqueur 🚧 du chantier collaboratif.
+            const totalMs = C.BUILD_TIMES.lamp;
+            const remaining = E.buildRemainingMs(readyAt, epochNow);
+            const frac = Math.max(0, Math.min(1, 1 - remaining / totalMs));
+            draws.push({ y: (y + 1) * T, fn: () => {
+              ctx.save(); ctx.globalAlpha = 0.55;
+              ctx.drawImage(sprites.lamp, x * T, (y + 1) * T - 32);
               ctx.restore();
-            }
-          } });
+              const barW = 20, bx = x * T + 8 - barW / 2, by = (y + 1) * T - 38;
+              ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(bx, by, barW, 3);
+              ctx.fillStyle = "#ffe27a"; ctx.fillRect(bx, by, barW * frac, 3);
+              const totalSec = Math.ceil(remaining / 1000);
+              const mm = String(Math.floor(totalSec / 60)).padStart(2, "0");
+              const ss = String(totalSec % 60).padStart(2, "0");
+              ctx.font = "bold 8px monospace"; ctx.textAlign = "center";
+              ctx.fillStyle = "#00000090"; ctx.fillText(`${mm}:${ss}`, x * T + 8 + 1, by - 3 + 1);
+              ctx.fillStyle = "#fff"; ctx.fillText(`${mm}:${ss}`, x * T + 8, by - 3);
+            } });
+          }
         }
       }
       // Animaux d'élevage (+ indicateur de production à ramasser). Position
@@ -1816,7 +1877,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       )}
 
       {/* Panneau des quêtes de découverte (checklist cochable) */}
-      {questOpen && myQuests && (
+      {questOpen && myQuests && !questsHidden && (
         <div className="ferme-quests panel">
           <div className="ferme-quests-head">
             <b>{L.questTitle}</b>
@@ -1835,7 +1896,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           {C.QUESTS.every(q => myQuests[q.id]) && <div className="ferme-quest-alldone">{L.questAllDone}</div>}
         </div>
       )}
-      {!questOpen && <button className="ferme-btn ferme-quests-fab" onClick={() => setQuestOpen(true)}>{L.questBtn}</button>}
+      {!questOpen && !questsHidden && <button className="ferme-btn ferme-quests-fab" onClick={() => setQuestOpen(true)}>{L.questBtn}</button>}
 
       {/* Panneau de la mission d'équipe en cours (v1 : bois/pierre à déposer au chantier) */}
       {coop && (() => {

@@ -179,6 +179,25 @@ export const FENCE_COST = 15; // prix d'une section de clôture à la boutique (
 export const LAMP_COST = 5000;         // prix d'un lampadaire à la boutique (or)
 export const LAMP_LIGHT_RADIUS = 4.5;  // rayon éclairé autour du lampadaire, en tuiles
 
+// --- Temps de construction réels (chantier 2026-07, "modèle Clash of Clans") ---
+// Toute infrastructure posée par un joueur (lampadaire pour l'instant, et
+// toute future construction similaire) n'est PAS fonctionnelle immédiatement :
+// elle reste un chantier en cours pendant BUILD_TIMES[kind] (durée RÉELLE en
+// ms, indépendante du cycle jour/nuit — même philosophie que growMs/
+// WATER_VALID_MS/prodMs), avant de devenir utilisable. Techniquement, le
+// champ objHp existant (jusqu'ici une simple valeur de robustesse à 1 pour
+// ces objets non dégradables) est réutilisé pour y stocker l'horodatage de
+// fin de chantier (`readyAt`) : aucun nouveau champ réseau/sauvegarde
+// nécessaire, en suivant le même pattern "état dérivé purement d'un
+// horodatage partagé" déjà utilisé pour les cultures/animaux (voir
+// `buildReady`/`buildRemainingMs` dans fermeEngine.js). Pour ajouter une
+// future infrastructure au même système : lui donner une entrée ici, la
+// poser en stockant `now + BUILD_TIMES.<kind>` dans objHp, et vérifier
+// `E.buildReady(...)` avant de la considérer fonctionnelle côté rendu.
+export const BUILD_TIMES = {
+  lamp: 15 * 60 * 1000, // lampadaire niveau 1 : 15 minutes réelles (valeur donnée par Guillaume)
+};
+
 // --- Constructions bois/pierre (chantier 2026-07) ---
 // Le joueur convertit du bois/de la pierre récoltés en sections prêtes à poser
 // (clic sur l'icône bois/pierre du HUD -> menu Construire/Vendre), puis les
