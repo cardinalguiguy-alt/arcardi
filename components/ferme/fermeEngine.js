@@ -311,7 +311,7 @@ export function newFarmer(id, name, gender, outfit) {
     sleepStartedAt: null, sleepStartEnergy: 0, // dort actuellement ? (voir resolveSleepStart/End)
     tools: { hoe: 1, can: 1, axe: 1, pick: 1 },
     inv: {
-      wood: 0, stone: 0, food: 0, fence: 0, wall: 0, path: 0, lamp: 0, scarecrow: 0,
+      wood: 0, stone: 0, food: 0, fence: 0, wall: 0, path: 0, lamp: 0, scarecrow: 0, grass: 0,
       seeds: [5, 0, 0, 0], crops: [0, 0, 0, 0],
       gems: C.GEMS.map(() => 0),      // gemmes rares trouvées au minage
       fish: C.FISH.map(() => 0),      // poissons pêchés
@@ -363,6 +363,7 @@ export function normalizeFarmer(f) {
   if (typeof f.inv.path !== "number") f.inv.path = 0;
   if (typeof f.inv.lamp !== "number") f.inv.lamp = 0;
   if (typeof f.inv.scarecrow !== "number") f.inv.scarecrow = 0;
+  if (typeof f.inv.grass !== "number") f.inv.grass = 0;
   f.inv.seeds = padArray(f.inv.seeds, C.CROPS.length);
   f.inv.crops = padArray(f.inv.crops, C.CROPS.length);
   f.inv.gems = padArray(f.inv.gems, C.GEMS.length);
@@ -651,6 +652,30 @@ export function resolveAct(world, f, m) {
       }
       break;
     }
+    case "grass": {
+      // Replanter de l'herbe sur une case labourée (chantier 2026-07, demande
+      // Guillaume) : achetée à la boutique (5 or/unité, voir C.GRASS_COST),
+      // posée avec l'outil Construction (variante "grass"), UNIQUEMENT sur du
+      // sol labouré SEC (G_TILLED — pas G_WATERED/G_GRASS, contrairement à
+      // fence/wall/lamp/scarecrow qui se posent sur n'importe quelle case
+      // libre). Même "modèle Clash of Clans" que lampadaire/épouvantail (voir
+      // BUILD_TIMES.grass, 5 secondes réelles) : le sol passe d'abord en
+      // G_GRASS_GROWING (objHp = horodatage de fin de pousse, RÉUTILISÉ ici
+      // pour un type de sol plutôt qu'un objet, même pattern que documenté
+      // dans BUILD_TIMES), puis redevient G_GRASS TOUT SEUL une fois le délai
+      // écoulé (vérifié côté hôte à chaque tick, voir FermeGame.js), sans
+      // action supplémentaire du joueur. Définitif, pas de retrait (pas de
+      // branche "objects[i] === ..." de récupération comme fence/wall/lamp/
+      // scarecrow ci-dessus).
+      if (g === C.G_TILLED && o === C.O_NONE && !world.crops.has(i)) {
+        if (f.inv.grass > 0) {
+          f.inv.grass--;
+          world.ground[i] = C.G_GRASS_GROWING; world.objHp.set(i, now + C.BUILD_TIMES.grass);
+          res.tiles.push(i); res.fx.push({ k: "plantGrass", x, y }); res.invChanged = true;
+        } else res.toast = "noGrassStock";
+      }
+      break;
+    }
     case "fish":
       // Pêche : la case ciblée doit être de l'eau (rivière) et à portée. Le
       // TYPE de poisson est décidé par le minijeu côté client (m.fish) : on
@@ -820,6 +845,11 @@ export function resolveBuy(f, money, m) {
     const cost = C.SCARECROW_COST * n;
     if (money < cost) { res.toast = "noGold"; return res; }
     res.moneyDelta = -cost; f.inv.scarecrow = (f.inv.scarecrow || 0) + n; res.invChanged = true;
+  } else if (m.item === "grass") {
+    const n = Math.max(1, Math.min(50, (m.n | 0) || 1));
+    const cost = C.GRASS_COST * n;
+    if (money < cost) { res.toast = "noGold"; return res; }
+    res.moneyDelta = -cost; f.inv.grass = (f.inv.grass || 0) + n; res.invChanged = true;
   } else if (m.item === "tool") {
     const key = m.tool;
     if (!C.TOOLS.includes(key)) return res;

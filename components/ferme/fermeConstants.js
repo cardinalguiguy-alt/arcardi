@@ -34,6 +34,15 @@ export const G_BRIDGE_CLOSED = 9; // pont FERMÉ via le levier (chantier 2026-07
                                    // retiré/remboursé) : seul cet état de passage bascule, G_BRIDGE <-> 
                                    // G_BRIDGE_CLOSED, via resolveAct cas "lever". Bloque le passage comme
                                    // G_WATER tant qu'il n'est pas rouvert (voir blockedTile).
+export const G_GRASS_GROWING = 10; // herbe en train de repousser sur une case labourée (chantier 2026-07,
+                                    // demande Guillaume : pouvoir "reverse to the original state of grass").
+                                    // Posée avec l'outil Construction (variante "grass", herbe achetée à la
+                                    // boutique, voir GRASS_COST), sur du sol G_TILLED uniquement. Même "modèle
+                                    // Clash of Clans" que lampadaire/épouvantail (voir BUILD_TIMES.grass,
+                                    // 5 secondes réelles) : redevient G_GRASS TOUT SEUL une fois le délai
+                                    // écoulé (vérifié côté hôte à chaque tick, pas d'action du joueur requise,
+                                    // voir FermeGame.js). Ne bloque pas le passage (comme G_TILLED). Définitif,
+                                    // pas de retrait une fois planté.
 
 // Objets
 export const O_NONE = 0;
@@ -252,6 +261,17 @@ export const LAMP_LIGHT_RADIUS = 4.5;  // rayon éclairé autour du lampadaire, 
 // Prix extrapolé (aucun chiffre précis demandé), à ajuster librement.
 export const SCARECROW_COST = 400; // prix d'un épouvantail à la boutique (or)
 
+// --- Herbe (chantier 2026-07, demande Guillaume) ---
+// Achetable à la boutique (payée en or, 5 or/unité) puis posée librement avec
+// l'outil Construction (case 8, nouvelle variante "grass"), UNIQUEMENT sur du
+// sol labouré sec (G_TILLED). Permet de "reverse to the original state of
+// grass" une case labourée qu'on ne veut plus cultiver. Même "modèle Clash of
+// Clans" que lampadaire/épouvantail (chantier réel de BUILD_TIMES.grass, voir
+// plus bas) : passe d'abord par G_GRASS_GROWING, puis redevient G_GRASS TOUTE
+// SEULE une fois le délai écoulé, sans action supplémentaire du joueur.
+// Définitif, pas de retrait (contrairement à fence/wall/lamp/scarecrow).
+export const GRASS_COST = 5; // prix d'une unité d'herbe à la boutique (or)
+
 // --- Temps de construction réels (chantier 2026-07, "modèle Clash of Clans") ---
 // Toute infrastructure posée par un joueur (lampadaire pour l'instant, et
 // toute future construction similaire) n'est PAS fonctionnelle immédiatement :
@@ -270,6 +290,7 @@ export const SCARECROW_COST = 400; // prix d'un épouvantail à la boutique (or)
 export const BUILD_TIMES = {
   lamp: 15 * 60 * 1000,     // lampadaire niveau 1 : 15 minutes réelles (valeur donnée par Guillaume)
   scarecrow: 10 * 1000,     // épouvantail : 10 secondes réelles (valeur donnée par Guillaume)
+  grass: 5 * 1000,          // repousse de l'herbe sur une case labourée : 5 secondes réelles (valeur donnée par Guillaume)
 };
 
 // --- Constructions bois/pierre (chantier 2026-07) ---

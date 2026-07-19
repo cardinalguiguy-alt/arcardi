@@ -62,6 +62,25 @@ export function buildSprites() {
     P(g, 3, 0, 1, T, "#8a6038"); P(g, 11, 0, 1, T, "#8a6038");
     return c;
   }
+  function bridgeRuinTile() {
+    // Base : eau visible (chantier de pont en ruine, pas encore réparé).
+    const [c, g] = cv(T, T), r = makeRnd(48);
+    P(g, 0, 0, T, T, "#3a7bc8");
+    for (let i = 0; i < 8; i++) P(g, (r() * T) | 0, (r() * T) | 0, 3, 1, "#4a8bd8");
+    for (let i = 0; i < 4; i++) P(g, (r() * T) | 0, (r() * T) | 0, 2, 1, "#7ab4e8");
+    P(g, 3, 10, 3, 1, "#a8d4f0");
+    // Piliers de bois effondrés dépassant de l'eau (pas de planches).
+    P(g, 2, 5, 2, 8, "#7a5330");
+    P(g, 2, 5, 1, 8, "#5e3f22");
+    P(g, 12, 3, 2, 7, "#8a6038");
+    P(g, 12, 3, 1, 7, "#6a4a2a");
+    P(g, 7, 9, 2, 5, "#6a4528");
+    // Éclats/débris flottants autour des piliers.
+    P(g, 5, 3, 2, 1, "#8a6038");
+    P(g, 9, 6, 1, 1, "#7a5330");
+    P(g, 1, 13, 2, 1, "#6a4528");
+    return c;
+  }
   function pathTile() {
     const [c, g] = cv(T, T), r = makeRnd(63);
     P(g, 0, 0, T, T, "#b8a888");
@@ -632,6 +651,8 @@ export function buildSprites() {
     water: [waterTile(0), waterTile(1)],
     sand: sandTile(),
     bridge: bridgeTile(),
+    bridgeRuin: bridgeRuinTile(),
+    grassPatch: grassTile(0), // icône outil Construction/aperçu pour l'herbe (chantier 2026-07), simple réutilisation d'une tuile d'herbe existante
     path: pathTile(),
     oak: oakTree(),
     pine: pineTree(),

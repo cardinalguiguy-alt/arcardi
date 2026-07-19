@@ -158,7 +158,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const autoWaterPendingRef = useRef(new Set());   // tuiles d'arrosage auto déjà demandées (anti-spam)
   const autoCollectPendingRef = useRef(new Set()); // animaux de collecte auto déjà demandés (anti-spam)
   const fenceDirRef = useRef("auto"); // orientation choisie pour la prochaine clôture posée ("auto"|"h"|"v")
-  const buildKindRef = useRef("fence"); // miroir synchrone de buildKind ("fence"|"wall"|"path"|"lamp"|"scarecrow"|"bridgeWood"|"bridgeStone")
+  const buildKindRef = useRef("fence"); // miroir synchrone de buildKind ("fence"|"wall"|"path"|"lamp"|"scarecrow"|"grass"|"bridgeWood"|"bridgeStone")
   const heldAnimalRef = useRef(-1);   // index (dans sharedRef.animals) de l'animal actuellement porté par CE joueur, -1 sinon
   // Dormir dans la maison (chantier 2026-07) : sleepStartedAtRef (performance.now(),
   // horloge locale) + sleepStartEnergyRef permettent d'interpoler localement l'énergie
@@ -328,7 +328,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       else if (gr === C.G_SAND) col = [216, 192, 122];
       else if (gr === C.G_TILLED || gr === C.G_WATERED) col = [138, 92, 53];
       else if (gr === C.G_BRIDGE || gr === C.G_PATH || gr === C.G_PATH_STONE) col = [154, 107, 63];
-      else if (gr === C.G_BRIDGE_SITE) col = [200, 160, 60];
+      else if (gr === C.G_BRIDGE_SITE) col = [90, 110, 150];
       else if (gr === C.G_BRIDGE_CLOSED) col = [176, 74, 58];
       if (o === C.O_TREE || o === C.O_TREE2) col = [46, 106, 40];
       else if (o === C.O_ROCK || o === C.O_WALL) col = [130, 130, 138];
@@ -769,7 +769,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     pushToast(L.toastNewDay(p.day));
   }
   function toastMsg(key) {
-    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, actionFailed: L.toastActionFailed, coopNone: L.toastCoopNone, farCoop: L.toastFarCoop, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull }[key] || "";
+    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, actionFailed: L.toastActionFailed, coopNone: L.toastCoopNone, farCoop: L.toastFarCoop, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull }[key] || "";
   }
 
   // -------- Hôte : boucle temps + persistance --------
@@ -788,6 +788,28 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         channelRef.current?.send({ type: "broadcast", event: "apply", payload: { coop: s.coop } });
         channelRef.current?.send({ type: "broadcast", event: "chat", payload: { from: "🚧", msg: L.coopStarted(lang === "en" ? def.nameEn : def.name) } });
         dirtyRef.current = true;
+      }
+      // Repousse d'herbe (chantier 2026-07, demande Guillaume) : contrairement
+      // au lampadaire/épouvantail (état "prêt" purement dérivé à l'affichage,
+      // jamais de mutation du monde), une case G_GRASS_GROWING doit finir par
+      // redevenir G_GRASS pour de vrai (redevenir labourable, etc.), donc on
+      // vérifie ici à chaque tick (1s, granularité largement suffisante pour
+      // un chantier de 5s) si son délai est écoulé. Parcours de la carte
+      // entière : coût négligeable (un simple survol d'un tableau d'entiers),
+      // mêmes ordres de grandeur que buildMinimapBase.
+      {
+        const grassTiles = [];
+        for (let gi = 0; gi < w.ground.length; gi++) {
+          if (w.ground[gi] === C.G_GRASS_GROWING && E.buildReady(w.objHp.get(gi), Date.now())) {
+            w.ground[gi] = C.G_GRASS; w.objHp.delete(gi);
+            recordTileOverride(gi);
+            grassTiles.push({ i: gi, g: w.ground[gi], o: w.objects[gi] });
+          }
+        }
+        if (grassTiles.length) {
+          minimapDirtyRef.current = true; dirtyRef.current = true;
+          channelRef.current?.send({ type: "broadcast", event: "apply", payload: { tiles: grassTiles } });
+        }
       }
       if (Date.now() - s.dayStartAt >= C.DAY_REAL_MS) {
         const { tiles } = E.newDay(w, farmersRef.current, s.day, s.seed);
@@ -911,6 +933,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // directement à la pose côté hôte (voir resolveAct cas "bridge").
       const bk = buildKindRef.current;
       const action = bk === "wall" ? "wall" : bk === "path" ? "path" : bk === "lamp" ? "lamp" : bk === "scarecrow" ? "scarecrow"
+        : bk === "grass" ? "grass"
         : (bk === "bridgeWood" || bk === "bridgeStone") ? "bridge" : "fence";
       sendReq({ kind: "act", action, x: tt.x, y: tt.y, dir: fenceDirRef.current, material: bk === "bridgeStone" ? "stone" : "wood" });
     }
@@ -1148,21 +1171,30 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         else if (g === C.G_SAND) img = sprites.sand;
         else if (g === C.G_BRIDGE) img = sprites.bridge;
         else if (g === C.G_BRIDGE_CLOSED) img = sprites.bridge;
-        else if (g === C.G_BRIDGE_SITE) img = sprites.sand;
+        else if (g === C.G_BRIDGE_SITE) img = sprites.bridgeRuin;
+        else if (g === C.G_GRASS_GROWING) img = sprites.tilled;
         else img = sprites.path;
         ctx.drawImage(img, x * T, y * T);
-        if (g === C.G_BRIDGE_SITE) {
-          // Site de pont à construire (chantier 2026-07) : voile hachuré
-          // semi-transparent par-dessus le sol (même technique que le voile
-          // d'humidité, un simple fillRect) pour signaler visuellement un
-          // chantier plutôt qu'une berge normale. Rendu réel non validé par
-          // Guillaume (le sandbox ne peut pas juger visuellement une teinte).
-          ctx.fillStyle = "rgba(120, 90, 40, 0.45)";
+        if (g === C.G_GRASS_GROWING) {
+          // Repousse d'herbe en cours (chantier 2026-07, demande Guillaume) :
+          // même "modèle Clash of Clans" que lampadaire/épouvantail, mais sur
+          // le SOL plutôt qu'un objet (voir resolveAct cas "grass" et le tick
+          // hôte qui finalise le retour à G_GRASS, FermeGame.js). Léger voile
+          // vert + barre de progression, même technique que la jauge de
+          // chantier collaboratif plus haut, pour rester cohérent avec le
+          // reste du chantier 2026-07 sans ajouter de nouveau sprite dédié.
+          const readyAt = w.objHp.get(i);
+          const remaining = E.buildRemainingMs(readyAt, epochNow);
+          const frac = Math.max(0, Math.min(1, 1 - remaining / C.BUILD_TIMES.grass));
+          ctx.fillStyle = "rgba(60, 150, 60, 0.30)";
           ctx.fillRect(x * T, y * T, T, T);
-          ctx.strokeStyle = "rgba(60, 40, 10, 0.6)";
-          ctx.lineWidth = 1;
-          ctx.strokeRect(x * T + 0.5, y * T + 0.5, T - 1, T - 1);
+          const barW = T - 4;
+          ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(x * T + 2, y * T + T - 4, barW, 3);
+          ctx.fillStyle = "#6bd15a"; ctx.fillRect(x * T + 2, y * T + T - 4, barW * frac, 3);
         }
+        // Site de pont en ruine (chantier 2026-07, validé Guillaume) : le
+        // sprite bridgeRuin (piliers effondrés + eau visible) suffit à signaler
+        // le chantier, plus besoin de voile hachuré par-dessus.
         if (g === C.G_BRIDGE_CLOSED) {
           // Pont fermé via le levier (chantier 2026-07, demande Guillaume) :
           // le pont reste VISIBLE (décision validée), une barrière
@@ -1617,15 +1649,24 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       ctx.fillStyle = isSelf ? "#ffffff" : "#ffe9a8"; ctx.fillText(p.name, px + 8, py - 10);
     }
     function nightAlpha() {
-      // Demande Guillaume (chantier 2026-07) : nuit sensiblement plus sombre
-      // qu'avant (0.6 d'opacité max jusqu'ici, jugé trop clair) — plafond
-      // relevé à 0.85. Mêmes paliers horaires qu'avant (tombée de la nuit
-      // 17h-20h, obscurité max atteinte 5h de jeu plus tard), seule
-      // l'intensité change.
+      // Demande Guillaume (chantier 2026-07) : lumière du jour qui revient
+      // PROGRESSIVEMENT à l'aube (5h30-6h30, fondu symétrique au coucher de
+      // soleil) plutôt qu'un retour instantané au jour. L'obscurité doit
+      // rester quasi totale (plafond 0.85) tout le cœur de la nuit, du pic
+      // atteint vers 23h jusqu'au début de l'aube à 5h30 — seules les zones
+      // éclairées par les lampadaires (halo percé plus bas) restent visibles
+      // pendant ce palier. Mêmes paliers de tombée du jour qu'avant (17h-20h
+      // amorce, 20h-23h approfondissement jusqu'au plafond).
       const tmin = E.gameTimeMin(sharedRef.current.dayStartAt, Date.now());
-      if (tmin < 17 * 60) return 0;
-      if (tmin < 20 * 60) return ((tmin - 17 * 60) / 180) * 0.3;
-      return 0.3 + Math.min(1, (tmin - 20 * 60) / 300) * 0.55;
+      const NIGHT_MAX = 0.85;
+      const DAWN_START = 5 * 60 + 30, DAWN_END = 6 * 60 + 30;   // 5h30 → 6h30
+      const DUSK_START = 17 * 60, DUSK_MID = 20 * 60, DEEP_END = 23 * 60; // 17h / 20h / 23h
+      if (tmin < DAWN_START) return NIGHT_MAX; // cœur de nuit, avant l'aube
+      if (tmin < DAWN_END) return NIGHT_MAX * (1 - (tmin - DAWN_START) / (DAWN_END - DAWN_START)); // aube progressive
+      if (tmin < DUSK_START) return 0; // plein jour
+      if (tmin < DUSK_MID) return ((tmin - DUSK_START) / (DUSK_MID - DUSK_START)) * 0.3; // tombée du jour amorcée
+      if (tmin < DEEP_END) return 0.3 + Math.min(1, (tmin - DUSK_MID) / (DEEP_END - DUSK_MID)) * (NIGHT_MAX - 0.3); // approfondissement
+      return NIGHT_MAX; // cœur de nuit jusqu'au lendemain matin
     }
     function drawFullMap() {
       const mc = mapCanvasRef.current; if (!mc) return;
@@ -1813,6 +1854,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // directement l'outil Construction sur la variante "scarecrow", prêt à
   // poser au clic suivant.
   const buyScarecrow = (n) => { sendReq({ kind: "buy", item: "scarecrow", n }); buildKindRef.current = "scarecrow"; setBuildKind("scarecrow"); };
+  // Achat d'herbe (payée en or, comme l'épouvantail) : équipe directement
+  // l'outil Construction sur la variante "grass", prêt à poser au clic
+  // suivant (herbe = replanter sur une case labourée, chantier 2026-07).
+  const buyGrass = (n) => { sendReq({ kind: "buy", item: "grass", n }); buildKindRef.current = "grass"; setBuildKind("grass"); };
   const sellItem = (item, crop) => sendReq({ kind: "sell", item, crop, n: 9999 });
   // Menu Construire (clic sur bois/pierre du HUD) : fabrique `n` sections de
   // `item` (fence/wall/path) depuis le bois/la pierre récoltés, puis équipe
@@ -1942,11 +1987,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             // menu Construire/Vendre (fence/wall/path/lamp/scarecrow), pas
             // seulement clôture.
             const bkImg = buildKind === "wall" ? "wall" : buildKind === "path" ? "path" : buildKind === "lamp" ? "lamp" : buildKind === "scarecrow" ? "scarecrow"
+              : buildKind === "grass" ? "grassPatch"
               : (buildKind === "bridgeWood" || buildKind === "bridgeStone") ? "bridge" : "fence";
             // Pour le pont, pas de stock dédié (voir craft menu) : le compteur
             // affiche directement le bois/la pierre disponible pour la
             // variante choisie, cohérent avec le coût prélevé à la pose.
             count = myInv ? (buildKind === "wall" ? (myInv.wall || 0) : buildKind === "path" ? (myInv.path || 0) : buildKind === "lamp" ? (myInv.lamp || 0) : buildKind === "scarecrow" ? (myInv.scarecrow || 0)
+              : buildKind === "grass" ? (myInv.grass || 0)
               : buildKind === "bridgeWood" ? (myInv.wood || 0) : buildKind === "bridgeStone" ? (myInv.stone || 0) : (myInv.fence || 0)) : "";
             img = spritesReady ? spritesRef.current[bkImg] : null;
             lvl = buildKind === "fence" ? (fenceDir === "h" ? "↔" : fenceDir === "v" ? "↕" : "R") : "";
@@ -1955,6 +2002,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           else lvl = "N" + (myTools[s.key] || 1);
           const title = isSeed ? L.seedTip(seedName(seedSel)) : isFood ? L.foodTip(C.FOOD_ENERGY) : isRod ? L.rodTip
             : isFence ? (buildKind === "wall" ? L.wallTip : buildKind === "path" ? L.pathTip : buildKind === "lamp" ? L.lampTip : buildKind === "scarecrow" ? L.scarecrowTip
+              : buildKind === "grass" ? L.grassTip
               : (buildKind === "bridgeWood" || buildKind === "bridgeStone") ? L.bridgeTip : L.fenceTip)
             : isHerd ? L.herdTip : TOOL_NAMES[s.key];
           return (
@@ -2153,6 +2201,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               <div className="info"><b>{L.scarecrowRowTitle(C.SCARECROW_COST)}</b><span>{L.scarecrowRowSub(myInv ? (myInv.scarecrow || 0) : 0)}</span></div>
               <button disabled={hud.money < C.SCARECROW_COST} onClick={() => buyScarecrow(1)}>{L.buy1}</button>
               <button disabled={hud.money < C.SCARECROW_COST * 5} onClick={() => buyScarecrow(5)}>{L.buy5}</button>
+            </div>
+            <div className="ferme-shop-row">
+              <Sprite img={spritesReady ? spritesRef.current.grassPatch : null} w={16} h={16} />
+              <div className="info"><b>{L.grassRowTitle(C.GRASS_COST)}</b><span>{L.grassRowSub(myInv ? (myInv.grass || 0) : 0)}</span></div>
+              <button disabled={hud.money < C.GRASS_COST} onClick={() => buyGrass(1)}>{L.buy1}</button>
+              <button disabled={hud.money < C.GRASS_COST * 5} onClick={() => buyGrass(5)}>{L.buy5}</button>
             </div>
             <div className="ferme-tools-header">{L.shopAnimalsHeader}</div>
             {C.ANIMALS.map(a => (
