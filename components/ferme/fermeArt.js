@@ -343,20 +343,32 @@ export function buildSprites() {
   /* ---------------- Bâtiments et animaux ---------------- */
   function horseSprite() {
     const [c, g] = cv(28, 24); // vu de profil (regarde à droite)
-    const body = "#8a5a34", dark = "#6a4426", mane = "#3a2a18";
+    const body = "#8a5a34", light = "#a5764a", dark = "#6a4426", shade = "#5a3a20",
+      mane = "#3a2a18", maneDeep = "#2a1c10", hoof = "#2a2018", saddle = "#7a3020", saddleLight = "#9a4a30";
     P(g, 6, 10, 15, 7, body);          // corps
-    P(g, 6, 10, 15, 2, "#9a6a44");
+    P(g, 6, 10, 15, 2, light);         // reflet sur le dos
+    P(g, 6, 16, 15, 1, shade);         // ombre sous le ventre
     P(g, 19, 6, 6, 7, body);           // encolure
+    P(g, 19, 6, 6, 2, light);
     P(g, 23, 3, 5, 6, body);           // tête
+    P(g, 23, 3, 5, 1, light);
+    P(g, 24, 1, 2, 3, body); P(g, 24, 1, 1, 2, dark); // oreille
     P(g, 27, 5, 1, 3, dark);           // museau
+    P(g, 27, 7, 1, 1, "#3a2418");      // naseau
     P(g, 24, 4, 3, 2, mane);           // toupet
     P(g, 19, 5, 2, 6, mane);           // crinière
+    P(g, 20, 5, 1, 6, maneDeep);       // mèches (relief de la crinière)
     P(g, 1, 11, 6, 3, mane);           // queue
+    P(g, 1, 12, 6, 1, maneDeep);
+    P(g, 10, 8, 8, 3, saddle);         // selle (support pour un ou deux cavaliers)
+    P(g, 10, 8, 8, 1, saddleLight);
+    P(g, 9, 10, 1, 2, "#5a2418"); P(g, 18, 10, 1, 2, "#5a2418"); // sangle
     P(g, 7, 17, 2, 6, dark); P(g, 12, 17, 2, 6, body);  // pattes avant/gauche
     P(g, 16, 17, 2, 6, dark); P(g, 19, 17, 2, 6, body); // pattes arrière
-    P(g, 7, 22, 2, 1, "#2a2018"); P(g, 12, 22, 2, 1, "#2a2018");
-    P(g, 16, 22, 2, 1, "#2a2018"); P(g, 19, 22, 2, 1, "#2a2018");
+    P(g, 7, 22, 2, 2, hoof); P(g, 12, 22, 2, 2, hoof);
+    P(g, 16, 22, 2, 2, hoof); P(g, 19, 22, 2, 2, hoof);
     P(g, 25, 5, 1, 1, "#1a1a1a");      // oeil
+    P(g, 25, 4, 1, 1, "#e8dcc8");      // reflet dans l'oeil
     return c;
   }
   function well() {

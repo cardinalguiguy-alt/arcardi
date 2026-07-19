@@ -103,7 +103,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const meRef = useRef(null);
   const playersRef = useRef(new Map()); // id -> remote farmer render data
   const farmersRef = useRef({});        // hôte : id -> état privé arbitré
-  const sharedRef = useRef({ seed: 0, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horse: { owned: false, x: C.SPAWN.x + 2, y: C.SPAWN.y, rider: null }, animals: [], wellBuilt: false, coop: null, barn: E.newBarnState() });
+  const sharedRef = useRef({ seed: 0, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horse: { owned: false, x: C.SPAWN.x + 2, y: C.SPAWN.y, rider: null, rider2: null }, animals: [], wellBuilt: false, coop: null, barn: E.newBarnState() });
   const invRef = useRef(null);
   const toolsRef = useRef({ hoe: 1, can: 1, axe: 1, pick: 1 });
   const energyRef = useRef(C.MAX_ENERGY);
@@ -200,12 +200,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       overridesRef.current = { ground: { ...(saved.groundOv || {}) }, object: { ...(saved.objectOv || {}) } };
       sharedRef.current = {
         seed: saved.seed, money: saved.money, day: saved.day, dayStartAt: saved.dayStartAt, totalEarned: saved.totalEarned,
-        horse: saved.horse || { owned: false, x: C.SPAWN.x + 2, y: C.SPAWN.y, rider: null },
+        horse: saved.horse || { owned: false, x: C.SPAWN.x + 2, y: C.SPAWN.y, rider: null, rider2: null },
         animals: saved.animals || [], wellBuilt: !!saved.wellBuilt, coop: saved.coop || null,
         barn: saved.barn || E.newBarnState(),
       };
-      // Le cavalier repart à pied à la reprise (aucun joueur monté au chargement).
-      if (sharedRef.current.horse) sharedRef.current.horse.rider = null;
+      // Les cavaliers repartent à pied à la reprise (aucun joueur monté au chargement).
+      if (sharedRef.current.horse) { sharedRef.current.horse.rider = null; sharedRef.current.horse.rider2 = null; }
       farmersRef.current = saved.farmers || {};
       // Une ferme peut avoir été sauvegardée par un zip plus ancien, avant
       // l'ajout des gemmes/poissons/productions/quêtes : on remet chaque
@@ -222,7 +222,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const seed = hashSeed(code);
       worldRef.current = E.generateWorld(seed);
       overridesRef.current = { ground: {}, object: {} };
-      sharedRef.current = { seed, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horse: { owned: false, x: C.SPAWN.x + 2, y: C.SPAWN.y, rider: null }, animals: [], wellBuilt: false, coop: null, barn: E.newBarnState() };
+      sharedRef.current = { seed, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horse: { owned: false, x: C.SPAWN.x + 2, y: C.SPAWN.y, rider: null, rider2: null }, animals: [], wellBuilt: false, coop: null, barn: E.newBarnState() };
       farmersRef.current = {};
       // Crée tout de suite l'enregistrement pour réserver le code.
       persistFarm();
@@ -288,7 +288,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     overridesRef.current = { ground: { ...(payload.groundOv || {}) }, object: { ...(payload.objectOv || {}) } };
     sharedRef.current = {
       seed: payload.seed, money: payload.money, day: payload.day, dayStartAt: payload.dayStartAt, totalEarned: payload.totalEarned,
-      horse: payload.horse || { owned: false, x: C.SPAWN.x + 2, y: C.SPAWN.y, rider: null },
+      horse: payload.horse || { owned: false, x: C.SPAWN.x + 2, y: C.SPAWN.y, rider: null, rider2: null },
       animals: payload.animals || [], wellBuilt: !!payload.wellBuilt, coop: payload.coop || null,
       barn: payload.barn || E.newBarnState(),
     };
@@ -406,7 +406,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function syncBuildings() {
     const s = sharedRef.current;
     setBuildings({ horseOwned: !!(s.horse && s.horse.owned), wellBuilt: !!s.wellBuilt, animalCount: (s.animals || []).length });
-    setOnHorse(!!(s.horse && s.horse.rider === me.id));
+    setOnHorse(!!(s.horse && (s.horse.rider === me.id || s.horse.rider2 === me.id)));
   }
   function broadcastSnapshot() {
     if (!worldRef.current) return;
@@ -505,7 +505,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     } else if (req.kind === "buyHorse") {
       const h = s.horse;
       if (!h.owned && s.money >= C.HORSE_COST) {
-        s.money -= C.HORSE_COST; h.owned = true; h.x = C.SPAWN.x + 2; h.y = C.SPAWN.y; h.rider = null;
+        s.money -= C.HORSE_COST; h.owned = true; h.x = C.SPAWN.x + 2; h.y = C.SPAWN.y; h.rider = null; h.rider2 = null;
         out.state = shareState(); out.horse = h;
         out.chat = { from: "🐴", msg: L.chatAnimalBought(lang === "en" ? "Horse" : "Cheval") };
       } else if (!h.owned) out.toast = { id: f.id, key: "noGold" };
@@ -537,11 +537,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         }
       }
     } else if (req.kind === "mount") {
+      // Deux places : "rider" (mène la monture) et "rider2" (passager, la suit).
+      // Si un premier cavalier est déjà en selle, le cheval bouge : on compare
+      // la position du demandeur à la position VIVANTE du cavalier (suivie en
+      // continu via les messages "pos"), pas à h.x/h.y qui n'est à jour que
+      // lorsque le cheval est laissé libre (voir "dismount").
       const h = s.horse;
-      if (h.owned && !h.rider && Math.abs(px - h.x) <= C.MOUNT_RANGE && Math.abs(py - h.y) <= C.MOUNT_RANGE) { h.rider = req.id; out.horse = h; }
+      const anchorFarmer = h.rider ? farmersRef.current[h.rider] : null;
+      const hx = anchorFarmer ? anchorFarmer.x : h.x, hy = anchorFarmer ? anchorFarmer.y : h.y;
+      if (h.owned && h.rider !== req.id && h.rider2 !== req.id && Math.abs(px - hx) <= C.MOUNT_RANGE && Math.abs(py - hy) <= C.MOUNT_RANGE) {
+        if (!h.rider) { h.rider = req.id; out.horse = h; }
+        else if (!h.rider2) { h.rider2 = req.id; out.horse = h; }
+      }
     } else if (req.kind === "dismount") {
       const h = s.horse;
-      if (h.rider === req.id) { h.rider = null; h.x = px; h.y = py; out.horse = h; }
+      if (h.rider === req.id) { h.rider = null; h.rider2 = null; h.x = px; h.y = py; out.horse = h; }
+      else if (h.rider2 === req.id) { h.rider2 = null; out.horse = h; }
     } else if (req.kind === "collect") {
       const ai = req.animal | 0, an = s.animals[ai];
       const apos = an ? E.animalPos(an, Date.now()) : null;
@@ -859,11 +870,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function barnWon() { setBarnMini(null); sendReq({ kind: "barnBuild" }); }
   function barnLost() { setBarnMini(null); pushToast(L.barnMiniFail); }
 
-  // Monter / descendre du cheval (touche F).
+  // Position vivante du cheval : celle de son cavalier actuel s'il est monté
+  // (le cheval se déplace avec lui), sinon sa position au repos (h.x/h.y).
+  function horseAnchor(h) {
+    if (h.rider) { const r = playersRef.current.get(h.rider); if (r) return { x: r.x, y: r.y }; }
+    return { x: h.x, y: h.y };
+  }
+  // Monter / descendre du cheval (touche F). Deux places : le cavalier qui
+  // monte le premier mène la monture, un second joueur peut grimper derrière
+  // comme passager tant qu'il reste une place libre.
   function toggleMount() {
     const h = sharedRef.current.horse, m = meRef.current; if (!h || !h.owned || !m) return;
-    if (h.rider === me.id) { sendReq({ kind: "dismount" }); }
-    else if (!h.rider && Math.abs(m.x - h.x) <= C.MOUNT_RANGE && Math.abs(m.y - h.y) <= C.MOUNT_RANGE) { sendReq({ kind: "mount" }); }
+    if (h.rider === me.id || h.rider2 === me.id) { sendReq({ kind: "dismount" }); }
+    else if (!h.rider || !h.rider2) {
+      const a = horseAnchor(h);
+      if (Math.abs(m.x - a.x) <= C.MOUNT_RANGE && Math.abs(m.y - a.y) <= C.MOUNT_RANGE) sendReq({ kind: "mount" });
+    }
   }
   function teleportWell() {
     const m = meRef.current; if (!m || !sharedRef.current.wellBuilt) return;
@@ -1098,8 +1120,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // Invite cheval (monter/descendre)
       const hh = sharedRef.current.horse; let mp = null;
       if (hh && hh.owned) {
-        if (hh.rider === me.id) mp = "dismount";
-        else if (!hh.rider && Math.abs(m.x - hh.x) <= C.MOUNT_RANGE && Math.abs(m.y - hh.y) <= C.MOUNT_RANGE) mp = "mount";
+        if (hh.rider === me.id || hh.rider2 === me.id) mp = "dismount";
+        else if (!hh.rider || !hh.rider2) {
+          const a = horseAnchor(hh);
+          if (Math.abs(m.x - a.x) <= C.MOUNT_RANGE && Math.abs(m.y - a.y) <= C.MOUNT_RANGE) mp = "mount";
+        }
       }
       setMountPromptThrottled(mp);
 
@@ -1165,6 +1190,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     function updateMe(dt) {
       const m = meRef.current, w = worldRef.current, keys = keysRef.current;
+      const horseNow = sharedRef.current.horse;
+      if (horseNow && horseNow.rider2 === me.id) {
+        // Passager : ne pilote pas, suit simplement la position vivante du
+        // cavalier principal (aucune touche de déplacement à traiter ici ;
+        // F reste actif pour descendre, géré ailleurs par toggleMount()).
+        const driver = playersRef.current.get(horseNow.rider);
+        if (driver) { m.x = driver.x; m.y = driver.y; m.dir = driver.dir; m.moving = driver.moving; m.animT = driver.animT || 0; }
+        const now2 = performance.now();
+        if (now2 - lastPosSentRef.current > 1000 / C.POS_TICK_HZ) { lastPosSentRef.current = now2; sendPos(); }
+        return;
+      }
       const uiBlocked = shopOpenRef.current || binOpenRef.current || mapOpenRef.current || fishMiniRef.current || document.activeElement === chatInputRef.current;
       let dx = 0, dy = 0;
       if (!uiBlocked) {
@@ -1204,13 +1240,25 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const sheet = sprites.getChar(p.gender, p.outfit);
       const row = p.dir === 0 ? 0 : p.dir === 1 ? 1 : 2;
       const frame = p.moving ? Math.floor((p.animT || 0) % 4) : 0;
-      const px = Math.round(p.x * T), py = Math.round(p.y * T);
-      const flip = p.dir === 2;
       const horse = sharedRef.current.horse;
-      const riding = horse && horse.rider === p.id;
+      const isPrimaryRider = horse && horse.rider === p.id;
+      const isPassenger = horse && horse.rider2 === p.id;
+      const riding = isPrimaryRider || isPassenger;
+      const flip = p.dir === 2;
+      // Le passager est assis juste derrière le cavalier principal sur la
+      // selle, décalé du côté opposé au sens de la marche.
+      const basePx = Math.round(p.x * T), py = Math.round(p.y * T);
+      const px = isPassenger ? basePx + (flip ? 9 : -9) : basePx;
       const lift = riding ? 8 : 0; // le cavalier est surélevé sur la monture
       ctx.fillStyle = "rgba(0,0,0,0.25)"; ctx.beginPath(); ctx.ellipse(px + 8, py + 15, riding ? 9 : 6, riding ? 3 : 2.5, 0, 0, 7); ctx.fill();
-      if (riding) ctx.drawImage(spritesRef.current.horse, px - 6, py - 6);
+      if (isPrimaryRider) {
+        // Le cheval n'est dessiné qu'une fois, porté par le cavalier
+        // principal, et se retourne avec lui selon le sens de la marche.
+        ctx.save();
+        if (flip) { ctx.translate(basePx + 22, py - 6); ctx.scale(-1, 1); ctx.drawImage(sprites.horse, 0, 0); }
+        else ctx.drawImage(sprites.horse, basePx - 6, py - 6);
+        ctx.restore();
+      }
       ctx.save();
       if (flip) { ctx.translate(px + 16, py - 8 - lift); ctx.scale(-1, 1); ctx.drawImage(sheet, frame * 16, row * 24, 16, 24, 0, 0, 16, 24); }
       else ctx.drawImage(sheet, frame * 16, row * 24, 16, 24, px, py - 8 - lift, 16, 24);

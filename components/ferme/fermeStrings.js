@@ -88,7 +88,7 @@ export const FERME_STR = {
     // Boutique : bâtiments et animaux
     buyLabel: "Acheter",
     shopHorseTitle: (cost) => `🐴 Cheval : ${cost} or`,
-    shopHorseSub: "Se déplace bien plus vite une fois enfourché. Approche-toi et appuie sur F.",
+    shopHorseSub: "Se déplace bien plus vite une fois enfourché. Approche-toi et appuie sur F (peut porter deux cavaliers).",
     shopHorseOwned: "🐴 Cheval déjà dans la ferme.",
     shopWellTitle: (cost) => `🪣 Puits : ${cost} or`,
     shopWellSub: "Ajoute un 2e point de téléport dans les champs (bouton 🪣).",
@@ -280,7 +280,7 @@ export const FERME_STR = {
     wellToast: "🪣 Teleported to the well!",
     buyLabel: "Buy",
     shopHorseTitle: (cost) => `🐴 Horse: ${cost} gold`,
-    shopHorseSub: "Moves much faster once mounted. Walk up to it and press F.",
+    shopHorseSub: "Moves much faster once mounted. Walk up to it and press F (can carry two riders).",
     shopHorseOwned: "🐴 Horse already on the farm.",
     shopWellTitle: (cost) => `🪣 Well: ${cost} gold`,
     shopWellSub: "Adds a 2nd teleport point in the fields (🪣 button).",
