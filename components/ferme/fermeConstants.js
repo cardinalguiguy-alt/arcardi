@@ -101,6 +101,21 @@ export const QUESTS = [
 export const FOOD_COST = 10;    // prix du casse-croûte (10 or, demande 2026-07 : réduit depuis 50)
 export const FOOD_ENERGY = 40;  // énergie rendue
 
+// --- Dormir dans la maison (chantier 2026-07, demandé par Guillaume) ---
+// Le fermier s'approche de la porte de la maison et appuie sur E (même
+// mécanisme que boutique/bac/grange, voir tryOpenNearby dans FermeGame.js)
+// pour entrer dormir. Aucune animation d'entrée : il disparaît simplement de
+// la carte, des "Zzz" s'échappent des fenêtres de la maison (visibles de
+// tous les joueurs, pas seulement du dormeur) et son énergie remonte
+// PROGRESSIVEMENT jusqu'au plein, pile au bout de SLEEP_MS. Il peut aussi
+// ressortir plus tôt en rappuyant sur E, en gardant l'énergie déjà regagnée
+// à cet instant (voir resolveSleepStart/resolveSleepEnd, fermeEngine.js).
+export const SLEEP_MS = 60 * 1000; // durée du sommeil (60 secondes réelles)
+// Porte de la maison : juste sous le seuil visible sur le sprite (house(),
+// fermeArt.js — porte dessinée à 42-56px sur les 96px du canevas). Portée
+// d'interaction : même nearTile() que boutique/bac/grange.
+export const HOUSE_DOOR = { x: 43, y: 35 };
+
 // Ressources
 export const WOOD_SELL = 5;
 export const STONE_SELL = 4;

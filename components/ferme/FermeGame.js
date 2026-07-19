@@ -148,6 +148,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const fenceDirRef = useRef("auto"); // orientation choisie pour la prochaine clôture posée ("auto"|"h"|"v")
   const buildKindRef = useRef("fence"); // miroir synchrone de buildKind ("fence"|"wall"|"path"|"lamp")
   const heldAnimalRef = useRef(-1);   // index (dans sharedRef.animals) de l'animal actuellement porté par CE joueur, -1 sinon
+  // Dormir dans la maison (chantier 2026-07) : sleepStartedAtRef (performance.now(),
+  // horloge locale) + sleepStartEnergyRef permettent d'interpoler localement l'énergie
+  // affichée pendant les 60s, même principe que cropGrowState mais côté client pour
+  // le confort visuel du dormeur (l'hôte, lui, dérive l'énergie finale de SA propre
+  // horloge à la sortie, voir resolveSleepEnd — les deux convergent car basés sur la
+  // même énergie de départ et la même durée C.SLEEP_MS).
+  const sleepStartedAtRef = useRef(null);
+  const sleepStartEnergyRef = useRef(0);
+  const sleepTimerRef = useRef(null); // setTimeout de sortie automatique après C.SLEEP_MS
 
   useEffect(() => { fishMiniRef.current = !!fishMini || !!barnMini; }, [fishMini, barnMini]);
   useEffect(() => { mapOpenRef.current = mapOpen; }, [mapOpen]);
@@ -372,7 +381,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       ensureRemote(payload);
       const r = playersRef.current.get(payload.id);
       r.tx = payload.x; r.ty = payload.y; r.dir = payload.dir; r.moving = payload.moving; r.tool = payload.tool;
-      r.gender = payload.gender; r.outfit = payload.outfit; r.name = payload.name;
+      r.gender = payload.gender; r.outfit = payload.outfit; r.name = payload.name; r.sleeping = !!payload.sleeping;
     });
     ch.on("broadcast", { event: "req" }, ({ payload }) => { if (isHost) hostHandleReq(payload); });
     ch.on("broadcast", { event: "apply" }, ({ payload }) => applyDeltas(payload));
@@ -401,7 +410,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function ensureRemote(p) {
     if (p.id === me.id) return;
     if (!playersRef.current.has(p.id)) {
-      playersRef.current.set(p.id, { id: p.id, name: p.name, gender: p.gender || "m", outfit: p.outfit || 0, x: p.x ?? C.SPAWN.x, y: p.y ?? C.SPAWN.y, tx: p.x ?? C.SPAWN.x, ty: p.y ?? C.SPAWN.y, dir: p.dir || 0, moving: false, tool: 0, animT: 0 });
+      playersRef.current.set(p.id, { id: p.id, name: p.name, gender: p.gender || "m", outfit: p.outfit || 0, x: p.x ?? C.SPAWN.x, y: p.y ?? C.SPAWN.y, tx: p.x ?? C.SPAWN.x, ty: p.y ?? C.SPAWN.y, dir: p.dir || 0, moving: false, tool: 0, animT: 0, sleeping: false });
     }
   }
 
@@ -516,6 +525,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const r = E.resolveEat(f);
       if (r.invChanged) out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
       if (r.fx) out.fx.push(r.fx);
+    } else if (req.kind === "sleepStart") {
+      const r = E.resolveSleepStart(f, Date.now());
+      if (r.reason) out.toast = { id: f.id, key: r.reason };
+    } else if (req.kind === "sleepEnd") {
+      const r = E.resolveSleepEnd(f, Date.now());
+      if (r.invChanged) out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
     } else if (req.kind === "buyHorse") {
       // Plusieurs chevaux achetables (demande 2026-07) : coût croissant
       // (C.HORSE_COSTS), jusqu'à C.HORSE_MAX_COUNT. Chaque cheval est un
@@ -704,7 +719,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     pushToast(L.toastNewDay(p.day));
   }
   function toastMsg(key) {
-    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, actionFailed: L.toastActionFailed, coopNone: L.toastCoopNone, farCoop: L.toastFarCoop, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney }[key] || "";
+    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, actionFailed: L.toastActionFailed, coopNone: L.toastCoopNone, farCoop: L.toastFarCoop, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull }[key] || "";
   }
 
   // -------- Hôte : boucle temps + persistance --------
@@ -784,7 +799,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function doJoin() { doJoinWith((nameVal || "Fermier").trim().slice(0, 14) || "Fermier", gender, myOutfit); }
   function doJoinWith(name, g, outfit) {
     if (!worldReady) return;
-    meRef.current = { id: me.id, name, gender: g === "f" ? "f" : "m", outfit: outfit | 0, x: C.SPAWN.x, y: C.SPAWN.y, dir: 0, moving: false, animT: 0 };
+    meRef.current = { id: me.id, name, gender: g === "f" ? "f" : "m", outfit: outfit | 0, x: C.SPAWN.x, y: C.SPAWN.y, dir: 0, moving: false, animT: 0, sleeping: false };
     invRef.current = invRef.current || { wood: 0, stone: 0, food: 0, fence: 0, wall: 0, path: 0, seeds: [5, 0, 0, 0], crops: [0, 0, 0, 0], gems: C.GEMS.map(() => 0), fish: C.FISH.map(() => 0) };
     if (!myInv) { setMyInv(invRef.current); }
     if (!myQuests) setMyQuests((farmersRef.current[me.id] && farmersRef.current[me.id].quests) || {});
@@ -798,7 +813,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function changeCharacter() { autoJoinTriedRef.current = true; joinedRef.current = false; setPhase("select"); }
   function pubMe() {
     const m = meRef.current;
-    return { id: m.id, name: m.name, gender: m.gender, outfit: m.outfit, x: +m.x.toFixed(2), y: +m.y.toFixed(2), dir: m.dir, moving: m.moving, tool: slotRef.current };
+    return { id: m.id, name: m.name, gender: m.gender, outfit: m.outfit, x: +m.x.toFixed(2), y: +m.y.toFixed(2), dir: m.dir, moving: m.moving, tool: slotRef.current, sleeping: !!m.sleeping };
   }
   function sendPos() { channelRef.current?.send({ type: "broadcast", event: "pos", payload: pubMe() }); }
 
@@ -812,7 +827,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     channelRef.current?.send({ type: "broadcast", event: "req", payload: { ...payload, id: me.id, name: m.name, px: +m.x.toFixed(2), py: +m.y.toFixed(2) } });
   }
   function doAction() {
-    const m = meRef.current; if (!m || actAnimRef.current > 0 || fishMiniRef.current) return;
+    const m = meRef.current; if (!m || actAnimRef.current > 0 || fishMiniRef.current || m.sleeping) return;
     const w = worldRef.current; if (!w) return;
     // Priorité : ramasser la production d'un animal proche.
     const ai = nearestCollectable();
@@ -956,6 +971,38 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     pushToast(L.homeToast);
   }
 
+  // -------- Dormir dans la maison (chantier 2026-07) --------
+  // Aucune animation d'entrée : le fermier disparaît simplement de l'écran
+  // (voir la boucle de rendu, qui ne dessine plus son personnage tant que
+  // m.sleeping est vrai) pendant que des "Zzz" flottent au-dessus des
+  // fenêtres de la maison, visibles de TOUS les joueurs (le flag "sleeping"
+  // voyage avec la position, diffusée à 12 Hz comme dir/moving/tool, voir
+  // pubMe()/le handler "pos"). L'énergie remonte progressivement, pilotée
+  // par l'hôte (resolveSleepStart/End, fermeEngine.js) mais interpolée
+  // localement ici pour un affichage fluide de la jauge du dormeur.
+  function startSleep() {
+    const m = meRef.current; if (!m || m.sleeping) return;
+    if (energyRef.current >= C.MAX_ENERGY) { pushToast(L.toastSleepFull); return; }
+    m.sleeping = true; m.moving = false;
+    sleepStartedAtRef.current = performance.now();
+    sleepStartEnergyRef.current = energyRef.current;
+    sendPos();
+    clearTimeout(sleepTimerRef.current);
+    sleepTimerRef.current = setTimeout(() => wakeUp(true), C.SLEEP_MS);
+    sendReq({ kind: "sleepStart" });
+  }
+  // auto = sortie naturelle au bout de 60s (énergie pleine) ; sinon sortie
+  // anticipée demandée par le joueur (touche E), énergie déjà acquise gardée.
+  function wakeUp(auto) {
+    const m = meRef.current; if (!m || !m.sleeping) return;
+    clearTimeout(sleepTimerRef.current); sleepTimerRef.current = null;
+    m.sleeping = false;
+    sleepStartedAtRef.current = null;
+    sendPos();
+    sendReq({ kind: "sleepEnd" });
+    pushToast(auto ? L.toastSleepDone : L.toastSleepEarly);
+  }
+
   // -------- Boucle de rendu + entrées --------
   useEffect(() => {
     if (phase !== "playing" || !spritesReady) return;
@@ -971,6 +1018,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     function onKeyDown(e) {
       if (document.activeElement === chatInputRef.current) return;
       if (fishMiniRef.current) return; // le minijeu de pêche gère ses entrées
+      // Endormi : seule la touche E (se réveiller) doit rester active, pour
+      // ne pas pouvoir changer d'outil/monter à cheval/etc. depuis "l'intérieur".
+      if (meRef.current?.sleeping && e.code !== "KeyE") return;
       keysRef.current[e.code] = true;
       if (e.code >= "Digit1" && e.code <= "Digit9") selectSlot(+e.code.slice(5) - 1);
       if (e.code === "Space") { e.preventDefault(); doAction(); }
@@ -1008,6 +1058,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       checkWalkOverHarvest();
       checkWalkOverWater();
       checkWalkOverCollect();
+      // Sommeil : énergie interpolée localement en temps réel pendant les
+      // 60s (affichage fluide de la jauge), sans attendre l'hôte (qui, lui,
+      // ne tranche l'énergie finale qu'à la sortie, voir wakeUp/resolveSleepEnd).
+      if (m.sleeping && sleepStartedAtRef.current) {
+        const frac = Math.min(1, (now - sleepStartedAtRef.current) / C.SLEEP_MS);
+        const disp = Math.round(sleepStartEnergyRef.current + (C.MAX_ENERGY - sleepStartEnergyRef.current) * frac);
+        if (disp !== energyRef.current) { energyRef.current = disp; setMyEnergy(disp); }
+      }
       if (actAnimRef.current > 0) actAnimRef.current -= dt;
       for (const p of playersRef.current.values()) {
         p.x += (p.tx - p.x) * Math.min(1, dt * 12);
@@ -1169,8 +1227,25 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       for (const horse of (sharedRef.current.horses || [])) {
         if (!horse.rider) draws.push({ y: (horse.y + 1) * T, fn: () => ctx.drawImage(sprites.horse, horse.x * T - 6, horse.y * T - 10) });
       }
-      draws.push({ y: (m.y + 1) * T, fn: () => drawSelf(m) });
-      for (const p of playersRef.current.values()) draws.push({ y: (p.y + 1) * T, fn: () => drawRemote(p) });
+      if (!m.sleeping) draws.push({ y: (m.y + 1) * T, fn: () => drawSelf(m) });
+      for (const p of playersRef.current.values()) if (!p.sleeping) draws.push({ y: (p.y + 1) * T, fn: () => drawRemote(p) });
+      // Sommeil : aucune animation d'entrée, le dormeur disparaît juste de la
+      // carte (voir ci-dessus, non ajouté à `draws`) ; des "Zzz" flottent
+      // au-dessus des fenêtres de la maison tant qu'AU MOINS un joueur dort
+      // (peu importe lequel), visibles de tous.
+      const anySleeping = m.sleeping || [...playersRef.current.values()].some(p => p.sleeping);
+      if (anySleeping) {
+        const hx = C.HOUSE.x * T, hy = (C.HOUSE.y + C.HOUSE.h) * T - 96;
+        draws.push({ y: (C.HOUSE.y + C.HOUSE.h) * T + 1, fn: () => {
+          ctx.font = "bold 10px monospace"; ctx.textAlign = "center";
+          for (const off of [{ dx: 23, dy: 58 }, { dx: 75, dy: 58 }]) {
+            const bob = Math.sin(now / 260 + off.dx) * 2;
+            const zx = hx + off.dx, zy = hy + off.dy - 6 + bob;
+            ctx.fillStyle = "#00000090"; ctx.fillText("Zzz", zx + 1, zy + 1);
+            ctx.fillStyle = "#ffffff"; ctx.fillText("Zzz", zx, zy);
+          }
+        } });
+      }
       draws.sort((a, b) => a.y - b.y);
       for (const d of draws) d.fn();
 
@@ -1210,6 +1285,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // Invite boutique/bac
       let pk = null;
       if (nearTile(C.SHOP)) pk = "shop"; else if (nearTile(C.BIN)) pk = "bin";
+      else if (nearTile(C.HOUSE_DOOR)) pk = m.sleeping ? "wake" : "sleep";
       else if (nearTile(C.COOP_SITE) && sharedRef.current.coop) pk = "coop";
       else if (nearTile(C.BARN_SITE)) { const b = sharedRef.current.barn; if (b && b.level < C.BARN_LEVELS.length) pk = b.ready ? "barnBuild" : "barn"; }
       setPromptKeyThrottled(pk);
@@ -1292,7 +1368,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (now2 - lastPosSentRef.current > 1000 / C.POS_TICK_HZ) { lastPosSentRef.current = now2; sendPos(); }
         return;
       }
-      const uiBlocked = shopOpenRef.current || binOpenRef.current || mapOpenRef.current || fishMiniRef.current || document.activeElement === chatInputRef.current;
+      const uiBlocked = shopOpenRef.current || binOpenRef.current || mapOpenRef.current || fishMiniRef.current || document.activeElement === chatInputRef.current || m.sleeping;
       let dx = 0, dy = 0;
       if (!uiBlocked) {
         if (keys["ArrowUp"] || keys["KeyW"] || keys["KeyZ"]) dy -= 1;
@@ -1392,6 +1468,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
 
     return () => {
       cancelAnimationFrame(raf);
+      clearTimeout(sleepTimerRef.current);
       window.removeEventListener("resize", resize);
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
@@ -1455,6 +1532,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function tryOpenNearby() {
     if (nearTile(C.SHOP)) setShopOpen(true);
     else if (nearTile(C.BIN)) setBinOpen(true);
+    else if (nearTile(C.HOUSE_DOOR)) { if (meRef.current.sleeping) wakeUp(false); else startSleep(); }
     else if (nearTile(C.COOP_SITE) && sharedRef.current.coop) sendReq({ kind: "coopDeposit" });
     else if (nearTile(C.BARN_SITE)) {
       const b = sharedRef.current.barn;
@@ -1643,7 +1721,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       </div>
 
       {/* Invite proximité */}
-      {promptKey && <div className="ferme-prompt">{promptKey === "shop" ? L.promptShop : promptKey === "coop" ? L.promptCoop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : L.promptBin}</div>}
+      {promptKey && <div className="ferme-prompt">{promptKey === "shop" ? L.promptShop : promptKey === "coop" ? L.promptCoop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "sleep" ? L.promptSleep : promptKey === "wake" ? L.promptWake : L.promptBin}</div>}
       {mountPrompt && <div className="ferme-prompt ferme-prompt-mount">{mountPrompt === "mount" ? L.mountPrompt : L.dismountPrompt}</div>}
 
       {/* Barre d'outils */}

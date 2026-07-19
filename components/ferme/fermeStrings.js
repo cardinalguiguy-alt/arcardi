@@ -122,6 +122,12 @@ export const FERME_STR = {
     promptCoop: "[E] Déposer au chantier",
     promptBarn: "[E] Déposer à la grange",
     promptBarnBuild: "[E] Construire (mini-jeu)",
+    promptSleep: "[E] Dormir",
+    promptWake: "[E] Se réveiller",
+    // Dormir dans la maison (chantier 2026-07)
+    toastSleepFull: "Tu n'es pas fatigué, pas besoin de dormir.",
+    toastSleepDone: "Bien dormi ! Énergie remplie.",
+    toastSleepEarly: "Réveil anticipé.",
     // Grange collaborative persistante (zip 158)
     barnHudLine: (level, max, cap) => `Grange ${level}/${max} · ${cap} animaux max`,
     barnDeposited: (who, n, res) => `${who} apporte ${n} ${res} à la grange.`,
@@ -317,6 +323,12 @@ export const FERME_STR = {
     promptCoop: "[E] Deposit at site",
     promptBarn: "[E] Deposit at barn",
     promptBarnBuild: "[E] Build (mini-game)",
+    promptSleep: "[E] Sleep",
+    promptWake: "[E] Wake up",
+    // Sleeping in the house (2026-07 chantier)
+    toastSleepFull: "You're not tired, no need to sleep.",
+    toastSleepDone: "Slept well! Energy refilled.",
+    toastSleepEarly: "Woke up early.",
     // Persistent collaborative barn (zip 158)
     barnHudLine: (level, max, cap) => `Barn ${level}/${max} · ${cap} animals max`,
     barnDeposited: (who, n, res) => `${who} brings ${n} ${res} to the barn.`,

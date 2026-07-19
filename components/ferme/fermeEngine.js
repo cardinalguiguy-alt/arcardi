@@ -234,6 +234,7 @@ export function newFarmer(id, name, gender, outfit) {
     id, name: String(name || "Fermier").slice(0, 14), gender: gender === "f" ? "f" : "m", outfit: outfit | 0,
     x: C.SPAWN.x, y: C.SPAWN.y, dir: 0, moving: false, tool: 0,
     energy: C.MAX_ENERGY,
+    sleepStartedAt: null, sleepStartEnergy: 0, // dort actuellement ? (voir resolveSleepStart/End)
     tools: { hoe: 1, can: 1, axe: 1, pick: 1 },
     inv: {
       wood: 0, stone: 0, food: 0, fence: 0, wall: 0, path: 0, lamp: 0,
@@ -269,6 +270,8 @@ export function normalizeFarmer(f) {
   f.tools = f.tools || {};
   for (const k of C.TOOLS) if (typeof f.tools[k] !== "number") f.tools[k] = 1;
   if (typeof f.energy !== "number") f.energy = C.MAX_ENERGY;
+  if (typeof f.sleepStartedAt !== "number") f.sleepStartedAt = null;
+  if (typeof f.sleepStartEnergy !== "number") f.sleepStartEnergy = 0;
   f.inv = f.inv || {};
   if (typeof f.inv.wood !== "number") f.inv.wood = 0;
   if (typeof f.inv.stone !== "number") f.inv.stone = 0;
@@ -755,6 +758,42 @@ export function resolveEat(f) {
   return res;
 }
 
+// Dormir dans la maison (chantier 2026-07) : f.sleepStartedAt (horodatage
+// hôte) + f.sleepStartEnergy (énergie au moment de s'endormir) permettent de
+// dériver l'énergie actuelle à tout instant sans message réseau
+// supplémentaire, même principe que cropGrowState/animalReady (état dérivé
+// purement d'un horodatage). L'énergie est pleine PILE au bout de
+// C.SLEEP_MS ; sortir plus tôt (resolveSleepEnd) garde juste la fraction déjà
+// acquise à cet instant.
+export function sleepEnergyNow(f, now) {
+  if (!f.sleepStartedAt) return f.energy;
+  const frac = Math.min(1, (now - f.sleepStartedAt) / C.SLEEP_MS);
+  return Math.round(f.sleepStartEnergy + (C.MAX_ENERGY - f.sleepStartEnergy) * frac);
+}
+// Entrer dormir (touche E devant la porte, voir C.HOUSE_DOOR). Refuse si déjà
+// endormi, ou si l'énergie est déjà au maximum (dormir ne servirait à rien).
+export function resolveSleepStart(f, now) {
+  normalizeFarmer(f);
+  const res = { ok: false, reason: null };
+  if (f.sleepStartedAt) { res.reason = "actionFailed"; return res; }
+  if (f.energy >= C.MAX_ENERGY) { res.reason = "sleepFull"; return res; }
+  f.sleepStartedAt = now; f.sleepStartEnergy = f.energy;
+  res.ok = true;
+  return res;
+}
+// Sortir de la maison : soit automatiquement après C.SLEEP_MS (énergie
+// pleine), soit plus tôt sur demande du joueur (énergie partielle, jamais
+// perdue). Renvoie { invChanged } pour rediffuser la nouvelle énergie.
+export function resolveSleepEnd(f, now) {
+  normalizeFarmer(f);
+  const res = { invChanged: false };
+  if (!f.sleepStartedAt) return res;
+  f.energy = sleepEnergyNow(f, now);
+  f.sleepStartedAt = null; f.sleepStartEnergy = 0;
+  res.invChanged = true;
+  return res;
+}
+
 /* -------------------------------------------------------------------------
    Passage au jour suivant (hôte uniquement). Depuis le zip 151, la pousse des
    cultures, l'arrosage et la production animale sont en temps RÉEL et ne
@@ -777,7 +816,7 @@ export function newDay(world, farmers, day, seed) {
       tiles.push(i);
     }
   }
-  for (const id in farmers) farmers[id].energy = C.MAX_ENERGY;
+  for (const id in farmers) { farmers[id].energy = C.MAX_ENERGY; farmers[id].sleepStartedAt = null; farmers[id].sleepStartEnergy = 0; }
   return { tiles, cropTiles: [] };
 }
 
