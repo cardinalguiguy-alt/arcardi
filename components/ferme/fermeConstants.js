@@ -493,6 +493,15 @@ export const WOLF_ROAM_RADIUS = 7;        // amplitude de rôdaille rive droite
 export const WOLF_TORCH_RANGE = 6;        // rayon d'effroi autour d'une torche allumée
 export const WOLF_FLEE_COOLDOWN_MS = 4000; // temps avant de reprendre son activité après une fuite
 
+// Loups agressifs (chantier 2026-07, demande Guillaume) : une minorité de
+// loups, tirée UNE FOIS à l'apparition (voir wolfSpawnPos/updateWolves), ne
+// fuit pas la torche et tente au contraire de mordre le fermier porteur.
+export const WOLF_AGGRESSIVE_CHANCE = 0.2;   // ~1 loup sur 5
+export const WOLF_SPEED_AGGRESSIVE = 4.4;    // > WOLF_SPEED_FAST : rattrape un fermier qui fuit
+export const WOLF_BITE_RANGE = 0.75;         // distance déclenchant la morsure (mini-jeu)
+export const WOLF_BITE_REACT_MS = 2200;      // durée du mini-jeu de riposte (très court = difficile)
+export const INJURED_MS = 10 * 60 * 1000;    // indisponibilité après une morsure manquée (10 min, survit à un refresh)
+
 // --- Torche (chantier 2026-07) : objet équipable (bouton dédié, comme le
 // sifflet à chevaux), pas un slot d'outil numéroté. Éclaire comme un
 // lampadaire portatif (rayon plus modeste) et fait fuir les loups à portée.

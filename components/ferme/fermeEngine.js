@@ -356,6 +356,7 @@ export function newFarmer(id, name, gender, outfit) {
     x: C.SPAWN.x, y: C.SPAWN.y, dir: 0, moving: false, tool: 0,
     energy: C.MAX_ENERGY,
     sleepStartedAt: null, sleepStartEnergy: 0, // dort actuellement ? (voir resolveSleepStart/End)
+    injuredUntil: 0, // horodatage de fin d'indisponibilité après une morsure de loup (0 = pas blessé)
     tools: { hoe: 1, can: 1, axe: 1, pick: 1 },
     inv: {
       wood: 0, stone: 0, food: 0, fence: 0, wall: 0, path: 0, lamp: 0, scarecrow: 0, grass: 0, mill: 0,
@@ -401,6 +402,7 @@ export function normalizeFarmer(f) {
   if (typeof f.energy !== "number") f.energy = C.MAX_ENERGY;
   if (typeof f.sleepStartedAt !== "number") f.sleepStartedAt = null;
   if (typeof f.sleepStartEnergy !== "number") f.sleepStartEnergy = 0;
+  if (typeof f.injuredUntil !== "number") f.injuredUntil = 0;
   f.inv = f.inv || {};
   if (typeof f.inv.wood !== "number") f.inv.wood = 0;
   if (typeof f.inv.stone !== "number") f.inv.stone = 0;
@@ -1232,6 +1234,18 @@ export function bridgeIsOpen(world, k) {
   const sites = world.bridgeSites && world.bridgeSites[k];
   if (!sites || !sites.length) return false;
   return world.ground[sites[0]] === C.G_BRIDGE;
+}
+
+// Vrai si la case (x,y) est de l'eau infranchissable à pied (rivière, ou
+// emplacement de pont pas encore construit/fermé) — utilisé pour empêcher
+// les loups de traverser la rivière ailleurs que par un pont OUVERT (voir
+// updateWolves dans FermeGame.js, correctif chantier 2026-07 : les loups
+// pouvaient sinon marcher directement sur l'eau, ex. en phase "flee").
+export function isWaterTile(world, x, y) {
+  const fx = Math.floor(x), fy = Math.floor(y);
+  if (!inMap(fx, fy)) return true;
+  const g = world.ground[idx(fx, fy)];
+  return g === C.G_WATER || g === C.G_BRIDGE_SITE || g === C.G_BRIDGE_CLOSED;
 }
 
 // Point de passage (centre) d'un pont, pour servir de point de cheminement

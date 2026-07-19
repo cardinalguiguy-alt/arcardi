@@ -116,6 +116,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [torchOn, setTorchOn] = useState(false); // torche allumée (chantier 2026-07) : éloigne les loups, éclaire un rayon autour du porteur
   const [fishMini, setFishMini] = useState(null); // {mode, fish} pendant le minijeu, sinon null
   const [barnMini, setBarnMini] = useState(null); // {level} pendant le mini-jeu de construction de la grange, sinon null
+  const [wolfBite, setWolfBite] = useState(null); // {wolfId} pendant le mini-jeu de morsure (loup agressif), sinon null
+  const [injuredUntil, setInjuredUntil] = useState(0); // horodatage de fin d'indisponibilité (0 = pas blessé), survit à un refresh (voir farmer.injuredUntil)
   const [shopOpen, setShopOpen] = useState(false);
   const [binOpen, setBinOpen] = useState(false);
   const [mapOpen, setMapOpen] = useState(false);
@@ -197,8 +199,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const sleepStartedAtRef = useRef(null);
   const sleepStartEnergyRef = useRef(0);
   const sleepTimerRef = useRef(null); // setTimeout de sortie automatique après C.SLEEP_MS
+  const injuredUntilRef = useRef(0); // miroir synchrone de injuredUntil (lu dans la boucle de rendu/déplacement)
 
-  useEffect(() => { fishMiniRef.current = !!fishMini || !!barnMini; }, [fishMini, barnMini]);
+  useEffect(() => { fishMiniRef.current = !!fishMini || !!barnMini || !!wolfBite; }, [fishMini, barnMini, wolfBite]);
+  useEffect(() => { injuredUntilRef.current = injuredUntil || 0; }, [injuredUntil]);
   useEffect(() => { mapOpenRef.current = mapOpen; }, [mapOpen]);
   useEffect(() => { shopOpenRef.current = shopOpen; }, [shopOpen]);
   useEffect(() => { binOpenRef.current = binOpen; }, [binOpen]);
@@ -404,7 +408,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     E.normalizeAnimals(sharedRef.current.animals);
     // Mon propre fermier (reprise) si présent
     const mine = payload.farmers && payload.farmers[me.id];
-    if (mine) { invRef.current = mine.inv; toolsRef.current = mine.tools; energyRef.current = mine.energy; setMyInv(mine.inv); setMyTools(mine.tools); setMyEnergy(mine.energy); if (mine.quests) setMyQuests(mine.quests); }
+    if (mine) {
+      invRef.current = mine.inv; toolsRef.current = mine.tools; energyRef.current = mine.energy;
+      setMyInv(mine.inv); setMyTools(mine.tools); setMyEnergy(mine.energy); if (mine.quests) setMyQuests(mine.quests);
+      // Blessure (morsure de loup) : survit à un rechargement, restaurée depuis
+      // l'état persistant du fermier (voir farmer.injuredUntil / INJURED_MS).
+      injuredUntilRef.current = mine.injuredUntil || 0; setInjuredUntil(injuredUntilRef.current);
+    }
     minimapDirtyRef.current = true;
     setHud(h => ({ ...h, money: payload.money, day: payload.day }));
     setCoop(sharedRef.current.coop);
@@ -582,7 +592,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     let questId = null; // action réussie -> quête à valider éventuellement
     const px = typeof req.px === "number" ? req.px : f.x, py = typeof req.py === "number" ? req.py : f.y;
 
-    if (req.kind === "act") {
+    if (req.kind === "wolfBiteResult") {
+      // Dénouement du mini-jeu de morsure (chantier 2026-07) : n'affecte que
+      // le loup concerné, encore en attente ("biting") et visant bien CE
+      // fermier — ignore toute requête tardive/rejouée après résolution.
+      const s2 = sharedRef.current;
+      const wf = (s2.wolves || []).find(x => x.id === req.wolfId && x.phase === "biting" && x.biteTargetId === req.id);
+      if (wf) resolveWolfBiteOutcome(wf, req.result === "win" ? "win" : "fail");
+    } else if (req.kind === "act") {
       const r = E.resolveAct(w, f, req);
       for (const i of r.tiles) { recordTileOverride(i); out.tiles.push({ i, g: w.ground[i], o: w.objects[i], hp: w.objHp.get(i) }); }
       for (const i of r.cropTiles) { const c = w.crops.get(i); out.crops.push({ i, c: c ? { t: c.t, bankedMs: c.bankedMs, wateredAt: c.wateredAt } : null }); }
@@ -837,7 +854,23 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // p.crops ci-dessus, mais sur w.mills.
     if (w && p.mills) for (const [i, wheat, nextAt] of p.mills) w.mills.set(i, { wheat, nextAt });
     if (p.state) { const s = sharedRef.current; s.money = p.state.money; s.day = p.state.day; s.dayStartAt = p.state.dayStartAt; s.totalEarned = p.state.totalEarned; setHud(h => ({ ...h, money: s.money, day: s.day })); }
-    if (p.farmer && p.farmer.id === me.id) { invRef.current = p.farmer.inv; toolsRef.current = p.farmer.tools; energyRef.current = p.farmer.energy; setMyInv(p.farmer.inv); setMyTools(p.farmer.tools); setMyEnergy(p.farmer.energy); if (p.farmer.quests) setMyQuests(p.farmer.quests); }
+    if (p.farmer && p.farmer.id === me.id) {
+      invRef.current = p.farmer.inv; toolsRef.current = p.farmer.tools; energyRef.current = p.farmer.energy;
+      setMyInv(p.farmer.inv); setMyTools(p.farmer.tools); setMyEnergy(p.farmer.energy); if (p.farmer.quests) setMyQuests(p.farmer.quests);
+      if (typeof p.farmer.injuredUntil === "number" && p.farmer.injuredUntil !== injuredUntilRef.current) {
+        const wasInjured = injuredUntilRef.current > Date.now();
+        injuredUntilRef.current = p.farmer.injuredUntil; setInjuredUntil(p.farmer.injuredUntil);
+        // Nouvelle blessure (pas déjà blessé) : le loup vient de mordre -> on
+        // ramène le fermier chez lui, incapable d'agir pendant C.INJURED_MS.
+        if (!wasInjured && p.farmer.injuredUntil > Date.now()) {
+          const m = meRef.current;
+          if (m) { m.x = C.SPAWN.x; m.y = C.SPAWN.y; m.moving = false; sendPos(); }
+          setWolfBite(null);
+          pushToast(L.toastInjured);
+        }
+      }
+    }
+    if (p.wolfBite && p.wolfBite.id === me.id && !isInjured()) setWolfBite({ wolfId: p.wolfBite.wolfId });
     if (p.toast && p.toast.id === me.id) pushToast(toastMsg(p.toast.key));
     if (p.chat) addChat(p.chat.from, p.chat.msg);
     if (p.fx) for (const f of p.fx) spawnFx(f);
@@ -1021,8 +1054,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const m = meRef.current;
     channelRef.current?.send({ type: "broadcast", event: "req", payload: { ...payload, id: me.id, name: m.name, px: +m.x.toFixed(2), py: +m.y.toFixed(2) } });
   }
+  function isInjured() { return Date.now() < injuredUntilRef.current; }
   function doAction() {
-    const m = meRef.current; if (!m || actAnimRef.current > 0 || fishMiniRef.current || m.sleeping) return;
+    const m = meRef.current; if (!m || actAnimRef.current > 0 || fishMiniRef.current || m.sleeping || isInjured()) return;
     const w = worldRef.current; if (!w) return;
     // Priorité : ramasser la production d'un animal proche.
     const ai = nearestCollectable();
@@ -1130,6 +1164,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function fishLost(tooSoon) { setFishMini(null); pushToast(tooSoon ? L.fishTooSoon : L.fishFail); }
   function barnWon() { setBarnMini(null); sendReq({ kind: "barnBuild" }); }
   function barnLost() { setBarnMini(null); pushToast(L.barnMiniFail); }
+  function wolfBiteWon() {
+    const wb = wolfBite; setWolfBite(null);
+    if (wb) sendReq({ kind: "wolfBiteResult", wolfId: wb.wolfId, result: "win" });
+    pushToast(L.wolfBiteWin);
+  }
+  function wolfBiteLost() {
+    const wb = wolfBite; setWolfBite(null);
+    if (wb) sendReq({ kind: "wolfBiteResult", wolfId: wb.wolfId, result: "fail" });
+    // Pas de toast ici : la blessure elle-même (payload.farmer.injuredUntil,
+    // voir applyDeltas) affiche déjà L.toastInjured et téléporte à la maison.
+  }
 
   // Position vivante du cheval : celle de son cavalier actuel s'il est monté
   // (le cheval se déplace avec lui), sinon sa position au repos (h.x/h.y).
@@ -1209,6 +1254,54 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
     }
   }
+  // Position vivante d'un joueur (soi-même ou distant) par id, pour le
+  // ciblage des loups agressifs. Renvoie null si le joueur n'est plus là
+  // (déconnecté) : le loup abandonne alors sa cible (voir phase "attack").
+  function livePlayerPos(id) {
+    const mm = meRef.current;
+    if (mm && mm.id === id) return { id, x: mm.x, y: mm.y };
+    const p = playersRef.current.get(id);
+    return p ? { id, x: p.x, y: p.y } : null;
+  }
+  // Dénouement d'une morsure tentée (chantier 2026-07) : "win" = le fermier a
+  // réagi à temps au mini-jeu (voir req.kind === "wolfBiteResult" plus bas),
+  // le loup repart effrayé comme s'il avait fui la torche. "fail" = pas de
+  // réaction dans le délai (mini-jeu raté OU joueur injoignable) : le fermier
+  // est blessé pendant C.INJURED_MS, ramené chez lui. Toujours appelé côté
+  // hôte, donc farmersRef.current[id] fait foi (persisté ensuite via le
+  // filet dirtyRef -> persistFarm, même mécanisme que le reste du fermier).
+  function resolveWolfBiteOutcome(wf, result) {
+    const targetId = wf.biteTargetId || wf.attackTargetId;
+    wf.attackTargetId = null; wf.biteTargetId = null; wf.biteDeadline = 0; wf.huntAnimalIdx = -1;
+    if (result === "win") {
+      wf.phase = "flee"; wf.fleeUntil = Date.now() + C.WOLF_FLEE_COOLDOWN_MS;
+      const target = targetId ? livePlayerPos(targetId) : null;
+      if (target) {
+        const dx = wf.x - target.x, dy = wf.y - target.y, d = Math.hypot(dx, dy) || 1;
+        wf.tx = wf.x + (dx / d) * 4; wf.ty = wf.y + (dy / d) * 4;
+      }
+      wf.state = "run";
+      if (targetId) {
+        const nm = (playersRef.current.get(targetId) || (meRef.current?.id === targetId ? meRef.current : null) || {}).name || "?";
+        addChat("🐺", L.wolfBiteWinChat(nm));
+      }
+      return;
+    }
+    // "fail" : blesse le fermier visé s'il existe encore (peut avoir quitté).
+    if (targetId) {
+      const f = E.normalizeFarmer(farmersRef.current[targetId]);
+      if (f) {
+        f.injuredUntil = Date.now() + C.INJURED_MS;
+        dirtyRef.current = true;
+        channelRef.current?.send({
+          type: "broadcast", event: "apply",
+          payload: { farmer: { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv, injuredUntil: f.injuredUntil } },
+        });
+        addChat("🩸", L.wolfBiteFailChat(f.name));
+      }
+    }
+    wf.phase = "return";
+  }
   // Loups (chantier 2026-07, demande Guillaume). Simulation HÔTE UNIQUEMENT,
   // même esprit que updateWhistledHorses : positions dérivées frame par
   // frame, diffusées en throttle (~150ms). Apparaissent rive droite
@@ -1234,6 +1327,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           state: "stop", phase: "roam", roamAnchor: { x: p.x, y: p.y }, roamTarget: null, nextRoamAt: 0,
           nextHuntCheckAt: now + 3000 + Math.random() * C.WOLF_HUNT_TRIGGER_MS,
           bridgeIdx: -1, huntAnimalIdx: -1, eatUntil: 0, fleeUntil: 0,
+          // Loup agressif (chantier 2026-07) : ne fuit pas la torche, tente une
+          // morsure à la place (voir la branche `scare` plus bas). Trait FIXE
+          // tiré une seule fois à l'apparition (pas un tirage à chaque frame).
+          aggressive: Math.random() < C.WOLF_AGGRESSIVE_CHANCE,
+          attackTargetId: null, biteTargetId: null, biteDeadline: 0,
         });
       }
       channelRef.current?.send({ type: "broadcast", event: "apply", payload: { wolves: s.wolves } });
@@ -1248,11 +1346,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     if (!s.wolves || !s.wolves.length) return;
 
-    // Porteurs de torche allumée (soi-même + distants), pour la fuite.
+    // Porteurs de torche allumée (soi-même + distants), pour la fuite. `id`
+    // conservé (chantier 2026-07) : un loup agressif qui décide d'attaquer au
+    // lieu de fuir a besoin de savoir QUI viser (voir plus bas, phase "attack").
     const torchBearers = [];
     const mm = meRef.current;
-    if (mm && torchOnRef.current) torchBearers.push({ x: mm.x, y: mm.y });
-    for (const p of playersRef.current.values()) if (p.torch) torchBearers.push({ x: p.x, y: p.y });
+    if (mm && torchOnRef.current) torchBearers.push({ id: mm.id, x: mm.x, y: mm.y });
+    for (const p of playersRef.current.values()) if (p.torch) torchBearers.push({ id: p.id, x: p.x, y: p.y });
 
     let animalsChanged = false, moved = false;
     for (const wf of s.wolves) {
@@ -1263,17 +1363,46 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
       let speed = 0;
       if (scare) {
-        // Repas en cours interrompu par la torche : l'animal visé est sauvé.
-        wf.huntAnimalIdx = -1;
-        wf.phase = "flee"; wf.fleeUntil = now + C.WOLF_FLEE_COOLDOWN_MS;
-        const dx = wf.x - scare.x, dy = wf.y - scare.y, d = Math.hypot(dx, dy) || 1;
-        wf.tx = wf.x + (dx / d) * 4; wf.ty = wf.y + (dy / d) * 4;
-        wf.state = "run"; speed = C.WOLF_SPEED_FAST;
+        if (wf.aggressive && wf.phase !== "attack" && wf.phase !== "biting") {
+          // Loup agressif (chantier 2026-07, ~1 loup sur 5) : ignore la peur
+          // de la torche et fonce sur son porteur au lieu de fuir. Repas en
+          // cours abandonné, comme pour la fuite classique.
+          wf.huntAnimalIdx = -1;
+          wf.phase = "attack"; wf.attackTargetId = scare.id;
+        } else if (!wf.aggressive) {
+          // Repas en cours interrompu par la torche : l'animal visé est sauvé.
+          wf.huntAnimalIdx = -1;
+          wf.phase = "flee"; wf.fleeUntil = now + C.WOLF_FLEE_COOLDOWN_MS;
+          const dx = wf.x - scare.x, dy = wf.y - scare.y, d = Math.hypot(dx, dy) || 1;
+          wf.tx = wf.x + (dx / d) * 4; wf.ty = wf.y + (dy / d) * 4;
+          wf.state = "run"; speed = C.WOLF_SPEED_FAST;
+        }
       } else if (wf.phase === "flee") {
         if (now < wf.fleeUntil) { wf.state = "run"; speed = C.WOLF_SPEED_FAST; }
         else wf.phase = E.riverSideOf(w, wf.x, wf.y) === "west" ? "return" : "roam";
       }
-      if (!scare && wf.phase !== "flee") {
+      if (wf.phase === "attack") {
+        // Fonce vers le fermier visé (ou le plus proche si celui-ci a lâché
+        // sa torche/quitté la portée entretemps) jusqu'à portée de morsure.
+        wf.state = "run"; speed = C.WOLF_SPEED_AGGRESSIVE;
+        const target = (wf.attackTargetId && livePlayerPos(wf.attackTargetId)) || (scare ? livePlayerPos(scare.id) : null);
+        if (!target) { wf.phase = "roam"; }
+        else {
+          wf.attackTargetId = target.id;
+          wf.tx = target.x; wf.ty = target.y;
+          if (Math.hypot(target.x - wf.x, target.y - wf.y) < C.WOLF_BITE_RANGE) {
+            wf.phase = "biting"; wf.biteTargetId = target.id;
+            wf.biteDeadline = now + C.WOLF_BITE_REACT_MS + 900; // + marge réseau
+            wf.state = "stop"; speed = 0;
+            channelRef.current?.send({ type: "broadcast", event: "apply", payload: { wolfBite: { id: target.id, wolfId: wf.id } } });
+          }
+        }
+      } else if (wf.phase === "biting") {
+        // Immobile, en attente du mini-jeu côté joueur (req "wolfBiteResult")
+        // ou du délai de grâce : sans réaction à temps, la morsure réussit.
+        wf.state = "stop"; speed = 0; wf.tx = wf.x; wf.ty = wf.y;
+        if (now >= wf.biteDeadline) resolveWolfBiteOutcome(wf, "fail");
+      } else if (!scare && wf.phase !== "flee") {
         if (wf.phase === "roam") {
           wf.state = "walk"; speed = C.WOLF_SPEED_SLOW;
           if (!wf.roamTarget || Math.hypot(wf.roamTarget.x - wf.x, wf.roamTarget.y - wf.y) < 0.3 || now >= wf.nextRoamAt) {
@@ -1346,10 +1475,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const dx = wf.tx - wf.x, dy = wf.ty - wf.y, d = Math.hypot(dx, dy);
         if (d > 0.02) {
           const step = Math.min(speed * dt, d);
-          wf.x += (dx / d) * step; wf.y += (dy / d) * step;
-          wf.dir = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 2 : 3) : (dy < 0 ? 1 : 0);
-          wf.animT += dt * (speed >= C.WOLF_SPEED_FAST ? 10 : 5);
-          moved = true;
+          const nx = wf.x + (dx / d) * step, ny = wf.y + (dy / d) * step;
+          // Ne jamais marcher sur l'eau (rivière, pont pas encore ouvert) : en
+          // phase "cross" le loup avance sur un pont ouvert (case non-eau),
+          // toutes les autres phases (dont "flee", qui visait tout droit vers
+          // un point pouvant tomber dans la rivière) doivent rester sur leur
+          // rive tant qu'un pont ouvert n'a pas été emprunté.
+          if (!E.isWaterTile(w, nx, ny)) {
+            wf.x = nx; wf.y = ny;
+            wf.dir = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 2 : 3) : (dy < 0 ? 1 : 0);
+            wf.animT += dt * (speed >= C.WOLF_SPEED_FAST ? 10 : 5);
+            moved = true;
+          } else {
+            wf.animT = 0;
+          }
         }
       } else wf.animT = 0;
     }
@@ -1430,7 +1569,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // ----- entrées -----
     function onKeyDown(e) {
       if (document.activeElement === chatInputRef.current) return;
-      if (fishMiniRef.current) return; // le minijeu de pêche gère ses entrées
+      if (fishMiniRef.current) return; // le minijeu de pêche (ou de morsure) gère ses entrées
+      if (isInjured()) return; // blessé : aucune entrée, en attendant la fin du repos forcé
       // Endormi : seule la touche E (se réveiller) doit rester active, pour
       // ne pas pouvoir changer d'outil/monter à cheval/etc. depuis "l'intérieur".
       if (meRef.current?.sleeping && e.code !== "KeyE") return;
@@ -1450,7 +1590,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     function onKeyUp(e) { keysRef.current[e.code] = false; }
     function onMove(e) { mouseRef.current.x = e.clientX; mouseRef.current.y = e.clientY; }
-    function onDown(e) { if (e.button === 0 && !mapOpenRef.current && !shopOpenRef.current && !binOpenRef.current && !fishMiniRef.current) doAction(); }
+    function onDown(e) { if (e.button === 0 && !mapOpenRef.current && !shopOpenRef.current && !binOpenRef.current && !fishMiniRef.current && !isInjured()) doAction(); }
     function onWheel() { }
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
@@ -1990,7 +2130,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (now2 - lastPosSentRef.current > 1000 / C.POS_TICK_HZ) { lastPosSentRef.current = now2; sendPos(); }
         return;
       }
-      const uiBlocked = shopOpenRef.current || binOpenRef.current || mapOpenRef.current || fishMiniRef.current || document.activeElement === chatInputRef.current || m.sleeping;
+      const uiBlocked = shopOpenRef.current || binOpenRef.current || mapOpenRef.current || fishMiniRef.current || document.activeElement === chatInputRef.current || m.sleeping || isInjured();
       let dx = 0, dy = 0;
       if (!uiBlocked) {
         if (keys["ArrowUp"] || keys["KeyW"] || keys["KeyZ"]) dy -= 1;
@@ -2594,6 +2734,24 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       {chatOpen && <input ref={chatInputRef} className="ferme-chat-input" maxLength={120} placeholder={L.chatSend}
         onKeyDown={e => { if (e.key === "Enter") submitChat(); else if (e.key === "Escape") { setChatOpen(false); chatInputRef.current.blur(); } }} autoFocus />}
 
+      {/* Blessure (morsure de loup, chantier 2026-07) : bannière rouge avec
+          décompte, tant que injuredUntil (persistant, survit à un refresh)
+          est dans le futur. Le tick HUD 1Hz (setHud plus haut) fait vivre le
+          décompte sans minuterie dédiée. */}
+      {injuredUntil > Date.now() && (() => {
+        const left = Math.max(0, injuredUntil - Date.now());
+        const mm = String(Math.floor(left / 60000)).padStart(2, "0");
+        const ss = String(Math.floor((left % 60000) / 1000)).padStart(2, "0");
+        return (
+          <div className="ferme-toast" style={{
+            position: "fixed", top: 12, left: "50%", transform: "translateX(-50%)",
+            background: "#7a1414", color: "#fff", fontWeight: "bold", zIndex: 50,
+          }}>
+            {L.injuredBanner(`${mm}:${ss}`)}
+          </div>
+        );
+      })()}
+
       {/* Toasts */}
       <div className="ferme-toasts">{toasts.map(t2 => <div key={t2.id} className="ferme-toast">{t2.msg}</div>)}</div>
 
@@ -2738,6 +2896,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       {/* Minijeu de pêche (difficulté selon le type de poisson) */}
       {fishMini && <FishMinigame mode={fishMini.mode} fish={fishMini.fish} L={L} lang={lang} onWin={fishWon} onFail={fishLost} />}
       {barnMini && <BarnMinigame level={barnMini.level} L={L} onWin={barnWon} onFail={barnLost} />}
+      {wolfBite && <WolfBiteMinigame L={L} onWin={wolfBiteWon} onFail={wolfBiteLost} />}
 
       {/* Carte plein écran (nouveauté) : positions live, fermeture au clic/Échap/M */}
       {mapOpen && (
@@ -2924,6 +3083,74 @@ function BarnMinigame({ level, L, onWin, onFail }) {
           <div className="ferme-fish-cursor" style={{ left: `${(st ? st.cursor : 0) * 100}%` }} />
         </div>
         <div className="ferme-fish-hint">{L.barnMiniHint}</div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================================
+   Mini-jeu de morsure (loup agressif, chantier 2026-07, demande Guillaume) :
+   plein écran, fond rouge, très difficile à dessein (fenêtre courte +
+   décroissance rapide de la jauge). Il faut marteler Espace/clic pour faire
+   monter la jauge de lutte jusqu'à 1 AVANT C.WOLF_BITE_REACT_MS, sans quoi
+   (ou si le joueur ne réagit pas du tout) c'est un échec — voir onFail, qui
+   se contente d'informer l'hôte : la blessure elle-même est appliquée côté
+   hôte (délai de grâce wf.biteDeadline dans updateWolves), ce composant ne
+   fait que tenter de la devancer.
+   ============================================================================ */
+function WolfBiteMinigame({ L, onWin, onFail }) {
+  const [, force] = useState(0);
+  const s = useRef(null);
+  const done = useRef(false);
+
+  const finish = (kind) => { if (done.current) return; done.current = true; if (kind === "win") onWin(); else onFail(); };
+  const press = () => {
+    const st = s.current; if (!st || done.current) return;
+    st.prog = Math.min(1, st.prog + 0.11);
+    if (st.prog >= 1) finish("win");
+  };
+
+  useEffect(() => {
+    const st = { t0: performance.now(), prog: 0 };
+    s.current = st;
+    let raf = 0, last = performance.now();
+    const loop = () => {
+      raf = requestAnimationFrame(loop);
+      const now = performance.now(), dt = Math.min(0.05, (now - last) / 1000); last = now;
+      const st2 = s.current; if (!st2 || done.current) return;
+      st2.prog = Math.max(0, st2.prog - 0.55 * dt); // décroissance rapide : il faut marteler en continu
+      if (now - st2.t0 > C.WOLF_BITE_REACT_MS) return finish("fail");
+      force(v => (v + 1) % 1000000);
+    };
+    raf = requestAnimationFrame(loop);
+    const onKey = (e) => { if (e.code === "Space") { e.preventDefault(); if (!e.repeat) press(); } };
+    window.addEventListener("keydown", onKey);
+    return () => { cancelAnimationFrame(raf); window.removeEventListener("keydown", onKey); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const st = s.current;
+  const prog = st ? st.prog : 0;
+  const msLeft = st ? Math.max(0, C.WOLF_BITE_REACT_MS - (performance.now() - st.t0)) : C.WOLF_BITE_REACT_MS;
+  const onDown = (e) => { e.preventDefault(); press(); };
+
+  return (
+    <div
+      className="ferme-fish-ov"
+      onPointerDown={onDown}
+      style={{ background: "rgba(120,0,0,0.55)", animation: "fermeWolfBitePulse 0.5s infinite alternate" }}
+    >
+      <style>{`@keyframes fermeWolfBitePulse { from { background-color: rgba(120,0,0,0.55); } to { background-color: rgba(200,0,0,0.75); } }`}</style>
+      <div className="ferme-fish-box panel" onPointerDown={onDown} style={{ borderColor: "#c0392b" }}>
+        <div className="ferme-fish-title" style={{ color: "#ffdada" }}>{L.wolfBiteTitle}</div>
+        <div className="ferme-fish-bar">
+          <div className="ferme-fish-cursor" style={{ left: `${prog * 100}%`, background: "#ff3b3b" }} />
+          <div style={{
+            position: "absolute", inset: 0, background: "#ff5555",
+            width: `${prog * 100}%`, opacity: 0.55, borderRadius: "inherit",
+          }} />
+        </div>
+        <div className="ferme-fish-hint">{L.wolfBiteHint} ({Math.ceil(msLeft / 100) / 10}s)</div>
       </div>
     </div>
   );
