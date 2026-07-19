@@ -371,6 +371,22 @@ export function buildSprites() {
     P(g, 25, 4, 1, 1, "#e8dcc8");      // reflet dans l'oeil
     return c;
   }
+  // Lampadaire (chantier 2026-07, achetable/posable par les joueurs) : poteau
+  // fin surmonté d'une lanterne. Dessiné plus haut qu'une tuile (comme le
+  // puits), donc dans le calque "draws" trié par profondeur, pas la boucle de
+  // sol. La lanterne est toujours dessinée "éteinte" ici : son halo lumineux
+  // de nuit est un effet de rendu séparé (percé dans l'overlay nocturne),
+  // pas une variante de sprite.
+  function lampSprite() {
+    const [c, g] = cv(16, 32);
+    P(g, 7, 14, 2, 16, "#3a3a40"); // poteau
+    P(g, 6, 28, 4, 2, "#2a2a30");  // base
+    P(g, 4, 16, 8, 2, "#4a4a52");  // bras
+    g.fillStyle = "#5a5a62"; g.beginPath(); g.moveTo(3, 8); g.lineTo(13, 8); g.lineTo(11, 14); g.lineTo(5, 14); g.fill(); // cage
+    P(g, 5, 3, 6, 6, "#f0d878"); // vitre/lanterne (teinte chaude, "éteinte" le jour)
+    P(g, 6, 2, 4, 1, "#3a3a40");
+    return c;
+  }
   function well() {
     const [c, g] = cv(24, 30);
     // toit
@@ -547,6 +563,7 @@ export function buildSprites() {
     fenceCorner: fenceTileCorner(),
     fencePost: fenceTilePost(),
     wall: wallTile(),
+    lamp: lampSprite(),
     barn: [barnSprite(1), barnSprite(2), barnSprite(3)],
     animals: [],
     products: [],

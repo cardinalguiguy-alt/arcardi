@@ -36,6 +36,7 @@ export const O_FENCE = 9;   // section de clôture, orientation automatique (voi
 export const O_FENCE_H = 10; // section de clôture, orientation FORCÉE horizontale (touche R)
 export const O_FENCE_V = 11; // section de clôture, orientation FORCÉE verticale (touche R)
 export const O_WALL = 12;    // mur en pierre, construit par les joueurs (bloque le passage, pas d'orientation)
+export const O_LAMP = 13;    // lampadaire, achetable et posé par les joueurs (éclaire la nuit, bloque le passage)
 
 // --- Cultures ---
 // stages: 0=semis ... maxStage=récoltable ; growMs = durée RÉELLE (arrosée) pour
@@ -97,7 +98,7 @@ export const QUESTS = [
   { id: "fish",  reward: 60 },
   { id: "sell",  reward: 80 },
 ];
-export const FOOD_COST = 50;    // prix du casse-croûte
+export const FOOD_COST = 10;    // prix du casse-croûte (10 or, demande 2026-07 : réduit depuis 50)
 export const FOOD_ENERGY = 40;  // énergie rendue
 
 // Ressources
@@ -135,7 +136,14 @@ export const BIN = { x: 52, y: 33 };
 export const SPAWN = { x: 43, y: 37 }; // chemin devant la maison (cible du téléport)
 
 // --- Bâtiments / déplacements ---
-export const HORSE_COST = 800;
+// Plusieurs chevaux achetables (demande 2026-07, Guillaume) : coût croissant
+// à chaque cheval supplémentaire, jusqu'à HORSE_MAX_COUNT. `HORSE_COSTS[n]`
+// = prix du (n+1)-ième cheval (index 0 = premier cheval, inchangé à 800 or).
+// Valeurs au-delà du premier extrapolées (aucun chiffre précis demandé par
+// Guillaume, cohérent avec la nuance de méthode déjà suivie ailleurs dans
+// Ferme Vallée, ex. paliers de la grange) : à ajuster librement.
+export const HORSE_COSTS = [800, 1500, 2500];
+export const HORSE_MAX_COUNT = HORSE_COSTS.length;
 export const HORSE_SPEED_MULT = 1.9; // vitesse à cheval
 export const MOUNT_RANGE = 1.6;      // distance pour enfourcher le cheval
 export const WELL_COST = 600;
@@ -144,6 +152,17 @@ export const WELL_SPAWN = { x: 30, y: 64 }; // cible du téléport puits (dégag
 
 // --- Clôture (posée librement par les joueurs, section par section) ---
 export const FENCE_COST = 15; // prix d'une section de clôture à la boutique (payée en or, inchangé)
+
+// --- Lampadaire (chantier 2026-07, demandé par Guillaume) ---
+// Achetable à la boutique (payé en or, même principe que la clôture) puis
+// posé librement avec l'outil Construction (case 8, nouvelle variante
+// "lamp"). Fonctionnel : éclaire un rayon autour de lui une fois la nuit
+// tombée (voir nightAlpha/lampsInView dans FermeGame.js, qui perce un halo
+// de lumière au niveau de chaque lampadaire posé). Un seul palier pour
+// l'instant ("lvl 1"), valeurs extrapolées (aucun chiffre précis demandé
+// par Guillaume), à ajuster librement.
+export const LAMP_COST = 5000;         // prix d'un lampadaire à la boutique (or)
+export const LAMP_LIGHT_RADIUS = 4.5;  // rayon éclairé autour du lampadaire, en tuiles
 
 // --- Constructions bois/pierre (chantier 2026-07) ---
 // Le joueur convertit du bois/de la pierre récoltés en sections prêtes à poser
