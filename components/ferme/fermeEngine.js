@@ -473,10 +473,14 @@ export function resolveAct(world, f, m) {
           res.tiles.push(i); res.fx.push({ k: "rockdown", x, y });
           // Gemme rare : chance de trouver une pierre précieuse dans le rocher,
           // modulée par la distance à la maison (chantier 2026-07, voir
-          // gemChanceAt ci-dessus).
+          // gemChanceAt ci-dessus). Les gemmes vont désormais dans un pool
+          // COMMUN à tous les joueurs de la salle (demande Guillaume 2026-07),
+          // pas dans l'inventaire privé du fermier : on se contente de
+          // signaler la trouvaille via `res.gemFound`, c'est l'appelant hôte
+          // (FermeGame.js) qui incrémente le pool partagé (sharedRef.current.gems).
           if (Math.random() < gemChanceAt(x, y)) {
             const gt = weightedPick(C.GEMS);
-            f.inv.gems[gt] = (f.inv.gems[gt] || 0) + 1;
+            res.gemFound = gt;
             res.fx.push({ k: "gem", x, y, gem: gt });
           }
         } else world.objHp.set(i, hp);
@@ -912,11 +916,6 @@ export function resolveSell(f, m) {
   } else if (m.item === "stone") {
     const n = Math.min(f.inv.stone, Math.max(1, (m.n | 0) || f.inv.stone));
     f.inv.stone -= n; gain = n * C.STONE_SELL;
-  } else if (m.item === "gem") {
-    const gt = m.gem | 0;
-    if (gt < 0 || gt >= C.GEMS.length) return res;
-    const n = Math.min(f.inv.gems[gt], Math.max(1, (m.n | 0) || f.inv.gems[gt]));
-    f.inv.gems[gt] -= n; gain = n * C.GEMS[gt].sell;
   } else if (m.item === "fish") {
     const ft = m.fish | 0;
     if (ft < 0 || ft >= C.FISH.length) return res;
@@ -929,6 +928,26 @@ export function resolveSell(f, m) {
     f.inv.products[pt] -= n; gain = n * C.ANIMALS[pt].sell;
   }
   if (gain > 0) { res.moneyDelta = gain; res.earnedDelta = gain; res.invChanged = true; res.gain = gain; }
+  return res;
+}
+
+// Vente d'une gemme depuis le pool COMMUN à la salle (chantier 2026-07,
+// demande Guillaume : les gemmes/diamants sont partagés entre tous les
+// joueurs de la ferme, pas privés à chacun). `gems` = tableau partagé
+// (sharedRef.current.gems côté FermeGame.js), muté directement comme le
+// fait resolveSell sur f.inv. Renvoie { moneyDelta, earnedDelta, gemsChanged,
+// toast, gain }, même forme que resolveSell pour rester simple à brancher
+// côté hôte.
+export function resolveSellGem(gems, m) {
+  const res = { moneyDelta: 0, earnedDelta: 0, gemsChanged: false, toast: null, gain: 0 };
+  const gt = m.gem | 0;
+  if (gt < 0 || gt >= C.GEMS.length || !gems) return res;
+  const have = gems[gt] || 0;
+  const n = Math.min(have, Math.max(1, (m.n | 0) || have));
+  if (n <= 0) return res;
+  gems[gt] -= n;
+  const gain = n * C.GEMS[gt].sell;
+  res.moneyDelta = gain; res.earnedDelta = gain; res.gemsChanged = true; res.gain = gain;
   return res;
 }
 

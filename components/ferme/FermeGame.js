@@ -56,6 +56,28 @@ function migrateHorses(saved) {
   return [];
 }
 
+// Les gemmes/diamants deviennent un pool COMMUN à la salle (chantier 2026-07,
+// demande Guillaume), au lieu d'un inventaire privé par fermier. Filet de
+// migration (même principe que migrateHorses) : si la sauvegarde n'a pas
+// encore de `gems` partagé, on récupère tout ce que chaque fermier avait déjà
+// trouvé individuellement (f.inv.gems) dans le pool commun, sans rien perdre,
+// puis on vide l'inventaire privé (devenu obsolète pour les gemmes).
+function migrateGems(saved) {
+  const n = C.GEMS.length;
+  const gems = Array.isArray(saved.gems) ? saved.gems.slice(0, n) : [];
+  while (gems.length < n) gems.push(0);
+  if (!saved.gems) {
+    for (const id in (saved.farmers || {})) {
+      const f = saved.farmers[id];
+      if (f && f.inv && Array.isArray(f.inv.gems)) {
+        for (let i = 0; i < f.inv.gems.length && i < n; i++) gems[i] += f.inv.gems[i] || 0;
+        f.inv.gems = C.GEMS.map(() => 0);
+      }
+    }
+  }
+  return gems;
+}
+
 export default function FermeGame({ room, me, isHost, players, t, lang, onFinish }) {
   const L = fstr(lang);
 
@@ -105,6 +127,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [mounted, setMounted] = useState(false);
   const [coop, setCoop] = useState(null); // miroir React de sharedRef.current.coop (mission d'équipe en cours)
   const [barn, setBarn] = useState(null); // miroir React de sharedRef.current.barn (grange persistante)
+  const [gems, setGems] = useState(() => C.GEMS.map(() => 0)); // miroir React de sharedRef.current.gems (pool commun à la salle)
 
   // -------- Refs (état du jeu, lus par la boucle de rendu) --------
   const canvasRef = useRef(null);
@@ -160,6 +183,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const fenceDirRef = useRef("auto"); // orientation choisie pour la prochaine clôture posée ("auto"|"h"|"v")
   const buildKindRef = useRef("fence"); // miroir synchrone de buildKind ("fence"|"wall"|"path"|"lamp"|"scarecrow"|"grass"|"bridgeWood"|"bridgeStone")
   const heldAnimalRef = useRef(-1);   // index (dans sharedRef.animals) de l'animal actuellement porté par CE joueur, -1 sinon
+  const horseCallAccumRef = useRef(0); // accumulateur (secondes) pour throttler la diffusion réseau des chevaux sifflés en course
   // Dormir dans la maison (chantier 2026-07) : sleepStartedAtRef (performance.now(),
   // horloge locale) + sleepStartEnergyRef permettent d'interpoler localement l'énergie
   // affichée pendant les 60s, même principe que cropGrowState mais côté client pour
@@ -264,9 +288,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         horses: migrateHorses(saved),
         animals: saved.animals || [], wellBuilt: !!saved.wellBuilt, coop: saved.coop || null,
         barn: saved.barn || E.newBarnState(),
+        gems: migrateGems(saved),
       };
       // Les cavaliers repartent à pied à la reprise (aucun joueur monté au chargement).
-      for (const h of sharedRef.current.horses) { h.rider = null; h.rider2 = null; }
+      for (const h of sharedRef.current.horses) { h.rider = null; h.rider2 = null; h.callTarget = null; }
       farmersRef.current = saved.farmers || {};
       // Une ferme peut avoir été sauvegardée par un zip plus ancien, avant
       // l'ajout des gemmes/poissons/productions/quêtes : on remet chaque
@@ -283,7 +308,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const seed = hashSeed(code);
       worldRef.current = E.generateWorld(seed);
       overridesRef.current = { ground: {}, object: {} };
-      sharedRef.current = { seed, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState() };
+      sharedRef.current = { seed, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), gems: C.GEMS.map(() => 0) };
       farmersRef.current = {};
       // Crée tout de suite l'enregistrement pour réserver le code.
       persistFarm();
@@ -294,6 +319,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     setHud(h => ({ ...h, money: sharedRef.current.money, day: sharedRef.current.day }));
     setCoop(sharedRef.current.coop);
     setBarn(sharedRef.current.barn);
+    setGems(sharedRef.current.gems);
     syncBuildings();
     setWorldReady(true);
     setPhase("select"); // l'effet d'auto-spawn décidera de sauter cet écran
@@ -357,6 +383,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       horses: payload.horses || (payload.horse && payload.horse.owned ? [{ x: payload.horse.x, y: payload.horse.y, rider: null, rider2: null }] : []),
       animals: payload.animals || [], wellBuilt: !!payload.wellBuilt, coop: payload.coop || null,
       barn: payload.barn || E.newBarnState(),
+      gems: migrateGems(payload),
     };
     if (payload.farmers) {
       farmersRef.current = payload.farmers;
@@ -372,6 +399,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     setHud(h => ({ ...h, money: payload.money, day: payload.day }));
     setCoop(sharedRef.current.coop);
     setBarn(sharedRef.current.barn);
+    setGems(sharedRef.current.gems);
     syncBuildings();
     setWorldReady(true);
   }
@@ -466,7 +494,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       groundOv: overridesRef.current.ground, objectOv: overridesRef.current.object,
       crops: worldRef.current ? E.serializeCrops(worldRef.current) : [],
       farmers: farmersRef.current,
-      horses: s.horses, animals: s.animals, wellBuilt: s.wellBuilt, coop: s.coop, barn: s.barn,
+      horses: s.horses, animals: s.animals, wellBuilt: s.wellBuilt, coop: s.coop, barn: s.barn, gems: s.gems,
     };
   }
   function syncBuildings() {
@@ -549,12 +577,27 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (r.invChanged) out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
       if (r.toast) out.toast = { id: f.id, key: r.toast };
       if (r.did) questId = r.did;
+      // Gemme trouvée : va dans le pool COMMUN à la salle (chantier 2026-07),
+      // pas dans l'inventaire privé du fermier (voir resolveAct/"mine").
+      if (typeof r.gemFound === "number") {
+        s.gems[r.gemFound] = (s.gems[r.gemFound] || 0) + 1;
+        out.gems = s.gems;
+      }
     } else if (req.kind === "buy") {
       const r = E.resolveBuy(f, s.money, req);
       if (r.moneyDelta) { s.money += r.moneyDelta; out.state = shareState(); }
       if (r.invChanged) out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
       if (r.toast) out.toast = { id: f.id, key: r.toast };
       if (r.chat) out.chat = { from: r.chat.from, msg: L.chatToolUp(toolName(r.chat.tool), r.chat.lvl) };
+    } else if (req.kind === "sell" && req.item === "gem") {
+      // Vente d'une gemme du pool COMMUN (chantier 2026-07) : pas de
+      // vérification de proximité au bac ici (les gemmes sont partagées et
+      // vendables aussi bien au bac que depuis le menu Construire/Vendre,
+      // demande Guillaume), contrairement aux autres ventes.
+      const r = E.resolveSellGem(s.gems, req);
+      if (r.moneyDelta) { s.money += r.moneyDelta; s.totalEarned += r.earnedDelta; out.state = shareState(); }
+      if (r.gemsChanged) out.gems = s.gems;
+      if (r.gain > 0) { out.fx.push({ k: "sell", x: px, y: py, gain: r.gain }); out.chat = { from: "💰", msg: L.chatSell(r.gain, s.money) }; questId = "sell"; }
     } else if (req.kind === "sell") {
       const r = E.resolveSell(f, req);
       if (r.moneyDelta) { s.money += r.moneyDelta; s.totalEarned += r.earnedDelta; out.state = shareState(); }
@@ -641,6 +684,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (h.rider === req.id) { h.rider = null; h.rider2 = null; h.x = px; h.y = py; out.horses = hs; break; }
         else if (h.rider2 === req.id) { h.rider2 = null; out.horses = hs; break; }
       }
+    } else if (req.kind === "whistle") {
+      // Sifflement (bouton dédié, icône cheval) : tous les chevaux LIBRES
+      // (personne dessus) de la ferme se mettent à courir vers celui qui a
+      // sifflé, où qu'il soit sur la carte (pas de restriction de portée,
+      // c'est justement l'intérêt du rappel à distance). Le déplacement réel
+      // (course progressive) est fait côté hôte, image par image, dans la
+      // boucle de rendu (voir updateWhistledHorses) ; ici on se contente de
+      // fixer la cible (`callTarget`) que cette boucle va suivre.
+      const hs = s.horses || [];
+      let any = false;
+      for (const h of hs) {
+        if (h.rider) continue; // monté : ignore l'appel, il a déjà un cavalier
+        h.callTarget = { x: px, y: py };
+        any = true;
+      }
+      if (any) out.horses = hs;
     } else if (req.kind === "collect") {
       const ai = req.animal | 0, an = s.animals[ai];
       const apos = an ? E.animalPos(an, Date.now()) : null;
@@ -729,7 +788,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // Les quêtes accomplies voyagent avec l'état privé du fermier.
     if (out.farmer) out.farmer.quests = f.quests;
 
-    if (out.tiles.length || out.state || out.horses || out.animals || out.wellBuilt) dirtyRef.current = true;
+    if (out.tiles.length || out.state || out.horses || out.animals || out.wellBuilt || out.gems) dirtyRef.current = true;
     channelRef.current?.send({ type: "broadcast", event: "apply", payload: out });
   }
   function shareState() { const s = sharedRef.current; return { money: s.money, day: s.day, dayStartAt: s.dayStartAt, totalEarned: s.totalEarned }; }
@@ -756,6 +815,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (p.wellBuilt) { sharedRef.current.wellBuilt = true; minimapDirtyRef.current = true; syncBuildings(); }
     if (p.coop !== undefined) { sharedRef.current.coop = p.coop; setCoop(p.coop); }
     if (p.barn !== undefined) { sharedRef.current.barn = p.barn; setBarn(p.barn); minimapDirtyRef.current = true; }
+    if (p.gems) { sharedRef.current.gems = p.gems; setGems(p.gems); }
   }
   function applyNewDay(p) {
     const w = worldRef.current; if (!w) return;
@@ -1034,6 +1094,38 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const idx = nearestMountableHorse();
     if (idx >= 0) sendReq({ kind: "mount", horseIndex: idx });
   }
+  // Sifflement (bouton dédié, icône cheval, chantier 2026-07 demande
+  // Guillaume) : envoie la requête au hôte, qui fixe `callTarget` sur chaque
+  // cheval libre (voir req.kind === "whistle" dans hostHandleReqUnsafe).
+  function whistleHorses() { sendReq({ kind: "whistle" }); }
+  // Fait progresser, HÔTE UNIQUEMENT, chaque cheval ayant reçu un `callTarget`
+  // (sifflement) vers cette cible, à la même vitesse qu'un cheval monté
+  // (PLAYER_SPEED * HORSE_SPEED_MULT, "au galop"). Purement une simulation de
+  // position (comme updateMe pour les joueurs) : appelée à chaque frame côté
+  // hôte, avec une diffusion réseau THROTTLÉE (toutes les ~150ms, comme les
+  // messages de position des joueurs) pour ne pas saturer le canal.
+  function updateWhistledHorses(dt) {
+    const hs = sharedRef.current.horses; if (!hs || !hs.length) return;
+    let moved = false;
+    const speed = C.PLAYER_SPEED * C.HORSE_SPEED_MULT;
+    for (const h of hs) {
+      if (h.rider) { if (h.callTarget) h.callTarget = null; continue; } // monté entre-temps : annule l'appel
+      if (!h.callTarget) continue;
+      const dx = h.callTarget.x - h.x, dy = h.callTarget.y - h.y;
+      const d = Math.hypot(dx, dy);
+      if (d < 0.12) { h.x = h.callTarget.x; h.y = h.callTarget.y; h.callTarget = null; }
+      else { const step = Math.min(speed * dt, d); h.x += (dx / d) * step; h.y += (dy / d) * step; }
+      moved = true;
+    }
+    if (moved) {
+      minimapDirtyRef.current = true;
+      horseCallAccumRef.current += dt;
+      if (horseCallAccumRef.current >= 0.15) {
+        horseCallAccumRef.current = 0;
+        channelRef.current?.send({ type: "broadcast", event: "apply", payload: { horses: hs } });
+      }
+    }
+  }
   function teleportWell() {
     const m = meRef.current; if (!m || !sharedRef.current.wellBuilt) return;
     m.x = C.WELL_SPAWN.x; m.y = C.WELL_SPAWN.y; m.moving = false;
@@ -1136,6 +1228,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (!w || !m || !sprites) return;
 
       updateMe(dt);
+      if (isHost) updateWhistledHorses(dt);
       checkWalkOverHarvest();
       checkWalkOverWater();
       checkWalkOverCollect();
@@ -1955,10 +2048,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         <div className="row ferme-hud-res" title={L.stoneResTip} onClick={() => setCraftMenuOpen(o => o === "stone" ? null : "stone")}>
           <Sprite img={spritesReady ? spritesRef.current.icons.stone : null} w={16} h={16} /> <span>{myInv ? myInv.stone : 0}</span>
         </div>
+        <div className="row ferme-hud-res" title={L.gemsResTip} onClick={() => setCraftMenuOpen(o => o === "gems" ? null : "gems")}>
+          <Sprite img={spritesReady ? spritesRef.current.gemIcons[2] : null} w={16} h={16} /> <span>{gems ? gems.reduce((a, b) => a + b, 0) : 0}</span>
+        </div>
       </div>
 
       {/* Énergie */}
       <div className="ferme-energy-wrap panel"><div className="ferme-energy-bar" style={{ height: Math.max(0, (myEnergy / C.MAX_ENERGY) * 100) + "%" }} /></div>
+
+      {/* Sifflet à chevaux (chantier 2026-07, demande Guillaume) : bouton
+          dédié à gauche de l'écran, icône cheval. Rappelle tous les chevaux
+          libres de la ferme, qui reviennent en courant vers qui a sifflé. */}
+      <button className="ferme-whistle-btn" title={L.whistleTip} onClick={whistleHorses}>
+        <Sprite img={spritesReady ? spritesRef.current.horse : null} w={36} h={30} />
+      </button>
 
       {/* Boutons flottants (nouveautés incluses) */}
       <div className="ferme-actions">
@@ -2041,7 +2144,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         <div className="ferme-seed-menu-ov" onClick={() => setCraftMenuOpen(null)}>
           <div className="ferme-seed-menu panel ferme-craft-menu" onClick={e => e.stopPropagation()}>
             <div className="ferme-seed-menu-title">
-              {craftMenuOpen === "wood" ? L.craftMenuTitleWood(myInv ? myInv.wood : 0) : L.craftMenuTitleStone(myInv ? myInv.stone : 0)}
+              {craftMenuOpen === "wood" ? L.craftMenuTitleWood(myInv ? myInv.wood : 0) : craftMenuOpen === "stone" ? L.craftMenuTitleStone(myInv ? myInv.stone : 0) : L.craftMenuTitleGems()}
             </div>
             {craftMenuOpen === "wood" && (
               <div className="ferme-craft-row">
@@ -2079,9 +2182,25 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 </div>
               </>
             )}
-            <button className="ferme-btn ferme-craft-sell"
-              disabled={!myInv || myInv[craftMenuOpen] === 0}
-              onClick={() => { sellItem(craftMenuOpen); setCraftMenuOpen(null); }}>{L.sellAll}</button>
+            {craftMenuOpen === "gems" && (
+              <>
+                {C.GEMS.map(gm => {
+                  const n = gems ? (gems[gm.id] || 0) : 0;
+                  return (
+                    <div className="ferme-craft-row" key={"cg" + gm.id}>
+                      <Sprite img={spritesReady ? spritesRef.current.gemIcons[gm.id] : null} w={26} h={26} />
+                      <span className="name">{(lang === "en" ? gm.nameEn : gm.name)} × {n}<br /><span className="cost">{L.perPiece(gm.sell)}</span></span>
+                      <button disabled={!n} onClick={() => sellGem(gm.id)}>{L.sellAll}</button>
+                    </div>
+                  );
+                })}
+              </>
+            )}
+            {craftMenuOpen !== "gems" && (
+              <button className="ferme-btn ferme-craft-sell"
+                disabled={!myInv || myInv[craftMenuOpen] === 0}
+                onClick={() => { sellItem(craftMenuOpen); setCraftMenuOpen(null); }}>{L.sellAll}</button>
+            )}
           </div>
         </div>
       )}
@@ -2236,16 +2355,6 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 </div>
               );
             })}
-            <div className="ferme-shop-row">
-              <Sprite img={spritesReady ? spritesRef.current.icons.wood : null} w={32} h={32} />
-              <div className="info"><b>{L.woodRowTitle(myInv ? myInv.wood : 0)}</b><span>{L.perPiece(C.WOOD_SELL)}</span></div>
-              <button disabled={!myInv || myInv.wood === 0} onClick={() => sellItem("wood")}>{L.sellAll}</button>
-            </div>
-            <div className="ferme-shop-row">
-              <Sprite img={spritesReady ? spritesRef.current.icons.stone : null} w={32} h={32} />
-              <div className="info"><b>{L.stoneRowTitle(myInv ? myInv.stone : 0)}</b><span>{L.perPiece(C.STONE_SELL)}</span></div>
-              <button disabled={!myInv || myInv.stone === 0} onClick={() => sellItem("stone")}>{L.sellAll}</button>
-            </div>
             {C.FISH.map(fs => {
               const n = myInv && myInv.fish ? myInv.fish[fs.id] : 0;
               return (
@@ -2257,12 +2366,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               );
             })}
             {C.GEMS.map(gm => {
-              const n = myInv && myInv.gems ? myInv.gems[gm.id] : 0;
+              const n = gems ? gems[gm.id] : 0;
               if (!n) return null;
               return (
                 <div className="ferme-shop-row" key={"g" + gm.id}>
                   <Sprite img={spritesReady ? spritesRef.current.gemIcons[gm.id] : null} w={32} h={32} />
-                  <div className="info"><b>{(lang === "en" ? gm.nameEn : gm.name)} × {n}</b><span>{L.perPiece(gm.sell)}</span></div>
+                  <div className="info"><b>{(lang === "en" ? gm.nameEn : gm.name)} × {n}</b><span>{L.perPiece(gm.sell)}</span><span className="ferme-usage">{L.gemsSharedHint}</span></div>
                   <button disabled={!n} onClick={() => sellGem(gm.id)}>{L.sellAll}</button>
                 </div>
               );

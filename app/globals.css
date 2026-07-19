@@ -6560,6 +6560,9 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
 
 /* Boutons flottants (téléport, carte, changer de perso, quitter) */
 .ferme-actions{ position:fixed; top:10px; right:10px; z-index:41; display:flex; flex-wrap:wrap; justify-content:flex-end; gap:8px; max-width:min(66vw, 520px); }
+.ferme-whistle-btn{ position:fixed; left:10px; top:50%; transform:translateY(-50%); z-index:41; width:52px; height:52px; display:flex; align-items:center; justify-content:center; border-radius:50%; border:3px solid var(--f-wood); background:var(--f-gold); box-shadow:0 3px 0 var(--f-wood-d); cursor:pointer; padding:0; }
+.ferme-whistle-btn:hover{ filter:brightness(1.08); }
+.ferme-whistle-btn:active{ transform:translateY(calc(-50% + 2px)); box-shadow:0 1px 0 var(--f-wood-d); }
 
 /* Masque le chrome ARCARDI (FABs haut/droite, barre de scores, logo) pendant
    la ferme : elle est plein écran et ces boutons (surtout le mode agrandi, qui
