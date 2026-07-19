@@ -60,16 +60,10 @@ export const WATER_VALID_MS = 10 * H;
 // l'améthyste est commune, le diamant très rare. Vendues très cher au bac.
 export const GEMS = [
   { id: 0, name: "Améthyste", nameEn: "Amethyst", sell: 200,  color: "#b46ee0", weight: 0.62 },
-  { id: 1, name: "Émeraude",  nameEn: "Emerald",  sell: 500,  color: "#2ee673", weight: 0.30, glow: true },
+  { id: 1, name: "Émeraude",  nameEn: "Emerald",  sell: 500,  color: "#3fbf6a", weight: 0.30 },
   { id: 2, name: "Diamant",   nameEn: "Diamond",  sell: 1200, color: "#a8e8f4", weight: 0.08 },
 ];
 export const GEM_DROP_CHANCE = 0.16; // proba qu'un rocher détruit lâche une gemme
-
-// --- Or trouvé dans la rivière (pêche) ---
-// Petite chance de trouver un peu d'or en pêchant, en plus du poisson.
-export const GOLD_FIND_CHANCE = 0.12;
-export const GOLD_FIND_MIN = 15;
-export const GOLD_FIND_MAX = 60;
 
 // --- Poissons (pêche à la rivière) ---
 // Se mangent (rendent de l'énergie) OU se revendent au bac. Tirage pondéré.
@@ -222,7 +216,22 @@ export const COOP_MISSIONS = [
     reward: 600,
   },
 ];
-export const MAX_ANIMALS = 12;      // limite d'animaux dans l'enclos
+// --- Grange collaborative (zip 158) : premier "chantier persistant" issu ---
+// des missions d'équipe (voir section 0 du contexte). Contrairement à
+// COOP_SITE/COOP_MISSIONS (missions aléatoires, temporaires, tirées au
+// hasard), la grange a un emplacement FIXE et son niveau SURVIT d'une
+// session à l'autre : à chaque palier construit, le bâtiment reste visible
+// sur la carte et grandit. But annoncé par Guillaume : augmenter durablement
+// le nombre d'animaux possible. S'ajoute aux missions aléatoires existantes,
+// ne les remplace pas (elles continuent de se déclencher normalement).
+export const BARN_SITE = { x: 37, y: 44 };
+export const BARN_LEVELS = [
+  // Palier 1 : construction initiale (la grange n'existe pas avant).
+  { level: 1, cost: { wood: 150, stone: 100 }, hits: 6, animalBonus: 6 },
+  { level: 2, cost: { wood: 250, stone: 180 }, hits: 8, animalBonus: 6 },
+  { level: 3, cost: { wood: 400, stone: 300 }, hits: 10, animalBonus: 8 },
+];
+export const MAX_ANIMALS = 12;      // limite d'animaux dans l'enclos, avant toute grange
 export const COLLECT_RANGE = 1.5;   // distance pour ramasser une production
 // Déambulation lente (zip 152) : purement dérivée de l'horodatage (comme
 // cropGrowState), aucun message réseau supplémentaire. `hx`/`hy` (ancrage,

@@ -320,24 +320,14 @@ export function buildSprites() {
     }
     return c;
   }
-  // Gemme (losange) d'une couleur donnée, pour l'inventaire / le bac. `gm`
-  // peut porter `glow: true` (ex. l'émeraude) pour un rendu vert luisant :
-  // halo lumineux (shadowBlur) derrière la pierre + petit éclat blanc en plus
-  // de la facette existante.
-  function gemIcon(gm) {
-    const col = gm.color;
+  // Gemme (losange) d'une couleur donnée, pour l'inventaire / le bac.
+  function gemIcon(col) {
     const [c, g] = cv(T, T);
-    if (gm.glow) { g.shadowColor = col; g.shadowBlur = 7; }
     g.fillStyle = col; g.beginPath();
     g.moveTo(8, 2); g.lineTo(13, 7); g.lineTo(8, 14); g.lineTo(3, 7); g.closePath(); g.fill();
-    if (gm.glow) { g.shadowBlur = 0; }
     g.fillStyle = "rgba(255,255,255,.55)"; g.beginPath();
     g.moveTo(8, 2); g.lineTo(11, 6); g.lineTo(8, 8); g.lineTo(5, 6); g.closePath(); g.fill();
     P(g, 6, 9, 1, 1, "rgba(255,255,255,.5)");
-    if (gm.glow) {
-      g.fillStyle = "rgba(255,255,255,.9)";
-      g.beginPath(); g.arc(9.5, 5, 1.1, 0, 7); g.fill(); // petit éclat lumineux
-    }
     return c;
   }
   // Poisson d'une couleur donnée.
@@ -479,6 +469,44 @@ export function buildSprites() {
     return c;
   }
 
+  // Grange collaborative (chantier persistant, zip 158) : 3 paliers, la
+  // grange grandit et se complète visuellement à chaque palier construit.
+  // Même famille de dessin que house(), palette rouge/blanc "grange" plutôt
+  // que rouge tuile, taille croissante (48 / 72 / 96 px).
+  function barnSprite(level) {
+    const sz = level === 1 ? 48 : level === 2 ? 72 : 96;
+    const [c, g] = cv(sz, sz + 8);
+    const wallH = Math.round(sz * 0.42);
+    const baseY = sz - 4;
+    // Murs
+    P(g, sz * 0.06, baseY - wallH, sz * 0.88, wallH, "#a83c30");
+    for (let y = baseY - wallH + 4; y < baseY; y += 6) P(g, sz * 0.06, y, sz * 0.88, 1, "#8a3028");
+    P(g, sz * 0.06, baseY - wallH, sz * 0.88, 3, "#c04a3c");
+    // Toit à deux pans
+    g.fillStyle = "#5a4530";
+    g.beginPath(); g.moveTo(0, baseY - wallH + 2); g.lineTo(sz / 2, sz * 0.08); g.lineTo(sz, baseY - wallH + 2); g.fill();
+    g.fillStyle = "#6a5238";
+    g.beginPath(); g.moveTo(sz * 0.04, baseY - wallH); g.lineTo(sz / 2, sz * 0.12); g.lineTo(sz * 0.96, baseY - wallH); g.lineTo(sz * 0.9, baseY - wallH); g.lineTo(sz / 2, sz * 0.18); g.lineTo(sz * 0.1, baseY - wallH); g.fill();
+    // Porte double, cadre blanc (signature "grange")
+    const doorW = sz * 0.28, doorX = sz / 2 - doorW / 2, doorY = baseY - wallH * 0.86, doorH = wallH * 0.86;
+    P(g, doorX - 2, doorY - 2, doorW + 4, doorH + 2, "#f0ead8");
+    P(g, doorX, doorY, doorW / 2 - 1, doorH, "#7a5330");
+    P(g, doorX + doorW / 2 + 1, doorY, doorW / 2 - 1, doorH, "#7a5330");
+    // Grande ouverture ronde sous le pignon (silo à foin), palier 2+
+    if (level >= 2) {
+      g.fillStyle = "#f0ead8"; g.beginPath(); g.arc(sz / 2, baseY - wallH - sz * 0.03, sz * 0.09, 0, 7); g.fill();
+      g.fillStyle = "#5a4530"; g.beginPath(); g.arc(sz / 2, baseY - wallH - sz * 0.03, sz * 0.065, 0, 7); g.fill();
+    }
+    // Silo latéral (annexe), palier 3 uniquement : marque bien la grange "au complet"
+    if (level >= 3) {
+      const siloX = sz * 0.98, siloW = sz * 0.14, siloH = wallH * 1.5;
+      P(g, siloX, baseY - siloH, siloW, siloH, "#c8c8d0");
+      g.fillStyle = "#a8a8b2"; g.beginPath(); g.arc(siloX + siloW / 2, baseY - siloH, siloW / 2, Math.PI, 0); g.fill();
+      P(g, siloX, baseY - siloH * 0.4, siloW, 2, "#9a9aa4");
+    }
+    return c;
+  }
+
   /* ---------------- Atlas ---------------- */
   const S = {
     grass: [grassTile(0), grassTile(1), grassTile(2)],
@@ -507,6 +535,7 @@ export function buildSprites() {
     fenceCorner: fenceTileCorner(),
     fencePost: fenceTilePost(),
     wall: wallTile(),
+    barn: [barnSprite(1), barnSprite(2), barnSprite(3)],
     animals: [],
     products: [],
   };
@@ -515,7 +544,7 @@ export function buildSprites() {
     for (let s = 0; s < C.CROP_STAGES; s++) S.crops[t][s] = cropSprite(t, s);
   }
   for (const k of ["hoe", "can", "axe", "pick", "seeds", "wood", "stone", "food", "gold", "energy", "rod", "ready", "thirst", "herd"]) S.icons[k] = icon(k);
-  S.gemIcons = C.GEMS.map(gm => gemIcon(gm));
+  S.gemIcons = C.GEMS.map(gm => gemIcon(gm.color));
   S.fishIcons = C.FISH.map(fs => fishIcon(fs.color));
   S.animals = C.ANIMALS.map(a => animalSprite(a.id));
   S.products = C.ANIMALS.map(a => productIcon(a.id));

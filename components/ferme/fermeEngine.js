@@ -454,11 +454,6 @@ export function resolveAct(world, f, m) {
         f.inv.fish[ft] = (f.inv.fish[ft] || 0) + 1;
         res.fx.push({ k: "fish", x, y, fish: ft });
         res.invChanged = true;
-        // Un peu d'or trouvé dans la rivière, en plus du poisson (chance faible).
-        if (Math.random() < C.GOLD_FIND_CHANCE) {
-          res.gold = C.GOLD_FIND_MIN + Math.floor(Math.random() * (C.GOLD_FIND_MAX - C.GOLD_FIND_MIN + 1));
-          res.fx.push({ k: "goldfound", x, y, gold: res.gold });
-        }
       } else {
         res.toast = "needWater";
       }
@@ -504,6 +499,64 @@ export function resolveCoopDeposit(f, coop, m) {
   part.got += n;
   res.invChanged = true; res.deposited = n; res.resource = part.resource; res.partId = part.id;
   if (coop.parts.every(p => p.got >= p.target)) res.completed = true;
+  return res;
+}
+
+/* -------------------------------------------------------------------------
+   Grange collaborative persistante (zip 158, voir BARN_SITE/BARN_LEVELS
+   dans fermeConstants.js). État partagé minimal : { level, progress:
+   {wood,stone}, ready }. `level` 0..3 = paliers déjà construits (survit
+   entre les sessions, comme animals/horse/wellBuilt). `progress` accumule
+   les ressources vers le PROCHAIN palier (BARN_LEVELS[level]). `ready`
+   passe à true une fois le coût du palier atteint : il ne reste alors plus
+   qu'à réussir le mini-jeu de construction (voir FermeGame.js) pour valider
+   le palier.
+   ------------------------------------------------------------------------- */
+export function newBarnState() { return { level: 0, progress: { wood: 0, stone: 0 }, ready: false }; }
+
+// Capacité d'animaux effective compte tenu des paliers de grange déjà construits.
+export function barnAnimalCap(level) {
+  let cap = C.MAX_ANIMALS;
+  for (let i = 0; i < (level | 0) && i < C.BARN_LEVELS.length; i++) cap += C.BARN_LEVELS[i].animalBonus;
+  return cap;
+}
+
+// Dépôt de bois/pierre au chantier de la grange (même logique que
+// resolveCoopDeposit : dépose le maximum possible, déduit la ressource
+// depuis ce que porte le fermier). Ne fait rien si la grange est déjà au
+// niveau maximum ou si le palier en cours est déjà "prêt" (il ne manque
+// plus que le mini-jeu, pas de ressources).
+export function resolveBarnDeposit(f, barn, m) {
+  normalizeFarmer(f);
+  const res = { invChanged: false, toast: null, deposited: 0, resource: null, becameReady: false };
+  if (!barn || barn.level >= C.BARN_LEVELS.length) { res.toast = "barnMax"; return res; }
+  if (!nearT(f, C.BARN_SITE)) { res.toast = "farBarn"; return res; }
+  if (barn.ready) { res.toast = "barnReady"; return res; }
+  const def = C.BARN_LEVELS[barn.level];
+  let resource = null;
+  if (m.res && (barn.progress[m.res] || 0) < def.cost[m.res] && (f.inv[m.res] || 0) > 0) resource = m.res;
+  if (!resource) resource = ["wood", "stone"].find(r => (barn.progress[r] || 0) < def.cost[r] && (f.inv[r] || 0) > 0);
+  if (!resource) { res.toast = "coopNothing"; return res; }
+  const have = f.inv[resource] || 0, need = def.cost[resource] - (barn.progress[resource] || 0);
+  const n = Math.min(have, need);
+  if (n <= 0) { res.toast = "coopNothing"; return res; }
+  f.inv[resource] -= n; barn.progress[resource] = (barn.progress[resource] || 0) + n;
+  res.invChanged = true; res.deposited = n; res.resource = resource;
+  if (barn.progress.wood >= def.cost.wood && barn.progress.stone >= def.cost.stone) { barn.ready = true; res.becameReady = true; }
+  return res;
+}
+
+// Validation du palier après réussite du mini-jeu de construction (rythme,
+// joué côté client comme la pêche — voir BarnMinigame dans FermeGame.js).
+// Ne fait confiance qu'à `barn.ready` (déjà vérifié côté hôte via les
+// dépôts) : le client ne peut pas "inventer" un palier sans avoir réuni les
+// ressources, seul le résultat du mini-jeu (gagné/raté) est déclaratif —
+// même niveau de confiance que le minijeu de pêche existant.
+export function resolveBarnBuild(f, barn) {
+  const res = { built: false, level: barn ? barn.level : 0, toast: null };
+  if (!barn || !barn.ready) { res.toast = "barnNotReady"; return res; }
+  barn.level += 1; barn.ready = false; barn.progress = { wood: 0, stone: 0 };
+  res.built = true; res.level = barn.level;
   return res;
 }
 
