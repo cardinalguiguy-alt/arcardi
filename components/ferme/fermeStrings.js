@@ -125,7 +125,7 @@ export const FERME_STR = {
     // Grange collaborative persistante (zip 158)
     barnHudLine: (level, max, cap) => `Grange ${level}/${max} · ${cap} animaux max`,
     barnDeposited: (who, n, res) => `${who} apporte ${n} ${res} à la grange.`,
-    barnReadyChat: "🛖 La grange a assez de matériaux : approchez-vous et faites [E] pour construire !",
+    barnReadyChat: (money) => `🛖 La grange a assez de matériaux, ${money} or ont été prélevés dans la caisse commune : approchez-vous et faites [E] pour construire !`,
     barnBuilt: (who, level) => `🎉 ${who} a fait passer la grange au niveau ${level} !`,
     barnMiniFail: "Raté ! Reviens à la grange pour retenter.",
     barnMiniTitle: (level) => `🔨 Construction de la grange (palier ${level})`,
@@ -135,6 +135,7 @@ export const FERME_STR = {
     toastFarBarn: "Approche-toi de la grange pour déposer.",
     toastBarnReadyWait: "La grange est prête à être construite : appuie sur E pour lancer le mini-jeu.",
     toastBarnNotReady: "Il manque encore des matériaux avant de pouvoir construire.",
+    toastBarnNeedMoney: "Le bois et la pierre sont réunis, mais il manque de l'or dans la caisse commune pour lancer les travaux.",
     // Mission d'équipe (chantier collaboratif, v1)
     coopTitle: "🚧 Mission d'équipe",
     woodLabel: "bois",
@@ -319,7 +320,7 @@ export const FERME_STR = {
     // Persistent collaborative barn (zip 158)
     barnHudLine: (level, max, cap) => `Barn ${level}/${max} · ${cap} animals max`,
     barnDeposited: (who, n, res) => `${who} brings ${n} ${res} to the barn.`,
-    barnReadyChat: "🛖 The barn has enough materials: come over and press [E] to build!",
+    barnReadyChat: (money) => `🛖 The barn has enough materials, ${money} gold was taken from the shared pot: come over and press [E] to build!`,
     barnBuilt: (who, level) => `🎉 ${who} upgraded the barn to level ${level}!`,
     barnMiniFail: "Missed it! Come back to the barn to try again.",
     barnMiniTitle: (level) => `🔨 Building the barn (tier ${level})`,
@@ -329,6 +330,7 @@ export const FERME_STR = {
     toastFarBarn: "Get closer to the barn to deposit.",
     toastBarnReadyWait: "The barn is ready to be built: press E to start the mini-game.",
     toastBarnNotReady: "Still missing some materials before you can build.",
+    toastBarnNeedMoney: "Wood and stone are ready, but the shared pot doesn't have enough gold to start the work.",
     // Team mission (collaborative construction site, v1)
     coopTitle: "🚧 Team mission",
     woodLabel: "wood",

@@ -499,10 +499,16 @@ export function buildSprites() {
 
   // Grange collaborative (chantier persistant, zip 158) : 3 paliers, la
   // grange grandit et se complète visuellement à chaque palier construit.
-  // Même famille de dessin que house(), palette rouge/blanc "grange" plutôt
-  // que rouge tuile, taille croissante (48 / 72 / 96 px).
+  // Paliers 1/2 : même famille de dessin que house(), palette rouge/blanc
+  // "grange", taille croissante (48 / 72 px). Palier 3 (zip 161, demande
+  // explicite "bien plus grand que la maison" — la maison fait 96×96px) :
+  // dessin dédié, façade beaucoup plus large ET plus haute que la maison,
+  // avec silo attenant à taille réelle, cupole + girouette au faîtage,
+  // grande fenêtre ronde de fenil et soubassement en pierre — direction
+  // validée par Guillaume sur maquette avant implémentation.
   function barnSprite(level) {
-    const sz = level === 1 ? 48 : level === 2 ? 72 : 96;
+    if (level >= 3) return barnSpriteBig();
+    const sz = level === 1 ? 48 : 72;
     const [c, g] = cv(sz, sz + 8);
     const wallH = Math.round(sz * 0.42);
     const baseY = sz - 4;
@@ -520,18 +526,67 @@ export function buildSprites() {
     P(g, doorX - 2, doorY - 2, doorW + 4, doorH + 2, "#f0ead8");
     P(g, doorX, doorY, doorW / 2 - 1, doorH, "#7a5330");
     P(g, doorX + doorW / 2 + 1, doorY, doorW / 2 - 1, doorH, "#7a5330");
-    // Grande ouverture ronde sous le pignon (silo à foin), palier 2+
+    // Grande ouverture ronde sous le pignon (silo à foin), palier 2 uniquement
     if (level >= 2) {
       g.fillStyle = "#f0ead8"; g.beginPath(); g.arc(sz / 2, baseY - wallH - sz * 0.03, sz * 0.09, 0, 7); g.fill();
       g.fillStyle = "#5a4530"; g.beginPath(); g.arc(sz / 2, baseY - wallH - sz * 0.03, sz * 0.065, 0, 7); g.fill();
     }
-    // Silo latéral (annexe), palier 3 uniquement : marque bien la grange "au complet"
-    if (level >= 3) {
-      const siloX = sz * 0.98, siloW = sz * 0.14, siloH = wallH * 1.5;
-      P(g, siloX, baseY - siloH, siloW, siloH, "#c8c8d0");
-      g.fillStyle = "#a8a8b2"; g.beginPath(); g.arc(siloX + siloW / 2, baseY - siloH, siloW / 2, Math.PI, 0); g.fill();
-      P(g, siloX, baseY - siloH * 0.4, siloW, 2, "#9a9aa4");
-    }
+    return c;
+  }
+
+  // Palier 3 : dessin en coordonnées absolues (pas de mise à l'échelle d'un
+  // "sz" unique comme les paliers 1/2) pour garder le plein contrôle sur les
+  // proportions d'un bâtiment volontairement massif. Canevas 170×230px, à
+  // comparer aux 96×96px de la maison (house()) : la grange au palier 3 est
+  // donc PLUS DE 4 FOIS plus grande en surface. Budget vertical (du haut
+  // vers le bas) : pointe de girouette → cupole → faîtage principal → mur →
+  // fondations en pierre, tout aligné sur `baseY` (sol).
+  function barnSpriteBig() {
+    const W = 170, H = 230;
+    const [c, g] = cv(W, H);
+    const baseY = 221;
+    const cx = 75; // centre horizontal du corps principal (hors silo)
+
+    // Fondations en pierre : ancrent visuellement le bâtiment au sol.
+    P(g, 10, 213, 150, 8, "#8a8a92");
+    for (let x = 14; x < 156; x += 10) P(g, x, 213, 1, 8, "#78787f");
+
+    // Silo attenant, à taille réelle (pas un simple détail cosmétique).
+    P(g, 132, 100, 28, 113, "#c8c8d0");
+    for (let y = 106; y < 210; y += 8) P(g, 132, y, 28, 1, "#b6b6bd");
+    g.fillStyle = "#a8a8b2"; g.beginPath(); g.ellipse(146, 100, 14, 7, 0, 0, 7); g.fill();
+    P(g, 132, 150, 28, 3, "#9a9aa4");
+
+    // Mur principal.
+    P(g, 20, 123, 110, 90, "#a83c30");
+    for (let y = 129; y < 213; y += 7) P(g, 20, y, 110, 1, "#8a3028");
+    P(g, 20, 123, 110, 3, "#c04a3c");
+
+    // Toit à deux pans (faîtage principal).
+    g.fillStyle = "#5a4530";
+    g.beginPath(); g.moveTo(20, 123); g.lineTo(cx, 68); g.lineTo(130, 123); g.fill();
+    g.fillStyle = "#6a5238";
+    g.beginPath(); g.moveTo(28, 123); g.lineTo(cx, 78); g.lineTo(122, 123); g.fill();
+
+    // Grande fenêtre ronde de fenil, dans le pignon.
+    g.fillStyle = "#f0ead8"; g.beginPath(); g.arc(cx, 100, 14, 0, 7); g.fill();
+    g.fillStyle = "#5a4530"; g.beginPath(); g.arc(cx, 100, 9, 0, 7); g.fill();
+
+    // Cupole + girouette, au sommet du faîtage : c'est elle qui fait
+    // dépasser la grange bien au-delà de la hauteur de la maison.
+    P(g, 58, 42, 34, 26, "#f0ead8");
+    P(g, 62, 48, 4, 20, "#c8c0ac"); P(g, 104, 48, 4, 20, "#c8c0ac"); // colombages
+    g.fillStyle = "#a83c30";
+    g.beginPath(); g.moveTo(53, 42); g.lineTo(cx, 25); g.lineTo(97, 42); g.fill();
+    P(g, cx - 1, 12, 2, 13, "#5a4530");
+    g.fillStyle = "#5a4530";
+    g.beginPath(); g.moveTo(cx, 10); g.lineTo(cx + 12, 16); g.lineTo(cx, 22); g.fill(); // girouette
+
+    // Porte double, cadre blanc (signature "grange"), bien visible.
+    P(g, 58, 163, 34, 44, "#f0ead8");
+    P(g, 61, 166, 13, 38, "#7a5330");
+    P(g, 76, 166, 13, 38, "#7a5330");
+
     return c;
   }
 

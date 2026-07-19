@@ -243,12 +243,23 @@ export const COOP_MISSIONS = [
 // sur la carte et grandit. But annoncé par Guillaume : augmenter durablement
 // le nombre d'animaux possible. S'ajoute aux missions aléatoires existantes,
 // ne les remplace pas (elles continuent de se déclencher normalement).
-export const BARN_SITE = { x: 37, y: 44 };
+// Repositionnée au zip 161 à droite de l'enclos de départ (PEN, x:48-56) :
+// l'ancien emplacement (37,44) gênait la lisibilité près de la maison une
+// fois les lampadaires/chevaux du zip 160 ajoutés. Bien dégagée de la PEN
+// (marge de plusieurs tuiles) pour laisser la place au palier 3, bien plus
+// grand désormais (voir barnSprite() dans fermeArt.js) — generateWorld
+// dégage spécifiquement une zone assez large autour de ce point (sol forcé
+// en herbe + arbres/rochers retirés), voir fermeEngine.js.
+export const BARN_SITE = { x: 67, y: 41 };
 export const BARN_LEVELS = [
-  // Palier 1 : construction initiale (la grange n'existe pas avant).
-  { level: 1, cost: { wood: 150, stone: 100 }, hits: 6, animalBonus: 6 },
-  { level: 2, cost: { wood: 250, stone: 180 }, hits: 8, animalBonus: 6 },
-  { level: 3, cost: { wood: 400, stone: 300 }, hits: 10, animalBonus: 8 },
+  // Palier 1 : construction initiale (la grange n'existe pas avant). Coût en
+  // or ajouté au zip 161 (en plus du bois/pierre), demandé par Guillaume :
+  // il faut réunir une somme déterminée pour LANCER les travaux d'un palier,
+  // payée dès que le bois/la pierre du palier sont réunis (voir
+  // resolveBarnDeposit dans fermeEngine.js).
+  { level: 1, cost: { wood: 150, stone: 100, money: 10000 }, hits: 6, animalBonus: 6 },
+  { level: 2, cost: { wood: 250, stone: 180, money: 20000 }, hits: 8, animalBonus: 6 },
+  { level: 3, cost: { wood: 400, stone: 300, money: 50000 }, hits: 10, animalBonus: 8 },
 ];
 export const MAX_ANIMALS = 12;      // limite d'animaux dans l'enclos, avant toute grange
 export const COLLECT_RANGE = 1.5;   // distance pour ramasser une production

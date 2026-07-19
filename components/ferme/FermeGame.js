@@ -632,13 +632,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         dirtyRef.current = true;
       }
     } else if (req.kind === "barnDeposit") {
-      const r = E.resolveBarnDeposit(f, s.barn, req);
+      const r = E.resolveBarnDeposit(f, s.barn, req, s.money);
       if (r.invChanged) out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
       if (r.toast) out.toast = { id: f.id, key: r.toast };
       if (r.deposited > 0) {
         out.barn = s.barn;
         out.chat = { from: "🛖", msg: L.barnDeposited(f.name, r.deposited, r.resource === "wood" ? L.woodLabel : L.stoneLabel) };
-        if (r.becameReady) channelRef.current?.send({ type: "broadcast", event: "chat", payload: { from: "🛖", msg: L.barnReadyChat } });
+        dirtyRef.current = true;
+      }
+      if (r.becameReady) {
+        s.money -= r.moneySpent; out.state = shareState(); out.barn = s.barn;
+        channelRef.current?.send({ type: "broadcast", event: "chat", payload: { from: "🛖", msg: L.barnReadyChat(r.moneySpent) } });
         dirtyRef.current = true;
       }
     } else if (req.kind === "barnBuild") {
@@ -700,7 +704,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     pushToast(L.toastNewDay(p.day));
   }
   function toastMsg(key) {
-    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, actionFailed: L.toastActionFailed, coopNone: L.toastCoopNone, farCoop: L.toastFarCoop, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady }[key] || "";
+    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, actionFailed: L.toastActionFailed, coopNone: L.toastCoopNone, farCoop: L.toastFarCoop, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney }[key] || "";
   }
 
   // -------- Hôte : boucle temps + persistance --------
@@ -1067,29 +1071,38 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       draws.push({ y: (C.BIN.y + 1) * T, fn: () => ctx.drawImage(sprites.bin, C.BIN.x * T - 2, (C.BIN.y + 1) * T - 18) });
       // Grange collaborative persistante : sprite réel dès le palier 1 (elle
       // survit d'une session à l'autre), simple marqueur de chantier tant
-      // qu'aucun palier n'est encore construit (niveau 0).
+      // qu'aucun palier n'est encore construit (niveau 0). Jauges (bois,
+      // pierre, or) placées au-dessus du bâtiment ; leur position tient
+      // compte de la vraie hauteur du sprite (le palier 3, bien plus grand
+      // que la maison depuis le zip 161, a besoin de bien plus de recul).
       if (sharedRef.current.barn) {
         const bs = C.BARN_SITE, barnNow = sharedRef.current.barn;
         const def = C.BARN_LEVELS[barnNow.level]; // palier EN COURS de collecte (undefined si déjà au max)
         draws.push({ y: (bs.y + 1) * T, fn: () => {
+          let sprH = 0;
           if (barnNow.level >= 1 && spritesRef.current && spritesRef.current.barn) {
             const spr = spritesRef.current.barn[barnNow.level - 1];
+            sprH = spr.height;
             ctx.drawImage(spr, bs.x * T - spr.width / 2 + 8, (bs.y + 1) * T - spr.height + 4);
           } else {
             ctx.font = "14px monospace"; ctx.textAlign = "center";
             ctx.fillText("🛖", bs.x * T + 8, bs.y * T + 4 + Math.sin(now / 300) * 1.5);
           }
           if (def) {
-            const barW = 22, bx = bs.x * T + 8 - barW / 2, topY = bs.y * T - (barnNow.level >= 1 ? 14 : 6);
+            const barW = 26, bx = bs.x * T + 8 - barW / 2;
+            const topY = sprH ? (bs.y + 1) * T - sprH + 4 - 14 : bs.y * T - 6;
             if (barnNow.ready) {
-              ctx.font = "12px monospace"; ctx.textAlign = "center";
+              ctx.font = "13px monospace"; ctx.textAlign = "center";
               ctx.fillText("🔨", bs.x * T + 8, topY);
             } else {
-              ["wood", "stone"].forEach((r, ri) => {
-                const got = barnNow.progress[r] || 0, frac = Math.max(0, Math.min(1, got / def.cost[r]));
-                const by = topY + ri * 5;
+              const resourcesDone = barnNow.progress.wood >= def.cost.wood && barnNow.progress.stone >= def.cost.stone;
+              const rows = resourcesDone ? ["money"] : ["wood", "stone", "money"];
+              rows.forEach((r, ri) => {
+                const got = r === "money" ? sharedRef.current.money : (barnNow.progress[r] || 0);
+                const frac = Math.max(0, Math.min(1, got / def.cost[r]));
+                const by = topY - (rows.length - 1 - ri) * 5;
                 ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(bx, by, barW, 3);
-                ctx.fillStyle = r === "wood" ? "#a9773f" : "#9aa0a8";
+                ctx.fillStyle = r === "wood" ? "#a9773f" : r === "stone" ? "#9aa0a8" : "#e8b830";
                 ctx.fillRect(bx, by, barW * frac, 3);
               });
             }

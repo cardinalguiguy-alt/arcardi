@@ -93,6 +93,19 @@ export function generateWorld(seed) {
       const o = objects[idx(x, y)];
       if (o === C.O_TREE || o === C.O_TREE2 || o === C.O_ROCK) { objects[idx(x, y)] = C.O_NONE; objHp.delete(idx(x, y)); }
     }
+  // Dégager aussi l'emplacement (fixe) de la grange, à droite de l'enclos de
+  // départ (zip 161) : sol forcé en herbe (au cas où la rivière serpenterait
+  // par là) et arbres/rochers retirés, sur une zone assez large pour
+  // accueillir le palier 3 (le plus grand bâtiment du jeu, voir
+  // barnSprite() dans fermeArt.js).
+  for (let y = C.BARN_SITE.y - 15; y < C.BARN_SITE.y + 5; y++)
+    for (let x = C.BARN_SITE.x - 10; x < C.BARN_SITE.x + 10; x++) {
+      if (!inMap(x, y)) continue;
+      const i = idx(x, y);
+      ground[i] = C.G_GRASS;
+      const o = objects[i];
+      if (o === C.O_TREE || o === C.O_TREE2 || o === C.O_ROCK) { objects[i] = C.O_NONE; objHp.delete(i); }
+    }
 
   // Enclos de départ : construit avec de VRAIES sections de clôture (comme
   // celles posées librement par les joueurs), plutôt qu'un simple décor sans
@@ -528,9 +541,10 @@ export function resolveCoopDeposit(f, coop, m) {
    {wood,stone}, ready }. `level` 0..3 = paliers déjà construits (survit
    entre les sessions, comme animals/horse/wellBuilt). `progress` accumule
    les ressources vers le PROCHAIN palier (BARN_LEVELS[level]). `ready`
-   passe à true une fois le coût du palier atteint : il ne reste alors plus
-   qu'à réussir le mini-jeu de construction (voir FermeGame.js) pour valider
-   le palier.
+   passe à true une fois le bois/la pierre ET l'or du palier réunis (or
+   ajouté au zip 161, payé depuis la caisse commune dès que le bois/la
+   pierre sont au complet) : il ne reste alors plus qu'à réussir le mini-jeu
+   de construction (voir FermeGame.js) pour valider le palier.
    ------------------------------------------------------------------------- */
 export function newBarnState() { return { level: 0, progress: { wood: 0, stone: 0 }, ready: false }; }
 
@@ -545,14 +559,29 @@ export function barnAnimalCap(level) {
 // resolveCoopDeposit : dépose le maximum possible, déduit la ressource
 // depuis ce que porte le fermier). Ne fait rien si la grange est déjà au
 // niveau maximum ou si le palier en cours est déjà "prêt" (il ne manque
-// plus que le mini-jeu, pas de ressources).
-export function resolveBarnDeposit(f, barn, m) {
+// plus que le mini-jeu, pas de ressources/argent).
+// `money` = caisse commune actuelle (lecture seule, fournie par l'appelant
+// hôte, voir FermeGame.js) : une fois bois/pierre au complet, il faut AUSSI
+// que la caisse contienne `def.cost.money` pour que la grange devienne
+// "prête" ; l'or est alors déduit par l'APPELANT (res.moneySpent > 0), pas
+// ici, pour garder cette fonction cohérente avec le reste du moteur (jamais
+// de mutation directe de `s.money`, toujours via shareState() côté hôte).
+export function resolveBarnDeposit(f, barn, m, money) {
   normalizeFarmer(f);
-  const res = { invChanged: false, toast: null, deposited: 0, resource: null, becameReady: false };
+  const res = { invChanged: false, toast: null, deposited: 0, resource: null, becameReady: false, moneySpent: 0 };
   if (!barn || barn.level >= C.BARN_LEVELS.length) { res.toast = "barnMax"; return res; }
   if (!nearT(f, C.BARN_SITE)) { res.toast = "farBarn"; return res; }
   if (barn.ready) { res.toast = "barnReady"; return res; }
   const def = C.BARN_LEVELS[barn.level];
+  const resourcesDone = barn.progress.wood >= def.cost.wood && barn.progress.stone >= def.cost.stone;
+  if (resourcesDone) {
+    // Il ne manque plus que l'or : pas de bois/pierre à déposer ici, on se
+    // contente de vérifier la caisse commune (permet de revenir réessayer
+    // après avoir vendu de quoi compléter la somme, sans rien reporter).
+    if ((money || 0) < def.cost.money) { res.toast = "barnNeedMoney"; return res; }
+    barn.ready = true; res.becameReady = true; res.moneySpent = def.cost.money;
+    return res;
+  }
   let resource = null;
   if (m.res && (barn.progress[m.res] || 0) < def.cost[m.res] && (f.inv[m.res] || 0) > 0) resource = m.res;
   if (!resource) resource = ["wood", "stone"].find(r => (barn.progress[r] || 0) < def.cost[r] && (f.inv[r] || 0) > 0);
@@ -562,7 +591,14 @@ export function resolveBarnDeposit(f, barn, m) {
   if (n <= 0) { res.toast = "coopNothing"; return res; }
   f.inv[resource] -= n; barn.progress[resource] = (barn.progress[resource] || 0) + n;
   res.invChanged = true; res.deposited = n; res.resource = resource;
-  if (barn.progress.wood >= def.cost.wood && barn.progress.stone >= def.cost.stone) { barn.ready = true; res.becameReady = true; }
+  if (barn.progress.wood >= def.cost.wood && barn.progress.stone >= def.cost.stone) {
+    // Les ressources viennent de se compléter avec CE dépôt : on tente
+    // directement le paiement, pour ne pas obliger un aller-retour inutile
+    // si la caisse commune a déjà assez d'or. Sinon, un toast dédié prévient
+    // (en plus du message de dépôt) qu'il ne manque plus que l'argent.
+    if ((money || 0) >= def.cost.money) { barn.ready = true; res.becameReady = true; res.moneySpent = def.cost.money; }
+    else res.toast = "barnNeedMoney";
+  }
   return res;
 }
 
