@@ -585,6 +585,27 @@ export const FERTILIZER_COST = 150;                 // prix d'achat en or, à l'
 export const FERTILIZER_RESTOCK_EVERY_N_DAYS = 2;   // cycle de réapparition dans le shop
 export const FERTILIZER_SHOP_STOCK = 3;             // unités remises en stock à chaque réapparition
 
+// --- Soan, l'employé pêcheur (chantier 2026-07, demande Guillaume : "ajouter
+// un employé chargé d'aller pêcher du poisson quand je lui en donne l'ordre").
+// Même modèle que Greg ci-dessus (engageable au shop, rôdaille permanente
+// autour de son ancre tant qu'il n'a pas de tâche, état persistant unique
+// `sharedRef.current.soan`), avec deux différences volontaires :
+// - Contrat réel de SOAN_CONTRACT_MS = 24h (pas 2 jours comme Greg).
+// - Pas d'ordre "sur N cases" façon gregOrder : un seul ordre possible
+//   ("soanOrder"), qui l'envoie au bord de la rivière le plus proche de son
+//   ancre (findRiverbankTile, fermeEngine.js — même principe de recherche en
+//   anneaux que findClearableTiles) où il pêche ensuite EN CONTINU (peut y
+//   rester toute la journée) jusqu'à un nouvel ordre ou l'expiration du
+//   contrat, plutôt qu'une tâche qui se termine après N unités.
+export const SOAN_HIRE_COST = 400;                  // même prix que Greg (aucun élément ne les distingue économiquement)
+export const SOAN_CONTRACT_MS = 24 * 60 * 60 * 1000; // 24h réelles (demande explicite de Guillaume, contrairement aux 2 jours de Greg)
+export const SOAN_SPEED = 3.2;                      // identique à GREG_SPEED
+export const SOAN_ROAM_RADIUS = 6;                  // rôdaille autour de son ancre tant qu'il n'a pas reçu d'ordre
+export const SOAN_ANCHOR = { x: 60, y: 58 };        // ancre de rôdaille, entre la maison (x=40) et la rivière (x~70-120 selon la seed)
+export const SOAN_TASK_RANGE = 0.6;                 // distance d'arrivée avant de pêcher, identique à GREG_TASK_RANGE
+export const SOAN_RIVER_SEARCH_RADIUS = 60;         // rayon de recherche d'une berge (findRiverbankTile) autour de SOAN_ANCHOR — large car la rivière est sinueuse et sa position dépend de la seed
+export const SOAN_FISH_INTERVAL_MS = 8 * 60 * 1000; // fréquence à laquelle Soan attrape un poisson une fois posté à la rivière (8 min réelles, extrapolé : pas de mini-jeu pour un PNJ, contrairement au joueur)
+
 // --- Lapins (chantier 2026-07, demande Guillaume : "ajouter des petits
 // lapins bien détaillés qui fuient et sont inoffensifs, surtout rive
 // droite"). Contrairement aux loups : présents de JOUR COMME DE NUIT (juste

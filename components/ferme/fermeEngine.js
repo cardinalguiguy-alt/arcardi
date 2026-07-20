@@ -1016,6 +1016,43 @@ export function gregAutoWaterAll(world, now) {
 }
 
 /* -------------------------------------------------------------------------
+   Soan, l'employé pêcheur (chantier 2026-07, demande Guillaume). Fonctions
+   pures, mêmes principes que le bloc Greg ci-dessus.
+   ------------------------------------------------------------------------- */
+
+// Cherche la berge (case G_SAND, sans objet dessus) la plus proche de
+// `anchor` en anneaux croissants, jusqu'à C.SOAN_RIVER_SEARCH_RADIUS — même
+// principe de recherche en spirale que findClearableTiles/findFreeGrassTiles.
+// La rivière étant sinueuse et sa position dérivée de la seed (voir
+// generateWorld), on ne peut pas viser un point fixe : on part d'une ancre
+// côté maison et on cherche la berge la plus proche.
+export function findRiverbankTile(world, anchor) {
+  const seen = new Set();
+  for (let r = 0; r < C.SOAN_RIVER_SEARCH_RADIUS; r++) {
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue; // seulement l'anneau
+        const x = anchor.x + dx, y = anchor.y + dy;
+        if (!inMap(x, y)) continue;
+        const i = idx(x, y);
+        if (seen.has(i)) continue;
+        seen.add(i);
+        if (world.ground[i] === C.G_SAND && world.objects[i] === C.O_NONE) return i;
+      }
+    }
+  }
+  return null;
+}
+
+// Une prise de Soan une fois posté à la rivière : tirage pondéré identique
+// au joueur (voir resolveAct cas "fish", fallback `weightedPick(C.FISH)`
+// quand aucun minijeu ne tranche — Soan n'en a pas). Renvoie l'index dans
+// C.FISH.
+export function soanCatchFish(rnd) {
+  return weightedPick(C.FISH, rnd);
+}
+
+/* -------------------------------------------------------------------------
    Missions collaboratives (v1 "grandes lignes", voir COOP_MISSIONS/COOP_SITE
    dans fermeConstants.js). État partagé minimal : { id, parts:[{id,resource,
    target,got}] }, tiré au hasard parmi COOP_MISSIONS, régénéré une fois
