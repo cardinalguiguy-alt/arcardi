@@ -515,8 +515,8 @@ export const HEAL_RANGE = 2.5;               // distance max (tuiles) pour soign
 // même esprit que les loups (voir updateRabbits dans FermeGame.js).
 export const RABBIT_COUNT_DAY = 10;        // population cible de jour
 export const RABBIT_COUNT_NIGHT = 3;       // population cible de nuit (plus discrets)
-export const RABBIT_SPEED_SLOW = 0.9;      // rôde tranquillement
-export const RABBIT_SPEED_FLEE = 3.2;      // fuite une fois repéré (plus rapide qu'un fermier)
+export const RABBIT_SPEED_SLOW = 0.9;      // rôde tranquillement (inchangé)
+export const RABBIT_SPEED_FLEE = 4.6;      // fuite une fois repéré (relevé 2026-07, nettement plus rapide qu'un fermier)
 export const RABBIT_ROAM_RADIUS = 5;       // amplitude de rôdaille autour de son point d'ancrage
 export const RABBIT_FLEE_RANGE = 3;        // distance en dessous de laquelle un lapin risque d'être repéré
 export const RABBIT_FLEE_COOLDOWN_MS = 3500; // durée d'une fuite avant de reprendre son activité
@@ -526,6 +526,7 @@ export const RABBIT_CATCH_RANGE = ANIMAL_PICK_RANGE; // même portée que l'outi
 export const RABBIT_MIN_HOUSE_DIST = 35;   // distance min. à la maison pour apparaître ("zones éloignées de la maison")
 export const RABBIT_EAST_BIAS = 0.8;       // proba. de favoriser la rive droite à l'apparition ("surtout rive droite")
 export const RABBIT_RESPAWN_MS = 7000;     // délai minimum entre deux réapparitions (repop progressif, pas instantané)
+export const RABBIT_FLEE_HOP_PX = 5;       // amplitude (pixels) du bond visuel en fuite (demande 2026-07, roam inchangé)
 
 // --- Torche (chantier 2026-07) : objet équipable (bouton dédié, comme le
 // sifflet à chevaux), pas un slot d'outil numéroté. Éclaire comme un

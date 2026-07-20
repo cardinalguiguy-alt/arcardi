@@ -2197,7 +2197,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         draws.push({ y: (rb.y + 1) * T, fn: () => {
           const frame = rb.state === "stop" ? 0 : Math.floor((rb.animT || 0) % 3);
           const img = sprites.rabbit[frame];
-          const px = Math.round(rb.x * T - 8), py = Math.round(rb.y * T - 7);
+          const px = Math.round(rb.x * T - 8);
+          // Bond visuel uniquement EN FUITE (rb.state === "run", jamais en
+          // roam/stop — demande 2026-07 : "les changer pas dans leur état
+          // normal, mais qu'ils aient l'air de sautiller en fuite"). Arc
+          // simple dérivé du même animT que le cycle de frames, donc
+          // toujours en phase avec l'anim des pattes.
+          const hop = rb.state === "run" ? Math.abs(Math.sin((rb.animT || 0) * Math.PI)) * C.RABBIT_FLEE_HOP_PX : 0;
+          const py = Math.round(rb.y * T - 7 - hop);
           if (rb.dir === 2) { ctx.save(); ctx.translate(px + 16, py); ctx.scale(-1, 1); ctx.drawImage(img, 0, 0); ctx.restore(); }
           else ctx.drawImage(img, px, py);
         } });
