@@ -555,12 +555,22 @@ export const HEAL_RANGE = 2.5;               // distance max (tuiles) pour soign
 // FermeGame.js) vaut soit `null` (pas engagé), soit un objet d'état.
 export const GREG_HIRE_COST = 400;                 // prix d'engagement (extrapolé, entre le puits et un cheval)
 export const GREG_CONTRACT_MS = 2 * 24 * 60 * 60 * 1000; // durée réelle du contrat : 2 jours réels rémunérés
-export const GREG_WATER_INTERVAL_MS = 10 * H;      // arrosage automatique de TOUTES les cultures, toutes les 10h réelles
+export const GREG_WATER_INTERVAL_MS = 10 * H;      // vérification (arrosage des cultures qui en ont besoin), toutes les 10h réelles
 export const GREG_SPEED = 3.2;                     // tuiles/seconde, un peu plus lent qu'un fermier (5.2)
 export const GREG_ROAM_RADIUS = 6;                 // amplitude de rôdaille autour de son ancre (même principe que WOLF_ROAM_RADIUS)
 export const GREG_ANCHOR = { x: 26, y: 58 };        // point d'ancrage (rôdaille + tuiles de dépôt), au bord des champs ouest (puits)
 export const GREG_TASK_RANGE = 0.6;                // distance d'arrivée sur une case de tâche avant de l'exécuter
 export const GREG_ORDER_MAX = 60;                  // nombre max de cases par ordre (garde-fou anti-abus)
+// Extension du champ (chantier 2026-07) : Greg abat les arbres et casse les
+// rochers trouvés autour de son ancre pour agrandir la zone cultivable, sans
+// qu'un ordre explicite soit nécessaire — même esprit que l'arrosage auto.
+// Niveau d'outil fixe (Greg n'a pas d'inventaire d'outils à améliorer) :
+// équivalent hache/pioche niveau 1, comme un fermier qui n'a rien acheté.
+export const GREG_AXE_LVL = 1;
+export const GREG_PICK_LVL = 1;
+export const GREG_CLEAR_RADIUS = 12;               // rayon de recherche d'arbres/rochers à dégager (plus large que GREG_ROAM_RADIUS : "étendre" le champ, pas juste l'entretenir)
+export const GREG_CLEAR_BATCH = 3;                 // nb d'obstacles mis en file par passage de scan
+export const GREG_CLEAR_CHECK_MS = 5 * 60 * 1000;  // fréquence de scan (5 min réelles) quand Greg n'a plus de tâche en attente
 
 // --- Lapins (chantier 2026-07, demande Guillaume : "ajouter des petits
 // lapins bien détaillés qui fuient et sont inoffensifs, surtout rive

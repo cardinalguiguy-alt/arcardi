@@ -835,6 +835,73 @@ export function resolveAct(world, f, m) {
 }
 
 /* -------------------------------------------------------------------------
+   Extension du champ par Greg (chantier 2026-07) : abattage d'arbres et
+   minage de rochers, mêmes règles de dégâts que le joueur (resolveAct
+   "chop"/"mine") mais à un niveau d'outil fixe (GREG_AXE_LVL/GREG_PICK_LVL),
+   et le bois/pierre obtenus vont dans le stock COMMUN de la ferme
+   (sharedRef.current.gregStock côté FermeGame.js), jamais dans l'inventaire
+   d'un joueur en particulier.
+   ------------------------------------------------------------------------- */
+
+// Cherche jusqu'à `count` arbres/rochers (O_TREE/O_TREE2/O_STUMP/O_ROCK) en
+// anneaux croissants autour de `anchor`, jusqu'à C.GREG_CLEAR_RADIUS — même
+// principe de recherche en spirale que findFreeGrassTiles.
+export function findClearableTiles(world, anchor, count) {
+  const out = [];
+  const seen = new Set();
+  for (let r = 0; r < C.GREG_CLEAR_RADIUS && out.length < count; r++) {
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue; // seulement l'anneau
+        const x = anchor.x + dx, y = anchor.y + dy;
+        if (!inMap(x, y)) continue;
+        const i = idx(x, y);
+        if (seen.has(i)) continue;
+        seen.add(i);
+        const o = world.objects[i];
+        if (o === C.O_TREE || o === C.O_TREE2 || o === C.O_STUMP || o === C.O_ROCK) {
+          out.push(i);
+          if (out.length >= count) return out;
+        }
+      }
+    }
+  }
+  return out;
+}
+
+// Abattage d'une case par Greg (identique à resolveAct "chop", sans énergie
+// ni outil de joueur). `done` ne devient vrai que quand la case est
+// entièrement dégagée (arbre -> souche -> rien) : l'appelant garde la même
+// tâche en tête de file tant que `done` est faux.
+export function gregChop(world, i) {
+  const o = world.objects[i];
+  if (o !== C.O_TREE && o !== C.O_TREE2 && o !== C.O_STUMP) return { done: true, wood: 0 };
+  const hp = (world.objHp.get(i) || 1) - C.GREG_AXE_LVL;
+  let wood = 0;
+  if (hp <= 0) {
+    if (o === C.O_STUMP) { world.objects[i] = C.O_NONE; world.objHp.delete(i); wood = toolYield(2, C.GREG_AXE_LVL); }
+    else { world.objects[i] = C.O_STUMP; world.objHp.set(i, 2); wood = toolYield(C.TREE_WOOD, C.GREG_AXE_LVL); }
+  } else world.objHp.set(i, hp);
+  return { done: world.objects[i] === C.O_NONE, wood };
+}
+
+// Minage d'une case par Greg (identique à resolveAct "mine", sans énergie ni
+// outil de joueur ; pas de gemme — chance réservée aux joueurs, cf.
+// resolveAct "mine").
+export function gregMine(world, i) {
+  const o = world.objects[i];
+  if (o !== C.O_ROCK) return { done: true, stone: 0 };
+  const hp = (world.objHp.get(i) || 1) - C.GREG_PICK_LVL;
+  let stone = 0, done = false;
+  if (hp <= 0) {
+    world.objects[i] = C.O_NONE; world.objHp.delete(i);
+    stone = toolYield(C.ROCK_STONE, C.GREG_PICK_LVL);
+    done = true;
+  } else world.objHp.set(i, hp);
+  return { done, stone };
+}
+
+/* -------------------------------------------------------------------------
    Greg, l'employé de champs de base (chantier 2026-07). Fonctions pures de
    mutation du monde, appelées uniquement côté hôte (FermeGame.js/updateGreg
    et hostHandleReqUnsafe), sans passer par un `farmer` (Greg n'a ni énergie
@@ -892,12 +959,17 @@ export function gregWater(world, i, now) {
   return false;
 }
 
-// Arrosage automatique périodique (toutes les GREG_WATER_INTERVAL_MS) : TOUT
-// le champ d'un coup, comme demandé ("arrosera automatiquement toutes les
-// dix heures"). Renvoie la liste des indices effectivement arrosés.
+// Arrosage automatique périodique (vérifié toutes les GREG_WATER_INTERVAL_MS) :
+// Greg détecte les cultures qui ONT BESOIN d'être arrosées (cropGrowState().needsWater,
+// i.e. pas mûres et dernier arrosage expiré depuis WATER_VALID_MS) et n'arrose que
+// celles-ci — pas tout le champ d'un coup. Renvoie la liste des indices arrosés.
 export function gregAutoWaterAll(world, now) {
   const out = [];
-  for (const [i, c] of world.crops) { c.bankedMs = cropGrowState(c, now).grown; c.wateredAt = now; out.push(i); }
+  for (const [i, c] of world.crops) {
+    const gs = cropGrowState(c, now);
+    if (!gs.needsWater) continue;
+    c.bankedMs = gs.grown; c.wateredAt = now; out.push(i);
+  }
   return out;
 }
 
