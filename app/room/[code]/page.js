@@ -129,6 +129,33 @@ export default function Room() {
   const presenceChRef = useRef(null);
   const readingRulesRef = useRef(false);
   const [hostGone, setHostGone] = useState(false);
+  // Rejoindre la ferme librement, y compris pour l'HÔTE (demande 2026-07,
+  // révisée) : Ferme Vallée est un monde partagé PERSISTANT (sauvegardé
+  // dans ferme_saves, hors rooms.game_state) et HOST-AUTHORITATIVE (l'hôte
+  // simule le monde et répond aux requêtes des autres joueurs — voir
+  // FermeGame.js). Deux besoins distincts couverts par le même instantané
+  // `fermeAway` (current_game/launch_at/stage_launch_at) :
+  // 1. Un INVITÉ qui clique "Retour au salon" (🏠) DEPUIS la ferme ne
+  //    touche jamais `rooms` en base (voir handleGameFinish) : ça ne fait
+  //    que ramener CET invité à SA vue lobby locale. Sans instantané, il
+  //    restait bloqué sur "En attente que l'hôte…" jusqu'à ce que l'hôte
+  //    relance une partie pour tout le monde — inutile, la ferme continue.
+  // 2. L'HÔTE lui-même, en revenant au salon (🎪 ou "Quitter" dans la
+  //    ferme), NE DOIT PLUS forcer tout le monde à quitter : seul un vrai
+  //    "📣 Rassembler tout le monde" (gatherFerme) le fait désormais. Le
+  //    problème est que l'hôte, contrairement à un invité, EST le monde :
+  //    démonter son FermeGame arrêterait la simulation pour tout le monde.
+  //    Solution : dès que l'hôte quitte la vue, on garde une instance
+  //    CACHÉE (display:none) de FermeGame montée en arrière-plan — voir
+  //    plus bas, juste avant </RoomChat> — tant que `fermeAway` est
+  //    renseigné ; la simulation continue exactement comme si de rien
+  //    n'était, seule la vue de l'hôte a changé.
+  // Dans les deux cas, un bouton dédié ("🌾 Rejoindre la ferme") restaure
+  // l'instantané d'un clic (rejoinFerme), sans dépendre du round-trip
+  // Realtime. Effacé dès qu'un VRAI changement de `rooms` arrive (voir
+  // l'abonnement Realtime plus haut) ou dès que "Rassembler tout le monde"
+  // est utilisé (l'état serveur fait alors autorité de nouveau).
+  const [fermeAway, setFermeAway] = useState(null);
   // Garde anti-double-appel pour la succession automatique de l'hôte
   // (point 5) : un seul essai par période "hôte disparu" détectée.
   const hostSuccessionRef = useRef(false);
@@ -206,7 +233,7 @@ export default function Room() {
       roomSub = supabase
         .channel("r_" + roomRow.id)
         .on("postgres_changes", { event: "UPDATE", schema: "public", table: "rooms", filter: `id=eq.${roomRow.id}` },
-          payload => setRoom(payload.new))
+          payload => { setRoom(payload.new); setFermeAway(null); })
         .subscribe();
     })();
 
@@ -435,10 +462,31 @@ export default function Room() {
   // volontairement différente depuis la demande 2026-07 (ne quitte jamais
   // la scène).
   async function backToLobby() {
+    // Ferme Vallée (demande 2026-07, révisée) : "Retour au salon" ne doit
+    // PLUS entraîner tout le monde automatiquement quand c'est l'HÔTE qui
+    // quitte la ferme — seul "📣 Rassembler tout le monde" (gatherFerme,
+    // plus bas) le fait désormais. On délègue donc au même chemin local
+    // que pour un invité (handleGameFinish), qui garde en plus une
+    // instance cachée de la ferme active en arrière-plan pour l'hôte (voir
+    // le commentaire de `fermeAway` plus haut). Comportement INCHANGÉ pour
+    // les 21 autres jeux : reset global classique, comme avant.
+    if (room?.current_game === "ferme") { handleGameFinish(); return; }
     await resetRoomToLobby(room.id);
     // Mise à jour locale immédiate : ne dépend pas du round-trip Realtime,
     // donc fonctionne même si la réplication Postgres sur `rooms` a du
     // retard (l'hôte voit l'effet de son propre clic tout de suite).
+    setRoom(r => (r ? { ...r, status: "lobby", current_game: null, game_state: null } : r));
+  }
+
+  // "📣 Rassembler tout le monde" (demande 2026-07) : LA seule action qui
+  // referme réellement Ferme Vallée pour tout le monde — écrit `rooms` en
+  // base (comme l'ancien backToLobby), ce qui ramène tous les invités au
+  // salon via Realtime (leur `fermeAway` est effacé au passage, voir
+  // l'abonnement plus haut) et arrête l'instance cachée de l'hôte.
+  async function gatherFerme() {
+    if (!isHost || room?.current_game !== "ferme") return;
+    setFermeAway(null);
+    await resetRoomToLobby(room.id);
     setRoom(r => (r ? { ...r, status: "lobby", current_game: null, game_state: null } : r));
   }
 
@@ -537,7 +585,30 @@ export default function Room() {
   // ne faisait STRICTEMENT rien, d'où le bouton qui semblait "sans effet"
   // même quand la mise à jour Supabase avait réussi.
   function handleGameFinish() {
-    setRoom(r => (r ? { ...r, status: "lobby", current_game: null, game_state: null } : r));
+    setRoom(r => {
+      if (r && r.status === "playing" && r.current_game === "ferme") {
+        // Instantané pris pour TOUT joueur qui quitte la vue ferme (hôte
+        // compris depuis la révision 2026-07) — voir le commentaire de
+        // `fermeAway` plus haut pour le détail des deux usages (invité vs
+        // hôte).
+        setFermeAway({ current_game: r.current_game, launch_at: r.launch_at, stage_launch_at: r.stage_launch_at });
+      }
+      return r ? { ...r, status: "lobby", current_game: null, game_state: null } : r;
+    });
+  }
+
+  // Rejoindre la ferme d'un clic (demande 2026-07) : restaure localement
+  // l'instantané pris juste avant le retour au salon — aucune écriture
+  // Supabase nécessaire. Pour un invité, la ferme n'a jamais quitté son
+  // état "playing" côté hôte/serveur. Pour l'hôte lui-même, c'est
+  // l'instance cachée (voir plus bas, avant </RoomChat>) qui a continué de
+  // la simuler pendant son absence : ce clic ne fait que remonter la vue
+  // visible.
+  function rejoinFerme() {
+    if (!fermeAway) return;
+    const snap = fermeAway;
+    setFermeAway(null);
+    setRoom(r => (r ? { ...r, status: "playing", current_game: snap.current_game, launch_at: snap.launch_at, stage_launch_at: snap.stage_launch_at } : r));
   }
 
   // Clic sur le logo ARCARDI (en haut à gauche) :
@@ -786,10 +857,15 @@ export default function Room() {
             tous les joueurs et ramène TOUT LE MONDE à l'écran de lancement
             du jeu (porte/rideau fermé, bouton "Jouer") — jamais jusqu'au
             salon de sélection (voir confirmEndGame plus haut).
-          - "Retour au salon" (hôte SEUL, 🎪) : ELLE, à l'inverse, quitte
-            réellement la scène et ramène tout le monde au salon de
-            sélection de jeu — même action que backToLobby (logo ARCARDI),
-            simplement accessible sans repasser par la fin de partie.
+          - "Retour au salon" (hôte SEUL, 🎪) : ramène l'hôte au salon de
+            sélection de jeu — même action que backToLobby (logo ARCARDI).
+            Pour Ferme Vallée (demande 2026-07, révisée) : ne ramène QUE
+            l'hôte, la ferme continue de tourner pour les autres (voir
+            backToLobby/fermeAway) ; pour les 21 autres jeux, comportement
+            inchangé, ramène tout le monde.
+          - "📣 Rassembler tout le monde" (hôte SEUL, Ferme Vallée
+            uniquement, demande 2026-07) : LA seule action qui referme
+            réellement la ferme pour tout le monde (voir gatherFerme).
           - Mode agrandi (tout le monde) : masque l'en-tête et les vignettes
             pour donner toute la hauteur au jeu (voir body.stage-focus). */}
       {playing && (
@@ -806,6 +882,18 @@ export default function Room() {
                 <rect x="5" y="5" width="14" height="14" rx="2.5" />
               </svg>
               <span className="back-room-label">{t("endGameShort")}</span>
+            </button>
+          )}
+          {isHost && room.current_game === "ferme" && (
+            <button
+              className="back-room-fab"
+              onClick={gatherFerme}
+              title={t("gatherFermeTooltip")}
+              aria-label={t("gatherFermeShort")}
+              style={meta ? { borderColor: `var(${meta.accent})` } : undefined}
+            >
+              <span className="back-room-icon" aria-hidden="true">📣</span>
+              <span className="back-room-label">{t("gatherFermeShort")}</span>
             </button>
           )}
           {isHost && (
@@ -1075,7 +1163,25 @@ export default function Room() {
               </div>
             )}
 
-            {isHost ? (
+            {isHost && fermeAway ? (
+              // L'hôte est revenu au salon SANS faire quitter tout le
+              // monde (demande 2026-07, révisée) : la ferme continue de
+              // tourner en arrière-plan (instance cachée, voir plus bas
+              // avant </RoomChat>). On masque donc le sélecteur de jeu
+              // habituel (lancer un AUTRE jeu pendant que la ferme tourne
+              // n'aurait pas de sens) au profit d'un rappel + des deux
+              // seules actions pertinentes ici : reprendre, ou rassembler
+              // tout le monde pour de bon.
+              <div className="ferme-rejoin-cta" style={{ marginTop: 16, textAlign: "center" }}>
+                <p className="hint" style={{ marginBottom: 10 }}>{t("hostFermeAwayHint")}</p>
+                <button className="btn" style={{ width: "auto", padding: "10px 22px" }} onClick={rejoinFerme}>
+                  {t("rejoinFerme")}
+                </button>
+                <button className="btn ghost" style={{ width: "auto", padding: "10px 22px", marginTop: 10 }} onClick={gatherFerme}>
+                  📣 {t("gatherFermeShort")}
+                </button>
+              </div>
+            ) : isHost ? (
               <>
                 <p className="hint" style={{ marginTop: 22, marginBottom: 10 }}>{t("gamePicker")}</p>
                 <div className="game-grid">
@@ -1121,6 +1227,19 @@ export default function Room() {
                 </div>
                 <p className="muted" style={{ marginTop: 16, textAlign: "center" }}>{t("moreGamesSoon")}</p>
               </>
+            ) : fermeAway && isOnline(room.host_id) ? (
+              // Ferme Vallée continue de tourner sans cet invité : bouton
+              // autonome pour la rejoindre, sans attendre l'hôte — affiché
+              // uniquement tant que l'hôte est en ligne (sinon le monde
+              // host-authoritative n'est plus animé côté serveur, rejoindre
+              // n'aurait aucun sens ; on retombe alors sur le message
+              // d'attente standard ci-dessous).
+              <div className="ferme-rejoin-cta" style={{ marginTop: 16, textAlign: "center" }}>
+                <p className="hint" style={{ marginBottom: 10 }}>{t("rejoinFermeHint")}</p>
+                <button className="btn" style={{ width: "auto", padding: "10px 22px" }} onClick={rejoinFerme}>
+                  {t("rejoinFerme")}
+                </button>
+              </div>
             ) : (
               <p className="muted" style={{ marginTop: 16 }}>{t("waitHost")}</p>
             )}
@@ -1151,6 +1270,26 @@ export default function Room() {
               <button className="btn ghost" style={{ width: "auto", padding: "10px 20px", marginTop: 0 }} onClick={() => { setCodeGate(null); setCodeError(false); }}>{t("tuprefCodeCancel")}</button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Instance CACHÉE de Ferme Vallée (demande 2026-07, révisée) : montée
+          hors du Crossfade, indépendamment de la vue visible, tant que
+          l'HÔTE est "away" (fermeAway renseigné) — c'est-à-dire qu'il a
+          quitté la scène (🎪/Quitter) SANS utiliser "Rassembler tout le
+          monde". Ferme Vallée est host-authoritative (simulation, réponse
+          aux requêtes des autres joueurs) : si on laissait le composant se
+          démonter comme pour un simple invité, le monde s'arrêterait pour
+          TOUT LE MONDE dès que l'hôte regarde ailleurs. `display:none`
+          suffit à la garder active (les intervalles/effets React tournent
+          normalement sur un noeud caché) sans rien afficher. `room` n'a
+          besoin que de `room.id` (stable) côté FermeGame — inutile de lui
+          repasser l'instantané `fermeAway`. `onFinish` est un no-op : cette
+          instance ne doit jamais déclencher elle-même de transition de vue
+          (seuls les boutons visibles, rejoinFerme/gatherFerme, le font). */}
+      {isHost && fermeAway && room && (
+        <div style={{ display: "none" }} aria-hidden="true">
+          <FermeGame room={room} me={me} isHost={true} players={players} t={t} lang={lang} onFinish={() => {}} />
         </div>
       )}
 

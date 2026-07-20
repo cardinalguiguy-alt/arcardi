@@ -28,7 +28,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "@/lib/supabaseClient";
-import { resetRoomToLobby } from "@/lib/gameSync";
 import * as C from "./fermeConstants";
 import * as E from "./fermeEngine";
 import { buildSprites } from "./fermeArt";
@@ -2386,15 +2385,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     setChatOpen(false); chatInputRef.current?.blur();
   }
   async function leaveGame() {
+    // L'hôte ne quitte pas réellement le monde partagé : Ferme Vallée est
+    // host-authoritative (simulation, réponse aux requêtes des autres
+    // joueurs) et démontant ce composant ARRÊTERAIT le monde pour tout le
+    // monde. Ce bouton, pour l'hôte, se contente donc de masquer SA vue
+    // (voir `fermeAway` dans app/room/[code]/page.js, qui garde ce
+    // composant monté en arrière-plan) — aucune écriture Supabase, aucun
+    // évènement "leave" diffusé (le fermier hôte reste visible aux autres,
+    // qui ne l'ont jamais vraiment quitté). Seul le bouton dédié "📣
+    // Rassembler tout le monde" (côté salon) referme réellement la partie
+    // pour tout le monde.
+    if (isHost) { onFinish && onFinish(); return; }
     joinedRef.current = false;
     channelRef.current?.send({ type: "broadcast", event: "leave", payload: { id: me.id } });
-    if (isHost) {
-      // La ferme est stockée DURABLEMENT dans ferme_saves (par code), pas dans
-      // rooms.game_state : on sauvegarde une dernière fois, puis le retour au
-      // salon standard n'efface PLUS la ferme. Elle se recharge par son code.
-      try { await persistFarm(); } catch (e) { /* non bloquant */ }
-      await resetRoomToLobby(room.id);
-    }
     onFinish && onFinish();
   }
 
