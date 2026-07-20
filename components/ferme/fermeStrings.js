@@ -161,6 +161,14 @@ export const FERME_STR = {
     toastSleepFull: "Tu n'es pas fatigué, pas besoin de dormir.",
     toastSleepDone: "Bien dormi ! Énergie remplie.",
     toastSleepEarly: "Réveil anticipé.",
+    // Trousse de soins (chantier 2026-07) : un autre joueur blessé peut être
+    // soigné (touche E à proximité), réduit son repos forcé à 1 minute.
+    healKitRowTitle: "🩹 Trousse de soins (gratuite)",
+    healKitRowSub: (n) => `Réduit à 1 min le repos forcé d'un coéquipier blessé (approche-toi, touche E). En stock : ${n}`,
+    healChat: (healer, hurt) => `🩹 ${healer} a soigné ${hurt}, son repos forcé est réduit à 1 minute !`,
+    toastNotInjured: "Ce fermier n'est plus blessé.",
+    toastNoHealKit: "Il te faut une trousse de soins (achetable gratuitement au magasin).",
+    toastHealTooFar: "Rapproche-toi du fermier blessé pour le soigner.",
     // Grange collaborative persistante (zip 158)
     barnHudLine: (level, max, cap) => `Grange ${level}/${max} · ${cap} animaux max`,
     barnDeposited: (who, n, res) => `${who} apporte ${n} ${res} à la grange.`,
@@ -406,6 +414,14 @@ export const FERME_STR = {
     toastSleepFull: "You're not tired, no need to sleep.",
     toastSleepDone: "Slept well! Energy refilled.",
     toastSleepEarly: "Woke up early.",
+    // Heal kit (2026-07 chantier): another injured player can be healed
+    // (press E nearby), cutting their forced rest down to 1 minute.
+    healKitRowTitle: "🩹 Heal kit (free)",
+    healKitRowSub: (n) => `Cuts an injured teammate's forced rest to 1 min (walk up to them, press E). In stock: ${n}`,
+    healChat: (healer, hurt) => `🩹 ${healer} healed ${hurt}, forced rest cut down to 1 minute!`,
+    toastNotInjured: "That farmer isn't injured anymore.",
+    toastNoHealKit: "You need a heal kit (free at the shop).",
+    toastHealTooFar: "Get closer to the injured farmer to heal them.",
     // Persistent collaborative barn (zip 158)
     barnHudLine: (level, max, cap) => `Barn ${level}/${max} · ${cap} animals max`,
     barnDeposited: (who, n, res) => `${who} brings ${n} ${res} to the barn.`,

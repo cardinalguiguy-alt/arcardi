@@ -328,6 +328,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     minimapDirtyRef.current = true;
     restoredRef.current = true;
+    // Filet identique à applySnapshot (non-hôte) : l'hôte est aussi un joueur
+    // et doit retrouver SA PROPRE blessure en cours (injuredUntil) au rejoin,
+    // faute de quoi il pouvait ressortir librement avant la fin du repos
+    // forcé (bug remonté 2026-07 : seul le cas non-hôte était couvert).
+    {
+      const mineF = farmersRef.current[me.id];
+      injuredUntilRef.current = (mineF && mineF.injuredUntil) || 0;
+      setInjuredUntil(injuredUntilRef.current);
+    }
     setCodeLoading(false);
     setHud(h => ({ ...h, money: sharedRef.current.money, day: sharedRef.current.day }));
     setCoop(sharedRef.current.coop);
@@ -408,6 +417,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // Même filet de sécurité qu'au chargement par code (voir loadFarmByCode) :
       // un instantané peut porter des fermiers au format d'un zip antérieur.
       for (const id in farmersRef.current) E.normalizeFarmer(farmersRef.current[id]);
+      // Un joueur distant déjà blessé au moment où je rejoins (pas seulement
+      // au moment où il se fait mordre) doit rester repérable comme tel, pour
+      // que je puisse le soigner (voir applyDeltas / p.injured).
+      for (const id in farmersRef.current) {
+        const rp = playersRef.current.get(id);
+        if (rp) rp.injuredUntil = farmersRef.current[id].injuredUntil || 0;
+      }
     }
     E.normalizeAnimals(sharedRef.current.animals);
     // Mon propre fermier (reprise) si présent
@@ -604,6 +620,35 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const s2 = sharedRef.current;
       const wf = (s2.wolves || []).find(x => x.id === req.wolfId && x.phase === "biting" && x.biteTargetId === req.id);
       if (wf) resolveWolfBiteOutcome(wf, req.result === "win" ? "win" : "fail");
+    } else if (req.kind === "heal") {
+      // Soin d'un autre joueur blessé (trousse de soins, chantier 2026-07,
+      // demande : réduire le repos forcé à 1 minute au lieu de 10). f = le
+      // soignant (déjà résolu ci-dessus via hostEnsureFarmer). Vérifs :
+      // trousse en stock, cible bien blessée à l'instant présent, et à
+      // portée (position cible tenue à jour par les broadcasts "pos", voir
+      // plus haut ch.on("pos") -> farmersRef.current[payload.id].x/y).
+      const target = req.targetId ? E.normalizeFarmer(farmersRef.current[req.targetId]) : null;
+      if (!target || !(target.injuredUntil > Date.now())) {
+        out.toast = { id: f.id, key: "notInjured" };
+      } else if (!((f.inv.healKit || 0) > 0)) {
+        out.toast = { id: f.id, key: "noHealKit" };
+      } else if (Math.hypot(target.x - f.x, target.y - f.y) > C.HEAL_RANGE) {
+        out.toast = { id: f.id, key: "healTooFar" };
+      } else {
+        f.inv.healKit -= 1;
+        out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
+        const reduced = Date.now() + C.HEAL_REDUCE_MS;
+        if (target.injuredUntil > reduced) target.injuredUntil = reduced;
+        dirtyRef.current = true;
+        channelRef.current?.send({
+          type: "broadcast", event: "apply",
+          payload: {
+            farmer: { id: target.id, energy: target.energy, tools: target.tools, inv: target.inv, injuredUntil: target.injuredUntil },
+            injured: { id: target.id, until: target.injuredUntil },
+          },
+        });
+        channelRef.current?.send({ type: "broadcast", event: "chat", payload: { from: "💊", msg: L.healChat(f.name, target.name) } });
+      }
     } else if (req.kind === "act") {
       const r = E.resolveAct(w, f, req);
       for (const i of r.tiles) { recordTileOverride(i); out.tiles.push({ i, g: w.ground[i], o: w.objects[i], hp: w.objHp.get(i) }); }
@@ -892,6 +937,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
     }
     if (p.wolfBite && p.wolfBite.id === me.id && !isInjured()) setWolfBite({ wolfId: p.wolfBite.wolfId });
+    // Statut "blessé" diffusé à TOUTE la room (voir resolveWolfBiteOutcome et
+    // resolveHeal côté hôte) : permet aux autres joueurs de repérer un
+    // fermier blessé pour le soigner, même s'ils n'étaient pas la cible.
+    if (p.injured) {
+      if (p.injured.id === me.id) {
+        injuredUntilRef.current = p.injured.until; setInjuredUntil(p.injured.until);
+      } else {
+        const rp = playersRef.current.get(p.injured.id);
+        if (rp) rp.injuredUntil = p.injured.until;
+      }
+    }
     if (p.toast && p.toast.id === me.id) pushToast(toastMsg(p.toast.key));
     if (p.chat) addChat(p.chat.from, p.chat.msg);
     if (p.fx) for (const f of p.fx) spawnFx(f);
@@ -917,7 +973,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     pushToast(L.toastNewDay(p.day));
   }
   function toastMsg(key) {
-    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, noMillStock: L.toastNoMillStock, millNotEmpty: L.toastMillNotEmpty, noWheatToDeposit: L.toastNoWheatToDeposit, millFull: L.toastMillFull, actionFailed: L.toastActionFailed, coopNone: L.toastCoopNone, farCoop: L.toastFarCoop, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull }[key] || "";
+    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, noMillStock: L.toastNoMillStock, millNotEmpty: L.toastMillNotEmpty, noWheatToDeposit: L.toastNoWheatToDeposit, millFull: L.toastMillFull, actionFailed: L.toastActionFailed, coopNone: L.toastCoopNone, farCoop: L.toastFarCoop, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull, notInjured: L.toastNotInjured, noHealKit: L.toastNoHealKit, healTooFar: L.toastHealTooFar }[key] || "";
   }
 
   // -------- Hôte : boucle temps + persistance --------
@@ -1339,7 +1395,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         dirtyRef.current = true;
         channelRef.current?.send({
           type: "broadcast", event: "apply",
-          payload: { farmer: { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv, injuredUntil: f.injuredUntil } },
+          payload: {
+            farmer: { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv, injuredUntil: f.injuredUntil },
+            // Diffusé à TOUS (pas juste à la victime) pour que les autres
+            // joueurs de la room sachent qui est blessé et puissent le
+            // soigner (trousse de soins, demande 2026-07). Voir applyDeltas.
+            injured: { id: f.id, until: f.injuredUntil },
+          },
         });
         addChat("🩸", L.wolfBiteFailChat(f.name));
       }
@@ -2377,6 +2439,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       ctx.font = "bold 7px monospace"; ctx.textAlign = "center";
       ctx.fillStyle = "#00000090"; ctx.fillText(p.name, px + 8 + 1, py - 10 + 1);
       ctx.fillStyle = isSelf ? "#ffffff" : "#ffe9a8"; ctx.fillText(p.name, px + 8, py - 10);
+      // Icône de blessure (chantier 2026-07) : visible au-dessus de TOUT
+      // fermier blessé, soi-même ou distant (voir p.injuredUntil, propagé à
+      // tous via applyDeltas/p.injured), pour qu'un autre joueur repère qui
+      // soigner (trousse de soins, touche E à proximité).
+      const hurtUntil = isSelf ? injuredUntilRef.current : (p.injuredUntil || 0);
+      if (hurtUntil > Date.now()) {
+        ctx.font = "10px monospace";
+        ctx.fillText("🩹", px + 8, py - 20);
+      }
     }
     function nightAlpha() {
       // Demande Guillaume (chantier 2026-07) : lumière du jour qui revient
@@ -2487,8 +2558,24 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (horiz) return "h";
     return "post";
   }
+  // Fermier blessé le plus proche (portée C.HEAL_RANGE), pour le soin à la
+  // trousse (chantier 2026-07). Ne considère que les AUTRES joueurs : on ne
+  // se soigne pas soi-même.
+  function nearestInjuredPlayer() {
+    const m = meRef.current; if (!m) return null;
+    let best = null, bestD = C.HEAL_RANGE;
+    for (const p of playersRef.current.values()) {
+      if (p.injuredUntil && p.injuredUntil > Date.now()) {
+        const d = Math.hypot(p.x - m.x, p.y - m.y);
+        if (d <= bestD) { bestD = d; best = p; }
+      }
+    }
+    return best;
+  }
   function tryOpenNearby() {
-    if (nearTile(C.SHOP)) setShopOpen(true);
+    const injured = nearestInjuredPlayer();
+    if (injured && !isInjured()) sendReq({ kind: "heal", targetId: injured.id });
+    else if (nearTile(C.SHOP)) setShopOpen(true);
     else if (nearTile(C.BIN)) setBinOpen(true);
     else if (nearTile(C.HOUSE_DOOR)) { if (meRef.current.sleeping) wakeUp(false); else startSleep(); }
     else if (nearTile(C.COOP_SITE) && sharedRef.current.coop) sendReq({ kind: "coopDeposit" });
@@ -2594,6 +2681,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // suivant (herbe = replanter sur une case labourée, chantier 2026-07).
   const buyGrass = (n) => { sendReq({ kind: "buy", item: "grass", n }); buildKindRef.current = "grass"; setBuildKind("grass"); };
   const buyMill = (n) => { sendReq({ kind: "buy", item: "mill", n }); buildKindRef.current = "mill"; setBuildKind("mill"); };
+  const buyHealKit = (n) => sendReq({ kind: "buy", item: "healKit", n });
   const sellFlour = () => sendReq({ kind: "sell", item: "flour", n: 9999 });
   const sellItem = (item, crop) => sendReq({ kind: "sell", item, crop, n: 9999 });
   // Menu Construire (clic sur bois/pierre du HUD) : fabrique `n` sections de
@@ -3006,6 +3094,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               <Sprite img={spritesReady ? spritesRef.current.mill : null} w={30} h={36} />
               <div className="info"><b>{L.millRowTitle(C.MILL_COST)}</b><span>{L.millRowSub(myInv ? (myInv.mill || 0) : 0)}</span></div>
               <button disabled={hud.money < C.MILL_COST} onClick={() => buyMill(1)}>{L.buy1}</button>
+            </div>
+            <div className="ferme-shop-row">
+              <div style={{ width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>🩹</div>
+              <div className="info"><b>{L.healKitRowTitle}</b><span>{L.healKitRowSub(myInv ? (myInv.healKit || 0) : 0)}</span></div>
+              <button onClick={() => buyHealKit(1)}>{L.buy1}</button>
             </div>
             <div className="ferme-tools-header">{L.shopAnimalsHeader}</div>
             {C.ANIMALS.map(a => (

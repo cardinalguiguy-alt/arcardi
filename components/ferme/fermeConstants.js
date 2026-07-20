@@ -501,6 +501,9 @@ export const WOLF_SPEED_AGGRESSIVE = 4.4;    // > WOLF_SPEED_FAST : rattrape un 
 export const WOLF_BITE_RANGE = 0.75;         // distance déclenchant la morsure (mini-jeu)
 export const WOLF_BITE_REACT_MS = 2200;      // durée du mini-jeu de riposte (très court = difficile)
 export const INJURED_MS = 10 * 60 * 1000;    // indisponibilité après une morsure manquée (10 min, survit à un refresh)
+export const HEAL_KIT_COST = 0;              // trousse de soins, gratuite (magasin) — demande 2026-07
+export const HEAL_REDUCE_MS = 60 * 1000;     // durée restante après soin par un autre joueur (1 min)
+export const HEAL_RANGE = 2.5;               // distance max (tuiles) pour soigner un fermier blessé
 
 // --- Lapins (chantier 2026-07, demande Guillaume : "ajouter des petits
 // lapins bien détaillés qui fuient et sont inoffensifs, surtout rive

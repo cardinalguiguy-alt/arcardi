@@ -359,7 +359,7 @@ export function newFarmer(id, name, gender, outfit) {
     injuredUntil: 0, // horodatage de fin d'indisponibilité après une morsure de loup (0 = pas blessé)
     tools: { hoe: 1, can: 1, axe: 1, pick: 1 },
     inv: {
-      wood: 0, stone: 0, food: 0, fence: 0, wall: 0, path: 0, lamp: 0, scarecrow: 0, grass: 0, mill: 0,
+      wood: 0, stone: 0, food: 0, fence: 0, wall: 0, path: 0, lamp: 0, scarecrow: 0, grass: 0, mill: 0, healKit: 0,
       seeds: [5, 0, 0, 0], crops: [0, 0, 0, 0],
       gems: C.GEMS.map(() => 0),      // gemmes rares trouvées au minage
       fish: C.FISH.map(() => 0),      // poissons pêchés
@@ -414,6 +414,7 @@ export function normalizeFarmer(f) {
   if (typeof f.inv.scarecrow !== "number") f.inv.scarecrow = 0;
   if (typeof f.inv.grass !== "number") f.inv.grass = 0;
   if (typeof f.inv.mill !== "number") f.inv.mill = 0;
+  if (typeof f.inv.healKit !== "number") f.inv.healKit = 0;
   f.inv.seeds = padArray(f.inv.seeds, C.CROPS.length);
   f.inv.crops = padArray(f.inv.crops, C.CROPS.length);
   f.inv.gems = padArray(f.inv.gems, C.GEMS.length);
@@ -960,6 +961,11 @@ export function resolveBuy(f, money, m) {
     const cost = C.MILL_COST * n;
     if (money < cost) { res.toast = "noGold"; return res; }
     res.moneyDelta = -cost; f.inv.mill = (f.inv.mill || 0) + n; res.invChanged = true;
+  } else if (m.item === "healKit") {
+    const n = Math.max(1, Math.min(10, (m.n | 0) || 1));
+    const cost = C.HEAL_KIT_COST * n;
+    if (money < cost) { res.toast = "noGold"; return res; }
+    res.moneyDelta = -cost; f.inv.healKit = (f.inv.healKit || 0) + n; res.invChanged = true;
   } else if (m.item === "tool") {
     const key = m.tool;
     if (!C.TOOLS.includes(key)) return res;
