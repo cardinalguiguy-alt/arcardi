@@ -116,6 +116,7 @@ export const FERME_STR = {
     wolfBiteWin: "Tu as repoussé le loup !",
     wolfBiteFailChat: (who) => `🩸 ${who} a été mordu par un loup et ramené chez lui, blessé.`,
     wolfBiteWinChat: (who) => `🐺 ${who} a repoussé un loup agressif !`,
+    rabbitCaughtChat: (who) => `🐇 ${who} a attrapé un lapin sauvage !`,
     injuredBanner: (mmss) => `🩸 Blessé — repos forcé (${mmss})`,
     toastInjured: "Tu es blessé, impossible d'agir pour le moment.",
     // Boutique : bâtiments et animaux
@@ -364,6 +365,7 @@ export const FERME_STR = {
     wolfBiteWin: "You fought off the wolf!",
     wolfBiteFailChat: (who) => `🩸 ${who} was bitten by a wolf and dragged back home, injured.`,
     wolfBiteWinChat: (who) => `🐺 ${who} fought off an aggressive wolf!`,
+    rabbitCaughtChat: (who) => `🐇 ${who} caught a wild rabbit!`,
     injuredBanner: (mmss) => `🩸 Injured — forced rest (${mmss})`,
     toastInjured: "You're injured and can't act right now.",
     buyLabel: "Buy",

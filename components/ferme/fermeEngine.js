@@ -1287,3 +1287,32 @@ export function wolfSpawnPos(world, rnd) {
   const y = Math.floor(world.h / 2);
   return { x: riverCenterAt(world, y) + C.WOLF_SPAWN_MARGIN + 1, y: y + 0.5 };
 }
+
+// Distance (en cases) au centre de la maison — même centre que gemChanceAt
+// ci-dessus, réutilisé tel quel pour placer les lapins ("zones éloignées de
+// la maison", demande Guillaume).
+export function houseDist(x, y) {
+  return Math.hypot(x - HOUSE_CX, y - HOUSE_CY);
+}
+
+// Position d'apparition d'un lapin (chantier 2026-07, demande Guillaume :
+// "petits lapins... surtout rive droite"). Contrairement aux loups (qui
+// n'apparaissent QUE rive droite), les lapins favorisent la rive droite sans
+// s'y limiter strictement (C.RABBIT_EAST_BIAS, tiré une fois par tentative de
+// spawn) — et doivent toujours être loin de la maison (C.RABBIT_MIN_HOUSE_DIST),
+// où qu'ils soient sur la carte. `rnd` = générateur 0..1 fourni par
+// l'appelant (Math.random côté hôte, comme wolfSpawnPos).
+export function rabbitSpawnPos(world, rnd) {
+  const preferEast = rnd() < C.RABBIT_EAST_BIAS;
+  for (let tries = 0; tries < 60; tries++) {
+    const x = Math.floor(rnd() * world.w);
+    const y = Math.floor(rnd() * world.h);
+    if (houseDist(x, y) < C.RABBIT_MIN_HOUSE_DIST) continue;
+    if (preferEast && riverSideOf(world, x, y) !== "east") continue;
+    if (blockedTile(world, x, y) || isWaterTile(world, x, y)) continue;
+    return { x: x + 0.5, y: y + 0.5 };
+  }
+  // Repli : même filet que wolfSpawnPos, rive droite au milieu de la carte.
+  const y = Math.floor(world.h / 2);
+  return { x: riverCenterAt(world, y) + C.WOLF_SPAWN_MARGIN + 4, y: y + 0.5 };
+}

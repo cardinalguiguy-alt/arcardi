@@ -153,7 +153,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const meRef = useRef(null);
   const playersRef = useRef(new Map()); // id -> remote farmer render data
   const farmersRef = useRef({});        // hôte : id -> état privé arbitré
-  const sharedRef = useRef({ seed: 0, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), flour: 0, wolves: [], wolfNight: { active: false, kills: 0 } });
+  const sharedRef = useRef({ seed: 0, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), flour: 0, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [] });
   const invRef = useRef(null);
   const toolsRef = useRef({ hoe: 1, can: 1, axe: 1, pick: 1 });
   const energyRef = useRef(C.MAX_ENERGY);
@@ -188,6 +188,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const heldAnimalRef = useRef(-1);   // index (dans sharedRef.animals) de l'animal actuellement porté par CE joueur, -1 sinon
   const horseCallAccumRef = useRef(0); // accumulateur (secondes) pour throttler la diffusion réseau des chevaux sifflés en course
   const wolfAccumRef = useRef(0);      // accumulateur (secondes), même throttle réseau pour les loups simulés côté hôte
+  const rabbitAccumRef = useRef(0);    // accumulateur (secondes), même throttle réseau pour les lapins simulés côté hôte
+  const rabbitRespawnAtRef = useRef(0); // horodatage du prochain repop autorisé (repop progressif, pas instantané)
+  const rabbitSeqRef = useRef(0);      // compteur pour des ids de lapins uniques
   const torchOnRef = useRef(false);    // miroir synchrone de torchOn (lu dans la boucle de rendu / diffusé avec la position)
   // Dormir dans la maison (chantier 2026-07) : sleepStartedAtRef (performance.now(),
   // horloge locale) + sleepStartEnergyRef permettent d'interpoler localement l'énergie
@@ -298,6 +301,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         gems: migrateGems(saved),
         flour: saved.flour || 0,
         wolves: [], wolfNight: { active: false, kills: 0 }, // repartent à zéro à la reprise, respawn dérivé de l'heure courante
+        rabbits: [], // même principe : repartent à zéro, repop dérivé de l'heure courante (voir updateRabbits)
       };
       // Les cavaliers repartent à pied à la reprise (aucun joueur monté au chargement).
       for (const h of sharedRef.current.horses) { h.rider = null; h.rider2 = null; h.callTarget = null; }
@@ -317,7 +321,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const seed = hashSeed(code);
       worldRef.current = E.generateWorld(seed);
       overridesRef.current = { ground: {}, object: {} };
-      sharedRef.current = { seed, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), gems: C.GEMS.map(() => 0), flour: 0, wolves: [], wolfNight: { active: false, kills: 0 } };
+      sharedRef.current = { seed, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), gems: C.GEMS.map(() => 0), flour: 0, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [] };
       farmersRef.current = {};
       // Crée tout de suite l'enregistrement pour réserver le code.
       persistFarm();
@@ -397,6 +401,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       gems: migrateGems(payload),
       flour: payload.flour || 0,
       wolves: payload.wolves || [], wolfNight: { active: !!(payload.wolves && payload.wolves.length), kills: 0 },
+      rabbits: payload.rabbits || [],
     };
     if (payload.farmers) {
       farmersRef.current = payload.farmers;
@@ -517,6 +522,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       mills: worldRef.current ? E.serializeMills(worldRef.current) : [],
       farmers: farmersRef.current,
       horses: s.horses, animals: s.animals, wellBuilt: s.wellBuilt, coop: s.coop, barn: s.barn, gems: s.gems, flour: s.flour, wolves: s.wolves,
+      rabbits: s.rabbits,
     };
   }
   function syncBuildings() {
@@ -773,6 +779,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // Annulation (changement d'outil) : relâche l'animal sans le déplacer.
       const ai = req.animal | 0, an = s.animals[ai];
       if (an && an.carriedBy === req.id) { an.carriedBy = null; out.animals = s.animals; }
+    } else if (req.kind === "catchRabbit") {
+      // Capture d'un lapin sauvage avec l'outil "déplacer" (même case 9 que
+      // pour attraper un animal de la ferme, demande Guillaume). Contrairement
+      // aux animaux de la ferme : pas de portage, résolution immédiate en un
+      // clic — "pour le fun", sans aucun effet économique. Ne réussit que si
+      // le lapin visé est encore là, à portée, et PAS en train de fuir (s'il
+      // fuit, c'est qu'un jet de repérage l'a déjà "vu" arriver, voir
+      // updateRabbits) : la vraie chance ("1 sur 5") vient de ces jets
+      // répétés pendant l'approche, pas d'un tirage supplémentaire ici.
+      const ri = (s.rabbits || []).findIndex(r => r.id === req.rabbit);
+      const rb = ri >= 0 ? s.rabbits[ri] : null;
+      if (rb && rb.phase !== "flee" && Math.hypot(px - rb.x, py - rb.y) <= C.RABBIT_CATCH_RANGE) {
+        s.rabbits.splice(ri, 1);
+        out.rabbits = s.rabbits;
+        out.chat = { from: "🐇", msg: L.rabbitCaughtChat(f.name) };
+      } else out.toast = { id: f.id, key: "actionFailed" };
     } else if (req.kind === "coopDeposit") {
       const r = E.resolveCoopDeposit(f, s.coop, req);
       if (r.invChanged) out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
@@ -876,6 +898,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (p.horses) { sharedRef.current.horses = p.horses; syncBuildings(); }
     if (p.animals) { sharedRef.current.animals = p.animals; syncBuildings(); }
     if (p.wolves) { sharedRef.current.wolves = p.wolves; minimapDirtyRef.current = true; }
+    if (p.rabbits) { sharedRef.current.rabbits = p.rabbits; minimapDirtyRef.current = true; }
     if (p.wellBuilt) { sharedRef.current.wellBuilt = true; minimapDirtyRef.current = true; syncBuildings(); }
     if (p.coop !== undefined) { sharedRef.current.coop = p.coop; setCoop(p.coop); }
     if (p.barn !== undefined) { sharedRef.current.barn = p.barn; setBarn(p.barn); minimapDirtyRef.current = true; }
@@ -1108,7 +1131,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (heldAnimalRef.current === -1) {
         const ai = nearestPickableAnimal(tt);
         if (ai >= 0) { heldAnimalRef.current = ai; setCarryingAnimal(true); sendReq({ kind: "pickAnimal", animal: ai }); }
-        else actAnimRef.current = 0;
+        else {
+          // Aucun animal de ferme visé : tente d'attraper un lapin sauvage
+          // proche (chantier 2026-07, demande Guillaume). Résolution
+          // immédiate côté hôte, pas de portage (voir req "catchRabbit").
+          const rid = nearestPickableRabbit(tt);
+          if (rid) sendReq({ kind: "catchRabbit", rabbit: rid });
+          actAnimRef.current = 0;
+        }
       } else {
         sendReq({ kind: "placeAnimal", animal: heldAnimalRef.current, x: tt.x, y: tt.y });
         heldAnimalRef.current = -1; setCarryingAnimal(false);
@@ -1128,6 +1158,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const apos = E.animalPos(a, now);
       const d = Math.abs((tt.x + 0.5) - apos.x) + Math.abs((tt.y + 0.5) - apos.y);
       if (d <= bd) { bd = d; best = i; }
+    }
+    return best;
+  }
+  // Id du lapin sauvage le plus proche de la case visée `tt` (outil
+  // "déplacer", chantier 2026-07) : même style que nearestPickableAnimal,
+  // mais renvoie un id (pas un index — le tableau des lapins bouge sans
+  // arrêt côté hôte, un index se périmerait). N'exclut PAS les lapins en
+  // fuite ici : c'est resolveReq côté hôte qui tranche si la capture réussit
+  // (voir req "catchRabbit"), le client se contente de viser le plus proche.
+  function nearestPickableRabbit(tt) {
+    const rabbits = sharedRef.current.rabbits || [];
+    let best = null, bd = 1.3;
+    for (const rb of rabbits) {
+      const d = Math.abs((tt.x + 0.5) - rb.x) + Math.abs((tt.y + 0.5) - rb.y);
+      if (d <= bd) { bd = d; best = rb.id; }
     }
     return best;
   }
@@ -1300,6 +1345,123 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
     }
     wf.phase = "return";
+  }
+  // Lapins (chantier 2026-07, demande Guillaume : "petits lapins bien
+  // détaillés qui fuient et sont inoffensifs, surtout rive droite").
+  // Simulation HÔTE UNIQUEMENT, même esprit général que les loups
+  // (updateWolves ci-dessous) mais bien plus simple : aucune attaque, aucun
+  // pont/rivière à respecter (les lapins ne chassent rien de l'autre côté),
+  // juste roam + fuite face à un fermier trop proche. Présents JOUR ET NUIT
+  // (contrairement aux loups, nocturnes), population cible différente selon
+  // l'heure (C.RABBIT_COUNT_DAY/NIGHT) : l'excédent est retiré en douceur au
+  // passage à la nuit, le manque est comblé progressivement (un lapin à la
+  // fois, C.RABBIT_RESPAWN_MS) plutôt que d'un coup, pour ne pas donner
+  // l'impression d'un "pop" instantané et pour laisser le repop se faire loin
+  // du regard des joueurs (E.rabbitSpawnPos, "zones éloignées de la maison").
+  function updateRabbits(dt) {
+    const w = worldRef.current; if (!w) return;
+    const s = sharedRef.current;
+    const now = Date.now();
+    if (!s.rabbits) s.rabbits = [];
+    const tmin = E.gameTimeMin(s.dayStartAt, now);
+    const target = E.isNightTime(tmin) ? C.RABBIT_COUNT_NIGHT : C.RABBIT_COUNT_DAY;
+
+    let changed = false;
+    if (s.rabbits.length > target) {
+      // Passage au régime de nuit (ou tout autre excédent) : retire l'excès
+      // au hasard, en priorité des lapins déjà en fuite (les moins "posés"
+      // visuellement) plutôt que d'ordre fixe.
+      const fleeing = [], calm = [];
+      for (const rb of s.rabbits) (rb.phase === "flee" ? fleeing : calm).push(rb);
+      while (fleeing.length + calm.length > target) {
+        if (fleeing.length) fleeing.splice(Math.floor(Math.random() * fleeing.length), 1);
+        else calm.splice(Math.floor(Math.random() * calm.length), 1);
+      }
+      s.rabbits = fleeing.concat(calm);
+      changed = true;
+    } else if (s.rabbits.length < target && now >= rabbitRespawnAtRef.current) {
+      const p = E.rabbitSpawnPos(w, Math.random);
+      s.rabbits.push({
+        id: "rabbit" + (rabbitSeqRef.current++) + "_" + now, x: p.x, y: p.y, tx: p.x, ty: p.y, dir: 2, animT: 0,
+        state: "stop", phase: "roam", roamAnchor: { x: p.x, y: p.y }, roamTarget: null, nextRoamAt: 0,
+        nextNoticeAt: 0, fleeUntil: 0,
+      });
+      rabbitRespawnAtRef.current = now + C.RABBIT_RESPAWN_MS;
+      changed = true;
+    }
+    if (changed) {
+      channelRef.current?.send({ type: "broadcast", event: "apply", payload: { rabbits: s.rabbits } });
+      minimapDirtyRef.current = true;
+      rabbitAccumRef.current = 0;
+      return;
+    }
+    if (!s.rabbits.length) return;
+
+    // Fermiers vivants à considérer pour la fuite (soi-même + distants),
+    // même style que torchBearers ci-dessous pour les loups.
+    const live = [];
+    const mm = meRef.current;
+    if (mm) live.push({ x: mm.x, y: mm.y });
+    for (const p of playersRef.current.values()) live.push({ x: p.x, y: p.y });
+
+    let moved = false;
+    for (const rb of s.rabbits) {
+      let near = null, nearD = Infinity;
+      for (const t of live) { const d = Math.hypot(t.x - rb.x, t.y - rb.y); if (d < nearD) { nearD = d; near = t; } }
+      let speed = 0;
+      if (rb.phase === "flee") {
+        if (now < rb.fleeUntil) { rb.state = "run"; speed = C.RABBIT_SPEED_FLEE; }
+        else { rb.phase = "roam"; rb.roamAnchor = { x: rb.x, y: rb.y }; }
+      }
+      if (rb.phase !== "flee" && near && nearD < C.RABBIT_FLEE_RANGE) {
+        // "1 chance sur 5 qu'ils ne nous voient pas" (demande chiffrée de
+        // Guillaume) : jet de repérage throttlé (pas à chaque frame) tant
+        // qu'un fermier reste dans le rayon d'alerte — plus l'approche est
+        // longue/répétée, plus le risque cumulé d'être repéré grandit,
+        // d'où l'intérêt d'une approche courte et prudente pour tenter la
+        // capture avant le prochain jet.
+        if (now >= (rb.nextNoticeAt || 0)) {
+          rb.nextNoticeAt = now + C.RABBIT_NOTICE_CHECK_MS;
+          if (Math.random() >= C.RABBIT_UNSEEN_CHANCE) {
+            rb.phase = "flee"; rb.fleeUntil = now + C.RABBIT_FLEE_COOLDOWN_MS;
+            const dx = rb.x - near.x, dy = rb.y - near.y, d = Math.hypot(dx, dy) || 1;
+            rb.tx = rb.x + (dx / d) * 5; rb.ty = rb.y + (dy / d) * 5;
+            rb.state = "run"; speed = C.RABBIT_SPEED_FLEE;
+          }
+        }
+      }
+      if (rb.phase === "roam" && speed === 0) {
+        rb.state = rb.roamTarget ? "walk" : "stop"; speed = C.RABBIT_SPEED_SLOW;
+        if (!rb.roamTarget || Math.hypot(rb.roamTarget.x - rb.x, rb.roamTarget.y - rb.y) < 0.25 || now >= rb.nextRoamAt) {
+          if (Math.random() < 0.4) { rb.roamTarget = null; rb.nextRoamAt = now + 1500 + Math.random() * 2500; rb.state = "stop"; speed = 0; }
+          else {
+            const a = Math.random() * Math.PI * 2, d = Math.random() * C.RABBIT_ROAM_RADIUS;
+            rb.roamTarget = { x: rb.roamAnchor.x + Math.cos(a) * d, y: rb.roamAnchor.y + Math.sin(a) * d };
+            rb.nextRoamAt = now + 4000 + Math.random() * 3000;
+          }
+        }
+        if (rb.roamTarget) { rb.tx = rb.roamTarget.x; rb.ty = rb.roamTarget.y; } else speed = 0;
+      }
+      if (speed > 0 && rb.tx !== undefined) {
+        const dx = rb.tx - rb.x, dy = rb.ty - rb.y, d = Math.hypot(dx, dy);
+        if (d > 0.02) {
+          const step = Math.min(speed * dt, d);
+          const nx = rb.x + (dx / d) * step, ny = rb.y + (dy / d) * step;
+          if (!E.blockedTile(w, nx, ny) && !E.isWaterTile(w, nx, ny)) {
+            rb.x = nx; rb.y = ny;
+            rb.dir = dx < 0 ? 2 : 3;
+            rb.animT += dt * (speed >= C.RABBIT_SPEED_FLEE ? 9 : 4);
+            moved = true;
+          } else { rb.tx = rb.x; rb.ty = rb.y; rb.animT = 0; }
+        }
+      } else rb.animT = 0;
+    }
+    if (moved) minimapDirtyRef.current = true;
+    rabbitAccumRef.current += dt;
+    if (rabbitAccumRef.current >= 0.15) {
+      rabbitAccumRef.current = 0;
+      channelRef.current?.send({ type: "broadcast", event: "apply", payload: { rabbits: s.rabbits } });
+    }
   }
   // Loups (chantier 2026-07, demande Guillaume). Simulation HÔTE UNIQUEMENT,
   // même esprit que updateWhistledHorses : positions dérivées frame par
@@ -1609,6 +1771,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       updateMe(dt);
       if (isHost) updateWhistledHorses(dt);
       if (isHost) updateWolves(dt);
+      if (isHost) updateRabbits(dt);
       checkWalkOverHarvest();
       checkWalkOverWater();
       checkWalkOverCollect();
@@ -1962,6 +2125,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           const img = sprites.wolf[frame];
           const px = Math.round(wf.x * T - 14), py = Math.round(wf.y * T - 9);
           if (wf.dir === 2) { ctx.save(); ctx.translate(px + 30, py); ctx.scale(-1, 1); ctx.drawImage(img, 0, 0); ctx.restore(); }
+          else ctx.drawImage(img, px, py);
+        } });
+      }
+      // Lapins (chantier 2026-07) : 3 frames de bond, même mécanique
+      // d'animation que les loups (cycle piloté par animT/state), silhouette
+      // bien plus petite/basse.
+      for (const rb of (sharedRef.current.rabbits || [])) {
+        draws.push({ y: (rb.y + 1) * T, fn: () => {
+          const frame = rb.state === "stop" ? 0 : Math.floor((rb.animT || 0) % 3);
+          const img = sprites.rabbit[frame];
+          const px = Math.round(rb.x * T - 8), py = Math.round(rb.y * T - 7);
+          if (rb.dir === 2) { ctx.save(); ctx.translate(px + 16, py); ctx.scale(-1, 1); ctx.drawImage(img, 0, 0); ctx.restore(); }
           else ctx.drawImage(img, px, py);
         } });
       }

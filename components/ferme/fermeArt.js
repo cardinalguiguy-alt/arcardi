@@ -441,6 +441,42 @@ export function buildSprites() {
     P(g, (21 + off) | 0, 14, 3, 7, body); P(g, (21 + off) | 0, 20, 3, 2, paw);
     return c;
   }
+  // Lapin (chantier 2026-07, demande Guillaume : "petits lapins bien
+  // détaillés qui fuient et sont inoffensifs"). Vu de profil (regarde à
+  // droite, comme le loup/cheval), petite silhouette basse, grandes oreilles
+  // dressées, queue en pompon. 3 frames de saut (accroupi/tendu/en l'air,
+  // cycle de bond plutôt qu'une marche à 4 temps comme le loup — un lapin ne
+  // "marche" pas, il bondit) ; frame=0 sert aussi de pose "à l'arrêt"
+  // (immobile, aux aguets) pour l'état arrêté/roam lent.
+  function rabbitSprite(frame) {
+    const [c, g] = cv(16, 14);
+    const body = "#a9744f", light = "#c99568", dark = "#7d5335", belly = "#ecdcc4",
+      ear = "#c99568", earInner = "#e2a08a", eye = "#1a1a1a", nose = "#5a2418";
+    // Décalage vertical du corps + des pattes selon la phase de bond.
+    const hop = [0, -2, -1][frame % 3];      // 0=accroupi, 1=apogée du bond, 2=retombée
+    const legStretch = [0, 2, 1][frame % 3]; // pattes arrière plus tendues à l'appui
+    // Queue en pompon (arrière).
+    P(g, 1, 6 + hop, 2, 2, belly);
+    // Corps (dos rond typique du lapin).
+    P(g, 3, 4 + hop, 8, 5, body);
+    P(g, 3, 4 + hop, 8, 1, light);
+    P(g, 4, 8 + hop, 6, 1, dark);         // ombre sous le ventre
+    P(g, 4, 7 + hop, 5, 1, belly);        // ventre clair
+    // Tête + museau (avant/bas).
+    P(g, 9, 3 + hop, 4, 4, body);
+    P(g, 12, 5 + hop, 1, 1, nose);        // truffe
+    P(g, 11, 4 + hop, 1, 1, belly);       // joue claire
+    P(g, 10, 4 + hop, 1, 1, eye);         // oeil
+    // Oreilles dressées, longues et fines.
+    P(g, 9, 0 + hop, 1, 4, ear); P(g, 9, 1 + hop, 1, 2, earInner);
+    P(g, 11, 0 + hop, 1, 4, ear); P(g, 11, 1 + hop, 1, 2, earInner);
+    // Pattes avant (courtes).
+    P(g, 4, 9 + hop, 1, 2, dark); P(g, 9, 9 + hop, 1, 2, dark);
+    // Pattes arrière (puissantes, tendues à l'appui du bond).
+    P(g, 2, (9 - legStretch) + hop, 2, 2 + legStretch, dark);
+    P(g, 7, (9 - legStretch) + hop, 2, 2 + legStretch, dark);
+    return c;
+  }
   // Torche portative (chantier 2026-07) : bouton dédié (comme le sifflet à
   // chevaux), pas un slot d'outil numéroté. Flamme dessinée séparément de la
   // hampe pour pouvoir la faire vaciller légèrement à l'affichage (voir
@@ -774,6 +810,7 @@ export function buildSprites() {
     fishIcons: [],
     horse: horseSprite(),
     wolf: [wolfSprite(0), wolfSprite(1), wolfSprite(2), wolfSprite(3)],
+    rabbit: [rabbitSprite(0), rabbitSprite(1), rabbitSprite(2)],
     torch: torchSprite(),
     well: well(),
     fence: fenceTile(),
