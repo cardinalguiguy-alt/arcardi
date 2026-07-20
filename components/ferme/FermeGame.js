@@ -134,6 +134,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // recherche de cases est alors sa position réelle à cet instant (px/py),
   // pas la boutique où il était en train de choisir.
   const [gregOrderPending, setGregOrderPending] = useState(null); // {crop, count} | null
+  const [fertilizerOrderOpen, setFertilizerOrderOpen] = useState(false); // panneau "épandre de l'engrais" (chantier 2026-07)
+  const [fertilizerOrderCount, setFertilizerOrderCount] = useState(5);
+  // Même schéma différé que gregOrderPending ci-dessus : choisi à la
+  // boutique, confirmé ensuite via le bouton flottant à l'endroit voulu.
+  const [fertilizerOrderPending, setFertilizerOrderPending] = useState(null); // {count} | null
   const [binOpen, setBinOpen] = useState(false);
   const [mapOpen, setMapOpen] = useState(false);
   const [promptKey, setPromptKey] = useState(null); // 'shop' | 'bin' | null
@@ -147,7 +152,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [barn, setBarn] = useState(null); // miroir React de sharedRef.current.barn (grange persistante)
   const [gems, setGems] = useState(() => C.GEMS.map(() => 0)); // miroir React de sharedRef.current.gems (pool commun à la salle)
   const [flour, setFlour] = useState(0); // miroir React de sharedRef.current.flour (sacs de farine, pool commun à la salle, chantier 2026-07)
-  const [gregStock, setGregStock] = useState(() => ({ wood: 0, stone: 0 })); // miroir React de sharedRef.current.gregStock (bois/pierre récoltés par Greg, pool commun, chantier 2026-07)
+  const [gregStock, setGregStock] = useState(() => ({ wood: 0, stone: 0, fertilizer: 0 })); // miroir React de sharedRef.current.gregStock (bois/pierre récoltés par Greg + engrais acheté, pool commun, chantier 2026-07)
+  const [fertilizerShop, setFertilizerShop] = useState(() => ({ stock: 0, lastRestockDay: 0 })); // miroir React de sharedRef.current.fertilizerShop (stock boutique de l'engrais, chantier 2026-07)
   // Défi "chasse aux lapins" (chantier 2026-07, demande Guillaume) : miroir
   // React de sharedRef.current.rabbitChallenge (null si aucun défi en cours),
   // popup de proposition affichée UNIQUEMENT à l'hôte (jamais partagée), et
@@ -177,7 +183,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const meRef = useRef(null);
   const playersRef = useRef(new Map()); // id -> remote farmer render data
   const farmersRef = useRef({});        // hôte : id -> état privé arbitré
-  const sharedRef = useRef({ seed: 0, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), flour: 0, gregStock: { wood: 0, stone: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], rabbitChallenge: null, greg: null });
+  const sharedRef = useRef({ seed: 0, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), flour: 0, gregStock: { wood: 0, stone: 0, fertilizer: 0 }, fertilizerShop: { stock: 0, lastRestockDay: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], rabbitChallenge: null, greg: null });
   const invRef = useRef(null);
   const toolsRef = useRef({ hoe: 1, can: 1, axe: 1, pick: 1 });
   const energyRef = useRef(C.MAX_ENERGY);
@@ -343,7 +349,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         flour: saved.flour || 0,
         // Stock commun de bois/pierre récoltés par Greg (chantier 2026-07,
         // "étendre son champ") : survit à une reprise, comme flour/gems.
-        gregStock: { wood: (saved.gregStock && saved.gregStock.wood) || 0, stone: (saved.gregStock && saved.gregStock.stone) || 0 },
+        gregStock: { wood: (saved.gregStock && saved.gregStock.wood) || 0, stone: (saved.gregStock && saved.gregStock.stone) || 0, fertilizer: (saved.gregStock && saved.gregStock.fertilizer) || 0 },
+        // Boutique d'engrais (chantier 2026-07, suite plan validé) : survit à
+        // une reprise comme gregStock (le cycle de restock continue depuis
+        // lastRestockDay, aucun rattrapage spécial nécessaire).
+        fertilizerShop: { stock: (saved.fertilizerShop && saved.fertilizerShop.stock) || 0, lastRestockDay: (saved.fertilizerShop && saved.fertilizerShop.lastRestockDay) || 0 },
         wolves: [], wolfNight: { active: false, kills: 0 }, // repartent à zéro à la reprise, respawn dérivé de l'heure courante
         rabbits: [], // même principe : repartent à zéro, repop dérivé de l'heure courante (voir updateRabbits)
         rabbitChallenge: null, // défi éphémère, ne survit pas à une reprise (même principe que wolfNight)
@@ -374,7 +384,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const seed = hashSeed(code);
       worldRef.current = E.generateWorld(seed);
       overridesRef.current = { ground: {}, object: {} };
-      sharedRef.current = { seed, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), gems: C.GEMS.map(() => 0), flour: 0, gregStock: { wood: 0, stone: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], rabbitChallenge: null, greg: null };
+      sharedRef.current = { seed, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), gems: C.GEMS.map(() => 0), flour: 0, gregStock: { wood: 0, stone: 0, fertilizer: 0 }, fertilizerShop: { stock: 0, lastRestockDay: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], rabbitChallenge: null, greg: null };
       farmersRef.current = {};
       // Crée tout de suite l'enregistrement pour réserver le code.
       persistFarm();
@@ -398,7 +408,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     setBarn(sharedRef.current.barn);
     setGems(sharedRef.current.gems);
     setFlour(sharedRef.current.flour || 0);
-    setGregStock(sharedRef.current.gregStock || { wood: 0, stone: 0 });
+    setGregStock(sharedRef.current.gregStock || { wood: 0, stone: 0, fertilizer: 0 });
+    setFertilizerShop(sharedRef.current.fertilizerShop || { stock: 0, lastRestockDay: 0 });
     setRabbitChallenge(sharedRef.current.rabbitChallenge);
     syncBuildings();
     setWorldReady(true);
@@ -469,7 +480,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       barn: payload.barn || E.newBarnState(),
       gems: migrateGems(payload),
       flour: payload.flour || 0,
-      gregStock: { wood: (payload.gregStock && payload.gregStock.wood) || 0, stone: (payload.gregStock && payload.gregStock.stone) || 0 },
+      gregStock: { wood: (payload.gregStock && payload.gregStock.wood) || 0, stone: (payload.gregStock && payload.gregStock.stone) || 0, fertilizer: (payload.gregStock && payload.gregStock.fertilizer) || 0 },
+      fertilizerShop: { stock: (payload.fertilizerShop && payload.fertilizerShop.stock) || 0, lastRestockDay: (payload.fertilizerShop && payload.fertilizerShop.lastRestockDay) || 0 },
       wolves: payload.wolves || [], wolfNight: { active: !!(payload.wolves && payload.wolves.length), kills: 0 },
       rabbits: payload.rabbits || [], rabbitChallenge: payload.rabbitChallenge || null,
       greg: payload.greg || null,
@@ -504,7 +516,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     setBarn(sharedRef.current.barn);
     setGems(sharedRef.current.gems);
     setFlour(sharedRef.current.flour || 0);
-    setGregStock(sharedRef.current.gregStock || { wood: 0, stone: 0 });
+    setGregStock(sharedRef.current.gregStock || { wood: 0, stone: 0, fertilizer: 0 });
+    setFertilizerShop(sharedRef.current.fertilizerShop || { stock: 0, lastRestockDay: 0 });
     setRabbitChallenge(sharedRef.current.rabbitChallenge);
     syncBuildings();
     setWorldReady(true);
@@ -602,7 +615,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       crops: worldRef.current ? E.serializeCrops(worldRef.current) : [],
       mills: worldRef.current ? E.serializeMills(worldRef.current) : [],
       farmers: farmersRef.current,
-      horses: s.horses, animals: s.animals, wellBuilt: s.wellBuilt, coop: s.coop, barn: s.barn, gems: s.gems, flour: s.flour, gregStock: s.gregStock, wolves: s.wolves, greg: s.greg,
+      horses: s.horses, animals: s.animals, wellBuilt: s.wellBuilt, coop: s.coop, barn: s.barn, gems: s.gems, flour: s.flour, gregStock: s.gregStock, fertilizerShop: s.fertilizerShop, wolves: s.wolves, greg: s.greg,
       rabbits: s.rabbits, rabbitChallenge: s.rabbitChallenge,
     };
   }
@@ -849,6 +862,48 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             for (const i of tiles) g.taskQueue.push({ a: "till", i }, { a: "plant", i, crop: cropIdx }, { a: "water", i });
             out.state = shareState(); out.greg = g;
             out.chat = { from: "🧑‍🌾", msg: lang === "en" ? `Greg is on it: ${tiles.length} tile(s) of ${C.CROPS[cropIdx].nameEn}.` : `Greg s'y met : ${tiles.length} case(s) de ${C.CROPS[cropIdx].name}.` };
+          }
+        }
+      }
+    } else if (req.kind === "buyFertilizer") {
+      // Achat d'engrais au shop (chantier 2026-07, suite plan validé) : stock
+      // limité côté boutique (sharedRef.current.fertilizerShop.stock, remis à
+      // niveau tous les FERTILIZER_RESTOCK_EVERY_N_DAYS jours, voir le
+      // dayTimer plus bas), payé en or. Une fois acheté, l'engrais rejoint le
+      // pool COMMUN de la ferme (sharedRef.current.gregStock.fertilizer,
+      // même esprit que gregStock.wood/stone) — pas l'inventaire d'un joueur
+      // en particulier, puisqu'il ne se dépense que via un ordre à Greg.
+      const shop = sharedRef.current.fertilizerShop || (sharedRef.current.fertilizerShop = { stock: 0, lastRestockDay: s.day });
+      if (shop.stock <= 0) out.toast = { id: f.id, key: "gregNoRoom" };
+      else if (s.money < C.FERTILIZER_COST) out.toast = { id: f.id, key: "noGold" };
+      else {
+        s.money -= C.FERTILIZER_COST; shop.stock -= 1;
+        const stock = sharedRef.current.gregStock || (sharedRef.current.gregStock = { wood: 0, stone: 0 });
+        stock.fertilizer = (stock.fertilizer || 0) + 1;
+        out.state = shareState(); out.gregStock = stock; out.fertilizerShop = shop;
+      }
+    } else if (req.kind === "gregFertilizeOrder") {
+      // Ordre "épandre de l'engrais" (chantier 2026-07, suite plan validé) :
+      // même schéma que "gregOrder" (labourer/planter/arroser), mais cible
+      // des cases DÉJÀ PLANTÉES et non mûres (findFertilizableTiles) plutôt
+      // que de l'herbe libre, et consomme le pool commun d'engrais
+      // (gregStock.fertilizer, 1 engrais = 1 case) au lieu de l'or.
+      const g = s.greg;
+      const count = Math.max(1, Math.min(C.GREG_ORDER_MAX, req.count | 0));
+      if (!g || g.expiresAt <= Date.now()) out.toast = { id: f.id, key: "gregNotHired" };
+      else {
+        const stock = sharedRef.current.gregStock || (sharedRef.current.gregStock = { wood: 0, stone: 0 });
+        const have = stock.fertilizer || 0;
+        if (have <= 0) out.toast = { id: f.id, key: "gregNoFertilizer" };
+        else {
+          const w2 = worldRef.current;
+          const tiles = E.findFertilizableTiles(w2, { x: Math.round(px), y: Math.round(py) }, Math.min(count, have), Date.now());
+          if (tiles.length === 0) out.toast = { id: f.id, key: "gregNoRoom" };
+          else {
+            stock.fertilizer = have - tiles.length;
+            for (const i of tiles) g.taskQueue.push({ a: "fertilize", i });
+            out.gregStock = stock; out.greg = g;
+            out.chat = { from: "🧑‍🌾", msg: lang === "en" ? `Greg is on it: fertilizing ${tiles.length} tile(s).` : `Greg s'y met : engrais sur ${tiles.length} case(s).` };
           }
         }
       }
@@ -1117,6 +1172,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (p.gems) { sharedRef.current.gems = p.gems; setGems(p.gems); }
     if (p.flour !== undefined) { sharedRef.current.flour = p.flour; setFlour(p.flour); }
     if (p.gregStock !== undefined) { sharedRef.current.gregStock = p.gregStock; setGregStock(p.gregStock); }
+    if (p.fertilizerShop !== undefined) { sharedRef.current.fertilizerShop = p.fertilizerShop; setFertilizerShop(p.fertilizerShop); }
     if (p.rabbitChallenge !== undefined) { sharedRef.current.rabbitChallenge = p.rabbitChallenge; setRabbitChallenge(p.rabbitChallenge); }
     if (p.hatWon) {
       // Diffusion du chapeau gagné (chantier 2026-07) : même principe que
@@ -1134,11 +1190,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // Énergie restaurée pour tous (accord avec l'hôte).
     energyRef.current = C.MAX_ENERGY; setMyEnergy(C.MAX_ENERGY);
     if (p.animals) { sharedRef.current.animals = p.animals; syncBuildings(); }
+    if (p.fertilizerShop !== undefined) { sharedRef.current.fertilizerShop = p.fertilizerShop; setFertilizerShop(p.fertilizerShop); }
     setHud(h => ({ ...h, day: p.day }));
     pushToast(L.toastNewDay(p.day));
   }
   function toastMsg(key) {
-    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, noMillStock: L.toastNoMillStock, millNotEmpty: L.toastMillNotEmpty, noWheatToDeposit: L.toastNoWheatToDeposit, millFull: L.toastMillFull, actionFailed: L.toastActionFailed, coopNone: L.toastCoopNone, farCoop: L.toastFarCoop, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull, notInjured: L.toastNotInjured, noHealKit: L.toastNoHealKit, healTooFar: L.toastHealTooFar, gregNotHired: L.toastGregNotHired, gregNoRoom: L.toastGregNoRoom }[key] || "";
+    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, noMillStock: L.toastNoMillStock, millNotEmpty: L.toastMillNotEmpty, noWheatToDeposit: L.toastNoWheatToDeposit, millFull: L.toastMillFull, actionFailed: L.toastActionFailed, coopNone: L.toastCoopNone, farCoop: L.toastFarCoop, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull, notInjured: L.toastNotInjured, noHealKit: L.toastNoHealKit, healTooFar: L.toastHealTooFar, gregNotHired: L.toastGregNotHired, gregNoRoom: L.toastGregNoRoom, gregNoFertilizer: L.toastGregNoFertilizer }[key] || "";
   }
 
   // -------- Hôte : boucle temps + persistance --------
@@ -1228,13 +1285,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (Date.now() - s.dayStartAt >= C.DAY_REAL_MS) {
         const { tiles } = E.newDay(w, farmersRef.current, s.day, s.seed);
         s.day += 1; s.dayStartAt = Date.now();
+        // Réapparition de l'engrais en boutique (chantier 2026-07, suite plan
+        // validé) : tous les FERTILIZER_RESTOCK_EVERY_N_DAYS jours, le stock
+        // shop remonte à FERTILIZER_SHOP_STOCK (épuisable entre-temps, jamais
+        // remis à niveau hors de ce cycle — cohérent avec "ressource rare").
+        const shop = sharedRef.current.fertilizerShop || (sharedRef.current.fertilizerShop = { stock: 0, lastRestockDay: 0 });
+        if (s.day - shop.lastRestockDay >= C.FERTILIZER_RESTOCK_EVERY_N_DAYS) {
+          shop.stock = C.FERTILIZER_SHOP_STOCK; shop.lastRestockDay = s.day;
+        }
         const tilesOut = tiles.map(i => { recordTileOverride(i); return { i, g: w.ground[i], o: w.objects[i] }; });
         // Depuis le zip 151, la pousse/l'arrosage/la production animale sont en
         // temps réel (voir cropGrowState/animalReady) : ce passage de jour ne
         // fait plus produire les animaux, il ne fait que régénérer un peu de
         // nature et restaurer l'énergie (voir E.newDay).
         dirtyRef.current = true;
-        channelRef.current?.send({ type: "broadcast", event: "newday", payload: { day: s.day, dayStartAt: s.dayStartAt, tiles: tilesOut, crops: [], animals: s.animals } });
+        channelRef.current?.send({ type: "broadcast", event: "newday", payload: { day: s.day, dayStartAt: s.dayStartAt, tiles: tilesOut, crops: [], animals: s.animals, fertilizerShop: shop } });
         channelRef.current?.send({ type: "broadcast", event: "chat", payload: { from: "☀", msg: L.chatNewDay(s.day) } });
       }
     }, 1000);
@@ -1967,6 +2032,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (t.a === "till") { ok = E.gregTill(w, t.i); if (ok) { recordTileOverride(t.i); patch = { tiles: [{ i: t.i, g: w.ground[t.i], o: w.objects[t.i] }] }; } }
         else if (t.a === "plant") { ok = E.gregPlant(w, t.i, t.crop); if (ok) patch = { crops: [{ i: t.i, c: w.crops.get(t.i) }] }; }
         else if (t.a === "water") { ok = E.gregWater(w, t.i, now); if (ok) patch = { crops: [{ i: t.i, c: w.crops.get(t.i) }] }; }
+        else if (t.a === "fertilize") { ok = E.gregFertilize(w, t.i, now); if (ok) patch = { crops: [{ i: t.i, c: w.crops.get(t.i) }] }; }
         else if (t.a === "chop") {
           const r = E.gregChop(w, t.i);
           recordTileOverride(t.i);
@@ -2040,6 +2106,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (!gregOrderPending) return;
     sendReq({ kind: "gregOrder", crop: gregOrderPending.crop, count: gregOrderPending.count });
     setGregOrderPending(null);
+  };
+  const buyFertilizer = () => sendReq({ kind: "buyFertilizer" });
+  const armFertilizerOrder = () => { setFertilizerOrderPending({ count: fertilizerOrderCount }); setFertilizerOrderOpen(false); setShopOpen(false); };
+  const cancelFertilizerOrder = () => setFertilizerOrderPending(null);
+  const fireFertilizerOrder = () => {
+    if (!fertilizerOrderPending) return;
+    sendReq({ kind: "gregFertilizeOrder", count: fertilizerOrderPending.count });
+    setFertilizerOrderPending(null);
   };
   const buyAnimal = (type) => sendReq({ kind: "buyAnimal", animal: type });
   // Défi "chasse aux lapins" (chantier 2026-07) : actions RÉSERVÉES à l'hôte
@@ -3200,6 +3274,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           <button className="ferme-greg-order-cancel" title={L.gregOrderCancel} onClick={cancelGregOrder}>✕</button>
         </div>
       )}
+      {fertilizerOrderPending && (
+        <div className="ferme-greg-order-wrap">
+          <button className="ferme-greg-order-fab" onClick={fireFertilizerOrder}>{L.gregOrderFab}</button>
+          <button className="ferme-greg-order-cancel" title={L.gregOrderCancel} onClick={cancelFertilizerOrder}>✕</button>
+        </div>
+      )}
 
       {/* Boutons flottants (nouveautés incluses) */}
       <div className="ferme-actions">
@@ -3305,6 +3385,29 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           </div>
         </div>
       )}
+
+      {fertilizerOrderOpen && (
+        <div className="ferme-seed-menu-ov" onClick={() => setFertilizerOrderOpen(false)}>
+          <div className="ferme-seed-menu panel" onClick={e => e.stopPropagation()}>
+            <div className="ferme-seed-menu-title">{L.fertilizerOrderTitle}</div>
+            <div className="ferme-shop-row">
+              <div className="info"><span>{L.fertilizerOrderAvailable(gregStock.fertilizer || 0)}</span></div>
+            </div>
+            <div className="ferme-shop-row">
+              <div className="info"><b>{L.fertilizerOrderCountLabel}</b></div>
+              <input type="number" min={1} max={C.GREG_ORDER_MAX} value={fertilizerOrderCount}
+                onChange={e => setFertilizerOrderCount(Math.max(1, Math.min(C.GREG_ORDER_MAX, parseInt(e.target.value) || 1)))}
+                style={{ width: 60 }} />
+            </div>
+            <div className="ferme-shop-row">
+              <div className="info"><span>{L.fertilizerOrderCost(Math.min(fertilizerOrderCount, gregStock.fertilizer || 0))}</span></div>
+              <button disabled={(gregStock.fertilizer || 0) <= 0} onClick={armFertilizerOrder}>{L.fertilizerOrderArmBtn}</button>
+            </div>
+            <div className="ferme-seed-menu-hint">{L.fertilizerOrderHint}</div>
+          </div>
+        </div>
+      )}
+
 
       {craftMenuOpen && (
         <div className="ferme-seed-menu-ov" onClick={() => setCraftMenuOpen(null)}>
@@ -3528,6 +3631,23 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 ? <button onClick={() => setGregOrderOpen(true)}>{L.gregOrderBtn}</button>
                 : <button disabled={hud.money < C.GREG_HIRE_COST} onClick={hireGreg}>{L.hireLabel}</button>}
             </div>
+            {/* Engrais (chantier 2026-07, suite plan validé) : ligne visible
+                UNIQUEMENT quand le stock boutique est non nul (ressource rare,
+                pas disponible en permanence — voir FERTILIZER_RESTOCK_EVERY_N_DAYS). */}
+            {fertilizerShop.stock > 0 && (
+              <div className="ferme-shop-row">
+                <span style={{ fontSize: 26, width: 32, textAlign: "center" }}>🌱</span>
+                <div className="info">
+                  <b>{L.fertilizerShopLabel}</b>
+                  <span>{L.fertilizerShopStock(fertilizerShop.stock)}</span>
+                  <span className="ferme-usage">{L.fertilizerOrderAvailable(gregStock.fertilizer || 0)}</span>
+                </div>
+                <button disabled={hud.money < C.FERTILIZER_COST} onClick={buyFertilizer}>{L.fertilizerShopBuy(C.FERTILIZER_COST)}</button>
+                {sharedRef.current.greg && (gregStock.fertilizer || 0) > 0 && (
+                  <button onClick={() => setFertilizerOrderOpen(true)}>{L.fertilizerOrderBtn}</button>
+                )}
+              </div>
+            )}
             <div className="ferme-shop-row">
               <Sprite img={spritesReady ? spritesRef.current.well : null} w={26} h={32} />
               <div className="info"><b>{L.shopWellTitle(C.WELL_COST)}</b><span>{buildings.wellBuilt ? L.shopWellOwned : L.shopWellSub}</span></div>

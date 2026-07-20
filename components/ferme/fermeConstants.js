@@ -572,6 +572,19 @@ export const GREG_CLEAR_RADIUS = 12;               // rayon de recherche d'arbre
 export const GREG_CLEAR_BATCH = 3;                 // nb d'obstacles mis en file par passage de scan
 export const GREG_CLEAR_CHECK_MS = 5 * 60 * 1000;  // fréquence de scan (5 min réelles) quand Greg n'a plus de tâche en attente
 
+// --- Engrais (chantier 2026-07, suite plan validé) : ressource RARE achetée
+// en or au shop (stock limité, se reconstitue tous les FERTILIZER_RESTOCK_EVERY_N_DAYS
+// jours), stockée dans le pool commun sharedRef.current.gregStock.fertilizer
+// (même esprit que gregStock.wood/stone) une fois achetée. Dépensée ensuite
+// via un ordre à Greg ("gregFertilizeOrder", 1 engrais = 1 case) qui accélère
+// la pousse d'une culture déjà plantée et non mûre. Prix extrapolés entre le
+// coût d'une graine de blé (120) et celui du puits (600) : à ajuster au
+// playtest si besoin (pas bloquant, voir plan).
+export const FERTILIZER_BOOST_MS = 6 * H;           // temps de pousse retiré (fixe, quelle que soit la culture)
+export const FERTILIZER_COST = 150;                 // prix d'achat en or, à l'unité
+export const FERTILIZER_RESTOCK_EVERY_N_DAYS = 2;   // cycle de réapparition dans le shop
+export const FERTILIZER_SHOP_STOCK = 3;             // unités remises en stock à chaque réapparition
+
 // --- Lapins (chantier 2026-07, demande Guillaume : "ajouter des petits
 // lapins bien détaillés qui fuient et sont inoffensifs, surtout rive
 // droite"). Contrairement aux loups : présents de JOUR COMME DE NUIT (juste

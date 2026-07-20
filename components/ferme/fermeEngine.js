@@ -959,6 +959,48 @@ export function gregWater(world, i, now) {
   return false;
 }
 
+// Engrais (chantier 2026-07, suite plan validé) : cherche jusqu'à `count`
+// cases PLANTÉES et NON MÛRES (contrairement à findFreeGrassTiles qui
+// cherche de l'herbe libre) en anneaux croissants autour de `anchor` — même
+// principe de recherche en spirale.
+export function findFertilizableTiles(world, anchor, count, now) {
+  const out = [];
+  const seen = new Set();
+  for (let r = 0; r < 40 && out.length < count; r++) {
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue; // seulement l'anneau
+        const x = anchor.x + dx, y = anchor.y + dy;
+        if (!inMap(x, y)) continue;
+        const i = idx(x, y);
+        if (seen.has(i)) continue;
+        seen.add(i);
+        const c = world.crops.get(i);
+        if (c && !cropGrowState(c, now).mature) {
+          out.push(i);
+          if (out.length >= count) return out;
+        }
+      }
+    }
+  }
+  return out;
+}
+
+// Engrais sur une case par Greg : banque la progression actuelle (comme
+// gregWater) puis ajoute FERTILIZER_BOOST_MS, plafonné à growMs (jamais de
+// pousse négative ni de dépassement de la durée réelle). Renvoie false si la
+// case n'a pas de culture ou si la culture est déjà mûre (rien à accélérer).
+export function gregFertilize(world, i, now) {
+  const c = world.crops.get(i);
+  if (!c) return false;
+  const gs = cropGrowState(c, now);
+  if (gs.mature) return false;
+  const dur = C.CROPS[c.t].growMs;
+  c.bankedMs = Math.min(dur, gs.grown + C.FERTILIZER_BOOST_MS);
+  c.wateredAt = now;
+  return true;
+}
+
 // Arrosage automatique périodique (vérifié toutes les GREG_WATER_INTERVAL_MS) :
 // Greg détecte les cultures qui ONT BESOIN d'être arrosées (cropGrowState().needsWater,
 // i.e. pas mûres et dernier arrosage expiré depuis WATER_VALID_MS) et n'arrose que
