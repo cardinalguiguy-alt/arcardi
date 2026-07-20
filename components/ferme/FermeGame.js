@@ -125,6 +125,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [wolfBite, setWolfBite] = useState(null); // {wolfId} pendant le mini-jeu de morsure (loup agressif), sinon null
   const [injuredUntil, setInjuredUntil] = useState(0); // horodatage de fin d'indisponibilité (0 = pas blessé), survit à un refresh (voir farmer.injuredUntil)
   const [shopOpen, setShopOpen] = useState(false);
+  const [gregOrderOpen, setGregOrderOpen] = useState(false); // panneau "donner un ordre à Greg" (chantier 2026-07)
+  const [gregOrderCrop, setGregOrderCrop] = useState(0);
+  const [gregOrderCount, setGregOrderCount] = useState(10);
   const [binOpen, setBinOpen] = useState(false);
   const [mapOpen, setMapOpen] = useState(false);
   const [promptKey, setPromptKey] = useState(null); // 'shop' | 'bin' | null
@@ -167,7 +170,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const meRef = useRef(null);
   const playersRef = useRef(new Map()); // id -> remote farmer render data
   const farmersRef = useRef({});        // hôte : id -> état privé arbitré
-  const sharedRef = useRef({ seed: 0, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), flour: 0, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], rabbitChallenge: null });
+  const sharedRef = useRef({ seed: 0, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), flour: 0, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], rabbitChallenge: null, greg: null });
   const invRef = useRef(null);
   const toolsRef = useRef({ hoe: 1, can: 1, axe: 1, pick: 1 });
   const energyRef = useRef(C.MAX_ENERGY);
@@ -203,6 +206,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const horseCallAccumRef = useRef(0); // accumulateur (secondes) pour throttler la diffusion réseau des chevaux sifflés en course
   const wolfAccumRef = useRef(0);      // accumulateur (secondes), même throttle réseau pour les loups simulés côté hôte
   const rabbitAccumRef = useRef(0);    // accumulateur (secondes), même throttle réseau pour les lapins simulés côté hôte
+  const gregAccumRef = useRef(0);      // accumulateur (secondes), même throttle réseau pour Greg simulé côté hôte
   const rabbitRespawnAtRef = useRef(0); // horodatage du prochain repop autorisé (repop progressif, pas instantané)
   const rabbitSeqRef = useRef(0);      // compteur pour des ids de lapins uniques
   const torchOnRef = useRef(false);    // miroir synchrone de torchOn (lu dans la boucle de rendu / diffusé avec la position)
@@ -333,6 +337,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         wolves: [], wolfNight: { active: false, kills: 0 }, // repartent à zéro à la reprise, respawn dérivé de l'heure courante
         rabbits: [], // même principe : repartent à zéro, repop dérivé de l'heure courante (voir updateRabbits)
         rabbitChallenge: null, // défi éphémère, ne survit pas à une reprise (même principe que wolfNight)
+        // Greg (chantier 2026-07) : contrat réel de 2 jours, DOIT survivre à
+        // une reprise (contrairement aux loups/lapins) — sinon un rechargement
+        // "rembourserait" gratuitement le temps de contrat restant. On ne
+        // garde que s'il n'a pas déjà expiré depuis la dernière sauvegarde ;
+        // la file de tâches en cours est purgée (redémarre en rôdaille, aucune
+        // tâche perdue de façon visible car elle a été payée à la commande).
+        greg: (saved.greg && saved.greg.expiresAt > Date.now())
+          ? { ...saved.greg, taskQueue: [], phase: "roam", roamTarget: null, nextRoamAt: 0 } : null,
       };
       // Les cavaliers repartent à pied à la reprise (aucun joueur monté au chargement).
       for (const h of sharedRef.current.horses) { h.rider = null; h.rider2 = null; h.callTarget = null; }
@@ -352,7 +364,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const seed = hashSeed(code);
       worldRef.current = E.generateWorld(seed);
       overridesRef.current = { ground: {}, object: {} };
-      sharedRef.current = { seed, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), gems: C.GEMS.map(() => 0), flour: 0, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], rabbitChallenge: null };
+      sharedRef.current = { seed, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), gems: C.GEMS.map(() => 0), flour: 0, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], rabbitChallenge: null, greg: null };
       farmersRef.current = {};
       // Crée tout de suite l'enregistrement pour réserver le code.
       persistFarm();
@@ -448,6 +460,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       flour: payload.flour || 0,
       wolves: payload.wolves || [], wolfNight: { active: !!(payload.wolves && payload.wolves.length), kills: 0 },
       rabbits: payload.rabbits || [], rabbitChallenge: payload.rabbitChallenge || null,
+      greg: payload.greg || null,
     };
     if (payload.farmers) {
       farmersRef.current = payload.farmers;
@@ -576,7 +589,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       crops: worldRef.current ? E.serializeCrops(worldRef.current) : [],
       mills: worldRef.current ? E.serializeMills(worldRef.current) : [],
       farmers: farmersRef.current,
-      horses: s.horses, animals: s.animals, wellBuilt: s.wellBuilt, coop: s.coop, barn: s.barn, gems: s.gems, flour: s.flour, wolves: s.wolves,
+      horses: s.horses, animals: s.animals, wellBuilt: s.wellBuilt, coop: s.coop, barn: s.barn, gems: s.gems, flour: s.flour, wolves: s.wolves, greg: s.greg,
       rabbits: s.rabbits, rabbitChallenge: s.rabbitChallenge,
     };
   }
@@ -779,6 +792,49 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         out.state = shareState(); out.wellBuilt = true;
         out.chat = { from: "🪣", msg: lang === "en" ? "The well is built!" : "Le puits est construit !" };
       } else if (!s.wellBuilt) out.toast = { id: f.id, key: "noGold" };
+    } else if (req.kind === "hireGreg") {
+      // Engagement de Greg (chantier 2026-07) : contrat réel de 2 jours
+      // (C.GREG_CONTRACT_MS), rémunéré d'avance (C.GREG_HIRE_COST). Un seul
+      // Greg à la fois : ré-engager avant expiration prolonge simplement le
+      // contrat (paie à nouveau, repart pour 2 jours pleins) plutôt que de
+      // refuser — plus simple à comprendre pour le joueur qu'un blocage.
+      if (s.money >= C.GREG_HIRE_COST) {
+        s.money -= C.GREG_HIRE_COST;
+        const now = Date.now();
+        s.greg = {
+          hiredAt: now, expiresAt: now + C.GREG_CONTRACT_MS,
+          x: C.GREG_ANCHOR.x, y: C.GREG_ANCHOR.y, tx: C.GREG_ANCHOR.x, ty: C.GREG_ANCHOR.y, dir: 0, animT: 0, moving: false,
+          phase: "roam", roamAnchor: { x: C.GREG_ANCHOR.x, y: C.GREG_ANCHOR.y }, roamTarget: null, nextRoamAt: 0,
+          taskQueue: [], lastAutoWaterAt: now,
+        };
+        out.state = shareState(); out.greg = s.greg;
+        out.chat = { from: "🧑‍🌾", msg: lang === "en" ? "Greg is hired for 2 days!" : "Greg est engagé pour 2 jours !" };
+      } else out.toast = { id: f.id, key: "noGold" };
+    } else if (req.kind === "gregOrder") {
+      // Ordre donné à Greg (chantier 2026-07) : "labourer N cases, planter,
+      // puis arroser" pour une culture donnée. Payé d'avance au prix des
+      // graines (stock commun, ne touche PAS l'inventaire d'un joueur en
+      // particulier — Greg travaille pour la ferme). La file de tâches est
+      // simplement complétée (des ordres successifs s'enchaînent).
+      const g = s.greg;
+      const cropIdx = req.crop | 0, count = Math.max(1, Math.min(C.GREG_ORDER_MAX, req.count | 0));
+      if (!g || g.expiresAt <= Date.now()) out.toast = { id: f.id, key: "gregNotHired" };
+      else if (!(cropIdx >= 0 && cropIdx < C.CROPS.length)) out.toast = { id: f.id, key: "noGold" };
+      else {
+        const cost = C.CROPS[cropIdx].seedCost * count;
+        const w2 = worldRef.current;
+        if (s.money < cost) out.toast = { id: f.id, key: "noGold" };
+        else {
+          const tiles = E.findFreeGrassTiles(w2, g.roamAnchor || C.GREG_ANCHOR, count);
+          if (tiles.length === 0) out.toast = { id: f.id, key: "gregNoRoom" };
+          else {
+            s.money -= C.CROPS[cropIdx].seedCost * tiles.length;
+            for (const i of tiles) g.taskQueue.push({ a: "till", i }, { a: "plant", i, crop: cropIdx }, { a: "water", i });
+            out.state = shareState(); out.greg = g;
+            out.chat = { from: "🧑‍🌾", msg: lang === "en" ? `Greg is on it: ${tiles.length} tile(s) of ${C.CROPS[cropIdx].nameEn}.` : `Greg s'y met : ${tiles.length} case(s) de ${C.CROPS[cropIdx].name}.` };
+          }
+        }
+      }
     } else if (req.kind === "buyAnimal") {
       const at = req.animal | 0;
       if (at >= 0 && at < C.ANIMALS.length) {
@@ -1037,6 +1093,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (p.animals) { sharedRef.current.animals = p.animals; syncBuildings(); }
     if (p.wolves) { sharedRef.current.wolves = p.wolves; minimapDirtyRef.current = true; }
     if (p.rabbits) { sharedRef.current.rabbits = p.rabbits; minimapDirtyRef.current = true; }
+    if (p.greg !== undefined) { sharedRef.current.greg = p.greg; minimapDirtyRef.current = true; }
     if (p.wellBuilt) { sharedRef.current.wellBuilt = true; minimapDirtyRef.current = true; syncBuildings(); }
     if (p.coop !== undefined) { sharedRef.current.coop = p.coop; setCoop(p.coop); }
     if (p.barn !== undefined) { sharedRef.current.barn = p.barn; setBarn(p.barn); minimapDirtyRef.current = true; }
@@ -1063,7 +1120,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     pushToast(L.toastNewDay(p.day));
   }
   function toastMsg(key) {
-    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, noMillStock: L.toastNoMillStock, millNotEmpty: L.toastMillNotEmpty, noWheatToDeposit: L.toastNoWheatToDeposit, millFull: L.toastMillFull, actionFailed: L.toastActionFailed, coopNone: L.toastCoopNone, farCoop: L.toastFarCoop, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull, notInjured: L.toastNotInjured, noHealKit: L.toastNoHealKit, healTooFar: L.toastHealTooFar }[key] || "";
+    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, noMillStock: L.toastNoMillStock, millNotEmpty: L.toastMillNotEmpty, noWheatToDeposit: L.toastNoWheatToDeposit, millFull: L.toastMillFull, actionFailed: L.toastActionFailed, coopNone: L.toastCoopNone, farCoop: L.toastFarCoop, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull, notInjured: L.toastNotInjured, noHealKit: L.toastNoHealKit, healTooFar: L.toastHealTooFar, gregNotHired: L.toastGregNotHired, gregNoRoom: L.toastGregNoRoom }[key] || "";
   }
 
   // -------- Hôte : boucle temps + persistance --------
@@ -1837,6 +1894,79 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       channelRef.current?.send({ type: "broadcast", event: "apply", payload: { wolves: s.wolves } });
     }
   }
+  // Greg, l'employé de champs (chantier 2026-07). Simulation hôte, même
+  // squelette que updateWolves/updateRabbits (rôdaille par ancre + throttle
+  // réseau ~150ms), plus une file de tâches (till/plant/water) et un
+  // arrosage automatique global toutes les GREG_WATER_INTERVAL_MS. "Greg
+  // doit toujours se balader autour du champs tant qu'il est employé" :
+  // en l'absence de tâche, il repasse systématiquement en rôdaille autour
+  // de son ancre — jamais immobile.
+  function updateGreg(dt) {
+    const w = worldRef.current; if (!w) return;
+    const s = sharedRef.current, g = s.greg;
+    if (!g) return;
+    const now = Date.now();
+    if (g.expiresAt <= now) {
+      s.greg = null;
+      channelRef.current?.send({ type: "broadcast", event: "apply", payload: { greg: null } });
+      addChat("🧑‍🌾", lang === "en" ? "Greg's contract has ended." : "Le contrat de Greg est terminé.");
+      dirtyRef.current = true;
+      return;
+    }
+    // Arrosage automatique de tout le champ, toutes les 10h réelles.
+    if (now - (g.lastAutoWaterAt || 0) >= C.GREG_WATER_INTERVAL_MS) {
+      g.lastAutoWaterAt = now;
+      const wateredIdx = E.gregAutoWaterAll(w, now);
+      if (wateredIdx.length) {
+        dirtyRef.current = true;
+        channelRef.current?.send({ type: "broadcast", event: "apply", payload: { crops: wateredIdx.map(i => ({ i, c: w.crops.get(i) })) } });
+      }
+    }
+    let speed = 0, moved = false;
+    if (g.taskQueue && g.taskQueue.length > 0) {
+      const t = g.taskQueue[0];
+      const tx = E.xOf(t.i) + 0.5, ty = E.yOf(t.i) + 0.5;
+      g.tx = tx; g.ty = ty; speed = C.GREG_SPEED; g.phase = "task";
+      const d = Math.hypot(tx - g.x, ty - g.y);
+      if (d <= C.GREG_TASK_RANGE) {
+        let ok = false, patch = null;
+        if (t.a === "till") { ok = E.gregTill(w, t.i); if (ok) { recordTileOverride(t.i); patch = { tiles: [{ i: t.i, g: w.ground[t.i], o: w.objects[t.i] }] }; } }
+        else if (t.a === "plant") { ok = E.gregPlant(w, t.i, t.crop); if (ok) patch = { crops: [{ i: t.i, c: w.crops.get(t.i) }] }; }
+        else if (t.a === "water") { ok = E.gregWater(w, t.i, now); if (ok) patch = { crops: [{ i: t.i, c: w.crops.get(t.i) }] }; }
+        g.taskQueue.shift();
+        dirtyRef.current = true;
+        if (patch) channelRef.current?.send({ type: "broadcast", event: "apply", payload: patch });
+      }
+    } else {
+      g.phase = "roam";
+      if (!g.roamAnchor) g.roamAnchor = { x: C.GREG_ANCHOR.x, y: C.GREG_ANCHOR.y };
+      speed = C.GREG_SPEED * 0.55; // rôdaille plus lente que le trajet vers une tâche
+      if (!g.roamTarget || Math.hypot(g.roamTarget.x - g.x, g.roamTarget.y - g.y) < 0.3 || now >= (g.nextRoamAt || 0)) {
+        const a = Math.random() * Math.PI * 2, d = 1 + Math.random() * C.GREG_ROAM_RADIUS;
+        g.roamTarget = { x: g.roamAnchor.x + Math.cos(a) * d, y: g.roamAnchor.y + Math.sin(a) * d };
+        g.nextRoamAt = now + 1500 + Math.random() * 2500;
+      }
+      g.tx = g.roamTarget.x; g.ty = g.roamTarget.y;
+    }
+    if (speed > 0 && g.tx !== undefined) {
+      const dx = g.tx - g.x, dy = g.ty - g.y, d = Math.hypot(dx, dy);
+      if (d > 0.02) {
+        const step = Math.min(speed * dt, d);
+        const nx = g.x + (dx / d) * step, ny = g.y + (dy / d) * step;
+        if (!E.isWaterTile(w, nx, ny)) {
+          g.x = nx; g.y = ny;
+          g.dir = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 2 : 3) : (dy < 0 ? 1 : 0);
+          g.animT = (g.animT || 0) + dt * 6; g.moving = true; moved = true;
+        } else g.animT = 0;
+      } else g.moving = false;
+    } else g.moving = false;
+    if (moved) minimapDirtyRef.current = true;
+    gregAccumRef.current += dt;
+    if (gregAccumRef.current >= 0.15) {
+      gregAccumRef.current = 0;
+      channelRef.current?.send({ type: "broadcast", event: "apply", payload: { greg: g } });
+    }
+  }
   function teleportWell() {
     const m = meRef.current; if (!m || !sharedRef.current.wellBuilt) return;
     m.x = C.WELL_SPAWN.x; m.y = C.WELL_SPAWN.y; m.moving = false;
@@ -1844,6 +1974,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   }
   const buyHorse = () => sendReq({ kind: "buyHorse" });
   const buyWell = () => sendReq({ kind: "buyWell" });
+  const hireGreg = () => sendReq({ kind: "hireGreg" });
+  const sendGregOrder = () => { sendReq({ kind: "gregOrder", crop: gregOrderCrop, count: gregOrderCount }); setGregOrderOpen(false); };
   const buyAnimal = (type) => sendReq({ kind: "buyAnimal", animal: type });
   // Défi "chasse aux lapins" (chantier 2026-07) : actions RÉSERVÉES à l'hôte
   // (c'est lui qui reçoit la popup de proposition, jamais les autres
@@ -1962,6 +2094,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (isHost) updateWhistledHorses(dt);
       if (isHost) updateWolves(dt);
       if (isHost) updateRabbits(dt);
+      if (isHost) updateGreg(dt);
       checkWalkOverHarvest();
       checkWalkOverWater();
       checkWalkOverCollect();
@@ -1978,6 +2111,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         p.x += (p.tx - p.x) * Math.min(1, dt * 12);
         p.y += (p.ty - p.y) * Math.min(1, dt * 12);
         p.animT = p.moving ? (p.animT || 0) + dt * 9 : 0;
+      }
+      const gregNow = sharedRef.current.greg;
+      if (gregNow && !isHost) {
+        if (gregNow.rx === undefined) { gregNow.rx = gregNow.x; gregNow.ry = gregNow.y; }
+        gregNow.rx += (gregNow.x - gregNow.rx) * Math.min(1, dt * 8);
+        gregNow.ry += (gregNow.y - gregNow.ry) * Math.min(1, dt * 8);
       }
 
       const cam = getCam();
@@ -2338,6 +2477,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           if (rb.dir === 2) { ctx.save(); ctx.translate(px + 16, py); ctx.scale(-1, 1); ctx.drawImage(img, 0, 0); ctx.restore(); }
           else ctx.drawImage(img, px, py);
         } });
+      }
+      // Greg, l'employé de champs (chantier 2026-07) : réutilise le rendu
+      // fermier existant (drawCharacter) avec un jeu de sprite dédié
+      // (outfit -1 → sprite ouvrier, voir buildSprites/getChar) plutôt que
+      // de dessiner un nouveau personnage à part. L'hôte affiche sa position
+      // simulée en temps réel (g.x/g.y) ; les autres joueurs affichent la
+      // position lissée (g.rx/g.ry, voir la boucle d'interpolation ci-dessus).
+      {
+        const g = sharedRef.current.greg;
+        if (g) {
+          const gx = isHost ? g.x : (g.rx ?? g.x), gy = isHost ? g.y : (g.ry ?? g.y);
+          draws.push({ y: (gy + 1) * T, fn: () => drawCharacter({ id: "greg", name: "Greg", x: gx, y: gy, dir: g.dir || 0, moving: !!g.moving, animT: g.animT || 0, gender: "m", outfit: 0 }, false) });
+        }
       }
       if (!m.sleeping) draws.push({ y: (m.y + 1) * T, fn: () => drawSelf(m) });
       for (const p of playersRef.current.values()) if (!p.sleeping) draws.push({ y: (p.y + 1) * T, fn: () => drawRemote(p) });
@@ -3052,6 +3204,32 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       {/* Menu Construire/Vendre (clic sur bois ou pierre du HUD) : choisir de
           fabriquer des sections de construction (clôture/mur/chemin) depuis
           la ressource récoltée, ou de tout vendre au bac (chantier 2026-07). */}
+      {gregOrderOpen && (
+        <div className="ferme-seed-menu-ov" onClick={() => setGregOrderOpen(false)}>
+          <div className="ferme-seed-menu panel" onClick={e => e.stopPropagation()}>
+            <div className="ferme-seed-menu-title">{L.gregOrderTitle}</div>
+            {C.CROPS.map(cr => (
+              <div key={cr.id} className={"ferme-seed-menu-row" + (cr.id === gregOrderCrop ? " sel" : "")}
+                onClick={() => setGregOrderCrop(cr.id)}>
+                <Sprite img={spritesReady ? spritesRef.current.crops[cr.id][C.CROP_STAGES - 1] : null} w={26} h={26} />
+                <span className="name">{seedName(cr.id)}</span>
+                <span className="count">{L.perPiece(cr.seedCost)}</span>
+              </div>
+            ))}
+            <div className="ferme-shop-row">
+              <div className="info"><b>{L.gregOrderCountLabel}</b></div>
+              <input type="number" min={1} max={C.GREG_ORDER_MAX} value={gregOrderCount}
+                onChange={e => setGregOrderCount(Math.max(1, Math.min(C.GREG_ORDER_MAX, parseInt(e.target.value) || 1)))}
+                style={{ width: 60 }} />
+            </div>
+            <div className="ferme-shop-row">
+              <div className="info"><span>{L.gregOrderCost(C.CROPS[gregOrderCrop].seedCost * gregOrderCount)}</span></div>
+              <button disabled={hud.money < C.CROPS[gregOrderCrop].seedCost * gregOrderCount} onClick={sendGregOrder}>{L.gregOrderBtn}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {craftMenuOpen && (
         <div className="ferme-seed-menu-ov" onClick={() => setCraftMenuOpen(null)}>
           <div className="ferme-seed-menu panel ferme-craft-menu" onClick={e => e.stopPropagation()}>
@@ -3262,6 +3440,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               <Sprite img={spritesReady ? spritesRef.current.horse : null} w={36} h={30} />
               <div className="info"><b>{L.shopHorseTitle(C.HORSE_COSTS[Math.min(buildings.horseCount, C.HORSE_MAX_COUNT - 1)])}</b><span>{L.shopHorseSub}</span><span className="ferme-usage">{buildings.horseCount >= C.HORSE_MAX_COUNT ? L.shopHorseMax : L.shopHorseCount(buildings.horseCount, C.HORSE_MAX_COUNT)}</span></div>
               <button disabled={buildings.horseCount >= C.HORSE_MAX_COUNT || hud.money < C.HORSE_COSTS[Math.min(buildings.horseCount, C.HORSE_MAX_COUNT - 1)]} onClick={buyHorse}>{buildings.horseCount >= C.HORSE_MAX_COUNT ? L.maxLabel : L.buyLabel}</button>
+            </div>
+            <div className="ferme-shop-row">
+              <Sprite img={spritesReady ? spritesRef.current.getChar("m", 0) : null} w={26} h={32} />
+              <div className="info">
+                <b>{L.gregRowTitle(C.GREG_HIRE_COST)}</b>
+                <span>{L.gregRowSub}</span>
+                <span className="ferme-usage">{sharedRef.current.greg ? L.gregHiredUntil(Math.max(0, Math.ceil((sharedRef.current.greg.expiresAt - Date.now()) / 3600000))) : L.gregNotHiredSub}</span>
+              </div>
+              {sharedRef.current.greg
+                ? <button onClick={() => setGregOrderOpen(true)}>{L.gregOrderBtn}</button>
+                : <button disabled={hud.money < C.GREG_HIRE_COST} onClick={hireGreg}>{L.hireLabel}</button>}
             </div>
             <div className="ferme-shop-row">
               <Sprite img={spritesReady ? spritesRef.current.well : null} w={26} h={32} />

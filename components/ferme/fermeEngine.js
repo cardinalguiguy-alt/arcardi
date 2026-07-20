@@ -835,6 +835,73 @@ export function resolveAct(world, f, m) {
 }
 
 /* -------------------------------------------------------------------------
+   Greg, l'employé de champs de base (chantier 2026-07). Fonctions pures de
+   mutation du monde, appelées uniquement côté hôte (FermeGame.js/updateGreg
+   et hostHandleReqUnsafe), sans passer par un `farmer` (Greg n'a ni énergie
+   ni outils : il agit gratuitement une fois engagé).
+   ------------------------------------------------------------------------- */
+
+// Cherche jusqu'à `count` cases d'herbe libres (G_GRASS, sans objet, sans
+// culture, hors pont/eau) en anneaux croissants autour de `anchor` — même
+// principe de recherche en spirale que les spawns (wolfSpawnPos/rabbitSpawnPos).
+export function findFreeGrassTiles(world, anchor, count) {
+  const out = [];
+  const seen = new Set();
+  for (let r = 0; r < 40 && out.length < count; r++) {
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue; // seulement l'anneau
+        const x = anchor.x + dx, y = anchor.y + dy;
+        if (!inMap(x, y)) continue;
+        const i = idx(x, y);
+        if (seen.has(i)) continue;
+        seen.add(i);
+        if (world.ground[i] === C.G_GRASS && world.objects[i] === C.O_NONE && !world.crops.has(i)) {
+          out.push(i);
+          if (out.length >= count) return out;
+        }
+      }
+    }
+  }
+  return out;
+}
+
+// Labour d'une case par Greg (identique à resolveAct "till", sans énergie).
+export function gregTill(world, i) {
+  if (world.ground[i] === C.G_GRASS && world.objects[i] === C.O_NONE && !world.crops.has(i)) {
+    world.ground[i] = C.G_TILLED; return true;
+  }
+  return false;
+}
+
+// Plantation d'une case par Greg (le coût en pièces a déjà été prélevé au
+// moment de l'ordre, voir hostHandleReqUnsafe cas "gregOrder" — Greg ne
+// consomme pas l'inventaire de graines d'un joueur, c'est un stock commun).
+export function gregPlant(world, i, cropIdx) {
+  const g = world.ground[i];
+  if ((g === C.G_TILLED || g === C.G_WATERED) && !world.crops.has(i)) {
+    world.crops.set(i, { t: cropIdx, bankedMs: 0, wateredAt: null }); return true;
+  }
+  return false;
+}
+
+// Arrosage d'une case par Greg (identique à resolveAct "water", sans énergie).
+export function gregWater(world, i, now) {
+  const c = world.crops.get(i);
+  if (c) { c.bankedMs = cropGrowState(c, now).grown; c.wateredAt = now; return true; }
+  return false;
+}
+
+// Arrosage automatique périodique (toutes les GREG_WATER_INTERVAL_MS) : TOUT
+// le champ d'un coup, comme demandé ("arrosera automatiquement toutes les
+// dix heures"). Renvoie la liste des indices effectivement arrosés.
+export function gregAutoWaterAll(world, now) {
+  const out = [];
+  for (const [i, c] of world.crops) { c.bankedMs = cropGrowState(c, now).grown; c.wateredAt = now; out.push(i); }
+  return out;
+}
+
+/* -------------------------------------------------------------------------
    Missions collaboratives (v1 "grandes lignes", voir COOP_MISSIONS/COOP_SITE
    dans fermeConstants.js). État partagé minimal : { id, parts:[{id,resource,
    target,got}] }, tiré au hasard parmi COOP_MISSIONS, régénéré une fois

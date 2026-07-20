@@ -547,6 +547,21 @@ export const HEAL_KIT_COST = 0;              // trousse de soins, gratuite (maga
 export const HEAL_REDUCE_MS = 60 * 1000;     // durée restante après soin par un autre joueur (1 min)
 export const HEAL_RANGE = 2.5;               // distance max (tuiles) pour soigner un fermier blessé
 
+// --- Greg, l'employé de champs de base (chantier 2026-07, demande Guillaume :
+// engageable depuis le shop, arrose automatiquement toutes les 10h, exécute
+// des ordres de labour/plantation/arrosage sur N cases, se balade tant qu'il
+// est employé, contrat de 2 jours rémunéré). Un seul Greg par ferme (pas de
+// liste, contrairement aux chevaux) : `sharedRef.current.greg` (voir
+// FermeGame.js) vaut soit `null` (pas engagé), soit un objet d'état.
+export const GREG_HIRE_COST = 400;                 // prix d'engagement (extrapolé, entre le puits et un cheval)
+export const GREG_CONTRACT_MS = 2 * 24 * 60 * 60 * 1000; // durée réelle du contrat : 2 jours réels rémunérés
+export const GREG_WATER_INTERVAL_MS = 10 * H;      // arrosage automatique de TOUTES les cultures, toutes les 10h réelles
+export const GREG_SPEED = 3.2;                     // tuiles/seconde, un peu plus lent qu'un fermier (5.2)
+export const GREG_ROAM_RADIUS = 6;                 // amplitude de rôdaille autour de son ancre (même principe que WOLF_ROAM_RADIUS)
+export const GREG_ANCHOR = { x: 26, y: 58 };        // point d'ancrage (rôdaille + tuiles de dépôt), au bord des champs ouest (puits)
+export const GREG_TASK_RANGE = 0.6;                // distance d'arrivée sur une case de tâche avant de l'exécuter
+export const GREG_ORDER_MAX = 60;                  // nombre max de cases par ordre (garde-fou anti-abus)
+
 // --- Lapins (chantier 2026-07, demande Guillaume : "ajouter des petits
 // lapins bien détaillés qui fuient et sont inoffensifs, surtout rive
 // droite"). Contrairement aux loups : présents de JOUR COMME DE NUIT (juste
