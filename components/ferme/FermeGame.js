@@ -3139,9 +3139,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // emoji permanent, même principe que le chapeau-trophée ci-dessus mais
       // toujours actif (pas conditionné à un trophée gagné) et réservé à
       // Soan (p.id === "soan", jamais un vrai joueur).
+      // Correctif 2026-07 (demande Guillaume : "le chapeau flotte trop haut,
+      // il devrait être sur sa tête") : décalage vertical réduit par rapport
+      // au chapeau-trophée ci-dessus (qui, lui, flotte volontairement plus
+      // haut) — le sprite fait 24px de haut, dessiné en py-8-lift, donc le
+      // haut de la tête est vers py-8-lift ; la casquette est posée juste
+      // au-dessus (py-16-lift) plutôt qu'à py-26-lift (18px trop haut).
       if (p.id === "soan") {
         ctx.font = "12px monospace";
-        ctx.fillText("🧢", px + 8, py - (riding ? 34 : 26) - lift);
+        ctx.fillText("🧢", px + 8, py - (riding ? 24 : 16) - lift);
       }
     }
     function nightAlpha() {
