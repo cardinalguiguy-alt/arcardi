@@ -41,6 +41,7 @@ export const FERME_STR = {
     foodLabel: "Casse-croûte",
     rodLabel: "Canne",
     seedTip: (name) => `${name} (clique pour choisir une autre graine)`,
+    toolsTip: (name) => `${name} (touche 1 pour changer d'outil, clique pour choisir)`,
     foodTip: (e) => `Manger (casse-croûte, poisson ou production animale comestible)`,
     rodTip: "Canne à pêche : vise l'eau de la rivière pour pêcher",
     fenceTip: "Clôture : pose ou retire une section sur la case visée (touche R pour choisir son orientation avant de poser)",
@@ -80,6 +81,8 @@ export const FERME_STR = {
     equipBtn: "Équiper",
     // Menu de sélection des graines (clic sur la case graines)
     seedMenuTitle: "Choisir une graine",
+    // Menu de sélection d'outil (clic sur la case outils : houe/hache/pioche)
+    toolMenuTitle: "Choisir un outil",
     // Pêche / gemmes
     toastNeedWater: "Approche-toi de l'eau et vise la rivière pour pêcher !",
     fxGem: (name) => `Gemme : ${name} !`,
@@ -354,6 +357,7 @@ export const FERME_STR = {
     foodLabel: "Snack",
     rodLabel: "Rod",
     seedTip: (name) => `${name} (click to pick another seed)`,
+    toolsTip: (name) => `${name} (press 1 to switch tool, click to choose)`,
     foodTip: (e) => `Eat (snack, fish, or an edible animal product)`,
     rodTip: "Fishing rod: aim at the river water to fish",
     fenceTip: "Fence: place or remove a section on the targeted tile (press R to pick its orientation before placing)",
@@ -391,6 +395,7 @@ export const FERME_STR = {
     buildCostBridgeStone: (n) => `${n} stone per tile`,
     equipBtn: "Equip",
     seedMenuTitle: "Choose a seed",
+    toolMenuTitle: "Choose a tool",
     toastNeedWater: "Get close to the water and aim at the river to fish!",
     fxGem: (name) => `Gem: ${name}!`,
     fxBridge: "Bridge!",

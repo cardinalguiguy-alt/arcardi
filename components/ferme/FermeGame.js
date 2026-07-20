@@ -108,6 +108,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [slot, setSlot] = useState(0);
   const [seedSel, setSeedSel] = useState(0);
   const [seedMenuOpen, setSeedMenuOpen] = useState(false); // mini-menu de choix de graine
+  // Outil "tools" (simplification barre d'outils) : houe/hache/pioche sont
+  // regroupées sous une seule case (touche 1). toolKind mémorise lequel des
+  // trois est actuellement équipé ; la touche 1 fait tourner hoe -> axe ->
+  // pick -> hoe quand la case est déjà sélectionnée, et le clic gauche ouvre
+  // toolMenuOpen (même principe que seedMenuOpen) pour choisir directement.
+  const [toolKind, setToolKind] = useState("hoe");
+  const [toolMenuOpen, setToolMenuOpen] = useState(false);
   const [fenceDir, setFenceDir] = useState("auto"); // orientation affichée dans la barre d'outils (miroir de fenceDirRef)
   // Construction (chantier 2026-07) : l'outil clôture (case 8) devient un
   // outil "Construction" générique à 3 variantes choisies depuis le menu
@@ -199,6 +206,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const keysRef = useRef({});
   const mouseRef = useRef({ x: 0, y: 0 });
   const slotRef = useRef(0);
+  const toolKindRef = useRef("hoe"); // miroir synchrone de toolKind (hoe/axe/pick)
   const seedSelRef = useRef(0);
   const actAnimRef = useRef(0);
   const fxRef = useRef([]);
@@ -254,6 +262,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   useEffect(() => { shopOpenRef.current = shopOpen; }, [shopOpen]);
   useEffect(() => { binOpenRef.current = binOpen; }, [binOpen]);
   useEffect(() => { slotRef.current = slot; }, [slot]);
+  useEffect(() => { toolKindRef.current = toolKind; }, [toolKind]);
   useEffect(() => { seedSelRef.current = seedSel; }, [seedSel]);
 
   // Ordre d'arrivée -> tenue attribuée
@@ -1461,7 +1470,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (!inMap(tt.x, tt.y)) return;
     const i = idxOf(tt.x, tt.y);
     const sl = slotRef.current;
-    if (sl === 6) { startFishing(tt); return; } // pêche = minijeu
+    if (sl === 4) { startFishing(tt); return; } // pêche = minijeu
     actAnimRef.current = 0.28;
     const c = w.crops.get(i);
     if (c && E.cropGrowState(c, Date.now()).mature) return sendReq({ kind: "act", action: "harvest", x: tt.x, y: tt.y });
@@ -1472,20 +1481,25 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // Moulin construit (chantier 2026-07, demande Guillaume) : cliquable
     // directement pour y déposer son blé, même priorité que le levier
     // ci-dessus — SAUF si l'outil Construction est équipé en variante "mill"
-    // (case 8), auquel cas le clic sert à retirer/reposer le moulin lui-même
-    // (voir resolveAct cas "mill", branche sl===7 plus bas).
-    if (w.objects[i] === C.O_MILL && E.buildReady(w.objHp.get(i), Date.now()) && !(sl === 7 && buildKindRef.current === "mill")) {
+    // (case Construction), auquel cas le clic sert à retirer/reposer le
+    // moulin lui-même (voir resolveAct cas "mill", branche sl===5 plus bas).
+    if (w.objects[i] === C.O_MILL && E.buildReady(w.objHp.get(i), Date.now()) && !(sl === 5 && buildKindRef.current === "mill")) {
       return sendReq({ kind: "act", action: "millDeposit", x: tt.x, y: tt.y });
     }
-    if (sl === 0) sendReq({ kind: "act", action: "till", x: tt.x, y: tt.y });
+    if (sl === 0) {
+      // Case "outils" (simplification barre d'outils) : houe/hache/pioche
+      // regroupées, l'action dépend de toolKindRef.current (choisi via la
+      // touche 1 en rotation, ou le mini-menu au clic).
+      const tk = toolKindRef.current;
+      const action = tk === "axe" ? "chop" : tk === "pick" ? "mine" : "till";
+      sendReq({ kind: "act", action, x: tt.x, y: tt.y });
+    }
     else if (sl === 1) sendReq({ kind: "act", action: "water", x: tt.x, y: tt.y });
-    else if (sl === 2) sendReq({ kind: "act", action: "chop", x: tt.x, y: tt.y });
-    else if (sl === 3) sendReq({ kind: "act", action: "mine", x: tt.x, y: tt.y });
-    else if (sl === 4) sendReq({ kind: "act", action: "plant", seed: seedSelRef.current, x: tt.x, y: tt.y });
-    else if (sl === 5) sendReq({ kind: "eat" });
-    else if (sl === 7) {
-      // Outil "Construction" (case 8) : variante choisie via le menu
-      // Construire/Vendre (fence = clôture bois, wall = mur pierre,
+    else if (sl === 2) sendReq({ kind: "act", action: "plant", seed: seedSelRef.current, x: tt.x, y: tt.y });
+    else if (sl === 3) sendReq({ kind: "eat" });
+    else if (sl === 5) {
+      // Outil "Construction" (case Construction) : variante choisie via le
+      // menu Construire/Vendre (fence = clôture bois, wall = mur pierre,
       // path = chemin dallé, lamp = lampadaire acheté en or, scarecrow =
       // épouvantail acheté en or, bridgeWood/bridgeStone = case de pont,
       // chantier 2026-07). L'orientation (dir) n'a de sens que pour la
@@ -1502,7 +1516,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         : (bk === "bridgeWood" || bk === "bridgeStone") ? "bridge" : "fence";
       sendReq({ kind: "act", action, x: tt.x, y: tt.y, dir: fenceDirRef.current, material: bk === "bridgeStone" ? "stone" : "wood" });
     }
-    else if (sl === 8) {
+    else if (sl === 6) {
       // Outil "déplacer" : premier clic attrape l'animal visé, second clic
       // le dépose sur la case visée (n'importe où sur la ferme, hors case
       // bloquée). Aucune limite d'enclos : le joueur choisit librement.
@@ -2373,18 +2387,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // ne pas pouvoir changer d'outil/monter à cheval/etc. depuis "l'intérieur".
       if (meRef.current?.sleeping && e.code !== "KeyE") return;
       keysRef.current[e.code] = true;
-      if (e.code >= "Digit1" && e.code <= "Digit9") selectSlot(+e.code.slice(5) - 1);
+      if (e.code >= "Digit1" && e.code <= "Digit9") {
+        const idx = +e.code.slice(5) - 1;
+        if (idx === 0) pressToolKey();
+        else selectSlot(idx);
+      }
       if (e.code === "Space") { e.preventDefault(); doAction(); }
       if (e.code === "KeyE") tryOpenNearby();
       if (e.code === "KeyF") toggleMount();
-      if (e.code === "KeyR" && slotRef.current === 7 && buildKindRef.current === "fence") {
+      if (e.code === "KeyR" && slotRef.current === 5 && buildKindRef.current === "fence") {
         fenceDirRef.current = fenceDirRef.current === "auto" ? "h" : fenceDirRef.current === "h" ? "v" : "auto";
         setFenceDir(fenceDirRef.current);
         pushToast(L.fenceDirToast(fenceDirRef.current));
       }
       if (e.code === "KeyT") { e.preventDefault(); setChatOpen(true); setTimeout(() => chatInputRef.current?.focus(), 0); }
       if (e.code === "KeyM") setMapOpen(o => !o);
-      if (e.code === "Escape") { setShopOpen(false); setBinOpen(false); setMapOpen(false); setSeedMenuOpen(false); setCraftMenuOpen(null); }
+      if (e.code === "Escape") { setShopOpen(false); setBinOpen(false); setMapOpen(false); setSeedMenuOpen(false); setToolMenuOpen(false); setCraftMenuOpen(null); }
     }
     function onKeyUp(e) { keysRef.current[e.code] = false; }
     function onMove(e) { mouseRef.current.x = e.clientX; mouseRef.current.y = e.clientY; }
@@ -3049,9 +3067,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     function drawSelf(m) {
       drawCharacter(m, true);
-      if (actAnimRef.current > 0 && slotRef.current < 4) {
+      if (actAnimRef.current > 0 && slotRef.current < 2) {
         const sprites = spritesRef.current;
-        const key = ["hoe", "can", "axe", "pick"][slotRef.current];
+        const key = slotRef.current === 0 ? toolKindRef.current : "can";
         const px = Math.round(m.x * T), py = Math.round(m.y * T);
         const fx2 = [0, 0, -1, 1][m.dir], fy2 = [1, -1, 0, 0][m.dir];
         ctx.drawImage(sprites.icons[key], px + fx2 * 10 + 2, py + fy2 * 8 - 4);
@@ -3311,20 +3329,38 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function cropName(t) { return lang === "en" ? C.CROPS[t].nameEn : C.CROPS[t].name; }
 
   // -------- Interactions UI --------
-  // Case graines : au lieu de cycler à l'aveugle, un clic ouvre/ferme un
-  // petit menu listant chaque graine (icône, nom, quantité) pour choisir
-  // directement. Les autres emplacements ferment le menu s'il était ouvert.
-  function selectSlot(s) {
-    if (s === 4) setSeedMenuOpen(o => (slotRef.current === 4 ? !o : true));
+  // Case graines (désormais index 2) : au lieu de cycler à l'aveugle, un clic
+  // ouvre/ferme un petit menu listant chaque graine (icône, nom, quantité)
+  // pour choisir directement. Les autres emplacements ferment le menu s'il
+  // était ouvert.
+  // Case outils (index 0, simplification barre d'outils) : même principe de
+  // mini-menu au clic (toolMenuOpen) — mais voir pressToolKey ci-dessous pour
+  // le comportement DIFFÉRENT au clavier (touche 1 = rotation, pas ouverture
+  // du menu). `noToolMenu` permet à pressToolKey de sélectionner la case 0
+  // sans déclencher l'ouverture du menu.
+  function selectSlot(s, noToolMenu) {
+    if (s === 2) setSeedMenuOpen(o => (slotRef.current === 2 ? !o : true));
     else setSeedMenuOpen(false);
+    if (s === 0 && !noToolMenu) setToolMenuOpen(o => (slotRef.current === 0 ? !o : true));
+    else setToolMenuOpen(false);
     setCraftMenuOpen(null);
     // Changer d'outil en portant un animal l'annule (relâché sans être
     // déplacé), pour ne jamais le laisser "coincé" en main d'un joueur.
-    if (s !== 8 && heldAnimalRef.current !== -1) {
+    if (s !== 6 && heldAnimalRef.current !== -1) {
       sendReq({ kind: "dropAnimal", animal: heldAnimalRef.current });
       heldAnimalRef.current = -1; setCarryingAnimal(false);
     }
     setSlot(s);
+  }
+  // Touche 1 (case outils) : si déjà équipée, fait tourner hoe -> axe ->
+  // pick -> hoe ; sinon sélectionne simplement la case (garde le dernier
+  // outil équipé), sans ouvrir le mini-menu (réservé au clic souris).
+  function pressToolKey() {
+    if (slotRef.current === 0) {
+      setToolKind(tk => tk === "hoe" ? "axe" : tk === "axe" ? "pick" : "hoe");
+    } else {
+      selectSlot(0, true);
+    }
   }
   function submitChat() {
     const v = chatInputRef.current?.value.trim();
@@ -3383,7 +3419,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function craftBuild(item, n) {
     sendReq({ kind: "craft", item, n });
     buildKindRef.current = item; setBuildKind(item);
-    selectSlot(7);
+    selectSlot(5);
     setCraftMenuOpen(null);
   }
   // Équiper le pont (chantier 2026-07) : contrairement à craftBuild, aucune
@@ -3394,7 +3430,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function equipBridge(mat) {
     buildKindRef.current = mat === "stone" ? "bridgeStone" : "bridgeWood";
     setBuildKind(mat === "stone" ? "bridgeStone" : "bridgeWood");
-    selectSlot(7);
+    selectSlot(5);
     setCraftMenuOpen(null);
   }
   // Équiper la rénovation en pierre (chantier 2026-07, demande Guillaume) :
@@ -3404,7 +3440,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function equipBridgeRenovate() {
     buildKindRef.current = "bridgeRenovate";
     setBuildKind("bridgeRenovate");
-    selectSlot(7);
+    selectSlot(5);
     setCraftMenuOpen(null);
   }
   const sellFish = (fishId) => sendReq({ kind: "sell", item: "fish", fish: fishId, n: 9999 });
@@ -3414,8 +3450,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // -------- Rendu React (UI par-dessus le canvas) --------
   const TOOL_NAMES = lang === "en" ? C.TOOL_NAMES_EN : C.TOOL_NAMES;
   const slots = [
-    { key: "hoe", icon: "hoe" }, { key: "can", icon: "can" }, { key: "axe", icon: "axe" },
-    { key: "pick", icon: "pick" }, { key: "seeds", icon: "seeds" }, { key: "food", icon: "food" },
+    { key: "tools", icon: toolKind }, { key: "can", icon: "can" },
+    { key: "seeds", icon: "seeds" }, { key: "food", icon: "food" },
     { key: "rod", icon: "rod" }, { key: "fence", icon: "fence" }, { key: "herd", icon: "herd" },
   ];
   const clockStr = (() => { const h = Math.floor(hud.timeMin / 60) % 24, mn = hud.timeMin % 60; return `${h}h${String(mn).padStart(2, "0")}`; })();
@@ -3536,11 +3572,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       {/* Barre d'outils */}
       <div className="ferme-toolbar panel">
         {slots.map((s, i) => {
-          const isSeed = s.key === "seeds", isFood = s.key === "food", isRod = s.key === "rod", isFence = s.key === "fence", isHerd = s.key === "herd";
+          const isSeed = s.key === "seeds", isFood = s.key === "food", isRod = s.key === "rod", isFence = s.key === "fence", isHerd = s.key === "herd", isTools = s.key === "tools";
           let count = "", lvl = "", img = spritesReady ? spritesRef.current.icons[s.icon] : null;
           if (isSeed) { count = myInv ? myInv.seeds[seedSel] : ""; img = spritesReady ? spritesRef.current.crops[seedSel][C.CROP_STAGES - 1] : null; }
           else if (isFood) count = myInv ? myInv.food : "";
           else if (isRod) { /* pas de niveau ni de compteur */ }
+          else if (isTools) lvl = "N" + (myTools[toolKind] || 1);
           else if (isFence) {
             // Outil "Construction" générique (chantier 2026-07) : icône,
             // compteur et infobulle dépendent de la variante choisie via le
@@ -3565,7 +3602,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               : buildKind === "grass" ? L.grassTip : buildKind === "mill" ? L.millTip
               : buildKind === "bridgeRenovate" ? L.bridgeRenovateTip
               : (buildKind === "bridgeWood" || buildKind === "bridgeStone") ? L.bridgeTip : L.fenceTip)
-            : isHerd ? L.herdTip : TOOL_NAMES[s.key];
+            : isHerd ? L.herdTip : isTools ? L.toolsTip(TOOL_NAMES[toolKind]) : TOOL_NAMES[s.key];
           return (
             <div key={s.key} className={"ferme-slot" + (i === slot ? " sel" : "")} onClick={() => selectSlot(i)} title={title}>
               <span className="ferme-slot-key">{i + 1}</span>
@@ -3589,6 +3626,26 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 <Sprite img={spritesReady ? spritesRef.current.crops[cr.id][C.CROP_STAGES - 1] : null} w={26} h={26} />
                 <span className="name">{seedName(cr.id)}</span>
                 <span className="count">× {myInv ? myInv.seeds[cr.id] : 0}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Mini-menu de choix d'outil (clic sur la case outils) : liste
+          cliquable houe/hache/pioche, même principe que le menu graines.
+          La touche 1 (clavier), elle, fait tourner les outils sans passer
+          par ce menu (voir pressToolKey). */}
+      {toolMenuOpen && (
+        <div className="ferme-seed-menu-ov" onClick={() => setToolMenuOpen(false)}>
+          <div className="ferme-seed-menu panel" onClick={e => e.stopPropagation()}>
+            <div className="ferme-seed-menu-title">{L.toolMenuTitle}</div>
+            {C.TOOLS.filter(k => k !== "can").map(k => (
+              <div key={k} className={"ferme-seed-menu-row" + (k === toolKind ? " sel" : "")}
+                onClick={() => { setToolKind(k); setToolMenuOpen(false); }}>
+                <Sprite img={spritesReady ? spritesRef.current.icons[k] : null} w={26} h={26} />
+                <span className="name">{TOOL_NAMES[k]}</span>
+                <span className="count">N{myTools[k] || 1}</span>
               </div>
             ))}
           </div>
