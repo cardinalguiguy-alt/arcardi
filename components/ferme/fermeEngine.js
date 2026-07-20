@@ -568,7 +568,7 @@ export function resolveAct(world, f, m) {
         for (let k = 0; k < world.bridgeSites.length; k++) {
           const sites = world.bridgeSites[k];
           if (sites.indexOf(i) === -1) continue;
-          if (sites.every((si) => world.ground[si] === C.G_BRIDGE)) {
+          if (sites.every((si) => world.ground[si] === C.G_BRIDGE || world.ground[si] === C.G_BRIDGE_STONE)) {
             const lp = world.bridgeLeverPos[k];
             if (world.objects[lp] !== C.O_LEVER) {
               world.objects[lp] = C.O_LEVER; world.objHp.set(lp, 1);
@@ -577,6 +577,24 @@ export function resolveAct(world, f, m) {
           }
           break;
         }
+      }
+      break;
+    }
+    case "renovateBridge": {
+      // Rénovation en pierre d'une case de pont bois déjà construite
+      // (chantier 2026-07, demande Guillaume) : "la rénovation en pierre doit
+      // changer l'aspect du pont (aspect pierre joli), et lui permettre de
+      // résister à la dégradation". Contrairement à "bridge" ci-dessus, cible
+      // une case DÉJÀ bâtie en bois (G_BRIDGE ou G_BRIDGE_CLOSED, on peut
+      // rénover un pont fermé sans le rouvrir), jamais un chantier
+      // G_BRIDGE_SITE. Préserve l'état ouvert/fermé de la case (une case
+      // fermée rénovée reste fermée, voir G_BRIDGE_STONE_CLOSED). Permanent,
+      // comme la construction initiale : aucun retrait possible.
+      if (g === C.G_BRIDGE || g === C.G_BRIDGE_CLOSED) {
+        if (f.inv.stone < C.BRIDGE_RENOVATE_COST_STONE) { res.toast = "noStone"; return res; }
+        f.inv.stone -= C.BRIDGE_RENOVATE_COST_STONE;
+        world.ground[i] = g === C.G_BRIDGE_CLOSED ? C.G_BRIDGE_STONE_CLOSED : C.G_BRIDGE_STONE;
+        res.tiles.push(i); res.fx.push({ k: "bridge", x, y, mat: "stone" }); res.invChanged = true;
       }
       break;
     }
@@ -592,9 +610,22 @@ export function resolveAct(world, f, m) {
         const k = world.bridgeLeverPos.indexOf(i);
         if (k >= 0) {
           const sites = world.bridgeSites[k];
-          const closed = world.ground[sites[0]] === C.G_BRIDGE_CLOSED;
-          const newG = closed ? C.G_BRIDGE : C.G_BRIDGE_CLOSED;
-          for (const si of sites) { world.ground[si] = newG; res.tiles.push(si); }
+          // Depuis la rénovation en pierre (chantier 2026-07), une même
+          // traversée peut mélanger des cases bois (G_BRIDGE/G_BRIDGE_CLOSED)
+          // et des cases rénovées (G_BRIDGE_STONE/G_BRIDGE_STONE_CLOSED) :
+          // chaque case bascule désormais selon SON propre matériau, l'état
+          // ouvert/fermé global (déterminé sur la 1re case comme avant) reste
+          // partagé par toute la traversée.
+          const closed = world.ground[sites[0]] === C.G_BRIDGE_CLOSED || world.ground[sites[0]] === C.G_BRIDGE_STONE_CLOSED;
+          for (const si of sites) {
+            const sg = world.ground[si];
+            if (closed) {
+              world.ground[si] = sg === C.G_BRIDGE_STONE_CLOSED ? C.G_BRIDGE_STONE : C.G_BRIDGE;
+            } else {
+              world.ground[si] = sg === C.G_BRIDGE_STONE ? C.G_BRIDGE_STONE_CLOSED : C.G_BRIDGE_CLOSED;
+            }
+            res.tiles.push(si);
+          }
           res.fx.push({ k: "lever", x, y, closed: !closed });
         }
       }
@@ -1172,6 +1203,32 @@ export function newDay(world, farmers, day, seed) {
       tiles.push(i);
     }
   }
+  // Dégradation du pont bois (chantier 2026-07, demande Guillaume) : "une
+  // fois qu'il est totalement construit, il perd deux tuiles par nuit, car il
+  // est en bois" — ajusté ensuite par Guillaume ("trop fréquent sinon") à
+  // une nuit SUR DEUX (voir BRIDGE_DECAY_EVERY_N_NIGHTS). Ne s'applique QUE
+  // si la traversée est déjà ENTIÈREMENT bâtie (aucune case encore en
+  // G_BRIDGE_SITE) ; les cases perdues sont tirées au hasard PARMI LES CASES
+  // BOIS uniquement (G_BRIDGE/G_BRIDGE_CLOSED
+  // — jamais les cases rénovées G_BRIDGE_STONE/G_BRIDGE_STONE_CLOSED, qui
+  // résistent) et redeviennent un chantier G_BRIDGE_SITE normal à rebâtir.
+  for (const sites of (world.bridgeSites || [])) {
+    if (day % C.BRIDGE_DECAY_EVERY_N_NIGHTS !== 0) continue;
+    const complete = sites.every((si) => {
+      const sg = world.ground[si];
+      return sg === C.G_BRIDGE || sg === C.G_BRIDGE_CLOSED || sg === C.G_BRIDGE_STONE || sg === C.G_BRIDGE_STONE_CLOSED;
+    });
+    if (!complete) continue;
+    const woodSites = sites.filter((si) => world.ground[si] === C.G_BRIDGE || world.ground[si] === C.G_BRIDGE_CLOSED);
+    let n = Math.min(C.BRIDGE_DECAY_PER_NIGHT, woodSites.length);
+    while (n > 0) {
+      const pick = Math.floor(rnd() * woodSites.length);
+      const si = woodSites.splice(pick, 1)[0];
+      world.ground[si] = C.G_BRIDGE_SITE;
+      tiles.push(si);
+      n--;
+    }
+  }
   for (const id in farmers) { farmers[id].energy = C.MAX_ENERGY; farmers[id].sleepStartedAt = null; farmers[id].sleepStartEnergy = 0; }
   return { tiles, cropTiles: [] };
 }
@@ -1197,7 +1254,7 @@ export function blockedTile(world, x, y, now = Date.now()) {
   if (!inMap(fx, fy)) return true;
   const i = idx(fx, fy);
   const g = world.ground[i], o = world.objects[i];
-  if (g === C.G_WATER || g === C.G_BRIDGE_SITE || g === C.G_BRIDGE_CLOSED) return true;
+  if (g === C.G_WATER || g === C.G_BRIDGE_SITE || g === C.G_BRIDGE_CLOSED || g === C.G_BRIDGE_STONE_CLOSED) return true;
   if (o === C.O_LAMP || o === C.O_MILL) return buildReady(world.objHp.get(i), now);
   if (o === C.O_TREE || o === C.O_TREE2 || o === C.O_ROCK || o === C.O_HOUSE || o === C.O_SHOP || o === C.O_BIN || o === C.O_STUMP || o === C.O_WELL || o === C.O_FENCE || o === C.O_FENCE_H || o === C.O_FENCE_V || o === C.O_WALL) return true;
   return false;
@@ -1239,7 +1296,8 @@ export function riverSideOf(world, x, y) {
 export function bridgeIsOpen(world, k) {
   const sites = world.bridgeSites && world.bridgeSites[k];
   if (!sites || !sites.length) return false;
-  return world.ground[sites[0]] === C.G_BRIDGE;
+  const g0 = world.ground[sites[0]];
+  return g0 === C.G_BRIDGE || g0 === C.G_BRIDGE_STONE;
 }
 
 // Vrai si la case (x,y) est de l'eau infranchissable à pied (rivière, ou
@@ -1251,7 +1309,7 @@ export function isWaterTile(world, x, y) {
   const fx = Math.floor(x), fy = Math.floor(y);
   if (!inMap(fx, fy)) return true;
   const g = world.ground[idx(fx, fy)];
-  return g === C.G_WATER || g === C.G_BRIDGE_SITE || g === C.G_BRIDGE_CLOSED;
+  return g === C.G_WATER || g === C.G_BRIDGE_SITE || g === C.G_BRIDGE_CLOSED || g === C.G_BRIDGE_STONE_CLOSED;
 }
 
 // Point de passage (centre) d'un pont, pour servir de point de cheminement

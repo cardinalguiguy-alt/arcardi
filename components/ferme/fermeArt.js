@@ -81,6 +81,24 @@ export function buildSprites() {
     P(g, 1, 13, 2, 1, "#6a4528");
     return c;
   }
+  function bridgeStoneTile() {
+    // Pont rénové en pierre (chantier 2026-07, demande Guillaume : "aspect
+    // pierre joli"). Base grise pierre avec un pavage de dalles irrégulières
+    // (jointures plus sombres), distinct du bois (bridgeTile ci-dessus) pour
+    // que la rénovation soit visible d'un coup d'œil.
+    const [c, g] = cv(T, T), r = makeRnd(77);
+    P(g, 0, 0, T, T, "#8a8a92");
+    // Jointures de dalles (grille légèrement irrégulière).
+    P(g, 0, 0, T, 1, "#6a6a72"); P(g, 0, 5, T, 1, "#6a6a72"); P(g, 0, 10, T, 1, "#6a6a72");
+    P(g, 0, 0, 1, T, "#6a6a72"); P(g, 7, 0, 1, T, "#6a6a72");
+    // Variations de teinte par dalle + petits éclats clairs (usure/relief).
+    for (let i = 0; i < 10; i++) {
+      const x = (r() * T) | 0, y = (r() * T) | 0;
+      P(g, x, y, 2, 1, r() < 0.5 ? "#9c9ca4" : "#78787f");
+    }
+    P(g, 2, 2, 1, 1, "#b0b0b8"); P(g, 12, 12, 1, 1, "#b0b0b8");
+    return c;
+  }
   function pathTile() {
     const [c, g] = cv(T, T), r = makeRnd(63);
     P(g, 0, 0, T, T, "#b8a888");
@@ -794,6 +812,7 @@ export function buildSprites() {
     sand: sandTile(),
     bridge: bridgeTile(),
     bridgeRuin: bridgeRuinTile(),
+    bridgeStoneSprite: bridgeStoneTile(),
     grassPatch: grassTile(0), // icône outil Construction/aperçu pour l'herbe (chantier 2026-07), simple réutilisation d'une tuile d'herbe existante
     path: pathTile(),
     oak: oakTree(),

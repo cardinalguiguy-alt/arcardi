@@ -43,6 +43,19 @@ export const G_GRASS_GROWING = 10; // herbe en train de repousser sur une case l
                                     // écoulé (vérifié côté hôte à chaque tick, pas d'action du joueur requise,
                                     // voir FermeGame.js). Ne bloque pas le passage (comme G_TILLED). Définitif,
                                     // pas de retrait une fois planté.
+export const G_BRIDGE_STONE = 11; // case de pont RÉNOVÉE en pierre (chantier 2026-07, demande Guillaume : le pont
+                                   // bois, une fois entièrement construit, perd 2 cases aléatoires par nuit — voir
+                                   // BRIDGE_DECAY_PER_NIGHT — "car il est en bois" ; la rénovation en pierre change
+                                   // l'aspect ET rend la case résistante, elle n'est plus jamais tirée par la
+                                   // dégradation nocturne). Posée case par case sur une case déjà en G_BRIDGE (ou
+                                   // G_BRIDGE_CLOSED), PAS sur un chantier G_BRIDGE_SITE : contrairement à la
+                                   // construction initiale, la rénovation améliore une structure bois déjà en
+                                   // place plutôt que de la refaire de zéro (voir resolveAct cas "renovateBridge").
+                                   // Ouverte/fermable au levier comme G_BRIDGE, voir G_BRIDGE_STONE_CLOSED.
+export const G_BRIDGE_STONE_CLOSED = 12; // pont rénové en pierre, FERMÉ via le levier (même principe que
+                                          // G_BRIDGE_CLOSED, mais pour une case déjà rénovée : le levier bascule
+                                          // chaque case selon SON matériau propre, G_BRIDGE<->G_BRIDGE_CLOSED ou
+                                          // G_BRIDGE_STONE<->G_BRIDGE_STONE_CLOSED, voir resolveAct cas "lever").
 
 // Objets
 export const O_NONE = 0;
@@ -353,6 +366,35 @@ export const BUILD_COSTS = {
 // de piéger un joueur en pleine rivière en retirant la case sous ses pieds).
 export const BRIDGE_COST_WOOD = 20;  // bois par case de pont en bois
 export const BRIDGE_COST_STONE = 15; // pierre par case de pont en pierre
+
+// --- Dégradation du pont bois + rénovation en pierre (chantier 2026-07, demande Guillaume) ---
+// "problème rénovation du pont : une fois qu'il est totalement construit, il
+// perd deux tuiles par nuit, car il est en bois. La rénovation en pierre doit
+// changer l'aspect du pont (aspect pierre joli), et lui permettre de résister
+// à la dégradation." Décisions validées par Guillaume (3 questions à choix
+// multiples, conformément à la section 3) : la dégradation ne démarre QUE
+// lorsque toute la traversée est déjà bâtie (aucune case encore en
+// G_BRIDGE_SITE) ; les cases perdues sont tirées AU HASARD parmi les cases
+// bois (G_BRIDGE/G_BRIDGE_CLOSED) de la traversée, pas depuis les bords ni
+// toujours la même ; une case perdue redevient un chantier G_BRIDGE_SITE
+// normal (à rebâtir comme au tout début, bois ou pierre). La rénovation en
+// pierre se fait case par case, DIRECTEMENT sur une case de pont bois déjà
+// construite (G_BRIDGE/G_BRIDGE_CLOSED) — pas besoin de la redétruire — et la
+// transforme en G_BRIDGE_STONE (résistante, ne peut plus jamais être tirée
+// par la dégradation).
+export const BRIDGE_DECAY_PER_NIGHT = 2; // nombre de cases bois perdues, au hasard, chaque nuit ÉLIGIBLE (voir
+                                          // BRIDGE_DECAY_EVERY_N_NIGHTS), par traversée ENTIÈREMENT construite
+                                          // (aucun site restant) ; si moins de cases bois restent que ce nombre
+                                          // (ex: presque tout rénové), seules les cases bois restantes sont
+                                          // perdues (jamais les cases pierre).
+export const BRIDGE_DECAY_EVERY_N_NIGHTS = 2; // fréquence de la dégradation (chantier 2026-07, ajusté par
+                                               // Guillaume : "c'est trop fréquent sinon" — passé d'une dégradation
+                                               // toutes les nuits à une nuit SUR DEUX). Comparé au compteur `day`
+                                               // transmis à `newDay` (voir fermeEngine.js) : la dégradation ne se
+                                               // déclenche que si `day % BRIDGE_DECAY_EVERY_N_NIGHTS === 0`.
+export const BRIDGE_RENOVATE_COST_STONE = 15; // pierre par case pour rénover une case de pont bois déjà construite
+                                               // en pierre (résistante) ; même tarif que la construction initiale en
+                                               // pierre (BRIDGE_COST_STONE), valeur extrapolée à ajuster librement.
 
 // --- Levier de pont (chantier 2026-07, demande Guillaume) ---
 // "les ponts en pierre et en bois doivent pouvoir être refermés et ouverts à

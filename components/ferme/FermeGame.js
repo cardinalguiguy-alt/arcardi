@@ -414,6 +414,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       else if (gr === C.G_BRIDGE || gr === C.G_PATH || gr === C.G_PATH_STONE) col = [154, 107, 63];
       else if (gr === C.G_BRIDGE_SITE) col = [90, 110, 150];
       else if (gr === C.G_BRIDGE_CLOSED) col = [176, 74, 58];
+      else if (gr === C.G_BRIDGE_STONE) col = [138, 138, 146];
+      else if (gr === C.G_BRIDGE_STONE_CLOSED) col = [176, 74, 58];
       if (o === C.O_TREE || o === C.O_TREE2) col = [46, 106, 40];
       else if (o === C.O_ROCK || o === C.O_WALL) col = [130, 130, 138];
       else if (o === C.O_LAMP) col = [230, 200, 100];
@@ -1277,9 +1279,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // clôture ; l'envoyer pour les autres variantes est sans effet. Le
       // pont n'a pas de stock à part : le coût (bois ou pierre) est prélevé
       // directement à la pose côté hôte (voir resolveAct cas "bridge").
+      // bridgeRenovate (chantier 2026-07, demande Guillaume) : rénove en
+      // pierre une case de pont BOIS déjà construite (aspect + résistance à
+      // la dégradation nocturne), voir resolveAct cas "renovateBridge".
       const bk = buildKindRef.current;
       const action = bk === "wall" ? "wall" : bk === "path" ? "path" : bk === "lamp" ? "lamp" : bk === "scarecrow" ? "scarecrow"
         : bk === "grass" ? "grass" : bk === "mill" ? "mill"
+        : bk === "bridgeRenovate" ? "renovateBridge"
         : (bk === "bridgeWood" || bk === "bridgeStone") ? "bridge" : "fence";
       sendReq({ kind: "act", action, x: tt.x, y: tt.y, dir: fenceDirRef.current, material: bk === "bridgeStone" ? "stone" : "wood" });
     }
@@ -1991,6 +1997,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         else if (g === C.G_SAND) img = sprites.sand;
         else if (g === C.G_BRIDGE) img = sprites.bridge;
         else if (g === C.G_BRIDGE_CLOSED) img = sprites.bridge;
+        else if (g === C.G_BRIDGE_STONE) img = sprites.bridgeStoneSprite;
+        else if (g === C.G_BRIDGE_STONE_CLOSED) img = sprites.bridgeStoneSprite;
         else if (g === C.G_BRIDGE_SITE) img = sprites.bridgeRuin;
         else if (g === C.G_GRASS_GROWING) img = sprites.tilled;
         else img = sprites.path;
@@ -2015,7 +2023,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         // Site de pont en ruine (chantier 2026-07, validé Guillaume) : le
         // sprite bridgeRuin (piliers effondrés + eau visible) suffit à signaler
         // le chantier, plus besoin de voile hachuré par-dessus.
-        if (g === C.G_BRIDGE_CLOSED) {
+        if (g === C.G_BRIDGE_CLOSED || g === C.G_BRIDGE_STONE_CLOSED) {
           // Pont fermé via le levier (chantier 2026-07, demande Guillaume) :
           // le pont reste VISIBLE (décision validée), une barrière
           // hachurée rouge/blanche (signal "fermé", même technique de fillRect
@@ -2217,7 +2225,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           // de sa traversée (w.bridgeSites/w.bridgeLeverPos, voir
           // fermeEngine.js), aucun état séparé à stocker.
           const k = w.bridgeLeverPos ? w.bridgeLeverPos.indexOf(idxOf(x, y)) : -1;
-          const closed = k >= 0 && w.ground[w.bridgeSites[k][0]] === C.G_BRIDGE_CLOSED;
+          const closed = k >= 0 && (w.ground[w.bridgeSites[k][0]] === C.G_BRIDGE_CLOSED || w.ground[w.bridgeSites[k][0]] === C.G_BRIDGE_STONE_CLOSED);
           draws.push({ y: (y + 1) * T, fn: () => ctx.drawImage(closed ? sprites.leverClosed : sprites.leverOpen, x * T, (y + 1) * T - 24) });
         }
         else if (o === C.O_MILL) {
@@ -2860,6 +2868,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     selectSlot(7);
     setCraftMenuOpen(null);
   }
+  // Équiper la rénovation en pierre (chantier 2026-07, demande Guillaume) :
+  // même principe qu'equipBridge (aucune fabrication préalable, coût prélevé
+  // à la pose, voir resolveAct cas "renovateBridge"), mais cible une case de
+  // pont BOIS déjà construite plutôt qu'un chantier G_BRIDGE_SITE.
+  function equipBridgeRenovate() {
+    buildKindRef.current = "bridgeRenovate";
+    setBuildKind("bridgeRenovate");
+    selectSlot(7);
+    setCraftMenuOpen(null);
+  }
   const sellFish = (fishId) => sendReq({ kind: "sell", item: "fish", fish: fishId, n: 9999 });
   const sellGem = (gemId) => sendReq({ kind: "sell", item: "gem", gem: gemId, n: 9999 });
 
@@ -2984,13 +3002,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             // seulement clôture.
             const bkImg = buildKind === "wall" ? "wall" : buildKind === "path" ? "path" : buildKind === "lamp" ? "lamp" : buildKind === "scarecrow" ? "scarecrow"
               : buildKind === "grass" ? "grassPatch" : buildKind === "mill" ? "mill"
-              : (buildKind === "bridgeWood" || buildKind === "bridgeStone") ? "bridge" : "fence";
+              : buildKind === "bridgeWood" ? "bridge" : (buildKind === "bridgeStone" || buildKind === "bridgeRenovate") ? "bridgeStoneSprite" : "fence";
             // Pour le pont, pas de stock dédié (voir craft menu) : le compteur
             // affiche directement le bois/la pierre disponible pour la
             // variante choisie, cohérent avec le coût prélevé à la pose.
             count = myInv ? (buildKind === "wall" ? (myInv.wall || 0) : buildKind === "path" ? (myInv.path || 0) : buildKind === "lamp" ? (myInv.lamp || 0) : buildKind === "scarecrow" ? (myInv.scarecrow || 0)
               : buildKind === "grass" ? (myInv.grass || 0) : buildKind === "mill" ? (myInv.mill || 0)
-              : buildKind === "bridgeWood" ? (myInv.wood || 0) : buildKind === "bridgeStone" ? (myInv.stone || 0) : (myInv.fence || 0)) : "";
+              : buildKind === "bridgeWood" ? (myInv.wood || 0) : (buildKind === "bridgeStone" || buildKind === "bridgeRenovate") ? (myInv.stone || 0) : (myInv.fence || 0)) : "";
             img = spritesReady ? spritesRef.current[bkImg] : null;
             lvl = buildKind === "fence" ? (fenceDir === "h" ? "↔" : fenceDir === "v" ? "↕" : "R") : "";
           }
@@ -2999,6 +3017,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           const title = isSeed ? L.seedTip(seedName(seedSel)) : isFood ? L.foodTip(C.FOOD_ENERGY) : isRod ? L.rodTip
             : isFence ? (buildKind === "wall" ? L.wallTip : buildKind === "path" ? L.pathTip : buildKind === "lamp" ? L.lampTip : buildKind === "scarecrow" ? L.scarecrowTip
               : buildKind === "grass" ? L.grassTip : buildKind === "mill" ? L.millTip
+              : buildKind === "bridgeRenovate" ? L.bridgeRenovateTip
               : (buildKind === "bridgeWood" || buildKind === "bridgeStone") ? L.bridgeTip : L.fenceTip)
             : isHerd ? L.herdTip : TOOL_NAMES[s.key];
           return (
@@ -3069,9 +3088,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   <button disabled={!myInv || myInv.stone < C.BUILD_COSTS.path * 5} onClick={() => craftBuild("path", 5)}>{L.buy5}</button>
                 </div>
                 <div className="ferme-craft-row">
-                  <Sprite img={spritesReady ? spritesRef.current.bridge : null} w={26} h={26} />
+                  <Sprite img={spritesReady ? spritesRef.current.bridgeStoneSprite : null} w={26} h={26} />
                   <span className="name">{L.buildBridgeStoneLabel}<br /><span className="cost">{L.buildCostBridgeStone(C.BRIDGE_COST_STONE)}</span></span>
                   <button disabled={!myInv || myInv.stone < C.BRIDGE_COST_STONE} onClick={() => equipBridge("stone")}>{L.equipBtn}</button>
+                </div>
+                <div className="ferme-craft-row">
+                  <Sprite img={spritesReady ? spritesRef.current.bridgeStoneSprite : null} w={26} h={26} />
+                  <span className="name">{L.buildBridgeRenovateLabel}<br /><span className="cost">{L.buildCostBridgeStone(C.BRIDGE_RENOVATE_COST_STONE)}</span></span>
+                  <button disabled={!myInv || myInv.stone < C.BRIDGE_RENOVATE_COST_STONE} onClick={equipBridgeRenovate}>{L.equipBtn}</button>
                 </div>
               </>
             )}
