@@ -524,7 +524,31 @@ export function buildSprites() {
     g.fillStyle = "#ffe27a"; g.beginPath(); g.moveTo(7, 2); g.lineTo(9, 6); g.lineTo(7, 5); g.lineTo(5, 6); g.fill();  // coeur clair de la flamme
     return c;
   }
-  // Lampadaire (chantier 2026-07, achetable/posable par les joueurs) : poteau
+  // Tabouret de pêche + canne tenue (demande Guillaume : "la canne à pêche et
+  // le tabouret doivent être faits en pixel art, pour rester cohérents avec
+  // l'univers du jeu") : remplace les overlays emoji 🪑/🎣 de Soan en pêche
+  // (FermeGame.js, drawCharacter) par des sprites générés au même style que
+  // le reste de l'atlas (blocs pleins + boucle diagonale, comme torchSprite/
+  // l'icône outil "rod" ci-dessus dont la canne reprend le principe).
+  function stoolSprite() {
+    const [c, g] = cv(14, 14);
+    P(g, 2, 4, 10, 3, "#8a6340");  // assise en bois
+    P(g, 2, 4, 10, 1, "#a87745"); // reflet sur l'assise
+    g.strokeStyle = "#6a4a2a"; g.lineWidth = 2;
+    g.beginPath(); g.moveTo(3, 7); g.lineTo(11, 13); g.stroke();  // pied croisé 1 (tabouret pliant)
+    g.beginPath(); g.moveTo(11, 7); g.lineTo(3, 13); g.stroke();  // pied croisé 2
+    return c;
+  }
+  function fishingRodHeldSprite() {
+    const [c, g] = cv(18, 26);
+    P(g, 8, 20, 3, 6, "#5a4020");  // poignée en bois
+    P(g, 8, 20, 1, 6, "#7a5a34"); // reflet poignée
+    for (let i = 0; i < 17; i++) P(g, 16 - i, 19 - i, 1, 1, "#c8c8d0"); // canne diagonale, poignée -> pointe
+    P(g, 0, 2, 1, 16, "#d8d8e0"); // fil tendu de la pointe vers l'eau
+    P(g, 0, 17, 3, 3, "#e03e2e"); // flotteur
+    P(g, 1, 18, 1, 1, "#fff");
+    return c;
+  }
   // fin surmonté d'une lanterne. Dessiné plus haut qu'une tuile (comme le
   // puits), donc dans le calque "draws" trié par profondeur, pas la boucle de
   // sol. La lanterne est toujours dessinée "éteinte" ici : son halo lumineux
@@ -847,6 +871,8 @@ export function buildSprites() {
     wolf: [wolfSprite(0), wolfSprite(1), wolfSprite(2), wolfSprite(3)],
     rabbit: [rabbitSprite(0), rabbitSprite(1), rabbitSprite(2)],
     torch: torchSprite(),
+    stool: stoolSprite(),
+    fishingRodHeld: fishingRodHeldSprite(),
     well: well(),
     fence: fenceTile(),
     fenceV: fenceTileV(),

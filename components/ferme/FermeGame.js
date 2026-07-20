@@ -868,7 +868,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           hiredAt: now, expiresAt: now + C.GREG_CONTRACT_MS,
           x: C.GREG_ANCHOR.x, y: C.GREG_ANCHOR.y, tx: C.GREG_ANCHOR.x, ty: C.GREG_ANCHOR.y, dir: 0, animT: 0, moving: false,
           phase: "roam", roamAnchor: { x: C.GREG_ANCHOR.x, y: C.GREG_ANCHOR.y }, roamTarget: null, nextRoamAt: 0,
-          taskQueue: [], lastAutoWaterAt: now,
+          taskQueue: [], lastWaterCheckAt: now,
         };
         out.state = shareState(); out.greg = s.greg;
         out.chat = { from: "🧑‍🌾", msg: lang === "en" ? "Greg is hired for 2 days!" : "Greg est engagé pour 2 jours !" };
@@ -2071,9 +2071,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // Greg, l'employé de champs (chantier 2026-07). Simulation hôte, même
   // squelette que updateWolves/updateRabbits (rôdaille par ancre + throttle
   // réseau ~150ms), plus une file de tâches (till/plant/water) et un
-  // détection + arrosage automatique global toutes les GREG_WATER_INTERVAL_MS
-  // (ne mouille que les cultures qui en ont réellement besoin, cf.
-  // gregAutoWaterAll/cropGrowState().needsWater — pas tout le champ d'un coup).
+  // détection fréquente (GREG_WATER_CHECK_MS) des cultures qui ont besoin d'eau
+  // (findThirstyCrops/cropGrowState().needsWater), mises en file comme tâches
+  // "water" : Greg s'y rend PHYSIQUEMENT à pied avant d'arroser (gregWater),
+  // dès qu'une culture manque d'eau — plutôt que l'ancien arrosage instantané
+  // (télétransporté, toutes les 10h) — demande Guillaume. Peu importe qui a
+  // planté (joueur ou Greg lui-même) : findThirstyCrops scanne tout le champ.
   // "Greg doit toujours se balader autour du champs tant qu'il est employé" :
   // en l'absence de tâche, il repasse systématiquement en rôdaille autour
   // de son ancre — jamais immobile.
@@ -2089,13 +2092,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       dirtyRef.current = true;
       return;
     }
-    // Vérification toutes les 10h réelles : n'arrose que les cultures qui en ont besoin.
-    if (now - (g.lastAutoWaterAt || 0) >= C.GREG_WATER_INTERVAL_MS) {
-      g.lastAutoWaterAt = now;
-      const wateredIdx = E.gregAutoWaterAll(w, now);
-      if (wateredIdx.length) {
-        dirtyRef.current = true;
-        channelRef.current?.send({ type: "broadcast", event: "apply", payload: { crops: wateredIdx.map(i => ({ i, c: w.crops.get(i) })) } });
+    // Vérification fréquente (15s réelles) : dès qu'une culture manque d'eau,
+    // Greg est envoyé physiquement l'arroser (tâche "water" en tête de file,
+    // prioritaire sur le débroussaillage) — pas d'arrosage instantané.
+    if (now - (g.lastWaterCheckAt || 0) >= C.GREG_WATER_CHECK_MS) {
+      g.lastWaterCheckAt = now;
+      const thirsty = E.findThirstyCrops(w, now, C.GREG_WATER_BATCH);
+      if (thirsty.length) {
+        g.taskQueue = g.taskQueue || [];
+        const queued = new Set(g.taskQueue.filter(t => t.a === "water").map(t => t.i));
+        const newTasks = thirsty.filter(i => !queued.has(i)).map(i => ({ a: "water", i }));
+        if (newTasks.length) g.taskQueue.unshift(...newTasks);
       }
     }
     // Extension du champ (chantier 2026-07, demande Guillaume) : quand Greg
@@ -2850,7 +2857,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const so = sharedRef.current.soan;
         if (so) {
           const sx = isHost ? so.x : (so.rx ?? so.x), sy = isHost ? so.y : (so.ry ?? so.y);
-          draws.push({ y: (sy + 1) * T, fn: () => drawCharacter({ id: "soan", name: "Soan", x: sx, y: sy, dir: so.dir || 0, moving: !!so.moving, animT: so.animT || 0, gender: "m", outfit: 1 }, false) });
+          draws.push({ y: (sy + 1) * T, fn: () => drawCharacter({ id: "soan", name: "Soan", x: sx, y: sy, dir: so.dir || 0, moving: !!so.moving, animT: so.animT || 0, gender: "m", outfit: 1, fishing: so.phase === "fishing" }, false) });
         }
       }
       if (!m.sleeping) draws.push({ y: (m.y + 1) * T, fn: () => drawSelf(m) });
@@ -3157,6 +3164,24 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (p.id === "soan") {
         ctx.font = "12px monospace";
         ctx.fillText("🧢", px + 8, py - (riding ? 24 : 16) - lift);
+      }
+      // Tabouret + canne à pêche visibles pendant que Soan pêche (demande
+      // Guillaume : "soan doit disposer d'un tabouret et avoir une canne à
+      // pêche visible quand il pêche" puis "en pixel art, pour rester
+      // cohérents avec l'univers du jeu") : sprites dédiés (sprites.stool /
+      // sprites.fishingRodHeld, voir fermeArt.js), conditionnés à p.fishing
+      // (phase === "fishing", propagé depuis updateSoan/draws.push
+      // ci-dessus), même principe que la casquette permanente ci-dessus mais
+      // affiché seulement pendant l'action de pêche elle-même — pas en
+      // rôdaille ni en pause. Le tabouret est posé au sol derrière lui, la
+      // canne tenue et retournée selon le sens où il fait face à l'eau
+      // (même logique de flip que le sprite du personnage juste au-dessus).
+      if (p.id === "soan" && p.fishing) {
+        ctx.drawImage(sprites.stool, px + (flip ? 10 : -12), py + 3);
+        ctx.save();
+        if (flip) { ctx.translate(px + 16, py - 4 - lift); ctx.scale(-1, 1); ctx.drawImage(sprites.fishingRodHeld, 0, 0); }
+        else ctx.drawImage(sprites.fishingRodHeld, px, py - 4 - lift);
+        ctx.restore();
       }
     }
     function nightAlpha() {

@@ -1003,16 +1003,23 @@ export function gregFertilize(world, i, now) {
   return true;
 }
 
-// Arrosage automatique périodique (vérifié toutes les GREG_WATER_INTERVAL_MS) :
-// Greg détecte les cultures qui ONT BESOIN d'être arrosées (cropGrowState().needsWater,
-// i.e. pas mûres et dernier arrosage expiré depuis WATER_VALID_MS) et n'arrose que
-// celles-ci — pas tout le champ d'un coup. Renvoie la liste des indices arrosés.
-export function gregAutoWaterAll(world, now) {
+// Détection des cultures qui ont besoin d'être arrosées (cropGrowState().needsWater,
+// i.e. pas mûres et dernier arrosage expiré depuis WATER_VALID_MS), quelle que soit
+// la personne qui les a plantées (world.crops est global, pas rattaché à un joueur
+// en particulier — un champ planté par un joueur et un champ planté par Greg
+// lui-même sont traités de façon identique). Ne MOUILLE PAS les cases : se contente
+// de renvoyer la liste des indices, pour que l'appelant (updateGreg) mette Greg en
+// route à pied vers chacune (voir gregWater, déjà câblé à la file de tâches côté
+// FermeGame.js) — "dès qu'une culture manque d'eau, Greg doit aller l'arroser"
+// (demande Guillaume), remplace l'ancien arrosage instantané (télétransporté, sans
+// déplacement réel).
+export function findThirstyCrops(world, now, limit) {
   const out = [];
   for (const [i, c] of world.crops) {
     const gs = cropGrowState(c, now);
     if (!gs.needsWater) continue;
-    c.bankedMs = gs.grown; c.wateredAt = now; out.push(i);
+    out.push(i);
+    if (out.length >= limit) break;
   }
   return out;
 }

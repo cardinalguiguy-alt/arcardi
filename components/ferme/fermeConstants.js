@@ -574,7 +574,8 @@ export const HEAL_RANGE = 2.5;               // distance max (tuiles) pour soign
 // FermeGame.js) vaut soit `null` (pas engagé), soit un objet d'état.
 export const GREG_HIRE_COST = 400;                 // prix d'engagement (extrapolé, entre le puits et un cheval)
 export const GREG_CONTRACT_MS = 2 * 24 * 60 * 60 * 1000; // durée réelle du contrat : 2 jours réels rémunérés
-export const GREG_WATER_INTERVAL_MS = 10 * H;      // vérification (arrosage des cultures qui en ont besoin), toutes les 10h réelles
+export const GREG_WATER_CHECK_MS = 15 * 1000;      // fréquence de scan des cultures assoiffées (15s réelles) — Greg part à pied dès qu'il en repère une, pas d'arrosage instantané
+export const GREG_WATER_BATCH = 6;                 // nb max de cases assoiffées mises en file par scan (évite de surcharger la file d'un coup sur un grand champ)
 export const GREG_SPEED = 3.2;                     // tuiles/seconde, un peu plus lent qu'un fermier (5.2)
 export const GREG_ROAM_RADIUS = 6;                 // amplitude de rôdaille autour de son ancre (même principe que WOLF_ROAM_RADIUS)
 export const GREG_ANCHOR = { x: 26, y: 58 };        // point d'ancrage (rôdaille + tuiles de dépôt), au bord des champs ouest (puits)
