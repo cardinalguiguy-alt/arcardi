@@ -781,6 +781,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (r.moneyDelta) { s.money += r.moneyDelta; s.totalEarned += r.earnedDelta; out.state = shareState(); }
       if (r.flourChanged) out.flour = s.flour;
       if (r.gain > 0) { out.fx.push({ k: "sell", x: px, y: py, gain: r.gain }); out.chat = { from: "💰", msg: L.chatSell(r.gain, s.money) }; questId = "sell"; }
+    } else if (req.kind === "sell" && req.item === "commonFish") {
+      // Vente d'un poisson pêché par Soan, pool COMMUN (chantier 2026-07,
+      // demande Guillaume : "le poisson est direct notre propriété et on
+      // peut aller le vendre") — même principe que la vente de gemmes/farine
+      // juste au-dessus.
+      const stock = s.gregStock || (s.gregStock = { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0) });
+      const r = E.resolveSellCommonFish(stock, req);
+      if (r.moneyDelta) { s.money += r.moneyDelta; s.totalEarned += r.earnedDelta; out.state = shareState(); }
+      if (r.stockChanged) out.gregStock = stock;
+      if (r.gain > 0) { out.fx.push({ k: "sell", x: px, y: py, gain: r.gain }); out.chat = { from: "💰", msg: L.chatSell(r.gain, s.money) }; questId = "sell"; }
     } else if (req.kind === "sell") {
       const r = E.resolveSell(f, req);
       if (r.moneyDelta) { s.money += r.moneyDelta; s.totalEarned += r.earnedDelta; out.state = shareState(); }
@@ -2143,12 +2153,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   }
   // Soan, l'employé pêcheur (chantier 2026-07, demande Guillaume). Simulation
   // hôte, même squelette que updateGreg (rôdaille par ancre + throttle réseau
-  // ~150ms), mais sans file de tâches : trois phases seulement.
+  // ~150ms), mais sans file de tâches : quatre phases.
   // "roam" (en attente d'ordre, se balade autour de son ancre) -> "toRiver"
-  // (se dirige vers la berge trouvée à l'ordre) -> "fishing" (posté à la
-  // rivière, attrape un poisson toutes les SOAN_FISH_INTERVAL_MS, y reste
-  // indéfiniment — "peut rester toute la journée" — jusqu'à un nouvel ordre,
-  // un rappel, ou la fin du contrat).
+  // (se dirige vers la berge trouvée à l'ordre, ou y retourne après une
+  // pause) -> "fishing" (posté à la rivière, attrape un poisson toutes les
+  // SOAN_FISH_INTERVAL_MS EN CONTINU pendant SOAN_WORK_MS) -> "break" (pause
+  // de SOAN_BREAK_MS, il se balade autour de la berge) -> retour en
+  // "toRiver", et ainsi de suite EN BOUCLE (demande Guillaume : "boucle
+  // pendant 24h") jusqu'à un rappel ou l'expiration du contrat (24h réelles,
+  // aucun minuteur de boucle séparé n'est nécessaire).
   function updateSoan(dt) {
     const w = worldRef.current; if (!w) return;
     const s = sharedRef.current, so = s.soan;
@@ -2166,10 +2179,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const tx = E.xOf(so.riverSpot) + 0.5, ty = E.yOf(so.riverSpot) + 0.5;
       so.tx = tx; so.ty = ty; speed = C.SOAN_SPEED;
       const d = Math.hypot(tx - so.x, ty - so.y);
-      if (d <= C.SOAN_TASK_RANGE) { so.phase = "fishing"; so.lastFishAt = now; }
+      // Arrivée à la berge (premier trajet OU retour après une pause, même
+      // code dans les deux cas) : (re)démarre un bloc de pêche de
+      // SOAN_WORK_MS.
+      if (d <= C.SOAN_TASK_RANGE) { so.phase = "fishing"; so.lastFishAt = now; so.workUntil = now + C.SOAN_WORK_MS; }
     } else if (so.phase === "fishing" && so.riverSpot != null) {
       so.tx = so.x; so.ty = so.y; // reste posté sur place
-      if (now - (so.lastFishAt || 0) >= C.SOAN_FISH_INTERVAL_MS) {
+      if (now >= (so.workUntil || 0)) {
+        // 30 min de pêche d'affilée écoulées : pause, il se balade autour de
+        // la berge (demande Guillaume : "il ira marcher").
+        so.phase = "break"; so.breakUntil = now + C.SOAN_BREAK_MS;
+        so.roamAnchor = { x: E.xOf(so.riverSpot) + 0.5, y: E.yOf(so.riverSpot) + 0.5 };
+        so.roamTarget = null; so.nextRoamAt = 0;
+      } else if (now - (so.lastFishAt || 0) >= C.SOAN_FISH_INTERVAL_MS) {
+        // Pêche en continu tant que le bloc de travail n'est pas terminé.
         so.lastFishAt = now;
         const ft = E.soanCatchFish();
         const stock = sharedRef.current.gregStock || (sharedRef.current.gregStock = { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0) });
@@ -2178,6 +2201,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         setGregStock({ ...stock });
         channelRef.current?.send({ type: "broadcast", event: "apply", payload: { gregStock: stock } });
         dirtyRef.current = true;
+      }
+    } else if (so.phase === "break") {
+      // Pause : se balade autour de la berge (roamAnchor posé à l'entrée en
+      // pause ci-dessus), même mouvement que la rôdaille "roam" mais avec un
+      // rayon dédié (SOAN_BREAK_ROAM_RADIUS), jusqu'à la fin de la pause.
+      if (now >= (so.breakUntil || 0)) {
+        so.phase = "toRiver"; // retour au poste de pêche, redémarre un bloc de travail à l'arrivée
+      } else {
+        speed = C.SOAN_SPEED * 0.55;
+        if (!so.roamTarget || Math.hypot(so.roamTarget.x - so.x, so.roamTarget.y - so.y) < 0.3 || now >= (so.nextRoamAt || 0)) {
+          const anchor = so.roamAnchor || C.SOAN_ANCHOR;
+          const a = Math.random() * Math.PI * 2, d = 1 + Math.random() * C.SOAN_BREAK_ROAM_RADIUS;
+          so.roamTarget = { x: anchor.x + Math.cos(a) * d, y: anchor.y + Math.sin(a) * d };
+          so.nextRoamAt = now + 1500 + Math.random() * 2500;
+        }
+        so.tx = so.roamTarget.x; so.ty = so.roamTarget.y;
       }
     } else {
       so.phase = "roam";
@@ -3313,6 +3352,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     setCraftMenuOpen(null);
   }
   const sellFish = (fishId) => sendReq({ kind: "sell", item: "fish", fish: fishId, n: 9999 });
+  const sellCommonFish = (fishId) => sendReq({ kind: "sell", item: "commonFish", fish: fishId, n: 9999 });
   const sellGem = (gemId) => sendReq({ kind: "sell", item: "gem", gem: gemId, n: 9999 });
 
   // -------- Rendu React (UI par-dessus le canvas) --------
@@ -3782,7 +3822,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 <span className="ferme-usage">
                   {sharedRef.current.soan
                     ? L.soanHiredUntil(Math.max(0, Math.ceil((sharedRef.current.soan.expiresAt - Date.now()) / 3600000))) + " — " +
-                      (sharedRef.current.soan.phase === "fishing" ? L.soanStatusFishing : sharedRef.current.soan.phase === "toRiver" ? L.soanStatusToRiver : L.soanStatusRoam)
+                      (sharedRef.current.soan.phase === "fishing" ? L.soanStatusFishing
+                        : sharedRef.current.soan.phase === "break" ? L.soanStatusBreak
+                        : sharedRef.current.soan.phase === "toRiver" ? L.soanStatusToRiver : L.soanStatusRoam)
                     : L.soanNotHiredSub}
                 </span>
               </div>
@@ -3883,6 +3925,23 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   <Sprite img={spritesReady ? spritesRef.current.fishIcons[fs.id] : null} w={32} h={32} />
                   <div className="info"><b>{(lang === "en" ? fs.nameEn : fs.name)} × {n}</b><span>{L.perPiece(fs.sell)}</span></div>
                   <button disabled={!n} onClick={() => sellFish(fs.id)}>{L.sellAll}</button>
+                </div>
+              );
+            })}
+            {/* Poissons pêchés par Soan, pool COMMUN (chantier 2026-07,
+                demande Guillaume : "le poisson est direct notre propriété et
+                on peut aller le vendre") — même principe d'affichage que les
+                gemmes du pool commun juste en dessous. Lignes visibles
+                UNIQUEMENT si le stock commun contient au moins un poisson de
+                cette espèce. */}
+            {C.FISH.map(fs => {
+              const n = gregStock.fish ? gregStock.fish[fs.id] : 0;
+              if (!n) return null;
+              return (
+                <div className="ferme-shop-row" key={"cf" + fs.id}>
+                  <Sprite img={spritesReady ? spritesRef.current.fishIcons[fs.id] : null} w={32} h={32} />
+                  <div className="info"><b>{(lang === "en" ? fs.nameEn : fs.name)} × {n}</b><span>{L.perPiece(fs.sell)}</span><span className="ferme-usage">{L.soanFishSharedHint}</span></div>
+                  <button disabled={!n} onClick={() => sellCommonFish(fs.id)}>{L.sellAll}</button>
                 </div>
               );
             })}

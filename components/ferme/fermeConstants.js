@@ -604,7 +604,16 @@ export const SOAN_ROAM_RADIUS = 6;                  // rôdaille autour de son a
 export const SOAN_ANCHOR = { x: 60, y: 58 };        // ancre de rôdaille, entre la maison (x=40) et la rivière (x~70-120 selon la seed)
 export const SOAN_TASK_RANGE = 0.6;                 // distance d'arrivée avant de pêcher, identique à GREG_TASK_RANGE
 export const SOAN_RIVER_SEARCH_RADIUS = 60;         // rayon de recherche d'une berge (findRiverbankTile) autour de SOAN_ANCHOR — large car la rivière est sinueuse et sa position dépend de la seed
-export const SOAN_FISH_INTERVAL_MS = 8 * 60 * 1000; // fréquence à laquelle Soan attrape un poisson une fois posté à la rivière (8 min réelles, extrapolé : pas de mini-jeu pour un PNJ, contrairement au joueur)
+// Cycle travail/pause (chantier 2026-07, demande Guillaume : "il doit travailler
+// pendant 30 minutes straight, puis prendre une pause de 15 minutes, il ira
+// marcher, puis se remet au travail, boucle pendant 24h") : une fois posté à
+// la rivière, Soan alterne indéfiniment pêche/pause jusqu'à un rappel ou
+// l'expiration de son contrat (24h réelles ci-dessus, aucun minuteur de cycle
+// séparé n'est nécessaire — la boucle s'arrête d'elle-même avec le contrat).
+export const SOAN_WORK_MS = 30 * 60 * 1000;         // durée d'un bloc de pêche d'affilée
+export const SOAN_BREAK_MS = 15 * 60 * 1000;        // durée de la pause (balade) avant de reprendre
+export const SOAN_BREAK_ROAM_RADIUS = 8;            // amplitude de balade pendant la pause, autour de la berge où il pêche
+export const SOAN_FISH_INTERVAL_MS = 20 * 1000;     // pêche EN CONTINU pendant un bloc de travail ("il pioche des poissons continûment", demande Guillaume) : une prise toutes les 20s réelles (extrapolé, pas de mini-jeu pour un PNJ, contrairement au joueur)
 
 // --- Lapins (chantier 2026-07, demande Guillaume : "ajouter des petits
 // lapins bien détaillés qui fuient et sont inoffensifs, surtout rive

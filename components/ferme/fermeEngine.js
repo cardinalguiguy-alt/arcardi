@@ -1330,6 +1330,25 @@ export function resolveSellFlour(shared, m) {
   return res;
 }
 
+// Vente d'un poisson depuis le pool COMMUN pêché par Soan (chantier 2026-07,
+// demande Guillaume : "le poisson est direct notre propriété et on peut aller
+// le vendre") : même principe que resolveSellGem/resolveSellFlour ci-dessus.
+// `stock` = sharedRef.current.gregStock côté FermeGame.js (stock.fish, tableau
+// par espèce comme C.FISH/f.inv.fish), muté directement. Renvoie
+// { moneyDelta, earnedDelta, stockChanged, toast, gain }.
+export function resolveSellCommonFish(stock, m) {
+  const res = { moneyDelta: 0, earnedDelta: 0, stockChanged: false, toast: null, gain: 0 };
+  const ft = m.fish | 0;
+  if (ft < 0 || ft >= C.FISH.length || !stock || !stock.fish) return res;
+  const have = stock.fish[ft] || 0;
+  const n = Math.min(have, Math.max(1, (m.n | 0) || have));
+  if (n <= 0) return res;
+  stock.fish[ft] -= n;
+  const gain = n * C.FISH[ft].sell;
+  res.moneyDelta = gain; res.earnedDelta = gain; res.stockChanged = true; res.gain = gain;
+  return res;
+}
+
 // Repas : rend de l'énergie. Mange un casse-croûte en priorité ; sinon, mange
 // le poisson le moins précieux disponible (la pêche sert donc aussi à se
 // nourrir). Renvoie { invChanged, fx }.
