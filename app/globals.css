@@ -6606,6 +6606,26 @@ body.ferme-active .wrap-room > .brand{ display:none !important; }
 .ferme-seed-menu-row canvas{ image-rendering:pixelated; }
 .ferme-seed-menu-row .name{ flex:1; font-size:13px; }
 .ferme-seed-menu-row .count{ font-size:12px; font-weight:bold; opacity:.8; }
+.ferme-seed-menu-hint{ font-size:11px; opacity:.75; padding:6px 4px 2px; line-height:1.35; }
+
+/* Bouton flottant "Lancer Greg ici" (chantier 2026-07 v2) : reste affiché
+   tant qu'un ordre est armé (choisi à la boutique) mais pas encore envoyé,
+   pour que le joueur puisse se déplacer librement puis confirmer sur place. */
+.ferme-greg-order-wrap{
+  position:fixed; left:50%; bottom:96px; transform:translateX(-50%); z-index:41;
+  display:flex; align-items:center; gap:8px;
+}
+.ferme-greg-order-fab{
+  display:flex; align-items:center; gap:8px; padding:10px 16px; border-radius:24px;
+  border:3px solid var(--f-wood); background:var(--f-gold); box-shadow:0 3px 0 var(--f-wood-d);
+  cursor:pointer; font-weight:bold; font-size:13px; white-space:nowrap;
+}
+.ferme-greg-order-fab:hover{ filter:brightness(1.08); }
+.ferme-greg-order-fab:active{ transform:translateY(2px); box-shadow:0 1px 0 var(--f-wood-d); }
+.ferme-greg-order-cancel{
+  width:36px; height:36px; border-radius:50%; border:2px solid var(--f-wood); background:#4a4238;
+  color:#fff; cursor:pointer; font-size:14px; line-height:1; flex:none;
+}
 
 /* Menu Construire/Vendre (clic sur bois/pierre du HUD, chantier 2026-07) */
 .ferme-craft-menu{ width:min(300px, 88vw); }

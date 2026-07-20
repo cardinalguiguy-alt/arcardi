@@ -128,6 +128,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [gregOrderOpen, setGregOrderOpen] = useState(false); // panneau "donner un ordre à Greg" (chantier 2026-07)
   const [gregOrderCrop, setGregOrderCrop] = useState(0);
   const [gregOrderCount, setGregOrderCount] = useState(10);
+  // Ordre choisi mais pas encore lancé (retour Guillaume 2026-07) : le joueur
+  // choisit culture+nombre à la boutique, PUIS se déplace où il veut que Greg
+  // travaille et confirme via le bouton flottant (gregOrderFab) — l'ancre de
+  // recherche de cases est alors sa position réelle à cet instant (px/py),
+  // pas la boutique où il était en train de choisir.
+  const [gregOrderPending, setGregOrderPending] = useState(null); // {crop, count} | null
   const [binOpen, setBinOpen] = useState(false);
   const [mapOpen, setMapOpen] = useState(false);
   const [promptKey, setPromptKey] = useState(null); // 'shop' | 'bin' | null
@@ -825,7 +831,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const w2 = worldRef.current;
         if (s.money < cost) out.toast = { id: f.id, key: "noGold" };
         else {
-          const tiles = E.findFreeGrassTiles(w2, g.roamAnchor || C.GREG_ANCHOR, count);
+          // Zone ciblée par le joueur (chantier 2026-07, suite retour Guillaume) :
+          // Greg laboure intelligemment AUTOUR d'où le joueur se trouve au
+          // moment de l'ordre (px/py, position déjà envoyée par sendReq),
+          // plutôt qu'autour d'un point fixe ou de sa position de rôdaille.
+          const tiles = E.findFreeGrassTiles(w2, { x: Math.round(px), y: Math.round(py) }, count);
           if (tiles.length === 0) out.toast = { id: f.id, key: "gregNoRoom" };
           else {
             s.money -= C.CROPS[cropIdx].seedCost * tiles.length;
@@ -1975,7 +1985,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const buyHorse = () => sendReq({ kind: "buyHorse" });
   const buyWell = () => sendReq({ kind: "buyWell" });
   const hireGreg = () => sendReq({ kind: "hireGreg" });
-  const sendGregOrder = () => { sendReq({ kind: "gregOrder", crop: gregOrderCrop, count: gregOrderCount }); setGregOrderOpen(false); };
+  // Choix de l'ordre (chantier 2026-07, v2 suite retour Guillaume) : on
+  // n'envoie PAS tout de suite — le joueur est encore à la boutique. On
+  // mémorise juste le choix et on ferme boutique + panneau ; le joueur va
+  // ensuite où il veut, puis confirme via le bouton flottant (fireGregOrder).
+  const armGregOrder = () => { setGregOrderPending({ crop: gregOrderCrop, count: gregOrderCount }); setGregOrderOpen(false); setShopOpen(false); };
+  const cancelGregOrder = () => setGregOrderPending(null);
+  const fireGregOrder = () => {
+    if (!gregOrderPending) return;
+    sendReq({ kind: "gregOrder", crop: gregOrderPending.crop, count: gregOrderPending.count });
+    setGregOrderPending(null);
+  };
   const buyAnimal = (type) => sendReq({ kind: "buyAnimal", animal: type });
   // Défi "chasse aux lapins" (chantier 2026-07) : actions RÉSERVÉES à l'hôte
   // (c'est lui qui reçoit la popup de proposition, jamais les autres
@@ -3126,6 +3146,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         <Sprite img={spritesReady ? spritesRef.current.torch : null} w={22} h={30} />
       </button>
 
+      {/* Ordre Greg armé (chantier 2026-07 v2) : le joueur a choisi
+          culture+nombre à la boutique, il se déplace maintenant librement
+          puis confirme ici — Greg travaillera autour de CETTE position. */}
+      {gregOrderPending && (
+        <div className="ferme-greg-order-wrap">
+          <button className="ferme-greg-order-fab" onClick={fireGregOrder}>{L.gregOrderFab}</button>
+          <button className="ferme-greg-order-cancel" title={L.gregOrderCancel} onClick={cancelGregOrder}>✕</button>
+        </div>
+      )}
+
       {/* Boutons flottants (nouveautés incluses) */}
       <div className="ferme-actions">
         <button className="ferme-btn" onClick={teleportHome}>{L.btnHome}</button>
@@ -3224,8 +3254,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             </div>
             <div className="ferme-shop-row">
               <div className="info"><span>{L.gregOrderCost(C.CROPS[gregOrderCrop].seedCost * gregOrderCount)}</span></div>
-              <button disabled={hud.money < C.CROPS[gregOrderCrop].seedCost * gregOrderCount} onClick={sendGregOrder}>{L.gregOrderBtn}</button>
+              <button disabled={hud.money < C.CROPS[gregOrderCrop].seedCost * gregOrderCount} onClick={armGregOrder}>{L.gregOrderArmBtn}</button>
             </div>
+            <div className="ferme-seed-menu-hint">{L.gregOrderHint}</div>
           </div>
         </div>
       )}
