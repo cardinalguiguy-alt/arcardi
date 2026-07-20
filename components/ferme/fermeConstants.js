@@ -541,7 +541,7 @@ export const WOLF_FLEE_COOLDOWN_MS = 4000; // temps avant de reprendre son activ
 export const WOLF_AGGRESSIVE_CHANCE = 0.2;   // ~1 loup sur 5
 export const WOLF_SPEED_AGGRESSIVE = 4.4;    // > WOLF_SPEED_FAST : rattrape un fermier qui fuit
 export const WOLF_BITE_RANGE = 0.75;         // distance déclenchant la morsure (mini-jeu)
-export const WOLF_BITE_REACT_MS = 2200;      // durée du mini-jeu de riposte (très court = difficile)
+export const WOLF_BITE_REACT_MS = 2800;      // durée du mini-jeu de riposte (rééquilibré 2026-07 : 2200ms + jauge trop punitive rendait le mini-jeu quasi impossible, voir aussi press/decay dans WolfBiteMinigame)
 export const INJURED_MS = 10 * 60 * 1000;    // indisponibilité après une morsure manquée (10 min, survit à un refresh)
 export const HEAL_KIT_COST = 0;              // trousse de soins, gratuite (magasin) — demande 2026-07
 export const HEAL_REDUCE_MS = 60 * 1000;     // durée restante après soin par un autre joueur (1 min)

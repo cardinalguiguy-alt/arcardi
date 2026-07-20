@@ -3828,13 +3828,17 @@ function BarnMinigame({ level, L, onWin, onFail }) {
 
 /* ============================================================================
    Mini-jeu de morsure (loup agressif, chantier 2026-07, demande Guillaume) :
-   plein écran, fond rouge, très difficile à dessein (fenêtre courte +
-   décroissance rapide de la jauge). Il faut marteler Espace/clic pour faire
-   monter la jauge de lutte jusqu'à 1 AVANT C.WOLF_BITE_REACT_MS, sans quoi
-   (ou si le joueur ne réagit pas du tout) c'est un échec — voir onFail, qui
-   se contente d'informer l'hôte : la blessure elle-même est appliquée côté
-   hôte (délai de grâce wf.biteDeadline dans updateWolves), ce composant ne
-   fait que tenter de la devancer.
+   plein écran, fond rouge. Il faut marteler Espace/clic pour faire monter la
+   jauge de lutte jusqu'à 1 AVANT C.WOLF_BITE_REACT_MS, sans quoi (ou si le
+   joueur ne réagit pas du tout) c'est un échec — voir onFail, qui se contente
+   d'informer l'hôte : la blessure elle-même est appliquée côté hôte (délai de
+   grâce wf.biteDeadline dans updateWolves), ce composant ne fait que tenter
+   de la devancer.
+   Rééquilibré 2026-07 (retour Guillaume : quasi impossible à gagner) : gain
+   par appui relevé (0.11 -> 0.16) et décroissance de la jauge adoucie
+   (0.55/s -> 0.38/s), en plus de la fenêtre allongée (C.WOLF_BITE_REACT_MS,
+   voir fermeConstants.js). Reste un vrai mini-jeu (mash insuffisant = échec),
+   mais un martelage normal (~5 appuis/s) suffit désormais à gagner.
    ============================================================================ */
 function WolfBiteMinigame({ L, onWin, onFail }) {
   const [, force] = useState(0);
@@ -3844,7 +3848,7 @@ function WolfBiteMinigame({ L, onWin, onFail }) {
   const finish = (kind) => { if (done.current) return; done.current = true; if (kind === "win") onWin(); else onFail(); };
   const press = () => {
     const st = s.current; if (!st || done.current) return;
-    st.prog = Math.min(1, st.prog + 0.11);
+    st.prog = Math.min(1, st.prog + 0.16);
     if (st.prog >= 1) finish("win");
   };
 
@@ -3856,7 +3860,7 @@ function WolfBiteMinigame({ L, onWin, onFail }) {
       raf = requestAnimationFrame(loop);
       const now = performance.now(), dt = Math.min(0.05, (now - last) / 1000); last = now;
       const st2 = s.current; if (!st2 || done.current) return;
-      st2.prog = Math.max(0, st2.prog - 0.55 * dt); // décroissance rapide : il faut marteler en continu
+      st2.prog = Math.max(0, st2.prog - 0.38 * dt); // décroissance adoucie : il faut marteler, mais un rythme normal suffit
       if (now - st2.t0 > C.WOLF_BITE_REACT_MS) return finish("fail");
       force(v => (v + 1) % 1000000);
     };
