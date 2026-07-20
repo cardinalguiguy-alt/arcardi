@@ -156,6 +156,13 @@ export default function Room() {
   // l'abonnement Realtime plus haut) ou dès que "Rassembler tout le monde"
   // est utilisé (l'état serveur fait alors autorité de nouveau).
   const [fermeAway, setFermeAway] = useState(null);
+  // Correctif 2026-07 : mémorise le code de la ferme durable une fois chargé
+  // par FermeGame (voir `onCodeLoaded`), pour le repasser en `savedCode` à
+  // toute nouvelle instance côté hôte (instance cachée en arrière-plan,
+  // remontage lors d'un "Rejoindre la ferme") — sans quoi ces remontages
+  // restaient bloqués sur l'écran "entrez le code", jamais cliqué puisque
+  // soit invisible (display:none), soit sauté trop vite par l'utilisateur.
+  const fermeCodeRef = useRef("");
   // Garde anti-double-appel pour la succession automatique de l'hôte
   // (point 5) : un seul essai par période "hôte disparu" détectée.
   const hostSuccessionRef = useRef(false);
@@ -1100,7 +1107,7 @@ export default function Room() {
                     <PuzzleGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
                   )}
                   {room.current_game === "ferme" && (
-                    <FermeGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} />
+                    <FermeGame room={room} me={me} isHost={isHost} players={players} t={t} lang={lang} onFinish={handleGameFinish} savedCode={fermeCodeRef.current} onCodeLoaded={(c) => { fermeCodeRef.current = c; }} />
                   )}
                 </StageComponent>
                 </GameErrorBoundary>
@@ -1289,7 +1296,7 @@ export default function Room() {
           (seuls les boutons visibles, rejoinFerme/gatherFerme, le font). */}
       {isHost && fermeAway && room && (
         <div style={{ display: "none" }} aria-hidden="true">
-          <FermeGame room={room} me={me} isHost={true} players={players} t={t} lang={lang} onFinish={() => {}} />
+          <FermeGame room={room} me={me} isHost={true} players={players} t={t} lang={lang} onFinish={() => {}} savedCode={fermeCodeRef.current} onCodeLoaded={(c) => { fermeCodeRef.current = c; }} />
         </div>
       )}
 

@@ -77,14 +77,21 @@ function migrateGems(saved) {
   return gems;
 }
 
-export default function FermeGame({ room, me, isHost, players, t, lang, onFinish }) {
+export default function FermeGame({ room, me, isHost, players, t, lang, onFinish, savedCode, onCodeLoaded }) {
   const L = fstr(lang);
 
   // -------- État React (piloté par évènements, basse fréquence) --------
   // Phases : "code" (hôte : saisit le code de ferme) -> "select" (choix du
   // perso, sauté si déjà mémorisé) -> "playing". L'invité démarre en "select"
   // (il attend l'instantané de l'hôte, sans saisir de code).
-  const [phase, setPhase] = useState(isHost ? "code" : "select");
+  // Correctif 2026-07 : quand `savedCode` est fourni (l'hôte a déjà chargé
+  // cette ferme plus tôt dans la session — voir page.js), on saute
+  // directement l'écran "code" au lieu d'y rester bloqué. Indispensable pour
+  // l'instance CACHÉE (display:none) montée en arrière-plan quand l'hôte
+  // quitte la vue ferme : sans ça, personne ne peut jamais cliquer sur
+  // "Charger" pour elle, et la simulation ne redémarre jamais tant que
+  // l'hôte est "away" — contrairement à ce que promettait le design.
+  const [phase, setPhase] = useState(isHost && !savedCode ? "code" : "select");
   const [gender, setGender] = useState("m");
   const [nameVal, setNameVal] = useState((me?.username || "Fermier").slice(0, 14));
   const [codeInput, setCodeInput] = useState("");
@@ -131,6 +138,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [barn, setBarn] = useState(null); // miroir React de sharedRef.current.barn (grange persistante)
   const [gems, setGems] = useState(() => C.GEMS.map(() => 0)); // miroir React de sharedRef.current.gems (pool commun à la salle)
   const [flour, setFlour] = useState(0); // miroir React de sharedRef.current.flour (sacs de farine, pool commun à la salle, chantier 2026-07)
+  // Défi "chasse aux lapins" (chantier 2026-07, demande Guillaume) : miroir
+  // React de sharedRef.current.rabbitChallenge (null si aucun défi en cours),
+  // popup de proposition affichée UNIQUEMENT à l'hôte (jamais partagée), et
+  // chapeau de trophée gagné (persistant, voir farmer.hat / p.hat).
+  const [rabbitChallenge, setRabbitChallenge] = useState(null);
+  const [rabbitChallengeOffer, setRabbitChallengeOffer] = useState(false); // popup "activer le défi ?" (hôte uniquement)
+  const [hasHat, setHasHat] = useState(false); // moi-même : je porte le chapeau gagné (trophée du défi lapins)
 
   // -------- Refs (état du jeu, lus par la boucle de rendu) --------
   const canvasRef = useRef(null);
@@ -153,7 +167,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const meRef = useRef(null);
   const playersRef = useRef(new Map()); // id -> remote farmer render data
   const farmersRef = useRef({});        // hôte : id -> état privé arbitré
-  const sharedRef = useRef({ seed: 0, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), flour: 0, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [] });
+  const sharedRef = useRef({ seed: 0, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), flour: 0, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], rabbitChallenge: null });
   const invRef = useRef(null);
   const toolsRef = useRef({ hoe: 1, can: 1, axe: 1, pick: 1 });
   const energyRef = useRef(C.MAX_ENERGY);
@@ -202,9 +216,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const sleepStartEnergyRef = useRef(0);
   const sleepTimerRef = useRef(null); // setTimeout de sortie automatique après C.SLEEP_MS
   const injuredUntilRef = useRef(0); // miroir synchrone de injuredUntil (lu dans la boucle de rendu/déplacement)
+  const hatRef = useRef(false); // miroir synchrone de hasHat (lu dans la boucle de rendu, voir drawCharacter)
+  const rabbitChallengeOfferRef = useRef(false); // miroir synchrone de rabbitChallengeOffer (lu dans le timer hôte, évite de reproposer en boucle)
 
   useEffect(() => { fishMiniRef.current = !!fishMini || !!barnMini || !!wolfBite; }, [fishMini, barnMini, wolfBite]);
   useEffect(() => { injuredUntilRef.current = injuredUntil || 0; }, [injuredUntil]);
+  useEffect(() => { hatRef.current = !!hasHat; }, [hasHat]);
+  useEffect(() => { rabbitChallengeOfferRef.current = !!rabbitChallengeOffer; }, [rabbitChallengeOffer]);
   useEffect(() => { mapOpenRef.current = mapOpen; }, [mapOpen]);
   useEffect(() => { shopOpenRef.current = shopOpen; }, [shopOpen]);
   useEffect(() => { binOpenRef.current = binOpen; }, [binOpen]);
@@ -231,6 +249,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // Pré-remplit le dernier code de ferme utilisé sur cette machine.
     try { const c = window.localStorage.getItem("ferme_lastcode"); if (c) setCodeInput(c); } catch (e) { /* localStorage indispo */ }
     return () => document.body.classList.remove("ferme-active");
+  }, []);
+
+  // Correctif 2026-07 : quand cette instance démarre avec `savedCode` (cas de
+  // l'instance CACHÉE montée en arrière-plan pendant que l'hôte est "away",
+  // ET du remontage lors d'un "Rejoindre la ferme"), on charge le monde tout
+  // de suite au lieu d'attendre un clic sur "Charger" que personne ne peut
+  // faire (l'instance cachée n'est jamais affichée). Sans ce correctif, la
+  // simulation host-authoritative restait totalement figée pendant toute
+  // l'absence de l'hôte, malgré ce que promettait le design de `fermeAway`.
+  useEffect(() => {
+    if (isHost && savedCode && !farmCodeRef.current) loadFarmByCode(savedCode);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Checklist des quêtes de découverte (nouveaux joueurs) : une fois toutes
@@ -302,6 +332,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         flour: saved.flour || 0,
         wolves: [], wolfNight: { active: false, kills: 0 }, // repartent à zéro à la reprise, respawn dérivé de l'heure courante
         rabbits: [], // même principe : repartent à zéro, repop dérivé de l'heure courante (voir updateRabbits)
+        rabbitChallenge: null, // défi éphémère, ne survit pas à une reprise (même principe que wolfNight)
       };
       // Les cavaliers repartent à pied à la reprise (aucun joueur monté au chargement).
       for (const h of sharedRef.current.horses) { h.rider = null; h.rider2 = null; h.callTarget = null; }
@@ -321,7 +352,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const seed = hashSeed(code);
       worldRef.current = E.generateWorld(seed);
       overridesRef.current = { ground: {}, object: {} };
-      sharedRef.current = { seed, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), gems: C.GEMS.map(() => 0), flour: 0, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [] };
+      sharedRef.current = { seed, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), gems: C.GEMS.map(() => 0), flour: 0, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], rabbitChallenge: null };
       farmersRef.current = {};
       // Crée tout de suite l'enregistrement pour réserver le code.
       persistFarm();
@@ -336,6 +367,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const mineF = farmersRef.current[me.id];
       injuredUntilRef.current = (mineF && mineF.injuredUntil) || 0;
       setInjuredUntil(injuredUntilRef.current);
+      hatRef.current = !!(mineF && mineF.hat);
+      setHasHat(hatRef.current);
     }
     setCodeLoading(false);
     setHud(h => ({ ...h, money: sharedRef.current.money, day: sharedRef.current.day }));
@@ -343,9 +376,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     setBarn(sharedRef.current.barn);
     setGems(sharedRef.current.gems);
     setFlour(sharedRef.current.flour || 0);
+    setRabbitChallenge(sharedRef.current.rabbitChallenge);
     syncBuildings();
     setWorldReady(true);
     setPhase("select"); // l'effet d'auto-spawn décidera de sauter cet écran
+    onCodeLoaded && onCodeLoaded(code); // mémorise le code côté page.js pour les remontages suivants (instance cachée, rejoin)
     setTimeout(() => broadcastSnapshot(), 0);
   }
 
@@ -410,7 +445,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       gems: migrateGems(payload),
       flour: payload.flour || 0,
       wolves: payload.wolves || [], wolfNight: { active: !!(payload.wolves && payload.wolves.length), kills: 0 },
-      rabbits: payload.rabbits || [],
+      rabbits: payload.rabbits || [], rabbitChallenge: payload.rabbitChallenge || null,
     };
     if (payload.farmers) {
       farmersRef.current = payload.farmers;
@@ -422,7 +457,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // que je puisse le soigner (voir applyDeltas / p.injured).
       for (const id in farmersRef.current) {
         const rp = playersRef.current.get(id);
-        if (rp) rp.injuredUntil = farmersRef.current[id].injuredUntil || 0;
+        if (rp) { rp.injuredUntil = farmersRef.current[id].injuredUntil || 0; rp.hat = !!farmersRef.current[id].hat; }
       }
     }
     E.normalizeAnimals(sharedRef.current.animals);
@@ -434,6 +469,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // Blessure (morsure de loup) : survit à un rechargement, restaurée depuis
       // l'état persistant du fermier (voir farmer.injuredUntil / INJURED_MS).
       injuredUntilRef.current = mine.injuredUntil || 0; setInjuredUntil(injuredUntilRef.current);
+      hatRef.current = !!mine.hat; setHasHat(hatRef.current);
     }
     minimapDirtyRef.current = true;
     setHud(h => ({ ...h, money: payload.money, day: payload.day }));
@@ -441,6 +477,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     setBarn(sharedRef.current.barn);
     setGems(sharedRef.current.gems);
     setFlour(sharedRef.current.flour || 0);
+    setRabbitChallenge(sharedRef.current.rabbitChallenge);
     syncBuildings();
     setWorldReady(true);
   }
@@ -524,7 +561,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function ensureRemote(p) {
     if (p.id === me.id) return;
     if (!playersRef.current.has(p.id)) {
-      playersRef.current.set(p.id, { id: p.id, name: p.name, gender: p.gender || "m", outfit: p.outfit || 0, x: p.x ?? C.SPAWN.x, y: p.y ?? C.SPAWN.y, tx: p.x ?? C.SPAWN.x, ty: p.y ?? C.SPAWN.y, dir: p.dir || 0, moving: false, tool: 0, animT: 0, sleeping: false, torch: false });
+      playersRef.current.set(p.id, { id: p.id, name: p.name, gender: p.gender || "m", outfit: p.outfit || 0, x: p.x ?? C.SPAWN.x, y: p.y ?? C.SPAWN.y, tx: p.x ?? C.SPAWN.x, ty: p.y ?? C.SPAWN.y, dir: p.dir || 0, moving: false, tool: 0, animT: 0, sleeping: false, torch: false, hat: !!(farmersRef.current[p.id] && farmersRef.current[p.id].hat) });
     }
   }
 
@@ -538,7 +575,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       mills: worldRef.current ? E.serializeMills(worldRef.current) : [],
       farmers: farmersRef.current,
       horses: s.horses, animals: s.animals, wellBuilt: s.wellBuilt, coop: s.coop, barn: s.barn, gems: s.gems, flour: s.flour, wolves: s.wolves,
-      rabbits: s.rabbits,
+      rabbits: s.rabbits, rabbitChallenge: s.rabbitChallenge,
     };
   }
   function syncBuildings() {
@@ -824,6 +861,30 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // Annulation (changement d'outil) : relâche l'animal sans le déplacer.
       const ai = req.animal | 0, an = s.animals[ai];
       if (an && an.carriedBy === req.id) { an.carriedBy = null; out.animals = s.animals; }
+    } else if (req.kind === "sellAnimal") {
+      // Vente d'un animal porté (outil "déplacer", touche E, demande 2026-07) :
+      // au lieu de le redéposer sur la carte (voir "placeAnimal"), le joueur
+      // peut le vendre définitivement contre de l'or, où qu'il se trouve sur
+      // la ferme. Prix de vente = 1/3 du prix d'achat (`cost`) du même type
+      // d'animal, arrondi à l'entier le plus proche — indépendant du prix de
+      // vente de la PRODUCTION (`sell`, œuf/lait/laine/truffe), qui reste
+      // inchangé. Retrait définitif du tableau (`splice`), même pattern que
+      // pour un animal mangé par un loup (voir phase "eat" plus haut) : les
+      // index détenus par d'autres joueurs (`carriedBy`) qui suivraient un
+      // animal situé APRÈS celui-ci dans le tableau se décaleraient d'un cran
+      // — risque déjà présent et accepté pour le loup, non traité ici non
+      // plus (accepter la même limite plutôt qu'introduire un mécanisme à
+      // part, cf. remarque du zip 178 sur les lapins/id vs index).
+      const ai = req.animal | 0, an = s.animals[ai];
+      if (an && an.carriedBy === req.id) {
+        const at = C.ANIMALS[an.type];
+        const price = Math.round(((at && at.cost) || 0) / 3);
+        s.money += price;
+        s.animals.splice(ai, 1);
+        out.state = shareState(); out.animals = s.animals;
+        out.fx.push({ k: "sell", x: px, y: py, gain: price });
+        out.chat = { from: "💰", msg: L.chatAnimalSold(lang === "en" ? at.nameEn : at.name, price) };
+      } else out.toast = { id: f.id, key: "actionFailed" };
     } else if (req.kind === "catchRabbit") {
       // Capture d'un lapin sauvage avec l'outil "déplacer" (même case 9 que
       // pour attraper un animal de la ferme, demande Guillaume). Contrairement
@@ -839,6 +900,25 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         s.rabbits.splice(ri, 1);
         out.rabbits = s.rabbits;
         out.chat = { from: "🐇", msg: L.rabbitCaughtChat(f.name) };
+        // Défi "chasse aux lapins" (chantier 2026-07, demande Guillaume) : si
+        // un défi est actif, cette capture compte pour le compteur personnel
+        // du fermier. Indexé par id de fermier (pas par index de tableau,
+        // contrairement aux animaux/loups) : reste valide quel que soit
+        // l'ordre des captures ou des (re)connexions pendant le défi.
+        const rc = s.rabbitChallenge;
+        if (rc && rc.active) {
+          rc.catches[req.id] = (rc.catches[req.id] || 0) + 1;
+          if (rc.catches[req.id] >= C.RABBIT_CHALLENGE_TARGET) {
+            // Victoire : le défi s'arrête, le gagnant reçoit le chapeau
+            // (trophée cosmétique persistant, voir farmer.hat / p.hatWon,
+            // même mécanique de diffusion que le statut "blessé").
+            rc.active = false;
+            f.hat = true;
+            out.hatWon = { id: f.id };
+            out.chat = { from: "🎩", msg: L.rabbitChallengeWon(f.name) };
+          }
+          out.rabbitChallenge = rc;
+        }
       } else out.toast = { id: f.id, key: "actionFailed" };
     } else if (req.kind === "coopDeposit") {
       const r = E.resolveCoopDeposit(f, s.coop, req);
@@ -960,6 +1040,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (p.barn !== undefined) { sharedRef.current.barn = p.barn; setBarn(p.barn); minimapDirtyRef.current = true; }
     if (p.gems) { sharedRef.current.gems = p.gems; setGems(p.gems); }
     if (p.flour !== undefined) { sharedRef.current.flour = p.flour; setFlour(p.flour); }
+    if (p.rabbitChallenge !== undefined) { sharedRef.current.rabbitChallenge = p.rabbitChallenge; setRabbitChallenge(p.rabbitChallenge); }
+    if (p.hatWon) {
+      // Diffusion du chapeau gagné (chantier 2026-07) : même principe que
+      // `p.injured` pour la blessure — état persistant du fermier concerné,
+      // propagé à tous pour qu'il reste visible même après un refresh distant.
+      if (p.hatWon.id === me.id) { hatRef.current = true; setHasHat(true); }
+      else { const rp = playersRef.current.get(p.hatWon.id); if (rp) rp.hat = true; }
+    }
   }
   function applyNewDay(p) {
     const w = worldRef.current; if (!w) return;
@@ -992,6 +1080,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         channelRef.current?.send({ type: "broadcast", event: "apply", payload: { coop: s.coop } });
         channelRef.current?.send({ type: "broadcast", event: "chat", payload: { from: "🚧", msg: L.coopStarted(lang === "en" ? def.nameEn : def.name) } });
         dirtyRef.current = true;
+      }
+      // Défi "chasse aux lapins" (chantier 2026-07, demande Guillaume) :
+      // contrairement à la mission collaborative ci-dessus (auto-démarrée),
+      // ce défi n'est JAMAIS déclenché automatiquement — seulement PROPOSÉ à
+      // l'hôte (popup locale, `rabbitChallengeOffer`, jamais partagée aux
+      // autres joueurs) tant qu'aucun défi n'est déjà en cours et qu'au moins
+      // `RABBIT_CHALLENGE_MIN_PLAYERS` fermiers sont en ligne en même temps.
+      // C'est l'hôte qui choisit ensuite d'activer réellement le défi (voir
+      // `activateRabbitChallenge`). Un seul jet par tick tant que la popup
+      // n'a pas déjà été proposée (`rabbitChallengeOfferRef`), pour éviter de
+      // la faire réapparaître en boucle si l'hôte l'ignore sans la fermer.
+      if (!s.rabbitChallenge && online >= C.RABBIT_CHALLENGE_MIN_PLAYERS && !rabbitChallengeOfferRef.current
+        && Math.random() < C.RABBIT_CHALLENGE_OFFER_CHANCE) {
+        rabbitChallengeOfferRef.current = true;
+        setRabbitChallengeOffer(true);
       }
       // Repousse d'herbe (chantier 2026-07, demande Guillaume) : contrairement
       // au lampadaire/épouvantail (état "prêt" purement dérivé à l'affichage,
@@ -1736,6 +1839,25 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const buyHorse = () => sendReq({ kind: "buyHorse" });
   const buyWell = () => sendReq({ kind: "buyWell" });
   const buyAnimal = (type) => sendReq({ kind: "buyAnimal", animal: type });
+  // Défi "chasse aux lapins" (chantier 2026-07) : actions RÉSERVÉES à l'hôte
+  // (c'est lui qui reçoit la popup de proposition, jamais les autres
+  // joueurs) — pas de requête réseau ici, l'hôte modifie directement son
+  // propre état partagé puis le diffuse, comme pour le démarrage d'une
+  // mission collaborative un peu plus haut.
+  function activateRabbitChallenge() {
+    const s = sharedRef.current;
+    s.rabbitChallenge = { active: true, catches: {}, startedAt: Date.now() };
+    setRabbitChallenge(s.rabbitChallenge);
+    setRabbitChallengeOffer(false); rabbitChallengeOfferRef.current = false;
+    channelRef.current?.send({ type: "broadcast", event: "apply", payload: { rabbitChallenge: s.rabbitChallenge } });
+    channelRef.current?.send({ type: "broadcast", event: "chat", payload: { from: "🐇", msg: L.rabbitChallengeStarted(C.RABBIT_CHALLENGE_TARGET) } });
+    dirtyRef.current = true;
+  }
+  function dismissRabbitChallengeOffer() {
+    // Ignorer la proposition ne bloque pas définitivement : `rabbitChallengeOfferRef`
+    // est relâché pour qu'un futur tirage puisse la reproposer plus tard.
+    setRabbitChallengeOffer(false); rabbitChallengeOfferRef.current = false;
+  }
   const sellProduct = (type) => sendReq({ kind: "sell", item: "product", product: type, n: 9999 });
 
   // -------- Téléport maison (nouveauté) --------
@@ -2289,7 +2411,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
 
       // Invite boutique/bac
       let pk = null;
-      if (nearTile(C.SHOP)) pk = "shop"; else if (nearTile(C.BIN)) pk = "bin";
+      if (heldAnimalRef.current !== -1) pk = "sellAnimal";
+      else if (nearTile(C.SHOP)) pk = "shop"; else if (nearTile(C.BIN)) pk = "bin";
       else if (nearTile(C.HOUSE_DOOR)) pk = m.sleeping ? "wake" : "sleep";
       else if (nearTile(C.COOP_SITE) && sharedRef.current.coop) pk = "coop";
       else if (nearTile(C.BARN_SITE)) { const b = sharedRef.current.barn; if (b && b.level < C.BARN_LEVELS.length) pk = b.ready ? "barnBuild" : "barn"; }
@@ -2455,6 +2578,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         ctx.font = "10px monospace";
         ctx.fillText("🩹", px + 8, py - 20);
       }
+      // Chapeau (chantier 2026-07) : trophée cosmétique persistant, remporté
+      // en gagnant le défi "chasse aux lapins" (voir farmer.hat / p.hatWon).
+      // Purement décoratif, aucun effet de jeu — affiché en permanence, pas
+      // seulement pendant le défi (contrairement à l'icône de blessure
+      // ci-dessus, temporaire).
+      const wearingHat = isSelf ? hatRef.current : !!p.hat;
+      if (wearingHat) {
+        ctx.font = "12px monospace";
+        ctx.fillText("🎩", px + 8, py - (riding ? 34 : 26) - lift);
+      }
     }
     function nightAlpha() {
       // Demande Guillaume (chantier 2026-07) : lumière du jour qui revient
@@ -2580,6 +2713,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     return best;
   }
   function tryOpenNearby() {
+    // Vendre l'animal porté (outil "déplacer") est prioritaire sur toute
+    // autre interaction : un joueur les mains prises ne peut de toute façon
+    // rien faire d'autre tant qu'il n'a pas déposé ou vendu l'animal, comme
+    // le montre déjà `selectSlot` qui relâche l'animal au changement d'outil.
+    if (heldAnimalRef.current !== -1) {
+      sendReq({ kind: "sellAnimal", animal: heldAnimalRef.current });
+      heldAnimalRef.current = -1; setCarryingAnimal(false);
+      return;
+    }
     const injured = nearestInjuredPlayer();
     if (injured && !isInjured()) sendReq({ kind: "heal", targetId: injured.id });
     else if (nearTile(C.SHOP)) setShopOpen(true);
@@ -2664,7 +2806,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // qui ne l'ont jamais vraiment quitté). Seul le bouton dédié "📣
     // Rassembler tout le monde" (côté salon) referme réellement la partie
     // pour tout le monde.
-    if (isHost) { onFinish && onFinish(); return; }
+    // Correctif 2026-07 : l'hôte doit aussi remettre `joinedRef.current` à
+    // false AVANT le retour — sinon, au démontage de cette vue (l'effet
+    // réseau ci-dessus, cleanup), `joinedRef.current` étant resté `true`, un
+    // broadcast "leave" est envoyé pour l'hôte lui-même, qui disparaît alors
+    // à tort de la carte de tous les autres joueurs alors qu'il est censé
+    // rester visible (voir le commentaire juste au-dessus).
+    if (isHost) { joinedRef.current = false; onFinish && onFinish(); return; }
     joinedRef.current = false;
     channelRef.current?.send({ type: "broadcast", event: "leave", payload: { id: me.id } });
     onFinish && onFinish();
@@ -2818,7 +2966,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       </div>
 
       {/* Invite proximité */}
-      {promptKey && <div className="ferme-prompt">{promptKey === "shop" ? L.promptShop : promptKey === "coop" ? L.promptCoop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "sleep" ? L.promptSleep : promptKey === "wake" ? L.promptWake : L.promptBin}</div>}
+      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "shop" ? L.promptShop : promptKey === "coop" ? L.promptCoop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "sleep" ? L.promptSleep : promptKey === "wake" ? L.promptWake : L.promptBin}</div>}
       {mountPrompt && <div className="ferme-prompt ferme-prompt-mount">{mountPrompt === "mount" ? L.mountPrompt : L.dismountPrompt}</div>}
 
       {/* Barre d'outils */}
@@ -3001,6 +3149,29 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           </div>
         );
       })()}
+
+      {/* Défi "chasse aux lapins" en cours (chantier 2026-07) : progression
+          PERSONNELLE du joueur affichant l'écran (chacun voit son propre
+          compteur, pas celui des autres — suffisant pour "qui gagnera en
+          premier", pas besoin d'un classement complet pour un mini-défi). */}
+      {rabbitChallenge && rabbitChallenge.active && (
+        <div className="ferme-rabbit-challenge panel">
+          {L.rabbitChallengeProgress(Math.min((rabbitChallenge.catches && rabbitChallenge.catches[me.id]) || 0, C.RABBIT_CHALLENGE_TARGET), C.RABBIT_CHALLENGE_TARGET)}
+        </div>
+      )}
+
+      {/* Popup de proposition du défi lapins, hôte uniquement (jamais montrée
+          aux autres joueurs — c'est l'hôte seul qui choisit de l'activer). */}
+      {isHost && rabbitChallengeOffer && (
+        <div className="ferme-modal open" onClick={dismissRabbitChallengeOffer}>
+          <div className="panel ferme-modal-panel" onClick={e => e.stopPropagation()} style={{ width: "min(360px, 92vw)", textAlign: "center" }}>
+            <h2>{L.rabbitChallengeOfferTitle}</h2>
+            <div className="ferme-hint">{L.rabbitChallengeOfferSub(C.RABBIT_CHALLENGE_TARGET)}</div>
+            <button onClick={activateRabbitChallenge}>{L.rabbitChallengeActivate}</button>{" "}
+            <button onClick={dismissRabbitChallengeOffer}>{L.rabbitChallengeIgnore}</button>
+          </div>
+        </div>
+      )}
 
       {/* Chat */}
       <div className="ferme-chatlog">{[...chat].reverse().map(c => <div key={c.id}><b>{c.from}</b> {c.msg}</div>)}</div>

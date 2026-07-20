@@ -528,6 +528,17 @@ export const RABBIT_EAST_BIAS = 0.8;       // proba. de favoriser la rive droite
 export const RABBIT_RESPAWN_MS = 7000;     // délai minimum entre deux réapparitions (repop progressif, pas instantané)
 export const RABBIT_FLEE_HOP_PX = 5;       // amplitude (pixels) du bond visuel en fuite (demande 2026-07, roam inchangé)
 
+// --- Défi "chasse aux lapins" (chantier 2026-07, demande Guillaume) ---
+// Popup proposée aléatoirement à l'HÔTE (jamais démarrée automatiquement,
+// contrairement aux missions collaboratives, voir COOP_MISSIONS) tant qu'au
+// moins 2 fermiers sont en ligne simultanément et qu'aucun défi n'est déjà en
+// cours. Le premier fermier à atteindre RABBIT_CHALLENGE_TARGET captures
+// (voir req "catchRabbit") remporte le défi et gagne un chapeau (cosmétique,
+// purement pour le fun, comme la capture de lapin elle-même).
+export const RABBIT_CHALLENGE_MIN_PLAYERS = 2;   // nombre minimum de fermiers en ligne en même temps pour proposer le défi
+export const RABBIT_CHALLENGE_TARGET = 3;        // nombre de lapins à capturer pour gagner
+export const RABBIT_CHALLENGE_OFFER_CHANCE = 1 / 240; // proba. par tick (1 Hz) de proposer le défi à l'hôte : ~1 fois toutes les 4 min en moyenne quand les conditions sont réunies (valeur extrapolée, à ajuster librement)
+
 // --- Torche (chantier 2026-07) : objet équipable (bouton dédié, comme le
 // sifflet à chevaux), pas un slot d'outil numéroté. Éclaire comme un
 // lampadaire portatif (rayon plus modeste) et fait fuir les loups à portée.
