@@ -180,6 +180,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // trou transparent (fond de la page visible) plutôt qu'un cercle éclairé
   // — c'était la cause du bug "les lampadaires restent éteints la nuit".
   const nightCanvasRef = useRef(null);
+  // Météo (chantier 2026-07) : positions (fractions 0..1 de l'écran) des
+  // traits de pluie affichés les jours orageux — générées une seule fois
+  // puis animées frame après frame (voir le rendu plus bas), pas régénérées
+  // à chaque frame pour éviter un scintillement aléatoire.
+  const rainDropsRef = useRef(null);
   const chatInputRef = useRef(null);
   const channelRef = useRef(null);
   const spritesRef = useRef(null);
@@ -1366,6 +1371,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         dirtyRef.current = true;
         channelRef.current?.send({ type: "broadcast", event: "newday", payload: { day: s.day, dayStartAt: s.dayStartAt, tiles: tilesOut, crops: [], animals: s.animals, fertilizerShop: shop } });
         channelRef.current?.send({ type: "broadcast", event: "chat", payload: { from: "☀", msg: L.chatNewDay(s.day) } });
+        if (E.isStormyDay(s.day)) {
+          channelRef.current?.send({ type: "broadcast", event: "chat", payload: { from: "⛈", msg: L.chatStormyDay } });
+        }
       }
     }, 1000);
     const saveTimer = setInterval(() => {
@@ -2798,15 +2806,24 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // de dessiner un nouveau personnage à part. L'hôte affiche sa position
       // simulée en temps réel (g.x/g.y) ; les autres joueurs affichent la
       // position lissée (g.rx/g.ry, voir la boucle d'interpolation ci-dessus).
+      // Salopette (demande Guillaume, chantier 2026-07 : "Greg ressemble
+      // trop à un fermier, il doit avoir une salopette") : flag `overalls`
+      // propagé jusqu'à sprites.getChar/charSheet (fermeArt.js), qui dessine
+      // une bavette + bretelles denim par-dessus le rendu de base — réservé
+      // à Greg, aucun joueur ne peut choisir cet outfit.
       {
         const g = sharedRef.current.greg;
         if (g) {
           const gx = isHost ? g.x : (g.rx ?? g.x), gy = isHost ? g.y : (g.ry ?? g.y);
-          draws.push({ y: (gy + 1) * T, fn: () => drawCharacter({ id: "greg", name: "Greg", x: gx, y: gy, dir: g.dir || 0, moving: !!g.moving, animT: g.animT || 0, gender: "m", outfit: 0 }, false) });
+          draws.push({ y: (gy + 1) * T, fn: () => drawCharacter({ id: "greg", name: "Greg", x: gx, y: gy, dir: g.dir || 0, moving: !!g.moving, animT: g.animT || 0, gender: "m", outfit: 0, overalls: true }, false) });
         }
       }
       // Soan, l'employé pêcheur (chantier 2026-07) : même principe de rendu
       // que Greg ci-dessus, réutilise drawCharacter (aucun nouveau sprite).
+      // Casquette (demande Guillaume, chantier 2026-07) : PAS un flag pixel
+      // art comme la salopette de Greg — dessinée en overlay emoji dans
+      // drawCharacter, même principe que le chapeau-trophée 🎩 existant
+      // (voir plus bas dans drawCharacter, condition sur p.id === "soan").
       {
         const so = sharedRef.current.soan;
         if (so) {
@@ -2890,6 +2907,34 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.globalCompositeOperation = "source-over";
         ctx.drawImage(nc, 0, 0);
+      }
+
+      // Météo : jour orageux/pluvieux (chantier 2026-07, demande Guillaume :
+      // "des journées grises d'orages et pluie, une toutes les 7") —
+      // PUREMENT visuel, aucun effet sur la pousse/l'énergie/les animaux.
+      // Dessiné en espace ÉCRAN (transform déjà remis à l'identité juste
+      // au-dessus, comme le voile nocturne) : un voile gris semi-transparent
+      // plein écran + des traits de pluie qui tombent en continu. S'ajoute
+      // au voile nocturne s'il fait aussi nuit (les deux se cumulent tout
+      // simplement, pas de logique spéciale de mélange).
+      if (E.isStormyDay(sharedRef.current.day || 1)) {
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.globalCompositeOperation = "source-over";
+        ctx.fillStyle = `rgba(70,74,86,${C.STORM_TINT_ALPHA})`;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        if (!rainDropsRef.current || rainDropsRef.current.length !== C.STORM_RAIN_COUNT) {
+          rainDropsRef.current = Array.from({ length: C.STORM_RAIN_COUNT }, () => ({
+            x: Math.random(), y: Math.random(), sp: 0.7 + Math.random() * 0.6,
+          }));
+        }
+        ctx.strokeStyle = "rgba(210,220,235,0.35)";
+        ctx.lineWidth = 1;
+        for (const d of rainDropsRef.current) {
+          d.y += (C.STORM_RAIN_SPEED / canvas.height) * dt * d.sp;
+          if (d.y > 1.05) { d.y = -0.05; d.x = Math.random(); }
+          const sx = d.x * canvas.width, sy = d.y * canvas.height;
+          ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx - 4, sy + C.STORM_RAIN_LEN); ctx.stroke();
+        }
       }
 
       // Invite boutique/bac
@@ -3015,7 +3060,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     function drawRemote(p) { drawCharacter(p, false); }
     function drawCharacter(p, isSelf) {
       const sprites = spritesRef.current;
-      const sheet = sprites.getChar(p.gender, p.outfit);
+      const sheet = sprites.getChar(p.gender, p.outfit, p.overalls);
       const row = p.dir === 0 ? 0 : p.dir === 1 ? 1 : 2;
       const frame = p.moving ? Math.floor((p.animT || 0) % 4) : 0;
       const horse = (sharedRef.current.horses || []).find(h => h.rider === p.id || h.rider2 === p.id) || null;
@@ -3070,6 +3115,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (wearingHat) {
         ctx.font = "12px monospace";
         ctx.fillText("🎩", px + 8, py - (riding ? 34 : 26) - lift);
+      }
+      // Casquette de Soan (chantier 2026-07, demande Guillaume : "Soan
+      // ressemble trop à un fermier, il doit avoir un chapeau") : overlay
+      // emoji permanent, même principe que le chapeau-trophée ci-dessus mais
+      // toujours actif (pas conditionné à un trophée gagné) et réservé à
+      // Soan (p.id === "soan", jamais un vrai joueur).
+      if (p.id === "soan") {
+        ctx.font = "12px monospace";
+        ctx.fillText("🧢", px + 8, py - (riding ? 34 : 26) - lift);
       }
     }
     function nightAlpha() {

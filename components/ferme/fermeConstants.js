@@ -514,6 +514,25 @@ export const ANIMAL_PICK_RANGE = 1.8;        // portée pour attraper/déposer u
 export const DAWN_START_MIN = 5 * 60 + 30, DAWN_END_MIN = 6 * 60 + 30;   // 5h30 → 6h30
 export const DUSK_START_MIN = 17 * 60, DUSK_MID_MIN = 20 * 60, DEEP_END_MIN = 23 * 60; // 17h / 20h / 23h
 
+// --- Météo : journées grises d'orage/pluie (chantier 2026-07, demande
+// Guillaume : "ajouter des journées grises d'orages et pluie, une toutes les
+// 7") ---
+// PUREMENT visuel/ambiance pour l'instant : un jour sur STORM_EVERY_N_DAYS
+// (day % STORM_EVERY_N_DAYS === 0, donc jour 7, 14, 21…) est marqué comme
+// orageux dès son tout début (voir E.isStormyDay, dérivé du même compteur
+// `day` que le reste — aucun tirage aléatoire, prévisible et reproductible
+// pour tous les joueurs de la ferme). AUCUN effet de gameplay volontaire
+// (pousse des cultures, énergie, déplacement… tout inchangé) : uniquement un
+// voile gris semi-transparent + des traits de pluie qui défilent à l'écran
+// (voir le rendu dans FermeGame.js, juste après le voile nocturne). Message
+// de chat dédié au lever du jour (L.chatStormyDay), en plus du message
+// "Jour N" habituel.
+export const STORM_EVERY_N_DAYS = 7;      // 1 jour orageux tous les N jours (0 = désactivé)
+export const STORM_TINT_ALPHA = 0.28;     // opacité du voile gris (composé AVANT le voile nocturne, s'additionne la nuit)
+export const STORM_RAIN_COUNT = 70;       // nombre de traits de pluie affichés simultanément
+export const STORM_RAIN_SPEED = 420;      // vitesse de chute, px/seconde (écran, indépendant du zoom)
+export const STORM_RAIN_LEN = 14;         // longueur d'un trait de pluie, px
+
 // --- Loups (chantier 2026-07, demande Guillaume : "loups assez détaillés,
 // rive droite de la rivière, ponts non fermés, torche pour les éloigner") ---
 // Simulation PUREMENT hôte (comme les chevaux sifflés) : les loups

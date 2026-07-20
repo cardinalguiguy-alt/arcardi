@@ -282,6 +282,7 @@ export const FERME_STR = {
     chatToolUp: (name, lvl) => `${name} au niveau ${lvl} !`,
     chatSell: (gain, total) => `Vente : +${gain} or ! Caisse commune : ${total} or`,
     chatNewDay: (day) => `Jour ${day}, bonne journée à la ferme !`,
+    chatStormyDay: "Le ciel se couvre... orage et pluie toute la journée, prends un imperméable !",
     chatJoin: (name) => `${name} rejoint la ferme.`,
     chatLeave: (name) => `${name} a quitté la ferme.`,
     // Effets flottants
@@ -577,6 +578,7 @@ export const FERME_STR = {
     chatToolUp: (name, lvl) => `${name} upgraded to level ${lvl}!`,
     chatSell: (gain, total) => `Sale: +${gain} gold! Shared pot: ${total} gold`,
     chatNewDay: (day) => `Day ${day}, have a great day on the farm!`,
+    chatStormyDay: "The sky is turning grey... storm and rain all day, grab a raincoat!",
     chatJoin: (name) => `${name} joined the farm.`,
     chatLeave: (name) => `${name} left the farm.`,
     fxWood: (n) => `+${n} wood`,

@@ -1472,6 +1472,15 @@ export function gameTimeMin(dayStartAt, now) {
   return Math.floor(C.DAY_START_MIN + frac * (C.DAY_END_MIN - C.DAY_START_MIN));
 }
 
+// Météo (chantier 2026-07, demande Guillaume) : true si `day` est un jour
+// orageux/pluvieux (voir C.STORM_EVERY_N_DAYS). Dérivé du compteur `day`
+// existant plutôt que d'un tirage aléatoire : même résultat pour tous les
+// joueurs de la ferme sans rien synchroniser de plus, et prévisible d'une
+// session à l'autre.
+export function isStormyDay(day) {
+  return C.STORM_EVERY_N_DAYS > 0 && (day | 0) % C.STORM_EVERY_N_DAYS === 0;
+}
+
 // Collision : true si la tuile bloque le déplacement d'un fermier.
 // `now` (correctif chantier 2026-07) : une infrastructure encore EN CHANTIER
 // (temps de construction réel, voir BUILD_TIMES/buildReady) ne bloque PAS le

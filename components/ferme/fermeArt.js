@@ -227,7 +227,7 @@ export function buildSprites() {
   const HAIR_COLORS = ["#5a3a1e", "#2a2a2a", "#c8862a", "#8a3020", "#d4b03a", "#4a3468", "#743a12", "#b0b0b8"];
   const SKIN = "#f0c8a0", SKIN_D = "#d8a878";
 
-  function drawCharFrame(g, ox, gender, outfit, dir, frame) {
+  function drawCharFrame(g, ox, gender, outfit, dir, frame, overalls) {
     const o = C.OUTFITS[outfit % C.OUTFITS.length];
     const hair = HAIR_COLORS[outfit % HAIR_COLORS.length];
     const step = frame === 1 ? 1 : frame === 3 ? -1 : 0;
@@ -279,6 +279,22 @@ export function buildSprites() {
       P(g, x + 10, 5 + bob, 1, 2, "#3a2a1e");
       P(g, x + 11, 7 + bob, 1, 1, "#c88a6a");
     }
+    // Salopette (chantier 2026-07, demande Guillaume : "Greg doit avoir une
+    // salopette") : dessinée PAR-DESSUS le rendu de base (jambes + torse déjà
+    // posés plus haut), pas un outfit de C.OUTFITS parmi ceux choisissables
+    // par les joueurs — activée via le flag `overalls` (voir S.getChar/
+    // charSheet), pour l'instant réservé à Greg (FermeGame.js, outfit: 0,
+    // overalls: true). Jambes recolorées en denim + bavette + deux
+    // bretelles, silhouette reconnaissable même en petit sprite 16x24.
+    if (overalls) {
+      const DENIM = "#3f5a8c", DENIM_D = shade(DENIM);
+      P(g, x + 5, 15 + bob, 3, 6, DENIM);
+      P(g, x + 8, 15 + bob, 3, 6, DENIM_D);
+      P(g, x + 6, 11 + bob, 4, 5, DENIM);
+      P(g, x + 6, 11 + bob, 4, 1, tint(DENIM));
+      P(g, x + 5, 9 + bob, 1, 3, DENIM);
+      P(g, x + 10, 9 + bob, 1, 3, DENIM);
+    }
   }
   function shade(hex) { return adjust(hex, -30); }
   function tint(hex) { return adjust(hex, 30); }
@@ -289,12 +305,12 @@ export function buildSprites() {
     const b = Math.max(0, Math.min(255, (n & 255) + d));
     return `rgb(${r},${gg},${b})`;
   }
-  function charSheet(gender, outfit) {
+  function charSheet(gender, outfit, overalls) {
     const [c, g] = cv(16 * 4, 24 * 3);
     for (let dir = 0; dir < 3; dir++)
       for (let f = 0; f < 4; f++) {
         g.save(); g.translate(0, dir * 24);
-        drawCharFrame(g, f * 16, gender, outfit, dir, f);
+        drawCharFrame(g, f * 16, gender, outfit, dir, f, overalls);
         g.restore();
       }
     return c;
@@ -855,9 +871,9 @@ export function buildSprites() {
   S.fishIcons = C.FISH.map(fs => fishIcon(fs.color));
   S.animals = C.ANIMALS.map(a => animalSprite(a.id));
   S.products = C.ANIMALS.map(a => productIcon(a.id));
-  S.getChar = (gender, outfit) => {
-    const key = gender + ":" + outfit;
-    if (!S.chars[key]) S.chars[key] = charSheet(gender, outfit);
+  S.getChar = (gender, outfit, overalls) => {
+    const key = gender + ":" + outfit + (overalls ? ":overalls" : "");
+    if (!S.chars[key]) S.chars[key] = charSheet(gender, outfit, !!overalls);
     return S.chars[key];
   };
   return S;
