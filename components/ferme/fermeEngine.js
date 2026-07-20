@@ -403,6 +403,12 @@ export function normalizeFarmer(f) {
   if (typeof f.sleepStartedAt !== "number") f.sleepStartedAt = null;
   if (typeof f.sleepStartEnergy !== "number") f.sleepStartEnergy = 0;
   if (typeof f.injuredUntil !== "number") f.injuredUntil = 0;
+  // Trophée 🏆 du défi lapins (correctif 2026-07) : horodatage d'expiration,
+  // remplace l'ancien champ booléen `hat` (permanent) — un ancien fermier
+  // avec `hat: true` mais sans `hatUntil` verra simplement son trophée ne
+  // plus s'afficher (0 = pas de trophée en cours), cohérent avec la demande
+  // de rendre l'affichage temporaire plutôt que définitif.
+  if (typeof f.hatUntil !== "number") f.hatUntil = 0;
   f.inv = f.inv || {};
   if (typeof f.inv.wood !== "number") f.inv.wood = 0;
   if (typeof f.inv.stone !== "number") f.inv.stone = 0;

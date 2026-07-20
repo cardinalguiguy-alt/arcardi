@@ -168,10 +168,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // Défi "chasse aux lapins" (chantier 2026-07, demande Guillaume) : miroir
   // React de sharedRef.current.rabbitChallenge (null si aucun défi en cours),
   // popup de proposition affichée UNIQUEMENT à l'hôte (jamais partagée), et
-  // chapeau de trophée gagné (persistant, voir farmer.hat / p.hat).
+  // trophée gagné (temporaire depuis le correctif 2026-07, voir
+  // farmer.hatUntil / p.hatWon / C.HAT_DISPLAY_MS).
   const [rabbitChallenge, setRabbitChallenge] = useState(null);
   const [rabbitChallengeOffer, setRabbitChallengeOffer] = useState(false); // popup "activer le défi ?" (hôte uniquement)
-  const [hasHat, setHasHat] = useState(false); // moi-même : je porte le chapeau gagné (trophée du défi lapins)
+  const [hatUntil, setHatUntil] = useState(0); // moi-même : horodatage de fin d'affichage du trophée (0 = pas de trophée en cours)
 
   // -------- Refs (état du jeu, lus par la boucle de rendu) --------
   const canvasRef = useRef(null);
@@ -251,12 +252,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const sleepStartEnergyRef = useRef(0);
   const sleepTimerRef = useRef(null); // setTimeout de sortie automatique après C.SLEEP_MS
   const injuredUntilRef = useRef(0); // miroir synchrone de injuredUntil (lu dans la boucle de rendu/déplacement)
-  const hatRef = useRef(false); // miroir synchrone de hasHat (lu dans la boucle de rendu, voir drawCharacter)
+  const hatUntilRef = useRef(0); // miroir synchrone de hatUntil (lu dans la boucle de rendu, voir drawCharacter)
   const rabbitChallengeOfferRef = useRef(false); // miroir synchrone de rabbitChallengeOffer (lu dans le timer hôte, évite de reproposer en boucle)
 
   useEffect(() => { fishMiniRef.current = !!fishMini || !!barnMini || !!wolfBite; }, [fishMini, barnMini, wolfBite]);
   useEffect(() => { injuredUntilRef.current = injuredUntil || 0; }, [injuredUntil]);
-  useEffect(() => { hatRef.current = !!hasHat; }, [hasHat]);
+  useEffect(() => { hatUntilRef.current = hatUntil || 0; }, [hatUntil]);
   useEffect(() => { rabbitChallengeOfferRef.current = !!rabbitChallengeOffer; }, [rabbitChallengeOffer]);
   useEffect(() => { mapOpenRef.current = mapOpen; }, [mapOpen]);
   useEffect(() => { shopOpenRef.current = shopOpen; }, [shopOpen]);
@@ -424,8 +425,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const mineF = farmersRef.current[me.id];
       injuredUntilRef.current = (mineF && mineF.injuredUntil) || 0;
       setInjuredUntil(injuredUntilRef.current);
-      hatRef.current = !!(mineF && mineF.hat);
-      setHasHat(hatRef.current);
+      hatUntilRef.current = (mineF && mineF.hatUntil) || 0;
+      setHatUntil(hatUntilRef.current);
     }
     setCodeLoading(false);
     setHud(h => ({ ...h, money: sharedRef.current.money, day: sharedRef.current.day }));
@@ -522,7 +523,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // que je puisse le soigner (voir applyDeltas / p.injured).
       for (const id in farmersRef.current) {
         const rp = playersRef.current.get(id);
-        if (rp) { rp.injuredUntil = farmersRef.current[id].injuredUntil || 0; rp.hat = !!farmersRef.current[id].hat; }
+        if (rp) { rp.injuredUntil = farmersRef.current[id].injuredUntil || 0; rp.hatUntil = farmersRef.current[id].hatUntil || 0; }
       }
     }
     E.normalizeAnimals(sharedRef.current.animals);
@@ -534,7 +535,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // Blessure (morsure de loup) : survit à un rechargement, restaurée depuis
       // l'état persistant du fermier (voir farmer.injuredUntil / INJURED_MS).
       injuredUntilRef.current = mine.injuredUntil || 0; setInjuredUntil(injuredUntilRef.current);
-      hatRef.current = !!mine.hat; setHasHat(hatRef.current);
+      hatUntilRef.current = mine.hatUntil || 0; setHatUntil(hatUntilRef.current);
     }
     minimapDirtyRef.current = true;
     setHud(h => ({ ...h, money: payload.money, day: payload.day }));
@@ -628,7 +629,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function ensureRemote(p) {
     if (p.id === me.id) return;
     if (!playersRef.current.has(p.id)) {
-      playersRef.current.set(p.id, { id: p.id, name: p.name, gender: p.gender || "m", outfit: p.outfit || 0, x: p.x ?? C.SPAWN.x, y: p.y ?? C.SPAWN.y, tx: p.x ?? C.SPAWN.x, ty: p.y ?? C.SPAWN.y, dir: p.dir || 0, moving: false, tool: 0, animT: 0, sleeping: false, torch: false, hat: !!(farmersRef.current[p.id] && farmersRef.current[p.id].hat) });
+      playersRef.current.set(p.id, { id: p.id, name: p.name, gender: p.gender || "m", outfit: p.outfit || 0, x: p.x ?? C.SPAWN.x, y: p.y ?? C.SPAWN.y, tx: p.x ?? C.SPAWN.x, ty: p.y ?? C.SPAWN.y, dir: p.dir || 0, moving: false, tool: 0, animT: 0, sleeping: false, torch: false, hatUntil: (farmersRef.current[p.id] && farmersRef.current[p.id].hatUntil) || 0 });
     }
   }
 
@@ -1117,13 +1118,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (rc && rc.active) {
           rc.catches[req.id] = (rc.catches[req.id] || 0) + 1;
           if (rc.catches[req.id] >= C.RABBIT_CHALLENGE_TARGET) {
-            // Victoire : le défi s'arrête, le gagnant reçoit le chapeau
-            // (trophée cosmétique persistant, voir farmer.hat / p.hatWon,
-            // même mécanique de diffusion que le statut "blessé").
+            // Victoire : le défi s'arrête, le gagnant reçoit le trophée 🏆
+            // (correctif 2026-07 : affiché temporairement pendant
+            // C.HAT_DISPLAY_MS, plus permanent — voir farmer.hatUntil /
+            // p.hatWon, même mécanique de diffusion que le statut "blessé").
             rc.active = false;
-            f.hat = true;
-            out.hatWon = { id: f.id };
-            out.chat = { from: "🎩", msg: L.rabbitChallengeWon(f.name) };
+            f.hatUntil = Date.now() + C.HAT_DISPLAY_MS;
+            out.hatWon = { id: f.id, hatUntil: f.hatUntil };
+            out.chat = { from: "🏆", msg: L.rabbitChallengeWon(f.name) };
           }
           out.rabbitChallenge = rc;
         }
@@ -1254,11 +1256,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (p.fertilizerShop !== undefined) { sharedRef.current.fertilizerShop = p.fertilizerShop; setFertilizerShop(p.fertilizerShop); }
     if (p.rabbitChallenge !== undefined) { sharedRef.current.rabbitChallenge = p.rabbitChallenge; setRabbitChallenge(p.rabbitChallenge); }
     if (p.hatWon) {
-      // Diffusion du chapeau gagné (chantier 2026-07) : même principe que
-      // `p.injured` pour la blessure — état persistant du fermier concerné,
-      // propagé à tous pour qu'il reste visible même après un refresh distant.
-      if (p.hatWon.id === me.id) { hatRef.current = true; setHasHat(true); }
-      else { const rp = playersRef.current.get(p.hatWon.id); if (rp) rp.hat = true; }
+      // Diffusion du trophée gagné (correctif 2026-07 : temporaire, voir
+      // C.HAT_DISPLAY_MS) : même principe que `p.injured` pour la blessure —
+      // état persistant (avec expiration) du fermier concerné, propagé à
+      // tous pour qu'il reste visible (jusqu'à expiration) même après un
+      // refresh distant.
+      if (p.hatWon.id === me.id) { hatUntilRef.current = p.hatWon.hatUntil; setHatUntil(p.hatWon.hatUntil); }
+      else { const rp = playersRef.current.get(p.hatWon.id); if (rp) rp.hatUntil = p.hatWon.hatUntil; }
     }
   }
   function applyNewDay(p) {
@@ -2840,7 +2844,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // que Greg ci-dessus, réutilise drawCharacter (aucun nouveau sprite).
       // Casquette (demande Guillaume, chantier 2026-07) : PAS un flag pixel
       // art comme la salopette de Greg — dessinée en overlay emoji dans
-      // drawCharacter, même principe que le chapeau-trophée 🎩 existant
+      // drawCharacter, même principe que le trophée cosmétique 🏆 existant
       // (voir plus bas dans drawCharacter, condition sur p.id === "soan").
       {
         const so = sharedRef.current.soan;
@@ -3124,15 +3128,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         ctx.font = "10px monospace";
         ctx.fillText("🩹", px + 8, py - 20);
       }
-      // Chapeau (chantier 2026-07) : trophée cosmétique persistant, remporté
-      // en gagnant le défi "chasse aux lapins" (voir farmer.hat / p.hatWon).
-      // Purement décoratif, aucun effet de jeu — affiché en permanence, pas
-      // seulement pendant le défi (contrairement à l'icône de blessure
-      // ci-dessus, temporaire).
-      const wearingHat = isSelf ? hatRef.current : !!p.hat;
+      // Chapeau (chantier 2026-07) : trophée cosmétique remporté en gagnant
+      // le défi "chasse aux lapins" (voir farmer.hatUntil / p.hatWon).
+      // Purement décoratif, aucun effet de jeu.
+      // Correctif 2026-07 (demande Guillaume : "le chapeau trophée doit être
+      // remplacé par une icone trophée") : 🎩 (haut-de-forme) remplacé par
+      // 🏆 (coupe), même position/logique, purement cosmétique.
+      // Correctif 2026-07 (demande Guillaume : "il doit disparaitre au bout
+      // de 15 minutes") : n'est plus affiché en permanence, seulement tant
+      // que Date.now() < hatUntil (C.HAT_DISPLAY_MS après la victoire), même
+      // principe d'horodatage que la blessure (injuredUntil).
+      const wearingHat = (isSelf ? hatUntilRef.current : (p.hatUntil || 0)) > Date.now();
       if (wearingHat) {
         ctx.font = "12px monospace";
-        ctx.fillText("🎩", px + 8, py - (riding ? 34 : 26) - lift);
+        ctx.fillText("🏆", px + 8, py - (riding ? 34 : 26) - lift);
       }
       // Casquette de Soan (chantier 2026-07, demande Guillaume : "Soan
       // ressemble trop à un fermier, il doit avoir un chapeau") : overlay

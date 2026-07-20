@@ -668,6 +668,11 @@ export const RABBIT_FLEE_HOP_PX = 5;       // amplitude (pixels) du bond visuel 
 export const RABBIT_CHALLENGE_MIN_PLAYERS = 2;   // nombre minimum de fermiers en ligne en même temps pour proposer le défi
 export const RABBIT_CHALLENGE_TARGET = 3;        // nombre de lapins à capturer pour gagner
 export const RABBIT_CHALLENGE_OFFER_CHANCE = 1 / 240; // proba. par tick (1 Hz) de proposer le défi à l'hôte : ~1 fois toutes les 4 min en moyenne quand les conditions sont réunies (valeur extrapolée, à ajuster librement)
+// Trophée 🏆 du gagnant (correctif 2026-07, demande Guillaume : "il doit
+// disparaitre au bout de 15 minutes") : n'est plus permanent, affiché
+// seulement pendant HAT_DISPLAY_MS après la victoire (voir farmer.hatUntil,
+// même mécanique d'horodatage que injuredUntil).
+export const HAT_DISPLAY_MS = 15 * 60 * 1000;    // durée d'affichage du trophée après la victoire du défi lapins
 
 // --- Torche (chantier 2026-07) : objet équipable (bouton dédié, comme le
 // sifflet à chevaux), pas un slot d'outil numéroté. Éclaire comme un
