@@ -139,10 +139,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // envoyé directement au clic ("Envoyer pêcher"), donc aucun state
   // "pending" n'est nécessaire ici.
   const [fertilizerOrderOpen, setFertilizerOrderOpen] = useState(false); // panneau "épandre de l'engrais" (chantier 2026-07)
-  const [fertilizerOrderCount, setFertilizerOrderCount] = useState(5);
+
   // Même schéma différé que gregOrderPending ci-dessus : choisi à la
   // boutique, confirmé ensuite via le bouton flottant à l'endroit voulu.
-  const [fertilizerOrderPending, setFertilizerOrderPending] = useState(null); // {count} | null
+  const [fertilizerOrderPending, setFertilizerOrderPending] = useState(false); // true | false — zone fixe 5x5, plus de nombre de cases à choisir
   const [binOpen, setBinOpen] = useState(false);
   const [mapOpen, setMapOpen] = useState(false);
   const [promptKey, setPromptKey] = useState(null); // 'shop' | 'bin' | null
@@ -905,13 +905,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         out.state = shareState(); out.gregStock = stock; out.fertilizerShop = shop;
       }
     } else if (req.kind === "gregFertilizeOrder") {
-      // Ordre "épandre de l'engrais" (chantier 2026-07, suite plan validé) :
-      // même schéma que "gregOrder" (labourer/planter/arroser), mais cible
-      // des cases DÉJÀ PLANTÉES et non mûres (findFertilizableTiles) plutôt
-      // que de l'herbe libre, et consomme le pool commun d'engrais
-      // (gregStock.fertilizer, 1 engrais = 1 case) au lieu de l'or.
+      // Ordre "épandre de l'engrais" (chantier 2026-07, révisé 2026-07 :
+      // zone fixe au lieu d'un nombre de cases choisi) : même schéma que
+      // "gregOrder" (labourer/planter/arroser), mais cible toutes les cases
+      // DÉJÀ PLANTÉES et non mûres dans le carré C.FERTILIZER_AREA_SIZE x
+      // C.FERTILIZER_AREA_SIZE autour du point où se trouve le joueur
+      // (findFertilizableTiles). Consomme le pool commun d'engrais
+      // (gregStock.fertilizer) à raison d'1 engrais pour TOUT le carré,
+      // quel que soit le nombre de cases réellement fertilisées.
       const g = s.greg;
-      const count = Math.max(1, Math.min(C.GREG_ORDER_MAX, req.count | 0));
       if (!g || g.expiresAt <= Date.now()) out.toast = { id: f.id, key: "gregNotHired" };
       else {
         const stock = sharedRef.current.gregStock || (sharedRef.current.gregStock = { wood: 0, stone: 0 });
@@ -919,10 +921,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (have <= 0) out.toast = { id: f.id, key: "gregNoFertilizer" };
         else {
           const w2 = worldRef.current;
-          const tiles = E.findFertilizableTiles(w2, { x: Math.round(px), y: Math.round(py) }, Math.min(count, have), Date.now());
+          const tiles = E.findFertilizableTiles(w2, { x: Math.round(px), y: Math.round(py) }, Date.now());
           if (tiles.length === 0) out.toast = { id: f.id, key: "gregNoRoom" };
           else {
-            stock.fertilizer = have - tiles.length;
+            stock.fertilizer = have - 1;
             for (const i of tiles) g.taskQueue.push({ a: "fertilize", i });
             out.gregStock = stock; out.greg = g;
             out.chat = { from: "🧑‍🌾", msg: lang === "en" ? `Greg is on it: fertilizing ${tiles.length} tile(s).` : `Greg s'y met : engrais sur ${tiles.length} case(s).` };
@@ -2268,12 +2270,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     setGregOrderPending(null);
   };
   const buyFertilizer = () => sendReq({ kind: "buyFertilizer" });
-  const armFertilizerOrder = () => { setFertilizerOrderPending({ count: fertilizerOrderCount }); setFertilizerOrderOpen(false); setShopOpen(false); };
-  const cancelFertilizerOrder = () => setFertilizerOrderPending(null);
+  const armFertilizerOrder = () => { setFertilizerOrderPending(true); setFertilizerOrderOpen(false); setShopOpen(false); };
+  const cancelFertilizerOrder = () => setFertilizerOrderPending(false);
   const fireFertilizerOrder = () => {
     if (!fertilizerOrderPending) return;
-    sendReq({ kind: "gregFertilizeOrder", count: fertilizerOrderPending.count });
-    setFertilizerOrderPending(null);
+    sendReq({ kind: "gregFertilizeOrder" });
+    setFertilizerOrderPending(false);
   };
   const buyAnimal = (type) => sendReq({ kind: "buyAnimal", animal: type });
   // Soan, l'employé pêcheur (chantier 2026-07, demande Guillaume) : contrairement
@@ -3577,13 +3579,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               <div className="info"><span>{L.fertilizerOrderAvailable(gregStock.fertilizer || 0)}</span></div>
             </div>
             <div className="ferme-shop-row">
-              <div className="info"><b>{L.fertilizerOrderCountLabel}</b></div>
-              <input type="number" min={1} max={C.GREG_ORDER_MAX} value={fertilizerOrderCount}
-                onChange={e => setFertilizerOrderCount(Math.max(1, Math.min(C.GREG_ORDER_MAX, parseInt(e.target.value) || 1)))}
-                style={{ width: 60 }} />
-            </div>
-            <div className="ferme-shop-row">
-              <div className="info"><span>{L.fertilizerOrderCost(Math.min(fertilizerOrderCount, gregStock.fertilizer || 0))}</span></div>
+              <div className="info"><span>{L.fertilizerOrderCost}</span></div>
               <button disabled={(gregStock.fertilizer || 0) <= 0} onClick={armFertilizerOrder}>{L.fertilizerOrderArmBtn}</button>
             </div>
             <div className="ferme-seed-menu-hint">{L.fertilizerOrderHint}</div>

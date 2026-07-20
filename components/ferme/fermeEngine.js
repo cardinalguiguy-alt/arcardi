@@ -959,28 +959,24 @@ export function gregWater(world, i, now) {
   return false;
 }
 
-// Engrais (chantier 2026-07, suite plan validé) : cherche jusqu'à `count`
-// cases PLANTÉES et NON MÛRES (contrairement à findFreeGrassTiles qui
-// cherche de l'herbe libre) en anneaux croissants autour de `anchor` — même
-// principe de recherche en spirale.
-export function findFertilizableTiles(world, anchor, count, now) {
+// Engrais (chantier 2026-07, révisé 2026-07 : zone fixe au lieu d'un
+// nombre de cases choisi) : renvoie TOUTES les cases PLANTÉES et NON
+// MÛRES (contrairement à findFreeGrassTiles qui cherche de l'herbe libre)
+// dans le carré C.FERTILIZER_AREA_SIZE x C.FERTILIZER_AREA_SIZE centré sur
+// `anchor` (le point où se trouve le joueur quand il lance l'ordre à Greg).
+// Un seul engrais du stock est consommé pour tout le carré, quel que soit
+// le nombre de cases effectivement fertilisées (voir gregFertilizeOrder,
+// FermeGame.js).
+export function findFertilizableTiles(world, anchor, now) {
   const out = [];
-  const seen = new Set();
-  for (let r = 0; r < 40 && out.length < count; r++) {
-    for (let dy = -r; dy <= r; dy++) {
-      for (let dx = -r; dx <= r; dx++) {
-        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue; // seulement l'anneau
-        const x = anchor.x + dx, y = anchor.y + dy;
-        if (!inMap(x, y)) continue;
-        const i = idx(x, y);
-        if (seen.has(i)) continue;
-        seen.add(i);
-        const c = world.crops.get(i);
-        if (c && !cropGrowState(c, now).mature) {
-          out.push(i);
-          if (out.length >= count) return out;
-        }
-      }
+  const half = Math.floor(C.FERTILIZER_AREA_SIZE / 2);
+  for (let dy = -half; dy <= half; dy++) {
+    for (let dx = -half; dx <= half; dx++) {
+      const x = anchor.x + dx, y = anchor.y + dy;
+      if (!inMap(x, y)) continue;
+      const i = idx(x, y);
+      const c = world.crops.get(i);
+      if (c && !cropGrowState(c, now).mature) out.push(i);
     }
   }
   return out;

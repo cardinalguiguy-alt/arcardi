@@ -213,7 +213,7 @@ export const TREE_WOOD = 6;  // bois par arbre
 export const ROCK_STONE = 4; // pierres par rocher
 
 // --- Temps ---
-export const DAY_REAL_MS = 8 * 60 * 1000; // un jour = 8 minutes réelles
+export const DAY_REAL_MS = 16 * 60 * 1000; // un jour = 16 minutes réelles (temps ingame 2x plus lent, demande 2026-07)
 export const DAY_START_MIN = 6 * 60;      // 6h00
 export const DAY_END_MIN = 26 * 60;       // 2h00 le lendemain
 export const START_MONEY = 500;
@@ -581,6 +581,7 @@ export const GREG_CLEAR_CHECK_MS = 5 * 60 * 1000;  // fréquence de scan (5 min 
 // coût d'une graine de blé (120) et celui du puits (600) : à ajuster au
 // playtest si besoin (pas bloquant, voir plan).
 export const FERTILIZER_BOOST_MS = 6 * H;           // temps de pousse retiré (fixe, quelle que soit la culture)
+export const FERTILIZER_AREA_SIZE = 5;              // 1 engrais = 1 carré de FERTILIZER_AREA_SIZE x FERTILIZER_AREA_SIZE cases (centré sur le point choisi), demande 2026-07
 export const FERTILIZER_COST = 150;                 // prix d'achat en or, à l'unité
 export const FERTILIZER_RESTOCK_EVERY_N_DAYS = 2;   // cycle de réapparition dans le shop
 export const FERTILIZER_SHOP_STOCK = 3;             // unités remises en stock à chaque réapparition
