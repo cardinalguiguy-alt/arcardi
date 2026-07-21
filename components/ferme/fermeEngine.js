@@ -1077,9 +1077,18 @@ export function gregMine(world, i) {
    ni outils : il agit gratuitement une fois engagé).
    ------------------------------------------------------------------------- */
 
-// Cherche jusqu'à `count` cases d'herbe libres (G_GRASS, sans objet, sans
-// culture, hors pont/eau) en anneaux croissants autour de `anchor` — même
-// principe de recherche en spirale que les spawns (wolfSpawnPos/rabbitSpawnPos).
+// Cherche jusqu'à `count` cases plantables libres (herbe G_GRASS OU déjà
+// labourées G_TILLED/G_WATERED, sans objet, sans culture, hors pont/eau) en
+// anneaux croissants autour de `anchor` — même principe de recherche en
+// spirale que les spawns (wolfSpawnPos/rabbitSpawnPos). Correctif 2026-07
+// (demande Guillaume : "Greg doit pouvoir semer sur des cases déjà
+// labourées qui n'ont pas de plantes, [...] pour l'instant son comportement
+// c'est de labourer une nouvelle case même quand certaines sont libres") :
+// avant, seul G_GRASS était retenu, ignorant toute case déjà labourée mais
+// vide (par exemple après une récolte) — Greg labourait donc une case
+// fraîche à côté au lieu de replanter directement sur celle déjà prête.
+// L'appelant (gregOrder, FermeGame.js) inspecte `world.ground[i]` pour
+// sauter la tâche "till" si la case est déjà labourée.
 export function findFreeGrassTiles(world, anchor, count) {
   const out = [];
   const seen = new Set();
@@ -1092,7 +1101,8 @@ export function findFreeGrassTiles(world, anchor, count) {
         const i = idx(x, y);
         if (seen.has(i)) continue;
         seen.add(i);
-        if (world.ground[i] === C.G_GRASS && world.objects[i] === C.O_NONE && !world.crops.has(i)) {
+        const gr = world.ground[i];
+        if ((gr === C.G_GRASS || gr === C.G_TILLED || gr === C.G_WATERED) && world.objects[i] === C.O_NONE && !world.crops.has(i)) {
           out.push(i);
           if (out.length >= count) return out;
         }

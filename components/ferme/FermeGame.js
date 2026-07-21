@@ -985,7 +985,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           if (tiles.length === 0) out.toast = { id: f.id, key: "gregNoRoom" };
           else {
             s.money -= C.CROPS[cropIdx].seedCost * tiles.length;
-            for (const i of tiles) g.taskQueue.push({ a: "till", i }, { a: "plant", i, crop: cropIdx }, { a: "water", i });
+            for (const i of tiles) {
+              // Case déjà labourée (G_TILLED/G_WATERED) : pas besoin de
+              // "till", on passe directement à la plantation (correctif
+              // 2026-07, voir findFreeGrassTiles).
+              const alreadyTilled = w2.ground[i] === C.G_TILLED || w2.ground[i] === C.G_WATERED;
+              if (!alreadyTilled) g.taskQueue.push({ a: "till", i });
+              g.taskQueue.push({ a: "plant", i, crop: cropIdx }, { a: "water", i });
+            }
             out.state = shareState(); out.greg = g;
             out.chat = { from: "🧑‍🌾", msg: lang === "en" ? `Greg is on it: ${tiles.length} tile(s) of ${C.CROPS[cropIdx].nameEn}.` : `Greg s'y met : ${tiles.length} case(s) de ${C.CROPS[cropIdx].name}.` };
           }
