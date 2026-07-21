@@ -261,6 +261,29 @@ export const FERME_STR = {
     darkPassageToast: "🌑 Une obscurité glaciale t'avale...",
     darkPassageReturnToast: "☀️ Tu retrouves la lumière du jour.",
     evilMonsterCaughtToast: "👹 Une créature t'a happé... tu te réveilles chez toi, blessé.",
+    // Pommade de protection (chantier 2026-07) : achetable au magasin,
+    // repousse les créatures maléfiques et immunise le joueur contre elles
+    // pendant 10 minutes, pour explorer/farm côté maléfique sans crainte.
+    salveRowTitle: "🧴 Pommade de protection",
+    salveRowSub: (n) => `Utilisée : repousse les créatures maléfiques et t'immunise contre elles pendant 10 min. Se fabrique au chaudron (⚗️). En stock : ${n}`,
+    salveUseLabel: "Utiliser",
+    salveUsedToast: "🧴 Pommade appliquée : immunisé contre les créatures maléfiques pendant 10 minutes.",
+    toastNoSalve: "Il te faut une pommade de protection (à fabriquer au chaudron).",
+    immunityBanner: (t) => `🧴 Immunisé aux créatures maléfiques — ${t}`,
+    // Chaudron de la pommade de protection (chantier 2026-07) : recette
+    // coopérative (1 améthyste + 2 truites + 1 brochet), voir CAULDRON_SITE/
+    // SALVE_RECIPE (fermeConstants.js) et resolveSalveDeposit/resolveSalveBrew
+    // (fermeEngine.js).
+    promptCauldron: "[E] Chaudron (améthyste, 2 truites, 1 brochet)",
+    promptSalveDeposit: "[E] Déposer poisson au chaudron",
+    promptSalveBrew: "[E] Lancer la concoction",
+    salveDeposited: (who, n, res) => `${who} dépose ${n} ${res} au chaudron.`,
+    salveBrewed: (who) => `⚗️ ${who} a concocté une pommade de protection !`,
+    toastFarCauldron: "Approche-toi du chaudron pour déposer ou concocter.",
+    toastNoFishToDeposit: "Tu ne portes ni truite ni brochet à déposer.",
+    toastCauldronMissing: "Il manque des ingrédients (1 améthyste, 2 truites, 1 brochet).",
+    troutLabel: "truite(s)",
+    pikeLabel: "brochet(s)",
     // Aide
     help1: "ZQSD/WASD/Flèches : bouger (8 directions) · Espace/Clic : utiliser l'outil",
     help2: "1-8 : outils (7 = canne, 8 = clôture) · E : boutique/vente · T : chat · M : carte · 🏠 : maison",
@@ -566,6 +589,27 @@ export const FERME_STR = {
     darkPassageToast: "🌑 A cold darkness swallows you...",
     darkPassageReturnToast: "☀️ You find daylight again.",
     evilMonsterCaughtToast: "👹 A creature caught you... you wake up at home, injured.",
+    // Protection salve (2026-07 chantier): buyable at the shop, repels evil
+    // creatures and makes the player immune to them for 10 minutes, so they
+    // can explore/farm the evil side without worry.
+    salveRowTitle: "🧴 Protection salve",
+    salveRowSub: (n) => `When used: repels evil creatures and grants immunity to them for 10 min. Crafted at the cauldron (⚗️). In stock: ${n}`,
+    salveUseLabel: "Use",
+    salveUsedToast: "🧴 Salve applied: immune to evil creatures for 10 minutes.",
+    toastNoSalve: "You need a protection salve (craft it at the cauldron).",
+    immunityBanner: (t) => `🧴 Immune to evil creatures — ${t}`,
+    // Protection salve cauldron (2026-07 chantier): cooperative recipe (1
+    // amethyst + 2 trout + 1 pike).
+    promptCauldron: "[E] Cauldron (amethyst, 2 trout, 1 pike)",
+    promptSalveDeposit: "[E] Deposit fish at the cauldron",
+    promptSalveBrew: "[E] Start brewing",
+    salveDeposited: (who, n, res) => `${who} deposits ${n} ${res} at the cauldron.`,
+    salveBrewed: (who) => `⚗️ ${who} brewed a protection salve!`,
+    toastFarCauldron: "Get closer to the cauldron to deposit or brew.",
+    toastNoFishToDeposit: "You're not carrying any trout or pike to deposit.",
+    toastCauldronMissing: "Missing ingredients (1 amethyst, 2 trout, 1 pike).",
+    troutLabel: "trout",
+    pikeLabel: "pike",
     help1: "WASD/Arrows: move (8 directions) · Space/Click: use tool",
     help2: "1-8: tools (7 = rod, 8 = fence) · E: shop/sell · T: chat · M: map · 🏠: house",
     toastTired: "Too tired! Eat a snack or wait for tomorrow.",

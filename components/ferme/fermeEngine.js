@@ -513,7 +513,7 @@ export function newFarmer(id, name, gender, outfit) {
     injuredUntil: 0, // horodatage de fin d'indisponibilité après une morsure de loup (0 = pas blessé)
     tools: { hoe: 1, can: 1, axe: 1, pick: 1 },
     inv: {
-      wood: 0, stone: 0, food: 0, fence: 0, wall: 0, path: 0, lamp: 0, scarecrow: 0, grass: 0, mill: 0, healKit: 0,
+      wood: 0, stone: 0, food: 0, fence: 0, wall: 0, path: 0, lamp: 0, scarecrow: 0, grass: 0, mill: 0, healKit: 0, salve: 0,
       seeds: [5, 0, 0, 0], crops: [0, 0, 0, 0],
       gems: C.GEMS.map(() => 0),      // gemmes rares trouvées au minage
       fish: C.FISH.map(() => 0),      // poissons pêchés
@@ -575,6 +575,7 @@ export function normalizeFarmer(f) {
   if (typeof f.inv.grass !== "number") f.inv.grass = 0;
   if (typeof f.inv.mill !== "number") f.inv.mill = 0;
   if (typeof f.inv.healKit !== "number") f.inv.healKit = 0;
+  if (typeof f.inv.salve !== "number") f.inv.salve = 0;
   f.inv.seeds = padArray(f.inv.seeds, C.CROPS.length);
   f.inv.crops = padArray(f.inv.crops, C.CROPS.length);
   f.inv.gems = padArray(f.inv.gems, C.GEMS.length);
@@ -1254,6 +1255,63 @@ export function resolveCoopDeposit(f, coop, m) {
 }
 
 /* -------------------------------------------------------------------------
+   Chaudron de la pommade de protection (chantier 2026-07, voir
+   CAULDRON_SITE/SALVE_RECIPE dans fermeConstants.js). État partagé minimal :
+   { trout, pike } — quantité de poissons déjà déposée par l'équipe vers LA
+   PROCHAINE pommade. L'améthyste n'a pas besoin d'être "déposée" : elle est
+   prélevée directement dans la réserve commune de gemmes (s.gems) au moment
+   de la concoction (voir resolveSalveBrew). Comme la grange/les missions
+   d'équipe : persiste entre sessions, coopératif (n'importe quel fermier
+   peut déposer un poisson qu'il porte, n'importe quel fermier peut lancer la
+   concoction une fois la recette réunie).
+   ------------------------------------------------------------------------- */
+export function newSalveCraftState() { return { trout: 0, pike: 0 }; }
+
+// Dépôt d'un poisson (truite ou brochet) au chaudron (touche E à proximité
+// de CAULDRON_SITE, comme le dépôt de bois/pierre à la grange). `m.fish` =
+// "trout" | "pike". Dépose le MAXIMUM utile (comme resolveCoopDeposit/
+// resolveBarnDeposit) plutôt que tout refuser si le fermier en porte plus
+// que ce qu'il reste à réunir pour la prochaine pommade — l'éventuel surplus
+// déposé sert d'avance pour la pommade SUIVANTE plutôt que d'être plafonné,
+// pour ne pas gaspiller une pêche généreuse.
+export function resolveSalveDeposit(f, salveCraft, m) {
+  normalizeFarmer(f);
+  const res = { invChanged: false, toast: null, deposited: 0, fish: null };
+  if (!nearT(f, C.CAULDRON_SITE)) { res.toast = "farCauldron"; return res; }
+  const key = m.fish === "pike" ? "pike" : m.fish === "trout" ? "trout" : null;
+  if (!key) return res;
+  const ft = key === "trout" ? 1 : 2; // index C.FISH (voir fermeConstants.js)
+  const have = f.inv.fish[ft] || 0;
+  if (have <= 0) { res.toast = "noFishToDeposit"; return res; }
+  f.inv.fish[ft] -= have;
+  salveCraft[key] = (salveCraft[key] || 0) + have;
+  res.invChanged = true; res.deposited = have; res.fish = key;
+  return res;
+}
+
+// Lancement de la concoction (touche E au chaudron, une fois la recette
+// réunie) : consomme EXACTEMENT SALVE_RECIPE (pas tout le surplus éventuel,
+// pour laisser une avance à la pommade suivante) dans le stock déposé
+// (trout/pike) et dans la réserve commune de gemmes (amethyst), puis crédite
+// 1 pommade dans l'inventaire PERSONNEL du fermier qui lance la concoction
+// (physiquement présent pour la récupérer) — pas dans un stock partagé, pour
+// rester cohérent avec le reste de l'inventaire consommable (trousse de
+// soins, etc.).
+export function resolveSalveBrew(f, salveCraft, gems) {
+  normalizeFarmer(f);
+  const res = { invChanged: false, gemsChanged: false, toast: null, brewed: false };
+  if (!nearT(f, C.CAULDRON_SITE)) { res.toast = "farCauldron"; return res; }
+  const rec = C.SALVE_RECIPE;
+  const haveAmethyst = (gems && gems[0]) || 0;
+  const ready = (salveCraft.trout || 0) >= rec.trout && (salveCraft.pike || 0) >= rec.pike && haveAmethyst >= rec.amethyst;
+  if (!ready) { res.toast = "cauldronMissing"; return res; }
+  salveCraft.trout -= rec.trout; salveCraft.pike -= rec.pike;
+  gems[0] -= rec.amethyst; res.gemsChanged = true;
+  f.inv.salve = (f.inv.salve || 0) + 1; res.invChanged = true; res.brewed = true;
+  return res;
+}
+
+/* -------------------------------------------------------------------------
    Grange collaborative persistante (zip 158, voir BARN_SITE/BARN_LEVELS
    dans fermeConstants.js). État partagé minimal : { level, progress:
    {wood,stone}, ready }. `level` 0..3 = paliers déjà construits (survit
@@ -1388,6 +1446,19 @@ export function resolveBuy(f, money, m) {
     res.moneyDelta = -cost; f.tools[key] = lvl + 1; res.invChanged = true;
     res.chat = { from: "⚒", key: "toolUp", tool: key, lvl: lvl + 1 };
   }
+  return res;
+}
+
+// Usage de la pommade de protection (chantier 2026-07) : consomme 1 unité de
+// l'inventaire si dispo. L'effet (immunité/répulsion 10 min côté carte
+// maléfique) est appliqué localement côté client au moment du clic (voir
+// useSalve, FermeGame.js) ; cette fonction ne gère QUE le décompte du stock
+// côté hôte, seul autorité sur l'inventaire (persistance/diffusion).
+export function resolveUseSalve(f) {
+  normalizeFarmer(f);
+  const res = { invChanged: false, toast: null };
+  if (!((f.inv.salve || 0) > 0)) { res.toast = "noSalve"; return res; }
+  f.inv.salve -= 1; res.invChanged = true;
   return res;
 }
 

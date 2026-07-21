@@ -131,6 +131,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [barnMini, setBarnMini] = useState(null); // {level} pendant le mini-jeu de construction de la grange, sinon null
   const [wolfBite, setWolfBite] = useState(null); // {wolfId} pendant le mini-jeu de morsure (loup agressif), sinon null
   const [injuredUntil, setInjuredUntil] = useState(0); // horodatage de fin d'indisponibilité (0 = pas blessé), survit à un refresh (voir farmer.injuredUntil)
+  const [immunityUntil, setImmunityUntil] = useState(0); // pommade de protection (chantier 2026-07) : horodatage de fin d'immunité/répulsion aux créatures maléfiques (0 = inactif), effet purement local, ne survit pas à un refresh
   const [shopOpen, setShopOpen] = useState(false);
   const [gregOrderOpen, setGregOrderOpen] = useState(false); // panneau "donner un ordre à Greg" (chantier 2026-07)
   const [gregOrderCrop, setGregOrderCrop] = useState(0);
@@ -161,6 +162,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [mounted, setMounted] = useState(false);
   const [coop, setCoop] = useState(null); // miroir React de sharedRef.current.coop (mission d'équipe en cours)
   const [barn, setBarn] = useState(null); // miroir React de sharedRef.current.barn (grange persistante)
+  const [salveCraft, setSalveCraft] = useState(null); // miroir React de sharedRef.current.salveCraft (chaudron de la pommade)
   const [gems, setGems] = useState(() => C.GEMS.map(() => 0)); // miroir React de sharedRef.current.gems (pool commun à la salle)
   const [flour, setFlour] = useState(0); // miroir React de sharedRef.current.flour (sacs de farine, pool commun à la salle, chantier 2026-07)
   const [gregStock, setGregStock] = useState(() => ({ wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0) })); // miroir React de sharedRef.current.gregStock (bois/pierre récoltés par Greg + engrais acheté + poissons pêchés par Soan, pool commun, chantier 2026-07)
@@ -212,7 +214,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const meRef = useRef(null);
   const playersRef = useRef(new Map()); // id -> remote farmer render data
   const farmersRef = useRef({});        // hôte : id -> état privé arbitré
-  const sharedRef = useRef({ seed: 0, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), flour: 0, gregStock: { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0) }, fertilizerShop: { stock: 0, lastRestockDay: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], rabbitChallenge: null, greg: null, soan: null });
+  const sharedRef = useRef({ seed: 0, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), salveCraft: E.newSalveCraftState(), flour: 0, gregStock: { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0) }, fertilizerShop: { stock: 0, lastRestockDay: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], rabbitChallenge: null, greg: null, soan: null });
   const invRef = useRef(null);
   const toolsRef = useRef({ hoe: 1, can: 1, axe: 1, pick: 1 });
   const energyRef = useRef(C.MAX_ENERGY);
@@ -264,11 +266,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const sleepStartEnergyRef = useRef(0);
   const sleepTimerRef = useRef(null); // setTimeout de sortie automatique après C.SLEEP_MS
   const injuredUntilRef = useRef(0); // miroir synchrone de injuredUntil (lu dans la boucle de rendu/déplacement)
+  const immunityUntilRef = useRef(0); // miroir synchrone de immunityUntil (lu dans updateEvilMonsters)
   const hatUntilRef = useRef(0); // miroir synchrone de hatUntil (lu dans la boucle de rendu, voir drawCharacter)
   const rabbitChallengeOfferRef = useRef(false); // miroir synchrone de rabbitChallengeOffer (lu dans le timer hôte, évite de reproposer en boucle)
 
   useEffect(() => { fishMiniRef.current = !!fishMini || !!barnMini || !!wolfBite; }, [fishMini, barnMini, wolfBite]);
   useEffect(() => { injuredUntilRef.current = injuredUntil || 0; }, [injuredUntil]);
+  useEffect(() => { immunityUntilRef.current = immunityUntil || 0; }, [immunityUntil]);
   useEffect(() => { hatUntilRef.current = hatUntil || 0; }, [hatUntil]);
   useEffect(() => { rabbitChallengeOfferRef.current = !!rabbitChallengeOffer; }, [rabbitChallengeOffer]);
   useEffect(() => { mapOpenRef.current = mapOpen; }, [mapOpen]);
@@ -377,6 +381,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         horses: migrateHorses(saved),
         animals: saved.animals || [], wellBuilt: !!saved.wellBuilt, coop: saved.coop || null,
         barn: saved.barn || E.newBarnState(),
+        salveCraft: saved.salveCraft || E.newSalveCraftState(),
         gems: migrateGems(saved),
         flour: saved.flour || 0,
         // Stock commun de bois/pierre récoltés par Greg (chantier 2026-07,
@@ -422,7 +427,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const seed = hashSeed(code);
       worldRef.current = E.generateWorld(seed);
       overridesRef.current = { ground: {}, object: {} };
-      sharedRef.current = { seed, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), gems: C.GEMS.map(() => 0), flour: 0, gregStock: { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0) }, fertilizerShop: { stock: 0, lastRestockDay: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], rabbitChallenge: null, greg: null, soan: null };
+      sharedRef.current = { seed, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), salveCraft: E.newSalveCraftState(), gems: C.GEMS.map(() => 0), flour: 0, gregStock: { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0) }, fertilizerShop: { stock: 0, lastRestockDay: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], rabbitChallenge: null, greg: null, soan: null };
       farmersRef.current = {};
       // Crée tout de suite l'enregistrement pour réserver le code.
       persistFarm();
@@ -444,6 +449,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     setHud(h => ({ ...h, money: sharedRef.current.money, day: sharedRef.current.day }));
     setCoop(sharedRef.current.coop);
     setBarn(sharedRef.current.barn);
+    setSalveCraft(sharedRef.current.salveCraft);
     setGems(sharedRef.current.gems);
     setFlour(sharedRef.current.flour || 0);
     setGregStock(sharedRef.current.gregStock || { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0) });
@@ -516,6 +522,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       horses: payload.horses || (payload.horse && payload.horse.owned ? [{ x: payload.horse.x, y: payload.horse.y, rider: null, rider2: null }] : []),
       animals: payload.animals || [], wellBuilt: !!payload.wellBuilt, coop: payload.coop || null,
       barn: payload.barn || E.newBarnState(),
+      salveCraft: payload.salveCraft || E.newSalveCraftState(),
       gems: migrateGems(payload),
       flour: payload.flour || 0,
       gregStock: { wood: (payload.gregStock && payload.gregStock.wood) || 0, stone: (payload.gregStock && payload.gregStock.stone) || 0, fertilizer: (payload.gregStock && payload.gregStock.fertilizer) || 0, fish: C.FISH.map((_, i) => (payload.gregStock && payload.gregStock.fish && payload.gregStock.fish[i]) || 0) },
@@ -553,6 +560,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     setHud(h => ({ ...h, money: payload.money, day: payload.day }));
     setCoop(sharedRef.current.coop);
     setBarn(sharedRef.current.barn);
+    setSalveCraft(sharedRef.current.salveCraft);
     setGems(sharedRef.current.gems);
     setFlour(sharedRef.current.flour || 0);
     setGregStock(sharedRef.current.gregStock || { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0) });
@@ -654,7 +662,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       crops: worldRef.current ? E.serializeCrops(worldRef.current) : [],
       mills: worldRef.current ? E.serializeMills(worldRef.current) : [],
       farmers: farmersRef.current,
-      horses: s.horses, animals: s.animals, wellBuilt: s.wellBuilt, coop: s.coop, barn: s.barn, gems: s.gems, flour: s.flour, gregStock: s.gregStock, fertilizerShop: s.fertilizerShop, wolves: s.wolves, greg: s.greg, soan: s.soan,
+      horses: s.horses, animals: s.animals, wellBuilt: s.wellBuilt, coop: s.coop, barn: s.barn, salveCraft: s.salveCraft, gems: s.gems, flour: s.flour, gregStock: s.gregStock, fertilizerShop: s.fertilizerShop, wolves: s.wolves, greg: s.greg, soan: s.soan,
       rabbits: s.rabbits, rabbitChallenge: s.rabbitChallenge,
     };
   }
@@ -726,7 +734,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const f = hostEnsureFarmer(req.id, req.name);
     if (typeof req.px === "number") { f.x = req.px; f.y = req.py; }
     const s = sharedRef.current;
-    const out = { tiles: [], crops: [], mills: null, fx: [], state: null, farmer: null, toast: null, chat: null, horses: null, animals: null, wellBuilt: false, coop: undefined, barn: undefined };
+    const out = { tiles: [], crops: [], mills: null, fx: [], state: null, farmer: null, toast: null, chat: null, horses: null, animals: null, wellBuilt: false, coop: undefined, barn: undefined, salveCraft: undefined };
     let questId = null; // action réussie -> quête à valider éventuellement
     const px = typeof req.px === "number" ? req.px : f.x, py = typeof req.py === "number" ? req.py : f.y;
 
@@ -799,6 +807,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         type: "broadcast", event: "apply",
         payload: { injured: { id: f.id, until: f.injuredUntil } },
       });
+    } else if (req.kind === "useSalve") {
+      // Pommade de protection (chantier 2026-07, demande Guillaume) : même
+      // esprit que "evilChop"/"evilCaught" — l'effet (immunité/répulsion 10
+      // min) est déjà appliqué en optimiste côté client (voir useSalve,
+      // FermeGame.js), l'hôte se contente ici de décompter le stock, seul
+      // autorité sur l'inventaire (persistance/diffusion aux autres joueurs
+      // après un refresh).
+      const r = E.resolveUseSalve(f);
+      if (r.invChanged) out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
+      if (r.toast) out.toast = { id: f.id, key: r.toast };
     } else if (req.kind === "act") {
       const r = E.resolveAct(w, f, req);
       for (const i of r.tiles) { recordTileOverride(i); out.tiles.push({ i, g: w.ground[i], o: w.objects[i], hp: w.objHp.get(i) }); }
@@ -1215,6 +1233,30 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         channelRef.current?.send({ type: "broadcast", event: "chat", payload: { from: "🎉", msg: L.barnBuilt(f.name, r.level) } });
         dirtyRef.current = true;
       }
+    } else if (req.kind === "salveDeposit") {
+      // Dépôt d'un poisson (truite/brochet) au chaudron de la pommade de
+      // protection (chantier 2026-07) — même esprit que barnDeposit, mais
+      // sur les poissons personnels du fermier plutôt que bois/pierre.
+      const r = E.resolveSalveDeposit(f, s.salveCraft, req);
+      if (r.invChanged) out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
+      if (r.toast) out.toast = { id: f.id, key: r.toast };
+      if (r.deposited > 0) {
+        out.salveCraft = s.salveCraft;
+        out.chat = { from: "🧪", msg: L.salveDeposited(f.name, r.deposited, r.fish === "trout" ? L.troutLabel : L.pikeLabel) };
+        dirtyRef.current = true;
+      }
+    } else if (req.kind === "salveBrew") {
+      // Lancement de la concoction (chantier 2026-07) : consomme la recette
+      // (poissons déposés au chaudron + améthyste dans la réserve commune de
+      // gemmes) et crédite 1 pommade dans l'inventaire du fermier présent.
+      const r = E.resolveSalveBrew(f, s.salveCraft, s.gems);
+      if (r.toast) out.toast = { id: f.id, key: r.toast };
+      if (r.brewed) {
+        out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
+        out.salveCraft = s.salveCraft; out.gems = s.gems;
+        channelRef.current?.send({ type: "broadcast", event: "chat", payload: { from: "🧪", msg: L.salveBrewed(f.name) } });
+        dirtyRef.current = true;
+      }
     }
 
     // Quêtes de découverte : première réussite d'une action listée -> or commun.
@@ -1295,6 +1337,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (p.wellBuilt) { sharedRef.current.wellBuilt = true; minimapDirtyRef.current = true; syncBuildings(); }
     if (p.coop !== undefined) { sharedRef.current.coop = p.coop; setCoop(p.coop); }
     if (p.barn !== undefined) { sharedRef.current.barn = p.barn; setBarn(p.barn); minimapDirtyRef.current = true; }
+    if (p.salveCraft !== undefined) { sharedRef.current.salveCraft = p.salveCraft; setSalveCraft(p.salveCraft); }
     if (p.gems) { sharedRef.current.gems = p.gems; setGems(p.gems); }
     if (p.flour !== undefined) { sharedRef.current.flour = p.flour; setFlour(p.flour); }
     if (p.gregStock !== undefined) { sharedRef.current.gregStock = p.gregStock; setGregStock(p.gregStock); }
@@ -1323,7 +1366,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     pushToast(L.toastNewDay(p.day));
   }
   function toastMsg(key) {
-    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, noMillStock: L.toastNoMillStock, millNotEmpty: L.toastMillNotEmpty, noWheatToDeposit: L.toastNoWheatToDeposit, millFull: L.toastMillFull, actionFailed: L.toastActionFailed, coopNone: L.toastCoopNone, farCoop: L.toastFarCoop, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull, notInjured: L.toastNotInjured, noHealKit: L.toastNoHealKit, healTooFar: L.toastHealTooFar, gregNotHired: L.toastGregNotHired, gregNoRoom: L.toastGregNoRoom, gregNoFertilizer: L.toastGregNoFertilizer, soanNotHired: L.toastSoanNotHired, soanNoRiver: L.toastSoanNoRiver }[key] || "";
+    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, noMillStock: L.toastNoMillStock, millNotEmpty: L.toastMillNotEmpty, noWheatToDeposit: L.toastNoWheatToDeposit, millFull: L.toastMillFull, actionFailed: L.toastActionFailed, coopNone: L.toastCoopNone, farCoop: L.toastFarCoop, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull, notInjured: L.toastNotInjured, noHealKit: L.toastNoHealKit, healTooFar: L.toastHealTooFar, gregNotHired: L.toastGregNotHired, gregNoRoom: L.toastGregNoRoom, gregNoFertilizer: L.toastGregNoFertilizer, soanNotHired: L.toastSoanNotHired, soanNoRiver: L.toastSoanNoRiver, farCauldron: L.toastFarCauldron, noFishToDeposit: L.toastNoFishToDeposit, cauldronMissing: L.toastCauldronMissing }[key] || "";
   }
 
   // -------- Hôte : boucle temps + persistance --------
@@ -2864,6 +2907,32 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           });
         } });
       }
+      // Chaudron de la pommade de protection (chantier 2026-07) : même
+      // principe que le chantier de mission d'équipe ci-dessus (marqueur +
+      // mini-jauges), 3 ingrédients (truite/brochet déposés localement au
+      // chaudron, améthyste lue directement dans la réserve commune de
+      // gemmes plutôt que dans salveCraft, voir resolveSalveBrew).
+      if (sharedRef.current.salveCraft) {
+        const cds = C.CAULDRON_SITE, scNow = sharedRef.current.salveCraft, rec = C.SALVE_RECIPE;
+        const gemsNow = (sharedRef.current.gems && sharedRef.current.gems[0]) || 0;
+        draws.push({ y: (cds.y + 1) * T, fn: () => {
+          const bob = Math.sin(now / 300) * 1.5;
+          ctx.font = "14px monospace"; ctx.textAlign = "center";
+          ctx.fillText("⚗️", cds.x * T + 8, cds.y * T + 4 + bob);
+          const barW = 20;
+          const rows = [
+            { resource: "amethyst", got: gemsNow, target: rec.amethyst, color: "#b46ee0" },
+            { resource: "trout", got: scNow.trout || 0, target: rec.trout, color: "#d98a5a" },
+            { resource: "pike", got: scNow.pike || 0, target: rec.pike, color: "#6a8f5a" },
+          ];
+          rows.forEach((r, ri) => {
+            const bx = cds.x * T + 8 - barW / 2, by = cds.y * T + 8 + ri * 5;
+            const frac = Math.max(0, Math.min(1, r.got / r.target));
+            ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(bx, by, barW, 3);
+            ctx.fillStyle = r.color; ctx.fillRect(bx, by, barW * frac, 3);
+          });
+        } });
+      }
       const lampsInView = []; // positions des lampadaires visibles, pour percer l'overlay nocturne
       // Torches portées par les fermiers (chantier 2026-07) : même mécanique
       // de halo que les lampadaires, rayon plus modeste (C.TORCH_LIGHT_RADIUS),
@@ -3210,6 +3279,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       else if (nearTile(C.HOUSE_DOOR)) pk = m.sleeping ? "wake" : "sleep";
       else if (nearTile(C.COOP_SITE) && sharedRef.current.coop) pk = "coop";
       else if (nearTile(C.BARN_SITE)) { const b = sharedRef.current.barn; if (b && b.level < C.BARN_LEVELS.length) pk = b.ready ? "barnBuild" : "barn"; }
+      else if (nearTile(C.CAULDRON_SITE)) {
+        const sc = sharedRef.current.salveCraft || { trout: 0, pike: 0 };
+        const rec = C.SALVE_RECIPE, gemsNow = (sharedRef.current.gems && sharedRef.current.gems[0]) || 0;
+        const ready = sc.trout >= rec.trout && sc.pike >= rec.pike && gemsNow >= rec.amethyst;
+        const carryingFish = myInv && ((myInv.fish && (myInv.fish[1] || myInv.fish[2])) || 0);
+        pk = ready ? "salveBrew" : (carryingFish ? "salveDeposit" : "cauldron");
+      }
       setPromptKeyThrottled(pk);
       // Invite cheval (monter/descendre) : plusieurs chevaux possibles.
       const hs = sharedRef.current.horses || []; let mp = null;
@@ -3370,13 +3446,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           if (mo.chasing) {
             const glow = 0.35 + Math.sin(now / 220) * 0.15;
             ctx.save(); ctx.shadowColor = `rgba(170, 60, 220, ${glow})`; ctx.shadowBlur = 14;
+          } else if (mo.fleeing) {
+            // Pommade de protection (chantier 2026-07) : lueur verte plutôt
+            // que violette tant que la créature fuit le joueur, pour bien
+            // distinguer visuellement "danger" (chasing) de "repoussée"
+            // (fleeing) le temps de l'effet.
+            const glow = 0.3 + Math.sin(now / 220) * 0.12;
+            ctx.save(); ctx.shadowColor = `rgba(90, 220, 130, ${glow})`; ctx.shadowBlur = 12;
           }
           ctx.save();
           ctx.filter = "brightness(0.55) saturate(2.2) hue-rotate(235deg)";
           if (mo.dir === 2) { ctx.translate(px + 30, py); ctx.scale(-1, 1); ctx.drawImage(img, 0, 0); }
           else ctx.drawImage(img, px, py);
           ctx.restore();
-          if (mo.chasing) ctx.restore();
+          if (mo.chasing || mo.fleeing) ctx.restore();
         } });
       }
       draws.sort((a, b) => a.y - b.y);
@@ -3417,20 +3500,32 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // canStandEvil) : des créatures qui se bloquent en forêt seraient
     // triviales à semer, ce qui viderait la menace de tout son sens sur une
     // carte aussi densément boisée.
+    // Pommade de protection (chantier 2026-07, demande Guillaume : "adding a
+    // salve buyable from the market to repel the creatures or be immune to
+    // them for 10 minutes, so the player can explore/farm that side"). Tant
+    // que immunityUntilRef est dans le futur : aucun contact ne déclenche
+    // plus caughtByMonster (immunité), ET toute créature qui aurait
+    // autrement chargé le joueur s'en éloigne au contraire, à la même
+    // vitesse (répulsion) — les deux formulations de la demande couvertes
+    // par un seul et même effet, plutôt que de choisir entre elles.
     function updateEvilMonsters(dt) {
       const ew = evilWorldRef.current, m = meRef.current;
       if (!ew || !ew.monsters || !ew.monsters.length) return;
+      const immune = Date.now() < immunityUntilRef.current;
       for (const mo of ew.monsters) {
         mo.animT = (mo.animT || 0) + dt * 6;
-        const ddx = m.x - mo.x, ddy = m.y - mo.y, dist = Math.hypot(ddx, ddy);
-        if (dist <= C.EVIL_MONSTER_CATCH_RADIUS) { caughtByMonster(); return; }
+        const ddx = m.x - mo.x, ddy = m.y - mo.y, dist = Math.hypot(ddx, ddy) || 0.0001;
+        if (!immune && dist <= C.EVIL_MONSTER_CATCH_RADIUS) { caughtByMonster(); return; }
         if (dist <= C.EVIL_MONSTER_DETECT_RADIUS) {
           const speed = C.EVIL_MONSTER_SPEED * dt;
-          mo.x += (ddx / dist) * speed; mo.y += (ddy / dist) * speed;
-          mo.dir = ddx < 0 ? 2 : 3;
-          mo.chasing = true;
+          const sign = immune ? -1 : 1;
+          mo.x += sign * (ddx / dist) * speed; mo.y += sign * (ddy / dist) * speed;
+          mo.dir = (sign * ddx) < 0 ? 2 : 3;
+          mo.chasing = !immune;
+          mo.fleeing = immune;
         } else {
           mo.chasing = false;
+          mo.fleeing = false;
         }
       }
     }
@@ -3767,6 +3862,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       else if (b.ready) setBarnMini({ level: b.level + 1 });
       else sendReq({ kind: "barnDeposit" });
     }
+    else if (nearTile(C.CAULDRON_SITE)) {
+      const sc = sharedRef.current.salveCraft || { trout: 0, pike: 0 };
+      const rec = C.SALVE_RECIPE, gemsNow = (sharedRef.current.gems && sharedRef.current.gems[0]) || 0;
+      const ready = sc.trout >= rec.trout && sc.pike >= rec.pike && gemsNow >= rec.amethyst;
+      if (ready) { salveBrew(); return; }
+      const hasTrout = myInv && (myInv.fish && myInv.fish[1] || 0) > 0;
+      const hasPike = myInv && (myInv.fish && myInv.fish[2] || 0) > 0;
+      if (hasTrout) salveDeposit("trout");
+      else if (hasPike) salveDeposit("pike");
+      else pushToast(L.toastCauldronMissing);
+    }
   }
 
   function spawnFx(m) {
@@ -3888,6 +3994,24 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const buyGrass = (n) => { sendReq({ kind: "buy", item: "grass", n }); buildKindRef.current = "grass"; setBuildKind("grass"); };
   const buyMill = (n) => { sendReq({ kind: "buy", item: "mill", n }); buildKindRef.current = "mill"; setBuildKind("mill"); };
   const buyHealKit = (n) => sendReq({ kind: "buy", item: "healKit", n });
+  // Pommade de protection (chantier 2026-07, demande Guillaume : plus
+  // achetable en boutique — désormais fabriquée au chaudron (CAULDRON_SITE)
+  // à partir de poissons déposés par l'équipe + améthyste de la réserve
+  // commune, voir salveDeposit/salveBrew ci-dessous et resolveSalveDeposit/
+  // resolveSalveBrew, fermeEngine.js).
+  const salveDeposit = (fish) => sendReq({ kind: "salveDeposit", fish });
+  const salveBrew = () => sendReq({ kind: "salveBrew" });
+  // Usage de la pommade (inchangé) : applique l'immunité IMMÉDIATEMENT en
+  // local (ressenti instantané, comme caughtByMonster) puis envoie la
+  // requête à l'hôte pour décompter le stock côté serveur (persistance/
+  // diffusion). Utilisable à tout moment, pas de contrainte de proximité.
+  const useSalve = () => {
+    if (!myInv || !((myInv.salve || 0) > 0)) { pushToast(L.toastNoSalve); return; }
+    const until = Date.now() + C.SALVE_IMMUNITY_MS;
+    immunityUntilRef.current = until; setImmunityUntil(until);
+    sendReq({ kind: "useSalve" });
+    pushToast(L.salveUsedToast);
+  };
   const sellFlour = () => sendReq({ kind: "sell", item: "flour", n: 9999 });
   const sellItem = (item, crop) => sendReq({ kind: "sell", item, crop, n: 9999 });
   // Menu Construire (clic sur bois/pierre du HUD) : fabrique `n` sections de
@@ -4044,7 +4168,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       </div>
 
       {/* Invite proximité */}
-      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "shop" ? L.promptShop : promptKey === "coop" ? L.promptCoop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "sleep" ? L.promptSleep : promptKey === "wake" ? L.promptWake : L.promptBin}</div>}
+      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "shop" ? L.promptShop : promptKey === "coop" ? L.promptCoop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "salveDeposit" ? L.promptSalveDeposit : promptKey === "salveBrew" ? L.promptSalveBrew : promptKey === "sleep" ? L.promptSleep : promptKey === "wake" ? L.promptWake : L.promptBin}</div>}
       {mountPrompt && <div className="ferme-prompt ferme-prompt-mount">{mountPrompt === "mount" ? L.mountPrompt : L.dismountPrompt}</div>}
 
       {/* Barre d'outils */}
@@ -4345,6 +4469,23 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         );
       })()}
 
+      {/* Immunité (pommade de protection, chantier 2026-07) : bannière verte
+          avec décompte, même principe que la bannière de blessure ci-dessus,
+          tant qu'immunityUntil est dans le futur. */}
+      {immunityUntil > Date.now() && (() => {
+        const left = Math.max(0, immunityUntil - Date.now());
+        const mm = String(Math.floor(left / 60000)).padStart(2, "0");
+        const ss = String(Math.floor((left % 60000) / 1000)).padStart(2, "0");
+        return (
+          <div className="ferme-toast" style={{
+            position: "fixed", top: injuredUntil > Date.now() ? 52 : 12, left: "50%", transform: "translateX(-50%)",
+            background: "#146a2e", color: "#fff", fontWeight: "bold", zIndex: 50,
+          }}>
+            {L.immunityBanner(`${mm}:${ss}`)}
+          </div>
+        );
+      })()}
+
       {/* Toasts */}
       <div className="ferme-toasts">{toasts.map(t2 => <div key={t2.id} className="ferme-toast">{t2.msg}</div>)}</div>
 
@@ -4474,6 +4615,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               <div style={{ width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>🩹</div>
               <div className="info"><b>{L.healKitRowTitle}</b><span>{L.healKitRowSub(myInv ? (myInv.healKit || 0) : 0)}</span></div>
               <button onClick={() => buyHealKit(1)}>{L.buy1}</button>
+            </div>
+            <div className="ferme-shop-row">
+              <div style={{ width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>🧴</div>
+              <div className="info"><b>{L.salveRowTitle}</b><span>{L.salveRowSub(myInv ? (myInv.salve || 0) : 0)}</span></div>
+              <button disabled={!myInv || !(myInv.salve > 0)} onClick={useSalve}>{L.salveUseLabel}</button>
             </div>
             <div className="ferme-tools-header">{L.shopAnimalsHeader}</div>
             {C.ANIMALS.map(a => (

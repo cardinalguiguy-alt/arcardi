@@ -296,6 +296,30 @@ export const EVIL_MONSTER_CATCH_RADIUS = 0.7; // distance de contact (dans un se
 export const EVIL_MONSTER_MIN_SPAWN_DIST = 10; // distance minimale au point d'arrivée pour la génération d'une créature
 export const EVIL_INJURED_MS = 30 * 60 * 1000; // 30 minutes : durée de la blessure infligée par une créature (distincte de INJURED_MS, la morsure de loup)
 
+// Pommade de protection (chantier 2026-07, demande Guillaume : un objet
+// achetable au magasin pour repousser les créatures maléfiques ou en être
+// immunisé pendant 10 minutes, pour pouvoir explorer/farm côté maléfique
+// sans craindre le contact). Effet purement local (comme le reste de la
+// carte maléfique, voir generateEvilWorld) : consommée à l'usage, elle fait
+// fuir toute créature qui aurait autrement repéré/rattrapé le joueur pendant
+// sa durée, plutôt que de simplement ignorer le contact (repousser ET
+// immuniser, conformément à la demande).
+// Pommade de protection : recette de fabrication (chantier 2026-07, demande
+// Guillaume : "n'est plus disponible depuis la boutique, mais requiert
+// désormais un mélange [...] d'amétyste et de poissons [...] : 1 amétyste, 2
+// trouts et 1 pike pour une pommade"). L'améthyste est prélevée directement
+// dans la réserve COMMUNE de gemmes (voir GEMS/s.gems, déjà alimentée par le
+// minage de tous les fermiers) ; les poissons sont déposés au chaudron
+// (CAULDRON_SITE) depuis l'inventaire personnel de chaque fermier — les deux
+// mécaniques permettent bien de "coopérer entre fermiers connectés" comme
+// demandé, sans dupliquer un système de dépôt pour l'améthyste qui existe
+// déjà. Note : Guillaume a aussi mentionné du bois ("un mélange de bois,
+// d'amétyste et de poissons") mais ne lui a donné aucune quantité dans la
+// liste chiffrée finale ; non inclus ici en attendant confirmation/quantité.
+export const CAULDRON_SITE = { x: 51, y: 33 }; // chaudron, à 2 cases à l'est de la boutique
+export const SALVE_RECIPE = { amethyst: 1, trout: 2, pike: 1 }; // trout=FISH[1], pike=FISH[2]
+export const SALVE_IMMUNITY_MS = 10 * 60 * 1000; // 10 minutes d'immunité/répulsion après usage
+
 
 // --- Clôture (posée librement par les joueurs, section par section) ---
 export const FENCE_COST = 15; // prix d'une section de clôture à la boutique (payée en or, inchangé)
