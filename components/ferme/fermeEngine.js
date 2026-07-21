@@ -1832,8 +1832,16 @@ export function newDay(world, farmers, day, seed) {
   const W = C.MAP_W, H = C.MAP_H;
   const rnd = makeRng((seed ^ (day * 2654435761)) & 0x7fffffff);
   const tiles = [];
+  // Zip 232: never regrow nature ON the train tracks (Guillaume: "make sure
+  // trees can't grow on the train tracks; they can grow beside it"), nor
+  // inside the normalized station area, nor under the barn's largest drawn
+  // rectangle (trees there would be invisible under the sprite and, now that
+  // buildings are solid, unreachable to chop).
+  const onRails = (x) => x >= C.STATION_RAIL_X && x <= C.STATION_RAIL_X + 1;
+  const inRect = (x, y, R) => x >= R.x && x < R.x + R.w && y >= R.y && y < R.y + R.h;
   for (let k = 0; k < 14; k++) {
     const x = Math.floor(rnd() * W), y = Math.floor(rnd() * H), i = idx(x, y);
+    if (onRails(x) || inRect(x, y, C.STATION_CLEAR) || inRect(x, y, C.BARN_BLOCKS[C.BARN_BLOCKS.length - 1])) continue;
     if (world.ground[i] === C.G_GRASS && world.objects[i] === C.O_NONE && !world.crops.has(i)
       && Math.abs(x - C.SPAWN.x) + Math.abs(y - C.SPAWN.y) > 18) {
       const type = rnd() < 0.5 ? C.O_ROCK : (rnd() < 0.35 ? C.O_TREE2 : C.O_TREE);
@@ -1896,9 +1904,25 @@ export function isStormyDay(day) {
 // par sa propre construction en cours, incapable de circuler librement).
 // `now` par défaut à `Date.now()` pour ne rien casser aux appels existants qui
 // ne le précisent pas encore.
+// Zip 232 (Guillaume: "users can't walk through or behind" the station and
+// the barn): the two buildings become SOLID over their full drawn rectangle
+// (roof included), not just their footprint. The station rect is a constant
+// (the station always exists); the barn rect depends on the built level,
+// read from `world.barnLevel` — a mirror field refreshed every frame by
+// updateMe (FermeGame.js) since the barn state lives in `shared`, not in
+// the world object that collision functions receive.
+const inBlockRect = (fx, fy, R) => fx >= R.x && fx < R.x + R.w && fy >= R.y && fy < R.y + R.h;
+export function solidBuildingAt(world, fx, fy) {
+  if (inBlockRect(fx, fy, C.STATION_BLOCK)) return true;
+  const bl = (world && world.barnLevel) | 0;
+  if (bl > 0 && inBlockRect(fx, fy, C.BARN_BLOCKS[Math.min(bl, C.BARN_BLOCKS.length) - 1])) return true;
+  return false;
+}
+
 export function blockedTile(world, x, y, now = Date.now()) {
   const fx = Math.floor(x), fy = Math.floor(y);
   if (!inMap(fx, fy)) return true;
+  if (solidBuildingAt(world, fx, fy)) return true;
   const i = idx(fx, fy);
   const g = world.ground[i], o = world.objects[i];
   if (g === C.G_WATER || g === C.G_BRIDGE_SITE || g === C.G_BRIDGE_CLOSED || g === C.G_BRIDGE_STONE_CLOSED) return true;
@@ -1918,6 +1942,7 @@ export function blockedTile(world, x, y, now = Date.now()) {
 export function blockedTileMounted(world, x, y, now = Date.now()) {
   const fx = Math.floor(x), fy = Math.floor(y);
   if (!inMap(fx, fy)) return true;
+  if (solidBuildingAt(world, fx, fy)) return true; // station/barn solid, mounted or not (zip 232)
   const i = idx(fx, fy);
   const o = world.objects[i];
   if (o === C.O_LAMP || o === C.O_MILL) return buildReady(world.objHp.get(i), now);
@@ -2308,13 +2333,21 @@ export function seasonOf(day) {
 // the caller can record them as overrides (persisted + snapshot-carried).
 export function clearStationArea(w) {
   const changed = [];
-  const R = C.STATION_CLEAR;
-  for (let y = R.y; y < R.y + R.h; y++) for (let x = R.x; x < R.x + R.w; x++) {
-    if (x < 0 || y < 0 || x >= C.MAP_W || y >= C.MAP_H) continue;
+  const clearAt = (x, y) => {
+    if (x < 0 || y < 0 || x >= C.MAP_W || y >= C.MAP_H) return;
     const i = y * C.MAP_W + x;
     if (w.objects[i] !== C.O_NONE && w.objects[i] !== C.O_HOUSE) {
       w.objects[i] = C.O_NONE; w.objHp.delete(i); changed.push(i);
     }
-  }
+  };
+  const R = C.STATION_CLEAR;
+  for (let y = R.y; y < R.y + R.h; y++) for (let x = R.x; x < R.x + R.w; x++) clearAt(x, y);
+  // Zip 232: the rails now run the ENTIRE west border, so the two rail
+  // columns are cleared over the full map height (seeded trees/rocks used
+  // to sit on the track outside the old rows 6..46 window). Trees can still
+  // grow BESIDE the track (columns 1 and 4+ untouched here); newDay skips
+  // these columns too, so nothing regrows on the rails.
+  for (let y = 0; y < C.MAP_H; y++)
+    for (let x = C.STATION_RAIL_X; x <= C.STATION_RAIL_X + 1; x++) clearAt(x, y);
   return changed;
 }

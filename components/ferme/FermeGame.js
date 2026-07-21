@@ -4133,9 +4133,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         // Rails + platform: ground-level, drawn under every sorted sprite
         // (pushed with very low sort keys so they land first in `draws`).
         draws.push({ y: -1000, fn: () => {
+          // One wide track (zip 232): left/right half tiles, full border.
           for (let yy = C.STATION_RAIL_Y0; yy <= C.STATION_RAIL_Y1; yy++) {
-            ctx.drawImage(sprites.rail, C.STATION_RAIL_X * T, yy * T);
-            ctx.drawImage(sprites.rail, (C.STATION_RAIL_X + 1) * T, yy * T);
+            ctx.drawImage(sprites.railL, C.STATION_RAIL_X * T, yy * T);
+            ctx.drawImage(sprites.railR, (C.STATION_RAIL_X + 1) * T, yy * T);
           }
         } });
         draws.push({ y: -999, fn: () => {
@@ -4150,12 +4151,31 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (v && (v.phase === "train" || v.phase === "depart")) {
           const raw = 1 - Math.max(0, (v.phaseUntil - Date.now()) / C.VISITOR_TRAIN_MS);
           const pr = Math.min(1, Math.max(0, raw));
-          const yStop = (C.STATION.y + 2) * T, yOff = (C.STATION_RAIL_Y0 - 7) * T;
+          const yStop = (C.STATION_PLATFORM.y + 1) * T, yOff = -8 * T;
           const trainY = v.phase === "train" ? yOff + (yStop - yOff) * pr : yStop + (yOff - yStop) * pr;
-          draws.push({ y: -900, fn: () => ctx.drawImage(sprites.train, C.STATION_RAIL_X * T + 6, trainY) });
+          draws.push({ y: -900, fn: () => {
+            const tx = C.STATION_RAIL_X * T + 4; // centered on the wide track
+            ctx.drawImage(sprites.train, tx, trainY);
+            // Choo-choo smoke: little puffs rising from the funnel, denser
+            // while the train is actually rolling (start of arrival / end of
+            // departure), fading as they climb.
+            const rolling = v.phase === "train" ? 1 - pr : pr;
+            const tp = performance.now();
+            for (let i = 0; i < 3; i++) {
+              const ph = ((tp / 500 + i / 3) % 1);
+              const a = Math.max(0, 0.55 * (1 - ph) * (0.25 + 0.75 * rolling));
+              if (a <= 0.02) continue;
+              ctx.fillStyle = `rgba(238,238,238,${a.toFixed(2)})`;
+              ctx.beginPath();
+              ctx.arc(tx + 12 + Math.sin(tp / 320 + i * 2.1) * 3, trainY + 13 - 6 - ph * 26, 2 + ph * 4, 0, 7);
+              ctx.fill();
+            }
+          } });
         }
-        // Station building + the interactive ad board.
-        draws.push({ y: (C.STATION.y + C.STATION.h) * T, fn: () => ctx.drawImage(sprites.station, C.STATION.x * T, C.STATION.y * T - 18) });
+        // Station building (anchored by its BOTTOM edge: the zip 232 sprite
+        // is taller than the footprint because of the gabled roof) + the
+        // interactive ad board.
+        draws.push({ y: (C.STATION.y + C.STATION.h) * T, fn: () => ctx.drawImage(sprites.station, C.STATION.x * T, (C.STATION.y + C.STATION.h) * T - sprites.station.height) });
         draws.push({ y: (C.STATION_SIGN.y + 1) * T, fn: () => ctx.drawImage(sprites.signBoard, C.STATION_SIGN.x * T - 1, C.STATION_SIGN.y * T - 6) });
         // Decorative ducks: purely cosmetic, client-side, seeded from the
         // farm seed, drifting up and down the river with a 2-frame bob.
@@ -4680,6 +4700,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     function updateMe(dt) {
       const m = meRef.current, keys = keysRef.current;
+      // Zip 232 (solid station/barn): mirror the current barn level onto the
+      // world object so blockedTile/blockedTileMounted (fermeEngine.js) can
+      // block the barn's drawn rectangle — the barn state lives in `shared`,
+      // which collision functions never receive. Refreshed every frame; also
+      // covers the host sims (wolves, Greg, animal drops) since they share
+      // this same world object.
+      if (worldRef.current) worldRef.current.barnLevel = sharedRef.current.barn ? (sharedRef.current.barn.level | 0) : 0;
       if (m.zone === "evil") { updateMeEvil(dt); return; }
       const w = worldRef.current;
       const horseNow = (sharedRef.current.horses || []).find(h => h.rider2 === me.id);
@@ -4713,8 +4740,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const sp = C.PLAYER_SPEED * (mounted ? C.HORSE_SPEED_MULT : 1) / (swimming ? C.HORSE_WATER_SLOW : 1) * dt;
         const nx = m.x + dx * sp, ny = m.y + dy * sp;
         const stand = mounted ? canStandMounted : canStand;
-        if (stand(w, nx, m.y)) m.x = nx;
-        if (stand(w, m.x, ny)) m.y = ny;
+        // Zip 232 escape hatch: if the CURRENT position is already inside a
+        // solid tile (e.g. a barn tier finished while standing in its newly
+        // blocked rectangle), collision is waived so the player can simply
+        // walk out instead of being stuck forever.
+        const stuck = !stand(w, m.x, m.y);
+        if (stuck || stand(w, nx, m.y)) m.x = nx;
+        if (stuck || stand(w, m.x, ny)) m.y = ny;
         if (dx < 0) m.dir = 2; else if (dx > 0) m.dir = 3; else if (dy < 0) m.dir = 1; else if (dy > 0) m.dir = 0;
         // Cadence d'animation ralentie à la nage (le cycle de galop devient
         // un battement de nage, voir drawCharacter/horseRun).

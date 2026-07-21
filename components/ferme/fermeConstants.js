@@ -863,13 +863,31 @@ export const DUCK_TURN_MIN_S = 4;         // seconds between direction changes
 export const DUCK_TURN_MAX_S = 10;
 
 // --- Train station (west edge, pre-built, free) ---
-export const STATION = { x: 6, y: 24, w: 6, h: 5 };  // station building footprint
-export const STATION_PLATFORM = { x: 4, y: 22, w: 2, h: 12 }; // platform strip along the rails
-export const STATION_RAIL_X = 2;          // rails occupy columns RAIL_X..RAIL_X+1
-export const STATION_RAIL_Y0 = 6;         // rails visible from this row...
-export const STATION_RAIL_Y1 = 46;        // ...to this row (train slides in from the north)
-export const STATION_SIGN = { x: 8, y: 30 };  // the interactive ad board (press E)
-export const STATION_CLEAR = { x: 1, y: 20, w: 12, h: 16 }; // objects cleared here at load (host normalization)
+// Zip 232 redesign (Guillaume: "big square and ugly" -> smaller + cuter):
+// footprint shrunk from 6x5 to 4x3, platform shortened, and the rails now
+// run along the ENTIRE west border (they used to stop at row 46, cutting
+// off at the bottom-left corner).
+export const STATION = { x: 6, y: 25, w: 4, h: 3 };  // station building footprint
+export const STATION_PLATFORM = { x: 4, y: 23, w: 2, h: 8 }; // platform strip along the rails
+export const STATION_RAIL_X = 2;          // rails occupy columns RAIL_X..RAIL_X+1 (ONE wide track, see railL/railR)
+export const STATION_RAIL_Y0 = 0;         // rails run from the very top...
+export const STATION_RAIL_Y1 = MAP_H - 1; // ...to the very bottom of the map
+export const STATION_SIGN = { x: 10, y: 28 };  // the interactive ad board (press E), east of the building
+export const STATION_CLEAR = { x: 1, y: 21, w: 10, h: 12 }; // objects cleared here at load (host normalization; rails are cleared separately over their full length, see clearStationArea)
+
+// Solid buildings (zip 232, Guillaume: "users can't walk through or behind"
+// the station and the barn). Full DRAWN rectangles in tiles (including the
+// roof rows above the footprint), checked by blockedTile/blockedTileMounted
+// via solidBuildingAt (fermeEngine.js). The barn rect depends on its level
+// (sprite sizes 48/72/170 px, see barnSprite in fermeArt.js); blockedTile
+// reads the current level from world.barnLevel, refreshed every frame in
+// updateMe (FermeGame.js).
+export const STATION_BLOCK = { x: 6, y: 24, w: 4, h: 4 }; // building + roof row above it
+export const BARN_BLOCKS = [
+  { x: 66, y: 39, w: 3, h: 3 },   // level 1 (48px sprite)
+  { x: 65, y: 37, w: 5, h: 5 },   // level 2 (72px sprite)
+  { x: 62, y: 28, w: 11, h: 14 }, // level 3 (170x230px sprite)
+];
 export const AD_FEE = 25;                 // gold per newly posted ad category (common chest)
 export const AD_CATEGORIES = ["crops", "animal", "fish", "resources"];
 

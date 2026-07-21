@@ -594,15 +594,20 @@ export function buildSprites() {
     P(g, 3, 12 + dy, 10, 1, "rgba(168,212,240,0.8)"); // ripple
     return c;
   }
-  // Rail tile (vertical track), tiled along the west edge.
-  function railTile() {
-    const [c, g] = cv(T, T), r = makeRnd(413);
-    P(g, 0, 0, T, T, "#7a6a52");
-    for (let i = 0; i < 10; i++) P(g, (r() * T) | 0, (r() * T) | 0, 1, 1, r() < 0.5 ? "#6d5e47" : "#8a795e");
-    P(g, 1, 3, 14, 2, "#5a4630"); P(g, 1, 3, 14, 1, "#6b5238");   // sleepers
-    P(g, 1, 10, 14, 2, "#5a4630"); P(g, 1, 10, 14, 1, "#6b5238");
-    P(g, 3, 0, 2, T, "#8f9aa5"); P(g, 11, 0, 2, T, "#8f9aa5");    // rails
-    P(g, 3, 0, 1, T, "#b9c2cc"); P(g, 11, 0, 1, T, "#b9c2cc");
+  // Rail tiles (vertical track), tiled along the ENTIRE west border.
+  // Zip 232 redesign: the two columns used to each carry their own narrow
+  // track (looked like two parallel toy tracks); they now form ONE wide
+  // track — left half (rail on the right of the tile) + right half (rail on
+  // the left), with wooden sleepers spanning both tiles.
+  function railHalf(side) {
+    const [c, g] = cv(T, T), r = makeRnd(413 + side);
+    P(g, 0, 0, T, T, "#8a795e");                                   // ballast
+    for (let i = 0; i < 12; i++) P(g, (r() * T) | 0, (r() * T) | 0, 1, 1, r() < 0.5 ? "#7a6a52" : "#97866b");
+    for (const sy of [2, 9]) {                                     // sleepers (span the full 2-tile track)
+      P(g, 0, sy, T, 3, "#5a4630"); P(g, 0, sy, T, 1, "#6b5238");
+    }
+    const rx = side === 0 ? 6 : T - 8;                             // one rail per half tile
+    P(g, rx, 0, 2, T, "#8f9aa5"); P(g, rx, 0, 1, T, "#b9c2cc");
     return c;
   }
   // Platform tile (stone-edged planks).
@@ -613,33 +618,59 @@ export function buildSprites() {
     P(g, 0, 0, T, 1, "#cfc0a0");
     return c;
   }
-  // The station building (validated mockup: brick walls, slate gable roof,
-  // hanging sign + clock, awning toward the platform). Same helper style as
-  // the other buildings.
+  // The station building. Zip 232 full redesign (Guillaume: "right now it
+  // is a big square and ugly... make the station design cuter and more
+  // bespoke"): footprint shrunk to 4x3 tiles, cottage look — cream plaster
+  // with timber framing, a steep warm-red gabled roof with a ridge cap and
+  // finial, a round gable window, a little clock, a scalloped awning over a
+  // green door, and window flower boxes. Canvas is taller than the
+  // footprint (roof); FermeGame anchors it by its BOTTOM edge.
   function stationSprite() {
-    const W = C.STATION.w * T, H = C.STATION.h * T + 18;
+    const W = C.STATION.w * T, H = C.STATION.h * T + 28; // 64 x 76
     const [c, g] = cv(W, H);
-    const BY = 18;
-    P(g, 0, BY, W, H - BY, "#c98a52");                     // brick
-    for (let y = BY; y < H; y += 4) P(g, 0, y, W, 1, "#b57944");
-    for (let x = 0; x < W; x += 6) P(g, x, BY, 1, H - BY, "#b57944");
-    P(g, 0, H - 5, W, 5, "#8d8d8d"); P(g, 0, H - 5, W, 1, "#a5a5a5"); // stone base
-    P(g, 0, 0, W, BY, "#5d6570"); P(g, 0, 0, W, 2, "#78818c");        // slate roof
-    for (let y = 3; y < BY; y += 3) P(g, 0, y, W, 1, "#525a64");
-    P(g, 0, BY - 1, W, 1, "#454c55");
-    const dx = (W / 2 - 6) | 0;
-    P(g, dx, BY + 12, 12, H - BY - 17, "#6b4a2e"); P(g, dx, BY + 12, 12, 1, "#7d5836"); // door
-    P(g, dx + 2, BY + 14, 8, 3, "#3a2d1e"); P(g, dx + 9, BY + 24, 1, 2, "#e8c860");
-    for (const wx of [6, W - 16]) {                                    // windows
-      P(g, wx, BY + 8, 10, 9, "#7ab4e8"); P(g, wx, BY + 8, 10, 1, "#5a94c8");
-      P(g, wx + 4, BY + 8, 1, 9, "#5a94c8");
-      P(g, wx - 1, BY + 7, 12, 1, "#6b4a2e"); P(g, wx - 1, BY + 17, 12, 1, "#6b4a2e");
+    const BY = 28;                                        // wall top (roof above)
+    const wall = "#efe4c8", timber = "#7a5330", roof = "#b5543c", roofL = "#c9694e";
+    // Walls + stone base.
+    P(g, 2, BY, W - 4, H - BY, wall);
+    P(g, 2, H - 5, W - 4, 5, "#9a9aa2"); P(g, 2, H - 5, W - 4, 1, "#b2b2ba");
+    // Timber framing (corners, top beam, two diagonal-look studs).
+    P(g, 2, BY, 2, H - BY - 5, timber); P(g, W - 4, BY, 2, H - BY - 5, timber);
+    P(g, 2, BY, W - 4, 2, timber);
+    P(g, 12, BY, 1, 10, timber); P(g, W - 13, BY, 1, 10, timber);
+    // Steep gabled roof (triangle) + ridge cap + tiny finial ball.
+    g.fillStyle = roof;
+    g.beginPath(); g.moveTo(-2, BY + 2); g.lineTo(W / 2, 4); g.lineTo(W + 2, BY + 2); g.fill();
+    g.fillStyle = roofL;
+    g.beginPath(); g.moveTo(2, BY - 1); g.lineTo(W / 2, 7); g.lineTo(W - 2, BY - 1);
+    g.lineTo(W - 8, BY - 1); g.lineTo(W / 2, 12); g.lineTo(8, BY - 1); g.fill();
+    P(g, (W / 2 - 1) | 0, 1, 2, 4, timber); P(g, (W / 2 - 2) | 0, 0, 4, 2, "#e8c860"); // finial
+    P(g, -2, BY + 1, W + 4, 2, "#8a3d2c");                // eave shadow line
+    // Round window in the gable + little clock under it.
+    g.fillStyle = timber; g.beginPath(); g.arc(W / 2, 15, 5, 0, 7); g.fill();
+    g.fillStyle = "#8fc7ec"; g.beginPath(); g.arc(W / 2, 15, 3.5, 0, 7); g.fill();
+    P(g, (W / 2) | 0, 13, 1, 5, timber); P(g, (W / 2 - 3) | 0, 15, 7, 1, timber);
+    g.fillStyle = "#f6f6f6"; g.beginPath(); g.arc(W / 2, 24, 3, 0, 7); g.fill();
+    P(g, (W / 2) | 0, 22, 1, 2, "#333333"); P(g, (W / 2) | 0, 24, 2, 1, "#333333");
+    // Green door with a window, under a scalloped rose awning.
+    const dw = 12, dx = (W / 2 - dw / 2) | 0, dy = H - 5 - 20;
+    P(g, dx - 1, dy - 1, dw + 2, 21, timber);
+    P(g, dx, dy, dw, 20, "#4f7a4a"); P(g, dx, dy, dw, 1, "#639159");
+    P(g, dx + 2, dy + 2, dw - 4, 5, "#8fc7ec");           // door window
+    P(g, dx + dw - 3, dy + 10, 1, 2, "#e8c860");          // handle
+    g.fillStyle = "#c95a6a";                              // scalloped awning
+    for (let i = 0; i < 4; i++) { g.beginPath(); g.arc(dx - 2 + 2 + i * 4.4, dy - 2, 2.4, 0, Math.PI); g.fill(); }
+    P(g, dx - 3, dy - 5, dw + 6, 3, "#c95a6a"); P(g, dx - 3, dy - 5, dw + 6, 1, "#dd7284");
+    // Two windows with shutters + flower boxes (pink/red blooms).
+    for (const wx of [7, W - 17]) {
+      P(g, wx - 1, BY + 8, 12, 11, timber);
+      P(g, wx, BY + 9, 10, 9, "#8fc7ec"); P(g, wx, BY + 9, 10, 1, "#6ba7d0");
+      P(g, wx + 4, BY + 9, 1, 9, timber); P(g, wx, BY + 13, 10, 1, timber);
+      P(g, wx - 1, BY + 19, 12, 3, "#6b4a2e");            // flower box
+      for (let f = 0; f < 5; f++) P(g, wx + f * 2.4, BY + 17, 2, 2, f % 2 ? "#e06a8a" : "#d84040");
+      P(g, wx + 1, BY + 18, 9, 1, "#4f7a4a");             // greenery
     }
-    P(g, (W / 2 - 14) | 0, 5, 28, 8, "#e8dcc0");                       // hanging sign
-    P(g, (W / 2 - 14) | 0, 5, 28, 1, "#c8bc9e");
-    P(g, (W / 2 - 11) | 0, 8, 22, 2, "#7d5836");
-    P(g, W - 12, 4, 8, 8, "#f2f2f2"); P(g, W - 9, 7, 1, 3, "#333333"); // clock
-    P(g, W - 8, 7, 2, 1, "#333333");
+    // Wall lantern beside the door.
+    P(g, dx - 6, dy + 2, 3, 4, "#3a3a3a"); P(g, dx - 5, dy + 3, 1, 2, "#ffd970");
     return c;
   }
   // The ad board on the platform (interactive: press E). Symmetric SHORT
@@ -652,18 +683,45 @@ export function buildSprites() {
     P(g, 2, 9, 11, 3, "#e8dcc0");
     return c;
   }
-  // The little train (engine + one passenger car), drawn vertically; slides
-  // in from the north when a visitor arrives.
+  // The train, zip 232 redesign (Guillaume: "the train design should be a
+  // classic steam / choo choo train"): seen from above, sliding in from the
+  // north — cowcatcher wedge, round black smokebox with a brass-rimmed
+  // funnel, black boiler with gold bands, red cab, coal tender, and one
+  // cream-and-green passenger coach. Wheels peek out along both sides.
+  // Animated smoke puffs are drawn live in FermeGame, above the funnel.
   function trainSprite() {
-    const [c, g] = cv(20, 92);
-    P(g, 5, 0, 10, 8, "#4a4a4a");                     // boiler nose
-    P(g, 7, 2, 6, 4, "#333333");                      // chimney base
-    P(g, 3, 8, 14, 30, "#8a3030"); P(g, 3, 8, 14, 2, "#a54040"); // engine
-    P(g, 5, 12, 10, 7, "#7ab4e8");                    // cab window
-    P(g, 2, 36, 16, 3, "#3a3a3a");                    // chassis
-    P(g, 3, 42, 14, 44, "#4a6a9a"); P(g, 3, 42, 14, 2, "#5a7aaa"); // car
-    for (const wy of [47, 58, 69]) { P(g, 5, wy, 4, 6, "#cfe4f4"); P(g, 11, wy, 4, 6, "#cfe4f4"); }
-    P(g, 2, 87, 16, 3, "#3a3a3a");
+    const W = 24, H = 108;
+    const [c, g] = cv(W, H);
+    const wheel = (y, h) => { P(g, 1, y, 2, h, "#2a2a2a"); P(g, W - 3, y, 2, h, "#2a2a2a"); };
+    // Cowcatcher (front wedge) + buffer beam.
+    g.fillStyle = "#8a3030";
+    g.beginPath(); g.moveTo(4, 6); g.lineTo(W / 2, 0); g.lineTo(W - 4, 6); g.fill();
+    P(g, 4, 6, W - 8, 2, "#a54040");
+    // Smokebox: round black nose with a brass-rimmed funnel.
+    g.fillStyle = "#2e2e2e"; g.beginPath(); g.arc(W / 2, 14, 8, 0, 7); g.fill();
+    g.fillStyle = "#e8c860"; g.beginPath(); g.arc(W / 2, 13, 4.5, 0, 7); g.fill(); // brass rim
+    g.fillStyle = "#1c1c1c"; g.beginPath(); g.arc(W / 2, 13, 3, 0, 7); g.fill();   // funnel mouth
+    // Boiler: long black barrel with gold bands + a brass steam dome.
+    P(g, 4, 20, W - 8, 22, "#333333"); P(g, 5, 20, 2, 22, "#4a4a4a");
+    for (const by of [24, 31, 38]) P(g, 4, by, W - 8, 1, "#e8c860");
+    g.fillStyle = "#d8b850"; g.beginPath(); g.arc(W / 2, 28, 3, 0, 7); g.fill();
+    wheel(22, 6); wheel(32, 8);                        // driving wheels
+    // Cab: red with a darker roof outline and a skylight.
+    P(g, 2, 42, W - 4, 14, "#8a3030"); P(g, 2, 42, W - 4, 2, "#a54040");
+    P(g, 3, 43, W - 6, 12, "#7a2828");
+    P(g, 8, 46, 8, 5, "#7ab4e8"); P(g, 8, 46, 8, 1, "#5a94c8"); // skylight
+    // Coal tender.
+    P(g, 3, 58, W - 6, 14, "#3a3a3a"); P(g, 3, 58, W - 6, 1, "#4c4c4c");
+    for (let i = 0; i < 14; i++) P(g, 6 + ((i * 7) % (W - 12)), 60 + ((i * 5) % 10), 2, 2, i % 2 ? "#1c1c1c" : "#262626");
+    wheel(60, 6);
+    P(g, 8, 72, W - 16, 3, "#2a2a2a");                 // coupling
+    // Passenger coach: cream upper, green lower, roof vent, windows.
+    P(g, 3, 75, W - 6, 30, "#4f7a4a"); P(g, 3, 75, W - 6, 2, "#639159");
+    P(g, 5, 78, W - 10, 24, "#efe4c8");
+    P(g, (W / 2 - 2) | 0, 79, 4, 3, "#8a8a92");        // roof vent
+    for (const wy of [84, 92]) { P(g, 6, wy, 4, 5, "#7ab4e8"); P(g, W - 10, wy, 4, 5, "#7ab4e8"); }
+    wheel(80, 6); wheel(96, 6);
+    P(g, 4, 105, W - 8, 3, "#2a2a2a");                 // rear buffer beam
     return c;
   }
 
@@ -1238,7 +1296,7 @@ house: house(),
     cauldron: cauldronSprite(),
     seaIcons: [],
     duck: [duckSprite(0), duckSprite(1)],
-    rail: railTile(),
+    railL: railHalf(0), railR: railHalf(1), // one wide track (zip 232)
     platform: platformTile(),
     station: stationSprite(),
     signBoard: signBoardSprite(),
