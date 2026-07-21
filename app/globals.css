@@ -6700,6 +6700,34 @@ div.ferme-usage{ margin-bottom:10px; }
   padding:6px 14px; box-shadow:0 3px 0 var(--f-wood-d); font-size:13px; width:100%;
 }
 .ferme-cauldron-ready-btn:hover{ filter:brightness(1.08); }
+.ferme-cauldron-ready-btn:disabled{ opacity:.55; cursor:default; filter:none; }
+
+/* Parchemin de recette du chaudron (demande Guillaume 2026-07) : vieux
+   papier jauni, encre brune, coins légèrement irréguliers ; nom de la
+   concoction en haut, ingrédients au milieu, effet (formulation voilée)
+   en bas, séparés par des filets d'encre passée. */
+.ferme-parchment{
+  position:relative; margin:10px 0; padding:14px 16px 12px;
+  background:
+    radial-gradient(ellipse at 18% 12%, rgba(255,248,220,.55), transparent 55%),
+    radial-gradient(ellipse at 85% 90%, rgba(120,84,30,.28), transparent 60%),
+    linear-gradient(160deg, #f1dfae, #e7d093 55%, #d9bd7c);
+  color:#4a3418; border:1px solid #a9853f;
+  border-radius:10px 3px 12px 4px / 4px 12px 3px 10px;
+  box-shadow: inset 0 0 22px rgba(110,76,26,.38), 0 2px 6px rgba(0,0,0,.35);
+  font-family: Georgia, "Times New Roman", serif;
+}
+.ferme-parchment-title{
+  text-align:center; font-weight:bold; font-size:17px; letter-spacing:.5px;
+  padding-bottom:7px; margin-bottom:9px; border-bottom:1px solid rgba(90,60,20,.45);
+}
+.ferme-parchment-ing{ list-style:none; margin:0 0 10px; padding:0; }
+.ferme-parchment-ing li{ padding:2.5px 0; font-size:14px; line-height:1.35; }
+.ferme-parchment-ing li::before{ content:"✦ "; color:#8a6a2f; }
+.ferme-parchment-effect{
+  font-style:italic; text-align:center; font-size:13px; line-height:1.45;
+  color:#5d4520; padding-top:8px; border-top:1px solid rgba(90,60,20,.45);
+}
 
 .ferme-close-x{
   float:right; background:var(--f-accent); color:#fff; font-family:inherit; font-weight:bold;

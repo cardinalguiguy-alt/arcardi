@@ -281,7 +281,7 @@ export const FERME_STR = {
     // (fermeEngine.js).
     promptCauldron: "[E] Chaudron (concocter)",
     promptCauldronIgnite: "[E] Allumer le chaudron 🔥",
-    promptCauldronBrewing: "⏳ Concoction en cours...",
+    promptCauldronBrewing: (s) => `⏳ Concoction en cours... ${s}s`,
     promptCauldronCollect: "[E] Récupérer la pommade",
     promptSalveDeposit: "[E] Déposer poisson au chaudron",
     promptSalveBrew: "[E] Lancer la concoction",
@@ -294,6 +294,8 @@ export const FERME_STR = {
     toastCauldronBrewing: "⏳ La concoction est déjà en cours, reviens dans un instant.",
     toastCauldronNothingToCollect: "Rien à récupérer au chaudron pour l'instant.",
     toastCauldronNeedTorch: "Allume d'abord ta torche pour lancer le feu sous le chaudron !",
+    toastCauldronHasEnough: "Le chaudron a déjà tout le poisson nécessaire pour cette recette.",
+    cauldronNeedAmethyst: "Il manque une améthyste dans la réserve commune de gemmes pour lancer la recette.",
     troutLabel: "truite(s)",
     pikeLabel: "brochet(s)",
     // Menu du chaudron (chantier 2026-07, refonte demande Guillaume : "une
@@ -306,14 +308,16 @@ export const FERME_STR = {
     // chaudron, torche en main) — voir cauldronPlaceIngredients/
     // igniteCauldron/tryOpenNearby, FermeGame.js.
     cauldronMenuTitle: "⚗️ Que voulez-vous concocter ?",
-    cauldronMenuHint: "Choisis une concoction, dépose les ingrédients demandés, puis va allumer ta torche et clique sur le chaudron pour lancer le feu.",
+    cauldronMenuHint: "Réunis les ingrédients du parchemin, puis va allumer ta torche et clique sur le chaudron pour lancer le feu.",
     cauldronProductSalveName: "🧴 Pommade magique",
-    cauldronProductSalveNeed: (rec) => `Recette : ${rec.amethyst} améthyste, ${rec.trout} truite(s), ${rec.pike} brochet(s)`,
-    cauldronProductSalveProgress: (dep, amethyst, rec) => `Déjà placé : ${dep.trout}/${rec.trout} truite(s), ${dep.pike}/${rec.pike} brochet(s) · Améthyste en réserve : ${amethyst}/${rec.amethyst}`,
-    cauldronDepositQuestion: "Déposer les ingrédients ?",
-    cauldronYesBtn: "Oui",
-    cauldronCompleteBtn: "Compléter",
-    cauldronNoBtn: "Non",
+    // Parchemin de recette (demande Guillaume 2026-07) : nom en haut, liste
+    // des ingrédients (avec avancement), effet en bas dans une formulation
+    // voilée, sans chiffres de gameplay.
+    scrollIngAmethyst: (have, need) => `${need} améthyste de la réserve commune (${have}/${need})`,
+    scrollIngTrout: (dep, need) => `${need} truites versées au chaudron (${dep}/${need})`,
+    scrollIngPike: (dep, need) => `${need} brochet versé au chaudron (${dep}/${need})`,
+    cauldronScrollEffect: "« Qui s'en oint la peau chemine un temps parmi les ombres, et les créatures de la nuit se détournent de son passage. »",
+    cauldronAddBtn: "🫗 Ajouter les ingrédients",
     cauldronReadyBtn: "✅ Prêt !",
     cauldronReadyHint: "Recette complète — va allumer ta torche puis clique sur le chaudron pour lancer la concoction !",
     cauldronIgniteHint: "Torche en main, clique sur le chaudron pour allumer le feu et lancer la concoction (1 min).",
@@ -658,7 +662,7 @@ export const FERME_STR = {
     // amethyst + 2 trout + 1 pike).
     promptCauldron: "[E] Cauldron (brew)",
     promptCauldronIgnite: "[E] Light the cauldron 🔥",
-    promptCauldronBrewing: "⏳ Brewing in progress...",
+    promptCauldronBrewing: (s) => `⏳ Brewing in progress... ${s}s`,
     promptCauldronCollect: "[E] Collect the salve",
     promptSalveDeposit: "[E] Deposit fish at the cauldron",
     promptSalveBrew: "[E] Start brewing",
@@ -669,6 +673,8 @@ export const FERME_STR = {
     toastCauldronBrewing: "⏳ Already brewing, come back in a moment.",
     toastCauldronNothingToCollect: "Nothing to collect at the cauldron right now.",
     toastCauldronNeedTorch: "Light your torch first to start the fire under the cauldron!",
+    toastCauldronHasEnough: "The cauldron already has all the fish it needs for this recipe.",
+    cauldronNeedAmethyst: "The common gem reserve is missing an amethyst to start this recipe.",
     // Cauldron menu (2026-07 chantier, revamp): "deposit ingredients? Yes/No"
     // (becomes "Complete" once the team already started), then a "Ready!"
     // button once the recipe is complete — actually lighting the fire now
@@ -676,14 +682,13 @@ export const FERME_STR = {
     // from a menu button. See cauldronPlaceIngredients/igniteCauldron/
     // tryOpenNearby, FermeGame.js.
     cauldronMenuTitle: "⚗️ What would you like to brew?",
-    cauldronMenuHint: "Pick a brew, deposit the requested ingredients, then go light your torch and click the cauldron to start the fire.",
+    cauldronMenuHint: "Gather the ingredients on the scroll, then go light your torch and click the cauldron to start the fire.",
     cauldronProductSalveName: "🧴 Magic salve",
-    cauldronProductSalveNeed: (rec) => `Recipe: ${rec.amethyst} amethyst, ${rec.trout} trout, ${rec.pike} pike`,
-    cauldronProductSalveProgress: (dep, amethyst, rec) => `Already placed: ${dep.trout}/${rec.trout} trout, ${dep.pike}/${rec.pike} pike · Amethyst in stock: ${amethyst}/${rec.amethyst}`,
-    cauldronDepositQuestion: "Deposit the ingredients?",
-    cauldronYesBtn: "Yes",
-    cauldronCompleteBtn: "Complete",
-    cauldronNoBtn: "No",
+    scrollIngAmethyst: (have, need) => `${need} amethyst from the common reserve (${have}/${need})`,
+    scrollIngTrout: (dep, need) => `${need} trout poured into the cauldron (${dep}/${need})`,
+    scrollIngPike: (dep, need) => `${need} pike poured into the cauldron (${dep}/${need})`,
+    cauldronScrollEffect: "“Who anoints their skin with it walks a while among the shadows, and the creatures of the night turn away from their path.”",
+    cauldronAddBtn: "🫗 Add the ingredients",
     cauldronReadyBtn: "✅ Ready!",
     cauldronReadyHint: "Recipe complete — go light your torch, then click the cauldron to start brewing!",
     cauldronIgniteHint: "Torch in hand, click the cauldron to light the fire and start brewing (1 min).",

@@ -1387,9 +1387,16 @@ export function resolveSalveDeposit(f, salveCraft, world, m) {
   const ft = key === "trout" ? 1 : 2; // index C.FISH (voir fermeConstants.js)
   const have = f.inv.fish[ft] || 0;
   if (have <= 0) { res.toast = "noFishToDeposit"; return res; }
-  f.inv.fish[ft] -= have;
-  salveCraft[key] = (salveCraft[key] || 0) + have;
-  res.invChanged = true; res.deposited = have; res.fish = key;
+  // Correctif audit 2026-07 : ne prélève que ce qui MANQUE pour la recette en
+  // cours (avant : tout le poisson porté partait au chaudron, surplus compris,
+  // sans retrait possible — perte sèche pour un pêcheur trop chargé, et le
+  // surplus bloquait en plus le déplacement du chaudron via cauldronNotEmpty).
+  const needed = Math.max(0, (C.SALVE_RECIPE[key] || 0) - (salveCraft[key] || 0));
+  if (needed <= 0) { res.toast = "cauldronHasEnough"; return res; }
+  const take = Math.min(have, needed);
+  f.inv.fish[ft] -= take;
+  salveCraft[key] = (salveCraft[key] || 0) + take;
+  res.invChanged = true; res.deposited = take; res.fish = key;
   return res;
 }
 

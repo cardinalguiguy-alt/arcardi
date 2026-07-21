@@ -160,6 +160,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // (liste de produits, une seule entrée pour l'instant : la pommade
   // magique). Voir cauldronPlaceIngredients/igniteCauldron plus bas.
   const [cauldronMenuOpen, setCauldronMenuOpen] = useState(false);
+  const [brewSecs, setBrewSecs] = useState(0); // secondes restantes de concoction, affichées dans le prompt (correctif audit 2026-07)
   // Menu "Employés actifs" (chantier 2026-07, demande Guillaume : "un menu
   // qui indique le nom des employés sous contrat actuellement, on pourra les
   // diriger à partir de ce menu, leur donner les ordres") : panneau dédié,
@@ -253,7 +254,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const mapOpenRef = useRef(false);
   const shopOpenRef = useRef(false);
   const binOpenRef = useRef(false);
-  const cauldronMenuOpenRef = useRef(false); // miroir synchrone de cauldronMenuOpen, même rôle que shopOpenRef/binOpenRef (bloque déplacement/action pendant que le menu est ouvert)
+  const cauldronMenuOpenRef = useRef(false);
+  const brewSecsRef = useRef(0);       // miroir de brewSecs (évite un setState par frame dans la boucle de rendu)
+  const cauldronPosRef = useRef(null); // cache de la position du chaudron (correctif audit 2026-07 : évite un scan complet de la carte par frame ; invalidé si l'objet n'y est plus) // miroir synchrone de cauldronMenuOpen, même rôle que shopOpenRef/binOpenRef (bloque déplacement/action pendant que le menu est ouvert)
   const toastIdRef = useRef(0);
   const chatIdRef = useRef(0);
   const farmCodeRef = useRef("");      // code de la ferme durable en cours
@@ -564,7 +567,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       horses: payload.horses || (payload.horse && payload.horse.owned ? [{ x: payload.horse.x, y: payload.horse.y, rider: null, rider2: null }] : []),
       animals: payload.animals || [], wellBuilt: !!payload.wellBuilt, coop: payload.coop || null,
       barn: payload.barn || E.newBarnState(),
-      salveCraft: payload.salveCraft || E.newSalveCraftState(),
+      salveCraft: (() => {
+        // Correctif audit 2026-07 : même relocalisation d'horloge que dans
+        // applyDeltas (brewingUntil = timestamp hôte -> horloge locale).
+        const sc = payload.salveCraft || E.newSalveCraftState();
+        if (sc.brewingUntil > 0 && typeof payload.hostNow === "number") sc.brewingUntil = Date.now() + (sc.brewingUntil - payload.hostNow);
+        return sc;
+      })(),
       gems: migrateGems(payload),
       flour: payload.flour || 0,
       gregStock: { wood: (payload.gregStock && payload.gregStock.wood) || 0, stone: (payload.gregStock && payload.gregStock.stone) || 0, fertilizer: (payload.gregStock && payload.gregStock.fertilizer) || 0, fish: C.FISH.map((_, i) => (payload.gregStock && payload.gregStock.fish && payload.gregStock.fish[i]) || 0) },
@@ -706,6 +715,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       farmers: farmersRef.current,
       horses: s.horses, animals: s.animals, wellBuilt: s.wellBuilt, coop: s.coop, barn: s.barn, salveCraft: s.salveCraft, gems: s.gems, flour: s.flour, gregStock: s.gregStock, fertilizerShop: s.fertilizerShop, wolves: s.wolves, greg: s.greg, soan: s.soan,
       rabbits: s.rabbits, rabbitChallenge: s.rabbitChallenge,
+      hostNow: Date.now(), // correctif audit 2026-07 : relocalisation d'horloge (voir salveCraft.brewingUntil)
     };
   }
   function syncBuildings() {
@@ -1382,7 +1392,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (out.farmer) out.farmer.quests = f.quests;
 
     if (out.tiles.length || out.state || out.horses || out.animals || out.wellBuilt || out.gems || out.mills || out.flour !== undefined) dirtyRef.current = true;
-    channelRef.current?.send({ type: "broadcast", event: "apply", payload: out });
+    channelRef.current?.send({ type: "broadcast", event: "apply", payload: { ...out, hostNow: Date.now() } });
   }
   function shareState() { const s = sharedRef.current; return { money: s.money, day: s.day, dayStartAt: s.dayStartAt, totalEarned: s.totalEarned }; }
   function toolName(k) { return (lang === "en" ? C.TOOL_NAMES_EN : C.TOOL_NAMES)[k]; }
@@ -1444,7 +1454,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (p.wellBuilt) { sharedRef.current.wellBuilt = true; minimapDirtyRef.current = true; syncBuildings(); }
     if (p.coop !== undefined) { sharedRef.current.coop = p.coop; setCoop(p.coop); }
     if (p.barn !== undefined) { sharedRef.current.barn = p.barn; setBarn(p.barn); minimapDirtyRef.current = true; }
-    if (p.salveCraft !== undefined) { sharedRef.current.salveCraft = p.salveCraft; setSalveCraft(p.salveCraft); }
+    if (p.salveCraft !== undefined) {
+      // Correctif audit 2026-07 : brewingUntil est un timestamp posé avec
+      // l'horloge de l'HÔTE — on le relocalise sur l'horloge locale via
+      // hostNow, pour que la fin de concoction soit vue au même moment par
+      // tous, même avec des horloges machines décalées.
+      const sc = p.salveCraft;
+      if (sc && sc.brewingUntil > 0 && typeof p.hostNow === "number") sc.brewingUntil = Date.now() + (sc.brewingUntil - p.hostNow);
+      sharedRef.current.salveCraft = sc; setSalveCraft(sc);
+    }
     if (p.gems) { sharedRef.current.gems = p.gems; setGems(p.gems); }
     if (p.flour !== undefined) { sharedRef.current.flour = p.flour; setFlour(p.flour); }
     if (p.gregStock !== undefined) { sharedRef.current.gregStock = p.gregStock; setGregStock(p.gregStock); }
@@ -1473,7 +1491,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     pushToast(L.toastNewDay(p.day));
   }
   function toastMsg(key) {
-    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, noMillStock: L.toastNoMillStock, millNotEmpty: L.toastMillNotEmpty, noWheatToDeposit: L.toastNoWheatToDeposit, millFull: L.toastMillFull, actionFailed: L.toastActionFailed, coopNone: L.toastCoopNone, farCoop: L.toastFarCoop, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull, notInjured: L.toastNotInjured, noHealKit: L.toastNoHealKit, healTooFar: L.toastHealTooFar, gregNotHired: L.toastGregNotHired, gregNoRoom: L.toastGregNoRoom, gregNoFertilizer: L.toastGregNoFertilizer, soanNotHired: L.toastSoanNotHired, soanNoRiver: L.toastSoanNoRiver, farCauldron: L.toastFarCauldron, noFishToDeposit: L.toastNoFishToDeposit, cauldronMissing: L.toastCauldronMissing, cauldronAlreadyTaken: L.toastCauldronAlreadyTaken, noCauldronStock: L.toastNoCauldronStock, cauldronNotEmpty: L.toastCauldronNotEmpty, cauldronBrewing: L.toastCauldronBrewing, cauldronNothingToCollect: L.toastCauldronNothingToCollect }[key] || "";
+    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, noMillStock: L.toastNoMillStock, millNotEmpty: L.toastMillNotEmpty, noWheatToDeposit: L.toastNoWheatToDeposit, millFull: L.toastMillFull, actionFailed: L.toastActionFailed, coopNone: L.toastCoopNone, farCoop: L.toastFarCoop, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull, notInjured: L.toastNotInjured, noHealKit: L.toastNoHealKit, healTooFar: L.toastHealTooFar, gregNotHired: L.toastGregNotHired, gregNoRoom: L.toastGregNoRoom, gregNoFertilizer: L.toastGregNoFertilizer, soanNotHired: L.toastSoanNotHired, soanNoRiver: L.toastSoanNoRiver, farCauldron: L.toastFarCauldron, noFishToDeposit: L.toastNoFishToDeposit, cauldronMissing: L.toastCauldronMissing, cauldronAlreadyTaken: L.toastCauldronAlreadyTaken, noCauldronStock: L.toastNoCauldronStock, cauldronNotEmpty: L.toastCauldronNotEmpty, cauldronBrewing: L.toastCauldronBrewing, cauldronNothingToCollect: L.toastCauldronNothingToCollect, cauldronHasEnough: L.toastCauldronHasEnough }[key] || "";
   }
 
   // -------- Hôte : boucle temps + persistance --------
@@ -1693,6 +1711,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (w.objects[i] === C.O_MILL && E.buildReady(w.objHp.get(i), Date.now()) && !(sl === 5 && buildKindRef.current === "mill")) {
       return sendReq({ kind: "act", action: "millDeposit", x: tt.x, y: tt.y });
     }
+    // Chaudron cliquable (correctif audit 2026-07) : tous les textes du jeu
+    // disent "clique sur le chaudron" mais seul E fonctionnait — le clic (et
+    // Espace) déclenche maintenant exactement la même logique que la touche E
+    // (voir cauldronInteract), quel que soit l'outil équipé, même priorité
+    // que le levier/moulin ci-dessus.
+    if (w.objects[i] === C.O_CAULDRON && E.buildReady(w.objHp.get(i), Date.now())) { actAnimRef.current = 0; return cauldronInteract(); }
     if (sl === 0) {
       // Case "outils" (simplification barre d'outils) : houe/hache/pioche
       // regroupées, l'action dépend de toolKindRef.current (choisi via la
@@ -2854,8 +2878,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (idx === 0) pressToolKey();
         else selectSlot(idx);
       }
-      if (e.code === "Space") { e.preventDefault(); doAction(); }
-      if (e.code === "KeyE") tryOpenNearby();
+      // Correctif audit 2026-07 : Espace/E n'agissent plus "à travers" un
+      // menu ouvert (le clic était déjà bloqué, voir onDown ; Échap/T/M
+      // restent actifs pour fermer/naviguer).
+      const uiOpen = mapOpenRef.current || shopOpenRef.current || binOpenRef.current || cauldronMenuOpenRef.current;
+      if (e.code === "Space") { e.preventDefault(); if (!uiOpen) doAction(); }
+      if (e.code === "KeyE") { if (!uiOpen) tryOpenNearby(); }
       if (e.code === "KeyF") toggleMount();
       if (e.code === "KeyR" && slotRef.current === 5 && buildKindRef.current === "fence") {
         fenceDirRef.current = fenceDirRef.current === "auto" ? "h" : fenceDirRef.current === "h" ? "v" : "auto";
@@ -3503,6 +3531,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       else if (cauldronTile && nearTile(cauldronTile)) {
         const cst = salveRecipeStatus();
         pk = cst.brewReady ? "cauldronCollect" : cst.brewing ? "cauldronBrewing" : (cst.ready && torchOnRef.current) ? "cauldronIgnite" : "cauldron";
+        // Compte à rebours de concoction (correctif audit 2026-07) : mis à
+        // jour au plus une fois par seconde (setState seulement au changement).
+        const secs = cst.brewing && !cst.brewReady ? Math.max(1, Math.ceil((cst.brewingUntil - Date.now()) / 1000)) : 0;
+        if (secs !== brewSecsRef.current) { brewSecsRef.current = secs; setBrewSecs(secs); }
       }
       setPromptKeyThrottled(pk);
       // Invite cheval (monter/descendre) : plusieurs chevaux possibles.
@@ -4177,7 +4209,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // et l'interaction, jamais par tick). Renvoie null si pas encore posé.
   function findCauldronTile() {
     const w = worldRef.current; if (!w) return null;
-    for (let i = 0; i < w.objects.length; i++) if (w.objects[i] === C.O_CAULDRON) return { x: E.xOf(i), y: E.yOf(i) };
+    const c = cauldronPosRef.current;
+    if (c && w.objects[c.i] === C.O_CAULDRON) return c;
+    cauldronPosRef.current = null;
+    for (let i = 0; i < w.objects.length; i++) if (w.objects[i] === C.O_CAULDRON) { cauldronPosRef.current = { x: E.xOf(i), y: E.yOf(i), i }; return cauldronPosRef.current; }
     return null;
   }
   // Clôture (posée librement par un joueur, OU section de l'enclos de départ,
@@ -4259,13 +4294,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     //    Sinon (recette incomplète, ou torche éteinte), ouvre le menu
     //    "que voulez-vous concocter ?" pour déposer les ingrédients — voir
     //    cauldronMenuOpen, cauldronPlaceIngredients.
-    else if (findCauldronTile() && nearTile(findCauldronTile())) {
-      const st = salveRecipeStatus();
-      if (st.brewReady) salveCollect();
-      else if (st.brewing) pushToast(L.toastCauldronBrewing);
-      else if (st.ready && torchOnRef.current) igniteCauldron();
-      else setCauldronMenuOpen(true);
-    }
+    else { const ct = findCauldronTile(); if (ct && nearTile(ct)) cauldronInteract(); }
   }
 
   function spawnFx(m) {
@@ -4418,7 +4447,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       rec, deposited: { trout: sc.trout || 0, pike: sc.pike || 0 }, amethyst: gemsNow,
       carrying: { trout: carryTrout, pike: carryPike },
       ready: (sc.trout || 0) >= rec.trout && (sc.pike || 0) >= rec.pike && gemsNow >= rec.amethyst,
-      canPlace: carryTrout > 0 || carryPike > 0,
+      // Correctif audit 2026-07 : "Oui" ne dépose plus que ce qui manque —
+      // canPlace n'est donc vrai que si le joueur porte un poisson encore
+      // utile à la recette en cours (cohérent avec resolveSalveDeposit).
+      canPlace: (carryTrout > 0 && (sc.trout || 0) < rec.trout) || (carryPike > 0 && (sc.pike || 0) < rec.pike),
       // Une partie de la recette a déjà été déposée par l'équipe (mémoire
       // persistante côté hôte) : le bouton de dépôt devient "Compléter" au
       // lieu de "Oui" (demande Guillaume : "il faudra aller chercher les
@@ -4439,8 +4471,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function cauldronPlaceIngredients() {
     const st = salveRecipeStatus();
     if (!st.canPlace) { pushToast(L.toastNoFishToDeposit); return; }
-    if (st.carrying.trout > 0) salveDeposit("trout");
-    if (st.carrying.pike > 0) salveDeposit("pike");
+    if (st.carrying.trout > 0 && st.deposited.trout < st.rec.trout) salveDeposit("trout");
+    if (st.carrying.pike > 0 && st.deposited.pike < st.rec.pike) salveDeposit("pike");
   }
   // "Il faudra allumer le chaudron ! Les joueurs devront cliquer sur le
   // chaudron en tenant la torche pour allumer le feu et lancer la
@@ -4466,6 +4498,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // session") — un simple clic/E au chaudron suffit, pas de menu.
   function salveCollect() {
     sendReq({ kind: "salveCollect" });
+  }
+  // Interaction unifiée au chaudron (clic souris, Espace OU touche E —
+  // correctif audit 2026-07) : récupère le produit fini, signale l'attente,
+  // allume si recette complète + torche allumée, sinon ouvre le menu.
+  function cauldronInteract() {
+    const st = salveRecipeStatus();
+    if (st.brewReady) salveCollect();
+    else if (st.brewing) pushToast(L.toastCauldronBrewing);
+    else if (st.ready && torchOnRef.current) igniteCauldron();
+    else setCauldronMenuOpen(true);
   }
   // Chaudron ramené du monde maléfique (chantier 2026-07, demande Guillaume).
   const evilCauldronPickup = () => {
@@ -4650,7 +4692,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       </div>
 
       {/* Invite proximité */}
-      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "shop" ? L.promptShop : promptKey === "coop" ? L.promptCoop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "salveDeposit" ? L.promptSalveDeposit : promptKey === "salveBrew" ? L.promptSalveBrew : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "sleep" ? L.promptSleep : promptKey === "wake" ? L.promptWake : L.promptBin}</div>}
+      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "shop" ? L.promptShop : promptKey === "coop" ? L.promptCoop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "sleep" ? L.promptSleep : promptKey === "wake" ? L.promptWake : L.promptBin}</div>}
       {mountPrompt && <div className="ferme-prompt ferme-prompt-mount">{mountPrompt === "mount" ? L.mountPrompt : L.dismountPrompt}</div>}
 
       {/* Barre d'outils */}
@@ -5184,33 +5226,38 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               <button className="ferme-close-x" onClick={() => setCauldronMenuOpen(false)}>✕</button>
               <h2>{L.cauldronMenuTitle}</h2>
               <div className="ferme-hint">{L.cauldronMenuHint}</div>
-              <div className="ferme-shop-row">
-                <span style={{ fontSize: 26, width: 32, textAlign: "center" }}>🧴</span>
-                <div className="info">
-                  <b>{L.cauldronProductSalveName}</b>
-                  <span>{L.cauldronProductSalveNeed(st.rec)}</span>
-                  <span className="ferme-usage">{L.cauldronProductSalveProgress(st.deposited, st.amethyst, st.rec)}</span>
-                </div>
-                {/* Recette pas encore complète : "Déposer les ingrédients ?
-                    Oui / Non" (devient "Compléter" au lieu de "Oui" si une
-                    partie a déjà été déposée par l'équipe — mémoire
-                    persistante côté hôte, voir st.started). "Non" referme
-                    simplement le menu sans rien déposer. */}
-                {!st.ready ? (
-                  <div className="ferme-cauldron-confirm">
-                    <span className="ferme-usage">{L.cauldronDepositQuestion}</span>
-                    <button disabled={!st.canPlace} onClick={cauldronPlaceIngredients}>{st.started ? L.cauldronCompleteBtn : L.cauldronYesBtn}</button>
-                    <button className="ferme-btn-secondary" onClick={() => setCauldronMenuOpen(false)}>{L.cauldronNoBtn}</button>
-                  </div>
-                ) : (
-                  // Recette complète : bouton "Prêt !" — confirme puis ferme
-                  // le menu en rappelant d'aller allumer le chaudron (torche
-                  // en main) pour lancer la concoction, geste qui se fait
-                  // maintenant DANS le monde (voir tryOpenNearby), plus par
-                  // un bouton de ce menu.
-                  <button className="ferme-cauldron-ready-btn" onClick={() => { setCauldronMenuOpen(false); pushToast(L.cauldronReadyHint); }}>{L.cauldronReadyBtn}</button>
-                )}
+              {/* Recette en vieux parchemin (demande Guillaume 2026-07) : nom
+                  de la concoction en haut, liste des ingrédients dessous
+                  (avec l'avancement de l'équipe), effet en bas dans une
+                  formulation volontairement voilée (pas de chiffres de
+                  gameplay). */}
+              <div className="ferme-parchment">
+                <div className="ferme-parchment-title">{L.cauldronProductSalveName}</div>
+                <ul className="ferme-parchment-ing">
+                  <li>{L.scrollIngAmethyst(st.amethyst, st.rec.amethyst)}{st.amethyst >= st.rec.amethyst ? " ✓" : ""}</li>
+                  <li>{L.scrollIngTrout(st.deposited.trout, st.rec.trout)}{st.deposited.trout >= st.rec.trout ? " ✓" : ""}</li>
+                  <li>{L.scrollIngPike(st.deposited.pike, st.rec.pike)}{st.deposited.pike >= st.rec.pike ? " ✓" : ""}</li>
+                </ul>
+                <div className="ferme-parchment-effect">{L.cauldronScrollEffect}</div>
               </div>
+              {!st.ready ? (
+                // Verse d'un coup tout ce que le joueur porte d'encore UTILE
+                // à la recette (cauldronPlaceIngredients, plafonné au manquant
+                // côté hôte) — grisé s'il ne porte rien d'utile.
+                <button className="ferme-cauldron-ready-btn" disabled={!st.canPlace} onClick={cauldronPlaceIngredients}>{L.cauldronAddBtn}</button>
+              ) : (
+                // Recette complète : bouton "Prêt !" — confirme puis ferme
+                // le menu en rappelant d'aller allumer le chaudron (torche
+                // en main) pour lancer la concoction, geste qui se fait
+                // DANS le monde (voir tryOpenNearby/cauldronInteract).
+                <button className="ferme-cauldron-ready-btn" onClick={() => { setCauldronMenuOpen(false); pushToast(L.cauldronReadyHint); }}>{L.cauldronReadyBtn}</button>
+              )}
+              {/* Si les poissons sont au complet mais qu'il manque l'améthyste
+                  (réserve commune, non "versable"), expliquer pourquoi le
+                  bouton est grisé. */}
+              {!st.ready && st.deposited.trout >= st.rec.trout && st.deposited.pike >= st.rec.pike && st.amethyst < st.rec.amethyst && (
+                <div className="ferme-hint">{L.cauldronNeedAmethyst}</div>
+              )}
               {st.ready && (
                 <div className="ferme-hint">
                   <Sprite img={spritesReady ? spritesRef.current.torch : null} w={16} h={22} /> {L.cauldronIgniteHint}
