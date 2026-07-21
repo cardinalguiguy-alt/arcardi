@@ -156,6 +156,13 @@ export default function Room() {
   // l'abonnement Realtime plus haut) ou dès que "Rassembler tout le monde"
   // est utilisé (l'état serveur fait alors autorité de nouveau).
   const [fermeAway, setFermeAway] = useState(null);
+  // Correctif 2026-07 (bouton "Quitter" de Ferme Vallée inopérant par
+  // intermittence) : l'abonnement Realtime `rooms` ci-dessous vit dans un
+  // effet à deps figées ([code, router]), donc son callback ne voit JAMAIS
+  // la valeur à jour de `fermeAway` (fermeture sur le `null` initial) — une
+  // ref est nécessaire pour qu'il lise l'état courant à chaque évènement.
+  const fermeAwayRef = useRef(null);
+  useEffect(() => { fermeAwayRef.current = fermeAway; }, [fermeAway]);
   // Correctif 2026-07 : mémorise le code de la ferme durable une fois chargé
   // par FermeGame (voir `onCodeLoaded`), pour le repasser en `savedCode` à
   // toute nouvelle instance côté hôte (instance cachée en arrière-plan,
@@ -240,7 +247,30 @@ export default function Room() {
       roomSub = supabase
         .channel("r_" + roomRow.id)
         .on("postgres_changes", { event: "UPDATE", schema: "public", table: "rooms", filter: `id=eq.${roomRow.id}` },
-          payload => { setRoom(payload.new); setFermeAway(null); })
+          payload => {
+            // Correctif 2026-07 : un invité (ou l'hôte) qui a quitté Ferme
+            // Vallée via le bouton "Quitter" n'a RIEN écrit en base (voir
+            // handleGameFinish/backToLobby) — `rooms.current_game` reste
+            // "ferme" côté serveur, seule la vue locale est passée à
+            // "lobby" (+ instantané `fermeAway`). Avant ce correctif, le
+            // moindre UPDATE de `rooms` SANS RAPPORT avec la ferme
+            // (nomination d'hôte, etc. — n'importe quel autre joueur peut
+            // le déclencher, à n'importe quel moment) écrasait aveuglément
+            // ce départ local en réappliquant `payload.new` tel quel :
+            // l'invité se retrouvait renvoyé de force dans la ferme, et
+            // "Quitter" semblait n'avoir fonctionné qu'une fois sur deux.
+            // Tant que la base dit encore "ferme" en cours, on conserve
+            // donc la vue "lobby" locale (et l'instantané `fermeAway`) —
+            // seul un VRAI changement de jeu/statut en base (typiquement
+            // "📣 Rassembler tout le monde", qui écrit current_game=null)
+            // doit nous en faire sortir.
+            if (fermeAwayRef.current && payload.new.current_game === "ferme") {
+              setRoom(r => ({ ...payload.new, status: "lobby", current_game: null, game_state: null }));
+              return;
+            }
+            setRoom(payload.new);
+            setFermeAway(null);
+          })
         .subscribe();
     })();
 
