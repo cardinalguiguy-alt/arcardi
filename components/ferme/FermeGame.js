@@ -200,6 +200,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [coop, setCoop] = useState(null); // miroir React de sharedRef.current.coop (mission d'équipe en cours)
   const [barn, setBarn] = useState(null); // miroir React de sharedRef.current.barn (grange persistante)
   const [salveCraft, setSalveCraft] = useState(null); // miroir React de sharedRef.current.salveCraft (chaudron de la pommade)
+  const [house, setHouse] = useState({ level: 1, upgradeUntil: 0 }); // miroir React de sharedRef.current.house (maison à niveaux, 2026-07)
   const [gems, setGems] = useState(() => C.GEMS.map(() => 0)); // miroir React de sharedRef.current.gems (pool commun à la salle)
   const [flour, setFlour] = useState(0); // miroir React de sharedRef.current.flour (sacs de farine, pool commun à la salle, chantier 2026-07)
   const [gregStock, setGregStock] = useState(() => ({ wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0) })); // miroir React de sharedRef.current.gregStock (bois/pierre récoltés par Greg + engrais acheté + poissons pêchés par Soan, pool commun, chantier 2026-07)
@@ -251,7 +252,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const meRef = useRef(null);
   const playersRef = useRef(new Map()); // id -> remote farmer render data
   const farmersRef = useRef({});        // hôte : id -> état privé arbitré
-  const sharedRef = useRef({ seed: 0, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), salveCraft: E.newSalveCraftState(), flour: 0, gregStock: { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0) }, fertilizerShop: { stock: 0, lastRestockDay: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], rabbitChallenge: null, greg: null, soan: null });
+  const sharedRef = useRef({ seed: 0, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), salveCraft: E.newSalveCraftState(), house: { level: 1, upgradeUntil: 0 }, flour: 0, gregStock: { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0) }, fertilizerShop: { stock: 0, lastRestockDay: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], rabbitChallenge: null, greg: null, soan: null });
   const invRef = useRef(null);
   const toolsRef = useRef({ hoe: 1, can: 1, axe: 1, pick: 1 });
   const energyRef = useRef(C.MAX_ENERGY);
@@ -454,6 +455,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         animals: saved.animals || [], wellBuilt: !!saved.wellBuilt, coop: saved.coop || null,
         barn: saved.barn || E.newBarnState(),
         salveCraft: saved.salveCraft || E.newSalveCraftState(),
+        // Maison à niveaux (validation Guillaume 2026-07) : persiste comme la grange.
+        house: (saved.house && saved.house.level) ? { level: saved.house.level, upgradeUntil: saved.house.upgradeUntil || 0 } : { level: 1, upgradeUntil: 0 },
         gems: migrateGems(saved),
         flour: saved.flour || 0,
         // Stock commun de bois/pierre récoltés par Greg (chantier 2026-07,
@@ -499,7 +502,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const seed = hashSeed(code);
       worldRef.current = E.generateWorld(seed);
       overridesRef.current = { ground: {}, object: {} };
-      sharedRef.current = { seed, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), salveCraft: E.newSalveCraftState(), gems: C.GEMS.map(() => 0), flour: 0, gregStock: { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0) }, fertilizerShop: { stock: 0, lastRestockDay: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], rabbitChallenge: null, greg: null, soan: null };
+      sharedRef.current = { seed, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), salveCraft: E.newSalveCraftState(), house: { level: 1, upgradeUntil: 0 }, gems: C.GEMS.map(() => 0), flour: 0, gregStock: { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0) }, fertilizerShop: { stock: 0, lastRestockDay: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], rabbitChallenge: null, greg: null, soan: null };
       farmersRef.current = {};
       // Crée tout de suite l'enregistrement pour réserver le code.
       persistFarm();
@@ -522,6 +525,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     setCoop(sharedRef.current.coop);
     setBarn(sharedRef.current.barn);
     setSalveCraft(sharedRef.current.salveCraft);
+    setHouse(sharedRef.current.house || { level: 1, upgradeUntil: 0 });
     setGems(sharedRef.current.gems);
     setFlour(sharedRef.current.flour || 0);
     setGregStock(sharedRef.current.gregStock || { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0) });
@@ -602,6 +606,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (sc.brewingUntil > 0 && typeof payload.hostNow === "number") sc.brewingUntil = Date.now() + (sc.brewingUntil - payload.hostNow);
         return sc;
       })(),
+      // Maison à niveaux (2026-07) : même relocalisation d'horloge que
+      // salveCraft.brewingUntil pour l'horodatage de fin de travaux.
+      house: (() => {
+        const hh = (payload.house && payload.house.level) ? { level: payload.house.level, upgradeUntil: payload.house.upgradeUntil || 0 } : { level: 1, upgradeUntil: 0 };
+        if (hh.upgradeUntil > 0 && typeof payload.hostNow === "number") hh.upgradeUntil = Date.now() + (hh.upgradeUntil - payload.hostNow);
+        return hh;
+      })(),
       gems: migrateGems(payload),
       flour: payload.flour || 0,
       gregStock: { wood: (payload.gregStock && payload.gregStock.wood) || 0, stone: (payload.gregStock && payload.gregStock.stone) || 0, fertilizer: (payload.gregStock && payload.gregStock.fertilizer) || 0, fish: C.FISH.map((_, i) => (payload.gregStock && payload.gregStock.fish && payload.gregStock.fish[i]) || 0) },
@@ -640,6 +651,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     setCoop(sharedRef.current.coop);
     setBarn(sharedRef.current.barn);
     setSalveCraft(sharedRef.current.salveCraft);
+    setHouse(sharedRef.current.house || { level: 1, upgradeUntil: 0 });
     setGems(sharedRef.current.gems);
     setFlour(sharedRef.current.flour || 0);
     setGregStock(sharedRef.current.gregStock || { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0) });
@@ -779,7 +791,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       crops: worldRef.current ? E.serializeCrops(worldRef.current) : [],
       mills: worldRef.current ? E.serializeMills(worldRef.current) : [],
       farmers: farmersRef.current,
-      horses: s.horses, animals: s.animals, wellBuilt: s.wellBuilt, coop: s.coop, barn: s.barn, salveCraft: s.salveCraft, gems: s.gems, flour: s.flour, gregStock: s.gregStock, fertilizerShop: s.fertilizerShop, wolves: s.wolves, greg: s.greg, soan: s.soan,
+      horses: s.horses, animals: s.animals, wellBuilt: s.wellBuilt, coop: s.coop, barn: s.barn, salveCraft: s.salveCraft, house: s.house, gems: s.gems, flour: s.flour, gregStock: s.gregStock, fertilizerShop: s.fertilizerShop, wolves: s.wolves, greg: s.greg, soan: s.soan,
       rabbits: s.rabbits, rabbitChallenge: s.rabbitChallenge,
       hostNow: Date.now(), // correctif audit 2026-07 : relocalisation d'horloge (voir salveCraft.brewingUntil)
       // Correctif audit lancement 2026-07 (succession d'hôte) : le code de la
@@ -907,7 +919,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const f = hostEnsureFarmer(req.id, req.name);
     if (typeof req.px === "number") { f.x = req.px; f.y = req.py; }
     const s = sharedRef.current;
-    const out = { tiles: [], crops: [], mills: null, fx: [], state: null, farmer: null, toast: null, chat: null, horses: null, animals: null, wellBuilt: false, coop: undefined, barn: undefined, salveCraft: undefined };
+    const out = { tiles: [], crops: [], mills: null, fx: [], state: null, farmer: null, toast: null, chat: null, horses: null, animals: null, wellBuilt: false, coop: undefined, barn: undefined, salveCraft: undefined, house: undefined };
     let questId = null; // action réussie -> quête à valider éventuellement
     const px = typeof req.px === "number" ? req.px : f.x, py = typeof req.py === "number" ? req.py : f.y;
 
@@ -1107,6 +1119,27 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           out.state = shareState(); out.horses = hs;
           out.chat = { from: "🐴", msg: L.chatAnimalBought(lang === "en" ? "Horse" : "Cheval") };
         } else out.toast = { id: f.id, key: "noGold" };
+      }
+    } else if (req.kind === "houseUpgrade") {
+      // Maison à niveaux (validation Guillaume 2026-07) : lance les TRAVAUX
+      // du palier suivant — or prélevé sur la caisse commune, bois/pierre
+      // sur l'inventaire du DEMANDEUR, fin des travaux à upgradeUntil
+      // (2 h vers le niveau 2, 5 h vers le niveau 3, temps RÉEL). La montée
+      // de niveau effective est faite par le tick hôte 1 Hz (voir dayTimer),
+      // pour aboutir même si plus personne ne clique rien d'ici là.
+      const hh = s.house || (s.house = { level: 1, upgradeUntil: 0 });
+      const pal = C.HOUSE_LEVELS[hh.level - 1];
+      if (pal && hh.level < C.HOUSE_MAX_LEVEL && !(hh.upgradeUntil > Date.now())
+          && s.money >= pal.cost.money && f.inv.wood >= pal.cost.wood && f.inv.stone >= pal.cost.stone) {
+        s.money -= pal.cost.money;
+        f.inv.wood -= pal.cost.wood; f.inv.stone -= pal.cost.stone;
+        hh.upgradeUntil = Date.now() + pal.durationMs;
+        out.state = shareState();
+        out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
+        out.house = { ...hh };
+        channelRef.current?.send({ type: "broadcast", event: "chat", payload: { from: "🏠", msg: L.houseWorksStarted(f.name, pal.level) } });
+      } else {
+        out.toast = { id: req.id, key: "actionFailed" };
       }
     } else if (req.kind === "buyWell") {
       const w2 = worldRef.current;
@@ -1527,7 +1560,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // Les quêtes accomplies voyagent avec l'état privé du fermier.
     if (out.farmer) out.farmer.quests = f.quests;
 
-    if (out.tiles.length || out.state || out.horses || out.animals || out.wellBuilt || out.gems || out.mills || out.flour !== undefined) dirtyRef.current = true;
+    if (out.tiles.length || out.state || out.horses || out.animals || out.wellBuilt || out.gems || out.mills || out.house || out.flour !== undefined) dirtyRef.current = true;
     channelRef.current?.send({ type: "broadcast", event: "apply", payload: { ...out, hostNow: Date.now() } });
   }
   function shareState() { const s = sharedRef.current; return { money: s.money, day: s.day, dayStartAt: s.dayStartAt, totalEarned: s.totalEarned }; }
@@ -1599,6 +1632,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (sc && sc.brewingUntil > 0 && typeof p.hostNow === "number") sc.brewingUntil = Date.now() + (sc.brewingUntil - p.hostNow);
       sharedRef.current.salveCraft = sc; setSalveCraft(sc);
     }
+    if (p.house) {
+      // Maison à niveaux (2026-07) : même relocalisation que brewingUntil.
+      const hh = { ...p.house };
+      if (hh.upgradeUntil > 0 && typeof p.hostNow === "number") hh.upgradeUntil = Date.now() + (hh.upgradeUntil - p.hostNow);
+      sharedRef.current.house = hh; setHouse(hh);
+    }
     if (p.gems) { sharedRef.current.gems = p.gems; setGems(p.gems); }
     if (p.flour !== undefined) { sharedRef.current.flour = p.flour; setFlour(p.flour); }
     if (p.gregStock !== undefined) { sharedRef.current.gregStock = p.gregStock; setGregStock(p.gregStock); }
@@ -1634,6 +1673,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   useEffect(() => {
     if (!isHost) return;
     const dayTimer = setInterval(() => {
+      // Fin des travaux de la maison (2026-07) : montée de niveau effective,
+      // diffusée à tous (avec hostNow pour la relocalisation d'horloge).
+      {
+        const hh0 = sharedRef.current.house;
+        if (hh0 && hh0.upgradeUntil > 0 && Date.now() >= hh0.upgradeUntil) {
+          hh0.level = Math.min(C.HOUSE_MAX_LEVEL, hh0.level + 1);
+          hh0.upgradeUntil = 0;
+          dirtyRef.current = true;
+          channelRef.current?.send({ type: "broadcast", event: "apply", payload: { house: { ...hh0 }, hostNow: Date.now() } });
+          channelRef.current?.send({ type: "broadcast", event: "chat", payload: { from: "🏠", msg: L.houseUpgraded(hh0.level) } });
+        }
+      }
       const s = sharedRef.current, w = worldRef.current;
       if (!w) return;
       // Mission collaborative : démarre automatiquement dès que 2 fermiers
@@ -2914,6 +2965,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   }
   const buyHorse = () => sendReq({ kind: "buyHorse" });
   const buyWell = () => sendReq({ kind: "buyWell" });
+  const houseUpgrade = () => sendReq({ kind: "houseUpgrade" }); // maison à niveaux (2026-07)
   const hireGreg = () => sendReq({ kind: "hireGreg" });
   // Choix de l'ordre (chantier 2026-07, v2 suite retour Guillaume) : on
   // n'envoie PAS tout de suite — le joueur est encore à la boutique. On
@@ -3339,7 +3391,23 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (inMap(tt.x, tt.y)) { ctx.strokeStyle = "rgba(255,255,255,0.7)"; ctx.lineWidth = 1; ctx.strokeRect(tt.x * T + 0.5, tt.y * T + 0.5, T - 1, T - 1); }
 
       const draws = [];
-      draws.push({ y: (C.HOUSE.y + C.HOUSE.h) * T, fn: () => ctx.drawImage(sprites.house, C.HOUSE.x * T, (C.HOUSE.y + C.HOUSE.h) * T - 96) });
+      draws.push({ y: (C.HOUSE.y + C.HOUSE.h) * T, fn: () => {
+        // Maison à niveaux (2026-07) : sprite selon le niveau ; pendant les
+        // travaux, marteau + barre de progression au-dessus du toit.
+        const hh = sharedRef.current.house || { level: 1, upgradeUntil: 0 };
+        const img = (sprites.houses && sprites.houses[Math.min(Math.max(hh.level, 1), 3) - 1]) || sprites.house;
+        ctx.drawImage(img, C.HOUSE.x * T, (C.HOUSE.y + C.HOUSE.h) * T - 96);
+        if (hh.upgradeUntil > Date.now()) {
+          const pal = C.HOUSE_LEVELS[hh.level - 1];
+          const total = pal ? pal.durationMs : 1;
+          const frac = Math.max(0, Math.min(1, 1 - (hh.upgradeUntil - Date.now()) / total));
+          const barW = 40, bx = C.HOUSE.x * T + 48 - barW / 2, by = (C.HOUSE.y + C.HOUSE.h) * T - 104;
+          ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(bx, by, barW, 4);
+          ctx.fillStyle = "#c9a25a"; ctx.fillRect(bx, by, barW * frac, 4);
+          ctx.font = "10px monospace"; ctx.textAlign = "center";
+          ctx.fillText("🔨", bx + barW / 2, by - 4);
+        }
+      } });
       draws.push({ y: (C.SHOP.y + 1) * T, fn: () => ctx.drawImage(sprites.shop, C.SHOP.x * T - 4, (C.SHOP.y + 1) * T - 28) });
       draws.push({ y: (C.BIN.y + 1) * T, fn: () => ctx.drawImage(sprites.bin, C.BIN.x * T - 2, (C.BIN.y + 1) * T - 18) });
       // Grange collaborative persistante : sprite réel dès le palier 1 (elle
@@ -4247,7 +4315,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // selle, décalé du côté opposé au sens de la marche.
       const basePx = Math.round(p.x * T), py = Math.round(p.y * T);
       const px = isPassenger ? basePx + (flip ? 9 : -9) : basePx;
-      const lift = riding ? 10 : 0; // le cavalier est ASSIS sur la selle (voir le buste + jambe plus bas)
+      // Correctif retour Guillaume 2026-07 ("assis trop haut, effet
+      // flottement") : lift réduit pour que le bas du buste repose
+      // DIRECTEMENT sur la selle du sprite cheval (selle à ~py+2 écran, bas
+      // du buste 15px sous seatY), au lieu de flotter au-dessus.
+      const lift = riding ? 5 : 0;
       // Nage à cheval (chantier 2026-07) : monture sur une case d'eau ->
       // pattes immergées + vaguelettes (drawSwimOverlay), pas d'ombre portée.
       const wSwim = worldRef.current;
@@ -5422,6 +5494,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           <div className="panel ferme-modal-panel" onClick={e => e.stopPropagation()}>
             <button className="ferme-close-x" onClick={() => setShopOpen(false)}>✕</button>
             <h2>{L.shopTitle}</h2><div className="ferme-hint">{L.shopHint}</div>
+            {/* Réorganisation de la boutique (demande Guillaume 2026-07) :
+                sections thématiques — Graines & cultures, Animaux (le cheval y
+                rejoint les autres bêtes, comme demandé), Outils, Constructions,
+                Consommables & soins, Employés. Chaque ligne est STRICTEMENT la
+                même qu'avant (mêmes libellés/actions/gardes), seuls l'ordre et
+                les en-têtes de section changent. */}
+            <div className="ferme-tools-header">{L.shopSeedsHeader}</div>
             <div className="ferme-usage">{L.seedsUsageHint}</div>
             {C.CROPS.map(cr => (
               <div className="ferme-shop-row" key={"s" + cr.id}>
@@ -5431,10 +5510,41 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 <button disabled={hud.money < cr.seedCost * 5} onClick={() => buySeed(cr.id, 5)}>{L.buy5}</button>
               </div>
             ))}
+            {/* Engrais (chantier 2026-07, suite plan validé) : ligne visible
+                UNIQUEMENT quand le stock boutique est non nul (ressource rare,
+                pas disponible en permanence — voir FERTILIZER_RESTOCK_EVERY_N_DAYS). */}
+            {fertilizerShop.stock > 0 && (
+              <div className="ferme-shop-row">
+                <span style={{ fontSize: 26, width: 32, textAlign: "center" }}>🌱</span>
+                <div className="info">
+                  <b>{L.fertilizerShopLabel}</b>
+                  <span>{L.fertilizerShopStock(fertilizerShop.stock)}</span>
+                  <span className="ferme-usage">{L.fertilizerOrderAvailable(gregStock.fertilizer || 0)}</span>
+                </div>
+                <button disabled={hud.money < C.FERTILIZER_COST} onClick={buyFertilizer}>{L.fertilizerShopBuy(C.FERTILIZER_COST)}</button>
+                {sharedRef.current.greg && (gregStock.fertilizer || 0) > 0 && (
+                  <button onClick={() => setFertilizerOrderOpen(true)}>{L.fertilizerOrderBtn}</button>
+                )}
+              </div>
+            )}
             <div className="ferme-shop-row">
-              <Sprite img={spritesReady ? spritesRef.current.icons.food : null} w={32} h={32} />
-              <div className="info"><b>{L.foodRowTitle(C.FOOD_COST)}</b><span>{L.foodRowSub(C.FOOD_ENERGY, myInv ? myInv.food : 0)}</span></div>
-              <button disabled={hud.money < C.FOOD_COST} onClick={buyFood}>{L.buyOne}</button>
+              <Sprite img={spritesReady ? spritesRef.current.grassPatch : null} w={16} h={16} />
+              <div className="info"><b>{L.grassRowTitle(C.GRASS_COST)}</b><span>{L.grassRowSub(myInv ? (myInv.grass || 0) : 0)}</span></div>
+              <button disabled={hud.money < C.GRASS_COST} onClick={() => buyGrass(1)}>{L.buy1}</button>
+              <button disabled={hud.money < C.GRASS_COST * 5} onClick={() => buyGrass(5)}>{L.buy5}</button>
+            </div>
+            <div className="ferme-tools-header">{L.shopAnimalsHeader}</div>
+            {C.ANIMALS.map(a => (
+              <div className="ferme-shop-row" key={"an" + a.id}>
+                <Sprite img={spritesReady ? spritesRef.current.animals[a.id] : null} w={32} h={28} />
+                <div className="info"><b>{L.animalRowTitle(lang === "en" ? a.nameEn : a.name, a.cost)}</b><span>{L.animalRowSub(lang === "en" ? a.prodEn : a.prod, a.sell, Math.round(a.prodMs / 3600000))}</span></div>
+                <button disabled={hud.money < a.cost || buildings.animalCount >= E.barnAnimalCap(barn ? barn.level : 0)} onClick={() => buyAnimal(a.id)}>{L.buyLabel}</button>
+              </div>
+            ))}
+            <div className="ferme-shop-row">
+              <Sprite img={spritesReady ? spritesRef.current.horse : null} w={36} h={30} />
+              <div className="info"><b>{L.shopHorseTitle(C.HORSE_COSTS[Math.min(buildings.horseCount, C.HORSE_MAX_COUNT - 1)])}</b><span>{L.shopHorseSub}</span><span className="ferme-usage">{buildings.horseCount >= C.HORSE_MAX_COUNT ? L.shopHorseMax : L.shopHorseCount(buildings.horseCount, C.HORSE_MAX_COUNT)}</span></div>
+              <button disabled={buildings.horseCount >= C.HORSE_MAX_COUNT || hud.money < C.HORSE_COSTS[Math.min(buildings.horseCount, C.HORSE_MAX_COUNT - 1)]} onClick={buyHorse}>{buildings.horseCount >= C.HORSE_MAX_COUNT ? L.maxLabel : L.buyLabel}</button>
             </div>
             <div className="ferme-tools-header">{L.toolsHeader}</div>
             {C.TOOLS.map(k => {
@@ -5447,12 +5557,72 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 </div>
               );
             })}
-            <div className="ferme-tools-header">🏗️</div>
+            <div className="ferme-tools-header">{L.shopBuildHeader}</div>
+            {/* Maison à niveaux (validation Guillaume 2026-07) : lancer les
+                travaux du palier suivant depuis la boutique — statut/compte à
+                rebours pendant les travaux, MAX au niveau 3. */}
             <div className="ferme-shop-row">
-              <Sprite img={spritesReady ? spritesRef.current.horse : null} w={36} h={30} />
-              <div className="info"><b>{L.shopHorseTitle(C.HORSE_COSTS[Math.min(buildings.horseCount, C.HORSE_MAX_COUNT - 1)])}</b><span>{L.shopHorseSub}</span><span className="ferme-usage">{buildings.horseCount >= C.HORSE_MAX_COUNT ? L.shopHorseMax : L.shopHorseCount(buildings.horseCount, C.HORSE_MAX_COUNT)}</span></div>
-              <button disabled={buildings.horseCount >= C.HORSE_MAX_COUNT || hud.money < C.HORSE_COSTS[Math.min(buildings.horseCount, C.HORSE_MAX_COUNT - 1)]} onClick={buyHorse}>{buildings.horseCount >= C.HORSE_MAX_COUNT ? L.maxLabel : L.buyLabel}</button>
+              <Sprite img={spritesReady ? spritesRef.current.houses[Math.min(Math.max(house.level, 1), C.HOUSE_MAX_LEVEL) - 1] : null} w={36} h={36} />
+              <div className="info">
+                <b>{L.houseRowTitle(house.level)}</b>
+                {house.level >= C.HOUSE_MAX_LEVEL
+                  ? <span>{L.houseRowMax}</span>
+                  : house.upgradeUntil > Date.now()
+                    ? <span>{L.houseUpgrading(Math.max(1, Math.ceil((house.upgradeUntil - Date.now()) / 60000)))}</span>
+                    : <span>{L.houseRowCost(C.HOUSE_LEVELS[house.level - 1])}</span>}
+                <span className="ferme-usage">{L.houseRowSub}</span>
+              </div>
+              {house.level < C.HOUSE_MAX_LEVEL && !(house.upgradeUntil > Date.now()) && (() => {
+                const nx = C.HOUSE_LEVELS[house.level - 1];
+                const ok = nx && hud.money >= nx.cost.money && myInv && (myInv.wood || 0) >= nx.cost.wood && (myInv.stone || 0) >= nx.cost.stone;
+                return <button disabled={!ok} onClick={houseUpgrade}>{L.houseUpgradeBtn}</button>;
+              })()}
             </div>
+            <div className="ferme-shop-row">
+              <Sprite img={spritesReady ? spritesRef.current.well : null} w={26} h={32} />
+              <div className="info"><b>{L.shopWellTitle(C.WELL_COST)}</b><span>{buildings.wellBuilt ? L.shopWellOwned : L.shopWellSub}</span></div>
+              <button disabled={buildings.wellBuilt || hud.money < C.WELL_COST} onClick={buyWell}>{buildings.wellBuilt ? L.maxLabel : L.buyLabel}</button>
+            </div>
+            <div className="ferme-shop-row">
+              <Sprite img={spritesReady ? spritesRef.current.fence : null} w={32} h={32} />
+              <div className="info"><b>{L.fenceRowTitle(C.FENCE_COST)}</b><span>{L.fenceRowSub(myInv ? (myInv.fence || 0) : 0)}</span></div>
+              <button disabled={hud.money < C.FENCE_COST} onClick={() => buyFence(1)}>{L.buy1}</button>
+              <button disabled={hud.money < C.FENCE_COST * 5} onClick={() => buyFence(5)}>{L.buy5}</button>
+            </div>
+            <div className="ferme-shop-row">
+              <Sprite img={spritesReady ? spritesRef.current.lamp : null} w={20} h={32} />
+              <div className="info"><b>{L.lampRowTitle(C.LAMP_COST)}</b><span>{L.lampRowSub(myInv ? (myInv.lamp || 0) : 0)}</span></div>
+              <button disabled={hud.money < C.LAMP_COST} onClick={() => buyLamp(1)}>{L.buy1}</button>
+              <button disabled={hud.money < C.LAMP_COST * 5} onClick={() => buyLamp(5)}>{L.buy5}</button>
+            </div>
+            <div className="ferme-shop-row">
+              <Sprite img={spritesReady ? spritesRef.current.scarecrow : null} w={20} h={32} />
+              <div className="info"><b>{L.scarecrowRowTitle(C.SCARECROW_COST)}</b><span>{L.scarecrowRowSub(myInv ? (myInv.scarecrow || 0) : 0)}</span></div>
+              <button disabled={hud.money < C.SCARECROW_COST} onClick={() => buyScarecrow(1)}>{L.buy1}</button>
+              <button disabled={hud.money < C.SCARECROW_COST * 5} onClick={() => buyScarecrow(5)}>{L.buy5}</button>
+            </div>
+            <div className="ferme-shop-row">
+              <Sprite img={spritesReady ? spritesRef.current.mill : null} w={30} h={36} />
+              <div className="info"><b>{L.millRowTitle(C.MILL_COST)}</b><span>{L.millRowSub(myInv ? (myInv.mill || 0) : 0)}</span></div>
+              <button disabled={hud.money < C.MILL_COST} onClick={() => buyMill(1)}>{L.buy1}</button>
+            </div>
+            <div className="ferme-tools-header">{L.shopConsumablesHeader}</div>
+            <div className="ferme-shop-row">
+              <Sprite img={spritesReady ? spritesRef.current.icons.food : null} w={32} h={32} />
+              <div className="info"><b>{L.foodRowTitle(C.FOOD_COST)}</b><span>{L.foodRowSub(C.FOOD_ENERGY, myInv ? myInv.food : 0)}</span></div>
+              <button disabled={hud.money < C.FOOD_COST} onClick={buyFood}>{L.buyOne}</button>
+            </div>
+            <div className="ferme-shop-row">
+              <div style={{ width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>🩹</div>
+              <div className="info"><b>{L.healKitRowTitle}</b><span>{L.healKitRowSub(myInv ? (myInv.healKit || 0) : 0)}</span></div>
+              <button onClick={() => buyHealKit(1)}>{L.buy1}</button>
+            </div>
+            <div className="ferme-shop-row">
+              <div style={{ width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>🧴</div>
+              <div className="info"><b>{L.salveRowTitle}</b><span>{L.salveRowSub(myInv ? (myInv.salve || 0) : 0)}</span></div>
+              <button disabled={!myInv || !(myInv.salve > 0)} onClick={useSalve}>{L.salveUseLabel}</button>
+            </div>
+            <div className="ferme-tools-header">{L.shopStaffHeader}</div>
             <div className="ferme-shop-row">
               <Sprite img={spritesReady ? spritesRef.current.getChar("m", 0) : null} w={26} h={32} />
               <div className="info">
@@ -5484,75 +5654,6 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                     : <button onClick={soanRecall}>{L.soanRecallBtn}</button>)
                 : <button disabled={hud.money < C.SOAN_HIRE_COST} onClick={hireSoan}>{L.hireLabel}</button>}
             </div>
-            {/* Engrais (chantier 2026-07, suite plan validé) : ligne visible
-                UNIQUEMENT quand le stock boutique est non nul (ressource rare,
-                pas disponible en permanence — voir FERTILIZER_RESTOCK_EVERY_N_DAYS). */}
-            {fertilizerShop.stock > 0 && (
-              <div className="ferme-shop-row">
-                <span style={{ fontSize: 26, width: 32, textAlign: "center" }}>🌱</span>
-                <div className="info">
-                  <b>{L.fertilizerShopLabel}</b>
-                  <span>{L.fertilizerShopStock(fertilizerShop.stock)}</span>
-                  <span className="ferme-usage">{L.fertilizerOrderAvailable(gregStock.fertilizer || 0)}</span>
-                </div>
-                <button disabled={hud.money < C.FERTILIZER_COST} onClick={buyFertilizer}>{L.fertilizerShopBuy(C.FERTILIZER_COST)}</button>
-                {sharedRef.current.greg && (gregStock.fertilizer || 0) > 0 && (
-                  <button onClick={() => setFertilizerOrderOpen(true)}>{L.fertilizerOrderBtn}</button>
-                )}
-              </div>
-            )}
-            <div className="ferme-shop-row">
-              <Sprite img={spritesReady ? spritesRef.current.well : null} w={26} h={32} />
-              <div className="info"><b>{L.shopWellTitle(C.WELL_COST)}</b><span>{buildings.wellBuilt ? L.shopWellOwned : L.shopWellSub}</span></div>
-              <button disabled={buildings.wellBuilt || hud.money < C.WELL_COST} onClick={buyWell}>{buildings.wellBuilt ? L.maxLabel : L.buyLabel}</button>
-            </div>
-            <div className="ferme-shop-row">
-              <Sprite img={spritesReady ? spritesRef.current.fence : null} w={32} h={32} />
-              <div className="info"><b>{L.fenceRowTitle(C.FENCE_COST)}</b><span>{L.fenceRowSub(myInv ? (myInv.fence || 0) : 0)}</span></div>
-              <button disabled={hud.money < C.FENCE_COST} onClick={() => buyFence(1)}>{L.buy1}</button>
-              <button disabled={hud.money < C.FENCE_COST * 5} onClick={() => buyFence(5)}>{L.buy5}</button>
-            </div>
-            <div className="ferme-shop-row">
-              <Sprite img={spritesReady ? spritesRef.current.lamp : null} w={20} h={32} />
-              <div className="info"><b>{L.lampRowTitle(C.LAMP_COST)}</b><span>{L.lampRowSub(myInv ? (myInv.lamp || 0) : 0)}</span></div>
-              <button disabled={hud.money < C.LAMP_COST} onClick={() => buyLamp(1)}>{L.buy1}</button>
-              <button disabled={hud.money < C.LAMP_COST * 5} onClick={() => buyLamp(5)}>{L.buy5}</button>
-            </div>
-            <div className="ferme-shop-row">
-              <Sprite img={spritesReady ? spritesRef.current.scarecrow : null} w={20} h={32} />
-              <div className="info"><b>{L.scarecrowRowTitle(C.SCARECROW_COST)}</b><span>{L.scarecrowRowSub(myInv ? (myInv.scarecrow || 0) : 0)}</span></div>
-              <button disabled={hud.money < C.SCARECROW_COST} onClick={() => buyScarecrow(1)}>{L.buy1}</button>
-              <button disabled={hud.money < C.SCARECROW_COST * 5} onClick={() => buyScarecrow(5)}>{L.buy5}</button>
-            </div>
-            <div className="ferme-shop-row">
-              <Sprite img={spritesReady ? spritesRef.current.grassPatch : null} w={16} h={16} />
-              <div className="info"><b>{L.grassRowTitle(C.GRASS_COST)}</b><span>{L.grassRowSub(myInv ? (myInv.grass || 0) : 0)}</span></div>
-              <button disabled={hud.money < C.GRASS_COST} onClick={() => buyGrass(1)}>{L.buy1}</button>
-              <button disabled={hud.money < C.GRASS_COST * 5} onClick={() => buyGrass(5)}>{L.buy5}</button>
-            </div>
-            <div className="ferme-shop-row">
-              <Sprite img={spritesReady ? spritesRef.current.mill : null} w={30} h={36} />
-              <div className="info"><b>{L.millRowTitle(C.MILL_COST)}</b><span>{L.millRowSub(myInv ? (myInv.mill || 0) : 0)}</span></div>
-              <button disabled={hud.money < C.MILL_COST} onClick={() => buyMill(1)}>{L.buy1}</button>
-            </div>
-            <div className="ferme-shop-row">
-              <div style={{ width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>🩹</div>
-              <div className="info"><b>{L.healKitRowTitle}</b><span>{L.healKitRowSub(myInv ? (myInv.healKit || 0) : 0)}</span></div>
-              <button onClick={() => buyHealKit(1)}>{L.buy1}</button>
-            </div>
-            <div className="ferme-shop-row">
-              <div style={{ width: 32, height: 32, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>🧴</div>
-              <div className="info"><b>{L.salveRowTitle}</b><span>{L.salveRowSub(myInv ? (myInv.salve || 0) : 0)}</span></div>
-              <button disabled={!myInv || !(myInv.salve > 0)} onClick={useSalve}>{L.salveUseLabel}</button>
-            </div>
-            <div className="ferme-tools-header">{L.shopAnimalsHeader}</div>
-            {C.ANIMALS.map(a => (
-              <div className="ferme-shop-row" key={"an" + a.id}>
-                <Sprite img={spritesReady ? spritesRef.current.animals[a.id] : null} w={32} h={28} />
-                <div className="info"><b>{L.animalRowTitle(lang === "en" ? a.nameEn : a.name, a.cost)}</b><span>{L.animalRowSub(lang === "en" ? a.prodEn : a.prod, a.sell, Math.round(a.prodMs / 3600000))}</span></div>
-                <button disabled={hud.money < a.cost || buildings.animalCount >= E.barnAnimalCap(barn ? barn.level : 0)} onClick={() => buyAnimal(a.id)}>{L.buyLabel}</button>
-              </div>
-            ))}
           </div>
         </div>
       )}

@@ -172,6 +172,98 @@ export function buildSprites() {
     P(g, 6, 6, 2, 1, "#c2c2ca");
     return c;
   }
+  // ---- Helpers des bâtiments refondus (maquettes validées 2026-07) ----
+  // Porte en planches (cadre sombre, poignée dorée), 16x26 posée en (x,y).
+  function bDoor(g, x, y) {
+    P(g, x - 1, y, 16, 26, "#4a3826");
+    P(g, x, y + 1, 14, 25, "#7a5330");
+    for (let i = x + 2; i < x + 13; i += 3) P(g, i, y + 2, 1, 22, "#6a4426");
+    P(g, x, y + 1, 14, 2, "#8a6340");
+    P(g, x + 11, y + 12, 1, 1, "#e8c85a"); P(g, x + 11, y + 13, 1, 1, "#c8a83a");
+  }
+  // Fenêtre à croisillons + jardinière fleurie, 16x15 posée en (x,y).
+  function bWindow(g, x, y) {
+    P(g, x - 1, y - 1, 16, 13, "#4a3826");
+    P(g, x, y, 14, 11, "#a8d4e8");
+    P(g, x, y, 14, 3, "#d0ecf6");
+    P(g, x + 7, y, 1, 11, "#4a3826"); P(g, x, y + 5, 14, 1, "#4a3826");
+    P(g, x - 2, y + 12, 18, 2, "#6a4a2c");
+    for (let i = 0; i < 3; i++) { P(g, x + 2 + i * 4, y + 11, 1, 1, "#d4504a"); P(g, x + 3 + i * 4, y + 11, 1, 1, "#e8842a"); }
+  }
+  // Rangée de moellons irréguliers (pierre) : rangs décalés, tons variés.
+  function bStones(g, x, y, w, h, r, tones, bh) {
+    P(g, x, y, w, h, "#6f6f78");
+    let row = 0;
+    for (let yy = y; yy < y + h; yy += bh) {
+      const hh = Math.min(bh, y + h - yy);
+      let xx = x + (row % 2 ? -3 : 0);
+      while (xx < x + w) {
+        const bw = 5 + Math.floor(r() * 5);
+        const x0 = Math.max(x, xx), x1 = Math.min(x + w, xx + bw - 1);
+        if (x1 > x0) { P(g, x0, yy, x1 - x0, hh - 1, tones[Math.floor(r() * tones.length)]); P(g, x0, yy, 1, 1, tones[1]); }
+        xx += bw;
+      }
+      row++;
+    }
+  }
+  // Cheminée en pierre (commune aux maisons niv 2/3).
+  function bChimney(g) {
+    P(g, 66, 12, 12, 20, "#8a8a92"); P(g, 64, 10, 16, 4, "#72727a");
+    for (let y = 14; y < 30; y += 4) P(g, 67, y, 10, 1, "#7a7a84");
+  }
+  // Maison NIVEAU 2 (maquette A validée) : colombages + toit de chaume +
+  // soubassement en pierre. Même canevas 96x96 et même ancrage au sol que
+  // house() (niveau 1) : aucun changement de position de rendu nécessaire.
+  function houseLvl2() {
+    const [c, g] = cv(96, 96);
+    const r = makeRnd(72);
+    // soubassement pierre
+    bStones(g, 8, 78, 80, 10, r, ["#9a9aa4", "#b8b8c2", "#84848e", "#9a9aa4"], 5);
+    // mur enduit clair (grain léger) + poutres de colombage
+    P(g, 8, 46, 80, 32, "#e6d9bc");
+    for (let i = 0; i < 90; i++) P(g, 8 + Math.floor(r() * 80), 46 + Math.floor(r() * 32), 1, 1, "#efe4ca");
+    P(g, 8, 46, 80, 2, "#5a4028"); P(g, 8, 76, 80, 2, "#5a4028");
+    P(g, 8, 46, 2, 32, "#5a4028"); P(g, 86, 46, 2, 32, "#5a4028");
+    P(g, 34, 46, 2, 32, "#5a4028"); P(g, 60, 46, 2, 32, "#5a4028");
+    for (let i = 0; i < 28; i++) { P(g, 10 + Math.floor(i * 23 / 28), 48 + i, 1, 1, "#5a4028"); P(g, 62 + Math.floor(i * 23 / 28), 48 + i, 1, 1, "#5a4028"); }
+    // toit de chaume : rangées de paille, ourlet de mèches en bord
+    for (let i = 0; i < 38; i++) {
+      const half = Math.floor(44 * i / 38);
+      const col = i % 3 === 0 ? "#8f6c2c" : (i % 2 ? "#c89a48" : "#d8ac54");
+      P(g, 48 - half, 8 + i, Math.max(1, half * 2), 1, col);
+    }
+    for (let i = 0; i < 30; i++) P(g, 6 + Math.floor(r() * 84), 45 + Math.floor(r() * 2), 1, 1, "#8f6c2c");
+    P(g, 44, 5, 8, 4, "#e0b862"); // faîtage
+    bChimney(g);
+    bDoor(g, 42, 62);
+    bWindow(g, 16, 58); bWindow(g, 70, 58);
+    return c;
+  }
+  // Maison NIVEAU 3 (maquette B validée) : murs en pierre appareillée + toit
+  // de tuiles rouges + auvent bois au-dessus de la porte. Même canevas 96x96.
+  function houseLvl3() {
+    const [c, g] = cv(96, 96);
+    const r = makeRnd(113);
+    // mur en pierre
+    bStones(g, 8, 46, 80, 42, r, ["#b8b0a2", "#d0c8ba", "#a09888", "#b8b0a2"], 6);
+    // toit de tuiles rouges (écailles marquées un rang sur deux)
+    for (let i = 0; i < 40; i++) {
+      const half = Math.floor(44 * i / 40);
+      const y0 = 8 + i;
+      if (i % 4 === 0) P(g, 48 - half, y0, Math.max(1, half * 2), 1, "#7c2a22");
+      else {
+        P(g, 48 - half, y0, Math.max(1, half * 2), 1, "#c04a3c");
+        if (i % 2 === 0) for (let xx = 48 - half; xx < 48 + half; xx += 5) { P(g, xx, y0, 1, 1, "#7c2a22"); P(g, xx + 1, y0, 1, 1, "#d4635a"); }
+      }
+    }
+    P(g, 0, 46, 96, 3, "#6a241e"); // rive de toit
+    bChimney(g);
+    // auvent bois au-dessus de la porte
+    P(g, 38, 56, 22, 3, "#8a3028"); P(g, 39, 59, 2, 4, "#6a4a2c"); P(g, 56, 59, 2, 4, "#6a4a2c");
+    bDoor(g, 42, 62);
+    bWindow(g, 16, 58); bWindow(g, 70, 58);
+    return c;
+  }
   function house() {
     const [c, g] = cv(96, 96);
     P(g, 8, 46, 80, 42, "#c8a878");
@@ -193,15 +285,29 @@ export function buildSprites() {
     return c;
   }
   function shopStand() {
+    // Étal refondu (maquette validée 2026-07) : auvent rayé à lambrequins,
+    // comptoir en planches veinées, cagettes de produits colorés.
     const [c, g] = cv(24, 28);
-    P(g, 2, 10, 20, 14, "#9a6b3f");
-    P(g, 2, 10, 20, 2, "#b8834f");
-    for (let i = 0; i < 5; i++) P(g, 1 + i * 4.4, 2, 4, 6, i % 2 ? "#e8e4d8" : "#d44a3f");
-    P(g, 0, 7, 24, 2, "#b03a30");
-    P(g, 3, 24, 2, 4, "#7a5330"); P(g, 19, 24, 2, 4, "#7a5330");
-    P(g, 5, 13, 4, 3, "#e8842a"); P(g, 11, 13, 4, 3, "#e03e2e"); P(g, 16, 13, 3, 3, "#b46ee0");
+    const r = makeRnd(4);
+    P(g, 2, 12, 20, 12, "#9a6b3f");
+    for (let x = 2; x < 22; x += 4) { P(g, x, 12, 1, 12, "#6f4b2a"); P(g, x + 1 + Math.floor(r() * 2), 13 + Math.floor(r() * 9), 1, 2, "#875c34"); }
+    P(g, 1, 10, 22, 2, "#b8834f"); P(g, 1, 10, 22, 1, "#d09a5e"); // plateau
+    for (let i = 0; i < 6; i++) {
+      const col = i % 2 ? "#efe9da" : "#d44a3f";
+      P(g, 1 + i * 4, 2, 4, 5, col);
+      P(g, 2 + i * 4, 7, 2, 2, col); // pointe de lambrequin
+    }
+    P(g, 0, 1, 24, 2, "#b03a30");
+    P(g, 3, 24, 2, 4, "#7a5330"); P(g, 19, 24, 2, 4, "#7a5330"); // pieds
+    const prods = ["#e8842a", "#e03e2e", "#b46ee0"];
+    for (let b = 0; b < 3; b++) {
+      const bx = 3 + b * 7;
+      P(g, bx, 7, 6, 3, "#8a6340"); P(g, bx, 7, 6, 1, "#a87745");
+      for (let i = 0; i < 3; i++) P(g, bx + 1 + i * 2, 7, 1, 1, prods[b]);
+    }
     return c;
   }
+
   function sellBin() {
     const [c, g] = cv(20, 18);
     P(g, 1, 4, 18, 13, "#8a6340");
@@ -683,36 +789,33 @@ export function buildSprites() {
   // demande explicite de Guillaume) : un peu plus large qu'une case, un peu
   // moins haut que la maison.
   function millSprite() {
+    // Moulin refondu (maquette validée 2026-07) : tour en pierre, calotte
+    // bois, AILES de moulin à vent (lattes bois + toile écrue) remplaçant
+    // l'ancienne roue à aubes. Même canevas 30x36, même ancrage de rendu.
     const [c, g] = cv(30, 36);
-    // soubassement en pierre
-    P(g, 2, 26, 26, 8, "#9a9aa2"); P(g, 2, 26, 26, 2, "#b2b2ba");
-    for (let x = 3; x < 27; x += 5) P(g, x, 28, 1, 6, "#7a7a82");
-    // corps en bois
-    P(g, 3, 12, 24, 15, "#a9773f");
-    P(g, 3, 12, 24, 2, "#c08c4f"); // reflet du haut
-    for (let y = 15; y < 26; y += 4) P(g, 3, y, 24, 1, "#8a6038"); // planches horizontales
-    // toit en pente (deux pans, style grange simple)
-    g.fillStyle = "#7a3a2a"; g.beginPath(); g.moveTo(0, 13); g.lineTo(15, 2); g.lineTo(30, 13); g.fill();
-    g.fillStyle = "#8a4632"; g.beginPath(); g.moveTo(0, 13); g.lineTo(15, 2); g.lineTo(15, 5); g.lineTo(2, 13.5); g.fill(); // pan éclairé
-    P(g, 0, 12, 30, 2, "#5a2c20"); // rive de toit
-    // porte + petite fenêtre
-    P(g, 12, 19, 7, 8, "#5a3d24"); P(g, 12, 19, 7, 1, "#6a4a2c");
-    P(g, 22, 16, 4, 4, "#cfe0e8"); P(g, 22, 16, 4, 1, "#3a3a40");
-    // roue à aubes sur le flanc gauche (symbole du moulin, statique)
-    g.strokeStyle = "#5a3d24"; g.lineWidth = 2;
-    g.beginPath(); g.arc(4, 24, 7, 0, 7); g.stroke();
-    g.fillStyle = "#7a5330";
-    for (let a = 0; a < 8; a++) {
-      const ang = (a / 8) * Math.PI * 2;
-      g.beginPath(); g.moveTo(4, 24); g.lineTo(4 + Math.cos(ang) * 7, 24 + Math.sin(ang) * 7); g.stroke();
+    const r = makeRnd(3);
+    bStones(g, 9, 14, 12, 20, r, ["#b8b0a2", "#d0c8ba", "#a09888"], 4);
+    g.fillStyle = "#7a5330"; g.beginPath(); g.moveTo(7, 15); g.lineTo(15, 7); g.lineTo(23, 15); g.fill();
+    P(g, 8, 13, 14, 1, "#6a4426"); P(g, 10, 10, 10, 1, "#6a4426");
+    // 4 ailes en diagonale : latte bois + bande de toile
+    for (let i = 3; i < 13; i++) {
+      for (const sx of [1, -1]) for (const sy of [1, -1]) {
+        const xx = 15 + sx * i, yy = 12 + sy * i;
+        if (xx >= 0 && xx < 30 && yy >= 0 && yy < 36) {
+          P(g, xx, yy, 1, 1, "#5a4028");
+          const tx = xx + sx;
+          if (i >= 5 && tx >= 0 && tx < 30) P(g, tx, yy, 1, 1, i % 3 ? "#eae2cc" : "#d8cfb2");
+        }
+      }
     }
-    g.fillStyle = "#5a3d24"; g.beginPath(); g.arc(4, 24, 2, 0, 7); g.fill(); // moyeu
-    // sac de blé/farine posé contre l'entrée
-    g.fillStyle = "#d8b878"; g.beginPath();
-    g.moveTo(20, 34); g.quadraticCurveTo(18, 28, 20, 24); g.lineTo(25, 24); g.quadraticCurveTo(27, 28, 25, 34); g.fill();
-    P(g, 20, 22, 5, 2, "#b8912a");
+    P(g, 14, 11, 2, 2, "#3a2818"); // moyeu
+    P(g, 12, 26, 6, 8, "#5a3d24"); P(g, 12, 26, 6, 1, "#6a4a2c"); // porte
+    P(g, 12, 18, 5, 4, "#cfe0e8"); P(g, 12, 18, 5, 1, "#3a3a40"); // fenêtre
+    // sac de farine contre l'entrée
+    P(g, 22, 28, 5, 6, "#d8b878"); P(g, 22, 27, 5, 2, "#b8912a");
     return c;
   }
+
   // Chaudron en métal (chantier 2026-07 : remplace l'ancien rendu emoji
   // ⚗️ flottant, demande explicite Guillaume "un joli chaudron type
   // métal, pas une image qui flotte"). Panse en fonte noire, rebord et
@@ -750,19 +853,28 @@ export function buildSprites() {
     return c;
   }
   function well() {
+    // Puits refondu (maquette validée 2026-07) : toit de tuiles, treuil avec
+    // tambour + corde + seau en métal, margelle en moellons, eau visible.
     const [c, g] = cv(24, 30);
-    // toit
-    g.fillStyle = "#a83c30"; g.beginPath(); g.moveTo(1, 12); g.lineTo(12, 3); g.lineTo(23, 12); g.fill();
-    P(g, 1, 11, 22, 2, "#8a3028");
-    P(g, 4, 12, 2, 10, "#7a5330"); P(g, 18, 12, 2, 10, "#7a5330"); // poteaux
-    // margelle en pierre
-    P(g, 3, 20, 18, 8, "#9a9aa2"); P(g, 3, 20, 18, 2, "#b2b2ba");
-    for (let x = 4; x < 21; x += 4) P(g, x, 22, 1, 6, "#7a7a82");
-    P(g, 6, 22, 12, 5, "#2a3a4a"); // eau sombre
-    P(g, 8, 23, 4, 1, "#4a6a8a");
-    P(g, 10, 12, 4, 8, "#8a6340"); // seau/corde au centre
+    for (let row = 0; row < 2; row++) {
+      const yy = 3 + row * 4;
+      P(g, 2, yy, 20, 4, "#c04a3c");
+      P(g, 2, yy + 3, 20, 1, "#7c2a22");
+      for (let x = 2 + (row % 2 ? 2 : 0); x < 22; x += 5) { P(g, x, yy, 1, 3, "#7c2a22"); P(g, x + 1, yy, 1, 1, "#d4635a"); }
+    }
+    P(g, 1, 10, 22, 2, "#6a241e");
+    P(g, 3, 12, 2, 10, "#6a4a2c"); P(g, 19, 12, 2, 10, "#6a4a2c"); // poteaux
+    P(g, 5, 13, 14, 2, "#5a4028");  // axe du treuil
+    P(g, 10, 12, 4, 4, "#8a6340");  // tambour
+    P(g, 11, 16, 1, 5, "#3a2818");  // corde
+    P(g, 9, 20, 5, 3, "#8a8a92"); P(g, 9, 20, 5, 1, "#a4a4ae"); // seau métal
+    const r = makeRnd(9);
+    bStones(g, 2, 22, 20, 8, r, ["#9a9aa4", "#b8b8c2", "#84848e"], 4);
+    P(g, 5, 24, 14, 4, "#20303c"); // eau sombre visible
+    P(g, 8, 25, 3, 1, "#3a5a74"); P(g, 14, 26, 2, 1, "#3a5a74");
     return c;
   }
+
   // Clôture HORIZONTALE : les deux lisses courent sur toute la LARGEUR de la
   // tuile (y=6 et y=11), donc se prolongent sans coupure d'une tuile à
   // l'autre quand plusieurs tuiles sont posées côte à côte horizontalement.
@@ -878,16 +990,29 @@ export function buildSprites() {
     P(g, sz * 0.06, baseY - wallH, sz * 0.88, wallH, "#a83c30");
     for (let y = baseY - wallH + 4; y < baseY; y += 6) P(g, sz * 0.06, y, sz * 0.88, 1, "#8a3028");
     P(g, sz * 0.06, baseY - wallH, sz * 0.88, 3, "#c04a3c");
-    // Toit à deux pans
-    g.fillStyle = "#5a4530";
+    // Restyle maquette validée 2026-07 : joints de planches verticaux sur
+    // le bardage rouge (lecture "planches" plutôt qu'aplat).
+    for (let x = Math.round(sz * 0.06) + 5; x < sz * 0.92; x += 5) P(g, x, baseY - wallH + 3, 1, wallH - 3, "#8a3028");
+    // Toit à deux pans — gris ardoise (maquette validée 2026-07)
+    g.fillStyle = "#8a8a92";
     g.beginPath(); g.moveTo(0, baseY - wallH + 2); g.lineTo(sz / 2, sz * 0.08); g.lineTo(sz, baseY - wallH + 2); g.fill();
-    g.fillStyle = "#6a5238";
+    g.fillStyle = "#a4a4ae";
     g.beginPath(); g.moveTo(sz * 0.04, baseY - wallH); g.lineTo(sz / 2, sz * 0.12); g.lineTo(sz * 0.96, baseY - wallH); g.lineTo(sz * 0.9, baseY - wallH); g.lineTo(sz / 2, sz * 0.18); g.lineTo(sz * 0.1, baseY - wallH); g.fill();
     // Porte double, cadre blanc (signature "grange")
     const doorW = sz * 0.28, doorX = sz / 2 - doorW / 2, doorY = baseY - wallH * 0.86, doorH = wallH * 0.86;
     P(g, doorX - 2, doorY - 2, doorW + 4, doorH + 2, "#f0ead8");
     P(g, doorX, doorY, doorW / 2 - 1, doorH, "#7a5330");
     P(g, doorX + doorW / 2 + 1, doorY, doorW / 2 - 1, doorH, "#7a5330");
+    // Croix blanches sur les deux vantaux + rail de coulissement
+    // (maquette validée 2026-07).
+    for (let i = 0; i < doorH; i++) {
+      const t = Math.floor(i * (doorW / 2 - 3) / doorH);
+      P(g, doorX + 1 + t, doorY + i, 1, 1, "#f0ead8");
+      P(g, doorX + Math.floor(doorW / 2) - 2 - t, doorY + i, 1, 1, "#f0ead8");
+      P(g, doorX + Math.floor(doorW / 2) + 2 + t, doorY + i, 1, 1, "#f0ead8");
+      P(g, doorX + doorW - 3 - t, doorY + i, 1, 1, "#f0ead8");
+    }
+    P(g, doorX - 3, doorY - 4, doorW + 6, 2, "#5a4028");
     // Grande ouverture ronde sous le pignon (silo à foin), palier 2 uniquement
     if (level >= 2) {
       g.fillStyle = "#f0ead8"; g.beginPath(); g.arc(sz / 2, baseY - wallH - sz * 0.03, sz * 0.09, 0, 7); g.fill();
@@ -924,10 +1049,12 @@ export function buildSprites() {
     for (let y = 129; y < 213; y += 7) P(g, 20, y, 110, 1, "#8a3028");
     P(g, 20, 123, 110, 3, "#c04a3c");
 
-    // Toit à deux pans (faîtage principal).
-    g.fillStyle = "#5a4530";
+    // Joints de planches sur le mur (restyle maquette validée 2026-07).
+    for (let x = 25; x < 128; x += 6) P(g, x, 126, 1, 87, "#8a3028");
+    // Toit à deux pans (faîtage principal) — gris ardoise (maquette 2026-07).
+    g.fillStyle = "#8a8a92";
     g.beginPath(); g.moveTo(20, 123); g.lineTo(cx, 68); g.lineTo(130, 123); g.fill();
-    g.fillStyle = "#6a5238";
+    g.fillStyle = "#a4a4ae";
     g.beginPath(); g.moveTo(28, 123); g.lineTo(cx, 78); g.lineTo(122, 123); g.fill();
 
     // Grande fenêtre ronde de fenil, dans le pignon.
@@ -948,6 +1075,12 @@ export function buildSprites() {
     P(g, 58, 163, 34, 44, "#f0ead8");
     P(g, 61, 166, 13, 38, "#7a5330");
     P(g, 76, 166, 13, 38, "#7a5330");
+    // Croix blanches sur les deux vantaux (maquette validée 2026-07).
+    for (let i = 0; i < 38; i++) {
+      const t = Math.floor(i * 10 / 38);
+      P(g, 62 + t, 166 + i, 1, 1, "#f0ead8"); P(g, 72 - t, 166 + i, 1, 1, "#f0ead8");
+      P(g, 77 + t, 166 + i, 1, 1, "#f0ead8"); P(g, 87 - t, 166 + i, 1, 1, "#f0ead8");
+    }
 
     return c;
   }
@@ -969,7 +1102,8 @@ export function buildSprites() {
     deadTree: deadTree(),
     stump: stump(),
     rock: rock(),
-    house: house(),
+house: house(),
+    houses: [house(), houseLvl2(), houseLvl3()], // maison à niveaux (maquettes validées 2026-07)
     shop: shopStand(),
     bin: sellBin(),
     crops: [],

@@ -293,6 +293,21 @@ export const DROWN_INJURED_MS = 60 * 1000;
 export const CRITTER_STUCK_S = 2.5;
 export const CRITTER_DETOUR_MS = 1200;
 export const MOUNT_RANGE = 1.6;      // distance pour enfourcher le cheval
+// Maison à NIVEAUX (validation Guillaume 2026-07, maquettes approuvées) :
+// niveau 1 = maison actuelle, niveau 2 = colombages/chaume/soubassement
+// pierre (maquette A), niveau 3 = pierre/tuiles rouges/auvent (maquette B).
+// Chaque palier coûte or + bois + pierre pour LANCER les travaux (payés
+// d'un coup : or sur la caisse commune, bois/pierre sur l'inventaire du
+// demandeur), puis l'amélioration dure un temps RÉEL : 2 h pour le niveau
+// 2, 5 h pour le niveau 3 (durées demandées par Guillaume). Montants
+// extrapolés (aucun chiffre demandé à part les durées), calibrés nettement
+// sous la grange (BARN_LEVELS) pour rester un objectif de mi-parcours — à
+// ajuster librement. HOUSE_LEVELS[n] = palier VERS le niveau n+2.
+export const HOUSE_LEVELS = [
+  { level: 2, cost: { money: 3000, wood: 120, stone: 80 }, durationMs: 2 * 3600 * 1000 },
+  { level: 3, cost: { money: 8000, wood: 200, stone: 160 }, durationMs: 5 * 3600 * 1000 },
+];
+export const HOUSE_MAX_LEVEL = 3;
 export const WELL_COST = 600;
 export const WELL = { x: 30, y: 62 }; // emplacement du puits (champs à l'ouest)
 export const WELL_SPAWN = { x: 30, y: 64 }; // cible du téléport puits (dégagée à l'achat)
