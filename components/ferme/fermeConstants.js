@@ -361,6 +361,9 @@ export const EVIL_CAULDRON_SPAWN = { x: 52, y: 20 }; // position FIXE du chaudro
                                                       // à bonne distance d'EVIL_SPAWN pour qu'il faille explorer un peu.
 export const SALVE_RECIPE = { amethyst: 1, trout: 2, pike: 1 }; // trout=FISH[1], pike=FISH[2]
 export const SALVE_IMMUNITY_MS = 10 * 60 * 1000; // 10 minutes d'immunité/répulsion après usage
+export const SALVE_BREW_MS = 60 * 1000; // 1 minute de concoction réelle (chantier 2026-07, demande Guillaume : menu
+                                         // "déposer/prêt/allumer" + minuterie + retrait dédié au chaudron, voir
+                                         // resolveSalveBrew/resolveSalveCollect, fermeEngine.js)
 
 
 // --- Clôture (posée librement par les joueurs, section par section) ---

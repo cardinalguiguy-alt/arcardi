@@ -1303,7 +1303,14 @@ export function resolveCoopDeposit(f, coop, m) {
    via objectOv, voir generateWorld/applyOverrides) — retrouvée au besoin par
    findCauldronPos() ci-dessous plutôt que dupliquée ici.
    ------------------------------------------------------------------------- */
-export function newSalveCraftState() { return { trout: 0, pike: 0, cauldronUnlocked: false }; }
+// `brewingUntil` (chantier 2026-07, demande Guillaume : "menu déposer/prêt/
+// allumer" + minuterie de concoction + retrait dédié) : 0 tant qu'aucune
+// concoction n'est en cours ; sinon horodatage de fin de concoction, MÊME
+// PRINCIPE que world.objHp/buildReady (aucun message réseau supplémentaire
+// nécessaire pour faire avancer la minuterie, les clients comparent
+// simplement à Date.now()). Remis à 0 par resolveSalveCollect une fois le
+// produit récupéré.
+export function newSalveCraftState() { return { trout: 0, pike: 0, cauldronUnlocked: false, brewingUntil: 0 }; }
 
 // Position du chaudron posé sur la carte (s'il l'est), dérivée de
 // world.objects — un seul chaudron possible pour toute la ferme (voir
@@ -1348,7 +1355,7 @@ export function resolveCauldronPlace(f, world, salveCraft, m) {
   const i = idx(x, y), g = world.ground[i], o = world.objects[i];
   const now = Date.now();
   if (o === C.O_CAULDRON) {
-    if ((salveCraft.trout || 0) > 0 || (salveCraft.pike || 0) > 0) { res.toast = "cauldronNotEmpty"; return res; }
+    if ((salveCraft.trout || 0) > 0 || (salveCraft.pike || 0) > 0 || salveCraft.brewingUntil > 0) { res.toast = "cauldronNotEmpty"; return res; }
     world.objects[i] = C.O_NONE; world.objHp.delete(i);
     f.inv.cauldron = (f.inv.cauldron || 0) + 1;
     res.tiles.push(i); res.invChanged = true;
@@ -1386,27 +1393,56 @@ export function resolveSalveDeposit(f, salveCraft, world, m) {
   return res;
 }
 
-// Lancement de la concoction (touche E au chaudron, une fois la recette
-// réunie) : consomme EXACTEMENT SALVE_RECIPE (pas tout le surplus éventuel,
-// pour laisser une avance à la pommade suivante) dans le stock déposé
-// (trout/pike) et dans la réserve commune de gemmes (amethyst), puis crédite
-// 1 pommade dans l'inventaire PERSONNEL du fermier qui lance la concoction
-// (physiquement présent pour la récupérer) — pas dans un stock partagé, pour
-// rester cohérent avec le reste de l'inventaire consommable (trousse de
-// soins, etc.).
+// Allumage/lancement de la concoction (chantier 2026-07, refonte demande
+// Guillaume : "cliquer sur le chaudron en tenant la torche pour allumer le
+// feu et lancer la concoction" — déclenché côté client par un clic/E sur le
+// chaudron lorsque la torche est allumée ET la recette complète, voir
+// tryOpenNearby/igniteCauldron, FermeGame.js). Consomme EXACTEMENT
+// SALVE_RECIPE (pas tout le surplus éventuel, pour laisser une avance à la
+// pommade suivante) dans le stock déposé (trout/pike) et dans la réserve
+// commune de gemmes (amethyst) — MAIS ne crédite plus la pommade
+// immédiatement : lance une minuterie réelle de C.SALVE_BREW_MS (1 minute),
+// le produit devant ensuite être récupéré séparément (voir
+// resolveSalveCollect). Refuse si une concoction est déjà en cours (pas de
+// double-lancement, pas de perte d'ingrédients déjà engagés).
 export function resolveSalveBrew(f, salveCraft, gems, world) {
   normalizeFarmer(f);
-  const res = { invChanged: false, gemsChanged: false, toast: null, brewed: false };
+  const res = { invChanged: false, gemsChanged: false, toast: null, ignited: false };
   const pos = findCauldronPos(world);
   if (!pos || !buildReady(world.objHp.get(pos.i), Date.now())) { res.toast = "cauldronMissing"; return res; }
   if (!nearT(f, pos)) { res.toast = "farCauldron"; return res; }
+  if (salveCraft.brewingUntil > 0) { res.toast = "cauldronBrewing"; return res; }
   const rec = C.SALVE_RECIPE;
   const haveAmethyst = (gems && gems[0]) || 0;
   const ready = (salveCraft.trout || 0) >= rec.trout && (salveCraft.pike || 0) >= rec.pike && haveAmethyst >= rec.amethyst;
   if (!ready) { res.toast = "cauldronMissing"; return res; }
   salveCraft.trout -= rec.trout; salveCraft.pike -= rec.pike;
   gems[0] -= rec.amethyst; res.gemsChanged = true;
-  f.inv.salve = (f.inv.salve || 0) + 1; res.invChanged = true; res.brewed = true;
+  salveCraft.brewingUntil = Date.now() + C.SALVE_BREW_MS;
+  res.ignited = true;
+  return res;
+}
+
+// Retrait du produit fini (touche E au chaudron une fois la minuterie
+// écoulée, chantier 2026-07, demande Guillaume : "le produit est récupérable
+// directement au chaudron et apparaîtra dans l'inventaire, il sera
+// logiquement utilisable par tous les joueurs de la session") : crédite 1
+// pommade dans l'inventaire PERSONNEL du fermier PRÉSENT qui vient la
+// chercher — n'importe quel fermier de l'équipe peut faire ce geste, pas
+// forcément celui qui avait allumé le feu (coopératif, comme le reste du
+// chaudron). Remet `brewingUntil` à 0, ce qui libère le chaudron pour une
+// prochaine concoction (dépôt à nouveau possible).
+export function resolveSalveCollect(f, salveCraft, world) {
+  normalizeFarmer(f);
+  const res = { invChanged: false, toast: null, collected: false };
+  const pos = findCauldronPos(world);
+  if (!pos || !buildReady(world.objHp.get(pos.i), Date.now())) { res.toast = "cauldronMissing"; return res; }
+  if (!nearT(f, pos)) { res.toast = "farCauldron"; return res; }
+  if (!(salveCraft.brewingUntil > 0)) { res.toast = "cauldronNothingToCollect"; return res; }
+  if (Date.now() < salveCraft.brewingUntil) { res.toast = "cauldronBrewing"; return res; }
+  salveCraft.brewingUntil = 0;
+  f.inv.salve = (f.inv.salve || 0) + 1;
+  res.invChanged = true; res.collected = true;
   return res;
 }
 

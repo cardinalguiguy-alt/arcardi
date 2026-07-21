@@ -6688,6 +6688,19 @@ body.ferme-active .wrap-room > .brand{ display:none !important; }
    (marche au tactile comme au clic, pas seulement au survol). */
 .ferme-usage{ display:block; font-size:11.5px; font-style:italic; opacity:.68; margin-top:2px; }
 div.ferme-usage{ margin-bottom:10px; }
+/* Menu chaudron (chantier 2026-07, refonte demande Guillaume) : question
+   "Déposer les ingrédients ? Oui/Non" puis bouton "Prêt !" — même ligne que
+   .ferme-shop-row, boutons alignés à droite. */
+.ferme-cauldron-confirm{ display:flex; align-items:center; gap:8px; }
+.ferme-cauldron-confirm .ferme-usage{ margin:0; flex:1; }
+.ferme-shop-row button.ferme-btn-secondary{ background:var(--f-paper); }
+.ferme-cauldron-ready-btn{
+  font-family:inherit; font-weight:bold; cursor:pointer; color:#fff;
+  background:var(--f-accent); border:3px solid var(--f-wood); border-radius:6px;
+  padding:6px 14px; box-shadow:0 3px 0 var(--f-wood-d); font-size:13px; width:100%;
+}
+.ferme-cauldron-ready-btn:hover{ filter:brightness(1.08); }
+
 .ferme-close-x{
   float:right; background:var(--f-accent); color:#fff; font-family:inherit; font-weight:bold;
   cursor:pointer; border:3px solid var(--f-wood); border-radius:6px; padding:4px 10px; box-shadow:0 3px 0 var(--f-wood-d);

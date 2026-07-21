@@ -279,16 +279,44 @@ export const FERME_STR = {
     // coopérative (1 améthyste + 2 truites + 1 brochet), voir CAULDRON_SITE/
     // SALVE_RECIPE (fermeConstants.js) et resolveSalveDeposit/resolveSalveBrew
     // (fermeEngine.js).
-    promptCauldron: "[E] Chaudron (améthyste, 2 truites, 1 brochet)",
+    promptCauldron: "[E] Chaudron (concocter)",
+    promptCauldronIgnite: "[E] Allumer le chaudron 🔥",
+    promptCauldronBrewing: "⏳ Concoction en cours...",
+    promptCauldronCollect: "[E] Récupérer la pommade",
     promptSalveDeposit: "[E] Déposer poisson au chaudron",
     promptSalveBrew: "[E] Lancer la concoction",
     salveDeposited: (who, n, res) => `${who} dépose ${n} ${res} au chaudron.`,
-    salveBrewed: (who) => `⚗️ ${who} a concocté une pommade de protection !`,
+    salveIgnited: (who) => `🔥 ${who} allume le feu sous le chaudron ! Concoction en cours (1 min)...`,
+    salveBrewed: (who) => `⚗️ ${who} récupère une pommade de protection au chaudron !`,
     toastFarCauldron: "Approche-toi du chaudron pour déposer ou concocter.",
     toastNoFishToDeposit: "Tu ne portes ni truite ni brochet à déposer.",
     toastCauldronMissing: "Il manque des ingrédients (1 améthyste, 2 truites, 1 brochet), ou le chaudron n'est pas encore posé.",
+    toastCauldronBrewing: "⏳ La concoction est déjà en cours, reviens dans un instant.",
+    toastCauldronNothingToCollect: "Rien à récupérer au chaudron pour l'instant.",
+    toastCauldronNeedTorch: "Allume d'abord ta torche pour lancer le feu sous le chaudron !",
     troutLabel: "truite(s)",
     pikeLabel: "brochet(s)",
+    // Menu du chaudron (chantier 2026-07, refonte demande Guillaume : "une
+    // fois la recette sélectionnée, le chaudron doit proposer de déposer les
+    // ingrédients ? Oui-Non [...] si tous les ingrédients sont là alors on
+    // peut cliquer sur prêt ! et puis le chaudron indiquera allumez le
+    // chaudron") : liste de produits (une seule entrée pour l'instant),
+    // confirmation avant chaque dépôt, bouton "Prêt !" une fois la recette
+    // complète, puis allumage effectif dans le monde (clic/E sur le
+    // chaudron, torche en main) — voir cauldronPlaceIngredients/
+    // igniteCauldron/tryOpenNearby, FermeGame.js.
+    cauldronMenuTitle: "⚗️ Que voulez-vous concocter ?",
+    cauldronMenuHint: "Choisis une concoction, dépose les ingrédients demandés, puis va allumer ta torche et clique sur le chaudron pour lancer le feu.",
+    cauldronProductSalveName: "🧴 Pommade magique",
+    cauldronProductSalveNeed: (rec) => `Recette : ${rec.amethyst} améthyste, ${rec.trout} truite(s), ${rec.pike} brochet(s)`,
+    cauldronProductSalveProgress: (dep, amethyst, rec) => `Déjà placé : ${dep.trout}/${rec.trout} truite(s), ${dep.pike}/${rec.pike} brochet(s) · Améthyste en réserve : ${amethyst}/${rec.amethyst}`,
+    cauldronDepositQuestion: "Déposer les ingrédients ?",
+    cauldronYesBtn: "Oui",
+    cauldronCompleteBtn: "Compléter",
+    cauldronNoBtn: "Non",
+    cauldronReadyBtn: "✅ Prêt !",
+    cauldronReadyHint: "Recette complète — va allumer ta torche puis clique sur le chaudron pour lancer la concoction !",
+    cauldronIgniteHint: "Torche en main, clique sur le chaudron pour allumer le feu et lancer la concoction (1 min).",
     // Chaudron ramené du monde maléfique (chantier 2026-07, demande
     // Guillaume) : artéfact ramassable UNE SEULE fois côté maléfique, puis
     // posable où on veut côté ferme avec l'outil Construction (voir
@@ -628,12 +656,37 @@ export const FERME_STR = {
     immunityBanner: (t) => `🧴 Invisible and immune to evil creatures — ${t}`,
     // Protection salve cauldron (2026-07 chantier): cooperative recipe (1
     // amethyst + 2 trout + 1 pike).
-    promptCauldron: "[E] Cauldron (amethyst, 2 trout, 1 pike)",
+    promptCauldron: "[E] Cauldron (brew)",
+    promptCauldronIgnite: "[E] Light the cauldron 🔥",
+    promptCauldronBrewing: "⏳ Brewing in progress...",
+    promptCauldronCollect: "[E] Collect the salve",
     promptSalveDeposit: "[E] Deposit fish at the cauldron",
     promptSalveBrew: "[E] Start brewing",
     salveDeposited: (who, n, res) => `${who} deposits ${n} ${res} at the cauldron.`,
-    salveBrewed: (who) => `⚗️ ${who} brewed a protection salve!`,
+    salveIgnited: (who) => `🔥 ${who} lights the fire under the cauldron! Brewing in progress (1 min)...`,
+    salveBrewed: (who) => `⚗️ ${who} collects a protection salve at the cauldron!`,
     toastFarCauldron: "Get closer to the cauldron to deposit or brew.",
+    toastCauldronBrewing: "⏳ Already brewing, come back in a moment.",
+    toastCauldronNothingToCollect: "Nothing to collect at the cauldron right now.",
+    toastCauldronNeedTorch: "Light your torch first to start the fire under the cauldron!",
+    // Cauldron menu (2026-07 chantier, revamp): "deposit ingredients? Yes/No"
+    // (becomes "Complete" once the team already started), then a "Ready!"
+    // button once the recipe is complete — actually lighting the fire now
+    // happens in the world (click/E on the cauldron, torch in hand), not
+    // from a menu button. See cauldronPlaceIngredients/igniteCauldron/
+    // tryOpenNearby, FermeGame.js.
+    cauldronMenuTitle: "⚗️ What would you like to brew?",
+    cauldronMenuHint: "Pick a brew, deposit the requested ingredients, then go light your torch and click the cauldron to start the fire.",
+    cauldronProductSalveName: "🧴 Magic salve",
+    cauldronProductSalveNeed: (rec) => `Recipe: ${rec.amethyst} amethyst, ${rec.trout} trout, ${rec.pike} pike`,
+    cauldronProductSalveProgress: (dep, amethyst, rec) => `Already placed: ${dep.trout}/${rec.trout} trout, ${dep.pike}/${rec.pike} pike · Amethyst in stock: ${amethyst}/${rec.amethyst}`,
+    cauldronDepositQuestion: "Deposit the ingredients?",
+    cauldronYesBtn: "Yes",
+    cauldronCompleteBtn: "Complete",
+    cauldronNoBtn: "No",
+    cauldronReadyBtn: "✅ Ready!",
+    cauldronReadyHint: "Recipe complete — go light your torch, then click the cauldron to start brewing!",
+    cauldronIgniteHint: "Torch in hand, click the cauldron to light the fire and start brewing (1 min).",
     promptEvilCauldronPickup: "[E] Pick up the cauldron",
     evilCauldronPickedToast: "⚗️ You picked up the cauldron! Bring it back to the farm and place it anywhere (Build tool).",
     toastCauldronAlreadyTaken: "This cauldron has already been picked up.",

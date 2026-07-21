@@ -783,6 +783,25 @@ export default function HeistRoom({ room, me, isHost, players, t, lang, onFinish
     });
   }
 
+  // Applique un état sauvegardé (rooms.game_state) au rendu local — utilisé
+  // au premier SUBSCRIBED du canal (ci-dessous) ET par l'effet de
+  // resynchronisation passive juste après (voir son commentaire pour le
+  // bug corrigé). Garde-fou inchangé : une sauvegarde d'un ANCIEN format
+  // (sans la finale "La Joconde" puzzle.c6, ou sans le labyrinthe
+  // puzzle.maze ajouté au zip 138) est ignorée — la restaurer ferait
+  // planter le rendu.
+  function applySavedState(saved) {
+    if (!saved || !saved.puzzle || !saved.puzzle.c6 || !saved.puzzle.maze) return;
+    setRoles({ A: saved.roleA, B: saved.roleB });
+    setPuzzle(saved.puzzle);
+    setDeadline(saved.deadline);
+    setChapter(saved.chapter);
+    setAlert(saved.alert || 0);
+    setFinalA(!!saved.finalA); setFinalB(!!saved.finalB);
+    setPhase(saved.phase);
+    autoStartedRef.current = true;
+  }
+
   useEffect(() => {
     const ch = supabase.channel("heist_" + room.id, { config: { broadcast: { self: true } } });
     channelRef.current = ch;
@@ -867,22 +886,7 @@ export default function HeistRoom({ room, me, isHost, players, t, lang, onFinish
         setChannelReady(true);
         if (!restoredRef.current) {
           restoredRef.current = true;
-          const saved = readGameState(room, "heist");
-          // Garde-fou : une sauvegarde d'un ANCIEN format (sans la finale
-          // "La Joconde" puzzle.c6, ou sans le labyrinthe puzzle.maze ajouté au
-          // zip 138) est ignorée — la restaurer ferait planter le rendu.
-          if (saved && (!saved.puzzle || !saved.puzzle.c6 || !saved.puzzle.maze)) {
-            // rien : retour propre à l'écran d'intro
-          } else if (saved) {
-            setRoles({ A: saved.roleA, B: saved.roleB });
-            setPuzzle(saved.puzzle);
-            setDeadline(saved.deadline);
-            setChapter(saved.chapter);
-            setAlert(saved.alert || 0);
-            setFinalA(!!saved.finalA); setFinalB(!!saved.finalB);
-            setPhase(saved.phase);
-            autoStartedRef.current = true;
-          }
+          applySavedState(readGameState(room, "heist"));
         }
       }
     });
@@ -893,6 +897,28 @@ export default function HeistRoom({ room, me, isHost, players, t, lang, onFinish
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [room.id]);
+
+  // CORRECTIF (bug "invité bloqué sur l'écran de départ") : la lecture de
+  // `rooms.game_state` ci-dessus ne se fait qu'UNE fois, au SUBSCRIBED du
+  // canal — or le rideau (`CurtainStage`) monte ce composant plus tard chez
+  // l'invité que chez l'hôte (tampon `stage_launch_at`, voir CurtainStage.js),
+  // pendant que l'hôte, lui, envoie `match_start` (broadcast) dès que SON
+  // canal est prêt. Si l'invité ne s'abonne qu'APRÈS ce broadcast, il le
+  // rate définitivement — et jusqu'ici, si en plus l'écriture Supabase de
+  // l'hôte (`saveGameState`) n'était pas encore arrivée à ce moment précis
+  // (course particulièrement probable depuis l'ajout du labyrinthe, dont la
+  // grille 11x11 alourdit légèrement la charge utile), l'invité restait
+  // bloqué à l'écran "en attente" pour toute la manche, sans aucun
+  // rattrapage automatique. `room.game_state` est pourtant déjà tenu à jour
+  // en direct par la page (postgres_changes sur `rooms`, voir page.js) —
+  // cet effet réagit donc à CHAQUE mise à jour de `room` et retente une
+  // restauration tant qu'on est encore sur l'écran d'intro sans puzzle
+  // local, ce qui rattrape le cas raté sans que l'invité ait à recharger.
+  useEffect(() => {
+    if (phase !== "intro" || puzzle) return;
+    applySavedState(readGameState(room, "heist"));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [room?.game_state, phase, puzzle]);
 
   function startMatch(pRow1, pRow2) {
     const pa = { id: pRow1.profile_id, username: pRow1.profiles?.username, avatar: pRow1.profiles?.avatar };
