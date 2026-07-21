@@ -228,6 +228,17 @@ export const ROCK_HP = 3;
 export const TREE_WOOD = 6;  // bois par arbre
 export const ROCK_STONE = 4; // pierres par rocher
 
+// Rochers du monde maléfique (chantier 2026-07, demande Guillaume : "les
+// roches là-bas (plus pointues) contiennent de la pierre mais aussi des
+// minerais magiques qui serviront d'ingrédients pour des concoctions
+// futures, à ramener au chaudron") : mêmes C.O_ROCK/C.ROCK_HP que la ferme
+// (réutilisés tels quels dans generateEvilWorld), seul le RENDU diffère
+// (variante "pointue"/améthyste, voir fermeArt.js) et le MINAGE rapporte en
+// plus une chance de minerai magique, en sus de la pierre habituelle.
+export const EVIL_ORE_CHANCE = 0.35;  // probabilité de minerai à chaque rocher épuisé
+export const EVIL_ORE_YIELD = [1, 2]; // quantité min/max de minerai par trouvaille
+export const EVIL_ROCK_HP = ROCK_HP * 5; // rochers maléfiques : 5x plus résistants à la pioche que ceux de la ferme (demande Guillaume)
+
 // --- Temps ---
 export const DAY_REAL_MS = 16 * 60 * 1000; // un jour = 16 minutes réelles (temps ingame 2x plus lent, demande 2026-07)
 export const DAY_START_MIN = 6 * 60;      // 6h00

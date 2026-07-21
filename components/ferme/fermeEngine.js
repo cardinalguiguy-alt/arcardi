@@ -286,7 +286,7 @@ export function generateEvilWorld() {
     const tx = rnd() * W, ty = rnd() * H;
     place(tx, ty, pickTreeType(tx, ty), C.TREE_HP);
   }
-  for (let i = 0; i < 260; i++) place(rnd() * W, rnd() * H, C.O_ROCK, C.ROCK_HP);
+  for (let i = 0; i < 260; i++) place(rnd() * W, rnd() * H, C.O_ROCK, C.EVIL_ROCK_HP);
   // Dégage l'arrivée (bord sud), le passage retour (bord nord-ouest) et le
   // chaudron-artéfact (chantier 2026-07, demande Guillaume : "on le trouve
   // comme un artéfact interactif dans le monde maléfique") — ce dernier
@@ -520,6 +520,7 @@ export function newFarmer(id, name, gender, outfit) {
     tools: { hoe: 1, can: 1, axe: 1, pick: 1 },
     inv: {
       wood: 0, stone: 0, food: 0, fence: 0, wall: 0, path: 0, lamp: 0, scarecrow: 0, grass: 0, mill: 0, healKit: 0, salve: 0,
+      magicOre: 0, // minerai magique miné dans le monde maléfique (chantier 2026-07), ingrédient pour de futures concoctions au chaudron
       seeds: [5, 0, 0, 0], crops: [0, 0, 0, 0],
       gems: C.GEMS.map(() => 0),      // gemmes rares trouvées au minage
       fish: C.FISH.map(() => 0),      // poissons pêchés
@@ -572,6 +573,7 @@ export function normalizeFarmer(f) {
   f.inv = f.inv || {};
   if (typeof f.inv.wood !== "number") f.inv.wood = 0;
   if (typeof f.inv.stone !== "number") f.inv.stone = 0;
+  if (typeof f.inv.magicOre !== "number") f.inv.magicOre = 0;
   if (typeof f.inv.food !== "number") f.inv.food = 0;
   if (typeof f.inv.fence !== "number") f.inv.fence = 0;
   if (typeof f.inv.wall !== "number") f.inv.wall = 0;

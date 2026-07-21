@@ -797,6 +797,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
         dirtyRef.current = true;
       }
+    } else if (req.kind === "evilMine") {
+      // Minage de rocher en carte maléfique (chantier 2026-07, demande
+      // Guillaume : "les roches là-bas contiennent de la pierre mais aussi
+      // des minerais magiques") : même esprit que "evilChop" — la carte
+      // maléfique n'existe pas côté hôte, la pierre et le minerai gagnés
+      // sont déjà calculés/plafonnés côté client (doActionEvil) et
+      // simplement crédités ici.
+      const stone = Math.max(0, Math.min(50, req.stone | 0));
+      const ore = Math.max(0, Math.min(10, req.ore | 0));
+      if (stone > 0 || ore > 0) {
+        f.inv.stone += stone;
+        f.inv.magicOre = (f.inv.magicOre || 0) + ore;
+        out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
+        dirtyRef.current = true;
+      }
     } else if (req.kind === "evilCaught") {
       // Créature maléfique (chantier 2026-07, demande Guillaume) : même
       // esprit que "evilChop" — la carte maléfique n'existe pas côté hôte,
@@ -1706,12 +1721,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // ferme n'est donc jamais touchée par erreur. Contrairement à resolveAct,
   // gère aussi O_TREE_DEAD (jamais rencontré côté ferme) comme un arbre
   // normal : mêmes PV/rendement, devient une souche (O_STUMP) une fois à 0.
-  // Seule la hache agit ici (pas de récolte/arrosage/pioche/construction en
-  // zone maléfique, hors périmètre de la demande).
+  // Seuls la hache (arbres) et la pioche (rochers, chantier 2026-07 ci-dessous)
+  // agissent ici (pas de récolte/arrosage/construction en zone maléfique,
+  // hors périmètre de la demande).
   function doActionEvil() {
     const m = meRef.current; if (!m || actAnimRef.current > 0) return;
     const ew = evilWorldRef.current; if (!ew) return;
-    if (slotRef.current !== 0 || toolKindRef.current !== "axe") return;
+    if (slotRef.current !== 0) return;
+    if (toolKindRef.current === "pick") { doMineEvil(m, ew); return; }
+    if (toolKindRef.current !== "axe") return;
     const tt = targetTileEvil();
     if (!inMapEvil(tt.x, tt.y)) return;
     const i = tt.y * ew.w + tt.x;
@@ -1728,6 +1746,41 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       else { ew.objects[i] = C.O_STUMP; ew.objHp.set(i, 2); }
       fxRef.current.push({ ...base, kind: "txt", txt: L.fxWood(wood), col: "#ffdf80", life: 1.4 });
       sendReq({ kind: "evilChop", wood });
+    } else {
+      ew.objHp.set(i, hp);
+    }
+  }
+  // Minage des rochers du monde maléfique (chantier 2026-07, demande
+  // Guillaume : "les roches là-bas [plus pointues] contiennent de la pierre
+  // mais aussi des minerais magiques qui serviront d'ingrédients pour des
+  // concoctions futures, à ramener au chaudron"). Même principe que la coupe
+  // d'arbre ci-dessus : résolu localement sur evilWorldRef (jamais
+  // synchronisé), seul le gain (pierre + minerai) est envoyé à l'hôte via la
+  // requête dédiée "evilMine" pour créditer l'inventaire du fermier. Le
+  // minerai n'a, pour l'instant, aucun usage côté chaudron (aucune recette ne
+  // le consomme encore) — il s'accumule simplement dans `inv.magicOre` en
+  // attendant un futur chantier de concoctions.
+  function doMineEvil(m, ew) {
+    const tt = targetTileEvil();
+    if (!inMapEvil(tt.x, tt.y)) return;
+    const i = tt.y * ew.w + tt.x;
+    if (ew.objects[i] !== C.O_ROCK) return;
+    actAnimRef.current = 0.28;
+    const pickLvl = (toolsRef.current && toolsRef.current.pick) || 1;
+    const hp = (ew.objHp.get(i) || 1) - pickLvl;
+    const base = { x: m.x, y: m.y, t: 0 };
+    for (let k = 0; k < 5; k++) fxRef.current.push({ ...base, kind: "p", col: k % 2 ? "#8a6f9e" : "#c7bcd6", vx: (Math.random() - .5) * 3, vy: -Math.random() * 3, life: .6 });
+    if (hp <= 0) {
+      ew.objects[i] = C.O_NONE; ew.objHp.delete(i);
+      const stone = E.toolYield(C.ROCK_STONE, pickLvl);
+      let ore = 0;
+      if (Math.random() < C.EVIL_ORE_CHANCE) {
+        const [lo, hi] = C.EVIL_ORE_YIELD;
+        ore = lo + Math.floor(Math.random() * (hi - lo + 1));
+      }
+      fxRef.current.push({ ...base, kind: "txt", txt: L.fxStone(stone), col: "#d8d0e0", life: 1.4 });
+      if (ore > 0) fxRef.current.push({ ...base, kind: "txt", txt: L.fxMagicOre(ore), col: "#c48bff", life: 1.6 });
+      sendReq({ kind: "evilMine", stone, ore });
     } else {
       ew.objHp.set(i, hp);
     }
@@ -3506,7 +3559,24 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (o === C.O_TREE || o === C.O_TREE2) { const img = o === C.O_TREE ? sprites.oak : sprites.pine; draws.push({ y: (y + 1) * T, fn: () => ctx.drawImage(img, x * T - 8, (y + 1) * T - 48) }); }
         else if (o === C.O_TREE_DEAD) draws.push({ y: (y + 1) * T, fn: () => ctx.drawImage(sprites.deadTree, x * T - 8, (y + 1) * T - 48) });
         else if (o === C.O_STUMP) draws.push({ y: (y + 1) * T, fn: () => ctx.drawImage(sprites.stump, x * T, y * T) });
-        else if (o === C.O_ROCK) draws.push({ y: (y + 1) * T, fn: () => ctx.drawImage(sprites.rock, x * T, y * T) });
+        else if (o === C.O_ROCK) {
+          // Rochers du monde maléfique (chantier 2026-07, demande Guillaume :
+          // "les roches là-bas [plus pointues]") : même sprite de base que
+          // la ferme (pas de nouveau pixel art dédié ici), mais lueur
+          // améthyste pulsante pour signaler visuellement la présence de
+          // minerai magique — même teinte que le lac/la lueur maléfique
+          // (voir cauldronSprite, fermeArt.js), sans idem-sprite dupliqué.
+          draws.push({
+            y: (y + 1) * T, fn: () => {
+              const pulse = 0.55 + 0.35 * Math.sin(now / 480 + i);
+              ctx.save();
+              ctx.shadowColor = `rgba(190, 120, 255, ${pulse})`;
+              ctx.shadowBlur = 10;
+              ctx.drawImage(sprites.rock, x * T, y * T);
+              ctx.restore();
+            }
+          });
+        }
       }
       // Chaudron-artéfact (chantier 2026-07, demande Guillaume : "on le
       // trouve comme un artéfact interactif dans le monde maléfique avant

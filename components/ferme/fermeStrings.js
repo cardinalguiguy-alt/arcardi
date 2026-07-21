@@ -330,6 +330,7 @@ export const FERME_STR = {
     // Effets flottants
     fxWood: (n) => `+${n} bois`,
     fxStone: (n) => `+${n} pierre`,
+    fxMagicOre: (n) => `+${n} minerai magique`,
     fxHarvest: (name) => `+1 ${name.toLowerCase()}`,
     fxGold: (n) => `+${n} or`,
     fxEat: "Miam !",
@@ -666,6 +667,7 @@ export const FERME_STR = {
     chatLeave: (name) => `${name} left the farm.`,
     fxWood: (n) => `+${n} wood`,
     fxStone: (n) => `+${n} stone`,
+    fxMagicOre: (n) => `+${n} magic ore`,
     fxHarvest: (name) => `+1 ${name.toLowerCase()}`,
     fxGold: (n) => `+${n} gold`,
     fxEat: "Yum!",
