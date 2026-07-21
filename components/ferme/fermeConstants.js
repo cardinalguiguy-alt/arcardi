@@ -313,6 +313,14 @@ export const EVIL_MONSTER_DETECT_RADIUS = 9; // distance à partir de laquelle u
 export const EVIL_MONSTER_CATCH_RADIUS = 0.7; // distance de contact (dans un sens comme dans l'autre) déclenchant l'attrapage
 export const EVIL_MONSTER_MIN_SPAWN_DIST = 10; // distance minimale au point d'arrivée pour la génération d'une créature
 export const EVIL_INJURED_MS = 30 * 60 * 1000; // 30 minutes : durée de la blessure infligée par une créature (distincte de INJURED_MS, la morsure de loup)
+// Mini-jeu de morsure des créatures maléfiques (chantier 2026-07, demande
+// Guillaume : "ajoute un minijeu pour résister à la morsure") : au contact,
+// la créature s'arrête et un mini-jeu de martelage (EvilBiteMinigame, même
+// mécanique que WolfBiteMinigame côté ferme normale) s'ouvre avant que
+// caughtByMonster() ne soit appliqué — réussi, la créature fuit au lieu de
+// blesser le joueur.
+export const EVIL_BITE_REACT_MS = 2800;       // durée du mini-jeu de riposte — même valeur que WOLF_BITE_REACT_MS, à ajuster séparément si besoin
+export const EVIL_MONSTER_FLEE_MS = 6000;     // durée pendant laquelle une créature repoussée fuit le joueur avant de pouvoir rechasser
 
 // Pommade de protection (chantier 2026-07, demande Guillaume : un objet
 // achetable au magasin pour repousser les créatures maléfiques ou en être

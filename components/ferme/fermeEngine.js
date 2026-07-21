@@ -324,7 +324,15 @@ export function generateEvilWorld() {
       const i = my * W + mx;
       if (ground[i] === C.G_GRASS && objects[i] === C.O_NONE && Math.hypot(mx - C.EVIL_SPAWN.x, my - C.EVIL_SPAWN.y) >= C.EVIL_MONSTER_MIN_SPAWN_DIST) ok = true;
     }
-    if (ok) monsters.push({ id: n, x: mx + 0.5, y: my + 0.5, homeX: mx + 0.5, homeY: my + 0.5 });
+    // Correctif 2026-07 (demande Guillaume : "il ne faut pas que tous les
+    // monstres aient un aspect de loup") : chaque créature reçoit un `kind`
+    // ("wolf" ou "zombie") tiré ici via le même rnd() seedé que le reste de
+    // la génération, donc déterministe et identique pour tous les clients
+    // (pas de Math.random(), sinon désync visuelle entre joueurs). Répartition
+    // ~50/50, aucun impact sur la logique de poursuite/contact (voir
+    // updateEvilMonsters, FermeGame.js), seulement sur le rendu.
+    const kind = rnd() < 0.5 ? "wolf" : "zombie";
+    if (ok) monsters.push({ id: n, kind, x: mx + 0.5, y: my + 0.5, homeX: mx + 0.5, homeY: my + 0.5 });
   }
   return { w: W, h: H, ground, objects, objHp, crops: new Map(), mills: new Map(), bridgeSites: [], bridgeLeverPos: [], riverCenter: [], monsters };
 }

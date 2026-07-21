@@ -130,6 +130,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [fishMini, setFishMini] = useState(null); // {mode, fish} pendant le minijeu, sinon null
   const [barnMini, setBarnMini] = useState(null); // {level} pendant le mini-jeu de construction de la grange, sinon null
   const [wolfBite, setWolfBite] = useState(null); // {wolfId} pendant le mini-jeu de morsure (loup agressif), sinon null
+  const [evilBite, setEvilBite] = useState(null); // {monsterId} pendant le mini-jeu de morsure d'une créature maléfique (chantier 2026-07), sinon null
   const [injuredUntil, setInjuredUntil] = useState(0); // horodatage de fin d'indisponibilité (0 = pas blessé), survit à un refresh (voir farmer.injuredUntil)
   const [immunityUntil, setImmunityUntil] = useState(0); // pommade de protection (chantier 2026-07) : horodatage de fin d'immunité/répulsion aux créatures maléfiques (0 = inactif), effet purement local, ne survit pas à un refresh
   const [shopOpen, setShopOpen] = useState(false);
@@ -279,8 +280,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const immunityUntilRef = useRef(0); // miroir synchrone de immunityUntil (lu dans updateEvilMonsters)
   const hatUntilRef = useRef(0); // miroir synchrone de hatUntil (lu dans la boucle de rendu, voir drawCharacter)
   const rabbitChallengeOfferRef = useRef(false); // miroir synchrone de rabbitChallengeOffer (lu dans le timer hôte, évite de reproposer en boucle)
+  const evilBiteRef = useRef(null); // miroir synchrone de evilBite (lu dans updateEvilMonsters, boucle de rendu — évite de redéclencher le mini-jeu tant qu'il est déjà ouvert)
 
-  useEffect(() => { fishMiniRef.current = !!fishMini || !!barnMini || !!wolfBite; }, [fishMini, barnMini, wolfBite]);
+  useEffect(() => { fishMiniRef.current = !!fishMini || !!barnMini || !!wolfBite || !!evilBite; }, [fishMini, barnMini, wolfBite, evilBite]);
+  useEffect(() => { evilBiteRef.current = evilBite; }, [evilBite]);
   useEffect(() => { injuredUntilRef.current = injuredUntil || 0; }, [injuredUntil]);
   useEffect(() => { immunityUntilRef.current = immunityUntil || 0; }, [immunityUntil]);
   useEffect(() => { hatUntilRef.current = hatUntil || 0; }, [hatUntil]);
@@ -2673,6 +2676,35 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     sendReq({ kind: "evilCaught", until });
     crossPassage(false, true);
   }
+  // Mini-jeu de morsure des créatures maléfiques (chantier 2026-07, demande
+  // Guillaume : "ajoute un minijeu pour résister à la morsure") : au contact
+  // (voir updateEvilMonsters), la créature s'arrête et ce mini-jeu s'ouvre
+  // au lieu d'appliquer caughtByMonster() instantanément. Déclarée au niveau
+  // du composant (comme resolveWolfBiteOutcome ne l'est pas — ici tout est
+  // local, aucun aller-retour hôte requis, contrairement au loup de la ferme
+  // normale) pour rester accessible depuis le bouton du mini-jeu comme
+  // depuis un éventuel timeout.
+  function resolveEvilBiteOutcome(mo, result) {
+    if (!mo) return;
+    if (result === "win") {
+      mo.chasing = false;
+      mo.fleeing = true;
+      mo.biteFleeUntil = Date.now() + C.EVIL_MONSTER_FLEE_MS;
+      pushToast(L.evilBiteWin);
+    } else {
+      caughtByMonster();
+    }
+  }
+  function evilBiteWon() {
+    const eb = evilBiteRef.current; setEvilBite(null);
+    const mo = eb && (evilWorldRef.current?.monsters || []).find(x => x.id === eb.monsterId);
+    resolveEvilBiteOutcome(mo, "win");
+  }
+  function evilBiteLost() {
+    const eb = evilBiteRef.current; setEvilBite(null);
+    const mo = eb && (evilWorldRef.current?.monsters || []).find(x => x.id === eb.monsterId);
+    resolveEvilBiteOutcome(mo, "fail");
+  }
   function crossPassage(toEvil, viaMonster) {
     if (zoneTransRef.current.active) return; // déjà en transition : ignore un nouveau déclenchement
     zoneTransRef.current = { active: true, t0: performance.now(), toEvil, swapped: false, viaMonster: !!viaMonster };
@@ -3636,9 +3668,6 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // danger avant même le contact.
       for (const mo of (ew.monsters || [])) {
         draws.push({ y: (mo.y + 1) * T, fn: () => {
-          const frame = Math.floor((mo.animT || 0) % 4);
-          const img = sprites.wolf[frame];
-          const px = Math.round(mo.x * T - 14), py = Math.round(mo.y * T - 9);
           if (mo.chasing) {
             const glow = 0.35 + Math.sin(now / 220) * 0.15;
             ctx.save(); ctx.shadowColor = `rgba(170, 60, 220, ${glow})`; ctx.shadowBlur = 14;
@@ -3650,11 +3679,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             const glow = 0.3 + Math.sin(now / 220) * 0.12;
             ctx.save(); ctx.shadowColor = `rgba(90, 220, 130, ${glow})`; ctx.shadowBlur = 12;
           }
-          ctx.save();
-          ctx.filter = "brightness(0.55) saturate(2.2) hue-rotate(235deg)";
-          if (mo.dir === 2) { ctx.translate(px + 30, py); ctx.scale(-1, 1); ctx.drawImage(img, 0, 0); }
-          else ctx.drawImage(img, px, py);
-          ctx.restore();
+          // Correctif 2026-07 (demande Guillaume : "pas tous un aspect de
+          // loup") : dispatch selon mo.kind (tiré à la génération, voir
+          // generateEvilWorld/fermeEngine.js) — loup (rendu existant
+          // inchangé) ou zombie (drawZombie, ci-dessous près de
+          // drawCharacter).
+          if (mo.kind === "zombie") drawZombie(mo, now);
+          else drawWolfMonster(mo);
           if (mo.chasing || mo.fleeing) ctx.restore();
         } });
       }
@@ -3701,31 +3732,68 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // carte aussi densément boisée.
     // Pommade de protection (chantier 2026-07, demande Guillaume : "adding a
     // salve buyable from the market to repel the creatures or be immune to
-    // them for 10 minutes, so the player can explore/farm that side"). Tant
-    // que immunityUntilRef est dans le futur : aucun contact ne déclenche
-    // plus caughtByMonster (immunité), ET toute créature qui aurait
-    // autrement chargé le joueur s'en éloigne au contraire, à la même
-    // vitesse (répulsion) — les deux formulations de la demande couvertes
-    // par un seul et même effet, plutôt que de choisir entre elles.
+    // them for 10 minutes, so the player can explore/farm that side").
+    // Correctif 2026-07 (demande Guillaume : "elle doit nous rendre invisible
+    // ET immunisé aux monstres") : remplace l'ancienne répulsion (créature
+    // qui "voit" le joueur et s'en éloigne) par une invisibilité totale —
+    // tant que immunityUntilRef est dans le futur, une créature qui ne fuit
+    // pas déjà une morsure gagnée ignore purement et simplement le joueur
+    // (aucune poursuite, aucun mouvement de réaction), exactement comme s'il
+    // n'était pas là. Voir aussi le rendu semi-transparent du joueur pendant
+    // l'immunité (drawCharacter, ci-dessous), ajouté pour rendre cette
+    // invisibilité lisible à l'écran.
     function updateEvilMonsters(dt) {
       const ew = evilWorldRef.current, m = meRef.current;
       if (!ew || !ew.monsters || !ew.monsters.length) return;
       const immune = Date.now() < immunityUntilRef.current;
+      const now = Date.now();
       for (const mo of ew.monsters) {
         mo.animT = (mo.animT || 0) + dt * 6;
+        // Fuite temporaire après une morsure repoussée (mini-jeu gagné, voir
+        // resolveEvilBiteOutcome) : la créature reste inoffensive jusqu'à
+        // mo.biteFleeUntil, indépendamment de l'immunité globale (pommade,
+        // ci-dessous) — les deux causes de fuite cohabitent sans se marcher
+        // dessus (un mo.fleeing recalculé chaque frame par l'une écraserait
+        // silencieusement l'autre).
+        const biteFleeing = !!mo.biteFleeUntil && now < mo.biteFleeUntil;
+        if (mo.biteFleeUntil && !biteFleeing) mo.biteFleeUntil = 0;
+        // Mini-jeu déjà ouvert pour CETTE créature : elle reste immobile,
+        // pas de nouveau contact tant que le joueur n'a pas répondu (voir
+        // evilBiteWon/evilBiteLost, qui referment le mini-jeu).
+        if (evilBiteRef.current && evilBiteRef.current.monsterId === mo.id) { mo.fleeing = biteFleeing; continue; }
+        // Correctif 2026-07 (demande Guillaume : "la pommade doit nous
+        // rendre invisible ET immunisé aux monstres") : tant que
+        // immunityUntilRef est dans le futur, une créature qui n'est pas
+        // déjà en train de fuir une morsure gagnée ignore purement et
+        // simplement le joueur — ni poursuite, ni répulsion visible (ancien
+        // comportement, qui donnait l'impression que la créature "voyait"
+        // quand même le joueur pour s'en éloigner). Un joueur invisible
+        // n'est, par définition, jamais détecté : la créature garde son
+        // comportement de veille (immobile/idle) comme si personne n'était
+        // là, jusqu'à l'expiration de l'immunité.
+        if (immune && !biteFleeing) { mo.chasing = false; mo.fleeing = false; continue; }
         const ddx = m.x - mo.x, ddy = m.y - mo.y, dist = Math.hypot(ddx, ddy) || 0.0001;
-        if (!immune && dist <= C.EVIL_MONSTER_CATCH_RADIUS) { caughtByMonster(); return; }
-        if (dist <= C.EVIL_MONSTER_DETECT_RADIUS) {
+        const fleeingNow = biteFleeing;
+        if (!fleeingNow && dist <= C.EVIL_MONSTER_CATCH_RADIUS) {
+          // Correctif 2026-07 (demande Guillaume : "ajoute un minijeu pour
+          // résister à la morsure") : le contact n'applique plus
+          // caughtByMonster() instantanément — il ouvre le mini-jeu de
+          // martelage (voir EvilBiteMinigame plus bas), sur le modèle du
+          // loup agressif de la ferme normale. Ignoré si un autre mini-jeu
+          // (pêche, grange, loup...) est déjà ouvert, comme pour le reste
+          // des interactions pendant fishMiniRef.
+          if (!fishMiniRef.current) setEvilBite({ monsterId: mo.id });
+          mo.chasing = true; mo.fleeing = false;
+          continue;
+        }
+        if (dist <= C.EVIL_MONSTER_DETECT_RADIUS || fleeingNow) {
           const speed = C.EVIL_MONSTER_SPEED * dt;
-          const sign = immune ? -1 : 1;
+          const sign = fleeingNow ? -1 : 1;
           mo.x += sign * (ddx / dist) * speed; mo.y += sign * (ddy / dist) * speed;
           mo.dir = (sign * ddx) < 0 ? 2 : 3;
-          mo.chasing = !immune;
-          mo.fleeing = immune;
-        } else {
-          mo.chasing = false;
-          mo.fleeing = false;
         }
+        mo.chasing = !fleeingNow && dist <= C.EVIL_MONSTER_DETECT_RADIUS;
+        mo.fleeing = fleeingNow;
       }
     }
     function updateMeEvil(dt) {
@@ -3828,7 +3896,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         else ctx.drawImage(sprites.horse, basePx - 6, py - 6);
         ctx.restore();
       }
+      // Invisibilité de la pommade (chantier 2026-07, demande Guillaume :
+      // "elle doit nous rendre invisible ET immunisé aux monstres") : tant
+      // que soi-même en zone maléfique reste sous l'effet (immunityUntilRef,
+      // voir aussi updateEvilMonsters qui fait ignorer le joueur par les
+      // créatures pendant ce temps), le sprite se dessine semi-transparent —
+      // retour visuel indispensable pour que le joueur SACHE qu'il est
+      // invisible, plutôt qu'un effet purement logique invisible... au sens
+      // propre.
+      const invisibleNow = isSelf && p.zone === "evil" && Date.now() < immunityUntilRef.current;
       ctx.save();
+      if (invisibleNow) ctx.globalAlpha = 0.35;
       if (flip) { ctx.translate(px + 16, py - 8 - lift); ctx.scale(-1, 1); ctx.drawImage(sheet, frame * 16, row * 24, 16, 24, 0, 0, 16, 24); }
       else ctx.drawImage(sheet, frame * 16, row * 24, 16, 24, px, py - 8 - lift, 16, 24);
       ctx.restore();
@@ -3897,6 +3975,64 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         else ctx.drawImage(sprites.fishingRodHeld, px, py - 4 - lift);
         ctx.restore();
       }
+    }
+    // Rendu du loup maléfique (chantier 2026-07) : extrait tel quel de
+    // l'ancien rendu inline (voir drawEvilFrame) au moment de l'introduction
+    // du type "zombie" ci-dessous — aucun changement de comportement, juste
+    // sorti de la boucle pour permettre le dispatch par mo.kind.
+    function drawWolfMonster(mo) {
+      const sprites = spritesRef.current;
+      const frame = Math.floor((mo.animT || 0) % 4);
+      const img = sprites.wolf[frame];
+      const px = Math.round(mo.x * T - 14), py = Math.round(mo.y * T - 9);
+      ctx.save();
+      ctx.filter = "brightness(0.55) saturate(2.2) hue-rotate(235deg)";
+      if (mo.dir === 2) { ctx.translate(px + 30, py); ctx.scale(-1, 1); ctx.drawImage(img, 0, 0); }
+      else ctx.drawImage(img, px, py);
+      ctx.restore();
+    }
+    // Zombie maléfique (chantier 2026-07, demande Guillaume : "un skin type
+    // zombie basé sur l'apparence du fermier ou de Greg, avec des couleurs
+    // pâles, qui doit faire peur") : réutilise le sprite de Greg
+    // (sprites.getChar("m", 0, true, false), même skin que le NPC dessiné
+    // plus haut dans drawFullMap) plutôt qu'un nouvel asset dédié — teinté
+    // blafard/verdâtre via ctx.filter (à l'opposé du violet des loups),
+    // démarche titubante (légère rotation oscillante par frame) et posture
+    // penchée en avant (cisaillement), bras tendus suggérés par deux
+    // rectangles sombres, tache sombre semi-transparente sur le visage pour
+    // l'effet "visage défoncé".
+    function drawZombie(mo, now) {
+      const sprites = spritesRef.current;
+      const sheet = sprites.getChar("m", 0, true, false);
+      const row = mo.dir === 0 ? 0 : mo.dir === 1 ? 1 : 2;
+      const frame = Math.floor((mo.animT || 0) % 4);
+      const px = Math.round(mo.x * T), py = Math.round(mo.y * T);
+      const flip = mo.dir === 2;
+      // Démarche titubante : légère oscillation d'angle, déphasée par
+      // l'identité de la créature pour que plusieurs zombies ne titubent
+      // pas parfaitement en phase les uns avec les autres.
+      const wobble = Math.sin(now / 260 + (mo.id || 0) * 1.7) * 0.09;
+      ctx.save();
+      ctx.translate(px + 8, py + 8 - 4);
+      ctx.rotate(wobble);
+      // Cisaillement avant : posture penchée en avant façon prédateur.
+      ctx.transform(1, 0, 0.22, 1, 0, 0);
+      ctx.filter = "brightness(0.75) saturate(0.35) sepia(0.25) hue-rotate(70deg)";
+      if (flip) { ctx.scale(-1, 1); ctx.drawImage(sheet, frame * 16, row * 24, 16, 24, -16, -12, 16, 24); }
+      else ctx.drawImage(sheet, frame * 16, row * 24, 16, 24, -8, -12, 16, 24);
+      ctx.filter = "none";
+      // Bras tendus vers l'avant : deux petits rectangles sombres, léger
+      // balancement inverse du bobbing de marche.
+      const armSwing = Math.sin((mo.animT || 0) * 1.6) * 2;
+      ctx.fillStyle = "rgba(40, 55, 40, 0.85)";
+      const armDir = flip ? -1 : 1;
+      ctx.fillRect(armDir * 6, -2 + armSwing, armDir * 5, 3);
+      ctx.fillRect(armDir * 6, 4 - armSwing, armDir * 5, 3);
+      // Tache de "visage défoncé" : marque sombre semi-transparente sur la
+      // zone du visage, légèrement décalée selon le sens.
+      ctx.fillStyle = "rgba(90, 10, 15, 0.45)";
+      ctx.beginPath(); ctx.ellipse((flip ? -4 : 4), -8, 3.5, 2.5, 0, 0, 7); ctx.fill();
+      ctx.restore();
     }
     function nightAlpha() {
       // Demande Guillaume (chantier 2026-07) : lumière du jour qui revient
@@ -5001,6 +5137,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       {fishMini && <FishMinigame mode={fishMini.mode} fish={fishMini.fish} L={L} lang={lang} onWin={fishWon} onFail={fishLost} />}
       {barnMini && <BarnMinigame level={barnMini.level} L={L} onWin={barnWon} onFail={barnLost} />}
       {wolfBite && <WolfBiteMinigame L={L} onWin={wolfBiteWon} onFail={wolfBiteLost} />}
+      {evilBite && <EvilBiteMinigame L={L} onWin={evilBiteWon} onFail={evilBiteLost} />}
 
       {/* Carte plein écran (nouveauté) : positions live, fermeture au clic/Échap/M */}
       {mapOpen && (
@@ -5259,6 +5396,77 @@ function WolfBiteMinigame({ L, onWin, onFail }) {
           }} />
         </div>
         <div className="ferme-fish-hint">{L.wolfBiteHint} ({Math.ceil(msLeft / 100) / 10}s)</div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================================
+   Mini-jeu de morsure des créatures maléfiques (chantier 2026-07, demande
+   Guillaume : "ajoute un minijeu pour résister à la morsure"). Même mécanique
+   de martelage que WolfBiteMinigame ci-dessus (marteler Espace/clic pour
+   faire monter la jauge avant C.EVIL_BITE_REACT_MS), copiée plutôt que
+   généralisée en composant paramétrable pour ne pas risquer de régression
+   sur le mini-jeu loup existant, déjà rééquilibré (voir commentaire de
+   WolfBiteMinigame). Seule différence demandée par Guillaume : l'overlay
+   n'est PAS rouge comme celui du loup, mais "en mode nuit" — un violet
+   profond, cohérent avec la teinte déjà utilisée partout ailleurs dans le
+   monde maléfique (lac, passage sombre, lueur des rochers, voir
+   drawEvilFrame) plutôt qu'une nouvelle couleur inventée pour l'occasion.
+   ============================================================================ */
+function EvilBiteMinigame({ L, onWin, onFail }) {
+  const [, force] = useState(0);
+  const s = useRef(null);
+  const done = useRef(false);
+
+  const finish = (kind) => { if (done.current) return; done.current = true; if (kind === "win") onWin(); else onFail(); };
+  const press = () => {
+    const st = s.current; if (!st || done.current) return;
+    st.prog = Math.min(1, st.prog + 0.16);
+    if (st.prog >= 1) finish("win");
+  };
+
+  useEffect(() => {
+    const st = { t0: performance.now(), prog: 0 };
+    s.current = st;
+    let raf = 0, last = performance.now();
+    const loop = () => {
+      raf = requestAnimationFrame(loop);
+      const now = performance.now(), dt = Math.min(0.05, (now - last) / 1000); last = now;
+      const st2 = s.current; if (!st2 || done.current) return;
+      st2.prog = Math.max(0, st2.prog - 0.38 * dt);
+      if (now - st2.t0 > C.EVIL_BITE_REACT_MS) return finish("fail");
+      force(v => (v + 1) % 1000000);
+    };
+    raf = requestAnimationFrame(loop);
+    const onKey = (e) => { if (e.code === "Space") { e.preventDefault(); if (!e.repeat) press(); } };
+    window.addEventListener("keydown", onKey);
+    return () => { cancelAnimationFrame(raf); window.removeEventListener("keydown", onKey); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const st = s.current;
+  const prog = st ? st.prog : 0;
+  const msLeft = st ? Math.max(0, C.EVIL_BITE_REACT_MS - (performance.now() - st.t0)) : C.EVIL_BITE_REACT_MS;
+  const onDown = (e) => { e.preventDefault(); press(); };
+
+  return (
+    <div
+      className="ferme-fish-ov"
+      onPointerDown={onDown}
+      style={{ background: "rgba(30,10,60,0.72)", animation: "fermeEvilBitePulse 0.5s infinite alternate" }}
+    >
+      <style>{`@keyframes fermeEvilBitePulse { from { background-color: rgba(30,10,60,0.72); } to { background-color: rgba(70,25,120,0.85); } }`}</style>
+      <div className="ferme-fish-box panel" onPointerDown={onDown} style={{ borderColor: "#8c5ae0" }}>
+        <div className="ferme-fish-title" style={{ color: "#e6d9ff" }}>{L.evilBiteTitle}</div>
+        <div className="ferme-fish-bar">
+          <div className="ferme-fish-cursor" style={{ left: `${prog * 100}%`, background: "#a86bff" }} />
+          <div style={{
+            position: "absolute", inset: 0, background: "#8c5ae0",
+            width: `${prog * 100}%`, opacity: 0.55, borderRadius: "inherit",
+          }} />
+        </div>
+        <div className="ferme-fish-hint">{L.evilBiteHint} ({Math.ceil(msLeft / 100) / 10}s)</div>
       </div>
     </div>
   );

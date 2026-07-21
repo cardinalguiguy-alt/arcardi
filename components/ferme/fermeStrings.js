@@ -122,6 +122,10 @@ export const FERME_STR = {
     wolfBiteWin: "Tu as repoussé le loup !",
     wolfBiteFailChat: (who) => `🩸 ${who} a été mordu par un loup et ramené chez lui, blessé.`,
     wolfBiteWinChat: (who) => `🐺 ${who} a repoussé un loup agressif !`,
+    // Créature maléfique / mini-jeu de morsure (chantier 2026-07)
+    evilBiteTitle: "👹 ELLE T'ATTAQUE !",
+    evilBiteHint: "Martèle Espace (ou clique) pour lui échapper !",
+    evilBiteWin: "Tu as repoussé la créature !",
     rabbitCaughtChat: (who) => `🐇 ${who} a attrapé un lapin sauvage !`,
     rabbitChallengeOfferTitle: "🐇 Défi chasse aux lapins ?",
     rabbitChallengeOfferSub: (n) => `Au moins 2 fermiers sont en ligne. Lancer un défi : le premier à attraper ${n} lapins gagne un chapeau !`,
@@ -270,7 +274,7 @@ export const FERME_STR = {
     salveUseLabel: "Utiliser",
     salveUsedToast: "🧴 Pommade appliquée : immunisé contre les créatures maléfiques pendant 10 minutes.",
     toastNoSalve: "Il te faut une pommade de protection (à fabriquer au chaudron).",
-    immunityBanner: (t) => `🧴 Immunisé aux créatures maléfiques — ${t}`,
+    immunityBanner: (t) => `🧴 Invisible et immunisé aux créatures maléfiques — ${t}`,
     // Chaudron de la pommade de protection (chantier 2026-07) : recette
     // coopérative (1 améthyste + 2 truites + 1 brochet), voir CAULDRON_SITE/
     // SALVE_RECIPE (fermeConstants.js) et resolveSalveDeposit/resolveSalveBrew
@@ -477,6 +481,10 @@ export const FERME_STR = {
     wolfBiteWin: "You fought off the wolf!",
     wolfBiteFailChat: (who) => `🩸 ${who} was bitten by a wolf and dragged back home, injured.`,
     wolfBiteWinChat: (who) => `🐺 ${who} fought off an aggressive wolf!`,
+    // Evil creature / bite minigame (chantier 2026-07)
+    evilBiteTitle: "👹 IT'S ATTACKING YOU!",
+    evilBiteHint: "Mash Space (or click) to break free!",
+    evilBiteWin: "You fought off the creature!",
     rabbitCaughtChat: (who) => `🐇 ${who} caught a wild rabbit!`,
     rabbitChallengeOfferTitle: "🐇 Rabbit-catching challenge?",
     rabbitChallengeOfferSub: (n) => `At least 2 farmers are online. Start a challenge: first to catch ${n} rabbits wins a hat!`,
@@ -617,7 +625,7 @@ export const FERME_STR = {
     salveUseLabel: "Use",
     salveUsedToast: "🧴 Salve applied: immune to evil creatures for 10 minutes.",
     toastNoSalve: "You need a protection salve (craft it at the cauldron).",
-    immunityBanner: (t) => `🧴 Immune to evil creatures — ${t}`,
+    immunityBanner: (t) => `🧴 Invisible and immune to evil creatures — ${t}`,
     // Protection salve cauldron (2026-07 chantier): cooperative recipe (1
     // amethyst + 2 trout + 1 pike).
     promptCauldron: "[E] Cauldron (amethyst, 2 trout, 1 pike)",
