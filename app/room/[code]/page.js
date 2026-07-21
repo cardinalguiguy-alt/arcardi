@@ -224,6 +224,16 @@ export default function Room() {
       if (!Object.prototype.hasOwnProperty.call(roomRow, "game_state")) missing.push("supabase/upgrade-002.sql");
       if (!Object.prototype.hasOwnProperty.call(roomRow, "launch_at")) missing.push("supabase/upgrade-003.sql");
       if (!Object.prototype.hasOwnProperty.call(roomRow, "stage_launch_at")) missing.push("supabase/upgrade-004.sql");
+      // Correctif audit lancement 2026-07 : upgrade-005 (table ferme_saves,
+      // sauvegarde DURABLE de Ferme Vallée) ne laisse aucune trace dans la
+      // ligne `rooms` — détection par une lecture-témoin (limit 1, RLS
+      // select ouverte aux connectés, voir upgrade-005.sql). Sans ce check,
+      // l'hôte ne découvrait la table manquante qu'au moment de saisir son
+      // code de ferme, en pleine soirée, invités déjà à bord.
+      try {
+        const { error: fsErr } = await supabase.from("ferme_saves").select("code").limit(1);
+        if (fsErr) missing.push("supabase/upgrade-005.sql");
+      } catch (e) { missing.push("supabase/upgrade-005.sql"); }
       setMissingMigrations(missing);
 
       // Rejoint automatiquement le salon si ce n'est pas déjà fait — c'est

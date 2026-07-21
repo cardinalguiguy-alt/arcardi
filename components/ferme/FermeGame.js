@@ -36,6 +36,21 @@ import { fstr } from "./fermeStrings";
 const GAME_ID = "ferme";
 const ZOOM = 3;
 
+// Cache mémoire du dernier état sauvegardé par L'HÔTE de CET onglet
+// (correctif audit lancement 2026-07, module-level : survit aux montages/
+// démontages successifs du composant dans la même session). Raison d'être :
+// lors d'une bascule d'instance hôte (bouton Quitter -> instance cachée,
+// "Rejoindre la ferme" -> instance visible), la NOUVELLE instance lit
+// ferme_saves pendant que le flush de démontage de L'ANCIENNE est encore en
+// vol — la lecture peut battre l'écriture de vitesse et recharger un état en
+// léger retour arrière, répercuté aux invités par snapshot. Ce cache fait
+// foi sur la base pendant une courte fenêtre (HOST_MEM_CACHE_MS) : dans le
+// même onglet, la mémoire est par construction au moins aussi fraîche que ce
+// que CE même hôte a pu écrire en base. Jamais utilisé au-delà de la
+// fenêtre (une autre room/un autre hôte a alors pu écrire plus récent).
+let hostFarmMemCache = null; // { code, state, at }
+const HOST_MEM_CACHE_MS = 20000;
+
 // Petit hash stable d'une chaîne -> seed positive (monde stable par salon).
 function hashSeed(str) {
   let h = 2166136261;
@@ -98,6 +113,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [codeError, setCodeError] = useState("");
   const [codeLoading, setCodeLoading] = useState(false);
   const [worldReady, setWorldReady] = useState(false);
+  // Correctif audit lancement 2026-07 : vrai quand l'hôte a répondu "pas
+  // encore de ferme chargée" (event `nofarm`) — l'invité affiche alors un
+  // message d'attente explicite au lieu d'un "Connexion…" muet et sans fin.
+  const [hostPreparing, setHostPreparing] = useState(false);
   const [hud, setHud] = useState({ money: C.START_MONEY, day: 1, timeMin: C.DAY_START_MIN, players: 1 });
   const [myEnergy, setMyEnergy] = useState(C.MAX_ENERGY);
   const [myTools, setMyTools] = useState({ hoe: 1, can: 1, axe: 1, pick: 1 });
@@ -260,6 +279,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const toastIdRef = useRef(0);
   const chatIdRef = useRef(0);
   const farmCodeRef = useRef("");      // code de la ferme durable en cours
+  const worldReadyRef = useRef(false); // miroir synchrone de worldReady (lu dans le handler `snapshot`, correctif audit lancement 2026-07)
+  const lastSnapSentRef = useRef(0);   // hôte : throttle des snapshots complets déclenchés par `hello` (au plus 1 par 500 ms)
+  const persistFnRef = useRef(null);   // toujours la DERNIÈRE persistFarm (closures fraîches pour les filets unmount/pagehide ci-dessous)
   const autoJoinTriedRef = useRef(false);
   const fishTileRef = useRef(null);    // case d'eau ciblée par le minijeu de pêche
   const fishMiniRef = useRef(false);   // un mini-jeu plein écran est en cours (pêche OU construction de la grange) : bloque le reste
@@ -298,6 +320,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   useEffect(() => { immunityUntilRef.current = immunityUntil || 0; }, [immunityUntil]);
   useEffect(() => { hatUntilRef.current = hatUntil || 0; }, [hatUntil]);
   useEffect(() => { rabbitChallengeOfferRef.current = !!rabbitChallengeOffer; }, [rabbitChallengeOffer]);
+  useEffect(() => { worldReadyRef.current = worldReady; }, [worldReady]);
   useEffect(() => { mapOpenRef.current = mapOpen; }, [mapOpen]);
   useEffect(() => { shopOpenRef.current = shopOpen; }, [shopOpen]);
   useEffect(() => { cauldronMenuOpenRef.current = cauldronMenuOpen; }, [cauldronMenuOpen]);
@@ -405,7 +428,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (!code) { setCodeError(L.codeEmpty); return; }
     setCodeError(""); setCodeLoading(true);
     let saved = null;
-    try {
+    // Cache mémoire d'abord (voir hostFarmMemCache en tête de fichier) : lors
+    // d'une bascule d'instance hôte dans le même onglet, il est toujours au
+    // moins aussi frais que la base et élimine la course lecture/écriture.
+    if (hostFarmMemCache && hostFarmMemCache.code === code && Date.now() - hostFarmMemCache.at < HOST_MEM_CACHE_MS) {
+      saved = hostFarmMemCache.state;
+    } else try {
       const { data, error } = await supabase.from("ferme_saves").select("state").eq("code", code).maybeSingle();
       if (error) throw error;
       if (data && data.state) saved = data.state;
@@ -618,6 +646,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     setFertilizerShop(sharedRef.current.fertilizerShop || { stock: 0, lastRestockDay: 0 });
     setRabbitChallenge(sharedRef.current.rabbitChallenge);
     syncBuildings();
+    // Correctif audit lancement 2026-07 (succession d'hôte) : mémorise le
+    // code de la ferme reçu avec l'instantané. Sans lui, un invité promu
+    // hôte (claimAbandonedHost) simulait le monde mais persistFarm() ne
+    // faisait plus JAMAIS rien (farmCodeRef vide) — perte de progression
+    // totalement silencieuse à la fermeture de la session. On ne remplace
+    // jamais un code déjà connu (l'hôte d'origine garde le sien), et on le
+    // remonte à page.js (onCodeLoaded) pour les remontages d'instance.
+    if (payload.farmCode && !farmCodeRef.current) {
+      farmCodeRef.current = payload.farmCode;
+      onCodeLoaded && onCodeLoaded(payload.farmCode);
+    }
+    setHostPreparing(false);
     setWorldReady(true);
   }
 
@@ -628,12 +668,38 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
 
     ch.on("broadcast", { event: "hello", }, ({ payload }) => {
       if (!isHost) return;
-      // Un joueur demande l'instantané : l'hôte le renvoie.
-      broadcastSnapshot();
+      // Correctif audit lancement 2026-07 : pas encore de monde (l'hôte est
+      // toujours sur l'écran code) -> on répond `nofarm` au lieu de laisser
+      // l'invité sur un "Connexion…" muet et sans fin (voir écran select).
+      if (!worldRef.current) { ch.send({ type: "broadcast", event: "nofarm", payload: {} }); return; }
+      // Throttle léger : plusieurs invités relancent `hello` toutes les
+      // 1,2 s — inutile de construire/envoyer plusieurs instantanés complets
+      // dans la même demi-seconde (ils se valent tous ; le demandeur écarté
+      // retentera de lui-même 1,2 s plus tard).
+      const nowMs = Date.now();
+      if (nowMs - lastSnapSentRef.current < 500) return;
+      lastSnapSentRef.current = nowMs;
+      // Un joueur demande l'instantané : l'hôte le renvoie, ADRESSÉ à ce
+      // joueur (payload.to) — les clients déjà en jeu l'ignorent (voir le
+      // handler `snapshot` ci-dessous) : fini le monde intégralement
+      // régénéré chez TOUS les invités à chaque arrivée/retry d'un seul.
+      broadcastSnapshot(payload && payload.id);
+    });
+    ch.on("broadcast", { event: "nofarm" }, () => {
+      // Réponse de l'hôte à un `hello` prématuré (voir ci-dessus) : message
+      // d'attente explicite chez l'invité, effacé dès qu'un snapshot arrive.
+      if (!isHost && !worldReadyRef.current) setHostPreparing(true);
     });
     ch.on("broadcast", { event: "snapshot" }, ({ payload }) => {
       // L'hôte ignore l'écho de son propre snapshot (il a déjà le monde).
       if (isHost && worldRef.current) return;
+      // Correctif audit lancement 2026-07 : un snapshot ADRESSÉ à un autre
+      // joueur (réponse à SON hello) ne concerne pas un client dont le monde
+      // est déjà prêt — l'appliquer quand même régénérait tout le monde
+      // (micro-freeze) et pouvait faire reculer l'état visible. Un snapshot
+      // NON adressé (diffusion générale de l'hôte à son (re)montage) reste
+      // appliqué par tous : c'est un point de resynchronisation volontaire.
+      if (worldReadyRef.current && payload && payload.to && payload.to !== me.id) return;
       applySnapshot(payload);
     });
     ch.on("broadcast", { event: "join" }, ({ payload }) => {
@@ -716,6 +782,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       horses: s.horses, animals: s.animals, wellBuilt: s.wellBuilt, coop: s.coop, barn: s.barn, salveCraft: s.salveCraft, gems: s.gems, flour: s.flour, gregStock: s.gregStock, fertilizerShop: s.fertilizerShop, wolves: s.wolves, greg: s.greg, soan: s.soan,
       rabbits: s.rabbits, rabbitChallenge: s.rabbitChallenge,
       hostNow: Date.now(), // correctif audit 2026-07 : relocalisation d'horloge (voir salveCraft.brewingUntil)
+      // Correctif audit lancement 2026-07 (succession d'hôte) : le code de la
+      // ferme voyage avec l'instantané, pour qu'un invité promu hôte
+      // (claimAbandonedHost) puisse continuer à SAUVEGARDER — voir
+      // applySnapshot, qui le range dans farmCodeRef.
+      farmCode: farmCodeRef.current || null,
     };
   }
   function syncBuildings() {
@@ -724,9 +795,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     setBuildings({ horseCount: hs.length, wellBuilt: !!s.wellBuilt, animalCount: (s.animals || []).length });
     setOnHorse(hs.some(h => h.rider === me.id || h.rider2 === me.id));
   }
-  function broadcastSnapshot() {
+  function broadcastSnapshot(toId) {
     if (!worldRef.current) return;
-    channelRef.current?.send({ type: "broadcast", event: "snapshot", payload: currentSnapshot() });
+    // `to` (correctif audit lancement 2026-07) : renseigné quand le snapshot
+    // répond au `hello` d'UN joueur précis — les clients déjà en jeu
+    // l'ignorent alors (voir le handler `snapshot`). null = diffusion
+    // générale (montage/chargement hôte), appliquée par tous.
+    channelRef.current?.send({ type: "broadcast", event: "snapshot", payload: { ...currentSnapshot(), to: toId || null } });
   }
   function hostEnsureFarmer(id, name, gender, outfit) {
     // Filet de sécurité systématique (même pour un fermier déjà existant) :
@@ -745,15 +820,61 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // salon et se recharge par le même code, sur des semaines.
   async function persistFarm() {
     if (!isHost || !farmCodeRef.current || !worldRef.current) return;
+    // Le cache mémoire est posé AVANT l'écriture réseau (et même si elle
+    // échoue) : c'est lui qui protège les bascules d'instance dans l'onglet
+    // (voir hostFarmMemCache en tête de fichier).
+    const snap = currentSnapshot();
+    hostFarmMemCache = { code: farmCodeRef.current, state: snap, at: Date.now() };
     try {
       await supabase.from("ferme_saves").upsert(
-        { code: farmCodeRef.current, state: currentSnapshot(), updated_at: new Date().toISOString() },
+        { code: farmCodeRef.current, state: snap, updated_at: new Date().toISOString() },
         { onConflict: "code" }
       );
     } catch (e) {
       console.error("[FERME] Sauvegarde impossible (table ferme_saves absente ? exécute supabase/upgrade-005.sql).", e);
     }
   }
+  // Toujours la DERNIÈRE version de persistFarm (props et state frais) pour
+  // les filets ci-dessous, qui vivent dans des effets à deps vides et ne
+  // verraient sinon que la closure du tout premier rendu.
+  useEffect(() => { persistFnRef.current = persistFarm; });
+  // Filets anti-perte de sauvegarde (correctif audit lancement 2026-07) :
+  // 1. au DÉMONTAGE de l'instance (bouton Quitter, bascule vers l'instance
+  //    cachée, "Rejoindre la ferme", "Terminer la partie") — avant, tout ce
+  //    qui était "dirty" depuis moins de 3 s (période du saveTimer) était
+  //    perdu, et l'instance suivante rechargeait donc depuis ferme_saves un
+  //    état en léger retour arrière, répercuté aux invités par snapshot ;
+  // 2. à pagehide / onglet masqué — meilleure chance d'écrire avant une
+  //    fermeture d'onglet ou une mise en veille (best effort : la requête
+  //    peut être coupée en route, mais on ne perd jamais PLUS qu'avant).
+  // flush() ne fait rien si rien n'a changé (dirtyRef), et persistFarm
+  // elle-même ne fait rien côté invité (isHost + farmCode + monde requis).
+  useEffect(() => {
+    const flush = () => {
+      if (!dirtyRef.current) return;
+      dirtyRef.current = false;
+      persistFnRef.current && persistFnRef.current();
+    };
+    const onVis = () => { if (document.visibilityState === "hidden") flush(); };
+    window.addEventListener("pagehide", flush);
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.removeEventListener("pagehide", flush);
+      document.removeEventListener("visibilitychange", onVis);
+      flush(); // démontage : dernier point de sauvegarde de CETTE instance
+    };
+  }, []);
+  // Point de contrôle à la promotion d'hôte (succession, correctif audit
+  // lancement 2026-07) : dès que CE client devient hôte d'un monde prêt dont
+  // il connaît le code (reçu via le snapshot, voir applySnapshot), il écrit
+  // immédiatement une sauvegarde-témoin, sans attendre qu'une action rende
+  // l'état "dirty" — la ferme est ainsi couverte même si plus personne ne
+  // touche à rien après la disparition de l'hôte d'origine. Pour l'hôte
+  // normal, ça ne fait qu'un point de sauvegarde de plus au chargement.
+  useEffect(() => {
+    if (isHost && worldReady && farmCodeRef.current) persistFnRef.current && persistFnRef.current();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isHost, worldReady]);
 
   // Enregistre les tuiles changées dans les overrides de persistance.
   function recordTileOverride(i) {
@@ -4619,7 +4740,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               </div>
             </div>
             <button className="ferme-btn ferme-join-btn" disabled={!worldReady} onClick={doJoin}>{L.joinBtn}</button>
-            <div className="ferme-join-err">{!worldReady ? L.connecting : ""}</div>
+            {/* Correctif audit lancement 2026-07 : tant que l'hôte n'a pas
+                chargé de ferme (réponse `nofarm` à nos hello), message
+                d'attente explicite au lieu d'un "Connexion…" sans fin. */}
+            <div className="ferme-join-err">{!worldReady ? (hostPreparing ? L.waitWorld : L.connecting) : ""}</div>
           </div>
         </div>
       </div>
