@@ -995,6 +995,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         type: "broadcast", event: "apply",
         payload: { injured: { id: f.id, until: f.injuredUntil } },
       });
+    } else if (req.kind === "drown") {
+      // Noyade (décision Guillaume 2026-07 : descendre du cheval en pleine
+      // eau -> retour à la maison + blessure d'UNE minute). Même mécanique
+      // de confiance qu'"evilCaught" ci-dessus : l'horodatage déjà appliqué
+      // en optimiste côté client est repris tel quel (borné contre les
+      // valeurs aberrantes), la téléportation est locale au client (elle
+      // arrive à l'hôte par ses messages de position habituels).
+      const nowD = Date.now();
+      const untilD = (typeof req.until === "number" && req.until > nowD && req.until <= nowD + C.DROWN_INJURED_MS + 5000) ? req.until : nowD + C.DROWN_INJURED_MS;
+      f.injuredUntil = untilD;
+      dirtyRef.current = true;
+      channelRef.current?.send({
+        type: "broadcast", event: "apply",
+        payload: { injured: { id: f.id, until: f.injuredUntil } },
+      });
     } else if (req.kind === "useSalve") {
       // Pommade de protection (chantier 2026-07, demande Guillaume) : même
       // esprit que "evilChop"/"evilCaught" — l'effet (immunité/répulsion 10
@@ -2091,7 +2106,29 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   }
   function toggleMount() {
     const m = meRef.current; if (!m) return;
-    if (myHorse()) { sendReq({ kind: "dismount" }); return; }
+    if (myHorse()) {
+      // Noyade (décision Guillaume 2026-07) : descendre du cheval en pleine
+      // eau = le fermier coule et est ramené chez lui (C.SPAWN) avec une
+      // blessure d'UNE minute (C.DROWN_INJURED_MS). Le "dismount" part
+      // D'ABORD (avec la position actuelle en px/py) : le cheval reste donc
+      // nager sur place — récupérable au sifflet, les chevaux sifflés
+      // savent nager désormais (voir updateWhistledHorses). Blessure
+      // appliquée en optimiste localement puis persistée/diffusée par
+      // l'hôte (req "drown", même mécanique de confiance qu'"evilCaught").
+      const w = worldRef.current;
+      if (w && E.isWaterTile(w, m.x, m.y)) {
+        sendReq({ kind: "dismount" });
+        const until = Date.now() + C.DROWN_INJURED_MS;
+        injuredUntilRef.current = until; setInjuredUntil(until);
+        sendReq({ kind: "drown", until });
+        m.x = C.SPAWN.x; m.y = C.SPAWN.y; m.moving = false;
+        sendPos();
+        pushToast(L.drownToast);
+        return;
+      }
+      sendReq({ kind: "dismount" });
+      return;
+    }
     const idx = nearestMountableHorse();
     if (idx >= 0) sendReq({ kind: "mount", horseIndex: idx });
   }
@@ -2119,6 +2156,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // messages de position des joueurs) pour ne pas saturer le canal.
   function updateWhistledHorses(dt) {
     const hs = sharedRef.current.horses; if (!hs || !hs.length) return;
+    const w = worldRef.current;
     let moved = false;
     const speed = C.PLAYER_SPEED * C.HORSE_SPEED_MULT;
     for (const h of hs) {
@@ -2126,8 +2164,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (!h.callTarget) continue;
       const dx = h.callTarget.x - h.x, dy = h.callTarget.y - h.y;
       const d = Math.hypot(dx, dy);
+      // Nage (décision Guillaume 2026-07) : un cheval sifflé depuis l'autre
+      // rive traverse la rivière à la nage, ralenti par C.HORSE_WATER_SLOW
+      // tant qu'il est sur une case d'eau — plus jamais de cheval coincé
+      // derrière la rivière (il allait déjà en ligne droite, il ne fait
+      // plus que ralentir de façon crédible en zone d'eau).
+      const sp2 = (w && E.isWaterTile(w, h.x, h.y)) ? speed / C.HORSE_WATER_SLOW : speed;
       if (d < 0.12) { h.x = h.callTarget.x; h.y = h.callTarget.y; h.callTarget = null; }
-      else { const step = Math.min(speed * dt, d); h.x += (dx / d) * step; h.y += (dy / d) * step; }
+      else { const step = Math.min(sp2 * dt, d); h.x += (dx / d) * step; h.y += (dy / d) * step; }
       moved = true;
     }
     if (moved) {
@@ -2232,6 +2276,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         id: "rabbit" + (rabbitSeqRef.current++) + "_" + now, x: p.x, y: p.y, tx: p.x, ty: p.y, dir: 2, animT: 0,
         state: "stop", phase: "roam", roamAnchor: { x: p.x, y: p.y }, roamTarget: null, nextRoamAt: 0,
         nextNoticeAt: 0, fleeUntil: 0,
+        // Côté d'origine (demande Guillaume 2026-07 : "retrouver le pont pour
+        // rentrer chez eux, les lapins aussi") : mémorisé au spawn — un lapin
+        // chassé de l'autre côté de la rivière y reviendra par un pont ouvert
+        // (voir phase "return" plus bas).
+        homeSide: E.riverSideOf(w, p.x, p.y),
       });
       rabbitRespawnAtRef.current = now + C.RABBIT_RESPAWN_MS;
       changed = true;
@@ -2258,7 +2307,37 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       let speed = 0;
       if (rb.phase === "flee") {
         if (now < rb.fleeUntil) { rb.state = "run"; speed = C.RABBIT_SPEED_FLEE; }
-        else { rb.phase = "roam"; rb.roamAnchor = { x: rb.x, y: rb.y }; }
+        else {
+          // Fin de fuite : s'il a été chassé du mauvais côté de la rivière,
+          // il rentre chez lui par un pont (voir phase "return" ci-dessous).
+          rb.phase = (rb.homeSide && E.riverSideOf(w, rb.x, rb.y) !== rb.homeSide) ? "return" : "roam";
+          rb.roamAnchor = { x: rb.x, y: rb.y };
+        }
+      }
+      // Retente périodiquement un retour au bercail resté en échec (aucun
+      // pont ouvert au dernier essai — voir nextReturnAt, phase "return").
+      if (rb.phase === "roam" && rb.homeSide && rb.nextReturnAt && now >= rb.nextReturnAt && E.riverSideOf(w, rb.x, rb.y) !== rb.homeSide) { rb.phase = "return"; rb.nextReturnAt = 0; }
+      // Retour au bercail (demande Guillaume 2026-07 : "les lapins aussi") :
+      // rejoint le pont ouvert le plus proche, le traverse, puis reprend sa
+      // rôdaille chez lui. Sans pont ouvert : broute sur place et retente
+      // plus tard (nextReturnAt).
+      if (rb.phase === "return" && speed === 0) {
+        rb.state = "walk"; speed = C.RABBIT_SPEED_SLOW;
+        if (!rb.homeSide || E.riverSideOf(w, rb.x, rb.y) === rb.homeSide) {
+          rb.phase = "roam"; rb.roamAnchor = { x: rb.x, y: rb.y }; rb.roamTarget = null; rb.state = "stop"; speed = 0;
+        } else {
+          if (rb.bridgeIdx == null || rb.bridgeIdx < 0 || !E.bridgeIsOpen(w, rb.bridgeIdx)) rb.bridgeIdx = E.nearestOpenBridge(w, rb.x, rb.y);
+          if (rb.bridgeIdx < 0) {
+            rb.phase = "roam"; rb.roamAnchor = { x: rb.x, y: rb.y }; rb.nextReturnAt = now + 8000; rb.state = "stop"; speed = 0;
+          } else {
+            const bp = E.bridgeCrossPoint(w, rb.bridgeIdx);
+            const homeEast = rb.homeSide === "east";
+            // Vise le centre du pont, puis la sortie côté maison une fois dessus.
+            const nearB = Math.hypot(bp.x - rb.x, bp.y - rb.y) < 0.7;
+            rb.tx = nearB ? bp.x + (homeEast ? 4 : -4) : bp.x;
+            rb.ty = bp.y;
+          }
+        }
       }
       if (rb.phase !== "flee" && near && nearD < C.RABBIT_FLEE_RANGE) {
         // "1 chance sur 5 qu'ils ne nous voient pas" (demande chiffrée de
@@ -2289,17 +2368,43 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         }
         if (rb.roamTarget) { rb.tx = rb.roamTarget.x; rb.ty = rb.roamTarget.y; } else speed = 0;
       }
+      // Cap de contournement anti-blocage en cours (posé plus bas) : il
+      // remplace temporairement la cible normale (même principe que les loups).
+      if (rb.detourUntil && now < rb.detourUntil && rb.detour) { rb.tx = rb.detour.x; rb.ty = rb.detour.y; }
+      else if (rb.detourUntil && now >= rb.detourUntil) { rb.detourUntil = 0; rb.detour = null; }
       if (speed > 0 && rb.tx !== undefined) {
         const dx = rb.tx - rb.x, dy = rb.ty - rb.y, d = Math.hypot(dx, dy);
         if (d > 0.02) {
           const step = Math.min(speed * dt, d);
           const nx = rb.x + (dx / d) * step, ny = rb.y + (dy / d) * step;
-          if (!E.blockedTile(w, nx, ny) && !E.isWaterTile(w, nx, ny)) {
-            rb.x = nx; rb.y = ny;
-            rb.dir = dx < 0 ? 2 : 3;
+          // Correctif 2026-07 (demande Guillaume : "ils ne doivent pas être
+          // coincés trop longtemps par la rivière ou des obstacles") : au
+          // lieu de s'arrêter net contre l'eau/un obstacle (l'ancien
+          // `rb.tx = rb.x` annulait carrément la cible), le lapin GLISSE le
+          // long (essai axe X seul, puis axe Y seul), et un cap de
+          // contournement perpendiculaire est pris s'il piétine trop
+          // longtemps — même mécanique que les loups (updateWolves).
+          const pass = (xx, yy) => !E.blockedTile(w, xx, yy) && !E.isWaterTile(w, xx, yy);
+          let mx = rb.x, my = rb.y;
+          if (pass(nx, ny)) { mx = nx; my = ny; }
+          else if (pass(nx, rb.y)) { mx = nx; }
+          else if (pass(rb.x, ny)) { my = ny; }
+          const adv = Math.hypot(mx - rb.x, my - rb.y);
+          if (adv > 0.001) {
+            if (mx !== rb.x) rb.dir = mx < rb.x ? 2 : 3;
+            rb.x = mx; rb.y = my;
             rb.animT += dt * (speed >= C.RABBIT_SPEED_FLEE ? 9 : 4);
             moved = true;
-          } else { rb.tx = rb.x; rb.ty = rb.y; rb.animT = 0; }
+          } else rb.animT = 0;
+          if (adv < step * 0.25) {
+            rb.stuckT = (rb.stuckT || 0) + dt;
+            if (rb.stuckT >= C.CRITTER_STUCK_S) {
+              rb.stuckT = 0;
+              const sgn = Math.random() < 0.5 ? 1 : -1;
+              rb.detour = { x: rb.x - (dy / d) * 4 * sgn, y: rb.y + (dx / d) * 4 * sgn };
+              rb.detourUntil = now + C.CRITTER_DETOUR_MS;
+            }
+          } else rb.stuckT = 0;
         }
       } else rb.animT = 0;
     }
@@ -2474,11 +2579,28 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           if (E.riverSideOf(w, wf.x, wf.y) === "east") { wf.phase = "roam"; wf.roamAnchor = { x: wf.x, y: wf.y }; }
           else {
             if (wf.bridgeIdx < 0 || !E.bridgeIsOpen(w, wf.bridgeIdx)) wf.bridgeIdx = E.nearestOpenBridge(w, wf.x, wf.y);
-            if (wf.bridgeIdx < 0) { wf.tx = wf.x; wf.ty = wf.y; speed = 0; wf.state = "stop"; }
-            else { const p = E.bridgeCrossPoint(w, wf.bridgeIdx); wf.tx = p.x + 4; wf.ty = p.y; }
+            if (wf.bridgeIdx < 0) {
+              // Plus aucun pont ouvert (décision Guillaume 2026-07) : le loup
+              // ne reste plus planté sur la rive ferme — il détale LE LONG de
+              // la rivière (côté ouest, jamais à la nage) vers le bord de
+              // carte le plus proche, et despawn en l'atteignant (voir le
+              // filtre `gone` après la boucle). Si un pont rouvre entretemps,
+              // nearestOpenBridge (relancé à chaque tick tant que
+              // bridgeIdx < 0) reprend le dessus et il rentre normalement.
+              wf.state = "run"; speed = C.WOLF_SPEED_FAST;
+              if (!wf.escapeDir) wf.escapeDir = wf.y < w.h / 2 ? -1 : 1;
+              wf.tx = E.riverCenterAt(w, wf.y + wf.escapeDir * 3) - 3;
+              wf.ty = wf.y + wf.escapeDir * 3;
+              if (wf.y < 2 || wf.y > w.h - 3) wf.gone = true;
+            }
+            else { wf.escapeDir = 0; const p = E.bridgeCrossPoint(w, wf.bridgeIdx); wf.tx = p.x + 4; wf.ty = p.y; }
           }
         }
       }
+      // Cap de contournement anti-blocage en cours (posé plus bas) : il
+      // remplace temporairement la cible normale de la phase.
+      if (wf.detourUntil && now < wf.detourUntil && wf.detour) { wf.tx = wf.detour.x; wf.ty = wf.detour.y; }
+      else if (wf.detourUntil && now >= wf.detourUntil) { wf.detourUntil = 0; wf.detour = null; }
       if (speed > 0 && wf.tx !== undefined) {
         const dx = wf.tx - wf.x, dy = wf.ty - wf.y, d = Math.hypot(dx, dy);
         if (d > 0.02) {
@@ -2489,16 +2611,44 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           // toutes les autres phases (dont "flee", qui visait tout droit vers
           // un point pouvant tomber dans la rivière) doivent rester sur leur
           // rive tant qu'un pont ouvert n'a pas été emprunté.
-          if (!E.isWaterTile(w, nx, ny)) {
-            wf.x = nx; wf.y = ny;
-            wf.dir = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 2 : 3) : (dy < 0 ? 1 : 0);
+          // Correctif 2026-07 (demande Guillaume : "ils ne doivent pas être
+          // coincés trop longtemps") : au lieu de se figer net contre la
+          // berge, il GLISSE le long (essai axe X seul, puis axe Y seul,
+          // comme la collision joueur canStand).
+          let mx = wf.x, my = wf.y;
+          if (!E.isWaterTile(w, nx, ny)) { mx = nx; my = ny; }
+          else if (!E.isWaterTile(w, nx, wf.y)) { mx = nx; }
+          else if (!E.isWaterTile(w, wf.x, ny)) { my = ny; }
+          const adv = Math.hypot(mx - wf.x, my - wf.y);
+          if (adv > 0.001) {
+            wf.dir = Math.abs(mx - wf.x) > Math.abs(my - wf.y) ? (mx < wf.x ? 2 : 3) : (my < wf.y ? 1 : 0);
+            wf.x = mx; wf.y = my;
             wf.animT += dt * (speed >= C.WOLF_SPEED_FAST ? 10 : 5);
             moved = true;
-          } else {
-            wf.animT = 0;
-          }
+          } else wf.animT = 0;
+          // Anti-blocage : s'il n'avance presque plus alors qu'il veut
+          // avancer, au bout de C.CRITTER_STUCK_S secondes cumulées il prend
+          // un cap perpendiculaire court (C.CRITTER_DETOUR_MS) pour
+          // contourner l'obstacle, puis reprend sa cible.
+          if (adv < step * 0.25) {
+            wf.stuckT = (wf.stuckT || 0) + dt;
+            if (wf.stuckT >= C.CRITTER_STUCK_S) {
+              wf.stuckT = 0;
+              const sgn = Math.random() < 0.5 ? 1 : -1;
+              wf.detour = { x: wf.x - (dy / d) * 4 * sgn, y: wf.y + (dx / d) * 4 * sgn };
+              wf.detourUntil = now + C.CRITTER_DETOUR_MS;
+            }
+          } else wf.stuckT = 0;
         }
       } else wf.animT = 0;
+    }
+    // Despawn des loups en fuite définitive (phase "return" sans pont ouvert,
+    // décision Guillaume 2026-07 : "court le long de la rivière et s'éloigne
+    // jusqu'à despawn") : retirés du monde une fois le bord de carte atteint.
+    if (s.wolves.some(x => x.gone)) {
+      s.wolves = s.wolves.filter(x => !x.gone);
+      minimapDirtyRef.current = true;
+      channelRef.current?.send({ type: "broadcast", event: "apply", payload: { wolves: s.wolves } });
     }
     if (moved) minimapDirtyRef.current = true;
     if (animalsChanged) {
@@ -3465,8 +3615,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         } });
       }
       // Chevaux libres (non montés) : plusieurs possibles désormais.
+      // Chantier 2026-07 : un cheval sifflé qui accourt (callTarget) galope
+      // (cycle horseRun cadencé sur l'horloge, pas d'animT propre) ; un
+      // cheval sur une case d'eau (nage vers le siffleur, ou laissé là par
+      // une noyade) est immergé sous la ligne d'eau (drawSwimOverlay).
       for (const horse of (sharedRef.current.horses || [])) {
-        if (!horse.rider) draws.push({ y: (horse.y + 1) * T, fn: () => ctx.drawImage(sprites.horse, horse.x * T - 6, horse.y * T - 10) });
+        if (!horse.rider) draws.push({ y: (horse.y + 1) * T, fn: () => {
+          const hx = horse.x * T - 6, hy = horse.y * T - 10;
+          const img = horse.callTarget ? sprites.horseRun[Math.floor(now / 110) % 4] : sprites.horse;
+          ctx.drawImage(img, hx, hy);
+          if (E.isWaterTile(w, horse.x, horse.y)) drawSwimOverlay(hx, hy + 1, 28);
+        } });
       }
       // Loups (chantier 2026-07) : 4 frames de marche, vitesse du cycle
       // dépendante de l'état (arrêté/lent/rapide, voir updateWolves) plutôt
@@ -4027,15 +4186,23 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (keys["ArrowRight"] || keys["KeyD"]) dx += 1;
       }
       const mounted = (sharedRef.current.horses || []).some(h => h.rider === me.id);
+      // Nage à cheval (chantier 2026-07) : monté, l'eau devient franchissable
+      // (canStandMounted) mais divise la vitesse par C.HORSE_WATER_SLOW tant
+      // que le cheval est sur une case d'eau — plus lent qu'à pied, cohérent
+      // avec une traversée à la nage. À pied, l'eau bloque comme avant.
+      const swimming = mounted && E.isWaterTile(w, m.x, m.y);
       const moving = (dx || dy) && actAnimRef.current <= 0;
       if (moving) {
         const len = Math.hypot(dx, dy); dx /= len; dy /= len;
-        const sp = C.PLAYER_SPEED * (mounted ? C.HORSE_SPEED_MULT : 1) * dt;
+        const sp = C.PLAYER_SPEED * (mounted ? C.HORSE_SPEED_MULT : 1) / (swimming ? C.HORSE_WATER_SLOW : 1) * dt;
         const nx = m.x + dx * sp, ny = m.y + dy * sp;
-        if (canStand(w, nx, m.y)) m.x = nx;
-        if (canStand(w, m.x, ny)) m.y = ny;
+        const stand = mounted ? canStandMounted : canStand;
+        if (stand(w, nx, m.y)) m.x = nx;
+        if (stand(w, m.x, ny)) m.y = ny;
         if (dx < 0) m.dir = 2; else if (dx > 0) m.dir = 3; else if (dy < 0) m.dir = 1; else if (dy > 0) m.dir = 0;
-        m.animT += dt * 9;
+        // Cadence d'animation ralentie à la nage (le cycle de galop devient
+        // un battement de nage, voir drawCharacter/horseRun).
+        m.animT += dt * (swimming ? 4 : 9);
       } else m.animT = 0;
       m.moving = !!moving;
       const now = performance.now();
@@ -4052,6 +4219,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
     }
     function drawRemote(p) { drawCharacter(p, false); }
+    // Habillage nage (chantier 2026-07, décision Guillaume "immersion +
+    // ondulations") : ligne d'eau semi-opaque qui immerge les pattes du
+    // cheval + petites vaguelettes claires animées. (sx, sy) = coin du
+    // sprite cheval 28x24 tel que dessiné, sw = sa largeur.
+    function drawSwimOverlay(sx, sy, sw) {
+      ctx.fillStyle = "rgba(58, 123, 200, 0.72)";
+      ctx.fillRect(sx - 2, sy + 16, sw + 4, 9);
+      const ph = performance.now() / 320;
+      ctx.fillStyle = "rgba(220, 238, 255, 0.55)";
+      for (let k = 0; k < 3; k++) {
+        const ox = (Math.sin(ph + k * 2.1) * 0.5 + 0.5) * (sw - 6);
+        ctx.fillRect(sx + ox, sy + 15 + ((k + Math.floor(ph)) % 3), 5, 1);
+      }
+    }
     function drawCharacter(p, isSelf) {
       const sprites = spritesRef.current;
       const sheet = sprites.getChar(p.gender, p.outfit, p.overalls, p.cap);
@@ -4066,15 +4247,29 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // selle, décalé du côté opposé au sens de la marche.
       const basePx = Math.round(p.x * T), py = Math.round(p.y * T);
       const px = isPassenger ? basePx + (flip ? 9 : -9) : basePx;
-      const lift = riding ? 8 : 0; // le cavalier est surélevé sur la monture
-      ctx.fillStyle = "rgba(0,0,0,0.25)"; ctx.beginPath(); ctx.ellipse(px + 8, py + 15, riding ? 9 : 6, riding ? 3 : 2.5, 0, 0, 7); ctx.fill();
+      const lift = riding ? 10 : 0; // le cavalier est ASSIS sur la selle (voir le buste + jambe plus bas)
+      // Nage à cheval (chantier 2026-07) : monture sur une case d'eau ->
+      // pattes immergées + vaguelettes (drawSwimOverlay), pas d'ombre portée.
+      const wSwim = worldRef.current;
+      const swimmingHere = riding && wSwim && p.zone !== "evil" && E.isWaterTile(wSwim, p.x, p.y);
+      if (!swimmingHere) { ctx.fillStyle = "rgba(0,0,0,0.25)"; ctx.beginPath(); ctx.ellipse(px + 8, py + 15, riding ? 9 : 6, riding ? 3 : 2.5, 0, 0, 7); ctx.fill(); }
+      // Galop (chantier 2026-07, demande Guillaume : "le cheval doit décrire
+      // une action de galop quand il se déplace") : 4 frames (horseRun,
+      // fermeArt.js) cadencées par l'animT du cavalier — déjà ralenti à la
+      // nage côté updateMe, le cycle devient naturellement un battement
+      // lent. À l'arrêt : frame statique (pattes jointes). hBob = rebond
+      // vertical du cavalier, synchronisé avec la frame d'envol du sprite.
+      const hFrame = p.moving ? Math.floor((p.animT || 0) % 4) : 0;
+      const hBob = p.moving ? [0, -1, 0, 0][hFrame] : 0;
       if (isPrimaryRider) {
         // Le cheval n'est dessiné qu'une fois, porté par le cavalier
         // principal, et se retourne avec lui selon le sens de la marche.
+        const hImg = p.moving ? sprites.horseRun[hFrame] : sprites.horse;
         ctx.save();
-        if (flip) { ctx.translate(basePx + 22, py - 6); ctx.scale(-1, 1); ctx.drawImage(sprites.horse, 0, 0); }
-        else ctx.drawImage(sprites.horse, basePx - 6, py - 6);
+        if (flip) { ctx.translate(basePx + 22, py - 6); ctx.scale(-1, 1); ctx.drawImage(hImg, 0, 0); }
+        else ctx.drawImage(hImg, basePx - 6, py - 6);
         ctx.restore();
+        if (swimmingHere) drawSwimOverlay(basePx - 6, py - 6, 28);
       }
       // Invisibilité de la pommade (chantier 2026-07, demande Guillaume :
       // "elle doit nous rendre invisible ET immunisé aux monstres") : tant
@@ -4087,7 +4282,26 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const invisibleNow = isSelf && p.zone === "evil" && Date.now() < immunityUntilRef.current;
       ctx.save();
       if (invisibleNow) ctx.globalAlpha = 0.35;
-      if (flip) { ctx.translate(px + 16, py - 8 - lift); ctx.scale(-1, 1); ctx.drawImage(sheet, frame * 16, row * 24, 16, 24, 0, 0, 16, 24); }
+      if (riding) {
+        // ASSIS (chantier 2026-07, demande Guillaume : "le fermier qui le
+        // chevauche doit clairement être assis dessus, de manière plus
+        // réaliste") : on ne dessine que le BUSTE du sprite (15 px du haut —
+        // les jambes du cycle de marche, debout, n'ont aucun sens assis),
+        // posé sur la selle avec le rebond du galop (hBob), pose neutre
+        // (colonne 0). Une jambe fléchie est ajoutée par-dessus : cuisse à
+        // l'horizontale, mollet qui tombe le long du flanc, botte au bout.
+        const seatY = py - 8 - lift + hBob;
+        ctx.save();
+        if (flip) { ctx.translate(px + 16, seatY); ctx.scale(-1, 1); }
+        else ctx.translate(px, seatY);
+        ctx.drawImage(sheet, 0, row * 24, 16, 15, 0, 0, 16, 15);
+        ctx.fillStyle = "#3a3550";  // pantalon
+        ctx.fillRect(6, 13, 6, 3);  // cuisse
+        ctx.fillRect(10, 15, 3, 5); // mollet
+        ctx.fillStyle = "#241c14";  // botte
+        ctx.fillRect(10, 19, 4, 3);
+        ctx.restore();
+      } else if (flip) { ctx.translate(px + 16, py - 8 - lift); ctx.scale(-1, 1); ctx.drawImage(sheet, frame * 16, row * 24, 16, 24, 0, 0, 16, 24); }
       else ctx.drawImage(sheet, frame * 16, row * 24, 16, 24, px, py - 8 - lift, 16, 24);
       ctx.restore();
       // Torche allumée (chantier 2026-07) : dessinée collée à la main côté
@@ -4303,6 +4517,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function canStand(w, x, y) {
     const r = 0.3;
     return !blocked(w, x - r, y) && !blocked(w, x + r, y) && !blocked(w, x - r, y + 0.35) && !blocked(w, x + r, y + 0.35);
+  }
+  // Variante montée (chantier 2026-07, demande Guillaume : "on doit pouvoir
+  // traverser la rivière à cheval") : mêmes 4 points de test que canStand,
+  // mais l'eau est franchissable à la nage (voir E.blockedTileMounted). Le
+  // ralentissement /4 est appliqué dans updateMe, pas ici.
+  function canStandMounted(w, x, y) {
+    const r = 0.3, now = Date.now();
+    const bm = (xx, yy) => E.blockedTileMounted(w, xx, yy, now);
+    return !bm(x - r, y) && !bm(x + r, y) && !bm(x - r, y + 0.35) && !bm(x + r, y + 0.35);
   }
   function facingTile() {
     const m = meRef.current;

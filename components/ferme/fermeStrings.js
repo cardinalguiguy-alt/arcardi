@@ -266,6 +266,7 @@ export const FERME_STR = {
     darkPassageToast: "🌑 Une obscurité glaciale t'avale...",
     darkPassageReturnToast: "☀️ Tu retrouves la lumière du jour.",
     evilMonsterCaughtToast: "👹 Une créature t'a happé... tu te réveilles chez toi, blessé.",
+    drownToast: "🌊 Glouglou... tu as coulé ! Ramené à la maison, blessé (1 min).",
     // Pommade de protection (chantier 2026-07) : achetable au magasin,
     // repousse les créatures maléfiques et immunise le joueur contre elles
     // pendant 10 minutes, pour explorer/farm côté maléfique sans crainte.
@@ -649,6 +650,7 @@ export const FERME_STR = {
     darkPassageToast: "🌑 A cold darkness swallows you...",
     darkPassageReturnToast: "☀️ You find daylight again.",
     evilMonsterCaughtToast: "👹 A creature caught you... you wake up at home, injured.",
+    drownToast: "🌊 Glub glub... you sank! Carried back home, injured (1 min).",
     // Protection salve (2026-07 chantier): buyable at the shop, repels evil
     // creatures and makes the player immune to them for 10 minutes, so they
     // can explore/farm the evil side without worry.

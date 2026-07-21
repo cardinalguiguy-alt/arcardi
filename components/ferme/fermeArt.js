@@ -456,34 +456,54 @@ export function buildSprites() {
   }
 
   /* ---------------- Bâtiments et animaux ---------------- */
-  function horseSprite() {
+  // Cheval (refonte chantier 2026-07, demande Guillaume : "le cheval doit
+  // décrire une action de galop quand il se déplace, + de détail sur la
+  // course") : sprite paramétré par frame, sur le modèle de wolfSprite/
+  // rabbitSprite. frame 0 = à l'arrêt (pose d'origine, pattes verticales),
+  // utilisée aussi pour le cheval libre non monté. frames 1..3 = cycle de
+  // galop : les paires de pattes avant/arrière s'étendent en oblique puis se
+  // regroupent sous le corps, le corps rebondit d'un pixel, la queue passe à
+  // l'horizontale (soufflée) et la crinière flotte vers l'arrière.
+  function horseSprite(frame) {
+    const f = (frame || 0) % 4;
     const [c, g] = cv(28, 24); // vu de profil (regarde à droite)
     const body = "#8a5a34", light = "#a5764a", dark = "#6a4426", shade = "#5a3a20",
       mane = "#3a2a18", maneDeep = "#2a1c10", hoof = "#2a2018", saddle = "#7a3020", saddleLight = "#9a4a30";
-    P(g, 6, 10, 15, 7, body);          // corps
-    P(g, 6, 10, 15, 2, light);         // reflet sur le dos
-    P(g, 6, 16, 15, 1, shade);         // ombre sous le ventre
-    P(g, 19, 6, 6, 7, body);           // encolure
-    P(g, 19, 6, 6, 2, light);
-    P(g, 23, 3, 5, 6, body);           // tête
-    P(g, 23, 3, 5, 1, light);
-    P(g, 24, 1, 2, 3, body); P(g, 24, 1, 1, 2, dark); // oreille
-    P(g, 27, 5, 1, 3, dark);           // museau
-    P(g, 27, 7, 1, 1, "#3a2418");      // naseau
-    P(g, 24, 4, 3, 2, mane);           // toupet
-    P(g, 19, 5, 2, 6, mane);           // crinière
-    P(g, 20, 5, 1, 6, maneDeep);       // mèches (relief de la crinière)
-    P(g, 1, 11, 6, 3, mane);           // queue
-    P(g, 1, 12, 6, 1, maneDeep);
-    P(g, 10, 8, 8, 3, saddle);         // selle (support pour un ou deux cavaliers)
-    P(g, 10, 8, 8, 1, saddleLight);
-    P(g, 9, 10, 1, 2, "#5a2418"); P(g, 18, 10, 1, 2, "#5a2418"); // sangle
-    P(g, 7, 17, 2, 6, dark); P(g, 12, 17, 2, 6, body);  // pattes avant/gauche
-    P(g, 16, 17, 2, 6, dark); P(g, 19, 17, 2, 6, body); // pattes arrière
-    P(g, 7, 22, 2, 2, hoof); P(g, 12, 22, 2, 2, hoof);
-    P(g, 16, 22, 2, 2, hoof); P(g, 19, 22, 2, 2, hoof);
-    P(g, 25, 5, 1, 1, "#1a1a1a");      // oeil
-    P(g, 25, 4, 1, 1, "#e8dcc8");      // reflet dans l'oeil
+    const bob = [0, -1, 0, 0][f];   // rebond vertical du corps (phase d'envol)
+    const ext = [0, 5, 1, -4][f];   // pattes avant : étendues vers l'avant / regroupées
+    const ext2 = [0, -5, -1, 4][f]; // pattes arrière : opposées (étendues vers l'arrière)
+    const b = 10 + bob;             // ligne de dos
+    P(g, 6, b, 15, 7, body);           // corps
+    P(g, 6, b, 15, 2, light);          // reflet sur le dos
+    P(g, 6, b + 6, 15, 1, shade);      // ombre sous le ventre
+    P(g, 19, b - 4, 6, 7, body);       // encolure
+    P(g, 19, b - 4, 6, 2, light);
+    P(g, 23, b - 7, 5, 6, body);       // tête
+    P(g, 23, b - 7, 5, 1, light);
+    P(g, 24, b - 9, 2, 3, body); P(g, 24, b - 9, 1, 2, dark); // oreille
+    P(g, 27, b - 5, 1, 3, dark);       // museau
+    P(g, 27, b - 3, 1, 1, "#3a2418");  // naseau
+    P(g, 24, b - 6, 3, 2, mane);       // toupet
+    // Crinière : flotte d'un pixel vers l'arrière en pleine extension.
+    P(g, 19 - (f === 1 ? 1 : 0), b - 5, 2, 6, mane);
+    P(g, 20 - (f === 1 ? 1 : 0), b - 5, 1, 6, maneDeep);
+    // Queue : tombante à l'arrêt, soufflée à l'horizontale au galop.
+    if (f === 1 || f === 2) { P(g, 0, b, 6, 2, mane); P(g, 0, b + 1, 6, 1, maneDeep); }
+    else { P(g, 1, b + 1, 6, 3, mane); P(g, 1, b + 2, 6, 1, maneDeep); }
+    P(g, 10, b - 2, 8, 3, saddle);     // selle (support pour un ou deux cavaliers)
+    P(g, 10, b - 2, 8, 1, saddleLight);
+    P(g, 9, b, 1, 2, "#5a2418"); P(g, 18, b, 1, 2, "#5a2418"); // sangle
+    // Pattes : haut de patte à mi-extension (ext >> 1), sabot à pleine
+    // extension — l'écart donne l'oblique de la foulée. Un pixel plus
+    // courtes en phase regroupée (f=3), pattes "rentrées" sous le corps.
+    const legH = f === 3 ? 5 : 6;
+    const ly = b + 7;
+    P(g, 7 + (ext2 >> 1), ly, 2, legH, dark);  P(g, 7 + ext2, ly + legH - 1, 2, 2, hoof);  // arrière int.
+    P(g, 12 + (ext2 >> 1), ly, 2, legH, body); P(g, 12 + ext2, ly + legH - 1, 2, 2, hoof); // arrière ext.
+    P(g, 16 + (ext >> 1), ly, 2, legH, dark);  P(g, 16 + ext, ly + legH - 1, 2, 2, hoof);  // avant int.
+    P(g, 19 + (ext >> 1), ly, 2, legH, body);  P(g, 19 + ext, ly + legH - 1, 2, 2, hoof);  // avant ext.
+    P(g, 25, b - 5, 1, 1, "#1a1a1a");  // oeil
+    P(g, 25, b - 6, 1, 1, "#e8dcc8");  // reflet dans l'oeil
     return c;
   }
   // Loup (chantier 2026-07, demande Guillaume : "loups assez détaillés... avec
@@ -957,7 +977,8 @@ export function buildSprites() {
     icons: {},
     gemIcons: [],
     fishIcons: [],
-    horse: horseSprite(),
+    horse: horseSprite(0),
+    horseRun: [horseSprite(0), horseSprite(1), horseSprite(2), horseSprite(3)], // cycle de galop (chantier 2026-07)
     wolf: [wolfSprite(0), wolfSprite(1), wolfSprite(2), wolfSprite(3)],
     rabbit: [rabbitSprite(0), rabbitSprite(1), rabbitSprite(2)],
     torch: torchSprite(),

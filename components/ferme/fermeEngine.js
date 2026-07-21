@@ -1882,6 +1882,24 @@ export function blockedTile(world, x, y, now = Date.now()) {
   return false;
 }
 
+// Variante MONTÉE de blockedTile (chantier 2026-07, demande Guillaume : "on
+// doit pouvoir traverser la rivière à cheval") : identique, sauf que l'eau
+// (et les emplacements/tabliers de pont fermés — de l'eau en dessous) est
+// franchissable À LA NAGE. Les obstacles solides (arbres, rochers, clôtures,
+// murs, bâtiments...) bloquent toujours, monté ou pas. Le RALENTISSEMENT
+// (C.HORSE_WATER_SLOW) est appliqué côté FermeGame (updateMe /
+// updateWhistledHorses), pas ici : cette fonction ne dit que "passable ou
+// non".
+export function blockedTileMounted(world, x, y, now = Date.now()) {
+  const fx = Math.floor(x), fy = Math.floor(y);
+  if (!inMap(fx, fy)) return true;
+  const i = idx(fx, fy);
+  const o = world.objects[i];
+  if (o === C.O_LAMP || o === C.O_MILL) return buildReady(world.objHp.get(i), now);
+  if (o === C.O_TREE || o === C.O_TREE2 || o === C.O_ROCK || o === C.O_HOUSE || o === C.O_SHOP || o === C.O_BIN || o === C.O_STUMP || o === C.O_WELL || o === C.O_FENCE || o === C.O_FENCE_H || o === C.O_FENCE_V || o === C.O_WALL) return true;
+  return false;
+}
+
 export const idxOf = idx;
 
 /* -------------------------------------------------------------------------

@@ -275,6 +275,23 @@ export const SPAWN = { x: 43, y: 37 }; // chemin devant la maison (cible du tél
 export const HORSE_COSTS = [800, 1500, 2500];
 export const HORSE_MAX_COUNT = HORSE_COSTS.length;
 export const HORSE_SPEED_MULT = 1.9; // vitesse à cheval
+// Traversée de la rivière à cheval (chantier 2026-07, demande Guillaume :
+// "on doit pouvoir traverser la rivière à cheval, mais le cheval ralentit
+// par 4 quand il est sur de l'eau") — s'applique au cheval monté ET aux
+// chevaux sifflés qui accourent (updateWhistledHorses), voir aussi
+// blockedTileMounted (fermeEngine.js).
+export const HORSE_WATER_SLOW = 4;         // diviseur de vitesse à la nage
+// Noyade (décision Guillaume 2026-07) : descendre du cheval en pleine eau =
+// le fermier coule, est ramené chez lui (C.SPAWN) avec une blessure COURTE
+// d'une minute (INJURED_MS = morsure de loup, EVIL_INJURED_MS = créature).
+export const DROWN_INJURED_MS = 60 * 1000;
+// Anti-blocage loups/lapins (chantier 2026-07, demande Guillaume : "ils ne
+// doivent pas être coincés trop longtemps par la rivière ou des
+// obstacles") : au bout de CRITTER_STUCK_S secondes sans progresser, la
+// bête prend un cap de contournement perpendiculaire pendant
+// CRITTER_DETOUR_MS avant de reprendre sa cible.
+export const CRITTER_STUCK_S = 2.5;
+export const CRITTER_DETOUR_MS = 1200;
 export const MOUNT_RANGE = 1.6;      // distance pour enfourcher le cheval
 export const WELL_COST = 600;
 export const WELL = { x: 30, y: 62 }; // emplacement du puits (champs à l'ouest)
