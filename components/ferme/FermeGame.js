@@ -167,6 +167,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [adsOpen, setAdsOpen] = useState(false);       // station ad board panel
   const [adsSel, setAdsSel] = useState([]);            // checkbox selection inside the panel
   const [visitorOpen, setVisitorOpen] = useState(false); // visitor dialog panel
+  const [visitorRid, setVisitorRid] = useState(-1);    // which visitor the dialog targets (zip 233: several at once)
   const [myVote, setMyVote] = useState(null);          // my residency vote (null until cast)
   const [repairMini, setRepairMini] = useState(null);  // co-op repair minigame ({name}) | null
   const [nearHall, setNearHall] = useState(false);     // am I close to the townhall? (1 Hz, corner notif)
@@ -352,8 +353,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     if (!d && repairMini) setRepairMini(null); // repaired (or expired) elsewhere
   }, [stationSt]); // eslint-disable-line react-hooks/exhaustive-deps
-  // Reset my residency vote whenever the visitor changes.
-  useEffect(() => { setMyVote(null); }, [stationSt && stationSt.visitor && stationSt.visitor.rid]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Reset my residency vote whenever the targeted visitor changes (zip 233).
+  useEffect(() => { setMyVote(null); }, [visitorRid]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { evilBiteRef.current = evilBite; }, [evilBite]);
   useEffect(() => { injuredUntilRef.current = injuredUntil || 0; }, [injuredUntil]);
   useEffect(() => { immunityUntilRef.current = immunityUntil || 0; }, [immunityUntil]);
@@ -1670,6 +1671,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // -------- 2026-07 station update: host-side station module --------
   function rosterOf(rid) { return C.VISITOR_ROSTER[rid] || C.VISITOR_ROSTER[0]; }
   function cropLabel(id) { const cr = C.CROPS[id] || C.CROPS[0]; return lang === "en" ? cr.nameEn : cr.name; }
+  // Zip 233: human label of a gift reward (unique seeds / decoration / pet).
+  function giftLabel(g) {
+    if (!g) return "";
+    if (g.kind === "seed") { const cr = C.CROPS[g.cropId] || {}; return L.giftSeed(lang === "en" ? cr.seedNameEn : cr.seedName); }
+    if (g.kind === "decor") { const d = C.UNIQUE_DECORATIONS.find(x => x.id === g.id) || {}; return L.giftDecor(lang === "en" ? d.nameEn : d.name); }
+    if (g.kind === "pet") { const pt = C.UNIQUE_PETS.find(x => x.id === g.petId) || {}; return L.giftPet(lang === "en" ? pt.nameEn : pt.name); }
+    return "";
+  }
   // Broadcast the FULL station object (discrete changes only: arrivals,
   // phase switches, deals, votes, damage). Continuous movement travels in
   // the light `visitorSim` payload instead. Also refreshes the host's own
@@ -1683,19 +1692,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function stationChat(msg, from) {
     channelRef.current?.send({ type: "broadcast", event: "chat", payload: { from: from || "\u{1F689}", msg } });
   }
-  function hostExecuteHostileDamage() {
-    const w = worldRef.current, s = sharedRef.current, v = s.station.visitor;
+  function hostExecuteHostileDamage(v) {
+    const w = worldRef.current, s = sharedRef.current;
     if (!w || !v) return;
     const ro = rosterOf(v.rid);
-    const r = E.applyHostileDamage(w, s, Math.random);
+    const r = E.applyHostileDamage(w, s, Math.random, v.rid);
     v.phase = "leave"; v.offer = { type: "done" };
     if (r.patches.length) channelRef.current?.send({ type: "broadcast", event: "apply", payload: { crops: r.patches } });
     channelRef.current?.send({ type: "broadcast", event: "apply", payload: { state: shareState() } });
     stationChat(L.hostileDamageChat(ro.name, s.station.damage.stolen, s.station.damage.ruined.length), "\u26A0\uFE0F");
     broadcastStation();
   }
-  function hostFinalizeVote() {
-    const s = sharedRef.current, v = s.station.visitor;
+  function hostFinalizeVote(v) {
+    const s = sharedRef.current;
     if (!v || !v.votes) return;
     const ro = rosterOf(v.rid);
     const fv = E.finalizeVote(v.votes, Math.random);
@@ -1712,7 +1721,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const w = worldRef.current, s = sharedRef.current;
     if (!s.station) s.station = E.newStationState();
     const ch = channelRef.current;
-    const v = s.station.visitor;
+    const v = E.getVisitor(s, req.rid); // zip 233: requests target a specific visitor by roster id
     const toastTo = (key) => ch?.send({ type: "broadcast", event: "apply", payload: { toast: { id: req.id, key } } });
     if (req.kind === "adsSet") {
       const r = E.resolveAdsSet(s, req.ads);
@@ -1727,16 +1736,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (!r.ok) { toastTo(r.toast || "actionFailed"); return true; }
       ch?.send({ type: "broadcast", event: "apply", payload: { farmer: { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv }, state: shareState() } });
       stationChat(L.visitorDealDone(rosterOf(v.rid).name, r.gain), "\u{1F4B0}");
+      // Gift reward (zip 233): seeds are already in the seller's pocket;
+      // decorations/pets were queued in station.pendingGifts.
+      if (r.gift) stationChat(r.giftQueued ? L.visitorGiftQueued(rosterOf(v.rid).name, giftLabel(r.gift)) : L.visitorGiftGranted(rosterOf(v.rid).name, giftLabel(r.gift)), "\u{1F381}");
       broadcastStation();
       return true;
     }
     if (req.kind === "visitorChat") {
-      const r = E.resolveVisitorChat(s);
+      const r = E.resolveVisitorChat(s, req.rid);
       if (r.ok) { stationChat(L.visitorChatDone(rosterOf(v.rid).name), "\u{1F4AC}"); broadcastStation(); }
       return true;
     }
     if (req.kind === "visitorPay") {
-      const r = E.resolveHostilePay(s);
+      const r = E.resolveHostilePay(s, req.rid);
       if (!r.ok) { toastTo(r.toast || "actionFailed"); return true; }
       ch?.send({ type: "broadcast", event: "apply", payload: { state: shareState() } });
       stationChat(L.visitorPaid(rosterOf(v.rid).name, r.paid), "\u26A0\uFE0F");
@@ -1744,7 +1756,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       return true;
     }
     if (req.kind === "visitorRefuse") {
-      if (v && v.phase === "wait" && v.offer && v.offer.type === "demand") hostExecuteHostileDamage();
+      if (v && v.phase === "wait" && v.offer && v.offer.type === "demand") hostExecuteHostileDamage(v);
       return true;
     }
     if (req.kind === "visitorVote") {
@@ -1754,7 +1766,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const online = new Set([me.id, ...playersRef.current.keys()]);
         let all = true;
         for (const idp of online) if (!(idp in v.votes)) { all = false; break; }
-        if (all) hostFinalizeVote(); else broadcastStation();
+        if (all) hostFinalizeVote(v); else broadcastStation();
       }
       return true;
     }
@@ -1780,83 +1792,120 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     return false;
   }
-  // Host simulation of the live visitor (called from the rAF loop, next to
-  // updateGreg). Handles scheduling, the train, walking, waiting, hostile
-  // deadlines, vote deadlines, leaving, and the network throttle.
-  function updateVisitor(dt) {
+  // Summed crop stock of the ONLINE players (zip 233): feeds spawnVisitor's
+  // easy/prep offer classification. Offline farmers are ignored: an order
+  // must be servable by somebody actually here.
+  function visitorStockCtx() {
+    const crops = C.CROPS.map(() => 0);
+    const online = new Set([me.id, ...playersRef.current.keys()]);
+    for (const id of online) {
+      const f = farmersRef.current[id];
+      if (f && f.inv && Array.isArray(f.inv.crops)) f.inv.crops.forEach((n, i) => { crops[i] += (n || 0); });
+    }
+    return { crops };
+  }
+  // Host simulation of the live visitors (called from the rAF loop, next to
+  // updateGreg). Zip 233: SEVERAL visitors at once (station.visitors[], max
+  // C.VISITORS_MAX) arriving in random-sized rounds via spawnVisitorGroup.
+  // Handles scheduling, the train, walking, waiting (10-min real-time floor),
+  // strolling after 30 real minutes, hostile deadlines, vote deadlines,
+  // leaving, and the network throttle.
+  function updateVisitors(dt) {
     const w = worldRef.current, s = sharedRef.current;
     if (!w) return;
     if (!s.station) s.station = E.newStationState();
     const st = s.station, now = Date.now();
+    if (!Array.isArray(st.visitors)) st.visitors = [];
     // Expired repair window: the damage becomes permanent.
     if (st.damage && now > st.damage.until) {
       st.damage = null;
       stationChat(L.repairExpired, "\u{1F6E0}\uFE0F");
       broadcastStation();
     }
-    const v = st.visitor;
-    if (!v) {
-      if (!st.nextVisitAt) { E.scheduleNextVisit(st, E.farmPopularity(s, w), Math.random); dirtyRef.current = true; }
-      else if (now >= st.nextVisitAt) {
-        const nv = E.spawnVisitor(st, Math.random);
-        if (nv) {
-          st.visitor = nv;
-          stationChat(L.visitorArrived(rosterOf(nv.rid).name), "\u{1F682}");
-          broadcastStation();
-        } else E.scheduleNextVisit(st, 0, Math.random);
-      }
-      return;
+    // Round scheduler: when the timer fires and there is room, a whole group
+    // (1..VISITORS_MAX, random each round) steps off the train.
+    if (!st.nextVisitAt) { E.scheduleNextVisit(st, E.farmPopularity(s, w), Math.random); dirtyRef.current = true; }
+    else if (now >= st.nextVisitAt) {
+      if (st.visitors.length < C.VISITORS_MAX) {
+        const added = E.spawnVisitorGroup(st, Math.random, !!st.damage, visitorStockCtx());
+        E.scheduleNextVisit(st, E.farmPopularity(s, w), Math.random);
+        if (added.length === 1) stationChat(L.visitorArrived(rosterOf(added[0].rid).name), "\u{1F682}");
+        else if (added.length > 1) stationChat(L.visitorsArrived(added.map(nv => rosterOf(nv.rid).name).join(", ")), "\u{1F682}");
+        if (added.length) broadcastStation();
+      } else E.scheduleNextVisit(st, 0, Math.random);
     }
-    // Walking helper: straight line toward (tx,ty), returns true on arrival.
-    const walkTo = (tx, ty) => {
-      const dx = tx - v.x, dy = ty - v.y, d = Math.hypot(dx, dy);
-      if (d < 0.08) { v.moving = false; return true; }
-      const step = Math.min(d, C.VISITOR_SPEED * dt);
-      v.x += (dx / d) * step; v.y += (dy / d) * step;
-      v.moving = true; v.animT = (v.animT || 0) + dt * 6;
-      v.dir = Math.abs(dx) > Math.abs(dy) ? 2 : (dy > 0 ? 0 : 1);
-      return false;
-    };
     // Waypoints: platform -> south of the townhall -> its door (and back).
     // The station sits WEST of the river, like the townhall: no crossing.
+    // Waiting spots fan out west of the door by slot so the group forms a row.
     const WP = [{ x: 5, y: 30.5 }, { x: 5, y: 36.5 }, { x: 43.5, y: 36.5 }, { x: 43.5, y: 36.3 }];
-    if (v.phase === "train") {
-      if (now >= v.phaseUntil) { v.phase = "walk"; v.wpi = 1; broadcastStation(); }
-    } else if (v.phase === "walk") {
-      const wp = WP[Math.min(v.wpi || 1, WP.length - 1)];
-      if (walkTo(wp.x, wp.y)) {
-        v.wpi = (v.wpi || 1) + 1;
-        if (v.wpi >= WP.length) {
-          v.phase = "wait"; v.moving = false; v.dir = 1;
-          v.waitUntil = now + C.VISITOR_WAIT_MS;
-          if (v.offer && v.offer.type === "demand") v.deadline = now + C.HOSTILE_DEADLINE_MS;
-          if (v.offer && v.offer.type === "stay") { v.votes = {}; v.voteUntil = now + C.VOTE_DEADLINE_MS; }
-          broadcastStation();
+    let removed = false;
+    for (const v of st.visitors) {
+      const slotX = (v.slot | 0) * 1.3;
+      const walkTo = (tx, ty, speedMul) => {
+        const dx = tx - v.x, dy = ty - v.y, d = Math.hypot(dx, dy);
+        if (d < 0.08) { v.moving = false; return true; }
+        const step = Math.min(d, C.VISITOR_SPEED * (speedMul || 1) * dt);
+        v.x += (dx / d) * step; v.y += (dy / d) * step;
+        v.moving = true; v.animT = (v.animT || 0) + dt * 6;
+        v.dir = Math.abs(dx) > Math.abs(dy) ? 2 : (dy > 0 ? 0 : 1);
+        return false;
+      };
+      const wpAt = (i) => { const wp = WP[Math.max(0, Math.min(i, WP.length - 1))]; return i >= 2 ? { x: wp.x - slotX, y: wp.y } : wp; };
+      if (v.phase === "train") {
+        if (now >= v.phaseUntil) { v.phase = "walk"; v.wpi = 1; broadcastStation(); }
+      } else if (v.phase === "walk") {
+        const wp = wpAt(Math.min(v.wpi || 1, WP.length - 1));
+        if (walkTo(wp.x, wp.y)) {
+          v.wpi = (v.wpi || 1) + 1;
+          if (v.wpi >= WP.length) {
+            v.phase = "wait"; v.moving = false; v.dir = 1;
+            // Zip 233: 10-minute real-time FLOOR for every visit type; "prep"
+            // orders are sized on the item's grow time (capped) instead.
+            v.waitStartedAt = now;
+            v.waitUntil = now + E.visitorWaitMs(v.offer);
+            if (v.offer && v.offer.type === "demand") v.deadline = now + C.HOSTILE_DEADLINE_MS;
+            if (v.offer && v.offer.type === "stay") { v.votes = {}; v.voteUntil = now + C.VOTE_DEADLINE_MS; }
+            broadcastStation();
+          }
         }
-      }
-    } else if (v.phase === "wait") {
-      if (v.offer && v.offer.type === "demand" && now > v.deadline) hostExecuteHostileDamage();
-      else if (v.offer && v.offer.type === "stay" && now > v.voteUntil) hostFinalizeVote();
-      else if (now > v.waitUntil) { v.phase = "leave"; stationChat(L.visitorLeftChat(rosterOf(v.rid).name)); broadcastStation(); }
-    } else if (v.phase === "leave") {
-      if (v.wpi === undefined || v.wpi >= WP.length) v.wpi = WP.length - 2;
-      const wp = WP[Math.max(0, v.wpi)];
-      if (walkTo(wp.x, wp.y)) {
-        v.wpi -= 1;
-        if (v.wpi < 0) { v.phase = "depart"; v.phaseUntil = now + C.VISITOR_TRAIN_MS; v.moving = false; broadcastStation(); }
-      }
-    } else if (v.phase === "depart") {
-      if (now >= v.phaseUntil) {
-        st.visitor = null;
-        E.scheduleNextVisit(st, E.farmPopularity(s, w), Math.random);
-        broadcastStation();
+      } else if (v.phase === "wait") {
+        if (v.offer && v.offer.type === "demand" && now > v.deadline) hostExecuteHostileDamage(v);
+        else if (v.offer && v.offer.type === "stay" && now > v.voteUntil) hostFinalizeVote(v);
+        else if (now > v.waitUntil) { v.phase = "leave"; stationChat(L.visitorLeftChat(rosterOf(v.rid).name)); broadcastStation(); }
+        else if (v.waitStartedAt && now - v.waitStartedAt > C.VISITOR_WANDER_AFTER_MS) {
+          // Zip 233: after 30 real minutes they stop standing rigidly and
+          // stroll around the townhall square (same roamTarget/nextRoamAt
+          // pattern as Greg/rabbits). Still phase "wait": every deal / pay /
+          // vote / chat path keeps working unmodified, and proximity checks
+          // read the live x/y.
+          if (!v.roamTarget || now >= (v.nextRoamAt || 0) || Math.hypot(v.roamTarget.x - v.x, v.roamTarget.y - v.y) < 0.15) {
+            v.nextRoamAt = now + 2500 + Math.random() * 4500;
+            v.roamTarget = Math.random() < 0.35 ? null : { x: 40.5 + Math.random() * 6.5, y: 36.2 + Math.random() * 3.4 };
+            if (!v.roamTarget) v.moving = false;
+          }
+          if (v.roamTarget) walkTo(v.roamTarget.x, v.roamTarget.y, 0.45);
+        }
+      } else if (v.phase === "leave") {
+        if (v.wpi === undefined || v.wpi >= WP.length) v.wpi = WP.length - 2;
+        const wp = wpAt(Math.max(0, v.wpi));
+        if (walkTo(wp.x, wp.y)) {
+          v.wpi -= 1;
+          if (v.wpi < 0) { v.phase = "depart"; v.phaseUntil = now + C.VISITOR_TRAIN_MS; v.moving = false; broadcastStation(); }
+        }
+      } else if (v.phase === "depart") {
+        if (now >= v.phaseUntil) { v._gone = true; removed = true; }
       }
     }
-    // Light continuous broadcast while the visitor moves (200 ms throttle).
+    if (removed) {
+      st.visitors = st.visitors.filter(v => !v._gone);
+      broadcastStation();
+    }
+    // Light continuous broadcast while visitors move (200 ms throttle):
+    // an ARRAY of per-visitor positions matched by rid on the guests.
     visitorNetRef.current += dt;
-    if (visitorNetRef.current >= C.VISITOR_NET_MS / 1000 && st.visitor) {
+    if (visitorNetRef.current >= C.VISITOR_NET_MS / 1000 && st.visitors.length) {
       visitorNetRef.current = 0;
-      channelRef.current?.send({ type: "broadcast", event: "apply", payload: { visitorSim: { x: v.x, y: v.y, dir: v.dir, moving: v.moving, animT: v.animT, phase: v.phase } } });
+      channelRef.current?.send({ type: "broadcast", event: "apply", payload: { visitorSim: st.visitors.map(v => ({ rid: v.rid, x: v.x, y: v.y, dir: v.dir, moving: v.moving, animT: v.animT, phase: v.phase })) } });
     }
   }
   function shareState() { const s = sharedRef.current; return { money: s.money, day: s.day, dayStartAt: s.dayStartAt, totalEarned: s.totalEarned }; }
@@ -1933,8 +1982,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       setStationSt(sharedRef.current.station ? JSON.parse(JSON.stringify(sharedRef.current.station)) : null);
     }
     if (p.visitorSim && !isHost) {
-      const stv = sharedRef.current.station && sharedRef.current.station.visitor;
-      if (stv) { stv.x = p.visitorSim.x; stv.y = p.visitorSim.y; stv.dir = p.visitorSim.dir; stv.moving = p.visitorSim.moving; stv.animT = p.visitorSim.animT; stv.phase = p.visitorSim.phase; }
+      // Zip 233: an ARRAY of light per-visitor positions, matched by rid.
+      const list = sharedRef.current.station && sharedRef.current.station.visitors;
+      if (list && Array.isArray(p.visitorSim)) for (const sim of p.visitorSim) {
+        const stv = list.find(vv => vv.rid === sim.rid);
+        if (stv) { stv.x = sim.x; stv.y = sim.y; stv.dir = sim.dir; stv.moving = sim.moving; stv.animT = sim.animT; stv.phase = sim.phase; }
+      }
     }
     if (p.greg !== undefined) { sharedRef.current.greg = p.greg; minimapDirtyRef.current = true; }
     if (p.soan !== undefined) { sharedRef.current.soan = p.soan; minimapDirtyRef.current = true; }
@@ -3605,6 +3658,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const uiOpen = mapOpenRef.current || shopOpenRef.current || binOpenRef.current || cauldronMenuOpenRef.current || adsOpenRef.current || visitorOpenRef.current;
       if (e.code === "Space") { e.preventDefault(); if (!uiOpen) doAction(); }
       if (e.code === "KeyE") { if (!uiOpen) tryOpenNearby(); }
+      // Zip 233 (Guillaume): Q, not E, talks to visitors - opens the unified
+      // visitor card for the nearest one waiting within reach. NOTE: KeyQ is
+      // ALSO move-left on AZERTY (ZQSD) - !e.repeat keeps a held Q from
+      // re-opening the card; to test in browser, see the context file.
+      if (e.code === "KeyQ" && !e.repeat) { if (!uiOpen) { const vq = visitorPromptNearby(); if (vq) { setMyVote(null); setVisitorRid(vq.rid); setVisitorOpen(true); } } }
       if (e.code === "KeyF") toggleMount();
       if (e.code === "KeyR" && slotRef.current === 5 && buildKindRef.current === "fence") {
         fenceDirRef.current = fenceDirRef.current === "auto" ? "h" : fenceDirRef.current === "h" ? "v" : "auto";
@@ -3640,7 +3698,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (isHost) updateRabbits(dt);
       if (isHost) updateSharedEvilMonsters(dt); // créatures maléfiques partagées (2026-07)
       if (isHost) updateGreg(dt);
-      if (isHost) updateVisitor(dt); // 2026-07 station update
+      if (isHost) updateVisitors(dt); // 2026-07 station update (zip 233: multi-visitor)
       if (isHost) updateSoan(dt);
       // Simulation hôte toujours sur worldRef.current (la ferme), quoi qu'il
       // arrive : rien ci-dessus ne dépend de la zone du joueur LOCAL. Seul
@@ -4144,11 +4202,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             for (let xx = C.STATION_PLATFORM.x; xx < C.STATION_PLATFORM.x + C.STATION_PLATFORM.w; xx++)
               ctx.drawImage(sprites.platform, xx * T, yy * T);
         } });
-        // The train slides in from the north while a visitor arrives, and
+        // The train slides in from the north while visitors arrive, and
         // back out when they depart. Timestamps are already relocated onto
         // the local clock (migrateStation), so guests see the same motion.
-        const v = st && st.visitor;
-        if (v && (v.phase === "train" || v.phase === "depart")) {
+        // Zip 233: several visitors can share the train; its motion follows
+        // the LATEST phaseUntil among them (last one to step off / board).
+        const vlist = (st && st.visitors) || [];
+        const v = vlist.filter(x => x.phase === "train" || x.phase === "depart").sort((a, b) => b.phaseUntil - a.phaseUntil)[0] || null;
+        if (v) {
           const raw = 1 - Math.max(0, (v.phaseUntil - Date.now()) / C.VISITOR_TRAIN_MS);
           const pr = Math.min(1, Math.max(0, raw));
           const yStop = (C.STATION_PLATFORM.y + 1) * T, yOff = -8 * T;
@@ -4198,16 +4259,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             draws.push({ y: dyp + T * 0.6, fn: () => ctx.drawImage(sprites.duck[fr], dxp, dyp) });
           }
         }
-        // The visiting villager (host: live sim; guests: broadcast position
-        // smoothed locally) + residents idling by the townhall.
-        if (v && v.phase !== "train" && v.phase !== "depart") {
+        // The visiting villagers (host: live sim; guests: broadcast positions
+        // smoothed locally) + residents idling by the townhall. Zip 233:
+        // EVERY live visitor is drawn, each smoothed independently.
+        for (const vv of vlist) {
+          if (vv.phase === "train" || vv.phase === "depart") continue;
           if (!isHost) {
-            v.rx = v.rx === undefined ? v.x : v.rx + (v.x - v.rx) * Math.min(1, dt * 8);
-            v.ry = v.ry === undefined ? v.y : v.ry + (v.y - v.ry) * Math.min(1, dt * 8);
+            vv.rx = vv.rx === undefined ? vv.x : vv.rx + (vv.x - vv.rx) * Math.min(1, dt * 8);
+            vv.ry = vv.ry === undefined ? vv.y : vv.ry + (vv.y - vv.ry) * Math.min(1, dt * 8);
           }
-          const vx = isHost ? v.x : v.rx, vy = isHost ? v.y : v.ry;
-          const ro = C.VISITOR_ROSTER[v.rid] || C.VISITOR_ROSTER[0];
-          draws.push({ y: (vy + 1) * T, fn: () => drawCharacter({ id: "visitor", name: ro.name, x: vx, y: vy, dir: v.dir || 0, moving: !!v.moving, animT: v.animT || 0, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap }, false) });
+          const vx = isHost ? vv.x : vv.rx, vy = isHost ? vv.y : vv.ry;
+          const ro = C.VISITOR_ROSTER[vv.rid] || C.VISITOR_ROSTER[0];
+          draws.push({ y: (vy + 1) * T, fn: () => drawCharacter({ id: "visitor" + vv.rid, name: ro.name, x: vx, y: vy, dir: vv.dir || 0, moving: !!vv.moving, animT: vv.animT || 0, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap }, false) });
         }
         const residents = (st && st.residents) || [];
         for (let ri = 0; ri < residents.length; ri++) {
@@ -4371,15 +4434,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (heldAnimalRef.current !== -1) pk = "sellAnimal";
       else if (nearTile(C.SHOP)) pk = "shop"; else if (nearTile(C.BIN)) pk = "bin";
       else if (nearTile(C.STATION_SIGN)) pk = "station"; // 2026-07 station update
-      else if (nearTile(C.HOUSE_DOOR)) pk = m.sleeping ? "wake" : "sleep";
-      else if (visitorPromptNearby()) pk = "visitor"; // 2026-07 station update
-      else if (nearTile(C.COOP_SITE) && sharedRef.current.coop) pk = "coop";
-      else if (nearTile(C.BARN_SITE)) { const b = sharedRef.current.barn; if (b && b.level < C.BARN_LEVELS.length) pk = b.ready ? "barnBuild" : "barn"; }
+      // Zip 233: sleep prompt removed with the townhall sleep option; the
+      // visitor prompt carries the nearest rid so the label can name them.
+      else { const vp = visitorPromptNearby(); if (vp) pk = "visitor:" + vp.rid; }
+      if (!pk && nearTile(C.COOP_SITE) && sharedRef.current.coop) pk = "coop";
+      else if (!pk && nearTile(C.BARN_SITE)) { const b = sharedRef.current.barn; if (b && b.level < C.BARN_LEVELS.length) pk = b.ready ? "barnBuild" : "barn"; }
       // (chantier 2026-07, refonte demande Guillaume) : le prompt E distingue
       // maintenant les 4 états possibles du chaudron — récupérer le produit
       // fini, attendre la fin de la concoction, allumer le feu (recette
       // complète + torche déjà allumée), ou ouvrir le menu de dépôt sinon.
-      else if (cauldronTile && nearTile(cauldronTile)) {
+      else if (!pk && cauldronTile && nearTile(cauldronTile)) {
         const cst = salveRecipeStatus();
         pk = cst.brewReady ? "cauldronCollect" : cst.brewing ? "cauldronBrewing" : (cst.ready && torchOnRef.current) ? "cauldronIgnite" : "cauldron";
         // Compte à rebours de concoction (correctif audit 2026-07) : mis à
@@ -5109,11 +5173,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     return facingTile();
   }
   function nearTile(tl, d = 2.5) { const m = meRef.current; return m && Math.abs(m.x - tl.x) <= d && Math.abs(m.y - tl.y) <= d; }
-  // 2026-07 station update: the waiting visitor, if I stand close enough.
+  // 2026-07 station update (zip 233): the NEAREST waiting visitor within
+  // reach, if any. Uses live x/y, so it keeps working while they stroll.
   function visitorPromptNearby() {
-    const m = meRef.current, st = sharedRef.current.station, v = st && st.visitor;
-    if (!m || !v || v.phase !== "wait") return null;
-    return (Math.abs(m.x - v.x) + Math.abs(m.y - v.y) <= 2.4) ? v : null;
+    const m = meRef.current, st = sharedRef.current.station;
+    if (!m || !st || !Array.isArray(st.visitors)) return null;
+    let best = null, bestD = 2.4;
+    for (const v of st.visitors) {
+      if (v.phase !== "wait") continue;
+      const d = Math.abs(m.x - v.x) + Math.abs(m.y - v.y);
+      if (d <= bestD) { bestD = d; best = v; }
+    }
+    return best;
   }
   // Position du chaudron ramené (chantier 2026-07, demande Guillaume) : posé
   // n'importe où par un joueur, retrouvée en scannant w.objects — un seul
@@ -5185,8 +5256,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     else if (nearTile(C.SHOP)) setShopOpen(true);
     else if (nearTile(C.BIN)) setBinOpen(true);
     else if (nearTile(C.STATION_SIGN)) { setAdsSel([...((sharedRef.current.station && sharedRef.current.station.ads) || [])]); setAdsOpen(true); } // 2026-07 station update
-    else if (nearTile(C.HOUSE_DOOR)) { if (meRef.current.sleeping) wakeUp(false); else startSleep(); }
-    else if (visitorPromptNearby()) { setMyVote(null); setVisitorOpen(true); } // 2026-07 station update
+    // Zip 233: the townhall 'sleep' option is REMOVED (Guillaume) - the E-at-
+    // HOUSE_DOOR branch is gone; startSleep/wakeUp stay in place but dead,
+    // flagged for a later cleanup zip. Visitor interaction moved to Q.
     else if (nearTile(C.COOP_SITE) && sharedRef.current.coop) sendReq({ kind: "coopDeposit" });
     else if (nearTile(C.BARN_SITE)) {
       const b = sharedRef.current.barn;
@@ -5617,7 +5689,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       </div>
 
       {/* Invite proximité */}
-      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "visitor" ? L.promptVisitor((C.VISITOR_ROSTER[(stationSt && stationSt.visitor && stationSt.visitor.rid) || 0] || {}).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "coop" ? L.promptCoop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "sleep" ? L.promptSleep : promptKey === "wake" ? L.promptWake : L.promptBin}</div>}
+      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey.startsWith("visitor:") ? L.promptVisitor((C.VISITOR_ROSTER[+promptKey.slice(8)] || {}).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "coop" ? L.promptCoop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : L.promptBin}</div>}
       {mountPrompt && <div className="ferme-prompt ferme-prompt-mount">{mountPrompt === "mount" ? L.mountPrompt : L.dismountPrompt}</div>}
 
       {/* Barre d'outils */}
@@ -5674,7 +5746,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         <div className="ferme-seed-menu-ov" onClick={() => setSeedMenuOpen(false)}>
           <div className="ferme-seed-menu panel" onClick={e => e.stopPropagation()}>
             <div className="ferme-seed-menu-title">{L.seedMenuTitle}</div>
-            {C.CROPS.map(cr => (
+            {C.CROPS.filter(cr => !cr.unique || (myInv && myInv.seeds && myInv.seeds[cr.id] > 0)).map(cr => (
               <div key={cr.id} className={"ferme-seed-menu-row" + (cr.id === seedSel ? " sel" : "")}
                 onClick={() => { setSeedSel(cr.id); setSeedMenuOpen(false); }}>
                 <Sprite img={spritesReady ? spritesRef.current.crops[cr.id][C.CROP_STAGES - 1] : null} w={26} h={26} />
@@ -5713,7 +5785,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         <div className="ferme-seed-menu-ov" onClick={() => setGregOrderOpen(false)}>
           <div className="ferme-seed-menu panel" onClick={e => e.stopPropagation()}>
             <div className="ferme-seed-menu-title">{L.gregOrderTitle}</div>
-            {C.CROPS.map(cr => (
+            {C.CROPS.filter(cr => !cr.unique).map(cr => (
               <div key={cr.id} className={"ferme-seed-menu-row" + (cr.id === gregOrderCrop ? " sel" : "")}
                 onClick={() => setGregOrderCrop(cr.id)}>
                 <Sprite img={spritesReady ? spritesRef.current.crops[cr.id][C.CROP_STAGES - 1] : null} w={26} h={26} />
@@ -6008,7 +6080,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 les en-têtes de section changent. */}
             <div className="ferme-tools-header">{L.shopSeedsHeader}</div>
             <div className="ferme-usage">{L.seedsUsageHint}</div>
-            {C.CROPS.map(cr => (
+            {C.CROPS.filter(cr => !cr.unique).map(cr => (
               <div className="ferme-shop-row" key={"s" + cr.id}>
                 <Sprite img={spritesReady ? spritesRef.current.crops[cr.id][C.CROP_STAGES - 1] : null} w={32} h={32} />
                 <div className="info"><b>{L.seedCostLabel(cr)}</b><span>{L.seedRowSub(cr)}{myInv ? myInv.seeds[cr.id] : 0}</span></div>
@@ -6228,7 +6300,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           <div className="panel ferme-modal-panel" onClick={e => e.stopPropagation()}>
             <button className="ferme-close-x" onClick={() => setBinOpen(false)}>✕</button>
             <h2>{L.binTitle}</h2><div className="ferme-hint">{L.binHint}</div>
-            {C.CROPS.map(cr => {
+            {C.CROPS.filter(cr => !cr.unique || (myInv && myInv.crops && myInv.crops[cr.id] > 0)).map(cr => {
               const n = myInv ? myInv.crops[cr.id] : 0;
               return (
                 <div className="ferme-shop-row" key={"b" + cr.id}>
@@ -6328,69 +6400,96 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               ? <p style={{ fontSize: 12, opacity: .7 }}>{L.adsBlacklistEmpty}</p>
               : stationSt.blacklist.map(rid => <div key={rid} style={{ fontSize: 13, padding: "2px 0" }}>🚫 {(C.VISITOR_ROSTER[rid] || {}).name || "?"}</div>)}
             <p style={{ fontSize: 11, opacity: .6 }}>{L.adsBlacklistHint}</p>
+            {/* Zip 233: gifts promised by visitors (pets/decorations) that
+                wait for their systems to ship - persisted in the save. */}
+            <h4>{L.adsGiftsTitle}</h4>
+            {(!stationSt || !stationSt.pendingGifts || !stationSt.pendingGifts.length)
+              ? <p style={{ fontSize: 12, opacity: .7 }}>{L.adsGiftsEmpty}</p>
+              : stationSt.pendingGifts.map((g, gi) => <div key={gi} style={{ fontSize: 13, padding: "2px 0" }}>🎁 {L.adsGiftRow(giftLabel(g), (C.VISITOR_ROSTER[g.from] || {}).name || "?")}</div>)}
           </div>
         </div>
       )}
-      {visitorOpen && stationSt && stationSt.visitor && (() => {
-        const v = stationSt.visitor, ro = C.VISITOR_ROSTER[v.rid] || C.VISITOR_ROSTER[0];
+      {visitorOpen && stationSt && (() => {
+        const v = ((stationSt.visitors || []).find(x => x.rid === visitorRid)) || null;
+        if (!v) return null;
+        const ro = C.VISITOR_ROSTER[v.rid] || C.VISITOR_ROSTER[0];
         const o = v.offer || {};
         const rel = (stationSt.rel && stationSt.rel[v.rid]) || 0;
+        const have = o.type === "buy" ? ((myInv && myInv.crops && myInv.crops[o.crop]) || 0) : 0;
+        const enough = o.type === "buy" ? have >= (o.n || 0) : false;
+        const paper = { background: "#f5eeda", color: "#1d1d1d" };
         return (
           <div className="ferme-modal open" onClick={() => setVisitorOpen(false)}>
-            <div className="panel ferme-modal-panel" onClick={e => e.stopPropagation()} style={{ width: "min(400px, 94vw)" }}>
+            <div className="panel ferme-modal-panel" onClick={e => e.stopPropagation()} style={{ width: "min(420px, 94vw)", ...paper }}>
               <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                 <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap) : null} sx={16} sy={24} w={32} h={48} />
                 <div>
-                  <h3 style={{ margin: 0 }}>{L.visitorPanelTitle(ro.name)}</h3>
-                  <div style={{ fontSize: 12, opacity: .75 }}>{L.visitorRelation(rel)}{v.disp === "hostile" ? " · " + L.visitorUrgent : ""}</div>
+                  <h3 style={{ margin: 0, color: "#1d1d1d" }}>{L.visitorPanelTitle(ro.name)}</h3>
+                  <div style={{ fontSize: 12, opacity: .8 }}>{L.visitorRelation(rel)}{v.disp === "hostile" ? " · " + L.visitorUrgent : ""}</div>
                 </div>
               </div>
               <div style={{ margin: "10px 0", fontSize: 14 }}>
                 {o.type === "buy" && <>
                   <p>{L.visitorWantsBuy(ro.name, o.n, (lang === "en" ? (C.CROPS[o.crop] || {}).nameEn : (C.CROPS[o.crop] || {}).name), o.price)}</p>
-                  {o.bonus ? <p style={{ color: "#ffe060" }}>{L.visitorRichBonus(o.bonus)}</p> : null}
-                  <button onClick={() => { sendReq({ kind: "visitorDeal" }); setVisitorOpen(false); }}>{L.visitorAccept}</button>{" "}
-                  <button onClick={() => { sendReq({ kind: "visitorChat" }); setVisitorOpen(false); }}>{L.visitorChatBtn}</button>
+                  {o.easy ? <p style={{ fontSize: 12, opacity: .8 }}>{L.visitorEasyNote}</p> : o.prep ? <p style={{ fontSize: 12, opacity: .8 }}>{L.visitorPrepNote}</p> : null}
+                  {o.bonus ? <p style={{ color: "#8a5a00", fontWeight: 700 }}>{L.visitorRichBonus(o.bonus)}</p> : null}
+                  {o.reward && o.reward.kind !== "gold" ? <p style={{ color: "#7a3aa0", fontWeight: 700 }}>{"\u{1F381} "}{L.visitorRewardGift(giftLabel(o.reward))}</p> : null}
+                  <p style={{ fontWeight: 700, color: enough ? "#1d6b2a" : "#a33a1f" }}>{L.visitorStock(have, o.n)}</p>
+                  <button disabled={!enough} onClick={() => { sendReq({ kind: "visitorDeal", rid: v.rid }); setVisitorOpen(false); }}>{L.visitorAccept}</button>
                 </>}
-                {o.type === "chat" && <>
-                  <p>{L.visitorWantsChat(ro.name)}</p>
-                  <button onClick={() => { sendReq({ kind: "visitorChat" }); setVisitorOpen(false); }}>{L.visitorChatBtn}</button>
-                </>}
+                {o.type === "chat" && <p>{L.visitorWantsChat(ro.name)}</p>}
                 {o.type === "demand" && <>
-                  <p style={{ color: "#ff9a7a" }}>{L.visitorDemand(ro.name, o.gold)}</p>
-                  <button onClick={() => { sendReq({ kind: "visitorPay" }); setVisitorOpen(false); }}>{L.visitorPayBtn(o.gold)}</button>{" "}
-                  <button onClick={() => { sendReq({ kind: "visitorRefuse" }); setVisitorOpen(false); }}>{L.visitorRefuseBtn}</button>
+                  <p style={{ color: "#a33a1f", fontWeight: 700 }}>{L.visitorDemand(ro.name, o.gold)}</p>
+                  <button onClick={() => { sendReq({ kind: "visitorPay", rid: v.rid }); setVisitorOpen(false); }}>{L.visitorPayBtn(o.gold)}</button>{" "}
+                  <button onClick={() => { sendReq({ kind: "visitorRefuse", rid: v.rid }); setVisitorOpen(false); }}>{L.visitorRefuseBtn}</button>
                 </>}
                 {o.type === "stay" && <>
                   <h4 style={{ margin: "4px 0" }}>{L.stayTitle(ro.name)}</h4>
                   <p>{L.stayProposal(ro.name, ro.job)}</p>
                   {myVote === null ? <>
-                    <button onClick={() => { setMyVote(true); sendReq({ kind: "visitorVote", v: true }); }}>{L.voteYes}</button>{" "}
-                    <button onClick={() => { setMyVote(false); sendReq({ kind: "visitorVote", v: false }); }}>{L.voteNo}</button>
-                  </> : <p style={{ opacity: .75 }}>{L.voteWaiting}</p>}
+                    <button onClick={() => { setMyVote(true); sendReq({ kind: "visitorVote", rid: v.rid, v: true }); }}>{L.voteYes}</button>{" "}
+                    <button onClick={() => { setMyVote(false); sendReq({ kind: "visitorVote", rid: v.rid, v: false }); }}>{L.voteNo}</button>
+                  </> : <p style={{ opacity: .8 }}>{L.voteWaiting}</p>}
                 </>}
-                {o.type === "done" && <p style={{ opacity: .75 }}>{L.visitorLeftChat(ro.name)}</p>}
+                {o.type === "done" && <p style={{ opacity: .8 }}>{L.visitorLeftChat(ro.name)}</p>}
               </div>
-              <button onClick={() => { sendReq({ kind: "visitorBlacklist", rid: v.rid }); setVisitorOpen(false); }} style={{ opacity: .8 }}>{L.visitorBlacklistBtn}</button>
+              {(o.type === "buy" || o.type === "chat") && <>
+                <div style={{ borderTop: "1px solid #c9b98f", margin: "8px 0" }} />
+                <button onClick={() => { sendReq({ kind: "visitorChat", rid: v.rid }); setVisitorOpen(false); }}>{L.visitorChatBtn}</button>{" "}
+              </>}
+              <button onClick={() => { sendReq({ kind: "visitorBlacklist", rid: v.rid }); setVisitorOpen(false); }} style={{ opacity: .85 }}>{L.visitorBlacklistBtn}</button>
             </div>
           </div>
         );
       })()}
-      {/* Corner notification: a visitor waits at the townhall and nobody is
-          nearby (Guillaume: small head icon, name, the ask, urgency flag). */}
-      {stationSt && stationSt.visitor && stationSt.visitor.phase === "wait" && !visitorOpen && !nearHall && (() => {
-        const v = stationSt.visitor, ro = C.VISITOR_ROSTER[v.rid] || C.VISITOR_ROSTER[0];
-        const o = v.offer || {};
-        const ask = o.type === "buy" ? L.notifWantsBuy(o.n, (lang === "en" ? (C.CROPS[o.crop] || {}).nameEn : (C.CROPS[o.crop] || {}).name))
-          : o.type === "demand" ? L.notifDemand(o.gold)
-          : o.type === "stay" ? L.notifStay : L.notifWantsChat;
+      {/* Corner notifications (zip 233): one paper card per waiting visitor
+          (up to 3, then "+N more"), each with a remote "Meet me at townhall"
+          button that opens the SAME visitor card without walking over -
+          Guillaume: black text on paper, not yellow-on-dark. */}
+      {stationSt && (stationSt.visitors || []).some(vv => vv.phase === "wait") && !visitorOpen && !nearHall && (() => {
+        const waiting = (stationSt.visitors || []).filter(vv => vv.phase === "wait");
+        const shown = waiting.slice(0, 3);
+        const card = { background: "#f5eeda", border: "1px solid #6b4a2e", borderRadius: 10, padding: "8px 10px", display: "flex", gap: 10, alignItems: "center", color: "#1d1d1d" };
         return (
-          <div style={{ position: "fixed", right: 12, top: 64, zIndex: 60, background: "rgba(22,26,34,0.94)", border: "1px solid #6b4a2e", borderRadius: 10, padding: "8px 10px", display: "flex", gap: 10, alignItems: "center", maxWidth: 270, color: "#f0e8d8" }}>
-            <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap) : null} sx={16} sy={24} w={24} h={36} />
-            <div style={{ fontSize: 12, lineHeight: 1.35 }}>
-              <b>{L.notifAsk(ro.name)}</b><br />{ask}
-              {o.type === "demand" && <span style={{ color: "#ff8a6a", fontWeight: 700 }}> · {L.visitorUrgent}</span>}
-            </div>
+          <div style={{ position: "fixed", right: 12, top: 64, zIndex: 60, display: "flex", flexDirection: "column", gap: 6, maxWidth: 280 }}>
+            {shown.map(vv => {
+              const ro = C.VISITOR_ROSTER[vv.rid] || C.VISITOR_ROSTER[0];
+              const o = vv.offer || {};
+              const ask = o.type === "buy" ? L.notifWantsBuy(o.n, (lang === "en" ? (C.CROPS[o.crop] || {}).nameEn : (C.CROPS[o.crop] || {}).name))
+                : o.type === "demand" ? L.notifDemand(o.gold)
+                : o.type === "stay" ? L.notifStay : L.notifWantsChat;
+              return (
+                <div key={vv.rid} style={card}>
+                  <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap) : null} sx={16} sy={24} w={24} h={36} />
+                  <div style={{ fontSize: 12, lineHeight: 1.35 }}>
+                    <b>{L.notifAsk(ro.name)}</b><br />{ask}
+                    {o.type === "demand" && <span style={{ color: "#a33a1f", fontWeight: 700 }}> · {L.visitorUrgent}</span>}
+                    <br /><button style={{ marginTop: 4, fontSize: 11 }} onClick={() => { setMyVote(null); setVisitorRid(vv.rid); setVisitorOpen(true); }}>{L.meetBtn}</button>
+                  </div>
+                </div>
+              );
+            })}
+            {waiting.length > 3 && <div style={{ ...card, fontSize: 12, padding: "4px 10px" }}>{L.notifMore(waiting.length - 3)}</div>}
           </div>
         );
       })()}

@@ -1561,6 +1561,7 @@ export function resolveBuy(f, money, m) {
   if (m.item === "seed") {
     const st = m.crop | 0, n = Math.max(1, Math.min(50, (m.n | 0) || 1));
     if (st < 0 || st >= C.CROPS.length) return res;
+    if (C.CROPS[st].unique) { res.toast = "actionFailed"; return res; } // zip 233: gift-only seeds, never sold
     const cost = C.CROPS[st].seedCost * n;
     if (money < cost) { res.toast = "noGold"; return res; }
     res.moneyDelta = -cost; f.inv.seeds[st] += n; res.invChanged = true;
@@ -2096,9 +2097,18 @@ export function newStationState() {
     rel: {},            // roster id -> friendship points (chats, deals)
     residents: [],      // [{rid, job}] accepted through a unanimous vote (or dice)
     nextVisitAt: 0,     // host clock; 0 = schedule on next host tick
-    visitor: null,      // live visitor object (host-simulated, broadcast)
+    visitors: [],       // live visitor objects (host-simulated, broadcast) - up to VISITORS_MAX (zip 233)
+    pendingGifts: [],   // owed gifts (decor/pet) awaiting their systems - PERSISTED (zip 233)
     damage: null,       // live hostile-damage record awaiting co-op repair
   };
+}
+
+// Look up a live visitor by roster id. Every resolver now targets a specific
+// visitor this way (zip 233: several can be on the farm at once).
+export function getVisitor(s, rid) {
+  const list = (s.station && s.station.visitors) || [];
+  for (const v of list) if (v.rid === rid) return v;
+  return null;
 }
 
 // Load/snapshot normalization (same role as normalizeFarmer for farmers).
@@ -2111,15 +2121,21 @@ export function migrateStation(st, hostNow) {
   out.blacklist = Array.isArray(st.blacklist) ? st.blacklist.filter(r => typeof r === "number") : [];
   out.rel = (st.rel && typeof st.rel === "object") ? st.rel : {};
   out.residents = Array.isArray(st.residents) ? st.residents.filter(r => r && typeof r.rid === "number") : [];
+  // Owed gifts (zip 233) survive EVERY load, plain or snapshot: a promised
+  // pet must not vanish before the pet system ships.
+  out.pendingGifts = Array.isArray(st.pendingGifts) ? st.pendingGifts.filter(g => g && typeof g.kind === "string") : [];
   if (typeof hostNow === "number") {
-    // Mid-session snapshot: keep the live visitor/damage, relocated.
+    // Mid-session snapshot: keep the live visitors/damage, relocated.
+    // A legacy single st.visitor (pre-233 snapshot) is wrapped into an array.
     const shift = Date.now() - hostNow;
-    if (st.visitor) {
-      out.visitor = { ...st.visitor };
-      for (const k of ["phaseUntil", "waitUntil", "deadline", "voteUntil"]) {
-        if (typeof out.visitor[k] === "number" && out.visitor[k] > 0) out.visitor[k] += shift;
+    const raw = Array.isArray(st.visitors) ? st.visitors : (st.visitor ? [st.visitor] : []);
+    out.visitors = raw.map(v0 => {
+      const v = { ...v0 };
+      for (const k of ["phaseUntil", "waitUntil", "deadline", "voteUntil", "waitStartedAt"]) {
+        if (typeof v[k] === "number" && v[k] > 0) v[k] += shift;
       }
-    }
+      return v;
+    });
     if (st.damage) {
       out.damage = { ...st.damage };
       if (typeof out.damage.until === "number" && out.damage.until > 0) out.damage.until += shift;
@@ -2157,10 +2173,69 @@ export function scheduleNextVisit(station, popularity, rnd) {
 // and (softly) the previous visitor. Disposition: hostile roll first (edgy
 // roster entries count double, each resident halves it), then rich patrons,
 // then nice/neutral. High-friendship nice visitors ask to STAY instead.
-export function spawnVisitor(station, rnd) {
+// How long a visitor lingers at the townhall (zip 233): 10 real minutes is
+// now the hard FLOOR for every visit type. "Prep" orders (asking for
+// something not yet in stock) are sized around the item's grow time instead,
+// capped by VISITOR_WAIT_MAX_MS, so the wait is computed AFTER the offer is
+// classified (see spawnVisitor).
+export function visitorWaitMs(offer) {
+  let ms = C.VISITOR_WAIT_MS;
+  if (offer && offer.prep && typeof offer.prepMs === "number") ms = offer.prepMs * 1.2;
+  return Math.max(C.VISITOR_WAIT_FLOOR_MS, Math.min(C.VISITOR_WAIT_MAX_MS, ms));
+}
+
+// Roll the gift attached to a "prep" order (zip 233): unique seeds are
+// granted straight into the seller's inventory on completion; decorations
+// and pets queue in station.pendingGifts until their systems exist.
+function rollGiftReward(r) {
+  const roll = r();
+  if (roll < 0.5) {
+    const cropId = C.UNIQUE_SEED_CROPS[Math.floor(r() * C.UNIQUE_SEED_CROPS.length)];
+    return { kind: "seed", cropId };
+  }
+  if (roll < 0.85) return { kind: "decor", id: C.UNIQUE_DECORATIONS[Math.floor(r() * C.UNIQUE_DECORATIONS.length)].id };
+  return { kind: "pet", petId: C.UNIQUE_PETS[Math.floor(r() * C.UNIQUE_PETS.length)].id };
+}
+
+// Classify a buy offer against what the farm ACTUALLY has (zip 233).
+// stockCtx = { crops: number[] } summed over the online players' pockets.
+// - easy: already in stock -> lower price, gold only.
+// - prep: not in stock -> higher price, wait sized on the grow time (capped),
+//   and a chance at a gift reward. If NOTHING is growable within the max
+//   wait, we still fall back to the fastest-growing candidate so the offer
+//   stays completable in principle (noted simplification: real grow times
+//   are hours, so a fresh planting rarely finishes inside one visit).
+function classifyBuyOffer(offer, stockCtx, r) {
+  const askable = C.CROPS.filter(cr => !cr.unique);
+  const stock = (stockCtx && Array.isArray(stockCtx.crops)) ? stockCtx.crops : [];
+  const stocked = askable.filter(cr => (stock[cr.id] || 0) >= 2);
+  if (stocked.length && r() < C.VISITOR_EASY_STOCK_BIAS) {
+    const cr = stocked[Math.floor(r() * stocked.length)];
+    offer.crop = cr.id;
+    offer.n = Math.max(1, Math.min(stock[cr.id] || 1, offer.n));
+    offer.easy = true;
+    offer.price = Math.ceil(cr.sell * (1.05 + r() * 0.25)); // modest: costs the farm nothing but stock
+    offer.reward = { kind: "gold" };                        // easy orders are cash-only
+    return offer;
+  }
+  const notStocked = askable.filter(cr => (stock[cr.id] || 0) < 2);
+  const pool = notStocked.length ? notStocked : askable;
+  const fitting = pool.filter(cr => cr.growMs * 1.2 <= C.VISITOR_WAIT_MAX_MS);
+  const cr = (fitting.length ? fitting : [pool.reduce((a, b) => (a.growMs <= b.growMs ? a : b))])[
+    Math.floor(r() * (fitting.length || 1))];
+  offer.crop = cr.id;
+  offer.prep = true;
+  offer.prepMs = cr.growMs;
+  offer.price = Math.ceil(cr.sell * (1.8 + r() * 0.7));     // effort pays better
+  offer.reward = r() < C.VISITOR_GIFT_CHANCE ? rollGiftReward(r) : { kind: "gold" };
+  return offer;
+}
+
+export function spawnVisitor(station, rnd, stockCtx) {
   const r = rnd || Math.random;
   const banned = new Set(station.blacklist || []);
   for (const res of station.residents || []) banned.add(res.rid);
+  for (const cur of station.visitors || []) banned.add(cur.rid); // zip 233: no duplicates on the farm
   const pool = C.VISITOR_ROSTER.filter(v => !banned.has(v.rid) && v.rid !== station.lastRid);
   if (!pool.length) return null;
   const who = pool[Math.floor(r() * pool.length)];
@@ -2176,7 +2251,8 @@ export function spawnVisitor(station, rnd) {
     disp = "rich";
     const crop = Math.floor(r() * C.CROPS.length);
     const n = 10 + Math.floor(r() * 11);
-    offer = { type: "buy", crop, n, price: C.CROPS[crop].sell * 3, bonus: 300 + Math.floor(r() * 501) };
+    offer = classifyBuyOffer({ type: "buy", crop, n, price: C.CROPS[crop].sell * 3, bonus: 300 + Math.floor(r() * 501) }, stockCtx, r);
+    if (offer.easy) offer.price = Math.max(offer.price, C.CROPS[offer.crop].sell * 2); // rich patrons still overpay
   } else if (rel >= C.REL_RESIDENT_MIN) {
     disp = "nice";
     offer = { type: "stay", job: who.job };
@@ -2187,30 +2263,71 @@ export function spawnVisitor(station, rnd) {
     disp = r() < 0.6 ? "nice" : "neutral";
     const crop = Math.floor(r() * C.CROPS.length);
     const n = 3 + Math.floor(r() * 8);
-    const mult = 1.3 + r() * 0.7; // they surprise us with the price
-    offer = { type: "buy", crop, n, price: Math.ceil(C.CROPS[crop].sell * mult) };
+    offer = classifyBuyOffer({ type: "buy", crop, n, price: 0 }, stockCtx, r);
   }
   return {
     rid: who.rid, disp, offer,
     x: C.STATION_PLATFORM.x + 1, y: C.STATION.y + C.STATION.h + 1.5,
     dir: 2, moving: false, animT: 0,
     phase: "train", phaseUntil: Date.now() + C.VISITOR_TRAIN_MS,
-    waitUntil: 0, deadline: 0, votes: null, voteUntil: 0,
+    waitUntil: 0, waitStartedAt: 0, deadline: 0, votes: null, voteUntil: 0,
   };
+}
+
+// Spawn a whole ROUND of visitors (zip 233): random size 1..VISITORS_MAX,
+// clamped by the free room on the farm; at most one hostile at a time
+// (including during an unrepaired raid); staggered off the train one by one.
+export function spawnVisitorGroup(station, rnd, raidActive, stockCtx) {
+  const r = rnd || Math.random;
+  if (!Array.isArray(station.visitors)) station.visitors = [];
+  const room = C.VISITORS_MAX - station.visitors.length;
+  if (room <= 0) return [];
+  const n = Math.min(room, 1 + Math.floor(r() * C.VISITORS_MAX));
+  const used = new Set(station.visitors.map(v => v.slot | 0));
+  const out = [];
+  let hostileTaken = !!raidActive || station.visitors.some(v => v.disp === "hostile" && v.phase !== "depart");
+  for (let k = 0; k < n; k++) {
+    const nv = spawnVisitor(station, r, stockCtx);
+    if (!nv) break;
+    if (nv.disp === "hostile") {
+      if (hostileTaken) {
+        nv.disp = "neutral";
+        const crop = Math.floor(r() * C.CROPS.length);
+        nv.offer = classifyBuyOffer({ type: "buy", crop, n: 1 + Math.floor(r() * 2), price: 0 }, stockCtx, r);
+      } else hostileTaken = true;
+    }
+    let slot = 0; while (used.has(slot)) slot++;
+    used.add(slot); nv.slot = slot;
+    nv.phaseUntil += k * 900; // step off the train one by one
+    out.push(nv); station.visitors.push(nv);
+  }
+  return out;
 }
 
 // A nice/neutral/rich visitor buys crops FROM the accepting player's own
 // inventory; the gold (plus any rich-patron bonus) lands in the common
 // chest, consistent with how sales already work. Mutates f and s.
 export function resolveVisitorDeal(f, s, m) {
-  const res = { ok: false, toast: null, gain: 0 };
-  const v = s.station && s.station.visitor;
+  const res = { ok: false, toast: null, gain: 0, gift: null, giftQueued: false };
+  const v = getVisitor(s, m && m.rid);
   if (!v || v.phase !== "wait" || !v.offer || v.offer.type !== "buy") { res.toast = "actionFailed"; return res; }
   const o = v.offer;
   if ((f.inv.crops[o.crop] || 0) < o.n) { res.toast = "visitorNotEnough"; return res; }
   f.inv.crops[o.crop] -= o.n;
   res.gain = o.n * o.price + (o.bonus || 0);
   s.money += res.gain; s.totalEarned = (s.totalEarned || 0) + res.gain;
+  // Gift reward (zip 233, "prep" orders only): unique seeds land straight in
+  // the seller's pocket; decorations/pets are QUEUED (their systems are still
+  // deferred) in station.pendingGifts, which persists across saves.
+  const rw = o.reward;
+  if (rw && rw.kind === "seed") {
+    f.inv.seeds[rw.cropId] = (f.inv.seeds[rw.cropId] || 0) + 3;
+    res.gift = { ...rw };
+  } else if (rw && (rw.kind === "decor" || rw.kind === "pet")) {
+    if (!Array.isArray(s.station.pendingGifts)) s.station.pendingGifts = [];
+    s.station.pendingGifts.push({ ...rw, from: v.rid, at: Date.now() });
+    res.gift = { ...rw }; res.giftQueued = true;
+  }
   s.station.rel[v.rid] = ((s.station.rel[v.rid] || 0) + C.REL_DEAL);
   v.phase = "leave"; v.offer = { type: "done" };
   res.ok = true;
@@ -2218,8 +2335,8 @@ export function resolveVisitorDeal(f, s, m) {
 }
 
 // A friendly chat: +1 friendship, visitor heads home happy.
-export function resolveVisitorChat(s) {
-  const v = s.station && s.station.visitor;
+export function resolveVisitorChat(s, rid) {
+  const v = getVisitor(s, rid);
   if (!v || v.phase !== "wait") return { ok: false };
   s.station.rel[v.rid] = ((s.station.rel[v.rid] || 0) + C.REL_CHAT);
   if (v.offer && (v.offer.type === "chat" || v.offer.type === "buy")) { v.phase = "leave"; v.offer = { type: "done" }; }
@@ -2227,9 +2344,9 @@ export function resolveVisitorChat(s) {
 }
 
 // Paying a hostile visitor's demand from the common chest.
-export function resolveHostilePay(s) {
+export function resolveHostilePay(s, rid) {
   const res = { ok: false, toast: null, paid: 0 };
-  const v = s.station && s.station.visitor;
+  const v = getVisitor(s, rid);
   if (!v || v.phase !== "wait" || !v.offer || v.offer.type !== "demand") { res.toast = "actionFailed"; return res; }
   if (s.money < v.offer.gold) { res.toast = "noGold"; return res; }
   s.money -= v.offer.gold; res.paid = v.offer.gold;
@@ -2243,7 +2360,7 @@ export function resolveHostilePay(s) {
 // growing crops. Everything taken is RECORDED in the damage object so a
 // successful co-op repair can restore it 100%. Returns tile patches for the
 // host to broadcast.
-export function applyHostileDamage(w, s, rnd) {
+export function applyHostileDamage(w, s, rnd, rid) {
   const r = rnd || Math.random;
   const stolen = Math.min(C.HOSTILE_STEAL_MAX, s.money);
   s.money -= stolen;
@@ -2256,7 +2373,7 @@ export function applyHostileDamage(w, s, rnd) {
     ruined.push({ i, c: { t: c.t, bankedMs: c.bankedMs || 0, wateredAt: c.wateredAt || null } });
     w.crops.delete(i);
   }
-  const v = s.station.visitor;
+  const v = getVisitor(s, rid);
   s.station.damage = {
     rid: v ? v.rid : -1, stolen, ruined,
     wins: 0, winners: [], until: Date.now() + C.REPAIR_WINDOW_MS,
@@ -2304,8 +2421,8 @@ export function resolveAdsSet(s, ads) {
 export function resolveBlacklist(s, rid) {
   if (typeof rid !== "number" || rid < 0 || rid >= C.VISITOR_ROSTER.length) return { ok: false };
   if (!s.station.blacklist.includes(rid)) s.station.blacklist.push(rid);
-  const v = s.station.visitor;
-  if (v && v.rid === rid && v.phase !== "leave") { v.phase = "leave"; v.offer = { type: "done" }; }
+  const v = getVisitor(s, rid);
+  if (v && v.phase !== "leave" && v.phase !== "depart") { v.phase = "leave"; v.offer = { type: "done" }; }
   return { ok: true };
 }
 

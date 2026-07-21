@@ -123,6 +123,13 @@ export const CROPS = [
   // sprite), aucun autre fichier n'a besoin d'être modifié pour ces 2 entrées.
   { id: 4, name: "Blé",  nameEn: "Wheat", seedName: "Graine de blé",  seedNameEn: "Wheat seeds", growMs: 48 * H, seedCost: 120, sell: 480, color: "#e8d24a", top: "#c2a82a" },
   { id: 5, name: "Maïs", nameEn: "Corn",  seedName: "Graine de maïs", seedNameEn: "Corn seeds",  growMs: 48 * H, seedCost: 140, sell: 560, color: "#f0c93a", top: "#d9a91a" },
+  // 2026-07 visitors update (zip 233): UNIQUE crop varieties, `unique: true`.
+  // NEVER sold in the shop (the shop/Greg lists filter on this flag, and
+  // resolveBuySeed refuses them): their seeds only arrive as visitor GIFTS
+  // on "prep" orders (see spawnVisitor). Everything else (planting, growth,
+  // sprites, selling at the bin) rides the existing data-driven pipeline.
+  { id: 6, name: "Navet doré",    nameEn: "Golden turnip", seedName: "Graine de navet doré",    seedNameEn: "Golden turnip seeds", growMs: 6 * H,  seedCost: 0, sell: 260, color: "#f6d76a", top: "#e0b02a", unique: true },
+  { id: 7, name: "Baie étoilée",  nameEn: "Star berry",    seedName: "Graine de baie étoilée",  seedNameEn: "Star berry seeds",    growMs: 12 * H, seedCost: 0, sell: 460, color: "#b48ef0", top: "#7a4ee0", unique: true },
 ];
 export const CROP_STAGES = 5; // 0..4, stage 4 = mûr
 // Durée réelle pendant laquelle un arrosage reste valable : passé ce délai sans
@@ -936,8 +943,29 @@ export const VISIT_AD_BONUS_MS = 40 * 1000;       // per posted ad category
 export const VISIT_POP_BONUS_MAX_MS = 3 * 60 * 1000; // popularity cap
 export const VISITOR_SPEED = 2.4;                 // tiles/s walking
 export const VISITOR_TRAIN_MS = 4500;             // train pulls in, doors, etc.
-export const VISITOR_WAIT_MS = 90 * 1000;         // how long they wait at the townhall
+export const VISITOR_WAIT_MS = 90 * 1000;         // legacy base wait (still the formula seed, now FLOORED below)
 export const VISITOR_NET_MS = 200;                // host broadcast throttle while a visitor exists
+// 2026-07 visitors update (zip 233, Guillaume's spec):
+export const VISITORS_MAX = 5;                    // hard cap of visitors on the farm at once
+export const VISITOR_WAIT_FLOOR_MS = 10 * 60 * 1000;   // 10 real minutes, hard FLOOR for every visit type
+export const VISITOR_WAIT_MAX_MS = 45 * 60 * 1000;     // ceiling: even "prep" orders never linger longer
+export const VISITOR_WANDER_AFTER_MS = 30 * 60 * 1000; // after 30 real minutes waiting, they stroll around
+export const VISITOR_EASY_STOCK_BIAS = 0.65;      // chance a buy order targets something already in stock
+export const VISITOR_GIFT_CHANCE = 0.45;          // chance a "prep" order pays a GIFT on top of the gold
+// Unique gift catalogues (never purchasable). Decorations and pets cannot be
+// granted yet (personal houses / pet system are still deferred): they queue
+// in station.pendingGifts (persisted, see migrateStation) until those ship.
+export const UNIQUE_SEED_CROPS = [6, 7];          // indexes in CROPS with unique: true
+export const UNIQUE_DECORATIONS = [
+  { id: "gnome",    name: "Gnome farceur",       nameEn: "Prankster gnome" },
+  { id: "fountain", name: "Fontaine de cristal", nameEn: "Crystal fountain" },
+  { id: "sunwheel", name: "Roue solaire",        nameEn: "Sun wheel" },
+];
+export const UNIQUE_PETS = [
+  { id: "dragon",  name: "Dragonneau",     nameEn: "Baby dragon" },
+  { id: "unicorn", name: "Licorne",        nameEn: "Unicorn" },
+  { id: "skunk",   name: "Moufette chic",  nameEn: "Fancy skunk" },
+];
 
 // Dispositions. Hostile chance is halved once per resident living on the
 // farm (a lively townhall discourages troublemakers).
