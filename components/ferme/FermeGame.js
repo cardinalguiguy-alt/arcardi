@@ -2199,6 +2199,35 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       } else g.moving = false;
     } else g.moving = false;
     if (moved) minimapDirtyRef.current = true;
+    // Arrosage passif "en marchant" (demande Guillaume : Greg doit être plus
+    // efficace, pas juste faire un aller-retour dédié case par case comme
+    // avant). Même principe que checkWalkOverWater côté joueur : QUELLE QUE
+    // SOIT la case sous ses pieds à cet instant — qu'il se rende à une
+    // tâche "water" précise, à une tâche "till"/"chop"/"mine", ou qu'il
+    // rôdaille sans tâche — toute culture assoiffée croisée au passage est
+    // arrosée instantanément, sans détour ni attente de son tour dans
+    // `taskQueue`. Ça ne remplace pas la file de tâches "water" (toujours
+    // utile pour les cultures isolées, hors du chemin naturel de Greg),
+    // mais ça évite désormais un trajet dédié par case pour tout ce qu'il
+    // traverse en marchant vers autre chose — exactement comme un joueur
+    // avec l'arrosoir équipé. On retire aussi du taskQueue toute tâche
+    // "water" déjà en file pour cette même case, désormais inutile.
+    const gtx = Math.floor(g.x + 0.5), gty = Math.floor(g.y + 0.5);
+    if (inMap(gtx, gty)) {
+      const gi = idxOf(gtx, gty);
+      const gc = w.crops.get(gi);
+      if (gc) {
+        const ggs = E.cropGrowState(gc, now);
+        if (!ggs.mature && ggs.needsWater) {
+          const wOk = E.gregWater(w, gi, now);
+          if (wOk) {
+            if (g.taskQueue && g.taskQueue.length) g.taskQueue = g.taskQueue.filter(t => !(t.a === "water" && t.i === gi));
+            dirtyRef.current = true;
+            channelRef.current?.send({ type: "broadcast", event: "apply", payload: { crops: [{ i: gi, c: w.crops.get(gi) }] } });
+          }
+        }
+      }
+    }
     gregAccumRef.current += dt;
     if (gregAccumRef.current >= 0.15) {
       gregAccumRef.current = 0;
@@ -2960,7 +2989,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const so = sharedRef.current.soan;
         if (so) {
           const sx = isHost ? so.x : (so.rx ?? so.x), sy = isHost ? so.y : (so.ry ?? so.y);
-          draws.push({ y: (sy + 1) * T, fn: () => drawCharacter({ id: "soan", name: "Soan", x: sx, y: sy, dir: so.dir || 0, moving: !!so.moving, animT: so.animT || 0, gender: "m", outfit: 1, fishing: so.phase === "fishing" }, false) });
+          draws.push({ y: (sy + 1) * T, fn: () => drawCharacter({ id: "soan", name: "Soan", x: sx, y: sy, dir: so.dir || 0, moving: !!so.moving, animT: so.animT || 0, gender: "m", outfit: 1, cap: true, fishing: so.phase === "fishing" }, false) });
         }
       }
       if (!m.sleeping) draws.push({ y: (m.y + 1) * T, fn: () => drawSelf(m) });
@@ -3175,15 +3204,26 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const draws = [];
       for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
         const i = y * ew.w + x, g = ew.ground[i];
-        ctx.fillStyle = g === C.G_DARK_PASSAGE ? "#3a2a55" : "#182417";
+        ctx.fillStyle = g === C.G_DARK_PASSAGE ? "#3a2a55" : g === C.G_WATER ? "#241246" : "#182417";
         ctx.fillRect(x * T, y * T, T, T);
         if (g === C.G_DARK_PASSAGE) {
           const pulse = 0.4 + Math.sin(now / 500) * 0.15;
           ctx.fillStyle = `rgba(140, 90, 220, ${pulse})`;
           ctx.fillRect(x * T, y * T, T, T);
+        } else if (g === C.G_WATER) {
+          // Grand lac violet luisant (chantier 2026-07, demande Guillaume :
+          // "ambiance sombre partout avec un grand lac violet luisant") :
+          // même principe de voile pulsant que le passage sombre ci-dessus,
+          // teinte plus profonde et onde plus lente/large pour une surface
+          // qui respire plutôt que clignote, cohérente avec un grand plan
+          // d'eau plutôt qu'une case isolée.
+          const glow = 0.5 + Math.sin(now / 1100 + (x + y) * 0.35) * 0.22;
+          ctx.fillStyle = `rgba(160, 70, 220, ${glow})`;
+          ctx.fillRect(x * T, y * T, T, T);
         }
         const o = ew.objects[i];
         if (o === C.O_TREE || o === C.O_TREE2) { const img = o === C.O_TREE ? sprites.oak : sprites.pine; draws.push({ y: (y + 1) * T, fn: () => ctx.drawImage(img, x * T - 8, (y + 1) * T - 48) }); }
+        else if (o === C.O_TREE_DEAD) draws.push({ y: (y + 1) * T, fn: () => ctx.drawImage(sprites.deadTree, x * T - 8, (y + 1) * T - 48) });
         else if (o === C.O_ROCK) draws.push({ y: (y + 1) * T, fn: () => ctx.drawImage(sprites.rock, x * T, y * T) });
       }
       draws.push({ y: (m.y + 1) * T, fn: () => drawSelf(m) });
@@ -3197,8 +3237,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     function blockedEvil(ew, x, y) {
       const fx = Math.floor(x), fy = Math.floor(y);
       if (fx < 0 || fy < 0 || fx >= ew.w || fy >= ew.h) return true;
-      const o = ew.objects[fy * ew.w + fx];
-      return o === C.O_TREE || o === C.O_TREE2 || o === C.O_ROCK;
+      const i = fy * ew.w + fx;
+      const o = ew.objects[i];
+      // Lac violet (chantier 2026-07, demande Guillaume) : bloque comme la
+      // rivière côté ferme normale (E.isWaterTile) — pas de baignade ici.
+      if (ew.ground[i] === C.G_WATER) return true;
+      return o === C.O_TREE || o === C.O_TREE2 || o === C.O_TREE_DEAD || o === C.O_ROCK;
     }
     function canStandEvil(ew, x, y) {
       const r = 0.3;
@@ -3281,7 +3325,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     function drawRemote(p) { drawCharacter(p, false); }
     function drawCharacter(p, isSelf) {
       const sprites = spritesRef.current;
-      const sheet = sprites.getChar(p.gender, p.outfit, p.overalls);
+      const sheet = sprites.getChar(p.gender, p.outfit, p.overalls, p.cap);
       const row = p.dir === 0 ? 0 : p.dir === 1 ? 1 : 2;
       const frame = p.moving ? Math.floor((p.animT || 0) % 4) : 0;
       const horse = (sharedRef.current.horses || []).find(h => h.rider === p.id || h.rider2 === p.id) || null;
@@ -3343,20 +3387,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         ctx.fillText("🏆", px + 8, py - (riding ? 34 : 26) - lift);
       }
       // Casquette de Soan (chantier 2026-07, demande Guillaume : "Soan
-      // ressemble trop à un fermier, il doit avoir un chapeau") : overlay
-      // emoji permanent, même principe que le chapeau-trophée ci-dessus mais
-      // toujours actif (pas conditionné à un trophée gagné) et réservé à
-      // Soan (p.id === "soan", jamais un vrai joueur).
-      // Correctif 2026-07 (demande Guillaume : "le chapeau flotte trop haut,
-      // il devrait être sur sa tête") : décalage vertical réduit par rapport
-      // au chapeau-trophée ci-dessus (qui, lui, flotte volontairement plus
-      // haut) — le sprite fait 24px de haut, dessiné en py-8-lift, donc le
-      // haut de la tête est vers py-8-lift ; la casquette est posée juste
-      // au-dessus (py-16-lift) plutôt qu'à py-26-lift (18px trop haut).
-      if (p.id === "soan") {
-        ctx.font = "12px monospace";
-        ctx.fillText("🧢", px + 8, py - (riding ? 24 : 16) - lift);
-      }
+      // ressemble trop à un fermier, il doit avoir un chapeau") : d'abord un
+      // overlay emoji 🧢 flottant à position fixe à l'écran (ici même) ; puis
+      // corrigé pour flotter moins haut ; puis, demande finale de Guillaume
+      // ("le chapeau doit être son skin, vraiment faire partie de sa tête,
+      // et tourner avec lui quand il marche"), retiré d'ici et remplacé par
+      // du vrai pixel art fusionné DANS le sprite lui-même (voir `cap` dans
+      // fermeArt.js/drawCharFrame, activé via `p.cap` sur le sheet réclamé
+      // par `sprites.getChar` juste au-dessus dans cette fonction) : la
+      // casquette suit désormais automatiquement le bob de marche ET le
+      // sens (face/dos/profil, avec flip gauche-droite), exactement comme
+      // le reste du corps — plus aucun dessin séparé nécessaire ici.
       // Tabouret + canne à pêche visibles pendant que Soan pêche (demande
       // Guillaume : "soan doit disposer d'un tabouret et avoir une canne à
       // pêche visible quand il pêche" puis "en pixel art, pour rester

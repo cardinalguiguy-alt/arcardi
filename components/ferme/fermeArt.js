@@ -133,6 +133,29 @@ export function buildSprites() {
     P(g, 15, 2, 2, 4, l);
     return c;
   }
+  // Arbre mort, sans feuilles (chantier 2026-07, demande Guillaume : arbres
+  // morts pour l'ambiance de la carte maléfique) : même gabarit 32x48 que
+  // oakTree/pineTree (mêmes offsets d'ancrage dans drawEvilFrame), mais tronc
+  // et branches nus — pas de bosquet de feuillage, juste une silhouette de
+  // bois mort tracée au trait (branches anguleuses qui se ramifient), pour
+  // trancher visuellement avec les arbres vivants encore présents ailleurs
+  // sur la carte maléfique.
+  function deadTree() {
+    const [c, g] = cv(32, 48);
+    const bark = "#3a342e", barkD = "#231f1a";
+    P(g, 14, 30, 5, 16, bark);
+    P(g, 14, 30, 2, 16, barkD);
+    P(g, 11, 44, 3, 2, bark); P(g, 18, 44, 3, 2, barkD);
+    g.strokeStyle = barkD; g.lineWidth = 2; g.lineCap = "round";
+    const branches = [
+      [16, 30, 7, 15], [16, 27, 25, 13], [16, 21, 5, 7], [16, 19, 27, 9],
+      [16, 15, 11, 3], [16, 15, 21, 5], [11, 3, 8, 0], [21, 5, 25, 2],
+    ];
+    for (const [x1, y1, x2, y2] of branches) { g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke(); }
+    const r = makeRnd(45);
+    for (let i = 0; i < 6; i++) P(g, 5 + ((r() * 22) | 0), 3 + ((r() * 16) | 0), 1, 1, barkD);
+    return c;
+  }
   function stump() {
     const [c, g] = cv(T, T);
     P(g, 4, 6, 8, 8, "#7a5330"); P(g, 4, 6, 8, 3, "#c8a878");
@@ -227,7 +250,7 @@ export function buildSprites() {
   const HAIR_COLORS = ["#5a3a1e", "#2a2a2a", "#c8862a", "#8a3020", "#d4b03a", "#4a3468", "#743a12", "#b0b0b8"];
   const SKIN = "#f0c8a0", SKIN_D = "#d8a878";
 
-  function drawCharFrame(g, ox, gender, outfit, dir, frame, overalls) {
+  function drawCharFrame(g, ox, gender, outfit, dir, frame, overalls, cap) {
     const o = C.OUTFITS[outfit % C.OUTFITS.length];
     const hair = HAIR_COLORS[outfit % HAIR_COLORS.length];
     const step = frame === 1 ? 1 : frame === 3 ? -1 : 0;
@@ -279,6 +302,36 @@ export function buildSprites() {
       P(g, x + 10, 5 + bob, 1, 2, "#3a2a1e");
       P(g, x + 11, 7 + bob, 1, 1, "#c88a6a");
     }
+    // Casquette de Soan (chantier 2026-07, révisée : "le chapeau doit être
+    // son skin, vraiment faire partie de sa tête, et tourner avec lui quand
+    // il marche") : avant, un simple emoji 🧢 flottant, dessiné par-dessus
+    // le personnage à une position fixe à l'écran, sans lien avec le sens
+    // de la marche (drawCharacter, FermeGame.js) — retiré, remplacé par du
+    // vrai pixel art fusionné DANS le sprite lui-même (comme la salopette de
+    // Greg juste en dessous). Dessinée ici, DANS `drawCharFrame`, elle suit
+    // donc automatiquement `bob` (petit rebond de marche, comme le reste du
+    // corps) et surtout le `flip`/`dir` gérés par `drawCharacter` : dir 0 =
+    // face caméra (visière vers le bas, bien visible), dir 1 = dos tourné
+    // (juste le dôme, pas de visière — cohérent, on ne verrait pas une
+    // visière de dos), dir 2 = profil (visière vers l'avant du sens de la
+    // marche ; le retournement gauche/droite est pris en charge par le
+    // `ctx.scale(-1,1)` déjà appliqué à tout le sprite dans drawCharacter,
+    // exactement comme les bras en profil juste au-dessus — aucune variante
+    // gauche/droite à coder séparément ici).
+    if (cap) {
+      const CAP = "#2f6f4a", CAP_D = shade(CAP), CAP_L = tint(CAP);
+      P(g, x + 3, 0 + bob, 10, 3, CAP);
+      P(g, x + 3, 0 + bob, 10, 1, CAP_L);
+      P(g, x + 3, 2 + bob, 10, 1, CAP_D);
+      if (dir === 0) {
+        P(g, x + 3, 3 + bob, 10, 1, CAP_D);
+        P(g, x + 3, 4 + bob, 4, 1, CAP_D); // visière, vers le bas/caméra
+      } else if (dir === 2) {
+        P(g, x + 3, 3 + bob, 10, 1, CAP_D);
+        P(g, x + 10, 4 + bob, 3, 1, CAP_D); // visière, vers l'avant du profil
+      }
+      // dir === 1 (dos) : pas de visière, seulement le dôme ci-dessus.
+    }
     // Salopette (chantier 2026-07, demande Guillaume : "Greg doit avoir une
     // salopette") : dessinée PAR-DESSUS le rendu de base (jambes + torse déjà
     // posés plus haut), pas un outfit de C.OUTFITS parmi ceux choisissables
@@ -305,12 +358,12 @@ export function buildSprites() {
     const b = Math.max(0, Math.min(255, (n & 255) + d));
     return `rgb(${r},${gg},${b})`;
   }
-  function charSheet(gender, outfit, overalls) {
+  function charSheet(gender, outfit, overalls, cap) {
     const [c, g] = cv(16 * 4, 24 * 3);
     for (let dir = 0; dir < 3; dir++)
       for (let f = 0; f < 4; f++) {
         g.save(); g.translate(0, dir * 24);
-        drawCharFrame(g, f * 16, gender, outfit, dir, f, overalls);
+        drawCharFrame(g, f * 16, gender, outfit, dir, f, overalls, cap);
         g.restore();
       }
     return c;
@@ -857,6 +910,7 @@ export function buildSprites() {
     path: pathTile(),
     oak: oakTree(),
     pine: pineTree(),
+    deadTree: deadTree(),
     stump: stump(),
     rock: rock(),
     house: house(),
@@ -897,9 +951,9 @@ export function buildSprites() {
   S.fishIcons = C.FISH.map(fs => fishIcon(fs.color));
   S.animals = C.ANIMALS.map(a => animalSprite(a.id));
   S.products = C.ANIMALS.map(a => productIcon(a.id));
-  S.getChar = (gender, outfit, overalls) => {
-    const key = gender + ":" + outfit + (overalls ? ":overalls" : "");
-    if (!S.chars[key]) S.chars[key] = charSheet(gender, outfit, !!overalls);
+  S.getChar = (gender, outfit, overalls, cap) => {
+    const key = gender + ":" + outfit + (overalls ? ":overalls" : "") + (cap ? ":cap" : "");
+    if (!S.chars[key]) S.chars[key] = charSheet(gender, outfit, !!overalls, !!cap);
     return S.chars[key];
   };
   return S;

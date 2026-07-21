@@ -92,6 +92,8 @@ export const O_MILL = 16;      // moulin (chantier 2026-07, demande Guillaume : 
                                 // le lampadaire (voir MILL_COST/BUILD_TIMES.mill ci-dessous), bloque le passage une
                                 // fois construit. Transforme en continu le blé déposé en sacs de farine, voir
                                 // resolveAct cas "mill"/"millDeposit" et E.millTick (fermeEngine.js).
+export const O_TREE_DEAD = 17; // arbre mort, sans feuilles (chantier 2026-07, demande Guillaume : ambiance de
+                                // la carte maléfique) — réservé à generateEvilWorld, jamais posé côté ferme normale.
 
 // --- Cultures ---
 // stages: 0=semis ... maxStage=récoltable ; growMs = durée RÉELLE (arrosée) pour

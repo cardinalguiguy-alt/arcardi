@@ -211,6 +211,28 @@ export function generateEvilWorld() {
   const ground = new Array(W * H).fill(C.G_GRASS);
   const objects = new Array(W * H).fill(C.O_NONE);
   const objHp = new Map();
+  // Proportion d'arbres morts croissante avec la profondeur (chantier
+  // 2026-07, demande Guillaume : "la proportion d'arbres morts doit être
+  // plus grande à mesure qu'on progresse dans le monde maléfique, de 30% à
+  // 90%") : "profondeur" = distance à l'arrivée (C.EVIL_SPAWN, bord sud),
+  // normalisée sur la diagonale de la carte — s'enfoncer dans la carte,
+  // depuis l'arrivée, quelle que soit la direction, augmente donc bien le
+  // ratio, jusqu'à 90% dans les coins les plus éloignés. Utilisée par les
+  // trois boucles de placement d'arbres ci-dessous, à la place de l'ancien
+  // seuil fixe (rnd() < 0.3, identique partout sur la carte).
+  const maxDepthDist = Math.hypot(W, H);
+  function deadRatioAt(x, y) {
+    const dist = Math.hypot(x - C.EVIL_SPAWN.x, y - C.EVIL_SPAWN.y);
+    const depth = Math.max(0, Math.min(1, dist / maxDepthDist));
+    return 0.3 + 0.6 * depth;
+  }
+  // Choisit un type d'arbre vivant/mort selon la profondeur de (x,y) : au-delà
+  // du seuil mort-vivant, garde un mélange chêne/pin 50/50 comme avant.
+  function pickTreeType(x, y) {
+    const roll = rnd();
+    if (roll < deadRatioAt(x, y)) return C.O_TREE_DEAD;
+    return rnd() < 0.5 ? C.O_TREE2 : C.O_TREE;
+  }
   function place(x, y, type, hp) {
     x = Math.round(x); y = Math.round(y);
     if (x < 0 || y < 0 || x >= W || y >= H) return;
@@ -218,6 +240,32 @@ export function generateEvilWorld() {
     if (ground[i] !== C.G_GRASS || objects[i] !== C.O_NONE) return;
     objects[i] = type; objHp.set(i, hp);
   }
+  // Grand lac violet luisant (chantier 2026-07, demande Guillaume : "ambiance
+  // sombre partout avec un grand lac violet luisant") : placé AVANT les
+  // bosquets ci-dessous, pour qu'ils l'évitent naturellement (`place` refuse
+  // toute case qui n'est plus G_GRASS). Centre choisi à l'écart du spawn
+  // (bord sud) et du passage retour (nord-ouest), pour ne jamais boucher
+  // l'accès à l'un ou l'autre. Contour irrégulier (pas un cercle parfait) :
+  // rayon local perturbé par un bruit simple pour une silhouette organique.
+  const lakeCx = 47, lakeCy = 30, lakeR = 12;
+  for (let y = Math.max(0, lakeCy - lakeR - 2); y <= Math.min(H - 1, lakeCy + lakeR + 2); y++) {
+    for (let x = Math.max(0, lakeCx - lakeR - 2); x <= Math.min(W - 1, lakeCx + lakeR + 2); x++) {
+      const dx = x - lakeCx, dy = y - lakeCy, d = Math.hypot(dx, dy);
+      const wobble = Math.sin(Math.atan2(dy, dx) * 5 + 1.7) * 1.6 + Math.cos(Math.atan2(dy, dx) * 3) * 1.1;
+      if (d <= lakeR + wobble) ground[y * W + x] = C.G_WATER;
+    }
+  }
+  // Arbres morts, sans feuilles : dispersés PARTOUT sur la carte (pas
+  // seulement dans les bosquets), pour une ambiance sombre continue, en plus
+  // des bosquets d'arbres normaux ci-dessous (qui gardent une proportion
+  // d'arbres morts mélangés, croissante avec la profondeur, voir
+  // deadRatioAt/pickTreeType ci-dessus). Ici, contrairement aux deux boucles
+  // suivantes, la case reste TOUJOURS un arbre mort si elle est retenue au
+  // tirage (pas de pickTreeType) : c'est un semis dédié, en plus du mélange
+  // vivant/mort des bosquets/semis normaux, pas une alternative à celui-ci —
+  // sa densité reste donc uniforme, la variation de proportion vient des
+  // deux boucles suivantes.
+  for (let i = 0; i < 260; i++) place(rnd() * W, rnd() * H, C.O_TREE_DEAD, C.TREE_HP);
   // Bosquets denses (plus nombreux/serrés que generateWorld) + semis épars,
   // pour une forêt qui se referme vite autour du joueur.
   for (let c = 0; c < 60; c++) {
@@ -225,10 +273,14 @@ export function generateEvilWorld() {
     const r = 3 + rnd() * 7, n = 14 + Math.floor(rnd() * 26);
     for (let i = 0; i < n; i++) {
       const a = rnd() * Math.PI * 2, d = rnd() * r;
-      place(cx + Math.cos(a) * d, cy + Math.sin(a) * d, rnd() < 0.4 ? C.O_TREE2 : C.O_TREE, C.TREE_HP);
+      const tx = cx + Math.cos(a) * d, ty = cy + Math.sin(a) * d;
+      place(tx, ty, pickTreeType(tx, ty), C.TREE_HP);
     }
   }
-  for (let i = 0; i < 900; i++) place(rnd() * W, rnd() * H, rnd() < 0.35 ? C.O_TREE2 : C.O_TREE, C.TREE_HP);
+  for (let i = 0; i < 900; i++) {
+    const tx = rnd() * W, ty = rnd() * H;
+    place(tx, ty, pickTreeType(tx, ty), C.TREE_HP);
+  }
   for (let i = 0; i < 260; i++) place(rnd() * W, rnd() * H, C.O_ROCK, C.ROCK_HP);
   // Dégage l'arrivée (bord sud) et le passage retour (bord nord-ouest).
   for (const p of [C.EVIL_SPAWN, C.EVIL_RETURN_PASSAGE]) {
@@ -236,7 +288,8 @@ export function generateEvilWorld() {
       if (x < 0 || y < 0 || x >= W || y >= H) continue;
       const i = y * W + x;
       const o = objects[i];
-      if (o === C.O_TREE || o === C.O_TREE2 || o === C.O_ROCK) { objects[i] = C.O_NONE; objHp.delete(i); }
+      if (o === C.O_TREE || o === C.O_TREE2 || o === C.O_TREE_DEAD || o === C.O_ROCK) { objects[i] = C.O_NONE; objHp.delete(i); }
+      if (ground[i] === C.G_WATER) ground[i] = C.G_GRASS; // garde-fou : jamais d'eau sur l'arrivée/le passage retour
     }
   }
   ground[C.EVIL_RETURN_PASSAGE.y * W + C.EVIL_RETURN_PASSAGE.x] = C.G_DARK_PASSAGE;
