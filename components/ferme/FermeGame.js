@@ -49,6 +49,15 @@ const ZOOM = 3;
 // que CE même hôte a pu écrire en base. Jamais utilisé au-delà de la
 // fenêtre (une autre room/un autre hôte a alors pu écrire plus récent).
 let hostFarmMemCache = null; // { code, state, at }
+// Carte maléfique (seed FIXE, identique pour tous) : générée UNE fois par
+// onglet et partagée entre toutes les instances/du composant (correctif
+// latence 2026-07 : la générer à chaud au premier passage/première
+// simulation hôte provoquait un à-coup perceptible).
+let evilWorldModuleCache = null;
+function getEvilWorldCached(E2) {
+  if (!evilWorldModuleCache) evilWorldModuleCache = E2.generateEvilWorld();
+  return evilWorldModuleCache;
+}
 const HOST_MEM_CACHE_MS = 20000;
 
 // Petit hash stable d'une chaîne -> seed positive (monde stable par salon).
@@ -252,7 +261,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const meRef = useRef(null);
   const playersRef = useRef(new Map()); // id -> remote farmer render data
   const farmersRef = useRef({});        // hôte : id -> état privé arbitré
-  const sharedRef = useRef({ seed: 0, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), salveCraft: E.newSalveCraftState(), house: { level: 1, upgradeUntil: 0 }, flour: 0, gregStock: { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0) }, fertilizerShop: { stock: 0, lastRestockDay: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], rabbitChallenge: null, greg: null, soan: null });
+  const sharedRef = useRef({ seed: 0, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), salveCraft: E.newSalveCraftState(), house: { level: 1, upgradeUntil: 0 }, evilMonsters: [], flour: 0, gregStock: { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0) }, fertilizerShop: { stock: 0, lastRestockDay: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], rabbitChallenge: null, greg: null, soan: null });
   const invRef = useRef(null);
   const toolsRef = useRef({ hoe: 1, can: 1, axe: 1, pick: 1 });
   const energyRef = useRef(C.MAX_ENERGY);
@@ -294,7 +303,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const heldAnimalRef = useRef(-1);   // index (dans sharedRef.animals) de l'animal actuellement porté par CE joueur, -1 sinon
   const horseCallAccumRef = useRef(0); // accumulateur (secondes) pour throttler la diffusion réseau des chevaux sifflés en course
   const wolfAccumRef = useRef(0);      // accumulateur (secondes), même throttle réseau pour les loups simulés côté hôte
-  const rabbitAccumRef = useRef(0);    // accumulateur (secondes), même throttle réseau pour les lapins simulés côté hôte
+  const rabbitAccumRef = useRef(0);
+  const evilMonstersAccumRef = useRef(0); // hôte : throttle réseau des créatures maléfiques partagées (2026-07)    // accumulateur (secondes), même throttle réseau pour les lapins simulés côté hôte
   const gregAccumRef = useRef(0);      // accumulateur (secondes), même throttle réseau pour Greg simulé côté hôte
   const soanAccumRef = useRef(0);      // accumulateur (secondes), même throttle réseau pour Soan simulé côté hôte
   const rabbitRespawnAtRef = useRef(0); // horodatage du prochain repop autorisé (repop progressif, pas instantané)
@@ -457,6 +467,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         salveCraft: saved.salveCraft || E.newSalveCraftState(),
         // Maison à niveaux (validation Guillaume 2026-07) : persiste comme la grange.
         house: (saved.house && saved.house.level) ? { level: saved.house.level, upgradeUntil: saved.house.upgradeUntil || 0 } : { level: 1, upgradeUntil: 0 },
+        evilMonsters: [], // créatures maléfiques partagées (2026-07) : jamais restaurées, régénérées depuis la seed fixe à la demande (comme les loups)
         gems: migrateGems(saved),
         flour: saved.flour || 0,
         // Stock commun de bois/pierre récoltés par Greg (chantier 2026-07,
@@ -487,6 +498,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // Les cavaliers repartent à pied à la reprise (aucun joueur monté au chargement).
       for (const h of sharedRef.current.horses) { h.rider = null; h.rider2 = null; h.callTarget = null; }
       farmersRef.current = saved.farmers || {};
+      // Correctif 2026-07 ("le chaudron est toujours trouvable") : filet de
+      // normalisation — si un chaudron est DÉJÀ posé quelque part sur la
+      // ferme (O_CAULDRON dans le monde restauré), l'artéfact du monde
+      // maléfique a forcément déjà été ramassé : on force le verrou
+      // cauldronUnlocked, même pour une sauvegarde d'un zip antérieur où le
+      // drapeau aurait pu manquer/se perdre. Sans ça, l'artéfact restait
+      // visible et ramassable une seconde fois côté carte maléfique.
+      {
+        const objs = worldRef.current.objects;
+        if (!sharedRef.current.salveCraft.cauldronUnlocked) {
+          for (let i2 = 0; i2 < objs.length; i2++) if (objs[i2] === C.O_CAULDRON) { sharedRef.current.salveCraft.cauldronUnlocked = true; break; }
+        }
+      }
       // Une ferme peut avoir été sauvegardée par un zip plus ancien, avant
       // l'ajout des gemmes/poissons/productions/quêtes : on remet chaque
       // fermier au format actuel (sans rien perdre) pour éviter tout crash
@@ -502,7 +526,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const seed = hashSeed(code);
       worldRef.current = E.generateWorld(seed);
       overridesRef.current = { ground: {}, object: {} };
-      sharedRef.current = { seed, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), salveCraft: E.newSalveCraftState(), house: { level: 1, upgradeUntil: 0 }, gems: C.GEMS.map(() => 0), flour: 0, gregStock: { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0) }, fertilizerShop: { stock: 0, lastRestockDay: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], rabbitChallenge: null, greg: null, soan: null };
+      sharedRef.current = { seed, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), salveCraft: E.newSalveCraftState(), house: { level: 1, upgradeUntil: 0 }, evilMonsters: [], gems: C.GEMS.map(() => 0), flour: 0, gregStock: { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0) }, fertilizerShop: { stock: 0, lastRestockDay: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], rabbitChallenge: null, greg: null, soan: null };
       farmersRef.current = {};
       // Crée tout de suite l'enregistrement pour réserver le code.
       persistFarm();
@@ -570,6 +594,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       else if (gr === C.G_BRIDGE_CLOSED) col = [176, 74, 58];
       else if (gr === C.G_BRIDGE_STONE) col = [138, 138, 146];
       else if (gr === C.G_BRIDGE_STONE_CLOSED) col = [176, 74, 58];
+      else if (gr === C.G_DARK_PASSAGE) col = [150, 90, 220]; // passage sombre repérable sur la carte (demande Guillaume 2026-07)
       if (o === C.O_TREE || o === C.O_TREE2) col = [46, 106, 40];
       else if (o === C.O_ROCK || o === C.O_WALL) col = [130, 130, 138];
       else if (o === C.O_LAMP) col = [230, 200, 100];
@@ -613,6 +638,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (hh.upgradeUntil > 0 && typeof payload.hostNow === "number") hh.upgradeUntil = Date.now() + (hh.upgradeUntil - payload.hostNow);
         return hh;
       })(),
+      evilMonsters: payload.evilMonsters || [], // créatures maléfiques partagées (2026-07)
       gems: migrateGems(payload),
       flour: payload.flour || 0,
       gregStock: { wood: (payload.gregStock && payload.gregStock.wood) || 0, stone: (payload.gregStock && payload.gregStock.stone) || 0, fertilizer: (payload.gregStock && payload.gregStock.fertilizer) || 0, fish: C.FISH.map((_, i) => (payload.gregStock && payload.gregStock.fish && payload.gregStock.fish[i]) || 0) },
@@ -750,6 +776,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       r.tx = payload.x; r.ty = payload.y; r.dir = payload.dir; r.moving = payload.moving; r.tool = payload.tool;
       r.gender = payload.gender; r.outfit = payload.outfit; r.name = payload.name; r.sleeping = !!payload.sleeping;
       r.torch = !!payload.torch; r.zone = payload.zone || "farm";
+      // Monde maléfique multijoueur (2026-07) : cible d'interpolation sur la
+      // carte maléfique + drapeau d'immunité (lu par la simulation hôte).
+      if (r.zone === "evil" && payload.ex !== undefined) {
+        r.etx = payload.ex; r.ety = payload.ey;
+        if (r.ex === undefined) { r.ex = payload.ex; r.ey = payload.ey; }
+        r.emoving = !!payload.emoving; r.immune = !!payload.immune;
+      } else { r.ex = r.ey = r.etx = r.ety = undefined; r.emoving = false; r.immune = false; }
     });
     ch.on("broadcast", { event: "req" }, ({ payload }) => { if (isHost) hostHandleReq(payload); });
     ch.on("broadcast", { event: "apply" }, ({ payload }) => applyDeltas(payload));
@@ -791,7 +824,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       crops: worldRef.current ? E.serializeCrops(worldRef.current) : [],
       mills: worldRef.current ? E.serializeMills(worldRef.current) : [],
       farmers: farmersRef.current,
-      horses: s.horses, animals: s.animals, wellBuilt: s.wellBuilt, coop: s.coop, barn: s.barn, salveCraft: s.salveCraft, house: s.house, gems: s.gems, flour: s.flour, gregStock: s.gregStock, fertilizerShop: s.fertilizerShop, wolves: s.wolves, greg: s.greg, soan: s.soan,
+      horses: s.horses, animals: s.animals, wellBuilt: s.wellBuilt, coop: s.coop, barn: s.barn, salveCraft: s.salveCraft, house: s.house, evilMonsters: s.evilMonsters, gems: s.gems, flour: s.flour, gregStock: s.gregStock, fertilizerShop: s.fertilizerShop, wolves: s.wolves, greg: s.greg, soan: s.soan,
       rabbits: s.rabbits, rabbitChallenge: s.rabbitChallenge,
       hostNow: Date.now(), // correctif audit 2026-07 : relocalisation d'horloge (voir salveCraft.brewingUntil)
       // Correctif audit lancement 2026-07 (succession d'hôte) : le code de la
@@ -947,8 +980,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       } else {
         f.inv.healKit -= 1;
         out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
-        const reduced = Date.now() + C.HEAL_REDUCE_MS;
-        if (target.injuredUntil > reduced) target.injuredUntil = reduced;
+        if (target.injuryKind === "evil") {
+          // Blessure de créature maléfique (décision Guillaume 2026-07) :
+          // CHAQUE pansement retire un tiers de la blessure de 30 min
+          // (C.EVIL_HEAL_STEP_MS = 10 min) — il en faut donc jusqu'à 3,
+          // appliqués par un ou plusieurs coéquipiers, pour sauver
+          // complètement le blessé (mécanique habituelle sinon : il reste
+          // téléporté devant la maison, immobilisé jusqu'à la fin).
+          target.injuredUntil -= C.EVIL_HEAL_STEP_MS;
+          if (target.injuredUntil - Date.now() <= 1000) { target.injuredUntil = Date.now(); target.injuryKind = null; }
+        } else {
+          const reduced = Date.now() + C.HEAL_REDUCE_MS;
+          if (target.injuredUntil > reduced) target.injuredUntil = reduced;
+        }
         dirtyRef.current = true;
         channelRef.current?.send({
           type: "broadcast", event: "apply",
@@ -957,7 +1001,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             injured: { id: target.id, until: target.injuredUntil },
           },
         });
-        channelRef.current?.send({ type: "broadcast", event: "chat", payload: { from: "💊", msg: L.healChat(f.name, target.name) } });
+        const remainMn = Math.ceil(Math.max(0, target.injuredUntil - Date.now()) / 60000);
+        channelRef.current?.send({ type: "broadcast", event: "chat", payload: { from: "💊", msg: remainMn > 1 ? L.healPartialChat(f.name, target.name, remainMn) : L.healChat(f.name, target.name) } });
       }
     } else if (req.kind === "evilChop") {
       // Coupe d'arbre en carte maléfique (chantier 2026-07, demande
@@ -1002,6 +1047,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const now = Date.now();
       const until = (typeof req.until === "number" && req.until > now && req.until <= now + C.EVIL_INJURED_MS + 5000) ? req.until : now + C.EVIL_INJURED_MS;
       f.injuredUntil = until;
+      f.injuryKind = "evil"; // décision Guillaume 2026-07 : soignable par 3 pansements (voir req "heal")
       dirtyRef.current = true;
       channelRef.current?.send({
         type: "broadcast", event: "apply",
@@ -1017,11 +1063,23 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const nowD = Date.now();
       const untilD = (typeof req.until === "number" && req.until > nowD && req.until <= nowD + C.DROWN_INJURED_MS + 5000) ? req.until : nowD + C.DROWN_INJURED_MS;
       f.injuredUntil = untilD;
+      f.injuryKind = "drown";
       dirtyRef.current = true;
       channelRef.current?.send({
         type: "broadcast", event: "apply",
         payload: { injured: { id: f.id, until: f.injuredUntil } },
       });
+    } else if (req.kind === "evilBiteResult") {
+      // Dénouement du mini-jeu de morsure d'une créature PARTAGÉE (2026-07) :
+      // "win" = repoussée, elle fuit un moment (visible par tous) ; "fail" =
+      // la blessure et le retour maison arrivent séparément par la req
+      // "evilCaught" du même client (mécanique habituelle).
+      const moB = (s.evilMonsters || []).find(x => x.id === req.monsterId);
+      if (moB) {
+        moB.biteTargetId = null; moB.biteDeadline = 0;
+        if (req.result === "win") { moB.chasing = false; moB.biteFleeUntil = Date.now() + C.EVIL_MONSTER_FLEE_MS; }
+        channelRef.current?.send({ type: "broadcast", event: "apply", payload: { evilMonsters: s.evilMonsters } });
+      }
     } else if (req.kind === "useSalve") {
       // Pommade de protection (chantier 2026-07, demande Guillaume) : même
       // esprit que "evilChop"/"evilCaught" — l'effet (immunité/répulsion 10
@@ -1600,6 +1658,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
     }
     if (p.wolfBite && p.wolfBite.id === me.id && !isInjured()) setWolfBite({ wolfId: p.wolfBite.wolfId });
+    // Créatures maléfiques partagées (2026-07) : positions simulées par
+    // l'hôte, et déclenchement du mini-jeu de morsure chez la cible.
+    // Correctif latence/freeze 2026-07 : l'HÔTE est la seule autorité sur
+    // les créatures partagées — appliquer l'écho self:true de son PROPRE
+    // broadcast (vieux de ~150 ms + aller-retour serveur) écrasait ses
+    // mutations fraîches (dont biteTargetId/biteDeadline) : les morsures se
+    // re-déclenchaient en boucle (spam d'apply `evilBite` chez la cible,
+    // mini-jeu qui se rouvrait sans fin -> freeze) et les monstres faisaient
+    // du va-et-vient. Les invités, eux, appliquent normalement.
+    if (p.evilMonsters && !isHost) sharedRef.current.evilMonsters = p.evilMonsters;
+    if (p.evilBite && p.evilBite.id === me.id && !evilBiteRef.current && !isInjured() && meRef.current && meRef.current.zone === "evil" && !fishMiniRef.current) setEvilBite({ monsterId: p.evilBite.monsterId });
     // Statut "blessé" diffusé à TOUTE la room (voir resolveWolfBiteOutcome et
     // resolveHeal côté hôte) : permet aux autres joueurs de repérer un
     // fermier blessé pour le soigner, même s'ils n'étaient pas la cible.
@@ -1857,7 +1926,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // sur leur écran) — voir aussi le filtre zone!=="farm" au rendu (draws
     // ci-dessous), qui masque carrément son personnage pendant ce temps.
     const px = m.zone === "evil" ? m.farmX : m.x, py = m.zone === "evil" ? m.farmY : m.y;
-    return { id: m.id, name: m.name, gender: m.gender, outfit: m.outfit, x: +px.toFixed(2), y: +py.toFixed(2), dir: m.dir, moving: m.zone === "evil" ? false : m.moving, tool: slotRef.current, sleeping: !!m.sleeping, torch: !!torchOnRef.current, zone: m.zone || "farm" };
+    const pub = { id: m.id, name: m.name, gender: m.gender, outfit: m.outfit, x: +px.toFixed(2), y: +py.toFixed(2), dir: m.dir, moving: m.zone === "evil" ? false : m.moving, tool: slotRef.current, sleeping: !!m.sleeping, torch: !!torchOnRef.current, zone: m.zone || "farm" };
+    // Monde maléfique MULTIJOUEUR (demande Guillaume 2026-07) : les
+    // coordonnées RÉELLES sur la carte maléfique voyagent dans des champs
+    // dédiés (ex/ey) — x/y restent figées sur la case du passage pour tout
+    // ce qui regarde la ferme (hôte, carte, autres joueurs restés au champ).
+    // `immune` permet à l'hôte (simulation partagée des créatures) de savoir
+    // qui est invisible sous pommade.
+    if (m.zone === "evil") { pub.ex = +m.x.toFixed(2); pub.ey = +m.y.toFixed(2); pub.emoving = !!m.moving; pub.immune = Date.now() < immunityUntilRef.current; }
+    return pub;
   }
   function sendPos() { channelRef.current?.send({ type: "broadcast", event: "pos", payload: pubMe() }); }
 
@@ -2272,6 +2349,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const f = E.normalizeFarmer(farmersRef.current[targetId]);
       if (f) {
         f.injuredUntil = Date.now() + C.INJURED_MS;
+        f.injuryKind = "wolf";
         dirtyRef.current = true;
         channelRef.current?.send({
           type: "broadcast", event: "apply",
@@ -2474,6 +2552,58 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // aller chasser dans l'enclos, repartent à l'aube. Une torche allumée à
   // portée (C.WOLF_TORCH_RANGE) prime sur tout le reste : le loup fuit et
   // abandonne sa proie/son repas en cours (l'animal est alors sauvé).
+  // Créatures maléfiques PARTAGÉES (décision Guillaume 2026-07) : simulation
+  // HÔTE sur le modèle des loups — tous les joueurs présents sur la carte
+  // maléfique voient les mêmes créatures aux mêmes endroits. Initialisées à
+  // la demande depuis la seed FIXE de la carte (E.generateEvilWorld), jamais
+  // persistées (comme les loups). Chaque créature vise le joueur en zone
+  // maléfique le plus proche NON immunisé (pommade = invisible) ; le contact
+  // déclenche le mini-jeu de morsure CHEZ ce joueur (apply `evilBite` ciblé)
+  // et le dénouement revient par la req "evilBiteResult". La blessure/le
+  // retour maison du perdant passent par la req "evilCaught" existante.
+  function updateSharedEvilMonsters(dt) {
+    const s = sharedRef.current;
+    const evil = [];
+    const mm = meRef.current;
+    if (mm && mm.zone === "evil") evil.push({ id: mm.id, x: mm.x, y: mm.y, immune: Date.now() < immunityUntilRef.current });
+    for (const p of playersRef.current.values()) if (p.zone === "evil" && p.etx !== undefined) evil.push({ id: p.id, x: p.etx, y: p.ety, immune: !!p.immune });
+    if (!evil.length) { evilMonstersAccumRef.current = 0; return; } // personne là-bas : simulation en pause
+    if (!s.evilMonsters || !s.evilMonsters.length) s.evilMonsters = getEvilWorldCached(E).monsters.map(mo => ({ ...mo }));
+    const now = Date.now();
+    for (const mo of s.evilMonsters) {
+      mo.animT = (mo.animT || 0) + dt * 6;
+      const biteFleeing = !!mo.biteFleeUntil && now < mo.biteFleeUntil;
+      if (mo.biteFleeUntil && !biteFleeing) mo.biteFleeUntil = 0;
+      // Morsure en cours (mini-jeu ouvert chez la cible) : immobile jusqu'au
+      // résultat ou au délai de grâce (même marge réseau que les loups).
+      if (mo.biteTargetId && now < (mo.biteDeadline || 0)) { mo.fleeing = biteFleeing; mo.chasing = false; continue; }
+      if (mo.biteTargetId) { mo.biteTargetId = null; mo.biteDeadline = 0; }
+      let near = null, nearD = Infinity;
+      for (const t of evil) { if (t.immune) continue; const d = Math.hypot(t.x - mo.x, t.y - mo.y); if (d < nearD) { nearD = d; near = t; } }
+      if (!near) { mo.chasing = false; mo.fleeing = biteFleeing; continue; }
+      const ddx = near.x - mo.x, ddy = near.y - mo.y, dist = nearD || 0.0001;
+      if (!biteFleeing && dist <= C.EVIL_MONSTER_CATCH_RADIUS) {
+        mo.biteTargetId = near.id;
+        mo.biteDeadline = now + C.EVIL_BITE_REACT_MS + 900;
+        mo.chasing = true; mo.fleeing = false;
+        channelRef.current?.send({ type: "broadcast", event: "apply", payload: { evilBite: { id: near.id, monsterId: mo.id } } });
+        continue;
+      }
+      if (dist <= C.EVIL_MONSTER_DETECT_RADIUS || biteFleeing) {
+        const speed = C.EVIL_MONSTER_SPEED * dt;
+        const sign = biteFleeing ? -1 : 1;
+        mo.x += sign * (ddx / dist) * speed; mo.y += sign * (ddy / dist) * speed;
+        mo.dir = (sign * ddx) < 0 ? 2 : 3;
+      }
+      mo.chasing = !biteFleeing && dist <= C.EVIL_MONSTER_DETECT_RADIUS;
+      mo.fleeing = biteFleeing;
+    }
+    evilMonstersAccumRef.current += dt;
+    if (evilMonstersAccumRef.current >= 0.15) {
+      evilMonstersAccumRef.current = 0;
+      channelRef.current?.send({ type: "broadcast", event: "apply", payload: { evilMonsters: s.evilMonsters } });
+    }
+  }
   function updateWolves(dt) {
     const w = worldRef.current; if (!w) return;
     const s = sharedRef.current;
@@ -3057,26 +3187,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // local, aucun aller-retour hôte requis, contrairement au loup de la ferme
   // normale) pour rester accessible depuis le bouton du mini-jeu comme
   // depuis un éventuel timeout.
-  function resolveEvilBiteOutcome(mo, result) {
-    if (!mo) return;
-    if (result === "win") {
-      mo.chasing = false;
-      mo.fleeing = true;
-      mo.biteFleeUntil = Date.now() + C.EVIL_MONSTER_FLEE_MS;
-      pushToast(L.evilBiteWin);
-    } else {
-      caughtByMonster();
-    }
+  function resolveEvilBiteOutcome(monsterId, result) {
+    // Créatures PARTAGÉES (2026-07) : le dénouement part à l'hôte (req
+    // "evilBiteResult") — "win" = la créature fuit un moment pour tout le
+    // monde ; "fail" = blessure + retour maison, via caughtByMonster()
+    // (inchangé : req "evilCaught", mécanique habituelle de blessure).
+    sendReq({ kind: "evilBiteResult", monsterId, result });
+    if (result === "win") pushToast(L.evilBiteWin);
+    else caughtByMonster();
   }
   function evilBiteWon() {
     const eb = evilBiteRef.current; setEvilBite(null);
-    const mo = eb && (evilWorldRef.current?.monsters || []).find(x => x.id === eb.monsterId);
-    resolveEvilBiteOutcome(mo, "win");
+    if (eb) resolveEvilBiteOutcome(eb.monsterId, "win");
   }
   function evilBiteLost() {
     const eb = evilBiteRef.current; setEvilBite(null);
-    const mo = eb && (evilWorldRef.current?.monsters || []).find(x => x.id === eb.monsterId);
-    resolveEvilBiteOutcome(mo, "fail");
+    if (eb) resolveEvilBiteOutcome(eb.monsterId, "fail");
   }
   function crossPassage(toEvil, viaMonster) {
     if (zoneTransRef.current.active) return; // déjà en transition : ignore un nouveau déclenchement
@@ -3090,7 +3216,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       zt.swapped = true;
       const m = meRef.current;
       if (zt.toEvil) {
-        if (!evilWorldRef.current) evilWorldRef.current = E.generateEvilWorld();
+        if (!evilWorldRef.current) evilWorldRef.current = getEvilWorldCached(E);
         m.farmX = m.x; m.farmY = m.y; // position ferme à restaurer au retour
         m.zone = "evil";
         m.x = C.EVIL_SPAWN.x; m.y = C.EVIL_SPAWN.y; m.moving = false;
@@ -3240,6 +3366,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (isHost) updateWhistledHorses(dt);
       if (isHost) updateWolves(dt);
       if (isHost) updateRabbits(dt);
+      if (isHost) updateSharedEvilMonsters(dt); // créatures maléfiques partagées (2026-07)
       if (isHost) updateGreg(dt);
       if (isHost) updateSoan(dt);
       // Simulation hôte toujours sur worldRef.current (la ferme), quoi qu'il
@@ -4073,7 +4200,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // distinct visuellement d'un loup normal. Lueur douce ajoutée quand la
       // créature a repéré le joueur (`chasing`), pour signaler clairement le
       // danger avant même le contact.
-      for (const mo of (ew.monsters || [])) {
+      // Coéquipiers présents sur la carte maléfique (2026-07) : visibles et
+      // interpolés (ex/ey vers etx/ety, ~12 Hz), animés via un compteur
+      // dédié (eAnimT, distinct de l'animT utilisé par la vue ferme).
+      for (const rp of playersRef.current.values()) {
+        if (rp.zone !== "evil" || rp.etx === undefined) continue;
+        rp.ex = rp.ex === undefined ? rp.etx : rp.ex + (rp.etx - rp.ex) * 0.25;
+        rp.ey = rp.ey === undefined ? rp.ety : rp.ey + (rp.ety - rp.ey) * 0.25;
+        rp.eAnimT = rp.emoving ? (rp.eAnimT || 0) + 0.16 : 0;
+        const pv = { ...rp, x: rp.ex, y: rp.ey, moving: !!rp.emoving, animT: rp.eAnimT };
+        draws.push({ y: (rp.ey + 1) * T, fn: () => drawCharacter(pv, false) });
+      }
+      // Créatures maléfiques PARTAGÉES (2026-07) : positions simulées par
+      // l'hôte (updateSharedEvilMonsters), reçues via apply `evilMonsters`.
+      for (const mo of (sharedRef.current.evilMonsters || [])) {
         draws.push({ y: (mo.y + 1) * T, fn: () => {
           if (mo.chasing) {
             const glow = 0.35 + Math.sin(now / 220) * 0.15;
@@ -4149,64 +4289,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // n'était pas là. Voir aussi le rendu semi-transparent du joueur pendant
     // l'immunité (drawCharacter, ci-dessous), ajouté pour rendre cette
     // invisibilité lisible à l'écran.
-    function updateEvilMonsters(dt) {
-      const ew = evilWorldRef.current, m = meRef.current;
-      if (!ew || !ew.monsters || !ew.monsters.length) return;
-      const immune = Date.now() < immunityUntilRef.current;
-      const now = Date.now();
-      for (const mo of ew.monsters) {
-        mo.animT = (mo.animT || 0) + dt * 6;
-        // Fuite temporaire après une morsure repoussée (mini-jeu gagné, voir
-        // resolveEvilBiteOutcome) : la créature reste inoffensive jusqu'à
-        // mo.biteFleeUntil, indépendamment de l'immunité globale (pommade,
-        // ci-dessous) — les deux causes de fuite cohabitent sans se marcher
-        // dessus (un mo.fleeing recalculé chaque frame par l'une écraserait
-        // silencieusement l'autre).
-        const biteFleeing = !!mo.biteFleeUntil && now < mo.biteFleeUntil;
-        if (mo.biteFleeUntil && !biteFleeing) mo.biteFleeUntil = 0;
-        // Mini-jeu déjà ouvert pour CETTE créature : elle reste immobile,
-        // pas de nouveau contact tant que le joueur n'a pas répondu (voir
-        // evilBiteWon/evilBiteLost, qui referment le mini-jeu).
-        if (evilBiteRef.current && evilBiteRef.current.monsterId === mo.id) { mo.fleeing = biteFleeing; continue; }
-        // Correctif 2026-07 (demande Guillaume : "la pommade doit nous
-        // rendre invisible ET immunisé aux monstres") : tant que
-        // immunityUntilRef est dans le futur, une créature qui n'est pas
-        // déjà en train de fuir une morsure gagnée ignore purement et
-        // simplement le joueur — ni poursuite, ni répulsion visible (ancien
-        // comportement, qui donnait l'impression que la créature "voyait"
-        // quand même le joueur pour s'en éloigner). Un joueur invisible
-        // n'est, par définition, jamais détecté : la créature garde son
-        // comportement de veille (immobile/idle) comme si personne n'était
-        // là, jusqu'à l'expiration de l'immunité.
-        if (immune && !biteFleeing) { mo.chasing = false; mo.fleeing = false; continue; }
-        const ddx = m.x - mo.x, ddy = m.y - mo.y, dist = Math.hypot(ddx, ddy) || 0.0001;
-        const fleeingNow = biteFleeing;
-        if (!fleeingNow && dist <= C.EVIL_MONSTER_CATCH_RADIUS) {
-          // Correctif 2026-07 (demande Guillaume : "ajoute un minijeu pour
-          // résister à la morsure") : le contact n'applique plus
-          // caughtByMonster() instantanément — il ouvre le mini-jeu de
-          // martelage (voir EvilBiteMinigame plus bas), sur le modèle du
-          // loup agressif de la ferme normale. Ignoré si un autre mini-jeu
-          // (pêche, grange, loup...) est déjà ouvert, comme pour le reste
-          // des interactions pendant fishMiniRef.
-          if (!fishMiniRef.current) setEvilBite({ monsterId: mo.id });
-          mo.chasing = true; mo.fleeing = false;
-          continue;
-        }
-        if (dist <= C.EVIL_MONSTER_DETECT_RADIUS || fleeingNow) {
-          const speed = C.EVIL_MONSTER_SPEED * dt;
-          const sign = fleeingNow ? -1 : 1;
-          mo.x += sign * (ddx / dist) * speed; mo.y += sign * (ddy / dist) * speed;
-          mo.dir = (sign * ddx) < 0 ? 2 : 3;
-        }
-        mo.chasing = !fleeingNow && dist <= C.EVIL_MONSTER_DETECT_RADIUS;
-        mo.fleeing = fleeingNow;
-      }
-    }
+    // (Simulation locale des créatures supprimée, 2026-07 : les créatures
+    // maléfiques sont désormais PARTAGÉES et simulées par l'HÔTE — voir
+    // updateSharedEvilMonsters — sur décision de Guillaume, pour que tous
+    // les joueurs présents sur la carte voient les mêmes monstres.)
     function updateMeEvil(dt) {
       const m = meRef.current, ew = evilWorldRef.current, keys = keysRef.current;
       if (!ew) return;
-      updateEvilMonsters(dt);
       const uiBlocked = mapOpenRef.current || document.activeElement === chatInputRef.current;
       let dx = 0, dy = 0;
       if (!uiBlocked) {
@@ -4226,9 +4315,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         m.animT += dt * 9;
       } else m.animT = 0;
       m.moving = !!moving;
-      // Pas de sendPos ici : ce joueur est seul sur cette carte (voir
-      // pubMe/crossPassage) — sa position publique reste figée sur la case
-      // du passage côté ferme tant qu'il n'est pas revenu.
+      // Monde maléfique MULTIJOUEUR (2026-07) : la position est désormais
+      // diffusée aussi depuis la carte maléfique (champs ex/ey de pubMe) —
+      // pour les coéquipiers présents sur la carte ET pour la simulation
+      // hôte des créatures partagées. x/y publics restent figés côté ferme.
+      const nowP = performance.now();
+      if (nowP - lastPosSentRef.current > 1000 / C.POS_TICK_HZ) { lastPosSentRef.current = nowP; sendPos(); }
     }
     function updateMe(dt) {
       const m = meRef.current, keys = keysRef.current;
@@ -4543,6 +4635,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         g.font = "bold 10px monospace"; g.textAlign = "center";
         g.fillStyle = "#000"; g.fillText(self ? L.mapYou : p.name, px + 1, py - 6 + 1);
         g.fillStyle = self ? "#fff" : "#ffe9a8"; g.fillText(self ? L.mapYou : p.name, px, py - 6);
+      }
+      // Passage sombre (demande Guillaume 2026-07 : "on ne trouve pas la
+      // case noire") : marqueur violet pulsant + libellé sur la carte.
+      if (w.darkPassage) {
+        const dpx = (w.darkPassage.x + 0.5) * scale, dpy = (w.darkPassage.y + 0.5) * scale;
+        const pulse = 4 + Math.sin(performance.now() / 300) * 1.5;
+        g.fillStyle = "rgba(150, 90, 220, 0.85)"; g.beginPath(); g.arc(dpx, dpy, pulse + 2, 0, 7); g.fill();
+        g.fillStyle = "#e8d8ff"; g.beginPath(); g.arc(dpx, dpy, 2.5, 0, 7); g.fill();
+        g.font = "bold 10px monospace"; g.textAlign = "center";
+        g.fillStyle = "#000"; g.fillText(L.mapDarkPassage, dpx + 1, dpy - 9 + 1);
+        g.fillStyle = "#d9c2ff"; g.fillText(L.mapDarkPassage, dpx, dpy - 9);
       }
     }
 

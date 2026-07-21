@@ -352,7 +352,12 @@ export const EVIL_INJURED_MS = 30 * 60 * 1000; // 30 minutes : durée de la bles
 // caughtByMonster() ne soit appliqué — réussi, la créature fuit au lieu de
 // blesser le joueur.
 export const EVIL_BITE_REACT_MS = 2800;       // durée du mini-jeu de riposte — même valeur que WOLF_BITE_REACT_MS, à ajuster séparément si besoin
-export const EVIL_MONSTER_FLEE_MS = 6000;     // durée pendant laquelle une créature repoussée fuit le joueur avant de pouvoir rechasser
+export const EVIL_MONSTER_FLEE_MS = 6000;
+// Soin d'une blessure de créature maléfique (décision Guillaume 2026-07) :
+// chaque pansement retire un TIERS de la blessure de 30 min : il en faut
+// donc jusqu'à 3 (appliqués par un ou plusieurs coéquipiers) pour sauver
+// complètement le blessé.
+export const EVIL_HEAL_STEP_MS = EVIL_INJURED_MS / 3;     // durée pendant laquelle une créature repoussée fuit le joueur avant de pouvoir rechasser
 
 // Pommade de protection (chantier 2026-07, demande Guillaume : un objet
 // achetable au magasin pour repousser les créatures maléfiques ou en être

@@ -332,6 +332,19 @@ export default function Room() {
     // ce canal, l'hôte lui-même déclenche son propre toast localement, voir
     // confirmEndGame plus bas.
     ch.on("broadcast", { event: "game_ended" }, () => { showEndNotice(); });
+    // "📣 Rassembler tout le monde" (correctif 2026-07, bug remonté : le
+    // bouton ne ramenait pas toujours les invités au salon) : jusqu'ici il
+    // ne comptait QUE sur l'UPDATE Postgres de resetRoomToLobby, relayé par
+    // l'abonnement postgres_changes des invités — event parfois perdu ou
+    // très retardé (réplication/reconnexion), d'où des invités qui
+    // restaient dans la ferme. L'hôte diffuse maintenant EN PLUS cet event
+    // direct sur le canal presence déjà ouvert par tous : retour au lobby
+    // immédiat et fiable, même si l'event de la table se perd (l'état
+    // serveur, lui, a bien été écrit par resetRoomToLobby).
+    ch.on("broadcast", { event: "ferme_gather" }, () => {
+      setFermeAway(null);
+      setRoom(r => (r ? { ...r, status: "lobby", current_game: null, game_state: null } : r));
+    });
     ch.subscribe(status => {
       if (status === "SUBSCRIBED") ch.track({ at: Date.now(), readingRules: readingRulesRef.current });
     });
@@ -532,6 +545,12 @@ export default function Room() {
   // l'abonnement plus haut) et arrête l'instance cachée de l'hôte.
   async function gatherFerme() {
     if (!isHost || room?.current_game !== "ferme") return;
+    // Correctif 2026-07 : diffusion directe IMMÉDIATE aux invités via le
+    // canal presence (voir le handler "ferme_gather" plus haut), AVANT
+    // l'écriture en base — le retour au salon ne dépend plus du seul relais
+    // postgres_changes, parfois perdu. broadcast.self n'étant pas activé sur
+    // ce canal, l'hôte applique sa propre transition localement ci-dessous.
+    presenceChRef.current?.send({ type: "broadcast", event: "ferme_gather", payload: {} });
     setFermeAway(null);
     await resetRoomToLobby(room.id);
     setRoom(r => (r ? { ...r, status: "lobby", current_game: null, game_state: null } : r));
