@@ -621,17 +621,27 @@ export default function Room() {
   // ("Retour au salon" / "🏠"). Avant : un onFinish={() => {}} — un no-op qui
   // ne faisait STRICTEMENT rien, d'où le bouton qui semblait "sans effet"
   // même quand la mise à jour Supabase avait réussi.
+  // Correctif 2026-07 (bug remonté par Guillaume : "bouton leave qui ne
+  // ramène pas au lobby", reproduit côté hôte) : `setFermeAway(...)` était
+  // appelé DEPUIS la fonction de mise à jour passée à `setRoom(r => ...)`.
+  // Ce genre d'effet de bord dans une fonction censée être pure est
+  // dangereux avec React 18/StrictMode (activé par défaut en dev
+  // Next.js) : la fonction de mise à jour peut être invoquée plusieurs
+  // fois pour un même rendu, ce qui pouvait déclencher `setFermeAway`
+  // deux fois (ou dans un ordre imprévisible par rapport à `setRoom`) et
+  // laisser l'hôte bloqué sur la vue ferme au lieu de revenir au lobby.
+  // On lit maintenant `room` directement (fermeture sur l'état du rendu en
+  // cours, toujours à jour au moment du clic) AVANT de déclencher les deux
+  // mises à jour d'état, l'une après l'autre, toutes deux pures.
   function handleGameFinish() {
-    setRoom(r => {
-      if (r && r.status === "playing" && r.current_game === "ferme") {
-        // Instantané pris pour TOUT joueur qui quitte la vue ferme (hôte
-        // compris depuis la révision 2026-07) — voir le commentaire de
-        // `fermeAway` plus haut pour le détail des deux usages (invité vs
-        // hôte).
-        setFermeAway({ current_game: r.current_game, launch_at: r.launch_at, stage_launch_at: r.stage_launch_at });
-      }
-      return r ? { ...r, status: "lobby", current_game: null, game_state: null } : r;
-    });
+    if (room && room.status === "playing" && room.current_game === "ferme") {
+      // Instantané pris pour TOUT joueur qui quitte la vue ferme (hôte
+      // compris depuis la révision 2026-07) — voir le commentaire de
+      // `fermeAway` plus haut pour le détail des deux usages (invité vs
+      // hôte).
+      setFermeAway({ current_game: room.current_game, launch_at: room.launch_at, stage_launch_at: room.stage_launch_at });
+    }
+    setRoom(r => (r ? { ...r, status: "lobby", current_game: null, game_state: null } : r));
   }
 
   // Rejoindre la ferme d'un clic (demande 2026-07) : restaure localement
