@@ -831,3 +831,122 @@ export const HAT_DISPLAY_MS = 15 * 60 * 1000;    // durée d'affichage du troph�
 // sifflet à chevaux), pas un slot d'outil numéroté. Éclaire comme un
 // lampadaire portatif (rayon plus modeste) et fait fuir les loups à portée.
 export const TORCH_LIGHT_RADIUS = 4.5; // rayon éclairé autour du porteur (tuiles)
+
+/* ==========================================================================
+   2026-07 TRAIN STATION UPDATE (project language switched to English by
+   Guillaume's decision). New systems: rare sea creatures, decorative ducks,
+   the west-side train station with its ad board, the 25-visitor roster
+   (nice / neutral / hostile / rich patrons), relationships, unanimous
+   residency votes with a dice tiebreak, the co-op damage-repair minigame,
+   the visitor blacklist, and seasons. All state lives in the save JSON
+   (sharedRef.station), no Supabase migration required.
+   ========================================================================== */
+
+// --- Rare sea creatures (fishing) ---
+// Caught with the rod like fish, but stored in their own inventory array
+// (inv.seaCreatures) so old saves and every existing FISH consumer (Soan,
+// Greg's stall, the salve recipe) stay untouched. Sell-only for now.
+export const SEA_CREATURES = [
+  { id: 0, name: "Étoile de mer", nameEn: "Starfish", sell: 360, color: "#e8956a", weight: 0.5 },
+  { id: 1, name: "Hippocampe",    nameEn: "Seahorse", sell: 550, color: "#d4b83f", weight: 0.32 },
+  { id: 2, name: "Anguille",      nameEn: "Eel",      sell: 780, color: "#5a7a5f", weight: 0.18 },
+];
+export const SEA_MIN_STREAK = 3;          // casts before rares become possible (mid-river)
+export const SEA_CHANCE = 0.30;           // rare chance per cast once eligible
+export const SEA_EXTREME_FRAC = 0.15;     // top/bottom 15% of map rows = "extreme ends" of the river
+export const SEA_EXTREME_FIRST_CHANCE = 0.35; // rare chance at the extreme ends, from the very first cast
+
+// --- Decorative ducks (purely cosmetic, client-side, seeded per farm) ---
+export const DUCK_COUNT = 6;
+export const DUCK_SPEED = 0.35;           // tiles/s drift along the river
+export const DUCK_TURN_MIN_S = 4;         // seconds between direction changes
+export const DUCK_TURN_MAX_S = 10;
+
+// --- Train station (west edge, pre-built, free) ---
+export const STATION = { x: 6, y: 24, w: 6, h: 5 };  // station building footprint
+export const STATION_PLATFORM = { x: 4, y: 22, w: 2, h: 12 }; // platform strip along the rails
+export const STATION_RAIL_X = 2;          // rails occupy columns RAIL_X..RAIL_X+1
+export const STATION_RAIL_Y0 = 6;         // rails visible from this row...
+export const STATION_RAIL_Y1 = 46;        // ...to this row (train slides in from the north)
+export const STATION_SIGN = { x: 8, y: 30 };  // the interactive ad board (press E)
+export const STATION_CLEAR = { x: 1, y: 20, w: 12, h: 16 }; // objects cleared here at load (host normalization)
+export const AD_FEE = 25;                 // gold per newly posted ad category (common chest)
+export const AD_CATEGORIES = ["crops", "animal", "fish", "resources"];
+
+// --- Visitors ---
+// 25 recurring named characters. Outfits reuse the existing charSheet
+// pipeline: distinctness comes from gender x outfit(0-7) x overalls x cap,
+// which yields well over 25 unique combinations without any new art asset.
+// `edgy: true` doubles the hostile roll for that character; `rich: true`
+// makes them eligible for rich-patron visits (big-money purchases).
+export const VISITOR_ROSTER = [
+  { rid: 0,  name: "Margot",   gender: "f", outfit: 3, overalls: false, cap: false, theme: "market",  job: "run a market stall" },
+  { rid: 1,  name: "Theo",     gender: "m", outfit: 2, overalls: true,  cap: true,  theme: "fields",  job: "help in the fields" },
+  { rid: 2,  name: "Colette",  gender: "f", outfit: 4, overalls: false, cap: false, theme: "style",   job: "sew and dye clothes" },
+  { rid: 3,  name: "Bastien",  gender: "m", outfit: 0, overalls: false, cap: false, theme: "gold",    job: "keep the farm ledgers", rich: true },
+  { rid: 4,  name: "Odile",    gender: "f", outfit: 5, overalls: false, cap: true,  theme: "shadow",  job: "guard the farm at night", edgy: true },
+  { rid: 5,  name: "Marcel",   gender: "m", outfit: 1, overalls: true,  cap: false, theme: "wood",    job: "carve furniture" },
+  { rid: 6,  name: "Ines",     gender: "f", outfit: 6, overalls: false, cap: false, theme: "river",   job: "smoke and salt fish" },
+  { rid: 7,  name: "Gustave",  gender: "m", outfit: 7, overalls: false, cap: true,  theme: "train",   job: "run the station clock" },
+  { rid: 8,  name: "Perrine",  gender: "f", outfit: 0, overalls: true,  cap: false, theme: "animals", job: "care for the animals" },
+  { rid: 9,  name: "Aurelien", gender: "m", outfit: 4, overalls: false, cap: false, theme: "gold",    job: "appraise gems", rich: true },
+  { rid: 10, name: "Sidonie",  gender: "f", outfit: 1, overalls: false, cap: true,  theme: "kitchen", job: "cook for everyone" },
+  { rid: 11, name: "Firmin",   gender: "m", outfit: 5, overalls: true,  cap: true,  theme: "stone",   job: "lay stone paths", edgy: true },
+  { rid: 12, name: "Capucine", gender: "f", outfit: 2, overalls: true,  cap: false, theme: "flowers", job: "plant flower beds" },
+  { rid: 13, name: "Honore",   gender: "m", outfit: 3, overalls: false, cap: true,  theme: "market",  job: "haggle with traders" },
+  { rid: 14, name: "Lucille",  gender: "f", outfit: 7, overalls: true,  cap: false, theme: "river",   job: "ferry goods by boat" },
+  { rid: 15, name: "Anselme",  gender: "m", outfit: 6, overalls: true,  cap: false, theme: "fields",  job: "breed better seeds" },
+  { rid: 16, name: "Rosalie",  gender: "f", outfit: 3, overalls: true,  cap: true,  theme: "kitchen", job: "bake bread and pies" },
+  { rid: 17, name: "Edgar",    gender: "m", outfit: 2, overalls: false, cap: false, theme: "shadow",  job: "track wolves", edgy: true },
+  { rid: 18, name: "Violette", gender: "f", outfit: 4, overalls: true,  cap: false, theme: "style",   job: "paint signs and murals" },
+  { rid: 19, name: "Casimir",  gender: "m", outfit: 0, overalls: true,  cap: true,  theme: "wood",    job: "fell and replant trees" },
+  { rid: 20, name: "Philomene",gender: "f", outfit: 5, overalls: true,  cap: false, theme: "gold",    job: "fund new buildings", rich: true },
+  { rid: 21, name: "Ambroise", gender: "m", outfit: 1, overalls: false, cap: true,  theme: "train",   job: "haul freight crates" },
+  { rid: 22, name: "Berthe",   gender: "f", outfit: 6, overalls: true,  cap: true,  theme: "animals", job: "shear and milk" },
+  { rid: 23, name: "Leandre",  gender: "m", outfit: 7, overalls: true,  cap: false, theme: "stone",   job: "mine the far hills" },
+  { rid: 24, name: "Zelie",    gender: "f", outfit: 0, overalls: false, cap: true,  theme: "flowers", job: "keep bees" },
+];
+
+// Visit scheduling. Not a fixed timer: after each visit the host schedules
+// the next one in [VISIT_MIN_MS, VISIT_MAX_MS], then SHORTENS that delay by
+// VISIT_AD_BONUS_MS per posted ad and by a popularity bonus (capped) that
+// grows as the farm gets more established (buildings, animals, house level,
+// total gold earned). So ads AND organic popularity both bring people in.
+export const VISIT_MIN_MS = 4 * 60 * 1000;
+export const VISIT_MAX_MS = 9 * 60 * 1000;
+export const VISIT_AD_BONUS_MS = 40 * 1000;       // per posted ad category
+export const VISIT_POP_BONUS_MAX_MS = 3 * 60 * 1000; // popularity cap
+export const VISITOR_SPEED = 2.4;                 // tiles/s walking
+export const VISITOR_TRAIN_MS = 4500;             // train pulls in, doors, etc.
+export const VISITOR_WAIT_MS = 90 * 1000;         // how long they wait at the townhall
+export const VISITOR_NET_MS = 200;                // host broadcast throttle while a visitor exists
+
+// Dispositions. Hostile chance is halved once per resident living on the
+// farm (a lively townhall discourages troublemakers).
+export const VISITOR_HOSTILE_CHANCE = 0.06;
+export const VISITOR_RICH_CHANCE = 0.5;           // for rich-flagged roster entries
+export const VISITOR_CHAT_CHANCE = 0.3;           // nice/neutral visit is a chat (no purchase)
+
+// Hostile visitors (Guillaume's caps: steal up to 100 gold, ruin 10 crops).
+export const HOSTILE_DEADLINE_MS = 60 * 1000;     // time to pay or refuse
+export const HOSTILE_STEAL_MAX = 100;
+export const HOSTILE_RUIN_CROPS = 10;
+export const REPAIR_WINDOW_MS = 120 * 1000;       // co-op window to reverse the damage
+export const REPAIR_HITS = 3;                     // hits needed in the repair minigame (easy)
+
+// Relationships and residency.
+export const REL_CHAT = 1;
+export const REL_DEAL = 2;
+export const REL_RESIDENT_MIN = 6;                // friendship needed before they ask to stay
+export const VOTE_DEADLINE_MS = 60 * 1000;        // online players must vote within this window
+
+// --- Seasons (timing chosen by the model, per Guillaume's delegation) ---
+// One season lasts SEASON_DAYS in-game days; purely visual for now (tint +
+// HUD label), gameplay hooks come later with crops-per-season.
+export const SEASON_DAYS = 7;
+export const SEASONS = [
+  { key: "spring", emoji: "🌸", tint: null },
+  { key: "summer", emoji: "☀️", tint: "rgba(255,214,90,0.05)" },
+  { key: "autumn", emoji: "🍂", tint: "rgba(224,138,44,0.09)" },
+  { key: "winter", emoji: "❄️", tint: "rgba(150,185,255,0.11)" },
+];

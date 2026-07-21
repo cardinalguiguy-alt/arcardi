@@ -162,6 +162,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [injuredUntil, setInjuredUntil] = useState(0); // horodatage de fin d'indisponibilité (0 = pas blessé), survit à un refresh (voir farmer.injuredUntil)
   const [immunityUntil, setImmunityUntil] = useState(0); // pommade de protection (chantier 2026-07) : horodatage de fin d'immunité/répulsion aux créatures maléfiques (0 = inactif), effet purement local, ne survit pas à un refresh
   const [shopOpen, setShopOpen] = useState(false);
+  // -------- 2026-07 station update: UI state --------
+  const [stationSt, setStationSt] = useState(null);    // React mirror of sharedRef.current.station
+  const [adsOpen, setAdsOpen] = useState(false);       // station ad board panel
+  const [adsSel, setAdsSel] = useState([]);            // checkbox selection inside the panel
+  const [visitorOpen, setVisitorOpen] = useState(false); // visitor dialog panel
+  const [myVote, setMyVote] = useState(null);          // my residency vote (null until cast)
+  const [repairMini, setRepairMini] = useState(null);  // co-op repair minigame ({name}) | null
+  const [nearHall, setNearHall] = useState(false);     // am I close to the townhall? (1 Hz, corner notif)
+  const repairSeenRef = useRef(0);                     // damage.until already shown (no re-open loop)
+  const visitorNetRef = useRef(0);                     // host network throttle for visitorSim
+  const ducksRef = useRef(null);                       // decorative ducks (client-side, seeded)
+  const adsOpenRef = useRef(false);
+  const visitorOpenRef = useRef(false);
   const [gregOrderOpen, setGregOrderOpen] = useState(false); // panneau "donner un ordre à Greg" (chantier 2026-07)
   const [gregOrderCrop, setGregOrderCrop] = useState(0);
   const [gregOrderCount, setGregOrderCount] = useState(10);
@@ -261,7 +274,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const meRef = useRef(null);
   const playersRef = useRef(new Map()); // id -> remote farmer render data
   const farmersRef = useRef({});        // hôte : id -> état privé arbitré
-  const sharedRef = useRef({ seed: 0, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), salveCraft: E.newSalveCraftState(), house: { level: 1, upgradeUntil: 0 }, evilMonsters: [], flour: 0, gregStock: { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0) }, fertilizerShop: { stock: 0, lastRestockDay: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], rabbitChallenge: null, greg: null, soan: null });
+  const sharedRef = useRef({ seed: 0, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), salveCraft: E.newSalveCraftState(), house: { level: 1, upgradeUntil: 0 }, evilMonsters: [], flour: 0, gregStock: { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0) }, fertilizerShop: { stock: 0, lastRestockDay: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], rabbitChallenge: null, greg: null, soan: null, station: E.newStationState() });
   const invRef = useRef(null);
   const toolsRef = useRef({ hoe: 1, can: 1, axe: 1, pick: 1 });
   const energyRef = useRef(C.MAX_ENERGY);
@@ -294,7 +307,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const persistFnRef = useRef(null);   // toujours la DERNIÈRE persistFarm (closures fraîches pour les filets unmount/pagehide ci-dessous)
   const autoJoinTriedRef = useRef(false);
   const fishTileRef = useRef(null);    // case d'eau ciblée par le minijeu de pêche
-  const fishMiniRef = useRef(false);   // un mini-jeu plein écran est en cours (pêche OU construction de la grange) : bloque le reste
+  const fishMiniRef = useRef(false);
+  const seaStreakRef = useRef(0);      // 2026-07 station update: consecutive casts (client mirror, host re-validates)   // un mini-jeu plein écran est en cours (pêche OU construction de la grange) : bloque le reste
   const autoHarvestPendingRef = useRef(new Set()); // tuiles de récolte auto déjà demandées (anti-spam)
   const autoWaterPendingRef = useRef(new Set());   // tuiles d'arrosage auto déjà demandées (anti-spam)
   const autoCollectPendingRef = useRef(new Set()); // animaux de collecte auto déjà demandés (anti-spam)
@@ -325,7 +339,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const rabbitChallengeOfferRef = useRef(false); // miroir synchrone de rabbitChallengeOffer (lu dans le timer hôte, évite de reproposer en boucle)
   const evilBiteRef = useRef(null); // miroir synchrone de evilBite (lu dans updateEvilMonsters, boucle de rendu — évite de redéclencher le mini-jeu tant qu'il est déjà ouvert)
 
-  useEffect(() => { fishMiniRef.current = !!fishMini || !!barnMini || !!wolfBite || !!evilBite; }, [fishMini, barnMini, wolfBite, evilBite]);
+  useEffect(() => { fishMiniRef.current = !!fishMini || !!barnMini || !!wolfBite || !!evilBite || !!repairMini; }, [fishMini, barnMini, wolfBite, evilBite, repairMini]);
+  useEffect(() => { adsOpenRef.current = adsOpen; visitorOpenRef.current = visitorOpen; }, [adsOpen, visitorOpen]);
+  // 2026-07 station update: a fresh hostile raid opens the co-op repair
+  // minigame for EVERYONE online (keyed by damage.until so it opens once).
+  useEffect(() => {
+    const d = stationSt && stationSt.damage;
+    if (d && repairSeenRef.current !== d.until && Date.now() < d.until) {
+      repairSeenRef.current = d.until;
+      const ro = C.VISITOR_ROSTER[d.rid];
+      setRepairMini({ name: ro ? ro.name : "?" });
+    }
+    if (!d && repairMini) setRepairMini(null); // repaired (or expired) elsewhere
+  }, [stationSt]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Reset my residency vote whenever the visitor changes.
+  useEffect(() => { setMyVote(null); }, [stationSt && stationSt.visitor && stationSt.visitor.rid]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { evilBiteRef.current = evilBite; }, [evilBite]);
   useEffect(() => { injuredUntilRef.current = injuredUntil || 0; }, [injuredUntil]);
   useEffect(() => { immunityUntilRef.current = immunityUntil || 0; }, [immunityUntil]);
@@ -458,6 +486,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const w = E.generateWorld(saved.seed);
       E.applyOverrides(w, { groundOv: saved.groundOv, objectOv: saved.objectOv, crops: saved.crops, mills: saved.mills });
       worldRef.current = w;
+      // 2026-07 station update: the pre-built station stands on cleared
+      // ground even on old saves (same normalization spirit as the cauldron
+      // fix of zip 230). Overrides persist + travel in snapshots.
+      for (const ci of E.clearStationArea(w)) recordTileOverride(ci);
       overridesRef.current = { ground: { ...(saved.groundOv || {}) }, object: { ...(saved.objectOv || {}) } };
       sharedRef.current = {
         seed: saved.seed, money: saved.money, day: saved.day, dayStartAt: saved.dayStartAt, totalEarned: saved.totalEarned,
@@ -486,6 +518,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         // garde que s'il n'a pas déjà expiré depuis la dernière sauvegarde ;
         // la file de tâches en cours est purgée (redémarre en rôdaille, aucune
         // tâche perdue de façon visible car elle a été payée à la commande).
+        // 2026-07 station update: ads/blacklist/relationships/residents
+        // persist; a live visitor or unrepaired raid does NOT (transient,
+        // like wolves) - migrateStation drops them on plain loads.
+        station: E.migrateStation(saved.station),
         greg: (saved.greg && saved.greg.expiresAt > Date.now())
           ? { ...saved.greg, taskQueue: [], phase: "roam", roamTarget: null, nextRoamAt: 0 } : null,
         // Soan (chantier 2026-07) : même principe que Greg ci-dessus — contrat
@@ -525,8 +561,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     } else {
       const seed = hashSeed(code);
       worldRef.current = E.generateWorld(seed);
+      for (const ci of E.clearStationArea(worldRef.current)) recordTileOverride(ci); // 2026-07 station update
       overridesRef.current = { ground: {}, object: {} };
-      sharedRef.current = { seed, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), salveCraft: E.newSalveCraftState(), house: { level: 1, upgradeUntil: 0 }, evilMonsters: [], gems: C.GEMS.map(() => 0), flour: 0, gregStock: { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0) }, fertilizerShop: { stock: 0, lastRestockDay: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], rabbitChallenge: null, greg: null, soan: null };
+      sharedRef.current = { seed, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), salveCraft: E.newSalveCraftState(), house: { level: 1, upgradeUntil: 0 }, evilMonsters: [], gems: C.GEMS.map(() => 0), flour: 0, gregStock: { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0) }, fertilizerShop: { stock: 0, lastRestockDay: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], rabbitChallenge: null, greg: null, soan: null, station: E.newStationState() };
       farmersRef.current = {};
       // Crée tout de suite l'enregistrement pour réserver le code.
       persistFarm();
@@ -647,7 +684,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       rabbits: payload.rabbits || [], rabbitChallenge: payload.rabbitChallenge || null,
       greg: payload.greg || null,
       soan: payload.soan || null,
+      // 2026-07 station update: mid-session snapshot keeps the live visitor,
+      // with host-clock timestamps relocated (same discipline as house).
+      station: E.migrateStation(payload.station, payload.hostNow),
     };
+    setStationSt(sharedRef.current.station ? JSON.parse(JSON.stringify(sharedRef.current.station)) : null);
     if (payload.farmers) {
       farmersRef.current = payload.farmers;
       // Même filet de sécurité qu'au chargement par code (voir loadFarmByCode) :
@@ -826,6 +867,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       farmers: farmersRef.current,
       horses: s.horses, animals: s.animals, wellBuilt: s.wellBuilt, coop: s.coop, barn: s.barn, salveCraft: s.salveCraft, house: s.house, evilMonsters: s.evilMonsters, gems: s.gems, flour: s.flour, gregStock: s.gregStock, fertilizerShop: s.fertilizerShop, wolves: s.wolves, greg: s.greg, soan: s.soan,
       rabbits: s.rabbits, rabbitChallenge: s.rabbitChallenge,
+      station: s.station, // 2026-07 station update
       hostNow: Date.now(), // correctif audit 2026-07 : relocalisation d'horloge (voir salveCraft.brewingUntil)
       // Correctif audit lancement 2026-07 (succession d'hôte) : le code de la
       // ferme voyage avec l'instantané, pour qu'un invité promu hôte
@@ -955,6 +997,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const out = { tiles: [], crops: [], mills: null, fx: [], state: null, farmer: null, toast: null, chat: null, horses: null, animals: null, wellBuilt: false, coop: undefined, barn: undefined, salveCraft: undefined, house: undefined };
     let questId = null; // action réussie -> quête à valider éventuellement
     const px = typeof req.px === "number" ? req.px : f.x, py = typeof req.py === "number" ? req.py : f.y;
+
+    // 2026-07 station update: station/visitor/repair requests are resolved in
+    // a dedicated handler (returns true when the request was consumed).
+    if (hostHandleStationReq(req, f)) return;
 
     if (req.kind === "wolfBiteResult") {
       // Dénouement du mini-jeu de morsure (chantier 2026-07) : n'affecte que
@@ -1621,6 +1667,198 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (out.tiles.length || out.state || out.horses || out.animals || out.wellBuilt || out.gems || out.mills || out.house || out.flour !== undefined) dirtyRef.current = true;
     channelRef.current?.send({ type: "broadcast", event: "apply", payload: { ...out, hostNow: Date.now() } });
   }
+  // -------- 2026-07 station update: host-side station module --------
+  function rosterOf(rid) { return C.VISITOR_ROSTER[rid] || C.VISITOR_ROSTER[0]; }
+  function cropLabel(id) { const cr = C.CROPS[id] || C.CROPS[0]; return lang === "en" ? cr.nameEn : cr.name; }
+  // Broadcast the FULL station object (discrete changes only: arrivals,
+  // phase switches, deals, votes, damage). Continuous movement travels in
+  // the light `visitorSim` payload instead. Also refreshes the host's own
+  // React mirror, since the host ignores its own echo (see applyDeltas).
+  function broadcastStation() {
+    const st = sharedRef.current.station;
+    setStationSt(st ? JSON.parse(JSON.stringify(st)) : null);
+    dirtyRef.current = true;
+    channelRef.current?.send({ type: "broadcast", event: "apply", payload: { station: st, hostNow: Date.now() } });
+  }
+  function stationChat(msg, from) {
+    channelRef.current?.send({ type: "broadcast", event: "chat", payload: { from: from || "\u{1F689}", msg } });
+  }
+  function hostExecuteHostileDamage() {
+    const w = worldRef.current, s = sharedRef.current, v = s.station.visitor;
+    if (!w || !v) return;
+    const ro = rosterOf(v.rid);
+    const r = E.applyHostileDamage(w, s, Math.random);
+    v.phase = "leave"; v.offer = { type: "done" };
+    if (r.patches.length) channelRef.current?.send({ type: "broadcast", event: "apply", payload: { crops: r.patches } });
+    channelRef.current?.send({ type: "broadcast", event: "apply", payload: { state: shareState() } });
+    stationChat(L.hostileDamageChat(ro.name, s.station.damage.stolen, s.station.damage.ruined.length), "\u26A0\uFE0F");
+    broadcastStation();
+  }
+  function hostFinalizeVote() {
+    const s = sharedRef.current, v = s.station.visitor;
+    if (!v || !v.votes) return;
+    const ro = rosterOf(v.rid);
+    const fv = E.finalizeVote(v.votes, Math.random);
+    if (fv.stay) {
+      s.station.residents.push({ rid: v.rid, job: v.offer.job });
+      stationChat(fv.dice ? L.voteDiceChat(ro.name, fv.roll, true) : L.voteStayChat(ro.name), "\u{1F3E0}");
+    } else {
+      stationChat(fv.dice ? L.voteDiceChat(ro.name, fv.roll, false) : L.voteLeaveChat(ro.name), "\u{1F3E0}");
+    }
+    v.phase = "leave"; v.offer = { type: "done" }; v.votes = null;
+    broadcastStation();
+  }
+  function hostHandleStationReq(req, f) {
+    const w = worldRef.current, s = sharedRef.current;
+    if (!s.station) s.station = E.newStationState();
+    const ch = channelRef.current;
+    const v = s.station.visitor;
+    const toastTo = (key) => ch?.send({ type: "broadcast", event: "apply", payload: { toast: { id: req.id, key } } });
+    if (req.kind === "adsSet") {
+      const r = E.resolveAdsSet(s, req.ads);
+      if (!r.ok) { toastTo(r.toast || "actionFailed"); return true; }
+      if (r.cost > 0) ch?.send({ type: "broadcast", event: "apply", payload: { state: shareState() } });
+      stationChat(L.adsSaved(r.cost), "\u{1F4CC}");
+      broadcastStation();
+      return true;
+    }
+    if (req.kind === "visitorDeal") {
+      const r = E.resolveVisitorDeal(f, s, req);
+      if (!r.ok) { toastTo(r.toast || "actionFailed"); return true; }
+      ch?.send({ type: "broadcast", event: "apply", payload: { farmer: { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv }, state: shareState() } });
+      stationChat(L.visitorDealDone(rosterOf(v.rid).name, r.gain), "\u{1F4B0}");
+      broadcastStation();
+      return true;
+    }
+    if (req.kind === "visitorChat") {
+      const r = E.resolveVisitorChat(s);
+      if (r.ok) { stationChat(L.visitorChatDone(rosterOf(v.rid).name), "\u{1F4AC}"); broadcastStation(); }
+      return true;
+    }
+    if (req.kind === "visitorPay") {
+      const r = E.resolveHostilePay(s);
+      if (!r.ok) { toastTo(r.toast || "actionFailed"); return true; }
+      ch?.send({ type: "broadcast", event: "apply", payload: { state: shareState() } });
+      stationChat(L.visitorPaid(rosterOf(v.rid).name, r.paid), "\u26A0\uFE0F");
+      broadcastStation();
+      return true;
+    }
+    if (req.kind === "visitorRefuse") {
+      if (v && v.phase === "wait" && v.offer && v.offer.type === "demand") hostExecuteHostileDamage();
+      return true;
+    }
+    if (req.kind === "visitorVote") {
+      if (v && v.phase === "wait" && v.offer && v.offer.type === "stay") {
+        v.votes = v.votes || {};
+        v.votes[req.id] = !!req.v;
+        const online = new Set([me.id, ...playersRef.current.keys()]);
+        let all = true;
+        for (const idp of online) if (!(idp in v.votes)) { all = false; break; }
+        if (all) hostFinalizeVote(); else broadcastStation();
+      }
+      return true;
+    }
+    if (req.kind === "visitorBlacklist") {
+      const rid = req.rid | 0;
+      const r = E.resolveBlacklist(s, rid);
+      if (r.ok) { stationChat(L.visitorLeftChat(rosterOf(rid).name), "\u{1F6AB}"); broadcastStation(); }
+      return true;
+    }
+    if (req.kind === "repairResult") {
+      const onlineCount = playersRef.current.size + 1;
+      const r = E.resolveRepairResult(w, s, req.id, !!req.win, onlineCount);
+      if (r.done) {
+        if (r.patches && r.patches.length) ch?.send({ type: "broadcast", event: "apply", payload: { crops: r.patches } });
+        ch?.send({ type: "broadcast", event: "apply", payload: { state: shareState() } });
+        stationChat(L.repairDoneChat(r.restored.stolen, r.restored.crops), "\u2705");
+        broadcastStation();
+      } else if (typeof r.progress === "number") {
+        stationChat(L.repairProgress(r.progress, r.needed), "\u{1F6E0}\uFE0F");
+        broadcastStation();
+      }
+      return true;
+    }
+    return false;
+  }
+  // Host simulation of the live visitor (called from the rAF loop, next to
+  // updateGreg). Handles scheduling, the train, walking, waiting, hostile
+  // deadlines, vote deadlines, leaving, and the network throttle.
+  function updateVisitor(dt) {
+    const w = worldRef.current, s = sharedRef.current;
+    if (!w) return;
+    if (!s.station) s.station = E.newStationState();
+    const st = s.station, now = Date.now();
+    // Expired repair window: the damage becomes permanent.
+    if (st.damage && now > st.damage.until) {
+      st.damage = null;
+      stationChat(L.repairExpired, "\u{1F6E0}\uFE0F");
+      broadcastStation();
+    }
+    const v = st.visitor;
+    if (!v) {
+      if (!st.nextVisitAt) { E.scheduleNextVisit(st, E.farmPopularity(s, w), Math.random); dirtyRef.current = true; }
+      else if (now >= st.nextVisitAt) {
+        const nv = E.spawnVisitor(st, Math.random);
+        if (nv) {
+          st.visitor = nv;
+          stationChat(L.visitorArrived(rosterOf(nv.rid).name), "\u{1F682}");
+          broadcastStation();
+        } else E.scheduleNextVisit(st, 0, Math.random);
+      }
+      return;
+    }
+    // Walking helper: straight line toward (tx,ty), returns true on arrival.
+    const walkTo = (tx, ty) => {
+      const dx = tx - v.x, dy = ty - v.y, d = Math.hypot(dx, dy);
+      if (d < 0.08) { v.moving = false; return true; }
+      const step = Math.min(d, C.VISITOR_SPEED * dt);
+      v.x += (dx / d) * step; v.y += (dy / d) * step;
+      v.moving = true; v.animT = (v.animT || 0) + dt * 6;
+      v.dir = Math.abs(dx) > Math.abs(dy) ? 2 : (dy > 0 ? 0 : 1);
+      return false;
+    };
+    // Waypoints: platform -> south of the townhall -> its door (and back).
+    // The station sits WEST of the river, like the townhall: no crossing.
+    const WP = [{ x: 5, y: 30.5 }, { x: 5, y: 36.5 }, { x: 43.5, y: 36.5 }, { x: 43.5, y: 36.3 }];
+    if (v.phase === "train") {
+      if (now >= v.phaseUntil) { v.phase = "walk"; v.wpi = 1; broadcastStation(); }
+    } else if (v.phase === "walk") {
+      const wp = WP[Math.min(v.wpi || 1, WP.length - 1)];
+      if (walkTo(wp.x, wp.y)) {
+        v.wpi = (v.wpi || 1) + 1;
+        if (v.wpi >= WP.length) {
+          v.phase = "wait"; v.moving = false; v.dir = 1;
+          v.waitUntil = now + C.VISITOR_WAIT_MS;
+          if (v.offer && v.offer.type === "demand") v.deadline = now + C.HOSTILE_DEADLINE_MS;
+          if (v.offer && v.offer.type === "stay") { v.votes = {}; v.voteUntil = now + C.VOTE_DEADLINE_MS; }
+          broadcastStation();
+        }
+      }
+    } else if (v.phase === "wait") {
+      if (v.offer && v.offer.type === "demand" && now > v.deadline) hostExecuteHostileDamage();
+      else if (v.offer && v.offer.type === "stay" && now > v.voteUntil) hostFinalizeVote();
+      else if (now > v.waitUntil) { v.phase = "leave"; stationChat(L.visitorLeftChat(rosterOf(v.rid).name)); broadcastStation(); }
+    } else if (v.phase === "leave") {
+      if (v.wpi === undefined || v.wpi >= WP.length) v.wpi = WP.length - 2;
+      const wp = WP[Math.max(0, v.wpi)];
+      if (walkTo(wp.x, wp.y)) {
+        v.wpi -= 1;
+        if (v.wpi < 0) { v.phase = "depart"; v.phaseUntil = now + C.VISITOR_TRAIN_MS; v.moving = false; broadcastStation(); }
+      }
+    } else if (v.phase === "depart") {
+      if (now >= v.phaseUntil) {
+        st.visitor = null;
+        E.scheduleNextVisit(st, E.farmPopularity(s, w), Math.random);
+        broadcastStation();
+      }
+    }
+    // Light continuous broadcast while the visitor moves (200 ms throttle).
+    visitorNetRef.current += dt;
+    if (visitorNetRef.current >= C.VISITOR_NET_MS / 1000 && st.visitor) {
+      visitorNetRef.current = 0;
+      channelRef.current?.send({ type: "broadcast", event: "apply", payload: { visitorSim: { x: v.x, y: v.y, dir: v.dir, moving: v.moving, animT: v.animT, phase: v.phase } } });
+    }
+  }
   function shareState() { const s = sharedRef.current; return { money: s.money, day: s.day, dayStartAt: s.dayStartAt, totalEarned: s.totalEarned }; }
   function toolName(k) { return (lang === "en" ? C.TOOL_NAMES_EN : C.TOOL_NAMES)[k]; }
 
@@ -1687,6 +1925,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (p.animals) { sharedRef.current.animals = p.animals; syncBuildings(); }
     if (p.wolves) { sharedRef.current.wolves = p.wolves; minimapDirtyRef.current = true; }
     if (p.rabbits) { sharedRef.current.rabbits = p.rabbits; minimapDirtyRef.current = true; }
+    // 2026-07 station update. Echo guard (!isHost): the host simulates the
+    // visitor continuously, its own echo must NEVER overwrite the live
+    // object (root cause of the zip 230 evil-monster desync).
+    if (p.station !== undefined && !isHost) {
+      sharedRef.current.station = E.migrateStation(p.station, p.hostNow);
+      setStationSt(sharedRef.current.station ? JSON.parse(JSON.stringify(sharedRef.current.station)) : null);
+    }
+    if (p.visitorSim && !isHost) {
+      const stv = sharedRef.current.station && sharedRef.current.station.visitor;
+      if (stv) { stv.x = p.visitorSim.x; stv.y = p.visitorSim.y; stv.dir = p.visitorSim.dir; stv.moving = p.visitorSim.moving; stv.animT = p.visitorSim.animT; stv.phase = p.visitorSim.phase; }
+    }
     if (p.greg !== undefined) { sharedRef.current.greg = p.greg; minimapDirtyRef.current = true; }
     if (p.soan !== undefined) { sharedRef.current.soan = p.soan; minimapDirtyRef.current = true; }
     if (p.wellBuilt) { sharedRef.current.wellBuilt = true; minimapDirtyRef.current = true; syncBuildings(); }
@@ -1735,7 +1984,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     pushToast(L.toastNewDay(p.day));
   }
   function toastMsg(key) {
-    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, noMillStock: L.toastNoMillStock, millNotEmpty: L.toastMillNotEmpty, noWheatToDeposit: L.toastNoWheatToDeposit, millFull: L.toastMillFull, actionFailed: L.toastActionFailed, coopNone: L.toastCoopNone, farCoop: L.toastFarCoop, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull, notInjured: L.toastNotInjured, noHealKit: L.toastNoHealKit, healTooFar: L.toastHealTooFar, gregNotHired: L.toastGregNotHired, gregNoRoom: L.toastGregNoRoom, gregNoFertilizer: L.toastGregNoFertilizer, soanNotHired: L.toastSoanNotHired, soanNoRiver: L.toastSoanNoRiver, farCauldron: L.toastFarCauldron, noFishToDeposit: L.toastNoFishToDeposit, cauldronMissing: L.toastCauldronMissing, cauldronAlreadyTaken: L.toastCauldronAlreadyTaken, noCauldronStock: L.toastNoCauldronStock, cauldronNotEmpty: L.toastCauldronNotEmpty, cauldronBrewing: L.toastCauldronBrewing, cauldronNothingToCollect: L.toastCauldronNothingToCollect, cauldronHasEnough: L.toastCauldronHasEnough }[key] || "";
+    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, noMillStock: L.toastNoMillStock, millNotEmpty: L.toastMillNotEmpty, noWheatToDeposit: L.toastNoWheatToDeposit, millFull: L.toastMillFull, actionFailed: L.toastActionFailed, coopNone: L.toastCoopNone, farCoop: L.toastFarCoop, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull, notInjured: L.toastNotInjured, noHealKit: L.toastNoHealKit, healTooFar: L.toastHealTooFar, gregNotHired: L.toastGregNotHired, gregNoRoom: L.toastGregNoRoom, gregNoFertilizer: L.toastGregNoFertilizer, soanNotHired: L.toastSoanNotHired, soanNoRiver: L.toastSoanNoRiver, farCauldron: L.toastFarCauldron, noFishToDeposit: L.toastNoFishToDeposit, cauldronMissing: L.toastCauldronMissing, cauldronAlreadyTaken: L.toastCauldronAlreadyTaken, noCauldronStock: L.toastNoCauldronStock, cauldronNotEmpty: L.toastCauldronNotEmpty, cauldronBrewing: L.toastCauldronBrewing, cauldronNothingToCollect: L.toastCauldronNothingToCollect, cauldronHasEnough: L.toastCauldronHasEnough, visitorNotEnough: L.visitorNotEnough }[key] || "";
   }
 
   // -------- Hôte : boucle temps + persistance --------
@@ -1897,6 +2146,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const it = setInterval(() => {
       const s = sharedRef.current;
       setHud(h => ({ ...h, timeMin: E.gameTimeMin(s.dayStartAt, Date.now()) }));
+      // 2026-07 station update: am I near the townhall? (drives the corner
+      // notification card for waiting visitors, 1 Hz is plenty)
+      const m0 = meRef.current;
+      if (m0) setNearHall(Math.abs(m0.x - (C.HOUSE.x + 3.5)) + Math.abs(m0.y - (C.HOUSE.y + 5.5)) < 8);
     }, 1000);
     return () => clearInterval(it);
   }, []);
@@ -2180,14 +2433,33 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     let total = 0; for (const fs of C.FISH) total += fs.weight;
     let r = Math.random() * total, ft = 0;
     for (let i = 0; i < C.FISH.length; i++) { r -= C.FISH[i].weight; if (r <= 0) { ft = i; break; } }
+    // 2026-07 station update: rare sea creatures. Eligible after
+    // SEA_MIN_STREAK consecutive casts (client mirror of f.seaStreak, the
+    // host re-validates), or from the FIRST cast at the extreme north/south
+    // ends of the river. Rare bites use the hardest minigame tier.
+    const seaEligible = E.seaExtremeRow(tt.y) ? C.SEA_EXTREME_FIRST_CHANCE
+      : (seaStreakRef.current >= C.SEA_MIN_STREAK ? C.SEA_CHANCE : 0);
+    if (Math.random() < seaEligible) {
+      let stot = 0; for (const sc of C.SEA_CREATURES) stot += sc.weight;
+      let sr = Math.random() * stot, si = 0;
+      for (let i = 0; i < C.SEA_CREATURES.length; i++) { sr -= C.SEA_CREATURES[i].weight; if (sr <= 0) { si = i; break; } }
+      fishTileRef.current = { x: tt.x, y: tt.y };
+      pushToast(L.seaBite(lang === "en" ? C.SEA_CREATURES[si].nameEn : C.SEA_CREATURES[si].name));
+      setFishMini({ mode: 2, fish: 2, sea: si });
+      return;
+    }
     fishTileRef.current = { x: tt.x, y: tt.y };
     pushToast(L.fishBite(lang === "en" ? C.FISH[ft].nameEn : C.FISH[ft].name));
     setFishMini({ mode: ft, fish: ft });
   }
   function fishWon() {
-    const ft = fishMini ? fishMini.fish : 0, tt = fishTileRef.current;
+    const fm = fishMini, tt = fishTileRef.current;
     setFishMini(null);
-    if (tt) sendReq({ kind: "act", action: "fish", x: tt.x, y: tt.y, fish: ft });
+    if (!tt || !fm) return;
+    // 2026-07 station update: rare catches claim `sea`; the host validates
+    // the streak/extreme-row eligibility (see resolveAct in fermeEngine.js).
+    if (typeof fm.sea === "number") { seaStreakRef.current = 0; sendReq({ kind: "act", action: "fish", x: tt.x, y: tt.y, sea: fm.sea }); }
+    else { seaStreakRef.current += 1; sendReq({ kind: "act", action: "fish", x: tt.x, y: tt.y, fish: fm.fish }); }
   }
   function fishLost(tooSoon) { setFishMini(null); pushToast(tooSoon ? L.fishTooSoon : L.fishFail); }
   function barnWon() { setBarnMini(null); sendReq({ kind: "barnBuild" }); }
@@ -3330,7 +3602,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // Correctif audit 2026-07 : Espace/E n'agissent plus "à travers" un
       // menu ouvert (le clic était déjà bloqué, voir onDown ; Échap/T/M
       // restent actifs pour fermer/naviguer).
-      const uiOpen = mapOpenRef.current || shopOpenRef.current || binOpenRef.current || cauldronMenuOpenRef.current;
+      const uiOpen = mapOpenRef.current || shopOpenRef.current || binOpenRef.current || cauldronMenuOpenRef.current || adsOpenRef.current || visitorOpenRef.current;
       if (e.code === "Space") { e.preventDefault(); if (!uiOpen) doAction(); }
       if (e.code === "KeyE") { if (!uiOpen) tryOpenNearby(); }
       if (e.code === "KeyF") toggleMount();
@@ -3341,11 +3613,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
       if (e.code === "KeyT") { e.preventDefault(); setChatOpen(true); setTimeout(() => chatInputRef.current?.focus(), 0); }
       if (e.code === "KeyM") setMapOpen(o => !o);
-      if (e.code === "Escape") { setShopOpen(false); setBinOpen(false); setMapOpen(false); setSeedMenuOpen(false); setToolMenuOpen(false); setCraftMenuOpen(null); setCauldronMenuOpen(false); }
+      if (e.code === "Escape") { setShopOpen(false); setBinOpen(false); setMapOpen(false); setSeedMenuOpen(false); setToolMenuOpen(false); setCraftMenuOpen(null); setCauldronMenuOpen(false); setAdsOpen(false); setVisitorOpen(false); }
     }
     function onKeyUp(e) { keysRef.current[e.code] = false; }
     function onMove(e) { mouseRef.current.x = e.clientX; mouseRef.current.y = e.clientY; }
-    function onDown(e) { if (e.button === 0 && !mapOpenRef.current && !shopOpenRef.current && !binOpenRef.current && !cauldronMenuOpenRef.current && !fishMiniRef.current && !isInjured()) doAction(); }
+    function onDown(e) { if (e.button === 0 && !mapOpenRef.current && !shopOpenRef.current && !binOpenRef.current && !cauldronMenuOpenRef.current && !fishMiniRef.current && !adsOpenRef.current && !visitorOpenRef.current && !isInjured()) doAction(); }
     function onWheel() { }
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
@@ -3368,6 +3640,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (isHost) updateRabbits(dt);
       if (isHost) updateSharedEvilMonsters(dt); // créatures maléfiques partagées (2026-07)
       if (isHost) updateGreg(dt);
+      if (isHost) updateVisitor(dt); // 2026-07 station update
       if (isHost) updateSoan(dt);
       // Simulation hôte toujours sur worldRef.current (la ferme), quoi qu'il
       // arrive : rien ci-dessus ne dépend de la zone du joueur LOCAL. Seul
@@ -3854,6 +4127,75 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           else ctx.drawImage(img, px, py);
         } });
       }
+      // -------- 2026-07 station update: station, train, ducks, visitor --------
+      {
+        const st = sharedRef.current.station;
+        // Rails + platform: ground-level, drawn under every sorted sprite
+        // (pushed with very low sort keys so they land first in `draws`).
+        draws.push({ y: -1000, fn: () => {
+          for (let yy = C.STATION_RAIL_Y0; yy <= C.STATION_RAIL_Y1; yy++) {
+            ctx.drawImage(sprites.rail, C.STATION_RAIL_X * T, yy * T);
+            ctx.drawImage(sprites.rail, (C.STATION_RAIL_X + 1) * T, yy * T);
+          }
+        } });
+        draws.push({ y: -999, fn: () => {
+          for (let yy = C.STATION_PLATFORM.y; yy < C.STATION_PLATFORM.y + C.STATION_PLATFORM.h; yy++)
+            for (let xx = C.STATION_PLATFORM.x; xx < C.STATION_PLATFORM.x + C.STATION_PLATFORM.w; xx++)
+              ctx.drawImage(sprites.platform, xx * T, yy * T);
+        } });
+        // The train slides in from the north while a visitor arrives, and
+        // back out when they depart. Timestamps are already relocated onto
+        // the local clock (migrateStation), so guests see the same motion.
+        const v = st && st.visitor;
+        if (v && (v.phase === "train" || v.phase === "depart")) {
+          const raw = 1 - Math.max(0, (v.phaseUntil - Date.now()) / C.VISITOR_TRAIN_MS);
+          const pr = Math.min(1, Math.max(0, raw));
+          const yStop = (C.STATION.y + 2) * T, yOff = (C.STATION_RAIL_Y0 - 7) * T;
+          const trainY = v.phase === "train" ? yOff + (yStop - yOff) * pr : yStop + (yOff - yStop) * pr;
+          draws.push({ y: -900, fn: () => ctx.drawImage(sprites.train, C.STATION_RAIL_X * T + 6, trainY) });
+        }
+        // Station building + the interactive ad board.
+        draws.push({ y: (C.STATION.y + C.STATION.h) * T, fn: () => ctx.drawImage(sprites.station, C.STATION.x * T, C.STATION.y * T - 18) });
+        draws.push({ y: (C.STATION_SIGN.y + 1) * T, fn: () => ctx.drawImage(sprites.signBoard, C.STATION_SIGN.x * T - 1, C.STATION_SIGN.y * T - 6) });
+        // Decorative ducks: purely cosmetic, client-side, seeded from the
+        // farm seed, drifting up and down the river with a 2-frame bob.
+        if (!ducksRef.current && w.riverCenter && w.riverCenter.length) {
+          let ds = (sharedRef.current.seed || 1) >>> 0;
+          const drnd = () => { ds = (ds * 1103515245 + 12345) & 0x7fffffff; return ds / 0x7fffffff; };
+          ducksRef.current = Array.from({ length: C.DUCK_COUNT }, () => {
+            const dy = 12 + drnd() * (C.MAP_H - 24);
+            return { y: dy, off: (drnd() - 0.5) * 2.4, dir: drnd() < 0.5 ? 1 : -1, turnAt: 0 };
+          });
+        }
+        if (ducksRef.current) {
+          const nowS = performance.now() / 1000;
+          for (const d of ducksRef.current) {
+            if (nowS >= d.turnAt) { d.dir = Math.random() < 0.5 ? 1 : -1; d.turnAt = nowS + C.DUCK_TURN_MIN_S + Math.random() * (C.DUCK_TURN_MAX_S - C.DUCK_TURN_MIN_S); }
+            d.y += d.dir * C.DUCK_SPEED * dt;
+            if (d.y < 10) { d.y = 10; d.dir = 1; } if (d.y > C.MAP_H - 10) { d.y = C.MAP_H - 10; d.dir = -1; }
+            const dxp = (E.riverCenterAt(w, Math.round(d.y)) + d.off) * T, dyp = d.y * T;
+            const fr = Math.floor(performance.now() / 450) % 2;
+            draws.push({ y: dyp + T * 0.6, fn: () => ctx.drawImage(sprites.duck[fr], dxp, dyp) });
+          }
+        }
+        // The visiting villager (host: live sim; guests: broadcast position
+        // smoothed locally) + residents idling by the townhall.
+        if (v && v.phase !== "train" && v.phase !== "depart") {
+          if (!isHost) {
+            v.rx = v.rx === undefined ? v.x : v.rx + (v.x - v.rx) * Math.min(1, dt * 8);
+            v.ry = v.ry === undefined ? v.y : v.ry + (v.y - v.ry) * Math.min(1, dt * 8);
+          }
+          const vx = isHost ? v.x : v.rx, vy = isHost ? v.y : v.ry;
+          const ro = C.VISITOR_ROSTER[v.rid] || C.VISITOR_ROSTER[0];
+          draws.push({ y: (vy + 1) * T, fn: () => drawCharacter({ id: "visitor", name: ro.name, x: vx, y: vy, dir: v.dir || 0, moving: !!v.moving, animT: v.animT || 0, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap }, false) });
+        }
+        const residents = (st && st.residents) || [];
+        for (let ri = 0; ri < residents.length; ri++) {
+          const ro = C.VISITOR_ROSTER[residents[ri].rid]; if (!ro) continue;
+          const rxp = 47.5 + (ri % 3) * 1.6, ryp = 37.5 + Math.floor(ri / 3) * 1.4;
+          draws.push({ y: (ryp + 1) * T, fn: () => drawCharacter({ id: "res" + ro.rid, name: ro.name, x: rxp, y: ryp, dir: 0, moving: false, animT: 0, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap }, false) });
+        }
+      }
       // Greg, l'employé de champs (chantier 2026-07) : réutilise le rendu
       // fermier existant (drawCharacter) avec un jeu de sprite dédié
       // (outfit -1 → sprite ouvrier, voir buildSprites/getChar) plutôt que
@@ -3991,12 +4333,26 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         }
       }
 
+      // 2026-07 station update: seasonal tint, stacked exactly like the
+      // storm veil (screen space, purely visual).
+      {
+        const se = E.seasonOf(sharedRef.current.day || 1);
+        if (se.tint) {
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+          ctx.globalCompositeOperation = "source-over";
+          ctx.fillStyle = se.tint;
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+      }
+
       // Invite boutique/bac
       let pk = null;
       const cauldronTile = findCauldronTile();
       if (heldAnimalRef.current !== -1) pk = "sellAnimal";
       else if (nearTile(C.SHOP)) pk = "shop"; else if (nearTile(C.BIN)) pk = "bin";
+      else if (nearTile(C.STATION_SIGN)) pk = "station"; // 2026-07 station update
       else if (nearTile(C.HOUSE_DOOR)) pk = m.sleeping ? "wake" : "sleep";
+      else if (visitorPromptNearby()) pk = "visitor"; // 2026-07 station update
       else if (nearTile(C.COOP_SITE) && sharedRef.current.coop) pk = "coop";
       else if (nearTile(C.BARN_SITE)) { const b = sharedRef.current.barn; if (b && b.level < C.BARN_LEVELS.length) pk = b.ready ? "barnBuild" : "barn"; }
       // (chantier 2026-07, refonte demande Guillaume) : le prompt E distingue
@@ -4337,7 +4693,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (now2 - lastPosSentRef.current > 1000 / C.POS_TICK_HZ) { lastPosSentRef.current = now2; sendPos(); }
         return;
       }
-      const uiBlocked = shopOpenRef.current || binOpenRef.current || mapOpenRef.current || cauldronMenuOpenRef.current || fishMiniRef.current || document.activeElement === chatInputRef.current || m.sleeping || isInjured();
+      const uiBlocked = shopOpenRef.current || binOpenRef.current || mapOpenRef.current || cauldronMenuOpenRef.current || fishMiniRef.current || adsOpenRef.current || visitorOpenRef.current || document.activeElement === chatInputRef.current || m.sleeping || isInjured();
       let dx = 0, dy = 0;
       if (!uiBlocked) {
         if (keys["ArrowUp"] || keys["KeyW"] || keys["KeyZ"]) dy -= 1;
@@ -4721,6 +5077,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     return facingTile();
   }
   function nearTile(tl, d = 2.5) { const m = meRef.current; return m && Math.abs(m.x - tl.x) <= d && Math.abs(m.y - tl.y) <= d; }
+  // 2026-07 station update: the waiting visitor, if I stand close enough.
+  function visitorPromptNearby() {
+    const m = meRef.current, st = sharedRef.current.station, v = st && st.visitor;
+    if (!m || !v || v.phase !== "wait") return null;
+    return (Math.abs(m.x - v.x) + Math.abs(m.y - v.y) <= 2.4) ? v : null;
+  }
   // Position du chaudron ramené (chantier 2026-07, demande Guillaume) : posé
   // n'importe où par un joueur, retrouvée en scannant w.objects — un seul
   // chaudron possible pour toute la ferme (voir resolveCauldronPlace côté
@@ -4790,7 +5152,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (injured && !isInjured()) sendReq({ kind: "heal", targetId: injured.id });
     else if (nearTile(C.SHOP)) setShopOpen(true);
     else if (nearTile(C.BIN)) setBinOpen(true);
+    else if (nearTile(C.STATION_SIGN)) { setAdsSel([...((sharedRef.current.station && sharedRef.current.station.ads) || [])]); setAdsOpen(true); } // 2026-07 station update
     else if (nearTile(C.HOUSE_DOOR)) { if (meRef.current.sleeping) wakeUp(false); else startSleep(); }
+    else if (visitorPromptNearby()) { setMyVote(null); setVisitorOpen(true); } // 2026-07 station update
     else if (nearTile(C.COOP_SITE) && sharedRef.current.coop) sendReq({ kind: "coopDeposit" });
     else if (nearTile(C.BARN_SITE)) {
       const b = sharedRef.current.barn;
@@ -4838,6 +5202,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const fs = C.FISH[m.fish] || C.FISH[0];
         fx.push({ ...base, kind: "txt", txt: L.fxFish(lang === "en" ? fs.nameEn : fs.name), col: "#a8d4f0", life: 1.4 });
         for (let i = 0; i < 5; i++) fx.push({ ...base, kind: "p", col: "#5a9be0", vx: (Math.random() - .5) * 2, vy: -Math.random() * 2, life: .5 });
+        break;
+      }
+      case "sea": { // 2026-07 station update: rare sea creature caught
+        const sc = C.SEA_CREATURES[m.sea] || C.SEA_CREATURES[0];
+        fx.push({ ...base, kind: "txt", txt: L.seaCaught(lang === "en" ? sc.nameEn : sc.name), col: sc.color, life: 2 });
+        for (let i = 0; i < 8; i++) fx.push({ ...base, kind: "p", col: sc.color, vx: (Math.random() - .5) * 3, vy: -Math.random() * 3, life: .7 });
         break;
       }
       case "product": {
@@ -5086,6 +5456,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     setCraftMenuOpen(null);
   }
   const sellFish = (fishId) => sendReq({ kind: "sell", item: "fish", fish: fishId, n: 9999 });
+  const sellSea = (seaId) => sendReq({ kind: "sell", item: "sea", sea: seaId, n: 9999 }); // 2026-07 station update
   const sellCommonFish = (fishId) => sendReq({ kind: "sell", item: "commonFish", fish: fishId, n: 9999 });
   const sellGem = (gemId) => sendReq({ kind: "sell", item: "gem", gem: gemId, n: 9999 });
 
@@ -5155,7 +5526,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       {/* HUD */}
       <div className="ferme-hud panel">
         <div className="row"><Sprite img={spritesReady ? spritesRef.current.icons.gold : null} w={18} h={18} /> <span>{hud.money}</span> <span className="ferme-hud-sub">{L.goldCommon}</span></div>
-        <div className="row">📅 {L.day} {hud.day} &nbsp; 🕐 {clockStr}</div>
+        <div className="row">📅 {L.day} {hud.day} &nbsp; {(() => { const se = E.seasonOf(hud.day || 1); const nm = { spring: L.seasonSpring, summer: L.seasonSummer, autumn: L.seasonAutumn, winter: L.seasonWinter }[se.key]; return se.emoji + " " + nm; })()} &nbsp; 🕐 {clockStr}</div>
         <div className="row ferme-hud-players">👥 {L.playersOnline(hud.players)}</div>
         <div className="row ferme-hud-barn">🛖 {L.barnHudLine(barn ? barn.level : 0, C.BARN_LEVELS.length, E.barnAnimalCap(barn ? barn.level : 0))}</div>
         <div className="row ferme-hud-res" title={L.woodResTip} onClick={() => setCraftMenuOpen(o => o === "wood" ? null : "wood")}>
@@ -5214,7 +5585,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       </div>
 
       {/* Invite proximité */}
-      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "shop" ? L.promptShop : promptKey === "coop" ? L.promptCoop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "sleep" ? L.promptSleep : promptKey === "wake" ? L.promptWake : L.promptBin}</div>}
+      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "visitor" ? L.promptVisitor((C.VISITOR_ROSTER[(stationSt && stationSt.visitor && stationSt.visitor.rid) || 0] || {}).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "coop" ? L.promptCoop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "sleep" ? L.promptSleep : promptKey === "wake" ? L.promptWake : L.promptBin}</div>}
       {mountPrompt && <div className="ferme-prompt ferme-prompt-mount">{mountPrompt === "mount" ? L.mountPrompt : L.dismountPrompt}</div>}
 
       {/* Barre d'outils */}
@@ -5845,6 +6216,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 </div>
               );
             })}
+            {/* 2026-07 station update: rare sea creatures (personal, sell-only).
+                Rows only appear once you own at least one. */}
+            {C.SEA_CREATURES.map(sc => {
+              const n = myInv && myInv.seaCreatures ? myInv.seaCreatures[sc.id] : 0;
+              if (!n) return null;
+              return (
+                <div className="ferme-shop-row" key={"sea" + sc.id}>
+                  <Sprite img={spritesReady ? spritesRef.current.seaIcons[sc.id] : null} w={32} h={32} />
+                  <div className="info"><b>{(lang === "en" ? sc.nameEn : sc.name)} × {n}</b><span>{L.perPiece(sc.sell)}</span><span className="ferme-usage">{L.seaSectionHint}</span></div>
+                  <button disabled={!n} onClick={() => sellSea(sc.id)}>{L.sellAll}</button>
+                </div>
+              );
+            })}
             {/* Poissons pêchés par Soan, pool COMMUN (chantier 2026-07,
                 demande Guillaume : "le poisson est direct notre propriété et
                 on peut aller le vendre") — même principe d'affichage que les
@@ -5889,6 +6273,96 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       )}
 
       {/* Minijeu de pêche (difficulté selon le type de poisson) */}
+      {/* -------- 2026-07 station update: panels -------- */}
+      {adsOpen && (
+        <div className="ferme-modal open" onClick={() => setAdsOpen(false)}>
+          <div className="panel ferme-modal-panel" onClick={e => e.stopPropagation()}>
+            <h3 style={{ marginTop: 0 }}>{L.adsTitle}</h3>
+            <p style={{ fontSize: 13, opacity: .85 }}>{L.adsIntro}</p>
+            {C.AD_CATEGORIES.map(cat => {
+              const label = { crops: L.adCatCrops, animal: L.adCatAnimal, fish: L.adCatFish, resources: L.adCatResources }[cat];
+              const on = adsSel.includes(cat);
+              return (
+                <label key={cat} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 2px", cursor: "pointer" }}>
+                  <input type="checkbox" checked={on} onChange={() => setAdsSel(sel => on ? sel.filter(c => c !== cat) : [...sel, cat])} />
+                  <span>{label}</span>
+                </label>
+              );
+            })}
+            <p style={{ fontSize: 12, opacity: .7 }}>{L.adsFee(C.AD_FEE)}</p>
+            <button onClick={() => { sendReq({ kind: "adsSet", ads: adsSel }); setAdsOpen(false); }}>{L.adsSave}</button>
+            <h4>{L.adsBlacklistTitle}</h4>
+            {(!stationSt || !stationSt.blacklist || !stationSt.blacklist.length)
+              ? <p style={{ fontSize: 12, opacity: .7 }}>{L.adsBlacklistEmpty}</p>
+              : stationSt.blacklist.map(rid => <div key={rid} style={{ fontSize: 13, padding: "2px 0" }}>🚫 {(C.VISITOR_ROSTER[rid] || {}).name || "?"}</div>)}
+            <p style={{ fontSize: 11, opacity: .6 }}>{L.adsBlacklistHint}</p>
+          </div>
+        </div>
+      )}
+      {visitorOpen && stationSt && stationSt.visitor && (() => {
+        const v = stationSt.visitor, ro = C.VISITOR_ROSTER[v.rid] || C.VISITOR_ROSTER[0];
+        const o = v.offer || {};
+        const rel = (stationSt.rel && stationSt.rel[v.rid]) || 0;
+        return (
+          <div className="ferme-modal open" onClick={() => setVisitorOpen(false)}>
+            <div className="panel ferme-modal-panel" onClick={e => e.stopPropagation()} style={{ width: "min(400px, 94vw)" }}>
+              <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap) : null} sx={16} sy={24} w={32} h={48} />
+                <div>
+                  <h3 style={{ margin: 0 }}>{L.visitorPanelTitle(ro.name)}</h3>
+                  <div style={{ fontSize: 12, opacity: .75 }}>{L.visitorRelation(rel)}{v.disp === "hostile" ? " · " + L.visitorUrgent : ""}</div>
+                </div>
+              </div>
+              <div style={{ margin: "10px 0", fontSize: 14 }}>
+                {o.type === "buy" && <>
+                  <p>{L.visitorWantsBuy(ro.name, o.n, (lang === "en" ? (C.CROPS[o.crop] || {}).nameEn : (C.CROPS[o.crop] || {}).name), o.price)}</p>
+                  {o.bonus ? <p style={{ color: "#ffe060" }}>{L.visitorRichBonus(o.bonus)}</p> : null}
+                  <button onClick={() => { sendReq({ kind: "visitorDeal" }); setVisitorOpen(false); }}>{L.visitorAccept}</button>{" "}
+                  <button onClick={() => { sendReq({ kind: "visitorChat" }); setVisitorOpen(false); }}>{L.visitorChatBtn}</button>
+                </>}
+                {o.type === "chat" && <>
+                  <p>{L.visitorWantsChat(ro.name)}</p>
+                  <button onClick={() => { sendReq({ kind: "visitorChat" }); setVisitorOpen(false); }}>{L.visitorChatBtn}</button>
+                </>}
+                {o.type === "demand" && <>
+                  <p style={{ color: "#ff9a7a" }}>{L.visitorDemand(ro.name, o.gold)}</p>
+                  <button onClick={() => { sendReq({ kind: "visitorPay" }); setVisitorOpen(false); }}>{L.visitorPayBtn(o.gold)}</button>{" "}
+                  <button onClick={() => { sendReq({ kind: "visitorRefuse" }); setVisitorOpen(false); }}>{L.visitorRefuseBtn}</button>
+                </>}
+                {o.type === "stay" && <>
+                  <h4 style={{ margin: "4px 0" }}>{L.stayTitle(ro.name)}</h4>
+                  <p>{L.stayProposal(ro.name, ro.job)}</p>
+                  {myVote === null ? <>
+                    <button onClick={() => { setMyVote(true); sendReq({ kind: "visitorVote", v: true }); }}>{L.voteYes}</button>{" "}
+                    <button onClick={() => { setMyVote(false); sendReq({ kind: "visitorVote", v: false }); }}>{L.voteNo}</button>
+                  </> : <p style={{ opacity: .75 }}>{L.voteWaiting}</p>}
+                </>}
+                {o.type === "done" && <p style={{ opacity: .75 }}>{L.visitorLeftChat(ro.name)}</p>}
+              </div>
+              <button onClick={() => { sendReq({ kind: "visitorBlacklist", rid: v.rid }); setVisitorOpen(false); }} style={{ opacity: .8 }}>{L.visitorBlacklistBtn}</button>
+            </div>
+          </div>
+        );
+      })()}
+      {/* Corner notification: a visitor waits at the townhall and nobody is
+          nearby (Guillaume: small head icon, name, the ask, urgency flag). */}
+      {stationSt && stationSt.visitor && stationSt.visitor.phase === "wait" && !visitorOpen && !nearHall && (() => {
+        const v = stationSt.visitor, ro = C.VISITOR_ROSTER[v.rid] || C.VISITOR_ROSTER[0];
+        const o = v.offer || {};
+        const ask = o.type === "buy" ? L.notifWantsBuy(o.n, (lang === "en" ? (C.CROPS[o.crop] || {}).nameEn : (C.CROPS[o.crop] || {}).name))
+          : o.type === "demand" ? L.notifDemand(o.gold)
+          : o.type === "stay" ? L.notifStay : L.notifWantsChat;
+        return (
+          <div style={{ position: "fixed", right: 12, top: 64, zIndex: 60, background: "rgba(22,26,34,0.94)", border: "1px solid #6b4a2e", borderRadius: 10, padding: "8px 10px", display: "flex", gap: 10, alignItems: "center", maxWidth: 270, color: "#f0e8d8" }}>
+            <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap) : null} sx={16} sy={24} w={24} h={36} />
+            <div style={{ fontSize: 12, lineHeight: 1.35 }}>
+              <b>{L.notifAsk(ro.name)}</b><br />{ask}
+              {o.type === "demand" && <span style={{ color: "#ff8a6a", fontWeight: 700 }}> · {L.visitorUrgent}</span>}
+            </div>
+          </div>
+        );
+      })()}
+      {repairMini && <RepairMinigame name={repairMini.name} L={L} onDone={(win) => { setRepairMini(null); sendReq({ kind: "repairResult", win }); pushToast(win ? L.repairWin : L.repairFail); }} />}
       {fishMini && <FishMinigame mode={fishMini.mode} fish={fishMini.fish} L={L} lang={lang} onWin={fishWon} onFail={fishLost} />}
       {barnMini && <BarnMinigame level={barnMini.level} L={L} onWin={barnWon} onFail={barnLost} />}
       {wolfBite && <WolfBiteMinigame L={L} onWin={wolfBiteWon} onFail={wolfBiteLost} />}
@@ -6222,6 +6696,65 @@ function EvilBiteMinigame({ L, onWin, onFail }) {
           }} />
         </div>
         <div className="ferme-fish-hint">{L.evilBiteHint} ({Math.ceil(msLeft / 100) / 10}s)</div>
+      </div>
+    </div>
+  );
+}
+
+/* --------------------------------------------------------------------------
+   2026-07 station update: co-op repair minigame after a hostile raid.
+   Deliberately EASIER than the wolf-bite duel (Guillaume: "not too hard, not
+   like the wolves"): a cursor sweeps a bar, click or press Space while it is
+   inside the wide green zone. REPAIR_HITS hits win; 6 misses or 20 s fail.
+   Each online player plays their own copy; the host counts the wins (2 needed,
+   or a single one when playing solo) and restores 100% of the damage.
+   -------------------------------------------------------------------------- */
+function RepairMinigame({ name, L, onDone }) {
+  const [pos, setPos] = useState(0);
+  const [hits, setHits] = useState(0);
+  const [misses, setMisses] = useState(0);
+  const stateRef = useRef({ pos: 0, hits: 0, misses: 0, done: false, t0: performance.now() });
+  const onDoneRef = useRef(onDone);
+  useEffect(() => { onDoneRef.current = onDone; }, [onDone]);
+  useEffect(() => {
+    let raf = 0;
+    const loop = () => {
+      raf = requestAnimationFrame(loop);
+      const st = stateRef.current;
+      if (st.done) return;
+      const t = (performance.now() - st.t0) / 1000;
+      st.pos = (Math.sin(t * 2.4) + 1) / 2;
+      setPos(st.pos);
+      if (t > 20) { st.done = true; onDoneRef.current(false); }
+    };
+    raf = requestAnimationFrame(loop);
+    const hit = () => {
+      const st = stateRef.current;
+      if (st.done) return;
+      if (st.pos >= 0.36 && st.pos <= 0.64) {
+        st.hits++; setHits(st.hits);
+        if (st.hits >= C.REPAIR_HITS) { st.done = true; onDoneRef.current(true); }
+      } else {
+        st.misses++; setMisses(st.misses);
+        if (st.misses >= 6) { st.done = true; onDoneRef.current(false); }
+      }
+    };
+    const onKey = (e) => { if (e.code === "Space") { e.preventDefault(); hit(); } };
+    const onClick = () => hit();
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("mousedown", onClick);
+    return () => { cancelAnimationFrame(raf); window.removeEventListener("keydown", onKey); window.removeEventListener("mousedown", onClick); };
+  }, []);
+  return (
+    <div className="ferme-modal open">
+      <div className="panel ferme-modal-panel" style={{ width: "min(380px, 94vw)", textAlign: "center" }}>
+        <h3 style={{ marginTop: 0 }}>{L.repairTitle}</h3>
+        <p style={{ fontSize: 13 }}>{L.repairIntro(name)}</p>
+        <div style={{ position: "relative", height: 26, background: "#2a2f3a", borderRadius: 8, overflow: "hidden", margin: "10px 0" }}>
+          <div style={{ position: "absolute", left: "36%", width: "28%", top: 0, bottom: 0, background: "rgba(90,200,110,0.5)" }} />
+          <div style={{ position: "absolute", left: `calc(${(pos * 100).toFixed(1)}% - 3px)`, width: 6, top: 0, bottom: 0, background: "#ffe060", borderRadius: 3 }} />
+        </div>
+        <p style={{ fontSize: 13 }}>{L.repairHits(hits, C.REPAIR_HITS)} · ❌ {misses}/6</p>
       </div>
     </div>
   );

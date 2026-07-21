@@ -561,6 +561,112 @@ export function buildSprites() {
     return c;
   }
 
+  /* -------- 2026-07 station update: sea creatures, ducks, station -------- */
+  // Sea creature icons (inventory / sell bin), one per C.SEA_CREATURES entry.
+  function seaIcon(kind, col) {
+    const [c, g] = cv(T, T);
+    if (kind === 0) { // starfish: 5 chunky arms
+      P(g, 7, 2, 2, 5, col); P(g, 2, 6, 5, 2, col); P(g, 9, 6, 5, 2, col);
+      P(g, 4, 9, 2, 5, col); P(g, 10, 9, 2, 5, col); P(g, 6, 6, 4, 4, col);
+      P(g, 7, 7, 1, 1, "#ffffff55"); P(g, 9, 8, 1, 1, "#00000022");
+    } else if (kind === 1) { // seahorse: curled S profile
+      P(g, 7, 2, 4, 3, col); P(g, 10, 3, 2, 2, col); P(g, 6, 5, 3, 4, col); P(g, 7, 9, 3, 3, col);
+      P(g, 9, 12, 2, 2, col); P(g, 8, 13, 2, 1, col);
+      P(g, 5, 3, 2, 1, col); P(g, 5, 5, 1, 1, col); // crest + snout
+      P(g, 9, 3, 1, 1, "#1a1a1a");
+    } else { // eel: long wavy body
+      P(g, 2, 5, 5, 2, col); P(g, 6, 7, 5, 2, col); P(g, 10, 9, 4, 2, col);
+      P(g, 2, 4, 2, 1, col); P(g, 3, 5, 1, 1, "#1a1a1a");
+      P(g, 6, 7, 3, 1, "rgba(255,255,255,.25)");
+    }
+    return c;
+  }
+  // Floating duck, 2 bobbing frames (purely decorative on the river).
+  function duckSprite(frame) {
+    const [c, g] = cv(T, T);
+    const dy = frame ? 1 : 0;
+    P(g, 4, 7 + dy, 8, 5, "#e8dcc0");             // body
+    P(g, 4, 11 + dy, 8, 1, "#c8bc9e");            // waterline shadow
+    P(g, 10, 4 + dy, 4, 4, "#e8dcc0");            // head
+    P(g, 14, 5 + dy, 2, 2, "#e8952a");            // beak
+    P(g, 12, 5 + dy, 1, 1, "#1a1a1a");            // eye
+    P(g, 5, 8 + dy, 4, 2, "#c8a86a");             // wing
+    P(g, 3, 12 + dy, 10, 1, "rgba(168,212,240,0.8)"); // ripple
+    return c;
+  }
+  // Rail tile (vertical track), tiled along the west edge.
+  function railTile() {
+    const [c, g] = cv(T, T), r = makeRnd(413);
+    P(g, 0, 0, T, T, "#7a6a52");
+    for (let i = 0; i < 10; i++) P(g, (r() * T) | 0, (r() * T) | 0, 1, 1, r() < 0.5 ? "#6d5e47" : "#8a795e");
+    P(g, 1, 3, 14, 2, "#5a4630"); P(g, 1, 3, 14, 1, "#6b5238");   // sleepers
+    P(g, 1, 10, 14, 2, "#5a4630"); P(g, 1, 10, 14, 1, "#6b5238");
+    P(g, 3, 0, 2, T, "#8f9aa5"); P(g, 11, 0, 2, T, "#8f9aa5");    // rails
+    P(g, 3, 0, 1, T, "#b9c2cc"); P(g, 11, 0, 1, T, "#b9c2cc");
+    return c;
+  }
+  // Platform tile (stone-edged planks).
+  function platformTile() {
+    const [c, g] = cv(T, T);
+    P(g, 0, 0, T, T, "#b8a888");
+    P(g, 0, 4, T, 1, "#a89878"); P(g, 0, 9, T, 1, "#a89878"); P(g, 0, 14, T, 1, "#a89878");
+    P(g, 0, 0, T, 1, "#cfc0a0");
+    return c;
+  }
+  // The station building (validated mockup: brick walls, slate gable roof,
+  // hanging sign + clock, awning toward the platform). Same helper style as
+  // the other buildings.
+  function stationSprite() {
+    const W = C.STATION.w * T, H = C.STATION.h * T + 18;
+    const [c, g] = cv(W, H);
+    const BY = 18;
+    P(g, 0, BY, W, H - BY, "#c98a52");                     // brick
+    for (let y = BY; y < H; y += 4) P(g, 0, y, W, 1, "#b57944");
+    for (let x = 0; x < W; x += 6) P(g, x, BY, 1, H - BY, "#b57944");
+    P(g, 0, H - 5, W, 5, "#8d8d8d"); P(g, 0, H - 5, W, 1, "#a5a5a5"); // stone base
+    P(g, 0, 0, W, BY, "#5d6570"); P(g, 0, 0, W, 2, "#78818c");        // slate roof
+    for (let y = 3; y < BY; y += 3) P(g, 0, y, W, 1, "#525a64");
+    P(g, 0, BY - 1, W, 1, "#454c55");
+    const dx = (W / 2 - 6) | 0;
+    P(g, dx, BY + 12, 12, H - BY - 17, "#6b4a2e"); P(g, dx, BY + 12, 12, 1, "#7d5836"); // door
+    P(g, dx + 2, BY + 14, 8, 3, "#3a2d1e"); P(g, dx + 9, BY + 24, 1, 2, "#e8c860");
+    for (const wx of [6, W - 16]) {                                    // windows
+      P(g, wx, BY + 8, 10, 9, "#7ab4e8"); P(g, wx, BY + 8, 10, 1, "#5a94c8");
+      P(g, wx + 4, BY + 8, 1, 9, "#5a94c8");
+      P(g, wx - 1, BY + 7, 12, 1, "#6b4a2e"); P(g, wx - 1, BY + 17, 12, 1, "#6b4a2e");
+    }
+    P(g, (W / 2 - 14) | 0, 5, 28, 8, "#e8dcc0");                       // hanging sign
+    P(g, (W / 2 - 14) | 0, 5, 28, 1, "#c8bc9e");
+    P(g, (W / 2 - 11) | 0, 8, 22, 2, "#7d5836");
+    P(g, W - 12, 4, 8, 8, "#f2f2f2"); P(g, W - 9, 7, 1, 3, "#333333"); // clock
+    P(g, W - 8, 7, 2, 1, "#333333");
+    return c;
+  }
+  // The ad board on the platform (interactive: press E). Symmetric SHORT
+  // legs (Guillaume's mockup note: the right leg was too long).
+  function signBoardSprite() {
+    const [c, g] = cv(18, 22);
+    P(g, 2, 12, 2, 8, "#6b4a2e"); P(g, 14, 12, 2, 8, "#6b4a2e"); // equal legs
+    P(g, 0, 0, 18, 14, "#8a5c35"); P(g, 0, 0, 18, 1, "#9a6c45");
+    P(g, 2, 2, 6, 5, "#e8dcc0"); P(g, 10, 3, 5, 6, "#f0e8a0");   // pinned notices
+    P(g, 2, 9, 11, 3, "#e8dcc0");
+    return c;
+  }
+  // The little train (engine + one passenger car), drawn vertically; slides
+  // in from the north when a visitor arrives.
+  function trainSprite() {
+    const [c, g] = cv(20, 92);
+    P(g, 5, 0, 10, 8, "#4a4a4a");                     // boiler nose
+    P(g, 7, 2, 6, 4, "#333333");                      // chimney base
+    P(g, 3, 8, 14, 30, "#8a3030"); P(g, 3, 8, 14, 2, "#a54040"); // engine
+    P(g, 5, 12, 10, 7, "#7ab4e8");                    // cab window
+    P(g, 2, 36, 16, 3, "#3a3a3a");                    // chassis
+    P(g, 3, 42, 14, 44, "#4a6a9a"); P(g, 3, 42, 14, 2, "#5a7aaa"); // car
+    for (const wy of [47, 58, 69]) { P(g, 5, wy, 4, 6, "#cfe4f4"); P(g, 11, wy, 4, 6, "#cfe4f4"); }
+    P(g, 2, 87, 16, 3, "#3a3a3a");
+    return c;
+  }
+
   /* ---------------- Bâtiments et animaux ---------------- */
   // Cheval (refonte chantier 2026-07, demande Guillaume : "le cheval doit
   // décrire une action de galop quand il se déplace, + de détail sur la
@@ -1130,6 +1236,13 @@ house: house(),
     leverClosed: leverSprite(false),
     mill: millSprite(),
     cauldron: cauldronSprite(),
+    seaIcons: [],
+    duck: [duckSprite(0), duckSprite(1)],
+    rail: railTile(),
+    platform: platformTile(),
+    station: stationSprite(),
+    signBoard: signBoardSprite(),
+    train: trainSprite(),
     barn: [barnSprite(1), barnSprite(2), barnSprite(3)],
     animals: [],
     products: [],
@@ -1141,6 +1254,7 @@ house: house(),
   for (const k of ["hoe", "can", "axe", "pick", "seeds", "wood", "stone", "food", "gold", "energy", "rod", "ready", "thirst", "herd", "flour"]) S.icons[k] = icon(k);
   S.gemIcons = C.GEMS.map(gm => gemIcon(gm.color));
   S.fishIcons = C.FISH.map(fs => fishIcon(fs.color));
+  S.seaIcons = C.SEA_CREATURES.map((sc, i) => seaIcon(i, sc.color));
   S.animals = C.ANIMALS.map(a => animalSprite(a.id));
   S.products = C.ANIMALS.map(a => productIcon(a.id));
   S.getChar = (gender, outfit, overalls, cap) => {

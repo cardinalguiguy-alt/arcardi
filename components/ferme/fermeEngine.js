@@ -532,6 +532,7 @@ export function newFarmer(id, name, gender, outfit) {
       seeds: [5, 0, 0, 0], crops: [0, 0, 0, 0],
       gems: C.GEMS.map(() => 0),      // gemmes rares trouvées au minage
       fish: C.FISH.map(() => 0),      // poissons pêchés
+      seaCreatures: C.SEA_CREATURES.map(() => 0), // rare sea creatures (2026-07 station update), sell-only
       products: C.ANIMALS.map(() => 0), // productions d'élevage ramassées
     },
     quests: {}, // id de quête -> true quand accomplie
@@ -596,6 +597,8 @@ export function normalizeFarmer(f) {
   f.inv.crops = padArray(f.inv.crops, C.CROPS.length);
   f.inv.gems = padArray(f.inv.gems, C.GEMS.length);
   f.inv.fish = padArray(f.inv.fish, C.FISH.length);
+  f.inv.seaCreatures = padArray(f.inv.seaCreatures, C.SEA_CREATURES.length); // 2026-07 station update
+  if (typeof f.seaStreak !== "number") f.seaStreak = 0; // consecutive casts, host-side rarity gate
   f.inv.products = padArray(f.inv.products, C.ANIMALS.length);
   f.quests = f.quests || {};
   return f;
@@ -996,10 +999,26 @@ export function resolveAct(world, f, m) {
       // ajoute exactement ce poisson (repli sur un tirage si absent/invalide).
       if (g === C.G_WATER) {
         if (!useEnergy(f, "fish", null)) { res.toast = "tired"; return res; }
-        let ft = m.fish | 0;
-        if (!(ft >= 0 && ft < C.FISH.length)) ft = weightedPick(C.FISH);
-        f.inv.fish[ft] = (f.inv.fish[ft] || 0) + 1;
-        res.fx.push({ k: "fish", x, y, fish: ft });
+        // 2026-07 station update, rare sea creatures. The client minigame
+        // CLAIMS a rare catch (m.sea = species index) but the host is the
+        // judge: the claim is only honored if this cast was actually
+        // eligible (enough consecutive casts, f.seaStreak, OR the tile is
+        // in the extreme north/south stretch of the river). An ineligible
+        // claim silently downgrades to a normal fish, so a tampered client
+        // gains nothing.
+        const extreme = seaExtremeRow(y);
+        if (typeof m.sea === "number" && m.sea >= 0 && m.sea < C.SEA_CREATURES.length
+            && ((f.seaStreak | 0) >= C.SEA_MIN_STREAK || extreme)) {
+          f.inv.seaCreatures[m.sea] = (f.inv.seaCreatures[m.sea] || 0) + 1;
+          f.seaStreak = 0; // rarity streak resets on a rare catch
+          res.fx.push({ k: "sea", x, y, sea: m.sea });
+        } else {
+          let ft = m.fish | 0;
+          if (!(ft >= 0 && ft < C.FISH.length)) ft = weightedPick(C.FISH);
+          f.inv.fish[ft] = (f.inv.fish[ft] || 0) + 1;
+          f.seaStreak = (f.seaStreak | 0) + 1;
+          res.fx.push({ k: "fish", x, y, fish: ft });
+        }
         res.invChanged = true;
       } else {
         res.toast = "needWater";
@@ -1658,6 +1677,12 @@ export function resolveSell(f, m) {
     if (ft < 0 || ft >= C.FISH.length) return res;
     const n = Math.min(f.inv.fish[ft], Math.max(1, (m.n | 0) || f.inv.fish[ft]));
     f.inv.fish[ft] -= n; gain = n * C.FISH[ft].sell;
+  } else if (m.item === "sea") {
+    // 2026-07 station update: rare sea creatures, sell-only.
+    const st = m.sea | 0;
+    if (st < 0 || st >= C.SEA_CREATURES.length) return res;
+    const n = Math.min(f.inv.seaCreatures[st], Math.max(1, (m.n | 0) || f.inv.seaCreatures[st]));
+    f.inv.seaCreatures[st] -= n; gain = n * C.SEA_CREATURES[st].sell;
   } else if (m.item === "product") {
     const pt = m.product | 0;
     if (pt < 0 || pt >= C.ANIMALS.length) return res;
@@ -2019,4 +2044,277 @@ export function rabbitSpawnPos(world, rnd) {
   // Repli : même filet que wolfSpawnPos, rive droite au milieu de la carte.
   const y = Math.floor(world.h / 2);
   return { x: riverCenterAt(world, y) + C.WOLF_SPAWN_MARGIN + 4, y: y + 0.5 };
+}
+
+/* ==========================================================================
+   2026-07 TRAIN STATION UPDATE (see fermeConstants.js header). Pure host
+   helpers, same discipline as the wolf/evil-world modules: the host resolves
+   everything, clients only send requests and render broadcast state.
+   ========================================================================== */
+
+// Is this map row in the "extreme end" stretch of the river (top/bottom
+// C.SEA_EXTREME_FRAC of the map)? Used by both the host validation in
+// resolveAct("fish") and the client-side roll in startFishing.
+export function seaExtremeRow(y) {
+  const frac = C.SEA_EXTREME_FRAC;
+  return y < C.MAP_H * frac || y >= C.MAP_H * (1 - frac);
+}
+
+// Fresh station state. Persisted inside the save JSON (ferme_saves.state),
+// snapshot-carried like `house`. `visitor` and `damage` are transient and
+// reset to null at load (migrateStation): a half-finished visit or an
+// unrepaired raid never survives a session, exactly like wolves/monsters.
+export function newStationState() {
+  return {
+    ads: [],            // posted ad categories (subset of C.AD_CATEGORIES)
+    blacklist: [],      // roster ids banned from ever visiting again
+    rel: {},            // roster id -> friendship points (chats, deals)
+    residents: [],      // [{rid, job}] accepted through a unanimous vote (or dice)
+    nextVisitAt: 0,     // host clock; 0 = schedule on next host tick
+    visitor: null,      // live visitor object (host-simulated, broadcast)
+    damage: null,       // live hostile-damage record awaiting co-op repair
+  };
+}
+
+// Load/snapshot normalization (same role as normalizeFarmer for farmers).
+// `hostNow` (snapshots only) relocates host-clock timestamps onto the local
+// clock, same discipline as salveCraft.brewingUntil / house.upgradeUntil.
+export function migrateStation(st, hostNow) {
+  const out = newStationState();
+  if (!st) return out;
+  out.ads = Array.isArray(st.ads) ? st.ads.filter(a => C.AD_CATEGORIES.includes(a)) : [];
+  out.blacklist = Array.isArray(st.blacklist) ? st.blacklist.filter(r => typeof r === "number") : [];
+  out.rel = (st.rel && typeof st.rel === "object") ? st.rel : {};
+  out.residents = Array.isArray(st.residents) ? st.residents.filter(r => r && typeof r.rid === "number") : [];
+  if (typeof hostNow === "number") {
+    // Mid-session snapshot: keep the live visitor/damage, relocated.
+    const shift = Date.now() - hostNow;
+    if (st.visitor) {
+      out.visitor = { ...st.visitor };
+      for (const k of ["phaseUntil", "waitUntil", "deadline", "voteUntil"]) {
+        if (typeof out.visitor[k] === "number" && out.visitor[k] > 0) out.visitor[k] += shift;
+      }
+    }
+    if (st.damage) {
+      out.damage = { ...st.damage };
+      if (typeof out.damage.until === "number" && out.damage.until > 0) out.damage.until += shift;
+    }
+  }
+  return out;
+}
+
+// Farm popularity score: how established the place looks. Feeds the organic
+// "people are curious about your farm" visits (no ad needed). Deliberately
+// coarse; every term is capped so no single stat dominates.
+export function farmPopularity(s, w) {
+  let pop = 0;
+  pop += Math.min(10, (s.animals || []).length);                 // livestock
+  pop += Math.min(6, (s.horses || []).length * 2);               // horses
+  pop += (s.wellBuilt ? 2 : 0) + (s.coop ? 2 : 0);
+  pop += s.barn ? Math.min(6, (s.barn.level || 0) * 2) : 0;
+  pop += s.house ? Math.min(6, ((s.house.level || 1) - 1) * 3) : 0;
+  pop += Math.min(10, Math.floor((s.totalEarned || 0) / 2000));  // trade history
+  pop += Math.min(6, ((s.station && s.station.residents) || []).length * 2);
+  return pop; // 0..~48
+}
+
+// Schedule the next visit on the host clock: random base window, shortened
+// by posted ads and popularity (both capped). Never below 45s.
+export function scheduleNextVisit(station, popularity, rnd) {
+  const r = (rnd || Math.random)();
+  let ms = C.VISIT_MIN_MS + r * (C.VISIT_MAX_MS - C.VISIT_MIN_MS);
+  ms -= (station.ads || []).length * C.VISIT_AD_BONUS_MS;
+  ms -= Math.min(C.VISIT_POP_BONUS_MAX_MS, popularity * 4000);
+  station.nextVisitAt = Date.now() + Math.max(45 * 1000, ms);
+}
+
+// Pick who steps off the train. Excludes blacklisted ids, current residents,
+// and (softly) the previous visitor. Disposition: hostile roll first (edgy
+// roster entries count double, each resident halves it), then rich patrons,
+// then nice/neutral. High-friendship nice visitors ask to STAY instead.
+export function spawnVisitor(station, rnd) {
+  const r = rnd || Math.random;
+  const banned = new Set(station.blacklist || []);
+  for (const res of station.residents || []) banned.add(res.rid);
+  const pool = C.VISITOR_ROSTER.filter(v => !banned.has(v.rid) && v.rid !== station.lastRid);
+  if (!pool.length) return null;
+  const who = pool[Math.floor(r() * pool.length)];
+  station.lastRid = who.rid;
+  let hostile = C.VISITOR_HOSTILE_CHANCE * (who.edgy ? 2 : 1);
+  hostile = hostile / Math.pow(2, (station.residents || []).length);
+  let disp, offer;
+  const rel = (station.rel && station.rel[who.rid]) || 0;
+  if (r() < hostile) {
+    disp = "hostile";
+    offer = { type: "demand", gold: 40 + Math.floor(r() * (C.HOSTILE_STEAL_MAX - 40 + 1)) };
+  } else if (who.rich && r() < C.VISITOR_RICH_CHANCE) {
+    disp = "rich";
+    const crop = Math.floor(r() * C.CROPS.length);
+    const n = 10 + Math.floor(r() * 11);
+    offer = { type: "buy", crop, n, price: C.CROPS[crop].sell * 3, bonus: 300 + Math.floor(r() * 501) };
+  } else if (rel >= C.REL_RESIDENT_MIN) {
+    disp = "nice";
+    offer = { type: "stay", job: who.job };
+  } else if (r() < C.VISITOR_CHAT_CHANCE) {
+    disp = r() < 0.6 ? "nice" : "neutral";
+    offer = { type: "chat" };
+  } else {
+    disp = r() < 0.6 ? "nice" : "neutral";
+    const crop = Math.floor(r() * C.CROPS.length);
+    const n = 3 + Math.floor(r() * 8);
+    const mult = 1.3 + r() * 0.7; // they surprise us with the price
+    offer = { type: "buy", crop, n, price: Math.ceil(C.CROPS[crop].sell * mult) };
+  }
+  return {
+    rid: who.rid, disp, offer,
+    x: C.STATION_PLATFORM.x + 1, y: C.STATION.y + C.STATION.h + 1.5,
+    dir: 2, moving: false, animT: 0,
+    phase: "train", phaseUntil: Date.now() + C.VISITOR_TRAIN_MS,
+    waitUntil: 0, deadline: 0, votes: null, voteUntil: 0,
+  };
+}
+
+// A nice/neutral/rich visitor buys crops FROM the accepting player's own
+// inventory; the gold (plus any rich-patron bonus) lands in the common
+// chest, consistent with how sales already work. Mutates f and s.
+export function resolveVisitorDeal(f, s, m) {
+  const res = { ok: false, toast: null, gain: 0 };
+  const v = s.station && s.station.visitor;
+  if (!v || v.phase !== "wait" || !v.offer || v.offer.type !== "buy") { res.toast = "actionFailed"; return res; }
+  const o = v.offer;
+  if ((f.inv.crops[o.crop] || 0) < o.n) { res.toast = "visitorNotEnough"; return res; }
+  f.inv.crops[o.crop] -= o.n;
+  res.gain = o.n * o.price + (o.bonus || 0);
+  s.money += res.gain; s.totalEarned = (s.totalEarned || 0) + res.gain;
+  s.station.rel[v.rid] = ((s.station.rel[v.rid] || 0) + C.REL_DEAL);
+  v.phase = "leave"; v.offer = { type: "done" };
+  res.ok = true;
+  return res;
+}
+
+// A friendly chat: +1 friendship, visitor heads home happy.
+export function resolveVisitorChat(s) {
+  const v = s.station && s.station.visitor;
+  if (!v || v.phase !== "wait") return { ok: false };
+  s.station.rel[v.rid] = ((s.station.rel[v.rid] || 0) + C.REL_CHAT);
+  if (v.offer && (v.offer.type === "chat" || v.offer.type === "buy")) { v.phase = "leave"; v.offer = { type: "done" }; }
+  return { ok: true };
+}
+
+// Paying a hostile visitor's demand from the common chest.
+export function resolveHostilePay(s) {
+  const res = { ok: false, toast: null, paid: 0 };
+  const v = s.station && s.station.visitor;
+  if (!v || v.phase !== "wait" || !v.offer || v.offer.type !== "demand") { res.toast = "actionFailed"; return res; }
+  if (s.money < v.offer.gold) { res.toast = "noGold"; return res; }
+  s.money -= v.offer.gold; res.paid = v.offer.gold;
+  v.phase = "leave"; v.offer = { type: "done" };
+  res.ok = true;
+  return res;
+}
+
+// The hostile visitor follows through (refusal or timeout): steals up to
+// HOSTILE_STEAL_MAX gold from the chest AND ruins up to HOSTILE_RUIN_CROPS
+// growing crops. Everything taken is RECORDED in the damage object so a
+// successful co-op repair can restore it 100%. Returns tile patches for the
+// host to broadcast.
+export function applyHostileDamage(w, s, rnd) {
+  const r = rnd || Math.random;
+  const stolen = Math.min(C.HOSTILE_STEAL_MAX, s.money);
+  s.money -= stolen;
+  const cropTiles = [...w.crops.keys()];
+  const ruined = [];
+  while (ruined.length < C.HOSTILE_RUIN_CROPS && cropTiles.length) {
+    const k = Math.floor(r() * cropTiles.length);
+    const i = cropTiles.splice(k, 1)[0];
+    const c = w.crops.get(i);
+    ruined.push({ i, c: { t: c.t, bankedMs: c.bankedMs || 0, wateredAt: c.wateredAt || null } });
+    w.crops.delete(i);
+  }
+  const v = s.station.visitor;
+  s.station.damage = {
+    rid: v ? v.rid : -1, stolen, ruined,
+    wins: 0, winners: [], until: Date.now() + C.REPAIR_WINDOW_MS,
+  };
+  return { patches: ruined.map(rn => ({ i: rn.i, c: null })) };
+}
+
+// One player finished the repair minigame. Enough wins (2, or 1 if playing
+// solo) inside the window reverses the raid completely: gold back in the
+// chest, every ruined crop replanted exactly as it was. Returns crop patches
+// on success, null otherwise.
+export function resolveRepairResult(w, s, playerId, win, onlineCount) {
+  const d = s.station && s.station.damage;
+  if (!d || Date.now() > d.until) return { done: false, patches: null };
+  if (!win) return { done: false, patches: null };
+  if (d.winners.includes(playerId)) return { done: false, patches: null };
+  d.winners.push(playerId); d.wins++;
+  const needed = Math.min(2, Math.max(1, onlineCount));
+  if (d.wins < needed) return { done: false, patches: null, progress: d.wins, needed };
+  s.money += d.stolen;
+  const patches = [];
+  for (const rn of d.ruined) { w.crops.set(rn.i, { t: rn.c.t, bankedMs: rn.c.bankedMs, wateredAt: rn.c.wateredAt }); patches.push({ i: rn.i, c: rn.c }); }
+  const restored = { stolen: d.stolen, crops: d.ruined.length };
+  s.station.damage = null;
+  return { done: true, patches, restored };
+}
+
+// Posting ads: only NEWLY added categories are billed (C.AD_FEE each, common
+// chest). Removing a sign is free.
+export function resolveAdsSet(s, ads) {
+  const res = { ok: false, toast: null, cost: 0 };
+  const clean = Array.isArray(ads) ? [...new Set(ads.filter(a => C.AD_CATEGORIES.includes(a)))] : [];
+  const old = new Set(s.station.ads || []);
+  const added = clean.filter(a => !old.has(a));
+  res.cost = added.length * C.AD_FEE;
+  if (s.money < res.cost) { res.toast = "noGold"; return res; }
+  s.money -= res.cost;
+  s.station.ads = clean;
+  res.ok = true;
+  return res;
+}
+
+// Blacklisting: permanent ban. If the banned character is the CURRENT
+// visitor, they are marched straight back to the train.
+export function resolveBlacklist(s, rid) {
+  if (typeof rid !== "number" || rid < 0 || rid >= C.VISITOR_ROSTER.length) return { ok: false };
+  if (!s.station.blacklist.includes(rid)) s.station.blacklist.push(rid);
+  const v = s.station.visitor;
+  if (v && v.rid === rid && v.phase !== "leave") { v.phase = "leave"; v.offer = { type: "done" }; }
+  return { ok: true };
+}
+
+// Residency vote outcome (Guillaume's rules): unanimous YES = they stay;
+// unanimous NO = they leave; a SPLIT vote = visible dice roll, 4-6 stays.
+// Returns {decided, stay, dice, roll}.
+export function finalizeVote(votes, rnd) {
+  const vals = Object.values(votes || {});
+  if (!vals.length) return { decided: true, stay: false, dice: false, roll: 0 };
+  const yes = vals.filter(Boolean).length, no = vals.length - yes;
+  if (no === 0) return { decided: true, stay: true, dice: false, roll: 0 };
+  if (yes === 0) return { decided: true, stay: false, dice: false, roll: 0 };
+  const roll = 1 + Math.floor((rnd || Math.random)() * 6);
+  return { decided: true, stay: roll >= 4, dice: true, roll };
+}
+
+// Current season from the in-game day (purely visual for now).
+export function seasonOf(day) {
+  return C.SEASONS[Math.floor(((day || 1) - 1) / C.SEASON_DAYS) % C.SEASONS.length];
+}
+
+// Host normalization at load: the pre-built station must stand on clear
+// ground even on OLD saves (same spirit as the cauldron fix of zip 230).
+// Clears seeded trees/rocks inside STATION_CLEAR; returns changed indices so
+// the caller can record them as overrides (persisted + snapshot-carried).
+export function clearStationArea(w) {
+  const changed = [];
+  const R = C.STATION_CLEAR;
+  for (let y = R.y; y < R.y + R.h; y++) for (let x = R.x; x < R.x + R.w; x++) {
+    if (x < 0 || y < 0 || x >= C.MAP_W || y >= C.MAP_H) continue;
+    const i = y * C.MAP_W + x;
+    if (w.objects[i] !== C.O_NONE && w.objects[i] !== C.O_HOUSE) {
+      w.objects[i] = C.O_NONE; w.objHp.delete(i); changed.push(i);
+    }
+  }
+  return changed;
 }
