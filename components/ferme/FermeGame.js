@@ -3220,6 +3220,27 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           const glow = 0.5 + Math.sin(now / 1100 + (x + y) * 0.35) * 0.22;
           ctx.fillStyle = `rgba(160, 70, 220, ${glow})`;
           ctx.fillRect(x * T, y * T, T, T);
+          // Bulles (chantier 2026-07, demande Guillaume : "rendre le lac plus
+          // actif") : une case sur ~sept émet une bulle en boucle, hash
+          // déterministe sur l'indice de case (pas de random() par frame,
+          // sinon la case "choisie" changerait sans arrêt) pour une
+          // répartition stable mais qui a l'air naturelle/éparse — chaque
+          // bulle remonte du bas vers le haut de sa case sur une période
+          // propre (déphasée par le hash), grossit très légèrement en
+          // montant, et s'estompe juste avant de disparaître en haut plutôt
+          // que de couper net.
+          const bh = ((i * 2654435761) >>> 0) % 1000 / 1000;
+          if (bh < 0.14) {
+            const period = 2600 + bh * 4200;
+            const phase = ((now + bh * 97000) % period) / period;
+            if (phase < 0.9) {
+              const bx = x * T + 4 + bh * (T - 8);
+              const by = (y + 1) * T - phase * (T * 1.15);
+              const bAlpha = Math.sin(phase / 0.9 * Math.PI) * 0.75;
+              ctx.fillStyle = `rgba(215, 180, 255, ${bAlpha})`;
+              ctx.beginPath(); ctx.arc(bx, by, 1.2 + bh * 1.6, 0, 7); ctx.fill();
+            }
+          }
         }
         const o = ew.objects[i];
         if (o === C.O_TREE || o === C.O_TREE2) { const img = o === C.O_TREE ? sprites.oak : sprites.pine; draws.push({ y: (y + 1) * T, fn: () => ctx.drawImage(img, x * T - 8, (y + 1) * T - 48) }); }
