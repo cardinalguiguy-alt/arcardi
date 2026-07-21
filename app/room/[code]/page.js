@@ -1334,9 +1334,23 @@ export default function Room() {
           repasser l'instantané `fermeAway`. `onFinish` est un no-op : cette
           instance ne doit jamais déclencher elle-même de transition de vue
           (seuls les boutons visibles, rejoinFerme/gatherFerme, le font). */}
+      {/* Correctif URGENT 2026-07 : `display:none` sur ce `<div>` wrapper
+          n'a AUCUN effet sur le contenu de FermeGame — elle rend son propre
+          plein écran via un React Portal directement dans `document.body`
+          (indispensable pour son `position:fixed`), donc totalement hors de
+          ce `<div>` masqué dans le DOM final. Sans le prop `hidden`
+          ci-dessous, cette instance cachée s'auto-rejoignait dès que son
+          monde était prêt et s'affichait plein écran PAR-DESSUS le salon dès
+          que l'hôte cliquait "Quitter" — symptôme remonté : le bouton
+          "semblait" ramener instantanément dans la ferme, fermier respawné
+          devant la maison. `hidden` coupe le rendu (voir `wrap` dans
+          FermeGame.js) sans arrêter la simulation (effets/intervalles
+          inchangés). Le `<div style={{display:"none"}}>` est conservé en
+          filet de sécurité supplémentaire, mais n'est plus ce qui protège
+          réellement contre l'affichage. */}
       {isHost && fermeAway && room && (
         <div style={{ display: "none" }} aria-hidden="true">
-          <FermeGame room={room} me={me} isHost={true} players={players} t={t} lang={lang} onFinish={() => {}} savedCode={fermeCodeRef.current} onCodeLoaded={(c) => { fermeCodeRef.current = c; }} />
+          <FermeGame room={room} me={me} isHost={true} players={players} t={t} lang={lang} onFinish={() => {}} savedCode={fermeCodeRef.current} onCodeLoaded={(c) => { fermeCodeRef.current = c; }} hidden />
         </div>
       )}
 

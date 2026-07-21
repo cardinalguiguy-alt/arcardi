@@ -77,7 +77,7 @@ function migrateGems(saved) {
   return gems;
 }
 
-export default function FermeGame({ room, me, isHost, players, t, lang, onFinish, savedCode, onCodeLoaded }) {
+export default function FermeGame({ room, me, isHost, players, t, lang, onFinish, savedCode, onCodeLoaded, hidden }) {
   const L = fstr(lang);
 
   // -------- État React (piloté par évènements, basse fréquence) --------
@@ -360,7 +360,27 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // overflow:hidden) crée un bloc englobant qui "capturerait" et rognerait un
   // position:fixed. Le portal vers body fait résoudre le fixed par rapport au
   // viewport, comme dans la maquette plein écran.
-  const wrap = (node) => (mounted && typeof document !== "undefined" ? createPortal(node, document.body) : null);
+  // Correctif URGENT 2026-07 (bug remonté par Guillaume : bouton "Quitter"
+  // qui ne ramène pas au lobby, mais renvoie instantanément dans la partie,
+  // fermier respawné devant la maison) : cette fonction rend TOUJOURS via un
+  // PORTAL React directement dans `document.body` (indispensable pour le
+  // plein écran `position:fixed`, voir commentaire plus haut) — un portal
+  // rend son contenu dans un noeud DOM totalement différent de celui où il
+  // est déclaré dans l'arbre React. Un `display:none` posé sur le `<div>`
+  // wrapper de l'instance CACHÉE (page.js, avant `</RoomChat>`) n'a donc
+  // AUCUN effet sur ce contenu : il reste visible, plein écran, par-dessus
+  // tout le reste. Or cette instance cachée s'auto-rejoint dès que son monde
+  // est prêt (effet d'auto-spawn plus bas, personnage déjà mémorisé) et
+  // spawn systématiquement au point de spawn (`C.SPAWN`, près de la maison,
+  // voir `doJoinWith`) — d'où le symptôme exact remonté : clic "Quitter" ->
+  // l'hôte est VISUELLEMENT renvoyé dans la ferme, planté devant sa maison,
+  // sans jamais voir le salon. Le correctif : un prop `hidden` dédié (passé
+  // uniquement par l'instance cachée de page.js) qui coupe le RENDU (portal
+  // renvoyé à `null`) sans toucher aux effets/refs/intervalles React, qui
+  // continuent de tourner normalement sur un composant simplement non rendu
+  // — la simulation en arrière-plan (le vrai but de cette instance) n'est
+  // donc pas affectée, seul son affichage fantôme disparaît.
+  const wrap = (node) => (!hidden && mounted && typeof document !== "undefined" ? createPortal(node, document.body) : null);
 
   // -------- Hôte : charge (ou crée) une ferme durable depuis son CODE --------
   // Charge la sauvegarde de la table ferme_saves indexée par le code saisi.
