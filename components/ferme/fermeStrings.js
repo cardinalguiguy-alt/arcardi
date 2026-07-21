@@ -260,6 +260,7 @@ export const FERME_STR = {
     homeBlockedToast: "🌑 Impossible de rentrer d'ici... il faut retrouver le passage.",
     darkPassageToast: "🌑 Une obscurité glaciale t'avale...",
     darkPassageReturnToast: "☀️ Tu retrouves la lumière du jour.",
+    evilMonsterCaughtToast: "👹 Une créature t'a happé... tu te réveilles chez toi, blessé.",
     // Aide
     help1: "ZQSD/WASD/Flèches : bouger (8 directions) · Espace/Clic : utiliser l'outil",
     help2: "1-8 : outils (7 = canne, 8 = clôture) · E : boutique/vente · T : chat · M : carte · 🏠 : maison",
@@ -564,6 +565,7 @@ export const FERME_STR = {
     homeBlockedToast: "🌑 Can't teleport home from here... find the passage back.",
     darkPassageToast: "🌑 A cold darkness swallows you...",
     darkPassageReturnToast: "☀️ You find daylight again.",
+    evilMonsterCaughtToast: "👹 A creature caught you... you wake up at home, injured.",
     help1: "WASD/Arrows: move (8 directions) · Space/Click: use tool",
     help2: "1-8: tools (7 = rod, 8 = fence) · E: shop/sell · T: chat · M: map · 🏠: house",
     toastTired: "Too tired! Eat a snack or wait for tomorrow.",

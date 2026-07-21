@@ -766,6 +766,39 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         });
         channelRef.current?.send({ type: "broadcast", event: "chat", payload: { from: "💊", msg: L.healChat(f.name, target.name) } });
       }
+    } else if (req.kind === "evilChop") {
+      // Coupe d'arbre en carte maléfique (chantier 2026-07, demande
+      // Guillaume) : contrairement à req.kind==="act", ne touche JAMAIS
+      // worldRef (la carte maléfique n'existe pas côté hôte, voir
+      // doActionEvil/FermeGame.js) — seul le bois gagné, déjà calculé et
+      // plafonné côté client via E.toolYield, est crédité ici.
+      const wood = Math.max(0, Math.min(50, req.wood | 0));
+      if (wood > 0) {
+        f.inv.wood += wood;
+        out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
+        dirtyRef.current = true;
+      }
+    } else if (req.kind === "evilCaught") {
+      // Créature maléfique (chantier 2026-07, demande Guillaume) : même
+      // esprit que "evilChop" — la carte maléfique n'existe pas côté hôte,
+      // tout est déjà résolu côté client (caughtByMonster/updateEvilMonsters,
+      // FermeGame.js). On se contente de persister/diffuser la blessure,
+      // comme pour une morsure de loup ratée (resolveWolfBiteOutcome), avec
+      // la durée dédiée C.EVIL_INJURED_MS (30 min) au lieu de C.INJURED_MS.
+      // Reprend TEL QUEL l'horodatage envoyé (déjà appliqué en optimiste
+      // côté client) plutôt que de le recalculer : sinon la moindre
+      // différence ferait retéléporter le fermier une seconde fois via
+      // applyDeltas pendant qu'il est encore visuellement en zone maléfique
+      // (voir commentaire de caughtByMonster). Bornée uniquement pour
+      // écarter une valeur aberrante d'un client non fiable.
+      const now = Date.now();
+      const until = (typeof req.until === "number" && req.until > now && req.until <= now + C.EVIL_INJURED_MS + 5000) ? req.until : now + C.EVIL_INJURED_MS;
+      f.injuredUntil = until;
+      dirtyRef.current = true;
+      channelRef.current?.send({
+        type: "broadcast", event: "apply",
+        payload: { injured: { id: f.id, until: f.injuredUntil } },
+      });
     } else if (req.kind === "act") {
       const r = E.resolveAct(w, f, req);
       for (const i of r.tiles) { recordTileOverride(i); out.tiles.push({ i, g: w.ground[i], o: w.objects[i], hp: w.objHp.get(i) }); }
@@ -1485,6 +1518,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function isInjured() { return Date.now() < injuredUntilRef.current; }
   function doAction() {
     const m = meRef.current; if (!m || actAnimRef.current > 0 || fishMiniRef.current || m.sleeping || isInjured()) return;
+    if (m.zone === "evil") return doActionEvil();
     const w = worldRef.current; if (!w) return;
     // Priorité : ramasser la production d'un animal proche.
     const ai = nearestCollectable();
@@ -1558,6 +1592,45 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         sendReq({ kind: "placeAnimal", animal: heldAnimalRef.current, x: tt.x, y: tt.y });
         heldAnimalRef.current = -1; setCarryingAnimal(false);
       }
+    }
+  }
+  // Action en carte maléfique (chantier 2026-07, demande Guillaume : "il
+  // faut juste qu'on puisse chop tous les arbres et récupérer le bois comme
+  // des arbres normaux") : la carte maléfique n'est PAS synchronisée avec
+  // l'hôte (evilWorldRef purement local, voir generateEvilWorld) — resolveAct
+  // (fermeEngine.js) ne peut donc pas s'appliquer ici, il opère sur worldRef
+  // (la ferme). La coupe est résolue localement sur evilWorldRef (même
+  // formule d'usure/rendement que resolveAct cas "chop", via E.toolYield et
+  // C.TREE_HP/C.TREE_WOOD, pour un ressenti identique à la ferme), puis SEUL
+  // le gain de bois est envoyé à l'hôte (req "evilChop") pour créditer
+  // l'inventaire du fermier — aucune coordonnée envoyée, aucune tuile de la
+  // ferme n'est donc jamais touchée par erreur. Contrairement à resolveAct,
+  // gère aussi O_TREE_DEAD (jamais rencontré côté ferme) comme un arbre
+  // normal : mêmes PV/rendement, devient une souche (O_STUMP) une fois à 0.
+  // Seule la hache agit ici (pas de récolte/arrosage/pioche/construction en
+  // zone maléfique, hors périmètre de la demande).
+  function doActionEvil() {
+    const m = meRef.current; if (!m || actAnimRef.current > 0) return;
+    const ew = evilWorldRef.current; if (!ew) return;
+    if (slotRef.current !== 0 || toolKindRef.current !== "axe") return;
+    const tt = targetTileEvil();
+    if (!inMapEvil(tt.x, tt.y)) return;
+    const i = tt.y * ew.w + tt.x;
+    const o = ew.objects[i];
+    if (o !== C.O_TREE && o !== C.O_TREE2 && o !== C.O_TREE_DEAD && o !== C.O_STUMP) return;
+    actAnimRef.current = 0.28;
+    const axeLvl = (toolsRef.current && toolsRef.current.axe) || 1;
+    const hp = (ew.objHp.get(i) || 1) - axeLvl;
+    const base = { x: m.x, y: m.y, t: 0 };
+    for (let k = 0; k < 5; k++) fxRef.current.push({ ...base, kind: "p", col: k % 2 ? "#3e8a34" : "#a87745", vx: (Math.random() - .5) * 3, vy: -Math.random() * 3, life: .6 });
+    if (hp <= 0) {
+      const wood = E.toolYield(o === C.O_STUMP ? 2 : C.TREE_WOOD, axeLvl);
+      if (o === C.O_STUMP) { ew.objects[i] = C.O_NONE; ew.objHp.delete(i); }
+      else { ew.objects[i] = C.O_STUMP; ew.objHp.set(i, 2); }
+      fxRef.current.push({ ...base, kind: "txt", txt: L.fxWood(wood), col: "#ffdf80", life: 1.4 });
+      sendReq({ kind: "evilChop", wood });
+    } else {
+      ew.objHp.set(i, hp);
     }
   }
   // Animal (non porté) le plus proche de la case visée `tt`, pour l'outil
@@ -2394,9 +2467,36 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // RÉELLE de zone/monde/position pile au point le plus noir (invisible pour
   // le joueur) -> retour progressif à la normale. `swapped` évite de
   // rejouer la bascule plusieurs fois pendant la même transition.
-  function crossPassage(toEvil) {
+  // `viaMonster` (chantier 2026-07, demande Guillaume : créatures maléfiques
+  // qui "renvoient chez lui" au contact) : même fondu que le retour normal,
+  // mais atterrissage forcé chez le joueur (C.SPAWN) plutôt que sur la case
+  // du passage — cohérent avec "sent back to your house" plutôt qu'un simple
+  // retour par le passage — et toast dédié. Voir caughtByMonster.
+  // Contact avec une créature maléfique (chantier 2026-07, demande
+  // Guillaume : "s'il vous touche ou si vous le touchez, vous êtes renvoyé
+  // chez vous avec une blessure de 30 minutes") — appelée par
+  // updateEvilMonsters (boucle de rendu) dans les deux sens de contact,
+  // aucune distinction "attaque"/"subi" : un simple contact suffit. La durée
+  // (`until`) est calculée ICI, côté client (seule autorité sur la carte
+  // maléfique, jamais synchronisée à l'hôte, voir generateEvilWorld) et
+  // appliquée immédiatement en local pour un ressenti instantané ; le MÊME
+  // horodatage est envoyé à l'hôte (req "evilCaught") pour persistance/
+  // diffusion aux autres joueurs (repérer/soigner un fermier blessé, comme
+  // pour une morsure de loup) — l'envoi de la valeur déjà calculée, plutôt
+  // que de laisser l'hôte la recalculer, évite un flottement entre les deux
+  // (voir applyDeltas : si la valeur revenue de l'hôte diffère de celle déjà
+  // posée ici, le fermier serait retéléporté une seconde fois, alors encore
+  // en zone maléfique — voir garde `wasInjured`/injuredUntilRef ci-dessous).
+  function caughtByMonster() {
+    if (zoneTransRef.current.active || isInjured()) return; // déjà en transition ou déjà blessé : ignore
+    const until = Date.now() + C.EVIL_INJURED_MS;
+    injuredUntilRef.current = until; setInjuredUntil(until);
+    sendReq({ kind: "evilCaught", until });
+    crossPassage(false, true);
+  }
+  function crossPassage(toEvil, viaMonster) {
     if (zoneTransRef.current.active) return; // déjà en transition : ignore un nouveau déclenchement
-    zoneTransRef.current = { active: true, t0: performance.now(), toEvil, swapped: false };
+    zoneTransRef.current = { active: true, t0: performance.now(), toEvil, swapped: false, viaMonster: !!viaMonster };
   }
   function updateZoneTransition() {
     const zt = zoneTransRef.current;
@@ -2412,6 +2512,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         m.x = C.EVIL_SPAWN.x; m.y = C.EVIL_SPAWN.y; m.moving = false;
         sendPos(); // fige la position publique sur la case du passage (voir pubMe)
         pushToast(L.darkPassageToast);
+      } else if (zt.viaMonster) {
+        m.zone = "farm";
+        m.x = C.SPAWN.x; m.y = C.SPAWN.y; m.moving = false;
+        sendPos();
+        pushToast(L.evilMonsterCaughtToast);
       } else {
         const w = worldRef.current;
         m.zone = "farm";
@@ -3245,9 +3350,35 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const o = ew.objects[i];
         if (o === C.O_TREE || o === C.O_TREE2) { const img = o === C.O_TREE ? sprites.oak : sprites.pine; draws.push({ y: (y + 1) * T, fn: () => ctx.drawImage(img, x * T - 8, (y + 1) * T - 48) }); }
         else if (o === C.O_TREE_DEAD) draws.push({ y: (y + 1) * T, fn: () => ctx.drawImage(sprites.deadTree, x * T - 8, (y + 1) * T - 48) });
+        else if (o === C.O_STUMP) draws.push({ y: (y + 1) * T, fn: () => ctx.drawImage(sprites.stump, x * T, y * T) });
         else if (o === C.O_ROCK) draws.push({ y: (y + 1) * T, fn: () => ctx.drawImage(sprites.rock, x * T, y * T) });
       }
       draws.push({ y: (m.y + 1) * T, fn: () => drawSelf(m) });
+      // Créatures maléfiques (chantier 2026-07, demande Guillaume) : réutilise
+      // le sprite loup (mêmes 4 frames de marche, même mécanique d'animT que
+      // les loups de la ferme) plutôt qu'un nouvel asset — reteinté en violet
+      // sombre via ctx.filter pour rester cohérent avec l'ambiance de la
+      // carte maléfique (lac/passage, déjà dans cette teinte) et bien
+      // distinct visuellement d'un loup normal. Lueur douce ajoutée quand la
+      // créature a repéré le joueur (`chasing`), pour signaler clairement le
+      // danger avant même le contact.
+      for (const mo of (ew.monsters || [])) {
+        draws.push({ y: (mo.y + 1) * T, fn: () => {
+          const frame = Math.floor((mo.animT || 0) % 4);
+          const img = sprites.wolf[frame];
+          const px = Math.round(mo.x * T - 14), py = Math.round(mo.y * T - 9);
+          if (mo.chasing) {
+            const glow = 0.35 + Math.sin(now / 220) * 0.15;
+            ctx.save(); ctx.shadowColor = `rgba(170, 60, 220, ${glow})`; ctx.shadowBlur = 14;
+          }
+          ctx.save();
+          ctx.filter = "brightness(0.55) saturate(2.2) hue-rotate(235deg)";
+          if (mo.dir === 2) { ctx.translate(px + 30, py); ctx.scale(-1, 1); ctx.drawImage(img, 0, 0); }
+          else ctx.drawImage(img, px, py);
+          ctx.restore();
+          if (mo.chasing) ctx.restore();
+        } });
+      }
       draws.sort((a, b) => a.y - b.y);
       for (const d of draws) d.fn();
       // Voile sombre permanent (assombrissement de l'ambiance, indépendant
@@ -3263,15 +3394,50 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // Lac violet (chantier 2026-07, demande Guillaume) : bloque comme la
       // rivière côté ferme normale (E.isWaterTile) — pas de baignade ici.
       if (ew.ground[i] === C.G_WATER) return true;
-      return o === C.O_TREE || o === C.O_TREE2 || o === C.O_TREE_DEAD || o === C.O_ROCK;
+      return o === C.O_TREE || o === C.O_TREE2 || o === C.O_TREE_DEAD || o === C.O_STUMP || o === C.O_ROCK;
     }
     function canStandEvil(ew, x, y) {
       const r = 0.3;
       return !blockedEvil(ew, x - r, y) && !blockedEvil(ew, x + r, y) && !blockedEvil(ew, x - r, y + 0.35) && !blockedEvil(ew, x + r, y + 0.35);
     }
+    // Créatures maléfiques (chantier 2026-07, demande Guillaume : "des
+    // monstres qui pourchassent le joueur, lents, mais qui l'assomment et le
+    // renvoient chez lui blessé au contact") : simulation purement locale
+    // (comme le reste de la carte maléfique, voir generateEvilWorld) —
+    // endormies tant que le joueur reste hors de portée de détection
+    // (`EVIL_MONSTER_DETECT_RADIUS`), puis avancent lentement droit sur lui
+    // (`EVIL_MONSTER_SPEED`, bien inférieure à `PLAYER_SPEED` : on peut leur
+    // échapper en marchant) une fois repérées — pas de désaggro ensuite
+    // (elles gardent la cible jusqu'au contact ou jusqu'à ce que le joueur
+    // quitte la carte). Le contact déclenche `caughtByMonster()` quel que
+    // soit le sens (le joueur fonce dedans OU la créature le rattrape) —
+    // volontairement aucune distinction "attaque"/"subi", conformément à la
+    // demande ("if you hit them or if they hit you"). Volontairement pas de
+    // collision avec les arbres/rochers ici (contrairement au joueur, voir
+    // canStandEvil) : des créatures qui se bloquent en forêt seraient
+    // triviales à semer, ce qui viderait la menace de tout son sens sur une
+    // carte aussi densément boisée.
+    function updateEvilMonsters(dt) {
+      const ew = evilWorldRef.current, m = meRef.current;
+      if (!ew || !ew.monsters || !ew.monsters.length) return;
+      for (const mo of ew.monsters) {
+        mo.animT = (mo.animT || 0) + dt * 6;
+        const ddx = m.x - mo.x, ddy = m.y - mo.y, dist = Math.hypot(ddx, ddy);
+        if (dist <= C.EVIL_MONSTER_CATCH_RADIUS) { caughtByMonster(); return; }
+        if (dist <= C.EVIL_MONSTER_DETECT_RADIUS) {
+          const speed = C.EVIL_MONSTER_SPEED * dt;
+          mo.x += (ddx / dist) * speed; mo.y += (ddy / dist) * speed;
+          mo.dir = ddx < 0 ? 2 : 3;
+          mo.chasing = true;
+        } else {
+          mo.chasing = false;
+        }
+      }
+    }
     function updateMeEvil(dt) {
       const m = meRef.current, ew = evilWorldRef.current, keys = keysRef.current;
       if (!ew) return;
+      updateEvilMonsters(dt);
       const uiBlocked = mapOpenRef.current || document.activeElement === chatInputRef.current;
       let dx = 0, dy = 0;
       if (!uiBlocked) {
@@ -3505,6 +3671,24 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
 
   // -------- Utilitaires partagés (hors boucle) --------
   function inMap(x, y) { const w = worldRef.current; return w && x >= 0 && y >= 0 && x < w.w && y < w.h; }
+  // Équivalents "carte maléfique" de inMap/targetTile ci-dessus (chantier
+  // 2026-07, demande Guillaume : pouvoir couper les arbres du monde
+  // maléfique) : mêmes calculs, mais sur evilWorldRef (70x70) plutôt que
+  // worldRef (ferme, 180x140) — targetTile ci-dessous serait sinon fausse en
+  // zone maléfique (elle borne la caméra sur les dimensions de la ferme, pas
+  // celles, bien plus petites, de la carte maléfique). Voir doActionEvil.
+  function inMapEvil(x, y) { const ew = evilWorldRef.current; return ew && x >= 0 && y >= 0 && x < ew.w && y < ew.h; }
+  function targetTileEvil() {
+    const m = meRef.current, ew = evilWorldRef.current; if (!m || !ew) return { x: 0, y: 0 };
+    const canvas = canvasRef.current;
+    const vw = canvas.width / ZOOM, vh = canvas.height / ZOOM;
+    let cx = (m.x + 0.5) * C.TILE - vw / 2, cy = (m.y + 0.5) * C.TILE - vh / 2;
+    cx = Math.max(0, Math.min(ew.w * C.TILE - vw, cx)); cy = Math.max(0, Math.min(ew.h * C.TILE - vh, cy));
+    const wx = (mouseRef.current.x / ZOOM + cx) / C.TILE, wy = (mouseRef.current.y / ZOOM + cy) / C.TILE;
+    const tx = Math.floor(wx), ty = Math.floor(wy);
+    if (inMapEvil(tx, ty) && Math.abs(wx - (m.x + 0.5)) <= C.ACT_RANGE + 0.5 && Math.abs(wy - (m.y + 0.2)) <= C.ACT_RANGE + 0.5) return { x: tx, y: ty };
+    return facingTile();
+  }
   function blocked(w, x, y) { return E.blockedTile(w, x, y, Date.now()); }
   function canStand(w, x, y) {
     const r = 0.3;

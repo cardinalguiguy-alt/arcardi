@@ -166,15 +166,20 @@ export function generateWorld(seed) {
     }
   }
 
-  // Passage sombre (chantier 2026-07, demande Guillaume) : posé rive droite
-  // (à l'est du centre de la rivière, comme riverSideOf/O_LAMP le font déjà
-  // ailleurs), près de la limite nord de la carte (y petit). Calculé depuis
-  // riverCenter (donc dépendant de la seed, jamais un point fixe en dur,
-  // même logique que bridgeLeverPos ci-dessus) : un peu de marge pour rester
-  // sur l'herbe, pas dans le sable/l'eau. Case + voisinage immédiat dégagés
-  // d'arbres/rochers pour garantir qu'elle est toujours atteignable.
-  const dpY = 3;
-  const dpX = Math.round(riverCenterAtRow(riverCenter, dpY) + 9);
+  // Passage sombre (chantier 2026-07, demande Guillaume — repositionné :
+  // "le monde maléfique doit être accessible via des passages présents à la
+  // limite de la map, proche du bord droit de la map") : posé à la limite
+  // EST de la carte (x proche de W), plutôt qu'au bord nord comme avant.
+  // La rivière (riverCenter) reste toujours cantonnée entre x=70 et x=120
+  // (voir génération plus haut, rx borné à [70,120]) : un point proche du
+  // bord droit (x = W - 4) en est donc toujours loin, pas besoin de le
+  // calculer depuis riverCenter comme avant. y choisi à mi-hauteur de la
+  // carte, à bonne distance de la maison/l'enclos (concentrés côté centre,
+  // voir C.HOUSE/C.PEN) et des sites de pont (by 42/100, loin du bord est).
+  // Case + voisinage immédiat dégagés d'arbres/rochers pour garantir
+  // qu'elle est toujours atteignable.
+  const dpX = W - 4;
+  const dpY = Math.round(H / 2);
   const darkPassage = { x: Math.max(2, Math.min(W - 3, dpX)), y: dpY };
   for (let y = darkPassage.y - 1; y <= darkPassage.y + 1; y++) {
     for (let x = darkPassage.x - 1; x <= darkPassage.x + 1; x++) {
@@ -293,7 +298,29 @@ export function generateEvilWorld() {
     }
   }
   ground[C.EVIL_RETURN_PASSAGE.y * W + C.EVIL_RETURN_PASSAGE.x] = C.G_DARK_PASSAGE;
-  return { w: W, h: H, ground, objects, objHp, crops: new Map(), mills: new Map(), bridgeSites: [], bridgeLeverPos: [], riverCenter: [] };
+  // Créatures maléfiques (chantier 2026-07, demande Guillaume : "des
+  // monstres qui pourchassent le joueur, lents, mais qui l'assomment et le
+  // renvoient chez lui blessé au contact") : générées ici (même seed fixe
+  // que le reste de la carte, donc toujours aux mêmes points de départ),
+  // simulées ensuite CÔTÉ CLIENT uniquement (updateEvilMonsters,
+  // FermeGame.js) — comme le reste de la carte maléfique, aucune notion
+  // d'hôte ici. Rejection sampling sur case d'herbe libre (pas d'arbre/
+  // rocher/eau), à bonne distance de l'arrivée pour ne jamais surprendre le
+  // joueur dès la première seconde. `home{X,Y}` retient le point de
+  // génération : sert de point de rappel si jamais on veut les faire
+  // "rentrer" hors chasse (non exploité pour l'instant, gardé pour un futur
+  // chantier plutôt qu'un champ à rajouter après coup).
+  const monsters = [];
+  for (let n = 0; n < C.EVIL_MONSTER_COUNT; n++) {
+    let mx = 0, my = 0, tries = 0, ok = false;
+    while (tries < 300 && !ok) {
+      mx = Math.floor(rnd() * W); my = Math.floor(rnd() * H); tries++;
+      const i = my * W + mx;
+      if (ground[i] === C.G_GRASS && objects[i] === C.O_NONE && Math.hypot(mx - C.EVIL_SPAWN.x, my - C.EVIL_SPAWN.y) >= C.EVIL_MONSTER_MIN_SPAWN_DIST) ok = true;
+    }
+    if (ok) monsters.push({ id: n, x: mx + 0.5, y: my + 0.5, homeX: mx + 0.5, homeY: my + 0.5 });
+  }
+  return { w: W, h: H, ground, objects, objHp, crops: new Map(), mills: new Map(), bridgeSites: [], bridgeLeverPos: [], riverCenter: [], monsters };
 }
 
 // Applique des overrides persistés (reprise après rechargement) sur un monde
@@ -500,7 +527,7 @@ export function newFarmer(id, name, gender, outfit) {
 // niveau 1 = quantité de base inchangée, chaque niveau supplémentaire multiplie
 // par C.TOOL_YIELD_MULT (1.5 par défaut). Fonction pure, arrondie à l'entier
 // le plus proche (au moins 1 pour ne jamais tomber à 0 sur une petite base).
-function toolYield(base, level) {
+export function toolYield(base, level) {
   return Math.max(1, Math.round(base * Math.pow(C.TOOL_YIELD_MULT, Math.max(0, level - 1))));
 }
 

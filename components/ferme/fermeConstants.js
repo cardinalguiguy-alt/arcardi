@@ -285,6 +285,17 @@ export const EVIL_SPAWN = { x: 35, y: 66 }; // arrivée du joueur, près du bord
 export const EVIL_RETURN_PASSAGE = { x: 12, y: 8 };
 export const ZONE_FADE_MS = 900; // durée d'une moitié de fondu (aller au noir OU revenir), écran noir tenu entre les deux
 
+// Créatures maléfiques (chantier 2026-07, demande Guillaume : "des monstres
+// qui pourchassent le joueur, lents, mais qui l'assomment et le renvoient
+// chez lui blessé au contact") : simulées côté client uniquement (aucun
+// hôte pour la carte maléfique), voir generateEvilWorld/updateEvilMonsters.
+export const EVIL_MONSTER_COUNT = 9;         // nombre de créatures sur la carte
+export const EVIL_MONSTER_SPEED = 1.5;       // tuiles/seconde — nettement plus lent que le joueur (PLAYER_SPEED = 5.2)
+export const EVIL_MONSTER_DETECT_RADIUS = 9; // distance à partir de laquelle une créature endormie se met à suivre le joueur
+export const EVIL_MONSTER_CATCH_RADIUS = 0.7; // distance de contact (dans un sens comme dans l'autre) déclenchant l'attrapage
+export const EVIL_MONSTER_MIN_SPAWN_DIST = 10; // distance minimale au point d'arrivée pour la génération d'une créature
+export const EVIL_INJURED_MS = 30 * 60 * 1000; // 30 minutes : durée de la blessure infligée par une créature (distincte de INJURED_MS, la morsure de loup)
+
 
 // --- Clôture (posée librement par les joueurs, section par section) ---
 export const FENCE_COST = 15; // prix d'une section de clôture à la boutique (payée en or, inchangé)
