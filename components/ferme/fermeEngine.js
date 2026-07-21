@@ -287,8 +287,14 @@ export function generateEvilWorld() {
     place(tx, ty, pickTreeType(tx, ty), C.TREE_HP);
   }
   for (let i = 0; i < 260; i++) place(rnd() * W, rnd() * H, C.O_ROCK, C.ROCK_HP);
-  // Dégage l'arrivée (bord sud) et le passage retour (bord nord-ouest).
-  for (const p of [C.EVIL_SPAWN, C.EVIL_RETURN_PASSAGE]) {
+  // Dégage l'arrivée (bord sud), le passage retour (bord nord-ouest) et le
+  // chaudron-artéfact (chantier 2026-07, demande Guillaume : "on le trouve
+  // comme un artéfact interactif dans le monde maléfique") — ce dernier
+  // n'est PAS un objet de world.objects (contrairement aux arbres/rochers) :
+  // c'est un point d'intérêt purement CLIENT, rendu/interactif tant que
+  // s.salveCraft.cauldronUnlocked est faux (voir FermeGame.js), donc seule
+  // sa case doit rester dégagée ici.
+  for (const p of [C.EVIL_SPAWN, C.EVIL_RETURN_PASSAGE, C.EVIL_CAULDRON_SPAWN]) {
     for (let y = p.y - 1; y <= p.y + 1; y++) for (let x = p.x - 1; x <= p.x + 1; x++) {
       if (x < 0 || y < 0 || x >= W || y >= H) continue;
       const i = y * W + x;
@@ -1256,28 +1262,99 @@ export function resolveCoopDeposit(f, coop, m) {
 
 /* -------------------------------------------------------------------------
    Chaudron de la pommade de protection (chantier 2026-07, voir
-   CAULDRON_SITE/SALVE_RECIPE dans fermeConstants.js). État partagé minimal :
-   { trout, pike } — quantité de poissons déjà déposée par l'équipe vers LA
-   PROCHAINE pommade. L'améthyste n'a pas besoin d'être "déposée" : elle est
-   prélevée directement dans la réserve commune de gemmes (s.gems) au moment
-   de la concoction (voir resolveSalveBrew). Comme la grange/les missions
-   d'équipe : persiste entre sessions, coopératif (n'importe quel fermier
-   peut déposer un poisson qu'il porte, n'importe quel fermier peut lancer la
-   concoction une fois la recette réunie).
+   SALVE_RECIPE dans fermeConstants.js). État partagé minimal : { trout,
+   pike, cauldronUnlocked } — `trout`/`pike` = quantité de poissons déjà
+   déposée par l'équipe vers LA PROCHAINE pommade. L'améthyste n'a pas besoin
+   d'être "déposée" : elle est prélevée directement dans la réserve commune
+   de gemmes (s.gems) au moment de la concoction (voir resolveSalveBrew).
+   Comme la grange/les missions d'équipe : persiste entre sessions,
+   coopératif (n'importe quel fermier peut déposer un poisson qu'il porte,
+   n'importe quel fermier peut lancer la concoction une fois la recette
+   réunie).
+   `cauldronUnlocked` (chantier 2026-07, demande Guillaume : "le chaudron
+   doit être récupéré dans le monde maléfique et ramené") : passe à true la
+   PREMIÈRE fois qu'un fermier ramasse l'artéfact sur la carte maléfique (voir
+   resolveEvilCauldronPickup) — unique pour toute la ferme, comme le puits :
+   une fois true, plus personne ne peut le retrouver une deuxième fois côté
+   maléfique, quel que soit l'endroit où le chaudron se trouve/est posé côté
+   ferme ensuite. Le chaudron LUI-MÊME (l'objet posé sur la carte, voir
+   O_CAULDRON) n'a pas besoin d'une position dans cet état partagé : comme
+   O_MILL, sa position est entièrement dérivée de world.objects (persistée
+   via objectOv, voir generateWorld/applyOverrides) — retrouvée au besoin par
+   findCauldronPos() ci-dessous plutôt que dupliquée ici.
    ------------------------------------------------------------------------- */
-export function newSalveCraftState() { return { trout: 0, pike: 0 }; }
+export function newSalveCraftState() { return { trout: 0, pike: 0, cauldronUnlocked: false }; }
+
+// Position du chaudron posé sur la carte (s'il l'est), dérivée de
+// world.objects — un seul chaudron possible pour toute la ferme (voir
+// resolveCauldronPlace), le scan complet de la carte reste donc négligeable
+// (appelé seulement sur pression de E, jamais par tick).
+function findCauldronPos(world) {
+  for (let i = 0; i < world.objects.length; i++) {
+    if (world.objects[i] === C.O_CAULDRON) return { x: xOf(i), y: yOf(i), i };
+  }
+  return null;
+}
+
+// Ramassage de l'artéfact sur la carte maléfique (touche E à proximité
+// d'EVIL_CAULDRON_SPAWN, côté client — voir FermeGame.js/generateEvilWorld ;
+// la carte maléfique elle-même est simulée localement, mais l'inventaire du
+// fermier est géré par l'hôte comme le reste, d'où cette requête dédiée).
+// Unique pour toute la ferme : refusé si déjà débloqué par quelqu'un
+// d'autre (protège aussi contre une double requête si deux fermiers
+// l'atteignent au même instant, l'hôte traitant les requêtes séquentiellement).
+export function resolveEvilCauldronPickup(f, salveCraft) {
+  normalizeFarmer(f);
+  const res = { invChanged: false, toast: null, unlocked: false };
+  if (salveCraft.cauldronUnlocked) { res.toast = "cauldronAlreadyTaken"; return res; }
+  salveCraft.cauldronUnlocked = true;
+  f.inv.cauldron = (f.inv.cauldron || 0) + 1;
+  res.invChanged = true; res.unlocked = true;
+  return res;
+}
+
+// Pose/retrait du chaudron ramené (outil Construction, variante "cauldron",
+// même mécanique que le moulin — voir cas "mill" de resolveAct) : posable
+// UNE SEULE fois puisque f.inv.cauldron ne peut valoir que 0 ou 1 (obtenu
+// uniquement via resolveEvilCauldronPickup, jamais acheté). Retrait possible
+// pour le déplacer ailleurs, mais bloqué tant que salveCraft contient encore
+// du poisson non transformé (même prudence que millNotEmpty : ne jamais
+// faire disparaître un dépôt collectif d'un autre fermier).
+export function resolveCauldronPlace(f, world, salveCraft, m) {
+  normalizeFarmer(f);
+  const res = { invChanged: false, toast: null, tiles: [] };
+  const x = m.x | 0, y = m.y | 0;
+  if (!inMap(x, y) || !canReach(f, x, y)) return res;
+  const i = idx(x, y), g = world.ground[i], o = world.objects[i];
+  const now = Date.now();
+  if (o === C.O_CAULDRON) {
+    if ((salveCraft.trout || 0) > 0 || (salveCraft.pike || 0) > 0) { res.toast = "cauldronNotEmpty"; return res; }
+    world.objects[i] = C.O_NONE; world.objHp.delete(i);
+    f.inv.cauldron = (f.inv.cauldron || 0) + 1;
+    res.tiles.push(i); res.invChanged = true;
+  } else if ((g === C.G_GRASS || g === C.G_TILLED || g === C.G_WATERED) && o === C.O_NONE && !world.crops.has(i)) {
+    if (f.inv.cauldron > 0) {
+      f.inv.cauldron--;
+      world.objects[i] = C.O_CAULDRON; world.objHp.set(i, now + C.BUILD_TIMES.cauldron);
+      res.tiles.push(i); res.invChanged = true;
+    } else res.toast = "noCauldronStock";
+  }
+  return res;
+}
 
 // Dépôt d'un poisson (truite ou brochet) au chaudron (touche E à proximité
-// de CAULDRON_SITE, comme le dépôt de bois/pierre à la grange). `m.fish` =
+// du chaudron POSÉ, comme le dépôt de bois/pierre à la grange). `m.fish` =
 // "trout" | "pike". Dépose le MAXIMUM utile (comme resolveCoopDeposit/
 // resolveBarnDeposit) plutôt que tout refuser si le fermier en porte plus
 // que ce qu'il reste à réunir pour la prochaine pommade — l'éventuel surplus
 // déposé sert d'avance pour la pommade SUIVANTE plutôt que d'être plafonné,
 // pour ne pas gaspiller une pêche généreuse.
-export function resolveSalveDeposit(f, salveCraft, m) {
+export function resolveSalveDeposit(f, salveCraft, world, m) {
   normalizeFarmer(f);
   const res = { invChanged: false, toast: null, deposited: 0, fish: null };
-  if (!nearT(f, C.CAULDRON_SITE)) { res.toast = "farCauldron"; return res; }
+  const pos = findCauldronPos(world);
+  if (!pos || !buildReady(world.objHp.get(pos.i), Date.now())) { res.toast = "cauldronMissing"; return res; }
+  if (!nearT(f, pos)) { res.toast = "farCauldron"; return res; }
   const key = m.fish === "pike" ? "pike" : m.fish === "trout" ? "trout" : null;
   if (!key) return res;
   const ft = key === "trout" ? 1 : 2; // index C.FISH (voir fermeConstants.js)
@@ -1297,10 +1374,12 @@ export function resolveSalveDeposit(f, salveCraft, m) {
 // (physiquement présent pour la récupérer) — pas dans un stock partagé, pour
 // rester cohérent avec le reste de l'inventaire consommable (trousse de
 // soins, etc.).
-export function resolveSalveBrew(f, salveCraft, gems) {
+export function resolveSalveBrew(f, salveCraft, gems, world) {
   normalizeFarmer(f);
   const res = { invChanged: false, gemsChanged: false, toast: null, brewed: false };
-  if (!nearT(f, C.CAULDRON_SITE)) { res.toast = "farCauldron"; return res; }
+  const pos = findCauldronPos(world);
+  if (!pos || !buildReady(world.objHp.get(pos.i), Date.now())) { res.toast = "cauldronMissing"; return res; }
+  if (!nearT(f, pos)) { res.toast = "farCauldron"; return res; }
   const rec = C.SALVE_RECIPE;
   const haveAmethyst = (gems && gems[0]) || 0;
   const ready = (salveCraft.trout || 0) >= rec.trout && (salveCraft.pike || 0) >= rec.pike && haveAmethyst >= rec.amethyst;

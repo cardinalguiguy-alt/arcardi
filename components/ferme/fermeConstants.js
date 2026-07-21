@@ -94,6 +94,13 @@ export const O_MILL = 16;      // moulin (chantier 2026-07, demande Guillaume : 
                                 // resolveAct cas "mill"/"millDeposit" et E.millTick (fermeEngine.js).
 export const O_TREE_DEAD = 17; // arbre mort, sans feuilles (chantier 2026-07, demande Guillaume : ambiance de
                                 // la carte maléfique) — réservé à generateEvilWorld, jamais posé côté ferme normale.
+export const O_CAULDRON = 18;  // chaudron (chantier 2026-07, demande Guillaume : "le chaudron doit être récupéré
+                                // dans le monde maléfique et ramené [...] on peut le placer où on veut sur la
+                                // map [...] utilisable automatiquement"). Objet POSABLE côté ferme normale, même
+                                // mécanique que O_MILL (outil Construction, variante "cauldron", chantier réel
+                                // avant d'être fonctionnel, voir BUILD_TIMES.cauldron) — mais jamais achetable :
+                                // il faut d'abord le ramasser sur la carte maléfique (voir EVIL_CAULDRON_SPAWN),
+                                // une seule fois pour toute la ferme (voir s.cauldron, fermeEngine.js/FermeGame.js).
 
 // --- Cultures ---
 // stages: 0=semis ... maxStage=récoltable ; growMs = durée RÉELLE (arrosée) pour
@@ -316,7 +323,23 @@ export const EVIL_INJURED_MS = 30 * 60 * 1000; // 30 minutes : durée de la bles
 // déjà. Note : Guillaume a aussi mentionné du bois ("un mélange de bois,
 // d'amétyste et de poissons") mais ne lui a donné aucune quantité dans la
 // liste chiffrée finale ; non inclus ici en attendant confirmation/quantité.
-export const CAULDRON_SITE = { x: 51, y: 33 }; // chaudron, à 2 cases à l'est de la boutique
+// Chaudron : ramené du monde maléfique (chantier 2026-07, demande Guillaume :
+// "le chaudron doit être récupéré dans le monde maléfique et ramené [...] on
+// le trouve comme un artéfact interactif dans le monde maléfique avant qu'il
+// ne soit présent dans le monde normal [...] on peut le pick up, le collecter
+// et le ramener dans notre monde pour le placer où on veut sur la map. Il
+// sera automatiquement utilisable"). Remplace l'ancien CAULDRON_SITE fixe
+// (doc -50) : PLUS de coordonnées figées côté ferme, le site est désormais
+// la position où un joueur choisit de poser l'objet O_CAULDRON (voir cas
+// "cauldron" dans resolveAct, fermeEngine.js), retrouvée dynamiquement en
+// scannant les tuiles autour du joueur — même principe que O_MILL pour le
+// dépôt de blé, voir E.findCauldronTile()/nearCauldron côté FermeGame.js.
+// Unique pour toute la ferme (comme le puits) : une fois ramassé côté
+// maléfique ET posé côté ferme, plus personne ne peut en retrouver un
+// deuxième (voir s.cauldron.unlocked, fermeEngine.js/FermeGame.js).
+export const EVIL_CAULDRON_SPAWN = { x: 52, y: 20 }; // position FIXE du chaudron-artéfact sur la carte maléfique
+                                                      // (indépendante de la seed de la ferme, comme EVIL_RETURN_PASSAGE),
+                                                      // à bonne distance d'EVIL_SPAWN pour qu'il faille explorer un peu.
 export const SALVE_RECIPE = { amethyst: 1, trout: 2, pike: 1 }; // trout=FISH[1], pike=FISH[2]
 export const SALVE_IMMUNITY_MS = 10 * 60 * 1000; // 10 minutes d'immunité/répulsion après usage
 
@@ -405,6 +428,8 @@ export const BUILD_TIMES = {
   scarecrow: 10 * 1000,     // épouvantail : 10 secondes réelles (valeur donnée par Guillaume)
   grass: 5 * 1000,          // repousse de l'herbe sur une case labourée : 5 secondes réelles (valeur donnée par Guillaume)
   mill: 60 * 60 * 1000,     // moulin niveau 1 : 1 heure réelle (valeur donnée par Guillaume)
+  cauldron: 5 * 1000,       // chaudron : 5 secondes réelles (extrapolé, pas de "bâtiment" au sens propre, cohérent
+                             // avec l'absence de mini-jeu à la concoction elle-même, voir doc -50)
 };
 
 // --- Constructions bois/pierre (chantier 2026-07) ---

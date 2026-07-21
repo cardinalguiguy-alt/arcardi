@@ -281,9 +281,20 @@ export const FERME_STR = {
     salveBrewed: (who) => `⚗️ ${who} a concocté une pommade de protection !`,
     toastFarCauldron: "Approche-toi du chaudron pour déposer ou concocter.",
     toastNoFishToDeposit: "Tu ne portes ni truite ni brochet à déposer.",
-    toastCauldronMissing: "Il manque des ingrédients (1 améthyste, 2 truites, 1 brochet).",
+    toastCauldronMissing: "Il manque des ingrédients (1 améthyste, 2 truites, 1 brochet), ou le chaudron n'est pas encore posé.",
     troutLabel: "truite(s)",
     pikeLabel: "brochet(s)",
+    // Chaudron ramené du monde maléfique (chantier 2026-07, demande
+    // Guillaume) : artéfact ramassable UNE SEULE fois côté maléfique, puis
+    // posable où on veut côté ferme avec l'outil Construction (voir
+    // O_CAULDRON/EVIL_CAULDRON_SPAWN, fermeConstants.js).
+    promptEvilCauldronPickup: "[E] Ramasser le chaudron",
+    evilCauldronPickedToast: "⚗️ Tu as récupéré le chaudron ! Ramène-le côté ferme et pose-le où tu veux (outil Construction).",
+    toastCauldronAlreadyTaken: "Ce chaudron a déjà été récupéré.",
+    toastNoCauldronStock: "Tu ne portes pas de chaudron à poser.",
+    toastCauldronNotEmpty: "Vide le chaudron (poisson déposé) avant de le déplacer.",
+    cauldronRowTitle: "⚗️ Chaudron",
+    cauldronRowSub: "Ramené du monde maléfique. Pose-le où tu veux avec l'outil Construction : il sert alors à fabriquer la pommade de protection.",
     // Aide
     help1: "ZQSD/WASD/Flèches : bouger (8 directions) · Espace/Clic : utiliser l'outil",
     help2: "1-8 : outils (7 = canne, 8 = clôture) · E : boutique/vente · T : chat · M : carte · 🏠 : maison",
@@ -606,8 +617,15 @@ export const FERME_STR = {
     salveDeposited: (who, n, res) => `${who} deposits ${n} ${res} at the cauldron.`,
     salveBrewed: (who) => `⚗️ ${who} brewed a protection salve!`,
     toastFarCauldron: "Get closer to the cauldron to deposit or brew.",
+    promptEvilCauldronPickup: "[E] Pick up the cauldron",
+    evilCauldronPickedToast: "⚗️ You picked up the cauldron! Bring it back to the farm and place it anywhere (Build tool).",
+    toastCauldronAlreadyTaken: "This cauldron has already been picked up.",
+    toastNoCauldronStock: "You aren't carrying a cauldron to place.",
+    toastCauldronNotEmpty: "Empty the cauldron (deposited fish) before moving it.",
+    cauldronRowTitle: "⚗️ Cauldron",
+    cauldronRowSub: "Brought back from the evil world. Place it anywhere with the Build tool: it's then used to craft the protection salve.",
     toastNoFishToDeposit: "You're not carrying any trout or pike to deposit.",
-    toastCauldronMissing: "Missing ingredients (1 amethyst, 2 trout, 1 pike).",
+    toastCauldronMissing: "Missing ingredients (1 amethyst, 2 trout, 1 pike), or the cauldron isn't placed yet.",
     troutLabel: "trout",
     pikeLabel: "pike",
     help1: "WASD/Arrows: move (8 directions) · Space/Click: use tool",

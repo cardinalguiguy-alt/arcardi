@@ -500,6 +500,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       else if (o === C.O_SCARECROW) col = [212, 178, 90];
       else if (o === C.O_LEVER) col = [80, 80, 88];
       else if (o === C.O_MILL) col = [169, 119, 63];
+      else if (o === C.O_CAULDRON) col = [140, 90, 190];
       else if (o === C.O_HOUSE) col = [192, 74, 60];
       else if (o === C.O_SHOP || o === C.O_BIN) col = [232, 200, 90];
       im.data.set([col[0], col[1], col[2], 255], i * 4);
@@ -1237,7 +1238,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // Dépôt d'un poisson (truite/brochet) au chaudron de la pommade de
       // protection (chantier 2026-07) — même esprit que barnDeposit, mais
       // sur les poissons personnels du fermier plutôt que bois/pierre.
-      const r = E.resolveSalveDeposit(f, s.salveCraft, req);
+      const r = E.resolveSalveDeposit(f, s.salveCraft, w, req);
       if (r.invChanged) out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
       if (r.toast) out.toast = { id: f.id, key: r.toast };
       if (r.deposited > 0) {
@@ -1249,7 +1250,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // Lancement de la concoction (chantier 2026-07) : consomme la recette
       // (poissons déposés au chaudron + améthyste dans la réserve commune de
       // gemmes) et crédite 1 pommade dans l'inventaire du fermier présent.
-      const r = E.resolveSalveBrew(f, s.salveCraft, s.gems);
+      const r = E.resolveSalveBrew(f, s.salveCraft, s.gems, w);
       if (r.toast) out.toast = { id: f.id, key: r.toast };
       if (r.brewed) {
         out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
@@ -1257,6 +1258,31 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         channelRef.current?.send({ type: "broadcast", event: "chat", payload: { from: "🧪", msg: L.salveBrewed(f.name) } });
         dirtyRef.current = true;
       }
+    } else if (req.kind === "evilCauldronPickup") {
+      // Ramassage de l'artéfact-chaudron sur la carte maléfique (chantier
+      // 2026-07, demande Guillaume) : la carte maléfique n'existe pas côté
+      // hôte (comme evilChop/evilCaught), mais l'unicité du chaudron pour
+      // TOUTE la ferme exige une décision arbitrée par l'hôte (traite les
+      // requêtes séquentiellement, donc pas de double-obtention possible
+      // même si deux fermiers l'atteignent au même instant).
+      const r = E.resolveEvilCauldronPickup(f, s.salveCraft);
+      if (r.invChanged) out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
+      if (r.toast) out.toast = { id: f.id, key: r.toast };
+      if (r.unlocked) {
+        out.salveCraft = s.salveCraft;
+        out.chat = { from: "⚗️", msg: L.evilCauldronPickedToast };
+        dirtyRef.current = true;
+      }
+    } else if (req.kind === "cauldronPlace") {
+      // Pose/retrait du chaudron ramené (outil Construction, variante
+      // "cauldron", chantier 2026-07) — même mécanique que "act"/"mill",
+      // mais fonction dédiée car elle a aussi besoin de s.salveCraft (pour
+      // interdire le retrait tant qu'il reste du poisson non transformé).
+      const r = E.resolveCauldronPlace(f, w, s.salveCraft, req);
+      for (const i of r.tiles) { recordTileOverride(i); out.tiles.push({ i, g: w.ground[i], o: w.objects[i], hp: w.objHp.get(i) }); }
+      if (r.invChanged) out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
+      if (r.toast) out.toast = { id: f.id, key: r.toast };
+      if (r.tiles.length) dirtyRef.current = true;
     }
 
     // Quêtes de découverte : première réussite d'une action listée -> or commun.
@@ -1366,7 +1392,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     pushToast(L.toastNewDay(p.day));
   }
   function toastMsg(key) {
-    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, noMillStock: L.toastNoMillStock, millNotEmpty: L.toastMillNotEmpty, noWheatToDeposit: L.toastNoWheatToDeposit, millFull: L.toastMillFull, actionFailed: L.toastActionFailed, coopNone: L.toastCoopNone, farCoop: L.toastFarCoop, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull, notInjured: L.toastNotInjured, noHealKit: L.toastNoHealKit, healTooFar: L.toastHealTooFar, gregNotHired: L.toastGregNotHired, gregNoRoom: L.toastGregNoRoom, gregNoFertilizer: L.toastGregNoFertilizer, soanNotHired: L.toastSoanNotHired, soanNoRiver: L.toastSoanNoRiver, farCauldron: L.toastFarCauldron, noFishToDeposit: L.toastNoFishToDeposit, cauldronMissing: L.toastCauldronMissing }[key] || "";
+    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, noMillStock: L.toastNoMillStock, millNotEmpty: L.toastMillNotEmpty, noWheatToDeposit: L.toastNoWheatToDeposit, millFull: L.toastMillFull, actionFailed: L.toastActionFailed, coopNone: L.toastCoopNone, farCoop: L.toastFarCoop, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull, notInjured: L.toastNotInjured, noHealKit: L.toastNoHealKit, healTooFar: L.toastHealTooFar, gregNotHired: L.toastGregNotHired, gregNoRoom: L.toastGregNoRoom, gregNoFertilizer: L.toastGregNoFertilizer, soanNotHired: L.toastSoanNotHired, soanNoRiver: L.toastSoanNoRiver, farCauldron: L.toastFarCauldron, noFishToDeposit: L.toastNoFishToDeposit, cauldronMissing: L.toastCauldronMissing, cauldronAlreadyTaken: L.toastCauldronAlreadyTaken, noCauldronStock: L.toastNoCauldronStock, cauldronNotEmpty: L.toastCauldronNotEmpty }[key] || "";
   }
 
   // -------- Hôte : boucle temps + persistance --------
@@ -1610,6 +1636,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // pierre une case de pont BOIS déjà construite (aspect + résistance à
       // la dégradation nocturne), voir resolveAct cas "renovateBridge".
       const bk = buildKindRef.current;
+      if (bk === "cauldron") {
+        // Chaudron ramené du monde maléfique (chantier 2026-07) : requête
+        // dédiée cauldronPlace (voir plus haut) plutôt que "act", car elle a
+        // aussi besoin de s.salveCraft côté hôte (garde-fou de retrait).
+        sendReq({ kind: "cauldronPlace", x: tt.x, y: tt.y });
+        return;
+      }
       const action = bk === "wall" ? "wall" : bk === "path" ? "path" : bk === "lamp" ? "lamp" : bk === "scarecrow" ? "scarecrow"
         : bk === "grass" ? "grass" : bk === "mill" ? "mill"
         : bk === "bridgeRenovate" ? "renovateBridge"
@@ -2907,32 +2940,6 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           });
         } });
       }
-      // Chaudron de la pommade de protection (chantier 2026-07) : même
-      // principe que le chantier de mission d'équipe ci-dessus (marqueur +
-      // mini-jauges), 3 ingrédients (truite/brochet déposés localement au
-      // chaudron, améthyste lue directement dans la réserve commune de
-      // gemmes plutôt que dans salveCraft, voir resolveSalveBrew).
-      if (sharedRef.current.salveCraft) {
-        const cds = C.CAULDRON_SITE, scNow = sharedRef.current.salveCraft, rec = C.SALVE_RECIPE;
-        const gemsNow = (sharedRef.current.gems && sharedRef.current.gems[0]) || 0;
-        draws.push({ y: (cds.y + 1) * T, fn: () => {
-          const bob = Math.sin(now / 300) * 1.5;
-          ctx.font = "14px monospace"; ctx.textAlign = "center";
-          ctx.fillText("⚗️", cds.x * T + 8, cds.y * T + 4 + bob);
-          const barW = 20;
-          const rows = [
-            { resource: "amethyst", got: gemsNow, target: rec.amethyst, color: "#b46ee0" },
-            { resource: "trout", got: scNow.trout || 0, target: rec.trout, color: "#d98a5a" },
-            { resource: "pike", got: scNow.pike || 0, target: rec.pike, color: "#6a8f5a" },
-          ];
-          rows.forEach((r, ri) => {
-            const bx = cds.x * T + 8 - barW / 2, by = cds.y * T + 8 + ri * 5;
-            const frac = Math.max(0, Math.min(1, r.got / r.target));
-            ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(bx, by, barW, 3);
-            ctx.fillStyle = r.color; ctx.fillRect(bx, by, barW * frac, 3);
-          });
-        } });
-      }
       const lampsInView = []; // positions des lampadaires visibles, pour percer l'overlay nocturne
       // Torches portées par les fermiers (chantier 2026-07) : même mécanique
       // de halo que les lampadaires, rayon plus modeste (C.TORCH_LIGHT_RADIUS),
@@ -3077,6 +3084,54 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 ctx.fillStyle = "#00000090"; ctx.fillText(`${mm}:${ss}`, x * T + 8 + 1, by2 - 3 + 1);
                 ctx.fillStyle = "#fff"; ctx.fillText(`${mm}:${ss}`, x * T + 8, by2 - 3);
               }
+            } });
+          }
+        }
+        else if (o === C.O_CAULDRON) {
+          // Chaudron ramené du monde maléfique (chantier 2026-07, demande
+          // Guillaume) : posable n'importe où (contrairement à l'ancien
+          // CAULDRON_SITE fixe, voir doc -50), même traitement visuel que
+          // lampadaire/épouvantail pendant le chantier (BUILD_TIMES.cauldron,
+          // 5s réelles), puis affiche les 3 mini-jauges de la recette une
+          // fois fonctionnel (même contenu que l'ancien marqueur fixe :
+          // améthyste lue dans la réserve commune de gemmes, truite/brochet
+          // dans s.salveCraft). Pas de sprite dédié : emoji ⚗️, comme avant.
+          const ii = idxOf(x, y);
+          const readyAt = w.objHp.get(ii);
+          const ready = E.buildReady(readyAt, epochNow);
+          if (!ready) {
+            const totalMs = C.BUILD_TIMES.cauldron;
+            const remaining = E.buildRemainingMs(readyAt, epochNow);
+            const frac = Math.max(0, Math.min(1, 1 - remaining / totalMs));
+            draws.push({ y: (y + 1) * T, fn: () => {
+              ctx.save(); ctx.globalAlpha = 0.55;
+              ctx.font = "14px monospace"; ctx.textAlign = "center";
+              ctx.fillText("⚗️", x * T + 8, (y + 1) * T - 20);
+              ctx.restore();
+              const barW = 20, bx = x * T + 8 - barW / 2, by = (y + 1) * T - 30;
+              ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(bx, by, barW, 3);
+              ctx.fillStyle = "#c9a25a"; ctx.fillRect(bx, by, barW * frac, 3);
+            } });
+          } else {
+            const scNow = sharedRef.current.salveCraft || { trout: 0, pike: 0 };
+            const gemsNow = (sharedRef.current.gems && sharedRef.current.gems[0]) || 0;
+            const rec = C.SALVE_RECIPE;
+            draws.push({ y: (y + 1) * T, fn: () => {
+              const bob = Math.sin(now / 300) * 1.5;
+              ctx.font = "14px monospace"; ctx.textAlign = "center";
+              ctx.fillText("⚗️", x * T + 8, (y + 1) * T - 20 + bob);
+              const barW = 20, bx = x * T + 8 - barW / 2;
+              const rows = [
+                { got: gemsNow, target: rec.amethyst, color: "#b46ee0" },
+                { got: scNow.trout || 0, target: rec.trout, color: "#d98a5a" },
+                { got: scNow.pike || 0, target: rec.pike, color: "#6a8f5a" },
+              ];
+              rows.forEach((r, ri) => {
+                const by = (y + 1) * T - 30 + ri * 5;
+                const frac = Math.max(0, Math.min(1, r.got / r.target));
+                ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(bx, by, barW, 3);
+                ctx.fillStyle = r.color; ctx.fillRect(bx, by, barW * frac, 3);
+              });
             } });
           }
         }
@@ -3274,12 +3329,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
 
       // Invite boutique/bac
       let pk = null;
+      const cauldronTile = findCauldronTile();
       if (heldAnimalRef.current !== -1) pk = "sellAnimal";
       else if (nearTile(C.SHOP)) pk = "shop"; else if (nearTile(C.BIN)) pk = "bin";
       else if (nearTile(C.HOUSE_DOOR)) pk = m.sleeping ? "wake" : "sleep";
       else if (nearTile(C.COOP_SITE) && sharedRef.current.coop) pk = "coop";
       else if (nearTile(C.BARN_SITE)) { const b = sharedRef.current.barn; if (b && b.level < C.BARN_LEVELS.length) pk = b.ready ? "barnBuild" : "barn"; }
-      else if (nearTile(C.CAULDRON_SITE)) {
+      else if (cauldronTile && nearTile(cauldronTile)) {
         const sc = sharedRef.current.salveCraft || { trout: 0, pike: 0 };
         const rec = C.SALVE_RECIPE, gemsNow = (sharedRef.current.gems && sharedRef.current.gems[0]) || 0;
         const ready = sc.trout >= rec.trout && sc.pike >= rec.pike && gemsNow >= rec.amethyst;
@@ -3429,6 +3485,25 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         else if (o === C.O_STUMP) draws.push({ y: (y + 1) * T, fn: () => ctx.drawImage(sprites.stump, x * T, y * T) });
         else if (o === C.O_ROCK) draws.push({ y: (y + 1) * T, fn: () => ctx.drawImage(sprites.rock, x * T, y * T) });
       }
+      // Chaudron-artéfact (chantier 2026-07, demande Guillaume : "on le
+      // trouve comme un artéfact interactif dans le monde maléfique avant
+      // qu'il ne soit présent dans le monde normal") : point d'intérêt fixe
+      // (EVIL_CAULDRON_SPAWN), PAS un objet de ew.objects — disparaît dès
+      // que quelqu'un l'a ramassé (s.salveCraft.cauldronUnlocked, synchronisé
+      // comme le reste), pour tout le monde, pas seulement le joueur qui l'a
+      // pris. Emoji + lueur pulsante pour bien le distinguer du décor.
+      if (!(sharedRef.current.salveCraft && sharedRef.current.salveCraft.cauldronUnlocked)) {
+        const cx = C.EVIL_CAULDRON_SPAWN.x, cy = C.EVIL_CAULDRON_SPAWN.y;
+        if (cx >= x0 - 1 && cx <= x1 + 1 && cy >= y0 - 1 && cy <= y1 + 1) {
+          draws.push({ y: (cy + 1) * T, fn: () => {
+            const glow = 0.4 + Math.sin(now / 350) * 0.2;
+            ctx.save(); ctx.shadowColor = `rgba(200, 140, 255, ${glow})`; ctx.shadowBlur = 16;
+            ctx.font = "16px monospace"; ctx.textAlign = "center";
+            ctx.fillText("⚗️", cx * T + 8, cy * T + 6 + Math.sin(now / 300) * 2);
+            ctx.restore();
+          } });
+        }
+      }
       draws.push({ y: (m.y + 1) * T, fn: () => drawSelf(m) });
       // Créatures maléfiques (chantier 2026-07, demande Guillaume) : réutilise
       // le sprite loup (mêmes 4 frames de marche, même mécanique d'animT que
@@ -3468,6 +3543,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // du cycle jour/nuit de la ferme, jamais retiré ici).
       ctx.fillStyle = "rgba(0,0,10,0.35)";
       ctx.fillRect(cam.x, cam.y, cam.vw, cam.vh);
+      // Invite E pour ramasser le chaudron-artéfact (chantier 2026-07).
+      const already = sharedRef.current.salveCraft && sharedRef.current.salveCraft.cauldronUnlocked;
+      setPromptKeyThrottled(!already && nearTile(C.EVIL_CAULDRON_SPAWN) ? "evilCauldronPickup" : null);
     }
     function blockedEvil(ew, x, y) {
       const fx = Math.floor(x), fy = Math.floor(y);
@@ -3808,6 +3886,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     return facingTile();
   }
   function nearTile(tl, d = 2.5) { const m = meRef.current; return m && Math.abs(m.x - tl.x) <= d && Math.abs(m.y - tl.y) <= d; }
+  // Position du chaudron ramené (chantier 2026-07, demande Guillaume) : posé
+  // n'importe où par un joueur, retrouvée en scannant w.objects — un seul
+  // chaudron possible pour toute la ferme (voir resolveCauldronPlace côté
+  // hôte), le scan reste donc négligeable (appelé seulement pour le prompt E
+  // et l'interaction, jamais par tick). Renvoie null si pas encore posé.
+  function findCauldronTile() {
+    const w = worldRef.current; if (!w) return null;
+    for (let i = 0; i < w.objects.length; i++) if (w.objects[i] === C.O_CAULDRON) return { x: E.xOf(i), y: E.yOf(i) };
+    return null;
+  }
   // Clôture (posée librement par un joueur, OU section de l'enclos de départ,
   // désormais unifiés en un seul système d'objets, voir generateWorld) : si le
   // joueur a FORCÉ l'orientation en posant (touche R -> O_FENCE_H/O_FENCE_V),
@@ -3841,6 +3929,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     return best;
   }
   function tryOpenNearby() {
+    const m0 = meRef.current;
+    // Carte maléfique (chantier 2026-07, demande Guillaume) : seule
+    // interaction E possible ici, le chaudron-artéfact — les coordonnées de
+    // la ferme (SHOP/BIN/etc.) n'ont aucun sens en zone maléfique, on sort
+    // donc tôt plutôt que de risquer une fausse coïncidence de coordonnées.
+    if (m0 && m0.zone === "evil") {
+      const already = sharedRef.current.salveCraft && sharedRef.current.salveCraft.cauldronUnlocked;
+      if (!already && nearTile(C.EVIL_CAULDRON_SPAWN)) evilCauldronPickup();
+      return;
+    }
     // Vendre l'animal porté (outil "déplacer") est prioritaire sur toute
     // autre interaction : un joueur les mains prises ne peut de toute façon
     // rien faire d'autre tant qu'il n'a pas déposé ou vendu l'animal, comme
@@ -3862,7 +3960,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       else if (b.ready) setBarnMini({ level: b.level + 1 });
       else sendReq({ kind: "barnDeposit" });
     }
-    else if (nearTile(C.CAULDRON_SITE)) {
+    else if (findCauldronTile() && nearTile(findCauldronTile())) {
       const sc = sharedRef.current.salveCraft || { trout: 0, pike: 0 };
       const rec = C.SALVE_RECIPE, gemsNow = (sharedRef.current.gems && sharedRef.current.gems[0]) || 0;
       const ready = sc.trout >= rec.trout && sc.pike >= rec.pike && gemsNow >= rec.amethyst;
@@ -3995,12 +4093,32 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const buyMill = (n) => { sendReq({ kind: "buy", item: "mill", n }); buildKindRef.current = "mill"; setBuildKind("mill"); };
   const buyHealKit = (n) => sendReq({ kind: "buy", item: "healKit", n });
   // Pommade de protection (chantier 2026-07, demande Guillaume : plus
-  // achetable en boutique — désormais fabriquée au chaudron (CAULDRON_SITE)
-  // à partir de poissons déposés par l'équipe + améthyste de la réserve
-  // commune, voir salveDeposit/salveBrew ci-dessous et resolveSalveDeposit/
-  // resolveSalveBrew, fermeEngine.js).
+  // achetable en boutique — désormais fabriquée à un chaudron ramené du
+  // monde maléfique et posé où on veut (voir O_CAULDRON/EVIL_CAULDRON_SPAWN,
+  // fermeConstants.js), à partir de poissons déposés par l'équipe +
+  // améthyste de la réserve commune, voir salveDeposit/salveBrew ci-dessous
+  // et resolveSalveDeposit/resolveSalveBrew, fermeEngine.js).
+  // Sélection de l'outil Construction en variante "cauldron" (chantier
+  // 2026-07) : PAS de bouton d'achat (le chaudron ne s'obtient qu'en le
+  // ramassant côté maléfique, voir evilCauldronPickup) — ce bouton
+  // n'apparaît dans le menu Construire que si le fermier en porte un
+  // (myInv.cauldron > 0), pour le poser/reposer où il veut.
+  const selectCauldronBuild = () => { buildKindRef.current = "cauldron"; setBuildKind("cauldron"); };
   const salveDeposit = (fish) => sendReq({ kind: "salveDeposit", fish });
   const salveBrew = () => sendReq({ kind: "salveBrew" });
+  // Chaudron ramené du monde maléfique (chantier 2026-07, demande Guillaume).
+  const evilCauldronPickup = () => {
+    sendReq({ kind: "evilCauldronPickup" });
+    // Bascule directement l'outil Construction sur "cauldron" (confort :
+    // évite d'avoir à rouvrir un menu pour poser un objet qu'on ne possède
+    // qu'en un seul exemplaire) — optimiste comme le reste des ramassages
+    // évil (evilChop), sans conséquence si l'hôte refuse (déjà pris par
+    // quelqu'un d'autre au même instant) : sélectionner l'outil sans rien
+    // porter ne pose simplement rien au clic (voir resolveCauldronPlace,
+    // noCauldronStock).
+    selectSlot(5);
+    buildKindRef.current = "cauldron"; setBuildKind("cauldron");
+  };
   // Usage de la pommade (inchangé) : applique l'immunité IMMÉDIATEMENT en
   // local (ressenti instantané, comme caughtByMonster) puis envoie la
   // requête à l'hôte pour décompter le stock côté serveur (persistance/
@@ -4168,7 +4286,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       </div>
 
       {/* Invite proximité */}
-      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "shop" ? L.promptShop : promptKey === "coop" ? L.promptCoop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "salveDeposit" ? L.promptSalveDeposit : promptKey === "salveBrew" ? L.promptSalveBrew : promptKey === "sleep" ? L.promptSleep : promptKey === "wake" ? L.promptWake : L.promptBin}</div>}
+      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "shop" ? L.promptShop : promptKey === "coop" ? L.promptCoop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "salveDeposit" ? L.promptSalveDeposit : promptKey === "salveBrew" ? L.promptSalveBrew : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "sleep" ? L.promptSleep : promptKey === "wake" ? L.promptWake : L.promptBin}</div>}
       {mountPrompt && <div className="ferme-prompt ferme-prompt-mount">{mountPrompt === "mount" ? L.mountPrompt : L.dismountPrompt}</div>}
 
       {/* Barre d'outils */}
@@ -4186,22 +4304,25 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             // menu Construire/Vendre (fence/wall/path/lamp/scarecrow), pas
             // seulement clôture.
             const bkImg = buildKind === "wall" ? "wall" : buildKind === "path" ? "path" : buildKind === "lamp" ? "lamp" : buildKind === "scarecrow" ? "scarecrow"
-              : buildKind === "grass" ? "grassPatch" : buildKind === "mill" ? "mill"
+              : buildKind === "grass" ? "grassPatch" : buildKind === "mill" ? "mill" : buildKind === "cauldron" ? null
               : buildKind === "bridgeWood" ? "bridge" : (buildKind === "bridgeStone" || buildKind === "bridgeRenovate") ? "bridgeStoneSprite" : "fence";
             // Pour le pont, pas de stock dédié (voir craft menu) : le compteur
             // affiche directement le bois/la pierre disponible pour la
             // variante choisie, cohérent avec le coût prélevé à la pose.
+            // Chaudron (chantier 2026-07) : pas de sprite dédié pour
+            // l'instant (emoji ⚗️ affiché à la place de l'icône, voir
+            // ci-dessous) — non fait/limite connue, à ajouter si besoin.
             count = myInv ? (buildKind === "wall" ? (myInv.wall || 0) : buildKind === "path" ? (myInv.path || 0) : buildKind === "lamp" ? (myInv.lamp || 0) : buildKind === "scarecrow" ? (myInv.scarecrow || 0)
-              : buildKind === "grass" ? (myInv.grass || 0) : buildKind === "mill" ? (myInv.mill || 0)
+              : buildKind === "grass" ? (myInv.grass || 0) : buildKind === "mill" ? (myInv.mill || 0) : buildKind === "cauldron" ? (myInv.cauldron || 0)
               : buildKind === "bridgeWood" ? (myInv.wood || 0) : (buildKind === "bridgeStone" || buildKind === "bridgeRenovate") ? (myInv.stone || 0) : (myInv.fence || 0)) : "";
-            img = spritesReady ? spritesRef.current[bkImg] : null;
-            lvl = buildKind === "fence" ? (fenceDir === "h" ? "↔" : fenceDir === "v" ? "↕" : "R") : "";
+            img = spritesReady && bkImg ? spritesRef.current[bkImg] : null;
+            lvl = buildKind === "fence" ? (fenceDir === "h" ? "↔" : fenceDir === "v" ? "↕" : "R") : buildKind === "cauldron" ? "⚗️" : "";
           }
           else if (isHerd) { if (carryingAnimal) lvl = "●"; }
           else lvl = "N" + (myTools[s.key] || 1);
           const title = isSeed ? L.seedTip(seedName(seedSel)) : isFood ? L.foodTip(C.FOOD_ENERGY) : isRod ? L.rodTip
             : isFence ? (buildKind === "wall" ? L.wallTip : buildKind === "path" ? L.pathTip : buildKind === "lamp" ? L.lampTip : buildKind === "scarecrow" ? L.scarecrowTip
-              : buildKind === "grass" ? L.grassTip : buildKind === "mill" ? L.millTip
+              : buildKind === "grass" ? L.grassTip : buildKind === "mill" ? L.millTip : buildKind === "cauldron" ? L.cauldronRowSub
               : buildKind === "bridgeRenovate" ? L.bridgeRenovateTip
               : (buildKind === "bridgeWood" || buildKind === "bridgeStone") ? L.bridgeTip : L.fenceTip)
             : isHerd ? L.herdTip : isTools ? L.toolsTip(TOOL_NAMES[toolKind]) : TOOL_NAMES[s.key];
