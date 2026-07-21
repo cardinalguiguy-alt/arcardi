@@ -693,6 +693,42 @@ export function buildSprites() {
     P(g, 20, 22, 5, 2, "#b8912a");
     return c;
   }
+  // Chaudron en métal (chantier 2026-07 : remplace l'ancien rendu emoji
+  // ⚗️ flottant, demande explicite Guillaume "un joli chaudron type
+  // métal, pas une image qui flotte"). Panse en fonte noire, rebord et
+  // reflets en gris acier, trois pieds courts, anse arquée, liquide en
+  // ébullition (violet, cohérent avec la teinte "améthyste" déjà utilisée
+  // pour la lueur côté maléfique) avec quelques bulles et un mince filet
+  // de vapeur. Dessiné plus haut qu'une tuile (comme le puits/lampadaire),
+  // donc dans le calque "draws" trié par profondeur, pas la boucle de sol.
+  function cauldronSprite() {
+    const [c, g] = cv(20, 24);
+    // vapeur légère au-dessus (statique, pas d'animation de flottement)
+    g.strokeStyle = "rgba(220,220,230,0.5)"; g.lineWidth = 1;
+    g.beginPath(); g.moveTo(7, 4); g.quadraticCurveTo(5, 1, 7, -1); g.stroke();
+    g.beginPath(); g.moveTo(12, 4); g.quadraticCurveTo(14, 1, 12, -1); g.stroke();
+    // anse arquée en fer
+    g.strokeStyle = "#2a2a30"; g.lineWidth = 2;
+    g.beginPath(); g.arc(10, 9, 7, Math.PI, 0); g.stroke();
+    // panse en fonte (corps arrondi)
+    g.fillStyle = "#2e2e34";
+    g.beginPath(); g.moveTo(2, 10); g.quadraticCurveTo(2, 21, 10, 21); g.quadraticCurveTo(18, 21, 18, 10);
+    g.lineTo(18, 9); g.lineTo(2, 9); g.fill();
+    // reflet métallique (haut-gauche)
+    g.fillStyle = "#4a4a54";
+    g.beginPath(); g.moveTo(3, 10); g.quadraticCurveTo(3, 17, 7, 20); g.lineTo(6, 20); g.quadraticCurveTo(3, 16, 3, 10); g.fill();
+    P(g, 4, 12, 2, 6, "#5a5a66"); // liseré de reflet
+    // rebord épais du chaudron
+    P(g, 1, 7, 18, 3, "#3a3a42");
+    P(g, 1, 7, 18, 1, "#57575f");
+    // liquide en ébullition (potion), visible juste sous le rebord
+    P(g, 4, 8, 12, 1, "#8a5ad0");
+    g.fillStyle = "#a97ee8";
+    g.beginPath(); g.arc(7, 8, 1, 0, 7); g.arc(11, 8, 1.2, 0, 7); g.arc(14, 8, 0.8, 0, 7); g.fill();
+    // pieds courts en fonte
+    P(g, 2, 20, 3, 3, "#26262c"); P(g, 15, 20, 3, 3, "#26262c"); P(g, 8.5, 21, 3, 3, "#26262c");
+    return c;
+  }
   function well() {
     const [c, g] = cv(24, 30);
     // toit
@@ -938,6 +974,7 @@ export function buildSprites() {
     leverOpen: leverSprite(true),
     leverClosed: leverSprite(false),
     mill: millSprite(),
+    cauldron: cauldronSprite(),
     barn: [barnSprite(1), barnSprite(2), barnSprite(3)],
     animals: [],
     products: [],

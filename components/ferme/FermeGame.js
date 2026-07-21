@@ -1648,6 +1648,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         : bk === "bridgeRenovate" ? "renovateBridge"
         : (bk === "bridgeWood" || bk === "bridgeStone") ? "bridge" : "fence";
       sendReq({ kind: "act", action, x: tt.x, y: tt.y, dir: fenceDirRef.current, material: bk === "bridgeStone" ? "stone" : "wood" });
+      // Correctif 2026-07 (bug remonté par Guillaume : "le moulin ne peut pas
+      // être alimenté en blé") : l'achat d'un moulin bascule automatiquement
+      // l'outil Construction sur la variante "mill" (confort de pose, voir
+      // buyMill), mais RIEN ne le rebasculait ensuite — tant que cette
+      // variante restait équipée, resolveAct/"mill" prenait la branche de
+      // RETRAIT à chaque clic sur le moulin (voir le garde-fou sl===5 dans le
+      // bloc millDeposit ci-dessus), au lieu du dépôt de blé. Comme un moulin
+      // fraîchement posé contient 0 blé, rien ne bloquait ce retrait : le
+      // premier clic destiné à le nourrir le reprenait silencieusement en
+      // inventaire. On rebascule donc sur la variante par défaut ("fence")
+      // juste après avoir envoyé la pose, pour que le clic suivant sur le
+      // moulin déclenche bien millDeposit.
+      if (bk === "mill") { buildKindRef.current = "fence"; setBuildKind("fence"); }
     }
     else if (sl === 6) {
       // Outil "déplacer" : premier clic attrape l'animal visé, second clic
@@ -3095,7 +3108,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           // 5s réelles), puis affiche les 3 mini-jauges de la recette une
           // fois fonctionnel (même contenu que l'ancien marqueur fixe :
           // améthyste lue dans la réserve commune de gemmes, truite/brochet
-          // dans s.salveCraft). Pas de sprite dédié : emoji ⚗️, comme avant.
+          // dans s.salveCraft). Sprite dédié en pixel art (voir cauldronSprite,
+          // fermeArt.js — demande explicite Guillaume : "un joli chaudron type
+          // métal, pas une image qui flotte" ; remplace l'ancien rendu emoji
+          // ⚗️ avec animation de flottement).
           const ii = idxOf(x, y);
           const readyAt = w.objHp.get(ii);
           const ready = E.buildReady(readyAt, epochNow);
@@ -3105,8 +3121,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             const frac = Math.max(0, Math.min(1, 1 - remaining / totalMs));
             draws.push({ y: (y + 1) * T, fn: () => {
               ctx.save(); ctx.globalAlpha = 0.55;
-              ctx.font = "14px monospace"; ctx.textAlign = "center";
-              ctx.fillText("⚗️", x * T + 8, (y + 1) * T - 20);
+              ctx.drawImage(sprites.cauldron, x * T - 2, (y + 1) * T - 24);
               ctx.restore();
               const barW = 20, bx = x * T + 8 - barW / 2, by = (y + 1) * T - 30;
               ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(bx, by, barW, 3);
@@ -3117,9 +3132,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             const gemsNow = (sharedRef.current.gems && sharedRef.current.gems[0]) || 0;
             const rec = C.SALVE_RECIPE;
             draws.push({ y: (y + 1) * T, fn: () => {
-              const bob = Math.sin(now / 300) * 1.5;
-              ctx.font = "14px monospace"; ctx.textAlign = "center";
-              ctx.fillText("⚗️", x * T + 8, (y + 1) * T - 20 + bob);
+              ctx.drawImage(sprites.cauldron, x * T - 2, (y + 1) * T - 24);
               const barW = 20, bx = x * T + 8 - barW / 2;
               const rows = [
                 { got: gemsNow, target: rec.amethyst, color: "#b46ee0" },
@@ -3491,15 +3504,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // (EVIL_CAULDRON_SPAWN), PAS un objet de ew.objects — disparaît dès
       // que quelqu'un l'a ramassé (s.salveCraft.cauldronUnlocked, synchronisé
       // comme le reste), pour tout le monde, pas seulement le joueur qui l'a
-      // pris. Emoji + lueur pulsante pour bien le distinguer du décor.
+      // pris. Sprite pixel art (voir cauldronSprite, fermeArt.js) + lueur
+      // pulsante statique pour bien le distinguer du décor — plus d'emoji ni
+      // d'animation de flottement (demande Guillaume).
       if (!(sharedRef.current.salveCraft && sharedRef.current.salveCraft.cauldronUnlocked)) {
         const cx = C.EVIL_CAULDRON_SPAWN.x, cy = C.EVIL_CAULDRON_SPAWN.y;
         if (cx >= x0 - 1 && cx <= x1 + 1 && cy >= y0 - 1 && cy <= y1 + 1) {
           draws.push({ y: (cy + 1) * T, fn: () => {
             const glow = 0.4 + Math.sin(now / 350) * 0.2;
             ctx.save(); ctx.shadowColor = `rgba(200, 140, 255, ${glow})`; ctx.shadowBlur = 16;
-            ctx.font = "16px monospace"; ctx.textAlign = "center";
-            ctx.fillText("⚗️", cx * T + 8, cy * T + 6 + Math.sin(now / 300) * 2);
+            ctx.drawImage(sprites.cauldron, cx * T - 2, cy * T - 2);
             ctx.restore();
           } });
         }
