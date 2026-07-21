@@ -166,7 +166,81 @@ export function generateWorld(seed) {
     }
   }
 
-  return { w: W, h: H, ground, objects, objHp, crops, mills, bridgeSites, bridgeLeverPos, riverCenter };
+  // Passage sombre (chantier 2026-07, demande Guillaume) : posé rive droite
+  // (à l'est du centre de la rivière, comme riverSideOf/O_LAMP le font déjà
+  // ailleurs), près de la limite nord de la carte (y petit). Calculé depuis
+  // riverCenter (donc dépendant de la seed, jamais un point fixe en dur,
+  // même logique que bridgeLeverPos ci-dessus) : un peu de marge pour rester
+  // sur l'herbe, pas dans le sable/l'eau. Case + voisinage immédiat dégagés
+  // d'arbres/rochers pour garantir qu'elle est toujours atteignable.
+  const dpY = 3;
+  const dpX = Math.round(riverCenterAtRow(riverCenter, dpY) + 9);
+  const darkPassage = { x: Math.max(2, Math.min(W - 3, dpX)), y: dpY };
+  for (let y = darkPassage.y - 1; y <= darkPassage.y + 1; y++) {
+    for (let x = darkPassage.x - 1; x <= darkPassage.x + 1; x++) {
+      if (!inMap(x, y)) continue;
+      const i = idx(x, y);
+      ground[i] = C.G_GRASS;
+      const o = objects[i];
+      if (o === C.O_TREE || o === C.O_TREE2 || o === C.O_ROCK) { objects[i] = C.O_NONE; objHp.delete(i); }
+    }
+  }
+  ground[idx(darkPassage.x, darkPassage.y)] = C.G_DARK_PASSAGE;
+
+  return { w: W, h: H, ground, objects, objHp, crops, mills, bridgeSites, bridgeLeverPos, riverCenter, darkPassage };
+}
+
+function riverCenterAtRow(riverCenter, y) {
+  const row = Math.max(0, Math.min(riverCenter.length - 1, Math.round(y)));
+  return riverCenter[row];
+}
+
+// Carte maléfique (chantier 2026-07, demande Guillaume) : générée localement
+// par le client qui l'emprunte, PAS synchronisée entre joueurs (le passage
+// n'emmène "que lui" — voir enterDarkPassage côté FermeGame.js) et PAS
+// persistée en base : seed fixe (indépendante de la seed de la ferme), donc
+// la carte est toujours identique d'une visite à l'autre pour tout le monde,
+// mais aucun état (arbres coupés, etc.) n'a besoin d'être sauvegardé puisque
+// régénérée à l'identique à chaque entrée. Forêt volontairement bien plus
+// dense que la ferme (ambiance plus oppressante) ; le passage retour
+// (C.EVIL_RETURN_PASSAGE) est un point fixe, jamais dérivé d'un cours d'eau
+// puisqu'il n'y a pas de rivière ici.
+export function generateEvilWorld() {
+  const W = C.EVIL_MAP_W, H = C.EVIL_MAP_H;
+  const rnd = makeRng(0xE411); // seed fixe : une seule carte maléfique, partagée par toutes les parties
+  const ground = new Array(W * H).fill(C.G_GRASS);
+  const objects = new Array(W * H).fill(C.O_NONE);
+  const objHp = new Map();
+  function place(x, y, type, hp) {
+    x = Math.round(x); y = Math.round(y);
+    if (x < 0 || y < 0 || x >= W || y >= H) return;
+    const i = y * W + x;
+    if (ground[i] !== C.G_GRASS || objects[i] !== C.O_NONE) return;
+    objects[i] = type; objHp.set(i, hp);
+  }
+  // Bosquets denses (plus nombreux/serrés que generateWorld) + semis épars,
+  // pour une forêt qui se referme vite autour du joueur.
+  for (let c = 0; c < 60; c++) {
+    const cx = Math.floor(rnd() * W), cy = Math.floor(rnd() * H);
+    const r = 3 + rnd() * 7, n = 14 + Math.floor(rnd() * 26);
+    for (let i = 0; i < n; i++) {
+      const a = rnd() * Math.PI * 2, d = rnd() * r;
+      place(cx + Math.cos(a) * d, cy + Math.sin(a) * d, rnd() < 0.4 ? C.O_TREE2 : C.O_TREE, C.TREE_HP);
+    }
+  }
+  for (let i = 0; i < 900; i++) place(rnd() * W, rnd() * H, rnd() < 0.35 ? C.O_TREE2 : C.O_TREE, C.TREE_HP);
+  for (let i = 0; i < 260; i++) place(rnd() * W, rnd() * H, C.O_ROCK, C.ROCK_HP);
+  // Dégage l'arrivée (bord sud) et le passage retour (bord nord-ouest).
+  for (const p of [C.EVIL_SPAWN, C.EVIL_RETURN_PASSAGE]) {
+    for (let y = p.y - 1; y <= p.y + 1; y++) for (let x = p.x - 1; x <= p.x + 1; x++) {
+      if (x < 0 || y < 0 || x >= W || y >= H) continue;
+      const i = y * W + x;
+      const o = objects[i];
+      if (o === C.O_TREE || o === C.O_TREE2 || o === C.O_ROCK) { objects[i] = C.O_NONE; objHp.delete(i); }
+    }
+  }
+  ground[C.EVIL_RETURN_PASSAGE.y * W + C.EVIL_RETURN_PASSAGE.x] = C.G_DARK_PASSAGE;
+  return { w: W, h: H, ground, objects, objHp, crops: new Map(), mills: new Map(), bridgeSites: [], bridgeLeverPos: [], riverCenter: [] };
 }
 
 // Applique des overrides persistés (reprise après rechargement) sur un monde

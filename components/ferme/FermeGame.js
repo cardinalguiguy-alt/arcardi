@@ -197,6 +197,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const channelRef = useRef(null);
   const spritesRef = useRef(null);
   const worldRef = useRef(null);
+  // Carte maléfique (chantier 2026-07, demande Guillaume — "passage sombre") :
+  // générée localement à la première entrée (E.generateEvilWorld, seed fixe,
+  // voir fermeEngine.js), gardée en cache ensuite (même instance tant que
+  // l'onglet reste ouvert). Totalement indépendante de worldRef (qui reste
+  // TOUJOURS la ferme, y compris pour la simulation hôte pendant que ce
+  // joueur précis est parti — voir updateMe/le rendu, qui basculent sur
+  // evilWorldRef seulement pour CE joueur, jamais sur worldRef lui-même).
+  const evilWorldRef = useRef(null);
+  // Transition en fondu au noir (aller ET retour) : { active, t0, toEvil,
+  // swapped }. `swapped` marque le moment (mi-fondu, écran totalement noir)
+  // où la téléportation réelle a lieu, pour qu'elle soit invisible.
+  const zoneTransRef = useRef({ active: false, t0: 0, toEvil: false, swapped: false });
   const meRef = useRef(null);
   const playersRef = useRef(new Map()); // id -> remote farmer render data
   const farmersRef = useRef({});        // hôte : id -> état privé arbitré
@@ -600,7 +612,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const r = playersRef.current.get(payload.id);
       r.tx = payload.x; r.ty = payload.y; r.dir = payload.dir; r.moving = payload.moving; r.tool = payload.tool;
       r.gender = payload.gender; r.outfit = payload.outfit; r.name = payload.name; r.sleeping = !!payload.sleeping;
-      r.torch = !!payload.torch;
+      r.torch = !!payload.torch; r.zone = payload.zone || "farm";
     });
     ch.on("broadcast", { event: "req" }, ({ payload }) => { if (isHost) hostHandleReq(payload); });
     ch.on("broadcast", { event: "apply" }, ({ payload }) => applyDeltas(payload));
@@ -629,7 +641,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function ensureRemote(p) {
     if (p.id === me.id) return;
     if (!playersRef.current.has(p.id)) {
-      playersRef.current.set(p.id, { id: p.id, name: p.name, gender: p.gender || "m", outfit: p.outfit || 0, x: p.x ?? C.SPAWN.x, y: p.y ?? C.SPAWN.y, tx: p.x ?? C.SPAWN.x, ty: p.y ?? C.SPAWN.y, dir: p.dir || 0, moving: false, tool: 0, animT: 0, sleeping: false, torch: false, hatUntil: (farmersRef.current[p.id] && farmersRef.current[p.id].hatUntil) || 0 });
+      playersRef.current.set(p.id, { id: p.id, name: p.name, gender: p.gender || "m", outfit: p.outfit || 0, x: p.x ?? C.SPAWN.x, y: p.y ?? C.SPAWN.y, tx: p.x ?? C.SPAWN.x, ty: p.y ?? C.SPAWN.y, dir: p.dir || 0, moving: false, tool: 0, animT: 0, sleeping: false, torch: false, hatUntil: (farmersRef.current[p.id] && farmersRef.current[p.id].hatUntil) || 0, zone: "farm" });
     }
   }
 
@@ -1436,7 +1448,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function doJoin() { doJoinWith((nameVal || "Fermier").trim().slice(0, 14) || "Fermier", gender, myOutfit); }
   function doJoinWith(name, g, outfit) {
     if (!worldReady) return;
-    meRef.current = { id: me.id, name, gender: g === "f" ? "f" : "m", outfit: outfit | 0, x: C.SPAWN.x, y: C.SPAWN.y, dir: 0, moving: false, animT: 0, sleeping: false };
+    meRef.current = { id: me.id, name, gender: g === "f" ? "f" : "m", outfit: outfit | 0, x: C.SPAWN.x, y: C.SPAWN.y, dir: 0, moving: false, animT: 0, sleeping: false, zone: "farm" };
     invRef.current = invRef.current || { wood: 0, stone: 0, food: 0, fence: 0, wall: 0, path: 0, seeds: [5, 0, 0, 0], crops: [0, 0, 0, 0], gems: C.GEMS.map(() => 0), fish: C.FISH.map(() => 0) };
     if (!myInv) { setMyInv(invRef.current); }
     if (!myQuests) setMyQuests((farmersRef.current[me.id] && farmersRef.current[me.id].quests) || {});
@@ -1450,7 +1462,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function changeCharacter() { autoJoinTriedRef.current = true; joinedRef.current = false; setPhase("select"); }
   function pubMe() {
     const m = meRef.current;
-    return { id: m.id, name: m.name, gender: m.gender, outfit: m.outfit, x: +m.x.toFixed(2), y: +m.y.toFixed(2), dir: m.dir, moving: m.moving, tool: slotRef.current, sleeping: !!m.sleeping, torch: !!torchOnRef.current };
+    // Tant que m.zone==="evil", la position DIFFUSÉE reste figée sur la case
+    // du passage (m.farmX/farmY, capturée à l'entrée par crossPassage) : les
+    // autres joueurs restés sur la ferme ne doivent jamais voir de
+    // coordonnées de la carte maléfique (dimensions différentes, aucun sens
+    // sur leur écran) — voir aussi le filtre zone!=="farm" au rendu (draws
+    // ci-dessous), qui masque carrément son personnage pendant ce temps.
+    const px = m.zone === "evil" ? m.farmX : m.x, py = m.zone === "evil" ? m.farmY : m.y;
+    return { id: m.id, name: m.name, gender: m.gender, outfit: m.outfit, x: +px.toFixed(2), y: +py.toFixed(2), dir: m.dir, moving: m.zone === "evil" ? false : m.moving, tool: slotRef.current, sleeping: !!m.sleeping, torch: !!torchOnRef.current, zone: m.zone || "farm" };
   }
   function sendPos() { channelRef.current?.send({ type: "broadcast", event: "pos", payload: pubMe() }); }
 
@@ -2338,9 +2357,70 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   }
   const sellProduct = (type) => sendReq({ kind: "sell", item: "product", product: type, n: 9999 });
 
+  // -------- Passage sombre / carte maléfique (chantier 2026-07, demande
+  // Guillaume : "quand un joueur l'empruntera, cela affichera pour lui un
+  // écran noir en fondu enchainé et l'emmenera lui seul sur la nouvelle map
+  // maléfique") --------
+  // Fondu en 2 moitiés (ZONE_FADE_MS chacune) : noir progressif -> bascule
+  // RÉELLE de zone/monde/position pile au point le plus noir (invisible pour
+  // le joueur) -> retour progressif à la normale. `swapped` évite de
+  // rejouer la bascule plusieurs fois pendant la même transition.
+  function crossPassage(toEvil) {
+    if (zoneTransRef.current.active) return; // déjà en transition : ignore un nouveau déclenchement
+    zoneTransRef.current = { active: true, t0: performance.now(), toEvil, swapped: false };
+  }
+  function updateZoneTransition() {
+    const zt = zoneTransRef.current;
+    if (!zt.active) return;
+    const elapsed = performance.now() - zt.t0;
+    if (!zt.swapped && elapsed >= C.ZONE_FADE_MS) {
+      zt.swapped = true;
+      const m = meRef.current;
+      if (zt.toEvil) {
+        if (!evilWorldRef.current) evilWorldRef.current = E.generateEvilWorld();
+        m.farmX = m.x; m.farmY = m.y; // position ferme à restaurer au retour
+        m.zone = "evil";
+        m.x = C.EVIL_SPAWN.x; m.y = C.EVIL_SPAWN.y; m.moving = false;
+        sendPos(); // fige la position publique sur la case du passage (voir pubMe)
+        pushToast(L.darkPassageToast);
+      } else {
+        const w = worldRef.current;
+        m.zone = "farm";
+        m.x = (w && w.darkPassage ? w.darkPassage.x : C.SPAWN.x); m.y = (w && w.darkPassage ? w.darkPassage.y + 1 : C.SPAWN.y); m.moving = false;
+        sendPos();
+        pushToast(L.darkPassageReturnToast);
+      }
+    }
+    if (elapsed >= C.ZONE_FADE_MS * 2) zt.active = false;
+  }
+  function zoneFadeAlpha() {
+    const zt = zoneTransRef.current;
+    if (!zt.active) return 0;
+    const elapsed = performance.now() - zt.t0;
+    if (elapsed < C.ZONE_FADE_MS) return elapsed / C.ZONE_FADE_MS;
+    if (elapsed < C.ZONE_FADE_MS * 2) return 1 - (elapsed - C.ZONE_FADE_MS) / C.ZONE_FADE_MS;
+    return 0;
+  }
+  // Détection automatique (marcher sur la case, pas de touche à presser —
+  // "quand un joueur l'empruntera") : une seule direction possible à la
+  // fois selon la zone courante, donc pas d'ambiguïté farm/evil ici.
+  function checkWalkOverPassage() {
+    if (zoneTransRef.current.active) return; // pas de nouveau déclenchement pendant une transition en cours
+    const m = meRef.current;
+    const tx = Math.floor(m.x + 0.5), ty = Math.floor(m.y + 0.5);
+    if (m.zone === "evil") {
+      const ew = evilWorldRef.current; if (!ew) return;
+      if (tx === C.EVIL_RETURN_PASSAGE.x && ty === C.EVIL_RETURN_PASSAGE.y) crossPassage(false);
+    } else {
+      const w = worldRef.current; if (!w || !w.darkPassage) return;
+      if (tx === w.darkPassage.x && ty === w.darkPassage.y) crossPassage(true);
+    }
+  }
+
   // -------- Téléport maison (nouveauté) --------
   function teleportHome() {
     const m = meRef.current; if (!m) return;
+    if (m.zone === "evil") { pushToast(L.homeBlockedToast); return; }
     m.x = C.SPAWN.x; m.y = C.SPAWN.y; m.moving = false;
     sendPos();
     pushToast(L.homeToast);
@@ -2440,6 +2520,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (isHost) updateRabbits(dt);
       if (isHost) updateGreg(dt);
       if (isHost) updateSoan(dt);
+      // Simulation hôte toujours sur worldRef.current (la ferme), quoi qu'il
+      // arrive : rien ci-dessus ne dépend de la zone du joueur LOCAL. Seul
+      // ce qui suit (mouvement/rendu propres à CE client) bascule sur la
+      // carte maléfique si m.zone==="evil" — voir crossPassage plus haut.
+      updateZoneTransition();
+      checkWalkOverPassage();
+      if (m.zone === "evil") {
+        drawEvilFrame(now);
+        const fa = zoneFadeAlpha();
+        if (fa > 0) { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = "black"; ctx.globalAlpha = fa; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.globalAlpha = 1; }
+        return;
+      }
       checkWalkOverHarvest();
       checkWalkOverWater();
       checkWalkOverCollect();
@@ -2491,8 +2583,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         else if (g === C.G_BRIDGE_STONE_CLOSED) img = sprites.bridgeStoneSprite;
         else if (g === C.G_BRIDGE_SITE) img = sprites.bridgeRuin;
         else if (g === C.G_GRASS_GROWING) img = sprites.tilled;
+        else if (g === C.G_DARK_PASSAGE) img = sprites.grass[0];
         else img = sprites.path;
         ctx.drawImage(img, x * T, y * T);
+        if (g === C.G_DARK_PASSAGE) {
+          // Passage sombre (chantier 2026-07, demande Guillaume) : voile
+          // violine pulsant, pour être repéré de loin sans être un simple
+          // sprite figé — reste discret (pas de flèche/texte) puisque
+          // "il pourra revenir s'il retrouve l'entrée" suppose qu'on ne le
+          // souligne pas non plus côté carte maléfique.
+          const pulse = 0.45 + Math.sin(now / 500) * 0.15;
+          ctx.fillStyle = `rgba(35, 10, 55, ${pulse})`;
+          ctx.fillRect(x * T, y * T, T, T);
+        }
         if (g === C.G_GRASS_GROWING) {
           // Repousse d'herbe en cours (chantier 2026-07, demande Guillaume) :
           // même "modèle Clash of Clans" que lampadaire/épouvantail, mais sur
@@ -2861,7 +2964,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         }
       }
       if (!m.sleeping) draws.push({ y: (m.y + 1) * T, fn: () => drawSelf(m) });
-      for (const p of playersRef.current.values()) if (!p.sleeping) draws.push({ y: (p.y + 1) * T, fn: () => drawRemote(p) });
+      for (const p of playersRef.current.values()) if (!p.sleeping && p.zone !== "evil") draws.push({ y: (p.y + 1) * T, fn: () => drawRemote(p) });
       // Sommeil : aucune animation d'entrée, le dormeur disparaît juste de la
       // carte (voir ci-dessus, non ajouté à `draws`) ; des "Zzz" flottent
       // au-dessus des fenêtres de la maison tant qu'AU MOINS un joueur dort
@@ -2981,6 +3084,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       setMountPromptThrottled(mp);
 
       if (mapOpenRef.current) drawFullMap();
+      const fa = zoneFadeAlpha();
+      if (fa > 0) { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = "black"; ctx.globalAlpha = fa; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.globalAlpha = 1; }
     }
     raf = requestAnimationFrame(loop);
 
@@ -3040,8 +3145,95 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       setTimeout(() => autoCollectPendingRef.current.delete(ai), 1500);
       sendReq({ kind: "collect", animal: ai });
     }
+    // Collision dédiée à la carte maléfique : volontairement séparée de
+    // canStand/blockedTile (fermeEngine.js), câblées en dur sur les
+    // dimensions de la ferme (idx/inMap internes -> C.MAP_W/C.MAP_H) et donc
+    // inutilisables telles quelles sur une carte 70x70 — voir generateEvilWorld.
+    function getCamEvil() {
+      const ew = evilWorldRef.current, m = meRef.current;
+      const vw = canvas.width / ZOOM, vh = canvas.height / ZOOM;
+      let cx = (m.x + 0.5) * T - vw / 2, cy = (m.y + 0.5) * T - vh / 2;
+      cx = Math.max(0, Math.min(ew.w * T - vw, cx)); cy = Math.max(0, Math.min(ew.h * T - vh, cy));
+      return { x: cx, y: cy, vw, vh };
+    }
+    // Rendu de la carte maléfique : volontairement minimal et séparé du
+    // rendu ferme (qui suppose worldRef.current partout) — juste le sol
+    // (teinte sombre unie, pas de cycle jour/nuit ici : l'ambiance reste
+    // sombre en permanence), les arbres/rochers (mêmes sprites que la ferme,
+    // pour la cohérence visuelle) et le joueur lui-même. Pas d'autre joueur,
+    // pas d'animaux, pas de cultures : personne d'autre n'est censé se
+    // trouver ici en même temps (voir crossPassage/pubMe, "lui seul").
+    function drawEvilFrame(now) {
+      const ew = evilWorldRef.current, m = meRef.current, sprites = spritesRef.current;
+      if (!ew || !sprites) return;
+      const cam = getCamEvil();
+      ctx.setTransform(ZOOM, 0, 0, ZOOM, -Math.round(cam.x * ZOOM), -Math.round(cam.y * ZOOM));
+      ctx.fillStyle = "#0b120c";
+      ctx.fillRect(cam.x, cam.y, cam.vw, cam.vh);
+      const x0 = Math.max(0, Math.floor(cam.x / T)), x1 = Math.min(ew.w - 1, Math.ceil((cam.x + cam.vw) / T));
+      const y0 = Math.max(0, Math.floor(cam.y / T)), y1 = Math.min(ew.h - 1, Math.ceil((cam.y + cam.vh) / T));
+      const draws = [];
+      for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+        const i = y * ew.w + x, g = ew.ground[i];
+        ctx.fillStyle = g === C.G_DARK_PASSAGE ? "#3a2a55" : "#182417";
+        ctx.fillRect(x * T, y * T, T, T);
+        if (g === C.G_DARK_PASSAGE) {
+          const pulse = 0.4 + Math.sin(now / 500) * 0.15;
+          ctx.fillStyle = `rgba(140, 90, 220, ${pulse})`;
+          ctx.fillRect(x * T, y * T, T, T);
+        }
+        const o = ew.objects[i];
+        if (o === C.O_TREE || o === C.O_TREE2) { const img = o === C.O_TREE ? sprites.oak : sprites.pine; draws.push({ y: (y + 1) * T, fn: () => ctx.drawImage(img, x * T - 8, (y + 1) * T - 48) }); }
+        else if (o === C.O_ROCK) draws.push({ y: (y + 1) * T, fn: () => ctx.drawImage(sprites.rock, x * T, y * T) });
+      }
+      draws.push({ y: (m.y + 1) * T, fn: () => drawSelf(m) });
+      draws.sort((a, b) => a.y - b.y);
+      for (const d of draws) d.fn();
+      // Voile sombre permanent (assombrissement de l'ambiance, indépendant
+      // du cycle jour/nuit de la ferme, jamais retiré ici).
+      ctx.fillStyle = "rgba(0,0,10,0.35)";
+      ctx.fillRect(cam.x, cam.y, cam.vw, cam.vh);
+    }
+    function blockedEvil(ew, x, y) {
+      const fx = Math.floor(x), fy = Math.floor(y);
+      if (fx < 0 || fy < 0 || fx >= ew.w || fy >= ew.h) return true;
+      const o = ew.objects[fy * ew.w + fx];
+      return o === C.O_TREE || o === C.O_TREE2 || o === C.O_ROCK;
+    }
+    function canStandEvil(ew, x, y) {
+      const r = 0.3;
+      return !blockedEvil(ew, x - r, y) && !blockedEvil(ew, x + r, y) && !blockedEvil(ew, x - r, y + 0.35) && !blockedEvil(ew, x + r, y + 0.35);
+    }
+    function updateMeEvil(dt) {
+      const m = meRef.current, ew = evilWorldRef.current, keys = keysRef.current;
+      if (!ew) return;
+      const uiBlocked = mapOpenRef.current || document.activeElement === chatInputRef.current;
+      let dx = 0, dy = 0;
+      if (!uiBlocked) {
+        if (keys["ArrowUp"] || keys["KeyW"] || keys["KeyZ"]) dy -= 1;
+        if (keys["ArrowDown"] || keys["KeyS"]) dy += 1;
+        if (keys["ArrowLeft"] || keys["KeyA"] || keys["KeyQ"]) dx -= 1;
+        if (keys["ArrowRight"] || keys["KeyD"]) dx += 1;
+      }
+      const moving = (dx || dy) && actAnimRef.current <= 0;
+      if (moving) {
+        const len = Math.hypot(dx, dy); dx /= len; dy /= len;
+        const sp = C.PLAYER_SPEED * dt;
+        const nx = m.x + dx * sp, ny = m.y + dy * sp;
+        if (canStandEvil(ew, nx, m.y)) m.x = nx;
+        if (canStandEvil(ew, m.x, ny)) m.y = ny;
+        if (dx < 0) m.dir = 2; else if (dx > 0) m.dir = 3; else if (dy < 0) m.dir = 1; else if (dy > 0) m.dir = 0;
+        m.animT += dt * 9;
+      } else m.animT = 0;
+      m.moving = !!moving;
+      // Pas de sendPos ici : ce joueur est seul sur cette carte (voir
+      // pubMe/crossPassage) — sa position publique reste figée sur la case
+      // du passage côté ferme tant qu'il n'est pas revenu.
+    }
     function updateMe(dt) {
-      const m = meRef.current, w = worldRef.current, keys = keysRef.current;
+      const m = meRef.current, keys = keysRef.current;
+      if (m.zone === "evil") { updateMeEvil(dt); return; }
+      const w = worldRef.current;
       const horseNow = (sharedRef.current.horses || []).find(h => h.rider2 === me.id);
       if (horseNow) {
         // Passager : ne pilote pas, suit simplement la position vivante du

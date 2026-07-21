@@ -56,6 +56,13 @@ export const G_BRIDGE_STONE_CLOSED = 12; // pont rénové en pierre, FERMÉ via 
                                           // G_BRIDGE_CLOSED, mais pour une case déjà rénovée : le levier bascule
                                           // chaque case selon SON matériau propre, G_BRIDGE<->G_BRIDGE_CLOSED ou
                                           // G_BRIDGE_STONE<->G_BRIDGE_STONE_CLOSED, voir resolveAct cas "lever").
+export const G_DARK_PASSAGE = 13; // "passage sombre" (chantier 2026-07, demande Guillaume) : case unique posée en
+                                   // rive droite, près de la limite nord de la carte (voir generateWorld ->
+                                   // world.darkPassage, position dépendant de la seed puisque calculée depuis
+                                   // riverCenter, jamais un point fixe en dur). Marche dessus = déclenche le fondu
+                                   // au noir + téléportation SOLO vers la carte maléfique (voir enterDarkPassage/
+                                   // tryOpenNearby côté FermeGame.js). Rendu volontairement sombre (voir drawTile)
+                                   // pour se distinguer du reste du décor.
 
 // Objets
 export const O_NONE = 0;
@@ -252,6 +259,30 @@ export const MOUNT_RANGE = 1.6;      // distance pour enfourcher le cheval
 export const WELL_COST = 600;
 export const WELL = { x: 30, y: 62 }; // emplacement du puits (champs à l'ouest)
 export const WELL_SPAWN = { x: 30, y: 64 }; // cible du téléport puits (dégagée à l'achat)
+
+// --- Passage sombre / carte maléfique (chantier 2026-07, demande Guillaume :
+// "ajoute seulement un passage sombre rive droite à la limite de la map. quand
+// un joueur l'empruntera, cela affichera pour lui un écran noir en fondu
+// enchainé et l'emmenera lui seul sur la nouvelle map maléfique. le bouton
+// home ne fonctionnera pas sur la nouvelle map, mais il pourra revenir s'il
+// retrouve l'entrée") ---
+// La position du passage lui-même (world.darkPassage) N'EST PAS ici : elle
+// dépend de riverCenter donc de la seed de CETTE partie (calculée dans
+// generateWorld, jamais un point fixe en dur, voir G_DARK_PASSAGE). Ce qui
+// suit est fixe, propre à la carte maléfique elle-même (indépendante de la
+// ferme, générée localement, voir generateEvilWorld) :
+export const EVIL_MAP_W = 70;
+export const EVIL_MAP_H = 70;
+export const EVIL_SPAWN = { x: 35, y: 66 }; // arrivée du joueur, près du bord sud de la carte maléfique
+// Passage retour : PAS annoncé au joueur (ni surligné, ni sur la mini-carte) —
+// "il pourra revenir s'il retrouve l'entrée" implique qu'il doit l'explorer et
+// la repérer lui-même. Position fixe (indépendante de la seed de la ferme :
+// une seule carte maléfique, partagée par toutes les parties) mais choisie à
+// bonne distance du point d'arrivée pour qu'elle ne saute pas aux yeux tout de
+// suite.
+export const EVIL_RETURN_PASSAGE = { x: 12, y: 8 };
+export const ZONE_FADE_MS = 900; // durée d'une moitié de fondu (aller au noir OU revenir), écran noir tenu entre les deux
+
 
 // --- Clôture (posée librement par les joueurs, section par section) ---
 export const FENCE_COST = 15; // prix d'une section de clôture à la boutique (payée en or, inchangé)
