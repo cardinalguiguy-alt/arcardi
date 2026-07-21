@@ -153,6 +153,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [fertilizerOrderPending, setFertilizerOrderPending] = useState(false); // true | false — zone fixe 5x5, plus de nombre de cases à choisir
   const [binOpen, setBinOpen] = useState(false);
   const [mapOpen, setMapOpen] = useState(false);
+  // Menu "Employés actifs" (chantier 2026-07, demande Guillaume : "un menu
+  // qui indique le nom des employés sous contrat actuellement, on pourra les
+  // diriger à partir de ce menu, leur donner les ordres") : panneau dédié,
+  // séparé de la boutique — liste UNIQUEMENT les employés (Greg/Soan)
+  // effectivement sous contrat (sharedRef.current.greg/soan non null), avec
+  // leur nom et le temps de contrat restant, et donne un accès direct aux
+  // mêmes ordres que la boutique (gregOrderOpen/fertilizerOrderOpen/
+  // soanOrder/soanRecall — aucune nouvelle logique de commande, juste un
+  // raccourci d'accès pour éviter de rouvrir toute la boutique).
+  const [employeesOpen, setEmployeesOpen] = useState(false);
   const [promptKey, setPromptKey] = useState(null); // 'shop' | 'bin' | null
   const [mountPrompt, setMountPrompt] = useState(null); // 'mount' | 'dismount' | null
   const [chat, setChat] = useState([]);   // {id, from, msg}
@@ -4295,6 +4305,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         <button className="ferme-btn" onClick={teleportHome}>{L.btnHome}</button>
         {buildings.wellBuilt && <button className="ferme-btn" onClick={teleportWell}>{L.btnWell}</button>}
         <button className="ferme-btn" onClick={() => setMapOpen(true)}>{L.btnMap}</button>
+        {(sharedRef.current.greg || sharedRef.current.soan) && (
+          <button className="ferme-btn" onClick={() => setEmployeesOpen(true)}>{L.btnEmployees}</button>
+        )}
         <button className="ferme-btn ferme-btn-ghost" onClick={changeCharacter}>{L.btnChangeChar}</button>
         <button className="ferme-btn ferme-btn-ghost" onClick={leaveGame}>{L.btnLeave}</button>
       </div>
@@ -4434,6 +4447,56 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           </div>
         </div>
       )}
+
+      {/* Menu "Employés actifs" (chantier 2026-07, demande Guillaume) : liste
+          les employés RÉELLEMENT sous contrat (le bouton qui ouvre ce
+          panneau est lui-même masqué si personne n'est engagé, voir plus
+          haut), avec leur nom et le temps de contrat restant, et donne un
+          accès direct aux mêmes commandes que la boutique — pas de nouvelle
+          logique de jeu, juste un raccourci pour ne pas rouvrir toute la
+          boutique à chaque ordre. Se ferme automatiquement s'il ne reste
+          plus aucun employé actif (fin de contrat pendant que le panneau
+          est ouvert), pour ne jamais rester affiché sur une liste vide. */}
+      {employeesOpen && (sharedRef.current.greg || sharedRef.current.soan) && (
+        <div className="ferme-modal open" onClick={() => setEmployeesOpen(false)}>
+          <div className="panel ferme-modal-panel" onClick={e => e.stopPropagation()}>
+            <button className="ferme-close-x" onClick={() => setEmployeesOpen(false)}>✕</button>
+            <h2>{L.employeesTitle}</h2>
+            <div className="ferme-hint">{L.employeesHint}</div>
+            {sharedRef.current.greg && (
+              <div className="ferme-shop-row">
+                <Sprite img={spritesReady ? spritesRef.current.getChar("m", 0) : null} w={26} h={32} />
+                <div className="info">
+                  <b>{L.employeesGregName}</b>
+                  <span className="ferme-usage">{L.gregHiredUntil(Math.max(0, Math.ceil((sharedRef.current.greg.expiresAt - Date.now()) / 3600000)))}</span>
+                </div>
+                <button onClick={() => { setEmployeesOpen(false); setGregOrderOpen(true); }}>{L.gregOrderBtn}</button>
+                {(gregStock.fertilizer || 0) > 0 && (
+                  <button onClick={() => { setEmployeesOpen(false); setFertilizerOrderOpen(true); }}>{L.fertilizerOrderBtn}</button>
+                )}
+              </div>
+            )}
+            {sharedRef.current.soan && (
+              <div className="ferme-shop-row">
+                <Sprite img={spritesReady ? spritesRef.current.getChar("m", 1) : null} w={26} h={32} />
+                <div className="info">
+                  <b>{L.employeesSoanName}</b>
+                  <span className="ferme-usage">
+                    {L.soanHiredUntil(Math.max(0, Math.ceil((sharedRef.current.soan.expiresAt - Date.now()) / 3600000)))} — {
+                      sharedRef.current.soan.phase === "fishing" ? L.soanStatusFishing
+                        : sharedRef.current.soan.phase === "break" ? L.soanStatusBreak
+                        : sharedRef.current.soan.phase === "toRiver" ? L.soanStatusToRiver : L.soanStatusRoam}
+                  </span>
+                </div>
+                {sharedRef.current.soan.phase === "roam"
+                  ? <button onClick={soanOrder}>{L.soanOrderBtn}</button>
+                  : <button onClick={soanRecall}>{L.soanRecallBtn}</button>}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
 
 
       {craftMenuOpen && (
