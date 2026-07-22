@@ -41,6 +41,7 @@ export function buildSprites() {
     if (spec.body === "dragon") { P(g, 13, 5, 2, 1, "#ffcf3a"); P(g, 2, 7, 3, 2, dark); P(g, 6, 5, 1, 2, dark); P(g, 8, 4, 1, 2, dark); }
     else if (spec.body === "horse") { P(g, 12, 1, 1, 4, light); P(g, 8, 5, 1, 3, light); }
     else if (spec.body === "cat") { P(g, 9, 2, 1, 2, base); P(g, 12, 2, 1, 2, base); P(g, 2, 10, 3, 1, base); }
+    else if (spec.body === "dog") { P(g, 8, 5, 2, 3, dark); /* floppy ear */ P(g, 13, 5, 1, 3, dark); P(g, 2, 9, 3, 2, base); /* tail */ P(g, 11, 8, 1, 1, "#1a1a1a"); /* nose */ }
     else if (spec.body === "turtle") { P(g, 4, 7, 8, 6, dark); P(g, 5, 8, 6, 4, base); P(g, 6, 9, 1, 1, light); P(g, 9, 10, 1, 1, light); }
     else if (spec.body === "lamb") { P(g, 4, 6, 8, 3, light); P(g, 5, 5, 6, 2, light); }
     else { P(g, 9, 3, 1, 2, base); P(g, 12, 3, 1, 2, base); P(g, 3, 10, 2, 1, base); }
@@ -725,6 +726,29 @@ export function buildSprites() {
         P(g, 6, 8, 4, 3, "#c9a25a");                                  // poche avant
         P(g, 7, 9, 2, 1, "#5a3a1e");                                  // boucle
         break;
+      // Zip 237: small pixel glyphs for the new pixel-styled buttons. White
+      // so they read on the colored button faces.
+      case "check": // accept
+        g.fillStyle = "#ffffff"; P(g, 3, 8, 2, 2, "#ffffff"); P(g, 5, 10, 2, 2, "#ffffff"); P(g, 7, 8, 2, 2, "#ffffff"); P(g, 9, 6, 2, 2, "#ffffff"); P(g, 11, 4, 2, 2, "#ffffff"); break;
+      case "cross": // decline / refuse
+        for (let i = 0; i < 8; i++) { P(g, 4 + i, 4 + i, 2, 1, "#ffffff"); P(g, 11 - i, 4 + i, 2, 1, "#ffffff"); } break;
+      case "coin2": // pay
+        g.fillStyle = "#fff3c0"; g.beginPath(); g.arc(8, 8, 5, 0, 7); g.fill();
+        g.fillStyle = "#e0b83a"; P(g, 7, 5, 2, 6, "#e0b83a"); P(g, 6, 7, 4, 2, "#e0b83a"); break;
+      case "speech": // chat
+        P(g, 2, 4, 12, 7, "#ffffff"); P(g, 4, 11, 3, 2, "#ffffff");
+        P(g, 4, 6, 8, 1, "#8a6340"); P(g, 4, 8, 6, 1, "#8a6340"); break;
+      case "swap": // barter / trade (two arrows)
+        P(g, 3, 5, 8, 2, "#ffffff"); P(g, 9, 3, 2, 2, "#ffffff"); P(g, 11, 5, 2, 2, "#ffffff");
+        P(g, 5, 9, 8, 2, "#ffffff"); P(g, 5, 9, 2, 2, "#ffffff"); P(g, 3, 9, 2, 2, "#ffffff"); break;
+      case "bell": // recall / meet
+        P(g, 6, 3, 4, 2, "#ffffff"); P(g, 5, 5, 6, 5, "#ffffff"); P(g, 4, 10, 8, 2, "#ffffff"); P(g, 7, 12, 2, 2, "#ffffff"); break;
+      case "ban": // blacklist
+        g.strokeStyle = "#ffffff"; g.lineWidth = 2; g.beginPath(); g.arc(8, 8, 5, 0, 7); g.stroke();
+        g.beginPath(); g.moveTo(4, 4); g.lineTo(12, 12); g.stroke(); break;
+      case "release": // set pet free (open hand + arrow up)
+        P(g, 5, 8, 6, 4, "#ffffff"); P(g, 5, 6, 1, 4, "#ffffff"); P(g, 7, 5, 1, 5, "#ffffff"); P(g, 9, 6, 1, 4, "#ffffff");
+        P(g, 7, 2, 2, 3, "#ffffff"); P(g, 6, 3, 4, 1, "#ffffff"); break;
       default: break;
     }
     return c;
@@ -1502,7 +1526,7 @@ house: house(),
     S.crops[t] = [];
     for (let s = 0; s < C.CROP_STAGES; s++) S.crops[t][s] = cropSprite(t, s);
   }
-  for (const k of ["hoe", "can", "axe", "pick", "seeds", "wood", "stone", "food", "gold", "energy", "rod", "ready", "thirst", "herd", "flour", "bag"]) S.icons[k] = icon(k);
+  for (const k of ["hoe", "can", "axe", "pick", "seeds", "wood", "stone", "food", "gold", "energy", "rod", "ready", "thirst", "herd", "flour", "bag", "check", "cross", "coin2", "speech", "swap", "bell", "ban", "release"]) S.icons[k] = icon(k);
   // Zip 236: one sprite per pet id in the catalog (individual pets).
   S.pets = {};
   for (const pid of Object.keys(C.PET_CATALOG)) S.pets[pid] = petSprite(pid);

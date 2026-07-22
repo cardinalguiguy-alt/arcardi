@@ -991,6 +991,63 @@ export function petName(petId, en) {
   return en ? p.nameEn : p.name;
 }
 
+// --- Zip 237: COMMON pets (cats & dogs, many breeds) that visitors can offer
+// in exchange for an order (Guillaume: "up to 15 varieties of dogs and
+// cats"). They fold into PET_CATALOG so the bag/sprite/name paths treat them
+// like any other pet. `common:true` marks them; `body` drives the sprite
+// silhouette (cat vs dog) and `hue` the tint so breeds read differently.
+export const COMMON_CATS = [
+  { id: "cat_tabby",    name: "Chat tigré",        nameEn: "Tabby cat",        hue: 30 },
+  { id: "cat_black",    name: "Chat noir",         nameEn: "Black cat",        hue: 270 },
+  { id: "cat_white",    name: "Chat blanc",        nameEn: "White cat",        hue: 210 },
+  { id: "cat_ginger",   name: "Chat roux",         nameEn: "Ginger cat",       hue: 20 },
+  { id: "cat_siamese",  name: "Siamois",           nameEn: "Siamese",          hue: 40 },
+  { id: "cat_calico",   name: "Chat calico",       nameEn: "Calico",           hue: 15 },
+  { id: "cat_grey",     name: "Chartreux",         nameEn: "Grey cat",         hue: 220 },
+  { id: "cat_persian",  name: "Persan",            nameEn: "Persian",          hue: 45 },
+  { id: "cat_bengal",   name: "Bengal",            nameEn: "Bengal",           hue: 35 },
+  { id: "cat_tux",      name: "Chat smoking",      nameEn: "Tuxedo cat",       hue: 260 },
+  { id: "cat_maine",    name: "Maine coon",        nameEn: "Maine coon",       hue: 25 },
+  { id: "cat_blue",     name: "Bleu russe",        nameEn: "Russian blue",     hue: 200 },
+  { id: "cat_cream",    name: "Chat crème",        nameEn: "Cream cat",        hue: 50 },
+  { id: "cat_spotty",   name: "Chat moucheté",     nameEn: "Spotted cat",      hue: 300 },
+  { id: "cat_lilac",    name: "Chat lilas",        nameEn: "Lilac cat",        hue: 285 },
+];
+export const COMMON_DOGS = [
+  { id: "dog_lab",      name: "Labrador",          nameEn: "Labrador",         hue: 40 },
+  { id: "dog_poodle",   name: "Caniche",           nameEn: "Poodle",           hue: 320 },
+  { id: "dog_husky",    name: "Husky",             nameEn: "Husky",            hue: 205 },
+  { id: "dog_beagle",   name: "Beagle",            nameEn: "Beagle",           hue: 28 },
+  { id: "dog_corgi",    name: "Corgi",             nameEn: "Corgi",            hue: 35 },
+  { id: "dog_shiba",    name: "Shiba",             nameEn: "Shiba",            hue: 22 },
+  { id: "dog_dalmatian",name: "Dalmatien",         nameEn: "Dalmatian",        hue: 250 },
+  { id: "dog_bulldog",  name: "Bouledogue",        nameEn: "Bulldog",          hue: 45 },
+  { id: "dog_terrier",  name: "Terrier",           nameEn: "Terrier",          hue: 33 },
+  { id: "dog_dachs",    name: "Teckel",            nameEn: "Dachshund",        hue: 26 },
+  { id: "dog_collie",   name: "Colley",            nameEn: "Collie",           hue: 38 },
+  { id: "dog_pug",      name: "Carlin",            nameEn: "Pug",              hue: 48 },
+  { id: "dog_boxer",    name: "Boxer",             nameEn: "Boxer",            hue: 24 },
+  { id: "dog_spaniel",  name: "Épagneul",          nameEn: "Spaniel",          hue: 30 },
+  { id: "dog_pom",      name: "Spitz nain",        nameEn: "Pomeranian",       hue: 42 },
+];
+for (const c of COMMON_CATS) PET_CATALOG[c.id] = { name: c.name, nameEn: c.nameEn, hue: c.hue, body: "cat", common: true };
+for (const d of COMMON_DOGS) PET_CATALOG[d.id] = { name: d.name, nameEn: d.nameEn, hue: d.hue, body: "dog", common: true };
+export const COMMON_PET_IDS = [...COMMON_CATS, ...COMMON_DOGS].map(p => p.id);
+
+// --- Zip 237: SWAP offers. Some visitors barter an item for our produce
+// instead of paying money (Guillaume: "offering a decorative item, a useful
+// item, rare seeds, common pets — for our crops and fish and other produce").
+// The visitor WANTS n units of one of our produce kinds; in return they GIVE
+// one reward. Resolution in resolveVisitorSwap.
+export const SWAP_OFFER_CHANCE = 0.22;   // share of non-hostile, non-stay visits that are swaps
+export const SWAP_WANT_MIN = 3;
+export const SWAP_WANT_MAX = 8;
+// Useful items a swap can hand over (drawn into the player's own bag/inv).
+export const SWAP_USEFUL_ITEMS = [
+  { item: "wood",    n: 20 }, { item: "stone", n: 15 }, { item: "food", n: 6 },
+  { item: "salve",   n: 1 },  { item: "healKit", n: 2 }, { item: "fence", n: 10 },
+];
+
 // Dispositions. Hostile chance is halved once per resident living on the
 // farm (a lively townhall discourages troublemakers).
 export const VISITOR_HOSTILE_CHANCE = 0.06;

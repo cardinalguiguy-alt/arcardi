@@ -1724,8 +1724,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (!g) return "";
     if (g.kind === "seed") { const cr = C.CROPS[g.cropId] || {}; return L.giftSeed(lang === "en" ? cr.seedNameEn : cr.seedName); }
     if (g.kind === "decor") { const d = C.UNIQUE_DECORATIONS.find(x => x.id === g.id) || {}; return L.giftDecor(lang === "en" ? d.nameEn : d.name); }
-    if (g.kind === "pet") { const pt = C.UNIQUE_PETS.find(x => x.id === g.petId) || {}; return L.giftPet(lang === "en" ? pt.nameEn : pt.name); }
+    if (g.kind === "pet") { return L.giftPet(C.petName(g.petId, lang === "en")); }
+    if (g.kind === "useful") { return L.giftUseful(g.n || 1, itemLabel(g.item)); }
     return "";
+  }
+  // Zip 237: human label for a useful item id (used by swap gives).
+  function itemLabel(item) {
+    return ({ wood: lang === "en" ? "wood" : "bois", stone: lang === "en" ? "stone" : "pierre", food: lang === "en" ? "snacks" : "snacks", salve: lang === "en" ? "immunity salve" : "baume d'immunité", healKit: lang === "en" ? "bandaids" : "pansements", fence: lang === "en" ? "fences" : "clôtures" })[item] || item;
   }
   // Broadcast the FULL station object (discrete changes only: arrivals,
   // phase switches, deals, votes, damage). Continuous movement travels in
@@ -1782,11 +1787,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (req.kind === "visitorDeal") {
       const r = E.resolveVisitorDeal(f, s, req);
       if (!r.ok) { toastTo(r.toast || "actionFailed"); return true; }
-      ch?.send({ type: "broadcast", event: "apply", payload: { farmer: { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv }, state: shareState() } });
+      // Zip 237: pets can land in the seller's bag now, so include pets in the payload.
+      ch?.send({ type: "broadcast", event: "apply", payload: { farmer: { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv, pets: f.pets }, state: shareState() } });
       stationChat(L.visitorDealDone(rosterOf(v.rid).name, r.gain), "\u{1F4B0}");
-      // Gift reward (zip 233): seeds are already in the seller's pocket;
-      // decorations/pets were queued in station.pendingGifts.
       if (r.gift) stationChat(r.giftQueued ? L.visitorGiftQueued(rosterOf(v.rid).name, giftLabel(r.gift)) : L.visitorGiftGranted(rosterOf(v.rid).name, giftLabel(r.gift)), "\u{1F381}");
+      broadcastStation();
+      return true;
+    }
+    // Zip 237: barter — swap our produce for the visitor's offered item.
+    if (req.kind === "visitorSwap") {
+      const r = E.resolveVisitorSwap(f, s, req);
+      if (!r.ok) { toastTo(r.toast === "visitorNotEnough" ? "swapNotEnough" : (r.toast || "actionFailed")); return true; }
+      ch?.send({ type: "broadcast", event: "apply", payload: { farmer: { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv, pets: f.pets }, state: shareState() } });
+      stationChat(L.swapDone(rosterOf(v.rid).name, giftLabel(r.gift)), "\u{1F501}");
+      if (r.giftQueued) stationChat(L.visitorGiftQueued(rosterOf(v.rid).name, giftLabel(r.gift)), "\u{1F381}");
       broadcastStation();
       return true;
     }
@@ -1810,7 +1824,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // that nobody has claimed yet (idempotent, see resolveVisitorGreet).
       const r = E.resolveVisitorGreet(f, s, req.rid);
       if (r.ok) {
-        if (r.gift && !r.giftQueued) ch?.send({ type: "broadcast", event: "apply", payload: { farmer: { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv } } });
+        if (r.gift && !r.giftQueued) ch?.send({ type: "broadcast", event: "apply", payload: { farmer: { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv, pets: f.pets } } });
         stationChat(L.visitorArrivalGift(rosterOf(v.rid).name, giftLabel(r.gift)), "\u{1F381}");
         broadcastStation();
       }
@@ -6967,7 +6981,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               <div className="ferme-shop-row" key={"pet" + pi}>
                 <Sprite img={spritesReady ? spritesRef.current.pets[pt.id] : null} w={32} h={32} />
                 <div className="info"><b>{C.petName(pt.id, lang === "en")}</b></div>
-                <button className="ferme-vbtn bad small" onClick={() => sendReq({ kind: "releasePet", index: pi })}>{L.bagReleaseBtn}</button>
+                <PixBtn sprites={spritesReady ? spritesRef.current : null} icon="release" tone="bad" small label={L.bagReleaseBtn} onClick={() => sendReq({ kind: "releasePet", index: pi })} />
               </div>
             ))}
 
@@ -7090,32 +7104,37 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       {/* -------- 2026-07 station update: panels -------- */}
       {adsOpen && (
         <div className="ferme-modal open" onClick={() => setAdsOpen(false)}>
-          <div className="panel ferme-modal-panel" onClick={e => e.stopPropagation()}>
+          <div className="panel ferme-modal-panel ferme-ads-panel" onClick={e => e.stopPropagation()}>
+            <button className="ferme-close-x" onClick={() => setAdsOpen(false)}>✕</button>
             <h3 style={{ marginTop: 0 }}>{L.adsTitle}</h3>
-            <p style={{ fontSize: 13, opacity: .85 }}>{L.adsIntro}</p>
-            {C.AD_CATEGORIES.map(cat => {
-              const label = { crops: L.adCatCrops, animal: L.adCatAnimal, fish: L.adCatFish, resources: L.adCatResources }[cat];
-              const on = adsSel.includes(cat);
-              return (
-                <label key={cat} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 2px", cursor: "pointer" }}>
-                  <input type="checkbox" checked={on} onChange={() => setAdsSel(sel => on ? sel.filter(c => c !== cat) : [...sel, cat])} />
-                  <span>{label}</span>
-                </label>
-              );
-            })}
-            <p style={{ fontSize: 12, opacity: .7 }}>{L.adsFee(C.AD_FEE)}</p>
-            <button onClick={() => { sendReq({ kind: "adsSet", ads: adsSel }); setAdsOpen(false); }}>{L.adsSave}</button>
-            <h4>{L.adsBlacklistTitle}</h4>
+            <p style={{ fontSize: 13, opacity: .85, lineHeight: 1.5, margin: "0 0 12px" }}>{L.adsIntro}</p>
+            <div className="ferme-ads-cats">
+              {C.AD_CATEGORIES.map(cat => {
+                const label = { crops: L.adCatCrops, animal: L.adCatAnimal, fish: L.adCatFish, resources: L.adCatResources }[cat];
+                const on = adsSel.includes(cat);
+                return (
+                  <label key={cat} className={"ferme-ads-cat" + (on ? " on" : "")} onClick={() => setAdsSel(sel => on ? sel.filter(c => c !== cat) : [...sel, cat])}>
+                    <span className="ferme-ads-check">{on ? "\u2714" : ""}</span>
+                    <span>{label}</span>
+                  </label>
+                );
+              })}
+            </div>
+            <p style={{ fontSize: 12, opacity: .7, margin: "12px 0" }}>{L.adsFee(C.AD_FEE)}</p>
+            <PixBtn sprites={spritesReady ? spritesRef.current : null} icon="check" tone="good" block label={L.adsSave} onClick={() => { sendReq({ kind: "adsSet", ads: adsSel }); setAdsOpen(false); }} />
+
+            <div className="ferme-ads-sep" />
+            <h4 style={{ margin: "4px 0 8px" }}>{L.adsBlacklistTitle}</h4>
             {(!stationSt || !stationSt.blacklist || !stationSt.blacklist.length)
-              ? <p style={{ fontSize: 12, opacity: .7 }}>{L.adsBlacklistEmpty}</p>
-              : stationSt.blacklist.map(rid => <div key={rid} style={{ fontSize: 13, padding: "2px 0" }}>🚫 {(C.VISITOR_ROSTER[rid] || {}).name || "?"}</div>)}
-            <p style={{ fontSize: 11, opacity: .6 }}>{L.adsBlacklistHint}</p>
-            {/* Zip 233: gifts promised by visitors (pets/decorations) that
-                wait for their systems to ship - persisted in the save. */}
-            <h4>{L.adsGiftsTitle}</h4>
+              ? <p style={{ fontSize: 12, opacity: .7, margin: "2px 0" }}>{L.adsBlacklistEmpty}</p>
+              : <div className="ferme-ads-list">{stationSt.blacklist.map(rid => <div key={rid} className="ferme-ads-row">{"\u{1F6AB}"} {(C.VISITOR_ROSTER[rid] || {}).name || "?"}</div>)}</div>}
+            <p style={{ fontSize: 11, opacity: .6, margin: "8px 0 0" }}>{L.adsBlacklistHint}</p>
+
+            <div className="ferme-ads-sep" />
+            <h4 style={{ margin: "4px 0 8px" }}>{L.adsGiftsTitle}</h4>
             {(!stationSt || !stationSt.pendingGifts || !stationSt.pendingGifts.length)
-              ? <p style={{ fontSize: 12, opacity: .7 }}>{L.adsGiftsEmpty}</p>
-              : stationSt.pendingGifts.map((g, gi) => <div key={gi} style={{ fontSize: 13, padding: "2px 0" }}>🎁 {L.adsGiftRow(giftLabel(g), (C.VISITOR_ROSTER[g.from] || {}).name || "?")}</div>)}
+              ? <p style={{ fontSize: 12, opacity: .7, margin: "2px 0" }}>{L.adsGiftsEmpty}</p>
+              : <div className="ferme-ads-list">{stationSt.pendingGifts.map((g, gi) => <div key={gi} className="ferme-ads-row">{"\u{1F381}"} {L.adsGiftRow(giftLabel(g), (C.VISITOR_ROSTER[g.from] || {}).name || "?")}</div>)}</div>}
           </div>
         </div>
       )}
@@ -7144,7 +7163,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 ))}
               </div>
             )}
-            <button className="ferme-vbtn" onClick={() => sendReq({ kind: "visitorChat", rid: v.rid })}>{"\u{1F4AC} "}{L.visitorChatBtn}</button>
+            <PixBtn sprites={spritesReady ? spritesRef.current : null} icon="speech" label={L.visitorChatBtn} onClick={() => sendReq({ kind: "visitorChat", rid: v.rid })} />
           </div>
         );
         return (
@@ -7190,11 +7209,54 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                     <b style={{ color: enough ? "#1d6b2a" : "#a33a1f", fontSize: 15 }}>{have} / {o.n}</b>
                   </div>
                   <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                    <button className="ferme-vbtn good" disabled={!enough} onClick={() => { sendReq({ kind: "visitorDeal", rid: v.rid }); setVisitorOpen(false); }}>{"\u2714 "}{L.visitorAccept}</button>
-                    <button className="ferme-vbtn ghost" onClick={() => setVisitorOpen(false)}>{L.visitorCloseBtn}</button>
+                    <PixBtn sprites={spritesReady ? spritesRef.current : null} icon="check" tone="good" disabled={!enough} label={L.visitorAccept} onClick={() => { sendReq({ kind: "visitorDeal", rid: v.rid }); setVisitorOpen(false); }} />
+                    <PixBtn sprites={spritesReady ? spritesRef.current : null} icon="cross" tone="ghost" label={L.visitorCloseBtn} onClick={() => setVisitorOpen(false)} />
                   </div>
                   {chatSection}
                 </>}
+                {o.type === "swap" && (() => {
+                  // Zip 237: barter card — what they want (from our produce) vs
+                  // what they give. Pixel icons on both sides.
+                  const w2 = o.want || {}; const give = o.give || {};
+                  const wImg = !spritesReady ? null
+                    : w2.kind === "crop" ? spritesRef.current.crops[w2.id][C.CROP_STAGES - 1]
+                    : w2.kind === "fish" ? spritesRef.current.fishIcons[w2.id]
+                    : spritesRef.current.products[w2.id];
+                  const wName = w2.kind === "crop" ? cropName(w2.id)
+                    : w2.kind === "fish" ? (lang === "en" ? (C.FISH[w2.id] || {}).nameEn : (C.FISH[w2.id] || {}).name)
+                    : (lang === "en" ? (C.ANIMALS[w2.id] || {}).prodEn : (C.ANIMALS[w2.id] || {}).prod);
+                  const haveW = !myInv ? 0 : w2.kind === "crop" ? ((myInv.crops || [])[w2.id] || 0)
+                    : w2.kind === "fish" ? ((myInv.fish || [])[w2.id] || 0)
+                    : ((myInv.products || [])[w2.id] || 0);
+                  const okSwap = haveW >= (w2.n || 0);
+                  const giveImg = !spritesReady ? null
+                    : give.kind === "pet" ? spritesRef.current.pets[give.petId]
+                    : give.kind === "seed" ? spritesRef.current.crops[give.cropId][C.CROP_STAGES - 1]
+                    : give.kind === "useful" ? spritesRef.current.icons[give.item === "salve" ? "energy" : give.item === "healKit" ? "energy" : give.item] || spritesRef.current.icons.gold
+                    : null;
+                  return (<>
+                    <h4 style={{ margin: "4px 0 8px" }}>{L.swapTitle(ro.name)}</h4>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#efe5c8", border: "1px solid #c9b98f", borderRadius: 8, padding: "10px 12px" }}>
+                      <div style={{ flex: 1, textAlign: "center" }}>
+                        <div style={{ fontSize: 11, opacity: .7, marginBottom: 4 }}>{L.swapWantLabel}</div>
+                        <Sprite img={wImg} w={40} h={40} />
+                        <div style={{ fontWeight: 800 }}>{"\u00D7"}{w2.n} {wName}</div>
+                      </div>
+                      <div style={{ fontSize: 22 }}>{"\u{1F501}"}</div>
+                      <div style={{ flex: 1, textAlign: "center" }}>
+                        <div style={{ fontSize: 11, opacity: .7, marginBottom: 4 }}>{L.swapGiveLabel}</div>
+                        {giveImg ? <Sprite img={giveImg} w={40} h={40} /> : <div style={{ fontSize: 30 }}>{"\u{1F381}"}</div>}
+                        <div style={{ fontWeight: 800 }}>{giftLabel(give)}</div>
+                      </div>
+                    </div>
+                    <div style={{ margin: "8px 0 2px", fontSize: 12, color: okSwap ? "#1d6b2a" : "#a33a1f", fontWeight: 700, textAlign: "right" }}>{L.swapPocket(haveW, w2.n)}</div>
+                    <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+                      <PixBtn sprites={spritesReady ? spritesRef.current : null} icon="swap" tone="good" disabled={!okSwap} label={L.swapAcceptBtn} onClick={() => { sendReq({ kind: "visitorSwap", rid: v.rid }); setVisitorOpen(false); }} />
+                      <PixBtn sprites={spritesReady ? spritesRef.current : null} icon="cross" tone="ghost" label={L.visitorCloseBtn} onClick={() => setVisitorOpen(false)} />
+                    </div>
+                    {chatSection}
+                  </>);
+                })()}
                 {o.type === "chat" && <>
                   <p style={{ margin: "2px 0" }}>{L.visitorWantsChat(ro.name)}</p>
                   {chatSection}
@@ -7202,16 +7264,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 {o.type === "demand" && <>
                   <p style={{ color: "#a33a1f", fontWeight: 700 }}>{L.visitorDemand(ro.name, o.gold)}</p>
                   <div style={{ display: "flex", gap: 8 }}>
-                    <button className="ferme-vbtn" onClick={() => { sendReq({ kind: "visitorPay", rid: v.rid }); setVisitorOpen(false); }}>{"\u{1FA99} "}{L.visitorPayBtn(o.gold)}</button>
-                    <button className="ferme-vbtn bad" onClick={() => { sendReq({ kind: "visitorRefuse", rid: v.rid }); setVisitorOpen(false); }}>{L.visitorRefuseBtn}</button>
+                    <PixBtn sprites={spritesReady ? spritesRef.current : null} icon="coin2" tone="gold" label={L.visitorPayBtn(o.gold)} onClick={() => { sendReq({ kind: "visitorPay", rid: v.rid }); setVisitorOpen(false); }} />
+                    <PixBtn sprites={spritesReady ? spritesRef.current : null} icon="cross" tone="bad" label={L.visitorRefuseBtn} onClick={() => { sendReq({ kind: "visitorRefuse", rid: v.rid }); setVisitorOpen(false); }} />
                   </div>
                 </>}
                 {o.type === "stay" && <>
                   <h4 style={{ margin: "4px 0" }}>{L.stayTitle(ro.name)}</h4>
                   <p>{L.stayProposal(ro.name, ro.job)}</p>
                   {myVote === null ? <div style={{ display: "flex", gap: 8 }}>
-                    <button className="ferme-vbtn good" onClick={() => { setMyVote(true); sendReq({ kind: "visitorVote", rid: v.rid, v: true }); }}>{L.voteYes}</button>
-                    <button className="ferme-vbtn bad" onClick={() => { setMyVote(false); sendReq({ kind: "visitorVote", rid: v.rid, v: false }); }}>{L.voteNo}</button>
+                    <PixBtn sprites={spritesReady ? spritesRef.current : null} icon="check" tone="good" label={L.voteYes} onClick={() => { setMyVote(true); sendReq({ kind: "visitorVote", rid: v.rid, v: true }); }} />
+                    <PixBtn sprites={spritesReady ? spritesRef.current : null} icon="cross" tone="bad" label={L.voteNo} onClick={() => { setMyVote(false); sendReq({ kind: "visitorVote", rid: v.rid, v: false }); }} />
                   </div> : <p style={{ opacity: .8 }}>{L.voteWaiting}</p>}
                 </>}
                 {o.type === "done" && <>
@@ -7220,8 +7282,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 </>}
               </div>
               <div style={{ marginTop: 10, textAlign: "right", display: "flex", gap: 6, justifyContent: "flex-end" }}>
-                <button className="ferme-vbtn small" onClick={() => { sendReq({ kind: "visitorRecall", rid: v.rid }); }}>{L.meetAtHallBtn}</button>
-                <button className="ferme-vbtn bad small" onClick={() => { sendReq({ kind: "visitorBlacklist", rid: v.rid }); setVisitorOpen(false); }}>{L.visitorBlacklistBtn}</button>
+                <PixBtn sprites={spritesReady ? spritesRef.current : null} icon="bell" small label={L.meetAtHallBtn} onClick={() => { sendReq({ kind: "visitorRecall", rid: v.rid }); }} />
+                <PixBtn sprites={spritesReady ? spritesRef.current : null} icon="ban" tone="bad" small label={L.visitorBlacklistBtn} onClick={() => { sendReq({ kind: "visitorBlacklist", rid: v.rid }); setVisitorOpen(false); }} />
               </div>
             </div>
           </div>
@@ -7242,6 +7304,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               const o = vv.offer || {};
               const ask = o.type === "buy" ? L.notifWantsBuy(o.n, (lang === "en" ? (C.CROPS[o.crop] || {}).nameEn : (C.CROPS[o.crop] || {}).name))
                 : o.type === "demand" ? L.notifDemand(o.gold)
+                : o.type === "swap" ? L.notifSwap
                 : o.type === "stay" ? L.notifStay : L.notifWantsChat;
               return (
                 <div key={vv.rid} style={card}>
@@ -7251,7 +7314,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                     {o.type === "buy" && spritesReady && <span style={{ verticalAlign: "middle", marginRight: 4, display: "inline-block" }}><Sprite img={spritesRef.current.crops[o.crop][C.CROP_STAGES - 1]} w={18} h={18} /></span>}
                     {ask}
                     {o.type === "demand" && <span style={{ color: "#a33a1f", fontWeight: 700 }}> · {L.visitorUrgent}</span>}
-                    <br /><button className="ferme-vbtn small" style={{ marginTop: 4 }} onClick={() => { setMyVote(null); setVisitorRid(vv.rid); setVisitorOpen(true); sendReq({ kind: "visitorRecall", rid: vv.rid }); }}>{L.meetBtn}</button>
+                    <br /><span style={{ display: "inline-block", marginTop: 4 }}><PixBtn sprites={spritesReady ? spritesRef.current : null} icon="bell" small label={L.meetBtn} onClick={() => { setMyVote(null); setVisitorRid(vv.rid); setVisitorOpen(true); sendReq({ kind: "visitorRecall", rid: vv.rid }); }} /></span>
                   </div>
                 </div>
               );
@@ -7295,6 +7358,24 @@ function Sprite({ img, w = 32, h = 32, sx, sy }) {
     g.drawImage(img, 0, 0, sw, sh, 0, 0, sw, sh);
   }, [img, sx, sy]);
   return <canvas ref={ref} style={{ width: w, height: h, imageRendering: "pixelated" }} />;
+}
+
+/* Zip 237: pixel-themed button. Renders an optional pixel icon sprite next to
+   a label inside a chunky beveled button (.ferme-pixbtn). `tone` picks the
+   color variant (good/bad/gold/ghost/plain). Used to replace the old
+   emoji-as-button rows across the visitor card and ad board. */
+function PixBtn({ icon, label, tone = "plain", disabled, onClick, small, sprites, block }) {
+  const img = icon && sprites ? sprites.icons[icon] : null;
+  return (
+    <button
+      className={"ferme-pixbtn" + (tone ? " " + tone : "") + (small ? " small" : "") + (block ? " block" : "")}
+      disabled={disabled}
+      onClick={onClick}
+    >
+      {img && <span className="ferme-pixbtn-ico"><Sprite img={img} w={small ? 16 : 20} h={small ? 16 : 20} /></span>}
+      <span className="ferme-pixbtn-label">{label}</span>
+    </button>
+  );
 }
 
 /* ============================================================================

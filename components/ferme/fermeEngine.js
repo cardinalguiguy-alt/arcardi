@@ -2264,7 +2264,32 @@ function rollGiftReward(r) {
     return { kind: "seed", cropId };
   }
   if (roll < 0.85) return { kind: "decor", id: C.UNIQUE_DECORATIONS[Math.floor(r() * C.UNIQUE_DECORATIONS.length)].id };
+  // Zip 237: gifted pets are now usually a COMMON pet (cat/dog breed); a rare
+  // unique pet still shows up occasionally.
+  if (roll < 0.97) return { kind: "pet", petId: C.COMMON_PET_IDS[Math.floor(r() * C.COMMON_PET_IDS.length)] };
   return { kind: "pet", petId: C.UNIQUE_PETS[Math.floor(r() * C.UNIQUE_PETS.length)].id };
+}
+
+// Zip 237: build a swap offer — pick a produce the visitor wants and a reward
+// they give. `want.kind` is "crop" | "fish" | "product"; `give` mirrors the
+// gift-reward shapes plus a "useful" item kind.
+function rollSwapOffer(r, rel) {
+  const wantKinds = ["crop", "fish", "product"];
+  const wk = wantKinds[Math.floor(r() * wantKinds.length)];
+  let wantId = 0;
+  if (wk === "crop") wantId = C.CROPS.filter(c => !c.unique)[Math.floor(r() * C.CROPS.filter(c => !c.unique).length)].id;
+  else if (wk === "fish") wantId = Math.floor(r() * C.FISH.length);
+  else wantId = Math.floor(r() * C.ANIMALS.length);
+  const n = C.SWAP_WANT_MIN + Math.floor(r() * (C.SWAP_WANT_MAX - C.SWAP_WANT_MIN + 1));
+  // Reward: friends (higher rel) skew toward better gives (pet/decor/seed);
+  // strangers more often hand over a useful stack.
+  const gr = r();
+  let give;
+  if (gr < 0.35) give = { kind: "pet", petId: C.COMMON_PET_IDS[Math.floor(r() * C.COMMON_PET_IDS.length)] };
+  else if (gr < 0.55) give = { kind: "seed", cropId: C.UNIQUE_SEED_CROPS[Math.floor(r() * C.UNIQUE_SEED_CROPS.length)] };
+  else if (gr < 0.72) give = { kind: "decor", id: C.UNIQUE_DECORATIONS[Math.floor(r() * C.UNIQUE_DECORATIONS.length)].id };
+  else { const it = C.SWAP_USEFUL_ITEMS[Math.floor(r() * C.SWAP_USEFUL_ITEMS.length)]; give = { kind: "useful", item: it.item, n: it.n }; }
+  return { type: "swap", want: { kind: wk, id: wantId, n }, give };
 }
 
 // Classify a buy offer against what the farm ACTUALLY has (zip 233).
@@ -2352,6 +2377,11 @@ export function spawnVisitor(station, rnd, stockCtx) {
   } else if (r() < C.VISITOR_CHAT_CHANCE) {
     disp = r() < 0.6 ? "nice" : "neutral";
     offer = { type: "chat" };
+  } else if (r() < C.SWAP_OFFER_CHANCE) {
+    // Zip 237: a barter — the visitor WANTS some of our produce and GIVES an
+    // item (decor / useful item / rare seeds / common pet) rather than gold.
+    disp = r() < 0.6 ? "nice" : "neutral";
+    offer = rollSwapOffer(r, rel);
   } else {
     disp = r() < 0.6 ? "nice" : "neutral";
     const crop = Math.floor(r() * C.CROPS.length);
@@ -2425,18 +2455,62 @@ export function resolveVisitorDeal(f, s, m) {
   f.inv.crops[o.crop] -= o.n;
   res.gain = o.n * o.price + (o.bonus || 0);
   s.money += res.gain; s.totalEarned = (s.totalEarned || 0) + res.gain;
-  // Gift reward (zip 233, "prep" orders only): unique seeds land straight in
-  // the seller's pocket; decorations/pets are QUEUED (their systems are still
-  // deferred) in station.pendingGifts, which persists across saves.
+  // Gift reward (zip 233, "prep" orders only). Zip 237: rewards are granted
+  // through the shared grantReward() helper so PETS land in the seller's own
+  // bag (max MAX_PETS); only bag-full pets and decorations fall back to the
+  // communal pendingGifts queue.
   const rw = o.reward;
-  if (rw && rw.kind === "seed") {
+  if (rw) { const gr = grantReward(f, s, v, rw); res.gift = { ...rw }; res.giftQueued = gr.queued; res.bagFull = gr.bagFull; }
+  s.station.rel[v.rid] = ((s.station.rel[v.rid] || 0) + C.REL_DEAL);
+  startLinger(v);
+  res.ok = true;
+  return res;
+}
+
+// Zip 237: grant a reward object to a farmer, routing by kind.
+//  - seed  -> +3 rare seeds in the seller's pocket
+//  - pet   -> the seller's own bag (resolveCatchPet); if full, queue in
+//             pendingGifts as a fallback so it isn't lost
+//  - useful-> a stack of a useful item straight into the seller's inventory
+//  - decor -> communal pendingGifts (decoration system still deferred)
+// Returns { queued, bagFull }.
+export function grantReward(f, s, v, rw) {
+  const out = { queued: false, bagFull: false };
+  if (!rw) return out;
+  if (rw.kind === "seed") {
     f.inv.seeds[rw.cropId] = (f.inv.seeds[rw.cropId] || 0) + 3;
-    res.gift = { ...rw };
-  } else if (rw && (rw.kind === "decor" || rw.kind === "pet")) {
+  } else if (rw.kind === "pet") {
+    const cr = resolveCatchPet(f, rw.petId);
+    if (!cr.ok) {
+      out.bagFull = true;
+      if (!Array.isArray(s.station.pendingGifts)) s.station.pendingGifts = [];
+      s.station.pendingGifts.push({ ...rw, from: v ? v.rid : -1, at: Date.now() });
+      out.queued = true;
+    }
+  } else if (rw.kind === "useful") {
+    if (Array.isArray(f.inv[rw.item])) { /* not expected */ }
+    else f.inv[rw.item] = (f.inv[rw.item] || 0) + (rw.n || 1);
+  } else { // decor (or unknown) -> communal queue
     if (!Array.isArray(s.station.pendingGifts)) s.station.pendingGifts = [];
-    s.station.pendingGifts.push({ ...rw, from: v.rid, at: Date.now() });
-    res.gift = { ...rw }; res.giftQueued = true;
+    s.station.pendingGifts.push({ ...rw, from: v ? v.rid : -1, at: Date.now() });
+    out.queued = true;
   }
+  return out;
+}
+
+// Zip 237: fulfil a SWAP offer — deduct the wanted produce from the seller,
+// grant the reward. Produce kinds: crop (f.inv.crops), fish (f.inv.fish),
+// product (f.inv.products).
+export function resolveVisitorSwap(f, s, m) {
+  const res = { ok: false, toast: null, gift: null, giftQueued: false, bagFull: false };
+  const v = getVisitor(s, m && m.rid);
+  if (!v || v.phase !== "wait" || !v.offer || v.offer.type !== "swap") { res.toast = "actionFailed"; return res; }
+  const w = v.offer.want;
+  const bag = w.kind === "crop" ? f.inv.crops : w.kind === "fish" ? f.inv.fish : f.inv.products;
+  if (!bag || (bag[w.id] || 0) < w.n) { res.toast = "visitorNotEnough"; return res; }
+  bag[w.id] -= w.n;
+  const gr = grantReward(f, s, v, v.offer.give);
+  res.gift = { ...v.offer.give }; res.giftQueued = gr.queued; res.bagFull = gr.bagFull;
   s.station.rel[v.rid] = ((s.station.rel[v.rid] || 0) + C.REL_DEAL);
   startLinger(v);
   res.ok = true;
@@ -2485,18 +2559,18 @@ export function resolveVisitorChat(s, rid, rnd) {
 // pocket (a bit smaller than a deal reward), decorations/pets queue in
 // station.pendingGifts like deal gifts do.
 export function resolveVisitorGreet(f, s, rid) {
-  const res = { ok: false, gift: null, giftQueued: false };
+  const res = { ok: false, gift: null, giftQueued: false, bagFull: false };
   const v = getVisitor(s, rid);
   if (!v || !v.arrivalGift || v.greeted) return res;
   v.greeted = true;
   const rw = v.arrivalGift;
   if (rw.kind === "seed") {
+    // Arrival seeds are a touch smaller than a deal reward.
     f.inv.seeds[rw.cropId] = (f.inv.seeds[rw.cropId] || 0) + 2;
     res.gift = { ...rw };
   } else {
-    if (!Array.isArray(s.station.pendingGifts)) s.station.pendingGifts = [];
-    s.station.pendingGifts.push({ ...rw, from: v.rid, at: Date.now() });
-    res.gift = { ...rw }; res.giftQueued = true;
+    const gr = grantReward(f, s, v, rw);
+    res.gift = { ...rw }; res.giftQueued = gr.queued; res.bagFull = gr.bagFull;
   }
   res.ok = true;
   return res;

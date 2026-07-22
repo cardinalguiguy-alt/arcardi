@@ -6826,6 +6826,39 @@ div.ferme-usage{ margin-bottom:10px; }
 .ferme-vbtn.bad{ background: #ecc4b4; border-color: #8a3a24; box-shadow: 0 2px 0 #8a3a24; color: #5c1f0e; }
 .ferme-vbtn.ghost{ background: transparent; box-shadow: none; border-style: dashed; }
 .ferme-vbtn.small{ font-size: 11px; padding: 3px 8px; box-shadow: 0 1px 0 #6b4a2e; }
+/* Zip 237: pixel-themed buttons — chunkier bevel, pixel icon + label. Replaces
+   emoji-as-button rows on the visitor card and ad board. */
+.ferme-pixbtn{
+  display: inline-flex; align-items: center; gap: 7px; justify-content: center;
+  font: inherit; font-size: 13px; font-weight: 800; cursor: pointer;
+  color: #2a1c10; background: linear-gradient(#f0e6c8, #e2d3aa);
+  border: 3px solid #6b4a2e; border-radius: 4px;
+  box-shadow: inset 0 2px 0 #fff7e0, inset 0 -3px 0 #c3ad7e, 0 3px 0 #4f3620;
+  padding: 7px 14px; image-rendering: pixelated;
+  transition: transform .05s, box-shadow .05s, filter .1s;
+}
+.ferme-pixbtn .ferme-pixbtn-ico{ display: inline-flex; }
+.ferme-pixbtn:hover:not(:disabled){ filter: brightness(1.05); }
+.ferme-pixbtn:active:not(:disabled){ transform: translateY(3px); box-shadow: inset 0 2px 0 #fff7e0, inset 0 -2px 0 #c3ad7e, 0 0 0 #4f3620; }
+.ferme-pixbtn:disabled{ opacity: .5; cursor: not-allowed; box-shadow: inset 0 2px 0 #fff7e0, 0 3px 0 #4f3620; }
+.ferme-pixbtn.small{ font-size: 11px; padding: 4px 9px; border-width: 2px; box-shadow: inset 0 1px 0 #fff7e0, inset 0 -2px 0 #c3ad7e, 0 2px 0 #4f3620; }
+.ferme-pixbtn.block{ display: flex; width: 100%; }
+.ferme-pixbtn.good{ background: linear-gradient(#cbe9ac, #a9d488); border-color: #3f7a2e; box-shadow: inset 0 2px 0 #eafbdc, inset 0 -3px 0 #7cae5c, 0 3px 0 #2c5720; color: #163f0d; }
+.ferme-pixbtn.bad{ background: linear-gradient(#f0c7b4, #e0a189); border-color: #8a3a24; box-shadow: inset 0 2px 0 #ffe6da, inset 0 -3px 0 #b56b52, 0 3px 0 #5c2413; color: #4c1607; }
+.ferme-pixbtn.gold{ background: linear-gradient(#f7e08c, #ecc548); border-color: #9a7418; box-shadow: inset 0 2px 0 #fff4c4, inset 0 -3px 0 #c99a28, 0 3px 0 #6d5010; color: #4a3506; }
+.ferme-pixbtn.ghost{ background: linear-gradient(#efe7d0, #e3d8ba); border-style: dashed; color: #5a4a30; }
+/* Zip 237: ad board — wider panel, breathing room, tappable category chips. */
+.ferme-ads-panel{ width: min(560px, 94vw) !important; max-height: 86vh; overflow-y: auto; padding: 22px 26px !important; line-height: 1.5; }
+.ferme-ads-cats{ display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.ferme-ads-cat{ display: flex; align-items: center; gap: 10px; padding: 10px 12px; cursor: pointer;
+  background: #efe6cd; border: 2px solid #c3ad7e; border-radius: 8px; font-size: 14px; font-weight: 600; user-select: none; }
+.ferme-ads-cat:hover{ background: #f4ecd6; }
+.ferme-ads-cat.on{ background: #d9ecc4; border-color: #6b9a48; color: #274d16; }
+.ferme-ads-check{ width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center;
+  border: 2px solid #6b4a2e; border-radius: 4px; background: #fff; font-size: 12px; color: #2c5720; }
+.ferme-ads-sep{ height: 2px; background: repeating-linear-gradient(90deg, #c3ad7e 0 6px, transparent 6px 12px); margin: 18px 0 4px; }
+.ferme-ads-list{ display: flex; flex-direction: column; gap: 4px; }
+.ferme-ads-row{ font-size: 13px; padding: 4px 8px; background: #efe6cd; border-radius: 6px; }
 .ferme-vbar{
   height: 10px; background: #ddd2b0; border: 1px solid #6b4a2e; border-radius: 4px; overflow: hidden;
 }

@@ -585,6 +585,16 @@ export const FERME_STR = {
     bagEnergyRow: (e, max) => `${e} / ${max}`,
     bagSleepHint: "Dors chez toi (ferme ou Valley Town, touche E) pour recharger sans acheter de snacks.",
     petCaughtToast: (name) => `🐾 ${name} rejoint ton sac !`,
+    // --- Zip 237 : troc + pets communs ---
+    giftUseful: (n, item) => `${n} ${item}`,
+    swapTitle: (name) => `${name} propose un troc`,
+    swapWantLabel: "Il/elle veut :",
+    swapGiveLabel: "En échange :",
+    swapAcceptBtn: "Troquer",
+    swapNotEnough: "Tu n'as pas assez de marchandise pour ce troc.",
+    swapDone: (name, give) => `Troc conclu avec ${name} : tu reçois ${give} !`,
+    notifSwap: "propose un troc",
+    swapPocket: (have, n) => `${have} / ${n} en poche`,
   },
   en: {
     // --- 2026-07 station update (sea creatures, ducks, station, visitors, seasons) ---
@@ -1121,6 +1131,16 @@ export const FERME_STR = {
     bagEnergyRow: (e, max) => `${e} / ${max}`,
     bagSleepHint: "Sleep at home (farm or Valley Town, press E) to recharge without buying snacks.",
     petCaughtToast: (name) => `🐾 ${name} joins your bag!`,
+    // --- Zip 237: barter + common pets ---
+    giftUseful: (n, item) => `${n} ${item}`,
+    swapTitle: (name) => `${name} offers a trade`,
+    swapWantLabel: "They want:",
+    swapGiveLabel: "In return:",
+    swapAcceptBtn: "Trade",
+    swapNotEnough: "You don't have enough goods for this trade.",
+    swapDone: (name, give) => `Trade done with ${name}: you get ${give}!`,
+    notifSwap: "offers a trade",
+    swapPocket: (have, n) => `${have} / ${n} in pocket`,
   },
 };
 
