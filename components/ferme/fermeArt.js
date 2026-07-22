@@ -206,7 +206,7 @@ export function buildSprites() {
     return c;
   }
 
-  function grassTile(variant) {
+
     const [c, g] = cv(T, T), r = makeRnd(77 + variant * 131);
     P(g, 0, 0, T, T, "#59a84a");
     for (let i = 0; i < 26; i++) P(g, (r() * T) | 0, (r() * T) | 0, 1, 1, r() < 0.5 ? "#4f9a41" : "#63b653");

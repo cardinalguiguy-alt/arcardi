@@ -384,6 +384,7 @@ export const FERME_STR = {
     cropRowSub: (cr, n) => `${cr.sell} or pièce · total ${n * cr.sell} or`,
     woodRowTitle: (n) => `Bois × ${n}`,
     stoneRowTitle: (n) => `Pierre × ${n}`,
+    perPiece: (v) => `${v} or pièce`,
     sellAll: "Tout vendre",
     // Carte plein écran
     mapTitle: "🗺️ Carte de la vallée",
@@ -949,6 +950,7 @@ export const FERME_STR = {
     cropRowSub: (cr, n) => `${cr.sell} gold each · total ${n * cr.sell} gold`,
     woodRowTitle: (n) => `Wood × ${n}`,
     stoneRowTitle: (n) => `Stone × ${n}`,
+    perPiece: (v) => `${v} gold each`,
     sellAll: "Sell all",
     mapTitle: "🗺️ Valley map",
     mapClose: "Click anywhere or press Esc or M to close",
