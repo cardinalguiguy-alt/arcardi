@@ -53,9 +53,21 @@ let hostFarmMemCache = null; // { code, state, at }
 // onglet et partagée entre toutes les instances/du composant (correctif
 // latence 2026-07 : la générer à chaud au premier passage/première
 // simulation hôte provoquait un à-coup perceptible).
+// Zip 235 (Guillaume, "similar to Folk of the Faraway Tree, where lands come
+// and go and rotate through"): cache is now keyed by the CURRENT PASSAGE
+// WORLD INDEX (rotates every SEASON_DAYS in-game days). The evil-world
+// coordinates (EVIL_SPAWN, EVIL_RETURN_PASSAGE, EVIL_CAULDRON_SPAWN) are
+// reused verbatim, so the fade/walk-over machinery in FermeGame stays
+// unchanged; each passage world just paints a different biome + gives
+// different loot/pets. See generatePassageWorld/passageWorldOf in engine.
 let evilWorldModuleCache = null;
-function getEvilWorldCached(E2) {
-  if (!evilWorldModuleCache) evilWorldModuleCache = E2.generateEvilWorld();
+let evilWorldModuleCacheIdx = -1;
+function getEvilWorldCached(E2, day) {
+  const idx = E2.passageWorldIndex(day || 1);
+  if (!evilWorldModuleCache || evilWorldModuleCacheIdx !== idx) {
+    evilWorldModuleCache = E2.generatePassageWorld(idx);
+    evilWorldModuleCacheIdx = idx;
+  }
   return evilWorldModuleCache;
 }
 // Valley Town (zip 234): same module-level cache pattern as the evil world —
@@ -202,6 +214,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // boutique, confirmé ensuite via le bouton flottant à l'endroit voulu.
   const [fertilizerOrderPending, setFertilizerOrderPending] = useState(false); // true | false — zone fixe 5x5, plus de nombre de cases à choisir
   const [binOpen, setBinOpen] = useState(false);
+  const [bagOpen, setBagOpen] = useState(false); // zip 236: personal bag modal
   const [mapOpen, setMapOpen] = useState(false);
   // Menu du chaudron (chantier 2026-07, demande Guillaume : "le click sur E
   // doit ouvrir un menu chaudron que voulez-vous concocter ?") : remplace
@@ -263,6 +276,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // puis animées frame après frame (voir le rendu plus bas), pas régénérées
   // à chaque frame pour éviter un scintillement aléatoire.
   const rainDropsRef = useRef(null);
+  const snowFlakesRef = useRef(null); // zip 235: winter fullscreen snowfall (screen-space, same idea as rainDropsRef)
+  const passageIdxRef = useRef(-1);   // zip 235: last known passage-world index (rotates weekly)
+  const passageAppliedIdxRef = useRef(-1);
+  const facadeStylesRef = useRef({}); // zip 235: farmerId -> town façade style index (client-side pref, broadcast via pos)
+  const petCaughtRef = useRef({});    // zip 235: worldKey -> true once we caught this week's pet locally (limits nagging)
+  const pickedIdsRef = useRef({});    // zip 235: worldIdx -> { pickupId -> true }, client-side idempotence
+  const mazePrizeClaimedRef = useRef({}); // zip 235: worldIdx -> true (once/week/player)
+  const speedBuffUntilRef = useRef(0);   // zip 235: candy speed buff expiry (performance.now())
   const chatInputRef = useRef(null);
   const channelRef = useRef(null);
   const spritesRef = useRef(null);
@@ -307,6 +328,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const mapOpenRef = useRef(false);
   const shopOpenRef = useRef(false);
   const binOpenRef = useRef(false);
+  const bagOpenRef = useRef(false); // zip 236
+  const [myPets, setMyPets] = useState([]); // zip 236: my individual pets, mirror of me.pets
+  const myPetsRef = useRef([]);     // zip 236: draw-loop mirror of myPets
+  const petFollowRef = useRef([]);  // zip 236: smoothed follow positions for my pets
   const cauldronMenuOpenRef = useRef(false);
   const brewSecsRef = useRef(0);       // miroir de brewSecs (évite un setState par frame dans la boucle de rendu)
   const cauldronPosRef = useRef(null); // cache de la position du chaudron (correctif audit 2026-07 : évite un scan complet de la carte par frame ; invalidé si l'objet n'y est plus) // miroir synchrone de cauldronMenuOpen, même rôle que shopOpenRef/binOpenRef (bloque déplacement/action pendant que le menu est ouvert)
@@ -379,6 +404,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   useEffect(() => { shopOpenRef.current = shopOpen; }, [shopOpen]);
   useEffect(() => { cauldronMenuOpenRef.current = cauldronMenuOpen; }, [cauldronMenuOpen]);
   useEffect(() => { binOpenRef.current = binOpen; }, [binOpen]);
+  useEffect(() => { myPetsRef.current = myPets; petFollowRef.current = petFollowRef.current.slice(0, myPets.length); }, [myPets]);
+  useEffect(() => { bagOpenRef.current = bagOpen; }, [bagOpen]);
   useEffect(() => { slotRef.current = slot; }, [slot]);
   useEffect(() => { toolKindRef.current = toolKind; }, [toolKind]);
   useEffect(() => { seedSelRef.current = seedSel; }, [seedSel]);
@@ -723,6 +750,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (mine) {
       invRef.current = mine.inv; toolsRef.current = mine.tools; energyRef.current = mine.energy;
       setMyInv(mine.inv); setMyTools(mine.tools); setMyEnergy(mine.energy); if (mine.quests) setMyQuests(mine.quests);
+      setMyPets(Array.isArray(mine.pets) ? mine.pets : []); // zip 236
       // Blessure (morsure de loup) : survit à un rechargement, restaurée depuis
       // l'état persistant du fermier (voir farmer.injuredUntil / INJURED_MS).
       injuredUntilRef.current = mine.injuredUntil || 0; setInjuredUntil(injuredUntilRef.current);
@@ -844,6 +872,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     ch.on("broadcast", { event: "apply" }, ({ payload }) => applyDeltas(payload));
     ch.on("broadcast", { event: "newday" }, ({ payload }) => applyNewDay(payload));
     ch.on("broadcast", { event: "chat" }, ({ payload }) => addChat(payload.from, payload.msg));
+    // Zip 235: town façade style broadcast — everyone sees each other's
+    // choice without any host arbitration (client-only preference).
+    ch.on("broadcast", { event: "facadeStyle" }, ({ payload }) => {
+      if (!payload || !payload.id) return;
+      facadeStylesRef.current = { ...facadeStylesRef.current, [payload.id]: payload.style | 0 };
+    });
 
     ch.subscribe(status => {
       if (status !== "SUBSCRIBED") return;
@@ -1811,6 +1845,61 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (r.ok) { stationChat(L.visitorLeftChat(rosterOf(rid).name), "\u{1F6AB}"); broadcastStation(); }
       return true;
     }
+    // Zip 235 (Guillaume: "when we want to recall them, we press 'meet at the
+    // townhall'"): pins the visitor's roam target back near the townhall for
+    // VISITOR_RECALL_MS, no state churn otherwise.
+    if (req.kind === "visitorRecall") {
+      const rid = req.rid | 0;
+      const v = (s.station.visitors || []).find(vv => vv.rid === rid);
+      if (v) { v.recallUntil = Date.now() + C.VISITOR_RECALL_MS; v.roamTarget = null; v.nextRoamAt = 0; broadcastStation(); }
+      return true;
+    }
+    if (req.kind === "passagePickup") {
+      const worldIdx = req.worldIdx | 0, pickupId = req.pickupId | 0;
+      const r = E.resolvePassagePickup(s, f, worldIdx, pickupId, Math.random);
+      out.state = shareState();
+      // Pets are individual now: return the updated farmer so the catcher's
+      // bag syncs. Chat announces gold; pet catch / bag-full toast is local.
+      if (r.pet || r.bagFull) out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv, pets: f.pets };
+      out.chat = { from: "✨", msg: L.passageLootToast(r.gold) };
+      if (r.pet) out.toast = { id: f.id, key: "petCaught", petId: r.pet.id };
+      else if (r.bagFull) out.toast = { id: f.id, key: "bagFull" };
+      return true;
+    }
+    // Zip 236: release a pet back into the wild (frees a bag slot).
+    if (req.kind === "releasePet") {
+      const r = E.resolveReleasePet(f, req.index | 0);
+      if (r.ok) {
+        out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv, pets: f.pets };
+        out.toast = { id: f.id, key: "petReleased", petId: r.petId };
+      }
+      return true;
+    }
+    // Zip 235: maze center prize — flat gold reward. Client dedupes with
+    // mazePrizeClaimedRef so the host doesn't need to track per-player
+    // claims (they'd reset anyway on rotation).
+    if (req.kind === "mazePrize") {
+      s.money += C.MAZE_PRIZE_GOLD; s.totalEarned = (s.totalEarned || 0) + C.MAZE_PRIZE_GOLD;
+      out.state = shareState();
+      out.chat = { from: "🏆", msg: L.mazePrizeToast(C.MAZE_PRIZE_GOLD) };
+      return true;
+    }
+    if (req.kind === "berryPick") {
+      const r = E.resolveBerryPick(f, w, req.x | 0, req.y | 0, Math.random);
+      if (r.ok) {
+        out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
+        out.toast = { id: f.id, key: "berriesPicked", n: r.n };
+      }
+      return true;
+    }
+    if (req.kind === "fruitPick") {
+      const r = E.resolveFruitPick(f, w, req.x | 0, req.y | 0);
+      if (r.ok) {
+        out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
+        out.toast = { id: f.id, key: "fruitPicked", n: r.n };
+      } else if (r.cooldown) out.toast = { id: f.id, key: "fruitCooldown" };
+      return true;
+    }
     if (req.kind === "repairResult") {
       const onlineCount = playersRef.current.size + 1;
       const r = E.resolveRepairResult(w, s, req.id, !!req.win, onlineCount);
@@ -1926,10 +2015,28 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           // pattern as Greg/rabbits). Still phase "wait": every deal / pay /
           // vote / chat path keeps working unmodified, and proximity checks
           // read the live x/y.
+          // Zip 235 (Guillaume: "allow visitors to walk all over the map
+          // when they linger"): roamTarget draws from the WHOLE farm, not
+          // just the townhall square. Recall ("meet at townhall" button)
+          // pins the target back on the square for VISITOR_RECALL_MS.
+          const recalled = v.recallUntil && now < v.recallUntil;
           if (!v.roamTarget || now >= (v.nextRoamAt || 0) || Math.hypot(v.roamTarget.x - v.x, v.roamTarget.y - v.y) < 0.15) {
             v.nextRoamAt = now + 2500 + Math.random() * 4500;
-            v.roamTarget = Math.random() < 0.35 ? null : { x: 40.5 + Math.random() * 6.5, y: 36.2 + Math.random() * 3.4 };
-            if (!v.roamTarget) v.moving = false;
+            if (recalled) {
+              // Small step back toward the townhall.
+              v.roamTarget = { x: 40.5 + Math.random() * 6.5, y: 36.2 + Math.random() * 3.4 };
+            } else if (Math.random() < 0.25) {
+              v.roamTarget = null; v.moving = false;
+            } else {
+              // Random hop within a HOP-tile radius; keep it walkable.
+              let tries = 0, tx, ty;
+              do {
+                tx = Math.max(4, Math.min(C.MAP_W - 4, v.x + (Math.random() * 2 - 1) * C.VISITOR_ROAM_HOP));
+                ty = Math.max(4, Math.min(C.MAP_H - 4, v.y + (Math.random() * 2 - 1) * C.VISITOR_ROAM_HOP));
+                tries++;
+              } while (tries < 6 && E.blockedTile(w, tx, ty));
+              v.roamTarget = { x: tx, y: ty };
+            }
           }
           if (v.roamTarget) walkTo(v.roamTarget.x, v.roamTarget.y, 0.45);
         }
@@ -1979,6 +2086,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (p.farmer && p.farmer.id === me.id) {
       invRef.current = p.farmer.inv; toolsRef.current = p.farmer.tools; energyRef.current = p.farmer.energy;
       setMyInv(p.farmer.inv); setMyTools(p.farmer.tools); setMyEnergy(p.farmer.energy); if (p.farmer.quests) setMyQuests(p.farmer.quests);
+      if (Array.isArray(p.farmer.pets)) setMyPets(p.farmer.pets); // zip 236
       if (typeof p.farmer.injuredUntil === "number" && p.farmer.injuredUntil !== injuredUntilRef.current) {
         const wasInjured = injuredUntilRef.current > Date.now();
         injuredUntilRef.current = p.farmer.injuredUntil; setInjuredUntil(p.farmer.injuredUntil);
@@ -2018,7 +2126,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (rp) rp.injuredUntil = p.injured.until;
       }
     }
-    if (p.toast && p.toast.id === me.id) pushToast(toastMsg(p.toast.key));
+    if (p.toast && p.toast.id === me.id) pushToast(toastMsg(p.toast.key, p.toast.petId != null ? p.toast.petId : p.toast.n));
     if (p.chat) addChat(p.chat.from, p.chat.msg);
     if (p.fx) for (const f of p.fx) spawnFx(f);
     if (p.horses) { sharedRef.current.horses = p.horses; syncBuildings(); }
@@ -2087,7 +2195,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     setHud(h => ({ ...h, day: p.day }));
     pushToast(L.toastNewDay(p.day));
   }
-  function toastMsg(key) {
+  function toastMsg(key, n) {
+    if (key === "berriesPicked") return L.toastBerriesPicked(n | 0);
+    if (key === "fruitPicked")   return L.toastFruitPicked(n | 0);
+    if (key === "fruitCooldown") return L.toastFruitCooldown;
+    if (key === "petCaught")     return L.petCaughtToast(C.petName(n, lang === "en"));
+    if (key === "petReleased")   return L.bagReleasedToast(C.petName(n, lang === "en"));
+    if (key === "bagFull")       return L.bagPetsFull(C.MAX_PETS);
     return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, noMillStock: L.toastNoMillStock, millNotEmpty: L.toastMillNotEmpty, noWheatToDeposit: L.toastNoWheatToDeposit, millFull: L.toastMillFull, actionFailed: L.toastActionFailed, coopNone: L.toastCoopNone, farCoop: L.toastFarCoop, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull, notInjured: L.toastNotInjured, noHealKit: L.toastNoHealKit, healTooFar: L.toastHealTooFar, gregNotHired: L.toastGregNotHired, gregNoRoom: L.toastGregNoRoom, gregNoFertilizer: L.toastGregNoFertilizer, soanNotHired: L.toastSoanNotHired, soanNoRiver: L.toastSoanNoRiver, farCauldron: L.toastFarCauldron, noFishToDeposit: L.toastNoFishToDeposit, cauldronMissing: L.toastCauldronMissing, cauldronAlreadyTaken: L.toastCauldronAlreadyTaken, noCauldronStock: L.toastNoCauldronStock, cauldronNotEmpty: L.toastCauldronNotEmpty, cauldronBrewing: L.toastCauldronBrewing, cauldronNothingToCollect: L.toastCauldronNothingToCollect, cauldronHasEnough: L.toastCauldronHasEnough, visitorNotEnough: L.visitorNotEnough }[key] || "";
   }
 
@@ -2155,6 +2269,40 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (grassTiles.length) {
           minimapDirtyRef.current = true; dirtyRef.current = true;
           channelRef.current?.send({ type: "broadcast", event: "apply", payload: { tiles: grassTiles } });
+        }
+      }
+      // Zip 235 — Spring: seed a few berry bushes across the farm and keep
+      // topping them up until BERRY_BUSH_MAX is reached. Purely host-driven,
+      // rare (~one attempt per 5s), so no visible spikes on gathering.
+      if (E.seasonOf().key === "spring") {
+        let existing = 0;
+        for (let bi = 0; bi < w.objects.length; bi++) if (w.objects[bi] === C.O_BERRY_BUSH) existing++;
+        if (existing < C.BERRY_BUSH_MAX && Math.random() < 0.2) {
+          let tries = 30;
+          while (tries-- > 0) {
+            const tx = 4 + Math.floor(Math.random() * (C.MAP_W - 8));
+            const ty = 4 + Math.floor(Math.random() * (C.MAP_H - 8));
+            const bi = ty * C.MAP_W + tx;
+            if (w.ground[bi] === C.G_GRASS && w.objects[bi] === C.O_NONE) {
+              w.objects[bi] = C.O_BERRY_BUSH;
+              w.objHp.set(bi, C.BERRY_BUSH_HP);
+              recordTileOverride(bi);
+              channelRef.current?.send({ type: "broadcast", event: "apply", payload: { tiles: [{ i: bi, g: w.ground[bi], o: w.objects[bi], hp: C.BERRY_BUSH_HP }] } });
+              dirtyRef.current = true;
+              break;
+            }
+          }
+        }
+      }
+      // Zip 235 — Weekly passage-world rotation announcement. Fires once per
+      // change of week (in-game days -> week index). Everyone reads the same
+      // day, so hosts and clients all show the same toast at the same moment.
+      {
+        const idx = E.passageWorldIndex(sharedRef.current.day || 1);
+        if (passageIdxRef.current !== idx) {
+          passageIdxRef.current = idx;
+          const spec = E.passageWorldOf(sharedRef.current.day || 1);
+          channelRef.current?.send({ type: "broadcast", event: "chat", payload: { from: "🌀", msg: L.passageWorldToast(lang === "en" ? spec.nameEn : spec.name) } });
         }
       }
       // Production continue des moulins (chantier 2026-07, transformation
@@ -2945,7 +3093,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (mm && mm.zone === "evil") evil.push({ id: mm.id, x: mm.x, y: mm.y, immune: Date.now() < immunityUntilRef.current });
     for (const p of playersRef.current.values()) if (p.zone === "evil" && p.etx !== undefined) evil.push({ id: p.id, x: p.etx, y: p.ety, immune: !!p.immune });
     if (!evil.length) { evilMonstersAccumRef.current = 0; return; } // personne là-bas : simulation en pause
-    if (!s.evilMonsters || !s.evilMonsters.length) s.evilMonsters = getEvilWorldCached(E).monsters.map(mo => ({ ...mo }));
+    // Zip 235: when the passage rotates, drop any stale monsters from the
+    // previous world before re-seeding from the current one. Some worlds
+    // (candy/maze/crystal/meadow) have zero monsters, which is fine.
+    const curWorldIdx = E.passageWorldIndex(sharedRef.current.day || 1);
+    if (s._evilMonstersWorldIdx !== curWorldIdx) { s.evilMonsters = []; s._evilMonstersWorldIdx = curWorldIdx; }
+    if (!s.evilMonsters || (!s.evilMonsters.length && curWorldIdx === 0)) {
+      s.evilMonsters = getEvilWorldCached(E, sharedRef.current.day || 1).monsters.map(mo => ({ ...mo }));
+    }
     const now = Date.now();
     for (const mo of s.evilMonsters) {
       mo.animT = (mo.animT || 0) + dt * 6;
@@ -3612,7 +3767,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         sendPos();
         pushToast(L.trainToFarmToast);
       } else if (zt.toEvil) {
-        if (!evilWorldRef.current) evilWorldRef.current = getEvilWorldCached(E);
+        // Zip 235: always refresh in case the passage rotated since the
+        // last visit. The cached generator is idempotent per week index.
+        evilWorldRef.current = getEvilWorldCached(E, sharedRef.current.day || 1);
         m.farmX = m.x; m.farmY = m.y; // position ferme à restaurer au retour
         m.zone = "evil";
         m.x = C.EVIL_SPAWN.x; m.y = C.EVIL_SPAWN.y; m.moving = false;
@@ -3727,7 +3884,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // Correctif audit 2026-07 : Espace/E n'agissent plus "à travers" un
       // menu ouvert (le clic était déjà bloqué, voir onDown ; Échap/T/M
       // restent actifs pour fermer/naviguer).
-      const uiOpen = mapOpenRef.current || shopOpenRef.current || binOpenRef.current || cauldronMenuOpenRef.current || adsOpenRef.current || visitorOpenRef.current;
+      const uiOpen = mapOpenRef.current || shopOpenRef.current || binOpenRef.current || bagOpenRef.current || cauldronMenuOpenRef.current || adsOpenRef.current || visitorOpenRef.current;
       if (e.code === "Space") { e.preventDefault(); if (!uiOpen) doAction(); }
       if (e.code === "KeyE") { if (!uiOpen) tryOpenNearby(); }
       // Zip 233 (Guillaume): Q, not E, talks to visitors - opens the unified
@@ -3741,13 +3898,34 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         setFenceDir(fenceDirRef.current);
         pushToast(L.fenceDirToast(fenceDirRef.current));
       }
+      // Zip 235: R at your OWN Valley Town door cycles the free façade
+      // style (1..10). Purely local preference; broadcast via posBlob so
+      // remote clients render your house with the same style.
+      if (e.code === "KeyR" && meRef.current && meRef.current.zone === "town") {
+        const ids = Object.keys(farmersRef.current || {}).sort();
+        const myHouseIdx = ids.indexOf(me.id);
+        if (myHouseIdx >= 0) {
+          const hsn = C.TOWN_HOUSES[myHouseIdx];
+          if (hsn) {
+            const doorX = hsn.x + C.TOWN_HOUSE_W / 2, doorY = hsn.y + C.TOWN_HOUSE_H + 0.5;
+            if (Math.abs(meRef.current.x + 0.5 - doorX) <= 1.6 && Math.abs(meRef.current.y - doorY) <= 1.4) {
+              const cur = facadeStylesRef.current[me.id] || 0;
+              const nxt = (cur + 1) % C.TOWN_HOUSE_STYLES;
+              facadeStylesRef.current = { ...facadeStylesRef.current, [me.id]: nxt };
+              pushToast(L.townHouseStyleChangeBtn(nxt + 1));
+              // Broadcast via chat channel so remote clients pick it up.
+              channelRef.current?.send({ type: "broadcast", event: "facadeStyle", payload: { id: me.id, style: nxt } });
+            }
+          }
+        }
+      }
       if (e.code === "KeyT") { e.preventDefault(); setChatOpen(true); setTimeout(() => chatInputRef.current?.focus(), 0); }
       if (e.code === "KeyM") setMapOpen(o => !o);
-      if (e.code === "Escape") { setShopOpen(false); setBinOpen(false); setMapOpen(false); setSeedMenuOpen(false); setToolMenuOpen(false); setCraftMenuOpen(null); setCauldronMenuOpen(false); setAdsOpen(false); setVisitorOpen(false); }
+      if (e.code === "Escape") { setShopOpen(false); setBinOpen(false); setBagOpen(false); setMapOpen(false); setSeedMenuOpen(false); setToolMenuOpen(false); setCraftMenuOpen(null); setCauldronMenuOpen(false); setAdsOpen(false); setVisitorOpen(false); }
     }
     function onKeyUp(e) { keysRef.current[e.code] = false; }
     function onMove(e) { mouseRef.current.x = e.clientX; mouseRef.current.y = e.clientY; }
-    function onDown(e) { if (e.button === 0 && !mapOpenRef.current && !shopOpenRef.current && !binOpenRef.current && !cauldronMenuOpenRef.current && !fishMiniRef.current && !adsOpenRef.current && !visitorOpenRef.current && !isInjured()) doAction(); }
+    function onDown(e) { if (e.button === 0 && !mapOpenRef.current && !shopOpenRef.current && !binOpenRef.current && !bagOpenRef.current && !cauldronMenuOpenRef.current && !fishMiniRef.current && !adsOpenRef.current && !visitorOpenRef.current && !isInjured()) doAction(); }
     function onWheel() { }
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
@@ -3777,6 +3955,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // ce qui suit (mouvement/rendu propres à CE client) bascule sur la
       // carte maléfique si m.zone==="evil" — voir crossPassage plus haut.
       updateZoneTransition();
+      // Zip 235: detect weekly passage rotation on every client — clears
+      // per-player pickup / prize tracking so the next visit is fresh.
+      {
+        const idx = E.passageWorldIndex(sharedRef.current.day || 1);
+        if (passageAppliedIdxRef.current !== idx) {
+          passageAppliedIdxRef.current = idx;
+          pickedIdsRef.current = {};
+          mazePrizeClaimedRef.current = {};
+          // Invalidate any prior evil-world reference; will be re-fetched on entry.
+          if (meRef.current && meRef.current.zone !== "evil") evilWorldRef.current = null;
+        }
+      }
       checkWalkOverPassage();
       if (m.zone === "evil") {
         drawEvilFrame(now);
@@ -3923,6 +4113,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           ctx.drawImage(fk === "corner" ? sprites.fenceCorner : fk === "v" ? sprites.fenceV : fk === "post" ? sprites.fencePost : sprites.fence, x * T, y * T);
         }
         else if (o === C.O_WALL) ctx.drawImage(sprites.wall, x * T, y * T);
+        else if (o === C.O_BERRY_BUSH) draws.push({ y: (y + 1) * T, fn: () => ctx.drawImage(sprites.berryBush, x * T, y * T - 2) });
       }
 
       const tt = targetTile();
@@ -4015,7 +4206,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       for (let y = y0 - 1; y <= Math.min(w.h - 1, y1 + 2); y++) for (let x = x0 - 1; x <= Math.min(w.w - 1, x1 + 1); x++) {
         if (!inMap(x, y)) continue;
         const o = w.objects[idxOf(x, y)];
-        if (o === C.O_TREE || o === C.O_TREE2) { const img = o === C.O_TREE ? sprites.oak : sprites.pine; draws.push({ y: (y + 1) * T, fn: () => ctx.drawImage(img, x * T - 8, (y + 1) * T - 48) }); }
+        if (o === C.O_TREE || o === C.O_TREE2) { const _se = E.seasonOf().key; const img = o === C.O_TREE ? (_se === "autumn" ? sprites.oakAutumn : _se === "spring" ? sprites.oakSpring : sprites.oak) : (_se === "autumn" ? sprites.pineAutumn : _se === "spring" ? sprites.pineSpring : sprites.pine); draws.push({ y: (y + 1) * T, fn: () => ctx.drawImage(img, x * T - 8, (y + 1) * T - 48) }); }
         else if (o === C.O_WELL) draws.push({ y: (y + 1) * T, fn: () => ctx.drawImage(sprites.well, x * T - 4, (y + 1) * T - 30) });
         else if (o === C.O_LAMP) {
           const readyAt = w.objHp.get(idxOf(x, y));
@@ -4240,7 +4431,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       for (const wf of (sharedRef.current.wolves || [])) {
         draws.push({ y: (wf.y + 1) * T, fn: () => {
           const frame = wf.state === "stop" ? 0 : Math.floor((wf.animT || 0) % 4);
-          const img = sprites.wolf[frame];
+          // Zip 235 (Guillaume: "when it's winter, ... snow leopards replace
+          // wolves"): same simulated wolves, different pelt. Purely visual;
+          // AI/collision is unchanged.
+          const isWinter = E.seasonOf().key === "winter";
+          const img = (isWinter && sprites.snowLeopard) ? sprites.snowLeopard[frame] : sprites.wolf[frame];
           const px = Math.round(wf.x * T - 14), py = Math.round(wf.y * T - 9);
           if (wf.dir === 2) { ctx.save(); ctx.translate(px + 30, py); ctx.scale(-1, 1); ctx.drawImage(img, 0, 0); ctx.restore(); }
           else ctx.drawImage(img, px, py);
@@ -4390,7 +4585,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           draws.push({ y: (sy + 1) * T, fn: () => drawCharacter({ id: "soan", name: "Soan", x: sx, y: sy, dir: so.dir || 0, moving: !!so.moving, animT: so.animT || 0, gender: "m", outfit: 1, cap: true, fishing: so.phase === "fishing" }, false) });
         }
       }
-      if (!m.sleeping) draws.push({ y: (m.y + 1) * T, fn: () => drawSelf(m) });
+      if (!m.sleeping) { draws.push({ y: (m.y + 0.9) * T, fn: () => drawMyPets(m, dt) }); draws.push({ y: (m.y + 1) * T, fn: () => drawSelf(m) }); }
       // Zip 234 (Guillaume: "when we walk over a certain crop, we can see
       // what they are"): standing on a planted tile floats a small paper tag
       // above the farmer — crop name + growth % (or "ready!" / "needs
@@ -4522,12 +4717,34 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
 
       // 2026-07 station update: seasonal tint, stacked exactly like the
       // storm veil (screen space, purely visual).
+      // Zip 235 (Guillaume: "when it's winter, it snows"): winter also adds
+      // a fullscreen snowfall, same mechanic as the storm rain but slower
+      // and lighter. Snow flakes are recycled the same way rain drops are.
       {
-        const se = E.seasonOf(sharedRef.current.day || 1);
+        const se = E.seasonOf();
         if (se.tint) {
           ctx.setTransform(1, 0, 0, 1, 0, 0);
           ctx.globalCompositeOperation = "source-over";
           ctx.fillStyle = se.tint;
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+        if (se.key === "winter") {
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+          if (!snowFlakesRef.current || snowFlakesRef.current.length !== C.SNOW_COUNT) {
+            snowFlakesRef.current = Array.from({ length: C.SNOW_COUNT }, () => ({
+              x: Math.random(), y: Math.random(), sp: 0.6 + Math.random() * 0.9, sw: (Math.random() * 2 - 1) * 0.02,
+            }));
+          }
+          ctx.fillStyle = "rgba(240, 246, 255, 0.9)";
+          for (const d of snowFlakesRef.current) {
+            d.y += (C.SNOW_SPEED / canvas.height) * dt * d.sp;
+            d.x += d.sw * dt;
+            if (d.y > 1.05) { d.y = -0.05; d.x = Math.random(); }
+            const sx = d.x * canvas.width, sy = d.y * canvas.height;
+            ctx.fillRect(sx, sy, 2, 2);
+          }
+          // Fine white overlay to sell a bit of ground cover.
+          ctx.fillStyle = "rgba(240, 246, 255, 0.09)";
           ctx.fillRect(0, 0, canvas.width, canvas.height);
         }
       }
@@ -4789,7 +5006,47 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       ctx.fillRect(cam.x, cam.y, cam.vw, cam.vh);
       // Invite E pour ramasser le chaudron-artéfact (chantier 2026-07).
       const already = sharedRef.current.salveCraft && sharedRef.current.salveCraft.cauldronUnlocked;
-      setPromptKeyThrottled(!already && nearTile(C.EVIL_CAULDRON_SPAWN) ? "evilCauldronPickup" : null);
+      // Zip 235: passage-world pickups (breloques). Only shown for worlds
+      // that place them (spec.pickupCount > 0). Idempotent client-side via
+      // pickedIdsRef; the host also tracks them (see req "passagePickup").
+      const passSpec = ew.spec || null;
+      if (passSpec && passSpec.pickupColor && Array.isArray(ew.pickups)) {
+        const picked = pickedIdsRef.current[ew.worldIdx] || {};
+        for (const pk of ew.pickups) {
+          if (picked[pk.id]) continue;
+          const px = pk.x * T + T / 2, py = pk.y * T + T / 2;
+          const pulse = 0.6 + 0.4 * Math.sin(now / 320 + pk.id);
+          ctx.save();
+          ctx.shadowColor = passSpec.pickupColor; ctx.shadowBlur = 10 * pulse;
+          ctx.fillStyle = passSpec.pickupColor;
+          ctx.beginPath(); ctx.arc(px, py, 4, 0, 7); ctx.fill();
+          ctx.restore();
+        }
+      }
+      // Zip 235: maze center prize (only in "maze" world). Drawn as a small
+      // chest lookalike.
+      if (ew.maze) {
+        const mx = ew.maze.prizeX * T, my = ew.maze.prizeY * T;
+        ctx.fillStyle = "#8a5a2a"; ctx.fillRect(mx + 2, my + 6, 12, 8);
+        ctx.fillStyle = "#e8c860"; ctx.fillRect(mx + 2, my + 6, 12, 2);
+        ctx.fillStyle = "#3a2a10"; ctx.fillRect(mx + 7, my + 9, 2, 3);
+        const pulse = 0.4 + 0.3 * Math.sin(now / 400);
+        ctx.save(); ctx.shadowColor = `rgba(255,220,130,${pulse})`; ctx.shadowBlur = 12;
+        ctx.strokeStyle = "rgba(255,220,130,0.6)"; ctx.strokeRect(mx + 1.5, my + 5.5, 13, 9); ctx.restore();
+      }
+      // Prompt on the passage world: pickup nearby > cauldron > return.
+      let ppk = null;
+      const cauldronDone = sharedRef.current.salveCraft && sharedRef.current.salveCraft.cauldronUnlocked;
+      if (passSpec && passSpec.pickupColor && Array.isArray(ew.pickups)) {
+        const pickedNow = pickedIdsRef.current[ew.worldIdx] || {};
+        for (const pk of ew.pickups) {
+          if (pickedNow[pk.id]) continue;
+          if (Math.abs(m.x + 0.5 - (pk.x + 0.5)) <= 1.2 && Math.abs(m.y + 0.5 - (pk.y + 0.5)) <= 1.2) { ppk = "passagePickup:" + pk.id; break; }
+        }
+      }
+      if (!ppk && ew.maze && Math.abs(m.x + 0.5 - (ew.maze.prizeX + 0.5)) <= 1.5 && Math.abs(m.y + 0.5 - (ew.maze.prizeY + 0.5)) <= 1.5) ppk = "mazePrize";
+      if (!ppk && !cauldronDone && nearTile(C.EVIL_CAULDRON_SPAWN) && passSpec && passSpec.key === "evil") ppk = "evilCauldronPickup";
+      setPromptKeyThrottled(ppk);
     }
     function blockedEvil(ew, x, y) {
       const fx = Math.floor(x), fy = Math.floor(y);
@@ -4835,6 +5092,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (fx <= C.TOWN_RAIL_X + 1 && !(fy >= C.TOWN_PLATFORM.y && fy < C.TOWN_PLATFORM.y + C.TOWN_PLATFORM.h)) return true; // rails: only reachable along the platform
       const i = fy * tw.w + fx;
       if (tw.ground[i] === C.G_WATER) return true; // fountain pool
+      // Zip 235: townhall footprint blocks like a building.
+      if (fx >= C.TOWN_HALL.x && fx < C.TOWN_HALL.x + C.TOWN_HALL.w && fy >= C.TOWN_HALL.y && fy < C.TOWN_HALL.y + C.TOWN_HALL.h) return true;
       for (const hsn of C.TOWN_HOUSES) {
         if (fx >= hsn.x && fx < hsn.x + C.TOWN_HOUSE_W && fy >= hsn.y && fy < hsn.y + C.TOWN_HOUSE_H) return true;
       }
@@ -4859,7 +5118,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const moving = (dx || dy) && actAnimRef.current <= 0;
       if (moving) {
         const len = Math.hypot(dx, dy); dx /= len; dy /= len;
-        const sp = C.PLAYER_SPEED * dt;
+        const sp = C.PLAYER_SPEED * dt * (performance.now() < speedBuffUntilRef.current ? C.CANDY_SPEED_MUL : 1);
         const nx = m.x + dx * sp, ny = m.y + dy * sp;
         if (canStandTown(tw, nx, m.y)) m.x = nx;
         if (canStandTown(tw, m.x, ny)) m.y = ny;
@@ -4882,12 +5141,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const draws = [];
       for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
         const i = y * tw.w + x, g = tw.ground[i];
-        if (g === C.G_GRASS) ctx.fillStyle = ((x + y) % 2 === 0) ? "#4c8f40" : "#529745";
-        else if (g === C.G_PATH) ctx.fillStyle = "#c8a163";
-        else if (g === C.G_PATH_STONE) ctx.fillStyle = ((x + y) % 2 === 0) ? "#a9a9b2" : "#9f9fa8";
-        else if (g === C.G_WATER) ctx.fillStyle = "#3f7fd0";
-        else ctx.fillStyle = "#4c8f40";
-        ctx.fillRect(x * T, y * T, T, T);
+        // Zip 235: use the real farm sprite tiles for a match with the farm
+        // look (grass/path/stone), keeping the fountain water for the pool.
+        if (g === C.G_GRASS) ctx.drawImage(sprites.grass[(x * 37 + y * 17) % sprites.grass.length], x * T, y * T);
+        else if (g === C.G_PATH) ctx.drawImage(sprites.path, x * T, y * T);
+        else if (g === C.G_PATH_STONE) { ctx.fillStyle = ((x + y) % 2 === 0) ? "#a9a9b2" : "#9f9fa8"; ctx.fillRect(x * T, y * T, T, T); }
+        else if (g === C.G_WATER) { ctx.fillStyle = "#3f7fd0"; ctx.fillRect(x * T, y * T, T, T); }
+        else ctx.drawImage(sprites.grass[0], x * T, y * T);
         // Rails on the west edge (same look as the farm side: dark bed,
         // lighter ties, two steel rails).
         if (x >= C.TOWN_RAIL_X && x <= C.TOWN_RAIL_X + 1) {
@@ -4909,7 +5169,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           ctx.fillRect(x * T, y * T, T, T);
         }
         const o = tw.objects[i];
-        if (o === C.O_TREE || o === C.O_TREE2) { const img = o === C.O_TREE ? sprites.oak : sprites.pine; draws.push({ y: (y + 1) * T, fn: () => ctx.drawImage(img, x * T - 8, (y + 1) * T - 48) }); }
+        if (o === C.O_TREE || o === C.O_TREE2) { const _se = E.seasonOf().key; const img = o === C.O_TREE ? (_se === "autumn" ? sprites.oakAutumn : _se === "spring" ? sprites.oakSpring : sprites.oak) : (_se === "autumn" ? sprites.pineAutumn : _se === "spring" ? sprites.pineSpring : sprites.pine); draws.push({ y: (y + 1) * T, fn: () => ctx.drawImage(img, x * T - 8, (y + 1) * T - 48) }); }
       }
       // Fountain rim + spray, on top of the pool tiles.
       {
@@ -4926,12 +5186,25 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           ctx.fillRect(fx0 + T - 6 + d * 3, fy0 + T - 2 - ph * 6, 2, 2);
         }
       }
+      // Zip 235: townhall sprite anchored on TOWN_HALL (128x128, anchored
+      // by its bottom edge like the houses).
+      {
+        const th = C.TOWN_HALL, thBy = (th.y + th.h) * T;
+        draws.push({ y: thBy, fn: () => {
+          ctx.drawImage(sprites.townhall, th.x * T + (th.w * T - 128) / 2, thBy - 128);
+        } });
+      }
       // Houses: one per known farmer (deterministic order), leftovers show a
-      // "for sale" plate. Sprite variety cycles through the house levels.
+      // "for sale" plate. Zip 235: 10 basic free façade styles — the owner
+      // may cycle theirs with R at their door (see facadeStylesRef).
       const owners = townHouseOwners();
       for (let hi = 0; hi < owners.length; hi++) {
         const hsn = owners[hi];
-        const img = sprites.houses[hi % sprites.houses.length];
+        // Style: owner's saved choice if any, else deterministic default.
+        const styleMap = facadeStylesRef.current || {};
+        const styleIdx = (hsn.ownerId && typeof styleMap[hsn.ownerId] === "number")
+          ? styleMap[hsn.ownerId] : hi % C.TOWN_HOUSE_STYLES;
+        const img = (sprites.townHouses && sprites.townHouses[styleIdx % C.TOWN_HOUSE_STYLES]) || sprites.houses[hi % sprites.houses.length];
         const bx = hsn.x * T, by = (hsn.y + C.TOWN_HOUSE_H) * T;
         draws.push({ y: by, fn: () => {
           ctx.drawImage(img, bx, by - 96);
@@ -4957,6 +5230,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         p.animT = p.moving ? (p.animT || 0) + dt * 9 : 0;
         draws.push({ y: (p.y + 1) * T, fn: () => drawCharacter(p, false) });
       }
+      if (!m.sleeping) draws.push({ y: (m.y + 0.9) * T, fn: () => drawMyPets(m, dt) });
       draws.push({ y: (m.y + 1) * T, fn: () => drawSelf(m) });
       draws.sort((a, b) => a.y - b.y);
       for (const d of draws) d.fn();
@@ -5019,7 +5293,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const moving = (dx || dy) && actAnimRef.current <= 0;
       if (moving) {
         const len = Math.hypot(dx, dy); dx /= len; dy /= len;
-        const sp = C.PLAYER_SPEED * dt;
+        const sp = C.PLAYER_SPEED * dt * (performance.now() < speedBuffUntilRef.current ? C.CANDY_SPEED_MUL : 1);
         const nx = m.x + dx * sp, ny = m.y + dy * sp;
         if (canStandEvil(ew, nx, m.y)) m.x = nx;
         if (canStandEvil(ew, m.x, ny)) m.y = ny;
@@ -5092,6 +5366,33 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       m.moving = !!moving;
       const now = performance.now();
       if (now - lastPosSentRef.current > 1000 / C.POS_TICK_HZ) { lastPosSentRef.current = now; sendPos(); }
+    }
+    // Zip 236: draw my individual pets trailing behind me. Each pet keeps a
+    // smoothed follow position (petFollowRef) that eases toward a point a bit
+    // behind the player, offset per pet so two pets don't overlap. Purely
+    // local/visual — pets aren't broadcast, everyone sees their own.
+    function drawMyPets(m, dt2) {
+      const sprites = spritesRef.current;
+      const pets = myPetsRef.current;
+      if (!pets || !pets.length || !sprites.pets) return;
+      const follow = petFollowRef.current;
+      // behind = opposite of facing dir
+      const bx = -[0, 0, -1, 1][m.dir], by = -[1, -1, 0, 0][m.dir];
+      for (let i = 0; i < pets.length; i++) {
+        const img = sprites.pets[pets[i].id];
+        if (!img) continue;
+        // target a tile behind the player, fanned sideways by pet index
+        const side = i === 0 ? -0.45 : 0.45;
+        const perpX = by, perpY = -bx;
+        const tx = m.x + bx * (0.9 + i * 0.15) + perpX * side;
+        const ty = m.y + by * (0.9 + i * 0.15) + perpY * side;
+        if (!follow[i]) follow[i] = { x: tx, y: ty };
+        const f2 = follow[i];
+        f2.x += (tx - f2.x) * Math.min(1, dt2 * 6);
+        f2.y += (ty - f2.y) * Math.min(1, dt2 * 6);
+        const bob = m.moving ? Math.sin(performance.now() / 140 + i) * 1.5 : 0;
+        ctx.drawImage(img, Math.round(f2.x * T), Math.round(f2.y * T - 2 + bob));
+      }
     }
     function drawSelf(m) {
       drawCharacter(m, true);
@@ -5512,8 +5813,41 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // la ferme (SHOP/BIN/etc.) n'ont aucun sens en zone maléfique, on sort
     // donc tôt plutôt que de risquer une fausse coïncidence de coordonnées.
     if (m0 && m0.zone === "evil") {
+      const ew = evilWorldRef.current;
+      // Zip 235: passage-world pickups (breloques). Idempotent client-side
+      // via pickedIdsRef so a nearby pickup isn't collected twice.
+      if (ew && ew.spec && ew.spec.pickupColor && Array.isArray(ew.pickups)) {
+        const picked = pickedIdsRef.current[ew.worldIdx] || {};
+        for (const pk of ew.pickups) {
+          if (picked[pk.id]) continue;
+          if (Math.abs(m0.x + 0.5 - (pk.x + 0.5)) <= 1.2 && Math.abs(m0.y + 0.5 - (pk.y + 0.5)) <= 1.2) {
+            pickedIdsRef.current = { ...pickedIdsRef.current, [ew.worldIdx]: { ...picked, [pk.id]: true } };
+            sendReq({ kind: "passagePickup", worldIdx: ew.worldIdx, pickupId: pk.id });
+            // Candy world: pickup also grants a 1 min speed buff to the collector.
+            if (ew.spec.key === "candy") {
+              speedBuffUntilRef.current = performance.now() + C.CANDY_SPEED_MS;
+              pushToast(L.candySpeedToast);
+            }
+            return;
+          }
+        }
+      }
+      // Zip 235: maze center prize (once per world per player per week).
+      if (ew && ew.maze) {
+        const claimed = mazePrizeClaimedRef.current[ew.worldIdx];
+        if (!claimed && Math.abs(m0.x + 0.5 - (ew.maze.prizeX + 0.5)) <= 1.5 && Math.abs(m0.y + 0.5 - (ew.maze.prizeY + 0.5)) <= 1.5) {
+          mazePrizeClaimedRef.current = { ...mazePrizeClaimedRef.current, [ew.worldIdx]: true };
+          sendReq({ kind: "mazePrize", worldIdx: ew.worldIdx });
+          pushToast(L.mazePrizeToast(C.MAZE_PRIZE_GOLD));
+          return;
+        }
+      }
+      // Carte maléfique (chantier 2026-07, demande Guillaume) : seule
+      // interaction E possible ici, le chaudron-artéfact — les coordonnées de
+      // la ferme (SHOP/BIN/etc.) n'ont aucun sens en zone maléfique, on sort
+      // donc tôt plutôt que de risquer une fausse coïncidence de coordonnées.
       const already = sharedRef.current.salveCraft && sharedRef.current.salveCraft.cauldronUnlocked;
-      if (!already && nearTile(C.EVIL_CAULDRON_SPAWN)) evilCauldronPickup();
+      if (!already && nearTile(C.EVIL_CAULDRON_SPAWN) && ew && ew.spec && ew.spec.key === "evil") evilCauldronPickup();
       return;
     }
     // Vendre l'animal porté (outil "déplacer") est prioritaire sur toute
@@ -5530,13 +5864,33 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const doorX = hsn.x + C.TOWN_HOUSE_W / 2, doorY = hsn.y + C.TOWN_HOUSE_H + 0.5;
         if (Math.abs(m0.x + 0.5 - doorX) <= 1.6 && Math.abs(m0.y - doorY) <= 1.4) {
           const fid = ids[hi];
+          // Zip 235 (Guillaume: "allow us to 'sleep' at our houses in the
+          // valley town by pressing 'E'"): the owner sleeps at their own
+          // door — same startSleep flow as the farm's original bedroom.
+          if (fid === me.id) { startSleep(); pushToast(L.sleepInHouseToast); return; }
           if (!fid) pushToast(L.toastHouseSale);
-          else if (fid === me.id) pushToast(L.toastYourHouse);
           else pushToast(L.toastTheirHouse((farmersRef.current[fid] || {}).name || "?"));
           return;
         }
       }
       return;
+    }
+    // Zip 235: berry bush / fruit tree pick (spring). Checked BEFORE the
+    // heavy shop/bin/nearest logic so it stays cheap when nothing is near.
+    if (m0 && m0.zone === "farm") {
+      const tx = Math.floor(m0.x + 0.5), ty = Math.floor(m0.y + 0.5);
+      const w2 = worldRef.current;
+      if (w2) {
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+          const xx = tx + dx, yy = ty + dy;
+          if (xx < 0 || yy < 0 || xx >= C.MAP_W || yy >= C.MAP_H) continue;
+          const i = yy * C.MAP_W + xx;
+          if (w2.objects[i] === C.O_BERRY_BUSH) { sendReq({ kind: "berryPick", x: xx, y: yy }); return; }
+          if (w2.objects[i] === C.O_TREE && E.seasonOf().key === "spring" && (i * 2654435761 >>> 0) % C.FRUIT_TREE_MOD === 0) {
+            sendReq({ kind: "fruitPick", x: xx, y: yy }); return;
+          }
+        }
+      }
     }
     if (heldAnimalRef.current !== -1) {
       sendReq({ kind: "sellAnimal", animal: heldAnimalRef.current });
@@ -5854,6 +6208,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   }
   const sellFish = (fishId) => sendReq({ kind: "sell", item: "fish", fish: fishId, n: 9999 });
   const sellSea = (seaId) => sendReq({ kind: "sell", item: "sea", sea: seaId, n: 9999 }); // 2026-07 station update
+  // Zip 235: berries/fruit (spring gathering).
+  const sellBerry = () => sendReq({ kind: "sell", item: "berry", n: 9999 });
+  const sellFruit = () => sendReq({ kind: "sell", item: "fruit", n: 9999 });
   const sellCommonFish = (fishId) => sendReq({ kind: "sell", item: "commonFish", fish: fishId, n: 9999 });
   const sellGem = (gemId) => sendReq({ kind: "sell", item: "gem", gem: gemId, n: 9999 });
 
@@ -6031,6 +6388,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             </div>
           );
         })}
+        {/* Zip 236: personal bag button (bag icon). Opens the individual
+            inventory: pets, immunity salve, bandaids, energy/sleep hint. This
+            is separate from the selling stall, which holds the COMMUNAL loot
+            (crops/fish/gems/gold). */}
+        <div className="ferme-slot ferme-slot-bag" onClick={() => setBagOpen(true)} title={L.bagBtn}>
+          <Sprite img={spritesReady ? spritesRef.current.icons.bag : null} w={32} h={32} />
+          {myPets.length > 0 && <span className="ferme-slot-count">{myPets.length}</span>}
+        </div>
       </div>
 
       {/* Mini-menu de choix de graine (clic sur la case graines) : liste
@@ -6588,6 +6953,42 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       })()}
 
       {/* Bac de vente */}
+      {/* Zip 236: personal bag modal (individual items). Communal loot stays
+          in the selling stall (bin modal below). */}
+      {bagOpen && (
+        <div className="ferme-modal open" onClick={() => setBagOpen(false)}>
+          <div className="panel ferme-modal-panel" onClick={e => e.stopPropagation()}>
+            <button className="ferme-close-x" onClick={() => setBagOpen(false)}>✕</button>
+            <h2>{L.bagTitle}</h2>
+
+            <div style={{ fontSize: 11, fontWeight: 700, opacity: .7, textTransform: "uppercase", letterSpacing: .5, marginTop: 6 }}>{L.bagPetsTitle(myPets.length, C.MAX_PETS)}</div>
+            {myPets.length === 0 && <div className="ferme-hint">{L.bagNoPets}</div>}
+            {myPets.map((pt, pi) => (
+              <div className="ferme-shop-row" key={"pet" + pi}>
+                <Sprite img={spritesReady ? spritesRef.current.pets[pt.id] : null} w={32} h={32} />
+                <div className="info"><b>{C.petName(pt.id, lang === "en")}</b></div>
+                <button className="ferme-vbtn bad small" onClick={() => sendReq({ kind: "releasePet", index: pi })}>{L.bagReleaseBtn}</button>
+              </div>
+            ))}
+
+            <div style={{ fontSize: 11, fontWeight: 700, opacity: .7, textTransform: "uppercase", letterSpacing: .5, marginTop: 12 }}>{L.bagHealTitle}</div>
+            <div className="ferme-shop-row">
+              <span style={{ fontSize: 26, width: 32, textAlign: "center" }}>🧪</span>
+              <div className="info"><b>{L.bagSalveRow((myInv && myInv.salve) || 0)}</b><span>{L.bagSalveSub}</span></div>
+            </div>
+            <div className="ferme-shop-row">
+              <span style={{ fontSize: 26, width: 32, textAlign: "center" }}>🩹</span>
+              <div className="info"><b>{L.bagHealKitRow((myInv && myInv.healKit) || 0)}</b><span>{L.bagHealKitSub}</span></div>
+            </div>
+
+            <div style={{ fontSize: 11, fontWeight: 700, opacity: .7, textTransform: "uppercase", letterSpacing: .5, marginTop: 12 }}>{L.bagEnergyTitle}</div>
+            <div className="ferme-shop-row">
+              <Sprite img={spritesReady ? spritesRef.current.icons.energy : null} w={32} h={32} />
+              <div className="info"><b>{L.bagEnergyRow(Math.round(myEnergy), C.MAX_ENERGY)}</b><span>{L.bagSleepHint}</span></div>
+            </div>
+          </div>
+        </div>
+      )}
       {binOpen && (
         <div className="ferme-modal open" onClick={() => setBinOpen(false)}>
           <div className="panel ferme-modal-panel" onClick={e => e.stopPropagation()}>
@@ -6626,6 +7027,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 </div>
               );
             })}
+            {/* Zip 235: berry / fruit rows (only visible when owned). Icon
+                reuses a crop sprite so no new asset is needed. */}
+            {myInv && (myInv.berries || 0) > 0 && (
+              <div className="ferme-shop-row" key="berry">
+                <Sprite img={spritesReady ? spritesRef.current.berryBush : null} w={32} h={32} />
+                <div className="info"><b>{L.berryLabel} × {myInv.berries}</b><span>{L.perPiece(C.BERRY_SELL)}</span></div>
+                <button onClick={sellBerry}>{L.sellAll}</button>
+              </div>
+            )}
+            {myInv && (myInv.fruit || 0) > 0 && (
+              <div className="ferme-shop-row" key="fruit">
+                <Sprite img={spritesReady ? spritesRef.current.crops[0][C.CROP_STAGES - 1] : null} w={32} h={32} />
+                <div className="info"><b>{L.fruitLabel} × {myInv.fruit}</b><span>{L.perPiece(C.FRUIT_SELL)}</span></div>
+                <button onClick={sellFruit}>{L.sellAll}</button>
+              </div>
+            )}
             {/* Poissons pêchés par Soan, pool COMMUN (chantier 2026-07,
                 demande Guillaume : "le poisson est direct notre propriété et
                 on peut aller le vendre") — même principe d'affichage que les
@@ -6802,7 +7219,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   {chatSection}
                 </>}
               </div>
-              <div style={{ marginTop: 10, textAlign: "right" }}>
+              <div style={{ marginTop: 10, textAlign: "right", display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                <button className="ferme-vbtn small" onClick={() => { sendReq({ kind: "visitorRecall", rid: v.rid }); }}>{L.meetAtHallBtn}</button>
                 <button className="ferme-vbtn bad small" onClick={() => { sendReq({ kind: "visitorBlacklist", rid: v.rid }); setVisitorOpen(false); }}>{L.visitorBlacklistBtn}</button>
               </div>
             </div>
@@ -6818,7 +7236,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const shown = waiting.slice(0, 3);
         const card = { background: "#f5eeda", border: "1px solid #6b4a2e", borderRadius: 10, padding: "8px 10px", display: "flex", gap: 10, alignItems: "center", color: "#1d1d1d" };
         return (
-          <div style={{ position: "fixed", right: 12, top: 64, zIndex: 60, display: "flex", flexDirection: "column", gap: 6, maxWidth: 280 }}>
+          <div style={{ position: "fixed", right: 12, top: 120, zIndex: 40, display: "flex", flexDirection: "column", gap: 6, maxWidth: 280 }}>
             {shown.map(vv => {
               const ro = C.VISITOR_ROSTER[vv.rid] || C.VISITOR_ROSTER[0];
               const o = vv.offer || {};
@@ -6833,7 +7251,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                     {o.type === "buy" && spritesReady && <span style={{ verticalAlign: "middle", marginRight: 4, display: "inline-block" }}><Sprite img={spritesRef.current.crops[o.crop][C.CROP_STAGES - 1]} w={18} h={18} /></span>}
                     {ask}
                     {o.type === "demand" && <span style={{ color: "#a33a1f", fontWeight: 700 }}> · {L.visitorUrgent}</span>}
-                    <br /><button className="ferme-vbtn small" style={{ marginTop: 4 }} onClick={() => { setMyVote(null); setVisitorRid(vv.rid); setVisitorOpen(true); }}>{L.meetBtn}</button>
+                    <br /><button className="ferme-vbtn small" style={{ marginTop: 4 }} onClick={() => { setMyVote(null); setVisitorRid(vv.rid); setVisitorOpen(true); sendReq({ kind: "visitorRecall", rid: vv.rid }); }}>{L.meetBtn}</button>
                   </div>
                 </div>
               );

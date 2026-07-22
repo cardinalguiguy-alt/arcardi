@@ -967,6 +967,30 @@ export const UNIQUE_PETS = [
   { id: "skunk",   name: "Moufette chic",  nameEn: "Fancy skunk" },
 ];
 
+// --- Zip 236: pets are now INDIVIDUAL to each player (Guillaume: "pets we
+// collect ... each player can have maximum two pets. In order to get a new
+// one, they have to set one they already have free in the wild"). Unified
+// catalog keyed by id so the bag can render/name any pet regardless of
+// source (visitor gift OR passage world). `hue` drives the generic pet
+// sprite tint (fermeArt.js/petSprite); `body` picks a silhouette.
+export const MAX_PETS = 2;
+export const PET_CATALOG = {
+  // visitor-gift pets
+  dragon:    { name: "Dragonneau",            nameEn: "Baby dragon",       hue: 130, body: "dragon" },
+  unicorn:   { name: "Licorne",               nameEn: "Unicorn",           hue: 300, body: "horse" },
+  skunk:     { name: "Moufette chic",         nameEn: "Fancy skunk",       hue: 260, body: "critter" },
+  // passage-world pets (must match PASSAGE_WORLDS[].pet.id)
+  shadowcat: { name: "Chat d'ombre",          nameEn: "Shadow cat",        hue: 260, body: "cat" },
+  candyfox:  { name: "Renard barbe à papa",   nameEn: "Cotton-candy fox",  hue: 320, body: "critter" },
+  mazemouse: { name: "Souris des haies",      nameEn: "Hedge mouse",       hue: 90,  body: "critter" },
+  gemturtle: { name: "Tortue gemme",          nameEn: "Gem turtle",        hue: 180, body: "turtle" },
+  cloudlamb: { name: "Agneau des nuages",     nameEn: "Cloud lamb",        hue: 40,  body: "lamb" },
+};
+export function petName(petId, en) {
+  const p = PET_CATALOG[petId]; if (!p) return petId;
+  return en ? p.nameEn : p.name;
+}
+
 // Dispositions. Hostile chance is halved once per resident living on the
 // farm (a lively townhall discourages troublemakers).
 export const VISITOR_HOSTILE_CHANCE = 0.06;
@@ -1035,6 +1059,11 @@ export const TOWN_HOUSES = [                        // door faces south onto a s
   { x: 14, y: 13 }, { x: 22, y: 13 }, { x: 38, y: 13 }, { x: 46, y: 13 },   // north side of main street
   { x: 14, y: 27 }, { x: 22, y: 27 }, { x: 38, y: 27 }, { x: 46, y: 27 },   // south side
 ];
+// Zip 235: Valley Town townhall — big civic building anchored just north of
+// the plaza, replacing the old "just another house" look. Sprite is 128x128,
+// footprint occupies 8x5 tiles (blockedTown extends to cover it, see
+// FermeGame.js/blockedTown).
+export const TOWN_HALL = { x: 28, y: 4, w: 8, h: 5 };
 export const TRAIN_BOARD = { x: 5, y: 30 };         // farm-side boarding spot on the platform (E to ride)
 
 // --- Seasons (timing chosen by the model, per Guillaume's delegation) ---
@@ -1047,3 +1076,87 @@ export const SEASONS = [
   { key: "autumn", emoji: "🍂", tint: "rgba(224,138,44,0.09)" },
   { key: "winter", emoji: "❄️", tint: "rgba(150,185,255,0.11)" },
 ];
+
+// --- Zip 235 (Guillaume) ---
+
+// Saisons en TEMPS RÉEL : une saison dure désormais 7 jours réels (demande
+// Guillaume : "change the seasons to be once every real 7 days it changes"),
+// et n'est plus dérivée du jour de jeu. Ancre fixe (un lundi) pour que tous
+// les clients calculent exactement la même saison sans aucune synchro.
+// SEASON_DAYS ci-dessus reste utilisé pour la ROTATION HEBDOMADAIRE (en jours
+// de JEU) des mondes du passage sombre, voir PASSAGE_WORLDS.
+export const SEASON_REAL_MS = 7 * 24 * 60 * 60 * 1000;
+export const SEASON_EPOCH = Date.UTC(2026, 0, 5); // lundi 5 janvier 2026, 00:00 UTC -> printemps
+
+// Hiver : il neige (flocons plein écran, même mécanique que la pluie d'orage)
+// et les léopards des neiges REMPLACENT les loups (même comportement, sprite
+// reteinté blanc à rosettes, voir snowLeopardSprite/fermeArt.js).
+export const SNOW_COUNT = 90;        // flocons affichés simultanément
+export const SNOW_SPEED = 60;        // vitesse de chute, px/s écran
+// Automne : les visiteurs veulent plus de citrouilles (biais de tirage de la
+// culture demandée, voir classifyBuyOffer) ; feuillages orange (variantes de
+// sprites, voir fermeArt.js).
+export const AUTUMN_PUMPKIN_BIAS = 0.55; // proba de forcer la citrouille quand elle est candidate
+export const PUMPKIN_CROP_ID = 3;
+// Printemps : fleurs décoratives sur l'herbe (purement visuel, hash de case),
+// fruits (pommes) sur une partie des chênes (E pour cueillir, 1x/jour réel
+// par arbre) et buissons à baies posés par l'hôte (E = cueillir des baies,
+// hache = bois). Baies et fruits sont des objets d'inventaire vendables au bac.
+export const O_BERRY_BUSH = 19;      // buisson à baies (printemps), hache = bois, E = baies
+export const BERRY_BUSH_MAX = 14;    // nombre max de buissons posés par l'hôte au printemps
+export const BERRY_BUSH_HP = 2;
+export const BERRY_BUSH_WOOD = 2;    // bois récolté en l'abattant
+export const BERRY_PICK_MIN = 2;     // baies par cueillette (min..max)
+export const BERRY_PICK_MAX = 4;
+export const BERRY_SELL = 25;        // prix de vente d'une baie au bac
+export const FRUIT_PICK_N = 2;       // pommes par cueillette d'arbre
+export const FRUIT_SELL = 18;        // prix de vente d'une pomme au bac
+export const FRUIT_TREE_MOD = 3;     // 1 chêne sur FRUIT_TREE_MOD (hash de case) porte des fruits au printemps
+
+// --- Mondes tournants du passage sombre (zip 235, demande Guillaume :
+// "every new week (game time) it rotates to a new land, similar to Folk of
+// the Faraway Tree"). L'index de monde = floor((jour de jeu - 1) / SEASON_DAYS)
+// % PASSAGE_WORLDS.length, donc tout le monde calcule la même rotation depuis
+// s.day, sans synchro. Toutes les cartes réutilisent EVIL_SPAWN /
+// EVIL_RETURN_PASSAGE (mêmes coordonnées d'arrivée/retour), si bien que toute
+// la machinerie existante (fondu, walk-over de retour) marche telle quelle.
+// Chaque monde a ses cadeaux/breloques et un animal de compagnie EXCLUSIF à
+// attraper (1 tentative réussie par joueur et par semaine, chance
+// PASSAGE_PET_CATCH_CHANCE ; l'animal rejoint station.pendingGifts comme les
+// cadeaux des visiteurs, en attendant le système d'animaux).
+export const PASSAGE_WORLDS = [
+  { key: "evil",    name: "Terres Maléfiques",   nameEn: "Evil Lands",
+    bg: "#0b120c", g1: "#182417", g2: "#182417", waterA: "#241246", waterB: "rgba(160,70,220,",
+    pickupColor: null, pickupCount: 0,
+    pet: { id: "shadowcat", name: "Chat d'ombre", nameEn: "Shadow cat" }, petHue: 260 },
+  { key: "candy",   name: "Pays des Bonbons",    nameEn: "Candy Land",
+    bg: "#f2b8d0", g1: "#f0c2d8", g2: "#eab4ce", waterA: "#c86ea8", waterB: "rgba(255,190,230,",
+    pickupColor: "#e0356e", pickupCount: 14,
+    pet: { id: "candyfox", name: "Renard barbe à papa", nameEn: "Cotton-candy fox" }, petHue: 300 },
+  { key: "maze",    name: "Pays du Labyrinthe",  nameEn: "Maze Land",
+    bg: "#25331f", g1: "#4a6b38", g2: "#446434", waterA: "#3a7bc8", waterB: "rgba(190,225,255,",
+    pickupColor: "#e8c860", pickupCount: 6,
+    pet: { id: "mazemouse", name: "Souris des haies", nameEn: "Hedge mouse" }, petHue: 90 },
+  { key: "crystal", name: "Grottes de Cristal",  nameEn: "Crystal Caverns",
+    bg: "#0c1226", g1: "#1c2440", g2: "#182038", waterA: "#12386a", waterB: "rgba(120,200,255,",
+    pickupColor: "#7ce0f0", pickupCount: 12,
+    pet: { id: "gemturtle", name: "Tortue gemme", nameEn: "Gem turtle" }, petHue: 180 },
+  { key: "meadow",  name: "Prairie Céleste",     nameEn: "Sky Meadow",
+    bg: "#a8d8f0", g1: "#8fd06a", g2: "#86c862", waterA: "#5ab0e8", waterB: "rgba(255,255,255,",
+    pickupColor: "#f0b428", pickupCount: 12,
+    pet: { id: "cloudlamb", name: "Agneau des nuages", nameEn: "Cloud lamb" }, petHue: 40 },
+];
+export const PASSAGE_PET_CATCH_CHANCE = 0.35;
+export const PASSAGE_LOOT_GOLD_MIN = 25;   // or accordé par breloque ramassée (min..max)
+export const PASSAGE_LOOT_GOLD_MAX = 75;
+export const MAZE_PRIZE_GOLD = 300;        // récompense du coffre au bout du labyrinthe (1x/joueur/semaine)
+export const CANDY_SPEED_MS = 60 * 1000;   // durée du bonbon magique "vitesse" (buff local)
+export const CANDY_SPEED_MUL = 1.5;
+
+// --- Valley Town, suite (zip 235) ---
+export const TOWN_HOUSE_STYLES = 10;       // 10 façades de base gratuites (R à sa porte pour changer)
+
+// Rappel des visiteurs qui flânent : pendant ce délai après un "rendez-vous à
+// la mairie", ils reviennent (et restent) sur la place au lieu de vagabonder.
+export const VISITOR_RECALL_MS = 2 * 60 * 1000;
+export const VISITOR_ROAM_HOP = 8;         // longueur max (tuiles) d'une étape de balade libre sur toute la carte

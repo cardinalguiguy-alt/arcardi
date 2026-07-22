@@ -23,8 +23,189 @@ export function buildSprites() {
   function P(g, x, y, w, h, col) { g.fillStyle = col; g.fillRect(x, y, w, h); }
   function makeRnd(s) { return () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; }; }
 
-  /* ---------------- Tuiles de sol ---------------- */
-  function grassTile(variant) {
+  // ==================================================================
+  // Zip 236: generic pet sprite (tinted little critter). One 16x16 sprite per
+  // pet id in C.PET_CATALOG, tinted by the catalog `hue`. Kept deliberately
+  // simple — a body blob, ears/horn, eye, feet — differentiated by `body`.
+  function petSprite(petId) {
+    const spec = C.PET_CATALOG[petId] || { hue: 200, body: "critter" };
+    const [c, g] = cv(T, T);
+    const base = `hsl(${spec.hue}, 65%, 62%)`;
+    const dark = `hsl(${spec.hue}, 55%, 42%)`;
+    const light = `hsl(${spec.hue}, 70%, 78%)`;
+    P(g, 4, 8, 8, 6, base); P(g, 3, 9, 10, 4, base);
+    P(g, 4, 8, 8, 1, light);
+    P(g, 5, 13, 2, 2, dark); P(g, 9, 13, 2, 2, dark);
+    P(g, 9, 4, 5, 5, base); P(g, 9, 4, 5, 1, light);
+    P(g, 12, 6, 1, 1, "#1a1a1a");
+    if (spec.body === "dragon") { P(g, 13, 5, 2, 1, "#ffcf3a"); P(g, 2, 7, 3, 2, dark); P(g, 6, 5, 1, 2, dark); P(g, 8, 4, 1, 2, dark); }
+    else if (spec.body === "horse") { P(g, 12, 1, 1, 4, light); P(g, 8, 5, 1, 3, light); }
+    else if (spec.body === "cat") { P(g, 9, 2, 1, 2, base); P(g, 12, 2, 1, 2, base); P(g, 2, 10, 3, 1, base); }
+    else if (spec.body === "turtle") { P(g, 4, 7, 8, 6, dark); P(g, 5, 8, 6, 4, base); P(g, 6, 9, 1, 1, light); P(g, 9, 10, 1, 1, light); }
+    else if (spec.body === "lamb") { P(g, 4, 6, 8, 3, light); P(g, 5, 5, 6, 2, light); }
+    else { P(g, 9, 3, 1, 2, base); P(g, 12, 3, 1, 2, base); P(g, 3, 10, 2, 1, base); }
+    return c;
+  }
+
+  // ==================================================================
+  // Zip 235 additions
+  // ==================================================================
+  // Léopard des neiges : mêmes 4 frames que wolfSprite, dessinées via
+  // temporary tint (canvas mask). On construit un canevas au-dessus du loup
+  // et on remplit les zones du corps en blanc + rosettes noires.
+  function snowLeopardSprite(frame) {
+    const wolf = wolfSprite(frame);
+    const [c, g] = cv(30, 22);
+    // Base = loup, puis on ré-éclaircit le corps.
+    g.drawImage(wolf, 0, 0);
+    g.globalCompositeOperation = "source-atop";
+    // Voile clair général : blanc cassé sur tout le corps.
+    g.fillStyle = "rgba(238, 240, 248, 0.75)"; g.fillRect(0, 0, 30, 22);
+    // Rosettes : petites taches sombres semi-transparentes déterministes.
+    g.fillStyle = "rgba(60, 60, 78, 0.85)";
+    const rr = makeRnd(500 + frame * 17);
+    for (let i = 0; i < 26; i++) g.fillRect(3 + Math.floor(rr() * 24), 5 + Math.floor(rr() * 14), 1, 1);
+    for (let i = 0; i < 8; i++) g.fillRect(3 + Math.floor(rr() * 24), 5 + Math.floor(rr() * 14), 2, 1);
+    g.globalCompositeOperation = "source-over";
+    return c;
+  }
+
+  // Buisson à baies (printemps) : petite touffe verte foncée piquée de baies
+  // rouges. Occupe une seule tuile (16x16).
+  function berryBushSprite() {
+    const [c, g] = cv(T, T);
+    P(g, 2, 6, 12, 8, "#2d6a2a"); P(g, 1, 8, 14, 5, "#2d6a2a");
+    for (let i = 0; i < 22; i++) P(g, 2 + Math.floor(Math.random() * 12), 6 + Math.floor(Math.random() * 8), 1, 1, Math.random() < 0.4 ? "#3d8a3a" : "#245422");
+    // baies rouges (déterministes plutôt qu'aléatoires : un rendu à chaque
+    // frame donnerait un buisson qui clignote — on fige ici).
+    const berries = [[3, 8], [7, 6], [9, 10], [5, 12], [11, 7], [12, 11]];
+    for (const [bx, by] of berries) { P(g, bx, by, 2, 2, "#c8283a"); P(g, bx, by, 1, 1, "#e05a6a"); }
+    return c;
+  }
+
+  // ----- Mairie de Valley Town (zip 235, Guillaume : "change the townhall
+  // design to look more like a townhall and not like a house"). Sprite
+  // dédié : bâtisse imposante à colonnades avec fronton, drapeau, horloge,
+  // large volée de marches. Canevas 128x128 (2x une maison), ancré comme les
+  // maisons par son bord bas.
+  function townhallSprite() {
+    const W = 128, H = 128;
+    const [c, g] = cv(W, H);
+    // Marches (soubassement large).
+    P(g, 6, 118, W - 12, 6, "#b0b0b8"); P(g, 6, 118, W - 12, 1, "#c8c8d0");
+    P(g, 10, 112, W - 20, 6, "#a4a4ac"); P(g, 10, 112, W - 20, 1, "#c0c0c8");
+    // Corps principal (murs crème clairs).
+    P(g, 18, 52, W - 36, 62, "#efe6cc"); P(g, 18, 52, W - 36, 2, "#f7efd8");
+    // Colonnes doriques (5, réparties devant la façade).
+    for (let i = 0; i < 5; i++) {
+      const cx = 24 + i * 18;
+      P(g, cx, 60, 6, 52, "#f4ecd4"); P(g, cx, 60, 1, 52, "#fff8e2"); P(g, cx + 5, 60, 1, 52, "#d4c69a");
+      P(g, cx - 1, 58, 8, 3, "#e6d8b0"); P(g, cx - 1, 110, 8, 3, "#c8b98a");
+    }
+    // Fronton triangulaire (à colonnes).
+    g.fillStyle = "#c8b070";
+    g.beginPath(); g.moveTo(12, 55); g.lineTo(W / 2, 22); g.lineTo(W - 12, 55); g.fill();
+    g.fillStyle = "#e0c88c";
+    g.beginPath(); g.moveTo(16, 55); g.lineTo(W / 2, 27); g.lineTo(W - 16, 55); g.lineTo(W - 20, 55); g.lineTo(W / 2, 33); g.lineTo(20, 55); g.fill();
+    // Horloge ronde au centre du fronton.
+    g.fillStyle = "#2a2620"; g.beginPath(); g.arc(W / 2, 45, 8, 0, 7); g.fill();
+    g.fillStyle = "#f6f0e0"; g.beginPath(); g.arc(W / 2, 45, 6, 0, 7); g.fill();
+    P(g, (W / 2) | 0, 41, 1, 4, "#2a2620"); P(g, (W / 2) | 0, 45, 4, 1, "#2a2620");
+    // Toit plat au-dessus du fronton + drapeau.
+    P(g, 30, 20, 4, 8, "#7a5330"); // mât
+    P(g, 34, 20, 12, 6, "#3a6ec8"); P(g, 34, 22, 12, 2, "#e05050");
+    // Grande porte à double battant + fronton d'entrée.
+    const dw = 18, dx = (W - dw) / 2, dy = 82;
+    P(g, dx - 3, dy - 4, dw + 6, 4, "#8a6340"); P(g, dx - 3, dy - 5, dw + 6, 1, "#a68258");
+    P(g, dx, dy, dw, 30, "#4a3520"); P(g, dx + dw / 2, dy, 1, 30, "#2a1e12");
+    P(g, dx + 3, dy + 4, 5, 8, "#8fc7ec"); P(g, dx + dw - 8, dy + 4, 5, 8, "#8fc7ec"); // hublots
+    P(g, dx + 2, dy + 20, 2, 2, "#e8c860"); P(g, dx + dw - 4, dy + 20, 2, 2, "#e8c860");
+    // Fenêtres cintrées de chaque côté.
+    for (const wx of [24, W - 34]) {
+      P(g, wx, 66, 10, 20, "#5a4028");
+      P(g, wx + 1, 67, 8, 18, "#8fc7ec"); P(g, wx + 1, 67, 8, 2, "#a8d4f0");
+      P(g, wx + 4, 67, 1, 18, "#5a4028"); P(g, wx + 1, 76, 8, 1, "#5a4028");
+      g.fillStyle = "#5a4028"; g.beginPath(); g.arc(wx + 5, 67, 5, Math.PI, 2 * Math.PI); g.fill();
+      g.fillStyle = "#a8d4f0"; g.beginPath(); g.arc(wx + 5, 67, 4, Math.PI, 2 * Math.PI); g.fill();
+    }
+    return c;
+  }
+
+  // ----- 10 façades de maison basiques pour Valley Town (zip 235). Toutes
+  // au même canevas 96x96 que la maison de ferme, ancrées par leur bord bas.
+  function townHouseVariant(styleIdx) {
+    const [c, g] = cv(96, 96);
+    // Palette de toits/murs qui tourne par styleIdx pour distinguer chaque
+    // maison. 10 couleurs distinctes.
+    const roofs  = ["#a83c30","#c04a3c","#3a6ec8","#4a8c4a","#8a5330","#c9944a","#8a3a7a","#3f5f8a","#2a6a6a","#6a3040"];
+    const walls  = ["#c8a878","#efe4c8","#e6d9bc","#d8c078","#c8d8b0","#f2dcb8","#c8b8d8","#b8d0e0","#e8ccb0","#d8c0c0"];
+    const roofL  = ["#c04a3c","#d05a4c","#4a80d8","#5aa25a","#a06a40","#e0a95a","#a04a90","#5570a2","#3a8080","#803850"];
+    const doorC  = ["#7a5330","#5a3a1e","#4a5a2a","#3a3a2a","#5a3a20","#3a2a1a","#2a2a4a","#402a2a","#2a4a4a","#4a2a3a"];
+    const roof = roofs[styleIdx % roofs.length];
+    const wall = walls[styleIdx % walls.length];
+    const rL   = roofL [styleIdx % roofL.length];
+    const dC   = doorC[styleIdx % doorC.length];
+    // Murs.
+    P(g, 8, 46, 80, 42, wall);
+    for (let y = 50; y < 88; y += 6) P(g, 8, y, 80, 1, "#00000022");
+    // Toit variant : styles pair/impair -> pente simple / à croupes.
+    g.fillStyle = roof;
+    if (styleIdx % 2 === 0) {
+      g.beginPath(); g.moveTo(0, 48); g.lineTo(48, 6); g.lineTo(96, 48); g.fill();
+      g.fillStyle = rL;
+      g.beginPath(); g.moveTo(6, 46); g.lineTo(48, 10); g.lineTo(90, 46); g.lineTo(84, 46); g.lineTo(48, 15); g.lineTo(12, 46); g.fill();
+    } else {
+      P(g, 4, 30, 88, 18, roof); P(g, 4, 30, 88, 2, rL);
+      g.beginPath(); g.moveTo(4, 30); g.lineTo(48, 8); g.lineTo(92, 30); g.fill();
+    }
+    P(g, 0, 46, 96, 4, "#00000055");
+    // Cheminée.
+    P(g, 68, 12, 10, 18, "#8a8a92"); P(g, 66, 10, 14, 4, "#72727a");
+    // Porte.
+    P(g, 42, 62, 14, 26, dC);
+    P(g, 44, 64, 10, 24, "#00000022");
+    P(g, 52, 75, 2, 2, "#e8c85a");
+    // Fenêtres avec volets colorés selon le style.
+    const shut = roof;
+    for (const wx of [16, 68]) {
+      P(g, wx, 58, 14, 12, "#5a4530");
+      P(g, wx + 1, 59, 12, 10, "#a8d4e8"); P(g, wx + 1, 59, 12, 4, "#c8e8f4");
+      P(g, wx + 6, 59, 1, 10, "#5a4530"); P(g, wx + 1, 63, 12, 1, "#5a4530");
+      // Volets sur les côtés.
+      P(g, wx - 3, 58, 3, 12, shut); P(g, wx + 14, 58, 3, 12, shut);
+      P(g, wx - 1, 70, 16, 2, "#7a5330");
+    }
+    // Détail distinctif : boîte à fleurs, plaque de numéro, etc.
+    if (styleIdx % 3 === 0) { P(g, 42, 78, 14, 3, "#6b4a2e"); for (let i = 0; i < 5; i++) P(g, 43 + i * 2.4, 76, 2, 2, i % 2 ? "#e06a8a" : "#d84040"); }
+    else if (styleIdx % 3 === 1) { P(g, 76, 60, 8, 5, "#f5eeda"); P(g, 76, 60, 8, 1, "#6b4a2e"); }
+    else { P(g, 12, 76, 6, 6, "#c8b070"); P(g, 12, 76, 6, 1, "#e0c890"); }
+    return c;
+  }
+
+  // Feuillage d'automne : sprite dérivé du chêne, teinté vers l'orangé.
+  function autumnTree(baseImg) {
+    const [c, g] = cv(baseImg.width, baseImg.height);
+    g.drawImage(baseImg, 0, 0);
+    g.globalCompositeOperation = "source-atop";
+    g.fillStyle = "rgba(220, 130, 40, 0.55)";
+    // Ne teinte QUE la partie haute (feuillage).
+    g.fillRect(0, 0, baseImg.width, Math.floor(baseImg.height * 0.65));
+    g.globalCompositeOperation = "source-over";
+    return c;
+  }
+
+  // Chêne en fleurs (printemps) : léger voile rose sur le feuillage.
+  function springTree(baseImg) {
+    const [c, g] = cv(baseImg.width, baseImg.height);
+    g.drawImage(baseImg, 0, 0);
+    g.globalCompositeOperation = "source-atop";
+    g.fillStyle = "rgba(255, 180, 220, 0.35)";
+    g.fillRect(0, 0, baseImg.width, Math.floor(baseImg.height * 0.65));
+    g.globalCompositeOperation = "source-over";
+    return c;
+  }
+
+
     const [c, g] = cv(T, T), r = makeRnd(77 + variant * 131);
     P(g, 0, 0, T, T, "#59a84a");
     for (let i = 0; i < 26; i++) P(g, (r() * T) | 0, (r() * T) | 0, 1, 1, r() < 0.5 ? "#4f9a41" : "#63b653");
@@ -536,6 +717,13 @@ export function buildSprites() {
         g.strokeStyle = "rgba(140,110,70,.5)"; g.lineWidth = 1;
         g.beginPath(); g.moveTo(5, 8); g.lineTo(11, 8); g.moveTo(5, 11); g.lineTo(11, 11); g.stroke(); // coutures
         P(g, 3, 12, 1, 1, "#fff6e6"); // grain de farine échappé
+        break;
+      case "bag": // zip 236: sac à dos / besace personnelle (bouton du sac)
+        P(g, 4, 5, 8, 9, "#9a6b3e"); P(g, 4, 5, 8, 1, "#b5824f");   // corps
+        P(g, 3, 7, 10, 5, "#8a5f36");                                 // ventre plus large
+        P(g, 5, 3, 6, 3, "#7a5330"); P(g, 6, 2, 4, 2, "#8a5f36");     // rabat + anse
+        P(g, 6, 8, 4, 3, "#c9a25a");                                  // poche avant
+        P(g, 7, 9, 2, 1, "#5a3a1e");                                  // boucle
         break;
       default: break;
     }
@@ -1278,6 +1466,11 @@ house: house(),
     horse: horseSprite(0),
     horseRun: [horseSprite(0), horseSprite(1), horseSprite(2), horseSprite(3)], // cycle de galop (chantier 2026-07)
     wolf: [wolfSprite(0), wolfSprite(1), wolfSprite(2), wolfSprite(3)],
+    // Zip 235: winter swap. Same 4 frames, same anim, different pelt.
+    snowLeopard: [snowLeopardSprite(0), snowLeopardSprite(1), snowLeopardSprite(2), snowLeopardSprite(3)],
+    berryBush: berryBushSprite(),
+    townhall: townhallSprite(),
+    townHouses: Array.from({ length: C.TOWN_HOUSE_STYLES }, (_, i) => townHouseVariant(i)),
     rabbit: [rabbitSprite(0), rabbitSprite(1), rabbitSprite(2)],
     torch: torchSprite(),
     stool: stoolSprite(),
@@ -1309,12 +1502,20 @@ house: house(),
     S.crops[t] = [];
     for (let s = 0; s < C.CROP_STAGES; s++) S.crops[t][s] = cropSprite(t, s);
   }
-  for (const k of ["hoe", "can", "axe", "pick", "seeds", "wood", "stone", "food", "gold", "energy", "rod", "ready", "thirst", "herd", "flour"]) S.icons[k] = icon(k);
+  for (const k of ["hoe", "can", "axe", "pick", "seeds", "wood", "stone", "food", "gold", "energy", "rod", "ready", "thirst", "herd", "flour", "bag"]) S.icons[k] = icon(k);
+  // Zip 236: one sprite per pet id in the catalog (individual pets).
+  S.pets = {};
+  for (const pid of Object.keys(C.PET_CATALOG)) S.pets[pid] = petSprite(pid);
   S.gemIcons = C.GEMS.map(gm => gemIcon(gm.color));
   S.fishIcons = C.FISH.map(fs => fishIcon(fs.color));
   S.seaIcons = C.SEA_CREATURES.map((sc, i) => seaIcon(i, sc.color));
   S.animals = C.ANIMALS.map(a => animalSprite(a.id));
   S.products = C.ANIMALS.map(a => productIcon(a.id));
+  // Zip 235: seasonal foliage variants (autumn = orange leaves,
+  // spring = pink blooms). Same size as base sprites, drawn via seasonal
+  // tint. FermeGame picks them based on seasonOf().
+  S.oakAutumn = autumnTree(S.oak); S.pineAutumn = autumnTree(S.pine);
+  S.oakSpring = springTree(S.oak); S.pineSpring = springTree(S.pine);
   S.getChar = (gender, outfit, overalls, cap) => {
     const key = gender + ":" + outfit + (overalls ? ":overalls" : "") + (cap ? ":cap" : "");
     if (!S.chars[key]) S.chars[key] = charSheet(gender, outfit, !!overalls, !!cap);

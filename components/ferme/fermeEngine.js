@@ -536,6 +536,7 @@ export function newFarmer(id, name, gender, outfit) {
       products: C.ANIMALS.map(() => 0), // productions d'élevage ramassées
     },
     quests: {}, // id de quête -> true quand accomplie
+    pets: [],   // zip 236: pets INDIVIDUELS (max C.MAX_PETS), {id, at}. Voir resolveCatchPet/resolveReleasePet.
   };
 }
 
@@ -591,6 +592,8 @@ export function normalizeFarmer(f) {
   if (typeof f.inv.scarecrow !== "number") f.inv.scarecrow = 0;
   if (typeof f.inv.grass !== "number") f.inv.grass = 0;
   if (typeof f.inv.mill !== "number") f.inv.mill = 0;
+  if (typeof f.inv.berries !== "number") f.inv.berries = 0;
+  if (typeof f.inv.fruit !== "number") f.inv.fruit = 0;
   if (typeof f.inv.healKit !== "number") f.inv.healKit = 0;
   if (typeof f.inv.salve !== "number") f.inv.salve = 0;
   f.inv.seeds = padArray(f.inv.seeds, C.CROPS.length);
@@ -601,6 +604,10 @@ export function normalizeFarmer(f) {
   if (typeof f.seaStreak !== "number") f.seaStreak = 0; // consecutive casts, host-side rarity gate
   f.inv.products = padArray(f.inv.products, C.ANIMALS.length);
   f.quests = f.quests || {};
+  // Zip 236: individual pets. Keep only well-formed known pets; cap at MAX_PETS.
+  f.pets = (Array.isArray(f.pets) ? f.pets : [])
+    .filter(p => p && typeof p.id === "string" && C.PET_CATALOG[p.id])
+    .slice(0, C.MAX_PETS);
   return f;
 }
 
@@ -1684,6 +1691,12 @@ export function resolveSell(f, m) {
     if (st < 0 || st >= C.SEA_CREATURES.length) return res;
     const n = Math.min(f.inv.seaCreatures[st], Math.max(1, (m.n | 0) || f.inv.seaCreatures[st]));
     f.inv.seaCreatures[st] -= n; gain = n * C.SEA_CREATURES[st].sell;
+  } else if (m.item === "berry") {
+    const n = Math.min(f.inv.berries || 0, Math.max(1, (m.n | 0) || (f.inv.berries || 0)));
+    f.inv.berries = (f.inv.berries || 0) - n; gain = n * C.BERRY_SELL;
+  } else if (m.item === "fruit") {
+    const n = Math.min(f.inv.fruit || 0, Math.max(1, (m.n | 0) || (f.inv.fruit || 0)));
+    f.inv.fruit = (f.inv.fruit || 0) - n; gain = n * C.FRUIT_SELL;
   } else if (m.item === "product") {
     const pt = m.product | 0;
     if (pt < 0 || pt >= C.ANIMALS.length) return res;
@@ -1928,7 +1941,7 @@ export function blockedTile(world, x, y, now = Date.now()) {
   const g = world.ground[i], o = world.objects[i];
   if (g === C.G_WATER || g === C.G_BRIDGE_SITE || g === C.G_BRIDGE_CLOSED || g === C.G_BRIDGE_STONE_CLOSED) return true;
   if (o === C.O_LAMP || o === C.O_MILL) return buildReady(world.objHp.get(i), now);
-  if (o === C.O_TREE || o === C.O_TREE2 || o === C.O_ROCK || o === C.O_HOUSE || o === C.O_SHOP || o === C.O_BIN || o === C.O_STUMP || o === C.O_WELL || o === C.O_FENCE || o === C.O_FENCE_H || o === C.O_FENCE_V || o === C.O_WALL) return true;
+  if (o === C.O_TREE || o === C.O_TREE2 || o === C.O_ROCK || o === C.O_HOUSE || o === C.O_SHOP || o === C.O_BIN || o === C.O_STUMP || o === C.O_WELL || o === C.O_FENCE || o === C.O_FENCE_H || o === C.O_FENCE_V || o === C.O_WALL || o === C.O_BERRY_BUSH) return true;
   return false;
 }
 
@@ -1947,7 +1960,7 @@ export function blockedTileMounted(world, x, y, now = Date.now()) {
   const i = idx(fx, fy);
   const o = world.objects[i];
   if (o === C.O_LAMP || o === C.O_MILL) return buildReady(world.objHp.get(i), now);
-  if (o === C.O_TREE || o === C.O_TREE2 || o === C.O_ROCK || o === C.O_HOUSE || o === C.O_SHOP || o === C.O_BIN || o === C.O_STUMP || o === C.O_WELL || o === C.O_FENCE || o === C.O_FENCE_H || o === C.O_FENCE_V || o === C.O_WALL) return true;
+  if (o === C.O_TREE || o === C.O_TREE2 || o === C.O_ROCK || o === C.O_HOUSE || o === C.O_SHOP || o === C.O_BIN || o === C.O_STUMP || o === C.O_WELL || o === C.O_FENCE || o === C.O_FENCE_H || o === C.O_FENCE_V || o === C.O_WALL || o === C.O_BERRY_BUSH) return true;
   return false;
 }
 
@@ -2272,8 +2285,16 @@ function classifyBuyOffer(offer, stockCtx, r, rel) {
   const askable = C.CROPS.filter(cr => !cr.unique);
   const stock = (stockCtx && Array.isArray(stockCtx.crops)) ? stockCtx.crops : [];
   const stocked = askable.filter(cr => (stock[cr.id] || 0) >= 2);
+  // Zip 235 (Guillaume: "when it's autumn ... more visitors want pumpkins"):
+  // whenever the pumpkin is a valid candidate in the pool being drawn from,
+  // it is force-picked with probability AUTUMN_PUMPKIN_BIAS during autumn.
+  const pickCrop = (arr) => {
+    const pk = arr.find(cr => cr.id === C.PUMPKIN_CROP_ID);
+    if (pk && seasonOf().key === "autumn" && r() < C.AUTUMN_PUMPKIN_BIAS) return pk;
+    return arr[Math.floor(r() * arr.length)];
+  };
   if (stocked.length && r() < C.VISITOR_EASY_STOCK_BIAS) {
-    const cr = stocked[Math.floor(r() * stocked.length)];
+    const cr = pickCrop(stocked);
     offer.crop = cr.id;
     offer.n = Math.max(1, Math.min(stock[cr.id] || 1, offer.n));
     offer.easy = true;
@@ -2285,8 +2306,7 @@ function classifyBuyOffer(offer, stockCtx, r, rel) {
   const notStocked = askable.filter(cr => (stock[cr.id] || 0) < 2);
   const pool = notStocked.length ? notStocked : askable;
   const fitting = pool.filter(cr => cr.growMs * 1.2 <= C.VISITOR_WAIT_MAX_MS);
-  const cr = (fitting.length ? fitting : [pool.reduce((a, b) => (a.growMs <= b.growMs ? a : b))])[
-    Math.floor(r() * (fitting.length || 1))];
+  const cr = fitting.length ? pickCrop(fitting) : pool.reduce((a, b) => (a.growMs <= b.growMs ? a : b));
   offer.crop = cr.id;
   offer.prep = true;
   offer.prepMs = cr.growMs;
@@ -2578,9 +2598,17 @@ export function finalizeVote(votes, rnd) {
   return { decided: true, stay: roll >= 4, dice: true, roll };
 }
 
-// Current season from the in-game day (purely visual for now).
-export function seasonOf(day) {
-  return C.SEASONS[Math.floor(((day || 1) - 1) / C.SEASON_DAYS) % C.SEASONS.length];
+// Season, zip 235 rework (Guillaume: "change the seasons to be once every
+// real 7 days"): derived from the REAL clock (7 real days per season, fixed
+// epoch anchor) instead of the in-game day. The day parameter is kept so the
+// existing call sites don't change, but it is ignored. Every client computes
+// the same season with zero sync. No longer purely visual: winter snows and
+// swaps wolves for snow leopards, autumn tints foliage and biases visitor
+// orders toward pumpkins, spring spawns flowers/fruit/berry bushes (see
+// FermeGame.js + classifyBuyOffer below).
+export function seasonOf() {
+  const idx = Math.floor(Math.max(0, Date.now() - C.SEASON_EPOCH) / C.SEASON_REAL_MS);
+  return C.SEASONS[idx % C.SEASONS.length];
 }
 
 // Host normalization at load: the pre-built station must stand on clear
@@ -2606,4 +2634,192 @@ export function clearStationArea(w) {
   for (let y = 0; y < C.MAP_H; y++)
     for (let x = C.STATION_RAIL_X; x <= C.STATION_RAIL_X + 1; x++) clearAt(x, y);
   return changed;
+}
+
+// ==================================================================
+// Zip 235 — mondes tournants du passage sombre + saisons runtime
+// ==================================================================
+
+// Semaine de jeu -> index dans C.PASSAGE_WORLDS. Un même s.day donne la même
+// semaine à tous les clients : rotation identique partout, sans synchro.
+export function passageWorldIndex(day) {
+  return Math.floor(Math.max(0, (day || 1) - 1) / C.SEASON_DAYS) % C.PASSAGE_WORLDS.length;
+}
+export function passageWorldOf(day) { return C.PASSAGE_WORLDS[passageWorldIndex(day)]; }
+
+// Génère l'une des cartes du passage sombre, à partir du même modèle que
+// generateEvilWorld (mêmes coordonnées d'arrivée/retour, mêmes dimensions),
+// mais avec des variations propres à chaque monde : Terres Maléfiques (le
+// monde d'origine), Bonbons, Labyrinthe, Cristal, Prairie. La seed est
+// stable par monde (mêmes objets à chaque visite dans la même semaine), et
+// chaque carte pose une petite collection de "breloques" (pickups) au sol
+// (colorPickupColor / pickupCount) qui rapportent de l'or à qui les ramasse
+// (voir resolvePassagePickup, hôte). Le labyrinthe pose des "haies" (arbres
+// morts, pour la collision) formant un dédale et un prix au centre.
+export function generatePassageWorld(worldIdx) {
+  const W = C.EVIL_MAP_W, H = C.EVIL_MAP_H;
+  const spec = C.PASSAGE_WORLDS[worldIdx];
+  const rnd = makeRng(0xE411 + worldIdx * 977);
+  const ground = new Array(W * H).fill(C.G_GRASS);
+  const objects = new Array(W * H).fill(C.O_NONE);
+  const objHp = new Map();
+  const id = (x, y) => y * W + x;
+
+  // Petit lac / mare à peu près à mi-carte, comme la carte maléfique.
+  const lakeCx = 22 + Math.floor(rnd() * 14), lakeCy = 30 + Math.floor(rnd() * 10);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const d = Math.hypot(x - lakeCx, y - lakeCy);
+    if (d < 6 + rnd() * 2) ground[id(x, y)] = C.G_WATER;
+  }
+
+  // Ceinture d'arbres autour de la carte (arbres morts pour le monde
+  // maléfique et cristal ; arbres/pins vivants ailleurs).
+  const treeKind = () => (spec.key === "evil" || spec.key === "crystal")
+    ? C.O_TREE_DEAD : (rnd() < 0.5 ? C.O_TREE : C.O_TREE2);
+  const put = (x, y, kind, hp) => {
+    x = Math.round(x); y = Math.round(y);
+    if (x < 1 || y < 1 || x >= W - 1 || y >= H - 1) return false;
+    const i = id(x, y);
+    if (ground[i] !== C.G_GRASS || objects[i] !== C.O_NONE) return false;
+    objects[i] = kind; objHp.set(i, hp);
+    return true;
+  };
+
+  if (spec.key === "maze") {
+    // Labyrinthe : haies en grille avec passages irréguliers. Prix (chest
+    // symbolique = un tas de "breloques" concentré) au centre.
+    const HW = 4, cx = Math.floor(W / 2), cy = Math.floor(H / 2);
+    for (let y = 4; y < H - 4; y += HW) for (let x = 4; x < W - 4; x++) {
+      if (rnd() < 0.72 && Math.hypot(x - cx, y - cy) > 3) put(x, y, C.O_TREE_DEAD, C.TREE_HP);
+    }
+    for (let x = 4; x < W - 4; x += HW) for (let y = 4; y < H - 4; y++) {
+      if (rnd() < 0.72 && Math.hypot(x - cx, y - cy) > 3) put(x, y, C.O_TREE_DEAD, C.TREE_HP);
+    }
+    // Couloir garanti : dégager un chemin de EVIL_SPAWN vers le centre.
+    let x = C.EVIL_SPAWN.x, y = C.EVIL_SPAWN.y;
+    while (Math.hypot(x - cx, y - cy) > 2) {
+      const i = id(x, y); if (objects[i] !== C.O_NONE) { objects[i] = C.O_NONE; objHp.delete(i); }
+      if (Math.abs(x - cx) > Math.abs(y - cy)) x += Math.sign(cx - x);
+      else y += Math.sign(cy - y);
+    }
+  } else {
+    // Ceinture + éparpillement de forêt (mêmes ordres de grandeur que
+    // generateEvilWorld).
+    for (let n = 0; n < 220; n++) put(rnd() * W, rnd() * H, treeKind(), C.TREE_HP);
+    for (let x = 1; x < W - 1; x++) { if (rnd() < 0.65) put(x, 1 + Math.floor(rnd() * 2), treeKind(), C.TREE_HP); if (rnd() < 0.65) put(x, H - 2 - Math.floor(rnd() * 2), treeKind(), C.TREE_HP); }
+    for (let i = 0; i < 220; i++) put(rnd() * W, rnd() * H, C.O_ROCK, C.EVIL_ROCK_HP);
+  }
+
+  // Dégage impérativement les cases d'arrivée / retour / prix maléfique.
+  for (const p of [C.EVIL_SPAWN, C.EVIL_RETURN_PASSAGE, C.EVIL_CAULDRON_SPAWN]) {
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      const i = id(p.x + dx, p.y + dy);
+      if (i >= 0 && i < ground.length) {
+        if (ground[i] === C.G_WATER) ground[i] = C.G_GRASS;
+        if (objects[i] !== C.O_NONE) { objects[i] = C.O_NONE; objHp.delete(i); }
+      }
+    }
+  }
+  ground[id(C.EVIL_RETURN_PASSAGE.x, C.EVIL_RETURN_PASSAGE.y)] = C.G_DARK_PASSAGE;
+
+  // Pickups (breloques). Placés sur des cases d'herbe libres, jamais dans
+  // l'eau, jamais sur un objet, jamais trop près du spawn (on veut avoir à
+  // explorer un peu).
+  const pickups = [];
+  if (spec.pickupCount > 0) {
+    let tries = spec.pickupCount * 20, placed = 0;
+    while (tries-- > 0 && placed < spec.pickupCount) {
+      const x = 4 + Math.floor(rnd() * (W - 8)), y = 4 + Math.floor(rnd() * (H - 8));
+      if (Math.hypot(x - C.EVIL_SPAWN.x, y - C.EVIL_SPAWN.y) < 8) continue;
+      const i = id(x, y);
+      if (ground[i] !== C.G_GRASS || objects[i] !== C.O_NONE) continue;
+      pickups.push({ id: placed, x, y }); placed++;
+    }
+  }
+  const maze = spec.key === "maze"
+    ? { prizeX: Math.floor(W / 2), prizeY: Math.floor(H / 2) } : null;
+
+  // Créatures : le seul monde qui garde des monstres est "evil" — les autres
+  // sont paisibles (Guillaume: "unique gifts, trinkets, rare pets to catch").
+  const monsters = [];
+  if (spec.key === "evil") {
+    for (let n = 0; n < C.EVIL_MONSTER_COUNT; n++) {
+      let mx = 0, my = 0, ok = false, tries = 0;
+      while (!ok && tries++ < 400) {
+        mx = 1 + Math.floor(rnd() * (W - 2)); my = 1 + Math.floor(rnd() * (H - 2));
+        const i = id(mx, my);
+        if (ground[i] === C.G_GRASS && objects[i] === C.O_NONE
+          && Math.hypot(mx - C.EVIL_SPAWN.x, my - C.EVIL_SPAWN.y) >= C.EVIL_MONSTER_MIN_SPAWN_DIST) ok = true;
+      }
+      monsters.push({ id: n, x: mx, y: my, tx: mx, ty: my, dir: 0, animT: 0, moving: false, chasing: false, fleeing: false, kind: rnd() < 0.5 ? "zombie" : "wolf", hp: 3 });
+    }
+  }
+
+  return { w: W, h: H, ground, objects, objHp, monsters, pickups, spec, maze, worldIdx };
+}
+
+// Ramassage d'une breloque : gain d'or + potentielle capture d'animal
+// exclusif du monde (station.pendingGifts, comme les cadeaux visiteur).
+// petCaughtBefore : liste des mondes où CE joueur a déjà capturé son pet
+// cette semaine (côté FermeGame, on garde ça dans un ref local, réinitialisé
+// à chaque rotation).
+export function resolvePassagePickup(s, f, worldIdx, pickupId, rnd) {
+  const r = rnd || Math.random;
+  const spec = C.PASSAGE_WORLDS[worldIdx];
+  const gold = C.PASSAGE_LOOT_GOLD_MIN + Math.floor(r() * (C.PASSAGE_LOOT_GOLD_MAX - C.PASSAGE_LOOT_GOLD_MIN + 1));
+  s.money = (s.money || 0) + gold; s.totalEarned = (s.totalEarned || 0) + gold;
+  const res = { gold, pet: null, bagFull: false };
+  // Zip 236: pets are INDIVIDUAL now. A successful catch lands in the
+  // collector's own bag (f.pets), capped at MAX_PETS. If their bag is full,
+  // the animal escapes (no catch) and we flag bagFull so the client can tell
+  // them to release one first. Gold is granted regardless.
+  if (r() < C.PASSAGE_PET_CATCH_CHANCE) {
+    const cr = resolveCatchPet(f, spec.pet.id);
+    if (cr.ok) res.pet = { id: spec.pet.id, name: spec.pet.name, nameEn: spec.pet.nameEn };
+    else res.bagFull = true;
+  }
+  return res;
+}
+
+// Zip 236: add a pet to a farmer's individual bag (max C.MAX_PETS).
+export function resolveCatchPet(f, petId) {
+  if (!C.PET_CATALOG[petId]) return { ok: false, unknown: true };
+  f.pets = Array.isArray(f.pets) ? f.pets : [];
+  if (f.pets.length >= C.MAX_PETS) return { ok: false, full: true };
+  f.pets.push({ id: petId, at: Date.now() });
+  return { ok: true, petId };
+}
+// Release a pet back into the wild (frees a slot). Idempotent-ish: a bad
+// index just no-ops with ok:false.
+export function resolveReleasePet(f, index) {
+  f.pets = Array.isArray(f.pets) ? f.pets : [];
+  if (index < 0 || index >= f.pets.length) return { ok: false };
+  const [gone] = f.pets.splice(index, 1);
+  return { ok: true, petId: gone ? gone.id : null };
+}
+
+// Cueillette d'un buisson à baies (E) : baies dans l'inventaire.
+export function resolveBerryPick(f, world, x, y, rnd) {
+  const r = rnd || Math.random;
+  const i = y * C.MAP_W + x;
+  if (world.objects[i] !== C.O_BERRY_BUSH) return { ok: false };
+  const n = C.BERRY_PICK_MIN + Math.floor(r() * (C.BERRY_PICK_MAX - C.BERRY_PICK_MIN + 1));
+  f.inv.berries = (f.inv.berries || 0) + n;
+  return { ok: true, n };
+}
+// Fruits (pommes) sur un chêne : 1 cueillette par jour réel par arbre. lastPickAt
+// est stocké dans world.objHp (on réutilise la Map existante pour ne rien
+// ajouter au schéma persisté ; les valeurs y sont des timestamps).
+export function resolveFruitPick(f, world, x, y) {
+  const i = y * C.MAP_W + x;
+  if (world.objects[i] !== C.O_TREE) return { ok: false };
+  const last = world.objHp.get(i) || 0;
+  // Chêne fruitier ? 1 chêne sur FRUIT_TREE_MOD porte des fruits au printemps
+  // (hash de case déterministe). Hors printemps, jamais.
+  if (seasonOf().key !== "spring" || (i * 2654435761 >>> 0) % C.FRUIT_TREE_MOD !== 0) return { ok: false };
+  const REAL_DAY_MS = 24 * 60 * 60 * 1000;
+  if (Date.now() - last < REAL_DAY_MS) return { ok: false, cooldown: true };
+  f.inv.fruit = (f.inv.fruit || 0) + C.FRUIT_PICK_N;
+  world.objHp.set(i, Date.now());
+  return { ok: true, n: C.FRUIT_PICK_N };
 }

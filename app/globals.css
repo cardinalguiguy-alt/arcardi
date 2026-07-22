@@ -6590,6 +6590,11 @@ body.ferme-active .wrap-room > .brand{ display:none !important; }
 .ferme-slot-key{ position:absolute; top:-2px; left:2px; font-size:10px; font-weight:bold; color:var(--f-ink); opacity:.7; }
 .ferme-slot-count{ position:absolute; bottom:0; right:3px; font-size:12px; font-weight:bold; color:var(--f-ink); text-shadow:0 0 2px #fff; }
 .ferme-slot-lvl{ position:absolute; top:-2px; right:3px; font-size:10px; font-weight:bold; color:var(--f-accent); }
+/* Zip 236: personal bag button — set slightly apart from the numbered tool
+   slots with a leading gap and a warmer background so it reads as a UI button
+   rather than a selectable tool. */
+.ferme-slot-bag{ margin-left:10px; background:var(--f-paper); border-color:var(--f-accent); }
+.ferme-slot-bag:hover{ background:var(--f-gold); }
 
 /* Mini-menu de choix de graine (clic sur la case graines) */
 .ferme-seed-menu-ov{ position:fixed; inset:0; z-index:12; }
