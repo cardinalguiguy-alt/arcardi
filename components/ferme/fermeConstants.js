@@ -986,6 +986,57 @@ export const REL_DEAL = 2;
 export const REL_RESIDENT_MIN = 6;                // friendship needed before they ask to stay
 export const VOTE_DEADLINE_MS = 60 * 1000;        // online players must vote within this window
 
+// Zip 234 (Guillaume: "the more a friendship is built, the more they visit,
+// the more they come bearing gifts, and the more they pay"). All effects are
+// driven by station.rel[rid], the existing per-character friendship counter.
+export const REL_PRICE_BONUS = 0.03;              // +3% on every buy price per friendship point...
+export const REL_PRICE_BONUS_MAX = 0.6;           // ...capped at +60% (rel 20)
+export const REL_GIFT_BONUS = 0.03;               // prep-order gift chance grows with friendship...
+export const REL_GIFT_MAX = 0.85;                 // ...capped
+export const REL_EASY_GIFT_MIN = 6;               // real friends may attach a gift even to an EASY order
+export const REL_SPAWN_WEIGHT = 0.25;             // roster pick weight: 1 + rel*this (capped at rel 12) -> friends visit more often
+export const REL_SPAWN_WEIGHT_RELCAP = 12;
+export const REL_POP_DIV = 4;                     // farmPopularity: +1 per REL_POP_DIV total friendship points (capped) -> visits come sooner
+export const REL_POP_MAX = 8;
+export const REL_ARRIVAL_GIFT_MIN = 4;            // from this friendship on, they sometimes step off the train with a present
+export const REL_ARRIVAL_GIFT_CHANCE = 0.06;      // chance per friendship point...
+export const REL_ARRIVAL_GIFT_CHANCE_MAX = 0.5;   // ...capped at 50%
+export const REL_HEART = 2;                       // friendship points per heart in the visitor card (5 hearts max)
+export const REL_CHAT_CAP_PER_VISIT = 3;          // only the first chats of a visit earn friendship (anti-spam)
+export const VISITOR_CHAT_TIERS = 3;              // dialogue pools by friendship tier (see fermeStrings.visitorChatLines)
+export const VISITOR_CHAT_LINES = 4;              // lines per tier, fr/en symmetric
+export const VISITOR_CHAT_TIER1_REL = 4;          // rel thresholds for tiers 1 and 2
+export const VISITOR_CHAT_TIER2_REL = 10;
+export const VISITOR_LINGER_MS = 3 * 60 * 1000;   // after a fulfilled order they stroll the square instead of leaving at once
+export const VISITOR_STAGGER_MIN_MS = 1800;       // gap between two group members stepping off the train...
+export const VISITOR_STAGGER_MAX_MS = 4200;       // ...so they walk in a loose line, not on top of each other
+
+// --- Valley Town (zip 234, Guillaume: "users can take a train ride at the
+// existing train station and arrive at the town centre, called Valley Town;
+// each user can have a house there"). Separate map like the evil world (fixed
+// seed, regenerated identically on every visit, nothing persisted), but
+// MULTIPLAYER: players publish their real position with zone "town" and see
+// each other there. Houses are assigned deterministically (see townHouseOwners
+// in FermeGame.js): known farmers sorted by id -> plots in order; leftover
+// plots show a "for sale" sign. Interiors are deferred.
+export const TOWN_MAP_W = 64;
+export const TOWN_MAP_H = 48;
+export const TOWN_RAIL_X = 2;                       // rails on columns 2..3, full height, like the farm
+export const TOWN_PLATFORM = { x: 4, y: 18, w: 2, h: 8 };
+export const TOWN_SPAWN = { x: 6, y: 22 };          // step off the train here
+export const TOWN_STATION_SIGN = { x: 7, y: 24 };   // E here to ride back to the farm
+export const TOWN_MAIN_ST_Y = 22;                   // main street rows y..y+1, from the platform to the east edge
+export const TOWN_CROSS_ST_X = 31;                  // cross street columns x..x+1, north-south through the plaza
+export const TOWN_PLAZA = { x: 26, y: 17, w: 12, h: 12 }; // paved central square
+export const TOWN_FOUNTAIN = { x: 31, y: 22 };      // 2x2 fountain, top-left tile (blocks movement)
+export const TOWN_HOUSE_W = 6;                      // house sprite is 96px = 6 tiles wide
+export const TOWN_HOUSE_H = 3;                      // blocked footprint rows (the visual roof overlaps north of it)
+export const TOWN_HOUSES = [                        // door faces south onto a street
+  { x: 14, y: 13 }, { x: 22, y: 13 }, { x: 38, y: 13 }, { x: 46, y: 13 },   // north side of main street
+  { x: 14, y: 27 }, { x: 22, y: 27 }, { x: 38, y: 27 }, { x: 46, y: 27 },   // south side
+];
+export const TRAIN_BOARD = { x: 5, y: 30 };         // farm-side boarding spot on the platform (E to ride)
+
 // --- Seasons (timing chosen by the model, per Guillaume's delegation) ---
 // One season lasts SEASON_DAYS in-game days; purely visual for now (tint +
 // HUD label), gameplay hooks come later with crops-per-season.

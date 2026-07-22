@@ -58,6 +58,13 @@ function getEvilWorldCached(E2) {
   if (!evilWorldModuleCache) evilWorldModuleCache = E2.generateEvilWorld();
   return evilWorldModuleCache;
 }
+// Valley Town (zip 234): same module-level cache pattern as the evil world —
+// fixed seed, generated once per page load, shared by every remount.
+let townWorldModuleCache = null;
+function getTownWorldCached(E2) {
+  if (!townWorldModuleCache) townWorldModuleCache = E2.generateTownWorld();
+  return townWorldModuleCache;
+}
 const HOST_MEM_CACHE_MS = 20000;
 
 // Petit hash stable d'une chaîne -> seed positive (monde stable par salon).
@@ -268,6 +275,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // joueur précis est parti — voir updateMe/le rendu, qui basculent sur
   // evilWorldRef seulement pour CE joueur, jamais sur worldRef lui-même).
   const evilWorldRef = useRef(null);
+  // Valley Town (zip 234) : carte locale de CE joueur, comme evilWorldRef —
+  // mais le zone "town" est MULTIJOUEUR (positions publiees normalement).
+  const townWorldRef = useRef(null);
   // Transition en fondu au noir (aller ET retour) : { active, t0, toEvil,
   // swapped }. `swapped` marque le moment (mi-fondu, écran totalement noir)
   // où la téléportation réelle a lieu, pour qu'elle soit invisible.
@@ -355,6 +365,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   }, [stationSt]); // eslint-disable-line react-hooks/exhaustive-deps
   // Reset my residency vote whenever the targeted visitor changes (zip 233).
   useEffect(() => { setMyVote(null); }, [visitorRid]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Zip 234 (friendship): opening a visitor card greets them — the host
+  // grants any unclaimed ARRIVAL gift to the greeting farmer (no-op
+  // otherwise, see resolveVisitorGreet).
+  useEffect(() => { if (visitorOpen && visitorRid >= 0) sendReq({ kind: "visitorGreet", rid: visitorRid }); }, [visitorOpen, visitorRid]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { evilBiteRef.current = evilBite; }, [evilBite]);
   useEffect(() => { injuredUntilRef.current = injuredUntil || 0; }, [injuredUntil]);
   useEffect(() => { immunityUntilRef.current = immunityUntil || 0; }, [immunityUntil]);
@@ -1743,8 +1757,29 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       return true;
     }
     if (req.kind === "visitorChat") {
-      const r = E.resolveVisitorChat(s, req.rid);
-      if (r.ok) { stationChat(L.visitorChatDone(rosterOf(v.rid).name), "\u{1F4AC}"); broadcastStation(); }
+      // Zip 234 chat rework: the engine picks a dialogue line from the
+      // friendship-tier pool and appends it to v.chatLog (rendered as speech
+      // bubbles in the visitor card, which every player sees via the station
+      // broadcast). The global chat gets the actual spoken line too.
+      const r = E.resolveVisitorChat(s, req.rid, Math.random);
+      if (r.ok) {
+        const line = (L.visitorChatLines[r.tier] || L.visitorChatLines[0])[r.li] || "";
+        stationChat(L.visitorChatSaid(rosterOf(v.rid).name, line), "\u{1F4AC}");
+        if (r.gained) stationChat(L.visitorChatDone(rosterOf(v.rid).name), "\u{1F49B}");
+        broadcastStation();
+      }
+      return true;
+    }
+    if (req.kind === "visitorGreet") {
+      // Zip 234 (friendship): sent automatically when a visitor card opens.
+      // No-op unless this visitor stepped off the train with an arrival gift
+      // that nobody has claimed yet (idempotent, see resolveVisitorGreet).
+      const r = E.resolveVisitorGreet(f, s, req.rid);
+      if (r.ok) {
+        if (r.gift && !r.giftQueued) ch?.send({ type: "broadcast", event: "apply", payload: { farmer: { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv } } });
+        stationChat(L.visitorArrivalGift(rosterOf(v.rid).name, giftLabel(r.gift)), "\u{1F381}");
+        broadcastStation();
+      }
       return true;
     }
     if (req.kind === "visitorPay") {
@@ -1844,10 +1879,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const walkTo = (tx, ty, speedMul) => {
         const dx = tx - v.x, dy = ty - v.y, d = Math.hypot(dx, dy);
         if (d < 0.08) { v.moving = false; return true; }
-        const step = Math.min(d, C.VISITOR_SPEED * (speedMul || 1) * dt);
+        // Zip 234: per-visitor speed variance (v.speedMul, rolled at spawn)
+        // stacks with the situational multiplier (0.45 while strolling), so
+        // a group spreads out naturally along the path.
+        const step = Math.min(d, C.VISITOR_SPEED * (v.speedMul || 1) * (speedMul || 1) * dt);
         v.x += (dx / d) * step; v.y += (dy / d) * step;
         v.moving = true; v.animT = (v.animT || 0) + dt * 6;
-        v.dir = Math.abs(dx) > Math.abs(dy) ? 2 : (dy > 0 ? 0 : 1);
+        // Zip 234 debug fix: eastbound visitors used to face WEST (dir was
+        // hardcoded to 2 for any horizontal move) — dir 3 is "right".
+        v.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 3 : 2) : (dy > 0 ? 0 : 1);
         return false;
       };
       const wpAt = (i) => { const wp = WP[Math.max(0, Math.min(i, WP.length - 1))]; return i >= 2 ? { x: wp.x - slotX, y: wp.y } : wp; };
@@ -1871,7 +1911,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       } else if (v.phase === "wait") {
         if (v.offer && v.offer.type === "demand" && now > v.deadline) hostExecuteHostileDamage(v);
         else if (v.offer && v.offer.type === "stay" && now > v.voteUntil) hostFinalizeVote(v);
-        else if (now > v.waitUntil) { v.phase = "leave"; stationChat(L.visitorLeftChat(rosterOf(v.rid).name)); broadcastStation(); }
+        else if (now > v.waitUntil) {
+          // Zip 234: a visitor whose order was FULFILLED lingered on the
+          // square (see startLinger) — their exit line is a happy goodbye,
+          // not the old "left without an answer" one (which stays for
+          // genuinely unanswered visits).
+          v.phase = "leave";
+          stationChat(v.offer && v.offer.type === "done" ? L.visitorHomeChat(rosterOf(v.rid).name) : L.visitorLeftChat(rosterOf(v.rid).name));
+          broadcastStation();
+        }
         else if (v.waitStartedAt && now - v.waitStartedAt > C.VISITOR_WANDER_AFTER_MS) {
           // Zip 233: after 30 real minutes they stop standing rigidly and
           // stroll around the townhall square (same roamTarget/nextRoamAt
@@ -1938,7 +1986,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         // ramène le fermier chez lui, incapable d'agir pendant C.INJURED_MS.
         if (!wasInjured && p.farmer.injuredUntil > Date.now()) {
           const m = meRef.current;
-          if (m) { m.x = C.SPAWN.x; m.y = C.SPAWN.y; m.moving = false; sendPos(); }
+          // Zip 234 debug fix: reset the ZONE too — getting injured while in
+          // Valley Town (or the evil map, via host-side paths) used to beam
+          // farm spawn coordinates onto the wrong map.
+          if (m) { m.zone = "farm"; m.x = C.SPAWN.x; m.y = C.SPAWN.y; m.moving = false; sendPos(); }
           setWolfBite(null);
           pushToast(L.toastInjured);
         }
@@ -2257,6 +2308,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function doAction() {
     const m = meRef.current; if (!m || actAnimRef.current > 0 || fishMiniRef.current || m.sleeping || isInjured()) return;
     if (m.zone === "evil") return doActionEvil();
+    if (m.zone === "town") return; // Valley Town (zip 234): no farm tools here — E interactions only (see tryOpenNearby)
     const w = worldRef.current; if (!w) return;
     // Priorité : ramasser la production d'un animal proche.
     const ai = nearestCollectable();
@@ -3533,6 +3585,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (zoneTransRef.current.active) return; // déjà en transition : ignore un nouveau déclenchement
     zoneTransRef.current = { active: true, t0: performance.now(), toEvil, swapped: false, viaMonster: !!viaMonster };
   }
+  // Valley Town (zip 234): the train ride reuses the exact zone-fade
+  // machinery (fade to black, teleport at mid-fade, fade back) with a `dest`
+  // field the evil passage never sets — "town" (farm -> Valley Town) or
+  // "farmFromTown" (the ride back, arriving on the farm platform).
+  function rideTrain(toTown) {
+    if (zoneTransRef.current.active) return;
+    zoneTransRef.current = { active: true, t0: performance.now(), toEvil: false, swapped: false, dest: toTown ? "town" : "farmFromTown" };
+  }
   function updateZoneTransition() {
     const zt = zoneTransRef.current;
     if (!zt.active) return;
@@ -3540,7 +3600,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (!zt.swapped && elapsed >= C.ZONE_FADE_MS) {
       zt.swapped = true;
       const m = meRef.current;
-      if (zt.toEvil) {
+      if (zt.dest === "town") {
+        if (!townWorldRef.current) townWorldRef.current = getTownWorldCached(E);
+        m.zone = "town";
+        m.x = C.TOWN_SPAWN.x; m.y = C.TOWN_SPAWN.y; m.moving = false;
+        sendPos(); // publish the town position right away (multiplayer zone)
+        pushToast(L.trainToTownToast);
+      } else if (zt.dest === "farmFromTown") {
+        m.zone = "farm";
+        m.x = C.TRAIN_BOARD.x; m.y = C.TRAIN_BOARD.y - 0.5; m.moving = false;
+        sendPos();
+        pushToast(L.trainToFarmToast);
+      } else if (zt.toEvil) {
         if (!evilWorldRef.current) evilWorldRef.current = getEvilWorldCached(E);
         m.farmX = m.x; m.farmY = m.y; // position ferme à restaurer au retour
         m.zone = "evil";
@@ -3576,6 +3647,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function checkWalkOverPassage() {
     if (zoneTransRef.current.active) return; // pas de nouveau déclenchement pendant une transition en cours
     const m = meRef.current;
+    if (m.zone === "town") return; // zip 234: Valley Town rides back via E at the sign, never by walk-over (its coords would collide with farm passage math)
     const tx = Math.floor(m.x + 0.5), ty = Math.floor(m.y + 0.5);
     if (m.zone === "evil") {
       const ew = evilWorldRef.current; if (!ew) return;
@@ -3589,7 +3661,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // -------- Téléport maison (nouveauté) --------
   function teleportHome() {
     const m = meRef.current; if (!m) return;
-    if (m.zone === "evil") { pushToast(L.homeBlockedToast); return; }
+    if (m.zone === "evil" || m.zone === "town") { pushToast(L.homeBlockedToast); return; } // zip 234: teleporting home from Valley Town would desync zone/coords — ride the train back instead
     m.x = C.SPAWN.x; m.y = C.SPAWN.y; m.moving = false;
     sendPos();
     pushToast(L.homeToast);
@@ -3708,6 +3780,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       checkWalkOverPassage();
       if (m.zone === "evil") {
         drawEvilFrame(now);
+        const fa = zoneFadeAlpha();
+        if (fa > 0) { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = "black"; ctx.globalAlpha = fa; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.globalAlpha = 1; }
+        return;
+      }
+      // Valley Town (zip 234): same early-return pattern as the evil map; the
+      // host sims above keep running on the farm world regardless.
+      if (m.zone === "town") {
+        drawTownFrame(now, dt);
         const fa = zoneFadeAlpha();
         if (fa > 0) { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = "black"; ctx.globalAlpha = fa; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.globalAlpha = 1; }
         return;
@@ -4311,7 +4391,31 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         }
       }
       if (!m.sleeping) draws.push({ y: (m.y + 1) * T, fn: () => drawSelf(m) });
-      for (const p of playersRef.current.values()) if (!p.sleeping && p.zone !== "evil") draws.push({ y: (p.y + 1) * T, fn: () => drawRemote(p) });
+      // Zip 234 (Guillaume: "when we walk over a certain crop, we can see
+      // what they are"): standing on a planted tile floats a small paper tag
+      // above the farmer — crop name + growth % (or "ready!" / "needs
+      // water"). Purely local, drawn on top of everything (huge sort y).
+      {
+        const ctx2 = Math.floor(m.x + 0.5), cty = Math.floor(m.y + 0.5);
+        const cUnder = inMap(ctx2, cty) ? w.crops.get(idxOf(ctx2, cty)) : null;
+        if (cUnder) {
+          const gs = E.cropGrowState(cUnder, epochNow);
+          const cr = C.CROPS[cUnder.t] || C.CROPS[0];
+          const label = `${lang === "en" ? cr.nameEn : cr.name} \u00B7 ${gs.mature ? L.cropTipReady : gs.needsWater ? L.cropTipWater : Math.floor(((gs.grown || 0) / cr.growMs) * 100) + "%"}`;
+          draws.push({ y: 1e9, fn: () => {
+            ctx.font = "bold 8px monospace"; ctx.textAlign = "center";
+            const px = (m.x + 0.5) * T, py = m.y * T - 26;
+            const wpx = ctx.measureText(label).width + 10;
+            ctx.fillStyle = "rgba(245,238,218,0.95)"; ctx.fillRect(px - wpx / 2, py - 9, wpx, 13);
+            ctx.strokeStyle = "#6b4a2e"; ctx.lineWidth = 1; ctx.strokeRect(px - wpx / 2 + 0.5, py - 8.5, wpx - 1, 12);
+            // Mini crop swatch on the left edge of the tag.
+            ctx.fillStyle = cr.color; ctx.fillRect(px - wpx / 2 + 2, py - 6, 4, 7);
+            ctx.fillStyle = "#1d1d1d"; ctx.fillText(label, px + 2, py + 1);
+            ctx.textAlign = "left";
+          } });
+        }
+      }
+      for (const p of playersRef.current.values()) if (!p.sleeping && p.zone !== "evil" && p.zone !== "town") draws.push({ y: (p.y + 1) * T, fn: () => drawRemote(p) }); // zip 234: town players are drawn on the town map, not here
       // Sommeil : aucune animation d'entrée, le dormeur disparaît juste de la
       // carte (voir ci-dessus, non ajouté à `draws`) ; des "Zzz" flottent
       // au-dessus des fenêtres de la maison tant qu'AU MOINS un joueur dort
@@ -4434,6 +4538,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (heldAnimalRef.current !== -1) pk = "sellAnimal";
       else if (nearTile(C.SHOP)) pk = "shop"; else if (nearTile(C.BIN)) pk = "bin";
       else if (nearTile(C.STATION_SIGN)) pk = "station"; // 2026-07 station update
+      else if (nearTile(C.TRAIN_BOARD)) pk = "trainRide"; // Valley Town (zip 234)
       // Zip 233: sleep prompt removed with the townhall sleep option; the
       // visitor prompt carries the nearest rid so the label can name them.
       else { const vp = visitorPromptNearby(); if (vp) pk = "visitor:" + vp.rid; }
@@ -4700,6 +4805,173 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const r = 0.3;
       return !blockedEvil(ew, x - r, y) && !blockedEvil(ew, x + r, y) && !blockedEvil(ew, x - r, y + 0.35) && !blockedEvil(ew, x + r, y + 0.35);
     }
+    // ----- Valley Town (zip 234) -----
+    // Same separation as the evil map: dedicated camera, collision and frame
+    // renderer on townWorldRef (64x48), never touching worldRef. UNLIKE the
+    // evil map this zone is MULTIPLAYER: remote players with zone "town" are
+    // lerped and drawn here (their real x/y travels in the normal pos
+    // broadcast, see pubMe).
+    function getCamTown() {
+      const tw = townWorldRef.current, m = meRef.current;
+      const vw = canvas.width / ZOOM, vh = canvas.height / ZOOM;
+      let cx = (m.x + 0.5) * T - vw / 2, cy = (m.y + 0.5) * T - vh / 2;
+      cx = Math.max(0, Math.min(tw.w * T - vw, cx)); cy = Math.max(0, Math.min(tw.h * T - vh, cy));
+      return { x: cx, y: cy, vw, vh };
+    }
+    // Deterministic house assignment: every KNOWN farmer (farmersRef, i.e.
+    // anyone who ever joined this world) sorted by id -> plots in order.
+    // Same inputs on every client = same map for everyone, no sync needed.
+    function townHouseOwners() {
+      const ids = Object.keys(farmersRef.current || {}).sort();
+      return C.TOWN_HOUSES.map((h, i) => {
+        const fid = ids[i];
+        const fm = fid ? farmersRef.current[fid] : null;
+        return { ...h, ownerId: fid || null, ownerName: fm ? (fm.name || "?") : null };
+      });
+    }
+    function blockedTown(tw, x, y) {
+      const fx = Math.floor(x), fy = Math.floor(y);
+      if (fx < 0 || fy < 0 || fx >= tw.w || fy >= tw.h) return true;
+      if (fx <= C.TOWN_RAIL_X + 1 && !(fy >= C.TOWN_PLATFORM.y && fy < C.TOWN_PLATFORM.y + C.TOWN_PLATFORM.h)) return true; // rails: only reachable along the platform
+      const i = fy * tw.w + fx;
+      if (tw.ground[i] === C.G_WATER) return true; // fountain pool
+      for (const hsn of C.TOWN_HOUSES) {
+        if (fx >= hsn.x && fx < hsn.x + C.TOWN_HOUSE_W && fy >= hsn.y && fy < hsn.y + C.TOWN_HOUSE_H) return true;
+      }
+      const o = tw.objects[i];
+      return o === C.O_TREE || o === C.O_TREE2 || o === C.O_STUMP;
+    }
+    function canStandTown(tw, x, y) {
+      const r = 0.3;
+      return !blockedTown(tw, x - r, y) && !blockedTown(tw, x + r, y) && !blockedTown(tw, x - r, y + 0.35) && !blockedTown(tw, x + r, y + 0.35);
+    }
+    function updateMeTown(dt) {
+      const m = meRef.current, tw = townWorldRef.current, keys = keysRef.current;
+      if (!tw) return;
+      const uiBlocked = mapOpenRef.current || document.activeElement === chatInputRef.current;
+      let dx = 0, dy = 0;
+      if (!uiBlocked) {
+        if (keys["ArrowUp"] || keys["KeyW"] || keys["KeyZ"]) dy -= 1;
+        if (keys["ArrowDown"] || keys["KeyS"]) dy += 1;
+        if (keys["ArrowLeft"] || keys["KeyA"] || keys["KeyQ"]) dx -= 1;
+        if (keys["ArrowRight"] || keys["KeyD"]) dx += 1;
+      }
+      const moving = (dx || dy) && actAnimRef.current <= 0;
+      if (moving) {
+        const len = Math.hypot(dx, dy); dx /= len; dy /= len;
+        const sp = C.PLAYER_SPEED * dt;
+        const nx = m.x + dx * sp, ny = m.y + dy * sp;
+        if (canStandTown(tw, nx, m.y)) m.x = nx;
+        if (canStandTown(tw, m.x, ny)) m.y = ny;
+        if (dx < 0) m.dir = 2; else if (dx > 0) m.dir = 3; else if (dy < 0) m.dir = 1; else if (dy > 0) m.dir = 0;
+        m.animT += dt * 9;
+      } else m.animT = 0;
+      m.moving = !!moving;
+      const nowP = performance.now();
+      if (nowP - lastPosSentRef.current > 1000 / C.POS_TICK_HZ) { lastPosSentRef.current = nowP; sendPos(); }
+    }
+    function drawTownFrame(now, dt) {
+      const tw = townWorldRef.current, m = meRef.current, sprites = spritesRef.current;
+      if (!tw || !sprites) return;
+      const cam = getCamTown();
+      ctx.setTransform(ZOOM, 0, 0, ZOOM, -Math.round(cam.x * ZOOM), -Math.round(cam.y * ZOOM));
+      ctx.fillStyle = "#4c8f40";
+      ctx.fillRect(cam.x, cam.y, cam.vw, cam.vh);
+      const x0 = Math.max(0, Math.floor(cam.x / T)), x1 = Math.min(tw.w - 1, Math.ceil((cam.x + cam.vw) / T));
+      const y0 = Math.max(0, Math.floor(cam.y / T)), y1 = Math.min(tw.h - 1, Math.ceil((cam.y + cam.vh) / T));
+      const draws = [];
+      for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+        const i = y * tw.w + x, g = tw.ground[i];
+        if (g === C.G_GRASS) ctx.fillStyle = ((x + y) % 2 === 0) ? "#4c8f40" : "#529745";
+        else if (g === C.G_PATH) ctx.fillStyle = "#c8a163";
+        else if (g === C.G_PATH_STONE) ctx.fillStyle = ((x + y) % 2 === 0) ? "#a9a9b2" : "#9f9fa8";
+        else if (g === C.G_WATER) ctx.fillStyle = "#3f7fd0";
+        else ctx.fillStyle = "#4c8f40";
+        ctx.fillRect(x * T, y * T, T, T);
+        // Rails on the west edge (same look as the farm side: dark bed,
+        // lighter ties, two steel rails).
+        if (x >= C.TOWN_RAIL_X && x <= C.TOWN_RAIL_X + 1) {
+          ctx.fillStyle = "#5c5348"; ctx.fillRect(x * T, y * T, T, T);
+          if (y % 2 === 0) { ctx.fillStyle = "#7a6a52"; ctx.fillRect(x * T, y * T + 6, T, 3); }
+          ctx.fillStyle = "#9aa0aa";
+          if (x === C.TOWN_RAIL_X) ctx.fillRect(x * T + 11, y * T, 2, T);
+          else ctx.fillRect(x * T + 3, y * T, 2, T);
+        }
+        // Platform planks alongside the rails.
+        if (x >= C.TOWN_PLATFORM.x && x < C.TOWN_PLATFORM.x + C.TOWN_PLATFORM.w && y >= C.TOWN_PLATFORM.y && y < C.TOWN_PLATFORM.y + C.TOWN_PLATFORM.h) {
+          ctx.fillStyle = "#b09468"; ctx.fillRect(x * T, y * T, T, T);
+          ctx.fillStyle = "#9c8158"; ctx.fillRect(x * T, y * T + (y % 2 ? 4 : 10), T, 2);
+        }
+        // Fountain pool: gently breathing highlight, like the farm river.
+        if (g === C.G_WATER) {
+          const glow = 0.25 + Math.sin(now / 900 + (x + y)) * 0.12;
+          ctx.fillStyle = `rgba(190, 225, 255, ${glow})`;
+          ctx.fillRect(x * T, y * T, T, T);
+        }
+        const o = tw.objects[i];
+        if (o === C.O_TREE || o === C.O_TREE2) { const img = o === C.O_TREE ? sprites.oak : sprites.pine; draws.push({ y: (y + 1) * T, fn: () => ctx.drawImage(img, x * T - 8, (y + 1) * T - 48) }); }
+      }
+      // Fountain rim + spray, on top of the pool tiles.
+      {
+        const fx0 = C.TOWN_FOUNTAIN.x * T, fy0 = C.TOWN_FOUNTAIN.y * T;
+        ctx.fillStyle = "#8a8a94";
+        ctx.fillRect(fx0 - 3, fy0 - 3, T * 2 + 6, 3); ctx.fillRect(fx0 - 3, fy0 + T * 2, T * 2 + 6, 3);
+        ctx.fillRect(fx0 - 3, fy0, 3, T * 2); ctx.fillRect(fx0 + T * 2, fy0, 3, T * 2);
+        const jet = Math.sin(now / 260) * 2;
+        ctx.fillStyle = "rgba(210, 235, 255, 0.9)";
+        ctx.fillRect(fx0 + T - 1, fy0 + T - 8 + jet, 2, 8 - jet);
+        for (let d = 0; d < 4; d++) {
+          const ph = ((now / 700) + d * 0.25) % 1;
+          ctx.fillStyle = `rgba(210, 235, 255, ${0.7 * (1 - ph)})`;
+          ctx.fillRect(fx0 + T - 6 + d * 3, fy0 + T - 2 - ph * 6, 2, 2);
+        }
+      }
+      // Houses: one per known farmer (deterministic order), leftovers show a
+      // "for sale" plate. Sprite variety cycles through the house levels.
+      const owners = townHouseOwners();
+      for (let hi = 0; hi < owners.length; hi++) {
+        const hsn = owners[hi];
+        const img = sprites.houses[hi % sprites.houses.length];
+        const bx = hsn.x * T, by = (hsn.y + C.TOWN_HOUSE_H) * T;
+        draws.push({ y: by, fn: () => {
+          ctx.drawImage(img, bx, by - 96);
+          const label = hsn.ownerName || L.townSaleSign;
+          ctx.font = "bold 8px monospace"; ctx.textAlign = "center";
+          const tx2 = bx + T * C.TOWN_HOUSE_W / 2, ty2 = by - 96 + 12;
+          const wpx = ctx.measureText(label).width + 8;
+          ctx.fillStyle = "#f5eeda"; ctx.fillRect(tx2 - wpx / 2, ty2 - 8, wpx, 11);
+          ctx.strokeStyle = "#6b4a2e"; ctx.lineWidth = 1; ctx.strokeRect(tx2 - wpx / 2 + 0.5, ty2 - 7.5, wpx - 1, 10);
+          ctx.fillStyle = "#1d1d1d"; ctx.fillText(label, tx2, ty2);
+          ctx.textAlign = "left";
+        } });
+      }
+      // Station sign (ride back to the farm), reusing the farm's ad board sprite.
+      draws.push({ y: (C.TOWN_STATION_SIGN.y + 1) * T, fn: () => ctx.drawImage(sprites.signBoard, C.TOWN_STATION_SIGN.x * T - 1, C.TOWN_STATION_SIGN.y * T - 6) });
+      // Remote players in town: their pos broadcast carries real town coords
+      // (zone "town"); lerp locally exactly like the farm loop does — the
+      // farm loop early-returns before its own lerp while we are here.
+      for (const p of playersRef.current.values()) {
+        if (p.zone !== "town" || p.sleeping) continue;
+        p.x += (p.tx - p.x) * Math.min(1, dt * 12);
+        p.y += (p.ty - p.y) * Math.min(1, dt * 12);
+        p.animT = p.moving ? (p.animT || 0) + dt * 9 : 0;
+        draws.push({ y: (p.y + 1) * T, fn: () => drawCharacter(p, false) });
+      }
+      draws.push({ y: (m.y + 1) * T, fn: () => drawSelf(m) });
+      draws.sort((a, b) => a.y - b.y);
+      for (const d of draws) d.fn();
+      // Prompts: E at the sign to ride home; near a house door, name it.
+      let tpk = null;
+      if (nearTile(C.TOWN_STATION_SIGN)) tpk = "trainBack";
+      else {
+        for (const hsn of owners) {
+          const doorX = hsn.x + C.TOWN_HOUSE_W / 2, doorY = hsn.y + C.TOWN_HOUSE_H + 0.5;
+          if (Math.abs(m.x + 0.5 - doorX) <= 1.6 && Math.abs(m.y - doorY) <= 1.4) { tpk = hsn.ownerName ? "townHouse:" + hsn.ownerName : "townHouseSale"; break; }
+        }
+      }
+      setPromptKeyThrottled(tpk);
+      setMountPromptThrottled(null); // zip 234 debug fix: clear a stale farm mount hint while in town
+    }
     // Créatures maléfiques (chantier 2026-07, demande Guillaume : "des
     // monstres qui pourchassent le joueur, lents, mais qui l'assomment et le
     // renvoient chez lui blessé au contact") : simulation purement locale
@@ -4772,6 +5044,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // this same world object.
       if (worldRef.current) worldRef.current.barnLevel = sharedRef.current.barn ? (sharedRef.current.barn.level | 0) : 0;
       if (m.zone === "evil") { updateMeEvil(dt); return; }
+      if (m.zone === "town") { updateMeTown(dt); return; } // Valley Town (zip 234)
       const w = worldRef.current;
       const horseNow = (sharedRef.current.horses || []).find(h => h.rider2 === me.id);
       if (horseNow) {
@@ -5178,6 +5451,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function visitorPromptNearby() {
     const m = meRef.current, st = sharedRef.current.station;
     if (!m || !st || !Array.isArray(st.visitors)) return null;
+    if (m.zone && m.zone !== "farm") return null; // zip 234 debug fix: no visitor prompts from Valley Town / the evil map (coordinate aliasing)
     let best = null, bestD = 2.4;
     for (const v of st.visitors) {
       if (v.phase !== "wait") continue;
@@ -5246,6 +5520,24 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // autre interaction : un joueur les mains prises ne peut de toute façon
     // rien faire d'autre tant qu'il n'a pas déposé ou vendu l'animal, comme
     // le montre déjà `selectSlot` qui relâche l'animal au changement d'outil.
+    if (m0 && m0.zone === "town") {
+      // Valley Town (zip 234): E at the sign rides the train home; E at a
+      // house door just introduces the place (interiors deferred).
+      if (nearTile(C.TOWN_STATION_SIGN)) { rideTrain(false); return; }
+      const ids = Object.keys(farmersRef.current || {}).sort();
+      for (let hi = 0; hi < C.TOWN_HOUSES.length; hi++) {
+        const hsn = C.TOWN_HOUSES[hi];
+        const doorX = hsn.x + C.TOWN_HOUSE_W / 2, doorY = hsn.y + C.TOWN_HOUSE_H + 0.5;
+        if (Math.abs(m0.x + 0.5 - doorX) <= 1.6 && Math.abs(m0.y - doorY) <= 1.4) {
+          const fid = ids[hi];
+          if (!fid) pushToast(L.toastHouseSale);
+          else if (fid === me.id) pushToast(L.toastYourHouse);
+          else pushToast(L.toastTheirHouse((farmersRef.current[fid] || {}).name || "?"));
+          return;
+        }
+      }
+      return;
+    }
     if (heldAnimalRef.current !== -1) {
       sendReq({ kind: "sellAnimal", animal: heldAnimalRef.current });
       heldAnimalRef.current = -1; setCarryingAnimal(false);
@@ -5256,6 +5548,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     else if (nearTile(C.SHOP)) setShopOpen(true);
     else if (nearTile(C.BIN)) setBinOpen(true);
     else if (nearTile(C.STATION_SIGN)) { setAdsSel([...((sharedRef.current.station && sharedRef.current.station.ads) || [])]); setAdsOpen(true); } // 2026-07 station update
+    else if (nearTile(C.TRAIN_BOARD)) rideTrain(true); // Valley Town (zip 234): board the train on the platform
     // Zip 233: the townhall 'sleep' option is REMOVED (Guillaume) - the E-at-
     // HOUSE_DOOR branch is gone; startSleep/wakeUp stay in place but dead,
     // flagged for a later cleanup zip. Visitor interaction moved to Q.
@@ -5689,7 +5982,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       </div>
 
       {/* Invite proximité */}
-      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey.startsWith("visitor:") ? L.promptVisitor((C.VISITOR_ROSTER[+promptKey.slice(8)] || {}).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "coop" ? L.promptCoop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : L.promptBin}</div>}
+      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("visitor:") ? L.promptVisitor((C.VISITOR_ROSTER[+promptKey.slice(8)] || {}).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "coop" ? L.promptCoop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : L.promptBin}</div>}
       {mountPrompt && <div className="ferme-prompt ferme-prompt-mount">{mountPrompt === "mount" ? L.mountPrompt : L.dismountPrompt}</div>}
 
       {/* Barre d'outils */}
@@ -6418,46 +6711,100 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const have = o.type === "buy" ? ((myInv && myInv.crops && myInv.crops[o.crop]) || 0) : 0;
         const enough = o.type === "buy" ? have >= (o.n || 0) : false;
         const paper = { background: "#f5eeda", color: "#1d1d1d" };
+        const cropDef = o.type === "buy" ? (C.CROPS[o.crop] || C.CROPS[0]) : null;
+        const cropImg = cropDef && spritesReady ? spritesRef.current.crops[cropDef.id][C.CROP_STAGES - 1] : null;
+        const cropNm = cropDef ? (lang === "en" ? cropDef.nameEn : cropDef.name) : "";
+        // Zip 234: pixel hearts (Stardew style) — REL_HEART friendship points
+        // per heart, 5 hearts max, so progress stays readable at a glance.
+        const hearts = Math.min(5, Math.floor(rel / C.REL_HEART));
+        const chatSection = (
+          <div style={{ borderTop: "1px solid #c9b98f", marginTop: 8, paddingTop: 6 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, opacity: .7, textTransform: "uppercase", letterSpacing: .5 }}>{L.visitorChatTitle}</div>
+            {(v.chatLog && v.chatLog.length > 0) && (
+              <div style={{ maxHeight: 96, overflowY: "auto", margin: "6px 0", display: "flex", flexDirection: "column", gap: 4 }}>
+                {v.chatLog.map((cl, ci) => (
+                  <div key={ci} className="ferme-vbubble">{(L.visitorChatLines[cl.tier] || L.visitorChatLines[0])[cl.li]}</div>
+                ))}
+              </div>
+            )}
+            <button className="ferme-vbtn" onClick={() => sendReq({ kind: "visitorChat", rid: v.rid })}>{"\u{1F4AC} "}{L.visitorChatBtn}</button>
+          </div>
+        );
         return (
           <div className="ferme-modal open" onClick={() => setVisitorOpen(false)}>
-            <div className="panel ferme-modal-panel" onClick={e => e.stopPropagation()} style={{ width: "min(420px, 94vw)", ...paper }}>
+            <div className="panel ferme-modal-panel" onClick={e => e.stopPropagation()} style={{ width: "min(440px, 94vw)", ...paper }}>
               <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap) : null} sx={16} sy={24} w={32} h={48} />
+                <div style={{ background: "#e8dfc4", border: "2px solid #6b4a2e", borderRadius: 6, padding: "4px 6px 0" }}>
+                  <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap) : null} sx={16} sy={24} w={32} h={48} />
+                </div>
                 <div>
                   <h3 style={{ margin: 0, color: "#1d1d1d" }}>{L.visitorPanelTitle(ro.name)}</h3>
-                  <div style={{ fontSize: 12, opacity: .8 }}>{L.visitorRelation(rel)}{v.disp === "hostile" ? " · " + L.visitorUrgent : ""}</div>
+                  <div style={{ fontSize: 14, letterSpacing: 1, lineHeight: 1.2 }}>
+                    {[0, 1, 2, 3, 4].map(hi => <span key={hi} className="ferme-vheart" style={{ color: hi < hearts ? "#d0342c" : "#cbb894" }}>{"\u2665"}</span>)}
+                    <span style={{ fontSize: 11, opacity: .7, marginLeft: 6 }}>{L.visitorRelation(rel)}</span>
+                  </div>
+                  {v.disp === "hostile" && <div style={{ fontSize: 12, color: "#a33a1f", fontWeight: 700 }}>{L.visitorUrgent}</div>}
                 </div>
               </div>
-              <div style={{ margin: "10px 0", fontSize: 14 }}>
+              <div style={{ margin: "10px 0 4px", fontSize: 14 }}>
                 {o.type === "buy" && <>
-                  <p>{L.visitorWantsBuy(ro.name, o.n, (lang === "en" ? (C.CROPS[o.crop] || {}).nameEn : (C.CROPS[o.crop] || {}).name), o.price)}</p>
-                  {o.easy ? <p style={{ fontSize: 12, opacity: .8 }}>{L.visitorEasyNote}</p> : o.prep ? <p style={{ fontSize: 12, opacity: .8 }}>{L.visitorPrepNote}</p> : null}
-                  {o.bonus ? <p style={{ color: "#8a5a00", fontWeight: 700 }}>{L.visitorRichBonus(o.bonus)}</p> : null}
-                  {o.reward && o.reward.kind !== "gold" ? <p style={{ color: "#7a3aa0", fontWeight: 700 }}>{"\u{1F381} "}{L.visitorRewardGift(giftLabel(o.reward))}</p> : null}
-                  <p style={{ fontWeight: 700, color: enough ? "#1d6b2a" : "#a33a1f" }}>{L.visitorStock(have, o.n)}</p>
-                  <button disabled={!enough} onClick={() => { sendReq({ kind: "visitorDeal", rid: v.rid }); setVisitorOpen(false); }}>{L.visitorAccept}</button>
+                  {/* The ASK, as pixels: crop icon x quantity, then the money. */}
+                  <div style={{ display: "flex", gap: 12, alignItems: "center", background: "#efe5c8", border: "1px solid #c9b98f", borderRadius: 8, padding: "8px 10px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <Sprite img={cropImg} w={40} h={40} />
+                      <span style={{ fontWeight: 800, fontSize: 18 }}>{"\u00D7"}{o.n}</span>
+                    </div>
+                    <div style={{ fontSize: 13, lineHeight: 1.4 }}>
+                      <b>{cropNm}</b><br />
+                      {"\u{1FA99} "}{L.visitorPerUnit(o.price)}<br />
+                      <b>{"\u{1FA99} "}{L.visitorTotal(o.n * o.price + (o.bonus || 0))}</b>
+                    </div>
+                  </div>
+                  {o.easy ? <p style={{ fontSize: 12, opacity: .8, margin: "6px 0 0" }}>{L.visitorEasyNote}</p> : o.prep ? <p style={{ fontSize: 12, opacity: .8, margin: "6px 0 0" }}>{L.visitorPrepNote}</p> : null}
+                  {o.bonus ? <p style={{ color: "#8a5a00", fontWeight: 700, margin: "4px 0 0" }}>{L.visitorRichBonus(o.bonus)}</p> : null}
+                  {o.reward && o.reward.kind !== "gold" ? <p style={{ color: "#7a3aa0", fontWeight: 700, margin: "4px 0 0" }}>{"\u{1F381} "}{L.visitorRewardGift(giftLabel(o.reward))}</p> : null}
+                  {/* Inventory comparison: how much I carry vs what they want. */}
+                  <div style={{ margin: "8px 0 2px", display: "flex", alignItems: "center", gap: 8 }}>
+                    <Sprite img={cropImg} w={22} h={22} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: 11, opacity: .75 }}>{L.visitorPocket}</div>
+                      <div className="ferme-vbar"><div style={{ width: `${Math.min(100, Math.round((have / Math.max(1, o.n)) * 100))}%`, background: enough ? "#4e9a3f" : "#c9812e" }} /></div>
+                    </div>
+                    <b style={{ color: enough ? "#1d6b2a" : "#a33a1f", fontSize: 15 }}>{have} / {o.n}</b>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                    <button className="ferme-vbtn good" disabled={!enough} onClick={() => { sendReq({ kind: "visitorDeal", rid: v.rid }); setVisitorOpen(false); }}>{"\u2714 "}{L.visitorAccept}</button>
+                    <button className="ferme-vbtn ghost" onClick={() => setVisitorOpen(false)}>{L.visitorCloseBtn}</button>
+                  </div>
+                  {chatSection}
                 </>}
-                {o.type === "chat" && <p>{L.visitorWantsChat(ro.name)}</p>}
+                {o.type === "chat" && <>
+                  <p style={{ margin: "2px 0" }}>{L.visitorWantsChat(ro.name)}</p>
+                  {chatSection}
+                </>}
                 {o.type === "demand" && <>
                   <p style={{ color: "#a33a1f", fontWeight: 700 }}>{L.visitorDemand(ro.name, o.gold)}</p>
-                  <button onClick={() => { sendReq({ kind: "visitorPay", rid: v.rid }); setVisitorOpen(false); }}>{L.visitorPayBtn(o.gold)}</button>{" "}
-                  <button onClick={() => { sendReq({ kind: "visitorRefuse", rid: v.rid }); setVisitorOpen(false); }}>{L.visitorRefuseBtn}</button>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button className="ferme-vbtn" onClick={() => { sendReq({ kind: "visitorPay", rid: v.rid }); setVisitorOpen(false); }}>{"\u{1FA99} "}{L.visitorPayBtn(o.gold)}</button>
+                    <button className="ferme-vbtn bad" onClick={() => { sendReq({ kind: "visitorRefuse", rid: v.rid }); setVisitorOpen(false); }}>{L.visitorRefuseBtn}</button>
+                  </div>
                 </>}
                 {o.type === "stay" && <>
                   <h4 style={{ margin: "4px 0" }}>{L.stayTitle(ro.name)}</h4>
                   <p>{L.stayProposal(ro.name, ro.job)}</p>
-                  {myVote === null ? <>
-                    <button onClick={() => { setMyVote(true); sendReq({ kind: "visitorVote", rid: v.rid, v: true }); }}>{L.voteYes}</button>{" "}
-                    <button onClick={() => { setMyVote(false); sendReq({ kind: "visitorVote", rid: v.rid, v: false }); }}>{L.voteNo}</button>
-                  </> : <p style={{ opacity: .8 }}>{L.voteWaiting}</p>}
+                  {myVote === null ? <div style={{ display: "flex", gap: 8 }}>
+                    <button className="ferme-vbtn good" onClick={() => { setMyVote(true); sendReq({ kind: "visitorVote", rid: v.rid, v: true }); }}>{L.voteYes}</button>
+                    <button className="ferme-vbtn bad" onClick={() => { setMyVote(false); sendReq({ kind: "visitorVote", rid: v.rid, v: false }); }}>{L.voteNo}</button>
+                  </div> : <p style={{ opacity: .8 }}>{L.voteWaiting}</p>}
                 </>}
-                {o.type === "done" && <p style={{ opacity: .8 }}>{L.visitorLeftChat(ro.name)}</p>}
+                {o.type === "done" && <>
+                  <p style={{ opacity: .85, margin: "2px 0" }}>{L.visitorThanks(ro.name)}</p>
+                  {chatSection}
+                </>}
               </div>
-              {(o.type === "buy" || o.type === "chat") && <>
-                <div style={{ borderTop: "1px solid #c9b98f", margin: "8px 0" }} />
-                <button onClick={() => { sendReq({ kind: "visitorChat", rid: v.rid }); setVisitorOpen(false); }}>{L.visitorChatBtn}</button>{" "}
-              </>}
-              <button onClick={() => { sendReq({ kind: "visitorBlacklist", rid: v.rid }); setVisitorOpen(false); }} style={{ opacity: .85 }}>{L.visitorBlacklistBtn}</button>
+              <div style={{ marginTop: 10, textAlign: "right" }}>
+                <button className="ferme-vbtn bad small" onClick={() => { sendReq({ kind: "visitorBlacklist", rid: v.rid }); setVisitorOpen(false); }}>{L.visitorBlacklistBtn}</button>
+              </div>
             </div>
           </div>
         );
@@ -6482,9 +6829,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 <div key={vv.rid} style={card}>
                   <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap) : null} sx={16} sy={24} w={24} h={36} />
                   <div style={{ fontSize: 12, lineHeight: 1.35 }}>
-                    <b>{L.notifAsk(ro.name)}</b><br />{ask}
+                    <b>{L.notifAsk(ro.name)}</b><br />
+                    {o.type === "buy" && spritesReady && <span style={{ verticalAlign: "middle", marginRight: 4, display: "inline-block" }}><Sprite img={spritesRef.current.crops[o.crop][C.CROP_STAGES - 1]} w={18} h={18} /></span>}
+                    {ask}
                     {o.type === "demand" && <span style={{ color: "#a33a1f", fontWeight: 700 }}> · {L.visitorUrgent}</span>}
-                    <br /><button style={{ marginTop: 4, fontSize: 11 }} onClick={() => { setMyVote(null); setVisitorRid(vv.rid); setVisitorOpen(true); }}>{L.meetBtn}</button>
+                    <br /><button className="ferme-vbtn small" style={{ marginTop: 4 }} onClick={() => { setMyVote(null); setVisitorRid(vv.rid); setVisitorOpen(true); }}>{L.meetBtn}</button>
                   </div>
                 </div>
               );

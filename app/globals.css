@@ -6803,3 +6803,31 @@ div.ferme-usage{ margin-bottom:10px; }
 /* mode réaction */
 .ferme-fish-react{ height:90px; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:22px; color:#fff; background:#c0453c; border:3px solid var(--f-wood); border-radius:8px; margin:8px 0; }
 .ferme-fish-react.go{ background:#3fa653; }
+
+/* --- Ferme Vallee, zip 234: visitor card widgets (pixel-paper buttons,
+   inventory bar, chat bubbles, hearts). Scoped by prefix, used only in
+   components/ferme/FermeGame.js. --- */
+.ferme-vbtn{
+  font: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
+  color: #1d1d1d; background: #e8dfc4;
+  border: 2px solid #6b4a2e; border-radius: 6px;
+  box-shadow: 0 2px 0 #6b4a2e; padding: 6px 12px;
+  image-rendering: pixelated; transition: transform .05s, box-shadow .05s, filter .1s;
+}
+.ferme-vbtn:hover:not(:disabled){ filter: brightness(1.06); }
+.ferme-vbtn:active:not(:disabled){ transform: translateY(2px); box-shadow: 0 0 0 #6b4a2e; }
+.ferme-vbtn:disabled{ opacity: .45; cursor: not-allowed; box-shadow: none; }
+.ferme-vbtn.good{ background: #bfe0a8; border-color: #3f7a2e; box-shadow: 0 2px 0 #3f7a2e; color: #174210; }
+.ferme-vbtn.bad{ background: #ecc4b4; border-color: #8a3a24; box-shadow: 0 2px 0 #8a3a24; color: #5c1f0e; }
+.ferme-vbtn.ghost{ background: transparent; box-shadow: none; border-style: dashed; }
+.ferme-vbtn.small{ font-size: 11px; padding: 3px 8px; box-shadow: 0 1px 0 #6b4a2e; }
+.ferme-vbar{
+  height: 10px; background: #ddd2b0; border: 1px solid #6b4a2e; border-radius: 4px; overflow: hidden;
+}
+.ferme-vbar > div{ height: 100%; transition: width .2s; }
+.ferme-vbubble{
+  background: #ffffff; border: 1px solid #c9b98f; border-radius: 8px 8px 8px 2px;
+  padding: 4px 8px; font-size: 12px; line-height: 1.35; color: #1d1d1d;
+  max-width: 92%; align-self: flex-start;
+}
+.ferme-vheart{ text-shadow: 0 1px 0 rgba(0,0,0,.15); }

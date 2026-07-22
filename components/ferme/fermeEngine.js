@@ -2156,7 +2156,64 @@ export function farmPopularity(s, w) {
   pop += s.house ? Math.min(6, ((s.house.level || 1) - 1) * 3) : 0;
   pop += Math.min(10, Math.floor((s.totalEarned || 0) / 2000));  // trade history
   pop += Math.min(6, ((s.station && s.station.residents) || []).length * 2);
-  return pop; // 0..~48
+  // Zip 234: total friendship makes the farm popular too — friends spread the
+  // word, so the next visit round comes sooner (see scheduleNextVisit).
+  const relSum = Object.values((s.station && s.station.rel) || {}).reduce((a, b) => a + (b || 0), 0);
+  pop += Math.min(C.REL_POP_MAX, Math.floor(relSum / C.REL_POP_DIV));
+  return pop; // 0..~56
+}
+
+// Valley Town (zip 234): a second map like the evil world — fixed seed, built
+// locally by whoever rides the train, never persisted — but MULTIPLAYER
+// (players in zone "town" publish real positions and see each other; see
+// pubMe/drawTownFrame in FermeGame.js). Ground only: streets, a paved plaza,
+// a 2x2 fountain pool, a platform by the rails, and grass. House sprites,
+// rails and signs are drawn client-side from the TOWN_* constants; trees stay
+// world objects so the existing sprite/collision patterns apply.
+export function generateTownWorld() {
+  const W = C.TOWN_MAP_W, H = C.TOWN_MAP_H;
+  const rnd = makeRng(0x7041); // fixed seed: one Valley Town for everyone
+  const ground = new Array(W * H).fill(C.G_GRASS);
+  const objects = new Array(W * H).fill(C.O_NONE);
+  const objHp = new Map();
+  const id = (x, y) => y * W + x;
+  // Main street (west-east, from the platform to the east edge) + cross
+  // street (north-south) as packed dirt paths.
+  for (let x = C.TOWN_PLATFORM.x; x < W - 2; x++) for (let dy = 0; dy < 2; dy++) ground[id(x, C.TOWN_MAIN_ST_Y + dy)] = C.G_PATH;
+  for (let y = 6; y < H - 5; y++) for (let dx = 0; dx < 2; dx++) ground[id(C.TOWN_CROSS_ST_X + dx, y)] = C.G_PATH;
+  // Central plaza: stone paving, with the fountain pool (2x2 water) in the
+  // middle — water blocks movement like everywhere else.
+  for (let y = C.TOWN_PLAZA.y; y < C.TOWN_PLAZA.y + C.TOWN_PLAZA.h; y++)
+    for (let x = C.TOWN_PLAZA.x; x < C.TOWN_PLAZA.x + C.TOWN_PLAZA.w; x++) ground[id(x, y)] = C.G_PATH_STONE;
+  for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) ground[id(C.TOWN_FOUNTAIN.x + dx, C.TOWN_FOUNTAIN.y + dy)] = C.G_WATER;
+  // Short walkway from each house door down to its street.
+  for (const hsn of C.TOWN_HOUSES) {
+    const doorX = hsn.x + 2;
+    for (let y = hsn.y + C.TOWN_HOUSE_H; y <= hsn.y + C.TOWN_HOUSE_H + 3; y++) {
+      if (y >= 0 && y < H) { ground[id(doorX, y)] = C.G_PATH; ground[id(doorX + 1, y)] = C.G_PATH; }
+    }
+  }
+  // Greenery: a tree ring along the borders plus light scatter, kept away
+  // from streets, plaza, platform, rails and house plots.
+  const clearOf = (x, y) => {
+    if (x <= C.TOWN_RAIL_X + 2 && y >= C.TOWN_PLATFORM.y - 2 && y <= C.TOWN_PLATFORM.y + C.TOWN_PLATFORM.h + 2) return false;
+    if (ground[id(x, y)] !== C.G_GRASS) return false;
+    for (const hsn of C.TOWN_HOUSES) {
+      if (x >= hsn.x - 1 && x < hsn.x + C.TOWN_HOUSE_W + 1 && y >= hsn.y - 4 && y < hsn.y + C.TOWN_HOUSE_H + 2) return false;
+    }
+    return true;
+  };
+  const put = (x, y) => {
+    x = Math.round(x); y = Math.round(y);
+    if (x < C.TOWN_RAIL_X + 2 || y < 1 || x >= W - 1 || y >= H - 1) return;
+    const i = id(x, y);
+    if (objects[i] !== C.O_NONE || !clearOf(x, y)) return;
+    objects[i] = rnd() < 0.5 ? C.O_TREE : C.O_TREE2; objHp.set(i, C.TREE_HP);
+  };
+  for (let x = 5; x < W - 1; x += 1) { if (rnd() < 0.75) put(x, 1 + Math.floor(rnd() * 3)); if (rnd() < 0.75) put(x, H - 2 - Math.floor(rnd() * 3)); }
+  for (let y = 1; y < H - 1; y += 1) if (rnd() < 0.75) put(W - 2 - Math.floor(rnd() * 3), y);
+  for (let i = 0; i < 70; i++) put(rnd() * W, rnd() * H);
+  return { w: W, h: H, ground, objects, objHp };
 }
 
 // Schedule the next visit on the host clock: random base window, shortened
@@ -2205,7 +2262,13 @@ function rollGiftReward(r) {
 //   wait, we still fall back to the fastest-growing candidate so the offer
 //   stays completable in principle (noted simplification: real grow times
 //   are hours, so a fresh planting rarely finishes inside one visit).
-function classifyBuyOffer(offer, stockCtx, r) {
+function classifyBuyOffer(offer, stockCtx, r, rel) {
+  rel = rel || 0;
+  // Zip 234 (friendship): friends pay more for the same order (up to +60%),
+  // are more likely to attach a gift to a prep order, and — real friends
+  // only — may even bring a gift with an EASY order.
+  const priceMul = 1 + Math.min(C.REL_PRICE_BONUS_MAX, rel * C.REL_PRICE_BONUS);
+  const giftChance = Math.min(C.REL_GIFT_MAX, C.VISITOR_GIFT_CHANCE + rel * C.REL_GIFT_BONUS);
   const askable = C.CROPS.filter(cr => !cr.unique);
   const stock = (stockCtx && Array.isArray(stockCtx.crops)) ? stockCtx.crops : [];
   const stocked = askable.filter(cr => (stock[cr.id] || 0) >= 2);
@@ -2214,8 +2277,9 @@ function classifyBuyOffer(offer, stockCtx, r) {
     offer.crop = cr.id;
     offer.n = Math.max(1, Math.min(stock[cr.id] || 1, offer.n));
     offer.easy = true;
-    offer.price = Math.ceil(cr.sell * (1.05 + r() * 0.25)); // modest: costs the farm nothing but stock
-    offer.reward = { kind: "gold" };                        // easy orders are cash-only
+    offer.price = Math.ceil(cr.sell * (1.05 + r() * 0.25) * priceMul); // modest: costs the farm nothing but stock
+    offer.reward = (rel >= C.REL_EASY_GIFT_MIN && r() < giftChance * 0.5)
+      ? rollGiftReward(r) : { kind: "gold" };               // easy orders are cash-only for strangers
     return offer;
   }
   const notStocked = askable.filter(cr => (stock[cr.id] || 0) < 2);
@@ -2226,8 +2290,8 @@ function classifyBuyOffer(offer, stockCtx, r) {
   offer.crop = cr.id;
   offer.prep = true;
   offer.prepMs = cr.growMs;
-  offer.price = Math.ceil(cr.sell * (1.8 + r() * 0.7));     // effort pays better
-  offer.reward = r() < C.VISITOR_GIFT_CHANCE ? rollGiftReward(r) : { kind: "gold" };
+  offer.price = Math.ceil(cr.sell * (1.8 + r() * 0.7) * priceMul); // effort pays better
+  offer.reward = r() < giftChance ? rollGiftReward(r) : { kind: "gold" };
   return offer;
 }
 
@@ -2238,7 +2302,12 @@ export function spawnVisitor(station, rnd, stockCtx) {
   for (const cur of station.visitors || []) banned.add(cur.rid); // zip 233: no duplicates on the farm
   const pool = C.VISITOR_ROSTER.filter(v => !banned.has(v.rid) && v.rid !== station.lastRid);
   if (!pool.length) return null;
-  const who = pool[Math.floor(r() * pool.length)];
+  // Zip 234 (friendship): weighted pick — the better the friendship, the more
+  // often that character hops on the train. Strangers keep weight 1.
+  const weights = pool.map(v => 1 + Math.min(C.REL_SPAWN_WEIGHT_RELCAP, (station.rel && station.rel[v.rid]) || 0) * C.REL_SPAWN_WEIGHT);
+  let pick = r() * weights.reduce((a, b) => a + b, 0), wi = 0;
+  while (wi < weights.length - 1 && pick >= weights[wi]) { pick -= weights[wi]; wi++; }
+  const who = pool[wi];
   station.lastRid = who.rid;
   let hostile = C.VISITOR_HOSTILE_CHANCE * (who.edgy ? 2 : 1);
   hostile = hostile / Math.pow(2, (station.residents || []).length);
@@ -2251,9 +2320,13 @@ export function spawnVisitor(station, rnd, stockCtx) {
     disp = "rich";
     const crop = Math.floor(r() * C.CROPS.length);
     const n = 10 + Math.floor(r() * 11);
-    offer = classifyBuyOffer({ type: "buy", crop, n, price: C.CROPS[crop].sell * 3, bonus: 300 + Math.floor(r() * 501) }, stockCtx, r);
+    offer = classifyBuyOffer({ type: "buy", crop, n, price: C.CROPS[crop].sell * 3, bonus: 300 + Math.floor(r() * 501) }, stockCtx, r, rel);
     if (offer.easy) offer.price = Math.max(offer.price, C.CROPS[offer.crop].sell * 2); // rich patrons still overpay
-  } else if (rel >= C.REL_RESIDENT_MIN) {
+  } else if (rel >= C.REL_RESIDENT_MIN && r() < 0.3) {
+    // Zip 234 tweak: asking to STAY used to be the ONLY offer once rel hit
+    // REL_RESIDENT_MIN, which crowded out the improved friend offers (better
+    // prices/gifts). Now it's an occasional request; most friend visits are
+    // ordinary (well-paying) trades or chats.
     disp = "nice";
     offer = { type: "stay", job: who.job };
   } else if (r() < C.VISITOR_CHAT_CHANCE) {
@@ -2263,15 +2336,26 @@ export function spawnVisitor(station, rnd, stockCtx) {
     disp = r() < 0.6 ? "nice" : "neutral";
     const crop = Math.floor(r() * C.CROPS.length);
     const n = 3 + Math.floor(r() * 8);
-    offer = classifyBuyOffer({ type: "buy", crop, n, price: 0 }, stockCtx, r);
+    offer = classifyBuyOffer({ type: "buy", crop, n, price: 0 }, stockCtx, r, rel);
   }
-  return {
+  const nv = {
     rid: who.rid, disp, offer,
     x: C.STATION_PLATFORM.x + 1, y: C.STATION.y + C.STATION.h + 1.5,
     dir: 2, moving: false, animT: 0,
+    // Zip 234: slight per-visitor walk speed variance, so a group naturally
+    // spreads out along the path instead of marching in lockstep.
+    speedMul: 0.85 + r() * 0.3,
     phase: "train", phaseUntil: Date.now() + C.VISITOR_TRAIN_MS,
     waitUntil: 0, waitStartedAt: 0, deadline: 0, votes: null, voteUntil: 0,
   };
+  // Zip 234 (friendship): from REL_ARRIVAL_GIFT_MIN on, friends sometimes
+  // step off the train WITH a present — granted the first time somebody
+  // opens their card (see resolveVisitorGreet).
+  if (disp !== "hostile" && rel >= C.REL_ARRIVAL_GIFT_MIN
+    && r() < Math.min(C.REL_ARRIVAL_GIFT_CHANCE_MAX, rel * C.REL_ARRIVAL_GIFT_CHANCE)) {
+    nv.arrivalGift = rollGiftReward(r);
+  }
+  return nv;
 }
 
 // Spawn a whole ROUND of visitors (zip 233): random size 1..VISITORS_MAX,
@@ -2286,6 +2370,7 @@ export function spawnVisitorGroup(station, rnd, raidActive, stockCtx) {
   const used = new Set(station.visitors.map(v => v.slot | 0));
   const out = [];
   let hostileTaken = !!raidActive || station.visitors.some(v => v.disp === "hostile" && v.phase !== "depart");
+  let stagger = 0;
   for (let k = 0; k < n; k++) {
     const nv = spawnVisitor(station, r, stockCtx);
     if (!nv) break;
@@ -2293,12 +2378,16 @@ export function spawnVisitorGroup(station, rnd, raidActive, stockCtx) {
       if (hostileTaken) {
         nv.disp = "neutral";
         const crop = Math.floor(r() * C.CROPS.length);
-        nv.offer = classifyBuyOffer({ type: "buy", crop, n: 1 + Math.floor(r() * 2), price: 0 }, stockCtx, r);
+        nv.offer = classifyBuyOffer({ type: "buy", crop, n: 1 + Math.floor(r() * 2), price: 0 }, stockCtx, r, (station.rel && station.rel[nv.rid]) || 0);
       } else hostileTaken = true;
     }
     let slot = 0; while (used.has(slot)) slot++;
     used.add(slot); nv.slot = slot;
-    nv.phaseUntil += k * 900; // step off the train one by one
+    // Zip 234 (Guillaume: "make them walk one after another, staggered"):
+    // a wide randomized gap accumulates between group members, so they step
+    // off, walk and ARRIVE at the townhall clearly one after another.
+    stagger += k === 0 ? 0 : C.VISITOR_STAGGER_MIN_MS + r() * (C.VISITOR_STAGGER_MAX_MS - C.VISITOR_STAGGER_MIN_MS);
+    nv.phaseUntil += stagger;
     out.push(nv); station.visitors.push(nv);
   }
   return out;
@@ -2329,18 +2418,68 @@ export function resolveVisitorDeal(f, s, m) {
     res.gift = { ...rw }; res.giftQueued = true;
   }
   s.station.rel[v.rid] = ((s.station.rel[v.rid] || 0) + C.REL_DEAL);
-  v.phase = "leave"; v.offer = { type: "done" };
+  startLinger(v);
   res.ok = true;
   return res;
 }
 
-// A friendly chat: +1 friendship, visitor heads home happy.
-export function resolveVisitorChat(s, rid) {
+// Zip 234 (Guillaume: "they don't need to leave immediately after we've
+// fulfilled their order"): instead of turning on their heels, a satisfied
+// visitor stays a while and strolls the townhall square. Implemented by
+// keeping phase "wait" with the wander branch armed IMMEDIATELY
+// (waitStartedAt backdated past VISITOR_WANDER_AFTER_MS) and a fresh, short
+// waitUntil — the ordinary wait-timeout path then walks them home, and chat
+// keeps working during the stroll.
+function startLinger(v) {
+  const now = Date.now();
+  v.offer = { type: "done" };
+  v.phase = "wait";
+  v.deadline = 0; v.voteUntil = 0;
+  v.waitUntil = now + C.VISITOR_LINGER_MS;
+  v.waitStartedAt = now - C.VISITOR_WANDER_AFTER_MS - 1000;
+}
+
+// A friendly chat (zip 234 rework, Guillaume: "make a clear chat function"):
+// every press picks a dialogue line from the friendship-tier pool and appends
+// it to the visitor's in-card chat log (broadcast with the station state).
+// Only the first REL_CHAT_CAP_PER_VISIT chats of a visit earn friendship
+// (anti-spam); a "chat"-type visit is considered fulfilled after the first
+// exchange, so the visitor lingers on the square instead of standing on duty.
+export function resolveVisitorChat(s, rid, rnd) {
+  const r = rnd || Math.random;
   const v = getVisitor(s, rid);
   if (!v || v.phase !== "wait") return { ok: false };
-  s.station.rel[v.rid] = ((s.station.rel[v.rid] || 0) + C.REL_CHAT);
-  if (v.offer && (v.offer.type === "chat" || v.offer.type === "buy")) { v.phase = "leave"; v.offer = { type: "done" }; }
-  return { ok: true };
+  v.chatCount = (v.chatCount | 0) + 1;
+  const gained = v.chatCount <= C.REL_CHAT_CAP_PER_VISIT;
+  if (gained) s.station.rel[v.rid] = ((s.station.rel[v.rid] || 0) + C.REL_CHAT);
+  const rel = (s.station.rel && s.station.rel[v.rid]) || 0;
+  const tier = rel >= C.VISITOR_CHAT_TIER2_REL ? 2 : rel >= C.VISITOR_CHAT_TIER1_REL ? 1 : 0;
+  const li = Math.floor(r() * C.VISITOR_CHAT_LINES);
+  v.chatLog = ((v.chatLog || []).slice(-5)).concat([{ tier, li, at: Date.now() }]);
+  if (v.offer && v.offer.type === "chat") startLinger(v);
+  return { ok: true, tier, li, gained };
+}
+
+// Zip 234 (friendship): grant a friend's ARRIVAL gift the first time somebody
+// opens their card. Idempotent (greeted flag); seeds land in the greeter's
+// pocket (a bit smaller than a deal reward), decorations/pets queue in
+// station.pendingGifts like deal gifts do.
+export function resolveVisitorGreet(f, s, rid) {
+  const res = { ok: false, gift: null, giftQueued: false };
+  const v = getVisitor(s, rid);
+  if (!v || !v.arrivalGift || v.greeted) return res;
+  v.greeted = true;
+  const rw = v.arrivalGift;
+  if (rw.kind === "seed") {
+    f.inv.seeds[rw.cropId] = (f.inv.seeds[rw.cropId] || 0) + 2;
+    res.gift = { ...rw };
+  } else {
+    if (!Array.isArray(s.station.pendingGifts)) s.station.pendingGifts = [];
+    s.station.pendingGifts.push({ ...rw, from: v.rid, at: Date.now() });
+    res.gift = { ...rw }; res.giftQueued = true;
+  }
+  res.ok = true;
+  return res;
 }
 
 // Paying a hostile visitor's demand from the common chest.
