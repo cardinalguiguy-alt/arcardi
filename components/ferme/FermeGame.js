@@ -4092,15 +4092,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // resident (normalizeStation conserve les champs supplémentaires).
   // Zip 252 : balade d'un résident sur la ferme (host), pour qu'on puisse
   // l'aborder (Q). Positions diffusées à part (residentSim, ~2 Hz).
-  function residentRoam(res, w, now, dt) {
+  function residentRoam(res, w, now, dt, ro) {
+    // Zip 256 : l'apiculteur (René, skill beekeeper) rôde autour de sa ruche
+    // (point d'ancrage BEEKEEPER_ANCHOR) au lieu du spawn commun, et sur un
+    // rayon plus resserré pour rester visible près de son atelier.
+    const isBeekeeper = ro && ro.skill === "beekeeper";
+    const anchor = isBeekeeper ? C.BEEKEEPER_ANCHOR : C.SPAWN;
+    const rx = isBeekeeper ? 3 : 9, ry = isBeekeeper ? 3 : 7;
     if (typeof res.x !== "number" || typeof res.y !== "number") {
-      res.x = C.SPAWN.x + (Math.random() * 8 - 4); res.y = C.SPAWN.y + (Math.random() * 6 - 3);
+      res.x = anchor.x + (Math.random() * (rx * 0.9) - rx * 0.45); res.y = anchor.y + (Math.random() * (ry * 0.9) - ry * 0.45);
       res.dir = 0; res.animT = 0; res.moving = false; res.roamTarget = null; res.nextRoamAt = 0;
     }
     if (!res.roamTarget || now >= (res.nextRoamAt || 0) || Math.hypot(res.roamTarget.x - res.x, res.roamTarget.y - res.y) < 0.2) {
       res.nextRoamAt = now + 2500 + Math.random() * 4500;
       if (Math.random() < 0.25) { res.roamTarget = null; res.moving = false; }
-      else { let tries = 0, tx = res.x, ty = res.y; do { tx = C.SPAWN.x + (Math.random() * 2 - 1) * 9; ty = C.SPAWN.y + (Math.random() * 2 - 1) * 7; tries++; } while (tries < 6 && (!inMap(Math.floor(tx), Math.floor(ty)) || E.blockedTile(w, tx, ty))); res.roamTarget = { x: tx, y: ty }; }
+      else { let tries = 0, tx = res.x, ty = res.y; do { tx = anchor.x + (Math.random() * 2 - 1) * rx; ty = anchor.y + (Math.random() * 2 - 1) * ry; tries++; } while (tries < 6 && (!inMap(Math.floor(tx), Math.floor(ty)) || E.blockedTile(w, tx, ty))); res.roamTarget = { x: tx, y: ty }; }
     }
     if (res.roamTarget) {
       const dx = res.roamTarget.x - res.x, dy = res.roamTarget.y - res.y, d = Math.hypot(dx, dy);
@@ -4133,7 +4139,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (!res) continue;
       const ro = C.VISITOR_ROSTER[res.rid];
       if (!ro) continue;
-      residentRoam(res, w, now, dt); // zip 252 : balade sur la ferme (chaque tick)
+      residentRoam(res, w, now, dt, ro); // zip 252 : balade sur la ferme (chaque tick) — zip 256 : ancre dédiée pour l'apiculteur
       // Premier passage : on planifie la première journée de travail sans rien
       // produire (emménager prend un peu de temps). La borne haute protège
       // d'une succession d'hôte : `nextWorkAt` vient de l'horloge de l'hôte

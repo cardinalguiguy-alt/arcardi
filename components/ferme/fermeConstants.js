@@ -108,6 +108,7 @@ export const O_CAULDRON = 18;  // chaudron (chantier 2026-07, demande Guillaume 
 // "12h réelles pour la tomate"). navet 6h, patate 12h, tomate 12h, citrouille 18h
 // (proportionnel aux anciens ratios de croissance 1/2/2/3). Prix et coûts inchangés.
 const H = 60 * 60 * 1000; // 1 heure en ms, pour lisibilité des durées ci-dessous
+const MIN = 60 * 1000; // 1 minute en ms, pour lisibilité des durées ci-dessous
 export const CROPS = [
   { id: 0, name: "Navet",          nameEn: "Turnip",   seedName: "Graine de navet",       seedNameEn: "Turnip seeds",   growMs: 6 * H,  seedCost: 20, sell: 60,  color: "#e8d8f0", top: "#b46ee0" },
   { id: 1, name: "Pomme de terre", nameEn: "Potato",   seedName: "Graine de p. de terre", seedNameEn: "Potato seeds",   growMs: 12 * H, seedCost: 35, sell: 110, color: "#d9b380", top: "#c49a62" },
@@ -616,14 +617,19 @@ export const PEN = { x: 48, y: 38, w: 8, h: 6 };
 // Zip 253 (demande Guillaume) : COÛT D'ACHAT des animaux d'élevage divisé
 // par 2,5 (120->48, 8000->3200, 10000->4000, 15000->6000, 25000->10000) pour
 // rendre l'élevage plus accessible. Prix de vente (sell) inchangés.
+//
+// Zip 255 (demande Guillaume) : cadences de production revues pour poule/
+// chèvre/brebis/cochon (durées RÉELLES, indépendantes du cycle jour/nuit) +
+// prix de vente de la truffe fortement augmenté.
 export const ANIMALS = [
-  { id: 0, name: "Poule",  nameEn: "Hen",   cost: 48,    prodMs: 4 * H,  prod: "Œuf",             prodEn: "Egg",         sell: 125, edible: true,  energy: 15, body: "#f0e8d8", accent: "#d44a3f" },
-  { id: 1, name: "Chèvre", nameEn: "Goat",  cost: 3200,  prodMs: 8 * H,  prod: "Lait de chèvre",  prodEn: "Goat milk",   sell: 300, edible: true,  energy: 22, body: "#d8cbb0", accent: "#7a6a52" },
-  { id: 2, name: "Brebis", nameEn: "Sheep", cost: 4000,  prodMs: 14 * H, prod: "Laine",           prodEn: "Wool",        sell: 450, edible: false, energy: 0,  body: "#f2f0ea", accent: "#c8c0b0" },
-  { id: 3, name: "Cochon", nameEn: "Pig",   cost: 6000,  prodMs: 16 * H, prod: "Truffe",          prodEn: "Truffle",     sell: 700, edible: true,  energy: 28, body: "#e8a8b0", accent: "#c07882" },
-  // Zip 254 (demande Guillaume) : la vache produit du lait toutes les 30 min
-  // (duree REELLE) au lieu de 10 h — cadence bien plus rapide.
-  { id: 4, name: "Vache",  nameEn: "Cow",   cost: 10000, prodMs: 0.5 * H, prod: "Lait",            prodEn: "Milk",        sell: 600, edible: true,  energy: 26, body: "#efe7dc", accent: "#5a4634" },
+  { id: 0, name: "Poule",  nameEn: "Hen",   cost: 48,    prodMs: 10 * MIN, prod: "Œuf",             prodEn: "Egg",         sell: 125,  edible: true,  energy: 15, body: "#f0e8d8", accent: "#d44a3f" },
+  { id: 1, name: "Chèvre", nameEn: "Goat",  cost: 3200,  prodMs: 20 * MIN, prod: "Lait de chèvre",  prodEn: "Goat milk",   sell: 300,  edible: true,  energy: 22, body: "#d8cbb0", accent: "#7a6a52" },
+  { id: 2, name: "Brebis", nameEn: "Sheep", cost: 4000,  prodMs: 45 * MIN, prod: "Laine",           prodEn: "Wool",        sell: 450,  edible: false, energy: 0,  body: "#f2f0ea", accent: "#c8c0b0" },
+  { id: 3, name: "Cochon", nameEn: "Pig",   cost: 6000,  prodMs: 5 * H,    prod: "Truffe",          prodEn: "Truffle",     sell: 2900, edible: true,  energy: 28, body: "#e8a8b0", accent: "#c07882" },
+  // Zip 255 (demande Guillaume) : vache repassée à 1h réelle (l'affichage du
+  // shop arrondit prodMs à l'heure la plus proche — 30 min affichait "1h",
+  // ce qui ne correspondait pas à la cadence réelle).
+  { id: 4, name: "Vache",  nameEn: "Cow",   cost: 10000, prodMs: 1 * H,    prod: "Lait",            prodEn: "Milk",        sell: 600,  edible: true,  energy: 26, body: "#efe7dc", accent: "#5a4634" },
 ];
 // Zip 254 (demande Guillaume) : echelle d'affichage par animal (rendu en jeu
 // uniquement — purement visuel, aucune incidence sur la logique/collisions,
@@ -1052,7 +1058,12 @@ export const ARTISAN_BUILDINGS = {
 // Métier -> bâtiment (null = pas de bâtiment, travaille directement).
 export const SKILL_BUILDING = { beekeeper: "beehive", cheesemaker: "fromagerie", baker: "bakery", lumberjack: null };
 // Cadences de production (ms réelles) et valeurs de vente (or).
-export const HONEY_MS = 4 * 60 * 1000;     export const HONEY_SELL = 400;   // ruche : passif, aucun intrant
+export const HONEY_MS = 4 * 60 * 1000;     export const HONEY_SELL = 700;   // ruche : passif, aucun intrant (700 : prix relevé, demande Guillaume)
+
+// Point d'ancrage de rôdaille de l'apiculteur (René) : centre du bâtiment
+// beehive (site 2x2 à x:50,y:46), pour qu'il reste autour de sa ruche au lieu
+// de se balader près du spawn comme les autres résidents.
+export const BEEKEEPER_ANCHOR = { x: 51, y: 47 };
 export const CHEESE_MS = 6 * 60 * 1000;    export const CHEESE_MILK_COST = 3; // fromagerie : 3 laits -> 1 roue
 export const CHEESE_WHEEL_SELL = 1500;     export const CHEESE_PORTION_SELL = 350; export const PORTIONS_PER_WHEEL = 6;
 export const PASTRY_MS = 3 * 60 * 1000;    export const PASTRY_SELL = 500;  // boulangerie : farine + lait + œuf -> 1 pâtisserie
