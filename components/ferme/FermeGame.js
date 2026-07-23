@@ -2476,6 +2476,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // position ET pour les entités simulées par l'hôte (greg/soan/lapins/…).
   function netCanBroadcast() { return channelReadyRef.current && !hiddenRef.current && playersRef.current.size > 0; }
   function sendPos() { if (!netCanBroadcast()) return; channelRef.current?.send({ type: "broadcast", event: "pos", payload: pubMe() }); }
+  // FIX 242 (AOI / zone d'intérêt) : rayon "même zone d'écran" dérivé du viewport réel + marge de pré-chargement.
+  function aoiRadiusTiles() { const c = canvasRef.current; if (!c) return 40; return Math.hypot(c.width, c.height) / (ZOOM * C.TILE) / 2 + C.AOI_MARGIN_TILES; }
+  // Distance (tuiles) au plus proche AUTRE joueur de la même zone ; Infinity si personne.
+  function nearestOtherDist() { const m = meRef.current; if (!m) return Infinity; let best = Infinity; for (const p of playersRef.current.values()) { if (!p || (p.zone || "farm") !== m.zone) continue; const d = Math.hypot(p.x - m.x, p.y - m.y); if (d < best) best = d; } return best; }
+  // Cadence de diffusion de MA position : plein débit si un autre joueur peut me voir, sinon débit "minimap" (personne ne me voit bouger de près).
+  function posSendHz() { return nearestOtherDist() <= aoiRadiusTiles() ? C.POS_TICK_HZ : C.POS_FAR_HZ; }
+  // Un joueur distant (non-hôte) est-il à portée de vue de cette entité (ou de l'une de ces entités) ? Sinon inutile de la diffuser : hors écran ET absente de la minimap (loups/greg/soan/lapins n'y figurent pas).
+  function anyRemoteNear(ex, ey) { const R = aoiRadiusTiles(); for (const p of playersRef.current.values()) { if (!p || (p.zone || "farm") !== "farm") continue; if (Math.hypot(p.x - ex, p.y - ey) <= R) return true; } return false; }
+  function anyRemoteNearList(list) { if (!list || !list.length) return false; const R = aoiRadiusTiles(); for (const p of playersRef.current.values()) { if (!p || (p.zone || "farm") !== "farm") continue; for (const e of list) { if (e && Math.hypot(p.x - e.x, p.y - e.y) <= R) return true; } } return false; }
 
   // -------- Actions joueur (envoi au host) --------
   // La requête porte DEUX jeux de coordonnées : px/py = position du joueur
@@ -3098,7 +3107,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     if (moved) minimapDirtyRef.current = true;
     rabbitAccumRef.current += dt;
-    if (rabbitAccumRef.current >= 0.5 && netCanBroadcast()) {
+    if (rabbitAccumRef.current >= 0.5 && netCanBroadcast() && anyRemoteNearList(s.rabbits)) {
       rabbitAccumRef.current = 0;
       channelRef.current?.send({ type: "broadcast", event: "apply", payload: { rabbits: s.rabbits } });
     }
@@ -3405,7 +3414,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       return;
     }
     wolfAccumRef.current += dt;
-    if (wolfAccumRef.current >= 0.5 && netCanBroadcast()) {
+    if (wolfAccumRef.current >= 0.5 && netCanBroadcast() && anyRemoteNearList(s.wolves)) {
       wolfAccumRef.current = 0;
       channelRef.current?.send({ type: "broadcast", event: "apply", payload: { wolves: s.wolves } });
     }
@@ -3552,7 +3561,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
     }
     gregAccumRef.current += dt;
-    if (gregAccumRef.current >= 0.5 && netCanBroadcast()) {
+    if (gregAccumRef.current >= 0.5 && netCanBroadcast() && anyRemoteNear(g.x, g.y)) {
       gregAccumRef.current = 0;
       channelRef.current?.send({ type: "broadcast", event: "apply", payload: { greg: g } });
     }
@@ -3649,7 +3658,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     } else so.moving = false;
     if (moved) minimapDirtyRef.current = true;
     soanAccumRef.current += dt;
-    if (soanAccumRef.current >= 0.5 && netCanBroadcast()) {
+    if (soanAccumRef.current >= 0.5 && netCanBroadcast() && anyRemoteNear(so.x, so.y)) {
       soanAccumRef.current = 0;
       channelRef.current?.send({ type: "broadcast", event: "apply", payload: { soan: so } });
     }
@@ -5161,7 +5170,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       } else m.animT = 0;
       m.moving = !!moving;
       const nowP = performance.now();
-      if (m.moving || m.moving !== lastMovingSentRef.current) { if (nowP - lastPosSentRef.current > 1000 / C.POS_TICK_HZ) { lastPosSentRef.current = nowP; lastMovingSentRef.current = m.moving; sendPos(); } }
+      if (m.moving || m.moving !== lastMovingSentRef.current) { if (nowP - lastPosSentRef.current > 1000 / posSendHz()) { lastPosSentRef.current = nowP; lastMovingSentRef.current = m.moving; sendPos(); } }
     }
     function drawTownFrame(now, dt) {
       const tw = townWorldRef.current, m = meRef.current, sprites = spritesRef.current;
@@ -5340,7 +5349,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // pour les coéquipiers présents sur la carte ET pour la simulation
       // hôte des créatures partagées. x/y publics restent figés côté ferme.
       const nowP = performance.now();
-      if (m.moving || m.moving !== lastMovingSentRef.current) { if (nowP - lastPosSentRef.current > 1000 / C.POS_TICK_HZ) { lastPosSentRef.current = nowP; lastMovingSentRef.current = m.moving; sendPos(); } }
+      if (m.moving || m.moving !== lastMovingSentRef.current) { if (nowP - lastPosSentRef.current > 1000 / posSendHz()) { lastPosSentRef.current = nowP; lastMovingSentRef.current = m.moving; sendPos(); } }
     }
     function updateMe(dt) {
       const m = meRef.current, keys = keysRef.current;
@@ -5362,7 +5371,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const driver = playersRef.current.get(horseNow.rider);
         if (driver) { m.x = driver.x; m.y = driver.y; m.dir = driver.dir; m.moving = driver.moving; m.animT = driver.animT || 0; }
         const now2 = performance.now();
-        if (m.moving || m.moving !== lastMovingSentRef.current) { if (now2 - lastPosSentRef.current > 1000 / C.POS_TICK_HZ) { lastPosSentRef.current = now2; lastMovingSentRef.current = m.moving; sendPos(); } }
+        if (m.moving || m.moving !== lastMovingSentRef.current) { if (now2 - lastPosSentRef.current > 1000 / posSendHz()) { lastPosSentRef.current = now2; lastMovingSentRef.current = m.moving; sendPos(); } }
         return;
       }
       const uiBlocked = shopOpenRef.current || binOpenRef.current || mapOpenRef.current || cauldronMenuOpenRef.current || fishMiniRef.current || adsOpenRef.current || visitorOpenRef.current || document.activeElement === chatInputRef.current || m.sleeping || isInjured();
@@ -5399,7 +5408,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       } else m.animT = 0;
       m.moving = !!moving;
       const now = performance.now();
-      if (m.moving || m.moving !== lastMovingSentRef.current) { if (now - lastPosSentRef.current > 1000 / C.POS_TICK_HZ) { lastPosSentRef.current = now; lastMovingSentRef.current = m.moving; sendPos(); } }
+      if (m.moving || m.moving !== lastMovingSentRef.current) { if (now - lastPosSentRef.current > 1000 / posSendHz()) { lastPosSentRef.current = now; lastMovingSentRef.current = m.moving; sendPos(); } }
     }
     // Zip 236: draw my individual pets trailing behind me. Each pet keeps a
     // smoothed follow position (petFollowRef) that eases toward a point a bit

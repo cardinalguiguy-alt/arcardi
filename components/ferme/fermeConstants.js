@@ -255,7 +255,9 @@ export const START_MONEY = 500;
 // --- Réseau / jeu ---
 export const MAX_PLAYERS = 8;
 export const PLAYER_SPEED = 5.2; // tuiles/seconde
-export const POS_TICK_HZ = 12;   // fréquence de diffusion des positions (broadcast)
+export const POS_TICK_HZ = 12;
+export const AOI_MARGIN_TILES = 8;   // FIX 242 (AOI): marge (tuiles) autour du viewport — pré-charge entités/joueurs juste avant qu'ils entrent à l'écran
+export const POS_FAR_HZ = 1.5;       // FIX 242 (AOI): cadence de diffusion de position quand aucun autre joueur n'est à portée de vue (indication minimap seulement)   // fréquence de diffusion des positions (broadcast)
 export const ACT_RANGE = 1.8;    // portée d'action en tuiles
 
 // Couleurs de tenue attribuées aux joueurs (par ordre d'arrivée)
