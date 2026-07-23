@@ -1733,14 +1733,25 @@ export function buildSprites() {
 
   // Palier 3 : dessin en coordonnées absolues (pas de mise à l'échelle d'un
   // "sz" unique comme les paliers 1/2) pour garder le plein contrôle sur les
-  // proportions d'un bâtiment volontairement massif. Canevas 170×230px, à
-  // comparer aux 96×96px de la maison (house()) : la grange au palier 3 est
-  // donc PLUS DE 4 FOIS plus grande en surface. Budget vertical (du haut
-  // vers le bas) : pointe de girouette → cupole → faîtage principal → mur →
-  // fondations en pierre, tout aligné sur `baseY` (sol).
+  // proportions d'un bâtiment volontairement massif. Canevas de sortie
+  // 85×115px (réduit de moitié depuis 170×230px — jugé "BEAUCOUP trop grand"
+  // par Guillaume, voir SCALE dans barnSpriteBig), à comparer aux 96×96px de
+  // la maison (house()) : la grange au palier 3 reste donc un peu plus
+  // grande que la maison, mais plus l'énorme bâtiment d'avant. Budget
+  // vertical (du haut vers le bas) : pointe de girouette → cupole → faîtage
+  // principal → mur → fondations en pierre, tout aligné sur `baseY` (sol).
   function barnSpriteBig() {
+    // Demande Guillaume : le palier 3 était "BEAUCOUP trop grand" à l'écran.
+    // Le canevas final est réduit de moitié (85×115, contre 170×230
+    // auparavant) via un g.scale(0.5) global : tout le tracé ci-dessous
+    // continue de raisonner dans le système de coordonnées d'origine
+    // (170×230) pour ne pas devoir recalculer chaque forme à la main, seul
+    // le canevas de sortie (et donc la taille réellement dessinée sur la
+    // carte par drawImage, voir FermeGame.js) est deux fois plus petit.
+    const SCALE = 0.5;
     const W = 170, H = 230;
-    const [c, g] = cv(W, H);
+    const [c, g] = cv(W * SCALE, H * SCALE);
+    g.scale(SCALE, SCALE);
     const baseY = 221;
     const cx = 75; // centre horizontal du corps principal (hors silo)
 

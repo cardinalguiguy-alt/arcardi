@@ -971,9 +971,9 @@ export const STATION_CLEAR = { x: 1, y: 21, w: 10, h: 12 }; // objects cleared h
 // updateMe (FermeGame.js).
 export const STATION_BLOCK = { x: 6, y: 24, w: 4, h: 4 }; // building + roof row above it
 export const BARN_BLOCKS = [
-  { x: 66, y: 39, w: 3, h: 3 },   // level 1 (48px sprite)
-  { x: 65, y: 37, w: 5, h: 5 },   // level 2 (72px sprite)
-  { x: 62, y: 28, w: 11, h: 14 }, // level 3 (170x230px sprite)
+  { x: 66, y: 39, w: 3, h: 3 },  // level 1 (48px sprite)
+  { x: 65, y: 37, w: 5, h: 5 },  // level 2 (72px sprite)
+  { x: 64, y: 35, w: 6, h: 7 },  // level 3 (85x115px sprite — réduit de moitié, était 170x230px/11x14, demande Guillaume "beaucoup trop grand")
 ];
 export const AD_FEE = 25;                 // gold per newly posted ad category (common chest)
 export const AD_CATEGORIES = ["crops", "animal", "fish", "resources"];

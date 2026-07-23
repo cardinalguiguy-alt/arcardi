@@ -6688,6 +6688,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const zone = m.zone === "town" ? "town" : "farm";
     const tt = zone === "town" ? targetTileTown() : targetTile();
     const armed = handModeRef.current;
+    if (armed === "__lamp__" || armed === "__scarecrow__") {
+      // Correctif ("lampadaire perdu après rangement au sac (R)") : un
+      // lampadaire/épouvantail rangé via handStoreHeld atterrit dans
+      // f.inv.lamp/scarecrow, PAS dans le sac de décorations (f.inv.decor) —
+      // il ne pouvait donc jamais être réarmé depuis ce menu, seul l'outil
+      // Construction (variante lamp/scarecrow) le permettait, ce qui n'était
+      // pas évident pour le joueur. On réutilise ici directement l'action
+      // "act" existante (resolveAct cas "lamp"/"scarecrow", même logique que
+      // l'outil Construction) pour reposer l'objet depuis l'outil main.
+      const iv = invRef.current, key = armed === "__lamp__" ? "lamp" : "scarecrow";
+      if (!(iv && (iv[key] | 0) > 0)) { handModeRef.current = null; setHandMode(null); return; }
+      if (zone !== "farm" || !handPlaceable(zone, tt.x, tt.y)) { pushToast(L.decorBadSpot); return; }
+      sendReq({ kind: "act", action: key, x: tt.x, y: tt.y });
+      return;
+    }
     if (armed) {
       const iv = invRef.current; // ref (pas l'état React) : handAction vit dans un écouteur figé
       if (!(iv && iv.decor && (iv.decor[armed] | 0) > 0)) { handModeRef.current = null; setHandMode(null); return; }
@@ -7407,7 +7422,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             lvl = buildKind === "fence" ? (fenceDir === "h" ? "↔" : fenceDir === "v" ? "↕" : "R") : buildKind === "cauldron" ? "⚗️" : "";
           }
           else if (isHerd) { if (carryingAnimal) lvl = "●"; }
-          else if (isHand) { const dn = myInv && myInv.decor ? Object.values(myInv.decor).reduce((a, b) => a + (b | 0), 0) : 0; count = dn || ""; if (handHeldUI || handMode) lvl = "●"; }
+          else if (isHand) { const dn = (myInv && myInv.decor ? Object.values(myInv.decor).reduce((a, b) => a + (b | 0), 0) : 0) + (myInv ? (myInv.lamp | 0) + (myInv.scarecrow | 0) : 0); count = dn || ""; if (handHeldUI || handMode) lvl = "●"; }
           else lvl = "N" + (myTools[s.key] || 1);
           const title = isSeed ? L.seedTip(seedName(seedSel)) : isFood ? L.foodTip(C.FOOD_ENERGY) : isRod ? L.rodTip
             : isFence ? (buildKind === "wall" ? L.wallTip : buildKind === "path" ? L.pathTip : buildKind === "lamp" ? L.lampTip : buildKind === "scarecrow" ? L.scarecrowTip
@@ -7459,15 +7474,39 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             <div className="ferme-seed-menu-title">{L.handMenuTitle}</div>
             {(() => {
               const owned = C.UNIQUE_DECORATIONS.filter(d => myInv && myInv.decor && (myInv.decor[d.id] | 0) > 0);
-              if (!owned.length) return <div className="ferme-seed-menu-row" style={{ opacity: .7, cursor: "default" }}><span className="name">{L.handMenuEmpty}</span></div>;
-              return owned.map(d => (
-                <div key={d.id} className={"ferme-seed-menu-row" + (d.id === handMode ? " sel" : "")}
-                  onClick={() => { armDecor(d.id); setHandMenuOpen(false); }}>
-                  <Sprite img={spritesReady ? spritesRef.current.decor[d.id] : null} w={26} h={26} />
-                  <span className="name">{lang === "en" ? d.nameEn : d.name}</span>
-                  <span className="count">× {myInv ? (myInv.decor[d.id] | 0) : 0}</span>
-                </div>
-              ));
+              // Correctif : un lampadaire/épouvantail rangé au sac (R) vit
+              // dans myInv.lamp/scarecrow, pas myInv.decor — sans ces deux
+              // entrées, il n'apparaissait nulle part dans ce menu et restait
+              // introuvable pour le joueur une fois rangé.
+              const lampN = myInv ? (myInv.lamp | 0) : 0;
+              const scarecrowN = myInv ? (myInv.scarecrow | 0) : 0;
+              if (!owned.length && !lampN && !scarecrowN) return <div className="ferme-seed-menu-row" style={{ opacity: .7, cursor: "default" }}><span className="name">{L.handMenuEmpty}</span></div>;
+              return [
+                lampN > 0 && (
+                  <div key="__lamp__" className={"ferme-seed-menu-row" + (handMode === "__lamp__" ? " sel" : "")}
+                    onClick={() => { armDecor("__lamp__"); setHandMenuOpen(false); }}>
+                    <Sprite img={spritesReady ? spritesRef.current.lamp : null} w={26} h={26} />
+                    <span className="name">{L.lampRowTitle(C.LAMP_COST).replace(/ :.*/, "")}</span>
+                    <span className="count">× {lampN}</span>
+                  </div>
+                ),
+                scarecrowN > 0 && (
+                  <div key="__scarecrow__" className={"ferme-seed-menu-row" + (handMode === "__scarecrow__" ? " sel" : "")}
+                    onClick={() => { armDecor("__scarecrow__"); setHandMenuOpen(false); }}>
+                    <Sprite img={spritesReady ? spritesRef.current.scarecrow : null} w={26} h={26} />
+                    <span className="name">{L.scarecrowRowTitle(C.SCARECROW_COST).replace(/ :.*/, "")}</span>
+                    <span className="count">× {scarecrowN}</span>
+                  </div>
+                ),
+                ...owned.map(d => (
+                  <div key={d.id} className={"ferme-seed-menu-row" + (d.id === handMode ? " sel" : "")}
+                    onClick={() => { armDecor(d.id); setHandMenuOpen(false); }}>
+                    <Sprite img={spritesReady ? spritesRef.current.decor[d.id] : null} w={26} h={26} />
+                    <span className="name">{lang === "en" ? d.nameEn : d.name}</span>
+                    <span className="count">× {myInv ? (myInv.decor[d.id] | 0) : 0}</span>
+                  </div>
+                )),
+              ];
             })()}
             <div className="ferme-seed-menu-row" style={{ opacity: .75, fontSize: 11, cursor: "default" }} onClick={e => e.stopPropagation()}>
               <span className="name">{L.handMoveHint}</span>
