@@ -3272,6 +3272,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       sendReq({ kind: "dismount" });
       return;
     }
+    // Zip 253 : aucun cheval en ville ni dans le passage sombre — on ne peut
+    // monter QUE sur la ferme (les chevaux vivent à la ferme). En ville, F ne
+    // fait rien (le prompt de monte y est déjà masqué, voir updateMeTown).
+    if (m.zone && m.zone !== "farm") return;
     const idx = nearestMountableHorse();
     if (idx >= 0) sendReq({ kind: "mount", horseIndex: idx });
   }
@@ -4401,6 +4405,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   }
   function crossPassage(toEvil, viaMonster) {
     if (zoneTransRef.current.active) return; // déjà en transition : ignore un nouveau déclenchement
+    // Zip 253 : le cheval reste à la ferme (décision Guillaume). Un joueur monté
+    // qui franchit le passage sombre descend d'abord — sinon l'ancien `rider`
+    // traînait le cheval aux coordonnées de la carte maléfique (même ghost-horse
+    // que le train vers la ville). Le cheval est laissé sur la ferme à sa place.
+    if (toEvil && myHorse()) sendReq({ kind: "dismount" });
     zoneTransRef.current = { active: true, t0: performance.now(), toEvil, swapped: false, viaMonster: !!viaMonster };
   }
   // Valley Town (zip 234): the train ride reuses the exact zone-fade
@@ -4409,6 +4418,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // "farmFromTown" (the ride back, arriving on the farm platform).
   function rideTrain(toTown) {
     if (zoneTransRef.current.active) return;
+    // Zip 253 (décision Guillaume : "le cheval reste à quai, mais le train
+    // emmène quand même le joueur à pied") : un joueur monté qui embarque pour
+    // la ville DESCEND d'abord — le cheval est laissé sur la ferme, à la place
+    // d'embarquement (dismount fixe h.x/h.y sur la position actuelle du
+    // cavalier). Sans ça, l'ancien `rider` restait posé et les autres joueurs
+    // voyaient le cheval se téléporter aux coordonnées ville du cavalier
+    // (horseAnchor). En ville, plus aucun cheval (monte bloquée, voir
+    // toggleMount) — cohérent avec "il restera à la ferme".
+    if (toTown && myHorse()) sendReq({ kind: "dismount" });
     zoneTransRef.current = { active: true, t0: performance.now(), toEvil: false, swapped: false, dest: toTown ? "town" : "farmFromTown" };
   }
   function updateZoneTransition() {
@@ -5408,7 +5426,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         }
       }
       draws.sort((a, b) => a.y - b.y);
-      for (const d of draws) d.fn();
+      // Zip 253 (audit) : on isole chaque draw en try/catch, exactement comme
+      // la boucle de rendu de la ville (fix zip 250 "les maisons disparaissent
+      // à deux"). Sans ça, une seule exception dans UN draw (joueur distant
+      // fraîchement arrivé, sprite manquant, résident/atelier mal formé)
+      // interrompait TOUTE la frame triée -> moitié basse de la ferme non
+      // dessinée. La ferme étant la zone principale, ce filet manquait.
+      for (const d of draws) { try { d.fn(); } catch (e) { console.error("[FERME] farm draw ignoré", e); } }
 
       const fx = fxRef.current;
       for (let i = fx.length - 1; i >= 0; i--) {
@@ -6714,6 +6738,31 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     return best;
   }
+  // Zip 253 (demande Guillaume : "que les résidents avec skills que nous avons
+  // apparaissent dans l'onglet employés") : liste des résidents recrutés qui
+  // portent un métier (skill). Ils travaillent pour la ferme comme Greg/Soan,
+  // donc on les liste au même endroit. Lue au rendu -> sharedRef frais.
+  function skilledResidents() {
+    const rs = (sharedRef.current.station && sharedRef.current.station.residents) || [];
+    return rs.filter(r => r && C.VISITOR_ROSTER[r.rid] && C.VISITOR_ROSTER[r.rid].skill);
+  }
+  // Zip 253 : ligne d'état de PRODUCTION d'un résident à skill, pour la fiche Q
+  // enrichie ET l'onglet Employés. Purement lecture de l'état partagé
+  // (craftStock / gregStock), aucun nouveau message réseau. Renvoie "" si
+  // l'atelier n'est pas encore construit (la fiche affiche alors la ligne de
+  // besoin existante à la place).
+  function residentProdLine(ro) {
+    const s = sharedRef.current;
+    const cs = s.craftStock || {}, gs = s.gregStock || {};
+    const crafts = s.crafts || {};
+    if (ro.skill === "lumberjack") return L.residentProdWood(gs.wood | 0, gs.stone | 0);
+    const bid = C.SKILL_BUILDING[ro.skill];
+    if (!bid || !(crafts[bid] && crafts[bid].built)) return "";
+    if (ro.skill === "beekeeper") return L.residentProdHoney(cs.honey | 0);
+    if (ro.skill === "cheesemaker") return L.residentProdCheese(cs.cheeseWheel | 0, cs.cheesePortion | 0);
+    if (ro.skill === "baker") return L.residentProdPastry(cs.pastry | 0);
+    return "";
+  }
   // Position du chaudron ramené (chantier 2026-07, demande Guillaume) : posé
   // n'importe où par un joueur, retrouvée en scannant w.objects — un seul
   // chaudron possible pour toute la ferme (voir resolveCauldronPlace côté
@@ -7297,7 +7346,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         <button className="ferme-btn" onClick={teleportHome}>{L.btnHome}</button>
         {buildings.wellBuilt && <button className="ferme-btn" onClick={teleportWell}>{L.btnWell}</button>}
         <button className="ferme-btn" onClick={() => setMapOpen(true)}>{L.btnMap}</button>
-        {(sharedRef.current.greg || sharedRef.current.soan) && (
+        {(sharedRef.current.greg || sharedRef.current.soan || skilledResidents().length > 0) && (
           <button className="ferme-btn" onClick={() => setEmployeesOpen(true)}>{L.btnEmployees}</button>
         )}
         <button className="ferme-btn ferme-btn-ghost" onClick={changeCharacter}>{L.btnChangeChar}</button>
@@ -7483,12 +7532,30 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           boutique à chaque ordre. Se ferme automatiquement s'il ne reste
           plus aucun employé actif (fin de contrat pendant que le panneau
           est ouvert), pour ne jamais rester affiché sur une liste vide. */}
-      {employeesOpen && (sharedRef.current.greg || sharedRef.current.soan) && (
+      {employeesOpen && (sharedRef.current.greg || sharedRef.current.soan || skilledResidents().length > 0) && (
         <div className="ferme-modal open" onClick={() => setEmployeesOpen(false)}>
           <div className="panel ferme-modal-panel" onClick={e => e.stopPropagation()}>
             <button className="ferme-close-x" onClick={() => setEmployeesOpen(false)}>✕</button>
             <h2>{L.employeesTitle}</h2>
             <div className="ferme-hint">{L.employeesHint}</div>
+            {/* Zip 253 : résidents à skill (René/Ingrid/Tristan/Chloé…) listés
+                comme employés de la ferme, avec leur métier et l'état de leur
+                production. Clic -> ouvre leur fiche de dialogue (même carte que
+                la touche Q). */}
+            {skilledResidents().map(res => {
+              const ro = C.VISITOR_ROSTER[res.rid]; if (!ro) return null;
+              const prod = residentProdLine(ro);
+              return (
+                <div className="ferme-shop-row" key={"emp-res-" + res.rid}>
+                  <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap) : null} w={26} h={32} />
+                  <div className="info">
+                    <b>{ro.name}</b>
+                    <span className="ferme-usage">{prod || L.residentTag(ro.job)}</span>
+                  </div>
+                  <button onClick={() => { setEmployeesOpen(false); setResidentCard(res.rid); }}>{L.residentSeeBtn}</button>
+                </div>
+              );
+            })}
             {sharedRef.current.greg && (
               <div className="ferme-shop-row">
                 <Sprite img={spritesReady ? spritesRef.current.getChar("m", 0) : null} w={26} h={32} />
@@ -8044,7 +8111,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           </div>
         </div>
       )}
-      {/* Zip 252 : fiche de dialogue d'un résident (Q à proximité). */}
+      {/* Zip 252 : fiche de dialogue d'un résident (Q à proximité).
+          Zip 253 : fiche enrichie -> métier, ligne de besoin, ET état de
+          production vivant (miel/fromage/pâtisserie/bois-pierre) lu sur l'état
+          partagé. */}
       {residentCard != null && (() => {
         const ro = C.VISITOR_ROSTER[residentCard]; if (!ro) return null;
         const bid = C.SKILL_BUILDING[ro.skill];
@@ -8053,6 +8123,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (ro.skill === "lumberjack") need = L.residentLumberjackLine;
         else if (bid) need = built ? L.residentBuildingReady(L.buildingName(bid)) : L.residentNeedBuilding(L.buildingName(bid));
         else need = "";
+        const prod = residentProdLine(ro); // "" tant que l'atelier n'est pas bâti
         return (
           <div className="ferme-modal open" onClick={() => setResidentCard(null)}>
             <div className="panel ferme-modal-panel" onClick={e => e.stopPropagation()}>
@@ -8061,6 +8132,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               <div className="ferme-shop-row">
                 <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap) : null} sx={16} sy={24} w={40} h={60} />
                 <div className="info"><b>{L.residentGreet(ro.name, ro.job)}</b><span>{need}</span></div>
+              </div>
+              <div className="ferme-shop-row">
+                <span style={{ fontSize: 22, width: 32, textAlign: "center" }}>🛠️</span>
+                <div className="info"><b>{L.residentRoleTitle}</b><span>{prod || L.residentNotWorkingYet}</span></div>
               </div>
               <div style={{ marginTop: 10, textAlign: "right" }}>
                 <PixBtn sprites={spritesReady ? spritesRef.current : null} tone="plain" label={L.residentCloseBtn} onClick={() => setResidentCard(null)} />
