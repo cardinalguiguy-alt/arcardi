@@ -2164,6 +2164,7 @@ export function newStationState() {
     nextVisitAt: 0,     // host clock; 0 = schedule on next host tick
     visitors: [],       // live visitor objects (host-simulated, broadcast) - up to VISITORS_MAX (zip 233)
     pendingGifts: [],   // owed gifts (decor/pet) awaiting their systems - PERSISTED (zip 233)
+    promisedGifts: [],  // zip 250: bag gifts a departed visitor pledged to SEND, delivered to a specific farmer after a short delay - PERSISTED
     damage: null,       // live hostile-damage record awaiting co-op repair
   };
 }
@@ -2189,6 +2190,11 @@ export function migrateStation(st, hostNow) {
   // Owed gifts (zip 233) survive EVERY load, plain or snapshot: a promised
   // pet must not vanish before the pet system ships.
   out.pendingGifts = Array.isArray(st.pendingGifts) ? st.pendingGifts.filter(g => g && typeof g.kind === "string") : [];
+  // Zip 250: promised (delayed) bag gifts survive loads too, so a pledge made
+  // just before a reload/snapshot still reaches the right farmer's bag.
+  out.promisedGifts = Array.isArray(st.promisedGifts)
+    ? st.promisedGifts.filter(g => g && g.reward && typeof g.reward.kind === "string" && g.farmerId)
+    : [];
   if (typeof hostNow === "number") {
     // Mid-session snapshot: keep the live visitors/damage, relocated.
     // A legacy single st.visitor (pre-233 snapshot) is wrapped into an array.
@@ -2499,7 +2505,7 @@ export function spawnVisitorGroup(station, rnd, raidActive, stockCtx) {
 // inventory; the gold (plus any rich-patron bonus) lands in the common
 // chest, consistent with how sales already work. Mutates f and s.
 export function resolveVisitorDeal(f, s, m) {
-  const res = { ok: false, toast: null, gain: 0, gift: null, giftQueued: false };
+  const res = { ok: false, toast: null, gain: 0, gift: null, giftQueued: false, giftPromised: false };
   const v = getVisitor(s, m && m.rid);
   if (!v || v.phase !== "wait" || !v.offer || v.offer.type !== "buy") { res.toast = "actionFailed"; return res; }
   const o = v.offer;
@@ -2512,11 +2518,39 @@ export function resolveVisitorDeal(f, s, m) {
   // bag (max MAX_PETS); only bag-full pets and decorations fall back to the
   // communal pendingGifts queue.
   const rw = o.reward;
-  if (rw) { const gr = grantReward(f, s, v, rw); res.gift = { ...rw }; res.giftQueued = gr.queued; res.bagFull = gr.bagFull; }
+  if (rw) offerGiftReward(f, s, v, rw, res); // zip 250: 80% direct / 20% promis (cadeaux sac)
   s.station.rel[v.rid] = ((s.station.rel[v.rid] || 0) + C.REL_DEAL);
   startLinger(v);
   res.ok = true;
   return res;
+}
+
+// Zip 250 (demande Guillaume : "plus de promesses en l'air qui durent trop
+// longtemps"). Décide du sort d'un cadeau de deal/troc :
+//  - décoration  -> mécanique propre inchangée (grantReward -> file commune) ;
+//  - cadeau SAC (graine/objet/animal) -> 8/10 remis DIRECT au joueur maintenant,
+//    2/10 "promis" : on accroche le cadeau au visiteur (v.promisedGift), il sera
+//    déposé dans le sac de CE joueur 3 à 5 min APRÈS son départ (voir la boucle
+//    hôte updateVisitors dans FermeGame.js).
+// Écrit res.gift + res.giftQueued/bagFull/giftPromised. rnd() injectable (tests).
+export function offerGiftReward(f, s, v, rw, res, rnd) {
+  const r = rnd || Math.random;
+  res.gift = { ...rw };
+  // Les décorations gardent leur voie existante (non concernées par le 80/20).
+  if (rw.kind === "decor") {
+    const gr = grantReward(f, s, v, rw);
+    res.giftQueued = gr.queued; res.bagFull = gr.bagFull;
+    return;
+  }
+  if (r() < C.VISITOR_GIFT_DIRECT_CHANCE) {
+    const gr = grantReward(f, s, v, rw);
+    res.giftQueued = gr.queued; res.bagFull = gr.bagFull;
+  } else {
+    // Promesse tenue : rattachée au visiteur, convertie en livraison différée
+    // au moment où il monte dans le train (FermeGame: updateVisitors).
+    if (v) v.promisedGift = { farmerId: f.id, fromRid: v.rid, reward: { ...rw } };
+    res.giftPromised = true;
+  }
 }
 
 // Zip 237: grant a reward object to a farmer, routing by kind.
@@ -2554,15 +2588,14 @@ export function grantReward(f, s, v, rw) {
 // grant the reward. Produce kinds: crop (f.inv.crops), fish (f.inv.fish),
 // product (f.inv.products).
 export function resolveVisitorSwap(f, s, m) {
-  const res = { ok: false, toast: null, gift: null, giftQueued: false, bagFull: false };
+  const res = { ok: false, toast: null, gift: null, giftQueued: false, bagFull: false, giftPromised: false };
   const v = getVisitor(s, m && m.rid);
   if (!v || v.phase !== "wait" || !v.offer || v.offer.type !== "swap") { res.toast = "actionFailed"; return res; }
   const w = v.offer.want;
   const bag = w.kind === "crop" ? f.inv.crops : w.kind === "fish" ? f.inv.fish : f.inv.products;
   if (!bag || (bag[w.id] || 0) < w.n) { res.toast = "visitorNotEnough"; return res; }
   bag[w.id] -= w.n;
-  const gr = grantReward(f, s, v, v.offer.give);
-  res.gift = { ...v.offer.give }; res.giftQueued = gr.queued; res.bagFull = gr.bagFull;
+  offerGiftReward(f, s, v, v.offer.give, res); // zip 250: 80% direct / 20% promis (cadeaux sac)
   s.station.rel[v.rid] = ((s.station.rel[v.rid] || 0) + C.REL_DEAL);
   startLinger(v);
   res.ok = true;

@@ -913,6 +913,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     ch.subscribe(status => {
       if (status !== "SUBSCRIBED") return;
       channelReadyRef.current = true;
+      // Zip 250 (demande Guillaume) : restaure la préférence de style de maison
+      // (Valley Town) enregistrée en localStorage et la (re)diffuse pour que
+      // tout le monde voie ta façade choisie dès la connexion.
+      try {
+        const savedFacade = window.localStorage.getItem("ferme_town_facade");
+        if (savedFacade !== null) {
+          const st2 = ((savedFacade | 0) % C.TOWN_HOUSE_STYLES + C.TOWN_HOUSE_STYLES) % C.TOWN_HOUSE_STYLES;
+          facadeStylesRef.current = { ...facadeStylesRef.current, [me.id]: st2 };
+          ch.send({ type: "broadcast", event: "facadeStyle", payload: { id: me.id, style: st2 } });
+        }
+      } catch (e2) { /* localStorage indispo */ }
       if (isHost) {
         // Le monde est déjà généré par l'effet de montage ci-dessus ; on
         // diffuse juste un instantané pour tout invité déjà en attente.
@@ -1815,6 +1826,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (g.kind === "useful") { return L.giftUseful(g.n || 1, itemLabel(g.item)); }
     return "";
   }
+  // Zip 250: ligne de chat annonçant le sort d'un cadeau de deal/troc —
+  // promis (livré plus tard), en file d'attente (déco), ou remis direct.
+  function giftChatLine(rid, r) {
+    const nm = rosterOf(rid).name, lbl = giftLabel(r.gift);
+    if (r.giftPromised) return L.visitorGiftPromised(nm, lbl);
+    if (r.giftQueued) return L.visitorGiftQueued(nm, lbl);
+    return L.visitorGiftGranted(nm, lbl);
+  }
   // Zip 237: human label for a useful item id (used by swap gives).
   function itemLabel(item) {
     return ({ wood: lang === "en" ? "wood" : "bois", stone: lang === "en" ? "stone" : "pierre", food: lang === "en" ? "snacks" : "snacks", salve: lang === "en" ? "immunity salve" : "baume d'immunité", healKit: lang === "en" ? "bandaids" : "pansements", fence: lang === "en" ? "fences" : "clôtures" })[item] || item;
@@ -1877,7 +1896,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // Zip 237: pets can land in the seller's bag now, so include pets in the payload.
       ch?.send({ type: "broadcast", event: "apply", payload: { farmer: { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv, pets: f.pets }, state: shareState() } });
       stationChat(L.visitorDealDone(rosterOf(v.rid).name, r.gain), "\u{1F4B0}");
-      if (r.gift) stationChat(r.giftQueued ? L.visitorGiftQueued(rosterOf(v.rid).name, giftLabel(r.gift)) : L.visitorGiftGranted(rosterOf(v.rid).name, giftLabel(r.gift)), "\u{1F381}");
+      if (r.gift) stationChat(giftChatLine(v.rid, r), "\u{1F381}");
       broadcastStation();
       return true;
     }
@@ -1887,7 +1906,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (!r.ok) { toastTo(r.toast === "visitorNotEnough" ? "swapNotEnough" : (r.toast || "actionFailed")); return true; }
       ch?.send({ type: "broadcast", event: "apply", payload: { farmer: { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv, pets: f.pets }, state: shareState() } });
       stationChat(L.swapDone(rosterOf(v.rid).name, giftLabel(r.gift)), "\u{1F501}");
-      if (r.giftQueued) stationChat(L.visitorGiftQueued(rosterOf(v.rid).name, giftLabel(r.gift)), "\u{1F381}");
+      if (r.giftQueued || r.giftPromised) stationChat(giftChatLine(v.rid, r), "\u{1F381}");
       broadcastStation();
       return true;
     }
@@ -2035,6 +2054,29 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // Handles scheduling, the train, walking, waiting (10-min real-time floor),
   // strolling after 30 real minutes, hostile deadlines, vote deadlines,
   // leaving, and the network throttle.
+  // Zip 250 (demande Guillaume) : livraison des cadeaux "promis" (les 2/10
+  // différés). Host-only. Chaque entrée { farmerId, fromRid, reward, deliverAt }
+  // est déposée dans le SAC du fermier concerné dès qu'elle est échue ET que ce
+  // joueur est connecté (sinon on patiente : la promesse ne se perd pas, elle
+  // est persistée). Réutilise EXACTEMENT le chemin des deals (grantReward +
+  // delta 'farmer' via hostSend → self-apply chez l'hôte, apply chez l'invité).
+  function hostDeliverPromisedGifts(now) {
+    const s = sharedRef.current, st = s.station;
+    if (!st || !Array.isArray(st.promisedGifts) || !st.promisedGifts.length) return;
+    let changed = false;
+    const keep = [];
+    for (const pg of st.promisedGifts) {
+      if (!pg || !pg.reward || !pg.farmerId || (pg.deliverAt || 0) > now) { keep.push(pg); continue; }
+      const online = pg.farmerId === me.id || playersRef.current.has(pg.farmerId);
+      if (!online) { keep.push(pg); continue; } // le joueur est parti : on garde la promesse jusqu'à son retour
+      const rf = hostEnsureFarmer(pg.farmerId);
+      E.grantReward(rf, s, null, pg.reward);
+      hostSend({ type: "broadcast", event: "apply", payload: { farmer: { id: rf.id, energy: rf.energy, tools: rf.tools, inv: rf.inv, pets: rf.pets } } });
+      stationChat(L.visitorGiftDelivered(rosterOf(pg.fromRid != null ? pg.fromRid : 0).name, giftLabel(pg.reward)), "\u{1F381}");
+      changed = true;
+    }
+    if (changed) { st.promisedGifts = keep; dirtyRef.current = true; broadcastStation(); }
+  }
   function updateVisitors(dt) {
     const w = worldRef.current, s = sharedRef.current;
     if (!w) return;
@@ -2149,13 +2191,25 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           if (v.wpi < 0) { v.phase = "depart"; v.phaseUntil = now + C.VISITOR_TRAIN_MS; v.moving = false; broadcastStation(); }
         }
       } else if (v.phase === "depart") {
-        if (now >= v.phaseUntil) { v._gone = true; removed = true; }
+        if (now >= v.phaseUntil) {
+          v._gone = true; removed = true;
+          // Zip 250: un cadeau "promis" (2/10) devient une livraison différée,
+          // datée depuis le DÉPART du visiteur (3 à 5 min), destinée au sac du
+          // joueur qui a conclu le deal.
+          if (v.promisedGift && v.promisedGift.farmerId && v.promisedGift.reward) {
+            if (!Array.isArray(st.promisedGifts)) st.promisedGifts = [];
+            const delay = C.VISITOR_GIFT_DELAY_MIN_MS + Math.random() * (C.VISITOR_GIFT_DELAY_MAX_MS - C.VISITOR_GIFT_DELAY_MIN_MS);
+            st.promisedGifts.push({ farmerId: v.promisedGift.farmerId, fromRid: (v.promisedGift.fromRid != null ? v.promisedGift.fromRid : v.rid), reward: v.promisedGift.reward, deliverAt: now + delay });
+            dirtyRef.current = true;
+          }
+        }
       }
     }
     if (removed) {
       st.visitors = st.visitors.filter(v => !v._gone);
       broadcastStation();
     }
+    hostDeliverPromisedGifts(now); // zip 250: dépose les cadeaux promis échus
     // Light continuous broadcast while visitors move (200 ms throttle):
     // an ARRAY of per-visitor positions matched by rid on the guests.
     visitorNetRef.current += dt;
@@ -4235,6 +4289,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               const nxt = (cur + 1) % C.TOWN_HOUSE_STYLES;
               facadeStylesRef.current = { ...facadeStylesRef.current, [me.id]: nxt };
               pushToast(L.townHouseStyleChangeBtn(nxt + 1));
+              // Zip 250 (demande Guillaume) : la préférence de style est
+              // mémorisée en localStorage (par machine, comme ferme_lastcode)
+              // pour survivre à un rechargement / une nouvelle session.
+              try { window.localStorage.setItem("ferme_town_facade", String(nxt)); } catch (e2) { /* localStorage indispo */ }
               // Broadcast via chat channel so remote clients pick it up.
               channelRef.current?.send({ type: "broadcast", event: "facadeStyle", payload: { id: me.id, style: nxt } });
             }
@@ -4736,14 +4794,23 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // (cycle horseRun cadencé sur l'horloge, pas d'animT propre) ; un
       // cheval sur une case d'eau (nage vers le siffleur, ou laissé là par
       // une noyade) est immergé sous la ligne d'eau (drawSwimOverlay).
-      for (const horse of (sharedRef.current.horses || [])) {
-        if (!horse.rider) draws.push({ y: (horse.y + 1) * T, fn: () => {
-          const hx = horse.x * T - 6, hy = horse.y * T - 10;
+      (sharedRef.current.horses || []).forEach((horse, hidx) => {
+        if (horse.rider) return;
+        // Zip 250 (demande Guillaume : "les mouvements du cheval sont saccadés
+        // pour les clients") : l'hôte simule au frame près, l'invité ne reçoit
+        // que ~2 Hz et affichait la position BRUTE -> saccades. On lisse comme
+        // Greg : un cheval sifflé qui galope (callTarget) glisse par
+        // extrapolation rejouée contre la collision ; un cheval immobile reste
+        // en easing seul (aucune avance).
+        const hp = isHost ? horse : smoothNpc("horse:" + hidx, horse.x, horse.y, dt, !!horse.callTarget, !!horse.callTarget, (cx, cy) => canStand(w, cx, cy));
+        const dx0 = hp.x, dy0 = hp.y;
+        draws.push({ y: (dy0 + 1) * T, fn: () => {
+          const hx = dx0 * T - 6, hy = dy0 * T - 10;
           const img = horse.callTarget ? sprites.horseRun[Math.floor(now / 110) % 4] : sprites.horse;
           ctx.drawImage(img, hx, hy);
           if (E.isWaterTile(w, horse.x, horse.y)) drawSwimOverlay(hx, hy + 1, 28);
         } });
-      }
+      });
       // Loups (chantier 2026-07) : 4 frames de marche, vitesse du cycle
       // dépendante de l'état (arrêté/lent/rapide, voir updateWolves) plutôt
       // que des frames différentes — même mécanique que l'animation des
@@ -4890,11 +4957,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         // EVERY live visitor is drawn, each smoothed independently.
         for (const vv of vlist) {
           if (vv.phase === "train" || vv.phase === "depart") continue;
-          if (!isHost) {
-            vv.rx = vv.rx === undefined ? vv.x : vv.rx + (vv.x - vv.rx) * Math.min(1, dt * 8);
-            vv.ry = vv.ry === undefined ? vv.y : vv.ry + (vv.y - vv.ry) * Math.min(1, dt * 8);
-          }
-          const vx = isHost ? vv.x : vv.rx, vy = isHost ? vv.y : vv.ry;
+          // Zip 250 (demande Guillaume : "les visiteurs sont saccadés pour les
+          // clients") : on remplace l'ancien easing faible (taux 8) par le même
+          // lissage que Greg/Soan — extrapolation façon-joueur rejouée contre la
+          // collision — pour qu'ils GLISSENT entre deux paquets 2 Hz au lieu de
+          // sauter. L'hôte garde la position simulée brute.
+          const vp = isHost ? vv : smoothNpc("visitor:" + vv.rid, vv.x, vv.y, dt, true, !!vv.moving, (cx, cy) => canStand(w, cx, cy));
+          const vx = vp.x, vy = vp.y;
           const ro = C.VISITOR_ROSTER[vv.rid] || C.VISITOR_ROSTER[0];
           draws.push({ y: (vy + 1) * T, fn: () => drawCharacter({ id: "visitor" + vv.rid, name: ro.name, x: vx, y: vy, dir: vv.dir || 0, moving: !!vv.moving, animT: vv.animT || 0, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap }, false) });
         }
@@ -5535,7 +5604,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const moving = (dx || dy) && actAnimRef.current <= 0;
       if (moving) {
         const len = Math.hypot(dx, dy); dx /= len; dy /= len;
-        const sp = C.PLAYER_SPEED * C.TOWN_SPEED_MULT * dt * (performance.now() < speedBuffUntilRef.current ? C.CANDY_SPEED_MUL : 1);
+        // Zip 250 (demande Guillaume : "mêmes déplacements qu'à la ferme, on
+        // ne fait que marcher en ville") : on retire l'ancien bonus de vitesse
+        // ville (TOWN_SPEED_MULT) pour caler la marche EXACTEMENT sur la ferme
+        // (PLAYER_SPEED, même bonus bonbon). Le cheval reste absent en ville.
+        const sp = C.PLAYER_SPEED * dt * (performance.now() < speedBuffUntilRef.current ? C.CANDY_SPEED_MUL : 1);
         const nx = m.x + dx * sp, ny = m.y + dy * sp;
         if (canStandTown(tw, nx, m.y)) m.x = nx;
         if (canStandTown(tw, m.x, ny)) m.y = ny;
@@ -5621,10 +5694,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const styleMap = facadeStylesRef.current || {};
         const styleIdx = (hsn.ownerId && typeof styleMap[hsn.ownerId] === "number")
           ? styleMap[hsn.ownerId] : hi % C.TOWN_HOUSE_STYLES;
-        const img = (sprites.townHouses && sprites.townHouses[styleIdx % C.TOWN_HOUSE_STYLES]) || sprites.houses[hi % sprites.houses.length];
+        // Zip 250: fallback d'image blindé (jamais `undefined` passé à
+        // drawImage) — voir aussi le try/catch par-draw plus bas.
+        const img = (sprites.townHouses && sprites.townHouses[styleIdx % C.TOWN_HOUSE_STYLES]) || (sprites.houses && sprites.houses[hi % sprites.houses.length]) || null;
         const bx = hsn.x * T, by = (hsn.y + C.TOWN_HOUSE_H) * T;
         draws.push({ y: by, fn: () => {
-          ctx.drawImage(img, bx, by - 96);
+          if (img) ctx.drawImage(img, bx, by - 96);
           const label = hsn.ownerName || L.townSaleSign;
           ctx.font = "bold 8px monospace"; ctx.textAlign = "center";
           const tx2 = bx + T * C.TOWN_HOUSE_W / 2, ty2 = by - 96 + 12;
@@ -5652,7 +5727,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (!m.sleeping) draws.push({ y: (m.y + 0.9) * T, fn: () => drawMyPets(m, dt) });
       draws.push({ y: (m.y + 1) * T, fn: () => drawSelf(m) });
       draws.sort((a, b) => a.y - b.y);
-      for (const d of draws) d.fn();
+      // Zip 250 (bug "les maisons disparaissent à deux") : la boucle exécutait
+      // les draws triés d'un bloc — si UN seul draw levait une exception (ex.
+      // un joueur distant fraîchement arrivé, une image manquante), TOUS les
+      // draws suivants (dont des maisons plus bas à l'écran) n'étaient plus
+      // dessinés. On isole chaque draw : une frame ne peut plus être amputée.
+      for (const d of draws) { try { d.fn(); } catch (e) { console.error("[FERME] town draw ignoré", e); } }
       // Prompts: E at the sign to ride home; near a house door, name it.
       let tpk = null;
       if (nearTile(C.TOWN_STATION_SIGN)) tpk = "trainBack";

@@ -1025,6 +1025,15 @@ export const VISITOR_WAIT_MAX_MS = 45 * 60 * 1000;     // ceiling: even "prep" o
 export const VISITOR_WANDER_AFTER_MS = 30 * 60 * 1000; // after 30 real minutes waiting, they stroll around
 export const VISITOR_EASY_STOCK_BIAS = 0.65;      // chance a buy order targets something already in stock
 export const VISITOR_GIFT_CHANCE = 0.45;          // chance a "prep" order pays a GIFT on top of the gold
+// Zip 250 (demande Guillaume) : fin des "promesses en l'air". Pour un cadeau
+// qui va dans le SAC (graine / objet utile / animal), 8/10 des visiteurs le
+// remettent DIRECTEMENT au moment du deal ; les 2/10 restants repartent en
+// promettant de "l'envoyer", et le cadeau est déposé dans le sac du joueur
+// concerné 3 à 5 min APRÈS le départ du visiteur (voir promisedGifts). Les
+// décorations gardent leur mécanique propre (non concernées par ce partage).
+export const VISITOR_GIFT_DIRECT_CHANCE = 0.8;         // 8/10 : cadeau remis sur-le-champ
+export const VISITOR_GIFT_DELAY_MIN_MS = 3 * 60 * 1000; // 2/10 : livraison différée, borne basse
+export const VISITOR_GIFT_DELAY_MAX_MS = 5 * 60 * 1000; // ...borne haute (après le départ)
 // Unique gift catalogues (never purchasable). Decorations and pets cannot be
 // granted yet (personal houses / pet system are still deferred): they queue
 // in station.pendingGifts (persisted, see migrateStation) until those ship.

@@ -57,6 +57,8 @@ export const FERME_STR = {
     visitorRewardGift: (g) => `En plus de l'or, ${g} si l'affaire est conclue !`,
     visitorGiftGranted: (n, g) => `🎁 ${n} laisse un cadeau : ${g} !`,
     visitorGiftQueued: (n, g) => `🎁 ${n} promet un cadeau : ${g}. Il sera livré dès que possible !`,
+    visitorGiftPromised: (n, g) => `🎁 ${n} promet de t'envoyer un cadeau : ${g}. Il arrivera dans quelques minutes !`, // zip 250
+    visitorGiftDelivered: (n, g) => `🎁 Le cadeau promis par ${n} vient d'arriver dans ton sac : ${g} !`, // zip 250
     giftSeed: (s) => `des graines uniques (${s})`,
     giftDecor: (d) => `une décoration unique (${d})`,
     giftPet: (pt) => `un animal de compagnie (${pt})`,
@@ -277,14 +279,14 @@ export const FERME_STR = {
     shopConsumablesHeader: "🎒 Consommables & soins",
     shopStaffHeader: "🧑‍🌾 Employés",
     // Maison à niveaux (validation Guillaume 2026-07)
-    houseRowTitle: (lvl) => `🏛️ Mairie (niveau ${lvl})`, // 2026-07 : la maison devient la mairie du village
-    houseRowSub: "Améliore la mairie de la ferme (nouveau visuel à chaque niveau). Bois/pierre prélevés sur TON inventaire, or sur la caisse commune.",
+    houseRowTitle: (lvl) => `🏪 FARM MARKET STORE (niveau ${lvl})`, // zip 250 : renommage de la maison centrale (demande Guillaume)
+    houseRowSub: "Améliore le FARM MARKET STORE de la ferme (nouveau visuel à chaque niveau). Bois/pierre prélevés sur TON inventaire, or sur la caisse commune.",
     houseRowCost: (pal) => `Passer au niveau ${pal.level} : ${pal.cost.money} or + ${pal.cost.wood} bois + ${pal.cost.stone} pierre. Travaux : ${Math.round(pal.durationMs / 3600000)} h`,
     houseRowMax: "Niveau maximum atteint !",
     houseUpgrading: (mn) => `🔨 Travaux en cours... fin dans ~${mn} min`,
     houseUpgradeBtn: "Lancer les travaux",
-    houseWorksStarted: (name, lvl) => `${name} a lancé les travaux de la mairie (vers le niveau ${lvl}) !`,
-    houseUpgraded: (lvl) => `🎉 La mairie est passée au niveau ${lvl} !`,
+    houseWorksStarted: (name, lvl) => `${name} a lancé les travaux du FARM MARKET STORE (vers le niveau ${lvl}) !`,
+    houseUpgraded: (lvl) => `🎉 Le FARM MARKET STORE est passé au niveau ${lvl} !`,
     animalRowTitle: (name, cost) => `${name} : ${cost} or`,
     animalRowSub: (prod, sell, hours) => `Produit toutes les ${hours} h : ${prod} (se vend ${sell} or)`,
     penFull: "L'enclos est plein !",
@@ -643,6 +645,8 @@ export const FERME_STR = {
     visitorRewardGift: (g) => `On top of the gold, ${g} if the deal is done!`,
     visitorGiftGranted: (n, g) => `🎁 ${n} leaves a gift: ${g}!`,
     visitorGiftQueued: (n, g) => `🎁 ${n} promises a gift: ${g}. It will be delivered as soon as possible!`,
+    visitorGiftPromised: (n, g) => `🎁 ${n} promises to send you a gift: ${g}. It will arrive in a few minutes!`, // zip 250
+    visitorGiftDelivered: (n, g) => `🎁 The gift promised by ${n} just landed in your bag: ${g}!`, // zip 250
     giftSeed: (s) => `unique seeds (${s})`,
     giftDecor: (d) => `a unique decoration (${d})`,
     giftPet: (pt) => `a pet (${pt})`,
@@ -851,14 +855,14 @@ export const FERME_STR = {
     shopConsumablesHeader: "🎒 Consumables & care",
     shopStaffHeader: "🧑‍🌾 Employees",
     // House levels (Guillaume's validation 2026-07)
-    houseRowTitle: (lvl) => `🏛️ Townhall (level ${lvl})`, // 2026-07: the house becomes the village townhall
-    houseRowSub: "Upgrades the farm townhall (new look at each level). Wood/stone taken from YOUR inventory, gold from the shared pot.",
+    houseRowTitle: (lvl) => `🏪 FARM MARKET STORE (level ${lvl})`, // zip 250: central house renamed (Guillaume)
+    houseRowSub: "Upgrades the farm FARM MARKET STORE (new look at each level). Wood/stone taken from YOUR inventory, gold from the shared pot.",
     houseRowCost: (pal) => `Reach level ${pal.level}: ${pal.cost.money} gold + ${pal.cost.wood} wood + ${pal.cost.stone} stone — works: ${Math.round(pal.durationMs / 3600000)} h`,
     houseRowMax: "Maximum level reached!",
     houseUpgrading: (mn) => `🔨 Works in progress — done in ~${mn} min`,
     houseUpgradeBtn: "Start the works",
-    houseWorksStarted: (name, lvl) => `${name} started the townhall works (towards level ${lvl})!`,
-    houseUpgraded: (lvl) => `🎉 The townhall reached level ${lvl}!`,
+    houseWorksStarted: (name, lvl) => `${name} started the FARM MARKET STORE works (towards level ${lvl})!`,
+    houseUpgraded: (lvl) => `🎉 The FARM MARKET STORE reached level ${lvl}!`,
     animalRowTitle: (name, cost) => `${name}: ${cost} gold`,
     animalRowSub: (prod, sell, hours) => `Produces every ${hours} h: ${prod} (sells for ${sell} gold)`,
     penFull: "The pen is full!",
