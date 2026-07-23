@@ -4032,6 +4032,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const x0 = Math.max(0, Math.floor(cam.x / T)), x1 = Math.min(w.w - 1, Math.ceil((cam.x + cam.vw) / T));
       const y0 = Math.max(0, Math.floor(cam.y / T)), y1 = Math.min(w.h - 1, Math.ceil((cam.y + cam.vh) / T));
       const waterFrame = Math.floor(now / 600) % 2;
+      const draws = [];  // FIX 240: déclaré AVANT la boucle de tuiles (le rendu des buissons à baies y pousse via draws.push — cf. modèle evil/town). Corrige le ReferenceError TDZ qui noircissait la moitié basse de la ferme.
 
       for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
         const i = idxOf(x, y), g = w.ground[i];
@@ -4133,7 +4134,6 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const tt = targetTile();
       if (inMap(tt.x, tt.y)) { ctx.strokeStyle = "rgba(255,255,255,0.7)"; ctx.lineWidth = 1; ctx.strokeRect(tt.x * T + 0.5, tt.y * T + 0.5, T - 1, T - 1); }
 
-      const draws = [];
       draws.push({ y: (C.HOUSE.y + C.HOUSE.h) * T, fn: () => {
         // Maison à niveaux (2026-07) : sprite selon le niveau ; pendant les
         // travaux, marteau + barre de progression au-dessus du toit.
