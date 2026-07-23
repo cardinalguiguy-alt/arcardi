@@ -4128,7 +4128,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           ctx.drawImage(fk === "corner" ? sprites.fenceCorner : fk === "v" ? sprites.fenceV : fk === "post" ? sprites.fencePost : sprites.fence, x * T, y * T);
         }
         else if (o === C.O_WALL) ctx.drawImage(sprites.wall, x * T, y * T);
-        else if (o === C.O_BERRY_BUSH) draws.push({ y: (y + 1) * T, fn: () => ctx.drawImage(sprites.berryBush, x * T, y * T - 2) });
+        // O_BERRY_BUSH is drawn in the second tile pass (with the draws[] array, like trees)
       }
 
       const tt = targetTile();
@@ -4220,7 +4220,29 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       for (let y = y0 - 1; y <= Math.min(w.h - 1, y1 + 2); y++) for (let x = x0 - 1; x <= Math.min(w.w - 1, x1 + 1); x++) {
         if (!inMap(x, y)) continue;
         const o = w.objects[idxOf(x, y)];
-        if (o === C.O_TREE || o === C.O_TREE2) { const _se = E.seasonOf().key; const img = o === C.O_TREE ? (_se === "autumn" ? sprites.oakAutumn : _se === "spring" ? sprites.oakSpring : sprites.oak) : (_se === "autumn" ? sprites.pineAutumn : _se === "spring" ? sprites.pineSpring : sprites.pine); draws.push({ y: (y + 1) * T, fn: () => ctx.drawImage(img, x * T - 8, (y + 1) * T - 48) }); }
+        if (o === C.O_TREE || o === C.O_TREE2) {
+          // Zip 235 seasonal foliage — guard: if variant sprite is missing
+          // (e.g. sprites not yet built), fall back to base oak/pine to
+          // prevent ctx.drawImage(undefined) corrupting the canvas context.
+          const _se = E.seasonOf().key;
+          const _oak = (_se === "autumn" && sprites.oakAutumn) ? sprites.oakAutumn
+                     : (_se === "spring" && sprites.oakSpring) ? sprites.oakSpring
+                     : sprites.oak;
+          const _pine = (_se === "autumn" && sprites.pineAutumn) ? sprites.pineAutumn
+                      : (_se === "spring" && sprites.pineSpring) ? sprites.pineSpring
+                      : sprites.pine;
+          const img = o === C.O_TREE ? _oak : _pine;
+          draws.push({ y: (y + 1) * T, fn: () => ctx.drawImage(img, x * T - 8, (y + 1) * T - 48) });
+        }
+        else if (o === C.O_BERRY_BUSH) {
+          // Berry bush (spring, zip 235): drawn in this second pass so it
+          // depth-sorts correctly with trees, players, etc. Guarded against
+          // undefined sprite.
+          draws.push({ y: (y + 1) * T, fn: () => {
+            if (sprites.berryBush) ctx.drawImage(sprites.berryBush, x * T, y * T - 2);
+            else { ctx.fillStyle = "#2d6a2a"; ctx.fillRect(x * T + 2, y * T + 4, T - 4, T - 4); }
+          } });
+        }
         else if (o === C.O_WELL) draws.push({ y: (y + 1) * T, fn: () => ctx.drawImage(sprites.well, x * T - 4, (y + 1) * T - 30) });
         else if (o === C.O_LAMP) {
           const readyAt = w.objHp.get(idxOf(x, y));
@@ -4447,9 +4469,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           const frame = wf.state === "stop" ? 0 : Math.floor((wf.animT || 0) % 4);
           // Zip 235 (Guillaume: "when it's winter, ... snow leopards replace
           // wolves"): same simulated wolves, different pelt. Purely visual;
-          // AI/collision is unchanged.
+          // AI/collision is unchanged. Guarded: fall back to wolf if snow
+          // leopard sprite not ready.
           const isWinter = E.seasonOf().key === "winter";
-          const img = (isWinter && sprites.snowLeopard) ? sprites.snowLeopard[frame] : sprites.wolf[frame];
+          const img = (isWinter && sprites.snowLeopard && sprites.snowLeopard[frame])
+            ? sprites.snowLeopard[frame]
+            : sprites.wolf[frame];
           const px = Math.round(wf.x * T - 14), py = Math.round(wf.y * T - 9);
           if (wf.dir === 2) { ctx.save(); ctx.translate(px + 30, py); ctx.scale(-1, 1); ctx.drawImage(img, 0, 0); ctx.restore(); }
           else ctx.drawImage(img, px, py);
@@ -5155,13 +5180,28 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const draws = [];
       for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
         const i = y * tw.w + x, g = tw.ground[i];
-        // Zip 235: use the real farm sprite tiles for a match with the farm
-        // look (grass/path/stone), keeping the fountain water for the pool.
-        if (g === C.G_GRASS) ctx.drawImage(sprites.grass[(x * 37 + y * 17) % sprites.grass.length], x * T, y * T);
-        else if (g === C.G_PATH) ctx.drawImage(sprites.path, x * T, y * T);
-        else if (g === C.G_PATH_STONE) { ctx.fillStyle = ((x + y) % 2 === 0) ? "#a9a9b2" : "#9f9fa8"; ctx.fillRect(x * T, y * T, T, T); }
-        else if (g === C.G_WATER) { ctx.fillStyle = "#3f7fd0"; ctx.fillRect(x * T, y * T, T, T); }
-        else ctx.drawImage(sprites.grass[0], x * T, y * T);
+        // Town ground: use farm sprite tiles where available, with safe fillRect
+        // fallbacks. IMPORTANT: always guard ctx.drawImage with a null check —
+        // drawImage(undefined) silently corrupts the canvas context state and
+        // causes black squares to cover everything downstream that frame.
+        if (g === C.G_GRASS) {
+          const gTile = sprites.grass && sprites.grass[(x * 37 + y * 17) % sprites.grass.length];
+          if (gTile) ctx.drawImage(gTile, x * T, y * T);
+          else { ctx.fillStyle = ((x + y) % 2 === 0) ? "#4c8f40" : "#529745"; ctx.fillRect(x * T, y * T, T, T); }
+        } else if (g === C.G_PATH) {
+          if (sprites.path) ctx.drawImage(sprites.path, x * T, y * T);
+          else { ctx.fillStyle = "#c8a163"; ctx.fillRect(x * T, y * T, T, T); }
+        } else if (g === C.G_PATH_STONE) {
+          ctx.fillStyle = ((x + y) % 2 === 0) ? "#a9a9b2" : "#9f9fa8";
+          ctx.fillRect(x * T, y * T, T, T);
+        } else if (g === C.G_WATER) {
+          ctx.fillStyle = "#3f7fd0";
+          ctx.fillRect(x * T, y * T, T, T);
+        } else {
+          // Unknown ground type — safe fillRect, never drawImage with unknown source.
+          ctx.fillStyle = "#4c8f40";
+          ctx.fillRect(x * T, y * T, T, T);
+        }
         // Rails on the west edge (same look as the farm side: dark bed,
         // lighter ties, two steel rails).
         if (x >= C.TOWN_RAIL_X && x <= C.TOWN_RAIL_X + 1) {
@@ -5183,8 +5223,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           ctx.fillRect(x * T, y * T, T, T);
         }
         const o = tw.objects[i];
-        if (o === C.O_TREE || o === C.O_TREE2) { const _se = E.seasonOf().key; const img = o === C.O_TREE ? (_se === "autumn" ? sprites.oakAutumn : _se === "spring" ? sprites.oakSpring : sprites.oak) : (_se === "autumn" ? sprites.pineAutumn : _se === "spring" ? sprites.pineSpring : sprites.pine); draws.push({ y: (y + 1) * T, fn: () => ctx.drawImage(img, x * T - 8, (y + 1) * T - 48) }); }
-      }
+        if (o === C.O_TREE || o === C.O_TREE2) {
+          // Zip 235 seasonal foliage — guard: if variant sprite is missing
+          // (e.g. sprites not yet built), fall back to base oak/pine to
+          // prevent ctx.drawImage(undefined) corrupting the canvas context.
+          const _se = E.seasonOf().key;
+          const _oak = (_se === "autumn" && sprites.oakAutumn) ? sprites.oakAutumn
+                     : (_se === "spring" && sprites.oakSpring) ? sprites.oakSpring
+                     : sprites.oak;
+          const _pine = (_se === "autumn" && sprites.pineAutumn) ? sprites.pineAutumn
+                      : (_se === "spring" && sprites.pineSpring) ? sprites.pineSpring
+                      : sprites.pine;
+          const img = o === C.O_TREE ? _oak : _pine;
+          draws.push({ y: (y + 1) * T, fn: () => ctx.drawImage(img, x * T - 8, (y + 1) * T - 48) });
+        }
+      } // end for-loop over town tiles
       // Fountain rim + spray, on top of the pool tiles.
       {
         const fx0 = C.TOWN_FOUNTAIN.x * T, fy0 = C.TOWN_FOUNTAIN.y * T;
@@ -5201,11 +5254,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         }
       }
       // Zip 235: townhall sprite anchored on TOWN_HALL (128x128, anchored
-      // by its bottom edge like the houses).
+      // by its bottom edge like the houses). Guarded: if sprite is not ready
+      // yet, fall back to a simple filled rect so the canvas state stays clean.
       {
         const th = C.TOWN_HALL, thBy = (th.y + th.h) * T;
         draws.push({ y: thBy, fn: () => {
-          ctx.drawImage(sprites.townhall, th.x * T + (th.w * T - 128) / 2, thBy - 128);
+          if (sprites.townhall) {
+            ctx.drawImage(sprites.townhall, th.x * T + (th.w * T - 128) / 2, thBy - 128);
+          } else {
+            ctx.fillStyle = "#c8b070"; ctx.fillRect(th.x * T, thBy - 80, th.w * T, 80);
+          }
         } });
       }
       // Houses: one per known farmer (deterministic order), leftovers show a
@@ -5218,10 +5276,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const styleMap = facadeStylesRef.current || {};
         const styleIdx = (hsn.ownerId && typeof styleMap[hsn.ownerId] === "number")
           ? styleMap[hsn.ownerId] : hi % C.TOWN_HOUSE_STYLES;
-        const img = (sprites.townHouses && sprites.townHouses[styleIdx % C.TOWN_HOUSE_STYLES]) || sprites.houses[hi % sprites.houses.length];
+        const img = (sprites.townHouses && sprites.townHouses[styleIdx % C.TOWN_HOUSE_STYLES])
+          || (sprites.houses && sprites.houses[hi % sprites.houses.length])
+          || null;
         const bx = hsn.x * T, by = (hsn.y + C.TOWN_HOUSE_H) * T;
         draws.push({ y: by, fn: () => {
-          ctx.drawImage(img, bx, by - 96);
+          if (img) {
+            ctx.drawImage(img, bx, by - 96);
+          } else {
+            ctx.fillStyle = "#c8a878"; ctx.fillRect(bx, by - 64, C.TOWN_HOUSE_W * T, 64);
+          }
           const label = hsn.ownerName || L.townSaleSign;
           ctx.font = "bold 8px monospace"; ctx.textAlign = "center";
           const tx2 = bx + T * C.TOWN_HOUSE_W / 2, ty2 = by - 96 + 12;
