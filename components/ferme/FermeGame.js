@@ -988,7 +988,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     farmersRef.current[id] = f;
     dirtyRef.current = true;
     // Renvoie l'état privé de départ au nouveau venu.
-    channelRef.current?.send({ type: "broadcast", event: "apply", payload: { farmer: { id, energy: f.energy, tools: f.tools, inv: f.inv } } });
+    hostSend({ type: "broadcast", event: "apply", payload: { farmer: { id, energy: f.energy, tools: f.tools, inv: f.inv } } });
     return f;
   }
   // Sauvegarde DURABLE de la ferme dans la table ferme_saves (indexée par le
@@ -1071,11 +1071,24 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // remplit jamais l'inventaire, quêtes qui ne se cochent jamais). Même si
   // normalizeFarmer() corrige la cause connue, ce filet évite qu'un futur
   // changement de schéma reproduise le même échec totalement silencieux.
+  // FIX 246b : avec self:false (zip 243), l'hôte ne reçoit PAS l'écho de ses
+  // propres broadcasts. Ses actions (achat, vente, ramassage d'œufs...) étaient
+  // donc bien APPLIQUÉES en autorité (or/inventaire réels modifiés) mais ne
+  // s'AFFICHAIENT jamais chez lui : setHud/setMyInv/pushToast/spawnFx se font
+  // dans applyDeltas, uniquement à la RÉCEPTION d'un apply. L'hôte s'applique
+  // donc désormais son propre diff localement (comme le faisait l'écho self:true
+  // d'avant 243). Les entités qu'il simule (evilMonsters/station/visitorSim)
+  // sont protégées par les gardes !isHost dans applyDeltas -> pas de double
+  // application nuisible ; le reste (tiles/crops/animals...) est idempotent.
+  function hostSend(msg) {
+    channelRef.current?.send(msg);
+    if (isHost && msg && msg.event === "apply") applyDeltas(msg.payload);
+  }
   function hostHandleReq(req) {
     try { hostHandleReqUnsafe(req); }
     catch (e) {
       console.error("[FERME] hostHandleReq: échec de traitement, action ignorée.", req, e);
-      channelRef.current?.send({ type: "broadcast", event: "apply", payload: { toast: { id: req.id, key: "actionFailed" } } });
+      hostSend({ type: "broadcast", event: "apply", payload: { toast: { id: req.id, key: "actionFailed" } } });
     }
   }
   function hostHandleReqUnsafe(req) {
@@ -1129,7 +1142,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           if (target.injuredUntil > reduced) target.injuredUntil = reduced;
         }
         dirtyRef.current = true;
-        channelRef.current?.send({
+        hostSend({
           type: "broadcast", event: "apply",
           payload: {
             farmer: { id: target.id, energy: target.energy, tools: target.tools, inv: target.inv, injuredUntil: target.injuredUntil },
@@ -1184,7 +1197,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       f.injuredUntil = until;
       f.injuryKind = "evil"; // décision Guillaume 2026-07 : soignable par 3 pansements (voir req "heal")
       dirtyRef.current = true;
-      channelRef.current?.send({
+      hostSend({
         type: "broadcast", event: "apply",
         payload: { injured: { id: f.id, until: f.injuredUntil } },
       });
@@ -1200,7 +1213,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       f.injuredUntil = untilD;
       f.injuryKind = "drown";
       dirtyRef.current = true;
-      channelRef.current?.send({
+      hostSend({
         type: "broadcast", event: "apply",
         payload: { injured: { id: f.id, until: f.injuredUntil } },
       });
@@ -1233,7 +1246,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             if (tId) { moB.biteGrace = moB.biteGrace || {}; moB.biteGrace[tId] = now + C.EVIL_MONSTER_BITE_GRACE_MS; }
           }
         }
-        channelRef.current?.send({ type: "broadcast", event: "apply", payload: { evilMonsters: s.evilMonsters } });
+        hostSend({ type: "broadcast", event: "apply", payload: { evilMonsters: s.evilMonsters } });
       }
     } else if (req.kind === "useSalve") {
       // Pommade de protection (chantier 2026-07, demande Guillaume) : même
@@ -1802,7 +1815,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (out.farmer) out.farmer.quests = f.quests;
 
     if (out.tiles.length || out.state || out.horses || out.animals || out.wellBuilt || out.gems || out.mills || out.house || out.flour !== undefined) dirtyRef.current = true;
-    channelRef.current?.send({ type: "broadcast", event: "apply", payload: { ...out, hostNow: Date.now() } });
+    hostSend({ type: "broadcast", event: "apply", payload: { ...out, hostNow: Date.now() } });
   }
   // -------- 2026-07 station update: host-side station module --------
   function rosterOf(rid) { return C.VISITOR_ROSTER[rid] || C.VISITOR_ROSTER[0]; }
@@ -1861,7 +1874,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function hostHandleStationReq(req, f) {
     const w = worldRef.current, s = sharedRef.current;
     if (!s.station) s.station = E.newStationState();
-    const ch = channelRef.current;
+    const ch = { send: (m) => hostSend(m) }; // FIX 246b : ch relaie ET applique en local chez l'hôte
     const v = E.getVisitor(s, req.rid); // zip 233: requests target a specific visitor by roster id
     const toastTo = (key) => ch?.send({ type: "broadcast", event: "apply", payload: { toast: { id: req.id, key } } });
     if (req.kind === "adsSet") {
