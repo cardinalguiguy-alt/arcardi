@@ -336,7 +336,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const bagOpenRef = useRef(false); // zip 236
   const [myPets, setMyPets] = useState([]); // zip 236: my individual pets, mirror of me.pets
   const myPetsRef = useRef([]);     // zip 236: draw-loop mirror of myPets
-  const petFollowRef = useRef([]);  // zip 236: smoothed follow positions for my pets
+  const petFollowRef = useRef(new Map());  // zip 247: smoothed follow positions, per-player-id (self + remotes)
   const cauldronMenuOpenRef = useRef(false);
   const brewSecsRef = useRef(0);       // miroir de brewSecs (évite un setState par frame dans la boucle de rendu)
   const cauldronPosRef = useRef(null); // cache de la position du chaudron (correctif audit 2026-07 : évite un scan complet de la carte par frame ; invalidé si l'objet n'y est plus) // miroir synchrone de cauldronMenuOpen, même rôle que shopOpenRef/binOpenRef (bloque déplacement/action pendant que le menu est ouvert)
@@ -416,7 +416,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   useEffect(() => { shopOpenRef.current = shopOpen; }, [shopOpen]);
   useEffect(() => { cauldronMenuOpenRef.current = cauldronMenuOpen; }, [cauldronMenuOpen]);
   useEffect(() => { binOpenRef.current = binOpen; }, [binOpen]);
-  useEffect(() => { myPetsRef.current = myPets; petFollowRef.current = petFollowRef.current.slice(0, myPets.length); }, [myPets]);
+  useEffect(() => { myPetsRef.current = myPets; }, [myPets]);
   useEffect(() => { bagOpenRef.current = bagOpen; }, [bagOpen]);
   useEffect(() => { slotRef.current = slot; }, [slot]);
   useEffect(() => { toolKindRef.current = toolKind; }, [toolKind]);
@@ -864,6 +864,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (payload.id === me.id) return;
       const r = playersRef.current.get(payload.id);
       playersRef.current.delete(payload.id);
+      petFollowRef.current.delete(payload.id); // zip 247: libère l'état de suivi des pets du partant
       if (r) addChat("👋", L.chatLeave(r.name));
       setHud(h => ({ ...h, players: playersRef.current.size + 1 }));
       // Un animal porté par un joueur qui quitte est relâché sur place, pour
@@ -883,12 +884,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const _now = performance.now();
       const _prevX = r.px0 !== undefined ? r.px0 : payload.x, _prevY = r.py0 !== undefined ? r.py0 : payload.y;
       const _dtr = r.tRecv !== undefined ? Math.max(0.03, (_now - r.tRecv) / 1000) : 0;
-      if (payload.moving && _dtr > 0) { r.vx = (payload.x - _prevX) / _dtr; r.vy = (payload.y - _prevY) / _dtr; const _sp = Math.hypot(r.vx, r.vy), _mx = C.PLAYER_SPEED * 1.6; if (_sp > _mx) { r.vx *= _mx / _sp; r.vy *= _mx / _sp; } }
+      if (payload.moving && _dtr > 0) { r.vx = (payload.x - _prevX) / _dtr; r.vy = (payload.y - _prevY) / _dtr; const _sp = Math.hypot(r.vx, r.vy), _mx = C.PLAYER_SPEED * C.POS_EXTRAP_SPEED_CAP; if (_sp > _mx) { r.vx *= _mx / _sp; r.vy *= _mx / _sp; } }
       else { r.vx = 0; r.vy = 0; }
       r.px0 = payload.x; r.py0 = payload.y; r.tRecv = _now;
       r.tx = payload.x; r.ty = payload.y; r.dir = payload.dir; r.moving = payload.moving; r.tool = payload.tool;
       r.gender = payload.gender; r.outfit = payload.outfit; r.name = payload.name; r.sleeping = !!payload.sleeping;
       r.torch = !!payload.torch; r.zone = payload.zone || "farm";
+      if (Array.isArray(payload.pets)) r.pets = payload.pets; // zip 247: pets are now broadcast so everyone sees everyone's pets
       // Monde maléfique multijoueur (2026-07) : cible d'interpolation sur la
       // carte maléfique + drapeau d'immunité (lu par la simulation hôte).
       if (r.zone === "evil" && payload.ex !== undefined) {
@@ -941,7 +943,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function ensureRemote(p) {
     if (p.id === me.id) return;
     if (!playersRef.current.has(p.id)) {
-      playersRef.current.set(p.id, { id: p.id, name: p.name, gender: p.gender || "m", outfit: p.outfit || 0, x: p.x ?? C.SPAWN.x, y: p.y ?? C.SPAWN.y, tx: p.x ?? C.SPAWN.x, ty: p.y ?? C.SPAWN.y, dir: p.dir || 0, moving: false, tool: 0, animT: 0, sleeping: false, torch: false, hatUntil: (farmersRef.current[p.id] && farmersRef.current[p.id].hatUntil) || 0, zone: "farm" });
+      playersRef.current.set(p.id, { id: p.id, name: p.name, gender: p.gender || "m", outfit: p.outfit || 0, x: p.x ?? C.SPAWN.x, y: p.y ?? C.SPAWN.y, tx: p.x ?? C.SPAWN.x, ty: p.y ?? C.SPAWN.y, dir: p.dir || 0, moving: false, tool: 0, animT: 0, sleeping: false, torch: false, hatUntil: (farmersRef.current[p.id] && farmersRef.current[p.id].hatUntil) || 0, pets: (p.pets) || (farmersRef.current[p.id] && farmersRef.current[p.id].pets) || [], zone: "farm" });
     }
   }
 
@@ -1394,26 +1396,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           x: C.GREG_ANCHOR.x, y: C.GREG_ANCHOR.y, tx: C.GREG_ANCHOR.x, ty: C.GREG_ANCHOR.y, dir: 0, animT: 0, moving: false,
           phase: "roam", roamAnchor: { x: C.GREG_ANCHOR.x, y: C.GREG_ANCHOR.y }, roamTarget: null, nextRoamAt: 0,
           taskQueue: [], lastWaterCheckAt: now,
-          wellbeing: C.GREG_WELLBEING_START, lastChatAt: 0, // FIX 246 : bien-être initial
         };
         out.state = shareState(); out.greg = s.greg;
         out.chat = { from: "🧑‍🌾", msg: lang === "en" ? "Greg is hired for 2 days!" : "Greg est engagé pour 2 jours !" };
       } else out.toast = { id: f.id, key: "noGold" };
-    } else if (req.kind === "gregChat") {
-      // FIX 246 (décision Guillaume : parler à Greg pour augmenter son
-      // bien-être). Causette de proximité (fiche Q) : remonte la jauge, avec
-      // un cooldown anti-spam. La ligne de chat est diffusée à toute la room.
-      const g = s.greg;
-      if (!g || g.expiresAt <= Date.now()) out.toast = { id: f.id, key: "gregNotHired" };
-      else {
-        const now2 = Date.now();
-        if (!g.lastChatAt || now2 - g.lastChatAt >= C.GREG_CHAT_COOLDOWN_MS) {
-          g.lastChatAt = now2;
-          g.wellbeing = Math.min(C.GREG_WELLBEING_MAX, (g.wellbeing ?? C.GREG_WELLBEING_START) + C.GREG_CHAT_WELLBEING_GAIN);
-        }
-        out.greg = g;
-        out.chat = { from: "🧑\u200d🌾", msg: L.gregChatLine(f.name) };
-      }
     } else if (req.kind === "gregOrder") {
       // Ordre donné à Greg (chantier 2026-07) : "labourer N cases, planter,
       // puis arroser" pour une culture donnée. Payé d'avance au prix des
@@ -2198,6 +2184,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // p.crops ci-dessus, mais sur w.mills.
     if (w && p.mills) for (const [i, wheat, nextAt] of p.mills) w.mills.set(i, { wheat, nextAt });
     if (p.state) { const s = sharedRef.current; s.money = p.state.money; s.day = p.state.day; s.dayStartAt = p.state.dayStartAt; s.totalEarned = p.state.totalEarned; setHud(h => ({ ...h, money: s.money, day: s.day })); }
+    if (p.farmer && p.farmer.id !== me.id && Array.isArray(p.farmer.pets)) {
+      const r = playersRef.current.get(p.farmer.id);
+      if (r) r.pets = p.farmer.pets; // zip 247: everyone sees everyone's pets, not just the owner
+    }
     if (p.farmer && p.farmer.id === me.id) {
       invRef.current = p.farmer.inv; toolsRef.current = p.farmer.tools; energyRef.current = p.farmer.energy;
       setMyInv(p.farmer.inv); setMyTools(p.farmer.tools); setMyEnergy(p.farmer.energy); if (p.farmer.quests) setMyQuests(p.farmer.quests);
@@ -2546,7 +2536,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // sur leur écran) — voir aussi le filtre zone!=="farm" au rendu (draws
     // ci-dessous), qui masque carrément son personnage pendant ce temps.
     const px = m.zone === "evil" ? m.farmX : m.x, py = m.zone === "evil" ? m.farmY : m.y;
-    const pub = { id: m.id, name: m.name, gender: m.gender, outfit: m.outfit, x: +px.toFixed(2), y: +py.toFixed(2), dir: m.dir, moving: m.zone === "evil" ? false : m.moving, tool: slotRef.current, sleeping: !!m.sleeping, torch: !!torchOnRef.current, zone: m.zone || "farm" };
+    const pub = { id: m.id, name: m.name, gender: m.gender, outfit: m.outfit, x: +px.toFixed(2), y: +py.toFixed(2), dir: m.dir, moving: m.zone === "evil" ? false : m.moving, tool: slotRef.current, sleeping: !!m.sleeping, torch: !!torchOnRef.current, zone: m.zone || "farm", pets: myPetsRef.current };
     // Monde maléfique MULTIJOUEUR (demande Guillaume 2026-07) : les
     // coordonnées RÉELLES sur la carte maléfique voyagent dans des champs
     // dédiés (ex/ey) — x/y restent figées sur la case du passage pour tout
@@ -3636,13 +3626,6 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const s = sharedRef.current, g = s.greg;
     if (!g) return;
     const now = Date.now();
-    // FIX 246 : bien-être de Greg (humeur + petit bonus, décision Guillaume).
-    // Décroît lentement avec le temps, remonte quand on lui parle (fiche Q, voir
-    // req "gregChat"). Au-dessus de HIGH -> léger bonus de vitesse et pauses
-    // plus courtes ; sous LOW -> léger malus. Diffusé avec l'objet greg.
-    if (g.wellbeing === undefined) g.wellbeing = C.GREG_WELLBEING_START;
-    g.wellbeing = Math.max(0, g.wellbeing - C.GREG_WELLBEING_DECAY_PER_MIN * (dt / 60));
-    const wbMult = g.wellbeing >= C.GREG_WELLBEING_HIGH ? C.GREG_SPEED_BONUS : (g.wellbeing <= C.GREG_WELLBEING_LOW ? C.GREG_SPEED_MALUS : 1);
     if (g.expiresAt <= now) {
       s.greg = null;
       channelRef.current?.send({ type: "broadcast", event: "apply", payload: { greg: null } });
@@ -3681,7 +3664,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (g.taskQueue && g.taskQueue.length > 0) {
       const t = g.taskQueue[0];
       const tx = E.xOf(t.i) + 0.5, ty = E.yOf(t.i) + 0.5;
-      g.tx = tx; g.ty = ty; speed = C.GREG_TASK_SPEED * wbMult; g.phase = "task"; g.sitting = false; // FIX 246 : plus rapide en mission
+      g.tx = tx; g.ty = ty; speed = C.GREG_TASK_SPEED; g.phase = "task"; g.sitting = false;
       const d = Math.hypot(tx - g.x, ty - g.y);
       if (d <= C.GREG_TASK_RANGE) {
         let ok = false, patch = null;
@@ -3717,19 +3700,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     } else {
       g.phase = "roam";
       if (!g.roamAnchor) g.roamAnchor = { x: C.GREG_ANCHOR.x, y: C.GREG_ANCHOR.y };
-      // FIX 246 (demande Guillaume) : au repos, Greg marche tranquillement
-      // autour de son ancre et, de temps à autre, s'assoit sur son tabouret un
-      // moment (Zzz) au lieu de repartir aussitôt. Bien-être haut = pauses
-      // assises plus courtes (il est en forme).
+      // Au repos, Greg marche tranquillement autour de son ancre et, de temps
+      // à autre, s'assoit sur son tabouret un moment (Zzz) au lieu de
+      // repartir aussitôt.
       if (g.sitUntil && now < g.sitUntil) {
         g.sitting = true; speed = 0; g.tx = g.x; g.ty = g.y;
       } else {
         if (g.sitting) { g.sitting = false; g.roamTarget = null; g.nextRoamAt = 0; }
-        speed = C.GREG_SPEED * 0.55 * wbMult;
+        speed = C.GREG_SPEED * 0.55;
         if (!g.roamTarget || Math.hypot(g.roamTarget.x - g.x, g.roamTarget.y - g.y) < 0.3 || now >= (g.nextRoamAt || 0)) {
           if (Math.random() < C.GREG_SIT_CHANCE) {
             const sitMs = C.GREG_SIT_MIN_MS + Math.random() * (C.GREG_SIT_MAX_MS - C.GREG_SIT_MIN_MS);
-            g.sitUntil = now + (g.wellbeing >= C.GREG_WELLBEING_HIGH ? sitMs * 0.6 : sitMs);
+            g.sitUntil = now + sitMs;
             g.sitting = true; speed = 0; g.tx = g.x; g.ty = g.y;
           } else {
             const a = Math.random() * Math.PI * 2, d = 1 + Math.random() * C.GREG_ROAM_RADIUS;
@@ -3786,6 +3768,81 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (gregAccumRef.current >= 0.5 && netCanBroadcast() && anyRemoteNear(g.x, g.y)) {
       gregAccumRef.current = 0;
       channelRef.current?.send({ type: "broadcast", event: "apply", payload: { greg: g } });
+    }
+  }
+  // Zip 247 (demande Guillaume : "when they move in, they start working on the
+  // farm, based on what they promised to contribute when they convinced us to
+  // let them move in"). Les résidents (visiteurs ayant emménagé après un vote,
+  // s.station.residents) ne se contentent plus de figurer devant leur maison :
+  // l'HÔTE leur fait produire une contribution concrète toutes les
+  // RESIDENT_WORK_MS, choisie d'après le `theme` de leur fiche de roster —
+  // c'est-à-dire d'après le `job` qu'ils ont promis pendant le vote
+  // (RESIDENT_TASK_BY_THEME, fermeConstants.js).
+  //  - "crops"  : arrose les cultures assoiffées (comme Greg, mais sans trajet)
+  //  - "wood"   : abat un arbre     -> gregStock.wood
+  //  - "stone"  : mine un rocher    -> gregStock.stone
+  //  - "fish"   : poisson           -> gregStock.fish
+  //  - "gold"   : revenu            -> s.money
+  // Aucun sprite ni canal réseau dédié : on réutilise les patchs
+  // tiles/crops/gregStock/state déjà gérés par applyDeltas côté invités.
+  // `nextWorkAt`/`announced` sont du bookkeeping HÔTE porté par l'objet
+  // resident (normalizeStation conserve les champs supplémentaires).
+  function updateResidents(dt) {
+    const w = worldRef.current; if (!w) return;
+    const s = sharedRef.current, st = s.station;
+    if (!st) return;
+    const residents = st.residents || [];
+    if (!residents.length) return;
+    const now = Date.now();
+    for (const res of residents) {
+      if (!res) continue;
+      const ro = C.VISITOR_ROSTER[res.rid];
+      if (!ro) continue;
+      // Premier passage : on planifie la première journée de travail sans rien
+      // produire (emménager prend un peu de temps). La borne haute protège
+      // d'une succession d'hôte : `nextWorkAt` vient de l'horloge de l'hôte
+      // PRÉCÉDENT et pourrait, en cas de décalage, être très loin dans le
+      // futur — le résident resterait alors bloqué à ne jamais travailler.
+      if (!res.nextWorkAt || res.nextWorkAt > now + C.RESIDENT_WORK_MS) { res.nextWorkAt = now + C.RESIDENT_WORK_MS; continue; }
+      if (now < res.nextWorkAt) continue;
+      res.nextWorkAt = now + C.RESIDENT_WORK_MS;
+      const task = C.RESIDENT_TASK_BY_THEME[ro.theme] || "gold";
+      const stock = s.gregStock || (s.gregStock = { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0) });
+      if (!Array.isArray(stock.fish)) stock.fish = C.FISH.map(() => 0);
+      const patch = {};
+      if (task === "crops") {
+        const done = [];
+        for (const i of E.findThirstyCrops(w, now, C.RESIDENT_WATER_BATCH)) {
+          if (E.gregWater(w, i, now)) done.push({ i, c: w.crops.get(i) });
+        }
+        if (done.length) patch.crops = done;
+      } else if (task === "wood" || task === "stone") {
+        const i = E.findResidentTile(w, C.GREG_ANCHOR, task === "stone" ? "rock" : "tree");
+        if (i >= 0) {
+          const r = task === "stone" ? E.gregMine(w, i) : E.gregChop(w, i);
+          recordTileOverride(i);
+          if (r.wood) stock.wood += r.wood;
+          if (r.stone) stock.stone += r.stone;
+          patch.tiles = [{ i, g: w.ground[i], o: w.objects[i], hp: w.objHp.get(i) }];
+          patch.gregStock = stock;
+        }
+      } else if (task === "fish") {
+        stock.fish[Math.floor(Math.random() * stock.fish.length)] += C.RESIDENT_FISH_PER_SHIFT;
+        patch.gregStock = stock;
+      } else {
+        s.money += C.RESIDENT_GOLD_PER_SHIFT;
+        s.totalEarned = (s.totalEarned || 0) + C.RESIDENT_GOLD_PER_SHIFT;
+        setHud(h => ({ ...h, money: s.money }));
+        patch.state = shareState();
+      }
+      // Annonce unique, à la toute première journée de travail : on rappelle
+      // la promesse faite pendant le vote (ro.job) pour que la contribution
+      // soit lisible. Les tours suivants restent silencieux (pas de spam).
+      if (!res.announced) { res.announced = true; stationChat(L.residentStarted(ro.name, ro.job), "\u{1F6E0}\uFE0F"); }
+      dirtyRef.current = true;
+      if (Object.keys(patch).length && netCanBroadcast()) {
+        channelRef.current?.send({ type: "broadcast", event: "apply", payload: patch });
+      }
     }
   }
   // Soan, l'employé pêcheur (chantier 2026-07, demande Guillaume). Simulation
@@ -4214,6 +4271,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (isHost) updateSharedEvilMonsters(dt); // créatures maléfiques partagées (2026-07)
       if (isHost) updateGreg(dt);
       if (isHost) updateVisitors(dt); // 2026-07 station update (zip 233: multi-visitor)
+      if (isHost) updateResidents(dt); // zip 247: moved-in visitors work the farm per their pledged job
       if (isHost) updateSoan(dt);
       // Simulation hôte toujours sur worldRef.current (la ferme), quoi qu'il
       // arrive : rien ci-dessus ne dépend de la zone du joueur LOCAL. Seul
@@ -4354,7 +4412,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             ctx.fillStyle = `rgba(40,26,12,${gs.wetness * 0.55})`;
             ctx.fillRect(x * T, y * T, T, T);
           }
-          ctx.drawImage(sprites.crops[c.t][gs.stage], x * T, y * T);
+          const cropSprites = sprites.crops[c.t] || sprites.crops[0];
+          const cropImg = cropSprites && cropSprites[gs.stage];
+          if (cropImg) ctx.drawImage(cropImg, x * T, y * T);
           if (gs.mature) {
             // Bulle "prête à récolter" : flotte doucement au-dessus de la case.
             const bob = Math.sin(now / 260) * 1.5;
@@ -4839,9 +4899,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           draws.push({ y: (vy + 1) * T, fn: () => drawCharacter({ id: "visitor" + vv.rid, name: ro.name, x: vx, y: vy, dir: vv.dir || 0, moving: !!vv.moving, animT: vv.animT || 0, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap }, false) });
         }
         const residents = (st && st.residents) || [];
+        const houseOwners = townHouseOwners();
         for (let ri = 0; ri < residents.length; ri++) {
           const ro = C.VISITOR_ROSTER[residents[ri].rid]; if (!ro) continue;
-          const rxp = 47.5 + (ri % 3) * 1.6, ryp = 37.5 + Math.floor(ri / 3) * 1.4;
+          const hsn = houseOwners.find(h => h.resident && h.resident.rid === residents[ri].rid);
+          const rxp = hsn ? hsn.x + C.TOWN_HOUSE_W / 2 : 47.5 + (ri % 3) * 1.6;
+          const ryp = hsn ? hsn.y + C.TOWN_HOUSE_H + 0.6 : 37.5 + Math.floor(ri / 3) * 1.4;
           draws.push({ y: (ryp + 1) * T, fn: () => drawCharacter({ id: "res" + ro.rid, name: ro.name, x: rxp, y: ryp, dir: 0, moving: false, animT: 0, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap }, false) });
         }
       }
@@ -4863,8 +4926,6 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           if (isHost) { gx = g.x; gy = g.y; }
           // FIX 246 : pas d'extrapolation quand il est assis (moving faux) — il reste bien posé.
           else { const gp = smoothNpc("greg", g.x, g.y, dt, true, !!g.moving && !g.sitting, (cx, cy) => canStand(w, cx, cy)); gx = gp.x; gy = gp.y; }
-          const wb = g.wellbeing ?? C.GREG_WELLBEING_START;
-          const mood = g.sitting ? "\uD83D\uDCA4" : (wb >= C.GREG_WELLBEING_HIGH ? "\uD83D\uDE0A" : wb <= C.GREG_WELLBEING_LOW ? "\uD83D\uDE1F" : "\uD83D\uDE10");
           const nearG = (Math.abs(m.x - g.x) + Math.abs(m.y - g.y) <= 2.4) && (!m.zone || m.zone === "farm") && !gregCardOpenRef.current;
           draws.push({ y: (gy + 1) * T, fn: () => {
             ctx.save();
@@ -4879,16 +4940,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             } else {
               drawCharacter({ id: "greg", name: "Greg", x: gx, y: gy, dir: g.dir || 0, moving: !!g.moving, animT: g.animT || 0, gender: "m", outfit: 0, overalls: true }, false);
             }
-            // Humeur au-dessus de la tête (😊/😐/😟, 💤 si assis).
-            ctx.font = "10px sans-serif"; ctx.textAlign = "center";
-            const bob = Math.sin(performance.now() / 500) * 1.5;
-            ctx.fillText(mood, Math.round(gx * T) + 8, Math.round(gy * T) - 18 + bob);
             // Invite "Q" quand le joueur est à portée (comme les visiteurs).
             if (nearG) {
               ctx.font = "bold 8px sans-serif";
               ctx.strokeStyle = "#000"; ctx.lineWidth = 3; ctx.fillStyle = "#fff8c0";
               const hx = Math.round(gx * T) + 8, hy = Math.round(gy * T) - 28;
-              ctx.strokeText("Q \uD83D\uDCAC", hx, hy); ctx.fillText("Q \uD83D\uDCAC", hx, hy);
+              ctx.strokeText("Q \uD83D\uDCCB", hx, hy); ctx.fillText("Q \uD83D\uDCCB", hx, hy);
             }
             ctx.restore();
           } });
@@ -4934,7 +4991,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           } });
         }
       }
-      for (const p of playersRef.current.values()) if (!p.sleeping && p.zone !== "evil" && p.zone !== "town") draws.push({ y: (p.y + 1) * T, fn: () => drawRemote(p) }); // zip 234: town players are drawn on the town map, not here
+      for (const p of playersRef.current.values()) if (!p.sleeping && p.zone !== "evil" && p.zone !== "town") { draws.push({ y: (p.y + 0.9) * T, fn: () => drawRemotePets(p, dt) }); draws.push({ y: (p.y + 1) * T, fn: () => drawRemote(p) }); } // zip 234: town players are drawn on the town map, not here — zip 247: their pets follow them here too
       // Sommeil : aucune animation d'entrée, le dormeur disparaît juste de la
       // carte (voir ci-dessus, non ajouté à `draws`) ; des "Zzz" flottent
       // au-dessus des fenêtres de la maison tant qu'AU MOINS un joueur dort
@@ -5427,12 +5484,23 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // Deterministic house assignment: every KNOWN farmer (farmersRef, i.e.
     // anyone who ever joined this world) sorted by id -> plots in order.
     // Same inputs on every client = same map for everyone, no sync needed.
+    // Zip 247 (demande Guillaume : "quand les visiteurs emménagent, ils
+    // occupent une des maisons à vendre") : une fois les joueurs casés, les
+    // résidents (visiteurs ayant emménagé, sharedRef.current.station.residents,
+    // même ordre pour tout le monde) prennent les plots restants — sinon la
+    // maison reste "à vendre" indéfiniment même après un emménagement.
     function townHouseOwners() {
       const ids = Object.keys(farmersRef.current || {}).sort();
+      const residents = (sharedRef.current.station && sharedRef.current.station.residents) || [];
       return C.TOWN_HOUSES.map((h, i) => {
         const fid = ids[i];
-        const fm = fid ? farmersRef.current[fid] : null;
-        return { ...h, ownerId: fid || null, ownerName: fm ? (fm.name || "?") : null };
+        if (fid) { const fm = farmersRef.current[fid]; return { ...h, ownerId: fid, ownerName: fm ? (fm.name || "?") : null, resident: null }; }
+        const res = residents[i - ids.length];
+        if (res) {
+          const ro = C.VISITOR_ROSTER[res.rid];
+          return { ...h, ownerId: "res" + res.rid, ownerName: ro ? ro.name : null, resident: res };
+        }
+        return { ...h, ownerId: null, ownerName: null, resident: null };
       });
     }
     function blockedTown(tw, x, y) {
@@ -5467,7 +5535,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const moving = (dx || dy) && actAnimRef.current <= 0;
       if (moving) {
         const len = Math.hypot(dx, dy); dx /= len; dy /= len;
-        const sp = C.PLAYER_SPEED * dt * (performance.now() < speedBuffUntilRef.current ? C.CANDY_SPEED_MUL : 1);
+        const sp = C.PLAYER_SPEED * C.TOWN_SPEED_MULT * dt * (performance.now() < speedBuffUntilRef.current ? C.CANDY_SPEED_MUL : 1);
         const nx = m.x + dx * sp, ny = m.y + dy * sp;
         if (canStandTown(tw, nx, m.y)) m.x = nx;
         if (canStandTown(tw, m.x, ny)) m.y = ny;
@@ -5578,6 +5646,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         p.x += (p.tx - p.x) * Math.min(1, dt * 12);
         p.y += (p.ty - p.y) * Math.min(1, dt * 12);
         p.animT = p.moving ? (p.animT || 0) + dt * 9 : 0;
+        draws.push({ y: (p.y + 0.9) * T, fn: () => drawRemotePets(p, dt) });
         draws.push({ y: (p.y + 1) * T, fn: () => drawCharacter(p, false) });
       }
       if (!m.sleeping) draws.push({ y: (m.y + 0.9) * T, fn: () => drawMyPets(m, dt) });
@@ -5717,15 +5786,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const now = performance.now();
       maybeSendPos();
     }
-    // Zip 236: draw my individual pets trailing behind me. Each pet keeps a
-    // smoothed follow position (petFollowRef) that eases toward a point a bit
-    // behind the player, offset per pet so two pets don't overlap. Purely
-    // local/visual — pets aren't broadcast, everyone sees their own.
-    function drawMyPets(m, dt2) {
+    // Zip 236/247: draw a player's individual pets trailing behind them. Each
+    // pet keeps a smoothed follow position (petFollowRef, keyed by player id)
+    // that eases toward a point a bit behind the player, offset per pet so
+    // two pets don't overlap. Zip 247: pets are now broadcast (see pubMe/
+    // applyDeltas/ensureRemote) so every player sees everyone's pets, not
+    // just their own.
+    function drawPetsFor(id, pets, m, dt2) {
       const sprites = spritesRef.current;
-      const pets = myPetsRef.current;
       if (!pets || !pets.length || !sprites.pets) return;
-      const follow = petFollowRef.current;
+      let follow = petFollowRef.current.get(id);
+      if (!follow) { follow = []; petFollowRef.current.set(id, follow); }
+      if (follow.length > pets.length) follow.length = pets.length;
       // behind = opposite of facing dir
       const bx = -[0, 0, -1, 1][m.dir], by = -[1, -1, 0, 0][m.dir];
       for (let i = 0; i < pets.length; i++) {
@@ -5744,6 +5816,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         ctx.drawImage(img, Math.round(f2.x * T), Math.round(f2.y * T - 2 + bob));
       }
     }
+    function drawMyPets(m, dt2) { drawPetsFor(me.id, myPetsRef.current, m, dt2); }
+    function drawRemotePets(p, dt2) { drawPetsFor(p.id, p.pets, p, dt2); }
     function drawSelf(m) {
       drawCharacter(m, true);
       if (actAnimRef.current > 0 && slotRef.current < 2) {
@@ -6890,22 +6964,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
 
 
 
-      {/* FIX 246 : fiche de Greg (touche Q à proximité) — humeur/bien-être,
-          causette (+bien-être) et menu d'ordres complet, comme convenu. */}
+      {/* Fiche de Greg (touche Q à proximité) — menu d'ordres complet. */}
       {gregCardOpen && sharedRef.current.greg && (() => {
         const g = sharedRef.current.greg;
-        const wb = Math.round(g.wellbeing ?? C.GREG_WELLBEING_START);
-        const mood = wb >= C.GREG_WELLBEING_HIGH ? "\uD83D\uDE0A" : wb <= C.GREG_WELLBEING_LOW ? "\uD83D\uDE1F" : "\uD83D\uDE10";
-        const barCol = wb >= C.GREG_WELLBEING_HIGH ? "#5fbf5f" : wb <= C.GREG_WELLBEING_LOW ? "#d07a3a" : "#e0c24a";
         return (
           <div className="ferme-modal open" onClick={() => setGregCardOpen(false)}>
             <div className="panel ferme-modal-panel" onClick={e => e.stopPropagation()}>
               <button className="ferme-close-x" onClick={() => setGregCardOpen(false)}>\u2715</button>
-              <h2>{mood} {L.employeesGregName}</h2>
-              <div className="ferme-hint">{L.gregWellbeingLabel} : {wb}/{C.GREG_WELLBEING_MAX}</div>
-              <div style={{ height: 10, borderRadius: 6, background: "#0003", overflow: "hidden", margin: "6px 0 12px" }}>
-                <div style={{ height: "100%", width: wb + "%", background: barCol, transition: "width .2s" }} />
-              </div>
+              <h2>{L.employeesGregName}</h2>
               <div className="ferme-shop-row">
                 <Sprite img={spritesReady ? spritesRef.current.getChar("m", 0, true) : null} w={26} h={32} />
                 <div className="info">
@@ -6914,7 +6980,6 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 </div>
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
-                <button onClick={() => sendReq({ kind: "gregChat" })}>{L.gregTalkBtn}</button>
                 <button onClick={() => { setGregCardOpen(false); setGregOrderOpen(true); }}>{L.gregOrderBtn}</button>
                 {(gregStock.fertilizer || 0) > 0 && (
                   <button onClick={() => { setGregCardOpen(false); setFertilizerOrderOpen(true); }}>{L.fertilizerOrderBtn}</button>

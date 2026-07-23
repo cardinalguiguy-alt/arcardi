@@ -395,7 +395,13 @@ export function serializeMills(world) {
 // C.WATER_VALID_MS : passé ce délai sans réarroser, la pousse est mise en
 // pause (elle ne recule jamais) jusqu'au prochain arrosage.
 export function cropGrowState(crop, now) {
-  const def = C.CROPS[crop.t];
+  // Défensif (chantier 2026-07) : un `crop.t` invalide/hors-limites (tuile
+  // ciblée par une tâche de Greg périmée, snapshot en cours de migration,
+  // etc.) faisait planter cette fonction (accès à C.CROPS[undefined].growMs),
+  // ce qui interrompait la boucle de rendu des tuiles EN PLEIN FRAME et
+  // laissait tout le reste de la carte non dessiné — le fameux glitch des
+  // "carrés noirs". On retombe sur la culture 0 plutôt que de jeter.
+  const def = C.CROPS[crop.t] || C.CROPS[0];
   const dur = def.growMs;
   const extra = crop.wateredAt ? Math.min(now - crop.wateredAt, C.WATER_VALID_MS) : 0;
   const grown = Math.min(dur, (crop.bankedMs || 0) + extra);
@@ -1070,6 +1076,30 @@ export function findClearableTiles(world, anchor, count) {
     }
   }
   return out;
+}
+
+// Zip 247 : première tuile "à défricher" d'un TYPE donné autour de `anchor`
+// (balayage par anneaux croissants, même principe que findClearableTiles
+// ci-dessus, mais filtré par type). Utilisé par la simulation des résidents
+// (visiteurs ayant emménagé) : un bûcheron cherche un arbre, un tailleur de
+// pierre un rocher. Renvoie -1 si rien n'est trouvé dans le rayon.
+export function findResidentTile(world, anchor, kind) {
+  for (let r = 0; r < C.GREG_CLEAR_RADIUS; r++) {
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue; // seulement l'anneau
+        const x = anchor.x + dx, y = anchor.y + dy;
+        if (!inMap(x, y)) continue;
+        const i = idx(x, y);
+        const o = world.objects[i];
+        const hit = kind === "rock"
+          ? o === C.O_ROCK
+          : (o === C.O_TREE || o === C.O_TREE2 || o === C.O_STUMP);
+        if (hit) return i;
+      }
+    }
+  }
+  return -1;
 }
 
 // Abattage d'une case par Greg (identique à resolveAct "chop", sans énergie

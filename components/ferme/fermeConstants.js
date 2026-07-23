@@ -255,9 +255,21 @@ export const START_MONEY = 500;
 // --- Réseau / jeu ---
 export const MAX_PLAYERS = 8;
 export const PLAYER_SPEED = 5.2; // tuiles/seconde
+// Zip 247 (demande Guillaume : "fix the walking speed in the valley town, it
+// should be faster") : Valley Town est une grande carte de rues longues et on
+// n'y a ni cheval ni raccourci — on marche donc sensiblement plus vite qu'à la
+// ferme. Multiplicateur appliqué dans updateMeTown (FermeGame.js) uniquement,
+// la vitesse de la ferme n'est pas touchée.
+export const TOWN_SPEED_MULT = 1.45;
 export const POS_TICK_HZ = 8;        // FIX 243: 12 -> 8 Hz (economie position ; extrapolation cote rendu compense le ressenti)
 export const AOI_MARGIN_TILES = 8;   // FIX 242 (AOI): marge (tuiles) autour du viewport — pré-charge entités/joueurs juste avant qu'ils entrent à l'écran
 export const POS_KEEPALIVE_MS = 500;   // FIX 243: en mouvement continu (meme direction), on renvoie une correction au moins toutes les 500 ms
+// Zip 247 : plafond de la vitesse ESTIMÉE d'un joueur distant (extrapolation,
+// voir le handler "pos"). L'ancienne valeur codée en dur (1.6) était déjà
+// INFÉRIEURE à la vitesse à cheval (HORSE_SPEED_MULT = 1.9) et le reste à
+// celle de Valley Town avec bonbon (1.45 * 1.5 = 2.175) : les joueurs
+// distants rapides traînaient donc visuellement derrière leur vraie position.
+export const POS_EXTRAP_SPEED_CAP = 2.4;
 export const POS_EXTRAP_MAX_MS = 600;  // FIX 243: duree max d'extrapolation d'un joueur distant sans nouveau paquet (anti-derive)
 export const POS_FAR_HZ = 1.5;       // FIX 242 (AOI): cadence de diffusion de position quand aucun autre joueur n'est à portée de vue (indication minimap seulement)   // fréquence de diffusion des positions (broadcast)
 export const ACT_RANGE = 1.8;    // portée d'action en tuiles
@@ -780,21 +792,6 @@ export const GREG_CLEAR_RADIUS = 12;               // rayon de recherche d'arbre
 export const GREG_CLEAR_BATCH = 3;                 // nb d'obstacles mis en file par passage de scan
 export const GREG_CLEAR_CHECK_MS = 5 * 60 * 1000;  // fréquence de scan (5 min réelles) quand Greg n'a plus de tâche en attente
 
-// --- Bien-être de Greg (FIX 246, décision Guillaume : "humeur + petit bonus").
-// Jauge 0..GREG_WELLBEING_MAX portée par sharedRef.current.greg.wellbeing,
-// diffusée avec le reste de l'objet greg. Monte quand on lui parle (fiche Q),
-// redescend lentement avec le temps. Au-dessus du seuil HIGH, Greg travaille
-// un peu plus vite et fait des pauses plus courtes ; sous LOW, un peu plus
-// lent. Aucun effet économique lourd (pas de contrat/prix impactés).
-export const GREG_WELLBEING_MAX = 100;
-export const GREG_WELLBEING_START = 70;              // à l'engagement
-export const GREG_WELLBEING_DECAY_PER_MIN = 1.5;     // points perdus par minute réelle
-export const GREG_CHAT_WELLBEING_GAIN = 10;          // gain par causette (fiche Q)
-export const GREG_CHAT_COOLDOWN_MS = 20 * 1000;      // anti-spam : une causette "utile" toutes les 20s
-export const GREG_WELLBEING_HIGH = 70;               // au-dessus : bonus de vitesse / pauses courtes
-export const GREG_WELLBEING_LOW = 30;                // en dessous : léger malus de vitesse
-export const GREG_SPEED_BONUS = 1.15;                // multiplicateur de vitesse quand bien-être haut
-export const GREG_SPEED_MALUS = 0.9;                 // multiplicateur quand bien-être bas
 
 // --- Repos de Greg : pose assise sur un tabouret + 💤 (FIX 246, décision
 // Guillaume : "pose assise dédiée"). Quand il rôde sans tâche, il s'assoit
@@ -951,6 +948,28 @@ export const BARN_BLOCKS = [
 ];
 export const AD_FEE = 25;                 // gold per newly posted ad category (common chest)
 export const AD_CATEGORIES = ["crops", "animal", "fish", "resources"];
+
+// --- Zip 247 : les visiteurs qui EMMÉNAGENT se mettent au travail (demande
+// Guillaume : "when they move in, they start working on the farm, based on
+// what they promised to contribute when they convinced us to let them move
+// in"). Chaque entrée du roster porte déjà un `theme` et un `job` (la
+// promesse faite pendant le vote) : on mappe ce thème sur une contribution
+// concrète, exécutée par l'HÔTE toutes les RESIDENT_WORK_MS (voir
+// updateResidents dans FermeGame.js). Aucun nouveau sprite ni message
+// réseau dédié : on réutilise les patchs `tiles`/`crops`/`gregStock`/`state`
+// déjà gérés par applyDeltas.
+export const RESIDENT_WORK_MS = 90 * 1000;   // une "journée de travail" toutes les 90 s réelles
+export const RESIDENT_WATER_BATCH = 3;       // cultures arrosées par tour pour un résident des champs
+export const RESIDENT_FISH_PER_SHIFT = 1;    // poissons ajoutés au stock commun par tour
+export const RESIDENT_GOLD_PER_SHIFT = 12;   // or rapporté par tour (métiers non agricoles)
+export const RESIDENT_TASK_BY_THEME = {
+  fields: "crops", flowers: "crops",   // sèment/soignent -> arrosent les cultures assoiffées
+  wood: "wood",                        // bûcheron -> abat un arbre, bois au stock commun
+  stone: "stone",                      // carrier -> mine un rocher, pierre au stock commun
+  river: "fish",                       // pêcheur/fumeur de poisson -> poisson au stock commun
+  animals: "gold", kitchen: "gold", market: "gold", gold: "gold",
+  style: "gold", shadow: "gold", train: "gold",
+};
 
 // --- Visitors ---
 // 25 recurring named characters. Outfits reuse the existing charSheet

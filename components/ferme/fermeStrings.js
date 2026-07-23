@@ -121,6 +121,7 @@ export const FERME_STR = {
     voteNo: "❌ Contre",
     voteWaiting: "Vote enregistré, en attente des autres joueurs...",
     voteStayChat: (n) => `🎉 Vote unanime : ${n} s'installe à la ferme !`,
+    residentStarted: (n, job) => `${n} s'installe dans une maison à vendre et se met au travail : ${job}.`,
     voteDiceChat: (n, r, st) => `🎲 Vote partagé, le dé donne ${r} : ${n} ${st ? "reste !" : "repart..."}`,
     voteLeaveChat: (n) => `${n} repart, le vote n'a pas abouti.`,
     residentTag: (j) => `Habitant(e) : ${j}`,
@@ -517,18 +518,6 @@ export const FERME_STR = {
     gregNotHiredSub: "Contrat de 2 jours",
     gregHiredUntil: (h) => `Employé — encore ${h}h de contrat`,
     gregOrderBtn: "Donner un ordre",
-    gregWellbeingLabel: "Bien-être",
-    gregTalkBtn: "\uD83D\uDCAC Parler à Greg",
-    gregChatLine: (name) => {
-      const pool = [
-        `${name}, merci de passer me voir !`,
-        "Le grand air, y'a que ça de vrai.",
-        "Dès que tu as une commande, je m'y mets.",
-        "Encore un effort et ces champs seront magnifiques.",
-        "Une petite pause au soleil, et je repars de plus belle.",
-      ];
-      return pool[Math.floor(Math.random() * pool.length)];
-    },
     gregOrderTitle: "Ordonner à Greg de labourer, planter puis arroser",
     gregOrderCountLabel: "Nombre de cases",
     gregOrderCost: (n) => `Coût : ${n} or`,
@@ -718,6 +707,7 @@ export const FERME_STR = {
     voteNo: "❌ Against",
     voteWaiting: "Vote recorded, waiting for the other players...",
     voteStayChat: (n) => `🎉 Unanimous vote: ${n} is moving in!`,
+    residentStarted: (n, job) => `${n} moves into one of the houses for sale and gets to work: ${job}.`,
     voteDiceChat: (n, r, st) => `🎲 Split vote, the die shows ${r}: ${n} ${st ? "stays!" : "leaves..."}`,
     voteLeaveChat: (n) => `${n} leaves, the vote did not pass.`,
     residentTag: (j) => `Resident: ${j}`,
@@ -1079,18 +1069,6 @@ export const FERME_STR = {
     gregNotHiredSub: "2-day contract",
     gregHiredUntil: (h) => `Hired — ${h}h left on contract`,
     gregOrderBtn: "Give an order",
-    gregWellbeingLabel: "Wellbeing",
-    gregTalkBtn: "\uD83D\uDCAC Talk to Greg",
-    gregChatLine: (name) => {
-      const pool = [
-        `${name}, thanks for stopping by!`,
-        "Nothing beats the fresh air out here.",
-        "Give me an order and I'm on it.",
-        "A bit more and these fields will look great.",
-        "A quick rest in the sun, then back to it.",
-      ];
-      return pool[Math.floor(Math.random() * pool.length)];
-    },
     gregOrderTitle: "Order Greg to till, plant then water",
     gregOrderCountLabel: "Number of tiles",
     gregOrderCost: (n) => `Cost: ${n} gold`,
