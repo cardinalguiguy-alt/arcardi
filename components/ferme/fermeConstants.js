@@ -255,8 +255,10 @@ export const START_MONEY = 500;
 // --- Réseau / jeu ---
 export const MAX_PLAYERS = 8;
 export const PLAYER_SPEED = 5.2; // tuiles/seconde
-export const POS_TICK_HZ = 12;
+export const POS_TICK_HZ = 8;        // FIX 243: 12 -> 8 Hz (economie position ; extrapolation cote rendu compense le ressenti)
 export const AOI_MARGIN_TILES = 8;   // FIX 242 (AOI): marge (tuiles) autour du viewport — pré-charge entités/joueurs juste avant qu'ils entrent à l'écran
+export const POS_KEEPALIVE_MS = 500;   // FIX 243: en mouvement continu (meme direction), on renvoie une correction au moins toutes les 500 ms
+export const POS_EXTRAP_MAX_MS = 600;  // FIX 243: duree max d'extrapolation d'un joueur distant sans nouveau paquet (anti-derive)
 export const POS_FAR_HZ = 1.5;       // FIX 242 (AOI): cadence de diffusion de position quand aucun autre joueur n'est à portée de vue (indication minimap seulement)   // fréquence de diffusion des positions (broadcast)
 export const ACT_RANGE = 1.8;    // portée d'action en tuiles
 

@@ -325,6 +325,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const dirtyRef = useRef(false);
   const overridesRef = useRef({ ground: {}, object: {} }); // deltas vs monde de base
   const lastPosSentRef = useRef(0);
+  const lastPosKeyRef = useRef("s");        // FIX 243: derniere cle d'etat de mouvement diffusee ("m"+dir ou "s") pour l'emission par intention
   const lastMovingSentRef = useRef(false); // FIX 241: dernier "moving" diffusé — coupe l'envoi de position quand le joueur est immobile
   const hiddenRef = useRef(false);         // FIX 241: onglet masqué (Page Visibility) — coupe toute diffusion réseau (desktop + tablette)
   const mapOpenRef = useRef(false);
@@ -659,6 +660,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     setTimeout(() => setChat(cs => cs.filter(x => x.id !== id)), 13000);
   }, []);
 
+  // FIX 243: self:false supprime l'echo de ses propres broadcasts. Le chat en
+  // dependait (l'expediteur voyait son message via l'echo). broadcastChat ajoute
+  // donc le message EN LOCAL puis le diffuse -> l'expediteur le voit, les autres
+  // le recoivent, sans doublon (pas d'echo avec self:false).
+  function broadcastChat(from, msg) {
+    addChat(from, msg);
+    channelRef.current?.send({ type: "broadcast", event: "chat", payload: { from, msg } });
+  }
+
   function buildMinimapBase() {
     const w = worldRef.current; if (!w) return;
     const c = document.createElement("canvas"); c.width = w.w; c.height = w.h;
@@ -787,7 +797,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
 
   // -------- Réseau : canal, souscription, évènements --------
   useEffect(() => {
-    const ch = supabase.channel(GAME_ID + "_" + room.id, { config: { broadcast: { self: true } } });
+    const ch = supabase.channel(GAME_ID + "_" + room.id, { config: { broadcast: { self: false } } });  // FIX 243: self:false (-33% a 2j, -25% a 3j), echo local du chat assure par broadcastChat()
     channelRef.current = ch;
 
     ch.on("broadcast", { event: "hello", }, ({ payload }) => {
@@ -860,6 +870,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (payload.id === me.id) return;
       ensureRemote(payload);
       const r = playersRef.current.get(payload.id);
+      // FIX 243: vitesse estimee par delta de position entre 2 paquets (base de l'extrapolation cote rendu).
+      const _now = performance.now();
+      const _prevX = r.px0 !== undefined ? r.px0 : payload.x, _prevY = r.py0 !== undefined ? r.py0 : payload.y;
+      const _dtr = r.tRecv !== undefined ? Math.max(0.03, (_now - r.tRecv) / 1000) : 0;
+      if (payload.moving && _dtr > 0) { r.vx = (payload.x - _prevX) / _dtr; r.vy = (payload.y - _prevY) / _dtr; const _sp = Math.hypot(r.vx, r.vy), _mx = C.PLAYER_SPEED * 1.6; if (_sp > _mx) { r.vx *= _mx / _sp; r.vy *= _mx / _sp; } }
+      else { r.vx = 0; r.vy = 0; }
+      r.px0 = payload.x; r.py0 = payload.y; r.tRecv = _now;
       r.tx = payload.x; r.ty = payload.y; r.dir = payload.dir; r.moving = payload.moving; r.tool = payload.tool;
       r.gender = payload.gender; r.outfit = payload.outfit; r.name = payload.name; r.sleeping = !!payload.sleeping;
       r.torch = !!payload.torch; r.zone = payload.zone || "farm";
@@ -1111,7 +1128,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           },
         });
         const remainMn = Math.ceil(Math.max(0, target.injuredUntil - Date.now()) / 60000);
-        channelRef.current?.send({ type: "broadcast", event: "chat", payload: { from: "💊", msg: remainMn > 1 ? L.healPartialChat(f.name, target.name, remainMn) : L.healChat(f.name, target.name) } });
+        broadcastChat("💊", remainMn > 1 ? L.healPartialChat(f.name, target.name, remainMn) : L.healChat(f.name, target.name));
       }
     } else if (req.kind === "evilChop") {
       // Coupe d'arbre en carte maléfique (chantier 2026-07, demande
@@ -1304,7 +1321,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         out.state = shareState();
         out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
         out.house = { ...hh };
-        channelRef.current?.send({ type: "broadcast", event: "chat", payload: { from: "🏠", msg: L.houseWorksStarted(f.name, pal.level) } });
+        broadcastChat("🏠", L.houseWorksStarted(f.name, pal.level));
       } else {
         out.toast = { id: req.id, key: "actionFailed" };
       }
@@ -1614,7 +1631,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           const def = C.COOP_MISSIONS.find(m2 => m2.id === s.coop.id);
           const reward = (def && def.reward) || 0;
           s.money += reward; out.state = shareState();
-          channelRef.current?.send({ type: "broadcast", event: "chat", payload: { from: "🎉", msg: L.coopDone(lang === "en" ? def.nameEn : def.name, reward) } });
+          broadcastChat("🎉", L.coopDone(lang === "en" ? def.nameEn : def.name, reward));
           // Nouvelle mission tirée aussitôt (tant que 2+ fermiers sont en ligne).
           s.coop = (playersRef.current.size + 1) >= 2 ? E.pickCoopMission() : null;
           out.coop = s.coop;
@@ -1632,7 +1649,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
       if (r.becameReady) {
         s.money -= r.moneySpent; out.state = shareState(); out.barn = s.barn;
-        channelRef.current?.send({ type: "broadcast", event: "chat", payload: { from: "🛖", msg: L.barnReadyChat(r.moneySpent) } });
+        broadcastChat("🛖", L.barnReadyChat(r.moneySpent));
         dirtyRef.current = true;
       }
     } else if (req.kind === "barnBuild") {
@@ -1640,7 +1657,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (r.toast) out.toast = { id: f.id, key: r.toast };
       if (r.built) {
         out.barn = s.barn;
-        channelRef.current?.send({ type: "broadcast", event: "chat", payload: { from: "🎉", msg: L.barnBuilt(f.name, r.level) } });
+        broadcastChat("🎉", L.barnBuilt(f.name, r.level));
         dirtyRef.current = true;
       }
     } else if (req.kind === "salveDeposit") {
@@ -1667,7 +1684,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (r.toast) out.toast = { id: f.id, key: r.toast };
       if (r.ignited) {
         out.salveCraft = s.salveCraft; out.gems = s.gems;
-        channelRef.current?.send({ type: "broadcast", event: "chat", payload: { from: "🔥", msg: L.salveIgnited(f.name) } });
+        broadcastChat("🔥", L.salveIgnited(f.name));
         dirtyRef.current = true;
       }
     } else if (req.kind === "salveCollect") {
@@ -1682,7 +1699,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (r.toast) out.toast = { id: f.id, key: r.toast };
       if (r.collected) {
         out.salveCraft = s.salveCraft;
-        channelRef.current?.send({ type: "broadcast", event: "chat", payload: { from: "🧴", msg: L.salveBrewed(f.name) } });
+        broadcastChat("🧴", L.salveBrewed(f.name));
         dirtyRef.current = true;
       }
     } else if (req.kind === "evilCauldronPickup") {
@@ -1720,7 +1737,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         s.money += q.reward; out.state = shareState();
         if (!out.farmer) out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
         const label = (L.questLabels && L.questLabels[questId]) || questId;
-        channelRef.current?.send({ type: "broadcast", event: "chat", payload: { from: "🎯", msg: L.questDone(label, q.reward) } });
+        broadcastChat("🎯", L.questDone(label, q.reward));
         dirtyRef.current = true;
       }
     }
@@ -1757,7 +1774,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     channelRef.current?.send({ type: "broadcast", event: "apply", payload: { station: st, hostNow: Date.now() } });
   }
   function stationChat(msg, from) {
-    channelRef.current?.send({ type: "broadcast", event: "chat", payload: { from: from || "\u{1F689}", msg } });
+    broadcastChat(from || "\u{1F689}", msg);
   }
   function hostExecuteHostileDamage(v) {
     const w = worldRef.current, s = sharedRef.current;
@@ -2246,7 +2263,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           hh0.upgradeUntil = 0;
           dirtyRef.current = true;
           channelRef.current?.send({ type: "broadcast", event: "apply", payload: { house: { ...hh0 }, hostNow: Date.now() } });
-          channelRef.current?.send({ type: "broadcast", event: "chat", payload: { from: "🏠", msg: L.houseUpgraded(hh0.level) } });
+          broadcastChat("🏠", L.houseUpgraded(hh0.level));
         }
       }
       const s = sharedRef.current, w = worldRef.current;
@@ -2259,7 +2276,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         s.coop = E.pickCoopMission();
         const def = C.COOP_MISSIONS.find(m2 => m2.id === s.coop.id);
         channelRef.current?.send({ type: "broadcast", event: "apply", payload: { coop: s.coop } });
-        channelRef.current?.send({ type: "broadcast", event: "chat", payload: { from: "🚧", msg: L.coopStarted(lang === "en" ? def.nameEn : def.name) } });
+        broadcastChat("🚧", L.coopStarted(lang === "en" ? def.nameEn : def.name));
         dirtyRef.current = true;
       }
       // Défi "chasse aux lapins" (chantier 2026-07, demande Guillaume) :
@@ -2330,7 +2347,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (passageIdxRef.current !== idx) {
           passageIdxRef.current = idx;
           const spec = E.passageWorldOf(sharedRef.current.day || 1);
-          channelRef.current?.send({ type: "broadcast", event: "chat", payload: { from: "🌀", msg: L.passageWorldToast(lang === "en" ? spec.nameEn : spec.name) } });
+          broadcastChat("🌀", L.passageWorldToast(lang === "en" ? spec.nameEn : spec.name));
         }
       }
       // Production continue des moulins (chantier 2026-07, transformation
@@ -2381,9 +2398,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         // nature et restaurer l'énergie (voir E.newDay).
         dirtyRef.current = true;
         channelRef.current?.send({ type: "broadcast", event: "newday", payload: { day: s.day, dayStartAt: s.dayStartAt, tiles: tilesOut, crops: [], animals: s.animals, fertilizerShop: shop } });
-        channelRef.current?.send({ type: "broadcast", event: "chat", payload: { from: "☀", msg: L.chatNewDay(s.day) } });
+        broadcastChat("☀", L.chatNewDay(s.day));
         if (E.isStormyDay(s.day)) {
-          channelRef.current?.send({ type: "broadcast", event: "chat", payload: { from: "⛈", msg: L.chatStormyDay } });
+          broadcastChat("⛈", L.chatStormyDay);
         }
       }
     }, 1000);
@@ -2475,7 +2492,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // émis, sans aucun impact de gameplay (personne pour voir). Vaut pour la
   // position ET pour les entités simulées par l'hôte (greg/soan/lapins/…).
   function netCanBroadcast() { return channelReadyRef.current && !hiddenRef.current && playersRef.current.size > 0; }
-  function sendPos() { if (!netCanBroadcast()) return; channelRef.current?.send({ type: "broadcast", event: "pos", payload: pubMe() }); }
+  function sendPos() { if (!netCanBroadcast()) return; const _m = meRef.current; if (_m) { lastPosSentRef.current = performance.now(); lastPosKeyRef.current = _m.moving ? ("m" + _m.dir) : "s"; } channelRef.current?.send({ type: "broadcast", event: "pos", payload: pubMe() }); }
   // FIX 242 (AOI / zone d'intérêt) : rayon "même zone d'écran" dérivé du viewport réel + marge de pré-chargement.
   function aoiRadiusTiles() { const c = canvasRef.current; if (!c) return 40; return Math.hypot(c.width, c.height) / (ZOOM * C.TILE) / 2 + C.AOI_MARGIN_TILES; }
   // Distance (tuiles) au plus proche AUTRE joueur de la même zone ; Infinity si personne.
@@ -2485,6 +2502,35 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // Un joueur distant (non-hôte) est-il à portée de vue de cette entité (ou de l'une de ces entités) ? Sinon inutile de la diffuser : hors écran ET absente de la minimap (loups/greg/soan/lapins n'y figurent pas).
   function anyRemoteNear(ex, ey) { const R = aoiRadiusTiles(); for (const p of playersRef.current.values()) { if (!p || (p.zone || "farm") !== "farm") continue; if (Math.hypot(p.x - ex, p.y - ey) <= R) return true; } return false; }
   function anyRemoteNearList(list) { if (!list || !list.length) return false; const R = aoiRadiusTiles(); for (const p of playersRef.current.values()) { if (!p || (p.zone || "farm") !== "farm") continue; for (const e of list) { if (e && Math.hypot(p.x - e.x, p.y - e.y) <= R) return true; } } return false; }
+  // FIX 243 (emission par intention + cap 8 Hz) : on n'emet plus un flux continu.
+  // On envoie quand l'ETAT de mouvement change (depart/arret/changement de
+  // direction), plafonne a POS_TICK_HZ, plus un keep-alive de correction. Les
+  // changements de direction (donc les mouvements rapides) partent tout de suite ;
+  // seule la marche en ligne droite est throttlee -> gros gain trafic sans perdre
+  // la reactivite. Borne dure : jamais plus que POS_TICK_HZ/s (<= l'ancien 12 Hz).
+  function maybeSendPos() {
+    const m = meRef.current; if (!m) return;
+    const now = performance.now();
+    const key = m.moving ? ("m" + m.dir) : "s";
+    const minGap = 1000 / posSendHz();
+    if (key !== lastPosKeyRef.current) { if (now - lastPosSentRef.current >= minGap) sendPos(); }
+    else if (m.moving && now - lastPosSentRef.current >= C.POS_KEEPALIVE_MS) sendPos();
+  }
+  // FIX 243 (extrapolation) : on affiche les autres joueurs a leur position
+  // PRESENTE (base recue + vitesse * temps ecoule) et non a leur derniere position
+  // recue (en retard -> sensation de lag). La vitesse vient du delta entre deux
+  // paquets (capture diagonales + mouvements rapides). Collision rejouee localement
+  // (canStand/canStandTown) car la carte est partagee -> le fantome ne traverse pas
+  // un mur. Plafonne a POS_EXTRAP_MAX_MS pour eviter la derive si un paquet manque.
+  function advanceRemote(p) {
+    if (!p || !p.moving || p.vx === undefined || (p.vx === 0 && p.vy === 0)) return;
+    const el = Math.min((performance.now() - (p.tRecv || 0)) / 1000, C.POS_EXTRAP_MAX_MS / 1000);
+    if (el <= 0) return;
+    const nx = p.px0 + p.vx * el, ny = p.py0 + p.vy * el;
+    if (p.zone === "town") { const tw = townWorldRef.current; p.tx = (tw && canStandTown(tw, nx, p.py0)) ? nx : p.px0; p.ty = (tw && canStandTown(tw, p.px0, ny)) ? ny : p.py0; }
+    else if (!p.zone || p.zone === "farm") { const w = worldRef.current; p.tx = (w && canStand(w, nx, p.py0)) ? nx : p.px0; p.ty = (w && canStand(w, p.px0, ny)) ? ny : p.py0; }
+  }
+
 
   // -------- Actions joueur (envoi au host) --------
   // La requête porte DEUX jeux de coordonnées : px/py = position du joueur
@@ -3709,7 +3755,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     setRabbitChallenge(s.rabbitChallenge);
     setRabbitChallengeOffer(false); rabbitChallengeOfferRef.current = false;
     channelRef.current?.send({ type: "broadcast", event: "apply", payload: { rabbitChallenge: s.rabbitChallenge } });
-    channelRef.current?.send({ type: "broadcast", event: "chat", payload: { from: "🐇", msg: L.rabbitChallengeStarted(C.RABBIT_CHALLENGE_TARGET) } });
+    broadcastChat("🐇", L.rabbitChallengeStarted(C.RABBIT_CHALLENGE_TARGET));
     dirtyRef.current = true;
   }
   function dismissRabbitChallengeOffer() {
@@ -4038,6 +4084,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
       if (actAnimRef.current > 0) actAnimRef.current -= dt;
       for (const p of playersRef.current.values()) {
+        advanceRemote(p); // FIX 243
         p.x += (p.tx - p.x) * Math.min(1, dt * 12);
         p.y += (p.ty - p.y) * Math.min(1, dt * 12);
         p.animT = p.moving ? (p.animT || 0) + dt * 9 : 0;
@@ -5170,7 +5217,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       } else m.animT = 0;
       m.moving = !!moving;
       const nowP = performance.now();
-      if (m.moving || m.moving !== lastMovingSentRef.current) { if (nowP - lastPosSentRef.current > 1000 / posSendHz()) { lastPosSentRef.current = nowP; lastMovingSentRef.current = m.moving; sendPos(); } }
+      maybeSendPos();
     }
     function drawTownFrame(now, dt) {
       const tw = townWorldRef.current, m = meRef.current, sprites = spritesRef.current;
@@ -5268,6 +5315,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // farm loop early-returns before its own lerp while we are here.
       for (const p of playersRef.current.values()) {
         if (p.zone !== "town" || p.sleeping) continue;
+        advanceRemote(p); // FIX 243
         p.x += (p.tx - p.x) * Math.min(1, dt * 12);
         p.y += (p.ty - p.y) * Math.min(1, dt * 12);
         p.animT = p.moving ? (p.animT || 0) + dt * 9 : 0;
@@ -5349,7 +5397,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // pour les coéquipiers présents sur la carte ET pour la simulation
       // hôte des créatures partagées. x/y publics restent figés côté ferme.
       const nowP = performance.now();
-      if (m.moving || m.moving !== lastMovingSentRef.current) { if (nowP - lastPosSentRef.current > 1000 / posSendHz()) { lastPosSentRef.current = nowP; lastMovingSentRef.current = m.moving; sendPos(); } }
+      maybeSendPos();
     }
     function updateMe(dt) {
       const m = meRef.current, keys = keysRef.current;
@@ -5371,7 +5419,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const driver = playersRef.current.get(horseNow.rider);
         if (driver) { m.x = driver.x; m.y = driver.y; m.dir = driver.dir; m.moving = driver.moving; m.animT = driver.animT || 0; }
         const now2 = performance.now();
-        if (m.moving || m.moving !== lastMovingSentRef.current) { if (now2 - lastPosSentRef.current > 1000 / posSendHz()) { lastPosSentRef.current = now2; lastMovingSentRef.current = m.moving; sendPos(); } }
+        maybeSendPos();
         return;
       }
       const uiBlocked = shopOpenRef.current || binOpenRef.current || mapOpenRef.current || cauldronMenuOpenRef.current || fishMiniRef.current || adsOpenRef.current || visitorOpenRef.current || document.activeElement === chatInputRef.current || m.sleeping || isInjured();
@@ -5408,7 +5456,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       } else m.animT = 0;
       m.moving = !!moving;
       const now = performance.now();
-      if (m.moving || m.moving !== lastMovingSentRef.current) { if (now - lastPosSentRef.current > 1000 / posSendHz()) { lastPosSentRef.current = now; lastMovingSentRef.current = m.moving; sendPos(); } }
+      maybeSendPos();
     }
     // Zip 236: draw my individual pets trailing behind me. Each pet keeps a
     // smoothed follow position (petFollowRef) that eases toward a point a bit
@@ -6053,7 +6101,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   }
   function submitChat() {
     const v = chatInputRef.current?.value.trim();
-    if (v) channelRef.current?.send({ type: "broadcast", event: "chat", payload: { from: meRef.current.name, msg: v.slice(0, 120) } });
+    if (v) broadcastChat(meRef.current.name, v.slice(0, 120));
     if (chatInputRef.current) chatInputRef.current.value = "";
     setChatOpen(false); chatInputRef.current?.blur();
   }
