@@ -1124,9 +1124,19 @@ export function gregMine(world, i) {
 // L'appelant (gregOrder, FermeGame.js) inspecte `world.ground[i]` pour
 // sauter la tâche "till" si la case est déjà labourée.
 export function findFreeGrassTiles(world, anchor, count) {
-  const out = [];
+  // FIX 246 (demande Guillaume) : quand une commande de plantation tombe,
+  // Greg doit PRIVILÉGIER les cases vides DÉJÀ LABOURÉES proches de l'ordre
+  // (pas de "till" à refaire, gain de temps) avant de labourer de nouvelles
+  // cases d'herbe. On collecte donc en deux catégories, en balayant par
+  // anneaux (du plus proche au plus loin) : les cases déjà labourées
+  // (G_TILLED/G_WATERED) d'abord — bornées à un rayon de proximité pour qu'il
+  // n'aille pas traverser toute la ferme vers une case labourée isolée —,
+  // puis les cases d'herbe libres pour compléter. Résultat ordonné
+  // "labourées proches -> herbe la plus proche".
+  const PREF_R = 16; // rayon de "proximité" pour préférer une case déjà labourée
+  const tilled = [], grass = [];
   const seen = new Set();
-  for (let r = 0; r < 40 && out.length < count; r++) {
+  for (let r = 0; r < 40 && (tilled.length + grass.length) < count * 4; r++) {
     for (let dy = -r; dy <= r; dy++) {
       for (let dx = -r; dx <= r; dx++) {
         if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue; // seulement l'anneau
@@ -1135,15 +1145,14 @@ export function findFreeGrassTiles(world, anchor, count) {
         const i = idx(x, y);
         if (seen.has(i)) continue;
         seen.add(i);
+        if (world.objects[i] !== C.O_NONE || world.crops.has(i)) continue;
         const gr = world.ground[i];
-        if ((gr === C.G_GRASS || gr === C.G_TILLED || gr === C.G_WATERED) && world.objects[i] === C.O_NONE && !world.crops.has(i)) {
-          out.push(i);
-          if (out.length >= count) return out;
-        }
+        if ((gr === C.G_TILLED || gr === C.G_WATERED) && r <= PREF_R) tilled.push(i);
+        else if (gr === C.G_GRASS || gr === C.G_TILLED || gr === C.G_WATERED) grass.push(i);
       }
     }
   }
-  return out;
+  return tilled.concat(grass).slice(0, count);
 }
 
 // Labour d'une case par Greg (identique à resolveAct "till", sans énergie).
@@ -1243,21 +1252,34 @@ export function findThirstyCrops(world, now, limit) {
 // generateWorld), on ne peut pas viser un point fixe : on part d'une ancre
 // côté maison et on cherche la berge la plus proche.
 export function findRiverbankTile(world, anchor) {
+  // FIX 246 (demande Guillaume : "Soan a parfois du mal à trouver la rivière").
+  // Avant, on n'acceptait QUE des cases de sable (G_SAND) libres : sur une
+  // rive sans liseré de sable (herbe/terre au ras de l'eau), la recherche
+  // renvoyait null et Soan restait planté. On accepte désormais TOUTE case
+  // praticable (non-eau, sans objet) qui BORDE l'eau (4-voisinage) — le sable
+  // reste préféré quand il existe. Balayage par anneaux (du plus proche au
+  // plus loin) autour de l'ancre (désormais la position du joueur à l'ordre,
+  // voir soanOrder).
+  const isWater = (x, y) => inMap(x, y) && world.ground[idx(x, y)] === C.G_WATER;
+  const walkable = (x, y) => inMap(x, y) && world.ground[idx(x, y)] !== C.G_WATER && world.objects[idx(x, y)] === C.O_NONE;
+  let fallback = null;
   const seen = new Set();
   for (let r = 0; r < C.SOAN_RIVER_SEARCH_RADIUS; r++) {
     for (let dy = -r; dy <= r; dy++) {
       for (let dx = -r; dx <= r; dx++) {
         if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue; // seulement l'anneau
         const x = anchor.x + dx, y = anchor.y + dy;
-        if (!inMap(x, y)) continue;
-        const i = idx(x, y);
-        if (seen.has(i)) continue;
+        const i = inMap(x, y) ? idx(x, y) : -1;
+        if (i < 0 || seen.has(i)) continue;
         seen.add(i);
-        if (world.ground[i] === C.G_SAND && world.objects[i] === C.O_NONE) return i;
+        if (!walkable(x, y)) continue;
+        if (!(isWater(x + 1, y) || isWater(x - 1, y) || isWater(x, y + 1) || isWater(x, y - 1))) continue;
+        if (world.ground[i] === C.G_SAND) return i; // berge de sable = idéale, prioritaire
+        if (fallback == null) fallback = i;          // sinon 1re terre praticable bordant l'eau
       }
     }
   }
-  return null;
+  return fallback; // sable si trouvé dans le rayon, sinon toute berge praticable, sinon null
 }
 
 // Une prise de Soan une fois posté à la rivière : tirage pondéré identique

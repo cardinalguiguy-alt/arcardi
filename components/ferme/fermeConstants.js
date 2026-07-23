@@ -761,9 +761,10 @@ export const HEAL_RANGE = 2.5;               // distance max (tuiles) pour soign
 // FermeGame.js) vaut soit `null` (pas engagé), soit un objet d'état.
 export const GREG_HIRE_COST = 400;                 // prix d'engagement (extrapolé, entre le puits et un cheval)
 export const GREG_CONTRACT_MS = 2 * 24 * 60 * 60 * 1000; // durée réelle du contrat : 2 jours réels rémunérés
-export const GREG_WATER_CHECK_MS = 15 * 1000;      // fréquence de scan des cultures assoiffées (15s réelles) — Greg part à pied dès qu'il en repère une, pas d'arrosage instantané
-export const GREG_WATER_BATCH = 6;                 // nb max de cases assoiffées mises en file par scan (évite de surcharger la file d'un coup sur un grand champ)
-export const GREG_SPEED = 3.2;                     // tuiles/seconde, un peu plus lent qu'un fermier (5.2)
+export const GREG_WATER_CHECK_MS = 8 * 1000;       // FIX 246 : scan des cultures assoiffées plus fréquent (15s -> 8s) — Greg arrose plus vite (demande Guillaume)
+export const GREG_WATER_BATCH = 10;                // FIX 246 : plus de cases assoiffées par passage (6 -> 10), Greg arrose plus vite
+export const GREG_SPEED = 3.2;                     // tuiles/seconde (rôdaille au repos = GREG_SPEED * 0.55)
+export const GREG_TASK_SPEED = 4.3;                // FIX 246 : en mission Greg se déplace plus vite (demande Guillaume) — reste sous PLAYER_SPEED (5.2)
 export const GREG_ROAM_RADIUS = 6;                 // amplitude de rôdaille autour de son ancre (même principe que WOLF_ROAM_RADIUS)
 export const GREG_ANCHOR = { x: 26, y: 58 };        // point d'ancrage (rôdaille + tuiles de dépôt), au bord des champs ouest (puits)
 export const GREG_TASK_RANGE = 0.6;                // distance d'arrivée sur une case de tâche avant de l'exécuter
@@ -778,6 +779,29 @@ export const GREG_PICK_LVL = 1;
 export const GREG_CLEAR_RADIUS = 12;               // rayon de recherche d'arbres/rochers à dégager (plus large que GREG_ROAM_RADIUS : "étendre" le champ, pas juste l'entretenir)
 export const GREG_CLEAR_BATCH = 3;                 // nb d'obstacles mis en file par passage de scan
 export const GREG_CLEAR_CHECK_MS = 5 * 60 * 1000;  // fréquence de scan (5 min réelles) quand Greg n'a plus de tâche en attente
+
+// --- Bien-être de Greg (FIX 246, décision Guillaume : "humeur + petit bonus").
+// Jauge 0..GREG_WELLBEING_MAX portée par sharedRef.current.greg.wellbeing,
+// diffusée avec le reste de l'objet greg. Monte quand on lui parle (fiche Q),
+// redescend lentement avec le temps. Au-dessus du seuil HIGH, Greg travaille
+// un peu plus vite et fait des pauses plus courtes ; sous LOW, un peu plus
+// lent. Aucun effet économique lourd (pas de contrat/prix impactés).
+export const GREG_WELLBEING_MAX = 100;
+export const GREG_WELLBEING_START = 70;              // à l'engagement
+export const GREG_WELLBEING_DECAY_PER_MIN = 1.5;     // points perdus par minute réelle
+export const GREG_CHAT_WELLBEING_GAIN = 10;          // gain par causette (fiche Q)
+export const GREG_CHAT_COOLDOWN_MS = 20 * 1000;      // anti-spam : une causette "utile" toutes les 20s
+export const GREG_WELLBEING_HIGH = 70;               // au-dessus : bonus de vitesse / pauses courtes
+export const GREG_WELLBEING_LOW = 30;                // en dessous : léger malus de vitesse
+export const GREG_SPEED_BONUS = 1.15;                // multiplicateur de vitesse quand bien-être haut
+export const GREG_SPEED_MALUS = 0.9;                 // multiplicateur quand bien-être bas
+
+// --- Repos de Greg : pose assise sur un tabouret + 💤 (FIX 246, décision
+// Guillaume : "pose assise dédiée"). Quand il rôde sans tâche, il s'assoit
+// parfois un moment avant de reprendre sa balade tranquille.
+export const GREG_SIT_CHANCE = 0.45;                 // proba., à chaque fin de cible de rôdaille, de s'asseoir au lieu de repartir
+export const GREG_SIT_MIN_MS = 4000;                 // durée assise minimale
+export const GREG_SIT_MAX_MS = 9000;                 // durée assise maximale
 
 // --- Engrais (chantier 2026-07, suite plan validé) : ressource RARE achetée
 // en or au shop (stock limité, se reconstitue tous les FERTILIZER_RESTOCK_EVERY_N_DAYS
@@ -818,8 +842,8 @@ export const SOAN_RIVER_SEARCH_RADIUS = 60;         // rayon de recherche d'une 
 // la rivière, Soan alterne indéfiniment pêche/pause jusqu'à un rappel ou
 // l'expiration de son contrat (24h réelles ci-dessus, aucun minuteur de cycle
 // séparé n'est nécessaire — la boucle s'arrête d'elle-même avec le contrat).
-export const SOAN_WORK_MS = 30 * 60 * 1000;         // durée d'un bloc de pêche d'affilée
-export const SOAN_BREAK_MS = 15 * 60 * 1000;        // durée de la pause (balade) avant de reprendre
+export const SOAN_WORK_MS = 45 * 60 * 1000;         // FIX 246 : Soan travaille plus (30 -> 45 min de pêche d'affilée, demande Guillaume)
+export const SOAN_BREAK_MS = 8 * 60 * 1000;         // FIX 246 : pauses plus courtes (15 -> 8 min), Soan travaille plus
 export const SOAN_BREAK_ROAM_RADIUS = 8;            // amplitude de balade pendant la pause, autour de la berge où il pêche
 export const SOAN_FISH_INTERVAL_MS = 20 * 1000;     // pêche EN CONTINU pendant un bloc de travail ("il pioche des poissons continûment", demande Guillaume) : une prise toutes les 20s réelles (extrapolé, pas de mini-jeu pour un PNJ, contrairement au joueur)
 
@@ -838,9 +862,11 @@ export const RABBIT_SPEED_FLEE = 4.6;      // fuite une fois repéré (relevé 2
 export const RABBIT_ROAM_RADIUS = 5;       // amplitude de rôdaille autour de son point d'ancrage
 export const RABBIT_FLEE_RANGE = 3;        // distance en dessous de laquelle un lapin risque d'être repéré
 export const RABBIT_FLEE_COOLDOWN_MS = 3500; // durée d'une fuite avant de reprendre son activité
-export const RABBIT_NOTICE_CHECK_MS = 550; // fréquence des "jets de repérage" tant qu'un fermier reste à portée
-export const RABBIT_UNSEEN_CHANCE = 0.2;   // "1 chance sur 5 qu'ils ne nous voient pas" (demande chiffrée de Guillaume)
-export const RABBIT_CATCH_RANGE = ANIMAL_PICK_RANGE; // même portée que l'outil "déplacer" sur les animaux de la ferme
+export const RABBIT_NOTICE_CHECK_MS = 800; // FIX 246 : jets de repérage moins fréquents (550 -> 800ms), lapins plus faciles à approcher
+export const RABBIT_UNSEEN_CHANCE = 0.38;  // FIX 246 : "pas vus" plus généreux (0.2 -> 0.38), ramassage des lapins facilité (demande Guillaume)
+export const RABBIT_CATCH_RANGE = 2.6;     // FIX 246 : portée de capture élargie (1.8 -> 2.6), lapins plus faciles à attraper
+export const RABBIT_CATCH_PICK_RADIUS = 2.2;  // FIX 246 : rayon de ciblage souris d'un lapin (nearestPickableRabbit), élargi (1.3 -> 2.2)
+export const RABBIT_CATCH_FLEE_GRACE = 1.1;   // FIX 246 : on peut quand même attraper un lapin qui vient de détaler s'il est TRÈS proche (<= cette distance)
 export const RABBIT_MIN_HOUSE_DIST = 35;   // distance min. à la maison pour apparaître ("zones éloignées de la maison")
 export const RABBIT_EAST_BIAS = 0.8;       // proba. de favoriser la rive droite à l'apparition ("surtout rive droite")
 export const RABBIT_RESPAWN_MS = 7000;     // délai minimum entre deux réapparitions (repop progressif, pas instantané)

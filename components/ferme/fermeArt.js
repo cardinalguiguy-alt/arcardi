@@ -1094,6 +1094,41 @@ export function buildSprites() {
     g.beginPath(); g.moveTo(11, 7); g.lineTo(3, 13); g.stroke();  // pied croisé 2
     return c;
   }
+  // Greg assis sur son tabouret (FIX 246, décision Guillaume : "pose assise
+  // dédiée"). Sprite 16x24 (même gabarit qu'un personnage, aligné pareil dans
+  // drawCharacter) : tabouret pliant baké dessous, Greg de face, jambes
+  // repliées/pendantes, bras sur les cuisses, salopette denim reconnaissable.
+  // Le 💤 flottant est ajouté au rendu (FermeGame) pour qu'il oscille.
+  function gregSeatedSprite() {
+    const [c, g] = cv(16, 24);
+    const o = C.OUTFITS[0];
+    const hair = HAIR_COLORS[0];
+    const DENIM = "#3f5a8c", DENIM_D = shade(DENIM);
+    const WOOD = "#8a6340", WOOD_L = "#a87745", WOOD_D = "#6a4a2a";
+    // Tabouret (assise + pieds croisés).
+    P(g, 3, 17, 10, 3, WOOD); P(g, 3, 17, 10, 1, WOOD_L);
+    g.strokeStyle = WOOD_D; g.lineWidth = 2;
+    g.beginPath(); g.moveTo(4, 20); g.lineTo(11, 24); g.stroke();
+    g.beginPath(); g.moveTo(12, 20); g.lineTo(5, 24); g.stroke();
+    // Mollets pendants devant le tabouret + bottes.
+    P(g, 5, 16, 2, 5, DENIM); P(g, 9, 16, 2, 5, DENIM_D);
+    P(g, 5, 21, 2, 2, "#6a4528"); P(g, 9, 21, 2, 2, "#6a4528");
+    // Cuisses assises (horizontales) sur l'assise.
+    P(g, 4, 14, 8, 3, DENIM); P(g, 4, 16, 8, 1, DENIM_D);
+    // Torse + salopette.
+    P(g, 4, 9, 8, 6, o.shirt); P(g, 4, 9, 8, 1, tint(o.shirt));
+    P(g, 6, 10, 4, 5, DENIM);
+    P(g, 5, 9, 1, 4, DENIM); P(g, 10, 9, 1, 4, DENIM);
+    // Bras posés sur les cuisses + mains.
+    P(g, 3, 12, 2, 3, o.shirt); P(g, 11, 12, 2, 3, o.shirt);
+    P(g, 3, 14, 2, 1, SKIN); P(g, 11, 14, 2, 1, SKIN);
+    // Tête + cheveux.
+    P(g, 4, 2, 8, 8, SKIN); P(g, 4, 9, 8, 1, SKIN_D);
+    P(g, 3, 1, 10, 3, hair); P(g, 3, 3, 1, 3, hair); P(g, 12, 3, 1, 3, hair); P(g, 4, 1, 8, 2, hair);
+    P(g, 6, 5, 1, 2, "#3a2a1e"); P(g, 9, 5, 1, 2, "#3a2a1e"); // yeux reposés
+    P(g, 6, 8, 4, 1, "#c88a6a"); // bouche
+    return c;
+  }
   function fishingRodHeldSprite() {
     const [c, g] = cv(18, 26);
     P(g, 8, 20, 3, 6, "#5a4020");  // poignée en bois
@@ -1498,6 +1533,7 @@ house: house(),
     rabbit: [rabbitSprite(0), rabbitSprite(1), rabbitSprite(2)],
     torch: torchSprite(),
     stool: stoolSprite(),
+    gregSeated: gregSeatedSprite(),
     fishingRodHeld: fishingRodHeldSprite(),
     well: well(),
     fence: fenceTile(),
