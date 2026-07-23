@@ -1047,64 +1047,117 @@ export const UNIQUE_PETS = [
 // source (visitor gift OR passage world). `hue` drives the generic pet
 // sprite tint (fermeArt.js/petSprite); `body` picks a silhouette.
 export const MAX_PETS = 2;
+// Zip 248 (demande Guillaume : "the dalmatian is purple, which does not make
+// sense... make each dog and cat design accurate to their actual appearance").
+// L'ancien système ne portait qu'une TEINTE (`hue`) appliquée en HSL sur une
+// unique silhouette générique : d'où un dalmatien violet et 30 races
+// indiscernables. Chaque entrée porte désormais une VRAIE palette et un
+// motif :
+//   coat  = couleur principale du pelage        shade = ombre / dos
+//   belly = ventre / poitrail / museau clair    mark  = couleur des marques
+//   eye   = couleur de l'iris                   nose  = truffe
+//   pattern = "solid" | "tabby" | "spots" | "rosette" | "calico" | "points"
+//             | "tuxedo" | "saddle" | "mask" | "patches" | "blaze"
+//   ears  = "cat" | "perky" | "floppy" | "long" | "tiny" | "rose"
+//   tail  = "cat" | "curl" | "plume" | "stub" | "bushy"
+//   fluff = 0 (poil ras) | 1 (moyen) | 2 (très fourni : persan, spitz…)
+//   longBody = true pour les races basses et allongées (teckel)
+// Voir petSprite (fermeArt.js) qui dessine chat et chien avec des
+// silhouettes RÉELLEMENT différentes puis applique le motif par-dessus.
 export const PET_CATALOG = {
-  // visitor-gift pets
-  dragon:    { name: "Dragonneau",            nameEn: "Baby dragon",       hue: 130, body: "dragon" },
-  unicorn:   { name: "Licorne",               nameEn: "Unicorn",           hue: 300, body: "horse" },
-  skunk:     { name: "Moufette chic",         nameEn: "Fancy skunk",       hue: 260, body: "critter" },
-  // passage-world pets (must match PASSAGE_WORLDS[].pet.id)
-  shadowcat: { name: "Chat d'ombre",          nameEn: "Shadow cat",        hue: 260, body: "cat" },
-  candyfox:  { name: "Renard barbe à papa",   nameEn: "Cotton-candy fox",  hue: 320, body: "critter" },
-  mazemouse: { name: "Souris des haies",      nameEn: "Hedge mouse",       hue: 90,  body: "critter" },
-  gemturtle: { name: "Tortue gemme",          nameEn: "Gem turtle",        hue: 180, body: "turtle" },
-  cloudlamb: { name: "Agneau des nuages",     nameEn: "Cloud lamb",        hue: 40,  body: "lamb" },
+  // --- visitor-gift pets
+  dragon:    { name: "Dragonneau",          nameEn: "Baby dragon",      body: "dragon",
+               coat: "#4aa04a", shade: "#2e6e2e", belly: "#a8dc78", mark: "#ffcf3a", eye: "#ffd75e", nose: "#1f4d1f", pattern: "solid" },
+  unicorn:   { name: "Licorne",             nameEn: "Unicorn",          body: "horse",
+               coat: "#f4f0ea", shade: "#d8d2c6", belly: "#ffffff", mark: "#e58ac0", eye: "#7a5fd0", nose: "#c0a8b8", pattern: "solid" },
+  skunk:     { name: "Moufette chic",       nameEn: "Fancy skunk",      body: "critter",
+               coat: "#2a2a30", shade: "#17171c", belly: "#3a3a42", mark: "#f0eee6", eye: "#ffd75e", nose: "#101014", pattern: "stripe" },
+  // --- passage-world pets (must match PASSAGE_WORLDS[].pet.id)
+  shadowcat: { name: "Chat d'ombre",        nameEn: "Shadow cat",       body: "cat",
+               coat: "#3a2f4a", shade: "#241d30", belly: "#4d4062", mark: "#b088ff", eye: "#c9a6ff", nose: "#241d30", pattern: "solid", ears: "cat", tail: "cat", fluff: 1 },
+  candyfox:  { name: "Renard barbe à papa", nameEn: "Cotton-candy fox", body: "critter",
+               coat: "#f2a8cf", shade: "#d2789f", belly: "#fde4f1", mark: "#ffffff", eye: "#6a4a7a", nose: "#8a4a6a", pattern: "tips" },
+  mazemouse: { name: "Souris des haies",    nameEn: "Hedge mouse",      body: "critter",
+               coat: "#9a8f7a", shade: "#776d5a", belly: "#e0d8c4", mark: "#f0b8c0", eye: "#241d18", nose: "#c07888", pattern: "solid" },
+  gemturtle: { name: "Tortue gemme",        nameEn: "Gem turtle",       body: "turtle",
+               coat: "#5fbf7a", shade: "#3d8a55", belly: "#a8e0b0", mark: "#3fbfc8", eye: "#1f3d2a", nose: "#2e6b42", pattern: "solid" },
+  cloudlamb: { name: "Agneau des nuages",   nameEn: "Cloud lamb",       body: "lamb",
+               coat: "#f6f4f0", shade: "#dcd8d0", belly: "#ffffff", mark: "#e8c9a8", eye: "#3a3028", nose: "#c9a086", pattern: "solid", fluff: 2 },
 };
 export function petName(petId, en) {
   const p = PET_CATALOG[petId]; if (!p) return petId;
   return en ? p.nameEn : p.name;
 }
 
-// --- Zip 237: COMMON pets (cats & dogs, many breeds) that visitors can offer
-// in exchange for an order (Guillaume: "up to 15 varieties of dogs and
-// cats"). They fold into PET_CATALOG so the bag/sprite/name paths treat them
-// like any other pet. `common:true` marks them; `body` drives the sprite
-// silhouette (cat vs dog) and `hue` the tint so breeds read differently.
+// --- Zip 237 / refonte zip 248 : races COMMUNES (chats & chiens) proposées
+// par les visiteurs. Chaque race a maintenant sa palette réelle et son motif,
+// pour être reconnaissable au premier coup d'œil.
 export const COMMON_CATS = [
-  { id: "cat_tabby",    name: "Chat tigré",        nameEn: "Tabby cat",        hue: 30 },
-  { id: "cat_black",    name: "Chat noir",         nameEn: "Black cat",        hue: 270 },
-  { id: "cat_white",    name: "Chat blanc",        nameEn: "White cat",        hue: 210 },
-  { id: "cat_ginger",   name: "Chat roux",         nameEn: "Ginger cat",       hue: 20 },
-  { id: "cat_siamese",  name: "Siamois",           nameEn: "Siamese",          hue: 40 },
-  { id: "cat_calico",   name: "Chat calico",       nameEn: "Calico",           hue: 15 },
-  { id: "cat_grey",     name: "Chartreux",         nameEn: "Grey cat",         hue: 220 },
-  { id: "cat_persian",  name: "Persan",            nameEn: "Persian",          hue: 45 },
-  { id: "cat_bengal",   name: "Bengal",            nameEn: "Bengal",           hue: 35 },
-  { id: "cat_tux",      name: "Chat smoking",      nameEn: "Tuxedo cat",       hue: 260 },
-  { id: "cat_maine",    name: "Maine coon",        nameEn: "Maine coon",       hue: 25 },
-  { id: "cat_blue",     name: "Bleu russe",        nameEn: "Russian blue",     hue: 200 },
-  { id: "cat_cream",    name: "Chat crème",        nameEn: "Cream cat",        hue: 50 },
-  { id: "cat_spotty",   name: "Chat moucheté",     nameEn: "Spotted cat",      hue: 300 },
-  { id: "cat_lilac",    name: "Chat lilas",        nameEn: "Lilac cat",        hue: 285 },
+  { id: "cat_tabby",   name: "Chat tigré",    nameEn: "Tabby cat",    pattern: "tabby",
+    coat: "#96794e", shade: "#6d5636", belly: "#e2d3ae", mark: "#4e3c22", eye: "#8fbf4a", nose: "#c98a86" },
+  { id: "cat_black",   name: "Chat noir",     nameEn: "Black cat",    pattern: "solid",
+    coat: "#2c2c33", shade: "#191920", belly: "#3c3c46", mark: "#2c2c33", eye: "#8fd94a", nose: "#191920" },
+  { id: "cat_white",   name: "Chat blanc",    nameEn: "White cat",    pattern: "solid",
+    coat: "#f4f2ec", shade: "#d9d5cb", belly: "#ffffff", mark: "#f4f2ec", eye: "#5aa8d9", nose: "#e8a8a8" },
+  { id: "cat_ginger",  name: "Chat roux",     nameEn: "Ginger cat",   pattern: "tabby",
+    coat: "#d9843c", shade: "#ac5f22", belly: "#f6d9a8", mark: "#9a4f18", eye: "#8fbf4a", nose: "#e0968e" },
+  { id: "cat_siamese", name: "Siamois",       nameEn: "Siamese",      pattern: "points",
+    coat: "#eadfc4", shade: "#cfc0a0", belly: "#f8f0dc", mark: "#4a3830", eye: "#4aa8e0", nose: "#4a3830" },
+  { id: "cat_calico",  name: "Chat calico",   nameEn: "Calico",       pattern: "calico",
+    coat: "#f4f1e8", shade: "#d8d3c6", belly: "#ffffff", mark: "#d9863c", mark2: "#33302e", eye: "#c9a03c", nose: "#e0a0a0" },
+  { id: "cat_grey",    name: "Chartreux",     nameEn: "Grey cat",     pattern: "solid",
+    coat: "#7f8d97", shade: "#5d6a74", belly: "#a3b0b8", mark: "#7f8d97", eye: "#e0a83c", nose: "#5d6a74" },
+  { id: "cat_persian", name: "Persan",        nameEn: "Persian",      pattern: "solid", fluff: 2, flatFace: true,
+    coat: "#efe3c8", shade: "#d4c5a4", belly: "#fbf5e6", mark: "#efe3c8", eye: "#d9803c", nose: "#d9a09a" },
+  { id: "cat_bengal",  name: "Bengal",        nameEn: "Bengal",       pattern: "rosette",
+    coat: "#d9a441", shade: "#b07f26", belly: "#f3ddab", mark: "#4a3320", eye: "#8fbf4a", nose: "#c98a72" },
+  { id: "cat_tux",     name: "Chat smoking",  nameEn: "Tuxedo cat",   pattern: "tuxedo",
+    coat: "#2c2c33", shade: "#191920", belly: "#f6f4ee", mark: "#f6f4ee", eye: "#8fd94a", nose: "#e8a8a8" },
+  { id: "cat_maine",   name: "Maine coon",    nameEn: "Maine coon",   pattern: "tabby", fluff: 2, tufts: true,
+    coat: "#8a6740", shade: "#63482b", belly: "#dcc39a", mark: "#40301c", eye: "#c9a03c", nose: "#b07a70" },
+  { id: "cat_blue",    name: "Bleu russe",    nameEn: "Russian blue", pattern: "solid",
+    coat: "#93a6b4", shade: "#6f8290", belly: "#b9c8d2", mark: "#93a6b4", eye: "#6fbf5a", nose: "#7f909c" },
+  { id: "cat_cream",   name: "Chat crème",    nameEn: "Cream cat",    pattern: "solid",
+    coat: "#eed9b0", shade: "#d2b98c", belly: "#f9ecd2", mark: "#eed9b0", eye: "#c9a03c", nose: "#e0b0a0" },
+  { id: "cat_spotty",  name: "Chat moucheté", nameEn: "Spotted cat",  pattern: "spots",
+    coat: "#d5d5d0", shade: "#b2b2ac", belly: "#eeeeea", mark: "#43434a", eye: "#8fbf4a", nose: "#b09090" },
+  { id: "cat_lilac",   name: "Chat lilas",    nameEn: "Lilac cat",    pattern: "solid",
+    coat: "#bda9b6", shade: "#9a8794", belly: "#dccfd8", mark: "#bda9b6", eye: "#c9a03c", nose: "#c0a0aa" },
 ];
 export const COMMON_DOGS = [
-  { id: "dog_lab",      name: "Labrador",          nameEn: "Labrador",         hue: 40 },
-  { id: "dog_poodle",   name: "Caniche",           nameEn: "Poodle",           hue: 320 },
-  { id: "dog_husky",    name: "Husky",             nameEn: "Husky",            hue: 205 },
-  { id: "dog_beagle",   name: "Beagle",            nameEn: "Beagle",           hue: 28 },
-  { id: "dog_corgi",    name: "Corgi",             nameEn: "Corgi",            hue: 35 },
-  { id: "dog_shiba",    name: "Shiba",             nameEn: "Shiba",            hue: 22 },
-  { id: "dog_dalmatian",name: "Dalmatien",         nameEn: "Dalmatian",        hue: 250 },
-  { id: "dog_bulldog",  name: "Bouledogue",        nameEn: "Bulldog",          hue: 45 },
-  { id: "dog_terrier",  name: "Terrier",           nameEn: "Terrier",          hue: 33 },
-  { id: "dog_dachs",    name: "Teckel",            nameEn: "Dachshund",        hue: 26 },
-  { id: "dog_collie",   name: "Colley",            nameEn: "Collie",           hue: 38 },
-  { id: "dog_pug",      name: "Carlin",            nameEn: "Pug",              hue: 48 },
-  { id: "dog_boxer",    name: "Boxer",             nameEn: "Boxer",            hue: 24 },
-  { id: "dog_spaniel",  name: "Épagneul",          nameEn: "Spaniel",          hue: 30 },
-  { id: "dog_pom",      name: "Spitz nain",        nameEn: "Pomeranian",       hue: 42 },
+  { id: "dog_lab",       name: "Labrador",   nameEn: "Labrador",   pattern: "solid",  ears: "floppy", tail: "plume",
+    coat: "#ddc188", shade: "#bb9d63", belly: "#f0dfb4", mark: "#ddc188", eye: "#5a3a20", nose: "#2a2320" },
+  { id: "dog_poodle",    name: "Caniche",    nameEn: "Poodle",     pattern: "solid",  ears: "floppy", tail: "pom", fluff: 2, curly: true,
+    coat: "#f0ece2", shade: "#d5cfc0", belly: "#fbf8f0", mark: "#f0ece2", eye: "#3a2f28", nose: "#241f1c" },
+  { id: "dog_husky",     name: "Husky",      nameEn: "Husky",      pattern: "mask",   ears: "perky",  tail: "bushy", fluff: 1,
+    coat: "#4a4f5a", shade: "#31353e", belly: "#f2f2ee", mark: "#f2f2ee", eye: "#5ec8e8", nose: "#1c1c20" },
+  { id: "dog_beagle",    name: "Beagle",     nameEn: "Beagle",     pattern: "saddle", ears: "long",   tail: "up",
+    coat: "#f2ece0", shade: "#d3ccbc", belly: "#ffffff", mark: "#c2822f", mark2: "#33302c", eye: "#4a3220", nose: "#241f1c" },
+  { id: "dog_corgi",     name: "Corgi",      nameEn: "Corgi",      pattern: "blaze",  ears: "perky",  tail: "stub", stumpy: true,
+    coat: "#d99a52", shade: "#b3762f", belly: "#f6efe2", mark: "#f6efe2", eye: "#4a3220", nose: "#241f1c" },
+  { id: "dog_shiba",     name: "Shiba",      nameEn: "Shiba",      pattern: "blaze",  ears: "perky",  tail: "curl",
+    coat: "#d9793a", shade: "#b0561d", belly: "#f6ecd8", mark: "#f6ecd8", eye: "#3a2a1c", nose: "#241f1c" },
+  { id: "dog_dalmatian", name: "Dalmatien",  nameEn: "Dalmatian",  pattern: "spots",  ears: "floppy", tail: "up",
+    coat: "#f5f3ed", shade: "#dad6cc", belly: "#ffffff", mark: "#1e1e22", eye: "#4a3a2a", nose: "#1e1e22" },
+  { id: "dog_bulldog",   name: "Bouledogue", nameEn: "Bulldog",    pattern: "patches",ears: "rose",   tail: "stub", wide: true, flatFace: true,
+    coat: "#f0e6d4", shade: "#d2c4ac", belly: "#fbf6ec", mark: "#c98f4a", eye: "#3a2a1c", nose: "#241f1c" },
+  { id: "dog_terrier",   name: "Terrier",    nameEn: "Terrier",    pattern: "patches",ears: "tiny",   tail: "up", scruffy: true,
+    coat: "#f2ece0", shade: "#d3ccbc", belly: "#ffffff", mark: "#b8823c", eye: "#3a2a1c", nose: "#241f1c" },
+  { id: "dog_dachs",     name: "Teckel",     nameEn: "Dachshund",  pattern: "solid",  ears: "long",   tail: "up", longBody: true,
+    coat: "#8c4a24", shade: "#68341a", belly: "#b06a3a", mark: "#8c4a24", eye: "#2f2018", nose: "#1e1a18" },
+  { id: "dog_collie",    name: "Colley",     nameEn: "Collie",     pattern: "blaze",  ears: "semi",   tail: "plume", fluff: 2, longNose: true,
+    coat: "#b5762f", shade: "#8d5820", belly: "#f6efe2", mark: "#f6efe2", eye: "#3a2a1c", nose: "#241f1c" },
+  { id: "dog_pug",       name: "Carlin",     nameEn: "Pug",        pattern: "mask",   ears: "rose",   tail: "curl", flatFace: true,
+    coat: "#e5c98d", shade: "#c4a769", belly: "#f4e6c4", mark: "#2e2a28", eye: "#2a2018", nose: "#1e1a18" },
+  { id: "dog_boxer",     name: "Boxer",      nameEn: "Boxer",      pattern: "mask",   ears: "semi",   tail: "stub",
+    coat: "#c9803c", shade: "#a15f24", belly: "#f2e4cc", mark: "#3a2e26", eye: "#3a2a1c", nose: "#241f1c" },
+  { id: "dog_spaniel",   name: "Épagneul",   nameEn: "Spaniel",    pattern: "patches",ears: "long",   tail: "plume", fluff: 1,
+    coat: "#f4efe4", shade: "#d6d0c2", belly: "#ffffff", mark: "#7d4a2a", eye: "#3a2a1c", nose: "#241f1c" },
+  { id: "dog_pom",       name: "Spitz nain", nameEn: "Pomeranian", pattern: "solid",  ears: "tiny",   tail: "pom", fluff: 2, stumpy: true,
+    coat: "#e0913c", shade: "#bb6f22", belly: "#f6dcb0", mark: "#e0913c", eye: "#2f2018", nose: "#1e1a18" },
 ];
-for (const c of COMMON_CATS) PET_CATALOG[c.id] = { name: c.name, nameEn: c.nameEn, hue: c.hue, body: "cat", common: true };
-for (const d of COMMON_DOGS) PET_CATALOG[d.id] = { name: d.name, nameEn: d.nameEn, hue: d.hue, body: "dog", common: true };
+for (const c of COMMON_CATS) PET_CATALOG[c.id] = { ...c, body: "cat", common: true, ears: "cat", tail: "cat" };
+for (const d of COMMON_DOGS) PET_CATALOG[d.id] = { ...d, body: "dog", common: true };
 export const COMMON_PET_IDS = [...COMMON_CATS, ...COMMON_DOGS].map(p => p.id);
 
 // --- Zip 237: SWAP offers. Some visitors barter an item for our produce

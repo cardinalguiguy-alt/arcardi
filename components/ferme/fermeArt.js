@@ -24,27 +24,220 @@ export function buildSprites() {
   function makeRnd(s) { return () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; }; }
 
   // ==================================================================
-  // Zip 236: generic pet sprite (tinted little critter). One 16x16 sprite per
-  // pet id in C.PET_CATALOG, tinted by the catalog `hue`. Kept deliberately
-  // simple — a body blob, ears/horn, eye, feet — differentiated by `body`.
+  // Zip 248 — refonte complète des sprites de familiers (demande Guillaume :
+  // "the dalmatian is purple, which does not make sense... make each dog and
+  // cat design accurate to their actual appearance" + "improve the overall
+  // pet design - right now it looks too ambiguous").
+  //
+  // AVANT : une seule silhouette générique teintée en HSL par un `hue` — d'où
+  // un dalmatien VIOLET, et 30 races strictement identiques à la couleur près.
+  // MAINTENANT, trois changements :
+  //   1) chaque race porte sa VRAIE palette (coat/shade/belly/mark) et son
+  //      motif — voir PET_CATALOG (fermeConstants.js) ;
+  //   2) chat et chien ont des silhouettes RÉELLEMENT distinctes : le chat a
+  //      une tête ronde, des oreilles triangulaires et une longue queue
+  //      dressée ; le chien a un museau saillant avec truffe, des oreilles
+  //      selon la race (tombantes / dressées / longues / en rose) et un corps
+  //      plus trapu ;
+  //   3) un CONTOUR sombre est ajouté automatiquement (outlineSprite) — c'est
+  //      lui qui règle le "trop ambigu" : sans liseré, tête et corps se
+  //      fondaient en une seule masse illisible à 16x16.
+  // Les motifs (taches, rayures, masque, points siamois, selle, smoking…) sont
+  // peints en `source-atop` : ils se DÉCOUPENT sur la silhouette déjà dessinée,
+  // donc aucune tache ne flotte dans le vide. Yeux et truffe sont posés
+  // ensuite, et le contour tout à la fin pour rester net.
+  //
+  // Le dessin tient dans x1..x14 / y1..y14 : la marge d'un pixel est réservée
+  // au contour.
+  function outlineSprite(g, w, h, col) {
+    const im = g.getImageData(0, 0, w, h), d = im.data;
+    const solid = (x, y) => x >= 0 && y >= 0 && x < w && y < h && d[(y * w + x) * 4 + 3] > 0;
+    const ring = [];
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      if (solid(x, y)) continue;
+      if (solid(x - 1, y) || solid(x + 1, y) || solid(x, y - 1) || solid(x, y + 1)) ring.push(x, y);
+    }
+    g.fillStyle = col;
+    for (let i = 0; i < ring.length; i += 2) g.fillRect(ring[i], ring[i + 1], 1, 1);
+  }
   function petSprite(petId) {
-    const spec = C.PET_CATALOG[petId] || { hue: 200, body: "critter" };
+    const spec = C.PET_CATALOG[petId] || {};
+    const kind = spec.body || "critter";
+    const coat = spec.coat || "#b0a898";
+    const shade = spec.shade || "#8a8274";
+    const belly = spec.belly || "#e2ddd2";
+    const mark = spec.mark || shade;
+    const mark2 = spec.mark2 || mark;
+    const eyeC = spec.eye || "#3a3a3a";
+    const noseC = spec.nose || "#2a2320";
+    const pattern = spec.pattern || "solid";
+    const fluff = spec.fluff | 0;
+    const ears = spec.ears || (kind === "cat" ? "cat" : "floppy");
+    const tail = spec.tail || (kind === "cat" ? "cat" : "up");
     const [c, g] = cv(T, T);
-    const base = `hsl(${spec.hue}, 65%, 62%)`;
-    const dark = `hsl(${spec.hue}, 55%, 42%)`;
-    const light = `hsl(${spec.hue}, 70%, 78%)`;
-    P(g, 4, 8, 8, 6, base); P(g, 3, 9, 10, 4, base);
-    P(g, 4, 8, 8, 1, light);
-    P(g, 5, 13, 2, 2, dark); P(g, 9, 13, 2, 2, dark);
-    P(g, 9, 4, 5, 5, base); P(g, 9, 4, 5, 1, light);
-    P(g, 12, 6, 1, 1, "#1a1a1a");
-    if (spec.body === "dragon") { P(g, 13, 5, 2, 1, "#ffcf3a"); P(g, 2, 7, 3, 2, dark); P(g, 6, 5, 1, 2, dark); P(g, 8, 4, 1, 2, dark); }
-    else if (spec.body === "horse") { P(g, 12, 1, 1, 4, light); P(g, 8, 5, 1, 3, light); }
-    else if (spec.body === "cat") { P(g, 9, 2, 1, 2, base); P(g, 12, 2, 1, 2, base); P(g, 2, 10, 3, 1, base); }
-    else if (spec.body === "dog") { P(g, 8, 5, 2, 3, dark); /* floppy ear */ P(g, 13, 5, 1, 3, dark); P(g, 2, 9, 3, 2, base); /* tail */ P(g, 11, 8, 1, 1, "#1a1a1a"); /* nose */ }
-    else if (spec.body === "turtle") { P(g, 4, 7, 8, 6, dark); P(g, 5, 8, 6, 4, base); P(g, 6, 9, 1, 1, light); P(g, 9, 10, 1, 1, light); }
-    else if (spec.body === "lamb") { P(g, 4, 6, 8, 3, light); P(g, 5, 5, 6, 2, light); }
-    else { P(g, 9, 3, 1, 2, base); P(g, 12, 3, 1, 2, base); P(g, 3, 10, 2, 1, base); }
+    // Aléa DÉTERMINISTE par identifiant : les taches d'un dalmatien doivent
+    // être identiques d'une session à l'autre (sinon le sprite scintille).
+    let sd = 0; for (let i = 0; i < petId.length; i++) sd = (sd * 31 + petId.charCodeAt(i)) & 0x7fffffff;
+    const rnd = makeRnd(sd + 7);
+    const PUPIL = "#16161a", OUT = "#241f1c";
+
+    if (kind === "cat" || kind === "dog") {
+      const isCat = kind === "cat";
+      const low = !!spec.longBody;                       // teckel : long et bas
+      const bx = low ? 2 : 3, bw = low ? 10 : (isCat ? 8 : 9);
+      const legA = bx + 1, legB = bx + bw - 3;
+
+      // ---- queue (en premier : le corps recouvre sa racine) ----
+      if (tail === "cat") { P(g, 1, 6, 2, 6, coat); P(g, 2, 5, 2, 1, coat); }
+      else if (tail === "curl") { P(g, 1, 7, 3, 2, coat); P(g, 1, 5, 2, 3, coat); }
+      else if (tail === "plume") { P(g, 1, 6, 3, 4, coat); P(g, 2, 4, 2, 2, coat); }
+      else if (tail === "pom") { P(g, 1, 6, 3, 3, coat); }
+      else if (tail === "bushy") { P(g, 1, 7, 3, 5, coat); }
+      else if (tail === "stub") { P(g, 2, 10, 2, 2, coat); }
+      else { P(g, 1, 6, 2, 4, coat); }
+
+      // ---- corps + pattes ----
+      P(g, bx, 9, bw, 4, coat);
+      P(g, bx + 1, 12, bw - 2, 1, belly);
+      P(g, legA, 13, 2, 2, shade);
+      P(g, legB, 13, 2, 2, shade);
+
+      // ---- tête ----
+      if (isCat) {
+        P(g, 8, 3, 7, 6, coat);              // crâne rond
+        P(g, spec.flatFace ? 10 : 11, spec.flatFace ? 5 : 6, spec.flatFace ? 5 : 4, 2, belly); // museau (aplati chez le persan)
+      } else {
+        P(g, 8, 3, 6, 6, coat);              // crâne
+        // Museau raccourci pour les races à face plate (carlin, bouledogue).
+        P(g, 12, 6, spec.flatFace ? 2 : 3, 3, belly);
+      }
+
+      // ---- oreilles ----
+      if (ears === "cat") {
+        P(g, 8, 1, 2, 3, coat); P(g, 12, 1, 2, 3, coat);
+        P(g, 9, 2, 1, 1, noseC); P(g, 12, 2, 1, 1, noseC);
+        if (spec.tufts) { P(g, 8, 0, 1, 1, belly); P(g, 13, 0, 1, 1, belly); }
+      } else if (ears === "perky") {
+        P(g, 8, 1, 2, 3, coat); P(g, 11, 1, 2, 3, coat);
+        P(g, 8, 2, 1, 1, noseC); P(g, 12, 2, 1, 1, noseC);
+      } else if (ears === "semi") {
+        P(g, 8, 2, 2, 3, coat); P(g, 11, 2, 2, 3, coat);
+        P(g, 8, 2, 2, 1, shade); P(g, 11, 2, 2, 1, shade);
+      } else if (ears === "tiny") {
+        P(g, 8, 2, 2, 2, coat); P(g, 11, 2, 2, 2, coat);
+      } else if (ears === "rose") {
+        P(g, 7, 4, 2, 2, shade); P(g, 12, 3, 2, 2, shade);
+      } else if (ears === "long") {
+        P(g, 6, 4, 2, 8, shade); P(g, 13, 3, 1, 3, shade);
+      } else { // floppy
+        P(g, 6, 4, 2, 6, shade); P(g, 13, 3, 1, 3, shade);
+      }
+
+      // ---- motif : découpé sur la silhouette (source-atop) ----
+      g.globalCompositeOperation = "source-atop";
+      if (pattern === "tabby") {
+        for (const sx of [bx + 2, bx + 4, bx + 6]) P(g, sx, 9, 1, 4, mark);
+        P(g, 10, 3, 1, 2, mark); P(g, 12, 3, 1, 2, mark);
+        P(g, 1, 7, 2, 1, mark); P(g, 1, 10, 2, 1, mark);
+      } else if (pattern === "spots") {
+        for (let i = 0; i < 12; i++) P(g, 2 + Math.floor(rnd() * 11), 2 + Math.floor(rnd() * 11), 2, 2, mark);
+        for (let i = 0; i < 9; i++) P(g, 1 + Math.floor(rnd() * 13), 2 + Math.floor(rnd() * 12), 1, 1, mark);
+      } else if (pattern === "rosette") {
+        for (let i = 0; i < 7; i++) { const sx = bx + Math.floor(rnd() * (bw - 2)), sy = 9 + Math.floor(rnd() * 3); P(g, sx, sy, 2, 1, mark); P(g, sx, sy + 1, 1, 1, mark); }
+        P(g, 10, 3, 1, 2, mark); P(g, 12, 3, 1, 2, mark);
+      } else if (pattern === "calico") {
+        P(g, bx, 9, 4, 3, mark); P(g, 1, 5, 3, 4, mark);
+        P(g, 9, 1, 4, 3, mark2); P(g, bx + 4, 10, 4, 3, mark2);
+      } else if (pattern === "points") {
+        P(g, 8, 1, 7, 3, mark);                       // oreilles
+        P(g, 11, 5, 4, 4, mark);                      // masque de face
+        P(g, 1, 4, 3, 8, mark);                       // queue
+        P(g, legA, 13, 2, 2, mark); P(g, legB, 13, 2, 2, mark);
+      } else if (pattern === "tuxedo") {
+        P(g, 11, 6, 4, 2, mark);                      // museau blanc
+        P(g, bx + 2, 10, 5, 3, mark);                 // plastron
+        P(g, legA, 13, 2, 2, mark); P(g, legB, 13, 2, 2, mark);
+      } else if (pattern === "saddle") {
+        P(g, 8, 3, 7, 5, mark); P(g, 6, 4, 2, 8, mark);   // tête + oreille fauves
+        P(g, bx, 9, bw - 2, 3, mark2);                     // selle noire
+      } else if (pattern === "mask") {
+        P(g, 11, 4, 4, 5, mark); P(g, 9, 4, 2, 2, mark);   // masque facial
+        P(g, bx + 1, 10, 6, 3, belly);                     // poitrail clair
+        P(g, legA, 13, 2, 2, belly); P(g, legB, 13, 2, 2, belly);
+      } else if (pattern === "blaze") {
+        P(g, 11, 3, 2, 4, mark);                           // liste sur le chanfrein
+        P(g, bx + 1, 10, 6, 3, mark);                      // poitrail blanc
+        P(g, legA, 13, 2, 2, mark); P(g, legB, 13, 2, 2, mark);
+      } else if (pattern === "patches") {
+        P(g, 8, 3, 5, 4, mark);
+        P(g, bx, 9, 4, 3, mark);
+        if (ears === "long" || ears === "floppy") P(g, 6, 4, 2, 8, mark);
+      }
+      if (spec.curly) for (let i = 0; i < 18; i++) P(g, 2 + Math.floor(rnd() * 12), 2 + Math.floor(rnd() * 11), 1, 1, shade);
+      if (spec.scruffy) for (let i = 0; i < 10; i++) P(g, bx + Math.floor(rnd() * bw), 8 + Math.floor(rnd() * 5), 1, 1, shade);
+      if (fluff >= 2) P(g, 7, 8, 2, 5, belly);             // collerette (persan, spitz, colley…)
+      g.globalCompositeOperation = "source-over";
+
+      // ---- yeux / truffe, par-dessus le motif ----
+      if (isCat) {
+        P(g, 10, 5, 1, 2, eyeC); P(g, 13, 5, 1, 2, eyeC);
+        P(g, 10, 5, 1, 1, PUPIL); P(g, 13, 5, 1, 1, PUPIL);
+        P(g, 12, 7, 1, 1, noseC);
+      } else {
+        P(g, 10, 4, 1, 2, eyeC); P(g, 12, 4, 1, 2, eyeC);
+        P(g, 10, 4, 1, 1, PUPIL); P(g, 12, 4, 1, 1, PUPIL);
+        P(g, spec.flatFace ? 13 : 14, 6, 1, 2, noseC);
+      }
+    } else if (kind === "dragon") {
+      P(g, 3, 8, 8, 5, coat); P(g, 4, 12, 6, 1, belly);
+      P(g, 9, 3, 6, 6, coat); P(g, 11, 7, 3, 1, belly);
+      P(g, 2, 4, 4, 5, shade);                                  // aile
+      for (let i = 0; i < 4; i++) P(g, 4 + i * 2, 6 + (i % 2), 1, 2, mark);
+      P(g, 13, 1, 1, 3, mark); P(g, 10, 1, 1, 2, mark);          // cornes
+      P(g, 1, 10, 3, 2, coat);                                   // queue
+      P(g, 12, 5, 1, 2, eyeC); P(g, 12, 5, 1, 1, PUPIL);
+      P(g, 14, 7, 1, 1, noseC);
+    } else if (kind === "horse") {
+      P(g, 3, 8, 8, 5, coat); P(g, 4, 12, 6, 1, belly);
+      P(g, 10, 3, 4, 6, coat); P(g, 12, 7, 2, 2, belly);
+      P(g, 9, 2, 2, 6, mark);                                    // crinière
+      P(g, 1, 7, 3, 5, mark);                                    // queue
+      P(g, 12, 0, 1, 3, "#ffd75e"); P(g, 12, 0, 1, 1, "#fff0b0"); // corne
+      P(g, 4, 13, 2, 2, shade); P(g, 9, 13, 2, 2, shade);
+      P(g, 12, 5, 1, 2, eyeC); P(g, 12, 5, 1, 1, PUPIL);
+      P(g, 13, 8, 1, 1, noseC);
+    } else if (kind === "turtle") {
+      P(g, 2, 6, 10, 6, shade); P(g, 3, 7, 8, 4, coat);          // carapace
+      for (const [sx, sy] of [[4, 8], [7, 8], [5, 10], [8, 10]]) P(g, sx, sy, 2, 1, mark);
+      P(g, 11, 8, 4, 4, coat); P(g, 12, 11, 3, 1, belly);        // tête
+      P(g, 1, 9, 2, 2, coat);                                    // queue
+      P(g, 3, 12, 2, 2, coat); P(g, 9, 12, 2, 2, coat);
+      P(g, 13, 9, 1, 2, eyeC); P(g, 13, 9, 1, 1, PUPIL);
+    } else if (kind === "lamb") {
+      P(g, 2, 5, 10, 7, coat);                                   // toison
+      for (let i = 0; i < 16; i++) P(g, 2 + Math.floor(rnd() * 10), 5 + Math.floor(rnd() * 6), 1, 1, shade);
+      P(g, 10, 7, 5, 4, mark); P(g, 11, 10, 3, 1, belly);        // face
+      P(g, 9, 7, 2, 2, mark); P(g, 14, 7, 1, 2, mark);           // oreilles
+      P(g, 3, 12, 2, 2, mark); P(g, 9, 12, 2, 2, mark);
+      P(g, 12, 8, 1, 2, eyeC); P(g, 12, 8, 1, 1, PUPIL);
+      P(g, 14, 9, 1, 1, noseC);
+    } else {
+      // Petits mammifères (moufette, renard, souris) : corps compact, grandes
+      // oreilles rondes, grosse queue touffue.
+      P(g, 4, 8, 7, 5, coat); P(g, 5, 12, 5, 1, belly);
+      P(g, 9, 4, 6, 5, coat); P(g, 11, 8, 3, 1, belly);
+      P(g, 8, 2, 3, 3, coat); P(g, 12, 2, 3, 3, coat);           // oreilles
+      P(g, 9, 3, 1, 1, noseC); P(g, 13, 3, 1, 1, noseC);
+      P(g, 1, 5, 4, 7, coat);                                     // queue touffue
+      P(g, 5, 13, 2, 2, shade); P(g, 9, 13, 2, 2, shade);
+      g.globalCompositeOperation = "source-atop";
+      if (pattern === "stripe") { P(g, 6, 6, 2, 7, mark); P(g, 1, 4, 4, 5, mark); P(g, 11, 3, 1, 4, mark); }
+      else if (pattern === "tips") { P(g, 1, 4, 3, 3, mark); P(g, 11, 8, 4, 2, mark); }
+      g.globalCompositeOperation = "source-over";
+      P(g, 11, 6, 1, 2, eyeC); P(g, 11, 6, 1, 1, PUPIL);
+      P(g, 14, 7, 1, 1, noseC);
+    }
+    outlineSprite(g, T, T, OUT);
     return c;
   }
 
