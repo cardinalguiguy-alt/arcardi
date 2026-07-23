@@ -325,6 +325,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const dirtyRef = useRef(false);
   const overridesRef = useRef({ ground: {}, object: {} }); // deltas vs monde de base
   const lastPosSentRef = useRef(0);
+  const lastMovingSentRef = useRef(false); // FIX 241: dernier "moving" diffusé — coupe l'envoi de position quand le joueur est immobile
+  const hiddenRef = useRef(false);         // FIX 241: onglet masqué (Page Visibility) — coupe toute diffusion réseau (desktop + tablette)
   const mapOpenRef = useRef(false);
   const shopOpenRef = useRef(false);
   const binOpenRef = useRef(false);
@@ -835,6 +837,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (payload.id !== me.id) {
         ensureRemote(payload);
         addChat("🌱", L.chatJoin(payload.name));
+        sendPos(); // FIX 241: la position n'étant plus diffusée en continu, on l'annonce à l'arrivée d'un joueur
       }
       setHud(h => ({ ...h, players: playersRef.current.size + 1 }));
     });
@@ -897,6 +900,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [room.id, isHost]);
+
+  // FIX 241: pause réseau quand l'onglet du jeu n'est plus affiché (autre
+  // onglet/app au premier plan, fenêtre minimisée, ou sur TABLETTE écran
+  // verrouillé / app changée). netCanBroadcast() lit hiddenRef -> plus aucun
+  // message émis tant que le jeu n'est pas visible ; reprise immédiate au retour.
+  useEffect(() => {
+    const onVis = () => { hiddenRef.current = document.hidden; if (!document.hidden && channelReadyRef.current) sendPos(); };
+    document.addEventListener('visibilitychange', onVis);
+    hiddenRef.current = document.hidden;
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, []);
 
   function ensureRemote(p) {
     if (p.id === me.id) return;
@@ -2072,7 +2086,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // Light continuous broadcast while visitors move (200 ms throttle):
     // an ARRAY of per-visitor positions matched by rid on the guests.
     visitorNetRef.current += dt;
-    if (visitorNetRef.current >= C.VISITOR_NET_MS / 1000 && st.visitors.length) {
+    if (visitorNetRef.current >= C.VISITOR_NET_MS / 1000 && st.visitors.length && netCanBroadcast()) {
       visitorNetRef.current = 0;
       channelRef.current?.send({ type: "broadcast", event: "apply", payload: { visitorSim: st.visitors.map(v => ({ rid: v.rid, x: v.x, y: v.y, dir: v.dir, moving: v.moving, animT: v.animT, phase: v.phase })) } });
     }
@@ -2455,7 +2469,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (m.zone === "evil") { pub.ex = +m.x.toFixed(2); pub.ey = +m.y.toFixed(2); pub.emoving = !!m.moving; pub.immune = Date.now() < immunityUntilRef.current; }
     return pub;
   }
-  function sendPos() { channelRef.current?.send({ type: "broadcast", event: "pos", payload: pubMe() }); }
+  // FIX 241 (réduction trafic Realtime) : on ne diffuse QUE s'il y a au moins
+  // un autre joueur pour recevoir ET si l'onglet est visible. Seul dans sa
+  // ferme (cas courant) ou onglet masqué/tablette verrouillée -> zéro message
+  // émis, sans aucun impact de gameplay (personne pour voir). Vaut pour la
+  // position ET pour les entités simulées par l'hôte (greg/soan/lapins/…).
+  function netCanBroadcast() { return channelReadyRef.current && !hiddenRef.current && playersRef.current.size > 0; }
+  function sendPos() { if (!netCanBroadcast()) return; channelRef.current?.send({ type: "broadcast", event: "pos", payload: pubMe() }); }
 
   // -------- Actions joueur (envoi au host) --------
   // La requête porte DEUX jeux de coordonnées : px/py = position du joueur
@@ -2844,7 +2864,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (moved) {
       minimapDirtyRef.current = true;
       horseCallAccumRef.current += dt;
-      if (horseCallAccumRef.current >= 0.15) {
+      if (horseCallAccumRef.current >= 0.5 && netCanBroadcast()) {
         horseCallAccumRef.current = 0;
         channelRef.current?.send({ type: "broadcast", event: "apply", payload: { horses: hs } });
       }
@@ -3078,7 +3098,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     if (moved) minimapDirtyRef.current = true;
     rabbitAccumRef.current += dt;
-    if (rabbitAccumRef.current >= 0.15) {
+    if (rabbitAccumRef.current >= 0.5 && netCanBroadcast()) {
       rabbitAccumRef.current = 0;
       channelRef.current?.send({ type: "broadcast", event: "apply", payload: { rabbits: s.rabbits } });
     }
@@ -3145,7 +3165,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       mo.fleeing = biteFleeing;
     }
     evilMonstersAccumRef.current += dt;
-    if (evilMonstersAccumRef.current >= 0.15) {
+    if (evilMonstersAccumRef.current >= 0.5 && netCanBroadcast()) {
       evilMonstersAccumRef.current = 0;
       channelRef.current?.send({ type: "broadcast", event: "apply", payload: { evilMonsters: s.evilMonsters } });
     }
@@ -3385,7 +3405,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       return;
     }
     wolfAccumRef.current += dt;
-    if (wolfAccumRef.current >= 0.15) {
+    if (wolfAccumRef.current >= 0.5 && netCanBroadcast()) {
       wolfAccumRef.current = 0;
       channelRef.current?.send({ type: "broadcast", event: "apply", payload: { wolves: s.wolves } });
     }
@@ -3532,7 +3552,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
     }
     gregAccumRef.current += dt;
-    if (gregAccumRef.current >= 0.15) {
+    if (gregAccumRef.current >= 0.5 && netCanBroadcast()) {
       gregAccumRef.current = 0;
       channelRef.current?.send({ type: "broadcast", event: "apply", payload: { greg: g } });
     }
@@ -3629,7 +3649,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     } else so.moving = false;
     if (moved) minimapDirtyRef.current = true;
     soanAccumRef.current += dt;
-    if (soanAccumRef.current >= 0.15) {
+    if (soanAccumRef.current >= 0.5 && netCanBroadcast()) {
       soanAccumRef.current = 0;
       channelRef.current?.send({ type: "broadcast", event: "apply", payload: { soan: so } });
     }
@@ -5141,7 +5161,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       } else m.animT = 0;
       m.moving = !!moving;
       const nowP = performance.now();
-      if (nowP - lastPosSentRef.current > 1000 / C.POS_TICK_HZ) { lastPosSentRef.current = nowP; sendPos(); }
+      if (m.moving || m.moving !== lastMovingSentRef.current) { if (nowP - lastPosSentRef.current > 1000 / C.POS_TICK_HZ) { lastPosSentRef.current = nowP; lastMovingSentRef.current = m.moving; sendPos(); } }
     }
     function drawTownFrame(now, dt) {
       const tw = townWorldRef.current, m = meRef.current, sprites = spritesRef.current;
@@ -5320,7 +5340,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // pour les coéquipiers présents sur la carte ET pour la simulation
       // hôte des créatures partagées. x/y publics restent figés côté ferme.
       const nowP = performance.now();
-      if (nowP - lastPosSentRef.current > 1000 / C.POS_TICK_HZ) { lastPosSentRef.current = nowP; sendPos(); }
+      if (m.moving || m.moving !== lastMovingSentRef.current) { if (nowP - lastPosSentRef.current > 1000 / C.POS_TICK_HZ) { lastPosSentRef.current = nowP; lastMovingSentRef.current = m.moving; sendPos(); } }
     }
     function updateMe(dt) {
       const m = meRef.current, keys = keysRef.current;
@@ -5342,7 +5362,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const driver = playersRef.current.get(horseNow.rider);
         if (driver) { m.x = driver.x; m.y = driver.y; m.dir = driver.dir; m.moving = driver.moving; m.animT = driver.animT || 0; }
         const now2 = performance.now();
-        if (now2 - lastPosSentRef.current > 1000 / C.POS_TICK_HZ) { lastPosSentRef.current = now2; sendPos(); }
+        if (m.moving || m.moving !== lastMovingSentRef.current) { if (now2 - lastPosSentRef.current > 1000 / C.POS_TICK_HZ) { lastPosSentRef.current = now2; lastMovingSentRef.current = m.moving; sendPos(); } }
         return;
       }
       const uiBlocked = shopOpenRef.current || binOpenRef.current || mapOpenRef.current || cauldronMenuOpenRef.current || fishMiniRef.current || adsOpenRef.current || visitorOpenRef.current || document.activeElement === chatInputRef.current || m.sleeping || isInjured();
@@ -5379,7 +5399,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       } else m.animT = 0;
       m.moving = !!moving;
       const now = performance.now();
-      if (now - lastPosSentRef.current > 1000 / C.POS_TICK_HZ) { lastPosSentRef.current = now; sendPos(); }
+      if (m.moving || m.moving !== lastMovingSentRef.current) { if (now - lastPosSentRef.current > 1000 / C.POS_TICK_HZ) { lastPosSentRef.current = now; lastMovingSentRef.current = m.moving; sendPos(); } }
     }
     // Zip 236: draw my individual pets trailing behind me. Each pet keeps a
     // smoothed follow position (petFollowRef) that eases toward a point a bit

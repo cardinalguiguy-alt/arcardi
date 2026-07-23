@@ -944,7 +944,7 @@ export const VISIT_POP_BONUS_MAX_MS = 3 * 60 * 1000; // popularity cap
 export const VISITOR_SPEED = 2.4;                 // tiles/s walking
 export const VISITOR_TRAIN_MS = 4500;             // train pulls in, doors, etc.
 export const VISITOR_WAIT_MS = 90 * 1000;         // legacy base wait (still the formula seed, now FLOORED below)
-export const VISITOR_NET_MS = 200;                // host broadcast throttle while a visitor exists
+export const VISITOR_NET_MS = 500;                // host broadcast throttle while a visitor exists
 // 2026-07 visitors update (zip 233, Guillaume's spec):
 export const VISITORS_MAX = 5;                    // hard cap of visitors on the farm at once
 export const VISITOR_WAIT_FLOOR_MS = 10 * 60 * 1000;   // 10 real minutes, hard FLOOR for every visit type
