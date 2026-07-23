@@ -1003,7 +1003,44 @@ export const VISITOR_ROSTER = [
   { rid: 22, name: "Berthe",   gender: "f", outfit: 6, overalls: true,  cap: true,  theme: "animals", job: "shear and milk" },
   { rid: 23, name: "Leandre",  gender: "m", outfit: 7, overalls: true,  cap: false, theme: "stone",   job: "mine the far hills" },
   { rid: 24, name: "Zelie",    gender: "f", outfit: 0, overalls: false, cap: true,  theme: "flowers", job: "keep bees" },
+  // Zip 252 (demande Guillaume) : artisans NOMMÉS. Ce sont des visiteurs
+  // normaux (offres classiques), mais leur `skill` permet de leur proposer
+  // d'emménager, et une fois résidents ils débloquent un métier (atelier
+  // achetable en or à la boutique) ou travaillent directement pour nous.
+  { rid: 25, name: "René",    gender: "m", outfit: 1, overalls: true,  cap: true,  theme: "flowers", job: "keep bees and jar honey",        skill: "beekeeper" },
+  { rid: 26, name: "Ingrid",  gender: "f", outfit: 6, overalls: true,  cap: false, theme: "animals", job: "turn our milk into fine cheese", skill: "cheesemaker" },
+  { rid: 27, name: "Tristan", gender: "m", outfit: 7, overalls: true,  cap: false, theme: "wood",    job: "fell trees and break rocks all day", skill: "lumberjack" },
+  { rid: 28, name: "Chloé",   gender: "f", outfit: 3, overalls: true,  cap: true,  theme: "kitchen", job: "bake cakes and cookies",         skill: "baker" },
 ];
+
+// ---- Zip 252 : métiers d'artisans (résidents à skill) ----
+// Indices d'élevage utilisés comme intrants (voir ANIMALS ci-dessus).
+export const HEN_ANIMAL = 0;   // œufs = products[0]
+export const COW_ANIMAL = 4;   // lait  = products[4]
+// Ateliers achetables en or À LA BOUTIQUE, seulement quand l'artisan
+// correspondant est résident. Posés automatiquement au site indiqué (sur la
+// ferme, non bloquants — on interagit par proximité). Tristan (bûcheron) n'a
+// PAS d'atelier : il travaille directement dès qu'il emménage.
+export const ARTISAN_BUILDINGS = {
+  beehive:    { skill: "beekeeper",   cost: 6000,  site: { x: 50, y: 46 }, w: 2, h: 2 },
+  fromagerie: { skill: "cheesemaker", cost: 12000, site: { x: 56, y: 46 }, w: 3, h: 2 },
+  bakery:     { skill: "baker",       cost: 9000,  site: { x: 62, y: 46 }, w: 3, h: 2 },
+};
+// Métier -> bâtiment (null = pas de bâtiment, travaille directement).
+export const SKILL_BUILDING = { beekeeper: "beehive", cheesemaker: "fromagerie", baker: "bakery", lumberjack: null };
+// Cadences de production (ms réelles) et valeurs de vente (or).
+export const HONEY_MS = 4 * 60 * 1000;     export const HONEY_SELL = 400;   // ruche : passif, aucun intrant
+export const CHEESE_MS = 6 * 60 * 1000;    export const CHEESE_MILK_COST = 3; // fromagerie : 3 laits -> 1 roue
+export const CHEESE_WHEEL_SELL = 1500;     export const CHEESE_PORTION_SELL = 350; export const PORTIONS_PER_WHEEL = 6;
+export const PASTRY_MS = 3 * 60 * 1000;    export const PASTRY_SELL = 500;  // boulangerie : farine + lait + œuf -> 1 pâtisserie
+export const PASTRY_FLOUR = 1, PASTRY_MILK = 1, PASTRY_EGG = 1;
+export const LUMBERJACK_WOOD = 6, LUMBERJACK_STONE = 4; // Tristan : par tour de travail -> réserve commune (gregStock)
+// Certains visiteurs arrivent en RÉCLAMANT du fromage (roue ou parts) contre
+// une grosse somme, prélevée sur la réserve commune craftStock.
+export const VISITOR_CHEESE_CHANCE = 0.18;      // part des offres "buy" converties en demande de fromage
+export const CHEESE_DEMAND_WHEEL_MIN = 1, CHEESE_DEMAND_WHEEL_MAX = 3;
+export const CHEESE_DEMAND_WHEEL_PAY = 2200;    // or par roue payé par le visiteur (mieux qu'au bac)
+export const CHEESE_DEMAND_PORTION_PAY = 520;   // or par part
 
 // Visit scheduling. Not a fixed timer: after each visit the host schedules
 // the next one in [VISIT_MIN_MS, VISIT_MAX_MS], then SHORTENS that delay by

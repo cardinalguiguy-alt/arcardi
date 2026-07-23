@@ -2221,6 +2221,32 @@ export function migrateStation(st, hostNow) {
   return out;
 }
 
+// Zip 252 : ateliers d'artisans + stock de produits artisanaux (communs).
+export function newCrafts() {
+  const c = {};
+  for (const bid of Object.keys(C.ARTISAN_BUILDINGS)) c[bid] = { built: false, nextAt: 0 };
+  return c;
+}
+export function migrateCrafts(cr) {
+  const out = newCrafts();
+  if (cr && typeof cr === "object") for (const bid of Object.keys(out)) {
+    if (cr[bid] && typeof cr[bid] === "object") out[bid] = { built: !!cr[bid].built, nextAt: cr[bid].nextAt | 0 };
+  }
+  return out;
+}
+export function newCraftStock() { return { honey: 0, cheeseWheel: 0, cheesePortion: 0, pastry: 0 }; }
+export function migrateCraftStock(s) {
+  const out = newCraftStock();
+  if (s && typeof s === "object") for (const k of Object.keys(out)) out[k] = Math.max(0, s[k] | 0);
+  return out;
+}
+// Skill présent parmi les résidents installés ? (débloque l'achat d'atelier)
+export function residentHasSkill(station, skill) {
+  const list = (station && station.residents) || [];
+  for (const r of list) { const ro = C.VISITOR_ROSTER[r.rid]; if (ro && ro.skill === skill) return true; }
+  return false;
+}
+
 // Zip 251: normalise la liste des décorations posées (ferme + Valley Town).
 // Chaque entrée : { did, deco, x, y, zone: "farm"|"town", owner }. Filtrée aux
 // ids connus et aux coordonnées valides. `did` = identifiant unique stable
@@ -2581,12 +2607,10 @@ export function grantReward(f, s, v, rw) {
     f.inv.seeds[rw.cropId] = (f.inv.seeds[rw.cropId] || 0) + 3;
   } else if (rw.kind === "pet") {
     const cr = resolveCatchPet(f, rw.petId);
-    if (!cr.ok) {
-      out.bagFull = true;
-      if (!Array.isArray(s.station.pendingGifts)) s.station.pendingGifts = [];
-      s.station.pendingGifts.push({ ...rw, from: v ? v.rid : -1, at: Date.now() });
-      out.queued = true;
-    }
+    // Zip 252 (demande Guillaume) : si le sac est plein (2 compagnons), on NE
+    // met PLUS le pet dans une file commune. On signale bagFull : l'hôte
+    // proposera au joueur de libérer un compagnon ou de refuser le cadeau.
+    if (!cr.ok) out.bagFull = true;
   } else if (rw.kind === "useful") {
     if (Array.isArray(f.inv[rw.item])) { /* not expected */ }
     else f.inv[rw.item] = (f.inv[rw.item] || 0) + (rw.n || 1);

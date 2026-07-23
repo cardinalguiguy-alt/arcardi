@@ -890,6 +890,52 @@ export function buildSprites() {
     }
     return c;
   }
+  // Zip 252 : ateliers d'artisans. Dessinés sur ~48x40, ancrés par le bas.
+  function artisanBuildingSprite(id) {
+    if (id === "beehive") {
+      const [c, g] = cv(32, 40);
+      P(g, 13, 34, 6, 4, "#7a5330");                    // socle
+      P(g, 6, 30, 20, 5, "#c99a4a");                    // base de la ruche
+      P(g, 8, 24, 16, 6, "#d8a94e"); P(g, 10, 18, 12, 6, "#e0b558"); P(g, 12, 13, 8, 5, "#e8c162"); // paille empilée
+      for (let y = 14; y < 34; y += 3) P(g, 6, y, 20, 1, "#00000022"); // lignes de paille
+      P(g, 14, 27, 4, 3, "#3a2a18");                    // entrée
+      outlineSprite(g, 32, 40, "#5a3a1e");
+      return c;
+    }
+    if (id === "fromagerie") {
+      const [c, g] = cv(48, 40);
+      P(g, 4, 16, 40, 22, "#d8c39a");                   // murs
+      P(g, 4, 30, 40, 8, "#c2a875");
+      g.fillStyle = "#9a5a3a"; g.beginPath(); g.moveTo(2, 16); g.lineTo(24, 4); g.lineTo(46, 16); g.closePath(); g.fill(); // toit
+      P(g, 20, 24, 8, 14, "#7a5330");                   // porte
+      P(g, 8, 20, 6, 6, "#a9c7e0"); P(g, 34, 20, 6, 6, "#a9c7e0"); // fenêtres
+      g.fillStyle = "#f2d873"; g.beginPath(); g.arc(38, 30, 4, 0, 7); g.fill(); // enseigne roue de fromage
+      g.fillStyle = "#e0b84a"; for (let a = 0; a < 3; a++) { g.beginPath(); g.moveTo(38, 30); g.arc(38, 30, 4, a * 2, a * 2 + 0.5); g.closePath(); g.fill(); }
+      outlineSprite(g, 48, 40, "#6a4a2a");
+      return c;
+    }
+    // bakery
+    const [c, g] = cv(48, 40);
+    P(g, 4, 16, 40, 22, "#e6c9a0");
+    P(g, 4, 30, 40, 8, "#d0aa72");
+    g.fillStyle = "#b04a3a"; g.beginPath(); g.moveTo(2, 16); g.lineTo(24, 5); g.lineTo(46, 16); g.closePath(); g.fill(); // toit
+    P(g, 36, 2, 5, 10, "#8a6a52");                       // cheminée du four
+    P(g, 20, 24, 8, 14, "#7a5330");                      // porte
+    P(g, 9, 20, 7, 6, "#c98a4a"); P(g, 24, 20, 7, 6, "#c98a4a"); // vitrines (pain doré)
+    P(g, 10, 22, 5, 3, "#e8b96a"); P(g, 25, 22, 5, 3, "#e8b96a");
+    outlineSprite(g, 48, 40, "#7a4a2a");
+    return c;
+  }
+  // Icônes de produits artisanaux (16x16).
+  function craftIcon(id) {
+    const [c, g] = cv(T, T);
+    if (id === "honey") { P(g, 5, 4, 6, 3, "#e0b84a"); P(g, 6, 3, 4, 1, "#c99a2a"); P(g, 4, 7, 8, 7, "#f2c94b"); P(g, 5, 9, 6, 3, "#e0b030"); P(g, 6, 5, 4, 2, "#fff2c0"); }
+    else if (id === "cheeseWheel") { g.fillStyle = "#f2d873"; g.beginPath(); g.arc(8, 9, 6, 0, 7); g.fill(); g.fillStyle = "#e0b84a"; g.beginPath(); g.arc(8, 9, 6, 0, 3.5); g.fill(); P(g, 6, 6, 1, 1, "#c99a2a"); P(g, 10, 8, 1, 1, "#c99a2a"); P(g, 8, 11, 1, 1, "#c99a2a"); }
+    else if (id === "cheesePortion") { g.fillStyle = "#f2d873"; g.beginPath(); g.moveTo(3, 13); g.lineTo(13, 13); g.lineTo(4, 4); g.closePath(); g.fill(); g.fillStyle = "#e0b84a"; P(g, 3, 12, 10, 2, "#e0b84a"); P(g, 7, 9, 1, 1, "#c99a2a"); P(g, 9, 11, 1, 1, "#c99a2a"); }
+    else { P(g, 4, 8, 8, 5, "#c98a4a"); P(g, 5, 6, 6, 3, "#e8b96a"); P(g, 6, 5, 4, 2, "#f5d9a0"); P(g, 7, 4, 1, 1, "#d14a3a"); P(g, 6, 10, 1, 1, "#8a3a2a"); P(g, 9, 10, 1, 1, "#8a3a2a"); } // pâtisserie
+    outlineSprite(g, T, T, "#5a3a1e");
+    return c;
+  }
   function icon(kind) {
     const [c, g] = cv(T, T);
     switch (kind) {
@@ -1806,6 +1852,9 @@ house: house(),
   // Zip 251: sprites des décorations déployables (cadeaux). Dessinés sur ~28px
   // de haut, ancrés par le bas au rendu (comme les petites structures).
   S.decor = {}; for (const d of C.UNIQUE_DECORATIONS) S.decor[d.id] = decorSprite(d.id);
+  // Zip 252 : bâtiments d'ateliers + icônes de produits artisanaux.
+  S.artisan = { beehive: artisanBuildingSprite("beehive"), fromagerie: artisanBuildingSprite("fromagerie"), bakery: artisanBuildingSprite("bakery") };
+  S.craftIcons = { honey: craftIcon("honey"), cheeseWheel: craftIcon("cheeseWheel"), cheesePortion: craftIcon("cheesePortion"), pastry: craftIcon("pastry") };
   // Zip 236: one sprite per pet id in the catalog (individual pets).
   S.pets = {};
   for (const pid of Object.keys(C.PET_CATALOG)) S.pets[pid] = petSprite(pid);
