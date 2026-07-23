@@ -237,7 +237,12 @@ export function buildSprites() {
       P(g, 11, 6, 1, 2, eyeC); P(g, 11, 6, 1, 1, PUPIL);
       P(g, 14, 7, 1, 1, noseC);
     }
-    outlineSprite(g, T, T, OUT);
+    // Zip 251 (demande Guillaume : "make the black outline thinner", sauf le
+    // dalmatien) : le dalmatien garde son contour plein (OUT) ; tous les autres
+    // familiers reçoivent un contour plus léger/fin (même anneau 1 px mais
+    // semi-transparent, il lit donc comme un liseré plus fin).
+    const petOut = petId === "dog_dalmatian" ? OUT : "rgba(36,31,28,0.45)";
+    outlineSprite(g, T, T, petOut);
     return c;
   }
 
@@ -851,6 +856,40 @@ export function buildSprites() {
   }
 
   /* ---------------- Icônes d'interface ---------------- */
+  // Zip 251 : sprites des décorations offertes (gnome, fontaine, roue solaire).
+  // Canvas 20x28, dessin ancré en bas (les "pieds" reposent vers y=27).
+  function decorSprite(id) {
+    const [c, g] = cv(20, 28);
+    if (id === "gnome") {
+      P(g, 7, 20, 6, 6, "#3f6fb0");                    // tunique bleue
+      P(g, 6, 24, 8, 3, "#2f568c");                    // bas de tunique
+      P(g, 8, 15, 4, 5, "#f2d3b0");                    // visage
+      P(g, 7, 19, 6, 2, "#e8e8e8");                    // barbe blanche
+      P(g, 8, 20, 4, 3, "#e8e8e8");
+      g.fillStyle = "#c0392b"; g.beginPath(); g.moveTo(6, 15); g.lineTo(14, 15); g.lineTo(10, 4); g.closePath(); g.fill(); // bonnet rouge
+      P(g, 9, 16, 2, 1, "#d9a066");                    // nez
+      P(g, 8, 17, 1, 1, "#2a2320"); P(g, 11, 17, 1, 1, "#2a2320"); // yeux
+      outlineSprite(g, 20, 28, "#241f1c");
+    } else if (id === "fountain") {
+      P(g, 3, 22, 14, 5, "#9aa0aa");                   // vasque pierre
+      P(g, 4, 20, 12, 3, "#b6bcc6");
+      P(g, 5, 21, 10, 2, "#3f7fd0");                   // eau
+      P(g, 9, 10, 2, 11, "#b6bcc6");                   // colonne centrale
+      P(g, 7, 9, 6, 2, "#9aa0aa");                     // vasque haute
+      P(g, 8, 8, 4, 1, "#3f7fd0");
+      g.fillStyle = "rgba(210,235,255,0.9)"; P(g, 9, 3, 2, 5, "#cfeaff"); // jet
+      P(g, 7, 6, 1, 2, "#cfeaff"); P(g, 12, 6, 1, 2, "#cfeaff");
+      outlineSprite(g, 20, 28, "#5a606a");
+    } else { // sunwheel
+      P(g, 9, 12, 2, 15, "#8a6340");                   // poteau
+      g.fillStyle = "#e8c24a"; g.beginPath(); g.arc(10, 9, 6, 0, 7); g.fill();   // disque solaire
+      g.fillStyle = "#f2d873"; g.beginPath(); g.arc(10, 9, 3, 0, 7); g.fill();
+      g.strokeStyle = "#e8c24a"; g.lineWidth = 2;      // rayons
+      for (let a = 0; a < 8; a++) { const an = a * Math.PI / 4; g.beginPath(); g.moveTo(10 + Math.cos(an) * 6, 9 + Math.sin(an) * 6); g.lineTo(10 + Math.cos(an) * 9, 9 + Math.sin(an) * 9); g.stroke(); }
+      outlineSprite(g, 20, 28, "#8a6a2a");
+    }
+    return c;
+  }
   function icon(kind) {
     const [c, g] = cv(T, T);
     switch (kind) {
@@ -895,6 +934,14 @@ export function buildSprites() {
         P(g, 4, 3, 2, 5, "#e8b888"); P(g, 6, 2, 2, 6, "#e8b888");
         P(g, 8, 2, 2, 6, "#e8b888"); P(g, 10, 4, 2, 5, "#e8b888");
         P(g, 4, 7, 2, 1, "#c89468"); P(g, 6, 7, 6, 1, "#c89468"); // ombre paume/doigts
+        break;
+      case "hand": // zip 251 : outil "main" — poser/déplacer des objets. Une
+        // main qui pince un petit objet (distinct de "herd", la main ouverte).
+        P(g, 6, 8, 6, 5, "#e8b888");                 // paume
+        P(g, 5, 6, 2, 4, "#e8b888"); P(g, 7, 5, 2, 5, "#e8b888"); P(g, 9, 5, 2, 5, "#e8b888"); // doigts
+        P(g, 11, 7, 2, 3, "#e8b888");                // pouce
+        P(g, 6, 9, 6, 1, "#c89468");                 // ombre paume
+        P(g, 3, 3, 4, 4, "#b5824f"); P(g, 4, 4, 2, 2, "#d8a86a"); // petit objet (caisse) tenu
         break;
       case "thirst": // goutte barrée : culture plantée non arrosée
         g.fillStyle = "#5a9be0";
@@ -1755,7 +1802,10 @@ house: house(),
     S.crops[t] = [];
     for (let s = 0; s < C.CROP_STAGES; s++) S.crops[t][s] = cropSprite(t, s);
   }
-  for (const k of ["hoe", "can", "axe", "pick", "seeds", "wood", "stone", "food", "gold", "energy", "rod", "ready", "thirst", "herd", "flour", "bag", "check", "cross", "coin2", "speech", "swap", "bell", "ban", "release"]) S.icons[k] = icon(k);
+  for (const k of ["hoe", "can", "axe", "pick", "seeds", "wood", "stone", "food", "gold", "energy", "rod", "ready", "thirst", "herd", "hand", "flour", "bag", "check", "cross", "coin2", "speech", "swap", "bell", "ban", "release"]) S.icons[k] = icon(k);
+  // Zip 251: sprites des décorations déployables (cadeaux). Dessinés sur ~28px
+  // de haut, ancrés par le bas au rendu (comme les petites structures).
+  S.decor = {}; for (const d of C.UNIQUE_DECORATIONS) S.decor[d.id] = decorSprite(d.id);
   // Zip 236: one sprite per pet id in the catalog (individual pets).
   S.pets = {};
   for (const pid of Object.keys(C.PET_CATALOG)) S.pets[pid] = petSprite(pid);

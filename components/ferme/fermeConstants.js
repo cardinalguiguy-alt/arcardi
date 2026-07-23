@@ -1056,6 +1056,10 @@ export const UNIQUE_PETS = [
 // source (visitor gift OR passage world). `hue` drives the generic pet
 // sprite tint (fermeArt.js/petSprite); `body` picks a silhouette.
 export const MAX_PETS = 2;
+// Zip 251 (demande Guillaume : "réduire les familiers à ~la taille d'une
+// poule") : facteur d'échelle appliqué au RENDU du pet (sprite 16x16 dessiné
+// à PET_DRAW_SCALE * 16 px, ancré par le bas). Purement visuel, ajustable.
+export const PET_DRAW_SCALE = 0.7;
 // Zip 248 (demande Guillaume : "the dalmatian is purple, which does not make
 // sense... make each dog and cat design accurate to their actual appearance").
 // L'ancien système ne portait qu'une TEINTE (`hue`) appliquée en HSL sur une

@@ -308,7 +308,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const meRef = useRef(null);
   const playersRef = useRef(new Map()); // id -> remote farmer render data
   const farmersRef = useRef({});        // hôte : id -> état privé arbitré
-  const sharedRef = useRef({ seed: 0, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), salveCraft: E.newSalveCraftState(), house: { level: 1, upgradeUntil: 0 }, evilMonsters: [], flour: 0, gregStock: { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0) }, fertilizerShop: { stock: 0, lastRestockDay: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], rabbitChallenge: null, greg: null, soan: null, station: E.newStationState() });
+  const sharedRef = useRef({ seed: 0, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), salveCraft: E.newSalveCraftState(), house: { level: 1, upgradeUntil: 0 }, evilMonsters: [], flour: 0, gregStock: { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0) }, fertilizerShop: { stock: 0, lastRestockDay: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], rabbitChallenge: null, greg: null, soan: null, station: E.newStationState(), decor: [] });
   const invRef = useRef(null);
   const toolsRef = useRef({ hoe: 1, can: 1, axe: 1, pick: 1 });
   const energyRef = useRef(C.MAX_ENERGY);
@@ -356,6 +356,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const fenceDirRef = useRef("auto"); // orientation choisie pour la prochaine clôture posée ("auto"|"h"|"v")
   const buildKindRef = useRef("fence"); // miroir synchrone de buildKind ("fence"|"wall"|"path"|"lamp"|"scarecrow"|"grass"|"mill"|"bridgeWood"|"bridgeStone")
   const heldAnimalRef = useRef(-1);   // index (dans sharedRef.animals) de l'animal actuellement porté par CE joueur, -1 sinon
+  // Zip 251 : outil main. handModeRef = déco du sac ARMÉE pour la pose (id) ou
+  // null ; handHeldRef = objet attrapé sur la carte pour être déplacé/rangé :
+  //   { kind:"decor", did, deco } | { kind:"obj", otype, fromX, fromY } | null
+  const handModeRef = useRef(null);
+  const handHeldRef = useRef(null);
+  const [handMode, setHandMode] = useState(null);      // miroir React (surbrillance menu)
+  const [handMenuOpen, setHandMenuOpen] = useState(false);
+  const [handHeldUI, setHandHeldUI] = useState(null);  // miroir React (invite d'action)
   const horseCallAccumRef = useRef(0); // accumulateur (secondes) pour throttler la diffusion réseau des chevaux sifflés en course
   const wolfAccumRef = useRef(0);      // accumulateur (secondes), même throttle réseau pour les loups simulés côté hôte
   const rabbitAccumRef = useRef(0);
@@ -419,6 +427,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   useEffect(() => { myPetsRef.current = myPets; }, [myPets]);
   useEffect(() => { bagOpenRef.current = bagOpen; }, [bagOpen]);
   useEffect(() => { slotRef.current = slot; }, [slot]);
+  useEffect(() => { handModeRef.current = handMode; }, [handMode]); // zip 251
+  const handMenuOpenRef = useRef(false);
+  useEffect(() => { handMenuOpenRef.current = handMenuOpen; }, [handMenuOpen]); // zip 251
   useEffect(() => { toolKindRef.current = toolKind; }, [toolKind]);
   useEffect(() => { seedSelRef.current = seedSel; }, [seedSel]);
 
@@ -576,6 +587,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         // persist; a live visitor or unrepaired raid does NOT (transient,
         // like wolves) - migrateStation drops them on plain loads.
         station: E.migrateStation(saved.station),
+        decor: E.migrateDecor(saved.decor), // zip 251: décorations posées (ferme + ville)
         greg: (saved.greg && saved.greg.expiresAt > Date.now())
           ? { ...saved.greg, taskQueue: [], phase: "roam", roamTarget: null, nextRoamAt: 0 } : null,
         // Soan (chantier 2026-07) : même principe que Greg ci-dessus — contrat
@@ -750,6 +762,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // 2026-07 station update: mid-session snapshot keeps the live visitor,
       // with host-clock timestamps relocated (same discipline as house).
       station: E.migrateStation(payload.station, payload.hostNow),
+      decor: E.migrateDecor(payload.decor), // zip 251
     };
     setStationSt(sharedRef.current.station ? JSON.parse(JSON.stringify(sharedRef.current.station)) : null);
     if (payload.farmers) {
@@ -970,6 +983,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       horses: s.horses, animals: s.animals, wellBuilt: s.wellBuilt, coop: s.coop, barn: s.barn, salveCraft: s.salveCraft, house: s.house, evilMonsters: s.evilMonsters, gems: s.gems, flour: s.flour, gregStock: s.gregStock, fertilizerShop: s.fertilizerShop, wolves: s.wolves, greg: s.greg, soan: s.soan,
       rabbits: s.rabbits, rabbitChallenge: s.rabbitChallenge,
       station: s.station, // 2026-07 station update
+      decor: s.decor, // zip 251: décorations posées (ferme + Valley Town), persistées
       hostNow: Date.now(), // correctif audit 2026-07 : relocalisation d'horloge (voir salveCraft.brewingUntil)
       // Correctif audit lancement 2026-07 (succession d'hôte) : le code de la
       // ferme voyage avec l'instantané, pour qu'un invité promu hôte
@@ -1116,6 +1130,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // 2026-07 station update: station/visitor/repair requests are resolved in
     // a dedicated handler (returns true when the request was consumed).
     if (hostHandleStationReq(req, f)) return;
+    if (hostHandleDecorReq(req, f)) return; // zip 251: pose/déplacement/rangement (outil main)
 
     if (req.kind === "wolfBiteResult") {
       // Dénouement du mini-jeu de morsure (chantier 2026-07) : n'affecte que
@@ -1851,6 +1866,84 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function stationChat(msg, from) {
     broadcastChat(from || "\u{1F689}", msg);
   }
+  // -------- Zip 251 : décorations (outil main) — hôte autoritaire --------
+  function nextDecorDid() {
+    const s = sharedRef.current; let mx = 0;
+    for (const e of (s.decor || [])) if ((e.did | 0) > mx) mx = e.did | 0;
+    return mx + 1;
+  }
+  function broadcastDecor() {
+    dirtyRef.current = true;
+    // apply gardé par !isHost côté applyDeltas -> l'hôte conserve sa liste vivante.
+    hostSend({ type: "broadcast", event: "apply", payload: { decor: sharedRef.current.decor } });
+  }
+  // Traite les requêtes de l'outil main. Retourne true si consommée.
+  //  - placeDecor : pose une déco du sac (ferme ou ville) ;
+  //  - moveDecor / pickDecor : déplace une déco posée, ou la remet au sac ;
+  //  - moveObj / returnObj : déplace un lampadaire/épouvantail (ferme), ou le
+  //    remet dans l'inventaire du joueur. La validité de la case CIBLE est
+  //    vérifiée côté client avant l'envoi (il connaît la carte de sa zone).
+  function hostHandleDecorReq(req, f) {
+    const w = worldRef.current, s = sharedRef.current;
+    if (!Array.isArray(s.decor)) s.decor = [];
+    if (req.kind === "placeDecor") {
+      const deco = req.deco, zone = req.zone === "town" ? "town" : "farm";
+      if (!C.UNIQUE_DECORATIONS.some(d => d.id === deco)) return true;
+      if (!f.inv.decor || (f.inv.decor[deco] | 0) <= 0) { hostSend({ type: "broadcast", event: "apply", payload: { toast: { id: f.id, key: "decorNone" } } }); return true; }
+      const x = +req.x, y = +req.y;
+      if (!(x >= 0 && y >= 0)) return true;
+      f.inv.decor[deco] = (f.inv.decor[deco] | 0) - 1;
+      if (f.inv.decor[deco] <= 0) delete f.inv.decor[deco];
+      s.decor.push({ did: nextDecorDid(), deco, x: +x.toFixed(2), y: +y.toFixed(2), zone, owner: f.id });
+      hostSend({ type: "broadcast", event: "apply", payload: { farmer: { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv, pets: f.pets } } });
+      broadcastDecor();
+      return true;
+    }
+    if (req.kind === "moveDecor") {
+      const e = s.decor.find(d => d.did === (req.did | 0));
+      if (e && +req.x >= 0 && +req.y >= 0) { e.x = +(+req.x).toFixed(2); e.y = +(+req.y).toFixed(2); broadcastDecor(); }
+      return true;
+    }
+    if (req.kind === "pickDecor") {
+      const idx = s.decor.findIndex(d => d.did === (req.did | 0));
+      if (idx >= 0) {
+        const e = s.decor[idx]; s.decor.splice(idx, 1);
+        if (!f.inv.decor) f.inv.decor = {};
+        f.inv.decor[e.deco] = (f.inv.decor[e.deco] | 0) + 1;
+        hostSend({ type: "broadcast", event: "apply", payload: { farmer: { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv, pets: f.pets }, toast: { id: f.id, key: "decorPicked" } } });
+        broadcastDecor();
+      }
+      return true;
+    }
+    if (req.kind === "moveObj" || req.kind === "returnObj") {
+      if (!w) return true;
+      const fromI = idxOf(req.fromX | 0, req.fromY | 0);
+      const o = w.objects[fromI];
+      if (o !== C.O_LAMP && o !== C.O_SCARECROW) return true; // seuls lampadaire/épouvantail sont manipulables à la main
+      const hp = w.objHp.get(fromI) || 0;
+      w.objects[fromI] = C.O_NONE; w.objHp.delete(fromI); recordTileOverride(fromI);
+      const tiles = [{ i: fromI, g: w.ground[fromI], o: C.O_NONE }];
+      const payload = { tiles };
+      if (req.kind === "returnObj") {
+        if (o === C.O_LAMP) f.inv.lamp = (f.inv.lamp | 0) + 1; else f.inv.scarecrow = (f.inv.scarecrow | 0) + 1;
+        payload.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv, pets: f.pets };
+        payload.toast = { id: f.id, key: "objReturned" };
+      } else {
+        const toI = idxOf(req.toX | 0, req.toY | 0);
+        if (w.objects[toI] === C.O_NONE && !E.blockedTile(w, (req.toX | 0) + 0.5, (req.toY | 0) + 0.5)) {
+          w.objects[toI] = o; w.objHp.set(toI, hp); recordTileOverride(toI);
+          tiles.push({ i: toI, g: w.ground[toI], o, hp });
+        } else {
+          // cible invalide : on repose l'objet à sa place d'origine.
+          w.objects[fromI] = o; w.objHp.set(fromI, hp); recordTileOverride(fromI);
+          tiles[0] = { i: fromI, g: w.ground[fromI], o, hp };
+        }
+      }
+      hostSend({ type: "broadcast", event: "apply", payload });
+      return true;
+    }
+    return false;
+  }
   function hostExecuteHostileDamage(v) {
     const w = worldRef.current, s = sharedRef.current;
     if (!w || !v) return;
@@ -2299,6 +2392,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       sharedRef.current.station = E.migrateStation(p.station, p.hostNow);
       setStationSt(sharedRef.current.station ? JSON.parse(JSON.stringify(sharedRef.current.station)) : null);
     }
+    // Zip 251: liste des décorations posées (ferme + Valley Town). L'hôte est
+    // autoritaire ; l'écho ne doit pas écraser sa liste vivante.
+    if (p.decor !== undefined && !isHost) { sharedRef.current.decor = E.migrateDecor(p.decor); minimapDirtyRef.current = true; }
     if (p.visitorSim && !isHost) {
       // Zip 233: an ARRAY of light per-visitor positions, matched by rid.
       const list = sharedRef.current.station && sharedRef.current.station.visitors;
@@ -2361,7 +2457,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (key === "petCaught")     return L.petCaughtToast(C.petName(n, lang === "en"));
     if (key === "petReleased")   return L.bagReleasedToast(C.petName(n, lang === "en"));
     if (key === "bagFull")       return L.bagPetsFull(C.MAX_PETS);
-    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, noMillStock: L.toastNoMillStock, millNotEmpty: L.toastMillNotEmpty, noWheatToDeposit: L.toastNoWheatToDeposit, millFull: L.toastMillFull, actionFailed: L.toastActionFailed, coopNone: L.toastCoopNone, farCoop: L.toastFarCoop, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull, notInjured: L.toastNotInjured, noHealKit: L.toastNoHealKit, healTooFar: L.toastHealTooFar, gregNotHired: L.toastGregNotHired, gregNoRoom: L.toastGregNoRoom, gregNoFertilizer: L.toastGregNoFertilizer, soanNotHired: L.toastSoanNotHired, soanNoRiver: L.toastSoanNoRiver, farCauldron: L.toastFarCauldron, noFishToDeposit: L.toastNoFishToDeposit, cauldronMissing: L.toastCauldronMissing, cauldronAlreadyTaken: L.toastCauldronAlreadyTaken, noCauldronStock: L.toastNoCauldronStock, cauldronNotEmpty: L.toastCauldronNotEmpty, cauldronBrewing: L.toastCauldronBrewing, cauldronNothingToCollect: L.toastCauldronNothingToCollect, cauldronHasEnough: L.toastCauldronHasEnough, visitorNotEnough: L.visitorNotEnough }[key] || "";
+    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, noMillStock: L.toastNoMillStock, millNotEmpty: L.toastMillNotEmpty, noWheatToDeposit: L.toastNoWheatToDeposit, millFull: L.toastMillFull, actionFailed: L.toastActionFailed, coopNone: L.toastCoopNone, farCoop: L.toastFarCoop, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull, notInjured: L.toastNotInjured, noHealKit: L.toastNoHealKit, healTooFar: L.toastHealTooFar, gregNotHired: L.toastGregNotHired, gregNoRoom: L.toastGregNoRoom, gregNoFertilizer: L.toastGregNoFertilizer, soanNotHired: L.toastSoanNotHired, soanNoRiver: L.toastSoanNoRiver, farCauldron: L.toastFarCauldron, noFishToDeposit: L.toastNoFishToDeposit, cauldronMissing: L.toastCauldronMissing, cauldronAlreadyTaken: L.toastCauldronAlreadyTaken, noCauldronStock: L.toastNoCauldronStock, cauldronNotEmpty: L.toastCauldronNotEmpty, cauldronBrewing: L.toastCauldronBrewing, cauldronNothingToCollect: L.toastCauldronNothingToCollect, cauldronHasEnough: L.toastCauldronHasEnough, visitorNotEnough: L.visitorNotEnough, decorNone: L.decorNone, decorPicked: L.decorPicked, objReturned: L.objReturned }[key] || "";
   }
 
   // -------- Hôte : boucle temps + persistance --------
@@ -2701,6 +2797,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function doAction() {
     const m = meRef.current; if (!m || actAnimRef.current > 0 || fishMiniRef.current || m.sleeping || isInjured()) return;
     if (m.zone === "evil") return doActionEvil();
+    if (slotRef.current === 7) return handAction(); // zip 251 : outil main (ferme ET ville)
     if (m.zone === "town") return; // Valley Town (zip 234): no farm tools here — E interactions only (see tryOpenNearby)
     const w = worldRef.current; if (!w) return;
     // Priorité : ramasser la production d'un animal proche.
@@ -4269,6 +4366,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // re-opening the card; to test in browser, see the context file.
       if (e.code === "KeyQ" && !e.repeat) { if (!uiOpen) { const vq = visitorPromptNearby(); if (vq) { setMyVote(null); setVisitorRid(vq.rid); setVisitorOpen(true); } else if (gregPromptNearby()) { setGregCardOpen(true); } } } // FIX 246 : Q parle aussi à Greg
       if (e.code === "KeyF") toggleMount();
+      // Zip 251 : R avec l'outil main tenant un objet -> le remet dans le sac
+      // (prioritaire sur le cycle de façade ville / d'orientation clôture).
+      if (e.code === "KeyR" && slotRef.current === 7 && handHeldRef.current) { handStoreHeld(); return; }
       if (e.code === "KeyR" && slotRef.current === 5 && buildKindRef.current === "fence") {
         fenceDirRef.current = fenceDirRef.current === "auto" ? "h" : fenceDirRef.current === "h" ? "v" : "auto";
         setFenceDir(fenceDirRef.current);
@@ -5078,6 +5178,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           }
         } });
       }
+      // Zip 251 : décorations posées sur la FERME (liste partagée, persistée).
+      for (const e of (sharedRef.current.decor || [])) {
+        if (e.zone !== "farm") continue;
+        const dimg = sprites.decor && sprites.decor[e.deco]; if (!dimg) continue;
+        const dex = e.x, dey = e.y;
+        draws.push({ y: (dey + 0.5) * T, fn: () => ctx.drawImage(dimg, Math.round(dex * T - dimg.width / 2), Math.round(dey * T - dimg.height + 6)) });
+      }
       draws.sort((a, b) => a.y - b.y);
       for (const d of draws) d.fn();
 
@@ -5726,6 +5833,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
       if (!m.sleeping) draws.push({ y: (m.y + 0.9) * T, fn: () => drawMyPets(m, dt) });
       draws.push({ y: (m.y + 1) * T, fn: () => drawSelf(m) });
+      // Zip 251 : décorations posées en Valley Town (même liste partagée,
+      // filtrée sur zone "town" ; persistées avec la ferme).
+      for (const e of (sharedRef.current.decor || [])) {
+        if (e.zone !== "town") continue;
+        const dimg = sprites.decor && sprites.decor[e.deco]; if (!dimg) continue;
+        const dex = e.x, dey = e.y;
+        draws.push({ y: (dey + 0.5) * T, fn: () => ctx.drawImage(dimg, Math.round(dex * T - dimg.width / 2), Math.round(dey * T - dimg.height + 6)) });
+      }
       draws.sort((a, b) => a.y - b.y);
       // Zip 250 (bug "les maisons disparaissent à deux") : la boucle exécutait
       // les draws triés d'un bloc — si UN seul draw levait une exception (ex.
@@ -5893,7 +6008,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         f2.x += (tx - f2.x) * Math.min(1, dt2 * 6);
         f2.y += (ty - f2.y) * Math.min(1, dt2 * 6);
         const bob = m.moving ? Math.sin(performance.now() / 140 + i) * 1.5 : 0;
-        ctx.drawImage(img, Math.round(f2.x * T), Math.round(f2.y * T - 2 + bob));
+        // Zip 251 (demande Guillaume) : pets réduits à ~la taille d'une poule.
+        // On dessine le sprite 16x16 à l'échelle PET_DRAW_SCALE, ancré par le
+        // BAS (les pattes restent au sol) et centré horizontalement.
+        const ps = C.PET_DRAW_SCALE, dw = 16 * ps, dh = 16 * ps;
+        const dxp = f2.x * T + (16 - dw) / 2, dyp = f2.y * T - 2 + (16 - dh) + bob;
+        ctx.drawImage(img, Math.round(dxp), Math.round(dyp), dw, dh);
       }
     }
     function drawMyPets(m, dt2) { drawPetsFor(me.id, myPetsRef.current, m, dt2); }
@@ -6251,6 +6371,93 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     return facingTile();
   }
   function nearTile(tl, d = 2.5) { const m = meRef.current; return m && Math.abs(m.x - tl.x) <= d && Math.abs(m.y - tl.y) <= d; }
+  // ---- Zip 251 : outil main (poser/déplacer/ranger décos + lampadaires) ----
+  // Case visée en Valley Town (équivalent town de targetTile, sur townWorldRef).
+  function targetTileTown() {
+    const m = meRef.current, tw = townWorldRef.current, canvas = canvasRef.current;
+    if (!m || !tw || !canvas) return { x: 0, y: 0 };
+    const vw = canvas.width / ZOOM, vh = canvas.height / ZOOM;
+    let cx = (m.x + 0.5) * C.TILE - vw / 2, cy = (m.y + 0.5) * C.TILE - vh / 2;
+    cx = Math.max(0, Math.min(tw.w * C.TILE - vw, cx)); cy = Math.max(0, Math.min(tw.h * C.TILE - vh, cy));
+    const wx = (mouseRef.current.x / ZOOM + cx) / C.TILE, wy = (mouseRef.current.y / ZOOM + cy) / C.TILE;
+    const tx = Math.floor(wx), ty = Math.floor(wy);
+    if (tx >= 0 && ty >= 0 && tx < tw.w && ty < tw.h && Math.abs(wx - (m.x + 0.5)) <= C.ACT_RANGE + 0.5 && Math.abs(wy - (m.y + 0.2)) <= C.ACT_RANGE + 0.5) return { x: tx, y: ty };
+    return facingTile();
+  }
+  // Case posable pour une déco selon la zone (le client connaît sa carte).
+  function farmPlaceable(x, y) { const w = worldRef.current; return inMap(x, y) && w && canStand(w, x + 0.5, y + 0.5); }
+  function townPlaceable(x, y) {
+    const tw = townWorldRef.current; if (!tw) return false;
+    const fx = Math.floor(x), fy = Math.floor(y);
+    if (fx < 0 || fy < 0 || fx >= tw.w || fy >= tw.h) return false;
+    if (fx <= C.TOWN_RAIL_X + 1) return false;                       // rails / bord ouest
+    const i = fy * tw.w + fx;
+    if (tw.ground[i] === C.G_WATER) return false;                    // bassin de la fontaine
+    if (fx >= C.TOWN_HALL.x && fx < C.TOWN_HALL.x + C.TOWN_HALL.w && fy >= C.TOWN_HALL.y && fy < C.TOWN_HALL.y + C.TOWN_HALL.h) return false;
+    for (const hsn of C.TOWN_HOUSES) if (fx >= hsn.x && fx < hsn.x + C.TOWN_HOUSE_W && fy >= hsn.y && fy < hsn.y + C.TOWN_HOUSE_H) return false;
+    const o = tw.objects[i];
+    return !(o === C.O_TREE || o === C.O_TREE2 || o === C.O_STUMP);
+  }
+  function handPlaceable(zone, x, y) { return zone === "town" ? townPlaceable(x, y) : farmPlaceable(x, y); }
+  // Objet le plus proche de la case visée que la main peut attraper : une déco
+  // (ferme ou ville) ou, sur la ferme, un lampadaire/épouvantail sous le curseur.
+  function handNearestGrab(zone, tt) {
+    const decor = sharedRef.current.decor || [];
+    let best = null, bestD = 1.5;
+    for (const e of decor) {
+      if (e.zone !== zone) continue;
+      const d = Math.hypot(e.x - (tt.x + 0.5), e.y - (tt.y + 0.5));
+      if (d < bestD) { bestD = d; best = { kind: "decor", did: e.did, deco: e.deco }; }
+    }
+    if (best) return best;
+    if (zone === "farm") {
+      const w = worldRef.current, o = w && w.objects[idxOf(tt.x, tt.y)];
+      if (o === C.O_LAMP || o === C.O_SCARECROW) return { kind: "obj", otype: o, fromX: tt.x, fromY: tt.y };
+    }
+    return null;
+  }
+  // Clic avec l'outil main : pose une déco armée, dépose l'objet tenu, ou
+  // attrape l'objet visé.
+  function handAction() {
+    const m = meRef.current; if (!m) return;
+    const zone = m.zone === "town" ? "town" : "farm";
+    const tt = zone === "town" ? targetTileTown() : targetTile();
+    const armed = handModeRef.current;
+    if (armed) {
+      const iv = invRef.current; // ref (pas l'état React) : handAction vit dans un écouteur figé
+      if (!(iv && iv.decor && (iv.decor[armed] | 0) > 0)) { handModeRef.current = null; setHandMode(null); return; }
+      if (!handPlaceable(zone, tt.x, tt.y)) { pushToast(L.decorBadSpot); return; }
+      sendReq({ kind: "placeDecor", deco: armed, x: tt.x + 0.5, y: tt.y + 0.5, zone });
+      return;
+    }
+    const held = handHeldRef.current;
+    if (held) {
+      if (held.kind === "decor") {
+        if (!handPlaceable(zone, tt.x, tt.y)) { pushToast(L.decorBadSpot); return; }
+        sendReq({ kind: "moveDecor", did: held.did, x: tt.x + 0.5, y: tt.y + 0.5 });
+      } else if (held.kind === "obj" && zone === "farm") {
+        sendReq({ kind: "moveObj", fromX: held.fromX, fromY: held.fromY, toX: tt.x, toY: tt.y });
+      }
+      handHeldRef.current = null; setHandHeldUI(null);
+      return;
+    }
+    const grab = handNearestGrab(zone, tt);
+    if (grab) { handHeldRef.current = grab; setHandHeldUI(grab); pushToast(L.handGrabbed); }
+    else pushToast(L.handNothing);
+  }
+  // Reprend dans le sac l'objet actuellement tenu par la main (touche R).
+  function handStoreHeld() {
+    const held = handHeldRef.current; if (!held) return;
+    if (held.kind === "decor") sendReq({ kind: "pickDecor", did: held.did });
+    else if (held.kind === "obj") sendReq({ kind: "returnObj", fromX: held.fromX, fromY: held.fromY });
+    handHeldRef.current = null; setHandHeldUI(null);
+  }
+  // Arme (ou désarme) une déco du sac pour la poser au prochain clic.
+  function armDecor(id) {
+    handHeldRef.current = null; setHandHeldUI(null);
+    const nxt = handModeRef.current === id ? null : id;
+    handModeRef.current = nxt; setHandMode(nxt);
+  }
   // 2026-07 station update (zip 233): the NEAREST waiting visitor within
   // reach, if any. Uses live x/y, so it keeps working while they stroll.
   function visitorPromptNearby() {
@@ -6500,6 +6707,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     else setSeedMenuOpen(false);
     if (s === 0 && !noToolMenu) setToolMenuOpen(o => (slotRef.current === 0 ? !o : true));
     else setToolMenuOpen(false);
+    // Zip 251 : la case main (7) ouvre/ferme son menu de décorations ; en
+    // quittant l'outil main on abandonne toute pose armée / objet attrapé
+    // (l'attrape est purement locale, l'objet reste en place sur la carte).
+    if (s === 7) setHandMenuOpen(o => (slotRef.current === 7 ? !o : true));
+    else setHandMenuOpen(false);
+    if (s !== 7) { handModeRef.current = null; setHandMode(null); handHeldRef.current = null; setHandHeldUI(null); }
     setCraftMenuOpen(null);
     // Changer d'outil en portant un animal l'annule (relâché sans être
     // déplacé), pour ne jamais le laisser "coincé" en main d'un joueur.
@@ -6731,6 +6944,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     { key: "tools", icon: toolKind }, { key: "can", icon: "can" },
     { key: "seeds", icon: "seeds" }, { key: "food", icon: "food" },
     { key: "rod", icon: "rod" }, { key: "fence", icon: "fence" }, { key: "herd", icon: "herd" },
+    { key: "hand", icon: "hand" }, // zip 251 : outil main (poser/déplacer/ranger objets)
   ];
   const clockStr = (() => { const h = Math.floor(hud.timeMin / 60) % 24, mn = hud.timeMin % 60; return `${h}h${String(mn).padStart(2, "0")}`; })();
 
@@ -6852,11 +7066,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       {/* Invite proximité */}
       {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("visitor:") ? L.promptVisitor((C.VISITOR_ROSTER[+promptKey.slice(8)] || {}).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "coop" ? L.promptCoop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : L.promptBin}</div>}
       {mountPrompt && <div className="ferme-prompt ferme-prompt-mount">{mountPrompt === "mount" ? L.mountPrompt : L.dismountPrompt}</div>}
+      {handHeldUI && <div className="ferme-prompt ferme-prompt-mount">{L.handHeldHint}</div>}
 
       {/* Barre d'outils */}
       <div className="ferme-toolbar panel">
         {slots.map((s, i) => {
-          const isSeed = s.key === "seeds", isFood = s.key === "food", isRod = s.key === "rod", isFence = s.key === "fence", isHerd = s.key === "herd", isTools = s.key === "tools";
+          const isSeed = s.key === "seeds", isFood = s.key === "food", isRod = s.key === "rod", isFence = s.key === "fence", isHerd = s.key === "herd", isTools = s.key === "tools", isHand = s.key === "hand";
           let count = "", lvl = "", img = spritesReady ? spritesRef.current.icons[s.icon] : null;
           if (isSeed) { count = myInv ? myInv.seeds[seedSel] : ""; img = spritesReady ? spritesRef.current.crops[seedSel][C.CROP_STAGES - 1] : null; }
           else if (isFood) count = myInv ? myInv.food : "";
@@ -6883,13 +7098,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             lvl = buildKind === "fence" ? (fenceDir === "h" ? "↔" : fenceDir === "v" ? "↕" : "R") : buildKind === "cauldron" ? "⚗️" : "";
           }
           else if (isHerd) { if (carryingAnimal) lvl = "●"; }
+          else if (isHand) { const dn = myInv && myInv.decor ? Object.values(myInv.decor).reduce((a, b) => a + (b | 0), 0) : 0; count = dn || ""; if (handHeldUI || handMode) lvl = "●"; }
           else lvl = "N" + (myTools[s.key] || 1);
           const title = isSeed ? L.seedTip(seedName(seedSel)) : isFood ? L.foodTip(C.FOOD_ENERGY) : isRod ? L.rodTip
             : isFence ? (buildKind === "wall" ? L.wallTip : buildKind === "path" ? L.pathTip : buildKind === "lamp" ? L.lampTip : buildKind === "scarecrow" ? L.scarecrowTip
               : buildKind === "grass" ? L.grassTip : buildKind === "mill" ? L.millTip : buildKind === "cauldron" ? L.cauldronRowSub
               : buildKind === "bridgeRenovate" ? L.bridgeRenovateTip
               : (buildKind === "bridgeWood" || buildKind === "bridgeStone") ? L.bridgeTip : L.fenceTip)
-            : isHerd ? L.herdTip : isTools ? L.toolsTip(TOOL_NAMES[toolKind]) : TOOL_NAMES[s.key];
+            : isHerd ? L.herdTip : isHand ? L.handTip : isTools ? L.toolsTip(TOOL_NAMES[toolKind]) : TOOL_NAMES[s.key];
           return (
             <div key={s.key} className={"ferme-slot" + (i === slot ? " sel" : "")} onClick={() => selectSlot(i)} title={title}>
               <span className="ferme-slot-key">{i + 1}</span>
@@ -6923,6 +7139,30 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 <span className="count">× {myInv ? myInv.seeds[cr.id] : 0}</span>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Zip 251 : menu de l'outil main — décorations posables + aide au déplacement. */}
+      {handMenuOpen && slot === 7 && (
+        <div className="ferme-seed-menu-ov" onClick={() => setHandMenuOpen(false)}>
+          <div className="ferme-seed-menu panel" onClick={e => e.stopPropagation()}>
+            <div className="ferme-seed-menu-title">{L.handMenuTitle}</div>
+            {(() => {
+              const owned = C.UNIQUE_DECORATIONS.filter(d => myInv && myInv.decor && (myInv.decor[d.id] | 0) > 0);
+              if (!owned.length) return <div className="ferme-seed-menu-row" style={{ opacity: .7, cursor: "default" }}><span className="name">{L.handMenuEmpty}</span></div>;
+              return owned.map(d => (
+                <div key={d.id} className={"ferme-seed-menu-row" + (d.id === handMode ? " sel" : "")}
+                  onClick={() => { armDecor(d.id); setHandMenuOpen(false); }}>
+                  <Sprite img={spritesReady ? spritesRef.current.decor[d.id] : null} w={26} h={26} />
+                  <span className="name">{lang === "en" ? d.nameEn : d.name}</span>
+                  <span className="count">× {myInv ? (myInv.decor[d.id] | 0) : 0}</span>
+                </div>
+              ));
+            })()}
+            <div className="ferme-seed-menu-row" style={{ opacity: .75, fontSize: 11, cursor: "default" }} onClick={e => e.stopPropagation()}>
+              <span className="name">{L.handMoveHint}</span>
+            </div>
           </div>
         </div>
       )}
@@ -7507,6 +7747,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 <PixBtn sprites={spritesReady ? spritesRef.current : null} icon="release" tone="bad" small label={L.bagReleaseBtn} onClick={() => sendReq({ kind: "releasePet", index: pi })} />
               </div>
             ))}
+
+            {/* Zip 251 : décorations reçues en cadeau, déployables via l'outil main. */}
+            <div style={{ fontSize: 11, fontWeight: 700, opacity: .7, textTransform: "uppercase", letterSpacing: .5, marginTop: 12 }}>{L.bagDecorTitle}</div>
+            {(() => {
+              const owned = C.UNIQUE_DECORATIONS.filter(d => myInv && myInv.decor && (myInv.decor[d.id] | 0) > 0);
+              if (!owned.length) return <div className="ferme-hint">{L.bagNoDecor}</div>;
+              return (<>
+                {owned.map(d => (
+                  <div className="ferme-shop-row" key={"decor" + d.id}>
+                    <Sprite img={spritesReady ? spritesRef.current.decor[d.id] : null} w={32} h={32} />
+                    <div className="info"><b>{(lang === "en" ? d.nameEn : d.name)} × {myInv.decor[d.id] | 0}</b></div>
+                  </div>
+                ))}
+                <div className="ferme-hint">{L.bagDecorHint}</div>
+              </>);
+            })()}
 
             <div style={{ fontSize: 11, fontWeight: 700, opacity: .7, textTransform: "uppercase", letterSpacing: .5, marginTop: 12 }}>{L.bagHealTitle}</div>
             <div className="ferme-shop-row">

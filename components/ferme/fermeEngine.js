@@ -540,6 +540,7 @@ export function newFarmer(id, name, gender, outfit) {
       fish: C.FISH.map(() => 0),      // poissons pêchés
       seaCreatures: C.SEA_CREATURES.map(() => 0), // rare sea creatures (2026-07 station update), sell-only
       products: C.ANIMALS.map(() => 0), // productions d'élevage ramassées
+      decor: {}, // zip 251: décorations reçues en cadeau, déployables via l'outil main (id -> quantité)
     },
     quests: {}, // id de quête -> true quand accomplie
     pets: [],   // zip 236: pets INDIVIDUELS (max C.MAX_PETS), {id, at}. Voir resolveCatchPet/resolveReleasePet.
@@ -609,6 +610,11 @@ export function normalizeFarmer(f) {
   f.inv.seaCreatures = padArray(f.inv.seaCreatures, C.SEA_CREATURES.length); // 2026-07 station update
   if (typeof f.seaStreak !== "number") f.seaStreak = 0; // consecutive casts, host-side rarity gate
   f.inv.products = padArray(f.inv.products, C.ANIMALS.length);
+  // Zip 251: sac de décorations (id -> quantité), nettoyé aux ids connus.
+  { const d = (f.inv.decor && typeof f.inv.decor === "object") ? f.inv.decor : {};
+    const clean = {};
+    for (const dd of C.UNIQUE_DECORATIONS) { const n = d[dd.id] | 0; if (n > 0) clean[dd.id] = n; }
+    f.inv.decor = clean; }
   f.quests = f.quests || {};
   // Zip 236: individual pets. Keep only well-formed known pets; cap at MAX_PETS.
   f.pets = (Array.isArray(f.pets) ? f.pets : [])
@@ -2215,6 +2221,18 @@ export function migrateStation(st, hostNow) {
   return out;
 }
 
+// Zip 251: normalise la liste des décorations posées (ferme + Valley Town).
+// Chaque entrée : { did, deco, x, y, zone: "farm"|"town", owner }. Filtrée aux
+// ids connus et aux coordonnées valides. `did` = identifiant unique stable
+// (attribué à la pose) utilisé par l'outil main pour cibler/déplacer/reprendre.
+export function migrateDecor(list) {
+  if (!Array.isArray(list)) return [];
+  const known = new Set(C.UNIQUE_DECORATIONS.map(d => d.id));
+  return list
+    .filter(e => e && known.has(e.deco) && typeof e.x === "number" && typeof e.y === "number")
+    .map(e => ({ did: e.did | 0, deco: e.deco, x: +e.x, y: +e.y, zone: e.zone === "town" ? "town" : "farm", owner: e.owner || null }));
+}
+
 // Farm popularity score: how established the place looks. Feeds the organic
 // "people are curious about your farm" visits (no ad needed). Deliberately
 // coarse; every term is capped so no single stat dominates.
@@ -2536,12 +2554,8 @@ export function resolveVisitorDeal(f, s, m) {
 export function offerGiftReward(f, s, v, rw, res, rnd) {
   const r = rnd || Math.random;
   res.gift = { ...rw };
-  // Les décorations gardent leur voie existante (non concernées par le 80/20).
-  if (rw.kind === "decor") {
-    const gr = grantReward(f, s, v, rw);
-    res.giftQueued = gr.queued; res.bagFull = gr.bagFull;
-    return;
-  }
+  // Zip 251 : les décorations sont désormais des objets de SAC (comme les
+  // graines/objets/animaux) -> soumises au même partage 80/20 que le reste.
   if (r() < C.VISITOR_GIFT_DIRECT_CHANCE) {
     const gr = grantReward(f, s, v, rw);
     res.giftQueued = gr.queued; res.bagFull = gr.bagFull;
@@ -2576,7 +2590,13 @@ export function grantReward(f, s, v, rw) {
   } else if (rw.kind === "useful") {
     if (Array.isArray(f.inv[rw.item])) { /* not expected */ }
     else f.inv[rw.item] = (f.inv[rw.item] || 0) + (rw.n || 1);
-  } else { // decor (or unknown) -> communal queue
+  } else if (rw.kind === "decor") {
+    // Zip 251 (demande Guillaume) : les décorations vont désormais dans le SAC
+    // PERSONNEL du joueur (f.inv.decor), déployables via l'outil main — fini la
+    // file commune indéfinie.
+    if (!f.inv.decor || typeof f.inv.decor !== "object") f.inv.decor = {};
+    f.inv.decor[rw.id] = (f.inv.decor[rw.id] | 0) + 1;
+  } else { // unknown kind -> communal queue (filet de sécurité)
     if (!Array.isArray(s.station.pendingGifts)) s.station.pendingGifts = [];
     s.station.pendingGifts.push({ ...rw, from: v ? v.rid : -1, at: Date.now() });
     out.queued = true;
