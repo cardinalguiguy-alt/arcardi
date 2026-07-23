@@ -914,15 +914,37 @@ export function buildSprites() {
       outlineSprite(g, 48, 40, "#6a4a2a");
       return c;
     }
-    // bakery
+    // bakery — Zip 259 (demande Guillaume : "bien plus mignon et typé
+    // boutique, vrai bâtiment"). Devanture pastel, toit rouge, cheminée
+    // fumante, enseigne cupcake suspendue, auvent rayé au-dessus d'une grande
+    // vitrine garnie de pâtisseries, et porte d'entrée à droite.
     const [c, g] = cv(48, 40);
-    P(g, 4, 16, 40, 22, "#e6c9a0");
-    P(g, 4, 30, 40, 8, "#d0aa72");
-    g.fillStyle = "#b04a3a"; g.beginPath(); g.moveTo(2, 16); g.lineTo(24, 5); g.lineTo(46, 16); g.closePath(); g.fill(); // toit
-    P(g, 36, 2, 5, 10, "#8a6a52");                       // cheminée du four
-    P(g, 20, 24, 8, 14, "#7a5330");                      // porte
-    P(g, 9, 20, 7, 6, "#c98a4a"); P(g, 24, 20, 7, 6, "#c98a4a"); // vitrines (pain doré)
-    P(g, 10, 22, 5, 3, "#e8b96a"); P(g, 25, 22, 5, 3, "#e8b96a");
+    // Façade + soubassement
+    P(g, 5, 15, 38, 23, "#f6e3c8");
+    P(g, 5, 33, 38, 5, "#e7c79b");
+    // Toit à deux pentes + ombre
+    g.fillStyle = "#c95a4a"; g.beginPath(); g.moveTo(3, 16); g.lineTo(24, 4); g.lineTo(45, 16); g.closePath(); g.fill();
+    g.fillStyle = "#a84636"; g.beginPath(); g.moveTo(3, 16); g.lineTo(24, 4); g.lineTo(24, 7); g.lineTo(7, 16); g.closePath(); g.fill();
+    P(g, 22, 6, 4, 3, "#efdcc2");                        // petit épi de faîtage
+    // Cheminée du four + volutes de fumée
+    P(g, 33, 4, 5, 9, "#9a6a52"); P(g, 33, 4, 5, 2, "#7a4a38");
+    g.fillStyle = "rgba(235,235,235,0.85)";
+    g.beginPath(); g.arc(35, 3, 2, 0, 7); g.fill();
+    g.beginPath(); g.arc(38, 1, 1.5, 0, 7); g.fill();
+    // Enseigne suspendue avec un cupcake
+    P(g, 19, 16, 10, 6, "#8a5a36"); P(g, 23, 15, 2, 1, "#6a4426");
+    P(g, 22, 19, 4, 2, "#f0b7c2"); P(g, 22, 18, 4, 1, "#e88aa0"); P(g, 23, 17, 2, 1, "#c65a78");
+    // Auvent rayé au-dessus de la vitrine
+    for (let i = 0; i < 6; i++) P(g, 6 + i * 6, 22, 6, 4, i % 2 ? "#e8938a" : "#f7efe6");
+    P(g, 6, 26, 30, 1, "#c95a4a");
+    // Grande vitrine + pâtisseries en présentation
+    P(g, 7, 27, 22, 8, "#bfe3ea"); P(g, 7, 27, 22, 1, "#8fb0b8"); P(g, 18, 27, 1, 8, "#9ec3cb");
+    P(g, 9, 31, 4, 3, "#e8b96a"); P(g, 9, 30, 4, 1, "#f6d9a4"); P(g, 10, 29, 2, 1, "#e87a9a");   // cupcake
+    P(g, 15, 31, 4, 3, "#d79a5a"); P(g, 15, 30, 4, 1, "#f2c98a"); P(g, 16, 29, 2, 1, "#b0674a");  // brioche
+    P(g, 22, 31, 5, 3, "#e2a84a"); P(g, 23, 30, 3, 1, "#f4d18a");                                   // tarte
+    // Porte d'entrée à droite
+    P(g, 31, 24, 9, 11, "#8a5a36"); P(g, 31, 24, 9, 1, "#6a4426"); P(g, 33, 26, 5, 4, "#b98a5a");
+    P(g, 37, 30, 1, 2, "#e8c24a");                        // poignée
     outlineSprite(g, 48, 40, "#7a4a2a");
     return c;
   }
@@ -1232,11 +1254,17 @@ export function buildSprites() {
   // galop : les paires de pattes avant/arrière s'étendent en oblique puis se
   // regroupent sous le corps, le corps rebondit d'un pixel, la queue passe à
   // l'horizontale (soufflée) et la crinière flotte vers l'arrière.
-  function horseSprite(frame) {
+  // Zip 258 : paramètre `coat` optionnel. "white" produit le CHEVAL BLANC
+  // d'Eduardo (robe crème, crinière gris clair) en réutilisant exactement le
+  // même tracé — seule la palette change. Sans argument, robe baie d'origine.
+  function horseSprite(frame, coat) {
     const f = (frame || 0) % 4;
     const [c, g] = cv(28, 24); // vu de profil (regarde à droite)
-    const body = "#8a5a34", light = "#a5764a", dark = "#6a4426", shade = "#5a3a20",
-      mane = "#3a2a18", maneDeep = "#2a1c10", hoof = "#2a2018", saddle = "#7a3020", saddleLight = "#9a4a30";
+    const white = coat === "white";
+    const body = white ? "#ececef" : "#8a5a34", light = white ? "#ffffff" : "#a5764a",
+      dark = white ? "#c6c6d0" : "#6a4426", shade = white ? "#b2b2c0" : "#5a3a20",
+      mane = white ? "#c8c8d2" : "#3a2a18", maneDeep = white ? "#a8a8b6" : "#2a1c10",
+      hoof = white ? "#5a5a64" : "#2a2018", saddle = "#7a3020", saddleLight = "#9a4a30";
     const bob = [0, -1, 0, 0][f];   // rebond vertical du corps (phase d'envol)
     const ext = [0, 5, 1, -4][f];   // pattes avant : étendues vers l'avant / regroupées
     const ext2 = [0, -5, -1, 4][f]; // pattes arrière : opposées (étendues vers l'arrière)
@@ -1834,6 +1862,7 @@ house: house(),
     fishIcons: [],
     horse: horseSprite(0),
     horseRun: [horseSprite(0), horseSprite(1), horseSprite(2), horseSprite(3)], // cycle de galop (chantier 2026-07)
+    horseWhite: horseSprite(0, "white"), // zip 258 : monture d'Eduardo (arrivée au village)
     wolf: [wolfSprite(0), wolfSprite(1), wolfSprite(2), wolfSprite(3)],
     // Zip 235: winter swap. Same 4 frames, same anim, different pelt.
     snowLeopard: [snowLeopardSprite(0), snowLeopardSprite(1), snowLeopardSprite(2), snowLeopardSprite(3)],

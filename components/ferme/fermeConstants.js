@@ -1040,7 +1040,19 @@ export const VISITOR_ROSTER = [
   { rid: 26, name: "Ingrid",  gender: "f", outfit: 6, overalls: true,  cap: false, theme: "animals", job: "turn our milk into fine cheese", skill: "cheesemaker" },
   { rid: 27, name: "Tristan", gender: "m", outfit: 7, overalls: true,  cap: false, theme: "wood",    job: "fell trees and break rocks all day", skill: "lumberjack" },
   { rid: 28, name: "Chloé",   gender: "f", outfit: 3, overalls: true,  cap: true,  theme: "kitchen", job: "bake cakes and cookies",         skill: "baker" },
+  // Zip 258 (demande Guillaume) : Eduardo Da Fonseca. Skin d'explorateur
+  // extravagant (outfit 5 + chapeau, gender m). Son skill "voyager" (commerçant
+  // grand voyageur) permet de l'accueillir comme résident ; une fois installé,
+  // on lui passe commande de produits du monde depuis le menu Employés (voir
+  // WORLD_GOODS / VOYAGE_*). Il se présente au village sur le dos d'un CHEVAL
+  // BLANC (rendu : sprite horseWhite dessiné sous lui tant qu'il est visiteur).
+  // Zip 259 (demande Guillaume) : il apparaît DÉSORMAIS aussi souvent que les
+  // autres (le flag `rare` a été retiré) — il faut pouvoir le recruter.
+  { rid: 29, name: "Eduardo Da Fonseca", gender: "m", outfit: 5, overalls: false, cap: true, theme: "market", job: "sail the world and bring back rare goods", skill: "voyager" },
 ];
+// Poids de spawn d'un visiteur "rare" (aucun personnage n'est marqué `rare`
+// depuis le zip 259, mais la mécanique reste dispo pour un futur usage).
+export const RARE_VISITOR_WEIGHT = 0.25;
 
 // ---- Zip 252 : métiers d'artisans (résidents à skill) ----
 // Indices d'élevage utilisés comme intrants (voir ANIMALS ci-dessus).
@@ -1056,9 +1068,13 @@ export const ARTISAN_BUILDINGS = {
   bakery:     { skill: "baker",       cost: 9000,  site: { x: 62, y: 46 }, w: 3, h: 2 },
 };
 // Métier -> bâtiment (null = pas de bâtiment, travaille directement).
-export const SKILL_BUILDING = { beekeeper: "beehive", cheesemaker: "fromagerie", baker: "bakery", lumberjack: null };
+// voyager (Eduardo) : pas de bâtiment, il travaille par voyages (commandes).
+export const SKILL_BUILDING = { beekeeper: "beehive", cheesemaker: "fromagerie", baker: "bakery", lumberjack: null, voyager: null };
 // Cadences de production (ms réelles) et valeurs de vente (or).
-export const HONEY_MS = 4 * 60 * 1000;     export const HONEY_SELL = 700;   // ruche : passif, aucun intrant (700 : prix relevé, demande Guillaume)
+// Zip 258 (demande Guillaume : "le miel est une denrée rare") : cadence ÷3
+// (4 min -> 12 min entre deux pots) et prix du pot fortement relevé à 7000.
+// C'est le produit passif le plus lent et le plus cher du jeu, assumé.
+export const HONEY_MS = 12 * 60 * 1000;    export const HONEY_SELL = 7000;  // ruche : passif, aucun intrant (denrée rare : 12 min/pot, 7000 l'unité — zip 258)
 
 // Point d'ancrage de rôdaille de l'apiculteur (René) : centre du bâtiment
 // beehive (site 2x2 à x:50,y:46), pour qu'il reste autour de sa ruche au lieu
@@ -1066,9 +1082,89 @@ export const HONEY_MS = 4 * 60 * 1000;     export const HONEY_SELL = 700;   // r
 export const BEEKEEPER_ANCHOR = { x: 51, y: 47 };
 export const CHEESE_MS = 6 * 60 * 1000;    export const CHEESE_MILK_COST = 3; // fromagerie : 3 laits -> 1 roue
 export const CHEESE_WHEEL_SELL = 1500;     export const CHEESE_PORTION_SELL = 350; export const PORTIONS_PER_WHEEL = 6;
-export const PASTRY_MS = 3 * 60 * 1000;    export const PASTRY_SELL = 500;  // boulangerie : farine + lait + œuf -> 1 pâtisserie
-export const PASTRY_FLOUR = 1, PASTRY_MILK = 1, PASTRY_EGG = 1;
+// Zip 258 (demande Guillaume) : la boulangerie tourne 3× plus vite (3 min ->
+// 1 min entre deux fournées) mais UNIQUEMENT en journée (voir BAKERY_*_MIN),
+// et produit désormais par FOURNÉE : 1 lait + 1 farine + 6 œufs -> 10
+// pâtisseries d'un coup. Prix unitaire inchangé (500), demande Guillaume.
+export const PASTRY_MS = 1 * 60 * 1000;    export const PASTRY_SELL = 500;  // boulangerie : 1 lait + 1 farine + 6 œufs -> PASTRY_BATCH pâtisseries
+export const PASTRY_FLOUR = 1, PASTRY_MILK = 1, PASTRY_EGG = 6;
+export const PASTRY_BATCH = 10;            // nombre de pâtisseries produites par fournée réussie
+// Horaires d'ouverture de la boulangerie (minutes dans la journée de jeu).
+// La pâtissière ne produit qu'entre 5h30 et 19h00 ; hors de cette plage, le
+// four est éteint (aucune production, aucune alerte). Le jour de jeu commence
+// à 6h (DAY_START_MIN) donc 5h30 = ouverture effective dès le lever.
+export const BAKERY_OPEN_MIN = 5 * 60 + 30;  // 5h30
+export const BAKERY_CLOSE_MIN = 19 * 60;     // 19h00
 export const LUMBERJACK_WOOD = 6, LUMBERJACK_STONE = 4; // Tristan : par tour de travail -> réserve commune (gregStock)
+
+/* ==========================================================================
+   Zip 258 : Eduardo Da Fonseca, commerçant grand voyageur (demande Guillaume)
+   --------------------------------------------------------------------------
+   Une fois Eduardo résident, on lui commande des PRODUITS DU MONDE rares
+   depuis le menu Employés. Chaque produit appartient à un PALIER DE DISTANCE
+   (moyen / lointain) qui pilote à la fois le prix (buy × multiplicateur) et la
+   durée du voyage (en JOURS de jeu). Il part au moins 2 jours, revient avec la
+   commande + parfois une surprise, le tout déposé dans la réserve commune
+   (station.worldStock). On peut ensuite revendre ces produits au marché
+   ("assez cher", WORLD_GOODS[].sell) — l'usage en pâtisseries vanillées/
+   chocolatées viendra plus tard (demande Guillaume : "à voir à l'avenir").
+   Liste volontairement resserrée (6 produits, demande Guillaume), cacao et
+   gousses de vanille de Madagascar inclus.
+   ========================================================================== */
+// Paliers de distance : mult = multiplicateur de prix, days = durée du voyage
+// en jours de jeu (1 jour de jeu = DAY_REAL_MS). "proche" est prévu pour de
+// futurs produits ; aucun produit de la liste actuelle n'y est rattaché.
+export const VOYAGE_TIERS = {
+  proche:   { mult: 1.0, days: 2 },
+  moyen:    { mult: 1.5, days: 3 },
+  lointain: { mult: 2.0, days: 4 },
+};
+// key   : identifiant interne (clé de station.worldStock)
+// tier  : palier de distance (VOYAGE_TIERS)
+// buy   : prix de base par unité (avant multiplicateur de distance) payé à Eduardo
+// sell  : prix de revente par unité au marché (bac/boutique) — "assez cher"
+export const WORLD_GOODS = [
+  { key: "vanilla",  name: "Gousse de vanille (Madagascar)", nameEn: "Vanilla pod (Madagascar)", tier: "moyen",    buy: 800, sell: 1600, emoji: "\u{1F33F}" },
+  { key: "coffee",   name: "Café d'Éthiopie",                nameEn: "Ethiopian coffee",          tier: "moyen",    buy: 300, sell: 700,  emoji: "☕" },
+  { key: "cinnamon", name: "Cannelle de Ceylan",             nameEn: "Ceylon cinnamon",           tier: "moyen",    buy: 260, sell: 620,  emoji: "\u{1F90E}" },
+  { key: "cocoa",    name: "Fève de cacao",                  nameEn: "Cocoa bean",                tier: "lointain", buy: 400, sell: 900,  emoji: "\u{1F36B}" },
+  { key: "pineapple",name: "Ananas",                         nameEn: "Pineapple",                 tier: "lointain", buy: 250, sell: 600,  emoji: "\u{1F34D}" },
+  { key: "coconut",  name: "Noix de coco",                   nameEn: "Coconut",                   tier: "lointain", buy: 180, sell: 450,  emoji: "\u{1F965}" },
+];
+// Prix unitaire d'une commande (payé d'avance) = buy × mult du palier, arrondi.
+export function worldGoodUnitCost(good) {
+  const t = VOYAGE_TIERS[good.tier] || VOYAGE_TIERS.proche;
+  return Math.round(good.buy * t.mult);
+}
+export const VOYAGE_DAY_MS = DAY_REAL_MS;   // 1 jour de jeu = durée réelle d'un jour
+export const VOYAGE_MAX_QTY = 20;           // garde-fou : quantité max par produit et par commande
+export const VOYAGE_SURPRISE_CHANCE = 0.5;  // probabilité qu'Eduardo ramène une surprise en plus
+export const VOYAGE_SURPRISE_MIN = 1, VOYAGE_SURPRISE_MAX = 3; // quantité de la surprise
+// Ancre de rôdaille d'Eduardo quand il est au village (près de la gare/mairie).
+export const VOYAGER_ANCHOR = { x: 40, y: 12 };
+
+/* ==========================================================================
+   Zip 259 : exclusion d'un résident (kick-out) + retour de l'ex-résident
+   (demande Guillaume).
+   --------------------------------------------------------------------------
+   Depuis le menu Employés/Résidents, on peut voter l'exclusion d'un résident
+   (unanimité des joueurs en ligne ; immédiat en solo), ce qui libère sa
+   maison. L'ex-résident revient ensuite, entre 2 et 15 minutes réelles plus
+   tard, sous forme de visiteur spécial (offer.type "plea") avec une réaction
+   figée à l'exclusion : "touching" (touchante, implore une révision),
+   "bitter" (aigrie/méchante) ou "healthy" (réaction saine et posée). Un index
+   de variante (vi) est tiré à l'exclusion pour choisir le texte exact, stable
+   d'une session à l'autre. On peut alors le réintégrer (oui, si une maison est
+   libre) ou refuser (non).
+   ========================================================================== */
+export const KICK_RETURN_MIN_MS = 2 * 60 * 1000;   // délai min avant le retour de l'ex-résident
+export const KICK_RETURN_MAX_MS = 15 * 60 * 1000;  // délai max
+// Humeurs possibles au retour, avec leur poids relatif de tirage.
+export const EXILE_MOODS = ["touching", "bitter", "healthy"];
+export const EXILE_MOOD_WEIGHTS = { touching: 3, bitter: 2, healthy: 2 };
+// Nombre de variantes de texte par humeur (doit correspondre aux tableaux
+// exilePlea/exileYes/exileNo de fermeStrings.js). Sert à tirer un index valide.
+export const EXILE_VARIANT_COUNTS = { touching: 4, bitter: 4, healthy: 3 };
 // Certains visiteurs arrivent en RÉCLAMANT du fromage (roue ou parts) contre
 // une grosse somme, prélevée sur la réserve commune craftStock.
 export const VISITOR_CHEESE_CHANCE = 0.18;      // part des offres "buy" converties en demande de fromage

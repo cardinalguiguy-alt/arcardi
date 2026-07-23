@@ -190,6 +190,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [myVote, setMyVote] = useState(null);          // my residency vote (null until cast)
   const [repairMini, setRepairMini] = useState(null);  // co-op repair minigame ({name}) | null
   const [nearHall, setNearHall] = useState(false);     // am I close to the townhall? (1 Hz, corner notif)
+  const [nearArtisan, setNearArtisan] = useState(null); // zip 259 : bid du bâtiment d'artisan proche (encart d'info production), ou null
   const repairSeenRef = useRef(0);                     // damage.until already shown (no re-open loop)
   const visitorNetRef = useRef(0);                     // host network throttle for visitorSim
   const residentNetRef = useRef(0);                    // zip 252: host network throttle for residentSim (résidents baladeurs)
@@ -235,6 +236,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // raccourci d'accès pour éviter de rouvrir toute la boutique).
   const [employeesOpen, setEmployeesOpen] = useState(false);
   const [gregCardOpen, setGregCardOpen] = useState(false); // FIX 246 : fiche de Greg ouverte via la touche Q à proximité (comme les visiteurs)
+  // Zip 258 : commande de voyage à Eduardo (menu Employés) + revente des
+  // produits du monde rapportés. voyagerDraft = { key: quantité }.
+  const [voyagerOrderOpen, setVoyagerOrderOpen] = useState(false);
+  const [voyagerSellOpen, setVoyagerSellOpen] = useState(false);
+  const [voyagerDraft, setVoyagerDraft] = useState({});
   const [residentCard, setResidentCard] = useState(null);  // zip 252 : rid du résident dont la fiche dialogue est ouverte (ou null)
   const [petChoice, setPetChoice] = useState(null);        // zip 252 : { petId } cadeau animal en attente quand le sac est plein
   const gregCardOpenRef = useRef(false);
@@ -1911,6 +1917,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (e && +req.x >= 0 && +req.y >= 0) { e.x = +(+req.x).toFixed(2); e.y = +(+req.y).toFixed(2); broadcastDecor(); }
       return true;
     }
+    if (req.kind === "moveArtisan") {
+      // Zip 259 : déplace UNIQUEMENT la position d'un bâtiment d'artisan
+      // construit (crafts[bid].pos), sans jamais le supprimer ni toucher à sa
+      // production. L'apiculteur/fromager/pâtissière recalcule sa zone de
+      // rôdaille automatiquement (artisanAnchor lit cette position).
+      const bid = req.bid, def = C.ARTISAN_BUILDINGS[bid];
+      if (!def || !s.crafts || !s.crafts[bid] || !s.crafts[bid].built) return true;
+      const x = req.x | 0, y = req.y | 0;
+      if (!(x >= 0 && y >= 0)) return true;
+      s.crafts[bid].pos = { x, y };
+      dirtyRef.current = true;
+      hostSend({ type: "broadcast", event: "apply", payload: { crafts: s.crafts } });
+      return true;
+    }
     if (req.kind === "pickDecor") {
       const idx = s.decor.findIndex(d => d.did === (req.did | 0));
       if (idx >= 0) {
@@ -2218,6 +2238,55 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       broadcastStation();
       return true;
     }
+    if (req.kind === "kickResident") {
+      // Zip 259 : vote d'exclusion d'un résident. Unanimité des joueurs EN
+      // LIGNE (immédiat en solo). Quand l'exclusion passe : le résident quitte
+      // sa maison (libérée) et rejoint la file des exilés (st.exiles) pour
+      // revenir supplier plus tard (voir hostSpawnPlea / updateVisitors).
+      const rid = req.rid | 0;
+      if (!st || !(st.residents || []).some(r => r.rid === rid)) return true;
+      const online = Object.keys(farmersRef.current || {});
+      if (!st.kickVotes) st.kickVotes = {};
+      const votes = st.kickVotes[rid] || (st.kickVotes[rid] = {});
+      votes[req.id] = true;
+      const unanime = online.length > 0 && online.every(id => votes[id]);
+      if (online.length <= 1 || unanime) {
+        const ro = C.VISITOR_ROSTER[rid];
+        st.residents = st.residents.filter(r => r.rid !== rid);
+        delete st.kickVotes[rid];
+        // Humeur pondérée + variante de texte figées dès l'exclusion.
+        const moods = C.EXILE_MOODS, wsum = moods.reduce((a, m) => a + (C.EXILE_MOOD_WEIGHTS[m] || 1), 0);
+        let pick = Math.random() * wsum, mood = moods[0];
+        for (const m of moods) { pick -= (C.EXILE_MOOD_WEIGHTS[m] || 1); if (pick < 0) { mood = m; break; } }
+        const vi = Math.floor(Math.random() * (C.EXILE_VARIANT_COUNTS[mood] || 1));
+        const delay = C.KICK_RETURN_MIN_MS + Math.floor(Math.random() * (C.KICK_RETURN_MAX_MS - C.KICK_RETURN_MIN_MS + 1));
+        if (!st.exiles) st.exiles = [];
+        st.exiles.push({ rid, returnAt: Date.now() + delay, mood, vi });
+        stationChat(L.kickedChat(ro ? ro.name : "?"), "\u{1F44B}");
+      } else {
+        hostSend({ type: "broadcast", event: "apply", payload: { toast: { id: req.id, key: "kickVoted" } } });
+      }
+      broadcastStation();
+      return true;
+    }
+    if (req.kind === "pleaResolve") {
+      // Zip 259 : réponse à la supplique d'un ex-résident revenu. "accept" ->
+      // il réemménage SI une maison est libre ; sinon message "plus de place".
+      // "refuse" -> il repart. Dans tous les cas le visiteur-supplique s'en va.
+      const rid = req.rid | 0, ro = C.VISITOR_ROSTER[rid];
+      if (!st || !ro) return true;
+      const v = E.getVisitor(s, rid);
+      if (req.accept) {
+        const used = Object.keys(farmersRef.current || {}).length + (st.residents || []).length;
+        if (used >= C.TOWN_HOUSES.length) { hostSend({ type: "broadcast", event: "apply", payload: { toast: { id: req.id, key: "residentNoRoom" } } }); }
+        else { if (!st.residents) st.residents = []; st.residents.push({ rid, job: ro.job, announced: false }); stationChat(L.exileReacceptedChat(ro.name), "\u{1F3E1}"); }
+      } else {
+        stationChat(L.exileRefusedChat(ro.name), "\u{1F494}");
+      }
+      if (v) { v.phase = "leave"; v.offer = { type: "done" }; }
+      broadcastStation();
+      return true;
+    }
     if (req.kind === "buyArtisanBuilding") {
       const bid = req.bid, def = C.ARTISAN_BUILDINGS[bid];
       if (!def || !st) return true;
@@ -2261,6 +2330,54 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       hostSend({ type: "broadcast", event: "apply", payload: { farmer: { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv, pets: f.pets }, toast: { id: f.id, key: cr.ok ? "petCaught" : "bagFull", petId: req.petId } } });
       return true;
     }
+    if (req.kind === "voyagerOrder") {
+      // Zip 258 : commande passée à Eduardo (commerçant grand voyageur) depuis
+      // le menu Employés. Payée d'avance (or). La durée = plus grand palier de
+      // distance parmi les produits commandés. Il part, puis updateResidents
+      // détecte le retour (res.trip.returnAt) et dépose la marchandise dans
+      // station.worldStock.
+      if (!st) return true;
+      const res = (st.residents || []).find(r => C.VISITOR_ROSTER[r.rid] && C.VISITOR_ROSTER[r.rid].skill === "voyager");
+      if (!res) return true; // Eduardo n'est pas (encore) résident
+      if (res.trip && res.trip.phase === "away") { hostSend({ type: "broadcast", event: "apply", payload: { toast: { id: req.id, key: "voyagerBusy" } } }); return true; }
+      const order = Array.isArray(req.order) ? req.order : [];
+      let cost = 0, maxDays = 0; const clean = [];
+      for (const line of order) {
+        const good = C.WORLD_GOODS.find(g => g.key === (line && line.key));
+        if (!good) continue;
+        const qty = Math.max(0, Math.min(C.VOYAGE_MAX_QTY, (line.qty | 0)));
+        if (qty <= 0) continue;
+        cost += C.worldGoodUnitCost(good) * qty;
+        maxDays = Math.max(maxDays, (C.VOYAGE_TIERS[good.tier] || C.VOYAGE_TIERS.proche).days);
+        clean.push({ key: good.key, qty });
+      }
+      if (!clean.length) return true;
+      if (s.money < cost) { hostSend({ type: "broadcast", event: "apply", payload: { toast: { id: req.id, key: "noGold" } } }); return true; }
+      s.money -= cost; setHud(h => ({ ...h, money: s.money }));
+      const durMs = maxDays * C.VOYAGE_DAY_MS;
+      res.trip = { phase: "away", returnAt: Date.now() + durMs, order: clean, cost };
+      res.announced = true; // il repart : pas de ré-annonce "au travail"
+      broadcastStation();
+      hostSend({ type: "broadcast", event: "apply", payload: { state: shareState() } });
+      stationChat(L.voyagerDeparted(fmtDuration(durMs)), "\u{1F40E}");
+      return true;
+    }
+    if (req.kind === "voyagerSell") {
+      // Zip 258 : revente au marché d'un produit du monde de la réserve commune
+      // (station.worldStock) au prix WORLD_GOODS[].sell. Même esprit que sellCraft.
+      if (!st) return true;
+      const good = C.WORLD_GOODS.find(g => g.key === req.item);
+      const ws = st.worldStock || (st.worldStock = {});
+      if (!good || (ws[good.key] | 0) <= 0) return true;
+      const n = Math.min(ws[good.key] | 0, req.n > 0 ? req.n : 9999);
+      ws[good.key] -= n; const gain = n * good.sell;
+      s.money += gain; s.totalEarned = (s.totalEarned || 0) + gain;
+      setHud(h => ({ ...h, money: s.money }));
+      broadcastStation();
+      hostSend({ type: "broadcast", event: "apply", payload: { state: shareState() } });
+      stationChat(L.craftSold((lang === "en" ? good.nameEn : good.name), n, gain), "\u{1F4B0}");
+      return true;
+    }
     return false;
   }
   // Boucle de production des ateliers (hôte, ~1 Hz depuis la boucle temps).
@@ -2269,7 +2386,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (!w || !s.crafts) return;
     const now = Date.now();
     const stock = s.craftStock || (s.craftStock = E.newCraftStock());
-    let stockChanged = false, flourChanged = false;
+    let stockChanged = false, flourChanged = false, craftsMetaChanged = false;
     const bh = s.crafts.beehive;
     if (bh && bh.built) {
       if (!bh.nextAt || bh.nextAt > now + C.HONEY_MS) bh.nextAt = now + C.HONEY_MS;
@@ -2286,19 +2403,38 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     const bk = s.crafts.bakery;
     if (bk && bk.built) {
-      if (!bk.nextAt || bk.nextAt > now + C.PASTRY_MS) bk.nextAt = now + C.PASTRY_MS;
-      else if (now >= bk.nextAt) {
+      // Zip 258 (demande Guillaume) : la boulangerie ne tourne QU'EN JOURNÉE
+      // (5h30 -> 19h). Hors horaires, four éteint : ni production, ni alerte.
+      const tmin = E.gameTimeMin(s.dayStartAt, now);
+      const open = tmin >= C.BAKERY_OPEN_MIN && tmin < C.BAKERY_CLOSE_MIN;
+      if (!open) {
+        // fermé : on repousse la prochaine fournée et on efface une éventuelle
+        // alerte (elle ne concerne que les heures d'ouverture).
+        if (!bk.nextAt || bk.nextAt < now) bk.nextAt = now + C.PASTRY_MS;
+        if (bk.alert) { bk.alert = false; craftsMetaChanged = true; }
+      } else if (!bk.nextAt || bk.nextAt > now + C.PASTRY_MS) {
+        bk.nextAt = now + C.PASTRY_MS;
+      } else if (now >= bk.nextAt) {
         const milkSrc = findInvWith("products", C.COW_ANIMAL, C.PASTRY_MILK);
         const eggSrc = findInvWith("products", C.HEN_ANIMAL, C.PASTRY_EGG);
         if ((s.flour | 0) >= C.PASTRY_FLOUR && milkSrc && eggSrc) {
+          // Fournée : 1 lait + 1 farine + 6 œufs -> PASTRY_BATCH pâtisseries.
           s.flour -= C.PASTRY_FLOUR; flourChanged = true;
           milkSrc.fm.inv.products[C.COW_ANIMAL] -= C.PASTRY_MILK; eggSrc.fm.inv.products[C.HEN_ANIMAL] -= C.PASTRY_EGG;
-          stock.pastry++; stockChanged = true; bk.nextAt = now + C.PASTRY_MS;
+          stock.pastry += C.PASTRY_BATCH; stockChanged = true; bk.nextAt = now + C.PASTRY_MS;
           broadcastFarmerDelta(milkSrc.fm); if (eggSrc.id !== milkSrc.id) broadcastFarmerDelta(eggSrc.fm);
-        } else bk.nextAt = now + Math.min(C.PASTRY_MS, 30000);
+          // Stock revenu -> l'alerte s'efface toute seule (demande Guillaume).
+          if (bk.alert) { bk.alert = false; craftsMetaChanged = true; }
+        } else {
+          // Intrants insuffisants : la pâtissière stoppe et lève une ALERTE
+          // (une seule fois, jusqu'à résolution) — coin haut-droite + badge
+          // dans le menu Employés. Réessaie bientôt.
+          bk.nextAt = now + Math.min(C.PASTRY_MS, 30000);
+          if (!bk.alert) { bk.alert = true; craftsMetaChanged = true; stationChat(L.bakeryAlertToast, "⚠️"); }
+        }
       }
     }
-    if (stockChanged || flourChanged) {
+    if (stockChanged || flourChanged || craftsMetaChanged) {
       dirtyRef.current = true;
       const payload = { crafts: s.crafts };
       if (stockChanged) payload.craftStock = stock;
@@ -2312,6 +2448,31 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (!s.station) s.station = E.newStationState();
     const st = s.station, now = Date.now();
     if (!Array.isArray(st.visitors)) st.visitors = [];
+    // Zip 259 : retour des ex-résidents exclus. Quand l'échéance d'un exilé est
+    // atteinte et qu'il reste de la place, on le fait revenir en visiteur
+    // spécial (offer.type "plea") pour qu'il vienne supplier/réagir. Retiré de
+    // la file dès qu'il est de retour (une seule tentative).
+    if (Array.isArray(st.exiles) && st.exiles.length) {
+      for (let i = st.exiles.length - 1; i >= 0; i--) {
+        const ex = st.exiles[i];
+        if (!ex || now < ex.returnAt) continue;
+        if (st.visitors.length >= C.VISITORS_MAX || st.visitors.some(v => v.rid === ex.rid)) continue; // pas de place / déjà là : on réessaie au prochain tick
+        st.visitors.push({
+          // disp "neutral" volontaire : le plea NE déclenche aucun dégât (seul
+          // offer.type "demand" en provoque) ; l'humeur vit dans offer.mood.
+          rid: ex.rid, disp: "neutral",
+          offer: { type: "plea", mood: ex.mood, vi: ex.vi | 0 },
+          x: C.STATION_PLATFORM.x + 1, y: C.STATION.y + C.STATION.h + 1.5,
+          dir: 2, moving: false, animT: 0, speedMul: 0.9,
+          phase: "train", phaseUntil: now + C.VISITOR_TRAIN_MS,
+          waitUntil: 0, waitStartedAt: 0, deadline: 0, votes: null, voteUntil: 0,
+        });
+        st.exiles.splice(i, 1);
+        const ro = C.VISITOR_ROSTER[ex.rid];
+        stationChat(L.exileReturnChat(ro ? ro.name : "?"), "\u{1F6B6}");
+        broadcastStation();
+      }
+    }
     // Expired repair window: the damage becomes permanent.
     if (st.damage && now > st.damage.until) {
       st.damage = null;
@@ -2605,7 +2766,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (key === "petCaught")     return L.petCaughtToast(C.petName(n, lang === "en"));
     if (key === "petReleased")   return L.bagReleasedToast(C.petName(n, lang === "en"));
     if (key === "bagFull")       return L.bagPetsFull(C.MAX_PETS);
-    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, noMillStock: L.toastNoMillStock, millNotEmpty: L.toastMillNotEmpty, noWheatToDeposit: L.toastNoWheatToDeposit, millFull: L.toastMillFull, actionFailed: L.toastActionFailed, coopNone: L.toastCoopNone, farCoop: L.toastFarCoop, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull, notInjured: L.toastNotInjured, noHealKit: L.toastNoHealKit, healTooFar: L.toastHealTooFar, gregNotHired: L.toastGregNotHired, gregNoRoom: L.toastGregNoRoom, gregNoFertilizer: L.toastGregNoFertilizer, soanNotHired: L.toastSoanNotHired, soanNoRiver: L.toastSoanNoRiver, farCauldron: L.toastFarCauldron, noFishToDeposit: L.toastNoFishToDeposit, cauldronMissing: L.toastCauldronMissing, cauldronAlreadyTaken: L.toastCauldronAlreadyTaken, noCauldronStock: L.toastNoCauldronStock, cauldronNotEmpty: L.toastCauldronNotEmpty, cauldronBrewing: L.toastCauldronBrewing, cauldronNothingToCollect: L.toastCauldronNothingToCollect, cauldronHasEnough: L.toastCauldronHasEnough, visitorNotEnough: L.visitorNotEnough, decorNone: L.decorNone, decorPicked: L.decorPicked, objReturned: L.objReturned, residentNoRoom: L.residentNoRoom, artisanNoResident: L.artisanNoResident }[key] || "";
+    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, noMillStock: L.toastNoMillStock, millNotEmpty: L.toastMillNotEmpty, noWheatToDeposit: L.toastNoWheatToDeposit, millFull: L.toastMillFull, actionFailed: L.toastActionFailed, coopNone: L.toastCoopNone, farCoop: L.toastFarCoop, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull, notInjured: L.toastNotInjured, noHealKit: L.toastNoHealKit, healTooFar: L.toastHealTooFar, gregNotHired: L.toastGregNotHired, gregNoRoom: L.toastGregNoRoom, gregNoFertilizer: L.toastGregNoFertilizer, soanNotHired: L.toastSoanNotHired, soanNoRiver: L.toastSoanNoRiver, farCauldron: L.toastFarCauldron, noFishToDeposit: L.toastNoFishToDeposit, cauldronMissing: L.toastCauldronMissing, cauldronAlreadyTaken: L.toastCauldronAlreadyTaken, noCauldronStock: L.toastNoCauldronStock, cauldronNotEmpty: L.toastCauldronNotEmpty, cauldronBrewing: L.toastCauldronBrewing, cauldronNothingToCollect: L.toastCauldronNothingToCollect, cauldronHasEnough: L.toastCauldronHasEnough, visitorNotEnough: L.visitorNotEnough, decorNone: L.decorNone, decorPicked: L.decorPicked, objReturned: L.objReturned, residentNoRoom: L.residentNoRoom, artisanNoResident: L.artisanNoResident, voyagerBusy: L.voyagerBusyToast, kickVoted: L.kickVotedToast }[key] || "";
   }
 
   // -------- Hôte : boucle temps + persistance --------
@@ -2805,6 +2966,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // notification card for waiting visitors, 1 Hz is plenty)
       const m0 = meRef.current;
       if (m0) setNearHall(Math.abs(m0.x - (C.HOUSE.x + 3.5)) + Math.abs(m0.y - (C.HOUSE.y + 5.5)) < 8);
+      // Zip 259 : suis-je près d'un bâtiment d'artisan construit ? (encart
+      // d'info production à l'approche). On ne teste que sur la ferme.
+      if (m0 && (!m0.zone || m0.zone === "farm")) {
+        let found = null;
+        for (const bid of Object.keys(C.ARTISAN_BUILDINGS)) {
+          const cb = (sharedRef.current.crafts || {})[bid]; if (!cb || !cb.built) continue;
+          const def = C.ARTISAN_BUILDINGS[bid], p = artisanPos(bid);
+          const cx = p.x + def.w / 2, cy = p.y + def.h / 2;
+          if (Math.abs(m0.x - cx) + Math.abs(m0.y - cy) < 4) { found = bid; break; }
+        }
+        setNearArtisan(found);
+      } else setNearArtisan(null);
     }, 1000);
     return () => clearInterval(it);
   }, []);
@@ -4092,13 +4265,34 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // resident (normalizeStation conserve les champs supplémentaires).
   // Zip 252 : balade d'un résident sur la ferme (host), pour qu'on puisse
   // l'aborder (Q). Positions diffusées à part (residentSim, ~2 Hz).
+  // Zip 259 : position (coin haut-gauche, en tuiles) d'un bâtiment d'artisan.
+  // Déplaçable : on lit crafts[bid].pos si présent, sinon le site d'origine.
+  function artisanPos(bid) {
+    const cb = (sharedRef.current.crafts || {})[bid];
+    const def = C.ARTISAN_BUILDINGS[bid];
+    if (cb && cb.pos && typeof cb.pos.x === "number") return { x: cb.pos.x, y: cb.pos.y };
+    return def ? { x: def.site.x, y: def.site.y } : { x: 0, y: 0 };
+  }
+  // Zip 259 : point d'ancrage de rôdaille d'un artisan = juste DEVANT (au sud
+  // de) son bâtiment, à sa position actuelle. Renvoie null si pas de bâtiment
+  // construit (l'artisan se balade alors près du spawn).
+  function artisanAnchor(skill) {
+    const bid = C.SKILL_BUILDING[skill];
+    if (!bid) return null;
+    const cb = (sharedRef.current.crafts || {})[bid];
+    if (!cb || !cb.built) return null;
+    const def = C.ARTISAN_BUILDINGS[bid], p = artisanPos(bid);
+    return { x: p.x + def.w / 2, y: p.y + def.h + 0.5 };
+  }
   function residentRoam(res, w, now, dt, ro) {
-    // Zip 256 : l'apiculteur (René, skill beekeeper) rôde autour de sa ruche
-    // (point d'ancrage BEEKEEPER_ANCHOR) au lieu du spawn commun, et sur un
-    // rayon plus resserré pour rester visible près de son atelier.
-    const isBeekeeper = ro && ro.skill === "beekeeper";
-    const anchor = isBeekeeper ? C.BEEKEEPER_ANCHOR : C.SPAWN;
-    const rx = isBeekeeper ? 3 : 9, ry = isBeekeeper ? 3 : 7;
+    // Zip 256/259 : un artisan à bâtiment (apiculteur/fromager/pâtissière) rôde
+    // autour de SON bâtiment, à sa position ACTUELLE (déplaçable, voir
+    // artisanAnchor), au lieu d'une ancre fixe — corrige "l'apiculteur planté
+    // devant le farm market" et fait que la pâtissière se tient devant sa
+    // boutique. Les autres résidents se baladent près du spawn commun.
+    const bAnchor = ro && ro.skill ? artisanAnchor(ro.skill) : null;
+    const anchor = bAnchor || C.SPAWN;
+    const rx = bAnchor ? 3 : 9, ry = bAnchor ? 3 : 7;
     if (typeof res.x !== "number" || typeof res.y !== "number") {
       res.x = anchor.x + (Math.random() * (rx * 0.9) - rx * 0.45); res.y = anchor.y + (Math.random() * (ry * 0.9) - ry * 0.45);
       res.dir = 0; res.animT = 0; res.moving = false; res.roamTarget = null; res.nextRoamAt = 0;
@@ -4139,6 +4333,33 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (!res) continue;
       const ro = C.VISITOR_ROSTER[res.rid];
       if (!ro) continue;
+      // Zip 258 : Eduardo en voyage. Tant qu'il n'est pas rentré, il ne se
+      // balade pas et ne travaille pas (il est absent du village). À l'échéance
+      // (res.trip.returnAt), on dépose la commande + une éventuelle surprise
+      // dans la réserve commune (station.worldStock) et on le fait réapparaître.
+      if (res.trip && res.trip.phase === "away") {
+        if (now >= res.trip.returnAt) {
+          const ws = s.station.worldStock || (s.station.worldStock = {});
+          const brought = {};
+          for (const line of (res.trip.order || [])) { ws[line.key] = (ws[line.key] | 0) + (line.qty | 0); brought[line.key] = (brought[line.key] | 0) + (line.qty | 0); }
+          let surprise = false;
+          if (Math.random() < C.VOYAGE_SURPRISE_CHANCE) {
+            const g = C.WORLD_GOODS[Math.floor(Math.random() * C.WORLD_GOODS.length)];
+            const q = C.VOYAGE_SURPRISE_MIN + Math.floor(Math.random() * (C.VOYAGE_SURPRISE_MAX - C.VOYAGE_SURPRISE_MIN + 1));
+            ws[g.key] = (ws[g.key] | 0) + q; brought[g.key] = (brought[g.key] | 0) + q; surprise = true;
+          }
+          res.trip = null;
+          // On efface sa position pour que residentRoam le replace proprement
+          // sur une case valide près du spawn (évite de le figer sur une tuile
+          // bloquée si VOYAGER_ANCHOR tombait mal).
+          delete res.x; delete res.y; delete res.roamTarget; res.moving = false; res.nextRoamAt = 0;
+          s.station.voyagerNotice = { goods: brought, surprise, at: now };
+          const summary = Object.keys(brought).map(k => `${L.worldGoodName(k)} ×${brought[k]}`).join(", ");
+          stationChat(L.voyagerReturned(summary + (surprise ? L.voyagerSurpriseTag : "")), "\u{1F9F3}");
+          broadcastStation();
+        }
+        continue;
+      }
       residentRoam(res, w, now, dt, ro); // zip 252 : balade sur la ferme (chaque tick) — zip 256 : ancre dédiée pour l'apiculteur
       // Premier passage : on planifie la première journée de travail sans rien
       // produire (emménager prend un peu de temps). La borne haute protège
@@ -4328,6 +4549,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const hireSoan = () => sendReq({ kind: "hireSoan" });
   const soanOrder = () => sendReq({ kind: "soanOrder" });
   const soanRecall = () => sendReq({ kind: "soanRecall" });
+  // Zip 258 : commande de voyage à Eduardo. Envoie la liste { key, qty } non
+  // vide au host (voyagerOrder), puis referme le panneau et remet le brouillon
+  // à zéro. Le coût/durée sont recalculés et vérifiés côté hôte (autoritaire).
+  const setDraftQty = (key, qty) => setVoyagerDraft(d => ({ ...d, [key]: Math.max(0, Math.min(C.VOYAGE_MAX_QTY, qty | 0)) }));
+  const voyagerDraftLines = () => C.WORLD_GOODS.map(g => ({ key: g.key, qty: voyagerDraft[g.key] | 0 })).filter(l => l.qty > 0);
+  const voyagerDraftCost = () => voyagerDraftLines().reduce((sum, l) => { const g = C.WORLD_GOODS.find(x => x.key === l.key); return sum + (g ? C.worldGoodUnitCost(g) * l.qty : 0); }, 0);
+  const voyagerDraftDays = () => voyagerDraftLines().reduce((mx, l) => { const g = C.WORLD_GOODS.find(x => x.key === l.key); return g ? Math.max(mx, (C.VOYAGE_TIERS[g.tier] || C.VOYAGE_TIERS.proche).days) : mx; }, 0);
+  const sendVoyagerOrder = () => { const order = voyagerDraftLines(); if (!order.length) return; sendReq({ kind: "voyagerOrder", order }); setVoyagerDraft({}); setVoyagerOrderOpen(false); setEmployeesOpen(false); };
+  const sellWorldGood = (key, n) => sendReq({ kind: "voyagerSell", item: key, n });
   // Défi "chasse aux lapins" (chantier 2026-07) : actions RÉSERVÉES à l'hôte
   // (c'est lui qui reçoit la popup de proposition, jamais les autres
   // joueurs) — pas de requête réseau ici, l'hôte modifie directement son
@@ -5293,12 +5523,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           const vp = isHost ? vv : smoothNpc("visitor:" + vv.rid, vv.x, vv.y, dt, true, !!vv.moving, (cx, cy) => canStand(w, cx, cy));
           const vx = vp.x, vy = vp.y;
           const ro = C.VISITOR_ROSTER[vv.rid] || C.VISITOR_ROSTER[0];
-          draws.push({ y: (vy + 1) * T, fn: () => drawCharacter({ id: "visitor" + vv.rid, name: ro.name, x: vx, y: vy, dir: vv.dir || 0, moving: !!vv.moving, animT: vv.animT || 0, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap }, false) });
+          // Zip 258 : Eduardo "se présente au village sur le dos d'un cheval
+          // blanc" — tant qu'il est visiteur (pas encore résident), on dessine
+          // sa monture juste derrière lui (sprite horseWhite), sous le perso.
+          const onWhiteHorse = ro.skill === "voyager" && sprites.horseWhite;
+          draws.push({ y: (vy + 1) * T, fn: () => {
+            if (onWhiteHorse) { const hi = sprites.horseWhite; ctx.drawImage(hi, Math.round(vx * T - hi.width / 2 - 4), Math.round((vy + 1) * T - hi.height + 2)); }
+            drawCharacter({ id: "visitor" + vv.rid, name: ro.name, x: vx, y: vy, dir: vv.dir || 0, moving: !!vv.moving, animT: vv.animT || 0, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap }, false);
+          } });
         }
         const residents = (st && st.residents) || [];
         const houseOwners = townHouseOwners();
         for (let ri = 0; ri < residents.length; ri++) {
           const ro = C.VISITOR_ROSTER[residents[ri].rid]; if (!ro) continue;
+          if (residents[ri].trip && residents[ri].trip.phase === "away") continue; // zip 258 : Eduardo absent (en voyage)
           const hsn = houseOwners.find(h => h.resident && h.resident.rid === residents[ri].rid);
           const rxp = hsn ? hsn.x + C.TOWN_HOUSE_W / 2 : 47.5 + (ri % 3) * 1.6;
           const ryp = hsn ? hsn.y + C.TOWN_HOUSE_H + 0.6 : 37.5 + Math.floor(ri / 3) * 1.4;
@@ -5419,7 +5657,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         for (const bid of Object.keys(C.ARTISAN_BUILDINGS)) {
           const cb = crafts[bid]; if (!cb || !cb.built) continue;
           const def = C.ARTISAN_BUILDINGS[bid], bimg = sprites.artisan && sprites.artisan[bid]; if (!bimg) continue;
-          const bcx = (def.site.x + def.w / 2) * T, bby = (def.site.y + def.h) * T;
+          const bp = artisanPos(bid); // zip 259 : position déplaçable
+          const bcx = (bp.x + def.w / 2) * T, bby = (bp.y + def.h) * T;
           draws.push({ y: bby, fn: () => {
             ctx.drawImage(bimg, Math.round(bcx - bimg.width / 2), Math.round(bby - bimg.height));
             if (bid === "beehive") { // abeilles tournant autour de la ruche
@@ -5438,6 +5677,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const residents = (sharedRef.current.station && sharedRef.current.station.residents) || [];
         for (const res of residents) {
           const ro = C.VISITOR_ROSTER[res.rid]; if (!ro) continue;
+          if (res.trip && res.trip.phase === "away") continue; // zip 258 : Eduardo absent (en voyage)
           if (typeof res.x !== "number") continue;
           const rp = isHost ? res : smoothNpc("resident:" + res.rid, res.x, res.y, dt, true, !!res.moving, (cx, cy) => canStand(w, cx, cy));
           const rx = rp.x, ry = rp.y;
@@ -6667,6 +6907,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // Objet le plus proche de la case visée que la main peut attraper : une déco
   // (ferme ou ville) ou, sur la ferme, un lampadaire/épouvantail sous le curseur.
   function handNearestGrab(zone, tt) {
+    // Zip 259 : sur la ferme, l'outil main peut SAISIR un bâtiment d'artisan
+    // construit (ruche/fromagerie/boulangerie) pour le DÉPLACER — jamais le
+    // ranger au sac (il ne disparaît pas). Prioritaire quand la case visée est
+    // sur (ou au bord de) l'emprise du bâtiment.
+    if (zone === "farm") {
+      for (const bid of Object.keys(C.ARTISAN_BUILDINGS)) {
+        const cb = (sharedRef.current.crafts || {})[bid]; if (!cb || !cb.built) continue;
+        const def = C.ARTISAN_BUILDINGS[bid], p = artisanPos(bid);
+        if (tt.x >= p.x - 1 && tt.x <= p.x + def.w && tt.y >= p.y - 1 && tt.y <= p.y + def.h) return { kind: "artisan", bid };
+      }
+    }
     const decor = sharedRef.current.decor || [];
     let best = null, bestD = 1.5;
     for (const e of decor) {
@@ -6717,6 +6968,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         sendReq({ kind: "moveDecor", did: held.did, x: tt.x + 0.5, y: tt.y + 0.5 });
       } else if (held.kind === "obj" && zone === "farm") {
         sendReq({ kind: "moveObj", fromX: held.fromX, fromY: held.fromY, toX: tt.x, toY: tt.y });
+      } else if (held.kind === "artisan" && zone === "farm") {
+        // Zip 259 : repose le bâtiment sur la case visée (nouveau coin haut-
+        // gauche). L'hôte valide et met à jour crafts[bid].pos (jamais supprimé).
+        if (!handPlaceable(zone, tt.x, tt.y)) { pushToast(L.decorBadSpot); return; }
+        sendReq({ kind: "moveArtisan", bid: held.bid, x: tt.x, y: tt.y });
       }
       handHeldRef.current = null; setHandHeldUI(null);
       return;
@@ -6730,6 +6986,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const held = handHeldRef.current; if (!held) return;
     if (held.kind === "decor") sendReq({ kind: "pickDecor", did: held.did });
     else if (held.kind === "obj") sendReq({ kind: "returnObj", fromX: held.fromX, fromY: held.fromY });
+    // Zip 259 : un bâtiment d'artisan tenu ne se range PAS au sac (il ne doit
+    // jamais disparaître) — R annule simplement la prise, le bâtiment reste où
+    // il est.
     handHeldRef.current = null; setHandHeldUI(null);
   }
   // Arme (ou désarme) une déco du sac pour la poser au prochain clic.
@@ -6785,16 +7044,33 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // (craftStock / gregStock), aucun nouveau message réseau. Renvoie "" si
   // l'atelier n'est pas encore construit (la fiche affiche alors la ligne de
   // besoin existante à la place).
+  // Zip 258 : formate une durée (ms réelles) en texte court FR/EN, pour le
+  // compte à rebours du retour d'Eduardo (ex. "45 min", "1 h 10").
+  function fmtDuration(ms) {
+    const m = Math.max(0, Math.round(ms / 60000));
+    if (m < 60) return lang === "en" ? `${m} min` : `${m} min`;
+    const h = Math.floor(m / 60), r = m % 60;
+    return r ? `${h} h ${r}` : `${h} h`;
+  }
   function residentProdLine(ro) {
     const s = sharedRef.current;
     const cs = s.craftStock || {}, gs = s.gregStock || {};
     const crafts = s.crafts || {};
     if (ro.skill === "lumberjack") return L.residentProdWood(gs.wood | 0, gs.stone | 0);
+    // Zip 258 : Eduardo (voyager) — pas d'atelier, statut = en voyage / au village.
+    if (ro.skill === "voyager") {
+      const res = skilledResidents().find(r => r.rid === ro.rid);
+      if (res && res.trip && res.trip.phase === "away") return L.voyagerStatusAway(fmtDuration(res.trip.returnAt - Date.now()));
+      const total = Object.values((s.station && s.station.worldStock) || {}).reduce((a, b) => a + (b | 0), 0);
+      return L.voyagerProdLine(total);
+    }
     const bid = C.SKILL_BUILDING[ro.skill];
     if (!bid || !(crafts[bid] && crafts[bid].built)) return "";
     if (ro.skill === "beekeeper") return L.residentProdHoney(cs.honey | 0);
     if (ro.skill === "cheesemaker") return L.residentProdCheese(cs.cheeseWheel | 0, cs.cheesePortion | 0);
-    if (ro.skill === "baker") return L.residentProdPastry(cs.pastry | 0);
+    // Zip 258 : si la boulangerie est en alerte (rupture d'intrants en
+    // journée), la ligne d'état devient l'alerte plutôt que le compteur.
+    if (ro.skill === "baker") return (crafts[bid] && crafts[bid].alert) ? L.bakeryAlertLine : L.residentProdPastry(cs.pastry | 0);
     return "";
   }
   // Position du chaudron ramené (chantier 2026-07, demande Guillaume) : posé
@@ -7380,7 +7656,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         <button className="ferme-btn" onClick={teleportHome}>{L.btnHome}</button>
         {buildings.wellBuilt && <button className="ferme-btn" onClick={teleportWell}>{L.btnWell}</button>}
         <button className="ferme-btn" onClick={() => setMapOpen(true)}>{L.btnMap}</button>
-        {(sharedRef.current.greg || sharedRef.current.soan || skilledResidents().length > 0) && (
+        {(sharedRef.current.greg || sharedRef.current.soan || skilledResidents().length > 0 || ((sharedRef.current.station && sharedRef.current.station.residents) || []).length > 0) && (
           <button className="ferme-btn" onClick={() => setEmployeesOpen(true)}>{L.btnEmployees}</button>
         )}
         <button className="ferme-btn ferme-btn-ghost" onClick={changeCharacter}>{L.btnChangeChar}</button>
@@ -7590,7 +7866,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           boutique à chaque ordre. Se ferme automatiquement s'il ne reste
           plus aucun employé actif (fin de contrat pendant que le panneau
           est ouvert), pour ne jamais rester affiché sur une liste vide. */}
-      {employeesOpen && (sharedRef.current.greg || sharedRef.current.soan || skilledResidents().length > 0) && (
+      {employeesOpen && (sharedRef.current.greg || sharedRef.current.soan || skilledResidents().length > 0 || ((sharedRef.current.station && sharedRef.current.station.residents) || []).length > 0) && (
         <div className="ferme-modal open" onClick={() => setEmployeesOpen(false)}>
           <div className="panel ferme-modal-panel" onClick={e => e.stopPropagation()}>
             <button className="ferme-close-x" onClick={() => setEmployeesOpen(false)}>✕</button>
@@ -7603,14 +7879,28 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             {skilledResidents().map(res => {
               const ro = C.VISITOR_ROSTER[res.rid]; if (!ro) return null;
               const prod = residentProdLine(ro);
+              // Zip 258 : Eduardo (voyager) a des boutons dédiés (commander un
+              // voyage / revendre), au lieu du simple "Voir". Alerte pâtissière :
+              // la ligne d'état passe en rouge quand le four est en rupture.
+              const isVoyager = ro.skill === "voyager";
+              const away = isVoyager && res.trip && res.trip.phase === "away";
+              const bakerAlert = ro.skill === "baker" && (sharedRef.current.crafts || {}).bakery && sharedRef.current.crafts.bakery.alert;
+              const worldTotal = Object.values((sharedRef.current.station && sharedRef.current.station.worldStock) || {}).reduce((a, b) => a + (b | 0), 0);
               return (
                 <div className="ferme-shop-row" key={"emp-res-" + res.rid}>
                   <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap) : null} w={26} h={32} />
                   <div className="info">
-                    <b>{ro.name}</b>
-                    <span className="ferme-usage">{prod || L.residentTag(ro.job)}</span>
+                    <b>{ro.name} {bakerAlert ? "⚠️" : ""}</b>
+                    <span className="ferme-usage" style={bakerAlert ? { color: "#c0392b", fontWeight: 700 } : undefined}>{prod || L.residentTag(ro.job)}</span>
                   </div>
-                  <button onClick={() => { setEmployeesOpen(false); setResidentCard(res.rid); }}>{L.residentSeeBtn}</button>
+                  {isVoyager ? (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                      <button disabled={away} onClick={() => { setVoyagerDraft({}); setVoyagerOrderOpen(true); }}>{L.voyagerOrderBtn}</button>
+                      {worldTotal > 0 && <button onClick={() => setVoyagerSellOpen(true)}>{L.voyagerSellBtn}</button>}
+                    </div>
+                  ) : (
+                    <button onClick={() => { setEmployeesOpen(false); setResidentCard(res.rid); }}>{L.residentSeeBtn}</button>
+                  )}
                 </div>
               );
             })}
@@ -7644,11 +7934,99 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   : <button onClick={soanRecall}>{L.soanRecallBtn}</button>}
               </div>
             )}
+            {/* Zip 259 : TOUS nos résidents (skill ou non) avec un bouton de
+                vote d'exclusion. En multi il faut l'unanimité des joueurs en
+                ligne (le compteur affiche l'avancée) ; en solo c'est immédiat.
+                L'exclusion libère la maison ; l'ex-résident reviendra supplier. */}
+            {(stationSt && (stationSt.residents || []).length > 0) && (
+              <>
+                <div className="ferme-hint" style={{ marginTop: 10 }}>{L.residentsSectionTitle}</div>
+                {(stationSt.residents || []).map(res => {
+                  const ro = C.VISITOR_ROSTER[res.rid]; if (!ro) return null;
+                  const votes = ((stationSt.kickVotes || {})[res.rid]) || {};
+                  const nv = Object.keys(votes).length;
+                  const online = Math.max(1, (hud.players | 0) || Object.keys(farmersRef.current || {}).length || 1);
+                  const away = res.trip && res.trip.phase === "away";
+                  return (
+                    <div className="ferme-shop-row" key={"kick-" + res.rid}>
+                      <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap) : null} w={26} h={32} />
+                      <div className="info">
+                        <b>{ro.name}</b>
+                        <span className="ferme-usage">{away ? L.voyagerStatusAway(fmtDuration(res.trip.returnAt - Date.now())) : L.residentTag(ro.job)}</span>
+                      </div>
+                      <button onClick={() => sendReq({ kind: "kickResident", rid: res.rid })}>{nv > 0 ? L.kickTally(nv, online) : L.kickBtn}</button>
+                    </div>
+                  );
+                })}
+              </>
+            )}
           </div>
         </div>
       )}
 
 
+
+      {/* Zip 258 : commande de voyage à Eduardo (produits du monde). */}
+      {voyagerOrderOpen && (
+        <div className="ferme-modal open" onClick={() => setVoyagerOrderOpen(false)}>
+          <div className="panel ferme-modal-panel" onClick={e => e.stopPropagation()}>
+            <button className="ferme-close-x" onClick={() => setVoyagerOrderOpen(false)}>✕</button>
+            <h2>{L.voyagerOrderTitle}</h2>
+            <div className="ferme-hint">{L.voyagerOrderHint}</div>
+            {C.WORLD_GOODS.map(g => {
+              const qty = voyagerDraft[g.key] | 0;
+              const unit = C.worldGoodUnitCost(g);
+              const days = (C.VOYAGE_TIERS[g.tier] || C.VOYAGE_TIERS.proche).days;
+              return (
+                <div className="ferme-shop-row" key={"vg-" + g.key}>
+                  <div className="info">
+                    <b>{g.emoji} {lang === "en" ? g.nameEn : g.name}</b>
+                    <span className="ferme-usage">{L.voyagerUnitCost(unit)} · {L.voyagerTripDays(days)}</span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <button onClick={() => setDraftQty(g.key, qty - 1)} disabled={qty <= 0}>−</button>
+                    <span style={{ minWidth: 22, textAlign: "center" }}>{qty}</span>
+                    <button onClick={() => setDraftQty(g.key, qty + 1)} disabled={qty >= C.VOYAGE_MAX_QTY}>+</button>
+                  </div>
+                </div>
+              );
+            })}
+            <div style={{ marginTop: 10, fontWeight: 700 }}>
+              {L.voyagerTotal(voyagerDraftCost())}{voyagerDraftDays() > 0 ? ` · ${L.voyagerTripDays(voyagerDraftDays())}` : ""}
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+              <button disabled={voyagerDraftLines().length === 0 || voyagerDraftCost() > (hud.money | 0)} onClick={sendVoyagerOrder}>{L.voyagerSendBtn}</button>
+              <button onClick={() => setVoyagerOrderOpen(false)}>{L.voyagerCancelBtn}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Zip 258 : revente des produits du monde rapportés par Eduardo. */}
+      {voyagerSellOpen && (
+        <div className="ferme-modal open" onClick={() => setVoyagerSellOpen(false)}>
+          <div className="panel ferme-modal-panel" onClick={e => e.stopPropagation()}>
+            <button className="ferme-close-x" onClick={() => setVoyagerSellOpen(false)}>✕</button>
+            <h2>{L.voyagerSellTitle}</h2>
+            {C.WORLD_GOODS.map(g => {
+              const n = ((sharedRef.current.station && sharedRef.current.station.worldStock) || {})[g.key] | 0;
+              if (n <= 0) return null;
+              return (
+                <div className="ferme-shop-row" key={"vgs-" + g.key}>
+                  <div className="info">
+                    <b>{g.emoji} {L.voyagerSellRow(lang === "en" ? g.nameEn : g.name, n)}</b>
+                    <span className="ferme-usage">{g.sell} or/unité</span>
+                  </div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button onClick={() => sellWorldGood(g.key, 1)}>{lang === "en" ? "Sell 1" : "Vendre 1"}</button>
+                    <button onClick={() => sellWorldGood(g.key, 9999)}>{lang === "en" ? "Sell all" : "Tout vendre"}</button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Fiche de Greg (touche Q à proximité) — menu d'ordres complet. */}
       {gregCardOpen && sharedRef.current.greg && (() => {
@@ -8178,7 +8556,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const bid = C.SKILL_BUILDING[ro.skill];
         const built = bid && sharedRef.current.crafts && sharedRef.current.crafts[bid] && sharedRef.current.crafts[bid].built;
         let need;
-        if (ro.skill === "lumberjack") need = L.residentLumberjackLine;
+        // Zip 258 : si la boulangerie est en alerte, la pâtissière explique
+        // qu'il lui faut des ingrédients (demande Guillaume : "au clic, message
+        // de la pâtissière").
+        const bakerAlert = ro.skill === "baker" && built && sharedRef.current.crafts.bakery && sharedRef.current.crafts.bakery.alert;
+        if (bakerAlert) need = L.bakeryAlertMsg;
+        else if (ro.skill === "lumberjack") need = L.residentLumberjackLine;
         else if (bid) need = built ? L.residentBuildingReady(L.buildingName(bid)) : L.residentNeedBuilding(L.buildingName(bid));
         else need = "";
         const prod = residentProdLine(ro); // "" tant que l'atelier n'est pas bâti
@@ -8526,6 +8909,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                     <PixBtn sprites={spritesReady ? spritesRef.current : null} icon="cross" tone="bad" label={L.voteNo} onClick={() => { setMyVote(false); sendReq({ kind: "visitorVote", rid: v.rid, v: false }); }} />
                   </div> : <p style={{ opacity: .8 }}>{L.voteWaiting}</p>}
                 </>}
+                {o.type === "plea" && <>
+                  {/* Zip 259 : supplique d'un ex-résident exclu. Le ton dépend
+                      de o.mood (touchant / aigri / sain). Oui = réintègre (si
+                      maison libre), Non = il repart. */}
+                  <h4 style={{ margin: "4px 0" }}>{L.pleaTitle(ro.name)}</h4>
+                  <p style={{ fontStyle: "italic", color: o.mood === "bitter" ? "#a33a1f" : "#3a3a3a" }}>« {L.exilePlea(o.mood, o.vi | 0)} »</p>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <PixBtn sprites={spritesReady ? spritesRef.current : null} icon="check" tone="good" label={L.pleaAccept} onClick={() => { sendReq({ kind: "pleaResolve", rid: v.rid, accept: true }); setVisitorOpen(false); }} />
+                    <PixBtn sprites={spritesReady ? spritesRef.current : null} icon="cross" tone="bad" label={L.pleaRefuse} onClick={() => { sendReq({ kind: "pleaResolve", rid: v.rid, accept: false }); setVisitorOpen(false); }} />
+                  </div>
+                </>}
                 {o.type === "done" && <>
                   <p style={{ opacity: .85, margin: "2px 0" }}>{L.visitorThanks(ro.name)}</p>
                   {chatSection}
@@ -8555,7 +8949,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               const ask = o.type === "buy" ? L.notifWantsBuy(o.n, (lang === "en" ? (C.CROPS[o.crop] || {}).nameEn : (C.CROPS[o.crop] || {}).name))
                 : o.type === "demand" ? L.notifDemand(o.gold)
                 : o.type === "swap" ? L.notifSwap
-                : o.type === "stay" ? L.notifStay : L.notifWantsChat;
+                : o.type === "stay" ? L.notifStay : o.type === "plea" ? L.notifPlea : L.notifWantsChat;
               return (
                 <div key={vv.rid} style={card}>
                   <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap) : null} sx={16} sy={24} w={24} h={36} />
@@ -8570,6 +8964,51 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               );
             })}
             {waiting.length > 3 && <div style={{ ...card, fontSize: 12, padding: "4px 10px" }}>{L.notifMore(waiting.length - 3)}</div>}
+          </div>
+        );
+      })()}
+      {/* Zip 258 : notifications coin haut-droite "à côté de l'écran des
+          employés" (demande Guillaume). (1) Alerte pâtissière quand le four est
+          en rupture d'ingrédients — clic -> ouvre le menu Employés (badge sur
+          la pâtissière). (2) Avis de retour d'Eduardo avec ce qu'il rapporte —
+          clic -> ouvre le menu Employés puis se dissipe. */}
+      {!employeesOpen && (() => {
+        const crafts = sharedRef.current.crafts || {};
+        const bakeryAlert = crafts.bakery && crafts.bakery.built && crafts.bakery.alert;
+        const notice = stationSt && stationSt.voyagerNotice;
+        if (!bakeryAlert && !notice) return null;
+        const card = { background: "#f5eeda", border: "1px solid #6b4a2e", borderRadius: 10, padding: "8px 10px", color: "#1d1d1d", fontSize: 12, lineHeight: 1.35, cursor: "pointer" };
+        return (
+          <div style={{ position: "fixed", right: 12, top: 320, zIndex: 40, display: "flex", flexDirection: "column", gap: 6, maxWidth: 280 }}>
+            {bakeryAlert && (
+              <div style={{ ...card, borderColor: "#c0392b" }} onClick={() => setEmployeesOpen(true)}>
+                <b>⚠️ {L.bakeryAlertTitle}</b><br />{L.bakeryAlertMsg}
+              </div>
+            )}
+            {notice && (
+              <div style={card} onClick={() => { sharedRef.current.station.voyagerNotice = null; setStationSt(s => s ? { ...s, voyagerNotice: null } : s); setEmployeesOpen(true); }}>
+                <b>🧳 {L.voyagerReturnNotifTitle}</b><br />
+                {Object.keys(notice.goods || {}).map(k => `${L.worldGoodName(k)} ×${notice.goods[k]}`).join(", ")}{notice.surprise ? L.voyagerSurpriseTag : ""}
+              </div>
+            )}
+          </div>
+        );
+      })()}
+      {/* Zip 259 : encart d'info production à l'approche d'un bâtiment
+          d'artisan (ruche / fromagerie / boulangerie). Lecture seule de l'état
+          partagé, affiché en bas au centre. */}
+      {nearArtisan && (() => {
+        const bid = nearArtisan;
+        const crafts = sharedRef.current.crafts || {};
+        if (!crafts[bid] || !crafts[bid].built) return null;
+        const cs = sharedRef.current.craftStock || {};
+        const line = bid === "beehive" ? L.residentProdHoney(cs.honey | 0)
+          : bid === "fromagerie" ? L.residentProdCheese(cs.cheeseWheel | 0, cs.cheesePortion | 0)
+          : (crafts.bakery && crafts.bakery.alert) ? L.bakeryAlertLine : L.residentProdPastry(cs.pastry | 0);
+        const alert = bid === "bakery" && crafts.bakery && crafts.bakery.alert;
+        return (
+          <div style={{ position: "fixed", left: "50%", transform: "translateX(-50%)", bottom: 92, zIndex: 39, background: "#f5eeda", border: `1px solid ${alert ? "#c0392b" : "#6b4a2e"}`, borderRadius: 10, padding: "6px 12px", color: "#1d1d1d", fontSize: 12, maxWidth: 320, textAlign: "center", pointerEvents: "none" }}>
+            <b>{L.buildingName(bid)}</b><br />{line}
           </div>
         );
       })()}

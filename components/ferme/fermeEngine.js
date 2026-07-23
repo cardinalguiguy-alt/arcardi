@@ -2204,6 +2204,17 @@ export function newStationState() {
     pendingGifts: [],   // owed gifts (decor/pet) awaiting their systems - PERSISTED (zip 233)
     promisedGifts: [],  // zip 250: bag gifts a departed visitor pledged to SEND, delivered to a specific farmer after a short delay - PERSISTED
     damage: null,       // live hostile-damage record awaiting co-op repair
+    // Zip 258 : réserve commune de produits du monde rapportés par Eduardo
+    // (clé WORLD_GOODS[].key -> quantité). PERSISTÉE. `voyagerNotice` = petit
+    // avis de retour transitoire (affiché en coin, effacé à l'ouverture du menu).
+    worldStock: {},
+    voyagerNotice: null,
+    // Zip 259 : exclusions de résidents (kick-out). `kickVotes[rid] = { playerId:
+    // true }` = votes d'exclusion en cours (unanimité des joueurs en ligne).
+    // `exiles` = ex-résidents exclus qui reviendront supplier (returnAt = horloge
+    // hôte, mood + variante de texte figées à l'exclusion). PERSISTÉ.
+    kickVotes: {},
+    exiles: [],
   };
 }
 
@@ -2225,6 +2236,13 @@ export function migrateStation(st, hostNow) {
   out.blacklist = Array.isArray(st.blacklist) ? st.blacklist.filter(r => typeof r === "number") : [];
   out.rel = (st.rel && typeof st.rel === "object") ? st.rel : {};
   out.residents = Array.isArray(st.residents) ? st.residents.filter(r => r && typeof r.rid === "number") : [];
+  // Zip 258 : réserve de produits du monde (objet clé->quantité) préservée à
+  // chaque chargement/snapshot, comme les cadeaux dus.
+  out.worldStock = (st.worldStock && typeof st.worldStock === "object") ? { ...st.worldStock } : {};
+  out.voyagerNotice = (st.voyagerNotice && typeof st.voyagerNotice === "object") ? st.voyagerNotice : null;
+  // Zip 259 : votes d'exclusion en cours + file des ex-résidents à faire revenir.
+  out.kickVotes = (st.kickVotes && typeof st.kickVotes === "object") ? st.kickVotes : {};
+  out.exiles = Array.isArray(st.exiles) ? st.exiles.filter(e => e && typeof e.rid === "number") : [];
   // Owed gifts (zip 233) survive EVERY load, plain or snapshot: a promised
   // pet must not vanish before the pet system ships.
   out.pendingGifts = Array.isArray(st.pendingGifts) ? st.pendingGifts.filter(g => g && typeof g.kind === "string") : [];
@@ -2249,6 +2267,17 @@ export function migrateStation(st, hostNow) {
       out.damage = { ...st.damage };
       if (typeof out.damage.until === "number" && out.damage.until > 0) out.damage.until += shift;
     }
+    // Zip 258 : la commande d'Eduardo en cours (res.trip.returnAt, horloge de
+    // l'hôte) doit être relocalisée comme les échéances des visiteurs, sinon un
+    // changement d'hôte en plein voyage fausserait l'heure de retour.
+    out.residents = out.residents.map(r => {
+      if (r && r.trip && typeof r.trip.returnAt === "number" && r.trip.returnAt > 0) {
+        return { ...r, trip: { ...r.trip, returnAt: r.trip.returnAt + shift } };
+      }
+      return r;
+    });
+    // Zip 259 : idem pour l'heure de retour des ex-résidents exclus.
+    out.exiles = out.exiles.map(e => (e && typeof e.returnAt === "number" && e.returnAt > 0) ? { ...e, returnAt: e.returnAt + shift } : e);
   }
   return out;
 }
@@ -2262,7 +2291,14 @@ export function newCrafts() {
 export function migrateCrafts(cr) {
   const out = newCrafts();
   if (cr && typeof cr === "object") for (const bid of Object.keys(out)) {
-    if (cr[bid] && typeof cr[bid] === "object") out[bid] = { built: !!cr[bid].built, nextAt: cr[bid].nextAt | 0 };
+    // Zip 258 : on conserve le flag `alert` de la boulangerie (rupture
+    // d'ingrédients). Zip 259 : on conserve aussi `pos` (position déplaçable
+    // du bâtiment, voir moveArtisan) à travers synchros invité et changements
+    // d'hôte — sinon un bâtiment déplacé "sauterait" à son site d'origine.
+    if (cr[bid] && typeof cr[bid] === "object") {
+      out[bid] = { built: !!cr[bid].built, nextAt: cr[bid].nextAt | 0, alert: !!cr[bid].alert };
+      if (cr[bid].pos && typeof cr[bid].pos.x === "number" && typeof cr[bid].pos.y === "number") out[bid].pos = { x: cr[bid].pos.x, y: cr[bid].pos.y };
+    }
   }
   return out;
 }
@@ -2483,7 +2519,9 @@ export function spawnVisitor(station, rnd, stockCtx) {
   if (!pool.length) return null;
   // Zip 234 (friendship): weighted pick — the better the friendship, the more
   // often that character hops on the train. Strangers keep weight 1.
-  const weights = pool.map(v => 1 + Math.min(C.REL_SPAWN_WEIGHT_RELCAP, (station.rel && station.rel[v.rid]) || 0) * C.REL_SPAWN_WEIGHT);
+  // Zip 258 : un visiteur `rare` (Eduardo) part d'un poids de base réduit
+  // (RARE_VISITOR_WEIGHT au lieu de 1), donc apparaît nettement moins souvent.
+  const weights = pool.map(v => (v.rare ? C.RARE_VISITOR_WEIGHT : 1) + Math.min(C.REL_SPAWN_WEIGHT_RELCAP, (station.rel && station.rel[v.rid]) || 0) * C.REL_SPAWN_WEIGHT);
   let pick = r() * weights.reduce((a, b) => a + b, 0), wi = 0;
   while (wi < weights.length - 1 && pick >= weights[wi]) { pick -= weights[wi]; wi++; }
   const who = pool[wi];
