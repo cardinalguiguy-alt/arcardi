@@ -243,10 +243,13 @@ export const FERME_STR = {
     wolfBiteWin: "Tu as repoussé le loup !",
     wolfBiteFailChat: (who) => `🩸 ${who} a été mordu par un loup et ramené chez lui, blessé.`,
     wolfBiteWinChat: (who) => `🐺 ${who} a repoussé un loup agressif !`,
+    // Mise à mort après 3 victoires (chantier 2026-07, demande Guillaume)
+    wolfKilledChat: (who) => `🗡️ ${who} a terrassé un loup agressif après trois ripostes !`,
     // Créature maléfique / mini-jeu de morsure (chantier 2026-07)
     evilBiteTitle: "👹 ELLE T'ATTAQUE !",
     evilBiteHint: "Martèle Espace (ou clique) pour lui échapper !",
     evilBiteWin: "Tu as repoussé la créature !",
+    evilKilledChat: (who) => `🗡️ ${who} a terrassé une créature maléfique après trois ripostes !`,
     rabbitCaughtChat: (who) => `🐇 ${who} a attrapé un lapin sauvage !`,
     rabbitChallengeOfferTitle: "🐇 Défi chasse aux lapins ?",
     rabbitChallengeOfferSub: (n) => `Au moins 2 fermiers sont en ligne. Lancer un défi : le premier à attraper ${n} lapins gagne un chapeau !`,
@@ -814,10 +817,13 @@ export const FERME_STR = {
     wolfBiteWin: "You fought off the wolf!",
     wolfBiteFailChat: (who) => `🩸 ${who} was bitten by a wolf and dragged back home, injured.`,
     wolfBiteWinChat: (who) => `🐺 ${who} fought off an aggressive wolf!`,
+    // Kill after 3 wins (chantier 2026-07, Guillaume's request)
+    wolfKilledChat: (who) => `🗡️ ${who} slew an aggressive wolf after three fend-offs!`,
     // Evil creature / bite minigame (chantier 2026-07)
     evilBiteTitle: "👹 IT'S ATTACKING YOU!",
     evilBiteHint: "Mash Space (or click) to break free!",
     evilBiteWin: "You fought off the creature!",
+    evilKilledChat: (who) => `🗡️ ${who} slew an evil creature after three fend-offs!`,
     rabbitCaughtChat: (who) => `🐇 ${who} caught a wild rabbit!`,
     rabbitChallengeOfferTitle: "🐇 Rabbit-catching challenge?",
     rabbitChallengeOfferSub: (n) => `At least 2 farmers are online. Start a challenge: first to catch ${n} rabbits wins a hat!`,

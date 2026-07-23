@@ -364,6 +364,18 @@ export const EVIL_INJURED_MS = 30 * 60 * 1000; // 30 minutes : durée de la bles
 // blesser le joueur.
 export const EVIL_BITE_REACT_MS = 2800;       // durée du mini-jeu de riposte — même valeur que WOLF_BITE_REACT_MS, à ajuster séparément si besoin
 export const EVIL_MONSTER_FLEE_MS = 6000;
+// Mise à mort d'une créature (chantier 2026-07, demande Guillaume : "un moyen
+// de tuer les loups et les ennemis après trois victoires au mini-jeu"). Le
+// compteur est PAR JOUEUR et PAR CRÉATURE (stocké dans mo.biteWins[playerId],
+// côté hôte comme le reste de la simulation) : à la EVIL_MONSTER_KILL_WINS-ième
+// victoire d'un même joueur contre CETTE créature, elle meurt au lieu de fuir.
+// EVIL_MONSTER_BITE_GRACE_MS = fenêtre garantie sans re-morsure de la même
+// créature sur ce joueur après CHAQUE victoire (adoucit les 2 premières, casse
+// la boucle instantanée). EVIL_MONSTER_DEATH_ANIM_MS = durée de l'animation de
+// mort (fondu + effondrement) avant le despawn.
+export const EVIL_MONSTER_KILL_WINS = 3;
+export const EVIL_MONSTER_BITE_GRACE_MS = 3500;
+export const EVIL_MONSTER_DEATH_ANIM_MS = 900;
 // Soin d'une blessure de créature maléfique (décision Guillaume 2026-07) :
 // chaque pansement retire un TIERS de la blessure de 30 min : il en faut
 // donc jusqu'à 3 (appliqués par un ou plusieurs coéquipiers) pour sauver
@@ -716,6 +728,18 @@ export const WOLF_SPAWN_MARGIN = 5;       // marge (tuiles) au-delà de la berge
 export const WOLF_ROAM_RADIUS = 7;        // amplitude de rôdaille rive droite
 export const WOLF_TORCH_RANGE = 6;        // rayon d'effroi autour d'une torche allumée
 export const WOLF_FLEE_COOLDOWN_MS = 4000; // temps avant de reprendre son activité après une fuite
+// Mise à mort d'un loup (chantier 2026-07, demande Guillaume : "un moyen de
+// tuer les loups et les ennemis après trois victoires au mini-jeu"). Symétrique
+// des créatures maléfiques (voir EVIL_MONSTER_KILL_WINS) : compteur PAR JOUEUR
+// et PAR LOUP (wf.biteWins[playerId], côté hôte). À la WOLF_KILL_WINS-ième
+// victoire d'un même joueur contre CE loup, il meurt (phase "dead" + animation)
+// au lieu de fuir. WOLF_BITE_GRACE_MS = fenêtre garantie sans re-morsure du
+// même loup sur ce joueur après CHAQUE victoire — corrige la boucle où un loup
+// agressif re-mordait dès la frame suivante (le ré-aggro est aussi bloqué
+// pendant flee/dead). WOLF_DEATH_ANIM_MS = durée de l'anim de mort avant despawn.
+export const WOLF_KILL_WINS = 3;
+export const WOLF_BITE_GRACE_MS = 3500;
+export const WOLF_DEATH_ANIM_MS = 900;
 
 // Loups agressifs (chantier 2026-07, demande Guillaume) : une minorité de
 // loups, tirée UNE FOIS à l'apparition (voir wolfSpawnPos/updateWolves), ne

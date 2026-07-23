@@ -1202,8 +1202,28 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // "evilCaught" du même client (mécanique habituelle).
       const moB = (s.evilMonsters || []).find(x => x.id === req.monsterId);
       if (moB) {
+        const tId = moB.biteTargetId; // qui vient de gagner/perdre (fixé par updateSharedEvilMonsters)
         moB.biteTargetId = null; moB.biteDeadline = 0;
-        if (req.result === "win") { moB.chasing = false; moB.biteFleeUntil = Date.now() + C.EVIL_MONSTER_FLEE_MS; }
+        if (req.result === "win") {
+          moB.chasing = false;
+          const now = Date.now();
+          // Compteur de victoires PAR JOUEUR sur CETTE créature (chantier
+          // 2026-07, demande Guillaume, symétrique des loups) : à la
+          // C.EVIL_MONSTER_KILL_WINS-ième victoire d'un même joueur, elle meurt.
+          if (tId) { moB.biteWins = moB.biteWins || {}; moB.biteWins[tId] = (moB.biteWins[tId] || 0) + 1; }
+          const wins = tId ? moB.biteWins[tId] : 0;
+          if (tId && wins >= C.EVIL_MONSTER_KILL_WINS) {
+            moB.dead = true; moB.deadUntil = now + C.EVIL_MONSTER_DEATH_ANIM_MS;
+            moB.chasing = false; moB.fleeing = false; moB.biteWins = {};
+            const nm = (playersRef.current.get(tId) || (meRef.current?.id === tId ? meRef.current : null) || {}).name || "?";
+            addChat("🗡️", L.evilKilledChat(nm));
+          } else {
+            moB.biteFleeUntil = now + C.EVIL_MONSTER_FLEE_MS;
+            // Grâce : la créature ignore ce joueur (comme immunisé) le temps de
+            // C.EVIL_MONSTER_BITE_GRACE_MS, brisant la boucle de re-morsure.
+            if (tId) { moB.biteGrace = moB.biteGrace || {}; moB.biteGrace[tId] = now + C.EVIL_MONSTER_BITE_GRACE_MS; }
+          }
+        }
         channelRef.current?.send({ type: "broadcast", event: "apply", payload: { evilMonsters: s.evilMonsters } });
       }
     } else if (req.kind === "useSalve") {
@@ -2942,20 +2962,37 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // hôte, donc farmersRef.current[id] fait foi (persisté ensuite via le
   // filet dirtyRef -> persistFarm, même mécanisme que le reste du fermier).
   function resolveWolfBiteOutcome(wf, result) {
+    const now = Date.now();
     const targetId = wf.biteTargetId || wf.attackTargetId;
     wf.attackTargetId = null; wf.biteTargetId = null; wf.biteDeadline = 0; wf.huntAnimalIdx = -1;
     if (result === "win") {
-      wf.phase = "flee"; wf.fleeUntil = Date.now() + C.WOLF_FLEE_COOLDOWN_MS;
+      const nm = targetId ? ((playersRef.current.get(targetId) || (meRef.current?.id === targetId ? meRef.current : null) || {}).name || "?") : "?";
+      // Compteur de victoires PAR JOUEUR sur CE loup (chantier 2026-07, demande
+      // Guillaume). À la C.WOLF_KILL_WINS-ième victoire d'un même fermier, le
+      // loup est terrassé au lieu de fuir.
+      if (targetId) { wf.biteWins = wf.biteWins || {}; wf.biteWins[targetId] = (wf.biteWins[targetId] || 0) + 1; }
+      const wins = targetId ? wf.biteWins[targetId] : 0;
+      if (targetId && wins >= C.WOLF_KILL_WINS) {
+        // Mise à mort : phase "dead", figé, animation puis despawn (wf.gone,
+        // réutilise le filtre de despawn existant). Diffusé explicitement pour
+        // que tous les clients reçoivent deadUntil et jouent l'animation.
+        wf.phase = "dead"; wf.state = "dead"; wf.deadUntil = now + C.WOLF_DEATH_ANIM_MS;
+        wf.tx = wf.x; wf.ty = wf.y; wf.biteWins = {};
+        channelRef.current?.send({ type: "broadcast", event: "apply", payload: { wolves: sharedRef.current.wolves } });
+        addChat("🗡️", L.wolfKilledChat(nm));
+        return;
+      }
+      // Sinon : fuite classique + grâce garantie sans re-morsure de CE loup sur
+      // ce joueur (casse la boucle « re-mordu instantanément »).
+      wf.phase = "flee"; wf.fleeUntil = now + C.WOLF_FLEE_COOLDOWN_MS;
+      if (targetId) { wf.biteGrace = wf.biteGrace || {}; wf.biteGrace[targetId] = now + C.WOLF_BITE_GRACE_MS; }
       const target = targetId ? livePlayerPos(targetId) : null;
       if (target) {
         const dx = wf.x - target.x, dy = wf.y - target.y, d = Math.hypot(dx, dy) || 1;
         wf.tx = wf.x + (dx / d) * 4; wf.ty = wf.y + (dy / d) * 4;
       }
       wf.state = "run";
-      if (targetId) {
-        const nm = (playersRef.current.get(targetId) || (meRef.current?.id === targetId ? meRef.current : null) || {}).name || "?";
-        addChat("🐺", L.wolfBiteWinChat(nm));
-      }
+      if (targetId) addChat("🐺", L.wolfBiteWinChat(nm));
       return;
     }
     // "fail" : blesse le fermier visé s'il existe encore (peut avoir quitté).
@@ -3193,6 +3230,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const now = Date.now();
     for (const mo of s.evilMonsters) {
       mo.animT = (mo.animT || 0) + dt * 6;
+      // Créature terrassée (3e victoire d'un joueur, voir handler evilBiteResult) :
+      // plus aucune IA, figée le temps de l'animation puis retirée après la boucle.
+      if (mo.dead) { mo.chasing = false; mo.fleeing = false; continue; }
       const biteFleeing = !!mo.biteFleeUntil && now < mo.biteFleeUntil;
       if (mo.biteFleeUntil && !biteFleeing) mo.biteFleeUntil = 0;
       // Morsure en cours (mini-jeu ouvert chez la cible) : immobile jusqu'au
@@ -3200,7 +3240,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (mo.biteTargetId && now < (mo.biteDeadline || 0)) { mo.fleeing = biteFleeing; mo.chasing = false; continue; }
       if (mo.biteTargetId) { mo.biteTargetId = null; mo.biteDeadline = 0; }
       let near = null, nearD = Infinity;
-      for (const t of evil) { if (t.immune) continue; const d = Math.hypot(t.x - mo.x, t.y - mo.y); if (d < nearD) { nearD = d; near = t; } }
+      // Grâce anti-re-morsure (chantier 2026-07) : un joueur qui vient de gagner
+      // est ignoré (comme immunisé) pendant C.EVIL_MONSTER_BITE_GRACE_MS.
+      for (const t of evil) { if (t.immune) continue; if (mo.biteGrace && mo.biteGrace[t.id] && now < mo.biteGrace[t.id]) continue; const d = Math.hypot(t.x - mo.x, t.y - mo.y); if (d < nearD) { nearD = d; near = t; } }
       if (!near) { mo.chasing = false; mo.fleeing = biteFleeing; continue; }
       const ddx = near.x - mo.x, ddy = near.y - mo.y, dist = nearD || 0.0001;
       if (!biteFleeing && dist <= C.EVIL_MONSTER_CATCH_RADIUS) {
@@ -3218,6 +3260,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
       mo.chasing = !biteFleeing && dist <= C.EVIL_MONSTER_DETECT_RADIUS;
       mo.fleeing = biteFleeing;
+    }
+    // Retrait des créatures terrassées une fois leur animation de mort finie.
+    if (s.evilMonsters.some(m => m.dead && now >= (m.deadUntil || 0))) {
+      s.evilMonsters = s.evilMonsters.filter(m => !(m.dead && now >= (m.deadUntil || 0)));
+      channelRef.current?.send({ type: "broadcast", event: "apply", payload: { evilMonsters: s.evilMonsters } });
     }
     evilMonstersAccumRef.current += dt;
     if (evilMonstersAccumRef.current >= 0.5 && netCanBroadcast()) {
@@ -3269,8 +3316,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (mm && torchOnRef.current) torchBearers.push({ id: mm.id, x: mm.x, y: mm.y });
     for (const p of playersRef.current.values()) if (p.torch) torchBearers.push({ id: p.id, x: p.x, y: p.y });
 
+    // Grâce anti-re-morsure (chantier 2026-07) : après une victoire, le loup ne
+    // peut pas re-cibler CE joueur pendant C.WOLF_BITE_GRACE_MS (voir
+    // resolveWolfBiteOutcome). Empêche le ré-aggro instantané d'un loup agressif.
+    const biteGraceActive = (wf, id) => !!(wf.biteGrace && wf.biteGrace[id] && now < wf.biteGrace[id]);
     let animalsChanged = false, moved = false;
     for (const wf of s.wolves) {
+      // Loup terrassé (3e victoire d'un joueur, voir resolveWolfBiteOutcome) :
+      // figé le temps de l'animation de mort, puis retiré (réutilise le filtre
+      // `gone` plus bas). Ne fait plus AUCUNE IA entre-temps.
+      if (wf.phase === "dead") {
+        wf.state = "dead"; wf.tx = wf.x; wf.ty = wf.y;
+        if (now >= (wf.deadUntil || 0)) wf.gone = true;
+        continue;
+      }
       let scare = null, scareD = Infinity;
       for (const t of torchBearers) {
         const d = Math.hypot(t.x - wf.x, t.y - wf.y);
@@ -3278,7 +3337,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
       let speed = 0;
       if (scare) {
-        if (wf.aggressive && wf.phase !== "attack" && wf.phase !== "biting") {
+        if (wf.aggressive && wf.phase !== "attack" && wf.phase !== "biting" && wf.phase !== "flee" && !biteGraceActive(wf, scare.id)) {
           // Loup agressif (chantier 2026-07, ~1 loup sur 5) : ignore la peur
           // de la torche et fonce sur son porteur au lieu de fuir. Repas en
           // cours abandonné, comme pour la fuite classique.
@@ -3301,7 +3360,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         // sa torche/quitté la portée entretemps) jusqu'à portée de morsure.
         wf.state = "run"; speed = C.WOLF_SPEED_AGGRESSIVE;
         const target = (wf.attackTargetId && livePlayerPos(wf.attackTargetId)) || (scare ? livePlayerPos(scare.id) : null);
-        if (!target) { wf.phase = "roam"; }
+        // Cible sous grâce (vient de gagner) : on abandonne l'attaque au lieu de
+        // re-mordre — filet de sécurité en plus du blocage du ré-aggro plus haut.
+        if (target && biteGraceActive(wf, target.id)) { wf.phase = "roam"; wf.attackTargetId = null; }
+        else if (!target) { wf.phase = "roam"; }
         else {
           wf.attackTargetId = target.id;
           wf.tx = target.x; wf.ty = target.y;
@@ -4527,6 +4589,35 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           const isWinter = E.seasonOf().key === "winter";
           const img = (isWinter && sprites.snowLeopard) ? sprites.snowLeopard[frame] : sprites.wolf[frame];
           const px = Math.round(wf.x * T - 14), py = Math.round(wf.y * T - 9);
+          // Animation de mort (chantier 2026-07, 3e victoire d'un joueur) : le
+          // loup s'effondre (rotation vers le sol) en s'estompant, avec un petit
+          // nuage de poussière. deadUntil vient de l'hôte (diffusé), horloges
+          // proches suffisent pour ~900ms.
+          if (wf.deadUntil) {
+            const prog = Math.min(1, Math.max(0, 1 - (wf.deadUntil - Date.now()) / C.WOLF_DEATH_ANIM_MS));
+            ctx.save();
+            ctx.globalAlpha = Math.max(0, 1 - prog);
+            const cx = px + 15, cy = py + 12;
+            ctx.translate(cx, cy);
+            ctx.rotate((wf.dir === 2 ? -1 : 1) * prog * (Math.PI / 2)); // bascule au sol
+            ctx.translate(-15, -12);
+            if (wf.dir === 2) { ctx.translate(30, 0); ctx.scale(-1, 1); ctx.drawImage(img, 0, 0); }
+            else ctx.drawImage(img, 0, 0);
+            ctx.restore();
+            // Poussière de chute.
+            ctx.save();
+            for (let i = 0; i < 5; i++) {
+              const a = (i / 5) * Math.PI * 2;
+              const r = 4 + prog * 12;
+              ctx.globalAlpha = Math.max(0, 0.5 * (1 - prog));
+              ctx.fillStyle = "rgba(120,110,95,1)";
+              ctx.beginPath();
+              ctx.arc(cx + Math.cos(a) * r, cy + Math.sin(a) * r * 0.5 + 6, 2.5 * (1 - prog * 0.5), 0, 7);
+              ctx.fill();
+            }
+            ctx.restore();
+            return;
+          }
           if (wf.dir === 2) { ctx.save(); ctx.translate(px + 30, py); ctx.scale(-1, 1); ctx.drawImage(img, 0, 0); ctx.restore(); }
           else ctx.drawImage(img, px, py);
         } });
@@ -5083,6 +5174,31 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           // generateEvilWorld/fermeEngine.js) — loup (rendu existant
           // inchangé) ou zombie (drawZombie, ci-dessous près de
           // drawCharacter).
+          // Animation de mort (chantier 2026-07, 3e victoire d'un joueur) :
+          // effondrement + fondu, avec un éclat violet façon dissipation. Les
+          // créatures mortes n'ont ni chasing ni fleeing (pas de lueur autour).
+          if (mo.deadUntil) {
+            const prog = Math.min(1, Math.max(0, 1 - (mo.deadUntil - Date.now()) / C.EVIL_MONSTER_DEATH_ANIM_MS));
+            const cx = mo.x * T, cy = mo.y * T;
+            ctx.save();
+            ctx.globalAlpha = Math.max(0, 1 - prog);
+            ctx.translate(cx, cy); ctx.rotate((mo.dir === 2 ? -1 : 1) * prog * (Math.PI / 2)); ctx.translate(-cx, -cy);
+            if (mo.kind === "zombie") drawZombie(mo, now);
+            else drawWolfMonster(mo);
+            ctx.restore();
+            ctx.save();
+            for (let i = 0; i < 6; i++) {
+              const a = (i / 6) * Math.PI * 2;
+              const r = 4 + prog * 14;
+              ctx.globalAlpha = Math.max(0, 0.55 * (1 - prog));
+              ctx.fillStyle = "rgba(170, 60, 220, 1)";
+              ctx.beginPath();
+              ctx.arc(cx + Math.cos(a) * r, cy + Math.sin(a) * r, 2.5 * (1 - prog * 0.5), 0, 7);
+              ctx.fill();
+            }
+            ctx.restore();
+            return;
+          }
           if (mo.kind === "zombie") drawZombie(mo, now);
           else drawWolfMonster(mo);
           if (mo.chasing || mo.fleeing) ctx.restore();
