@@ -5090,9 +5090,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           const carrier = an.carriedBy === me.id ? m : playersRef.current.get(an.carriedBy);
           if (!carrier) continue; // porteur pas encore connu de ce client : ignore ce tour-ci
           ax = carrier.x; ay = carrier.y - 0.55;
-        } else {
-          const apos = E.animalPos(an, epochNow); ax = apos.x; ay = apos.y;
         }
+        // zip 255 : mouvement animal 100% local (broute/marche, pattes,
+        // direction) — voir E.animalPos. Porté : pas d'anim propre (pose
+        // d'arrêt, oriente vers la droite par défaut).
+        const apos = an.carriedBy ? { x: ax, y: ay, dir: 1, frame: 0 } : E.animalPos(an, epochNow);
+        ax = apos.x; ay = apos.y;
         // Zip 254 : echelle d'affichage par type (vache ~= cheval, chevre plus
         // grande, etc. — voir C.ANIMAL_DRAW_SCALE). Purement visuel : le sprite
         // natif fait 16x14, on l'agrandit en gardant l'ancrage bas-centre (les
@@ -5102,7 +5105,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const adx = ax * T + 8 - aw / 2;   // recentrage horizontal
         const ady = ay * T + 14 - ah;      // ancrage bas conserve
         draws.push({ y: (ay + 1) * T, fn: () => {
-          ctx.drawImage(sprites.animals[an.type], adx, ady, aw, ah);
+          const img = sprites.animals[an.type][apos.frame || 0];
+          if (apos.dir === 2) { ctx.save(); ctx.translate(adx + aw, ady); ctx.scale(-1, 1); ctx.drawImage(img, 0, 0, aw, ah); ctx.restore(); }
+          else ctx.drawImage(img, adx, ady, aw, ah);
           if (!an.carriedBy && E.animalReady(an, epochNow)) { const bob = Math.sin(now / 260) * 1.5; ctx.drawImage(sprites.products[an.type], adx + aw / 2 - 6, ady - 12 + bob, 12, 12); }
         } });
       }
@@ -7865,7 +7870,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             <div className="ferme-tools-header">{L.shopAnimalsHeader}</div>
             {C.ANIMALS.map(a => (
               <div className="ferme-shop-row" key={"an" + a.id}>
-                <Sprite img={spritesReady ? spritesRef.current.animals[a.id] : null} w={32} h={28} />
+                <Sprite img={spritesReady ? spritesRef.current.animals[a.id][0] : null} w={32} h={28} />
                 <div className="info"><b>{L.animalRowTitle(lang === "en" ? a.nameEn : a.name, a.cost)}</b><span>{L.animalRowSub(lang === "en" ? a.prodEn : a.prod, a.sell, Math.round(a.prodMs / 3600000))}</span></div>
                 <button disabled={hud.money < a.cost || buildings.animalCount >= E.barnAnimalCap(barn ? barn.level : 0)} onClick={() => buyAnimal(a.id)}>{L.buyLabel}</button>
               </div>

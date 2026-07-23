@@ -1629,23 +1629,35 @@ export function buildSprites() {
     P(g, 0, 15, T, 1, "#54545c");
     return c;
   }
-  // Animal de profil (16x14) : forme simple déclinée par type.
-  function animalSprite(type) {
+  // Animal de profil (16x14) : forme simple déclinée par type. Refonte zip
+  // 255 (demande Guillaume : "animer les pattes", même principe que
+  // wolfSprite) : sprite paramétré par `frame` (0..3). frame 0 = pose
+  // d'arrêt (pattes jointes, utilisée quand l'animal broute) ; frames 1..3 =
+  // cycle de marche à 4 temps (pattes avant/arrière opposées, comme le
+  // loup), toujours vu de profil regardant à droite — le miroir gauche/
+  // droite se fait au moment du dessin (FermeGame.js), pas ici.
+  function animalSprite(type, frame) {
     const a = C.ANIMALS[type], [c, g] = cv(16, 14);
     const body = a.body, acc = a.accent;
+    const off = [0, 2, 0, -2][(frame || 0) % 4];  // patte avant-gauche/arrière-droite
+    const off2 = -off;                            // paire opposée
     if (type === 0) { // poule
       P(g, 4, 6, 7, 5, body); P(g, 9, 3, 4, 4, body); // corps + tête
       P(g, 12, 4, 2, 1, "#e8a83a"); // bec
       P(g, 10, 2, 3, 2, acc);       // crête
       P(g, 12, 4, 1, 1, "#1a1a1a");
       P(g, 3, 8, 3, 2, body);       // queue
-      P(g, 6, 11, 1, 2, "#e8a83a"); P(g, 9, 11, 1, 2, "#e8a83a");
+      // Fines pattes de poule : léger pas alterné (amplitude réduite, tenu
+      // par un pied de biche plutôt qu'un sabot).
+      P(g, (6 + off * 0.5) | 0, 11, 1, 2, "#e8a83a");
+      P(g, (9 + off2 * 0.5) | 0, 11, 1, 2, "#e8a83a");
     } else if (type === 2) { // brebis (laineuse)
       P(g, 3, 4, 10, 7, body); P(g, 4, 3, 8, 2, body);
       P(g, 2, 5, 2, 5, body); P(g, 12, 5, 2, 5, body);
       P(g, 11, 6, 4, 4, acc);       // tête
       P(g, 13, 7, 1, 1, "#1a1a1a");
-      P(g, 5, 11, 1, 2, "#5a4a3a"); P(g, 10, 11, 1, 2, "#5a4a3a");
+      P(g, (5 + off) | 0, 11, 1, 2, "#5a4a3a");
+      P(g, (10 + off2) | 0, 11, 1, 2, "#5a4a3a");
     } else { // chèvre / cochon / vache (corps allongé)
       P(g, 3, 5, 9, 6, body); P(g, 3, 5, 9, 2, tint(body));
       P(g, 10, 3, 4, 5, body);      // tête
@@ -1653,7 +1665,8 @@ export function buildSprites() {
       if (type === 3) { P(g, 13, 6, 2, 1, "#c07882"); } // groin cochon
       if (type === 1) { P(g, 10, 1, 1, 3, acc); P(g, 12, 1, 1, 3, acc); } // cornes chèvre
       if (type === 4) { P(g, 3, 6, 9, 4, body); P(g, 5, 7, 2, 2, acc); P(g, 8, 8, 2, 2, acc); } // taches vache
-      P(g, 4, 11, 2, 2, "#5a4636"); P(g, 9, 11, 2, 2, "#5a4636");
+      P(g, (4 + off) | 0, 11, 2, 2, "#5a4636");  // patte avant
+      P(g, (9 + off2) | 0, 11, 2, 2, "#5a4636"); // patte arrière
       P(g, 2, 6, 2, 3, body);       // queue
     }
     return c;
@@ -1861,7 +1874,9 @@ house: house(),
   S.gemIcons = C.GEMS.map(gm => gemIcon(gm.color));
   S.fishIcons = C.FISH.map(fs => fishIcon(fs.color));
   S.seaIcons = C.SEA_CREATURES.map((sc, i) => seaIcon(i, sc.color));
-  S.animals = C.ANIMALS.map(a => animalSprite(a.id));
+  // zip 255 : 4 frames de marche par animal (au lieu d'un sprite unique),
+  // même structure que sprites.wolf/sprites.rabbit.
+  S.animals = C.ANIMALS.map(a => [0, 1, 2, 3].map(f => animalSprite(a.id, f)));
   S.products = C.ANIMALS.map(a => productIcon(a.id));
   // Zip 235: seasonal foliage variants (autumn = orange leaves,
   // spring = pink blooms). Same size as base sprites, drawn via seasonal

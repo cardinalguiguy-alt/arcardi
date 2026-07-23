@@ -486,22 +486,54 @@ export function gemChanceAt(x, y) {
   return C.GEM_DROP_CHANCE * mult;
 }
 
-// Position réelle/affichée d'un animal (zip 152) : dérivée PUREMENT de son
-// ancrage (`hx`/`hy`, seule valeur synchronisée) et de l'horodatage, comme
-// cropGrowState/gameTimeMin. Chaque client calcule exactement la même
-// position sans le moindre message réseau supplémentaire. Un animal en
+// Position/état affiché d'un animal (zip 152, refonte zip 255) : dérivé
+// PUREMENT de son ancrage (`hx`/`hy`, seule valeur synchronisée), de son
+// `type` et de l'horodatage, comme cropGrowState/gameTimeMin. Chaque client
+// calcule exactement la même chose sans le moindre message réseau
+// supplémentaire (demande explicite Guillaume : rester 100% local, zéro
+// trafic, contrairement aux loups/lapins simulés côté hôte). Un animal en
 // cours de transport (`carriedBy`) n'a pas de position propre : l'appelant
 // doit alors utiliser la position du fermier qui le porte.
+//
+// Comportement (zip 255, demande Guillaume : "faire bouger les animaux de
+// manière cohérente et légèrement plus détaillée, animer les pattes, changer
+// de direction, s'arrêter") : cycle long par animal, alternant une longue
+// phase "broute" (arrêté sur place, la majorité du cycle — calme, réaliste)
+// et une courte phase "marche" vers un point voisin fixe puis, au cycle
+// suivant, le retour vers l'ancrage — un vrai aller-retour cohérent plutôt
+// qu'un tremblement aléatoire. `dir` (1=droite, 2=gauche, pour le miroir du
+// sprite) et `frame` (0..3, cycle de pattes façon loup) sont dérivés du même
+// calcul, toujours en phase.
 export function animalPos(an, now) {
-  if (!an) return { x: 0, y: 0 };
-  if (an.carriedBy) return { x: an.hx, y: an.hy };
+  if (!an) return { x: 0, y: 0, dir: 1, frame: 0, state: "stop" };
+  if (an.carriedBy) return { x: an.hx, y: an.hy, dir: 1, frame: 0, state: "stop" };
   const seed = Math.abs(Math.round(an.hx * 97 + an.hy * 131 + an.type * 17)) % 1000;
-  const period = C.ANIMAL_WANDER_PERIOD_MS + (seed % 5) * 700; // légère variété par animal
+  const cycleMs = C.ANIMAL_CYCLE_MS + (seed % 7) * 900;   // variété de rythme par animal
+  const walkMs = Math.min(cycleMs - 500, C.ANIMAL_WALK_MS + (seed % 5) * 250);
+  const t = now + seed * 37; // déphasage par animal (même horloge globale)
+  const cycleIdx = Math.floor(t / cycleMs);
+  const phase = t - cycleIdx * cycleMs;
+  // Point voisin fixe (angle figé par seed, façon "aiguille d'or" pour une
+  // bonne répartition visuelle), toujours dans le petit rayon d'origine.
+  const angle = (seed * 2.399963) % (Math.PI * 2);
   const amp = C.ANIMAL_WANDER_RADIUS;
-  const t = now / period;
-  const dx = Math.sin(t * 2 * Math.PI + seed) * amp;
-  const dy = Math.cos(t * 1.7 * Math.PI + seed * 0.6) * amp * 0.7;
-  return { x: an.hx + dx, y: an.hy + dy };
+  const ox = Math.cos(angle) * amp, oy = Math.sin(angle) * amp * 0.6;
+  const fromAnchor = (cycleIdx % 2 === 0); // alterne : ancrage->point, puis point->ancrage
+  const startX = fromAnchor ? an.hx : an.hx + ox, startY = fromAnchor ? an.hy : an.hy + oy;
+  const endX = fromAnchor ? an.hx + ox : an.hx, endY = fromAnchor ? an.hy + oy : an.hy;
+  const facingRight = endX >= startX;
+  const dir = facingRight ? 1 : 2;
+  if (phase < cycleMs - walkMs) {
+    // Broute : immobile au point de départ de la prochaine marche, déjà
+    // orienté vers celle-ci (pas de demi-tour brusque au démarrage).
+    return { x: startX, y: startY, dir, frame: 0, state: "stop" };
+  }
+  const tw = (phase - (cycleMs - walkMs)) / walkMs; // 0..1 sur la phase de marche
+  const ease = tw < 0.5 ? 2 * tw * tw : 1 - Math.pow(-2 * tw + 2, 2) / 2; // smoothstep
+  const x = startX + (endX - startX) * ease;
+  const y = startY + (endY - startY) * ease;
+  const frame = Math.floor(t / C.ANIMAL_WALK_FRAME_MS) % 4;
+  return { x, y, dir, frame, state: "walk" };
 }
 
 // Filet de sécurité pour les animaux restaurés d'une sauvegarde antérieure au

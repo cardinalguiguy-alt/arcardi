@@ -702,8 +702,19 @@ export const COLLECT_RANGE = 1.5;   // distance pour ramasser une production
 // de cet ancrage. Rayon volontairement petit pour rester dans l'enclos de
 // départ (les animaux y naissent à au moins 1 case des clôtures).
 export const ANIMAL_WANDER_RADIUS = 0.55;    // amplitude en tuiles
-export const ANIMAL_WANDER_PERIOD_MS = 7000; // période de base (variée par animal)
+export const ANIMAL_WANDER_PERIOD_MS = 7000; // période de base (conservée, non réutilisée par animalPos depuis zip 255)
 export const ANIMAL_PICK_RANGE = 1.8;        // portée pour attraper/déposer un animal (= ACT_RANGE)
+// Broutage/marche (zip 255, demande Guillaume : "faire bouger les animaux de
+// la ferme de manière cohérente et légèrement plus détaillée, animer les
+// pattes, changer de direction, s'arrêter"). Toujours 100% local (dérivé de
+// hx/hy/type/horodatage, comme cropGrowState/animalPos) : aucun trafic réseau
+// ajouté. Cycles longs, l'animal broute (arrêté) la plupart du temps puis
+// marche vers un point voisin et en revient — même mécanique de cycle que
+// les loups/lapins (animT->frame), mais purement locale au lieu d'être
+// diffusée par l'hôte.
+export const ANIMAL_CYCLE_MS = 13000;        // durée de base d'un cycle brouter/marcher (variée par animal)
+export const ANIMAL_WALK_MS = 2200;          // portion du cycle passée à marcher (le reste = broute, arrêté)
+export const ANIMAL_WALK_FRAME_MS = 260;     // durée d'une frame de patte pendant la marche (4 frames, cf. loups)
 
 // --- Cycle jour/nuit (seuils partagés) ---
 // Extraits ici (au lieu de rester en constantes locales dans nightAlpha,
