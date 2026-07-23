@@ -5093,9 +5093,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         } else {
           const apos = E.animalPos(an, epochNow); ax = apos.x; ay = apos.y;
         }
+        // Zip 254 : echelle d'affichage par type (vache ~= cheval, chevre plus
+        // grande, etc. — voir C.ANIMAL_DRAW_SCALE). Purement visuel : le sprite
+        // natif fait 16x14, on l'agrandit en gardant l'ancrage bas-centre (les
+        // pieds restent au meme endroit) pour ne pas casser l'alignement au sol.
+        const asc = (C.ANIMAL_DRAW_SCALE && C.ANIMAL_DRAW_SCALE[an.type]) || 1;
+        const aw = 16 * asc, ah = 14 * asc;
+        const adx = ax * T + 8 - aw / 2;   // recentrage horizontal
+        const ady = ay * T + 14 - ah;      // ancrage bas conserve
         draws.push({ y: (ay + 1) * T, fn: () => {
-          ctx.drawImage(sprites.animals[an.type], ax * T, ay * T);
-          if (!an.carriedBy && E.animalReady(an, epochNow)) { const bob = Math.sin(now / 260) * 1.5; ctx.drawImage(sprites.products[an.type], ax * T + 3, ay * T - 12 + bob, 12, 12); }
+          ctx.drawImage(sprites.animals[an.type], adx, ady, aw, ah);
+          if (!an.carriedBy && E.animalReady(an, epochNow)) { const bob = Math.sin(now / 260) * 1.5; ctx.drawImage(sprites.products[an.type], adx + aw / 2 - 6, ady - 12 + bob, 12, 12); }
         } });
       }
       // Chevaux libres (non montés) : plusieurs possibles désormais.
