@@ -2559,7 +2559,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // confondus.
   function sendReq(payload) {
     const m = meRef.current;
-    channelRef.current?.send({ type: "broadcast", event: "req", payload: { ...payload, id: me.id, name: m.name, px: +m.x.toFixed(2), py: +m.y.toFixed(2) } });
+    const full = { ...payload, id: me.id, name: m.name, px: +m.x.toFixed(2), py: +m.y.toFixed(2) };
+    // FIX 244b : depuis self:false (zip 243), l'hote ne recoit PLUS l'echo de
+    // ses propres broadcasts -> son propre "req" n'atteignait jamais
+    // ch.on("req") (garde par isHost) et AUCUNE de ses actions n'etait traitee
+    // (recoltes, peche, cheval, chat visiteurs...). Seuls les invites, dont le
+    // req atteint bien l'hote, fonctionnaient. Correctif : l'hote traite sa
+    // requete EN LOCAL (comme s'il l'avait recue), sans passer par le reseau.
+    // Le req est de toute facon host-only (les invites l'ignorent) et l'hote
+    // diffuse ensuite l'"apply" aux autres depuis hostHandleReq -> inchange.
+    if (isHost) { hostHandleReq(full); return; }
+    channelRef.current?.send({ type: "broadcast", event: "req", payload: full });
   }
   function isInjured() { return Date.now() < injuredUntilRef.current; }
   function doAction() {

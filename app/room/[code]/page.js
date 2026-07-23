@@ -544,7 +544,14 @@ export default function Room() {
   // salon via Realtime (leur `fermeAway` est effacé au passage, voir
   // l'abonnement plus haut) et arrête l'instance cachée de l'hôte.
   async function gatherFerme() {
-    if (!isHost || room?.current_game !== "ferme") return;
+    // FIX 244 : quand l'hote "quitte" la ferme (handleGameFinish), room.current_game
+    // est remis a null EN LOCAL alors que l'instantane ferme est conserve dans
+    // fermeAway (la ferme tourne en fond via l'instance cachee). L'ancien garde
+    // room.current_game !== "ferme" bloquait donc TOUJOURS le bouton dans ce menu
+    // "away" -> "Rassembler tout le monde" ne faisait rien. On accepte desormais
+    // aussi le cas fermeAway (instantane ferme conserve).
+    const fermeActive = room?.current_game === "ferme" || (fermeAway && fermeAway.current_game === "ferme");
+    if (!isHost || !fermeActive) return;
     // Correctif 2026-07 : diffusion directe IMMÉDIATE aux invités via le
     // canal presence (voir le handler "ferme_gather" plus haut), AVANT
     // l'écriture en base — le retour au salon ne dépend plus du seul relais
