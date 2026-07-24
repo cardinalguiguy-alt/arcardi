@@ -2578,7 +2578,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // (1..VISITORS_MAX, random each round) steps off the train.
     if (!st.nextVisitAt) { E.scheduleNextVisit(st, E.farmPopularity(s, w), Math.random); dirtyRef.current = true; }
     else if (now >= st.nextVisitAt) {
-      if (st.visitors.length < C.VISITORS_MAX) {
+      // Demande Guillaume : aucune arrivée entre 22h00 et 05h00 heure ingame.
+      // On ne spawn pas et on repousse l'échéance de quelques minutes réelles
+      // (au lieu d'un vrai recalcul d'horaire) : on retente au prochain passage,
+      // jusqu'à sortir de la plage nocturne — le premier groupe part alors avec
+      // le même tirage de popularité que d'habitude, juste retardé.
+      const tminNow = E.gameTimeMin(s.dayStartAt, now);
+      const minOfDayNow = ((tminNow % 1440) + 1440) % 1440;
+      const inArrivalBlackout = minOfDayNow >= 22 * 60 || minOfDayNow < 5 * 60;
+      if (inArrivalBlackout) {
+        st.nextVisitAt = now + 60000; // reessai dans 1 minute réelle
+        dirtyRef.current = true;
+      } else if (st.visitors.length < C.VISITORS_MAX) {
         const added = E.spawnVisitorGroup(st, Math.random, !!st.damage, visitorStockCtx());
         E.scheduleNextVisit(st, E.farmPopularity(s, w), Math.random);
         if (added.length === 1) stationChat(L.visitorArrived(rosterOf(added[0].rid).name), "\u{1F682}");
