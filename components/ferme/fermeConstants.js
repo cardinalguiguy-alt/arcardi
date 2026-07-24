@@ -170,6 +170,30 @@ export const GEM_HOUSE_NEAR_RADIUS = 22; // en dessous (en cases) : gemmes quasi
 export const GEM_HOUSE_NEAR_MULT = 0.08; // multiplicateur appliqué à GEM_DROP_CHANCE tout près de la maison
 export const GEM_HOUSE_FAR_RADIUS = 95;  // au-delà (en cases) : abondance maximale (plateau, ne monte plus)
 export const GEM_HOUSE_FAR_MULT = 1.6;   // multiplicateur maximal, loin de la maison
+// Zip 280 (bijouterie, demande Guillaume) : l'or est une ressource RARE
+// trouvée en minant les rochers, comme les gemmes mais indépendamment (un
+// rocher peut donc donner gemme ET or le même coup, ou ni l'un ni l'autre).
+// Va dans le pool COMMUN gregStock.gold (même esprit que gregStock.stone),
+// pas dans l'inventaire perso — cohérent avec gems/fish/animals déjà partagés.
+// Zip 281 (demande Guillaume) : l'or n'est PAS réparti comme les gemmes
+// (distance à la maison) — il ne se trouve QUE près de la rivière. Un
+// rocher miné à GOLD_RIVER_RADIUS cases ou moins d'une case d'eau (G_WATER)
+// a une chance GOLD_DROP_CHANCE de lâcher de l'or ; au-delà, aucune chance
+// (0), quelle que soit la distance à la maison.
+// Zip 282 (demande Guillaume : "toujours faire des pépites d'or quelque
+// chose de rare") : 0.25 rendait l'or presque banal près de la rivière (1
+// rocher sur 4). Ramené à 0.05 — plus rare que le diamant (la gemme la
+// plus rare, poids 0.08 dans C.GEMS), cohérent avec le statut de ressource
+// précieuse de l'or.
+export const GOLD_DROP_CHANCE = 0.05;
+export const GOLD_RIVER_RADIUS = 4; // en cases, autour du rocher miné
+export const GOLD_PER_FIND = 1;
+// Zip 283 (demande Guillaume) : chance montée à 12% aux extrémités NORD et
+// SUD de la carte (bande de GOLD_EXTREME_BAND cases depuis le bord y=0 ou
+// y=MAP_H-1), 5% ailleurs — toujours conditionné à la proximité de la
+// rivière (GOLD_RIVER_RADIUS), ce boost ne s'applique jamais loin de l'eau.
+export const GOLD_EXTREME_CHANCE = 0.12;
+export const GOLD_EXTREME_BAND = 20; // en cases, depuis le haut/bas de la carte
 
 // --- Poissons (pêche à la rivière) ---
 // Se mangent (rendent de l'énergie) OU se revendent au bac. Tirage pondéré.
@@ -1170,6 +1194,36 @@ export const CHEESE_WHEEL_SELL = 1500;     export const CHEESE_PORTION_SELL = 35
 export const PASTRY_MS = 1 * 60 * 1000;    export const PASTRY_SELL = 500;  // boulangerie : 1 lait + 1 farine + 6 œufs -> PASTRY_BATCH pâtisseries
 export const PASTRY_FLOUR = 1, PASTRY_MILK = 1, PASTRY_EGG = 6;
 export const PASTRY_BATCH = 10;            // nombre de pâtisseries produites par fournée réussie
+
+// ---- Zip 280 (bijouterie, demande Guillaume) ----
+// Contrairement aux autres ateliers (beehive/fromagerie/bakery/sawmill), la
+// bijouterie n'est PAS liée à un résident/métier : n'IMPORTE QUEL joueur
+// connecté peut designer un lot une fois le bâtiment acheté (état partagé
+// station.jewelry, voir newStationState). Chaque lot est une pièce UNIQUE
+// (pas de production passive, pas de cadence) : le joueur choisit le type,
+// la matière (une gemme, au choix parmi celles en stock), la découpe
+// (purement cosmétique, sert à l'aperçu) et fixe LIBREMENT son prix de
+// vente — chaque pièce finie est donc vendue individuellement à son propre
+// prix (pas un prix fixe par type comme miel/fromage/pâtisserie).
+export const JEWELRY_COST = 15000; // achat du bâtiment (pot commun), une fois pour toutes
+export const JEWELRY_TYPES = [
+  { id: "earrings",  name: "Boucles d'oreilles", nameEn: "Earrings",   gold: 2 },
+  { id: "bracelet",  name: "Bracelet",           nameEn: "Bracelet",   gold: 3 },
+  { id: "necklace",  name: "Collier",            nameEn: "Necklace",   gold: 4 },
+  { id: "chain",     name: "Chaîne en or",       nameEn: "Gold chain", gold: 5 },
+];
+// Découpe : purement cosmétique (aucune incidence sur coût/prix), sert
+// uniquement à varier l'aperçu visuel généré dans la scène de design.
+export const JEWELRY_SHAPES = [
+  { id: "round",  name: "Ronde",   nameEn: "Round" },
+  { id: "square", name: "Carrée",  nameEn: "Square" },
+  { id: "heart",  name: "Cœur",    nameEn: "Heart" },
+  { id: "star",   name: "Étoile",  nameEn: "Star" },
+];
+// Une pièce consomme 1 gemme (au choix du joueur, n'importe quel type parmi
+// C.GEMS) + l'or indiqué par JEWELRY_TYPES[].gold ci-dessus, tous deux
+// prélevés sur le pool COMMUN (s.gems / s.gregStock.gold).
+export const JEWELRY_GEM_COST = 1;
 // Horaires d'ouverture de la boulangerie (minutes dans la journée de jeu).
 // La pâtissière ne produit qu'entre 5h30 et 19h00 ; hors de cette plage, le
 // four est éteint (aucune production, aucune alerte). Le jour de jeu commence

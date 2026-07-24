@@ -486,6 +486,25 @@ export function gemChanceAt(x, y) {
   return C.GEM_DROP_CHANCE * mult;
 }
 
+// Zip 281 (bijouterie) : l'or ne se trouve QUE près de la rivière — vrai
+// pour la carte (déterministe par seed), contrairement à `world` qui n'est
+// pas dispo ici (cette fonction est appelée depuis resolveAct, qui l'a).
+function nearRiver(world, x, y, radius) {
+  for (let yy = y - radius; yy <= y + radius; yy++) {
+    for (let xx = x - radius; xx <= x + radius; xx++) {
+      if (inMap(xx, yy) && world.ground[idx(xx, yy)] === C.G_WATER) return true;
+    }
+  }
+  return false;
+}
+// Zip 283 : chance de trouver de l'or à CETTE case (déjà su près de la
+// rivière, voir appel dans resolveAct) — montée aux extrémités nord/sud de
+// la carte (bande GOLD_EXTREME_BAND depuis y=0 ou y=MAP_H-1), 5% ailleurs.
+function goldChanceAt(y) {
+  if (y <= C.GOLD_EXTREME_BAND || y >= C.MAP_H - 1 - C.GOLD_EXTREME_BAND) return C.GOLD_EXTREME_CHANCE;
+  return C.GOLD_DROP_CHANCE;
+}
+
 // Position/état affiché d'un animal (zip 152, refonte zip 255) : dérivé
 // PUREMENT de son ancrage (`hx`/`hy`, seule valeur synchronisée), de son
 // `type` et de l'horodatage, comme cropGrowState/gameTimeMin. Chaque client
@@ -764,6 +783,16 @@ export function resolveAct(world, f, m) {
             const gt = weightedPick(C.GEMS);
             res.gemFound = gt;
             res.fx.push({ k: "gem", x, y, gem: gt });
+          }
+          // Zip 280/281 (bijouterie) : or, tirage INDÉPENDANT de la gemme
+          // ci-dessus (un même rocher peut donc donner les deux, l'un des
+          // deux, ou ni l'un ni l'autre) — MAIS uniquement près de la
+          // rivière (demande Guillaume), peu importe la distance à la
+          // maison. Va aussi au pool commun (gregStock.gold), signalé ici
+          // pour incrément côté hôte.
+          if (nearRiver(world, x, y, C.GOLD_RIVER_RADIUS) && Math.random() < goldChanceAt(y)) {
+            res.goldFound = (res.goldFound || 0) + C.GOLD_PER_FIND;
+            res.fx.push({ k: "gold", x, y });
           }
         } else world.objHp.set(i, hp);
         res.invChanged = true;
@@ -2283,6 +2312,11 @@ export function newStationState() {
     // sort comme visiteur, juste sous ce nom d'emprunt. Un hostile SANS skill
     // reste banni pour de bon, sans entrée ici.
     covers: {},
+    // Zip 280 : bijouterie — PAS liée à un résident (voir fermeConstants.js).
+    // `built` = bâtiment acheté (pot commun, une fois) ; `items` = pièces
+    // finies en attente de vente, chacune avec son PROPRE prix fixé par le
+    // joueur qui l'a designée : { id, type, gemId, shape, price, maker }.
+    jewelry: { built: false, items: [] },
   };
 }
 
@@ -2315,6 +2349,12 @@ export function migrateStation(st, hostNow) {
   // règles de survie qu'un rel/blacklist : PERSISTÉES à chaque chargement/
   // snapshot, aucune relocalisation d'horloge nécessaire (pas de timestamp).
   out.covers = (st.covers && typeof st.covers === "object") ? { ...st.covers } : {};
+  // Zip 280 : bijouterie — survit à chaque chargement/snapshot, comme le
+  // reste de la station (aucun timestamp à relocaliser, contrairement aux
+  // visiteurs/dégâts ci-dessous).
+  out.jewelry = (st.jewelry && typeof st.jewelry === "object")
+    ? { built: !!st.jewelry.built, items: Array.isArray(st.jewelry.items) ? st.jewelry.items.filter(it => it && typeof it.id === "number") : [] }
+    : { built: false, items: [] };
   // Owed gifts (zip 233) survive EVERY load, plain or snapshot: a promised
   // pet must not vanish before the pet system ships.
   out.pendingGifts = Array.isArray(st.pendingGifts) ? st.pendingGifts.filter(g => g && typeof g.kind === "string") : [];
@@ -3190,4 +3230,55 @@ export function resolveFruitPick(f, world, x, y) {
   f.inv.fruit = (f.inv.fruit || 0) + C.FRUIT_PICK_N;
   world.objHp.set(i, Date.now());
   return { ok: true, n: C.FRUIT_PICK_N };
+}
+
+// ---- Zip 280 : bijouterie (voir fermeConstants.js JEWELRY_*) ----
+// Achat du bâtiment : pot commun (shared.money), une seule fois. `shared` =
+// sharedRef.current côté FermeGame.js, muté directement (même esprit que
+// resolveSellFlour). Renvoie { ok, toast }.
+export function resolveBuyJewelry(shared, station) {
+  if (station.jewelry && station.jewelry.built) return { ok: false, toast: "actionFailed" };
+  if ((shared.money | 0) < C.JEWELRY_COST) return { ok: false, toast: "noGold" };
+  shared.money -= C.JEWELRY_COST;
+  station.jewelry = station.jewelry || { built: false, items: [] };
+  station.jewelry.built = true;
+  return { ok: true };
+}
+
+// Fabrication d'une pièce designée par le joueur (n'importe qui, pas de
+// rôle). Consomme sur les pools COMMUNS (gems + gregStock.gold), jamais
+// l'inventaire perso. `req` = { type, gemId, shape, price }. Le prix est
+// fixé LIBREMENT par le joueur (bornes larges pour éviter les valeurs
+// absurdes/négatives côté triche client). Renvoie { ok, toast, item }.
+export function resolveMakeJewelry(shared, station, req) {
+  if (!station.jewelry || !station.jewelry.built) return { ok: false, toast: "actionFailed" };
+  const type = C.JEWELRY_TYPES.find(t => t.id === req.type);
+  const shape = C.JEWELRY_SHAPES.find(sh => sh.id === req.shape);
+  const gemId = req.gemId | 0;
+  if (!type || !shape || gemId < 0 || gemId >= C.GEMS.length) return { ok: false, toast: "actionFailed" };
+  const price = Math.max(1, Math.min(999999, Math.round(Number(req.price) || 0)));
+  if (!price) return { ok: false, toast: "actionFailed" };
+  const gregStock = shared.gregStock || (shared.gregStock = { wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) });
+  const gems = shared.gems || (shared.gems = C.GEMS.map(() => 0));
+  if ((gregStock.gold | 0) < type.gold) return { ok: false, toast: "jewelryNoGold" };
+  if ((gems[gemId] | 0) < C.JEWELRY_GEM_COST) return { ok: false, toast: "jewelryNoGem" };
+  gregStock.gold -= type.gold;
+  gems[gemId] -= C.JEWELRY_GEM_COST;
+  const nextId = (station.jewelry.items.reduce((mx, it) => Math.max(mx, it.id | 0), 0) || 0) + 1;
+  const item = { id: nextId, type: type.id, gemId, shape: shape.id, price, maker: req.makerName || "" };
+  station.jewelry.items.push(item);
+  return { ok: true, item };
+}
+
+// Vente d'une pièce finie (chacune à son propre prix, fixé au design) : va
+// au pot commun comme toute autre vente. `id` = identifiant de la pièce
+// (station.jewelry.items[].id). Renvoie { ok, toast, gain }.
+export function resolveSellJewelry(shared, station, id) {
+  if (!station.jewelry || !Array.isArray(station.jewelry.items)) return { ok: false, toast: "actionFailed" };
+  const idx = station.jewelry.items.findIndex(it => it.id === id);
+  if (idx < 0) return { ok: false, toast: "actionFailed" };
+  const [item] = station.jewelry.items.splice(idx, 1);
+  const gain = item.price | 0;
+  shared.money = (shared.money | 0) + gain;
+  return { ok: true, gain };
 }

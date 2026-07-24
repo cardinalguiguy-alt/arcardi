@@ -244,6 +244,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [injuredUntil, setInjuredUntil] = useState(0); // horodatage de fin d'indisponibilité (0 = pas blessé), survit à un refresh (voir farmer.injuredUntil)
   const [immunityUntil, setImmunityUntil] = useState(0); // pommade de protection (chantier 2026-07) : horodatage de fin d'immunité/répulsion aux créatures maléfiques (0 = inactif), effet purement local, ne survit pas à un refresh
   const [shopOpen, setShopOpen] = useState(false);
+  // Zip 280 (bijouterie) : modale de design ouverte + brouillon en cours
+  // (purement local tant que "Fabriquer" n'est pas cliqué — rien n'est
+  // envoyé à l'hôte avant validation).
+  const [jewelryDesignOpen, setJewelryDesignOpen] = useState(false);
+  const [jewelryDraft, setJewelryDraft] = useState({ type: C.JEWELRY_TYPES[0].id, gemId: 0, shape: C.JEWELRY_SHAPES[0].id, price: 1000 });
   // -------- 2026-07 station update: UI state --------
   const [stationSt, setStationSt] = useState(null);    // React mirror of sharedRef.current.station
   const [adsOpen, setAdsOpen] = useState(false);       // station ad board panel
@@ -320,7 +325,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [house, setHouse] = useState({ level: 1, upgradeUntil: 0 }); // miroir React de sharedRef.current.house (maison à niveaux, 2026-07)
   const [gems, setGems] = useState(() => C.GEMS.map(() => 0)); // miroir React de sharedRef.current.gems (pool commun à la salle)
   const [flour, setFlour] = useState(0); // miroir React de sharedRef.current.flour (sacs de farine, pool commun à la salle, chantier 2026-07)
-  const [gregStock, setGregStock] = useState(() => ({ wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) })); // miroir React de sharedRef.current.gregStock (bois/pierre récoltés par Greg + engrais acheté + poissons pêchés par Soan, pool commun, chantier 2026-07)
+  const [gregStock, setGregStock] = useState(() => ({ wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) })); // miroir React de sharedRef.current.gregStock (bois/pierre récoltés par Greg + engrais acheté + poissons pêchés par Soan, pool commun, chantier 2026-07)
   const [fertilizerShop, setFertilizerShop] = useState(() => ({ stock: 0, lastRestockDay: 0 })); // miroir React de sharedRef.current.fertilizerShop (stock boutique de l'engrais, chantier 2026-07)
   // Défi "chasse aux lapins" (chantier 2026-07, demande Guillaume) : miroir
   // React de sharedRef.current.rabbitChallenge (null si aucun défi en cours),
@@ -380,7 +385,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const meRef = useRef(null);
   const playersRef = useRef(new Map()); // id -> remote farmer render data
   const farmersRef = useRef({});        // hôte : id -> état privé arbitré
-  const sharedRef = useRef({ seed: 0, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), salveCraft: E.newSalveCraftState(), house: { level: 1, upgradeUntil: 0 }, evilMonsters: [], flour: 0, gregStock: { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) }, fertilizerShop: { stock: 0, lastRestockDay: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], rabbitChallenge: null, greg: null, soan: null, harald: null, station: E.newStationState(), decor: [], crafts: E.newCrafts(), craftStock: E.newCraftStock() });
+  const sharedRef = useRef({ seed: 0, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), salveCraft: E.newSalveCraftState(), house: { level: 1, upgradeUntil: 0 }, evilMonsters: [], flour: 0, gregStock: { wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) }, fertilizerShop: { stock: 0, lastRestockDay: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], rabbitChallenge: null, greg: null, soan: null, harald: null, station: E.newStationState(), decor: [], crafts: E.newCrafts(), craftStock: E.newCraftStock() });
   const invRef = useRef(null);
   const toolsRef = useRef({ hoe: 1, can: 1, axe: 1, pick: 1 });
   const energyRef = useRef(C.MAX_ENERGY);
@@ -643,7 +648,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         flour: saved.flour || 0,
         // Stock commun de bois/pierre récoltés par Greg (chantier 2026-07,
         // "étendre son champ") : survit à une reprise, comme flour/gems.
-        gregStock: { wood: (saved.gregStock && saved.gregStock.wood) || 0, stone: (saved.gregStock && saved.gregStock.stone) || 0, fertilizer: (saved.gregStock && saved.gregStock.fertilizer) || 0, fish: C.FISH.map((_, i) => (saved.gregStock && saved.gregStock.fish && saved.gregStock.fish[i]) || 0), animals: C.ANIMALS.map((_, i) => (saved.gregStock && saved.gregStock.animals && saved.gregStock.animals[i]) || 0) },
+        gregStock: { wood: (saved.gregStock && saved.gregStock.wood) || 0, stone: (saved.gregStock && saved.gregStock.stone) || 0, fertilizer: (saved.gregStock && saved.gregStock.fertilizer) || 0, gold: (saved.gregStock && saved.gregStock.gold) || 0, fish: C.FISH.map((_, i) => (saved.gregStock && saved.gregStock.fish && saved.gregStock.fish[i]) || 0), animals: C.ANIMALS.map((_, i) => (saved.gregStock && saved.gregStock.animals && saved.gregStock.animals[i]) || 0) },
         // Boutique d'engrais (chantier 2026-07, suite plan validé) : survit à
         // une reprise comme gregStock (le cycle de restock continue depuis
         // lastRestockDay, aucun rattrapage spécial nécessaire).
@@ -713,7 +718,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       worldRef.current = E.generateWorld(seed);
       for (const ci of E.clearStationArea(worldRef.current)) recordTileOverride(ci); // 2026-07 station update
       overridesRef.current = { ground: {}, object: {} };
-      sharedRef.current = { seed, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), salveCraft: E.newSalveCraftState(), house: { level: 1, upgradeUntil: 0 }, evilMonsters: [], gems: C.GEMS.map(() => 0), flour: 0, gregStock: { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) }, fertilizerShop: { stock: 0, lastRestockDay: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], rabbitChallenge: null, greg: null, soan: null, harald: null, station: E.newStationState() };
+      sharedRef.current = { seed, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), salveCraft: E.newSalveCraftState(), house: { level: 1, upgradeUntil: 0 }, evilMonsters: [], gems: C.GEMS.map(() => 0), flour: 0, gregStock: { wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) }, fertilizerShop: { stock: 0, lastRestockDay: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], rabbitChallenge: null, greg: null, soan: null, harald: null, station: E.newStationState() };
       farmersRef.current = {};
       // Crée tout de suite l'enregistrement pour réserver le code.
       persistFarm();
@@ -739,7 +744,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     setHouse(sharedRef.current.house || { level: 1, upgradeUntil: 0 });
     setGems(sharedRef.current.gems);
     setFlour(sharedRef.current.flour || 0);
-    setGregStock(sharedRef.current.gregStock || { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) });
+    setGregStock(sharedRef.current.gregStock || { wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) });
     setFertilizerShop(sharedRef.current.fertilizerShop || { stock: 0, lastRestockDay: 0 });
     setRabbitChallenge(sharedRef.current.rabbitChallenge);
     syncBuildings();
@@ -837,7 +842,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       evilMonsters: payload.evilMonsters || [], // créatures maléfiques partagées (2026-07)
       gems: migrateGems(payload),
       flour: payload.flour || 0,
-      gregStock: { wood: (payload.gregStock && payload.gregStock.wood) || 0, stone: (payload.gregStock && payload.gregStock.stone) || 0, fertilizer: (payload.gregStock && payload.gregStock.fertilizer) || 0, fish: C.FISH.map((_, i) => (payload.gregStock && payload.gregStock.fish && payload.gregStock.fish[i]) || 0), animals: C.ANIMALS.map((_, i) => (payload.gregStock && payload.gregStock.animals && payload.gregStock.animals[i]) || 0) },
+      gregStock: { wood: (payload.gregStock && payload.gregStock.wood) || 0, stone: (payload.gregStock && payload.gregStock.stone) || 0, fertilizer: (payload.gregStock && payload.gregStock.fertilizer) || 0, gold: (payload.gregStock && payload.gregStock.gold) || 0, fish: C.FISH.map((_, i) => (payload.gregStock && payload.gregStock.fish && payload.gregStock.fish[i]) || 0), animals: C.ANIMALS.map((_, i) => (payload.gregStock && payload.gregStock.animals && payload.gregStock.animals[i]) || 0) },
       fertilizerShop: { stock: (payload.fertilizerShop && payload.fertilizerShop.stock) || 0, lastRestockDay: (payload.fertilizerShop && payload.fertilizerShop.lastRestockDay) || 0 },
       wolves: payload.wolves || [], wolfNight: { active: !!(payload.wolves && payload.wolves.length), kills: 0 },
       rabbits: payload.rabbits || [], rabbitChallenge: payload.rabbitChallenge || null,
@@ -884,7 +889,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     setHouse(sharedRef.current.house || { level: 1, upgradeUntil: 0 });
     setGems(sharedRef.current.gems);
     setFlour(sharedRef.current.flour || 0);
-    setGregStock(sharedRef.current.gregStock || { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) });
+    setGregStock(sharedRef.current.gregStock || { wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) });
     setFertilizerShop(sharedRef.current.fertilizerShop || { stock: 0, lastRestockDay: 0 });
     setRabbitChallenge(sharedRef.current.rabbitChallenge);
     syncBuildings();
@@ -1388,6 +1393,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         s.gems[r.gemFound] = (s.gems[r.gemFound] || 0) + 1;
         out.gems = s.gems;
       }
+      // Zip 280 (bijouterie) : or trouvé en minant, va au pool COMMUN
+      // (gregStock.gold), même esprit que gemFound ci-dessus.
+      if (typeof r.goldFound === "number" && r.goldFound > 0) {
+        const gs2 = s.gregStock || (s.gregStock = { wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) });
+        gs2.gold = (gs2.gold | 0) + r.goldFound;
+        out.gregStock = gs2;
+      }
       // Moulin (chantier 2026-07) : dépôt de blé -> remonte le nouveau stock
       // de la/des tuile(s) de moulin touchée(s) à tout le monde (même
       // mécanique que out.crops ci-dessus, sur w.mills).
@@ -1421,7 +1433,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // demande Guillaume : "le poisson est direct notre propriété et on
       // peut aller le vendre") — même principe que la vente de gemmes/farine
       // juste au-dessus.
-      const stock = s.gregStock || (s.gregStock = { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) });
+      const stock = s.gregStock || (s.gregStock = { wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) });
       const r = E.resolveSellCommonFish(stock, req);
       if (r.moneyDelta) { s.money += r.moneyDelta; s.totalEarned += r.earnedDelta; out.state = shareState(); }
       if (r.stockChanged) out.gregStock = stock;
@@ -1429,7 +1441,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     } else if (req.kind === "sell" && req.item === "commonAnimal") {
       // Zip 260 : vente d'une production animale du POOL COMMUN ramassé par
       // Harald (œuf/lait/laine/truffe), même principe que "commonFish".
-      const stock = s.gregStock || (s.gregStock = { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) });
+      const stock = s.gregStock || (s.gregStock = { wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) });
       const r = E.resolveSellCommonAnimal(stock, req);
       if (r.moneyDelta) { s.money += r.moneyDelta; s.totalEarned += r.earnedDelta; out.state = shareState(); }
       if (r.stockChanged) out.gregStock = stock;
@@ -1937,7 +1949,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // Les quêtes accomplies voyagent avec l'état privé du fermier.
     if (out.farmer) out.farmer.quests = f.quests;
 
-    if (out.tiles.length || out.state || out.horses || out.animals || out.wellBuilt || out.gems || out.mills || out.house || out.flour !== undefined) dirtyRef.current = true;
+    if (out.tiles.length || out.state || out.horses || out.animals || out.wellBuilt || out.gems || out.gregStock || out.mills || out.house || out.flour !== undefined) dirtyRef.current = true;
     hostSend({ type: "broadcast", event: "apply", payload: { ...out, hostNow: Date.now() } });
   }
   // -------- 2026-07 station update: host-side station module --------
@@ -1951,6 +1963,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     return cover ? { ...ro, name: cover } : ro;
   }
   function cropLabel(id) { const cr = C.CROPS[id] || C.CROPS[0]; return lang === "en" ? cr.nameEn : cr.name; }
+  // Zip 280 : glyphe simple (emoji) représentant la découpe choisie, faute
+  // de sprite dédié — utilisé à la fois dans le panneau de vente et l'aperçu
+  // de la scène de design.
+  function jewelryGlyph(shapeId) {
+    return { round: "\u{1F48D}", square: "\u{1F536}", heart: "\u{1F49B}", star: "\u2B50" }[shapeId] || "\u{1F48D}";
+  }
   // Zip 233: human label of a gift reward (unique seeds / decoration / pet).
   function giftLabel(g) {
     if (!g) return "";
@@ -2111,6 +2129,32 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const ch = { send: (m) => hostSend(m) }; // FIX 246b : ch relaie ET applique en local chez l'hôte
     const v = E.getVisitor(s, req.rid); // zip 233: requests target a specific visitor by roster id
     const toastTo = (key) => ch?.send({ type: "broadcast", event: "apply", payload: { toast: { id: req.id, key } } });
+    // Zip 280 : bijouterie — pas de rôle, n'importe quel joueur peut acheter
+    // le bâtiment, designer un lot, ou vendre une pièce finie du pool commun.
+    if (req.kind === "buyJewelry") {
+      const r = E.resolveBuyJewelry(s, s.station);
+      if (!r.ok) { toastTo(r.toast || "actionFailed"); return true; }
+      ch?.send({ type: "broadcast", event: "apply", payload: { state: shareState() } });
+      stationChat(L.jewelryBuiltChat, "\u{1F48D}");
+      broadcastStation();
+      return true;
+    }
+    if (req.kind === "makeJewelry") {
+      const r = E.resolveMakeJewelry(s, s.station, { ...req, makerName: f.name });
+      if (!r.ok) { toastTo(r.toast || "actionFailed"); return true; }
+      ch?.send({ type: "broadcast", event: "apply", payload: { gems: s.gems, gregStock: s.gregStock } });
+      stationChat(L.jewelryMadeChat(f.name, L.jewelryTypeName(r.item.type)), "\u{1F48D}");
+      broadcastStation();
+      return true;
+    }
+    if (req.kind === "sellJewelry") {
+      const r = E.resolveSellJewelry(s, s.station, req.itemId | 0);
+      if (!r.ok) { toastTo(r.toast || "actionFailed"); return true; }
+      ch?.send({ type: "broadcast", event: "apply", payload: { state: shareState() } });
+      stationChat(L.jewelrySoldChat(r.gain), "\u{1F4B0}");
+      broadcastStation();
+      return true;
+    }
     if (req.kind === "adsSet") {
       const r = E.resolveAdsSet(s, req.ads);
       if (!r.ok) { toastTo(r.toast || "actionFailed"); return true; }
@@ -2340,7 +2384,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const src = findInvWith("products", idx, need);
     if (src) return { kind: "farmer", src };
     const s = sharedRef.current;
-    const stock = s.gregStock || (s.gregStock = { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) });
+    const stock = s.gregStock || (s.gregStock = { wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) });
     if (!Array.isArray(stock.animals)) stock.animals = C.ANIMALS.map(() => 0);
     if ((stock.animals[idx] | 0) >= need) return { kind: "greg" };
     return null;
@@ -2933,7 +2977,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (key === "petCaught")     return L.petCaughtToast(C.petName(n, lang === "en"));
     if (key === "petReleased")   return L.bagReleasedToast(C.petName(n, lang === "en"));
     if (key === "bagFull")       return L.bagPetsFull(C.MAX_PETS);
-    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, noMillStock: L.toastNoMillStock, millNotEmpty: L.toastMillNotEmpty, noWheatToDeposit: L.toastNoWheatToDeposit, millFull: L.toastMillFull, actionFailed: L.toastActionFailed, coopNone: L.toastCoopNone, farCoop: L.toastFarCoop, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull, notInjured: L.toastNotInjured, noHealKit: L.toastNoHealKit, healTooFar: L.toastHealTooFar, gregNotHired: L.toastGregNotHired, gregNoRoom: L.toastGregNoRoom, gregNoFertilizer: L.toastGregNoFertilizer, soanNotHired: L.toastSoanNotHired, soanNoRiver: L.toastSoanNoRiver, farCauldron: L.toastFarCauldron, noFishToDeposit: L.toastNoFishToDeposit, cauldronMissing: L.toastCauldronMissing, cauldronAlreadyTaken: L.toastCauldronAlreadyTaken, noCauldronStock: L.toastNoCauldronStock, cauldronNotEmpty: L.toastCauldronNotEmpty, cauldronBrewing: L.toastCauldronBrewing, cauldronNothingToCollect: L.toastCauldronNothingToCollect, cauldronHasEnough: L.toastCauldronHasEnough, visitorNotEnough: L.visitorNotEnough, decorNone: L.decorNone, decorPicked: L.decorPicked, objReturned: L.objReturned, residentNoRoom: L.residentNoRoom, artisanNoResident: L.artisanNoResident, voyagerBusy: L.voyagerBusyToast, kickVoted: L.kickVotedToast }[key] || "";
+    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, noMillStock: L.toastNoMillStock, millNotEmpty: L.toastMillNotEmpty, noWheatToDeposit: L.toastNoWheatToDeposit, millFull: L.toastMillFull, actionFailed: L.toastActionFailed, coopNone: L.toastCoopNone, farCoop: L.toastFarCoop, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull, notInjured: L.toastNotInjured, noHealKit: L.toastNoHealKit, healTooFar: L.toastHealTooFar, gregNotHired: L.toastGregNotHired, gregNoRoom: L.toastGregNoRoom, gregNoFertilizer: L.toastGregNoFertilizer, soanNotHired: L.toastSoanNotHired, soanNoRiver: L.toastSoanNoRiver, farCauldron: L.toastFarCauldron, noFishToDeposit: L.toastNoFishToDeposit, cauldronMissing: L.toastCauldronMissing, cauldronAlreadyTaken: L.toastCauldronAlreadyTaken, noCauldronStock: L.toastNoCauldronStock, cauldronNotEmpty: L.toastCauldronNotEmpty, cauldronBrewing: L.toastCauldronBrewing, cauldronNothingToCollect: L.toastCauldronNothingToCollect, cauldronHasEnough: L.toastCauldronHasEnough, visitorNotEnough: L.visitorNotEnough, decorNone: L.decorNone, decorPicked: L.decorPicked, objReturned: L.objReturned, residentNoRoom: L.residentNoRoom, artisanNoResident: L.artisanNoResident, voyagerBusy: L.voyagerBusyToast, kickVoted: L.kickVotedToast, jewelryNoGold: L.toastJewelryNoGold, jewelryNoGem: L.toastJewelryNoGem }[key] || "";
   }
 
   // -------- Hôte : boucle temps + persistance --------
@@ -4492,7 +4536,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // produisent via updateCrafts (rien à faire ici).
   function residentSkillShift(res, ro, w, s) {
     if (ro.skill !== "lumberjack") return;
-    const stock = s.gregStock || (s.gregStock = { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) });
+    const stock = s.gregStock || (s.gregStock = { wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) });
     const tiles = [];
     for (const kind of ["tree", "rock"]) {
       const i = E.findResidentTile(w, C.GREG_ANCHOR, kind);
@@ -4561,7 +4605,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // updateCrafts), pas le travail générique par thème.
       if (ro.skill) { residentSkillShift(res, ro, w, s); if (!res.announced) { res.announced = true; stationChat(L.residentStarted(ro.name, ro.job), "\u{1F6E0}"); } continue; }
       const task = C.RESIDENT_TASK_BY_THEME[ro.theme] || "gold";
-      const stock = s.gregStock || (s.gregStock = { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) });
+      const stock = s.gregStock || (s.gregStock = { wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) });
       if (!Array.isArray(stock.fish)) stock.fish = C.FISH.map(() => 0);
       const patch = {};
       if (task === "crops") {
@@ -4657,7 +4701,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         // Pêche en continu tant que le bloc de travail n'est pas terminé.
         so.lastFishAt = now;
         const ft = E.soanCatchFish();
-        const stock = sharedRef.current.gregStock || (sharedRef.current.gregStock = { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) });
+        const stock = sharedRef.current.gregStock || (sharedRef.current.gregStock = { wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) });
         if (!stock.fish) stock.fish = C.FISH.map(() => 0);
         stock.fish[ft] = (stock.fish[ft] || 0) + 1;
         setGregStock({ ...stock });
@@ -4781,7 +4825,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // autour du BARYCENTRE des animaux (pas d'ancre fixe). Un filet anti-perte
     // (HARALD_FORCE_MS) ramasse au forfait tout animal prêt depuis trop
     // longtemps, où qu'il soit (garantit le zéro-perte même inatteignable).
-    const stock = s.gregStock || (s.gregStock = { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) });
+    const stock = s.gregStock || (s.gregStock = { wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) });
     if (!stock.animals) stock.animals = C.ANIMALS.map(() => 0);
     const live = (s.animals || []).filter(a => a && !a.carriedBy);
     const fxList = [];
@@ -4886,6 +4930,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   }
   const buyHorse = () => sendReq({ kind: "buyHorse" });
   const buyWell = () => sendReq({ kind: "buyWell" });
+  const buyJewelry = () => sendReq({ kind: "buyJewelry" });
+  const makeJewelry = (design) => sendReq({ kind: "makeJewelry", type: design.type, gemId: design.gemId, shape: design.shape, price: design.price });
+  const sellJewelry = (itemId) => sendReq({ kind: "sellJewelry", itemId });
   const houseUpgrade = () => sendReq({ kind: "houseUpgrade" }); // maison à niveaux (2026-07)
   const hireGreg = () => sendReq({ kind: "hireGreg" });
   // Choix de l'ordre (chantier 2026-07, v2 suite retour Guillaume) : on
@@ -5211,7 +5258,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
       if (e.code === "KeyT") { e.preventDefault(); setChatOpen(true); setTimeout(() => chatInputRef.current?.focus(), 0); }
       if (e.code === "KeyM") setMapOpen(o => !o);
-      if (e.code === "Escape") { setShopOpen(false); setBinOpen(false); setBagOpen(false); setMapOpen(false); setSeedMenuOpen(false); setToolMenuOpen(false); setCraftMenuOpen(null); setCauldronMenuOpen(false); setAdsOpen(false); setVisitorOpen(false); }
+      if (e.code === "Escape") { setShopOpen(false); setBinOpen(false); setBagOpen(false); setMapOpen(false); setSeedMenuOpen(false); setToolMenuOpen(false); setCraftMenuOpen(null); setCauldronMenuOpen(false); setAdsOpen(false); setVisitorOpen(false); setJewelryDesignOpen(false); }
     }
     function onKeyUp(e) { keysRef.current[e.code] = false; }
     function onMove(e) { mouseRef.current.x = e.clientX; mouseRef.current.y = e.clientY; }
@@ -8142,6 +8189,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         <div className="row ferme-hud-res" title={L.flourResTip} onClick={() => setCraftMenuOpen(o => o === "flour" ? null : "flour")}>
           <Sprite img={spritesReady ? spritesRef.current.icons.flour : null} w={16} h={16} /> <span>{flour || 0}</span>
         </div>
+        <div className="row ferme-hud-res" title={L.goldResTip}>
+          {"\u{1FA99}"} <span>{(gregStock && gregStock.gold) || 0}</span>
+        </div>
       </div>
 
       {/* Énergie */}
@@ -8871,6 +8921,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               <div className="info"><b>{L.shopWellTitle(C.WELL_COST)}</b><span>{buildings.wellBuilt ? L.shopWellOwned : L.shopWellSub}</span></div>
               <button disabled={buildings.wellBuilt || hud.money < C.WELL_COST} onClick={buyWell}>{buildings.wellBuilt ? L.maxLabel : L.buyLabel}</button>
             </div>
+            {/* Zip 281 (demande Guillaume) : bâtiment/activité mis en
+                pause ("à venir") — SEULE la ressource or reste minable,
+                le bâtiment/la scène de design ne sont pas encore ouverts
+                à l'achat. Ligne grisée volontairement (disabled forcé). */}
+            <div className="ferme-shop-row ferme-shop-row-disabled">
+              <Sprite img={spritesReady ? spritesRef.current.gemIcons[2] : null} w={28} h={28} />
+              <div className="info"><b>{L.shopJewelryTitle(C.JEWELRY_COST)}</b><span>{L.shopJewelryComingSoon}</span></div>
+              <button disabled>{L.comingSoonLabel}</button>
+            </div>
             <div className="ferme-shop-row">
               <Sprite img={spritesReady ? spritesRef.current.fence : null} w={32} h={32} />
               <div className="info"><b>{L.fenceRowTitle(C.FENCE_COST)}</b><span>{L.fenceRowSub(myInv ? (myInv.fence || 0) : 0)}</span></div>
@@ -9278,9 +9337,116 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 )}
               </>);
             })()}
+            {/* Zip 280 : bijouterie — chaque pièce a son PROPRE prix (fixé
+                par le joueur qui l'a designée), donc une ligne par pièce
+                plutôt qu'un prix unique par type comme les autres artisans. */}
+            {(() => {
+              const items = (stationSt && stationSt.jewelry && stationSt.jewelry.items) || [];
+              if (!items.length) return null;
+              return (<>
+                <div className="ferme-tools-header">{L.jewelrySellTitle}</div>
+                {items.map(it => {
+                  const type = C.JEWELRY_TYPES.find(t => t.id === it.type) || C.JEWELRY_TYPES[0];
+                  const gem = C.GEMS[it.gemId] || C.GEMS[0];
+                  const shape = C.JEWELRY_SHAPES.find(sh => sh.id === it.shape) || C.JEWELRY_SHAPES[0];
+                  return (
+                    <div className="ferme-shop-row" key={"jw" + it.id}>
+                      <span style={{ width: 32, height: 32, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{jewelryGlyph(shape.id)}</span>
+                      <div className="info"><b>{L.jewelryPieceTitle(lang === "en" ? type.nameEn : type.name, lang === "en" ? gem.nameEn : gem.name)}</b><span>{L.perPiece(it.price)}</span>{it.maker && <span className="ferme-usage">{L.jewelryMakerHint(it.maker)}</span>}</div>
+                      <button onClick={() => sellJewelry(it.id)}>{L.jewelrySellBtn}</button>
+                    </div>
+                  );
+                })}
+              </>);
+            })()}
           </div>
         </div>
       )}
+
+      {/* Zip 280 : scène de design de la bijouterie — ouverte à tout
+          joueur connecté (pas de rôle). Formulaire + aperçu généré en
+          direct (glyphe + couleur de la gemme choisie), prix libre. */}
+      {jewelryDesignOpen && (() => {
+        const type = C.JEWELRY_TYPES.find(t => t.id === jewelryDraft.type) || C.JEWELRY_TYPES[0];
+        const gem = C.GEMS[jewelryDraft.gemId] || C.GEMS[0];
+        const shape = C.JEWELRY_SHAPES.find(sh => sh.id === jewelryDraft.shape) || C.JEWELRY_SHAPES[0];
+        const goldHave = (gregStock && gregStock.gold) | 0;
+        const gemHave = (gems && gems[jewelryDraft.gemId]) | 0;
+        const okGold = goldHave >= type.gold, okGem = gemHave >= C.JEWELRY_GEM_COST, okPrice = (jewelryDraft.price | 0) > 0;
+        const canMake = okGold && okGem && okPrice;
+        const submit = () => {
+          if (!canMake) return;
+          makeJewelry(jewelryDraft);
+          setJewelryDesignOpen(false);
+        };
+        return (
+          <div className="ferme-modal open" onClick={() => setJewelryDesignOpen(false)}>
+            <div className="panel ferme-modal-panel" onClick={e => e.stopPropagation()}>
+              <button className="ferme-close-x" onClick={() => setJewelryDesignOpen(false)}>✕</button>
+              <div className="ferme-tools-header">{L.jewelryDesignTitle}</div>
+
+              {/* Aperçu visuel généré automatiquement du résultat */}
+              <div style={{ display: "flex", justifyContent: "center", margin: "8px 0 14px" }}>
+                <div style={{
+                  width: 84, height: 84, borderRadius: shape.id === "square" ? 10 : "50%",
+                  background: gem.color, display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 40, boxShadow: "0 0 0 4px rgba(0,0,0,0.15) inset",
+                }}>{jewelryGlyph(shape.id)}</div>
+              </div>
+              <div style={{ textAlign: "center", marginBottom: 10, opacity: 0.85 }}>
+                {L.jewelryPreviewLine(lang === "en" ? type.nameEn : type.name, lang === "en" ? shape.nameEn : shape.name, lang === "en" ? gem.nameEn : gem.name)}
+              </div>
+
+              <div className="ferme-tools-header">{L.jewelryTypeLabel}</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+                {C.JEWELRY_TYPES.map(t => (
+                  <PixBtn key={t.id} sprites={spritesReady ? spritesRef.current : null} tone={jewelryDraft.type === t.id ? "gold" : "plain"} small
+                    label={`${lang === "en" ? t.nameEn : t.name} (${t.gold}\u{1FA99})`}
+                    onClick={() => setJewelryDraft(d => ({ ...d, type: t.id }))} />
+                ))}
+              </div>
+
+              <div className="ferme-tools-header">{L.jewelryMaterialLabel}</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+                {C.GEMS.map(g => {
+                  const have = (gems && gems[g.id]) | 0;
+                  return (
+                    <PixBtn key={g.id} sprites={spritesReady ? spritesRef.current : null} tone={jewelryDraft.gemId === g.id ? "gold" : "plain"} small
+                      label={`${lang === "en" ? g.nameEn : g.name} (${have})`}
+                      disabled={have < C.JEWELRY_GEM_COST}
+                      onClick={() => setJewelryDraft(d => ({ ...d, gemId: g.id }))} />
+                  );
+                })}
+              </div>
+
+              <div className="ferme-tools-header">{L.jewelryShapeLabel}</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+                {C.JEWELRY_SHAPES.map(sh => (
+                  <PixBtn key={sh.id} sprites={spritesReady ? spritesRef.current : null} tone={jewelryDraft.shape === sh.id ? "gold" : "plain"} small
+                    label={`${jewelryGlyph(sh.id)} ${lang === "en" ? sh.nameEn : sh.name}`}
+                    onClick={() => setJewelryDraft(d => ({ ...d, shape: sh.id }))} />
+                ))}
+              </div>
+
+              <div className="ferme-tools-header">{L.jewelryPriceLabel}</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                <input type="number" min={1} step={50} value={jewelryDraft.price}
+                  onChange={e => setJewelryDraft(d => ({ ...d, price: Math.max(0, Math.round(Number(e.target.value) || 0)) }))}
+                  style={{ width: 110 }} />
+                <span style={{ opacity: 0.7 }}>{"\u{1FA99}"}</span>
+              </div>
+
+              <div style={{ fontSize: 13, opacity: 0.8, marginBottom: 10 }}>
+                {L.jewelryStockLine(goldHave, type.gold, gemHave, C.JEWELRY_GEM_COST)}
+                {!okGold && <div style={{ color: "#c0392b" }}>{L.jewelryNoGoldHint}</div>}
+                {!okGem && <div style={{ color: "#c0392b" }}>{L.jewelryNoGemHint}</div>}
+              </div>
+
+              <button disabled={!canMake} onClick={submit}>{L.jewelryMakeBtn}</button>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Minijeu de pêche (difficulté selon le type de poisson) */}
       {/* -------- 2026-07 station update: panels -------- */}
