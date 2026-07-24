@@ -2012,8 +2012,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const ro = rosterOf(v.rid);
     const r = E.applyHostileDamage(w, s, Math.random, v.rid);
     v.phase = "leave"; v.offer = { type: "done" };
-    if (r.patches.length) channelRef.current?.send({ type: "broadcast", event: "apply", payload: { crops: r.patches } });
-    channelRef.current?.send({ type: "broadcast", event: "apply", payload: { state: shareState() } });
+    // Zip 264 (fuite realtime) : un seul broadcast au lieu de deux (crops+state
+    // fusionnés dans le même payload). applyDeltas traite chaque clé
+    // indépendamment, donc regrouper est transparent et divise par ~2 le trafic
+    // de ces événements d'action.
+    { const payload = { state: shareState() }; if (r.patches.length) payload.crops = r.patches; channelRef.current?.send({ type: "broadcast", event: "apply", payload }); }
     stationChat(L.hostileDamageChat(ro.name, s.station.damage.stolen, s.station.damage.ruined.length), "\u26A0\uFE0F");
     broadcastStation();
   }
@@ -2183,8 +2186,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const onlineCount = playersRef.current.size + 1;
       const r = E.resolveRepairResult(w, s, req.id, !!req.win, onlineCount);
       if (r.done) {
-        if (r.patches && r.patches.length) ch?.send({ type: "broadcast", event: "apply", payload: { crops: r.patches } });
-        ch?.send({ type: "broadcast", event: "apply", payload: { state: shareState() } });
+        // Zip 264 (fuite realtime) : crops+state fusionn\u00e9s en un seul broadcast.
+        { const payload = { state: shareState() }; if (r.patches && r.patches.length) payload.crops = r.patches; ch?.send({ type: "broadcast", event: "apply", payload }); }
         stationChat(L.repairDoneChat(r.restored.stolen, r.restored.crops), "\u2705");
         broadcastStation();
       } else if (typeof r.progress === "number") {
@@ -2646,8 +2649,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     hostDeliverPromisedGifts(now); // zip 250: dépose les cadeaux promis échus
     // Light continuous broadcast while visitors move (200 ms throttle):
     // an ARRAY of per-visitor positions matched by rid on the guests.
+    // Zip 264 (fuite realtime) : même traitement que les résidents — on
+    // n'inonde plus le réseau des positions de visiteurs quand personne ne les
+    // regarde. Garde AOI (anyRemoteNearList) + cadence VISITOR_NET_MS (750).
     visitorNetRef.current += dt;
-    if (visitorNetRef.current >= C.VISITOR_NET_MS / 1000 && st.visitors.length && netCanBroadcast()) {
+    if (visitorNetRef.current >= C.VISITOR_NET_MS / 1000 && st.visitors.length && netCanBroadcast() && anyRemoteNearList(st.visitors)) {
       visitorNetRef.current = 0;
       channelRef.current?.send({ type: "broadcast", event: "apply", payload: { visitorSim: st.visitors.map(v => ({ rid: v.rid, x: v.x, y: v.y, dir: v.dir, moving: v.moving, animT: v.animT, phase: v.phase })) } });
     }
@@ -3544,7 +3550,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (moved) {
       minimapDirtyRef.current = true;
       horseCallAccumRef.current += dt;
-      if (horseCallAccumRef.current >= 0.5 && netCanBroadcast()) {
+      if (horseCallAccumRef.current >= 0.7 && netCanBroadcast()) { // zip 264: 0.5 -> 0.7 s (cheval sifflé qui accourt, glissé par extrapolation — reste fluide)
         horseCallAccumRef.current = 0;
         channelRef.current?.send({ type: "broadcast", event: "apply", payload: { horses: hs } });
       }
@@ -4288,7 +4294,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
     }
     gregAccumRef.current += dt;
-    if (gregAccumRef.current >= 0.5 && netCanBroadcast() && anyRemoteNear(g.x, g.y)) {
+    if (gregAccumRef.current >= 0.7 && netCanBroadcast() && anyRemoteNear(g.x, g.y)) { // zip 264: 0.5 -> 0.7 s (PNJ purement baladeur, lissé smoothNpc — aucun impact gameplay, ~30% de trafic en moins)
       gregAccumRef.current = 0;
       channelRef.current?.send({ type: "broadcast", event: "apply", payload: { greg: g } });
     }
@@ -4329,6 +4335,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const cb = (sharedRef.current.crafts || {})[bid];
     if (!cb || !cb.built) return null;
     const def = C.ARTISAN_BUILDINGS[bid], p = artisanPos(bid);
+    // Zip 264 (demande Guillaume : « faire tourner l'apiculteur AUTOUR de la
+    // ruche, qu'il ne reste pas coincé devant le market ») : pour l'apiculteur,
+    // l'ancre est le CENTRE du bâtiment (flag ring) — les tuiles de la ruche
+    // étant solides (world.artisanBlocks), residentRoam ne peut viser que
+    // l'anneau autour, donc il en fait le tour au lieu de se poster devant.
+    // Les autres artisans (fromager, pâtissière) restent postés DEVANT leur
+    // boutique (au sud), comportement validé et inchangé.
+    if (skill === "beekeeper") return { x: p.x + def.w / 2, y: p.y + def.h / 2, ring: true };
     return { x: p.x + def.w / 2, y: p.y + def.h + 0.5 };
   }
   function residentRoam(res, w, now, dt, ro) {
@@ -4339,7 +4353,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // boutique. Les autres résidents se baladent près du spawn commun.
     const bAnchor = ro && ro.skill ? artisanAnchor(ro.skill) : null;
     const anchor = bAnchor || C.SPAWN;
-    const rx = bAnchor ? 3 : 9, ry = bAnchor ? 3 : 7;
+    // Zip 264 : apiculteur -> rayon un peu plus large (4) centré sur la ruche
+    // pour bien en faire le TOUR (l'anneau autour du footprint 2x2 solide).
+    const rx = bAnchor ? (bAnchor.ring ? 4 : 3) : 9, ry = bAnchor ? (bAnchor.ring ? 4 : 3) : 7;
     if (typeof res.x !== "number" || typeof res.y !== "number") {
       res.x = anchor.x + (Math.random() * (rx * 0.9) - rx * 0.45); res.y = anchor.y + (Math.random() * (ry * 0.9) - ry * 0.45);
       res.dir = 0; res.animT = 0; res.moving = false; res.roamTarget = null; res.nextRoamAt = 0;
@@ -4457,9 +4473,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         channelRef.current?.send({ type: "broadcast", event: "apply", payload: patch });
       }
     }
-    // Zip 252 : diffusion légère des positions des résidents baladeurs (~2 Hz).
+    // Zip 252 : diffusion légère des positions des résidents baladeurs.
+    // Zip 264 (fuite realtime n°1) : cette diffusion tournait à ~2 Hz EN
+    // CONTINU dès qu'un résident existait (≈ toujours dans une ferme établie),
+    // SANS garde de proximité — un salon laissé ouvert la vidait de messages
+    // pour rien. On l'aligne désormais sur Greg/Soan/loups : on ne diffuse QUE
+    // si un joueur distant est à portée de vue d'AU MOINS un résident
+    // (anyRemoteNearList). L'AOI a une marge de pré-chargement (AOI_MARGIN_TILES)
+    // donc le résident est re-synchronisé AVANT d'entrer à l'écran -> aucun
+    // « saut » visible à l'approche. Cadence abaissée via VISITOR_NET_MS (750).
     residentNetRef.current += dt;
-    if (residentNetRef.current >= C.VISITOR_NET_MS / 1000 && netCanBroadcast()) {
+    if (residentNetRef.current >= C.VISITOR_NET_MS / 1000 && netCanBroadcast() && anyRemoteNearList(residents)) {
       residentNetRef.current = 0;
       channelRef.current?.send({ type: "broadcast", event: "apply", payload: { residentSim: residents.map(r => ({ rid: r.rid, x: +(+r.x).toFixed(2), y: +(+r.y).toFixed(2), dir: r.dir | 0, moving: !!r.moving, animT: r.animT || 0 })) } });
     }
@@ -4556,7 +4580,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     } else so.moving = false;
     if (moved) minimapDirtyRef.current = true;
     soanAccumRef.current += dt;
-    if (soanAccumRef.current >= 0.5 && netCanBroadcast() && anyRemoteNear(so.x, so.y)) {
+    if (soanAccumRef.current >= 0.7 && netCanBroadcast() && anyRemoteNear(so.x, so.y)) { // zip 264: 0.5 -> 0.7 s (idem Greg : baladeur lissé, aucun impact gameplay)
       soanAccumRef.current = 0;
       channelRef.current?.send({ type: "broadcast", event: "apply", payload: { soan: so } });
     }
@@ -4649,7 +4673,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     if (moved) minimapDirtyRef.current = true;
     haraldAccumRef.current += dt;
-    if (haraldAccumRef.current >= 0.3 && netCanBroadcast() && anyRemoteNear(h.x, h.y)) {
+    if (haraldAccumRef.current >= 0.5 && netCanBroadcast() && anyRemoteNear(h.x, h.y)) { // zip 264: 0.3 -> 0.5 s. Harald diffusait à 3,3 Hz (la cadence la plus haute du jeu) sans raison ; aligné sur les autres employés (2 Hz), lissé smoothNpc -> -40% sur son flux, aucun impact visible.
       haraldAccumRef.current = 0;
       channelRef.current?.send({ type: "broadcast", event: "apply", payload: { harald: h } });
     }
@@ -5372,9 +5396,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             const frac = Math.max(0, Math.min(1, 1 - remaining / totalMs));
             draws.push({ y: (y + 1) * T, fn: () => {
               ctx.save(); ctx.globalAlpha = 0.55;
-              ctx.drawImage(sprites.mill, x * T - 7, (y + 1) * T - 36);
+              ctx.drawImage(sprites.mill, x * T - 14, (y + 1) * T - 54); // zip 264 : sprite agrandi 44x54, toujours centré sur x*T+8, base sur (y+1)*T
               ctx.restore();
-              const barW = 24, bx = x * T + 8 - barW / 2, by = (y + 1) * T - 42;
+              const barW = 24, bx = x * T + 8 - barW / 2, by = (y + 1) * T - 58; // zip 264 : au-dessus du sprite agrandi
               ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(bx, by, barW, 3);
               ctx.fillStyle = "#c9a25a"; ctx.fillRect(bx, by, barW * frac, 3);
               const totalSec = Math.ceil(remaining / 1000);
@@ -5387,25 +5411,27 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           } else {
             const ms = w.mills.get(ii) || { wheat: 0, nextAt: 0 };
             draws.push({ y: (y + 1) * T, fn: () => {
-              ctx.drawImage(sprites.mill, x * T - 7, (y + 1) * T - 36);
+              ctx.drawImage(sprites.mill, x * T - 14, (y + 1) * T - 54); // zip 264 : sprite agrandi 44x54, toujours centré sur x*T+8, base sur (y+1)*T
               // Zip 262 (demande Guillaume : "on doit voir les moulins TOURNER
               // quand ils produisent") : ailes de moulin qui tournent tant
               // qu'une transformation est en cours (ms.nextAt). Dessinées
               // par-dessus les ailes statiques du sprite, autour du moyeu.
               if (ms.nextAt) {
-                const hubX = x * T + 8, hubY = (y + 1) * T - 24, spin = performance.now() / 260;
+                // zip 264 : moyeu recalé pour le sprite agrandi ((y+1)*T-36) et
+                // ailes tournantes proportionnellement plus longues (16 px).
+                const hubX = x * T + 8, hubY = (y + 1) * T - 36, spin = performance.now() / 260;
                 ctx.save(); ctx.translate(hubX, hubY); ctx.rotate(spin);
                 for (let k = 0; k < 4; k++) {
                   ctx.rotate(Math.PI / 2);
-                  ctx.fillStyle = "#5a4028"; ctx.fillRect(0, -1, 11, 2);
-                  ctx.fillStyle = k % 2 ? "#eae2cc" : "#d8cfb2"; ctx.fillRect(4, -2, 6, 1);
+                  ctx.fillStyle = "#5a4028"; ctx.fillRect(0, -1, 16, 2);
+                  ctx.fillStyle = k % 2 ? "#eae2cc" : "#d8cfb2"; ctx.fillRect(6, -2, 9, 1);
                 }
                 ctx.restore();
-                ctx.fillStyle = "#3a2818"; ctx.fillRect(hubX - 1, hubY - 1, 2, 2);
+                ctx.fillStyle = "#3a2818"; ctx.fillRect(hubX - 1, hubY - 1, 3, 3);
               }
               const barW = 24, bx = x * T + 8 - barW / 2;
               const stockFrac = Math.max(0, Math.min(1, ms.wheat / C.MILL_STOCK_CAP));
-              const stockY = (y + 1) * T - 42;
+              const stockY = (y + 1) * T - 58; // zip 264 : au-dessus du sprite agrandi (-54)
               ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(bx, stockY, barW, 3);
               ctx.fillStyle = "#a9773f"; ctx.fillRect(bx, stockY, barW * stockFrac, 3);
               if (ms.nextAt) {
@@ -5680,13 +5706,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           const vp = isHost ? vv : smoothNpc("visitor:" + vv.rid, vv.x, vv.y, dt, true, !!vv.moving, (cx, cy) => canStand(w, cx, cy));
           const vx = vp.x, vy = vp.y;
           const ro = C.VISITOR_ROSTER[vv.rid] || C.VISITOR_ROSTER[0];
-          // Zip 258 : Eduardo "se présente au village sur le dos d'un cheval
-          // blanc" — tant qu'il est visiteur (pas encore résident), on dessine
-          // sa monture juste derrière lui (sprite horseWhite), sous le perso.
-          const onWhiteHorse = ro.skill === "voyager" && sprites.horseWhite;
+          // Zip 258/264 : Eduardo « se présente au village sur le dos d'un
+          // cheval blanc ». Zip 264 (demande Guillaume) : il chevauche
+          // désormais EXACTEMENT comme le fermier — on passe simplement
+          // mount:"white" à drawCharacter, qui compose la monture (galop
+          // horseWhiteRun) + la pose assise (buste + jambe fléchie) au bon
+          // ancrage. Plus de dessin manuel « cheval collé derrière ».
+          const onWhiteHorse = ro.skill === "voyager";
           draws.push({ y: (vy + 1) * T, fn: () => {
-            if (onWhiteHorse) { const hi = sprites.horseWhite; ctx.drawImage(hi, Math.round(vx * T - hi.width / 2 - 4), Math.round((vy + 1) * T - hi.height + 2)); }
-            drawCharacter({ id: "visitor" + vv.rid, name: ro.name, x: vx, y: vy, dir: vv.dir || 0, moving: !!vv.moving, animT: vv.animT || 0, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap }, false);
+            drawCharacter({ id: "visitor" + vv.rid, name: ro.name, x: vx, y: vy, dir: vv.dir || 0, moving: !!vv.moving, animT: vv.animT || 0, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap, mount: onWhiteHorse ? "white" : null }, false);
           } });
         }
         const residents = (st && st.residents) || [];
@@ -5828,12 +5856,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           const def = C.ARTISAN_BUILDINGS[bid], bimg = sprites.artisan && sprites.artisan[bid]; if (!bimg) continue;
           const bp = artisanPos(bid); // zip 259 : position déplaçable
           const bcx = (bp.x + def.w / 2) * T, bby = (bp.y + def.h) * T;
-          // Zip 261 : agrandissement au dessin (ARTISAN_DRAW_SCALE) — les
-          // bâtiments faisaient "stickers". Ancré par le bas-centre (le sol
-          // reste à bby), la collision (footprint) est inchangée.
+          // Zip 261/264 : agrandissement au dessin (ARTISAN_DRAW_SCALE, ramené
+          // à 1.15 avec les nouveaux sprites détaillés). Zip 264 : on ancre la
+          // LIGNE DE SOL du bâtiment (C.ARTISAN_FOOT[bid]) sur le bas du
+          // footprint (bby) plutôt que le bas de la toile — les nouvelles
+          // toiles portent toit/fumée/drapeau au-dessus et tommes/scie/établi
+          // débordant devant, donc le bas de toile n'est PLUS la ligne de sol.
+          // La collision (footprint) est inchangée.
           const sc = C.ARTISAN_DRAW_SCALE, dw = bimg.width * sc, dh = bimg.height * sc;
+          const footY = (C.ARTISAN_FOOT && typeof C.ARTISAN_FOOT[bid] === "number") ? C.ARTISAN_FOOT[bid] : bimg.height;
+          const topY = bby - footY * sc;
           draws.push({ y: bby, fn: () => {
-            ctx.drawImage(bimg, Math.round(bcx - dw / 2), Math.round(bby - dh), Math.round(dw), Math.round(dh));
+            ctx.drawImage(bimg, Math.round(bcx - dw / 2), Math.round(topY), Math.round(dw), Math.round(dh));
             if (bid === "beehive") { // abeilles tournant autour de la ruche (offsets mis à l'échelle)
               const t = performance.now() / 1000;
               for (let b = 0; b < 4; b++) {
@@ -6738,9 +6772,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const sheet = sprites.getChar(p.gender, p.outfit, p.overalls, p.cap);
       const row = p.dir === 0 ? 0 : p.dir === 1 ? 1 : 2;
       const frame = p.moving ? Math.floor((p.animT || 0) % 4) : 0;
-      const horse = (sharedRef.current.horses || []).find(h => h.rider === p.id || h.rider2 === p.id) || null;
-      const isPrimaryRider = horse && horse.rider === p.id;
-      const isPassenger = horse && horse.rider2 === p.id;
+      // Zip 264 (demande Guillaume) : Eduardo Da Fonseca chevauche EXACTEMENT
+      // comme le fermier (même pose assise, même galop), seule la robe du
+      // cheval change. On passe une monture COSMÉTIQUE via p.mount (ex.
+      // "white") : elle n'existe pas dans sharedRef.horses (Eduardo est un PNJ),
+      // on la traite donc comme un cavalier principal synthétique, en piochant
+      // les sprites horseWhite/horseWhiteRun au lieu de horse/horseRun.
+      const mount = p.mount || null;
+      const horse = mount ? null : ((sharedRef.current.horses || []).find(h => h.rider === p.id || h.rider2 === p.id) || null);
+      const isPrimaryRider = mount ? true : (horse && horse.rider === p.id);
+      const isPassenger = mount ? false : (horse && horse.rider2 === p.id);
       const riding = isPrimaryRider || isPassenger;
       const flip = p.dir === 2;
       // Le passager est assis juste derrière le cavalier principal sur la
@@ -6768,7 +6809,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (isPrimaryRider) {
         // Le cheval n'est dessiné qu'une fois, porté par le cavalier
         // principal, et se retourne avec lui selon le sens de la marche.
-        const hImg = p.moving ? sprites.horseRun[hFrame] : sprites.horse;
+        // Zip 264 : monture cosmétique blanche (Eduardo) -> jeu de sprites
+        // horseWhite/horseWhiteRun, sinon le cheval brun du fermier.
+        const hRun = mount === "white" ? sprites.horseWhiteRun : sprites.horseRun;
+        const hStill = mount === "white" ? sprites.horseWhite : sprites.horse;
+        const hImg = p.moving ? hRun[hFrame] : hStill;
         ctx.save();
         if (flip) { ctx.translate(basePx + 22, py - 6); ctx.scale(-1, 1); ctx.drawImage(hImg, 0, 0); }
         else ctx.drawImage(hImg, basePx - 6, py - 6);
@@ -8571,7 +8616,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   const built = sharedRef.current.crafts && sharedRef.current.crafts[bid] && sharedRef.current.crafts[bid].built;
                   return (
                     <div className="ferme-shop-row" key={"art" + bid}>
-                      <Sprite img={spritesReady ? spritesRef.current.artisan[bid] : null} w={34} h={30} />
+                      <Sprite img={spritesReady ? spritesRef.current.artisan[bid] : null} w={32} h={36} />
                       <div className="info"><b>{L.buildingName(bid)} — {"\u{1FA99}"} {def.cost}</b><span>{built ? L.artisanOwnedBtn : (bid === "sawmill" ? L.sawmillShopSub : L.craftName(bid === "beehive" ? "honey" : bid === "fromagerie" ? "cheeseWheel" : "pastry"))}</span></div>
                       <button disabled={built || hud.money < def.cost} onClick={() => buyArtisanBuilding(bid)}>{built ? L.artisanOwnedBtn : L.artisanBuyBtn}</button>
                     </div>

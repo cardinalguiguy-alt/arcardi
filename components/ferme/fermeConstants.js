@@ -264,15 +264,15 @@ export const PLAYER_SPEED = 5.2; // tuiles/seconde
 export const TOWN_SPEED_MULT = 1.45;
 export const POS_TICK_HZ = 8;        // FIX 243: 12 -> 8 Hz (economie position ; extrapolation cote rendu compense le ressenti)
 export const AOI_MARGIN_TILES = 8;   // FIX 242 (AOI): marge (tuiles) autour du viewport — pré-charge entités/joueurs juste avant qu'ils entrent à l'écran
-export const POS_KEEPALIVE_MS = 500;   // FIX 243: en mouvement continu (meme direction), on renvoie une correction au moins toutes les 500 ms
+export const POS_KEEPALIVE_MS = 800;   // FIX 243 (zip 264: 500 -> 800) : en mouvement continu (meme direction), correction au moins toutes les 800 ms. Le keep-alive n'est qu'un filet anti-derive (l'extrapolation cote rendu tient l'intervalle) : l'allonger coupe ~40% du trafic de position en marche droite SANS saccade (le rendu reste lisse, cf. advanceRemote).
 // Zip 247 : plafond de la vitesse ESTIMÉE d'un joueur distant (extrapolation,
 // voir le handler "pos"). L'ancienne valeur codée en dur (1.6) était déjà
 // INFÉRIEURE à la vitesse à cheval (HORSE_SPEED_MULT = 1.9) et le reste à
 // celle de Valley Town avec bonbon (1.45 * 1.5 = 2.175) : les joueurs
 // distants rapides traînaient donc visuellement derrière leur vraie position.
 export const POS_EXTRAP_SPEED_CAP = 2.4;
-export const POS_EXTRAP_MAX_MS = 600;  // FIX 243: duree max d'extrapolation d'un joueur distant sans nouveau paquet (anti-derive)
-export const POS_FAR_HZ = 1.5;       // FIX 242 (AOI): cadence de diffusion de position quand aucun autre joueur n'est à portée de vue (indication minimap seulement)   // fréquence de diffusion des positions (broadcast)
+export const POS_EXTRAP_MAX_MS = 900;  // FIX 243 (zip 264: 600 -> 900) : doit COUVRIR l'intervalle du keep-alive (POS_KEEPALIVE_MS = 800) pour qu'une marche en ligne droite reste lissee sans micro-gel entre deux paquets. Reste une borne dure anti-derive si un paquet est vraiment perdu.
+export const POS_FAR_HZ = 1;         // FIX 242 (AOI) — zip 264: 1.5 -> 1 Hz. Quand aucun autre joueur n'est à portée de vue, la position ne sert qu'à la minimap : 1 Hz suffit largement (aucun rendu du perso à l'écran). Économie directe sur les longues traversées solo-dans-le-groupe.   // fréquence de diffusion des positions (broadcast)
 export const ACT_RANGE = 1.8;    // portée d'action en tuiles
 
 // Couleurs de tenue attribuées aux joueurs (par ordre d'arrivée)
@@ -626,10 +626,10 @@ export const ANIMALS = [
   { id: 1, name: "Chèvre", nameEn: "Goat",  cost: 3200,  prodMs: 20 * MIN, prod: "Lait de chèvre",  prodEn: "Goat milk",   sell: 300,  edible: true,  energy: 22, body: "#d8cbb0", accent: "#7a6a52" },
   { id: 2, name: "Brebis", nameEn: "Sheep", cost: 4000,  prodMs: 45 * MIN, prod: "Laine",           prodEn: "Wool",        sell: 450,  edible: false, energy: 0,  body: "#f2f0ea", accent: "#c8c0b0" },
   { id: 3, name: "Cochon", nameEn: "Pig",   cost: 6000,  prodMs: 5 * H,    prod: "Truffe",          prodEn: "Truffle",     sell: 2900, edible: true,  energy: 28, body: "#e8a8b0", accent: "#c07882" },
-  // Zip 255 (demande Guillaume) : vache repassée à 1h réelle (l'affichage du
-  // shop arrondit prodMs à l'heure la plus proche — 30 min affichait "1h",
-  // ce qui ne correspondait pas à la cadence réelle).
-  { id: 4, name: "Vache",  nameEn: "Cow",   cost: 10000, prodMs: 1 * H,    prod: "Lait",            prodEn: "Milk",        sell: 600,  edible: true,  energy: 26, body: "#efe7dc", accent: "#5a4634" },
+  // Zip 255 : vache à 1h réelle. Zip 265 (demande Guillaume : « augmente le
+  // rendement du lait, toutes les 20 minutes par vache ») : cadence ramenée à
+  // 20 min réelles -> ×3 de lait par vache. Prix de vente inchangé (600).
+  { id: 4, name: "Vache",  nameEn: "Cow",   cost: 10000, prodMs: 20 * MIN, prod: "Lait",            prodEn: "Milk",        sell: 600,  edible: true,  energy: 26, body: "#efe7dc", accent: "#5a4634" },
 ];
 // Zip 254 (demande Guillaume) : echelle d'affichage par animal (rendu en jeu
 // uniquement — purement visuel, aucune incidence sur la logique/collisions,
@@ -696,9 +696,17 @@ export const BARN_LEVELS = [
   // il faut réunir une somme déterminée pour LANCER les travaux d'un palier,
   // payée dès que le bois/la pierre du palier sont réunis (voir
   // resolveBarnDeposit dans fermeEngine.js).
-  { level: 1, cost: { wood: 150, stone: 100, money: 10000 }, hits: 6, animalBonus: 6 },
-  { level: 2, cost: { wood: 250, stone: 180, money: 20000 }, hits: 8, animalBonus: 6 },
-  { level: 3, cost: { wood: 400, stone: 300, money: 50000 }, hits: 10, animalBonus: 8 },
+  // Zip 265 (demande Guillaume : « augmente la capacité de la grange pour
+  // accueillir 50 animaux ») : bonus relevés pour atteindre 50 au palier max
+  // (base MAX_ANIMALS 12 + 10 + 12 + 16 = 50). Progression : 12 (enclos) -> 22
+  // (niv.1) -> 34 (niv.2) -> 50 (niv.3). SANS surcoût realtime : les animaux ne
+  // sont PAS diffusés en continu (déambulation dérivée de l'horodatage, comme
+  // les cultures — voir animalPos) ; seuls des événements discrets (ajout,
+  // ramassage, déplacement) et le snapshot de join portent le tableau, un peu
+  // plus long mais envoyé rarement. Coûts (bois/pierre/or) inchangés.
+  { level: 1, cost: { wood: 150, stone: 100, money: 10000 }, hits: 6, animalBonus: 10 },
+  { level: 2, cost: { wood: 250, stone: 180, money: 20000 }, hits: 8, animalBonus: 12 },
+  { level: 3, cost: { wood: 400, stone: 300, money: 50000 }, hits: 10, animalBonus: 16 },
 ];
 export const MAX_ANIMALS = 12;      // limite d'animaux dans l'enclos, avant toute grange
 export const COLLECT_RANGE = 1.5;   // distance pour ramasser une production
@@ -1116,7 +1124,18 @@ export const ARTISAN_BUILDINGS = {
 // stickers") : facteur d'agrandissement au DESSIN des bâtiments d'artisans
 // (le sprite est dessiné à sa taille × ce facteur, ancré par le bas-centre).
 // N'affecte PAS la collision (footprint w×h en tuiles inchangé).
-export const ARTISAN_DRAW_SCALE = 1.75;
+// Zip 264 : les sprites de bâtiments d'artisans sont désormais le port EXACT
+// du .html (plus détaillés, dessinés à ~46 px de large en natif au lieu de 38).
+// L'ancien facteur 1.75 sur ces gros sprites les rendait « stickers » ; on
+// descend à 1.15 pour un rendu cohérent avec le footprint (3 tuiles ≈ 48 px).
+// Ajuster ICI si Guillaume veut les grossir/réduire d'un bloc.
+export const ARTISAN_DRAW_SCALE = 1.15;
+// Zip 264 : ligne de contact au sol DANS le sprite (coord. y de la base du
+// bâtiment, avant mise à l'échelle). Le rendu ancre ce y sur le bas du
+// footprint (au lieu du bas de la toile), pour que les bâtiments ne flottent
+// pas malgré des toiles plus hautes que le bâtiment (fumée/toit/drapeau au-
+// dessus, tommes/scie/établi débordant devant). Défaut = hauteur de la toile.
+export const ARTISAN_FOOT = { beehive: 31, fromagerie: 62, bakery: 62, sawmill: 58 };
 // Métier -> bâtiment (null = pas de bâtiment, travaille directement).
 // voyager (Eduardo) : pas de bâtiment, il travaille par voyages (commandes).
 // Zip 260 : lumberjack -> sawmill (le bûcheron s'ancre/rôde autour de sa
@@ -1236,7 +1255,7 @@ export const VISIT_POP_BONUS_MAX_MS = 3 * 60 * 1000; // popularity cap
 export const VISITOR_SPEED = 2.4;                 // tiles/s walking
 export const VISITOR_TRAIN_MS = 4500;             // train pulls in, doors, etc.
 export const VISITOR_WAIT_MS = 90 * 1000;         // legacy base wait (still the formula seed, now FLOORED below)
-export const VISITOR_NET_MS = 500;                // host broadcast throttle while a visitor exists
+export const VISITOR_NET_MS = 750;                // host broadcast throttle (zip 264: 500 -> 750, ~2 Hz -> ~1.33 Hz) pour visiteurs ET résidents baladeurs. Le rendu invité lisse ces PNJ via smoothNpc (glide+extrapolation, cf. FIX 246) : 1.33 Hz reste parfaitement fluide. Combiné à l'AOI-gate (zip 264), c'est le plus gros levier contre la fuite « résidents diffusés en continu ».
 // 2026-07 visitors update (zip 233, Guillaume's spec):
 export const VISITORS_MAX = 5;                    // hard cap of visitors on the farm at once
 export const VISITOR_WAIT_FLOOR_MS = 10 * 60 * 1000;   // 10 real minutes, hard FLOOR for every visit type

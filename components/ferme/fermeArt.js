@@ -903,109 +903,100 @@ export function buildSprites() {
   }
   // Zip 252 : ateliers d'artisans. Dessinés sur ~48x40, ancrés par le bas.
   function artisanBuildingSprite(id) {
-    // Zip 260 (demande Guillaume) : bâtiments d'artisans "poussés". Ruche
-    // INCHANGÉE (validée). Boulangerie + fromagerie passent en FAÇADE PIERRE
-    // (murs appareillés + chaînes d'angle claires) sur la même coquille
-    // mignonne que la gare (toit rouge à deux pans + épi doré). Ajout de la
-    // SCIERIE (toit foncé, scie circulaire au sol, outils en façade).
+    // Zip 264 (demande Guillaume) : boulangerie, scierie et fromagerie sont
+    // désormais le PORT EXACT du .html de référence (corrections_et_maisons_
+    // valley_town.html) — plus détaillés, moins « effet sticker ». Mêmes
+    // coordonnées de dessin, mêmes couleurs, mêmes helpers (roofCap/win/
+    // scallop/flowerbox/stoneWall). Les parties animées du mockup (fumée de
+    // cheminée, lame qui tourne) sont ici FIGÉES sur une frame représentative
+    // (le sprite est baké une fois). L'ancrage au sol passe par C.ARTISAN_FOOT
+    // (ligne de contact du bâtiment dans le sprite), pour qu'ils ne flottent
+    // pas malgré des toiles plus hautes. Ruche RÉDUITE (demande Guillaume).
+    const WALL = "#efe4c8", TIMBER = "#7a5330", ROOF = "#b5543c", ROOFL = "#c9694e", GLASS = "#8fc7ec", STONE = "#9a9aa2", GOLD = "#e8c860", AWN = "#c95a6a", AWNL = "#dd7284";
+    // Helpers repris tels quels du .html (mêmes signatures).
+    const roofCap = (g, X, Y, W, rc, rl) => { rc = rc || ROOF; rl = rl || ROOFL; const ax = X + W / 2, ay = Y - 15, ex = 6;
+      g.fillStyle = rc; g.beginPath(); g.moveTo(X - ex, Y + 2); g.lineTo(ax, ay); g.lineTo(X + W + ex, Y + 2); g.closePath(); g.fill();
+      g.fillStyle = rl; g.beginPath(); g.moveTo(X - 2, Y + 1); g.lineTo(ax, ay + 4); g.lineTo(X + W + 2, Y + 1); g.lineTo(X + W - 6, Y + 1); g.lineTo(ax, ay + 9); g.lineTo(X + 8, Y + 1); g.closePath(); g.fill();
+      P(g, X - ex, Y + 1, W + 2 * ex, 2, "#6a2c20"); P(g, ax - 1, ay - 4, 2, 5, TIMBER); P(g, ax - 2, ay - 5, 4, 2, GOLD); };
+    const win = (g, x, y) => { P(g, x - 1, y - 1, 12, 11, TIMBER); P(g, x, y, 10, 9, GLASS); P(g, x, y, 10, 2, "#a8d4f0"); P(g, x + 4, y, 1, 9, TIMBER); P(g, x, y + 4, 10, 1, TIMBER); };
+    const scallop = (g, x, y, n) => { g.fillStyle = AWN; for (let i = 0; i < n; i++) { g.beginPath(); g.arc(x + 2 + i * 4.4, y, 2.4, 0, Math.PI); g.fill(); } P(g, x - 1, y - 3, n * 4.4 + 2, 3, AWN); P(g, x - 1, y - 3, n * 4.4 + 2, 1, AWNL); };
+    const flowerbox = (g, x, y) => { P(g, x - 1, y, 12, 3, "#6b4a2e"); for (let f = 0; f < 5; f++) P(g, x + f * 2.4, y - 2, 2, 2, f % 2 ? "#e06a8a" : "#d84040"); P(g, x + 1, y - 1, 9, 1, "#4f7a4a"); };
+    const stoneWall = (g, X, Y, W, H) => { P(g, X, Y, W, H, "#d8c8a8");
+      for (let y = Y + 4; y < Y + H - 4; y += 5) P(g, X, y, W, 1, "#bda87e");
+      for (let y = Y; y < Y + H - 4; y += 5) { const off = ((((y - Y) / 5) | 0) % 2) ? 4 : 0; for (let x = X + off; x < X + W - 1; x += 8) P(g, x, y, 1, 5, "#bda87e"); }
+      P(g, X, Y + H - 4, W, 4, STONE); P(g, X, Y + H - 4, W, 1, "#b2b2ba");
+      for (let y = Y; y < Y + H - 4; y += 6) { P(g, X, y, 4, 5, "#ece1c6"); P(g, X + W - 4, y, 4, 5, "#ece1c6"); }
+      P(g, X, Y, W, 2, "#c2b088"); };
+
     if (id === "beehive") {
-      const [c, g] = cv(32, 40);
-      P(g, 13, 34, 6, 4, "#7a5330");                    // socle
-      P(g, 6, 30, 20, 5, "#c99a4a");                    // base de la ruche
-      P(g, 8, 24, 16, 6, "#d8a94e"); P(g, 10, 18, 12, 6, "#e0b558"); P(g, 12, 13, 8, 5, "#e8c162"); // paille empilée
-      for (let y = 14; y < 34; y += 3) P(g, 6, y, 20, 1, "#00000022"); // lignes de paille
-      P(g, 14, 27, 4, 3, "#3a2a18");                    // entrée
-      outlineSprite(g, 32, 40, "#5a3a1e");
+      // Zip 264 (demande Guillaume : « réduire nettement la taille de la
+      // ruche ») : petit skep de paille, ~20 px de large (contre 32 avant),
+      // pour ne plus écraser le farm market voisin.
+      const [c, g] = cv(28, 32);
+      P(g, 10, 28, 8, 3, "#7a5330");                    // socle bois
+      P(g, 5, 23, 18, 5, "#c99a4a");                    // base de la ruche
+      P(g, 6, 18, 16, 5, "#d8a94e"); P(g, 8, 14, 12, 5, "#e0b558"); P(g, 10, 10, 8, 4, "#e8c162"); P(g, 12, 7, 4, 3, "#efce76"); // paille empilée
+      for (let y = 9; y < 28; y += 3) P(g, 5, y, 18, 1, "#00000022"); // lignes de paille
+      P(g, 12, 24, 4, 3, "#3a2a18");                    // entrée
+      outlineSprite(g, 28, 32, "#5a3a1e");
       return c;
     }
+
     if (id === "fromagerie") {
-      const [c, g] = cv(48, 40);
-      // Murs en pierre appareillée (assises + joints décalés) + chaînes d'angle.
-      P(g, 5, 15, 38, 22, "#d8c8a8");
-      for (let y = 19; y < 33; y += 5) P(g, 5, y, 38, 1, "#bda87e");
-      for (let y = 15; y < 33; y += 5) { const off = ((((y - 15) / 5) | 0) % 2) ? 4 : 0; for (let x = 5 + off; x < 42; x += 8) P(g, x, y, 1, 5, "#bda87e"); }
-      P(g, 5, 33, 38, 4, "#9a9aa2"); P(g, 5, 33, 38, 1, "#b2b2ba");    // soubassement pierre
-      for (let y = 15; y < 33; y += 6) { P(g, 5, y, 4, 5, "#ece1c6"); P(g, 39, y, 4, 5, "#ece1c6"); } // chaînes d'angle
-      P(g, 5, 15, 38, 2, "#c2b088");                                   // linteau clair
-      // Toit rouge à deux pans + épi doré (signature gare).
-      g.fillStyle = "#b5543c"; g.beginPath(); g.moveTo(3, 16); g.lineTo(24, 3); g.lineTo(45, 16); g.closePath(); g.fill();
-      g.fillStyle = "#c9694e"; g.beginPath(); g.moveTo(3, 16); g.lineTo(24, 3); g.lineTo(24, 6); g.lineTo(8, 16); g.closePath(); g.fill();
-      P(g, 22, 4, 4, 3, "#e8c860");
-      // Fenêtres jumelles SYMÉTRIQUES, bien écartées de la porte.
-      const cwin = (x, y) => { P(g, x - 1, y - 1, 10, 10, "#7a5330"); P(g, x, y, 8, 8, "#8fc7ec"); P(g, x, y, 8, 2, "#a8d4f0"); P(g, x + 3, y, 1, 8, "#7a5330"); P(g, x, y + 3, 8, 1, "#7a5330"); };
-      cwin(7, 20); cwin(33, 20);
-      // Porte centrée.
-      P(g, 21, 24, 6, 13, "#7a5330"); P(g, 22, 26, 4, 11, "#8a6340"); P(g, 25, 31, 1, 2, "#e8c860");
-      // Enseigne meule centrée dans le pignon.
-      P(g, 23, 12, 2, 3, "#7a5330"); g.fillStyle = "#f2d873"; g.beginPath(); g.arc(24, 11, 3, 0, 7); g.fill();
-      g.fillStyle = "#e0b84a"; g.beginPath(); g.moveTo(24, 11); g.arc(24, 11, 3, -0.6, 0.6); g.closePath(); g.fill();
-      outlineSprite(g, 48, 40, "#6a4a2a");
-      // Tommes superposées DEVANT (après l'outline : posées au sol, sous les
-      // fenêtres, symétriques — demande Guillaume "des tommes superposées").
-      const tomme = (x, y, w) => { g.fillStyle = "#e7d49a"; g.fillRect(x - w, y - 1, 2 * w, 3); P(g, x - w, y + 2, 2 * w, 1, "#cdb26a"); P(g, x - 1, y - 1, 2, 1, "#f2e2b0"); };
-      tomme(11, 37, 4); tomme(11, 34, 3);
-      tomme(37, 37, 4); tomme(37, 34, 3);
-      // Drapeau de Savoie sur mât (croix blanche couppée sur fond rouge).
-      P(g, 2, 4, 1, 14, "#5a4530"); P(g, 3, 4, 11, 7, "#d21f2a"); P(g, 7, 6, 2, 4, "#ffffff"); P(g, 5, 7, 6, 2, "#ffffff");
+      // Port exact du mockup « p_cheese » (64x82).
+      const [c, g] = cv(64, 82); const X = 9, Y = 32, W = 46, H = 30, cxb = X + W / 2;
+      stoneWall(g, X, Y, W, H); roofCap(g, X, Y, W);
+      win(g, X + 3, Y + 8); win(g, X + W - 13, Y + 8);                 // fenêtres écartées, symétriques
+      P(g, cxb - 4, Y + 15, 8, H - 17, TIMBER); P(g, cxb - 3, Y + 17, 6, H - 19, "#8a6340"); P(g, cxb + 1, Y + 22, 1, 2, GOLD); // porte centrée
+      P(g, cxb - 1, Y - 6, 2, 4, TIMBER); g.fillStyle = "#f2d873"; g.beginPath(); g.arc(cxb, Y - 9, 4, 0, 7); g.fill();
+      g.fillStyle = "#e0b84a"; g.beginPath(); g.moveTo(cxb, Y - 9); g.arc(cxb, Y - 9, 4, -0.6, 0.6); g.closePath(); g.fill();
+      // tommes superposées devant (deux piles symétriques)
+      const tomme = (x, y, w) => { g.fillStyle = "#e7d49a"; g.beginPath(); g.ellipse(x, y, w, w * 0.42, 0, 0, 7); g.fill(); P(g, x - w, y - w * 0.42, w * 2, w * 0.42, "#e7d49a"); P(g, x - w, y, w * 2, w * 0.36, "#cdb26a"); g.fillStyle = "#dcc584"; g.beginPath(); g.moveTo(x, y - 1); g.lineTo(x + w, y - w * 0.42); g.lineTo(x + w, y); g.closePath(); g.fill(); };
+      const stack = (cx, by) => { tomme(cx, by, 7); tomme(cx, by - 4, 6); tomme(cx, by - 8, 5); };
+      stack(X + 9, Y + H + 7); stack(X + W - 9, Y + H + 7);
+      // drapeau de Savoie (croix blanche couppée / fond rouge)
+      P(g, X - 3, Y - 20, 1, 22, "#5a4530"); P(g, X - 2, Y - 20, 13, 9, "#d21f2a"); P(g, X + 3, Y - 18, 2, 5, "#fff"); P(g, X + 1, Y - 16, 6, 2, "#fff");
       return c;
     }
+
     if (id === "sawmill") {
-      const [c, g] = cv(48, 40);
-      // Coquille crème + colombages renforcés (lecture "atelier").
-      P(g, 5, 15, 38, 22, "#efe4c8");
-      P(g, 5, 33, 38, 4, "#9a9aa2"); P(g, 5, 33, 38, 1, "#b2b2ba");
-      P(g, 5, 15, 2, 18, "#7a5330"); P(g, 41, 15, 2, 18, "#7a5330"); P(g, 5, 15, 38, 2, "#7a5330");
-      P(g, 18, 15, 1, 18, "#6a4526"); P(g, 30, 15, 1, 18, "#6a4526");
-      // Toit FONCÉ (demande Guillaume) + épi.
-      g.fillStyle = "#8a3d2c"; g.beginPath(); g.moveTo(3, 16); g.lineTo(24, 3); g.lineTo(45, 16); g.closePath(); g.fill();
-      g.fillStyle = "#a04434"; g.beginPath(); g.moveTo(3, 16); g.lineTo(24, 3); g.lineTo(24, 6); g.lineTo(8, 16); g.closePath(); g.fill();
-      P(g, 22, 4, 4, 3, "#e8c860");
-      // Porte centrée.
-      P(g, 20, 24, 8, 13, "#7a5330"); P(g, 22, 26, 4, 11, "#8a6340"); P(g, 25, 31, 1, 2, "#e8c860");
-      // Outils en façade : hache (g), scie passe-partout (haut), maillet (d).
-      P(g, 9, 20, 1, 9, "#7a5330"); P(g, 7, 19, 4, 3, "#c9ccd2"); P(g, 7, 19, 1, 3, "#e6e9ee");
-      P(g, 14, 18, 16, 2, "#c9ccd2"); for (let i = 0; i < 7; i++) P(g, 15 + i * 2, 20, 1, 1, "#9aa0a8"); P(g, 13, 17, 2, 4, "#8a5a30"); P(g, 29, 17, 2, 4, "#8a5a30");
-      P(g, 38, 20, 1, 8, "#7a5330"); P(g, 36, 19, 5, 3, "#8a5a30"); P(g, 36, 19, 5, 1, "#a87745");
-      outlineSprite(g, 48, 40, "#5a3a1e");
-      // Scie circulaire AU SOL devant l'atelier (outil qui travaille) + bûche.
-      P(g, 12, 37, 24, 3, "#8a6340"); P(g, 12, 37, 24, 1, "#a87745");    // établi
-      P(g, 10, 34, 28, 3, "#b98a52"); P(g, 10, 34, 28, 1, "#d8a86a");    // bûche
-      P(g, 23, 34, 2, 3, "#6a4526");                                     // trait de coupe
-      g.fillStyle = "#d0d3d8"; g.beginPath(); g.arc(24, 34, 6, Math.PI, 2 * Math.PI); g.fill(); // lame (demi-disque émergeant)
-      for (let k = 0; k < 7; k++) { const a = Math.PI + k / 7 * Math.PI; P(g, Math.round(24 + Math.cos(a) * 6), Math.round(34 + Math.sin(a) * 6), 1, 1, "#8a8d94"); }
-      g.fillStyle = "#6a6d74"; g.beginPath(); g.arc(24, 34, 2, 0, 7); g.fill(); // moyeu
+      // Port exact du mockup « p_sawmill » (72x80), toit foncé + scie au sol.
+      const [c, g] = cv(72, 80); const X = 12, Y = 30, W = 46, H = 28;
+      P(g, X, Y, W, H, WALL); P(g, X, Y + H - 4, W, 4, STONE); P(g, X, Y + H - 4, W, 1, "#b2b2ba");
+      P(g, X, Y, 2, H - 4, TIMBER); P(g, X + W - 2, Y, 2, H - 4, TIMBER); P(g, X, Y, W, 2, TIMBER);
+      P(g, X + 16, Y, 1, H - 4, "#6a4526"); P(g, X + 32, Y, 1, H - 4, "#6a4526");
+      roofCap(g, X, Y, W, "#8a3d2c", "#a04434"); // toit foncé
+      P(g, X + W / 2 - 5, Y + 14, 10, H - 16, TIMBER); P(g, X + W / 2 - 3, Y + 16, 6, H - 18, "#8a6340"); P(g, X + W / 2 + 2, Y + 21, 1, 2, GOLD);
+      P(g, X + 6, Y + 7, 1, 11, "#7a5330"); P(g, X + 4, Y + 6, 4, 3, "#c9ccd2"); P(g, X + 4, Y + 6, 1, 3, "#e6e9ee");
+      P(g, X + 14, Y + 6, 20, 2, "#c9ccd2"); for (let i = 0; i < 9; i++) P(g, X + 15 + i * 2, Y + 8, 1, 1, "#9aa0a8"); P(g, X + 13, Y + 5, 2, 4, "#8a5a30"); P(g, X + 33, Y + 5, 2, 4, "#8a5a30");
+      P(g, X + 39, Y + 7, 1, 10, "#7a5330"); P(g, X + 37, Y + 6, 5, 3, "#8a5a30"); P(g, X + 37, Y + 6, 5, 1, "#a87745");
+      P(g, X + W + 2, Y + 18, 14, 5, "#b98a52"); P(g, X + W + 4, Y + 23, 12, 5, "#a87a44"); P(g, X + W + 2, Y + 18, 14, 1, "#d8a86a");
+      P(g, X + W + 4, Y + 20, 2, 2, "#7a5230"); P(g, X + W + 10, Y + 20, 2, 2, "#7a5230");
+      const tY = Y + H + 8, cx = X + 22;
+      P(g, X + 10, tY, 26, 6, "#8a6340"); P(g, X + 10, tY, 26, 1, "#a87745"); P(g, X + 12, tY + 6, 2, 4, "#6a4526"); P(g, X + 32, tY + 6, 2, 4, "#6a4526");
+      // Scie AU SOL — frame figée (angle 0) : bûche + lame circulaire dentée.
+      P(g, X + 8, tY - 4, 30, 4, "#b98a52"); P(g, X + 8, tY - 4, 30, 1, "#d8a86a"); P(g, cx - 1, tY - 4, 2, 4, "#6a4526");
+      g.save(); g.translate(cx, tY - 3); g.fillStyle = "#d0d3d8"; g.beginPath(); g.arc(0, 0, 7, 0, 7); g.fill();
+      g.fillStyle = "#8a8d94"; for (let k = 0; k < 14; k++) { const an = k / 14 * Math.PI * 2; g.beginPath(); g.moveTo(Math.cos(an) * 7, Math.sin(an) * 7); g.lineTo(Math.cos(an + 0.15) * 9, Math.sin(an + 0.15) * 9); g.lineTo(Math.cos(an + 0.3) * 7, Math.sin(an + 0.3) * 7); g.fill(); }
+      g.fillStyle = "#6a6d74"; g.beginPath(); g.arc(0, 0, 2.2, 0, 7); g.fill(); g.restore();
       return c;
     }
-    // bakery — Zip 260 (demande Guillaume) : FAÇADE PIERRE + cheminée COURTE
-    // emboîtée dans le toit (ne flotte plus). Vitrine garnie, auvent festonné,
-    // enseigne cupcake, coquille mignonne type gare.
-    const [c, g] = cv(48, 40);
-    // Murs pierre + chaînes d'angle + soubassement chaud.
-    P(g, 5, 15, 38, 22, "#d8c8a8");
-    for (let y = 19; y < 33; y += 5) P(g, 5, y, 38, 1, "#bda87e");
-    for (let y = 15; y < 33; y += 5) { const off = ((((y - 15) / 5) | 0) % 2) ? 4 : 0; for (let x = 5 + off; x < 42; x += 8) P(g, x, y, 1, 5, "#bda87e"); }
-    P(g, 5, 33, 38, 4, "#e7c79b");
-    for (let y = 15; y < 33; y += 6) { P(g, 5, y, 4, 5, "#ece1c6"); P(g, 39, y, 4, 5, "#ece1c6"); }
-    // Toit rouge + épi.
-    g.fillStyle = "#b5543c"; g.beginPath(); g.moveTo(3, 16); g.lineTo(24, 3); g.lineTo(45, 16); g.closePath(); g.fill();
-    g.fillStyle = "#c9694e"; g.beginPath(); g.moveTo(3, 16); g.lineTo(24, 3); g.lineTo(24, 6); g.lineTo(8, 16); g.closePath(); g.fill();
-    P(g, 22, 4, 4, 3, "#e8c860");
-    // Cheminée pierre COURTE, base emboîtée dans la pente du toit (~y13).
-    P(g, 33, 6, 5, 8, "#c9bfae"); P(g, 33, 6, 5, 2, "#a89e8c"); P(g, 32, 5, 7, 2, "#b0a692");
-    g.fillStyle = "rgba(235,235,235,0.85)"; g.beginPath(); g.arc(35, 3, 2, 0, 7); g.fill(); g.beginPath(); g.arc(38, 1, 1.5, 0, 7); g.fill();
-    // Auvent festonné rose au-dessus de la vitrine.
-    g.fillStyle = "#c95a6a"; for (let i = 0; i < 5; i++) { g.beginPath(); g.arc(9 + i * 4, 26, 2.2, 0, Math.PI); g.fill(); }
-    P(g, 6, 23, 22, 3, "#c95a6a"); P(g, 6, 23, 22, 1, "#dd7284");
-    // Grande vitrine garnie de pâtisseries.
-    P(g, 7, 27, 20, 7, "#8fc7ec"); P(g, 7, 27, 20, 1, "#6ba7d0"); P(g, 17, 27, 1, 7, "#7fb0c8");
-    P(g, 9, 30, 4, 3, "#e8b96a"); P(g, 9, 29, 4, 1, "#f6d9a4"); P(g, 10, 28, 2, 1, "#e87a9a");
-    P(g, 14, 30, 4, 3, "#d79a5a"); P(g, 14, 29, 4, 1, "#f2c98a"); P(g, 21, 30, 4, 3, "#e2a84a");
-    // Porte à droite.
-    P(g, 31, 25, 9, 12, "#7a5330"); P(g, 33, 27, 5, 8, "#8a6340"); P(g, 37, 31, 1, 2, "#e8c860");
-    // Enseigne cupcake suspendue.
-    P(g, 19, 17, 9, 5, "#8a5a36"); P(g, 23, 16, 2, 1, "#6a4426");
-    P(g, 22, 19, 4, 2, "#f0b7c2"); P(g, 22, 18, 4, 1, "#e88aa0"); P(g, 23, 17, 2, 1, "#c65a78");
-    outlineSprite(g, 48, 40, "#7a4a2a");
+
+    // bakery — port exact du mockup « p_bakery » (64x76), cheminée courte.
+    const [c, g] = cv(64, 76); const X = 9, Y = 32, W = 46, H = 30;
+    stoneWall(g, X, Y, W, H); roofCap(g, X, Y, W);
+    const chX = X + W - 15; P(g, chX, Y - 16, 8, 14, "#c9bfae"); for (let y = Y - 12; y < Y - 4; y += 4) P(g, chX, y, 8, 1, "#a89e8c");
+    P(g, chX - 1, Y - 18, 10, 3, "#b0a692"); P(g, chX - 1, Y - 18, 10, 1, "#c9bfae");
+    P(g, X + 4, Y + 9, 20, 10, TIMBER); P(g, X + 5, Y + 10, 18, 8, GLASS); P(g, X + 5, Y + 10, 18, 1, "#6ba7d0");
+    P(g, X + 8, Y + 13, 4, 4, "#e8b96a"); P(g, X + 8, Y + 12, 4, 1, "#f6d9a4"); P(g, X + 9, Y + 11, 2, 1, "#e87a9a");
+    P(g, X + 14, Y + 13, 4, 4, "#d79a5a"); P(g, X + 14, Y + 12, 4, 1, "#f2c98a"); P(g, X + 20, Y + 13, 3, 4, "#e2a84a");
+    scallop(g, X + 3, Y + 8, 6);
+    P(g, X + 28, Y + 16, 12, 14, TIMBER); P(g, X + 30, Y + 18, 8, 12, "#8a6340"); P(g, X + 37, Y + 24, 1, 2, GOLD);
+    P(g, X + 16, Y - 1, 10, 6, "#8a5a36"); P(g, X + 20, Y - 2, 2, 1, "#6a4426"); P(g, X + 19, Y + 2, 4, 2, "#f0b7c2"); P(g, X + 19, Y + 1, 4, 1, "#e88aa0"); P(g, X + 20, Y, 2, 1, "#c65a78");
+    flowerbox(g, X + 5, Y + 26);
+    // Fumée figée au-dessus de la cheminée (le mockup l'animait par rAF).
+    const cx = chX + 4; g.fillStyle = "rgba(235,235,235,0.8)";
+    g.beginPath(); g.arc(cx, Y - 20, 1.5, 0, 7); g.fill(); g.beginPath(); g.arc(cx + 1.6, Y - 25, 1.2, 0, 7); g.fill(); g.beginPath(); g.arc(cx - 1, Y - 30, 0.9, 0, 7); g.fill();
     return c;
   }
 
@@ -1576,29 +1567,34 @@ export function buildSprites() {
   // moins haut que la maison.
   function millSprite() {
     // Moulin refondu (maquette validée 2026-07) : tour en pierre, calotte
-    // bois, AILES de moulin à vent (lattes bois + toile écrue) remplaçant
-    // l'ancienne roue à aubes. Même canevas 30x36, même ancrage de rendu.
-    const [c, g] = cv(30, 36);
+    // bois, AILES de moulin à vent (lattes bois + toile écrue).
+    // Zip 264 (demande Guillaume : « augmenter la taille des moulins sans
+    // perdre en précision ») : redessiné à RÉSOLUTION NATIVE plus grande
+    // (44x54 au lieu de 30x36), donc ~1.5× plus grand à l'écran sans upscale
+    // flou. Design identique, tracé plus dense. Le rendu (FermeGame.js) reste
+    // centré sur x*T+8 et ancré en bas sur (y+1)*T ; les ailes tournantes et
+    // les jauges y sont recalées (hub à (y+1)*T-36).
+    const [c, g] = cv(44, 54);
     const r = makeRnd(3);
-    bStones(g, 9, 14, 12, 20, r, ["#b8b0a2", "#d0c8ba", "#a09888"], 4);
-    g.fillStyle = "#7a5330"; g.beginPath(); g.moveTo(7, 15); g.lineTo(15, 7); g.lineTo(23, 15); g.fill();
-    P(g, 8, 13, 14, 1, "#6a4426"); P(g, 10, 10, 10, 1, "#6a4426");
-    // 4 ailes en diagonale : latte bois + bande de toile
-    for (let i = 3; i < 13; i++) {
+    bStones(g, 13, 21, 18, 30, r, ["#b8b0a2", "#d0c8ba", "#a09888"], 6);
+    g.fillStyle = "#7a5330"; g.beginPath(); g.moveTo(10, 23); g.lineTo(22, 11); g.lineTo(34, 23); g.fill();
+    P(g, 12, 20, 20, 1, "#6a4426"); P(g, 15, 15, 15, 1, "#6a4426");
+    // 4 ailes en diagonale : latte bois épaisse + bande de toile écrue
+    for (let i = 4; i < 19; i++) {
       for (const sx of [1, -1]) for (const sy of [1, -1]) {
-        const xx = 15 + sx * i, yy = 12 + sy * i;
-        if (xx >= 0 && xx < 30 && yy >= 0 && yy < 36) {
-          P(g, xx, yy, 1, 1, "#5a4028");
-          const tx = xx + sx;
-          if (i >= 5 && tx >= 0 && tx < 30) P(g, tx, yy, 1, 1, i % 3 ? "#eae2cc" : "#d8cfb2");
+        const xx = 22 + sx * i, yy = 18 + sy * i;
+        if (xx >= 0 && xx < 44 && yy >= 0 && yy < 54) {
+          P(g, xx, yy, 2, 2, "#5a4028");
+          const tx = xx + sx * 2;
+          if (i >= 7 && tx >= 0 && tx < 44) P(g, tx, yy, 2, 2, i % 3 ? "#eae2cc" : "#d8cfb2");
         }
       }
     }
-    P(g, 14, 11, 2, 2, "#3a2818"); // moyeu
-    P(g, 12, 26, 6, 8, "#5a3d24"); P(g, 12, 26, 6, 1, "#6a4a2c"); // porte
-    P(g, 12, 18, 5, 4, "#cfe0e8"); P(g, 12, 18, 5, 1, "#3a3a40"); // fenêtre
+    P(g, 20, 16, 4, 4, "#3a2818"); // moyeu
+    P(g, 17, 39, 9, 12, "#5a3d24"); P(g, 17, 39, 9, 1, "#6a4a2c"); // porte
+    P(g, 18, 27, 7, 6, "#cfe0e8"); P(g, 18, 27, 7, 1, "#3a3a40"); // fenêtre
     // sac de farine contre l'entrée
-    P(g, 22, 28, 5, 6, "#d8b878"); P(g, 22, 27, 5, 2, "#b8912a");
+    P(g, 33, 42, 7, 9, "#d8b878"); P(g, 33, 41, 7, 3, "#b8912a");
     return c;
   }
 
@@ -1924,6 +1920,7 @@ house: house(),
     horse: horseSprite(0),
     horseRun: [horseSprite(0), horseSprite(1), horseSprite(2), horseSprite(3)], // cycle de galop (chantier 2026-07)
     horseWhite: horseSprite(0, "white"), // zip 258 : monture d'Eduardo (arrivée au village)
+    horseWhiteRun: [horseSprite(0, "white"), horseSprite(1, "white"), horseSprite(2, "white"), horseSprite(3, "white")], // zip 264 : cycle de galop blanc — Eduardo chevauche EXACTEMENT comme le fermier (même modèle assis), seule la robe change
     wolf: [wolfSprite(0), wolfSprite(1), wolfSprite(2), wolfSprite(3)],
     // Zip 235: winter swap. Same 4 frames, same anim, different pelt.
     snowLeopard: [snowLeopardSprite(0), snowLeopardSprite(1), snowLeopardSprite(2), snowLeopardSprite(3)],
