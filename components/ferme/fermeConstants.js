@@ -186,7 +186,12 @@ export const GEM_HOUSE_FAR_MULT = 1.6;   // multiplicateur maximal, loin de la m
 // plus rare, poids 0.08 dans C.GEMS), cohérent avec le statut de ressource
 // précieuse de l'or.
 export const GOLD_DROP_CHANCE = 0.05;
-export const GOLD_RIVER_RADIUS = 4; // en cases, autour du rocher miné
+// Zip 284 (demande Guillaume : "la proximité de la rivière pour les pépites
+// d'or doit être plus large") : passé de 4 à 8 cases — deux fois plus de
+// rochers autour de la rivière comptent désormais comme "près de l'eau"
+// pour la chance d'or, sans toucher aux chances elles-mêmes (GOLD_DROP_CHANCE/
+// GOLD_EXTREME_CHANCE inchangées).
+export const GOLD_RIVER_RADIUS = 8; // en cases, autour du rocher miné
 export const GOLD_PER_FIND = 1;
 // Zip 283 (demande Guillaume) : chance montée à 12% aux extrémités NORD et
 // SUD de la carte (bande de GOLD_EXTREME_BAND cases depuis le bord y=0 ou
@@ -194,6 +199,17 @@ export const GOLD_PER_FIND = 1;
 // rivière (GOLD_RIVER_RADIUS), ce boost ne s'applique jamais loin de l'eau.
 export const GOLD_EXTREME_CHANCE = 0.12;
 export const GOLD_EXTREME_BAND = 20; // en cases, depuis le haut/bas de la carte
+
+// Zip 284 (demande Guillaume : "plus de cailloux autour de la rivière, au
+// nord et sud de la map, qui respawn tous les jours quand l'utilisateur ne
+// regarde pas") : à chaque passage de jour (newDay, fermeEngine.js — déjà le
+// point où repousse un peu de nature loin du spawn), on ajoute EN PLUS des
+// rochers tirés spécifiquement près des berges, dans les mêmes bandes
+// nord/sud que le bonus d'or ci-dessus (GOLD_EXTREME_BAND), pour nourrir le
+// filon d'or élargi (GOLD_RIVER_RADIUS) en nouveaux rochers à miner. Valeurs
+// extrapolées (aucun chiffre précis demandé), à ajuster librement.
+export const RIVER_STONE_RESPAWN_PER_DAY = 10; // nombre de rochers ajoutés par jour, près de la rivière, nord+sud confondus
+export const RIVER_STONE_RESPAWN_RADIUS = 6;   // en cases, distance max au centre de la rivière (riverCenterAt) pour ce respawn ciblé
 
 // --- Poissons (pêche à la rivière) ---
 // Se mangent (rendent de l'énergie) OU se revendent au bac. Tirage pondéré.

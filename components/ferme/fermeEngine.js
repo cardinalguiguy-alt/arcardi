@@ -2033,6 +2033,30 @@ export function newDay(world, farmers, day, seed) {
       tiles.push(i);
     }
   }
+  // Zip 284 (demande Guillaume : "plus de cailloux autour de la rivière, au
+  // nord et sud de la map, ces cailloux respawn tous les jours quand
+  // l'utilisateur ne regarde pas") : en plus du repop généraliste ci-dessus
+  // (14 tuiles réparties sur toute la carte, loin du spawn), on ajoute ici
+  // RIVER_STONE_RESPAWN_PER_DAY rochers CIBLÉS près des berges, uniquement
+  // dans les bandes nord (y proche de 0) et sud (y proche de MAP_H-1) —
+  // mêmes bandes que le bonus d'or (GOLD_EXTREME_BAND) puisque ce sont ces
+  // rochers-là qu'on veut alimenter. Position tirée près du centre de la
+  // rivière à cette rangée (riverCenterAt) plutôt qu'au hasard sur toute la
+  // largeur, pour rester "autour de la rivière" comme demandé.
+  for (let k = 0; k < C.RIVER_STONE_RESPAWN_PER_DAY; k++) {
+    const north = rnd() < 0.5;
+    const y = north
+      ? Math.floor(rnd() * C.GOLD_EXTREME_BAND)
+      : H - 1 - Math.floor(rnd() * C.GOLD_EXTREME_BAND);
+    const cx = riverCenterAt(world, y);
+    const x = Math.round(cx + (rnd() - 0.5) * 2 * C.RIVER_STONE_RESPAWN_RADIUS);
+    if (!inMap(x, y)) continue;
+    const i = idx(x, y);
+    if (world.ground[i] === C.G_GRASS && world.objects[i] === C.O_NONE && !world.crops.has(i)) {
+      world.objects[i] = C.O_ROCK; world.objHp.set(i, C.ROCK_HP);
+      tiles.push(i);
+    }
+  }
   // Dégradation du pont bois (chantier 2026-07, demande Guillaume) : "une
   // fois qu'il est totalement construit, il perd deux tuiles par nuit, car il
   // est en bois" — ajusté ensuite par Guillaume ("trop fréquent sinon") à
