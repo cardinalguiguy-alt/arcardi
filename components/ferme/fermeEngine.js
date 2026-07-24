@@ -351,14 +351,21 @@ export function applyOverrides(world, saved) {
   if (saved.crops) for (const row of saved.crops) {
     const [i, t] = row;
     if (row.length >= 5) {
-      // Format d'un zip antérieur au 151 ([i,t,s,prog,watered], pousse par
-      // jour de jeu) : pas de conversion fiable vers le nouveau modèle en
-      // temps réel, on redémarre la pousse de cette culture à zéro (elle
-      // garde son type/emplacement, juste sa progression repart de zéro).
-      world.crops.set(i, { t, bankedMs: 0, wateredAt: null });
+      // Zip 287 (empilement de graines, n en 5e position) : depuis ce zip,
+      // serializeCrops écrit TOUJOURS [i,t,bankedMs,wateredAt,n] (longueur
+      // 5). L'ANCIEN format pré-151 avait aussi 5 éléments
+      // ([i,t,stage,prog,watered], pousse par jour de jeu) mais aucune
+      // sauvegarde de cette ancienneté (130+ zips plus tôt) ne peut
+      // raisonnablement subsister ; on ne distingue donc plus les deux ici
+      // (cropGrowState reste défensif sur des valeurs incohérentes de toute
+      // façon, voir son commentaire).
+      const [, , bankedMs, wateredAt, n] = row;
+      world.crops.set(i, { t, n: n || 1, bankedMs: bankedMs || 0, wateredAt: wateredAt || null });
     } else {
+      // [i,t,bankedMs,wateredAt] (longueur 4, zips 151 à 286) : pas de n
+      // sauvegardé -> défaut 1 (une seule culture par case, comme avant).
       const [, , bankedMs, wateredAt] = row;
-      world.crops.set(i, { t, bankedMs: bankedMs || 0, wateredAt: wateredAt || null });
+      world.crops.set(i, { t, n: 1, bankedMs: bankedMs || 0, wateredAt: wateredAt || null });
     }
   }
   world.mills = world.mills || new Map();
@@ -372,7 +379,7 @@ export function applyOverrides(world, saved) {
 
 export function serializeCrops(world) {
   const out = [];
-  for (const [i, c] of world.crops) out.push([i, c.t, c.bankedMs || 0, c.wateredAt || 0]);
+  for (const [i, c] of world.crops) out.push([i, c.t, c.bankedMs || 0, c.wateredAt || 0, c.n || 1]);
   return out;
 }
 
@@ -740,19 +747,34 @@ export function resolveAct(world, f, m) {
       break;
     case "plant": {
       const st = m.seed | 0;
-      if ((g === C.G_TILLED || g === C.G_WATERED) && !world.crops.has(i) && st >= 0 && st < C.CROPS.length && f.inv.seeds[st] > 0) {
-        f.inv.seeds[st]--;
-        world.crops.set(i, { t: st, bankedMs: 0, wateredAt: null });
-        res.cropTiles.push(i); res.invChanged = true;
+      if ((g === C.G_TILLED || g === C.G_WATERED) && st >= 0 && st < C.CROPS.length && f.inv.seeds[st] > 0) {
+        const existing = world.crops.get(i);
+        if (!existing) {
+          f.inv.seeds[st]--;
+          world.crops.set(i, { t: st, n: 1, bankedMs: 0, wateredAt: null });
+          res.cropTiles.push(i); res.invChanged = true;
+        } else if (existing.t === st && (existing.n || 1) < C.MAX_CROPS_PER_TILE) {
+          // Zip 287 : compléter une case déjà plantée (même graine, pas
+          // encore mûre — sinon le clic déclenche la récolte avant d'arriver
+          // ici, voir doAction/FermeGame.js) au lieu d'exiger une case vide.
+          f.inv.seeds[st]--;
+          existing.n = (existing.n || 1) + 1;
+          res.cropTiles.push(i); res.invChanged = true;
+        } else if (existing.t !== st) {
+          res.toast = "cropWrongType";
+        } else {
+          res.toast = "cropMaxed";
+        }
       }
       break;
     }
     case "harvest": {
       const c = world.crops.get(i);
       if (c && cropGrowState(c, now).mature) {
+        const n = c.n || 1;
         world.crops.delete(i); world.ground[i] = C.G_TILLED;
-        f.inv.crops[c.t]++;
-        res.cropTiles.push(i); res.tiles.push(i); res.fx.push({ k: "harvest", x, y, crop: c.t }); res.invChanged = true;
+        f.inv.crops[c.t] += n;
+        res.cropTiles.push(i); res.tiles.push(i); res.fx.push({ k: "harvest", x, y, crop: c.t, n }); res.invChanged = true;
       }
       break;
     }
@@ -1278,10 +1300,14 @@ export function gregTill(world, i) {
 // Plantation d'une case par Greg (le coût en pièces a déjà été prélevé au
 // moment de l'ordre, voir hostHandleReqUnsafe cas "gregOrder" — Greg ne
 // consomme pas l'inventaire de graines d'un joueur, c'est un stock commun).
+// Zip 287 : Greg cible toujours une case VIDE (via findFreeGrassTiles), il
+// ne complète pas encore une case déjà plantée jusqu'à MAX_CROPS_PER_TILE
+// (contrairement au joueur, voir resolveAct cas "plant") — n:1 explicite ici
+// pour la cohérence du champ, à étendre plus tard si besoin.
 export function gregPlant(world, i, cropIdx) {
   const g = world.ground[i];
   if ((g === C.G_TILLED || g === C.G_WATERED) && !world.crops.has(i)) {
-    world.crops.set(i, { t: cropIdx, bankedMs: 0, wateredAt: null }); return true;
+    world.crops.set(i, { t: cropIdx, n: 1, bankedMs: 0, wateredAt: null }); return true;
   }
   return false;
 }
@@ -2946,7 +2972,7 @@ export function applyHostileDamage(w, s, rnd, rid) {
     const k = Math.floor(r() * cropTiles.length);
     const i = cropTiles.splice(k, 1)[0];
     const c = w.crops.get(i);
-    ruined.push({ i, c: { t: c.t, bankedMs: c.bankedMs || 0, wateredAt: c.wateredAt || null } });
+    ruined.push({ i, c: { t: c.t, n: c.n || 1, bankedMs: c.bankedMs || 0, wateredAt: c.wateredAt || null } });
     w.crops.delete(i);
   }
   const v = getVisitor(s, rid);
@@ -2971,7 +2997,7 @@ export function resolveRepairResult(w, s, playerId, win, onlineCount) {
   if (d.wins < needed) return { done: false, patches: null, progress: d.wins, needed };
   s.money += d.stolen;
   const patches = [];
-  for (const rn of d.ruined) { w.crops.set(rn.i, { t: rn.c.t, bankedMs: rn.c.bankedMs, wateredAt: rn.c.wateredAt }); patches.push({ i: rn.i, c: rn.c }); }
+  for (const rn of d.ruined) { w.crops.set(rn.i, { t: rn.c.t, n: rn.c.n || 1, bankedMs: rn.c.bankedMs, wateredAt: rn.c.wateredAt }); patches.push({ i: rn.i, c: rn.c }); }
   const restored = { stolen: d.stolen, crops: d.ruined.length };
   s.station.damage = null;
   return { done: true, patches, restored };

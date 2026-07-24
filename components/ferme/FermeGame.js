@@ -1382,7 +1382,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     } else if (req.kind === "act") {
       const r = E.resolveAct(w, f, req);
       for (const i of r.tiles) { recordTileOverride(i); out.tiles.push({ i, g: w.ground[i], o: w.objects[i], hp: w.objHp.get(i) }); }
-      for (const i of r.cropTiles) { const c = w.crops.get(i); out.crops.push({ i, c: c ? { t: c.t, bankedMs: c.bankedMs, wateredAt: c.wateredAt } : null }); }
+      for (const i of r.cropTiles) { const c = w.crops.get(i); out.crops.push({ i, c: c ? { t: c.t, n: c.n || 1, bankedMs: c.bankedMs, wateredAt: c.wateredAt } : null }); }
       out.fx = r.fx;
       if (r.invChanged) out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
       if (r.toast) out.toast = { id: f.id, key: r.toast };
@@ -2831,7 +2831,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       else if (tl.o === C.O_STUMP) w.objHp.set(tl.i, 2);
       minimapDirtyRef.current = true;
     }
-    if (w && p.crops) for (const cr of p.crops) { if (cr.c) w.crops.set(cr.i, { t: cr.c.t, bankedMs: cr.c.bankedMs || 0, wateredAt: cr.c.wateredAt || null }); else w.crops.delete(cr.i); }
+    if (w && p.crops) for (const cr of p.crops) { if (cr.c) w.crops.set(cr.i, { t: cr.c.t, n: cr.c.n || 1, bankedMs: cr.c.bankedMs || 0, wateredAt: cr.c.wateredAt || null }); else w.crops.delete(cr.i); }
     // Moulins (chantier 2026-07) : [i, wheat, nextAt] par tuile changée
     // (dépôt de blé côté joueur, ou production côté tick hôte 1 Hz — voir
     // hostHandleReqUnsafe et le dayTimer plus bas). Même mécanique que
@@ -2962,7 +2962,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const w = worldRef.current; if (!w) return;
     const s = sharedRef.current; s.day = p.day; s.dayStartAt = p.dayStartAt;
     if (p.tiles) for (const tl of p.tiles) { w.ground[tl.i] = tl.g; w.objects[tl.i] = tl.o; if (tl.o !== C.O_NONE && tl.o !== C.O_STUMP) w.objHp.set(tl.i, tl.o === C.O_ROCK ? C.ROCK_HP : C.TREE_HP); minimapDirtyRef.current = true; }
-    if (p.crops) for (const cr of p.crops) { if (cr.c) w.crops.set(cr.i, { t: cr.c.t, bankedMs: cr.c.bankedMs || 0, wateredAt: cr.c.wateredAt || null }); else w.crops.delete(cr.i); }
+    if (p.crops) for (const cr of p.crops) { if (cr.c) w.crops.set(cr.i, { t: cr.c.t, n: cr.c.n || 1, bankedMs: cr.c.bankedMs || 0, wateredAt: cr.c.wateredAt || null }); else w.crops.delete(cr.i); }
     // Énergie restaurée pour tous (accord avec l'hôte).
     energyRef.current = C.MAX_ENERGY; setMyEnergy(C.MAX_ENERGY);
     if (p.animals) { sharedRef.current.animals = p.animals; syncBuildings(); }
@@ -2977,7 +2977,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (key === "petCaught")     return L.petCaughtToast(C.petName(n, lang === "en"));
     if (key === "petReleased")   return L.bagReleasedToast(C.petName(n, lang === "en"));
     if (key === "bagFull")       return L.bagPetsFull(C.MAX_PETS);
-    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, noMillStock: L.toastNoMillStock, millNotEmpty: L.toastMillNotEmpty, noWheatToDeposit: L.toastNoWheatToDeposit, millFull: L.toastMillFull, actionFailed: L.toastActionFailed, coopNone: L.toastCoopNone, farCoop: L.toastFarCoop, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull, notInjured: L.toastNotInjured, noHealKit: L.toastNoHealKit, healTooFar: L.toastHealTooFar, gregNotHired: L.toastGregNotHired, gregNoRoom: L.toastGregNoRoom, gregNoFertilizer: L.toastGregNoFertilizer, soanNotHired: L.toastSoanNotHired, soanNoRiver: L.toastSoanNoRiver, farCauldron: L.toastFarCauldron, noFishToDeposit: L.toastNoFishToDeposit, cauldronMissing: L.toastCauldronMissing, cauldronAlreadyTaken: L.toastCauldronAlreadyTaken, noCauldronStock: L.toastNoCauldronStock, cauldronNotEmpty: L.toastCauldronNotEmpty, cauldronBrewing: L.toastCauldronBrewing, cauldronNothingToCollect: L.toastCauldronNothingToCollect, cauldronHasEnough: L.toastCauldronHasEnough, visitorNotEnough: L.visitorNotEnough, decorNone: L.decorNone, decorPicked: L.decorPicked, objReturned: L.objReturned, residentNoRoom: L.residentNoRoom, artisanNoResident: L.artisanNoResident, voyagerBusy: L.voyagerBusyToast, kickVoted: L.kickVotedToast, jewelryNoGold: L.toastJewelryNoGold, jewelryNoGem: L.toastJewelryNoGem }[key] || "";
+    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, noMillStock: L.toastNoMillStock, millNotEmpty: L.toastMillNotEmpty, noWheatToDeposit: L.toastNoWheatToDeposit, millFull: L.toastMillFull, actionFailed: L.toastActionFailed, coopNone: L.toastCoopNone, farCoop: L.toastFarCoop, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull, notInjured: L.toastNotInjured, noHealKit: L.toastNoHealKit, healTooFar: L.toastHealTooFar, gregNotHired: L.toastGregNotHired, gregNoRoom: L.toastGregNoRoom, gregNoFertilizer: L.toastGregNoFertilizer, soanNotHired: L.toastSoanNotHired, soanNoRiver: L.toastSoanNoRiver, farCauldron: L.toastFarCauldron, noFishToDeposit: L.toastNoFishToDeposit, cauldronMissing: L.toastCauldronMissing, cauldronAlreadyTaken: L.toastCauldronAlreadyTaken, noCauldronStock: L.toastNoCauldronStock, cauldronNotEmpty: L.toastCauldronNotEmpty, cauldronBrewing: L.toastCauldronBrewing, cauldronNothingToCollect: L.toastCauldronNothingToCollect, cauldronHasEnough: L.toastCauldronHasEnough, visitorNotEnough: L.visitorNotEnough, decorNone: L.decorNone, decorPicked: L.decorPicked, objReturned: L.objReturned, residentNoRoom: L.residentNoRoom, artisanNoResident: L.artisanNoResident, voyagerBusy: L.voyagerBusyToast, kickVoted: L.kickVotedToast, jewelryNoGold: L.toastJewelryNoGold, jewelryNoGem: L.toastJewelryNoGem, cropWrongType: L.toastCropWrongType, cropMaxed: L.toastCropMaxed }[key] || "";
   }
 
   // -------- Hôte : boucle temps + persistance --------
@@ -5439,6 +5439,28 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           const cropSprites = sprites.crops[c.t] || sprites.crops[0];
           const cropImg = cropSprites && cropSprites[gs.stage];
           if (cropImg) ctx.drawImage(cropImg, x * T, y * T);
+          // Zip 288 (demande Guillaume : "l'affichage doit être très clair
+          // pour comprendre que chaque case a 5 graines") : pastille "n/5"
+          // TOUJOURS visible sur une case plantée (avant zip 288 : seulement
+          // à partir de n>1), fond plein pour rester lisible à la petite
+          // taille de tuile (T=16px, voir C.TILE), et teinte dorée dès que la
+          // case est pleine (n===MAX_CROPS_PER_TILE) pour signaler d'un coup
+          // d'œil qu'il n'y a plus de place. Toujours un seul sprite de
+          // culture par case (inchangé, voir zip 287) — seul ce badge change.
+          {
+            const n = c.n || 1, maxN = C.MAX_CROPS_PER_TILE;
+            const label = n + "/" + maxN;
+            const full = n >= maxN;
+            ctx.font = "bold 8px sans-serif";
+            const tw = ctx.measureText(label).width;
+            const bx = x * T + T - tw - 4, by = y * T + T - 9;
+            ctx.fillStyle = full ? "rgba(214,168,30,0.92)" : "rgba(0,0,0,0.68)";
+            ctx.fillRect(bx - 1, by - 1, tw + 3, 9);
+            ctx.textAlign = "left"; ctx.textBaseline = "top";
+            ctx.fillStyle = full ? "#3a2c05" : "#fff";
+            ctx.fillText(label, bx, by);
+            ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+          }
           if (gs.mature) {
             // Bulle "prête à récolter" : flotte doucement au-dessus de la case.
             const bob = Math.sin(now / 260) * 1.5;
@@ -7827,7 +7849,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       case "mine": for (let i = 0; i < 5; i++) fx.push({ ...base, kind: "p", col: "#a2a2aa", vx: (Math.random() - .5) * 3, vy: -Math.random() * 3, life: .6 }); break;
       case "treedown": fx.push({ ...base, kind: "txt", txt: L.fxWood(m.wood), col: "#ffdf80", life: 1.4 }); break;
       case "rockdown": fx.push({ ...base, kind: "txt", txt: L.fxStone(C.ROCK_STONE), col: "#d0d0e0", life: 1.4 }); break;
-      case "harvest": fx.push({ ...base, kind: "txt", txt: L.fxHarvest(cropName(m.crop)), col: "#a8f080", life: 1.4 }); break;
+      case "harvest": fx.push({ ...base, kind: "txt", txt: L.fxHarvest(cropName(m.crop), m.n), col: "#a8f080", life: 1.4 }); break;
       case "sell": fx.push({ ...base, kind: "txt", txt: L.fxGold(m.gain), col: "#ffe060", life: 1.8 }); break;
       case "eat": fx.push({ ...base, kind: "txt", txt: L.fxEat, col: "#ffd0a0", life: 1 }); break;
       case "gem": {

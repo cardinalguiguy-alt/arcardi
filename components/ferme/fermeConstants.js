@@ -144,6 +144,19 @@ export const WATER_VALID_MS = 10 * H;
 // (WATER_VALID_MS) — voir E.cropGrowState (champ `wetness`) et le rendu du
 // sol dans FermeGame.js.
 export const WATER_DARK_MS = 3 * H;
+// Zip 287 (demande Guillaume : "pouvoir semer 5 graines par case, pour
+// gagner de l'espace, une graine par case c'est beaucoup trop peu, ça
+// étend le champ exponentiellement") : une case plantée garde maintenant un
+// compteur `n` (1 à MAX_CROPS_PER_TILE, même TYPE de culture uniquement,
+// voir resolveAct cas "plant"/"harvest", fermeEngine.js) — semer plusieurs
+// fois sur la même case déjà plantée (même graine, tant que non mûre)
+// l'incrémente au lieu d'exiger une case libre supplémentaire ; récolter
+// rend n cultures d'un coup au lieu d'une seule. La pousse (durée, arrosage)
+// reste UNE SEULE minuterie par case, partagée par tout ce qui y est semé —
+// simplification volontaire (semer un complément en cours de pousse profite
+// du temps déjà écoulé sur la case, pas de pousse séparée par graine).
+// Valeur extrapolée depuis la demande ("5 graines par case").
+export const MAX_CROPS_PER_TILE = 5;
 
 // --- Gemmes rares (trouvées en cassant des rochers) ---
 // Chance de tomber sur une gemme quand un rocher est détruit. Tirage pondéré :
