@@ -257,7 +257,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [house, setHouse] = useState({ level: 1, upgradeUntil: 0 }); // miroir React de sharedRef.current.house (maison à niveaux, 2026-07)
   const [gems, setGems] = useState(() => C.GEMS.map(() => 0)); // miroir React de sharedRef.current.gems (pool commun à la salle)
   const [flour, setFlour] = useState(0); // miroir React de sharedRef.current.flour (sacs de farine, pool commun à la salle, chantier 2026-07)
-  const [gregStock, setGregStock] = useState(() => ({ wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0) })); // miroir React de sharedRef.current.gregStock (bois/pierre récoltés par Greg + engrais acheté + poissons pêchés par Soan, pool commun, chantier 2026-07)
+  const [gregStock, setGregStock] = useState(() => ({ wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) })); // miroir React de sharedRef.current.gregStock (bois/pierre récoltés par Greg + engrais acheté + poissons pêchés par Soan, pool commun, chantier 2026-07)
   const [fertilizerShop, setFertilizerShop] = useState(() => ({ stock: 0, lastRestockDay: 0 })); // miroir React de sharedRef.current.fertilizerShop (stock boutique de l'engrais, chantier 2026-07)
   // Défi "chasse aux lapins" (chantier 2026-07, demande Guillaume) : miroir
   // React de sharedRef.current.rabbitChallenge (null si aucun défi en cours),
@@ -317,7 +317,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const meRef = useRef(null);
   const playersRef = useRef(new Map()); // id -> remote farmer render data
   const farmersRef = useRef({});        // hôte : id -> état privé arbitré
-  const sharedRef = useRef({ seed: 0, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), salveCraft: E.newSalveCraftState(), house: { level: 1, upgradeUntil: 0 }, evilMonsters: [], flour: 0, gregStock: { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0) }, fertilizerShop: { stock: 0, lastRestockDay: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], rabbitChallenge: null, greg: null, soan: null, station: E.newStationState(), decor: [], crafts: E.newCrafts(), craftStock: E.newCraftStock() });
+  const sharedRef = useRef({ seed: 0, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), salveCraft: E.newSalveCraftState(), house: { level: 1, upgradeUntil: 0 }, evilMonsters: [], flour: 0, gregStock: { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) }, fertilizerShop: { stock: 0, lastRestockDay: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], rabbitChallenge: null, greg: null, soan: null, harald: null, station: E.newStationState(), decor: [], crafts: E.newCrafts(), craftStock: E.newCraftStock() });
   const invRef = useRef(null);
   const toolsRef = useRef({ hoe: 1, can: 1, axe: 1, pick: 1 });
   const energyRef = useRef(C.MAX_ENERGY);
@@ -379,6 +379,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const evilMonstersAccumRef = useRef(0); // hôte : throttle réseau des créatures maléfiques partagées (2026-07)    // accumulateur (secondes), même throttle réseau pour les lapins simulés côté hôte
   const gregAccumRef = useRef(0);      // accumulateur (secondes), même throttle réseau pour Greg simulé côté hôte
   const soanAccumRef = useRef(0);      // accumulateur (secondes), même throttle réseau pour Soan simulé côté hôte
+  const haraldAccumRef = useRef(0);    // zip 260 : même throttle réseau pour Harald (agent d'élevage) simulé côté hôte
   // FIX 246 : état de lissage des PNJ/bêtes côté invité, PERSISTANT (survit
   // au remplacement en bloc de greg/soan/wolves/rabbits par applyDeltas à
   // 2 Hz — c'est cette perte d'état qui rendait l'ancien easing g.rx/g.ry
@@ -578,7 +579,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         flour: saved.flour || 0,
         // Stock commun de bois/pierre récoltés par Greg (chantier 2026-07,
         // "étendre son champ") : survit à une reprise, comme flour/gems.
-        gregStock: { wood: (saved.gregStock && saved.gregStock.wood) || 0, stone: (saved.gregStock && saved.gregStock.stone) || 0, fertilizer: (saved.gregStock && saved.gregStock.fertilizer) || 0, fish: C.FISH.map((_, i) => (saved.gregStock && saved.gregStock.fish && saved.gregStock.fish[i]) || 0) },
+        gregStock: { wood: (saved.gregStock && saved.gregStock.wood) || 0, stone: (saved.gregStock && saved.gregStock.stone) || 0, fertilizer: (saved.gregStock && saved.gregStock.fertilizer) || 0, fish: C.FISH.map((_, i) => (saved.gregStock && saved.gregStock.fish && saved.gregStock.fish[i]) || 0), animals: C.ANIMALS.map((_, i) => (saved.gregStock && saved.gregStock.animals && saved.gregStock.animals[i]) || 0) },
         // Boutique d'engrais (chantier 2026-07, suite plan validé) : survit à
         // une reprise comme gregStock (le cycle de restock continue depuis
         // lastRestockDay, aucun rattrapage spécial nécessaire).
@@ -606,9 +607,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         // n'ayant pas de sens à restaurer tel quel.
         soan: (saved.soan && saved.soan.expiresAt > Date.now())
           ? { ...saved.soan, phase: "roam", roamTarget: null, nextRoamAt: 0, riverSpot: null } : null,
+        // Zip 260 : Harald (agent d'élevage) — même principe que Soan : contrat
+        // 24h qui DOIT survivre à une reprise, repart en rôdaille. Le
+        // rattrapage HORS-LIGNE (crédit des productions manquées au pool
+        // commun) est fait juste après, via E.haraldCatchup.
+        harald: (saved.harald && saved.harald.expiresAt > Date.now())
+          ? { ...saved.harald, phase: "roam", roamTarget: null, nextRoamAt: 0, nextRoundAt: 0 } : null,
       };
       // Les cavaliers repartent à pied à la reprise (aucun joueur monté au chargement).
       for (const h of sharedRef.current.horses) { h.rider = null; h.rider2 = null; h.callTarget = null; }
+      // Zip 260 : rattrapage hors-ligne de l'agent d'élevage (crédite au pool
+      // commun les productions animales manquées pendant l'absence, plafonné).
+      E.haraldCatchup(sharedRef.current, Date.now());
       farmersRef.current = saved.farmers || {};
       // Correctif 2026-07 ("le chaudron est toujours trouvable") : filet de
       // normalisation — si un chaudron est DÉJÀ posé quelque part sur la
@@ -639,7 +649,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       worldRef.current = E.generateWorld(seed);
       for (const ci of E.clearStationArea(worldRef.current)) recordTileOverride(ci); // 2026-07 station update
       overridesRef.current = { ground: {}, object: {} };
-      sharedRef.current = { seed, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), salveCraft: E.newSalveCraftState(), house: { level: 1, upgradeUntil: 0 }, evilMonsters: [], gems: C.GEMS.map(() => 0), flour: 0, gregStock: { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0) }, fertilizerShop: { stock: 0, lastRestockDay: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], rabbitChallenge: null, greg: null, soan: null, station: E.newStationState() };
+      sharedRef.current = { seed, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), salveCraft: E.newSalveCraftState(), house: { level: 1, upgradeUntil: 0 }, evilMonsters: [], gems: C.GEMS.map(() => 0), flour: 0, gregStock: { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) }, fertilizerShop: { stock: 0, lastRestockDay: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], rabbitChallenge: null, greg: null, soan: null, harald: null, station: E.newStationState() };
       farmersRef.current = {};
       // Crée tout de suite l'enregistrement pour réserver le code.
       persistFarm();
@@ -665,7 +675,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     setHouse(sharedRef.current.house || { level: 1, upgradeUntil: 0 });
     setGems(sharedRef.current.gems);
     setFlour(sharedRef.current.flour || 0);
-    setGregStock(sharedRef.current.gregStock || { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0) });
+    setGregStock(sharedRef.current.gregStock || { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) });
     setFertilizerShop(sharedRef.current.fertilizerShop || { stock: 0, lastRestockDay: 0 });
     setRabbitChallenge(sharedRef.current.rabbitChallenge);
     syncBuildings();
@@ -763,12 +773,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       evilMonsters: payload.evilMonsters || [], // créatures maléfiques partagées (2026-07)
       gems: migrateGems(payload),
       flour: payload.flour || 0,
-      gregStock: { wood: (payload.gregStock && payload.gregStock.wood) || 0, stone: (payload.gregStock && payload.gregStock.stone) || 0, fertilizer: (payload.gregStock && payload.gregStock.fertilizer) || 0, fish: C.FISH.map((_, i) => (payload.gregStock && payload.gregStock.fish && payload.gregStock.fish[i]) || 0) },
+      gregStock: { wood: (payload.gregStock && payload.gregStock.wood) || 0, stone: (payload.gregStock && payload.gregStock.stone) || 0, fertilizer: (payload.gregStock && payload.gregStock.fertilizer) || 0, fish: C.FISH.map((_, i) => (payload.gregStock && payload.gregStock.fish && payload.gregStock.fish[i]) || 0), animals: C.ANIMALS.map((_, i) => (payload.gregStock && payload.gregStock.animals && payload.gregStock.animals[i]) || 0) },
       fertilizerShop: { stock: (payload.fertilizerShop && payload.fertilizerShop.stock) || 0, lastRestockDay: (payload.fertilizerShop && payload.fertilizerShop.lastRestockDay) || 0 },
       wolves: payload.wolves || [], wolfNight: { active: !!(payload.wolves && payload.wolves.length), kills: 0 },
       rabbits: payload.rabbits || [], rabbitChallenge: payload.rabbitChallenge || null,
       greg: payload.greg || null,
       soan: payload.soan || null,
+      harald: payload.harald || null, // zip 260
       // 2026-07 station update: mid-session snapshot keeps the live visitor,
       // with host-clock timestamps relocated (same discipline as house).
       station: E.migrateStation(payload.station, payload.hostNow),
@@ -809,7 +820,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     setHouse(sharedRef.current.house || { level: 1, upgradeUntil: 0 });
     setGems(sharedRef.current.gems);
     setFlour(sharedRef.current.flour || 0);
-    setGregStock(sharedRef.current.gregStock || { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0) });
+    setGregStock(sharedRef.current.gregStock || { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) });
     setFertilizerShop(sharedRef.current.fertilizerShop || { stock: 0, lastRestockDay: 0 });
     setRabbitChallenge(sharedRef.current.rabbitChallenge);
     syncBuildings();
@@ -991,7 +1002,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       crops: worldRef.current ? E.serializeCrops(worldRef.current) : [],
       mills: worldRef.current ? E.serializeMills(worldRef.current) : [],
       farmers: farmersRef.current,
-      horses: s.horses, animals: s.animals, wellBuilt: s.wellBuilt, coop: s.coop, barn: s.barn, salveCraft: s.salveCraft, house: s.house, evilMonsters: s.evilMonsters, gems: s.gems, flour: s.flour, gregStock: s.gregStock, fertilizerShop: s.fertilizerShop, wolves: s.wolves, greg: s.greg, soan: s.soan,
+      horses: s.horses, animals: s.animals, wellBuilt: s.wellBuilt, coop: s.coop, barn: s.barn, salveCraft: s.salveCraft, house: s.house, evilMonsters: s.evilMonsters, gems: s.gems, flour: s.flour, gregStock: s.gregStock, fertilizerShop: s.fertilizerShop, wolves: s.wolves, greg: s.greg, soan: s.soan, harald: s.harald,
       rabbits: s.rabbits, rabbitChallenge: s.rabbitChallenge,
       station: s.station, // 2026-07 station update
       decor: s.decor, // zip 251: décorations posées (ferme + Valley Town), persistées
@@ -1346,8 +1357,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // demande Guillaume : "le poisson est direct notre propriété et on
       // peut aller le vendre") — même principe que la vente de gemmes/farine
       // juste au-dessus.
-      const stock = s.gregStock || (s.gregStock = { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0) });
+      const stock = s.gregStock || (s.gregStock = { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) });
       const r = E.resolveSellCommonFish(stock, req);
+      if (r.moneyDelta) { s.money += r.moneyDelta; s.totalEarned += r.earnedDelta; out.state = shareState(); }
+      if (r.stockChanged) out.gregStock = stock;
+      if (r.gain > 0) { out.fx.push({ k: "sell", x: px, y: py, gain: r.gain }); out.chat = { from: "💰", msg: L.chatSell(r.gain, s.money) }; questId = "sell"; }
+    } else if (req.kind === "sell" && req.item === "commonAnimal") {
+      // Zip 260 : vente d'une production animale du POOL COMMUN ramassé par
+      // Harald (œuf/lait/laine/truffe), même principe que "commonFish".
+      const stock = s.gregStock || (s.gregStock = { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) });
+      const r = E.resolveSellCommonAnimal(stock, req);
       if (r.moneyDelta) { s.money += r.moneyDelta; s.totalEarned += r.earnedDelta; out.state = shareState(); }
       if (r.stockChanged) out.gregStock = stock;
       if (r.gain > 0) { out.fx.push({ k: "sell", x: px, y: py, gain: r.gain }); out.chat = { from: "💰", msg: L.chatSell(r.gain, s.money) }; questId = "sell"; }
@@ -1565,6 +1584,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // en cours, sans résilier le contrat).
       const so = s.soan;
       if (so) { so.phase = "roam"; so.riverSpot = null; so.roamTarget = null; so.nextRoamAt = 0; out.state = shareState(); out.soan = so; }
+    } else if (req.kind === "hireHarald") {
+      // Zip 260 (demande Guillaume) : agent d'élevage engagé à la boutique
+      // comme Soan, contrat réel de 24h payé d'avance (1000 or). Un seul à la
+      // fois ; ré-engager avant expiration prolonge le contrat.
+      if (s.money >= C.HARALD_HIRE_COST) {
+        s.money -= C.HARALD_HIRE_COST;
+        const now = Date.now();
+        s.harald = {
+          hiredAt: now, expiresAt: now + C.HARALD_CONTRACT_MS,
+          x: C.HARALD_ANCHOR.x, y: C.HARALD_ANCHOR.y, tx: C.HARALD_ANCHOR.x, ty: C.HARALD_ANCHOR.y, dir: 0, animT: 0, moving: false,
+          phase: "roam", roamAnchor: { x: C.HARALD_ANCHOR.x, y: C.HARALD_ANCHOR.y }, roamTarget: null, nextRoamAt: 0, nextRoundAt: now + C.HARALD_ROUND_MS,
+        };
+        out.state = shareState(); out.harald = s.harald;
+        out.chat = { from: "\uD83E\uDDFA", msg: lang === "en" ? "Harald the livestock agent is hired for 24h!" : "Harald, l'agent d'\u00e9levage, est engag\u00e9 pour 24h !" };
+      } else out.toast = { id: f.id, key: "noGold" };
     } else if (req.kind === "buyAnimal") {
       const at = req.animal | 0;
       if (at >= 0 && at < C.ANIMALS.length) {
@@ -2228,8 +2262,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const rid = req.rid | 0, ro = C.VISITOR_ROSTER[rid];
       if (!ro || !ro.skill || !st) return true;
       if ((st.residents || []).some(r => r.rid === rid)) return true; // déjà installé
-      const used = Object.keys(farmersRef.current || {}).length + (st.residents || []).length;
-      if (used >= C.TOWN_HOUSES.length) { hostSend({ type: "broadcast", event: "apply", payload: { toast: { id: req.id, key: "residentNoRoom" } } }); return true; }
+      // Zip 260 (demande Guillaume) : limite portée à MAX_RESIDENTS,
+      // décorrélée des maisons (l'attribution de maison sera revue plus tard).
+      if ((st.residents || []).length >= C.MAX_RESIDENTS) { hostSend({ type: "broadcast", event: "apply", payload: { toast: { id: req.id, key: "residentNoRoom" } } }); return true; }
       if (!st.residents) st.residents = [];
       st.residents.push({ rid, job: ro.job, announced: false });
       const v = E.getVisitor(s, rid);
@@ -2245,12 +2280,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // revenir supplier plus tard (voir hostSpawnPlea / updateVisitors).
       const rid = req.rid | 0;
       if (!st || !(st.residents || []).some(r => r.rid === rid)) return true;
-      const online = Object.keys(farmersRef.current || {});
+      // Zip 260 (correctif Guillaume : "le vote n'exclut pas vraiment,
+      // Exclusion 1/1 sans effet") : on compte les joueurs RÉELLEMENT
+      // CONNECTÉS (soi-même + playersRef), pas farmersRef qui conserve des
+      // fermiers d'anciennes sessions — ce dernier gonflait le dénominateur et
+      // rendait l'unanimité impossible (compteur figé, aucune exclusion). En
+      // solo, onlineIds = [moi] -> exclusion immédiate.
+      const onlineIds = [me.id, ...playersRef.current.keys()];
       if (!st.kickVotes) st.kickVotes = {};
       const votes = st.kickVotes[rid] || (st.kickVotes[rid] = {});
       votes[req.id] = true;
-      const unanime = online.length > 0 && online.every(id => votes[id]);
-      if (online.length <= 1 || unanime) {
+      // On ne garde que les votes de joueurs encore connectés (nettoyage).
+      for (const vid of Object.keys(votes)) if (!onlineIds.includes(vid)) delete votes[vid];
+      const unanime = onlineIds.every(id => votes[id]);
+      if (onlineIds.length <= 1 || unanime) {
         const ro = C.VISITOR_ROSTER[rid];
         st.residents = st.residents.filter(r => r.rid !== rid);
         delete st.kickVotes[rid];
@@ -2277,8 +2320,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (!st || !ro) return true;
       const v = E.getVisitor(s, rid);
       if (req.accept) {
-        const used = Object.keys(farmersRef.current || {}).length + (st.residents || []).length;
-        if (used >= C.TOWN_HOUSES.length) { hostSend({ type: "broadcast", event: "apply", payload: { toast: { id: req.id, key: "residentNoRoom" } } }); }
+        // Zip 260 : même plafond MAX_RESIDENTS (décorrélé des maisons).
+        if ((st.residents || []).length >= C.MAX_RESIDENTS) { hostSend({ type: "broadcast", event: "apply", payload: { toast: { id: req.id, key: "residentNoRoom" } } }); }
         else { if (!st.residents) st.residents = []; st.residents.push({ rid, job: ro.job, announced: false }); stationChat(L.exileReacceptedChat(ro.name), "\u{1F3E1}"); }
       } else {
         stationChat(L.exileRefusedChat(ro.name), "\u{1F494}");
@@ -2714,6 +2757,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     if (p.greg !== undefined) { sharedRef.current.greg = p.greg; minimapDirtyRef.current = true; }
     if (p.soan !== undefined) { sharedRef.current.soan = p.soan; minimapDirtyRef.current = true; }
+    if (p.harald !== undefined) { sharedRef.current.harald = p.harald; minimapDirtyRef.current = true; } // zip 260
     if (p.wellBuilt) { sharedRef.current.wellBuilt = true; minimapDirtyRef.current = true; syncBuildings(); }
     if (p.coop !== undefined) { sharedRef.current.coop = p.coop; setCoop(p.coop); }
     if (p.barn !== undefined) { sharedRef.current.barn = p.barn; setBarn(p.barn); minimapDirtyRef.current = true; }
@@ -4313,7 +4357,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // produisent via updateCrafts (rien à faire ici).
   function residentSkillShift(res, ro, w, s) {
     if (ro.skill !== "lumberjack") return;
-    const stock = s.gregStock || (s.gregStock = { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0) });
+    const stock = s.gregStock || (s.gregStock = { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) });
     const tiles = [];
     for (const kind of ["tree", "rock"]) {
       const i = E.findResidentTile(w, C.GREG_ANCHOR, kind);
@@ -4373,7 +4417,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // updateCrafts), pas le travail générique par thème.
       if (ro.skill) { residentSkillShift(res, ro, w, s); if (!res.announced) { res.announced = true; stationChat(L.residentStarted(ro.name, ro.job), "\u{1F6E0}"); } continue; }
       const task = C.RESIDENT_TASK_BY_THEME[ro.theme] || "gold";
-      const stock = s.gregStock || (s.gregStock = { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0) });
+      const stock = s.gregStock || (s.gregStock = { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) });
       if (!Array.isArray(stock.fish)) stock.fish = C.FISH.map(() => 0);
       const patch = {};
       if (task === "crops") {
@@ -4461,7 +4505,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         // Pêche en continu tant que le bloc de travail n'est pas terminé.
         so.lastFishAt = now;
         const ft = E.soanCatchFish();
-        const stock = sharedRef.current.gregStock || (sharedRef.current.gregStock = { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0) });
+        const stock = sharedRef.current.gregStock || (sharedRef.current.gregStock = { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) });
         if (!stock.fish) stock.fish = C.FISH.map(() => 0);
         stock.fish[ft] = (stock.fish[ft] || 0) + 1;
         setGregStock({ ...stock });
@@ -4514,6 +4558,76 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       channelRef.current?.send({ type: "broadcast", event: "apply", payload: { soan: so } });
     }
   }
+
+  // Zip 260 : Harald, l'AGENT D'ÉLEVAGE (demande Guillaume). Simulation hôte,
+  // même famille que Greg/Soan. Il rôde autour de l'enclos (PEN) et fait des
+  // RONDES : toutes les HARALD_ROUND_MS, il ramasse TOUTES les productions
+  // animales prêtes (readyAt) et les verse au POOL COMMUN (gregStock.animals),
+  // exactement comme le bois de Greg / les poissons de Soan — zéro perte, aucun
+  // partage par joueur. Le mouvement est cosmétique (il reste dans/autour de
+  // l'enclos, ne traverse pas les solides). Le rattrapage HORS-LIGNE est géré
+  // séparément au chargement (E.haraldCatchup).
+  function updateHarald(dt) {
+    const w = worldRef.current; if (!w) return;
+    const s = sharedRef.current, h = s.harald;
+    if (!h) return;
+    const now = Date.now();
+    if (h.expiresAt <= now) {
+      s.harald = null;
+      channelRef.current?.send({ type: "broadcast", event: "apply", payload: { harald: null } });
+      addChat("\uD83E\uDDFA", lang === "en" ? "Harald's contract has ended." : "Le contrat de Harald est terminé.");
+      dirtyRef.current = true;
+      return;
+    }
+    // Rôdaille autour de l'ancre (centre de l'enclos), même mouvement que Soan.
+    let moved = false;
+    if (!h.roamAnchor) h.roamAnchor = { x: C.HARALD_ANCHOR.x, y: C.HARALD_ANCHOR.y };
+    if (!h.roamTarget || Math.hypot(h.roamTarget.x - h.x, h.roamTarget.y - h.y) < 0.3 || now >= (h.nextRoamAt || 0)) {
+      const a = Math.random() * Math.PI * 2, d = 1 + Math.random() * C.HARALD_ROAM_RADIUS;
+      h.roamTarget = { x: h.roamAnchor.x + Math.cos(a) * d, y: h.roamAnchor.y + Math.sin(a) * d };
+      h.nextRoamAt = now + 1500 + Math.random() * 2500;
+    }
+    h.tx = h.roamTarget.x; h.ty = h.roamTarget.y;
+    {
+      const dx = h.tx - h.x, dy = h.ty - h.y, d = Math.hypot(dx, dy);
+      if (d > 0.02) {
+        const step = Math.min(C.HARALD_SPEED * 0.55 * dt, d);
+        const nx = h.x + (dx / d) * step, ny = h.y + (dy / d) * step;
+        // Collision douce : ne traverse jamais un solide (bâtiments, clôtures…).
+        if (!E.blockedTile(w, nx, h.y)) h.x = nx;
+        if (!E.blockedTile(w, h.x, ny)) h.y = ny;
+        h.dir = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 2 : 3) : (dy < 0 ? 1 : 0);
+        h.animT = (h.animT || 0) + dt * 6; h.moving = true; moved = true;
+      } else h.moving = false;
+    }
+    // RONDE de ramassage (zéro perte quand connecté).
+    if (now >= (h.nextRoundAt || 0)) {
+      h.nextRoundAt = now + C.HARALD_ROUND_MS;
+      const stock = s.gregStock || (s.gregStock = { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) });
+      if (!stock.animals) stock.animals = C.ANIMALS.map(() => 0);
+      let picked = false;
+      for (const an of (s.animals || [])) {
+        if (!an || an.carriedBy) continue;
+        if (E.animalReady(an, now)) {
+          const prodMs = (C.ANIMALS[an.type] && C.ANIMALS[an.type].prodMs) || 0;
+          an.readyAt = now + prodMs;
+          stock.animals[an.type] = (stock.animals[an.type] || 0) + 1;
+          picked = true;
+        }
+      }
+      if (picked) {
+        setGregStock({ ...stock });
+        channelRef.current?.send({ type: "broadcast", event: "apply", payload: { gregStock: stock, animals: s.animals } });
+        dirtyRef.current = true;
+      }
+    }
+    if (moved) minimapDirtyRef.current = true;
+    haraldAccumRef.current += dt;
+    if (haraldAccumRef.current >= 0.5 && netCanBroadcast() && anyRemoteNear(h.x, h.y)) {
+      haraldAccumRef.current = 0;
+      channelRef.current?.send({ type: "broadcast", event: "apply", payload: { harald: h } });
+    }
+  }
   function teleportWell() {
     const m = meRef.current; if (!m || !sharedRef.current.wellBuilt) return;
     m.x = C.WELL_SPAWN.x; m.y = C.WELL_SPAWN.y; m.moving = false;
@@ -4547,6 +4661,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // à Greg, un seul ordre possible ("va pêcher"), envoyé directement — pas de
   // panneau de choix ni de bouton flottant à positionner.
   const hireSoan = () => sendReq({ kind: "hireSoan" });
+  const hireHarald = () => sendReq({ kind: "hireHarald" }); // zip 260
   const soanOrder = () => sendReq({ kind: "soanOrder" });
   const soanRecall = () => sendReq({ kind: "soanRecall" });
   // Zip 258 : commande de voyage à Eduardo. Envoie la liste { key, qty } non
@@ -4876,6 +4991,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (isHost) updateResidents(dt); // zip 247: moved-in visitors work the farm per their pledged job
       if (isHost) updateCrafts(); // zip 252: production des ateliers d'artisans
       if (isHost) updateSoan(dt);
+      if (isHost) updateHarald(dt); // zip 260 : agent d'élevage
       // Simulation hôte toujours sur worldRef.current (la ferme), quoi qu'il
       // arrive : rien ci-dessus ne dépend de la zone du joueur LOCAL. Seul
       // ce qui suit (mouvement/rendu propres à CE client) bascule sur la
@@ -5599,6 +5715,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           if (isHost) { sx = so.x; sy = so.y; }
           else { const sp = smoothNpc("soan", so.x, so.y, dt, true, !!so.moving, (cx, cy) => canStand(w, cx, cy)); sx = sp.x; sy = sp.y; } // FIX 246
           draws.push({ y: (sy + 1) * T, fn: () => drawCharacter({ id: "soan", name: "Soan", x: sx, y: sy, dir: so.dir || 0, moving: !!so.moving, animT: so.animT || 0, gender: "m", outfit: 1, cap: true, fishing: so.phase === "fishing" }, false) });
+        }
+      }
+      // Zip 260 : Harald, l'agent d'élevage — même principe de rendu que
+      // Greg/Soan (réutilise drawCharacter, jeu de sprite dédié outfit 6 +
+      // salopette + casquette).
+      {
+        const ha = sharedRef.current.harald;
+        if (ha) {
+          let hx, hy;
+          if (isHost) { hx = ha.x; hy = ha.y; }
+          else { const hp = smoothNpc("harald", ha.x, ha.y, dt, true, !!ha.moving, (cx, cy) => canStand(w, cx, cy)); hx = hp.x; hy = hp.y; }
+          draws.push({ y: (hy + 1) * T, fn: () => drawCharacter({ id: "harald", name: "Harald", x: hx, y: hy, dir: ha.dir || 0, moving: !!ha.moving, animT: ha.animT || 0, gender: "m", outfit: 6, overalls: true, cap: true }, false) });
         }
       }
       if (!m.sleeping) { draws.push({ y: (m.y + 0.9) * T, fn: () => drawMyPets(m, dt) }); draws.push({ y: (m.y + 1) * T, fn: () => drawSelf(m) }); }
@@ -6436,6 +6564,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // covers the host sims (wolves, Greg, animal drops) since they share
       // this same world object.
       if (worldRef.current) worldRef.current.barnLevel = sharedRef.current.barn ? (sharedRef.current.barn.level | 0) : 0;
+      // Zip 260 : miroir des footprints d'artisans (bâtiments SOLIDES) pour la
+      // collision locale (solidBuildingAt lit world.artisanBlocks), rafraîchi
+      // chaque frame comme barnLevel car la position est déplaçable.
+      if (worldRef.current) {
+        const abs = [], cr = sharedRef.current.crafts || {};
+        for (const bid of Object.keys(C.ARTISAN_BUILDINGS)) {
+          const cb = cr[bid]; if (!cb || !cb.built) continue;
+          const def = C.ARTISAN_BUILDINGS[bid], p = artisanPos(bid);
+          abs.push({ x: Math.round(p.x), y: Math.round(p.y), w: def.w, h: def.h });
+        }
+        worldRef.current.artisanBlocks = abs;
+      }
       if (m.zone === "evil") { updateMeEvil(dt); return; }
       if (m.zone === "town") { updateMeTown(dt); return; } // Valley Town (zip 234)
       const w = worldRef.current;
@@ -7536,6 +7676,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const sellBerry = () => sendReq({ kind: "sell", item: "berry", n: 9999 });
   const sellFruit = () => sendReq({ kind: "sell", item: "fruit", n: 9999 });
   const sellCommonFish = (fishId) => sendReq({ kind: "sell", item: "commonFish", fish: fishId, n: 9999 });
+  const sellCommonAnimal = (pid) => sendReq({ kind: "sell", item: "commonAnimal", product: pid, n: 9999 }); // zip 260
   const sellGem = (gemId) => sendReq({ kind: "sell", item: "gem", gem: gemId, n: 9999 });
 
   // -------- Rendu React (UI par-dessus le canvas) --------
@@ -7866,7 +8007,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           boutique à chaque ordre. Se ferme automatiquement s'il ne reste
           plus aucun employé actif (fin de contrat pendant que le panneau
           est ouvert), pour ne jamais rester affiché sur une liste vide. */}
-      {employeesOpen && (sharedRef.current.greg || sharedRef.current.soan || skilledResidents().length > 0 || ((sharedRef.current.station && sharedRef.current.station.residents) || []).length > 0) && (
+      {employeesOpen && (sharedRef.current.greg || sharedRef.current.soan || sharedRef.current.harald || skilledResidents().length > 0 || ((sharedRef.current.station && sharedRef.current.station.residents) || []).length > 0) && (
         <div className="ferme-modal open" onClick={() => setEmployeesOpen(false)}>
           <div className="panel ferme-modal-panel" onClick={e => e.stopPropagation()}>
             <button className="ferme-close-x" onClick={() => setEmployeesOpen(false)}>✕</button>
@@ -7932,6 +8073,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 {sharedRef.current.soan.phase === "roam"
                   ? <button onClick={soanOrder}>{L.soanOrderBtn}</button>
                   : <button onClick={soanRecall}>{L.soanRecallBtn}</button>}
+              </div>
+            )}
+            {sharedRef.current.harald && (
+              <div className="ferme-shop-row">
+                <Sprite img={spritesReady ? spritesRef.current.getChar("m", 6) : null} w={26} h={32} />
+                <div className="info">
+                  <b>{L.employeesHaraldName}</b>
+                  <span className="ferme-usage">{L.haraldHiredUntil(Math.max(0, Math.ceil((sharedRef.current.harald.expiresAt - Date.now()) / 3600000)))} — {L.haraldStatusRounds}</span>
+                </div>
               </div>
             )}
             {/* Zip 259 : TOUS nos résidents (skill ou non) avec un bouton de
@@ -8377,7 +8527,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   return (
                     <div className="ferme-shop-row" key={"art" + bid}>
                       <Sprite img={spritesReady ? spritesRef.current.artisan[bid] : null} w={34} h={30} />
-                      <div className="info"><b>{L.buildingName(bid)} — {"\u{1FA99}"} {def.cost}</b><span>{built ? L.artisanOwnedBtn : L.craftName(bid === "beehive" ? "honey" : bid === "fromagerie" ? "cheeseWheel" : "pastry")}</span></div>
+                      <div className="info"><b>{L.buildingName(bid)} — {"\u{1FA99}"} {def.cost}</b><span>{built ? L.artisanOwnedBtn : (bid === "sawmill" ? L.sawmillShopSub : L.craftName(bid === "beehive" ? "honey" : bid === "fromagerie" ? "cheeseWheel" : "pastry"))}</span></div>
                       <button disabled={built || hud.money < def.cost} onClick={() => buyArtisanBuilding(bid)}>{built ? L.artisanOwnedBtn : L.artisanBuyBtn}</button>
                     </div>
                   );
@@ -8431,6 +8581,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                     ? <button onClick={soanOrder}>{L.soanOrderBtn}</button>
                     : <button onClick={soanRecall}>{L.soanRecallBtn}</button>)
                 : <button disabled={hud.money < C.SOAN_HIRE_COST} onClick={hireSoan}>{L.hireLabel}</button>}
+            </div>
+            <div className="ferme-shop-row">
+              <Sprite img={spritesReady ? spritesRef.current.getChar("m", 6) : null} w={26} h={32} />
+              <div className="info">
+                <b>{L.haraldRowTitle(C.HARALD_HIRE_COST)}</b>
+                <span>{L.haraldRowSub}</span>
+                <span className="ferme-usage">{sharedRef.current.harald ? L.haraldHiredUntil(Math.max(0, Math.ceil((sharedRef.current.harald.expiresAt - Date.now()) / 3600000))) : L.haraldNotHiredSub}</span>
+              </div>
+              {sharedRef.current.harald
+                ? <button disabled>{L.haraldWorkingBtn}</button>
+                : <button disabled={hud.money < C.HARALD_HIRE_COST} onClick={hireHarald}>{L.hireLabel}</button>}
             </div>
           </div>
         </div>
@@ -8675,6 +8836,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   <Sprite img={spritesReady ? spritesRef.current.fishIcons[fs.id] : null} w={32} h={32} />
                   <div className="info"><b>{(lang === "en" ? fs.nameEn : fs.name)} × {n}</b><span>{L.perPiece(fs.sell)}</span><span className="ferme-usage">{L.soanFishSharedHint}</span></div>
                   <button disabled={!n} onClick={() => sellCommonFish(fs.id)}>{L.sellAll}</button>
+                </div>
+              );
+            })}
+            {/* Zip 260 : productions animales ramassées par Harald, pool COMMUN
+                (œuf/lait/laine/truffe) — même affichage que les poissons de
+                Soan. Visibles uniquement si le stock commun en contient. */}
+            {C.ANIMALS.map(a => {
+              const n = gregStock.animals ? gregStock.animals[a.id] : 0;
+              if (!n) return null;
+              return (
+                <div className="ferme-shop-row" key={"ca" + a.id}>
+                  <Sprite img={spritesReady ? spritesRef.current.products[a.id] : null} w={32} h={32} />
+                  <div className="info"><b>{(lang === "en" ? a.prodEn : a.prod)} × {n}</b><span>{L.perPiece(a.sell)}</span><span className="ferme-usage">{L.haraldSharedHint}</span></div>
+                  <button disabled={!n} onClick={() => sellCommonAnimal(a.id)}>{L.sellAll}</button>
                 </div>
               );
             })}

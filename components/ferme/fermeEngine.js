@@ -1854,6 +1854,50 @@ export function resolveSellCommonFish(stock, m) {
   return res;
 }
 
+// Zip 260 : vente d'une PRODUCTION ANIMALE depuis le pool COMMUN ramassé par
+// Harald (agent d'élevage) — œuf/lait/laine/truffe. Même principe que
+// resolveSellCommonFish : `stock` = sharedRef.current.gregStock, muté
+// directement (stock.animals, tableau par type comme C.ANIMALS/f.inv.products).
+// Renvoie { moneyDelta, earnedDelta, stockChanged, toast, gain }.
+export function resolveSellCommonAnimal(stock, m) {
+  const res = { moneyDelta: 0, earnedDelta: 0, stockChanged: false, toast: null, gain: 0 };
+  const pt = m.product | 0;
+  if (pt < 0 || pt >= C.ANIMALS.length || !stock || !stock.animals) return res;
+  const have = stock.animals[pt] || 0;
+  const n = Math.min(have, Math.max(1, (m.n | 0) || have));
+  if (n <= 0) return res;
+  stock.animals[pt] -= n;
+  const gain = n * C.ANIMALS[pt].sell;
+  res.moneyDelta = gain; res.earnedDelta = gain; res.stockChanged = true; res.gain = gain;
+  return res;
+}
+
+// Zip 260 : rattrapage HORS-LIGNE de Harald (agent d'élevage, demande
+// Guillaume : "à notre reconnexion on a dans l'inventaire les ressources
+// collectées"). Appelé une fois au chargement HÔTE. Pour chaque animal, on
+// crédite au pool commun (gregStock.animals) autant de cycles de production
+// (prodMs) écoulés pendant l'absence, borné par la fin du contrat
+// (harald.expiresAt) et PLAFONNÉ par animal (20 poule / 6 gros animal). On
+// repart ensuite d'un readyAt frais depuis MAINTENANT (aucun double-comptage
+// par updateHarald ensuite).
+export function haraldCatchup(s, now) {
+  if (!s || !s.harald) return;
+  const h = s.harald;
+  const effNow = Math.min(now, h.expiresAt || now);
+  const stock = s.gregStock || (s.gregStock = {});
+  if (!stock.animals) stock.animals = C.ANIMALS.map(() => 0);
+  for (const a of (s.animals || [])) {
+    if (!a || a.carriedBy || typeof a.readyAt !== "number") continue;
+    const prodMs = (C.ANIMALS[a.type] && C.ANIMALS[a.type].prodMs) || 0;
+    if (prodMs <= 0 || effNow < a.readyAt) continue;
+    let cycles = 1 + Math.floor((effNow - a.readyAt) / prodMs);
+    const cap = a.type === C.HEN_ANIMAL ? C.HARALD_OFFLINE_CAP_HEN : C.HARALD_OFFLINE_CAP_BIG;
+    if (cycles > cap) cycles = cap;
+    stock.animals[a.type] = (stock.animals[a.type] || 0) + cycles;
+    a.readyAt = now + prodMs;
+  }
+}
+
 // Repas : rend de l'énergie. Mange un casse-croûte en priorité ; sinon, mange
 // le poisson le moins précieux disponible (la pêche sert donc aussi à se
 // nourrir). Renvoie { invChanged, fx }.
@@ -1945,7 +1989,7 @@ export function newDay(world, farmers, day, seed) {
   const inRect = (x, y, R) => x >= R.x && x < R.x + R.w && y >= R.y && y < R.y + R.h;
   for (let k = 0; k < 14; k++) {
     const x = Math.floor(rnd() * W), y = Math.floor(rnd() * H), i = idx(x, y);
-    if (onRails(x) || inRect(x, y, C.STATION_CLEAR) || inRect(x, y, C.BARN_BLOCKS[C.BARN_BLOCKS.length - 1])) continue;
+    if (onRails(x) || inRect(x, y, C.STATION_CLEAR) || inRect(x, y, C.BARN_CLEAR)) continue;
     if (world.ground[i] === C.G_GRASS && world.objects[i] === C.O_NONE && !world.crops.has(i)
       && Math.abs(x - C.SPAWN.x) + Math.abs(y - C.SPAWN.y) > 18) {
       const type = rnd() < 0.5 ? C.O_ROCK : (rnd() < 0.35 ? C.O_TREE2 : C.O_TREE);
@@ -2020,6 +2064,14 @@ export function solidBuildingAt(world, fx, fy) {
   if (inBlockRect(fx, fy, C.STATION_BLOCK)) return true;
   const bl = (world && world.barnLevel) | 0;
   if (bl > 0 && inBlockRect(fx, fy, C.BARN_BLOCKS[Math.min(bl, C.BARN_BLOCKS.length) - 1])) return true;
+  // Zip 260 (demande Guillaume : "on passe pas à travers et les résidents non
+  // plus") : les bâtiments d'artisans (ruche/fromagerie/boulangerie/scierie)
+  // sont SOLIDES. Leurs footprints (w×h à leur position COURANTE, déplaçable)
+  // sont mirroités chaque frame dans world.artisanBlocks par updateMe
+  // (FermeGame.js), au même titre que world.barnLevel — solidBuildingAt ne
+  // reçoit que `world`, pas l'état partagé.
+  const ab = world && world.artisanBlocks;
+  if (ab) for (let k = 0; k < ab.length; k++) { const R = ab[k]; if (fx >= R.x && fx < R.x + R.w && fy >= R.y && fy < R.y + R.h) return true; }
   return false;
 }
 

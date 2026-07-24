@@ -873,6 +873,27 @@ export const SOAN_BREAK_MS = 8 * 60 * 1000;         // FIX 246 : pauses plus cou
 export const SOAN_BREAK_ROAM_RADIUS = 8;            // amplitude de balade pendant la pause, autour de la berge où il pêche
 export const SOAN_FISH_INTERVAL_MS = 20 * 1000;     // pêche EN CONTINU pendant un bloc de travail ("il pioche des poissons continûment", demande Guillaume) : une prise toutes les 20s réelles (extrapolé, pas de mini-jeu pour un PNJ, contrairement au joueur)
 
+// ---- Zip 260 : Harald, l'AGENT D'ÉLEVAGE (demande Guillaume) ----
+// Engagé à la boutique comme Soan, contrat réel de 24h payé d'avance (1000 or).
+// Fait des RONDES autour de l'enclos (PEN) et RAMASSE les productions des
+// animaux dès qu'elles sont prêtes (readyAt) pour éviter toute perte — œufs,
+// lait, laine, truffe. Tout va au POOL COMMUN de la ferme (gregStock.animals,
+// exactement comme le bois de Greg / les poissons de Soan : vendable par
+// n'importe quel joueur au bac/menu Vendre). Aucune séparation par joueur.
+// HORS-LIGNE : à la reconnexion, rattrapage PLAFONNÉ par animal (voir plus
+// bas), borné par la fin du contrat — voir E.haraldCatchup / updateHarald.
+export const HARALD_HIRE_COST = 1000;                  // demande Guillaume : 1000 or
+export const HARALD_CONTRACT_MS = 24 * 60 * 60 * 1000; // 24h réelles (comme Soan)
+export const HARALD_SPEED = 3.2;                       // identique à Greg/Soan
+export const HARALD_ANCHOR = { x: 52, y: 41 };         // centre de l'enclos (PEN x48-56 / y38-44)
+export const HARALD_ROAM_RADIUS = 4;                   // rôdaille serrée : reste dans/autour de l'enclos
+export const HARALD_ROUND_MS = 12 * 1000;              // une "ronde" de ramassage toutes les 12 s réelles quand connecté (zéro perte en pratique)
+// Plafonds de rattrapage HORS-LIGNE, PAR ANIMAL (demande Guillaume : "6 par
+// gros animal, 20 par poule"). On crédite au pool commun autant de cycles de
+// production écoulés pendant l'absence que le plafond l'autorise.
+export const HARALD_OFFLINE_CAP_HEN = 20;              // poule (ponte rapide)
+export const HARALD_OFFLINE_CAP_BIG = 6;               // chèvre/brebis/cochon/vache
+
 // --- Lapins (chantier 2026-07, demande Guillaume : "ajouter des petits
 // lapins bien détaillés qui fuient et sont inoffensifs, surtout rive
 // droite"). Contrairement aux loups : présents de JOUR COMME DE NUIT (juste
@@ -973,8 +994,21 @@ export const STATION_BLOCK = { x: 6, y: 24, w: 4, h: 4 }; // building + roof row
 export const BARN_BLOCKS = [
   { x: 66, y: 39, w: 3, h: 3 },  // level 1 (48px sprite)
   { x: 65, y: 37, w: 5, h: 5 },  // level 2 (72px sprite)
-  { x: 64, y: 35, w: 6, h: 7 },  // level 3 (85x115px sprite — réduit de moitié, était 170x230px/11x14, demande Guillaume "beaucoup trop grand")
+  // Zip 260 (demande Guillaume : la grange niv.3 "trop envahissante", "pouvoir
+  // passer DERRIÈRE le toit") : la collision est réduite aux 2 rangées de BASE
+  // (murs/fondations) au lieu du rectangle dessiné complet. Le toit (rangées
+  // au-dessus) devient traversable ; le tri de profondeur des `draws` (barn
+  // ancrée à (BARN_SITE.y+1)*T) masque déjà le perso quand il est derrière —
+  // donc on passe derrière le toit sans le traverser au sol.
+  { x: 64, y: 40, w: 6, h: 2 },  // level 3 : base seule (footprint mur), toit non-bloquant
 ];
+// Zip 260 : zone de DÉGAGEMENT d'objets au gen de map pour la grange
+// (rectangle DESSINÉ complet du plus grand palier, TOIT INCLUS) — distincte de
+// la COLLISION (BARN_BLOCKS, réduite à la base au niv.3 pour passer derrière le
+// toit). On garde l'empreinte d'avant afin de ne PAS semer d'arbres/rochers
+// sous le toit de la grange (ils y resteraient solides et gâcheraient le
+// "passage derrière").
+export const BARN_CLEAR = { x: 64, y: 35, w: 6, h: 7 };
 export const AD_FEE = 25;                 // gold per newly posted ad category (common chest)
 export const AD_CATEGORIES = ["crops", "animal", "fish", "resources"];
 
@@ -1066,10 +1100,17 @@ export const ARTISAN_BUILDINGS = {
   beehive:    { skill: "beekeeper",   cost: 6000,  site: { x: 50, y: 46 }, w: 2, h: 2 },
   fromagerie: { skill: "cheesemaker", cost: 12000, site: { x: 56, y: 46 }, w: 3, h: 2 },
   bakery:     { skill: "baker",       cost: 9000,  site: { x: 62, y: 46 }, w: 3, h: 2 },
+  // Zip 260 (demande Guillaume) : la scierie du bûcheron devient un vrai
+  // bâtiment achetable (10000 or), au même titre que les autres. Purement
+  // ancrage de métier : aucune production auto (Tristan abat les arbres via
+  // son thème "wood", voir updateResidents), mais achetable/déplaçable/solide.
+  sawmill:    { skill: "lumberjack",  cost: 10000, site: { x: 68, y: 46 }, w: 3, h: 2 },
 };
 // Métier -> bâtiment (null = pas de bâtiment, travaille directement).
 // voyager (Eduardo) : pas de bâtiment, il travaille par voyages (commandes).
-export const SKILL_BUILDING = { beekeeper: "beehive", cheesemaker: "fromagerie", baker: "bakery", lumberjack: null, voyager: null };
+// Zip 260 : lumberjack -> sawmill (le bûcheron s'ancre/rôde autour de sa
+// scierie une fois construite ; sinon rôde près du spawn comme avant).
+export const SKILL_BUILDING = { beekeeper: "beehive", cheesemaker: "fromagerie", baker: "bakery", lumberjack: "sawmill", voyager: null };
 // Cadences de production (ms réelles) et valeurs de vente (or).
 // Zip 258 (demande Guillaume : "le miel est une denrée rare") : cadence ÷3
 // (4 min -> 12 min entre deux pots) et prix du pot fortement relevé à 7000.
@@ -1418,6 +1459,12 @@ export const TOWN_PLAZA = { x: 26, y: 17, w: 12, h: 12 }; // paved central squar
 export const TOWN_FOUNTAIN = { x: 31, y: 22 };      // 2x2 fountain, top-left tile (blocks movement)
 export const TOWN_HOUSE_W = 6;                      // house sprite is 96px = 6 tiles wide
 export const TOWN_HOUSE_H = 3;                      // blocked footprint rows (the visual roof overlaps north of it)
+// Zip 260 (demande Guillaume) : plafond de résidents porté à 10, INDÉPENDANT
+// du nombre de maisons de Valley Town. L'attribution de maison sera revue plus
+// tard — pour l'instant, les résidents au-delà des maisons disponibles sont
+// simplement dessinés près d'un point par défaut (voir le rendu des résidents
+// dans FermeGame.js), ce qui est assumé.
+export const MAX_RESIDENTS = 10;
 export const TOWN_HOUSES = [                        // door faces south onto a street
   { x: 14, y: 13 }, { x: 22, y: 13 }, { x: 38, y: 13 }, { x: 46, y: 13 },   // north side of main street
   { x: 14, y: 27 }, { x: 22, y: 27 }, { x: 38, y: 27 }, { x: 46, y: 27 },   // south side
