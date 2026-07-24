@@ -5894,7 +5894,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           const hsn = houseOwners.find(h => h.resident && h.resident.rid === residents[ri].rid);
           const rxp = hsn ? hsn.x + C.TOWN_HOUSE_W / 2 : 47.5 + (ri % 3) * 1.6;
           const ryp = hsn ? hsn.y + C.TOWN_HOUSE_H + 0.6 : 37.5 + Math.floor(ri / 3) * 1.4;
-          draws.push({ y: (ryp + 1) * T, fn: () => drawCharacter({ id: "res" + ro.rid, name: ro.name, x: rxp, y: ryp, dir: 0, moving: false, animT: 0, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap }, false) });
+          // Zip 273 : idem — Eduardo reste monté même dans ce rendu "idle"
+          // (résident sans position simulée, planté près de sa maison).
+          const onWhiteHorseIdle = ro.skill === "voyager";
+          draws.push({ y: (ryp + 1) * T, fn: () => drawCharacter({ id: "res" + ro.rid, name: ro.name, x: rxp, y: ryp, dir: 0, moving: false, animT: 0, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap, mount: onWhiteHorseIdle ? "white" : null }, false) });
         }
       }
       // Greg, l'employé de champs (chantier 2026-07) : réutilise le rendu
@@ -6059,7 +6062,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           if (typeof res.x !== "number") continue;
           const rp = isHost ? res : smoothNpc("resident:" + res.rid, res.x, res.y, dt, true, !!res.moving, (cx, cy) => canStand(w, cx, cy));
           const rx = rp.x, ry = rp.y;
-          draws.push({ y: (ry + 1) * T, fn: () => drawCharacter({ id: "res" + res.rid, name: ro.name, x: rx, y: ry, dir: res.dir || 0, moving: !!res.moving, animT: res.animT || 0, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap }, false) });
+          // Zip 273 (demande Guillaume : "Eduardo doit TOUJOURS se balader à
+          // cheval, même de retour de mission") : même logique que côté
+          // visiteur (ligne ~5884) — un résident "voyager" (seul Eduardo a ce
+          // skill) reste monté en permanence, pas seulement le temps de son
+          // arrivée initiale au village.
+          const onWhiteHorse = ro.skill === "voyager";
+          draws.push({ y: (ry + 1) * T, fn: () => drawCharacter({ id: "res" + res.rid, name: ro.name, x: rx, y: ry, dir: res.dir || 0, moving: !!res.moving, animT: res.animT || 0, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap, mount: onWhiteHorse ? "white" : null }, false) });
         }
       }
       draws.sort((a, b) => a.y - b.y);
