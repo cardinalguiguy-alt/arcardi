@@ -7324,6 +7324,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     let best = null, bestD = 2.4;
     for (const res of st.residents) {
       if (typeof res.x !== "number") continue;
+      if (res.trip && res.trip.phase === "away") continue; // zip 267 fix : Eduardo en voyage n'est pas sur la map, donc pas triggerable au Q (même filtre que le rendu, lignes 5782/5947)
       const d = Math.abs(m.x - res.x) + Math.abs(m.y - res.y);
       if (d <= bestD) { bestD = d; best = res; }
     }
