@@ -2327,6 +2327,32 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     return null;
   }
+  // Zip 279 (fix Guillaume) : les artisans (fromagerie/boulangerie) ne
+  // cherchaient du lait/des œufs QUE dans l'inventaire perso d'un joueur
+  // (findInvWith ci-dessus), en ignorant le pool COMMUN rempli par Harald
+  // (sharedRef.current.gregStock.animals — même stock que les lignes "Ramassés
+  // par Harald" du panneau de vente). Résultat : four/fromagerie à l'arrêt
+  // ("ingrédients manquants") même avec des centaines d'œufs/de lait dans le
+  // stock commun, tant qu'aucun joueur n'en avait perso. Cette fonction
+  // cherche dans les deux pools (perso d'abord, puis commun) et renvoie de
+  // quoi consommer la bonne quantité, quelle que soit la source.
+  function findAnimalGoodsWith(idx, need) {
+    const src = findInvWith("products", idx, need);
+    if (src) return { kind: "farmer", src };
+    const s = sharedRef.current;
+    const stock = s.gregStock || (s.gregStock = { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) });
+    if (!Array.isArray(stock.animals)) stock.animals = C.ANIMALS.map(() => 0);
+    if ((stock.animals[idx] | 0) >= need) return { kind: "greg" };
+    return null;
+  }
+  // Consomme `need` unités de la source trouvée par findAnimalGoodsWith
+  // ci-dessus. Retourne true si le pool commun (gregStock) a été modifié
+  // (pour que l'appelant sache s'il doit le rebroadcaster).
+  function consumeAnimalGoods(found, idx, need) {
+    if (found.kind === "farmer") { found.src.fm.inv.products[idx] -= need; return false; }
+    sharedRef.current.gregStock.animals[idx] -= need;
+    return true;
+  }
   function broadcastFarmerDelta(fm) {
     hostSend({ type: "broadcast", event: "apply", payload: { farmer: { id: fm.id, energy: fm.energy, tools: fm.tools, inv: fm.inv, pets: fm.pets } } });
   }
@@ -2504,7 +2530,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (!w || !s.crafts) return;
     const now = Date.now();
     const stock = s.craftStock || (s.craftStock = E.newCraftStock());
-    let stockChanged = false, flourChanged = false, craftsMetaChanged = false;
+    let stockChanged = false, flourChanged = false, craftsMetaChanged = false, gregStockChanged = false;
     const bh = s.crafts.beehive;
     if (bh && bh.built) {
       if (!bh.nextAt || bh.nextAt > now + C.HONEY_MS) bh.nextAt = now + C.HONEY_MS;
@@ -2514,8 +2540,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (fr && fr.built) {
       if (!fr.nextAt || fr.nextAt > now + C.CHEESE_MS) fr.nextAt = now + C.CHEESE_MS;
       else if (now >= fr.nextAt) {
-        const src = findInvWith("products", C.COW_ANIMAL, C.CHEESE_MILK_COST);
-        if (src) { src.fm.inv.products[C.COW_ANIMAL] -= C.CHEESE_MILK_COST; stock.cheeseWheel++; stockChanged = true; fr.nextAt = now + C.CHEESE_MS; broadcastFarmerDelta(src.fm); }
+        const src = findAnimalGoodsWith(C.COW_ANIMAL, C.CHEESE_MILK_COST);
+        if (src) {
+          consumeAnimalGoods(src, C.COW_ANIMAL, C.CHEESE_MILK_COST);
+          stock.cheeseWheel++; stockChanged = true; fr.nextAt = now + C.CHEESE_MS;
+          if (src.kind === "farmer") broadcastFarmerDelta(src.src.fm); else gregStockChanged = true;
+        }
         else fr.nextAt = now + Math.min(C.CHEESE_MS, 30000); // pas de lait : réessaie bientôt
       }
     }
@@ -2533,14 +2563,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       } else if (!bk.nextAt || bk.nextAt > now + C.PASTRY_MS) {
         bk.nextAt = now + C.PASTRY_MS;
       } else if (now >= bk.nextAt) {
-        const milkSrc = findInvWith("products", C.COW_ANIMAL, C.PASTRY_MILK);
-        const eggSrc = findInvWith("products", C.HEN_ANIMAL, C.PASTRY_EGG);
+        const milkSrc = findAnimalGoodsWith(C.COW_ANIMAL, C.PASTRY_MILK);
+        const eggSrc = findAnimalGoodsWith(C.HEN_ANIMAL, C.PASTRY_EGG);
         if ((s.flour | 0) >= C.PASTRY_FLOUR && milkSrc && eggSrc) {
           // Fournée : 1 lait + 1 farine + 6 œufs -> PASTRY_BATCH pâtisseries.
           s.flour -= C.PASTRY_FLOUR; flourChanged = true;
-          milkSrc.fm.inv.products[C.COW_ANIMAL] -= C.PASTRY_MILK; eggSrc.fm.inv.products[C.HEN_ANIMAL] -= C.PASTRY_EGG;
+          const milkFromGreg = consumeAnimalGoods(milkSrc, C.COW_ANIMAL, C.PASTRY_MILK);
+          const eggFromGreg = consumeAnimalGoods(eggSrc, C.HEN_ANIMAL, C.PASTRY_EGG);
+          if (milkFromGreg || eggFromGreg) gregStockChanged = true;
+          if (milkSrc.kind === "farmer") broadcastFarmerDelta(milkSrc.src.fm);
+          if (eggSrc.kind === "farmer" && (eggSrc.src.id !== (milkSrc.kind === "farmer" ? milkSrc.src.id : null))) broadcastFarmerDelta(eggSrc.src.fm);
           stock.pastry += C.PASTRY_BATCH; stockChanged = true; bk.nextAt = now + C.PASTRY_MS;
-          broadcastFarmerDelta(milkSrc.fm); if (eggSrc.id !== milkSrc.id) broadcastFarmerDelta(eggSrc.fm);
           // Stock revenu -> l'alerte s'efface toute seule (demande Guillaume).
           if (bk.alert) { bk.alert = false; craftsMetaChanged = true; }
         } else {
@@ -2552,11 +2585,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         }
       }
     }
-    if (stockChanged || flourChanged || craftsMetaChanged) {
+    if (stockChanged || flourChanged || craftsMetaChanged || gregStockChanged) {
       dirtyRef.current = true;
       const payload = { crafts: s.crafts };
       if (stockChanged) payload.craftStock = stock;
       if (flourChanged) { payload.flour = s.flour; setFlour(s.flour); }
+      if (gregStockChanged) { payload.gregStock = s.gregStock; setGregStock(s.gregStock); }
       hostSend({ type: "broadcast", event: "apply", payload });
     }
   }
