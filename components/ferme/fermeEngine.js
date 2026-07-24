@@ -2274,6 +2274,15 @@ export function newStationState() {
     // hôte, mood + variante de texte figées à l'exclusion). PERSISTÉ.
     kickVotes: {},
     exiles: [],
+    // Zip 278 (demande Guillaume) : "si un visiteur hostile avec skills a été
+    // mis en blacklist permanente, le faire revenir sous un autre nom".
+    // `covers[rid] = "NouveauNom"` — identité de couverture PERSISTÉE, utilisée
+    // partout où le nom du roster est affiché (voir rosterOf côté FermeGame.js).
+    // Uniquement peuplé pour les rid À SKILL bannis (resolveBlacklist) : eux ne
+    // sont PAS ajoutés à `blacklist`, ils continuent de pouvoir être tirés au
+    // sort comme visiteur, juste sous ce nom d'emprunt. Un hostile SANS skill
+    // reste banni pour de bon, sans entrée ici.
+    covers: {},
   };
 }
 
@@ -2302,6 +2311,10 @@ export function migrateStation(st, hostNow) {
   // Zip 259 : votes d'exclusion en cours + file des ex-résidents à faire revenir.
   out.kickVotes = (st.kickVotes && typeof st.kickVotes === "object") ? st.kickVotes : {};
   out.exiles = Array.isArray(st.exiles) ? st.exiles.filter(e => e && typeof e.rid === "number") : [];
+  // Zip 278 : identités de couverture des hostiles à skill graciés — mêmes
+  // règles de survie qu'un rel/blacklist : PERSISTÉES à chaque chargement/
+  // snapshot, aucune relocalisation d'horloge nécessaire (pas de timestamp).
+  out.covers = (st.covers && typeof st.covers === "object") ? { ...st.covers } : {};
   // Owed gifts (zip 233) survive EVERY load, plain or snapshot: a promised
   // pet must not vanish before the pet system ships.
   out.pendingGifts = Array.isArray(st.pendingGifts) ? st.pendingGifts.filter(g => g && typeof g.kind === "string") : [];
@@ -2907,11 +2920,34 @@ export function resolveAdsSet(s, ads) {
   return res;
 }
 
-// Blacklisting: permanent ban. If the banned character is the CURRENT
-// visitor, they are marched straight back to the train.
-export function resolveBlacklist(s, rid) {
+// Blacklisting: permanent ban for a roster id WITHOUT a skill. If the banned
+// character is the CURRENT visitor, they are marched straight back to the
+// train.
+// Zip 278 (demande Guillaume : "si un visiteur hostile avec skills a été mis
+// en blacklist permanente, le faire revenir sous un autre nom") : un rid À
+// SKILL (Tristan, René, Ingrid, Chloé, Eduardo...) n'est plus banni pour de
+// bon — bannir un artisan pour toujours l'aurait rendu impossible à recruter
+// à nouveau, ce qui n'a jamais été l'intention (la blacklist visait les
+// hostiles ordinaires, pas les métiers). Il obtient à la place une identité
+// de couverture (`station.covers[rid]`, nom d'emprunt tiré de COVER_NAMES,
+// stable une fois tiré) : il continue de pouvoir être choisi comme visiteur
+// (le pool de spawnVisitor ne consulte QUE `blacklist`, pas `covers`), mais
+// s'affiche partout sous ce nouveau nom au lieu du sien.
+export function resolveBlacklist(s, rid, rnd) {
   if (typeof rid !== "number" || rid < 0 || rid >= C.VISITOR_ROSTER.length) return { ok: false };
-  if (!s.station.blacklist.includes(rid)) s.station.blacklist.push(rid);
+  const ro = C.VISITOR_ROSTER[rid];
+  if (ro && ro.skill) {
+    if (!s.station.covers) s.station.covers = {};
+    if (!s.station.covers[rid]) {
+      const r = rnd || Math.random;
+      const pool = C.COVER_NAMES[ro.gender] || C.COVER_NAMES.m;
+      const used = new Set(Object.values(s.station.covers));
+      const free = pool.filter(n => !used.has(n));
+      s.station.covers[rid] = (free.length ? free : pool)[Math.floor(r() * (free.length ? free.length : pool.length))];
+    }
+  } else if (!s.station.blacklist.includes(rid)) {
+    s.station.blacklist.push(rid);
+  }
   const v = getVisitor(s, rid);
   if (v && v.phase !== "leave" && v.phase !== "depart") { v.phase = "leave"; v.offer = { type: "done" }; }
   return { ok: true };

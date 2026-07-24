@@ -477,7 +477,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const d = stationSt && stationSt.damage;
     if (d && repairSeenRef.current !== d.until && Date.now() < d.until) {
       repairSeenRef.current = d.until;
-      const ro = C.VISITOR_ROSTER[d.rid];
+      const ro = rosterOf(d.rid);
       setRepairMini({ name: ro ? ro.name : "?" });
     }
     if (!d && repairMini) setRepairMini(null); // repaired (or expired) elsewhere
@@ -1941,7 +1941,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     hostSend({ type: "broadcast", event: "apply", payload: { ...out, hostNow: Date.now() } });
   }
   // -------- 2026-07 station update: host-side station module --------
-  function rosterOf(rid) { return C.VISITOR_ROSTER[rid] || C.VISITOR_ROSTER[0]; }
+  // Zip 278 : identité de couverture (voir resolveBlacklist/fermeEngine.js) —
+  // un rid À SKILL banni s'affiche partout sous son nom d'emprunt au lieu du
+  // sien, sans que le reste (thème, sprite, skill...) ne change. Retourne
+  // toujours un objet roster valide (jamais null/undefined), comme avant.
+  function rosterOf(rid) {
+    const ro = C.VISITOR_ROSTER[rid] || C.VISITOR_ROSTER[0];
+    const cover = sharedRef.current.station && sharedRef.current.station.covers && sharedRef.current.station.covers[ro.rid];
+    return cover ? { ...ro, name: cover } : ro;
+  }
   function cropLabel(id) { const cr = C.CROPS[id] || C.CROPS[0]; return lang === "en" ? cr.nameEn : cr.name; }
   // Zip 233: human label of a gift reward (unique seeds / decoration / pet).
   function giftLabel(g) {
@@ -2186,7 +2194,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     if (req.kind === "visitorBlacklist") {
       const rid = req.rid | 0;
-      const r = E.resolveBlacklist(s, rid);
+      const r = E.resolveBlacklist(s, rid, Math.random);
       if (r.ok) { stationChat(L.visitorLeftChat(rosterOf(rid).name), "\u{1F6AB}"); broadcastStation(); }
       return true;
     }
@@ -2361,7 +2369,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       for (const vid of Object.keys(votes)) if (!onlineIds.includes(vid)) delete votes[vid];
       const unanime = onlineIds.every(id => votes[id]);
       if (onlineIds.length <= 1 || unanime) {
-        const ro = C.VISITOR_ROSTER[rid];
+        const ro = rosterOf(rid);
         st.residents = st.residents.filter(r => r.rid !== rid);
         delete st.kickVotes[rid];
         // Humeur pondérée + variante de texte figées dès l'exclusion.
@@ -2383,7 +2391,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // Zip 259 : réponse à la supplique d'un ex-résident revenu. "accept" ->
       // il réemménage SI une maison est libre ; sinon message "plus de place".
       // "refuse" -> il repart. Dans tous les cas le visiteur-supplique s'en va.
-      const rid = req.rid | 0, ro = C.VISITOR_ROSTER[rid];
+      const rid = req.rid | 0, ro = rosterOf(rid);
       if (!st || !ro) return true;
       const v = E.getVisitor(s, rid);
       if (req.accept) {
@@ -2578,7 +2586,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           waitUntil: 0, waitStartedAt: 0, deadline: 0, votes: null, voteUntil: 0,
         });
         st.exiles.splice(i, 1);
-        const ro = C.VISITOR_ROSTER[ex.rid];
+        const ro = rosterOf(ex.rid);
         stationChat(L.exileReturnChat(ro ? ro.name : "?"), "\u{1F6B6}");
         broadcastStation();
       }
@@ -4456,6 +4464,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const i = E.findResidentTile(w, C.GREG_ANCHOR, kind);
       if (i >= 0) { if (kind === "rock") { E.gregMine(w, i); stock.stone += C.LUMBERJACK_STONE; } else { E.gregChop(w, i); stock.wood += C.LUMBERJACK_WOOD; } recordTileOverride(i); tiles.push({ i, g: w.ground[i], o: w.objects[i], hp: w.objHp.get(i) }); }
     }
+    // Zip 278 (demande Guillaume : "il doit couper du bois + transformer le
+    // bois en planches") : même tour de travail, en plus d'abattre/casser -
+    // s'il y a assez de bois en réserve, Tristan en scie une partie en
+    // planches (gregStock.planks, même pool commun). Rien ce tour-ci si le
+    // stock de bois est encore trop bas ; il rattrapera au tour suivant.
+    if ((stock.wood || 0) >= C.LUMBERJACK_PLANK_WOOD_COST) {
+      stock.wood -= C.LUMBERJACK_PLANK_WOOD_COST;
+      stock.planks = (stock.planks || 0) + C.LUMBERJACK_PLANK_YIELD;
+    }
     dirtyRef.current = true;
     if (netCanBroadcast()) channelRef.current?.send({ type: "broadcast", event: "apply", payload: { tiles, gregStock: stock } });
   }
@@ -4468,7 +4485,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const now = Date.now();
     for (const res of residents) {
       if (!res) continue;
-      const ro = C.VISITOR_ROSTER[res.rid];
+      const ro = rosterOf(res.rid);
       if (!ro) continue;
       // Zip 258 : Eduardo en voyage. Tant qu'il n'est pas rentré, il ne se
       // balade pas et ne travaille pas (il est absent du village). À l'échéance
@@ -5892,7 +5909,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           // sauter. L'hôte garde la position simulée brute.
           const vp = isHost ? vv : smoothNpc("visitor:" + vv.rid, vv.x, vv.y, dt, true, !!vv.moving, (cx, cy) => canStand(w, cx, cy));
           const vx = vp.x, vy = vp.y;
-          const ro = C.VISITOR_ROSTER[vv.rid] || C.VISITOR_ROSTER[0];
+          const ro = rosterOf(vv.rid);
           // Zip 258/264 : Eduardo « se présente au village sur le dos d'un
           // cheval blanc ». Zip 264 (demande Guillaume) : il chevauche
           // désormais EXACTEMENT comme le fermier — on passe simplement
@@ -5907,7 +5924,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const residents = (st && st.residents) || [];
         const houseOwners = townHouseOwners();
         for (let ri = 0; ri < residents.length; ri++) {
-          const ro = C.VISITOR_ROSTER[residents[ri].rid]; if (!ro) continue;
+          const ro = rosterOf(residents[ri].rid); if (!ro) continue;
           if (residents[ri].trip && residents[ri].trip.phase === "away") continue; // zip 258 : Eduardo absent (en voyage)
           // Zip 274 (bug signalé par Guillaume : "résidents en double, une
           // version figée + une version normale") : ce rendu "idle planté
@@ -6085,7 +6102,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       {
         const residents = (sharedRef.current.station && sharedRef.current.station.residents) || [];
         for (const res of residents) {
-          const ro = C.VISITOR_ROSTER[res.rid]; if (!ro) continue;
+          const ro = rosterOf(res.rid); if (!ro) continue;
           if (res.trip && res.trip.phase === "away") continue; // zip 258 : Eduardo absent (en voyage)
           if (typeof res.x !== "number") continue;
           const rp = isHost ? res : smoothNpc("resident:" + res.rid, res.x, res.y, dt, true, !!res.moving, (cx, cy) => canStand(w, cx, cy));
@@ -6593,7 +6610,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (fid) { const fm = farmersRef.current[fid]; return { ...h, ownerId: fid, ownerName: fm ? (fm.name || "?") : null, resident: null }; }
         const res = residents[i - ids.length];
         if (res) {
-          const ro = C.VISITOR_ROSTER[res.rid];
+          const ro = rosterOf(res.rid);
           return { ...h, ownerId: "res" + res.rid, ownerName: ro ? ro.name : null, resident: res };
         }
         return { ...h, ownerId: null, ownerName: null, resident: null };
@@ -7511,7 +7528,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const s = sharedRef.current;
     const cs = s.craftStock || {}, gs = s.gregStock || {};
     const crafts = s.crafts || {};
-    if (ro.skill === "lumberjack") return L.residentProdWood(gs.wood | 0, gs.stone | 0);
+    if (ro.skill === "lumberjack") return L.residentProdWood(gs.wood | 0, gs.stone | 0, gs.planks | 0);
     // Zip 258 : Eduardo (voyager) — pas d'atelier, statut = en voyage / au village.
     if (ro.skill === "voyager") {
       const res = skilledResidents().find(r => r.rid === ro.rid);
@@ -8120,7 +8137,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       </div>
 
       {/* Invite proximité */}
-      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("visitor:") ? L.promptVisitor((C.VISITOR_ROSTER[+promptKey.slice(8)] || {}).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "coop" ? L.promptCoop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : L.promptBin}</div>}
+      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "coop" ? L.promptCoop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : L.promptBin}</div>}
       {mountPrompt && <div className="ferme-prompt ferme-prompt-mount">{mountPrompt === "mount" ? L.mountPrompt : L.dismountPrompt}</div>}
       {handHeldUI && <div className="ferme-prompt ferme-prompt-mount">{L.handHeldHint}</div>}
 
@@ -8333,7 +8350,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 production. Clic -> ouvre leur fiche de dialogue (même carte que
                 la touche Q). */}
             {skilledResidents().map(res => {
-              const ro = C.VISITOR_ROSTER[res.rid]; if (!ro) return null;
+              const ro = rosterOf(res.rid); if (!ro) return null;
               const prod = residentProdLine(ro);
               // Zip 258 : Eduardo (voyager) a des boutons dédiés (commander un
               // voyage / revendre), au lieu du simple "Voir". Alerte pâtissière :
@@ -8407,7 +8424,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               <>
                 <div className="ferme-hint" style={{ marginTop: 10 }}>{L.residentsSectionTitle}</div>
                 {(stationSt.residents || []).map(res => {
-                  const ro = C.VISITOR_ROSTER[res.rid]; if (!ro) return null;
+                  const ro = rosterOf(res.rid); if (!ro) return null;
                   const votes = ((stationSt.kickVotes || {})[res.rid]) || {};
                   const nv = Object.keys(votes).length;
                   const online = Math.max(1, (hud.players | 0) || Object.keys(farmersRef.current || {}).length || 1);
@@ -9028,7 +9045,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           production vivant (miel/fromage/pâtisserie/bois-pierre) lu sur l'état
           partagé. */}
       {residentCard != null && (() => {
-        const ro = C.VISITOR_ROSTER[residentCard]; if (!ro) return null;
+        const ro = rosterOf(residentCard); if (!ro) return null;
         const bid = C.SKILL_BUILDING[ro.skill];
         const built = bid && sharedRef.current.crafts && sharedRef.current.crafts[bid] && sharedRef.current.crafts[bid].built;
         let need;
@@ -9250,14 +9267,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             <h4 style={{ margin: "4px 0 8px" }}>{L.adsGiftsTitle}</h4>
             {(!stationSt || !stationSt.pendingGifts || !stationSt.pendingGifts.length)
               ? <p style={{ fontSize: 12, opacity: .7, margin: "2px 0" }}>{L.adsGiftsEmpty}</p>
-              : <div className="ferme-ads-list">{stationSt.pendingGifts.map((g, gi) => <div key={gi} className="ferme-ads-row">{"\u{1F381}"} {L.adsGiftRow(giftLabel(g), (C.VISITOR_ROSTER[g.from] || {}).name || "?")}</div>)}</div>}
+              : <div className="ferme-ads-list">{stationSt.pendingGifts.map((g, gi) => <div key={gi} className="ferme-ads-row">{"\u{1F381}"} {L.adsGiftRow(giftLabel(g), rosterOf(g.from).name || "?")}</div>)}</div>}
           </div>
         </div>
       )}
       {visitorOpen && stationSt && (() => {
         const v = ((stationSt.visitors || []).find(x => x.rid === visitorRid)) || null;
         if (!v) return null;
-        const ro = C.VISITOR_ROSTER[v.rid] || C.VISITOR_ROSTER[0];
+        const ro = rosterOf(v.rid);
         const o = v.offer || {};
         const rel = (stationSt.rel && stationSt.rel[v.rid]) || 0;
         const have = o.type === "buy" ? ((myInv && myInv.crops && myInv.crops[o.crop]) || 0) : 0;
@@ -9434,7 +9451,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         return (
           <div style={{ position: "fixed", right: 12, top: 120, zIndex: 40, display: "flex", flexDirection: "column", gap: 6, maxWidth: 280 }}>
             {shown.map(vv => {
-              const ro = C.VISITOR_ROSTER[vv.rid] || C.VISITOR_ROSTER[0];
+              const ro = rosterOf(vv.rid);
               const o = vv.offer || {};
               const ask = o.type === "buy" ? L.notifWantsBuy(o.n, (lang === "en" ? (C.CROPS[o.crop] || {}).nameEn : (C.CROPS[o.crop] || {}).name))
                 : o.type === "demand" ? L.notifDemand(o.gold)

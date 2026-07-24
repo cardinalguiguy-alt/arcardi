@@ -148,7 +148,7 @@ export const FERME_STR = {
     }[sk] || `Bonjour ! Moi c'est ${n}.`),
     residentNeedBuilding: (b) => `Construis-moi une ${b} (achetable en or à la boutique) et je produirai pour la ferme !`,
     residentBuildingReady: (b) => `Ma ${b} tourne. Garde nos stocks remplis et je fais le reste !`,
-    residentLumberjackLine: "Je coupe du bois et casse des cailloux toute la journée — tout va dans notre réserve commune.",
+    residentLumberjackLine: "Je coupe du bois, casse des cailloux et scie des planches toute la journée — tout va dans notre réserve commune.",
     residentCloseBtn: "À plus tard",
     // Zip 253 : fiche résident enrichie + onglet Employés.
     residentRoleTitle: "Production",
@@ -156,7 +156,7 @@ export const FERME_STR = {
     residentProdHoney: (n) => `Ruche en route — ${n} pot(s) de miel en réserve.`,
     residentProdCheese: (w, p) => `Fromagerie active — ${w} roue(s), ${p} part(s) au frais.`,
     residentProdPastry: (n) => `Le four tourne — ${n} pâtisserie(s) prête(s).`,
-    residentProdWood: (w, s) => `Réserve commune : ${w} bois, ${s} pierre(s) rentrés.`,
+    residentProdWood: (w, s, p) => `Réserve commune : ${w} bois, ${s} pierre(s), ${p} planche(s) rentrés.`,
     residentSeeBtn: "Voir",
     // Zip 258 : alerte pâtissière (rupture d'ingrédients en journée).
     bakeryAlertShort: "⚠️ Ingrédients manquants",
@@ -869,7 +869,7 @@ export const FERME_STR = {
     }[sk] || `Hi! I'm ${n}.`),
     residentNeedBuilding: (b) => `Build me a ${b} (buyable with gold at the shop) and I'll produce for the farm!`,
     residentBuildingReady: (b) => `My ${b} is running. Keep our stocks filled and I'll do the rest!`,
-    residentLumberjackLine: "I fell trees and break rocks all day — it all goes into our common stock.",
+    residentLumberjackLine: "I fell trees, break rocks and saw planks all day — it all goes into our common stock.",
     residentCloseBtn: "See you later",
     // Zip 253: enriched resident card + Staff tab.
     residentRoleTitle: "Output",
@@ -877,7 +877,7 @@ export const FERME_STR = {
     residentProdHoney: (n) => `Hive humming — ${n} honey jar(s) in store.`,
     residentProdCheese: (w, p) => `Dairy running — ${w} wheel(s), ${p} portion(s) aging.`,
     residentProdPastry: (n) => `Oven's on — ${n} pastry(ies) ready.`,
-    residentProdWood: (w, s) => `Common stock: ${w} wood, ${s} stone brought in.`,
+    residentProdWood: (w, s, p) => `Common stock: ${w} wood, ${s} stone, ${p} plank(s) brought in.`,
     residentSeeBtn: "View",
     // Zip 258: baker out-of-ingredients alert.
     bakeryAlertShort: "⚠️ Out of ingredients",

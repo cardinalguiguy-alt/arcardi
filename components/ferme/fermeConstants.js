@@ -1102,6 +1102,16 @@ export const VISITOR_ROSTER = [
 // depuis le zip 259, mais la mécanique reste dispo pour un futur usage).
 export const RARE_VISITOR_WEIGHT = 0.25;
 
+// Zip 278 (demande Guillaume) : quand un hostile À SKILL est mis en
+// blacklist, on ne le bannit plus pour de bon — il revient sous un nom
+// d'emprunt (voir resolveBlacklist / covers dans newStationState). Noms
+// piochés dans ce pool, séparés par genre pour rester cohérents avec le
+// sprite (déjà fixé par le rid d'origine, seul le nom affiché change).
+export const COVER_NAMES = {
+  m: ["Anatole", "Baptiste", "Cyprien", "Emile", "Florian", "Gaspard", "Hippolyte", "Isidore", "Justin", "Lazare", "Maxence", "Norbert", "Octave", "Prosper", "Quentin"],
+  f: ["Adeline", "Blanche", "Céleste", "Delphine", "Estelle", "Fantine", "Georgine", "Henriette", "Iris", "Josephine", "Louison", "Marceline", "Noelle", "Ophelie", "Solange"],
+};
+
 // ---- Zip 252 : métiers d'artisans (résidents à skill) ----
 // Indices d'élevage utilisés comme intrants (voir ANIMALS ci-dessus).
 export const HEN_ANIMAL = 0;   // œufs = products[0]
@@ -1167,6 +1177,15 @@ export const PASTRY_BATCH = 10;            // nombre de pâtisseries produites p
 export const BAKERY_OPEN_MIN = 5 * 60 + 30;  // 5h30
 export const BAKERY_CLOSE_MIN = 19 * 60;     // 19h00
 export const LUMBERJACK_WOOD = 6, LUMBERJACK_STONE = 4; // Tristan : par tour de travail -> réserve commune (gregStock)
+// Zip 278 (demande Guillaume : "il doit couper du bois + transformer le bois
+// en planches") : à CHAQUE tour de travail, en plus d'abattre un arbre et
+// casser un rocher (ci-dessus), Tristan tente aussi une conversion — si la
+// réserve commune a au moins LUMBERJACK_PLANK_WOOD_COST de bois, il en
+// consomme cette quantité pour produire LUMBERJACK_PLANK_YIELD planches
+// (gregStock.planks, même pool commun que bois/pierre). Pas de conversion ce
+// tour-là si le stock de bois est insuffisant — il continuera d'accumuler du
+// bois au fil des tours suivants jusqu'à pouvoir convertir à nouveau.
+export const LUMBERJACK_PLANK_WOOD_COST = 4, LUMBERJACK_PLANK_YIELD = 2;
 
 /* ==========================================================================
    Zip 258 : Eduardo Da Fonseca, commerçant grand voyageur (demande Guillaume)
