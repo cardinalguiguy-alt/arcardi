@@ -455,14 +455,22 @@ export function buildRemainingMs(readyAt, now) {
 // (tab en veille, etc.), même esprit que cropGrowState qui ne perd jamais de
 // progression. Renvoie le nouvel état ({ wheat, nextAt }) et `sacks`
 // (nombre de sacs produits depuis le dernier appel).
-export function millTick(ms, now) {
+// Zip 286 (demande Guillaume : "2 moulins = x2, 3 moulins = x3") :
+// `speedMult` (nombre de moulins CONSTRUITS sur la ferme, calculé par
+// l'appelant — voir FermeGame.js) divise la durée d'un batch, sans toucher
+// à la quantité de blé consommée par sac (MILL_WHEAT_PER_SACK inchangé).
+// Par défaut 1 (aucun changement de comportement pour un appelant qui ne le
+// précise pas encore).
+export function millTick(ms, now, speedMult = 1) {
   let wheat = (ms && ms.wheat) || 0;
   let nextAt = (ms && ms.nextAt) || 0;
   let sacks = 0;
-  if (wheat >= C.MILL_WHEAT_PER_SACK && !nextAt) nextAt = now + C.MILL_BATCH_MS;
+  const mult = Math.max(C.MILL_SPEED_MIN_MULT, speedMult || 1);
+  const batchMs = C.MILL_BATCH_MS / mult;
+  if (wheat >= C.MILL_WHEAT_PER_SACK && !nextAt) nextAt = now + batchMs;
   while (nextAt && now >= nextAt && wheat >= C.MILL_WHEAT_PER_SACK) {
     wheat -= C.MILL_WHEAT_PER_SACK; sacks++;
-    nextAt = wheat >= C.MILL_WHEAT_PER_SACK ? nextAt + C.MILL_BATCH_MS : 0;
+    nextAt = wheat >= C.MILL_WHEAT_PER_SACK ? nextAt + batchMs : 0;
   }
   if (wheat < C.MILL_WHEAT_PER_SACK) nextAt = 0;
   return { wheat, nextAt, sacks };

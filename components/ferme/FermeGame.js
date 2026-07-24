@@ -3096,8 +3096,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const now = Date.now();
         const millTilesOut = [];
         let sacksProduced = 0;
+        // Zip 286 (demande Guillaume : "2 moulins = x2, 3 moulins = x3") :
+        // compte les moulins dont le CHANTIER est terminé (buildReady) — un
+        // moulin encore en construction ne compte pas dans le multiplicateur,
+        // il ne produit de toute façon rien tant qu'il n'est pas prêt.
+        let readyMillCount = 0;
+        for (const mi of w.mills.keys()) if (E.buildReady(w.objHp.get(mi), now)) readyMillCount++;
+        const millSpeedMult = Math.max(C.MILL_SPEED_MIN_MULT, readyMillCount);
         for (const [mi, ms] of w.mills) {
-          const r = E.millTick(ms, now);
+          const r = E.millTick(ms, now, millSpeedMult);
           if (r.wheat !== ms.wheat || r.nextAt !== ms.nextAt) {
             w.mills.set(mi, { wheat: r.wheat, nextAt: r.nextAt });
             millTilesOut.push([mi, r.wheat, r.nextAt]);

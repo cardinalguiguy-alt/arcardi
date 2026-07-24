@@ -542,6 +542,19 @@ export const MILL_WHEAT_PER_SACK = 2;        // Zip 261/262 (demande Guillaume :
 export const MILL_BATCH_MS = 5 * 60 * 1000;  // Zip 261/262 (demande Guillaume : moulins plus rapides) : 15 -> 5 min réelles par sac
 export const MILL_STOCK_CAP = 90;            // stock de blé max qu'un moulin peut contenir (extrapolé, ~30 sacs d'avance)
 export const FLOUR_SELL = 55;                // prix de vente d'un sac de farine (extrapolé)
+// Zip 286 (demande Guillaume : "quand une ferme dépose plusieurs moulins, il
+// faut qu'ils fonctionnent en même temps, qu'ils produisent la farine plus
+// vite. 2 moulins = x2, 3 moulins = x3") : chaque moulin garde son propre
+// stock de blé indépendant (inchangé, cf. ci-dessus), mais son rythme de
+// production (MILL_BATCH_MS) est maintenant divisé par le nombre de moulins
+// TERMINÉS (chantier fini, voir buildReady) sur la ferme au moment du tick —
+// voir E.millTick(ms, now, speedMult) et son appel dans FermeGame.js, qui
+// compte ce nombre avant la boucle. Avec 2 moulins construits, chacun sort un
+// sac 2x plus vite qu'un moulin seul ; avec 3, 3x plus vite — exactement le
+// x2/x3 demandé, tant qu'il reste du blé en stock dans le(s) moulin(s)
+// concerné(s). Pas de plafond volontairement (aucune limite demandée sur le
+// nombre de moulins ni sur ce multiplicateur).
+export const MILL_SPEED_MIN_MULT = 1; // multiplicateur plancher (1 moulin construit = vitesse normale)
 
 // --- Temps de construction réels (chantier 2026-07, "modèle Clash of Clans") ---
 // Toute infrastructure posée par un joueur (lampadaire pour l'instant, et
