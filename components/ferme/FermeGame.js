@@ -140,6 +140,21 @@ function drawBuildingShadow(ctx, cx, groundY, halfW) {
   // la remettre facilement si besoin. L'effet d'enfoncement (footing,
   // fonction suivante) reste inchangé.
 }
+// Zip 270 (demande Guillaume) : ombre "connectée" — contrairement à
+// drawBuildingShadow (ci-dessus, désactivée), celle-ci est REMONTÉE et
+// COLLÉE au bas du sprite (pas d'offset vers le bas qui la détache de la
+// base et donne un effet de flottement) : elle chevauche légèrement le bas
+// du bâtiment (groundY - 1) plutôt que de commencer sous lui (groundY + 2
+// comme l'ancienne version). Utilisée seulement là où Guillaume l'a demandée
+// (maisons de Valley Town, grange, boutique de la ferme) — pas globale.
+function drawBuildingShadowConnected(ctx, cx, groundY, halfW) {
+  ctx.save();
+  ctx.fillStyle = "rgba(0,0,0,0.28)";
+  ctx.beginPath();
+  ctx.ellipse(cx, groundY - 1, Math.max(6, halfW * 0.95), Math.max(3, halfW * 0.16), 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
 function drawBuildingFooting(ctx, cx, groundY, halfW) {
   ctx.save();
   ctx.fillStyle = "rgba(35,26,16,0.30)";
@@ -4627,6 +4642,48 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // partage par joueur. Le mouvement est cosmétique (il reste dans/autour de
   // l'enclos, ne traverse pas les solides). Le rattrapage HORS-LIGNE est géré
   // séparément au chargement (E.haraldCatchup).
+  // Zip 269 (demande Guillaume : "Harald est stupide, il marche contre la
+  // clôture au lieu de chercher un chemin") : recherche de chemin BFS très
+  // légère (4 directions, grille de tuiles bornée à une fenêtre autour du
+  // trajet départ→cible) — utilisée UNIQUEMENT quand updateHarald détecte un
+  // blocage réel (voir plus bas), donc coût quasi nul en régime normal.
+  // Retourne un tableau de centres de tuile {x,y} du premier pas jusqu'à la
+  // cible (sans la case de départ), ou null si aucun chemin trouvé dans la
+  // fenêtre de recherche (obstacle fermé, cible réellement inaccessible).
+  function haraldFindPath(w, sx, sy, tx, ty) {
+    const fsx = Math.floor(sx), fsy = Math.floor(sy), ftx = Math.floor(tx), fty = Math.floor(ty);
+    if (fsx === ftx && fsy === fty) return [];
+    const MARGIN = 6;
+    const minX = Math.min(fsx, ftx) - MARGIN, maxX = Math.max(fsx, ftx) + MARGIN;
+    const minY = Math.min(fsy, fty) - MARGIN, maxY = Math.max(fsy, fty) + MARGIN;
+    const width = maxX - minX + 1;
+    const key = (x, y) => (x - minX) + (y - minY) * width;
+    const visited = new Set([key(fsx, fsy)]);
+    const prev = new Map();
+    const queue = [[fsx, fsy]];
+    let qi = 0, steps = 0, found = false;
+    const MAX_STEPS = 2500; // fenêtre + plafond de nœuds : reste largement sous 1 ms même sur un enclos très découpé
+    while (qi < queue.length && steps < MAX_STEPS) {
+      const cur = queue[qi++]; steps++;
+      if (cur[0] === ftx && cur[1] === fty) { found = true; break; }
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const nx = cur[0] + dx, ny = cur[1] + dy;
+        if (nx < minX || nx > maxX || ny < minY || ny > maxY) continue;
+        const k = key(nx, ny);
+        if (visited.has(k) || E.blockedTile(w, nx + 0.5, ny + 0.5)) continue;
+        visited.add(k); prev.set(k, cur); queue.push([nx, ny]);
+      }
+    }
+    if (!found) return null;
+    const path = []; let curT = [ftx, fty];
+    while (!(curT[0] === fsx && curT[1] === fsy)) {
+      path.push({ x: curT[0] + 0.5, y: curT[1] + 0.5 });
+      const p = prev.get(key(curT[0], curT[1]));
+      if (!p) return null; // ne devrait pas arriver (found=true implique un chemin complet dans prev)
+      curT = p;
+    }
+    return path.reverse();
+  }
   function updateHarald(dt) {
     const w = worldRef.current; if (!w) return;
     const s = sharedRef.current, h = s.harald;
@@ -4682,16 +4739,50 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       tx = h.roamTarget.x; ty = h.roamTarget.y; roaming = true;
     }
     h.tx = tx; h.ty = ty;
+    // Zip 269 : le chemin de contournement en cours ne vaut que pour la
+    // cible pour laquelle il a été calculé — s'il change (nouvel animal
+    // ciblé, nouveau point de rôdaille), on l'abandonne et on retente en
+    // ligne droite (qui redéclenchera une BFS si un nouvel obstacle bloque).
+    if (h.path && h.path.length && h.pathTx !== undefined && Math.hypot(h.pathTx - tx, h.pathTy - ty) > 0.75) h.path = null;
     {
-      const dx = tx - h.x, dy = ty - h.y, d = Math.hypot(dx, dy);
+      // Cible EFFECTIVE de ce pas : le prochain point du chemin de
+      // contournement s'il y en a un, sinon la cible directe comme avant.
+      let etx = tx, ety = ty;
+      if (h.path && h.path.length) {
+        if (Math.hypot(h.path[0].x - h.x, h.path[0].y - h.y) < 0.18) h.path.shift();
+        if (h.path.length) { etx = h.path[0].x; ety = h.path[0].y; }
+      }
+      const dx = etx - h.x, dy = ety - h.y, d = Math.hypot(dx, dy);
       if (d > 0.02) {
         const step = Math.min((roaming ? C.HARALD_SPEED * 0.55 : C.HARALD_SPEED) * dt, d);
         const nx = h.x + (dx / d) * step, ny = h.y + (dy / d) * step;
+        const beforeX = h.x, beforeY = h.y;
         if (!E.blockedTile(w, nx, h.y)) h.x = nx;
         if (!E.blockedTile(w, h.x, ny)) h.y = ny;
         h.dir = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 2 : 3) : (dy < 0 ? 1 : 0);
         h.animT = (h.animT || 0) + dt * 6; h.moving = true; moved = true;
-      } else h.moving = false;
+        // Zip 269 (demande Guillaume : "il devrait réfléchir et chercher un
+        // chemin, pas pousser contre la clôture") : si le déplacement RÉEL
+        // est quasi nul (les deux axes bloqués — typiquement une clôture en
+        // travers) alors qu'il n'est pas encore arrivé, on accumule un temps
+        // de blocage ; passé un seuil, on calcule un contournement (BFS,
+        // voir haraldFindPath) plutôt que de continuer à pousser dans le
+        // mur. `pathRetryAt` évite de relancer la recherche en boucle si la
+        // cible est réellement inaccessible dans la fenêtre de recherche.
+        const realStep = Math.hypot(h.x - beforeX, h.y - beforeY);
+        if (realStep < step * 0.15 && (!h.path || !h.path.length)) {
+          h.stuckT = (h.stuckT || 0) + dt;
+          if (h.stuckT > 0.45 && now >= (h.pathRetryAt || 0)) {
+            const p = haraldFindPath(w, h.x, h.y, tx, ty);
+            h.pathRetryAt = now + 2500;
+            if (p && p.length) { h.path = p; h.pathTx = tx; h.pathTy = ty; }
+            h.stuckT = 0;
+          }
+        } else h.stuckT = 0;
+      } else {
+        h.moving = false;
+        if (h.path && h.path.length && Math.hypot(h.path[0].x - h.x, h.path[0].y - h.y) < 0.18) h.path.shift();
+      }
     }
     // Collecte de proximité de l'animal ciblé, une fois à portée.
     if (targetAn && E.animalReady(targetAn, now)) {
@@ -5264,7 +5355,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       } });
       draws.push({ y: (C.SHOP.y + 1) * T, fn: () => {
         const gy = (C.SHOP.y + 1) * T, cx = C.SHOP.x * T - 4 + sprites.shop.width / 2;
-        drawBuildingShadow(ctx, cx, gy, sprites.shop.width / 2);
+        drawBuildingShadowConnected(ctx, cx, gy, sprites.shop.width / 2);
         ctx.drawImage(sprites.shop, C.SHOP.x * T - 4, gy - 28);
         drawBuildingFooting(ctx, cx, gy, sprites.shop.width / 2);
       } });
@@ -5289,7 +5380,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             const spr = spritesRef.current.barn[barnNow.level - 1];
             sprH = spr.height;
             const barnGy = (bs.y + 1) * T + 4, barnCx = bs.x * T - spr.width / 2 + 8 + spr.width / 2;
-            drawBuildingShadow(ctx, barnCx, barnGy, spr.width / 2);
+            drawBuildingShadowConnected(ctx, barnCx, barnGy, spr.width / 2);
             ctx.drawImage(spr, bs.x * T - spr.width / 2 + 8, barnGy - spr.height);
             drawBuildingFooting(ctx, barnCx, barnGy, spr.width / 2);
           } else {
@@ -6583,7 +6674,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         draws.push({ y: by, fn: () => {
           if (img) {
             const hCx = bx + img.width / 2;
-            drawBuildingShadow(ctx, hCx, by, img.width / 2);
+            drawBuildingShadowConnected(ctx, hCx, by, img.width / 2);
             ctx.drawImage(img, bx, by - 96);
             drawBuildingFooting(ctx, hCx, by, img.width / 2);
           }
