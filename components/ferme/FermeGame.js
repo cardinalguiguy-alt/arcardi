@@ -142,19 +142,34 @@ function drawBuildingShadow(ctx, cx, groundY, halfW) {
 }
 // Zip 275 (demande Guillaume, screenshots à l'appui : "toujours pas réglées"
 // après 8 itérations 266→274 de retouches géométriques) : DÉSACTIVÉE,
-// exactement comme drawBuildingShadow ci-dessus depuis le zip 268. Le
-// problème n'était pas le calcul (l'ellipse était bien coupée par le sprite,
-// vérifié ligne par ligne) mais la PERCEPTION : une ellipse tronquée pile au
-// ras du sol continue de se lire comme un disque plein posé à côté du
-// bâtiment, faute d'un contour visible qui matérialise la coupe. Le seul
-// modèle qui a toujours donné un bon rendu (moulin, lampadaire, épouvantail,
-// bac de dépôt) n'a JAMAIS eu cette ellipse — juste `drawBuildingFooting`
-// (liseré sombre qui mord la base) + l'ancrage au sol (case labourée pour le
-// moulin, voir fermeEngine.js cas "mill"). On aligne grange/boutique/maisons
-// Valley Town sur ce modèle plutôt que de continuer à ajuster la géométrie.
-// Fonction conservée en no-op (comme drawBuildingShadow) pour ne pas avoir à
-// toucher chaque point d'appel dispersé dans le fichier.
-function drawBuildingShadowConnected(ctx, cx, groundY, halfW) {}
+// exactement comme drawBuildingShadow ci-dessus depuis le zip 268 — MAIS
+// zip 277 (demande Guillaume : "fix les ombres dégueulasses en dessous des
+// maisons de Valley Town, prends le modèle des ombres sous les personnages")
+// : réactivée avec un modèle différent de ce qui avait été tenté aux zips
+// 266→274. Le souci n'était pas d'avoir une ellipse, mais LAQUELLE : les
+// tentatives précédentes coupaient une ellipse pile à son équateur (aucun
+// contour visible pour signaler la coupe, l'œil lisait "un disque entier en
+// plus petit" à côté du bâtiment). Le modèle qui rend bien pour les
+// personnages (voir drawCharacter plus bas : une SEULE ellipse pleine et
+// sombre, dessinée AVANT le sprite, que le sprite recouvre presque
+// entièrement — seul un mince croissant dépasse sous les pieds) n'a jamais
+// ce problème car le sprite par-dessus est opaque sur toute la largeur du
+// personnage. On applique exactement la même recette ici : les appelants
+// passent déjà un `groundY` recalé sur le bas VISUEL réel du sprite (pas le
+// bas du canevas, qui a une marge transparente pour grange/maisons — voir
+// `houseShadowGy`/`barnShadowGy` aux points d'appel), donc l'ellipse tombe
+// bien sous le mur et seul un fin trait dépasse à sa base, exactement comme
+// sous un personnage.
+function drawBuildingShadowConnected(ctx, cx, groundY, halfW) {
+  ctx.save();
+  ctx.fillStyle = "rgba(0,0,0,0.25)";
+  ctx.beginPath();
+  const rx = Math.max(10, halfW * 0.8);
+  const ry = Math.max(3, rx / 3);
+  ctx.ellipse(cx, groundY, rx, ry, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
 function drawBuildingFooting(ctx, cx, groundY, halfW) {
   ctx.save();
   ctx.fillStyle = "rgba(35,26,16,0.30)";
