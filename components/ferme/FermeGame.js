@@ -5486,26 +5486,29 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           const cropImg = cropSprites && cropSprites[gs.stage];
           if (cropImg) ctx.drawImage(cropImg, x * T, y * T);
           // Zip 288 (demande Guillaume : "l'affichage doit être très clair
-          // pour comprendre que chaque case a 5 graines") : pastille "n/5"
+          // pour comprendre que chaque case a 5 graines") : indicateur
           // TOUJOURS visible sur une case plantée (avant zip 288 : seulement
-          // à partir de n>1), fond plein pour rester lisible à la petite
-          // taille de tuile (T=16px, voir C.TILE), et teinte dorée dès que la
-          // case est pleine (n===MAX_CROPS_PER_TILE) pour signaler d'un coup
-          // d'œil qu'il n'y a plus de place. Toujours un seul sprite de
-          // culture par case (inchangé, voir zip 287) — seul ce badge change.
+          // à partir de n>1). Toujours un seul sprite de culture par case
+          // (inchangé, voir zip 287) — seul cet indicateur change.
+          // Zip 292 (demande Guillaume : "le 1/5 est envahissant et sale,
+          // très gênant niveau style") : la pastille texte "n/5" à fond
+          // plein (zip 288) est remplacée par une rangée de 5 petits
+          // pastilles ("pips") le long du bord bas de la tuile — même
+          // info (capacité 5, toujours visible, teinte dorée une fois
+          // pleine) mais bien plus discrète, dans l'esprit d'une jauge de
+          // jeu plutôt que d'un badge de texte encadré qui jurait avec le
+          // reste du décor pixel art.
           {
             const n = c.n || 1, maxN = C.MAX_CROPS_PER_TILE;
-            const label = n + "/" + maxN;
             const full = n >= maxN;
-            ctx.font = "bold 8px sans-serif";
-            const tw = ctx.measureText(label).width;
-            const bx = x * T + T - tw - 4, by = y * T + T - 9;
-            ctx.fillStyle = full ? "rgba(214,168,30,0.92)" : "rgba(0,0,0,0.68)";
-            ctx.fillRect(bx - 1, by - 1, tw + 3, 9);
-            ctx.textAlign = "left"; ctx.textBaseline = "top";
-            ctx.fillStyle = full ? "#3a2c05" : "#fff";
-            ctx.fillText(label, bx, by);
-            ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+            const pip = 2, gap = 1;
+            const rowW = maxN * pip + (maxN - 1) * gap;
+            const px0 = x * T + (T - rowW) / 2, py0 = y * T + T - pip - 1;
+            for (let k = 0; k < maxN; k++) {
+              const filled = k < n;
+              ctx.fillStyle = filled ? (full ? "rgba(230,190,60,0.95)" : "rgba(255,255,255,0.9)") : "rgba(0,0,0,0.35)";
+              ctx.fillRect(px0 + k * (pip + gap), py0, pip, pip);
+            }
           }
           if (gs.mature) {
             // Bulle "prête à récolter" : flotte doucement au-dessus de la case.
