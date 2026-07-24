@@ -147,11 +147,19 @@ function drawBuildingShadow(ctx, cx, groundY, halfW) {
 // du bâtiment (groundY - 1) plutôt que de commencer sous lui (groundY + 2
 // comme l'ancienne version). Utilisée seulement là où Guillaume l'a demandée
 // (maisons de Valley Town, grange, boutique de la ferme) — pas globale.
+// Zip 271 (demande Guillaume : "le modèle de la pâtisserie est parfait,
+// l'ombre doit être EN DESSOUS du bâtiment, comme s'il reposait dessus, pas
+// d'écart") : repositionnée pour que le bord SUPÉRIEUR de l'ellipse touche
+// exactement groundY (aucun chevauchement vers le haut ni écart vers le
+// bas) — le centre est donc décalé du rayon vertical, pas d'un offset fixe
+// comme la version précédente (zip 270, qui laissait un mini-écart/débord
+// selon la largeur du bâtiment).
 function drawBuildingShadowConnected(ctx, cx, groundY, halfW) {
+  const ry = Math.max(3, halfW * 0.16);
   ctx.save();
   ctx.fillStyle = "rgba(0,0,0,0.28)";
   ctx.beginPath();
-  ctx.ellipse(cx, groundY - 1, Math.max(6, halfW * 0.95), Math.max(3, halfW * 0.16), 0, 0, Math.PI * 2);
+  ctx.ellipse(cx, groundY + ry, Math.max(6, halfW * 0.95), ry, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 }
