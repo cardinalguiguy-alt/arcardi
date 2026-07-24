@@ -140,38 +140,21 @@ function drawBuildingShadow(ctx, cx, groundY, halfW) {
   // la remettre facilement si besoin. L'effet d'enfoncement (footing,
   // fonction suivante) reste inchangé.
 }
-// Zip 270 (demande Guillaume) : ombre "connectée" — contrairement à
-// drawBuildingShadow (ci-dessus, désactivée), celle-ci est REMONTÉE et
-// COLLÉE au bas du sprite (pas d'offset vers le bas qui la détache de la
-// base et donne un effet de flottement) : elle chevauche légèrement le bas
-// du bâtiment (groundY - 1) plutôt que de commencer sous lui (groundY + 2
-// comme l'ancienne version). Utilisée seulement là où Guillaume l'a demandée
-// (maisons de Valley Town, grange, boutique de la ferme) — pas globale.
-// Zip 271 (demande Guillaume : "le modèle de la pâtisserie est parfait,
-// l'ombre doit être EN DESSOUS du bâtiment, comme s'il reposait dessus, pas
-// d'écart") : repositionnée pour que le bord SUPÉRIEUR de l'ellipse touche
-// exactement groundY (aucun chevauchement vers le haut ni écart vers le
-// bas) — le centre est donc décalé du rayon vertical, pas d'un offset fixe
-// comme la version précédente (zip 270, qui laissait un mini-écart/débord
-// selon la largeur du bâtiment).
-// Zip 273 (demande Guillaume, screenshots à l'appui : "l'ombre doit être
-// COUPÉE par le bâtiment, pas le recouvrir/flotter dessous") : centre de
-// l'ellipse remonté EXACTEMENT sur groundY (au lieu de groundY + ry, qui
-// plaçait toute l'ombre sous la ligne de sol -> elle ne touchait jamais le
-// bâtiment, d'où l'effet de disque posé à côté / flottement). Avec le
-// centre sur groundY, la moitié SUPÉRIEURE de l'ellipse tombe derrière le
-// sprite (dessiné juste après, par-dessus) et seule la moitié inférieure
-// — un simple croissant — dépasse devant le bâtiment, exactement comme une
-// ombre portée par un bâtiment qui repose dessus.
-function drawBuildingShadowConnected(ctx, cx, groundY, halfW) {
-  const ry = Math.max(3, halfW * 0.16);
-  ctx.save();
-  ctx.fillStyle = "rgba(0,0,0,0.28)";
-  ctx.beginPath();
-  ctx.ellipse(cx, groundY, Math.max(6, halfW * 0.95), ry, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
-}
+// Zip 275 (demande Guillaume, screenshots à l'appui : "toujours pas réglées"
+// après 8 itérations 266→274 de retouches géométriques) : DÉSACTIVÉE,
+// exactement comme drawBuildingShadow ci-dessus depuis le zip 268. Le
+// problème n'était pas le calcul (l'ellipse était bien coupée par le sprite,
+// vérifié ligne par ligne) mais la PERCEPTION : une ellipse tronquée pile au
+// ras du sol continue de se lire comme un disque plein posé à côté du
+// bâtiment, faute d'un contour visible qui matérialise la coupe. Le seul
+// modèle qui a toujours donné un bon rendu (moulin, lampadaire, épouvantail,
+// bac de dépôt) n'a JAMAIS eu cette ellipse — juste `drawBuildingFooting`
+// (liseré sombre qui mord la base) + l'ancrage au sol (case labourée pour le
+// moulin, voir fermeEngine.js cas "mill"). On aligne grange/boutique/maisons
+// Valley Town sur ce modèle plutôt que de continuer à ajuster la géométrie.
+// Fonction conservée en no-op (comme drawBuildingShadow) pour ne pas avoir à
+// toucher chaque point d'appel dispersé dans le fichier.
+function drawBuildingShadowConnected(ctx, cx, groundY, halfW) {}
 function drawBuildingFooting(ctx, cx, groundY, halfW) {
   ctx.save();
   ctx.fillStyle = "rgba(35,26,16,0.30)";
