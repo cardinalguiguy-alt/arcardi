@@ -5387,10 +5387,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           if (barnNow.level >= 1 && spritesRef.current && spritesRef.current.barn) {
             const spr = spritesRef.current.barn[barnNow.level - 1];
             sprH = spr.height;
+            // Zip 272 (demande Guillaume, screenshots à l'appui : "l'ombre
+            // doit être en dessous du bâtiment, comme s'il reposait dessus,
+            // pas d'écart") : les canevas de la grange ont une marge
+            // TRANSPARENTE en bas (paliers 1/2 : baseY = sz-4 pour un
+            // canevas sz+8 → 12px de vide ; palier 3/barnSpriteBig : baseY
+            // 221 pour un canevas 230 réduit ×0.5 → 4.5px de vide). Sans
+            // correction, `barnGy` (bas du CANEVAS) tombe bien EN DESSOUS du
+            // bas visuel réel du mur, d'où l'écart/flottement visible à
+            // l'écran. `BARN_SHADOW_PAD` compense, indexé comme
+            // `spritesRef.current.barn` (palier 1/2/3 -> index 0/1/2).
+            const BARN_SHADOW_PAD = [12, 12, 4.5];
             const barnGy = (bs.y + 1) * T + 4, barnCx = bs.x * T - spr.width / 2 + 8 + spr.width / 2;
-            drawBuildingShadowConnected(ctx, barnCx, barnGy, spr.width / 2);
+            const barnShadowGy = barnGy - (BARN_SHADOW_PAD[barnNow.level - 1] || 0);
+            drawBuildingShadowConnected(ctx, barnCx, barnShadowGy, spr.width / 2);
             ctx.drawImage(spr, bs.x * T - spr.width / 2 + 8, barnGy - spr.height);
-            drawBuildingFooting(ctx, barnCx, barnGy, spr.width / 2);
+            drawBuildingFooting(ctx, barnCx, barnShadowGy, spr.width / 2);
           } else {
             ctx.font = "14px monospace"; ctx.textAlign = "center";
             ctx.fillText("🛖", bs.x * T + 8, bs.y * T + 4 + Math.sin(now / 300) * 1.5);
@@ -6682,9 +6694,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         draws.push({ y: by, fn: () => {
           if (img) {
             const hCx = bx + img.width / 2;
-            drawBuildingShadowConnected(ctx, hCx, by, img.width / 2);
+            // Zip 272 (demande Guillaume, screenshots à l'appui) : les
+            // canevas des maisons (house()/houseLvl2/houseLvl3 et leurs
+            // variantes Valley Town, `townHouseVariant` — « même canevas
+            // 96x96 et même ancrage bas que house() ») ont 8px de marge
+            // TRANSPARENTE en bas (mur/porte s'arrêtent à y=88 sur un
+            // canevas de 96) ; `by` (bas du canevas) tombe donc 8px sous le
+            // bas visuel réel du mur, d'où l'écart/flottement de l'ombre.
+            const houseShadowGy = by - 8;
+            drawBuildingShadowConnected(ctx, hCx, houseShadowGy, img.width / 2);
             ctx.drawImage(img, bx, by - 96);
-            drawBuildingFooting(ctx, hCx, by, img.width / 2);
+            drawBuildingFooting(ctx, hCx, houseShadowGy, img.width / 2);
           }
           const label = hsn.ownerName || L.townSaleSign;
           ctx.font = "bold 8px monospace"; ctx.textAlign = "center";
