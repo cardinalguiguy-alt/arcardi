@@ -120,6 +120,39 @@ function migrateGems(saved) {
   return gems;
 }
 
+// Zip 266 (demande Guillaume) : effet "planté dans le sol" pour les bâtiments
+// — une petite ombre douce au sol + une base assombrie qui mord légèrement
+// sur le bas du sprite, pour éviter l'impression de bâtiment "posé" flottant
+// sur l'herbe. Prend le CENTRE X du bâtiment (cx), la ligne de sol en pixels
+// (groundY, bas du sprite/footprint) et une demi-largeur approximative
+// (halfW, ~largeur du sprite/2). Deux fonctions séparées :
+// - drawBuildingShadow : à appeler AVANT le drawImage du bâtiment (dessous).
+// - drawBuildingFooting : à appeler APRÈS le drawImage (butte de terre qui
+//   mord légèrement sur le bas du sprite pour l'effet d'enfoncement, sans
+//   toucher aux vrais sprites sources).
+// Fonctions PURES (ctx passé en paramètre), réutilisables depuis n'importe
+// quelle passe de rendu (ferme/évil/ville), sans dépendance de closure.
+function drawBuildingShadow(ctx, cx, groundY, halfW) {
+  ctx.save();
+  ctx.fillStyle = "rgba(0,0,0,0.22)";
+  ctx.beginPath();
+  ctx.ellipse(cx, groundY + 2, Math.max(6, halfW * 0.85), Math.max(3, halfW * 0.14), 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+function drawBuildingFooting(ctx, cx, groundY, halfW) {
+  ctx.save();
+  ctx.fillStyle = "rgba(35,26,16,0.30)";
+  ctx.beginPath();
+  ctx.ellipse(cx, groundY - 1, Math.max(5, halfW * 0.8), 3, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "rgba(60,42,24,0.22)";
+  ctx.beginPath();
+  ctx.ellipse(cx, groundY + 1, Math.max(6, halfW * 0.7), 2.2, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
 export default function FermeGame({ room, me, isHost, players, t, lang, onFinish, savedCode, onCodeLoaded, hidden }) {
   const L = fstr(lang);
 
@@ -5214,7 +5247,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         // travaux, marteau + barre de progression au-dessus du toit.
         const hh = sharedRef.current.house || { level: 1, upgradeUntil: 0 };
         const img = (sprites.houses && sprites.houses[Math.min(Math.max(hh.level, 1), 3) - 1]) || sprites.house;
-        ctx.drawImage(img, C.HOUSE.x * T, (C.HOUSE.y + C.HOUSE.h) * T - 96);
+        const houseGroundY = (C.HOUSE.y + C.HOUSE.h) * T, houseCx = C.HOUSE.x * T + img.width / 2;
+        drawBuildingShadow(ctx, houseCx, houseGroundY, img.width / 2);
+        ctx.drawImage(img, C.HOUSE.x * T, houseGroundY - 96);
+        drawBuildingFooting(ctx, houseCx, houseGroundY, img.width / 2);
         if (hh.upgradeUntil > Date.now()) {
           const pal = C.HOUSE_LEVELS[hh.level - 1];
           const total = pal ? pal.durationMs : 1;
@@ -5226,8 +5262,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           ctx.fillText("🔨", bx + barW / 2, by - 4);
         }
       } });
-      draws.push({ y: (C.SHOP.y + 1) * T, fn: () => ctx.drawImage(sprites.shop, C.SHOP.x * T - 4, (C.SHOP.y + 1) * T - 28) });
-      draws.push({ y: (C.BIN.y + 1) * T, fn: () => ctx.drawImage(sprites.bin, C.BIN.x * T - 2, (C.BIN.y + 1) * T - 18) });
+      draws.push({ y: (C.SHOP.y + 1) * T, fn: () => {
+        const gy = (C.SHOP.y + 1) * T, cx = C.SHOP.x * T - 4 + sprites.shop.width / 2;
+        drawBuildingShadow(ctx, cx, gy, sprites.shop.width / 2);
+        ctx.drawImage(sprites.shop, C.SHOP.x * T - 4, gy - 28);
+        drawBuildingFooting(ctx, cx, gy, sprites.shop.width / 2);
+      } });
+      draws.push({ y: (C.BIN.y + 1) * T, fn: () => {
+        const gy = (C.BIN.y + 1) * T, cx = C.BIN.x * T - 2 + sprites.bin.width / 2;
+        drawBuildingShadow(ctx, cx, gy, sprites.bin.width / 2);
+        ctx.drawImage(sprites.bin, C.BIN.x * T - 2, gy - 18);
+        drawBuildingFooting(ctx, cx, gy, sprites.bin.width / 2);
+      } });
       // Grange collaborative persistante : sprite réel dès le palier 1 (elle
       // survit d'une session à l'autre), simple marqueur de chantier tant
       // qu'aucun palier n'est encore construit (niveau 0). Jauges (bois,
@@ -5242,7 +5288,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           if (barnNow.level >= 1 && spritesRef.current && spritesRef.current.barn) {
             const spr = spritesRef.current.barn[barnNow.level - 1];
             sprH = spr.height;
-            ctx.drawImage(spr, bs.x * T - spr.width / 2 + 8, (bs.y + 1) * T - spr.height + 4);
+            const barnGy = (bs.y + 1) * T + 4, barnCx = bs.x * T - spr.width / 2 + 8 + spr.width / 2;
+            drawBuildingShadow(ctx, barnCx, barnGy, spr.width / 2);
+            ctx.drawImage(spr, bs.x * T - spr.width / 2 + 8, barnGy - spr.height);
+            drawBuildingFooting(ctx, barnCx, barnGy, spr.width / 2);
           } else {
             ctx.font = "14px monospace"; ctx.textAlign = "center";
             ctx.fillText("🛖", bs.x * T + 8, bs.y * T + 4 + Math.sin(now / 300) * 1.5);
@@ -5395,9 +5444,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             const remaining = E.buildRemainingMs(readyAt, epochNow);
             const frac = Math.max(0, Math.min(1, 1 - remaining / totalMs));
             draws.push({ y: (y + 1) * T, fn: () => {
+              drawBuildingShadow(ctx, x * T + 8, (y + 1) * T, 22);
               ctx.save(); ctx.globalAlpha = 0.55;
               ctx.drawImage(sprites.mill, x * T - 14, (y + 1) * T - 54); // zip 264 : sprite agrandi 44x54, toujours centré sur x*T+8, base sur (y+1)*T
               ctx.restore();
+              drawBuildingFooting(ctx, x * T + 8, (y + 1) * T, 22);
               const barW = 24, bx = x * T + 8 - barW / 2, by = (y + 1) * T - 58; // zip 264 : au-dessus du sprite agrandi
               ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(bx, by, barW, 3);
               ctx.fillStyle = "#c9a25a"; ctx.fillRect(bx, by, barW * frac, 3);
@@ -5411,7 +5462,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           } else {
             const ms = w.mills.get(ii) || { wheat: 0, nextAt: 0 };
             draws.push({ y: (y + 1) * T, fn: () => {
+              drawBuildingShadow(ctx, x * T + 8, (y + 1) * T, 22);
               ctx.drawImage(sprites.mill, x * T - 14, (y + 1) * T - 54); // zip 264 : sprite agrandi 44x54, toujours centré sur x*T+8, base sur (y+1)*T
+              drawBuildingFooting(ctx, x * T + 8, (y + 1) * T, 22);
               // Zip 262 (demande Guillaume : "on doit voir les moulins TOURNER
               // quand ils produisent") : ailes de moulin qui tournent tant
               // qu'une transformation est en cours (ms.nextAt). Dessinées
@@ -5670,7 +5723,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         // Station building (anchored by its BOTTOM edge: the zip 232 sprite
         // is taller than the footprint because of the gabled roof) + the
         // interactive ad board.
-        draws.push({ y: (C.STATION.y + C.STATION.h) * T, fn: () => ctx.drawImage(sprites.station, C.STATION.x * T, (C.STATION.y + C.STATION.h) * T - sprites.station.height) });
+        draws.push({ y: (C.STATION.y + C.STATION.h) * T, fn: () => {
+          const gy = (C.STATION.y + C.STATION.h) * T, cx = C.STATION.x * T + sprites.station.width / 2;
+          drawBuildingShadow(ctx, cx, gy, sprites.station.width / 2);
+          ctx.drawImage(sprites.station, C.STATION.x * T, gy - sprites.station.height);
+          drawBuildingFooting(ctx, cx, gy, sprites.station.width / 2);
+        } });
         draws.push({ y: (C.STATION_SIGN.y + 1) * T, fn: () => ctx.drawImage(sprites.signBoard, C.STATION_SIGN.x * T - 1, C.STATION_SIGN.y * T - 6) });
         // Decorative ducks: purely cosmetic, client-side, seeded from the
         // farm seed, drifting up and down the river with a 2-frame bob.
@@ -5867,7 +5925,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           const footY = (C.ARTISAN_FOOT && typeof C.ARTISAN_FOOT[bid] === "number") ? C.ARTISAN_FOOT[bid] : bimg.height;
           const topY = bby - footY * sc;
           draws.push({ y: bby, fn: () => {
+            drawBuildingShadow(ctx, bcx, bby, dw / 2);
             ctx.drawImage(bimg, Math.round(bcx - dw / 2), Math.round(topY), Math.round(dw), Math.round(dh));
+            drawBuildingFooting(ctx, bcx, bby, dw / 2);
             if (bid === "beehive") { // abeilles tournant autour de la ruche (offsets mis à l'échelle)
               const t = performance.now() / 1000;
               for (let b = 0; b < 4; b++) {
@@ -6500,7 +6560,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       {
         const th = C.TOWN_HALL, thBy = (th.y + th.h) * T;
         draws.push({ y: thBy, fn: () => {
+          const thCx = th.x * T + th.w * T / 2;
+          drawBuildingShadow(ctx, thCx, thBy, 64);
           ctx.drawImage(sprites.townhall, th.x * T + (th.w * T - 128) / 2, thBy - 128);
+          drawBuildingFooting(ctx, thCx, thBy, 64);
         } });
       }
       // Houses: one per known farmer (deterministic order), leftovers show a
@@ -6518,7 +6581,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const img = (sprites.townHouses && sprites.townHouses[styleIdx % C.TOWN_HOUSE_STYLES]) || (sprites.houses && sprites.houses[hi % sprites.houses.length]) || null;
         const bx = hsn.x * T, by = (hsn.y + C.TOWN_HOUSE_H) * T;
         draws.push({ y: by, fn: () => {
-          if (img) ctx.drawImage(img, bx, by - 96);
+          if (img) {
+            const hCx = bx + img.width / 2;
+            drawBuildingShadow(ctx, hCx, by, img.width / 2);
+            ctx.drawImage(img, bx, by - 96);
+            drawBuildingFooting(ctx, hCx, by, img.width / 2);
+          }
           const label = hsn.ownerName || L.townSaleSign;
           ctx.font = "bold 8px monospace"; ctx.textAlign = "center";
           const tx2 = bx + T * C.TOWN_HOUSE_W / 2, ty2 = by - 96 + 12;
