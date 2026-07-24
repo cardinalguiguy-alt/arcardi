@@ -136,6 +136,16 @@ export const FERME_STR = {
     promptResident: (n) => `Q — parler à ${n}`,
     recruitAsk: "Proposer d'emménager",
     residentGreet: (n, job) => `Bonjour ! Moi c'est ${n}. Mon métier, c'est ${job}.`,
+    // Zip 262 (demande Guillaume) : les visiteurs À SKILL s'annoncent
+    // clairement (« Je suis bûcheron et je souhaite vous aider à… »).
+    skillLabel: (sk) => ({ beekeeper: "apiculteur", cheesemaker: "fromager", baker: "boulanger-pâtissier", lumberjack: "bûcheron", voyager: "marchand voyageur" }[sk] || sk),
+    skillPitch: (sk, n) => ({
+      beekeeper: `Bonjour ! Moi c'est ${n}, je suis apiculteur et je souhaite vous aider à récolter et mettre en pot le miel de la ferme.`,
+      cheesemaker: `Bonjour ! Moi c'est ${n}, je suis fromager et je souhaite vous aider à transformer votre lait en fromage.`,
+      baker: `Bonjour ! Moi c'est ${n}, je suis boulanger-pâtissier et je souhaite vous aider à cuire pâtisseries et gâteaux.`,
+      lumberjack: `Bonjour ! Moi c'est ${n}, je suis bûcheron et je souhaite vous aider à abattre les arbres et casser les rochers.`,
+      voyager: `Bonjour ! Moi c'est ${n}, je suis marchand voyageur et je souhaite parcourir le monde pour vous rapporter des denrées rares.`,
+    }[sk] || `Bonjour ! Moi c'est ${n}.`),
     residentNeedBuilding: (b) => `Construis-moi une ${b} (achetable en or à la boutique) et je produirai pour la ferme !`,
     residentBuildingReady: (b) => `Ma ${b} tourne. Garde nos stocks remplis et je fais le reste !`,
     residentLumberjackLine: "Je coupe du bois et casse des cailloux toute la journée — tout va dans notre réserve commune.",
@@ -848,6 +858,15 @@ export const FERME_STR = {
     promptResident: (n) => `Q — talk to ${n}`,
     recruitAsk: "Ask to move in",
     residentGreet: (n, job) => `Hi! I'm ${n}. My trade is: ${job}.`,
+    // Zip 262: skilled visitors introduce their trade explicitly.
+    skillLabel: (sk) => ({ beekeeper: "beekeeper", cheesemaker: "cheesemaker", baker: "baker", lumberjack: "lumberjack", voyager: "traveling merchant" }[sk] || sk),
+    skillPitch: (sk, n) => ({
+      beekeeper: `Hi! I'm ${n}, I'm a beekeeper and I'd like to help you keep bees and jar honey.`,
+      cheesemaker: `Hi! I'm ${n}, I'm a cheesemaker and I'd like to help you turn your milk into fine cheese.`,
+      baker: `Hi! I'm ${n}, I'm a baker and I'd like to help you bake pastries and cakes.`,
+      lumberjack: `Hi! I'm ${n}, I'm a lumberjack and I'd like to help you fell trees and break rocks.`,
+      voyager: `Hi! I'm ${n}, I'm a traveling merchant and I'd like to sail the world to bring you rare goods.`,
+    }[sk] || `Hi! I'm ${n}.`),
     residentNeedBuilding: (b) => `Build me a ${b} (buyable with gold at the shop) and I'll produce for the farm!`,
     residentBuildingReady: (b) => `My ${b} is running. Keep our stocks filled and I'll do the rest!`,
     residentLumberjackLine: "I fell trees and break rocks all day — it all goes into our common stock.",

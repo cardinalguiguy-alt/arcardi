@@ -498,8 +498,8 @@ export const GRASS_COST = 5; // prix d'une unité d'herbe à la boutique (or)
 // delà de la mécanique elle-même), à ajuster librement.
 export const MILL_COST = 30000;              // prix d'un moulin niveau 1 à la boutique (or), donné par Guillaume
 export const MILL_WHEAT_CROP = 4;            // index de "Blé" dans C.CROPS ci-dessus
-export const MILL_WHEAT_PER_SACK = 3;        // blé consommé par sac de farine produit, donné par Guillaume
-export const MILL_BATCH_MS = 15 * 60 * 1000; // 15 minutes réelles par sac, donné par Guillaume
+export const MILL_WHEAT_PER_SACK = 2;        // Zip 261/262 (demande Guillaume : moins de blé par sac) : 3 -> 2
+export const MILL_BATCH_MS = 5 * 60 * 1000;  // Zip 261/262 (demande Guillaume : moulins plus rapides) : 15 -> 5 min réelles par sac
 export const MILL_STOCK_CAP = 90;            // stock de blé max qu'un moulin peut contenir (extrapolé, ~30 sacs d'avance)
 export const FLOUR_SELL = 55;                // prix de vente d'un sac de farine (extrapolé)
 
@@ -888,6 +888,11 @@ export const HARALD_SPEED = 3.2;                       // identique à Greg/Soan
 export const HARALD_ANCHOR = { x: 52, y: 41 };         // centre de l'enclos (PEN x48-56 / y38-44)
 export const HARALD_ROAM_RADIUS = 4;                   // rôdaille serrée : reste dans/autour de l'enclos
 export const HARALD_ROUND_MS = 12 * 1000;              // une "ronde" de ramassage toutes les 12 s réelles quand connecté (zéro perte en pratique)
+// Filet ANTI-PERTE : un animal prêt depuis plus longtemps que ça est ramassé
+// où qu'il soit (couvre les animaux qu'Harald ne peut pas atteindre à pied —
+// déplacés derrière une clôture, etc.). Garantit le zéro-perte même si le
+// pathing échoue, tout en laissant Harald faire ses rondes visibles sinon.
+export const HARALD_FORCE_MS = 45 * 1000;
 // Plafonds de rattrapage HORS-LIGNE, PAR ANIMAL (demande Guillaume : "6 par
 // gros animal, 20 par poule"). On crédite au pool commun autant de cycles de
 // production écoulés pendant l'absence que le plafond l'autorise.
@@ -928,7 +933,8 @@ export const RABBIT_FLEE_HOP_PX = 5;       // amplitude (pixels) du bond visuel 
 // purement pour le fun, comme la capture de lapin elle-même).
 export const RABBIT_CHALLENGE_MIN_PLAYERS = 2;   // nombre minimum de fermiers en ligne en même temps pour proposer le défi
 export const RABBIT_CHALLENGE_TARGET = 3;        // nombre de lapins à capturer pour gagner
-export const RABBIT_CHALLENGE_OFFER_CHANCE = 1 / 240; // proba. par tick (1 Hz) de proposer le défi à l'hôte : ~1 fois toutes les 4 min en moyenne quand les conditions sont réunies (valeur extrapolée, à ajuster librement)
+export const RABBIT_CHALLENGE_OFFER_CHANCE = 1 / 240; // proba. par tick (1 Hz) de proposer le défi à l'hôte (quand les conditions sont réunies)
+export const RABBIT_CHALLENGE_MIN_DAYS = 3;      // Zip 262 (demande Guillaume) : au plus UNE proposition tous les 3 jours ingame chez l'hôte
 // Trophée 🏆 du gagnant (correctif 2026-07, demande Guillaume : "il doit
 // disparaitre au bout de 15 minutes") : n'est plus permanent, affiché
 // seulement pendant HAT_DISPLAY_MS après la victoire (voir farmer.hatUntil,
@@ -1106,6 +1112,11 @@ export const ARTISAN_BUILDINGS = {
   // son thème "wood", voir updateResidents), mais achetable/déplaçable/solide.
   sawmill:    { skill: "lumberjack",  cost: 10000, site: { x: 68, y: 46 }, w: 3, h: 2 },
 };
+// Zip 261 (demande Guillaume : "ils doivent être plus grands, on dirait des
+// stickers") : facteur d'agrandissement au DESSIN des bâtiments d'artisans
+// (le sprite est dessiné à sa taille × ce facteur, ancré par le bas-centre).
+// N'affecte PAS la collision (footprint w×h en tuiles inchangé).
+export const ARTISAN_DRAW_SCALE = 1.75;
 // Métier -> bâtiment (null = pas de bâtiment, travaille directement).
 // voyager (Eduardo) : pas de bâtiment, il travaille par voyages (commandes).
 // Zip 260 : lumberjack -> sawmill (le bûcheron s'ancre/rôde autour de sa

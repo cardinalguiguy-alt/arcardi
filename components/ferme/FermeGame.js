@@ -402,6 +402,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const immunityUntilRef = useRef(0); // miroir synchrone de immunityUntil (lu dans updateEvilMonsters)
   const hatUntilRef = useRef(0); // miroir synchrone de hatUntil (lu dans la boucle de rendu, voir drawCharacter)
   const rabbitChallengeOfferRef = useRef(false); // miroir synchrone de rabbitChallengeOffer (lu dans le timer hôte, évite de reproposer en boucle)
+  const rabbitLastOfferDayRef = useRef(-999); // zip 262 : jour ingame de la dernière proposition de défi lapins (gate 1 fois / 3 jours)
   const evilBiteRef = useRef(null); // miroir synchrone de evilBite (lu dans updateEvilMonsters, boucle de rendu — évite de redéclencher le mini-jeu tant qu'il est déjà ouvert)
 
   useEffect(() => { fishMiniRef.current = !!fishMini || !!barnMini || !!wolfBite || !!evilBite || !!repairMini; }, [fishMini, barnMini, wolfBite, evilBite, repairMini]);
@@ -2853,7 +2854,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // n'a pas déjà été proposée (`rabbitChallengeOfferRef`), pour éviter de
       // la faire réapparaître en boucle si l'hôte l'ignore sans la fermer.
       if (!s.rabbitChallenge && online >= C.RABBIT_CHALLENGE_MIN_PLAYERS && !rabbitChallengeOfferRef.current
+        && (s.day - rabbitLastOfferDayRef.current) >= C.RABBIT_CHALLENGE_MIN_DAYS
         && Math.random() < C.RABBIT_CHALLENGE_OFFER_CHANCE) {
+        rabbitLastOfferDayRef.current = s.day; // zip 262 : au plus 1 proposition / 3 jours ingame
         rabbitChallengeOfferRef.current = true;
         setRabbitChallengeOffer(true);
       }
@@ -4579,51 +4582,74 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       dirtyRef.current = true;
       return;
     }
-    // Rôdaille autour de l'ancre (centre de l'enclos), même mouvement que Soan.
-    let moved = false;
-    if (!h.roamAnchor) h.roamAnchor = { x: C.HARALD_ANCHOR.x, y: C.HARALD_ANCHOR.y };
-    if (!h.roamTarget || Math.hypot(h.roamTarget.x - h.x, h.roamTarget.y - h.y) < 0.3 || now >= (h.nextRoamAt || 0)) {
-      const a = Math.random() * Math.PI * 2, d = 1 + Math.random() * C.HARALD_ROAM_RADIUS;
-      h.roamTarget = { x: h.roamAnchor.x + Math.cos(a) * d, y: h.roamAnchor.y + Math.sin(a) * d };
-      h.nextRoamAt = now + 1500 + Math.random() * 2500;
+    // Zip 261 (correctif Guillaume : "Harald va à l'enclos initial, il ne
+    // détecte pas où sont les animaux") : les animaux peuvent être DÉPLACÉS
+    // par le joueur (placeAnimal) hors du PEN de départ. Harald CIBLE donc
+    // dynamiquement l'animal PRÊT le plus proche (position dérivée animalPos),
+    // s'y rend et le ramasse à portée (collecte VISIBLE) ; sinon il rôde
+    // autour du BARYCENTRE des animaux (pas d'ancre fixe). Un filet anti-perte
+    // (HARALD_FORCE_MS) ramasse au forfait tout animal prêt depuis trop
+    // longtemps, où qu'il soit (garantit le zéro-perte même inatteignable).
+    const stock = s.gregStock || (s.gregStock = { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) });
+    if (!stock.animals) stock.animals = C.ANIMALS.map(() => 0);
+    const live = (s.animals || []).filter(a => a && !a.carriedBy);
+    const fxList = [];
+    const collect = (a, ap) => {
+      const prodMs = (C.ANIMALS[a.type] && C.ANIMALS[a.type].prodMs) || 0;
+      a.readyAt = now + prodMs;
+      stock.animals[a.type] = (stock.animals[a.type] || 0) + 1;
+      fxList.push({ k: "product", x: ap.x, y: ap.y, product: a.type });
+    };
+    // Filet anti-perte : animaux prêts depuis > HARALD_FORCE_MS.
+    for (const a of live) {
+      if (E.animalReady(a, now) && (now - (a.readyAt || 0)) > C.HARALD_FORCE_MS) collect(a, E.animalPos(a, now));
     }
-    h.tx = h.roamTarget.x; h.ty = h.roamTarget.y;
+    // Animal prêt le plus proche = cible de déplacement.
+    let targetAn = null, target = null, tdist = Infinity;
+    for (const a of live) {
+      if (!E.animalReady(a, now)) continue;
+      const ap = E.animalPos(a, now), d = Math.hypot(ap.x - h.x, ap.y - h.y);
+      if (d < tdist) { tdist = d; target = ap; targetAn = a; }
+    }
+    let moved = false, tx, ty, roaming = false;
+    if (target) { tx = target.x; ty = target.y; }
+    else {
+      // Rôdaille autour du barycentre des animaux (ou du PEN si aucun animal).
+      let cx = C.HARALD_ANCHOR.x, cy = C.HARALD_ANCHOR.y;
+      if (live.length) { cx = 0; cy = 0; for (const a of live) { const ap = E.animalPos(a, now); cx += ap.x; cy += ap.y; } cx /= live.length; cy /= live.length; }
+      if (!h.roamTarget || Math.hypot(h.roamTarget.x - h.x, h.roamTarget.y - h.y) < 0.3 || now >= (h.nextRoamAt || 0)) {
+        const a = Math.random() * Math.PI * 2, d = 1 + Math.random() * C.HARALD_ROAM_RADIUS;
+        h.roamTarget = { x: cx + Math.cos(a) * d, y: cy + Math.sin(a) * d };
+        h.nextRoamAt = now + 1500 + Math.random() * 2500;
+      }
+      tx = h.roamTarget.x; ty = h.roamTarget.y; roaming = true;
+    }
+    h.tx = tx; h.ty = ty;
     {
-      const dx = h.tx - h.x, dy = h.ty - h.y, d = Math.hypot(dx, dy);
+      const dx = tx - h.x, dy = ty - h.y, d = Math.hypot(dx, dy);
       if (d > 0.02) {
-        const step = Math.min(C.HARALD_SPEED * 0.55 * dt, d);
+        const step = Math.min((roaming ? C.HARALD_SPEED * 0.55 : C.HARALD_SPEED) * dt, d);
         const nx = h.x + (dx / d) * step, ny = h.y + (dy / d) * step;
-        // Collision douce : ne traverse jamais un solide (bâtiments, clôtures…).
         if (!E.blockedTile(w, nx, h.y)) h.x = nx;
         if (!E.blockedTile(w, h.x, ny)) h.y = ny;
         h.dir = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 2 : 3) : (dy < 0 ? 1 : 0);
         h.animT = (h.animT || 0) + dt * 6; h.moving = true; moved = true;
       } else h.moving = false;
     }
-    // RONDE de ramassage (zéro perte quand connecté).
-    if (now >= (h.nextRoundAt || 0)) {
-      h.nextRoundAt = now + C.HARALD_ROUND_MS;
-      const stock = s.gregStock || (s.gregStock = { wood: 0, stone: 0, fertilizer: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) });
-      if (!stock.animals) stock.animals = C.ANIMALS.map(() => 0);
-      let picked = false;
-      for (const an of (s.animals || [])) {
-        if (!an || an.carriedBy) continue;
-        if (E.animalReady(an, now)) {
-          const prodMs = (C.ANIMALS[an.type] && C.ANIMALS[an.type].prodMs) || 0;
-          an.readyAt = now + prodMs;
-          stock.animals[an.type] = (stock.animals[an.type] || 0) + 1;
-          picked = true;
-        }
-      }
-      if (picked) {
-        setGregStock({ ...stock });
-        channelRef.current?.send({ type: "broadcast", event: "apply", payload: { gregStock: stock, animals: s.animals } });
-        dirtyRef.current = true;
-      }
+    // Collecte de proximité de l'animal ciblé, une fois à portée.
+    if (targetAn && E.animalReady(targetAn, now)) {
+      const ap = E.animalPos(targetAn, now);
+      if (Math.abs(h.x - ap.x) <= C.COLLECT_RANGE && Math.abs(h.y - ap.y) <= C.COLLECT_RANGE) collect(targetAn, ap);
+    }
+    if (fxList.length) {
+      setGregStock({ ...stock });
+      for (const fxi of fxList) spawnFx(fxi);
+      channelRef.current?.send({ type: "broadcast", event: "apply", payload: { gregStock: stock, animals: s.animals, fx: fxList } });
+      dirtyRef.current = true;
     }
     if (moved) minimapDirtyRef.current = true;
     haraldAccumRef.current += dt;
-    if (haraldAccumRef.current >= 0.5 && netCanBroadcast() && anyRemoteNear(h.x, h.y)) {
+    if (haraldAccumRef.current >= 0.3 && netCanBroadcast() && anyRemoteNear(h.x, h.y)) {
       haraldAccumRef.current = 0;
       channelRef.current?.send({ type: "broadcast", event: "apply", payload: { harald: h } });
     }
@@ -5362,6 +5388,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             const ms = w.mills.get(ii) || { wheat: 0, nextAt: 0 };
             draws.push({ y: (y + 1) * T, fn: () => {
               ctx.drawImage(sprites.mill, x * T - 7, (y + 1) * T - 36);
+              // Zip 262 (demande Guillaume : "on doit voir les moulins TOURNER
+              // quand ils produisent") : ailes de moulin qui tournent tant
+              // qu'une transformation est en cours (ms.nextAt). Dessinées
+              // par-dessus les ailes statiques du sprite, autour du moyeu.
+              if (ms.nextAt) {
+                const hubX = x * T + 8, hubY = (y + 1) * T - 24, spin = performance.now() / 260;
+                ctx.save(); ctx.translate(hubX, hubY); ctx.rotate(spin);
+                for (let k = 0; k < 4; k++) {
+                  ctx.rotate(Math.PI / 2);
+                  ctx.fillStyle = "#5a4028"; ctx.fillRect(0, -1, 11, 2);
+                  ctx.fillStyle = k % 2 ? "#eae2cc" : "#d8cfb2"; ctx.fillRect(4, -2, 6, 1);
+                }
+                ctx.restore();
+                ctx.fillStyle = "#3a2818"; ctx.fillRect(hubX - 1, hubY - 1, 2, 2);
+              }
               const barW = 24, bx = x * T + 8 - barW / 2;
               const stockFrac = Math.max(0, Math.min(1, ms.wheat / C.MILL_STOCK_CAP));
               const stockY = (y + 1) * T - 42;
@@ -5787,12 +5828,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           const def = C.ARTISAN_BUILDINGS[bid], bimg = sprites.artisan && sprites.artisan[bid]; if (!bimg) continue;
           const bp = artisanPos(bid); // zip 259 : position déplaçable
           const bcx = (bp.x + def.w / 2) * T, bby = (bp.y + def.h) * T;
+          // Zip 261 : agrandissement au dessin (ARTISAN_DRAW_SCALE) — les
+          // bâtiments faisaient "stickers". Ancré par le bas-centre (le sol
+          // reste à bby), la collision (footprint) est inchangée.
+          const sc = C.ARTISAN_DRAW_SCALE, dw = bimg.width * sc, dh = bimg.height * sc;
           draws.push({ y: bby, fn: () => {
-            ctx.drawImage(bimg, Math.round(bcx - bimg.width / 2), Math.round(bby - bimg.height));
-            if (bid === "beehive") { // abeilles tournant autour de la ruche
+            ctx.drawImage(bimg, Math.round(bcx - dw / 2), Math.round(bby - dh), Math.round(dw), Math.round(dh));
+            if (bid === "beehive") { // abeilles tournant autour de la ruche (offsets mis à l'échelle)
               const t = performance.now() / 1000;
               for (let b = 0; b < 4; b++) {
-                const a = t * 2 + b * 1.6, bx = bcx + Math.cos(a) * 12, byp = bby - 20 + Math.sin(a * 1.3) * 8;
+                const a = t * 2 + b * 1.6, bx = bcx + Math.cos(a) * 12 * sc, byp = bby - 20 * sc + Math.sin(a * 1.3) * 8 * sc;
                 ctx.fillStyle = "#3a2a10"; ctx.fillRect(Math.round(bx), Math.round(byp), 2, 2);
                 ctx.fillStyle = "#e8c24a"; ctx.fillRect(Math.round(bx), Math.round(byp), 1, 1);
               }
@@ -8733,7 +8778,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               <h2>{ro.name}</h2>
               <div className="ferme-shop-row">
                 <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap) : null} sx={16} sy={24} w={40} h={60} />
-                <div className="info"><b>{L.residentGreet(ro.name, ro.job)}</b><span>{need}</span></div>
+                <div className="info"><b>{ro.skill ? L.skillPitch(ro.skill, ro.name) : L.residentGreet(ro.name, ro.job)}</b><span>{need}</span></div>
               </div>
               <div className="ferme-shop-row">
                 <span style={{ fontSize: 22, width: 32, textAlign: "center" }}>🛠️</span>
@@ -8986,7 +9031,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               {/* Zip 252 : visiteur à skill non encore résident -> proposer d'emménager. */}
               {ro.skill && !((stationSt.residents || []).some(r => r.rid === v.rid)) && (
                 <div style={{ marginTop: 8, background: "#eef3df", border: "1px solid #b9c99a", borderRadius: 8, padding: "8px 10px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-                  <span style={{ fontSize: 12 }}>{L.residentGreet(ro.name, ro.job)}</span>
+                  <span style={{ fontSize: 12 }}>{L.skillPitch(ro.skill, ro.name)}</span>
                   <PixBtn sprites={spritesReady ? spritesRef.current : null} icon="check" tone="good" small label={L.recruitAsk} onClick={() => askResidentStay(v.rid)} />
                 </div>
               )}
@@ -9078,7 +9123,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 </>}
                 {o.type === "stay" && <>
                   <h4 style={{ margin: "4px 0" }}>{L.stayTitle(ro.name)}</h4>
-                  <p>{L.stayProposal(ro.name, ro.job)}</p>
+                  <p>{ro.skill ? L.skillPitch(ro.skill, ro.name) + " " : ""}{L.stayProposal(ro.name, ro.job)}</p>
                   {myVote === null ? <div style={{ display: "flex", gap: 8 }}>
                     <PixBtn sprites={spritesReady ? spritesRef.current : null} icon="check" tone="good" label={L.voteYes} onClick={() => { setMyVote(true); sendReq({ kind: "visitorVote", rid: v.rid, v: true }); }} />
                     <PixBtn sprites={spritesReady ? spritesRef.current : null} icon="cross" tone="bad" label={L.voteNo} onClick={() => { setMyVote(false); sendReq({ kind: "visitorVote", rid: v.rid, v: false }); }} />
