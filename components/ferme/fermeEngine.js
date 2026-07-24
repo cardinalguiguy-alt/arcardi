@@ -1289,6 +1289,43 @@ export function findFreeGrassTiles(world, anchor, count) {
   return tilled.concat(grass).slice(0, count);
 }
 
+// Cherche jusqu'à `count` cases DÉJÀ PLANTÉES de la MÊME espèce `cropIdx`,
+// pas encore pleines (n < MAX_CROPS_PER_TILE) ET PAS ENCORE MÛRES, en
+// anneaux croissants autour de `anchor` — même principe de balayage que
+// findFreeGrassTiles.
+// Zip 288bis (demande Guillaume : "il doit semer 5 par 5 maintenant, de
+// préférence sur des cases de même espèce quand il peut") : appelée EN
+// PREMIER par gregOrder (FermeGame.js), avant findFreeGrassTiles, pour que
+// Greg privilégie le complément de cases existantes (aucun labour requis,
+// terrain déjà utilisé) plutôt que d'étendre le champ à de nouvelles cases.
+// Zip 288ter (demande Guillaume : "la lisibilité doit être cohérente, on
+// doit toujours connaître l'état de nos cultures") : une case déjà MÛRE
+// est exclue — une fois "prête à récolter" (bulle flottante, voir
+// FermeGame.js), l'état d'une case doit rester figé et lisible tel quel
+// jusqu'à la récolte du joueur ; Greg qui continuerait d'y ajouter des
+// graines en douce changerait silencieusement le rendu (n) d'une case déjà
+// annoncée comme "terminée", ce qui casserait cette lisibilité.
+export function findGregToppableTiles(world, anchor, cropIdx, count, now) {
+  const PREF_R = 16; // même rayon de proximité que le préférentiel "labourée" ci-dessous
+  const out = [];
+  const seen = new Set();
+  for (let r = 0; r <= PREF_R && out.length < count; r++) {
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+        const x = anchor.x + dx, y = anchor.y + dy;
+        if (!inMap(x, y)) continue;
+        const i = idx(x, y);
+        if (seen.has(i)) continue;
+        seen.add(i);
+        const c = world.crops.get(i);
+        if (c && c.t === cropIdx && (c.n || 1) < C.MAX_CROPS_PER_TILE && !cropGrowState(c, now).mature) out.push(i);
+      }
+    }
+  }
+  return out.slice(0, count);
+}
+
 // Labour d'une case par Greg (identique à resolveAct "till", sans énergie).
 export function gregTill(world, i) {
   if (world.ground[i] === C.G_GRASS && world.objects[i] === C.O_NONE && !world.crops.has(i)) {
@@ -1300,14 +1337,25 @@ export function gregTill(world, i) {
 // Plantation d'une case par Greg (le coût en pièces a déjà été prélevé au
 // moment de l'ordre, voir hostHandleReqUnsafe cas "gregOrder" — Greg ne
 // consomme pas l'inventaire de graines d'un joueur, c'est un stock commun).
-// Zip 287 : Greg cible toujours une case VIDE (via findFreeGrassTiles), il
-// ne complète pas encore une case déjà plantée jusqu'à MAX_CROPS_PER_TILE
-// (contrairement au joueur, voir resolveAct cas "plant") — n:1 explicite ici
-// pour la cohérence du champ, à étendre plus tard si besoin.
-export function gregPlant(world, i, cropIdx) {
+// Zip 288bis (demande Guillaume, suite à l'affichage "n/5" du zip 288 :
+// "Greg doit semer 5 par 5 maintenant") : Greg complète maintenant une case
+// déjà plantée de la MÊME espèce jusqu'à MAX_CROPS_PER_TILE au lieu de
+// n'agir que sur une case vide (auparavant n:1 systématique, voir
+// findFreeGrassTiles qui écartait toute case déjà en culture) — même règle
+// de complétion que le joueur (resolveAct cas "plant").
+export function gregPlant(world, i, cropIdx, now) {
   const g = world.ground[i];
-  if ((g === C.G_TILLED || g === C.G_WATERED) && !world.crops.has(i)) {
+  if (g !== C.G_TILLED && g !== C.G_WATERED) return false;
+  const existing = world.crops.get(i);
+  if (!existing) {
     world.crops.set(i, { t: cropIdx, n: 1, bankedMs: 0, wateredAt: null }); return true;
+  }
+  // Zip 288ter : re-vérifié ici (pas seulement à la sélection dans
+  // findGregToppableTiles) car Greg met du temps à marcher jusqu'à la case —
+  // elle a pu mûrir entre-temps. Une case mûre ne doit plus changer tant
+  // qu'elle n'a pas été récoltée (lisibilité pour le joueur).
+  if (existing.t === cropIdx && (existing.n || 1) < C.MAX_CROPS_PER_TILE && !cropGrowState(existing, now).mature) {
+    existing.n = (existing.n || 1) + 1; return true;
   }
   return false;
 }

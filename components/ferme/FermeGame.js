@@ -1535,38 +1535,84 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         out.chat = { from: "🧑‍🌾", msg: lang === "en" ? "Greg is hired for 2 days!" : "Greg est engagé pour 2 jours !" };
       } else out.toast = { id: f.id, key: "noGold" };
     } else if (req.kind === "gregOrder") {
-      // Ordre donné à Greg (chantier 2026-07) : "labourer N cases, planter,
-      // puis arroser" pour une culture donnée. Payé d'avance au prix des
-      // graines (stock commun, ne touche PAS l'inventaire d'un joueur en
-      // particulier — Greg travaille pour la ferme). La file de tâches est
-      // simplement complétée (des ordres successifs s'enchaînent).
+      // Ordre donné à Greg (chantier 2026-07) : "labourer, planter puis
+      // arroser" pour une culture donnée. Payé d'avance au prix des graines
+      // (stock commun, ne touche PAS l'inventaire d'un joueur en particulier
+      // — Greg travaille pour la ferme).
+      // Zip 291 (audit demandé par Guillaume, suite zip 289/290) :
+      // - `count` compte maintenant des GRAINES individuelles (pas des
+      //   cases) — "la commande de 60 ne doit plus être comprise comme une
+      //   commande de tiles mais de plant individuel". Le nombre de cases
+      //   nécessaires en découle (topping des cases existantes en priorité,
+      //   puis remplissage de cases neuves à 5 chacune).
+      // - Coût recalculé EXACTEMENT sur `count` (plus de gate au pire cas
+      //   x5 : ce padding bloquait à tort des ordres bon marché grâce au
+      //   complément de cases existantes — bug relevé à l'audit).
+      // - Un ordre ne peut plus être lancé tant qu'un précédent est encore
+      //   en cours d'exécution (taskQueue contient encore du "till"/"plant")
+      //   — avant, deux ordres rapprochés ciblaient les mêmes cases (encore
+      //   vides du point de vue du monde tant que Greg n'y est pas allé) et
+      //   débitaient deux fois des graines qui ne pouvaient pas toutes être
+      //   plantées (gregPlant refuse le dépassement, mais sans remboursement)
+      //   — bug relevé à l'audit.
       const g = s.greg;
-      const cropIdx = req.crop | 0, count = Math.max(1, Math.min(C.GREG_ORDER_MAX, req.count | 0));
+      const cropIdx = req.crop | 0, seedCount = Math.max(1, Math.min(C.GREG_ORDER_MAX, req.count | 0));
       if (!g || g.expiresAt <= Date.now()) out.toast = { id: f.id, key: "gregNotHired" };
       else if (!(cropIdx >= 0 && cropIdx < C.CROPS.length)) out.toast = { id: f.id, key: "noGold" };
+      else if (g.taskQueue && g.taskQueue.some(t => t.a === "till" || t.a === "plant")) out.toast = { id: f.id, key: "gregOrderBusy" };
       else {
-        const cost = C.CROPS[cropIdx].seedCost * count;
+        const cost = C.CROPS[cropIdx].seedCost * seedCount;
         const w2 = worldRef.current;
         if (s.money < cost) out.toast = { id: f.id, key: "noGold" };
         else {
-          // Zone ciblée par le joueur (chantier 2026-07, suite retour Guillaume) :
-          // Greg laboure intelligemment AUTOUR d'où le joueur se trouve au
-          // moment de l'ordre (px/py, position déjà envoyée par sendReq),
-          // plutôt qu'autour d'un point fixe ou de sa position de rôdaille.
-          const tiles = E.findFreeGrassTiles(w2, { x: Math.round(px), y: Math.round(py) }, count);
-          if (tiles.length === 0) out.toast = { id: f.id, key: "gregNoRoom" };
+          // Zone ciblée par le joueur (chantier 2026-07, suite retour
+          // Guillaume) : Greg laboure intelligemment AUTOUR d'où le joueur
+          // se trouve au moment de l'ordre (px/py, position déjà envoyée
+          // par sendReq), plutôt qu'autour d'un point fixe ou de sa
+          // position de rôdaille.
+          const anchor = { x: Math.round(px), y: Math.round(py) };
+          // On privilégie d'abord les cases DÉJÀ plantées de la même
+          // espèce, pas pleines et pas mûres (findGregToppableTiles —
+          // aucun labour requis) : au pire il en faut `seedCount` (une
+          // graine chacune), donc on en cherche jusqu'à `seedCount`.
+          const topTiles = E.findGregToppableTiles(w2, anchor, cropIdx, seedCount, Date.now());
+          let remaining = seedCount;
+          const topAlloc = [];
+          for (const i of topTiles) {
+            if (remaining <= 0) break;
+            const need = C.MAX_CROPS_PER_TILE - (w2.crops.get(i).n || 1);
+            const add = Math.min(need, remaining);
+            if (add <= 0) continue;
+            topAlloc.push({ i, add }); remaining -= add;
+          }
+          // Graines restantes : de nouvelles cases, remplies à 5 chacune
+          // (sauf la dernière, qui ne reçoit que le reliquat).
+          const newTiles = remaining > 0 ? E.findFreeGrassTiles(w2, anchor, Math.ceil(remaining / C.MAX_CROPS_PER_TILE)) : [];
+          const newAlloc = [];
+          for (const i of newTiles) {
+            if (remaining <= 0) break;
+            const add = Math.min(C.MAX_CROPS_PER_TILE, remaining);
+            newAlloc.push({ i, add }); remaining -= add;
+          }
+          const totalSeeds = seedCount - remaining;
+          if (totalSeeds === 0) out.toast = { id: f.id, key: "gregNoRoom" };
           else {
-            s.money -= C.CROPS[cropIdx].seedCost * tiles.length;
-            for (const i of tiles) {
+            s.money -= C.CROPS[cropIdx].seedCost * totalSeeds;
+            for (const { i, add } of topAlloc) {
+              for (let k = 0; k < add; k++) g.taskQueue.push({ a: "plant", i, crop: cropIdx });
+              g.taskQueue.push({ a: "water", i });
+            }
+            for (const { i, add } of newAlloc) {
               // Case déjà labourée (G_TILLED/G_WATERED) : pas besoin de
               // "till", on passe directement à la plantation (correctif
               // 2026-07, voir findFreeGrassTiles).
               const alreadyTilled = w2.ground[i] === C.G_TILLED || w2.ground[i] === C.G_WATERED;
               if (!alreadyTilled) g.taskQueue.push({ a: "till", i });
-              g.taskQueue.push({ a: "plant", i, crop: cropIdx }, { a: "water", i });
+              for (let k = 0; k < add; k++) g.taskQueue.push({ a: "plant", i, crop: cropIdx });
+              g.taskQueue.push({ a: "water", i });
             }
             out.state = shareState(); out.greg = g;
-            out.chat = { from: "🧑‍🌾", msg: lang === "en" ? `Greg is on it: ${tiles.length} tile(s) of ${C.CROPS[cropIdx].nameEn}.` : `Greg s'y met : ${tiles.length} case(s) de ${C.CROPS[cropIdx].name}.` };
+            out.chat = { from: "🧑‍🌾", msg: lang === "en" ? `Greg is on it: ${totalSeeds} seed(s) of ${C.CROPS[cropIdx].nameEn}.` : `Greg s'y met : ${totalSeeds} graine(s) de ${C.CROPS[cropIdx].name}.` };
           }
         }
       }
@@ -2977,7 +3023,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (key === "petCaught")     return L.petCaughtToast(C.petName(n, lang === "en"));
     if (key === "petReleased")   return L.bagReleasedToast(C.petName(n, lang === "en"));
     if (key === "bagFull")       return L.bagPetsFull(C.MAX_PETS);
-    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, noMillStock: L.toastNoMillStock, millNotEmpty: L.toastMillNotEmpty, noWheatToDeposit: L.toastNoWheatToDeposit, millFull: L.toastMillFull, actionFailed: L.toastActionFailed, coopNone: L.toastCoopNone, farCoop: L.toastFarCoop, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull, notInjured: L.toastNotInjured, noHealKit: L.toastNoHealKit, healTooFar: L.toastHealTooFar, gregNotHired: L.toastGregNotHired, gregNoRoom: L.toastGregNoRoom, gregNoFertilizer: L.toastGregNoFertilizer, soanNotHired: L.toastSoanNotHired, soanNoRiver: L.toastSoanNoRiver, farCauldron: L.toastFarCauldron, noFishToDeposit: L.toastNoFishToDeposit, cauldronMissing: L.toastCauldronMissing, cauldronAlreadyTaken: L.toastCauldronAlreadyTaken, noCauldronStock: L.toastNoCauldronStock, cauldronNotEmpty: L.toastCauldronNotEmpty, cauldronBrewing: L.toastCauldronBrewing, cauldronNothingToCollect: L.toastCauldronNothingToCollect, cauldronHasEnough: L.toastCauldronHasEnough, visitorNotEnough: L.visitorNotEnough, decorNone: L.decorNone, decorPicked: L.decorPicked, objReturned: L.objReturned, residentNoRoom: L.residentNoRoom, artisanNoResident: L.artisanNoResident, voyagerBusy: L.voyagerBusyToast, kickVoted: L.kickVotedToast, jewelryNoGold: L.toastJewelryNoGold, jewelryNoGem: L.toastJewelryNoGem, cropWrongType: L.toastCropWrongType, cropMaxed: L.toastCropMaxed }[key] || "";
+    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, noMillStock: L.toastNoMillStock, millNotEmpty: L.toastMillNotEmpty, noWheatToDeposit: L.toastNoWheatToDeposit, millFull: L.toastMillFull, actionFailed: L.toastActionFailed, coopNone: L.toastCoopNone, farCoop: L.toastFarCoop, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull, notInjured: L.toastNotInjured, noHealKit: L.toastNoHealKit, healTooFar: L.toastHealTooFar, gregNotHired: L.toastGregNotHired, gregOrderBusy: L.toastGregBusy, gregNoRoom: L.toastGregNoRoom, gregNoFertilizer: L.toastGregNoFertilizer, soanNotHired: L.toastSoanNotHired, soanNoRiver: L.toastSoanNoRiver, farCauldron: L.toastFarCauldron, noFishToDeposit: L.toastNoFishToDeposit, cauldronMissing: L.toastCauldronMissing, cauldronAlreadyTaken: L.toastCauldronAlreadyTaken, noCauldronStock: L.toastNoCauldronStock, cauldronNotEmpty: L.toastCauldronNotEmpty, cauldronBrewing: L.toastCauldronBrewing, cauldronNothingToCollect: L.toastCauldronNothingToCollect, cauldronHasEnough: L.toastCauldronHasEnough, visitorNotEnough: L.visitorNotEnough, decorNone: L.decorNone, decorPicked: L.decorPicked, objReturned: L.objReturned, residentNoRoom: L.residentNoRoom, artisanNoResident: L.artisanNoResident, voyagerBusy: L.voyagerBusyToast, kickVoted: L.kickVotedToast, jewelryNoGold: L.toastJewelryNoGold, jewelryNoGem: L.toastJewelryNoGem, cropWrongType: L.toastCropWrongType, cropMaxed: L.toastCropMaxed }[key] || "";
   }
 
   // -------- Hôte : boucle temps + persistance --------
@@ -4365,7 +4411,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (d <= C.GREG_TASK_RANGE) {
         let ok = false, patch = null;
         if (t.a === "till") { ok = E.gregTill(w, t.i); if (ok) { recordTileOverride(t.i); patch = { tiles: [{ i: t.i, g: w.ground[t.i], o: w.objects[t.i] }] }; } }
-        else if (t.a === "plant") { ok = E.gregPlant(w, t.i, t.crop); if (ok) patch = { crops: [{ i: t.i, c: w.crops.get(t.i) }] }; }
+        else if (t.a === "plant") { ok = E.gregPlant(w, t.i, t.crop, now); if (ok) patch = { crops: [{ i: t.i, c: w.crops.get(t.i) }] }; }
         else if (t.a === "water") { ok = E.gregWater(w, t.i, now); if (ok) patch = { crops: [{ i: t.i, c: w.crops.get(t.i) }] }; }
         else if (t.a === "fertilize") { ok = E.gregFertilize(w, t.i, now); if (ok) patch = { crops: [{ i: t.i, c: w.crops.get(t.i) }] }; }
         else if (t.a === "chop") {
