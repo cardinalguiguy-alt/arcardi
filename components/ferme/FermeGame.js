@@ -5382,9 +5382,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const hh = sharedRef.current.house || { level: 1, upgradeUntil: 0 };
         const img = (sprites.houses && sprites.houses[Math.min(Math.max(hh.level, 1), 3) - 1]) || sprites.house;
         const houseGroundY = (C.HOUSE.y + C.HOUSE.h) * T, houseCx = C.HOUSE.x * T + img.width / 2;
-        drawBuildingShadow(ctx, houseCx, houseGroundY, img.width / 2);
+        // Zip 279 (demande Guillaume, screenshots à l'appui : "le bâtiment
+        // central de la ferme" doit passer au même modèle que grange/
+        // boutique/maisons Valley Town) : même canevas 96×96 à 8px de marge
+        // transparente en bas que house()/townHouseVariant() (voir zip 272),
+        // donc même correction de `groundY` pour que l'ombre ET le footing
+        // tombent sous le bas VISUEL du mur, pas sous le bas du canevas.
+        const houseShadowGy = houseGroundY - 8;
+        drawBuildingShadowConnected(ctx, houseCx, houseShadowGy, img.width / 2);
         ctx.drawImage(img, C.HOUSE.x * T, houseGroundY - 96);
-        drawBuildingFooting(ctx, houseCx, houseGroundY, img.width / 2);
+        drawBuildingFooting(ctx, houseCx, houseShadowGy, img.width / 2);
         if (hh.upgradeUntil > Date.now()) {
           const pal = C.HOUSE_LEVELS[hh.level - 1];
           const total = pal ? pal.durationMs : 1;
@@ -6726,9 +6733,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const th = C.TOWN_HALL, thBy = (th.y + th.h) * T;
         draws.push({ y: thBy, fn: () => {
           const thCx = th.x * T + th.w * T / 2;
-          drawBuildingShadow(ctx, thCx, thBy, 64);
+          // Zip 279 (demande Guillaume, screenshots à l'appui : "l'espèce
+          // d'église blanche" doit passer au même modèle que grange/
+          // boutique/maisons Valley Town) : le canevas `townhallSprite()`
+          // (fermeArt.js) a lui aussi une marge transparente en bas — marches
+          // dessinées jusqu'à y=124 sur un canevas de 128, soit 4px de vide —
+          // d'où la même correction de `groundY` que pour les maisons (8px)
+          // et la grange (BARN_SHADOW_PAD), juste avec sa propre marge.
+          const thShadowGy = thBy - 4;
+          drawBuildingShadowConnected(ctx, thCx, thShadowGy, 64);
           ctx.drawImage(sprites.townhall, th.x * T + (th.w * T - 128) / 2, thBy - 128);
-          drawBuildingFooting(ctx, thCx, thBy, 64);
+          drawBuildingFooting(ctx, thCx, thShadowGy, 64);
         } });
       }
       // Houses: one per known farmer (deterministic order), leftovers show a
