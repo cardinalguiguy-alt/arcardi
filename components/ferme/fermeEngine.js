@@ -1016,6 +1016,13 @@ export function resolveAct(world, f, m) {
           f.inv.mill--;
           world.objects[i] = C.O_MILL; world.objHp.set(i, now + C.BUILD_TIMES.mill);
           world.mills.set(i, { wheat: 0, nextAt: 0 });
+          // Zip 273 (demande Guillaume : "un moulin apparaîtra toujours sur
+          // une case marron, quand on le pose il laboure la case en dessous
+          // de lui = meilleur rendu visuel") : on force G_TILLED si la case
+          // était en herbe, pour que le moulin ne semble jamais flotter sur
+          // l'herbe. Sans effet si déjà labourée/arrosée (on ne casse pas un
+          // arrosage existant).
+          if (g === C.G_GRASS) world.ground[i] = C.G_TILLED;
           res.tiles.push(i); res.invChanged = true;
         } else res.toast = "noMillStock";
       }

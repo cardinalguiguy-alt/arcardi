@@ -154,12 +154,21 @@ function drawBuildingShadow(ctx, cx, groundY, halfW) {
 // bas) — le centre est donc décalé du rayon vertical, pas d'un offset fixe
 // comme la version précédente (zip 270, qui laissait un mini-écart/débord
 // selon la largeur du bâtiment).
+// Zip 273 (demande Guillaume, screenshots à l'appui : "l'ombre doit être
+// COUPÉE par le bâtiment, pas le recouvrir/flotter dessous") : centre de
+// l'ellipse remonté EXACTEMENT sur groundY (au lieu de groundY + ry, qui
+// plaçait toute l'ombre sous la ligne de sol -> elle ne touchait jamais le
+// bâtiment, d'où l'effet de disque posé à côté / flottement). Avec le
+// centre sur groundY, la moitié SUPÉRIEURE de l'ellipse tombe derrière le
+// sprite (dessiné juste après, par-dessus) et seule la moitié inférieure
+// — un simple croissant — dépasse devant le bâtiment, exactement comme une
+// ombre portée par un bâtiment qui repose dessus.
 function drawBuildingShadowConnected(ctx, cx, groundY, halfW) {
   const ry = Math.max(3, halfW * 0.16);
   ctx.save();
   ctx.fillStyle = "rgba(0,0,0,0.28)";
   ctx.beginPath();
-  ctx.ellipse(cx, groundY + ry, Math.max(6, halfW * 0.95), ry, 0, 0, Math.PI * 2);
+  ctx.ellipse(cx, groundY, Math.max(6, halfW * 0.95), ry, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.restore();
 }
@@ -5891,6 +5900,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         for (let ri = 0; ri < residents.length; ri++) {
           const ro = C.VISITOR_ROSTER[residents[ri].rid]; if (!ro) continue;
           if (residents[ri].trip && residents[ri].trip.phase === "away") continue; // zip 258 : Eduardo absent (en voyage)
+          // Zip 274 (bug signalé par Guillaume : "résidents en double, une
+          // version figée + une version normale") : ce rendu "idle planté
+          // près de la maison" est un FALLBACK pour le tout premier instant
+          // avant que residentRoam (tick host, voir ~ligne 4413) ait donné
+          // une position simulée au résident. Une fois `res.x` numérique, le
+          // résident est déjà dessiné — en mouvement — par la boucle
+          // baladeurs plus bas (~ligne 6065) ; le dessiner ICI en plus créait
+          // un doublon figé à côté de sa version animée. On saute donc tout
+          // résident qui a déjà une position simulée.
+          if (typeof residents[ri].x === "number") continue;
           const hsn = houseOwners.find(h => h.resident && h.resident.rid === residents[ri].rid);
           const rxp = hsn ? hsn.x + C.TOWN_HOUSE_W / 2 : 47.5 + (ri % 3) * 1.6;
           const ryp = hsn ? hsn.y + C.TOWN_HOUSE_H + 0.6 : 37.5 + Math.floor(ri / 3) * 1.4;
