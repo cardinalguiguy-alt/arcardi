@@ -133,12 +133,12 @@ function migrateGems(saved) {
 // Fonctions PURES (ctx passé en paramètre), réutilisables depuis n'importe
 // quelle passe de rendu (ferme/évil/ville), sans dépendance de closure.
 function drawBuildingShadow(ctx, cx, groundY, halfW) {
-  ctx.save();
-  ctx.fillStyle = "rgba(0,0,0,0.22)";
-  ctx.beginPath();
-  ctx.ellipse(cx, groundY + 2, Math.max(6, halfW * 0.85), Math.max(3, halfW * 0.14), 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
+  // Zip 268 (demande Guillaume) : ombre retirée — elle donnait l'impression
+  // que les bâtiments flottaient/étaient suspendus au-dessus du sol. On
+  // garde la fonction (et tous ses points d'appel) en no-op plutôt que de
+  // retirer chaque appel dispersé dans le fichier : plus sûr, et permet de
+  // la remettre facilement si besoin. L'effet d'enfoncement (footing,
+  // fonction suivante) reste inchangé.
 }
 function drawBuildingFooting(ctx, cx, groundY, halfW) {
   ctx.save();
