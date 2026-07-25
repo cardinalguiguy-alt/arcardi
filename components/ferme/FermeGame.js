@@ -314,6 +314,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const repairSeenRef = useRef(0);                     // damage.until already shown (no re-open loop)
   const visitorNetRef = useRef(0);                     // host network throttle for visitorSim
   const residentNetRef = useRef(0);                    // zip 252: host network throttle for residentSim (résidents baladeurs)
+  const sessionStartRef = useRef(Date.now());          // zip 298: début de la session de jeu (continu) — base du minuteur de garantie artisans
+  const pitySeenRef = useRef({});                       // zip 298: artisans à skill déjà VUS cette session (rid -> true) — désamorce la garantie
   const ducksRef = useRef(null);                       // decorative ducks (client-side, seeded)
   const adsOpenRef = useRef(false);
   const visitorOpenRef = useRef(false);
@@ -2850,6 +2852,26 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       hostSend({ type: "broadcast", event: "apply", payload });
     }
   }
+  // Zip 298 (demande Guillaume) : renvoie le rid d'un artisan (fromagère/bûcheron)
+  // dont la venue doit être FORCÉE, ou -1. Marque au passage comme "vu cette
+  // session" tout artisan cible déjà présent (visiteur) ou déjà résident, ce qui
+  // désamorce définitivement la garantie pour lui. La garantie ne s'arme qu'après
+  // PITY_ARTISAN_MS de jeu continu (session courante, base = sessionStartRef).
+  function pityDueRid(st, now) {
+    for (const rid of C.PITY_ARTISAN_RIDS) {
+      if ((st.residents || []).some(r => r && r.rid === rid)) pitySeenRef.current[rid] = true;
+      else if ((st.visitors || []).some(v => v && v.rid === rid)) pitySeenRef.current[rid] = true;
+    }
+    if (now - sessionStartRef.current < C.PITY_ARTISAN_MS) return -1;
+    for (const rid of C.PITY_ARTISAN_RIDS) {
+      if (pitySeenRef.current[rid]) continue;
+      if ((st.blacklist || []).includes(rid)) continue;
+      if ((st.residents || []).some(r => r && r.rid === rid)) continue;
+      if ((st.visitors || []).some(v => v && v.rid === rid)) continue;
+      return rid;
+    }
+    return -1;
+  }
   function updateVisitors(dt) {
     const w = worldRef.current, s = sharedRef.current;
     if (!w) return;
@@ -2903,11 +2925,29 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         st.nextVisitAt = now + 60000; // reessai dans 1 minute réelle
         dirtyRef.current = true;
       } else if (st.visitors.length < C.VISITORS_MAX) {
-        const added = E.spawnVisitorGroup(st, Math.random, !!st.damage, visitorStockCtx());
-        E.scheduleNextVisit(st, E.farmPopularity(s, w), Math.random);
-        if (added.length === 1) stationChat(L.visitorArrived(rosterOf(added[0].rid).name), "\u{1F682}");
-        else if (added.length > 1) stationChat(L.visitorsArrived(added.map(nv => rosterOf(nv.rid).name).join(", ")), "\u{1F682}");
-        if (added.length) broadcastStation();
+        // Zip 298 : garantie d'apparition (fromagère/bûcheron). Après
+        // PITY_ARTISAN_MS de jeu continu, si l'un d'eux n'a jamais été vu cette
+        // session et n'est pas déjà résident, on force SA venue à cette visite.
+        const pity = pityDueRid(st, now);
+        if (pity >= 0) {
+          const nv = E.spawnVisitor(st, Math.random, visitorStockCtx(), pity);
+          if (nv) {
+            const usedSlots = new Set(st.visitors.map(v => v.slot | 0));
+            let slot = 0; while (usedSlots.has(slot)) slot++;
+            nv.slot = slot;
+            st.visitors.push(nv);
+            pitySeenRef.current[pity] = true;
+            stationChat(L.visitorArrived(rosterOf(nv.rid).name), "\u{1F682}");
+            broadcastStation();
+          }
+          E.scheduleNextVisit(st, E.farmPopularity(s, w), Math.random);
+        } else {
+          const added = E.spawnVisitorGroup(st, Math.random, !!st.damage, visitorStockCtx());
+          E.scheduleNextVisit(st, E.farmPopularity(s, w), Math.random);
+          if (added.length === 1) stationChat(L.visitorArrived(rosterOf(added[0].rid).name), "\u{1F682}");
+          else if (added.length > 1) stationChat(L.visitorsArrived(added.map(nv => rosterOf(nv.rid).name).join(", ")), "\u{1F682}");
+          if (added.length) broadcastStation();
+        }
       } else E.scheduleNextVisit(st, 0, Math.random);
     }
     // Waypoints: platform -> south of the townhall -> its door (and back).
@@ -4781,7 +4821,61 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function residentBeeSuit(res, ro) {
     return !!(ro && ro.skill === "beekeeper" && res && res.beePhase === "working");
   }
-  function residentRoam(res, w, now, dt, ro) {
+  // True si la case (x,y) est du sol LABOURÉ (sec ou arrosé). Demande Guillaume
+  // (chantier 2026-07, zip 298) : les résidents doivent éviter SOUPLEMENT le
+  // labouré — le traverser RAREMENT, pas jamais. On s'en sert pour biaiser le
+  // tirage des cibles de rôdaille (voir pickRoamTarget).
+  function tileTilled(w, x, y) {
+    const fx = Math.floor(x), fy = Math.floor(y);
+    if (!inMap(fx, fy)) return false;
+    const g = w.ground[fy * C.MAP_W + fx];
+    return g === C.G_TILLED || g === C.G_WATERED;
+  }
+  // Tire une case cible libre dans un rectangle autour de (ax,ay). Évite le
+  // labouré : on garde la 1re case libre NON labourée trouvée ; une case libre
+  // mais labourée n'est retenue qu'en repli, et seulement si `allowTilled` (tiré
+  // rarement par l'appelant) — sinon on renvoie null et l'appelant réessaie vite.
+  function pickRoamTarget(w, ax, ay, rx, ry, allowTilled) {
+    let fallback = null;
+    for (let i = 0; i < 24; i++) {
+      const tx = ax + (Math.random() * 2 - 1) * rx, ty = ay + (Math.random() * 2 - 1) * ry;
+      if (!inMap(Math.floor(tx), Math.floor(ty)) || E.blockedTile(w, tx, ty)) continue;
+      if (tileTilled(w, tx, ty)) { if (!fallback) fallback = { x: tx, y: ty }; continue; }
+      return { x: tx, y: ty };
+    }
+    return allowTilled ? fallback : null;
+  }
+  // Oriente le sprite d'un résident vers un point (utilisé pour le face-à-face).
+  function faceResidentToward(res, tx, ty) {
+    const dx = tx - res.x, dy = ty - res.y;
+    res.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 3 : 2) : (dy > 0 ? 0 : 1);
+  }
+  // Cherche un voisin disponible (autre résident présent, pas en voyage) dans un
+  // rayon raisonnable, pour aller discuter en face-à-face / former un petit
+  // groupe. On privilégie le plus proche (au-delà d'1,2 case : pas déjà collé).
+  function findRoamMate(res, peers) {
+    if (!peers) return null;
+    let best = null, bestD = 10;
+    for (const p of peers) {
+      if (!p || p === res || typeof p.x !== "number") continue;
+      if (p.trip && p.trip.phase === "away") continue;
+      const d = Math.hypot(p.x - res.x, p.y - res.y);
+      if (d < 1.2 || d >= bestD) continue;
+      bestD = d; best = p;
+    }
+    return best;
+  }
+  // Case libre adjacente à (mx,my) où venir se poster face au partenaire.
+  function meetSpotNear(w, mx, my) {
+    const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+    for (let k = dirs.length - 1; k > 0; k--) { const j = Math.floor(Math.random() * (k + 1)); const t = dirs[k]; dirs[k] = dirs[j]; dirs[j] = t; }
+    for (const [dx, dy] of dirs) {
+      const tx = mx + dx, ty = my + dy;
+      if (inMap(Math.floor(tx), Math.floor(ty)) && !E.blockedTile(w, tx, ty)) return { x: tx, y: ty };
+    }
+    return null;
+  }
+  function residentRoam(res, w, now, dt, ro, peers) {
     // Zip 256/259 : un artisan à bâtiment (apiculteur/fromager/pâtissière) rôde
     // autour de SON bâtiment, à sa position ACTUELLE (déplaçable, voir
     // artisanAnchor), au lieu d'une ancre fixe — corrige "l'apiculteur planté
@@ -4792,35 +4886,83 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // Zip 264 : apiculteur -> rayon un peu plus large (4) centré sur la ruche
     // pour bien en faire le TOUR (l'anneau autour du footprint 2x2 solide).
     const rx = bAnchor ? (bAnchor.ring ? 4 : 3) : 9, ry = bAnchor ? (bAnchor.ring ? 4 : 3) : 7;
-    // Bugfix (demande Guillaume : "René reste toujours planté au même endroit
-    // malgré l'ordre de récolte") : la position initiale n'était jamais
-    // vérifiée contre blockedTile — un artisan dont l'ancre est proche d'un
-    // bâtiment (ruche déplacée près de la maison, par ex.) pouvait apparaître
-    // directement collé/à cheval sur un mur, sans jamais s'en décoller (voir
-    // le point 2 ci-dessous, même famille de bug). On tire maintenant
-    // plusieurs candidats et on garde le premier libre (repli sur le centre
-    // de l'ancre si aucun n'est libre après le nombre max d'essais).
+    // Position initiale : jamais posée -> on tire plusieurs candidats et on garde
+    // le premier libre (repli sur le centre de l'ancre si aucun n'est libre).
     if (typeof res.x !== "number" || typeof res.y !== "number") {
       let ix = anchor.x, iy = anchor.y, itries = 0;
       do { ix = anchor.x + (Math.random() * (rx * 0.9) - rx * 0.45); iy = anchor.y + (Math.random() * (ry * 0.9) - ry * 0.45); itries++; } while (itries < 16 && E.blockedTile(w, ix, iy));
       res.x = ix; res.y = iy;
-      res.dir = 0; res.animT = 0; res.moving = false; res.roamTarget = null; res.nextRoamAt = 0;
+      res.dir = 0; res.animT = 0; res.moving = false; res.roamTarget = null; res.roamMeet = null; res.nextRoamAt = 0;
     }
+    // Bugfix (René toujours immobile — SUITE du zip 297) : si un résident est
+    // DÉJÀ posé sur une case bloquée (ruche/atelier déplacé sur lui via
+    // moveArtisan, ou sauvegarde d'avant le correctif), l'ancienne logique ne le
+    // récupérait jamais — le repositionnement n'agissait qu'au tout premier
+    // spawn (x/y encore indéfinis). Depuis une case bloquée, CHAQUE pas de
+    // rôdaille était refusé (blockedTile) puis la cible effacée -> figé à vie.
+    // On l'éjecte donc, à chaque tick tant qu'il est coincé, vers la case libre
+    // la plus proche de son ancre.
+    else if (E.blockedTile(w, res.x, res.y)) {
+      let ex = res.x, ey = res.y, et = 0, ok = false;
+      do { ex = anchor.x + (Math.random() * (rx * 0.9) - rx * 0.45); ey = anchor.y + (Math.random() * (ry * 0.9) - ry * 0.45); et++; ok = inMap(Math.floor(ex), Math.floor(ey)) && !E.blockedTile(w, ex, ey); } while (et < 24 && !ok);
+      if (ok) { res.x = ex; res.y = ey; }
+      res.roamTarget = null; res.roamMeet = null; res.moving = false; res.nextRoamAt = 0;
+    }
+    // Refonte "déplacements réalistes" (demande Guillaume, zip 298) : au lieu de
+    // marcher sans arrêt, un résident alterne pauses (souvent, durées variées),
+    // petits tours près de chez lui, rapprochements en face-à-face / petits
+    // groupes de discussion, et parfois une excursion plus loin dans la map.
+    // Les artisans ANCRÉS (bAnchor) restent près de leur atelier : on leur donne
+    // surtout plus de pauses, pas d'excursion ni de rendez-vous lointain (sinon
+    // René/Ingrid quitteraient leur poste). Les résidents génériques (près du
+    // spawn commun) ont le comportement social complet.
     if (!res.roamTarget || now >= (res.nextRoamAt || 0) || Math.hypot(res.roamTarget.x - res.x, res.roamTarget.y - res.y) < 0.2) {
-      if (Math.random() < 0.25) { res.roamTarget = null; res.moving = false; res.nextRoamAt = now + 2500 + Math.random() * 4500; }
-      else {
-        // Bugfix : jusqu'à 20 essais (au lieu de 6) — un anneau serré (rx/ry=4
-        // autour de la ruche) proche d'un bâtiment peut avoir très peu de
-        // cases libres. Ancien bug : passé les tries, la DERNIÈRE case tirée
-        // était acceptée quand même, même bloquée -> le résident restait
-        // planté à essayer d'atteindre une cible inatteignable jusqu'au
-        // prochain cycle complet (2.5 à 7s). Désormais, si aucune case libre
-        // n'est trouvée, on ne fige plus de cible et on retente vite (500 ms)
-        // au lieu d'attendre le plein cycle.
-        let tries = 0, tx = res.x, ty = res.y, found = false;
-        do { tx = anchor.x + (Math.random() * 2 - 1) * rx; ty = anchor.y + (Math.random() * 2 - 1) * ry; tries++; found = inMap(Math.floor(tx), Math.floor(ty)) && !E.blockedTile(w, tx, ty); } while (tries < 20 && !found);
-        if (found) { res.roamTarget = { x: tx, y: ty }; res.nextRoamAt = now + 2500 + Math.random() * 4500; }
-        else { res.roamTarget = null; res.moving = false; res.nextRoamAt = now + 500; }
+      const arrived = res.roamTarget && Math.hypot(res.roamTarget.x - res.x, res.roamTarget.y - res.y) < 0.2;
+      res.moving = false;
+      if (arrived && res.roamMeet != null) {
+        // Arrivé au rendez-vous : on s'arrête FACE au partenaire et on discute.
+        const mate = peers && peers.find(p => p && p.rid === res.roamMeet);
+        if (mate) faceResidentToward(res, mate.x, mate.y);
+        res.roamTarget = null; res.roamMeet = null;
+        res.nextRoamAt = now + 4000 + Math.random() * 7000;
+      } else {
+        const roll = Math.random();
+        const allowTilled = Math.random() < 0.15; // traversée du labouré : rare
+        if (bAnchor) {
+          // Artisan posté : ~55% pause (variée), sinon petit tour dans l'anneau.
+          if (roll < 0.55) {
+            res.roamTarget = null; res.roamMeet = null;
+            res.nextRoamAt = now + (Math.random() < 0.3 ? 7000 + Math.random() * 8000 : 2500 + Math.random() * 5000);
+          } else {
+            const t = pickRoamTarget(w, anchor.x, anchor.y, rx, ry, allowTilled);
+            if (t) { res.roamTarget = t; res.roamMeet = null; res.nextRoamAt = now + 2500 + Math.random() * 4500; }
+            else { res.roamTarget = null; res.roamMeet = null; res.nextRoamAt = now + 500; }
+          }
+        } else if (roll < 0.38) {
+          // PAUSE fréquente, durée variée (parfois une vraie halte de repos).
+          res.roamTarget = null; res.roamMeet = null;
+          res.nextRoamAt = now + (Math.random() < 0.25 ? 8000 + Math.random() * 9000 : 3000 + Math.random() * 5000);
+        } else if (roll < 0.62) {
+          // SOCIAL : rejoindre un voisin pour discuter en face-à-face / en groupe.
+          const mate = findRoamMate(res, peers);
+          const spot = mate ? meetSpotNear(w, mate.x, mate.y) : null;
+          if (spot) { res.roamTarget = spot; res.roamMeet = mate.rid; res.nextRoamAt = now + 12000; }
+          else {
+            const t = pickRoamTarget(w, anchor.x, anchor.y, rx, ry, allowTilled);
+            if (t) { res.roamTarget = t; res.roamMeet = null; res.nextRoamAt = now + 2500 + Math.random() * 4500; }
+            else { res.roamTarget = null; res.roamMeet = null; res.nextRoamAt = now + 500; }
+          }
+        } else if (roll < 0.76) {
+          // EXCURSION : s'éloigner davantage dans la map (rayon élargi).
+          const big = pickRoamTarget(w, anchor.x, anchor.y, rx * 2.4 + 4, ry * 2.4 + 4, allowTilled);
+          if (big) { res.roamTarget = big; res.roamMeet = null; res.nextRoamAt = now + 6000 + Math.random() * 6000; }
+          else { res.roamTarget = null; res.roamMeet = null; res.nextRoamAt = now + 500; }
+        } else {
+          // NORMAL : petit tour près du spawn.
+          const t = pickRoamTarget(w, anchor.x, anchor.y, rx, ry, allowTilled);
+          if (t) { res.roamTarget = t; res.roamMeet = null; res.nextRoamAt = now + 2500 + Math.random() * 4500; }
+          else { res.roamTarget = null; res.roamMeet = null; res.nextRoamAt = now + 500; }
+        }
       }
     }
     if (res.roamTarget) {
@@ -4829,11 +4971,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       else {
         const step = Math.min(d, C.VISITOR_SPEED * 0.7 * dt); const nx = res.x + (dx / d) * step, ny = res.y + (dy / d) * step;
         if (!E.blockedTile(w, nx, ny)) { res.x = nx; res.y = ny; res.moving = true; res.animT = (res.animT || 0) + dt * 6; res.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 3 : 2) : (dy > 0 ? 0 : 1); }
-        // Bugfix : un pas bloqué en cours de route (obstacle apparu entre-temps,
-        // ou cible côté opposé d'un mur) laissait l'ancienne version retenter
-        // indéfiniment la MÊME cible bloquée jusqu'au prochain cycle complet —
-        // on l'efface désormais et on retente vite (500 ms) comme ci-dessus.
-        else { res.moving = false; res.roamTarget = null; res.nextRoamAt = now + 500; }
+        // Un pas bloqué en cours de route (obstacle apparu, ou cible côté opposé
+        // d'un mur) : on efface la cible et on retente vite (500 ms) au lieu de
+        // buter indéfiniment sur la même case murée.
+        else { res.moving = false; res.roamTarget = null; res.roamMeet = null; res.nextRoamAt = now + 500; }
       }
     }
   }
@@ -4978,7 +5119,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         }
         continue;
       }
-      residentRoam(res, w, now, dt, ro); // zip 252 : balade sur la ferme (chaque tick) — zip 256 : ancre dédiée pour l'apiculteur
+      residentRoam(res, w, now, dt, ro, residents); // zip 252 : balade sur la ferme (chaque tick) — zip 256 : ancre dédiée — zip 298 : passe la liste des voisins (rendez-vous sociaux)
       if (ro.skill === "beekeeper") updateBeekeeperPhase(res, s, now); // chantier 2026-07 : blocs travail/pause de René
       // Premier passage : on planifie la première journée de travail sans rien
       // produire (emménager prend un peu de temps). La borne haute protège

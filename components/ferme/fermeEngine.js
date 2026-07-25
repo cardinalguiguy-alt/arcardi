@@ -2731,21 +2731,29 @@ function classifyBuyOffer(offer, stockCtx, r, rel) {
   return offer;
 }
 
-export function spawnVisitor(station, rnd, stockCtx) {
+export function spawnVisitor(station, rnd, stockCtx, forceRid) {
   const r = rnd || Math.random;
   const banned = new Set(station.blacklist || []);
   for (const res of station.residents || []) banned.add(res.rid);
   for (const cur of station.visitors || []) banned.add(cur.rid); // zip 233: no duplicates on the farm
   const pool = C.VISITOR_ROSTER.filter(v => !banned.has(v.rid) && v.rid !== station.lastRid);
-  if (!pool.length) return null;
-  // Zip 234 (friendship): weighted pick — the better the friendship, the more
-  // often that character hops on the train. Strangers keep weight 1.
-  // Zip 258 : un visiteur `rare` (Eduardo) part d'un poids de base réduit
-  // (RARE_VISITOR_WEIGHT au lieu de 1), donc apparaît nettement moins souvent.
-  const weights = pool.map(v => (v.rare ? C.RARE_VISITOR_WEIGHT : 1) + Math.min(C.REL_SPAWN_WEIGHT_RELCAP, (station.rel && station.rel[v.rid]) || 0) * C.REL_SPAWN_WEIGHT);
-  let pick = r() * weights.reduce((a, b) => a + b, 0), wi = 0;
-  while (wi < weights.length - 1 && pick >= weights[wi]) { pick -= weights[wi]; wi++; }
-  const who = pool[wi];
+  // Zip 298 (demande Guillaume) : garantie d'apparition d'un artisan précis
+  // (fromagère/bûcheron) via `forceRid` — on court-circuite le tirage pondéré
+  // et on l'impose, à condition qu'il ne soit ni banni ni déjà résident/visiteur
+  // (on ignore volontairement lastRid ici, la garantie prime).
+  let who = null;
+  if (forceRid != null && !banned.has(forceRid)) who = C.VISITOR_ROSTER.find(v => v.rid === forceRid) || null;
+  if (!who) {
+    if (!pool.length) return null;
+    // Zip 234 (friendship): weighted pick — the better the friendship, the more
+    // often that character hops on the train. Strangers keep weight 1.
+    // Zip 258 : un visiteur `rare` (Eduardo) part d'un poids de base réduit
+    // (RARE_VISITOR_WEIGHT au lieu de 1), donc apparaît nettement moins souvent.
+    const weights = pool.map(v => (v.rare ? C.RARE_VISITOR_WEIGHT : 1) + Math.min(C.REL_SPAWN_WEIGHT_RELCAP, (station.rel && station.rel[v.rid]) || 0) * C.REL_SPAWN_WEIGHT);
+    let pick = r() * weights.reduce((a, b) => a + b, 0), wi = 0;
+    while (wi < weights.length - 1 && pick >= weights[wi]) { pick -= weights[wi]; wi++; }
+    who = pool[wi];
+  }
   station.lastRid = who.rid;
   let hostile = C.VISITOR_HOSTILE_CHANCE * (who.edgy ? 2 : 1);
   hostile = hostile / Math.pow(2, (station.residents || []).length);

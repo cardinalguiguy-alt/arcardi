@@ -1402,6 +1402,13 @@ export const VISITOR_WAIT_MS = 90 * 1000;         // legacy base wait (still the
 export const VISITOR_NET_MS = 750;                // host broadcast throttle (zip 264: 500 -> 750, ~2 Hz -> ~1.33 Hz) pour visiteurs ET résidents baladeurs. Le rendu invité lisse ces PNJ via smoothNpc (glide+extrapolation, cf. FIX 246) : 1.33 Hz reste parfaitement fluide. Combiné à l'AOI-gate (zip 264), c'est le plus gros levier contre la fuite « résidents diffusés en continu ».
 // 2026-07 visitors update (zip 233, Guillaume's spec):
 export const VISITORS_MAX = 5;                    // hard cap of visitors on the farm at once
+// Zip 298 (demande Guillaume) : garantie d'apparition des artisans dont l'activité
+// est difficile à lancer si on ne les voit jamais — Ingrid (fromagère, rid 26) et
+// Tristan (bûcheron, rid 27). S'ils ne sont pas apparus au bout de PITY_ARTISAN_MS
+// de jeu CONTINU (session courante) et qu'ils ne sont pas déjà résidents, leur
+// venue est forcée à la prochaine visite hors plage nocturne.
+export const PITY_ARTISAN_RIDS = [26, 27];
+export const PITY_ARTISAN_MS = 30 * 60 * 1000;    // 30 minutes de jeu continu
 export const VISITOR_WAIT_FLOOR_MS = 10 * 60 * 1000;   // 10 real minutes, hard FLOOR for every visit type
 export const VISITOR_WAIT_MAX_MS = 45 * 60 * 1000;     // ceiling: even "prep" orders never linger longer
 export const VISITOR_WANDER_AFTER_MS = 30 * 60 * 1000; // after 30 real minutes waiting, they stroll around
