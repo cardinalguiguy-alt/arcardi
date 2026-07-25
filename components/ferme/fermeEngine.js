@@ -1099,15 +1099,34 @@ export function resolveAct(world, f, m) {
       if (o !== C.O_MILL || !buildReady(world.objHp.get(i), now)) break;
       const have = f.inv.crops[C.MILL_WHEAT_CROP] || 0;
       if (have <= 0) { res.toast = "noWheatToDeposit"; break; }
-      const ms = world.mills.get(i) || { wheat: 0, nextAt: 0 };
-      const room = C.MILL_STOCK_CAP - (ms.wheat || 0);
-      if (room <= 0) { res.toast = "millFull"; break; }
-      const n = Math.min(have, room);
-      f.inv.crops[C.MILL_WHEAT_CROP] -= n;
-      ms.wheat = (ms.wheat || 0) + n;
-      world.mills.set(i, ms);
-      res.invChanged = true; res.millTiles.push(i);
-      res.fx.push({ k: "millDeposit", x, y, n });
+      // Zip 301b (demande Guillaume) : un clic sur UN moulin alimente TOUS les
+      // moulins terminés de la ferme, en répartissant le blé équitablement
+      // (round-robin, plafonné à MILL_STOCK_CAP par moulin) — ils broient alors
+      // en parallèle. On scanne les tuiles O_MILL prêtes (peu nombreuses).
+      const millIdx = [];
+      for (let k = 0; k < world.objects.length; k++) {
+        if (world.objects[k] === C.O_MILL && buildReady(world.objHp.get(k), now)) millIdx.push(k);
+      }
+      if (!millIdx.length) break; // sécurité (on a pourtant cliqué un moulin prêt)
+      let totalRoom = 0;
+      for (const k of millIdx) totalRoom += Math.max(0, C.MILL_STOCK_CAP - ((world.mills.get(k) || {}).wheat || 0));
+      if (totalRoom <= 0) { res.toast = "millFull"; break; }
+      let toDeposit = Math.min(have, totalRoom);
+      f.inv.crops[C.MILL_WHEAT_CROP] -= toDeposit;
+      // Répartition 1 par 1 en tournant sur les moulins non pleins.
+      let remaining = toDeposit, ri = 0, guard = 0;
+      const guardMax = toDeposit + millIdx.length + 4;
+      while (remaining > 0 && guard++ < guardMax * 4) {
+        const k = millIdx[ri % millIdx.length]; ri++;
+        const ms = world.mills.get(k) || { wheat: 0, nextAt: 0 };
+        if ((ms.wheat || 0) < C.MILL_STOCK_CAP) {
+          ms.wheat = (ms.wheat || 0) + 1; world.mills.set(k, ms);
+          if (!res.millTiles.includes(k)) res.millTiles.push(k);
+          remaining--;
+        }
+      }
+      res.invChanged = true;
+      res.fx.push({ k: "millDeposit", x, y, n: toDeposit });
       break;
     }
     case "fish":
@@ -2537,7 +2556,7 @@ export function migrateCrafts(cr) {
 // Zip 301 : nouveaux produits — beurre (fromagerie), pain + viennoiseries
 // (Rosalie). migrateCraftStock itère sur Object.keys(out), donc l'ajout ici
 // suffit à les faire persister/synchroniser.
-export function newCraftStock() { return { honey: 0, cheeseWheel: 0, cheesePortion: 0, pastry: 0, butter: 0, bread: 0, croissant: 0, chocolatine: 0, painSuisse: 0 }; }
+export function newCraftStock() { return { honey: 0, cheeseWheel: 0, cheesePortion: 0, pastry: 0, pastryVanilla: 0, butter: 0, bread: 0, croissant: 0, chocolatine: 0, painSuisse: 0 }; }
 export function migrateCraftStock(s) {
   const out = newCraftStock();
   if (s && typeof s === "object") for (const k of Object.keys(out)) out[k] = Math.max(0, s[k] | 0);

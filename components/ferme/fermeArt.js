@@ -1111,6 +1111,7 @@ export function buildSprites() {
     else if (id === "bread") { P(g, 3, 6, 10, 6, "#c98a4a"); P(g, 3, 6, 10, 1, "#e8b96a"); P(g, 4, 5, 8, 1, "#e8b96a"); P(g, 5, 8, 1, 2, "#8a5a2a"); P(g, 8, 8, 1, 2, "#8a5a2a"); P(g, 3, 11, 10, 1, "#9a6a34"); } // pain
     else if (id === "croissant") { g.fillStyle = "#e0a94a"; g.beginPath(); g.arc(8, 9, 5, 0.4, 3.9); g.fill(); P(g, 5, 6, 6, 2, "#eebf6a"); P(g, 4, 8, 2, 3, "#c98a3a"); P(g, 11, 8, 2, 3, "#c98a3a"); P(g, 7, 6, 3, 1, "#f5d9a0"); } // croissant
     else if (id === "chocolatine" || id === "painSuisse") { P(g, 3, 6, 10, 6, "#cd9552"); P(g, 3, 6, 10, 1, "#e8b96a"); P(g, 4, 8, 2, 3, "#4a2a18"); P(g, 10, 8, 2, 3, "#4a2a18"); if (id === "painSuisse") { P(g, 6, 8, 1, 1, "#3a2010"); P(g, 8, 9, 1, 1, "#3a2010"); P(g, 7, 10, 1, 1, "#3a2010"); } } // chocolatine / pain suisse
+    else if (id === "pastryVanilla") { P(g, 4, 8, 8, 5, "#e7c98a"); P(g, 5, 6, 6, 3, "#f3e2ba"); P(g, 6, 5, 4, 2, "#fbf3da"); P(g, 7, 4, 1, 1, "#caa24a"); P(g, 6, 10, 1, 1, "#7a5a2a"); P(g, 9, 10, 1, 1, "#7a5a2a"); P(g, 8, 6, 1, 1, "#3a2a14"); } // pâtisserie à la vanille (crème claire, grains de vanille)
     else { P(g, 4, 8, 8, 5, "#c98a4a"); P(g, 5, 6, 6, 3, "#e8b96a"); P(g, 6, 5, 4, 2, "#f5d9a0"); P(g, 7, 4, 1, 1, "#d14a3a"); P(g, 6, 10, 1, 1, "#8a3a2a"); P(g, 9, 10, 1, 1, "#8a3a2a"); } // pâtisserie
     outlineSprite(g, T, T, "#5a3a1e");
     return c;
@@ -2070,7 +2071,7 @@ house: house(),
   S.decor = {}; for (const d of C.UNIQUE_DECORATIONS) S.decor[d.id] = decorSprite(d.id);
   // Zip 252 : bâtiments d'ateliers + icônes de produits artisanaux.
   S.artisan = { beehive: artisanBuildingSprite("beehive"), fromagerie: artisanBuildingSprite("fromagerie"), bakery: artisanBuildingSprite("bakery"), sawmill: artisanBuildingSprite("sawmill") };
-  S.craftIcons = { honey: craftIcon("honey"), cheeseWheel: craftIcon("cheeseWheel"), cheesePortion: craftIcon("cheesePortion"), pastry: craftIcon("pastry"), butter: craftIcon("butter"), bread: craftIcon("bread"), croissant: craftIcon("croissant"), chocolatine: craftIcon("chocolatine"), painSuisse: craftIcon("painSuisse") };
+  S.craftIcons = { honey: craftIcon("honey"), cheeseWheel: craftIcon("cheeseWheel"), cheesePortion: craftIcon("cheesePortion"), pastry: craftIcon("pastry"), pastryVanilla: craftIcon("pastryVanilla"), butter: craftIcon("butter"), bread: craftIcon("bread"), croissant: craftIcon("croissant"), chocolatine: craftIcon("chocolatine"), painSuisse: craftIcon("painSuisse") };
   // Zip 236: one sprite per pet id in the catalog (individual pets).
   S.pets = {};
   for (const pid of Object.keys(C.PET_CATALOG)) S.pets[pid] = petSprite(pid);

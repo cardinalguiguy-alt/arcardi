@@ -130,7 +130,7 @@ export const FERME_STR = {
     artisanNoResident: "Il faut d'abord que l'artisan correspondant vive chez toi.",
     artisanBuilt: (b) => `🔨 ${b} construit(e) ! L'artisan peut se mettre à produire.`,
     buildingName: (bid) => ({ beehive: "Ruche", fromagerie: "Fromagerie", bakery: "Boulangerie", sawmill: "Scierie" }[bid] || bid),
-    craftName: (item) => ({ honey: "Pot de miel", cheeseWheel: "Roue de fromage", cheesePortion: "Part de fromage", pastry: "Pâtisserie", butter: "Motte de beurre", bread: "Pain", croissant: "Croissant", chocolatine: "Chocolatine", painSuisse: "Pain suisse" }[item] || item),
+    craftName: (item) => ({ honey: "Pot de miel", cheeseWheel: "Roue de fromage", cheesePortion: "Part de fromage", pastry: "Pâtisserie", pastryVanilla: "Pâtisserie à la vanille", butter: "Motte de beurre", bread: "Pain", croissant: "Croissant", chocolatine: "Chocolatine", painSuisse: "Pain suisse" }[item] || item),
     craftSold: (name, n, gain) => `Vente : ${n} × ${name} (+${gain} or) ! Caisse commune enrichie.`,
     cheeseCut: (w, p) => `🧀 ${w} roue(s) découpée(s) en ${p} parts.`,
     promptResident: (n) => `Q — parler à ${n}`,
@@ -168,7 +168,7 @@ export const FERME_STR = {
     residentNotWorkingYet: "Pas encore d'atelier — je m'installe.",
     residentProdHoney: (n) => `Ruche en route — ${n} pot(s) de miel en réserve.`,
     residentProdCheese: (w, p, b) => `Fromagerie active — ${w} roue(s), ${p} part(s), ${b | 0} beurre au frais.`,
-    residentProdPastry: (n) => `Le four tourne — ${n} pâtisserie(s) prête(s).`,
+    residentProdPastry: (n, nv) => `Le four tourne — ${n} pâtisserie(s)${(nv | 0) > 0 ? `, ${nv} à la vanille` : ""} prête(s).`,
     // Zip 301 : filière pain + viennoiseries de Rosalie.
     residentProdBread: (pain, cr, ch, ps) => `Fournil — ${pain} pain(s), ${cr} croissant(s), ${ch} chocolatine(s), ${ps} pain(s) suisse(s).`,
     // Zip 301 : réglage du ratio fromage/beurre (fiche d'Ingrid).
@@ -924,7 +924,7 @@ export const FERME_STR = {
     artisanNoResident: "You first need the matching artisan living with you.",
     artisanBuilt: (b) => `🔨 ${b} built! The artisan can start producing.`,
     buildingName: (bid) => ({ beehive: "Beehive", fromagerie: "Cheese dairy", bakery: "Bakery", sawmill: "Sawmill" }[bid] || bid),
-    craftName: (item) => ({ honey: "Honey jar", cheeseWheel: "Cheese wheel", cheesePortion: "Cheese portion", pastry: "Pastry", butter: "Butter block", bread: "Bread", croissant: "Croissant", chocolatine: "Pain au chocolat", painSuisse: "Pain suisse" }[item] || item),
+    craftName: (item) => ({ honey: "Honey jar", cheeseWheel: "Cheese wheel", cheesePortion: "Cheese portion", pastry: "Pastry", pastryVanilla: "Vanilla pastry", butter: "Butter block", bread: "Bread", croissant: "Croissant", chocolatine: "Pain au chocolat", painSuisse: "Pain suisse" }[item] || item),
     craftSold: (name, n, gain) => `Sold: ${n} × ${name} (+${gain} gold)! Common pot topped up.`,
     cheeseCut: (w, p) => `🧀 Cut ${w} wheel(s) into ${p} portions.`,
     promptResident: (n) => `Q — talk to ${n}`,
@@ -966,7 +966,7 @@ export const FERME_STR = {
     cheeseRatioTitle: "Cheese / butter split",
     cheeseRatioLine: (cheese, butter) => `Cheese ${cheese}% · Butter ${butter}%`,
     cheeseRatioButterShort: "Butter",
-    residentProdPastry: (n) => `Oven's on — ${n} pastry(ies) ready.`,
+    residentProdPastry: (n, nv) => `Oven's on — ${n} pastry(ies)${(nv | 0) > 0 ? `, ${nv} vanilla` : ""} ready.`,
     residentProdWood: (w, s, p) => `Common stock: ${w} wood, ${s} stone, ${p} plank(s) brought in.`,
     residentSeeBtn: "View",
     // Zip 258: baker out-of-ingredients alert.

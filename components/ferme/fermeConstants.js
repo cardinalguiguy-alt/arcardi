@@ -551,7 +551,7 @@ export const GRASS_COST = 5; // prix d'une unité d'herbe à la boutique (or)
 // delà de la mécanique elle-même), à ajuster librement.
 export const MILL_COST = 30000;              // prix d'un moulin niveau 1 à la boutique (or), donné par Guillaume
 export const MILL_WHEAT_CROP = 4;            // index de "Blé" dans C.CROPS ci-dessus
-export const MILL_WHEAT_PER_SACK = 2;        // Zip 261/262 (demande Guillaume : moins de blé par sac) : 3 -> 2
+export const MILL_WHEAT_PER_SACK = 1;        // Zip 301b (demande Guillaume : plus de farine pour moins de blé) : 2 -> 1 (1 blé = 1 sac)
 export const MILL_BATCH_MS = 5 * 60 * 1000;  // Zip 261/262 (demande Guillaume : moulins plus rapides) : 15 -> 5 min réelles par sac
 export const MILL_STOCK_CAP = 90;            // stock de blé max qu'un moulin peut contenir (extrapolé, ~30 sacs d'avance)
 export const FLOUR_SELL = 55;                // prix de vente d'un sac de farine (extrapolé)
@@ -568,6 +568,17 @@ export const FLOUR_SELL = 55;                // prix de vente d'un sac de farine
 // concerné(s). Pas de plafond volontairement (aucune limite demandée sur le
 // nombre de moulins ni sur ce multiplicateur).
 export const MILL_SPEED_MIN_MULT = 1; // multiplicateur plancher (1 moulin construit = vitesse normale)
+// Zip 301b (demande Guillaume : "les faire fonctionner en même temps, pas
+// individuellement ; un clic sur l'un déclenche tous et divise le travail") :
+// un dépôt de blé sur N'IMPORTE quel moulin RÉPARTIT désormais le blé sur TOUS
+// les moulins terminés de la ferme (voir resolveAct cas "millDeposit"), qui
+// broient alors EN PARALLÈLE, chacun sa part. Le débit total est donc ~×N pour
+// N moulins (2 moulins = 2× plus de farine par minute, etc.), obtenu par la
+// répartition + le broyage simultané, chaque moulin tournant à sa cadence de
+// base. On remet donc le multiplicateur de vitesse par moulin à 1 (le boost
+// "MILL_BATCH_MS ÷ nb de moulins" du zip 286 est remplacé par ce parallélisme,
+// sinon le cumul répartition × boost donnerait un ×N² surpuissant).
+export const MILL_GROUPED_DEPOSIT = true;
 
 // --- Temps de construction réels (chantier 2026-07, "modèle Clash of Clans") ---
 // Toute infrastructure posée par un joueur (lampadaire pour l'instant, et
@@ -1250,7 +1261,7 @@ export const SKILL_BUILDING = { beekeeper: "beehive", cheesemaker: "fromagerie",
 // Zip 258 (demande Guillaume : "le miel est une denrée rare") : cadence ÷3
 // (4 min -> 12 min entre deux pots) et prix du pot fortement relevé à 7000.
 // C'est le produit passif le plus lent et le plus cher du jeu, assumé.
-export const HONEY_MS = 12 * 60 * 1000;    export const HONEY_SELL = 7000;  // ruche : passif, aucun intrant (denrée rare : 12 min/pot, 7000 l'unité — zip 258)
+export const HONEY_MS = 20 * 60 * 1000;    export const HONEY_SELL = 7000;  // ruche : passif, aucun intrant (denrée rare — zip 301b : 1 pot / 20 min, demande Guillaume)
 
 // Point d'ancrage de rôdaille de l'apiculteur (René) : centre du bâtiment
 // beehive (site 2x2 à x:50,y:46), pour qu'il reste autour de sa ruche au lieu
@@ -1274,7 +1285,7 @@ export const BEEKEEPER_BREAK_MS = 15 * 60 * 1000; // durée de la pause avant de
 export const SUPERRENE_DURATION_MS = 5 * 60 * 60 * 1000;  // 5h réelles de travail continu (décision Guillaume)
 export const SUPERRENE_COOLDOWN_MS = 10 * 60 * 60 * 1000; // 10h réelles, démarre à la FIN de l'effet ; entre-temps René reprend son cycle normal
 export const SUPERRENE_COFFEE_COST = 2;   // unités de café consommées par activation (MÊME pool que SuperGreg/SuperSoan)
-export const SUPERRENE_HONEY_MULT = 10;   // pendant l'effet, l'intervalle de production du miel est divisé par ce facteur (production accélérée)
+export const SUPERRENE_HONEY_MULT = 3;    // zip 301b (demande Guillaume : x10 trop cheaté) : ×3 pendant l'effet café
 export const CHEESE_MS = 6 * 60 * 1000;    export const CHEESE_MILK_COST = 3; // fromagerie : 3 laits -> 1 roue OU 1 motte de beurre (zip 301)
 export const CHEESE_WHEEL_SELL = 1500;     export const CHEESE_PORTION_SELL = 350; export const PORTIONS_PER_WHEEL = 6;
 // Zip 301 (demande Guillaume) : la fromagerie d'Ingrid produit désormais du
@@ -1285,7 +1296,7 @@ export const CHEESE_WHEEL_SELL = 1500;     export const CHEESE_PORTION_SELL = 35
 // sur la durée. Le beurre est une denrée vendable ET l'intrant des
 // viennoiseries de Rosalie (voir plus bas).
 export const BUTTER_SELL = 300;                 // prix de vente d'une motte de beurre
-export const FROMAGERIE_BUTTER_PCT_DEFAULT = 50; // part de beurre par défaut (50/50 fromage/beurre)
+export const FROMAGERIE_BUTTER_PCT_DEFAULT = 0; // zip 301b (demande Guillaume) : défaut = 100 % fromage (comportement historique préservé) ; le beurre n'apparaît qu'une fois le ratio réglé dans la fiche d'Ingrid
 export const FROMAGERIE_RATIO_STEP = 10;         // paliers de réglage du ratio (10 %)
 // Zip 258 (demande Guillaume) : la boulangerie tourne 3× plus vite (3 min ->
 // 1 min entre deux fournées) mais UNIQUEMENT en journée (voir BAKERY_*_MIN),
@@ -1294,6 +1305,14 @@ export const FROMAGERIE_RATIO_STEP = 10;         // paliers de réglage du ratio
 export const PASTRY_MS = 1 * 60 * 1000;    export const PASTRY_SELL = 500;  // boulangerie : 1 lait + 1 farine + 6 œufs -> PASTRY_BATCH pâtisseries
 export const PASTRY_FLOUR = 1, PASTRY_MILK = 1, PASTRY_EGG = 6;
 export const PASTRY_BATCH = 10;            // nombre de pâtisseries produites par fournée réussie
+// Zip 301b (demande Guillaume) : la vanille devient un intrant PREMIUM de la
+// pâtisserie de Chloé. Quand il y a de la vanille en réserve (worldStock.
+// vanilla), Chloé en consomme 1 par fournée et produit des PÂTISSERIES À LA
+// VANILLE (même taille de fournée, valeur unitaire bien supérieure) — c'est la
+// « valorisation par transformation » (le brut se revend peu, le transformé
+// rapporte). Sinon, fournée de pâtisseries classiques (inchangé).
+export const PASTRY_VANILLA_COST = 1;      // gousses de vanille par fournée premium
+export const PASTRY_VANILLA_SELL = 900;    // prix unitaire d'une pâtisserie à la vanille (vs 500 la classique)
 
 // ---- Zip 301 (demande Guillaume) : Rosalie, boulangère (pain + viennoiseries) ----
 // Rosalie travaille dans la MÊME boulangerie que Chloé (bakery), mais sur une
@@ -1386,10 +1405,14 @@ export const VOYAGE_TIERS = {
 // buy   : prix de base par unité (avant multiplicateur de distance) payé à Eduardo
 // sell  : prix de revente par unité au marché (bac/boutique) — "assez cher"
 export const WORLD_GOODS = [
-  { key: "vanilla",  name: "Gousse de vanille (Madagascar)", nameEn: "Vanilla pod (Madagascar)", tier: "moyen",    buy: 800, sell: 1600, emoji: "\u{1F33F}" },
-  { key: "coffee",   name: "Café d'Éthiopie",                nameEn: "Ethiopian coffee",          tier: "moyen",    buy: 300, sell: 700,  emoji: "☕" },
+  // Zip 301b (demande Guillaume) : cacao, café et vanille servent d'INTRANTS
+  // (viennoiseries, cafés Super*, pâtisseries à la vanille). Leurs prix bruts
+  // d'achat ET de vente sont fortement réduits — l'intérêt économique vient
+  // désormais de leur TRANSFORMATION par les artisans, pas de la revente brute.
+  { key: "vanilla",  name: "Gousse de vanille (Madagascar)", nameEn: "Vanilla pod (Madagascar)", tier: "moyen",    buy: 300, sell: 260,  emoji: "\u{1F33F}" },
+  { key: "coffee",   name: "Café d'Éthiopie",                nameEn: "Ethiopian coffee",          tier: "moyen",    buy: 200, sell: 200,  emoji: "☕" },
   { key: "cinnamon", name: "Cannelle de Ceylan",             nameEn: "Ceylon cinnamon",           tier: "moyen",    buy: 260, sell: 620,  emoji: "\u{1F90E}" },
-  { key: "cocoa",    name: "Fève de cacao",                  nameEn: "Cocoa bean",                tier: "lointain", buy: 400, sell: 900,  emoji: "\u{1F36B}" },
+  { key: "cocoa",    name: "Fève de cacao",                  nameEn: "Cocoa bean",                tier: "lointain", buy: 250, sell: 250,  emoji: "\u{1F36B}" },
   { key: "pineapple",name: "Ananas",                         nameEn: "Pineapple",                 tier: "lointain", buy: 250, sell: 600,  emoji: "\u{1F34D}" },
   { key: "coconut",  name: "Noix de coco",                   nameEn: "Coconut",                   tier: "lointain", buy: 180, sell: 450,  emoji: "\u{1F965}" },
 ];
