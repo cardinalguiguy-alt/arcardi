@@ -747,7 +747,7 @@ export function buildSprites() {
   const HAIR_COLORS = ["#5a3a1e", "#2a2a2a", "#c8862a", "#8a3020", "#d4b03a", "#4a3468", "#743a12", "#b0b0b8"];
   const SKIN = "#f0c8a0", SKIN_D = "#d8a878";
 
-  function drawCharFrame(g, ox, gender, outfit, dir, frame, overalls, cap) {
+  function drawCharFrame(g, ox, gender, outfit, dir, frame, overalls, cap, beeSuit) {
     const o = C.OUTFITS[outfit % C.OUTFITS.length];
     const hair = HAIR_COLORS[outfit % HAIR_COLORS.length];
     const step = frame === 1 ? 1 : frame === 3 ? -1 : 0;
@@ -815,7 +815,7 @@ export function buildSprites() {
     // `ctx.scale(-1,1)` déjà appliqué à tout le sprite dans drawCharacter,
     // exactement comme les bras en profil juste au-dessus — aucune variante
     // gauche/droite à coder séparément ici).
-    if (cap) {
+    if (cap && !beeSuit) {
       const CAP = "#2f6f4a", CAP_D = shade(CAP), CAP_L = tint(CAP);
       P(g, x + 3, 0 + bob, 10, 3, CAP);
       P(g, x + 3, 0 + bob, 10, 1, CAP_L);
@@ -845,6 +845,54 @@ export function buildSprites() {
       P(g, x + 5, 9 + bob, 1, 3, DENIM);
       P(g, x + 10, 9 + bob, 1, 3, DENIM);
     }
+    // Combinaison d'apiculteur (demande Guillaume : René doit ressembler à un
+    // apiculteur — combinaison blanche complète, voile, gants — mais UNIQUEMENT
+    // quand il est effectivement au travail près de sa ruche ; en dehors de ça
+    // il garde son skin de résident normal, voir FermeGame.js/residentBeeSuit).
+    // Dessinée en tout dernier, par-dessus torse/jambes/bras/cheveux/casquette,
+    // pour recouvrir intégralement le skin de base (même principe que la
+    // salopette de Greg juste au-dessus, mais couvrant aussi la tête).
+    if (beeSuit) {
+      const SUIT = "#f2f0e6", SUIT_D = shade(SUIT), SUIT_L = tint(SUIT);
+      const HAT = "#e8e4d2", HAT_D = shade(HAT);
+      const VEIL = "#2e2e30", VEIL_L = "#4a4a4e";
+      const GLOVE = "#e4dcc0", GLOVE_D = shade(GLOVE);
+      // Jambes : combinaison blanche intégrale (recouvre le pantalon o.pants).
+      P(g, x + 5, 15 + bob, 3, 6, SUIT);
+      P(g, x + 8, 15 + bob, 3, 6, SUIT_D);
+      P(g, x + 5, 20 + bob, 3, 1, shade(SUIT));
+      P(g, x + 8, 20 + bob, 3, 1, shade(SUIT_D));
+      // Bottes (repli du pantalon dans des bottes, contraste discret).
+      P(g, x + 5 + step, 21 + bob, 3, 3 - bob, "#4a3a26");
+      P(g, x + 8 - step, 21 + bob, 3, 3 - bob, "#4a3a26");
+      // Torse : combinaison montante jusqu'au col (recouvre le torse o.shirt).
+      P(g, x + 4, 10 + bob, 8, 6, SUIT);
+      P(g, x + 4, 10 + bob, 8, 1, SUIT_L);
+      // Fermeture éclair centrale, petit détail cousu.
+      P(g, x + 7, 11 + bob, 1, 5, SUIT_D);
+      // Bras : manches blanches (recouvrent les bras nus/manche courte o.shirt).
+      if (dir === 2) {
+        P(g, x + 7 + step, 11 + bob, 2, 5, SUIT);
+        P(g, x + 7 + step, 15 + bob, 2, 1, GLOVE_D);
+      } else {
+        P(g, x + 3, 11 + bob, 2, 5, SUIT); P(g, x + 11, 11 + bob, 2, 5, SUIT_D);
+        // Gants épais aux poignets (recouvrent la peau des mains).
+        P(g, x + 3, 15 + bob, 2, 1, GLOVE); P(g, x + 11, 15 + bob, 2, 1, GLOVE_D);
+      }
+      // Tête/voile : capuche + large chapeau à voile, recouvre cheveux/casquette.
+      // Capuche montante autour du cou/menton (recouvre le bas du visage/cheveux).
+      P(g, x + 4, 8 + bob, 8, 3, SUIT);
+      // Voile grillagé noir enveloppant tout le visage (silhouette anonyme,
+      // reconnaissable comme apiculteur même en tout petit sprite).
+      P(g, x + 4, 3 + bob, 8, 6, VEIL);
+      P(g, x + 5, 4 + bob, 6, 1, VEIL_L); // léger reflet du grillage
+      P(g, x + 5, 6 + bob, 6, 1, VEIL_L);
+      // Large chapeau rond à bord, posé au-dessus du voile.
+      P(g, x + 2, 1 + bob, 12, 2, HAT);
+      P(g, x + 3, 0 + bob, 10, 1, HAT_D);
+      P(g, x + 5, 0 + bob, 6, 1, tint(HAT));
+      P(g, x + 4, 2 + bob, 8, 1, HAT_D);
+    }
   }
   function shade(hex) { return adjust(hex, -30); }
   function tint(hex) { return adjust(hex, 30); }
@@ -855,12 +903,12 @@ export function buildSprites() {
     const b = Math.max(0, Math.min(255, (n & 255) + d));
     return `rgb(${r},${gg},${b})`;
   }
-  function charSheet(gender, outfit, overalls, cap) {
+  function charSheet(gender, outfit, overalls, cap, beeSuit) {
     const [c, g] = cv(16 * 4, 24 * 3);
     for (let dir = 0; dir < 3; dir++)
       for (let f = 0; f < 4; f++) {
         g.save(); g.translate(0, dir * 24);
-        drawCharFrame(g, f * 16, gender, outfit, dir, f, overalls, cap);
+        drawCharFrame(g, f * 16, gender, outfit, dir, f, overalls, cap, beeSuit);
         g.restore();
       }
     return c;
@@ -1981,9 +2029,9 @@ house: house(),
   // tint. FermeGame picks them based on seasonOf().
   S.oakAutumn = autumnTree(S.oak); S.pineAutumn = autumnTree(S.pine);
   S.oakSpring = springTree(S.oak); S.pineSpring = springTree(S.pine);
-  S.getChar = (gender, outfit, overalls, cap) => {
-    const key = gender + ":" + outfit + (overalls ? ":overalls" : "") + (cap ? ":cap" : "");
-    if (!S.chars[key]) S.chars[key] = charSheet(gender, outfit, !!overalls, !!cap);
+  S.getChar = (gender, outfit, overalls, cap, beeSuit) => {
+    const key = gender + ":" + outfit + (overalls ? ":overalls" : "") + (cap ? ":cap" : "") + (beeSuit ? ":beeSuit" : "");
+    if (!S.chars[key]) S.chars[key] = charSheet(gender, outfit, !!overalls, !!cap, !!beeSuit);
     return S.chars[key];
   };
   return S;

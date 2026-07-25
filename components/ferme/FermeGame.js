@@ -1819,6 +1819,41 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           out.chat = { from: "🎣", msg: lang === "en" ? "Soan is fueled by coffee! ☕🎣" : "Soan carbure au café ! ☕🎣" };
         }
       }
+    } else if (req.kind === "beekeeperOrder") {
+      // Chantier 2026-07 (demande Guillaume : "René doit être envoyé
+      // récolter de temps en temps, comme Soan, avec des pauses") : miroir
+      // exact de soanOrder — René ne produit du miel QUE pendant un bloc de
+      // travail actif (voir gate reneWorking() dans updateCrafts), déclenché
+      // par ce bouton. Pas de trajet à simuler (contrairement à Soan qui
+      // doit rejoindre la berge) : René reste déjà en permanence dans le
+      // petit rayon autour de sa ruche une fois construite (residentRoam),
+      // donc "envoyer récolter" bascule directement sa phase sur "working".
+      const now = Date.now();
+      const residents = (s.station && s.station.residents) || [];
+      const res = residents.find(r => r && rosterOf(r.rid) && rosterOf(r.rid).skill === "beekeeper");
+      const bh = (s.crafts || {}).beehive;
+      if (!bh || !bh.built) out.toast = { id: f.id, key: "beekeeperNoHive" };
+      else if (!res) out.toast = { id: f.id, key: "beekeeperNoHive" };
+      else if (res.beePhase === "working") out.toast = { id: f.id, key: "beekeeperBusy" };
+      else {
+        res.beePhase = "working"; res.beeWorkUntil = now + C.BEEKEEPER_WORK_MS;
+        // Redémarre le cycle de production proprement à partir de MAINTENANT
+        // (pas de rattrapage sur le temps passé en pause, voir reneWorking()).
+        bh.nextAt = now + C.HONEY_MS;
+        out.station = s.station;
+        out.chat = { from: "\u{1F41D}", msg: lang === "en" ? "René heads to the hive." : "René part récolter le miel." };
+      }
+    } else if (req.kind === "beekeeperRecall") {
+      // Rappelle René en pause (annule un bloc de travail en cours), sans
+      // impact sur son contrat (les résidents n'ont pas de contrat comme
+      // Greg/Soan — ils restent tant qu'on ne les exclut pas).
+      const now = Date.now();
+      const residents = (s.station && s.station.residents) || [];
+      const res = residents.find(r => r && rosterOf(r.rid) && rosterOf(r.rid).skill === "beekeeper");
+      if (res && res.beePhase === "working") {
+        res.beePhase = "break"; res.beeBreakUntil = now + C.BEEKEEPER_BREAK_MS;
+        out.station = s.station;
+      }
     } else if (req.kind === "hireHarald") {
       // Zip 260 (demande Guillaume) : agent d'élevage engagé à la boutique
       // comme Soan, contrat réel de 24h payé d'avance (1000 or). Un seul à la
@@ -2728,6 +2763,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     return false;
   }
   // Boucle de production des ateliers (hôte, ~1 Hz depuis la boucle temps).
+  // Chantier 2026-07 : René ne produit du miel que pendant un bloc de
+  // travail actif (voir updateBeekeeperPhase/beekeeperOrder) — cette
+  // fonction retrouve le résident apiculteur (il n'y en a qu'un, René) et
+  // vérifie sa phase courante. Renvoie false si René n'est pas (encore)
+  // résident, ce qui est cohérent : pas de résident, pas de production.
+  function reneWorking(s) {
+    const residents = (s.station && s.station.residents) || [];
+    const res = residents.find(r => r && rosterOf(r.rid) && rosterOf(r.rid).skill === "beekeeper");
+    return !!(res && res.beePhase === "working");
+  }
   function updateCrafts() {
     const s = sharedRef.current, w = worldRef.current;
     if (!w || !s.crafts) return;
@@ -2735,7 +2780,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const stock = s.craftStock || (s.craftStock = E.newCraftStock());
     let stockChanged = false, flourChanged = false, craftsMetaChanged = false, gregStockChanged = false;
     const bh = s.crafts.beehive;
-    if (bh && bh.built) {
+    // Chantier 2026-07 (demande Guillaume) : le miel ne se produit plus en
+    // continu tant que la ruche est construite — René doit être ACTIVEMENT
+    // en train de travailler (res.beePhase === "working", voir
+    // updateBeekeeperPhase/beekeeperOrder) pour que le décompte avance. Tant
+    // qu'il est en pause (ou avant son tout premier ordre), le bloc est
+    // entièrement sauté : bh.nextAt reste figé tel quel, aucun rattrapage du
+    // temps de pause (la remise à `now + HONEY_MS` se fait déjà proprement
+    // à chaque reprise de travail, voir updateBeekeeperPhase/beekeeperOrder).
+    if (bh && bh.built && reneWorking(s)) {
       if (!bh.nextAt || bh.nextAt > now + C.HONEY_MS) bh.nextAt = now + C.HONEY_MS;
       else if (now >= bh.nextAt) { bh.nextAt = now + C.HONEY_MS; stock.honey++; stockChanged = true; }
     }
@@ -3136,7 +3189,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (key === "petCaught")     return L.petCaughtToast(C.petName(n, lang === "en"));
     if (key === "petReleased")   return L.bagReleasedToast(C.petName(n, lang === "en"));
     if (key === "bagFull")       return L.bagPetsFull(C.MAX_PETS);
-    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, noMillStock: L.toastNoMillStock, millNotEmpty: L.toastMillNotEmpty, noWheatToDeposit: L.toastNoWheatToDeposit, millFull: L.toastMillFull, actionFailed: L.toastActionFailed, coopNone: L.toastCoopNone, farCoop: L.toastFarCoop, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull, notInjured: L.toastNotInjured, noHealKit: L.toastNoHealKit, healTooFar: L.toastHealTooFar, gregNotHired: L.toastGregNotHired, gregOrderBusy: L.toastGregBusy, gregNoRoom: L.toastGregNoRoom, gregNoFertilizer: L.toastGregNoFertilizer, gregCoffeeCooldown: L.toastGregCoffeeCooldown, noCoffee: L.toastNoCoffee, soanNotHired: L.toastSoanNotHired, soanNoRiver: L.toastSoanNoRiver, soanCoffeeCooldown: L.toastSoanCoffeeCooldown, farCauldron: L.toastFarCauldron, noFishToDeposit: L.toastNoFishToDeposit, cauldronMissing: L.toastCauldronMissing, cauldronAlreadyTaken: L.toastCauldronAlreadyTaken, noCauldronStock: L.toastNoCauldronStock, cauldronNotEmpty: L.toastCauldronNotEmpty, cauldronBrewing: L.toastCauldronBrewing, cauldronNothingToCollect: L.toastCauldronNothingToCollect, cauldronHasEnough: L.toastCauldronHasEnough, visitorNotEnough: L.visitorNotEnough, decorNone: L.decorNone, decorPicked: L.decorPicked, objReturned: L.objReturned, residentNoRoom: L.residentNoRoom, artisanNoResident: L.artisanNoResident, voyagerBusy: L.voyagerBusyToast, kickVoted: L.kickVotedToast, jewelryNoGold: L.toastJewelryNoGold, jewelryNoGem: L.toastJewelryNoGem, cropWrongType: L.toastCropWrongType, cropMaxed: L.toastCropMaxed }[key] || "";
+    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, noMillStock: L.toastNoMillStock, millNotEmpty: L.toastMillNotEmpty, noWheatToDeposit: L.toastNoWheatToDeposit, millFull: L.toastMillFull, actionFailed: L.toastActionFailed, coopNone: L.toastCoopNone, farCoop: L.toastFarCoop, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull, notInjured: L.toastNotInjured, noHealKit: L.toastNoHealKit, healTooFar: L.toastHealTooFar, gregNotHired: L.toastGregNotHired, gregOrderBusy: L.toastGregBusy, gregNoRoom: L.toastGregNoRoom, gregNoFertilizer: L.toastGregNoFertilizer, gregCoffeeCooldown: L.toastGregCoffeeCooldown, noCoffee: L.toastNoCoffee, soanNotHired: L.toastSoanNotHired, soanNoRiver: L.toastSoanNoRiver, soanCoffeeCooldown: L.toastSoanCoffeeCooldown, farCauldron: L.toastFarCauldron, noFishToDeposit: L.toastNoFishToDeposit, cauldronMissing: L.toastCauldronMissing, cauldronAlreadyTaken: L.toastCauldronAlreadyTaken, noCauldronStock: L.toastNoCauldronStock, cauldronNotEmpty: L.toastCauldronNotEmpty, cauldronBrewing: L.toastCauldronBrewing, cauldronNothingToCollect: L.toastCauldronNothingToCollect, cauldronHasEnough: L.toastCauldronHasEnough, visitorNotEnough: L.visitorNotEnough, decorNone: L.decorNone, decorPicked: L.decorPicked, objReturned: L.objReturned, residentNoRoom: L.residentNoRoom, artisanNoResident: L.artisanNoResident, voyagerBusy: L.voyagerBusyToast, kickVoted: L.kickVotedToast, jewelryNoGold: L.toastJewelryNoGold, jewelryNoGem: L.toastJewelryNoGem, cropWrongType: L.toastCropWrongType, cropMaxed: L.toastCropMaxed, beekeeperNoHive: L.toastBeekeeperNoHive, beekeeperBusy: L.toastBeekeeperBusy }[key] || "";
   }
 
   // -------- Hôte : boucle temps + persistance --------
@@ -4717,6 +4770,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (skill === "beekeeper") return { x: p.x + def.w / 2, y: p.y + def.h / 2, ring: true };
     return { x: p.x + def.w / 2, y: p.y + def.h + 0.5 };
   }
+  // Demande Guillaume : René (apiculteur) doit ressembler à un vrai apiculteur
+  // (combinaison blanche, voile, gants) UNIQUEMENT quand il est effectivement
+  // au travail près de sa ruche — pas son skin normal de résident en dehors
+  // de ça. Chantier 2026-07 (suite) : René fonctionne désormais par blocs de
+  // travail/pause (res.beePhase, voir updateBeekeeperPhase) — la combinaison
+  // ne s'affiche donc plus simplement "ruche construite" mais bien pendant la
+  // phase "working" (il est en pause le reste du temps, même une fois la
+  // ruche bâtie).
+  function residentBeeSuit(res, ro) {
+    return !!(ro && ro.skill === "beekeeper" && res && res.beePhase === "working");
+  }
   function residentRoam(res, w, now, dt, ro) {
     // Zip 256/259 : un artisan à bâtiment (apiculteur/fromager/pâtissière) rôde
     // autour de SON bâtiment, à sa position ACTUELLE (déplaçable, voir
@@ -4766,6 +4830,30 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     dirtyRef.current = true;
     if (netCanBroadcast()) channelRef.current?.send({ type: "broadcast", event: "apply", payload: { tiles, gregStock: stock } });
   }
+  // Chantier 2026-07 (demande Guillaume : "René doit être envoyé récolter de
+  // temps en temps, comme Soan, avec des pauses") : machine à états dédiée à
+  // René, en miroir de celle de Soan (phase/workUntil/breakUntil), mais SANS
+  // trajet à simuler — René reste déjà en permanence autour de sa ruche une
+  // fois construite (residentRoam + artisanAnchor.ring), il n'y a donc que
+  // deux phases : "working" (récolte active, voir le gate dans updateCrafts)
+  // et "break" (se balade, ne produit rien). Avant le tout premier ordre du
+  // joueur, res.beePhase est undefined -> traité comme "en attente", aucun
+  // décompte actif tant que le bouton n'a pas été pressé au moins une fois.
+  function updateBeekeeperPhase(res, s, now) {
+    if (!res.beePhase) return; // jamais encore envoyé récolter : attend le bouton (beekeeperOrder)
+    if (res.beePhase === "working" && now >= (res.beeWorkUntil || 0)) {
+      res.beePhase = "break"; res.beeBreakUntil = now + C.BEEKEEPER_BREAK_MS;
+      stationChat(L.beekeeperBreakChat(rosterOf(res.rid).name), "\u{1F41D}");
+    } else if (res.beePhase === "break" && now >= (res.beeBreakUntil || 0)) {
+      // Reprise automatique après la pause (miroir du comportement de Soan,
+      // qui redémarre seul un bloc de travail après sa pause) — le bouton
+      // reste disponible pour reprendre plus tôt si le joueur ne veut pas
+      // attendre la fin de la pause.
+      res.beePhase = "working"; res.beeWorkUntil = now + C.BEEKEEPER_WORK_MS;
+      const bh = (s.crafts || {}).beehive;
+      if (bh && bh.built) bh.nextAt = now + C.HONEY_MS; // cycle de production frais, pas de rattrapage du temps de pause
+    }
+  }
   function updateResidents(dt) {
     const w = worldRef.current; if (!w) return;
     const s = sharedRef.current, st = s.station;
@@ -4805,6 +4893,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         continue;
       }
       residentRoam(res, w, now, dt, ro); // zip 252 : balade sur la ferme (chaque tick) — zip 256 : ancre dédiée pour l'apiculteur
+      if (ro.skill === "beekeeper") updateBeekeeperPhase(res, s, now); // chantier 2026-07 : blocs travail/pause de René
       // Premier passage : on planifie la première journée de travail sans rien
       // produire (emménager prend un peu de temps). La borne haute protège
       // d'une succession d'hôte : `nextWorkAt` vient de l'horloge de l'hôte
@@ -5186,6 +5275,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const soanRecall = () => sendReq({ kind: "soanRecall" });
   const gregCoffee = () => sendReq({ kind: "gregCoffee" }); // chantier 3 : SuperGreg
   const soanCoffee = () => sendReq({ kind: "soanCoffee" }); // chantier 4 : SuperSoan
+  const beekeeperOrder = () => sendReq({ kind: "beekeeperOrder" }); // chantier 2026-07 : René, miroir soanOrder
+  const beekeeperRecall = () => sendReq({ kind: "beekeeperRecall" });
   // Zip 258 : commande de voyage à Eduardo. Envoie la liste { key, qty } non
   // vide au host (voyagerOrder), puis referme le panneau et remet le brouillon
   // à zéro. Le coût/durée sont recalculés et vérifiés côté hôte (autoritaire).
@@ -6279,7 +6370,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           // Zip 273 : idem — Eduardo reste monté même dans ce rendu "idle"
           // (résident sans position simulée, planté près de sa maison).
           const onWhiteHorseIdle = ro.skill === "voyager";
-          draws.push({ y: (ryp + 1) * T, fn: () => drawCharacter({ id: "res" + ro.rid, name: ro.name, x: rxp, y: ryp, dir: 0, moving: false, animT: 0, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap, mount: onWhiteHorseIdle ? "white" : null }, false) });
+          draws.push({ y: (ryp + 1) * T, fn: () => drawCharacter({ id: "res" + ro.rid, name: ro.name, x: rxp, y: ryp, dir: 0, moving: false, animT: 0, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap, beeSuit: residentBeeSuit(residents[ri], ro), mount: onWhiteHorseIdle ? "white" : null }, false) });
         }
       }
       // Greg, l'employé de champs (chantier 2026-07) : réutilise le rendu
@@ -6456,7 +6547,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           // skill) reste monté en permanence, pas seulement le temps de son
           // arrivée initiale au village.
           const onWhiteHorse = ro.skill === "voyager";
-          draws.push({ y: (ry + 1) * T, fn: () => drawCharacter({ id: "res" + res.rid, name: ro.name, x: rx, y: ry, dir: res.dir || 0, moving: !!res.moving, animT: res.animT || 0, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap, mount: onWhiteHorse ? "white" : null }, false) });
+          draws.push({ y: (ry + 1) * T, fn: () => drawCharacter({ id: "res" + res.rid, name: ro.name, x: rx, y: ry, dir: res.dir || 0, moving: !!res.moving, animT: res.animT || 0, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap, beeSuit: residentBeeSuit(res, ro), mount: onWhiteHorse ? "white" : null }, false) });
         }
       }
       draws.sort((a, b) => a.y - b.y);
@@ -7377,7 +7468,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     function drawCharacter(p, isSelf) {
       const sprites = spritesRef.current;
-      const sheet = sprites.getChar(p.gender, p.outfit, p.overalls, p.cap);
+      const sheet = sprites.getChar(p.gender, p.outfit, p.overalls, p.cap, p.beeSuit);
       const row = p.dir === 0 ? 0 : p.dir === 1 ? 1 : 2;
       const frame = p.moving ? Math.floor((p.animT || 0) % 4) : 0;
       // Zip 264 (demande Guillaume) : Eduardo Da Fonseca chevauche EXACTEMENT
@@ -8731,20 +8822,33 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               // voyage / revendre), au lieu du simple "Voir". Alerte pâtissière :
               // la ligne d'état passe en rouge quand le four est en rupture.
               const isVoyager = ro.skill === "voyager";
+              const isBeekeeper = ro.skill === "beekeeper";
               const away = isVoyager && res.trip && res.trip.phase === "away";
               const bakerAlert = ro.skill === "baker" && (sharedRef.current.crafts || {}).bakery && sharedRef.current.crafts.bakery.alert;
               const worldTotal = Object.values((sharedRef.current.station && sharedRef.current.station.worldStock) || {}).reduce((a, b) => a + (b | 0), 0);
+              const beehiveBuilt = isBeekeeper && (sharedRef.current.crafts || {}).beehive && sharedRef.current.crafts.beehive.built;
               return (
                 <div className="ferme-shop-row" key={"emp-res-" + res.rid}>
-                  <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap) : null} w={26} h={32} />
+                  <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, isBeekeeper && res.beePhase === "working") : null} w={26} h={32} />
                   <div className="info">
                     <b>{ro.name} {bakerAlert ? "⚠️" : ""}</b>
-                    <span className="ferme-usage" style={bakerAlert ? { color: "#c0392b", fontWeight: 700 } : undefined}>{prod || L.residentTag(ro.job)}</span>
+                    <span className="ferme-usage" style={bakerAlert ? { color: "#c0392b", fontWeight: 700 } : undefined}>
+                      {isBeekeeper && beehiveBuilt
+                        ? (res.beePhase === "working" ? L.beekeeperStatusWorking : res.beePhase === "break" ? L.beekeeperStatusBreak : L.beekeeperStatusIdle) + (prod ? " — " + prod : "")
+                        : (prod || L.residentTag(ro.job))}
+                    </span>
                   </div>
                   {isVoyager ? (
                     <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                       <button disabled={away} onClick={() => { setVoyagerDraft({}); setVoyagerOrderOpen(true); }}>{L.voyagerOrderBtn}</button>
                       {worldTotal > 0 && <button onClick={() => setVoyagerSellOpen(true)}>{L.voyagerSellBtn}</button>}
+                    </div>
+                  ) : isBeekeeper && beehiveBuilt ? (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                      {res.beePhase === "working"
+                        ? <button onClick={beekeeperRecall}>{L.beekeeperRecallBtn}</button>
+                        : <button onClick={beekeeperOrder}>{L.beekeeperOrderBtn}</button>}
+                      <button onClick={() => { setEmployeesOpen(false); setResidentCard(res.rid); }}>{L.residentSeeBtn}</button>
                     </div>
                   ) : (
                     <button onClick={() => { setEmployeesOpen(false); setResidentCard(res.rid); }}>{L.residentSeeBtn}</button>
@@ -9436,6 +9540,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const ro = rosterOf(residentCard); if (!ro) return null;
         const bid = C.SKILL_BUILDING[ro.skill];
         const built = bid && sharedRef.current.crafts && sharedRef.current.crafts[bid] && sharedRef.current.crafts[bid].built;
+        const res = ((sharedRef.current.station && sharedRef.current.station.residents) || []).find(r => r.rid === residentCard);
+        const isBeekeeper = ro.skill === "beekeeper";
         let need;
         // Zip 258 : si la boulangerie est en alerte, la pâtissière explique
         // qu'il lui faut des ingrédients (demande Guillaume : "au clic, message
@@ -9452,13 +9558,27 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               <button className="ferme-close-x" onClick={() => setResidentCard(null)}>✕</button>
               <h2>{ro.name}</h2>
               <div className="ferme-shop-row">
-                <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap) : null} sx={16} sy={24} w={40} h={60} />
+                <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, isBeekeeper && res && res.beePhase === "working") : null} sx={16} sy={24} w={40} h={60} />
                 <div className="info"><b>{ro.skill ? L.skillPitch(ro.skill, ro.name) : L.residentGreet(ro.name, ro.job)}</b><span>{need}</span></div>
               </div>
               <div className="ferme-shop-row">
                 <span style={{ fontSize: 22, width: 32, textAlign: "center" }}>🛠️</span>
-                <div className="info"><b>{L.residentRoleTitle}</b><span>{prod || L.residentNotWorkingYet}</span></div>
+                <div className="info">
+                  <b>{L.residentRoleTitle}</b>
+                  <span>
+                    {isBeekeeper && built
+                      ? (res && res.beePhase === "working" ? L.beekeeperStatusWorking : res && res.beePhase === "break" ? L.beekeeperStatusBreak : L.beekeeperStatusIdle) + (prod ? " — " + prod : "")
+                      : (prod || L.residentNotWorkingYet)}
+                  </span>
+                </div>
               </div>
+              {isBeekeeper && built && res && (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
+                  {res.beePhase === "working"
+                    ? <PixBtn sprites={spritesReady ? spritesRef.current : null} label={L.beekeeperRecallBtn} onClick={beekeeperRecall} />
+                    : <PixBtn sprites={spritesReady ? spritesRef.current : null} label={L.beekeeperOrderBtn} onClick={beekeeperOrder} />}
+                </div>
+              )}
               <div style={{ marginTop: 10, textAlign: "right" }}>
                 <PixBtn sprites={spritesReady ? spritesRef.current : null} tone="plain" label={L.residentCloseBtn} onClick={() => setResidentCard(null)} />
               </div>

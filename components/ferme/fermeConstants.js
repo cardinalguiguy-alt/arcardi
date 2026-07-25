@@ -1249,6 +1249,13 @@ export const HONEY_MS = 12 * 60 * 1000;    export const HONEY_SELL = 7000;  // r
 // beehive (site 2x2 à x:50,y:46), pour qu'il reste autour de sa ruche au lieu
 // de se balader près du spawn comme les autres résidents.
 export const BEEKEEPER_ANCHOR = { x: 51, y: 47 };
+// Chantier 2026-07 (demande Guillaume : "René doit être envoyé récolter de
+// temps en temps, comme Soan, avec des pauses") : miroir du système de blocs
+// travail/pause de Soan (SOAN_WORK_MS/SOAN_BREAK_MS), adapté au rythme du
+// miel (1 pot / 12 min, voir HONEY_MS) — un bloc de 45 min laisse le temps de
+// produire plusieurs pots avant la pause.
+export const BEEKEEPER_WORK_MS = 45 * 60 * 1000;  // durée d'un bloc de récolte actif
+export const BEEKEEPER_BREAK_MS = 15 * 60 * 1000; // durée de la pause avant de pouvoir reprendre (ou renvoyer manuellement via le bouton)
 export const CHEESE_MS = 6 * 60 * 1000;    export const CHEESE_MILK_COST = 3; // fromagerie : 3 laits -> 1 roue
 export const CHEESE_WHEEL_SELL = 1500;     export const CHEESE_PORTION_SELL = 350; export const PORTIONS_PER_WHEEL = 6;
 // Zip 258 (demande Guillaume) : la boulangerie tourne 3× plus vite (3 min ->

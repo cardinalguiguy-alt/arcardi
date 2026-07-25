@@ -711,6 +711,17 @@ export const FERME_STR = {
     toastSoanNoRiver: "Soan ne trouve pas de rivière accessible !",
     soanCoffeeBtn: "☕ Café (SuperSoan)",
     toastSoanCoffeeCooldown: "Soan doit encore récupérer avant un nouveau café !",
+    // Chantier 2026-07 (demande Guillaume) : René (apiculteur) fonctionne
+    // désormais comme Soan — blocs de travail actif puis pause, envoyé par un
+    // bouton (miroir soanOrder/soanRecall).
+    beekeeperOrderBtn: "Envoyer récolter",
+    beekeeperRecallBtn: "Rappeler",
+    beekeeperStatusWorking: "Récolte le miel à la ruche",
+    beekeeperStatusBreak: "En pause, il se balade",
+    beekeeperStatusIdle: "En attente d'ordre",
+    toastBeekeeperNoHive: "La ruche n'est pas encore construite !",
+    toastBeekeeperBusy: "René est déjà à la récolte !",
+    beekeeperBreakChat: (name) => `${name} fait une pause.`,
     // Menu "Employés actifs" (chantier 2026-07, demande Guillaume) : liste
     // les employés sous contrat, avec accès direct à leurs ordres.
     employeesTitle: "👥 Employés actifs",
@@ -1435,6 +1446,14 @@ export const FERME_STR = {
     toastSoanNoRiver: "Soan can't find a reachable river!",
     soanCoffeeBtn: "☕ Coffee (SuperSoan)",
     toastSoanCoffeeCooldown: "Soan still needs to recover before another coffee!",
+    beekeeperOrderBtn: "Send to harvest",
+    beekeeperRecallBtn: "Recall",
+    beekeeperStatusWorking: "Harvesting honey at the hive",
+    beekeeperStatusBreak: "On break, taking a walk",
+    beekeeperStatusIdle: "Waiting for orders",
+    toastBeekeeperNoHive: "The beehive isn't built yet!",
+    toastBeekeeperBusy: "René is already harvesting!",
+    beekeeperBreakChat: (name) => `${name} takes a break.`,
     employeesTitle: "👥 Active staff",
     employeesHint: "Employees currently under contract, with direct access to give them an order.",
     employeesGregName: "Greg",
