@@ -146,6 +146,15 @@ export const FERME_STR = {
       lumberjack: `Bonjour ! Moi c'est ${n}, je suis bûcheron et je souhaite vous aider à abattre les arbres et casser les rochers.`,
       voyager: `Bonjour ! Moi c'est ${n}, je suis marchand voyageur et je souhaite parcourir le monde pour vous rapporter des denrées rares.`,
     }[sk] || `Bonjour ! Moi c'est ${n}.`),
+    // Zip 299 (demande Guillaume) : petite réplique liée à son activité, affichée
+    // en bulle au-dessus d'un artisan quand le joueur s'en approche.
+    skillTalk: {
+      beekeeper: ["Les abeilles sont de bonne humeur aujourd'hui !", "Encore quelques pots et le miel est prêt.", "Chut… n'effraie pas mes abeilles.", "Le miel coule bien cette saison."],
+      cheesemaker: ["Ce fromage a besoin d'affiner encore un peu.", "Apporte-moi du lait, j'en fais des merveilles !", "Sens-moi cette meule, une pure merveille.", "La cave est à la bonne température."],
+      baker: ["Ça sent bon la pâtisserie, non ?", "Le four est chaud, les gâteaux arrivent !", "Un peu de farine, quelques œufs… et hop !", "Goûte une brioche tant qu'elle est tiède."],
+      lumberjack: ["J'abats, je scie, je casse du caillou !", "Encore un arbre et je fais une pause.", "Le bois part direct à la réserve commune.", "Ma hache n'a jamais été aussi affûtée."],
+      voyager: ["Je repars bientôt pour des terres lointaines.", "J'ai rapporté des denrées rares du bout du monde.", "Passe commande, je te trouve ça !", "Le grand large me manque déjà."],
+    },
     residentNeedBuilding: (b) => `Construis-moi une ${b} (achetable en or à la boutique) et je produirai pour la ferme !`,
     residentBuildingReady: (b) => `Ma ${b} tourne. Garde nos stocks remplis et je fais le reste !`,
     residentLumberjackLine: "Je coupe du bois, casse des cailloux et scie des planches toute la journée — tout va dans notre réserve commune.",
@@ -916,6 +925,15 @@ export const FERME_STR = {
       lumberjack: `Hi! I'm ${n}, I'm a lumberjack and I'd like to help you fell trees and break rocks.`,
       voyager: `Hi! I'm ${n}, I'm a traveling merchant and I'd like to sail the world to bring you rare goods.`,
     }[sk] || `Hi! I'm ${n}.`),
+    // Zip 299: short activity-related line shown in a bubble above an artisan
+    // when the player walks up to them.
+    skillTalk: {
+      beekeeper: ["The bees are in a good mood today!", "A few more jars and the honey's ready.", "Shh… don't spook my bees.", "The honey flows well this season."],
+      cheesemaker: ["This wheel needs to age a little more.", "Bring me milk and I'll work wonders!", "Smell this wheel — pure delight.", "The cellar's at just the right temperature."],
+      baker: ["Smells like fresh pastry, doesn't it?", "Oven's hot, the cakes are coming!", "A little flour, a few eggs… and voilà!", "Try a bun while it's still warm."],
+      lumberjack: ["I fell, I saw, I crack rocks!", "One more tree and I'll take a break.", "The wood goes straight to our common stock.", "My axe has never been sharper."],
+      voyager: ["I set sail again soon for distant lands.", "I brought back rare goods from afar.", "Place an order and I'll find it for you!", "I already miss the open sea."],
+    },
     residentNeedBuilding: (b) => `Build me a ${b} (buyable with gold at the shop) and I'll produce for the farm!`,
     residentBuildingReady: (b) => `My ${b} is running. Keep our stocks filled and I'll do the rest!`,
     residentLumberjackLine: "I fell trees, break rocks and saw planks all day — it all goes into our common stock.",

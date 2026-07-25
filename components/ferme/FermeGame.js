@@ -3013,12 +3013,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           // pins the target back on the square for VISITOR_RECALL_MS.
           const recalled = v.recallUntil && now < v.recallUntil;
           if (!v.roamTarget || now >= (v.nextRoamAt || 0) || Math.hypot(v.roamTarget.x - v.x, v.roamTarget.y - v.y) < 0.15) {
-            v.nextRoamAt = now + 2500 + Math.random() * 4500;
+            const flanerie = Math.random();
             if (recalled) {
               // Small step back toward the townhall.
               v.roamTarget = { x: 40.5 + Math.random() * 6.5, y: 36.2 + Math.random() * 3.4 };
-            } else if (Math.random() < 0.25) {
+              v.nextRoamAt = now + 2500 + Math.random() * 4500;
+              v.strollMul = 0.35 + Math.random() * 0.3;
+            } else if (flanerie < 0.32) {
+              // Pause de flânerie, durée variée (demande Guillaume, zip 299) :
+              // parfois un simple arrêt, parfois une vraie halte plus longue.
               v.roamTarget = null; v.moving = false;
+              v.nextRoamAt = now + (Math.random() < 0.3 ? 6000 + Math.random() * 7000 : 2000 + Math.random() * 4000);
             } else {
               // Random hop within a HOP-tile radius; keep it walkable.
               let tries = 0, tx, ty;
@@ -3028,9 +3033,24 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 tries++;
               } while (tries < 6 && E.blockedTile(w, tx, ty));
               v.roamTarget = { x: tx, y: ty };
+              v.nextRoamAt = now + 2500 + Math.random() * 4500;
+              // Rythme de CE trajet : certaines flâneries sont nettement plus
+              // lentes que d'autres (allure de promenade variable).
+              v.strollMul = 0.3 + Math.random() * 0.35;
             }
           }
-          if (v.roamTarget) walkTo(v.roamTarget.x, v.roamTarget.y, 0.45);
+          // Croisement : deux visiteurs qui se croisent en flânant s'arrêtent
+          // parfois quelques secondes (pas toujours), avec cooldown.
+          if (v.roamTarget && now >= (v.nextCrossAt || 0)) {
+            for (const o of st.visitors) {
+              if (!o || o === v || typeof o.x !== "number") continue;
+              if (Math.hypot(o.x - v.x, o.y - v.y) > 1.3) continue;
+              if (Math.random() < 0.2) { v.roamTarget = null; v.moving = false; v.nextRoamAt = now + 1500 + Math.random() * 3000; }
+              v.nextCrossAt = now + 6000 + Math.random() * 5000;
+              break;
+            }
+          }
+          if (v.roamTarget) walkTo(v.roamTarget.x, v.roamTarget.y, v.strollMul || 0.4);
         }
       } else if (v.phase === "leave") {
         if (v.wpi === undefined || v.wpi >= WP.length) v.wpi = WP.length - 2;
@@ -4929,14 +4949,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const roll = Math.random();
         const allowTilled = Math.random() < 0.15; // traversée du labouré : rare
         if (bAnchor) {
-          // Artisan posté : ~55% pause (variée), sinon petit tour dans l'anneau.
-          if (roll < 0.55) {
+          // Artisan posté : demande Guillaume (zip 299) — plus CALME, moins de
+          // mouvement, davantage de pauses TOUT PRÈS de la case centrale de son
+          // bâtiment. On pause ~78% du temps (souvent des haltes longues), et
+          // quand il bouge c'est un tout petit pas dans un rayon RESSERRÉ autour
+          // du centre (0.55x), donc il ne s'éloigne quasiment jamais de l'atelier.
+          if (roll < 0.5) {
             res.roamTarget = null; res.roamMeet = null;
-            res.nextRoamAt = now + (Math.random() < 0.3 ? 7000 + Math.random() * 8000 : 2500 + Math.random() * 5000);
+            res.nextRoamAt = now + (Math.random() < 0.4 ? 9000 + Math.random() * 10000 : 4000 + Math.random() * 5000);
           } else {
-            const t = pickRoamTarget(w, anchor.x, anchor.y, rx, ry, allowTilled);
-            if (t) { res.roamTarget = t; res.roamMeet = null; res.nextRoamAt = now + 2500 + Math.random() * 4500; }
-            else { res.roamTarget = null; res.roamMeet = null; res.nextRoamAt = now + 500; }
+            const arx = Math.max(1.6, rx * 0.55), ary = Math.max(1.6, ry * 0.55);
+            const t = pickRoamTarget(w, anchor.x, anchor.y, arx, ary, allowTilled);
+            if (t) { res.roamTarget = t; res.roamMeet = null; res.nextRoamAt = now + 3500 + Math.random() * 5000; }
+            else { res.roamTarget = null; res.roamMeet = null; res.nextRoamAt = now + 800; }
           }
         } else if (roll < 0.38) {
           // PAUSE fréquente, durée variée (parfois une vraie halte de repos).
@@ -4965,11 +4990,38 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         }
       }
     }
+    // Croisement (demande Guillaume, zip 299) : quand deux résidents baladeurs
+    // (non ancrés) se croisent, ils s'arrêtent PARFOIS (pas toujours) quelques
+    // secondes pour se saluer. Un cooldown (nextCrossAt) évite qu'ils restent
+    // scotchés l'un à l'autre.
+    if (!bAnchor && res.roamTarget && now >= (res.nextCrossAt || 0) && peers) {
+      for (const p of peers) {
+        if (!p || p === res || typeof p.x !== "number") continue;
+        if (Math.hypot(p.x - res.x, p.y - res.y) > 1.3) continue;
+        if (Math.random() < 0.22) {
+          faceResidentToward(res, p.x, p.y);
+          res.roamTarget = null; res.roamMeet = null; res.moving = false;
+          res.nextRoamAt = now + 1500 + Math.random() * 3000;
+        }
+        res.nextCrossAt = now + 6000 + Math.random() * 5000;
+        break;
+      }
+    }
     if (res.roamTarget) {
+      // Démarche/rythme variés (zip 299) : une allure PROPRE à chaque résident
+      // (res.gait, tirée une fois) × un rythme PROPRE à chaque trajet (segMul,
+      // retiré à chaque nouvelle cible) — certains marchent plus lentement, et
+      // un même résident n'avance pas toujours à la même vitesse.
+      const gait = res.gait || (res.gait = 0.6 + Math.random() * 0.6);
+      if (!res._segFor || res._segFor.x !== res.roamTarget.x || res._segFor.y !== res.roamTarget.y) {
+        res._segFor = { x: res.roamTarget.x, y: res.roamTarget.y };
+        res.segMul = 0.65 + Math.random() * 0.55;
+      }
+      const paceMul = bAnchor ? 0.7 : (gait * (res.segMul || 1));
       const dx = res.roamTarget.x - res.x, dy = res.roamTarget.y - res.y, d = Math.hypot(dx, dy);
       if (d < 0.08) res.moving = false;
       else {
-        const step = Math.min(d, C.VISITOR_SPEED * 0.7 * dt); const nx = res.x + (dx / d) * step, ny = res.y + (dy / d) * step;
+        const step = Math.min(d, C.VISITOR_SPEED * 0.7 * paceMul * dt); const nx = res.x + (dx / d) * step, ny = res.y + (dy / d) * step;
         if (!E.blockedTile(w, nx, ny)) { res.x = nx; res.y = ny; res.moving = true; res.animT = (res.animT || 0) + dt * 6; res.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 3 : 2) : (dy > 0 ? 0 : 1); }
         // Un pas bloqué en cours de route (obstacle apparu, ou cible côté opposé
         // d'un mur) : on efface la cible et on retente vite (500 ms) au lieu de
@@ -6745,7 +6797,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           // skill) reste monté en permanence, pas seulement le temps de son
           // arrivée initiale au village.
           const onWhiteHorse = ro.skill === "voyager";
-          draws.push({ y: (ry + 1) * T, fn: () => drawCharacter({ id: "res" + res.rid, name: ro.name, x: rx, y: ry, dir: res.dir || 0, moving: !!res.moving, animT: res.animT || 0, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap, beeSuit: residentBeeSuit(res, ro), plaid: ro.skill === "lumberjack", mount: onWhiteHorse ? "white" : null }, false) });
+          const talkLines = ro.skill && L.skillTalk ? L.skillTalk[ro.skill] : null;
+          draws.push({ y: (ry + 1) * T, fn: () => {
+            drawCharacter({ id: "res" + res.rid, name: ro.name, x: rx, y: ry, dir: res.dir || 0, moving: !!res.moving, animT: res.animT || 0, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap, beeSuit: residentBeeSuit(res, ro), plaid: ro.skill === "lumberjack", mount: onWhiteHorse ? "white" : null }, false);
+            // Bulle métier quand le joueur local est à proximité (zip 299).
+            const mm = meRef.current;
+            if (talkLines && talkLines.length && mm && (!mm.zone || mm.zone === "farm") && Math.abs(mm.x - rx) + Math.abs(mm.y - ry) <= 3) {
+              const txt = talkLines[Math.floor(performance.now() / 3500 + res.rid) % talkLines.length];
+              drawSpeechBubble(ctx, Math.round(rx * T) + 8, Math.round(ry * T) - 18, txt);
+            }
+          } });
         }
       }
       draws.sort((a, b) => a.y - b.y);
@@ -7662,6 +7723,23 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       grad.addColorStop(1, "rgba(255, 224, 120, 0)");
       ctx.fillStyle = grad;
       ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }
+    // Zip 299 (demande Guillaume) : petite bulle de dialogue au-dessus d'un
+    // artisan quand le joueur s'en approche (réplique liée à son métier).
+    function drawSpeechBubble(ctx, cx, by, text) {
+      ctx.save();
+      ctx.font = "7px monospace"; ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+      const padX = 4, bh = 13;
+      const tw = Math.ceil(ctx.measureText(text).width), bw = tw + padX * 2;
+      let bx = Math.round(cx - bw / 2);
+      bx = Math.max(2, Math.min(bx, C.MAP_W * T - bw - 2));
+      const byTop = Math.round(by - bh);
+      ctx.fillStyle = "rgba(255,255,255,0.93)"; ctx.strokeStyle = "rgba(0,0,0,0.55)"; ctx.lineWidth = 1;
+      if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(bx, byTop, bw, bh, 3); ctx.fill(); ctx.stroke(); }
+      else { ctx.fillRect(bx, byTop, bw, bh); ctx.strokeRect(bx, byTop, bw, bh); }
+      ctx.beginPath(); ctx.moveTo(cx - 3, byTop + bh - 0.5); ctx.lineTo(cx + 3, byTop + bh - 0.5); ctx.lineTo(cx, byTop + bh + 4); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = "#1d1d1d"; ctx.fillText(text, bx + padX, byTop + bh - 4);
       ctx.restore();
     }
     function drawCharacter(p, isSelf) {
