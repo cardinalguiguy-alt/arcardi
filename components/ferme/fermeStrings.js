@@ -130,7 +130,7 @@ export const FERME_STR = {
     artisanNoResident: "Il faut d'abord que l'artisan correspondant vive chez toi.",
     artisanBuilt: (b) => `🔨 ${b} construit(e) ! L'artisan peut se mettre à produire.`,
     buildingName: (bid) => ({ beehive: "Ruche", fromagerie: "Fromagerie", bakery: "Boulangerie", sawmill: "Scierie" }[bid] || bid),
-    craftName: (item) => ({ honey: "Pot de miel", cheeseWheel: "Roue de fromage", cheesePortion: "Part de fromage", pastry: "Pâtisserie" }[item] || item),
+    craftName: (item) => ({ honey: "Pot de miel", cheeseWheel: "Roue de fromage", cheesePortion: "Part de fromage", pastry: "Pâtisserie", butter: "Motte de beurre", bread: "Pain", croissant: "Croissant", chocolatine: "Chocolatine", painSuisse: "Pain suisse" }[item] || item),
     craftSold: (name, n, gain) => `Vente : ${n} × ${name} (+${gain} or) ! Caisse commune enrichie.`,
     cheeseCut: (w, p) => `🧀 ${w} roue(s) découpée(s) en ${p} parts.`,
     promptResident: (n) => `Q — parler à ${n}`,
@@ -142,7 +142,8 @@ export const FERME_STR = {
     skillPitch: (sk, n) => ({
       beekeeper: `Bonjour ! Moi c'est ${n}, je suis apiculteur et je souhaite vous aider à récolter et mettre en pot le miel de la ferme.`,
       cheesemaker: `Bonjour ! Moi c'est ${n}, je suis fromager et je souhaite vous aider à transformer votre lait en fromage.`,
-      baker: `Bonjour ! Moi c'est ${n}, je suis boulanger-pâtissier et je souhaite vous aider à cuire pâtisseries et gâteaux.`,
+      baker: `Bonjour ! Moi c'est ${n}, je suis pâtissière et je souhaite vous aider à cuire pâtisseries et gâteaux.`,
+      breadmaker: `${n}. Boulangère. Je fais le pain et les viennoiseries. Si vous avez du beurre, tant mieux ; sinon ce sera pain sec.`,
       lumberjack: `Bonjour ! Moi c'est ${n}, je suis bûcheron et je souhaite vous aider à abattre les arbres et casser les rochers.`,
       voyager: `Bonjour ! Moi c'est ${n}, je suis marchand voyageur et je souhaite parcourir le monde pour vous rapporter des denrées rares.`,
     }[sk] || `Bonjour ! Moi c'est ${n}.`),
@@ -151,7 +152,10 @@ export const FERME_STR = {
     skillTalk: {
       beekeeper: ["Les abeilles sont de bonne humeur aujourd'hui !", "Encore quelques pots et le miel est prêt.", "Chut… n'effraie pas mes abeilles.", "Le miel coule bien cette saison."],
       cheesemaker: ["Ce fromage a besoin d'affiner encore un peu.", "Apporte-moi du lait, j'en fais des merveilles !", "Sens-moi cette meule, une pure merveille.", "La cave est à la bonne température."],
-      baker: ["Ça sent bon la pâtisserie, non ?", "Le four est chaud, les gâteaux arrivent !", "Un peu de farine, quelques œufs… et hop !", "Goûte une brioche tant qu'elle est tiède."],
+      baker: ["Bienvenue, quelle joie de te voir ! 🌞", "Le four est chaud, les gâteaux arrivent !", "Prends une brioche tant qu'elle est tiède, c'est offert !", "Ça sent bon la pâtisserie, non ? Sers-toi !"],
+      // Zip 301 (demande Guillaume) : Rosalie, aigrie, parle rarement et de
+      // façon désagréable (bulle affichée moins souvent, voir FermeGame.js).
+      breadmaker: ["Quoi encore.", "Le pain sera prêt quand il sera prêt. Pas avant.", "Tu comptes rester planté là longtemps ?", "Pas de beurre, pas de viennoiseries. C'est comme ça.", "Hmph."],
       lumberjack: ["J'abats, je scie, je casse du caillou !", "Encore un arbre et je fais une pause.", "Le bois part direct à la réserve commune.", "Ma hache n'a jamais été aussi affûtée."],
       voyager: ["Je repars bientôt pour des terres lointaines.", "J'ai rapporté des denrées rares du bout du monde.", "Passe commande, je te trouve ça !", "Le grand large me manque déjà."],
     },
@@ -163,8 +167,14 @@ export const FERME_STR = {
     residentRoleTitle: "Production",
     residentNotWorkingYet: "Pas encore d'atelier — je m'installe.",
     residentProdHoney: (n) => `Ruche en route — ${n} pot(s) de miel en réserve.`,
-    residentProdCheese: (w, p) => `Fromagerie active — ${w} roue(s), ${p} part(s) au frais.`,
+    residentProdCheese: (w, p, b) => `Fromagerie active — ${w} roue(s), ${p} part(s), ${b | 0} beurre au frais.`,
     residentProdPastry: (n) => `Le four tourne — ${n} pâtisserie(s) prête(s).`,
+    // Zip 301 : filière pain + viennoiseries de Rosalie.
+    residentProdBread: (pain, cr, ch, ps) => `Fournil — ${pain} pain(s), ${cr} croissant(s), ${ch} chocolatine(s), ${ps} pain(s) suisse(s).`,
+    // Zip 301 : réglage du ratio fromage/beurre (fiche d'Ingrid).
+    cheeseRatioTitle: "Répartition fromage / beurre",
+    cheeseRatioLine: (cheese, butter) => `Fromage ${cheese}% · Beurre ${butter}%`,
+    cheeseRatioButterShort: "Beurre",
     residentProdWood: (w, s, p) => `Réserve commune : ${w} bois, ${s} pierre(s), ${p} planche(s) rentrés.`,
     residentSeeBtn: "Voir",
     // Zip 258 : alerte pâtissière (rupture d'ingrédients en journée).
@@ -914,18 +924,19 @@ export const FERME_STR = {
     artisanNoResident: "You first need the matching artisan living with you.",
     artisanBuilt: (b) => `🔨 ${b} built! The artisan can start producing.`,
     buildingName: (bid) => ({ beehive: "Beehive", fromagerie: "Cheese dairy", bakery: "Bakery", sawmill: "Sawmill" }[bid] || bid),
-    craftName: (item) => ({ honey: "Honey jar", cheeseWheel: "Cheese wheel", cheesePortion: "Cheese portion", pastry: "Pastry" }[item] || item),
+    craftName: (item) => ({ honey: "Honey jar", cheeseWheel: "Cheese wheel", cheesePortion: "Cheese portion", pastry: "Pastry", butter: "Butter block", bread: "Bread", croissant: "Croissant", chocolatine: "Pain au chocolat", painSuisse: "Pain suisse" }[item] || item),
     craftSold: (name, n, gain) => `Sold: ${n} × ${name} (+${gain} gold)! Common pot topped up.`,
     cheeseCut: (w, p) => `🧀 Cut ${w} wheel(s) into ${p} portions.`,
     promptResident: (n) => `Q — talk to ${n}`,
     recruitAsk: "Ask to move in",
     residentGreet: (n, job) => `Hi! I'm ${n}. My trade is: ${job}.`,
     // Zip 262: skilled visitors introduce their trade explicitly.
-    skillLabel: (sk) => ({ beekeeper: "beekeeper", cheesemaker: "cheesemaker", baker: "baker", lumberjack: "lumberjack", voyager: "traveling merchant" }[sk] || sk),
+    skillLabel: (sk) => ({ beekeeper: "beekeeper", cheesemaker: "cheesemaker", baker: "pastry chef", breadmaker: "baker", lumberjack: "lumberjack", voyager: "traveling merchant" }[sk] || sk),
     skillPitch: (sk, n) => ({
       beekeeper: `Hi! I'm ${n}, I'm a beekeeper and I'd like to help you keep bees and jar honey.`,
       cheesemaker: `Hi! I'm ${n}, I'm a cheesemaker and I'd like to help you turn your milk into fine cheese.`,
-      baker: `Hi! I'm ${n}, I'm a baker and I'd like to help you bake pastries and cakes.`,
+      baker: `Hi! I'm ${n}, I'm the pastry chef and I'd like to help you bake pastries and cakes.`,
+      breadmaker: `${n}. Baker. I make the bread and the viennoiseries. If you've got butter, good; otherwise it's plain bread.`,
       lumberjack: `Hi! I'm ${n}, I'm a lumberjack and I'd like to help you fell trees and break rocks.`,
       voyager: `Hi! I'm ${n}, I'm a traveling merchant and I'd like to sail the world to bring you rare goods.`,
     }[sk] || `Hi! I'm ${n}.`),
@@ -934,7 +945,9 @@ export const FERME_STR = {
     skillTalk: {
       beekeeper: ["The bees are in a good mood today!", "A few more jars and the honey's ready.", "Shh… don't spook my bees.", "The honey flows well this season."],
       cheesemaker: ["This wheel needs to age a little more.", "Bring me milk and I'll work wonders!", "Smell this wheel — pure delight.", "The cellar's at just the right temperature."],
-      baker: ["Smells like fresh pastry, doesn't it?", "Oven's hot, the cakes are coming!", "A little flour, a few eggs… and voilà!", "Try a bun while it's still warm."],
+      baker: ["Welcome, so lovely to see you! 🌞", "Oven's hot, the cakes are coming!", "Have a bun while it's warm — on the house!", "Smells like fresh pastry, doesn't it? Help yourself!"],
+      // Zip 301: Rosalie — bitter, speaks rarely and curtly.
+      breadmaker: ["What now.", "The bread's ready when it's ready. Not before.", "You planning to just stand there?", "No butter, no viennoiseries. That's how it is.", "Hmph."],
       lumberjack: ["I fell, I saw, I crack rocks!", "One more tree and I'll take a break.", "The wood goes straight to our common stock.", "My axe has never been sharper."],
       voyager: ["I set sail again soon for distant lands.", "I brought back rare goods from afar.", "Place an order and I'll find it for you!", "I already miss the open sea."],
     },
@@ -946,7 +959,13 @@ export const FERME_STR = {
     residentRoleTitle: "Output",
     residentNotWorkingYet: "No workshop yet — still settling in.",
     residentProdHoney: (n) => `Hive humming — ${n} honey jar(s) in store.`,
-    residentProdCheese: (w, p) => `Dairy running — ${w} wheel(s), ${p} portion(s) aging.`,
+    residentProdCheese: (w, p, b) => `Dairy running — ${w} wheel(s), ${p} portion(s), ${b | 0} butter in store.`,
+    // Zip 301: Rosalie's bread + viennoiserie line.
+    residentProdBread: (bread, cr, ch, ps) => `Bakehouse — ${bread} bread, ${cr} croissant(s), ${ch} pain(s) au chocolat, ${ps} pain(s) suisse(s).`,
+    // Zip 301: cheese/butter ratio control (Ingrid's card).
+    cheeseRatioTitle: "Cheese / butter split",
+    cheeseRatioLine: (cheese, butter) => `Cheese ${cheese}% · Butter ${butter}%`,
+    cheeseRatioButterShort: "Butter",
     residentProdPastry: (n) => `Oven's on — ${n} pastry(ies) ready.`,
     residentProdWood: (w, s, p) => `Common stock: ${w} wood, ${s} stone, ${p} plank(s) brought in.`,
     residentSeeBtn: "View",

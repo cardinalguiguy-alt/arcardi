@@ -747,7 +747,7 @@ export function buildSprites() {
   const HAIR_COLORS = ["#5a3a1e", "#2a2a2a", "#c8862a", "#8a3020", "#d4b03a", "#4a3468", "#743a12", "#b0b0b8"];
   const SKIN = "#f0c8a0", SKIN_D = "#d8a878";
 
-  function drawCharFrame(g, ox, gender, outfit, dir, frame, overalls, cap, beeSuit, plaid) {
+  function drawCharFrame(g, ox, gender, outfit, dir, frame, overalls, cap, beeSuit, plaid, cheeseHat) {
     const o = C.OUTFITS[outfit % C.OUTFITS.length];
     const hair = HAIR_COLORS[outfit % HAIR_COLORS.length];
     const step = frame === 1 ? 1 : frame === 3 ? -1 : 0;
@@ -922,6 +922,29 @@ export function buildSprites() {
       P(g, x + 5, 0 + bob, 6, 1, tint(HAT));
       P(g, x + 4, 2 + bob, 8, 1, HAT_D);
     }
+    // Béret + tablier de fromagère (demande Guillaume, zip 301 : Ingrid doit
+    // avoir un tablier et un béret). Overlay par-dessus le skin de base, comme
+    // la salopette/la chemise à carreaux — réservé au résident cheesemaker via
+    // le flag `cheeseHat` (voir S.getChar/charSheet). `!beeSuit` par précaution
+    // (personnages différents, jamais les deux à la fois).
+    if (cheeseHat && !beeSuit) {
+      // Tablier clair : bavette sur le torse + jupe sur le haut des jambes,
+      // deux bretelles. Recouvre partiellement o.shirt/o.pants.
+      const AP = "#f4efe2", AP_D = shade(AP);
+      P(g, x + 6, 10 + bob, 4, 6, AP);
+      P(g, x + 6, 10 + bob, 4, 1, tint(AP));
+      P(g, x + 5, 16 + bob, 6, 3, AP);
+      P(g, x + 5, 18 + bob, 6, 1, AP_D);
+      P(g, x + 6, 9 + bob, 1, 2, AP_D);
+      P(g, x + 9, 9 + bob, 1, 2, AP_D);
+      // Béret posé de biais (galette + léger débord + picot central).
+      const BER = "#2f3a56", BER_D = shade(BER);
+      P(g, x + 3, 1 + bob, 9, 3, BER);
+      P(g, x + 3, 1 + bob, 9, 1, tint(BER));
+      P(g, x + 3, 3 + bob, 9, 1, BER_D);
+      if (dir !== 1) P(g, x + 11, 0 + bob, 2, 1, BER_D); // débord visible de face/profil
+      P(g, x + 7, 0 + bob, 1, 1, BER_D); // picot
+    }
   }
   function shade(hex) { return adjust(hex, -30); }
   function tint(hex) { return adjust(hex, 30); }
@@ -932,12 +955,12 @@ export function buildSprites() {
     const b = Math.max(0, Math.min(255, (n & 255) + d));
     return `rgb(${r},${gg},${b})`;
   }
-  function charSheet(gender, outfit, overalls, cap, beeSuit, plaid) {
+  function charSheet(gender, outfit, overalls, cap, beeSuit, plaid, cheeseHat) {
     const [c, g] = cv(16 * 4, 24 * 3);
     for (let dir = 0; dir < 3; dir++)
       for (let f = 0; f < 4; f++) {
         g.save(); g.translate(0, dir * 24);
-        drawCharFrame(g, f * 16, gender, outfit, dir, f, overalls, cap, beeSuit, plaid);
+        drawCharFrame(g, f * 16, gender, outfit, dir, f, overalls, cap, beeSuit, plaid, cheeseHat);
         g.restore();
       }
     return c;
@@ -1083,6 +1106,11 @@ export function buildSprites() {
     if (id === "honey") { P(g, 5, 4, 6, 3, "#e0b84a"); P(g, 6, 3, 4, 1, "#c99a2a"); P(g, 4, 7, 8, 7, "#f2c94b"); P(g, 5, 9, 6, 3, "#e0b030"); P(g, 6, 5, 4, 2, "#fff2c0"); }
     else if (id === "cheeseWheel") { g.fillStyle = "#f2d873"; g.beginPath(); g.arc(8, 9, 6, 0, 7); g.fill(); g.fillStyle = "#e0b84a"; g.beginPath(); g.arc(8, 9, 6, 0, 3.5); g.fill(); P(g, 6, 6, 1, 1, "#c99a2a"); P(g, 10, 8, 1, 1, "#c99a2a"); P(g, 8, 11, 1, 1, "#c99a2a"); }
     else if (id === "cheesePortion") { g.fillStyle = "#f2d873"; g.beginPath(); g.moveTo(3, 13); g.lineTo(13, 13); g.lineTo(4, 4); g.closePath(); g.fill(); g.fillStyle = "#e0b84a"; P(g, 3, 12, 10, 2, "#e0b84a"); P(g, 7, 9, 1, 1, "#c99a2a"); P(g, 9, 11, 1, 1, "#c99a2a"); }
+    // Zip 301 : nouvelles denrées de la boulangerie/fromagerie.
+    else if (id === "butter") { P(g, 3, 7, 10, 5, "#f2df84"); P(g, 3, 7, 10, 1, "#fff0b8"); P(g, 3, 11, 10, 1, "#d9be5a"); P(g, 3, 6, 7, 1, "#fbeecb"); P(g, 4, 8, 2, 2, "#fff6d8"); } // motte de beurre
+    else if (id === "bread") { P(g, 3, 6, 10, 6, "#c98a4a"); P(g, 3, 6, 10, 1, "#e8b96a"); P(g, 4, 5, 8, 1, "#e8b96a"); P(g, 5, 8, 1, 2, "#8a5a2a"); P(g, 8, 8, 1, 2, "#8a5a2a"); P(g, 3, 11, 10, 1, "#9a6a34"); } // pain
+    else if (id === "croissant") { g.fillStyle = "#e0a94a"; g.beginPath(); g.arc(8, 9, 5, 0.4, 3.9); g.fill(); P(g, 5, 6, 6, 2, "#eebf6a"); P(g, 4, 8, 2, 3, "#c98a3a"); P(g, 11, 8, 2, 3, "#c98a3a"); P(g, 7, 6, 3, 1, "#f5d9a0"); } // croissant
+    else if (id === "chocolatine" || id === "painSuisse") { P(g, 3, 6, 10, 6, "#cd9552"); P(g, 3, 6, 10, 1, "#e8b96a"); P(g, 4, 8, 2, 3, "#4a2a18"); P(g, 10, 8, 2, 3, "#4a2a18"); if (id === "painSuisse") { P(g, 6, 8, 1, 1, "#3a2010"); P(g, 8, 9, 1, 1, "#3a2010"); P(g, 7, 10, 1, 1, "#3a2010"); } } // chocolatine / pain suisse
     else { P(g, 4, 8, 8, 5, "#c98a4a"); P(g, 5, 6, 6, 3, "#e8b96a"); P(g, 6, 5, 4, 2, "#f5d9a0"); P(g, 7, 4, 1, 1, "#d14a3a"); P(g, 6, 10, 1, 1, "#8a3a2a"); P(g, 9, 10, 1, 1, "#8a3a2a"); } // pâtisserie
     outlineSprite(g, T, T, "#5a3a1e");
     return c;
@@ -2042,7 +2070,7 @@ house: house(),
   S.decor = {}; for (const d of C.UNIQUE_DECORATIONS) S.decor[d.id] = decorSprite(d.id);
   // Zip 252 : bâtiments d'ateliers + icônes de produits artisanaux.
   S.artisan = { beehive: artisanBuildingSprite("beehive"), fromagerie: artisanBuildingSprite("fromagerie"), bakery: artisanBuildingSprite("bakery"), sawmill: artisanBuildingSprite("sawmill") };
-  S.craftIcons = { honey: craftIcon("honey"), cheeseWheel: craftIcon("cheeseWheel"), cheesePortion: craftIcon("cheesePortion"), pastry: craftIcon("pastry") };
+  S.craftIcons = { honey: craftIcon("honey"), cheeseWheel: craftIcon("cheeseWheel"), cheesePortion: craftIcon("cheesePortion"), pastry: craftIcon("pastry"), butter: craftIcon("butter"), bread: craftIcon("bread"), croissant: craftIcon("croissant"), chocolatine: craftIcon("chocolatine"), painSuisse: craftIcon("painSuisse") };
   // Zip 236: one sprite per pet id in the catalog (individual pets).
   S.pets = {};
   for (const pid of Object.keys(C.PET_CATALOG)) S.pets[pid] = petSprite(pid);
@@ -2058,9 +2086,9 @@ house: house(),
   // tint. FermeGame picks them based on seasonOf().
   S.oakAutumn = autumnTree(S.oak); S.pineAutumn = autumnTree(S.pine);
   S.oakSpring = springTree(S.oak); S.pineSpring = springTree(S.pine);
-  S.getChar = (gender, outfit, overalls, cap, beeSuit, plaid) => {
-    const key = gender + ":" + outfit + (overalls ? ":overalls" : "") + (cap ? ":cap" : "") + (beeSuit ? ":beeSuit" : "") + (plaid ? ":plaid" : "");
-    if (!S.chars[key]) S.chars[key] = charSheet(gender, outfit, !!overalls, !!cap, !!beeSuit, !!plaid);
+  S.getChar = (gender, outfit, overalls, cap, beeSuit, plaid, cheeseHat) => {
+    const key = gender + ":" + outfit + (overalls ? ":overalls" : "") + (cap ? ":cap" : "") + (beeSuit ? ":beeSuit" : "") + (plaid ? ":plaid" : "") + (cheeseHat ? ":cheeseHat" : "");
+    if (!S.chars[key]) S.chars[key] = charSheet(gender, outfit, !!overalls, !!cap, !!beeSuit, !!plaid, !!cheeseHat);
     return S.chars[key];
   };
   return S;

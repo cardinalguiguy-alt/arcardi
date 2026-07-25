@@ -1887,6 +1887,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           out.chat = { from: "\u{1F41D}", msg: lang === "en" ? "René is fueled by coffee! ☕⚡" : "René carbure au café ! ☕⚡" };
         }
       }
+    } else if (req.kind === "setCheeseRatio") {
+      // Zip 301 (demande Guillaume) : règle la part de BEURRE produite par la
+      // fromagerie (0..100 %, paliers de 10 %). Stocké sur crafts.fromagerie
+      // (persistant via migrateCrafts) et diffusé à tous. N'affecte que la
+      // RÉPARTITION de la sortie, pas la cadence ni le coût en lait.
+      const fr = (s.crafts || {}).fromagerie;
+      if (fr && fr.built) {
+        let pct = Math.round((req.pct | 0) / C.FROMAGERIE_RATIO_STEP) * C.FROMAGERIE_RATIO_STEP;
+        fr.butterPct = Math.max(0, Math.min(100, pct));
+        out.crafts = s.crafts; // diffusé aux invités par le broadcast final { ...out }
+      }
     } else if (req.kind === "hireHarald") {
       // Zip 260 (demande Guillaume) : agent d'élevage engagé à la boutique
       // comme Soan, contrat réel de 24h payé d'avance (1000 or). Un seul à la
@@ -2705,7 +2716,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (req.kind === "buyArtisanBuilding") {
       const bid = req.bid, def = C.ARTISAN_BUILDINGS[bid];
       if (!def || !st) return true;
-      if (!E.residentHasSkill(st, def.skill)) { hostSend({ type: "broadcast", event: "apply", payload: { toast: { id: req.id, key: "artisanNoResident" } } }); return true; }
+      // Zip 301 : la boulangerie accepte Chloé (baker) OU Rosalie (breadmaker).
+      const skillOk = E.residentHasSkill(st, def.skill) || (bid === "bakery" && E.residentHasSkill(st, "breadmaker"));
+      if (!skillOk) { hostSend({ type: "broadcast", event: "apply", payload: { toast: { id: req.id, key: "artisanNoResident" } } }); return true; }
       if (!s.crafts) s.crafts = E.newCrafts();
       if (s.crafts[bid] && s.crafts[bid].built) return true;
       if (s.money < def.cost) { hostSend({ type: "broadcast", event: "apply", payload: { toast: { id: req.id, key: "noGold" } } }); return true; }
@@ -2718,7 +2731,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     if (req.kind === "sellCraft") {
       const stock = s.craftStock || (s.craftStock = E.newCraftStock());
-      const price = { honey: C.HONEY_SELL, cheeseWheel: C.CHEESE_WHEEL_SELL, cheesePortion: C.CHEESE_PORTION_SELL, pastry: C.PASTRY_SELL }[req.item];
+      const price = { honey: C.HONEY_SELL, cheeseWheel: C.CHEESE_WHEEL_SELL, cheesePortion: C.CHEESE_PORTION_SELL, pastry: C.PASTRY_SELL, butter: C.BUTTER_SELL, bread: C.BREAD_SELL, croissant: C.CROISSANT_SELL, chocolatine: C.CHOCOLATINE_SELL, painSuisse: C.PAINSUISSE_SELL }[req.item];
       if (!price || (stock[req.item] | 0) <= 0) return true;
       const n = Math.min(stock[req.item] | 0, req.n > 0 ? req.n : 9999);
       stock[req.item] -= n; const gain = n * price;
@@ -2814,6 +2827,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const res = residents.find(r => r && rosterOf(r.rid) && rosterOf(r.rid).skill === "beekeeper");
     return (res && now < (res.superUntil || 0)) ? C.HONEY_MS / C.SUPERRENE_HONEY_MULT : C.HONEY_MS;
   }
+  // Zip 301 : Rosalie (breadmaker) est-elle résidente ? Sa filière pain/
+  // viennoiseries ne tourne que si oui (Chloé la pâtissière reste indépendante).
+  function breadmakerPresent(s) {
+    const rs = (s.station && s.station.residents) || [];
+    return rs.some(r => r && rosterOf(r.rid) && rosterOf(r.rid).skill === "breadmaker");
+  }
+  // Zip 301 : Chloé (baker) est-elle résidente ? Les PÂTISSERIES ne se
+  // produisent que si oui — la boulangerie pouvant désormais être bâtie par
+  // Rosalie seule, on évite des pâtisseries "fantômes" sans pâtissière.
+  function bakerPresent(s) {
+    const rs = (s.station && s.station.residents) || [];
+    return rs.some(r => r && rosterOf(r.rid) && rosterOf(r.rid).skill === "baker");
+  }
   function updateCrafts() {
     const s = sharedRef.current, w = worldRef.current;
     if (!w || !s.crafts) return;
@@ -2841,14 +2867,23 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const src = findAnimalGoodsWith(C.COW_ANIMAL, C.CHEESE_MILK_COST);
         if (src) {
           consumeAnimalGoods(src, C.COW_ANIMAL, C.CHEESE_MILK_COST);
-          stock.cheeseWheel++; stockChanged = true; fr.nextAt = now + C.CHEESE_MS;
+          // Zip 301 (demande Guillaume) : sortie combinée fromage/beurre selon
+          // le ratio réglé (fr.butterPct, paliers de 10 %). Un accumulateur
+          // (fr.ratioAcc) garantit la proportion exacte sur la durée : à
+          // chaque fournée on ajoute butterPct ; si l'accumulateur atteint
+          // 100, on produit du BEURRE et on retranche 100, sinon du FROMAGE.
+          const pct = Math.max(0, Math.min(100, fr.butterPct == null ? C.FROMAGERIE_BUTTER_PCT_DEFAULT : (fr.butterPct | 0)));
+          fr.ratioAcc = (fr.ratioAcc || 0) + pct;
+          if (fr.ratioAcc >= 100) { fr.ratioAcc -= 100; stock.butter = (stock.butter | 0) + 1; }
+          else stock.cheeseWheel++;
+          stockChanged = true; craftsMetaChanged = true; fr.nextAt = now + C.CHEESE_MS;
           if (src.kind === "farmer") broadcastFarmerDelta(src.src.fm); else gregStockChanged = true;
         }
         else fr.nextAt = now + Math.min(C.CHEESE_MS, 30000); // pas de lait : réessaie bientôt
       }
     }
     const bk = s.crafts.bakery;
-    if (bk && bk.built) {
+    if (bk && bk.built && bakerPresent(s)) {
       // Zip 258 (demande Guillaume) : la boulangerie ne tourne QU'EN JOURNÉE
       // (5h30 -> 19h). Hors horaires, four éteint : ni production, ni alerte.
       const tmin = E.gameTimeMin(s.dayStartAt, now);
@@ -2883,6 +2918,43 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         }
       }
     }
+    // Zip 301 (demande Guillaume) : Rosalie (breadmaker) — PAIN + VIENNOISERIES,
+    // dans la MÊME boulangerie que Chloé mais sur une filière et un minuteur
+    // indépendants (bk.breadNextAt), sans interférer avec les pâtisseries de
+    // Chloé (bk.nextAt). Ne tourne qu'en journée (mêmes horaires) et seulement
+    // si Rosalie est résidente. Le pain (farine seule) est toujours possible ;
+    // les viennoiseries exigent du BEURRE (croissant), voire du CHOCOLAT/cacao
+    // (chocolatine, pain suisse). Rotation des 4 produits selon les intrants
+    // dispo, pour un assortiment varié.
+    let stationChanged = false;
+    if (bk && bk.built && breadmakerPresent(s)) {
+      const tmin2 = E.gameTimeMin(s.dayStartAt, now);
+      const open2 = tmin2 >= C.BAKERY_OPEN_MIN && tmin2 < C.BAKERY_CLOSE_MIN;
+      if (!open2) {
+        if (!bk.breadNextAt || bk.breadNextAt < now) bk.breadNextAt = now + C.ROSALIE_MS;
+      } else if (!bk.breadNextAt || bk.breadNextAt > now + C.ROSALIE_MS) {
+        bk.breadNextAt = now + C.ROSALIE_MS;
+      } else if (now >= bk.breadNextAt) {
+        const ws = (s.station && s.station.worldStock) || {};
+        const haveFlour = (s.flour | 0) >= C.BREAD_FLOUR;
+        const haveButter = (stock.butter | 0) >= C.CROISSANT_BUTTER;
+        const haveCocoa = (ws.cocoa | 0) >= C.CHOCO_COCOA;
+        let idx = bk.viennoIdx | 0, made = false;
+        for (let tries = 0; tries < 4 && !made; tries++, idx = (idx + 1) % 4) {
+          if (idx === 0) { // PAIN (farine seule)
+            if (haveFlour) { s.flour -= C.BREAD_FLOUR; flourChanged = true; stock.bread = (stock.bread | 0) + C.BREAD_BATCH; made = true; }
+          } else if (idx === 1) { // CROISSANT (farine + beurre)
+            if (haveFlour && haveButter) { s.flour -= C.CROISSANT_FLOUR; flourChanged = true; stock.butter -= C.CROISSANT_BUTTER; stock.croissant = (stock.croissant | 0) + C.CROISSANT_BATCH; made = true; }
+          } else if (idx === 2) { // CHOCOLATINE (farine + beurre + chocolat)
+            if (haveFlour && haveButter && haveCocoa) { s.flour -= C.CHOCO_FLOUR; flourChanged = true; stock.butter -= C.CHOCO_BUTTER; ws.cocoa -= C.CHOCO_COCOA; stock.chocolatine = (stock.chocolatine | 0) + C.CHOCO_BATCH; made = true; stationChanged = true; }
+          } else { // PAIN SUISSE (farine + beurre + chocolat)
+            if (haveFlour && haveButter && haveCocoa) { s.flour -= C.CHOCO_FLOUR; flourChanged = true; stock.butter -= C.CHOCO_BUTTER; ws.cocoa -= C.CHOCO_COCOA; stock.painSuisse = (stock.painSuisse | 0) + C.CHOCO_BATCH; made = true; stationChanged = true; }
+          }
+        }
+        if (made) { stock.butter = Math.max(0, stock.butter | 0); stockChanged = true; craftsMetaChanged = true; bk.viennoIdx = idx; bk.breadNextAt = now + C.ROSALIE_MS; }
+        else bk.breadNextAt = now + Math.min(C.ROSALIE_MS, 30000); // rien de faisable (ni farine) : réessaie bientôt
+      }
+    }
     if (stockChanged || flourChanged || craftsMetaChanged || gregStockChanged) {
       dirtyRef.current = true;
       const payload = { crafts: s.crafts };
@@ -2891,6 +2963,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (gregStockChanged) { payload.gregStock = s.gregStock; setGregStock(s.gregStock); }
       hostSend({ type: "broadcast", event: "apply", payload });
     }
+    if (stationChanged) broadcastStation(); // zip 301 : cacao consommé (worldStock) -> propager aux invités
   }
   // Zip 298 (demande Guillaume) : renvoie le rid d'un artisan (fromagère/bûcheron)
   // dont la venue doit être FORCÉE, ou -1. Marque au passage comme "vu cette
@@ -5582,6 +5655,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const beekeeperOrder = () => sendReq({ kind: "beekeeperOrder" }); // chantier 2026-07 : René, miroir soanOrder
   const beekeeperRecall = () => sendReq({ kind: "beekeeperRecall" });
   const reneCoffee = () => sendReq({ kind: "reneCoffee" }); // zip suivant : SuperRené (café), miroir gregCoffee
+  const setCheeseRatio = (pct) => sendReq({ kind: "setCheeseRatio", pct }); // zip 301 : part de beurre de la fromagerie
   // Zip 258 : commande de voyage à Eduardo. Envoie la liste { key, qty } non
   // vide au host (voyagerOrder), puis referme le panneau et remet le brouillon
   // à zéro. Le coût/durée sont recalculés et vérifiés côté hôte (autoritaire).
@@ -6675,7 +6749,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           // Zip 273 : idem — Eduardo reste monté même dans ce rendu "idle"
           // (résident sans position simulée, planté près de sa maison).
           const onWhiteHorseIdle = ro.skill === "voyager";
-          draws.push({ y: (ryp + 1) * T, fn: () => drawCharacter({ id: "res" + ro.rid, name: ro.name, x: rxp, y: ryp, dir: 0, moving: false, animT: 0, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap, beeSuit: residentBeeSuit(residents[ri], ro), plaid: ro.skill === "lumberjack", mount: onWhiteHorseIdle ? "white" : null }, false) });
+          draws.push({ y: (ryp + 1) * T, fn: () => drawCharacter({ id: "res" + ro.rid, name: ro.name, x: rxp, y: ryp, dir: 0, moving: false, animT: 0, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap, beeSuit: residentBeeSuit(residents[ri], ro), plaid: ro.skill === "lumberjack", cheeseHat: ro.skill === "cheesemaker", mount: onWhiteHorseIdle ? "white" : null }, false) });
         }
       }
       // Greg, l'employé de champs (chantier 2026-07) : réutilise le rendu
@@ -6854,12 +6928,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           const onWhiteHorse = ro.skill === "voyager";
           const talkLines = ro.skill && L.skillTalk ? L.skillTalk[ro.skill] : null;
           draws.push({ y: (ry + 1) * T, fn: () => {
-            drawCharacter({ id: "res" + res.rid, name: ro.name, x: rx, y: ry, dir: res.dir || 0, moving: !!res.moving, animT: res.animT || 0, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap, beeSuit: residentBeeSuit(res, ro), plaid: ro.skill === "lumberjack", mount: onWhiteHorse ? "white" : null }, false);
+            drawCharacter({ id: "res" + res.rid, name: ro.name, x: rx, y: ry, dir: res.dir || 0, moving: !!res.moving, animT: res.animT || 0, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap, beeSuit: residentBeeSuit(res, ro), plaid: ro.skill === "lumberjack", cheeseHat: ro.skill === "cheesemaker", mount: onWhiteHorse ? "white" : null }, false);
             // Bulle métier quand le joueur local est à proximité (zip 299).
             const mm = meRef.current;
             if (talkLines && talkLines.length && mm && (!mm.zone || mm.zone === "farm") && Math.abs(mm.x - rx) + Math.abs(mm.y - ry) <= 3) {
-              const txt = talkLines[Math.floor(performance.now() / 3500 + res.rid) % talkLines.length];
-              drawSpeechBubble(ctx, Math.round(rx * T) + 8, Math.round(ry * T) - 18, txt);
+              // Zip 301 (demande Guillaume) : Rosalie (breadmaker) est aigrie et
+              // parle RAREMENT — sa bulle ne s'affiche qu'~3 s par tranche de
+              // 12 s (les autres artisans parlent en continu, cycle 3,5 s).
+              const rare = ro.skill === "breadmaker";
+              const now2 = performance.now();
+              const period = rare ? 12000 : 3500;
+              const show = rare ? (now2 % period < 3000) : true;
+              if (show) {
+                const txt = talkLines[Math.floor(now2 / period + res.rid) % talkLines.length];
+                drawSpeechBubble(ctx, Math.round(rx * T) + 8, Math.round(ry * T) - 18, txt);
+              }
             }
           } });
         }
@@ -7799,7 +7882,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     function drawCharacter(p, isSelf) {
       const sprites = spritesRef.current;
-      const sheet = sprites.getChar(p.gender, p.outfit, p.overalls, p.cap, p.beeSuit, p.plaid);
+      const sheet = sprites.getChar(p.gender, p.outfit, p.overalls, p.cap, p.beeSuit, p.plaid, p.cheeseHat);
       const row = p.dir === 0 ? 0 : p.dir === 1 ? 1 : 2;
       const frame = p.moving ? Math.floor((p.animT || 0) % 4) : 0;
       // Zip 264 (demande Guillaume) : Eduardo Da Fonseca chevauche EXACTEMENT
@@ -8328,7 +8411,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const bid = C.SKILL_BUILDING[ro.skill];
     if (!bid || !(crafts[bid] && crafts[bid].built)) return "";
     if (ro.skill === "beekeeper") return L.residentProdHoney(cs.honey | 0);
-    if (ro.skill === "cheesemaker") return L.residentProdCheese(cs.cheeseWheel | 0, cs.cheesePortion | 0);
+    if (ro.skill === "cheesemaker") return L.residentProdCheese(cs.cheeseWheel | 0, cs.cheesePortion | 0, cs.butter | 0);
+    // Zip 301 : Rosalie (breadmaker) — compteur pain + viennoiseries.
+    if (ro.skill === "breadmaker") return L.residentProdBread(cs.bread | 0, cs.croissant | 0, cs.chocolatine | 0, cs.painSuisse | 0);
     // Zip 258 : si la boulangerie est en alerte (rupture d'intrants en
     // journée), la ligne d'état devient l'alerte plutôt que le compteur.
     if (ro.skill === "baker") return (crafts[bid] && crafts[bid].alert) ? L.bakeryAlertLine : L.residentProdPastry(cs.pastry | 0);
@@ -9160,7 +9245,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               const beehiveBuilt = isBeekeeper && (sharedRef.current.crafts || {}).beehive && sharedRef.current.crafts.beehive.built;
               return (
                 <div className="ferme-shop-row" key={"emp-res-" + res.rid}>
-                  <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, isBeekeeper && res.beePhase === "working", ro.skill === "lumberjack") : null} sx={16} sy={24} w={24} h={36} />
+                  <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, isBeekeeper && res.beePhase === "working", ro.skill === "lumberjack", ro.skill === "cheesemaker") : null} sx={16} sy={24} w={24} h={36} />
                   <div className="info">
                     <b>{ro.name} {bakerAlert ? "⚠️" : ""}{isBeekeeper && Date.now() < (res.superUntil || 0) ? "☕⚡" : ""}</b>
                     <span className="ferme-usage" style={bakerAlert ? { color: "#c0392b", fontWeight: 700 } : undefined}>
@@ -9244,7 +9329,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   const away = res.trip && res.trip.phase === "away";
                   return (
                     <div className="ferme-shop-row" key={"kick-" + res.rid}>
-                      <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, false, ro.skill === "lumberjack") : null} sx={16} sy={24} w={24} h={36} />
+                      <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, false, ro.skill === "lumberjack", ro.skill === "cheesemaker") : null} sx={16} sy={24} w={24} h={36} />
                       <div className="info">
                         <b>{ro.name}</b>
                         <span className="ferme-usage">{away ? L.voyagerStatusAway(fmtDuration(res.trip.returnAt - Date.now())) : L.residentTag(ro.job)}</span>
@@ -9673,7 +9758,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             {(() => {
               const residents = (stationSt && stationSt.residents) || [];
               const hasSkill = (sk) => residents.some(r => (C.VISITOR_ROSTER[r.rid] || {}).skill === sk);
-              const rows = Object.keys(C.ARTISAN_BUILDINGS).filter(bid => hasSkill(C.ARTISAN_BUILDINGS[bid].skill));
+              // Zip 301 : la boulangerie se débloque avec Chloé (baker) OU
+              // Rosalie (breadmaker) — elles la partagent.
+              const rows = Object.keys(C.ARTISAN_BUILDINGS).filter(bid => hasSkill(C.ARTISAN_BUILDINGS[bid].skill) || (bid === "bakery" && hasSkill("breadmaker")));
               if (!rows.length) return null;
               return (<>
                 <div className="ferme-tools-header">{L.artisanShopTitle}</div>
@@ -9890,7 +9977,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               <button className="ferme-close-x" onClick={() => setResidentCard(null)}>✕</button>
               <h2>{ro.name}</h2>
               <div className="ferme-shop-row">
-                <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, isBeekeeper && res && res.beePhase === "working", ro.skill === "lumberjack") : null} sx={16} sy={24} w={40} h={60} />
+                <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, isBeekeeper && res && res.beePhase === "working", ro.skill === "lumberjack", ro.skill === "cheesemaker") : null} sx={16} sy={24} w={40} h={60} />
                 <div className="info"><b>{ro.skill ? L.skillPitch(ro.skill, ro.name) : L.residentGreet(ro.name, ro.job)}</b><span>{need}</span></div>
               </div>
               <div className="ferme-shop-row">
@@ -9912,6 +9999,23 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   <PixBtn sprites={spritesReady ? spritesRef.current : null} label={L.reneCoffeeBtn} onClick={reneCoffee} />
                 </div>
               )}
+              {/* Zip 301 (demande Guillaume) : réglage du ratio fromage/beurre
+                  de la fromagerie d'Ingrid, par paliers de 10 %. */}
+              {ro.skill === "cheesemaker" && built && (() => {
+                const fr = sharedRef.current.crafts && sharedRef.current.crafts.fromagerie;
+                const pct = fr && fr.butterPct != null ? (fr.butterPct | 0) : C.FROMAGERIE_BUTTER_PCT_DEFAULT;
+                return (
+                  <div style={{ marginTop: 10 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>{L.cheeseRatioTitle}</div>
+                    <div style={{ fontSize: 12, marginBottom: 6 }}>{L.cheeseRatioLine(100 - pct, pct)}</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <button disabled={pct <= 0} onClick={() => setCheeseRatio(pct - C.FROMAGERIE_RATIO_STEP)}>− {L.cheeseRatioButterShort}</button>
+                      <span style={{ minWidth: 96, textAlign: "center", fontWeight: 700 }}>{L.cheeseRatioButterShort} {pct}%</span>
+                      <button disabled={pct >= 100} onClick={() => setCheeseRatio(pct + C.FROMAGERIE_RATIO_STEP)}>+ {L.cheeseRatioButterShort}</button>
+                    </div>
+                  </div>
+                );
+              })()}
               <div style={{ marginTop: 10, textAlign: "right" }}>
                 <PixBtn sprites={spritesReady ? spritesRef.current : null} tone="plain" label={L.residentCloseBtn} onClick={() => setResidentCard(null)} />
               </div>
@@ -10051,7 +10155,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             {/* Zip 252 : produits d'artisans (réserve commune craftStock). */}
             {(() => {
               const cs = sharedRef.current.craftStock || {};
-              const items = [["honey", C.HONEY_SELL], ["cheeseWheel", C.CHEESE_WHEEL_SELL], ["cheesePortion", C.CHEESE_PORTION_SELL], ["pastry", C.PASTRY_SELL]];
+              const items = [["honey", C.HONEY_SELL], ["cheeseWheel", C.CHEESE_WHEEL_SELL], ["cheesePortion", C.CHEESE_PORTION_SELL], ["butter", C.BUTTER_SELL], ["pastry", C.PASTRY_SELL], ["bread", C.BREAD_SELL], ["croissant", C.CROISSANT_SELL], ["chocolatine", C.CHOCOLATINE_SELL], ["painSuisse", C.PAINSUISSE_SELL]];
               const any = items.some(([k]) => (cs[k] | 0) > 0);
               if (!any) return null;
               return (<>
@@ -10252,7 +10356,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             <div className="panel ferme-modal-panel" onClick={e => e.stopPropagation()} style={{ width: "min(440px, 94vw)", ...paper }}>
               <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                 <div style={{ background: "#e8dfc4", border: "2px solid #6b4a2e", borderRadius: 6, padding: "4px 6px 0" }}>
-                  <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, false, ro.skill === "lumberjack") : null} sx={16} sy={24} w={32} h={48} />
+                  <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, false, ro.skill === "lumberjack", ro.skill === "cheesemaker") : null} sx={16} sy={24} w={32} h={48} />
                 </div>
                 <div>
                   <h3 style={{ margin: 0, color: "#1d1d1d" }}>{L.visitorPanelTitle(ro.name)}</h3>
@@ -10407,7 +10511,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 : o.type === "stay" ? L.notifStay : o.type === "plea" ? L.notifPlea : L.notifWantsChat;
               return (
                 <div key={vv.rid} style={card}>
-                  <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, false, ro.skill === "lumberjack") : null} sx={16} sy={24} w={24} h={36} />
+                  <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, false, ro.skill === "lumberjack", ro.skill === "cheesemaker") : null} sx={16} sy={24} w={24} h={36} />
                   <div style={{ fontSize: 12, lineHeight: 1.35 }}>
                     <b>{L.notifAsk(ro.name)}</b><br />
                     {o.type === "buy" && spritesReady && <span style={{ verticalAlign: "middle", marginRight: 4, display: "inline-block" }}><Sprite img={spritesRef.current.crops[o.crop][C.CROP_STAGES - 1]} w={18} h={18} /></span>}
@@ -10458,8 +10562,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (!crafts[bid] || !crafts[bid].built) return null;
         const cs = sharedRef.current.craftStock || {};
         const line = bid === "beehive" ? L.residentProdHoney(cs.honey | 0)
-          : bid === "fromagerie" ? L.residentProdCheese(cs.cheeseWheel | 0, cs.cheesePortion | 0)
-          : (crafts.bakery && crafts.bakery.alert) ? L.bakeryAlertLine : L.residentProdPastry(cs.pastry | 0);
+          : bid === "fromagerie" ? L.residentProdCheese(cs.cheeseWheel | 0, cs.cheesePortion | 0, cs.butter | 0)
+          : (crafts.bakery && crafts.bakery.alert) ? L.bakeryAlertLine
+          : L.residentProdPastry(cs.pastry | 0) + " · " + L.residentProdBread(cs.bread | 0, cs.croissant | 0, cs.chocolatine | 0, cs.painSuisse | 0);
         const alert = bid === "bakery" && crafts.bakery && crafts.bakery.alert;
         return (
           <div style={{ position: "fixed", left: "50%", transform: "translateX(-50%)", bottom: 92, zIndex: 39, background: "#f5eeda", border: `1px solid ${alert ? "#c0392b" : "#6b4a2e"}`, borderRadius: 10, padding: "6px 12px", color: "#1d1d1d", fontSize: 12, maxWidth: 320, textAlign: "center", pointerEvents: "none" }}>

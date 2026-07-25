@@ -1159,7 +1159,13 @@ export const VISITOR_ROSTER = [
   { rid: 13, name: "Honore",   gender: "m", outfit: 3, overalls: false, cap: true,  theme: "market",  job: "haggle with traders" },
   { rid: 14, name: "Lucille",  gender: "f", outfit: 7, overalls: true,  cap: false, theme: "river",   job: "ferry goods by boat" },
   { rid: 15, name: "Anselme",  gender: "m", outfit: 6, overalls: true,  cap: false, theme: "fields",  job: "breed better seeds" },
-  { rid: 16, name: "Rosalie",  gender: "f", outfit: 3, overalls: true,  cap: true,  theme: "kitchen", job: "bake bread and pies" },
+  // Zip 301 (demande Guillaume) : Rosalie devient une artisane NOMMÉE à skill
+  // "breadmaker" (boulangère du pain et des viennoiseries), recrutable à la
+  // gare comme Ingrid/Tristan. Elle partage la boulangerie (SKILL_BUILDING
+  // "breadmaker" -> "bakery") avec Chloé la pâtissière. Outfit distinct de
+  // Chloé (outfit 3) pour ne pas les confondre. Caractère aigri (voir
+  // skillTalk). Production dans updateCrafts (pain + viennoiseries).
+  { rid: 16, name: "Rosalie",  gender: "f", outfit: 5, overalls: true,  cap: true,  theme: "kitchen", job: "bake fresh bread and viennoiseries", skill: "breadmaker" },
   { rid: 17, name: "Edgar",    gender: "m", outfit: 2, overalls: false, cap: false, theme: "shadow",  job: "track wolves", edgy: true },
   { rid: 18, name: "Violette", gender: "f", outfit: 4, overalls: true,  cap: false, theme: "style",   job: "paint signs and murals" },
   { rid: 19, name: "Casimir",  gender: "m", outfit: 0, overalls: true,  cap: true,  theme: "wood",    job: "fell and replant trees" },
@@ -1238,7 +1244,8 @@ export const ARTISAN_FOOT = { beehive: 31, fromagerie: 62, bakery: 62, sawmill: 
 // voyager (Eduardo) : pas de bâtiment, il travaille par voyages (commandes).
 // Zip 260 : lumberjack -> sawmill (le bûcheron s'ancre/rôde autour de sa
 // scierie une fois construite ; sinon rôde près du spawn comme avant).
-export const SKILL_BUILDING = { beekeeper: "beehive", cheesemaker: "fromagerie", baker: "bakery", lumberjack: "sawmill", voyager: null };
+// Zip 301 : breadmaker (Rosalie) partage la boulangerie de baker (Chloé).
+export const SKILL_BUILDING = { beekeeper: "beehive", cheesemaker: "fromagerie", baker: "bakery", breadmaker: "bakery", lumberjack: "sawmill", voyager: null };
 // Cadences de production (ms réelles) et valeurs de vente (or).
 // Zip 258 (demande Guillaume : "le miel est une denrée rare") : cadence ÷3
 // (4 min -> 12 min entre deux pots) et prix du pot fortement relevé à 7000.
@@ -1268,8 +1275,18 @@ export const SUPERRENE_DURATION_MS = 5 * 60 * 60 * 1000;  // 5h réelles de trav
 export const SUPERRENE_COOLDOWN_MS = 10 * 60 * 60 * 1000; // 10h réelles, démarre à la FIN de l'effet ; entre-temps René reprend son cycle normal
 export const SUPERRENE_COFFEE_COST = 2;   // unités de café consommées par activation (MÊME pool que SuperGreg/SuperSoan)
 export const SUPERRENE_HONEY_MULT = 10;   // pendant l'effet, l'intervalle de production du miel est divisé par ce facteur (production accélérée)
-export const CHEESE_MS = 6 * 60 * 1000;    export const CHEESE_MILK_COST = 3; // fromagerie : 3 laits -> 1 roue
+export const CHEESE_MS = 6 * 60 * 1000;    export const CHEESE_MILK_COST = 3; // fromagerie : 3 laits -> 1 roue OU 1 motte de beurre (zip 301)
 export const CHEESE_WHEEL_SELL = 1500;     export const CHEESE_PORTION_SELL = 350; export const PORTIONS_PER_WHEEL = 6;
+// Zip 301 (demande Guillaume) : la fromagerie d'Ingrid produit désormais du
+// FROMAGE **et** du BEURRE, à la même cadence (CHEESE_MS) et au même coût de
+// lait (CHEESE_MILK_COST). Le joueur règle la PROPORTION de beurre par paliers
+// de 10 % (crafts.fromagerie.butterPct, 0..100) dans la fiche d'Ingrid ; un
+// accumulateur (crafts.fromagerie.ratioAcc) répartit la sortie de façon exacte
+// sur la durée. Le beurre est une denrée vendable ET l'intrant des
+// viennoiseries de Rosalie (voir plus bas).
+export const BUTTER_SELL = 300;                 // prix de vente d'une motte de beurre
+export const FROMAGERIE_BUTTER_PCT_DEFAULT = 50; // part de beurre par défaut (50/50 fromage/beurre)
+export const FROMAGERIE_RATIO_STEP = 10;         // paliers de réglage du ratio (10 %)
 // Zip 258 (demande Guillaume) : la boulangerie tourne 3× plus vite (3 min ->
 // 1 min entre deux fournées) mais UNIQUEMENT en journée (voir BAKERY_*_MIN),
 // et produit désormais par FOURNÉE : 1 lait + 1 farine + 6 œufs -> 10
@@ -1277,6 +1294,24 @@ export const CHEESE_WHEEL_SELL = 1500;     export const CHEESE_PORTION_SELL = 35
 export const PASTRY_MS = 1 * 60 * 1000;    export const PASTRY_SELL = 500;  // boulangerie : 1 lait + 1 farine + 6 œufs -> PASTRY_BATCH pâtisseries
 export const PASTRY_FLOUR = 1, PASTRY_MILK = 1, PASTRY_EGG = 6;
 export const PASTRY_BATCH = 10;            // nombre de pâtisseries produites par fournée réussie
+
+// ---- Zip 301 (demande Guillaume) : Rosalie, boulangère (pain + viennoiseries) ----
+// Rosalie travaille dans la MÊME boulangerie que Chloé (bakery), mais sur une
+// filière distincte : le PAIN (farine seule, toujours disponible) et les
+// VIENNOISERIES (croissants = farine+beurre ; chocolatines & pains suisses =
+// farine+beurre+chocolat). Le "chocolat" est la fève de cacao rapportée par
+// Eduardo (WORLD_GOODS "cocoa", station.worldStock.cocoa). Les viennoiseries
+// ne se produisent QUE si l'on dispose de beurre (filière débloquée par la
+// fromagerie d'Ingrid) — d'où l'ordre "commence par le fromager/beurre".
+// Même contrainte horaire que la pâtisserie (journée, voir BAKERY_*_MIN).
+export const ROSALIE_MS = 90 * 1000;       // cadence d'une fournée de Rosalie (1 min 30)
+// Pain (farine de blé seule pour l'instant ; farine de seigle à venir).
+export const BREAD_FLOUR = 1, BREAD_BATCH = 4, BREAD_SELL = 120;
+// Croissant : farine + beurre.
+export const CROISSANT_FLOUR = 1, CROISSANT_BUTTER = 1, CROISSANT_BATCH = 6, CROISSANT_SELL = 180;
+// Chocolatine & pain suisse : farine + beurre + chocolat (cacao).
+export const CHOCO_FLOUR = 1, CHOCO_BUTTER = 1, CHOCO_COCOA = 1, CHOCO_BATCH = 6;
+export const CHOCOLATINE_SELL = 260, PAINSUISSE_SELL = 260;
 
 // ---- Zip 280 (bijouterie, demande Guillaume) ----
 // Contrairement aux autres ateliers (beehive/fromagerie/bakery/sawmill), la

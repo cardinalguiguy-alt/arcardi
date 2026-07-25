@@ -2519,11 +2519,25 @@ export function migrateCrafts(cr) {
     if (cr[bid] && typeof cr[bid] === "object") {
       out[bid] = { built: !!cr[bid].built, nextAt: cr[bid].nextAt | 0, alert: !!cr[bid].alert };
       if (cr[bid].pos && typeof cr[bid].pos.x === "number" && typeof cr[bid].pos.y === "number") out[bid].pos = { x: cr[bid].pos.x, y: cr[bid].pos.y };
+      // Zip 301 : préserver le réglage du ratio fromage/beurre (fromagerie) et
+      // les bookkeepings de production de Rosalie (bakery) à travers les
+      // synchros invité et les changements d'hôte.
+      if (bid === "fromagerie") {
+        if (typeof cr[bid].butterPct === "number") out[bid].butterPct = Math.max(0, Math.min(100, cr[bid].butterPct | 0));
+        if (typeof cr[bid].ratioAcc === "number") out[bid].ratioAcc = cr[bid].ratioAcc;
+      }
+      if (bid === "bakery") {
+        if (typeof cr[bid].breadNextAt === "number") out[bid].breadNextAt = cr[bid].breadNextAt | 0;
+        if (typeof cr[bid].viennoIdx === "number") out[bid].viennoIdx = cr[bid].viennoIdx | 0;
+      }
     }
   }
   return out;
 }
-export function newCraftStock() { return { honey: 0, cheeseWheel: 0, cheesePortion: 0, pastry: 0 }; }
+// Zip 301 : nouveaux produits — beurre (fromagerie), pain + viennoiseries
+// (Rosalie). migrateCraftStock itère sur Object.keys(out), donc l'ajout ici
+// suffit à les faire persister/synchroniser.
+export function newCraftStock() { return { honey: 0, cheeseWheel: 0, cheesePortion: 0, pastry: 0, butter: 0, bread: 0, croissant: 0, chocolatine: 0, painSuisse: 0 }; }
 export function migrateCraftStock(s) {
   const out = newCraftStock();
   if (s && typeof s === "object") for (const k of Object.keys(out)) out[k] = Math.max(0, s[k] | 0);
