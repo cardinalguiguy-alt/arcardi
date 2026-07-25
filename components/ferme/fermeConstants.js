@@ -883,7 +883,7 @@ export const GREG_TASK_SPEED = 4.3;                // FIX 246 : en mission Greg 
 export const GREG_ROAM_RADIUS = 6;                 // amplitude de rôdaille autour de son ancre (même principe que WOLF_ROAM_RADIUS)
 export const GREG_ANCHOR = { x: 26, y: 58 };        // point d'ancrage (rôdaille + tuiles de dépôt), au bord des champs ouest (puits)
 export const GREG_TASK_RANGE = 0.6;                // distance d'arrivée sur une case de tâche avant de l'exécuter
-export const GREG_ORDER_MAX = 60;                  // nombre max de GRAINES (pas de cases) par ordre (garde-fou anti-abus, zip 291)
+export const GREG_ORDER_MAX = 200;                  // nombre max de GRAINES (pas de cases) par ordre (garde-fou anti-abus, zip 291)
 // Extension du champ (chantier 2026-07) : Greg abat les arbres et casse les
 // rochers trouvés autour de son ancre pour agrandir la zone cultivable, sans
 // qu'un ordre explicite soit nécessaire — même esprit que l'arrosage auto.

@@ -183,6 +183,58 @@ function drawBuildingFooting(ctx, cx, groundY, halfW) {
   ctx.restore();
 }
 
+// Chantier 2 (file d'attente de 3 ordres pour Greg, feuille de route) :
+// résolution des cases ciblées par un `gregOrder`, factorisée en fonction
+// PURE pour être appelable à deux moments distincts :
+// - immédiatement, si Greg n'a aucun ordre en cours (comportement inchangé
+//   par rapport à l'ancienne logique inline) ;
+// - en différé, quand un ordre EMPILÉ (orderQueue) est activé au tour de
+//   Greg (updateGreg) — jamais au moment de la pose en file, pour éviter
+//   que deux ordres empilés ciblent les mêmes cases "libres" alors que la
+//   première commande ne les a pas encore remplies (voir feuille de route).
+// Ne modifie QUE `w2` (lecture) — ne touche ni à `g.taskQueue` ni à
+// `s.money` : c'est à l'appelant de pousser les tâches et gérer l'argent.
+function resolveGregOrderTiles(w2, order) {
+  const { cropIdx, seedCount, anchor } = order;
+  const topTiles = E.findGregToppableTiles(w2, anchor, cropIdx, seedCount, Date.now());
+  let remaining = seedCount;
+  const topAlloc = [];
+  for (const i of topTiles) {
+    if (remaining <= 0) break;
+    const need = C.MAX_CROPS_PER_TILE - (w2.crops.get(i).n || 1);
+    const add = Math.min(need, remaining);
+    if (add <= 0) continue;
+    topAlloc.push({ i, add }); remaining -= add;
+  }
+  const newTiles = remaining > 0 ? E.findFreeGrassTiles(w2, anchor, Math.ceil(remaining / C.MAX_CROPS_PER_TILE)) : [];
+  const newAlloc = [];
+  for (const i of newTiles) {
+    if (remaining <= 0) break;
+    const add = Math.min(C.MAX_CROPS_PER_TILE, remaining);
+    newAlloc.push({ i, add }); remaining -= add;
+  }
+  const totalSeeds = seedCount - remaining;
+  return { topAlloc, newAlloc, totalSeeds };
+}
+
+// Pousse dans `g.taskQueue` les tâches till/plant/water calculées par
+// `resolveGregOrderTiles` ci-dessus, pour l'ordre de culture `cropIdx`.
+// Fonction séparée de la résolution (celle-ci lit le monde, celle-là écrit
+// dans Greg) pour que l'activation d'un ordre en file (updateGreg) puisse
+// résoudre PUIS pousser dans la même frame sans dupliquer la boucle.
+function pushGregOrderTasks(g, w2, res, cropIdx) {
+  for (const { i, add } of res.topAlloc) {
+    for (let k = 0; k < add; k++) g.taskQueue.push({ a: "plant", i, crop: cropIdx });
+    g.taskQueue.push({ a: "water", i });
+  }
+  for (const { i, add } of res.newAlloc) {
+    const alreadyTilled = w2.ground[i] === C.G_TILLED || w2.ground[i] === C.G_WATERED;
+    if (!alreadyTilled) g.taskQueue.push({ a: "till", i });
+    for (let k = 0; k < add; k++) g.taskQueue.push({ a: "plant", i, crop: cropIdx });
+    g.taskQueue.push({ a: "water", i });
+  }
+}
+
 export default function FermeGame({ room, me, isHost, players, t, lang, onFinish, savedCode, onCodeLoaded, hidden }) {
   const L = fstr(lang);
 
@@ -669,7 +721,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         decor: E.migrateDecor(saved.decor), // zip 251: décorations posées (ferme + ville)
         crafts: E.migrateCrafts(saved.crafts), craftStock: E.migrateCraftStock(saved.craftStock), // zip 252
         greg: (saved.greg && saved.greg.expiresAt > Date.now())
-          ? { ...saved.greg, taskQueue: [], phase: "roam", roamTarget: null, nextRoamAt: 0 } : null,
+          // Chantier 2 (feuille de route) : `orderQueue` est un ajout — les
+          // sauvegardes antérieures ne l'ont pas, d'où le filet `|| []`
+          // (pas de migration SQL, tout vit dans le JSON de sauvegarde
+          // ferme). On la préserve si présente (ordres en attente qui
+          // survivent à une reprise), contrairement à `taskQueue` (tâches
+          // atomiques en cours, elles, repartent de zéro au chargement).
+          ? { ...saved.greg, taskQueue: [], orderQueue: saved.greg.orderQueue || [], phase: "roam", roamTarget: null, nextRoamAt: 0 } : null,
         // Soan (chantier 2026-07) : même principe que Greg ci-dessus — contrat
         // réel de 24h qui DOIT survivre à une reprise, mais repart en rôdaille
         // (pas en pleine pêche) au chargement, le trajet vers la rivière
@@ -1529,7 +1587,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           hiredAt: now, expiresAt: now + C.GREG_CONTRACT_MS,
           x: C.GREG_ANCHOR.x, y: C.GREG_ANCHOR.y, tx: C.GREG_ANCHOR.x, ty: C.GREG_ANCHOR.y, dir: 0, animT: 0, moving: false,
           phase: "roam", roamAnchor: { x: C.GREG_ANCHOR.x, y: C.GREG_ANCHOR.y }, roamTarget: null, nextRoamAt: 0,
-          taskQueue: [], lastWaterCheckAt: now,
+          taskQueue: [], orderQueue: [], lastWaterCheckAt: now,
         };
         out.state = shareState(); out.greg = s.greg;
         out.chat = { from: "🧑‍🌾", msg: lang === "en" ? "Greg is hired for 2 days!" : "Greg est engagé pour 2 jours !" };
@@ -1557,9 +1615,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       //   — bug relevé à l'audit.
       const g = s.greg;
       const cropIdx = req.crop | 0, seedCount = Math.max(1, Math.min(C.GREG_ORDER_MAX, req.count | 0));
+      // Chantier 2 (feuille de route) : Greg n'a plus une seule tâche en
+      // cours mais jusqu'à 3 ORDRES empilables (orderQueue). "Occupé" ne
+      // veut donc plus dire "refuser tout nouvel ordre" mais "la file est
+      // pleine" (3/3) — un ordre en cours d'exécution (taskQueue non vide)
+      // n'empêche plus d'en poser un 2e/3e derrière.
       if (!g || g.expiresAt <= Date.now()) out.toast = { id: f.id, key: "gregNotHired" };
       else if (!(cropIdx >= 0 && cropIdx < C.CROPS.length)) out.toast = { id: f.id, key: "noGold" };
-      else if (g.taskQueue && g.taskQueue.some(t => t.a === "till" || t.a === "plant")) out.toast = { id: f.id, key: "gregOrderBusy" };
+      else if ((g.orderQueue = g.orderQueue || []).length >= 3) out.toast = { id: f.id, key: "gregOrderBusy" };
       else {
         const cost = C.CROPS[cropIdx].seedCost * seedCount;
         const w2 = worldRef.current;
@@ -1569,50 +1632,38 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           // Guillaume) : Greg laboure intelligemment AUTOUR d'où le joueur
           // se trouve au moment de l'ordre (px/py, position déjà envoyée
           // par sendReq), plutôt qu'autour d'un point fixe ou de sa
-          // position de rôdaille.
+          // position de rôdaille. Capturée MAINTENANT (à la pose en file),
+          // pas à l'exécution — sinon le joueur aurait bougé entre-temps et
+          // la zone ciblée serait fausse (feuille de route, chantier 2).
           const anchor = { x: Math.round(px), y: Math.round(py) };
-          // On privilégie d'abord les cases DÉJÀ plantées de la même
-          // espèce, pas pleines et pas mûres (findGregToppableTiles —
-          // aucun labour requis) : au pire il en faut `seedCount` (une
-          // graine chacune), donc on en cherche jusqu'à `seedCount`.
-          const topTiles = E.findGregToppableTiles(w2, anchor, cropIdx, seedCount, Date.now());
-          let remaining = seedCount;
-          const topAlloc = [];
-          for (const i of topTiles) {
-            if (remaining <= 0) break;
-            const need = C.MAX_CROPS_PER_TILE - (w2.crops.get(i).n || 1);
-            const add = Math.min(need, remaining);
-            if (add <= 0) continue;
-            topAlloc.push({ i, add }); remaining -= add;
-          }
-          // Graines restantes : de nouvelles cases, remplies à 5 chacune
-          // (sauf la dernière, qui ne reçoit que le reliquat).
-          const newTiles = remaining > 0 ? E.findFreeGrassTiles(w2, anchor, Math.ceil(remaining / C.MAX_CROPS_PER_TILE)) : [];
-          const newAlloc = [];
-          for (const i of newTiles) {
-            if (remaining <= 0) break;
-            const add = Math.min(C.MAX_CROPS_PER_TILE, remaining);
-            newAlloc.push({ i, add }); remaining -= add;
-          }
-          const totalSeeds = seedCount - remaining;
-          if (totalSeeds === 0) out.toast = { id: f.id, key: "gregNoRoom" };
-          else {
-            s.money -= C.CROPS[cropIdx].seedCost * totalSeeds;
-            for (const { i, add } of topAlloc) {
-              for (let k = 0; k < add; k++) g.taskQueue.push({ a: "plant", i, crop: cropIdx });
-              g.taskQueue.push({ a: "water", i });
+          // Greg est-il déjà occupé sur un ordre en cours ? (taskQueue
+          // contient encore du "till"/"plant" d'un ordre précédemment
+          // activé) — si oui, ce nouvel ordre doit être empilé SANS
+          // résoudre les cases tout de suite (voir resolveGregOrderTiles :
+          // deux ordres empilés ne doivent pas cibler les mêmes cases
+          // "libres" alors que le premier ne les a pas encore remplies).
+          const busy = g.taskQueue && g.taskQueue.some(t => t.a === "till" || t.a === "plant");
+          if (!busy && g.orderQueue.length === 0) {
+            // Aucun ordre en cours ni en attente : comportement inchangé,
+            // résolution et exécution immédiates.
+            const res = resolveGregOrderTiles(w2, { cropIdx, seedCount, anchor });
+            if (res.totalSeeds === 0) out.toast = { id: f.id, key: "gregNoRoom" };
+            else {
+              s.money -= C.CROPS[cropIdx].seedCost * res.totalSeeds;
+              pushGregOrderTasks(g, w2, res, cropIdx);
+              out.state = shareState(); out.greg = g;
+              out.chat = { from: "🧑‍🌾", msg: lang === "en" ? `Greg is on it: ${res.totalSeeds} seed(s) of ${C.CROPS[cropIdx].nameEn}.` : `Greg s'y met : ${res.totalSeeds} graine(s) de ${C.CROPS[cropIdx].name}.` };
             }
-            for (const { i, add } of newAlloc) {
-              // Case déjà labourée (G_TILLED/G_WATERED) : pas besoin de
-              // "till", on passe directement à la plantation (correctif
-              // 2026-07, voir findFreeGrassTiles).
-              const alreadyTilled = w2.ground[i] === C.G_TILLED || w2.ground[i] === C.G_WATERED;
-              if (!alreadyTilled) g.taskQueue.push({ a: "till", i });
-              for (let k = 0; k < add; k++) g.taskQueue.push({ a: "plant", i, crop: cropIdx });
-              g.taskQueue.push({ a: "water", i });
-            }
+          } else {
+            // Ordre mis en attente : coût débité immédiatement sur
+            // `seedCount` demandé (comme aujourd'hui) — la résolution des
+            // cases réellement disponibles n'est connue qu'à l'activation,
+            // différée dans updateGreg.
+            s.money -= cost;
+            g.orderQueue.push({ kind: "gregOrder", cropIdx, seedCount, anchor });
             out.state = shareState(); out.greg = g;
-            out.chat = { from: "🧑‍🌾", msg: lang === "en" ? `Greg is on it: ${totalSeeds} seed(s) of ${C.CROPS[cropIdx].nameEn}.` : `Greg s'y met : ${totalSeeds} graine(s) de ${C.CROPS[cropIdx].name}.` };
+            const pos = g.orderQueue.length;
+            out.chat = { from: "🧑‍🌾", msg: lang === "en" ? `Greg will do it after his current tasks (position ${pos}/3 in queue).` : `Greg le fera après ses tâches en cours (position ${pos}/3 dans la file).` };
           }
         }
       }
@@ -1644,19 +1695,36 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // quel que soit le nombre de cases réellement fertilisées.
       const g = s.greg;
       if (!g || g.expiresAt <= Date.now()) out.toast = { id: f.id, key: "gregNotHired" };
+      else if ((g.orderQueue = g.orderQueue || []).length >= 3) out.toast = { id: f.id, key: "gregOrderBusy" };
       else {
         const stock = sharedRef.current.gregStock || (sharedRef.current.gregStock = { wood: 0, stone: 0 });
         const have = stock.fertilizer || 0;
         if (have <= 0) out.toast = { id: f.id, key: "gregNoFertilizer" };
         else {
-          const w2 = worldRef.current;
-          const tiles = E.findFertilizableTiles(w2, { x: Math.round(px), y: Math.round(py) }, Date.now());
-          if (tiles.length === 0) out.toast = { id: f.id, key: "gregNoRoom" };
-          else {
+          const anchor = { x: Math.round(px), y: Math.round(py) };
+          const busy = g.taskQueue && g.taskQueue.some(t => t.a === "till" || t.a === "plant");
+          if (!busy && g.orderQueue.length === 0) {
+            const w2 = worldRef.current;
+            const tiles = E.findFertilizableTiles(w2, anchor, Date.now());
+            if (tiles.length === 0) out.toast = { id: f.id, key: "gregNoRoom" };
+            else {
+              stock.fertilizer = have - 1;
+              for (const i of tiles) g.taskQueue.push({ a: "fertilize", i });
+              out.gregStock = stock; out.greg = g;
+              out.chat = { from: "🧑‍🌾", msg: lang === "en" ? `Greg is on it: fertilizing ${tiles.length} tile(s).` : `Greg s'y met : engrais sur ${tiles.length} case(s).` };
+            }
+          } else {
+            // Ordre mis en attente : le coût en engrais (1 unité, quel que
+            // soit le nombre de cases) est débité MAINTENANT, à la pose en
+            // file — sinon le joueur pourrait empiler 3 ordres sans avoir
+            // le stock au moment de les lancer réellement (feuille de
+            // route, chantier 2). La résolution des cases fertilisables
+            // (`findFertilizableTiles`) est différée à l'activation.
             stock.fertilizer = have - 1;
-            for (const i of tiles) g.taskQueue.push({ a: "fertilize", i });
+            g.orderQueue.push({ kind: "gregFertilizeOrder", anchor });
             out.gregStock = stock; out.greg = g;
-            out.chat = { from: "🧑‍🌾", msg: lang === "en" ? `Greg is on it: fertilizing ${tiles.length} tile(s).` : `Greg s'y met : engrais sur ${tiles.length} case(s).` };
+            const pos = g.orderQueue.length;
+            out.chat = { from: "🧑‍🌾", msg: lang === "en" ? `Greg will do it after his current tasks (position ${pos}/3 in queue).` : `Greg le fera après ses tâches en cours (position ${pos}/3 dans la file).` };
           }
         }
       }
@@ -4387,6 +4455,37 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const newTasks = thirsty.filter(i => !queued.has(i)).map(i => ({ a: "water", i }));
         if (newTasks.length) g.taskQueue.unshift(...newTasks);
       }
+    }
+    // Chantier 2 (feuille de route) : dès que Greg n'a plus de tâche en
+    // cours, activer le prochain ordre EMPILÉ (orderQueue) s'il y en a un —
+    // toujours prioritaire sur le scan auto-défrichage ci-dessous (un ordre
+    // en attente ne doit jamais être doublé par du débroussaillage
+    // autonome). La résolution des cases (resolveGregOrderTiles /
+    // findFertilizableTiles) est faite ICI, à l'activation, jamais à la
+    // pose en file — c'est le moment où le monde reflète vraiment ce que
+    // les ordres précédents ont déjà consommé.
+    if ((!g.taskQueue || g.taskQueue.length === 0) && g.orderQueue && g.orderQueue.length) {
+      g.taskQueue = g.taskQueue || [];
+      const next = g.orderQueue.shift();
+      if (next.kind === "gregOrder") {
+        const res = resolveGregOrderTiles(w, next);
+        if (res.totalSeeds > 0) {
+          pushGregOrderTasks(g, w, res, next.cropIdx);
+          addChat("🧑‍🌾", lang === "en" ? `Greg is on it: ${res.totalSeeds} seed(s) of ${C.CROPS[next.cropIdx].nameEn}.` : `Greg s'y met : ${res.totalSeeds} graine(s) de ${C.CROPS[next.cropIdx].name}.`);
+        }
+        // Si totalSeeds === 0 (plus aucune case libre entre-temps), l'ordre
+        // est simplement abandonné : l'or a déjà été débité à la pose, pas
+        // de remboursement prévu par la feuille de route pour ce cas —
+        // comportement volontairement simple, à revoir si ça se révèle
+        // frustrant en jeu.
+      } else if (next.kind === "gregFertilizeOrder") {
+        const tiles = E.findFertilizableTiles(w, next.anchor, now);
+        if (tiles.length) {
+          for (const i of tiles) g.taskQueue.push({ a: "fertilize", i });
+          addChat("🧑‍🌾", lang === "en" ? `Greg is on it: fertilizing ${tiles.length} tile(s).` : `Greg s'y met : engrais sur ${tiles.length} case(s).`);
+        }
+      }
+      dirtyRef.current = true;
     }
     // Extension du champ (chantier 2026-07, demande Guillaume) : quand Greg
     // n'a plus de tâche en attente, il repère les arbres/rochers autour de
@@ -8487,6 +8586,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               <button disabled={hud.money < C.CROPS[gregOrderCrop].seedCost * gregOrderCount} onClick={armGregOrder}>{L.gregOrderArmBtn}</button>
             </div>
             <div className="ferme-seed-menu-hint">{L.gregOrderHint}</div>
+            {/* Chantier 2 (feuille de route) : nombre d'ordres déjà en
+                attente, pour que le joueur sache où il en est avant d'en
+                poser un de plus (pas obligatoire au fonctionnement, mais
+                recommandé pour la lisibilité). */}
+            <div className="ferme-seed-menu-hint">{((sharedRef.current.greg && sharedRef.current.greg.orderQueue) || []).length}/3</div>
           </div>
         </div>
       )}
@@ -8700,6 +8804,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 <div className="info">
                   <b>Greg</b>
                   <span className="ferme-usage">{L.gregHiredUntil(Math.max(0, Math.ceil((g.expiresAt - Date.now()) / 3600000)))}</span>
+                  <span className="ferme-usage">{(g.orderQueue || []).length}/3</span>
                 </div>
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
