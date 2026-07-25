@@ -183,6 +183,58 @@ function drawBuildingFooting(ctx, cx, groundY, halfW) {
   ctx.restore();
 }
 
+// Chantier 2 (file d'attente de 3 ordres pour Greg, feuille de route) :
+// résolution des cases ciblées par un `gregOrder`, factorisée en fonction
+// PURE pour être appelable à deux moments distincts :
+// - immédiatement, si Greg n'a aucun ordre en cours (comportement inchangé
+//   par rapport à l'ancienne logique inline) ;
+// - en différé, quand un ordre EMPILÉ (orderQueue) est activé au tour de
+//   Greg (updateGreg) — jamais au moment de la pose en file, pour éviter
+//   que deux ordres empilés ciblent les mêmes cases "libres" alors que la
+//   première commande ne les a pas encore remplies (voir feuille de route).
+// Ne modifie QUE `w2` (lecture) — ne touche ni à `g.taskQueue` ni à
+// `s.money` : c'est à l'appelant de pousser les tâches et gérer l'argent.
+function resolveGregOrderTiles(w2, order) {
+  const { cropIdx, seedCount, anchor } = order;
+  const topTiles = E.findGregToppableTiles(w2, anchor, cropIdx, seedCount, Date.now());
+  let remaining = seedCount;
+  const topAlloc = [];
+  for (const i of topTiles) {
+    if (remaining <= 0) break;
+    const need = C.MAX_CROPS_PER_TILE - (w2.crops.get(i).n || 1);
+    const add = Math.min(need, remaining);
+    if (add <= 0) continue;
+    topAlloc.push({ i, add }); remaining -= add;
+  }
+  const newTiles = remaining > 0 ? E.findFreeGrassTiles(w2, anchor, Math.ceil(remaining / C.MAX_CROPS_PER_TILE)) : [];
+  const newAlloc = [];
+  for (const i of newTiles) {
+    if (remaining <= 0) break;
+    const add = Math.min(C.MAX_CROPS_PER_TILE, remaining);
+    newAlloc.push({ i, add }); remaining -= add;
+  }
+  const totalSeeds = seedCount - remaining;
+  return { topAlloc, newAlloc, totalSeeds };
+}
+
+// Pousse dans `g.taskQueue` les tâches till/plant/water calculées par
+// `resolveGregOrderTiles` ci-dessus, pour l'ordre de culture `cropIdx`.
+// Fonction séparée de la résolution (celle-ci lit le monde, celle-là écrit
+// dans Greg) pour que l'activation d'un ordre en file (updateGreg) puisse
+// résoudre PUIS pousser dans la même frame sans dupliquer la boucle.
+function pushGregOrderTasks(g, w2, res, cropIdx) {
+  for (const { i, add } of res.topAlloc) {
+    for (let k = 0; k < add; k++) g.taskQueue.push({ a: "plant", i, crop: cropIdx });
+    g.taskQueue.push({ a: "water", i });
+  }
+  for (const { i, add } of res.newAlloc) {
+    const alreadyTilled = w2.ground[i] === C.G_TILLED || w2.ground[i] === C.G_WATERED;
+    if (!alreadyTilled) g.taskQueue.push({ a: "till", i });
+    for (let k = 0; k < add; k++) g.taskQueue.push({ a: "plant", i, crop: cropIdx });
+    g.taskQueue.push({ a: "water", i });
+  }
+}
+
 export default function FermeGame({ room, me, isHost, players, t, lang, onFinish, savedCode, onCodeLoaded, hidden }) {
   const L = fstr(lang);
 
@@ -669,7 +721,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         decor: E.migrateDecor(saved.decor), // zip 251: décorations posées (ferme + ville)
         crafts: E.migrateCrafts(saved.crafts), craftStock: E.migrateCraftStock(saved.craftStock), // zip 252
         greg: (saved.greg && saved.greg.expiresAt > Date.now())
-          ? { ...saved.greg, taskQueue: [], phase: "roam", roamTarget: null, nextRoamAt: 0 } : null,
+          // Chantier 2 (feuille de route) : `orderQueue` est un ajout — les
+          // sauvegardes antérieures ne l'ont pas, d'où le filet `|| []`
+          // (pas de migration SQL, tout vit dans le JSON de sauvegarde
+          // ferme). On la préserve si présente (ordres en attente qui
+          // survivent à une reprise), contrairement à `taskQueue` (tâches
+          // atomiques en cours, elles, repartent de zéro au chargement).
+          ? { ...saved.greg, taskQueue: [], orderQueue: saved.greg.orderQueue || [], phase: "roam", roamTarget: null, nextRoamAt: 0 } : null,
         // Soan (chantier 2026-07) : même principe que Greg ci-dessus — contrat
         // réel de 24h qui DOIT survivre à une reprise, mais repart en rôdaille
         // (pas en pleine pêche) au chargement, le trajet vers la rivière
@@ -1529,7 +1587,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           hiredAt: now, expiresAt: now + C.GREG_CONTRACT_MS,
           x: C.GREG_ANCHOR.x, y: C.GREG_ANCHOR.y, tx: C.GREG_ANCHOR.x, ty: C.GREG_ANCHOR.y, dir: 0, animT: 0, moving: false,
           phase: "roam", roamAnchor: { x: C.GREG_ANCHOR.x, y: C.GREG_ANCHOR.y }, roamTarget: null, nextRoamAt: 0,
-          taskQueue: [], lastWaterCheckAt: now,
+          taskQueue: [], orderQueue: [], lastWaterCheckAt: now,
+          superUntil: 0, superCooldownUntil: 0, // chantier 3 : SuperGreg (café)
         };
         out.state = shareState(); out.greg = s.greg;
         out.chat = { from: "🧑‍🌾", msg: lang === "en" ? "Greg is hired for 2 days!" : "Greg est engagé pour 2 jours !" };
@@ -1557,9 +1616,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       //   — bug relevé à l'audit.
       const g = s.greg;
       const cropIdx = req.crop | 0, seedCount = Math.max(1, Math.min(C.GREG_ORDER_MAX, req.count | 0));
+      // Chantier 2 (feuille de route) : Greg n'a plus une seule tâche en
+      // cours mais jusqu'à 3 ORDRES empilables (orderQueue). "Occupé" ne
+      // veut donc plus dire "refuser tout nouvel ordre" mais "la file est
+      // pleine" (3/3) — un ordre en cours d'exécution (taskQueue non vide)
+      // n'empêche plus d'en poser un 2e/3e derrière.
       if (!g || g.expiresAt <= Date.now()) out.toast = { id: f.id, key: "gregNotHired" };
       else if (!(cropIdx >= 0 && cropIdx < C.CROPS.length)) out.toast = { id: f.id, key: "noGold" };
-      else if (g.taskQueue && g.taskQueue.some(t => t.a === "till" || t.a === "plant")) out.toast = { id: f.id, key: "gregOrderBusy" };
+      else if ((g.orderQueue = g.orderQueue || []).length >= 3) out.toast = { id: f.id, key: "gregOrderBusy" };
       else {
         const cost = C.CROPS[cropIdx].seedCost * seedCount;
         const w2 = worldRef.current;
@@ -1569,51 +1633,61 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           // Guillaume) : Greg laboure intelligemment AUTOUR d'où le joueur
           // se trouve au moment de l'ordre (px/py, position déjà envoyée
           // par sendReq), plutôt qu'autour d'un point fixe ou de sa
-          // position de rôdaille.
+          // position de rôdaille. Capturée MAINTENANT (à la pose en file),
+          // pas à l'exécution — sinon le joueur aurait bougé entre-temps et
+          // la zone ciblée serait fausse (feuille de route, chantier 2).
           const anchor = { x: Math.round(px), y: Math.round(py) };
-          // On privilégie d'abord les cases DÉJÀ plantées de la même
-          // espèce, pas pleines et pas mûres (findGregToppableTiles —
-          // aucun labour requis) : au pire il en faut `seedCount` (une
-          // graine chacune), donc on en cherche jusqu'à `seedCount`.
-          const topTiles = E.findGregToppableTiles(w2, anchor, cropIdx, seedCount, Date.now());
-          let remaining = seedCount;
-          const topAlloc = [];
-          for (const i of topTiles) {
-            if (remaining <= 0) break;
-            const need = C.MAX_CROPS_PER_TILE - (w2.crops.get(i).n || 1);
-            const add = Math.min(need, remaining);
-            if (add <= 0) continue;
-            topAlloc.push({ i, add }); remaining -= add;
-          }
-          // Graines restantes : de nouvelles cases, remplies à 5 chacune
-          // (sauf la dernière, qui ne reçoit que le reliquat).
-          const newTiles = remaining > 0 ? E.findFreeGrassTiles(w2, anchor, Math.ceil(remaining / C.MAX_CROPS_PER_TILE)) : [];
-          const newAlloc = [];
-          for (const i of newTiles) {
-            if (remaining <= 0) break;
-            const add = Math.min(C.MAX_CROPS_PER_TILE, remaining);
-            newAlloc.push({ i, add }); remaining -= add;
-          }
-          const totalSeeds = seedCount - remaining;
-          if (totalSeeds === 0) out.toast = { id: f.id, key: "gregNoRoom" };
-          else {
-            s.money -= C.CROPS[cropIdx].seedCost * totalSeeds;
-            for (const { i, add } of topAlloc) {
-              for (let k = 0; k < add; k++) g.taskQueue.push({ a: "plant", i, crop: cropIdx });
-              g.taskQueue.push({ a: "water", i });
+          // Greg est-il déjà occupé sur un ordre en cours ? (taskQueue
+          // contient encore du "till"/"plant" d'un ordre précédemment
+          // activé) — si oui, ce nouvel ordre doit être empilé SANS
+          // résoudre les cases tout de suite (voir resolveGregOrderTiles :
+          // deux ordres empilés ne doivent pas cibler les mêmes cases
+          // "libres" alors que le premier ne les a pas encore remplies).
+          const busy = g.taskQueue && g.taskQueue.some(t => t.a === "till" || t.a === "plant");
+          if (!busy && g.orderQueue.length === 0) {
+            // Aucun ordre en cours ni en attente : comportement inchangé,
+            // résolution et exécution immédiates.
+            const res = resolveGregOrderTiles(w2, { cropIdx, seedCount, anchor });
+            if (res.totalSeeds === 0) out.toast = { id: f.id, key: "gregNoRoom" };
+            else {
+              s.money -= C.CROPS[cropIdx].seedCost * res.totalSeeds;
+              pushGregOrderTasks(g, w2, res, cropIdx);
+              out.state = shareState(); out.greg = g;
+              out.chat = { from: "🧑‍🌾", msg: lang === "en" ? `Greg is on it: ${res.totalSeeds} seed(s) of ${C.CROPS[cropIdx].nameEn}.` : `Greg s'y met : ${res.totalSeeds} graine(s) de ${C.CROPS[cropIdx].name}.` };
             }
-            for (const { i, add } of newAlloc) {
-              // Case déjà labourée (G_TILLED/G_WATERED) : pas besoin de
-              // "till", on passe directement à la plantation (correctif
-              // 2026-07, voir findFreeGrassTiles).
-              const alreadyTilled = w2.ground[i] === C.G_TILLED || w2.ground[i] === C.G_WATERED;
-              if (!alreadyTilled) g.taskQueue.push({ a: "till", i });
-              for (let k = 0; k < add; k++) g.taskQueue.push({ a: "plant", i, crop: cropIdx });
-              g.taskQueue.push({ a: "water", i });
-            }
+          } else {
+            // Ordre mis en attente : coût débité immédiatement sur
+            // `seedCount` demandé (comme aujourd'hui) — la résolution des
+            // cases réellement disponibles n'est connue qu'à l'activation,
+            // différée dans updateGreg.
+            s.money -= cost;
+            g.orderQueue.push({ kind: "gregOrder", cropIdx, seedCount, anchor });
             out.state = shareState(); out.greg = g;
-            out.chat = { from: "🧑‍🌾", msg: lang === "en" ? `Greg is on it: ${totalSeeds} seed(s) of ${C.CROPS[cropIdx].nameEn}.` : `Greg s'y met : ${totalSeeds} graine(s) de ${C.CROPS[cropIdx].name}.` };
+            const pos = g.orderQueue.length;
+            out.chat = { from: "🧑‍🌾", msg: lang === "en" ? `Greg will do it after his current tasks (position ${pos}/3 in queue).` : `Greg le fera après ses tâches en cours (position ${pos}/3 dans la file).` };
           }
+        }
+      }
+    } else if (req.kind === "gregCoffee") {
+      // Chantier 3 (feuille de route) : active le mode SuperGreg (x10 sur le
+      // travail effectif, 15 min, cooldown 45 min démarrant à la FIN de
+      // l'effet — décision Guillaume, donc 15+45=60 min entre deux prises).
+      // Consomme le stock commun station.worldStock.coffee, PARTAGÉ avec
+      // SuperSoan (chantier 4) — pas de pool séparé.
+      const g = s.greg;
+      const now = Date.now();
+      if (!g || g.expiresAt <= now) out.toast = { id: f.id, key: "gregNotHired" };
+      else if (now < (g.superCooldownUntil || 0)) out.toast = { id: f.id, key: "gregCoffeeCooldown" };
+      else {
+        const st = s.station || (s.station = {});
+        const ws = st.worldStock || (st.worldStock = {});
+        if ((ws.coffee || 0) < C.SUPERGREG_COFFEE_COST) out.toast = { id: f.id, key: "noCoffee" };
+        else {
+          ws.coffee -= C.SUPERGREG_COFFEE_COST;
+          g.superUntil = now + C.SUPERGREG_DURATION_MS;
+          g.superCooldownUntil = now + C.SUPERGREG_DURATION_MS + C.SUPERGREG_COOLDOWN_MS;
+          out.state = shareState(); out.greg = g;
+          out.chat = { from: "🧑‍🌾", msg: lang === "en" ? "Greg is fueled by coffee! ☕⚡" : "Greg carbure au café ! ☕⚡" };
         }
       }
     } else if (req.kind === "buyFertilizer") {
@@ -1644,19 +1718,36 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // quel que soit le nombre de cases réellement fertilisées.
       const g = s.greg;
       if (!g || g.expiresAt <= Date.now()) out.toast = { id: f.id, key: "gregNotHired" };
+      else if ((g.orderQueue = g.orderQueue || []).length >= 3) out.toast = { id: f.id, key: "gregOrderBusy" };
       else {
         const stock = sharedRef.current.gregStock || (sharedRef.current.gregStock = { wood: 0, stone: 0 });
         const have = stock.fertilizer || 0;
         if (have <= 0) out.toast = { id: f.id, key: "gregNoFertilizer" };
         else {
-          const w2 = worldRef.current;
-          const tiles = E.findFertilizableTiles(w2, { x: Math.round(px), y: Math.round(py) }, Date.now());
-          if (tiles.length === 0) out.toast = { id: f.id, key: "gregNoRoom" };
-          else {
+          const anchor = { x: Math.round(px), y: Math.round(py) };
+          const busy = g.taskQueue && g.taskQueue.some(t => t.a === "till" || t.a === "plant");
+          if (!busy && g.orderQueue.length === 0) {
+            const w2 = worldRef.current;
+            const tiles = E.findFertilizableTiles(w2, anchor, Date.now());
+            if (tiles.length === 0) out.toast = { id: f.id, key: "gregNoRoom" };
+            else {
+              stock.fertilizer = have - 1;
+              for (const i of tiles) g.taskQueue.push({ a: "fertilize", i });
+              out.gregStock = stock; out.greg = g;
+              out.chat = { from: "🧑‍🌾", msg: lang === "en" ? `Greg is on it: fertilizing ${tiles.length} tile(s).` : `Greg s'y met : engrais sur ${tiles.length} case(s).` };
+            }
+          } else {
+            // Ordre mis en attente : le coût en engrais (1 unité, quel que
+            // soit le nombre de cases) est débité MAINTENANT, à la pose en
+            // file — sinon le joueur pourrait empiler 3 ordres sans avoir
+            // le stock au moment de les lancer réellement (feuille de
+            // route, chantier 2). La résolution des cases fertilisables
+            // (`findFertilizableTiles`) est différée à l'activation.
             stock.fertilizer = have - 1;
-            for (const i of tiles) g.taskQueue.push({ a: "fertilize", i });
+            g.orderQueue.push({ kind: "gregFertilizeOrder", anchor });
             out.gregStock = stock; out.greg = g;
-            out.chat = { from: "🧑‍🌾", msg: lang === "en" ? `Greg is on it: fertilizing ${tiles.length} tile(s).` : `Greg s'y met : engrais sur ${tiles.length} case(s).` };
+            const pos = g.orderQueue.length;
+            out.chat = { from: "🧑‍🌾", msg: lang === "en" ? `Greg will do it after his current tasks (position ${pos}/3 in queue).` : `Greg le fera après ses tâches en cours (position ${pos}/3 dans la file).` };
           }
         }
       }
@@ -1673,6 +1764,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           x: C.SOAN_ANCHOR.x, y: C.SOAN_ANCHOR.y, tx: C.SOAN_ANCHOR.x, ty: C.SOAN_ANCHOR.y, dir: 0, animT: 0, moving: false,
           phase: "roam", roamAnchor: { x: C.SOAN_ANCHOR.x, y: C.SOAN_ANCHOR.y }, roamTarget: null, nextRoamAt: 0,
           riverSpot: null, lastFishAt: 0,
+          superUntil: 0, superCooldownUntil: 0, // chantier 4 : SuperSoan (café)
         };
         out.state = shareState(); out.soan = s.soan;
         out.chat = { from: "🎣", msg: lang === "en" ? "Soan is hired for 24h!" : "Soan est engagé pour 24h !" };
@@ -1706,6 +1798,27 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // en cours, sans résilier le contrat).
       const so = s.soan;
       if (so) { so.phase = "roam"; so.riverSpot = null; so.roamTarget = null; so.nextRoamAt = 0; out.state = shareState(); out.soan = so; }
+    } else if (req.kind === "soanCoffee") {
+      // Chantier 4 (feuille de route) : miroir de gregCoffee, mais x10 sur la
+      // fréquence de pêche, 30 min, cooldown 1h démarrant à la FIN du
+      // travail (pas d'ambiguïté ici, contrairement à SuperGreg). MÊME stock
+      // partagé station.worldStock.coffee que SuperGreg.
+      const so = s.soan;
+      const now = Date.now();
+      if (!so || so.expiresAt <= now) out.toast = { id: f.id, key: "soanNotHired" };
+      else if (now < (so.superCooldownUntil || 0)) out.toast = { id: f.id, key: "soanCoffeeCooldown" };
+      else {
+        const st = s.station || (s.station = {});
+        const ws = st.worldStock || (st.worldStock = {});
+        if ((ws.coffee || 0) < C.SUPERSOAN_COFFEE_COST) out.toast = { id: f.id, key: "noCoffee" };
+        else {
+          ws.coffee -= C.SUPERSOAN_COFFEE_COST;
+          so.superUntil = now + C.SUPERSOAN_DURATION_MS;
+          so.superCooldownUntil = now + C.SUPERSOAN_DURATION_MS + C.SUPERSOAN_COOLDOWN_MS;
+          out.state = shareState(); out.soan = so;
+          out.chat = { from: "🎣", msg: lang === "en" ? "Soan is fueled by coffee! ☕🎣" : "Soan carbure au café ! ☕🎣" };
+        }
+      }
     } else if (req.kind === "hireHarald") {
       // Zip 260 (demande Guillaume) : agent d'élevage engagé à la boutique
       // comme Soan, contrat réel de 24h payé d'avance (1000 or). Un seul à la
@@ -3023,7 +3136,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (key === "petCaught")     return L.petCaughtToast(C.petName(n, lang === "en"));
     if (key === "petReleased")   return L.bagReleasedToast(C.petName(n, lang === "en"));
     if (key === "bagFull")       return L.bagPetsFull(C.MAX_PETS);
-    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, noMillStock: L.toastNoMillStock, millNotEmpty: L.toastMillNotEmpty, noWheatToDeposit: L.toastNoWheatToDeposit, millFull: L.toastMillFull, actionFailed: L.toastActionFailed, coopNone: L.toastCoopNone, farCoop: L.toastFarCoop, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull, notInjured: L.toastNotInjured, noHealKit: L.toastNoHealKit, healTooFar: L.toastHealTooFar, gregNotHired: L.toastGregNotHired, gregOrderBusy: L.toastGregBusy, gregNoRoom: L.toastGregNoRoom, gregNoFertilizer: L.toastGregNoFertilizer, soanNotHired: L.toastSoanNotHired, soanNoRiver: L.toastSoanNoRiver, farCauldron: L.toastFarCauldron, noFishToDeposit: L.toastNoFishToDeposit, cauldronMissing: L.toastCauldronMissing, cauldronAlreadyTaken: L.toastCauldronAlreadyTaken, noCauldronStock: L.toastNoCauldronStock, cauldronNotEmpty: L.toastCauldronNotEmpty, cauldronBrewing: L.toastCauldronBrewing, cauldronNothingToCollect: L.toastCauldronNothingToCollect, cauldronHasEnough: L.toastCauldronHasEnough, visitorNotEnough: L.visitorNotEnough, decorNone: L.decorNone, decorPicked: L.decorPicked, objReturned: L.objReturned, residentNoRoom: L.residentNoRoom, artisanNoResident: L.artisanNoResident, voyagerBusy: L.voyagerBusyToast, kickVoted: L.kickVotedToast, jewelryNoGold: L.toastJewelryNoGold, jewelryNoGem: L.toastJewelryNoGem, cropWrongType: L.toastCropWrongType, cropMaxed: L.toastCropMaxed }[key] || "";
+    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, noMillStock: L.toastNoMillStock, millNotEmpty: L.toastMillNotEmpty, noWheatToDeposit: L.toastNoWheatToDeposit, millFull: L.toastMillFull, actionFailed: L.toastActionFailed, coopNone: L.toastCoopNone, farCoop: L.toastFarCoop, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull, notInjured: L.toastNotInjured, noHealKit: L.toastNoHealKit, healTooFar: L.toastHealTooFar, gregNotHired: L.toastGregNotHired, gregOrderBusy: L.toastGregBusy, gregNoRoom: L.toastGregNoRoom, gregNoFertilizer: L.toastGregNoFertilizer, gregCoffeeCooldown: L.toastGregCoffeeCooldown, noCoffee: L.toastNoCoffee, soanNotHired: L.toastSoanNotHired, soanNoRiver: L.toastSoanNoRiver, soanCoffeeCooldown: L.toastSoanCoffeeCooldown, farCauldron: L.toastFarCauldron, noFishToDeposit: L.toastNoFishToDeposit, cauldronMissing: L.toastCauldronMissing, cauldronAlreadyTaken: L.toastCauldronAlreadyTaken, noCauldronStock: L.toastNoCauldronStock, cauldronNotEmpty: L.toastCauldronNotEmpty, cauldronBrewing: L.toastCauldronBrewing, cauldronNothingToCollect: L.toastCauldronNothingToCollect, cauldronHasEnough: L.toastCauldronHasEnough, visitorNotEnough: L.visitorNotEnough, decorNone: L.decorNone, decorPicked: L.decorPicked, objReturned: L.objReturned, residentNoRoom: L.residentNoRoom, artisanNoResident: L.artisanNoResident, voyagerBusy: L.voyagerBusyToast, kickVoted: L.kickVotedToast, jewelryNoGold: L.toastJewelryNoGold, jewelryNoGem: L.toastJewelryNoGem, cropWrongType: L.toastCropWrongType, cropMaxed: L.toastCropMaxed }[key] || "";
   }
 
   // -------- Hôte : boucle temps + persistance --------
@@ -4368,6 +4481,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const s = sharedRef.current, g = s.greg;
     if (!g) return;
     const now = Date.now();
+    // Chantier 3 (feuille de route) : SuperGreg. superActive n'accélère QUE
+    // le travail effectif (trajet vers une tâche + dégâts chop/mine), PAS la
+    // rôdaille passive (décision Guillaume) — voir plus bas où `speed` est
+    // affecté selon la branche taskQueue vs roam.
+    const superActive = now < (g.superUntil || 0);
+    if (!superActive && g.superWasActive) {
+      g.superWasActive = false;
+      addChat("🧑‍🌾", lang === "en" ? "Greg is back to normal." : "Greg redevient normal.");
+    } else if (superActive) g.superWasActive = true;
     if (g.expiresAt <= now) {
       s.greg = null;
       channelRef.current?.send({ type: "broadcast", event: "apply", payload: { greg: null } });
@@ -4388,6 +4510,37 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (newTasks.length) g.taskQueue.unshift(...newTasks);
       }
     }
+    // Chantier 2 (feuille de route) : dès que Greg n'a plus de tâche en
+    // cours, activer le prochain ordre EMPILÉ (orderQueue) s'il y en a un —
+    // toujours prioritaire sur le scan auto-défrichage ci-dessous (un ordre
+    // en attente ne doit jamais être doublé par du débroussaillage
+    // autonome). La résolution des cases (resolveGregOrderTiles /
+    // findFertilizableTiles) est faite ICI, à l'activation, jamais à la
+    // pose en file — c'est le moment où le monde reflète vraiment ce que
+    // les ordres précédents ont déjà consommé.
+    if ((!g.taskQueue || g.taskQueue.length === 0) && g.orderQueue && g.orderQueue.length) {
+      g.taskQueue = g.taskQueue || [];
+      const next = g.orderQueue.shift();
+      if (next.kind === "gregOrder") {
+        const res = resolveGregOrderTiles(w, next);
+        if (res.totalSeeds > 0) {
+          pushGregOrderTasks(g, w, res, next.cropIdx);
+          addChat("🧑‍🌾", lang === "en" ? `Greg is on it: ${res.totalSeeds} seed(s) of ${C.CROPS[next.cropIdx].nameEn}.` : `Greg s'y met : ${res.totalSeeds} graine(s) de ${C.CROPS[next.cropIdx].name}.`);
+        }
+        // Si totalSeeds === 0 (plus aucune case libre entre-temps), l'ordre
+        // est simplement abandonné : l'or a déjà été débité à la pose, pas
+        // de remboursement prévu par la feuille de route pour ce cas —
+        // comportement volontairement simple, à revoir si ça se révèle
+        // frustrant en jeu.
+      } else if (next.kind === "gregFertilizeOrder") {
+        const tiles = E.findFertilizableTiles(w, next.anchor, now);
+        if (tiles.length) {
+          for (const i of tiles) g.taskQueue.push({ a: "fertilize", i });
+          addChat("🧑‍🌾", lang === "en" ? `Greg is on it: fertilizing ${tiles.length} tile(s).` : `Greg s'y met : engrais sur ${tiles.length} case(s).`);
+        }
+      }
+      dirtyRef.current = true;
+    }
     // Extension du champ (chantier 2026-07, demande Guillaume) : quand Greg
     // n'a plus de tâche en attente, il repère les arbres/rochers autour de
     // son ancre et les met en file (chop/mine) pour agrandir la zone
@@ -4406,7 +4559,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (g.taskQueue && g.taskQueue.length > 0) {
       const t = g.taskQueue[0];
       const tx = E.xOf(t.i) + 0.5, ty = E.yOf(t.i) + 0.5;
-      g.tx = tx; g.ty = ty; speed = C.GREG_TASK_SPEED; g.phase = "task"; g.sitting = false;
+      g.tx = tx; g.ty = ty; speed = C.GREG_TASK_SPEED * (superActive ? C.SUPERGREG_SPEED_MULT : 1); g.phase = "task"; g.sitting = false;
       const d = Math.hypot(tx - g.x, ty - g.y);
       if (d <= C.GREG_TASK_RANGE) {
         let ok = false, patch = null;
@@ -4415,7 +4568,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         else if (t.a === "water") { ok = E.gregWater(w, t.i, now); if (ok) patch = { crops: [{ i: t.i, c: w.crops.get(t.i) }] }; }
         else if (t.a === "fertilize") { ok = E.gregFertilize(w, t.i, now); if (ok) patch = { crops: [{ i: t.i, c: w.crops.get(t.i) }] }; }
         else if (t.a === "chop") {
-          const r = E.gregChop(w, t.i);
+          const r = E.gregChop(w, t.i, superActive ? C.SUPERGREG_SPEED_MULT : 1);
           recordTileOverride(t.i);
           const stock = sharedRef.current.gregStock || (sharedRef.current.gregStock = { wood: 0, stone: 0 });
           if (r.wood) stock.wood += r.wood;
@@ -4425,7 +4578,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           if (patch) channelRef.current?.send({ type: "broadcast", event: "apply", payload: patch });
           return;
         } else if (t.a === "mine") {
-          const r = E.gregMine(w, t.i);
+          const r = E.gregMine(w, t.i, superActive ? C.SUPERGREG_SPEED_MULT : 1);
           recordTileOverride(t.i);
           const stock = sharedRef.current.gregStock || (sharedRef.current.gregStock = { wood: 0, stone: 0 });
           if (r.stone) stock.stone += r.stone;
@@ -4507,7 +4660,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
     }
     gregAccumRef.current += dt;
-    if (gregAccumRef.current >= 0.7 && netCanBroadcast() && anyRemoteNear(g.x, g.y)) { // zip 264: 0.5 -> 0.7 s (PNJ purement baladeur, lissé smoothNpc — aucun impact gameplay, ~30% de trafic en moins)
+    // Chantier 3 (feuille de route) : à x10, un déplacement entre deux
+    // paquets à 0.7s peut être une distance importante d'un coup et saccader
+    // l'interpolation smoothNpc côté clients distants — seuil réduit à 0.2s
+    // pendant SuperGreg uniquement, pour lisser sans alourdir le trafic le
+    // reste du temps.
+    const gregNetThrottle = superActive ? 0.2 : 0.7;
+    if (gregAccumRef.current >= gregNetThrottle && netCanBroadcast() && anyRemoteNear(g.x, g.y)) { // zip 264: 0.5 -> 0.7 s (PNJ purement baladeur, lissé smoothNpc — aucun impact gameplay, ~30% de trafic en moins)
       gregAccumRef.current = 0;
       channelRef.current?.send({ type: "broadcast", event: "apply", payload: { greg: g } });
     }
@@ -4726,6 +4885,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const s = sharedRef.current, so = s.soan;
     if (!so) return;
     const now = Date.now();
+    // Chantier 4 (feuille de route) : SuperSoan. Soan ne se déplaçant pas
+    // pendant la pêche, le seul levier de vitesse est la fréquence de
+    // capture (voir plus bas, calcul de fishInterval).
+    const superActive = now < (so.superUntil || 0);
+    if (!superActive && so.superWasActive) {
+      so.superWasActive = false;
+      addChat("🎣", lang === "en" ? "Soan is back to normal." : "Soan redevient normal.");
+    } else if (superActive) so.superWasActive = true;
     if (so.expiresAt <= now) {
       s.soan = null;
       channelRef.current?.send({ type: "broadcast", event: "apply", payload: { soan: null } });
@@ -4750,8 +4917,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         so.phase = "break"; so.breakUntil = now + C.SOAN_BREAK_MS;
         so.roamAnchor = { x: E.xOf(so.riverSpot) + 0.5, y: E.yOf(so.riverSpot) + 0.5 };
         so.roamTarget = null; so.nextRoamAt = 0;
-      } else if (now - (so.lastFishAt || 0) >= C.SOAN_FISH_INTERVAL_MS) {
+      } else if (now - (so.lastFishAt || 0) >= (superActive ? C.SOAN_FISH_INTERVAL_MS / C.SUPERSOAN_CATCH_MULT : C.SOAN_FISH_INTERVAL_MS)) {
         // Pêche en continu tant que le bloc de travail n'est pas terminé.
+        // Chantier 4 : "x10 poissons" = intervalle divisé par 10 pendant
+        // SuperSoan (20s → 2s), pas une capture de 10 poissons d'un coup.
         so.lastFishAt = now;
         const ft = E.soanCatchFish();
         const stock = sharedRef.current.gregStock || (sharedRef.current.gregStock = { wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) });
@@ -5015,6 +5184,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const hireHarald = () => sendReq({ kind: "hireHarald" }); // zip 260
   const soanOrder = () => sendReq({ kind: "soanOrder" });
   const soanRecall = () => sendReq({ kind: "soanRecall" });
+  const gregCoffee = () => sendReq({ kind: "gregCoffee" }); // chantier 3 : SuperGreg
+  const soanCoffee = () => sendReq({ kind: "soanCoffee" }); // chantier 4 : SuperSoan
   // Zip 258 : commande de voyage à Eduardo. Envoie la liste { key, qty } non
   // vide au host (voyagerOrder), puis referme le panneau et remet le brouillon
   // à zéro. Le coût/durée sont recalculés et vérifiés côté hôte (autoritaire).
@@ -6130,8 +6301,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           // FIX 246 : pas d'extrapolation quand il est assis (moving faux) — il reste bien posé.
           else { const gp = smoothNpc("greg", g.x, g.y, dt, true, !!g.moving && !g.sitting, (cx, cy) => canStand(w, cx, cy)); gx = gp.x; gy = gp.y; }
           const nearG = (Math.abs(m.x - g.x) + Math.abs(m.y - g.y) <= 2.4) && (!m.zone || m.zone === "farm") && !gregCardOpenRef.current;
+          const gSuperActive = Date.now() < (g.superUntil || 0);
           draws.push({ y: (gy + 1) * T, fn: () => {
             ctx.save();
+            if (gSuperActive) drawSuperGlow(Math.round(gx * T), Math.round(gy * T));
             if (g.sitting) {
               // Pose assise dédiée (sprite gregSeated) + ombre, aligné comme drawCharacter.
               const px = Math.round(gx * T), py = Math.round(gy * T);
@@ -6166,7 +6339,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           let sx, sy;
           if (isHost) { sx = so.x; sy = so.y; }
           else { const sp = smoothNpc("soan", so.x, so.y, dt, true, !!so.moving, (cx, cy) => canStand(w, cx, cy)); sx = sp.x; sy = sp.y; } // FIX 246
-          draws.push({ y: (sy + 1) * T, fn: () => drawCharacter({ id: "soan", name: "Soan", x: sx, y: sy, dir: so.dir || 0, moving: !!so.moving, animT: so.animT || 0, gender: "m", outfit: 1, cap: true, fishing: so.phase === "fishing" }, false) });
+          const soSuperActive = Date.now() < (so.superUntil || 0);
+          draws.push({ y: (sy + 1) * T, fn: () => {
+            if (soSuperActive) drawSuperGlow(Math.round(sx * T), Math.round(sy * T));
+            drawCharacter({ id: "soan", name: "Soan", x: sx, y: sy, dir: so.dir || 0, moving: !!so.moving, animT: so.animT || 0, gender: "m", outfit: 1, cap: true, fishing: so.phase === "fishing" }, false);
+          } });
         }
       }
       // Zip 260 : Harald, l'agent d'élevage — même principe de rendu que
@@ -7181,6 +7358,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const ox = (Math.sin(ph + k * 2.1) * 0.5 + 0.5) * (sw - 6);
         ctx.fillRect(sx + ox, sy + 15 + ((k + Math.floor(ph)) % 3), 5, 1);
       }
+    }
+    // Chantiers 3/4 (feuille de route) : halo jaune commun à SuperGreg et
+    // SuperSoan, factorisé ici (au lieu de dupliquer le bloc radialGradient)
+    // pour que le chantier 4 le réutilise tel quel. (px, py) = coin du
+    // sprite tel que dessiné (même convention que drawSwimOverlay), s'inspire
+    // du glow existant sur d'autres effets (ctx.shadowColor/shadowBlur).
+    function drawSuperGlow(px, py) {
+      ctx.save();
+      const cx = px + 8, cy = py + 12, ph = performance.now() / 260;
+      const r = 14 + Math.sin(ph) * 2;
+      const grad = ctx.createRadialGradient(cx, cy, 2, cx, cy, r);
+      grad.addColorStop(0, "rgba(255, 224, 120, 0.55)");
+      grad.addColorStop(1, "rgba(255, 224, 120, 0)");
+      ctx.fillStyle = grad;
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
     }
     function drawCharacter(p, isSelf) {
       const sprites = spritesRef.current;
@@ -8487,6 +8680,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               <button disabled={hud.money < C.CROPS[gregOrderCrop].seedCost * gregOrderCount} onClick={armGregOrder}>{L.gregOrderArmBtn}</button>
             </div>
             <div className="ferme-seed-menu-hint">{L.gregOrderHint}</div>
+            {/* Chantier 2 (feuille de route) : nombre d'ordres déjà en
+                attente, pour que le joueur sache où il en est avant d'en
+                poser un de plus (pas obligatoire au fonctionnement, mais
+                recommandé pour la lisibilité). */}
+            <div className="ferme-seed-menu-hint">{((sharedRef.current.greg && sharedRef.current.greg.orderQueue) || []).length}/3</div>
           </div>
         </div>
       )}
@@ -8558,20 +8756,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               <div className="ferme-shop-row">
                 <Sprite img={spritesReady ? spritesRef.current.getChar("m", 0) : null} w={26} h={32} />
                 <div className="info">
-                  <b>{L.employeesGregName}</b>
+                  <b>{L.employeesGregName} {Date.now() < (sharedRef.current.greg.superUntil || 0) ? "☕⚡" : ""}</b>
                   <span className="ferme-usage">{L.gregHiredUntil(Math.max(0, Math.ceil((sharedRef.current.greg.expiresAt - Date.now()) / 3600000)))}</span>
                 </div>
                 <button onClick={() => { setEmployeesOpen(false); setGregOrderOpen(true); }}>{L.gregOrderBtn}</button>
                 {(gregStock.fertilizer || 0) > 0 && (
                   <button onClick={() => { setEmployeesOpen(false); setFertilizerOrderOpen(true); }}>{L.fertilizerOrderBtn}</button>
                 )}
+                <button onClick={gregCoffee}>{L.gregCoffeeBtn}</button>
               </div>
             )}
             {sharedRef.current.soan && (
               <div className="ferme-shop-row">
                 <Sprite img={spritesReady ? spritesRef.current.getChar("m", 1) : null} w={26} h={32} />
                 <div className="info">
-                  <b>{L.employeesSoanName}</b>
+                  <b>{L.employeesSoanName} {Date.now() < (sharedRef.current.soan.superUntil || 0) ? "☕⚡" : ""}</b>
                   <span className="ferme-usage">
                     {L.soanHiredUntil(Math.max(0, Math.ceil((sharedRef.current.soan.expiresAt - Date.now()) / 3600000)))} — {
                       sharedRef.current.soan.phase === "fishing" ? L.soanStatusFishing
@@ -8582,6 +8781,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 {sharedRef.current.soan.phase === "roam"
                   ? <button onClick={soanOrder}>{L.soanOrderBtn}</button>
                   : <button onClick={soanRecall}>{L.soanRecallBtn}</button>}
+                <button onClick={soanCoffee}>{L.soanCoffeeBtn}</button>
               </div>
             )}
             {sharedRef.current.harald && (
@@ -8700,6 +8900,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 <div className="info">
                   <b>Greg</b>
                   <span className="ferme-usage">{L.gregHiredUntil(Math.max(0, Math.ceil((g.expiresAt - Date.now()) / 3600000)))}</span>
+                  <span className="ferme-usage">{(g.orderQueue || []).length}/3</span>
                 </div>
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
@@ -8707,6 +8908,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 {(gregStock.fertilizer || 0) > 0 && (
                   <button onClick={() => { setGregCardOpen(false); setFertilizerOrderOpen(true); }}>{L.fertilizerOrderBtn}</button>
                 )}
+                <button onClick={gregCoffee}>{L.gregCoffeeBtn}</button>
               </div>
             </div>
           </div>

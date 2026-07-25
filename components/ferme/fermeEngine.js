@@ -1210,10 +1210,13 @@ export function findResidentTile(world, anchor, kind) {
 // ni outil de joueur). `done` ne devient vrai que quand la case est
 // entièrement dégagée (arbre -> souche -> rien) : l'appelant garde la même
 // tâche en tête de file tant que `done` est faux.
-export function gregChop(world, i) {
+export function gregChop(world, i, mult = 1) {
   const o = world.objects[i];
   if (o !== C.O_TREE && o !== C.O_TREE2 && o !== C.O_STUMP) return { done: true, wood: 0 };
-  const hp = (world.objHp.get(i) || 1) - C.GREG_AXE_LVL;
+  // Chantier 3 (feuille de route) : SuperGreg multiplie les dégâts par coup
+  // pour que "10x plus rapide" se traduise aussi sur chop/mine (sinon Greg
+  // irait 10x plus vite d'arbre en arbre sans les abattre plus vite).
+  const hp = (world.objHp.get(i) || 1) - C.GREG_AXE_LVL * mult;
   let wood = 0;
   if (hp <= 0) {
     if (o === C.O_STUMP) { world.objects[i] = C.O_NONE; world.objHp.delete(i); wood = toolYield(2, C.GREG_AXE_LVL); }
@@ -1225,10 +1228,10 @@ export function gregChop(world, i) {
 // Minage d'une case par Greg (identique à resolveAct "mine", sans énergie ni
 // outil de joueur ; pas de gemme — chance réservée aux joueurs, cf.
 // resolveAct "mine").
-export function gregMine(world, i) {
+export function gregMine(world, i, mult = 1) {
   const o = world.objects[i];
   if (o !== C.O_ROCK) return { done: true, stone: 0 };
-  const hp = (world.objHp.get(i) || 1) - C.GREG_PICK_LVL;
+  const hp = (world.objHp.get(i) || 1) - C.GREG_PICK_LVL * mult;
   let stone = 0, done = false;
   if (hp <= 0) {
     world.objects[i] = C.O_NONE; world.objHp.delete(i);

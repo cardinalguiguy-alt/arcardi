@@ -883,7 +883,7 @@ export const GREG_TASK_SPEED = 4.3;                // FIX 246 : en mission Greg 
 export const GREG_ROAM_RADIUS = 6;                 // amplitude de rôdaille autour de son ancre (même principe que WOLF_ROAM_RADIUS)
 export const GREG_ANCHOR = { x: 26, y: 58 };        // point d'ancrage (rôdaille + tuiles de dépôt), au bord des champs ouest (puits)
 export const GREG_TASK_RANGE = 0.6;                // distance d'arrivée sur une case de tâche avant de l'exécuter
-export const GREG_ORDER_MAX = 60;                  // nombre max de GRAINES (pas de cases) par ordre (garde-fou anti-abus, zip 291)
+export const GREG_ORDER_MAX = 200;                  // nombre max de GRAINES (pas de cases) par ordre (garde-fou anti-abus, zip 291)
 // Extension du champ (chantier 2026-07) : Greg abat les arbres et casse les
 // rochers trouvés autour de son ancre pour agrandir la zone cultivable, sans
 // qu'un ordre explicite soit nécessaire — même esprit que l'arrosage auto.
@@ -902,6 +902,16 @@ export const GREG_CLEAR_CHECK_MS = 5 * 60 * 1000;  // fréquence de scan (5 min 
 export const GREG_SIT_CHANCE = 0.45;                 // proba., à chaque fin de cible de rôdaille, de s'asseoir au lieu de repartir
 export const GREG_SIT_MIN_MS = 4000;                 // durée assise minimale
 export const GREG_SIT_MAX_MS = 9000;                 // durée assise maximale
+
+// Chantier 3 (feuille de route Greg, café d'Éthiopie) : mode "SuperGreg".
+// x10 sur la vitesse de trajet vers une tâche (GREG_TASK_SPEED) et sur les
+// dégâts infligés par gregChop/gregMine, PAS sur la rôdaille passive (roam)
+// — décision Guillaume. Consomme le stock commun station.worldStock.coffee,
+// PARTAGÉ avec SuperSoan (chantier 4) — pas de pool séparé.
+export const SUPERGREG_SPEED_MULT = 10;          // multiplicateur de vitesse (trajet vers tâche uniquement)
+export const SUPERGREG_DURATION_MS = 15 * 60 * 1000; // 15 min réelles
+export const SUPERGREG_COOLDOWN_MS = 45 * 60 * 1000;  // 45 min réelles, démarre à la FIN de l'effet (décision Guillaume : 15+45=60 min entre deux prises)
+export const SUPERGREG_COFFEE_COST = 1;          // unités de café consommées par activation
 
 // --- Engrais (chantier 2026-07, suite plan validé) : ressource RARE achetée
 // en or au shop (stock limité, se reconstitue tous les FERTILIZER_RESTOCK_EVERY_N_DAYS
@@ -946,6 +956,18 @@ export const SOAN_WORK_MS = 45 * 60 * 1000;         // FIX 246 : Soan travaille 
 export const SOAN_BREAK_MS = 8 * 60 * 1000;         // FIX 246 : pauses plus courtes (15 -> 8 min), Soan travaille plus
 export const SOAN_BREAK_ROAM_RADIUS = 8;            // amplitude de balade pendant la pause, autour de la berge où il pêche
 export const SOAN_FISH_INTERVAL_MS = 20 * 1000;     // pêche EN CONTINU pendant un bloc de travail ("il pioche des poissons continûment", demande Guillaume) : une prise toutes les 20s réelles (extrapolé, pas de mini-jeu pour un PNJ, contrairement au joueur)
+
+// Chantier 4 (feuille de route Greg + résidents, café d'Éthiopie) : mode
+// "SuperSoan", miroir de SuperGreg (chantier 3) mais appliqué à la pêche.
+// Soan ne se déplaçant pas pendant la pêche, le seul levier est la
+// fréquence de capture : intervalle divisé par SUPERSOAN_CATCH_MULT pendant
+// le mode actif (20s → 2s), pas de changement sur SOAN_WORK_MS/SOAN_BREAK_MS.
+// Cooldown démarrant à la FIN du travail (pas d'ambiguïté ici, contrairement
+// à SuperGreg). Stock de café PARTAGÉ avec SuperGreg (station.worldStock.coffee).
+export const SUPERSOAN_CATCH_MULT = 10;           // multiplicateur de fréquence de pêche (divise l'intervalle entre 2 prises)
+export const SUPERSOAN_DURATION_MS = 30 * 60 * 1000; // 30 min réelles
+export const SUPERSOAN_COOLDOWN_MS = 60 * 60 * 1000;  // 1h réelle, démarre à la FIN de l'effet
+export const SUPERSOAN_COFFEE_COST = 1;           // unités de café consommées par activation — MÊME pool que SuperGreg
 
 // ---- Zip 260 : Harald, l'AGENT D'ÉLEVAGE (demande Guillaume) ----
 // Engagé à la boutique comme Soan, contrat réel de 24h payé d'avance (1000 or).
