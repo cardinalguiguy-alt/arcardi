@@ -747,7 +747,7 @@ export function buildSprites() {
   const HAIR_COLORS = ["#5a3a1e", "#2a2a2a", "#c8862a", "#8a3020", "#d4b03a", "#4a3468", "#743a12", "#b0b0b8"];
   const SKIN = "#f0c8a0", SKIN_D = "#d8a878";
 
-  function drawCharFrame(g, ox, gender, outfit, dir, frame, overalls, cap, beeSuit) {
+  function drawCharFrame(g, ox, gender, outfit, dir, frame, overalls, cap, beeSuit, plaid) {
     const o = C.OUTFITS[outfit % C.OUTFITS.length];
     const hair = HAIR_COLORS[outfit % HAIR_COLORS.length];
     const step = frame === 1 ? 1 : frame === 3 ? -1 : 0;
@@ -845,6 +845,35 @@ export function buildSprites() {
       P(g, x + 5, 9 + bob, 1, 3, DENIM);
       P(g, x + 10, 9 + bob, 1, 3, DENIM);
     }
+    // Chemise à carreaux "bûcheron canadien" (demande Guillaume : Tristan doit
+    // avoir cette chemise) : recolore torse + manches par-dessus le rendu de
+    // base (o.shirt déjà posé plus haut), même principe que la salopette de
+    // Greg juste au-dessus — activée via le flag `plaid` (voir S.getChar/
+    // charSheet), pour l'instant réservé à Tristan (FermeGame.js, résident
+    // lumberjack). `!beeSuit` par précaution seulement : les deux flags ne
+    // sont jamais vrais en même temps en pratique (personnages différents).
+    if (plaid && !beeSuit) {
+      const PLAID = "#a3261f", PLAID_D = shade(PLAID), LINE = "#241a14", LINE2 = "#4a3020";
+      // Torse : fond rouge flanelle par-dessus o.shirt.
+      P(g, x + 4, 10 + bob, 8, 6, PLAID);
+      P(g, x + 4, 10 + bob, 8, 1, tint(PLAID));
+      // Grille façon carreaux buffalo (lignes noires verticales + horizontales,
+      // plus une ligne secondaire plus fine pour casser l'uniformité du bloc).
+      P(g, x + 6, 10 + bob, 1, 6, LINE);
+      P(g, x + 9, 10 + bob, 1, 6, LINE);
+      P(g, x + 4, 12 + bob, 8, 1, LINE);
+      P(g, x + 4, 15 + bob, 8, 1, LINE);
+      P(g, x + 7, 10 + bob, 1, 6, LINE2);
+      P(g, x + 4, 13 + bob, 8, 1, LINE2);
+      // Manches (recouvrent les bras nus/manche courte o.shirt).
+      if (dir === 2) {
+        P(g, x + 7 + step, 11 + bob, 2, 5, PLAID);
+        P(g, x + 7 + step, 13 + bob, 2, 1, LINE);
+      } else {
+        P(g, x + 3, 11 + bob, 2, 5, PLAID); P(g, x + 11, 11 + bob, 2, 5, PLAID_D);
+        P(g, x + 3, 13 + bob, 2, 1, LINE); P(g, x + 11, 13 + bob, 2, 1, LINE);
+      }
+    }
     // Combinaison d'apiculteur (demande Guillaume : René doit ressembler à un
     // apiculteur — combinaison blanche complète, voile, gants — mais UNIQUEMENT
     // quand il est effectivement au travail près de sa ruche ; en dehors de ça
@@ -903,12 +932,12 @@ export function buildSprites() {
     const b = Math.max(0, Math.min(255, (n & 255) + d));
     return `rgb(${r},${gg},${b})`;
   }
-  function charSheet(gender, outfit, overalls, cap, beeSuit) {
+  function charSheet(gender, outfit, overalls, cap, beeSuit, plaid) {
     const [c, g] = cv(16 * 4, 24 * 3);
     for (let dir = 0; dir < 3; dir++)
       for (let f = 0; f < 4; f++) {
         g.save(); g.translate(0, dir * 24);
-        drawCharFrame(g, f * 16, gender, outfit, dir, f, overalls, cap, beeSuit);
+        drawCharFrame(g, f * 16, gender, outfit, dir, f, overalls, cap, beeSuit, plaid);
         g.restore();
       }
     return c;
@@ -2029,9 +2058,9 @@ house: house(),
   // tint. FermeGame picks them based on seasonOf().
   S.oakAutumn = autumnTree(S.oak); S.pineAutumn = autumnTree(S.pine);
   S.oakSpring = springTree(S.oak); S.pineSpring = springTree(S.pine);
-  S.getChar = (gender, outfit, overalls, cap, beeSuit) => {
-    const key = gender + ":" + outfit + (overalls ? ":overalls" : "") + (cap ? ":cap" : "") + (beeSuit ? ":beeSuit" : "");
-    if (!S.chars[key]) S.chars[key] = charSheet(gender, outfit, !!overalls, !!cap, !!beeSuit);
+  S.getChar = (gender, outfit, overalls, cap, beeSuit, plaid) => {
+    const key = gender + ":" + outfit + (overalls ? ":overalls" : "") + (cap ? ":cap" : "") + (beeSuit ? ":beeSuit" : "") + (plaid ? ":plaid" : "");
+    if (!S.chars[key]) S.chars[key] = charSheet(gender, outfit, !!overalls, !!cap, !!beeSuit, !!plaid);
     return S.chars[key];
   };
   return S;

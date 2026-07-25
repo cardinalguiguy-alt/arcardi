@@ -4792,43 +4792,129 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // Zip 264 : apiculteur -> rayon un peu plus large (4) centré sur la ruche
     // pour bien en faire le TOUR (l'anneau autour du footprint 2x2 solide).
     const rx = bAnchor ? (bAnchor.ring ? 4 : 3) : 9, ry = bAnchor ? (bAnchor.ring ? 4 : 3) : 7;
+    // Bugfix (demande Guillaume : "René reste toujours planté au même endroit
+    // malgré l'ordre de récolte") : la position initiale n'était jamais
+    // vérifiée contre blockedTile — un artisan dont l'ancre est proche d'un
+    // bâtiment (ruche déplacée près de la maison, par ex.) pouvait apparaître
+    // directement collé/à cheval sur un mur, sans jamais s'en décoller (voir
+    // le point 2 ci-dessous, même famille de bug). On tire maintenant
+    // plusieurs candidats et on garde le premier libre (repli sur le centre
+    // de l'ancre si aucun n'est libre après le nombre max d'essais).
     if (typeof res.x !== "number" || typeof res.y !== "number") {
-      res.x = anchor.x + (Math.random() * (rx * 0.9) - rx * 0.45); res.y = anchor.y + (Math.random() * (ry * 0.9) - ry * 0.45);
+      let ix = anchor.x, iy = anchor.y, itries = 0;
+      do { ix = anchor.x + (Math.random() * (rx * 0.9) - rx * 0.45); iy = anchor.y + (Math.random() * (ry * 0.9) - ry * 0.45); itries++; } while (itries < 16 && E.blockedTile(w, ix, iy));
+      res.x = ix; res.y = iy;
       res.dir = 0; res.animT = 0; res.moving = false; res.roamTarget = null; res.nextRoamAt = 0;
     }
     if (!res.roamTarget || now >= (res.nextRoamAt || 0) || Math.hypot(res.roamTarget.x - res.x, res.roamTarget.y - res.y) < 0.2) {
-      res.nextRoamAt = now + 2500 + Math.random() * 4500;
-      if (Math.random() < 0.25) { res.roamTarget = null; res.moving = false; }
-      else { let tries = 0, tx = res.x, ty = res.y; do { tx = anchor.x + (Math.random() * 2 - 1) * rx; ty = anchor.y + (Math.random() * 2 - 1) * ry; tries++; } while (tries < 6 && (!inMap(Math.floor(tx), Math.floor(ty)) || E.blockedTile(w, tx, ty))); res.roamTarget = { x: tx, y: ty }; }
+      if (Math.random() < 0.25) { res.roamTarget = null; res.moving = false; res.nextRoamAt = now + 2500 + Math.random() * 4500; }
+      else {
+        // Bugfix : jusqu'à 20 essais (au lieu de 6) — un anneau serré (rx/ry=4
+        // autour de la ruche) proche d'un bâtiment peut avoir très peu de
+        // cases libres. Ancien bug : passé les tries, la DERNIÈRE case tirée
+        // était acceptée quand même, même bloquée -> le résident restait
+        // planté à essayer d'atteindre une cible inatteignable jusqu'au
+        // prochain cycle complet (2.5 à 7s). Désormais, si aucune case libre
+        // n'est trouvée, on ne fige plus de cible et on retente vite (500 ms)
+        // au lieu d'attendre le plein cycle.
+        let tries = 0, tx = res.x, ty = res.y, found = false;
+        do { tx = anchor.x + (Math.random() * 2 - 1) * rx; ty = anchor.y + (Math.random() * 2 - 1) * ry; tries++; found = inMap(Math.floor(tx), Math.floor(ty)) && !E.blockedTile(w, tx, ty); } while (tries < 20 && !found);
+        if (found) { res.roamTarget = { x: tx, y: ty }; res.nextRoamAt = now + 2500 + Math.random() * 4500; }
+        else { res.roamTarget = null; res.moving = false; res.nextRoamAt = now + 500; }
+      }
     }
     if (res.roamTarget) {
       const dx = res.roamTarget.x - res.x, dy = res.roamTarget.y - res.y, d = Math.hypot(dx, dy);
       if (d < 0.08) res.moving = false;
-      else { const step = Math.min(d, C.VISITOR_SPEED * 0.7 * dt); const nx = res.x + (dx / d) * step, ny = res.y + (dy / d) * step; if (!E.blockedTile(w, nx, ny)) { res.x = nx; res.y = ny; res.moving = true; res.animT = (res.animT || 0) + dt * 6; res.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 3 : 2) : (dy > 0 ? 0 : 1); } else res.moving = false; }
+      else {
+        const step = Math.min(d, C.VISITOR_SPEED * 0.7 * dt); const nx = res.x + (dx / d) * step, ny = res.y + (dy / d) * step;
+        if (!E.blockedTile(w, nx, ny)) { res.x = nx; res.y = ny; res.moving = true; res.animT = (res.animT || 0) + dt * 6; res.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 3 : 2) : (dy > 0 ? 0 : 1); }
+        // Bugfix : un pas bloqué en cours de route (obstacle apparu entre-temps,
+        // ou cible côté opposé d'un mur) laissait l'ancienne version retenter
+        // indéfiniment la MÊME cible bloquée jusqu'au prochain cycle complet —
+        // on l'efface désormais et on retente vite (500 ms) comme ci-dessus.
+        else { res.moving = false; res.roamTarget = null; res.nextRoamAt = now + 500; }
+      }
     }
   }
   // Zip 252 : tour de travail d'un résident À SKILL. Tristan (lumberjack) abat
   // un arbre ET casse un rocher -> réserve commune ; les métiers à atelier
   // produisent via updateCrafts (rien à faire ici).
-  function residentSkillShift(res, ro, w, s) {
-    if (ro.skill !== "lumberjack") return;
+  // Chantier 5 (zip 295, demande Guillaume) : bloc générique de contribution
+  // par thème (RESIDENT_TASK_BY_THEME), factorisé pour être appelable depuis
+  // deux endroits : les résidents SANS skill (roster générique, chemin
+  // inchangé) et, plus bas, les résidents À skill tant que leur atelier dédié
+  // n'est pas construit (residentSkillShift) — plus aucun résident ne doit
+  // rester les bras croisés après son emménagement.
+  function genericResidentShift(res, ro, w, s) {
+    const now = Date.now();
+    const task = C.RESIDENT_TASK_BY_THEME[ro.theme] || "gold";
     const stock = s.gregStock || (s.gregStock = { wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) });
-    const tiles = [];
-    for (const kind of ["tree", "rock"]) {
-      const i = E.findResidentTile(w, C.GREG_ANCHOR, kind);
-      if (i >= 0) { if (kind === "rock") { E.gregMine(w, i); stock.stone += C.LUMBERJACK_STONE; } else { E.gregChop(w, i); stock.wood += C.LUMBERJACK_WOOD; } recordTileOverride(i); tiles.push({ i, g: w.ground[i], o: w.objects[i], hp: w.objHp.get(i) }); }
+    if (!Array.isArray(stock.fish)) stock.fish = C.FISH.map(() => 0);
+    const patch = {};
+    if (task === "crops") {
+      const done = [];
+      for (const i of E.findThirstyCrops(w, now, C.RESIDENT_WATER_BATCH)) {
+        if (E.gregWater(w, i, now)) done.push({ i, c: w.crops.get(i) });
+      }
+      if (done.length) patch.crops = done;
+    } else if (task === "wood" || task === "stone") {
+      const i = E.findResidentTile(w, C.GREG_ANCHOR, task === "stone" ? "rock" : "tree");
+      if (i >= 0) {
+        const r = task === "stone" ? E.gregMine(w, i) : E.gregChop(w, i);
+        recordTileOverride(i);
+        if (r.wood) stock.wood += r.wood;
+        if (r.stone) stock.stone += r.stone;
+        patch.tiles = [{ i, g: w.ground[i], o: w.objects[i], hp: w.objHp.get(i) }];
+        patch.gregStock = stock;
+      }
+    } else if (task === "fish") {
+      stock.fish[Math.floor(Math.random() * stock.fish.length)] += C.RESIDENT_FISH_PER_SHIFT;
+      patch.gregStock = stock;
+    } else {
+      s.money += C.RESIDENT_GOLD_PER_SHIFT;
+      s.totalEarned = (s.totalEarned || 0) + C.RESIDENT_GOLD_PER_SHIFT;
+      setHud(h => ({ ...h, money: s.money }));
+      patch.state = shareState();
     }
-    // Zip 278 (demande Guillaume : "il doit couper du bois + transformer le
-    // bois en planches") : même tour de travail, en plus d'abattre/casser -
-    // s'il y a assez de bois en réserve, Tristan en scie une partie en
-    // planches (gregStock.planks, même pool commun). Rien ce tour-ci si le
-    // stock de bois est encore trop bas ; il rattrapera au tour suivant.
-    if ((stock.wood || 0) >= C.LUMBERJACK_PLANK_WOOD_COST) {
-      stock.wood -= C.LUMBERJACK_PLANK_WOOD_COST;
-      stock.planks = (stock.planks || 0) + C.LUMBERJACK_PLANK_YIELD;
-    }
+    if (!res.announced) { res.announced = true; stationChat(L.residentStarted(ro.name, ro.job), "\u{1F6E0}\uFE0F"); }
     dirtyRef.current = true;
-    if (netCanBroadcast()) channelRef.current?.send({ type: "broadcast", event: "apply", payload: { tiles, gregStock: stock } });
+    if (Object.keys(patch).length && netCanBroadcast()) {
+      channelRef.current?.send({ type: "broadcast", event: "apply", payload: patch });
+    }
+  }
+  function residentSkillShift(res, ro, w, s) {
+    if (ro.skill === "lumberjack") {
+      const stock = s.gregStock || (s.gregStock = { wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) });
+      const tiles = [];
+      for (const kind of ["tree", "rock"]) {
+        const i = E.findResidentTile(w, C.GREG_ANCHOR, kind);
+        if (i >= 0) { if (kind === "rock") { E.gregMine(w, i); stock.stone += C.LUMBERJACK_STONE; } else { E.gregChop(w, i); stock.wood += C.LUMBERJACK_WOOD; } recordTileOverride(i); tiles.push({ i, g: w.ground[i], o: w.objects[i], hp: w.objHp.get(i) }); }
+      }
+      // Zip 278 (demande Guillaume : "il doit couper du bois + transformer le
+      // bois en planches") : même tour de travail, en plus d'abattre/casser -
+      // s'il y a assez de bois en réserve, Tristan en scie une partie en
+      // planches (gregStock.planks, même pool commun). Rien ce tour-ci si le
+      // stock de bois est encore trop bas ; il rattrapera au tour suivant.
+      if ((stock.wood || 0) >= C.LUMBERJACK_PLANK_WOOD_COST) {
+        stock.wood -= C.LUMBERJACK_PLANK_WOOD_COST;
+        stock.planks = (stock.planks || 0) + C.LUMBERJACK_PLANK_YIELD;
+      }
+      dirtyRef.current = true;
+      if (netCanBroadcast()) channelRef.current?.send({ type: "broadcast", event: "apply", payload: { tiles, gregStock: stock } });
+      return;
+    }
+    // Chantier 5 (zip 295) : résident à skill AUTRE que lumberjack (apiculteur,
+    // fromager, pâtissière, voyageur...), tant que son atelier dédié n'est pas
+    // construit (ou n'existe pas, cas du voyageur -> SKILL_BUILDING vaut null)
+    // -> fallback générique par thème (genericResidentShift ci-dessus), pour
+    // qu'il ne reste jamais les bras croisés en attendant que le joueur paie
+    // le bâtiment. Une fois l'atelier construit, updateCrafts prend le relais
+    // et ce fallback s'arrête (return anticipé ci-dessous).
+    const bid = C.SKILL_BUILDING[ro.skill];
+    const cb = bid ? (s.crafts || {})[bid] : null;
+    if (bid && cb && cb.built) return; // atelier construit -> updateCrafts prend le relais, rien à faire ici
+    genericResidentShift(res, ro, w, s);
   }
   // Chantier 2026-07 (demande Guillaume : "René doit être envoyé récolter de
   // temps en temps, comme Soan, avec des pauses") : machine à états dédiée à
@@ -4904,44 +4990,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       res.nextWorkAt = now + C.RESIDENT_WORK_MS;
       // Zip 252 : résident à skill -> travail dédié (Tristan) ou atelier (via
       // updateCrafts), pas le travail générique par thème.
+      // Chantier 5 : residentSkillShift gère désormais lui-même le fallback
+      // générique (via genericResidentShift) pour tout résident à skill dont
+      // l'atelier n'est pas construit — il ne reste donc plus jamais inactif.
       if (ro.skill) { residentSkillShift(res, ro, w, s); if (!res.announced) { res.announced = true; stationChat(L.residentStarted(ro.name, ro.job), "\u{1F6E0}"); } continue; }
-      const task = C.RESIDENT_TASK_BY_THEME[ro.theme] || "gold";
-      const stock = s.gregStock || (s.gregStock = { wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) });
-      if (!Array.isArray(stock.fish)) stock.fish = C.FISH.map(() => 0);
-      const patch = {};
-      if (task === "crops") {
-        const done = [];
-        for (const i of E.findThirstyCrops(w, now, C.RESIDENT_WATER_BATCH)) {
-          if (E.gregWater(w, i, now)) done.push({ i, c: w.crops.get(i) });
-        }
-        if (done.length) patch.crops = done;
-      } else if (task === "wood" || task === "stone") {
-        const i = E.findResidentTile(w, C.GREG_ANCHOR, task === "stone" ? "rock" : "tree");
-        if (i >= 0) {
-          const r = task === "stone" ? E.gregMine(w, i) : E.gregChop(w, i);
-          recordTileOverride(i);
-          if (r.wood) stock.wood += r.wood;
-          if (r.stone) stock.stone += r.stone;
-          patch.tiles = [{ i, g: w.ground[i], o: w.objects[i], hp: w.objHp.get(i) }];
-          patch.gregStock = stock;
-        }
-      } else if (task === "fish") {
-        stock.fish[Math.floor(Math.random() * stock.fish.length)] += C.RESIDENT_FISH_PER_SHIFT;
-        patch.gregStock = stock;
-      } else {
-        s.money += C.RESIDENT_GOLD_PER_SHIFT;
-        s.totalEarned = (s.totalEarned || 0) + C.RESIDENT_GOLD_PER_SHIFT;
-        setHud(h => ({ ...h, money: s.money }));
-        patch.state = shareState();
-      }
       // Annonce unique, à la toute première journée de travail : on rappelle
       // la promesse faite pendant le vote (ro.job) pour que la contribution
       // soit lisible. Les tours suivants restent silencieux (pas de spam).
-      if (!res.announced) { res.announced = true; stationChat(L.residentStarted(ro.name, ro.job), "\u{1F6E0}\uFE0F"); }
-      dirtyRef.current = true;
-      if (Object.keys(patch).length && netCanBroadcast()) {
-        channelRef.current?.send({ type: "broadcast", event: "apply", payload: patch });
-      }
+      // (gérée à l'intérieur de genericResidentShift, chantier 5)
+      genericResidentShift(res, ro, w, s);
     }
     // Zip 252 : diffusion légère des positions des résidents baladeurs.
     // Zip 264 (fuite realtime n°1) : cette diffusion tournait à ~2 Hz EN
@@ -6346,7 +6403,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           // ancrage. Plus de dessin manuel « cheval collé derrière ».
           const onWhiteHorse = ro.skill === "voyager";
           draws.push({ y: (vy + 1) * T, fn: () => {
-            drawCharacter({ id: "visitor" + vv.rid, name: ro.name, x: vx, y: vy, dir: vv.dir || 0, moving: !!vv.moving, animT: vv.animT || 0, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap, mount: onWhiteHorse ? "white" : null }, false);
+            drawCharacter({ id: "visitor" + vv.rid, name: ro.name, x: vx, y: vy, dir: vv.dir || 0, moving: !!vv.moving, animT: vv.animT || 0, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap, plaid: ro.skill === "lumberjack", mount: onWhiteHorse ? "white" : null }, false);
           } });
         }
         const residents = (st && st.residents) || [];
@@ -6370,7 +6427,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           // Zip 273 : idem — Eduardo reste monté même dans ce rendu "idle"
           // (résident sans position simulée, planté près de sa maison).
           const onWhiteHorseIdle = ro.skill === "voyager";
-          draws.push({ y: (ryp + 1) * T, fn: () => drawCharacter({ id: "res" + ro.rid, name: ro.name, x: rxp, y: ryp, dir: 0, moving: false, animT: 0, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap, beeSuit: residentBeeSuit(residents[ri], ro), mount: onWhiteHorseIdle ? "white" : null }, false) });
+          draws.push({ y: (ryp + 1) * T, fn: () => drawCharacter({ id: "res" + ro.rid, name: ro.name, x: rxp, y: ryp, dir: 0, moving: false, animT: 0, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap, beeSuit: residentBeeSuit(residents[ri], ro), plaid: ro.skill === "lumberjack", mount: onWhiteHorseIdle ? "white" : null }, false) });
         }
       }
       // Greg, l'employé de champs (chantier 2026-07) : réutilise le rendu
@@ -6547,7 +6604,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           // skill) reste monté en permanence, pas seulement le temps de son
           // arrivée initiale au village.
           const onWhiteHorse = ro.skill === "voyager";
-          draws.push({ y: (ry + 1) * T, fn: () => drawCharacter({ id: "res" + res.rid, name: ro.name, x: rx, y: ry, dir: res.dir || 0, moving: !!res.moving, animT: res.animT || 0, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap, beeSuit: residentBeeSuit(res, ro), mount: onWhiteHorse ? "white" : null }, false) });
+          draws.push({ y: (ry + 1) * T, fn: () => drawCharacter({ id: "res" + res.rid, name: ro.name, x: rx, y: ry, dir: res.dir || 0, moving: !!res.moving, animT: res.animT || 0, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap, beeSuit: residentBeeSuit(res, ro), plaid: ro.skill === "lumberjack", mount: onWhiteHorse ? "white" : null }, false) });
         }
       }
       draws.sort((a, b) => a.y - b.y);
@@ -7468,7 +7525,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     function drawCharacter(p, isSelf) {
       const sprites = spritesRef.current;
-      const sheet = sprites.getChar(p.gender, p.outfit, p.overalls, p.cap, p.beeSuit);
+      const sheet = sprites.getChar(p.gender, p.outfit, p.overalls, p.cap, p.beeSuit, p.plaid);
       const row = p.dir === 0 ? 0 : p.dir === 1 ? 1 : 2;
       const frame = p.moving ? Math.floor((p.animT || 0) % 4) : 0;
       // Zip 264 (demande Guillaume) : Eduardo Da Fonseca chevauche EXACTEMENT
@@ -8829,7 +8886,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               const beehiveBuilt = isBeekeeper && (sharedRef.current.crafts || {}).beehive && sharedRef.current.crafts.beehive.built;
               return (
                 <div className="ferme-shop-row" key={"emp-res-" + res.rid}>
-                  <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, isBeekeeper && res.beePhase === "working") : null} w={26} h={32} />
+                  <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, isBeekeeper && res.beePhase === "working", ro.skill === "lumberjack") : null} w={26} h={32} />
                   <div className="info">
                     <b>{ro.name} {bakerAlert ? "⚠️" : ""}</b>
                     <span className="ferme-usage" style={bakerAlert ? { color: "#c0392b", fontWeight: 700 } : undefined}>
@@ -8912,7 +8969,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   const away = res.trip && res.trip.phase === "away";
                   return (
                     <div className="ferme-shop-row" key={"kick-" + res.rid}>
-                      <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap) : null} w={26} h={32} />
+                      <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, false, ro.skill === "lumberjack") : null} w={26} h={32} />
                       <div className="info">
                         <b>{ro.name}</b>
                         <span className="ferme-usage">{away ? L.voyagerStatusAway(fmtDuration(res.trip.returnAt - Date.now())) : L.residentTag(ro.job)}</span>
@@ -9558,7 +9615,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               <button className="ferme-close-x" onClick={() => setResidentCard(null)}>✕</button>
               <h2>{ro.name}</h2>
               <div className="ferme-shop-row">
-                <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, isBeekeeper && res && res.beePhase === "working") : null} sx={16} sy={24} w={40} h={60} />
+                <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, isBeekeeper && res && res.beePhase === "working", ro.skill === "lumberjack") : null} sx={16} sy={24} w={40} h={60} />
                 <div className="info"><b>{ro.skill ? L.skillPitch(ro.skill, ro.name) : L.residentGreet(ro.name, ro.job)}</b><span>{need}</span></div>
               </div>
               <div className="ferme-shop-row">
@@ -9919,7 +9976,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             <div className="panel ferme-modal-panel" onClick={e => e.stopPropagation()} style={{ width: "min(440px, 94vw)", ...paper }}>
               <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                 <div style={{ background: "#e8dfc4", border: "2px solid #6b4a2e", borderRadius: 6, padding: "4px 6px 0" }}>
-                  <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap) : null} sx={16} sy={24} w={32} h={48} />
+                  <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, false, ro.skill === "lumberjack") : null} sx={16} sy={24} w={32} h={48} />
                 </div>
                 <div>
                   <h3 style={{ margin: 0, color: "#1d1d1d" }}>{L.visitorPanelTitle(ro.name)}</h3>
@@ -10074,7 +10131,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 : o.type === "stay" ? L.notifStay : o.type === "plea" ? L.notifPlea : L.notifWantsChat;
               return (
                 <div key={vv.rid} style={card}>
-                  <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap) : null} sx={16} sy={24} w={24} h={36} />
+                  <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, false, ro.skill === "lumberjack") : null} sx={16} sy={24} w={24} h={36} />
                   <div style={{ fontSize: 12, lineHeight: 1.35 }}>
                     <b>{L.notifAsk(ro.name)}</b><br />
                     {o.type === "buy" && spritesReady && <span style={{ verticalAlign: "middle", marginRight: 4, display: "inline-block" }}><Sprite img={spritesRef.current.crops[o.crop][C.CROP_STAGES - 1]} w={18} h={18} /></span>}
