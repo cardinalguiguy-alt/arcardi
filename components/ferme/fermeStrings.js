@@ -731,6 +731,10 @@ export const FERME_STR = {
     toastBeekeeperNoHive: "La ruche n'est pas encore construite !",
     toastBeekeeperBusy: "René est déjà à la récolte !",
     beekeeperBreakChat: (name) => `${name} fait une pause.`,
+    // Zip suivant (demande Guillaume) : "SuperRené" — un café le fait travailler
+    // en continu (aucune pause) et récolter le miel bien plus vite pendant 5h.
+    reneCoffeeBtn: "☕ Café (SuperRené)",
+    toastReneCoffeeCooldown: "René doit encore récupérer avant un nouveau café !",
     // Menu "Employés actifs" (chantier 2026-07, demande Guillaume) : liste
     // les employés sous contrat, avec accès direct à leurs ordres.
     employeesTitle: "👥 Employés actifs",
@@ -1472,6 +1476,10 @@ export const FERME_STR = {
     toastBeekeeperNoHive: "The beehive isn't built yet!",
     toastBeekeeperBusy: "René is already harvesting!",
     beekeeperBreakChat: (name) => `${name} takes a break.`,
+    // Next zip (Guillaume's request): "SuperRené" — coffee makes him work
+    // non-stop (no breaks) and harvest honey much faster for 5h.
+    reneCoffeeBtn: "☕ Coffee (SuperRené)",
+    toastReneCoffeeCooldown: "René still needs to recover before another coffee!",
     employeesTitle: "👥 Active staff",
     employeesHint: "Employees currently under contract, with direct access to give them an order.",
     employeesGregName: "Greg",

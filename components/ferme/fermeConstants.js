@@ -1252,10 +1252,22 @@ export const BEEKEEPER_ANCHOR = { x: 51, y: 47 };
 // Chantier 2026-07 (demande Guillaume : "René doit être envoyé récolter de
 // temps en temps, comme Soan, avec des pauses") : miroir du système de blocs
 // travail/pause de Soan (SOAN_WORK_MS/SOAN_BREAK_MS), adapté au rythme du
-// miel (1 pot / 12 min, voir HONEY_MS) — un bloc de 45 min laisse le temps de
+// miel (1 pot / 12 min, voir HONEY_MS) — un bloc de travail laisse le temps de
 // produire plusieurs pots avant la pause.
-export const BEEKEEPER_WORK_MS = 45 * 60 * 1000;  // durée d'un bloc de récolte actif
-export const BEEKEEPER_BREAK_MS = 15 * 60 * 1000; // durée de la pause avant de pouvoir reprendre (ou renvoyer manuellement via le bouton)
+// Zip suivant (demande Guillaume) : cycle porté à 1h de travail / 15 min de
+// pause dans l'état normal (avant : 45 min de travail).
+export const BEEKEEPER_WORK_MS = 60 * 60 * 1000;  // durée d'un bloc de récolte actif (1h)
+export const BEEKEEPER_BREAK_MS = 15 * 60 * 1000; // durée de la pause avant de pouvoir reprendre (ou renvoyer manuellement via le bouton "Envoyer récolter")
+
+// Zip suivant (demande Guillaume) : "SuperRené" — donner un café à René
+// (apiculteur) déclenche un effet prolongé pendant lequel il travaille EN
+// CONTINU (aucune pause) ET produit du miel bien plus vite. Miroir de
+// SuperGreg/SuperSoan (café), mais paramètres propres à René. Le café est
+// puisé dans le MÊME stock commun station.worldStock.coffee que Greg/Soan.
+export const SUPERRENE_DURATION_MS = 5 * 60 * 60 * 1000;  // 5h réelles de travail continu (décision Guillaume)
+export const SUPERRENE_COOLDOWN_MS = 10 * 60 * 60 * 1000; // 10h réelles, démarre à la FIN de l'effet ; entre-temps René reprend son cycle normal
+export const SUPERRENE_COFFEE_COST = 2;   // unités de café consommées par activation (MÊME pool que SuperGreg/SuperSoan)
+export const SUPERRENE_HONEY_MULT = 10;   // pendant l'effet, l'intervalle de production du miel est divisé par ce facteur (production accélérée)
 export const CHEESE_MS = 6 * 60 * 1000;    export const CHEESE_MILK_COST = 3; // fromagerie : 3 laits -> 1 roue
 export const CHEESE_WHEEL_SELL = 1500;     export const CHEESE_PORTION_SELL = 350; export const PORTIONS_PER_WHEEL = 6;
 // Zip 258 (demande Guillaume) : la boulangerie tourne 3× plus vite (3 min ->

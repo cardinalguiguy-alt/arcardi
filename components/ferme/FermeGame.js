@@ -1852,9 +1852,40 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const now = Date.now();
       const residents = (s.station && s.station.residents) || [];
       const res = residents.find(r => r && rosterOf(r.rid) && rosterOf(r.rid).skill === "beekeeper");
-      if (res && res.beePhase === "working") {
+      // Zip suivant : pendant l'effet café (SuperRené), le rappel est ignoré —
+      // René carbure et ne s'arrête pas avant la fin de l'effet.
+      if (res && res.beePhase === "working" && !(now < (res.superUntil || 0))) {
         res.beePhase = "break"; res.beeBreakUntil = now + C.BEEKEEPER_BREAK_MS;
         out.station = s.station;
+      }
+    } else if (req.kind === "reneCoffee") {
+      // Zip suivant (demande Guillaume) : "SuperRené". Donner un café à René
+      // (apiculteur) lance un effet de C.SUPERRENE_DURATION_MS pendant lequel
+      // il travaille EN CONTINU (aucune pause, voir updateBeekeeperPhase) et
+      // produit du miel accéléré (÷ C.SUPERRENE_HONEY_MULT, voir updateCrafts).
+      // Cooldown de C.SUPERRENE_COOLDOWN_MS démarrant à la FIN de l'effet.
+      // Consomme le stock commun station.worldStock.coffee (MÊME pool que
+      // SuperGreg/SuperSoan). Miroir de gregCoffee, appliqué au résident René.
+      const now = Date.now();
+      const residents = (s.station && s.station.residents) || [];
+      const res = residents.find(r => r && rosterOf(r.rid) && rosterOf(r.rid).skill === "beekeeper");
+      const bh = (s.crafts || {}).beehive;
+      if (!res || !bh || !bh.built) out.toast = { id: f.id, key: "beekeeperNoHive" };
+      else if (now < (res.superCooldownUntil || 0)) out.toast = { id: f.id, key: "reneCoffeeCooldown" };
+      else {
+        const st = s.station || (s.station = {});
+        const ws = st.worldStock || (st.worldStock = {});
+        if ((ws.coffee || 0) < C.SUPERRENE_COFFEE_COST) out.toast = { id: f.id, key: "noCoffee" };
+        else {
+          ws.coffee -= C.SUPERRENE_COFFEE_COST;
+          res.superUntil = now + C.SUPERRENE_DURATION_MS;
+          res.superCooldownUntil = now + C.SUPERRENE_DURATION_MS + C.SUPERRENE_COOLDOWN_MS;
+          // Bascule immédiate en travail continu + cycle de production frais.
+          res.beePhase = "working"; res.beeWorkUntil = res.superUntil;
+          bh.nextAt = now + C.HONEY_MS / C.SUPERRENE_HONEY_MULT;
+          out.station = s.station;
+          out.chat = { from: "\u{1F41D}", msg: lang === "en" ? "René is fueled by coffee! ☕⚡" : "René carbure au café ! ☕⚡" };
+        }
       }
     } else if (req.kind === "hireHarald") {
       // Zip 260 (demande Guillaume) : agent d'élevage engagé à la boutique
@@ -2775,6 +2806,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const res = residents.find(r => r && rosterOf(r.rid) && rosterOf(r.rid).skill === "beekeeper");
     return !!(res && res.beePhase === "working");
   }
+  // Zip suivant (SuperRené) : intervalle de production du miel — accéléré
+  // (÷ C.SUPERRENE_HONEY_MULT) tant que l'effet café de René est actif, sinon
+  // intervalle normal (C.HONEY_MS).
+  function reneHoneyMs(s, now) {
+    const residents = (s.station && s.station.residents) || [];
+    const res = residents.find(r => r && rosterOf(r.rid) && rosterOf(r.rid).skill === "beekeeper");
+    return (res && now < (res.superUntil || 0)) ? C.HONEY_MS / C.SUPERRENE_HONEY_MULT : C.HONEY_MS;
+  }
   function updateCrafts() {
     const s = sharedRef.current, w = worldRef.current;
     if (!w || !s.crafts) return;
@@ -2791,8 +2830,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // temps de pause (la remise à `now + HONEY_MS` se fait déjà proprement
     // à chaque reprise de travail, voir updateBeekeeperPhase/beekeeperOrder).
     if (bh && bh.built && reneWorking(s)) {
-      if (!bh.nextAt || bh.nextAt > now + C.HONEY_MS) bh.nextAt = now + C.HONEY_MS;
-      else if (now >= bh.nextAt) { bh.nextAt = now + C.HONEY_MS; stock.honey++; stockChanged = true; }
+      const hms = reneHoneyMs(s, now); // zip suivant : accéléré pendant l'effet café (SuperRené)
+      if (!bh.nextAt || bh.nextAt > now + hms) bh.nextAt = now + hms;
+      else if (now >= bh.nextAt) { bh.nextAt = now + hms; stock.honey++; stockChanged = true; }
     }
     const fr = s.crafts.fromagerie;
     if (fr && fr.built) {
@@ -3249,7 +3289,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (key === "petCaught")     return L.petCaughtToast(C.petName(n, lang === "en"));
     if (key === "petReleased")   return L.bagReleasedToast(C.petName(n, lang === "en"));
     if (key === "bagFull")       return L.bagPetsFull(C.MAX_PETS);
-    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, noMillStock: L.toastNoMillStock, millNotEmpty: L.toastMillNotEmpty, noWheatToDeposit: L.toastNoWheatToDeposit, millFull: L.toastMillFull, actionFailed: L.toastActionFailed, coopNone: L.toastCoopNone, farCoop: L.toastFarCoop, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull, notInjured: L.toastNotInjured, noHealKit: L.toastNoHealKit, healTooFar: L.toastHealTooFar, gregNotHired: L.toastGregNotHired, gregOrderBusy: L.toastGregBusy, gregNoRoom: L.toastGregNoRoom, gregNoFertilizer: L.toastGregNoFertilizer, gregCoffeeCooldown: L.toastGregCoffeeCooldown, noCoffee: L.toastNoCoffee, soanNotHired: L.toastSoanNotHired, soanNoRiver: L.toastSoanNoRiver, soanCoffeeCooldown: L.toastSoanCoffeeCooldown, farCauldron: L.toastFarCauldron, noFishToDeposit: L.toastNoFishToDeposit, cauldronMissing: L.toastCauldronMissing, cauldronAlreadyTaken: L.toastCauldronAlreadyTaken, noCauldronStock: L.toastNoCauldronStock, cauldronNotEmpty: L.toastCauldronNotEmpty, cauldronBrewing: L.toastCauldronBrewing, cauldronNothingToCollect: L.toastCauldronNothingToCollect, cauldronHasEnough: L.toastCauldronHasEnough, visitorNotEnough: L.visitorNotEnough, decorNone: L.decorNone, decorPicked: L.decorPicked, objReturned: L.objReturned, residentNoRoom: L.residentNoRoom, artisanNoResident: L.artisanNoResident, voyagerBusy: L.voyagerBusyToast, kickVoted: L.kickVotedToast, jewelryNoGold: L.toastJewelryNoGold, jewelryNoGem: L.toastJewelryNoGem, cropWrongType: L.toastCropWrongType, cropMaxed: L.toastCropMaxed, beekeeperNoHive: L.toastBeekeeperNoHive, beekeeperBusy: L.toastBeekeeperBusy }[key] || "";
+    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, noMillStock: L.toastNoMillStock, millNotEmpty: L.toastMillNotEmpty, noWheatToDeposit: L.toastNoWheatToDeposit, millFull: L.toastMillFull, actionFailed: L.toastActionFailed, coopNone: L.toastCoopNone, farCoop: L.toastFarCoop, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull, notInjured: L.toastNotInjured, noHealKit: L.toastNoHealKit, healTooFar: L.toastHealTooFar, gregNotHired: L.toastGregNotHired, gregOrderBusy: L.toastGregBusy, gregNoRoom: L.toastGregNoRoom, gregNoFertilizer: L.toastGregNoFertilizer, gregCoffeeCooldown: L.toastGregCoffeeCooldown, noCoffee: L.toastNoCoffee, soanNotHired: L.toastSoanNotHired, soanNoRiver: L.toastSoanNoRiver, soanCoffeeCooldown: L.toastSoanCoffeeCooldown, reneCoffeeCooldown: L.toastReneCoffeeCooldown, farCauldron: L.toastFarCauldron, noFishToDeposit: L.toastNoFishToDeposit, cauldronMissing: L.toastCauldronMissing, cauldronAlreadyTaken: L.toastCauldronAlreadyTaken, noCauldronStock: L.toastNoCauldronStock, cauldronNotEmpty: L.toastCauldronNotEmpty, cauldronBrewing: L.toastCauldronBrewing, cauldronNothingToCollect: L.toastCauldronNothingToCollect, cauldronHasEnough: L.toastCauldronHasEnough, visitorNotEnough: L.visitorNotEnough, decorNone: L.decorNone, decorPicked: L.decorPicked, objReturned: L.objReturned, residentNoRoom: L.residentNoRoom, artisanNoResident: L.artisanNoResident, voyagerBusy: L.voyagerBusyToast, kickVoted: L.kickVotedToast, jewelryNoGold: L.toastJewelryNoGold, jewelryNoGem: L.toastJewelryNoGem, cropWrongType: L.toastCropWrongType, cropMaxed: L.toastCropMaxed, beekeeperNoHive: L.toastBeekeeperNoHive, beekeeperBusy: L.toastBeekeeperBusy }[key] || "";
   }
 
   // -------- Hôte : boucle temps + persistance --------
@@ -5119,6 +5159,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // joueur, res.beePhase est undefined -> traité comme "en attente", aucun
   // décompte actif tant que le bouton n'a pas été pressé au moins une fois.
   function updateBeekeeperPhase(res, s, now) {
+    // Zip suivant (demande Guillaume) : pendant l'effet café (SuperRené), René
+    // travaille EN CONTINU — on force la phase "working" et on repousse la
+    // borne de fin de bloc jusqu'à la fin de l'effet, donc aucune pause ne se
+    // déclenche tant que l'effet dure (la production accélérée est gérée dans
+    // updateCrafts via reneHoneyMs).
+    if (now < (res.superUntil || 0)) {
+      if (res.beePhase !== "working") {
+        res.beePhase = "working";
+        const bh = (s.crafts || {}).beehive;
+        if (bh && bh.built) bh.nextAt = now + C.HONEY_MS / C.SUPERRENE_HONEY_MULT;
+      }
+      res.beeWorkUntil = res.superUntil;
+      return;
+    }
     if (!res.beePhase) return; // jamais encore envoyé récolter : attend le bouton (beekeeperOrder)
     if (res.beePhase === "working" && now >= (res.beeWorkUntil || 0)) {
       res.beePhase = "break"; res.beeBreakUntil = now + C.BEEKEEPER_BREAK_MS;
@@ -5527,6 +5581,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const soanCoffee = () => sendReq({ kind: "soanCoffee" }); // chantier 4 : SuperSoan
   const beekeeperOrder = () => sendReq({ kind: "beekeeperOrder" }); // chantier 2026-07 : René, miroir soanOrder
   const beekeeperRecall = () => sendReq({ kind: "beekeeperRecall" });
+  const reneCoffee = () => sendReq({ kind: "reneCoffee" }); // zip suivant : SuperRené (café), miroir gregCoffee
   // Zip 258 : commande de voyage à Eduardo. Envoie la liste { key, qty } non
   // vide au host (voyagerOrder), puis referme le panneau et remet le brouillon
   // à zéro. Le coût/durée sont recalculés et vérifiés côté hôte (autoritaire).
@@ -9105,9 +9160,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               const beehiveBuilt = isBeekeeper && (sharedRef.current.crafts || {}).beehive && sharedRef.current.crafts.beehive.built;
               return (
                 <div className="ferme-shop-row" key={"emp-res-" + res.rid}>
-                  <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, isBeekeeper && res.beePhase === "working", ro.skill === "lumberjack") : null} w={26} h={32} />
+                  <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, isBeekeeper && res.beePhase === "working", ro.skill === "lumberjack") : null} sx={16} sy={24} w={24} h={36} />
                   <div className="info">
-                    <b>{ro.name} {bakerAlert ? "⚠️" : ""}</b>
+                    <b>{ro.name} {bakerAlert ? "⚠️" : ""}{isBeekeeper && Date.now() < (res.superUntil || 0) ? "☕⚡" : ""}</b>
                     <span className="ferme-usage" style={bakerAlert ? { color: "#c0392b", fontWeight: 700 } : undefined}>
                       {isBeekeeper && beehiveBuilt
                         ? (res.beePhase === "working" ? L.beekeeperStatusWorking : res.beePhase === "break" ? L.beekeeperStatusBreak : L.beekeeperStatusIdle) + (prod ? " — " + prod : "")
@@ -9124,6 +9179,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                       {res.beePhase === "working"
                         ? <button onClick={beekeeperRecall}>{L.beekeeperRecallBtn}</button>
                         : <button onClick={beekeeperOrder}>{L.beekeeperOrderBtn}</button>}
+                      <button onClick={reneCoffee}>{L.reneCoffeeBtn}</button>
                       <button onClick={() => { setEmployeesOpen(false); setResidentCard(res.rid); }}>{L.residentSeeBtn}</button>
                     </div>
                   ) : (
@@ -9134,7 +9190,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             })}
             {sharedRef.current.greg && (
               <div className="ferme-shop-row">
-                <Sprite img={spritesReady ? spritesRef.current.getChar("m", 0) : null} w={26} h={32} />
+                <Sprite img={spritesReady ? spritesRef.current.getChar("m", 0) : null} sx={16} sy={24} w={24} h={36} />
                 <div className="info">
                   <b>{L.employeesGregName} {Date.now() < (sharedRef.current.greg.superUntil || 0) ? "☕⚡" : ""}</b>
                   <span className="ferme-usage">{L.gregHiredUntil(Math.max(0, Math.ceil((sharedRef.current.greg.expiresAt - Date.now()) / 3600000)))}</span>
@@ -9148,7 +9204,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             )}
             {sharedRef.current.soan && (
               <div className="ferme-shop-row">
-                <Sprite img={spritesReady ? spritesRef.current.getChar("m", 1) : null} w={26} h={32} />
+                <Sprite img={spritesReady ? spritesRef.current.getChar("m", 1) : null} sx={16} sy={24} w={24} h={36} />
                 <div className="info">
                   <b>{L.employeesSoanName} {Date.now() < (sharedRef.current.soan.superUntil || 0) ? "☕⚡" : ""}</b>
                   <span className="ferme-usage">
@@ -9166,7 +9222,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             )}
             {sharedRef.current.harald && (
               <div className="ferme-shop-row">
-                <Sprite img={spritesReady ? spritesRef.current.getChar("m", 6) : null} w={26} h={32} />
+                <Sprite img={spritesReady ? spritesRef.current.getChar("m", 6) : null} sx={16} sy={24} w={24} h={36} />
                 <div className="info">
                   <b>{L.employeesHaraldName}</b>
                   <span className="ferme-usage">{L.haraldHiredUntil(Math.max(0, Math.ceil((sharedRef.current.harald.expiresAt - Date.now()) / 3600000)))} — {L.haraldStatusRounds}</span>
@@ -9188,7 +9244,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   const away = res.trip && res.trip.phase === "away";
                   return (
                     <div className="ferme-shop-row" key={"kick-" + res.rid}>
-                      <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, false, ro.skill === "lumberjack") : null} w={26} h={32} />
+                      <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, false, ro.skill === "lumberjack") : null} sx={16} sy={24} w={24} h={36} />
                       <div className="info">
                         <b>{ro.name}</b>
                         <span className="ferme-usage">{away ? L.voyagerStatusAway(fmtDuration(res.trip.returnAt - Date.now())) : L.residentTag(ro.job)}</span>
@@ -9853,6 +9909,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   {res.beePhase === "working"
                     ? <PixBtn sprites={spritesReady ? spritesRef.current : null} label={L.beekeeperRecallBtn} onClick={beekeeperRecall} />
                     : <PixBtn sprites={spritesReady ? spritesRef.current : null} label={L.beekeeperOrderBtn} onClick={beekeeperOrder} />}
+                  <PixBtn sprites={spritesReady ? spritesRef.current : null} label={L.reneCoffeeBtn} onClick={reneCoffee} />
                 </div>
               )}
               <div style={{ marginTop: 10, textAlign: "right" }}>
