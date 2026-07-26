@@ -1009,7 +1009,16 @@ export function buildSprites() {
   // explicite de Guillaume). Générée une seule fois ici (baked), FermeGame.js
   // se contente de la positionner/tourner/redimensionner via drawImage.
   function balloonSprite() {
-    const W = 56, H = 86;
+    // Zip 304 (retouche Guillaume : "trop petit pour être réaliste et
+    // embarquer 4 visiteurs" + "détaille quatre fois plus les pixels") :
+    // résolution du canvas DOUBLÉE dans chaque dimension (donc x4 en nombre
+    // de pixels) — le sprite est toujours baké une seule fois, seul
+    // BALLOON_SCALE (FermeGame.js) change pour recadrer la taille finale à
+    // l'écran. Silhouette retravaillée d'après des photos réelles de
+    // montgolfières (jointes par Guillaume, uniquement pour la FORME) :
+    // dôme plus plein/arrondi et léger évasement du jupon juste avant le
+    // col, au lieu d'un simple cône lissé qui pointait vers le panier.
+    const W = 112, H = 172;
     const [c, g] = cv(W, H);
     // Bruit déterministe (même esprit que le PRNG seedé de la trajectoire,
     // fermeEngine.js) : donne un léger grain de tissu, IDENTIQUE à chaque
@@ -1036,15 +1045,21 @@ export function buildSprites() {
         }
       }
     }
-    const cx = W / 2, topY = 3, envBottomY = H * 0.56, maxR = W * 0.47;
-    const panelColors = ["#c81f1f", "#f2c018"], panelCount = 7;
+    const cx = W / 2, topY = 6, envBottomY = H * 0.58, maxR = W * 0.5;
+    // Skirt (jupon) : dernière bande de l'enveloppe, juste avant le col —
+    // sur les vraies montgolfières (cf. photos jointes) elle s'évase
+    // légèrement au lieu de se refermer en pointe, ce qui casse l'effet
+    // "cône" que le rendu précédent donnait.
+    const skirtStart = 0.86;
+    const panelColors = ["#c81f1f", "#f2c018"], panelCount = 12;
     // Enveloppe : éclairage "sphère" (diffus directionnel + spéculaire net)
     // au lieu d'un dégradé plat, assombrissement progressif à chaque couture
     // entre lés (au lieu d'un trait binaire) — c'est ce qui donne le rendu
     // "beaucoup plus réaliste" demandé sur les reflets du ballon.
     for (let y = topY; y < envBottomY; y++) {
       const v = (y - topY) / (envBottomY - topY);
-      const r = maxR * Math.pow(Math.sin(Math.PI * Math.min(1, v)), 0.72);
+      let r = maxR * Math.pow(Math.sin(Math.PI * Math.min(1, v)), 0.68);
+      if (v > skirtStart) r *= 1 + (v - skirtStart) / (1 - skirtStart) * 0.16;
       if (r < 0.5) continue;
       const vertLight = 0.85 + 0.35 * Math.sin(Math.PI * v);
       for (let x = Math.round(cx - r); x <= Math.round(cx + r); x++) {
@@ -1064,12 +1079,15 @@ export function buildSprites() {
     // Panier : vrai tressage d'osier (montants sombres réguliers + brins
     // clair/moyen/foncé en quinconce), bord haut et base renforcés, ombrage
     // gauche/droite pour donner du volume — demande "textures plus réalistes".
-    const basketW = 17, basketH = 12, basketY = H * 0.735, basketX = cx - basketW / 2;
-    const attachTopY = envBottomY - 2;
-    ropeTwist(cx - maxR * 0.38, attachTopY, basketX + 2, basketY + 1, 2, "#9c7a44", "#5c421f", 5);
-    ropeTwist(cx - maxR * 0.14, attachTopY, basketX + 2, basketY, 2, "#9c7a44", "#5c421f", 5);
-    ropeTwist(cx + maxR * 0.14, attachTopY, basketX + basketW - 2, basketY, 2, "#9c7a44", "#5c421f", 5);
-    ropeTwist(cx + maxR * 0.38, attachTopY, basketX + basketW - 2, basketY + 1, 2, "#9c7a44", "#5c421f", 5);
+    // Zip 304 : panier élargi (ratio 0.30 -> 0.34 de W) pour rester crédible
+    // avec 4 passagers, cordages un peu plus épais pour suivre la
+    // résolution doublée sans paraître filiformes.
+    const basketW = Math.round(W * 0.34), basketH = Math.round(basketW * 0.71), basketY = H * 0.735, basketX = cx - basketW / 2;
+    const attachTopY = envBottomY - 4;
+    ropeTwist(cx - maxR * 0.38, attachTopY, basketX + 3, basketY + 2, 3, "#9c7a44", "#5c421f", 8);
+    ropeTwist(cx - maxR * 0.14, attachTopY, basketX + 3, basketY, 3, "#9c7a44", "#5c421f", 8);
+    ropeTwist(cx + maxR * 0.14, attachTopY, basketX + basketW - 3, basketY, 3, "#9c7a44", "#5c421f", 8);
+    ropeTwist(cx + maxR * 0.38, attachTopY, basketX + basketW - 3, basketY + 2, 3, "#9c7a44", "#5c421f", 8);
     const stakeCol = "#3d2c14", weaveLight = "#a9834e", weaveMid = "#7d5c30", weaveDark = "#523c1c", rimCol = "#c79b5e";
     for (let by = 0; by < basketH; by++) {
       for (let bx = 0; bx < basketW; bx++) {
@@ -1092,12 +1110,17 @@ export function buildSprites() {
     // plusieurs teintes (cœur blanc → orange → rouge). La lueur de nuit
     // (percée du voile sombre) est ajoutée dynamiquement par FermeGame.js
     // via `flameX/flameY`, PAS bakée ici (elle doit pulser en direct).
-    const flameX = Math.round(cx), flameY = Math.round(basketY - 3);
-    px(flameX - 1, basketY - 1, "#2a2a2a"); px(flameX, basketY - 1, "#2a2a2a"); px(flameX + 1, basketY - 1, "#2a2a2a");
-    px(flameX - 1, basketY - 2, "#2a2a2a"); px(flameX + 1, basketY - 2, "#2a2a2a");
+    // Zip 304 : support et flamme redessinés à l'échelle x2 (chaque pixel
+    // d'origine devient un bloc 2x2) pour rester lisibles sur le canvas
+    // agrandi au lieu de se noyer dans le reste du détail.
+    const flameX = Math.round(cx), flameY = Math.round(basketY - 6);
+    P(g, flameX - 3, basketY - 3, 7, 2, "#2a2a2a");
+    P(g, flameX - 3, basketY - 5, 2, 2, "#2a2a2a"); P(g, flameX + 1, basketY - 5, 2, 2, "#2a2a2a");
     const flamePix = [
-      [0, -3, "#fff8d8"], [0, -2, "#ffe27a"], [-1, -1, "#ffb84d"], [1, -1, "#ffb84d"], [0, -1, "#ffcf5c"],
-      [-1, 0, "#ff8a2e"], [1, 0, "#ff8a2e"], [0, 0, "#ffa93d"], [-1, 1, "#e05a1c"], [1, 1, "#e05a1c"], [0, 1, "#ff7020"],
+      [0, -6, "#fff8d8"], [0, -5, "#fff8d8"], [0, -4, "#ffe27a"], [0, -3, "#ffe27a"],
+      [-2, -2, "#ffb84d"], [-1, -2, "#ffb84d"], [1, -2, "#ffb84d"], [2, -2, "#ffb84d"], [0, -2, "#ffcf5c"],
+      [-2, 0, "#ff8a2e"], [-1, 0, "#ff8a2e"], [1, 0, "#ff8a2e"], [2, 0, "#ff8a2e"], [0, 0, "#ffa93d"], [0, -1, "#ffa93d"],
+      [-2, 2, "#e05a1c"], [-1, 2, "#e05a1c"], [1, 2, "#e05a1c"], [2, 2, "#e05a1c"], [0, 2, "#ff7020"], [0, 1, "#ff7020"],
     ];
     for (const [dx, dy, col] of flamePix) px(flameX + dx, flameY + dy, col);
     return { canvas: c, w: W, h: H, anchorX: cx, anchorY: basketY, flameX, flameY };

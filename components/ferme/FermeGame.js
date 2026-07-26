@@ -8050,7 +8050,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // contente de le positionner/tourner/redimensionner via drawImage, comme
     // pour n'importe quel autre sprite du jeu — pas de recalcul par pixel à
     // chaque frame.
-    const BALLOON_SCALE = 0.85;
+    // Zip 304 (demande Guillaume : "trop petit pour être réaliste et
+    // embarquer 4 visiteurs") : le sprite baké (fermeArt.js) a été doublé en
+    // résolution (x4 en pixels) ET redessiné plus grand/plus détaillé ; on
+    // recadre ici l'échelle affichée pour que la montgolfière soit
+    // sensiblement plus imposante à l'écran qu'avant (au lieu de garder la
+    // même taille finale malgré le sprite plus grand).
+    const BALLOON_SCALE = 0.62;
     function drawBalloon(bst, now) {
       const sprite = spritesReady ? spritesRef.current.balloon : null;
       const pos = balloonWorldPos(bst, now);
@@ -8058,10 +8064,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const isFlying = bst.phase === "flying";
       // Ombre au sol : toujours à gy, rétrécit et s'éclaircit avec l'altitude
       // (loin du sol) — c'est ce qui rend le survol lisible en un coup d'œil.
+      // Zip 304 : rayons agrandis (x1.46, même facteur que l'augmentation de
+      // taille écran du sprite) — sinon l'ombre restait à l'ancienne taille
+      // sous une montgolfière visiblement plus grande, ce qui décrochait
+      // visuellement l'objet de son ombre.
       const shrink = Math.max(0.35, 1 - pos.altitude / 90);
       ctx.save();
       ctx.beginPath();
-      ctx.ellipse(gx, gy, 13 * shrink, 6 * shrink, 0, 0, Math.PI * 2);
+      ctx.ellipse(gx, gy, 19 * shrink, 9 * shrink, 0, 0, Math.PI * 2);
       ctx.fillStyle = `rgba(20, 20, 15, ${0.32 * shrink})`;
       ctx.fill();
       ctx.restore();
@@ -8071,7 +8081,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // panier retombe au même niveau qu'avant le passage au sprite HD (le
       // panier touchait quasi le sol/l'ombre à l'atterrissage) — sinon la
       // montgolfière semblerait flotter au-dessus de son ombre au posé.
-      const cx = gx, cy = gy - pos.altitude - 2;
+      const cx = gx, cy = gy - pos.altitude - 3;
       ctx.save();
       ctx.translate(cx, cy);
       // Petit tangage doux pendant le vol (purement décoratif, dérivé de t
@@ -8083,7 +8093,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const n = Math.min(C.BALLOON_CAPACITY, (bst.tickets || []).length);
       for (let i = 0; i < n; i++) {
         ctx.fillStyle = ["#f4c99b", "#e0a878", "#f4c99b", "#e0a878"][i % 4];
-        ctx.beginPath(); ctx.arc(-4.5 + i * 3, 1.5, 1.6, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(-6.75 + i * 4.5, 2.25, 2.4, 0, Math.PI * 2); ctx.fill();
       }
       ctx.restore();
       // Correctif (audit) : le brûleur, TOUJOURS allumé, doit percer le
@@ -8094,8 +8104,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // tourné) ; tangage ignoré ici, l'écart est imperceptible pour un
       // simple halo.
       const flameLocalY = (sprite.flameY - sprite.anchorY) * BALLOON_SCALE;
+      // Zip 304 : rayon de lueur agrandi (même facteur x1.46) pour rester
+      // cohérent avec le brûleur/panier désormais plus grands — sinon le
+      // halo perçant le voile de nuit paraissait trop petit par rapport au
+      // sprite.
       balloonGlowRef.current = bst.isNightFlight
-        ? { x: cx / T, y: (cy + flameLocalY) / T, radiusTiles: 0.85 + Math.sin(now / 260) * 0.12 }
+        ? { x: cx / T, y: (cy + flameLocalY) / T, radiusTiles: 1.24 + Math.sin(now / 260) * 0.17 }
         : null;
     }
     function drawSuperGlow(px, py) {
