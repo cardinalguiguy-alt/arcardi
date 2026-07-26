@@ -1008,111 +1008,49 @@ export function buildSprites() {
   // TOUJOURS allumé (jour et nuit, comme une vraie montgolfière — demande
   // explicite de Guillaume). Générée une seule fois ici (baked), FermeGame.js
   // se contente de la positionner/tourner/redimensionner via drawImage.
+  // Zip 305 : table de données du calque pixel-art (palette + grille en
+  // runs [xStart, longueur, indexPalette] par rangée) générée une fois à
+  // partir du calque validé par Guillaume, consommée par balloonSprite()
+  // ci-dessous. Aucune image bitmap chargée à l'exécution — juste des
+  // données peintes par du code, comme le reste du fichier.
+  const BALLOON_PALETTE = ["#f3e1a2","#eed806","#ebb255","#97b365","#3fac93","#f57b23","#c87f46","#6d7c76","#2a7bac","#ed5c2a","#eb413b","#f22e4c","#a55539","#af3131","#495673","#295697","#414272","#48325e","#2e306f","#d31821","#cd0f16","#b21631","#ac0e1c","#721e52","#870e25","#5c184b","#2e1740","#000000"];
+  const BALLOON_ROWS = [[0,[[13,1,17],[14,1,25],[15,2,23],[17,1,24],[18,1,22],[19,1,13],[20,3,12],[23,1,3],[24,1,7]]],[1,[[10,1,25],[11,2,23],[13,1,24],[14,2,20],[16,1,19],[17,3,5],[20,1,2],[21,5,0],[26,1,3],[27,1,7]]],[2,[[8,1,12],[9,1,13],[10,1,22],[11,2,20],[13,3,9],[16,1,6],[17,4,0],[21,2,6],[23,1,2],[24,4,11],[28,2,13]]],[3,[[7,1,12],[8,1,9],[9,1,13],[10,1,9],[11,1,5],[12,1,9],[13,3,5],[16,1,6],[17,3,2],[20,1,6],[21,4,11],[25,4,19],[29,1,10],[30,1,6],[31,1,7]]],[4,[[5,1,7],[6,1,3],[7,1,2],[8,1,6],[9,1,5],[10,1,2],[11,1,6],[12,4,0],[16,5,11],[21,2,20],[23,3,19],[26,4,9],[30,1,5],[31,1,10],[32,1,12]]],[5,[[4,1,23],[5,1,12],[6,1,3],[7,1,6],[8,7,0],[15,1,2],[16,7,19],[23,2,9],[25,1,19],[26,4,5],[30,1,1],[31,1,5],[32,1,10],[33,1,13]]],[6,[[3,1,17],[4,3,21],[7,1,12],[8,1,0],[9,1,2],[10,1,6],[11,5,11],[16,5,20],[21,1,9],[22,4,5],[26,3,1],[29,1,5],[30,2,1],[32,1,5],[33,1,19],[34,1,13]]],[7,[[3,2,24],[5,2,21],[7,1,13],[8,7,11],[15,1,19],[16,5,9],[21,3,5],[24,6,1],[30,3,3],[33,1,5],[34,1,9],[35,1,12]]],[8,[[2,5,24],[7,4,11],[11,4,20],[15,1,19],[16,6,5],[22,4,1],[26,6,3],[32,1,4],[33,1,3],[34,1,5],[35,1,13]]],[9,[[1,1,24],[2,2,22],[4,3,24],[7,1,19],[8,7,20],[15,1,19],[16,1,5],[17,4,1],[21,1,6],[22,2,3],[24,2,1],[26,4,3],[30,3,4],[33,1,7],[34,1,1],[35,1,5],[36,1,13]]],[10,[[1,1,12],[2,4,22],[6,1,24],[7,2,20],[9,2,19],[11,1,9],[12,4,5],[16,5,1],[21,1,3],[22,3,4],[25,1,3],[26,6,4],[32,2,8],[34,1,3],[35,1,1],[36,1,9]]],[11,[[1,2,12],[3,1,13],[4,2,22],[6,1,24],[7,1,9],[8,2,5],[10,1,9],[11,5,5],[16,5,1],[21,1,3],[22,3,4],[25,1,3],[26,1,4],[27,1,8],[28,2,4],[30,1,8],[31,1,15],[32,2,8],[34,2,4],[36,1,5],[37,1,12]]],[12,[[0,1,7],[1,1,12],[2,1,5],[3,1,13],[4,1,12],[5,1,5],[6,1,13],[7,1,9],[8,2,5],[10,1,9],[11,2,5],[13,2,1],[15,1,6],[16,6,4],[22,3,8],[25,1,4],[26,5,8],[31,3,15],[34,2,4],[36,1,6],[37,1,12]]],[13,[[0,2,14],[2,2,12],[4,2,5],[6,1,13],[7,1,5],[8,7,1],[15,1,3],[16,5,4],[21,5,8],[26,2,15],[28,2,8],[30,1,15],[31,2,16],[33,1,15],[34,1,8],[35,1,4],[36,1,3],[37,1,6]]],[14,[[0,2,14],[2,1,15],[3,1,7],[4,1,6],[5,1,12],[6,1,7],[7,8,1],[15,1,3],[16,5,4],[21,1,15],[22,4,8],[26,2,15],[28,2,8],[30,1,16],[31,2,23],[33,1,17],[34,2,8],[36,1,4],[37,1,6]]],[15,[[0,1,14],[1,2,15],[3,2,14],[5,1,15],[6,1,14],[7,3,1],[10,2,3],[12,4,4],[16,5,8],[21,5,15],[26,1,17],[27,1,23],[28,1,17],[29,1,16],[30,1,17],[31,3,23],[34,1,15],[35,1,8],[36,1,4],[37,1,3]]],[16,[[0,1,16],[1,2,15],[3,1,18],[4,2,15],[6,1,14],[7,1,3],[8,8,4],[16,5,8],[21,5,15],[26,1,17],[27,4,23],[31,1,22],[32,1,21],[33,1,23],[34,2,15],[36,1,4],[37,1,3]]],[17,[[0,1,14],[1,1,18],[2,1,15],[3,1,18],[4,3,15],[7,1,14],[8,7,4],[15,1,8],[16,5,15],[21,5,16],[26,1,25],[27,3,23],[30,1,21],[31,2,20],[33,1,21],[34,1,16],[35,1,15],[36,1,8],[37,1,7]]],[18,[[0,2,18],[2,1,15],[3,1,18],[4,4,15],[8,2,4],[10,1,8],[11,1,15],[12,4,8],[16,5,15],[21,1,17],[22,3,23],[25,1,25],[26,1,22],[27,2,20],[29,2,21],[31,2,20],[33,1,24],[34,1,23],[35,1,17],[36,1,8],[37,1,7]]],[19,[[0,1,16],[1,4,18],[5,1,15],[6,2,18],[8,3,8],[11,1,15],[12,4,8],[16,5,15],[21,1,25],[22,3,23],[25,1,25],[26,4,20],[30,3,11],[33,1,24],[34,1,23],[35,1,17],[36,1,15],[37,1,7]]],[20,[[1,1,25],[2,6,18],[8,1,15],[9,2,8],[11,5,15],[16,1,17],[17,4,23],[21,1,22],[22,2,20],[24,2,21],[26,2,19],[28,1,20],[29,1,19],[30,3,11],[33,1,20],[34,1,21],[35,1,16],[36,1,15],[37,1,14]]],[21,[[1,3,25],[4,1,26],[5,7,18],[12,4,15],[16,1,25],[17,4,23],[21,1,22],[22,3,20],[25,1,21],[26,3,11],[29,1,6],[30,1,2],[31,1,11],[32,1,19],[33,2,20],[35,1,23],[36,1,15]]],[22,[[1,1,25],[2,1,24],[3,5,25],[8,1,26],[9,4,18],[13,1,15],[14,2,16],[16,1,25],[17,4,23],[21,4,19],[25,4,11],[29,3,0],[32,2,11],[34,1,21],[35,1,23],[36,1,16]]],[23,[[2,4,24],[6,2,25],[8,1,26],[9,1,18],[10,1,17],[11,1,25],[12,1,26],[13,3,23],[16,1,24],[17,3,20],[20,1,22],[21,4,11],[25,3,0],[28,1,6],[29,2,0],[31,1,2],[32,2,11],[34,1,21],[35,1,17],[36,1,16]]],[24,[[2,1,23],[3,1,21],[4,1,22],[5,1,24],[6,1,25],[7,2,24],[9,4,25],[13,3,23],[16,1,24],[17,4,19],[21,3,11],[24,1,6],[25,3,0],[28,1,6],[29,2,5],[31,1,2],[32,1,11],[33,1,19],[34,1,20],[35,1,25]]],[25,[[3,4,21],[7,2,22],[9,1,24],[10,1,25],[11,2,24],[13,1,22],[14,2,20],[16,1,21],[17,4,11],[21,3,0],[24,1,2],[25,2,5],[27,1,6],[28,1,9],[29,1,5],[30,1,6],[31,2,0],[33,1,11],[34,1,21],[35,1,17]]],[26,[[3,1,12],[4,1,3],[5,5,21],[10,4,24],[14,3,20],[17,4,11],[21,3,0],[24,3,5],[27,1,9],[28,2,19],[30,1,5],[31,1,2],[32,1,6],[33,1,11],[34,1,23]]],[27,[[4,2,6],[6,1,0],[7,1,6],[8,2,21],[10,1,13],[11,3,21],[14,3,11],[17,3,0],[20,1,2],[21,3,5],[24,1,19],[25,2,9],[27,2,20],[29,1,9],[30,1,5],[31,1,6],[32,1,0],[33,1,13],[34,1,7]]],[28,[[4,1,12],[5,1,9],[6,3,6],[9,2,3],[11,3,21],[14,3,11],[17,1,2],[18,2,0],[20,1,6],[21,2,5],[23,1,9],[24,2,19],[26,3,20],[29,1,19],[30,1,9],[31,1,0],[32,1,6],[33,1,12]]],[29,[[5,1,12],[6,2,13],[8,1,9],[9,2,2],[11,2,6],[13,1,3],[14,3,0],[17,1,6],[18,2,5],[20,1,9],[21,2,19],[23,3,20],[26,1,23],[27,1,24],[28,1,20],[29,1,19],[30,1,9],[31,1,2],[32,1,6]]],[30,[[6,1,12],[7,1,22],[8,1,20],[9,1,13],[10,2,9],[12,1,3],[13,1,2],[14,1,6],[15,2,2],[17,1,5],[18,2,9],[20,3,19],[23,1,22],[24,1,20],[25,1,24],[26,2,23],[28,2,20],[30,1,9],[31,1,3]]],[31,[[7,1,23],[8,2,22],[10,1,13],[11,1,19],[12,1,13],[13,2,9],[15,2,5],[17,1,9],[18,2,19],[20,2,20],[22,1,24],[23,1,23],[24,1,25],[25,2,15],[27,1,23],[28,1,22],[29,1,19],[30,1,6]]],[32,[[8,1,25],[9,2,24],[11,2,22],[13,4,9],[17,1,19],[18,1,20],[19,1,19],[20,2,21],[22,1,23],[23,1,17],[24,1,16],[25,1,15],[26,1,16],[27,1,23],[28,1,22],[29,1,13]]],[33,[[9,1,17],[10,2,25],[12,2,24],[14,1,20],[15,1,22],[16,1,19],[17,3,20],[20,1,25],[21,1,23],[22,2,15],[24,2,8],[26,1,15],[27,1,23],[28,1,13],[29,1,7]]],[34,[[10,1,16],[11,1,26],[12,2,24],[14,3,22],[17,1,20],[18,1,24],[19,1,23],[20,2,16],[22,1,8],[23,1,7],[24,1,3],[25,1,8],[26,1,16],[27,1,23],[28,1,7]]],[35,[[11,1,14],[12,1,16],[13,1,26],[14,1,25],[15,2,24],[17,1,22],[18,2,25],[20,1,18],[21,1,15],[22,1,4],[23,2,3],[25,1,8],[26,1,18],[27,1,17]]],[36,[[12,1,7],[13,11,26],[24,1,17],[25,1,16],[26,1,17]]],[37,[[13,1,26],[14,1,27],[15,10,26],[25,1,17]]],[38,[[13,1,17],[14,10,26],[24,1,17]]],[39,[[14,1,17],[15,7,26],[22,1,17]]],[40,[[15,3,17],[18,1,25],[19,1,26],[20,1,17]]],[41,[[16,4,17],[20,1,7]]],[42,[[17,1,7],[18,2,14],[20,1,7],[21,1,14]]],[43,[[16,1,14],[17,2,7],[19,1,3],[20,2,7]]],[44,[[16,2,26],[18,2,25],[20,1,17],[21,1,14]]],[45,[[15,1,17],[16,1,23],[17,1,12],[18,2,6],[20,3,12]]],[46,[[16,1,23],[17,2,12],[19,3,6],[22,1,12]]],[47,[[16,1,23],[17,2,25],[19,2,23],[21,2,12]]],[48,[[18,2,7]]]];
+
   function balloonSprite() {
-    // Zip 304 (retouche Guillaume : "trop petit pour être réaliste et
-    // embarquer 4 visiteurs" + "détaille quatre fois plus les pixels") :
-    // résolution du canvas DOUBLÉE dans chaque dimension (donc x4 en nombre
-    // de pixels) — le sprite est toujours baké une seule fois, seul
-    // BALLOON_SCALE (FermeGame.js) change pour recadrer la taille finale à
-    // l'écran. Silhouette retravaillée d'après des photos réelles de
-    // montgolfières (jointes par Guillaume, uniquement pour la FORME) :
-    // dôme plus plein/arrondi et léger évasement du jupon juste avant le
-    // col, au lieu d'un simple cône lissé qui pointait vers le panier.
-    const W = 112, H = 172;
+    // Zip 305 (demande Guillaume : reprendre EXACTEMENT le calque pixel-art
+    // fourni — "sers-toi en de calque exact") : l'enveloppe et le panier ne
+    // sont plus dessinés par la formule géométrique (sphère éclairée +
+    // tressage procédural), mais reproduits pixel pour pixel depuis le
+    // calque validé. La règle du site (aucune image bitmap, tout généré par
+    // code) reste respectée : le calque a été converti une fois pour toutes
+    // en table de données (BALLOON_PALETTE / BALLOON_ROWS, quelques lignes
+    // plus bas) que ce code redessine lui-même via fillRect — pas de
+    // `<img>` ni de `drawImage` sur un fichier externe, juste des données
+    // que le canvas peint. Le sprite est baké une seule fois comme avant.
+    // Grille source : 38×49 "méga-pixels" (résolution native du calque
+    // pixel-art fourni), chaque méga-pixel est peint comme un carré de
+    // BLOCK px sur le canvas final pour rester net (pas de flou).
+    const BLOCK = 3;
+    const GRID_W = 38, GRID_H = 49;
+    const W = GRID_W * BLOCK, H = GRID_H * BLOCK;
     const [c, g] = cv(W, H);
-    // Bruit déterministe (même esprit que le PRNG seedé de la trajectoire,
-    // fermeEngine.js) : donne un léger grain de tissu, IDENTIQUE à chaque
-    // rechargement (le sprite est baké une seule fois de toute façon).
-    function hash(x, y, seed) {
-      let a = (x * 374761393 + y * 668265263 + seed * 2654435761) | 0;
-      a = (a ^ (a >>> 13)) * 1274126177 | 0;
-      return (((a ^ (a >>> 16)) >>> 0) % 1000) / 1000;
-    }
-    function shadeHex(hex, f) {
-      let r = parseInt(hex.slice(1, 3), 16), gg = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
-      r = Math.max(0, Math.min(255, r * f)); gg = Math.max(0, Math.min(255, gg * f)); b = Math.max(0, Math.min(255, b * f));
-      return `rgb(${r | 0},${gg | 0},${b | 0})`;
-    }
     function px(x, y, col) { g.fillStyle = col; g.fillRect(x, y, 1, 1); }
-    function ropeTwist(x0, y0, x1, y1, thick, colA, colB, period) {
-      const dx = x1 - x0, dy = y1 - y0, len = Math.sqrt(dx * dx + dy * dy) || 1;
-      const nx = -dy / len, ny = dx / len, steps = Math.ceil(len);
-      for (let s = 0; s <= steps; s++) {
-        const t = s / steps, sx = x0 + dx * t, sy = y0 + dy * t;
-        for (let w = -Math.floor(thick / 2); w <= Math.floor(thick / 2); w++) {
-          const phase = (t * len / period + w * 0.5) % 1;
-          px(Math.round(sx + nx * w), Math.round(sy + ny * w), phase < 0.5 ? colA : colB);
-        }
+    for (const [y, runs] of BALLOON_ROWS) {
+      for (const [x0, len, ci] of runs) {
+        g.fillStyle = BALLOON_PALETTE[ci];
+        g.fillRect(x0 * BLOCK, y * BLOCK, len * BLOCK, BLOCK);
       }
     }
-    const cx = W / 2, topY = 6, envBottomY = H * 0.58, maxR = W * 0.5;
-    // Skirt (jupon) : dernière bande de l'enveloppe, juste avant le col —
-    // sur les vraies montgolfières (cf. photos jointes) elle s'évase
-    // légèrement au lieu de se refermer en pointe, ce qui casse l'effet
-    // "cône" que le rendu précédent donnait.
-    const skirtStart = 0.86;
-    const panelColors = ["#c81f1f", "#f2c018"], panelCount = 12;
-    // Enveloppe : éclairage "sphère" (diffus directionnel + spéculaire net)
-    // au lieu d'un dégradé plat, assombrissement progressif à chaque couture
-    // entre lés (au lieu d'un trait binaire) — c'est ce qui donne le rendu
-    // "beaucoup plus réaliste" demandé sur les reflets du ballon.
-    for (let y = topY; y < envBottomY; y++) {
-      const v = (y - topY) / (envBottomY - topY);
-      let r = maxR * Math.pow(Math.sin(Math.PI * Math.min(1, v)), 0.68);
-      if (v > skirtStart) r *= 1 + (v - skirtStart) / (1 - skirtStart) * 0.16;
-      if (r < 0.5) continue;
-      const vertLight = 0.85 + 0.35 * Math.sin(Math.PI * v);
-      for (let x = Math.round(cx - r); x <= Math.round(cx + r); x++) {
-        const u = (x - cx) / r, uc = Math.max(-1, Math.min(1, u));
-        const normalZ = Math.sqrt(Math.max(0, 1 - uc * uc));
-        const lightDirX = -0.55, lightDirZ = 0.75;
-        const diffuse = Math.max(0.15, uc * (-lightDirX) + normalZ * lightDirZ);
-        const spec = Math.pow(Math.max(0, uc * (-lightDirX) + normalZ * lightDirZ - 0.35), 6) * 3.2;
-        const panelF = ((uc + 1) / 2) * panelCount, panelIdx = Math.max(0, Math.min(panelCount - 1, Math.floor(panelF)));
-        const base = panelColors[panelIdx % 2];
-        const seamDist = Math.min(panelF - panelIdx, panelIdx + 1 - panelF);
-        const seamAO = seamDist < 0.06 ? (1 - seamDist / 0.06) * 0.35 : 0;
-        const dith = (hash(x, y, 7) - 0.5) * 0.06;
-        px(x, y, shadeHex(base, diffuse * vertLight + spec + dith - seamAO));
-      }
-    }
-    // Panier : vrai tressage d'osier (montants sombres réguliers + brins
-    // clair/moyen/foncé en quinconce), bord haut et base renforcés, ombrage
-    // gauche/droite pour donner du volume — demande "textures plus réalistes".
-    // Zip 304 : panier élargi (ratio 0.30 -> 0.34 de W) pour rester crédible
-    // avec 4 passagers, cordages un peu plus épais pour suivre la
-    // résolution doublée sans paraître filiformes.
-    const basketW = Math.round(W * 0.34), basketH = Math.round(basketW * 0.71), basketY = H * 0.735, basketX = cx - basketW / 2;
-    const attachTopY = envBottomY - 4;
-    ropeTwist(cx - maxR * 0.38, attachTopY, basketX + 3, basketY + 2, 3, "#9c7a44", "#5c421f", 8);
-    ropeTwist(cx - maxR * 0.14, attachTopY, basketX + 3, basketY, 3, "#9c7a44", "#5c421f", 8);
-    ropeTwist(cx + maxR * 0.14, attachTopY, basketX + basketW - 3, basketY, 3, "#9c7a44", "#5c421f", 8);
-    ropeTwist(cx + maxR * 0.38, attachTopY, basketX + basketW - 3, basketY + 2, 3, "#9c7a44", "#5c421f", 8);
-    const stakeCol = "#3d2c14", weaveLight = "#a9834e", weaveMid = "#7d5c30", weaveDark = "#523c1c", rimCol = "#c79b5e";
-    for (let by = 0; by < basketH; by++) {
-      for (let bx = 0; bx < basketW; bx++) {
-        const isStake = (bx % 3 === 0);
-        const lightF = 1 - (bx / basketW) * 0.35;
-        let col;
-        if (by === 0 || by === 1) col = shadeHex(rimCol, lightF + 0.15);
-        else if (by === basketH - 1) col = shadeHex(stakeCol, lightF + 0.1);
-        else if (isStake) col = shadeHex(stakeCol, lightF + 0.2);
-        else {
-          const weaveRow = Math.floor((by + bx * 0.5) / 2) % 2 === 0;
-          col = shadeHex(weaveRow ? weaveLight : weaveMid, lightF + 0.15);
-          if ((by + bx) % 7 === 0) col = shadeHex(weaveDark, lightF + 0.1);
-        }
-        px(basketX + bx, basketY + by, col);
-      }
-    }
+    // Repère (panier) : rangée où débute le panier dans la grille source
+    // (sous l'enveloppe et les cordages), retrouvée sur le calque.
+    const cx = W / 2, basketTopRow = 45, basketY = basketTopRow * BLOCK;
     // Brûleur : TOUJOURS visible (jour et nuit, demande Guillaume : "c'est
-    // ainsi qu'une montgolfière fonctionne") — support métallique + flamme à
-    // plusieurs teintes (cœur blanc → orange → rouge). La lueur de nuit
-    // (percée du voile sombre) est ajoutée dynamiquement par FermeGame.js
-    // via `flameX/flameY`, PAS bakée ici (elle doit pulser en direct).
-    // Zip 304 : support et flamme redessinés à l'échelle x2 (chaque pixel
-    // d'origine devient un bloc 2x2) pour rester lisibles sur le canvas
-    // agrandi au lieu de se noyer dans le reste du détail.
+    // ainsi qu'une montgolfière fonctionne") — peint PAR-DESSUS le calque,
+    // juste au-dessus du panier, dans le même esprit que le sprite précédent
+    // (support métallique + flamme à plusieurs teintes). La lueur de nuit
+    // (percée du voile sombre) reste ajoutée dynamiquement par
+    // FermeGame.js via `flameX/flameY`, pas bakée ici (elle doit pulser en
+    // direct).
     const flameX = Math.round(cx), flameY = Math.round(basketY - 6);
     P(g, flameX - 3, basketY - 3, 7, 2, "#2a2a2a");
     P(g, flameX - 3, basketY - 5, 2, 2, "#2a2a2a"); P(g, flameX + 1, basketY - 5, 2, 2, "#2a2a2a");
