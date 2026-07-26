@@ -2197,6 +2197,16 @@ export function gameTimeMin(dayStartAt, now) {
   return Math.floor(C.DAY_START_MIN + frac * (C.DAY_END_MIN - C.DAY_START_MIN));
 }
 
+// Zip suivant (demande Guillaume) : prix de vente EFFECTIF d'un produit de
+// boulangerie, tenant compte du réglage du joueur (bk.prices[item], un
+// pourcentage 50..200 du prix par défaut, paliers de 10 %). Sans réglage
+// (undefined), on retombe sur le prix par défaut (BAKERY_DEFAULT_PRICE).
+export function bakeryItemPrice(bk, item) {
+  const def = C.BAKERY_DEFAULT_PRICE[item] || 0;
+  const pct = bk && bk.prices && bk.prices[item] != null ? bk.prices[item] : 100;
+  return Math.max(1, Math.round(def * pct / 100));
+}
+
 // Météo (chantier 2026-07, demande Guillaume) : true si `day` est un jour
 // orageux/pluvieux (voir C.STORM_EVERY_N_DAYS). Dérivé du compteur `day`
 // existant plutôt que d'un tirage aléatoire : même résultat pour tous les

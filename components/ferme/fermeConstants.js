@@ -1329,20 +1329,40 @@ export const PASTRY_MS = 1 * 60 * 1000;    // cadence d'une fournée de Chloé (
 // génériques pour 4 PRODUITS NOMMÉS, en rotation (même principe que les
 // viennoiseries de Rosalie) — chacun avec ses propres intrants :
 //   - Éclair au chocolat  : farine + lait + œufs + chocolat (cacao d'Eduardo)
-//   - Éclair à la vanille : farine + lait + œufs + vanille (Madagascar)
-//     (remplace l'ancienne "pâtisserie à la vanille")
-//   - Flan pâtissier à la vanille de Madagascar : farine + lait + œufs + vanille
+//   - Éclair à la vanille : farine + lait + œufs + vanille (Madagascar) +
+//     fève de tonka (remplace l'ancienne "pâtisserie à la vanille")
+//   - Flan pâtissier à la vanille de Madagascar : farine + lait + œufs +
+//     vanille + fève de tonka
 //   - Gâteau basque : farine + lait + œufs + vanille + beurre (fromagerie d'Ingrid)
 // Toutes tournent à la même cadence (PASTRY_MS) ; Chloé produit le premier
 // item réalisable en parcourant la rotation, comme Rosalie pour le pain.
 export const ECLAIR_CHOCO_FLOUR = 1, ECLAIR_CHOCO_MILK = 1, ECLAIR_CHOCO_EGG = 4, ECLAIR_CHOCO_COCOA = 1;
 export const ECLAIR_CHOCO_BATCH = 8, ECLAIR_CHOCO_SELL = 700;
-export const ECLAIR_VANILLA_FLOUR = 1, ECLAIR_VANILLA_MILK = 1, ECLAIR_VANILLA_EGG = 4, ECLAIR_VANILLA_VANILLA = 1;
+export const ECLAIR_VANILLA_FLOUR = 1, ECLAIR_VANILLA_MILK = 1, ECLAIR_VANILLA_EGG = 4, ECLAIR_VANILLA_VANILLA = 1, ECLAIR_VANILLA_TONKA = 1;
 export const ECLAIR_VANILLA_BATCH = 8, ECLAIR_VANILLA_SELL = 900; // prix inchangé vs l'ancienne pâtisserie vanille
-export const FLAN_VANILLA_FLOUR = 1, FLAN_VANILLA_MILK = 2, FLAN_VANILLA_EGG = 5, FLAN_VANILLA_VANILLA = 1;
+export const FLAN_VANILLA_FLOUR = 1, FLAN_VANILLA_MILK = 2, FLAN_VANILLA_EGG = 5, FLAN_VANILLA_VANILLA = 1, FLAN_VANILLA_TONKA = 1;
 export const FLAN_VANILLA_BATCH = 6, FLAN_VANILLA_SELL = 850;
 export const GATEAU_BASQUE_FLOUR = 1, GATEAU_BASQUE_MILK = 1, GATEAU_BASQUE_EGG = 4, GATEAU_BASQUE_VANILLA = 1, GATEAU_BASQUE_BUTTER = 1;
 export const GATEAU_BASQUE_BATCH = 6, GATEAU_BASQUE_SELL = 1200; // le plus premium (beurre en plus)
+
+// ---- Zip suivant (demande Guillaume) : clients automatiques le matin +
+// prix réglables par produit de boulangerie ----
+// Chaque matin (mêmes horaires d'ouverture que la boulangerie, jusqu'à
+// BAKERY_CUSTOMER_MORNING_END_MIN), des clients viennent automatiquement
+// acheter un des produits de Chloé/Rosalie dans le stock commun, sans
+// action du joueur : un produit tiré au hasard parmi ceux en stock, une
+// quantité aléatoire, payée au prix courant (réglé par le joueur ou le prix
+// par défaut ci-dessous) et créditée à la caisse commune.
+export const BAKERY_SELL_ITEMS = ["bread", "croissant", "chocolatine", "painSuisse", "eclairChoco", "eclairVanilla", "flanVanilla", "gateauBasque"];
+export const BAKERY_DEFAULT_PRICE = { bread: BREAD_SELL, croissant: CROISSANT_SELL, chocolatine: CHOCOLATINE_SELL, painSuisse: PAINSUISSE_SELL, eclairChoco: ECLAIR_CHOCO_SELL, eclairVanilla: ECLAIR_VANILLA_SELL, flanVanilla: FLAN_VANILLA_SELL, gateauBasque: GATEAU_BASQUE_SELL };
+export const BAKERY_CUSTOMER_MORNING_END_MIN = 11 * 60; // 11h00 : après ça, plus de clients spontanés
+export const BAKERY_CUSTOMER_MS = 45 * 1000;             // un client (potentiel) toutes les 45s en moyenne
+export const BAKERY_CUSTOMER_QTY_MIN = 1, BAKERY_CUSTOMER_QTY_MAX = 3; // quantité achetée par passage
+// Prix réglables : le joueur peut ajuster chaque prix entre 50 % et 200 %
+// du prix par défaut ci-dessus, par paliers de 10 % (mêmes paliers que le
+// ratio beurre de la fromagerie).
+export const BAKERY_PRICE_STEP_PCT = 10;
+export const BAKERY_PRICE_MIN_PCT = 50, BAKERY_PRICE_MAX_PCT = 200;
 
 // ---- Zip 301 (demande Guillaume) : Rosalie, boulangère (pain + viennoiseries) ----
 // Rosalie travaille dans la MÊME boulangerie que Chloé (bakery), mais sur une
@@ -1445,6 +1465,10 @@ export const WORLD_GOODS = [
   { key: "cocoa",    name: "Fève de cacao",                  nameEn: "Cocoa bean",                tier: "lointain", buy: 250, sell: 250,  emoji: "\u{1F36B}" },
   { key: "pineapple",name: "Ananas",                         nameEn: "Pineapple",                 tier: "lointain", buy: 250, sell: 600,  emoji: "\u{1F34D}" },
   { key: "coconut",  name: "Noix de coco",                   nameEn: "Coconut",                   tier: "lointain", buy: 180, sell: 450,  emoji: "\u{1F965}" },
+  // Zip suivant (demande Guillaume) : fève de tonka, intrant des bases
+  // vanillées de Chloé (éclairs vanille + flans vanille), aux côtés de la
+  // vanille de Madagascar.
+  { key: "tonka",    name: "Fève de tonka",                  nameEn: "Tonka bean",                tier: "lointain", buy: 280, sell: 280,  emoji: "\u{1FAD8}" },
 ];
 // Prix unitaire d'une commande (payé d'avance) = buy × mult du palier, arrondi.
 export function worldGoodUnitCost(good) {

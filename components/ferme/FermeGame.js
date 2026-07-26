@@ -1918,6 +1918,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         fr.butterPct = Math.max(0, Math.min(100, pct));
         out.crafts = s.crafts; // diffusé aux invités par le broadcast final { ...out }
       }
+    } else if (req.kind === "setBakeryPrice") {
+      // Zip suivant (demande Guillaume) : règle le prix de vente d'UN produit
+      // de boulangerie (bread/croissant/chocolatine/painSuisse/eclairChoco/
+      // eclairVanilla/flanVanilla/gateauBasque), en % du prix par défaut
+      // (50..200 %, paliers de 10 %). Stocké sur crafts.bakery.prices,
+      // persistant, utilisé à la fois pour la vente manuelle au bac et pour
+      // les clients automatiques du matin (voir tick plus bas).
+      const bkP = (s.crafts || {}).bakery;
+      if (bkP && bkP.built && C.BAKERY_SELL_ITEMS.includes(req.item)) {
+        let pct = Math.round((req.pct | 0) / C.BAKERY_PRICE_STEP_PCT) * C.BAKERY_PRICE_STEP_PCT;
+        pct = Math.max(C.BAKERY_PRICE_MIN_PCT, Math.min(C.BAKERY_PRICE_MAX_PCT, pct));
+        if (!bkP.prices) bkP.prices = {};
+        bkP.prices[req.item] = pct;
+        out.crafts = s.crafts; // diffusé aux invités par le broadcast final { ...out }
+      }
     } else if (req.kind === "hireHarald") {
       // Zip 260 (demande Guillaume) : agent d'élevage engagé à la boutique
       // comme Soan, contrat réel de 24h payé d'avance (1000 or). Un seul à la
@@ -2810,7 +2825,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     if (req.kind === "sellCraft") {
       const stock = s.craftStock || (s.craftStock = E.newCraftStock());
-      const price = { honey: C.HONEY_SELL, cheeseWheel: C.CHEESE_WHEEL_SELL, cheesePortion: C.CHEESE_PORTION_SELL, eclairChoco: C.ECLAIR_CHOCO_SELL, eclairVanilla: C.ECLAIR_VANILLA_SELL, flanVanilla: C.FLAN_VANILLA_SELL, gateauBasque: C.GATEAU_BASQUE_SELL, butter: C.BUTTER_SELL, bread: C.BREAD_SELL, croissant: C.CROISSANT_SELL, chocolatine: C.CHOCOLATINE_SELL, painSuisse: C.PAINSUISSE_SELL }[req.item];
+      const bkPr = (s.crafts || {}).bakery;
+      // Zip suivant (demande Guillaume) : les 8 produits de boulangerie
+      // utilisent désormais le prix RÉGLÉ par le joueur (bkPr.prices),
+      // les autres denrées (miel, fromage, beurre) gardent leur prix fixe.
+      const price = C.BAKERY_SELL_ITEMS.includes(req.item)
+        ? E.bakeryItemPrice(bkPr, req.item)
+        : { honey: C.HONEY_SELL, cheeseWheel: C.CHEESE_WHEEL_SELL, cheesePortion: C.CHEESE_PORTION_SELL, butter: C.BUTTER_SELL }[req.item];
       if (!price || (stock[req.item] | 0) <= 0) return true;
       const n = Math.min(stock[req.item] | 0, req.n > 0 ? req.n : 9999);
       stock[req.item] -= n; const gain = n * price;
@@ -3004,14 +3025,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             // ÉCLAIR À LA VANILLE : farine + lait + œufs + vanille (Madagascar)
             const milkSrc = findAnimalGoodsWith(C.COW_ANIMAL, C.ECLAIR_VANILLA_MILK);
             const eggSrc = findAnimalGoodsWith(C.HEN_ANIMAL, C.ECLAIR_VANILLA_EGG);
-            if ((s.flour | 0) >= C.ECLAIR_VANILLA_FLOUR && milkSrc && eggSrc && (wsBk.vanilla | 0) >= C.ECLAIR_VANILLA_VANILLA) {
+            if ((s.flour | 0) >= C.ECLAIR_VANILLA_FLOUR && milkSrc && eggSrc && (wsBk.vanilla | 0) >= C.ECLAIR_VANILLA_VANILLA && (wsBk.tonka | 0) >= C.ECLAIR_VANILLA_TONKA) {
               s.flour -= C.ECLAIR_VANILLA_FLOUR; flourChanged = true;
               const milkFromGreg = consumeAnimalGoods(milkSrc, C.COW_ANIMAL, C.ECLAIR_VANILLA_MILK);
               const eggFromGreg = consumeAnimalGoods(eggSrc, C.HEN_ANIMAL, C.ECLAIR_VANILLA_EGG);
               if (milkFromGreg || eggFromGreg) gregStockChanged = true;
               if (milkSrc.kind === "farmer") broadcastFarmerDelta(milkSrc.src.fm);
               if (eggSrc.kind === "farmer" && (eggSrc.src.id !== (milkSrc.kind === "farmer" ? milkSrc.src.id : null))) broadcastFarmerDelta(eggSrc.src.fm);
-              wsBk.vanilla -= C.ECLAIR_VANILLA_VANILLA; stationChanged = true;
+              wsBk.vanilla -= C.ECLAIR_VANILLA_VANILLA; wsBk.tonka -= C.ECLAIR_VANILLA_TONKA; stationChanged = true;
               stock.eclairVanilla = (stock.eclairVanilla | 0) + C.ECLAIR_VANILLA_BATCH;
               made = true;
             }
@@ -3019,14 +3040,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             // FLAN PÂTISSIER À LA VANILLE DE MADAGASCAR : farine + lait + œufs + vanille
             const milkSrc = findAnimalGoodsWith(C.COW_ANIMAL, C.FLAN_VANILLA_MILK);
             const eggSrc = findAnimalGoodsWith(C.HEN_ANIMAL, C.FLAN_VANILLA_EGG);
-            if ((s.flour | 0) >= C.FLAN_VANILLA_FLOUR && milkSrc && eggSrc && (wsBk.vanilla | 0) >= C.FLAN_VANILLA_VANILLA) {
+            if ((s.flour | 0) >= C.FLAN_VANILLA_FLOUR && milkSrc && eggSrc && (wsBk.vanilla | 0) >= C.FLAN_VANILLA_VANILLA && (wsBk.tonka | 0) >= C.FLAN_VANILLA_TONKA) {
               s.flour -= C.FLAN_VANILLA_FLOUR; flourChanged = true;
               const milkFromGreg = consumeAnimalGoods(milkSrc, C.COW_ANIMAL, C.FLAN_VANILLA_MILK);
               const eggFromGreg = consumeAnimalGoods(eggSrc, C.HEN_ANIMAL, C.FLAN_VANILLA_EGG);
               if (milkFromGreg || eggFromGreg) gregStockChanged = true;
               if (milkSrc.kind === "farmer") broadcastFarmerDelta(milkSrc.src.fm);
               if (eggSrc.kind === "farmer" && (eggSrc.src.id !== (milkSrc.kind === "farmer" ? milkSrc.src.id : null))) broadcastFarmerDelta(eggSrc.src.fm);
-              wsBk.vanilla -= C.FLAN_VANILLA_VANILLA; stationChanged = true;
+              wsBk.vanilla -= C.FLAN_VANILLA_VANILLA; wsBk.tonka -= C.FLAN_VANILLA_TONKA; stationChanged = true;
               stock.flanVanilla = (stock.flanVanilla | 0) + C.FLAN_VANILLA_BATCH;
               made = true;
             }
@@ -3097,6 +3118,38 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         }
         if (made) { stock.butter = Math.max(0, stock.butter | 0); stockChanged = true; craftsMetaChanged = true; bk.viennoIdx = idx; bk.breadNextAt = now + C.ROSALIE_MS; }
         else bk.breadNextAt = now + Math.min(C.ROSALIE_MS, 30000); // rien de faisable (ni farine) : réessaie bientôt
+      }
+    }
+    // Zip suivant (demande Guillaume) : des clients viennent automatiquement
+    // acheter les produits de Chloé/Rosalie le MATIN (mêmes horaires
+    // d'ouverture que la boulangerie, jusqu'à BAKERY_CUSTOMER_MORNING_END_MIN),
+    // sans action du joueur. Un client toutes les BAKERY_CUSTOMER_MS,
+    // choisit au hasard un produit en stock et l'achète au prix courant
+    // (réglé par le joueur via crafts.bakery.prices, sinon prix par défaut).
+    if (bk && bk.built) {
+      const tminC = E.gameTimeMin(s.dayStartAt, now);
+      const morningOpen = tminC >= C.BAKERY_OPEN_MIN && tminC < C.BAKERY_CUSTOMER_MORNING_END_MIN;
+      if (!morningOpen) {
+        bk.custNextAt = 0; // hors créneau : se réarme au matin suivant
+      } else if (!bk.custNextAt || bk.custNextAt > now + C.BAKERY_CUSTOMER_MS) {
+        bk.custNextAt = now + C.BAKERY_CUSTOMER_MS;
+      } else if (now >= bk.custNextAt) {
+        const avail = C.BAKERY_SELL_ITEMS.filter(it => (stock[it] | 0) > 0);
+        if (avail.length) {
+          const it = avail[Math.floor(Math.random() * avail.length)];
+          const haveQty = stock[it] | 0;
+          const span = C.BAKERY_CUSTOMER_QTY_MAX - C.BAKERY_CUSTOMER_QTY_MIN + 1;
+          const qty = Math.min(haveQty, C.BAKERY_CUSTOMER_QTY_MIN + Math.floor(Math.random() * span));
+          const unitPrice = E.bakeryItemPrice(bk, it);
+          stock[it] -= qty;
+          const gain = qty * unitPrice;
+          s.money += gain; s.totalEarned = (s.totalEarned || 0) + gain;
+          stockChanged = true;
+          setHud(h => ({ ...h, money: s.money }));
+          stationChat(L.bakeryCustomerBought(L.craftName(it), qty, gain), "\u{1F9FA}");
+        }
+        bk.custNextAt = now + C.BAKERY_CUSTOMER_MS;
+        craftsMetaChanged = true;
       }
     }
     if (stockChanged || flourChanged || craftsMetaChanged || gregStockChanged) {
@@ -5861,6 +5914,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const beekeeperRecall = () => sendReq({ kind: "beekeeperRecall" });
   const reneCoffee = () => sendReq({ kind: "reneCoffee" }); // zip suivant : SuperRené (café), miroir gregCoffee
   const setCheeseRatio = (pct) => sendReq({ kind: "setCheeseRatio", pct }); // zip 301 : part de beurre de la fromagerie
+  const setBakeryPrice = (item, pct) => sendReq({ kind: "setBakeryPrice", item, pct }); // zip suivant : prix de vente réglable par produit
   // Zip 258 : commande de voyage à Eduardo. Envoie la liste { key, qty } non
   // vide au host (voyagerOrder), puis referme le panneau et remet le brouillon
   // à zéro. Le coût/durée sont recalculés et vérifiés côté hôte (autoritaire).
@@ -10455,6 +10509,33 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   </div>
                 );
               })()}
+              {/* Zip suivant (demande Guillaume) : menu de prix de vente, un
+                  par produit de boulangerie, accessible depuis la fiche de
+                  Chloé OU Rosalie (le prix est commun aux deux, stocké sur
+                  crafts.bakery.prices). Paliers de 10 %, 50..200 % du prix
+                  par défaut. */}
+              {(ro.skill === "baker" || ro.skill === "breadmaker") && built && (() => {
+                const bkC = sharedRef.current.crafts && sharedRef.current.crafts.bakery;
+                const prices = (bkC && bkC.prices) || {};
+                return (
+                  <div style={{ marginTop: 10 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>{L.bakeryPriceTitle}</div>
+                    {C.BAKERY_SELL_ITEMS.map(it => {
+                      const pct = prices[it] != null ? prices[it] : 100;
+                      const def = C.BAKERY_DEFAULT_PRICE[it];
+                      const price = E.bakeryItemPrice(bkC, it);
+                      return (
+                        <div key={it} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                          <span style={{ flex: 1, fontSize: 12 }}>{L.bakeryPriceLine(L.craftName(it), price, def)}</span>
+                          <button disabled={pct <= C.BAKERY_PRICE_MIN_PCT} onClick={() => setBakeryPrice(it, pct - C.BAKERY_PRICE_STEP_PCT)}>−</button>
+                          <span style={{ minWidth: 34, textAlign: "center", fontWeight: 700, fontSize: 12 }}>{pct}%</span>
+                          <button disabled={pct >= C.BAKERY_PRICE_MAX_PCT} onClick={() => setBakeryPrice(it, pct + C.BAKERY_PRICE_STEP_PCT)}>+</button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
               <div style={{ marginTop: 10, textAlign: "right" }}>
                 <PixBtn sprites={spritesReady ? spritesRef.current : null} tone="plain" label={L.residentCloseBtn} onClick={() => setResidentCard(null)} />
               </div>
@@ -10594,7 +10675,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             {/* Zip 252 : produits d'artisans (réserve commune craftStock). */}
             {(() => {
               const cs = sharedRef.current.craftStock || {};
-              const items = [["honey", C.HONEY_SELL], ["cheeseWheel", C.CHEESE_WHEEL_SELL], ["cheesePortion", C.CHEESE_PORTION_SELL], ["butter", C.BUTTER_SELL], ["eclairChoco", C.ECLAIR_CHOCO_SELL], ["eclairVanilla", C.ECLAIR_VANILLA_SELL], ["flanVanilla", C.FLAN_VANILLA_SELL], ["gateauBasque", C.GATEAU_BASQUE_SELL], ["bread", C.BREAD_SELL], ["croissant", C.CROISSANT_SELL], ["chocolatine", C.CHOCOLATINE_SELL], ["painSuisse", C.PAINSUISSE_SELL]];
+              const bkP = sharedRef.current.crafts && sharedRef.current.crafts.bakery;
+              const items = [["honey", C.HONEY_SELL], ["cheeseWheel", C.CHEESE_WHEEL_SELL], ["cheesePortion", C.CHEESE_PORTION_SELL], ["butter", C.BUTTER_SELL], ["eclairChoco", E.bakeryItemPrice(bkP, "eclairChoco")], ["eclairVanilla", E.bakeryItemPrice(bkP, "eclairVanilla")], ["flanVanilla", E.bakeryItemPrice(bkP, "flanVanilla")], ["gateauBasque", E.bakeryItemPrice(bkP, "gateauBasque")], ["bread", E.bakeryItemPrice(bkP, "bread")], ["croissant", E.bakeryItemPrice(bkP, "croissant")], ["chocolatine", E.bakeryItemPrice(bkP, "chocolatine")], ["painSuisse", E.bakeryItemPrice(bkP, "painSuisse")]];
               const any = items.some(([k]) => (cs[k] | 0) > 0);
               if (!any) return null;
               return (<>
