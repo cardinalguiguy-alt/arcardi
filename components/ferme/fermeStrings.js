@@ -199,7 +199,7 @@ export const FERME_STR = {
         { who: "chloe", text: "Pas comme ça, tu ne parles pas aux clients comme ça, Rosalie, JAMAIS !" },
         { who: "rosalie", text: "C'est bon, c'est bon, j'ai compris..." },
         { who: "chloe", text: "Un peu de tenue, un tout petit peu !" },
-        { who: "rosalie", text: "Il grogne, le levain, pas moi." },
+        { who: "rosalie", text: "Il grogne, le levain, pas moi.", turn: true },
         { who: "chloe", text: "Pardon pour elle. Elle a bon fond, au fond du fond." },
         { who: "rosalie", text: "Hmph." },
       ],
@@ -222,7 +222,7 @@ export const FERME_STR = {
       [ // V5
         { who: "chloe", text: "On respecte les gens ici, Rosalie, un point c'est t—" },
         { who: "chloe", text: "OH MON PAIN !", ms: 1800 },
-        { who: "rosalie", text: "...Sauvée par le gong." },
+        { who: "rosalie", text: "...Sauvée par le gong.", turn: true },
         { who: "chloe", text: "Pardon quand même, hein !" },
       ],
       [ // V6
@@ -230,7 +230,7 @@ export const FERME_STR = {
         { who: "chloe", text: "Rosalie ?" },
         { who: "rosalie", text: "J'ai rien dit du tout." },
         { who: "chloe", text: "Justement. Tu vas t'excuser, un jour ?" },
-        { who: "rosalie", text: "On verra." },
+        { who: "rosalie", text: "On verra.", turn: true },
         { who: "chloe", text: "...et moi, pardon pour le ton, mais fallait bien." },
       ],
       [ // V7
@@ -269,7 +269,7 @@ export const FERME_STR = {
         { who: "chloe", text: "Je sais. Mais tu ne peux pas rester fâchée avec la terre entière." },
         { who: "rosalie", text: "Je ne suis PAS fâchée. Je suis... occupée." },
         { who: "chloe", text: "Bien sûr." },
-        { who: "rosalie", text: "...Retourne à ton four, Chloé." },
+        { who: "rosalie", text: "...Retourne à ton four, Chloé.", turn: true },
         { who: "chloe", text: "Elle va mieux, en fait, croyez-le ou non." },
       ],
     ],

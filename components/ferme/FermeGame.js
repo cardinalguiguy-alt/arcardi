@@ -5576,7 +5576,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // pas sa rôdaille (elle ne bouge pas, elle est simplement absente du
       // rendu).
       if (ro.skill === "baker" || ro.skill === "breadmaker") updateBakeryVisibility(res, ro, residents, now);
-      if (!res.hidden) residentRoam(res, w, now, dt, ro, residents); // zip 252 : balade sur la ferme (chaque tick) — zip 256 : ancre dédiée — zip 298 : passe la liste des voisins (rendez-vous sociaux)
+      // Zip suivant (demande Guillaume) : pendant une scène Chloé/Rosalie, les
+      // deux protagonistes restent SUR PLACE, face à face — on saute leur
+      // rôdaille normale (sinon elles s'éloigneraient en pleine réplique).
+      // Rosalie peut malgré tout, ponctuellement, tourner le dos (flavor
+      // "turn" sur certaines répliques grincheuses, voir dessin plus bas) —
+      // c'est une simple orientation, elle ne quitte jamais la distance
+      // conversationnelle.
+      const sceneActive = chloeRosalieSceneRef.current;
+      const inScene = sceneActive && (sceneActive.rosalieRid === res.rid || sceneActive.chloeRid === res.rid);
+      if (inScene) { res.moving = false; }
+      else if (!res.hidden) residentRoam(res, w, now, dt, ro, residents); // zip 252 : balade sur la ferme (chaque tick) — zip 256 : ancre dédiée — zip 298 : passe la liste des voisins (rendez-vous sociaux)
       if (ro.skill === "beekeeper") updateBeekeeperPhase(res, s, now); // chantier 2026-07 : blocs travail/pause de René
       // Premier passage : on planifie la première journée de travail sans rien
       // produire (emménager prend un peu de temps). La borne haute protège
@@ -7288,10 +7298,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           // pendant une scène Chloé/Rosalie en cours.
           const sceneNow = chloeRosalieSceneRef.current;
           const inScene = sceneNow && (res.rid === sceneNow.rosalieRid || res.rid === sceneNow.chloeRid);
+          // Zip suivant : sur certaines répliques grincheuses (line.turn),
+          // Rosalie tourne cosmétiquement le dos à Chloé — orientation
+          // seulement, elle reste à distance conversationnelle (res.x/y
+          // inchangés, voir gel de la rôdaille dans updateResidents).
+          const turnAwayDir = (() => {
+            if (!sceneNow || res.rid !== sceneNow.rosalieRid) return null;
+            const line = sceneNow.lines[sceneNow.stepIdx];
+            if (!line || !line.turn) return null;
+            return res.dir === 0 ? 1 : res.dir === 1 ? 0 : res.dir;
+          })();
           draws.push({ y: (ry + 1) * T, fn: () => {
             if (resSuperActive) drawCoffeeAura(Math.round(rx * T), Math.round(ry * T));
-            drawCharacter({ id: "res" + res.rid, name: ro.name, x: rx, y: ry, dir: res.dir || 0, moving: !!res.moving, animT: res.animT || 0, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap, beeSuit: residentBeeSuit(res, ro), plaid: ro.skill === "lumberjack", cheeseHat: ro.skill === "cheesemaker", mount: onWhiteHorse ? "white" : null }, false);
-            if (ro.skill === "breadmaker" && (inScene || (performance.now() % 12000 < 3000))) drawFrown(ctx, Math.round(rx * T) + 8, Math.round(ry * T) - 2);
+            drawCharacter({ id: "res" + res.rid, name: ro.name, x: rx, y: ry, dir: turnAwayDir != null ? turnAwayDir : (res.dir || 0), moving: !!res.moving, animT: res.animT || 0, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap, beeSuit: residentBeeSuit(res, ro), plaid: ro.skill === "lumberjack", cheeseHat: ro.skill === "cheesemaker", mount: onWhiteHorse ? "white" : null }, false);
+            if (ro.skill === "breadmaker" && (inScene || (performance.now() % 12000 < 3000)) && turnAwayDir == null) drawFrown(ctx, Math.round(rx * T) + 8, Math.round(ry * T) - 2);
             // Zip suivant : bulle de la scène Chloé/Rosalie en cours, si CE
             // résident est bien le locuteur de l'étape actuelle.
             if (sceneNow) {
@@ -7326,13 +7346,26 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   cyc.cycles++;
                   if (cyc.cycles >= 2 && Date.now() >= chloeRosalieCooldownRef.current) {
                     const chloeRes = residents.find(p => p && !p.hidden && rosterOf(p.rid) && rosterOf(p.rid).skill === "baker");
-                    if (chloeRes) {
+                    // Zip suivant (demande Guillaume) : les deux doivent être à
+                    // distance CONVERSATIONNELLE l'une de l'autre pour que la
+                    // scène démarre (sinon on attend un prochain cycle — Chloé
+                    // et Rosalie rôdent de toute façon près de la même
+                    // boulangerie, donc l'occasion revient vite).
+                    const closeEnough = chloeRes && typeof chloeRes.x === "number" && Math.hypot(chloeRes.x - res.x, chloeRes.y - res.y) <= C.CHLOE_ROSALIE_CONVO_DIST;
+                    if (chloeRes && closeEnough) {
                       cyc.cycles = 0;
                       const scenes = L.chloeRosalieScenes || [];
                       if (scenes.length) {
                         const rareIdx = scenes.length - 1;
                         const idx = (Math.random() < C.CHLOE_ROSALIE_SCENE_V11_CHANCE) ? rareIdx : Math.floor(Math.random() * rareIdx);
                         const lines = scenes[idx];
+                        // On fige les deux sur place, face à face, pour toute
+                        // la durée de la scène (voir updateResidents, qui
+                        // saute résidentRoam pour ces deux rid).
+                        res.roamTarget = null; res.roamMeet = null; res.moving = false;
+                        chloeRes.roamTarget = null; chloeRes.roamMeet = null; chloeRes.moving = false;
+                        faceResidentToward(res, chloeRes.x, chloeRes.y);
+                        faceResidentToward(chloeRes, res.x, res.y);
                         chloeRosalieSceneRef.current = { lines, stepIdx: 0, stepUntil: now2 + (lines[0].ms || 2600), rosalieRid: res.rid, chloeRid: chloeRes.rid };
                         chloeRosalieCooldownRef.current = Date.now() + C.CHLOE_ROSALIE_SCENE_COOLDOWN_MS;
                       }
