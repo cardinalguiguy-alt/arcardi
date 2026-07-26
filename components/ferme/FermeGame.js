@@ -2670,6 +2670,53 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       broadcastStation();
       return true;
     }
+    if (req.kind === "assignBalloonPilot") {
+      // Zip 302 : désigner/changer le pilote de la montgolfière. N'IMPORTE
+      // QUEL résident déjà installé convient ("sans attribution" : pas de
+      // skill dédié à créer, on réutilise un résident existant, qui garde
+      // son métier d'origine). rid null/absent = retirer le pilote actuel
+      // (le business repasse à l'arrêt, cf. updateBalloon).
+      if (!st) return true;
+      if (!st.balloon) st.balloon = E.newBalloonState();
+      const rid = (req.rid === null || req.rid === undefined) ? null : req.rid | 0;
+      if (rid !== null && !(st.residents || []).some(r => r.rid === rid)) return true; // pas un résident installé
+      st.balloon.pilotRid = rid;
+      if (rid === null) { st.balloon.phase = "idle"; st.balloon.tickets = []; st.balloon.nextDepartureAt = 0; }
+      const ro = rid !== null ? rosterOf(rid) : null;
+      stationChat(ro ? L.balloonPilotAssigned(ro.name) : L.balloonPilotRemoved, "\u{1F388}");
+      broadcastStation();
+      return true;
+    }
+    if (req.kind === "buyBalloonTicket") {
+      // Zip 302 : achat d'un billet (50€/passager) pendant la fenêtre
+      // d'embarquement. Passager = le joueur qui clique ("me") ou un
+      // résident désigné par rid (n'importe quel résident installé, y
+      // compris le pilote lui-même — il peut très bien voler avec ses
+      // propres passagers). Recette immédiate pour la caisse commune : c'est
+      // une activité touristique de la ferme, pas un achat perso du joueur.
+      const b = st && st.balloon;
+      if (!b || b.phase !== "boarding") { hostSend({ type: "broadcast", event: "apply", payload: { toast: { id: req.id, key: "balloonNotBoarding" } } }); return true; }
+      if (b.tickets.length >= C.BALLOON_CAPACITY) { hostSend({ type: "broadcast", event: "apply", payload: { toast: { id: req.id, key: "balloonFull" } } }); return true; }
+      let passenger;
+      if (req.rid === null || req.rid === undefined) {
+        passenger = { who: "me", id: f.id, name: f.name };
+      } else {
+        const rid = req.rid | 0;
+        if (!(st.residents || []).some(r => r.rid === rid)) return true;
+        const ro = rosterOf(rid);
+        passenger = { who: "resident", id: rid, name: ro ? ro.name : "?" };
+      }
+      if (b.tickets.some(t => t.who === passenger.who && t.id === passenger.id)) return true; // déjà à bord
+      b.tickets.push(passenger);
+      const gain = C.BALLOON_TICKET_PRICE;
+      s.money += gain; s.totalEarned = (s.totalEarned || 0) + gain;
+      b.soldToday = (b.soldToday | 0) + 1;
+      setHud(h => ({ ...h, money: s.money }));
+      stationChat(L.balloonTicketSold(passenger.name, b.tickets.length, C.BALLOON_CAPACITY), "\u{1F3AB}");
+      broadcastStation();
+      hostSend({ type: "broadcast", event: "apply", payload: { state: shareState() } });
+      return true;
+    }
     if (req.kind === "kickResident") {
       // Zip 259 : vote d'exclusion d'un résident. Unanimité des joueurs EN
       // LIGNE (immédiat en solo). Quand l'exclusion passe : le résident quitte
@@ -2961,7 +3008,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       } else if (now >= bk.breadNextAt) {
         const ws = (s.station && s.station.worldStock) || {};
         const haveFlour = (s.flour | 0) >= C.BREAD_FLOUR;
-        const haveButter = (stock.butter | 0) >= C.CROISSANT_BUTTER;
+        const haveButter = (stock.butter | 0) >= C.BUTTER_SELL_RESERVE + C.CROISSANT_BUTTER;
         const haveCocoa = (ws.cocoa | 0) >= C.CHOCO_COCOA;
         let idx = bk.viennoIdx | 0, made = false;
         for (let tries = 0; tries < 4 && !made; tries++, idx = (idx + 1) % 4) {
@@ -3386,7 +3433,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (key === "petCaught")     return L.petCaughtToast(C.petName(n, lang === "en"));
     if (key === "petReleased")   return L.bagReleasedToast(C.petName(n, lang === "en"));
     if (key === "bagFull")       return L.bagPetsFull(C.MAX_PETS);
-    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, noMillStock: L.toastNoMillStock, millNotEmpty: L.toastMillNotEmpty, noWheatToDeposit: L.toastNoWheatToDeposit, millFull: L.toastMillFull, actionFailed: L.toastActionFailed, coopNone: L.toastCoopNone, farCoop: L.toastFarCoop, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull, notInjured: L.toastNotInjured, noHealKit: L.toastNoHealKit, healTooFar: L.toastHealTooFar, gregNotHired: L.toastGregNotHired, gregOrderBusy: L.toastGregBusy, gregNoRoom: L.toastGregNoRoom, gregNoFertilizer: L.toastGregNoFertilizer, gregCoffeeCooldown: L.toastGregCoffeeCooldown, noCoffee: L.toastNoCoffee, soanNotHired: L.toastSoanNotHired, soanNoRiver: L.toastSoanNoRiver, soanCoffeeCooldown: L.toastSoanCoffeeCooldown, reneCoffeeCooldown: L.toastReneCoffeeCooldown, farCauldron: L.toastFarCauldron, noFishToDeposit: L.toastNoFishToDeposit, cauldronMissing: L.toastCauldronMissing, cauldronAlreadyTaken: L.toastCauldronAlreadyTaken, noCauldronStock: L.toastNoCauldronStock, cauldronNotEmpty: L.toastCauldronNotEmpty, cauldronBrewing: L.toastCauldronBrewing, cauldronNothingToCollect: L.toastCauldronNothingToCollect, cauldronHasEnough: L.toastCauldronHasEnough, visitorNotEnough: L.visitorNotEnough, decorNone: L.decorNone, decorPicked: L.decorPicked, objReturned: L.objReturned, residentNoRoom: L.residentNoRoom, artisanNoResident: L.artisanNoResident, voyagerBusy: L.voyagerBusyToast, kickVoted: L.kickVotedToast, jewelryNoGold: L.toastJewelryNoGold, jewelryNoGem: L.toastJewelryNoGem, cropWrongType: L.toastCropWrongType, cropMaxed: L.toastCropMaxed, beekeeperNoHive: L.toastBeekeeperNoHive, beekeeperBusy: L.toastBeekeeperBusy }[key] || "";
+    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, noMillStock: L.toastNoMillStock, millNotEmpty: L.toastMillNotEmpty, noWheatToDeposit: L.toastNoWheatToDeposit, millFull: L.toastMillFull, actionFailed: L.toastActionFailed, coopNone: L.toastCoopNone, farCoop: L.toastFarCoop, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull, notInjured: L.toastNotInjured, noHealKit: L.toastNoHealKit, healTooFar: L.toastHealTooFar, gregNotHired: L.toastGregNotHired, gregOrderBusy: L.toastGregBusy, gregNoRoom: L.toastGregNoRoom, gregNoFertilizer: L.toastGregNoFertilizer, gregCoffeeCooldown: L.toastGregCoffeeCooldown, noCoffee: L.toastNoCoffee, soanNotHired: L.toastSoanNotHired, soanNoRiver: L.toastSoanNoRiver, soanCoffeeCooldown: L.toastSoanCoffeeCooldown, reneCoffeeCooldown: L.toastReneCoffeeCooldown, farCauldron: L.toastFarCauldron, noFishToDeposit: L.toastNoFishToDeposit, cauldronMissing: L.toastCauldronMissing, cauldronAlreadyTaken: L.toastCauldronAlreadyTaken, noCauldronStock: L.toastNoCauldronStock, cauldronNotEmpty: L.toastCauldronNotEmpty, cauldronBrewing: L.toastCauldronBrewing, cauldronNothingToCollect: L.toastCauldronNothingToCollect, cauldronHasEnough: L.toastCauldronHasEnough, visitorNotEnough: L.visitorNotEnough, decorNone: L.decorNone, decorPicked: L.decorPicked, objReturned: L.objReturned, residentNoRoom: L.residentNoRoom, artisanNoResident: L.artisanNoResident, voyagerBusy: L.voyagerBusyToast, kickVoted: L.kickVotedToast, jewelryNoGold: L.toastJewelryNoGold, jewelryNoGem: L.toastJewelryNoGem, cropWrongType: L.toastCropWrongType, cropMaxed: L.toastCropMaxed, beekeeperNoHive: L.toastBeekeeperNoHive, beekeeperBusy: L.toastBeekeeperBusy, balloonNotBoarding: L.toastBalloonNotBoarding, balloonFull: L.toastBalloonFull }[key] || "";
   }
 
   // -------- Hôte : boucle temps + persistance --------
@@ -5359,6 +5406,67 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       channelRef.current?.send({ type: "broadcast", event: "apply", payload: { residentSim: residents.map(r => ({ rid: r.rid, x: +(+r.x).toFixed(2), y: +(+r.y).toFixed(2), dir: r.dir | 0, moving: !!r.moving, animT: r.animT || 0 })) } });
     }
   }
+  // Montgolfière (zip 302, demande Guillaume) : attraction touristique.
+  // Simulation hôte, même discipline que les autres systèmes "station" :
+  // état sur s.station.balloon, mutations côté hôte uniquement, diffusion
+  // via broadcastStation() (JSON.stringify snapshot déjà utilisé par
+  // recruitResident/kickResident/jewelry...). Trois phases en boucle :
+  //   idle -> boarding (fenêtre de vente, BALLOON_BOARDING_REAL_MS avant le
+  //   départ) -> flying (survol de BALLOON_FLIGHT_REAL_MS) -> idle...
+  // Sans pilote désigné (ou si le pilote a quitté/été exclu), le business
+  // reste à l'arrêt : pas de décollage, jauge remise à zéro.
+  function updateBalloon(dt) {
+    const s = sharedRef.current, st = s.station;
+    if (!st) return;
+    if (!st.balloon) st.balloon = E.newBalloonState();
+    const b = st.balloon;
+    const now = Date.now();
+    const pilotOk = b.pilotRid != null && (st.residents || []).some(r => r.rid === b.pilotRid);
+    if (!pilotOk) {
+      if (b.phase !== "idle" || b.nextDepartureAt || b.tickets.length) {
+        b.phase = "idle"; b.tickets = []; b.nextDepartureAt = 0; b.boardingUntil = 0;
+        broadcastStation();
+      }
+      return;
+    }
+    // Compteur "billets vendus aujourd'hui" (affichage) : remis à zéro au
+    // changement de jour de jeu, même logique que les autres stats du jour.
+    if (b.soldDay !== s.day) { b.soldDay = s.day; b.soldToday = 0; }
+    if (!b.nextDepartureAt) { b.nextDepartureAt = E.nextBalloonDeparture(s.dayStartAt, now); broadcastStation(); return; }
+    if (b.phase === "idle") {
+      if (now >= b.nextDepartureAt - C.BALLOON_BOARDING_REAL_MS) {
+        b.phase = "boarding";
+        b.boardingUntil = b.nextDepartureAt;
+        b.tickets = [];
+        stationChat(L.balloonBoarding(rosterOf(b.pilotRid)?.name || "?"), "\u{1F388}");
+        broadcastStation();
+      }
+      return;
+    }
+    if (b.phase === "boarding") {
+      if (now >= b.boardingUntil) {
+        // Décision Guillaume : le vol part À L'HEURE même incomplet.
+        b.phase = "flying";
+        b.flightStartAt = now;
+        b.flightEndAt = now + C.BALLOON_FLIGHT_REAL_MS;
+        b.seed = (Math.random() * 0x7fffffff) | 0;
+        b.isNightFlight = E.isNightTime(E.gameTimeMin(s.dayStartAt, now));
+        stationChat(L.balloonDeparted(b.tickets.length, C.BALLOON_CAPACITY), "\u{1F388}");
+        broadcastStation();
+      }
+      return;
+    }
+    if (b.phase === "flying") {
+      if (now >= b.flightEndAt) {
+        const n = b.tickets.length;
+        b.phase = "idle"; b.tickets = [];
+        b.nextDepartureAt = E.nextBalloonDeparture(s.dayStartAt, now);
+        stationChat(L.balloonLanded(n), "\u{1F388}");
+        broadcastStation();
+      }
+      return;
+    }
+  }
   // Soan, l'employé pêcheur (chantier 2026-07, demande Guillaume). Simulation
   // hôte, même squelette que updateGreg (rôdaille par ancre + throttle réseau
   // ~150ms), mais sans file de tâches : quatre phases.
@@ -6005,6 +6113,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (isHost) updateGreg(dt);
       if (isHost) updateVisitors(dt); // 2026-07 station update (zip 233: multi-visitor)
       if (isHost) updateResidents(dt); // zip 247: moved-in visitors work the farm per their pledged job
+      if (isHost) updateBalloon(dt); // zip 302: attraction touristique (montgolfière)
       if (isHost) updateCrafts(); // zip 252: production des ateliers d'artisans
       if (isHost) updateSoan(dt);
       if (isHost) updateHarald(dt); // zip 260 : agent d'élevage
@@ -6991,6 +7100,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         else { ctx.globalAlpha = a; ctx.font = "bold 8px monospace"; ctx.textAlign = "center"; ctx.fillStyle = "#00000090"; ctx.fillText(f.txt, f.x * T + 8 + 1, f.y * T - f.t * 12 + 1); ctx.fillStyle = f.col; ctx.fillText(f.txt, f.x * T + 8, f.y * T - f.t * 12); ctx.globalAlpha = 1; }
       }
 
+      // Zip 302 (demande Guillaume) : montgolfière — dessinée APRÈS le tri
+      // par y (calque "ciel", pas de tri avec les PNJ au sol) mais AVANT le
+      // voile de nuit pour qu'elle soit assombrie comme le reste la nuit,
+      // tout en gardant sa propre lueur (vol de 20h). Position identique
+      // pour tous les clients : dérivée à 100% de station.balloon (phase,
+      // seed, horodatages), rien de local/aléatoire côté rendu.
+      {
+        const bst = sharedRef.current?.station?.balloon;
+        if (bst && bst.pilotRid != null) drawBalloon(bst, epochNow);
+      }
+
       const na = nightAlpha();
       if (na > 0) {
         // Correctif chantier 2026-07 ("les lampadaires restent éteints la
@@ -7878,6 +7998,81 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // pour que le chantier 4 le réutilise tel quel. (px, py) = coin du
     // sprite tel que dessiné (même convention que drawSwimOverlay), s'inspire
     // du glow existant sur d'autres effets (ctx.shadowColor/shadowBlur).
+    // Zip 302 (demande Guillaume) : montgolfière — position et rendu.
+    // `now` = horloge RÉELLE (epochNow), à comparer aux horodatages hôte
+    // stockés dans station.balloon (mêmes unités que flightStartAt/flightEndAt).
+    // Idle/boarding : posée au sol sur C.BALLOON_ANCHOR (visible, contact au
+    // sol). Flying : suit balloonPathPoint(seed, t) — IDENTIQUE sur tous les
+    // clients (seed + horodatages broadcastés, aucun calcul aléatoire local).
+    // L'altitude (courbe en cloche : décollage bas -> croisière haute ->
+    // atterrissage bas) N'EST QUE visuelle : elle décale la nacelle vers le
+    // haut par rapport à SON OMBRE, qui elle reste au sol — c'est l'écart
+    // ombre/nacelle qui vend le survol, pas juste un sprite qui bouge.
+    function balloonWorldPos(bst, now) {
+      if (bst.phase === "flying" && bst.flightEndAt > bst.flightStartAt) {
+        const t = Math.max(0, Math.min(1, (now - bst.flightStartAt) / (bst.flightEndAt - bst.flightStartAt)));
+        const p = E.balloonPathPoint(bst.seed, t);
+        const altitude = 14 + 46 * Math.sin(t * Math.PI); // px : bas -> haut -> bas
+        return { x: p.x, y: p.y, altitude, t };
+      }
+      return { x: C.BALLOON_ANCHOR.x + 0.5, y: C.BALLOON_ANCHOR.y + 0.5, altitude: 0, t: 0 };
+    }
+    function drawBalloon(bst, now) {
+      const pos = balloonWorldPos(bst, now);
+      const gx = pos.x * T, gy = pos.y * T; // point au sol (centre de l'ombre)
+      const isFlying = bst.phase === "flying";
+      // Ombre au sol : toujours à gy, rétrécit et s'éclaircit avec l'altitude
+      // (loin du sol) — c'est ce qui rend le survol lisible en un coup d'œil.
+      const shrink = Math.max(0.35, 1 - pos.altitude / 90);
+      ctx.save();
+      ctx.beginPath();
+      ctx.ellipse(gx, gy, 13 * shrink, 6 * shrink, 0, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(20, 20, 15, ${0.32 * shrink})`;
+      ctx.fill();
+      ctx.restore();
+      // Nacelle + enveloppe, décalées vers le haut par l'altitude visuelle.
+      const cx = gx, cy = gy - pos.altitude - 22;
+      ctx.save();
+      ctx.translate(cx, cy);
+      // Petit tangage doux pendant le vol (purement décoratif, dérivé de t
+      // donc identique partout).
+      if (isFlying) ctx.rotate(Math.sin(pos.t * 22) * 0.05);
+      // Cordages
+      ctx.strokeStyle = "#5a4632"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(-8, 10); ctx.lineTo(-5, 22); ctx.moveTo(8, 10); ctx.lineTo(5, 22);
+      ctx.moveTo(-6, 12); ctx.lineTo(5, 22); ctx.moveTo(6, 12); ctx.lineTo(-5, 22);
+      ctx.stroke();
+      // Nacelle (panier)
+      ctx.fillStyle = "#8a5a2f";
+      ctx.fillRect(-6, 22, 12, 8);
+      ctx.strokeStyle = "#5a3a1c"; ctx.strokeRect(-6, 22, 12, 8);
+      // Passagers (petites têtes) selon le nombre de billets vendus.
+      const n = Math.min(C.BALLOON_CAPACITY, (bst.tickets || []).length);
+      for (let i = 0; i < n; i++) {
+        ctx.fillStyle = ["#f4c99b", "#e0a878", "#f4c99b", "#e0a878"][i % 4];
+        ctx.beginPath(); ctx.arc(-4.5 + i * 3, 23, 1.6, 0, Math.PI * 2); ctx.fill();
+      }
+      // Enveloppe (ballon), rayée pour rester lisible/jolie à petite taille.
+      const stripes = ["#d64545", "#f2c14e", "#3d7dd6", "#f2c14e", "#d64545"];
+      for (let i = 0; i < stripes.length; i++) {
+        const a0 = -Math.PI / 2 - Math.PI / 2 + (i / stripes.length) * Math.PI;
+        const a1 = -Math.PI / 2 - Math.PI / 2 + ((i + 1) / stripes.length) * Math.PI;
+        ctx.fillStyle = stripes[i];
+        ctx.beginPath(); ctx.moveTo(0, 0); ctx.ellipse(0, 0, 14, 20, 0, a0, a1); ctx.closePath(); ctx.fill();
+      }
+      ctx.strokeStyle = "rgba(0,0,0,0.25)"; ctx.beginPath(); ctx.ellipse(0, 0, 14, 20, 0, 0, Math.PI * 2); ctx.stroke();
+      // Vol de nuit (20h) : petite lanterne chaude dans la nacelle, pour
+      // rester repérable dans le voile sombre.
+      if (bst.isNightFlight) {
+        ctx.save();
+        const pulse = 6 + Math.sin(now / 260) * 1.5;
+        ctx.shadowColor = "rgba(255, 200, 100, 0.9)"; ctx.shadowBlur = pulse;
+        ctx.fillStyle = "#ffe9a8";
+        ctx.fillRect(-1.5, 24, 3, 3);
+        ctx.restore();
+      }
+      ctx.restore();
+    }
     function drawSuperGlow(px, py) {
       ctx.save();
       const cx = px + 8, cy = py + 12, ph = performance.now() / 260;
@@ -9386,6 +9581,62 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 })}
               </>
             )}
+            {/* Zip 302 (demande Guillaume) : montgolfière — pilote (résident
+                déjà installé, sans skill dédié à créer) + vente de billets
+                pendant la fenêtre d'embarquement (horaires fixes 10h/20h). */}
+            {(stationSt && (stationSt.residents || []).length > 0) && (() => {
+              const bst = stationSt.balloon || {};
+              const pilot = bst.pilotRid != null ? rosterOf(bst.pilotRid) : null;
+              const nowT = Date.now();
+              const meAboard = (bst.tickets || []).some(t => t.who === "me" && t.id === me.id);
+              return (
+                <>
+                  <div className="ferme-hint" style={{ marginTop: 10 }}>{L.balloonTitle}</div>
+                  <div className="ferme-shop-row">
+                    <div className="info">
+                      <b>{L.balloonPilotLabel} : {pilot ? pilot.name : "—"}</b>
+                      <span className="ferme-usage">
+                        {!pilot ? L.balloonNoPilot : bst.phase === "boarding" ? L.balloonPhaseBoarding((bst.tickets || []).length, C.BALLOON_CAPACITY)
+                          : bst.phase === "flying" ? L.balloonPhaseFlying
+                          : bst.nextDepartureAt ? L.balloonPhaseIdle(fmtDuration(bst.nextDepartureAt - nowT)) : ""}
+                        {pilot ? ` · ${L.balloonSoldToday(bst.soldToday || 0)}` : ""}
+                      </span>
+                    </div>
+                    {pilot && <button onClick={() => sendReq({ kind: "assignBalloonPilot", rid: null })}>{L.balloonUnassignBtn}</button>}
+                  </div>
+                  {!pilot && (stationSt.residents || []).map(res => {
+                    const ro = rosterOf(res.rid); if (!ro) return null;
+                    return (
+                      <div className="ferme-shop-row" key={"pilot-" + res.rid}>
+                        <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, false, ro.skill === "lumberjack", ro.skill === "cheesemaker") : null} sx={16} sy={24} w={24} h={36} />
+                        <div className="info"><b>{ro.name}</b><span className="ferme-usage">{L.residentTag(ro.job)}</span></div>
+                        <button onClick={() => sendReq({ kind: "assignBalloonPilot", rid: res.rid })}>{L.balloonAssignBtn}</button>
+                      </div>
+                    );
+                  })}
+                  {pilot && bst.phase === "boarding" && (bst.tickets || []).length < C.BALLOON_CAPACITY && (
+                    <>
+                      {!meAboard && (
+                        <div className="ferme-shop-row">
+                          <div className="info"><b>{L.balloonBuyForMeBtn(C.BALLOON_TICKET_PRICE)}</b></div>
+                          <button disabled={(hud.money | 0) < C.BALLOON_TICKET_PRICE} onClick={() => sendReq({ kind: "buyBalloonTicket", rid: null })}>{L.balloonBuyBtn(C.BALLOON_TICKET_PRICE)}</button>
+                        </div>
+                      )}
+                      {(stationSt.residents || []).filter(r => !(bst.tickets || []).some(t => t.who === "resident" && t.id === r.rid)).map(res => {
+                        const ro = rosterOf(res.rid); if (!ro) return null;
+                        return (
+                          <div className="ferme-shop-row" key={"ticket-" + res.rid}>
+                            <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, false, ro.skill === "lumberjack", ro.skill === "cheesemaker") : null} sx={16} sy={24} w={24} h={36} />
+                            <div className="info"><b>{ro.name}</b></div>
+                            <button onClick={() => sendReq({ kind: "buyBalloonTicket", rid: res.rid })}>{L.balloonBuyForResidentBtn(ro.name, C.BALLOON_TICKET_PRICE)}</button>
+                          </div>
+                        );
+                      })}
+                    </>
+                  )}
+                </>
+              );
+            })()}
           </div>
         </div>
       )}

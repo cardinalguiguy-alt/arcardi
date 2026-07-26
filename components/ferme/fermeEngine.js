@@ -2445,6 +2445,8 @@ export function newStationState() {
     // finies en attente de vente, chacune avec son PROPRE prix fixé par le
     // joueur qui l'a designée : { id, type, gemId, shape, price, maker }.
     jewelry: { built: false, items: [] },
+    // Zip 302 : montgolfière — voir newBalloonState() plus bas.
+    balloon: null, // rempli paresseusement (E.newBalloonState()) au premier tick hôte
   };
 }
 
@@ -2483,6 +2485,8 @@ export function migrateStation(st, hostNow) {
   out.jewelry = (st.jewelry && typeof st.jewelry === "object")
     ? { built: !!st.jewelry.built, items: Array.isArray(st.jewelry.items) ? st.jewelry.items.filter(it => it && typeof it.id === "number") : [] }
     : { built: false, items: [] };
+  // Zip 302 : montgolfière — état PERSISTÉ comme le reste de la station.
+  out.balloon = migrateBalloon(st.balloon);
   // Owed gifts (zip 233) survive EVERY load, plain or snapshot: a promised
   // pet must not vanish before the pet system ships.
   out.pendingGifts = Array.isArray(st.pendingGifts) ? st.pendingGifts.filter(g => g && typeof g.kind === "string") : [];
@@ -2506,6 +2510,12 @@ export function migrateStation(st, hostNow) {
     if (st.damage) {
       out.damage = { ...st.damage };
       if (typeof out.damage.until === "number" && out.damage.until > 0) out.damage.until += shift;
+    }
+    // Zip 302 : montgolfière — mêmes horodatages "horloge hôte" que les
+    // visiteurs/dégâts, à relocaliser en cas de changement d'hôte en cours
+    // de vol/embarquement (sinon décollage/atterrissage se dérègle).
+    for (const k of ["boardingUntil", "flightStartAt", "flightEndAt", "nextDepartureAt"]) {
+      if (typeof out.balloon[k] === "number" && out.balloon[k] > 0) out.balloon[k] += shift;
     }
     // Zip 258 : la commande d'Eduardo en cours (res.trip.returnAt, horloge de
     // l'hôte) doit être relocalisée comme les échéances des visiteurs, sinon un
@@ -3431,4 +3441,93 @@ export function resolveSellJewelry(shared, station, id) {
   const gain = item.price | 0;
   shared.money = (shared.money | 0) + gain;
   return { ok: true, gain };
+}
+
+/* -------------------------------------------------------------------------
+   Montgolfière (zip 302, demande Guillaume) : attraction touristique.
+   Fonctions PURES (état par défaut, migration, horaire, trajectoire) —
+   la simulation (tick hôte, requêtes) vit dans FermeGame.js comme le reste
+   des systèmes "station", au même titre que la bijouterie/les résidents.
+   ------------------------------------------------------------------------- */
+
+export function newBalloonState() {
+  return {
+    pilotRid: null,      // rid du résident désigné (doit être dans station.residents)
+    phase: "idle",        // idle | boarding | flying
+    tickets: [],           // passagers du vol en cours : { who: "me"|"resident", id, name }
+    boardingUntil: 0,      // horloge hôte : fin de la fenêtre d'embarquement
+    flightStartAt: 0,
+    flightEndAt: 0,
+    nextDepartureAt: 0,    // horloge hôte ; 0 = à (re)calculer au prochain tick hôte
+    isNightFlight: false,  // vol de 20h (nacelle éclairée) vs vol de 10h
+    seed: 0,               // graine de la trajectoire du vol en cours
+    soldToday: 0,           // billets vendus le jour de jeu courant (affichage)
+    soldDay: 0,             // jour de jeu correspondant à soldToday (reset au changement de jour)
+  };
+}
+
+export function migrateBalloon(b) {
+  const out = newBalloonState();
+  if (!b || typeof b !== "object") return out;
+  out.pilotRid = typeof b.pilotRid === "number" ? b.pilotRid : null;
+  out.phase = (b.phase === "boarding" || b.phase === "flying") ? b.phase : "idle";
+  out.tickets = Array.isArray(b.tickets)
+    ? b.tickets.filter(t => t && typeof t.id !== "undefined").slice(0, C.BALLOON_CAPACITY)
+    : [];
+  out.boardingUntil = b.boardingUntil | 0;
+  out.flightStartAt = b.flightStartAt | 0;
+  out.flightEndAt = b.flightEndAt | 0;
+  out.nextDepartureAt = b.nextDepartureAt | 0;
+  out.isNightFlight = !!b.isNightFlight;
+  out.seed = b.seed | 0;
+  out.soldToday = Math.max(0, b.soldToday | 0);
+  out.soldDay = b.soldDay | 0;
+  return out;
+}
+
+// Prochain horaire fixe (10h/20h, temps de JEU) traduit en horloge RÉELLE de
+// l'hôte, à partir de `dayStartAt` (même ancre que gameTimeMin). Si les deux
+// départs du jour courant sont déjà passés, on programme le premier départ
+// du jour de jeu suivant (un jour de jeu dure C.DAY_REAL_MS en temps réel).
+export function nextBalloonDeparture(dayStartAt, now) {
+  const span = C.DAY_END_MIN - C.DAY_START_MIN;
+  const msPerGameMin = C.DAY_REAL_MS / span;
+  for (const m of C.BALLOON_DEPARTURES_MIN) {
+    const at = dayStartAt + (m - C.DAY_START_MIN) * msPerGameMin;
+    if (at > now) return at;
+  }
+  const nextDayStart = dayStartAt + C.DAY_REAL_MS;
+  return nextDayStart + (C.BALLOON_DEPARTURES_MIN[0] - C.DAY_START_MIN) * msPerGameMin;
+}
+
+// PRNG déterministe minimal (mulberry32) : à graine égale, TOUS les clients
+// calculent exactement la même trajectoire sans rien synchroniser de plus
+// que `seed` (déjà broadcast avec le reste de station.balloon).
+function balloonRnd(seed) {
+  let a = seed | 0;
+  return function () {
+    a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// Trajectoire lissée (courbe de Bézier cubique) sur 4 points de contrôle
+// tirés dans les limites de la carte (avec marge), distincts à chaque vol
+// via `seed`. `t` = progression du survol, 0..1. Retourne la position AU SOL
+// (tuiles) : c'est cette position qui sert à la fois à l'ombre projetée et
+// (avec un décalage vertical de rendu) à la nacelle elle-même.
+export function balloonPathPoint(seed, t) {
+  const rnd = balloonRnd(seed || 1);
+  const margin = 14;
+  const pts = [0, 1, 2, 3].map(() => ({
+    x: margin + rnd() * (C.MAP_W - margin * 2),
+    y: margin + rnd() * (C.MAP_H - margin * 2),
+  }));
+  const tt = Math.max(0, Math.min(1, t));
+  const u = 1 - tt;
+  const x = u * u * u * pts[0].x + 3 * u * u * tt * pts[1].x + 3 * u * tt * tt * pts[2].x + tt * tt * tt * pts[3].x;
+  const y = u * u * u * pts[0].y + 3 * u * u * tt * pts[1].y + 3 * u * tt * tt * pts[2].y + tt * tt * tt * pts[3].y;
+  return { x, y };
 }

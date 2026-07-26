@@ -1305,6 +1305,15 @@ export const CHEESE_WHEEL_SELL = 1500;     export const CHEESE_PORTION_SELL = 35
 // sur la durée. Le beurre est une denrée vendable ET l'intrant des
 // viennoiseries de Rosalie (voir plus bas).
 export const BUTTER_SELL = 300;                 // prix de vente d'une motte de beurre
+// Zip suivant (bug signalé par Guillaume : "le beurre n'apparaît jamais dans
+// le shop") : Rosalie tourne toutes les ROSALIE_MS (1 min 30) et engloutit
+// IMMÉDIATEMENT tout beurre disponible dès qu'il y en a ≥ 1 (CROISSANT_BUTTER)
+// pour ses croissants/chocolatines, alors que la fromagerie n'en produit
+// qu'au mieux toutes les CHEESE_MS (6 min) selon le ratio réglé — le beurre
+// n'a donc jamais le temps de s'accumuler ni d'être vu/vendu par le joueur.
+// Cette réserve est mise de côté, jamais consommée par Rosalie, pour que le
+// beurre reste effectivement une denrée vendable comme prévu (zip 301).
+export const BUTTER_SELL_RESERVE = 3;
 export const FROMAGERIE_BUTTER_PCT_DEFAULT = 0; // zip 301b (demande Guillaume) : défaut = 100 % fromage (comportement historique préservé) ; le beurre n'apparaît qu'une fois le ratio réglé dans la fiche d'Ingrid
 export const FROMAGERIE_RATIO_STEP = 10;         // paliers de réglage du ratio (10 %)
 // Zip 258 (demande Guillaume) : la boulangerie tourne 3× plus vite (3 min ->
@@ -1830,3 +1839,24 @@ export const TOWN_HOUSE_STYLES = 10;       // 10 façades de base gratuites (R �
 // la mairie", ils reviennent (et restent) sur la place au lieu de vagabonder.
 export const VISITOR_RECALL_MS = 2 * 60 * 1000;
 export const VISITOR_ROAM_HOP = 8;         // longueur max (tuiles) d'une étape de balade libre sur toute la carte
+
+// --- Montgolfière (zip 302, demande Guillaume) : attraction touristique ---
+// Business indépendant des ateliers d'artisans : pas de skill dédié dans
+// VISITOR_ROSTER, pas de bâtiment à construire. Le joueur désigne comme
+// pilote N'IMPORTE QUEL résident DÉJÀ INSTALLÉ (st.residents), sans lui
+// retirer son métier d'origine — "sans attribution" = pas de skill/atelier
+// propre à créer pour ce business, on réutilise un résident existant.
+export const BALLOON_TICKET_PRICE = 50;    // prix du billet, par passager
+export const BALLOON_CAPACITY = 4;         // places dans la nacelle
+// Horaires FIXES en temps de jeu (minutes depuis minuit, cf. DAY_START_MIN/
+// DAY_END_MIN) : 10h00 (tour du matin) et 20h00 (tour de nuit).
+export const BALLOON_DEPARTURES_MIN = [10 * 60, 20 * 60];
+// Fenêtre d'embarquement AVANT chaque départ (horloge réelle, indépendante de
+// la vitesse du temps de jeu) : les billets ne sont vendables que pendant
+// cette fenêtre. Décision Guillaume : le vol part à l'heure même incomplet.
+export const BALLOON_BOARDING_REAL_MS = 90 * 1000; // 1min30 réelles avant le départ
+export const BALLOON_FLIGHT_REAL_MS = 3 * 60 * 1000; // durée réelle d'un survol complet
+// Point d'ancrage visuel (hangar/plateforme au sol) où la montgolfière est
+// visible posée hors vol et pendant l'embarquement. Purement décoratif, pas
+// de collision dédiée (cf. Guillaume à ajuster visuellement en jeu si besoin).
+export const BALLOON_ANCHOR = { x: 26, y: 34 };
