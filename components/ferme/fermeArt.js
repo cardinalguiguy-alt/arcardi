@@ -1018,39 +1018,104 @@ export function buildSprites() {
 
   function balloonSprite() {
     // Zip 305 (demande Guillaume : reprendre EXACTEMENT le calque pixel-art
-    // fourni — "sers-toi en de calque exact") : l'enveloppe et le panier ne
-    // sont plus dessinés par la formule géométrique (sphère éclairée +
-    // tressage procédural), mais reproduits pixel pour pixel depuis le
-    // calque validé. La règle du site (aucune image bitmap, tout généré par
+    // fourni — "sers-toi en de calque exact") : l'enveloppe est reproduite
+    // pixel pour pixel depuis le calque validé, PAS dessinée par une formule
+    // géométrique. La règle du site (aucune image bitmap, tout généré par
     // code) reste respectée : le calque a été converti une fois pour toutes
     // en table de données (BALLOON_PALETTE / BALLOON_ROWS, quelques lignes
-    // plus bas) que ce code redessine lui-même via fillRect — pas de
+    // plus haut) que ce code redessine lui-même via fillRect — pas de
     // `<img>` ni de `drawImage` sur un fichier externe, juste des données
     // que le canvas peint. Le sprite est baké une seule fois comme avant.
     // Grille source : 38×49 "méga-pixels" (résolution native du calque
     // pixel-art fourni), chaque méga-pixel est peint comme un carré de
     // BLOCK px sur le canvas final pour rester net (pas de flou).
-    const BLOCK = 3;
-    const GRID_W = 38, GRID_H = 49;
-    const W = GRID_W * BLOCK, H = GRID_H * BLOCK;
+    //
+    // Zip 306 (demande Guillaume : "agrandir le panier pour qu'il puisse
+    // accueillir les 4 visiteurs/résidents") — deux ajustements validés :
+    //  1) tout le sprite est très légèrement agrandi (BLOCK 3 → 3.3, environ
+    //     +10%) ;
+    //  2) le petit panier tracé sur le calque original (à peine 4 "méga-
+    //     pixels" de haut, trop exigu pour 4 têtes) est coupé de la grille
+    //     (on n'en peint que l'enveloppe + les cordages, jusqu'à
+    //     GRID_CUT_ROW) et remplacé par un panier tressé bien plus grand,
+    //     redessiné par code dans le même esprit "osier" que les zips
+    //     302-304 (montants sombres + brins clair/moyen/foncé en quinconce),
+    //     dimensionné explicitement pour laisser de la place à 4 passagers
+    //     (les repères d'affichage des têtes sont fixes dans FermeGame.js,
+    //     à ±6.75 px de large de part et d'autre du centre à l'écran — le
+    //     panier ci-dessous est prévu large pour bien les entourer).
+    const BLOCK = 3.3;
+    const GRID_W = 38, GRID_CUT_ROW = 45;
+    const envH = GRID_CUT_ROW * BLOCK;
+    // Panier agrandi (indépendant de la résolution du calque) : dimensions
+    // choisies pour rester nettement plus spacieux que l'ancien panier
+    // tracé (~27×12 px bakés) et que celui, déjà retiré, des zips 302-304
+    // (~38×27 px bakés à l'époque).
+    const basketW = 50, basketH = 30, basketGap = 3;
+    const W = Math.ceil(GRID_W * BLOCK), H = Math.ceil(envH + basketGap + basketH) + 4;
     const [c, g] = cv(W, H);
     function px(x, y, col) { g.fillStyle = col; g.fillRect(x, y, 1, 1); }
+    function shadeHex(hex, f) {
+      let r = parseInt(hex.slice(1, 3), 16), gg = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
+      r = Math.max(0, Math.min(255, r * f)); gg = Math.max(0, Math.min(255, gg * f)); b = Math.max(0, Math.min(255, b * f));
+      return `rgb(${r | 0},${gg | 0},${b | 0})`;
+    }
+    function ropeTwist(x0, y0, x1, y1, thick, colA, colB, period) {
+      const dx = x1 - x0, dy = y1 - y0, len = Math.sqrt(dx * dx + dy * dy) || 1;
+      const nx = -dy / len, ny = dx / len, steps = Math.ceil(len);
+      for (let s = 0; s <= steps; s++) {
+        const t = s / steps, sx = x0 + dx * t, sy = y0 + dy * t;
+        for (let w = -Math.floor(thick / 2); w <= Math.floor(thick / 2); w++) {
+          const phase = (t * len / period + w * 0.5) % 1;
+          px(Math.round(sx + nx * w), Math.round(sy + ny * w), phase < 0.5 ? colA : colB);
+        }
+      }
+    }
+    // Calque : seules l'enveloppe et les cordages (rangées < GRID_CUT_ROW)
+    // sont peints depuis les données tracées — le petit panier d'origine
+    // (rangées ≥ GRID_CUT_ROW) est volontairement ignoré ici.
     for (const [y, runs] of BALLOON_ROWS) {
+      if (y >= GRID_CUT_ROW) continue;
       for (const [x0, len, ci] of runs) {
         g.fillStyle = BALLOON_PALETTE[ci];
         g.fillRect(x0 * BLOCK, y * BLOCK, len * BLOCK, BLOCK);
       }
     }
-    // Repère (panier) : rangée où débute le panier dans la grille source
-    // (sous l'enveloppe et les cordages), retrouvée sur le calque.
-    const cx = W / 2, basketTopRow = 45, basketY = basketTopRow * BLOCK;
+    const cx = W / 2;
+    const basketX = cx - basketW / 2, basketY = envH + basketGap;
+    // Cordages reliant le bas des cordages du calque (qui convergent vers
+    // le centre) aux 4 coins du panier élargi.
+    const attachTopY = envH - 4 * BLOCK;
+    ropeTwist(cx - basketW * 0.30, attachTopY, basketX + 4, basketY + 2, 3, "#9c7a44", "#5c421f", 8);
+    ropeTwist(cx - basketW * 0.12, attachTopY, basketX + 4, basketY, 3, "#9c7a44", "#5c421f", 8);
+    ropeTwist(cx + basketW * 0.12, attachTopY, basketX + basketW - 4, basketY, 3, "#9c7a44", "#5c421f", 8);
+    ropeTwist(cx + basketW * 0.30, attachTopY, basketX + basketW - 4, basketY + 2, 3, "#9c7a44", "#5c421f", 8);
+    // Panier tressé : vrai tressage d'osier (montants sombres réguliers +
+    // brins clair/moyen/foncé en quinconce), même style que les zips
+    // 302-304, redessiné à la nouvelle taille.
+    const stakeCol = "#3d2c14", weaveLight = "#a9834e", weaveMid = "#7d5c30", weaveDark = "#523c1c", rimCol = "#c79b5e";
+    for (let by = 0; by < basketH; by++) {
+      for (let bx = 0; bx < basketW; bx++) {
+        const isStake = (bx % 4 === 0);
+        const lightF = 1 - (bx / basketW) * 0.35;
+        let col;
+        if (by === 0 || by === 1) col = shadeHex(rimCol, lightF + 0.15);
+        else if (by === basketH - 1) col = shadeHex(stakeCol, lightF + 0.1);
+        else if (isStake) col = shadeHex(stakeCol, lightF + 0.2);
+        else {
+          const weaveRow = Math.floor((by + bx * 0.5) / 2) % 2 === 0;
+          col = shadeHex(weaveRow ? weaveLight : weaveMid, lightF + 0.15);
+          if ((by + bx) % 7 === 0) col = shadeHex(weaveDark, lightF + 0.1);
+        }
+        px(Math.round(basketX + bx), Math.round(basketY + by), col);
+      }
+    }
     // Brûleur : TOUJOURS visible (jour et nuit, demande Guillaume : "c'est
-    // ainsi qu'une montgolfière fonctionne") — peint PAR-DESSUS le calque,
-    // juste au-dessus du panier, dans le même esprit que le sprite précédent
-    // (support métallique + flamme à plusieurs teintes). La lueur de nuit
-    // (percée du voile sombre) reste ajoutée dynamiquement par
-    // FermeGame.js via `flameX/flameY`, pas bakée ici (elle doit pulser en
-    // direct).
+    // ainsi qu'une montgolfière fonctionne") — peint PAR-DESSUS le panier,
+    // dans le même esprit que le sprite précédent (support métallique +
+    // flamme à plusieurs teintes). La lueur de nuit (percée du voile
+    // sombre) reste ajoutée dynamiquement par FermeGame.js via
+    // `flameX/flameY`, pas bakée ici (elle doit pulser en direct).
     const flameX = Math.round(cx), flameY = Math.round(basketY - 6);
     P(g, flameX - 3, basketY - 3, 7, 2, "#2a2a2a");
     P(g, flameX - 3, basketY - 5, 2, 2, "#2a2a2a"); P(g, flameX + 1, basketY - 5, 2, 2, "#2a2a2a");
