@@ -1053,7 +1053,7 @@ export function buildSprites() {
         const lightDirX = -0.55, lightDirZ = 0.75;
         const diffuse = Math.max(0.15, uc * (-lightDirX) + normalZ * lightDirZ);
         const spec = Math.pow(Math.max(0, uc * (-lightDirX) + normalZ * lightDirZ - 0.35), 6) * 3.2;
-        const panelF = ((u + 1) / 2) * panelCount, panelIdx = Math.floor(panelF);
+        const panelF = ((uc + 1) / 2) * panelCount, panelIdx = Math.max(0, Math.min(panelCount - 1, Math.floor(panelF)));
         const base = panelColors[panelIdx % 2];
         const seamDist = Math.min(panelF - panelIdx, panelIdx + 1 - panelF);
         const seamAO = seamDist < 0.06 ? (1 - seamDist / 0.06) * 0.35 : 0;
