@@ -101,6 +101,13 @@ export const O_CAULDRON = 18;  // chaudron (chantier 2026-07, demande Guillaume 
                                 // avant d'être fonctionnel, voir BUILD_TIMES.cauldron) — mais jamais achetable :
                                 // il faut d'abord le ramasser sur la carte maléfique (voir EVIL_CAULDRON_SPAWN),
                                 // une seule fois pour toute la ferme (voir s.cauldron, fermeEngine.js/FermeGame.js).
+export const O_SUCRERIE = 19;  // sucrerie (chantier canne à sucre). Mécanique IDENTIQUE au moulin (achetable/
+                                // posable avec l'outil Construction, variante "sucrerie", chantier réel avant
+                                // d'être fonctionnel, voir BUILD_TIMES.sucrerie), avec un stock de canne COMMUN
+                                // à la case (world.sucreries, voir resolveAct cas "sucrerie"/"sucrerieDeposit").
+                                // Transformation continue (canne -> sacs de sucre) pas encore branchée (voir
+                                // Phase 3 de la feuille de route) — pour l'instant seuls pose/retrait/dépôt
+                                // existent, sur le modèle exact du moulin.
 
 // --- Cultures ---
 // stages: 0=semis ... maxStage=récoltable ; growMs = durée RÉELLE (arrosée) pour
@@ -131,6 +138,8 @@ export const CROPS = [
   // sprites, selling at the bin) rides the existing data-driven pipeline.
   { id: 6, name: "Navet doré",    nameEn: "Golden turnip", seedName: "Graine de navet doré",    seedNameEn: "Golden turnip seeds", growMs: 6 * H,  seedCost: 0, sell: 260, color: "#f6d76a", top: "#e0b02a", unique: true },
   { id: 7, name: "Baie étoilée",  nameEn: "Star berry",    seedName: "Graine de baie étoilée",  seedNameEn: "Star berry seeds",    growMs: 12 * H, seedCost: 0, sell: 460, color: "#b48ef0", top: "#7a4ee0", unique: true },
+  // Canne à sucre (chantier sucrerie) — extrapolée au-dessus du maïs.
+  { id: 8, name: "Canne à sucre", nameEn: "Sugar cane", seedName: "Bouture de canne à sucre", seedNameEn: "Sugar cane cutting", growMs: 48 * H, seedCost: 160, sell: 620, color: "#7fae4a", top: "#4a7a2e" },
 ];
 export const CROP_STAGES = 5; // 0..4, stage 4 = mûr
 // Durée réelle pendant laquelle un arrosage reste valable : passé ce délai sans
@@ -555,6 +564,19 @@ export const MILL_WHEAT_PER_SACK = 1;        // Zip 301b (demande Guillaume : pl
 export const MILL_BATCH_MS = 5 * 60 * 1000;  // Zip 261/262 (demande Guillaume : moulins plus rapides) : 15 -> 5 min réelles par sac
 export const MILL_STOCK_CAP = 90;            // stock de blé max qu'un moulin peut contenir (extrapolé, ~30 sacs d'avance)
 export const FLOUR_SELL = 55;                // prix de vente d'un sac de farine (extrapolé)
+// Sucrerie (chantier canne à sucre) — miroir EXACT du moulin ci-dessus, pour
+// pose/retrait/dépôt (resolveAct cas "sucrerie"/"sucrerieDeposit"). Coût et
+// stock cap extrapolés sur le même principe que le moulin (bâtiment plus
+// "premium" que le moulin car culture plus chère, cf. FEUILLE_ROUTE) ; pas
+// de MILL_BATCH_MS/PER_SACK équivalent tant que la transformation (Phase 3
+// de la feuille de route) n'est pas branchée.
+export const SUCRERIE_COST = 36000;          // prix d'une sucrerie à la boutique (or), extrapolé au-dessus du moulin
+export const SUCRERIE_CANE_CROP = 8;         // index de "Canne à sucre" dans C.CROPS ci-dessus
+export const SUCRERIE_CANE_PER_SACK = 1;     // même repère que MILL_WHEAT_PER_SACK (1 canne = 1 sac de sucre)
+export const SUCRERIE_BATCH_MS = 8 * 60 * 1000; // 8 min réelles/sac (extrapolé, plus lent que le moulin : ressource plus chère)
+export const SUCRERIE_STOCK_CAP = 90;        // stock de canne max qu'une sucrerie peut contenir (même repère que le moulin)
+export const SUCRERIE_SPEED_MIN_MULT = 1;    // miroir de MILL_SPEED_MIN_MULT (parallélisme par répartition du dépôt, pas de boost par sucrerie)
+export const SUGAR_SELL = 70;                // prix de vente d'un sac de sucre (extrapolé au-dessus de FLOUR_SELL, sucre = ressource plus rare)
 // Zip 286 (demande Guillaume : "quand une ferme dépose plusieurs moulins, il
 // faut qu'ils fonctionnent en même temps, qu'ils produisent la farine plus
 // vite. 2 moulins = x2, 3 moulins = x3") : chaque moulin garde son propre
@@ -600,6 +622,7 @@ export const BUILD_TIMES = {
   scarecrow: 10 * 1000,     // épouvantail : 10 secondes réelles (valeur donnée par Guillaume)
   grass: 5 * 1000,          // repousse de l'herbe sur une case labourée : 5 secondes réelles (valeur donnée par Guillaume)
   mill: 60 * 60 * 1000,     // moulin niveau 1 : 1 heure réelle (valeur donnée par Guillaume)
+  sucrerie: 60 * 60 * 1000, // sucrerie : même chantier réel que le moulin (1h), miroir exact (chantier canne à sucre)
   cauldron: 5 * 1000,       // chaudron : 5 secondes réelles (extrapolé, pas de "bâtiment" au sens propre, cohérent
                              // avec l'absence de mini-jeu à la concoction elle-même, voir doc -50)
 };
@@ -1155,7 +1178,16 @@ export const RESIDENT_TASK_BY_THEME = {
 // makes them eligible for rich-patron visits (big-money purchases).
 export const VISITOR_ROSTER = [
   { rid: 0,  name: "Margot",   gender: "f", outfit: 3, overalls: false, cap: false, theme: "market",  job: "run a market stall" },
-  { rid: 1,  name: "Theo",     gender: "m", outfit: 2, overalls: true,  cap: true,  theme: "fields",  job: "help in the fields" },
+  // Zip 315 (chantier canne à sucre) : Theo devient Jérôme Martial, artisan
+  // NOMMÉ à skill "sugarworker" (sucrier), sur le même modèle que René/Ingrid/
+  // Tristan/Chloé. SKILL_BUILDING["sugarworker"] -> "sucrerie" ci-dessous.
+  // Renommé "Grosdésir" -> "Martial" (chantier sucrerie, demande Guillaume).
+  // `overalls: false` : son skin dédié (couleurs du drapeau martiniquais —
+  // voir le flag `sugarWorker` dans fermeArt.js/drawCharFrame) dessine sa
+  // propre chemise/pantalon par-dessus, la salopette générique ne servirait
+  // à rien ici. `cap: true` est conservé : la casquette générique est déjà
+  // verte (voir CAP dans drawCharFrame), donc cohérente telle quelle.
+  { rid: 1,  name: "Jérôme Martial", gender: "m", outfit: 2, overalls: false, cap: true,  theme: "fields",  job: "press cane and cook sugar", skill: "sugarworker" },
   { rid: 2,  name: "Colette",  gender: "f", outfit: 4, overalls: false, cap: false, theme: "style",   job: "sew and dye clothes" },
   { rid: 3,  name: "Bastien",  gender: "m", outfit: 0, overalls: false, cap: false, theme: "gold",    job: "keep the farm ledgers", rich: true },
   { rid: 4,  name: "Odile",    gender: "f", outfit: 5, overalls: false, cap: true,  theme: "shadow",  job: "guard the farm at night", edgy: true },
@@ -1256,7 +1288,7 @@ export const ARTISAN_FOOT = { beehive: 31, fromagerie: 62, bakery: 62, sawmill: 
 // Zip 260 : lumberjack -> sawmill (le bûcheron s'ancre/rôde autour de sa
 // scierie une fois construite ; sinon rôde près du spawn comme avant).
 // Zip 301 : breadmaker (Rosalie) partage la boulangerie de baker (Chloé).
-export const SKILL_BUILDING = { beekeeper: "beehive", cheesemaker: "fromagerie", baker: "bakery", breadmaker: "bakery", lumberjack: "sawmill", voyager: null };
+export const SKILL_BUILDING = { beekeeper: "beehive", cheesemaker: "fromagerie", baker: "bakery", breadmaker: "bakery", lumberjack: "sawmill", voyager: null, sugarworker: "sucrerie" };
 // Cadences de production (ms réelles) et valeurs de vente (or).
 // Zip 258 (demande Guillaume : "le miel est une denrée rare") : cadence ÷3
 // (4 min -> 12 min entre deux pots) et prix du pot fortement relevé à 7000.

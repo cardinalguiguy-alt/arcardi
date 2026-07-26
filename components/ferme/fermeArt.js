@@ -709,8 +709,78 @@ export function buildSprites() {
     return c;
   }
 
+  /* ---------------- Canne à sucre (chantier sucrerie, sprite dédié) ----------------
+   * Contrairement aux autres cultures (canevas T×T), la canne mûre dépasse la
+   * hauteur d'une tuile : canevas T large × T*2 haut, ANCRÉ PAR LE BAS (voir
+   * FermeGame.js, dessin des cultures). Tiges segmentées avec nœuds
+   * pourpre-brun, dégradé vert -> doré assombri vers la base aux stades avancés,
+   * panache plumeux au stade mûr (100%).
+   */
+  function caneSprite(stage) {
+    const H2 = T * 2;
+    const [c, g] = cv(T, H2);
+    const green = "#5aa93e", greenD = "#3f7a2a", leaf = "#7fcf52";
+    const node = "#6a4a3a"; // nœud pourpre-brun
+    const gold = "#c99a2e", goldD = "#8a6a1e";
+
+    function stalk(x, yTop, h, w, mature) {
+      // tige segmentée : alternance couleur + nœuds pourpre-brun tous les 4px
+      for (let seg = 0; seg < h; seg += 4) {
+        const y = yTop + seg;
+        const segH = Math.min(4, h - seg);
+        const fromBase = h - seg; // distance à la base
+        let col = green;
+        if (mature) {
+          // dégradé vert -> doré assombri en approchant de la base
+          col = fromBase <= h * 0.4 ? gold : (fromBase <= h * 0.6 ? goldD : green);
+        }
+        P(g, x, y, w, segH, col);
+        if (seg + 4 < h) P(g, x, y + segH - 1, w, 1, node);
+      }
+      P(g, x, yTop, w, 1, mature ? "#8a7a3a" : greenD); // ombrage colonne haut de tige
+    }
+
+    if (stage === 0) {
+      // pousse : 2 tiges courtes
+      stalk(6, H2 - 6, 6, 2, false);
+      stalk(9, H2 - 5, 5, 2, false);
+      P(g, 6, H2 - 8, 2, 2, leaf); P(g, 9, H2 - 7, 2, 2, leaf);
+    } else if (stage === 1) {
+      stalk(5, H2 - 11, 11, 2, false);
+      stalk(9, H2 - 9, 9, 2, false);
+      P(g, 4, H2 - 13, 3, 2, leaf); P(g, 9, H2 - 11, 3, 2, leaf); P(g, 12, H2 - 9, 2, 2, leaf);
+    } else if (stage === 2) {
+      stalk(4, H2 - 17, 17, 2, false);
+      stalk(7, H2 - 20, 20, 2, false);
+      stalk(10, H2 - 16, 16, 2, false);
+      P(g, 3, H2 - 20, 3, 2, leaf); P(g, 6, H2 - 23, 4, 2, leaf); P(g, 10, H2 - 19, 3, 2, leaf);
+    } else if (stage === 3) {
+      stalk(3, H2 - 24, 24, 2, true);
+      stalk(7, H2 - 28, 28, 2, true);
+      stalk(11, H2 - 23, 23, 2, true);
+      P(g, 2, H2 - 27, 3, 2, leaf); P(g, 6, H2 - 31, 4, 2, leaf); P(g, 11, H2 - 26, 3, 2, leaf);
+      // feuilles basses fanées
+      P(g, 2, H2 - 8, 3, 1, "#8a7a3a"); P(g, 11, H2 - 6, 3, 1, "#8a7a3a");
+    } else {
+      // stade mûr : tiges pleine hauteur, nœuds marqués, dégradé doré à la
+      // base, panache plumeux en tête.
+      stalk(3, H2 - 30, 30, 2, true);
+      stalk(7, H2 - 32, 32, 2, true);
+      stalk(11, H2 - 29, 29, 2, true);
+      // panache plumeux (au-dessus des tiges)
+      P(g, 5, H2 - 32, 2, 3, "#e8dfa0"); P(g, 8, H2 - 34, 2, 3, "#f4ecc4"); P(g, 11, H2 - 31, 2, 3, "#e8dfa0");
+      P(g, 6, H2 - 34, 1, 2, "#efe6b0"); P(g, 9, H2 - 36, 1, 2, "#f8f2d8");
+      // feuillage vert restant en haut de tige
+      P(g, 2, H2 - 27, 3, 2, leaf); P(g, 6, H2 - 30, 4, 2, leaf); P(g, 11, H2 - 26, 3, 2, leaf);
+      // feuilles basses fanées
+      P(g, 2, H2 - 6, 3, 1, "#8a7a3a"); P(g, 6, H2 - 4, 4, 1, "#6a5a2a"); P(g, 11, H2 - 5, 3, 1, "#8a7a3a");
+    }
+    return c;
+  }
+
   /* ---------------- Cultures (4 types × 5 stades) ---------------- */
   function cropSprite(type, stage) {
+    if (type === 8) return caneSprite(stage); // canne à sucre : sprite dédié, canevas T×(T*2)
     const [c, g] = cv(T, T);
     const info = C.CROPS[type];
     const green = "#4a9a3a", greenD = "#3a7a2c";
@@ -746,10 +816,19 @@ export function buildSprites() {
   /* ---------------- Personnages (H/F, 4 directions × 4 frames) ---------------- */
   const HAIR_COLORS = ["#5a3a1e", "#2a2a2a", "#c8862a", "#8a3020", "#d4b03a", "#4a3468", "#743a12", "#b0b0b8"];
   const SKIN = "#f0c8a0", SKIN_D = "#d8a878";
+  // Jérôme Martial (chantier sucrerie, demande Guillaume : "sa peau devra
+  // être marron, pas blanche, et ses cheveux noirs et courts") — peau et
+  // cheveux dédiés, réservés au résident sugarworker via le flag
+  // `sugarWorker` (voir S.getChar/charSheet). Les cheveux courts n'ont besoin
+  // d'aucune géométrie spéciale : la coupe masculine (gender === "m") posée
+  // plus bas est déjà courte, on lui applique juste la couleur MARTIAL_HAIR.
+  const MARTIAL_SKIN = "#8a5a34", MARTIAL_SKIN_D = "#6e4527", MARTIAL_HAIR = "#181818";
 
-  function drawCharFrame(g, ox, gender, outfit, dir, frame, overalls, cap, beeSuit, plaid, cheeseHat) {
+  function drawCharFrame(g, ox, gender, outfit, dir, frame, overalls, cap, beeSuit, plaid, cheeseHat, sugarWorker) {
     const o = C.OUTFITS[outfit % C.OUTFITS.length];
-    const hair = HAIR_COLORS[outfit % HAIR_COLORS.length];
+    const hair = sugarWorker ? MARTIAL_HAIR : HAIR_COLORS[outfit % HAIR_COLORS.length];
+    const skin = sugarWorker ? MARTIAL_SKIN : SKIN;
+    const skinD = sugarWorker ? MARTIAL_SKIN_D : SKIN_D;
     const step = frame === 1 ? 1 : frame === 3 ? -1 : 0;
     const bob = step !== 0 ? 1 : 0;
     const x = ox;
@@ -770,13 +849,13 @@ export function buildSprites() {
     P(g, x + 4, 10 + bob, 8, 1, tint(o.shirt));
     if (dir === 2) {
       P(g, x + 7 + step, 11 + bob, 2, 5, o.shirt);
-      P(g, x + 7 + step, 15 + bob, 2, 1, SKIN);
+      P(g, x + 7 + step, 15 + bob, 2, 1, skin);
     } else {
       P(g, x + 3, 11 + bob, 2, 5, o.shirt); P(g, x + 11, 11 + bob, 2, 5, o.shirt);
-      P(g, x + 3, 15 + bob, 2, 1, SKIN); P(g, x + 11, 15 + bob, 2, 1, SKIN);
+      P(g, x + 3, 15 + bob, 2, 1, skin); P(g, x + 11, 15 + bob, 2, 1, skin);
     }
-    P(g, x + 4, 2 + bob, 8, 8, SKIN);
-    P(g, x + 4, 9 + bob, 8, 1, SKIN_D);
+    P(g, x + 4, 2 + bob, 8, 8, skin);
+    P(g, x + 4, 9 + bob, 8, 1, skinD);
     if (gender === "f") {
       P(g, x + 3, 1 + bob, 10, 3, hair);
       P(g, x + 3, 3 + bob, 2, 8, hair); P(g, x + 11, 3 + bob, 2, 8, hair);
@@ -790,14 +869,15 @@ export function buildSprites() {
       if (dir === 1) P(g, x + 4, 3 + bob, 8, 4, hair);
       else P(g, x + 4, 2 + bob, 8, 2, hair);
     }
+    const mouth = sugarWorker ? "#4a2f1c" : "#c88a6a"; // ombre de bouche relative à la peau (peau marron -> ombre plus foncée que le clair "#c88a6a" par défaut, sinon elle ressortirait plus claire que la peau)
     if (dir === 0) {
       P(g, x + 6, 5 + bob, 1, 2, "#3a2a1e"); P(g, x + 9, 5 + bob, 1, 2, "#3a2a1e");
-      P(g, x + 6, 8 + bob, 4, 1, "#c88a6a");
+      P(g, x + 6, 8 + bob, 4, 1, mouth);
       if (gender === "f") { P(g, x + 5, 7 + bob, 1, 1, "#eeddaa"); P(g, x + 10, 7 + bob, 1, 1, "#f0a8a0"); }
     } else if (dir === 2) {
       P(g, x + 4, 3 + bob, 5, 5, hair);
       P(g, x + 10, 5 + bob, 1, 2, "#3a2a1e");
-      P(g, x + 11, 7 + bob, 1, 1, "#c88a6a");
+      P(g, x + 11, 7 + bob, 1, 1, mouth);
     }
     // Casquette de Soan (chantier 2026-07, révisée : "le chapeau doit être
     // son skin, vraiment faire partie de sa tête, et tourner avec lui quand
@@ -945,6 +1025,36 @@ export function buildSprites() {
       if (dir !== 1) P(g, x + 11, 0 + bob, 2, 1, BER_D); // débord visible de face/profil
       P(g, x + 7, 0 + bob, 1, 1, BER_D); // picot
     }
+    // Tenue de Jérôme Martial (chantier sucrerie, demande Guillaume : "des
+    // vêtements rouge noir et vert, pour évoquer les couleurs du drapeau de
+    // la Martinique") : chemise rouge, pantalon noir ; la casquette
+    // générique dessinée plus haut (bloc `cap`) est déjà verte (CAP =
+    // "#2f6f4a"), donc la 3e couleur du drapeau est déjà en place sans rien
+    // ajouter ici. Overlay par-dessus le torse/bras/jambes déjà posés (même
+    // principe que la salopette/la chemise à carreaux ci-dessus), réservé au
+    // résident sugarworker via le flag `sugarWorker` (voir S.getChar/
+    // charSheet). Coordonnées reprises du bloc jambes masculin (gender==="m"
+    // uniquement, Jérôme est un homme) et du torse/bras communs plus haut.
+    if (sugarWorker && !beeSuit) {
+      const SHIRT = "#c9302c", SHIRT_D = shade(SHIRT), PANTS = "#1c1c1c", PANTS_D = shade(PANTS);
+      // Jambes (pantalon noir), reprend exactement les coordonnées du bloc
+      // jambes masculin tout en haut de la fonction.
+      if (gender !== "f") {
+        P(g, x + 5, 15 + bob, 3, 6, PANTS);
+        P(g, x + 8, 15 + bob, 3, 6, PANTS_D);
+      }
+      // Torse (chemise rouge).
+      P(g, x + 4, 10 + bob, 8, (gender === "f" ? 5 : 6), SHIRT);
+      P(g, x + 4, 10 + bob, 8, 1, tint(SHIRT));
+      // Bras (manches rouges).
+      if (dir === 2) {
+        P(g, x + 7 + step, 11 + bob, 2, 5, SHIRT);
+        P(g, x + 7 + step, 15 + bob, 2, 1, skin);
+      } else {
+        P(g, x + 3, 11 + bob, 2, 5, SHIRT); P(g, x + 11, 11 + bob, 2, 5, SHIRT_D);
+        P(g, x + 3, 15 + bob, 2, 1, skin); P(g, x + 11, 15 + bob, 2, 1, skin);
+      }
+    }
   }
   function shade(hex) { return adjust(hex, -30); }
   function tint(hex) { return adjust(hex, 30); }
@@ -955,12 +1065,12 @@ export function buildSprites() {
     const b = Math.max(0, Math.min(255, (n & 255) + d));
     return `rgb(${r},${gg},${b})`;
   }
-  function charSheet(gender, outfit, overalls, cap, beeSuit, plaid, cheeseHat) {
+  function charSheet(gender, outfit, overalls, cap, beeSuit, plaid, cheeseHat, sugarWorker) {
     const [c, g] = cv(16 * 4, 24 * 3);
     for (let dir = 0; dir < 3; dir++)
       for (let f = 0; f < 4; f++) {
         g.save(); g.translate(0, dir * 24);
-        drawCharFrame(g, f * 16, gender, outfit, dir, f, overalls, cap, beeSuit, plaid, cheeseHat);
+        drawCharFrame(g, f * 16, gender, outfit, dir, f, overalls, cap, beeSuit, plaid, cheeseHat, sugarWorker);
         g.restore();
       }
     return c;
@@ -1325,6 +1435,15 @@ export function buildSprites() {
         g.strokeStyle = "rgba(140,110,70,.5)"; g.lineWidth = 1;
         g.beginPath(); g.moveTo(5, 8); g.lineTo(11, 8); g.moveTo(5, 11); g.lineTo(11, 11); g.stroke(); // coutures
         P(g, 3, 12, 1, 1, "#fff6e6"); // grain de farine échappé
+        break;
+      case "sugar": // sac de sucre (chantier canne à sucre) — miroir EXACT du sac de farine, teinte dorée/brune
+        g.fillStyle = "#f2e6b8"; // toile du sac, un ton plus doré que la farine
+        g.beginPath(); g.moveTo(4, 4); g.quadraticCurveTo(2, 9, 4, 14); g.lineTo(12, 14); g.quadraticCurveTo(14, 9, 12, 4); g.fill();
+        P(g, 5, 2, 6, 3, "#a97a2e");   // liseré noué en haut (plus brun)
+        P(g, 6, 1, 4, 1, "#6a4a1e");   // ficelle
+        g.strokeStyle = "rgba(140,110,70,.5)"; g.lineWidth = 1;
+        g.beginPath(); g.moveTo(5, 8); g.lineTo(11, 8); g.moveTo(5, 11); g.lineTo(11, 11); g.stroke(); // coutures
+        P(g, 3, 12, 1, 1, "#fffaf0"); // grain de sucre échappé
         break;
       case "bag": // zip 236: sac à dos / besace personnelle (bouton du sac)
         P(g, 4, 5, 8, 9, "#9a6b3e"); P(g, 4, 5, 8, 1, "#b5824f");   // corps
@@ -1845,6 +1964,121 @@ export function buildSprites() {
     return c;
   }
 
+  // Sucrerie (chantier canne à sucre, maquette "sucrerie_mockup_v3.png"
+  // fournie par Guillaume) — COPIE PIXEL-EXACTE du mockup, PAS une
+  // réinterprétation stylisée : Guillaume a explicitement demandé "une
+  // copie du mockup" après une première version jugée pas fidèle à 100%.
+  // Méthode : le mockup (880x800) est dessiné à un pixel "de base" = bloc de
+  // 8x8 (vérifié en mesurant les longueurs de segments unis dans l'image —
+  // toutes multiples de 8, aucun anticrénelage). En rééchantillonnant 1 pixel
+  // sur 8 (au centre de chaque bloc), on retrouve l'image pixel-art NATIVE
+  // sans perte, recadrée sur son contenu opaque (95x94 -> 95x88 utile). Les
+  // ~343 rectangles ci-dessous sont le résultat direct, en niveau de gris/
+  // couleur EXACTS du mockup (RLE ligne par ligne puis fusion verticale), pas
+  // redessinés à la main : maison en pierre à toit à 4 pans, cheminée
+  // fumante, fenêtre à 4 carreaux, porte, crochets à liane, tonneaux, et à
+  // droite le pressoir à canne (ossature à claire-voie + tronçons de canne
+  // pressée), et au sol les deux tas de canne coupée.
+  // MÊME mécanique de pose/jauges que le moulin (O_SUCRERIE, voir
+  // FermeGame.js) : un SEUL tile est solide (la façade de la maison), tout
+  // le reste (tonneaux, pressoir, tas de canne) n'est QUE de l'image — le
+  // joueur passe au travers, comme demandé par Guillaume ("on peut passer à
+  // travers, pareil pour les tonneaux"), exactement comme les ailes du
+  // moulin débordent déjà de leur case sans bloquer. Repères utilisés côté
+  // FermeGame.js pour l'ancrage : façade centrée en x=36, sol (bas du mur/
+  // porte) en y=72 dans ce repère 95x88.
+  function sucrerieSprite() {
+    const [c, g] = cv(95, 88);
+    P(g, 46, 0, 4, 1, "rgba(210,210,210,0.31)"); P(g, 47, 1, 2, 1, "rgba(210,210,210,0.31)"); P(g, 50, 3, 2, 1, "rgba(235,235,235,0.67)"); P(g, 49, 4, 4, 2, "rgba(235,235,235,0.67)");
+    P(g, 50, 6, 2, 1, "rgba(235,235,235,0.67)"); P(g, 48, 8, 3, 1, "rgba(235,235,235,0.78)"); P(g, 47, 9, 5, 3, "rgba(235,235,235,0.78)"); P(g, 48, 12, 3, 1, "rgba(235,235,235,0.78)");
+    P(g, 44, 14, 10, 1, "#a8a29c"); P(g, 44, 15, 10, 2, "#726d6a"); P(g, 45, 17, 8, 3, "#8f8a86"); P(g, 33, 19, 4, 2, "#e8c860");
+    P(g, 45, 20, 8, 1, "#726d6a"); P(g, 45, 21, 8, 3, "#8f8a86"); P(g, 34, 21, 2, 4, "#2e2016"); P(g, 45, 24, 8, 1, "#726d6a");
+    P(g, 33, 25, 5, 1, "#463a34"); P(g, 32, 26, 7, 1, "#463a34"); P(g, 45, 25, 8, 3, "#8f8a86"); P(g, 30, 27, 11, 1, "#463a34");
+    P(g, 28, 28, 7, 1, "#463a34"); P(g, 36, 28, 7, 1, "#463a34"); P(g, 35, 28, 1, 1, "#5a4c44"); P(g, 45, 28, 8, 1, "#726d6a");
+    P(g, 33, 29, 5, 1, "#5a4c44"); P(g, 38, 29, 6, 1, "#463a34"); P(g, 27, 29, 6, 1, "#463a34"); P(g, 25, 30, 6, 1, "#463a34");
+    P(g, 40, 30, 5, 1, "#463a34"); P(g, 31, 30, 9, 1, "#5a4c44"); P(g, 45, 29, 8, 3, "#8f8a86"); P(g, 42, 31, 3, 1, "#463a34");
+    P(g, 23, 31, 6, 1, "#463a34"); P(g, 29, 31, 13, 1, "#5a4c44"); P(g, 44, 32, 1, 1, "#463a34"); P(g, 27, 32, 17, 1, "#5a4c44");
+    P(g, 22, 32, 5, 1, "#463a34"); P(g, 45, 32, 8, 1, "#726d6a"); P(g, 25, 33, 21, 1, "#5a4c44"); P(g, 20, 33, 5, 1, "#463a34");
+    P(g, 46, 33, 5, 1, "#463a34"); P(g, 37, 34, 11, 1, "#5a4c44"); P(g, 18, 34, 5, 1, "#463a34"); P(g, 34, 34, 3, 1, "#463a34");
+    P(g, 48, 34, 5, 1, "#463a34"); P(g, 23, 34, 11, 1, "#5a4c44"); P(g, 17, 35, 4, 1, "#463a34"); P(g, 40, 35, 10, 1, "#5a4c44");
+    P(g, 21, 35, 11, 1, "#5a4c44"); P(g, 50, 35, 4, 1, "#463a34"); P(g, 32, 35, 8, 1, "#463a34"); P(g, 52, 36, 4, 1, "#463a34");
+    P(g, 19, 36, 11, 1, "#5a4c44"); P(g, 30, 36, 12, 1, "#463a34"); P(g, 15, 36, 4, 1, "#463a34"); P(g, 42, 36, 10, 1, "#5a4c44");
+    P(g, 54, 37, 4, 1, "#463a34"); P(g, 44, 37, 10, 1, "#5a4c44"); P(g, 28, 37, 16, 1, "#463a34"); P(g, 17, 37, 11, 1, "#5a4c44");
+    P(g, 13, 37, 4, 1, "#463a34"); P(g, 15, 38, 11, 1, "#5a4c44"); P(g, 12, 38, 3, 1, "#463a34"); P(g, 26, 38, 20, 1, "#463a34");
+    P(g, 56, 38, 3, 1, "#463a34"); P(g, 46, 38, 10, 1, "#5a4c44"); P(g, 24, 39, 25, 1, "#463a34"); P(g, 49, 39, 9, 1, "#5a4c44");
+    P(g, 13, 39, 11, 1, "#5a4c44"); P(g, 58, 39, 3, 1, "#463a34"); P(g, 10, 39, 3, 1, "#463a34"); P(g, 8, 40, 3, 1, "#463a34");
+    P(g, 51, 40, 9, 1, "#5a4c44"); P(g, 60, 40, 3, 1, "#463a34"); P(g, 22, 40, 29, 1, "#463a34"); P(g, 11, 40, 11, 1, "#5a4c44");
+    P(g, 5, 41, 60, 1, "#332a26"); P(g, 31, 42, 8, 1, "#332a26"); P(g, 65, 42, 1, 1, "#463a34"); P(g, 42, 42, 23, 1, "#332a26");
+    P(g, 5, 42, 23, 1, "#332a26"); P(g, 28, 42, 3, 2, "#96782b"); P(g, 39, 42, 3, 2, "#96782b"); P(g, 19, 43, 1, 1, "#5e5a56");
+    P(g, 12, 43, 7, 1, "#8f8a86"); P(g, 44, 43, 7, 1, "#8f8a86"); P(g, 31, 43, 4, 1, "#8f8a86"); P(g, 51, 43, 1, 1, "#5e5a56");
+    P(g, 43, 43, 1, 1, "#5e5a56"); P(g, 35, 43, 1, 1, "#5e5a56"); P(g, 36, 43, 3, 1, "#8f8a86"); P(g, 27, 43, 1, 1, "#5e5a56");
+    P(g, 11, 43, 1, 1, "#5e5a56"); P(g, 42, 43, 1, 1, "#8f8a86"); P(g, 20, 43, 7, 1, "#8f8a86"); P(g, 52, 43, 7, 1, "#8f8a86");
+    P(g, 41, 44, 18, 1, "#5e5a56"); P(g, 30, 44, 10, 1, "#5e5a56"); P(g, 11, 44, 18, 1, "#5e5a56"); P(g, 24, 45, 5, 2, "#8f8a86");
+    P(g, 11, 45, 4, 2, "#8f8a86"); P(g, 23, 45, 1, 2, "#5e5a56"); P(g, 16, 45, 7, 2, "#8f8a86"); P(g, 15, 45, 1, 2, "#5e5a56");
+    P(g, 63, 46, 22, 1, "#5a3f28"); P(g, 14, 47, 12, 1, "#2e2016"); P(g, 47, 45, 1, 4, "#5e5a56"); P(g, 32, 45, 7, 4, "#8f8a86");
+    P(g, 56, 45, 3, 4, "#8f8a86"); P(g, 39, 45, 1, 4, "#5e5a56"); P(g, 41, 45, 6, 4, "#8f8a86"); P(g, 55, 45, 1, 4, "#5e5a56");
+    P(g, 31, 45, 1, 4, "#5e5a56"); P(g, 48, 45, 7, 4, "#8f8a86"); P(g, 30, 45, 1, 4, "#8f8a86"); P(g, 11, 47, 3, 2, "#8f8a86");
+    P(g, 26, 47, 3, 2, "#8f8a86"); P(g, 63, 47, 22, 3, "#4a3524"); P(g, 15, 48, 4, 2, "#3f5f7e"); P(g, 20, 48, 5, 2, "#3f5f7e");
+    P(g, 41, 49, 18, 1, "#5e5a56"); P(g, 26, 49, 3, 1, "#5e5a56"); P(g, 11, 49, 3, 1, "#5e5a56"); P(g, 30, 49, 10, 1, "#5e5a56");
+    P(g, 73, 50, 2, 1, "#6b4a2e"); P(g, 25, 48, 1, 4, "#2e2016"); P(g, 14, 48, 1, 4, "#2e2016"); P(g, 19, 48, 1, 4, "#2e2016");
+    P(g, 20, 50, 5, 2, "#2e4a66"); P(g, 15, 50, 4, 2, "#2e4a66"); P(g, 71, 51, 6, 1, "#4a3320"); P(g, 14, 52, 12, 1, "#2e2016");
+    P(g, 40, 44, 1, 10, "#5f8a3c"); P(g, 29, 44, 1, 10, "#5f8a3c"); P(g, 43, 50, 1, 4, "#5e5a56"); P(g, 41, 50, 2, 4, "#8f8a86");
+    P(g, 36, 50, 4, 4, "#8f8a86"); P(g, 11, 50, 1, 4, "#5e5a56"); P(g, 30, 50, 5, 4, "#8f8a86"); P(g, 52, 50, 7, 4, "#8f8a86");
+    P(g, 35, 50, 1, 4, "#5e5a56"); P(g, 27, 50, 1, 4, "#5e5a56"); P(g, 51, 50, 1, 4, "#5e5a56"); P(g, 12, 50, 2, 4, "#8f8a86");
+    P(g, 44, 50, 7, 4, "#8f8a86"); P(g, 28, 50, 1, 4, "#8f8a86"); P(g, 26, 50, 1, 4, "#8f8a86"); P(g, 73, 52, 2, 2, "#6b4a2e");
+    P(g, 20, 53, 5, 1, "#2e4a66"); P(g, 71, 54, 6, 1, "#4a3320"); P(g, 11, 54, 3, 1, "#5e5a56"); P(g, 26, 54, 33, 1, "#5e5a56");
+    P(g, 15, 53, 1, 3, "#2e4a66"); P(g, 16, 53, 3, 3, "#c9a878"); P(g, 20, 54, 1, 2, "#2e4a66"); P(g, 24, 54, 1, 2, "#2e4a66");
+    P(g, 21, 54, 3, 2, "#c9a878"); P(g, 73, 55, 2, 1, "#4a3320"); P(g, 25, 53, 1, 4, "#2e2016"); P(g, 14, 53, 1, 4, "#2e2016");
+    P(g, 19, 53, 1, 4, "#2e2016"); P(g, 31, 55, 8, 2, "#2e2016"); P(g, 11, 55, 3, 2, "#8f8a86"); P(g, 72, 56, 5, 1, "#4a3320");
+    P(g, 15, 56, 4, 1, "#2e4a66"); P(g, 20, 56, 5, 1, "#2e4a66"); P(g, 26, 55, 5, 3, "#8f8a86"); P(g, 71, 57, 7, 1, "#4a3320");
+    P(g, 6, 57, 8, 1, "#3a3a3a"); P(g, 14, 57, 12, 1, "#2e2016"); P(g, 47, 55, 1, 4, "#5e5a56"); P(g, 56, 55, 3, 4, "#8f8a86");
+    P(g, 39, 55, 1, 4, "#5e5a56"); P(g, 48, 55, 7, 4, "#8f8a86"); P(g, 55, 55, 1, 4, "#5e5a56"); P(g, 40, 55, 7, 4, "#8f8a86");
+    P(g, 24, 58, 7, 1, "#8f8a86"); P(g, 14, 58, 1, 1, "#8f8a86"); P(g, 70, 58, 2, 1, "#4a3320"); P(g, 16, 58, 7, 1, "#8f8a86");
+    P(g, 77, 58, 2, 1, "#4a3320"); P(g, 23, 58, 1, 1, "#5e5a56"); P(g, 15, 58, 1, 1, "#5e5a56"); P(g, 80, 50, 3, 10, "#2e2016");
+    P(g, 13, 58, 1, 2, "#8a5a30"); P(g, 6, 58, 1, 2, "#8a5a30"); P(g, 8, 58, 4, 2, "#8a5a30"); P(g, 73, 58, 2, 2, "#6b4a2e");
+    P(g, 39, 59, 20, 1, "#5e5a56"); P(g, 14, 59, 17, 1, "#5e5a56"); P(g, 78, 59, 2, 1, "#4a3320"); P(g, 69, 59, 2, 1, "#4a3320");
+    P(g, 71, 60, 6, 1, "#4a3320"); P(g, 13, 60, 1, 1, "#3a3a3a"); P(g, 6, 60, 1, 1, "#3a3a3a"); P(g, 8, 60, 4, 1, "#3a3a3a");
+    P(g, 32, 57, 6, 5, "#4a3524"); P(g, 73, 61, 2, 2, "#6b4a2e"); P(g, 65, 50, 3, 14, "#2e2016"); P(g, 43, 60, 1, 4, "#5e5a56");
+    P(g, 52, 60, 7, 4, "#8f8a86"); P(g, 79, 60, 2, 4, "#4a3320"); P(g, 27, 60, 1, 4, "#5e5a56"); P(g, 39, 60, 4, 4, "#8f8a86");
+    P(g, 51, 60, 1, 4, "#5e5a56"); P(g, 14, 60, 5, 4, "#8f8a86"); P(g, 19, 60, 1, 4, "#5e5a56"); P(g, 44, 60, 7, 4, "#8f8a86");
+    P(g, 68, 60, 2, 4, "#4a3320"); P(g, 28, 60, 3, 4, "#8f8a86"); P(g, 20, 60, 7, 4, "#8f8a86"); P(g, 6, 61, 1, 3, "#8a5a30");
+    P(g, 36, 62, 1, 2, "#e8c860"); P(g, 37, 62, 1, 2, "#4a3524"); P(g, 32, 62, 4, 2, "#4a3524"); P(g, 71, 63, 6, 1, "#4a3320");
+    P(g, 0, 63, 6, 1, "#3a3a3a"); P(g, 81, 60, 2, 5, "#2e2016"); P(g, 13, 61, 1, 4, "#8a5a30"); P(g, 8, 61, 4, 4, "#8a5a30");
+    P(g, 68, 64, 1, 1, "#4a3320"); P(g, 39, 64, 20, 1, "#5e5a56"); P(g, 14, 64, 17, 1, "#5e5a56"); P(g, 2, 64, 5, 1, "#8a5a30");
+    P(g, 80, 64, 1, 1, "#4a3320"); P(g, 12, 58, 1, 8, "#a5713e"); P(g, 7, 58, 1, 8, "#6b4423"); P(g, 73, 64, 3, 2, "#96782b");
+    P(g, 65, 64, 3, 2, "#96782b"); P(g, 69, 64, 3, 2, "#96782b"); P(g, 0, 64, 1, 2, "#8a5a30"); P(g, 77, 64, 3, 2, "#96782b");
+    P(g, 2, 65, 4, 1, "#8a5a30"); P(g, 13, 65, 6, 1, "#3a3a3a"); P(g, 6, 65, 1, 1, "#3a3a3a"); P(g, 8, 65, 4, 1, "#3a3a3a");
+    P(g, 2, 66, 5, 1, "#3a3a3a"); P(g, 8, 66, 1, 1, "#3a3a3a"); P(g, 0, 66, 1, 1, "#3a3a3a"); P(g, 47, 65, 1, 3, "#5e5a56");
+    P(g, 56, 65, 3, 3, "#8f8a86"); P(g, 24, 65, 7, 3, "#8f8a86"); P(g, 39, 65, 1, 3, "#5e5a56"); P(g, 48, 65, 7, 3, "#8f8a86");
+    P(g, 19, 65, 4, 3, "#8f8a86"); P(g, 55, 65, 1, 3, "#5e5a56"); P(g, 40, 65, 7, 3, "#8f8a86"); P(g, 23, 65, 1, 3, "#5e5a56");
+    P(g, 18, 66, 1, 2, "#8a5a30"); P(g, 11, 66, 1, 2, "#8a5a30"); P(g, 13, 66, 4, 2, "#8a5a30"); P(g, 72, 66, 1, 3, "#4a3320");
+    P(g, 76, 66, 1, 3, "#4a3320"); P(g, 11, 68, 1, 1, "#3a3a3a"); P(g, 13, 68, 4, 1, "#3a3a3a"); P(g, 18, 68, 1, 1, "#3a3a3a");
+    P(g, 38, 57, 1, 13, "#2e2016"); P(g, 31, 57, 1, 13, "#2e2016"); P(g, 32, 64, 6, 6, "#4a3524"); P(g, 39, 68, 20, 2, "#726d6a");
+    P(g, 19, 68, 12, 2, "#726d6a"); P(g, 63, 70, 2, 1, "#a8a29c"); P(g, 68, 70, 1, 1, "#a8a29c"); P(g, 83, 70, 2, 1, "#a8a29c");
+    P(g, 72, 70, 1, 1, "#a8a29c"); P(g, 76, 70, 1, 1, "#a8a29c"); P(g, 69, 66, 3, 6, "#4d7530"); P(g, 73, 66, 3, 6, "#5f8a3c");
+    P(g, 77, 66, 3, 6, "#4d7530"); P(g, 65, 66, 3, 6, "#5f8a3c"); P(g, 19, 70, 40, 2, "#726d6a"); P(g, 72, 71, 1, 1, "#726d6a");
+    P(g, 76, 71, 1, 1, "#726d6a"); P(g, 68, 71, 1, 1, "#726d6a"); P(g, 0, 67, 1, 6, "#8a5a30"); P(g, 2, 67, 5, 6, "#8a5a30");
+    P(g, 8, 67, 1, 6, "#8a5a30"); P(g, 1, 64, 1, 10, "#6b4423"); P(g, 80, 65, 3, 9, "#2e2016"); P(g, 7, 66, 1, 8, "#a5713e");
+    P(g, 18, 69, 1, 5, "#8a5a30"); P(g, 11, 69, 1, 5, "#8a5a30"); P(g, 13, 69, 4, 5, "#8a5a30"); P(g, 83, 71, 2, 3, "#726d6a");
+    P(g, 63, 71, 2, 3, "#726d6a"); P(g, 68, 72, 12, 2, "#726d6a"); P(g, 65, 72, 3, 2, "#2e2016"); P(g, 8, 73, 1, 1, "#3a3a3a");
+    P(g, 2, 73, 5, 1, "#3a3a3a"); P(g, 0, 73, 1, 1, "#3a3a3a"); P(g, 12, 66, 1, 9, "#6b4423"); P(g, 17, 66, 1, 9, "#a5713e");
+    P(g, 11, 74, 1, 1, "#3a3a3a"); P(g, 18, 74, 1, 1, "#3a3a3a"); P(g, 13, 74, 4, 1, "#3a3a3a"); P(g, 63, 74, 22, 2, "#726d6a");
+    P(g, 74, 78, 1, 1, "#96782b"); P(g, 94, 79, 1, 1, "#4d7530"); P(g, 74, 79, 3, 1, "#96782b"); P(g, 30, 79, 3, 1, "#96782b");
+    P(g, 77, 79, 1, 1, "#5f8a3c"); P(g, 71, 79, 1, 1, "#96782b"); P(g, 33, 80, 3, 1, "#5f8a3c"); P(g, 68, 80, 1, 1, "#96782b");
+    P(g, 77, 80, 3, 1, "#5f8a3c"); P(g, 20, 80, 1, 1, "#96782b"); P(g, 24, 80, 3, 1, "#4d7530"); P(g, 71, 80, 6, 1, "#96782b");
+    P(g, 91, 80, 4, 1, "#4d7530"); P(g, 27, 80, 6, 1, "#96782b"); P(g, 33, 81, 8, 1, "#5f8a3c"); P(g, 81, 81, 2, 1, "#5f8a3c");
+    P(g, 21, 81, 3, 1, "#4d7530"); P(g, 17, 81, 4, 1, "#96782b"); P(g, 88, 81, 7, 1, "#4d7530"); P(g, 87, 81, 1, 1, "#96782b");
+    P(g, 24, 81, 9, 1, "#96782b"); P(g, 84, 82, 4, 1, "#96782b"); P(g, 37, 82, 4, 1, "#5f8a3c"); P(g, 14, 82, 5, 1, "#96782b");
+    P(g, 88, 82, 4, 1, "#4d7530"); P(g, 81, 82, 3, 1, "#5f8a3c"); P(g, 63, 81, 18, 3, "#6b4a2e"); P(g, 88, 83, 1, 1, "#5f8a3c");
+    P(g, 40, 83, 1, 1, "#5f8a3c"); P(g, 11, 83, 7, 1, "#96782b"); P(g, 81, 83, 7, 1, "#96782b"); P(g, 19, 82, 18, 3, "#6b4a2e");
+    P(g, 37, 83, 1, 2, "#4d7530"); P(g, 18, 83, 1, 2, "#5f8a3c"); P(g, 74, 84, 2, 1, "#5f8a3c"); P(g, 15, 84, 3, 1, "#4d7530");
+    P(g, 68, 84, 6, 1, "#4d7530"); P(g, 67, 84, 1, 1, "#96782b"); P(g, 8, 84, 7, 1, "#96782b"); P(g, 34, 85, 1, 1, "#5f8a3c");
+    P(g, 71, 85, 5, 1, "#4d7530"); P(g, 26, 85, 6, 1, "#4d7530"); P(g, 76, 84, 15, 3, "#6b4a2e"); P(g, 31, 86, 1, 1, "#4d7530");
+    P(g, 73, 86, 3, 1, "#4d7530"); P(g, 3, 85, 21, 3, "#6b4a2e"); P(g, 76, 87, 1, 1, "#4d7530");
+    return c;
+  }
+
+
   // Chaudron en métal (chantier 2026-07 : remplace l'ancien rendu emoji
   // ⚗️ flottant, demande explicite Guillaume "un joli chaudron type
   // métal, pas une image qui flotte"). Panse en fonte noire, rebord et
@@ -2190,6 +2424,7 @@ house: house(),
     leverOpen: leverSprite(true),
     leverClosed: leverSprite(false),
     mill: millSprite(),
+    sucrerie: sucrerieSprite(),
     cauldron: cauldronSprite(),
     seaIcons: [],
     duck: [duckSprite(0), duckSprite(1)],
@@ -2206,7 +2441,7 @@ house: house(),
     S.crops[t] = [];
     for (let s = 0; s < C.CROP_STAGES; s++) S.crops[t][s] = cropSprite(t, s);
   }
-  for (const k of ["hoe", "can", "axe", "pick", "seeds", "wood", "stone", "food", "gold", "energy", "rod", "ready", "thirst", "herd", "hand", "flour", "bag", "check", "cross", "coin2", "speech", "swap", "bell", "ban", "release"]) S.icons[k] = icon(k);
+  for (const k of ["hoe", "can", "axe", "pick", "seeds", "wood", "stone", "food", "gold", "energy", "rod", "ready", "thirst", "herd", "hand", "flour", "sugar", "bag", "check", "cross", "coin2", "speech", "swap", "bell", "ban", "release"]) S.icons[k] = icon(k);
   // Zip 251: sprites des décorations déployables (cadeaux). Dessinés sur ~28px
   // de haut, ancrés par le bas au rendu (comme les petites structures).
   S.decor = {}; for (const d of C.UNIQUE_DECORATIONS) S.decor[d.id] = decorSprite(d.id);
@@ -2239,9 +2474,9 @@ house: house(),
   // FermeGame.js aligne sur le monde ; `flameX/flameY` = position LOCALE du
   // brûleur (même repère) pour percer le voile de nuit au bon endroit.
   S.balloon = balloonSprite();
-  S.getChar = (gender, outfit, overalls, cap, beeSuit, plaid, cheeseHat) => {
-    const key = gender + ":" + outfit + (overalls ? ":overalls" : "") + (cap ? ":cap" : "") + (beeSuit ? ":beeSuit" : "") + (plaid ? ":plaid" : "") + (cheeseHat ? ":cheeseHat" : "");
-    if (!S.chars[key]) S.chars[key] = charSheet(gender, outfit, !!overalls, !!cap, !!beeSuit, !!plaid, !!cheeseHat);
+  S.getChar = (gender, outfit, overalls, cap, beeSuit, plaid, cheeseHat, sugarWorker) => {
+    const key = gender + ":" + outfit + (overalls ? ":overalls" : "") + (cap ? ":cap" : "") + (beeSuit ? ":beeSuit" : "") + (plaid ? ":plaid" : "") + (cheeseHat ? ":cheeseHat" : "") + (sugarWorker ? ":sugarWorker" : "");
+    if (!S.chars[key]) S.chars[key] = charSheet(gender, outfit, !!overalls, !!cap, !!beeSuit, !!plaid, !!cheeseHat, !!sugarWorker);
     return S.chars[key];
   };
   return S;

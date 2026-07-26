@@ -374,6 +374,13 @@ export function applyOverrides(world, saved) {
     const [i, wheat, nextAt] = row;
     world.mills.set(i, { wheat: wheat || 0, nextAt: nextAt || 0 });
   }
+  // Sucrerie (chantier canne à sucre) : miroir exact de world.mills ci-dessus.
+  world.sucreries = world.sucreries || new Map();
+  world.sucreries.clear();
+  if (saved.sucreries) for (const row of saved.sucreries) {
+    const [i, cane, nextAt] = row;
+    world.sucreries.set(i, { cane: cane || 0, nextAt: nextAt || 0 });
+  }
   return world;
 }
 
@@ -392,6 +399,14 @@ export function serializeCrops(world) {
 export function serializeMills(world) {
   const out = [];
   for (const [i, ms] of world.mills) if ((ms.wheat || 0) > 0 || (ms.nextAt || 0) > 0) out.push([i, ms.wheat || 0, ms.nextAt || 0]);
+  return out;
+}
+
+// Sérialisation des sucreries (chantier canne à sucre), miroir exact de
+// serializeMills ci-dessus.
+export function serializeSucreries(world) {
+  const out = [];
+  for (const [i, ss] of world.sucreries) if ((ss.cane || 0) > 0 || (ss.nextAt || 0) > 0) out.push([i, ss.cane || 0, ss.nextAt || 0]);
   return out;
 }
 
@@ -481,6 +496,32 @@ export function millTick(ms, now, speedMult = 1) {
   }
   if (wheat < C.MILL_WHEAT_PER_SACK) nextAt = 0;
   return { wheat, nextAt, sacks };
+}
+
+// Production continue d'une sucrerie (chantier canne à sucre) : miroir EXACT
+// de millTick ci-dessus (même formule de batch/rattrapage), MAIS avec une
+// différence assumée et cohérente avec le personnage : contrairement au
+// moulin (purement mécanique, personne ne l'actionne), la sucrerie a besoin
+// du savoir-faire de Jérôme Martial (résident à skill "sugarworker") pour
+// tourner — `working` (calculé par l'appelant via E.residentHasSkill(station,
+// "sugarworker"), voir FermeGame.js) doit être vrai, sinon la fonction ne fait
+// AVANCER ni consommer ni produire (la canne déposée reste intacte en
+// attendant qu'il soit recruté, jamais perdue). Une fois `working` vrai, la
+// mécanique de batch/rattrapage est identique à millTick.
+export function sucrerieTick(ss, now, speedMult = 1, working = true) {
+  let cane = (ss && ss.cane) || 0;
+  let nextAt = (ss && ss.nextAt) || 0;
+  let sacks = 0;
+  if (!working) return { cane, nextAt, sacks }; // en attente de Jérôme Martial : rien ne bouge
+  const mult = Math.max(C.SUCRERIE_SPEED_MIN_MULT, speedMult || 1);
+  const batchMs = C.SUCRERIE_BATCH_MS / mult;
+  if (cane >= C.SUCRERIE_CANE_PER_SACK && !nextAt) nextAt = now + batchMs;
+  while (nextAt && now >= nextAt && cane >= C.SUCRERIE_CANE_PER_SACK) {
+    cane -= C.SUCRERIE_CANE_PER_SACK; sacks++;
+    nextAt = cane >= C.SUCRERIE_CANE_PER_SACK ? nextAt + batchMs : 0;
+  }
+  if (cane < C.SUCRERIE_CANE_PER_SACK) nextAt = 0;
+  return { cane, nextAt, sacks };
 }
 
 // Rareté des gemmes selon la distance à la maison (chantier 2026-07, demande
@@ -719,7 +760,7 @@ function useEnergy(f, action, toolKey) {
    ------------------------------------------------------------------------- */
 export function resolveAct(world, f, m) {
   normalizeFarmer(f);
-  const res = { tiles: [], cropTiles: [], fx: [], invChanged: false, toast: null, did: null, millTiles: [] };
+  const res = { tiles: [], cropTiles: [], fx: [], invChanged: false, toast: null, did: null, millTiles: [], sucrerieTiles: [] };
   const x = m.x | 0, y = m.y | 0;
   if (!inMap(x, y) || !canReach(f, x, y)) return res;
   const i = idx(x, y), g = world.ground[i], o = world.objects[i];
@@ -1127,6 +1168,60 @@ export function resolveAct(world, f, m) {
       }
       res.invChanged = true;
       res.fx.push({ k: "millDeposit", x, y, n: toDeposit });
+      break;
+    }
+    case "sucrerie": {
+      // Sucrerie (chantier canne à sucre) : miroir EXACT du cas "mill"
+      // ci-dessus (pose/retrait via l'outil Construction, variante
+      // "sucrerie"). Retrait impossible tant qu'elle contient encore de la
+      // canne non transformée, même précaution que le moulin.
+      if (o === C.O_SUCRERIE) {
+        const ss = world.sucreries.get(i);
+        if (ss && (ss.cane || 0) > 0) { res.toast = "sucrerieNotEmpty"; break; }
+        world.objects[i] = C.O_NONE; world.objHp.delete(i); world.sucreries.delete(i);
+        f.inv.sucrerie = (f.inv.sucrerie || 0) + 1;
+        res.tiles.push(i); res.invChanged = true;
+      } else if ((g === C.G_GRASS || g === C.G_TILLED || g === C.G_WATERED) && o === C.O_NONE && !world.crops.has(i)) {
+        if (f.inv.sucrerie > 0) {
+          f.inv.sucrerie--;
+          world.objects[i] = C.O_SUCRERIE; world.objHp.set(i, now + C.BUILD_TIMES.sucrerie);
+          world.sucreries.set(i, { cane: 0, nextAt: 0 });
+          if (g === C.G_GRASS) world.ground[i] = C.G_TILLED;
+          res.tiles.push(i); res.invChanged = true;
+        } else res.toast = "noSucrerieStock";
+      }
+      break;
+    }
+    case "sucrerieDeposit": {
+      // Dépôt de canne dans une sucrerie CONSTRUITE : miroir EXACT du cas
+      // "millDeposit" ci-dessus, sur world.sucreries au lieu de world.mills et
+      // C.SUCRERIE_CANE_CROP au lieu de C.MILL_WHEAT_CROP.
+      if (o !== C.O_SUCRERIE || !buildReady(world.objHp.get(i), now)) break;
+      const have = f.inv.crops[C.SUCRERIE_CANE_CROP] || 0;
+      if (have <= 0) { res.toast = "noCaneToDeposit"; break; }
+      const sucrIdx = [];
+      for (let k = 0; k < world.objects.length; k++) {
+        if (world.objects[k] === C.O_SUCRERIE && buildReady(world.objHp.get(k), now)) sucrIdx.push(k);
+      }
+      if (!sucrIdx.length) break;
+      let totalRoom = 0;
+      for (const k of sucrIdx) totalRoom += Math.max(0, C.SUCRERIE_STOCK_CAP - ((world.sucreries.get(k) || {}).cane || 0));
+      if (totalRoom <= 0) { res.toast = "sucrerieFull"; break; }
+      let toDeposit = Math.min(have, totalRoom);
+      f.inv.crops[C.SUCRERIE_CANE_CROP] -= toDeposit;
+      let remaining = toDeposit, ri = 0, guard = 0;
+      const guardMax = toDeposit + sucrIdx.length + 4;
+      while (remaining > 0 && guard++ < guardMax * 4) {
+        const k = sucrIdx[ri % sucrIdx.length]; ri++;
+        const ss = world.sucreries.get(k) || { cane: 0, nextAt: 0 };
+        if ((ss.cane || 0) < C.SUCRERIE_STOCK_CAP) {
+          ss.cane = (ss.cane || 0) + 1; world.sucreries.set(k, ss);
+          if (!res.sucrerieTiles.includes(k)) res.sucrerieTiles.push(k);
+          remaining--;
+        }
+      }
+      res.invChanged = true;
+      res.fx.push({ k: "sucrerieDeposit", x, y, n: toDeposit });
       break;
     }
     case "fish":
@@ -1830,6 +1925,11 @@ export function resolveBuy(f, money, m) {
     const cost = C.MILL_COST * n;
     if (money < cost) { res.toast = "noGold"; return res; }
     res.moneyDelta = -cost; f.inv.mill = (f.inv.mill || 0) + n; res.invChanged = true;
+  } else if (m.item === "sucrerie") {
+    const n = Math.max(1, Math.min(50, (m.n | 0) || 1));
+    const cost = C.SUCRERIE_COST * n;
+    if (money < cost) { res.toast = "noGold"; return res; }
+    res.moneyDelta = -cost; f.inv.sucrerie = (f.inv.sucrerie || 0) + n; res.invChanged = true;
   } else if (m.item === "healKit") {
     const n = Math.max(1, Math.min(10, (m.n | 0) || 1));
     const cost = C.HEAL_KIT_COST * n;
@@ -1972,6 +2072,21 @@ export function resolveSellFlour(shared, m) {
   shared.flour = have - n;
   const gain = n * C.FLOUR_SELL;
   res.moneyDelta = gain; res.earnedDelta = gain; res.flourChanged = true; res.gain = gain;
+  return res;
+}
+
+// Vente d'un sac de sucre depuis le pool COMMUN à la salle (chantier canne à
+// sucre) : miroir EXACT de resolveSellFlour ci-dessus, sur `shared.sugar` /
+// C.SUGAR_SELL.
+export function resolveSellSugar(shared, m) {
+  const res = { moneyDelta: 0, earnedDelta: 0, sugarChanged: false, toast: null, gain: 0 };
+  if (!shared) return res;
+  const have = shared.sugar || 0;
+  const n = Math.min(have, Math.max(1, (m.n | 0) || have));
+  if (n <= 0) return res;
+  shared.sugar = have - n;
+  const gain = n * C.SUGAR_SELL;
+  res.moneyDelta = gain; res.earnedDelta = gain; res.sugarChanged = true; res.gain = gain;
   return res;
 }
 
@@ -2256,7 +2371,7 @@ export function blockedTile(world, x, y, now = Date.now()) {
   const i = idx(fx, fy);
   const g = world.ground[i], o = world.objects[i];
   if (g === C.G_WATER || g === C.G_BRIDGE_SITE || g === C.G_BRIDGE_CLOSED || g === C.G_BRIDGE_STONE_CLOSED) return true;
-  if (o === C.O_LAMP || o === C.O_MILL) return buildReady(world.objHp.get(i), now);
+  if (o === C.O_LAMP || o === C.O_MILL || o === C.O_SUCRERIE) return buildReady(world.objHp.get(i), now);
   if (o === C.O_TREE || o === C.O_TREE2 || o === C.O_ROCK || o === C.O_HOUSE || o === C.O_SHOP || o === C.O_BIN || o === C.O_STUMP || o === C.O_WELL || o === C.O_FENCE || o === C.O_FENCE_H || o === C.O_FENCE_V || o === C.O_WALL || o === C.O_BERRY_BUSH) return true;
   return false;
 }
@@ -2275,7 +2390,7 @@ export function blockedTileMounted(world, x, y, now = Date.now()) {
   if (solidBuildingAt(world, fx, fy)) return true; // station/barn solid, mounted or not (zip 232)
   const i = idx(fx, fy);
   const o = world.objects[i];
-  if (o === C.O_LAMP || o === C.O_MILL) return buildReady(world.objHp.get(i), now);
+  if (o === C.O_LAMP || o === C.O_MILL || o === C.O_SUCRERIE) return buildReady(world.objHp.get(i), now);
   if (o === C.O_TREE || o === C.O_TREE2 || o === C.O_ROCK || o === C.O_HOUSE || o === C.O_SHOP || o === C.O_BIN || o === C.O_STUMP || o === C.O_WELL || o === C.O_FENCE || o === C.O_FENCE_H || o === C.O_FENCE_V || o === C.O_WALL || o === C.O_BERRY_BUSH) return true;
   return false;
 }

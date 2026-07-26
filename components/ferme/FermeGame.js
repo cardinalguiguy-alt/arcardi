@@ -379,6 +379,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [house, setHouse] = useState({ level: 1, upgradeUntil: 0 }); // miroir React de sharedRef.current.house (maison à niveaux, 2026-07)
   const [gems, setGems] = useState(() => C.GEMS.map(() => 0)); // miroir React de sharedRef.current.gems (pool commun à la salle)
   const [flour, setFlour] = useState(0); // miroir React de sharedRef.current.flour (sacs de farine, pool commun à la salle, chantier 2026-07)
+  const [sugar, setSugar] = useState(0); // miroir React de sharedRef.current.sugar (sacs de sucre, chantier canne à sucre, miroir exact de flour)
   const [gregStock, setGregStock] = useState(() => ({ wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) })); // miroir React de sharedRef.current.gregStock (bois/pierre récoltés par Greg + engrais acheté + poissons pêchés par Soan, pool commun, chantier 2026-07)
   const [fertilizerShop, setFertilizerShop] = useState(() => ({ stock: 0, lastRestockDay: 0 })); // miroir React de sharedRef.current.fertilizerShop (stock boutique de l'engrais, chantier 2026-07)
   // Défi "chasse aux lapins" (chantier 2026-07, demande Guillaume) : miroir
@@ -445,7 +446,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const meRef = useRef(null);
   const playersRef = useRef(new Map()); // id -> remote farmer render data
   const farmersRef = useRef({});        // hôte : id -> état privé arbitré
-  const sharedRef = useRef({ seed: 0, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), salveCraft: E.newSalveCraftState(), house: { level: 1, upgradeUntil: 0 }, evilMonsters: [], flour: 0, gregStock: { wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) }, fertilizerShop: { stock: 0, lastRestockDay: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], rabbitChallenge: null, greg: null, soan: null, harald: null, station: E.newStationState(), decor: [], crafts: E.newCrafts(), craftStock: E.newCraftStock() });
+  const sharedRef = useRef({ seed: 0, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), salveCraft: E.newSalveCraftState(), house: { level: 1, upgradeUntil: 0 }, evilMonsters: [], flour: 0, sugar: 0, gregStock: { wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) }, fertilizerShop: { stock: 0, lastRestockDay: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], rabbitChallenge: null, greg: null, soan: null, harald: null, station: E.newStationState(), decor: [], crafts: E.newCrafts(), craftStock: E.newCraftStock() });
   const invRef = useRef(null);
   const toolsRef = useRef({ hoe: 1, can: 1, axe: 1, pick: 1 });
   const energyRef = useRef(C.MAX_ENERGY);
@@ -694,7 +695,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     try { window.localStorage.setItem("ferme_lastcode", code); } catch (e) { /* ignore */ }
     if (saved && typeof saved.seed === "number") {
       const w = E.generateWorld(saved.seed);
-      E.applyOverrides(w, { groundOv: saved.groundOv, objectOv: saved.objectOv, crops: saved.crops, mills: saved.mills });
+      E.applyOverrides(w, { groundOv: saved.groundOv, objectOv: saved.objectOv, crops: saved.crops, mills: saved.mills, sucreries: saved.sucreries });
       worldRef.current = w;
       // 2026-07 station update: the pre-built station stands on cleared
       // ground even on old saves (same normalization spirit as the cauldron
@@ -712,6 +713,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         evilMonsters: [], // créatures maléfiques partagées (2026-07) : jamais restaurées, régénérées depuis la seed fixe à la demande (comme les loups)
         gems: migrateGems(saved),
         flour: saved.flour || 0,
+        sugar: saved.sugar || 0,
         // Stock commun de bois/pierre récoltés par Greg (chantier 2026-07,
         // "étendre son champ") : survit à une reprise, comme flour/gems.
         gregStock: { wood: (saved.gregStock && saved.gregStock.wood) || 0, stone: (saved.gregStock && saved.gregStock.stone) || 0, fertilizer: (saved.gregStock && saved.gregStock.fertilizer) || 0, gold: (saved.gregStock && saved.gregStock.gold) || 0, fish: C.FISH.map((_, i) => (saved.gregStock && saved.gregStock.fish && saved.gregStock.fish[i]) || 0), animals: C.ANIMALS.map((_, i) => (saved.gregStock && saved.gregStock.animals && saved.gregStock.animals[i]) || 0) },
@@ -790,7 +792,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       worldRef.current = E.generateWorld(seed);
       for (const ci of E.clearStationArea(worldRef.current)) recordTileOverride(ci); // 2026-07 station update
       overridesRef.current = { ground: {}, object: {} };
-      sharedRef.current = { seed, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), salveCraft: E.newSalveCraftState(), house: { level: 1, upgradeUntil: 0 }, evilMonsters: [], gems: C.GEMS.map(() => 0), flour: 0, gregStock: { wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) }, fertilizerShop: { stock: 0, lastRestockDay: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], rabbitChallenge: null, greg: null, soan: null, harald: null, station: E.newStationState() };
+      sharedRef.current = { seed, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), salveCraft: E.newSalveCraftState(), house: { level: 1, upgradeUntil: 0 }, evilMonsters: [], gems: C.GEMS.map(() => 0), flour: 0, sugar: 0, gregStock: { wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) }, fertilizerShop: { stock: 0, lastRestockDay: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], rabbitChallenge: null, greg: null, soan: null, harald: null, station: E.newStationState() };
       farmersRef.current = {};
       // Crée tout de suite l'enregistrement pour réserver le code.
       persistFarm();
@@ -816,6 +818,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     setHouse(sharedRef.current.house || { level: 1, upgradeUntil: 0 });
     setGems(sharedRef.current.gems);
     setFlour(sharedRef.current.flour || 0);
+    setSugar(sharedRef.current.sugar || 0);
     setGregStock(sharedRef.current.gregStock || { wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) });
     setFertilizerShop(sharedRef.current.fertilizerShop || { stock: 0, lastRestockDay: 0 });
     setRabbitChallenge(sharedRef.current.rabbitChallenge);
@@ -889,7 +892,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // reprise.
   function applySnapshot(payload) {
     const w = E.generateWorld(payload.seed);
-    E.applyOverrides(w, { groundOv: payload.groundOv, objectOv: payload.objectOv, crops: payload.crops, mills: payload.mills });
+    E.applyOverrides(w, { groundOv: payload.groundOv, objectOv: payload.objectOv, crops: payload.crops, mills: payload.mills, sucreries: payload.sucreries });
     worldRef.current = w;
     overridesRef.current = { ground: { ...(payload.groundOv || {}) }, object: { ...(payload.objectOv || {}) } };
     sharedRef.current = {
@@ -914,6 +917,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       evilMonsters: payload.evilMonsters || [], // créatures maléfiques partagées (2026-07)
       gems: migrateGems(payload),
       flour: payload.flour || 0,
+      sugar: payload.sugar || 0,
       gregStock: { wood: (payload.gregStock && payload.gregStock.wood) || 0, stone: (payload.gregStock && payload.gregStock.stone) || 0, fertilizer: (payload.gregStock && payload.gregStock.fertilizer) || 0, gold: (payload.gregStock && payload.gregStock.gold) || 0, fish: C.FISH.map((_, i) => (payload.gregStock && payload.gregStock.fish && payload.gregStock.fish[i]) || 0), animals: C.ANIMALS.map((_, i) => (payload.gregStock && payload.gregStock.animals && payload.gregStock.animals[i]) || 0) },
       fertilizerShop: { stock: (payload.fertilizerShop && payload.fertilizerShop.stock) || 0, lastRestockDay: (payload.fertilizerShop && payload.fertilizerShop.lastRestockDay) || 0 },
       wolves: payload.wolves || [], wolfNight: { active: !!(payload.wolves && payload.wolves.length), kills: 0 },
@@ -961,6 +965,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     setHouse(sharedRef.current.house || { level: 1, upgradeUntil: 0 });
     setGems(sharedRef.current.gems);
     setFlour(sharedRef.current.flour || 0);
+    setSugar(sharedRef.current.sugar || 0);
     setGregStock(sharedRef.current.gregStock || { wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) });
     setFertilizerShop(sharedRef.current.fertilizerShop || { stock: 0, lastRestockDay: 0 });
     setRabbitChallenge(sharedRef.current.rabbitChallenge);
@@ -1142,8 +1147,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       groundOv: overridesRef.current.ground, objectOv: overridesRef.current.object,
       crops: worldRef.current ? E.serializeCrops(worldRef.current) : [],
       mills: worldRef.current ? E.serializeMills(worldRef.current) : [],
+      sucreries: worldRef.current ? E.serializeSucreries(worldRef.current) : [],
       farmers: farmersRef.current,
-      horses: s.horses, animals: s.animals, wellBuilt: s.wellBuilt, coop: s.coop, barn: s.barn, salveCraft: s.salveCraft, house: s.house, evilMonsters: s.evilMonsters, gems: s.gems, flour: s.flour, gregStock: s.gregStock, fertilizerShop: s.fertilizerShop, wolves: s.wolves, greg: s.greg, soan: s.soan, harald: s.harald,
+      horses: s.horses, animals: s.animals, wellBuilt: s.wellBuilt, coop: s.coop, barn: s.barn, salveCraft: s.salveCraft, house: s.house, evilMonsters: s.evilMonsters, gems: s.gems, flour: s.flour, sugar: s.sugar, gregStock: s.gregStock, fertilizerShop: s.fertilizerShop, wolves: s.wolves, greg: s.greg, soan: s.soan, harald: s.harald,
       rabbits: s.rabbits, rabbitChallenge: s.rabbitChallenge,
       station: s.station, // 2026-07 station update
       decor: s.decor, // zip 251: décorations posées (ferme + Valley Town), persistées
@@ -1478,6 +1484,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (r.millTiles && r.millTiles.length) {
         out.mills = r.millTiles.map(i => { const ms = w.mills.get(i) || { wheat: 0, nextAt: 0 }; return [i, ms.wheat, ms.nextAt]; });
       }
+      // Sucrerie (chantier canne à sucre) : miroir exact de out.mills ci-dessus.
+      if (r.sucrerieTiles && r.sucrerieTiles.length) {
+        out.sucreries = r.sucrerieTiles.map(i => { const ss = w.sucreries.get(i) || { cane: 0, nextAt: 0 }; return [i, ss.cane, ss.nextAt]; });
+      }
     } else if (req.kind === "buy") {
       const r = E.resolveBuy(f, s.money, req);
       if (r.moneyDelta) { s.money += r.moneyDelta; out.state = shareState(); }
@@ -1492,6 +1502,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const r = E.resolveSellGem(s.gems, req);
       if (r.moneyDelta) { s.money += r.moneyDelta; s.totalEarned += r.earnedDelta; out.state = shareState(); }
       if (r.gemsChanged) out.gems = s.gems;
+      if (r.gain > 0) { out.fx.push({ k: "sell", x: px, y: py, gain: r.gain }); out.chat = { from: "💰", msg: L.chatSell(r.gain, s.money) }; questId = "sell"; }
+    } else if (req.kind === "sell" && req.item === "sugar") {
+      // Vente de sacs de sucre du pool COMMUN (chantier canne à sucre) :
+      // miroir EXACT de la vente de farine ci-dessous.
+      const r = E.resolveSellSugar(s, req);
+      if (r.moneyDelta) { s.money += r.moneyDelta; s.totalEarned += r.earnedDelta; out.state = shareState(); }
+      if (r.sugarChanged) out.sugar = s.sugar;
       if (r.gain > 0) { out.fx.push({ k: "sell", x: px, y: py, gain: r.gain }); out.chat = { from: "💰", msg: L.chatSell(r.gain, s.money) }; questId = "sell"; }
     } else if (req.kind === "sell" && req.item === "flour") {
       // Vente de sacs de farine du pool COMMUN (chantier 2026-07), même
@@ -2228,7 +2245,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // Les quêtes accomplies voyagent avec l'état privé du fermier.
     if (out.farmer) out.farmer.quests = f.quests;
 
-    if (out.tiles.length || out.state || out.horses || out.animals || out.wellBuilt || out.gems || out.gregStock || out.mills || out.house || out.flour !== undefined) dirtyRef.current = true;
+    if (out.tiles.length || out.state || out.horses || out.animals || out.wellBuilt || out.gems || out.gregStock || out.mills || out.sucreries || out.house || out.flour !== undefined || out.sugar !== undefined) dirtyRef.current = true;
     hostSend({ type: "broadcast", event: "apply", payload: { ...out, hostNow: Date.now() } });
   }
   // -------- 2026-07 station update: host-side station module --------
@@ -3425,6 +3442,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // hostHandleReqUnsafe et le dayTimer plus bas). Même mécanique que
     // p.crops ci-dessus, mais sur w.mills.
     if (w && p.mills) for (const [i, wheat, nextAt] of p.mills) w.mills.set(i, { wheat, nextAt });
+    // Sucreries (chantier canne à sucre) : miroir exact de p.mills ci-dessus.
+    if (w && p.sucreries) for (const [i, cane, nextAt] of p.sucreries) w.sucreries.set(i, { cane, nextAt });
     if (p.state) { const s = sharedRef.current; s.money = p.state.money; s.day = p.state.day; s.dayStartAt = p.state.dayStartAt; s.totalEarned = p.state.totalEarned; setHud(h => ({ ...h, money: s.money, day: s.day })); }
     if (p.farmer && p.farmer.id !== me.id && Array.isArray(p.farmer.pets)) {
       const r = playersRef.current.get(p.farmer.id);
@@ -3533,6 +3552,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     if (p.gems) { sharedRef.current.gems = p.gems; setGems(p.gems); }
     if (p.flour !== undefined) { sharedRef.current.flour = p.flour; setFlour(p.flour); }
+    if (p.sugar !== undefined) { sharedRef.current.sugar = p.sugar; setSugar(p.sugar); }
     if (p.gregStock !== undefined) { sharedRef.current.gregStock = p.gregStock; setGregStock(p.gregStock); }
     if (p.fertilizerShop !== undefined) { sharedRef.current.fertilizerShop = p.fertilizerShop; setFertilizerShop(p.fertilizerShop); }
     if (p.rabbitChallenge !== undefined) { sharedRef.current.rabbitChallenge = p.rabbitChallenge; setRabbitChallenge(p.rabbitChallenge); }
@@ -3565,7 +3585,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (key === "petCaught")     return L.petCaughtToast(C.petName(n, lang === "en"));
     if (key === "petReleased")   return L.bagReleasedToast(C.petName(n, lang === "en"));
     if (key === "bagFull")       return L.bagPetsFull(C.MAX_PETS);
-    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, noMillStock: L.toastNoMillStock, millNotEmpty: L.toastMillNotEmpty, noWheatToDeposit: L.toastNoWheatToDeposit, millFull: L.toastMillFull, actionFailed: L.toastActionFailed, coopNone: L.toastCoopNone, farCoop: L.toastFarCoop, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull, notInjured: L.toastNotInjured, noHealKit: L.toastNoHealKit, healTooFar: L.toastHealTooFar, gregNotHired: L.toastGregNotHired, gregOrderBusy: L.toastGregBusy, gregNoRoom: L.toastGregNoRoom, gregNoFertilizer: L.toastGregNoFertilizer, gregCoffeeCooldown: L.toastGregCoffeeCooldown, noCoffee: L.toastNoCoffee, soanNotHired: L.toastSoanNotHired, soanNoRiver: L.toastSoanNoRiver, soanCoffeeCooldown: L.toastSoanCoffeeCooldown, reneCoffeeCooldown: L.toastReneCoffeeCooldown, farCauldron: L.toastFarCauldron, noFishToDeposit: L.toastNoFishToDeposit, cauldronMissing: L.toastCauldronMissing, cauldronAlreadyTaken: L.toastCauldronAlreadyTaken, noCauldronStock: L.toastNoCauldronStock, cauldronNotEmpty: L.toastCauldronNotEmpty, cauldronBrewing: L.toastCauldronBrewing, cauldronNothingToCollect: L.toastCauldronNothingToCollect, cauldronHasEnough: L.toastCauldronHasEnough, visitorNotEnough: L.visitorNotEnough, decorNone: L.decorNone, decorPicked: L.decorPicked, objReturned: L.objReturned, residentNoRoom: L.residentNoRoom, artisanNoResident: L.artisanNoResident, voyagerBusy: L.voyagerBusyToast, kickVoted: L.kickVotedToast, jewelryNoGold: L.toastJewelryNoGold, jewelryNoGem: L.toastJewelryNoGem, cropWrongType: L.toastCropWrongType, cropMaxed: L.toastCropMaxed, beekeeperNoHive: L.toastBeekeeperNoHive, beekeeperBusy: L.toastBeekeeperBusy, balloonNotBoarding: L.toastBalloonNotBoarding, balloonFull: L.toastBalloonFull }[key] || "";
+    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, noMillStock: L.toastNoMillStock, millNotEmpty: L.toastMillNotEmpty, noWheatToDeposit: L.toastNoWheatToDeposit, millFull: L.toastMillFull, noSucrerieStock: L.toastNoSucrerieStock, sucrerieNotEmpty: L.toastSucrerieNotEmpty, noCaneToDeposit: L.toastNoCaneToDeposit, sucrerieFull: L.toastSucrerieFull, actionFailed: L.toastActionFailed, coopNone: L.toastCoopNone, farCoop: L.toastFarCoop, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull, notInjured: L.toastNotInjured, noHealKit: L.toastNoHealKit, healTooFar: L.toastHealTooFar, gregNotHired: L.toastGregNotHired, gregOrderBusy: L.toastGregBusy, gregNoRoom: L.toastGregNoRoom, gregNoFertilizer: L.toastGregNoFertilizer, gregCoffeeCooldown: L.toastGregCoffeeCooldown, noCoffee: L.toastNoCoffee, soanNotHired: L.toastSoanNotHired, soanNoRiver: L.toastSoanNoRiver, soanCoffeeCooldown: L.toastSoanCoffeeCooldown, reneCoffeeCooldown: L.toastReneCoffeeCooldown, farCauldron: L.toastFarCauldron, noFishToDeposit: L.toastNoFishToDeposit, cauldronMissing: L.toastCauldronMissing, cauldronAlreadyTaken: L.toastCauldronAlreadyTaken, noCauldronStock: L.toastNoCauldronStock, cauldronNotEmpty: L.toastCauldronNotEmpty, cauldronBrewing: L.toastCauldronBrewing, cauldronNothingToCollect: L.toastCauldronNothingToCollect, cauldronHasEnough: L.toastCauldronHasEnough, visitorNotEnough: L.visitorNotEnough, decorNone: L.decorNone, decorPicked: L.decorPicked, objReturned: L.objReturned, residentNoRoom: L.residentNoRoom, artisanNoResident: L.artisanNoResident, voyagerBusy: L.voyagerBusyToast, kickVoted: L.kickVotedToast, jewelryNoGold: L.toastJewelryNoGold, jewelryNoGem: L.toastJewelryNoGem, cropWrongType: L.toastCropWrongType, cropMaxed: L.toastCropMaxed, beekeeperNoHive: L.toastBeekeeperNoHive, beekeeperBusy: L.toastBeekeeperBusy, balloonNotBoarding: L.toastBalloonNotBoarding, balloonFull: L.toastBalloonFull }[key] || "";
   }
 
   // -------- Hôte : boucle temps + persistance --------
@@ -3704,6 +3724,33 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           dirtyRef.current = true;
           const payload = { mills: millTilesOut };
           if (sacksProduced > 0) payload.flour = s.flour;
+          channelRef.current?.send({ type: "broadcast", event: "apply", payload });
+        }
+      }
+      // Production continue des sucreries (chantier canne à sucre) : miroir
+      // EXACT du bloc moulin ci-dessus, MAIS gatée par la présence de Jérôme
+      // Martial (résident à skill "sugarworker") — voir E.sucrerieTick,
+      // param `working`. Tant qu'il n'a pas emménagé, la canne déposée reste
+      // intacte en stock (aucune perte), simplement rien ne se transforme.
+      {
+        const now = Date.now();
+        const sucrTilesOut = [];
+        let sugarSacksProduced = 0;
+        const sucrerieWorking = E.residentHasSkill(s.station, "sugarworker");
+        const sucrerieSpeedMult = C.SUCRERIE_SPEED_MIN_MULT; // = 1, même parallélisme que le moulin (répartition du dépôt)
+        for (const [si, ss] of w.sucreries) {
+          const r = E.sucrerieTick(ss, now, sucrerieSpeedMult, sucrerieWorking);
+          if (r.cane !== ss.cane || r.nextAt !== ss.nextAt) {
+            w.sucreries.set(si, { cane: r.cane, nextAt: r.nextAt });
+            sucrTilesOut.push([si, r.cane, r.nextAt]);
+          }
+          if (r.sacks > 0) sugarSacksProduced += r.sacks;
+        }
+        if (sugarSacksProduced > 0) s.sugar = (s.sugar || 0) + sugarSacksProduced;
+        if (sucrTilesOut.length) {
+          dirtyRef.current = true;
+          const payload = { sucreries: sucrTilesOut };
+          if (sugarSacksProduced > 0) payload.sugar = s.sugar;
           channelRef.current?.send({ type: "broadcast", event: "apply", payload });
         }
       }
@@ -3952,6 +3999,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (w.objects[i] === C.O_MILL && E.buildReady(w.objHp.get(i), Date.now()) && !(sl === 5 && buildKindRef.current === "mill")) {
       return sendReq({ kind: "act", action: "millDeposit", x: tt.x, y: tt.y });
     }
+    // Sucrerie construite (chantier canne à sucre) : miroir exact du moulin
+    // ci-dessus.
+    if (w.objects[i] === C.O_SUCRERIE && E.buildReady(w.objHp.get(i), Date.now()) && !(sl === 5 && buildKindRef.current === "sucrerie")) {
+      return sendReq({ kind: "act", action: "sucrerieDeposit", x: tt.x, y: tt.y });
+    }
     // Chaudron cliquable (correctif audit 2026-07) : tous les textes du jeu
     // disent "clique sur le chaudron" mais seul E fonctionnait — le clic (et
     // Espace) déclenche maintenant exactement la même logique que la touche E
@@ -3990,7 +4042,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         return;
       }
       const action = bk === "wall" ? "wall" : bk === "path" ? "path" : bk === "lamp" ? "lamp" : bk === "scarecrow" ? "scarecrow"
-        : bk === "grass" ? "grass" : bk === "mill" ? "mill"
+        : bk === "grass" ? "grass" : bk === "mill" ? "mill" : bk === "sucrerie" ? "sucrerie"
         : bk === "bridgeRenovate" ? "renovateBridge"
         : (bk === "bridgeWood" || bk === "bridgeStone") ? "bridge" : "fence";
       sendReq({ kind: "act", action, x: tt.x, y: tt.y, dir: fenceDirRef.current, material: bk === "bridgeStone" ? "stone" : "wood" });
@@ -4007,6 +4059,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // juste après avoir envoyé la pose, pour que le clic suivant sur le
       // moulin déclenche bien millDeposit.
       if (bk === "mill") { buildKindRef.current = "fence"; setBuildKind("fence"); }
+      // Sucrerie (chantier canne à sucre) : même rebasculement, même raison.
+      if (bk === "sucrerie") { buildKindRef.current = "fence"; setBuildKind("fence"); }
     }
     else if (sl === 6) {
       // Outil "déplacer" : premier clic attrape l'animal visé, second clic
@@ -6476,7 +6530,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           }
           const cropSprites = sprites.crops[c.t] || sprites.crops[0];
           const cropImg = cropSprites && cropSprites[gs.stage];
-          if (cropImg) ctx.drawImage(cropImg, x * T, y * T);
+          // Zip 315 (chantier canne à sucre) : ancrage par le BAS de la tuile
+          // au lieu du coin haut-gauche. Les sprites existants (blé, maïs...)
+          // font T×T, donc y*T + T - T = y*T : rien ne change pour eux. La
+          // canne mûre a un canevas plus haut que T (panache + tige) et doit
+          // dépasser vers le HAUT de la tuile plutôt que déborder en dessous.
+          if (cropImg) ctx.drawImage(cropImg, x * T, y * T + T - cropImg.height);
           // Zip 288 (demande Guillaume : "l'affichage doit être très clair
           // pour comprendre que chaque case a 5 graines") : indicateur
           // TOUJOURS visible sur une case plantée (avant zip 288 : seulement
@@ -6807,6 +6866,76 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             } });
           }
         }
+        else if (o === C.O_SUCRERIE) {
+          // Sucrerie (chantier canne à sucre) : MIROIR EXACT du bloc O_MILL
+          // juste au-dessus (même traitement : sprite assombri + jauge
+          // pendant la construction, sprite plein + jauges une fois prête).
+          // Seule différence : pas d'ailes tournantes (le pressoir n'a rien
+          // à faire tourner à l'écran), et les jauges utilisent les
+          // constantes/couleurs dédiées (SUCRERIE_STOCK_CAP/BATCH_MS, teintes
+          // canne/sucre). Le sprite `sprites.sucrerie` (copie pixel-exacte du
+          // mockup, 95x88, voir fermeArt.js) est plus large que le moulin
+          // (tonneaux + pressoir + tas de canne inclus dans la même image) :
+          // l'offset horizontal recentre la FAÇADE (pas le centre de
+          // l'image, FACADE_CX=36 dans le repère du sprite) sur x*T+8,
+          // exactement là où se trouve la case solide (voir
+          // fermeEngine.js/blockedTile, un seul tile solide malgré le grand
+          // sprite — tonneaux/pressoir/tas de canne ne sont que du décor
+          // traversable, demande explicite de Guillaume). Verticalement,
+          // GROUND_Y=72 (ligne de sol au bas du mur/porte dans le sprite)
+          // est posé sur (y+1)*T.
+          const ii = idxOf(x, y);
+          const readyAt = w.objHp.get(ii);
+          const ready = E.buildReady(readyAt, epochNow);
+          const FACADE_CX = 36, GROUND_Y = 72; // repères dans sucrerieSprite (95x88)
+          const drawX = x * T - (FACADE_CX - 8), drawY = (y + 1) * T - GROUND_Y;
+          if (!ready) {
+            const totalMs = C.BUILD_TIMES.sucrerie;
+            const remaining = E.buildRemainingMs(readyAt, epochNow);
+            const frac = Math.max(0, Math.min(1, 1 - remaining / totalMs));
+            draws.push({ y: (y + 1) * T, fn: () => {
+              drawBuildingShadow(ctx, x * T + 8, (y + 1) * T, 22);
+              ctx.save(); ctx.globalAlpha = 0.55;
+              ctx.drawImage(sprites.sucrerie, drawX, drawY);
+              ctx.restore();
+              drawBuildingFooting(ctx, x * T + 8, (y + 1) * T, 22);
+              const barW = 24, bx = x * T + 8 - barW / 2, by = drawY - 4;
+              ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(bx, by, barW, 3);
+              ctx.fillStyle = "#c9a25a"; ctx.fillRect(bx, by, barW * frac, 3);
+              const totalSec = Math.ceil(remaining / 1000);
+              const mm = String(Math.floor(totalSec / 60)).padStart(2, "0");
+              const ss = String(totalSec % 60).padStart(2, "0");
+              ctx.font = "bold 8px monospace"; ctx.textAlign = "center";
+              ctx.fillStyle = "#00000090"; ctx.fillText(`${mm}:${ss}`, x * T + 8 + 1, by - 3 + 1);
+              ctx.fillStyle = "#fff"; ctx.fillText(`${mm}:${ss}`, x * T + 8, by - 3);
+            } });
+          } else {
+            const ss = w.sucreries.get(ii) || { cane: 0, nextAt: 0 };
+            draws.push({ y: (y + 1) * T, fn: () => {
+              drawBuildingShadow(ctx, x * T + 8, (y + 1) * T, 22);
+              ctx.drawImage(sprites.sucrerie, drawX, drawY);
+              drawBuildingFooting(ctx, x * T + 8, (y + 1) * T, 22);
+              const barW = 24, bx = x * T + 8 - barW / 2;
+              const stockFrac = Math.max(0, Math.min(1, ss.cane / C.SUCRERIE_STOCK_CAP));
+              const stockY = drawY - 4;
+              ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(bx, stockY, barW, 3);
+              ctx.fillStyle = "#5a8a3a"; ctx.fillRect(bx, stockY, barW * stockFrac, 3); // vert canne (distinct de l'or du moulin)
+              if (ss.nextAt) {
+                const remaining = Math.max(0, ss.nextAt - epochNow);
+                const frac = Math.max(0, Math.min(1, 1 - remaining / C.SUCRERIE_BATCH_MS));
+                const by2 = stockY - 5;
+                ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(bx, by2, barW, 3);
+                ctx.fillStyle = "#f2e6b8"; ctx.fillRect(bx, by2, barW * frac, 3); // doré/brun du sac de sucre
+                const totalSec = Math.ceil(remaining / 1000);
+                const mm = String(Math.floor(totalSec / 60)).padStart(2, "0");
+                const ss2 = String(totalSec % 60).padStart(2, "0");
+                ctx.font = "bold 8px monospace"; ctx.textAlign = "center";
+                ctx.fillStyle = "#00000090"; ctx.fillText(`${mm}:${ss2}`, x * T + 8 + 1, by2 - 3 + 1);
+                ctx.fillStyle = "#fff"; ctx.fillText(`${mm}:${ss2}`, x * T + 8, by2 - 3);
+              }
+            } });
+          }
+        }
         else if (o === C.O_CAULDRON) {
           // Chaudron ramené du monde maléfique (chantier 2026-07, demande
           // Guillaume) : posable n'importe où (contrairement à l'ancien
@@ -7076,7 +7205,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           // ancrage. Plus de dessin manuel « cheval collé derrière ».
           const onWhiteHorse = ro.skill === "voyager";
           draws.push({ y: (vy + 1) * T, fn: () => {
-            drawCharacter({ id: "visitor" + vv.rid, name: ro.name, x: vx, y: vy, dir: vv.dir || 0, moving: !!vv.moving, animT: vv.animT || 0, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap, plaid: ro.skill === "lumberjack", mount: onWhiteHorse ? "white" : null }, false);
+            drawCharacter({ id: "visitor" + vv.rid, name: ro.name, x: vx, y: vy, dir: vv.dir || 0, moving: !!vv.moving, animT: vv.animT || 0, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap, plaid: ro.skill === "lumberjack", sugarWorker: ro.skill === "sugarworker", mount: onWhiteHorse ? "white" : null }, false);
           } });
         }
         const residents = (st && st.residents) || [];
@@ -7100,7 +7229,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           // Zip 273 : idem — Eduardo reste monté même dans ce rendu "idle"
           // (résident sans position simulée, planté près de sa maison).
           const onWhiteHorseIdle = ro.skill === "voyager";
-          draws.push({ y: (ryp + 1) * T, fn: () => drawCharacter({ id: "res" + ro.rid, name: ro.name, x: rxp, y: ryp, dir: 0, moving: false, animT: 0, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap, beeSuit: residentBeeSuit(residents[ri], ro), plaid: ro.skill === "lumberjack", cheeseHat: ro.skill === "cheesemaker", mount: onWhiteHorseIdle ? "white" : null }, false) });
+          draws.push({ y: (ryp + 1) * T, fn: () => drawCharacter({ id: "res" + ro.rid, name: ro.name, x: rxp, y: ryp, dir: 0, moving: false, animT: 0, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap, beeSuit: residentBeeSuit(residents[ri], ro), plaid: ro.skill === "lumberjack", cheeseHat: ro.skill === "cheesemaker", sugarWorker: ro.skill === "sugarworker", mount: onWhiteHorseIdle ? "white" : null }, false) });
         }
       }
       // Greg, l'employé de champs (chantier 2026-07) : réutilise le rendu
@@ -7310,7 +7439,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           })();
           draws.push({ y: (ry + 1) * T, fn: () => {
             if (resSuperActive) drawCoffeeAura(Math.round(rx * T), Math.round(ry * T));
-            drawCharacter({ id: "res" + res.rid, name: ro.name, x: rx, y: ry, dir: turnAwayDir != null ? turnAwayDir : (res.dir || 0), moving: !!res.moving, animT: res.animT || 0, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap, beeSuit: residentBeeSuit(res, ro), plaid: ro.skill === "lumberjack", cheeseHat: ro.skill === "cheesemaker", mount: onWhiteHorse ? "white" : null }, false);
+            drawCharacter({ id: "res" + res.rid, name: ro.name, x: rx, y: ry, dir: turnAwayDir != null ? turnAwayDir : (res.dir || 0), moving: !!res.moving, animT: res.animT || 0, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap, beeSuit: residentBeeSuit(res, ro), plaid: ro.skill === "lumberjack", cheeseHat: ro.skill === "cheesemaker", sugarWorker: ro.skill === "sugarworker", mount: onWhiteHorse ? "white" : null }, false);
             if (ro.skill === "breadmaker" && (inScene || (performance.now() % 12000 < 3000)) && turnAwayDir == null) drawFrown(ctx, Math.round(rx * T) + 8, Math.round(ry * T) - 2);
             // Zip suivant : bulle de la scène Chloé/Rosalie en cours, si CE
             // résident est bien le locuteur de l'étape actuelle.
@@ -8485,7 +8614,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     function drawCharacter(p, isSelf) {
       const sprites = spritesRef.current;
-      const sheet = sprites.getChar(p.gender, p.outfit, p.overalls, p.cap, p.beeSuit, p.plaid, p.cheeseHat);
+      const sheet = sprites.getChar(p.gender, p.outfit, p.overalls, p.cap, p.beeSuit, p.plaid, p.cheeseHat, p.sugarWorker);
       const row = p.dir === 0 ? 0 : p.dir === 1 ? 1 : 2;
       const frame = p.moving ? Math.floor((p.animT || 0) % 4) : 0;
       // Zip 264 (demande Guillaume) : Eduardo Da Fonseca chevauche EXACTEMENT
@@ -9243,6 +9372,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       case "bridge": fx.push({ ...base, kind: "txt", txt: L.fxBridge, col: "#d9b380", life: 1.2 }); break;
       case "lever": fx.push({ ...base, kind: "txt", txt: m.closed ? L.fxLeverClosed : L.fxLeverOpen, col: m.closed ? "#e06a50" : "#8ac25a", life: 1.2 }); break;
       case "millDeposit": fx.push({ ...base, kind: "txt", txt: L.fxMillDeposit(m.n), col: "#c9a25a", life: 1.2 }); break;
+      case "sucrerieDeposit": fx.push({ ...base, kind: "txt", txt: L.fxSucrerieDeposit(m.n), col: "#c9a25a", life: 1.2 }); break;
       default: break;
     }
   }
@@ -9341,6 +9471,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // suivant (herbe = replanter sur une case labourée, chantier 2026-07).
   const buyGrass = (n) => { sendReq({ kind: "buy", item: "grass", n }); buildKindRef.current = "grass"; setBuildKind("grass"); };
   const buyMill = (n) => { sendReq({ kind: "buy", item: "mill", n }); buildKindRef.current = "mill"; setBuildKind("mill"); };
+  // Sucrerie (chantier canne à sucre) : miroir exact de buyMill ci-dessus.
+  const buySucrerie = (n) => { sendReq({ kind: "buy", item: "sucrerie", n }); buildKindRef.current = "sucrerie"; setBuildKind("sucrerie"); };
   const buyHealKit = (n) => sendReq({ kind: "buy", item: "healKit", n });
   // Pommade de protection (chantier 2026-07, demande Guillaume : plus
   // achetable en boutique — désormais fabriquée à un chaudron ramené du
@@ -9460,6 +9592,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     pushToast(L.salveUsedToast);
   };
   const sellFlour = () => sendReq({ kind: "sell", item: "flour", n: 9999 });
+  // Sucre (chantier canne à sucre) : miroir exact de sellFlour ci-dessus.
+  const sellSugar = () => sendReq({ kind: "sell", item: "sugar", n: 9999 });
   const sellItem = (item, crop) => sendReq({ kind: "sell", item, crop, n: 9999 });
   // Menu Construire (clic sur bois/pierre du HUD) : fabrique `n` sections de
   // `item` (fence/wall/path) depuis le bois/la pierre récoltés, puis équipe
@@ -9583,6 +9717,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         <div className="row ferme-hud-res" title={L.flourResTip} onClick={() => setCraftMenuOpen(o => o === "flour" ? null : "flour")}>
           <Sprite img={spritesReady ? spritesRef.current.icons.flour : null} w={16} h={16} /> <span>{flour || 0}</span>
         </div>
+        <div className="row ferme-hud-res" title={L.sugarResTip} onClick={() => setCraftMenuOpen(o => o === "sugar" ? null : "sugar")}>
+          <Sprite img={spritesReady ? spritesRef.current.icons.sugar : null} w={16} h={16} /> <span>{sugar || 0}</span>
+        </div>
         <div className="row ferme-hud-res" title={L.goldResTip}>
           {"\u{1FA99}"} <span>{(gregStock && gregStock.gold) || 0}</span>
         </div>
@@ -9649,7 +9786,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             // menu Construire/Vendre (fence/wall/path/lamp/scarecrow), pas
             // seulement clôture.
             const bkImg = buildKind === "wall" ? "wall" : buildKind === "path" ? "path" : buildKind === "lamp" ? "lamp" : buildKind === "scarecrow" ? "scarecrow"
-              : buildKind === "grass" ? "grassPatch" : buildKind === "mill" ? "mill" : buildKind === "cauldron" ? null
+              : buildKind === "grass" ? "grassPatch" : buildKind === "mill" ? "mill" : buildKind === "sucrerie" ? "sucrerie" : buildKind === "cauldron" ? null
               : buildKind === "bridgeWood" ? "bridge" : (buildKind === "bridgeStone" || buildKind === "bridgeRenovate") ? "bridgeStoneSprite" : "fence";
             // Pour le pont, pas de stock dédié (voir craft menu) : le compteur
             // affiche directement le bois/la pierre disponible pour la
@@ -9658,7 +9795,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             // l'instant (emoji ⚗️ affiché à la place de l'icône, voir
             // ci-dessous) — non fait/limite connue, à ajouter si besoin.
             count = myInv ? (buildKind === "wall" ? (myInv.wall || 0) : buildKind === "path" ? (myInv.path || 0) : buildKind === "lamp" ? (myInv.lamp || 0) : buildKind === "scarecrow" ? (myInv.scarecrow || 0)
-              : buildKind === "grass" ? (myInv.grass || 0) : buildKind === "mill" ? (myInv.mill || 0) : buildKind === "cauldron" ? (myInv.cauldron || 0)
+              : buildKind === "grass" ? (myInv.grass || 0) : buildKind === "mill" ? (myInv.mill || 0) : buildKind === "sucrerie" ? (myInv.sucrerie || 0) : buildKind === "cauldron" ? (myInv.cauldron || 0)
               : buildKind === "bridgeWood" ? (myInv.wood || 0) : (buildKind === "bridgeStone" || buildKind === "bridgeRenovate") ? (myInv.stone || 0) : (myInv.fence || 0)) : "";
             img = spritesReady && bkImg ? spritesRef.current[bkImg] : null;
             lvl = buildKind === "fence" ? (fenceDir === "h" ? "↔" : fenceDir === "v" ? "↕" : "R") : buildKind === "cauldron" ? "⚗️" : "";
@@ -9668,14 +9805,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           else lvl = "N" + (myTools[s.key] || 1);
           const title = isSeed ? L.seedTip(seedName(seedSel)) : isFood ? L.foodTip(C.FOOD_ENERGY) : isRod ? L.rodTip
             : isFence ? (buildKind === "wall" ? L.wallTip : buildKind === "path" ? L.pathTip : buildKind === "lamp" ? L.lampTip : buildKind === "scarecrow" ? L.scarecrowTip
-              : buildKind === "grass" ? L.grassTip : buildKind === "mill" ? L.millTip : buildKind === "cauldron" ? L.cauldronRowSub
+              : buildKind === "grass" ? L.grassTip : buildKind === "mill" ? L.millTip : buildKind === "sucrerie" ? L.sucrerieTip : buildKind === "cauldron" ? L.cauldronRowSub
               : buildKind === "bridgeRenovate" ? L.bridgeRenovateTip
               : (buildKind === "bridgeWood" || buildKind === "bridgeStone") ? L.bridgeTip : L.fenceTip)
             : isHerd ? L.herdTip : isHand ? L.handTip : isTools ? L.toolsTip(TOOL_NAMES[toolKind]) : TOOL_NAMES[s.key];
+          // Sucrerie (chantier canne à sucre) : son sprite (95x88) est bien
+          // plus large que les autres icônes de cet outil (mill 44x54 etc.) —
+          // `Sprite` ne recadre qu'à partir du coin haut-gauche (voir sa
+          // définition), donc on cadre ici sur maison+cheminée+tonneaux,
+          // même recadrage que la ligne boutique ci-dessus.
+          const isSucrerieIcon = isFence && buildKind === "sucrerie";
           return (
             <div key={s.key} className={"ferme-slot" + (i === slot ? " sel" : "")} onClick={() => selectSlot(i)} title={title}>
               <span className="ferme-slot-key">{i + 1}</span>
-              <Sprite img={img} w={32} h={32} />
+              <Sprite img={img} w={32} h={32} sx={isSucrerieIcon ? 65 : undefined} sy={isSucrerieIcon ? 76 : undefined} />
               {count !== "" && <span className="ferme-slot-count">{count}</span>}
               {lvl && <span className="ferme-slot-lvl">{lvl}</span>}
             </div>
@@ -9861,7 +10004,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               const beehiveBuilt = isBeekeeper && (sharedRef.current.crafts || {}).beehive && sharedRef.current.crafts.beehive.built;
               return (
                 <div className="ferme-shop-row" key={"emp-res-" + res.rid}>
-                  <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, isBeekeeper && res.beePhase === "working", ro.skill === "lumberjack", ro.skill === "cheesemaker") : null} sx={16} sy={24} w={24} h={36} />
+                  <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, isBeekeeper && res.beePhase === "working", ro.skill === "lumberjack", ro.skill === "cheesemaker", ro.skill === "sugarworker") : null} sx={16} sy={24} w={24} h={36} />
                   <div className="info">
                     <b>{ro.name} {bakerAlert ? "⚠️" : ""}{isBeekeeper && Date.now() < (res.superUntil || 0) ? "☕⚡" : ""}</b>
                     <span className="ferme-usage" style={bakerAlert ? { color: "#c0392b", fontWeight: 700 } : undefined}>
@@ -9948,7 +10091,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   const away = res.trip && res.trip.phase === "away";
                   return (
                     <div className="ferme-shop-row" key={"kick-" + res.rid}>
-                      <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, false, ro.skill === "lumberjack", ro.skill === "cheesemaker") : null} sx={16} sy={24} w={24} h={36} />
+                      <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, false, ro.skill === "lumberjack", ro.skill === "cheesemaker", ro.skill === "sugarworker") : null} sx={16} sy={24} w={24} h={36} />
                       <div className="info">
                         <b>{ro.name}</b>
                         <span className="ferme-usage">{away ? L.voyagerStatusAway(fmtDuration(res.trip.returnAt - Date.now())) : L.residentTag(ro.job)}</span>
@@ -9985,7 +10128,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                     const ro = rosterOf(res.rid); if (!ro) return null;
                     return (
                       <div className="ferme-shop-row" key={"pilot-" + res.rid}>
-                        <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, false, ro.skill === "lumberjack", ro.skill === "cheesemaker") : null} sx={16} sy={24} w={24} h={36} />
+                        <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, false, ro.skill === "lumberjack", ro.skill === "cheesemaker", ro.skill === "sugarworker") : null} sx={16} sy={24} w={24} h={36} />
                         <div className="info"><b>{ro.name}</b><span className="ferme-usage">{L.residentTag(ro.job)}</span></div>
                         <button onClick={() => sendReq({ kind: "assignBalloonPilot", rid: res.rid })}>{L.balloonAssignBtn}</button>
                       </div>
@@ -10002,7 +10145,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                         const ro = rosterOf(res.rid); if (!ro) return null;
                         return (
                           <div className="ferme-shop-row" key={"ticket-" + res.rid}>
-                            <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, false, ro.skill === "lumberjack", ro.skill === "cheesemaker") : null} sx={16} sy={24} w={24} h={36} />
+                            <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, false, ro.skill === "lumberjack", ro.skill === "cheesemaker", ro.skill === "sugarworker") : null} sx={16} sy={24} w={24} h={36} />
                             <div className="info"><b>{ro.name}</b></div>
                             <button onClick={() => sendReq({ kind: "buyBalloonTicket", rid: res.rid })}>{L.balloonBuyForResidentBtn(ro.name, C.BALLOON_TICKET_PRICE)}</button>
                           </div>
@@ -10113,7 +10256,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         <div className="ferme-seed-menu-ov" onClick={() => setCraftMenuOpen(null)}>
           <div className="ferme-seed-menu panel ferme-craft-menu" onClick={e => e.stopPropagation()}>
             <div className="ferme-seed-menu-title">
-              {craftMenuOpen === "wood" ? L.craftMenuTitleWood(myInv ? myInv.wood : 0) : craftMenuOpen === "stone" ? L.craftMenuTitleStone(myInv ? myInv.stone : 0) : craftMenuOpen === "flour" ? L.craftMenuTitleFlour() : L.craftMenuTitleGems()}
+              {craftMenuOpen === "wood" ? L.craftMenuTitleWood(myInv ? myInv.wood : 0) : craftMenuOpen === "stone" ? L.craftMenuTitleStone(myInv ? myInv.stone : 0) : craftMenuOpen === "flour" ? L.craftMenuTitleFlour() : craftMenuOpen === "sugar" ? L.craftMenuTitleSugar() : L.craftMenuTitleGems()}
             </div>
             {craftMenuOpen === "wood" && (
               <div className="ferme-craft-row">
@@ -10177,7 +10320,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 <button disabled={!flour} onClick={() => sellFlour()}>{L.sellAll}</button>
               </div>
             )}
-            {craftMenuOpen !== "gems" && craftMenuOpen !== "flour" && (
+            {craftMenuOpen === "sugar" && (
+              <div className="ferme-craft-row">
+                <Sprite img={spritesReady ? spritesRef.current.icons.sugar : null} w={26} h={26} />
+                <span className="name">{L.sugarItemName} × {sugar || 0}<br /><span className="cost">{L.perPiece(C.SUGAR_SELL)}</span></span>
+                <button disabled={!sugar} onClick={() => sellSugar()}>{L.sellAll}</button>
+              </div>
+            )}
+            {craftMenuOpen !== "gems" && craftMenuOpen !== "flour" && craftMenuOpen !== "sugar" && (
               <button className="ferme-btn ferme-craft-sell"
                 disabled={!myInv || myInv[craftMenuOpen] === 0}
                 onClick={() => { sellItem(craftMenuOpen); setCraftMenuOpen(null); }}>{L.sellAll}</button>
@@ -10427,6 +10577,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               <div className="info"><b>{L.millRowTitle(C.MILL_COST)}</b><span>{L.millRowSub(myInv ? (myInv.mill || 0) : 0)}</span></div>
               <button disabled={hud.money < C.MILL_COST} onClick={() => buyMill(1)}>{L.buy1}</button>
             </div>
+            {/* Sucrerie (chantier canne à sucre) : miroir exact de la ligne
+                moulin ci-dessus. Le sprite complet (copie pixel-exacte du
+                mockup, 95x88, tonneaux + pressoir + tas de canne inclus) est
+                plus large qu'une icône de boutique : `sx`/`sy` (Sprite ne
+                recadre qu'à partir du coin haut-gauche, voir sa définition)
+                cadrent ici sur la maison + cheminée + tonneaux SEULS (la
+                partie la plus identifiable), en laissant le pressoir/les tas
+                de canne hors champ. */}
+            <div className="ferme-shop-row">
+              <Sprite img={spritesReady ? spritesRef.current.sucrerie : null} sx={65} sy={76} w={30} h={35} />
+              <div className="info"><b>{L.sucrerieRowTitle(C.SUCRERIE_COST)}</b><span>{L.sucrerieRowSub(myInv ? (myInv.sucrerie || 0) : 0)}</span></div>
+              <button disabled={hud.money < C.SUCRERIE_COST} onClick={() => buySucrerie(1)}>{L.buy1}</button>
+            </div>
             {/* Zip 252 : ateliers d'artisans — visibles seulement quand l'artisan concerné vit chez nous. */}
             {(() => {
               const residents = (stationSt && stationSt.residents) || [];
@@ -10650,7 +10813,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               <button className="ferme-close-x" onClick={() => setResidentCard(null)}>✕</button>
               <h2>{ro.name}</h2>
               <div className="ferme-shop-row">
-                <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, isBeekeeper && res && res.beePhase === "working", ro.skill === "lumberjack", ro.skill === "cheesemaker") : null} sx={16} sy={24} w={40} h={60} />
+                <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, isBeekeeper && res && res.beePhase === "working", ro.skill === "lumberjack", ro.skill === "cheesemaker", ro.skill === "sugarworker") : null} sx={16} sy={24} w={40} h={60} />
                 <div className="info"><b>{ro.skill ? L.skillPitch(ro.skill, ro.name) : L.residentGreet(ro.name, ro.job)}</b><span>{need}</span></div>
               </div>
               <div className="ferme-shop-row">
@@ -11057,7 +11220,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             <div className="panel ferme-modal-panel" onClick={e => e.stopPropagation()} style={{ width: "min(440px, 94vw)", ...paper }}>
               <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                 <div style={{ background: "#e8dfc4", border: "2px solid #6b4a2e", borderRadius: 6, padding: "4px 6px 0" }}>
-                  <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, false, ro.skill === "lumberjack", ro.skill === "cheesemaker") : null} sx={16} sy={24} w={32} h={48} />
+                  <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, false, ro.skill === "lumberjack", ro.skill === "cheesemaker", ro.skill === "sugarworker") : null} sx={16} sy={24} w={32} h={48} />
                 </div>
                 <div>
                   <h3 style={{ margin: 0, color: "#1d1d1d" }}>{L.visitorPanelTitle(ro.name)}</h3>
@@ -11212,7 +11375,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 : o.type === "stay" ? L.notifStay : o.type === "plea" ? L.notifPlea : L.notifWantsChat;
               return (
                 <div key={vv.rid} style={card}>
-                  <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, false, ro.skill === "lumberjack", ro.skill === "cheesemaker") : null} sx={16} sy={24} w={24} h={36} />
+                  <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, false, ro.skill === "lumberjack", ro.skill === "cheesemaker", ro.skill === "sugarworker") : null} sx={16} sy={24} w={24} h={36} />
                   <div style={{ fontSize: 12, lineHeight: 1.35 }}>
                     <b>{L.notifAsk(ro.name)}</b><br />
                     {o.type === "buy" && spritesReady && <span style={{ verticalAlign: "middle", marginRight: 4, display: "inline-block" }}><Sprite img={spritesRef.current.crops[o.crop][C.CROP_STAGES - 1]} w={18} h={18} /></span>}
