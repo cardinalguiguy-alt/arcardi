@@ -1875,9 +1875,23 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       else {
         const st = s.station || (s.station = {});
         const ws = st.worldStock || (st.worldStock = {});
-        if ((ws.coffee || 0) < C.SUPERRENE_COFFEE_COST) out.toast = { id: f.id, key: "noCoffee" };
-        else {
-          ws.coffee -= C.SUPERRENE_COFFEE_COST;
+        // Zip suivant (demande Guillaume : "René a besoin de deux cafés, donc
+        // deux clics") : jauge 2 crans au lieu d'une consommation atomique de
+        // 2 cafés en un clic. La jauge expire au bout de
+        // RENE_COFFEE_GAUGE_TIMEOUT_MS (1 min) si le 2e clic n'arrive pas —
+        // vérifié ici paresseusement, pas de timer dédié.
+        const gaugeArmed = (res.coffeeGauge || 0) > 0 && now - (res.coffeeGaugeAt || 0) < C.RENE_COFFEE_GAUGE_TIMEOUT_MS;
+        if ((ws.coffee || 0) < 1) out.toast = { id: f.id, key: "noCoffee" };
+        else if (!gaugeArmed) {
+          // 1er café (ou jauge expirée) : on consomme 1 café, on arme la jauge, effet pas encore déclenché.
+          ws.coffee -= 1;
+          res.coffeeGauge = 1; res.coffeeGaugeAt = now;
+          out.station = s.station;
+          out.chat = { from: "\u{1F41D}", msg: lang === "en" ? "René drinks a first coffee… one more!" : "René boit un premier café… encore un !" };
+        } else {
+          // 2e café dans le délai : effet déclenché, jauge remise à 0 (miroir gregCoffee).
+          ws.coffee -= 1;
+          res.coffeeGauge = 0; res.coffeeGaugeAt = 0;
           res.superUntil = now + C.SUPERRENE_DURATION_MS;
           res.superCooldownUntil = now + C.SUPERRENE_DURATION_MS + C.SUPERRENE_COOLDOWN_MS;
           // Bascule immédiate en travail continu + cycle de production frais.
@@ -6784,7 +6798,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           const gSuperActive = Date.now() < (g.superUntil || 0);
           draws.push({ y: (gy + 1) * T, fn: () => {
             ctx.save();
-            if (gSuperActive) drawSuperGlow(Math.round(gx * T), Math.round(gy * T));
+            if (gSuperActive) drawCoffeeAura(Math.round(gx * T), Math.round(gy * T));
             if (g.sitting) {
               // Pose assise dédiée (sprite gregSeated) + ombre, aligné comme drawCharacter.
               const px = Math.round(gx * T), py = Math.round(gy * T);
@@ -6821,7 +6835,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           else { const sp = smoothNpc("soan", so.x, so.y, dt, true, !!so.moving, (cx, cy) => canStand(w, cx, cy)); sx = sp.x; sy = sp.y; } // FIX 246
           const soSuperActive = Date.now() < (so.superUntil || 0);
           draws.push({ y: (sy + 1) * T, fn: () => {
-            if (soSuperActive) drawSuperGlow(Math.round(sx * T), Math.round(sy * T));
+            if (soSuperActive) drawCoffeeAura(Math.round(sx * T), Math.round(sy * T));
             drawCharacter({ id: "soan", name: "Soan", x: sx, y: sy, dir: so.dir || 0, moving: !!so.moving, animT: so.animT || 0, gender: "m", outfit: 1, cap: true, fishing: so.phase === "fishing" }, false);
           } });
         }
@@ -6937,7 +6951,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           // arrivée initiale au village.
           const onWhiteHorse = ro.skill === "voyager";
           const talkLines = ro.skill && L.skillTalk ? L.skillTalk[ro.skill] : null;
+          const resSuperActive = Date.now() < (res.superUntil || 0);
           draws.push({ y: (ry + 1) * T, fn: () => {
+            if (resSuperActive) drawCoffeeAura(Math.round(rx * T), Math.round(ry * T));
             drawCharacter({ id: "res" + res.rid, name: ro.name, x: rx, y: ry, dir: res.dir || 0, moving: !!res.moving, animT: res.animT || 0, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap, beeSuit: residentBeeSuit(res, ro), plaid: ro.skill === "lumberjack", cheeseHat: ro.skill === "cheesemaker", mount: onWhiteHorse ? "white" : null }, false);
             // Bulle métier quand le joueur local est à proximité (zip 299).
             const mm = meRef.current;
@@ -7873,6 +7889,23 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
       ctx.restore();
     }
+    // Zip suivant (demande Guillaume) : "yeux jaunes illuminés" sous café, en
+    // plus du halo — même convention (px, py) que drawSuperGlow (coin du
+    // sprite tel que dessiné). Position approximative des yeux sur la tête
+    // (sprite 16px de large, dir face caméra), léger clignotement via le
+    // shadowBlur pulsé pour rester lisible sur toutes les directions.
+    function drawCoffeeEyes(px, py) {
+      ctx.save();
+      const ey = py - 2, pulse = 4 + Math.sin(performance.now() / 220) * 2;
+      ctx.shadowColor = "rgba(255, 230, 70, 0.95)"; ctx.shadowBlur = pulse + 4;
+      ctx.fillStyle = "#fff6a8";
+      ctx.fillRect(px + 4, ey, 2, 2);
+      ctx.fillRect(px + 10, ey, 2, 2);
+      ctx.restore();
+    }
+    // Halo + yeux jaunes combinés : effet visuel commun à tout employé sous
+    // café (Greg/Soan historiquement, René depuis le zip suivant).
+    function drawCoffeeAura(px, py) { drawSuperGlow(px, py); drawCoffeeEyes(px, py); }
     // Zip 299 (demande Guillaume) : petite bulle de dialogue au-dessus d'un
     // artisan quand le joueur s'en approche (réplique liée à son métier).
     function drawSpeechBubble(ctx, cx, by, text) {
@@ -9274,7 +9307,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                       {res.beePhase === "working"
                         ? <button onClick={beekeeperRecall}>{L.beekeeperRecallBtn}</button>
                         : <button onClick={beekeeperOrder}>{L.beekeeperOrderBtn}</button>}
-                      <button onClick={reneCoffee}>{L.reneCoffeeBtn}</button>
+                      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                        <button disabled={Date.now() < (res.superCooldownUntil || 0)} onClick={reneCoffee}>{L.reneCoffeeBtn}</button>
+                        {res.coffeeGauge > 0 && Date.now() - (res.coffeeGaugeAt || 0) < C.RENE_COFFEE_GAUGE_TIMEOUT_MS && <span className="ferme-usage">1/2 ☕</span>}
+                      </div>
                       <button onClick={() => { setEmployeesOpen(false); setResidentCard(res.rid); }}>{L.residentSeeBtn}</button>
                     </div>
                   ) : (
@@ -9294,7 +9330,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 {(gregStock.fertilizer || 0) > 0 && (
                   <button onClick={() => { setEmployeesOpen(false); setFertilizerOrderOpen(true); }}>{L.fertilizerOrderBtn}</button>
                 )}
-                <button onClick={gregCoffee}>{L.gregCoffeeBtn}</button>
+                <button disabled={Date.now() < (sharedRef.current.greg.superCooldownUntil || 0)} onClick={gregCoffee}>{L.gregCoffeeBtn}</button>
               </div>
             )}
             {sharedRef.current.soan && (
@@ -9312,7 +9348,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 {sharedRef.current.soan.phase === "roam"
                   ? <button onClick={soanOrder}>{L.soanOrderBtn}</button>
                   : <button onClick={soanRecall}>{L.soanRecallBtn}</button>}
-                <button onClick={soanCoffee}>{L.soanCoffeeBtn}</button>
+                <button disabled={Date.now() < (sharedRef.current.soan.superCooldownUntil || 0)} onClick={soanCoffee}>{L.soanCoffeeBtn}</button>
               </div>
             )}
             {sharedRef.current.harald && (
@@ -9439,7 +9475,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 {(gregStock.fertilizer || 0) > 0 && (
                   <button onClick={() => { setGregCardOpen(false); setFertilizerOrderOpen(true); }}>{L.fertilizerOrderBtn}</button>
                 )}
-                <button onClick={gregCoffee}>{L.gregCoffeeBtn}</button>
+                <button disabled={Date.now() < (g.superCooldownUntil || 0)} onClick={gregCoffee}>{L.gregCoffeeBtn}</button>
               </div>
             </div>
           </div>
@@ -10006,7 +10042,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   {res.beePhase === "working"
                     ? <PixBtn sprites={spritesReady ? spritesRef.current : null} label={L.beekeeperRecallBtn} onClick={beekeeperRecall} />
                     : <PixBtn sprites={spritesReady ? spritesRef.current : null} label={L.beekeeperOrderBtn} onClick={beekeeperOrder} />}
-                  <PixBtn sprites={spritesReady ? spritesRef.current : null} label={L.reneCoffeeBtn} onClick={reneCoffee} />
+                  <PixBtn sprites={spritesReady ? spritesRef.current : null} disabled={Date.now() < (res.superCooldownUntil || 0)} label={res.coffeeGauge > 0 && Date.now() - (res.coffeeGaugeAt || 0) < C.RENE_COFFEE_GAUGE_TIMEOUT_MS ? L.reneCoffeeBtn + " (1/2 ☕)" : L.reneCoffeeBtn} onClick={reneCoffee} />
                 </div>
               )}
               {/* Zip 301 (demande Guillaume) : réglage du ratio fromage/beurre

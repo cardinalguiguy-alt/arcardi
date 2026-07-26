@@ -1284,7 +1284,16 @@ export const BEEKEEPER_BREAK_MS = 15 * 60 * 1000; // durée de la pause avant de
 // puisé dans le MÊME stock commun station.worldStock.coffee que Greg/Soan.
 export const SUPERRENE_DURATION_MS = 5 * 60 * 60 * 1000;  // 5h réelles de travail continu (décision Guillaume)
 export const SUPERRENE_COOLDOWN_MS = 10 * 60 * 60 * 1000; // 10h réelles, démarre à la FIN de l'effet ; entre-temps René reprend son cycle normal
-export const SUPERRENE_COFFEE_COST = 2;   // unités de café consommées par activation (MÊME pool que SuperGreg/SuperSoan)
+export const SUPERRENE_COFFEE_COST = 2;   // unités de café consommées au TOTAL par activation (MÊME pool que SuperGreg/SuperSoan)
+// Zip suivant (demande Guillaume) : René "a besoin de deux cafés, donc deux
+// clics" — contrairement à Greg/Soan (1 clic = 1 café = effet immédiat), le
+// 1er clic sur reneCoffee consomme 1 café et arme une jauge (res.coffeeGauge
+// = 1, res.coffeeGaugeAt = horodatage) ; le 2e clic consomme le 2e café et
+// déclenche l'effet (miroir gregCoffee). Si le 2e café n'arrive pas dans ce
+// délai, la jauge expire (redémarre à 0 au clic suivant) — vérifié
+// paresseusement (pas de timer serveur dédié), et affiché côté UI par simple
+// comparaison Date.now() (même principe que le badge ☕⚡ de superUntil).
+export const RENE_COFFEE_GAUGE_TIMEOUT_MS = 60 * 1000; // 1 minute (décision Guillaume)
 export const SUPERRENE_HONEY_MULT = 3;    // zip 301b (demande Guillaume : x10 trop cheaté) : ×3 pendant l'effet café
 export const CHEESE_MS = 6 * 60 * 1000;    export const CHEESE_MILK_COST = 3; // fromagerie : 3 laits -> 1 roue OU 1 motte de beurre (zip 301)
 export const CHEESE_WHEEL_SELL = 1500;     export const CHEESE_PORTION_SELL = 350; export const PORTIONS_PER_WHEEL = 6;
