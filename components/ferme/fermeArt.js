@@ -1002,6 +1002,107 @@ export function buildSprites() {
     return c;
   }
   // Zip 252 : ateliers d'artisans. Dessinés sur ~48x40, ancrés par le bas.
+  // Zip 302 (demande Guillaume, maquette validée en amont) : montgolfière
+  // "hyperréaliste rouge et jaune" — pixel-art HD, texture PAR PIXEL, avec
+  // trois matières bien distinctes (enveloppe/panier/cordages) + un brûleur
+  // TOUJOURS allumé (jour et nuit, comme une vraie montgolfière — demande
+  // explicite de Guillaume). Générée une seule fois ici (baked), FermeGame.js
+  // se contente de la positionner/tourner/redimensionner via drawImage.
+  function balloonSprite() {
+    const W = 56, H = 86;
+    const [c, g] = cv(W, H);
+    // Bruit déterministe (même esprit que le PRNG seedé de la trajectoire,
+    // fermeEngine.js) : donne un léger grain de tissu, IDENTIQUE à chaque
+    // rechargement (le sprite est baké une seule fois de toute façon).
+    function hash(x, y, seed) {
+      let a = (x * 374761393 + y * 668265263 + seed * 2654435761) | 0;
+      a = (a ^ (a >>> 13)) * 1274126177 | 0;
+      return (((a ^ (a >>> 16)) >>> 0) % 1000) / 1000;
+    }
+    function shadeHex(hex, f) {
+      let r = parseInt(hex.slice(1, 3), 16), gg = parseInt(hex.slice(3, 5), 16), b = parseInt(hex.slice(5, 7), 16);
+      r = Math.max(0, Math.min(255, r * f)); gg = Math.max(0, Math.min(255, gg * f)); b = Math.max(0, Math.min(255, b * f));
+      return `rgb(${r | 0},${gg | 0},${b | 0})`;
+    }
+    function px(x, y, col) { g.fillStyle = col; g.fillRect(x, y, 1, 1); }
+    function ropeTwist(x0, y0, x1, y1, thick, colA, colB, period) {
+      const dx = x1 - x0, dy = y1 - y0, len = Math.sqrt(dx * dx + dy * dy) || 1;
+      const nx = -dy / len, ny = dx / len, steps = Math.ceil(len);
+      for (let s = 0; s <= steps; s++) {
+        const t = s / steps, sx = x0 + dx * t, sy = y0 + dy * t;
+        for (let w = -Math.floor(thick / 2); w <= Math.floor(thick / 2); w++) {
+          const phase = (t * len / period + w * 0.5) % 1;
+          px(Math.round(sx + nx * w), Math.round(sy + ny * w), phase < 0.5 ? colA : colB);
+        }
+      }
+    }
+    const cx = W / 2, topY = 3, envBottomY = H * 0.56, maxR = W * 0.47;
+    const panelColors = ["#c81f1f", "#f2c018"], panelCount = 7;
+    // Enveloppe : éclairage "sphère" (diffus directionnel + spéculaire net)
+    // au lieu d'un dégradé plat, assombrissement progressif à chaque couture
+    // entre lés (au lieu d'un trait binaire) — c'est ce qui donne le rendu
+    // "beaucoup plus réaliste" demandé sur les reflets du ballon.
+    for (let y = topY; y < envBottomY; y++) {
+      const v = (y - topY) / (envBottomY - topY);
+      const r = maxR * Math.pow(Math.sin(Math.PI * Math.min(1, v)), 0.72);
+      if (r < 0.5) continue;
+      const vertLight = 0.85 + 0.35 * Math.sin(Math.PI * v);
+      for (let x = Math.round(cx - r); x <= Math.round(cx + r); x++) {
+        const u = (x - cx) / r, uc = Math.max(-1, Math.min(1, u));
+        const normalZ = Math.sqrt(Math.max(0, 1 - uc * uc));
+        const lightDirX = -0.55, lightDirZ = 0.75;
+        const diffuse = Math.max(0.15, uc * (-lightDirX) + normalZ * lightDirZ);
+        const spec = Math.pow(Math.max(0, uc * (-lightDirX) + normalZ * lightDirZ - 0.35), 6) * 3.2;
+        const panelF = ((u + 1) / 2) * panelCount, panelIdx = Math.floor(panelF);
+        const base = panelColors[panelIdx % 2];
+        const seamDist = Math.min(panelF - panelIdx, panelIdx + 1 - panelF);
+        const seamAO = seamDist < 0.06 ? (1 - seamDist / 0.06) * 0.35 : 0;
+        const dith = (hash(x, y, 7) - 0.5) * 0.06;
+        px(x, y, shadeHex(base, diffuse * vertLight + spec + dith - seamAO));
+      }
+    }
+    // Panier : vrai tressage d'osier (montants sombres réguliers + brins
+    // clair/moyen/foncé en quinconce), bord haut et base renforcés, ombrage
+    // gauche/droite pour donner du volume — demande "textures plus réalistes".
+    const basketW = 17, basketH = 12, basketY = H * 0.735, basketX = cx - basketW / 2;
+    const attachTopY = envBottomY - 2;
+    ropeTwist(cx - maxR * 0.38, attachTopY, basketX + 2, basketY + 1, 2, "#9c7a44", "#5c421f", 5);
+    ropeTwist(cx - maxR * 0.14, attachTopY, basketX + 2, basketY, 2, "#9c7a44", "#5c421f", 5);
+    ropeTwist(cx + maxR * 0.14, attachTopY, basketX + basketW - 2, basketY, 2, "#9c7a44", "#5c421f", 5);
+    ropeTwist(cx + maxR * 0.38, attachTopY, basketX + basketW - 2, basketY + 1, 2, "#9c7a44", "#5c421f", 5);
+    const stakeCol = "#3d2c14", weaveLight = "#a9834e", weaveMid = "#7d5c30", weaveDark = "#523c1c", rimCol = "#c79b5e";
+    for (let by = 0; by < basketH; by++) {
+      for (let bx = 0; bx < basketW; bx++) {
+        const isStake = (bx % 3 === 0);
+        const lightF = 1 - (bx / basketW) * 0.35;
+        let col;
+        if (by === 0 || by === 1) col = shadeHex(rimCol, lightF + 0.15);
+        else if (by === basketH - 1) col = shadeHex(stakeCol, lightF + 0.1);
+        else if (isStake) col = shadeHex(stakeCol, lightF + 0.2);
+        else {
+          const weaveRow = Math.floor((by + bx * 0.5) / 2) % 2 === 0;
+          col = shadeHex(weaveRow ? weaveLight : weaveMid, lightF + 0.15);
+          if ((by + bx) % 7 === 0) col = shadeHex(weaveDark, lightF + 0.1);
+        }
+        px(basketX + bx, basketY + by, col);
+      }
+    }
+    // Brûleur : TOUJOURS visible (jour et nuit, demande Guillaume : "c'est
+    // ainsi qu'une montgolfière fonctionne") — support métallique + flamme à
+    // plusieurs teintes (cœur blanc → orange → rouge). La lueur de nuit
+    // (percée du voile sombre) est ajoutée dynamiquement par FermeGame.js
+    // via `flameX/flameY`, PAS bakée ici (elle doit pulser en direct).
+    const flameX = Math.round(cx), flameY = Math.round(basketY - 3);
+    px(flameX - 1, basketY - 1, "#2a2a2a"); px(flameX, basketY - 1, "#2a2a2a"); px(flameX + 1, basketY - 1, "#2a2a2a");
+    px(flameX - 1, basketY - 2, "#2a2a2a"); px(flameX + 1, basketY - 2, "#2a2a2a");
+    const flamePix = [
+      [0, -3, "#fff8d8"], [0, -2, "#ffe27a"], [-1, -1, "#ffb84d"], [1, -1, "#ffb84d"], [0, -1, "#ffcf5c"],
+      [-1, 0, "#ff8a2e"], [1, 0, "#ff8a2e"], [0, 0, "#ffa93d"], [-1, 1, "#e05a1c"], [1, 1, "#e05a1c"], [0, 1, "#ff7020"],
+    ];
+    for (const [dx, dy, col] of flamePix) px(flameX + dx, flameY + dy, col);
+    return { canvas: c, w: W, h: H, anchorX: cx, anchorY: basketY, flameX, flameY };
+  }
+
   function artisanBuildingSprite(id) {
     // Zip 264 (demande Guillaume) : boulangerie, scierie et fromagerie sont
     // désormais le PORT EXACT du .html de référence (corrections_et_maisons_
@@ -2087,6 +2188,17 @@ house: house(),
   // tint. FermeGame picks them based on seasonOf().
   S.oakAutumn = autumnTree(S.oak); S.pineAutumn = autumnTree(S.pine);
   S.oakSpring = springTree(S.oak); S.pineSpring = springTree(S.pine);
+  // Zip 302 (demande Guillaume, maquette validée) : montgolfière — sprite
+  // pixel-art HAUTE DÉFINITION généré une seule fois ici (comme tous les
+  // autres sprites de ce fichier), au lieu d'être redessiné en primitives
+  // canvas à CHAQUE frame dans FermeGame.js (trop coûteux pour ce niveau de
+  // détail : ombrage par pixel façon sphère + tressage d'osier + cordages
+  // torsadés). FermeGame.js se contente de `drawImage` ce canvas, à la bonne
+  // échelle/rotation, à chaque frame — aussi léger que les autres sprites.
+  // `anchorX/anchorY` = point de repère (haut du panier, centré en x) que
+  // FermeGame.js aligne sur le monde ; `flameX/flameY` = position LOCALE du
+  // brûleur (même repère) pour percer le voile de nuit au bon endroit.
+  S.balloon = balloonSprite();
   S.getChar = (gender, outfit, overalls, cap, beeSuit, plaid, cheeseHat) => {
     const key = gender + ":" + outfit + (overalls ? ":overalls" : "") + (cap ? ":cap" : "") + (beeSuit ? ":beeSuit" : "") + (plaid ? ":plaid" : "") + (cheeseHat ? ":cheeseHat" : "");
     if (!S.chars[key]) S.chars[key] = charSheet(gender, outfit, !!overalls, !!cap, !!beeSuit, !!plaid, !!cheeseHat);

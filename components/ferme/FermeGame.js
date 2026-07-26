@@ -404,6 +404,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // trou transparent (fond de la page visible) plutôt qu'un cercle éclairé
   // — c'était la cause du bug "les lampadaires restent éteints la nuit".
   const nightCanvasRef = useRef(null);
+  // Zip 302 (demande Guillaume) : montgolfière — position MONDE (en tuiles,
+  // même unité que lampsInView) du brûleur, remplie par drawBalloon() à
+  // chaque frame où le business tourne, lue par le voile de nuit un peu plus
+  // bas pour le PERCER au même titre qu'un lampadaire (voir §correctif ci-
+  // dessous). null quand aucun pilote n'est désigné (rien à percer).
+  const balloonGlowRef = useRef(null);
   // Météo (chantier 2026-07) : positions (fractions 0..1 de l'écran) des
   // traits de pluie affichés les jours orageux — générées une seule fois
   // puis animées frame après frame (voir le rendu plus bas), pas régénérées
@@ -7109,6 +7115,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       {
         const bst = sharedRef.current?.station?.balloon;
         if (bst && bst.pilotRid != null) drawBalloon(bst, epochNow);
+        else balloonGlowRef.current = null; // pas de business actif : rien à percer dans le voile de nuit
       }
 
       const na = nightAlpha();
@@ -7151,6 +7158,25 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             nctx.fillStyle = grad;
             nctx.beginPath(); nctx.arc(sx, sy, radiusPx, 0, Math.PI * 2); nctx.fill();
           }
+          nctx.restore();
+        }
+        // Zip 302 (correctif audit, demande Guillaume) : le brûleur allumé de
+        // la montgolfière perce le voile sombre EXACTEMENT comme un
+        // lampadaire (même calque hors-écran, même composite
+        // "destination-out"), au lieu d'être simplement peint dessous (bug :
+        // la lanterne restait assombrie comme le reste malgré son halo).
+        const bg = balloonGlowRef.current;
+        if (bg) {
+          nctx.save();
+          nctx.globalCompositeOperation = "destination-out";
+          const radiusPx = bg.radiusTiles * T * ZOOM;
+          const sx = (bg.x * T - cam.x) * ZOOM, sy = (bg.y * T - cam.y) * ZOOM;
+          const grad = nctx.createRadialGradient(sx, sy, 0, sx, sy, radiusPx);
+          grad.addColorStop(0, `rgba(0,0,0,${na})`);
+          grad.addColorStop(0.7, `rgba(0,0,0,${na * 0.85})`);
+          grad.addColorStop(1, "rgba(0,0,0,0)");
+          nctx.fillStyle = grad;
+          nctx.beginPath(); nctx.arc(sx, sy, radiusPx, 0, Math.PI * 2); nctx.fill();
           nctx.restore();
         }
         ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -8017,7 +8043,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
       return { x: C.BALLOON_ANCHOR.x + 0.5, y: C.BALLOON_ANCHOR.y + 0.5, altitude: 0, t: 0 };
     }
+    // Zip 302 (retouche graphique, demande Guillaume — maquette validée) :
+    // montgolfière "hyperréaliste rouge et jaune" — le sprite HD (osier
+    // tressé, cordages torsadés, ombrage sphérique de l'enveloppe) est baké
+    // une seule fois par buildSprites() (fermeArt.js, S.balloon) ; ici on se
+    // contente de le positionner/tourner/redimensionner via drawImage, comme
+    // pour n'importe quel autre sprite du jeu — pas de recalcul par pixel à
+    // chaque frame.
+    const BALLOON_SCALE = 0.85;
     function drawBalloon(bst, now) {
+      const sprite = spritesReady ? spritesRef.current.balloon : null;
       const pos = balloonWorldPos(bst, now);
       const gx = pos.x * T, gy = pos.y * T; // point au sol (centre de l'ombre)
       const isFlying = bst.phase === "flying";
@@ -8030,48 +8065,38 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       ctx.fillStyle = `rgba(20, 20, 15, ${0.32 * shrink})`;
       ctx.fill();
       ctx.restore();
-      // Nacelle + enveloppe, décalées vers le haut par l'altitude visuelle.
-      const cx = gx, cy = gy - pos.altitude - 22;
+      if (!sprite) { balloonGlowRef.current = null; return; }
+      // Repère = HAUT du panier (sprite.anchorY), décalé vers le haut par
+      // l'altitude visuelle. Décalage constant (-2) calé pour que le FOND du
+      // panier retombe au même niveau qu'avant le passage au sprite HD (le
+      // panier touchait quasi le sol/l'ombre à l'atterrissage) — sinon la
+      // montgolfière semblerait flotter au-dessus de son ombre au posé.
+      const cx = gx, cy = gy - pos.altitude - 2;
       ctx.save();
       ctx.translate(cx, cy);
       // Petit tangage doux pendant le vol (purement décoratif, dérivé de t
       // donc identique partout).
       if (isFlying) ctx.rotate(Math.sin(pos.t * 22) * 0.05);
-      // Cordages
-      ctx.strokeStyle = "#5a4632"; ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(-8, 10); ctx.lineTo(-5, 22); ctx.moveTo(8, 10); ctx.lineTo(5, 22);
-      ctx.moveTo(-6, 12); ctx.lineTo(5, 22); ctx.moveTo(6, 12); ctx.lineTo(-5, 22);
-      ctx.stroke();
-      // Nacelle (panier)
-      ctx.fillStyle = "#8a5a2f";
-      ctx.fillRect(-6, 22, 12, 8);
-      ctx.strokeStyle = "#5a3a1c"; ctx.strokeRect(-6, 22, 12, 8);
-      // Passagers (petites têtes) selon le nombre de billets vendus.
+      ctx.drawImage(sprite.canvas, -sprite.anchorX * BALLOON_SCALE, -sprite.anchorY * BALLOON_SCALE, sprite.w * BALLOON_SCALE, sprite.h * BALLOON_SCALE);
+      // Passagers (petites têtes) selon le nombre de billets vendus, posés
+      // juste au-dessus du bord du panier (même repère que le sprite).
       const n = Math.min(C.BALLOON_CAPACITY, (bst.tickets || []).length);
       for (let i = 0; i < n; i++) {
         ctx.fillStyle = ["#f4c99b", "#e0a878", "#f4c99b", "#e0a878"][i % 4];
-        ctx.beginPath(); ctx.arc(-4.5 + i * 3, 23, 1.6, 0, Math.PI * 2); ctx.fill();
-      }
-      // Enveloppe (ballon), rayée pour rester lisible/jolie à petite taille.
-      const stripes = ["#d64545", "#f2c14e", "#3d7dd6", "#f2c14e", "#d64545"];
-      for (let i = 0; i < stripes.length; i++) {
-        const a0 = -Math.PI / 2 - Math.PI / 2 + (i / stripes.length) * Math.PI;
-        const a1 = -Math.PI / 2 - Math.PI / 2 + ((i + 1) / stripes.length) * Math.PI;
-        ctx.fillStyle = stripes[i];
-        ctx.beginPath(); ctx.moveTo(0, 0); ctx.ellipse(0, 0, 14, 20, 0, a0, a1); ctx.closePath(); ctx.fill();
-      }
-      ctx.strokeStyle = "rgba(0,0,0,0.25)"; ctx.beginPath(); ctx.ellipse(0, 0, 14, 20, 0, 0, Math.PI * 2); ctx.stroke();
-      // Vol de nuit (20h) : petite lanterne chaude dans la nacelle, pour
-      // rester repérable dans le voile sombre.
-      if (bst.isNightFlight) {
-        ctx.save();
-        const pulse = 6 + Math.sin(now / 260) * 1.5;
-        ctx.shadowColor = "rgba(255, 200, 100, 0.9)"; ctx.shadowBlur = pulse;
-        ctx.fillStyle = "#ffe9a8";
-        ctx.fillRect(-1.5, 24, 3, 3);
-        ctx.restore();
+        ctx.beginPath(); ctx.arc(-4.5 + i * 3, 1.5, 1.6, 0, Math.PI * 2); ctx.fill();
       }
       ctx.restore();
+      // Correctif (audit) : le brûleur, TOUJOURS allumé, doit percer le
+      // voile de nuit comme un lampadaire — pas juste être peint dessous. On
+      // ne dessine pas la lueur ici : on note sa position MONDE (en tuiles)
+      // pour que le bloc du voile nocturne, plus bas, la perce exactement
+      // comme lampsInView. `flameLocalX/Y` = repère local (sprite non
+      // tourné) ; tangage ignoré ici, l'écart est imperceptible pour un
+      // simple halo.
+      const flameLocalY = (sprite.flameY - sprite.anchorY) * BALLOON_SCALE;
+      balloonGlowRef.current = bst.isNightFlight
+        ? { x: cx / T, y: (cy + flameLocalY) / T, radiusTiles: 0.85 + Math.sin(now / 260) * 0.12 }
+        : null;
     }
     function drawSuperGlow(px, py) {
       ctx.save();
@@ -9588,7 +9613,6 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               const bst = stationSt.balloon || {};
               const pilot = bst.pilotRid != null ? rosterOf(bst.pilotRid) : null;
               const nowT = Date.now();
-              const meAboard = (bst.tickets || []).some(t => t.who === "me" && t.id === me.id);
               return (
                 <>
                   <div className="ferme-hint" style={{ marginTop: 10 }}>{L.balloonTitle}</div>
@@ -9616,12 +9640,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   })}
                   {pilot && bst.phase === "boarding" && (bst.tickets || []).length < C.BALLOON_CAPACITY && (
                     <>
-                      {!meAboard && (
-                        <div className="ferme-shop-row">
-                          <div className="info"><b>{L.balloonBuyForMeBtn(C.BALLOON_TICKET_PRICE)}</b></div>
-                          <button disabled={(hud.money | 0) < C.BALLOON_TICKET_PRICE} onClick={() => sendReq({ kind: "buyBalloonTicket", rid: null })}>{L.balloonBuyBtn(C.BALLOON_TICKET_PRICE)}</button>
-                        </div>
-                      )}
+                      {/* Zip 302 (demande Guillaume, ce chantier) : bouton
+                          "Monter à bord" (joueur) retiré pour l'instant — les
+                          joueurs ne font pas eux-mêmes de tour de
+                          montgolfière. Seul l'envoi d'un résident reste
+                          possible. `meAboard` n'est donc plus utilisé ici. */}
                       {(stationSt.residents || []).filter(r => !(bst.tickets || []).some(t => t.who === "resident" && t.id === r.rid)).map(res => {
                         const ro = rosterOf(res.rid); if (!ro) return null;
                         return (
