@@ -2810,7 +2810,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     if (req.kind === "sellCraft") {
       const stock = s.craftStock || (s.craftStock = E.newCraftStock());
-      const price = { honey: C.HONEY_SELL, cheeseWheel: C.CHEESE_WHEEL_SELL, cheesePortion: C.CHEESE_PORTION_SELL, pastry: C.PASTRY_SELL, pastryVanilla: C.PASTRY_VANILLA_SELL, butter: C.BUTTER_SELL, bread: C.BREAD_SELL, croissant: C.CROISSANT_SELL, chocolatine: C.CHOCOLATINE_SELL, painSuisse: C.PAINSUISSE_SELL }[req.item];
+      const price = { honey: C.HONEY_SELL, cheeseWheel: C.CHEESE_WHEEL_SELL, cheesePortion: C.CHEESE_PORTION_SELL, eclairChoco: C.ECLAIR_CHOCO_SELL, eclairVanilla: C.ECLAIR_VANILLA_SELL, flanVanilla: C.FLAN_VANILLA_SELL, gateauBasque: C.GATEAU_BASQUE_SELL, butter: C.BUTTER_SELL, bread: C.BREAD_SELL, croissant: C.CROISSANT_SELL, chocolatine: C.CHOCOLATINE_SELL, painSuisse: C.PAINSUISSE_SELL }[req.item];
       if (!price || (stock[req.item] | 0) <= 0) return true;
       const n = Math.min(stock[req.item] | 0, req.n > 0 ? req.n : 9999);
       stock[req.item] -= n; const gain = n * price;
@@ -2953,7 +2953,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           // 100, on produit du BEURRE et on retranche 100, sinon du FROMAGE.
           const pct = Math.max(0, Math.min(100, fr.butterPct == null ? C.FROMAGERIE_BUTTER_PCT_DEFAULT : (fr.butterPct | 0)));
           fr.ratioAcc = (fr.ratioAcc || 0) + pct;
-          if (fr.ratioAcc >= 100) { fr.ratioAcc -= 100; stock.butter = (stock.butter | 0) + 1; }
+          if (fr.ratioAcc >= 100) { fr.ratioAcc -= 100; stock.butter = (stock.butter | 0) + C.FROMAGERIE_BUTTER_YIELD; }
           else stock.cheeseWheel++;
           stockChanged = true; craftsMetaChanged = true; fr.nextAt = now + C.CHEESE_MS;
           if (src.kind === "farmer") broadcastFarmerDelta(src.src.fm); else gregStockChanged = true;
@@ -2975,34 +2975,89 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       } else if (!bk.nextAt || bk.nextAt > now + C.PASTRY_MS) {
         bk.nextAt = now + C.PASTRY_MS;
       } else if (now >= bk.nextAt) {
-        const milkSrc = findAnimalGoodsWith(C.COW_ANIMAL, C.PASTRY_MILK);
-        const eggSrc = findAnimalGoodsWith(C.HEN_ANIMAL, C.PASTRY_EGG);
-        if ((s.flour | 0) >= C.PASTRY_FLOUR && milkSrc && eggSrc) {
-          // Fournée : 1 lait + 1 farine + 6 œufs -> PASTRY_BATCH pâtisseries.
-          s.flour -= C.PASTRY_FLOUR; flourChanged = true;
-          const milkFromGreg = consumeAnimalGoods(milkSrc, C.COW_ANIMAL, C.PASTRY_MILK);
-          const eggFromGreg = consumeAnimalGoods(eggSrc, C.HEN_ANIMAL, C.PASTRY_EGG);
-          if (milkFromGreg || eggFromGreg) gregStockChanged = true;
-          if (milkSrc.kind === "farmer") broadcastFarmerDelta(milkSrc.src.fm);
-          if (eggSrc.kind === "farmer" && (eggSrc.src.id !== (milkSrc.kind === "farmer" ? milkSrc.src.id : null))) broadcastFarmerDelta(eggSrc.src.fm);
-          // Zip 301b (demande Guillaume) : si de la vanille est en réserve
-          // (worldStock.vanilla), Chloé en consomme 1 et sort une fournée de
-          // PÂTISSERIES À LA VANILLE (premium, valeur unitaire bien plus haute)
-          // au lieu de pâtisseries classiques — valorisation par transformation.
-          const wsBk = (s.station && s.station.worldStock) || {};
-          if ((wsBk.vanilla | 0) >= C.PASTRY_VANILLA_COST) {
-            wsBk.vanilla -= C.PASTRY_VANILLA_COST; stationChanged = true;
-            stock.pastryVanilla = (stock.pastryVanilla | 0) + C.PASTRY_BATCH;
+        // Zip suivant (demande Guillaume) : Chloé ne fait plus de
+        // "pâtisserie(s)" génériques — 4 produits nommés en rotation
+        // (même principe que les viennoiseries de Rosalie ci-dessous) :
+        // éclair au chocolat, éclair à la vanille, flan pâtissier vanille de
+        // Madagascar, gâteau basque. Un seul produit sort par fournée ; on
+        // parcourt la rotation à partir de bk.pastryIdx jusqu'à trouver le
+        // premier réalisable avec les intrants dispo.
+        const wsBk = (s.station && s.station.worldStock) || {};
+        let idx = bk.pastryIdx | 0, made = false;
+        for (let tries = 0; tries < 4 && !made; tries++, idx = (idx + 1) % 4) {
+          if (idx === 0) {
+            // ÉCLAIR AU CHOCOLAT : farine + lait + œufs + chocolat (cacao d'Eduardo)
+            const milkSrc = findAnimalGoodsWith(C.COW_ANIMAL, C.ECLAIR_CHOCO_MILK);
+            const eggSrc = findAnimalGoodsWith(C.HEN_ANIMAL, C.ECLAIR_CHOCO_EGG);
+            if ((s.flour | 0) >= C.ECLAIR_CHOCO_FLOUR && milkSrc && eggSrc && (wsBk.cocoa | 0) >= C.ECLAIR_CHOCO_COCOA) {
+              s.flour -= C.ECLAIR_CHOCO_FLOUR; flourChanged = true;
+              const milkFromGreg = consumeAnimalGoods(milkSrc, C.COW_ANIMAL, C.ECLAIR_CHOCO_MILK);
+              const eggFromGreg = consumeAnimalGoods(eggSrc, C.HEN_ANIMAL, C.ECLAIR_CHOCO_EGG);
+              if (milkFromGreg || eggFromGreg) gregStockChanged = true;
+              if (milkSrc.kind === "farmer") broadcastFarmerDelta(milkSrc.src.fm);
+              if (eggSrc.kind === "farmer" && (eggSrc.src.id !== (milkSrc.kind === "farmer" ? milkSrc.src.id : null))) broadcastFarmerDelta(eggSrc.src.fm);
+              wsBk.cocoa -= C.ECLAIR_CHOCO_COCOA; stationChanged = true;
+              stock.eclairChoco = (stock.eclairChoco | 0) + C.ECLAIR_CHOCO_BATCH;
+              made = true;
+            }
+          } else if (idx === 1) {
+            // ÉCLAIR À LA VANILLE : farine + lait + œufs + vanille (Madagascar)
+            const milkSrc = findAnimalGoodsWith(C.COW_ANIMAL, C.ECLAIR_VANILLA_MILK);
+            const eggSrc = findAnimalGoodsWith(C.HEN_ANIMAL, C.ECLAIR_VANILLA_EGG);
+            if ((s.flour | 0) >= C.ECLAIR_VANILLA_FLOUR && milkSrc && eggSrc && (wsBk.vanilla | 0) >= C.ECLAIR_VANILLA_VANILLA) {
+              s.flour -= C.ECLAIR_VANILLA_FLOUR; flourChanged = true;
+              const milkFromGreg = consumeAnimalGoods(milkSrc, C.COW_ANIMAL, C.ECLAIR_VANILLA_MILK);
+              const eggFromGreg = consumeAnimalGoods(eggSrc, C.HEN_ANIMAL, C.ECLAIR_VANILLA_EGG);
+              if (milkFromGreg || eggFromGreg) gregStockChanged = true;
+              if (milkSrc.kind === "farmer") broadcastFarmerDelta(milkSrc.src.fm);
+              if (eggSrc.kind === "farmer" && (eggSrc.src.id !== (milkSrc.kind === "farmer" ? milkSrc.src.id : null))) broadcastFarmerDelta(eggSrc.src.fm);
+              wsBk.vanilla -= C.ECLAIR_VANILLA_VANILLA; stationChanged = true;
+              stock.eclairVanilla = (stock.eclairVanilla | 0) + C.ECLAIR_VANILLA_BATCH;
+              made = true;
+            }
+          } else if (idx === 2) {
+            // FLAN PÂTISSIER À LA VANILLE DE MADAGASCAR : farine + lait + œufs + vanille
+            const milkSrc = findAnimalGoodsWith(C.COW_ANIMAL, C.FLAN_VANILLA_MILK);
+            const eggSrc = findAnimalGoodsWith(C.HEN_ANIMAL, C.FLAN_VANILLA_EGG);
+            if ((s.flour | 0) >= C.FLAN_VANILLA_FLOUR && milkSrc && eggSrc && (wsBk.vanilla | 0) >= C.FLAN_VANILLA_VANILLA) {
+              s.flour -= C.FLAN_VANILLA_FLOUR; flourChanged = true;
+              const milkFromGreg = consumeAnimalGoods(milkSrc, C.COW_ANIMAL, C.FLAN_VANILLA_MILK);
+              const eggFromGreg = consumeAnimalGoods(eggSrc, C.HEN_ANIMAL, C.FLAN_VANILLA_EGG);
+              if (milkFromGreg || eggFromGreg) gregStockChanged = true;
+              if (milkSrc.kind === "farmer") broadcastFarmerDelta(milkSrc.src.fm);
+              if (eggSrc.kind === "farmer" && (eggSrc.src.id !== (milkSrc.kind === "farmer" ? milkSrc.src.id : null))) broadcastFarmerDelta(eggSrc.src.fm);
+              wsBk.vanilla -= C.FLAN_VANILLA_VANILLA; stationChanged = true;
+              stock.flanVanilla = (stock.flanVanilla | 0) + C.FLAN_VANILLA_BATCH;
+              made = true;
+            }
           } else {
-            stock.pastry += C.PASTRY_BATCH;
+            // GÂTEAU BASQUE : farine + lait + œufs + vanille + beurre (fromagerie d'Ingrid)
+            const milkSrc = findAnimalGoodsWith(C.COW_ANIMAL, C.GATEAU_BASQUE_MILK);
+            const eggSrc = findAnimalGoodsWith(C.HEN_ANIMAL, C.GATEAU_BASQUE_EGG);
+            const haveButter = (stock.butter | 0) >= C.BUTTER_SELL_RESERVE + C.GATEAU_BASQUE_BUTTER;
+            if ((s.flour | 0) >= C.GATEAU_BASQUE_FLOUR && milkSrc && eggSrc && (wsBk.vanilla | 0) >= C.GATEAU_BASQUE_VANILLA && haveButter) {
+              s.flour -= C.GATEAU_BASQUE_FLOUR; flourChanged = true;
+              const milkFromGreg = consumeAnimalGoods(milkSrc, C.COW_ANIMAL, C.GATEAU_BASQUE_MILK);
+              const eggFromGreg = consumeAnimalGoods(eggSrc, C.HEN_ANIMAL, C.GATEAU_BASQUE_EGG);
+              if (milkFromGreg || eggFromGreg) gregStockChanged = true;
+              if (milkSrc.kind === "farmer") broadcastFarmerDelta(milkSrc.src.fm);
+              if (eggSrc.kind === "farmer" && (eggSrc.src.id !== (milkSrc.kind === "farmer" ? milkSrc.src.id : null))) broadcastFarmerDelta(eggSrc.src.fm);
+              wsBk.vanilla -= C.GATEAU_BASQUE_VANILLA; stationChanged = true;
+              stock.butter -= C.GATEAU_BASQUE_BUTTER;
+              stock.gateauBasque = (stock.gateauBasque | 0) + C.GATEAU_BASQUE_BATCH;
+              made = true;
+            }
           }
-          stockChanged = true; bk.nextAt = now + C.PASTRY_MS;
+        }
+        if (made) {
+          stock.butter = Math.max(0, stock.butter | 0);
+          stockChanged = true; bk.pastryIdx = idx; bk.nextAt = now + C.PASTRY_MS;
           // Stock revenu -> l'alerte s'efface toute seule (demande Guillaume).
           if (bk.alert) { bk.alert = false; craftsMetaChanged = true; }
         } else {
-          // Intrants insuffisants : la pâtissière stoppe et lève une ALERTE
-          // (une seule fois, jusqu'à résolution) — coin haut-droite + badge
-          // dans le menu Employés. Réessaie bientôt.
+          // Intrants insuffisants (aucun des 4 produits réalisable) : la
+          // pâtissière stoppe et lève une ALERTE (une seule fois, jusqu'à
+          // résolution) — coin haut-droite + badge dans le menu Employés.
           bk.nextAt = now + Math.min(C.PASTRY_MS, 30000);
           if (!bk.alert) { bk.alert = true; craftsMetaChanged = true; stationChat(L.bakeryAlertToast, "⚠️"); }
         }
@@ -8743,7 +8798,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (ro.skill === "breadmaker") return L.residentProdBread(cs.bread | 0, cs.croissant | 0, cs.chocolatine | 0, cs.painSuisse | 0);
     // Zip 258 : si la boulangerie est en alerte (rupture d'intrants en
     // journée), la ligne d'état devient l'alerte plutôt que le compteur.
-    if (ro.skill === "baker") return (crafts[bid] && crafts[bid].alert) ? L.bakeryAlertLine : L.residentProdPastry(cs.pastry | 0, cs.pastryVanilla | 0);
+    if (ro.skill === "baker") return (crafts[bid] && crafts[bid].alert) ? L.bakeryAlertLine : L.residentProdPastry(cs.eclairChoco | 0, cs.eclairVanilla | 0, cs.flanVanilla | 0, cs.gateauBasque | 0);
     return "";
   }
   // Position du chaudron ramené (chantier 2026-07, demande Guillaume) : posé
@@ -10154,7 +10209,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   return (
                     <div className="ferme-shop-row" key={"art" + bid}>
                       <Sprite img={spritesReady ? spritesRef.current.artisan[bid] : null} w={32} h={36} />
-                      <div className="info"><b>{L.buildingName(bid)} — {"\u{1FA99}"} {def.cost}</b><span>{built ? L.artisanOwnedBtn : (bid === "sawmill" ? L.sawmillShopSub : L.craftName(bid === "beehive" ? "honey" : bid === "fromagerie" ? "cheeseWheel" : "pastry"))}</span></div>
+                      <div className="info"><b>{L.buildingName(bid)} — {"\u{1FA99}"} {def.cost}</b><span>{built ? L.artisanOwnedBtn : (bid === "sawmill" ? L.sawmillShopSub : L.craftName(bid === "beehive" ? "honey" : bid === "fromagerie" ? "cheeseWheel" : "gateauBasque"))}</span></div>
                       <button disabled={built || hud.money < def.cost} onClick={() => buyArtisanBuilding(bid)}>{built ? L.artisanOwnedBtn : L.artisanBuyBtn}</button>
                     </div>
                   );
@@ -10539,7 +10594,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             {/* Zip 252 : produits d'artisans (réserve commune craftStock). */}
             {(() => {
               const cs = sharedRef.current.craftStock || {};
-              const items = [["honey", C.HONEY_SELL], ["cheeseWheel", C.CHEESE_WHEEL_SELL], ["cheesePortion", C.CHEESE_PORTION_SELL], ["butter", C.BUTTER_SELL], ["pastry", C.PASTRY_SELL], ["pastryVanilla", C.PASTRY_VANILLA_SELL], ["bread", C.BREAD_SELL], ["croissant", C.CROISSANT_SELL], ["chocolatine", C.CHOCOLATINE_SELL], ["painSuisse", C.PAINSUISSE_SELL]];
+              const items = [["honey", C.HONEY_SELL], ["cheeseWheel", C.CHEESE_WHEEL_SELL], ["cheesePortion", C.CHEESE_PORTION_SELL], ["butter", C.BUTTER_SELL], ["eclairChoco", C.ECLAIR_CHOCO_SELL], ["eclairVanilla", C.ECLAIR_VANILLA_SELL], ["flanVanilla", C.FLAN_VANILLA_SELL], ["gateauBasque", C.GATEAU_BASQUE_SELL], ["bread", C.BREAD_SELL], ["croissant", C.CROISSANT_SELL], ["chocolatine", C.CHOCOLATINE_SELL], ["painSuisse", C.PAINSUISSE_SELL]];
               const any = items.some(([k]) => (cs[k] | 0) > 0);
               if (!any) return null;
               return (<>
@@ -10948,7 +11003,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const line = bid === "beehive" ? L.residentProdHoney(cs.honey | 0)
           : bid === "fromagerie" ? L.residentProdCheese(cs.cheeseWheel | 0, cs.cheesePortion | 0, cs.butter | 0)
           : (crafts.bakery && crafts.bakery.alert) ? L.bakeryAlertLine
-          : L.residentProdPastry(cs.pastry | 0, cs.pastryVanilla | 0) + " · " + L.residentProdBread(cs.bread | 0, cs.croissant | 0, cs.chocolatine | 0, cs.painSuisse | 0);
+          : L.residentProdPastry(cs.eclairChoco | 0, cs.eclairVanilla | 0, cs.flanVanilla | 0, cs.gateauBasque | 0) + " · " + L.residentProdBread(cs.bread | 0, cs.croissant | 0, cs.chocolatine | 0, cs.painSuisse | 0);
         const alert = bid === "bakery" && crafts.bakery && crafts.bakery.alert;
         return (
           <div style={{ position: "fixed", left: "50%", transform: "translateX(-50%)", bottom: 92, zIndex: 39, background: "#f5eeda", border: `1px solid ${alert ? "#c0392b" : "#6b4a2e"}`, borderRadius: 10, padding: "6px 12px", color: "#1d1d1d", fontSize: 12, maxWidth: 320, textAlign: "center", pointerEvents: "none" }}>

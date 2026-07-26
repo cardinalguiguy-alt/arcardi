@@ -1295,7 +1295,13 @@ export const SUPERRENE_COFFEE_COST = 2;   // unités de café consommées au TOT
 // comparaison Date.now() (même principe que le badge ☕⚡ de superUntil).
 export const RENE_COFFEE_GAUGE_TIMEOUT_MS = 60 * 1000; // 1 minute (décision Guillaume)
 export const SUPERRENE_HONEY_MULT = 3;    // zip 301b (demande Guillaume : x10 trop cheaté) : ×3 pendant l'effet café
-export const CHEESE_MS = 6 * 60 * 1000;    export const CHEESE_MILK_COST = 3; // fromagerie : 3 laits -> 1 roue OU 1 motte de beurre (zip 301)
+export const CHEESE_MS = 6 * 60 * 1000;    export const CHEESE_MILK_COST = 3; // fromagerie : 3 laits -> 1 roue OU du beurre (zip 301)
+// Zip suivant (demande Guillaume : "augmenter drastiquement le rendement en
+// beurre de la fromagerie") : chaque fournée qui tombe côté beurre (selon le
+// ratio réglé par le joueur, voir butterPct/ratioAcc plus bas) produit
+// désormais FROMAGERIE_BUTTER_YIELD mottes d'un coup au lieu d'une seule.
+// Le fromage (cheeseWheel) n'est pas concerné, seule la branche beurre.
+export const FROMAGERIE_BUTTER_YIELD = 8;
 export const CHEESE_WHEEL_SELL = 1500;     export const CHEESE_PORTION_SELL = 350; export const PORTIONS_PER_WHEEL = 6;
 // Zip 301 (demande Guillaume) : la fromagerie d'Ingrid produit désormais du
 // FROMAGE **et** du BEURRE, à la même cadence (CHEESE_MS) et au même coût de
@@ -1317,20 +1323,26 @@ export const BUTTER_SELL_RESERVE = 3;
 export const FROMAGERIE_BUTTER_PCT_DEFAULT = 0; // zip 301b (demande Guillaume) : défaut = 100 % fromage (comportement historique préservé) ; le beurre n'apparaît qu'une fois le ratio réglé dans la fiche d'Ingrid
 export const FROMAGERIE_RATIO_STEP = 10;         // paliers de réglage du ratio (10 %)
 // Zip 258 (demande Guillaume) : la boulangerie tourne 3× plus vite (3 min ->
-// 1 min entre deux fournées) mais UNIQUEMENT en journée (voir BAKERY_*_MIN),
-// et produit désormais par FOURNÉE : 1 lait + 1 farine + 6 œufs -> 10
-// pâtisseries d'un coup. Prix unitaire inchangé (500), demande Guillaume.
-export const PASTRY_MS = 1 * 60 * 1000;    export const PASTRY_SELL = 500;  // boulangerie : 1 lait + 1 farine + 6 œufs -> PASTRY_BATCH pâtisseries
-export const PASTRY_FLOUR = 1, PASTRY_MILK = 1, PASTRY_EGG = 6;
-export const PASTRY_BATCH = 10;            // nombre de pâtisseries produites par fournée réussie
-// Zip 301b (demande Guillaume) : la vanille devient un intrant PREMIUM de la
-// pâtisserie de Chloé. Quand il y a de la vanille en réserve (worldStock.
-// vanilla), Chloé en consomme 1 par fournée et produit des PÂTISSERIES À LA
-// VANILLE (même taille de fournée, valeur unitaire bien supérieure) — c'est la
-// « valorisation par transformation » (le brut se revend peu, le transformé
-// rapporte). Sinon, fournée de pâtisseries classiques (inchangé).
-export const PASTRY_VANILLA_COST = 1;      // gousses de vanille par fournée premium
-export const PASTRY_VANILLA_SELL = 900;    // prix unitaire d'une pâtisserie à la vanille (vs 500 la classique)
+// 1 min entre deux fournées) mais UNIQUEMENT en journée (voir BAKERY_*_MIN).
+export const PASTRY_MS = 1 * 60 * 1000;    // cadence d'une fournée de Chloé (1 min)
+// Zip suivant (demande Guillaume) : Chloé abandonne les "pâtisseries"
+// génériques pour 4 PRODUITS NOMMÉS, en rotation (même principe que les
+// viennoiseries de Rosalie) — chacun avec ses propres intrants :
+//   - Éclair au chocolat  : farine + lait + œufs + chocolat (cacao d'Eduardo)
+//   - Éclair à la vanille : farine + lait + œufs + vanille (Madagascar)
+//     (remplace l'ancienne "pâtisserie à la vanille")
+//   - Flan pâtissier à la vanille de Madagascar : farine + lait + œufs + vanille
+//   - Gâteau basque : farine + lait + œufs + vanille + beurre (fromagerie d'Ingrid)
+// Toutes tournent à la même cadence (PASTRY_MS) ; Chloé produit le premier
+// item réalisable en parcourant la rotation, comme Rosalie pour le pain.
+export const ECLAIR_CHOCO_FLOUR = 1, ECLAIR_CHOCO_MILK = 1, ECLAIR_CHOCO_EGG = 4, ECLAIR_CHOCO_COCOA = 1;
+export const ECLAIR_CHOCO_BATCH = 8, ECLAIR_CHOCO_SELL = 700;
+export const ECLAIR_VANILLA_FLOUR = 1, ECLAIR_VANILLA_MILK = 1, ECLAIR_VANILLA_EGG = 4, ECLAIR_VANILLA_VANILLA = 1;
+export const ECLAIR_VANILLA_BATCH = 8, ECLAIR_VANILLA_SELL = 900; // prix inchangé vs l'ancienne pâtisserie vanille
+export const FLAN_VANILLA_FLOUR = 1, FLAN_VANILLA_MILK = 2, FLAN_VANILLA_EGG = 5, FLAN_VANILLA_VANILLA = 1;
+export const FLAN_VANILLA_BATCH = 6, FLAN_VANILLA_SELL = 850;
+export const GATEAU_BASQUE_FLOUR = 1, GATEAU_BASQUE_MILK = 1, GATEAU_BASQUE_EGG = 4, GATEAU_BASQUE_VANILLA = 1, GATEAU_BASQUE_BUTTER = 1;
+export const GATEAU_BASQUE_BATCH = 6, GATEAU_BASQUE_SELL = 1200; // le plus premium (beurre en plus)
 
 // ---- Zip 301 (demande Guillaume) : Rosalie, boulangère (pain + viennoiseries) ----
 // Rosalie travaille dans la MÊME boulangerie que Chloé (bakery), mais sur une

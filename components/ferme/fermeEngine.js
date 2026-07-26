@@ -2566,7 +2566,7 @@ export function migrateCrafts(cr) {
 // Zip 301 : nouveaux produits — beurre (fromagerie), pain + viennoiseries
 // (Rosalie). migrateCraftStock itère sur Object.keys(out), donc l'ajout ici
 // suffit à les faire persister/synchroniser.
-export function newCraftStock() { return { honey: 0, cheeseWheel: 0, cheesePortion: 0, pastry: 0, pastryVanilla: 0, butter: 0, bread: 0, croissant: 0, chocolatine: 0, painSuisse: 0 }; }
+export function newCraftStock() { return { honey: 0, cheeseWheel: 0, cheesePortion: 0, eclairChoco: 0, eclairVanilla: 0, flanVanilla: 0, gateauBasque: 0, butter: 0, bread: 0, croissant: 0, chocolatine: 0, painSuisse: 0 }; }
 export function migrateCraftStock(s) {
   const out = newCraftStock();
   if (s && typeof s === "object") for (const k of Object.keys(out)) out[k] = Math.max(0, s[k] | 0);
