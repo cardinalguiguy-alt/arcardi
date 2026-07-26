@@ -1859,4 +1859,12 @@ export const BALLOON_FLIGHT_REAL_MS = 3 * 60 * 1000; // durée réelle d'un surv
 // Point d'ancrage visuel (hangar/plateforme au sol) où la montgolfière est
 // visible posée hors vol et pendant l'embarquement. Purement décoratif, pas
 // de collision dédiée (cf. Guillaume à ajuster visuellement en jeu si besoin).
-export const BALLOON_ANCHOR = { x: 26, y: 34 };
+// Zip 307 (demande Guillaume : "une belle zone de landing déplaçable, peut-
+// être rive droite pour l'instant") : ce point ne sert plus que de valeur par
+// défaut/de repli — le joueur peut désormais la déplacer avec l'outil main
+// (comme un bâtiment d'artisan), la position choisie est alors persistée dans
+// station.balloon.anchor (voir balloonAnchorPos, FermeGame.js). Choisie ici
+// rive droite (x > riverCenter, côté opposé à la maison, cf. WOLF_ROAM_RADIUS
+// plus bas), juste au sud de la traversée nord (bridgeSites `by = 42`, rivière
+// centrée ~x=95 à cette hauteur) : une position raisonnable proche du pont.
+export const BALLOON_ANCHOR = { x: 108, y: 46 };

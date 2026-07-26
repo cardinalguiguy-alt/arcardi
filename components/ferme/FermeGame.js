@@ -2313,6 +2313,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       hostSend({ type: "broadcast", event: "apply", payload: { crafts: s.crafts } });
       return true;
     }
+    if (req.kind === "moveBalloon") {
+      // Zip 307 : déplace la zone d'atterrissage (station.balloon.anchor),
+      // purement décoratif comme moveArtisan — jamais supprimée, pas de
+      // production/collision associée.
+      const st = s.station; if (!st) return true;
+      if (!st.balloon) st.balloon = E.newBalloonState();
+      const x = req.x | 0, y = req.y | 0;
+      if (!(x >= 0 && y >= 0)) return true;
+      st.balloon.anchor = { x, y };
+      broadcastStation();
+      return true;
+    }
     if (req.kind === "pickDecor") {
       const idx = s.decor.findIndex(d => d.did === (req.did | 0));
       if (idx >= 0) {
@@ -7118,6 +7130,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         else balloonGlowRef.current = null; // pas de business actif : rien à percer dans le voile de nuit
       }
 
+      // Zip 307 : pendant qu'on déplace la zone d'atterrissage (outil main),
+      // surbrillance de la case visée — verte si posable, rouge sinon. Rien
+      // de permanent : ce halo ne se dessine que le temps du déplacement.
+      {
+        const held = handHeldRef.current;
+        if (held && held.kind === "balloon" && meRef.current && meRef.current.zone !== "town" && meRef.current.zone !== "evil") {
+          const tt = targetTile();
+          const ok = farmPlaceable(tt.x, tt.y);
+          ctx.fillStyle = ok ? "rgba(90, 220, 120, 0.35)" : "rgba(220, 70, 70, 0.35)";
+          ctx.strokeStyle = ok ? "rgba(60, 200, 100, 0.9)" : "rgba(200, 60, 60, 0.9)";
+          ctx.lineWidth = 1;
+          const cx = tt.x * T + T / 2, cy = tt.y * T + T / 2, r = T * 0.9;
+          ctx.beginPath(); ctx.ellipse(cx, cy, r, r * 0.55, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        }
+      }
+
       const na = nightAlpha();
       if (na > 0) {
         // Correctif chantier 2026-07 ("les lampadaires restent éteints la
@@ -8034,6 +8062,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // atterrissage bas) N'EST QUE visuelle : elle décale la nacelle vers le
     // haut par rapport à SON OMBRE, qui elle reste au sol — c'est l'écart
     // ombre/nacelle qui vend le survol, pas juste un sprite qui bouge.
+    // Zip 307 (demande Guillaume : "belle zone de landing déplaçable") :
+    // renvoie le point d'ancrage courant (déplacé par le joueur via l'outil
+    // main, sinon C.BALLOON_ANCHOR par défaut). Lu depuis station.balloon.anchor,
+    // partagé/broadcasté comme le reste de station.balloon.
+    function balloonAnchorPos(bst) {
+      const a = bst && bst.anchor;
+      return (a && typeof a.x === "number" && typeof a.y === "number") ? a : C.BALLOON_ANCHOR;
+    }
     function balloonWorldPos(bst, now) {
       if (bst.phase === "flying" && bst.flightEndAt > bst.flightStartAt) {
         const t = Math.max(0, Math.min(1, (now - bst.flightStartAt) / (bst.flightEndAt - bst.flightStartAt)));
@@ -8041,7 +8077,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const altitude = 14 + 46 * Math.sin(t * Math.PI); // px : bas -> haut -> bas
         return { x: p.x, y: p.y, altitude, t };
       }
-      return { x: C.BALLOON_ANCHOR.x + 0.5, y: C.BALLOON_ANCHOR.y + 0.5, altitude: 0, t: 0 };
+      const anchor = balloonAnchorPos(bst);
+      return { x: anchor.x + 0.5, y: anchor.y + 0.5, altitude: 0, t: 0 };
     }
     // Zip 302 (retouche graphique, demande Guillaume — maquette validée) :
     // montgolfière "hyperréaliste rouge et jaune" — le sprite HD (osier
@@ -8537,6 +8574,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const def = C.ARTISAN_BUILDINGS[bid], p = artisanPos(bid);
         if (tt.x >= p.x - 1 && tt.x <= p.x + def.w && tt.y >= p.y - 1 && tt.y <= p.y + def.h) return { kind: "artisan", bid };
       }
+      // Zip 307 : saisir la zone d'atterrissage de la montgolfière (business
+      // actif, ballon pas en vol — inutile/déroutant de la déplacer pendant
+      // un survol) pour la reposer ailleurs.
+      const bst = sharedRef.current?.station?.balloon;
+      if (bst && bst.pilotRid != null && bst.phase !== "flying") {
+        const a = (bst.anchor && typeof bst.anchor.x === "number") ? bst.anchor : C.BALLOON_ANCHOR;
+        if (Math.hypot(tt.x - a.x, tt.y - a.y) < 3) return { kind: "balloon" };
+      }
     }
     const decor = sharedRef.current.decor || [];
     let best = null, bestD = 1.5;
@@ -8593,6 +8638,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         // gauche). L'hôte valide et met à jour crafts[bid].pos (jamais supprimé).
         if (!handPlaceable(zone, tt.x, tt.y)) { pushToast(L.decorBadSpot); return; }
         sendReq({ kind: "moveArtisan", bid: held.bid, x: tt.x, y: tt.y });
+      } else if (held.kind === "balloon" && zone === "farm") {
+        // Zip 307 : repose la zone d'atterrissage de la montgolfière sur la
+        // case visée. Comme un bâtiment d'artisan, elle ne disparaît jamais.
+        if (!handPlaceable(zone, tt.x, tt.y)) { pushToast(L.decorBadSpot); return; }
+        sendReq({ kind: "moveBalloon", x: tt.x, y: tt.y });
       }
       handHeldRef.current = null; setHandHeldUI(null);
       return;

@@ -3463,6 +3463,8 @@ export function newBalloonState() {
     seed: 0,               // graine de la trajectoire du vol en cours
     soldToday: 0,           // billets vendus le jour de jeu courant (affichage)
     soldDay: 0,             // jour de jeu correspondant à soldToday (reset au changement de jour)
+    anchor: null,           // zip 307 : point d'atterrissage choisi par le joueur ({x,y}) ;
+                             // null = pas encore déplacé, on utilise C.BALLOON_ANCHOR (rive droite, par défaut).
   };
 }
 
@@ -3482,6 +3484,8 @@ export function migrateBalloon(b) {
   out.seed = b.seed | 0;
   out.soldToday = Math.max(0, b.soldToday | 0);
   out.soldDay = b.soldDay | 0;
+  out.anchor = (b.anchor && typeof b.anchor.x === "number" && typeof b.anchor.y === "number")
+    ? { x: b.anchor.x | 0, y: b.anchor.y | 0 } : null;
   return out;
 }
 
