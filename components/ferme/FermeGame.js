@@ -5238,6 +5238,28 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (ok) { res.x = ex; res.y = ey; }
       res.roamTarget = null; res.roamMeet = null; res.moving = false; res.nextRoamAt = 0;
     }
+    // Bugfix (Ingrid figée à son spawn au lieu de rejoindre la fromagerie) :
+    // il n'y a PAS de pathfinding — chaque pas se fait en ligne droite vers
+    // roamTarget (voir plus bas, `const nx = res.x + (dx/d)*step ...`). Un
+    // artisan qui vient tout juste d'obtenir une ancre de travail (atelier
+    // construit, ou déplacé loin) part alors de sa position ACTUELLE, qui
+    // peut être à des dizaines de cases de là (ex. le point de spawn commun,
+    // s'il roulait encore près de C.SPAWN avant la construction du
+    // bâtiment). Si le moindre obstacle (clôture, rocher, bâtiment...)
+    // coupe la ligne droite entre les deux, le tout premier pas est bloqué
+    // (else, ligne ~5339 plus bas) : la cible est effacée et une nouvelle
+    // est retirée près de l'ancre 500 ms plus tard — mais le trajet en
+    // ligne droite reste bloqué par le même obstacle à chaque tentative, et
+    // le résident ne bouge donc plus jamais. On le détecte ici (ancre à
+    // bAnchor, distance courante > la zone de rôdaille habituelle) et on le
+    // RETÉLÉPORTE directement près de son atelier, comme au tout premier
+    // placement, au lieu de tenter une marche qui ne peut pas aboutir.
+    else if (bAnchor && Math.hypot(res.x - anchor.x, res.y - anchor.y) > rx * 3) {
+      let jx = anchor.x, jy = anchor.y, jt = 0, jok = false;
+      do { jx = anchor.x + (Math.random() * (rx * 0.9) - rx * 0.45); jy = anchor.y + (Math.random() * (ry * 0.9) - ry * 0.45); jt++; jok = inMap(Math.floor(jx), Math.floor(jy)) && !E.blockedTile(w, jx, jy); } while (jt < 16 && !jok);
+      if (jok) { res.x = jx; res.y = jy; }
+      res.roamTarget = null; res.roamMeet = null; res.moving = false; res.nextRoamAt = 0;
+    }
     // Refonte "déplacements réalistes" (demande Guillaume, zip 298) : au lieu de
     // marcher sans arrêt, un résident alterne pauses (souvent, durées variées),
     // petits tours près de chez lui, rapprochements en face-à-face / petits
@@ -5264,13 +5286,23 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           // bâtiment. On pause ~78% du temps (souvent des haltes longues), et
           // quand il bouge c'est un tout petit pas dans un rayon RESSERRÉ autour
           // du centre (0.55x), donc il ne s'éloigne quasiment jamais de l'atelier.
-          if (roll < 0.5) {
+          // Zip suivant (demande Guillaume : "Chloé/Rosalie marchent trop de
+          // manière erratique" quand elles sont visibles dehors toutes les
+          // deux) : encore plus calmes que les autres artisans postés — pause
+          // bien plus fréquente et longue, et rayon de déplacement resserré
+          // (0.3x au lieu de 0.55x) quand elles bougent quand même.
+          const isBakeryWorker = ro && (ro.skill === "baker" || ro.skill === "breadmaker");
+          const pauseChance = isBakeryWorker ? 0.8 : 0.5;
+          if (roll < pauseChance) {
             res.roamTarget = null; res.roamMeet = null;
-            res.nextRoamAt = now + (Math.random() < 0.4 ? 9000 + Math.random() * 10000 : 4000 + Math.random() * 5000);
+            res.nextRoamAt = now + (isBakeryWorker
+              ? (Math.random() < 0.55 ? 12000 + Math.random() * 14000 : 6000 + Math.random() * 7000)
+              : (Math.random() < 0.4 ? 9000 + Math.random() * 10000 : 4000 + Math.random() * 5000));
           } else {
-            const arx = Math.max(1.6, rx * 0.55), ary = Math.max(1.6, ry * 0.55);
+            const rMul = isBakeryWorker ? 0.3 : 0.55;
+            const arx = Math.max(1.4, rx * rMul), ary = Math.max(1.4, ry * rMul);
             const t = pickRoamTarget(w, anchor.x, anchor.y, arx, ary, allowTilled);
-            if (t) { res.roamTarget = t; res.roamMeet = null; res.nextRoamAt = now + 3500 + Math.random() * 5000; }
+            if (t) { res.roamTarget = t; res.roamMeet = null; res.nextRoamAt = now + (isBakeryWorker ? 5000 + Math.random() * 7000 : 3500 + Math.random() * 5000); }
             else { res.roamTarget = null; res.roamMeet = null; res.nextRoamAt = now + 800; }
           }
         } else if (roll < 0.38) {
@@ -5327,7 +5359,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         res._segFor = { x: res.roamTarget.x, y: res.roamTarget.y };
         res.segMul = 0.65 + Math.random() * 0.55;
       }
-      const paceMul = bAnchor ? 0.7 : (gait * (res.segMul || 1));
+      const paceMul = bAnchor ? (ro && (ro.skill === "baker" || ro.skill === "breadmaker") ? 0.55 : 0.7) : (gait * (res.segMul || 1));
       const dx = res.roamTarget.x - res.x, dy = res.roamTarget.y - res.y, d = Math.hypot(dx, dy);
       if (d < 0.08) res.moving = false;
       else {
@@ -5457,6 +5489,43 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (bh && bh.built) bh.nextAt = now + C.HONEY_MS; // cycle de production frais, pas de rattrapage du temps de pause
     }
   }
+  // Bugfix confort (demande Guillaume) : "Rosalie et Chloé marchent beaucoup
+  // trop" — au lieu de les laisser rôder sans arrêt devant la boulangerie
+  // toutes les deux à la fois, l'une des deux rentre régulièrement à
+  // l'intérieur (invisible, comme si elle était occupée à sa fournée) le
+  // temps d'un passage, puis ressort pendant que l'autre y va à son tour.
+  // Simple alternance basée sur le temps (pas de vraie exclusion stricte) :
+  // - dehors -> à l'échéance, tire au sort si elle rentre (BAKERY_ENTER_CHANCE),
+  //   SAUF si l'autre boulangère est déjà rentrée (jamais les deux dedans en
+  //   même temps) ; sinon reste dehors pour un tour de plus.
+  // - dedans -> ressort systématiquement à l'échéance, repositionnée près de
+  //   l'ancre (devant la boulangerie), roamTarget réinitialisé.
+  // Un résident caché (res.hidden) n'est ni dessiné (voir la boucle de rendu,
+  // "if (res.hidden) continue;") ni déplacé (résidentRoam sauté dans la boucle
+  // ci-dessous) : elle est simplement "à l'intérieur" pendant ce temps.
+  function updateBakeryVisibility(res, ro, peers, now) {
+    if (!res.shopPhaseUntil || now >= res.shopPhaseUntil) {
+      if (res.hidden) {
+        // Ressort de la boulangerie : redevient visible, se replace près de
+        // l'ancre (devant le bâtiment), rôdaille normale reprend ensuite.
+        res.hidden = false;
+        res.roamTarget = null; res.roamMeet = null; res.moving = false; res.nextRoamAt = 0;
+        res.shopPhaseUntil = now + C.BAKERY_OUTSIDE_MIN_MS + Math.random() * (C.BAKERY_OUTSIDE_MAX_MS - C.BAKERY_OUTSIDE_MIN_MS);
+      } else {
+        // Dehors : l'autre boulangère (Chloé <-> Rosalie) est-elle déjà
+        // rentrée ? Si oui, on ne rentre pas (jamais les deux dedans à la
+        // fois) — on redevient "dehors" pour un tour de plus.
+        const otherIn = (peers || []).some(p => p && p !== res && p.hidden && rosterOf(p.rid) && (rosterOf(p.rid).skill === "baker" || rosterOf(p.rid).skill === "breadmaker"));
+        if (!otherIn && Math.random() < C.BAKERY_ENTER_CHANCE) {
+          res.hidden = true;
+          res.roamTarget = null; res.roamMeet = null; res.moving = false;
+          res.shopPhaseUntil = now + C.BAKERY_INSIDE_MIN_MS + Math.random() * (C.BAKERY_INSIDE_MAX_MS - C.BAKERY_INSIDE_MIN_MS);
+        } else {
+          res.shopPhaseUntil = now + C.BAKERY_OUTSIDE_MIN_MS + Math.random() * (C.BAKERY_OUTSIDE_MAX_MS - C.BAKERY_OUTSIDE_MIN_MS);
+        }
+      }
+    }
+  }
   function updateResidents(dt) {
     const w = worldRef.current; if (!w) return;
     const s = sharedRef.current, st = s.station;
@@ -5495,7 +5564,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         }
         continue;
       }
-      residentRoam(res, w, now, dt, ro, residents); // zip 252 : balade sur la ferme (chaque tick) — zip 256 : ancre dédiée — zip 298 : passe la liste des voisins (rendez-vous sociaux)
+      // Zip suivant (demande Guillaume) : Chloé/Rosalie alternent entre
+      // "dehors" (rôdaille normale) et "à l'intérieur" (invisible, voir
+      // updateBakeryVisibility) — tant qu'elle est cachée, on ne calcule même
+      // pas sa rôdaille (elle ne bouge pas, elle est simplement absente du
+      // rendu).
+      if (ro.skill === "baker" || ro.skill === "breadmaker") updateBakeryVisibility(res, ro, residents, now);
+      if (!res.hidden) residentRoam(res, w, now, dt, ro, residents); // zip 252 : balade sur la ferme (chaque tick) — zip 256 : ancre dédiée — zip 298 : passe la liste des voisins (rendez-vous sociaux)
       if (ro.skill === "beekeeper") updateBeekeeperPhase(res, s, now); // chantier 2026-07 : blocs travail/pause de René
       // Premier passage : on planifie la première journée de travail sans rien
       // produire (emménager prend un peu de temps). La borne haute protège
@@ -7177,6 +7252,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         for (const res of residents) {
           const ro = rosterOf(res.rid); if (!ro) continue;
           if (res.trip && res.trip.phase === "away") continue; // zip 258 : Eduardo absent (en voyage)
+          if (res.hidden) continue; // zip suivant : Chloé/Rosalie, "à l'intérieur" de la boulangerie (voir updateBakeryVisibility)
           if (typeof res.x !== "number") continue;
           const rp = isHost ? res : smoothNpc("resident:" + res.rid, res.x, res.y, dt, true, !!res.moving, (cx, cy) => canStand(w, cx, cy));
           const rx = rp.x, ry = rp.y;

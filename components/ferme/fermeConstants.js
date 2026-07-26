@@ -1382,6 +1382,15 @@ export const BAKERY_CUSTOMER_QTY_MIN = 1, BAKERY_CUSTOMER_QTY_MAX = 3; // quanti
 export const BAKERY_PRICE_STEP_PCT = 10;
 export const BAKERY_PRICE_MIN_PCT = 50, BAKERY_PRICE_MAX_PCT = 200;
 
+// ---- Zip suivant (demande Guillaume) : Chloé et Rosalie marchent trop —
+// l'une des deux doit rentrer dans la boulangerie (invisible) le temps d'un
+// "service", puis ressortir pendant que l'autre y va, en alternance ; parfois
+// les deux sont dehors en même temps (jamais les deux dedans en même temps).
+// Voir updateBakeryVisibility (FermeGame.js).
+export const BAKERY_INSIDE_MIN_MS = 25 * 1000,  BAKERY_INSIDE_MAX_MS = 70 * 1000;  // durée d'un passage à l'intérieur
+export const BAKERY_OUTSIDE_MIN_MS = 15 * 1000, BAKERY_OUTSIDE_MAX_MS = 45 * 1000; // durée d'un passage dehors avant de retenter d'entrer
+export const BAKERY_ENTER_CHANCE = 0.5; // probabilité de rentrer à l'échéance "dehors" (sinon reste dehors un tour de plus)
+
 // ---- Zip 280 (bijouterie, demande Guillaume) ----
 // Contrairement aux autres ateliers (beehive/fromagerie/bakery/sawmill), la
 // bijouterie n'est PAS liée à un résident/métier : n'IMPORTE QUEL joueur
@@ -1468,7 +1477,7 @@ export const WORLD_GOODS = [
   // Zip suivant (demande Guillaume) : fève de tonka, intrant des bases
   // vanillées de Chloé (éclairs vanille + flans vanille), aux côtés de la
   // vanille de Madagascar.
-  { key: "tonka",    name: "Fève de tonka",                  nameEn: "Tonka bean",                tier: "lointain", buy: 280, sell: 280,  emoji: "\u{1FAD8}" },
+  { key: "tonka",    name: "Fève de tonka",                  nameEn: "Tonka bean",                tier: "lointain", buy: 180, sell: 180,  emoji: "\u{1FAD8}" }, // prix baissé (demande Guillaume, initialement 280/280, jugé trop cher)
 ];
 // Prix unitaire d'une commande (payé d'avance) = buy × mult du palier, arrondi.
 export function worldGoodUnitCost(good) {
