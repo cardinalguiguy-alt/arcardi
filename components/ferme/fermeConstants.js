@@ -1391,6 +1391,13 @@ export const BAKERY_INSIDE_MIN_MS = 25 * 1000,  BAKERY_INSIDE_MAX_MS = 70 * 1000
 export const BAKERY_OUTSIDE_MIN_MS = 15 * 1000, BAKERY_OUTSIDE_MAX_MS = 45 * 1000; // durée d'un passage dehors avant de retenter d'entrer
 export const BAKERY_ENTER_CHANCE = 0.5; // probabilité de rentrer à l'échéance "dehors" (sinon reste dehors un tour de plus)
 
+// Zip suivant (demande Guillaume) : scènes Chloé/Rosalie (voir
+// L.chloeRosalieScenes). Déclenchées quand la bulle "rare" de Rosalie a
+// bouclé 2 cycles à portée du joueur ET que Chloé n'est pas "à l'intérieur"
+// (res.hidden) de la boulangerie. Cooldown 5 min réelles après chaque scène.
+export const CHLOE_ROSALIE_SCENE_COOLDOWN_MS = 5 * 60 * 1000;
+export const CHLOE_ROSALIE_SCENE_V11_CHANCE = 1 / 18; // variante rare (René), ~1 fois sur 18
+
 // ---- Zip 280 (bijouterie, demande Guillaume) ----
 // Contrairement aux autres ateliers (beehive/fromagerie/bakery/sawmill), la
 // bijouterie n'est PAS liée à un résident/métier : n'IMPORTE QUEL joueur

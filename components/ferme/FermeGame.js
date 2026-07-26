@@ -528,6 +528,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const sleepTimerRef = useRef(null); // setTimeout de sortie automatique après C.SLEEP_MS
   const injuredUntilRef = useRef(0); // miroir synchrone de injuredUntil (lu dans la boucle de rendu/déplacement)
   const immunityUntilRef = useRef(0); // miroir synchrone de immunityUntil (lu dans updateEvilMonsters)
+  // Zip suivant (demande Guillaume) : scènes Chloé/Rosalie — état 100% local
+  // (une scène jouée pour un joueur n'a pas besoin d'être synchronisée aux
+  // autres, cf. "visible seulement par les joueurs proches").
+  const rosalieBubbleCycleRef = useRef({ lastPeriodStart: -1, cycles: 0 }); // compte les cycles de bulle "rare" vus à portée
+  const chloeRosalieSceneRef = useRef(null); // { lines, stepIdx, stepUntil, rosalieRid, chloeRid } pendant qu'une scène joue
+  const chloeRosalieCooldownRef = useRef(0); // Date.now() avant lequel on ne redéclenche pas de scène
   const hatUntilRef = useRef(0); // miroir synchrone de hatUntil (lu dans la boucle de rendu, voir drawCharacter)
   const rabbitChallengeOfferRef = useRef(false); // miroir synchrone de rabbitChallengeOffer (lu dans le timer hôte, évite de reproposer en boucle)
   const rabbitLastOfferDayRef = useRef(-999); // zip 262 : jour ingame de la dernière proposition de défi lapins (gate 1 fois / 3 jours)
@@ -7246,6 +7252,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           } });
         }
       }
+      // Zip suivant : avance la scène Chloé/Rosalie en cours (une étape par
+      // "stepUntil" écoulé), une seule fois par frame.
+      {
+        const sc = chloeRosalieSceneRef.current;
+        if (sc) {
+          const now2 = performance.now();
+          if (now2 >= sc.stepUntil) {
+            sc.stepIdx++;
+            if (sc.stepIdx >= sc.lines.length) chloeRosalieSceneRef.current = null;
+            else sc.stepUntil = now2 + (sc.lines[sc.stepIdx].ms || 2600);
+          }
+        }
+      }
       // Zip 252 : résidents baladeurs (lissés côté invité comme les visiteurs).
       {
         const residents = (sharedRef.current.station && sharedRef.current.station.residents) || [];
@@ -7264,9 +7283,23 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           const onWhiteHorse = ro.skill === "voyager";
           const talkLines = ro.skill && L.skillTalk ? L.skillTalk[ro.skill] : null;
           const resSuperActive = Date.now() < (res.superUntil || 0);
+          // Zip suivant : sourcils froncés de Rosalie (frown) — actifs
+          // uniquement pendant qu'elle grogne (bulle "rare" affichée) ou
+          // pendant une scène Chloé/Rosalie en cours.
+          const sceneNow = chloeRosalieSceneRef.current;
+          const inScene = sceneNow && (res.rid === sceneNow.rosalieRid || res.rid === sceneNow.chloeRid);
           draws.push({ y: (ry + 1) * T, fn: () => {
             if (resSuperActive) drawCoffeeAura(Math.round(rx * T), Math.round(ry * T));
             drawCharacter({ id: "res" + res.rid, name: ro.name, x: rx, y: ry, dir: res.dir || 0, moving: !!res.moving, animT: res.animT || 0, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap, beeSuit: residentBeeSuit(res, ro), plaid: ro.skill === "lumberjack", cheeseHat: ro.skill === "cheesemaker", mount: onWhiteHorse ? "white" : null }, false);
+            if (ro.skill === "breadmaker" && (inScene || (performance.now() % 12000 < 3000))) drawFrown(ctx, Math.round(rx * T) + 8, Math.round(ry * T) - 2);
+            // Zip suivant : bulle de la scène Chloé/Rosalie en cours, si CE
+            // résident est bien le locuteur de l'étape actuelle.
+            if (sceneNow) {
+              const line = sceneNow.lines[sceneNow.stepIdx];
+              if (line && ((line.who === "rosalie" && res.rid === sceneNow.rosalieRid) || (line.who === "chloe" && res.rid === sceneNow.chloeRid))) {
+                drawSpeechBubble(ctx, Math.round(rx * T) + 8, Math.round(ry * T) - 18, line.text);
+              }
+            }
             // Bulle métier quand le joueur local est à proximité (zip 299).
             const mm = meRef.current;
             if (talkLines && talkLines.length && mm && (!mm.zone || mm.zone === "farm") && Math.abs(mm.x - rx) + Math.abs(mm.y - ry) <= 3) {
@@ -7277,9 +7310,35 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               const now2 = performance.now();
               const period = rare ? 12000 : 3500;
               const show = rare ? (now2 % period < 3000) : true;
-              if (show) {
+              if (show && !chloeRosalieSceneRef.current) {
                 const txt = talkLines[Math.floor(now2 / period + res.rid) % talkLines.length];
                 drawSpeechBubble(ctx, Math.round(rx * T) + 8, Math.round(ry * T) - 18, txt);
+              }
+              // Zip suivant : déclencheur des scènes Chloé/Rosalie — on compte
+              // les cycles de la bulle "rare" de Rosalie vus à portée ; au
+              // 2e cycle, si Chloé (baker) est dehors et le cooldown est
+              // passé, on lance une scène.
+              if (rare && !chloeRosalieSceneRef.current) {
+                const cyc = rosalieBubbleCycleRef.current;
+                const periodIdx = Math.floor(now2 / period);
+                if (cyc.lastPeriodStart !== periodIdx) {
+                  cyc.lastPeriodStart = periodIdx;
+                  cyc.cycles++;
+                  if (cyc.cycles >= 2 && Date.now() >= chloeRosalieCooldownRef.current) {
+                    const chloeRes = residents.find(p => p && !p.hidden && rosterOf(p.rid) && rosterOf(p.rid).skill === "baker");
+                    if (chloeRes) {
+                      cyc.cycles = 0;
+                      const scenes = L.chloeRosalieScenes || [];
+                      if (scenes.length) {
+                        const rareIdx = scenes.length - 1;
+                        const idx = (Math.random() < C.CHLOE_ROSALIE_SCENE_V11_CHANCE) ? rareIdx : Math.floor(Math.random() * rareIdx);
+                        const lines = scenes[idx];
+                        chloeRosalieSceneRef.current = { lines, stepIdx: 0, stepUntil: now2 + (lines[0].ms || 2600), rosalieRid: res.rid, chloeRid: chloeRes.rid };
+                        chloeRosalieCooldownRef.current = Date.now() + C.CHLOE_ROSALIE_SCENE_COOLDOWN_MS;
+                      }
+                    }
+                  }
+                }
               }
             }
           } });
@@ -8364,6 +8423,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     function drawCoffeeAura(px, py) { drawSuperGlow(px, py); drawCoffeeEyes(px, py); }
     // Zip 299 (demande Guillaume) : petite bulle de dialogue au-dessus d'un
     // artisan quand le joueur s'en approche (réplique liée à son métier).
+    // Zip suivant (demande Guillaume) : sourcils froncés de Rosalie — simple
+    // surimpression (deux petits traits obliques), pas une nouvelle case du
+    // sprite sheet. cx/cy ~ position tête du personnage à l'écran.
+    function drawFrown(ctx, cx, cy) {
+      ctx.save();
+      ctx.strokeStyle = "#2a1a12"; ctx.lineWidth = 1; ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(cx - 5, cy - 2); ctx.lineTo(cx - 1, cy);
+      ctx.moveTo(cx + 5, cy - 2); ctx.lineTo(cx + 1, cy);
+      ctx.stroke();
+      ctx.restore();
+    }
     function drawSpeechBubble(ctx, cx, by, text) {
       ctx.save();
       ctx.font = "7px monospace"; ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
