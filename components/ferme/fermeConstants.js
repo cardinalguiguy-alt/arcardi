@@ -1345,6 +1345,24 @@ export const FLAN_VANILLA_BATCH = 6, FLAN_VANILLA_SELL = 850;
 export const GATEAU_BASQUE_FLOUR = 1, GATEAU_BASQUE_MILK = 1, GATEAU_BASQUE_EGG = 4, GATEAU_BASQUE_VANILLA = 1, GATEAU_BASQUE_BUTTER = 1;
 export const GATEAU_BASQUE_BATCH = 6, GATEAU_BASQUE_SELL = 1200; // le plus premium (beurre en plus)
 
+// ---- Zip 301 (demande Guillaume) : Rosalie, boulangère (pain + viennoiseries) ----
+// Rosalie travaille dans la MÊME boulangerie que Chloé (bakery), mais sur une
+// filière distincte : le PAIN (farine seule, toujours disponible) et les
+// VIENNOISERIES (croissants = farine+beurre ; chocolatines & pains suisses =
+// farine+beurre+chocolat). Le "chocolat" est la fève de cacao rapportée par
+// Eduardo (WORLD_GOODS "cocoa", station.worldStock.cocoa). Les viennoiseries
+// ne se produisent QUE si l'on dispose de beurre (filière débloquée par la
+// fromagerie d'Ingrid) — d'où l'ordre "commence par le fromager/beurre".
+// Même contrainte horaire que la pâtisserie (journée, voir BAKERY_*_MIN).
+export const ROSALIE_MS = 90 * 1000;       // cadence d'une fournée de Rosalie (1 min 30)
+// Pain (farine de blé seule pour l'instant ; farine de seigle à venir).
+export const BREAD_FLOUR = 1, BREAD_BATCH = 4, BREAD_SELL = 120;
+// Croissant : farine + beurre.
+export const CROISSANT_FLOUR = 1, CROISSANT_BUTTER = 1, CROISSANT_BATCH = 6, CROISSANT_SELL = 180;
+// Chocolatine & pain suisse : farine + beurre + chocolat (cacao).
+export const CHOCO_FLOUR = 1, CHOCO_BUTTER = 1, CHOCO_COCOA = 1, CHOCO_BATCH = 6;
+export const CHOCOLATINE_SELL = 260, PAINSUISSE_SELL = 260;
+
 // ---- Zip suivant (demande Guillaume) : clients automatiques le matin +
 // prix réglables par produit de boulangerie ----
 // Chaque matin (mêmes horaires d'ouverture que la boulangerie, jusqu'à
@@ -1363,24 +1381,6 @@ export const BAKERY_CUSTOMER_QTY_MIN = 1, BAKERY_CUSTOMER_QTY_MAX = 3; // quanti
 // ratio beurre de la fromagerie).
 export const BAKERY_PRICE_STEP_PCT = 10;
 export const BAKERY_PRICE_MIN_PCT = 50, BAKERY_PRICE_MAX_PCT = 200;
-
-// ---- Zip 301 (demande Guillaume) : Rosalie, boulangère (pain + viennoiseries) ----
-// Rosalie travaille dans la MÊME boulangerie que Chloé (bakery), mais sur une
-// filière distincte : le PAIN (farine seule, toujours disponible) et les
-// VIENNOISERIES (croissants = farine+beurre ; chocolatines & pains suisses =
-// farine+beurre+chocolat). Le "chocolat" est la fève de cacao rapportée par
-// Eduardo (WORLD_GOODS "cocoa", station.worldStock.cocoa). Les viennoiseries
-// ne se produisent QUE si l'on dispose de beurre (filière débloquée par la
-// fromagerie d'Ingrid) — d'où l'ordre "commence par le fromager/beurre".
-// Même contrainte horaire que la pâtisserie (journée, voir BAKERY_*_MIN).
-export const ROSALIE_MS = 90 * 1000;       // cadence d'une fournée de Rosalie (1 min 30)
-// Pain (farine de blé seule pour l'instant ; farine de seigle à venir).
-export const BREAD_FLOUR = 1, BREAD_BATCH = 4, BREAD_SELL = 120;
-// Croissant : farine + beurre.
-export const CROISSANT_FLOUR = 1, CROISSANT_BUTTER = 1, CROISSANT_BATCH = 6, CROISSANT_SELL = 180;
-// Chocolatine & pain suisse : farine + beurre + chocolat (cacao).
-export const CHOCO_FLOUR = 1, CHOCO_BUTTER = 1, CHOCO_COCOA = 1, CHOCO_BATCH = 6;
-export const CHOCOLATINE_SELL = 260, PAINSUISSE_SELL = 260;
 
 // ---- Zip 280 (bijouterie, demande Guillaume) ----
 // Contrairement aux autres ateliers (beehive/fromagerie/bakery/sawmill), la
