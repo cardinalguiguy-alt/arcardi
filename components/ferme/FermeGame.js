@@ -2333,6 +2333,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function stationChat(msg, from) {
     broadcastChat(from || "\u{1F689}", msg);
   }
+  // Petit changement (demande Guillaume) : formate la liste des ingrédients
+  // manquants (clés type "flour"/"milk"/...) en une chaîne localisée lisible,
+  // ex. "farine, lait" — utilisée par les alertes des artisans (boulangerie
+  // pour l'instant) pour dire PRÉCISÉMENT quoi manque, pas juste "il en manque".
+  function missingIngredientList(missing) {
+    if (!missing || !missing.length) return L.craftMissingIngredientName ? L.craftMissingIngredientName("") : "";
+    return missing.map(k => L.craftMissingIngredientName(k)).join(", ");
+  }
   // -------- Zip 251 : décorations (outil main) — hôte autoritaire --------
   function nextDecorDid() {
     const s = sharedRef.current; let mx = 0;
@@ -3061,6 +3069,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         // parcourt la rotation à partir de bk.pastryIdx jusqu'à trouver le
         // premier réalisable avec les intrants dispo.
         const wsBk = (s.station && s.station.worldStock) || {};
+        // Zip suivant (demande Guillaume) : quand aucune des 4 recettes n'est
+        // réalisable, on garde trace des ingrédients manquants de la recette la
+        // PLUS PROCHE d'être faisable (le moins d'intrants manquants), pour
+        // pouvoir l'afficher nommément dans l'alerte au lieu d'un message
+        // générique "il me manque des ingrédients".
+        let bestMissing = null;
+        const trackMissing = (miss) => { if (!bestMissing || miss.length < bestMissing.length) bestMissing = miss; };
         let idx = bk.pastryIdx | 0, made = false;
         for (let tries = 0; tries < 4 && !made; tries++, idx = (idx + 1) % 4) {
           if (idx === 0) {
@@ -3077,6 +3092,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               wsBk.cocoa -= C.ECLAIR_CHOCO_COCOA; stationChanged = true;
               stock.eclairChoco = (stock.eclairChoco | 0) + C.ECLAIR_CHOCO_BATCH;
               made = true;
+            } else {
+              const miss = [];
+              if ((s.flour | 0) < C.ECLAIR_CHOCO_FLOUR) miss.push("flour");
+              if (!milkSrc) miss.push("milk");
+              if (!eggSrc) miss.push("egg");
+              if ((wsBk.cocoa | 0) < C.ECLAIR_CHOCO_COCOA) miss.push("cocoa");
+              trackMissing(miss);
             }
           } else if (idx === 1) {
             // ÉCLAIR À LA VANILLE : farine + lait + œufs + vanille (Madagascar)
@@ -3092,6 +3114,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               wsBk.vanilla -= C.ECLAIR_VANILLA_VANILLA; wsBk.tonka -= C.ECLAIR_VANILLA_TONKA; stationChanged = true;
               stock.eclairVanilla = (stock.eclairVanilla | 0) + C.ECLAIR_VANILLA_BATCH;
               made = true;
+            } else {
+              const miss = [];
+              if ((s.flour | 0) < C.ECLAIR_VANILLA_FLOUR) miss.push("flour");
+              if (!milkSrc) miss.push("milk");
+              if (!eggSrc) miss.push("egg");
+              if ((wsBk.vanilla | 0) < C.ECLAIR_VANILLA_VANILLA) miss.push("vanilla");
+              if ((wsBk.tonka | 0) < C.ECLAIR_VANILLA_TONKA) miss.push("tonka");
+              trackMissing(miss);
             }
           } else if (idx === 2) {
             // FLAN PÂTISSIER À LA VANILLE DE MADAGASCAR : farine + lait + œufs + vanille
@@ -3107,6 +3137,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               wsBk.vanilla -= C.FLAN_VANILLA_VANILLA; wsBk.tonka -= C.FLAN_VANILLA_TONKA; stationChanged = true;
               stock.flanVanilla = (stock.flanVanilla | 0) + C.FLAN_VANILLA_BATCH;
               made = true;
+            } else {
+              const miss = [];
+              if ((s.flour | 0) < C.FLAN_VANILLA_FLOUR) miss.push("flour");
+              if (!milkSrc) miss.push("milk");
+              if (!eggSrc) miss.push("egg");
+              if ((wsBk.vanilla | 0) < C.FLAN_VANILLA_VANILLA) miss.push("vanilla");
+              if ((wsBk.tonka | 0) < C.FLAN_VANILLA_TONKA) miss.push("tonka");
+              trackMissing(miss);
             }
           } else {
             // GÂTEAU BASQUE : farine + lait + œufs + vanille + beurre (fromagerie d'Ingrid)
@@ -3124,6 +3162,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               stock.butter -= C.GATEAU_BASQUE_BUTTER;
               stock.gateauBasque = (stock.gateauBasque | 0) + C.GATEAU_BASQUE_BATCH;
               made = true;
+            } else {
+              const miss = [];
+              if ((s.flour | 0) < C.GATEAU_BASQUE_FLOUR) miss.push("flour");
+              if (!milkSrc) miss.push("milk");
+              if (!eggSrc) miss.push("egg");
+              if ((wsBk.vanilla | 0) < C.GATEAU_BASQUE_VANILLA) miss.push("vanilla");
+              if (!haveButter) miss.push("butter");
+              trackMissing(miss);
             }
           }
         }
@@ -3131,13 +3177,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           stock.butter = Math.max(0, stock.butter | 0);
           stockChanged = true; bk.pastryIdx = idx; bk.nextAt = now + C.PASTRY_MS;
           // Stock revenu -> l'alerte s'efface toute seule (demande Guillaume).
-          if (bk.alert) { bk.alert = false; craftsMetaChanged = true; }
+          if (bk.alert) { bk.alert = false; bk.alertMissing = null; craftsMetaChanged = true; }
         } else {
           // Intrants insuffisants (aucun des 4 produits réalisable) : la
           // pâtissière stoppe et lève une ALERTE (une seule fois, jusqu'à
           // résolution) — coin haut-droite + badge dans le menu Employés.
+          // Petit changement (demande Guillaume) : on nomme désormais les
+          // ingrédients manquants (recette la plus proche d'être faisable),
+          // au lieu d'un message générique.
           bk.nextAt = now + Math.min(C.PASTRY_MS, 30000);
-          if (!bk.alert) { bk.alert = true; craftsMetaChanged = true; stationChat(L.bakeryAlertToast, "⚠️"); }
+          bk.alertMissing = bestMissing || [];
+          if (!bk.alert) { bk.alert = true; craftsMetaChanged = true; stationChat(L.bakeryAlertToast(missingIngredientList(bk.alertMissing)), "⚠️"); }
+          else craftsMetaChanged = true;
         }
       }
     }
@@ -3769,6 +3820,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const millSpeedMult = C.MILL_SPEED_MIN_MULT; // = 1
         for (const [mi, ms] of w.mills) {
           const r = E.millTick(ms, now, millSpeedMult);
+          // Petit changement (demande Guillaume) : petite notification quand
+          // un moulin qui tournait (nextAt programmé) s'arrête faute de blé
+          // (nextAt retombe à 0). On ne prévient qu'une fois, à la transition.
+          if (ms.nextAt && !r.nextAt) stationChat(L.millStoppedToast, "🌾");
           if (r.wheat !== ms.wheat || r.nextAt !== ms.nextAt) {
             w.mills.set(mi, { wheat: r.wheat, nextAt: r.nextAt });
             millTilesOut.push([mi, r.wheat, r.nextAt]);
@@ -3796,6 +3851,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const sucrerieSpeedMult = C.SUCRERIE_SPEED_MIN_MULT; // = 1, même parallélisme que le moulin (répartition du dépôt)
         for (const [si, ss] of w.sucreries) {
           const r = E.sucrerieTick(ss, now, sucrerieSpeedMult, sucrerieWorking);
+          // Petit changement (demande Guillaume) : même notification que le
+          // moulin quand une sucrerie qui tournait s'arrête faute de canne.
+          if (sucrerieWorking && ss.nextAt && !r.nextAt) stationChat(L.sucrerieStoppedToast, "🎋");
           if (r.cane !== ss.cane || r.nextAt !== ss.nextAt) {
             w.sucreries.set(si, { cane: r.cane, nextAt: r.nextAt });
             sucrTilesOut.push([si, r.cane, r.nextAt]);
@@ -9217,7 +9275,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (ro.skill === "breadmaker") return L.residentProdBread(cs.bread | 0, cs.croissant | 0, cs.chocolatine | 0, cs.painSuisse | 0);
     // Zip 258 : si la boulangerie est en alerte (rupture d'intrants en
     // journée), la ligne d'état devient l'alerte plutôt que le compteur.
-    if (ro.skill === "baker") return (crafts[bid] && crafts[bid].alert) ? L.bakeryAlertLine : L.residentProdPastry(cs.eclairChoco | 0, cs.eclairVanilla | 0, cs.flanVanilla | 0, cs.gateauBasque | 0);
+    if (ro.skill === "baker") return (crafts[bid] && crafts[bid].alert) ? L.bakeryAlertLine(missingIngredientList(crafts[bid].alertMissing)) : L.residentProdPastry(cs.eclairChoco | 0, cs.eclairVanilla | 0, cs.flanVanilla | 0, cs.gateauBasque | 0);
     return "";
   }
   // Position du chaudron ramené (chantier 2026-07, demande Guillaume) : posé
@@ -10864,7 +10922,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         // qu'il lui faut des ingrédients (demande Guillaume : "au clic, message
         // de la pâtissière").
         const bakerAlert = ro.skill === "baker" && built && sharedRef.current.crafts.bakery && sharedRef.current.crafts.bakery.alert;
-        if (bakerAlert) need = L.bakeryAlertMsg;
+        if (bakerAlert) need = L.bakeryAlertMsg(missingIngredientList(sharedRef.current.crafts.bakery.alertMissing));
         else if (ro.skill === "lumberjack") need = L.residentLumberjackLine;
         else if (bid) need = built ? L.residentBuildingReady(L.buildingName(bid)) : L.residentNeedBuilding(L.buildingName(bid));
         else need = "";
@@ -11467,7 +11525,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           <div style={{ position: "fixed", right: 12, top: 320, zIndex: 40, display: "flex", flexDirection: "column", gap: 6, maxWidth: 280 }}>
             {bakeryAlert && (
               <div style={{ ...card, borderColor: "#c0392b" }} onClick={() => setEmployeesOpen(true)}>
-                <b>⚠️ {L.bakeryAlertTitle}</b><br />{L.bakeryAlertMsg}
+                <b>⚠️ {L.bakeryAlertTitle}</b><br />{L.bakeryAlertMsg(missingIngredientList(crafts.bakery.alertMissing))}
               </div>
             )}
             {notice && (
@@ -11489,7 +11547,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const cs = sharedRef.current.craftStock || {};
         const line = bid === "beehive" ? L.residentProdHoney(cs.honey | 0)
           : bid === "fromagerie" ? L.residentProdCheese(cs.cheeseWheel | 0, cs.cheesePortion | 0, cs.butter | 0)
-          : (crafts.bakery && crafts.bakery.alert) ? L.bakeryAlertLine
+          : (crafts.bakery && crafts.bakery.alert) ? L.bakeryAlertLine(missingIngredientList(crafts.bakery.alertMissing))
           : L.residentProdPastry(cs.eclairChoco | 0, cs.eclairVanilla | 0, cs.flanVanilla | 0, cs.gateauBasque | 0) + " · " + L.residentProdBread(cs.bread | 0, cs.croissant | 0, cs.chocolatine | 0, cs.painSuisse | 0);
         const alert = bid === "bakery" && crafts.bakery && crafts.bakery.alert;
         return (

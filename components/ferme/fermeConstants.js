@@ -1538,7 +1538,7 @@ export function worldGoodUnitCost(good) {
   return Math.round(good.buy * t.mult);
 }
 export const VOYAGE_DAY_MS = DAY_REAL_MS;   // 1 jour de jeu = durée réelle d'un jour
-export const VOYAGE_MAX_QTY = 20;           // garde-fou : quantité max par produit et par commande
+export const VOYAGE_MAX_QTY = 30;           // garde-fou : quantité max par produit et par commande
 export const VOYAGE_SURPRISE_CHANCE = 0.5;  // probabilité qu'Eduardo ramène une surprise en plus
 export const VOYAGE_SURPRISE_MIN = 1, VOYAGE_SURPRISE_MAX = 3; // quantité de la surprise
 // Ancre de rôdaille d'Eduardo quand il est au village (près de la gare/mairie).

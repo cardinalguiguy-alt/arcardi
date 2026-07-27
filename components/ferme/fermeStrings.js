@@ -296,10 +296,17 @@ export const FERME_STR = {
     residentSeeBtn: "Voir",
     // Zip 258 : alerte pâtissière (rupture d'ingrédients en journée).
     bakeryAlertShort: "⚠️ Ingrédients manquants",
-    bakeryAlertLine: "⚠️ Four à l'arrêt — il me manque des ingrédients !",
+    // Petit changement (demande Guillaume) : on nomme les ingrédients qui
+    // manquent au lieu d'un message générique. `list` est une chaîne déjà
+    // formatée (ex. "farine, lait") produite par missingIngredientList().
+    craftMissingIngredientName: (k) => ({
+      flour: "farine", milk: "lait", egg: "œufs", cocoa: "cacao",
+      vanilla: "vanille", tonka: "fève tonka", butter: "beurre",
+    }[k] || "des ingrédients"),
+    bakeryAlertLine: (list) => `⚠️ Four à l'arrêt — il me manque : ${list} !`,
     bakeryAlertTitle: "La pâtissière a besoin d'ingrédients",
-    bakeryAlertMsg: "Impossible de continuer : il me faut 1 lait, 1 farine et 6 œufs par fournée. Remplis nos stocks et je m'y remets aussitôt !",
-    bakeryAlertToast: "🍰 La pâtissière n'a plus d'ingrédients — production stoppée.",
+    bakeryAlertMsg: (list) => `Impossible de continuer : il me manque ${list}. Remplis nos stocks et je m'y remets aussitôt !`,
+    bakeryAlertToast: (list) => `🍰 La pâtissière n'a plus ${list} — production stoppée.`,
     bakeryNotifSee: "Voir",
     // Zip 280 : bijouterie (pas de rôle, ouverte à tous les joueurs).
     shopJewelryTitle: (cost) => `Bijouterie (${cost} or)`,
@@ -802,9 +809,14 @@ export const FERME_STR = {
     toastMillNotEmpty: "Vide d'abord le moulin (il reste du blé à transformer) avant de le retirer.",
     toastNoWheatToDeposit: "Tu n'as pas de blé récolté à déposer.",
     toastMillFull: "Le moulin est plein de blé, attends qu'il en transforme avant d'en redéposer.",
+    // Petit changement (demande Guillaume) : petite notification quand un
+    // moulin s'arrête faute de blé à moudre.
+    millStoppedToast: "🌾 Le moulin ne tourne plus — il n'a plus de blé à moudre.",
     // Sucrerie (chantier canne à sucre) : miroir exact des 4 toasts moulin ci-dessus.
     toastNoSucrerieStock: "Plus de sucrerie en stock, achètes-en une à la boutique !",
     toastSucrerieNotEmpty: "Vide d'abord la sucrerie (il reste de la canne à transformer) avant de la retirer.",
+    // Petit changement (demande Guillaume) : idem moulin, côté sucrerie.
+    sucrerieStoppedToast: "🎋 La sucrerie ne tourne plus — il n'y a plus de canne à presser.",
     toastNoCaneToDeposit: "Tu n'as pas de canne à sucre récoltée à déposer.",
     toastSucrerieFull: "La sucrerie est pleine de canne, attends qu'elle en transforme avant d'en redéposer.",
     toastActionFailed: "Action impossible, réessaie.",
@@ -1139,10 +1151,14 @@ export const FERME_STR = {
     residentSeeBtn: "View",
     // Zip 258: baker out-of-ingredients alert.
     bakeryAlertShort: "⚠️ Out of ingredients",
-    bakeryAlertLine: "⚠️ Oven stopped — I'm out of ingredients!",
+    craftMissingIngredientName: (k) => ({
+      flour: "flour", milk: "milk", egg: "eggs", cocoa: "cocoa",
+      vanilla: "vanilla", tonka: "tonka bean", butter: "butter",
+    }[k] || "some ingredients"),
+    bakeryAlertLine: (list) => `⚠️ Oven stopped — I'm out of ${list}!`,
     bakeryAlertTitle: "The baker needs ingredients",
-    bakeryAlertMsg: "I can't carry on: each batch needs 1 milk, 1 flour and 6 eggs. Top up our stocks and I'll get right back to it!",
-    bakeryAlertToast: "🍰 The baker is out of ingredients — production stopped.",
+    bakeryAlertMsg: (list) => `I can't carry on: I'm out of ${list}. Top up our stocks and I'll get right back to it!`,
+    bakeryAlertToast: (list) => `🍰 The baker is out of ${list} — production stopped.`,
     bakeryNotifSee: "View",
     // Zip 280: jewelry workshop (no role, open to every player).
     shopJewelryTitle: (cost) => `Jewelry workshop (${cost} gold)`,
@@ -1612,9 +1628,11 @@ export const FERME_STR = {
     toastMillNotEmpty: "Empty the mill first (it still has wheat to grind) before removing it.",
     toastNoWheatToDeposit: "You don't have any harvested wheat to deposit.",
     toastMillFull: "The mill is full of wheat, wait for it to grind some before depositing more.",
+    millStoppedToast: "🌾 The mill has stopped — it's out of wheat to grind.",
     // Sugarhouse (sugar cane chantier): exact mirror of the 4 mill toasts above.
     toastNoSucrerieStock: "Out of sugarhouses, buy one at the shop!",
     toastSucrerieNotEmpty: "Empty the sugarhouse first (it still has cane to press) before removing it.",
+    sucrerieStoppedToast: "🎋 The sugarhouse has stopped — it's out of cane to press.",
     toastNoCaneToDeposit: "You don't have any harvested sugar cane to deposit.",
     toastSucrerieFull: "The sugarhouse is full of cane, wait for it to press some before depositing more.",
     toastActionFailed: "Couldn't do that, try again.",
