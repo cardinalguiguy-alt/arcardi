@@ -701,6 +701,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // ground even on old saves (same normalization spirit as the cauldron
       // fix of zip 230). Overrides persist + travel in snapshots.
       for (const ci of E.clearStationArea(w)) recordTileOverride(ci);
+      // Chantier reprise (demande Guillaume) : efface les éventuelles
+      // sucreries "fantômes" posées avant la bascule vers le site fixe
+      // (ancien modèle multi-pose façon moulin).
+      for (const ci of E.clearGhostSucreries(w)) recordTileOverride(ci);
       overridesRef.current = { ground: { ...(saved.groundOv || {}) }, object: { ...(saved.objectOv || {}) } };
       sharedRef.current = {
         seed: saved.seed, money: saved.money, day: saved.day, dayStartAt: saved.dayStartAt, totalEarned: saved.totalEarned,
@@ -895,6 +899,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     E.applyOverrides(w, { groundOv: payload.groundOv, objectOv: payload.objectOv, crops: payload.crops, mills: payload.mills, sucreries: payload.sucreries });
     worldRef.current = w;
     overridesRef.current = { ground: { ...(payload.groundOv || {}) }, object: { ...(payload.objectOv || {}) } };
+    // Chantier reprise (demande Guillaume) : même nettoyage des sucreries
+    // fantômes qu'au chargement initial (loadFarmByCode) — applySnapshot
+    // sert aussi à la reprise/rejoin, où d'anciens overrides peuvent encore
+    // contenir un O_SUCRERIE posé librement avant la bascule au site fixe.
+    for (const ci of E.clearGhostSucreries(w)) recordTileOverride(ci);
     sharedRef.current = {
       seed: payload.seed, money: payload.money, day: payload.day, dayStartAt: payload.dayStartAt, totalEarned: payload.totalEarned,
       horses: payload.horses || (payload.horse && payload.horse.owned ? [{ x: payload.horse.x, y: payload.horse.y, rider: null, rider2: null }] : []),
@@ -3329,12 +3338,34 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         v.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 3 : 2) : (dy > 0 ? 0 : 1);
         return false;
       };
+      // Chantier reprise (demande Guillaume) : les trajets gare<->mairie
+      // (aller ET retour) et la flânerie en phase "wait" empruntent les
+      // chemins dallés (G_PATH devant les maisons ET G_PATH_STONE posé par
+      // le joueur, à égalité) quand un tracé existe, au lieu d'une ligne
+      // droite à travers l'herbe. Le chemin est calculé UNE FOIS pour la
+      // cible courante (v._viaPath, invalidé dès que tx/ty change) puis
+      // suivi point par point via walkTo ; si aucun chemin dallé n'est
+      // trouvé (E.findPavedPath renvoie null : pas de dalle sur zone, trou
+      // dans le tracé, recherche hors bornes...), on retombe simplement sur
+      // l'ancien comportement en ligne droite — aucune régression possible.
+      const walkVia = (tx, ty, speedMul) => {
+        if (v._viaTx !== tx || v._viaTy !== ty || !v._viaPath) {
+          v._viaTx = tx; v._viaTy = ty; v._viaIdx = 0;
+          v._viaPath = E.findPavedPath(w, v.x, v.y, tx, ty) || [{ x: tx, y: ty }];
+        }
+        const pt = v._viaPath[Math.min(v._viaIdx, v._viaPath.length - 1)];
+        if (walkTo(pt.x, pt.y, speedMul)) {
+          v._viaIdx++;
+          if (v._viaIdx >= v._viaPath.length) { v._viaPath = null; return true; }
+        }
+        return false;
+      };
       const wpAt = (i) => { const wp = WP[Math.max(0, Math.min(i, WP.length - 1))]; return i >= 2 ? { x: wp.x - slotX, y: wp.y } : wp; };
       if (v.phase === "train") {
         if (now >= v.phaseUntil) { v.phase = "walk"; v.wpi = 1; broadcastStation(); }
       } else if (v.phase === "walk") {
         const wp = wpAt(Math.min(v.wpi || 1, WP.length - 1));
-        if (walkTo(wp.x, wp.y)) {
+        if (walkVia(wp.x, wp.y)) {
           v.wpi = (v.wpi || 1) + 1;
           if (v.wpi >= WP.length) {
             v.phase = "wait"; v.moving = false; v.dir = 1;
@@ -3408,12 +3439,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               break;
             }
           }
-          if (v.roamTarget) walkTo(v.roamTarget.x, v.roamTarget.y, v.strollMul || 0.4);
+          if (v.roamTarget) walkVia(v.roamTarget.x, v.roamTarget.y, v.strollMul || 0.4);
         }
       } else if (v.phase === "leave") {
         if (v.wpi === undefined || v.wpi >= WP.length) v.wpi = WP.length - 2;
         const wp = wpAt(Math.max(0, v.wpi));
-        if (walkTo(wp.x, wp.y)) {
+        if (walkVia(wp.x, wp.y)) {
           v.wpi -= 1;
           if (v.wpi < 0) { v.phase = "depart"; v.phaseUntil = now + C.VISITOR_TRAIN_MS; v.moving = false; broadcastStation(); }
         }

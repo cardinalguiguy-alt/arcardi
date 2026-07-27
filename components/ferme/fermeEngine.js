@@ -2368,6 +2368,84 @@ export function blockedTileMounted(world, x, y, now = Date.now()) {
   return false;
 }
 
+// Chantier reprise (demande Guillaume) : les visiteurs qui marchent depuis
+// la gare (aller ET retour) ainsi que ceux qui flânent en phase "wait"
+// doivent PRIVILÉGIER les chemins dallés (G_PATH devant les maisons ET
+// G_PATH_STONE posé par le joueur, traités à égalité) plutôt qu'une ligne
+// droite à travers l'herbe. A* borné à la boîte englobante départ/arrivée
+// (+ marge) : les tuiles dallées coûtent nettement moins cher à traverser
+// que le reste, mais rien n'est infranchissable — un visiteur coupe quand
+// même à travers l'herbe si aucune dalle n'est disponible sur le trajet
+// (fourchette de recherche dépassée, dalle manquante, trou dans le
+// chemin...). Comme la carte fait 180x140 tuiles, la recherche est bornée
+// à une boîte + un nombre de nœuds explorés max : aucune de ces limites
+// n'est jamais atteinte en pratique ici (au plus VISITORS_MAX = 5
+// visiteurs, trajets gare<->mairie ou petits sauts de flânerie), mais en
+// cas de dépassement (carte custom, distance inhabituelle) la fonction
+// retourne simplement `null` — l'appelant retombe alors sur l'ancien
+// comportement en ligne droite (aucune régression possible).
+const PATH_TILE_COST = 1;      // coût d'une tuile dallée (G_PATH / G_PATH_STONE)
+const PLAIN_TILE_COST = 6;     // coût du reste (herbe, terre labourée, etc.) — décourage sans bloquer
+const PATHFIND_MARGIN = 6;     // marge (tuiles) ajoutée autour de la boîte départ/arrivée
+const PATHFIND_MAX_NODES = 3000; // garde-fou perf : au-delà, on abandonne (fallback ligne droite)
+
+function tileTravelCost(world, fx, fy) {
+  const g = world.ground[idx(fx, fy)];
+  return (g === C.G_PATH || g === C.G_PATH_STONE) ? PATH_TILE_COST : PLAIN_TILE_COST;
+}
+
+export function findPavedPath(world, sx, sy, tx, ty, now = Date.now()) {
+  const sfx = Math.floor(sx), sfy = Math.floor(sy), tfx = Math.floor(tx), tfy = Math.floor(ty);
+  if (sfx === tfx && sfy === tfy) return [{ x: tx, y: ty }];
+  const minX = Math.max(0, Math.min(sfx, tfx) - PATHFIND_MARGIN);
+  const maxX = Math.min(C.MAP_W - 1, Math.max(sfx, tfx) + PATHFIND_MARGIN);
+  const minY = Math.max(0, Math.min(sfy, tfy) - PATHFIND_MARGIN);
+  const maxY = Math.min(C.MAP_H - 1, Math.max(sfy, tfy) + PATHFIND_MARGIN);
+  if ((maxX - minX + 1) * (maxY - minY + 1) > PATHFIND_MAX_NODES) return null;
+  if (!inMap(tfx, tfy) || blockedTile(world, tfx + 0.5, tfy + 0.5, now)) return null;
+  const key = (x, y) => (y - minY) * (maxX - minX + 1) + (x - minX);
+  const gScore = new Map(), fScore = new Map(), came = new Map();
+  const h = (x, y) => Math.hypot(x - tfx, y - tfy);
+  const startK = key(sfx, sfy);
+  gScore.set(startK, 0); fScore.set(startK, h(sfx, sfy));
+  const open = new Map([[startK, { x: sfx, y: sfy }]]);
+  const closed = new Set();
+  let explored = 0;
+  const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
+  while (open.size) {
+    let bestK = -1, bestF = Infinity;
+    for (const [k] of open) { const f = fScore.get(k); if (f < bestF) { bestF = f; bestK = k; } }
+    const cur = open.get(bestK); open.delete(bestK); closed.add(bestK);
+    if (cur.x === tfx && cur.y === tfy) {
+      const pts = []; let ck = bestK;
+      while (came.has(ck)) { const [px, py] = came.get(ck); pts.unshift({ x: px + 0.5, y: py + 0.5 }); ck = key(px, py); }
+      pts.push({ x: tx, y: ty });
+      return pts;
+    }
+    explored++;
+    if (explored > PATHFIND_MAX_NODES) return null;
+    for (const [dx, dy] of DIRS) {
+      const nx = cur.x + dx, ny = cur.y + dy;
+      if (nx < minX || nx > maxX || ny < minY || ny > maxY) continue;
+      if (dx !== 0 && dy !== 0) { // pas de coupe de coin en diagonale
+        if (blockedTile(world, cur.x + dx + 0.5, cur.y + 0.5, now) || blockedTile(world, cur.x + 0.5, cur.y + dy + 0.5, now)) continue;
+      }
+      if (blockedTile(world, nx + 0.5, ny + 0.5, now)) continue;
+      const nk = key(nx, ny);
+      if (closed.has(nk)) continue;
+      const stepCost = tileTravelCost(world, nx, ny) * (dx !== 0 && dy !== 0 ? Math.SQRT2 : 1);
+      const tentative = (gScore.get(bestK) || 0) + stepCost;
+      if (tentative < (gScore.get(nk) ?? Infinity)) {
+        came.set(nk, [cur.x, cur.y]);
+        gScore.set(nk, tentative);
+        fScore.set(nk, tentative + h(nx, ny));
+        if (!open.has(nk)) open.set(nk, { x: nx, y: ny });
+      }
+    }
+  }
+  return null;
+}
+
 export const idxOf = idx;
 
 /* -------------------------------------------------------------------------
@@ -3299,6 +3377,28 @@ export function clearStationArea(w) {
   // these columns too, so nothing regrows on the rails.
   for (let y = 0; y < C.MAP_H; y++)
     for (let x = C.STATION_RAIL_X; x <= C.STATION_RAIL_X + 1; x++) clearAt(x, y);
+  return changed;
+}
+
+// Chantier reprise (demande Guillaume) : nettoyage des "fantômes" de
+// sucrerie laissés par l'ANCIEN modèle (pose libre façon moulin, avant la
+// bascule vers un bâtiment d'artisan unique posé au site fixe
+// C.SUCRERIE_SITE). Sur une ferme sauvegardée avant ce changement,
+// object0v peut encore contenir un ou plusieurs O_SUCRERIE ailleurs qu'au
+// site fixe : à chaque chargement, on les efface (tuile remise à O_NONE,
+// entrée world.sucreries associée supprimée avec sa canne en stock — la
+// sucrerie ne s'installe plus QUE depuis la boutique, comme convenu).
+// Retourne la liste des indices modifiés, à passer à recordTileOverride
+// (FermeGame.js) comme pour clearStationArea ci-dessus, sinon la tuile
+// fantôme reviendrait au prochain chargement (objectOv non mis à jour).
+export function clearGhostSucreries(world) {
+  const changed = [];
+  const keepIdx = idx(C.SUCRERIE_SITE.x, C.SUCRERIE_SITE.y);
+  for (let i = 0; i < world.objects.length; i++) {
+    if (world.objects[i] !== C.O_SUCRERIE || i === keepIdx) continue;
+    world.objects[i] = C.O_NONE; world.objHp.delete(i); changed.push(i);
+    if (world.sucreries) world.sucreries.delete(i);
+  }
   return changed;
 }
 
