@@ -5493,11 +5493,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // historique stormRosalieRid reste inchangé pour Chloé/Rosalie.
       const isTj = res.stormKind === "tj";
       const mate = peers && peers.find(p => p && p.rid === (isTj ? res.stormTargetRid : res.stormRosalieRid));
-      if (!mate || typeof mate.x !== "number") { res.storming = false; res.stormKind = null; res.roamTarget = null; res.moving = false; return; }
+      if (!mate || typeof mate.x !== "number") { res.storming = false; res.stormKind = null; res.roamTarget = null; res.moving = false; res.stormPath = null; return; }
       const dx = mate.x - res.x, dy = mate.y - res.y, d = Math.hypot(dx, dy);
       const convoDist = isTj ? C.TJ_CONVO_DIST : C.CHLOE_ROSALIE_CONVO_DIST;
       if (d <= convoDist) {
-        res.storming = false; res.roamTarget = null; res.moving = false;
+        res.storming = false; res.roamTarget = null; res.moving = false; res.stormPath = null;
         mate.roamTarget = null; mate.roamMeet = null; mate.moving = false;
         faceResidentToward(mate, res.x, res.y); faceResidentToward(res, mate.x, mate.y);
         if (isTj) {
@@ -5534,10 +5534,43 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         }
         return;
       }
-      const step = Math.min(d, C.VISITOR_SPEED * 1.9 * dt); // en trombe : bien plus rapide que la rôdaille normale (0.55x)
-      const nx = res.x + (dx / d) * step, ny = res.y + (dy / d) * step;
-      if (!E.blockedTile(w, nx, ny)) { res.x = nx; res.y = ny; res.moving = true; res.animT = (res.animT || 0) + dt * 9; res.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 3 : 2) : (dy > 0 ? 0 : 1); }
-      else { res.storming = false; res.stormKind = null; res.moving = false; } // obstacle sur le trajet direct : abandonne le sprint, redevient rôdaille normale
+      // Correctif "Chloé se fige en pleine trombe" (2026-07, bug remonté par
+      // Guillaume) : l'ancien pas en ligne droite abandonnait le sprint dès
+      // le premier obstacle rencontré (res.storming = false) — or Chloé et
+      // Rosalie travaillent dans le MÊME bâtiment (la boulangerie), donc la
+      // ligne droite entre elles traverse très souvent ce bâtiment, et Chloé
+      // restait plantée sur place au lieu de rejoindre Rosalie. On reprend
+      // désormais le même mouvement par axe + contournement BFS que Harald
+      // (voir haraldFindPath/updateHarald) : un axe bloqué n'annule plus le
+      // sprint, et si les DEUX axes restent bloqués plus de 0.45s (obstacle
+      // massif type le bâtiment lui-même), on calcule un chemin de secours
+      // au lieu d'abandonner.
+      if (res.stormPath && res.stormPath.length && res.stormPathTx !== undefined && Math.hypot(res.stormPathTx - mate.x, res.stormPathTy - mate.y) > 0.75) res.stormPath = null;
+      let etx = mate.x, ety = mate.y;
+      if (res.stormPath && res.stormPath.length) {
+        if (Math.hypot(res.stormPath[0].x - res.x, res.stormPath[0].y - res.y) < 0.18) res.stormPath.shift();
+        if (res.stormPath.length) { etx = res.stormPath[0].x; ety = res.stormPath[0].y; }
+      }
+      const edx = etx - res.x, edy = ety - res.y, ed = Math.hypot(edx, edy);
+      if (ed > 0.02) {
+        const step = Math.min(C.VISITOR_SPEED * 1.9 * dt, ed); // en trombe : bien plus rapide que la rôdaille normale (0.55x)
+        const nx = res.x + (edx / ed) * step, ny = res.y + (edy / ed) * step;
+        const beforeX = res.x, beforeY = res.y;
+        if (!E.blockedTile(w, nx, res.y)) res.x = nx;
+        if (!E.blockedTile(w, res.x, ny)) res.y = ny;
+        res.moving = true; res.animT = (res.animT || 0) + dt * 9;
+        res.dir = Math.abs(edx) > Math.abs(edy) ? (edx > 0 ? 3 : 2) : (edy > 0 ? 0 : 1);
+        const realStep = Math.hypot(res.x - beforeX, res.y - beforeY);
+        if (realStep < step * 0.15 && (!res.stormPath || !res.stormPath.length)) {
+          res.stormStuckT = (res.stormStuckT || 0) + dt;
+          if (res.stormStuckT > 0.45 && now >= (res.stormPathRetryAt || 0)) {
+            const p = haraldFindPath(w, res.x, res.y, mate.x, mate.y);
+            res.stormPathRetryAt = now + 2500;
+            if (p && p.length) { res.stormPath = p; res.stormPathTx = mate.x; res.stormPathTy = mate.y; }
+            res.stormStuckT = 0;
+          }
+        } else res.stormStuckT = 0;
+      }
       return;
     }
     // Zip 256/259 : un artisan à bâtiment (apiculteur/fromager/pâtissière) rôde
@@ -6054,8 +6087,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const winner = loser === tristan ? jerome : tristan;
     loser.injuredUntil = now + C.TJ_BRAWL_ITT_MS;
     loser.injuryKind = "brawl";
-    loser.storming = false; loser.stormKind = null; loser.moving = false; loser.roamTarget = null;
-    winner.storming = false; winner.stormKind = null; winner.moving = false; winner.roamTarget = null;
+    loser.storming = false; loser.stormKind = null; loser.moving = false; loser.roamTarget = null; loser.stormPath = null;
+    winner.storming = false; winner.stormKind = null; winner.moving = false; winner.roamTarget = null; winner.stormPath = null;
     st.tjBrawl = null;
     st.tjBrawlCooldownUntil = now + C.TJ_BRAWL_COOLDOWN_MS;
     spawnFx({ k: "brawl", x: loser.x, y: loser.y });
