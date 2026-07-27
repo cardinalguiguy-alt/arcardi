@@ -2446,7 +2446,17 @@ house: house(),
   // de haut, ancrés par le bas au rendu (comme les petites structures).
   S.decor = {}; for (const d of C.UNIQUE_DECORATIONS) S.decor[d.id] = decorSprite(d.id);
   // Zip 252 : bâtiments d'ateliers + icônes de produits artisanaux.
-  S.artisan = { beehive: artisanBuildingSprite("beehive"), fromagerie: artisanBuildingSprite("fromagerie"), bakery: artisanBuildingSprite("bakery"), sawmill: artisanBuildingSprite("sawmill") };
+  // Chantier "sucrerie déplaçable" (2026-07) : la sucrerie a rejoint cette
+  // liste (voir C.ARTISAN_BUILDINGS.sucrerie) — réutilise le canvas pixel-
+  // exact déjà calculé ci-dessus (S.sucrerie), pas besoin de le regénérer.
+  // BUG corrigé (Guillaume : "le bâtiment est effacé visuellement mais
+  // Jérôme tourne, et le dépôt de canne marche encore") : cette entrée avait
+  // été oubliée lors du branchement sur le pipeline générique — la donnée
+  // (crafts.sucrerie), la collision et le clic de dépôt ne dépendent QUE de
+  // C.ARTISAN_BUILDINGS/crafts et fonctionnaient déjà, mais le rendu
+  // (FermeGame.js) lit sprites.artisan.sucrerie et l'ignorait silencieusement
+  // (bimg undefined -> tuile jamais dessinée) faute de cette clé.
+  S.artisan = { beehive: artisanBuildingSprite("beehive"), fromagerie: artisanBuildingSprite("fromagerie"), bakery: artisanBuildingSprite("bakery"), sawmill: artisanBuildingSprite("sawmill"), sucrerie: S.sucrerie };
   S.craftIcons = { honey: craftIcon("honey"), cheeseWheel: craftIcon("cheeseWheel"), cheesePortion: craftIcon("cheesePortion"), eclairChoco: craftIcon("eclairChoco"), eclairVanilla: craftIcon("eclairVanilla"), flanVanilla: craftIcon("flanVanilla"), gateauBasque: craftIcon("gateauBasque"), butter: craftIcon("butter"), bread: craftIcon("bread"), croissant: craftIcon("croissant"), chocolatine: craftIcon("chocolatine"), painSuisse: craftIcon("painSuisse") };
   // Zip 236: one sprite per pet id in the catalog (individual pets).
   S.pets = {};
