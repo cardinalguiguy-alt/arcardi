@@ -573,8 +573,13 @@ export const FLOUR_SELL = 55;                // prix de vente d'un sac de farine
 // de la feuille de route) n'est pas branchée.
 export const SUCRERIE_COST = 36000;          // prix d'une sucrerie à la boutique (or), extrapolé au-dessus du moulin
 export const SUCRERIE_CANE_CROP = 8;         // index de "Canne à sucre" dans C.CROPS ci-dessus
-export const SUCRERIE_CANE_PER_SACK = 1;     // même repère que MILL_WHEAT_PER_SACK (1 canne = 1 sac de sucre)
-export const SUCRERIE_BATCH_MS = 8 * 60 * 1000; // 8 min réelles/sac (extrapolé, plus lent que le moulin : ressource plus chère)
+export const SUCRERIE_CANE_PER_SACK = 1;     // inchangé : 1 canne consommée par cycle de production
+// Zip 327 (demande Guillaume : rapprocher le rendement du sucre de celui de
+// la farine, le sucre devenant un intrant boulangerie/pâtisserie) : chaque
+// cycle produit désormais 2 sacs pour 1 canne consommée (au lieu de 1:1),
+// et la cadence est alignée sur le moulin (5 min, au lieu de 8 min).
+export const SUCRERIE_SACKS_PER_BATCH = 2;   // 1 canne -> 2 sacs de sucre par cycle
+export const SUCRERIE_BATCH_MS = 5 * 60 * 1000; // 5 min réelles/cycle, aligné sur MILL_BATCH_MS
 export const SUCRERIE_STOCK_CAP = 90;        // stock de canne max qu'une sucrerie peut contenir (même repère que le moulin)
 export const SUCRERIE_SPEED_MIN_MULT = 1;    // miroir de MILL_SPEED_MIN_MULT (parallélisme par répartition du dépôt, pas de boost par sucrerie)
 export const SUGAR_SELL = 70;                // prix de vente d'un sac de sucre (extrapolé au-dessus de FLOUR_SELL, sucre = ressource plus rare)
@@ -1051,7 +1056,7 @@ export const SUPERSOAN_COFFEE_COST = 1;           // unités de café consommée
 // n'importe quel joueur au bac/menu Vendre). Aucune séparation par joueur.
 // HORS-LIGNE : à la reconnexion, rattrapage PLAFONNÉ par animal (voir plus
 // bas), borné par la fin du contrat — voir E.haraldCatchup / updateHarald.
-export const HARALD_HIRE_COST = 1000;                  // demande Guillaume : 1000 or
+export const HARALD_HIRE_COST = 4000;                  // demande Guillaume : 4000 or / 24h (was 1000)
 export const HARALD_CONTRACT_MS = 24 * 60 * 60 * 1000; // 24h réelles (comme Soan)
 export const HARALD_SPEED = 3.2;                       // identique à Greg/Soan
 export const HARALD_ANCHOR = { x: 52, y: 41 };         // centre de l'enclos (PEN x48-56 / y38-44)
@@ -1357,6 +1362,12 @@ export const SKILL_BUILDING = { beekeeper: "beehive", cheesemaker: "fromagerie",
 // (4 min -> 12 min entre deux pots) et prix du pot fortement relevé à 7000.
 // C'est le produit passif le plus lent et le plus cher du jeu, assumé.
 export const HONEY_MS = 20 * 60 * 1000;    export const HONEY_SELL = 7000;  // ruche : passif, aucun intrant (denrée rare — zip 301b : 1 pot / 20 min, demande Guillaume)
+// Zip 327 (demande Guillaume) : rendement du miel selon la saison en cours
+// (voir SEASONS/seasonOf). Multiplicateur appliqué à la CADENCE de René
+// (intervalle = HONEY_MS / mult) — hiver à 0 = aucune production tant que la
+// saison dure (le cycle reste gelé, pas de perte, voir reneHoneyMs dans
+// FermeGame.js). Pas de sous-palier "fin d'été" : tout l'été est un pic.
+export const HONEY_SEASON_MULT = { winter: 0, autumn: 0.5, spring: 1, summer: 1.5 };
 
 // Point d'ancrage de rôdaille de l'apiculteur (René) : centre du bâtiment
 // beehive (site 2x2 à x:50,y:46), pour qu'il reste autour de sa ruche au lieu

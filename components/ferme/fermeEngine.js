@@ -517,7 +517,7 @@ export function sucrerieTick(ss, now, speedMult = 1, working = true) {
   const batchMs = C.SUCRERIE_BATCH_MS / mult;
   if (cane >= C.SUCRERIE_CANE_PER_SACK && !nextAt) nextAt = now + batchMs;
   while (nextAt && now >= nextAt && cane >= C.SUCRERIE_CANE_PER_SACK) {
-    cane -= C.SUCRERIE_CANE_PER_SACK; sacks++;
+    cane -= C.SUCRERIE_CANE_PER_SACK; sacks += C.SUCRERIE_SACKS_PER_BATCH; // zip 327 : 1 canne -> 2 sacs
     nextAt = cane >= C.SUCRERIE_CANE_PER_SACK ? nextAt + batchMs : 0;
   }
   if (cane < C.SUCRERIE_CANE_PER_SACK) nextAt = 0;

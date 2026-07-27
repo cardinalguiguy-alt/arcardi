@@ -1889,7 +1889,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         res.beePhase = "working"; res.beeWorkUntil = now + C.BEEKEEPER_WORK_MS;
         // Redémarre le cycle de production proprement à partir de MAINTENANT
         // (pas de rattrapage sur le temps passé en pause, voir reneWorking()).
-        bh.nextAt = now + C.HONEY_MS;
+        // Zip 327 : passe par reneHoneyMs pour le rendement saisonnier.
+        { const _hms = reneHoneyMs(s, now); bh.nextAt = _hms === Infinity ? 0 : now + _hms; }
         out.station = s.station;
         out.chat = { from: "\u{1F41D}", msg: lang === "en" ? "René heads to the hive." : "René part récolter le miel." };
       }
@@ -1944,7 +1945,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           res.superCooldownUntil = now + C.SUPERRENE_DURATION_MS + C.SUPERRENE_COOLDOWN_MS;
           // Bascule immédiate en travail continu + cycle de production frais.
           res.beePhase = "working"; res.beeWorkUntil = res.superUntil;
-          bh.nextAt = now + C.HONEY_MS / C.SUPERRENE_HONEY_MULT;
+          // Zip 327 : passe par reneHoneyMs (déjà accéléré café + saisonnier).
+          { const _hms = reneHoneyMs(s, now); bh.nextAt = _hms === Infinity ? 0 : now + _hms; }
           out.station = s.station;
           out.chat = { from: "\u{1F41D}", msg: lang === "en" ? "René is fueled by coffee! ☕⚡" : "René carbure au café ! ☕⚡" };
         }
@@ -3004,7 +3006,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function reneHoneyMs(s, now) {
     const residents = (s.station && s.station.residents) || [];
     const res = residents.find(r => r && rosterOf(r.rid) && rosterOf(r.rid).skill === "beekeeper");
-    return (res && now < (res.superUntil || 0)) ? C.HONEY_MS / C.SUPERRENE_HONEY_MULT : C.HONEY_MS;
+    const base = (res && now < (res.superUntil || 0)) ? C.HONEY_MS / C.SUPERRENE_HONEY_MULT : C.HONEY_MS;
+    // Zip 327 (demande Guillaume) : rendement saisonnier — hiver = pas de
+    // production (Infinity = cycle gelé, voir les appelants ci-dessous).
+    const seasonMult = C.HONEY_SEASON_MULT[E.seasonOf().key];
+    if (!seasonMult) return Infinity;
+    return base / seasonMult;
   }
   // Zip 301 : Rosalie (breadmaker) est-elle résidente ? Sa filière pain/
   // viennoiseries ne tourne que si oui (Chloé la pâtissière reste indépendante).
@@ -3035,8 +3042,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // temps de pause (la remise à `now + HONEY_MS` se fait déjà proprement
     // à chaque reprise de travail, voir updateBeekeeperPhase/beekeeperOrder).
     if (bh && bh.built && reneWorking(s)) {
-      const hms = reneHoneyMs(s, now); // zip suivant : accéléré pendant l'effet café (SuperRené)
-      if (!bh.nextAt || bh.nextAt > now + hms) bh.nextAt = now + hms;
+      const hms = reneHoneyMs(s, now); // zip suivant : accéléré pendant l'effet café (SuperRené), zip 327 : saisonnier
+      if (hms === Infinity) {
+        // hiver : aucune production, le cycle reste figé (repart normalement au printemps)
+      } else if (!bh.nextAt || bh.nextAt > now + hms) bh.nextAt = now + hms;
       else if (now >= bh.nextAt) { bh.nextAt = now + hms; stock.honey++; stockChanged = true; }
     }
     const fr = s.crafts.fromagerie;
@@ -5689,7 +5698,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (res.beePhase !== "working") {
         res.beePhase = "working";
         const bh = (s.crafts || {}).beehive;
-        if (bh && bh.built) bh.nextAt = now + C.HONEY_MS / C.SUPERRENE_HONEY_MULT;
+        // Zip 327 : idem, via reneHoneyMs (café + saisonnier).
+        if (bh && bh.built) { const _hms = reneHoneyMs(s, now); bh.nextAt = _hms === Infinity ? 0 : now + _hms; }
       }
       res.beeWorkUntil = res.superUntil;
       return;
@@ -5705,7 +5715,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // attendre la fin de la pause.
       res.beePhase = "working"; res.beeWorkUntil = now + C.BEEKEEPER_WORK_MS;
       const bh = (s.crafts || {}).beehive;
-      if (bh && bh.built) bh.nextAt = now + C.HONEY_MS; // cycle de production frais, pas de rattrapage du temps de pause
+      // cycle de production frais, pas de rattrapage du temps de pause ; zip 327 : saisonnier via reneHoneyMs
+      if (bh && bh.built) { const _hms = reneHoneyMs(s, now); bh.nextAt = _hms === Infinity ? 0 : now + _hms; }
     }
   }
   // Bugfix confort (demande Guillaume) : "Rosalie et Chloé marchent beaucoup
