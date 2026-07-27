@@ -533,6 +533,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // (une scène jouée pour un joueur n'a pas besoin d'être synchronisée aux
   // autres, cf. "visible seulement par les joueurs proches").
   const rosalieBubbleCycleRef = useRef({ lastPeriodStart: -1, cycles: 0 }); // compte les cycles de bulle "rare" vus à portée
+  const rosalieLineRef = useRef({ periodIdx: -1, idx: 0 }); // réplique tirée au sort (pondérée) pour le cycle "rare" en cours — figée pour toute sa durée
   const chloeRosalieSceneRef = useRef(null); // { lines, stepIdx, stepUntil, rosalieRid, chloeRid } pendant qu'une scène joue
   const chloeRosalieCooldownRef = useRef(0); // Date.now() avant lequel on ne redéclenche pas de scène
   const hatUntilRef = useRef(0); // miroir synchrone de hatUntil (lu dans la boucle de rendu, voir drawCharacter)
@@ -5386,6 +5387,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     return allowTilled ? fallback : null;
   }
+  // Retour Guillaume (chantier bulles/dispute) : tirage au sort pondéré dans
+  // un tableau, un seul index favorisé (ex. "Recule" dans le pool de Rosalie
+  // — voir ROSALIE_LINE_RECULE_WEIGHT). Les autres index se partagent le
+  // reste, chacun avec un poids de 1.
+  function pickWeightedIndex(len, favoredIdx, favoredWeight) {
+    if (len <= 1) return 0;
+    const total = (len - 1) + favoredWeight;
+    let r = Math.random() * total;
+    if (r < favoredWeight) return favoredIdx;
+    r -= favoredWeight;
+    let idx = Math.floor(r);
+    if (idx >= favoredIdx) idx++;
+    return Math.min(idx, len - 1);
+  }
   // Oriente le sprite d'un résident vers un point (utilisé pour le face-à-face).
   function faceResidentToward(res, tx, ty) {
     const dx = tx - res.x, dy = ty - res.y;
@@ -7655,10 +7670,29 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               // 12 s (les autres artisans parlent en continu, cycle 3,5 s).
               const rare = ro.skill === "breadmaker" || reneGrumpy; // "renfermé" : René aussi parle rarement pendant ses phases bougonnes
               const now2 = performance.now();
-              const period = rare ? 12000 : 3500;
-              const show = rare ? (now2 % period < 3000) : true;
+              // Retour Guillaume : cycle de Rosalie raccourci (6s au total,
+              // 3s parlée / 3s silence) pour se déclencher plus facilement à
+              // l'approche — celui de René (phases bougonnes) reste à 12s,
+              // les deux ne partagent que le booléen "rare".
+              const period = reneGrumpy ? 12000 : (ro.skill === "breadmaker" ? C.ROSALIE_RARE_TALK_PERIOD_MS : 3500);
+              const showMs = reneGrumpy ? 3000 : C.ROSALIE_RARE_TALK_SHOW_MS;
+              const show = rare ? (now2 % period < showMs) : true;
               if (show && !chloeRosalieSceneRef.current) {
-                const txt = talkLines[Math.floor(now2 / period + res.rid) % talkLines.length];
+                let txt;
+                if (ro.skill === "breadmaker") {
+                  // "Recule" (dernière réplique du pool) tirée avec un poids
+                  // double — figée pour toute la durée du cycle "parlée" en
+                  // cours (pas de retirage à chaque frame).
+                  const periodIdx = Math.floor(now2 / period);
+                  const lr = rosalieLineRef.current;
+                  if (lr.periodIdx !== periodIdx) {
+                    lr.periodIdx = periodIdx;
+                    lr.idx = pickWeightedIndex(talkLines.length, talkLines.length - 1, C.ROSALIE_LINE_RECULE_WEIGHT);
+                  }
+                  txt = talkLines[lr.idx];
+                } else {
+                  txt = talkLines[Math.floor(now2 / period + res.rid) % talkLines.length];
+                }
                 drawSpeechBubble(ctx, Math.round(rx * T) + 8, Math.round(ry * T) - 18, txt);
               }
               // Zip suivant : déclencheur des scènes Chloé/Rosalie — on compte

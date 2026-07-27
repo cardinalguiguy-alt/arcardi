@@ -1511,6 +1511,18 @@ export const CHLOE_ROSALIE_SCENE_COOLDOWN_MS = 5 * 60 * 1000;
 export const CHLOE_ROSALIE_SCENE_V11_CHANCE = 1 / 18; // variante rare (René), ~1 fois sur 18
 export const CHLOE_ROSALIE_CONVO_DIST = 1.8; // distance max (cases) pour déclencher/jouer une scène — "distance conversationnelle"
 
+// Retour Guillaume (chantier bulles/dispute plus faciles) : le cycle "rare"
+// de la bulle de Rosalie (3s parlée / silence) était calé sur 12s au total
+// (9s de silence), ce qui la faisait paraître sous-déclenchée ET ralentissait
+// d'autant le compteur de cycles qui lance la dispute (2 cycles à portée du
+// joueur). Ramené à 6s au total (3s parlée / 3s silence) pour Rosalie
+// uniquement — le cycle de René (RENE_GRUMPY_*, phases bougonnes) reste
+// inchangé à 12s, les deux ne partagent que le flag booléen "rare", pas cette
+// constante de durée (piège déjà rencontré au zip 327).
+export const ROSALIE_RARE_TALK_PERIOD_MS = 6000; // durée totale d'un cycle (parlée + silence)
+export const ROSALIE_RARE_TALK_SHOW_MS = 3000;   // partie "parlée" du cycle
+export const ROSALIE_LINE_RECULE_WEIGHT = 2; // "Recule" (dernière réplique du pool breadmaker) a 2x plus de chances de sortir que chacune des autres
+
 // ---- Zip 280 (bijouterie, demande Guillaume) ----
 // Contrairement aux autres ateliers (beehive/fromagerie/bakery/sawmill), la
 // bijouterie n'est PAS liée à un résident/métier : n'IMPORTE QUEL joueur
