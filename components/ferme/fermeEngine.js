@@ -2609,6 +2609,15 @@ export function newStationState() {
     tjBrawl: null,
     tjNextStormAt: 0,
     tjBrawlCooldownUntil: 0,
+    // Correctif "dispute Chloé/Rosalie vue de tous" (2026-07, demande
+    // Guillaume) : la scène était jusque-là 100% locale (chaque client la
+    // recalculait/rejouait pour son propre compte, désync possible entre
+    // joueurs). Même principe que tjBrawl ci-dessus désormais : `crScene` =
+    // scène de dispute en cours (null hors scène), `crNextCooldownUntil` =
+    // horodatage hôte avant lequel on ne redéclenche pas. Aucun impact
+    // gameplay (contrairement à tjBrawl) — seule la SYNCHRONISATION change.
+    crScene: null,
+    crNextCooldownUntil: 0,
   };
 }
 
@@ -2657,6 +2666,11 @@ export function migrateStation(st, hostNow) {
   out.tjBrawl = (st.tjBrawl && typeof st.tjBrawl === "object" && Array.isArray(st.tjBrawl.lines)) ? { ...st.tjBrawl } : null;
   out.tjNextStormAt = typeof st.tjNextStormAt === "number" ? st.tjNextStormAt : 0;
   out.tjBrawlCooldownUntil = typeof st.tjBrawlCooldownUntil === "number" ? st.tjBrawlCooldownUntil : 0;
+  // Correctif "dispute Chloé/Rosalie vue de tous" : même whitelist que
+  // tjBrawl ci-dessus, sinon ces champs seraient silencieusement perdus chez
+  // les invités à la prochaine synchro (piège déjà rencontré sur tjBrawl).
+  out.crScene = (st.crScene && typeof st.crScene === "object" && Array.isArray(st.crScene.lines)) ? { ...st.crScene } : null;
+  out.crNextCooldownUntil = typeof st.crNextCooldownUntil === "number" ? st.crNextCooldownUntil : 0;
   // Owed gifts (zip 233) survive EVERY load, plain or snapshot: a promised
   // pet must not vanish before the pet system ships.
   out.pendingGifts = Array.isArray(st.pendingGifts) ? st.pendingGifts.filter(g => g && typeof g.kind === "string") : [];
@@ -2708,6 +2722,9 @@ export function migrateStation(st, hostNow) {
     if (out.tjBrawl && typeof out.tjBrawl.stepUntil === "number" && out.tjBrawl.stepUntil > 0) out.tjBrawl.stepUntil += shift;
     if (out.tjNextStormAt > 0) out.tjNextStormAt += shift;
     if (out.tjBrawlCooldownUntil > 0) out.tjBrawlCooldownUntil += shift;
+    // Correctif "dispute Chloé/Rosalie vue de tous" : mêmes horodatages hôte que tjBrawl.
+    if (out.crScene && typeof out.crScene.stepUntil === "number" && out.crScene.stepUntil > 0) out.crScene.stepUntil += shift;
+    if (out.crNextCooldownUntil > 0) out.crNextCooldownUntil += shift;
   }
   return out;
 }

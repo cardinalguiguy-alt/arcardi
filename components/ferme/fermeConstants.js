@@ -1508,6 +1508,7 @@ export const BAKERY_ENTER_CHANCE = 0.5; // probabilité de rentrer à l'échéan
 // bouclé 2 cycles à portée du joueur ET que Chloé n'est pas "à l'intérieur"
 // (res.hidden) de la boulangerie. Cooldown 5 min réelles après chaque scène.
 export const CHLOE_ROSALIE_SCENE_COOLDOWN_MS = 5 * 60 * 1000;
+export const CHLOE_ROSALIE_TRIGGER_CYCLES = 3; // nombre de bulles négatives de Rosalie (à portée du joueur) avant que Chloé réagisse
 export const CHLOE_ROSALIE_SCENE_V11_CHANCE = 1 / 18; // variante rare (René), ~1 fois sur 18
 export const CHLOE_ROSALIE_CONVO_DIST = 1.8; // distance max (cases) pour déclencher/jouer une scène — "distance conversationnelle"
 

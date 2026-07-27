@@ -529,13 +529,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const sleepTimerRef = useRef(null); // setTimeout de sortie automatique après C.SLEEP_MS
   const injuredUntilRef = useRef(0); // miroir synchrone de injuredUntil (lu dans la boucle de rendu/déplacement)
   const immunityUntilRef = useRef(0); // miroir synchrone de immunityUntil (lu dans updateEvilMonsters)
-  // Zip suivant (demande Guillaume) : scènes Chloé/Rosalie — état 100% local
-  // (une scène jouée pour un joueur n'a pas besoin d'être synchronisée aux
-  // autres, cf. "visible seulement par les joueurs proches").
-  const rosalieBubbleCycleRef = useRef({ lastPeriodStart: -1, cycles: 0 }); // compte les cycles de bulle "rare" vus à portée
+  // Correctif "dispute Chloé/Rosalie vue de tous" (2026-07, demande Guillaume) :
+  // la scène et le cooldown sont désormais un état PARTAGÉ (station.crScene /
+  // station.crNextCooldownUntil, voir updateChloeRosalieFeud), plus des refs
+  // locaux — seul le compteur de cycles reste un ref, car il n'est utilisé que
+  // côté hôte (updateChloeRosalieFeud), jamais lu par les autres clients.
+  const rosalieBubbleCycleRef = useRef({ lastPeriodStart: -1, cycles: 0 }); // compte les cycles de bulle "rare" vus à portée (hôte uniquement)
   const rosalieLineRef = useRef({ periodIdx: -1, idx: 0 }); // réplique tirée au sort (pondérée) pour le cycle "rare" en cours — figée pour toute sa durée
-  const chloeRosalieSceneRef = useRef(null); // { lines, stepIdx, stepUntil, rosalieRid, chloeRid } pendant qu'une scène joue
-  const chloeRosalieCooldownRef = useRef(0); // Date.now() avant lequel on ne redéclenche pas de scène
   const hatUntilRef = useRef(0); // miroir synchrone de hatUntil (lu dans la boucle de rendu, voir drawCharacter)
   const rabbitChallengeOfferRef = useRef(false); // miroir synchrone de rabbitChallengeOffer (lu dans le timer hôte, évite de reproposer en boucle)
   const rabbitLastOfferDayRef = useRef(-999); // zip 262 : jour ingame de la dernière proposition de défi lapins (gate 1 fois / 3 jours)
@@ -5516,13 +5516,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           }
           res.stormKind = null;
         } else {
+          // Correctif "vue de tous" (2026-07) : la scène est désormais posée
+          // sur l'état PARTAGÉ station.crScene (comme tjBrawl), diffusée via
+          // broadcastStation() — exactement le même principe que la branche
+          // isTj ci-dessus. residentRoam ne tourne QUE côté hôte (voir
+          // updateResidents), donc cette écriture est déjà host-only.
           const scenes = L.chloeRosalieScenes || [];
           if (scenes.length) {
             const rareIdx = scenes.length - 1;
             const idx = (Math.random() < C.CHLOE_ROSALIE_SCENE_V11_CHANCE) ? rareIdx : Math.floor(Math.random() * rareIdx);
             const lines = scenes[idx];
-            chloeRosalieSceneRef.current = { lines, stepIdx: 0, stepUntil: performance.now() + (lines[0].ms || 2600), rosalieRid: mate.rid, chloeRid: res.rid };
-            chloeRosalieCooldownRef.current = Date.now() + C.CHLOE_ROSALIE_SCENE_COOLDOWN_MS;
+            const st = sharedRef.current.station;
+            st.crScene = { lines, stepIdx: 0, stepUntil: Date.now() + (lines[0].ms || 2600), rosalieRid: mate.rid, chloeRid: res.rid };
+            st.crNextCooldownUntil = Date.now() + C.CHLOE_ROSALIE_SCENE_COOLDOWN_MS;
+            broadcastStation();
           }
         }
         return;
@@ -5931,7 +5938,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // "turn" sur certaines répliques grincheuses, voir dessin plus bas) —
       // c'est une simple orientation, elle ne quitte jamais la distance
       // conversationnelle.
-      const sceneActive = chloeRosalieSceneRef.current;
+      const sceneActive = s.station.crScene;
       const inScene = sceneActive && (sceneActive.rosalieRid === res.rid || sceneActive.chloeRid === res.rid);
       // Idem pour la scène Tristan/Jérôme (état partagé station.tjBrawl,
       // voir plus haut) : les deux restent face à face jusqu'à la
@@ -5966,6 +5973,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // bagarre. 100% côté hôte (comme le reste d'updateResidents) — l'issue a
     // un vrai impact sur la production, contrairement au flavor Chloé/Rosalie.
     updateTristanJeromeFeud(residents, s, w, now);
+    // Correctif "dispute Chloé/Rosalie vue de tous" (2026-07, demande
+    // Guillaume) : même discipline host-only que ci-dessus — le déclenchement
+    // (comptage des messages négatifs de Rosalie à portée d'un joueur) et
+    // l'avancement de la scène vivent maintenant ici, plus dans la boucle de
+    // rendu (qui tournait sur CHAQUE client indépendamment).
+    updateChloeRosalieFeud(residents, s, now);
     // Zip 252 : diffusion légère des positions des résidents baladeurs.
     // Zip 264 (fuite realtime n°1) : cette diffusion tournait à ~2 Hz EN
     // CONTINU dès qu'un résident existait (≈ toujours dans une ferme établie),
@@ -6049,6 +6062,77 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     channelRef.current?.send({ type: "broadcast", event: "apply", payload: { fx: [{ k: "brawl", x: loser.x, y: loser.y }] } });
     broadcastGlobalToast(L.toastTJBrawl(rosterOf(loser.rid).name));
     broadcastStation();
+  }
+  // Correctif "dispute Chloé/Rosalie vue de tous" (2026-07, demande Guillaume) :
+  // déclenchement host-only, sur le même principe que updateTristanJeromeFeud
+  // ci-dessus. Rosalie parle rarement (bulle "négative" tous les
+  // ROSALIE_RARE_TALK_PERIOD_MS, calculée ici sur l'horloge hôte plutôt que
+  // performance.now() côté rendu) ; au 3e message franchi avec un joueur à
+  // portée pour l'entendre, Chloé réagit. Aucun impact gameplay (contrairement
+  // à Tristan/Jérôme) — seule la synchronisation entre joueurs change.
+  function anyPlayerNearResident(res, tiles) {
+    const m = meRef.current;
+    if (m && (!m.zone || m.zone === "farm") && Math.abs(m.x - res.x) + Math.abs(m.y - res.y) <= tiles) return true;
+    for (const p of playersRef.current.values()) {
+      if (p && (!p.zone || p.zone === "farm") && Math.abs(p.x - res.x) + Math.abs(p.y - res.y) <= tiles) return true;
+    }
+    return false;
+  }
+  function updateChloeRosalieFeud(residents, s, now) {
+    const st = s.station; if (!st) return;
+    const chloe = residents.find(r => r && rosterOf(r.rid) && rosterOf(r.rid).skill === "baker");
+    const rosalie = residents.find(r => r && rosterOf(r.rid) && rosterOf(r.rid).skill === "breadmaker");
+    if (!chloe || !rosalie || typeof rosalie.x !== "number") return;
+    const scene = st.crScene;
+    if (scene) {
+      // Scène en cours : avance d'une étape par stepUntil écoulé, comme tjBrawl.
+      if (now >= scene.stepUntil) {
+        scene.stepIdx++;
+        if (scene.stepIdx >= scene.lines.length) st.crScene = null;
+        else scene.stepUntil = now + (scene.lines[scene.stepIdx].ms || 2600);
+        broadcastStation();
+      }
+      return; // pas de nouveau déclenchement tant que la scène en cours n'est pas finie
+    }
+    if (chloe.storming) return; // déjà en route vers Rosalie
+    if (now < (st.crNextCooldownUntil || 0)) return;
+    if (rosalie.hidden) return; // personne ne peut l'entendre grommeler si elle est dans la boulangerie
+    // Cycle de la bulle "rare" de Rosalie : un "message négatif" toutes les
+    // ROSALIE_RARE_TALK_PERIOD_MS, compté une seule fois par cycle, et
+    // seulement si un joueur est à portée pour l'entendre à ce moment-là.
+    const periodIdx = Math.floor(now / C.ROSALIE_RARE_TALK_PERIOD_MS);
+    const cyc = rosalieBubbleCycleRef.current;
+    if (cyc.lastPeriodStart === periodIdx) return; // déjà compté ce cycle
+    if (!anyPlayerNearResident(rosalie, 3)) return;
+    cyc.lastPeriodStart = periodIdx;
+    cyc.cycles++;
+    if (cyc.cycles < C.CHLOE_ROSALIE_TRIGGER_CYCLES) return;
+    cyc.cycles = 0;
+    const wasHidden = chloe.hidden;
+    if (wasHidden) chloe.hidden = false; // ressort aussitôt de la boulangerie
+    const closeEnough = !wasHidden && Math.hypot(chloe.x - rosalie.x, chloe.y - rosalie.y) <= C.CHLOE_ROSALIE_CONVO_DIST;
+    if (closeEnough) {
+      const scenes = L.chloeRosalieScenes || [];
+      if (scenes.length) {
+        const rareIdx = scenes.length - 1;
+        const idx = (Math.random() < C.CHLOE_ROSALIE_SCENE_V11_CHANCE) ? rareIdx : Math.floor(Math.random() * rareIdx);
+        const lines = scenes[idx];
+        chloe.roamTarget = null; chloe.roamMeet = null; chloe.moving = false;
+        rosalie.roamTarget = null; rosalie.roamMeet = null; rosalie.moving = false;
+        faceResidentToward(rosalie, chloe.x, chloe.y);
+        faceResidentToward(chloe, rosalie.x, rosalie.y);
+        st.crScene = { lines, stepIdx: 0, stepUntil: now + (lines[0].ms || 2600), rosalieRid: rosalie.rid, chloeRid: chloe.rid };
+        st.crNextCooldownUntil = now + C.CHLOE_ROSALIE_SCENE_COOLDOWN_MS;
+        broadcastStation();
+      }
+    } else {
+      chloe.storming = true;
+      chloe.stormRosalieRid = rosalie.rid;
+      chloe.roamTarget = { x: rosalie.x, y: rosalie.y };
+      chloe.roamMeet = null;
+      st.crNextCooldownUntil = now + C.CHLOE_ROSALIE_SCENE_COOLDOWN_MS;
+      broadcastStation();
+    }
   }
   // Montgolfière (zip 302, demande Guillaume) : attraction touristique.
   // Simulation hôte, même discipline que les autres systèmes "station" :
@@ -7731,19 +7815,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           } });
         }
       }
-      // Zip suivant : avance la scène Chloé/Rosalie en cours (une étape par
-      // "stepUntil" écoulé), une seule fois par frame.
-      {
-        const sc = chloeRosalieSceneRef.current;
-        if (sc) {
-          const now2 = performance.now();
-          if (now2 >= sc.stepUntil) {
-            sc.stepIdx++;
-            if (sc.stepIdx >= sc.lines.length) chloeRosalieSceneRef.current = null;
-            else sc.stepUntil = now2 + (sc.lines[sc.stepIdx].ms || 2600);
-          }
-        }
-      }
+      // Correctif "vue de tous" (2026-07) : la scène Chloé/Rosalie est
+      // désormais avancée côté hôte uniquement (updateChloeRosalieFeud, sur
+      // station.crScene) — le rendu se contente de LIRE cet état partagé plus
+      // bas (crSceneNow), exactement comme pour tjBrawl. Plus d'avancement
+      // local par frame ici.
       // Zip 252 : résidents baladeurs (lissés côté invité comme les visiteurs).
       {
         const residents = (sharedRef.current.station && sharedRef.current.station.residents) || [];
@@ -7770,7 +7846,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           // Zip suivant : sourcils froncés de Rosalie (frown) — actifs
           // uniquement pendant qu'elle grogne (bulle "rare" affichée) ou
           // pendant une scène Chloé/Rosalie en cours.
-          const sceneNow = chloeRosalieSceneRef.current;
+          const sceneNow = sharedRef.current.station && sharedRef.current.station.crScene;
           const inScene = sceneNow && (res.rid === sceneNow.rosalieRid || res.rid === sceneNow.chloeRid);
           // Chantier "rivalité Tristan/Jérôme" : la scène est un état PARTAGÉ
           // (station.tjBrawl, avancé côté hôte via updateTristanJeromeFeud et
@@ -7855,7 +7931,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               const period = reneGrumpy ? 12000 : (ro.skill === "breadmaker" ? C.ROSALIE_RARE_TALK_PERIOD_MS : 3500);
               const showMs = reneGrumpy ? 3000 : C.ROSALIE_RARE_TALK_SHOW_MS;
               const show = rare ? (now2 % period < showMs) : true;
-              if (show && !chloeRosalieSceneRef.current) {
+              // Correctif "vue de tous" (2026-07) : cette bulle "flavor" reste
+              // un pur effet cosmétique par client (chacun voit Rosalie
+              // grommeler quand IL est à portée, sans impact gameplay) — SEUL
+              // le déclenchement de la vraie scène a été déplacé côté hôte
+              // (updateChloeRosalieFeud), plus dans cette boucle de rendu.
+              if (show && !sceneNow) {
                 let txt;
                 if (ro.skill === "breadmaker") {
                   // "Recule" (dernière réplique du pool) tirée avec un poids
@@ -7872,56 +7953,6 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   txt = talkLines[Math.floor(now2 / period + res.rid) % talkLines.length];
                 }
                 drawSpeechBubble(ctx, Math.round(rx * T) + 8, Math.round(ry * T) - 18, txt);
-              }
-              // Zip suivant : déclencheur des scènes Chloé/Rosalie — on compte
-              // les cycles de la bulle "rare" de Rosalie vus à portée ; au
-              // 2e cycle, si Chloé (baker) est dehors et le cooldown est
-              // passé, on lance une scène.
-              if (rare && ro.skill === "breadmaker" && !chloeRosalieSceneRef.current) {
-                const cyc = rosalieBubbleCycleRef.current;
-                const periodIdx = Math.floor(now2 / period);
-                if (cyc.lastPeriodStart !== periodIdx) {
-                  cyc.lastPeriodStart = periodIdx;
-                  cyc.cycles++;
-                  if (cyc.cycles >= 2 && Date.now() >= chloeRosalieCooldownRef.current) {
-                    const chloeRes = residents.find(p => p && !p.hidden && rosterOf(p.rid) && rosterOf(p.rid).skill === "baker");
-                    if (chloeRes && typeof chloeRes.x === "number" && !chloeRes.storming) {
-                      cyc.cycles = 0;
-                      const closeEnough = Math.hypot(chloeRes.x - res.x, chloeRes.y - res.y) <= C.CHLOE_ROSALIE_CONVO_DIST;
-                      if (closeEnough) {
-                        // Déjà à portée : la scène démarre tout de suite, comme avant.
-                        const scenes = L.chloeRosalieScenes || [];
-                        if (scenes.length) {
-                          const rareIdx = scenes.length - 1;
-                          const idx = (Math.random() < C.CHLOE_ROSALIE_SCENE_V11_CHANCE) ? rareIdx : Math.floor(Math.random() * rareIdx);
-                          const lines = scenes[idx];
-                          // On fige les deux sur place, face à face, pour toute
-                          // la durée de la scène (voir updateResidents, qui
-                          // saute résidentRoam pour ces deux rid).
-                          res.roamTarget = null; res.roamMeet = null; res.moving = false;
-                          chloeRes.roamTarget = null; chloeRes.roamMeet = null; chloeRes.moving = false;
-                          faceResidentToward(res, chloeRes.x, chloeRes.y);
-                          faceResidentToward(chloeRes, res.x, res.y);
-                          chloeRosalieSceneRef.current = { lines, stepIdx: 0, stepUntil: now2 + (lines[0].ms || 2600), rosalieRid: res.rid, chloeRid: chloeRes.rid };
-                          chloeRosalieCooldownRef.current = Date.now() + C.CHLOE_ROSALIE_SCENE_COOLDOWN_MS;
-                        }
-                      } else {
-                        // Zip suivant (demande Guillaume) : Rosalie vient
-                        // d'enchaîner deux commentaires agressifs sur le
-                        // client — Chloé, où qu'elle soit, arrive EN TROMBE
-                        // (sprint direct, voir le cas res.storming dans
-                        // residentRoam) au lieu d'attendre d'être déjà à
-                        // portée par hasard. La scène démarre dès qu'elle
-                        // arrive près de Rosalie.
-                        chloeRes.storming = true;
-                        chloeRes.stormRosalieRid = res.rid;
-                        chloeRes.roamTarget = { x: res.x, y: res.y };
-                        chloeRes.roamMeet = null;
-                        chloeRosalieCooldownRef.current = Date.now() + C.CHLOE_ROSALIE_SCENE_COOLDOWN_MS;
-                      }
-                    }
-                  }
-                }
               }
             }
           } });
