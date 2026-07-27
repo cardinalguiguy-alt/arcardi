@@ -5417,6 +5417,35 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     return null;
   }
   function residentRoam(res, w, now, dt, ro, peers) {
+    // Zip suivant (demande Guillaume) : Chloé arrive EN TROMBE chez Rosalie
+    // (sprint direct, ignore sa rôdaille/pauses normales) quand celle-ci a
+    // enchaîné deux commentaires agressifs sur le client — voir le
+    // déclencheur (res.storming / res.stormRosalieRid) plus bas dans le
+    // fichier. La scène démarre dès l'arrivée, ici même.
+    if (res.storming) {
+      const mate = peers && peers.find(p => p && p.rid === res.stormRosalieRid);
+      if (!mate || typeof mate.x !== "number") { res.storming = false; res.roamTarget = null; res.moving = false; return; }
+      const dx = mate.x - res.x, dy = mate.y - res.y, d = Math.hypot(dx, dy);
+      if (d <= C.CHLOE_ROSALIE_CONVO_DIST) {
+        res.storming = false; res.roamTarget = null; res.moving = false;
+        mate.roamTarget = null; mate.roamMeet = null; mate.moving = false;
+        faceResidentToward(mate, res.x, res.y); faceResidentToward(res, mate.x, mate.y);
+        const scenes = L.chloeRosalieScenes || [];
+        if (scenes.length) {
+          const rareIdx = scenes.length - 1;
+          const idx = (Math.random() < C.CHLOE_ROSALIE_SCENE_V11_CHANCE) ? rareIdx : Math.floor(Math.random() * rareIdx);
+          const lines = scenes[idx];
+          chloeRosalieSceneRef.current = { lines, stepIdx: 0, stepUntil: performance.now() + (lines[0].ms || 2600), rosalieRid: mate.rid, chloeRid: res.rid };
+          chloeRosalieCooldownRef.current = Date.now() + C.CHLOE_ROSALIE_SCENE_COOLDOWN_MS;
+        }
+        return;
+      }
+      const step = Math.min(d, C.VISITOR_SPEED * 1.9 * dt); // en trombe : bien plus rapide que la rôdaille normale (0.55x)
+      const nx = res.x + (dx / d) * step, ny = res.y + (dy / d) * step;
+      if (!E.blockedTile(w, nx, ny)) { res.x = nx; res.y = ny; res.moving = true; res.animT = (res.animT || 0) + dt * 9; res.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 3 : 2) : (dy > 0 ? 0 : 1); }
+      else { res.storming = false; res.moving = false; } // obstacle sur le trajet direct : abandonne le sprint, redevient rôdaille normale
+      return;
+    }
     // Zip 256/259 : un artisan à bâtiment (apiculteur/fromager/pâtissière) rôde
     // autour de SON bâtiment, à sa position ACTUELLE (déplaçable, voir
     // artisanAnchor), au lieu d'une ancre fixe — corrige "l'apiculteur planté
@@ -5746,7 +5775,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         // rentrée ? Si oui, on ne rentre pas (jamais les deux dedans à la
         // fois) — on redevient "dehors" pour un tour de plus.
         const otherIn = (peers || []).some(p => p && p !== res && p.hidden && rosterOf(p.rid) && (rosterOf(p.rid).skill === "baker" || rosterOf(p.rid).skill === "breadmaker"));
-        if (!otherIn && Math.random() < C.BAKERY_ENTER_CHANCE) {
+        // Zip suivant : ne rentre pas se cacher en pleine arrivée en trombe
+        // vers Rosalie (voir res.storming) — elle resterait invisible en
+        // plein sprint, ce qui casserait la scène qui doit suivre.
+        if (!res.storming && !otherIn && Math.random() < C.BAKERY_ENTER_CHANCE) {
           res.hidden = true;
           res.roamTarget = null; res.roamMeet = null; res.moving = false;
           res.shopPhaseUntil = now + C.BAKERY_INSIDE_MIN_MS + Math.random() * (C.BAKERY_INSIDE_MAX_MS - C.BAKERY_INSIDE_MIN_MS);
@@ -7557,7 +7589,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           // skill) reste monté en permanence, pas seulement le temps de son
           // arrivée initiale au village.
           const onWhiteHorse = ro.skill === "voyager";
-          const talkLines = ro.skill && L.skillTalk ? L.skillTalk[ro.skill] : null;
+          // Zip 327 (demande Guillaume) : René a des phases "renfermé"/bougon
+          // récurrentes, indépendantes de son cycle travail/pause — pendant
+          // ces phases il utilise un pool de répliques sèches dédié
+          // (L.skillTalkGrumpy) au lieu de ses bulles joyeuses habituelles.
+          const reneGrumpy = ro.skill === "beekeeper" && (performance.now() % C.RENE_GRUMPY_CYCLE_MS) < C.RENE_GRUMPY_DURATION_MS;
+          const talkLines = reneGrumpy ? ((L.skillTalkGrumpy && L.skillTalkGrumpy.beekeeper) || null) : (ro.skill && L.skillTalk ? L.skillTalk[ro.skill] : null);
           const resSuperActive = Date.now() < (res.superUntil || 0);
           // Zip suivant : sourcils froncés de Rosalie (frown) — actifs
           // uniquement pendant qu'elle grogne (bulle "rare" affichée) ou
@@ -7616,7 +7653,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               // Zip 301 (demande Guillaume) : Rosalie (breadmaker) est aigrie et
               // parle RAREMENT — sa bulle ne s'affiche qu'~3 s par tranche de
               // 12 s (les autres artisans parlent en continu, cycle 3,5 s).
-              const rare = ro.skill === "breadmaker";
+              const rare = ro.skill === "breadmaker" || reneGrumpy; // "renfermé" : René aussi parle rarement pendant ses phases bougonnes
               const now2 = performance.now();
               const period = rare ? 12000 : 3500;
               const show = rare ? (now2 % period < 3000) : true;
@@ -7628,7 +7665,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               // les cycles de la bulle "rare" de Rosalie vus à portée ; au
               // 2e cycle, si Chloé (baker) est dehors et le cooldown est
               // passé, on lance une scène.
-              if (rare && !chloeRosalieSceneRef.current) {
+              if (rare && ro.skill === "breadmaker" && !chloeRosalieSceneRef.current) {
                 const cyc = rosalieBubbleCycleRef.current;
                 const periodIdx = Math.floor(now2 / period);
                 if (cyc.lastPeriodStart !== periodIdx) {
@@ -7636,27 +7673,38 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   cyc.cycles++;
                   if (cyc.cycles >= 2 && Date.now() >= chloeRosalieCooldownRef.current) {
                     const chloeRes = residents.find(p => p && !p.hidden && rosterOf(p.rid) && rosterOf(p.rid).skill === "baker");
-                    // Zip suivant (demande Guillaume) : les deux doivent être à
-                    // distance CONVERSATIONNELLE l'une de l'autre pour que la
-                    // scène démarre (sinon on attend un prochain cycle — Chloé
-                    // et Rosalie rôdent de toute façon près de la même
-                    // boulangerie, donc l'occasion revient vite).
-                    const closeEnough = chloeRes && typeof chloeRes.x === "number" && Math.hypot(chloeRes.x - res.x, chloeRes.y - res.y) <= C.CHLOE_ROSALIE_CONVO_DIST;
-                    if (chloeRes && closeEnough) {
+                    if (chloeRes && typeof chloeRes.x === "number" && !chloeRes.storming) {
                       cyc.cycles = 0;
-                      const scenes = L.chloeRosalieScenes || [];
-                      if (scenes.length) {
-                        const rareIdx = scenes.length - 1;
-                        const idx = (Math.random() < C.CHLOE_ROSALIE_SCENE_V11_CHANCE) ? rareIdx : Math.floor(Math.random() * rareIdx);
-                        const lines = scenes[idx];
-                        // On fige les deux sur place, face à face, pour toute
-                        // la durée de la scène (voir updateResidents, qui
-                        // saute résidentRoam pour ces deux rid).
-                        res.roamTarget = null; res.roamMeet = null; res.moving = false;
-                        chloeRes.roamTarget = null; chloeRes.roamMeet = null; chloeRes.moving = false;
-                        faceResidentToward(res, chloeRes.x, chloeRes.y);
-                        faceResidentToward(chloeRes, res.x, res.y);
-                        chloeRosalieSceneRef.current = { lines, stepIdx: 0, stepUntil: now2 + (lines[0].ms || 2600), rosalieRid: res.rid, chloeRid: chloeRes.rid };
+                      const closeEnough = Math.hypot(chloeRes.x - res.x, chloeRes.y - res.y) <= C.CHLOE_ROSALIE_CONVO_DIST;
+                      if (closeEnough) {
+                        // Déjà à portée : la scène démarre tout de suite, comme avant.
+                        const scenes = L.chloeRosalieScenes || [];
+                        if (scenes.length) {
+                          const rareIdx = scenes.length - 1;
+                          const idx = (Math.random() < C.CHLOE_ROSALIE_SCENE_V11_CHANCE) ? rareIdx : Math.floor(Math.random() * rareIdx);
+                          const lines = scenes[idx];
+                          // On fige les deux sur place, face à face, pour toute
+                          // la durée de la scène (voir updateResidents, qui
+                          // saute résidentRoam pour ces deux rid).
+                          res.roamTarget = null; res.roamMeet = null; res.moving = false;
+                          chloeRes.roamTarget = null; chloeRes.roamMeet = null; chloeRes.moving = false;
+                          faceResidentToward(res, chloeRes.x, chloeRes.y);
+                          faceResidentToward(chloeRes, res.x, res.y);
+                          chloeRosalieSceneRef.current = { lines, stepIdx: 0, stepUntil: now2 + (lines[0].ms || 2600), rosalieRid: res.rid, chloeRid: chloeRes.rid };
+                          chloeRosalieCooldownRef.current = Date.now() + C.CHLOE_ROSALIE_SCENE_COOLDOWN_MS;
+                        }
+                      } else {
+                        // Zip suivant (demande Guillaume) : Rosalie vient
+                        // d'enchaîner deux commentaires agressifs sur le
+                        // client — Chloé, où qu'elle soit, arrive EN TROMBE
+                        // (sprint direct, voir le cas res.storming dans
+                        // residentRoam) au lieu d'attendre d'être déjà à
+                        // portée par hasard. La scène démarre dès qu'elle
+                        // arrive près de Rosalie.
+                        chloeRes.storming = true;
+                        chloeRes.stormRosalieRid = res.rid;
+                        chloeRes.roamTarget = { x: res.x, y: res.y };
+                        chloeRes.roamMeet = null;
                         chloeRosalieCooldownRef.current = Date.now() + C.CHLOE_ROSALIE_SCENE_COOLDOWN_MS;
                       }
                     }

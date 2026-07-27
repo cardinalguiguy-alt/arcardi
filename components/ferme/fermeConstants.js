@@ -1382,6 +1382,12 @@ export const BEEKEEPER_ANCHOR = { x: 51, y: 47 };
 // pause dans l'état normal (avant : 45 min de travail).
 export const BEEKEEPER_WORK_MS = 60 * 60 * 1000;  // durée d'un bloc de récolte actif (1h)
 export const BEEKEEPER_BREAK_MS = 15 * 60 * 1000; // durée de la pause avant de pouvoir reprendre (ou renvoyer manuellement via le bouton "Envoyer récolter")
+// Zip 327 (demande Guillaume) : René a aussi des phases "renfermé"/bougon,
+// indépendantes de son cycle travail/pause — un cycle de mauvaise humeur
+// récurrent (bulles sèches, affichées rarement, voir FermeGame.js) qui
+// alterne avec ses phases normales (bulles joyeuses existantes).
+export const RENE_GRUMPY_CYCLE_MS = 50 * 1000;    // durée totale d'un cycle d'humeur
+export const RENE_GRUMPY_DURATION_MS = 15 * 1000; // dont ce temps (au début du cycle) est bougon
 
 // Zip suivant (demande Guillaume) : "SuperRené" — donner un café à René
 // (apiculteur) déclenche un effet prolongé pendant lequel il travaille EN

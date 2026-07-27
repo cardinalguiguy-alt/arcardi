@@ -176,9 +176,14 @@ export const FERME_STR = {
       baker: ["Bienvenue, quelle joie de te voir ! 🌞", "Le four est chaud, les gâteaux arrivent !", "Prends une brioche tant qu'elle est tiède, c'est offert !", "Ça sent bon la pâtisserie, non ? Sers-toi !"],
       // Zip 301 (demande Guillaume) : Rosalie, aigrie, parle rarement et de
       // façon désagréable (bulle affichée moins souvent, voir FermeGame.js).
-      breadmaker: ["Quoi encore.", "Le pain sera prêt quand il sera prêt. Pas avant.", "Tu comptes rester planté là longtemps ?", "Pas de beurre, pas de viennoiseries. C'est comme ça.", "Hmph."],
+      breadmaker: ["Quoi encore.", "Le pain sera prêt quand il sera prêt. Pas avant.", "Tu comptes rester planté là longtemps ?", "Pas de beurre, pas de viennoiseries. C'est comme ça.", "Hmph.", "Tu veux te battre, c'est ça ? Tu veux te battre ?"],
       lumberjack: ["J'abats, je scie, je casse du caillou !", "Encore un arbre et je fais une pause.", "Le bois part direct à la réserve commune.", "Ma hache n'a jamais été aussi affûtée."],
       voyager: ["Je repars bientôt pour des terres lointaines.", "J'ai rapporté des denrées rares du bout du monde.", "Passe commande, je te trouve ça !", "Le grand large me manque déjà."],
+    },
+    // Zip 327 (demande Guillaume) : phases "renfermé"/bougon de René,
+    // indépendantes du cycle travail/pause — voir RENE_GRUMPY_CYCLE_MS.
+    skillTalkGrumpy: {
+      beekeeper: ["...", "... Pas d'humeur, là, tout de suite. Me parle pas.", "Tu veux que je te pique ?"],
     },
     // Zip suivant (demande Guillaume) : scènes Chloé/Rosalie. Déclenchées quand
     // la bulle "rare" de Rosalie a fait 2 cycles à portée du joueur, Chloé
@@ -1111,9 +1116,14 @@ export const FERME_STR = {
       cheesemaker: ["This wheel needs to age a little more.", "Bring me milk and I'll work wonders!", "Smell this wheel — pure delight.", "The cellar's at just the right temperature."],
       baker: ["Welcome, so lovely to see you! 🌞", "Oven's hot, the cakes are coming!", "Have a bun while it's warm — on the house!", "Smells like fresh pastry, doesn't it? Help yourself!"],
       // Zip 301: Rosalie — bitter, speaks rarely and curtly.
-      breadmaker: ["What now.", "The bread's ready when it's ready. Not before.", "You planning to just stand there?", "No butter, no viennoiseries. That's how it is.", "Hmph."],
+      breadmaker: ["What now.", "The bread's ready when it's ready. Not before.", "You planning to just stand there?", "No butter, no viennoiseries. That's how it is.", "Hmph.", "You want to fight, is that it? You want to fight?"],
       lumberjack: ["I fell, I saw, I crack rocks!", "One more tree and I'll take a break.", "The wood goes straight to our common stock.", "My axe has never been sharper."],
       voyager: ["I set sail again soon for distant lands.", "I brought back rare goods from afar.", "Place an order and I'll find it for you!", "I already miss the open sea."],
+    },
+    // Zip 327: René's "withdrawn"/grumpy phases, independent of his work/
+    // break cycle — see RENE_GRUMPY_CYCLE_MS.
+    skillTalkGrumpy: {
+      beekeeper: ["...", "... Not in the mood right now. Don't talk to me.", "Want me to sting you?"],
     },
     // Zip next: Chloé/Rosalie scenes, EN fallback (FR is the primary set —
     // see fr.chloeRosalieScenes for the full, richer versions).
