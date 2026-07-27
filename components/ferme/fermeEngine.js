@@ -2601,6 +2601,14 @@ export function newStationState() {
     jewelry: { built: false, items: [] },
     // Zip 302 : montgolfière — voir newBalloonState() plus bas.
     balloon: null, // rempli paresseusement (E.newBalloonState()) au premier tick hôte
+    // Chantier "rivalité Tristan/Jérôme" (2026-07) : état PARTAGÉ (horloge
+    // hôte) de la provocation en cours — voir updateTristanJeromeFeud/
+    // resolveTjBrawl (FermeGame.js). `tjBrawl` = scène de tension en cours
+    // (null hors scène) ; `tjNextStormAt`/`tjBrawlCooldownUntil` = horodatages
+    // hôte, relocalisés comme nextVisitAt en cas de snapshot/changement d'hôte.
+    tjBrawl: null,
+    tjNextStormAt: 0,
+    tjBrawlCooldownUntil: 0,
   };
 }
 
@@ -2641,6 +2649,14 @@ export function migrateStation(st, hostNow) {
     : { built: false, items: [] };
   // Zip 302 : montgolfière — état PERSISTÉ comme le reste de la station.
   out.balloon = migrateBalloon(st.balloon);
+  // Chantier "rivalité Tristan/Jérôme" (2026-07) : état de la scène en cours
+  // + les deux horodatages hôte (cooldowns) — sans cette copie explicite, un
+  // invité qui reçoit p.station perdrait tjBrawl/tjNextStormAt/
+  // tjBrawlCooldownUntil (out ne recopie QUE les champs listés ici), et la
+  // scène/le verrou d'ITT se désynchroniseraient chez lui.
+  out.tjBrawl = (st.tjBrawl && typeof st.tjBrawl === "object" && Array.isArray(st.tjBrawl.lines)) ? { ...st.tjBrawl } : null;
+  out.tjNextStormAt = typeof st.tjNextStormAt === "number" ? st.tjNextStormAt : 0;
+  out.tjBrawlCooldownUntil = typeof st.tjBrawlCooldownUntil === "number" ? st.tjBrawlCooldownUntil : 0;
   // Owed gifts (zip 233) survive EVERY load, plain or snapshot: a promised
   // pet must not vanish before the pet system ships.
   out.pendingGifts = Array.isArray(st.pendingGifts) ? st.pendingGifts.filter(g => g && typeof g.kind === "string") : [];
@@ -2680,8 +2696,18 @@ export function migrateStation(st, hostNow) {
       }
       return r;
     });
+    // Chantier "rivalité Tristan/Jérôme" : injuredUntil (ITT post-bagarre)
+    // est, comme trip.returnAt ci-dessus, un horodatage HÔTE — même
+    // relocalisation, sinon un changement d'hôte en pleine ITT décalerait
+    // (ou effacerait) l'immobilisation pour les invités.
+    out.residents = out.residents.map(r => (r && typeof r.injuredUntil === "number" && r.injuredUntil > 0) ? { ...r, injuredUntil: r.injuredUntil + shift } : r);
     // Zip 259 : idem pour l'heure de retour des ex-résidents exclus.
     out.exiles = out.exiles.map(e => (e && typeof e.returnAt === "number" && e.returnAt > 0) ? { ...e, returnAt: e.returnAt + shift } : e);
+    // Chantier "rivalité Tristan/Jérôme" : mêmes horodatages hôte que
+    // ci-dessus pour la scène de provocation en cours + les deux cooldowns.
+    if (out.tjBrawl && typeof out.tjBrawl.stepUntil === "number" && out.tjBrawl.stepUntil > 0) out.tjBrawl.stepUntil += shift;
+    if (out.tjNextStormAt > 0) out.tjNextStormAt += shift;
+    if (out.tjBrawlCooldownUntil > 0) out.tjBrawlCooldownUntil += shift;
   }
   return out;
 }
@@ -2739,6 +2765,19 @@ export function migrateCraftStock(s) {
 export function residentHasSkill(station, skill) {
   const list = (station && station.residents) || [];
   for (const r of list) { const ro = C.VISITOR_ROSTER[r.rid]; if (ro && ro.skill === skill) return true; }
+  return false;
+}
+// Chantier "rivalité Tristan/Jérôme" (2026-07) : variante de residentHasSkill
+// qui exige EN PLUS que le résident ne soit pas en ITT (injuredUntil) — sert
+// à couper la production continue (sucrerie de Jérôme) pendant une
+// immobilisation post-bagarre, sans toucher au reste de residentHasSkill
+// (utilisé ailleurs juste pour débloquer l'achat d'un atelier).
+export function residentActiveSkill(station, skill, now) {
+  const list = (station && station.residents) || [];
+  for (const r of list) {
+    const ro = C.VISITOR_ROSTER[r.rid];
+    if (ro && ro.skill === skill) return !(r.injuredUntil && r.injuredUntil > (now || Date.now()));
+  }
   return false;
 }
 

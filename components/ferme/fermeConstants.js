@@ -1511,6 +1511,20 @@ export const CHLOE_ROSALIE_SCENE_COOLDOWN_MS = 5 * 60 * 1000;
 export const CHLOE_ROSALIE_SCENE_V11_CHANCE = 1 / 18; // variante rare (René), ~1 fois sur 18
 export const CHLOE_ROSALIE_CONVO_DIST = 1.8; // distance max (cases) pour déclencher/jouer une scène — "distance conversationnelle"
 
+// Chantier "rivalité Tristan/Jérôme" (2026-07, demande Guillaume) : les deux
+// artisans se détestent et se provoquent périodiquement — même moteur que
+// Chloé/Rosalie (storming + scène de bulles séquencées), mais avec une issue
+// possible réellement impactante (bagarre -> ITT). Voir residentRoam
+// (res.storming/res.stormKind==="tj") et updateTristanJeromeFeud.
+export const TRISTAN_RID = 27; // rid VISITOR_ROSTER de Tristan (bûcheron)
+export const JEROME_RID = 1;   // rid VISITOR_ROSTER de Jérôme Martial (sucrerie)
+export const TJ_STORM_PERIOD_MS = 2 * DAY_REAL_MS; // ~48h in-game entre deux tentatives de provocation (départ en trombe vers le stand adverse)
+export const TJ_CONVO_DIST = 1.8; // distance de "face à face", identique à Chloé/Rosalie
+export const TJ_BRAWL_CHANCE = 0.3; // jet de bagarre à CHAQUE étape de tension (tant qu'ils sont à portée), pas une seule fois par rencontre
+export const TJ_BRAWL_ITT_MS = DAY_REAL_MS; // 24h in-game d'indisponibilité (immobile devant son stand) pour le perdant
+export const TJ_BRAWL_HEAL_STEP_MS = TJ_BRAWL_ITT_MS / 2; // chaque pansement retire la moitié de l'ITT restante (2 pansements pour guérir complètement)
+export const TJ_BRAWL_COOLDOWN_MS = DAY_REAL_MS; // verrou supplémentaire ENTRE DEUX BAGARRES (pas entre toutes les altercations) : 24h in-game après une bagarre avant qu'une nouvelle puisse se produire
+
 // Retour Guillaume (chantier bulles/dispute plus faciles) : le cycle "rare"
 // de la bulle de Rosalie (3s parlée / silence) était calé sur 12s au total
 // (9s de silence), ce qui la faisait paraître sous-déclenchée ET ralentissait

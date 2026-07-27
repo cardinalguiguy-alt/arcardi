@@ -278,6 +278,56 @@ export const FERME_STR = {
         { who: "chloe", text: "Elle va mieux, en fait, croyez-le ou non." },
       ],
     ],
+    // Chantier "rivalité Tristan/Jérôme" (2026-07, demande Guillaume) : scènes
+    // de provocation jouées quand l'un débarque en trombe sur le stand de
+    // l'autre (voir res.storming/stormKind==="tj"). Montée de tension en
+    // bulles séquencées (who: "tristan"|"jerome") ; le jet de bagarre (30 %)
+    // est tiré à CHAQUE étape franchie côté moteur (FermeGame.js), pas ici —
+    // ces répliques ne décident donc jamais seules de l'issue. Insultes trop
+    // crues rendues par une bulle de censure ("#%!&") plutôt que du texte cru.
+    tristanJeromeScenes: [
+      [ // T1 — Tristan vient chercher des noises
+        { who: "tristan", text: "Encore à traîner autour de MA réserve de bois, Jérôme ?" },
+        { who: "jerome", text: "Ta réserve ? Le village entier en profite, bûcheron du dimanche." },
+        { who: "tristan", text: "Répète un peu ça." },
+        { who: "jerome", text: "#%!&, tu m'as très bien entendu." },
+        { who: "tristan", text: "C'est toi qui l'auras cherché." },
+      ],
+      [ // T2 — Jérôme vient chercher des noises
+        { who: "jerome", text: "Tiens, le bûcheron qui pue la sciure. On vient renifler ma sucrerie ?" },
+        { who: "tristan", text: "Je passais. Contrairement à toi, moi je TRAVAILLE." },
+        { who: "jerome", text: "Travailler ? Tu casses des cailloux, Tristan, c'est pas un métier." },
+        { who: "tristan", text: "Répète ça en face, pour voir." },
+        { who: "jerome", text: "Avec plaisir, #%!& de bûcheron." },
+        { who: "tristan", text: "Bon. Très bien." },
+      ],
+      [ // T3 — montée plus longue, plusieurs relances avant le clash
+        { who: "tristan", text: "Jérôme." },
+        { who: "jerome", text: "Quoi." },
+        { who: "tristan", text: "Tu racontes quoi sur moi au marché, exactement ?" },
+        { who: "jerome", text: "La vérité. Que t'as la carrure d'un bûcheron et la finesse d'une bûche." },
+        { who: "tristan", text: "Très drôle. Vraiment très drôle." },
+        { who: "jerome", text: "Je trouve aussi, oui." },
+        { who: "tristan", text: "#%!&, tu vas voir ce que ça fait, une bûche." },
+        { who: "jerome", text: "Essaie, pour voir." },
+      ],
+      [ // T4 — plus bref, clash quasi immédiat
+        { who: "tristan", text: "T'as un problème avec moi, Jérôme ?" },
+        { who: "jerome", text: "Toi, en entier, c'est mon problème." },
+        { who: "tristan", text: "#%!&." },
+        { who: "jerome", text: "Pareillement." },
+      ],
+    ],
+    // Toast global (visible par toute la room, PAS filtré par joueur — voir le
+    // nouveau flag toast.broadcast) au départ en trombe de l'un vers l'autre :
+    // sert de "cloche" pour venir assister au clash.
+    toastTJStorm: (nom, cible) => `⚠️ ${nom} fonce droit sur ${cible}, ça va chauffer, venez voir !`,
+    // Idem, au moment où la bagarre éclate réellement (pas à chaque scène : uniquement si le jet de 30 % réussit).
+    toastTJBrawlStart: (nom1, nom2) => `💥 Bagarre entre ${nom1} et ${nom2} !`,
+    // Idem, à l'issue : qui a écopé de l'ITT.
+    toastTJBrawl: (perdant) => `🤕 ${perdant} en ressort méchamment sonné(e) et va rester cloué(e) sur place un moment.`,
+    healResidentChat: (soigneur, blesse) => `🩹 ${soigneur} a bandé les plaies de ${blesse}, son immobilisation est réduite.`,
+    healResidentPartialChat: (soigneur, blesse, mn) => `🩹 ${soigneur} a appliqué un pansement à ${blesse} : encore ${mn} min d'immobilisation (un autre pansement peut aider !)`,
     residentNeedBuilding: (b) => `Construis-moi une ${b} (achetable en or à la boutique) et je produirai pour la ferme !`,
     residentBuildingReady: (b) => `Ma ${b} tourne. Garde nos stocks remplis et je fais le reste !`,
     residentLumberjackLine: "Je coupe du bois, casse des cailloux et scie des planches toute la journée — tout va dans notre réserve commune.",
@@ -1140,6 +1190,18 @@ export const FERME_STR = {
       [{ who: "chloe", text: "OKAY! Everyone calm down, Rosalie!" }, { who: "rosalie", text: "FINE, I get it, no need to make a scene!" }, { who: "chloe", text: "Sorry, I got carried away... hug?" }, { who: "rosalie", text: "NO." }, { who: "chloe", text: "Fine, suit yourself." }],
       [{ who: "chloe", text: "Rosalie, ENOUGH, you can't take it out on everyone!" }, { who: "rosalie", text: "I'm not taking anything out on anyone!" }, { who: "chloe", text: "It's not because René left you that the whole village must pay!" }, { who: "rosalie", text: "We... we don't talk about René here." }, { who: "chloe", text: "I know. But you can't stay mad at the whole world." }, { who: "rosalie", text: "I'm NOT mad. I'm... busy." }, { who: "chloe", text: "Of course." }, { who: "rosalie", text: "...Get back to your oven, Chloé." }, { who: "chloe", text: "She's doing better, actually, believe it or not." }],
     ],
+    // Tristan/Jérôme rivalry scenes, EN fallback (FR is the primary set).
+    tristanJeromeScenes: [
+      [{ who: "tristan", text: "Hanging around my woodpile again, Jérôme?" }, { who: "jerome", text: "Your woodpile? The whole farm shares it, weekend lumberjack." }, { who: "tristan", text: "Say that again." }, { who: "jerome", text: "#%!&, you heard me fine." }, { who: "tristan", text: "You asked for this." }],
+      [{ who: "jerome", text: "Well, if it isn't the sawdust guy. Come to sniff my sugar mill?" }, { who: "tristan", text: "Just passing by. Unlike you, I actually WORK." }, { who: "jerome", text: "Work? You crack rocks, Tristan, that's not a trade." }, { who: "tristan", text: "Say that to my face." }, { who: "jerome", text: "Gladly, you #%!& lumberjack." }, { who: "tristan", text: "Fine. Fine then." }],
+      [{ who: "tristan", text: "Jérôme." }, { who: "jerome", text: "What." }, { who: "tristan", text: "What exactly are you telling people about me at the market?" }, { who: "jerome", text: "The truth. That you've got the build of a lumberjack and the wit of a log." }, { who: "tristan", text: "Very funny. Really." }, { who: "jerome", text: "I think so too, yes." }, { who: "tristan", text: "#%!&, you'll see what a log feels like." }, { who: "jerome", text: "Try it." }],
+      [{ who: "tristan", text: "You got a problem with me, Jérôme?" }, { who: "jerome", text: "You, entirely, are my problem." }, { who: "tristan", text: "#%!&." }, { who: "jerome", text: "Likewise." }],
+    ],
+    toastTJStorm: (name, target) => `⚠️ ${name} is marching straight at ${target} — trouble's brewing, come see!`,
+    toastTJBrawlStart: (n1, n2) => `💥 A brawl breaks out between ${n1} and ${n2}!`,
+    toastTJBrawl: (loser) => `🤕 ${loser} got roughed up and will be stuck in place for a while.`,
+    healResidentChat: (healer, hurt) => `🩹 ${healer} bandaged ${hurt}, reducing their downtime.`,
+    healResidentPartialChat: (healer, hurt, mn) => `🩹 ${healer} applied a bandage to ${hurt}: ${mn} min of downtime left (another bandage can help!)`,
     residentNeedBuilding: (b) => `Build me a ${b} (buyable with gold at the shop) and I'll produce for the farm!`,
     residentBuildingReady: (b) => `My ${b} is running. Keep our stocks filled and I'll do the rest!`,
     residentLumberjackLine: "I fell trees, break rocks and saw planks all day — it all goes into our common stock.",

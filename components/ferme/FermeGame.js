@@ -864,6 +864,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     addChat(from, msg);
     channelRef.current?.send({ type: "broadcast", event: "chat", payload: { from, msg } });
   }
+  // Chantier "rivalité Tristan/Jérôme" (2026-07) : toast visible par TOUTE la
+  // room (contrairement aux toasts habituels, filtrés par joueur via
+  // toast.id === me.id) — même principe self:false que broadcastChat :
+  // affiché EN LOCAL tout de suite (l'hôte est aussi un spectateur), puis
+  // diffusé aux autres clients (voir applyDeltas / p.toast.broadcast).
+  function broadcastGlobalToast(msg) {
+    pushToast(msg);
+    channelRef.current?.send({ type: "broadcast", event: "apply", payload: { toast: { broadcast: true, key: "raw", n: msg } } });
+  }
 
   function buildMinimapBase() {
     const w = worldRef.current; if (!w) return;
@@ -1371,6 +1380,32 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         });
         const remainMn = Math.ceil(Math.max(0, target.injuredUntil - Date.now()) / 60000);
         broadcastChat("💊", remainMn > 1 ? L.healPartialChat(f.name, target.name, remainMn) : L.healChat(f.name, target.name));
+      }
+    } else if (req.kind === "healResident") {
+      // Chantier "rivalité Tristan/Jérôme" (2026-07) : soin d'un résident en
+      // ITT (Tristan/Jérôme après une bagarre perdue) à la trousse de soins —
+      // même contrôles que "heal" ci-dessus (trousse en stock, cible
+      // toujours blessée, à portée), mais la cible est un résident
+      // (station.residents), pas un joueur.
+      const s3 = sharedRef.current;
+      const resList = (s3.station && s3.station.residents) || [];
+      const targetRes = resList.find(r => r && r.rid === req.targetRid);
+      if (!targetRes || !(targetRes.injuredUntil > Date.now())) {
+        out.toast = { id: f.id, key: "notInjured" };
+      } else if (!((f.inv.healKit || 0) > 0)) {
+        out.toast = { id: f.id, key: "noHealKit" };
+      } else if (Math.hypot((targetRes.x || 0) - f.x, (targetRes.y || 0) - f.y) > C.HEAL_RANGE) {
+        out.toast = { id: f.id, key: "healTooFar" };
+      } else {
+        f.inv.healKit -= 1;
+        out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
+        targetRes.injuredUntil -= C.TJ_BRAWL_HEAL_STEP_MS;
+        if (targetRes.injuredUntil - Date.now() <= 1000) { targetRes.injuredUntil = Date.now(); targetRes.injuryKind = null; }
+        dirtyRef.current = true;
+        broadcastStation();
+        const rname = (rosterOf(targetRes.rid) || {}).name || "?";
+        const remainMn = Math.ceil(Math.max(0, targetRes.injuredUntil - Date.now()) / 60000);
+        broadcastChat("💊", remainMn > 1 ? L.healResidentPartialChat(f.name, rname, remainMn) : L.healResidentChat(f.name, rname));
       }
     } else if (req.kind === "evilChop") {
       // Coupe d'arbre en carte maléfique (chantier 2026-07, demande
@@ -3623,7 +3658,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (rp) rp.injuredUntil = p.injured.until;
       }
     }
-    if (p.toast && p.toast.id === me.id) pushToast(toastMsg(p.toast.key, p.toast.petId != null ? p.toast.petId : p.toast.n));
+    // Chantier "rivalité Tristan/Jérôme" (2026-07) : nouveau cas de toast
+    // NON filtré par joueur (p.toast.broadcast) — visible par TOUTE la room,
+    // contrairement aux toasts habituels (p.toast.id === me.id, privés).
+    // Sert au "ban de spectacle" (départ en trombe / clash) — voir
+    // broadcastGlobalToast plus bas.
+    if (p.toast && (p.toast.broadcast || p.toast.id === me.id)) pushToast(toastMsg(p.toast.key, p.toast.petId != null ? p.toast.petId : p.toast.n));
     // Zip 252 : cadeau animal en attente mais sac plein -> ouvre le choix.
     if (p.petChoice && p.petChoice.id === me.id) setPetChoice({ petId: p.petChoice.petId });
     if (p.chat) addChat(p.chat.from, p.chat.msg);
@@ -3710,6 +3750,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     pushToast(L.toastNewDay(p.day));
   }
   function toastMsg(key, n) {
+    // Chantier "rivalité Tristan/Jérôme" : ces toasts ont besoin de PLUSIEURS
+    // noms (provocateur + cible, ou les deux protagonistes) — le host les
+    // pré-formate donc en texte final (via L.toastTJ*) et les fait transiter
+    // tels quels via "n" (clé "raw"), plutôt que de forcer toastMsg à gérer
+    // un deuxième paramètre nommé pour ce seul cas.
+    if (key === "raw") return String(n);
     if (key === "berriesPicked") return L.toastBerriesPicked(n | 0);
     if (key === "fruitPicked")   return L.toastFruitPicked(n | 0);
     if (key === "fruitCooldown") return L.toastFruitCooldown;
@@ -3875,7 +3921,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const now = Date.now();
         const cb = s.crafts && s.crafts.sucrerie;
         if (cb && cb.built) {
-          const sucrerieWorking = E.residentHasSkill(s.station, "sugarworker");
+          // Chantier "rivalité Tristan/Jérôme" : la sucrerie s'arrête aussi
+          // pendant l'ITT de Jérôme (bagarre perdue), pas seulement s'il n'a
+          // pas encore emménagé — voir E.residentActiveSkill.
+          const sucrerieWorking = E.residentActiveSkill(s.station, "sugarworker", now);
           const r = E.sucrerieTick(cb, now, C.SUCRERIE_SPEED_MIN_MULT, sucrerieWorking);
           if (sucrerieWorking && cb.nextAt && !r.nextAt) stationChat(L.sucrerieStoppedToast, "🎋");
           if (r.cane !== cb.cane || r.nextAt !== cb.nextAt) {
@@ -5438,27 +5487,50 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // déclencheur (res.storming / res.stormRosalieRid) plus bas dans le
     // fichier. La scène démarre dès l'arrivée, ici même.
     if (res.storming) {
-      const mate = peers && peers.find(p => p && p.rid === res.stormRosalieRid);
-      if (!mate || typeof mate.x !== "number") { res.storming = false; res.roamTarget = null; res.moving = false; return; }
+      // Chantier "rivalité Tristan/Jérôme" (2026-07) : même sprint direct que
+      // Chloé/Rosalie, mais la cible est stockée dans un champ générique
+      // (stormTargetRid) pour ne pas mélanger les deux moteurs — le champ
+      // historique stormRosalieRid reste inchangé pour Chloé/Rosalie.
+      const isTj = res.stormKind === "tj";
+      const mate = peers && peers.find(p => p && p.rid === (isTj ? res.stormTargetRid : res.stormRosalieRid));
+      if (!mate || typeof mate.x !== "number") { res.storming = false; res.stormKind = null; res.roamTarget = null; res.moving = false; return; }
       const dx = mate.x - res.x, dy = mate.y - res.y, d = Math.hypot(dx, dy);
-      if (d <= C.CHLOE_ROSALIE_CONVO_DIST) {
+      const convoDist = isTj ? C.TJ_CONVO_DIST : C.CHLOE_ROSALIE_CONVO_DIST;
+      if (d <= convoDist) {
         res.storming = false; res.roamTarget = null; res.moving = false;
         mate.roamTarget = null; mate.roamMeet = null; mate.moving = false;
         faceResidentToward(mate, res.x, res.y); faceResidentToward(res, mate.x, mate.y);
-        const scenes = L.chloeRosalieScenes || [];
-        if (scenes.length) {
-          const rareIdx = scenes.length - 1;
-          const idx = (Math.random() < C.CHLOE_ROSALIE_SCENE_V11_CHANCE) ? rareIdx : Math.floor(Math.random() * rareIdx);
-          const lines = scenes[idx];
-          chloeRosalieSceneRef.current = { lines, stepIdx: 0, stepUntil: performance.now() + (lines[0].ms || 2600), rosalieRid: mate.rid, chloeRid: res.rid };
-          chloeRosalieCooldownRef.current = Date.now() + C.CHLOE_ROSALIE_SCENE_COOLDOWN_MS;
+        if (isTj) {
+          // La scène (dialogue + jet de bagarre) est pilotée côté hôte par
+          // updateTristanJeromeFeud, sur l'état PARTAGÉ station.tjBrawl (pas
+          // un ref composant local comme Chloé/Rosalie) — pour que la
+          // dialogue + l'issue soient synchronisés chez tous les joueurs
+          // (contrairement à la scène Chloé/Rosalie, purement cosmétique et
+          // 100% locale, l'issue ici bloque réellement la production).
+          const scenes = L.tristanJeromeScenes || [];
+          if (scenes.length) {
+            const lines = scenes[Math.floor(Math.random() * scenes.length)];
+            const st = sharedRef.current.station;
+            st.tjBrawl = { lines, stepIdx: 0, stepUntil: Date.now() + (lines[0].ms || 2600), aRid: res.rid, bRid: mate.rid, resolved: false };
+            broadcastStation();
+          }
+          res.stormKind = null;
+        } else {
+          const scenes = L.chloeRosalieScenes || [];
+          if (scenes.length) {
+            const rareIdx = scenes.length - 1;
+            const idx = (Math.random() < C.CHLOE_ROSALIE_SCENE_V11_CHANCE) ? rareIdx : Math.floor(Math.random() * rareIdx);
+            const lines = scenes[idx];
+            chloeRosalieSceneRef.current = { lines, stepIdx: 0, stepUntil: performance.now() + (lines[0].ms || 2600), rosalieRid: mate.rid, chloeRid: res.rid };
+            chloeRosalieCooldownRef.current = Date.now() + C.CHLOE_ROSALIE_SCENE_COOLDOWN_MS;
+          }
         }
         return;
       }
       const step = Math.min(d, C.VISITOR_SPEED * 1.9 * dt); // en trombe : bien plus rapide que la rôdaille normale (0.55x)
       const nx = res.x + (dx / d) * step, ny = res.y + (dy / d) * step;
       if (!E.blockedTile(w, nx, ny)) { res.x = nx; res.y = ny; res.moving = true; res.animT = (res.animT || 0) + dt * 9; res.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 3 : 2) : (dy > 0 ? 0 : 1); }
-      else { res.storming = false; res.moving = false; } // obstacle sur le trajet direct : abandonne le sprint, redevient rôdaille normale
+      else { res.storming = false; res.stormKind = null; res.moving = false; } // obstacle sur le trajet direct : abandonne le sprint, redevient rôdaille normale
       return;
     }
     // Zip 256/259 : un artisan à bâtiment (apiculteur/fromager/pâtissière) rôde
@@ -5846,6 +5918,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // updateBakeryVisibility) — tant qu'elle est cachée, on ne calcule même
       // pas sa rôdaille (elle ne bouge pas, elle est simplement absente du
       // rendu).
+      // Chantier "rivalité Tristan/Jérôme" (2026-07) : le perdant d'une
+      // bagarre reste immobilisé devant son stand pendant l'ITT — même
+      // principe que res.trip "away" plus haut (aucune rôdaille, aucun tour
+      // de travail tant que res.injuredUntil n'est pas écoulé).
+      if (res.injuredUntil && res.injuredUntil > now) { res.moving = false; res.roamTarget = null; continue; }
       if (ro.skill === "baker" || ro.skill === "breadmaker") updateBakeryVisibility(res, ro, residents, now);
       // Zip suivant (demande Guillaume) : pendant une scène Chloé/Rosalie, les
       // deux protagonistes restent SUR PLACE, face à face — on saute leur
@@ -5856,7 +5933,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // conversationnelle.
       const sceneActive = chloeRosalieSceneRef.current;
       const inScene = sceneActive && (sceneActive.rosalieRid === res.rid || sceneActive.chloeRid === res.rid);
-      if (inScene) { res.moving = false; }
+      // Idem pour la scène Tristan/Jérôme (état partagé station.tjBrawl,
+      // voir plus haut) : les deux restent face à face jusqu'à la
+      // désescalade ou le clash.
+      const tjBrawlNow = s.station && s.station.tjBrawl;
+      const inTjScene = tjBrawlNow && (tjBrawlNow.aRid === res.rid || tjBrawlNow.bRid === res.rid);
+      if (inScene || inTjScene) { res.moving = false; }
       else if (!res.hidden) residentRoam(res, w, now, dt, ro, residents); // zip 252 : balade sur la ferme (chaque tick) — zip 256 : ancre dédiée — zip 298 : passe la liste des voisins (rendez-vous sociaux)
       if (ro.skill === "beekeeper") updateBeekeeperPhase(res, s, now); // chantier 2026-07 : blocs travail/pause de René
       // Premier passage : on planifie la première journée de travail sans rien
@@ -5879,6 +5961,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // (gérée à l'intérieur de genericResidentShift, chantier 5)
       genericResidentShift(res, ro, w, s);
     }
+    // Chantier "rivalité Tristan/Jérôme" (2026-07) : déclenchement périodique
+    // de la provocation + avancement de la scène en cours + résolution de la
+    // bagarre. 100% côté hôte (comme le reste d'updateResidents) — l'issue a
+    // un vrai impact sur la production, contrairement au flavor Chloé/Rosalie.
+    updateTristanJeromeFeud(residents, s, w, now);
     // Zip 252 : diffusion légère des positions des résidents baladeurs.
     // Zip 264 (fuite realtime n°1) : cette diffusion tournait à ~2 Hz EN
     // CONTINU dès qu'un résident existait (≈ toujours dans une ferme établie),
@@ -5893,6 +5980,75 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       residentNetRef.current = 0;
       channelRef.current?.send({ type: "broadcast", event: "apply", payload: { residentSim: residents.map(r => ({ rid: r.rid, x: +(+r.x).toFixed(2), y: +(+r.y).toFixed(2), dir: r.dir | 0, moving: !!r.moving, animT: r.animT || 0 })) } });
     }
+  }
+  // Chantier "rivalité Tristan/Jérôme" (2026-07, demande Guillaume) : Tristan
+  // (bûcheron) et Jérôme (sucrerie) se détestent et se provoquent tous les
+  // ~48h in-game — l'un part en trombe vers le stand de l'autre (voir
+  // res.storming/stormKind==="tj" dans residentRoam), une notification
+  // globale prévient toute la room ("venez voir"), puis une scène de tension
+  // s'enchaîne : à CHAQUE étape franchie (tant qu'ils sont à portée), jet de
+  // 30% de bagarre. Verrou : pas de nouvelle provocation tant que l'un des
+  // deux est encore en ITT ; cooldown supplémentaire de 24h in-game entre
+  // deux BAGARRES (les altercations sans bagarre, elles, ne sont pas
+  // freinées par ce cooldown). État partagé sur station.tjBrawl / tjNextStormAt
+  // / tjBrawlCooldownUntil — diffusé via broadcastStation() à chaque
+  // transition, pour que TOUS les clients voient la même scène (contrairement
+  // au flavor Chloé/Rosalie, purement local, ici l'issue bloque vraiment la
+  // production — voir le verrou injuredUntil plus haut dans updateResidents).
+  function updateTristanJeromeFeud(residents, s, w, now) {
+    const st = s.station; if (!st) return;
+    const tristan = residents.find(r => r && r.rid === C.TRISTAN_RID);
+    const jerome = residents.find(r => r && r.rid === C.JEROME_RID);
+    if (!tristan || !jerome || typeof tristan.x !== "number" || typeof jerome.x !== "number") return;
+    const brawl = st.tjBrawl;
+    if (brawl) {
+      // Scène en cours : à chaque étape franchie, jet de bagarre (30%) AVANT
+      // de passer à la ligne suivante — "chaque tic de proximité" demandé.
+      if (now >= brawl.stepUntil) {
+        if (now >= (st.tjBrawlCooldownUntil || 0) && Math.random() < C.TJ_BRAWL_CHANCE) {
+          resolveTjBrawl(tristan, jerome, st, now);
+          return;
+        }
+        brawl.stepIdx++;
+        if (brawl.stepIdx >= brawl.lines.length) {
+          // Désescalade : fin de la scène sans bagarre, chacun repart à sa rôdaille.
+          st.tjBrawl = null;
+        } else {
+          brawl.stepUntil = now + (brawl.lines[brawl.stepIdx].ms || 2600);
+        }
+        broadcastStation();
+      }
+      return; // scène en cours : pas de nouveau déclenchement pendant ce temps
+    }
+    // Verrou : pas de nouvelle provocation tant que l'un des deux est encore en ITT.
+    if ((tristan.injuredUntil || 0) > now || (jerome.injuredUntil || 0) > now) return;
+    if (tristan.storming || jerome.storming) return; // déjà en route
+    if (now < (st.tjNextStormAt || 0)) return;
+    st.tjNextStormAt = now + C.TJ_STORM_PERIOD_MS;
+    const instigator = Math.random() < 0.5 ? tristan : jerome;
+    const target = instigator === tristan ? jerome : tristan;
+    instigator.storming = true; instigator.stormKind = "tj"; instigator.stormTargetRid = target.rid;
+    instigator.roamTarget = { x: target.x, y: target.y }; instigator.roamMeet = null; instigator.nextRoamAt = 0;
+    const insName = rosterOf(instigator.rid).name, tgtName = rosterOf(target.rid).name;
+    broadcastGlobalToast(L.toastTJStorm(insName, tgtName));
+    broadcastStation();
+  }
+  // Résolution de la bagarre : tirage 50/50 du perdant, ITT (immobilisation +
+  // overlay "blessé", même mécanique que le fermier mordu par un loup — voir
+  // injuredUntil/injuryKind), particules d'impact + notification globale.
+  function resolveTjBrawl(tristan, jerome, st, now) {
+    const loser = Math.random() < 0.5 ? tristan : jerome;
+    const winner = loser === tristan ? jerome : tristan;
+    loser.injuredUntil = now + C.TJ_BRAWL_ITT_MS;
+    loser.injuryKind = "brawl";
+    loser.storming = false; loser.stormKind = null; loser.moving = false; loser.roamTarget = null;
+    winner.storming = false; winner.stormKind = null; winner.moving = false; winner.roamTarget = null;
+    st.tjBrawl = null;
+    st.tjBrawlCooldownUntil = now + C.TJ_BRAWL_COOLDOWN_MS;
+    spawnFx({ k: "brawl", x: loser.x, y: loser.y });
+    channelRef.current?.send({ type: "broadcast", event: "apply", payload: { fx: [{ k: "brawl", x: loser.x, y: loser.y }] } });
+    broadcastGlobalToast(L.toastTJBrawl(rosterOf(loser.rid).name));
+    broadcastStation();
   }
   // Montgolfière (zip 302, demande Guillaume) : attraction touristique.
   // Simulation hôte, même discipline que les autres systèmes "station" :
@@ -7616,6 +7772,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           // pendant une scène Chloé/Rosalie en cours.
           const sceneNow = chloeRosalieSceneRef.current;
           const inScene = sceneNow && (res.rid === sceneNow.rosalieRid || res.rid === sceneNow.chloeRid);
+          // Chantier "rivalité Tristan/Jérôme" : la scène est un état PARTAGÉ
+          // (station.tjBrawl, avancé côté hôte via updateTristanJeromeFeud et
+          // diffusé par broadcastStation) — le rendu se contente de LIRE cet
+          // état, chez tous les joueurs, pour un spectacle bien synchronisé.
+          const tjSceneNow = sharedRef.current.station && sharedRef.current.station.tjBrawl;
           // Zip suivant : sur certaines répliques grincheuses (line.turn),
           // Rosalie tourne cosmétiquement le dos à Chloé — orientation
           // seulement, elle reste à distance conversationnelle (res.x/y
@@ -7628,7 +7789,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           })();
           draws.push({ y: (ry + 1) * T, fn: () => {
             if (resSuperActive) drawCoffeeAura(Math.round(rx * T), Math.round(ry * T));
-            drawCharacter({ id: "res" + res.rid, name: ro.name, x: rx, y: ry, dir: turnAwayDir != null ? turnAwayDir : (res.dir || 0), moving: !!res.moving, animT: res.animT || 0, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap, beeSuit: residentBeeSuit(res, ro), plaid: ro.skill === "lumberjack", cheeseHat: ro.skill === "cheesemaker", sugarWorker: ro.skill === "sugarworker", mount: onWhiteHorse ? "white" : null }, false);
+            drawCharacter({ id: "res" + res.rid, name: ro.name, x: rx, y: ry, dir: turnAwayDir != null ? turnAwayDir : (res.dir || 0), moving: !!res.moving, animT: res.animT || 0, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap, beeSuit: residentBeeSuit(res, ro), plaid: ro.skill === "lumberjack", cheeseHat: ro.skill === "cheesemaker", sugarWorker: ro.skill === "sugarworker", mount: onWhiteHorse ? "white" : null, injuredUntil: res.injuredUntil }, false);
             if (ro.skill === "breadmaker" && (inScene || (performance.now() % 12000 < 3000)) && turnAwayDir == null && (res.dir || 0) === 0) drawFrown(ctx, Math.round(rx * T) + 8, Math.round(ry * T) - 3);
             // Chantier fumigateur (demande Guillaume) : René tient un petit
             // fumigateur pendant sa phase de travail (même condition que la
@@ -7662,9 +7823,26 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 drawSpeechBubble(ctx, Math.round(rx * T) + 8, Math.round(ry * T) - 18, line.text);
               }
             }
+            // Bulle de la scène de provocation Tristan/Jérôme en cours, si CE
+            // résident est bien le locuteur de l'étape actuelle (état partagé,
+            // voir tjSceneNow plus haut).
+            if (tjSceneNow && (res.rid === tjSceneNow.aRid || res.rid === tjSceneNow.bRid)) {
+              const line = tjSceneNow.lines[tjSceneNow.stepIdx];
+              // aRid/bRid ne sont pas figés "Tristan=a, Jérôme=b" (l'un ou
+              // l'autre peut être l'instigateur) — on identifie le locuteur
+              // par SKILL (line.who) plutôt que par a/b.
+              const speaksTristan = line && line.who === "tristan" && ro.skill === "lumberjack";
+              const speaksJerome = line && line.who === "jerome" && ro.skill === "sugarworker";
+              if (speaksTristan || speaksJerome) {
+                drawSpeechBubble(ctx, Math.round(rx * T) + 8, Math.round(ry * T) - 18, line.text);
+              }
+            }
             // Bulle métier quand le joueur local est à proximité (zip 299).
+            // Chantier "rivalité Tristan/Jérôme" : un résident en ITT (post-
+            // bagarre) reste silencieux, il ne débite pas ses répliques
+            // habituelles pendant qu'il est immobilisé.
             const mm = meRef.current;
-            if (talkLines && talkLines.length && mm && (!mm.zone || mm.zone === "farm") && Math.abs(mm.x - rx) + Math.abs(mm.y - ry) <= 3) {
+            if (talkLines && talkLines.length && !(res.injuredUntil && res.injuredUntil > Date.now()) && mm && (!mm.zone || mm.zone === "farm") && Math.abs(mm.x - rx) + Math.abs(mm.y - ry) <= 3) {
               // Zip 301 (demande Guillaume) : Rosalie (breadmaker) est aigrie et
               // parle RAREMENT — sa bulle ne s'affiche qu'~3 s par tranche de
               // 12 s (les autres artisans parlent en continu, cycle 3,5 s).
@@ -9452,6 +9630,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     return best;
   }
+  // Chantier "rivalité Tristan/Jérôme" (2026-07) : résident en ITT le plus
+  // proche (portée C.HEAL_RANGE), pour réduire son immobilisation au
+  // pansement — même distance/logique que nearestInjuredPlayer ci-dessus.
+  function nearestInjuredResident() {
+    const m = meRef.current; if (!m) return null;
+    const list = (sharedRef.current.station && sharedRef.current.station.residents) || [];
+    let best = null, bestD = C.HEAL_RANGE;
+    for (const r of list) {
+      if (r && r.injuredUntil && r.injuredUntil > Date.now() && typeof r.x === "number") {
+        const d = Math.hypot(r.x - m.x, r.y - m.y);
+        if (d <= bestD) { bestD = d; best = r; }
+      }
+    }
+    return best;
+  }
   function tryOpenNearby() {
     const m0 = meRef.current;
     // Carte maléfique (chantier 2026-07, demande Guillaume) : seule
@@ -9544,7 +9737,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       return;
     }
     const injured = nearestInjuredPlayer();
+    const injuredRes = nearestInjuredResident();
     if (injured && !isInjured()) sendReq({ kind: "heal", targetId: injured.id });
+    // Chantier "rivalité Tristan/Jérôme" : soigner Tristan ou Jérôme en ITT
+    // (bagarre perdue) avec une trousse de soins — même touche E, priorité
+    // juste après le soin d'un AUTRE joueur.
+    else if (injuredRes) sendReq({ kind: "healResident", targetRid: injuredRes.rid });
     else if (nearTile(C.SHOP)) setShopOpen(true);
     else if (nearTile(C.BIN)) setBinOpen(true);
     else if (nearTile(C.STATION_SIGN)) { setAdsSel([...((sharedRef.current.station && sharedRef.current.station.ads) || [])]); setAdsOpen(true); } // 2026-07 station update
@@ -9584,6 +9782,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       case "till": for (let i = 0; i < 6; i++) fx.push({ ...base, kind: "p", col: "#8a5c35", vx: (Math.random() - .5) * 2, vy: -Math.random() * 2.5, life: .5 }); break;
       case "chop": for (let i = 0; i < 5; i++) fx.push({ ...base, kind: "p", col: i % 2 ? "#3e8a34" : "#a87745", vx: (Math.random() - .5) * 3, vy: -Math.random() * 3, life: .6 }); break;
       case "mine": for (let i = 0; i < 5; i++) fx.push({ ...base, kind: "p", col: "#a2a2aa", vx: (Math.random() - .5) * 3, vy: -Math.random() * 3, life: .6 }); break;
+      // Chantier "rivalité Tristan/Jérôme" (2026-07) : impact de bagarre —
+      // "étoiles de choc" en éclatement radial (même famille que chop/mine,
+      // vitesses réparties en cercle au lieu d'un simple jet vers le haut)
+      // + un petit flash texte, joué au point du clash.
+      case "brawl":
+        for (let i = 0; i < 10; i++) {
+          const ang = (Math.PI * 2 * i) / 10 + Math.random() * 0.4;
+          const spd = 2.2 + Math.random() * 1.6;
+          fx.push({ ...base, kind: "p", col: i % 2 ? "#fff2a8" : "#ffffff", vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd - 1, life: .5 });
+        }
+        fx.push({ ...base, kind: "txt", txt: "💥", col: "#ffdf60", life: 1 });
+        break;
       case "treedown": fx.push({ ...base, kind: "txt", txt: L.fxWood(m.wood), col: "#ffdf80", life: 1.4 }); break;
       case "rockdown": fx.push({ ...base, kind: "txt", txt: L.fxStone(C.ROCK_STONE), col: "#d0d0e0", life: 1.4 }); break;
       case "harvest": fx.push({ ...base, kind: "txt", txt: L.fxHarvest(cropName(m.crop), m.n), col: "#a8f080", life: 1.4 }); break;
