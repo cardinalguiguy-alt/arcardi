@@ -101,10 +101,11 @@ export const O_CAULDRON = 18;  // chaudron (chantier 2026-07, demande Guillaume 
                                 // avant d'être fonctionnel, voir BUILD_TIMES.cauldron) — mais jamais achetable :
                                 // il faut d'abord le ramasser sur la carte maléfique (voir EVIL_CAULDRON_SPAWN),
                                 // une seule fois pour toute la ferme (voir s.cauldron, fermeEngine.js/FermeGame.js).
-export const O_SUCRERIE = 19;  // sucrerie (chantier canne à sucre). Mécanique IDENTIQUE au moulin (achetable/
-                                // posable avec l'outil Construction, variante "sucrerie", chantier réel avant
-                                // d'être fonctionnel, voir BUILD_TIMES.sucrerie), avec un stock de canne COMMUN
-                                // à la case (world.sucreries, voir resolveAct cas "sucrerie"/"sucrerieDeposit").
+export const O_SUCRERIE = 19;  // sucrerie (chantier canne à sucre). Bâtiment d'artisan (chantier reprise) :
+                                // achetable seulement quand Jérôme Martial (sugarworker) est résident, auto-posée
+                                // à un site fixe (voir SUCRERIE_SITE), un seul exemplaire, chantier réel avant
+                                // d'être fonctionnelle (BUILD_TIMES.sucrerie), avec un stock de canne COMMUN à la
+                                // case (world.sucreries, voir resolveAct cas "sucrerieDeposit").
                                 // Transformation continue (canne -> sacs de sucre) pas encore branchée (voir
                                 // Phase 3 de la feuille de route) — pour l'instant seuls pose/retrait/dépôt
                                 // existent, sur le modèle exact du moulin.
@@ -565,7 +566,7 @@ export const MILL_BATCH_MS = 5 * 60 * 1000;  // Zip 261/262 (demande Guillaume :
 export const MILL_STOCK_CAP = 90;            // stock de blé max qu'un moulin peut contenir (extrapolé, ~30 sacs d'avance)
 export const FLOUR_SELL = 55;                // prix de vente d'un sac de farine (extrapolé)
 // Sucrerie (chantier canne à sucre) — miroir EXACT du moulin ci-dessus, pour
-// pose/retrait/dépôt (resolveAct cas "sucrerie"/"sucrerieDeposit"). Coût et
+// pose/dépôt (resolveAct cas "sucrerieDeposit", pose auto via buySucrerieBuilding). Coût et
 // stock cap extrapolés sur le même principe que le moulin (bâtiment plus
 // "premium" que le moulin car culture plus chère, cf. FEUILLE_ROUTE) ; pas
 // de MILL_BATCH_MS/PER_SACK équivalent tant que la transformation (Phase 3
@@ -577,6 +578,18 @@ export const SUCRERIE_BATCH_MS = 8 * 60 * 1000; // 8 min réelles/sac (extrapol�
 export const SUCRERIE_STOCK_CAP = 90;        // stock de canne max qu'une sucrerie peut contenir (même repère que le moulin)
 export const SUCRERIE_SPEED_MIN_MULT = 1;    // miroir de MILL_SPEED_MIN_MULT (parallélisme par répartition du dépôt, pas de boost par sucrerie)
 export const SUGAR_SELL = 70;                // prix de vente d'un sac de sucre (extrapolé au-dessus de FLOUR_SELL, sucre = ressource plus rare)
+// Chantier reprise (demande Guillaume) : la sucrerie devient un vrai
+// bâtiment d'artisan comme les autres (ruche/fromagerie/boulangerie/scierie)
+// — achetable SEULEMENT quand Jérôme Martial (skill "sugarworker") est
+// résident, puis auto-posée à un emplacement FIXE (plus de pose libre via la
+// barre d'outils Construction, plus de retrait, un seul exemplaire). On
+// garde volontairement O_SUCRERIE comme tuile world.objects normale (au lieu
+// de rejoindre C.ARTISAN_BUILDINGS/world.artisanBlocks) : c'est ce qui
+// permet de conserver la collision partielle existante (seule la façade est
+// solide, tonneaux/pressoir/tas de canne restent traversables) ainsi que le
+// rendu à jauges (stock/batch) et le dépôt de canne par clic, sans rien
+// changer à ces mécaniques déjà validées par Guillaume.
+export const SUCRERIE_SITE = { x: 74, y: 46 }; // emplacement fixe (à côté du site de la scierie, x:68-70)
 // Zip 286 (demande Guillaume : "quand une ferme dépose plusieurs moulins, il
 // faut qu'ils fonctionnent en même temps, qu'ils produisent la farine plus
 // vite. 2 moulins = x2, 3 moulins = x3") : chaque moulin garde son propre

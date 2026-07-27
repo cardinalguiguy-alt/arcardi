@@ -1605,6 +1605,31 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         out.state = shareState(); out.wellBuilt = true;
         out.chat = { from: "🪣", msg: lang === "en" ? "The well is built!" : "Le puits est construit !" };
       } else if (!s.wellBuilt) out.toast = { id: f.id, key: "noGold" };
+    } else if (req.kind === "buySucrerieBuilding") {
+      // Sucrerie (chantier reprise) : bâtiment d'artisan comme les autres —
+      // achetable seulement quand Jérôme Martial (skill "sugarworker") est
+      // résident, puis auto-posée à un site FIXE (C.SUCRERIE_SITE), un seul
+      // exemplaire. On garde O_SUCRERIE comme tuile world.objects normale
+      // (pas C.ARTISAN_BUILDINGS/world.artisanBlocks) pour conserver telles
+      // quelles la collision partielle (seule la façade est solide), les
+      // jauges de rendu et le dépôt par clic déjà en place. Le tile
+      // O_SUCRERIE lui-même sert de "flag construit" — pas besoin d'un champ
+      // séparé à synchroniser/sauvegarder.
+      const w2 = worldRef.current;
+      const site = C.SUCRERIE_SITE, si = idxOf(site.x, site.y);
+      if (w2 && w2.objects[si] !== C.O_SUCRERIE) {
+        if (!E.residentHasSkill(s.station, "sugarworker")) { out.toast = { id: f.id, key: "artisanNoResident" }; }
+        else if (s.money < C.SUCRERIE_COST) { out.toast = { id: f.id, key: "noGold" }; }
+        else {
+          s.money -= C.SUCRERIE_COST;
+          w2.objects[si] = C.O_SUCRERIE; w2.objHp.set(si, Date.now() + C.BUILD_TIMES.sucrerie);
+          w2.sucreries.set(si, { cane: 0, nextAt: 0 });
+          recordTileOverride(si);
+          out.tiles.push({ i: si, g: w2.ground[si], o: C.O_SUCRERIE, hp: w2.objHp.get(si) });
+          out.state = shareState();
+          out.chat = { from: "🔨", msg: L.artisanBuilt(L.buildingName("sucrerie")) };
+        }
+      }
     } else if (req.kind === "hireGreg") {
       // Engagement de Greg (chantier 2026-07) : contrat réel de 2 jours
       // (C.GREG_CONTRACT_MS), rémunéré d'avance (C.GREG_HIRE_COST). Un seul
@@ -3999,9 +4024,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (w.objects[i] === C.O_MILL && E.buildReady(w.objHp.get(i), Date.now()) && !(sl === 5 && buildKindRef.current === "mill")) {
       return sendReq({ kind: "act", action: "millDeposit", x: tt.x, y: tt.y });
     }
-    // Sucrerie construite (chantier canne à sucre) : miroir exact du moulin
-    // ci-dessus.
-    if (w.objects[i] === C.O_SUCRERIE && E.buildReady(w.objHp.get(i), Date.now()) && !(sl === 5 && buildKindRef.current === "sucrerie")) {
+    // Sucrerie construite (chantier canne à sucre, bâtiment d'artisan à site
+    // fixe) : cliquable directement pour y déposer sa canne — plus de
+    // variante Construction "sucrerie" à exclure, elle n'est plus posable/
+    // retirable manuellement (chantier reprise).
+    if (w.objects[i] === C.O_SUCRERIE && E.buildReady(w.objHp.get(i), Date.now())) {
       return sendReq({ kind: "act", action: "sucrerieDeposit", x: tt.x, y: tt.y });
     }
     // Chaudron cliquable (correctif audit 2026-07) : tous les textes du jeu
@@ -4042,7 +4069,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         return;
       }
       const action = bk === "wall" ? "wall" : bk === "path" ? "path" : bk === "lamp" ? "lamp" : bk === "scarecrow" ? "scarecrow"
-        : bk === "grass" ? "grass" : bk === "mill" ? "mill" : bk === "sucrerie" ? "sucrerie"
+        : bk === "grass" ? "grass" : bk === "mill" ? "mill"
         : bk === "bridgeRenovate" ? "renovateBridge"
         : (bk === "bridgeWood" || bk === "bridgeStone") ? "bridge" : "fence";
       sendReq({ kind: "act", action, x: tt.x, y: tt.y, dir: fenceDirRef.current, material: bk === "bridgeStone" ? "stone" : "wood" });
@@ -4059,8 +4086,6 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // juste après avoir envoyé la pose, pour que le clic suivant sur le
       // moulin déclenche bien millDeposit.
       if (bk === "mill") { buildKindRef.current = "fence"; setBuildKind("fence"); }
-      // Sucrerie (chantier canne à sucre) : même rebasculement, même raison.
-      if (bk === "sucrerie") { buildKindRef.current = "fence"; setBuildKind("fence"); }
     }
     else if (sl === 6) {
       // Outil "déplacer" : premier clic attrape l'animal visé, second clic
@@ -9471,8 +9496,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // suivant (herbe = replanter sur une case labourée, chantier 2026-07).
   const buyGrass = (n) => { sendReq({ kind: "buy", item: "grass", n }); buildKindRef.current = "grass"; setBuildKind("grass"); };
   const buyMill = (n) => { sendReq({ kind: "buy", item: "mill", n }); buildKindRef.current = "mill"; setBuildKind("mill"); };
-  // Sucrerie (chantier canne à sucre) : miroir exact de buyMill ci-dessus.
-  const buySucrerie = (n) => { sendReq({ kind: "buy", item: "sucrerie", n }); buildKindRef.current = "sucrerie"; setBuildKind("sucrerie"); };
+  // Sucrerie (chantier reprise) : bâtiment d'artisan comme les autres —
+  // achat gaté côté hôte par la présence de Jérôme Martial comme résident,
+  // auto-posée à un emplacement fixe (voir hostHandleReqUnsafe, cas
+  // "buySucrerieBuilding"). Plus de variante Construction à équiper.
+  const buySucrerieBuilding = () => sendReq({ kind: "buySucrerieBuilding" });
   const buyHealKit = (n) => sendReq({ kind: "buy", item: "healKit", n });
   // Pommade de protection (chantier 2026-07, demande Guillaume : plus
   // achetable en boutique — désormais fabriquée à un chaudron ramené du
@@ -9786,7 +9814,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             // menu Construire/Vendre (fence/wall/path/lamp/scarecrow), pas
             // seulement clôture.
             const bkImg = buildKind === "wall" ? "wall" : buildKind === "path" ? "path" : buildKind === "lamp" ? "lamp" : buildKind === "scarecrow" ? "scarecrow"
-              : buildKind === "grass" ? "grassPatch" : buildKind === "mill" ? "mill" : buildKind === "sucrerie" ? "sucrerie" : buildKind === "cauldron" ? null
+              : buildKind === "grass" ? "grassPatch" : buildKind === "mill" ? "mill" : buildKind === "cauldron" ? null
               : buildKind === "bridgeWood" ? "bridge" : (buildKind === "bridgeStone" || buildKind === "bridgeRenovate") ? "bridgeStoneSprite" : "fence";
             // Pour le pont, pas de stock dédié (voir craft menu) : le compteur
             // affiche directement le bois/la pierre disponible pour la
@@ -9795,7 +9823,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             // l'instant (emoji ⚗️ affiché à la place de l'icône, voir
             // ci-dessous) — non fait/limite connue, à ajouter si besoin.
             count = myInv ? (buildKind === "wall" ? (myInv.wall || 0) : buildKind === "path" ? (myInv.path || 0) : buildKind === "lamp" ? (myInv.lamp || 0) : buildKind === "scarecrow" ? (myInv.scarecrow || 0)
-              : buildKind === "grass" ? (myInv.grass || 0) : buildKind === "mill" ? (myInv.mill || 0) : buildKind === "sucrerie" ? (myInv.sucrerie || 0) : buildKind === "cauldron" ? (myInv.cauldron || 0)
+              : buildKind === "grass" ? (myInv.grass || 0) : buildKind === "mill" ? (myInv.mill || 0) : buildKind === "cauldron" ? (myInv.cauldron || 0)
               : buildKind === "bridgeWood" ? (myInv.wood || 0) : (buildKind === "bridgeStone" || buildKind === "bridgeRenovate") ? (myInv.stone || 0) : (myInv.fence || 0)) : "";
             img = spritesReady && bkImg ? spritesRef.current[bkImg] : null;
             lvl = buildKind === "fence" ? (fenceDir === "h" ? "↔" : fenceDir === "v" ? "↕" : "R") : buildKind === "cauldron" ? "⚗️" : "";
@@ -9805,20 +9833,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           else lvl = "N" + (myTools[s.key] || 1);
           const title = isSeed ? L.seedTip(seedName(seedSel)) : isFood ? L.foodTip(C.FOOD_ENERGY) : isRod ? L.rodTip
             : isFence ? (buildKind === "wall" ? L.wallTip : buildKind === "path" ? L.pathTip : buildKind === "lamp" ? L.lampTip : buildKind === "scarecrow" ? L.scarecrowTip
-              : buildKind === "grass" ? L.grassTip : buildKind === "mill" ? L.millTip : buildKind === "sucrerie" ? L.sucrerieTip : buildKind === "cauldron" ? L.cauldronRowSub
+              : buildKind === "grass" ? L.grassTip : buildKind === "mill" ? L.millTip : buildKind === "cauldron" ? L.cauldronRowSub
               : buildKind === "bridgeRenovate" ? L.bridgeRenovateTip
               : (buildKind === "bridgeWood" || buildKind === "bridgeStone") ? L.bridgeTip : L.fenceTip)
             : isHerd ? L.herdTip : isHand ? L.handTip : isTools ? L.toolsTip(TOOL_NAMES[toolKind]) : TOOL_NAMES[s.key];
-          // Sucrerie (chantier canne à sucre) : son sprite (95x88) est bien
-          // plus large que les autres icônes de cet outil (mill 44x54 etc.) —
-          // `Sprite` ne recadre qu'à partir du coin haut-gauche (voir sa
-          // définition), donc on cadre ici sur maison+cheminée+tonneaux,
-          // même recadrage que la ligne boutique ci-dessus.
-          const isSucrerieIcon = isFence && buildKind === "sucrerie";
           return (
             <div key={s.key} className={"ferme-slot" + (i === slot ? " sel" : "")} onClick={() => selectSlot(i)} title={title}>
               <span className="ferme-slot-key">{i + 1}</span>
-              <Sprite img={img} w={32} h={32} sx={isSucrerieIcon ? 65 : undefined} sy={isSucrerieIcon ? 76 : undefined} />
+              <Sprite img={img} w={32} h={32} />
               {count !== "" && <span className="ferme-slot-count">{count}</span>}
               {lvl && <span className="ferme-slot-lvl">{lvl}</span>}
             </div>
@@ -10577,19 +10599,28 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               <div className="info"><b>{L.millRowTitle(C.MILL_COST)}</b><span>{L.millRowSub(myInv ? (myInv.mill || 0) : 0)}</span></div>
               <button disabled={hud.money < C.MILL_COST} onClick={() => buyMill(1)}>{L.buy1}</button>
             </div>
-            {/* Sucrerie (chantier canne à sucre) : miroir exact de la ligne
-                moulin ci-dessus. Le sprite complet (copie pixel-exacte du
-                mockup, 95x88, tonneaux + pressoir + tas de canne inclus) est
-                plus large qu'une icône de boutique : `sx`/`sy` (Sprite ne
-                recadre qu'à partir du coin haut-gauche, voir sa définition)
-                cadrent ici sur la maison + cheminée + tonneaux SEULS (la
-                partie la plus identifiable), en laissant le pressoir/les tas
-                de canne hors champ. */}
-            <div className="ferme-shop-row">
-              <Sprite img={spritesReady ? spritesRef.current.sucrerie : null} sx={65} sy={76} w={30} h={35} />
-              <div className="info"><b>{L.sucrerieRowTitle(C.SUCRERIE_COST)}</b><span>{L.sucrerieRowSub(myInv ? (myInv.sucrerie || 0) : 0)}</span></div>
-              <button disabled={hud.money < C.SUCRERIE_COST} onClick={() => buySucrerie(1)}>{L.buy1}</button>
-            </div>
+            {/* Sucrerie (chantier reprise) : bâtiment d'artisan comme les
+                autres — visible seulement quand Jérôme Martial (sugarworker)
+                vit chez nous, un seul exemplaire (auto-posé à site fixe, voir
+                buySucrerieBuilding). Le sprite complet (copie pixel-exacte du
+                mockup, 95x88) est plus large qu'une icône de boutique :
+                `sx`/`sy` cadrent ici sur la maison + cheminée + tonneaux
+                SEULS, même recadrage que l'ancienne icône d'outil. */}
+            {(() => {
+              const residents = (stationSt && stationSt.residents) || [];
+              const hasSugarworker = residents.some(r => (C.VISITOR_ROSTER[r.rid] || {}).skill === "sugarworker");
+              if (!hasSugarworker) return null;
+              const site = C.SUCRERIE_SITE;
+              const w0 = worldRef.current;
+              const built = !!(w0 && w0.objects && w0.objects[idxOf(site.x, site.y)] === C.O_SUCRERIE);
+              return (
+                <div className="ferme-shop-row">
+                  <Sprite img={spritesReady ? spritesRef.current.sucrerie : null} sx={65} sy={76} w={30} h={35} />
+                  <div className="info"><b>{L.sucrerieRowTitle(C.SUCRERIE_COST)}</b><span>{built ? L.artisanOwnedBtn : L.sucrerieRowSub()}</span></div>
+                  <button disabled={built || hud.money < C.SUCRERIE_COST} onClick={buySucrerieBuilding}>{built ? L.artisanOwnedBtn : L.buy1}</button>
+                </div>
+              );
+            })()}
             {/* Zip 252 : ateliers d'artisans — visibles seulement quand l'artisan concerné vit chez nous. */}
             {(() => {
               const residents = (stationSt && stationSt.residents) || [];

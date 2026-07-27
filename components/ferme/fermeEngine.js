@@ -1170,28 +1170,6 @@ export function resolveAct(world, f, m) {
       res.fx.push({ k: "millDeposit", x, y, n: toDeposit });
       break;
     }
-    case "sucrerie": {
-      // Sucrerie (chantier canne à sucre) : miroir EXACT du cas "mill"
-      // ci-dessus (pose/retrait via l'outil Construction, variante
-      // "sucrerie"). Retrait impossible tant qu'elle contient encore de la
-      // canne non transformée, même précaution que le moulin.
-      if (o === C.O_SUCRERIE) {
-        const ss = world.sucreries.get(i);
-        if (ss && (ss.cane || 0) > 0) { res.toast = "sucrerieNotEmpty"; break; }
-        world.objects[i] = C.O_NONE; world.objHp.delete(i); world.sucreries.delete(i);
-        f.inv.sucrerie = (f.inv.sucrerie || 0) + 1;
-        res.tiles.push(i); res.invChanged = true;
-      } else if ((g === C.G_GRASS || g === C.G_TILLED || g === C.G_WATERED) && o === C.O_NONE && !world.crops.has(i)) {
-        if (f.inv.sucrerie > 0) {
-          f.inv.sucrerie--;
-          world.objects[i] = C.O_SUCRERIE; world.objHp.set(i, now + C.BUILD_TIMES.sucrerie);
-          world.sucreries.set(i, { cane: 0, nextAt: 0 });
-          if (g === C.G_GRASS) world.ground[i] = C.G_TILLED;
-          res.tiles.push(i); res.invChanged = true;
-        } else res.toast = "noSucrerieStock";
-      }
-      break;
-    }
     case "sucrerieDeposit": {
       // Dépôt de canne dans une sucrerie CONSTRUITE : miroir EXACT du cas
       // "millDeposit" ci-dessus, sur world.sucreries au lieu de world.mills et
@@ -1925,11 +1903,6 @@ export function resolveBuy(f, money, m) {
     const cost = C.MILL_COST * n;
     if (money < cost) { res.toast = "noGold"; return res; }
     res.moneyDelta = -cost; f.inv.mill = (f.inv.mill || 0) + n; res.invChanged = true;
-  } else if (m.item === "sucrerie") {
-    const n = Math.max(1, Math.min(50, (m.n | 0) || 1));
-    const cost = C.SUCRERIE_COST * n;
-    if (money < cost) { res.toast = "noGold"; return res; }
-    res.moneyDelta = -cost; f.inv.sucrerie = (f.inv.sucrerie || 0) + n; res.invChanged = true;
   } else if (m.item === "healKit") {
     const n = Math.max(1, Math.min(10, (m.n | 0) || 1));
     const cost = C.HEAL_KIT_COST * n;
