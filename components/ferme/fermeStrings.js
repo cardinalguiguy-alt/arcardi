@@ -695,7 +695,9 @@ export const FERME_STR = {
     millRowTitle: (cost) => `🏚️ Moulin : ${cost} or`,
     millRowSub: (n) => `Transforme le blé déposé en sacs de farine, en continu (chantier d'1 heure réelle) · en stock : ${n}`,
     sucrerieRowTitle: (cost) => `🏚️ Sucrerie : ${cost} or`,
-    sucrerieRowSub: () => `Transforme la canne à sucre déposée en sacs de sucre, tant que Jérôme Martial est installé (chantier d'1 heure réelle)`,
+    // Chantier "sucrerie déplaçable" : construction INSTANTANÉE désormais
+    // (comme la ruche/fromagerie/boulangerie/scierie), plus de chantier d'1h.
+    sucrerieRowSub: () => `Transforme la canne à sucre déposée en sacs de sucre, tant que Jérôme Martial est installé — déplaçable comme les autres ateliers`,
     // Bac de vente
     binTitle: "💰 Bac de vente",
     binHint: "L'or gagné va dans la caisse commune de l'équipe.",
@@ -1531,7 +1533,7 @@ export const FERME_STR = {
     millRowTitle: (cost) => `🏚️ Mill: ${cost} gold`,
     millRowSub: (n) => `Continuously turns deposited wheat into flour sacks (1 real hour to build) · in stock: ${n}`,
     sucrerieRowTitle: (cost) => `🏚️ Sugar mill: ${cost} gold`,
-    sucrerieRowSub: () => `Continuously turns deposited sugar cane into sugar sacks, as long as Jérôme Martial lives there (1 real hour to build)`,
+    sucrerieRowSub: () => `Continuously turns deposited sugar cane into sugar sacks, as long as Jérôme Martial lives there — movable like the other workshops`,
     binTitle: "💰 Sell bin",
     binHint: "Gold earned goes into the team's shared pot.",
     cropRowTitle: (name, n) => `${name} × ${n}`,

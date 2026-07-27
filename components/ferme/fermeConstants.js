@@ -101,14 +101,14 @@ export const O_CAULDRON = 18;  // chaudron (chantier 2026-07, demande Guillaume 
                                 // avant d'être fonctionnel, voir BUILD_TIMES.cauldron) — mais jamais achetable :
                                 // il faut d'abord le ramasser sur la carte maléfique (voir EVIL_CAULDRON_SPAWN),
                                 // une seule fois pour toute la ferme (voir s.cauldron, fermeEngine.js/FermeGame.js).
-export const O_SUCRERIE = 19;  // sucrerie (chantier canne à sucre). Bâtiment d'artisan (chantier reprise) :
-                                // achetable seulement quand Jérôme Martial (sugarworker) est résident, auto-posée
-                                // à un site fixe (voir SUCRERIE_SITE), un seul exemplaire, chantier réel avant
-                                // d'être fonctionnelle (BUILD_TIMES.sucrerie), avec un stock de canne COMMUN à la
-                                // case (world.sucreries, voir resolveAct cas "sucrerieDeposit").
-                                // Transformation continue (canne -> sacs de sucre) pas encore branchée (voir
-                                // Phase 3 de la feuille de route) — pour l'instant seuls pose/retrait/dépôt
-                                // existent, sur le modèle exact du moulin.
+export const O_SUCRERIE = 19;  // sucrerie (chantier canne à sucre) — tile world.objects LEGACY (zips 317-324).
+                                // Chantier "sucrerie déplaçable" (2026-07) : la sucrerie a rejoint le modèle
+                                // des autres bâtiments d'artisans (C.ARTISAN_BUILDINGS.sucrerie / crafts.sucrerie),
+                                // achetable/déplaçable comme la ruche/fromagerie/boulangerie/scierie — plus aucune
+                                // NOUVELLE pose ne crée ce tile. Il ne sert plus qu'à retrouver/convertir une
+                                // sucrerie posée par l'ANCIEN modèle sur une ferme sauvegardée avant ce chantier
+                                // (voir E.clearGhostSucreries / E.migrateSucrerieToArtisan, fermeEngine.js, et
+                                // C.SUCRERIE_LEGACY_SOLID_TILE, coordonnée figée de l'ancien tile solide unique).
 
 // --- Cultures ---
 // stages: 0=semis ... maxStage=récoltable ; growMs = durée RÉELLE (arrosée) pour
@@ -581,15 +581,33 @@ export const SUGAR_SELL = 70;                // prix de vente d'un sac de sucre 
 // Chantier reprise (demande Guillaume) : la sucrerie devient un vrai
 // bâtiment d'artisan comme les autres (ruche/fromagerie/boulangerie/scierie)
 // — achetable SEULEMENT quand Jérôme Martial (skill "sugarworker") est
-// résident, puis auto-posée à un emplacement FIXE (plus de pose libre via la
-// barre d'outils Construction, plus de retrait, un seul exemplaire). On
-// garde volontairement O_SUCRERIE comme tuile world.objects normale (au lieu
-// de rejoindre C.ARTISAN_BUILDINGS/world.artisanBlocks) : c'est ce qui
-// permet de conserver la collision partielle existante (seule la façade est
-// solide, tonneaux/pressoir/tas de canne restent traversables) ainsi que le
-// rendu à jauges (stock/batch) et le dépôt de canne par clic, sans rien
-// changer à ces mécaniques déjà validées par Guillaume.
-export const SUCRERIE_SITE = { x: 74, y: 46 }; // emplacement fixe (à côté du site de la scierie, x:68-70)
+// résident, puis auto-posée à un emplacement de départ (plus de pose libre
+// via la barre d'outils Construction, plus de retrait, un seul exemplaire).
+// Chantier "sucrerie déplaçable" (2026-07, demande Guillaume : "qu'on puisse
+// bouger le bâtiment sucrerie, comme les autres bâtiments d'artisans") :
+// la sucrerie a finalement REJOINT C.ARTISAN_BUILDINGS/world.artisanBlocks
+// (voir plus bas), exactement comme la ruche/fromagerie/boulangerie/scierie
+// — collision RECTANGULAIRE pleine sur son footprint (w×h), déplaçable à la
+// main (moveArtisan), achat via buyArtisanBuilding générique. Le sprite
+// pixel-exact (95x88, voir fermeArt.js/sucrerieSprite) reste plus large que
+// le footprint choisi : tonneaux/pressoir/tas de canne, dessinés hors du
+// footprint (à droite/au-dessus), restent donc traversables tout seuls —
+// même principe que le débordement du sawmill/de la fromagerie, sans avoir
+// besoin d'une collision partielle dédiée. Voir ARTISAN_FACE_X/
+// ARTISAN_DRAW_SCALE_OVERRIDE ci-dessous pour l'ancrage visuel exact
+// (façade à x=36 dans le sprite, pas le centre de l'image) et
+// E.migrateSucrerieToArtisan (fermeEngine.js) pour la conversion des fermes
+// sauvegardées AVANT ce chantier (tile O_SUCRERIE + world.sucreries).
+export const SUCRERIE_SITE = { x: 73, y: 45 }; // coin haut-gauche du footprint (2x2) — anciennement site.x/y du tile solide unique (74,46), décalé de -1/-1 pour que le footprint reste centré au même endroit à l'écran
+// IMPORTANT (chantier "sucrerie déplaçable") : constante FIGÉE séparée de
+// SUCRERIE_SITE ci-dessus, qui référence désormais le footprint (a changé de
+// sens/valeur avec ce chantier). clearGhostSucreries/migrateSucrerieToArtisan
+// (fermeEngine.js) ont besoin de l'ANCIENNE coordonnée exacte du tile solide
+// unique posé par l'ancien modèle (zips 317-324) pour retrouver/convertir une
+// sucrerie sauvegardée AVANT ce chantier — ne JAMAIS faire varier cette
+// constante avec SUCRERIE_SITE (qui, elle, peut continuer à être ajustée si
+// le footprint doit encore bouger un jour).
+export const SUCRERIE_LEGACY_SOLID_TILE = { x: 74, y: 46 };
 // Zip 286 (demande Guillaume : "quand une ferme dépose plusieurs moulins, il
 // faut qu'ils fonctionnent en même temps, qu'ils produisent la farine plus
 // vite. 2 moulins = x2, 3 moulins = x3") : chaque moulin garde son propre
@@ -635,7 +653,15 @@ export const BUILD_TIMES = {
   scarecrow: 10 * 1000,     // épouvantail : 10 secondes réelles (valeur donnée par Guillaume)
   grass: 5 * 1000,          // repousse de l'herbe sur une case labourée : 5 secondes réelles (valeur donnée par Guillaume)
   mill: 60 * 60 * 1000,     // moulin niveau 1 : 1 heure réelle (valeur donnée par Guillaume)
-  sucrerie: 60 * 60 * 1000, // sucrerie : même chantier réel que le moulin (1h), miroir exact (chantier canne à sucre)
+  // sucrerie : ENTRÉE DÉSORMAIS INUTILISÉE (chantier "sucrerie déplaçable",
+  // demande Guillaume : "comme les autres bâtiments d'artisans") — la
+  // sucrerie a rejoint C.ARTISAN_BUILDINGS, qui suit le modèle
+  // buyArtisanBuilding (construction INSTANTANÉE, comme la ruche/fromagerie/
+  // boulangerie/scierie, aucune ne passe par BUILD_TIMES/objHp). Laissée ici
+  // en commentaire pour la trace ; si un délai de chantier est un jour
+  // redemandé spécifiquement pour la sucrerie, il faudra un mécanisme dédié
+  // (crafts.sucrerie n'a pas d'objHp, cf. migrateSucrerieToArtisan).
+  // sucrerie: 60 * 60 * 1000,
   cauldron: 5 * 1000,       // chaudron : 5 secondes réelles (extrapolé, pas de "bâtiment" au sens propre, cohérent
                              // avec l'absence de mini-jeu à la concoction elle-même, voir doc -50)
 };
@@ -1279,6 +1305,14 @@ export const ARTISAN_BUILDINGS = {
   // ancrage de métier : aucune production auto (Tristan abat les arbres via
   // son thème "wood", voir updateResidents), mais achetable/déplaçable/solide.
   sawmill:    { skill: "lumberjack",  cost: 10000, site: { x: 68, y: 46 }, w: 3, h: 2 },
+  // Chantier "sucrerie déplaçable" (2026-07, demande Guillaume) : rejoint le
+  // modèle des autres bâtiments d'artisans (voir commentaire SUCRERIE_SITE
+  // plus haut). Footprint volontairement plus PETIT (2x2) que le sprite
+  // pixel-exact (95x88 natif) : seule la maison en pierre (façade/porte) est
+  // solide, tonneaux/pressoir/tas de canne débordent hors du footprint et
+  // restent traversables, comme demandé par Guillaume ("on peut passer à
+  // travers, pareil pour les tonneaux").
+  sucrerie:   { skill: "sugarworker", cost: SUCRERIE_COST, site: SUCRERIE_SITE, w: 2, h: 2 },
 };
 // Zip 261 (demande Guillaume : "ils doivent être plus grands, on dirait des
 // stickers") : facteur d'agrandissement au DESSIN des bâtiments d'artisans
@@ -1295,7 +1329,23 @@ export const ARTISAN_DRAW_SCALE = 1.15;
 // footprint (au lieu du bas de la toile), pour que les bâtiments ne flottent
 // pas malgré des toiles plus hautes que le bâtiment (fumée/toit/drapeau au-
 // dessus, tommes/scie/établi débordant devant). Défaut = hauteur de la toile.
-export const ARTISAN_FOOT = { beehive: 31, fromagerie: 62, bakery: 62, sawmill: 58 };
+export const ARTISAN_FOOT = { beehive: 31, fromagerie: 62, bakery: 62, sawmill: 58, sucrerie: 72 };
+// Chantier "sucrerie déplaçable" : deux réglages PAR BÂTIMENT (au lieu de
+// globaux) pour que la sucrerie garde EXACTEMENT son ancrage/échelle déjà
+// validés (copie pixel-exacte du mockup, zip 320) une fois branchée sur le
+// pipeline générique de rendu des artisans (voir FermeGame.js) :
+//  - ARTISAN_FACE_X : abscisse (native, avant mise à l'échelle) de la
+//    "façade" dans le sprite, centrée sur le footprint au rendu — PAS le
+//    centre géométrique de l'image (le sprite sucrerie est asymétrique :
+//    façade à x=36, pressoir plus loin à droite). Absent pour un bid ->
+//    repli sur bimg.width/2 (comportement actuel inchangé pour beehive/
+//    fromagerie/bakery/sawmill, dessinés symétriques par construction).
+export const ARTISAN_FACE_X = { sucrerie: 36 };
+//  - ARTISAN_DRAW_SCALE_OVERRIDE : remplace C.ARTISAN_DRAW_SCALE pour un bid
+//    donné. La sucrerie reste à l'échelle 1 (taille NATIVE), pour ne pas
+//    altérer le rendu "copie pixel-exacte" validé par Guillaume — les autres
+//    bâtiments gardent ARTISAN_DRAW_SCALE (1.15) comme avant.
+export const ARTISAN_DRAW_SCALE_OVERRIDE = { sucrerie: 1 };
 // Métier -> bâtiment (null = pas de bâtiment, travaille directement).
 // voyager (Eduardo) : pas de bâtiment, il travaille par voyages (commandes).
 // Zip 260 : lumberjack -> sawmill (le bûcheron s'ancre/rôde autour de sa

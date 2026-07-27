@@ -760,7 +760,9 @@ function useEnergy(f, action, toolKey) {
    ------------------------------------------------------------------------- */
 export function resolveAct(world, f, m) {
   normalizeFarmer(f);
-  const res = { tiles: [], cropTiles: [], fx: [], invChanged: false, toast: null, did: null, millTiles: [], sucrerieTiles: [] };
+  // sucrerieTiles retiré (chantier "sucrerie déplaçable") : voir commentaire
+  // au cas "sucrerieDeposit" plus bas (déménagé hors de resolveAct).
+  const res = { tiles: [], cropTiles: [], fx: [], invChanged: false, toast: null, did: null, millTiles: [] };
   const x = m.x | 0, y = m.y | 0;
   if (!inMap(x, y) || !canReach(f, x, y)) return res;
   const i = idx(x, y), g = world.ground[i], o = world.objects[i];
@@ -1170,38 +1172,14 @@ export function resolveAct(world, f, m) {
       res.fx.push({ k: "millDeposit", x, y, n: toDeposit });
       break;
     }
-    case "sucrerieDeposit": {
-      // Dépôt de canne dans une sucrerie CONSTRUITE : miroir EXACT du cas
-      // "millDeposit" ci-dessus, sur world.sucreries au lieu de world.mills et
-      // C.SUCRERIE_CANE_CROP au lieu de C.MILL_WHEAT_CROP.
-      if (o !== C.O_SUCRERIE || !buildReady(world.objHp.get(i), now)) break;
-      const have = f.inv.crops[C.SUCRERIE_CANE_CROP] || 0;
-      if (have <= 0) { res.toast = "noCaneToDeposit"; break; }
-      const sucrIdx = [];
-      for (let k = 0; k < world.objects.length; k++) {
-        if (world.objects[k] === C.O_SUCRERIE && buildReady(world.objHp.get(k), now)) sucrIdx.push(k);
-      }
-      if (!sucrIdx.length) break;
-      let totalRoom = 0;
-      for (const k of sucrIdx) totalRoom += Math.max(0, C.SUCRERIE_STOCK_CAP - ((world.sucreries.get(k) || {}).cane || 0));
-      if (totalRoom <= 0) { res.toast = "sucrerieFull"; break; }
-      let toDeposit = Math.min(have, totalRoom);
-      f.inv.crops[C.SUCRERIE_CANE_CROP] -= toDeposit;
-      let remaining = toDeposit, ri = 0, guard = 0;
-      const guardMax = toDeposit + sucrIdx.length + 4;
-      while (remaining > 0 && guard++ < guardMax * 4) {
-        const k = sucrIdx[ri % sucrIdx.length]; ri++;
-        const ss = world.sucreries.get(k) || { cane: 0, nextAt: 0 };
-        if ((ss.cane || 0) < C.SUCRERIE_STOCK_CAP) {
-          ss.cane = (ss.cane || 0) + 1; world.sucreries.set(k, ss);
-          if (!res.sucrerieTiles.includes(k)) res.sucrerieTiles.push(k);
-          remaining--;
-        }
-      }
-      res.invChanged = true;
-      res.fx.push({ k: "sucrerieDeposit", x, y, n: toDeposit });
-      break;
-    }
+    // Chantier "sucrerie déplaçable" (2026-07) : le cas "sucrerieDeposit" a
+    // déménagé hors de resolveAct (voir hostHandleDecorReq, FermeGame.js) —
+    // la sucrerie n'est plus une tuile world.objects scannable par tile mais
+    // un bâtiment unique dans s.crafts.sucrerie (comme la ruche/fromagerie/
+    // etc.), et resolveAct n'a accès qu'à `world`, pas à l'état partagé où
+    // vit désormais son stock de canne. Toujours le même dépôt côté joueur
+    // (mêmes toasts noCaneToDeposit/sucrerieFull, même fx sucrerieDeposit),
+    // juste résolu là où crafts.sucrerie est atteignable.
     case "fish":
       // Pêche : la case ciblée doit être de l'eau (rivière) et à portée. Le
       // TYPE de poisson est décidé par le minijeu côté client (m.fish) : on
@@ -2735,6 +2713,15 @@ export function migrateCrafts(cr) {
         if (typeof cr[bid].breadNextAt === "number") out[bid].breadNextAt = cr[bid].breadNextAt | 0;
         if (typeof cr[bid].viennoIdx === "number") out[bid].viennoIdx = cr[bid].viennoIdx | 0;
       }
+      // Chantier "sucrerie déplaçable" (2026-07, demande Guillaume) : la
+      // sucrerie a rejoint ce modèle crafts[bid] générique. Contrairement aux
+      // autres artisans (production passive liée au résident, pas de dépôt
+      // joueur), elle garde un STOCK de canne déposée (mêmes mécaniques que
+      // sucrerieTick/resolveAct "sucrerieDeposit" du chantier canne à sucre,
+      // simplement stocké ici au lieu de world.sucreries) — `nextAt` (déjà
+      // générique ci-dessus) sert de minuteur de batch, exactement comme pour
+      // world.mills/world.sucreries avant ce chantier.
+      if (bid === "sucrerie" && typeof cr[bid].cane === "number") out[bid].cane = Math.max(0, cr[bid].cane | 0);
     }
   }
   return out;
@@ -3383,22 +3370,59 @@ export function clearStationArea(w) {
 // Chantier reprise (demande Guillaume) : nettoyage des "fantômes" de
 // sucrerie laissés par l'ANCIEN modèle (pose libre façon moulin, avant la
 // bascule vers un bâtiment d'artisan unique posé au site fixe
-// C.SUCRERIE_SITE). Sur une ferme sauvegardée avant ce changement,
-// object0v peut encore contenir un ou plusieurs O_SUCRERIE ailleurs qu'au
-// site fixe : à chaque chargement, on les efface (tuile remise à O_NONE,
-// entrée world.sucreries associée supprimée avec sa canne en stock — la
-// sucrerie ne s'installe plus QUE depuis la boutique, comme convenu).
-// Retourne la liste des indices modifiés, à passer à recordTileOverride
-// (FermeGame.js) comme pour clearStationArea ci-dessus, sinon la tuile
-// fantôme reviendrait au prochain chargement (objectOv non mis à jour).
+// C.SUCRERIE_LEGACY_SOLID_TILE). Sur une ferme sauvegardée avant ce
+// changement, object0v peut encore contenir un ou plusieurs O_SUCRERIE
+// ailleurs qu'au site fixe : à chaque chargement, on les efface (tuile
+// remise à O_NONE, entrée world.sucreries associée supprimée avec sa canne
+// en stock — la sucrerie ne s'installe plus QUE depuis la boutique, comme
+// convenu). Retourne la liste des indices modifiés, à passer à
+// recordTileOverride (FermeGame.js) comme pour clearStationArea ci-dessus,
+// sinon la tuile fantôme reviendrait au prochain chargement (objectOv non
+// mis à jour).
+// IMPORTANT (chantier "sucrerie déplaçable") : `keepIdx` référence
+// délibérément C.SUCRERIE_LEGACY_SOLID_TILE (constante FIGÉE, jamais
+// modifiée) et NON C.SUCRERIE_SITE — cette dernière a changé de sens/valeur
+// avec ce chantier (elle référence maintenant le footprint du bâtiment
+// d'artisan). Si on lisait C.SUCRERIE_SITE ici, cette fonction effacerait à
+// tort le tile légitime de l'ancien modèle avant que
+// migrateSucrerieToArtisan (ci-dessous) ait pu le convertir.
 export function clearGhostSucreries(world) {
   const changed = [];
-  const keepIdx = idx(C.SUCRERIE_SITE.x, C.SUCRERIE_SITE.y);
+  const keepIdx = idx(C.SUCRERIE_LEGACY_SOLID_TILE.x, C.SUCRERIE_LEGACY_SOLID_TILE.y);
   for (let i = 0; i < world.objects.length; i++) {
     if (world.objects[i] !== C.O_SUCRERIE || i === keepIdx) continue;
     world.objects[i] = C.O_NONE; world.objHp.delete(i); changed.push(i);
     if (world.sucreries) world.sucreries.delete(i);
   }
+  return changed;
+}
+
+// Chantier "sucrerie déplaçable" (2026-07, demande Guillaume : "qu'on puisse
+// bouger le bâtiment sucrerie, comme les autres bâtiments d'artisans") : la
+// sucrerie a rejoint C.ARTISAN_BUILDINGS/crafts.sucrerie (voir
+// fermeConstants.js). Sur une ferme sauvegardée AVANT ce chantier (zips
+// 317-324), le tile O_SUCRERIE à C.SUCRERIE_LEGACY_SOLID_TILE (voir
+// clearGhostSucreries ci-dessus, qui a déjà nettoyé tout exemplaire ailleurs
+// qu'à cette coordonnée) peut encore être présent, avec son stock de canne
+// dans world.sucreries. On le convertit ICI, une seule fois au chargement,
+// en crafts.sucrerie = { built, pos, cane, nextAt } (même stock, aucune
+// perte), puis on efface le vieux tile + son entrée world.sucreries pour ne
+// jamais avoir les deux représentations en même temps. Idempotent : si
+// crafts.sucrerie est déjà construit (ferme créée après ce chantier, ou déjà
+// migrée), ne fait rien côté crafts (le tile legacy, lui, est toujours
+// nettoyé par précaution). Retourne la liste des indices modifiés, à passer
+// à recordTileOverride (FermeGame.js) comme clearGhostSucreries.
+export function migrateSucrerieToArtisan(world, crafts) {
+  const changed = [];
+  if (!world || !world.objects) return changed;
+  const oldSiteIdx = idx(C.SUCRERIE_LEGACY_SOLID_TILE.x, C.SUCRERIE_LEGACY_SOLID_TILE.y);
+  if (world.objects[oldSiteIdx] !== C.O_SUCRERIE) return changed;
+  if (crafts && !(crafts.sucrerie && crafts.sucrerie.built)) {
+    const ss = (world.sucreries && world.sucreries.get(oldSiteIdx)) || { cane: 0, nextAt: 0 };
+    crafts.sucrerie = { built: true, pos: { x: C.SUCRERIE_SITE.x, y: C.SUCRERIE_SITE.y }, cane: ss.cane || 0, nextAt: ss.nextAt || 0 };
+  }
+  world.objects[oldSiteIdx] = C.O_NONE; world.objHp.delete(oldSiteIdx); changed.push(oldSiteIdx);
+  if (world.sucreries) world.sucreries.delete(oldSiteIdx);
   return changed;
 }
 

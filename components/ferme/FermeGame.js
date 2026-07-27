@@ -761,6 +761,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         harald: (saved.harald && saved.harald.expiresAt > Date.now())
           ? { ...saved.harald, phase: "roam", roamTarget: null, nextRoamAt: 0, nextRoundAt: 0 } : null,
       };
+      // Chantier "sucrerie déplaçable" (2026-07) : convertit une éventuelle
+      // sucrerie posée sous l'ANCIEN modèle (tile O_SUCRERIE à site fixe,
+      // zips 317-324) en crafts.sucrerie, sans perte de stock de canne. Voir
+      // E.migrateSucrerieToArtisan (fermeEngine.js). À faire APRÈS que
+      // sharedRef.current (donc .crafts) existe.
+      for (const ci of E.migrateSucrerieToArtisan(worldRef.current, sharedRef.current.crafts)) recordTileOverride(ci);
       // Les cavaliers repartent à pied à la reprise (aucun joueur monté au chargement).
       for (const h of sharedRef.current.horses) { h.rider = null; h.rider2 = null; h.callTarget = null; }
       // Zip 260 : rattrapage hors-ligne de l'agent d'élevage (crédite au pool
@@ -940,6 +946,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       decor: E.migrateDecor(payload.decor), // zip 251
       crafts: E.migrateCrafts(payload.crafts), craftStock: E.migrateCraftStock(payload.craftStock), // zip 252
     };
+    // Chantier "sucrerie déplaçable" : même conversion qu'à loadFarmByCode
+    // (voir ce commentaire), au cas où ce snapshot proviendrait encore d'un
+    // état pré-chantier (reprise/rejoin sur une ferme jamais rechargée
+    // depuis via loadFarmByCode).
+    for (const ci of E.migrateSucrerieToArtisan(worldRef.current, sharedRef.current.crafts)) recordTileOverride(ci);
     setStationSt(sharedRef.current.station ? JSON.parse(JSON.stringify(sharedRef.current.station)) : null);
     if (payload.farmers) {
       farmersRef.current = payload.farmers;
@@ -1493,10 +1504,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (r.millTiles && r.millTiles.length) {
         out.mills = r.millTiles.map(i => { const ms = w.mills.get(i) || { wheat: 0, nextAt: 0 }; return [i, ms.wheat, ms.nextAt]; });
       }
-      // Sucrerie (chantier canne à sucre) : miroir exact de out.mills ci-dessus.
-      if (r.sucrerieTiles && r.sucrerieTiles.length) {
-        out.sucreries = r.sucrerieTiles.map(i => { const ss = w.sucreries.get(i) || { cane: 0, nextAt: 0 }; return [i, ss.cane, ss.nextAt]; });
-      }
+      // Sucrerie : le dépôt de canne ne passe plus par "act" (chantier
+      // "sucrerie déplaçable" — voir hostHandleDecorReq/kind "sucrerieDeposit",
+      // qui broadcast directement crafts.sucrerie).
     } else if (req.kind === "buy") {
       const r = E.resolveBuy(f, s.money, req);
       if (r.moneyDelta) { s.money += r.moneyDelta; out.state = shareState(); }
@@ -1614,31 +1624,6 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         out.state = shareState(); out.wellBuilt = true;
         out.chat = { from: "🪣", msg: lang === "en" ? "The well is built!" : "Le puits est construit !" };
       } else if (!s.wellBuilt) out.toast = { id: f.id, key: "noGold" };
-    } else if (req.kind === "buySucrerieBuilding") {
-      // Sucrerie (chantier reprise) : bâtiment d'artisan comme les autres —
-      // achetable seulement quand Jérôme Martial (skill "sugarworker") est
-      // résident, puis auto-posée à un site FIXE (C.SUCRERIE_SITE), un seul
-      // exemplaire. On garde O_SUCRERIE comme tuile world.objects normale
-      // (pas C.ARTISAN_BUILDINGS/world.artisanBlocks) pour conserver telles
-      // quelles la collision partielle (seule la façade est solide), les
-      // jauges de rendu et le dépôt par clic déjà en place. Le tile
-      // O_SUCRERIE lui-même sert de "flag construit" — pas besoin d'un champ
-      // séparé à synchroniser/sauvegarder.
-      const w2 = worldRef.current;
-      const site = C.SUCRERIE_SITE, si = idxOf(site.x, site.y);
-      if (w2 && w2.objects[si] !== C.O_SUCRERIE) {
-        if (!E.residentHasSkill(s.station, "sugarworker")) { out.toast = { id: f.id, key: "artisanNoResident" }; }
-        else if (s.money < C.SUCRERIE_COST) { out.toast = { id: f.id, key: "noGold" }; }
-        else {
-          s.money -= C.SUCRERIE_COST;
-          w2.objects[si] = C.O_SUCRERIE; w2.objHp.set(si, Date.now() + C.BUILD_TIMES.sucrerie);
-          w2.sucreries.set(si, { cane: 0, nextAt: 0 });
-          recordTileOverride(si);
-          out.tiles.push({ i: si, g: w2.ground[si], o: C.O_SUCRERIE, hp: w2.objHp.get(si) });
-          out.state = shareState();
-          out.chat = { from: "🔨", msg: L.artisanBuilt(L.buildingName("sucrerie")) };
-        }
-      }
     } else if (req.kind === "hireGreg") {
       // Engagement de Greg (chantier 2026-07) : contrat réel de 2 jours
       // (C.GREG_CONTRACT_MS), rémunéré d'avance (C.GREG_HIRE_COST). Un seul
@@ -2888,6 +2873,35 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       stationChat(L.artisanBuilt(L.buildingName(bid)), "\u{1F528}");
       return true;
     }
+    if (req.kind === "sucrerieDeposit") {
+      // Chantier "sucrerie déplaçable" (2026-07) : dépôt de canne dans la
+      // sucrerie construite — remplace l'ancien cas resolveAct/
+      // "sucrerieDeposit" (fermeEngine.js), qui scannait des tuiles
+      // world.objects ; la sucrerie est désormais un bâtiment unique
+      // (s.crafts.sucrerie, comme les autres artisans), donc résolu ici où
+      // l'état partagé est atteignable, même esprit que moveArtisan/
+      // buyArtisanBuilding juste au-dessus. Mêmes toasts et fx qu'avant
+      // (noCaneToDeposit/sucrerieFull/sucrerieDeposit, voir fermeStrings.js).
+      const cb = s.crafts && s.crafts.sucrerie;
+      if (!cb || !cb.built) return true;
+      const have = f.inv.crops[C.SUCRERIE_CANE_CROP] || 0;
+      if (have <= 0) { hostSend({ type: "broadcast", event: "apply", payload: { toast: { id: f.id, key: "noCaneToDeposit" } } }); return true; }
+      const room = Math.max(0, C.SUCRERIE_STOCK_CAP - (cb.cane || 0));
+      if (room <= 0) { hostSend({ type: "broadcast", event: "apply", payload: { toast: { id: f.id, key: "sucrerieFull" } } }); return true; }
+      const toDeposit = Math.min(have, room);
+      f.inv.crops[C.SUCRERIE_CANE_CROP] -= toDeposit;
+      cb.cane = (cb.cane || 0) + toDeposit;
+      dirtyRef.current = true;
+      hostSend({
+        type: "broadcast", event: "apply",
+        payload: {
+          crafts: s.crafts,
+          farmer: { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv },
+          fx: [{ k: "sucrerieDeposit", x: f.x, y: f.y, n: toDeposit }],
+        },
+      });
+      return true;
+    }
     if (req.kind === "sellCraft") {
       const stock = s.craftStock || (s.craftStock = E.newCraftStock());
       const bkPr = (s.crafts || {}).bakery;
@@ -3838,34 +3852,29 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           channelRef.current?.send({ type: "broadcast", event: "apply", payload });
         }
       }
-      // Production continue des sucreries (chantier canne à sucre) : miroir
-      // EXACT du bloc moulin ci-dessus, MAIS gatée par la présence de Jérôme
-      // Martial (résident à skill "sugarworker") — voir E.sucrerieTick,
-      // param `working`. Tant qu'il n'a pas emménagé, la canne déposée reste
-      // intacte en stock (aucune perte), simplement rien ne se transforme.
+      // Production continue de la sucrerie (chantier canne à sucre), gatée
+      // par la présence de Jérôme Martial (résident à skill "sugarworker") —
+      // voir E.sucrerieTick, param `working`. Tant qu'il n'a pas emménagé, la
+      // canne déposée reste intacte en stock (aucune perte), simplement rien
+      // ne se transforme. Chantier "sucrerie déplaçable" (2026-07) : un SEUL
+      // bâtiment désormais (crafts.sucrerie, comme les autres artisans), plus
+      // de Map world.sucreries à parcourir — même mécanique de batch/
+      // rattrapage (E.sucrerieTick inchangée), juste une source d'état
+      // différente.
       {
         const now = Date.now();
-        const sucrTilesOut = [];
-        let sugarSacksProduced = 0;
-        const sucrerieWorking = E.residentHasSkill(s.station, "sugarworker");
-        const sucrerieSpeedMult = C.SUCRERIE_SPEED_MIN_MULT; // = 1, même parallélisme que le moulin (répartition du dépôt)
-        for (const [si, ss] of w.sucreries) {
-          const r = E.sucrerieTick(ss, now, sucrerieSpeedMult, sucrerieWorking);
-          // Petit changement (demande Guillaume) : même notification que le
-          // moulin quand une sucrerie qui tournait s'arrête faute de canne.
-          if (sucrerieWorking && ss.nextAt && !r.nextAt) stationChat(L.sucrerieStoppedToast, "🎋");
-          if (r.cane !== ss.cane || r.nextAt !== ss.nextAt) {
-            w.sucreries.set(si, { cane: r.cane, nextAt: r.nextAt });
-            sucrTilesOut.push([si, r.cane, r.nextAt]);
+        const cb = s.crafts && s.crafts.sucrerie;
+        if (cb && cb.built) {
+          const sucrerieWorking = E.residentHasSkill(s.station, "sugarworker");
+          const r = E.sucrerieTick(cb, now, C.SUCRERIE_SPEED_MIN_MULT, sucrerieWorking);
+          if (sucrerieWorking && cb.nextAt && !r.nextAt) stationChat(L.sucrerieStoppedToast, "🎋");
+          if (r.cane !== cb.cane || r.nextAt !== cb.nextAt) {
+            cb.cane = r.cane; cb.nextAt = r.nextAt;
+            dirtyRef.current = true;
+            const payload = { crafts: s.crafts };
+            if (r.sacks > 0) { s.sugar = (s.sugar || 0) + r.sacks; payload.sugar = s.sugar; }
+            channelRef.current?.send({ type: "broadcast", event: "apply", payload });
           }
-          if (r.sacks > 0) sugarSacksProduced += r.sacks;
-        }
-        if (sugarSacksProduced > 0) s.sugar = (s.sugar || 0) + sugarSacksProduced;
-        if (sucrTilesOut.length) {
-          dirtyRef.current = true;
-          const payload = { sucreries: sucrTilesOut };
-          if (sugarSacksProduced > 0) payload.sugar = s.sugar;
-          channelRef.current?.send({ type: "broadcast", event: "apply", payload });
         }
       }
       if (Date.now() - s.dayStartAt >= C.DAY_REAL_MS) {
@@ -4113,12 +4122,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (w.objects[i] === C.O_MILL && E.buildReady(w.objHp.get(i), Date.now()) && !(sl === 5 && buildKindRef.current === "mill")) {
       return sendReq({ kind: "act", action: "millDeposit", x: tt.x, y: tt.y });
     }
-    // Sucrerie construite (chantier canne à sucre, bâtiment d'artisan à site
-    // fixe) : cliquable directement pour y déposer sa canne — plus de
-    // variante Construction "sucrerie" à exclure, elle n'est plus posable/
-    // retirable manuellement (chantier reprise).
-    if (w.objects[i] === C.O_SUCRERIE && E.buildReady(w.objHp.get(i), Date.now())) {
-      return sendReq({ kind: "act", action: "sucrerieDeposit", x: tt.x, y: tt.y });
+    // Sucrerie construite (chantier canne à sucre, bâtiment d'artisan
+    // déplaçable depuis le chantier "sucrerie déplaçable" 2026-07) :
+    // cliquable directement pour y déposer sa canne, sur (ou juste à côté
+    // de) son footprint COURANT — plus une tuile world.objects fixe, voir
+    // artisanPos/C.ARTISAN_BUILDINGS.sucrerie. Requête dédiée "sucrerieDeposit"
+    // (pas "act") : voir hostHandleDecorReq, la sucrerie n'a plus de tuile
+    // O_SUCRERIE scannable pour la retrouver côté hôte.
+    {
+      const scr = sharedRef.current.crafts && sharedRef.current.crafts.sucrerie;
+      if (scr && scr.built) {
+        const sp = artisanPos("sucrerie"), sd = C.ARTISAN_BUILDINGS.sucrerie;
+        if (tt.x >= sp.x - 1 && tt.x <= sp.x + sd.w && tt.y >= sp.y - 1 && tt.y <= sp.y + sd.h) {
+          return sendReq({ kind: "sucrerieDeposit" });
+        }
+      }
     }
     // Chaudron cliquable (correctif audit 2026-07) : tous les textes du jeu
     // disent "clique sur le chaudron" mais seul E fonctionnait — le clic (et
@@ -5312,6 +5330,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // Les autres artisans (fromager, pâtissière) restent postés DEVANT leur
     // boutique (au sud), comportement validé et inchangé.
     if (skill === "beekeeper") return { x: p.x + def.w / 2, y: p.y + def.h / 2, ring: true };
+    // Chantier "sucrerie déplaçable" (2026-07, demande Guillaume : "Jérôme
+    // travaille autour, à côté de la presse") : contrairement aux autres
+    // artisans postés (devant leur boutique, au sud), Jérôme se poste à
+    // l'EST du footprint — côté où le sprite pixel-exact dessine le
+    // pressoir ("à droite le pressoir à canne", voir fermeArt.js/
+    // sucrerieSprite). Décalage approximatif (le footprint solide ne
+    // couvre que la maison, pas le pressoir qui déborde dessus) : à
+    // ajuster facilement ici si Guillaume le veut plus près/loin une fois
+    // vu en jeu.
+    if (skill === "sugarworker") return { x: p.x + def.w + 1.5, y: p.y + def.h / 2 };
     return { x: p.x + def.w / 2, y: p.y + def.h + 0.5 };
   }
   // Demande Guillaume : René (apiculteur) doit ressembler à un vrai apiculteur
@@ -5465,18 +5493,33 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           // deux) : encore plus calmes que les autres artisans postés — pause
           // bien plus fréquente et longue, et rayon de déplacement resserré
           // (0.3x au lieu de 0.55x) quand elles bougent quand même.
-          const isBakeryWorker = ro && (ro.skill === "baker" || ro.skill === "breadmaker");
-          const pauseChance = isBakeryWorker ? 0.8 : 0.5;
+          // Chantier "rythme des artisans postés" (2026-07, demande
+          // Guillaume : "tous les artisans postés doivent avoir des
+          // changements de rythme, et arrêter de marcher sans arrêt, c'est
+          // pas assez réaliste") : ce profil "boulangerie" — jusqu'ici
+          // réservé à Chloé/Rosalie — est désormais appliqué à TOUS les
+          // artisans postés (fromager, apiculteur, bûcheron, Jérôme...),
+          // au lieu du profil intermédiaire d'avant (pause 50%, pas 0.55x).
+          const pauseChance = 0.8;
           if (roll < pauseChance) {
             res.roamTarget = null; res.roamMeet = null;
-            res.nextRoamAt = now + (isBakeryWorker
-              ? (Math.random() < 0.55 ? 12000 + Math.random() * 14000 : 6000 + Math.random() * 7000)
-              : (Math.random() < 0.4 ? 9000 + Math.random() * 10000 : 4000 + Math.random() * 5000));
+            res.nextRoamAt = now + (Math.random() < 0.55 ? 12000 + Math.random() * 14000 : 6000 + Math.random() * 7000);
+            // Chantier fumigateur (demande Guillaume : "un temps d'arrêt 'il
+            // fume la ruche' avant de repartir") : certaines pauses de René
+            // (apiculteur) deviennent une pause "fumigateur" — il se tourne
+            // face au centre de la ruche et res.smoking reste vrai jusqu'à la
+            // pause suivante (voir rendu dans la boucle des résidents,
+            // fumigateur + souffle de fumée dirigé vers la ruche).
+            if (ro && ro.skill === "beekeeper") {
+              res.smoking = Math.random() < 0.4;
+              if (res.smoking) faceResidentToward(res, C.BEEKEEPER_ANCHOR.x, C.BEEKEEPER_ANCHOR.y);
+            }
           } else {
-            const rMul = isBakeryWorker ? 0.3 : 0.55;
+            if (ro && ro.skill === "beekeeper") res.smoking = false;
+            const rMul = 0.3;
             const arx = Math.max(1.4, rx * rMul), ary = Math.max(1.4, ry * rMul);
             const t = pickRoamTarget(w, anchor.x, anchor.y, arx, ary, allowTilled);
-            if (t) { res.roamTarget = t; res.roamMeet = null; res.nextRoamAt = now + (isBakeryWorker ? 5000 + Math.random() * 7000 : 3500 + Math.random() * 5000); }
+            if (t) { res.roamTarget = t; res.roamMeet = null; res.nextRoamAt = now + 5000 + Math.random() * 7000; }
             else { res.roamTarget = null; res.roamMeet = null; res.nextRoamAt = now + 800; }
           }
         } else if (roll < 0.38) {
@@ -5533,7 +5576,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         res._segFor = { x: res.roamTarget.x, y: res.roamTarget.y };
         res.segMul = 0.65 + Math.random() * 0.55;
       }
-      const paceMul = bAnchor ? (ro && (ro.skill === "baker" || ro.skill === "breadmaker") ? 0.55 : 0.7) : (gait * (res.segMul || 1));
+      // Chantier "rythme des artisans postés" : même allure ralentie (0.55x)
+      // pour tous les artisans postés, ex-réservée à la boulangerie.
+      const paceMul = bAnchor ? 0.55 : (gait * (res.segMul || 1));
       const dx = res.roamTarget.x - res.x, dy = res.roamTarget.y - res.y, d = Math.hypot(dx, dy);
       if (d < 0.08) res.moving = false;
       else {
@@ -6980,76 +7025,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             } });
           }
         }
-        else if (o === C.O_SUCRERIE) {
-          // Sucrerie (chantier canne à sucre) : MIROIR EXACT du bloc O_MILL
-          // juste au-dessus (même traitement : sprite assombri + jauge
-          // pendant la construction, sprite plein + jauges une fois prête).
-          // Seule différence : pas d'ailes tournantes (le pressoir n'a rien
-          // à faire tourner à l'écran), et les jauges utilisent les
-          // constantes/couleurs dédiées (SUCRERIE_STOCK_CAP/BATCH_MS, teintes
-          // canne/sucre). Le sprite `sprites.sucrerie` (copie pixel-exacte du
-          // mockup, 95x88, voir fermeArt.js) est plus large que le moulin
-          // (tonneaux + pressoir + tas de canne inclus dans la même image) :
-          // l'offset horizontal recentre la FAÇADE (pas le centre de
-          // l'image, FACADE_CX=36 dans le repère du sprite) sur x*T+8,
-          // exactement là où se trouve la case solide (voir
-          // fermeEngine.js/blockedTile, un seul tile solide malgré le grand
-          // sprite — tonneaux/pressoir/tas de canne ne sont que du décor
-          // traversable, demande explicite de Guillaume). Verticalement,
-          // GROUND_Y=72 (ligne de sol au bas du mur/porte dans le sprite)
-          // est posé sur (y+1)*T.
-          const ii = idxOf(x, y);
-          const readyAt = w.objHp.get(ii);
-          const ready = E.buildReady(readyAt, epochNow);
-          const FACADE_CX = 36, GROUND_Y = 72; // repères dans sucrerieSprite (95x88)
-          const drawX = x * T - (FACADE_CX - 8), drawY = (y + 1) * T - GROUND_Y;
-          if (!ready) {
-            const totalMs = C.BUILD_TIMES.sucrerie;
-            const remaining = E.buildRemainingMs(readyAt, epochNow);
-            const frac = Math.max(0, Math.min(1, 1 - remaining / totalMs));
-            draws.push({ y: (y + 1) * T, fn: () => {
-              drawBuildingShadow(ctx, x * T + 8, (y + 1) * T, 22);
-              ctx.save(); ctx.globalAlpha = 0.55;
-              ctx.drawImage(sprites.sucrerie, drawX, drawY);
-              ctx.restore();
-              drawBuildingFooting(ctx, x * T + 8, (y + 1) * T, 22);
-              const barW = 24, bx = x * T + 8 - barW / 2, by = drawY - 4;
-              ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(bx, by, barW, 3);
-              ctx.fillStyle = "#c9a25a"; ctx.fillRect(bx, by, barW * frac, 3);
-              const totalSec = Math.ceil(remaining / 1000);
-              const mm = String(Math.floor(totalSec / 60)).padStart(2, "0");
-              const ss = String(totalSec % 60).padStart(2, "0");
-              ctx.font = "bold 8px monospace"; ctx.textAlign = "center";
-              ctx.fillStyle = "#00000090"; ctx.fillText(`${mm}:${ss}`, x * T + 8 + 1, by - 3 + 1);
-              ctx.fillStyle = "#fff"; ctx.fillText(`${mm}:${ss}`, x * T + 8, by - 3);
-            } });
-          } else {
-            const ss = w.sucreries.get(ii) || { cane: 0, nextAt: 0 };
-            draws.push({ y: (y + 1) * T, fn: () => {
-              drawBuildingShadow(ctx, x * T + 8, (y + 1) * T, 22);
-              ctx.drawImage(sprites.sucrerie, drawX, drawY);
-              drawBuildingFooting(ctx, x * T + 8, (y + 1) * T, 22);
-              const barW = 24, bx = x * T + 8 - barW / 2;
-              const stockFrac = Math.max(0, Math.min(1, ss.cane / C.SUCRERIE_STOCK_CAP));
-              const stockY = drawY - 4;
-              ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(bx, stockY, barW, 3);
-              ctx.fillStyle = "#5a8a3a"; ctx.fillRect(bx, stockY, barW * stockFrac, 3); // vert canne (distinct de l'or du moulin)
-              if (ss.nextAt) {
-                const remaining = Math.max(0, ss.nextAt - epochNow);
-                const frac = Math.max(0, Math.min(1, 1 - remaining / C.SUCRERIE_BATCH_MS));
-                const by2 = stockY - 5;
-                ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(bx, by2, barW, 3);
-                ctx.fillStyle = "#f2e6b8"; ctx.fillRect(bx, by2, barW * frac, 3); // doré/brun du sac de sucre
-                const totalSec = Math.ceil(remaining / 1000);
-                const mm = String(Math.floor(totalSec / 60)).padStart(2, "0");
-                const ss2 = String(totalSec % 60).padStart(2, "0");
-                ctx.font = "bold 8px monospace"; ctx.textAlign = "center";
-                ctx.fillStyle = "#00000090"; ctx.fillText(`${mm}:${ss2}`, x * T + 8 + 1, by2 - 3 + 1);
-                ctx.fillStyle = "#fff"; ctx.fillText(`${mm}:${ss2}`, x * T + 8, by2 - 3);
-              }
-            } });
-          }
-        }
+        // O_SUCRERIE retiré (chantier "sucrerie déplaçable", 2026-07) : la
+        // sucrerie n'est plus une tuile world.objects (donc plus dessinée
+        // ici) mais un bâtiment d'artisan comme les autres — voir la boucle
+        // générique C.ARTISAN_BUILDINGS plus bas (sprites.artisan.sucrerie),
+        // qui porte maintenant aussi ses jauges stock/batch dédiées.
         else if (o === C.O_CAULDRON) {
           // Chaudron ramené du monde maléfique (chantier 2026-07, demande
           // Guillaume) : posable n'importe où (contrairement à l'ancien
@@ -7487,12 +7467,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           // toiles portent toit/fumée/drapeau au-dessus et tommes/scie/établi
           // débordant devant, donc le bas de toile n'est PLUS la ligne de sol.
           // La collision (footprint) est inchangée.
-          const sc = C.ARTISAN_DRAW_SCALE, dw = bimg.width * sc, dh = bimg.height * sc;
+          // Chantier "sucrerie déplaçable" : réglages PAR BÂTIMENT (voir
+          // C.ARTISAN_FACE_X/ARTISAN_DRAW_SCALE_OVERRIDE, fermeConstants.js)
+          // — repli sur le comportement historique (centre de l'image,
+          // ARTISAN_DRAW_SCALE) pour tout bid qui n'y figure pas, donc AUCUN
+          // changement visuel pour beehive/fromagerie/bakery/sawmill.
+          const sc = (C.ARTISAN_DRAW_SCALE_OVERRIDE && typeof C.ARTISAN_DRAW_SCALE_OVERRIDE[bid] === "number") ? C.ARTISAN_DRAW_SCALE_OVERRIDE[bid] : C.ARTISAN_DRAW_SCALE;
+          const dw = bimg.width * sc, dh = bimg.height * sc;
           const footY = (C.ARTISAN_FOOT && typeof C.ARTISAN_FOOT[bid] === "number") ? C.ARTISAN_FOOT[bid] : bimg.height;
+          const faceX = (C.ARTISAN_FACE_X && typeof C.ARTISAN_FACE_X[bid] === "number") ? C.ARTISAN_FACE_X[bid] : bimg.width / 2;
           const topY = bby - footY * sc;
+          const leftX = bcx - faceX * sc;
           draws.push({ y: bby, fn: () => {
             drawBuildingShadow(ctx, bcx, bby, dw / 2);
-            ctx.drawImage(bimg, Math.round(bcx - dw / 2), Math.round(topY), Math.round(dw), Math.round(dh));
+            ctx.drawImage(bimg, Math.round(leftX), Math.round(topY), Math.round(dw), Math.round(dh));
             drawBuildingFooting(ctx, bcx, bby, dw / 2);
             if (bid === "beehive") { // abeilles tournant autour de la ruche (offsets mis à l'échelle)
               const t = performance.now() / 1000;
@@ -7500,6 +7488,30 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 const a = t * 2 + b * 1.6, bx = bcx + Math.cos(a) * 12 * sc, byp = bby - 20 * sc + Math.sin(a * 1.3) * 8 * sc;
                 ctx.fillStyle = "#3a2a10"; ctx.fillRect(Math.round(bx), Math.round(byp), 2, 2);
                 ctx.fillStyle = "#e8c24a"; ctx.fillRect(Math.round(bx), Math.round(byp), 1, 1);
+              }
+            }
+            if (bid === "sucrerie") {
+              // Chantier "sucrerie déplaçable" : jauges stock de canne/batch
+              // en cours, miroir de l'ancien rendu O_SUCRERIE (mêmes teintes),
+              // maintenant lues sur crafts.sucrerie (cb) au lieu d'une tuile
+              // world.sucreries.
+              const barW = 24, bx2 = bcx - barW / 2;
+              const stockFrac = Math.max(0, Math.min(1, (cb.cane || 0) / C.SUCRERIE_STOCK_CAP));
+              const stockY = topY - 4;
+              ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(bx2, stockY, barW, 3);
+              ctx.fillStyle = "#5a8a3a"; ctx.fillRect(bx2, stockY, barW * stockFrac, 3); // vert canne
+              if (cb.nextAt) {
+                const remaining = Math.max(0, cb.nextAt - epochNow);
+                const frac = Math.max(0, Math.min(1, 1 - remaining / C.SUCRERIE_BATCH_MS));
+                const by2 = stockY - 5;
+                ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(bx2, by2, barW, 3);
+                ctx.fillStyle = "#f2e6b8"; ctx.fillRect(bx2, by2, barW * frac, 3); // doré/brun du sac de sucre
+                const totalSec = Math.ceil(remaining / 1000);
+                const mm = String(Math.floor(totalSec / 60)).padStart(2, "0");
+                const ssTxt = String(totalSec % 60).padStart(2, "0");
+                ctx.font = "bold 8px monospace"; ctx.textAlign = "center";
+                ctx.fillStyle = "#00000090"; ctx.fillText(`${mm}:${ssTxt}`, bcx + 1, by2 - 3 + 1);
+                ctx.fillStyle = "#fff"; ctx.fillText(`${mm}:${ssTxt}`, bcx, by2 - 3);
               }
             }
           } });
@@ -7555,6 +7567,30 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             if (resSuperActive) drawCoffeeAura(Math.round(rx * T), Math.round(ry * T));
             drawCharacter({ id: "res" + res.rid, name: ro.name, x: rx, y: ry, dir: turnAwayDir != null ? turnAwayDir : (res.dir || 0), moving: !!res.moving, animT: res.animT || 0, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap, beeSuit: residentBeeSuit(res, ro), plaid: ro.skill === "lumberjack", cheeseHat: ro.skill === "cheesemaker", sugarWorker: ro.skill === "sugarworker", mount: onWhiteHorse ? "white" : null }, false);
             if (ro.skill === "breadmaker" && (inScene || (performance.now() % 12000 < 3000)) && turnAwayDir == null) drawFrown(ctx, Math.round(rx * T) + 8, Math.round(ry * T) - 2);
+            // Chantier fumigateur (demande Guillaume) : René tient un petit
+            // fumigateur pendant sa phase de travail (même condition que la
+            // combinaison, voir residentBeeSuit), parfois dirigé vers la
+            // ruche avec un souffle de fumée semi-transparente (res.smoking,
+            // voir la pause dédiée dans residentRoam).
+            if (residentBeeSuit(res, ro)) {
+              const rdir = turnAwayDir != null ? turnAwayDir : (res.dir || 0);
+              const handDx = [0, 0, -8, 8][rdir] || 0, handDy = [7, 3, 5, 5][rdir] || 5;
+              const hx = Math.round(rx * T + 12 + handDx), hy = Math.round((ry + 1) * T - 16 + handDy);
+              ctx.fillStyle = "#585858"; ctx.fillRect(hx, hy, 3, 4); // petit corps métallique du fumigateur
+              ctx.fillStyle = "#e8c24a"; ctx.fillRect(hx, hy + 3, 3, 1); // liseré doré à la base
+              ctx.fillStyle = "#3a3a3a"; ctx.fillRect(hx + (rdir === 2 ? -2 : 3), hy, 2, 1); // bec
+              if (res.smoking) {
+                const hcx = C.BEEKEEPER_ANCHOR.x * T + 8, hcy = (C.BEEKEEPER_ANCHOR.y + 1) * T - 10;
+                const sdx = hcx - hx, sdy = hcy - hy;
+                const t2 = performance.now() / 480;
+                for (let p = 0; p < 4; p++) {
+                  const along = (p + 1) / 5, wob = Math.sin(t2 + p * 1.7) * 1.5;
+                  const px = hx + sdx * along + wob, py = hy + sdy * along - p * 1.2;
+                  ctx.fillStyle = `rgba(225,225,225,${0.32 - p * 0.06})`;
+                  ctx.beginPath(); ctx.arc(px, py, 1.5 + p * 0.5, 0, Math.PI * 2); ctx.fill();
+                }
+              }
+            }
             // Zip suivant : bulle de la scène Chloé/Rosalie en cours, si CE
             // résident est bien le locuteur de l'étape actuelle.
             if (sceneNow) {
@@ -9585,11 +9621,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // suivant (herbe = replanter sur une case labourée, chantier 2026-07).
   const buyGrass = (n) => { sendReq({ kind: "buy", item: "grass", n }); buildKindRef.current = "grass"; setBuildKind("grass"); };
   const buyMill = (n) => { sendReq({ kind: "buy", item: "mill", n }); buildKindRef.current = "mill"; setBuildKind("mill"); };
-  // Sucrerie (chantier reprise) : bâtiment d'artisan comme les autres —
-  // achat gaté côté hôte par la présence de Jérôme Martial comme résident,
-  // auto-posée à un emplacement fixe (voir hostHandleReqUnsafe, cas
-  // "buySucrerieBuilding"). Plus de variante Construction à équiper.
-  const buySucrerieBuilding = () => sendReq({ kind: "buySucrerieBuilding" });
+  // Sucrerie : achat désormais via buyArtisanBuilding("sucrerie") (chantier
+  // "sucrerie déplaçable", voir la ligne générique de boutique plus bas) —
+  // buySucrerieBuilding retiré, le const dédié n'a plus d'utilité.
   const buyHealKit = (n) => sendReq({ kind: "buy", item: "healKit", n });
   // Pommade de protection (chantier 2026-07, demande Guillaume : plus
   // achetable en boutique — désormais fabriquée à un chaudron ramené du
@@ -10688,29 +10722,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               <div className="info"><b>{L.millRowTitle(C.MILL_COST)}</b><span>{L.millRowSub(myInv ? (myInv.mill || 0) : 0)}</span></div>
               <button disabled={hud.money < C.MILL_COST} onClick={() => buyMill(1)}>{L.buy1}</button>
             </div>
-            {/* Sucrerie (chantier reprise) : bâtiment d'artisan comme les
-                autres — visible seulement quand Jérôme Martial (sugarworker)
-                vit chez nous, un seul exemplaire (auto-posé à site fixe, voir
-                buySucrerieBuilding). Le sprite complet (copie pixel-exacte du
-                mockup, 95x88) est plus large qu'une icône de boutique :
-                `sx`/`sy` cadrent ici sur la maison + cheminée + tonneaux
-                SEULS, même recadrage que l'ancienne icône d'outil. */}
-            {(() => {
-              const residents = (stationSt && stationSt.residents) || [];
-              const hasSugarworker = residents.some(r => (C.VISITOR_ROSTER[r.rid] || {}).skill === "sugarworker");
-              if (!hasSugarworker) return null;
-              const site = C.SUCRERIE_SITE;
-              const w0 = worldRef.current;
-              const built = !!(w0 && w0.objects && w0.objects[idxOf(site.x, site.y)] === C.O_SUCRERIE);
-              return (
-                <div className="ferme-shop-row">
-                  <Sprite img={spritesReady ? spritesRef.current.sucrerie : null} sx={65} sy={76} w={30} h={35} />
-                  <div className="info"><b>{L.sucrerieRowTitle(C.SUCRERIE_COST)}</b><span>{built ? L.artisanOwnedBtn : L.sucrerieRowSub()}</span></div>
-                  <button disabled={built || hud.money < C.SUCRERIE_COST} onClick={buySucrerieBuilding}>{built ? L.artisanOwnedBtn : L.buy1}</button>
-                </div>
-              );
-            })()}
-            {/* Zip 252 : ateliers d'artisans — visibles seulement quand l'artisan concerné vit chez nous. */}
+            {/* Zip 252 : ateliers d'artisans — visibles seulement quand l'artisan concerné vit chez nous.
+                Chantier "sucrerie déplaçable" (2026-07) : la sucrerie (skill
+                "sugarworker"/Jérôme Martial) a rejoint cette liste générique
+                au lieu d'une ligne dédiée — même achat (buyArtisanBuilding),
+                même gate par résident (hasSkill ci-dessous couvre déjà
+                "sugarworker" via C.ARTISAN_BUILDINGS.sucrerie.skill). Seule
+                différence conservée : son icône recadre la maison + cheminée
+                + tonneaux (sx/sy) au lieu du plein cadrage 32x36 des autres,
+                le sprite pixel-exact (95x88) étant bien plus large qu'eux. */}
             {(() => {
               const residents = (stationSt && stationSt.residents) || [];
               const hasSkill = (sk) => residents.some(r => (C.VISITOR_ROSTER[r.rid] || {}).skill === sk);
@@ -10723,10 +10743,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 {rows.map(bid => {
                   const def = C.ARTISAN_BUILDINGS[bid];
                   const built = sharedRef.current.crafts && sharedRef.current.crafts[bid] && sharedRef.current.crafts[bid].built;
+                  const isSucrerie = bid === "sucrerie";
                   return (
                     <div className="ferme-shop-row" key={"art" + bid}>
-                      <Sprite img={spritesReady ? spritesRef.current.artisan[bid] : null} w={32} h={36} />
-                      <div className="info"><b>{L.buildingName(bid)} — {"\u{1FA99}"} {def.cost}</b><span>{built ? L.artisanOwnedBtn : (bid === "sawmill" ? L.sawmillShopSub : L.craftName(bid === "beehive" ? "honey" : bid === "fromagerie" ? "cheeseWheel" : "gateauBasque"))}</span></div>
+                      <Sprite img={spritesReady ? spritesRef.current.artisan[bid] : null} {...(isSucrerie ? { sx: 65, sy: 76, w: 30, h: 35 } : { w: 32, h: 36 })} />
+                      <div className="info"><b>{L.buildingName(bid)} — {"\u{1FA99}"} {def.cost}</b><span>{built ? L.artisanOwnedBtn : (isSucrerie ? L.sucrerieRowSub() : bid === "sawmill" ? L.sawmillShopSub : L.craftName(bid === "beehive" ? "honey" : bid === "fromagerie" ? "cheeseWheel" : "gateauBasque"))}</span></div>
                       <button disabled={built || hud.money < def.cost} onClick={() => buyArtisanBuilding(bid)}>{built ? L.artisanOwnedBtn : L.artisanBuyBtn}</button>
                     </div>
                   );
