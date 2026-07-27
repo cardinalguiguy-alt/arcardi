@@ -7614,7 +7614,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           draws.push({ y: (ry + 1) * T, fn: () => {
             if (resSuperActive) drawCoffeeAura(Math.round(rx * T), Math.round(ry * T));
             drawCharacter({ id: "res" + res.rid, name: ro.name, x: rx, y: ry, dir: turnAwayDir != null ? turnAwayDir : (res.dir || 0), moving: !!res.moving, animT: res.animT || 0, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap, beeSuit: residentBeeSuit(res, ro), plaid: ro.skill === "lumberjack", cheeseHat: ro.skill === "cheesemaker", sugarWorker: ro.skill === "sugarworker", mount: onWhiteHorse ? "white" : null }, false);
-            if (ro.skill === "breadmaker" && (inScene || (performance.now() % 12000 < 3000)) && turnAwayDir == null) drawFrown(ctx, Math.round(rx * T) + 8, Math.round(ry * T) - 2);
+            if (ro.skill === "breadmaker" && (inScene || (performance.now() % 12000 < 3000)) && turnAwayDir == null) drawFrown(ctx, Math.round(rx * T) + 8, Math.round(ry * T) - 3);
             // Chantier fumigateur (demande Guillaume) : René tient un petit
             // fumigateur pendant sa phase de travail (même condition que la
             // combinaison, voir residentBeeSuit), parfois dirigé vers la
@@ -8801,8 +8801,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       ctx.save();
       ctx.strokeStyle = "#2a1a12"; ctx.lineWidth = 1; ctx.lineCap = "round";
       ctx.beginPath();
-      ctx.moveTo(cx - 5, cy - 2); ctx.lineTo(cx - 1, cy);
-      ctx.moveTo(cx + 5, cy - 2); ctx.lineTo(cx + 1, cy);
+      ctx.moveTo(cx - 4, cy - 2); ctx.lineTo(cx - 1, cy);
+      ctx.moveTo(cx + 4, cy - 2); ctx.lineTo(cx + 1, cy);
       ctx.stroke();
       ctx.restore();
     }
