@@ -140,7 +140,8 @@ export const CROPS = [
   { id: 6, name: "Navet doré",    nameEn: "Golden turnip", seedName: "Graine de navet doré",    seedNameEn: "Golden turnip seeds", growMs: 6 * H,  seedCost: 0, sell: 260, color: "#f6d76a", top: "#e0b02a", unique: true },
   { id: 7, name: "Baie étoilée",  nameEn: "Star berry",    seedName: "Graine de baie étoilée",  seedNameEn: "Star berry seeds",    growMs: 12 * H, seedCost: 0, sell: 460, color: "#b48ef0", top: "#7a4ee0", unique: true },
   // Canne à sucre (chantier sucrerie) — extrapolée au-dessus du maïs.
-  { id: 8, name: "Canne à sucre", nameEn: "Sugar cane", seedName: "Bouture de canne à sucre", seedNameEn: "Sugar cane cutting", growMs: 48 * H, seedCost: 160, sell: 620, color: "#7fae4a", top: "#4a7a2e" },
+  // Zip 341 (demande Guillaume : réduire un peu la durée de pousse) : 48h -> 36h.
+  { id: 8, name: "Canne à sucre", nameEn: "Sugar cane", seedName: "Bouture de canne à sucre", seedNameEn: "Sugar cane cutting", growMs: 36 * H, seedCost: 160, sell: 620, color: "#7fae4a", top: "#4a7a2e" },
 ];
 export const CROP_STAGES = 5; // 0..4, stage 4 = mûr
 // Durée réelle pendant laquelle un arrosage reste valable : passé ce délai sans
