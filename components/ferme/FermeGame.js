@@ -7144,6 +7144,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const y0 = Math.max(0, Math.floor(cam.y / T)), y1 = Math.min(w.h - 1, Math.ceil((cam.y + cam.vh) / T));
       const waterFrame = Math.floor(now / 600) % 2;
       const draws = [];  // FIX 240: déclaré AVANT la boucle de tuiles (le rendu des buissons à baies y pousse via draws.push — cf. modèle evil/town). Corrige le ReferenceError TDZ qui noircissait la moitié basse de la ferme.
+      // Zip suivant (retour Guillaume : les bulles de dialogue se retrouvaient
+      // masquées derrière des bâtiments proches) : le tri "draws" ci-dessus se
+      // fait par ancrage au SOL (pieds du personnage / base du bâtiment), pas
+      // par étendue visuelle — une bulle, qui dépasse largement au-dessus de
+      // la tête, pouvait donc se faire recouvrir par un bâtiment dessiné
+      // ensuite (base plus basse = dessiné après = par-dessus). On ne dessine
+      // donc plus les bulles inline dans chaque draw : elles sont mises en
+      // file ici et rendues dans une dernière passe, APRÈS tout le reste,
+      // donc toujours au-dessus (voir bubbleQueue.forEach plus bas).
+      const bubbleQueue = [];
+      const queueBubble = (cx, by, text, major) => bubbleQueue.push({ cx, by, text, major });
 
       for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
         const i = idxOf(x, y), g = w.ground[i];
@@ -7840,13 +7851,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               const rc = vv.tjReact;
               if (rc.phase === "gathered") {
                 const lines = L.tjCrowdLines || [];
-                if (lines.length) {
+                // Zip suivant (retour Guillaume : bulles de l'attroupement
+                // illisibles quand beaucoup de PNJ accourent) : sur un
+                // attroupement nombreux, TOUT LE MONDE parlait EN MÊME TEMPS
+                // (seul le texte différait selon rid) -> bulles qui se
+                // chevauchent. On répartit désormais l'affichage en 3
+                // "tours" tournants (rid % 3), un seul tiers de la foule
+                // parle à la fois -> moins de bulles simultanées, tout en
+                // gardant l'ambiance vivante (chacun parle à son tour).
+                if (lines.length && C.TJ_REACT_TALK_SLOTS && Math.floor(performance.now() / (C.TJ_REACT_LINE_PERIOD_MS / C.TJ_REACT_TALK_SLOTS)) % C.TJ_REACT_TALK_SLOTS === vv.rid % C.TJ_REACT_TALK_SLOTS) {
                   const now3 = performance.now();
                   const txt = lines[Math.floor(now3 / C.TJ_REACT_LINE_PERIOD_MS + vv.rid) % lines.length];
-                  drawSpeechBubble(ctx, Math.round(vx * T) + 8, Math.round(vy * T) - 18, txt);
+                  queueBubble(Math.round(vx * T) + 8, Math.round(vy * T) - 18, txt, false);
                 }
               } else if (rc.phase === "returning" && rc.afterLine && Date.now() < rc.returnAt) {
-                drawSpeechBubble(ctx, Math.round(vx * T) + 8, Math.round(vy * T) - 18, rc.afterLine);
+                queueBubble(Math.round(vx * T) + 8, Math.round(vy * T) - 18, rc.afterLine, false);
               }
             }
           } });
@@ -8147,7 +8166,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             if (sceneNow) {
               const line = sceneNow.lines[sceneNow.stepIdx];
               if (line && ((line.who === "rosalie" && res.rid === sceneNow.rosalieRid) || (line.who === "chloe" && res.rid === sceneNow.chloeRid))) {
-                drawSpeechBubble(ctx, Math.round(rx * T) + 8, Math.round(ry * T) - 18, line.text);
+                queueBubble(Math.round(rx * T) + 8, Math.round(ry * T) - 18, line.text, true);
               }
             }
             // Bulle de la scène de provocation Tristan/Jérôme en cours, si CE
@@ -8161,7 +8180,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               const speaksTristan = line && line.who === "tristan" && ro.skill === "lumberjack";
               const speaksJerome = line && line.who === "jerome" && ro.skill === "sugarworker";
               if (speaksTristan || speaksJerome) {
-                drawSpeechBubble(ctx, Math.round(rx * T) + 8, Math.round(ry * T) - 18, line.text);
+                queueBubble(Math.round(rx * T) + 8, Math.round(ry * T) - 18, line.text, true);
               }
             }
             // Bulle de la réaction de foule (bagarre Tristan/Jérôme, voir
@@ -8173,13 +8192,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               const rc = res.tjReact;
               if (rc.phase === "gathered") {
                 const lines = L.tjCrowdLines || [];
-                if (lines.length) {
+                // Voir le même correctif côté visiteurs plus haut (rotation
+                // par tiers de foule, C.TJ_REACT_TALK_SLOTS) : évite que
+                // toutes les bulles de l'attroupement s'affichent en même
+                // temps et se chevauchent.
+                if (lines.length && C.TJ_REACT_TALK_SLOTS && Math.floor(performance.now() / (C.TJ_REACT_LINE_PERIOD_MS / C.TJ_REACT_TALK_SLOTS)) % C.TJ_REACT_TALK_SLOTS === res.rid % C.TJ_REACT_TALK_SLOTS) {
                   const now3 = performance.now();
                   const txt = lines[Math.floor(now3 / C.TJ_REACT_LINE_PERIOD_MS + res.rid) % lines.length];
-                  drawSpeechBubble(ctx, Math.round(rx * T) + 8, Math.round(ry * T) - 18, txt);
+                  queueBubble(Math.round(rx * T) + 8, Math.round(ry * T) - 18, txt, false);
                 }
               } else if (rc.phase === "returning" && rc.afterLine && Date.now() < rc.returnAt) {
-                drawSpeechBubble(ctx, Math.round(rx * T) + 8, Math.round(ry * T) - 18, rc.afterLine);
+                queueBubble(Math.round(rx * T) + 8, Math.round(ry * T) - 18, rc.afterLine, false);
               }
             }
             // Bulle métier quand le joueur local est à proximité (zip 299).
@@ -8223,7 +8246,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 } else {
                   txt = talkLines[Math.floor(now2 / period + res.rid) % talkLines.length];
                 }
-                drawSpeechBubble(ctx, Math.round(rx * T) + 8, Math.round(ry * T) - 18, txt);
+                queueBubble(Math.round(rx * T) + 8, Math.round(ry * T) - 18, txt, false);
               }
             }
           } });
@@ -8237,6 +8260,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // interrompait TOUTE la frame triée -> moitié basse de la ferme non
       // dessinée. La ferme étant la zone principale, ce filet manquait.
       for (const d of draws) { try { d.fn(); } catch (e) { console.error("[FERME] farm draw ignoré", e); } }
+      // Passe finale des bulles (voir déclaration de bubbleQueue plus haut) :
+      // toujours rendues APRÈS tout le reste de la scène (bâtiments compris),
+      // donc jamais recouvertes. On les trie aussi par y pour qu'une bulle
+      // plus basse à l'écran (personnage au premier plan) passe par-dessus
+      // celle d'un personnage plus en arrière-plan, comme avant ce correctif.
+      bubbleQueue.sort((a, b) => a.by - b.by);
+      for (const bq of bubbleQueue) { try { drawSpeechBubble(ctx, bq.cx, bq.by, bq.text, bq.major); } catch (e) { console.error("[FERME] bulle ignorée", e); } }
 
       const fx = fxRef.current;
       for (let i = fx.length - 1; i >= 0; i--) {
@@ -9320,19 +9350,58 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       ctx.stroke();
       ctx.restore();
     }
-    function drawSpeechBubble(ctx, cx, by, text) {
+    // Zip suivant (demande Guillaume) : deux apparences de bulle. "Majeure"
+    // pour les protagonistes d'une scène (Chloé/Rosalie, Tristan/Jérôme) —
+    // police plus grande, une seule ligne, comme avant. "Mineure" pour tout
+    // le reste (réactions de foule, bulles métier "flavor") — police plus
+    // petite ET retour à la ligne (texte replié sur plusieurs lignes plutôt
+    // qu'une bulle très large), pour rester discrète et lisible même en
+    // attroupement. `major` (bool) sélectionne le style ; par défaut majeure
+    // pour rester rétro-compatible si un appelant omet le paramètre.
+    function wrapBubbleText(ctx, text, maxWidth) {
+      const words = text.split(" ");
+      const lines = [];
+      let cur = "";
+      for (const w of words) {
+        const test = cur ? cur + " " + w : w;
+        if (ctx.measureText(test).width > maxWidth && cur) { lines.push(cur); cur = w; }
+        else cur = test;
+      }
+      if (cur) lines.push(cur);
+      return lines;
+    }
+    function drawSpeechBubble(ctx, cx, by, text, major) {
+      if (major == null) major = true;
       ctx.save();
-      ctx.font = "7px monospace"; ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
-      const padX = 4, bh = 13;
-      const tw = Math.ceil(ctx.measureText(text).width), bw = tw + padX * 2;
-      let bx = Math.round(cx - bw / 2);
-      bx = Math.max(2, Math.min(bx, C.MAP_W * T - bw - 2));
-      const byTop = Math.round(by - bh);
-      ctx.fillStyle = "rgba(255,255,255,0.93)"; ctx.strokeStyle = "rgba(0,0,0,0.55)"; ctx.lineWidth = 1;
-      if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(bx, byTop, bw, bh, 3); ctx.fill(); ctx.stroke(); }
-      else { ctx.fillRect(bx, byTop, bw, bh); ctx.strokeRect(bx, byTop, bw, bh); }
-      ctx.beginPath(); ctx.moveTo(cx - 3, byTop + bh - 0.5); ctx.lineTo(cx + 3, byTop + bh - 0.5); ctx.lineTo(cx, byTop + bh + 4); ctx.closePath(); ctx.fill();
-      ctx.fillStyle = "#1d1d1d"; ctx.fillText(text, bx + padX, byTop + bh - 4);
+      ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+      if (major) {
+        ctx.font = "bold 7px monospace";
+        const padX = 4, bh = 13;
+        const tw = Math.ceil(ctx.measureText(text).width), bw = tw + padX * 2;
+        let bx = Math.round(cx - bw / 2);
+        bx = Math.max(2, Math.min(bx, C.MAP_W * T - bw - 2));
+        const byTop = Math.round(by - bh);
+        ctx.fillStyle = "rgba(255,255,255,0.96)"; ctx.strokeStyle = "rgba(0,0,0,0.6)"; ctx.lineWidth = 1;
+        if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(bx, byTop, bw, bh, 3); ctx.fill(); ctx.stroke(); }
+        else { ctx.fillRect(bx, byTop, bw, bh); ctx.strokeRect(bx, byTop, bw, bh); }
+        ctx.beginPath(); ctx.moveTo(cx - 3, byTop + bh - 0.5); ctx.lineTo(cx + 3, byTop + bh - 0.5); ctx.lineTo(cx, byTop + bh + 4); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = "#1d1d1d"; ctx.fillText(text, bx + padX, byTop + bh - 4);
+      } else {
+        ctx.font = "6px monospace";
+        const padX = 3, lineH = 7, maxWidth = 64;
+        const lines = wrapBubbleText(ctx, text, maxWidth);
+        const tw = Math.ceil(Math.max(...lines.map(l => ctx.measureText(l).width)));
+        const bw = tw + padX * 2, bh = lines.length * lineH + 4;
+        let bx = Math.round(cx - bw / 2);
+        bx = Math.max(2, Math.min(bx, C.MAP_W * T - bw - 2));
+        const byTop = Math.round(by - bh);
+        ctx.fillStyle = "rgba(255,255,255,0.85)"; ctx.strokeStyle = "rgba(0,0,0,0.4)"; ctx.lineWidth = 1;
+        if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(bx, byTop, bw, bh, 2); ctx.fill(); ctx.stroke(); }
+        else { ctx.fillRect(bx, byTop, bw, bh); ctx.strokeRect(bx, byTop, bw, bh); }
+        ctx.beginPath(); ctx.moveTo(cx - 2, byTop + bh - 0.5); ctx.lineTo(cx + 2, byTop + bh - 0.5); ctx.lineTo(cx, byTop + bh + 3); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = "#3a3a3a";
+        lines.forEach((l, i) => ctx.fillText(l, bx + padX, byTop + 5 + i * lineH));
+      }
       ctx.restore();
     }
     function drawCharacter(p, isSelf) {

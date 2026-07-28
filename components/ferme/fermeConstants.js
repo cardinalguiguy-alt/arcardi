@@ -1570,6 +1570,12 @@ export const TJ_REACT_GATHER_MAX_DIST = 3.2; // idem, borne haute
 export const TJ_REACT_SPEED_MUL = 1.35; // pas pressé (curieux/inquiet) mais pas le sprint de l'instigateur (storming, ×1.9)
 export const TJ_REACT_RETURN_SPEED_MUL = 0.55; // rythme du retour tranquille vers l'activité d'avant, une fois la scène finie
 export const TJ_REACT_LINE_PERIOD_MS = 2800; // cycle d'affichage des commentaires inquiets pendant l'attroupement (même principe que skillTalk)
+// Zip suivant (retour Guillaume : bulles de l'attroupement illisibles à
+// plusieurs, elles se chevauchent) : au lieu que TOUT l'attroupement parle en
+// permanence en même temps, on répartit l'affichage en 3 "tours" tournants
+// (rid % TJ_REACT_TALK_SLOTS) — un seul tiers de la foule montre sa bulle à
+// la fois, le reste attend son tour (voir le rendu, boucle résidents/visiteurs).
+export const TJ_REACT_TALK_SLOTS = 3;
 export const TJ_REACT_AFTER_MS = 6000; // mot de la fin affiché avant de repartir, une fois la bagarre résolue (voir TJ_BRAWL_IMMINENT_DELAY_MS pour le total ~30s)
 
 // Chantier "relations entre résidents" (2026-07, demande Guillaume : "des
