@@ -2743,7 +2743,19 @@ export function migrateCrafts(cr) {
     // du bâtiment, voir moveArtisan) à travers synchros invité et changements
     // d'hôte — sinon un bâtiment déplacé "sauterait" à son site d'origine.
     if (cr[bid] && typeof cr[bid] === "object") {
-      out[bid] = { built: !!cr[bid].built, nextAt: cr[bid].nextAt | 0, alert: !!cr[bid].alert };
+      // Correctif "persistance de la presse à canne" (retour Guillaume) :
+      // `nextAt` est un horodatage ABSOLU (Date.now() + délai, potentiellement
+      // ~1,7 * 10^12 ms). `| 0` (OU bit à bit) convertit en entier 32 bits
+      // SIGNÉ (ToInt32) : bien au-delà de ±2^31 (~2,1 milliard), la valeur
+      // "wrap" en un nombre quasi aléatoire, presque toujours très inférieur
+      // à l'heure réelle. Au rechargement suivant, le rattrapage de
+      // production (sucrerieTick et consorts) croit alors avoir un retard
+      // énorme et vide le stock déposé (canne, pain...) d'un coup pour
+      // produire en rafale. `|| 0` (OU logique, simple filet anti-NaN/undefined
+      // comme partout ailleurs dans le fichier, ex. serializeMills) ne tronque
+      // rien et corrige le problème pour TOUS les ateliers (pas seulement la
+      // sucrerie).
+      out[bid] = { built: !!cr[bid].built, nextAt: cr[bid].nextAt || 0, alert: !!cr[bid].alert };
       if (cr[bid].pos && typeof cr[bid].pos.x === "number" && typeof cr[bid].pos.y === "number") out[bid].pos = { x: cr[bid].pos.x, y: cr[bid].pos.y };
       // Zip 301 : préserver le réglage du ratio fromage/beurre (fromagerie) et
       // les bookkeepings de production de Rosalie (bakery) à travers les
@@ -2753,7 +2765,9 @@ export function migrateCrafts(cr) {
         if (typeof cr[bid].ratioAcc === "number") out[bid].ratioAcc = cr[bid].ratioAcc;
       }
       if (bid === "bakery") {
-        if (typeof cr[bid].breadNextAt === "number") out[bid].breadNextAt = cr[bid].breadNextAt | 0;
+        // Même correctif que nextAt ci-dessus : breadNextAt est lui aussi un
+        // horodatage absolu, pas un petit entier — `| 0` le tronquait pareil.
+        if (typeof cr[bid].breadNextAt === "number") out[bid].breadNextAt = cr[bid].breadNextAt || 0;
         if (typeof cr[bid].viennoIdx === "number") out[bid].viennoIdx = cr[bid].viennoIdx | 0;
       }
       // Chantier "sucrerie déplaçable" (2026-07, demande Guillaume) : la
@@ -3754,10 +3768,14 @@ export function migrateBalloon(b) {
   out.tickets = Array.isArray(b.tickets)
     ? b.tickets.filter(t => t && typeof t.id !== "undefined").slice(0, C.BALLOON_CAPACITY)
     : [];
-  out.boardingUntil = b.boardingUntil | 0;
-  out.flightStartAt = b.flightStartAt | 0;
-  out.flightEndAt = b.flightEndAt | 0;
-  out.nextDepartureAt = b.nextDepartureAt | 0;
+  // Même correctif que migrateCrafts ci-dessus (nextAt) : ces 4 champs sont
+  // des horodatages ABSOLUS, `| 0` les tronquait en entier 32 bits signé et
+  // les corrompait à chaque migration (chargement, synchro invité...). `|| 0`
+  // ne tronque rien.
+  out.boardingUntil = b.boardingUntil || 0;
+  out.flightStartAt = b.flightStartAt || 0;
+  out.flightEndAt = b.flightEndAt || 0;
+  out.nextDepartureAt = b.nextDepartureAt || 0;
   out.isNightFlight = !!b.isNightFlight;
   out.seed = b.seed | 0;
   out.soldToday = Math.max(0, b.soldToday | 0);
