@@ -167,6 +167,11 @@ export const FERME_STR = {
       breadmaker: `${n}. Boulangère. Je fais le pain et les viennoiseries. Si vous avez du beurre, tant mieux ; sinon ce sera pain sec.`,
       lumberjack: `Bonjour ! Moi c'est ${n}, je suis bûcheron et je souhaite vous aider à abattre les arbres et casser les rochers.`,
       voyager: `Bonjour ! Moi c'est ${n}, je suis marchand voyageur et je souhaite parcourir le monde pour vous rapporter des denrées rares.`,
+      // Zip suivant (demande Guillaume) : bio de Jérôme Martial, sucrier
+      // martiniquais. Se présente sous son surnom, explique son parcours
+      // (parti travailler ailleurs pour aider sa famille restée au pays) et
+      // sa fierté d'apporter son savoir-faire à la ferme.
+      sugarworker: `Bel bonjou ! Tu peux m'appeler Ti Jérôme. Je viens de Martinique — j'ai dû partir chercher du travail ailleurs pour aider ma famille restée au pays. Aujourd'hui je suis fier de faire partie de la ferme et d'y apporter mon savoir-faire de sucrier.`,
     }[sk] || `Bonjour ! Moi c'est ${n}.`),
     // Zip 299 (demande Guillaume) : petite réplique liée à son activité, affichée
     // en bulle au-dessus d'un artisan quand le joueur s'en approche.
@@ -179,6 +184,10 @@ export const FERME_STR = {
       breadmaker: ["Quoi encore.", "Le pain sera prêt quand il sera prêt. Pas avant.", "Tu comptes rester planté là longtemps ?", "Pas de beurre, pas de viennoiseries. C'est comme ça.", "Hmph.", "Tu veux te battre, c'est ça ? Tu veux te battre ?", "...", "Tu veux que je te mette au four ?", "Recule"],
       lumberjack: ["J'abats, je scie, je casse du caillou !", "Encore un arbre et je fais une pause.", "Le bois part direct à la réserve commune.", "Ma hache n'a jamais été aussi affûtée."],
       voyager: ["Je repars bientôt pour des terres lointaines.", "J'ai rapporté des denrées rares du bout du monde.", "Passe commande, je te trouve ça !", "Le grand large me manque déjà."],
+      // Zip suivant (demande Guillaume) : répliques créoles de Jérôme Martial
+      // (sucrier), identiques FR/EN comme demandé — "Sawfe" (santé/salut) et
+      // "pani tchak" restent en créole dans les deux langues.
+      sugarworker: ["Bel bonjou !", "Sawfe", "pani tchak"],
     },
     // Zip 327 (demande Guillaume) : phases "renfermé"/bougon de René,
     // indépendantes du cycle travail/pause — voir RENE_GRUMPY_CYCLE_MS.
@@ -317,6 +326,23 @@ export const FERME_STR = {
         { who: "tristan", text: "#%!&." },
         { who: "jerome", text: "Pareillement." },
       ],
+      [ // T5 — demande Guillaume : Tristan traite Jérôme de mal élevé
+        { who: "tristan", text: "T'as vraiment aucune éducation, Jérôme." },
+        { who: "jerome", text: "Mal élevé, moi ? Au moins moi, je sais parler aux gens." },
+        { who: "tristan", text: "Tu passes ton temps à insulter tout le village !" },
+        { who: "jerome", text: "Et toi, tu passes le tien à rien faire d'utile." },
+        { who: "tristan", text: "#%!&, répète ça." },
+        { who: "jerome", text: "Volontiers." },
+      ],
+      [ // T6 — demande Guillaume : Jérôme traite Tristan d'inutile, jaloux qu'Ingrid l'apprécie
+        { who: "jerome", text: "Franchement, Tristan, à quoi tu sers ici ?" },
+        { who: "tristan", text: "Je bosse plus dur que toi, sucrier de pacotille." },
+        { who: "jerome", text: "Tu bosses surtout à me suivre partout. T'es juste jaloux qu'Ingrid m'aime bien." },
+        { who: "tristan", text: "N'importe quoi, ça n'a rien à voir !" },
+        { who: "jerome", text: "Si, ça a tout à voir. T'es un inutile jaloux, voilà ce que t'es." },
+        { who: "tristan", text: "#%!&, tu vas regretter d'avoir dit ça." },
+        { who: "jerome", text: "On verra bien." },
+      ],
     ],
     // Toast global (visible par toute la room, PAS filtré par joueur — voir le
     // nouveau flag toast.broadcast) au départ en trombe de l'un vers l'autre :
@@ -332,6 +358,15 @@ export const FERME_STR = {
     residentBuildingReady: (b) => `Ma ${b} tourne. Garde nos stocks remplis et je fais le reste !`,
     residentLumberjackLine: "Je coupe du bois, casse des cailloux et scie des planches toute la journée — tout va dans notre réserve commune.",
     residentCloseBtn: "À plus tard",
+    // Chantier "relations entre résidents" (2026-07, demande Guillaume) :
+    // petite section de la fiche listant qui il/elle apprécie ou évite.
+    // Pensé pour évoluer au fil de l'histoire (voir RESIDENT_AFFINITIES).
+    residentAffinitiesTitle: "Relations",
+    residentAffinityAlly: (n) => `Ami(e) avec ${n}`,
+    residentAffinityEnemy: (n) => `En froid avec ${n}`,
+    // Demande Guillaume : interjection créole de Jérôme, parfois lâchée avant
+    // de répondre à une remarque vexante de Tristan (pas systématique).
+    jeromeInterjection: "Kisa i ka di mwen ?",
     // Zip 253 : fiche résident enrichie + onglet Employés.
     residentRoleTitle: "Production",
     residentNotWorkingYet: "Pas encore d'atelier — je m'installe.",
@@ -514,6 +549,10 @@ export const FERME_STR = {
     scarecrowTip: "Épouvantail : pose ou retire un épouvantail sur la case visée (chantier de 10 secondes réelles). Ne bloque pas le passage.",
     // Zip 251 : outil main + décorations.
     handTip: "Main : pose une décoration du sac, déplace lampadaires/épouvantails/décos, ou reprends-les dans le sac (R). Marche à la ferme et en ville.",
+    // Demande Guillaume : trousse de soins armée depuis le sac (clic sur la
+    // ligne "pansements") — le soin se déclenche automatiquement (E/Espace)
+    // à l'approche d'un joueur ou résident blessé.
+    healKitArmedTip: "Trousse de soins armée : approche-toi d'un joueur ou d'un résident blessé et appuie sur E (ou Espace) pour le soigner.",
     handMenuTitle: "🖐️ Décorations à poser",
     handMenuEmpty: "Aucune décoration en sac. On en reçoit en cadeau des visiteurs.",
     handMoveHint: "Clique un objet pour l'attraper, puis clique une case pour le poser (R = ranger dans le sac).",
@@ -1158,6 +1197,10 @@ export const FERME_STR = {
       breadmaker: `${n}. Baker. I make the bread and the viennoiseries. If you've got butter, good; otherwise it's plain bread.`,
       lumberjack: `Hi! I'm ${n}, I'm a lumberjack and I'd like to help you fell trees and break rocks.`,
       voyager: `Hi! I'm ${n}, I'm a traveling merchant and I'd like to sail the world to bring you rare goods.`,
+      // Jérôme Martial's bio: introduces himself by his nickname, explains he
+      // left Martinique to find work elsewhere and support his family back
+      // home, and is proud to bring his sugar-making know-how to the farm.
+      sugarworker: `Bel bonjou! You can call me Ti Jérôme. I'm from Martinique — I had to leave to find work elsewhere and support my family back home. Today I'm proud to be part of the farm and bring my sugar-making know-how.`,
     }[sk] || `Hi! I'm ${n}.`),
     // Zip 299: short activity-related line shown in a bubble above an artisan
     // when the player walks up to them.
@@ -1169,6 +1212,9 @@ export const FERME_STR = {
       breadmaker: ["What now.", "The bread's ready when it's ready. Not before.", "You planning to just stand there?", "No butter, no viennoiseries. That's how it is.", "Hmph.", "You want to fight, is that it? You want to fight?", "...", "Want me to put you in the oven?", "Back off."],
       lumberjack: ["I fell, I saw, I crack rocks!", "One more tree and I'll take a break.", "The wood goes straight to our common stock.", "My axe has never been sharper."],
       voyager: ["I set sail again soon for distant lands.", "I brought back rare goods from afar.", "Place an order and I'll find it for you!", "I already miss the open sea."],
+      // Jérôme Martial's Creole lines — kept identical to the French version,
+      // as requested ("Sawfe" and "pani tchak" are Creole, not translated).
+      sugarworker: ["Bel bonjou !", "Sawfe", "pani tchak"],
     },
     // Zip 327: René's "withdrawn"/grumpy phases, independent of his work/
     // break cycle — see RENE_GRUMPY_CYCLE_MS.
@@ -1196,6 +1242,8 @@ export const FERME_STR = {
       [{ who: "jerome", text: "Well, if it isn't the sawdust guy. Come to sniff my sugar mill?" }, { who: "tristan", text: "Just passing by. Unlike you, I actually WORK." }, { who: "jerome", text: "Work? You crack rocks, Tristan, that's not a trade." }, { who: "tristan", text: "Say that to my face." }, { who: "jerome", text: "Gladly, you #%!& lumberjack." }, { who: "tristan", text: "Fine. Fine then." }],
       [{ who: "tristan", text: "Jérôme." }, { who: "jerome", text: "What." }, { who: "tristan", text: "What exactly are you telling people about me at the market?" }, { who: "jerome", text: "The truth. That you've got the build of a lumberjack and the wit of a log." }, { who: "tristan", text: "Very funny. Really." }, { who: "jerome", text: "I think so too, yes." }, { who: "tristan", text: "#%!&, you'll see what a log feels like." }, { who: "jerome", text: "Try it." }],
       [{ who: "tristan", text: "You got a problem with me, Jérôme?" }, { who: "jerome", text: "You, entirely, are my problem." }, { who: "tristan", text: "#%!&." }, { who: "jerome", text: "Likewise." }],
+      [{ who: "tristan", text: "You really have no manners at all, Jérôme." }, { who: "jerome", text: "Rude, me? At least I know how to talk to people." }, { who: "tristan", text: "You spend your time insulting the whole farm!" }, { who: "jerome", text: "And you spend yours doing nothing useful." }, { who: "tristan", text: "#%!&, say that again." }, { who: "jerome", text: "Gladly." }],
+      [{ who: "jerome", text: "Honestly, Tristan, what use are you around here?" }, { who: "tristan", text: "I work harder than you, cheap sugar boy." }, { who: "jerome", text: "Mostly you work at following me around. You're just jealous that Ingrid likes me." }, { who: "tristan", text: "That's nonsense, it has nothing to do with it!" }, { who: "jerome", text: "It has everything to do with it. You're a jealous, useless man, that's what you are." }, { who: "tristan", text: "#%!&, you'll regret saying that." }, { who: "jerome", text: "We'll see." }],
     ],
     toastTJStorm: (name, target) => `⚠️ ${name} is marching straight at ${target} — trouble's brewing, come see!`,
     toastTJBrawlStart: (n1, n2) => `💥 A brawl breaks out between ${n1} and ${n2}!`,
@@ -1206,6 +1254,14 @@ export const FERME_STR = {
     residentBuildingReady: (b) => `My ${b} is running. Keep our stocks filled and I'll do the rest!`,
     residentLumberjackLine: "I fell trees, break rocks and saw planks all day — it all goes into our common stock.",
     residentCloseBtn: "See you later",
+    // "Resident relationships" feature: small section listing who they get on
+    // with or avoid. Meant to evolve over time (see RESIDENT_AFFINITIES).
+    residentAffinitiesTitle: "Relationships",
+    residentAffinityAlly: (n) => `Friends with ${n}`,
+    residentAffinityEnemy: (n) => `At odds with ${n}`,
+    // Jérôme's Creole interjection, occasionally used before replying to a
+    // stinging remark from Tristan (not systematic) — kept identical to FR.
+    jeromeInterjection: "Kisa i ka di mwen ?",
     // Zip 253: enriched resident card + Staff tab.
     residentRoleTitle: "Output",
     residentNotWorkingYet: "No workshop yet — still settling in.",
@@ -1381,6 +1437,9 @@ export const FERME_STR = {
     scarecrowTip: "Scarecrow: place or remove a scarecrow on the targeted tile (10 real seconds to build). Does not block movement.",
     // Zip 251: hand tool + decorations.
     handTip: "Hand: place a decoration from your bag, move lamps/scarecrows/decorations, or store them back in your bag (R). Works on the farm and in town.",
+    // Heal kit armed from the bag (click the "bandaids" row) — healing still
+    // triggers automatically (E/Space) near an injured player or resident.
+    healKitArmedTip: "Heal kit armed: walk up to an injured player or resident and press E (or Space) to heal them.",
     handMenuTitle: "🖐️ Decorations to place",
     handMenuEmpty: "No decorations in your bag. You get them as gifts from visitors.",
     handMoveHint: "Click an object to grab it, then click a tile to drop it (R = store in bag).",

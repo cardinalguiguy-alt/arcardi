@@ -502,6 +502,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [handMode, setHandMode] = useState(null);      // miroir React (surbrillance menu)
   const [handMenuOpen, setHandMenuOpen] = useState(false);
   const [handHeldUI, setHandHeldUI] = useState(null);  // miroir React (invite d'action)
+  // Demande Guillaume : clic sur la trousse de soins dans le sac -> armée
+  // dans la case main (7), visible dans la toolbar. Le soin se déclenche déjà
+  // automatiquement (E/Espace) dès qu'un joueur/résident blessé est à
+  // portée, quelle que soit la case active — ceci n'ajoute qu'un retour
+  // visuel + un point d'entrée explicite depuis le sac, sans dupliquer la
+  // logique de soin existante (req "heal"/"healResident").
+  const healArmedRef = useRef(false);
+  const [healArmed, setHealArmed] = useState(false);
+  function armHealKit() {
+    if (!(myInv && (myInv.healKit || 0) > 0)) return;
+    handModeRef.current = null; setHandMode(null);
+    handHeldRef.current = null; setHandHeldUI(null);
+    healArmedRef.current = true; setHealArmed(true);
+    selectSlot(7);
+    setBagOpen(false);
+  }
   const horseCallAccumRef = useRef(0); // accumulateur (secondes) pour throttler la diffusion réseau des chevaux sifflés en course
   const wolfAccumRef = useRef(0);      // accumulateur (secondes), même throttle réseau pour les loups simulés côté hôte
   const rabbitAccumRef = useRef(0);
@@ -5509,7 +5525,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           // 100% locale, l'issue ici bloque réellement la production).
           const scenes = L.tristanJeromeScenes || [];
           if (scenes.length) {
-            const lines = scenes[Math.floor(Math.random() * scenes.length)];
+            let lines = scenes[Math.floor(Math.random() * scenes.length)];
+            // Demande Guillaume : Jérôme lâche parfois (pas systématiquement)
+            // "Kisa i ka di mwen ?" juste avant de répondre à une remarque
+            // vexante de Tristan — tirage au sort à CHAQUE déclenchement de
+            // scène (pas figé dans les données), sur l'une des répliques de
+            // Jérôme qui suit directement une ligne de Tristan.
+            const jIdx = [];
+            for (let i = 1; i < lines.length; i++) if (lines[i].who === "jerome" && lines[i - 1].who === "tristan") jIdx.push(i);
+            if (jIdx.length && Math.random() < C.TJ_JEROME_INTERJECTION_CHANCE) {
+              const pick = jIdx[Math.floor(Math.random() * jIdx.length)];
+              lines = [...lines.slice(0, pick), { who: "jerome", text: L.jeromeInterjection }, ...lines.slice(pick)];
+            }
             const st = sharedRef.current.station;
             st.tjBrawl = { lines, stepIdx: 0, stepUntil: Date.now() + (lines[0].ms || 2600), aRid: res.rid, bRid: mate.rid, resolved: false };
             broadcastStation();
@@ -6797,6 +6824,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (e.code >= "Digit1" && e.code <= "Digit9") {
         const idx = +e.code.slice(5) - 1;
         if (idx === 0) pressToolKey();
+        else if (idx === 5) pressBuildKey();
         else selectSlot(idx);
       }
       // Correctif audit 2026-07 : Espace/E n'agissent plus "à travers" un
@@ -9567,6 +9595,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // Arme (ou désarme) une déco du sac pour la poser au prochain clic.
   function armDecor(id) {
     handHeldRef.current = null; setHandHeldUI(null);
+    healArmedRef.current = false; setHealArmed(false);
     const nxt = handModeRef.current === id ? null : id;
     handModeRef.current = nxt; setHandMode(nxt);
   }
@@ -9915,7 +9944,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // (l'attrape est purement locale, l'objet reste en place sur la carte).
     if (s === 7) setHandMenuOpen(o => (slotRef.current === 7 ? !o : true));
     else setHandMenuOpen(false);
-    if (s !== 7) { handModeRef.current = null; setHandMode(null); handHeldRef.current = null; setHandHeldUI(null); }
+    if (s !== 7) { handModeRef.current = null; setHandMode(null); handHeldRef.current = null; setHandHeldUI(null); healArmedRef.current = false; setHealArmed(false); }
     setCraftMenuOpen(null);
     // Changer d'outil en portant un animal l'annule (relâché sans être
     // déplacé), pour ne jamais le laisser "coincé" en main d'un joueur.
@@ -9934,6 +9963,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     } else {
       selectSlot(0, true);
     }
+  }
+  // Touche 6 (case construction) : demande Guillaume — si déjà équipée, fait
+  // tourner les objets ACHETÉS mais pas encore posés (clôture, mur, chemin,
+  // lampadaire, épouvantail, gazon, moulin), un peu comme pressToolKey pour
+  // la case outils. Ne montre que les variantes dont le stock sac est > 0 ;
+  // si aucune n'est en stock, la case se sélectionne simplement sans tourner.
+  function pressBuildKey() {
+    if (slotRef.current !== 5) { selectSlot(5); return; }
+    const order = ["fence", "wall", "path", "lamp", "scarecrow", "grass", "mill"];
+    const owned = order.filter(k => myInv && (myInv[k] || 0) > 0);
+    if (!owned.length) return;
+    const cur = buildKindRef.current;
+    const idx = owned.indexOf(cur);
+    const next = owned[(idx + 1) % owned.length];
+    buildKindRef.current = next; setBuildKind(next);
   }
   function submitChat() {
     const v = chatInputRef.current?.value.trim();
@@ -10319,14 +10363,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             lvl = buildKind === "fence" ? (fenceDir === "h" ? "↔" : fenceDir === "v" ? "↕" : "R") : buildKind === "cauldron" ? "⚗️" : "";
           }
           else if (isHerd) { if (carryingAnimal) lvl = "●"; }
-          else if (isHand) { const dn = (myInv && myInv.decor ? Object.values(myInv.decor).reduce((a, b) => a + (b | 0), 0) : 0) + (myInv ? (myInv.lamp | 0) + (myInv.scarecrow | 0) : 0); count = dn || ""; if (handHeldUI || handMode) lvl = "●"; }
+          else if (isHand) { const dn = (myInv && myInv.decor ? Object.values(myInv.decor).reduce((a, b) => a + (b | 0), 0) : 0) + (myInv ? (myInv.lamp | 0) + (myInv.scarecrow | 0) : 0); count = healArmed ? (myInv ? (myInv.healKit || 0) : "") : (dn || ""); if (healArmed) lvl = "🩹"; else if (handHeldUI || handMode) lvl = "●"; }
           else lvl = "N" + (myTools[s.key] || 1);
           const title = isSeed ? L.seedTip(seedName(seedSel)) : isFood ? L.foodTip(C.FOOD_ENERGY) : isRod ? L.rodTip
             : isFence ? (buildKind === "wall" ? L.wallTip : buildKind === "path" ? L.pathTip : buildKind === "lamp" ? L.lampTip : buildKind === "scarecrow" ? L.scarecrowTip
               : buildKind === "grass" ? L.grassTip : buildKind === "mill" ? L.millTip : buildKind === "cauldron" ? L.cauldronRowSub
               : buildKind === "bridgeRenovate" ? L.bridgeRenovateTip
               : (buildKind === "bridgeWood" || buildKind === "bridgeStone") ? L.bridgeTip : L.fenceTip)
-            : isHerd ? L.herdTip : isHand ? L.handTip : isTools ? L.toolsTip(TOOL_NAMES[toolKind]) : TOOL_NAMES[s.key];
+            : isHerd ? L.herdTip : isHand ? (healArmed ? L.healKitArmedTip : L.handTip) : isTools ? L.toolsTip(TOOL_NAMES[toolKind]) : TOOL_NAMES[s.key];
           return (
             <div key={s.key} className={"ferme-slot" + (i === slot ? " sel" : "")} onClick={() => selectSlot(i)} title={title}>
               <span className="ferme-slot-key">{i + 1}</span>
@@ -11282,9 +11326,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               <span style={{ fontSize: 26, width: 32, textAlign: "center" }}>🧪</span>
               <div className="info"><b>{L.bagSalveRow((myInv && myInv.salve) || 0)}</b><span>{L.bagSalveSub}</span></div>
             </div>
-            <div className="ferme-shop-row">
+            <div className="ferme-shop-row" style={(myInv && (myInv.healKit || 0) > 0) ? { cursor: "pointer" } : undefined} onClick={() => armHealKit()}>
               <span style={{ fontSize: 26, width: 32, textAlign: "center" }}>🩹</span>
-              <div className="info"><b>{L.bagHealKitRow((myInv && myInv.healKit) || 0)}</b><span>{L.bagHealKitSub}</span></div>
+              <div className="info"><b>{L.bagHealKitRow((myInv && myInv.healKit) || 0)}</b><span>{healArmed ? L.healKitArmedTip : L.bagHealKitSub}</span></div>
             </div>
 
             <div style={{ fontSize: 11, fontWeight: 700, opacity: .7, textTransform: "uppercase", letterSpacing: .5, marginTop: 12 }}>{L.bagEnergyTitle}</div>
@@ -11384,6 +11428,26 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                         </div>
                       );
                     })}
+                  </div>
+                );
+              })()}
+              {/* Chantier "relations entre résidents" (2026-07, demande
+                  Guillaume) : petites infos d'affinité/inimitié entre
+                  résidents, purement informatif, pensé pour évoluer au fil
+                  de l'histoire (voir C.RESIDENT_AFFINITIES). N'affiche que
+                  les relations réellement déclarées pour ce résident. */}
+              {(() => {
+                const aff = C.residentAffinitiesFor(ro.rid);
+                if (!aff.allies.length && !aff.enemies.length) return null;
+                return (
+                  <div style={{ marginTop: 10 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 6 }}>{L.residentAffinitiesTitle}</div>
+                    {aff.allies.map(r => { const oro = rosterOf(r); return oro ? (
+                      <div key={"aff-a-" + r} style={{ fontSize: 12, marginBottom: 2 }}>🤝 {L.residentAffinityAlly(oro.name)}</div>
+                    ) : null; })}
+                    {aff.enemies.map(r => { const oro = rosterOf(r); return oro ? (
+                      <div key={"aff-e-" + r} style={{ fontSize: 12, marginBottom: 2 }}>⚡ {L.residentAffinityEnemy(oro.name)}</div>
+                    ) : null; })}
                   </div>
                 );
               })()}

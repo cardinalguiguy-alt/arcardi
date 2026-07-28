@@ -1522,7 +1522,43 @@ export const JEROME_RID = 1;   // rid VISITOR_ROSTER de Jérôme Martial (sucrer
 export const TJ_STORM_PERIOD_MS = 2 * DAY_REAL_MS; // ~48h in-game entre deux tentatives de provocation (départ en trombe vers le stand adverse)
 export const TJ_CONVO_DIST = 1.8; // distance de "face à face", identique à Chloé/Rosalie
 export const TJ_BRAWL_CHANCE = 0.3; // jet de bagarre à CHAQUE étape de tension (tant qu'ils sont à portée), pas une seule fois par rencontre
+// Demande Guillaume : Jérôme lâche parfois (pas systématiquement) une
+// interjection créole ("Kisa i ka di mwen ?") juste avant de répondre à une
+// remarque vexante de Tristan — tirée au moment du déclenchement de la
+// scène, voir residentRoam (branche isTj).
+export const TJ_JEROME_INTERJECTION_CHANCE = 0.35;
 export const TJ_BRAWL_ITT_MS = DAY_REAL_MS; // 24h in-game d'indisponibilité (immobile devant son stand) pour le perdant
+
+// Chantier "relations entre résidents" (2026-07, demande Guillaume : "des
+// petites infos qui peuvent changer au fil de l'histoire") : table légère
+// d'affinités/inimitiés affichée dans la fiche de présentation (Q). Purement
+// informatif pour l'instant (aucun impact gameplay), pensée pour évoluer :
+// on pourra plus tard modifier ces listes suite à des événements narratifs
+// (réconciliation, nouvelle brouille...) sans toucher au reste du moteur.
+// Clé = rid VISITOR_ROSTER du résident ; allies/enemies = rids d'autres
+// résidents. Pas besoin d'être symétrique dans le code (on affiche l'union
+// des deux sens à l'écran, voir residentAffinitiesFor), mais on le garde
+// symétrique ici par lisibilité.
+export const RESIDENT_AFFINITIES = {
+  [JEROME_RID]: { enemies: [TRISTAN_RID], allies: [26] },   // Jérôme Martial : hostile avec Tristan, ami avec Ingrid
+  [TRISTAN_RID]: { enemies: [JEROME_RID], allies: [25] },   // Tristan : hostile avec Jérôme, ami avec René
+  25: { allies: [TRISTAN_RID], enemies: [16] },             // René : ami avec Tristan, en froid avec Rosalie
+  26: { allies: [JEROME_RID] },                             // Ingrid : amie avec Jérôme
+  16: { enemies: [25] },                                    // Rosalie : en froid avec René
+};
+// Renvoie { allies: [rid...], enemies: [rid...] } pour un résident donné, en
+// fusionnant les relations déclarées dans les deux sens (ex. si A liste B en
+// ami, B est considéré ami de A même si son entrée ne le répète pas).
+export function residentAffinitiesFor(rid) {
+  const allies = new Set((RESIDENT_AFFINITIES[rid] && RESIDENT_AFFINITIES[rid].allies) || []);
+  const enemies = new Set((RESIDENT_AFFINITIES[rid] && RESIDENT_AFFINITIES[rid].enemies) || []);
+  for (const [otherRid, rel] of Object.entries(RESIDENT_AFFINITIES)) {
+    const or = Number(otherRid); if (or === rid) continue;
+    if ((rel.allies || []).includes(rid)) allies.add(or);
+    if ((rel.enemies || []).includes(rid)) enemies.add(or);
+  }
+  return { allies: [...allies], enemies: [...enemies] };
+}
 export const TJ_BRAWL_HEAL_STEP_MS = TJ_BRAWL_ITT_MS / 2; // chaque pansement retire la moitié de l'ITT restante (2 pansements pour guérir complètement)
 export const TJ_BRAWL_COOLDOWN_MS = DAY_REAL_MS; // verrou supplémentaire ENTRE DEUX BAGARRES (pas entre toutes les altercations) : 24h in-game après une bagarre avant qu'une nouvelle puisse se produire
 
