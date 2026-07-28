@@ -350,6 +350,30 @@ export const FERME_STR = {
     toastTJStorm: (nom, cible) => `⚠️ ${nom} fonce droit sur ${cible}, ça va chauffer, venez voir !`,
     // Idem, au moment où la bagarre éclate réellement (pas à chaque scène : uniquement si le jet de 30 % réussit).
     toastTJBrawlStart: (nom1, nom2) => `💥 Bagarre entre ${nom1} et ${nom2} !`,
+    // Chantier "bagarre = vrai événement, en public" (2026-07, demande
+    // Guillaume) : commentaires inquiets des résidents/visiteurs attroupés
+    // autour du clash, tant que la bagarre n'est pas encore résolue (voir
+    // triggerTjCrowdReaction, FermeGame.js). Volontairement neutres (pas de
+    // nom en dur) pour convenir à n'importe quel badaud.
+    tjCrowdLines: [
+      "Oh là là, ça chauffe !",
+      "Ils vont vraiment en venir aux mains...",
+      "Quelqu'un devrait les séparer !",
+      "C'est pas beau à voir.",
+      "Encore eux deux...",
+      "J'espère que ça va s'arrêter là.",
+      "Ça va mal finir.",
+      "Restez calmes, tous les deux !",
+    ],
+    // Mot de la fin, une fois la bagarre résolue (voir endTjCrowdReaction) —
+    // avant que chacun ne reparte tranquillement à ses occupations.
+    tjAfterLines: [
+      "Bon, c'est fini...",
+      "Il fallait s'y attendre.",
+      "Pfff. Toujours pareil, ces deux-là.",
+      "Bon, on retourne au travail.",
+      "J'espère qu'ils vont se calmer, à la longue.",
+    ],
     // Idem, à l'issue : qui a écopé de l'ITT.
     toastTJBrawl: (perdant) => `🤕 ${perdant} en ressort méchamment sonné(e) et va rester cloué(e) sur place un moment.`,
     healResidentChat: (soigneur, blesse) => `🩹 ${soigneur} a bandé les plaies de ${blesse}, son immobilisation est réduite.`,
@@ -1247,6 +1271,23 @@ export const FERME_STR = {
     ],
     toastTJStorm: (name, target) => `⚠️ ${name} is marching straight at ${target} — trouble's brewing, come see!`,
     toastTJBrawlStart: (n1, n2) => `💥 A brawl breaks out between ${n1} and ${n2}!`,
+    tjCrowdLines: [
+      "Uh oh, this is getting ugly!",
+      "They're really going to fight...",
+      "Someone should break this up!",
+      "This isn't pretty to watch.",
+      "Those two again...",
+      "I hope it stops there.",
+      "This is going to end badly.",
+      "Calm down, you two!",
+    ],
+    tjAfterLines: [
+      "Well, that's that...",
+      "Saw that coming.",
+      "Ugh. Those two, always the same.",
+      "Alright, back to work.",
+      "Hope they calm down eventually.",
+    ],
     toastTJBrawl: (loser) => `🤕 ${loser} got roughed up and will be stuck in place for a while.`,
     healResidentChat: (healer, hurt) => `🩹 ${healer} bandaged ${hurt}, reducing their downtime.`,
     healResidentPartialChat: (healer, hurt, mn) => `🩹 ${healer} applied a bandage to ${hurt}: ${mn} min of downtime left (another bandage can help!)`,

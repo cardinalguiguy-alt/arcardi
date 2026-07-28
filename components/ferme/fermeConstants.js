@@ -1486,8 +1486,17 @@ export const CHOCOLATINE_SELL = 260, PAINSUISSE_SELL = 260;
 export const BAKERY_SELL_ITEMS = ["bread", "croissant", "chocolatine", "painSuisse", "eclairChoco", "eclairVanilla", "flanVanilla", "gateauBasque"];
 export const BAKERY_DEFAULT_PRICE = { bread: BREAD_SELL, croissant: CROISSANT_SELL, chocolatine: CHOCOLATINE_SELL, painSuisse: PAINSUISSE_SELL, eclairChoco: ECLAIR_CHOCO_SELL, eclairVanilla: ECLAIR_VANILLA_SELL, flanVanilla: FLAN_VANILLA_SELL, gateauBasque: GATEAU_BASQUE_SELL };
 export const BAKERY_CUSTOMER_MORNING_END_MIN = 11 * 60; // 11h00 : après ça, plus de clients spontanés
-export const BAKERY_CUSTOMER_MS = 45 * 1000;             // un client (potentiel) toutes les 45s en moyenne
+export const BAKERY_CUSTOMER_MS = 45 * 1000;             // cooldown normal entre deux VRAIES ventes (une fois qu'une rencontre a eu lieu)
 export const BAKERY_CUSTOMER_QTY_MIN = 1, BAKERY_CUSTOMER_QTY_MAX = 3; // quantité achetée par passage
+// Correctif "vraie rencontre" (2026-07, demande Guillaume) : la vente du
+// matin ne se déclenche plus à l'aveugle sur un simple minuteur — il faut
+// qu'un visiteur soit RÉELLEMENT à proximité de Chloé ou Rosalie visible
+// devant la boulangerie (voir bakeryEncounterPossible, FermeGame.js). Si
+// personne n'est là au moment du tirage, on retente bientôt
+// (BAKERY_CUSTOMER_RETRY_MS, plus court que le cooldown normal) plutôt que
+// d'attendre le plein cycle pour rien.
+export const BAKERY_CUSTOMER_ENCOUNTER_DIST = 2.5; // distance visiteur <-> boulangère pour compter comme une vraie rencontre
+export const BAKERY_CUSTOMER_RETRY_MS = 6 * 1000;  // nouvelle tentative si personne n'était là
 // Prix réglables : le joueur peut ajuster chaque prix entre 50 % et 200 %
 // du prix par défaut ci-dessus, par paliers de 10 % (mêmes paliers que le
 // ratio beurre de la fromagerie).
@@ -1528,6 +1537,39 @@ export const TJ_BRAWL_CHANCE = 0.3; // jet de bagarre à CHAQUE étape de tensio
 // scène, voir residentRoam (branche isTj).
 export const TJ_JEROME_INTERJECTION_CHANCE = 0.35;
 export const TJ_BRAWL_ITT_MS = DAY_REAL_MS; // 24h in-game d'indisponibilité (immobile devant son stand) pour le perdant
+
+// Chantier "bagarre = vrai événement, en public" (2026-07, demande
+// Guillaume) : dès que le jet de bagarre (TJ_BRAWL_CHANCE) tombe positif, la
+// résolution n'est plus immédiate — on ouvre une fenêtre "imminente"
+// (tjBrawl.imminent) pendant laquelle TOUS les résidents et visiteurs
+// présents (hors Tristan/Jérôme eux-mêmes) accourent former un attroupement
+// autour du clash et commentent, inquiets (voir triggerTjCrowdReaction,
+// updateTjCrowd, tjCrowdLines dans fermeStrings.js). Le JOUEUR, lui, garde
+// entièrement le contrôle de ses déplacements — contrairement à l'ancien
+// correctif "gel du joueur" (TJ_GAWK_*, retiré), c'est la foule de PNJ qui
+// réagit, pas lui. La bagarre se résout à la fin de cette fenêtre
+// (TJ_BRAWL_IMMINENT_DELAY_MS après le jet), le temps que l'attroupement se
+// forme et réagisse avant l'issue.
+// Retour Guillaume (durées de la scène) : la montée de tension (répliques
+// "#%!&" échangées par Tristan/Jérôme, voir tristanJeromeScenes) doit durer
+// ~10s AU TOTAL, quel que soit le nombre de répliques de la scène tirée au
+// sort (4 à 8 lignes selon tristanJeromeScenes) — la durée de CHAQUE étape
+// est donc calculée dynamiquement (TJ_TENSION_TOTAL_MS / nombre de lignes)
+// plutôt que fixée par ligne. La bagarre elle-même (une fois le jet positif,
+// pendant que l'attroupement regarde) doit ensuite durer AU MOINS 15s avant
+// résolution (TJ_BRAWL_IMMINENT_DELAY_MS) — suivie d'un mot de la fin
+// (TJ_REACT_AFTER_MS) : ~10s tension + ~15s bagarre + ~6s mot de la fin =
+// altercation visible ~31s tout compris.
+export const TJ_TENSION_TOTAL_MS = 10000; // durée totale visée pour la montée de tension (répartie sur les répliques de la scène)
+export const TJ_BRAWL_IMMINENT_DELAY_MS = 15000; // durée de la bagarre elle-même (au moins 15s), une fois le jet de bagarre positif
+export const TJ_REACT_STAGGER_MIN_MS = 0;    // décalage avant qu'UN PNJ donné se mette en route : borne basse
+export const TJ_REACT_STAGGER_MAX_MS = 1600; // décalage avant qu'UN PNJ donné se mette en route : borne haute (l'attroupement ne part pas tout d'un bloc)
+export const TJ_REACT_GATHER_MIN_DIST = 1.6; // distance au clash à laquelle un PNJ s'arrête pour regarder : borne basse (forme un attroupement, pas un tas)
+export const TJ_REACT_GATHER_MAX_DIST = 3.2; // idem, borne haute
+export const TJ_REACT_SPEED_MUL = 1.35; // pas pressé (curieux/inquiet) mais pas le sprint de l'instigateur (storming, ×1.9)
+export const TJ_REACT_RETURN_SPEED_MUL = 0.55; // rythme du retour tranquille vers l'activité d'avant, une fois la scène finie
+export const TJ_REACT_LINE_PERIOD_MS = 2800; // cycle d'affichage des commentaires inquiets pendant l'attroupement (même principe que skillTalk)
+export const TJ_REACT_AFTER_MS = 6000; // mot de la fin affiché avant de repartir, une fois la bagarre résolue (voir TJ_BRAWL_IMMINENT_DELAY_MS pour le total ~30s)
 
 // Chantier "relations entre résidents" (2026-07, demande Guillaume : "des
 // petites infos qui peuvent changer au fil de l'histoire") : table légère

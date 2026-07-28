@@ -3078,6 +3078,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const rs = (s.station && s.station.residents) || [];
     return rs.some(r => r && rosterOf(r.rid) && rosterOf(r.rid).skill === "baker");
   }
+  // Correctif "vraie rencontre" (2026-07, demande Guillaume) : un client du
+  // matin n'achète que si un visiteur vivant (pas encore descendu du train,
+  // pas déjà reparti) se trouve VRAIMENT à portée d'une boulangère visible
+  // (Chloé ou Rosalie, ni cachée à l'intérieur ni partie en trombe pour la
+  // scène de dispute) — coordonnées live de residents/visitors, pas de
+  // simulation séparée. Cf. updateBakeryVisibility pour res.hidden et le
+  // roaming grande-carte des visiteurs en phase "wait" (zip 235) qui les
+  // amène parfois devant la boulangerie.
+  function bakeryEncounterPossible(s) {
+    const bakers = ((s.station && s.station.residents) || []).filter(r => r && !r.hidden && typeof r.x === "number" && rosterOf(r.rid) && (rosterOf(r.rid).skill === "baker" || rosterOf(r.rid).skill === "breadmaker"));
+    if (!bakers.length) return false;
+    const visitors = (s.station && s.station.visitors) || [];
+    return visitors.some(v => v && typeof v.x === "number" && v.phase !== "train" && v.phase !== "depart" &&
+      bakers.some(b => Math.hypot(v.x - b.x, v.y - b.y) <= C.BAKERY_CUSTOMER_ENCOUNTER_DIST));
+  }
   function updateCrafts() {
     const s = sharedRef.current, w = worldRef.current;
     if (!w || !s.crafts) return;
@@ -3305,18 +3320,27 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     // Zip suivant (demande Guillaume) : des clients viennent automatiquement
     // acheter les produits de Chloé/Rosalie le MATIN (mêmes horaires
-    // d'ouverture que la boulangerie, jusqu'à BAKERY_CUSTOMER_MORNING_END_MIN),
-    // sans action du joueur. Un client toutes les BAKERY_CUSTOMER_MS,
-    // choisit au hasard un produit en stock et l'achète au prix courant
-    // (réglé par le joueur via crafts.bakery.prices, sinon prix par défaut).
+    // d'ouverture que la boulangerie, jusqu'à BAKERY_CUSTOMER_MORNING_END_MIN).
+    // Correctif "vraie rencontre" : ne se déclenche plus à l'aveugle — il
+    // faut qu'un visiteur soit effectivement à portée de Chloé/Rosalie
+    // visible (voir bakeryEncounterPossible) au moment du tirage, sinon on
+    // retente bientôt (BAKERY_CUSTOMER_RETRY_MS) plutôt que d'attendre le
+    // plein cycle. Une fois la rencontre confirmée, choisit au hasard un
+    // produit en stock et l'achète au prix courant (réglé par le joueur via
+    // crafts.bakery.prices, sinon prix par défaut).
     if (bk && bk.built) {
       const tminC = E.gameTimeMin(s.dayStartAt, now);
       const morningOpen = tminC >= C.BAKERY_OPEN_MIN && tminC < C.BAKERY_CUSTOMER_MORNING_END_MIN;
       if (!morningOpen) {
         bk.custNextAt = 0; // hors créneau : se réarme au matin suivant
       } else if (!bk.custNextAt || bk.custNextAt > now + C.BAKERY_CUSTOMER_MS) {
-        bk.custNextAt = now + C.BAKERY_CUSTOMER_MS;
+        bk.custNextAt = now + C.BAKERY_CUSTOMER_RETRY_MS;
       } else if (now >= bk.custNextAt) {
+        if (!bakeryEncounterPossible(s)) {
+          // Personne à portée pour l'instant : on retente vite plutôt que
+          // d'attendre le plein cycle (BAKERY_CUSTOMER_MS).
+          bk.custNextAt = now + C.BAKERY_CUSTOMER_RETRY_MS;
+        } else {
         const avail = C.BAKERY_SELL_ITEMS.filter(it => (stock[it] | 0) > 0);
         if (avail.length) {
           const it = avail[Math.floor(Math.random() * avail.length)];
@@ -3333,6 +3357,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         }
         bk.custNextAt = now + C.BAKERY_CUSTOMER_MS;
         craftsMetaChanged = true;
+        }
       }
     }
     if (stockChanged || flourChanged || craftsMetaChanged || gregStockChanged) {
@@ -3507,6 +3532,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       } else if (v.phase === "wait") {
         if (v.offer && v.offer.type === "demand" && now > v.deadline) hostExecuteHostileDamage(v);
         else if (v.offer && v.offer.type === "stay" && now > v.voteUntil) hostFinalizeVote(v);
+        // Chantier "bagarre = vrai événement, en public" (2026-07, demande
+        // Guillaume) : pendant une réaction de foule (voir triggerTjCrowdReaction),
+        // ce visiteur accourt/reste planté/repart au lieu de sa flânerie
+        // normale — prioritaire, mais les délais demande/vote ci-dessus
+        // restent actifs même pendant la scène.
+        else if (v.tjReact) updateTjCrowdVisitor(v, now, walkVia);
         else if (now > v.waitUntil) {
           // Zip 234: a visitor whose order was FULFILLED lingered on the
           // square (see startLinger) — their exit line is a happy goodbye,
@@ -5497,6 +5528,48 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     return null;
   }
   function residentRoam(res, w, now, dt, ro, peers) {
+    // Chantier "bagarre = vrai événement, en public" (2026-07, demande
+    // Guillaume) : dès que le jet de bagarre Tristan/Jérôme tombe positif,
+    // ce résident (n'importe lequel hors T/J, hors ITT, hors caché — voir
+    // triggerTjCrowdReaction) accourt voir, s'arrête à distance de sécurité
+    // en formant un attroupement, commente (voir tjCrowdLines au rendu),
+    // puis repart tranquillement une fois la scène résolue (endTjCrowdReaction).
+    // Prioritaire sur la rôdaille normale, comme res.storming ci-dessous.
+    if (res.tjReact) {
+      const rc = res.tjReact;
+      if (rc.phase === "moving") {
+        if (now < rc.startAt) { res.moving = false; return; } // léger décalage avant de se mettre en route (pas tous en même temps)
+        const dx = rc.tx - res.x, dy = rc.ty - res.y, d = Math.hypot(dx, dy);
+        if (d < 0.3) { rc.phase = "gathered"; res.moving = false; return; }
+        const step = Math.min(d, C.VISITOR_SPEED * C.TJ_REACT_SPEED_MUL * dt);
+        const nx = res.x + (dx / d) * step, ny = res.y + (dy / d) * step;
+        if (!E.blockedTile(w, nx, res.y)) res.x = nx;
+        if (!E.blockedTile(w, res.x, ny)) res.y = ny;
+        res.moving = true; res.animT = (res.animT || 0) + dt * 7;
+        res.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 3 : 2) : (dy > 0 ? 0 : 1);
+        return;
+      }
+      if (rc.phase === "gathered") {
+        // Arrivé : reste sur place, tourné vers le clash, et commente (bulle
+        // gérée au rendu — voir tjCrowdLines, cycle TJ_REACT_LINE_PERIOD_MS).
+        res.moving = false;
+        const stg = sharedRef.current.station, tjc = stg && stg.tjCrowd;
+        if (tjc) faceResidentToward(res, tjc.cx, tjc.cy);
+        return;
+      }
+      // rc.phase === "returning" : un dernier mot (tjAfterLines, voir rendu),
+      // puis retour tranquille vers l'activité d'avant la scène.
+      if (now < (rc.returnAt || 0)) { res.moving = false; return; }
+      const dx = rc.returnX - res.x, dy = rc.returnY - res.y, d = Math.hypot(dx, dy);
+      if (d < 0.3) { delete res.tjReact; res.roamTarget = null; res.nextRoamAt = now + 300; return; }
+      const step = Math.min(d, C.VISITOR_SPEED * C.TJ_REACT_RETURN_SPEED_MUL * dt);
+      const nx = res.x + (dx / d) * step, ny = res.y + (dy / d) * step;
+      if (!E.blockedTile(w, nx, res.y)) res.x = nx;
+      if (!E.blockedTile(w, res.x, ny)) res.y = ny;
+      res.moving = true; res.animT = (res.animT || 0) + dt * 6;
+      res.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 3 : 2) : (dy > 0 ? 0 : 1);
+      return;
+    }
     // Zip suivant (demande Guillaume) : Chloé arrive EN TROMBE chez Rosalie
     // (sprint direct, ignore sa rôdaille/pauses normales) quand celle-ci a
     // enchaîné deux commentaires agressifs sur le client — voir le
@@ -5538,7 +5611,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               lines = [...lines.slice(0, pick), { who: "jerome", text: L.jeromeInterjection }, ...lines.slice(pick)];
             }
             const st = sharedRef.current.station;
-            st.tjBrawl = { lines, stepIdx: 0, stepUntil: Date.now() + (lines[0].ms || 2600), aRid: res.rid, bRid: mate.rid, resolved: false };
+            // Retour Guillaume : durée de CHAQUE étape calculée pour que la
+            // montée de tension totale dure ~TJ_TENSION_TOTAL_MS, quel que
+            // soit le nombre de répliques de la scène tirée au sort (voir
+            // aussi l'avancement des étapes dans updateTristanJeromeFeud).
+            const stepMs = Math.max(700, Math.round(C.TJ_TENSION_TOTAL_MS / lines.length));
+            st.tjBrawl = { lines, stepIdx: 0, stepUntil: Date.now() + stepMs, stepMs, aRid: res.rid, bRid: mate.rid, resolved: false };
             broadcastStation();
           }
           res.stormKind = null;
@@ -6068,6 +6146,81 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // transition, pour que TOUS les clients voient la même scène (contrairement
   // au flavor Chloé/Rosalie, purement local, ici l'issue bloque vraiment la
   // production — voir le verrou injuredUntil plus haut dans updateResidents).
+  // Chantier "bagarre = vrai événement, en public" (2026-07, demande
+  // Guillaume) : dès que le jet de bagarre tombe positif, TOUS les résidents
+  // présents (hors Tristan/Jérôme, hors ITT, hors cachés à l'intérieur) et
+  // tous les visiteurs présents (phase "wait") accourent former un
+  // attroupement dispersé autour du point de clash (moyenne des positions de
+  // Tristan/Jérôme) — chacun avec un léger décalage de départ (TJ_REACT_
+  // STAGGER_*) pour que l'attroupement ne parte pas d'un seul bloc. État
+  // écrit sur station (résidents/visiteurs + station.tjCrowd pour le centre),
+  // diffusé via broadcastStation() par l'appelant — donc visible de tous.
+  function triggerTjCrowdReaction(tristan, jerome, st, now) {
+    const cx = (tristan.x + jerome.x) / 2, cy = (tristan.y + jerome.y) / 2;
+    st.tjCrowd = { cx, cy };
+    const residents = st.residents || [];
+    for (const r of residents) {
+      if (!r || r.rid === tristan.rid || r.rid === jerome.rid) continue;
+      if (r.injuredUntil && r.injuredUntil > now) continue; // déjà en ITT (bagarre précédente)
+      if (r.hidden) continue; // caché à l'intérieur (boulangerie)
+      if (typeof r.x !== "number") continue;
+      const angle = Math.random() * Math.PI * 2;
+      const dist = C.TJ_REACT_GATHER_MIN_DIST + Math.random() * (C.TJ_REACT_GATHER_MAX_DIST - C.TJ_REACT_GATHER_MIN_DIST);
+      r.tjReact = {
+        phase: "moving",
+        startAt: now + C.TJ_REACT_STAGGER_MIN_MS + Math.random() * (C.TJ_REACT_STAGGER_MAX_MS - C.TJ_REACT_STAGGER_MIN_MS),
+        tx: cx + Math.cos(angle) * dist, ty: cy + Math.sin(angle) * dist,
+        returnX: r.x, returnY: r.y,
+      };
+      r.roamTarget = null; r.roamMeet = null;
+    }
+    const visitors = st.visitors || [];
+    for (const v of visitors) {
+      if (!v || v.phase !== "wait" || typeof v.x !== "number") continue;
+      const angle = Math.random() * Math.PI * 2;
+      const dist = C.TJ_REACT_GATHER_MIN_DIST + Math.random() * (C.TJ_REACT_GATHER_MAX_DIST - C.TJ_REACT_GATHER_MIN_DIST);
+      v.tjReact = {
+        phase: "moving",
+        startAt: now + C.TJ_REACT_STAGGER_MIN_MS + Math.random() * (C.TJ_REACT_STAGGER_MAX_MS - C.TJ_REACT_STAGGER_MIN_MS),
+        tx: cx + Math.cos(angle) * dist, ty: cy + Math.sin(angle) * dist,
+        returnX: v.x, returnY: v.y,
+      };
+      v.roamTarget = null;
+    }
+  }
+  // Avance la scène de foule côté HÔTE pour les VISITEURS (les résidents,
+  // eux, sont avancés directement dans residentRoam, comme res.storming) —
+  // appelée depuis updateVisitors, branche phase "wait", prioritaire sur la
+  // flânerie normale. Réutilise le même helper walkVia (chemin dallé si
+  // trouvé, sinon ligne droite) que le reste de la phase "wait".
+  function updateTjCrowdVisitor(v, now, walkVia) {
+    const rc = v.tjReact;
+    if (rc.phase === "moving") {
+      if (now < rc.startAt) { v.moving = false; return; }
+      if (walkVia(rc.tx, rc.ty, C.TJ_REACT_SPEED_MUL)) { rc.phase = "gathered"; v.moving = false; }
+      return;
+    }
+    if (rc.phase === "gathered") { v.moving = false; return; }
+    // "returning" : mot de la fin (voir rendu), puis retour tranquille.
+    if (now < (rc.returnAt || 0)) { v.moving = false; return; }
+    if (walkVia(rc.returnX, rc.returnY, C.TJ_REACT_RETURN_SPEED_MUL)) { delete v.tjReact; v.nextRoamAt = now + 300; }
+  }
+  // Fin de la scène (bagarre résolue) : chacun dit un dernier mot
+  // (tjAfterLines, tiré une fois et figé dans rc.afterLine pour rester
+  // cohérent d'une frame à l'autre / entre joueurs) puis repart au bout de
+  // TJ_REACT_AFTER_MS — voir la phase "returning" dans residentRoam et
+  // updateTjCrowdVisitor.
+  function endTjCrowdReaction(st, now) {
+    const all = [...((st.residents) || []), ...((st.visitors) || [])];
+    const afterLines = L.tjAfterLines || [];
+    for (const p of all) {
+      if (!p || !p.tjReact) continue;
+      p.tjReact.phase = "returning";
+      p.tjReact.returnAt = now + C.TJ_REACT_AFTER_MS;
+      p.tjReact.afterLine = afterLines.length ? afterLines[Math.floor(Math.random() * afterLines.length)] : null;
+    }
+    st.tjCrowd = null;
+  }
   function updateTristanJeromeFeud(residents, s, w, now) {
     const st = s.station; if (!st) return;
     const tristan = residents.find(r => r && r.rid === C.TRISTAN_RID);
@@ -6075,11 +6228,30 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (!tristan || !jerome || typeof tristan.x !== "number" || typeof jerome.x !== "number") return;
     const brawl = st.tjBrawl;
     if (brawl) {
+      // Fenêtre "imminente" en cours (jet déjà positif, voir plus bas) : on
+      // attend que TJ_BRAWL_IMMINENT_DELAY_MS s'écoule — le temps que
+      // l'attroupement de PNJ accoure et réagisse (voir triggerTjCrowdReaction)
+      // — avant de résoudre réellement l'issue. Pas de nouveau jet ici,
+      // l'issue est déjà décidée.
+      if (brawl.imminent) {
+        if (now >= brawl.imminentAt + C.TJ_BRAWL_IMMINENT_DELAY_MS) resolveTjBrawl(tristan, jerome, st, now);
+        return;
+      }
       // Scène en cours : à chaque étape franchie, jet de bagarre (30%) AVANT
       // de passer à la ligne suivante — "chaque tic de proximité" demandé.
       if (now >= brawl.stepUntil) {
         if (now >= (st.tjBrawlCooldownUntil || 0) && Math.random() < C.TJ_BRAWL_CHANCE) {
-          resolveTjBrawl(tristan, jerome, st, now);
+          // Chantier "bagarre = vrai événement, en public" (2026-07, demande
+          // Guillaume) : le jet est décidé MAIS pas résolu tout de suite. On
+          // bascule la scène en "imminente", on annonce la bagarre à toute la
+          // room (toast dédié, jusque-là câblé mais jamais déclenché), et on
+          // fait accourir tout le monde autour du clash pour réagir (voir
+          // triggerTjCrowdReaction) — le joueur, lui, garde le contrôle total
+          // de ses déplacements.
+          brawl.imminent = true; brawl.imminentAt = now;
+          broadcastGlobalToast(L.toastTJBrawlStart(rosterOf(tristan.rid).name, rosterOf(jerome.rid).name));
+          triggerTjCrowdReaction(tristan, jerome, st, now);
+          broadcastStation();
           return;
         }
         brawl.stepIdx++;
@@ -6087,7 +6259,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           // Désescalade : fin de la scène sans bagarre, chacun repart à sa rôdaille.
           st.tjBrawl = null;
         } else {
-          brawl.stepUntil = now + (brawl.lines[brawl.stepIdx].ms || 2600);
+          brawl.stepUntil = now + (brawl.stepMs || 1700);
         }
         broadcastStation();
       }
@@ -6121,6 +6293,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     spawnFx({ k: "brawl", x: loser.x, y: loser.y });
     channelRef.current?.send({ type: "broadcast", event: "apply", payload: { fx: [{ k: "brawl", x: loser.x, y: loser.y }] } });
     broadcastGlobalToast(L.toastTJBrawl(rosterOf(loser.rid).name));
+    endTjCrowdReaction(st, now); // l'attroupement dit un dernier mot puis repart tranquillement (voir tjAfterLines)
     broadcastStation();
   }
   // Correctif "dispute Chloé/Rosalie vue de tous" (2026-07, demande Guillaume) :
@@ -7659,6 +7832,23 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           const onWhiteHorse = ro.skill === "voyager";
           draws.push({ y: (vy + 1) * T, fn: () => {
             drawCharacter({ id: "visitor" + vv.rid, name: ro.name, x: vx, y: vy, dir: vv.dir || 0, moving: !!vv.moving, animT: vv.animT || 0, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap, plaid: ro.skill === "lumberjack", sugarWorker: ro.skill === "sugarworker", mount: onWhiteHorse ? "white" : null }, false);
+            // Chantier "bagarre = vrai événement, en public" : même bulle de
+            // réaction de foule que les résidents (voir plus bas dans la
+            // boucle des résidents) — un visiteur peut lui aussi accourir et
+            // commenter, inquiet, la bagarre Tristan/Jérôme.
+            if (vv.tjReact) {
+              const rc = vv.tjReact;
+              if (rc.phase === "gathered") {
+                const lines = L.tjCrowdLines || [];
+                if (lines.length) {
+                  const now3 = performance.now();
+                  const txt = lines[Math.floor(now3 / C.TJ_REACT_LINE_PERIOD_MS + vv.rid) % lines.length];
+                  drawSpeechBubble(ctx, Math.round(vx * T) + 8, Math.round(vy * T) - 18, txt);
+                }
+              } else if (rc.phase === "returning" && rc.afterLine && Date.now() < rc.returnAt) {
+                drawSpeechBubble(ctx, Math.round(vx * T) + 8, Math.round(vy * T) - 18, rc.afterLine);
+              }
+            }
           } });
         }
         const residents = (st && st.residents) || [];
@@ -7974,12 +8164,32 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 drawSpeechBubble(ctx, Math.round(rx * T) + 8, Math.round(ry * T) - 18, line.text);
               }
             }
+            // Bulle de la réaction de foule (bagarre Tristan/Jérôme, voir
+            // triggerTjCrowdReaction) : commentaire inquiet en boucle pendant
+            // l'attroupement (cycle TJ_REACT_LINE_PERIOD_MS, décalé par rid
+            // comme les bulles métier ci-dessous), mot de la fin figé une
+            // fois la scène résolue (rc.afterLine).
+            if (res.tjReact) {
+              const rc = res.tjReact;
+              if (rc.phase === "gathered") {
+                const lines = L.tjCrowdLines || [];
+                if (lines.length) {
+                  const now3 = performance.now();
+                  const txt = lines[Math.floor(now3 / C.TJ_REACT_LINE_PERIOD_MS + res.rid) % lines.length];
+                  drawSpeechBubble(ctx, Math.round(rx * T) + 8, Math.round(ry * T) - 18, txt);
+                }
+              } else if (rc.phase === "returning" && rc.afterLine && Date.now() < rc.returnAt) {
+                drawSpeechBubble(ctx, Math.round(rx * T) + 8, Math.round(ry * T) - 18, rc.afterLine);
+              }
+            }
             // Bulle métier quand le joueur local est à proximité (zip 299).
             // Chantier "rivalité Tristan/Jérôme" : un résident en ITT (post-
             // bagarre) reste silencieux, il ne débite pas ses répliques
-            // habituelles pendant qu'il est immobilisé.
+            // habituelles pendant qu'il est immobilisé — et un résident en
+            // pleine réaction de foule (tjReact) commente déjà (voir plus
+            // haut) : pas de double bulle.
             const mm = meRef.current;
-            if (talkLines && talkLines.length && !(res.injuredUntil && res.injuredUntil > Date.now()) && mm && (!mm.zone || mm.zone === "farm") && Math.abs(mm.x - rx) + Math.abs(mm.y - ry) <= 3) {
+            if (talkLines && talkLines.length && !res.tjReact && !(res.injuredUntil && res.injuredUntil > Date.now()) && mm && (!mm.zone || mm.zone === "farm") && Math.abs(mm.x - rx) + Math.abs(mm.y - ry) <= 3) {
               // Zip 301 (demande Guillaume) : Rosalie (breadmaker) est aigrie et
               // parle RAREMENT — sa bulle ne s'affiche qu'~3 s par tranche de
               // 12 s (les autres artisans parlent en continu, cycle 3,5 s).
