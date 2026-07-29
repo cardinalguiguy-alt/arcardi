@@ -2486,6 +2486,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (o !== C.O_LAMP && o !== C.O_SCARECROW && o !== C.O_MILL && o !== C.O_CAULDRON && o !== C.O_WALL) return true;
       if (req.kind === "returnObj" && (o === C.O_MILL || o === C.O_CAULDRON)) return true;
       const hp = w.objHp.get(fromI) || 0;
+      // Correctif ("le moulin disparaît/perd son blé quand on le déplace") :
+      // contrairement à lampadaire/épouvantail/mur, le moulin porte un état
+      // propre PAR TUILE (stock de blé + minuterie de production en cours,
+      // world.mills — voir resolveAct cas "mill"/"millDeposit"), totalement
+      // séparé de w.objHp. Ce mécanisme moveObj a été étendu au moulin
+      // (chantier 2026-07) sans reporter cet état lors du déplacement : le
+      // moulin réapparaissait bien visuellement à la nouvelle case (le sprite
+      // ne dépend pas de world.mills), mais avec son stock de blé remis à
+      // zéro et une entrée fantôme laissée sur l'ancienne case — d'où
+      // l'impression de "moulin disparu" (son contenu, lui, disparaissait
+      // réellement). On retire ici l'état d'origine et on le replace sur la
+      // case d'arrivée (ou d'origine si le déplacement échoue), et on le
+      // diffuse aux autres joueurs comme le fait déjà "millDeposit" (clé
+      // payload.mills, même format [idx, wheat, nextAt]).
+      const millState = (o === C.O_MILL) ? (w.mills.get(fromI) || { wheat: 0, nextAt: 0 }) : null;
+      if (millState) w.mills.delete(fromI);
       w.objects[fromI] = C.O_NONE; w.objHp.delete(fromI); recordTileOverride(fromI);
       const tiles = [{ i: fromI, g: w.ground[fromI], o: C.O_NONE }];
       const payload = { tiles };
@@ -2500,10 +2516,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (w.objects[toI] === C.O_NONE && !E.blockedTile(w, (req.toX | 0) + 0.5, (req.toY | 0) + 0.5)) {
           w.objects[toI] = o; w.objHp.set(toI, hp); recordTileOverride(toI);
           tiles.push({ i: toI, g: w.ground[toI], o, hp });
+          if (millState) { w.mills.set(toI, millState); payload.mills = [[toI, millState.wheat, millState.nextAt]]; }
         } else {
           // cible invalide : on repose l'objet à sa place d'origine.
           w.objects[fromI] = o; w.objHp.set(fromI, hp); recordTileOverride(fromI);
           tiles[0] = { i: fromI, g: w.ground[fromI], o, hp };
+          if (millState) { w.mills.set(fromI, millState); payload.mills = [[fromI, millState.wheat, millState.nextAt]]; }
         }
       }
       hostSend({ type: "broadcast", event: "apply", payload });
