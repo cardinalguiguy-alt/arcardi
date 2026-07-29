@@ -10550,7 +10550,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           (or partagé, jour/saison/heure, joueurs connectés seulement) ; le
           reste (grange, ressources de construction) ne s'affiche qu'au
           survol, via .ferme-hud-extra en CSS. */}
-      <div className="ferme-hud panel">
+      <div className={"ferme-hud panel" + (craftMenuOpen ? " ferme-hud-pinned" : "")}>
         <div className="row"><Sprite img={spritesReady ? spritesRef.current.icons.gold : null} w={18} h={18} /> <span>{hud.money}</span> <span className="ferme-hud-sub">{L.goldCommon}</span></div>
         <div className="row">📅 {L.day} {hud.day} &nbsp; {(() => { const se = E.seasonOf(hud.day || 1); const nm = { spring: L.seasonSpring, summer: L.seasonSummer, autumn: L.seasonAutumn, winter: L.seasonWinter }[se.key]; return se.emoji + " " + nm; })()} &nbsp; 🕐 {clockStr}</div>
         <div className="row ferme-hud-players">👥 {L.playersOnline(hud.players)}</div>
