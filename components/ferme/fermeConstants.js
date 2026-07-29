@@ -1677,6 +1677,26 @@ export const LUMBERJACK_WOOD = 6, LUMBERJACK_STONE = 4; // Tristan : par tour de
 export const LUMBERJACK_PLANK_WOOD_COST = 4, LUMBERJACK_PLANK_YIELD = 2;
 
 /* ==========================================================================
+   Chantier "Super Tristan" (2026-07, demande Guillaume, effet café comique)
+   --------------------------------------------------------------------------
+   Miroir de SuperGreg/SuperSoan/SuperRené (même pool commun de café,
+   station.worldStock.coffee) mais façon "effet magique assumé" plutôt que
+   simple boost de vitesse : donner SUPERTRISTAN_COFFEE_COST cafés D'UN COUP
+   à Tristan (bûcheron) déclenche, pendant SUPERTRISTAN_DURATION_MS, la
+   disparition progressive d'environ SUPERTRISTAN_CLEAR_FRACTION (la moitié)
+   des arbres/cailloux de LA CARTE ENTIÈRE (pas juste autour de son ancre de
+   travail habituelle) — voir pickSuperTristanTargets (fermeEngine.js) et
+   updateSuperTristan (FermeGame.js). Le bois/la pierre récupérés rejoignent
+   la réserve commune (gregStock), comme son travail normal. La nature
+   repousse ensuite normalement au fil des jours (voir newDay).
+   ------------------------------------------------------------------------- */
+export const SUPERTRISTAN_COFFEE_COST = 20;            // unités de café consommées EN UNE FOIS (pas de jauge à cafés multiples, contrairement à SuperRené)
+export const SUPERTRISTAN_DURATION_MS = 15 * 60 * 1000; // 15 min réelles : durée sur laquelle la moitié de la nature de la carte disparaît
+export const SUPERTRISTAN_COOLDOWN_MS = 60 * 60 * 1000; // 1h réelle, démarre à la FIN de l'effet (avant un nouveau bain de café)
+export const SUPERTRISTAN_CLEAR_FRACTION = 0.5;         // proportion des arbres/cailloux de la carte visés
+export const SUPERTRISTAN_BATCH_MS = 4000;              // intervalle entre deux "vagues" d'abattage pendant l'effet (répartit la liste sur les 15 min)
+
+/* ==========================================================================
    Zip 258 : Eduardo Da Fonseca, commerçant grand voyageur (demande Guillaume)
    --------------------------------------------------------------------------
    Une fois Eduardo résident, on lui commande des PRODUITS DU MONDE rares

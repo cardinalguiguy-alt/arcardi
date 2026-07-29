@@ -1319,6 +1319,34 @@ export function gregMine(world, i, mult = 1) {
   return { done, stone };
 }
 
+// Chantier "Super Tristan" (2026-07, effet café comique) : sélectionne
+// environ la MOITIÉ (C.SUPERTRISTAN_CLEAR_FRACTION) des arbres/cailloux de
+// TOUTE la carte, hors zones protégées (rails, zone dégagée de la station,
+// zone dégagée de la grange — mêmes exclusions que la repousse quotidienne,
+// voir newDay). Renvoie un tableau d'index de tuiles déjà mélangé ;
+// updateSuperTristan (FermeGame.js) le vide ensuite par petits paquets
+// réguliers pendant la durée de l'effet, plutôt que tout d'un coup.
+export function pickSuperTristanTargets(world) {
+  const W = C.MAP_W, H = C.MAP_H;
+  const onRails = (x) => x >= C.STATION_RAIL_X && x <= C.STATION_RAIL_X + 1;
+  const inRect = (x, y, R) => x >= R.x && x < R.x + R.w && y >= R.y && y < R.y + R.h;
+  const all = [];
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      if (onRails(x) || inRect(x, y, C.STATION_CLEAR) || inRect(x, y, C.BARN_CLEAR)) continue;
+      const i = idx(x, y);
+      const o = world.objects[i];
+      if (o === C.O_TREE || o === C.O_TREE2 || o === C.O_ROCK || o === C.O_STUMP) all.push(i);
+    }
+  }
+  // Mélange (Fisher-Yates) puis ne garde que la fraction visée.
+  for (let i = all.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const tmp = all[i]; all[i] = all[j]; all[j] = tmp;
+  }
+  return all.slice(0, Math.round(all.length * C.SUPERTRISTAN_CLEAR_FRACTION));
+}
+
 /* -------------------------------------------------------------------------
    Greg, l'employé de champs de base (chantier 2026-07). Fonctions pures de
    mutation du monde, appelées uniquement côté hôte (FermeGame.js/updateGreg

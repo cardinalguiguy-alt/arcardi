@@ -1061,6 +1061,11 @@ export const FERME_STR = {
     // en continu (aucune pause) et récolter le miel bien plus vite pendant 5h.
     reneCoffeeBtn: "☕ Café (SuperRené)",
     toastReneCoffeeCooldown: "René doit encore récupérer avant un nouveau café !",
+    // Chantier "Super Tristan" (2026-07, effet café comique) : 20 cafés d'un
+    // coup, façon "SuperGreg" (pas de jauge à cafés multiples comme René).
+    tristanCoffeeBtn: "☕ Café ×20 (SuperTristan)",
+    toastTristanCoffeeCooldown: "Tristan doit encore récupérer avant un nouveau café !",
+    toastTristanNotHere: "Tristan n'a pas encore emménagé !",
     // Menu "Employés actifs" (chantier 2026-07, demande Guillaume) : liste
     // les employés sous contrat, avec accès direct à leurs ordres.
     employeesTitle: "👥 Employés actifs",
@@ -1943,6 +1948,11 @@ export const FERME_STR = {
     // non-stop (no breaks) and harvest honey much faster for 5h.
     reneCoffeeBtn: "☕ Coffee (SuperRené)",
     toastReneCoffeeCooldown: "René still needs to recover before another coffee!",
+    // "Super Tristan" (2026-07, comic coffee effect): 20 coffees at once,
+    // SuperGreg-style (no multi-step gauge like René's).
+    tristanCoffeeBtn: "☕ Coffee ×20 (SuperTristan)",
+    toastTristanCoffeeCooldown: "Tristan still needs to recover before another coffee!",
+    toastTristanNotHere: "Tristan hasn't moved in yet!",
     employeesTitle: "👥 Active staff",
     employeesHint: "Employees currently under contract, with direct access to give them an order.",
     employeesGregName: "Greg",

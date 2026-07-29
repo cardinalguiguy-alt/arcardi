@@ -2027,6 +2027,39 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           out.chat = { from: "\u{1F41D}", msg: lang === "en" ? "René is fueled by coffee! ☕⚡" : "René carbure au café ! ☕⚡" };
         }
       }
+    } else if (req.kind === "tristanCoffee") {
+      // Chantier "Super Tristan" (2026-07, demande Guillaume, effet café
+      // comique) : donner C.SUPERTRISTAN_COFFEE_COST cafés D'UN COUP (pas de
+      // jauge à cafés multiples, contrairement à SuperRené) déclenche un
+      // effet de C.SUPERTRISTAN_DURATION_MS (15 min réelles) pendant lequel
+      // environ la MOITIÉ des arbres/cailloux de LA CARTE ENTIÈRE disparaît
+      // progressivement (voir updateSuperTristan) — effet "magique" assumé,
+      // pas un simple boost de vitesse de travail. La liste des cases visées
+      // est tirée une seule fois, à l'activation (pickSuperTristanTargets),
+      // puis vidée par petits paquets pendant la durée de l'effet. Bois/
+      // pierre récoltés rejoignent la réserve commune (gregStock), comme le
+      // travail normal de Tristan. Cooldown de C.SUPERTRISTAN_COOLDOWN_MS
+      // démarrant à la FIN de l'effet. MÊME pool de café que SuperGreg/
+      // SuperSoan/SuperRené (station.worldStock.coffee).
+      const now = Date.now();
+      const residents = (s.station && s.station.residents) || [];
+      const res = residents.find(r => r && rosterOf(r.rid) && rosterOf(r.rid).skill === "lumberjack");
+      if (!res) out.toast = { id: f.id, key: "tristanNotHere" };
+      else if (now < (res.superCooldownUntil || 0)) out.toast = { id: f.id, key: "tristanCoffeeCooldown" };
+      else {
+        const st = s.station || (s.station = {});
+        const ws = st.worldStock || (st.worldStock = {});
+        if ((ws.coffee || 0) < C.SUPERTRISTAN_COFFEE_COST) out.toast = { id: f.id, key: "noCoffee" };
+        else {
+          ws.coffee -= C.SUPERTRISTAN_COFFEE_COST;
+          res.superUntil = now + C.SUPERTRISTAN_DURATION_MS;
+          res.superCooldownUntil = now + C.SUPERTRISTAN_DURATION_MS + C.SUPERTRISTAN_COOLDOWN_MS;
+          res.tristanSuperQueue = E.pickSuperTristanTargets(w);
+          res.tristanSuperNextBatchAt = now;
+          out.state = shareState(); out.station = s.station;
+          out.chat = { from: "\u{1FA93}", msg: lang === "en" ? "Tristan is fueled by coffee! ☕🪓⚡ Half the forest is about to go down!" : "Tristan carbure au café ! ☕🪓⚡ La moitié de la forêt va y passer !" };
+        }
+      }
     } else if (req.kind === "setCheeseRatio") {
       // Zip 301 (demande Guillaume) : règle la part de BEURRE produite par la
       // fromagerie (0..100 %, paliers de 10 %). Stocké sur crafts.fromagerie
@@ -3897,7 +3930,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (key === "petCaught")     return L.petCaughtToast(C.petName(n, lang === "en"));
     if (key === "petReleased")   return L.bagReleasedToast(C.petName(n, lang === "en"));
     if (key === "bagFull")       return L.bagPetsFull(C.MAX_PETS);
-    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, noMillStock: L.toastNoMillStock, millNotEmpty: L.toastMillNotEmpty, noWheatToDeposit: L.toastNoWheatToDeposit, millFull: L.toastMillFull, noSucrerieStock: L.toastNoSucrerieStock, sucrerieNotEmpty: L.toastSucrerieNotEmpty, noCaneToDeposit: L.toastNoCaneToDeposit, sucrerieFull: L.toastSucrerieFull, actionFailed: L.toastActionFailed, coopNone: L.toastCoopNone, farCoop: L.toastFarCoop, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull, notInjured: L.toastNotInjured, noHealKit: L.toastNoHealKit, healTooFar: L.toastHealTooFar, gregNotHired: L.toastGregNotHired, gregOrderBusy: L.toastGregBusy, gregNoRoom: L.toastGregNoRoom, gregNoFertilizer: L.toastGregNoFertilizer, gregCoffeeCooldown: L.toastGregCoffeeCooldown, noCoffee: L.toastNoCoffee, soanNotHired: L.toastSoanNotHired, soanNoRiver: L.toastSoanNoRiver, soanCoffeeCooldown: L.toastSoanCoffeeCooldown, reneCoffeeCooldown: L.toastReneCoffeeCooldown, farCauldron: L.toastFarCauldron, noFishToDeposit: L.toastNoFishToDeposit, cauldronMissing: L.toastCauldronMissing, cauldronAlreadyTaken: L.toastCauldronAlreadyTaken, noCauldronStock: L.toastNoCauldronStock, cauldronNotEmpty: L.toastCauldronNotEmpty, cauldronBrewing: L.toastCauldronBrewing, cauldronNothingToCollect: L.toastCauldronNothingToCollect, cauldronHasEnough: L.toastCauldronHasEnough, visitorNotEnough: L.visitorNotEnough, decorNone: L.decorNone, decorPicked: L.decorPicked, objReturned: L.objReturned, residentNoRoom: L.residentNoRoom, artisanNoResident: L.artisanNoResident, voyagerBusy: L.voyagerBusyToast, kickVoted: L.kickVotedToast, jewelryNoGold: L.toastJewelryNoGold, jewelryNoGem: L.toastJewelryNoGem, cropWrongType: L.toastCropWrongType, cropMaxed: L.toastCropMaxed, beekeeperNoHive: L.toastBeekeeperNoHive, beekeeperBusy: L.toastBeekeeperBusy, balloonNotBoarding: L.toastBalloonNotBoarding, balloonFull: L.toastBalloonFull }[key] || "";
+    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, noMillStock: L.toastNoMillStock, millNotEmpty: L.toastMillNotEmpty, noWheatToDeposit: L.toastNoWheatToDeposit, millFull: L.toastMillFull, noSucrerieStock: L.toastNoSucrerieStock, sucrerieNotEmpty: L.toastSucrerieNotEmpty, noCaneToDeposit: L.toastNoCaneToDeposit, sucrerieFull: L.toastSucrerieFull, actionFailed: L.toastActionFailed, coopNone: L.toastCoopNone, farCoop: L.toastFarCoop, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull, notInjured: L.toastNotInjured, noHealKit: L.toastNoHealKit, healTooFar: L.toastHealTooFar, gregNotHired: L.toastGregNotHired, gregOrderBusy: L.toastGregBusy, gregNoRoom: L.toastGregNoRoom, gregNoFertilizer: L.toastGregNoFertilizer, gregCoffeeCooldown: L.toastGregCoffeeCooldown, noCoffee: L.toastNoCoffee, soanNotHired: L.toastSoanNotHired, soanNoRiver: L.toastSoanNoRiver, soanCoffeeCooldown: L.toastSoanCoffeeCooldown, reneCoffeeCooldown: L.toastReneCoffeeCooldown, tristanNotHere: L.toastTristanNotHere, tristanCoffeeCooldown: L.toastTristanCoffeeCooldown, farCauldron: L.toastFarCauldron, noFishToDeposit: L.toastNoFishToDeposit, cauldronMissing: L.toastCauldronMissing, cauldronAlreadyTaken: L.toastCauldronAlreadyTaken, noCauldronStock: L.toastNoCauldronStock, cauldronNotEmpty: L.toastCauldronNotEmpty, cauldronBrewing: L.toastCauldronBrewing, cauldronNothingToCollect: L.toastCauldronNothingToCollect, cauldronHasEnough: L.toastCauldronHasEnough, visitorNotEnough: L.visitorNotEnough, decorNone: L.decorNone, decorPicked: L.decorPicked, objReturned: L.objReturned, residentNoRoom: L.residentNoRoom, artisanNoResident: L.artisanNoResident, voyagerBusy: L.voyagerBusyToast, kickVoted: L.kickVotedToast, jewelryNoGold: L.toastJewelryNoGold, jewelryNoGem: L.toastJewelryNoGem, cropWrongType: L.toastCropWrongType, cropMaxed: L.toastCropMaxed, beekeeperNoHive: L.toastBeekeeperNoHive, beekeeperBusy: L.toastBeekeeperBusy, balloonNotBoarding: L.toastBalloonNotBoarding, balloonFull: L.toastBalloonFull }[key] || "";
   }
 
   // -------- Hôte : boucle temps + persistance --------
@@ -6098,6 +6131,37 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (bid && cb && cb.built) return; // atelier construit -> updateCrafts prend le relais, rien à faire ici
     genericResidentShift(res, ro, w, s);
   }
+  // Chantier "Super Tristan" (2026-07, effet café comique) : pendant l'effet
+  // (res.superUntil actif), vide par petits paquets réguliers la file de
+  // cases tirée à l'activation (res.tristanSuperQueue, voir
+  // pickSuperTristanTargets) — indépendant du cycle de travail normal
+  // (C.RESIDENT_WORK_MS), appelé à CHAQUE tick tant que l'effet est actif
+  // (voir l'appel dans updateResidents ci-dessous). La taille de chaque
+  // vague s'ajuste sur le temps restant, pour que la file entière ait de
+  // bonnes chances d'être vidée avant la fin de l'effet même en cas de
+  // décalage réseau au déclenchement.
+  function updateSuperTristan(res, w, s, now) {
+    const queue = res.tristanSuperQueue;
+    if (!queue || !queue.length) return;
+    if (now < (res.tristanSuperNextBatchAt || 0)) return;
+    res.tristanSuperNextBatchAt = now + C.SUPERTRISTAN_BATCH_MS;
+    const remainingMs = Math.max(0, (res.superUntil || now) - now);
+    const remainingBatches = Math.max(1, Math.ceil(remainingMs / C.SUPERTRISTAN_BATCH_MS));
+    const batchSize = Math.max(1, Math.ceil(queue.length / remainingBatches));
+    const stock = s.gregStock || (s.gregStock = { wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) });
+    const tiles = [];
+    for (let n = 0; n < batchSize && queue.length; n++) {
+      const i = queue.pop();
+      const o = w.objects[i];
+      if (o === C.O_ROCK) { w.objects[i] = C.O_NONE; w.objHp.delete(i); stock.stone += C.LUMBERJACK_STONE; recordTileOverride(i); tiles.push({ i, g: w.ground[i], o: w.objects[i], hp: undefined }); }
+      else if (o === C.O_TREE || o === C.O_TREE2 || o === C.O_STUMP) { w.objects[i] = C.O_NONE; w.objHp.delete(i); stock.wood += C.LUMBERJACK_WOOD; recordTileOverride(i); tiles.push({ i, g: w.ground[i], o: w.objects[i], hp: undefined }); }
+      // sinon : la case a déjà changé entretemps (joueur passé par là) — on saute, rien à faire.
+    }
+    if (tiles.length) {
+      dirtyRef.current = true;
+      if (netCanBroadcast()) channelRef.current?.send({ type: "broadcast", event: "apply", payload: { tiles, gregStock: stock } });
+    }
+  }
   // Chantier 2026-07 (demande Guillaume : "René doit être envoyé récolter de
   // temps en temps, comme Soan, avec des pauses") : machine à états dédiée à
   // René, en miroir de celle de Soan (phase/workUntil/breakUntil), mais SANS
@@ -6243,6 +6307,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const inTjScene = tjBrawlNow && (tjBrawlNow.aRid === res.rid || tjBrawlNow.bRid === res.rid);
       if (inScene || inTjScene) { res.moving = false; }
       else if (!res.hidden) residentRoam(res, w, now, dt, ro, residents); // zip 252 : balade sur la ferme (chaque tick) — zip 256 : ancre dédiée — zip 298 : passe la liste des voisins (rendez-vous sociaux)
+      // Chantier "Super Tristan" : indépendant de la temporisation normale
+      // ci-dessous (res.nextWorkAt / C.RESIDENT_WORK_MS) — la file de cases
+      // à abattre doit se vider à CHAQUE tick tant que l'effet café est actif.
+      if (ro.skill === "lumberjack" && res.superUntil && now < res.superUntil) updateSuperTristan(res, w, s, now);
       if (ro.skill === "beekeeper") updateBeekeeperPhase(res, s, now); // chantier 2026-07 : blocs travail/pause de René
       // Premier passage : on planifie la première journée de travail sans rien
       // produire (emménager prend un peu de temps). La borne haute protège
@@ -6945,6 +7013,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const beekeeperOrder = () => sendReq({ kind: "beekeeperOrder" }); // chantier 2026-07 : René, miroir soanOrder
   const beekeeperRecall = () => sendReq({ kind: "beekeeperRecall" });
   const reneCoffee = () => sendReq({ kind: "reneCoffee" }); // zip suivant : SuperRené (café), miroir gregCoffee
+  const tristanCoffee = () => sendReq({ kind: "tristanCoffee" }); // chantier "Super Tristan" (café, effet comique)
   // Chantier "bouton café toujours cliquable" (2026-07, demande Guillaume) :
   // les boutons café (Greg/Soan/René) n'étaient désactivés que sur le cooldown
   // de l'employé, jamais sur le stock réel de station.worldStock.coffee — donc
@@ -11194,6 +11263,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               // la ligne d'état passe en rouge quand le four est en rupture.
               const isVoyager = ro.skill === "voyager";
               const isBeekeeper = ro.skill === "beekeeper";
+              const isLumberjack = ro.skill === "lumberjack"; // chantier "Super Tristan"
               const away = isVoyager && res.trip && res.trip.phase === "away";
               const bakerAlert = ro.skill === "baker" && (sharedRef.current.crafts || {}).bakery && sharedRef.current.crafts.bakery.alert;
               const worldTotal = Object.values((sharedRef.current.station && sharedRef.current.station.worldStock) || {}).reduce((a, b) => a + (b | 0), 0);
@@ -11202,7 +11272,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 <div className="ferme-shop-row" key={"emp-res-" + res.rid}>
                   <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, isBeekeeper && res.beePhase === "working", ro.skill === "lumberjack", ro.skill === "cheesemaker", ro.skill === "sugarworker") : null} sx={16} sy={24} w={24} h={36} />
                   <div className="info">
-                    <b>{ro.name} {bakerAlert ? "⚠️" : ""}{isBeekeeper && Date.now() < (res.superUntil || 0) ? "☕⚡" : ""}</b>
+                    <b>{ro.name} {bakerAlert ? "⚠️" : ""}{isBeekeeper && Date.now() < (res.superUntil || 0) ? "☕⚡" : ""}{isLumberjack && Date.now() < (res.superUntil || 0) ? "☕🪓⚡" : ""}</b>
                     <span className="ferme-usage" style={bakerAlert ? { color: "#c0392b", fontWeight: 700 } : undefined}>
                       {isBeekeeper && beehiveBuilt
                         ? (res.beePhase === "working" ? L.beekeeperStatusWorking : res.beePhase === "break" ? L.beekeeperStatusBreak : L.beekeeperStatusIdle) + (prod ? " — " + prod : "")
@@ -11223,6 +11293,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                         <button disabled={Date.now() < (res.superCooldownUntil || 0) || !hasCoffeeStock()} onClick={reneCoffee}>{L.reneCoffeeBtn}</button>
                         {res.coffeeGauge > 0 && Date.now() - (res.coffeeGaugeAt || 0) < C.RENE_COFFEE_GAUGE_TIMEOUT_MS && <span className="ferme-usage">1/2 ☕</span>}
                       </div>
+                      <button onClick={() => { setEmployeesOpen(false); setResidentCard(res.rid); }}>{L.residentSeeBtn}</button>
+                    </div>
+                  ) : isLumberjack ? (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                      <button disabled={Date.now() < (res.superCooldownUntil || 0) || !hasCoffeeStock()} onClick={tristanCoffee}>{L.tristanCoffeeBtn}</button>
                       <button onClick={() => { setEmployeesOpen(false); setResidentCard(res.rid); }}>{L.residentSeeBtn}</button>
                     </div>
                   ) : (
@@ -12025,6 +12100,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                     ? <PixBtn sprites={spritesReady ? spritesRef.current : null} label={L.beekeeperRecallBtn} onClick={beekeeperRecall} />
                     : <PixBtn sprites={spritesReady ? spritesRef.current : null} label={L.beekeeperOrderBtn} onClick={beekeeperOrder} />}
                   <PixBtn sprites={spritesReady ? spritesRef.current : null} disabled={Date.now() < (res.superCooldownUntil || 0) || !hasCoffeeStock()} label={res.coffeeGauge > 0 && Date.now() - (res.coffeeGaugeAt || 0) < C.RENE_COFFEE_GAUGE_TIMEOUT_MS ? L.reneCoffeeBtn + " (1/2 ☕)" : L.reneCoffeeBtn} onClick={reneCoffee} />
+                </div>
+              )}
+              {/* Chantier "Super Tristan" (café, effet comique) : 20 cafés
+                  d'un coup, en un seul bouton (pas de jauge, contrairement à
+                  René). Visible dès que Tristan a emménagé, pas besoin d'un
+                  atelier construit (il travaille déjà sans atelier). */}
+              {ro.skill === "lumberjack" && res && (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
+                  <PixBtn sprites={spritesReady ? spritesRef.current : null} disabled={Date.now() < (res.superCooldownUntil || 0) || !hasCoffeeStock()} label={L.tristanCoffeeBtn} onClick={tristanCoffee} />
                 </div>
               )}
               {/* Zip 301 (demande Guillaume) : réglage du ratio fromage/beurre
