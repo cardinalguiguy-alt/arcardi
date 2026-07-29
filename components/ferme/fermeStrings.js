@@ -572,7 +572,7 @@ export const FERME_STR = {
     lampTip: "Lampadaire : pose ou retire un lampadaire sur la case visée (chantier de 15 min réelles, puis fonctionnel : éclaire la nuit dans un rayon autour de lui)",
     scarecrowTip: "Épouvantail : pose ou retire un épouvantail sur la case visée (chantier de 10 secondes réelles). Ne bloque pas le passage.",
     // Zip 251 : outil main + décorations.
-    handTip: "Main : pose une décoration du sac, déplace lampadaires/épouvantails/décos, ou reprends-les dans le sac (R). Marche à la ferme et en ville.",
+    handTip: "Main : pose une décoration du sac, déplace lampadaires/épouvantails/murs/moulins/chaudron/décos, ou reprends-les dans le sac (R, sauf moulin/chaudron : R annule juste la prise). Marche à la ferme et en ville.",
     // Demande Guillaume : trousse de soins armée depuis le sac (clic sur la
     // ligne "pansements") — le soin se déclenche automatiquement (E/Espace)
     // à l'approche d'un joueur ou résident blessé.
@@ -1477,7 +1477,7 @@ export const FERME_STR = {
     lampTip: "Lamp post: place or remove a lamp post on the targeted tile (15 real min to build, then functional: lights up an area at night)",
     scarecrowTip: "Scarecrow: place or remove a scarecrow on the targeted tile (10 real seconds to build). Does not block movement.",
     // Zip 251: hand tool + decorations.
-    handTip: "Hand: place a decoration from your bag, move lamps/scarecrows/decorations, or store them back in your bag (R). Works on the farm and in town.",
+    handTip: "Hand: place a decoration from your bag, move lamps/scarecrows/walls/mills/the cauldron/decorations, or store them back in your bag (R, except mill/cauldron: R just cancels the grab). Works on the farm and in town.",
     // Heal kit armed from the bag (click the "bandaids" row) — healing still
     // triggers automatically (E/Space) near an injured player or resident.
     healKitArmedTip: "Heal kit armed: walk up to an injured player or resident and press E (or Space) to heal them.",

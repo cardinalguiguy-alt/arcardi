@@ -2400,9 +2400,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // Traite les requêtes de l'outil main. Retourne true si consommée.
   //  - placeDecor : pose une déco du sac (ferme ou ville) ;
   //  - moveDecor / pickDecor : déplace une déco posée, ou la remet au sac ;
-  //  - moveObj / returnObj : déplace un lampadaire/épouvantail (ferme), ou le
-  //    remet dans l'inventaire du joueur. La validité de la case CIBLE est
-  //    vérifiée côté client avant l'envoi (il connaît la carte de sa zone).
+  //  - moveObj / returnObj : déplace un lampadaire/épouvantail/moulin/chaudron
+  //    (ferme), ou remet lampadaire/épouvantail dans l'inventaire du joueur
+  //    (moulin/chaudron ne peuvent, eux, qu'être déplacés — jamais rangés).
+  //    La validité de la case CIBLE est vérifiée côté client avant l'envoi
+  //    (il connaît la carte de sa zone).
   function hostHandleDecorReq(req, f) {
     const w = worldRef.current, s = sharedRef.current;
     if (!Array.isArray(s.decor)) s.decor = [];
@@ -2465,13 +2467,32 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (!w) return true;
       const fromI = idxOf(req.fromX | 0, req.fromY | 0);
       const o = w.objects[fromI];
-      if (o !== C.O_LAMP && o !== C.O_SCARECROW) return true; // seuls lampadaire/épouvantail sont manipulables à la main
+      // Chantier "moulin/chaudron déplaçables" (2026-07, demande utilisateur) :
+      // moulin et chaudron rejoignent lampadaire/épouvantail sur ce même
+      // mécanisme générique de déplacement à la main (moveObj réutilisé tel
+      // quel : 1 seule tuile, objHp/readyAt reporté sans y toucher). En
+      // revanche returnObj (rangement au sac) reste refusé pour eux plus bas
+      // — ni le moulin ni le chaudron n'ont de slot d'inventaire dédié, et ils
+      // ne doivent jamais disparaître (le client ne l'envoie déjà plus, voir
+      // handStoreHeld, mais on le bloque aussi ici par sécurité).
+      // Chantier "murs enlevables à la main" (2026-07, demande utilisateur) :
+      // le mur en pierre (O_WALL) rejoint lui aussi ce mécanisme — il avait
+      // déjà un retrait dédié via l'outil Construction (resolveAct cas
+      // "wall"), mais pas via l'outil main comme lampadaire/épouvantail. Il a
+      // un slot d'inventaire dédié (f.inv.wall, déjà utilisé par ce même
+      // resolveAct), donc returnObj fonctionne pour lui exactement comme pour
+      // lampadaire/épouvantail (pas de garde-fou à ajouter, contrairement au
+      // moulin/chaudron ci-dessus).
+      if (o !== C.O_LAMP && o !== C.O_SCARECROW && o !== C.O_MILL && o !== C.O_CAULDRON && o !== C.O_WALL) return true;
+      if (req.kind === "returnObj" && (o === C.O_MILL || o === C.O_CAULDRON)) return true;
       const hp = w.objHp.get(fromI) || 0;
       w.objects[fromI] = C.O_NONE; w.objHp.delete(fromI); recordTileOverride(fromI);
       const tiles = [{ i: fromI, g: w.ground[fromI], o: C.O_NONE }];
       const payload = { tiles };
       if (req.kind === "returnObj") {
-        if (o === C.O_LAMP) f.inv.lamp = (f.inv.lamp | 0) + 1; else f.inv.scarecrow = (f.inv.scarecrow | 0) + 1;
+        if (o === C.O_LAMP) f.inv.lamp = (f.inv.lamp | 0) + 1;
+        else if (o === C.O_SCARECROW) f.inv.scarecrow = (f.inv.scarecrow | 0) + 1;
+        else f.inv.wall = (f.inv.wall | 0) + 1;
         payload.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv, pets: f.pets };
         payload.toast = { id: f.id, key: "objReturned" };
       } else {
@@ -9920,7 +9941,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (best) return best;
     if (zone === "farm") {
       const w = worldRef.current, o = w && w.objects[idxOf(tt.x, tt.y)];
-      if (o === C.O_LAMP || o === C.O_SCARECROW) return { kind: "obj", otype: o, fromX: tt.x, fromY: tt.y };
+      // Chantier "moulin/chaudron déplaçables" (2026-07, demande utilisateur) :
+      // ces deux tuiles rejoignent le même mécanisme main que lampadaire/
+      // épouvantail (moveObj), MAIS jamais rangeables au sac (voir
+      // handStoreHeld/hostHandleDecorReq plus bas) — un moulin/chaudron ne
+      // doit jamais disparaître, seulement changer de case.
+      // Chantier "murs enlevables à la main" (2026-07) : le mur en pierre
+      // rejoint aussi ce mécanisme, avec restitution au sac comme lampadaire/
+      // épouvantail (il avait déjà un retrait dédié via l'outil Construction,
+      // ceci ajoute juste le raccourci outil main).
+      if (o === C.O_LAMP || o === C.O_SCARECROW || o === C.O_MILL || o === C.O_CAULDRON || o === C.O_WALL) return { kind: "obj", otype: o, fromX: tt.x, fromY: tt.y };
     }
     return null;
   }
@@ -9982,7 +10012,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function handStoreHeld() {
     const held = handHeldRef.current; if (!held) return;
     if (held.kind === "decor") sendReq({ kind: "pickDecor", did: held.did });
-    else if (held.kind === "obj") sendReq({ kind: "returnObj", fromX: held.fromX, fromY: held.fromY });
+    // Chantier "moulin/chaudron déplaçables" : comme un bâtiment d'artisan,
+    // ces deux-là ne se rangent JAMAIS au sac (aucune entrée d'inventaire
+    // pour eux) — R annule simplement la prise. Seuls lampadaire/épouvantail
+    // passent encore par returnObj (ils ont un slot d'inventaire dédié).
+    else if (held.kind === "obj" && held.otype !== C.O_MILL && held.otype !== C.O_CAULDRON) sendReq({ kind: "returnObj", fromX: held.fromX, fromY: held.fromY });
     // Zip 259 : un bâtiment d'artisan tenu ne se range PAS au sac (il ne doit
     // jamais disparaître) — R annule simplement la prise, le bâtiment reste où
     // il est.

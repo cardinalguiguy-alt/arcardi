@@ -2568,6 +2568,14 @@ export function newStationState() {
     ads: [],            // posted ad categories (subset of C.AD_CATEGORIES)
     blacklist: [],      // roster ids banned from ever visiting again
     rel: {},            // roster id -> friendship points (chats, deals)
+    // Chantier "reset ponctuel de l'amitié" (2026-07, demande utilisateur) :
+    // drapeau de migration à usage unique (voir migrateStation ci-dessous).
+    // Une ferme TOUTE NEUVE n'a rien à réinitialiser (rel est déjà vide), donc
+    // elle démarre directement avec le drapeau posé ; seules les fermes
+    // EXISTANTES (chargées depuis une sauvegarde antérieure à ce chantier, où
+    // ce champ est absent) déclenchent la remise à zéro, une seule fois, à
+    // leur prochain chargement — voir migrateStation.
+    relResetDone2607: true,
     residents: [],      // [{rid, job}] accepted through a unanimous vote (or dice)
     nextVisitAt: 0,     // host clock; 0 = schedule on next host tick
     visitors: [],       // live visitor objects (host-simulated, broadcast) - up to VISITORS_MAX (zip 233)
@@ -2637,7 +2645,22 @@ export function migrateStation(st, hostNow) {
   if (!st) return out;
   out.ads = Array.isArray(st.ads) ? st.ads.filter(a => C.AD_CATEGORIES.includes(a)) : [];
   out.blacklist = Array.isArray(st.blacklist) ? st.blacklist.filter(r => typeof r === "number") : [];
-  out.rel = (st.rel && typeof st.rel === "object") ? st.rel : {};
+  // Chantier "reset ponctuel de l'amitié" (2026-07, demande utilisateur) :
+  // une ferme sauvegardée AVANT ce chantier n'a pas encore le champ
+  // `relResetDone2607` (absent = falsy) -> son compteur d'amitié par
+  // visiteur (rel) est remis à zéro UNE SEULE FOIS, à ce chargement précis
+  // (le tout prochain à se connecter à la ferme après la mise à jour), puis
+  // le drapeau est posé pour de bon : tous les chargements suivants (et le
+  // fonctionnement du jeu en général : chats, cadeaux, prix, etc.) continuent
+  // normalement à partir de rel={}, exactement comme aujourd'hui pour une
+  // ferme neuve. Aucune répétition possible, même après plusieurs
+  // reconnexions/changements d'hôte.
+  if (st.relResetDone2607) {
+    out.rel = (st.rel && typeof st.rel === "object") ? st.rel : {};
+  } else {
+    out.rel = {};
+  }
+  out.relResetDone2607 = true;
   out.residents = Array.isArray(st.residents) ? st.residents.filter(r => r && typeof r.rid === "number") : [];
   // Zip 258 : réserve de produits du monde (objet clé->quantité) préservée à
   // chaque chargement/snapshot, comme les cadeaux dus.
