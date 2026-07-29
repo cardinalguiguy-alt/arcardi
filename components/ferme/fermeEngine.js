@@ -1779,7 +1779,12 @@ export function resolveSalveCollect(f, salveCraft, world) {
    pierre sont au complet) : il ne reste alors plus qu'à réussir le mini-jeu
    de construction (voir FermeGame.js) pour valider le palier.
    ------------------------------------------------------------------------- */
-export function newBarnState() { return { level: 0, progress: { wood: 0, stone: 0 }, ready: false }; }
+// Chantier "grange déplaçable" (2026-07, demande utilisateur) : `pos` fixe
+// l'ancrage courant du bâtiment (par défaut BARN_SITE), déplacé ensuite via
+// l'outil main comme un bâtiment d'artisan (voir req "moveBarn",
+// FermeGame.js). Cloné (pas une référence à C.BARN_SITE) pour ne jamais
+// muter la constante par inadvertance.
+export function newBarnState() { return { level: 0, progress: { wood: 0, stone: 0 }, ready: false, pos: { x: C.BARN_SITE.x, y: C.BARN_SITE.y } }; }
 
 // Capacité d'animaux effective compte tenu des paliers de grange déjà construits.
 export function barnAnimalCap(level) {
@@ -1803,7 +1808,10 @@ export function resolveBarnDeposit(f, barn, m, money) {
   normalizeFarmer(f);
   const res = { invChanged: false, toast: null, deposited: 0, resource: null, becameReady: false, moneySpent: 0 };
   if (!barn || barn.level >= C.BARN_LEVELS.length) { res.toast = "barnMax"; return res; }
-  if (!nearT(f, C.BARN_SITE)) { res.toast = "farBarn"; return res; }
+  // Chantier "grange déplaçable" : on vise sa position COURANTE (barn.pos),
+  // repli sur BARN_SITE pour les parties déjà en cours sans ce champ.
+  const barnPosNow = (barn.pos && typeof barn.pos.x === "number") ? barn.pos : C.BARN_SITE;
+  if (!nearT(f, barnPosNow)) { res.toast = "farBarn"; return res; }
   if (barn.ready) { res.toast = "barnReady"; return res; }
   const def = C.BARN_LEVELS[barn.level];
   const resourcesDone = barn.progress.wood >= def.cost.wood && barn.progress.stone >= def.cost.stone;
@@ -2310,8 +2318,12 @@ export function isStormyDay(day) {
 const inBlockRect = (fx, fy, R) => fx >= R.x && fx < R.x + R.w && fy >= R.y && fy < R.y + R.h;
 export function solidBuildingAt(world, fx, fy) {
   if (inBlockRect(fx, fy, C.STATION_BLOCK)) return true;
-  const bl = (world && world.barnLevel) | 0;
-  if (bl > 0 && inBlockRect(fx, fy, C.BARN_BLOCKS[Math.min(bl, C.BARN_BLOCKS.length) - 1])) return true;
+  // Chantier "grange déplaçable" (2026-07) : le rectangle de collision suit
+  // désormais la position COURANTE de la grange, pas BARN_SITE fixe — mirroité
+  // chaque frame dans world.barnBlockRect par updateMe (FermeGame.js), au
+  // même titre que world.artisanBlocks ci-dessous.
+  const bbr = world && world.barnBlockRect;
+  if (bbr && inBlockRect(fx, fy, bbr)) return true;
   // Zip 260 (demande Guillaume : "on passe pas à travers et les résidents non
   // plus") : les bâtiments d'artisans (ruche/fromagerie/boulangerie/scierie)
   // sont SOLIDES. Leurs footprints (w×h à leur position COURANTE, déplaçable)

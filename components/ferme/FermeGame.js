@@ -508,6 +508,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [handMode, setHandMode] = useState(null);      // miroir React (surbrillance menu)
   const [handMenuOpen, setHandMenuOpen] = useState(false);
   const [handHeldUI, setHandHeldUI] = useState(null);  // miroir React (invite d'action)
+  // Chantier "prévisualisation + validation avant pose" (2026-07, demande
+  // utilisateur) : dès qu'on clique une case cible avec un objet tenu, elle
+  // n'est PLUS posée immédiatement — moveConfirmRef/UI retient {x,y,ok} en
+  // attente d'un clic sur Valider (ou Annuler pour retenter une autre case,
+  // l'objet reste tenu). Voir handAction/confirmMoveHeld/cancelMoveHeld et le
+  // rendu du fantôme (drawMoveGhost) plus bas.
+  const moveConfirmRef = useRef(null);
+  const [moveConfirmUI, setMoveConfirmUI] = useState(null);
   // Demande Guillaume : clic sur la trousse de soins dans le sac -> armée
   // dans la case main (7), visible dans la toolbar. Le soin se déclenche déjà
   // automatiquement (E/Espace) dès qu'un joueur/résident blessé est à
@@ -520,6 +528,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (!(myInv && (myInv.healKit || 0) > 0)) return;
     handModeRef.current = null; setHandMode(null);
     handHeldRef.current = null; setHandHeldUI(null);
+    moveConfirmRef.current = null; setMoveConfirmUI(null);
     healArmedRef.current = true; setHealArmed(true);
     selectSlot(7);
     setBagOpen(false);
@@ -2438,6 +2447,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       s.crafts[bid].pos = { x, y };
       dirtyRef.current = true;
       hostSend({ type: "broadcast", event: "apply", payload: { crafts: s.crafts } });
+      return true;
+    }
+    if (req.kind === "moveBarn") {
+      // Chantier "grange déplaçable" (2026-07, demande utilisateur) : déplace
+      // UNIQUEMENT la position de la grange (s.barn.pos), même esprit que
+      // moveArtisan — jamais supprimée, palier/progression/ressources
+      // déposées inchangés. Collision (world.barnBlockRect) et rendu (bs =
+      // barn.pos) suivent automatiquement la nouvelle position (updateMe).
+      const bn = s.barn;
+      if (!bn || (bn.level | 0) <= 0) return true; // rien à déplacer avant le 1er palier construit
+      const x = req.x | 0, y = req.y | 0;
+      if (!(x >= 0 && y >= 0)) return true;
+      bn.pos = { x, y };
+      setBarn(bn);
+      dirtyRef.current = true;
+      hostSend({ type: "broadcast", event: "apply", payload: { barn: bn } });
       return true;
     }
     if (req.kind === "moveBalloon") {
@@ -5523,6 +5548,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (cb && cb.pos && typeof cb.pos.x === "number") return { x: cb.pos.x, y: cb.pos.y };
     return def ? { x: def.site.x, y: def.site.y } : { x: 0, y: 0 };
   }
+  // Chantier "grange déplaçable" (2026-07) : position courante de la grange,
+  // même esprit qu'artisanPos — lit barn.pos si présent, repli sur BARN_SITE
+  // (parties déjà en cours sans ce champ).
+  function barnPos() {
+    const bn = sharedRef.current.barn;
+    return (bn && bn.pos && typeof bn.pos.x === "number") ? { x: bn.pos.x, y: bn.pos.y } : { x: C.BARN_SITE.x, y: C.BARN_SITE.y };
+  }
+  // Rectangle de collision de la grange à sa position/palier COURANTS (undefined
+  // si palier 0, rien construit). Même forme que world.artisanBlocks.
+  function barnBlockRectNow() {
+    const bn = sharedRef.current.barn, lvl = bn ? (bn.level | 0) : 0;
+    if (lvl <= 0) return null;
+    const bp = barnPos(), bb = C.BARN_BLOCKS[Math.min(lvl, C.BARN_BLOCKS.length) - 1];
+    const dx = bp.x - C.BARN_SITE.x, dy = bp.y - C.BARN_SITE.y;
+    return { x: bb.x + dx, y: bb.y + dy, w: bb.w, h: bb.h };
+  }
   // Zip 259 : point d'ancrage de rôdaille d'un artisan = juste DEVANT (au sud
   // de) son bâtiment, à sa position actuelle. Renvoie null si pas de bâtiment
   // construit (l'artisan se balade alors près du spawn).
@@ -7484,7 +7525,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // compte de la vraie hauteur du sprite (le palier 3, bien plus grand
       // que la maison depuis le zip 161, a besoin de bien plus de recul).
       if (sharedRef.current.barn) {
-        const bs = C.BARN_SITE, barnNow = sharedRef.current.barn;
+        // Chantier "grange déplaçable" (2026-07) : bs suit désormais la
+        // position courante (barn.pos), plus BARN_SITE fixe.
+        const barnNow = sharedRef.current.barn;
+        const bs = (barnNow && barnNow.pos && typeof barnNow.pos.x === "number") ? barnNow.pos : C.BARN_SITE;
         const def = C.BARN_LEVELS[barnNow.level]; // palier EN COURS de collecte (undefined si déjà au max)
         draws.push({ y: (bs.y + 1) * T, fn: () => {
           let sprH = 0;
@@ -8445,19 +8489,64 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         else balloonGlowRef.current = null; // pas de business actif : rien à percer dans le voile de nuit
       }
 
-      // Zip 307 : pendant qu'on déplace la zone d'atterrissage (outil main),
-      // surbrillance de la case visée — verte si posable, rouge sinon. Rien
-      // de permanent : ce halo ne se dessine que le temps du déplacement.
+      // Chantier "prévisualisation + validation avant pose" (2026-07, demande
+      // utilisateur) : remplace l'ancien halo (ballon uniquement) par un
+      // fantôme GÉNÉRIQUE — dès qu'une case cible attend confirmation
+      // (moveConfirmRef, posé par handAction sur clic), on dessine le VRAI
+      // sprite de l'objet/bâtiment tenu, semi-transparent et teinté vert/rouge
+      // selon moveConfirmRef.ok. Couvre tous les éléments déplaçables à la
+      // main (bâtiments d'artisan, grange, moulin/chaudron/mur/lampadaire/
+      // épouvantail, décos) ; le ballon garde son ellipse (pas de sprite
+      // discret). Uniquement sur la ferme — en ville la confirmation marche
+      // pareil (boutons) mais sans prévisualisation dessinée ici.
       {
-        const held = handHeldRef.current;
-        if (held && held.kind === "balloon" && meRef.current && meRef.current.zone !== "town" && meRef.current.zone !== "evil") {
-          const tt = targetTile();
-          const ok = farmPlaceable(tt.x, tt.y);
-          ctx.fillStyle = ok ? "rgba(90, 220, 120, 0.35)" : "rgba(220, 70, 70, 0.35)";
-          ctx.strokeStyle = ok ? "rgba(60, 200, 100, 0.9)" : "rgba(200, 60, 60, 0.9)";
-          ctx.lineWidth = 1;
-          const cx = tt.x * T + T / 2, cy = tt.y * T + T / 2, r = T * 0.9;
-          ctx.beginPath(); ctx.ellipse(cx, cy, r, r * 0.55, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        const held = handHeldRef.current, mc = moveConfirmRef.current;
+        if (held && mc && meRef.current && meRef.current.zone !== "town" && meRef.current.zone !== "evil") {
+          const gx = mc.x, gy = mc.y, ok = mc.ok;
+          const ghost = (img, dx, dy, dw, dh) => {
+            if (!img) return;
+            ctx.save();
+            ctx.globalAlpha = 0.55;
+            ctx.drawImage(img, dx, dy, dw, dh);
+            ctx.globalCompositeOperation = "source-atop";
+            ctx.fillStyle = ok ? "rgba(70,210,110,0.5)" : "rgba(220,60,60,0.55)";
+            ctx.fillRect(dx, dy, dw, dh);
+            ctx.restore();
+          };
+          if (held.kind === "artisan") {
+            const bid = held.bid, def = C.ARTISAN_BUILDINGS[bid], bimg = sprites.artisan && sprites.artisan[bid];
+            if (def && bimg) {
+              const bcx = (gx + def.w / 2) * T, bby = (gy + def.h) * T;
+              const sc = (C.ARTISAN_DRAW_SCALE_OVERRIDE && typeof C.ARTISAN_DRAW_SCALE_OVERRIDE[bid] === "number") ? C.ARTISAN_DRAW_SCALE_OVERRIDE[bid] : C.ARTISAN_DRAW_SCALE;
+              const dw = bimg.width * sc, dh = bimg.height * sc;
+              const footY = (C.ARTISAN_FOOT && typeof C.ARTISAN_FOOT[bid] === "number") ? C.ARTISAN_FOOT[bid] : bimg.height;
+              const faceX = (C.ARTISAN_FACE_X && typeof C.ARTISAN_FACE_X[bid] === "number") ? C.ARTISAN_FACE_X[bid] : bimg.width / 2;
+              ghost(bimg, Math.round(bcx - faceX * sc), Math.round(bby - footY * sc), Math.round(dw), Math.round(dh));
+            }
+          } else if (held.kind === "barn") {
+            const bn = sharedRef.current.barn, lvl = Math.max(1, bn ? (bn.level | 0) : 1);
+            const spr = spritesRef.current && spritesRef.current.barn && spritesRef.current.barn[Math.min(lvl, C.BARN_LEVELS.length) - 1];
+            if (spr) {
+              const barnGy = (gy + 1) * T + 4;
+              ghost(spr, gx * T - spr.width / 2 + 8, barnGy - spr.height, spr.width, spr.height);
+            }
+          } else if (held.kind === "obj") {
+            const ot = held.otype;
+            if (ot === C.O_MILL && sprites.mill) ghost(sprites.mill, gx * T - 14, (gy + 1) * T - 54, sprites.mill.width, sprites.mill.height);
+            else if (ot === C.O_CAULDRON && sprites.cauldron) ghost(sprites.cauldron, gx * T - 2, (gy + 1) * T - 24, sprites.cauldron.width, sprites.cauldron.height);
+            else if (ot === C.O_WALL && sprites.wall) ghost(sprites.wall, gx * T, gy * T, sprites.wall.width, sprites.wall.height);
+            else if (ot === C.O_LAMP && sprites.lamp) ghost(sprites.lamp, gx * T, (gy + 1) * T - 32, sprites.lamp.width, sprites.lamp.height);
+            else if (ot === C.O_SCARECROW && sprites.scarecrow) ghost(sprites.scarecrow, gx * T, (gy + 1) * T - 32, sprites.scarecrow.width, sprites.scarecrow.height);
+          } else if (held.kind === "decor") {
+            const dimg = sprites.decor && sprites.decor[held.deco];
+            if (dimg) ghost(dimg, Math.round((gx + 0.5) * T - dimg.width / 2), Math.round((gy + 0.5) * T - dimg.height + 6), dimg.width, dimg.height);
+          } else if (held.kind === "balloon") {
+            ctx.fillStyle = ok ? "rgba(90, 220, 120, 0.35)" : "rgba(220, 70, 70, 0.35)";
+            ctx.strokeStyle = ok ? "rgba(60, 200, 100, 0.9)" : "rgba(200, 60, 60, 0.9)";
+            ctx.lineWidth = 1;
+            const cx = (gx + 0.5) * T, cy = (gy + 0.5) * T, r = T * 0.9;
+            ctx.beginPath(); ctx.ellipse(cx, cy, r, r * 0.55, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+          }
         }
       }
 
@@ -8600,7 +8689,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // visitor prompt carries the nearest rid so the label can name them.
       else { const vp = visitorPromptNearby(); if (vp) pk = "visitor:" + vp.rid; }
       if (!pk && nearTile(C.COOP_SITE) && sharedRef.current.coop) pk = "coop";
-      else if (!pk && nearTile(C.BARN_SITE)) { const b = sharedRef.current.barn; if (b && b.level < C.BARN_LEVELS.length) pk = b.ready ? "barnBuild" : "barn"; }
+      else if (!pk && nearTile(barnPos())) { const b = sharedRef.current.barn; if (b && b.level < C.BARN_LEVELS.length) pk = b.ready ? "barnBuild" : "barn"; }
       // (chantier 2026-07, refonte demande Guillaume) : le prompt E distingue
       // maintenant les 4 états possibles du chaudron — récupérer le produit
       // fini, attendre la fin de la concoction, allumer le feu (recette
@@ -9238,6 +9327,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // covers the host sims (wolves, Greg, animal drops) since they share
       // this same world object.
       if (worldRef.current) worldRef.current.barnLevel = sharedRef.current.barn ? (sharedRef.current.barn.level | 0) : 0;
+      // Chantier "grange déplaçable" (2026-07) : world.barnBlockRect remplace
+      // l'ancien calcul figé sur BARN_SITE (solidBuildingAt, fermeEngine.js) —
+      // suit désormais barn.pos, comme world.artisanBlocks ci-dessous.
+      if (worldRef.current) worldRef.current.barnBlockRect = barnBlockRectNow();
       // Zip 260 : miroir des footprints d'artisans (bâtiments SOLIDES) pour la
       // collision locale (solidBuildingAt lit world.artisanBlocks), rafraîchi
       // chaque frame comme barnLevel car la position est déplaçable.
@@ -9940,6 +10033,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const def = C.ARTISAN_BUILDINGS[bid], p = artisanPos(bid);
         if (tt.x >= p.x - 1 && tt.x <= p.x + def.w && tt.y >= p.y - 1 && tt.y <= p.y + def.h) return { kind: "artisan", bid };
       }
+      // Chantier "grange déplaçable" (2026-07, demande utilisateur) : même
+      // mécanisme que les bâtiments d'artisan — saisissable une fois le 1er
+      // palier construit (rien à déplacer avant), sur (ou au bord de) son
+      // empreinte COURANTE (barnBlockRectNow, suit barn.pos).
+      {
+        const R = barnBlockRectNow();
+        if (R && tt.x >= R.x - 1 && tt.x <= R.x + R.w && tt.y >= R.y - 1 && tt.y <= R.y + R.h) return { kind: "barn" };
+      }
       // Zip 307 : saisir la zone d'atterrissage de la montgolfière (business
       // actif, ballon pas en vol — inutile/déroutant de la déplacer pendant
       // un survol) pour la reposer ailleurs.
@@ -10003,28 +10104,43 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     const held = handHeldRef.current;
     if (held) {
-      if (held.kind === "decor") {
-        if (!handPlaceable(zone, tt.x, tt.y)) { pushToast(L.decorBadSpot); return; }
-        sendReq({ kind: "moveDecor", did: held.did, x: tt.x + 0.5, y: tt.y + 0.5 });
-      } else if (held.kind === "obj" && zone === "farm") {
-        sendReq({ kind: "moveObj", fromX: held.fromX, fromY: held.fromY, toX: tt.x, toY: tt.y });
-      } else if (held.kind === "artisan" && zone === "farm") {
-        // Zip 259 : repose le bâtiment sur la case visée (nouveau coin haut-
-        // gauche). L'hôte valide et met à jour crafts[bid].pos (jamais supprimé).
-        if (!handPlaceable(zone, tt.x, tt.y)) { pushToast(L.decorBadSpot); return; }
-        sendReq({ kind: "moveArtisan", bid: held.bid, x: tt.x, y: tt.y });
-      } else if (held.kind === "balloon" && zone === "farm") {
-        // Zip 307 : repose la zone d'atterrissage de la montgolfière sur la
-        // case visée. Comme un bâtiment d'artisan, elle ne disparaît jamais.
-        if (!handPlaceable(zone, tt.x, tt.y)) { pushToast(L.decorBadSpot); return; }
-        sendReq({ kind: "moveBalloon", x: tt.x, y: tt.y });
-      }
-      handHeldRef.current = null; setHandHeldUI(null);
+      // Chantier "prévisualisation + validation avant pose" (2026-07) : le
+      // clic n'envoie plus la requête tout de suite — il vise juste la case
+      // (kinds valides uniquement : decor marche en ville, tout le reste
+      // uniquement sur la ferme) et ouvre le fantôme + boutons Valider/
+      // Annuler (voir confirmMoveHeld). Un nouveau clic pendant que le
+      // fantôme est affiché re-vise simplement une autre case.
+      if (held.kind !== "decor" && zone !== "farm") return;
+      const ok = handPlaceable(zone, tt.x, tt.y);
+      moveConfirmRef.current = { x: tt.x, y: tt.y, ok };
+      setMoveConfirmUI({ x: tt.x, y: tt.y, ok });
       return;
     }
     const grab = handNearestGrab(zone, tt);
     if (grab) { handHeldRef.current = grab; setHandHeldUI(grab); pushToast(L.handGrabbed); }
     else pushToast(L.handNothing);
+  }
+  // Confirme la pose en attente (bouton Valider) : envoie réellement la
+  // requête de déplacement correspondant au type d'objet tenu — reprend
+  // l'ancienne logique immédiate de handAction, déclenchée maintenant par ce
+  // bouton plutôt que par le clic sur la case. Ignoré si la case est invalide
+  // (bouton désactivé côté UI, double sécurité ici).
+  function confirmMoveHeld() {
+    const held = handHeldRef.current, mc = moveConfirmRef.current;
+    if (!held || !mc || !mc.ok) return;
+    const m = meRef.current, zone = m && m.zone === "town" ? "town" : "farm";
+    if (held.kind === "decor") sendReq({ kind: "moveDecor", did: held.did, x: mc.x + 0.5, y: mc.y + 0.5 });
+    else if (held.kind === "obj" && zone === "farm") sendReq({ kind: "moveObj", fromX: held.fromX, fromY: held.fromY, toX: mc.x, toY: mc.y });
+    else if (held.kind === "artisan" && zone === "farm") sendReq({ kind: "moveArtisan", bid: held.bid, x: mc.x, y: mc.y });
+    else if (held.kind === "balloon" && zone === "farm") sendReq({ kind: "moveBalloon", x: mc.x, y: mc.y });
+    else if (held.kind === "barn" && zone === "farm") sendReq({ kind: "moveBarn", x: mc.x, y: mc.y });
+    handHeldRef.current = null; setHandHeldUI(null);
+    moveConfirmRef.current = null; setMoveConfirmUI(null);
+  }
+  // Annule la pose en attente (bouton Annuler) : referme juste le fantôme,
+  // l'objet reste tenu pour retenter une autre case (R annule complètement).
+  function cancelMoveHeld() {
+    moveConfirmRef.current = null; setMoveConfirmUI(null);
   }
   // Reprend dans le sac l'objet actuellement tenu par la main (touche R).
   function handStoreHeld() {
@@ -10039,10 +10155,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // jamais disparaître) — R annule simplement la prise, le bâtiment reste où
     // il est.
     handHeldRef.current = null; setHandHeldUI(null);
+    moveConfirmRef.current = null; setMoveConfirmUI(null);
   }
   // Arme (ou désarme) une déco du sac pour la poser au prochain clic.
   function armDecor(id) {
     handHeldRef.current = null; setHandHeldUI(null);
+    moveConfirmRef.current = null; setMoveConfirmUI(null);
     healArmedRef.current = false; setHealArmed(false);
     const nxt = handModeRef.current === id ? null : id;
     handModeRef.current = nxt; setHandMode(nxt);
@@ -10292,7 +10410,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // HOUSE_DOOR branch is gone; startSleep/wakeUp stay in place but dead,
     // flagged for a later cleanup zip. Visitor interaction moved to Q.
     else if (nearTile(C.COOP_SITE) && sharedRef.current.coop) sendReq({ kind: "coopDeposit" });
-    else if (nearTile(C.BARN_SITE)) {
+    else if (nearTile(barnPos())) {
       const b = sharedRef.current.barn;
       if (!b || b.level >= C.BARN_LEVELS.length) pushToast(L.toastBarnMax);
       else if (b.ready) setBarnMini({ level: b.level + 1 });
@@ -10392,7 +10510,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // (l'attrape est purement locale, l'objet reste en place sur la carte).
     if (s === 7) setHandMenuOpen(o => (slotRef.current === 7 ? !o : true));
     else setHandMenuOpen(false);
-    if (s !== 7) { handModeRef.current = null; setHandMode(null); handHeldRef.current = null; setHandHeldUI(null); healArmedRef.current = false; setHealArmed(false); }
+    if (s !== 7) { handModeRef.current = null; setHandMode(null); handHeldRef.current = null; setHandHeldUI(null); moveConfirmRef.current = null; setMoveConfirmUI(null); healArmedRef.current = false; setHealArmed(false); }
     setCraftMenuOpen(null);
     // Changer d'outil en portant un animal l'annule (relâché sans être
     // déplacé), pour ne jamais le laisser "coincé" en main d'un joueur.
@@ -10784,7 +10902,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       {/* Invite proximité */}
       {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "coop" ? L.promptCoop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : L.promptBin}</div>}
       {mountPrompt && <div className="ferme-prompt ferme-prompt-mount">{mountPrompt === "mount" ? L.mountPrompt : L.dismountPrompt}</div>}
-      {handHeldUI && <div className="ferme-prompt ferme-prompt-mount">{L.handHeldHint}</div>}
+      {handHeldUI && !moveConfirmUI && <div className="ferme-prompt ferme-prompt-mount">{L.handHeldHint}</div>}
+      {moveConfirmUI && (
+        <div className="ferme-move-confirm">
+          <PixBtn sprites={spritesReady ? spritesRef.current : null} tone="good" label={L.moveConfirmBtn} disabled={!moveConfirmUI.ok} onClick={confirmMoveHeld} />
+          <PixBtn sprites={spritesReady ? spritesRef.current : null} tone="ghost" label={L.moveCancelBtn} onClick={cancelMoveHeld} />
+        </div>
+      )}
 
       {/* Barre d'outils */}
       <div className="ferme-toolbar panel">
