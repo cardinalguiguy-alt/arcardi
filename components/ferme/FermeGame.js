@@ -310,6 +310,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [myVote, setMyVote] = useState(null);          // my residency vote (null until cast)
   const [repairMini, setRepairMini] = useState(null);  // co-op repair minigame ({name}) | null
   const [nearHall, setNearHall] = useState(false);     // am I close to the townhall? (1 Hz, corner notif)
+  // Notifs coin haut-droit "meet me at townhall" (demande utilisateur) :
+  // rid des visiteurs dont j'ai fermé la carte manuellement. Purement
+  // local (par joueur, pas persisté) - purgé automatiquement dès que le
+  // visiteur n'est plus en attente (départ), pour qu'une future visite du
+  // même rid réaffiche une notif fraîche.
+  const [dismissedNotifs, setDismissedNotifs] = useState(() => new Set());
   const [nearArtisan, setNearArtisan] = useState(null); // zip 259 : bid du bâtiment d'artisan proche (encart d'info production), ou null
   const repairSeenRef = useRef(0);                     // damage.until already shown (no re-open loop)
   const visitorNetRef = useRef(0);                     // host network throttle for visitorSim
@@ -10540,29 +10546,34 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     <div className="ferme-root">
       <canvas id="ferme-game" ref={canvasRef} className="ferme-canvas" />
 
-      {/* HUD */}
+      {/* HUD (chantier notif/HUD, demande utilisateur) : minimisé par défaut
+          (or partagé, jour/saison/heure, joueurs connectés seulement) ; le
+          reste (grange, ressources de construction) ne s'affiche qu'au
+          survol, via .ferme-hud-extra en CSS. */}
       <div className="ferme-hud panel">
         <div className="row"><Sprite img={spritesReady ? spritesRef.current.icons.gold : null} w={18} h={18} /> <span>{hud.money}</span> <span className="ferme-hud-sub">{L.goldCommon}</span></div>
         <div className="row">📅 {L.day} {hud.day} &nbsp; {(() => { const se = E.seasonOf(hud.day || 1); const nm = { spring: L.seasonSpring, summer: L.seasonSummer, autumn: L.seasonAutumn, winter: L.seasonWinter }[se.key]; return se.emoji + " " + nm; })()} &nbsp; 🕐 {clockStr}</div>
         <div className="row ferme-hud-players">👥 {L.playersOnline(hud.players)}</div>
-        <div className="row ferme-hud-barn">🛖 {L.barnHudLine(barn ? barn.level : 0, C.BARN_LEVELS.length, E.barnAnimalCap(barn ? barn.level : 0))}</div>
-        <div className="row ferme-hud-res" title={L.woodResTip} onClick={() => setCraftMenuOpen(o => o === "wood" ? null : "wood")}>
-          <Sprite img={spritesReady ? spritesRef.current.icons.wood : null} w={16} h={16} /> <span>{myInv ? myInv.wood : 0}</span>
-        </div>
-        <div className="row ferme-hud-res" title={L.stoneResTip} onClick={() => setCraftMenuOpen(o => o === "stone" ? null : "stone")}>
-          <Sprite img={spritesReady ? spritesRef.current.icons.stone : null} w={16} h={16} /> <span>{myInv ? myInv.stone : 0}</span>
-        </div>
-        <div className="row ferme-hud-res" title={L.gemsResTip} onClick={() => setCraftMenuOpen(o => o === "gems" ? null : "gems")}>
-          <Sprite img={spritesReady ? spritesRef.current.gemIcons[2] : null} w={16} h={16} /> <span>{gems ? gems.reduce((a, b) => a + b, 0) : 0}</span>
-        </div>
-        <div className="row ferme-hud-res" title={L.flourResTip} onClick={() => setCraftMenuOpen(o => o === "flour" ? null : "flour")}>
-          <Sprite img={spritesReady ? spritesRef.current.icons.flour : null} w={16} h={16} /> <span>{flour || 0}</span>
-        </div>
-        <div className="row ferme-hud-res" title={L.sugarResTip} onClick={() => setCraftMenuOpen(o => o === "sugar" ? null : "sugar")}>
-          <Sprite img={spritesReady ? spritesRef.current.icons.sugar : null} w={16} h={16} /> <span>{sugar || 0}</span>
-        </div>
-        <div className="row ferme-hud-res" title={L.goldResTip}>
-          {"\u{1FA99}"} <span>{(gregStock && gregStock.gold) || 0}</span>
+        <div className="ferme-hud-extra">
+          <div className="row ferme-hud-barn">🛖 {L.barnHudLine(barn ? barn.level : 0, C.BARN_LEVELS.length, E.barnAnimalCap(barn ? barn.level : 0))}</div>
+          <div className="row ferme-hud-res" title={L.woodResTip} onClick={() => setCraftMenuOpen(o => o === "wood" ? null : "wood")}>
+            <Sprite img={spritesReady ? spritesRef.current.icons.wood : null} w={16} h={16} /> <span>{myInv ? myInv.wood : 0}</span>
+          </div>
+          <div className="row ferme-hud-res" title={L.stoneResTip} onClick={() => setCraftMenuOpen(o => o === "stone" ? null : "stone")}>
+            <Sprite img={spritesReady ? spritesRef.current.icons.stone : null} w={16} h={16} /> <span>{myInv ? myInv.stone : 0}</span>
+          </div>
+          <div className="row ferme-hud-res" title={L.gemsResTip} onClick={() => setCraftMenuOpen(o => o === "gems" ? null : "gems")}>
+            <Sprite img={spritesReady ? spritesRef.current.gemIcons[2] : null} w={16} h={16} /> <span>{gems ? gems.reduce((a, b) => a + b, 0) : 0}</span>
+          </div>
+          <div className="row ferme-hud-res" title={L.flourResTip} onClick={() => setCraftMenuOpen(o => o === "flour" ? null : "flour")}>
+            <Sprite img={spritesReady ? spritesRef.current.icons.flour : null} w={16} h={16} /> <span>{flour || 0}</span>
+          </div>
+          <div className="row ferme-hud-res" title={L.sugarResTip} onClick={() => setCraftMenuOpen(o => o === "sugar" ? null : "sugar")}>
+            <Sprite img={spritesReady ? spritesRef.current.icons.sugar : null} w={16} h={16} /> <span>{sugar || 0}</span>
+          </div>
+          <div className="row ferme-hud-res" title={L.goldResTip}>
+            {"\u{1FA99}"} <span>{(gregStock && gregStock.gold) || 0}</span>
+          </div>
         </div>
       </div>
 
@@ -12212,7 +12223,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           button that opens the SAME visitor card without walking over -
           Guillaume: black text on paper, not yellow-on-dark. */}
       {stationSt && (stationSt.visitors || []).some(vv => vv.phase === "wait") && !visitorOpen && !nearHall && (() => {
-        const waiting = (stationSt.visitors || []).filter(vv => vv.phase === "wait");
+        const waitingRids = new Set((stationSt.visitors || []).filter(vv => vv.phase === "wait").map(vv => vv.rid));
+        if (dismissedNotifs.size) {
+          let stale = false;
+          dismissedNotifs.forEach(rid => { if (!waitingRids.has(rid)) stale = true; });
+          if (stale) {
+            const next = new Set();
+            dismissedNotifs.forEach(rid => { if (waitingRids.has(rid)) next.add(rid); });
+            // Purge différée (pas pendant le rendu) pour éviter un setState en plein render.
+            setTimeout(() => setDismissedNotifs(next), 0);
+          }
+        }
+        const waiting = (stationSt.visitors || []).filter(vv => vv.phase === "wait" && !dismissedNotifs.has(vv.rid));
         const shown = waiting.slice(0, 3);
         const card = { background: "#f5eeda", border: "1px solid #6b4a2e", borderRadius: 10, padding: "8px 10px", display: "flex", gap: 10, alignItems: "center", color: "#1d1d1d" };
         return (
@@ -12225,9 +12247,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 : o.type === "swap" ? L.notifSwap
                 : o.type === "stay" ? L.notifStay : o.type === "plea" ? L.notifPlea : L.notifWantsChat;
               return (
-                <div key={vv.rid} style={card}>
+                <div key={vv.rid} style={{ ...card, position: "relative" }}>
+                  <button
+                    type="button"
+                    aria-label={L.closeBtn || "×"}
+                    onClick={() => setDismissedNotifs(prev => { const next = new Set(prev); next.add(vv.rid); return next; })}
+                    style={{ position: "absolute", top: 2, right: 4, border: "none", background: "transparent", color: "#6b4a2e", fontSize: 14, lineHeight: 1, cursor: "pointer", padding: 2 }}
+                  >×</button>
                   <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, false, ro.skill === "lumberjack", ro.skill === "cheesemaker", ro.skill === "sugarworker") : null} sx={16} sy={24} w={24} h={36} />
-                  <div style={{ fontSize: 12, lineHeight: 1.35 }}>
+                  <div style={{ fontSize: 12, lineHeight: 1.35, paddingRight: 14 }}>
                     <b>{L.notifAsk(ro.name)}</b><br />
                     {o.type === "buy" && spritesReady && <span style={{ verticalAlign: "middle", marginRight: 4, display: "inline-block" }}><Sprite img={spritesRef.current.crops[o.crop][C.CROP_STAGES - 1]} w={18} h={18} /></span>}
                     {ask}
