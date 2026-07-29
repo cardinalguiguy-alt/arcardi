@@ -6548,8 +6548,25 @@ body.stage-focus .chromatik-panel .chromatik-hand{ margin-top:24px; }
 
 /* HUD */
 .ferme-hud{ position:fixed; top:10px; left:10px; z-index:10; padding:8px 14px; font-size:14px; font-weight:bold; line-height:1.6; }
-.ferme-hud-extra{ display:none; margin-top:2px; }
-.ferme-hud:hover .ferme-hud-extra{ display:block; }
+.ferme-hud-extra{
+  overflow:hidden;
+  max-height:0;
+  opacity:0;
+  transform:translateY(-4px);
+  pointer-events:none;
+  transition: max-height .38s cubic-bezier(.22,.61,.36,1),
+              opacity .22s ease-out,
+              transform .3s cubic-bezier(.22,.61,.36,1);
+}
+.ferme-hud:hover .ferme-hud-extra{
+  max-height:240px;
+  opacity:1;
+  transform:translateY(0);
+  pointer-events:auto;
+  transition: max-height .3s cubic-bezier(.22,.61,.36,1) .03s,
+              opacity .28s ease-in .05s,
+              transform .32s cubic-bezier(.22,.61,.36,1) .03s;
+}
 .ferme-hud .row{ display:flex; align-items:center; gap:6px; }
 .ferme-hud canvas{ image-rendering:pixelated; }
 .ferme-hud-sub{ opacity:.6; font-size:11px; }
