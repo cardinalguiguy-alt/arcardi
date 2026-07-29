@@ -1584,6 +1584,19 @@ export const TJ_REACT_LINE_PERIOD_MS = 2800; // cycle d'affichage des commentair
 // la fois, le reste attend son tour (voir le rendu, boucle résidents/visiteurs).
 export const TJ_REACT_TALK_SLOTS = 3;
 export const TJ_REACT_AFTER_MS = 6000; // mot de la fin affiché avant de repartir, une fois la bagarre résolue (voir TJ_BRAWL_IMMINENT_DELAY_MS pour le total ~30s)
+// Chantier v363 "plus aucun PNJ figé" (bug remonté par Guillaume : Eduardo
+// « reste figé et ne circule plus ») : l'attroupement se déplace en LIGNE
+// DROITE, sans pathfinding (voir residentRoam/tjReact et updateTjCrowdVisitor).
+// Un PNJ dont la ligne droite est coupée par un obstacle massif (bâtiment,
+// clôture) n'atteignait donc JAMAIS son point de rassemblement ni son point de
+// retour : la phase ne se terminait pas, `tjReact` n'était jamais effacé, et le
+// PNJ restait bloqué à vie (plus de rôdaille, plus de déplacement — il
+// continuait juste à travailler). On borne désormais chaque phase dans le
+// temps : à l'échéance, le PNJ abandonne PROPREMENT (il s'arrête sur place pour
+// la phase d'aller = il regarde de loin, et il reprend sa rôdaille normale pour
+// la phase de retour). Aucun téléport, donc aucun saut visible à l'écran.
+export const TJ_REACT_MOVE_TIMEOUT_MS = 9000;   // délai max pour rejoindre l'attroupement, après son décalage de départ (TJ_REACT_STAGGER_*)
+export const TJ_REACT_RETURN_TIMEOUT_MS = 12000; // délai max pour regagner sa position d'avant la scène (rythme de retour tranquille, ×0.55)
 
 // Chantier "relations entre résidents" (2026-07, demande Guillaume : "des
 // petites infos qui peuvent changer au fil de l'histoire") : table légère
@@ -1748,6 +1761,17 @@ export const VOYAGE_MAX_QTY = 30;           // garde-fou : quantité max par pro
 export const VOYAGE_SURPRISE_CHANCE = 0.5;  // probabilité qu'Eduardo ramène une surprise en plus
 export const VOYAGE_SURPRISE_MIN = 1, VOYAGE_SURPRISE_MAX = 3; // quantité de la surprise
 // Ancre de rôdaille d'Eduardo quand il est au village (près de la gare/mairie).
+// ATTENTION (constat v363) : cette constante n'est PAS utilisée — elle n'est
+// lue nulle part dans le code. Eduardo a `SKILL_BUILDING.voyager = null`, donc
+// artisanAnchor() renvoie null pour lui et residentRoam le traite comme un
+// résident GÉNÉRIQUE : il rôde autour de C.SPAWN, sur le large rayon 9×7, avec
+// le comportement social complet (rendez-vous / petits groupes de discussion).
+// Choix assumé, conservé en v363 : c'est le seul résident monté (cheval blanc)
+// et le seul sans atelier — un grand circuit à cheval au milieu des autres est
+// bien plus cohérent qu'un piétinement sur un anneau de 3 cases dans un champ
+// vide au nord de la carte (et il garderait perdu ses rendez-vous sociaux,
+// réservés aux résidents non ancrés). Gardée ici uniquement au cas où l'on
+// voudrait un jour lui donner un poste fixe.
 export const VOYAGER_ANCHOR = { x: 40, y: 12 };
 
 /* ==========================================================================

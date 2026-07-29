@@ -2760,6 +2760,19 @@ export function migrateStation(st, hostNow) {
       for (const k of ["phaseUntil", "waitUntil", "deadline", "voteUntil", "waitStartedAt"]) {
         if (typeof v[k] === "number" && v[k] > 0) v[k] += shift;
       }
+      // Chantier v363 ("plus aucun PNJ figé") : les horodatages de
+      // l'attroupement Tristan/Jérôme (tjReact.startAt / tjReact.returnAt)
+      // manquaient à cette liste alors qu'ils sont eux aussi datés sur
+      // l'HORLOGE DE L'HÔTE. Un changement d'hôte en pleine scène les projetait
+      // dans le futur, et le PNJ restait bloqué sur `if (now < rc.startAt) {
+      // moving = false; return; }` — figé, sans jamais reprendre sa flânerie.
+      // Piège récurrent déjà rencontré sur les visiteurs/dégâts/montgolfière.
+      if (v.tjReact && typeof v.tjReact === "object") {
+        v.tjReact = { ...v.tjReact };
+        for (const k of ["startAt", "returnAt"]) {
+          if (typeof v.tjReact[k] === "number" && v.tjReact[k] > 0) v.tjReact[k] += shift;
+        }
+      }
       return v;
     });
     if (st.damage) {
@@ -2786,6 +2799,32 @@ export function migrateStation(st, hostNow) {
     // relocalisation, sinon un changement d'hôte en pleine ITT décalerait
     // (ou effacerait) l'immobilisation pour les invités.
     out.residents = out.residents.map(r => (r && typeof r.injuredUntil === "number" && r.injuredUntil > 0) ? { ...r, injuredUntil: r.injuredUntil + shift } : r);
+    // Chantier v363 ("plus aucun PNJ figé", demande Guillaume) : deux autres
+    // horodatages HÔTE des résidents manquaient à la relocalisation.
+    //  - shopPhaseUntil : alternance dehors/à l'intérieur de la boulangerie
+    //    (Chloé/Rosalie, voir updateBakeryVisibility). Non relocalisé, un
+    //    changement d'hôte pouvait le projeter loin dans le futur -> la
+    //    boulangère restait invisible (« à l'intérieur ») ou plantée dehors
+    //    pendant très longtemps.
+    //  - tjReact.startAt / tjReact.returnAt : attroupement autour de la bagarre
+    //    T/J. Même symptôme, mais bien plus visible : `if (now < rc.startAt)
+    //    return;` figeait totalement le résident (voir residentRoam). C'est
+    //    l'une des causes possibles du « Eduardo reste figé » remonté par
+    //    Guillaume, en plus du bug de position (corrigé côté FermeGame.js).
+    //    Idem côté visiteurs, traité plus haut dans out.visitors.
+    out.residents = out.residents.map(r => {
+      if (!r) return r;
+      let changed = false; const nr = { ...r };
+      if (typeof nr.shopPhaseUntil === "number" && nr.shopPhaseUntil > 0) { nr.shopPhaseUntil += shift; changed = true; }
+      if (nr.tjReact && typeof nr.tjReact === "object") {
+        const rc = { ...nr.tjReact };
+        for (const k of ["startAt", "returnAt"]) {
+          if (typeof rc[k] === "number" && rc[k] > 0) { rc[k] += shift; changed = true; }
+        }
+        nr.tjReact = rc;
+      }
+      return changed ? nr : r;
+    });
     // Zip 259 : idem pour l'heure de retour des ex-résidents exclus.
     out.exiles = out.exiles.map(e => (e && typeof e.returnAt === "number" && e.returnAt > 0) ? { ...e, returnAt: e.returnAt + shift } : e);
     // Chantier "rivalité Tristan/Jérôme" : mêmes horodatages hôte que

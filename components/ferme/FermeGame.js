@@ -5715,6 +5715,61 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     return null;
   }
   function residentRoam(res, w, now, dt, ro, peers) {
+    // ======================================================================
+    // Chantier v363 — "plus aucun PNJ figé" (deux bugs remontés par Guillaume :
+    // « Chloé ne rejoint jamais la boulangerie » et « Eduardo reste figé »).
+    // ----------------------------------------------------------------------
+    // CAUSE RACINE COMMUNE : les deux branches prioritaires ci-dessous
+    // (res.tjReact = attroupement, res.storming = arrivée en trombe) tournent
+    // AVANT le bloc d'initialisation de position (`if (typeof res.x !==
+    // "number")`, plus bas). Un résident qui entre dans l'un de ces deux états
+    // SANS position (ou qui perd sa position pendant l'état) calculait alors
+    // tous ses déplacements sur `undefined` :
+    //   Math.hypot(cible - undefined) => NaN, donc `d <= convoDist` faux,
+    //   `ed > 0.02` faux => `return` sec, À CHAQUE TICK, indéfiniment.
+    // Le résident ne bougeait plus JAMAIS (mais continuait à travailler, le
+    // shift métier étant appelé après residentRoam) et restait dessiné par le
+    // rendu de repli "idle planté près de sa maison" (voir la boucle de rendu,
+    // « if (typeof residents[ri].x === "number") continue; »).
+    //
+    // Les deux chemins observés en jeu :
+    //  1. CHLOÉ. updateBakeryVisibility peut la passer `hidden` à son PREMIER
+    //     tick, avant qu'elle ait reçu une position (residentRoam est sauté
+    //     quand `hidden`, or c'est lui qui pose x/y). updateChloeRosalieFeud ne
+    //     vérifiait QUE `rosalie.x`, pas `chloe.x` : si la rivalité était déjà
+    //     armée — typiquement quand ROSALIE A ÉTÉ RECRUTÉE EN PREMIÈRE, ses
+    //     répliques négatives ayant déjà atteint CHLOE_ROSALIE_TRIGGER_CYCLES
+    //     avant l'arrivée de Chloé — elle passait `storming = true` avec x
+    //     encore indéfini => figée à vie. BAKERY_ENTER_CHANCE valant 0.5, cela
+    //     n'arrivait qu'une fois sur deux, d'où le « pas toujours ».
+    //  2. EDUARDO. triggerTjCrowdReaction ne filtrait pas les résidents partis
+    //     en voyage (trip.phase === "away") : il gardant son x en partant, il
+    //     recevait un `tjReact` PENDANT son voyage, qu'il n'avançait jamais (le
+    //     `continue` de la branche "away" dans updateResidents). Au retour, le
+    //     code fait `delete res.x; delete res.y` pour le replacer proprement —
+    //     et la branche tjReact (phase "returning") repartait sur undefined
+    //     => figé à vie.
+    //
+    // CORRECTIF (ceinture) : ici, tout en haut, on garantit l'invariant
+    // « aucun état de déplacement scripté ne survit à une position invalide ».
+    // Si x/y ne sont pas des nombres finis, on purge storming/tjReact et on
+    // laisse le bloc d'initialisation plus bas reposer le résident près de son
+    // ancre, comme au tout premier spawn. Les bretelles (les gardes en amont
+    // qui empêchent d'ENTRER dans cet état sans position) sont dans
+    // updateBakeryVisibility, updateChloeRosalieFeud et triggerTjCrowdReaction.
+    // ======================================================================
+    if (!Number.isFinite(res.x) || !Number.isFinite(res.y)) {
+      if (res.storming) {
+        res.storming = false; res.stormKind = null;
+        res.stormRosalieRid = null; res.stormTargetRid = null;
+        res.stormPath = null; res.stormStuckT = 0;
+      }
+      if (res.tjReact) delete res.tjReact;
+      // On efface pour de bon (un NaN passerait le `typeof x === "number"` du
+      // bloc d'initialisation plus bas et laisserait le résident coincé).
+      delete res.x; delete res.y;
+      res.roamTarget = null; res.roamMeet = null; res.moving = false; res.nextRoamAt = 0;
+    }
     // Chantier "bagarre = vrai événement, en public" (2026-07, demande
     // Guillaume) : dès que le jet de bagarre Tristan/Jérôme tombe positif,
     // ce résident (n'importe lequel hors T/J, hors ITT, hors caché — voir
@@ -5727,7 +5782,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (rc.phase === "moving") {
         if (now < rc.startAt) { res.moving = false; return; } // léger décalage avant de se mettre en route (pas tous en même temps)
         const dx = rc.tx - res.x, dy = rc.ty - res.y, d = Math.hypot(dx, dy);
-        if (d < 0.3) { rc.phase = "gathered"; res.moving = false; return; }
+        // Chantier v363 (garde-fou anti-freeze, demande Guillaume) : le trajet
+        // est une ligne droite sans pathfinding — si un bâtiment la coupe, le
+        // PNJ n'atteignait jamais d < 0.3 et restait bloqué là, `tjReact` collé
+        // sur lui pour toujours. À l'échéance il abandonne simplement le
+        // rapprochement et regarde la scène de là où il est (phase "gathered" :
+        // il s'arrête, se tourne vers le clash et commente comme les autres).
+        if (d < 0.3 || now >= rc.startAt + C.TJ_REACT_MOVE_TIMEOUT_MS) { rc.phase = "gathered"; res.moving = false; return; }
         const step = Math.min(d, C.VISITOR_SPEED * C.TJ_REACT_SPEED_MUL * dt);
         const nx = res.x + (dx / d) * step, ny = res.y + (dy / d) * step;
         if (!E.blockedTile(w, nx, res.y)) res.x = nx;
@@ -5748,7 +5809,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // puis retour tranquille vers l'activité d'avant la scène.
       if (now < (rc.returnAt || 0)) { res.moving = false; return; }
       const dx = rc.returnX - res.x, dy = rc.returnY - res.y, d = Math.hypot(dx, dy);
-      if (d < 0.3) { delete res.tjReact; res.roamTarget = null; res.nextRoamAt = now + 300; return; }
+      // Chantier v363 (garde-fou anti-freeze) : même raison que la phase
+      // "moving" ci-dessus — retour en ligne droite, donc potentiellement
+      // impossible. À l'échéance on efface `tjReact` de toute façon : le PNJ
+      // reprend sa rôdaille normale depuis l'endroit où il se trouve (la
+      // rôdaille, elle, sait se débloquer seule — voir les branches
+      // d'éjection/repositionnement plus bas).
+      if (d < 0.3 || now >= (rc.returnAt || 0) + C.TJ_REACT_RETURN_TIMEOUT_MS) { delete res.tjReact; res.roamTarget = null; res.roamMeet = null; res.moving = false; res.nextRoamAt = now + 300; return; }
       const step = Math.min(d, C.VISITOR_SPEED * C.TJ_REACT_RETURN_SPEED_MUL * dt);
       const nx = res.x + (dx / d) * step, ny = res.y + (dy / d) * step;
       if (!E.blockedTile(w, nx, res.y)) res.x = nx;
@@ -6217,6 +6284,29 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // "if (res.hidden) continue;") ni déplacé (résidentRoam sauté dans la boucle
   // ci-dessous) : elle est simplement "à l'intérieur" pendant ce temps.
   function updateBakeryVisibility(res, ro, peers, now) {
+    // Chantier v363 (bug « Chloé ne rejoint jamais la boulangerie », remonté
+    // par Guillaume) : cette fonction tourne AVANT residentRoam dans
+    // updateResidents, et un résident `hidden` ne passe justement PAS par
+    // residentRoam — or c'est residentRoam qui pose x/y au premier tick. Une
+    // boulangère fraîchement recrutée pouvait donc être « rentrée à
+    // l'intérieur » avant même d'avoir existé sur la carte, et repartait alors
+    // dans le monde avec x/y indéfinis (voir le détail complet en tête de
+    // residentRoam : c'est ce qui armait le freeze définitif de Chloé, via
+    // updateChloeRosalieFeud). On exige désormais qu'elle ait une position
+    // réelle avant de pouvoir se cacher : au premier tick elle apparaît donc
+    // toujours DEHORS, devant la boulangerie, puis l'alternance normale
+    // reprend — ce qui est aussi plus lisible pour le joueur (on la voit
+    // arriver au lieu de la voir manquer à l'appel).
+    if (!Number.isFinite(res.x) || !Number.isFinite(res.y)) { res.hidden = false; res.shopPhaseUntil = 0; return; }
+    // Garde-fou horodatage hôte : `shopPhaseUntil` est daté sur l'horloge de
+    // l'HÔTE (comme nextWorkAt/trip.returnAt). Il est bien relocalisé par
+    // migrateStation en cas de changement d'hôte, mais on borne malgré tout la
+    // valeur : une échéance absurde (sauvegarde d'avant la relocalisation,
+    // horloge client très décalée) aurait laissé la boulangère invisible ou
+    // plantée dehors pendant des heures. Même esprit que la borne haute déjà
+    // posée sur res.nextWorkAt dans updateResidents.
+    const phaseCap = now + C.BAKERY_INSIDE_MAX_MS + C.BAKERY_OUTSIDE_MAX_MS;
+    if (res.shopPhaseUntil > phaseCap) res.shopPhaseUntil = 0;
     if (!res.shopPhaseUntil || now >= res.shopPhaseUntil) {
       if (res.hidden) {
         // Ressort de la boulangerie : redevient visible, se replace près de
@@ -6273,6 +6363,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           // sur une case valide près du spawn (évite de le figer sur une tuile
           // bloquée si VOYAGER_ANCHOR tombait mal).
           delete res.x; delete res.y; delete res.roamTarget; res.moving = false; res.nextRoamAt = 0;
+          // Chantier v363 (bug « Eduardo reste figé ») : on efface EN MÊME
+          // TEMPS tout état de déplacement scripté hérité d'avant/pendant le
+          // voyage. Sans ça, un `tjReact` (attroupement) ou un `storming`
+          // resté collé sur lui se serait remis à calculer ses pas sur le x/y
+          // qu'on vient justement de supprimer -> NaN -> figé à vie. Le garde
+          // en tête de residentRoam rattrape déjà le cas, ceci évite juste de
+          // repartir sur un état de scène périmé de plusieurs minutes.
+          delete res.tjReact; delete res.roamMeet;
+          res.storming = false; res.stormKind = null; res.stormRosalieRid = null; res.stormTargetRid = null; res.stormPath = null; res.stormStuckT = 0;
           s.station.voyagerNotice = { goods: brought, surprise, at: now };
           const summary = Object.keys(brought).map(k => `${L.worldGoodName(k)} ×${brought[k]}`).join(", ");
           stationChat(L.voyagerReturned(summary + (surprise ? L.voyagerSurpriseTag : "")), "\u{1F9F3}");
@@ -6428,6 +6527,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (!r || r.rid === tristan.rid || r.rid === jerome.rid) continue;
       if (r.injuredUntil && r.injuredUntil > now) continue; // déjà en ITT (bagarre précédente)
       if (r.hidden) continue; // caché à l'intérieur (boulangerie)
+      // Chantier v363 (bug « Eduardo reste figé », remonté par Guillaume) :
+      // filtre MANQUANT — un résident parti en voyage (Eduardo, trip "away")
+      // n'est pas sur la carte, mais il CONSERVE son x/y de départ, donc il
+      // passait le test de position juste en dessous et recevait un `tjReact`.
+      // Il ne pouvait pas l'avancer (updateResidents fait `continue` sur la
+      // branche "away", residentRoam n'est jamais appelé), et à son retour le
+      // code efface x/y pour le replacer proprement -> la branche tjReact
+      // repartait sur `undefined` et le figeait définitivement. Même filtre que
+      // le rendu et que le déclencheur au Q (voir les autres « phase === "away" »).
+      if (r.trip && r.trip.phase === "away") continue;
       if (typeof r.x !== "number") continue;
       const angle = Math.random() * Math.PI * 2;
       const dist = C.TJ_REACT_GATHER_MIN_DIST + Math.random() * (C.TJ_REACT_GATHER_MAX_DIST - C.TJ_REACT_GATHER_MIN_DIST);
@@ -6460,15 +6569,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // trouvé, sinon ligne droite) que le reste de la phase "wait".
   function updateTjCrowdVisitor(v, now, walkVia) {
     const rc = v.tjReact;
+    // Chantier v363 (garde-fou anti-freeze, demande Guillaume) : mêmes bornes
+    // de temps que pour les résidents (voir residentRoam/tjReact). walkVia
+    // tente un chemin dallé puis retombe sur la ligne droite : un visiteur dont
+    // les deux options sont coupées ne "terminait" jamais sa phase et restait
+    // planté avec son `tjReact` à vie, une fois la scène finie et l'attroupement
+    // dispersé. À l'échéance il abandonne proprement.
     if (rc.phase === "moving") {
       if (now < rc.startAt) { v.moving = false; return; }
-      if (walkVia(rc.tx, rc.ty, C.TJ_REACT_SPEED_MUL)) { rc.phase = "gathered"; v.moving = false; }
+      if (walkVia(rc.tx, rc.ty, C.TJ_REACT_SPEED_MUL) || now >= rc.startAt + C.TJ_REACT_MOVE_TIMEOUT_MS) { rc.phase = "gathered"; v.moving = false; }
       return;
     }
     if (rc.phase === "gathered") { v.moving = false; return; }
     // "returning" : mot de la fin (voir rendu), puis retour tranquille.
     if (now < (rc.returnAt || 0)) { v.moving = false; return; }
-    if (walkVia(rc.returnX, rc.returnY, C.TJ_REACT_RETURN_SPEED_MUL)) { delete v.tjReact; v.nextRoamAt = now + 300; }
+    if (walkVia(rc.returnX, rc.returnY, C.TJ_REACT_RETURN_SPEED_MUL) || now >= (rc.returnAt || 0) + C.TJ_REACT_RETURN_TIMEOUT_MS) { delete v.tjReact; v.moving = false; v.nextRoamAt = now + 300; }
   }
   // Fin de la scène (bagarre résolue) : chacun dit un dernier mot
   // (tjAfterLines, tiré une fois et figé dans rc.afterLine pour rester
@@ -6586,7 +6701,27 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const st = s.station; if (!st) return;
     const chloe = residents.find(r => r && rosterOf(r.rid) && rosterOf(r.rid).skill === "baker");
     const rosalie = residents.find(r => r && rosterOf(r.rid) && rosterOf(r.rid).skill === "breadmaker");
-    if (!chloe || !rosalie || typeof rosalie.x !== "number") return;
+    // Chantier v363 — CORRECTIF PRINCIPAL du bug « Chloé ne rejoint jamais la
+    // boulangerie » (remonté par Guillaume : parfait sur la ferme de test, cassé
+    // sur une ferme où ROSALIE A ÉTÉ RECRUTÉE EN PREMIÈRE).
+    // Le test ne portait QUE sur `rosalie.x` : la position de CHLOÉ n'était
+    // jamais vérifiée. Or Chloé peut très bien ne pas encore avoir de position
+    // (voir updateBakeryVisibility et le détail en tête de residentRoam). Dans
+    // ce cas la suite la passait `storming = true` avec x/y indéfinis, et
+    // residentRoam la figeait alors DÉFINITIVEMENT — elle continuait à
+    // travailler (le shift métier est appelé après residentRoam) mais son
+    // sprite restait planté sur le rendu de repli, sans jamais rejoindre la
+    // boulangerie. Exactement le symptôme décrit.
+    // Pourquoi l'ordre de recrutement changeait tout : quand Rosalie arrive
+    // d'abord, ses répliques négatives ont déjà atteint
+    // CHLOE_ROSALIE_TRIGGER_CYCLES AVANT l'arrivée de Chloé — la rivalité était
+    // donc armée et se déclenchait dès les premiers ticks de Chloé, pile pendant
+    // la fenêtre où elle n'a pas encore de position. Quand Chloé arrive d'abord,
+    // cette fonction sortait en amont (`!rosalie`), Chloé recevait tranquillement
+    // sa position, et le bug ne pouvait pas se produire.
+    if (!chloe || !rosalie) return;
+    if (!Number.isFinite(rosalie.x) || !Number.isFinite(rosalie.y)) return;
+    if (!Number.isFinite(chloe.x) || !Number.isFinite(chloe.y)) return;
     const scene = st.crScene;
     if (scene) {
       // Scène en cours : avance d'une étape par stepUntil écoulé, comme tjBrawl.
@@ -6613,7 +6748,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (cyc.cycles < C.CHLOE_ROSALIE_TRIGGER_CYCLES) return;
     cyc.cycles = 0;
     const wasHidden = chloe.hidden;
-    if (wasHidden) chloe.hidden = false; // ressort aussitôt de la boulangerie
+    if (wasHidden) {
+      chloe.hidden = false; // ressort aussitôt de la boulangerie
+      // Chantier v363 : on lui redonne aussi une vraie fenêtre "dehors". Sans
+      // ça, `shopPhaseUntil` restait celui du passage À L'INTÉRIEUR qu'on vient
+      // d'interrompre — donc déjà tout proche, voire écoulé : à son échéance
+      // updateBakeryVisibility retentait de la faire rentrer en pleine scène.
+      // Le garde `!res.storming` couvrait le sprint, mais pas la scène elle-même
+      // (Chloé pouvait disparaître en plein dialogue avec Rosalie).
+      chloe.shopPhaseUntil = now + C.BAKERY_OUTSIDE_MIN_MS + Math.random() * (C.BAKERY_OUTSIDE_MAX_MS - C.BAKERY_OUTSIDE_MIN_MS);
+    }
     const closeEnough = !wasHidden && Math.hypot(chloe.x - rosalie.x, chloe.y - rosalie.y) <= C.CHLOE_ROSALIE_CONVO_DIST;
     if (closeEnough) {
       const scenes = L.chloeRosalieScenes || [];
