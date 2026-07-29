@@ -1018,7 +1018,15 @@ export function resolveAct(world, f, m) {
         world.ground[i] = C.G_GRASS;
         f.inv.path = (f.inv.path || 0) + 1;
         res.tiles.push(i); res.invChanged = true;
-      } else if (g === C.G_GRASS && o === C.O_NONE && !world.crops.has(i)) {
+      } else if ((g === C.G_GRASS || g === C.G_TILLED || g === C.G_WATERED) && o === C.O_NONE && !world.crops.has(i)) {
+        // Chantier "chemin sur tuile labourée" (2026-07, demande utilisateur) :
+        // le chemin dallé acceptait seulement l'herbe (G_GRASS) ; il rejoint
+        // désormais le mur/lampadaire (même liste de sols autorisés) pour
+        // pouvoir aussi être posé sur une tuile labourée (G_TILLED) ou
+        // arrosée (G_WATERED) tant qu'aucune culture n'y pousse. Le retrait
+        // (branche G_PATH_STONE ci-dessus) continue de rendre G_GRASS dans
+        // tous les cas — un labour existant sous un chemin posé n'est donc
+        // pas restauré au retrait, comme c'était déjà le cas pour l'herbe.
         if (f.inv.path > 0) {
           f.inv.path--;
           world.ground[i] = C.G_PATH_STONE;
