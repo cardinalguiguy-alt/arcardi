@@ -319,7 +319,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [nearArtisan, setNearArtisan] = useState(null); // zip 259 : bid du bâtiment d'artisan proche (encart d'info production), ou null
   const repairSeenRef = useRef(0);                     // damage.until already shown (no re-open loop)
   const visitorNetRef = useRef(0);                     // host network throttle for visitorSim
-  const residentNetRef = useRef(0);                    // zip 252: host network throttle for residentSim (résidents baladeurs)
+  const residentNetWasNearRef = useRef(false);          // chantier "mouvement fluide" : détecte la transition hors-portée -> à-portée pour renvoyer le trajet en cours
   const sessionStartRef = useRef(Date.now());          // zip 298: début de la session de jeu (continu) — base du minuteur de garantie artisans
   const pitySeenRef = useRef({});                       // zip 298: artisans à skill déjà VUS cette session (rid -> true) — désamorce la garantie
   const ducksRef = useRef(null);                       // decorative ducks (client-side, seeded)
@@ -3738,12 +3738,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // Zip 252 : ateliers d'artisans + stock de produits artisanaux (communs).
     if (p.crafts !== undefined && !isHost) { sharedRef.current.crafts = E.migrateCrafts(p.crafts); minimapDirtyRef.current = true; }
     if (p.craftStock !== undefined && !isHost) { sharedRef.current.craftStock = E.migrateCraftStock(p.craftStock); }
-    if (p.residentSim && !isHost) { // positions des résidents baladeurs (léger, 2 Hz)
+    if (p.residentPath && !isHost) {
+      // Chantier "mouvement fluide" : trajet complet reçu une fois par nouvelle
+      // décision de l'hôte (voir updateResidents) -> stocké sur le résident,
+      // rejoué localement par smoothNpcPath (position ET rythme d'animation).
       const list = sharedRef.current.station && sharedRef.current.station.residents;
-      if (list && Array.isArray(p.residentSim)) for (const sim of p.residentSim) {
-        const r = list.find(rr => rr.rid === sim.rid);
-        if (r) { r.x = sim.x; r.y = sim.y; r.dir = sim.dir; r.moving = sim.moving; r.animT = sim.animT; }
-      }
+      const r = list && list.find(rr => rr.rid === p.residentPath.rid);
+      if (r) { r.netPath = p.residentPath.path; r.netPathStartAt = p.residentPath.startAt; r.netPathSpeed = p.residentPath.speed; }
+    }
+    if (p.residentStop && !isHost) {
+      // L'hôte s'est arrêté avant la fin d'un trajet (obstacle, scène figée...) :
+      // on efface le trajet en cours pour que smoothNpcPath se cale sur la
+      // position d'arrêt réelle plutôt que de terminer l'ancien chemin.
+      const list = sharedRef.current.station && sharedRef.current.station.residents;
+      const r = list && list.find(rr => rr.rid === p.residentStop.rid);
+      if (r) { r.netPath = null; r.x = p.residentStop.x; r.y = p.residentStop.y; }
     }
     if (p.visitorSim && !isHost) {
       // Zip 233: an ARRAY of light per-visitor positions, matched by rid.
@@ -4181,6 +4190,55 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     const k = Math.min(1, dt * (glide ? 14 : 12));
     st.x += (tx - st.x) * k; st.y += (ty - st.y) * k;
+    return st;
+  }
+
+  // Chantier "mouvement fluide côté invités" (2026-07, demande Guillaume) :
+  // au lieu d'extrapoler une ligne droite à partir de la dernière vitesse
+  // connue (smoothNpc ci-dessus), on rejoue ICI la VRAIE trajectoire décidée
+  // par l'hôte (path = liste de points, peut zigzaguer), point par point,
+  // en fonction du temps écoulé depuis son départ (startAt, horloge hôte —
+  // même convention que les autres timestamps hôte du jeu, ex.
+  // superCooldownUntil, comparés tels quels à Date.now() côté client).
+  // Retourne { x, y, dir, moving } (position au temps `elapsedS`, direction
+  // du segment en cours, `moving`=false une fois le bout du chemin atteint).
+  function walkPath(path, elapsedS, speed) {
+    if (!path || path.length < 2 || !(speed > 0)) return null;
+    let remaining = Math.max(0, elapsedS) * speed;
+    for (let i = 0; i < path.length - 1; i++) {
+      const a = path[i], b = path[i + 1];
+      const segLen = Math.hypot(b.x - a.x, b.y - a.y);
+      if (segLen <= 0.0001) continue;
+      if (remaining <= segLen) {
+        const t = remaining / segLen;
+        const dir = Math.abs(b.x - a.x) > Math.abs(b.y - a.y) ? (b.x > a.x ? 3 : 2) : (b.y > a.y ? 0 : 1);
+        return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, dir, moving: true };
+      }
+      remaining -= segLen;
+    }
+    const last = path[path.length - 1];
+    return { x: last.x, y: last.y, dir: null, moving: false };
+  }
+  // Lissage d'un résident côté invité : suit le trajet reçu (res.netPath/
+  // netPathStartAt/netPathSpeed) via walkPath, avec un easing léger (comme
+  // smoothNpc) pour ne jamais "sauter" quand un nouveau trajet arrive en
+  // cours de route. `animT` est ré-incrémenté localement à chaque frame tant
+  // que le résident marche, pour un cycle d'animation fluide indépendant du
+  // réseau (avant : mis à jour uniquement à réception d'un paquet ~1,33 Hz).
+  function smoothNpcPath(key, res, dt) {
+    const M = npcSmoothRef.current;
+    let st = M.get(key);
+    if (!st) { st = { x: res.x, y: res.y, dir: res.dir || 0, moving: false, animT: res.animT || 0 }; M.set(key, st); }
+    let idealX = res.x, idealY = res.y, idealDir = res.dir, idealMoving = !!res.moving;
+    if (res.netPath && res.netPath.length >= 2) {
+      const elapsedS = Math.max(0, (Date.now() - (res.netPathStartAt || Date.now())) / 1000);
+      const w = walkPath(res.netPath, elapsedS, res.netPathSpeed);
+      if (w) { idealX = w.x; idealY = w.y; if (w.dir != null) idealDir = w.dir; idealMoving = w.moving; }
+    }
+    const k = Math.min(1, dt * 14);
+    st.x += (idealX - st.x) * k; st.y += (idealY - st.y) * k;
+    st.dir = idealDir; st.moving = idealMoving;
+    st.animT = idealMoving ? (st.animT || 0) + dt * 6 : (st.animT || 0);
     return st;
   }
 
@@ -5416,7 +5474,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // `nextWorkAt`/`announced` sont du bookkeeping HÔTE porté par l'objet
   // resident (normalizeStation conserve les champs supplémentaires).
   // Zip 252 : balade d'un résident sur la ferme (host), pour qu'on puisse
-  // l'aborder (Q). Positions diffusées à part (residentSim, ~2 Hz).
+  // l'aborder (Q). Positions diffusées à part (trajet événementiel, voir
+  // residentPath dans updateResidents — chantier "mouvement fluide" 2026-07).
   // Zip 259 : position (coin haut-gauche, en tuiles) d'un bâtiment d'artisan.
   // Déplaçable : on lit crafts[bid].pos si présent, sinon le site d'origine.
   function artisanPos(bid) {
@@ -6132,10 +6191,49 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // (anyRemoteNearList). L'AOI a une marge de pré-chargement (AOI_MARGIN_TILES)
     // donc le résident est re-synchronisé AVANT d'entrer à l'écran -> aucun
     // « saut » visible à l'approche. Cadence abaissée via VISITOR_NET_MS (750).
-    residentNetRef.current += dt;
-    if (residentNetRef.current >= C.VISITOR_NET_MS / 1000 && netCanBroadcast() && anyRemoteNearList(residents)) {
-      residentNetRef.current = 0;
-      channelRef.current?.send({ type: "broadcast", event: "apply", payload: { residentSim: residents.map(r => ({ rid: r.rid, x: +(+r.x).toFixed(2), y: +(+r.y).toFixed(2), dir: r.dir | 0, moving: !!r.moving, animT: r.animT || 0 })) } });
+    //
+    // Chantier "mouvement fluide côté invités" (2026-07, demande Guillaume) :
+    // remplacé par un modèle événementiel A→B. Au lieu de repousser la
+    // position brute en continu (ce que le client ne pouvait que lisser par
+    // extrapolation de vitesse — saccadé dès que la trajectoire réelle
+    // n'était pas une ligne droite constante), l'hôte n'envoie plus qu'UN
+    // SEUL message par NOUVEAU trajet décidé : { rid, path, startAt, speed }.
+    // `path` = liste de points (2 pour un trajet direct ; plus si un chemin
+    // détourné existe déjà, ex. res.stormPath) ; `startAt` = horloge hôte au
+    // départ ; `speed` = cases/seconde. Chaque client rejoue localement la
+    // MÊME trajectoire dans le temps (voir walkPath/smoothNpcPath) — fluide
+    // même si le trajet zigzague, et surtout beaucoup MOINS de trafic qu'un
+    // flux continu (un message par décision, pas un message toutes les
+    // 750ms tant qu'un joueur est proche).
+    const residentsNearNow = anyRemoteNearList(residents);
+    // Un joueur distant vient d'entrer à portée : renvoyer le trajet en
+    // cours de TOUS les résidents concernés (sinon un joueur qui vient
+    // d'arriver ne connaît aucun trajet et le PNJ resterait figé).
+    const justCameIntoRange = residentsNearNow && !residentNetWasNearRef.current;
+    residentNetWasNearRef.current = residentsNearNow;
+    if (residentsNearNow && netCanBroadcast()) {
+      for (const res of residents) {
+        if (!res || !res.roamTarget) continue;
+        const tgt = res.roamTarget;
+        const same = !justCameIntoRange && res._pathSentFor && res._pathSentFor.x === tgt.x && res._pathSentFor.y === tgt.y;
+        if (same) continue;
+        res._pathSentFor = { x: tgt.x, y: tgt.y };
+        const gait = res.gait || (res.gait = 0.6 + Math.random() * 0.6);
+        const speed = C.VISITOR_SPEED * 0.7 * gait;
+        const mid = (res.stormPath && res.stormPath.length) ? res.stormPath.map(p => ({ x: +(+p.x).toFixed(2), y: +(+p.y).toFixed(2) })) : [];
+        const path = [{ x: +(+res.x).toFixed(2), y: +(+res.y).toFixed(2) }, ...mid, { x: +(+tgt.x).toFixed(2), y: +(+tgt.y).toFixed(2) }];
+        channelRef.current?.send({ type: "broadcast", event: "apply", payload: { residentPath: { rid: res.rid, path, startAt: now, speed } } });
+      }
+    }
+    // Un résident qui s'arrête (cible atteinte, obstacle, scène figée...) :
+    // prévenir explicitement pour que le client arrête son interpolation là
+    // où l'hôte s'est réellement arrêté, plutôt que de finir un ancien trajet.
+    for (const res of residents) {
+      if (!res) continue;
+      if (!res.roamTarget && res._pathSentFor) {
+        res._pathSentFor = null;
+        if (netCanBroadcast()) channelRef.current?.send({ type: "broadcast", event: "apply", payload: { residentStop: { rid: res.rid, x: +(+res.x).toFixed(2), y: +(+res.y).toFixed(2) } } });
+      }
     }
   }
   // Chantier "rivalité Tristan/Jérôme" (2026-07, demande Guillaume) : Tristan
@@ -6754,6 +6852,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const beekeeperOrder = () => sendReq({ kind: "beekeeperOrder" }); // chantier 2026-07 : René, miroir soanOrder
   const beekeeperRecall = () => sendReq({ kind: "beekeeperRecall" });
   const reneCoffee = () => sendReq({ kind: "reneCoffee" }); // zip suivant : SuperRené (café), miroir gregCoffee
+  // Chantier "bouton café toujours cliquable" (2026-07, demande Guillaume) :
+  // les boutons café (Greg/Soan/René) n'étaient désactivés que sur le cooldown
+  // de l'employé, jamais sur le stock réel de station.worldStock.coffee — donc
+  // cliquables même à 0 café en stock (le host refusait proprement côté
+  // serveur, mais sans retour visuel préalable). Ce helper centralise la
+  // vérification pour griser les boutons dans ce cas.
+  const hasCoffeeStock = () => (((sharedRef.current.station && sharedRef.current.station.worldStock && sharedRef.current.station.worldStock.coffee) || 0) > 0);
   const setCheeseRatio = (pct) => sendReq({ kind: "setCheeseRatio", pct }); // zip 301 : part de beurre de la fromagerie
   const setBakeryPrice = (item, pct) => sendReq({ kind: "setBakeryPrice", item, pct }); // zip suivant : prix de vente réglable par produit
   // Zip 258 : commande de voyage à Eduardo. Envoie la liste { key, qty } non
@@ -8104,8 +8209,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           if (res.trip && res.trip.phase === "away") continue; // zip 258 : Eduardo absent (en voyage)
           if (res.hidden) continue; // zip suivant : Chloé/Rosalie, "à l'intérieur" de la boulangerie (voir updateBakeryVisibility)
           if (typeof res.x !== "number") continue;
-          const rp = isHost ? res : smoothNpc("resident:" + res.rid, res.x, res.y, dt, true, !!res.moving, (cx, cy) => canStand(w, cx, cy));
+          const rp = isHost ? res : smoothNpcPath("resident:" + res.rid, res, dt);
           const rx = rp.x, ry = rp.y;
+          // Chantier "mouvement fluide" : côté invité, dir/moving/animT
+          // viennent désormais du trajet rejoué localement (rp), plus fluides
+          // qu'une simple retransmission de l'état brut de l'hôte (~1,33 Hz).
+          const resDir = isHost ? (res.dir || 0) : (rp.dir != null ? rp.dir : (res.dir || 0));
+          const resMoving = isHost ? !!res.moving : !!rp.moving;
+          const resAnimT = isHost ? (res.animT || 0) : (rp.animT || 0);
           // Zip 273 (demande Guillaume : "Eduardo doit TOUJOURS se balader à
           // cheval, même de retour de mission") : même logique que côté
           // visiteur (ligne ~5884) — un résident "voyager" (seul Eduardo a ce
@@ -8137,19 +8248,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             if (!sceneNow || res.rid !== sceneNow.rosalieRid) return null;
             const line = sceneNow.lines[sceneNow.stepIdx];
             if (!line || !line.turn) return null;
-            return res.dir === 0 ? 1 : res.dir === 1 ? 0 : res.dir;
+            return resDir === 0 ? 1 : resDir === 1 ? 0 : resDir;
           })();
           draws.push({ y: (ry + 1) * T, fn: () => {
             if (resSuperActive) drawCoffeeAura(Math.round(rx * T), Math.round(ry * T));
-            drawCharacter({ id: "res" + res.rid, name: ro.name, x: rx, y: ry, dir: turnAwayDir != null ? turnAwayDir : (res.dir || 0), moving: !!res.moving, animT: res.animT || 0, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap, beeSuit: residentBeeSuit(res, ro), plaid: ro.skill === "lumberjack", cheeseHat: ro.skill === "cheesemaker", sugarWorker: ro.skill === "sugarworker", mount: onWhiteHorse ? "white" : null, injuredUntil: res.injuredUntil }, false);
-            if (ro.skill === "breadmaker" && (inScene || (performance.now() % 12000 < 3000)) && turnAwayDir == null && (res.dir || 0) === 0) drawFrown(ctx, Math.round(rx * T) + 8, Math.round(ry * T) - 3);
+            drawCharacter({ id: "res" + res.rid, name: ro.name, x: rx, y: ry, dir: turnAwayDir != null ? turnAwayDir : resDir, moving: resMoving, animT: resAnimT, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap, beeSuit: residentBeeSuit(res, ro), plaid: ro.skill === "lumberjack", cheeseHat: ro.skill === "cheesemaker", sugarWorker: ro.skill === "sugarworker", mount: onWhiteHorse ? "white" : null, injuredUntil: res.injuredUntil }, false);
+            if (ro.skill === "breadmaker" && (inScene || (performance.now() % 12000 < 3000)) && turnAwayDir == null && resDir === 0) drawFrown(ctx, Math.round(rx * T) + 8, Math.round(ry * T) - 3);
             // Chantier fumigateur (demande Guillaume) : René tient un petit
             // fumigateur pendant sa phase de travail (même condition que la
             // combinaison, voir residentBeeSuit), parfois dirigé vers la
             // ruche avec un souffle de fumée semi-transparente (res.smoking,
             // voir la pause dédiée dans residentRoam).
             if (residentBeeSuit(res, ro)) {
-              const rdir = turnAwayDir != null ? turnAwayDir : (res.dir || 0);
+              const rdir = turnAwayDir != null ? turnAwayDir : resDir;
               const handDx = [0, 0, -8, 8][rdir] || 0, handDy = [7, 3, 5, 5][rdir] || 5;
               const hx = Math.round(rx * T + 12 + handDx), hy = Math.round((ry + 1) * T - 16 + handDy);
               ctx.fillStyle = "#585858"; ctx.fillRect(hx, hy, 3, 4); // petit corps métallique du fumigateur
@@ -10870,7 +10981,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                         ? <button onClick={beekeeperRecall}>{L.beekeeperRecallBtn}</button>
                         : <button onClick={beekeeperOrder}>{L.beekeeperOrderBtn}</button>}
                       <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                        <button disabled={Date.now() < (res.superCooldownUntil || 0)} onClick={reneCoffee}>{L.reneCoffeeBtn}</button>
+                        <button disabled={Date.now() < (res.superCooldownUntil || 0) || !hasCoffeeStock()} onClick={reneCoffee}>{L.reneCoffeeBtn}</button>
                         {res.coffeeGauge > 0 && Date.now() - (res.coffeeGaugeAt || 0) < C.RENE_COFFEE_GAUGE_TIMEOUT_MS && <span className="ferme-usage">1/2 ☕</span>}
                       </div>
                       <button onClick={() => { setEmployeesOpen(false); setResidentCard(res.rid); }}>{L.residentSeeBtn}</button>
@@ -10892,7 +11003,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 {(gregStock.fertilizer || 0) > 0 && (
                   <button onClick={() => { setEmployeesOpen(false); setFertilizerOrderOpen(true); }}>{L.fertilizerOrderBtn}</button>
                 )}
-                <button disabled={Date.now() < (sharedRef.current.greg.superCooldownUntil || 0)} onClick={gregCoffee}>{L.gregCoffeeBtn}</button>
+                <button disabled={Date.now() < (sharedRef.current.greg.superCooldownUntil || 0) || !hasCoffeeStock()} onClick={gregCoffee}>{L.gregCoffeeBtn}</button>
               </div>
             )}
             {sharedRef.current.soan && (
@@ -10910,7 +11021,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 {sharedRef.current.soan.phase === "roam"
                   ? <button onClick={soanOrder}>{L.soanOrderBtn}</button>
                   : <button onClick={soanRecall}>{L.soanRecallBtn}</button>}
-                <button disabled={Date.now() < (sharedRef.current.soan.superCooldownUntil || 0)} onClick={soanCoffee}>{L.soanCoffeeBtn}</button>
+                <button disabled={Date.now() < (sharedRef.current.soan.superCooldownUntil || 0) || !hasCoffeeStock()} onClick={soanCoffee}>{L.soanCoffeeBtn}</button>
               </div>
             )}
             {sharedRef.current.harald && (
@@ -11091,7 +11202,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 {(gregStock.fertilizer || 0) > 0 && (
                   <button onClick={() => { setGregCardOpen(false); setFertilizerOrderOpen(true); }}>{L.fertilizerOrderBtn}</button>
                 )}
-                <button disabled={Date.now() < (g.superCooldownUntil || 0)} onClick={gregCoffee}>{L.gregCoffeeBtn}</button>
+                <button disabled={Date.now() < (g.superCooldownUntil || 0) || !hasCoffeeStock()} onClick={gregCoffee}>{L.gregCoffeeBtn}</button>
               </div>
             </div>
           </div>
@@ -11674,7 +11785,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   {res.beePhase === "working"
                     ? <PixBtn sprites={spritesReady ? spritesRef.current : null} label={L.beekeeperRecallBtn} onClick={beekeeperRecall} />
                     : <PixBtn sprites={spritesReady ? spritesRef.current : null} label={L.beekeeperOrderBtn} onClick={beekeeperOrder} />}
-                  <PixBtn sprites={spritesReady ? spritesRef.current : null} disabled={Date.now() < (res.superCooldownUntil || 0)} label={res.coffeeGauge > 0 && Date.now() - (res.coffeeGaugeAt || 0) < C.RENE_COFFEE_GAUGE_TIMEOUT_MS ? L.reneCoffeeBtn + " (1/2 ☕)" : L.reneCoffeeBtn} onClick={reneCoffee} />
+                  <PixBtn sprites={spritesReady ? spritesRef.current : null} disabled={Date.now() < (res.superCooldownUntil || 0) || !hasCoffeeStock()} label={res.coffeeGauge > 0 && Date.now() - (res.coffeeGaugeAt || 0) < C.RENE_COFFEE_GAUGE_TIMEOUT_MS ? L.reneCoffeeBtn + " (1/2 ☕)" : L.reneCoffeeBtn} onClick={reneCoffee} />
                 </div>
               )}
               {/* Zip 301 (demande Guillaume) : réglage du ratio fromage/beurre
