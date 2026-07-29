@@ -1568,6 +1568,13 @@ export const TJ_REACT_STAGGER_MAX_MS = 1600; // décalage avant qu'UN PNJ donné
 export const TJ_REACT_GATHER_MIN_DIST = 1.6; // distance au clash à laquelle un PNJ s'arrête pour regarder : borne basse (forme un attroupement, pas un tas)
 export const TJ_REACT_GATHER_MAX_DIST = 3.2; // idem, borne haute
 export const TJ_REACT_SPEED_MUL = 1.35; // pas pressé (curieux/inquiet) mais pas le sprint de l'instigateur (storming, ×1.9)
+// Chantier "T/J courent un peu moins vite l'un vers l'autre" (2026-07,
+// demande utilisateur) : Tristan/Jérôme partageaient jusqu'ici le MÊME sprint
+// que Chloé/Rosalie (×1.9, storming). Nouveau multiplicateur DÉDIÉ, plus
+// lent : plus rapide qu'une marche standard (×1) mais nettement en retrait du
+// sprint Chloé/Rosalie. Chloé/Rosalie restent inchangées à ×1.9 (voir isTj
+// dans residentRoam, FermeGame.js).
+export const TJ_STORM_SPEED_MUL = 1.4;
 export const TJ_REACT_RETURN_SPEED_MUL = 0.55; // rythme du retour tranquille vers l'activité d'avant, une fois la scène finie
 export const TJ_REACT_LINE_PERIOD_MS = 2800; // cycle d'affichage des commentaires inquiets pendant l'attroupement (même principe que skillTalk)
 // Zip suivant (retour Guillaume : bulles de l'attroupement illisibles à

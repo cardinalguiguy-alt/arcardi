@@ -5803,7 +5803,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
       const edx = etx - res.x, edy = ety - res.y, ed = Math.hypot(edx, edy);
       if (ed > 0.02) {
-        const step = Math.min(C.VISITOR_SPEED * 1.9 * dt, ed); // en trombe : bien plus rapide que la rôdaille normale (0.55x)
+        // Chantier "T/J courent un peu moins vite l'un vers l'autre" : sprint
+        // dédié plus lent pour la scène Tristan/Jérôme (TJ_STORM_SPEED_MUL,
+        // ×1.4) — Chloé/Rosalie gardent leur sprint d'origine (×1.9).
+        const stormMul = isTj ? C.TJ_STORM_SPEED_MUL : 1.9;
+        const step = Math.min(C.VISITOR_SPEED * stormMul * dt, ed); // en trombe : plus rapide que la rôdaille normale (0.55x)
         const nx = res.x + (edx / ed) * step, ny = res.y + (edy / ed) * step;
         const beforeX = res.x, beforeY = res.y;
         if (!E.blockedTile(w, nx, res.y)) res.x = nx;
