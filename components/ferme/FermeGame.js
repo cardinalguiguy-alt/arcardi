@@ -6502,27 +6502,33 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (now >= brawl.imminentAt + C.TJ_BRAWL_IMMINENT_DELAY_MS) resolveTjBrawl(tristan, jerome, st, now);
         return;
       }
-      // Scène en cours : à chaque étape franchie, jet de bagarre (30%) AVANT
-      // de passer à la ligne suivante — "chaque tic de proximité" demandé.
+      // Scène en cours : à chaque étape franchie, jet de bagarre (30%) —
+      // toujours tiré réplique par réplique pour garder le suspense, MAIS
+      // (retour Guillaume) il ne coupe plus la scène : il se contente de
+      // mémoriser que ça finira en clash (brawl.willClash), et on continue
+      // à dérouler les répliques normalement. Toute la scène doit être
+      // jouée par les deux protagonistes avant que l'altercation démarre.
       if (now >= brawl.stepUntil) {
-        if (now >= (st.tjBrawlCooldownUntil || 0) && Math.random() < C.TJ_BRAWL_CHANCE) {
-          // Chantier "bagarre = vrai événement, en public" (2026-07, demande
-          // Guillaume) : le jet est décidé MAIS pas résolu tout de suite. On
-          // bascule la scène en "imminente", on annonce la bagarre à toute la
-          // room (toast dédié, jusque-là câblé mais jamais déclenché), et on
-          // fait accourir tout le monde autour du clash pour réagir (voir
-          // triggerTjCrowdReaction) — le joueur, lui, garde le contrôle total
-          // de ses déplacements.
-          brawl.imminent = true; brawl.imminentAt = now;
-          broadcastGlobalToast(L.toastTJBrawlStart(rosterOf(tristan.rid).name, rosterOf(jerome.rid).name));
-          triggerTjCrowdReaction(tristan, jerome, st, now);
-          broadcastStation();
-          return;
+        if (!brawl.willClash && now >= (st.tjBrawlCooldownUntil || 0) && Math.random() < C.TJ_BRAWL_CHANCE) {
+          brawl.willClash = true;
         }
         brawl.stepIdx++;
         if (brawl.stepIdx >= brawl.lines.length) {
-          // Désescalade : fin de la scène sans bagarre, chacun repart à sa rôdaille.
-          st.tjBrawl = null;
+          brawl.stepIdx = brawl.lines.length - 1; // garde la dernière réplique affichée (bulle)
+          if (brawl.willClash) {
+            // Chantier "bagarre = vrai événement, en public" (2026-07, demande
+            // Guillaume) : la scène est jouée en entier, PUIS l'altercation
+            // démarre — on bascule en "imminente", on annonce à toute la
+            // room (toast dédié) et on fait accourir tout le monde réagir
+            // (voir triggerTjCrowdReaction) — le joueur garde le contrôle
+            // total de ses déplacements.
+            brawl.imminent = true; brawl.imminentAt = now;
+            broadcastGlobalToast(L.toastTJBrawlStart(rosterOf(tristan.rid).name, rosterOf(jerome.rid).name));
+            triggerTjCrowdReaction(tristan, jerome, st, now);
+          } else {
+            // Désescalade : fin de la scène sans bagarre, chacun repart à sa rôdaille.
+            st.tjBrawl = null;
+          }
         } else {
           brawl.stepUntil = now + (brawl.stepMs || 1700);
         }
