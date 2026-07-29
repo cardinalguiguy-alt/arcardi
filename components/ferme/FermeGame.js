@@ -481,6 +481,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [myPets, setMyPets] = useState([]); // zip 236: my individual pets, mirror of me.pets
   const myPetsRef = useRef([]);     // zip 236: draw-loop mirror of myPets
   const petFollowRef = useRef(new Map());  // zip 247: smoothed follow positions, per-player-id (self + remotes)
+  // Chantier "pets à cheval" (2026-07, demande Guillaume) : pendant que le
+  // propriétaire est monté à cheval, ses pets ne peuvent pas suivre et
+  // rôdent sur place autour de la "zone d'abandon" (la position où il est
+  // monté). petZoneRef fige cette position par owner id ; petRidingPrevRef
+  // détecte le FRONT montant (vient de monter) pour ne figer la zone
+  // qu'une fois par montée, pas à chaque frame. Voir isRidingId/drawPetsFor.
+  const petZoneRef = useRef(new Map());
+  const petRidingPrevRef = useRef(new Map());
   const cauldronMenuOpenRef = useRef(false);
   const brewSecsRef = useRef(0);       // miroir de brewSecs (évite un setState par frame dans la boucle de rendu)
   const cauldronPosRef = useRef(null); // cache de la position du chaudron (correctif audit 2026-07 : évite un scan complet de la carte par frame ; invalidé si l'objet n'y est plus) // miroir synchrone de cauldronMenuOpen, même rôle que shopOpenRef/binOpenRef (bloque déplacement/action pendant que le menu est ouvert)
@@ -1107,6 +1115,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const r = playersRef.current.get(payload.id);
       playersRef.current.delete(payload.id);
       petFollowRef.current.delete(payload.id); // zip 247: libère l'état de suivi des pets du partant
+      petZoneRef.current.delete(payload.id); petRidingPrevRef.current.delete(payload.id); // chantier "pets à cheval"
       if (r) addChat("👋", L.chatLeave(r.name));
       setHud(h => ({ ...h, players: playersRef.current.size + 1 }));
       // Un animal porté par un joueur qui quitte est relâché sur place, pour
@@ -9403,27 +9412,77 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // two pets don't overlap. Zip 247: pets are now broadcast (see pubMe/
     // applyDeltas/ensureRemote) so every player sees everyone's pets, not
     // just their own.
+    // Chantier "pets à cheval" : le propriétaire donné par id est-il EN CE
+    // MOMENT monté sur l'un des chevaux de la ferme (1re ou 2e place) ?
+    // sharedRef.current.horses est déjà synchronisé pour tout le monde
+    // (hôte + invités), donc ça marche aussi bien pour "moi" que pour un
+    // joueur distant, sans message réseau dédié.
+    function isRidingId(id) {
+      const hs = sharedRef.current.horses; if (!hs) return false;
+      for (let i = 0; i < hs.length; i++) { const h = hs[i]; if (h && (h.rider === id || h.rider2 === id)) return true; }
+      return false;
+    }
     function drawPetsFor(id, pets, m, dt2) {
       const sprites = spritesRef.current;
       if (!pets || !pets.length || !sprites.pets) return;
       let follow = petFollowRef.current.get(id);
       if (!follow) { follow = []; petFollowRef.current.set(id, follow); }
       if (follow.length > pets.length) follow.length = pets.length;
+      // Monté à cheval => les pets ne peuvent pas suivre. On fige la "zone
+      // d'abandon" une seule fois, au moment précis où le propriétaire
+      // enfourche (front montant riding : false -> true) — sur la position
+      // ACTUELLE des pets (pas celle du cavalier) pour éviter un saut
+      // visuel au moment de monter.
+      const riding = isRidingId(id);
+      const wasRiding = petRidingPrevRef.current.get(id) || false;
+      if (riding && !wasRiding) {
+        let zx = 0, zy = 0, n = 0;
+        for (const f of follow) { if (f) { zx += f.x; zy += f.y; n++; } }
+        petZoneRef.current.set(id, n ? { x: zx / n, y: zy / n } : { x: m.x, y: m.y });
+      }
+      petRidingPrevRef.current.set(id, riding);
+      const zone = petZoneRef.current.get(id) || { x: m.x, y: m.y };
       // behind = opposite of facing dir
       const bx = -[0, 0, -1, 1][m.dir], by = -[1, -1, 0, 0][m.dir];
+      const now3 = performance.now();
       for (let i = 0; i < pets.length; i++) {
         const img = sprites.pets[pets[i].id];
         if (!img) continue;
         // target a tile behind the player, fanned sideways by pet index
         const side = i === 0 ? -0.45 : 0.45;
         const perpX = by, perpY = -bx;
-        const tx = m.x + bx * (0.9 + i * 0.15) + perpX * side;
-        const ty = m.y + by * (0.9 + i * 0.15) + perpY * side;
-        if (!follow[i]) follow[i] = { x: tx, y: ty };
+        const followTx = m.x + bx * (0.9 + i * 0.15) + perpX * side;
+        const followTy = m.y + by * (0.9 + i * 0.15) + perpY * side;
+        if (!follow[i]) follow[i] = { x: followTx, y: followTy, wtx: null, wty: null, wnextAt: 0 };
         const f2 = follow[i];
-        f2.x += (tx - f2.x) * Math.min(1, dt2 * 6);
-        f2.y += (ty - f2.y) * Math.min(1, dt2 * 6);
-        const bob = m.moving ? Math.sin(performance.now() / 140 + i) * 1.5 : 0;
+        let tx, ty, ease, isMoving;
+        if (riding) {
+          // Rôdaille lente sur place autour de la zone d'abandon (même
+          // esprit que la rôdaille des résidents, ×0.55 la marche standard) :
+          // un nouveau point est retiré de temps à autre dans un petit
+          // rayon autour de la zone.
+          if (f2.wtx == null || now3 >= (f2.wnextAt || 0)) {
+            const ang = Math.random() * Math.PI * 2, rad = 0.4 + Math.random() * 0.9;
+            f2.wtx = zone.x + Math.cos(ang) * rad;
+            f2.wty = zone.y + Math.sin(ang) * rad;
+            f2.wnextAt = now3 + 1800 + Math.random() * 2200;
+          }
+          tx = f2.wtx; ty = f2.wty;
+          ease = Math.min(1, dt2 * 1.1);
+          isMoving = true;
+        } else {
+          f2.wtx = null;
+          tx = followTx; ty = followTy;
+          // Redescendu de cheval : le pet revient TOUT DOUCEMENT vers sa
+          // place habituelle. Une fois suffisamment proche, on retrouve
+          // l'easing serré du suivi normal (comme avant ce chantier).
+          const d = Math.hypot(tx - f2.x, ty - f2.y);
+          ease = d > 0.6 ? Math.min(1, dt2 * 1.3) : Math.min(1, dt2 * 6);
+          isMoving = m.moving || d > 0.05;
+        }
+        f2.x += (tx - f2.x) * ease;
+        f2.y += (ty - f2.y) * ease;
+        const bob = isMoving ? Math.sin(now3 / 140 + i) * 1.5 : 0;
         // Zip 251 (demande Guillaume) : pets réduits à ~la taille d'une poule.
         // On dessine le sprite 16x16 à l'échelle PET_DRAW_SCALE, ancré par le
         // BAS (les pattes restent au sol) et centré horizontalement.
