@@ -617,6 +617,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const rosalieLineRef = useRef({ periodIdx: -1, idx: 0 }); // réplique tirée au sort (pondérée) pour le cycle "rare" en cours — figée pour toute sa durée
   const hatUntilRef = useRef(0); // miroir synchrone de hatUntil (lu dans la boucle de rendu, voir drawCharacter)
   const evilBiteRef = useRef(null); // miroir synchrone de evilBite (lu dans updateEvilMonsters, boucle de rendu — évite de redéclencher le mini-jeu tant qu'il est déjà ouvert)
+  /* Zip 375 — EMBUSCADE DE LA JETÉE. Trois darkwolves ENTIÈREMENT LOCAUX :
+     ils n'existent pour aucun autre joueur et ne coûtent pas un message.
+     C'est le motif déjà retenu pour les lapins (366), l'animation du cheptel
+     (369) et le défi lui-même (372) — ce qui est individuel et sans effet sur
+     le monde partagé se simule chez le client.
+     Forme : { phase:"cine"|"hostile", t0, fadeT0, wolves:[…] } ou null. */
+  const runAmbushRef = useRef(null);
+  /* Le déclencheur de la jetée s'ARME en quittant sa case et se désarme en la
+     franchissant. Sans ça, ressortir du menu du défi en étant encore sur la
+     dalle relancerait la cinématique en boucle. */
+  const runGateArmedRef = useRef(true);
 
   useEffect(() => { fishMiniRef.current = !!fishMini || !!barnMini || !!wolfBite || !!evilBite || !!repairMini; }, [fishMini, barnMini, wolfBite, evilBite, repairMini]);
   useEffect(() => { adsOpenRef.current = adsOpen; visitorOpenRef.current = visitorOpen; }, [adsOpen, visitorOpen]);
@@ -7993,6 +8004,79 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
 
      Le dialogue tient en trois messages (voir public/templerun/js/bridge.js).
      ====================================================================== */
+  /* ======================================================================
+     Zip 375 — EMBUSCADE DE LA JETÉE.
+     ----------------------------------------------------------------------
+     Le défi ne s'ouvre plus en touchant un coffre : on s'avance sur une
+     jetée de pierre qui ne mène nulle part, et trois darkwolves surgissent
+     de la berge en accélérant dans le dos du fermier. Fondu, puis menu.
+
+     POURQUOI TOUT EST LOCAL. Ces trois loups ne sont pas des créatures de
+     sharedRef.current.evilMonsters : ils naissent, courent et meurent chez
+     le seul client concerné. Trois raisons, dans l'ordre d'importance :
+
+       1. La scène est INDIVIDUELLE. Deux joueurs peuvent se tenir au bout de
+          la jetée en même temps et vivre chacun la sienne ; des créatures
+          partagées imposeraient d'arbitrer laquelle poursuit qui.
+       2. Le quota Realtime. Une meute répliquée à 12 Hz, c'est le prix d'un
+          joueur supplémentaire pour une scène de deux secondes.
+       3. L'hôte n'a rien à trancher : aucune de leurs actions ne modifie le
+          monde partagé. La seule conséquence durable — la blessure — passe
+          par caughtByMonster(), le chemin habituel, déjà autoritaire.
+
+     La contrepartie, assumée : l'autre joueur voit un avatar immobile au
+     bout d'une jetée. C'est exactement ce qu'il voyait déjà pendant une
+     course, et c'est cohérent avec le message de chat qui l'accompagne.
+     ====================================================================== */
+
+  // Position d'un loup pendant la CINÉMATIQUE. Ils remontent la jetée vers
+  // l'est, donc toujours à l'ouest du joueur, décalés en éventail.
+  function ambushCineSpot(w, d) {
+    return { x: C.RUN_GATE.x - d - w.back, y: C.RUN_JETTY_BASE.y + w.lane };
+  }
+
+  function startRunAmbush() {
+    const m = meRef.current, ew = evilWorldRef.current;
+    if (!m || !ew || runAmbushRef.current || runChallengeRef.current) return;
+    if (zoneTransRef.current.active || isInjured()) return;
+    m.moving = false; m.animT = 0;
+    m.dir = 2; // le fermier se retourne vers l'ouest : il les voit arriver
+    keysRef.current = {};
+    const wolves = [];
+    for (let i = 0; i < C.RUN_AMBUSH_COUNT; i++) {
+      wolves.push({
+        // Éventail perpendiculaire à la jetée + léger étagement en
+        // profondeur : une meute, pas trois loups alignés au cordeau.
+        lane: (i - (C.RUN_AMBUSH_COUNT - 1) / 2) * 1.05,
+        back: i * 0.55,
+        x: 0, y: 0, dir: 3, animT: 0, fleeUntil: 0, biting: false,
+      });
+    }
+    for (const w of wolves) {
+      const p = ambushCineSpot(w, C.RUN_AMBUSH_START_DIST);
+      w.x = p.x; w.y = p.y;
+    }
+    runAmbushRef.current = { phase: "cine", t0: performance.now(), fadeT0: 0, wolves };
+  }
+
+  // Voile noir de la cinématique. Séparé de zoneFadeAlpha() à dessein : ce
+  // fondu-ci ne téléporte personne et ne revient jamais en arrière — l'iframe
+  // du défi recouvre l'écran juste après.
+  function runAmbushFadeAlpha() {
+    const a = runAmbushRef.current;
+    if (!a || !a.fadeT0) return 0;
+    return Math.min(1, (performance.now() - a.fadeT0) / C.RUN_AMBUSH_FADE_MS);
+  }
+
+  /* updateRunAmbush() N'EST PAS ICI mais dans la closure de la boucle de rendu,
+     avec canStandEvil() et drawEvilFrame() — voir plus bas, près de
+     updateMeEvil(). La collision du monde sombre est volontairement locale à
+     cette closure depuis l'origine (elle ne peut pas réutiliser canStand/
+     blockedTile, câblés en dur sur les dimensions de la ferme) ; déplacer le
+     test au niveau du composant pour rapprocher deux fonctions aurait dupliqué
+     la règle de collision, ce qui est précisément ce que verify-gate.mjs
+     signale déjà comme son unique point de désynchronisation possible. */
+
   function openRunChallenge() {
     if (runChallengeRef.current || zoneTransRef.current.active || isInjured()) return;
     const m = meRef.current; if (!m) return;
@@ -8007,12 +8091,41 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     broadcastChat("\u{1F3C3}", L.runEnteredChat(m.name));
   }
 
-  // Sortie SANS conséquence : le joueur a ouvert le défi et l'a refermé sans
-  // courir. Il repart de la porte, à sa place, dans le monde sombre.
+  // Sortie sans avoir couru. Elle n'est plus « sans conséquence » depuis le
+  // zip 375 (décision Guillaume) : les trois loups de la cinématique sont
+  // toujours là. Le fermier est reposé AU PIED de la jetée, tourné vers
+  // l'ouest, face à eux — et il faudra les affronter au mini-jeu de morsure
+  // s'ils le rattrapent.
+  //
+  // Le replacer au pied plutôt qu'au bout règle deux choses d'un coup : la
+  // cinématique ne peut pas se relancer toute seule, et il n'est pas acculé
+  // au bord du vide avec trois loups devant lui et aucune issue.
   function closeRunChallenge() {
     runChallengeRef.current = false;
     setRunChallenge(false);
     keysRef.current = {};
+    const m = meRef.current;
+    const a = runAmbushRef.current;
+    if (m && m.zone === "evil" && a) {
+      m.x = C.RUN_JETTY_BASE.x; m.y = C.RUN_JETTY_BASE.y;
+      m.moving = false; m.animT = 0; m.dir = 2;
+      a.phase = "hostile";
+      a.fadeT0 = 0;
+      // Les loups se replacent sur la TERRE, à l'ouest du joueur : ils lui
+      // barrent le retour vers la carte, ce qui est le seul placement qui
+      // rende l'affrontement inévitable sans le coincer sur les dalles.
+      for (let i = 0; i < a.wolves.length; i++) {
+        const w = a.wolves[i];
+        w.x = C.RUN_JETTY_BASE.x - 2.2 - i * 0.7;
+        w.y = C.RUN_JETTY_BASE.y + w.lane;
+        w.dir = 3; w.biting = false; w.fleeUntil = 0; w.gone = false;
+      }
+      runGateArmedRef.current = false;
+      sendPos();
+      pushToast(L.runAmbushToast);
+    } else {
+      runAmbushRef.current = null;
+    }
   }
 
   // Défaite (ou abandon en cours de course, voir RUN_ABORT_COUNTS_AS_LOSS).
@@ -8021,6 +8134,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // téléportation locale. La durée est RUN_INJURED_MS (10 min), pas
   // EVIL_INJURED_MS (30 min) : on doit pouvoir retenter dans la soirée.
   function runChallengeLost(score, candies) {
+    /* Zip 375 : l'embuscade est effacée AVANT closeRunChallenge(), qui, sinon,
+       reposerait le fermier au pied de la jetée face aux loups — juste avant
+       que crossPassage() ne le renvoie à la ferme. On aurait vu passer un
+       toast d'embuscade en pleine défaite, et trois loups locaux auraient
+       survécu au changement de zone. Le retour au pied de la jetée n'a de
+       sens que pour une sortie VOLONTAIRE du menu. */
+    runAmbushRef.current = null;
     closeRunChallenge();
     const until = Date.now() + C.RUN_INJURED_MS;
     injuredUntilRef.current = until; setInjuredUntil(until);
@@ -8059,7 +8179,26 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // local, aucun aller-retour hôte requis, contrairement au loup de la ferme
   // normale) pour rester accessible depuis le bouton du mini-jeu comme
   // depuis un éventuel timeout.
-  function resolveEvilBiteOutcome(monsterId, result) {
+  function resolveEvilBiteOutcome(monsterId, result, local) {
+    /* Zip 375 — LOUPS DE L'EMBUSCADE. Ils n'existent que chez ce client :
+       leur envoyer une requête "evilBiteResult" ferait chercher à l'hôte un
+       monstre partagé d'indice 0, 1 ou 2 — c'est-à-dire une VRAIE créature de
+       la carte, qui se mettrait à fuir sans raison pour tout le monde. Le
+       dénouement local ne doit donc surtout pas emprunter le chemin réseau.
+
+       Seule la défaite reste partagée, via caughtByMonster() : la blessure
+       est une conséquence durable, elle a toujours été autoritaire. */
+    if (local) {
+      const a = runAmbushRef.current;
+      const w = a && a.wolves[monsterId];
+      if (w) {
+        w.biting = false;
+        if (result === "win") w.fleeUntil = performance.now() + C.RUN_AMBUSH_FLEE_MS;
+      }
+      if (result === "win") pushToast(L.evilBiteWin);
+      else caughtByMonster();
+      return;
+    }
     // Créatures PARTAGÉES (2026-07) : le dénouement part à l'hôte (req
     // "evilBiteResult") — "win" = la créature fuit un moment pour tout le
     // monde ; "fail" = blessure + retour maison, via caughtByMonster()
@@ -8070,11 +8209,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   }
   function evilBiteWon() {
     const eb = evilBiteRef.current; setEvilBite(null);
-    if (eb) resolveEvilBiteOutcome(eb.monsterId, "win");
+    if (eb) resolveEvilBiteOutcome(eb.monsterId, "win", eb.local);
   }
   function evilBiteLost() {
     const eb = evilBiteRef.current; setEvilBite(null);
-    if (eb) resolveEvilBiteOutcome(eb.monsterId, "fail");
+    if (eb) resolveEvilBiteOutcome(eb.monsterId, "fail", eb.local);
   }
   // `reason` (zip 372) ne change PAS la destination — il ne sert qu'à choisir
   // le message affiché à l'arrivée. "run" = défaite au défi de fuite, qui
@@ -8171,7 +8310,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // (marcher dessus suffit, aucune touche), mais elle n'ouvre pas une
       // transition de zone : elle affiche le défi PAR-DESSUS la ferme, qui
       // continue de tourner derrière. Voir openRunChallenge.
-      else if (tx === C.RUN_GATE.x && ty === C.RUN_GATE.y) openRunChallenge();
+      // Zip 375 : elle ne lance plus le menu directement — elle déclenche
+      // d'abord l'embuscade (voir startRunAmbush), et le menu vient après le
+      // fondu. Le verrou runGateArmedRef évite la boucle : sorti du menu, le
+      // joueur doit avoir QUITTÉ la dalle avant de pouvoir la redéclencher.
+      else if (tx === C.RUN_GATE.x && ty === C.RUN_GATE.y) {
+        if (runGateArmedRef.current) { runGateArmedRef.current = false; startRunAmbush(); }
+      } else runGateArmedRef.current = true;
     } else {
       const w = worldRef.current; if (!w || !w.darkPassage) return;
       if (tx === w.darkPassage.x && ty === w.darkPassage.y) crossPassage(true);
@@ -8350,8 +8495,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
       checkWalkOverPassage();
       if (m.zone === "evil") {
+        updateRunAmbush(dt); // zip 375 : embuscade locale de la jetée
         drawEvilFrame(now);
-        const fa = zoneFadeAlpha();
+        // Deux voiles distincts, et ils doivent le rester : celui de la zone
+        // (aller au noir puis revenir, avec téléportation au milieu) et celui
+        // de l'embuscade (aller au noir, et rien d'autre — l'iframe du défi
+        // prend le relais). On garde le plus opaque des deux.
+        const fa = Math.max(zoneFadeAlpha(), runAmbushFadeAlpha());
         if (fa > 0) { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = "black"; ctx.globalAlpha = fa; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.globalAlpha = 1; }
         return;
       }
@@ -9944,21 +10094,98 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const draws = [];
       for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
         const i = y * ew.w + x, g = ew.ground[i];
-        ctx.fillStyle = g === C.G_DARK_PASSAGE ? "#3a2a55" : g === C.G_RUN_GATE ? "#4a3320" : g === C.G_WATER ? "#241246" : "#182417";
+        const isDeck = g === C.G_RUN_JETTY || g === C.G_RUN_GATE;
+        ctx.fillStyle = g === C.G_DARK_PASSAGE ? "#3a2a55"
+          : isDeck ? "#3c372f"
+          : g === C.G_LAKE_SHORE ? "#1d2119"
+          : g === C.G_WATER ? "#241246" : "#182417";
         ctx.fillRect(x * T, y * T, T, T);
-        // Zip 372 : PORTE DU DÉFI DE FUITE. Contrairement au passage sombre,
-        // elle est faite pour être VUE de loin — c'est un défi, pas un secret.
-        // Deux braseros qui vacillent de part et d'autre, sur la même horloge
-        // que le reste du décor animé (aucun random par frame, sinon la
-        // flamme grésille au lieu de vaciller).
+        /* ZIP 375 — JETÉE EN PIERRES.
+           Réduction 2D de la chaussée du défi de fuite : mêmes dalles
+           fissurées, mêmes joints moussus, même pierre grise. Le hash de
+           case (pas de random par frame) décide de l'usure, exactement
+           comme le tirage de palier de world.js côté 3D — on veut que les
+           deux décors aient l'air taillés dans la même carrière.
+
+           Les DEUX bordures longues (les cases extrêmes en y) portent un
+           liseré de blocs, ce qui donne à la jetée une épaisseur et empêche
+           qu'elle se lise comme un simple chemin de terre claire. */
+        if (isDeck) {
+          const h = (i * 2654435761) >>> 0;
+          const px = x * T, py = y * T;
+          // Dalles : deux tons alternés selon la case, plus des taches
+          // d'humidité sur les plus abîmées.
+          ctx.fillStyle = (h & 1) ? "#453f36" : "#514a3f";
+          ctx.fillRect(px + 1, py + 1, T - 2, T - 2);
+          if ((h >> 3 & 3) === 0) {
+            ctx.fillStyle = "rgba(26,36,21,0.55)";
+            ctx.fillRect(px + 3 + (h >> 5 & 3), py + 4 + (h >> 7 & 3), 5, 4);
+          }
+          // Fissures : deux traits sombres orientés par le hash.
+          ctx.fillStyle = "rgba(10,8,7,0.75)";
+          if (h & 2) ctx.fillRect(px + 4 + (h >> 9 & 5), py + 2, 1, T - 6);
+          if (h & 4) ctx.fillRect(px + 2, py + 5 + (h >> 11 & 5), T - 5, 1);
+          // Joints moussus sur les bords de dalle.
+          ctx.fillStyle = "rgba(70,89,46,0.5)";
+          ctx.fillRect(px, py, T, 1); ctx.fillRect(px, py + T - 1, T, 1);
+          // Liseré de bordure sur les deux longs côtés de la jetée.
+          const onEdge = Math.abs(y - C.RUN_JETTY_BASE.y) === C.RUN_JETTY_HALF_W;
+          if (onEdge) {
+            const outer = y < C.RUN_JETTY_BASE.y ? py : py + T - 3;
+            ctx.fillStyle = "#2b2721";
+            ctx.fillRect(px, outer, T, 3);
+            ctx.fillStyle = "rgba(70,89,46,0.45)";
+            ctx.fillRect(px + (h >> 13 & 7), outer, 4, 2);
+          }
+        }
+        /* Bout de la jetée. Ce n'est plus un coffre : c'est le seuil du défi,
+           et il doit dire « c'est ICI que ça commence » sans texte. Deux
+           braseros, plus une lueur violette montante — la même que celle qui
+           filtre des crevasses dans le jeu de fuite. Aucun random par frame :
+           sinon la flamme grésille au lieu de vaciller. */
         if (g === C.G_RUN_GATE) {
+          const px = x * T, py = y * T;
+          const rise = 0.35 + Math.sin(now / 620) * 0.14;
+          ctx.fillStyle = `rgba(140, 90, 220, ${rise})`;
+          ctx.fillRect(px, py, T, T);
+          // Gravures : trois hampes runiques, comme sur les stèles du défi.
+          ctx.fillStyle = `rgba(200, 160, 255, ${0.5 + Math.sin(now / 430) * 0.2})`;
+          for (let r = 0; r < 3; r++) {
+            ctx.fillRect(px + 3 + r * 4, py + 5, 1, 6);
+            ctx.fillRect(px + 3 + r * 4, py + 6 + (r & 1) * 3, 3, 1);
+          }
           const fl = 0.55 + Math.sin(now / 130) * 0.2 + Math.sin(now / 71) * 0.1;
-          ctx.fillStyle = `rgba(255, 154, 60, ${fl})`;
-          ctx.fillRect(x * T, y * T, T, T);
           ctx.fillStyle = "#2a1c10";
-          ctx.fillRect(x * T + 1, y * T + 2, 3, 12); ctx.fillRect(x * T + T - 4, y * T + 2, 3, 12);
+          ctx.fillRect(px + 1, py + 2, 3, 12); ctx.fillRect(px + T - 4, py + 2, 3, 12);
           ctx.fillStyle = `rgba(255, 226, 150, ${0.65 + Math.sin(now / 95) * 0.25})`;
-          ctx.fillRect(x * T + 1, y * T, 3, 4); ctx.fillRect(x * T + T - 4, y * T, 3, 4);
+          ctx.fillRect(px + 1, py, 3, 4); ctx.fillRect(px + T - 4, py, 3, 4);
+          ctx.fillStyle = `rgba(255, 154, 60, ${fl * 0.35})`;
+          ctx.fillRect(px, py, T, T);
+        } else if (g === C.G_LAKE_SHORE) {
+          /* BERGE. C'est elle qui fait le « fondu » demandé : une bande de
+             galets et de mousse entre l'herbe et l'eau. Un dégradé de rendu
+             appliqué directement sur un bord de cases ne fait qu'adoucir un
+             escalier — il faut une matière intermédiaire pour que l'œil lise
+             une transition et non une frontière.
+
+             Tout est dérivé du hash de case : même répartition à chaque
+             frame, aucun scintillement. */
+          const h = (i * 40503 * 2654435761) >>> 0;
+          const px = x * T, py = y * T;
+          ctx.fillStyle = "rgba(39,53,26,0.55)";
+          ctx.fillRect(px + (h & 7), py + (h >> 3 & 7), 6, 4);
+          const pebbles = 3 + (h >> 6 & 3);
+          for (let p = 0; p < pebbles; p++) {
+            const hh = (h >> (p * 3)) ^ (h << p);
+            const gx = px + ((hh >>> 0) % (T - 3));
+            const gy = py + ((hh >>> 4) % (T - 3));
+            ctx.fillStyle = (hh & 1) ? "#3c372f" : "#565046";
+            ctx.fillRect(gx, gy, 2 + (hh >> 8 & 1), 2);
+          }
+          // Reflet violet du lac sur les galets mouillés, côté eau.
+          const wet = 0.10 + Math.sin(now / 900 + x * 0.4 + y * 0.3) * 0.05;
+          ctx.fillStyle = `rgba(160, 90, 220, ${wet})`;
+          ctx.fillRect(px, py, T, T);
         } else if (g === C.G_DARK_PASSAGE) {
           const pulse = 0.4 + Math.sin(now / 500) * 0.15;
           ctx.fillStyle = `rgba(140, 90, 220, ${pulse})`;
@@ -9970,9 +10197,42 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           // teinte plus profonde et onde plus lente/large pour une surface
           // qui respire plutôt que clignote, cohérente avec un grand plan
           // d'eau plutôt qu'une case isolée.
-          const glow = 0.5 + Math.sin(now / 1100 + (x + y) * 0.35) * 0.22;
+          /* ZIP 375 — PROFONDEUR. ew.depth vaut 0 au ras de la berge et 255
+             au large (transformée de distance calculée UNE FOIS à la
+             génération, voir carveEastLake). Trois choses en dépendent :
+
+               - le fond, qui va du violet clair de haut-fond au presque-noir ;
+               - l'intensité de la lueur, faible au bord ;
+               - l'écume, qui n'existe QUE sur la première case d'eau.
+
+             C'est ce triple accord qui fait le fondu. Une simple teinte plus
+             claire au bord donnerait un liseré, pas une rive.
+
+             Le `?? 255` couvre les mondes mis en cache avant ce zip : sans
+             carte de profondeur, on retombe exactement sur le rendu d'avant
+             plutôt que sur un lac entièrement noir. */
+          const dp = (ew.depth ? ew.depth[i] : 255) / 255;
+          const shallow = 1 - dp;
+          ctx.fillStyle = `rgb(${Math.round(36 + shallow * 34)}, ${Math.round(18 + shallow * 26)}, ${Math.round(70 + shallow * 30)})`;
+          ctx.fillRect(x * T, y * T, T, T);
+          const glow = (0.5 + Math.sin(now / 1100 + (x + y) * 0.35) * 0.22) * (0.3 + dp * 0.7);
           ctx.fillStyle = `rgba(160, 70, 220, ${glow})`;
           ctx.fillRect(x * T, y * T, T, T);
+          // Écume : un liseré clair qui respire, uniquement sur la première
+          // case d'eau, du côté où se trouve la terre.
+          if (dp < 0.2) {
+            const foam = 0.20 + Math.sin(now / 700 + y * 0.8) * 0.12;
+            ctx.fillStyle = `rgba(214, 186, 255, ${Math.max(0, foam)})`;
+            const land = (dx, dy) => {
+              const nx = x + dx, ny = y + dy;
+              if (nx < 0 || ny < 0 || nx >= ew.w || ny >= ew.h) return false;
+              return ew.ground[ny * ew.w + nx] !== C.G_WATER;
+            };
+            if (land(-1, 0)) ctx.fillRect(x * T, y * T, 2, T);
+            if (land(1, 0)) ctx.fillRect(x * T + T - 2, y * T, 2, T);
+            if (land(0, -1)) ctx.fillRect(x * T, y * T, T, 2);
+            if (land(0, 1)) ctx.fillRect(x * T, y * T + T - 2, T, 2);
+          }
           // Bulles (chantier 2026-07, demande Guillaume : "rendre le lac plus
           // actif") : une case sur ~sept émet une bulle en boucle, hash
           // déterministe sur l'indice de case (pas de random() par frame,
@@ -9982,8 +10242,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           // propre (déphasée par le hash), grossit très légèrement en
           // montant, et s'estompe juste avant de disparaître en haut plutôt
           // que de couper net.
+          // Zip 375 : plus de bulles dans dix centimètres d'eau. Elles sont
+          // réservées au large, ce qui accentue le dégradé et donne au bord
+          // le calme d'un haut-fond.
           const bh = ((i * 2654435761) >>> 0) % 1000 / 1000;
-          if (bh < 0.14) {
+          if (bh < 0.14 && dp > 0.35) {
             const period = 2600 + bh * 4200;
             const phase = ((now + bh * 97000) % period) / period;
             if (phase < 0.9) {
@@ -10108,6 +10371,30 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           if (mo.chasing || mo.fleeing) ctx.restore();
         } });
       }
+      /* Zip 375 : les trois darkwolves de l'embuscade. Même sprite et même
+         teinte violette que les créatures partagées (drawWolfMonster) — ce
+         sont les mêmes bêtes, pas une nouvelle espèce —, mais une lueur
+         nettement plus forte : ils sont le point de mire de la scène, et
+         pendant la cinématique ils sont la seule chose qui bouge. */
+      {
+        const amb = runAmbushRef.current;
+        if (amb) {
+          for (const w of amb.wolves) {
+            if (w.gone) continue;
+            draws.push({ y: (w.y + 1) * T, fn: () => {
+              const fleeing = performance.now() < w.fleeUntil;
+              const glow = 0.55 + Math.sin(now / 180) * 0.2;
+              ctx.save();
+              ctx.shadowColor = fleeing
+                ? `rgba(90, 220, 130, ${glow * 0.7})`
+                : `rgba(190, 80, 255, ${glow})`;
+              ctx.shadowBlur = fleeing ? 12 : 20;
+              drawWolfMonster(w);
+              ctx.restore();
+            } });
+          }
+        }
+      }
       draws.sort((a, b) => a.y - b.y);
       for (const d of draws) d.fn();
       // Voile sombre permanent (assombrissement de l'ambiance, indépendant
@@ -10171,6 +10458,71 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     function canStandEvil(ew, x, y) {
       const r = 0.3;
       return !blockedEvil(ew, x - r, y) && !blockedEvil(ew, x + r, y) && !blockedEvil(ew, x - r, y + 0.35) && !blockedEvil(ew, x + r, y + 0.35);
+    }
+    function updateRunAmbush(dt) {
+      const a = runAmbushRef.current;
+      if (!a) return;
+      const m = meRef.current, ew = evilWorldRef.current;
+      if (!m || !ew || m.zone !== "evil") { runAmbushRef.current = null; return; }
+      const now = performance.now();
+
+      if (a.phase === "cine") {
+        // Approche ACCÉLÉRÉE : k² et non k. Une interpolation linéaire donne
+        // des loups qui glissent à vitesse constante ; le carré fait qu'ils
+        // arrivent lentement puis fondent sur le joueur, ce qui est toute la
+        // différence entre un déplacement et une charge.
+        const k = Math.min(1, (now - a.t0) / C.RUN_AMBUSH_MS);
+        const d = C.RUN_AMBUSH_START_DIST
+          + (C.RUN_AMBUSH_END_DIST - C.RUN_AMBUSH_START_DIST) * (k * k);
+        for (const w of a.wolves) {
+          const p = ambushCineSpot(w, d);
+          w.x = p.x; w.y = p.y; w.dir = 3;
+          // La cadence des pattes suit l'accélération, sinon la meute a l'air
+          // de patiner sur les derniers mètres, exactement le défaut qu'on
+          // vient de corriger sur le fermier du défi (zips 373-374).
+          w.animT += dt * (7 + 13 * k);
+        }
+        if (k >= 1 && !a.fadeT0) a.fadeT0 = now;
+        if (a.fadeT0 && now - a.fadeT0 >= C.RUN_AMBUSH_FADE_MS) {
+          a.phase = "menu";
+          openRunChallenge();
+        }
+        return;
+      }
+
+      if (a.phase !== "hostile") return;
+
+      /* --- Affrontement (décision Guillaume : ressortir du menu sans courir
+         laisse les trois loups sur place, et il faut les affronter). --- */
+      if (isInjured() || zoneTransRef.current.active) { runAmbushRef.current = null; return; }
+      let alive = 0;
+      for (let i = 0; i < a.wolves.length; i++) {
+        const w = a.wolves[i];
+        if (w.gone) continue;
+        alive++;
+        if (w.biting) continue;            // figé tant que le mini-jeu est ouvert
+        const fleeing = now < w.fleeUntil;
+        let vx = m.x - w.x, vy = m.y - w.y;
+        const dist = Math.hypot(vx, vy) || 1;
+        if (fleeing) { vx = -vx; vy = -vy; }
+        const sp = C.RUN_AMBUSH_SPEED * dt;
+        const nx = w.x + (vx / dist) * sp, ny = w.y + (vy / dist) * sp;
+        // Déplacement par axe, comme le joueur : un loup qui rase la jetée doit
+        // longer le bord au lieu de se planter contre l'eau.
+        if (canStandEvil(ew, nx, w.y)) w.x = nx;
+        if (canStandEvil(ew, w.x, ny)) w.y = ny;
+        w.dir = (m.x < w.x) !== fleeing ? 2 : 3;
+        w.animT += dt * 9;
+        if (fleeing) continue;
+        if (dist <= C.RUN_AMBUSH_CATCH_RADIUS && !evilBiteRef.current && !fishMiniRef.current) {
+          w.biting = true;
+          setEvilBite({ monsterId: i, local: true });
+        }
+      }
+      // Semés, ou tous mis en fuite : la scène s'efface. On ne laisse pas trois
+      // loups locaux tourner indéfiniment sur la carte.
+      const far = Math.hypot(m.x - C.RUN_GATE.x, m.y - C.RUN_GATE.y) > C.RUN_AMBUSH_DESPAWN_DIST;
+      if (!alive || far) runAmbushRef.current = null;
     }
     // ----- Valley Town (zip 234) -----
     // Same separation as the evil map: dedicated camera, collision and frame
@@ -10456,7 +10808,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     function updateMeEvil(dt) {
       const m = meRef.current, ew = evilWorldRef.current, keys = keysRef.current;
       if (!ew) return;
-      const uiBlocked = mapOpenRef.current || document.activeElement === chatInputRef.current;
+      // Zip 375 : pendant la cinématique d'embuscade, le contrôle est coupé
+      // (décision Guillaume). On passe par uiBlocked plutôt que par un return
+      // sec : m.moving/m.animT continuent d'être remis à zéro proprement en
+      // bas de la fonction, et le fermier reste figé face aux loups au lieu
+      // de garder la dernière frame de marche.
+      const cine = !!(runAmbushRef.current && runAmbushRef.current.phase === "cine");
+      const uiBlocked = cine || mapOpenRef.current || document.activeElement === chatInputRef.current;
       let dx = 0, dy = 0;
       if (!uiBlocked) {
         if (keys["ArrowUp"] || keys["KeyW"] || keys["KeyZ"]) dy -= 1;

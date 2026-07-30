@@ -70,12 +70,85 @@ function reaches(w, target) {
   return { ok: false, visited };
 }
 
+/* ZIP 375 — ce que ce script doit prouver a CHANGÉ, et il faut le dire.
+
+   La porte n'est plus posée sur l'herbe : c'est la dernière dalle d'une jetée
+   qui avance AU-DESSUS du lac de la rive est. Trois choses peuvent donc mal
+   tourner, et aucune ne se verrait à la lecture du générateur :
+
+     1. le pied de la jetée pourrait se retrouver dans l'eau si le découpage
+        irrégulier de la rive mordait dessus (le générateur lui rend sa bande
+        de terre, encore faut-il le vérifier) ;
+     2. une dalle manquante couperait la jetée en deux, et le parcours en
+        largeur s'arrêterait au trou ;
+     3. le couloir garanti vise désormais le PIED de la jetée, pas la porte —
+        s'il visait encore la porte, il draguerait le lac sur trois cases.
+
+   D'où trois contrôles au lieu d'un : on arrive au pied, on arrive au bout,
+   et tout le tablier est bien du pont. */
 function check(label, w) {
+  const base = reaches(w, C.RUN_JETTY_BASE);
   const gate = reaches(w, C.RUN_GATE);
   const back = reaches(w, C.EVIL_RETURN_PASSAGE);
   const tile = w.ground[C.RUN_GATE.y * W + C.RUN_GATE.x] === C.G_RUN_GATE;
-  const ok = gate.ok && back.ok && tile;
-  console.log(`${ok ? "OK    " : "ÉCHEC "} ${label.padEnd(32)} porte=${gate.ok}  retour=${back.ok}  case=${tile ? "G_RUN_GATE" : "AUTRE"}  (${gate.visited} cases)`);
+
+  // Le pied doit être de la TERRE (sinon on ne peut pas s'y tenir), et
+  // chacune des dalles doit exister sur toute la largeur de la jetée.
+  const baseTile = w.ground[C.RUN_JETTY_BASE.y * W + C.RUN_JETTY_BASE.x];
+  const baseDry = baseTile !== C.G_WATER;
+  let deck = true;
+  for (let k = 1; k <= C.RUN_JETTY_LEN; k++) {
+    for (let dy = -C.RUN_JETTY_HALF_W; dy <= C.RUN_JETTY_HALF_W; dy++) {
+      const g = w.ground[(C.RUN_JETTY_BASE.y + dy) * W + (C.RUN_JETTY_BASE.x + k)];
+      if (g !== C.G_RUN_JETTY && g !== C.G_RUN_GATE) deck = false;
+    }
+  }
+  // Le lac doit exister : une rive est qui ne serait pas creusée passerait
+  // tous les contrôles ci-dessus sans qu'on voie une goutte d'eau.
+  let water = 0;
+  for (let y = 0; y < H; y++) for (let x = C.EAST_LAKE_X; x < W; x++) {
+    if (w.ground[y * W + x] === C.G_WATER) water++;
+  }
+  const lakeOk = water > 200;
+
+  /* EMBUSCADE. Les trois darkwolves de la cinématique remontent la jetée
+     depuis l'ouest, en éventail. Rien dans le code ne les empêche d'être
+     posés au-dessus de l'eau : leur placement est purement géométrique
+     (RUN_AMBUSH_START/END_DIST et l'écart de voie), pas contraint par la
+     collision. On rejoue donc ici, à l'avance, toutes les positions par
+     lesquelles ils passeront — celles de la cinématique ET celles de
+     l'affrontement — et on vérifie qu'aucune ne tombe dans le lac.
+
+     C'est le genre de défaut qui ne casse rien et se voit tout de suite :
+     trois loups qui courent sur un lac. */
+  const tileAt = (x, y) => {
+    const fx = Math.floor(x + 0.5), fy = Math.floor(y + 0.5);
+    if (fx < 0 || fy < 0 || fx >= W || fy >= H) return null;
+    return w.ground[fy * W + fx];
+  };
+  let dry = true, wetSpot = null;
+  for (let i = 0; i < C.RUN_AMBUSH_COUNT; i++) {
+    const lane = (i - (C.RUN_AMBUSH_COUNT - 1) / 2) * 1.05;
+    const back = i * 0.55;
+    // Cinématique : 24 pas entre la distance de départ et celle d'arrivée.
+    for (let s = 0; s <= 24; s++) {
+      const k = s / 24;
+      const d = C.RUN_AMBUSH_START_DIST
+        + (C.RUN_AMBUSH_END_DIST - C.RUN_AMBUSH_START_DIST) * (k * k);
+      const g = tileAt(C.RUN_GATE.x - d - back, C.RUN_JETTY_BASE.y + lane);
+      if (g === C.G_WATER || g === null) { dry = false; wetSpot = wetSpot || `cinématique loup ${i} à k=${k.toFixed(2)}`; }
+    }
+    // Placement de l'affrontement, à la sortie du menu (closeRunChallenge).
+    const g2 = tileAt(C.RUN_JETTY_BASE.x - 2.2 - i * 0.7, C.RUN_JETTY_BASE.y + lane);
+    if (g2 === C.G_WATER || g2 === null) { dry = false; wetSpot = wetSpot || `placement d'affrontement loup ${i}`; }
+  }
+
+  const ok = base.ok && gate.ok && back.ok && tile && baseDry && deck && lakeOk && dry;
+  console.log(`${ok ? "OK    " : "ÉCHEC "} ${label.padEnd(30)} pied=${base.ok} bout=${gate.ok} retour=${back.ok} tablier=${deck} embuscade=${dry} lac=${water}`);
+  if (!ok && !baseDry) console.log("        -> le pied de la jetée est dans l'eau");
+  if (!ok && !tile) console.log("        -> la dernière dalle n'est pas G_RUN_GATE");
+  if (!ok && !lakeOk) console.log("        -> la rive est n'a pas été creusée");
+  if (!ok && !dry) console.log(`        -> un loup court sur l'eau : ${wetSpot}`);
   return ok;
 }
 
@@ -87,6 +160,6 @@ for (let i = 0; i < C.PASSAGE_WORLDS.length; i++) {
 
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log(bad === 0
-  ? "\nOK — porte et passage retour atteignables à pied sur les 6 cartes."
+  ? "\nOK — jetée (pied et bout) et passage retour atteignables à pied sur les 6 cartes."
   : `\nÉCHEC — ${bad} carte(s) en défaut.`);
 process.exit(bad === 0 ? 0 : 1);

@@ -900,6 +900,10 @@ export const FERME_STR = {
       : `🍬 ${name} s'est fait rattraper, les mains vides.`,
     runLostToast: "🐺 La meute t'a eu... tu te réveilles à la ferme, blessé.",
     runCandiesToast: (n) => `🍬 +${n} bonbon(s) rapporté(s) du monde sombre !`,
+    // Zip 375 : ressortir du menu du défi sans courir ne met pas la meute
+    // en fuite pour autant. Le message doit dire les deux choses à la fois —
+    // tu as reculé, ils sont toujours là.
+    runAmbushToast: "🐺 Tu recules sur la berge... la meute, elle, n'a pas bougé.",
     bagRunTitle: "Défi de fuite",
     bagCandiesRow: (n) => `${n} bonbon(s)`,
     bagRunBestSub: (n) => n > 0 ? `Meilleur score : ${n}` : "Aucun score pour l'instant.",
@@ -1833,6 +1837,10 @@ export const FERME_STR = {
       : `🍬 ${name} got caught, empty-handed.`,
     runLostToast: "🐺 The pack got you... you wake up on the farm, injured.",
     runCandiesToast: (n) => `🍬 +${n} candy(ies) brought back from the dark world!`,
+    // Zip 375. Traduit dans l'esprit et non littéralement (consigne du
+    // zip 371) : le français joue sur le contraste entre "tu recules" et
+    // "eux n'ont pas bougé", et c'est ce contraste qu'on garde.
+    runAmbushToast: "🐺 You back off onto the bank... the pack doesn't.",
     bagRunTitle: "Escape challenge",
     bagCandiesRow: (n) => `${n} candy(ies)`,
     bagRunBestSub: (n) => n > 0 ? `Best score: ${n}` : "No score yet.",

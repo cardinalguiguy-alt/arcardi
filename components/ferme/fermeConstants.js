@@ -67,6 +67,18 @@ export const G_RUN_GATE = 14;      // zip 372 : porte du défi de fuite, bord ES
                                    // Contrairement au passage sombre, elle est ANNONCÉE (couloir dégagé qui y
                                    // mène, rendu lumineux) : c'est un défi qu'on doit pouvoir trouver, pas un
                                    // secret. Position fixe C.RUN_GATE, identique sur les cinq mondes.
+                                   // ZIP 375 : ce n'est plus un coffre/brasier posé sur l'herbe mais la
+                                   // DERNIÈRE DALLE DE LA JETÉE, au-dessus du lac (voir G_RUN_JETTY).
+export const G_RUN_JETTY = 15;     // zip 375 : dalle de la jetée en pierres qui avance dans le lac violet de la
+                                   // rive est, et depuis laquelle on lance le défi de fuite. C'est une
+                                   // réduction 2D de la chaussée du jeu de fuite (dalles fissurées, bordures
+                                   // moussues, torches), pour que le décor annonce le défi avant qu'il commence.
+                                   // Sol PRATICABLE : blockedEvil ne bloque que G_WATER, donc une dalle posée
+                                   // sur l'eau se traverse — c'est tout l'intérêt d'un identifiant distinct.
+export const G_LAKE_SHORE = 16;    // zip 375 : berge du lac. Bande de galets moussus entre l'herbe et l'eau, sur
+                                   // laquelle on marche normalement. Elle sert au FONDU demandé : sans elle, le
+                                   // lac s'arrête sur une ligne franche de cases, et aucun dégradé de rendu ne
+                                   // rattrape une silhouette en escalier.
 
 // Objets
 export const O_NONE = 0;
@@ -484,9 +496,68 @@ export const ZONE_FADE_MS = 900; // durée d'une moitié de fondu (aller au noir
    à 1 case, un joueur qui longe le bord se retrouve coincé entre deux troncs,
    et la « garantie » n'en est plus une en pratique.
    ========================================================================== */
-export const RUN_GATE = { x: 66, y: 34 };   // bord est, à mi-hauteur (carte 70x70)
-export const RUN_GATE_CLEAR = 2;            // rayon de la place dégagée autour de la porte
+export const RUN_GATE_CLEAR = 2;            // rayon de la place dégagée autour de la base de la jetée
 export const RUN_CORRIDOR_HALF = 1;         // demi-largeur du couloir garanti (1 => 3 cases de large)
+
+/* ==========================================================================
+   Zip 375 : RIVE EST, JETÉE EN PIERRES ET EMBUSCADE.
+   --------------------------------------------------------------------------
+   Demande de Guillaume : « une rive de lac violet bien soignée sur la partie
+   droite de la map dark world avec fondu pour évoquer l'univers du jeu de
+   fuite », et l'ouverture du défi qui ne se fait plus en approchant le coffre
+   mais en s'avançant sur une jetée en pierres.
+
+   TROIS RAISONS DE FAIRE ÇA PLUTÔT QUE DE REDÉCORER LA PORTE :
+
+   1. Le défi de fuite se joue sur une chaussée de pierre AU-DESSUS d'un lac
+      violet (voir public/templerun/js/world.js). Poser la même chaussée, en
+      réduction, à l'endroit d'où on le lance, c'est raccorder les deux
+      univers par le décor au lieu de le faire par un menu.
+   2. Un bord de carte est un endroit sans intérêt : de l'herbe, puis le vide.
+      Une rive donne une fin au monde.
+   3. Une jetée ne va nulle part. On s'y avance, on est acculé — ce qui rend
+      l'embuscade des loups lisible sans un mot d'explication.
+
+   GÉOMÉTRIE, tout est dérivé de EAST_LAKE_X pour qu'un seul nombre suffise à
+   déplacer l'ensemble. La jetée avance vers l'EST depuis la dernière bande de
+   terre, et la porte est sa dernière dalle.
+   ========================================================================== */
+export const EAST_LAKE_X = 57;        // colonne moyenne de la rive ; à l'est, c'est le lac
+export const EAST_LAKE_WOBBLE = 3.2;  // amplitude du découpage irrégulier de la rive
+export const LAKE_SHORE_BAND = 2;     // épaisseur, en cases, de la berge de galets (le « fondu »)
+
+export const RUN_JETTY_BASE = { x: EAST_LAKE_X, y: 34 }; // dernière case de TERRE, pied de la jetée
+export const RUN_JETTY_LEN = 4;       // longueur de la jetée, en dalles (décision Guillaume : « courte, 3-4 cases »)
+export const RUN_JETTY_HALF_W = 1;    // demi-largeur : 1 => 3 cases, comme les 3 voies du défi
+
+// La porte est la DERNIÈRE dalle. Elle reste nommée RUN_GATE : tout le code
+// existant (checkWalkOverPassage, verify-gate.mjs, carveRunCorridor) parle
+// déjà de cette constante, seule sa position et son habillage changent.
+export const RUN_GATE = { x: RUN_JETTY_BASE.x + RUN_JETTY_LEN, y: RUN_JETTY_BASE.y };
+
+/* --- Embuscade des darkwolves (cinématique + affrontement) ---------------
+   Entièrement LOCALE : aucun de ces loups n'existe pour les autres joueurs,
+   et l'ensemble ne coûte pas un message réseau. C'est le motif déjà retenu
+   pour les lapins (366), l'animation du cheptel (369) et le défi lui-même
+   (372) : ce qui est individuel et n'a pas d'effet sur le monde partagé se
+   simule chez le client, point.
+
+   La séquence : le joueur atteint le bout de la jetée -> contrôle coupé ->
+   les loups surgissent de la berge et accélèrent -> fondu -> menu du défi.
+   S'il ressort du menu sans courir, ils sont TOUJOURS là et deviennent
+   hostiles (décision Guillaume). */
+export const RUN_AMBUSH_COUNT = 3;
+export const RUN_AMBUSH_MS = 2000;        // durée de la cinématique avant le fondu
+export const RUN_AMBUSH_FADE_MS = 550;    // fondu au noir enchaîné à la fin de la cinématique
+export const RUN_AMBUSH_START_DIST = 9;   // distance, en cases, à laquelle les loups surgissent
+export const RUN_AMBUSH_END_DIST = 1.6;   // distance atteinte au moment du fondu (assez près pour inquiéter)
+export const RUN_AMBUSH_SPEED = 2.6;      // vitesse de poursuite APRÈS la cinématique (tuiles/s)
+                                          // volontairement supérieure à EVIL_MONSTER_SPEED (1.5) : ces
+                                          // trois-là ont déjà couru, et le joueur doit sentir qu'il est
+                                          // sur une jetée sans issue
+export const RUN_AMBUSH_CATCH_RADIUS = 0.7;  // même contact que les créatures maléfiques
+export const RUN_AMBUSH_FLEE_MS = 7000;      // durée de fuite d'un loup dont on a gagné la morsure
+export const RUN_AMBUSH_DESPAWN_DIST = 22;   // au-delà, le joueur a semé l'embuscade : elle s'efface
 
 // Blessure infligée par une DÉFAITE au défi (décision Guillaume) : 10 minutes,
 // nettement moins que la créature maléfique (EVIL_INJURED_MS = 30 min) parce

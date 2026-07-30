@@ -240,20 +240,157 @@ export function carveRunCorridor(ground, objects, objHp, W, H) {
     for (let dy = -half; dy <= half; dy++) for (let dx = -half; dx <= half; dx++) clearAt(x + dx, y + dy);
   };
 
+  /* ZIP 375 : le couloir vise désormais le PIED de la jetée, pas la porte.
+     La porte est au bout d'une jetée posée sur le lac ; y creuser un couloir
+     reviendrait à convertir en herbe les cases d'eau qu'il traverse, donc à
+     vider le lac sur trois cases de large exactement là où il doit être le
+     plus imposant. Le couloir amène sur la berge, la jetée fait le reste. */
+  const target = C.RUN_JETTY_BASE;
   let x = C.EVIL_SPAWN.x, y = C.EVIL_SPAWN.y;
   let guard = W * H; // garde-fou : jamais de boucle infinie, même sur une constante aberrante
   swath(x, y);
-  while ((x !== C.RUN_GATE.x || y !== C.RUN_GATE.y) && guard-- > 0) {
-    if (Math.abs(C.RUN_GATE.x - x) >= Math.abs(C.RUN_GATE.y - y)) x += Math.sign(C.RUN_GATE.x - x);
-    else y += Math.sign(C.RUN_GATE.y - y);
+  while ((x !== target.x || y !== target.y) && guard-- > 0) {
+    if (Math.abs(target.x - x) >= Math.abs(target.y - y)) x += Math.sign(target.x - x);
+    else y += Math.sign(target.y - y);
     swath(x, y);
   }
 
-  // Place dégagée devant la porte : on doit pouvoir la voir venir et manœuvrer.
+  // Place dégagée devant la jetée : on doit pouvoir la voir venir et manœuvrer
+  // — et, depuis le zip 375, y affronter trois loups sans se coincer dans un
+  // arbre au premier pas de côté.
   for (let dy = -C.RUN_GATE_CLEAR; dy <= C.RUN_GATE_CLEAR; dy++) {
-    for (let dx = -C.RUN_GATE_CLEAR; dx <= C.RUN_GATE_CLEAR; dx++) clearAt(C.RUN_GATE.x + dx, C.RUN_GATE.y + dy);
+    for (let dx = -C.RUN_GATE_CLEAR; dx <= C.RUN_GATE_CLEAR; dx++) clearAt(target.x + dx, target.y + dy);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   ZIP 375 — RIVE EST, BERGE ET JETÉE.
+
+   Appelée APRÈS carveRunCorridor dans les deux générateurs, et c'est un
+   ordre qui compte : le couloir dégage en force tout ce qu'il traverse, y
+   compris de l'eau. S'il passait après, il découperait une tranchée d'herbe
+   dans la rive qu'on vient de creuser.
+
+   Trois passes, dans cet ordre :
+     1. l'eau, avec un bord irrégulier (une rive rectiligne se lit comme un
+        bug d'affichage, pas comme un rivage) ;
+     2. la BERGE, bande de galets moussus sur les cases de terre qui touchent
+        l'eau. C'est elle qui porte le « fondu » demandé — un dégradé de
+        rendu sur un bord en escalier ne fait qu'adoucir l'escalier ;
+     3. la JETÉE, dalles posées PAR-DESSUS l'eau, plus la porte au bout.
+
+   Renvoie la carte de PROFONDEUR (0 au bord, 255 au large), calculée ici une
+   fois pour toutes. Le rendu s'en sert pour foncer l'eau et atténuer la lueur
+   près du bord ; la recalculer à chaque frame coûterait un parcours complet
+   de la carte soixante fois par seconde pour un résultat rigoureusement
+   constant.
+   -------------------------------------------------------------------------- */
+export function carveEastLake(ground, objects, objHp, W, H) {
+  const clearObj = (i) => { if (objects[i] !== C.O_NONE) { objects[i] = C.O_NONE; objHp.delete(i); } };
+
+  // --- 1. L'eau ---------------------------------------------------------
+  // Le bord suit une somme de deux sinus de périodes non multiples : la
+  // silhouette ne se répète pas sur la hauteur de la carte, contrairement à
+  // un sinus unique dont on verrait aussitôt la régularité.
+  const edgeAt = (y) =>
+    C.EAST_LAKE_X
+    + Math.sin(y * 0.21) * C.EAST_LAKE_WOBBLE
+    + Math.sin(y * 0.073 + 2.1) * (C.EAST_LAKE_WOBBLE * 0.55);
+
+  for (let y = 0; y < H; y++) {
+    const edge = edgeAt(y);
+    for (let x = Math.max(0, Math.floor(edge) - 1); x < W; x++) {
+      if (x < edge) continue;
+      const i = y * W + x;
+      ground[i] = C.G_WATER;
+      clearObj(i);
+    }
+  }
+
+  /* ESPLANADE D'APPROCHE. Bien plus qu'un pied de jetée au sec : toute la
+     bande de terre depuis laquelle les darkwolves surgissent, et sur laquelle
+     se joue l'affrontement si le joueur ressort du menu.
+
+     Sa longueur est RUN_AMBUSH_START_DIST + marge, et ce n'est pas une
+     coïncidence : c'est exactement la distance à laquelle la cinématique fait
+     apparaître le premier loup. Dériver les deux du même nombre est la seule
+     façon de garantir qu'ils ne surgiront jamais du lac — le placement des
+     loups est purement géométrique, rien dans leur code ne consulte la
+     collision.
+
+     Ce défaut-là n'a pas été deviné : verify-gate.mjs rejoue les positions de
+     la cinématique et l'a signalé sur la carte maléfique historique, où le
+     lac CENTRAL (rayon 12 autour de x=47) recouvrait le point d'apparition.
+
+     Comme le couloir garanti, l'esplanade convertit l'eau qu'elle rencontre.
+     Sur la carte historique elle taille donc un isthme dans le lac central —
+     c'est le même parti pris qu'au zip 372 (« le couloir traverse le lac :
+     ça dessine une chaussée sombre au milieu du violet luisant »), et la
+     berge posée juste après en fait un rivage plutôt qu'une découpe. */
+  const base = C.RUN_JETTY_BASE, half = C.RUN_JETTY_HALF_W;
+  const runway = C.RUN_AMBUSH_START_DIST + 3;
+  for (let dy = -half - 1; dy <= half + 1; dy++) {
+    const yy = base.y + dy;
+    if (yy < 0 || yy >= H) continue;
+    for (let xx = base.x - runway; xx <= base.x; xx++) {
+      if (xx < 0 || xx >= W) continue;
+      const i = yy * W + xx;
+      ground[i] = C.G_GRASS;
+      clearObj(i);
+    }
+  }
+
+  // --- 2. La berge ------------------------------------------------------
+  const isWater = (x, y) => x >= 0 && y >= 0 && x < W && y < H && ground[y * W + x] === C.G_WATER;
+  const shore = [];
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const i = y * W + x;
+      if (ground[i] !== C.G_GRASS) continue;
+      let near = false;
+      for (let d = 1; d <= C.LAKE_SHORE_BAND && !near; d++) {
+        if (isWater(x + d, y) || isWater(x - d, y) || isWater(x, y + d) || isWater(x, y - d)) near = true;
+      }
+      if (near) shore.push(i);
+    }
+  }
+  for (const i of shore) { ground[i] = C.G_LAKE_SHORE; clearObj(i); }
+
+  // --- 3. La jetée ------------------------------------------------------
+  for (let k = 1; k <= C.RUN_JETTY_LEN; k++) {
+    for (let dy = -half; dy <= half; dy++) {
+      const xx = base.x + k, yy = base.y + dy;
+      if (xx < 0 || yy < 0 || xx >= W || yy >= H) continue;
+      const i = yy * W + xx;
+      ground[i] = C.G_RUN_JETTY;
+      clearObj(i);
+    }
   }
   ground[C.RUN_GATE.y * W + C.RUN_GATE.x] = C.G_RUN_GATE;
+
+  // --- Carte de profondeur ---------------------------------------------
+  // Transformée de distance en deux balayages (avant puis arrière) sur la
+  // distance de Manhattan : exact, linéaire, et sans file d'attente à gérer.
+  const INF = 1e6;
+  const dist = new Float32Array(W * H);
+  for (let i = 0; i < W * H; i++) dist[i] = ground[i] === C.G_WATER ? INF : 0;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const i = y * W + x;
+    if (x > 0) dist[i] = Math.min(dist[i], dist[i - 1] + 1);
+    if (y > 0) dist[i] = Math.min(dist[i], dist[i - W] + 1);
+  }
+  for (let y = H - 1; y >= 0; y--) for (let x = W - 1; x >= 0; x--) {
+    const i = y * W + x;
+    if (x < W - 1) dist[i] = Math.min(dist[i], dist[i + 1] + 1);
+    if (y < H - 1) dist[i] = Math.min(dist[i], dist[i + W] + 1);
+  }
+  const DEPTH_FULL = 6; // au-delà de 6 cases du bord, l'eau est « au large »
+  const depth = new Uint8Array(W * H);
+  for (let i = 0; i < W * H; i++) {
+    depth[i] = ground[i] === C.G_WATER
+      ? Math.round(255 * Math.min(1, dist[i] / DEPTH_FULL)) : 0;
+  }
+  return depth;
 }
 
 export function generateEvilWorld() {
@@ -355,6 +492,10 @@ export function generateEvilWorld() {
   // donc apparaître dans le couloir, et c'est très bien : le chemin est
   // garanti praticable, pas garanti tranquille.
   carveRunCorridor(ground, objects, objHp, W, H);
+  // Zip 375 : rive est, berge et jetée. APRÈS le couloir, jamais avant — le
+  // couloir dégage en force tout ce qu'il traverse, y compris de l'eau, et
+  // découperait une tranchée d'herbe en plein milieu de la rive.
+  const depth = carveEastLake(ground, objects, objHp, W, H);
   // Créatures maléfiques (chantier 2026-07, demande Guillaume : "des
   // monstres qui pourchassent le joueur, lents, mais qui l'assomment et le
   // renvoient chez lui blessé au contact") : générées ici (même seed fixe
@@ -385,7 +526,7 @@ export function generateEvilWorld() {
     const kind = rnd() < 0.5 ? "wolf" : "zombie";
     if (ok) monsters.push({ id: n, kind, x: mx + 0.5, y: my + 0.5, homeX: mx + 0.5, homeY: my + 0.5 });
   }
-  return { w: W, h: H, ground, objects, objHp, crops: new Map(), mills: new Map(), bridgeSites: [], bridgeLeverPos: [], riverCenter: [], monsters };
+  return { w: W, h: H, ground, objects, objHp, depth, crops: new Map(), mills: new Map(), bridgeSites: [], bridgeLeverPos: [], riverCenter: [], monsters };
 }
 
 // Applique des overrides persistés (reprise après rechargement) sur un monde
@@ -3779,6 +3920,10 @@ export function generatePassageWorld(worldIdx) {
   // sur toute la carte, et sans ce passage en force la porte du défi serait
   // murée une semaine sur cinq.
   carveRunCorridor(ground, objects, objHp, W, H);
+  // Zip 375 : la MÊME rive est et la même jetée que sur la carte maléfique.
+  // Même argument que pour le couloir : la porte doit être au même endroit,
+  // et se présenter de la même façon, quelle que soit la semaine.
+  const depth = carveEastLake(ground, objects, objHp, W, H);
 
   // Pickups (breloques). Placés sur des cases d'herbe libres, jamais dans
   // l'eau, jamais sur un objet, jamais trop près du spawn (on veut avoir à
@@ -3813,7 +3958,7 @@ export function generatePassageWorld(worldIdx) {
     }
   }
 
-  return { w: W, h: H, ground, objects, objHp, monsters, pickups, spec, maze, worldIdx };
+  return { w: W, h: H, ground, objects, objHp, depth, monsters, pickups, spec, maze, worldIdx };
 }
 
 // Ramassage d'une breloque : gain d'or + potentielle capture d'animal
