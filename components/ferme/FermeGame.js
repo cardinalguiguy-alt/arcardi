@@ -323,6 +323,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const sessionStartRef = useRef(Date.now());          // zip 298: début de la session de jeu (continu) — base du minuteur de garantie artisans
   const pitySeenRef = useRef({});                       // zip 298: artisans à skill déjà VUS cette session (rid -> true) — désamorce la garantie
   const ducksRef = useRef(null);                       // decorative ducks (client-side, seeded)
+  const rabbitSeedDoneRef = useRef(false);             // zip 366 : peuplement initial des lapins tiré de la graine, une fois par session (même principe que ducksRef)
   const adsOpenRef = useRef(false);
   const visitorOpenRef = useRef(false);
   const [gregOrderOpen, setGregOrderOpen] = useState(false); // panneau "donner un ordre à Greg" (chantier 2026-07)
@@ -388,13 +389,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [sugar, setSugar] = useState(0); // miroir React de sharedRef.current.sugar (sacs de sucre, chantier canne à sucre, miroir exact de flour)
   const [gregStock, setGregStock] = useState(() => ({ wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) })); // miroir React de sharedRef.current.gregStock (bois/pierre récoltés par Greg + engrais acheté + poissons pêchés par Soan, pool commun, chantier 2026-07)
   const [fertilizerShop, setFertilizerShop] = useState(() => ({ stock: 0, lastRestockDay: 0 })); // miroir React de sharedRef.current.fertilizerShop (stock boutique de l'engrais, chantier 2026-07)
-  // Défi "chasse aux lapins" (chantier 2026-07, demande Guillaume) : miroir
-  // React de sharedRef.current.rabbitChallenge (null si aucun défi en cours),
-  // popup de proposition affichée UNIQUEMENT à l'hôte (jamais partagée), et
-  // trophée gagné (temporaire depuis le correctif 2026-07, voir
-  // farmer.hatUntil / p.hatWon / C.HAT_DISPLAY_MS).
-  const [rabbitChallenge, setRabbitChallenge] = useState(null);
-  const [rabbitChallengeOffer, setRabbitChallengeOffer] = useState(false); // popup "activer le défi ?" (hôte uniquement)
+  // Zip 366 : le défi "chasse aux lapins" est retiré (les lapins sont
+  // désormais simulés localement, voir updateRabbits) — ses états React ont
+  // disparu avec lui.
+  //
+  // Le TROPHÉE, lui, reste entièrement en place et fonctionnel : plus rien ne
+  // l'attribue aujourd'hui, mais toute la chaîne existe (farmer.hatUntil
+  // persisté, diffusion p.hatWon, rendu du chapeau sur le personnage,
+  // C.HAT_DISPLAY_MS). C'est délibéré — Guillaume veut pouvoir raccrocher
+  // plus tard des défis occasionnels avec synchronisation temporaire des
+  // bêtes à chasser, sans avoir à réécrire ce mécanisme.
   const [hatUntil, setHatUntil] = useState(0); // moi-même : horodatage de fin d'affichage du trophée (0 = pas de trophée en cours)
 
   // -------- Refs (état du jeu, lus par la boucle de rendu) --------
@@ -452,7 +456,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const meRef = useRef(null);
   const playersRef = useRef(new Map()); // id -> remote farmer render data
   const farmersRef = useRef({});        // hôte : id -> état privé arbitré
-  const sharedRef = useRef({ seed: 0, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), salveCraft: E.newSalveCraftState(), house: { level: 1, upgradeUntil: 0 }, evilMonsters: [], flour: 0, sugar: 0, gregStock: { wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) }, fertilizerShop: { stock: 0, lastRestockDay: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], rabbitChallenge: null, greg: null, soan: null, harald: null, station: E.newStationState(), decor: [], crafts: E.newCrafts(), craftStock: E.newCraftStock() });
+  const sharedRef = useRef({ seed: 0, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), salveCraft: E.newSalveCraftState(), house: { level: 1, upgradeUntil: 0 }, evilMonsters: [], flour: 0, sugar: 0, gregStock: { wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) }, fertilizerShop: { stock: 0, lastRestockDay: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], greg: null, soan: null, harald: null, station: E.newStationState(), decor: [], crafts: E.newCrafts(), craftStock: E.newCraftStock() });
   const invRef = useRef(null);
   const toolsRef = useRef({ hoe: 1, can: 1, axe: 1, pick: 1 });
   const energyRef = useRef(C.MAX_ENERGY);
@@ -562,7 +566,6 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   }
   const horseCallAccumRef = useRef(0); // accumulateur (secondes) pour throttler la diffusion réseau des chevaux sifflés en course
   const wolfAccumRef = useRef(0);      // accumulateur (secondes), même throttle réseau pour les loups simulés côté hôte
-  const rabbitAccumRef = useRef(0);
   const evilMonstersAccumRef = useRef(0); // hôte : throttle réseau des créatures maléfiques partagées (2026-07)    // accumulateur (secondes), même throttle réseau pour les lapins simulés côté hôte
   const gregAccumRef = useRef(0);      // accumulateur (secondes), même throttle réseau pour Greg simulé côté hôte
   const soanAccumRef = useRef(0);      // accumulateur (secondes), même throttle réseau pour Soan simulé côté hôte
@@ -595,8 +598,6 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const rosalieBubbleCycleRef = useRef({ lastPeriodStart: -1, cycles: 0 }); // compte les cycles de bulle "rare" vus à portée (hôte uniquement)
   const rosalieLineRef = useRef({ periodIdx: -1, idx: 0 }); // réplique tirée au sort (pondérée) pour le cycle "rare" en cours — figée pour toute sa durée
   const hatUntilRef = useRef(0); // miroir synchrone de hatUntil (lu dans la boucle de rendu, voir drawCharacter)
-  const rabbitChallengeOfferRef = useRef(false); // miroir synchrone de rabbitChallengeOffer (lu dans le timer hôte, évite de reproposer en boucle)
-  const rabbitLastOfferDayRef = useRef(-999); // zip 262 : jour ingame de la dernière proposition de défi lapins (gate 1 fois / 3 jours)
   const evilBiteRef = useRef(null); // miroir synchrone de evilBite (lu dans updateEvilMonsters, boucle de rendu — évite de redéclencher le mini-jeu tant qu'il est déjà ouvert)
 
   useEffect(() => { fishMiniRef.current = !!fishMini || !!barnMini || !!wolfBite || !!evilBite || !!repairMini; }, [fishMini, barnMini, wolfBite, evilBite, repairMini]);
@@ -623,7 +624,6 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   useEffect(() => { injuredUntilRef.current = injuredUntil || 0; }, [injuredUntil]);
   useEffect(() => { immunityUntilRef.current = immunityUntil || 0; }, [immunityUntil]);
   useEffect(() => { hatUntilRef.current = hatUntil || 0; }, [hatUntil]);
-  useEffect(() => { rabbitChallengeOfferRef.current = !!rabbitChallengeOffer; }, [rabbitChallengeOffer]);
   useEffect(() => { worldReadyRef.current = worldReady; }, [worldReady]);
   useEffect(() => { mapOpenRef.current = mapOpen; }, [mapOpen]);
   useEffect(() => { shopOpenRef.current = shopOpen; }, [shopOpen]);
@@ -786,7 +786,6 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         fertilizerShop: { stock: (saved.fertilizerShop && saved.fertilizerShop.stock) || 0, lastRestockDay: (saved.fertilizerShop && saved.fertilizerShop.lastRestockDay) || 0 },
         wolves: [], wolfNight: { active: false, kills: 0 }, // repartent à zéro à la reprise, respawn dérivé de l'heure courante
         rabbits: [], // même principe : repartent à zéro, repop dérivé de l'heure courante (voir updateRabbits)
-        rabbitChallenge: null, // défi éphémère, ne survit pas à une reprise (même principe que wolfNight)
         // Greg (chantier 2026-07) : contrat réel de 2 jours, DOIT survivre à
         // une reprise (contrairement aux loups/lapins) — sinon un rechargement
         // "rembourserait" gratuitement le temps de contrat restant. On ne
@@ -861,7 +860,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       worldRef.current = E.generateWorld(seed);
       for (const ci of E.clearStationArea(worldRef.current)) recordTileOverride(ci); // 2026-07 station update
       overridesRef.current = { ground: {}, object: {} };
-      sharedRef.current = { seed, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), salveCraft: E.newSalveCraftState(), house: { level: 1, upgradeUntil: 0 }, evilMonsters: [], gems: C.GEMS.map(() => 0), flour: 0, sugar: 0, gregStock: { wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) }, fertilizerShop: { stock: 0, lastRestockDay: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], rabbitChallenge: null, greg: null, soan: null, harald: null, station: E.newStationState() };
+      sharedRef.current = { seed, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), salveCraft: E.newSalveCraftState(), house: { level: 1, upgradeUntil: 0 }, evilMonsters: [], gems: C.GEMS.map(() => 0), flour: 0, sugar: 0, gregStock: { wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) }, fertilizerShop: { stock: 0, lastRestockDay: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], greg: null, soan: null, harald: null, station: E.newStationState() };
       farmersRef.current = {};
       // Crée tout de suite l'enregistrement pour réserver le code.
       persistFarm();
@@ -890,7 +889,6 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     setSugar(sharedRef.current.sugar || 0);
     setGregStock(sharedRef.current.gregStock || { wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) });
     setFertilizerShop(sharedRef.current.fertilizerShop || { stock: 0, lastRestockDay: 0 });
-    setRabbitChallenge(sharedRef.current.rabbitChallenge);
     syncBuildings();
     setWorldReady(true);
     setPhase("select"); // l'effet d'auto-spawn décidera de sauter cet écran
@@ -1004,7 +1002,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       gregStock: { wood: (payload.gregStock && payload.gregStock.wood) || 0, stone: (payload.gregStock && payload.gregStock.stone) || 0, fertilizer: (payload.gregStock && payload.gregStock.fertilizer) || 0, gold: (payload.gregStock && payload.gregStock.gold) || 0, fish: C.FISH.map((_, i) => (payload.gregStock && payload.gregStock.fish && payload.gregStock.fish[i]) || 0), animals: C.ANIMALS.map((_, i) => (payload.gregStock && payload.gregStock.animals && payload.gregStock.animals[i]) || 0) },
       fertilizerShop: { stock: (payload.fertilizerShop && payload.fertilizerShop.stock) || 0, lastRestockDay: (payload.fertilizerShop && payload.fertilizerShop.lastRestockDay) || 0 },
       wolves: payload.wolves || [], wolfNight: { active: !!(payload.wolves && payload.wolves.length), kills: 0 },
-      rabbits: payload.rabbits || [], rabbitChallenge: payload.rabbitChallenge || null,
+      // Zip 366 : l'invité qui rejoint garde SA propre population de lapins,
+      // peuplée depuis la graine comme celle de l'hôte (voir updateRabbits).
+      rabbits: sharedRef.current.rabbits || [],
       greg: payload.greg || null,
       soan: payload.soan || null,
       harald: payload.harald || null, // zip 260
@@ -1056,7 +1056,6 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     setSugar(sharedRef.current.sugar || 0);
     setGregStock(sharedRef.current.gregStock || { wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) });
     setFertilizerShop(sharedRef.current.fertilizerShop || { stock: 0, lastRestockDay: 0 });
-    setRabbitChallenge(sharedRef.current.rabbitChallenge);
     syncBuildings();
     // Correctif audit lancement 2026-07 (succession d'hôte) : mémorise le
     // code de la ferme reçu avec l'instantané. Sans lui, un invité promu
@@ -1449,7 +1448,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       sucreries: worldRef.current ? E.serializeSucreries(worldRef.current) : [],
       farmers: farmersRef.current,
       horses: s.horses, animals: s.animals, wellBuilt: s.wellBuilt, coop: s.coop, barn: s.barn, salveCraft: s.salveCraft, house: s.house, evilMonsters: s.evilMonsters, gems: s.gems, flour: s.flour, sugar: s.sugar, gregStock: s.gregStock, fertilizerShop: s.fertilizerShop, wolves: s.wolves, greg: s.greg, soan: s.soan, harald: s.harald,
-      rabbits: s.rabbits, rabbitChallenge: s.rabbitChallenge,
+      // Zip 366 : `rabbits` retiré de l'instantané. Chaque client peuple les
+      // siens depuis la graine de la ferme (voir updateRabbits) — les envoyer
+      // ici les écraserait aussitôt avec ceux de l'hôte, ce qui n'aurait de
+      // sens que s'ils étaient ensuite tenus à jour, c'est-à-dire diffusés.
+      // `rabbitChallenge` retiré avec le défi (zip 366).
       station: s.station, // 2026-07 station update
       decor: s.decor, // zip 251: décorations posées (ferme + Valley Town), persistées
       crafts: s.crafts, craftStock: s.craftStock, // zip 252: ateliers artisans + stock de produits
@@ -2438,48 +2441,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         out.fx.push({ k: "sell", x: px, y: py, gain: price });
         out.chat = { from: "💰", msg: L.chatAnimalSold(lang === "en" ? at.nameEn : at.name, price) };
       } else out.toast = { id: f.id, key: "actionFailed" };
-    } else if (req.kind === "catchRabbit") {
-      // Capture d'un lapin sauvage avec l'outil "déplacer" (même case 9 que
-      // pour attraper un animal de la ferme, demande Guillaume). Contrairement
-      // aux animaux de la ferme : pas de portage, résolution immédiate en un
-      // clic — "pour le fun", sans aucun effet économique. Ne réussit que si
-      // le lapin visé est encore là, à portée, et PAS en train de fuir (s'il
-      // fuit, c'est qu'un jet de repérage l'a déjà "vu" arriver, voir
-      // updateRabbits) : la vraie chance ("1 sur 5") vient de ces jets
-      // répétés pendant l'approche, pas d'un tirage supplémentaire ici.
-      const ri = (s.rabbits || []).findIndex(r => r.id === req.rabbit);
-      const rb = ri >= 0 ? s.rabbits[ri] : null;
-      // FIX 246 (demande Guillaume : "facilite le ramassage des lapins") :
-      // capture si le lapin est à portée (élargie) ET soit pas en fuite, soit
-      // en fuite MAIS très proche (RABBIT_CATCH_FLEE_GRACE) — un lapin qui
-      // vient de détaler juste sous la main peut désormais être saisi.
-      const rbDist = rb ? Math.hypot(px - rb.x, py - rb.y) : Infinity;
-      const catchable = rb && rbDist <= C.RABBIT_CATCH_RANGE && (rb.phase !== "flee" || rbDist <= C.RABBIT_CATCH_FLEE_GRACE);
-      if (catchable) {
-        s.rabbits.splice(ri, 1);
-        out.rabbits = s.rabbits;
-        out.chat = { from: "🐇", msg: L.rabbitCaughtChat(f.name) };
-        // Défi "chasse aux lapins" (chantier 2026-07, demande Guillaume) : si
-        // un défi est actif, cette capture compte pour le compteur personnel
-        // du fermier. Indexé par id de fermier (pas par index de tableau,
-        // contrairement aux animaux/loups) : reste valide quel que soit
-        // l'ordre des captures ou des (re)connexions pendant le défi.
-        const rc = s.rabbitChallenge;
-        if (rc && rc.active) {
-          rc.catches[req.id] = (rc.catches[req.id] || 0) + 1;
-          if (rc.catches[req.id] >= C.RABBIT_CHALLENGE_TARGET) {
-            // Victoire : le défi s'arrête, le gagnant reçoit le trophée 🏆
-            // (correctif 2026-07 : affiché temporairement pendant
-            // C.HAT_DISPLAY_MS, plus permanent — voir farmer.hatUntil /
-            // p.hatWon, même mécanique de diffusion que le statut "blessé").
-            rc.active = false;
-            f.hatUntil = Date.now() + C.HAT_DISPLAY_MS;
-            out.hatWon = { id: f.id, hatUntil: f.hatUntil };
-            out.chat = { from: "🏆", msg: L.rabbitChallengeWon(f.name) };
-          }
-          out.rabbitChallenge = rc;
-        }
-      } else out.toast = { id: f.id, key: "actionFailed" };
+    // Zip 366 : la branche `catchRabbit` a disparu d'ici. Les lapins étant
+    // désormais simulés par chaque client (voir updateRabbits), l'hôte n'a
+    // plus la liste de l'invité et ne peut plus rien arbitrer : la capture se
+    // résout en local, chez celui qui joue (voir catchRabbitLocal).
+    //
+    // Le DÉFI multijoueur « chasse aux lapins » est retiré avec elle (décision
+    // Guillaume). Le mécanisme du CHAPEAU-TROPHÉE est en revanche conservé
+    // INTACT et dormant — `hatUntil` sur le fermier, diffusion `hatWon`, rendu
+    // sur le personnage, persistance : tout fonctionne, plus rien ne le
+    // déclenche. C'est volontaire : Guillaume veut pouvoir remettre plus tard
+    // des défis occasionnels, avec synchronisation temporaire des bêtes à
+    // chasser. Il suffira d'assigner `f.hatUntil` et d'émettre `out.hatWon`
+    // depuis le nouveau défi, sans rien réécrire.
     } else if (req.kind === "coopDeposit") {
       const r = E.resolveCoopDeposit(f, s.coop, req);
       if (r.invChanged) out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
@@ -4090,6 +4064,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (p.horses) { sharedRef.current.horses = p.horses; syncBuildings(); }
     if (p.animals) { sharedRef.current.animals = p.animals; syncBuildings(); }
     if (p.wolves) { sharedRef.current.wolves = p.wolves; minimapDirtyRef.current = true; }
+    // Zip 366 : plus personne n'émet `rabbits` (simulation locale, voir
+    // updateRabbits). Ce handler est CONSERVÉ volontairement : c'est la
+    // couture par laquelle un futur défi de chasse à plusieurs pourra
+    // re-synchroniser temporairement les lapins, sans rien réécrire.
     if (p.rabbits) { sharedRef.current.rabbits = p.rabbits; minimapDirtyRef.current = true; }
     // 2026-07 station update. Echo guard (!isHost): the host simulates the
     // visitor continuously, its own echo must NEVER overwrite the live
@@ -4211,7 +4189,6 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (p.sugar !== undefined) { sharedRef.current.sugar = p.sugar; setSugar(p.sugar); }
     if (p.gregStock !== undefined) { sharedRef.current.gregStock = p.gregStock; setGregStock(p.gregStock); }
     if (p.fertilizerShop !== undefined) { sharedRef.current.fertilizerShop = p.fertilizerShop; setFertilizerShop(p.fertilizerShop); }
-    if (p.rabbitChallenge !== undefined) { sharedRef.current.rabbitChallenge = p.rabbitChallenge; setRabbitChallenge(p.rabbitChallenge); }
     if (p.hatWon) {
       // Diffusion du trophée gagné (correctif 2026-07 : temporaire, voir
       // C.HAT_DISPLAY_MS) : même principe que `p.injured` pour la blessure —
@@ -4284,23 +4261,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         broadcastChat("🚧", L.coopStarted(lang === "en" ? def.nameEn : def.name));
         dirtyRef.current = true;
       }
-      // Défi "chasse aux lapins" (chantier 2026-07, demande Guillaume) :
-      // contrairement à la mission collaborative ci-dessus (auto-démarrée),
-      // ce défi n'est JAMAIS déclenché automatiquement — seulement PROPOSÉ à
-      // l'hôte (popup locale, `rabbitChallengeOffer`, jamais partagée aux
-      // autres joueurs) tant qu'aucun défi n'est déjà en cours et qu'au moins
-      // `RABBIT_CHALLENGE_MIN_PLAYERS` fermiers sont en ligne en même temps.
-      // C'est l'hôte qui choisit ensuite d'activer réellement le défi (voir
-      // `activateRabbitChallenge`). Un seul jet par tick tant que la popup
-      // n'a pas déjà été proposée (`rabbitChallengeOfferRef`), pour éviter de
-      // la faire réapparaître en boucle si l'hôte l'ignore sans la fermer.
-      if (!s.rabbitChallenge && online >= C.RABBIT_CHALLENGE_MIN_PLAYERS && !rabbitChallengeOfferRef.current
-        && (s.day - rabbitLastOfferDayRef.current) >= C.RABBIT_CHALLENGE_MIN_DAYS
-        && Math.random() < C.RABBIT_CHALLENGE_OFFER_CHANCE) {
-        rabbitLastOfferDayRef.current = s.day; // zip 262 : au plus 1 proposition / 3 jours ingame
-        rabbitChallengeOfferRef.current = true;
-        setRabbitChallengeOffer(true);
-      }
+      // Zip 366 : la proposition du défi « chasse aux lapins » était ici. Elle
+      // est retirée avec le défi (les lapins ne sont plus partagés). Le tirage
+      // tournait à chaque tick 1 Hz sur l'hôte ; c'est autant en moins.
       // Repousse d'herbe (chantier 2026-07, demande Guillaume) : contrairement
       // au lampadaire/épouvantail (état "prêt" purement dérivé à l'affichage,
       // jamais de mutation du monde), une case G_GRASS_GROWING doit finir par
@@ -5010,10 +4973,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (ai >= 0) { heldAnimalRef.current = ai; setCarryingAnimal(true); sendReq({ kind: "pickAnimal", animal: ai }); }
         else {
           // Aucun animal de ferme visé : tente d'attraper un lapin sauvage
-          // proche (chantier 2026-07, demande Guillaume). Résolution
-          // immédiate côté hôte, pas de portage (voir req "catchRabbit").
-          const rid = nearestPickableRabbit(tt);
-          if (rid) sendReq({ kind: "catchRabbit", rabbit: rid });
+          // proche (chantier 2026-07, demande Guillaume). Pas de portage.
+          // Zip 366 : résolu EN LOCAL, plus par l'hôte — voir catchRabbitLocal.
+          catchRabbitLocal(tt);
           actAnimRef.current = 0;
         }
       } else {
@@ -5118,9 +5080,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // Id du lapin sauvage le plus proche de la case visée `tt` (outil
   // "déplacer", chantier 2026-07) : même style que nearestPickableAnimal,
   // mais renvoie un id (pas un index — le tableau des lapins bouge sans
-  // arrêt côté hôte, un index se périmerait). N'exclut PAS les lapins en
-  // fuite ici : c'est resolveReq côté hôte qui tranche si la capture réussit
-  // (voir req "catchRabbit"), le client se contente de viser le plus proche.
+  // arrêt, un index se périmerait). N'exclut PAS les lapins en fuite ici :
+  // zip 366, c'est catchRabbitLocal qui tranche si la capture réussit, cette
+  // fonction se contente de viser le plus proche.
   function nearestPickableRabbit(tt) {
     const rabbits = sharedRef.current.rabbits || [];
     let best = null, bd = C.RABBIT_CATCH_PICK_RADIUS; // FIX 246 : ciblage élargi (1.3 -> 2.2)
@@ -5129,6 +5091,39 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (d <= bd) { bd = d; best = rb.id; }
     }
     return best;
+  }
+  // ======================================================================
+  // Zip 366 — CAPTURE D'UN LAPIN, RÉSOLUE EN LOCAL.
+  //
+  // Elle passait par `sendReq({kind:"catchRabbit"})` : l'hôte vérifiait la
+  // portée sur SA liste, puis rediffusait le tableau. Ce chemin n'a plus de
+  // sens — l'hôte n'a plus les lapins de l'invité et ne peut donc plus rien
+  // arbitrer. Chacun résout sa propre capture, avec exactement les mêmes
+  // règles qu'avant (portée, tolérance sur un lapin qui vient de détaler).
+  //
+  // Aucun risque de triche introduit : le code d'origine dit explicitement
+  // que la capture est « pour le fun, sans aucun effet économique ». Un lapin
+  // attrapé ne rapporte rien — il disparaît, et l'événement est annoncé.
+  //
+  // Reste UNE diffusion : la ligne de chat. C'est un moment social (« X a
+  // attrapé un lapin ! »), rare, et c'est désormais la seule trace partagée
+  // de ces bêtes. Bilan par capture : 1 message au lieu de 2 (req + apply).
+  // ======================================================================
+  function catchRabbitLocal(tt) {
+    const s = sharedRef.current, m = meRef.current;
+    if (!m) return;
+    const rid = nearestPickableRabbit(tt);
+    if (!rid) return;
+    const ri = (s.rabbits || []).findIndex(r => r.id === rid);
+    const rb = ri >= 0 ? s.rabbits[ri] : null;
+    if (!rb) return;
+    const d = Math.hypot(m.x - rb.x, m.y - rb.y);
+    // Règle inchangée (FIX 246) : à portée ET soit pas en fuite, soit en fuite
+    // mais très proche — un lapin qui détale sous la main reste saisissable.
+    if (!(d <= C.RABBIT_CATCH_RANGE && (rb.phase !== "flee" || d <= C.RABBIT_CATCH_FLEE_GRACE))) return;
+    s.rabbits.splice(ri, 1);
+    minimapDirtyRef.current = true;
+    broadcastChat("🐇", L.rabbitCaughtChat(m.name)); // ajoute déjà l'écho local (self:false), ne pas doubler avec addChat
   }
   // Index d'un animal (dans sharedRef.animals) à portée et prêt à ramasser.
   function nearestCollectable() {
@@ -5401,11 +5396,56 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // fois, C.RABBIT_RESPAWN_MS) plutôt que d'un coup, pour ne pas donner
   // l'impression d'un "pop" instantané et pour laisser le repop se faire loin
   // du regard des joueurs (E.rabbitSpawnPos, "zones éloignées de la maison").
+  // ======================================================================
+  // Zip 366 — LES LAPINS PASSENT EN SIMULATION LOCALE (décision Guillaume :
+  // « mettre les lapins sur le même état que les canards »).
+  //
+  // Jusqu'ici : simulés par l'HÔTE seul, tableau complet diffusé à 2 Hz —
+  // ~2 msg/s et ~5,7 ko/s en continu, l'un des deux plus gros flux du jeu,
+  // pour une faune que le code lui-même qualifie de sans effet économique
+  // (« pour le fun », voir la capture). Chaque client les simule désormais
+  // pour son propre compte : PLUS AUCUN MESSAGE, jamais.
+  //
+  // Modèle repris des canards décoratifs (voir la boucle de rendu) :
+  // placement initial tiré de la GRAINE DE LA FERME, donc identique chez tous
+  // les joueurs, puis dérive locale libre. Concrètement : au début d'une
+  // session, « regarde le lapin là-bas » a du sens pour les deux joueurs ;
+  // l'accord se dissipe ensuite au fil des fuites, captures et repops. C'est
+  // exactement l'incohérence assumée par Guillaume — les déplacements de ces
+  // bêtes n'ont pas à être communs.
+  //
+  // POUR RÉ-SYNCHRONISER PLUS TARD (défi de chasse à plusieurs, intention
+  // exprimée par Guillaume) : tout le chemin partagé est conservé et inerte.
+  // Il suffit de rétablir la diffusion `{ rabbits: s.rabbits }` côté hôte et
+  // de re-restreindre l'appel de cette fonction à l'hôte (voir la boucle
+  // principale) ; le handler `p.rabbits` d'applyDeltas est resté en place
+  // pour ça, et le mécanisme du chapeau-trophée est lui aussi conservé
+  // dormant (voir hatWon/hatUntil).
+  // ======================================================================
   function updateRabbits(dt) {
     const w = worldRef.current; if (!w) return;
     const s = sharedRef.current;
     const now = Date.now();
     if (!s.rabbits) s.rabbits = [];
+    // Peuplement initial commun : même graine -> mêmes points d'apparition
+    // chez tous les joueurs, comme les canards. Fait une seule fois par
+    // session ; les repops ultérieurs sont libres (Math.random) et divergent.
+    if (!rabbitSeedDoneRef.current) {
+      rabbitSeedDoneRef.current = true;
+      let rs = ((s.seed || 1) ^ 0x9e37) >>> 0;
+      const srnd = () => { rs = (rs * 1103515245 + 12345) & 0x7fffffff; return rs / 0x7fffffff; };
+      const tmin0 = E.gameTimeMin(s.dayStartAt, now);
+      const n0 = E.isNightTime(tmin0) ? C.RABBIT_COUNT_NIGHT : C.RABBIT_COUNT_DAY;
+      for (let i = s.rabbits.length; i < n0; i++) {
+        const p0 = E.rabbitSpawnPos(w, srnd);
+        s.rabbits.push({
+          id: "rabbit" + (rabbitSeqRef.current++) + "_seed" + i, x: p0.x, y: p0.y, tx: p0.x, ty: p0.y, dir: 2, animT: 0,
+          state: "stop", phase: "roam", roamAnchor: { x: p0.x, y: p0.y }, roamTarget: null, nextRoamAt: 0,
+          nextNoticeAt: 0, fleeUntil: 0, homeSide: E.riverSideOf(w, p0.x, p0.y),
+        });
+      }
+      minimapDirtyRef.current = true;
+    }
     const tmin = E.gameTimeMin(s.dayStartAt, now);
     const target = E.isNightTime(tmin) ? C.RABBIT_COUNT_NIGHT : C.RABBIT_COUNT_DAY;
 
@@ -5438,13 +5478,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       changed = true;
     }
     if (changed) {
-      // Zip 364 : garde ajoutée. Le repop/dépop de lapins tourne en permanence
-      // (régime jour/nuit) et diffusait le tableau complet même sans personne
-      // en ligne. La population n'est pas un état persistant partagé : un
-      // invité qui arrive reçoit la liste par l'instantané.
-      if (netCanBroadcast()) channelRef.current?.send({ type: "broadcast", event: "apply", payload: { rabbits: s.rabbits } });
+      // Zip 366 : plus aucune diffusion ici — chaque client gère sa propre
+      // population (voir l'en-tête de cette fonction).
       minimapDirtyRef.current = true;
-      rabbitAccumRef.current = 0;
       return;
     }
     if (!s.rabbits.length) return;
@@ -5565,11 +5601,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       } else rb.animT = 0;
     }
     if (moved) minimapDirtyRef.current = true;
-    rabbitAccumRef.current += dt;
-    if (rabbitAccumRef.current >= 0.5 && netCanBroadcast() && anyRemoteNearList(s.rabbits)) {
-      rabbitAccumRef.current = 0;
-      channelRef.current?.send({ type: "broadcast", event: "apply", payload: { rabbits: s.rabbits } });
-    }
+    // Zip 366 : c'était ICI le flux périodique le plus coûteux du jeu avec les
+    // créatures maléfiques — tableau complet des 10 lapins à 2 Hz (~2 msg/s,
+    // ~5,7 ko/s). Supprimé : chaque client simule les siens.
   }
   // Loups (chantier 2026-07, demande Guillaume). Simulation HÔTE UNIQUEMENT,
   // même esprit que updateWhistledHorses : positions dérivées frame par
@@ -7783,25 +7817,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const voyagerDraftDays = () => voyagerDraftLines().reduce((mx, l) => { const g = C.WORLD_GOODS.find(x => x.key === l.key); return g ? Math.max(mx, (C.VOYAGE_TIERS[g.tier] || C.VOYAGE_TIERS.proche).days) : mx; }, 0);
   const sendVoyagerOrder = () => { const order = voyagerDraftLines(); if (!order.length) return; sendReq({ kind: "voyagerOrder", order }); setVoyagerDraft({}); setVoyagerOrderOpen(false); setEmployeesOpen(false); };
   const sellWorldGood = (key, n) => sendReq({ kind: "voyagerSell", item: key, n });
-  // Défi "chasse aux lapins" (chantier 2026-07) : actions RÉSERVÉES à l'hôte
-  // (c'est lui qui reçoit la popup de proposition, jamais les autres
-  // joueurs) — pas de requête réseau ici, l'hôte modifie directement son
-  // propre état partagé puis le diffuse, comme pour le démarrage d'une
-  // mission collaborative un peu plus haut.
-  function activateRabbitChallenge() {
-    const s = sharedRef.current;
-    s.rabbitChallenge = { active: true, catches: {}, startedAt: Date.now() };
-    setRabbitChallenge(s.rabbitChallenge);
-    setRabbitChallengeOffer(false); rabbitChallengeOfferRef.current = false;
-    channelRef.current?.send({ type: "broadcast", event: "apply", payload: { rabbitChallenge: s.rabbitChallenge } });
-    broadcastChat("🐇", L.rabbitChallengeStarted(C.RABBIT_CHALLENGE_TARGET));
-    dirtyRef.current = true;
-  }
-  function dismissRabbitChallengeOffer() {
-    // Ignorer la proposition ne bloque pas définitivement : `rabbitChallengeOfferRef`
-    // est relâché pour qu'un futur tirage puisse la reproposer plus tard.
-    setRabbitChallengeOffer(false); rabbitChallengeOfferRef.current = false;
-  }
+  // Zip 366 : `activateRabbitChallenge` / `dismissRabbitChallengeOffer`
+  // retirées avec le défi. Pour un futur défi de chasse à plusieurs, le modèle
+  // à reprendre est celui-ci : état sur sharedRef, diffusé par l'hôte, plus
+  // une synchronisation TEMPORAIRE des bêtes concernées (voir l'en-tête de
+  // updateRabbits, qui décrit précisément comment les repasser en partagées).
   const sellProduct = (type) => sendReq({ kind: "sell", item: "product", product: type, n: 9999 });
 
   // -------- Passage sombre / carte maléfique (chantier 2026-07, demande
@@ -8095,7 +8115,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       updateMe(dt);
       if (isHost) updateWhistledHorses(dt);
       if (isHost) updateWolves(dt);
-      if (isHost) updateRabbits(dt);
+      updateRabbits(dt); // zip 366 : plus réservé à l'hôte — chaque client simule SES lapins, décoratifs et non diffusés (motif canard)
       if (isHost) updateSharedEvilMonsters(dt); // créatures maléfiques partagées (2026-07)
       if (isHost) updateGreg(dt);
       if (isHost) updateVisitors(dt); // 2026-07 station update (zip 233: multi-visitor)
@@ -8757,7 +8777,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // d'animation que les loups (cycle piloté par animT/state), silhouette
       // bien plus petite/basse.
       for (const rb of (sharedRef.current.rabbits || [])) {
-        const rp = isHost ? rb : smoothNpc("rabbit:" + rb.id, rb.x, rb.y, dt, false, false, null); // FIX 246 : easing seul, pas d'incohérence visuelle
+        // Zip 366 : plus de lissage réseau. Le lapin est simulé LOCALEMENT,
+        // frame par frame — sa position est donc déjà exacte et continue chez
+        // tout le monde. smoothNpc ne servait qu'à masquer les paliers d'un
+        // flux reçu à 2 Hz ; l'appliquer maintenant ne ferait qu'ajouter du
+        // retard à une position parfaite.
+        const rp = rb;
         draws.push({ y: (rp.y + 1) * T, fn: () => {
           const frame = rb.state === "stop" ? 0 : Math.floor((rb.animT || 0) % 3);
           const img = sprites.rabbit[frame];
@@ -12422,28 +12447,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         );
       })()}
 
-      {/* Défi "chasse aux lapins" en cours (chantier 2026-07) : progression
-          PERSONNELLE du joueur affichant l'écran (chacun voit son propre
-          compteur, pas celui des autres — suffisant pour "qui gagnera en
-          premier", pas besoin d'un classement complet pour un mini-défi). */}
-      {rabbitChallenge && rabbitChallenge.active && (
-        <div className="ferme-rabbit-challenge panel">
-          {L.rabbitChallengeProgress(Math.min((rabbitChallenge.catches && rabbitChallenge.catches[me.id]) || 0, C.RABBIT_CHALLENGE_TARGET), C.RABBIT_CHALLENGE_TARGET)}
-        </div>
-      )}
-
-      {/* Popup de proposition du défi lapins, hôte uniquement (jamais montrée
-          aux autres joueurs — c'est l'hôte seul qui choisit de l'activer). */}
-      {isHost && rabbitChallengeOffer && (
-        <div className="ferme-modal open" onClick={dismissRabbitChallengeOffer}>
-          <div className="panel ferme-modal-panel" onClick={e => e.stopPropagation()} style={{ width: "min(360px, 92vw)", textAlign: "center" }}>
-            <h2>{L.rabbitChallengeOfferTitle}</h2>
-            <div className="ferme-hint">{L.rabbitChallengeOfferSub(C.RABBIT_CHALLENGE_TARGET)}</div>
-            <button onClick={activateRabbitChallenge}>{L.rabbitChallengeActivate}</button>{" "}
-            <button onClick={dismissRabbitChallengeOffer}>{L.rabbitChallengeIgnore}</button>
-          </div>
-        </div>
-      )}
+      {/* Zip 366 : encart de progression et popup de proposition du défi
+          "chasse aux lapins" retirés avec le défi lui-même. */}
 
       {/* Chat */}
       <div className="ferme-chatlog">{[...chat].reverse().map(c => <div key={c.id}><b>{c.from}</b> {c.msg}</div>)}</div>

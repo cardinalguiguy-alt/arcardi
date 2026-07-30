@@ -1123,22 +1123,20 @@ export const RABBIT_EAST_BIAS = 0.8;       // proba. de favoriser la rive droite
 export const RABBIT_RESPAWN_MS = 7000;     // délai minimum entre deux réapparitions (repop progressif, pas instantané)
 export const RABBIT_FLEE_HOP_PX = 5;       // amplitude (pixels) du bond visuel en fuite (demande 2026-07, roam inchangé)
 
-// --- Défi "chasse aux lapins" (chantier 2026-07, demande Guillaume) ---
-// Popup proposée aléatoirement à l'HÔTE (jamais démarrée automatiquement,
-// contrairement aux missions collaboratives, voir COOP_MISSIONS) tant qu'au
-// moins 2 fermiers sont en ligne simultanément et qu'aucun défi n'est déjà en
-// cours. Le premier fermier à atteindre RABBIT_CHALLENGE_TARGET captures
-// (voir req "catchRabbit") remporte le défi et gagne un chapeau (cosmétique,
-// purement pour le fun, comme la capture de lapin elle-même).
-export const RABBIT_CHALLENGE_MIN_PLAYERS = 2;   // nombre minimum de fermiers en ligne en même temps pour proposer le défi
-export const RABBIT_CHALLENGE_TARGET = 3;        // nombre de lapins à capturer pour gagner
-export const RABBIT_CHALLENGE_OFFER_CHANCE = 1 / 240; // proba. par tick (1 Hz) de proposer le défi à l'hôte (quand les conditions sont réunies)
-export const RABBIT_CHALLENGE_MIN_DAYS = 3;      // Zip 262 (demande Guillaume) : au plus UNE proposition tous les 3 jours ingame chez l'hôte
+// --- Défi "chasse aux lapins" : RETIRÉ (zip 366) ---
+// Les lapins sont désormais simulés localement par chaque client, comme les
+// canards décoratifs (voir updateRabbits dans FermeGame.js) : ils ne
+// consomment plus aucun message temps réel. Une course au premier arrivé n'a
+// donc plus de sens — chaque joueur voit des lapins différents.
+// Pour un futur défi de chasse à plusieurs (intention de Guillaume), il
+// faudra rétablir une synchronisation TEMPORAIRE des bêtes concernées pendant
+// la durée du défi seulement. Le trophée ci-dessous est resté en place
+// exprès, prêt à être réutilisé.
 // Trophée 🏆 du gagnant (correctif 2026-07, demande Guillaume : "il doit
 // disparaitre au bout de 15 minutes") : n'est plus permanent, affiché
 // seulement pendant HAT_DISPLAY_MS après la victoire (voir farmer.hatUntil,
 // même mécanique d'horodatage que injuredUntil).
-export const HAT_DISPLAY_MS = 15 * 60 * 1000;    // durée d'affichage du trophée après la victoire du défi lapins
+export const HAT_DISPLAY_MS = 15 * 60 * 1000;    // durée d'affichage du trophée après une victoire. Zip 366 : plus aucune source ne l'attribue (défi lapins retiré) — mécanisme conservé intact pour un futur défi.
 
 // --- Torche (chantier 2026-07) : objet équipable (bouton dédié, comme le
 // sifflet à chevaux), pas un slot d'outil numéroté. Éclaire comme un
