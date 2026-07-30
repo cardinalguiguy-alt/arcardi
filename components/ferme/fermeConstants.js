@@ -620,7 +620,11 @@ export const SUCRERIE_CANE_PER_SACK = 1;     // inchangé : 1 canne consommée p
 // et la cadence est alignée sur le moulin (5 min, au lieu de 8 min).
 export const SUCRERIE_SACKS_PER_BATCH = 2;   // 1 canne -> 2 sacs de sucre par cycle
 export const SUCRERIE_BATCH_MS = 5 * 60 * 1000; // 5 min réelles/cycle, aligné sur MILL_BATCH_MS
-export const SUCRERIE_STOCK_CAP = 90;        // stock de canne max qu'une sucrerie peut contenir (même repère que le moulin)
+// Zip 368 (demande Guillaume : "augmentons la capacité de stockage de la
+// sucrerie en canne, passer à 200") : 90 -> 200. Le moulin (MILL_STOCK_CAP)
+// reste volontairement à 90 — la demande ne portait que sur la sucrerie, et
+// c'est le seul endroit où les deux bâtiments cessent d'être des miroirs.
+export const SUCRERIE_STOCK_CAP = 200;       // stock de canne max qu'une sucrerie peut contenir
 export const SUCRERIE_SPEED_MIN_MULT = 1;    // miroir de MILL_SPEED_MIN_MULT (parallélisme par répartition du dépôt, pas de boost par sucrerie)
 export const SUGAR_SELL = 70;                // prix de vente d'un sac de sucre (extrapolé au-dessus de FLOUR_SELL, sucre = ressource plus rare)
 // Chantier reprise (demande Guillaume) : la sucrerie devient un vrai
@@ -823,41 +827,27 @@ export const ANIMALS = [
 // echelle coherente pour le reste du cheptel. Indexe par `id` d'ANIMALS :
 // [poule, chevre, brebis, cochon, vache].
 export const ANIMAL_DRAW_SCALE = [1, 1.35, 1.25, 1.4, 1.7];
-// --- Missions collaboratives (v1, "grandes lignes" — demande 2026-07) ---
-// Se déclenchent automatiquement dès que 2 fermiers sont en ligne en même
-// temps (voir hostMaybeStartCoop dans FermeGame.js) : une caisse commune de
-// chantier, matérialisée par un point sur la carte (COOP_SITE), avec 2
-// "parties" à remplir (chacune une ressource différente, bois ou pierre).
-// Un fermier qui s'approche du chantier (touche E, comme la boutique/le bac)
-// et qui porte la ressource d'une partie pas encore terminée y dépose
-// automatiquement ce qu'il faut (jusqu'au manquant) : en pratique, celui qui
-// apporte du bois avance une partie, celui qui apporte de la pierre avance
-// l'autre, donc à 2 chacun a naturellement "sa" partie. Version volontaire-
-// ment simple : pas d'assignation stricte par joueur, pas encore de variété
-// dans les chantiers au-delà de bois/pierre — à affiner ensuite.
-export const COOP_SITE = { x: 44, y: 42 };
-export const COOP_MISSIONS = [
-  {
-    id: "irrigation",
-    name: "Système d'irrigation",
-    nameEn: "Irrigation system",
-    parts: [
-      { id: "A", resource: "wood", target: 40, label: "Canalisations (bois)", labelEn: "Piping (wood)" },
-      { id: "B", resource: "stone", target: 30, label: "Bassin (pierre)", labelEn: "Basin (stone)" },
-    ],
-    reward: 400,
-  },
-  {
-    id: "houseext",
-    name: "Agrandir la maison",
-    nameEn: "House extension",
-    parts: [
-      { id: "A", resource: "wood", target: 60, label: "Charpente (bois)", labelEn: "Framing (wood)" },
-      { id: "B", resource: "stone", target: 40, label: "Fondations (pierre)", labelEn: "Foundations (stone)" },
-    ],
-    reward: 600,
-  },
-];
+// --- Missions d'équipe : SUPPRIMÉES au zip 368 -----------------------------
+// Demande Guillaume : "supprimer l'animation de team mission qui flotte (le
+// chantier qui bounce). C'est pas intéressant" -> puis, en arbitrage :
+// "supprimer celui de la mission d'équipe totalement, ainsi que la mission
+// d'équipe associée".
+// Étaient définis ici COOP_SITE (le point de dépôt, x44 y42) et COOP_MISSIONS
+// (deux chantiers tirés au sort, irrigation et agrandissement de la maison,
+// avec leurs cibles bois/pierre et leur récompense en or). Tout le système est
+// parti avec eux : déclenchement automatique à 2 joueurs en ligne, dépôt par
+// la touche E, panneau HUD, marqueur flottant, lignes de chat, champ `coop`
+// dans l'état partagé et dans la persistance, et le +2 de farmPopularity.
+// Une vieille sauvegarde peut encore contenir un champ `coop` : il est
+// simplement IGNORÉ au chargement (aucune lecture ne subsiste), les
+// ressources qui y avaient été déposées sont perdues — arbitrage assumé de
+// Guillaume, au maximum 60 bois et 40 pierre une seule fois.
+// À NE PAS confondre avec la GRANGE collaborative (BARN_LEVELS/BARN_SITE
+// ci-dessous), qui reste en place : c'est le chantier coopératif PERSISTANT,
+// et lui seul. Deux chaînes de texte portent encore le préfixe "coop" parce
+// que le dépôt à la grange les réutilise : `toastCoopNothing`, et
+// `woodLabel`/`stoneLabel`.
+
 // --- Grange collaborative (zip 158) : premier "chantier persistant" issu ---
 // des missions d'équipe (voir section 0 du contexte). Contrairement à
 // COOP_SITE/COOP_MISSIONS (missions aléatoires, temporaires, tirées au
@@ -1598,7 +1588,14 @@ export const TJ_BRAWL_ITT_MS = DAY_REAL_MS; // 24h in-game d'indisponibilité (i
 // résolution (TJ_BRAWL_IMMINENT_DELAY_MS) — suivie d'un mot de la fin
 // (TJ_REACT_AFTER_MS) : ~10s tension + ~15s bagarre + ~6s mot de la fin =
 // altercation visible ~31s tout compris.
-export const TJ_TENSION_TOTAL_MS = 10000; // durée totale visée pour la montée de tension (répartie sur les répliques de la scène)
+// Zip 368 (demande Guillaume : "les répliques de Tristan et Jérôme
+// s'enchaînent un peu vite") : 10 000 -> 22 000 (×2,2, valeur choisie par
+// Guillaume). La durée d'UNE réplique est calculée par division (voir stepMs
+// dans residentRoam) : les scènes font de 4 à 10 répliques, donc la réplique
+// moyenne passe d'environ 1,4 s à 3,1 s. La bagarre
+// (TJ_BRAWL_IMMINENT_DELAY_MS) et le mot de la fin (TJ_REACT_AFTER_MS) sont
+// inchangés : la scène complète passe d'environ 31 s à environ 43 s.
+export const TJ_TENSION_TOTAL_MS = 22000; // durée totale visée pour la montée de tension (répartie sur les répliques de la scène)
 export const TJ_BRAWL_IMMINENT_DELAY_MS = 15000; // durée de la bagarre elle-même (au moins 15s), une fois le jet de bagarre positif
 export const TJ_REACT_STAGGER_MIN_MS = 0;    // décalage avant qu'UN PNJ donné se mette en route : borne basse
 export const TJ_REACT_STAGGER_MAX_MS = 1600; // décalage avant qu'UN PNJ donné se mette en route : borne haute (l'attroupement ne part pas tout d'un bloc)
@@ -1620,6 +1617,18 @@ export const TJ_REACT_LINE_PERIOD_MS = 2800; // cycle d'affichage des commentair
 // (rid % TJ_REACT_TALK_SLOTS) — un seul tiers de la foule montre sa bulle à
 // la fois, le reste attend son tour (voir le rendu, boucle résidents/visiteurs).
 export const TJ_REACT_TALK_SLOTS = 3;
+// Zip 368 (demande Guillaume : "la lisibilité est mauvaise pour les
+// commentaires du public. Afficher deux fois moins de commentaires du public,
+// et moins simultané"). Les 3 tours tournants ci-dessus répartissaient déjà
+// l'affichage, mais TOUTE la foule finissait par parler. Ici, un PNJ sur
+// TJ_REACT_TALK_EVERY seulement commente la scène — les autres restent
+// muets du début à la fin. Sélection par `rid % TJ_REACT_TALK_EVERY`, donc
+// DÉTERMINISTE et identique chez tous les joueurs (aucun message réseau, et
+// pas de bavard différent d'un écran à l'autre).
+// Réglage retenu par Guillaume : 2, soit un commentateur sur deux, ce qui
+// divise par deux à la fois le NOMBRE de commentaires et le nombre de bulles
+// affichées simultanément. Mettre 1 pour revenir au comportement du zip 363.
+export const TJ_REACT_TALK_EVERY = 2;
 export const TJ_REACT_AFTER_MS = 6000; // mot de la fin affiché avant de repartir, une fois la bagarre résolue (voir TJ_BRAWL_IMMINENT_DELAY_MS pour le total ~30s)
 // Chantier v363 "plus aucun PNJ figé" (bug remonté par Guillaume : Eduardo
 // « reste figé et ne circule plus ») : l'attroupement se déplace en LIGNE
@@ -1902,7 +1911,19 @@ export const UNIQUE_PETS = [
 // constante (sac, resolveCatchPet, migrateFarmer .slice, textes FR/EN "n / max")
 // -- SAUF l'eventail de suivi de drawPetsFor, qui supposait exactement deux
 // pets (`i === 0 ? -0.45 : 0.45`) : corrige dans le meme zip, voir FermeGame.js.
-export const MAX_PETS = 4;
+//
+// Zip 368 (demande Guillaume : "pouvoir garder ses animaux personnels dans son
+// bag, et pouvoir les WALK en les choisissant : up to 4 pets at once") : les
+// deux notions sont désormais SÉPARÉES.
+//   MAX_PETS         = ce qu'on peut POSSÉDER, rangé dans le sac ;
+//   MAX_PETS_WALKING = ce qu'on peut sortir EN BALADE en même temps.
+// Valeurs retenues par Guillaume : 8 et 4. Un familier porte un drapeau `out`
+// (voir resolveSetPetWalking/migrateFarmer, fermeEngine.js) ; seuls les
+// familiers en balade sont dessinés et diffusés aux autres joueurs. La règle
+// du zip 236 (« pour en attraper un nouveau, il faut en relâcher un ») ne
+// mord donc plus qu'à 8, et la collection devient un objectif en soi.
+export const MAX_PETS = 8;
+export const MAX_PETS_WALKING = 4;
 // Zip 251 (demande Guillaume : "réduire les familiers à ~la taille d'une
 // poule") : facteur d'échelle appliqué au RENDU du pet (sprite 16x16 dessiné
 // à PET_DRAW_SCALE * 16 px, ancré par le bas). Purement visuel, ajustable.

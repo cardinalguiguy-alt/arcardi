@@ -789,7 +789,6 @@ export const FERME_STR = {
     // Invites de proximité
     promptShop: "[E] Boutique",
     promptBin: "[E] Vendre",
-    promptCoop: "[E] Déposer au chantier",
     promptBarn: "[E] Déposer à la grange",
     promptBarnBuild: "[E] Construire (mini-jeu)",
     promptSleep: "[E] Dormir",
@@ -820,15 +819,14 @@ export const FERME_STR = {
     toastBarnReadyWait: "La grange est prête à être construite : appuie sur E pour lancer le mini-jeu.",
     toastBarnNotReady: "Il manque encore des matériaux avant de pouvoir construire.",
     toastBarnNeedMoney: "Le bois et la pierre sont réunis, mais il manque de l'or dans la caisse commune pour lancer les travaux.",
-    // Mission d'équipe (chantier collaboratif, v1)
-    coopTitle: "🚧 Mission d'équipe",
+    // Zip 368 : les textes de la mission d'équipe (coopTitle, coopStarted,
+    // coopDeposited, coopDone, toastCoopNone, toastFarCoop) sont supprimés
+    // avec la mission d'équipe. Les TROIS chaînes ci-dessous restent : le
+    // dépôt à la GRANGE collaborative les réutilise (voir resolveBarnDeposit
+    // et la ligne de chat barnDeposited). Leur nom en "coop"/"Label" est
+    // historique, ne pas s'y fier.
     woodLabel: "bois",
     stoneLabel: "pierre",
-    coopStarted: (name) => `🚧 Nouvelle mission d'équipe : ${name} ! Apportez du bois et de la pierre au chantier.`,
-    coopDeposited: (who, n, res) => `${who} dépose ${n} ${res} au chantier.`,
-    coopDone: (name, reward) => `🎉 Mission accomplie : ${name} (+${reward} or) !`,
-    toastCoopNone: "Aucune mission d'équipe en cours (revenez à 2 en ligne).",
-    toastFarCoop: "Approche-toi du chantier pour déposer.",
     toastCoopNothing: "Tu n'as pas la ressource attendue sur toi (bois ou pierre).",
     // Boutique
     shopTitle: "🛒 Boutique de Pierre",
@@ -1101,6 +1099,14 @@ export const FERME_STR = {
     bagReleaseBtn: "Relâcher",
     bagReleasedToast: (name) => `👋 ${name} retourne à la vie sauvage.`,
     bagPetsFull: (max) => `Sac plein (${max} compagnons). Relâches-en un pour en attraper un autre.`,
+    // Zip 368 : sac (C.MAX_PETS) et balade (C.MAX_PETS_WALKING) sont deux
+    // plafonds distincts — un compagnon rangé reste à toi, il ne te suit plus.
+    bagPetsWalkingLine: (n, max) => `En balade : ${n} / ${max}. Les autres t'attendent dans le sac.`,
+    bagPetWalking: "En balade",
+    bagPetStowed: "Dans le sac",
+    bagWalkBtn: "Sortir",
+    bagStowBtn: "Ranger",
+    bagWalkFull: (max) => `Déjà ${max} compagnons en balade. Ranges-en un pour en sortir un autre.`,
     bagHealTitle: "Soins",
     bagSalveRow: (n) => `Baume d'immunité × ${n}`,
     bagSalveSub: "À utiliser avant d'entrer dans le passage sombre.",
@@ -1697,7 +1703,6 @@ export const FERME_STR = {
     fishTooSoon: "Too soon! It escaped.",
     promptShop: "[E] Shop",
     promptBin: "[E] Sell",
-    promptCoop: "[E] Deposit at site",
     promptBarn: "[E] Deposit at barn",
     promptBarnBuild: "[E] Build (mini-game)",
     promptSleep: "[E] Sleep",
@@ -1728,15 +1733,11 @@ export const FERME_STR = {
     toastBarnReadyWait: "The barn is ready to be built: press E to start the mini-game.",
     toastBarnNotReady: "Still missing some materials before you can build.",
     toastBarnNeedMoney: "Wood and stone are ready, but the shared pot doesn't have enough gold to start the work.",
-    // Team mission (collaborative construction site, v1)
-    coopTitle: "🚧 Team mission",
+    // Zip 368: team-mission strings removed with the feature itself. The three
+    // below stay: the collaborative BARN deposit reuses them (resolveBarnDeposit
+    // and the barnDeposited chat line). Their "coop" name is historical.
     woodLabel: "wood",
     stoneLabel: "stone",
-    coopStarted: (name) => `🚧 New team mission: ${name}! Bring wood and stone to the site.`,
-    coopDeposited: (who, n, res) => `${who} drops ${n} ${res} at the site.`,
-    coopDone: (name, reward) => `🎉 Mission complete: ${name} (+${reward} gold)!`,
-    toastCoopNone: "No team mission running right now (come back with 2+ online).",
-    toastFarCoop: "Get closer to the site to deposit.",
     toastCoopNothing: "You're not carrying the needed resource (wood or stone).",
     shopTitle: "🛒 Pierre's Shop",
     shopHint: "Purchases are paid from the team's shared pot.",
@@ -1979,6 +1980,15 @@ export const FERME_STR = {
     bagReleaseBtn: "Release",
     bagReleasedToast: (name) => `👋 ${name} returns to the wild.`,
     bagPetsFull: (max) => `Bag full (${max} companions). Release one to catch another.`,
+    // Zip 368: bag capacity (C.MAX_PETS) and walking limit (C.MAX_PETS_WALKING)
+    // are two separate caps — a stowed companion is still yours, it just
+    // doesn't follow you around.
+    bagPetsWalkingLine: (n, max) => `Out walking: ${n} / ${max}. The others wait in your bag.`,
+    bagPetWalking: "Out walking",
+    bagPetStowed: "In the bag",
+    bagWalkBtn: "Walk",
+    bagStowBtn: "Stow",
+    bagWalkFull: (max) => `Already ${max} companions out walking. Stow one to take another.`,
     bagHealTitle: "Healing",
     bagSalveRow: (n) => `Immunity salve × ${n}`,
     bagSalveSub: "Use it before entering the dark passage.",

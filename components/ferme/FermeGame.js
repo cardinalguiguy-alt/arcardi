@@ -380,7 +380,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [spritesReady, setSpritesReady] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const [coop, setCoop] = useState(null); // miroir React de sharedRef.current.coop (mission d'équipe en cours)
+  // Zip 368 : `coop` (miroir React de la mission d'équipe) supprimé avec la
+  // mission d'équipe elle-même. Voir fermeConstants.js pour le détail.
   const [barn, setBarn] = useState(null); // miroir React de sharedRef.current.barn (grange persistante)
   const [salveCraft, setSalveCraft] = useState(null); // miroir React de sharedRef.current.salveCraft (chaudron de la pommade)
   const [house, setHouse] = useState({ level: 1, upgradeUntil: 0 }); // miroir React de sharedRef.current.house (maison à niveaux, 2026-07)
@@ -456,7 +457,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const meRef = useRef(null);
   const playersRef = useRef(new Map()); // id -> remote farmer render data
   const farmersRef = useRef({});        // hôte : id -> état privé arbitré
-  const sharedRef = useRef({ seed: 0, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), salveCraft: E.newSalveCraftState(), house: { level: 1, upgradeUntil: 0 }, evilMonsters: [], flour: 0, sugar: 0, gregStock: { wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) }, fertilizerShop: { stock: 0, lastRestockDay: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], greg: null, soan: null, harald: null, station: E.newStationState(), decor: [], crafts: E.newCrafts(), craftStock: E.newCraftStock() });
+  const sharedRef = useRef({ seed: 0, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, barn: E.newBarnState(), salveCraft: E.newSalveCraftState(), house: { level: 1, upgradeUntil: 0 }, evilMonsters: [], flour: 0, sugar: 0, gregStock: { wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) }, fertilizerShop: { stock: 0, lastRestockDay: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], greg: null, soan: null, harald: null, station: E.newStationState(), decor: [], crafts: E.newCrafts(), craftStock: E.newCraftStock() });
   const invRef = useRef(null);
   const toolsRef = useRef({ hoe: 1, can: 1, axe: 1, pick: 1 });
   const energyRef = useRef(C.MAX_ENERGY);
@@ -503,6 +504,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const bagOpenRef = useRef(false); // zip 236
   const [myPets, setMyPets] = useState([]); // zip 236: my individual pets, mirror of me.pets
   const myPetsRef = useRef([]);     // zip 236: draw-loop mirror of myPets
+  // Zip 368 : miroir des seuls familiers EN BALADE (pt.out). C'est cette liste
+  // qui est dessinée et diffusée, pas le sac entier. Pré-calculée dans l'effet
+  // qui suit myPets plutôt que filtrée à chaque frame : la boucle de rendu
+  // n'alloue rien, et pubMe non plus.
+  const walkPetsRef = useRef([]);
   const petFollowRef = useRef(new Map());  // zip 247: smoothed follow positions, per-player-id (self + remotes)
   // Zip 367 : fondu d'apparition des pips de graines. `key` = case actuellement
   // visee ("x,y"), `a` = opacite qui remonte de 0 a 1 en C.PIP_FADE_MS tant que
@@ -634,7 +640,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   useEffect(() => { shopOpenRef.current = shopOpen; }, [shopOpen]);
   useEffect(() => { cauldronMenuOpenRef.current = cauldronMenuOpen; }, [cauldronMenuOpen]);
   useEffect(() => { binOpenRef.current = binOpen; }, [binOpen]);
-  useEffect(() => { myPetsRef.current = myPets; }, [myPets]);
+  useEffect(() => {
+    myPetsRef.current = myPets;
+    // Zip 368 : tolérant aux familiers d'avant ce zip (pas de champ `out`) —
+    // ils suivaient tous le joueur, donc `out` absent = en balade. En pratique
+    // migrateFarmer a déjà tranché, cette tolérance ne sert qu'aux payloads
+    // arrivant d'un client resté sur une version antérieure.
+    walkPetsRef.current = (Array.isArray(myPets) ? myPets : []).filter(pt => pt && (pt.out === undefined || pt.out));
+  }, [myPets]);
   useEffect(() => { bagOpenRef.current = bagOpen; }, [bagOpen]);
   useEffect(() => { slotRef.current = slot; }, [slot]);
   useEffect(() => { handModeRef.current = handMode; }, [handMode]); // zip 251
@@ -773,7 +786,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       sharedRef.current = {
         seed: saved.seed, money: saved.money, day: saved.day, dayStartAt: saved.dayStartAt, totalEarned: saved.totalEarned,
         horses: migrateHorses(saved),
-        animals: saved.animals || [], wellBuilt: !!saved.wellBuilt, coop: saved.coop || null,
+        animals: saved.animals || [], wellBuilt: !!saved.wellBuilt,
         barn: saved.barn || E.newBarnState(),
         salveCraft: saved.salveCraft || E.newSalveCraftState(),
         // Maison à niveaux (validation Guillaume 2026-07) : persiste comme la grange.
@@ -865,7 +878,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       worldRef.current = E.generateWorld(seed);
       for (const ci of E.clearStationArea(worldRef.current)) recordTileOverride(ci); // 2026-07 station update
       overridesRef.current = { ground: {}, object: {} };
-      sharedRef.current = { seed, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, coop: null, barn: E.newBarnState(), salveCraft: E.newSalveCraftState(), house: { level: 1, upgradeUntil: 0 }, evilMonsters: [], gems: C.GEMS.map(() => 0), flour: 0, sugar: 0, gregStock: { wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) }, fertilizerShop: { stock: 0, lastRestockDay: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], greg: null, soan: null, harald: null, station: E.newStationState() };
+      sharedRef.current = { seed, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, barn: E.newBarnState(), salveCraft: E.newSalveCraftState(), house: { level: 1, upgradeUntil: 0 }, evilMonsters: [], gems: C.GEMS.map(() => 0), flour: 0, sugar: 0, gregStock: { wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) }, fertilizerShop: { stock: 0, lastRestockDay: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], greg: null, soan: null, harald: null, station: E.newStationState() };
       farmersRef.current = {};
       // Crée tout de suite l'enregistrement pour réserver le code.
       persistFarm();
@@ -885,7 +898,6 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     setCodeLoading(false);
     setHud(h => ({ ...h, money: sharedRef.current.money, day: sharedRef.current.day }));
-    setCoop(sharedRef.current.coop);
     setBarn(sharedRef.current.barn);
     setSalveCraft(sharedRef.current.salveCraft);
     setHouse(sharedRef.current.house || { level: 1, upgradeUntil: 0 });
@@ -984,7 +996,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     sharedRef.current = {
       seed: payload.seed, money: payload.money, day: payload.day, dayStartAt: payload.dayStartAt, totalEarned: payload.totalEarned,
       horses: payload.horses || (payload.horse && payload.horse.owned ? [{ x: payload.horse.x, y: payload.horse.y, rider: null, rider2: null }] : []),
-      animals: payload.animals || [], wellBuilt: !!payload.wellBuilt, coop: payload.coop || null,
+      animals: payload.animals || [], wellBuilt: !!payload.wellBuilt,
       barn: payload.barn || E.newBarnState(),
       salveCraft: (() => {
         // Correctif audit 2026-07 : même relocalisation d'horloge que dans
@@ -1052,7 +1064,6 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     minimapDirtyRef.current = true;
     setHud(h => ({ ...h, money: payload.money, day: payload.day }));
-    setCoop(sharedRef.current.coop);
     setBarn(sharedRef.current.barn);
     setSalveCraft(sharedRef.current.salveCraft);
     setHouse(sharedRef.current.house || { level: 1, upgradeUntil: 0 });
@@ -1452,7 +1463,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       mills: worldRef.current ? E.serializeMills(worldRef.current) : [],
       sucreries: worldRef.current ? E.serializeSucreries(worldRef.current) : [],
       farmers: farmersRef.current,
-      horses: s.horses, animals: s.animals, wellBuilt: s.wellBuilt, coop: s.coop, barn: s.barn, salveCraft: s.salveCraft, house: s.house, evilMonsters: s.evilMonsters, gems: s.gems, flour: s.flour, sugar: s.sugar, gregStock: s.gregStock, fertilizerShop: s.fertilizerShop, wolves: s.wolves, greg: s.greg, soan: s.soan, harald: s.harald,
+      horses: s.horses, animals: s.animals, wellBuilt: s.wellBuilt, barn: s.barn, salveCraft: s.salveCraft, house: s.house, evilMonsters: s.evilMonsters, gems: s.gems, flour: s.flour, sugar: s.sugar, gregStock: s.gregStock, fertilizerShop: s.fertilizerShop, wolves: s.wolves, greg: s.greg, soan: s.soan, harald: s.harald,
       // Zip 366 : `rabbits` retiré de l'instantané. Chaque client peuple les
       // siens depuis la graine de la ferme (voir updateRabbits) — les envoyer
       // ici les écraserait aussitôt avec ceux de l'hôte, ce qui n'aurait de
@@ -1600,7 +1611,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const f = hostEnsureFarmer(req.id, req.name);
     if (typeof req.px === "number") { f.x = req.px; f.y = req.py; }
     const s = sharedRef.current;
-    const out = { tiles: [], crops: [], mills: null, fx: [], state: null, farmer: null, toast: null, chat: null, horses: null, animals: null, wellBuilt: false, coop: undefined, barn: undefined, salveCraft: undefined, house: undefined };
+    const out = { tiles: [], crops: [], mills: null, fx: [], state: null, farmer: null, toast: null, chat: null, horses: null, animals: null, wellBuilt: false, barn: undefined, salveCraft: undefined, house: undefined };
     let questId = null; // action réussie -> quête à valider éventuellement
     const px = typeof req.px === "number" ? req.px : f.x, py = typeof req.py === "number" ? req.py : f.y;
 
@@ -2459,24 +2470,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // des défis occasionnels, avec synchronisation temporaire des bêtes à
     // chasser. Il suffira d'assigner `f.hatUntil` et d'émettre `out.hatWon`
     // depuis le nouveau défi, sans rien réécrire.
-    } else if (req.kind === "coopDeposit") {
-      const r = E.resolveCoopDeposit(f, s.coop, req);
-      if (r.invChanged) out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
-      if (r.toast) out.toast = { id: f.id, key: r.toast };
-      if (r.deposited > 0) {
-        out.coop = s.coop;
-        out.chat = { from: "🚧", msg: L.coopDeposited(f.name, r.deposited, r.resource === "wood" ? L.woodLabel : L.stoneLabel) };
-        if (r.completed) {
-          const def = C.COOP_MISSIONS.find(m2 => m2.id === s.coop.id);
-          const reward = (def && def.reward) || 0;
-          s.money += reward; out.state = shareState();
-          broadcastChat("🎉", L.coopDone(lang === "en" ? def.nameEn : def.name, reward));
-          // Nouvelle mission tirée aussitôt (tant que 2+ fermiers sont en ligne).
-          s.coop = (playersRef.current.size + 1) >= 2 ? E.pickCoopMission() : null;
-          out.coop = s.coop;
-        }
-        dirtyRef.current = true;
-      }
+    // Zip 368 : la requête "coopDeposit" (dépôt bois/pierre au chantier de la
+    // mission d'équipe) est supprimée avec la mission d'équipe. "barnDeposit"
+    // juste en dessous est son équivalent pour la GRANGE, qui reste.
     } else if (req.kind === "barnDeposit") {
       const r = E.resolveBarnDeposit(f, s.barn, req, s.money);
       if (r.invChanged) out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
@@ -3001,6 +2997,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       out.chat = { from: "✨", msg: L.passageLootToast(r.gold) };
       if (r.pet) out.toast = { id: f.id, key: "petCaught", petId: r.pet.id };
       else if (r.bagFull) out.toast = { id: f.id, key: "bagFull" };
+      return true;
+    }
+    // Zip 368 (demande Guillaume : "pouvoir les WALK en les choisissant") :
+    // sortir un familier du sac, ou le ranger. Arbitré par l'hôte comme la
+    // capture et le relâchement — c'est lui qui détient farmersRef, donc le
+    // plafond de C.MAX_PETS_WALKING ne peut pas être contourné côté client.
+    if (req.kind === "petWalk") {
+      const r = E.resolveSetPetWalking(f, req.index | 0, !!req.walk);
+      if (r.ok) {
+        out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv, pets: f.pets };
+        dirtyRef.current = true; // `out` est persisté avec le fermier
+      } else if (r.full) {
+        out.toast = { id: f.id, key: "walkFull" };
+      }
       return true;
     }
     // Zip 236: release a pet back into the wild (frees a bag slot).
@@ -4016,7 +4026,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (p.farmer && p.farmer.id === me.id) {
       invRef.current = p.farmer.inv; toolsRef.current = p.farmer.tools; energyRef.current = p.farmer.energy;
       setMyInv(p.farmer.inv); setMyTools(p.farmer.tools); setMyEnergy(p.farmer.energy); if (p.farmer.quests) setMyQuests(p.farmer.quests);
-      if (Array.isArray(p.farmer.pets)) setMyPets(p.farmer.pets); // zip 236
+      // Zip 368 — COPIE, et non la référence. Chez l'HÔTE, `p.farmer.pets` EST
+      // le tableau vivant de farmersRef : hostSend ré-applique le payload en
+      // local, sans passer par JSON. Or resolveReleasePet le mute par splice et
+      // resolveSetPetWalking bascule `out` en place : l'identité du tableau ne
+      // changeait pas, `setMyPets` ne déclenchait donc AUCUN rendu et le sac
+      // restait affiché dans son état d'avant l'action. Invisible côté invité
+      // (le JSON reconstruit un objet neuf), systématique côté hôte — même
+      // famille de cause que le mini-jeu de morsure corrigé dans ce zip :
+      // « l'hôte ne passe pas par le réseau ». La copie découple au passage
+      // l'état React de l'objet autoritaire.
+      if (Array.isArray(p.farmer.pets)) setMyPets(p.farmer.pets.map(pt => ({ ...pt })));
       if (typeof p.farmer.injuredUntil === "number" && p.farmer.injuredUntil !== injuredUntilRef.current) {
         const wasInjured = injuredUntilRef.current > Date.now();
         injuredUntilRef.current = p.farmer.injuredUntil; setInjuredUntil(p.farmer.injuredUntil);
@@ -4172,7 +4192,6 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (p.soan !== undefined) { sharedRef.current.soan = p.soan; minimapDirtyRef.current = true; }
     if (p.harald !== undefined) { sharedRef.current.harald = p.harald; minimapDirtyRef.current = true; } // zip 260
     if (p.wellBuilt) { sharedRef.current.wellBuilt = true; minimapDirtyRef.current = true; syncBuildings(); }
-    if (p.coop !== undefined) { sharedRef.current.coop = p.coop; setCoop(p.coop); }
     if (p.barn !== undefined) { sharedRef.current.barn = p.barn; setBarn(p.barn); minimapDirtyRef.current = true; }
     if (p.salveCraft !== undefined) {
       // Correctif audit 2026-07 : brewingUntil est un timestamp posé avec
@@ -4229,7 +4248,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (key === "petCaught")     return L.petCaughtToast(C.petName(n, lang === "en"));
     if (key === "petReleased")   return L.bagReleasedToast(C.petName(n, lang === "en"));
     if (key === "bagFull")       return L.bagPetsFull(C.MAX_PETS);
-    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, noMillStock: L.toastNoMillStock, millNotEmpty: L.toastMillNotEmpty, noWheatToDeposit: L.toastNoWheatToDeposit, millFull: L.toastMillFull, noSucrerieStock: L.toastNoSucrerieStock, sucrerieNotEmpty: L.toastSucrerieNotEmpty, noCaneToDeposit: L.toastNoCaneToDeposit, sucrerieFull: L.toastSucrerieFull, actionFailed: L.toastActionFailed, coopNone: L.toastCoopNone, farCoop: L.toastFarCoop, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull, notInjured: L.toastNotInjured, noHealKit: L.toastNoHealKit, healTooFar: L.toastHealTooFar, gregNotHired: L.toastGregNotHired, gregOrderBusy: L.toastGregBusy, gregNoRoom: L.toastGregNoRoom, gregNoFertilizer: L.toastGregNoFertilizer, gregCoffeeCooldown: L.toastGregCoffeeCooldown, noCoffee: L.toastNoCoffee, soanNotHired: L.toastSoanNotHired, soanNoRiver: L.toastSoanNoRiver, soanCoffeeCooldown: L.toastSoanCoffeeCooldown, reneCoffeeCooldown: L.toastReneCoffeeCooldown, tristanNotHere: L.toastTristanNotHere, tristanCoffeeCooldown: L.toastTristanCoffeeCooldown, farCauldron: L.toastFarCauldron, noFishToDeposit: L.toastNoFishToDeposit, cauldronMissing: L.toastCauldronMissing, cauldronAlreadyTaken: L.toastCauldronAlreadyTaken, noCauldronStock: L.toastNoCauldronStock, cauldronNotEmpty: L.toastCauldronNotEmpty, cauldronBrewing: L.toastCauldronBrewing, cauldronNothingToCollect: L.toastCauldronNothingToCollect, cauldronHasEnough: L.toastCauldronHasEnough, visitorNotEnough: L.visitorNotEnough, decorNone: L.decorNone, decorPicked: L.decorPicked, objReturned: L.objReturned, residentNoRoom: L.residentNoRoom, artisanNoResident: L.artisanNoResident, voyagerBusy: L.voyagerBusyToast, kickVoted: L.kickVotedToast, jewelryNoGold: L.toastJewelryNoGold, jewelryNoGem: L.toastJewelryNoGem, cropWrongType: L.toastCropWrongType, cropMaxed: L.toastCropMaxed, beekeeperNoHive: L.toastBeekeeperNoHive, beekeeperBusy: L.toastBeekeeperBusy, balloonNotBoarding: L.toastBalloonNotBoarding, balloonFull: L.toastBalloonFull }[key] || "";
+    if (key === "walkFull")      return L.bagWalkFull(C.MAX_PETS_WALKING); // zip 368
+    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, noMillStock: L.toastNoMillStock, millNotEmpty: L.toastMillNotEmpty, noWheatToDeposit: L.toastNoWheatToDeposit, millFull: L.toastMillFull, noSucrerieStock: L.toastNoSucrerieStock, sucrerieNotEmpty: L.toastSucrerieNotEmpty, noCaneToDeposit: L.toastNoCaneToDeposit, sucrerieFull: L.toastSucrerieFull, actionFailed: L.toastActionFailed, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull, notInjured: L.toastNotInjured, noHealKit: L.toastNoHealKit, healTooFar: L.toastHealTooFar, gregNotHired: L.toastGregNotHired, gregOrderBusy: L.toastGregBusy, gregNoRoom: L.toastGregNoRoom, gregNoFertilizer: L.toastGregNoFertilizer, gregCoffeeCooldown: L.toastGregCoffeeCooldown, noCoffee: L.toastNoCoffee, soanNotHired: L.toastSoanNotHired, soanNoRiver: L.toastSoanNoRiver, soanCoffeeCooldown: L.toastSoanCoffeeCooldown, reneCoffeeCooldown: L.toastReneCoffeeCooldown, tristanNotHere: L.toastTristanNotHere, tristanCoffeeCooldown: L.toastTristanCoffeeCooldown, farCauldron: L.toastFarCauldron, noFishToDeposit: L.toastNoFishToDeposit, cauldronMissing: L.toastCauldronMissing, cauldronAlreadyTaken: L.toastCauldronAlreadyTaken, noCauldronStock: L.toastNoCauldronStock, cauldronNotEmpty: L.toastCauldronNotEmpty, cauldronBrewing: L.toastCauldronBrewing, cauldronNothingToCollect: L.toastCauldronNothingToCollect, cauldronHasEnough: L.toastCauldronHasEnough, visitorNotEnough: L.visitorNotEnough, decorNone: L.decorNone, decorPicked: L.decorPicked, objReturned: L.objReturned, residentNoRoom: L.residentNoRoom, artisanNoResident: L.artisanNoResident, voyagerBusy: L.voyagerBusyToast, kickVoted: L.kickVotedToast, jewelryNoGold: L.toastJewelryNoGold, jewelryNoGem: L.toastJewelryNoGem, cropWrongType: L.toastCropWrongType, cropMaxed: L.toastCropMaxed, beekeeperNoHive: L.toastBeekeeperNoHive, beekeeperBusy: L.toastBeekeeperBusy, balloonNotBoarding: L.toastBalloonNotBoarding, balloonFull: L.toastBalloonFull }[key] || "";
   }
 
   // -------- Hôte : boucle temps + persistance --------
@@ -4255,17 +4275,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
       const s = sharedRef.current, w = worldRef.current;
       if (!w) return;
-      // Mission collaborative : démarre automatiquement dès que 2 fermiers
-      // (ou plus) sont en ligne en même temps, si aucune n'est déjà en cours.
-      // S'arrête (sans perdre la progression) si tout le monde repart sauf un.
-      const online = playersRef.current.size + 1;
-      if (!s.coop && online >= 2) {
-        s.coop = E.pickCoopMission();
-        const def = C.COOP_MISSIONS.find(m2 => m2.id === s.coop.id);
-        channelRef.current?.send({ type: "broadcast", event: "apply", payload: { coop: s.coop } });
-        broadcastChat("🚧", L.coopStarted(lang === "en" ? def.nameEn : def.name));
-        dirtyRef.current = true;
-      }
+      // Zip 368 : le démarrage automatique de la mission d'équipe (dès 2
+      // fermiers en ligne) était ici, avec sa ligne de chat et sa diffusion.
+      // Supprimé avec la mission elle-même — c'est aussi un test de moins à
+      // chaque tick 1 Hz de l'hôte, et une diffusion de moins par mission.
       // Zip 366 : la proposition du défi « chasse aux lapins » était ici. Elle
       // est retirée avec le défi (les lapins ne sont plus partagés). Le tirage
       // tournait à chaque tick 1 Hz sur l'hôte ; c'est autant en moins.
@@ -4508,7 +4521,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // DISTANT (r.pets, ensureRemote) ; MES pets viennent du champ `farmer`,
   // laissé intact avec ses objets complets.
   function petIdsPub() {
-    const ps = myPetsRef.current;
+    // Zip 368 : on ne diffuse QUE les familiers en balade (walkPetsRef) — un
+    // familier rangé dans le sac n'existe pas pour les autres joueurs, donc
+    // agrandir le sac à 8 ne coûte pas un octet de plus sur le flux `pos`.
+    const ps = walkPetsRef.current;
     if (!Array.isArray(ps) || !ps.length) return [];
     const out = [];
     for (let i = 0; i < ps.length; i++) {
@@ -5689,7 +5705,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         mo.biteTargetId = near.id;
         mo.biteDeadline = now + C.EVIL_BITE_REACT_MS + 900;
         mo.chasing = true; mo.fleeing = false;
-        channelRef.current?.send({ type: "broadcast", event: "apply", payload: { evilBite: { id: near.id, monsterId: mo.id } } });
+        // Zip 368 : même correctif que pour la morsure de loup (voir le long
+        // commentaire dans updateWolves) — le monde maléfique portait le bug
+        // à l'identique, un hôte attaqué là-bas n'avait jamais son mini-jeu.
+        // Guillaume n'a signalé que les loups ; c'est la MÊME cause, corrigée
+        // au même endroit logique pour ne pas laisser un piège dormant.
+        hostSend({ type: "broadcast", event: "apply", payload: { evilBite: { id: near.id, monsterId: mo.id } } });
         continue;
       }
       if (dist <= C.EVIL_MONSTER_DETECT_RADIUS || biteFleeing) {
@@ -5828,7 +5849,25 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             wf.phase = "biting"; wf.biteTargetId = target.id;
             wf.biteDeadline = now + C.WOLF_BITE_REACT_MS + 900; // + marge réseau
             wf.state = "stop"; speed = 0;
-            channelRef.current?.send({ type: "broadcast", event: "apply", payload: { wolfBite: { id: target.id, wolfId: wf.id } } });
+            // ZIP 368 — CAUSE RACINE de "la blessure arrive avant que le
+            // mini-jeu ne s'affiche, ce qui laisse aucune chance au joueur"
+            // (remontée par Guillaume). Ce déclenchement partait par
+            // channelRef.send, et le canal est en broadcast.self = false
+            // (zip 243) : l'hôte ne reçoit JAMAIS l'écho de ses propres
+            // messages. Quand la cible du loup était l'hôte lui-même, le
+            // handler `p.wolfBite` d'applyDeltas n'était donc jamais atteint,
+            // setWolfBite n'était jamais appelé, AUCUN mini-jeu ne s'ouvrait
+            // — et à l'échéance ci-dessus (biteDeadline) l'hôte s'infligeait
+            // sa propre morsure via resolveWolfBiteOutcome(wf, "fail"). Vu du
+            // joueur : la blessure tombe sans que rien ne se soit affiché.
+            // Les invités, eux, recevaient bien le message : le bug était
+            // invisible côté invité, et systématique côté hôte.
+            // Correctif : hostSend, qui diffuse ET ré-applique en local chez
+            // l'hôte (même remède que FIX 244b pour ses propres `req`). Sans
+            // risque au regard du piège documenté au zip 364 : ce payload ne
+            // porte QUE `wolfBite`, aucun champ d'état partagé que l'hôte
+            // pourrait s'écraser à lui-même.
+            hostSend({ type: "broadcast", event: "apply", payload: { wolfBite: { id: target.id, wolfId: wf.id } } });
           }
         }
       } else if (wf.phase === "biting") {
@@ -8501,24 +8540,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           }
         } });
       }
-      // Chantier de la mission d'équipe en cours (marqueur simple, v1 : pas
-      // de sprite dédié, juste un repère + mini-jauges par ressource).
-      if (sharedRef.current.coop) {
-        const cs = C.COOP_SITE, coopNow = sharedRef.current.coop;
-        draws.push({ y: (cs.y + 1) * T, fn: () => {
-          const bob = Math.sin(now / 300) * 1.5;
-          ctx.font = "14px monospace"; ctx.textAlign = "center";
-          ctx.fillText("🚧", cs.x * T + 8, cs.y * T + 4 + bob);
-          const barW = 20;
-          coopNow.parts.forEach((p, pi) => {
-            const bx = cs.x * T + 8 - barW / 2, by = cs.y * T + 8 + pi * 5;
-            const frac = Math.max(0, Math.min(1, p.got / p.target));
-            ctx.fillStyle = "rgba(0,0,0,0.5)"; ctx.fillRect(bx, by, barW, 3);
-            ctx.fillStyle = p.resource === "wood" ? "#a9773f" : "#9aa0a8";
-            ctx.fillRect(bx, by, barW * frac, 3);
-          });
-        } });
-      }
+      // Zip 368 (demande Guillaume : "supprimer l'animation de team mission qui
+      // flotte, le chantier qui bounce — c'est pas intéressant", puis
+      // "supprimer celui de la mission d'équipe totalement, ainsi que la
+      // mission d'équipe associée") : le marqueur 🚧 oscillant et ses
+      // mini-jauges bois/pierre étaient ici. Partis avec la mission d'équipe.
+      // Le marqueur 🛖 de la grange au niveau 0 (juste au-dessus) utilise la
+      // même oscillation et la CONSERVE : la grange, elle, reste.
       const lampsInView = []; // positions des lampadaires visibles, pour percer l'overlay nocturne
       // Torches portées par les fermiers (chantier 2026-07) : même mécanique
       // de halo que les lampadaires, rayon plus modeste (C.TORCH_LIGHT_RADIUS),
@@ -8983,12 +9011,24 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 // "tours" tournants (rid % 3), un seul tiers de la foule
                 // parle à la fois -> moins de bulles simultanées, tout en
                 // gardant l'ambiance vivante (chacun parle à son tour).
-                if (lines.length && C.TJ_REACT_TALK_SLOTS && Math.floor(performance.now() / (C.TJ_REACT_LINE_PERIOD_MS / C.TJ_REACT_TALK_SLOTS)) % C.TJ_REACT_TALK_SLOTS === vv.rid % C.TJ_REACT_TALK_SLOTS) {
+                // Zip 368 (demande Guillaume : "la lisibilité est mauvaise pour les
+                // commentaires du public, afficher deux fois moins de commentaires
+                // du public, et moins simultané") : les 3 tours tournants ne
+                // suffisaient pas, parce que TOUTE la foule finissait par parler.
+                // Un PNJ sur C.TJ_REACT_TALK_EVERY seulement commente désormais la
+                // scène, et il reste muet du DÉBUT À LA FIN — mot de la fin
+                // compris, juste en dessous, qui était le pire moment (tout
+                // l'attroupement parlait dans la même frame). Sélection par
+                // `rid % TJ_REACT_TALK_EVERY` : déterministe, donc les mêmes PNJ
+                // sont bavards chez tous les joueurs, sans un octet de réseau.
+                if (lines.length && C.TJ_REACT_TALK_SLOTS && vv.rid % C.TJ_REACT_TALK_EVERY === 0 && Math.floor(performance.now() / (C.TJ_REACT_LINE_PERIOD_MS / C.TJ_REACT_TALK_SLOTS)) % C.TJ_REACT_TALK_SLOTS === vv.rid % C.TJ_REACT_TALK_SLOTS) {
                   const now3 = performance.now();
                   const txt = lines[Math.floor(now3 / C.TJ_REACT_LINE_PERIOD_MS + vv.rid) % lines.length];
                   queueBubble(Math.round(vx * T) + 8, Math.round(vy * T) - 18, txt, false);
                 }
-              } else if (rc.phase === "returning" && rc.afterLine && Date.now() < rc.returnAt) {
+              } else if (rc.phase === "returning" && rc.afterLine && vv.rid % C.TJ_REACT_TALK_EVERY === 0 && Date.now() < rc.returnAt) {
+                // Zip 368 : même filtre que ci-dessus — un PNJ muet pendant
+                // l'attroupement ne lâche pas non plus son mot de la fin.
                 queueBubble(Math.round(vx * T) + 8, Math.round(vy * T) - 18, rc.afterLine, false);
               }
             }
@@ -9326,12 +9366,24 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 // par tiers de foule, C.TJ_REACT_TALK_SLOTS) : évite que
                 // toutes les bulles de l'attroupement s'affichent en même
                 // temps et se chevauchent.
-                if (lines.length && C.TJ_REACT_TALK_SLOTS && Math.floor(performance.now() / (C.TJ_REACT_LINE_PERIOD_MS / C.TJ_REACT_TALK_SLOTS)) % C.TJ_REACT_TALK_SLOTS === res.rid % C.TJ_REACT_TALK_SLOTS) {
+                // Zip 368 (demande Guillaume : "la lisibilité est mauvaise pour les
+                // commentaires du public, afficher deux fois moins de commentaires
+                // du public, et moins simultané") : les 3 tours tournants ne
+                // suffisaient pas, parce que TOUTE la foule finissait par parler.
+                // Un PNJ sur C.TJ_REACT_TALK_EVERY seulement commente désormais la
+                // scène, et il reste muet du DÉBUT À LA FIN — mot de la fin
+                // compris, juste en dessous, qui était le pire moment (tout
+                // l'attroupement parlait dans la même frame). Sélection par
+                // `rid % TJ_REACT_TALK_EVERY` : déterministe, donc les mêmes PNJ
+                // sont bavards chez tous les joueurs, sans un octet de réseau.
+                if (lines.length && C.TJ_REACT_TALK_SLOTS && res.rid % C.TJ_REACT_TALK_EVERY === 0 && Math.floor(performance.now() / (C.TJ_REACT_LINE_PERIOD_MS / C.TJ_REACT_TALK_SLOTS)) % C.TJ_REACT_TALK_SLOTS === res.rid % C.TJ_REACT_TALK_SLOTS) {
                   const now3 = performance.now();
                   const txt = lines[Math.floor(now3 / C.TJ_REACT_LINE_PERIOD_MS + res.rid) % lines.length];
                   queueBubble(Math.round(rx * T) + 8, Math.round(ry * T) - 18, txt, false);
                 }
-              } else if (rc.phase === "returning" && rc.afterLine && Date.now() < rc.returnAt) {
+              } else if (rc.phase === "returning" && rc.afterLine && res.rid % C.TJ_REACT_TALK_EVERY === 0 && Date.now() < rc.returnAt) {
+                // Zip 368 : même filtre que ci-dessus — un PNJ muet pendant
+                // l'attroupement ne lâche pas non plus son mot de la fin.
                 queueBubble(Math.round(rx * T) + 8, Math.round(ry * T) - 18, rc.afterLine, false);
               }
             }
@@ -9618,8 +9670,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // Zip 233: sleep prompt removed with the townhall sleep option; the
       // visitor prompt carries the nearest rid so the label can name them.
       else { const vp = visitorPromptNearby(); if (vp) pk = "visitor:" + vp.rid; }
-      if (!pk && nearTile(C.COOP_SITE) && sharedRef.current.coop) pk = "coop";
-      else if (!pk && nearTile(barnPos())) { const b = sharedRef.current.barn; if (b && b.level < C.BARN_LEVELS.length) pk = b.ready ? "barnBuild" : "barn"; }
+      // Zip 368 : le prompt du chantier de mission d'équipe était en tête de
+      // cette chaîne ; la grange prend simplement sa place.
+      if (!pk && nearTile(barnPos())) { const b = sharedRef.current.barn; if (b && b.level < C.BARN_LEVELS.length) pk = b.ready ? "barnBuild" : "barn"; }
       // (chantier 2026-07, refonte demande Guillaume) : le prompt E distingue
       // maintenant les 4 états possibles du chaudron — récupérer le produit
       // fini, attendre la fin de la concoction, allumer le feu (recette
@@ -10441,7 +10494,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         ctx.drawImage(img, Math.round(dxp), Math.round(dyp), dw, dh);
       }
     }
-    function drawMyPets(m, dt2) { drawPetsFor(me.id, myPetsRef.current, m, dt2); }
+    // Zip 368 : seuls les familiers EN BALADE sont dessinés (walkPetsRef) ;
+    // ceux qui restent dans le sac ne suivent plus le joueur.
+    function drawMyPets(m, dt2) { drawPetsFor(me.id, walkPetsRef.current, m, dt2); }
     function drawRemotePets(p, dt2) { drawPetsFor(p.id, p.pets, p, dt2); }
     function drawSelf(m) {
       drawCharacter(m, true);
@@ -11422,7 +11477,6 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // Zip 233: the townhall 'sleep' option is REMOVED (Guillaume) - the E-at-
     // HOUSE_DOOR branch is gone; startSleep/wakeUp stay in place but dead,
     // flagged for a later cleanup zip. Visitor interaction moved to Q.
-    else if (nearTile(C.COOP_SITE) && sharedRef.current.coop) sendReq({ kind: "coopDeposit" });
     else if (nearTile(barnPos())) {
       const b = sharedRef.current.barn;
       if (!b || b.level >= C.BARN_LEVELS.length) pushToast(L.toastBarnMax);
@@ -11913,7 +11967,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       </div>
 
       {/* Invite proximité */}
-      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "coop" ? L.promptCoop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : L.promptBin}</div>}
+      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : L.promptBin}</div>}
       {mountPrompt && <div className="ferme-prompt ferme-prompt-mount">{mountPrompt === "mount" ? L.mountPrompt : L.dismountPrompt}</div>}
       {handHeldUI && !moveConfirmUI && <div className="ferme-prompt ferme-prompt-mount">{L.handHeldHint}</div>}
       {moveConfirmUI && (
@@ -12510,28 +12564,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       )}
       {!questOpen && !questsHidden && <button className="ferme-btn ferme-quests-fab" onClick={() => setQuestOpen(true)}>{L.questBtn}</button>}
 
-      {/* Panneau de la mission d'équipe en cours (v1 : bois/pierre à déposer au chantier) */}
-      {coop && (() => {
-        const def = C.COOP_MISSIONS.find(m2 => m2.id === coop.id);
-        if (!def) return null;
-        return (
-          <div className="ferme-coop panel">
-            <div className="ferme-quests-head"><b>{L.coopTitle}</b></div>
-            <div className="ferme-coop-name">{lang === "en" ? def.nameEn : def.name}</div>
-            {coop.parts.map((p, pi) => {
-              const pd = def.parts[pi] || def.parts.find(x => x.id === p.id);
-              const done = p.got >= p.target;
-              return (
-                <div key={p.id} className={"ferme-quest-row" + (done ? " done" : "")}>
-                  <span className="ferme-quest-check">{done ? "✅" : (p.resource === "wood" ? "🪵" : "🪨")}</span>
-                  <span className="ferme-quest-label">{lang === "en" ? pd.labelEn : pd.label}</span>
-                  <span className="ferme-quest-reward">{p.got}/{p.target}</span>
-                </div>
-              );
-            })}
-          </div>
-        );
-      })()}
+      {/* Zip 368 : le panneau HUD de la mission d'équipe (nom du chantier +
+          une ligne par ressource) était ici, en haut à droite sous les quêtes.
+          Retiré avec la mission d'équipe ; son CSS (.ferme-coop) est parti de
+          globals.css dans le même zip. */}
 
       {/* Zip 366 : encart de progression et popup de proposition du défi
           "chasse aux lapins" retirés avec le défi lui-même. */}
@@ -12871,15 +12907,33 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             <button className="ferme-close-x" onClick={() => setBagOpen(false)}>✕</button>
             <h2>{L.bagTitle}</h2>
 
+            {/* Zip 368 : le sac contient jusqu'à C.MAX_PETS familiers, dont
+                C.MAX_PETS_WALKING au maximum peuvent être EN BALADE. Chaque
+                ligne porte donc deux boutons : sortir/ranger, et relâcher. */}
             <div style={{ fontSize: 11, fontWeight: 700, opacity: .7, textTransform: "uppercase", letterSpacing: .5, marginTop: 6 }}>{L.bagPetsTitle(myPets.length, C.MAX_PETS)}</div>
             {myPets.length === 0 && <div className="ferme-hint">{L.bagNoPets}</div>}
-            {myPets.map((pt, pi) => (
-              <div className="ferme-shop-row" key={"pet" + pi}>
-                <Sprite img={spritesReady ? spritesRef.current.pets[pt.id] : null} w={32} h={32} />
-                <div className="info"><b>{C.petName(pt.id, lang === "en")}</b></div>
-                <PixBtn sprites={spritesReady ? spritesRef.current : null} icon="release" tone="bad" small label={L.bagReleaseBtn} onClick={() => sendReq({ kind: "releasePet", index: pi })} />
-              </div>
-            ))}
+            {myPets.length > 0 && (() => {
+              const outN = myPets.filter(pt => pt && (pt.out === undefined || pt.out)).length;
+              return <div className="ferme-hint">{L.bagPetsWalkingLine(outN, C.MAX_PETS_WALKING)}</div>;
+            })()}
+            {myPets.map((pt, pi) => {
+              const walking = pt && (pt.out === undefined || pt.out);
+              const outN = myPets.filter(q => q && (q.out === undefined || q.out)).length;
+              return (
+                <div className="ferme-shop-row" key={"pet" + pi}>
+                  <Sprite img={spritesReady ? spritesRef.current.pets[pt.id] : null} w={32} h={32} />
+                  <div className="info">
+                    <b>{C.petName(pt.id, lang === "en")}</b>
+                    <span>{walking ? L.bagPetWalking : L.bagPetStowed}</span>
+                  </div>
+                  <PixBtn sprites={spritesReady ? spritesRef.current : null} tone={walking ? "ghost" : "good"} small
+                    disabled={!walking && outN >= C.MAX_PETS_WALKING}
+                    label={walking ? L.bagStowBtn : L.bagWalkBtn}
+                    onClick={() => sendReq({ kind: "petWalk", index: pi, walk: !walking })} />
+                  <PixBtn sprites={spritesReady ? spritesRef.current : null} icon="release" tone="bad" small label={L.bagReleaseBtn} onClick={() => sendReq({ kind: "releasePet", index: pi })} />
+                </div>
+              );
+            })}
 
             {/* Zip 251 : décorations reçues en cadeau, déployables via l'outil main. */}
             <div style={{ fontSize: 11, fontWeight: 700, opacity: .7, textTransform: "uppercase", letterSpacing: .5, marginTop: 12 }}>{L.bagDecorTitle}</div>

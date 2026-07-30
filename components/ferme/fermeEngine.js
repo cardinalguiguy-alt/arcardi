@@ -650,7 +650,7 @@ export function newFarmer(id, name, gender, outfit) {
       decor: {}, // zip 251: décorations reçues en cadeau, déployables via l'outil main (id -> quantité)
     },
     quests: {}, // id de quête -> true quand accomplie
-    pets: [],   // zip 236: pets INDIVIDUELS (max C.MAX_PETS), {id, at}. Voir resolveCatchPet/resolveReleasePet.
+    pets: [],   // zip 236/368 : pets INDIVIDUELS, {id, at, out}. Sac plafonné à C.MAX_PETS, balade à C.MAX_PETS_WALKING (`out`). Voir resolveCatchPet/resolveReleasePet/resolveSetPetWalking.
   };
 }
 
@@ -724,9 +724,27 @@ export function normalizeFarmer(f) {
     f.inv.decor = clean; }
   f.quests = f.quests || {};
   // Zip 236: individual pets. Keep only well-formed known pets; cap at MAX_PETS.
+  // (Le .filter conserve les OBJETS d'origine, donc le drapeau `out` du zip
+  // 368 traverse cette normalisation sans être recréé.)
   f.pets = (Array.isArray(f.pets) ? f.pets : [])
     .filter(p => p && typeof p.id === "string" && C.PET_CATALOG[p.id])
     .slice(0, C.MAX_PETS);
+  // Zip 368 : `out` = ce familier est-il EN BALADE (dessiné et diffusé) ou
+  // seulement rangé dans le sac ? Deux cas à couvrir ici :
+  //   - sauvegarde d'AVANT le zip 368 : le champ n'existe pas. Les familiers
+  //     suivaient tous le joueur, donc on les sort tous — dans la limite de
+  //     MAX_PETS_WALKING, ce qui ne coupe personne puisque le plafond
+  //     précédent du sac était justement 4 ;
+  //   - sauvegarde d'après : on respecte `out`, mais on RE-PLAFONNE quand
+  //     même. C'est le seul garde-fou contre un sac trafiqué ou une baisse
+  //     future de MAX_PETS_WALKING qui laisserait 6 familiers dehors.
+  // Le surplus est rangé (out = false), jamais supprimé.
+  { let outN = 0;
+    for (const p of f.pets) {
+      const wants = (p.out === undefined) ? true : !!p.out;
+      p.out = wants && outN < C.MAX_PETS_WALKING;
+      if (p.out) outN++;
+    } }
   return f;
 }
 
@@ -1586,42 +1604,16 @@ export function soanCatchFish(rnd) {
 }
 
 /* -------------------------------------------------------------------------
-   Missions collaboratives (v1 "grandes lignes", voir COOP_MISSIONS/COOP_SITE
-   dans fermeConstants.js). État partagé minimal : { id, parts:[{id,resource,
-   target,got}] }, tiré au hasard parmi COOP_MISSIONS, régénéré une fois
-   terminé (voir FermeGame.js/hostMaybeStartCoop).
+   Missions d'équipe : SUPPRIMÉES au zip 368 (demande Guillaume).
+   Vivaient ici pickCoopMission() (tirage d'un chantier parmi C.COOP_MISSIONS)
+   et resolveCoopDeposit() (dépôt bois/pierre à C.COOP_SITE par la touche E).
+   Voir le commentaire de suppression dans fermeConstants.js pour la liste
+   complète de ce qui est parti avec elles.
+   ATTENTION : resolveBarnDeposit (plus bas) — la GRANGE collaborative, qui
+   reste — réutilise le toast "coopNothing" (« tu n'as pas la ressource
+   attendue sur toi »). Cette chaîne doit donc survivre dans fermeStrings.js
+   malgré son nom, exactement comme woodLabel/stoneLabel.
    ------------------------------------------------------------------------- */
-export function pickCoopMission(rnd) {
-  const list = C.COOP_MISSIONS;
-  const def = list[Math.floor((rnd ? rnd() : Math.random()) * list.length)];
-  return { id: def.id, parts: def.parts.map(p => ({ id: p.id, resource: p.resource, target: p.target, got: 0 })) };
-}
-
-// Dépôt au chantier (touche E à proximité de COOP_SITE, comme la boutique/le
-// bac). `m.part` optionnel (partie visée) ; à défaut, on prend la première
-// partie inachevée pour laquelle le fermier porte la ressource. Dépose le
-// MAXIMUM possible (comme resolveSell/resolveCraft) plutôt que de tout
-// refuser si le fermier a plus que le manquant. Renvoie { invChanged, toast,
-// deposited, resource, partId, completed }.
-export function resolveCoopDeposit(f, coop, m) {
-  normalizeFarmer(f);
-  const res = { invChanged: false, toast: null, deposited: 0, resource: null, partId: null, completed: false };
-  if (!coop) { res.toast = "coopNone"; return res; }
-  if (!nearT(f, C.COOP_SITE)) { res.toast = "farCoop"; return res; }
-  let part = null;
-  if (m.part) part = coop.parts.find(p => p.id === m.part && p.got < p.target);
-  if (!part) part = coop.parts.find(p => p.got < p.target && (f.inv[p.resource] || 0) > 0);
-  if (!part) { res.toast = "coopNothing"; return res; }
-  const have = f.inv[part.resource] || 0;
-  const need = part.target - part.got;
-  const n = Math.min(have, need);
-  if (n <= 0) { res.toast = "coopNothing"; return res; }
-  f.inv[part.resource] -= n;
-  part.got += n;
-  res.invChanged = true; res.deposited = n; res.resource = part.resource; res.partId = part.id;
-  if (coop.parts.every(p => p.got >= p.target)) res.completed = true;
-  return res;
-}
 
 /* -------------------------------------------------------------------------
    Chaudron de la pommade de protection (chantier 2026-07, voir
@@ -2941,7 +2933,12 @@ export function farmPopularity(s, w) {
   let pop = 0;
   pop += Math.min(10, (s.animals || []).length);                 // livestock
   pop += Math.min(6, (s.horses || []).length * 2);               // horses
-  pop += (s.wellBuilt ? 2 : 0) + (s.coop ? 2 : 0);
+  // Zip 368 : le terme `+ (s.coop ? 2 : 0)` (mission d'équipe en cours) est
+  // parti avec les missions d'équipe. Arbitrage Guillaume : on ne le reporte
+  // sur rien — le score maximal passe de ~56 à ~54, les visites spontanées
+  // deviennent donc très légèrement plus rares. C'était un bonus « chantier
+  // en cours » : sans chantier, il n'a plus d'objet.
+  pop += (s.wellBuilt ? 2 : 0);
   pop += s.barn ? Math.min(6, (s.barn.level || 0) * 2) : 0;
   pop += s.house ? Math.min(6, ((s.house.level || 1) - 1) * 3) : 0;
   pop += Math.min(10, Math.floor((s.totalEarned || 0) / 2000));  // trade history
@@ -3752,12 +3749,37 @@ export function resolvePassagePickup(s, f, worldIdx, pickupId, rnd) {
 }
 
 // Zip 236: add a pet to a farmer's individual bag (max C.MAX_PETS).
+// Zip 368 : le nouveau venu part EN BALADE s'il reste une place dehors
+// (MAX_PETS_WALKING), sinon il est simplement rangé dans le sac. Attraper un
+// familier reste donc gratifiant tout de suite quand on n'en promène pas déjà
+// quatre, sans jamais faire disparaître un de ceux qui sont sortis.
 export function resolveCatchPet(f, petId) {
   if (!C.PET_CATALOG[petId]) return { ok: false, unknown: true };
   f.pets = Array.isArray(f.pets) ? f.pets : [];
   if (f.pets.length >= C.MAX_PETS) return { ok: false, full: true };
-  f.pets.push({ id: petId, at: Date.now() });
+  let outN = 0;
+  for (const p of f.pets) if (p && p.out) outN++;
+  f.pets.push({ id: petId, at: Date.now(), out: outN < C.MAX_PETS_WALKING });
   return { ok: true, petId };
+}
+// Zip 368 (demande Guillaume : "pouvoir garder ses animaux personnels dans son
+// bag, et pouvoir les WALK en les choisissant") : sort un familier du sac ou le
+// range. `want` = true pour le mettre en balade. Renvoie { ok, full, petId, out }
+// — `full` quand MAX_PETS_WALKING familiers sont déjà dehors (le client affiche
+// alors le toast "walkFull"). Idempotent : demander la balade d'un familier
+// déjà dehors réussit sans rien changer, ce qui évite qu'un double clic ou un
+// message rejoué ne consomme une place.
+export function resolveSetPetWalking(f, index, want) {
+  f.pets = Array.isArray(f.pets) ? f.pets : [];
+  const p = f.pets[index | 0];
+  if (!p) return { ok: false };
+  if (!want) { p.out = false; return { ok: true, petId: p.id, out: false }; }
+  if (p.out) return { ok: true, petId: p.id, out: true };
+  let outN = 0;
+  for (const q of f.pets) if (q && q.out) outN++;
+  if (outN >= C.MAX_PETS_WALKING) return { ok: false, full: true };
+  p.out = true;
+  return { ok: true, petId: p.id, out: true };
 }
 // Release a pet back into the wild (frees a slot). Idempotent-ish: a bad
 // index just no-ops with ok:false.

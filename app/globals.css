@@ -6690,8 +6690,8 @@ body.ferme-active .wrap-room > .brand{ display:none !important; }
 
 /* Panneau de la mission d'équipe (chantier collaboratif, v1 2026-07) : côté
    droit, indépendant de la checklist des quêtes (désormais en bas à gauche). */
-.ferme-coop{ position:fixed; top:150px; right:10px; z-index:11; width:230px; max-width:65vw; padding:8px 10px; font-size:12px; }
-.ferme-coop-name{ font-weight:bold; margin-bottom:6px; }
+/* Zip 368 : .ferme-coop / .ferme-coop-name (panneau HUD de la mission
+   d'équipe) supprimés avec la mission d'équipe. */
 
 /* Défi "chasse aux lapins" (chantier 2026-07) : petit badge de progression,
    sous le panneau de mission d'équipe ci-dessus s'il est aussi affiché. */
