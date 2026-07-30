@@ -30,7 +30,7 @@ import { createPortal } from "react-dom";
 import { supabase } from "@/lib/supabaseClient";
 import * as C from "./fermeConstants";
 import * as E from "./fermeEngine";
-import { buildSprites } from "./fermeArt";
+import { buildSprites, charPalette } from "./fermeArt";
 import { fstr } from "./fermeStrings";
 
 const GAME_ID = "ferme";
@@ -629,6 +629,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      franchissant. Sans ça, ressortir du menu du défi en étant encore sur la
      dalle relancerait la cinématique en boucle. */
   const runGateArmedRef = useRef(true);
+  /* Zip 377 — instant où le voile de RETOUR de la sortie offroad a démarré
+     (0 = aucun voile). Le défi s'achève sur un écran noir dans son iframe ;
+     ce voile-ci prend le relais côté ferme et s'efface, pour que le raccord
+     entre les deux soit un fondu et non une coupe. */
+  const runReturnFadeRef = useRef(0);
 
   useEffect(() => { fishMiniRef.current = !!fishMini || !!barnMini || !!wolfBite || !!evilBite || !!repairMini; }, [fishMini, barnMini, wolfBite, evilBite, repairMini]);
   useEffect(() => { adsOpenRef.current = adsOpen; visitorOpenRef.current = visitorOpen; }, [adsOpen, visitorOpen]);
@@ -1793,6 +1798,32 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           // comme le fait "heal" pour l'énergie et les outils.
           farmer: { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv, injuredUntil: f.injuredUntil },
           chat: { from: "\u{1F36C}", msg: L.runLostChat(f.name, gained) },
+        },
+      });
+    } else if (req.kind === "runEscaped") {
+      /* Zip 377 : sortie par la bifurcation offroad. Calque exact de
+         "runFailed" ci-dessus À UNE LIGNE PRÈS, et c'est cette ligne qui fait
+         tout le chantier : f.injuredUntil n'est pas touché.
+
+         Les mêmes plafonds s'appliquent, pour la même raison — la course s'est
+         déroulée entièrement côté client, l'hôte persiste ce qu'on lui dit et
+         ne peut donc pas le croire sur parole. Un message aberrant doit rester
+         borné à ce qu'une course humainement possible produit.
+
+         La blessure existante est laissée telle quelle plutôt que remise à
+         zéro : la sortie offroad n'inflige aucune sanction, elle n'en efface
+         pas non plus. Un joueur déjà blessé qui court et ressort proprement
+         reste blessé du temps qu'il lui restait. */
+      const gainedE = Math.max(0, Math.min(C.RUN_MAX_CANDIES_PER_RUN, req.candies | 0));
+      f.inv.candies = (f.inv.candies | 0) + gainedE;
+      const scE = Math.max(0, Math.min(C.RUN_MAX_SCORE, req.score | 0));
+      if (scE > (f.inv.runBest | 0)) f.inv.runBest = scE;
+      dirtyRef.current = true;
+      hostSend({
+        type: "broadcast", event: "apply",
+        payload: {
+          farmer: { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv, injuredUntil: f.injuredUntil },
+          chat: { from: "\u{1F6E4}", msg: L.runEscapedChat(f.name, gainedE) },
         },
       });
     } else if (req.kind === "drown") {
@@ -8210,6 +8241,65 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     crossPassage(false, true, "run");
   }
 
+  /* ======================================================================
+     Zip 377 — SORTIE PAR LA BIFURCATION OFFROAD.
+     ----------------------------------------------------------------------
+     Le contraire exact de runChallengeLost, et c'est le contraste qui fait
+     tout l'intérêt de la mécanique : mêmes bonbons, même record, mais AUCUNE
+     blessure, et aucune meute au retour. Sortir volontairement doit valoir
+     mieux que se faire rattraper, sinon personne ne sortira jamais.
+
+     Trois précautions, toutes tirées de bugs déjà rencontrés sur ce chemin :
+
+       1. runAmbushRef est effacé AVANT de fermer le défi. C'est la leçon du
+          zip 375 : closeRunChallenge() repose sinon le fermier au pied de la
+          jetée FACE AUX TROIS LOUPS de la cinématique. Ici ce serait pire
+          qu'une incohérence, ce serait un mensonge — le joueur vient
+          justement de les semer.
+       2. On ne passe PAS par crossPassage(). Le joueur ne change pas de
+          zone : il était déjà dans le monde sombre, il y reste. Un fondu de
+          zone téléporterait et afficherait le mauvais toast.
+       3. La blessure n'est pas touchée du tout. Un joueur qui sortirait
+          alors qu'il est déjà blessé par ailleurs le reste — ce n'est pas
+          une récompense de soin, c'est une absence de sanction.
+     ====================================================================== */
+  function runChallengeEscaped(score, candies) {
+    runAmbushRef.current = null;
+    runChallengeRef.current = false;
+    setRunChallenge(false);
+    keysRef.current = {};
+    const m = meRef.current;
+    if (m && m.zone === "evil") {
+      // Au PIED de la jetée, tourné vers l'ouest — donc vers la carte et ses
+      // résidents, ce que dit le message. Le bout de la jetée le remettrait
+      // sur la dalle de la porte, et le verrou runGateArmedRef est là pour
+      // que rien ne se relance tant qu'il ne l'a pas quittée.
+      m.x = C.RUN_JETTY_BASE.x; m.y = C.RUN_JETTY_BASE.y;
+      m.moving = false; m.animT = 0; m.dir = 2;
+      runGateArmedRef.current = false;
+      sendPos();
+    }
+    // Le défi termine sur un écran noir ; sans ce voile qui s'efface, on
+    // passerait du noir plein à la carte d'un seul coup, juste après trois
+    // secondes de fondu soigné.
+    runReturnFadeRef.current = performance.now();
+    sendReq({ kind: "runEscaped", score: score | 0, candies: candies | 0 });
+    if ((candies | 0) > 0) pushToast(L.runCandiesToast(candies | 0));
+    pushToast(L.runEscapedToast);
+  }
+
+  // Voile de RETOUR : il part du noir et s'efface, à l'inverse des deux
+  // autres. Troisième voile distinct, pour la même raison que les deux
+  // premiers le sont entre eux — trois trajectoires différentes, mélangées
+  // elles produiraient des états impossibles à relire six mois plus tard.
+  function runReturnFadeAlpha() {
+    const t0 = runReturnFadeRef.current;
+    if (!t0) return 0;
+    const k = (performance.now() - t0) / C.RUN_RETURN_FADE_MS;
+    if (k >= 1) { runReturnFadeRef.current = 0; return 0; }
+    return 1 - Math.max(0, k);
+  }
+
   // Réception des messages de l'iframe. Même origine obligatoire : la page est
   // servie par la ferme elle-même, tout le reste est rejeté.
   useEffect(() => {
@@ -8220,11 +8310,34 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (!d || typeof d !== "object") return;
       if (d.type === "vf-run-ready") {
         const best = (invRef.current && invRef.current.runBest) | 0;
+        /* Zip 377 — LE FUYARD PORTE LE SKIN DU JOUEUR (demande Guillaume :
+           « personnage féminin = personnage féminin, personnage aux habits
+           rouges = personnage aux habits rouges »).
+
+           C'est aussi l'arbitrage du point d'architecture resté ouvert au §8
+           du contexte : c'est la TENUE qui voyage, pas une image de sprite.
+           Le défi ne peut pas lire fermeArt.js (page autonome de public/),
+           mais il n'a besoin que d'un genre et de quatre couleurs pour
+           rhabiller son squelette 3D — et ça ne coûte rien, le message
+           existait déjà. La variante « billboard » aurait obligé à jeter
+           toute l'animation articulée du zip 374.
+
+           charPalette() vit dans fermeArt.js, à côté de drawCharFrame qui
+           utilise exactement les mêmes constantes : le fuyard ne peut pas
+           dériver du sprite 2D sans que les deux dérivent ensemble. */
+        // meRef, pas l'état React : cet écouteur est posé une fois pour la
+        // durée du défi, une valeur capturée au montage serait figée.
+        const mm = meRef.current;
+        const skin = charPalette(mm && mm.gender, mm && mm.outfit);
         try {
-          e.source.postMessage({ type: "vf-run-init", lang, best }, window.location.origin);
+          e.source.postMessage({ type: "vf-run-init", lang, best, skin }, window.location.origin);
         } catch (err) {}
       } else if (d.type === "vf-run-over") {
         runChallengeLost(d.score, d.candies);
+      } else if (d.type === "vf-run-escape") {
+        // Zip 377 : sortie par la bifurcation offroad. Ce n'est PAS une
+        // défaite, et c'est la seule issue du défi qui ne le soit pas.
+        runChallengeEscaped(d.score, d.candies);
       } else if (d.type === "vf-run-exit") {
         closeRunChallenge();
       }
@@ -8558,11 +8671,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (m.zone === "evil") {
         updateRunAmbush(dt); // zip 375 : embuscade locale de la jetée
         drawEvilFrame(now);
-        // Deux voiles distincts, et ils doivent le rester : celui de la zone
-        // (aller au noir puis revenir, avec téléportation au milieu) et celui
-        // de l'embuscade (aller au noir, et rien d'autre — l'iframe du défi
-        // prend le relais). On garde le plus opaque des deux.
-        const fa = Math.max(zoneFadeAlpha(), runAmbushFadeAlpha());
+        // TROIS voiles distincts depuis le zip 377, et ils doivent le rester :
+        // celui de la zone (aller au noir puis revenir, avec téléportation au
+        // milieu), celui de l'embuscade (aller au noir, et rien d'autre —
+        // l'iframe du défi prend le relais) et celui du RETOUR par la sortie
+        // offroad (part du noir et s'efface). Trois trajectoires différentes ;
+        // les fusionner en un seul état produirait des cas impossibles à
+        // relire. On garde simplement le plus opaque des trois.
+        const fa = Math.max(zoneFadeAlpha(), runAmbushFadeAlpha(), runReturnFadeAlpha());
         if (fa > 0) { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = "black"; ctx.globalAlpha = fa; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.globalAlpha = 1; }
         return;
       }

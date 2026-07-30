@@ -46,14 +46,26 @@ function entryOf(o) {
   return o.t;
 }
 
+/* NODES_PER_SEED RELEVÉ DE 26 À 60 AU ZIP 377, et ce n'est pas un réglage de
+   confort : 26 tronçons font environ 2 400 unités, c'est-à-dire MOINS que
+   l'intervalle entre deux bifurcations (OFFROAD_EVERY = 4000). Le script
+   n'aurait donc jamais vu un seul embranchement, et aurait continué d'afficher
+   « OK » en n'ayant rien vérifié de la nouveauté du zip. 60 tronçons font
+   ~5 400 unités, soit au moins une bifurcation par graine — et sur 4 000
+   graines, la première ET la seconde sur bon nombre d'entre elles.
+
+   C'est exactement le piège du zip 375 : un contrôle qui ne dit rien après un
+   ajout de règle n'est pas rassurant, il est suspect. */
 const SEEDS = 4000;
-const NODES_PER_SEED = 26;
+const NODES_PER_SEED = 60;
 let totalNodes = 0, totalObstacles = 0, totalGaps = 0, totalCrev = 0;
 let totalTurns = 0, totalCoins = 0, totalCracks = 0, totalLength = 0;
+let totalExits = 0, seedsWithExit = 0;
 
 for (let s = 0; s < SEEDS; s++) {
   const gen = new Track.TrackGen(s);
   while (gen.nodes.length < NODES_PER_SEED) gen.pushNode(false);
+  if (gen.nodes.some(n => n.exit !== 0)) seedsWithExit++;
 
   /* Chaîne d'espacement PORTÉE D'UN TRONÇON À L'AUTRE. Depuis le zip 374 le
      générateur la maintient lui-même ; le vérificateur doit donc la suivre de
@@ -76,7 +88,37 @@ for (let s = 0; s < SEEDS; s++) {
        Depuis le 374 elles dépendent de la PRÉSENCE d'un virage de chaque
        côté, et leurs valeurs sont dérivées de la physique dans config.js. --- */
     const startLimit = node.entryTurn !== 0 ? CFG.TURN_CLEAR_AFTER : CFG.ENTRY_CLEAR_STRAIGHT;
-    const endLimit = node.length - (node.turn !== 0 ? CFG.TURN_CLEAR_BEFORE : CFG.END_CLEAR_STRAIGHT);
+    const endLimit = node.length - ((node.turn !== 0 || node.exit !== 0) ? CFG.TURN_CLEAR_BEFORE : CFG.END_CLEAR_STRAIGHT);
+
+    /* --- Zip 377 : règles d'un tronçon qui porte une BIFURCATION OFFROAD ---
+       Les trois sont vérifiées ici plutôt que dans un script à part parce
+       qu'elles concernent la GÉNÉRATION, et que ce script est celui qu'on
+       relit quand on se demande ce que la piste garantit. */
+    if (node.exit !== 0) {
+      totalExits++;
+      if (node.turn !== 0) {
+        fail(s, node, `un embranchement (${node.exit}) sur un tronçon qui TOURNE (${node.turn}) : la même touche voudrait dire deux choses`);
+      }
+      if (!node.escape) fail(s, node, `embranchement sans branche d'échappement`);
+      else {
+        if (node.escape.obstacles.length || node.escape.coins.length) {
+          fail(s, node, `la branche d'échappement porte des obstacles ou des pièces`);
+        }
+        if (node.escape.length < 110) {
+          fail(s, node, `branche d'échappement trop courte (${node.escape.length})`);
+        }
+        // La branche doit bien partir du BOUT du tronçon, sinon le joueur
+        // « tournerait » dans le vide au moment de la bascule.
+        const ff = [{ x: 0, z: -1 }, { x: 1, z: 0 }, { x: 0, z: 1 }, { x: -1, z: 0 }][node.dir & 3];
+        const ex = node.ox + ff.x * node.length, ez = node.oz + ff.z * node.length;
+        if (Math.abs(node.escape.ox - ex) > 1e-6 || Math.abs(node.escape.oz - ez) > 1e-6) {
+          fail(s, node, `la branche ne part pas du bout du tronçon`);
+        }
+        if (node.escape.dir !== ((node.dir + node.exit + 4) & 3)) {
+          fail(s, node, `la branche ne part pas du côté annoncé par node.exit`);
+        }
+      }
+    }
 
     for (const o of obs) {
       totalObstacles++;
@@ -170,6 +212,15 @@ console.log(`  obstacles ${totalObstacles}  |  trous ${totalGaps}  |  crevasses 
 console.log(`  pièces ${totalCoins}  |  fissures décoratives ${totalCracks}`);
 console.log(`  parades (à ${V} u/s) : saut ${(JUMP_T * V).toFixed(1)} u, glissade ${(SLIDE_T * V).toFixed(1)} u, voie ${(LANE_T * V).toFixed(1)} u`);
 console.log(`  zones franches de virage : ${CFG.TURN_CLEAR_AFTER} u après, ${CFG.TURN_CLEAR_BEFORE} u avant (calculées, pas réglées)`);
+console.log(`  bifurcations offroad : ${totalExits} sur ${seedsWithExit}/${SEEDS} graines (une tous les ${CFG.OFFROAD_EVERY} u)`);
+
+/* Le compte des bifurcations est un contrôle à part entière, pas un chiffre
+   d'ambiance : si le générateur cessait d'en poser, TOUTES les règles
+   ci-dessus resteraient satisfaites et le script dirait « OK » en n'ayant rien
+   vérifié. On exige donc qu'il en ait effectivement vu. */
+if (seedsWithExit < SEEDS) {
+  errors.push(`${SEEDS - seedsWithExit} graine(s) n'ont produit AUCUNE bifurcation sur ${NODES_PER_SEED} tronçons`);
+}
 
 if (errors.length) {
   console.log(`\nÉCHEC — ${errors.length} configuration(s) injuste(s) (25 premières) :`);

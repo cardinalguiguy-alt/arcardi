@@ -942,6 +942,12 @@ export const FERME_STR = {
     // en fuite pour autant. Le message doit dire les deux choses à la fois —
     // tu as reculé, ils sont toujours là.
     runAmbushToast: "🐺 Tu recules sur la berge... la meute, elle, n'a pas bougé.",
+    // Zip 377 : sortie par la bifurcation offroad. Texte donné mot pour mot
+    // par Guillaume — ne pas le réécrire.
+    runEscapedToast: "😮‍💨 Ouf ! On n'est pas passé loin de la catastrophe. Vite, sortez de là et retrouvez vos résidents.",
+    runEscapedChat: (name, candies) => candies > 0
+      ? `🛤️ ${name} a quitté la piste par l'offroad et rentre avec ${candies} bonbon(s), sans une égratignure.`
+      : `🛤️ ${name} a quitté la piste par l'offroad, sans une égratignure.`,
     bagRunTitle: "Défi de fuite",
     bagCandiesRow: (n) => `${n} bonbon(s)`,
     bagRunBestSub: (n) => n > 0 ? `Meilleur score : ${n}` : "Aucun score pour l'instant.",
@@ -1912,6 +1918,13 @@ export const FERME_STR = {
     // zip 371) : le français joue sur le contraste entre "tu recules" et
     // "eux n'ont pas bougé", et c'est ce contraste qu'on garde.
     runAmbushToast: "🐺 You back off onto the bank... the pack doesn't.",
+    // Zip 377. Traduit dans l'esprit (consigne du zip 371) : le français
+    // enchaîne un soulagement puis une urgence, et c'est cet enchaînement
+    // qu'on garde — « Phew! » puis un impératif sec.
+    runEscapedToast: "😮‍💨 Phew! That was far too close. Now get out of here and find your residents.",
+    runEscapedChat: (name, candies) => candies > 0
+      ? `🛤️ ${name} took the side track and came back with ${candies} candy(ies), without a scratch.`
+      : `🛤️ ${name} took the side track and came back without a scratch.`,
     bagRunTitle: "Escape challenge",
     bagCandiesRow: (n) => `${n} candy(ies)`,
     bagRunBestSub: (n) => n > 0 ? `Best score: ${n}` : "No score yet.",

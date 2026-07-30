@@ -116,3 +116,54 @@ button.ghost:hover { background: #241a3a; }
    blessure). Vide et sans bordure quand le défi tourne en autonome. */
 .hint.farm { border-top: none; padding-top: 0; margin-top: 0; color: #ffb85c; }
 .hint:empty { display: none; }
+
+/* ============================================ SORTIE OFFROAD (zip 377) === */
+
+/* Compte à rebours de la sortie. Volontairement DISCRET et posé sous la jauge
+   de meute : c'est une information, pas une alerte. Un bandeau clignotant en
+   plein cadre pousserait à sortir, alors que le jeu doit rester neutre sur ce
+   choix — il appartient au joueur, pas à l'interface. */
+.exit-hint {
+  margin-top: 12px; align-self: flex-start;
+  font-size: 13px; font-weight: 700; letter-spacing: .10em;
+  text-transform: uppercase;
+  color: #b887ff;                       /* COL_MUSHROOM : la couleur du chemin lumineux */
+  text-shadow: 0 2px 0 #1a0f2e, 0 0 14px #8c5adc99;
+  opacity: 0; transition: opacity .25s ease;
+}
+.exit-hint.on { opacity: 1; }
+/* Dans la fenêtre où l'appui est effectif, et seulement là. */
+.exit-hint.now { color: #ffd98a; text-shadow: 0 2px 0 #1a0f2e, 0 0 18px #ffb85c; }
+
+/* Bandeau de la séquence de sortie. Il entre par le bas et s'efface avec le
+   fondu — il ne doit surtout pas rester lisible sur le noir final, sinon on
+   arrive à la ferme avec un reste de texte du défi à l'écran. */
+.escape {
+  flex-direction: column; align-items: center; justify-content: flex-end;
+  padding-bottom: 12vh; pointer-events: none;
+}
+.escape-box {
+  text-align: center;
+  padding: 14px 34px;
+  background: linear-gradient(180deg, rgba(26,15,46,0) 0%, rgba(26,15,46,.72) 60%);
+  animation: escapeIn .5s ease both;
+}
+.escape-box h2 {
+  font-size: 30px; letter-spacing: .02em;
+  text-shadow: 0 0 22px #8c5adc, 0 3px 0 #1a0f2e;
+}
+.escape-box p { margin-top: 6px; font-size: 15px; color: #b49ae6; }
+@keyframes escapeIn {
+  from { opacity: 0; transform: translateY(18px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Voile du fondu enchaîné. `pointer-events:none` en permanence : même à
+   opacité 1 il ne doit jamais avaler un clic destiné à l'écran de fin du mode
+   autonome. Aucune transition CSS ici — l'opacité est pilotée frame par frame
+   par la courbe de Player.escapePose, et une transition la retarderait. */
+#fadeVeil {
+  position: fixed; inset: 0;
+  background: #050308;
+  opacity: 0; pointer-events: none;
+}

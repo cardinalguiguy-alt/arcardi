@@ -52,10 +52,45 @@ class ChaseCamera {
     this.pos.lerp(want, this.initialised ? k : 1);
     if (this.pos.lengthSq() === 0) this.pos.copy(want);
 
+    /* Zip 377 — REGARD EN ARRIÈRE de la sortie offroad.
+       La POSITION de la caméra ne bouge pas d'un pouce : elle reste derrière
+       le fermier, sur la branche. Seule la DIRECTION DE VISÉE balaie 180°,
+       jusqu'à regarder en arrière le long de la branche — c'est-à-dire vers
+       l'embranchement, que la meute traverse tout droit à ce moment-là.
+
+       POURQUOI 180° ET PAS UN SIMPLE COUP D'ŒIL DE CÔTÉ. La question a été
+       tranchée en calculant, pas à l'estime : la caméra de poursuite garde le
+       fermier exactement sur son axe, donc la meute — qui court derrière lui
+       puis derrière l'embranchement — se retrouve toujours à 120°-160° de cet
+       axe. Aucun décalage modéré ne peut la ramener dans le champ (72° de FOV,
+       ~52° de demi-champ horizontal en 16:9). Avec 180°, l'embranchement est
+       plein cadre et les loups le traversent à ~20° du centre. Le fermier, lui,
+       passe derrière la caméra : c'est normal, c'est SON regard qu'on adopte.
+
+       Le sens du balayage compte autant que son amplitude : dirYaw décroît
+       quand on tourne à droite, donc +escapeSide fait passer la visée PAR la
+       direction de la piste principale à mi-parcours. On ne coupe pas au plus
+       court, on panoramique le long de la piste qu'on abandonne.
+
+       Aucun lissage ajouté ici, et c'est délibéré : `look` est DÉJÀ une courbe
+       continue (montée cubique, retour en cosinus, voir Player.escapePose).
+       Lisser une courbe lissée n'ajoute que du retard. */
+    let lx = fx, lz = fz, fromCam = false;
+    if (player.escaping) {
+      const a = player.escapeSide * Math.PI * player.escapePose(performance.now()).look;
+      const ca = Math.cos(a), sa = Math.sin(a);
+      // Rotation de +a dans la convention de dirYaw, où f = (-sin yaw, -cos yaw).
+      lx = fx * ca + fz * sa;
+      lz = fz * ca - fx * sa;
+      fromCam = true;   // la visée part de la CAMÉRA, sinon l'axe n'est exact qu'à 0° et 180°
+    }
+
+    const ox = fromCam ? this.pos.x : p.x;
+    const oz = fromCam ? this.pos.z : p.z;
     this.look.set(
-      p.x + fx * CFG.CAM_LOOK_AHEAD,
+      ox + lx * CFG.CAM_LOOK_AHEAD,
       p.y + CFG.CAM_LOOK_HEIGHT,
-      p.z + fz * CFG.CAM_LOOK_AHEAD
+      oz + lz * CFG.CAM_LOOK_AHEAD
     );
 
     // Secousse : décroissance exponentielle, appliquée après le lissage pour

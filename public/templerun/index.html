@@ -26,7 +26,23 @@
     <div class="danger-label" id="lPack"></div>
     <div class="danger-bar"><div id="dangerFill"></div></div>
   </div>
+  <!-- Zip 377 : compte à rebours de la sortie offroad. Masqué tant qu'aucune
+       sortie n'est à portée ; le texte est posé par ui.js. -->
+  <div id="exitHint" class="exit-hint"></div>
 </div>
+
+<!-- ------------------------------------------- SORTIE OFFROAD (zip 377) --
+     Bandeau de la séquence de sortie, et voile du fondu enchaîné. Le voile
+     est un simple div : le faire en CSS plutôt qu'en Three.js le garde
+     AU-DESSUS du HUD, et surtout il reste noir même si le contexte WebGL est
+     perdu au pire moment. -->
+<div id="escape" class="layer escape">
+  <div class="escape-box">
+    <h2 id="eTitle"></h2>
+    <p id="eSub"></p>
+  </div>
+</div>
+<div id="fadeVeil"></div>
 
 <!-- ---------------------------------------------------------------- TITRE -->
 <div id="title" class="layer panel visible">
@@ -41,6 +57,7 @@
     <div id="cPause"></div>
   </div>
   <p class="hint" id="tHint"></p>
+  <p class="hint" id="tHintExit"></p>
   <p class="hint farm" id="tHintFarm"></p>
 </div>
 
@@ -72,9 +89,13 @@
      CDN ne casse que le défi. -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
+<!-- Ordre : config.js AVANT bridge.js depuis le zip 377. Le pont valide
+     désormais les couleurs de tenue reçues et retombe sur CFG.COL_* quand
+     elles manquent ; le faire charger après config lève la dépendance
+     temporelle au lieu de parier sur l'ordre d'arrivée des messages. -->
 <script src="js/strings.js"></script>
-<script src="js/bridge.js"></script>
 <script src="js/config.js"></script>
+<script src="js/bridge.js"></script>
 <script src="js/input.js"></script>
 <script src="js/track.js"></script>
 <script src="js/player.js"></script>

@@ -19,21 +19,48 @@
      défi.
 
    PROTOCOLE
-     ferme -> défi : { type:"vf-run-init", lang:"fr"|"en", best:<nombre> }
+     ferme -> défi : { type:"vf-run-init", lang:"fr"|"en", best:<nombre>,
+                       skin:{ gender, shirt, pants, hair, skin } }
      défi -> ferme : { type:"vf-run-ready" }
                      { type:"vf-run-over", score, candies, distance, cause }
+                     { type:"vf-run-escape", score, candies, distance }
                      { type:"vf-run-exit" }   (sortie sans avoir couru)
 
    "vf-run-over" n'est PAS envoyé à la mort mais au moment où le joueur ferme
    l'écran de fin : il doit pouvoir lire son score avant que la ferme enchaîne
    son fondu au noir.
+
+   "vf-run-escape" (zip 377) obéit à la règle INVERSE, et c'est voulu : il part
+   à la fin du fondu de la séquence de sortie, sans écran intermédiaire. Le
+   joueur ne s'est pas fait rattraper, il n'a pas de score à encaisser du
+   regard — il a fui, et le rythme doit rester celui d'une fuite. L'écran de
+   fin serait un point d'arrêt là où il faut un enchaînement.
+
+   "skin" (zip 377) tranche le point d'architecture laissé ouvert au §8 du
+   contexte : c'est la TENUE qui voyage, pas une image. Le défi ne peut pas
+   lire fermeArt.js, mais il n'en a pas besoin — quatre couleurs et un genre
+   suffisent à rhabiller le squelette 3D, ça ne coûte aucun octet de plus dans
+   un message qui existait déjà, et le jour où Carla vendra des chapeaux, on
+   ajoutera un champ ici au lieu de refaire le pipeline.
    ========================================================================== */
 
 const Bridge = (function () {
   let embedded = false;
   let lang = "fr";
   let externalBest = null;
+  let skin = null;
   let onInit = null;
+
+  /* Une couleur reçue est une DONNÉE EXTERNE : on ne la passe pas telle quelle
+     à three.js. Un "#" suivi de six chiffres hexadécimaux, rien d'autre, sinon
+     on garde la valeur de repli. Ce n'est pas de la paranoïa de sécurité (même
+     origine obligatoire, déjà vérifiée) mais de la robustesse : une couleur
+     absente ou malformée doit donner le fermier par défaut, pas un fermier
+     noir ni une exception dans la construction de la scène. */
+  function hexOr(v, fallback) {
+    return (typeof v === "string" && /^#[0-9a-fA-F]{6}$/.test(v))
+      ? parseInt(v.slice(1), 16) : fallback;
+  }
 
   function handle(e) {
     // L'iframe est servie par la ferme elle-même : même origine. On refuse
@@ -43,6 +70,15 @@ const Bridge = (function () {
     if (!d || typeof d !== "object" || d.type !== "vf-run-init") return;
     lang = d.lang === "en" ? "en" : "fr";
     if (typeof d.best === "number") externalBest = d.best;
+    if (d.skin && typeof d.skin === "object") {
+      skin = {
+        gender: d.skin.gender === "f" ? "f" : "m",
+        shirt: hexOr(d.skin.shirt, CFG.COL_SHIRT),
+        pants: hexOr(d.skin.pants, CFG.COL_PANTS),
+        hair:  hexOr(d.skin.hair,  CFG.COL_HAIR),
+        skin:  hexOr(d.skin.skin,  CFG.COL_SKIN),
+      };
+    }
     if (onInit) onInit();
   }
 
@@ -71,7 +107,9 @@ const Bridge = (function () {
     get embedded() { return embedded; },
     get lang() { return lang; },
     get externalBest() { return externalBest; },
+    get skin() { return skin; },
     over(payload) { post(Object.assign({ type: "vf-run-over" }, payload)); },
+    escape(payload) { post(Object.assign({ type: "vf-run-escape" }, payload)); },
     exit() { post({ type: "vf-run-exit" }); },
   };
 })();

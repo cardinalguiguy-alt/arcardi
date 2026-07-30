@@ -18,6 +18,22 @@ Marcher sur la porte ouvre le défi par-dessus la ferme. En cas de défaite :
 avec les **bonbons** ramassés. Abandonner une course en cours compte comme une
 défaite ; ressortir depuis l'écran-titre est gratuit.
 
+**Sortie offroad (zip 377).** Tous les **4000 mètres**, un embranchement s'ouvre
+sur le côté de la piste : bordure interrompue, stèle à runes au glow renforcé,
+deux torches rapprochées, et un chemin de champignons luminescents qui s'y
+engage. Tourner vers lui **quitte la course sain et sauf** — le fermier se
+retourne, on voit la meute continuer tout droit, il court seul trois secondes,
+et un fondu enchaîné le ramène **au pied de la jetée, sans un loup**.
+
+C'est la seule issue du défi qui ne soit pas une défaite : **aucune blessure**,
+bonbons conservés, et le score compte pour le record. Il s'arrête en revanche
+**au virage** — il mesure la distance parcourue *en danger*. Ne rien faire
+devant un embranchement n'a strictement aucune conséquence : la course continue,
+et le suivant est 4000 mètres plus loin.
+
+**Le fermier du défi porte la tenue du joueur** (zip 377) : genre et couleurs
+(chemise, pantalon, cheveux) voyagent dans `vf-run-init`.
+
 ## Y jouer seul, pour itérer sur le gameplay
 
 Double-cliquer sur **`index.html`**. Pas de build, pas de serveur. Le défi
@@ -74,11 +90,22 @@ nombre de gameplay.
 ### Protocole avec la ferme
 
 ```
-ferme -> défi : { type:"vf-run-init", lang, best }
+ferme -> défi : { type:"vf-run-init", lang, best,
+                  skin:{ gender, shirt, pants, hair, skin } }
 défi -> ferme : { type:"vf-run-ready" }
-                { type:"vf-run-over", score, candies, distance, cause }
+                { type:"vf-run-over",   score, candies, distance, cause }
+                { type:"vf-run-escape", score, candies, distance }
                 { type:"vf-run-exit" }
 ```
+
+`skin` tranche le point d'architecture laissé ouvert au §8 du contexte : c'est
+la **tenue** qui voyage, pas une image de sprite. Le défi ne peut pas lire
+`fermeArt.js`, mais quatre couleurs et un genre suffisent à rhabiller son
+squelette 3D — et le jour où Carla vendra des chapeaux, on ajoute un champ ici.
+
+`vf-run-escape` obéit à la règle **inverse** de `vf-run-over` : il part à la fin
+du fondu, sans écran intermédiaire. Le joueur n'a pas de score à encaisser du
+regard — il a fui, et le rythme doit rester celui d'une fuite.
 
 `vf-run-over` part quand le joueur ferme l'écran de fin, pas à sa mort : il doit
 pouvoir lire son score avant que la ferme enchaîne son fondu au noir. Les deux
@@ -89,13 +116,18 @@ origine.
 
 ## Vérification
 
-Quatre scripts Node, depuis ce dossier. Aucune dépendance.
+Sept scripts Node, depuis ce dossier. Aucune dépendance, moins de 40 secondes
+en tout — **les relancer tous à chaque livraison**. Un outil qu'on saute n'est
+pas un filet de sécurité, c'est un fichier mort (leçon du zip 375).
 
 ```
-node tools/verify-fairness.js    # équité de la génération (≈ 7 500 km)
+node tools/verify-fairness.js    # équité de la génération (≈ 21 700 km)
 node tools/simulate-run.js       # 120 parties complètes, sans navigateur
 node tools/smoke-render.js       # rendu exercé avec un faux Three.js
-node tools/check-strings.js      # parité FR/EN + couverture des libellés HTML
+node tools/check-strings.js      # parité FR/EN + ui.js exécuté contre un faux DOM
+node tools/verify-offroad.js     # la bifurcation, vérifiée en la JOUANT (zip 377)
+node tools/verify-skin.js        # la tenue du joueur, de la ferme au défi (zip 377)
+node tools/render-runner.js      # rend le fermier en PNG — À REGARDER (zip 377)
 ```
 
 `verify-fairness.js` ne vérifie pas une règle arbitraire mais une **simulation
@@ -103,6 +135,20 @@ de disponibilité** : chaque parade occupe le joueur pendant une durée connue
 (saut 0,71 s, glissade 0,62 s, voie 0,20 s), et à 34 u/s un saut consomme 24
 unités de piste. L'espacement minimal entre obstacles est donc *calculé* à
 partir de la physique du joueur, pas choisi à la main.
+
+`verify-offroad.js` suit le même principe : il ne relit aucune condition, il
+**joue**. Il fait prendre la sortie à un joueur, déroule la séquence image par
+image, et vérifie ce qui est arrivé — cadence tenue sans dérive, aucun appui
+latéral *nécessaire* dans la fenêtre d'armement (donc aucune sortie
+accidentelle possible), meute jamais posée sur la branche et toujours en train
+de s'éloigner, bout de la branche jamais atteint, score bien figé au virage.
+
+`render-runner.js` **rend le fermier 3D en PNG** (rasteriseur maison, zéro
+dépendance) sous trois angles et trois poses, pour les deux genres. Il ne
+prouve rien : il donne à regarder. Les deux corrections de silhouette du zip
+377 — la nuque posée du côté du visage depuis le zip 374, les mèches longues
+qui mangeaient le profil — viennent de là, et aucune des deux ne levait la
+moindre erreur.
 
 Côté ferme, `verify-gate` (dans le zip de livraison) refait un parcours en
 largeur depuis l'arrivée du monde sombre jusqu'à la porte, avec le vrai test de
@@ -112,11 +158,14 @@ collision du jeu, sur les six cartes.
 
 ## Ce qui reste à faire
 
-- **Le sprite du fermier** : aujourd'hui une silhouette en boîtes reprenant les
-  proportions et les couleurs `OUTFITS[0]`. À remplacer par le vrai sprite.
+- ~~**Le sprite du fermier**~~ : *fait au zip 377* — il porte la tenue et le
+  genre du joueur. Reste une silhouette en boîtes articulées, mais c'est
+  désormais un choix (l'animation du zip 374 en dépend), plus un placeholder.
 - **Les loups** : trois boîtes noires à yeux rouges. Le sprite existe dans
   `fermeArt.js`.
 - **Le décor** : arbres morts, colonnes, runes sont des boîtes. La palette, elle,
   est la bonne (relevée dans `drawEvilFrame`).
 - **Le son** : rien.
 - **Les bonbons** : ramassés et comptés, mais on n'en fait encore rien.
+- **La progression de la meute** : `CHASE_RECOVER` et `CHASE_LOSS_ON_STUMBLE`
+  sont fixes du début à la fin d'une course (voir l'audit).

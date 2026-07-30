@@ -10,6 +10,43 @@
 
 import * as C from "./fermeConstants";
 
+/* ---------------------------------------------------------------- PALETTE ---
+   Zip 377. Ces deux constantes vivaient DANS buildSprites(), donc invisibles
+   depuis l'extérieur du module — ce qui allait très bien tant que personne
+   d'autre que le canvas n'avait besoin de connaître la couleur des cheveux
+   d'un fermier. Le défi de fuite, lui, en a besoin : il doit reconstituer le
+   personnage du joueur en 3D et ne peut pas lire ce fichier (page autonome
+   servie depuis public/, voir §7 du contexte).
+
+   Elles sont donc REMONTÉES au niveau du module et exposées par charPalette().
+   Volontairement pas dupliquées : une deuxième liste de couleurs de cheveux
+   quelque part serait la garantie qu'un jour les deux divergent, et le défi
+   afficherait un fermier presque bon — le pire cas, celui qu'on ne remarque
+   pas tout de suite. buildSprites continue de lire ces mêmes constantes. */
+export const CHAR_HAIR_COLORS = ["#5a3a1e", "#2a2a2a", "#c8862a", "#8a3020", "#d4b03a", "#4a3468", "#743a12", "#b0b0b8"];
+export const CHAR_SKIN = "#f0c8a0";
+
+/* Tenue complète d'un fermier, telle que la dessine drawCharFrame : couleurs
+   de C.OUTFITS (chemise/pantalon), cheveux indexés sur le MÊME numéro de
+   tenue, peau standard. Le genre est renvoyé tel quel — c'est le
+   consommateur qui décide quoi en faire.
+
+   NB : cette fonction décrit un fermier JOUEUR. Les overlays de résidents
+   (salopette de Greg, chemise de Tristan, combinaison de René, tenue de
+   Carla…) n'y figurent pas, et c'est correct : seul un joueur peut lancer le
+   défi de fuite. */
+export function charPalette(gender, outfit) {
+  const i = ((outfit | 0) % C.OUTFITS.length + C.OUTFITS.length) % C.OUTFITS.length;
+  const o = C.OUTFITS[i];
+  return {
+    gender: gender === "f" ? "f" : "m",
+    shirt: o.shirt,
+    pants: o.pants,
+    hair: CHAR_HAIR_COLORS[i % CHAR_HAIR_COLORS.length],
+    skin: CHAR_SKIN,
+  };
+}
+
 export function buildSprites() {
   const T = 16;
 
@@ -814,8 +851,12 @@ export function buildSprites() {
   }
 
   /* ---------------- Personnages (H/F, 4 directions × 4 frames) ---------------- */
-  const HAIR_COLORS = ["#5a3a1e", "#2a2a2a", "#c8862a", "#8a3020", "#d4b03a", "#4a3468", "#743a12", "#b0b0b8"];
-  const SKIN = "#f0c8a0", SKIN_D = "#d8a878";
+  // Zip 377 : ces deux-là sont désormais déclarées au niveau du module (et
+  // exportées via charPalette, pour le défi de fuite). On les relit ici plutôt
+  // que de les redéclarer — une seule source de vérité pour la couleur d'un
+  // fermier, quel que soit le moteur qui le dessine.
+  const HAIR_COLORS = CHAR_HAIR_COLORS;
+  const SKIN = CHAR_SKIN, SKIN_D = "#d8a878";
   // Jérôme Martial (chantier sucrerie, demande Guillaume : "sa peau devra
   // être marron, pas blanche, et ses cheveux noirs et courts") — peau et
   // cheveux dédiés, réservés au résident sugarworker via le flag

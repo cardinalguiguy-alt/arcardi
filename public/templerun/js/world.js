@@ -88,6 +88,17 @@ const World = (function () {
 
   function cssHex(hex) { return "#" + hex.toString(16).padStart(6, "0"); }
 
+  /* Assombrissement d'une couleur, équivalent 3D du `shade()` de fermeArt.js.
+     Le sprite 2D ombre déjà le bas de la jupe (« P(g, x+3, 20, 10, 1,
+     shade(o.shirt)) ») ; sans ça, buste et jupe fusionnent en un seul aplat et
+     la silhouette féminine perd sa taille. Vérifié au rendu. */
+  function shadeHex(hex) {
+    const r = Math.round(((hex >> 16) & 255) * 0.72);
+    const g = Math.round(((hex >> 8) & 255) * 0.72);
+    const b = Math.round((hex & 255) * 0.72);
+    return (r << 16) | (g << 8) | b;
+  }
+
   /* Canvas de travail. Passer par un helper permet au faux DOM de
      tools/smoke-render.js de fournir un canvas bidon en UN seul endroit. */
   function makeCanvas(w, h) {
@@ -123,9 +134,11 @@ const World = (function () {
     mat.barkDark  = L(CFG.COL_BARK_DARK);
     mat.wolf      = L(CFG.COL_WOLF);
     mat.shirt     = L(CFG.COL_SHIRT);
+    mat.shirtDark = L(shadeHex(CFG.COL_SHIRT));   // bas de jupe : voir buildPlayer
     mat.pants     = L(CFG.COL_PANTS);
     mat.skin      = L(CFG.COL_SKIN);
     mat.hair      = L(CFG.COL_HAIR);
+    mat.earring   = L(0xe85a8a);   // le pixel rose du sprite féminin (fermeArt.js)
     mat.moss      = L(CFG.COL_MOSS);
     mat.mossDark  = L(CFG.COL_MOSS_DARK);
     mat.vine      = L(CFG.COL_VINE);
@@ -670,8 +683,25 @@ const World = (function () {
 
   /* ============================================================= FERMIER ===
      Silhouette bloc reprenant les proportions du sprite de Ferme Vallée
-     (16 px de large pour 24 de haut, tête large, jambes courtes) et ses
-     couleurs OUTFITS[0]. Placeholder assumé, à remplacer par le vrai sprite.
+     (16 px de large pour 24 de haut, tête large, jambes courtes).
+
+     ZIP 377 — CE N'EST PLUS UN PLACEHOLDER GÉNÉRIQUE : c'est LE fermier du
+     joueur. La ferme envoie son genre et ses quatre couleurs dans
+     "vf-run-init" (voir bridge.js) et applySkin() les pose ici.
+
+     COMMENT LE GENRE EST RENDU, et pourquoi comme ça. Le sprite 2D de la ferme
+     (drawCharFrame, fermeArt.js) distingue l'homme de la femme par trois
+     choses et trois seulement : des cheveux longs qui descendent le long du
+     visage et dans la nuque, un bas de tenue qui s'évase en jupe au lieu de
+     deux jambes de pantalon, et une boucle d'oreille rose. On reprend les
+     trois, à l'identique dans leur INTENTION — pas de nouvelle direction
+     artistique inventée pour la 3D. C'est la règle « chercher le motif déjà
+     présent dans le code avant d'en inventer un ».
+
+     Les pièces féminines sont CONSTRUITES UNE FOIS et masquées, jamais
+     reconstruites : applySkin peut être rappelée à tout moment (la ferme
+     réémet vf-run-init si son premier message s'est perdu), et reconstruire le
+     squelette invaliderait playerRig au milieu d'une frame.
 
      Hiérarchie : playerMesh (position + cap monde) > pelvis (pivot de toutes
      les poses) > chest (buste, qui doit pouvoir se pencher SANS entraîner les
@@ -701,8 +731,61 @@ const World = (function () {
     head.position.set(0, 0.86, 0);
     head.add(box(0.78, 0.68, 0.62, mat.skin, 0, 0.34, 0));
     head.add(box(0.84, 0.24, 0.68, mat.hair, 0, 0.62, 0));
-    head.add(box(0.86, 0.30, 0.16, mat.hair, 0, 0.44, -0.26));  // nuque : c'est ce qu'on voit de dos
+    /* Nuque courte : c'est ce qu'on voit de dos, et c'est LA seule chose qui
+       distingue l'arrière du crâne de l'avant sur ce personnage sans visage.
+
+       CORRIGÉE AU ZIP 377 : elle était posée à z = -0,26, c'est-à-dire du
+       côté du VISAGE. Le fermier courait donc avec sa nuque sur le front, et
+       l'arrière de son crâne — la seule face qu'on voie pendant toute la
+       partie — était de la peau nue. Trouvée en rendant le squelette et en le
+       regardant (tools/render-runner.js), pas en relisant : le code ne dit
+       nulle part de quel côté regarde le personnage.
+
+       La convention, revérifiée sur trois poses indépendantes plutôt que
+       supposée : le fermier regarde vers son -Z local (inclinaison de course
+       de -0,1 qui penche le buste EN AVANT, bascule de glissade de +0,95 qui
+       le renverse EN ARRIÈRE, bras d'appui planté à -1,75 DERRIÈRE lui). Le
+       dos est donc en +Z, et la caméra, posée à p - avant × CAM_BACK, s'y
+       trouve bien.
+
+       Masquée chez la femme, dont les cheveux longs la recouvrent entièrement
+       — deux volumes de cheveux superposés se battraient en profondeur
+       (z-fighting) sur toute la course. */
+    // Descendue jusqu'à la naissance des cheveux (0,14 au lieu de 0,29) une
+    // fois la face arrière enfin visible : sinon le crâne montrait une large
+    // bande de peau nue entre les cheveux et le cou. Invisible tant que la
+    // nuque était du mauvais côté.
+    const napeM = box(0.86, 0.44, 0.16, mat.hair, 0, 0.36, 0.26);
+    head.add(napeM);
     chest.add(head);
+
+    /* --- Pièces féminines, masquées par défaut --------------------------- */
+    /* Cheveux longs : deux mèches le long des tempes + une masse dans le dos,
+       descendant jusqu'aux épaules — les colonnes de cheveux du sprite 2D
+       (x+3 et x+11, de y3 à y13) et sa masse arrière.
+
+       Les mèches sont DÉCALÉES VERS L'ARRIÈRE (z = +0,08) et peu profondes :
+       la première version, centrée et profonde de 0,54, transformait la tête
+       en bloc noir de profil, visage compris. Vue de côté, une chevelure
+       longue doit encadrer le visage, pas le manger. Encore une chose que
+       seul le rendu dit. */
+    const hairL = box(0.20, 0.72, 0.40, mat.hair, -0.40, 0.24, 0.08);
+    const hairR = box(0.20, 0.72, 0.40, mat.hair, 0.40, 0.24, 0.08);
+    const hairB = box(0.88, 0.76, 0.18, mat.hair, 0, 0.26, 0.30);
+    // Boucle d'oreille : un pixel rose dans le sprite, un cube d'un dixième
+    // d'unité ici. Invisible neuf fois sur dix, et c'est très bien : c'est le
+    // genre de détail qui ne se remarque que quand il manque.
+    const earring = box(0.10, 0.12, 0.10, mat.earring, 0.42, 0.30, -0.14);
+    const femHead = [hairL, hairR, hairB, earring];
+    for (const m of femHead) { m.visible = false; head.add(m); }
+
+    // Jupe évasée : deux étages plutôt qu'un tronc de cône, pour rester dans
+    // la grammaire « que des boîtes » du fichier. Portée par le BASSIN, donc
+    // elle suit la bascule de la glissade sans un mot de plus.
+    const skirtA = box(1.00, 0.26, 0.66, mat.shirt, 0, rel(0.86), 0);
+    const skirtB = box(1.18, 0.22, 0.78, mat.shirtDark, 0, rel(0.70), 0);
+    const femBody = [skirtA, skirtB];
+    for (const m of femBody) { m.visible = false; pelvis.add(m); }
 
     // Bras : épaule à hauteur de poitrine, coude à mi-longueur.
     const armL = limb2(0.26, 0.34, 0.32, 0.28, mat.skin, -0.60, 0.60, 0);
@@ -718,7 +801,40 @@ const World = (function () {
     }
 
     scene.add(g);
-    playerRig = { pelvis, chest, head, armL, armR, legL, legR };
+    playerRig = { pelvis, chest, head, armL, armR, legL, legR, napeM, femHead, femBody };
+    if (pendingSkin) applySkin(pendingSkin);   // message arrivé avant la scène
+  }
+
+  /* Applique la tenue reçue de la ferme. Idempotente et sans allocation : on
+     ne fait que reteinter des matériaux existants et basculer des visibilités.
+
+     Les matériaux sont PARTAGÉS avec le décor pour deux d'entre eux — mat.skin
+     ne sert qu'au fermier, mais on prend soin de ne jamais toucher mat.kerb ou
+     mat.stone ici. Reteinter un matériau partagé repeindrait la moitié du
+     temple en bleu chemise, et l'erreur ne se verrait qu'en jeu. */
+  let pendingSkin = null;
+  function applySkin(s) {
+    pendingSkin = s;
+    if (!s || !playerRig) return;
+    mat.shirt.color.setHex(s.shirt);
+    mat.shirtDark.color.setHex(shadeHex(s.shirt));
+    mat.pants.color.setHex(s.pants);
+    mat.hair.color.setHex(s.hair);
+    mat.skin.color.setHex(s.skin);
+
+    const fem = s.gender === "f";
+    for (const m of playerRig.femHead) m.visible = fem;
+    for (const m of playerRig.femBody) m.visible = fem;
+    playerRig.napeM.visible = !fem;
+    // Sous la jupe, les jambes sont nues : le sprite 2D ne pose pas de
+    // pantalon chez la femme, il descend la chemise et laisse la peau
+    // jusqu'aux bottines. On suit, sinon la jupe aurait l'air enfilée
+    // par-dessus un pantalon.
+    const legMat = fem ? mat.skin : mat.pants;
+    for (const leg of [playerRig.legL, playerRig.legR]) {
+      leg.upper.material = legMat;
+      leg.lower.material = legMat;
+    }
   }
 
   function buildWolves() {
@@ -893,6 +1009,11 @@ const World = (function () {
     for (const side of [-1, 1]) {
       const off = side * (CFG.TRACK_WIDTH / 2 + 0.75);
       for (let t = 3; t < node.length - 3; t += CFG.KERB_SPACING) {
+        // Zip 377 : on N'OUVRE PAS la bordure au ciseau, on l'interrompt. Une
+        // trouée franche dans une haie de blocs est le signal le plus lisible
+        // qu'il existe un passage — et c'est le seul endroit du jeu où la
+        // bordure s'interrompt, donc il ne peut pas être confondu.
+        if (node.exit === side && t > node.length - CFG.OFFROAD_MOUTH) continue;
         if (rng() < CFG.KERB_SKIP_CHANCE) continue;
         const jitter = (rng() - 0.5) * 1.4;
 
@@ -1063,9 +1184,169 @@ const World = (function () {
       place(arrow, node.length - 6, node.turn * 2.2, 0.06);
     }
 
+    /* --- 13. BIFURCATION OFFROAD (zip 377). ---------------------------------
+       Trois repères, et volontairement AUCUN de ceux du virage. La flèche au
+       sol et les deux piliers jumeaux restent réservés aux virages
+       obligatoires : confondre « tourne ou tu meurs » avec « tu peux sortir
+       ici » serait le pire malentendu que ce jeu puisse produire, et le
+       vocabulaire visuel est ce qui l'empêche, pas un libellé.
+
+       Les trois repères sont ceux du schéma fourni par Guillaume :
+         a. une stèle à runes unique, côté sortie, au glow renforcé ;
+         b. deux torches RAPPROCHÉES juste avant (resserrement local — c'est
+            l'écart inhabituel qui se remarque, pas la torche) ;
+         c. un chemin de champignons luminescents qui s'engage dans la trouée,
+            seul élément qui DÉSIGNE une direction. Diégétique : le monde
+            sombre est déjà éclairé comme ça partout ailleurs. --- */
+    if (node.exit !== 0) {
+      const side = node.exit;
+      const t0 = node.length;
+
+      // a. Stèle isolée, plus haute que les bordures, au bord de la trouée.
+      const sh = 2.9;
+      place(box(0.4, sh, 1.7, mat.kerb, 0, 0, 0), t0 - CFG.OFFROAD_MOUTH - 1.2,
+            side * (CFG.TRACK_WIDTH / 2 + 0.9), sh / 2 - 0.2);
+      const runeG = new THREE.Mesh(geo.plane, mat.rune);
+      runeG.scale.set(1.5, sh * 0.7, 1);
+      place(runeG, t0 - CFG.OFFROAD_MOUTH - 1.2, side * (CFG.TRACK_WIDTH / 2 + 0.9), sh * 0.55);
+      glows.push(runeG);
+      // Glow « renforcé » : un second halo, plus large et plus doux, par-dessus
+      // la gravure. Deux plans valent mieux qu'un matériau dédié — le halo est
+      // billboardé comme les autres et suit la caméra sans code en plus.
+      const runeHalo = new THREE.Mesh(geo.plane, mat.glow);
+      runeHalo.scale.set(4.2, 4.2, 1);
+      place(runeHalo, t0 - CFG.OFFROAD_MOUTH - 1.2, side * (CFG.TRACK_WIDTH / 2 + 0.9), sh * 0.5);
+      glows.push(runeHalo);
+
+      // b. Deux torches rapprochées (2,5 u d'écart, contre TORCH_SPACING = 22).
+      for (let i = 0; i < 2; i++) {
+        const tt = t0 - CFG.OFFROAD_MOUTH - 5 + i * 2.5;
+        place(box(0.22, 2.2, 0.22, mat.torchWood, 0, 0, 0), tt, side * (CFG.TRACK_WIDTH / 2 + 0.45), 1.1);
+        const fl = new THREE.Mesh(geo.plane, mat.flame);
+        fl.scale.set(0.7, 0.95, 1);
+        place(fl, tt, side * (CFG.TRACK_WIDTH / 2 + 0.45), 2.4);
+        fl.userData.phase = (node.index * 7 + tt) * 0.7;
+        flames.push(fl);
+      }
+
+      // c. Chapelet de champignons qui s'enfonce dans la trouée, en biais.
+      for (let i = 0; i < 5; i++) {
+        const k = i / 4;
+        const tt = t0 - CFG.OFFROAD_MOUTH * 0.55 + k * (CFG.OFFROAD_MOUTH * 0.5);
+        const off = side * (CFG.TRACK_WIDTH / 2 - 0.4 + k * 3.2);
+        const capSize = 0.34 + (1 - k) * 0.12;
+        place(box(0.09, 0.22, 0.09, mat.mushStem, 0, 0, 0), tt, off, 0.11);
+        const cap = new THREE.Mesh(geo.cap, mat.mushroom);
+        cap.scale.set(capSize, capSize * 0.62, capSize);
+        place(cap, tt, off, 0.22);
+      }
+      const trailHalo = new THREE.Mesh(geo.plane, mat.glow);
+      trailHalo.scale.set(5.5, 5.5, 1);
+      place(trailHalo, t0 - CFG.OFFROAD_MOUTH * 0.3, side * (CFG.TRACK_WIDTH / 2 + 1.4), 0.5);
+      glows.push(trailHalo);
+
+      // La branche est bâtie DANS LE MÊME GROUPE que l'embranchement : elle
+      // apparaît et disparaît avec lui, donc elle est visible au moment de la
+      // décision (sans quoi le joueur choisirait à l'aveugle) et elle est
+      // libérée par dropNode sans une ligne de gestion de plus.
+      if (node.escape) buildEscapeBranch(node.escape, g);
+    }
+
     scene.add(g);
     nodeGroups.set(node.index, g);
     node.group = g;
+  }
+
+  /* ------------------------------------------- BRANCHE D'ÉCHAPPEMENT (377)
+     Une chaussée qui s'en va vers le lac, et rien d'autre. Pas d'obstacle
+     (il n'y a plus rien à jouer), pas de pièce (le score est arrêté), pas de
+     torche (on s'éloigne du temple), et une bordure qui se délite au lieu de
+     s'arrêter net.
+
+     BUDGET. Un embranchement tous les 4000 unités, c'est un tronçon sur
+     quarante environ : le surcoût ne pèse que sur ces tronçons-là, et il est
+     mesuré par smoke-render.js, qui force désormais un embranchement dans son
+     scénario. Le décor est volontairement plus maigre que sur la piste
+     principale — c'est aussi ce qui fait sentir qu'on quitte le chemin. */
+  function buildEscapeBranch(esc, g) {
+    const f = dirForward(esc.dir), r = dirRight(esc.dir);
+    const yaw = dirYaw(esc.dir);
+    const rng = Track.makeRng(Math.round(esc.startDist) * 31 + 17);
+    const place = (mesh, t, off, y) => {
+      mesh.position.set(esc.ox + f.x * t + r.x * off, y, esc.oz + f.z * t + r.z * off);
+      mesh.rotation.y += yaw;
+      g.add(mesh);
+      return mesh;
+    };
+
+    /* Pavage. Il DÉMARRE à t négatif : la branche et la piste principale
+       partagent leur coin, et sans ce recouvrement on verrait le vide sous le
+       joueur pendant la fraction de seconde du virage. Même raison que le
+       chevauchement naturel des tronçons dans un virage ordinaire. */
+    const tile = CFG.FLOOR_TILE;
+    for (let t = -CFG.TRACK_WIDTH / 2; t < esc.length - 0.01; t += tile) {
+      const len = Math.min(tile, esc.length - t);
+      const tier = pickWearTier(rng());
+      const variants = mat.stoneVariants[tier];
+      const material = variants[Math.floor(rng() * variants.length)];
+      // La chaussée se dégrade en s'éloignant : bascule et affaissement
+      // croissants. C'est un chemin qui n'est plus entretenu.
+      const wear = Math.min(1, Math.max(0, t) / esc.length);
+      const tilt = (rng() - 0.5) * (CFG.FLOOR_TILT_CRACKED + wear * 0.09);
+      const slab = box(CFG.TRACK_WIDTH, CFG.FLOOR_THICKNESS, Math.max(0.2, len - 0.12), material, 0, 0, 0);
+      slab.rotation.x = tilt; slab.rotation.z = (rng() - 0.5) * 0.03;
+      place(slab, t + len / 2, 0, -CFG.FLOOR_THICKNESS / 2 - wear * 0.12);
+    }
+
+    // Bordure qui se délite : de plus en plus de blocs manquants à mesure
+    // qu'on s'éloigne, jusqu'à disparaître complètement.
+    for (const s of [-1, 1]) {
+      for (let t = 2; t < esc.length * 0.62; t += CFG.KERB_SPACING) {
+        if (rng() < CFG.KERB_SKIP_CHANCE + (t / esc.length) * 1.1) continue;
+        const h = 0.7 + rng() * 0.4;
+        const b = box(1.4, h, 2.0 + rng() * 1.2, mat.kerb, 0, 0, 0);
+        b.rotation.y = (rng() - 0.5) * 0.22;
+        place(b, t, s * (CFG.TRACK_WIDTH / 2 + 0.75), h / 2 - 0.25);
+      }
+    }
+
+    // Champignons : le chemin lumineux commencé dans la trouée continue, et
+    // c'est lui qui tient la lecture de la branche une fois les torches
+    // laissées derrière.
+    for (let i = 0; i < 4; i++) {
+      const t = 6 + i * (esc.length * 0.2);
+      const off = (i % 2 === 0 ? -1 : 1) * (CFG.TRACK_WIDTH / 2 + 1.1 + rng() * 1.8);
+      for (let m = 0; m < 2; m++) {
+        const cap = new THREE.Mesh(geo.cap, mat.mushroom);
+        const cs = 0.3 + rng() * 0.24;
+        cap.scale.set(cs, cs * 0.62, cs);
+        place(cap, t + (rng() - 0.5) * 1.2, off + (rng() - 0.5) * 1.0, 0.18);
+      }
+      const halo = new THREE.Mesh(geo.plane, mat.glow);
+      const hs = 2.8 + rng() * 1.4;
+      halo.scale.set(hs, hs, 1);
+      place(halo, t, off, 0.5);
+      glows.push(halo);
+    }
+
+    // Quelques arbres morts, moitié moins qu'ailleurs : la branche est déjà
+    // le poste le plus chargé de son tronçon, et le brouillard épaissi de la
+    // séquence de sortie en mange la plus grande part.
+    for (let i = 0; i < 5; i++) {
+      const t = rng() * esc.length;
+      const off = (rng() < 0.5 ? -1 : 1) * (CFG.TRACK_WIDTH / 2 + 4 + rng() * 16);
+      const h = 4 + rng() * 4.5;
+      const trunk = box(0.42, h, 0.42, mat.bark, 0, 0, 0);
+      trunk.rotation.z = (rng() - 0.5) * 0.22;
+      place(trunk, t, off, h / 2 - 1.4);
+      for (let b = 0; b < 2; b++) {
+        const bl = 1.3 + rng() * 1.8;
+        const bm = box(0.16, bl, 0.16, mat.barkDark, 0, 0, 0);
+        bm.rotation.set((rng() - 0.5) * 1.6, rng() * 6.28, (rng() - 0.5) * 1.9);
+        place(bm, t + (rng() - 0.5) * 0.5, off + (rng() - 0.5) * 0.5, h * (0.55 + rng() * 0.4) - 1.4);
+      }
+    }
+    esc.built = true;
   }
 
   function dropNode(node) {
@@ -1111,6 +1392,11 @@ const World = (function () {
   const STRIDE_PER_UNIT = 1.35;   // cycles de foulée par unité de distance
   const RUN_SWING = 0.95;         // amplitude de balancement des cuisses (rad)
   const ARM_SWING = 0.62;         // amplitude de balancement des bras (rad)
+  /* Hauteur de repos du buste, relative au bassin. Elle est DÉRIVÉE de la même
+     expression que dans buildPlayer (rel(0.78)) et non recopiée : le souffle
+     de la sortie offroad doit y revenir exactement, sinon le fermier reste
+     tassé d'un demi-centimètre pour le restant de la partie. */
+  const CHEST_REST_Y = 0.78 - CFG.SLIDE_PELVIS_Y;
 
   function updatePlayer(player, now) {
     if (!player.node()) return;   // garde : un tronçon peut manquer une frame
@@ -1167,6 +1453,31 @@ const World = (function () {
     armR.hip.rotation.x = mix(swing * (ARM_SWING / RUN_SWING), -1.75 + dragArm);
     armR.hip.rotation.z = -0.55 * k;
     armR.knee.rotation.x = mix(-0.35 - Math.max(0, swing) * 0.5, -0.25);
+
+    /* ------------------------------------ SORTIE OFFROAD : IL SE RETOURNE ---
+       Zip 377. Le fermier ne s'arrête pas de courir — il jette un œil
+       par-dessus l'épaule, du côté d'où il vient, pendant que la meute file
+       tout droit. Deux rotations en Y qui S'AJOUTENT (buste puis tête) : c'est
+       ce qui donne un mouvement de torsion et non une tête vissée à l'envers.
+
+       Elles vivent sur l'axe Y, que ni la course ni la glissade n'utilisent —
+       aucun terme n'est accumulé sur un angle déjà occupé, ce qui est
+       exactement l'erreur classique que la séparation course/glissade évite
+       depuis le 374. Remettre à zéro EN DEHORS de la sortie est indispensable :
+       une torsion oubliée survivrait à la partie suivante.
+
+       Le souffle est porté par le buste et non par le bassin : un bassin qui
+       respire fait tanguer les jambes et casse la foulée. */
+    if (player.escaping) {
+      const e = player.escapePose(now);
+      chest.rotation.y = player.escapeSide * CFG.ESCAPE_LOOKBACK_TORSO * e.look;
+      head.rotation.y = player.escapeSide * CFG.ESCAPE_LOOKBACK_HEAD * e.look;
+      chest.position.y = CHEST_REST_Y + e.breath * CFG.ESCAPE_BREATH_AMP;
+    } else if (chest.rotation.y !== 0) {
+      chest.rotation.y = 0;
+      head.rotation.y = 0;
+      chest.position.y = CHEST_REST_Y;
+    }
 
     if (k > 0.35 && player.grounded) emitDust(now, p, k);
 
@@ -1335,6 +1646,21 @@ const World = (function () {
     mushLight.intensity = 0.75 + Math.sin(now / 260) * 0.12 + flash * 0.6;
   }
 
+  /* Épaississement de la brume pendant la sortie offroad (zip 377).
+     C'est le brouillard EXISTANT qu'on densifie, pas un voile ajouté : la
+     piste s'efface d'elle-même dans le lointain, le lac et les arbres morts
+     s'estompent dans le bon ordre, et le fondu de l'interface n'a plus qu'à
+     achever ce que la scène a commencé. Un voile plat par-dessus l'image
+     aurait délavé le fermier au premier plan aussi fort que l'horizon.
+
+     Remis à zéro par Game.start() : une densité laissée en l'état ferait
+     commencer la course suivante dans la purée de pois. */
+  function setMist(k) {
+    if (!scene || !scene.fog) return;
+    const m = Math.max(0, Math.min(1, k));
+    scene.fog.density = CFG.FOG_NEAR_DENSITY * (1 + (CFG.ESCAPE_MIST_MULT - 1) * m);
+  }
+
   function resize() {
     const w = window.innerWidth, h = window.innerHeight;
     renderer.setSize(Math.max(1, Math.round(w / CFG.PIXEL_SCALE)), Math.max(1, Math.round(h / CFG.PIXEL_SCALE)), false);
@@ -1346,8 +1672,11 @@ const World = (function () {
 
   return {
     init, buildNode, dropNode, clearAll, updatePlayer, updateWolves, updateAmbient, render, resize,
+    applySkin, setMist,
     get camera() { return camera; },
     get scene() { return scene; },
     get playerMesh() { return playerMesh; },
+    get playerRig() { return playerRig; },   // lecture seule, pour tools/smoke-render.js
+    get materials() { return mat; },         // idem : vérifier une teinte sans navigateur
   };
 })();

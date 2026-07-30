@@ -17,6 +17,13 @@
    * Percuter un obstacle ne tue pas : on TRÉBUCHE. La sanction est la perte de
      vitesse, donc du terrain cédé aux loups. Ce sont les loups qui tuent, pas
      la barrière — c'est ce qui rend l'échec progressif au lieu d'être sec.
+
+   ZIP 377 — SORTIE OFFROAD. Le même geste que le virage, avec la polarité
+   INVERSÉE : sur un virage, ne rien faire tue ; sur un embranchement, ne rien
+   faire est sans conséquence et c'est agir qui met fin à la course. D'où deux
+   choix qui découlent l'un de l'autre : aucune tolérance après le coin (une
+   sortie ratée ne coûte rien, une sortie subie coûte la partie), et un
+   armement qui ne survit jamais au tronçon.
    ========================================================================== */
 
 const LATERAL_HIT = CFG.LANE_WIDTH / 2 + CFG.PLAYER_RADIUS; // demi-largeur de contact
@@ -44,7 +51,17 @@ class Player {
     this.coins = 0;
 
     this.armedTurn = 0;     // -1 / +1 quand le joueur a demandé le virage
+    this.armedExit = 0;     // idem pour l'embranchement offroad (zip 377)
     this.overshoot = -1;    // >= 0 quand on a dépassé le coin sans avoir tourné
+
+    /* --- Sortie offroad (zip 377) ---
+       `escapeNode` est la branche sur laquelle on court une fois sorti. Tant
+       qu'il est nul, rien n'a changé pour personne : c'est le seul drapeau à
+       tester, et node() le fait à un seul endroit. */
+    this.escapeNode = null;
+    this.escapeSide = 0;    // côté pris, pour la caméra et la pose de regard en arrière
+    this.escapeStart = 0;
+    this.escapeDist = 0;    // distance AU MOMENT DU VIRAGE : c'est elle qui fait le score
 
     this.alive = true;
     this.deathCause = null;
@@ -53,9 +70,15 @@ class Player {
     this.onCoin = null;
     this.onDeath = null;
     this.onLand = null;
+    this.onEscape = null;
   }
 
-  node() { return this.track.get(this.nodeIndex); }
+  /* La branche de sortie prime sur la chaîne principale. Un seul point de
+     bascule pour TOUT le jeu : collisions, caméra, pose, position monde et
+     construction du décor lisent tous node(), donc tous suivent la branche
+     sans qu'aucun d'eux n'ait à connaître la sortie. */
+  node() { return this.escapeNode || this.track.get(this.nodeIndex); }
+  get escaping() { return this.escapeNode !== null; }
 
   /* Vitesse effective : vitesse de base, réduite pendant un trébuchement puis
      remontée progressivement (pas d'un coup, sinon la reprise est brutale). */
@@ -114,18 +137,62 @@ class Player {
     return { k, pop, age };
   }
 
+  /* ------------------------------------------- SÉQUENCE DE SORTIE (377) ---
+     Renvoie l'état de la séquence d'échappée. Même parti pris que slidePose :
+     la TEMPORALITÉ vit ici, à côté de la règle de jeu, et world.js/camera.js
+     se contentent de poser ce qu'on leur donne.
+
+       k     avancement global 0 -> 1 de la séquence.
+       look  0 -> 1 -> 0 : le regard par-dessus l'épaule. Il monte VITE (on se
+             retourne d'un coup quand on vient d'échapper à une meute) et
+             redescend lentement (on remet du temps à se convaincre qu'elles
+             ne suivent pas). L'asymétrie est le même principe que la
+             glissade du zip 374.
+       fade  0 -> 1 sur les ESCAPE_FADE_MS dernières millisecondes.
+       breath souffle du coureur, 0 au départ puis installé. */
+  escapePose(now) {
+    if (!this.escaping) return { k: 0, look: 0, fade: 0, breath: 0 };
+    const age = now - this.escapeStart;
+    const k = Math.min(1, age / CFG.ESCAPE_TOTAL_MS);
+
+    const u = Math.min(1, age / CFG.ESCAPE_LOOKBACK_MS);
+    // Montée cubique jusqu'au sommet, retour en cosinus sur le reste. Jamais
+    // un aller-retour symétrique : on se retourne d'un coup quand on vient
+    // d'échapper à une meute, on met plus longtemps à s'en détacher.
+    const pk = CFG.ESCAPE_LOOKBACK_PEAK;
+    const look = u < pk
+      ? 1 - Math.pow(1 - u / pk, 3)
+      : (1 + Math.cos(((u - pk) / (1 - pk)) * Math.PI)) / 2;
+
+    const left = CFG.ESCAPE_TOTAL_MS - age;
+    const fade = left >= CFG.ESCAPE_FADE_MS ? 0 : 1 - Math.max(0, left) / CFG.ESCAPE_FADE_MS;
+
+    const breath = Math.min(1, age / 400) * Math.sin(age / 1000 * CFG.ESCAPE_BREATH_HZ * Math.PI * 2);
+    return { k, look, fade, breath };
+  }
+
   /* ------------------------------------------------------------- ENTRÉES */
   handleInput(now) {
     const node = this.node();
     if (!node) return;
+    // Une fois sur la branche, plus aucune commande n'a de sens : la course
+    // est finie, le joueur regarde la fin de sa propre fuite.
+    if (this.escaping) { Input.clear(); return; }
+
     const nearTurn = node.turn !== 0 && this.t >= node.length - CFG.TURN_INPUT_WINDOW;
+    // Zip 377 : même fenêtre, même geste. node.turn et node.exit ne peuvent
+    // pas être non nuls en même temps (garanti par track.js), donc nearTurn et
+    // nearExit s'excluent : aucune priorité à arbitrer ici.
+    const nearExit = node.exit !== 0 && this.t >= node.length - CFG.TURN_INPUT_WINDOW;
 
     if (Input.consume("left")) {
       if (nearTurn && node.turn === -1) this.armedTurn = -1;
+      else if (nearExit && node.exit === -1) this.armedExit = -1;
       else this.lane = Math.max(0, this.lane - 1);
     }
     if (Input.consume("right")) {
       if (nearTurn && node.turn === 1) this.armedTurn = 1;
+      else if (nearExit && node.exit === 1) this.armedExit = 1;
       else this.lane = Math.min(CFG.LANE_COUNT - 1, this.lane + 1);
     }
     if (Input.consume("jump")) {
@@ -180,7 +247,15 @@ class Player {
     this.checkNode(now);
     if (!this.alive) return;
 
-    /* --- Fin de tronçon / virage --- */
+    /* --- Fin de tronçon / virage ---
+       Sur la branche de sortie, il n'y a pas de "suivant" : on court, c'est
+       tout. La branche est dimensionnée pour que son bout ne soit JAMAIS
+       atteint pendant la séquence (verify-offroad.js le prouve), mais on ne
+       s'appuie pas sur ce dimensionnement pour la sûreté : on borne. */
+    if (this.escaping) {
+      if (this.t > this.escapeNode.length - 2) this.t = this.escapeNode.length - 2;
+      return;
+    }
     this.advanceNode(now);
   }
 
@@ -247,6 +322,17 @@ class Player {
     if (!node) return;
     if (this.t < node.length) { this.overshoot = -1; return; }
 
+    /* Embranchement offroad. Contrairement au virage, l'inaction est le
+       comportement SÛR : sans armement, on continue tout droit sur la piste
+       principale comme si de rien n'était. Aucune tolérance après le coin
+       n'est offerte — une sortie ratée n'a aucune conséquence, alors qu'une
+       sortie prise par hasard une demi-unité trop tard mettrait fin à la
+       course d'un joueur qui ne l'avait pas demandé. */
+    if (node.exit !== 0 && this.armedExit === node.exit) {
+      this.takeExit(node, this.t - node.length, now);
+      return;
+    }
+
     if (node.turn === 0) {
       this.enterNext(node, this.t - node.length, 0);
       return;
@@ -268,6 +354,30 @@ class Player {
     if (this.overshoot > CFG.TURN_GRACE_AFTER) this.die("fall");
   }
 
+  /* Bascule sur la branche offroad. Volontairement calquée sur enterNext() :
+     même conservation de voie, même report du reliquat de distance. Le joueur
+     ne doit sentir aucune différence de PILOTAGE au moment du virage — c'est
+     après, quand il se retourne, que tout change. */
+  takeExit(node, leftover, now) {
+    const esc = node.escape;
+    if (!esc) return;                        // ceinture : jamais vu, jamais fatal
+    this.escapeNode = esc;
+    this.escapeSide = node.exit;
+    this.escapeStart = now;
+    this.escapeDist = this.totalDist;        // le score s'arrête ICI, pas au fondu
+    this.t = Math.max(0, leftover);
+    this.prevT = 0;
+    this.overshoot = -1;
+    this.armedTurn = 0;
+    this.armedExit = 0;
+    this.laneOffset = CFG.LANE_X[this.lane];
+    // Un saut ou une glissade en cours n'a plus lieu d'être : on part sur une
+    // pose de course propre, sinon le joueur peut entamer sa fuite couché.
+    this.slideUntil = 0;
+    this.y = 0; this.vy = 0; this.grounded = true;
+    if (this.onEscape) this.onEscape();
+  }
+
   enterNext(node, leftover, turn) {
     const next = this.track.get(node.index + 1);
     if (!next) return;
@@ -276,6 +386,7 @@ class Player {
     this.prevT = 0;
     this.overshoot = -1;
     this.armedTurn = 0;
+    this.armedExit = 0;   // zip 377 : un armement non consommé ne survit pas au tronçon
     // Dans un virage, on conserve la voie : sortir systématiquement au centre
     // donnerait un effet "téléport" et casserait la lisibilité.
     if (turn !== 0) this.laneOffset = CFG.LANE_X[this.lane];

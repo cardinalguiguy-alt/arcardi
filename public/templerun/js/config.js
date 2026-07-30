@@ -106,6 +106,65 @@ const CFG = {
   ENTRY_CLEAR_STRAIGHT: 10, // zone d'entrée d'un tronçon qui NE sort PAS d'un virage
   END_CLEAR_STRAIGHT: 10,   // zone de fin d'un tronçon qui ne tourne PAS
 
+  /* --------------------------------------------- BIFURCATION OFFROAD ------
+     Zip 377. Le défi n'avait AUCUNE fin « victoire » : une fois lancé, on ne
+     pouvait que se faire rattraper ou abandonner, et les deux comptaient
+     comme une défaite. Un embranchement apparaît désormais à intervalle
+     RÉGULIER EN DISTANCE (et non en temps réel — tout le reste de la config
+     raisonne en unités parcourues depuis le zip 373) et permet de quitter la
+     course sain et sauf.
+
+     COMMANDE : exactement la grammaire du virage (décision Guillaume).
+     Dans les TURN_INPUT_WINDOW dernières unités, appuyer vers le côté de
+     l'embranchement fait sortir ; ne rien faire continue tout droit. La
+     différence avec un vrai virage est capitale et voulue : ici, ne rien
+     faire est le comportement SÛR. Un embranchement n'est jamais mortel.
+
+     PAS DE SORTIE ACCIDENTELLE, et ce n'est pas une promesse en l'air : un
+     tronçon qui porte un embranchement se voit appliquer la MÊME zone sans
+     obstacle qu'un tronçon qui tourne (TURN_CLEAR_BEFORE, calculée). Le
+     joueur n'a donc aucune raison de changer de voie dans la fenêtre
+     d'armement — il n'y a rien à esquiver. Revérifié par verify-offroad.js. */
+  OFFROAD_EVERY: 4000,      // distance entre deux embranchements (unités ≈ mètres)
+  OFFROAD_HUD_DIST: 400,    // distance à partir de laquelle le HUD annonce la sortie
+  OFFROAD_MOUTH: 16,        // longueur de la trouée dans la bordure, côté embranchement
+  OFFROAD_BRANCH_LEN: 132,  // longueur de la branche construite (voir ESCAPE_TOTAL_MS)
+
+  /* --------------------------------------------- SÉQUENCE DE SORTIE -------
+     Décrite par Guillaume : le joueur se retourne essoufflé, on voit la meute
+     continuer tout droit, il court seul 3 secondes, fondu enchaîné lent, puis
+     la carte 2D du monde sombre.
+
+     ESCAPE_TOTAL_MS borne la longueur de branche nécessaire : à SPEED_MAX
+     (34 u/s), 3 s font 102 unités. OFFROAD_BRANCH_LEN garde 30 unités de
+     marge, et verify-offroad.js vérifie que le joueur n'atteint JAMAIS le
+     bout de la branche (sortir par le vide au dernier dixième de seconde
+     serait la pire fin possible). */
+  ESCAPE_TOTAL_MS: 3000,      // durée totale de la séquence, avant le passage à la ferme
+
+  /* Le CREUX du regard en arrière est calé sur la géométrie, pas au jugé.
+     Au moment du virage, la meute est 17 à 22 unités derrière (CHASE_START/
+     CHASE_MAX) ; elle atteint donc l'embranchement environ 0,6 s plus tard, et
+     le passe. Pour qu'on la VOIE le traverser, il faut que la caméra regarde
+     en arrière un peu après ce passage, et surtout assez loin de
+     l'embranchement pour qu'il ne remplisse pas tout le cadre : le sommet est
+     placé à ~0,85 s, quand le fermier a mis une trentaine d'unités entre lui
+     et le coin. Trop tôt, on ne voit qu'un mur de pierre ; trop tard, le
+     brouillard a mangé la meute (à 0,019 de densité, 21 unités laissent encore
+     85 % de visibilité, 60 n'en laissent plus que 20 %). */
+  ESCAPE_LOOKBACK_MS: 1800,   // fenêtre complète du regard en arrière
+  ESCAPE_LOOKBACK_PEAK: 0.47, // position du sommet dans la fenêtre (=> ~845 ms)
+  ESCAPE_LOOKBACK_TORSO: 1.20, // rotation du buste (rad)
+  ESCAPE_LOOKBACK_HEAD: 0.55,  // rotation de la tête EN PLUS du buste
+  ESCAPE_BREATH_HZ: 2.4,      // cadence du souffle (respiration visible du bassin)
+  ESCAPE_BREATH_AMP: 0.055,
+  /* Le fondu commence EXACTEMENT quand la caméra a fini de revenir vers
+     l'avant (3000 - 1200 = 1800 = ESCAPE_LOOKBACK_MS). Le fermier court donc
+     seul, face à la route, pendant toute la durée du fondu — ce que Guillaume
+     a décrit. Si l'une des deux valeurs bouge, l'autre doit suivre. */
+  ESCAPE_FADE_MS: 1200,
+  ESCAPE_MIST_MULT: 2.3,      // épaississement de la brume au bout de la branche
+
   /* ------------------------------------------------------------- OBSTACLES */
   OBST_SPACING_MIN: 15,     // distance minimale entre deux obstacles
   OBST_DENSITY_START: 0.45, // proportion des emplacements réellement occupés
@@ -267,11 +326,15 @@ const CFG = {
   DECOR_PROPS: 14,          // arbres morts, colonnes brisées et rochers par tronçon
   TREE_BRANCHES: 3,         // branches par arbre mort (le poste le plus coûteux du décor)
 
-  /* Tenue du fermier — OUTFITS[0] de fermeConstants.js */
+  /* Tenue du fermier — OUTFITS[0] de fermeConstants.js.
+     Ce ne sont plus que des VALEURS DE REPLI depuis le zip 377 : en jeu, la
+     ferme envoie la tenue réelle du joueur (genre + couleurs) dans le message
+     vf-run-init, et World.applySkin les remplace. Elles ne servent donc plus
+     qu'à l'ouverture directe du fichier, hors de la ferme. */
   COL_SHIRT: 0x3f7fd4,
   COL_PANTS: 0x454f66,
   COL_SKIN:  0xf0c8a0,
-  COL_HAIR:  0x8a5a30,
+  COL_HAIR:  0x5a3a1e,   // HAIR_COLORS[0] de fermeArt.js (et non plus une teinte inventée)
 };
 
 /* =============================================================================

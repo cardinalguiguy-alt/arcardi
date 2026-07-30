@@ -30,6 +30,10 @@ class Col {
   constructor(h) { this.h = h || 0; }
   lerp() { return this; } copy() { return this; } set() { return this; }
   setRGB() { return this; }
+  // Zip 377 : setHex RETIENT la valeur, contrairement aux autres méthodes de
+  // ce faux. C'est la seule dont on veut vérifier l'effet — le skin du joueur
+  // ne se contrôle qu'en relisant la couleur qui a été posée.
+  setHex(h) { this.h = h; return this; }
 }
 /* Vecteur 2D minimal, pour Texture.repeat et Texture.offset. */
 class V2 {
@@ -211,6 +215,162 @@ try {
      dérive livraison après livraison sans que personne le voie. */
   if (per100 > 200) failures.push(`budget dépassé : ${per100.toFixed(0)} objets / 100 u (plafond 200, repère 373 : 161)`);
   if (nodesEnd > 1000) failures.push(`${nodesEnd} objets de tronçon à l'écran (plafond 1000, repère 373 : 792)`);
+
+  /* ======================================================================
+     ZIP 377 (a) — COÛT D'UNE BIFURCATION OFFROAD.
+     ----------------------------------------------------------------------
+     Un tronçon qui porte un embranchement construit AUSSI toute la branche
+     d'échappement dans son propre groupe. C'est le tronçon le plus lourd du
+     jeu, et le seul dont le coût ne se voit pas dans la moyenne : il en passe
+     un tous les 4000 unités, soit un sur quarante — assez rare pour qu'une
+     moyenne le noie complètement, assez chargé pour faire chuter les images
+     par seconde pile au moment de la décision. On le mesure donc SEUL.
+     ====================================================================== */
+  {
+    const gen = new Track.TrackGen(7777);
+    let junction = null, plain = null;
+    while (!junction) {
+      const n = gen.pushNode(false);
+      if (n.exit !== 0) junction = n;
+      else if (!plain && n.turn === 0 && n.index > 2) plain = n;
+    }
+    const before = countTree(World.scene);
+    World.buildNode(plain);
+    const plainCost = countTree(World.scene) - before;
+    World.buildNode(junction);
+    const junctionCost = countTree(World.scene) - before - plainCost;
+
+    const plainPer100 = plainCost / plain.length * 100;
+    // La branche est bâtie avec le tronçon : sa longueur compte dans la
+    // densité, sinon on s'accuse d'un coût qu'on répartit sur trop peu de
+    // mètres. Le joueur voit bien les deux à l'écran en même temps.
+    const junctionPer100 = junctionCost / (junction.length + junction.escape.length) * 100;
+    console.log(`\nBifurcation offroad : ${junctionCost} objets (tronçon ${junction.length} u + branche ${junction.escape.length} u)`);
+    console.log(`  soit ${junctionPer100.toFixed(0)} objets / 100 u, contre ${plainPer100.toFixed(0)} pour un tronçon ordinaire.`);
+    if (junctionPer100 > 200) {
+      failures.push(`budget dépassé sur la bifurcation : ${junctionPer100.toFixed(0)} objets / 100 u (plafond 200)`);
+    }
+    World.dropNode(junction);
+    World.dropNode(plain);
+    if (countTree(World.scene) - before > 0) {
+      failures.push(`dropNode ne libère pas entièrement un tronçon à bifurcation (branche orpheline ?)`);
+    }
+  }
+
+  /* ======================================================================
+     ZIP 377 (b) — LA SÉQUENCE DE SORTIE EST RENDUE SANS EXCEPTION.
+     ----------------------------------------------------------------------
+     Trois secondes pendant lesquelles la caméra pivote de 180°, le buste et
+     la tête tournent sur un axe que rien n'utilisait, la brume s'épaissit et
+     les loups sont posés sur une piste que le joueur a quittée. C'est
+     l'endroit du code où une propriété manquante ne se verrait qu'en jeu, et
+     seulement après 4000 mètres de course.
+     ====================================================================== */
+  {
+    const gen2 = new Track.TrackGen(31337);
+    let junction = null;
+    while (!junction) { const n = gen2.pushNode(false); if (n.exit !== 0) junction = n; }
+    const p2 = new Player(gen2);
+    const pack2 = new WolfPack(gen2);
+    const cam2 = new ChaseCamera(World.camera);
+    World.buildNode(junction);
+    p2.nodeIndex = junction.index;
+    p2.totalDist = junction.startDist + junction.length;
+    p2.takeExit(junction, 0, 0);
+    if (!p2.escaping) failures.push("takeExit n'a pas basculé le joueur sur la branche");
+
+    let t2 = 0, peakTwist = 0, peakYaw = 0;
+    const mists = [];
+    for (let i = 0; i < 200; i++) {
+      p2.update(1 / 60, t2);
+      const pose = p2.escapePose(t2);
+      cam2.update(1 / 60, p2);
+      World.updatePlayer(p2, t2);
+      World.updateWolves(pack2, p2, t2);
+      World.updateAmbient(t2, 0);
+      World.setMist(pose.k);
+      mists.push(World.scene.fog.density);
+      peakTwist = Math.max(peakTwist, Math.abs(World.playerRig.chest.rotation.y));
+      peakYaw = Math.max(peakYaw, Math.abs(pose.look));
+      World.render();
+      t2 += 1000 / 60;
+    }
+    console.log(`Séquence de sortie rendue sur 200 images : torsion max du buste ${peakTwist.toFixed(2)} rad (cible ${CFG.ESCAPE_LOOKBACK_TORSO}), regard max ${peakYaw.toFixed(2)}, brume ×${(mists[mists.length - 1] / CFG.FOG_NEAR_DENSITY).toFixed(2)}.`);
+    // On vérifie que le regard en arrière a bien eu lieu À FOND : une courbe
+    // qui culminerait à 0,3 passerait inaperçue en jeu (« il ne se retourne
+    // pas vraiment ») mais ne casserait rien, donc rien ne la signalerait.
+    if (peakYaw < 0.98) failures.push(`le regard en arrière ne va que jusqu'à ${peakYaw.toFixed(2)} au lieu de 1`);
+    if (peakTwist < CFG.ESCAPE_LOOKBACK_TORSO * 0.98) failures.push(`la torsion du buste plafonne à ${peakTwist.toFixed(2)} rad`);
+    if (!(mists[mists.length - 1] > mists[0])) failures.push("la brume ne s'épaissit pas pendant la sortie");
+    if (mists[mists.length - 1] > CFG.FOG_NEAR_DENSITY * CFG.ESCAPE_MIST_MULT + 1e-9) {
+      failures.push("la brume dépasse ESCAPE_MIST_MULT");
+    }
+    // La torsion doit être REVENUE à zéro à la fin, sinon elle survit à la
+    // partie suivante — le fermier courrait la tête tournée.
+    World.setMist(0);
+    p2.escapeNode = null;
+    World.updatePlayer(p2, t2);
+    if (Math.abs(World.playerRig.chest.rotation.y) > 1e-9 || Math.abs(World.playerRig.head.rotation.y) > 1e-9) {
+      failures.push("la torsion du buste/de la tête n'est pas remise à zéro hors sortie");
+    }
+    if (Math.abs(World.scene.fog.density - CFG.FOG_NEAR_DENSITY) > 1e-9) {
+      failures.push("setMist(0) ne rend pas la densité de brouillard d'origine");
+    }
+    World.dropNode(junction);
+  }
+
+  /* ======================================================================
+     ZIP 377 (c) — LE SKIN DU JOUEUR EST RÉELLEMENT APPLIQUÉ.
+     ----------------------------------------------------------------------
+     On ne relit pas applySkin : on lui donne une tenue et on regarde les
+     matériaux et les visibilités APRÈS. C'est ce qui attrape la faute qu'on
+     ne voit pas en lisant — un matériau partagé reteinté, une pièce féminine
+     oubliée, des jambes restées en pantalon sous la jupe.
+     ====================================================================== */
+  {
+    const kerbBefore = World.materials.kerb.color.h;
+    const stoneBefore = World.materials.stone.color.h;
+
+    World.applySkin({ gender: "f", shirt: 0xd44a3f, pants: 0x5a4632, hair: 0x2a2a2a, skin: 0xf0c8a0 });
+    const m = World.materials, rig = World.playerRig;
+    if (m.shirt.color.h !== 0xd44a3f) failures.push("la couleur de chemise n'est pas appliquée");
+    if (m.hair.color.h !== 0x2a2a2a) failures.push("la couleur de cheveux n'est pas appliquée");
+    if (!rig.femBody.every(o => o.visible)) failures.push("la jupe n'apparaît pas sur un personnage féminin");
+    if (!rig.femHead.every(o => o.visible)) failures.push("les cheveux longs n'apparaissent pas sur un personnage féminin");
+    if (rig.napeM.visible) failures.push("la nuque masculine reste visible sous les cheveux longs (z-fighting)");
+    if (rig.legL.upper.material !== m.skin) failures.push("les jambes restent en pantalon sous la jupe");
+
+    World.applySkin({ gender: "m", shirt: 0x3fa653, pants: 0x3d3d55, hair: 0xc8862a, skin: 0xf0c8a0 });
+    if (m.shirt.color.h !== 0x3fa653) failures.push("la seconde tenue n'écrase pas la première");
+    if (rig.femBody.some(o => o.visible) || rig.femHead.some(o => o.visible)) {
+      failures.push("les pièces féminines survivent au passage à un personnage masculin");
+    }
+    if (!rig.napeM.visible) failures.push("la nuque masculine ne revient pas");
+    if (rig.legL.upper.material !== m.pants) failures.push("les jambes ne repassent pas en pantalon");
+
+    // Le décor n'a PAS bougé. C'est le contrôle qui manquerait le plus si on
+    // ne l'écrivait pas : reteinter un matériau partagé repeindrait la moitié
+    // du temple en couleur de chemise, et personne ne pense à le vérifier.
+    if (World.materials.kerb.color.h !== kerbBefore || World.materials.stone.color.h !== stoneBefore) {
+      failures.push("applySkin a modifié un matériau du DÉCOR");
+    }
+    console.log(`Skin : deux tenues appliquées (f puis m), pièces féminines basculées, décor intact.`);
+
+    /* ORIENTATION DE LA TÊTE (zip 377). La caméra est posée à
+       p - avant × CAM_BACK : elle voit donc le +Z LOCAL du fermier. Toutes
+       les pièces qui appartiennent à l'ARRIÈRE du crâne — nuque masculine,
+       masse de cheveux féminine — doivent y être, et la boucle d'oreille,
+       elle, du côté du visage.
+
+       Ce contrôle existe parce que la nuque était posée du mauvais côté
+       depuis le zip 374 : le fermier courait avec ses cheveux sur le front et
+       l'arrière du crâne en peau nue. Ça n'a jamais levé la moindre erreur, et
+       ça ne s'est vu qu'en rendant le personnage (tools/render-runner.js). Une
+       faute d'un signe qui ne casse rien ne se retrouve pas deux fois. */
+    if (!(rig.napeM.position.z > 0)) failures.push("la nuque masculine est du côté du VISAGE (z <= 0)");
+    if (!(rig.femHead[2].position.z > 0)) failures.push("la masse de cheveux féminine est du côté du visage (z <= 0)");
+    if (!(rig.femHead[3].position.z < 0)) failures.push("la boucle d'oreille est derrière la tête (z >= 0)");
+  }
 
   World.clearAll();
   const afterClear = countTree(World.scene) - baseline;

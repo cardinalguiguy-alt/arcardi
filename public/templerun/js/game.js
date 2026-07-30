@@ -13,17 +13,28 @@
      et de quitter une demi-seconde avant de se faire rattraper pour ne jamais
      rentrer blessé. Quitter depuis l'écran-titre, en revanche, est gratuit :
      on doit pouvoir entrer par curiosité et ressortir.
+
+   ZIP 377 — TROISIÈME ISSUE. Ces deux règles restent vraies mot pour mot ;
+   il s'y ajoute une SORTIE PROPRE, la seule qui ne soit pas une défaite : la
+   bifurcation offroad, tous les 4000 m. Elle ne remplace pas l'abandon, elle
+   le complète, et les coûts diffèrent volontairement — abandonner reste
+   pénalisant PARCE QUE la sortie honnête existe désormais. Le contraste est
+   le mécanisme, pas un effet de bord.
+
+   Une conséquence à ne pas perdre de vue : c'est le premier état du jeu où le
+   joueur n'a plus la main tout en étant encore dans la scène. Rien ne doit
+   pouvoir le tuer pendant ces trois secondes (voir STATE.ESCAPING).
    ========================================================================== */
 
 const Game = (function () {
-  const STATE = { TITLE: "title", RUNNING: "running", PAUSED: "paused", OVER: "over" };
+  const STATE = { TITLE: "title", RUNNING: "running", PAUSED: "paused", ESCAPING: "escaping", OVER: "over" };
 
   let state = STATE.TITLE;
   let track, player, pack, chaseCam;
   let lastFrame = 0;
   let score = 0;
   let running = false;
-  let reported = false;   // "vf-run-over" n'est envoyé qu'une fois
+  let reported = false;   // "vf-run-over" / "vf-run-escape" n'est envoyé qu'une fois
 
   /* ------------------------------------------------------------ DÉMARRAGE */
   function start() {
@@ -37,8 +48,12 @@ const Game = (function () {
     player.onStumble = () => { pack.onStumble(); chaseCam.addShake(0.9); };
     player.onLand = (hard) => { if (hard) chaseCam.addShake(0.35); };
     player.onDeath = () => endRun(player.deathCause);
+    player.onEscape = () => beginEscape();
 
     World.clearAll();
+    World.setMist(0);
+    UI.setFade(0);
+    UI.showEscape(false);
     for (const n of track.nodes) World.buildNode(n);
 
     Input.clear();
@@ -50,6 +65,38 @@ const Game = (function () {
   function endRun(cause) {
     state = STATE.OVER;
     UI.showGameOver(score, player.coins, player.totalDist, cause);
+  }
+
+  /* ------------------------------------------------- SORTIE OFFROAD (377)
+     Le score est FIGÉ au virage, pas au fondu. C'est la règle posée par
+     Guillaume : le score mesure la distance parcourue EN DANGER, et le danger
+     s'arrête au moment où l'on quitte la piste. Les trois secondes qui suivent
+     sont une fin de scène, pas du jeu — les compter reviendrait à offrir 90
+     points à qui sort, toujours les mêmes, ce qui n'est pas un score. */
+  function beginEscape() {
+    if (state !== STATE.RUNNING) return;
+    state = STATE.ESCAPING;
+    score = player.escapeDist * CFG.SCORE_PER_UNIT + player.coins * CFG.SCORE_PER_COIN;
+    Input.clear();
+    UI.showEscape(true);
+  }
+
+  function finishEscape() {
+    if (reported) return;
+    reported = true;
+    const payload = {
+      score: Math.floor(score),
+      candies: player.coins | 0,
+      distance: Math.floor(player.escapeDist),
+    };
+    if (Bridge.embedded) { Bridge.escape(payload); return; }
+    // Hors de la ferme (ouverture directe du fichier) : il n'y a pas de carte
+    // du monde sombre où atterrir, on montre l'écran de fin avec sa propre
+    // cause. Sans ça, le prototype autonome resterait bloqué sur un écran noir.
+    UI.showEscape(false);
+    UI.setFade(0);
+    state = STATE.OVER;
+    UI.showGameOver(payload.score, payload.candies, payload.distance, "escape");
   }
 
   function togglePause() {
@@ -112,7 +159,39 @@ const Game = (function () {
       World.updatePlayer(player, now);
       World.updateWolves(pack, player, now);
       World.updateAmbient(now, pack.danger());
-      UI.updateHud(score, player.coins, player.totalDist, pack.danger());
+      const exitAt = track.nextExitAt(player.totalDist);
+      UI.updateHud(score, player.coins, player.totalDist, pack.danger(),
+                   exitAt === null ? null : exitAt - player.totalDist);
+
+    } else if (state === STATE.ESCAPING) {
+      /* Le fermier court toujours — c'est ce qui fait vivre la scène — mais
+         plus rien ne le menace :
+
+           * pack.update() n'est PAS appelé : l'écart cesse d'évoluer, donc
+             aucune capture n'est possible pendant le fondu. Une mort à
+             2,8 secondes d'une sortie réussie serait la pire fin du jeu.
+           * updateWolves() l'est, lui. Les loups sont posés par locate() sur
+             la piste PRINCIPALE, où la branche ne figure pas : ils continuent
+             donc tout droit et s'éloignent d'eux-mêmes, sans une ligne de
+             code pour le leur ordonner. C'est le schéma de Guillaume, obtenu
+             gratuitement par la structure des données.
+           * ensureAhead() reste appelé : les loups ont besoin que les
+             tronçons devant l'embranchement existent encore pour y courir.
+           * le score n'est plus recalculé (figé dans beginEscape). */
+      player.update(dt, now);
+      const droppedE = track.ensureAhead(player.nodeIndex);
+      for (const n of droppedE) World.dropNode(n);
+      for (const n of track.nodes) if (!n.group) World.buildNode(n);
+
+      const pose = player.escapePose(now);
+      chaseCam.update(dt, player);
+      World.updatePlayer(player, now);
+      World.updateWolves(pack, player, now);
+      World.updateAmbient(now, 0);
+      World.setMist(pose.k);
+      UI.setFade(pose.fade);
+      UI.updateHud(score, player.coins, player.escapeDist, 0, null);
+      if (pose.k >= 1) finishEscape();
 
     } else if (state === STATE.OVER) {
       // On laisse la scène vivre doucement derrière l'écran de fin.
@@ -128,9 +207,11 @@ const Game = (function () {
 
   /* --------------------------------------------------------------- INIT */
   function init() {
-    // Le pont d'abord : il fixe la langue et le record avant le premier
-    // affichage. applyLang() est rappelé si la ferme répond après coup.
-    Bridge.init(() => UI.applyLang());
+    // Le pont d'abord : il fixe la langue, le record ET LA TENUE avant le
+    // premier affichage. Le rappel rejoue les deux si la ferme répond après
+    // coup — et World.applySkin sait encaisser un appel avant que la scène
+    // existe (voir pendingSkin), ce qui rend l'ordre d'arrivée indifférent.
+    Bridge.init(() => { UI.applyLang(); World.applySkin(Bridge.skin); });
 
     if (typeof THREE === "undefined") {
       UI.init();

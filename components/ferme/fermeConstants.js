@@ -577,6 +577,13 @@ export const RUN_ABORT_COUNTS_AS_LOSS = true;
 // quoi dans une sauvegarde partagée et durable. Calibrés bien au-dessus d'une
 // très bonne course (≈ 140 bonbons et ≈ 6 500 points sur 3 minutes en
 // simulation) pour ne jamais punir un bon joueur.
+// Zip 377 — BIFURCATION OFFROAD. Durée du voile qui s'efface au retour du
+// défi par la sortie honnête. Le défi finit sur un écran noir après son propre
+// fondu de 1,2 s (ESCAPE_FADE_MS, public/templerun/js/config.js) ; ce voile-ci
+// reprend le relais côté ferme pour que le raccord soit un enchaînement et non
+// une coupe. Plus court que ZONE_FADE_MS : on ne change pas de zone, on
+// rouvre les yeux sur celle où l'on était déjà.
+export const RUN_RETURN_FADE_MS = 700;
 export const RUN_MAX_CANDIES_PER_RUN = 2000;
 export const RUN_MAX_SCORE = 200000;
 

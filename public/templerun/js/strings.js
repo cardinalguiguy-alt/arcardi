@@ -22,6 +22,10 @@ const RUN_STR = {
     ctrlSlide: "<b>↓</b> ou <b>S</b> — glisser",
     ctrlPause: "<b>Échap</b> — pause",
     hint: "Les piliers violets annoncent un virage : appuyez dans la bonne direction avant le coin. Percuter un obstacle ne tue pas, mais la meute gagne du terrain.",
+    // Zip 377. Le texte doit dire les trois choses qui comptent, dans cet
+    // ordre : où c'est, ce que ça fait, ce que ça coûte. Un joueur qui lit
+    // « sortie » sans savoir que son score s'arrête là se sentira volé.
+    hintExit: "Tous les 4000 m, un embranchement s'ouvre sur le côté : tournez vers lui pour quitter la course sain et sauf. Votre score s'arrête au virage, mais il compte.",
     hintFarm: "Les bonbons ramassés seront rapportés à la ferme. En cas de défaite, vous rentrerez blessé.",
 
     hudScore: "Score",
@@ -29,17 +33,24 @@ const RUN_STR = {
     hudDistance: "Distance",
     hudBest: "Record",
     hudPack: "Meute",
+    exitIn: (m) => `Sortie dans ${m} m`,
+    exitNow: "Sortie — tournez maintenant",
 
     pause: "Pause",
     resume: "Reprendre",
     quit: "Abandonner",
     quitWarn: "Abandonner une course en cours compte comme une défaite.",
 
+    escapeTitle: "Vous quittez la piste",
+    escapeSub: "La meute continue tout droit.",
+
     over: "Rattrapé",
+    escaped: "Échappé",
     reasonWolves: "La meute vous a rattrapé.",
     reasonGap: "Vous êtes tombé dans le vide.",
     reasonFall: "Virage manqué — vous êtes passé par-dessus bord.",
     reasonAbort: "Course abandonnée.",
+    reasonEscape: "Vous avez pris l'embranchement et semé la meute.",
     newBest: "Nouveau record !",
     labelScore: "Score",
     labelCandies: "Bonbons",
@@ -62,6 +73,7 @@ const RUN_STR = {
     ctrlSlide: "<b>↓</b> or <b>S</b> — slide",
     ctrlPause: "<b>Esc</b> — pause",
     hint: "Purple pillars announce a turn: press the matching direction before the corner. Hitting an obstacle won't kill you, but the pack gains ground.",
+    hintExit: "Every 4000 m a side track opens up: turn into it to leave the run in one piece. Your score stops at the fork — but it counts.",
     hintFarm: "Candies you pick up are carried back to the farm. If you lose, you return injured.",
 
     hudScore: "Score",
@@ -69,17 +81,27 @@ const RUN_STR = {
     hudDistance: "Distance",
     hudBest: "Best",
     hudPack: "Pack",
+    exitIn: (m) => `Exit in ${m} m`,
+    exitNow: "Exit — turn now",
 
     pause: "Paused",
     resume: "Resume",
     quit: "Give up",
     quitWarn: "Giving up mid-run counts as a defeat.",
 
+    // Traduit dans l'esprit (consigne du zip 371) : le français joue sur
+    // « quitter la piste » / « continuer tout droit ». L'anglais garde le
+    // même contraste avec ses propres mots plutôt que de calquer.
+    escapeTitle: "You're off the track",
+    escapeSub: "The pack keeps going straight.",
+
     over: "Caught",
+    escaped: "Got away",
     reasonWolves: "The pack caught you.",
     reasonGap: "You fell into the void.",
     reasonFall: "Missed turn — you went straight over the edge.",
     reasonAbort: "Run abandoned.",
+    reasonEscape: "You took the side track and shook the pack off.",
     newBest: "New best!",
     labelScore: "Score",
     labelCandies: "Candies",

@@ -18,9 +18,11 @@ const UI = (function () {
     "best", "finalScore", "finalCoins", "finalDistance", "finalBest",
     "deathReason", "newBest", "dangerFill", "loadError",
     "tTitle", "tSub", "btnStart", "cLane", "cJump", "cSlide", "cPause",
-    "tHint", "tHintFarm", "lScore", "lCoins", "lDistance", "lBest", "lPack",
+    "tHint", "tHintExit", "tHintFarm", "lScore", "lCoins", "lDistance", "lBest", "lPack",
     "pTitle", "btnResume", "btnQuit", "pQuitWarn",
     "oTitle", "oHint", "btnBack", "fLScore", "fLCoins", "fLDistance", "fLBest",
+    // Zip 377 — sortie offroad.
+    "exitHint", "escape", "eTitle", "eSub", "fadeVeil",
   ];
 
   function init() {
@@ -39,7 +41,9 @@ const UI = (function () {
     html("cLane", L.ctrlLane); html("cJump", L.ctrlJump);
     html("cSlide", L.ctrlSlide); html("cPause", L.ctrlPause);
     txt("tHint", L.hint);
+    txt("tHintExit", L.hintExit);
     txt("tHintFarm", Bridge.embedded ? L.hintFarm : "");
+    txt("eTitle", L.escapeTitle); txt("eSub", L.escapeSub);
 
     txt("lScore", L.hudScore); txt("lCoins", L.hudCandies);
     txt("lDistance", L.hudDistance); txt("lBest", L.hudBest); txt("lPack", L.hudPack);
@@ -71,17 +75,43 @@ const UI = (function () {
     el.hud.classList.toggle("visible", name === "hud");
   }
 
-  function updateHud(score, coins, distance, danger) {
+  /* `exitIn` (zip 377) : distance restante jusqu'au prochain embranchement, ou
+     null s'il n'y en a pas en vue. On ARRONDIT À DIX MÈTRES plutôt qu'au
+     mètre — un compteur qui défile de 34 unités par seconde est illisible, et
+     un chiffre illisible qu'on essaie de lire coûte exactement l'attention
+     dont on a besoin pour les obstacles. */
+  function updateHud(score, coins, distance, danger, exitIn) {
     el.score.textContent = Math.floor(score);
     el.coins.textContent = coins;
     el.distance.textContent = Math.floor(distance) + " m";
     el.dangerFill.style.width = Math.round(danger * 100) + "%";
+
+    const near = exitIn !== null && exitIn !== undefined && exitIn <= CFG.OFFROAD_HUD_DIST;
+    el.exitHint.classList.toggle("on", near);
+    if (!near) { el.exitHint.classList.remove("now"); return; }
+    // « maintenant » = la fenêtre où l'appui est réellement pris en compte.
+    // C'est la MÊME constante que celle qui pilote le jeu (TURN_INPUT_WINDOW),
+    // pas une valeur d'affichage parallèle qui finirait par mentir.
+    const nowWindow = exitIn <= CFG.TURN_INPUT_WINDOW;
+    el.exitHint.classList.toggle("now", nowWindow);
+    el.exitHint.textContent = nowWindow
+      ? L.exitNow
+      : L.exitIn(Math.round(Math.max(0, exitIn) / 10) * 10);
+  }
+
+  /* Bandeau et voile de la séquence de sortie. */
+  function showEscape(on) {
+    if (el.escape) el.escape.classList.toggle("visible", !!on);
+  }
+  function setFade(a) {
+    if (el.fadeVeil) el.fadeVeil.style.opacity = String(Math.max(0, Math.min(1, a)));
   }
 
   function reasonText(cause) {
     return ({
       wolves: L.reasonWolves, gap: L.reasonGap,
       fall: L.reasonFall, abort: L.reasonAbort,
+      escape: L.reasonEscape,
     })[cause] || L.reasonWolves;
   }
 
@@ -97,6 +127,11 @@ const UI = (function () {
     el.best.textContent = isNew ? s : best;
     el.newBest.style.display = isNew ? "block" : "none";
     el.deathReason.textContent = reasonText(cause);
+    // Zip 377 : sortir par l'embranchement n'est pas se faire rattraper, et le
+    // titre doit le dire. C'est la seule fin du jeu qui ne soit pas un échec ;
+    // afficher « Rattrapé » par-dessus une fuite réussie annulerait
+    // exactement ce que la mécanique vient d'accorder au joueur.
+    el.oTitle.textContent = cause === "escape" ? L.escaped : L.over;
     show("gameover");
   }
 
@@ -107,5 +142,6 @@ const UI = (function () {
     el.loadError.style.display = "block";
   }
 
-  return { init, applyLang, show, updateHud, showGameOver, loadBest, showLoadError };
+  return { init, applyLang, show, updateHud, showGameOver, loadBest, showLoadError,
+           showEscape, setFade };
 })();

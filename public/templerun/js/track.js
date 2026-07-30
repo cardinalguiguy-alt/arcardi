@@ -37,6 +37,18 @@
         dernier obstacle d'un tronçon et le premier du suivant ne se voyaient
         pas. Elle est désormais portée par le générateur (this.prevObst), en
         distance ABSOLUE, donc elle traverse les virages.
+
+   ZIP 377 — BIFURCATION OFFROAD. Un troisième type de fin de tronçon apparaît
+   à côté de « tout droit » et « virage » : l'EMBRANCHEMENT (node.exit). Il ne
+   remplace ni l'un ni l'autre, il s'y ajoute, et il obéit à trois règles qui
+   le rendent inoffensif par construction :
+
+     * un tronçon qui porte un embranchement ne tourne jamais (exclusion
+       mutuelle : une même touche ne peut pas vouloir dire deux choses) ;
+     * il ouvre la même zone sans obstacle qu'un virage, donc le joueur n'a
+       aucune raison de changer de voie dans la fenêtre d'armement ;
+     * la branche elle-même (node.escape) vit HORS de this.nodes, ce qui
+       suffit à ce que la meute — posée par locate() — ne la prenne jamais.
    ========================================================================== */
 
 /* Types d'obstacles et parade associée. */
@@ -148,6 +160,14 @@ const Track = (function () {
       this.nodesSinceTurn = 99;
       this.lastTurn = 0;
       this.nextEntryTurn = 0;   // virage par lequel on ARRIVE sur le prochain tronçon
+      // Zip 377 — BIFURCATION OFFROAD. Distance ABSOLUE du prochain
+      // embranchement. On la porte sur le générateur, pas sur le tronçon :
+      // un tronçon mesure entre 68 et 112 unités, la sortie tombe donc au
+      // premier BORD de tronçon qui dépasse le seuil, et le seuil suivant
+      // repart de la valeur théorique (4000, 8000, 12000…) et non du bord
+      // atteint. Sans ça, l'écart réel entre deux sorties dériverait de
+      // ~90 unités à chaque fois et la 10e serait à 4900 m de la 9e.
+      this.nextExitThreshold = CFG.OFFROAD_EVERY;
       // Dernier obstacle posé, en distance ABSOLUE. C'est ce qui permet à la
       // règle d'espacement de traverser les bords de tronçon (voir en-tête).
       this.prevObst = null;
@@ -177,6 +197,8 @@ const Track = (function () {
         length: isFirst ? 120 : Math.round(this.rand(CFG.NODE_LEN_MIN, CFG.NODE_LEN_MAX)),
         startDist: dist,
         turn: 0,          // 0 = tout droit, -1 = gauche, +1 = droite
+        exit: 0,          // 0 = pas d'embranchement, -1 = offroad à gauche, +1 = à droite
+        escape: null,     // tronçon de la branche offroad (voir makeEscape)
         entryTurn: this.nextEntryTurn,  // virage par lequel on ARRIVE ici (0 = tout droit)
         obstacles: [],
         coins: [],
@@ -185,9 +207,23 @@ const Track = (function () {
         group: null,
       };
 
+      /* ------------------------------------------- EMBRANCHEMENT OFFROAD --
+         Traité AVANT le virage, et c'est l'ordre qui compte : un tronçon qui
+         porte une sortie ne tourne JAMAIS. Sinon, à l'approche du coin, la
+         même touche voudrait dire deux choses à la fois — « prends le virage
+         obligatoire » et « quitte la course » — et l'une des deux tue quand
+         l'autre sauve. Départager par un délai ou une priorité serait un
+         piège ; l'exclusion mutuelle, elle, ne peut pas se tromper. */
+      const isExitNode = !isFirst && dist + node.length >= this.nextExitThreshold;
+      if (isExitNode) {
+        node.exit = this.rng() < 0.5 ? -1 : 1;
+        this.nextExitThreshold += CFG.OFFROAD_EVERY;
+        node.escape = this.makeEscape(node);
+      }
+
       /* ------------------------------------------------------------ VIRAGE */
       const turnChance = CFG.TURN_CHANCE_START + (CFG.TURN_CHANCE_MAX - CFG.TURN_CHANCE_START) * diff;
-      if (!isFirst && this.nodesSinceTurn > CFG.TURN_MIN_GAP_NODES && this.rng() < turnChance) {
+      if (!isFirst && !isExitNode && this.nodesSinceTurn > CFG.TURN_MIN_GAP_NODES && this.rng() < turnChance) {
         // On évite deux virages identiques d'affilée : ça produit des demi-tours
         // qui replient la piste sur elle-même et se voient à l'écran.
         let t = this.rng() < 0.5 ? -1 : 1;
@@ -211,6 +247,38 @@ const Track = (function () {
       this.nextStartDist = dist + node.length;
       this.nextEntryTurn = node.turn;
       return node;
+    }
+
+    /* ------------------------------------------- BRANCHE D'ÉCHAPPEMENT ---
+       Le tronçon dans lequel le joueur s'engage s'il prend la sortie. C'est un
+       tronçon comme les autres — même repère (origine, direction, t) — ce qui
+       lui donne gratuitement la caméra, la pose du joueur et le placement du
+       décor. Trois différences, toutes voulues :
+
+         * il n'est PAS dans this.nodes. La meute est posée par locate(), qui
+           balaie this.nodes : l'y ajouter ferait suivre la sortie aux loups,
+           c'est-à-dire exactement le contraire de ce que le schéma demande.
+           En le laissant dehors, les loups continuent tout droit SANS UNE
+           LIGNE de code pour le leur dire.
+         * il est vide : aucun obstacle, aucune pièce. La course est finie au
+           moment du virage, le joueur n'a plus rien à jouer.
+         * il ne mène nulle part : on ne construit jamais son successeur. La
+           séquence de sortie s'achève par un fondu bien avant son bout (voir
+           CFG.ESCAPE_TOTAL_MS et verify-offroad.js). */
+    makeEscape(node) {
+      const f = dirForward(node.dir);
+      return {
+        index: -1,                       // hors chaîne : get() ne le renverra jamais
+        isEscape: true,
+        dir: (node.dir + node.exit + 4) & 3,
+        ox: node.ox + f.x * node.length,
+        oz: node.oz + f.z * node.length,
+        length: CFG.OFFROAD_BRANCH_LEN,
+        startDist: node.startDist + node.length,
+        turn: 0, exit: 0, escape: null, entryTurn: node.exit,
+        obstacles: [], coins: [], cracks: [],
+        built: false, group: null,
+      };
     }
 
     /* -------------------------------------------- FISSURES DÉCORATIVES ---
@@ -257,8 +325,14 @@ const Track = (function () {
          obstacles qui sont direct avant ou après un virage car ils sont
          inévitables ». Les deux constantes sont dérivées de la physique dans
          config.js, pas devinées. */
+      /* Zip 377 : un EMBRANCHEMENT ouvre la même zone franche qu'un virage,
+         et c'est ce qui garantit qu'aucune sortie ne peut être prise par
+         accident. Dans la fenêtre d'armement, la seule raison d'appuyer à
+         gauche ou à droite serait d'esquiver quelque chose ; en n'y mettant
+         rien à esquiver, on retire la raison plutôt que d'ajouter un garde-fou
+         qui, lui, se règle et donc se dérègle. */
       let from = node.entryTurn !== 0 ? CFG.TURN_CLEAR_AFTER : CFG.ENTRY_CLEAR_STRAIGHT;
-      let to = node.length - (node.turn !== 0 ? CFG.TURN_CLEAR_BEFORE : CFG.END_CLEAR_STRAIGHT);
+      let to = node.length - ((node.turn !== 0 || node.exit !== 0) ? CFG.TURN_CLEAR_BEFORE : CFG.END_CLEAR_STRAIGHT);
       if (node.startDist < CFG.OBST_START_SAFE_DIST) {
         from = Math.max(from, CFG.OBST_START_SAFE_DIST - node.startDist);
       }
@@ -444,6 +518,23 @@ const Track = (function () {
         y: y || 0,
         z: node.oz + f.z * t + r.z * laneOffset,
       };
+    }
+
+    /* Distance ABSOLUE du prochain embranchement encore devant `dist`, ou
+       null s'il n'est pas encore généré. Sert au compte à rebours du HUD.
+
+       On ne renvoie PAS this.nextExitThreshold : cette valeur-là est le seuil
+       théorique (4000, 8000…), pas le point de sortie réel, qui tombe au bord
+       du premier tronçon qui le dépasse. Annoncer « sortie dans 40 m » alors
+       qu'elle est à 130 m serait pire que ne rien annoncer. On lit donc les
+       tronçons déjà générés, qui portent la vérité. */
+    nextExitAt(dist) {
+      for (const n of this.nodes) {
+        if (n.exit === 0) continue;
+        const at = n.startDist + n.length;
+        if (at > dist) return at;
+      }
+      return null;
     }
 
     /* Convertit une distance totale en (tronçon, t). Sert aux loups. */
