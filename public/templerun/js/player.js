@@ -72,15 +72,46 @@ class Player {
   isSliding(now) { return now < this.slideUntil; }
   headHeight(now) { return this.y + (this.isSliding(now) ? CFG.SLIDE_HEIGHT : CFG.PLAYER_HEIGHT); }
 
-  /* Forme 0 -> 1 -> 0 de la bascule sur le flanc : monte en SLIDE_ROLL_MS,
-     tient à plat, puis redescend en SLIDE_ROLL_MS avant la fin de la
-     glissade. Lissée (smoothstep) pour éviter un basculement mécanique. */
-  slideRoll(now) {
-    if (!this.isSliding(now)) return 0;
-    const ease = (x) => x * x * (3 - 2 * x);
-    const rollIn = Math.min(1, (now - this.slideStart) / CFG.SLIDE_ROLL_MS);
-    const rollOut = Math.min(1, (this.slideUntil - now) / CFG.SLIDE_ROLL_MS);
-    return Math.min(ease(rollIn), ease(rollOut));
+  /* ------------------------------------------------- ENVELOPPE DE GLISSADE
+     Renvoie l'état complet de la glissade, que world.js n'a plus qu'à poser
+     sur le squelette. Trois nombres, et c'est là que se joue la fluidité :
+
+       k     0 -> 1 -> 0. C'est le « degré de glissade ». Volontairement
+             ASYMÉTRIQUE : plongeon en SLIDE_IN_MS (court, courbe agressive),
+             maintien, relevé en SLIDE_OUT_MS (plus long, courbe molle). Le
+             va-et-vient symétrique de l'ancienne version est exactement ce
+             qui donnait l'impression d'une interpolation plutôt que d'un
+             geste.
+       pop   petit rebond vertical au tout début du relevé : le fermier
+             REPOUSSE le sol pour se remettre debout au lieu de remonter en
+             ligne droite. Une bosse, pas une rampe.
+       age   temps écoulé depuis le départ, pour la traînée de poussière.
+
+     Rien ici ne touche la collision : le gabarit de glissade reste piloté par
+     isSliding()/SLIDE_HEIGHT, inchangés. Une pose ne doit jamais pouvoir
+     changer ce qui tue. */
+  slidePose(now) {
+    if (!this.isSliding(now)) return { k: 0, pop: 0, age: 0 };
+
+    const age = now - this.slideStart;
+    const left = this.slideUntil - now;
+
+    // Plongeon : cubique out — presque tout le mouvement dans les 40 premiers
+    // pour-cent du temps, comme un corps qui tombe.
+    const dive = Math.min(1, age / CFG.SLIDE_IN_MS);
+    const kIn = 1 - Math.pow(1 - dive, 3);
+
+    // Relevé : sinusoïde d'accélération — lent au départ (il faut décoller le
+    // dos du sol), rapide à la fin.
+    const rise = Math.min(1, left / CFG.SLIDE_OUT_MS);
+    const kOut = 1 - Math.cos(rise * Math.PI / 2);
+
+    const k = Math.min(kIn, kOut);
+
+    // Le rebond ne vit que pendant le relevé, et culmine à sa moitié.
+    const pop = rise < 1 ? Math.sin(rise * Math.PI) * (1 - rise) * 2 : 0;
+
+    return { k, pop, age };
   }
 
   /* ------------------------------------------------------------- ENTRÉES */
@@ -163,6 +194,21 @@ class Player {
         const half = CFG.GAP_LENGTH / 2;
         if (this.t > o.t - half && this.t < o.t + half && this.y <= 0.05) {
           return this.die("gap");
+        }
+        continue;
+      }
+      if (o.type === OBST.CREVASSE) {
+        /* Sol effondré partiel. Deux différences avec le trou pleine largeur :
+           il ne concerne que certaines voies, et le test latéral porte sur le
+           CENTRE du joueur, pas sur son gabarit. Utiliser LATERAL_HIT comme
+           pour un mur ferait tomber un joueur dont seule l'épaule dépasse
+           au-dessus du vide — injuste et illisible, puisque le bord de la
+           crevasse est justement l'endroit où l'on frôle. */
+        const half = CFG.CREVASSE_LENGTH / 2;
+        if (!(this.t > o.t - half && this.t < o.t + half) || this.y > 0.05) continue;
+        for (let i = 0; i < CFG.LANE_COUNT; i++) {
+          if (!o.lanes[i]) continue;
+          if (Math.abs(this.laneOffset - CFG.LANE_X[i]) < CFG.LANE_WIDTH / 2) return this.die("gap");
         }
         continue;
       }

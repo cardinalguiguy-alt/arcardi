@@ -18,10 +18,26 @@ const CFG = {
   FLOOR_TILE: 4,            // longueur d'une dalle (le sol est pavé de dalles)
   FLOOR_THICKNESS: 0.6,
 
-  NODE_LEN_MIN: 48,         // longueur d'un tronçon droit, en unités
-  NODE_LEN_MAX: 92,
-  NODES_AHEAD: 5,           // tronçons construits devant le joueur
-  NODES_BEHIND: 2,          // tronçons conservés derrière (pour voir les loups)
+  // Tronçons rallongés au zip 374. Les zones sans obstacle autour des virages
+  // sont désormais CALCULÉES depuis la physique (voir les dérivés en bas de
+  // fichier) et valent ~26 u en sortie de virage + ~44 u avant le suivant :
+  // sur un tronçon de 48 u il ne restait plus une seule place utilisable, et
+  // la piste devenait déserte.
+  NODE_LEN_MIN: 68,
+  NODE_LEN_MAX: 112,
+
+  /* Fenêtre de streaming RESSERRÉE au 374, et c'est ce qui finance tout le
+     nouveau décor. Le raisonnement, mesuré et non estimé : avec
+     FOG_NEAR_DENSITY à 0,019, un objet posé à 150 unités est déjà noyé à
+     99,97 % dans le brouillard. Garder 5 tronçons de ~90 unités revenait donc
+     à construire 450 unités de piste dont on n'en voyait que 150.
+
+     4 devant (≈ 360 u) laisse une marge confortable, 1 derrière suffit
+     largement aux loups : ils ne s'éloignent jamais de plus de CHASE_MAX + le
+     décalage du dernier loup, soit ~26 unités, quand le tronçon le plus court
+     en fait 68. */
+  NODES_AHEAD: 4,           // tronçons construits devant le joueur
+  NODES_BEHIND: 1,          // tronçons conservés derrière (pour voir les loups)
 
   /* --------------------------------------------------------------- VITESSE */
   SPEED_START: 16,          // vitesse au départ (unités/s)
@@ -40,12 +56,31 @@ const CFG = {
   JUMP_CLEAR_HEIGHT: 1.05,  // hauteur à partir de laquelle on passe une barrière basse
   SLIDE_MS: 620,
   SLIDE_HEIGHT: 0.75,       // hauteur du gabarit en glissade
-  SLIDE_ROLL_MS: 130,       // durée du bascule sur le flanc, en entrée ET en sortie
-  SLIDE_ROLL_ANGLE: 1.22,   // inclinaison du corps en glissade (rad, ~70°, pas 90 pour rester lisible)
-  SLIDE_DROP: 0.42,         // abaissement du buste pour coller le flanc au sol
-  SLIDE_PELVIS_Y: 0.55,     // hauteur du pivot de bascule (bassin) utilisé pour coucher le corps
   COYOTE_MS: 110,           // tolérance de saut juste après avoir quitté le sol
   INPUT_BUFFER_MS: 160,     // une entrée un poil trop tôt reste valable
+
+  /* ------------------------------------------------------ GLISSADE (POSE) --
+     Refonte du zip 374. L'ancienne glissade couchait le fermier sur le FLANC
+     à 70° : vu de la caméra arrière, ça ne se lisait pas comme une glissade
+     mais comme une chute, et la bascule symétrique entrée/sortie donnait un
+     mouvement mécanique.
+
+     Nouvelle pose, celle de Temple Run : pieds devant, buste renversé en
+     arrière, une main plantée au sol qui traîne, jambe arrière repliée sous
+     le corps. Elle se lit DE DOS, parce que c'est la silhouette qui change
+     (le corps devient long et bas) et non l'orientation.
+
+     Entrée et sortie sont volontairement ASYMÉTRIQUES : on se jette au sol
+     plus vite qu'on ne s'en relève. C'est ce qui fait la différence entre un
+     geste et une interpolation. */
+  SLIDE_IN_MS: 105,         // plongeon au sol : bref et sec
+  SLIDE_OUT_MS: 185,        // relevé : plus lent, avec un rebond (voir SLIDE_POP)
+  SLIDE_LEAN: 0.95,         // bascule du bassin vers l'arrière (rad, ~54°)
+  SLIDE_DROP: 0.30,         // abaissement du bassin, en plus de la bascule
+  SLIDE_PELVIS_Y: 0.55,     // hauteur du pivot du bassin au repos
+  SLIDE_POP: 0.16,          // ampleur du rebond vertical au relevé
+  SLIDE_DUST_COUNT: 14,     // bouffées de poussière recyclées sous le fermier
+  SLIDE_DUST_MS: 420,       // durée de vie d'une bouffée
 
   /* --------------------------------------------------------------- VIRAGES */
   TURN_INPUT_WINDOW: 16,    // distance AVANT le virage où l'entrée est acceptée
@@ -53,8 +88,23 @@ const CFG = {
   TURN_CHANCE_START: 0.22,  // probabilité qu'un tronçon se termine par un virage
   TURN_CHANCE_MAX: 0.5,
   TURN_MIN_GAP_NODES: 1,    // nb de tronçons droits minimum entre deux virages
-  TURN_CLEAR_BEFORE: 16,    // zone sans obstacle avant un virage
-  TURN_CLEAR_AFTER: 14,     // zone sans obstacle après un virage
+
+  /* --- Zones sans obstacle autour d'un virage. NE PAS RÉGLER À LA MAIN : ---
+     TURN_CLEAR_AFTER et TURN_CLEAR_BEFORE sont calculées en bas de fichier
+     depuis la physique du joueur et de la caméra. Les valeurs devinées du
+     zip 372 (16 avant / 14 après) étaient très en dessous du nécessaire,
+     d'où les obstacles littéralement inévitables signalés en jeu.
+
+     En SORTIE de virage, le joueur est aveugle deux fois : la caméra met
+     TURN_CAM_SETTLE_S à se réaligner (constante de temps de CAM_YAW_LERP),
+     et il lui faut ensuite TURN_REACT_S pour réagir à ce qu'il découvre.
+     En ENTRÉE de virage, la dernière parade doit être TERMINÉE avant que
+     s'ouvre la fenêtre d'armement : tant qu'il saute, il ne peut pas armer,
+     et un virage non armé tue. */
+  TURN_CAM_SETTLE_S: 0.35,  // temps de réalignement de la caméra après un virage
+  TURN_REACT_S: 0.30,       // temps de réaction humain admis
+  ENTRY_CLEAR_STRAIGHT: 10, // zone d'entrée d'un tronçon qui NE sort PAS d'un virage
+  END_CLEAR_STRAIGHT: 10,   // zone de fin d'un tronçon qui ne tourne PAS
 
   /* ------------------------------------------------------------- OBSTACLES */
   OBST_SPACING_MIN: 15,     // distance minimale entre deux obstacles
@@ -62,9 +112,29 @@ const CFG = {
   OBST_DENSITY_MAX: 0.85,
   OBST_DENSITY_RAMP_DIST: 2200,
   OBST_START_SAFE_DIST: 90, // aucun obstacle sur les 90 premières unités
-  GAP_LENGTH: 4.6,          // longueur d'un trou (saut obligatoire)
+  GAP_LENGTH: 4.6,          // longueur d'un trou pleine largeur (saut obligatoire)
   LOW_HEIGHT: 0.95,         // barrière basse : à sauter
   HIGH_CLEARANCE: 1.15,     // poutre haute : à passer en glissade
+
+  /* -------------------------------------------- CREVASSE (sol effondré) ---
+     Le trou au milieu de la chaussée de l'illustration de référence. À la
+     différence du trou pleine largeur, il n'occupe qu'une ou deux voies : la
+     parade est LATÉRALE, on prend une voie restée libre. Le saut marche aussi,
+     mais ce n'est pas ce qu'on demande au joueur.
+
+     Décision de Guillaume : « crevasse partielle rare, décor avant tout ».
+     D'où deux objets distincts et volontairement dissociés :
+       - la crevasse BLOQUANTE, tirée rarement parmi les obstacles ;
+       - la fissure DÉCORATIVE, fréquente, purement visuelle, qui ne touche ni
+         la collision ni le pavage du sol. C'est elle qui donne l'aspect « sol
+         éventré » de l'image sans rendre la piste hostile. */
+  CREVASSE_LENGTH: 5.2,     // longueur d'une crevasse le long de la piste
+  CREVASSE_CHANCE: 0.07,    // part des obstacles tirés qui deviennent crevasse (~5 % au final)
+  CREVASSE_MIN_DIFF: 0.18,  // pas de crevasse tant que la difficulté n'est pas installée
+  DECOR_CRACK_PER_NODE: 6,  // fissures décoratives TIRÉES par tronçon ; beaucoup sont
+                            // ensuite écartées parce qu'elles tombaient trop près d'un
+                            // vrai obstacle (voir Track.decorate), d'où un chiffre élevé
+                            // pour un résultat d'environ une fissure tous les 40 mètres
 
   /* ----------------------------------------------------------------- PIÈCES */
   COIN_VALUE: 1,
@@ -89,6 +159,8 @@ const CFG = {
   STORAGE_KEY: "vf_templerun_best_v1",
 
   /* ---------------------------------------------------------------- CAMÉRA */
+  /* HAUTEUR INCHANGÉE au zip 374, à la demande expresse de Guillaume : le
+     cadrage lui convient, seul le décor devait bouger. */
   CAM_BACK: 7.2,
   CAM_HEIGHT: 4.3,
   CAM_LOOK_AHEAD: 9,
@@ -100,32 +172,75 @@ const CFG = {
 
   /* ---------------------------------------------------------------- RENDU */
   PIXEL_SCALE: 3.4,         // rendu en basse résolution puis étirement : effet pixel
-  FOG_NEAR_DENSITY: 0.024,
-  DRAW_DISTANCE: 260,
+  FOG_NEAR_DENSITY: 0.019,  // un peu moins dense qu'au 372 : le lac et le ciel doivent se voir
+  DRAW_DISTANCE: 420,       // doit porter au moins jusqu'au dôme de ciel
+
+  /* ------------------------------------------------------------------ CIEL --
+     Ciel de l'illustration de référence : violet nocturne saturé, nuages
+     déchirés, croissant de lune bas, crêtes lointaines en silhouette. Peint
+     une fois sur un canvas et plaqué sur un dôme (voir World.buildSky) — pas
+     de shader, cohérent avec le reste du rendu.
+
+     Assombri par rapport à l'image, sur demande de Guillaume. */
+  SKY_TOP:       0x120a1f,  // zénith, presque noir
+  SKY_MID:       0x2a1442,  // corps du ciel
+  SKY_HORIZON:   0x46162f,  // rougeoiement bas, celui de l'image
+  SKY_CLOUD:     0x3a2255,  // masse nuageuse
+  SKY_CLOUD_LIT: 0x6d4a92,  // liseré éclairé des nuages, côté lune
+  SKY_MOON:      0xd7cae8,
+  SKY_PEAKS:     0x180f26,  // crêtes en silhouette sur l'horizon
+
+  /* --------------------------------------------------------------- ÉCLAIRS --
+     Un éclair n'est pas un fondu blanc : c'est un premier coup bref, un noir
+     très court, puis un second coup plus fort et plus long. Reproduire ce
+     rythme coûte trois nombres et fait toute la différence. */
+  LIGHTNING_MIN_MS: 7000,   // attente minimale entre deux éclairs
+  LIGHTNING_MAX_MS: 19000,
+  LIGHTNING_PRE_MS: 70,     // premier coup
+  LIGHTNING_DARK_MS: 55,    // noir entre les deux coups
+  LIGHTNING_MAIN_MS: 230,   // second coup, celui qu'on voit vraiment
+  LIGHTNING_STRENGTH: 0.9,  // 0 = invisible, 1 = ciel entièrement délavé
+  COL_LIGHTNING: 0xcdb6ff,  // teinte du flash : violet-blanc, pas blanc pur
+
+  /* ------------------------------------------------------------------- LAC --
+     Le lac violet inquiétant. La chaussée le franchit : c'est exactement ce
+     que fait déjà carveRunCorridor côté ferme en creusant un couloir à
+     travers le lac du monde sombre, et c'est ce qui relie visuellement le
+     défi à la carte dont il sort. */
+  LAKE_Y: -2.6,             // sous la chaussée
+  LAKE_SIZE: 1400,          // plan unique, assez grand pour couvrir le brouillard
+  LAKE_SCROLL: 0.035,       // vitesse de dérive de la texture d'ondes
+  LAKE_MIST_COUNT: 9,       // voiles de brume qui traînent à la surface
 
   /* --------------------------------------- PALETTE — relevée dans le jeu ---
-     Reprise telle quelle de la carte maléfique de Ferme Vallée
-     (drawEvilFrame dans FermeGame.js, deadTree dans fermeArt.js) pour que le
-     défi ne détonne pas à côté du reste du monde. */
-  COL_SKY:        0x2a1840,  // ciel violet nocturne (illustration de référence)
-  COL_FOG:        0x1a1030,
-  COL_GROUND:     0x182417,  // sol de la carte maléfique
-  COL_VOID:       0x0b120c,  // fond, sous la piste
-  COL_STONE:      0x6b6152,  // dalle de pierre du couloir
-  COL_STONE_DARK: 0x4a4438,
-  COL_STONE_EDGE: 0x3a352c,
-  COL_BARK:       0x3a342e,  // arbre mort
-  COL_BARK_DARK:  0x231f1a,
+     Reprise de la carte maléfique de Ferme Vallée (drawEvilFrame dans
+     FermeGame.js, deadTree dans fermeArt.js), puis ASSOMBRIE au zip 374 pour
+     coller à l'illustration de référence tout en restant plus sombre qu'elle. */
+  COL_FOG:        0x150c26,
+  COL_GROUND:     0x121a12,  // sol de la carte maléfique, assombri
+  COL_VOID:       0x080d10,  // fond, sous la piste
+  COL_STONE:      0x565046,  // dalle de pierre du couloir
+  COL_STONE_DARK: 0x3c372f,
+  COL_STONE_EDGE: 0x2b2721,
+  COL_BARK:       0x2e2822,  // arbre mort
+  COL_BARK_DARK:  0x1b1712,
   COL_PURPLE:     0x8c5ADC,  // lueur du passage sombre / du lac
-  COL_PURPLE_DIM: 0x4a2a7a,
+  COL_PURPLE_DIM: 0x3a2064,
+  COL_LAKE:       0x2a1052,  // creux des ondes
+  COL_LAKE_GLOW:  0x7b3fd8,  // crête des ondes : c'est elle qui « luit »
   COL_TORCH:      0xff9a3c,
   COL_COIN:       0xf2c43d,
-  COL_WOLF:       0x14100f,
+  COL_WOLF:       0x0f0c0b,
   COL_WOLF_EYE:   0xff3020,
-  COL_OBSTACLE:   0x55503f,
-  COL_STAIN:      0x3a4a2e,  // moisissure/mousse sur la pierre, teinte verdâtre raccord évil
-  COL_STAIN_DARK: 0x22301c,  // cœur des taches d'humidité, plus sombre
-  COL_CRACK:      0x110d0b,  // fêlures dans la pierre
+  COL_OBSTACLE:   0x453f33,
+  COL_STAIN:      0x2f3d24,  // moisissure sur la pierre, teinte verdâtre raccord évil
+  COL_STAIN_DARK: 0x1a2415,  // cœur des taches d'humidité, plus sombre
+  COL_CRACK:      0x0a0807,  // fêlures dans la pierre
+  COL_MOSS:       0x46592e,  // mousse franche, celle des joints de l'image
+  COL_MOSS_DARK:  0x27351a,
+  COL_VINE:       0x293a20,  // lierre
+  COL_MUSHROOM:   0xb887ff,  // chapeau de champignon luminescent
+  COL_RUNE:       0xa26bff,  // gravures runiques
 
   /* --------------------------------------------------- SOL EN RUINE ---
      3 paliers d'usure tirés au sort par dalle (voir World.buildStoneVariants) :
@@ -137,6 +252,21 @@ const CFG = {
   FLOOR_TILT_RUINED:  0.05,   // rad — bascule plus marquée des dalles très abîmées
   FLOOR_SINK_RUINED:  0.05,   // affaissement visuel des dalles très abîmées
 
+  /* -------------------------------------------- BORDS DE LA CHAUSSÉE ---
+     Ce que Guillaume a retenu de l'illustration : « inspire-toi surtout de la
+     plateforme ». Donc pas de couloir fermé, pas d'arches. Ce qui borde la
+     piste, ce sont les blocs bas façon sarcophage, les stèles gravées, la
+     mousse et les champignons — le ciel, le lac et les arbres morts se voient
+     par-dessus, ce qui serait impossible avec deux murs pleins. */
+  KERB_SPACING: 8.5,        // écart entre deux blocs de bordure
+  KERB_SKIP_CHANCE: 0.3,    // blocs manquants : une bordure trop régulière fait décor de jeu
+  STELE_CHANCE: 0.22,       // part des blocs remplacés par une stèle à runes
+  MUSHROOM_CLUSTERS: 5,     // bouquets de champignons luminescents par tronçon
+  VINE_CHANCE: 0.38,         // part des blocs portant du lierre retombant
+  TORCH_SPACING: 22,        // torches nettement plus rares qu'au 372 (13)
+  DECOR_PROPS: 14,          // arbres morts, colonnes brisées et rochers par tronçon
+  TREE_BRANCHES: 3,         // branches par arbre mort (le poste le plus coûteux du décor)
+
   /* Tenue du fermier — OUTFITS[0] de fermeConstants.js */
   COL_SHIRT: 0x3f7fd4,
   COL_PANTS: 0x454f66,
@@ -144,12 +274,37 @@ const CFG = {
   COL_HAIR:  0x8a5a30,
 };
 
-/* Dérivés — ne pas régler à la main. */
+/* =============================================================================
+   DÉRIVÉS — ne pas régler à la main.
+   ========================================================================== */
+
 CFG.SPEED_RANGE = CFG.SPEED_MAX - CFG.SPEED_START;
 CFG.LANE_X = [];
 for (let i = 0; i < CFG.LANE_COUNT; i++) {
   CFG.LANE_X.push((i - (CFG.LANE_COUNT - 1) / 2) * CFG.LANE_WIDTH);
 }
+
+/* Durées des parades, en secondes. Elles servent à DEUX choses : l'espacement
+   des obstacles (track.js) et les zones franches autour des virages. Les
+   dupliquer aux deux endroits serait la meilleure façon de les désaccorder. */
+CFG.JUMP_AIRTIME_S = (2 * CFG.JUMP_VELOCITY) / CFG.GRAVITY;
+CFG.SLIDE_TIME_S   = CFG.SLIDE_MS / 1000;
+CFG.LANE_TIME_S    = CFG.LANE_WIDTH / CFG.LANE_CHANGE_SPEED;
+CFG.LONGEST_PARADE_S = Math.max(CFG.JUMP_AIRTIME_S, CFG.SLIDE_TIME_S, CFG.LANE_TIME_S);
+
+/* Zone franche APRÈS un virage : le joueur ne voit rien tant que la caméra ne
+   s'est pas réalignée, puis il lui faut son temps de réaction. Tout obstacle
+   placé plus tôt est inévitable, quel que soit le talent. */
+CFG.TURN_CLEAR_AFTER = Math.ceil(
+  (CFG.TURN_CAM_SETTLE_S + CFG.TURN_REACT_S) * CFG.SPEED_MAX
+) + 4;
+
+/* Zone franche AVANT un virage : la parade la plus longue doit être terminée
+   quand s'ouvre la fenêtre d'armement du virage. Sinon le joueur est en l'air
+   au moment où il devrait appuyer, et le virage manqué est fatal. */
+CFG.TURN_CLEAR_BEFORE = Math.ceil(
+  CFG.TURN_INPUT_WINDOW + CFG.LONGEST_PARADE_S * CFG.SPEED_MAX
+) + 4;
 
 /* Les 4 directions cardinales. dir+1 = tourner à droite, dir-1 = à gauche.
    (vérifié : forward (0,-1) a pour droite (1,0), qui est bien D[1]) */

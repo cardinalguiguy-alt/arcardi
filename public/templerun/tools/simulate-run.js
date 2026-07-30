@@ -67,31 +67,76 @@ function oracle(player, track) {
     return;
   }
 
-  /* --- Obstacle le plus proche devant --- */
-  let next = null;
-  for (const o of node.obstacles) {
-    if (o.t <= player.t) continue;
-    if (!next || o.t < next.t) next = o;
+  /* --- Obstacle le plus proche devant ---------------------------------------
+     L'oracle regarde AUSSI dans le tronçon suivant, tant que le tronçon
+     courant ne se termine pas par un virage.
+
+     Corrigé au zip 374. L'oracle ne voyait que son propre tronçon : il
+     découvrait donc les obstacles des dix premières unités du suivant au
+     moment exact où il y entrait, avec 9 unités pour réagir là où un humain
+     en a trente. Sur un mur, ça coûtait un trébuchement et ça passait
+     inaperçu ; sur une crevasse, c'était mortel, et ça a fait échouer 12
+     courses sur 120.
+
+     Après un virage, en revanche, il ne peut RIEN voir — et c'est correct :
+     c'est exactement l'hypothèse dont CFG.TURN_CLEAR_AFTER est déduit.
+
+     UN OBSTACLE RESTE « DEVANT » TANT QU'ON NE L'A PAS ENTIÈREMENT QUITTÉ.
+     C'est la troisième cause de mort trouvée cette session, et la plus
+     instructive : le trou et la crevasse ont une LONGUEUR. En les classant
+     sur leur centre, l'oracle les considérait comme franchis à mi-parcours et
+     réagissait aussitôt à l'obstacle SUIVANT — c'est-à-dire qu'il amorçait un
+     changement de voie alors qu'il était encore au-dessus du vide, et
+     traversait le trou par le travers. Aucun humain ne ferait ça. On classe
+     donc sur le bord de SORTIE, et on chronomètre sur le bord d'ENTRÉE. */
+  const halfOf = (o) => o.type === OBST.CREVASSE ? CFG.CREVASSE_LENGTH / 2
+                      : o.type === OBST.GAP ? CFG.GAP_LENGTH / 2 : 0;
+
+  let next = null, dist = Infinity, lead = Infinity;
+  const consider = (o, offset) => {
+    const h = halfOf(o);
+    const exit = o.t + h + offset - player.t;     // distance jusqu'à la sortie
+    if (exit <= 0 || exit >= dist) return;
+    dist = exit;
+    lead = Math.max(0, o.t - h + offset - player.t);
+    next = o;
+  };
+  for (const o of node.obstacles) consider(o, 0);
+  if (!next && node.turn === 0) {
+    const ahead = track.get(node.index + 1);
+    if (ahead) for (const o of ahead.obstacles) consider(o, node.length);
   }
   if (!next) return;
 
-  const dist = next.t - player.t;
-  const eta = dist / v;                       // secondes avant impact
+  const eta = lead / v;                       // secondes avant le bord d'attaque
 
   if (next.type === OBST.GAP) {
     // Sauter pour être en l'air sur toute la longueur du trou.
-    if (eta <= 0.20 && player.y < 0.05) fakeInput.press("jump");
+    if (eta <= 0.20 && lead < 12 && player.y < 0.05) fakeInput.press("jump");
     return;
   }
 
   // Suis-je dans une voie bloquée ?
   let blocked = next.lanes[player.lane];
 
-  if (next.type === OBST.WALL) {
+  /* Mur et CREVASSE : même parade, un déport latéral. La crevasse a été
+     ajoutée au zip 374, et c'est ce script qui a montré qu'il fallait le
+     faire — l'oracle, qui ne la connaissait pas, tombait dedans 114 fois sur
+     120. Une passe de vérification qui ne dit rien après un ajout de règle
+     n'est pas rassurante, elle est SUSPECTE. */
+  if (next.type === OBST.WALL || next.type === OBST.CREVASSE) {
     if (blocked && next.free.length) {
-      // Rejoindre la voie libre la plus proche, le plus tôt possible.
+      /* Rejoindre la voie libre la plus proche, le plus tôt possible. À
+         distance ÉGALE on garde la première trouvée : sur une crevasse
+         centrale, partir vers la voie 0 depuis la voie 2 obligerait à
+         traverser le trou, ce qu'un joueur humain ne ferait jamais. Le
+         comparateur doit donc être <=, pas <, pour que le balayage retienne
+         bien la dernière option équidistante quand elle est du bon côté. */
       let best = next.free[0];
-      for (const f of next.free) if (Math.abs(f - player.lane) < Math.abs(best - player.lane)) best = f;
+      for (const f of next.free) {
+        const d = Math.abs(f - player.lane), db = Math.abs(best - player.lane);
+        if (d < db || (d === db && Math.sign(f - player.lane) === Math.sign(player.laneOffset))) best = f;
+      }
       if (best < player.lane) fakeInput.press("left");
       else if (best > player.lane) fakeInput.press("right");
     }
@@ -100,13 +145,13 @@ function oracle(player, track) {
 
   if (next.type === OBST.LOW) {
     if (!blocked) return;
-    if (eta <= 0.22 && player.y < 0.05) fakeInput.press("jump");
+    if (eta <= 0.22 && lead < 12 && player.y < 0.05) fakeInput.press("jump");
     return;
   }
 
   if (next.type === OBST.HIGH) {
     if (!blocked) return;
-    if (eta <= 0.14 && !player.isSliding(CLOCK)) fakeInput.press("slide");
+    if (eta <= 0.14 && lead < 10 && !player.isSliding(CLOCK)) fakeInput.press("slide");
   }
 }
 
@@ -165,8 +210,19 @@ console.log(`  pièces moyennes ${(totalCoins / RUNS).toFixed(1)}  |  trébuchem
 console.log(`  vitesse max atteinte ${maxSpeed.toFixed(1)} u/s (plafond ${CFG.SPEED_MAX})`);
 if (Object.keys(causes).length) console.log(`  morts : ${JSON.stringify(causes)}`);
 
-/* 2. Un joueur compétent doit survivre l'écrasante majorité du temps. */
-if (survived < RUNS * 0.9) {
+/* 2. Un joueur compétent doit survivre l'écrasante majorité du temps.
+
+   SEUIL RELEVÉ DE 90 % À 98 % AU ZIP 374. La marge de 90 % laissait passer
+   sans un mot une régression à 108/120 introduite par les crevasses : le
+   script affichait « OK » alors que le taux de survie venait de chuter de
+   120/120. Un seuil qui absorbe silencieusement douze morts nouvelles ne
+   protège de rien.
+
+   98 % laisse encore la place à un aléa rare sans exiger la perfection, et
+   surtout la liste des CAUSES est affichée à chaque exécution : une survie de
+   100 % obtenue avec un type d'obstacle jamais rencontré ne serait pas une
+   bonne nouvelle. */
+if (survived < RUNS * 0.98) {
   failures.push(`un joueur parfait ne survit que ${survived}/${RUNS} fois — le jeu est trop punitif ou cassé`);
 }
 

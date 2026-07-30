@@ -25,33 +25,102 @@
 
    Ces trois règles sont revérifiées par tools/verify-fairness.js, qui joue
    200 000 unités de piste et échoue si une seule configuration est injouable.
+
+   ZIP 374 — DEUX CORRECTIONS D'ÉQUITÉ, toutes deux signalées en jeu :
+
+     a. Les zones franches autour des virages étaient DEVINÉES (16 et 14
+        unités). Elles sont maintenant calculées dans config.js depuis le
+        temps d'aveuglement de la caméra, le temps de réaction et la durée de
+        la parade la plus longue. Un obstacle « juste avant ou juste après un
+        virage » était inévitable — il ne peut plus être placé là.
+     b. La chaîne d'espacement s'ARRÊTAIT au bord de chaque tronçon : le
+        dernier obstacle d'un tronçon et le premier du suivant ne se voyaient
+        pas. Elle est désormais portée par le générateur (this.prevObst), en
+        distance ABSOLUE, donc elle traverse les virages.
    ========================================================================== */
 
 /* Types d'obstacles et parade associée. */
 const OBST = {
-  LOW:  "low",   // barrière basse    -> sauter
-  HIGH: "high",  // poutre en hauteur -> glisser
-  WALL: "wall",  // bloc plein        -> changer de voie
-  GAP:  "gap",   // trou dans le sol  -> sauter (toute la largeur)
+  LOW:      "low",       // barrière basse       -> sauter
+  HIGH:     "high",      // poutre en hauteur    -> glisser
+  WALL:     "wall",      // bloc plein           -> changer de voie
+  GAP:      "gap",       // trou pleine largeur  -> sauter
+  CREVASSE: "crevasse",  // sol effondré partiel -> prendre une voie libre
 };
 
 const Track = (function () {
 
-  /* --- Coûts en distance des différentes parades, déduits de la physique --- */
-  const JUMP_AIRTIME = (2 * CFG.JUMP_VELOCITY) / CFG.GRAVITY;   // s
-  const SLIDE_TIME   = CFG.SLIDE_MS / 1000;                     // s
-  const LANE_TIME    = CFG.LANE_WIDTH / CFG.LANE_CHANGE_SPEED;  // s par voie
+  /* --- Coûts en distance des différentes parades, déduits de la physique ---
+     Les DURÉES vivent dans config.js (CFG.JUMP_AIRTIME_S & co) parce que les
+     zones franches des virages en ont besoin elles aussi ; on ne les
+     recalcule pas ici, on les relit. */
+  const JUMP_AIRTIME = CFG.JUMP_AIRTIME_S;                      // s
+  const SLIDE_TIME   = CFG.SLIDE_TIME_S;                        // s
+  const LANE_TIME    = CFG.LANE_TIME_S;                         // s par voie
   const MARGIN       = 5;                                       // marge de confort, en unités
 
   function minSpacingAfter(type) {
     // Distance parcourue à vitesse MAX pendant que la parade occupe le joueur.
     if (type === OBST.LOW || type === OBST.GAP) return JUMP_AIRTIME * CFG.SPEED_MAX + MARGIN;
     if (type === OBST.HIGH) return SLIDE_TIME * CFG.SPEED_MAX + MARGIN;
+    // La crevasse se contourne : le joueur n'est immobilisé que le temps du
+    // changement de voie, mais il doit AVOIR FINI de traverser avant le bord
+    // du trou, d'où la longueur de la crevasse ajoutée à l'espacement.
+    if (type === OBST.CREVASSE) return CFG.OBST_SPACING_MIN + CFG.CREVASSE_LENGTH;
     return CFG.OBST_SPACING_MIN;
   }
   /* Espacement exigé entre deux obstacles selon le déplacement latéral imposé. */
   function spacingForLaneTravel(lanes) {
     return lanes * LANE_TIME * CFG.SPEED_MAX + MARGIN;
+  }
+
+  /* Nombre de changements de voie à prévoir entre deux obstacles, DANS LE PIRE
+     CAS.
+
+     CORRIGÉ AU ZIP 374, et c'est le défaut d'équité le plus sérieux trouvé
+     cette session. L'ancienne version prenait le MINIMUM sur tous les couples
+     (voie libre avant, voie libre après) : elle vérifiait donc qu'il EXISTE un
+     trajet court, pas que TOUS les trajets possibles le soient. Un joueur
+     laissé sur la voie 0 par une barrière qui libérait 0, 1 et 2, puis
+     confronté à un obstacle ne libérant que la voie 2, se voyait accorder
+     l'espace d'un trajet de zéro voie.
+
+     Sur un mur, ça ne se voyait pas : on l'esquive à la dernière fraction de
+     seconde et le pire cas coûte un trébuchement. Sur une CREVASSE, longue de
+     5 unités et mortelle, ça tuait — 10 courses sur 120 dans simulate-run.js.
+
+     La bonne question n'est pas « existe-t-il un chemin court ? » mais « le
+     chemin le plus long qu'on puisse imposer au joueur tient-il dans la
+     distance disponible ? ». D'où max(min(...)). */
+  function worstLaneTravel(fromFree, toFree) {
+    if (!fromFree || !fromFree.length || !toFree || !toFree.length) return 0;
+    let worst = 0;
+    for (const a of fromFree) {
+      let best = Infinity;
+      for (const b of toFree) best = Math.min(best, Math.abs(a - b));
+      worst = Math.max(worst, best);
+    }
+    return worst;
+  }
+
+  const ALL_LANES = [];
+  for (let i = 0; i < CFG.LANE_COUNT; i++) ALL_LANES.push(i);
+
+  /* Voies dans lesquelles le joueur peut se trouver APRÈS avoir franchi un
+     obstacle. Ce n'est PAS la liste de ses voies libres, et la confusion entre
+     les deux est la seconde moitié du défaut d'équité corrigé au zip 374 :
+
+       - un mur ou une crevasse FORCENT le joueur dans une voie libre ;
+       - une barrière basse, une poutre haute ou un trou se franchissent
+         VERTICALEMENT. Le joueur les passe sans bouger d'un centimètre sur le
+         côté, y compris dans une voie « bloquée » — c'est même exactement ce
+         que fait n'importe qui, et ce que fait l'oracle de simulate-run.js.
+
+     Dimensionner l'espacement suivant sur `free` revenait donc à supposer un
+     déport latéral que le joueur n'a aucune raison d'avoir fait. */
+  function exitLanes(o) {
+    if (o.type === OBST.WALL || o.type === OBST.CREVASSE) return o.free;
+    return ALL_LANES;
   }
 
   /* ------------------------------------------------------------------ RNG --
@@ -78,6 +147,10 @@ const Track = (function () {
       this.nextStartDist = 0;
       this.nodesSinceTurn = 99;
       this.lastTurn = 0;
+      this.nextEntryTurn = 0;   // virage par lequel on ARRIVE sur le prochain tronçon
+      // Dernier obstacle posé, en distance ABSOLUE. C'est ce qui permet à la
+      // règle d'espacement de traverser les bords de tronçon (voir en-tête).
+      this.prevObst = null;
       // Premier tronçon : long, droit, désert. On ne piège pas un joueur qui
       // vient à peine d'appuyer sur "jouer".
       this.pushNode(true);
@@ -104,8 +177,10 @@ const Track = (function () {
         length: isFirst ? 120 : Math.round(this.rand(CFG.NODE_LEN_MIN, CFG.NODE_LEN_MAX)),
         startDist: dist,
         turn: 0,          // 0 = tout droit, -1 = gauche, +1 = droite
+        entryTurn: this.nextEntryTurn,  // virage par lequel on ARRIVE ici (0 = tout droit)
         obstacles: [],
         coins: [],
+        cracks: [],       // fissures PUREMENT décoratives (aucune collision)
         built: false,
         group: null,
       };
@@ -125,6 +200,7 @@ const Track = (function () {
       }
 
       if (!isFirst) this.populate(node, diff);
+      this.decorate(node);
 
       this.nodes.push(node);
 
@@ -133,25 +209,68 @@ const Track = (function () {
       this.nextOrigin = { x: node.ox + f.x * node.length, z: node.oz + f.z * node.length };
       this.nextDir = (node.dir + (node.turn === 0 ? 0 : node.turn) + 4) & 3;
       this.nextStartDist = dist + node.length;
+      this.nextEntryTurn = node.turn;
       return node;
+    }
+
+    /* -------------------------------------------- FISSURES DÉCORATIVES ---
+       Le « trou au milieu » de l'illustration, version inoffensive. Aucune
+       collision, aucun trou réel dans le pavage : world.js pose simplement
+       une entaille sombre et quelques éclats de dalle par-dessus le sol.
+
+       C'est le « décor avant tout » demandé par Guillaume. Les crevasses
+       BLOQUANTES, elles, passent par populate() comme n'importe quel autre
+       obstacle, et sont rares.
+
+       On les tient à l'écart des vrais obstacles et des bords de tronçon :
+       une entaille purement cosmétique posée à côté d'une crevasse mortelle
+       apprendrait au joueur que les fissures ne sont pas dangereuses, juste
+       avant de le tuer avec l'une d'elles. */
+    decorate(node) {
+      const n = this.randInt(0, CFG.DECOR_CRACK_PER_NODE);
+      for (let i = 0; i < n; i++) {
+        const t = this.rand(6, Math.max(7, node.length - 6));
+        let clash = false;
+        for (const o of node.obstacles) {
+          if (Math.abs(o.t - t) < CFG.CREVASSE_LENGTH * 2.5) { clash = true; break; }
+        }
+        if (clash) continue;
+        node.cracks.push({
+          t,
+          off: this.rand(-CFG.TRACK_WIDTH * 0.36, CFG.TRACK_WIDTH * 0.36),
+          len: this.rand(2.2, 5.5),
+          wide: this.rand(0.35, 1.1),
+          rot: this.rand(-0.5, 0.5),
+        });
+      }
     }
 
     /* ------------------------------------------------ OBSTACLES ET PIÈCES */
     populate(node, diff) {
       const density = CFG.OBST_DENSITY_START + (CFG.OBST_DENSITY_MAX - CFG.OBST_DENSITY_START) * diff;
 
-      // Fenêtre utilisable : on laisse la piste libre juste après le départ du
-      // tronçon (le joueur sort peut-être d'un virage) et juste avant sa fin
-      // (il doit voir le virage venir et pouvoir s'y préparer).
-      let from = CFG.TURN_CLEAR_AFTER;
-      let to = node.length - (node.turn !== 0 ? CFG.TURN_CLEAR_BEFORE : 10);
+      /* Fenêtre utilisable. Les deux bornes dépendent de la présence d'un
+         virage, et SEULEMENT de ça — un tronçon qui ne sort pas d'un virage
+         n'a aucune raison de gaspiller 26 unités d'entrée.
+
+         C'est ici que se règle la demande de Guillaume : « enlève les
+         obstacles qui sont direct avant ou après un virage car ils sont
+         inévitables ». Les deux constantes sont dérivées de la physique dans
+         config.js, pas devinées. */
+      let from = node.entryTurn !== 0 ? CFG.TURN_CLEAR_AFTER : CFG.ENTRY_CLEAR_STRAIGHT;
+      let to = node.length - (node.turn !== 0 ? CFG.TURN_CLEAR_BEFORE : CFG.END_CLEAR_STRAIGHT);
       if (node.startDist < CFG.OBST_START_SAFE_DIST) {
         from = Math.max(from, CFG.OBST_START_SAFE_DIST - node.startDist);
       }
       if (to - from < 12) return;
 
+      /* La chaîne d'espacement continue d'un tronçon à l'autre : on repart du
+         dernier obstacle posé, en distance absolue, converti dans le repère
+         local de ce tronçon (donc avec un t négatif s'il est derrière). */
+      let prev = this.prevObst
+        ? { t: this.prevObst.abs - node.startDist, type: this.prevObst.type, free: this.prevObst.free }
+        : null;
       let t = from;
-      let prev = null;   // { t, type, free:[voies libres] }
 
       while (t < to) {
         // Emplacement candidat. On respecte d'abord l'espacement imposé par
@@ -168,6 +287,7 @@ const Track = (function () {
 
         node.obstacles.push(cand);
         prev = cand;
+        this.prevObst = { abs: node.startDist + cand.t, type: cand.type, free: cand.free };
         t = cand.t;
       }
 
@@ -189,9 +309,25 @@ const Track = (function () {
       // installée, sinon la première minute est frustrante.
       if (type === OBST.GAP && diff < 0.25) type = OBST.LOW;
 
+      /* CREVASSE. Tirée APRÈS coup, en remplaçant un obstacle déjà choisi,
+         plutôt qu'ajoutée à la roue des types : c'est ce qui la garde rare
+         sans avoir à rééquilibrer les quatre autres probabilités entre elles
+         à chaque réglage de CREVASSE_CHANCE. */
+      if (diff >= CFG.CREVASSE_MIN_DIFF && this.rng() < CFG.CREVASSE_CHANCE) type = OBST.CREVASSE;
+
       let lanes;
       if (type === OBST.GAP) {
         lanes = [true, true, true];
+      } else if (type === OBST.CREVASSE) {
+        // 1 ou 2 voies effondrées, jamais 3 : sinon c'est un GAP, et la parade
+        // annoncée au joueur (« prends une voie libre ») deviendrait fausse.
+        lanes = [false, false, false];
+        if (this.rng() < 0.62) {
+          lanes[this.randInt(0, 2)] = true;
+        } else {
+          const s = this.randInt(0, 1);
+          lanes[s] = true; lanes[s + 1] = true;
+        }
       } else if (type === OBST.WALL) {
         // RÈGLE 2 : jamais les 3 voies. 1 ou 2 voies bloquées.
         const n = this.rng() < 0.55 ? 1 : 2;
@@ -216,17 +352,27 @@ const Track = (function () {
       const free = [];
       for (let i = 0; i < 3; i++) if (!lanes[i]) free.push(i);
       // GAP et LOW/HIGH pleine largeur n'ont pas de voie libre : c'est normal,
-      // la parade est verticale. Un WALL sans voie libre serait un mur de la
-      // mort — la règle 2 l'interdit, on revérifie quand même.
-      if (type === OBST.WALL && free.length === 0) return null;
+      // la parade est verticale. Un WALL ou une CREVASSE sans voie libre serait
+      // un mur de la mort — les règles ci-dessus l'interdisent, on revérifie.
+      if ((type === OBST.WALL || type === OBST.CREVASSE) && free.length === 0) return null;
 
       /* RÈGLE 3 : si l'obstacle précédent forçait le joueur dans certaines
-         voies, vérifier qu'il a la place de rejoindre une voie libre ici. */
-      if (prev && free.length > 0 && prev.free && prev.free.length > 0) {
-        let travel = Infinity;
-        for (const a of prev.free) for (const b of free) travel = Math.min(travel, Math.abs(a - b));
+         voies, vérifier qu'il a la place de rejoindre une voie libre ici.
+
+         Une crevasse a une LONGUEUR : le changement de voie doit être bouclé
+         avant son bord d'attaque, pas avant son centre. Sans ce demi-décalage,
+         on peut arriver sur le trou en plein glissement latéral. */
+      /* La garde porte sur les voies de SORTIE du précédent, pas sur ses voies
+         libres. Un obstacle pleine largeur (barrière basse sur les 3 voies,
+         trou) a `free` vide : l'ancienne garde sautait donc tout le contrôle
+         latéral juste après lui, alors que c'est précisément le cas où le
+         joueur peut être n'importe où. */
+      const fromLanes = prev ? exitLanes(prev) : null;
+      if (prev && free.length > 0 && fromLanes && fromLanes.length > 0) {
+        const travel = worstLaneTravel(fromLanes, free);
         const needed = Math.max(minSpacingAfter(prev.type), spacingForLaneTravel(travel));
-        if (t - prev.t < needed) return null;
+        const arrival = type === OBST.CREVASSE ? t - CFG.CREVASSE_LENGTH / 2 : t;
+        if (arrival - prev.t < needed) return null;
       }
 
       return { t, type, lanes, free };
@@ -254,9 +400,16 @@ const Track = (function () {
       }
     }
 
+    /* Une pièce ne doit jamais appâter le joueur DANS un obstacle. La marge
+       dépend de l'emprise réelle de l'obstacle le long de la piste : une
+       crevasse est bien plus longue qu'une barrière, et une pièce posée sur
+       son bord serait un piège pur. */
     blockedAt(node, t, lane) {
       for (const o of node.obstacles) {
-        if (Math.abs(o.t - t) > 2.4) continue;
+        const reach = o.type === OBST.CREVASSE ? CFG.CREVASSE_LENGTH / 2 + 1.6
+                    : o.type === OBST.GAP      ? CFG.GAP_LENGTH / 2 + 1.6
+                    : 2.4;
+        if (Math.abs(o.t - t) > reach) continue;
         if (o.lanes[lane]) return true;
       }
       return false;
@@ -307,7 +460,8 @@ const Track = (function () {
     }
   }
 
-  return { TrackGen, OBST, makeRng, minSpacingAfter, spacingForLaneTravel, JUMP_AIRTIME, SLIDE_TIME, LANE_TIME };
+  return { TrackGen, OBST, makeRng, minSpacingAfter, spacingForLaneTravel, worstLaneTravel, exitLanes,
+           JUMP_AIRTIME, SLIDE_TIME, LANE_TIME };
 })();
 
 /* Export Node.js pour le script de vérification, ignoré par le navigateur. */

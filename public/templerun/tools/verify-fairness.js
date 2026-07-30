@@ -37,34 +37,66 @@ function fail(seed, node, msg) {
   if (errors.length < 25) errors.push(`graine ${seed}, tronçon ${node.index} : ${msg}`);
 }
 
+/* Point d'ARRIVÉE d'un obstacle : l'endroit où le joueur doit avoir fini sa
+   parade. Pour tout ce qui est ponctuel c'est son t ; pour un trou, c'est son
+   bord d'attaque, parce qu'on ne rattrape rien une fois au-dessus du vide. */
+function entryOf(o) {
+  if (o.type === OBST.CREVASSE) return o.t - CFG.CREVASSE_LENGTH / 2;
+  if (o.type === OBST.GAP) return o.t - CFG.GAP_LENGTH / 2;
+  return o.t;
+}
+
 const SEEDS = 4000;
 const NODES_PER_SEED = 26;
-let totalNodes = 0, totalObstacles = 0, totalGaps = 0, totalTurns = 0, totalCoins = 0, totalLength = 0;
+let totalNodes = 0, totalObstacles = 0, totalGaps = 0, totalCrev = 0;
+let totalTurns = 0, totalCoins = 0, totalCracks = 0, totalLength = 0;
 
 for (let s = 0; s < SEEDS; s++) {
   const gen = new Track.TrackGen(s);
   while (gen.nodes.length < NODES_PER_SEED) gen.pushNode(false);
 
+  /* Chaîne d'espacement PORTÉE D'UN TRONÇON À L'AUTRE. Depuis le zip 374 le
+     générateur la maintient lui-même ; le vérificateur doit donc la suivre de
+     la même façon, sinon il valide chaque tronçon isolément et ne verra jamais
+     l'obstacle collé de l'autre côté d'un virage. Tout est en distance
+     ABSOLUE. */
+  let busyUntilAbs = -Infinity;
+  let prev = null;   // { abs, type, free }
+
   for (const node of gen.nodes) {
     totalNodes++;
     totalLength += node.length;
     totalCoins += node.coins.length;
+    totalCracks += node.cracks.length;
     if (node.turn !== 0) totalTurns++;
 
     const obs = node.obstacles.slice().sort((a, b) => a.t - b.t);
 
-    /* --- Règle : fenêtres libres au début et à la fin du tronçon --- */
+    /* --- Règle : fenêtres franches en entrée et en sortie de tronçon.
+       Depuis le 374 elles dépendent de la PRÉSENCE d'un virage de chaque
+       côté, et leurs valeurs sont dérivées de la physique dans config.js. --- */
+    const startLimit = node.entryTurn !== 0 ? CFG.TURN_CLEAR_AFTER : CFG.ENTRY_CLEAR_STRAIGHT;
+    const endLimit = node.length - (node.turn !== 0 ? CFG.TURN_CLEAR_BEFORE : CFG.END_CLEAR_STRAIGHT);
+
     for (const o of obs) {
       totalObstacles++;
       if (o.type === OBST.GAP) totalGaps++;
-      if (o.t < CFG.TURN_CLEAR_AFTER - 0.001) fail(s, node, `obstacle à t=${o.t.toFixed(1)} dans la zone d'entrée`);
-      const endLimit = node.length - (node.turn !== 0 ? CFG.TURN_CLEAR_BEFORE : 10);
-      if (o.t > endLimit + 0.001) fail(s, node, `obstacle à t=${o.t.toFixed(1)} trop près de la fin (limite ${endLimit.toFixed(1)})`);
-      if (node.startDist + o.t < CFG.OBST_START_SAFE_DIST - 0.001) fail(s, node, `obstacle dans la zone de départ protégée`);
+      if (o.type === OBST.CREVASSE) totalCrev++;
 
-      /* --- Règle : un mur ne bouche jamais les 3 voies --- */
+      if (o.t < startLimit - 0.001) {
+        fail(s, node, `obstacle à t=${o.t.toFixed(1)} dans la zone d'entrée (limite ${startLimit})`);
+      }
+      if (o.t > endLimit + 0.001) {
+        fail(s, node, `obstacle à t=${o.t.toFixed(1)} trop près de la fin (limite ${endLimit.toFixed(1)})`);
+      }
+      if (node.startDist + o.t < CFG.OBST_START_SAFE_DIST - 0.001) {
+        fail(s, node, `obstacle dans la zone de départ protégée`);
+      }
+
+      /* --- Règle : ni un mur ni une crevasse ne bouchent les 3 voies --- */
       if (o.type === OBST.WALL && o.lanes.every(Boolean)) fail(s, node, `mur bouchant les 3 voies à t=${o.t.toFixed(1)}`);
       if (o.type === OBST.WALL && o.free.length === 0) fail(s, node, `mur sans voie libre à t=${o.t.toFixed(1)}`);
+      if (o.type === OBST.CREVASSE && o.free.length === 0) fail(s, node, `crevasse sans voie libre à t=${o.t.toFixed(1)}`);
 
       /* --- Règle : un trou doit être franchissable d'un saut, même à la
              vitesse la plus BASSE (c'est là que le saut porte le moins loin) */
@@ -72,35 +104,60 @@ for (let s = 0; s < SEEDS; s++) {
       if (o.type === OBST.GAP && CFG.GAP_LENGTH > jumpReach - 1.5) {
         fail(s, node, `trou de ${CFG.GAP_LENGTH} infranchissable (portée min ${jumpReach.toFixed(1)})`);
       }
+      /* Une crevasse n'a PAS à être sautable — on la contourne. Mais si elle
+         l'est, tant mieux ; ce qu'on vérifie, c'est qu'on ne l'a pas rendue
+         plus longue que la portée d'un saut SANS laisser de voie libre, ce que
+         la règle précédente couvre déjà. */
     }
 
     /* --- Simulation de disponibilité du joueur parfait --- */
-    let busyUntil = -Infinity;   // distance jusqu'à laquelle le joueur est occupé
-    let prev = null;
     for (const o of obs) {
-      if (o.t < busyUntil - 0.001) {
-        fail(s, node, `obstacle ${o.type} à t=${o.t.toFixed(1)} tombe pendant une parade en cours (libre à ${busyUntil.toFixed(1)})`);
+      const abs = node.startDist + o.t;
+      const entry = node.startDist + entryOf(o);
+
+      if (entry < busyUntilAbs - 0.001) {
+        fail(s, node, `obstacle ${o.type} à t=${o.t.toFixed(1)} tombe pendant une parade en cours (libre à ${(busyUntilAbs - node.startDist).toFixed(1)})`);
       }
-      // Déplacement latéral imposé par rapport à l'obstacle précédent
-      if (prev && prev.free.length && o.free.length) {
-        let travel = Infinity;
-        for (const a of prev.free) for (const b of o.free) travel = Math.min(travel, Math.abs(a - b));
+      /* Déplacement latéral imposé par rapport à l'obstacle précédent, DANS LE
+         PIRE CAS (voir Track.worstLaneTravel : la version « meilleur cas » du
+         zip 372 laissait passer des crevasses mortelles). */
+      const fromLanes = prev ? Track.exitLanes(prev) : null;
+      if (prev && fromLanes.length && o.free.length) {
+        const travel = Track.worstLaneTravel(fromLanes, o.free);
         const need = travel * LANE_T * V;
-        if (o.t - prev.t < need - 0.001) {
-          fail(s, node, `${travel} changement(s) de voie exigés en ${(o.t - prev.t).toFixed(1)} unités (il en faut ${need.toFixed(1)})`);
+        if (entry - prev.abs < need - 0.001) {
+          fail(s, node, `${travel} changement(s) de voie exigés en ${(entry - prev.abs).toFixed(1)} unités (il en faut ${need.toFixed(1)})`);
         }
       }
-      if (o.type === OBST.LOW || o.type === OBST.GAP) busyUntil = o.t + JUMP_T * V;
-      else if (o.type === OBST.HIGH) busyUntil = o.t + SLIDE_T * V;
-      else busyUntil = o.t + LANE_T * V;
-      prev = o;
+      if (o.type === OBST.LOW || o.type === OBST.GAP) busyUntilAbs = abs + JUMP_T * V;
+      else if (o.type === OBST.HIGH) busyUntilAbs = abs + SLIDE_T * V;
+      else if (o.type === OBST.CREVASSE) busyUntilAbs = abs + CFG.CREVASSE_LENGTH / 2 + LANE_T * V;
+      else busyUntilAbs = abs + LANE_T * V;
+      prev = { abs, type: o.type, free: o.free };
     }
 
-    /* --- Règle : aucune pièce à l'intérieur d'un obstacle --- */
+    /* --- Règle : aucune pièce à l'intérieur d'un obstacle. Les trous sont
+       exclus du contrôle (on les saute), mais PAS les crevasses : une pièce
+       posée sur une voie effondrée serait un appât mortel. --- */
     for (const c of node.coins) {
       for (const o of node.obstacles) {
-        if (Math.abs(o.t - c.t) < 1.2 && o.lanes[c.lane] && o.type !== OBST.GAP) {
-          fail(s, node, `pièce dans un obstacle à t=${c.t.toFixed(1)}, voie ${c.lane}`);
+        if (o.type === OBST.GAP) continue;
+        const reach = o.type === OBST.CREVASSE ? CFG.CREVASSE_LENGTH / 2 : 1.2;
+        if (Math.abs(o.t - c.t) < reach && o.lanes[c.lane]) {
+          fail(s, node, `pièce dans un ${o.type} à t=${c.t.toFixed(1)}, voie ${c.lane}`);
+        }
+      }
+    }
+
+    /* --- Règle nouvelle au 374 : une fissure DÉCORATIVE ne doit jamais être
+       confondue avec une crevasse mortelle. Si les deux se côtoient, le joueur
+       apprend qu'une entaille est inoffensive juste avant de mourir dans la
+       suivante. --- */
+    for (const k of node.cracks) {
+      for (const o of node.obstacles) {
+        if (o.type !== OBST.CREVASSE && o.type !== OBST.GAP) continue;
+        if (Math.abs(o.t - k.t) < CFG.CREVASSE_LENGTH * 2) {
+          fail(s, node, `fissure décorative à t=${k.t.toFixed(1)} collée à un vrai trou (t=${o.t.toFixed(1)})`);
         }
       }
     }
@@ -109,8 +166,10 @@ for (let s = 0; s < SEEDS; s++) {
 
 const km = (totalLength / 1000).toFixed(1);
 console.log(`Pistes vérifiées : ${SEEDS} graines, ${totalNodes} tronçons, ${km} km de piste.`);
-console.log(`  obstacles ${totalObstacles}  |  dont trous ${totalGaps}  |  virages ${totalTurns}  |  pièces ${totalCoins}`);
+console.log(`  obstacles ${totalObstacles}  |  trous ${totalGaps}  |  crevasses ${totalCrev}  |  virages ${totalTurns}`);
+console.log(`  pièces ${totalCoins}  |  fissures décoratives ${totalCracks}`);
 console.log(`  parades (à ${V} u/s) : saut ${(JUMP_T * V).toFixed(1)} u, glissade ${(SLIDE_T * V).toFixed(1)} u, voie ${(LANE_T * V).toFixed(1)} u`);
+console.log(`  zones franches de virage : ${CFG.TURN_CLEAR_AFTER} u après, ${CFG.TURN_CLEAR_BEFORE} u avant (calculées, pas réglées)`);
 
 if (errors.length) {
   console.log(`\nÉCHEC — ${errors.length} configuration(s) injuste(s) (25 premières) :`);
