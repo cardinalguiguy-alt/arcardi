@@ -180,9 +180,25 @@ const World = (function () {
      positionné en coordonnées RELATIVES au bassin. Au repos (rotation.z = 0)
      ça retombe exactement sur les mêmes coordonnées monde qu'avant : seule
      la glissade fait tourner le pelvis pour coucher le corps sur le flanc. */
+  /* Membre articulé : un groupe-pivot posé à l'articulation (hanche/épaule)
+     et un mesh enfant décalé vers le bas de la moitié de sa longueur. Tourner
+     le pivot (rotation.x) balance donc le membre comme un vrai bras de levier
+     au lieu de faire glisser une boîte rigide en translation — c'est ce qui
+     donnait l'effet "patinage" plutôt qu'une vraie foulée. */
+  function limb(w, h, d, material, x, jointY, z) {
+    const pivot = new THREE.Group();
+    pivot.position.set(x, jointY, z);
+    const mesh = box(w, h, d, material, 0, -h / 2, 0);
+    pivot.add(mesh);
+    return pivot;
+  }
+
   function buildPlayer() {
     playerMesh = new THREE.Group();
     const g = playerMesh;
+    // Légère réduction générale de la silhouette (purement visuelle : les
+    // collisions restent pilotées par CFG.PLAYER_RADIUS/HEIGHT, inchangés).
+    g.scale.setScalar(0.88);
 
     const pelvis = new THREE.Group();
     pelvis.position.set(0, CFG.SLIDE_PELVIS_Y, 0);
@@ -191,15 +207,20 @@ const World = (function () {
     const rel = (y) => y - CFG.SLIDE_PELVIS_Y; // reconvertit une hauteur monde en hauteur relative au bassin
 
     const torso = box(0.95, 0.75, 0.55, mat.shirt, 0, rel(1.12), 0);
-    const armL  = box(0.28, 0.6, 0.3, mat.skin, -0.62, rel(1.15), 0); // bras gauche (se replie contre le torse en glissade)
-    const armR  = box(0.28, 0.6, 0.3, mat.skin, 0.62, rel(1.15), 0);  // bras droit (prend appui au sol en glissade)
     const head  = box(0.78, 0.68, 0.62, mat.skin, 0, rel(1.78), 0);
     const hair  = box(0.84, 0.24, 0.68, mat.hair, 0, rel(2.06), 0);
+
+    // Bras : pivot à l'épaule (haut de l'ancienne boîte), mesh suspendu dessous.
+    const armL = limb(0.28, 0.6, 0.3, mat.skin, -0.62, rel(1.45), 0); // se replie contre le torse en glissade
+    const armR = limb(0.28, 0.6, 0.3, mat.skin, 0.62, rel(1.45), 0);  // prend appui au sol en glissade
+
     [torso, armL, armR, head, hair].forEach(m => pelvis.add(m));
 
+    // Jambes : pivot à la hanche (haut de l'ancienne boîte), mesh suspendu
+    // dessous. Le pied touche le même point qu'avant au repos.
     playerLegs = [
-      box(0.34, 0.72, 0.34, mat.pants, -0.24, rel(0.4), 0),
-      box(0.34, 0.72, 0.34, mat.pants, 0.24, rel(0.4), 0),
+      limb(0.34, 0.72, 0.34, mat.pants, -0.24, rel(0.76), 0),
+      limb(0.34, 0.72, 0.34, mat.pants, 0.24, rel(0.76), 0),
     ];
     playerLegs.forEach(l => pelvis.add(l));
 
@@ -398,7 +419,7 @@ const World = (function () {
     // roll : 0 debout -> 1 couché à plat sur le flanc, lissé en entrée/sortie
     // (voir Player.slideRoll : monte, tient, redescend avant la fin de glissade).
     const roll = player.slideRoll(now);
-    const { pelvis, armL, armR } = playerRig;
+    const { pelvis, torso, armL, armR } = playerRig;
 
     // Bascule du bassin (et donc tout le torse/tête/jambes accrochés dessus) :
     // rotation négative sur Z envoie le bras DROIT vers le bas (voir plus bas),
@@ -406,28 +427,45 @@ const World = (function () {
     pelvis.rotation.z = -CFG.SLIDE_ROLL_ANGLE * roll;
     playerMesh.position.y = p.y - CFG.SLIDE_DROP * roll; // colle le flanc au sol
 
-    // Course : jambes en opposition de phase, figées en l'air, coupée en glissade
-    // (les jambes se resserrent et filent droit derrière une fois sur le flanc).
-    const runSwing = player.grounded ? Math.sin(now / 62) * 0.55 : 0.35;
+    // Course : la foulée est cadencée sur la DISTANCE parcourue, pas sur le
+    // temps réel. Un pendule articulé (rotation à la hanche) accélère et
+    // ralentit naturellement avec la vitesse du joueur — un rythme basé sur
+    // "now" continuerait de battre à la même cadence même à l'arrêt ou en
+    // sortie de trébuchement, ce qui est ce qui rendait la course artificielle.
+    const STRIDE_PER_UNIT = 1.35;     // cycles de foulée par unité de distance
+    const RUN_SWING = 0.95;           // amplitude de balancement des jambes (rad)
+    const ARM_SWING = 0.62;           // amplitude de balancement des bras (rad)
+    const phase = player.totalDist * STRIDE_PER_UNIT;
+    const runSwing = player.grounded ? Math.sin(phase) * RUN_SWING : 0.5; // jambes resserrées, figées en l'air
     const swing = runSwing * (1 - roll);
-    playerLegs[0].position.z = swing * 0.5 + roll * 0.3;
-    playerLegs[1].position.z = -swing * 0.5 + roll * 0.3;
-    const legLift = 0.4 + Math.abs(swing) * 0.08;
-    playerLegs[0].position.y = legLift;
-    playerLegs[1].position.y = legLift;
+
+    // Jambes en opposition de phase : pivot direct à la hanche, l'arc du
+    // pendule soulève le pied tout seul (pas besoin de forcer une hauteur).
+    playerLegs[0].rotation.x = swing + roll * 0.55;   // se replient et filent droit derrière en glissade
+    playerLegs[1].rotation.x = -swing + roll * 0.55;
     playerLegs[0].position.x = -0.24 * (1 - roll * 0.5);
     playerLegs[1].position.x = 0.24 * (1 - roll * 0.5);
 
-    // Bras droit : passe de "le long du corps" à "tendu au sol", avec un
-    // léger va-et-vient pour donner l'impression qu'il contrôle la glissade
-    // (freinage / appui), au lieu de traîner passivement.
+    // Bras droit : balancement de course en opposition avec la jambe droite,
+    // qui cède la place à "tendu au sol" pendant la glissade (freinage/appui),
+    // avec un léger va-et-vient pour donner l'impression qu'il la contrôle.
     const drag = Math.sin(now / 55) * 0.12 * roll;
+    armR.rotation.x = -swing * (ARM_SWING / RUN_SWING);
     armR.rotation.z = -1.15 * roll + drag;
-    armR.position.set(0.62 + 0.35 * roll, (1.15 - CFG.SLIDE_PELVIS_Y) - 0.55 * roll, 0.18 * roll);
+    armR.position.set(0.62 + 0.35 * roll, (1.45 - CFG.SLIDE_PELVIS_Y) - 0.55 * roll, 0.18 * roll);
 
-    // Bras gauche : se replie contre le torse, hors du chemin.
+    // Bras gauche : balancement inverse à la course, se replie contre le
+    // torse et sort du chemin pendant la glissade.
+    armL.rotation.x = swing * (ARM_SWING / RUN_SWING);
     armL.rotation.z = 0.9 * roll;
-    armL.position.set(-0.62 + 0.22 * roll, (1.15 - CFG.SLIDE_PELVIS_Y) + 0.1 * roll, -0.1 * roll);
+    armL.position.set(-0.62 + 0.22 * roll, (1.45 - CFG.SLIDE_PELVIS_Y) + 0.1 * roll, -0.1 * roll);
+
+    // Le torse encaisse deux petits "rebonds" par foulée complète (un par
+    // appui) et se penche légèrement en avant à la course, ce qui casse la
+    // rigidité d'un buste parfaitement immobile au-dessus des jambes.
+    const bob = player.grounded ? Math.abs(Math.sin(phase)) * 0.05 : 0;
+    pelvis.position.y = CFG.SLIDE_PELVIS_Y + bob * (1 - roll);
+    torso.rotation.x = -0.1 * (1 - roll);
 
     torchLight.position.set(p.x, p.y + 2.4, p.z);
   }
