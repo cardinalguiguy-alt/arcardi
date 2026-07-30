@@ -474,6 +474,25 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const lastPosKeyRef = useRef("s");        // FIX 243: derniere cle d'etat de mouvement diffusee ("m"+dir ou "s") pour l'emission par intention
   const lastMovingSentRef = useRef(false); // FIX 241: dernier "moving" diffusé — coupe l'envoi de position quand le joueur est immobile
   const hiddenRef = useRef(false);         // FIX 241: onglet masqué (Page Visibility) — coupe toute diffusion réseau (desktop + tablette)
+  // ---- Chantier v364 (trafic realtime, passe 1) ----
+  // Le quota Supabase compte des MESSAGES, pas des octets : tout ce qui suit
+  // vise d'abord à réduire le NOMBRE d'émissions, la taille ensuite.
+  // Anti-répétition de broadcastStation() : dernier état sérialisé réellement
+  // diffusé. Remis à null dès qu'on saute une diffusion (voir broadcastStation),
+  // pour ne jamais comparer à un état émis dans un autre contexte réseau.
+  const lastStationJsonRef = useRef(null);
+  // Une diffusion de station a été sautée faute de conditions réseau : à
+  // rejouer dès que possible (voir broadcastStation et le tick hôte 1 Hz).
+  const stationPendingRef = useRef(false);
+  // Trajets de résidents accumulés pendant la frame, vidés en UN SEUL message
+  // groupé en fin d'updateResidents (voir flushResidentNet). Avant v364, chaque
+  // résident émettait son propre message : une entrée dans l'AOI en produisait
+  // jusqu'à 10 dans la même frame, au-delà du throttle client -> messages jetés
+  // en silence -> PNJ figés chez l'arrivant.
+  const resPathQueueRef = useRef([]);
+  const resStopQueueRef = useRef([]);
+  // Compteurs de trafic (voir l'enveloppe de ch.send dans l'effet réseau).
+  const netStatsRef = useRef({ startedAt: Date.now(), sent: 0, dropped: 0, timedOut: 0, bytes: 0, byKey: {}, droppedByKey: {} });
   const mapOpenRef = useRef(false);
   const shopOpenRef = useRef(false);
   const binOpenRef = useRef(false);
@@ -1057,6 +1076,49 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // -------- Réseau : canal, souscription, évènements --------
   useEffect(() => {
     const ch = supabase.channel(GAME_ID + "_" + room.id, { config: { broadcast: { self: false } } });  // FIX 243: self:false (-33% a 2j, -25% a 3j), echo local du chat assure par broadcastChat()
+
+    // ------------------------------------------------------------------
+    // Zip 364 — INSTRUMENTATION DU TRAFIC (mesure, aucun effet de jeu).
+    //
+    // Motif : `lib/supabaseClient.js` fixe `eventsPerSecond: 10` (le défaut de
+    // supabase-js). C'est un throttle CÔTÉ CLIENT : au-delà de 10 messages/s,
+    // `send()` ne transmet rien et résout silencieusement sur la chaîne
+    // "rate limited". Aucun des ~96 sites d'émission de ce fichier ne lit ce
+    // retour — un message jeté était donc STRICTEMENT indétectable, alors même
+    // que l'hôte dépasse ce plafond en régime normal (ferme peuplée). Un
+    // `residentPath` ou un `station` perdu = un PNJ figé chez l'invité, sans
+    // trace ni dans la console ni dans les logs : exactement la famille de bugs
+    // poursuivie des zips 359 à 363.
+    //
+    // On enveloppe `ch.send` UNE fois plutôt que de toucher les 96 appels.
+    // Dans la console du navigateur : `__fermeNet()` affiche le tableau, et
+    // `__fermeNet(true)` remet les compteurs à zéro. Si `jetés` est non nul,
+    // c'est la priorité absolue, avant toute autre optimisation.
+    // ------------------------------------------------------------------
+    {
+      const rawSend = ch.send.bind(ch);
+      ch.send = (msg, opts) => {
+        const st = netStatsRef.current;
+        // Clé lisible : pour un "apply", les champs réellement transportés
+        // (c'est ce qui permet de dire QUEL système consomme, pas juste
+        // "apply"). Tronqué à 3 champs pour rester lisible.
+        const key = (msg && msg.event === "apply" && msg.payload)
+          ? "apply:" + Object.keys(msg.payload).filter(k => k !== "hostNow").slice(0, 3).join("+")
+          : ((msg && msg.event) || "?");
+        st.sent++;
+        st.byKey[key] = (st.byKey[key] || 0) + 1;
+        try { st.bytes += JSON.stringify(msg.payload || {}).length; } catch { /* payload non sérialisable : on compte le message, pas ses octets */ }
+        const r = rawSend(msg, opts);
+        // `send()` renvoie une Promise résolue sur "ok" | "timed out" | "rate limited".
+        if (r && typeof r.then === "function") {
+          r.then(res => {
+            if (res === "rate limited") { st.dropped++; st.droppedByKey[key] = (st.droppedByKey[key] || 0) + 1; }
+            else if (res === "timed out") st.timedOut++;
+          }).catch(() => {});
+        }
+        return r;
+      };
+    }
     channelRef.current = ch;
 
     ch.on("broadcast", { event: "hello", }, ({ payload }) => {
@@ -1131,14 +1193,68 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (payload.id === me.id) return;
       ensureRemote(payload);
       const r = playersRef.current.get(payload.id);
-      // FIX 243: vitesse estimee par delta de position entre 2 paquets (base de l'extrapolation cote rendu).
+      // ----------------------------------------------------------------
+      // Zip 365 — VITESSE REÇUE, PLUS DEVINÉE.
+      //
+      // Avant : `r.vx = (payload.x - prevX) / (arrivée - arrivée précédente)`.
+      // Le dénominateur était l'écart entre deux ARRIVÉES ; le numérateur, un
+      // déplacement produit pendant l'écart entre deux ÉMISSIONS. Dès que la
+      // gigue réseau écarte les deux — ce qui arrive à toute distance, et
+      // massivement sur une liaison intercontinentale — la vitesse obtenue
+      // était fausse d'autant. Deux paquets émis à 800 ms d'intervalle et
+      // reçus à 400 ms d'intervalle donnaient une vitesse DOUBLE, ensuite
+      // projetée pendant près d'une seconde par advanceRemote : le personnage
+      // partait devant, puis était ramené d'un coup au paquet suivant. C'est
+      // le « flottement ». `POS_EXTRAP_SPEED_CAP = 2.4` bornait ce dépassement
+      // à ~6 tuiles — il en limitait l'ampleur, pas la cause.
+      //
+      // Désormais la vitesse voyage dans le paquet (pubMe), exacte. On ne
+      // retombe sur l'estimation que pour un client resté sur une version
+      // antérieure, qui n'envoie pas `vx`.
+      // ----------------------------------------------------------------
       const _now = performance.now();
-      const _prevX = r.px0 !== undefined ? r.px0 : payload.x, _prevY = r.py0 !== undefined ? r.py0 : payload.y;
-      const _dtr = r.tRecv !== undefined ? Math.max(0.03, (_now - r.tRecv) / 1000) : 0;
-      if (payload.moving && _dtr > 0) { r.vx = (payload.x - _prevX) / _dtr; r.vy = (payload.y - _prevY) / _dtr; const _sp = Math.hypot(r.vx, r.vy), _mx = C.PLAYER_SPEED * C.POS_EXTRAP_SPEED_CAP; if (_sp > _mx) { r.vx *= _mx / _sp; r.vy *= _mx / _sp; } }
-      else { r.vx = 0; r.vy = 0; }
+      if (payload.moving && payload.vx !== undefined) { r.vx = payload.vx; r.vy = payload.vy; }
+      else if (payload.moving) { // repli : ancien client, estimation historique
+        const _prevX = r.px0 !== undefined ? r.px0 : payload.x, _prevY = r.py0 !== undefined ? r.py0 : payload.y;
+        const _dtr = r.tRecv !== undefined ? Math.max(0.03, (_now - r.tRecv) / 1000) : 0;
+        if (_dtr > 0) { r.vx = (payload.x - _prevX) / _dtr; r.vy = (payload.y - _prevY) / _dtr; const _sp = Math.hypot(r.vx, r.vy), _mx = C.PLAYER_SPEED * C.POS_EXTRAP_SPEED_CAP; if (_sp > _mx) { r.vx *= _mx / _sp; r.vy *= _mx / _sp; } }
+      } else { r.vx = 0; r.vy = 0; }
+      // ----------------------------------------------------------------
+      // Zip 365 — MESURE DE LA GIGUE + TAMPON ADAPTATIF.
+      //
+      // On compare l'écart entre deux ÉMISSIONS (payload.st, horloge monotone
+      // de l'expéditeur) à l'écart entre les deux ARRIVÉES correspondantes.
+      // Seules des DIFFÉRENCES sont comparées : le décalage d'horloge entre
+      // les deux machines s'annule, il n'y a aucune synchronisation à faire.
+      // L'écart résiduel EST la gigue de la liaison.
+      //
+      // `r.jitter` en est une moyenne mobile, qui pilote la profondeur du
+      // tampon de rendu (voir advanceRemote). Adaptatif par construction :
+      // proche de zéro entre deux joueurs d'une même ville, ~200 ms sur une
+      // liaison Europe–Australie. Rien à régler à la main, et aucun réglage
+      // taillé pour une seule paire de joueurs.
+      // ----------------------------------------------------------------
+      if (payload.st !== undefined && r.lastSt !== undefined && r.tRecv !== undefined) {
+        const sendGap = payload.st - r.lastSt, arrGap = _now - r.tRecv;
+        if (sendGap > 0 && sendGap < 5000) {
+          const d = Math.abs(arrGap - sendGap);
+          r.jitter = r.jitter === undefined ? d : r.jitter * 0.85 + d * 0.15;
+        }
+      }
+      r.lastSt = payload.st;
+      // Historique court des états reçus : c'est entre DEUX états réellement
+      // reçus que le rendu interpole (voir advanceRemote), au lieu de projeter
+      // au-delà du dernier connu. On ne devine plus, on relit.
+      if (!r.buf) r.buf = [];
+      r.buf.push({ t: _now, x: payload.x, y: payload.y, vx: r.vx, vy: r.vy, moving: !!payload.moving, dir: payload.dir });
+      while (r.buf.length > C.POS_BUF_MAX_SAMPLES) r.buf.shift();
       r.px0 = payload.x; r.py0 = payload.y; r.tRecv = _now;
-      r.tx = payload.x; r.ty = payload.y; r.dir = payload.dir; r.moving = payload.moving; r.tool = payload.tool;
+      r.dir = payload.dir; r.moving = payload.moving; r.tool = payload.tool;
+      // `tx`/`ty` ne sont plus posés ici : ce sont désormais les coordonnées
+      // d'AFFICHAGE, calculées par advanceRemote à partir du tampon. Les poser
+      // brutalement à la réception réintroduirait exactement le saut que ce
+      // chantier supprime.
+      if (r.tx === undefined) { r.tx = payload.x; r.ty = payload.y; r.x = payload.x; r.y = payload.y; }
       r.gender = payload.gender; r.outfit = payload.outfit; r.name = payload.name; r.sleeping = !!payload.sleeping;
       r.torch = !!payload.torch; r.zone = payload.zone || "farm";
       if (Array.isArray(payload.pets)) r.pets = payload.pets; // zip 247: pets are now broadcast so everyone sees everyone's pets
@@ -1149,6 +1265,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (r.ex === undefined) { r.ex = payload.ex; r.ey = payload.ey; }
         r.emoving = !!payload.emoving; r.immune = !!payload.immune;
       } else { r.ex = r.ey = r.etx = r.ety = undefined; r.emoving = false; r.immune = false; }
+    });
+    // Zip 364 : preuve de vie périodique (~30 octets / 20 s). Un joueur
+    // parfaitement immobile n'émet AUCUNE position (émission par intention,
+    // voir maybeSendPos) : sans ce ping, un TTL basé sur `pos` expulserait un
+    // joueur simplement parce qu'il ne bouge pas.
+    ch.on("broadcast", { event: "ping" }, ({ payload }) => {
+      if (!payload || payload.id === me.id) return;
+      const r = playersRef.current.get(payload.id);
+      if (r) r.lastSeenAt = Date.now();
+      // Volontairement PAS de ensureRemote ici : un ping seul ne porte ni nom
+      // ni apparence. Un joueur inconnu sera inscrit proprement par son
+      // prochain `pos` ou `join`, avec toutes ses données.
     });
     ch.on("broadcast", { event: "req" }, ({ payload }) => { if (isHost) hostHandleReq(payload); });
     ch.on("broadcast", { event: "apply" }, ({ payload }) => applyDeltas(payload));
@@ -1191,6 +1319,103 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [room.id, isHost]);
 
+  // ------------------------------------------------------------------
+  // Zip 364 — JOUEURS FANTÔMES.
+  //
+  // `leave` n'était émis qu'au démontage propre du composant. Onglet fermé
+  // d'un coup, navigateur tué, perte de réseau, batterie à plat : le joueur
+  // restait dans `playersRef` POUR TOUJOURS. Deux conséquences, toutes deux
+  // silencieuses :
+  //   - `netCanBroadcast()` (qui teste `playersRef.size > 0`) restait vrai :
+  //     l'hôte continuait de diffuser toute sa simulation à un absent, pour
+  //     le reste de la session ;
+  //   - `anyRemoteNear` restait vrai autour de sa dernière position connue :
+  //     l'AOI restait grande ouverte à cet endroit, annulant la garde de
+  //     proximité pour toutes les entités qui passaient par là.
+  // C'était le seul garde-fou réellement ABSENT de la couche réseau : ni
+  // presence, ni heartbeat, ni TTL.
+  //
+  // Correctif en trois temps :
+  //  1. `ping` toutes les PING_MS. Volontairement SANS garde `netCanBroadcast`
+  //     (ni onglet visible, ni "y a-t-il quelqu'un") — sinon deux clients qui
+  //     se sont mutuellement expirés ne pourraient plus jamais se redécouvrir
+  //     (blocage mutuel : chacun attend que l'autre parle en premier). Coût :
+  //     un message de ~30 octets toutes les 20 s, soit 0,05 msg/s. Négligeable
+  //     devant ce qu'il fait économiser.
+  //  2. Balayage 1 Hz : au-delà de PLAYER_TTL_MS sans signe de vie, le joueur
+  //     est retiré — SANS message de chat "untel est parti", puisqu'on ne sait
+  //     pas s'il est parti ou juste en veille. S'il revient, son prochain
+  //     ping/pos le réinscrit tout seul via ensureRemote.
+  //  3. `pagehide` : tentative d'un `leave` propre à la fermeture d'onglet,
+  //     ce qui couvre le cas courant sans attendre le TTL.
+  // ------------------------------------------------------------------
+  useEffect(() => {
+    const PING_MS = 20000;
+    const PLAYER_TTL_MS = 60000; // 3 pings manqués avant de conclure à une absence
+    const ping = setInterval(() => {
+      if (!channelReadyRef.current || !joinedRef.current) return;
+      channelRef.current?.send({ type: "broadcast", event: "ping", payload: { id: me.id } });
+    }, PING_MS);
+    const sweep = setInterval(() => {
+      const now = Date.now();
+      let removed = false;
+      for (const [id, p] of playersRef.current) {
+        if (!p) continue;
+        if (now - (p.lastSeenAt || 0) > PLAYER_TTL_MS) {
+          playersRef.current.delete(id);
+          petFollowRef.current.delete(id); petZoneRef.current.delete(id); petRidingPrevRef.current.delete(id);
+          removed = true;
+        }
+      }
+      if (removed) setHud(h => ({ ...h, players: playersRef.current.size + 1 }));
+    }, 1000);
+    const onHide = () => { if (joinedRef.current) channelRef.current?.send({ type: "broadcast", event: "leave", payload: { id: me.id } }); };
+    window.addEventListener("pagehide", onHide);
+    return () => { clearInterval(ping); clearInterval(sweep); window.removeEventListener("pagehide", onHide); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Zip 364 : accès console aux compteurs de trafic (voir l'enveloppe de
+  // ch.send). Aucun effet de jeu, aucun rendu — juste de quoi répondre
+  // factuellement à "qu'est-ce qui consomme, et est-ce qu'on perd des
+  // messages ?" plutôt que de raisonner par estimation.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.__fermeNet = (reset) => {
+      const st = netStatsRef.current;
+      const secs = Math.max(1, (Date.now() - st.startedAt) / 1000);
+      const table = Object.entries(st.byKey)
+        .sort((a, b) => b[1] - a[1])
+        .map(([k, n]) => ({ type: k, messages: n, "msg/s": +(n / secs).toFixed(2), jetés: st.droppedByKey[k] || 0 }));
+      const out = {
+        durée_s: Math.round(secs),
+        total_messages: st.sent,
+        "msg/s_moyen": +(st.sent / secs).toFixed(2),
+        "ko/s_moyen": +(st.bytes / secs / 1024).toFixed(2),
+        jetés_rate_limited: st.dropped,
+        expirés: st.timedOut,
+        projection_messages_par_heure: Math.round((st.sent / secs) * 3600),
+        détail: table,
+        // Zip 365 : qualité mesurée de la liaison avec chaque autre joueur.
+        // `gigue_ms` est l'écart moyen entre l'intervalle d'émission et
+        // l'intervalle de réception ; `tampon_ms` en découle directement et
+        // représente le retard d'affichage appliqué à ce joueur. C'est ce qui
+        // permet de dire si une saccade vient du réseau ou du jeu.
+        liaisons: [...playersRef.current.values()].map(p => ({
+          joueur: p.name,
+          gigue_ms: p.jitter === undefined ? "—" : Math.round(p.jitter),
+          tampon_ms: Math.round(remoteBufferMs(p)),
+          états_en_tampon: (p.buf && p.buf.length) || 0,
+        })),
+      };
+      // eslint-disable-next-line no-console
+      console.table(table); console.log(out);
+      if (reset) netStatsRef.current = { startedAt: Date.now(), sent: 0, dropped: 0, timedOut: 0, bytes: 0, byKey: {}, droppedByKey: {} };
+      return out;
+    };
+    return () => { try { delete window.__fermeNet; } catch { /* non configurable : sans conséquence */ } };
+  }, []);
+
   // FIX 241: pause réseau quand l'onglet du jeu n'est plus affiché (autre
   // onglet/app au premier plan, fenêtre minimisée, ou sur TABLETTE écran
   // verrouillé / app changée). netCanBroadcast() lit hiddenRef -> plus aucun
@@ -1205,8 +1430,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function ensureRemote(p) {
     if (p.id === me.id) return;
     if (!playersRef.current.has(p.id)) {
-      playersRef.current.set(p.id, { id: p.id, name: p.name, gender: p.gender || "m", outfit: p.outfit || 0, x: p.x ?? C.SPAWN.x, y: p.y ?? C.SPAWN.y, tx: p.x ?? C.SPAWN.x, ty: p.y ?? C.SPAWN.y, dir: p.dir || 0, moving: false, tool: 0, animT: 0, sleeping: false, torch: false, hatUntil: (farmersRef.current[p.id] && farmersRef.current[p.id].hatUntil) || 0, pets: (p.pets) || (farmersRef.current[p.id] && farmersRef.current[p.id].pets) || [], zone: "farm" });
+      playersRef.current.set(p.id, { id: p.id, name: p.name, gender: p.gender || "m", outfit: p.outfit || 0, x: p.x ?? C.SPAWN.x, y: p.y ?? C.SPAWN.y, tx: p.x ?? C.SPAWN.x, ty: p.y ?? C.SPAWN.y, dir: p.dir || 0, moving: false, tool: 0, animT: 0, sleeping: false, torch: false, hatUntil: (farmersRef.current[p.id] && farmersRef.current[p.id].hatUntil) || 0, pets: (p.pets) || (farmersRef.current[p.id] && farmersRef.current[p.id].pets) || [], zone: "farm", lastSeenAt: Date.now() });
     }
+    // Zip 364 : toute preuve de vie (join/pos/ping) repousse l'expiration —
+    // voir le balayage TTL plus haut.
+    const r = playersRef.current.get(p.id);
+    if (r) r.lastSeenAt = Date.now();
   }
 
   // -------- Hôte : construction de l'instantané + persistance --------
@@ -2420,10 +2649,41 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // phase switches, deals, votes, damage). Continuous movement travels in
   // the light `visitorSim` payload instead. Also refreshes the host's own
   // React mirror, since the host ignores its own echo (see applyDeltas).
+  // Zip 364 : c'était la SEULE grosse fonction d'émission dépourvue de garde
+  // `netCanBroadcast()`, alors qu'elle porte le payload le plus lourd du jeu
+  // (~8,8 ko : les 10 résidents avec tout leur état, les visiteurs, rel,
+  // jewelry, exiles, balloon, tjBrawl et ses répliques) et qu'elle est appelée
+  // depuis 55 endroits — dont, à chaque réplique franchie, les scènes
+  // Tristan/Jérôme et Chloé/Rosalie. Elle partait donc onglet masqué et même
+  // seul dans sa ferme.
+  //
+  // Deux précautions dans l'ordre des lignes ci-dessous :
+  //  - le MIROIR LOCAL (setStationSt) doit rester INCONDITIONNEL : c'est lui
+  //    qui alimente l'interface de l'hôte, qui ne reçoit pas son propre écho
+  //    (self:false). Le garde ne porte que sur l'envoi réseau.
+  //  - anti-répétition : plusieurs appelants (montgolfière, visibilité de la
+  //    boulangerie...) déclenchent sur un état inchangé. On compare l'état
+  //    sérialisé — déjà calculé pour le miroir, donc quasi gratuit.
+  //    `lastStationJsonRef` est remis à null dès qu'on saute une diffusion,
+  //    pour ne jamais comparer l'état courant à un état émis dans un contexte
+  //    réseau différent (invité parti puis revenu, onglet masqué entre-temps).
   function broadcastStation() {
     const st = sharedRef.current.station;
-    setStationSt(st ? JSON.parse(JSON.stringify(st)) : null);
+    const json = st ? JSON.stringify(st) : null;
+    setStationSt(json ? JSON.parse(json) : null);
     dirtyRef.current = true;
+    //
+    // ATTENTION (raison du drapeau `stationPendingRef`) : contrairement à un
+    // flux de positions, qui se répare tout seul au paquet suivant, `station`
+    // est déclenché sur ÉVÉNEMENT. Une diffusion sautée parce que l'onglet de
+    // l'hôte était masqué serait perdue DÉFINITIVEMENT (arrivée de résident,
+    // fin de vote, phase de montgolfière jamais vue par l'invité). On mémorise
+    // donc qu'une diffusion est due, et le tick hôte 1 Hz la rejoue dès que
+    // les conditions réseau reviennent.
+    if (!netCanBroadcast()) { lastStationJsonRef.current = null; stationPendingRef.current = true; return; }
+    if (json !== null && json === lastStationJsonRef.current) { stationPendingRef.current = false; return; }
+    lastStationJsonRef.current = json;
+    stationPendingRef.current = false;
     channelRef.current?.send({ type: "broadcast", event: "apply", payload: { station: st, hostNow: Date.now() } });
   }
   function stationChat(msg, from) {
@@ -3835,7 +4095,35 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // visitor continuously, its own echo must NEVER overwrite the live
     // object (root cause of the zip 230 evil-monster desync).
     if (p.station !== undefined && !isHost) {
+      // ----------------------------------------------------------------
+      // Zip 364 — CORRECTIF : `station` écrasait les trajectoires en cours.
+      //
+      // `migrateStation` reconstruit des objets résidents NEUFS. Or c'est sur
+      // ces objets que vivent `netPath`/`netPathStartAt`/`netPathSpeed`, le
+      // trajet A→B rejoué localement par smoothNpcPath. Chaque diffusion de
+      // station — donc chaque réplique de scène TJ ou Chloé/Rosalie, chaque
+      // changement de phase de visiteur, chaque tick de montgolfière — les
+      // effaçait tous d'un coup chez l'invité.
+      //
+      // Conséquence : le modèle A→B des résidents, censé être LE mécanisme de
+      // fluidité, était réinitialisé par intermittence. Le résident retombait
+      // sur sa position brute (celle de l'instant de l'envoi, déjà périmée),
+      // se recalait d'un bond, puis reprenait — jusqu'au prochain `station`.
+      // C'est la saccade résiduelle des PNJ baladeurs, et c'était invisible en
+      // lecture de code parce que la cause (station) et l'effet (résidents qui
+      // sautent) sont dans deux systèmes sans rapport apparent.
+      //
+      // On réattache donc les trajectoires par `rid` après la migration.
+      // ----------------------------------------------------------------
+      const prevPaths = new Map();
+      const prevList = (sharedRef.current.station && sharedRef.current.station.residents) || [];
+      for (const r of prevList) if (r && r.netPath) prevPaths.set(r.rid, { netPath: r.netPath, netPathStartAt: r.netPathStartAt, netPathSpeed: r.netPathSpeed });
       sharedRef.current.station = E.migrateStation(p.station, p.hostNow);
+      const newList = (sharedRef.current.station && sharedRef.current.station.residents) || [];
+      for (const r of newList) {
+        const keep = r && prevPaths.get(r.rid);
+        if (keep) { r.netPath = keep.netPath; r.netPathStartAt = keep.netPathStartAt; r.netPathSpeed = keep.netPathSpeed; }
+      }
       setStationSt(sharedRef.current.station ? JSON.parse(JSON.stringify(sharedRef.current.station)) : null);
     }
     // Zip 251: liste des décorations posées (ferme + Valley Town). L'hôte est
@@ -3859,6 +4147,35 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const list = sharedRef.current.station && sharedRef.current.station.residents;
       const r = list && list.find(rr => rr.rid === p.residentStop.rid);
       if (r) { r.netPath = null; r.x = p.residentStop.x; r.y = p.residentStop.y; }
+    }
+    // ----------------------------------------------------------------------
+    // Zip 364 : formes GROUPÉES de residentPath / residentStop (voir
+    // flushResidentNet). Un seul message porte désormais toutes les décisions
+    // de trajet de la frame — y compris l'attroupement TJ au complet.
+    // Les formes au singulier ci-dessus sont conservées : un joueur dont
+    // l'onglet tourne encore sur la version précédente reste compris.
+    //
+    // `netPathStartAt` est daté À LA RÉCEPTION, et non avec l'horodatage de
+    // l'hôte : les deux horloges ne sont pas comparables (cf. la limite de
+    // confiance documentée dans lib/gameSync.js). Une dérive d'horloge de
+    // quelques minutes — courante — faisait sinon calculer à walkPath un
+    // `elapsedS` énorme, qui renvoyait directement la fin du chemin : le PNJ
+    // se téléportait à destination au lieu de s'y rendre.
+    // ----------------------------------------------------------------------
+    if (Array.isArray(p.residentPaths) && !isHost) {
+      const list = (sharedRef.current.station && sharedRef.current.station.residents) || [];
+      const tRecv = Date.now();
+      for (const rp of p.residentPaths) {
+        const r = list.find(rr => rr.rid === rp.rid);
+        if (r) { r.netPath = rp.path; r.netPathStartAt = tRecv; r.netPathSpeed = rp.speed; }
+      }
+    }
+    if (Array.isArray(p.residentStops) && !isHost) {
+      const list = (sharedRef.current.station && sharedRef.current.station.residents) || [];
+      for (const rs of p.residentStops) {
+        const r = list.find(rr => rr.rid === rs.rid);
+        if (r) { r.netPath = null; r.x = rs.x; r.y = rs.y; }
+      }
     }
     if (p.visitorSim && !isHost) {
       // Zip 233: an ARRAY of light per-visitor positions, matched by rid.
@@ -3937,6 +4254,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   useEffect(() => {
     if (!isHost) return;
     const dayTimer = setInterval(() => {
+      // Zip 364 : rattrapage d'une diffusion de station sautée faute de
+      // conditions réseau (onglet hôte masqué, personne en ligne à ce
+      // moment-là). Sans ça, la garde ajoutée sur broadcastStation
+      // transformerait une économie de trafic en perte d'événement.
+      if (stationPendingRef.current && netCanBroadcast()) broadcastStation();
       // Fin des travaux de la maison (2026-07) : montée de niveau effective,
       // diffusée à tous (avec hostNow pour la relocalisation d'horloge).
       {
@@ -4213,6 +4535,25 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // ci-dessous), qui masque carrément son personnage pendant ce temps.
     const px = m.zone === "evil" ? m.farmX : m.x, py = m.zone === "evil" ? m.farmY : m.y;
     const pub = { id: m.id, name: m.name, gender: m.gender, outfit: m.outfit, x: +px.toFixed(2), y: +py.toFixed(2), dir: m.dir, moving: m.zone === "evil" ? false : m.moving, tool: slotRef.current, sleeping: !!m.sleeping, torch: !!torchOnRef.current, zone: m.zone || "farm", pets: myPetsRef.current };
+    // ------------------------------------------------------------------
+    // Zip 365 — RÉPLICATION PAR INTENTION (correctif flottement/saccades).
+    //
+    // `vx`/`vy` : ma vitesse RÉELLE en tuiles/seconde, cheval, nage et bonbon
+    // déjà appliqués. Le destinataire n'a plus à la DEVINER à partir de deux
+    // positions successives — estimation qui divisait le déplacement par
+    // l'écart entre deux ARRIVÉES et non entre deux ÉMISSIONS, et transformait
+    // donc toute gigue réseau en erreur de vitesse (voir advanceRemote).
+    //
+    // `st` : mon horloge monotone à l'émission. Jamais comparée à l'horloge du
+    // destinataire — seules les DIFFÉRENCES entre deux `st` le sont, ce qui
+    // annule tout décalage d'horloge entre machines. Sert uniquement à mesurer
+    // la gigue de la liaison (voir le tampon adaptatif dans le handler `pos`).
+    //
+    // Coût : ~25 octets par paquet de position, très largement repayés par
+    // l'allongement du keep-alive que cette précision autorise.
+    // ------------------------------------------------------------------
+    pub.st = +performance.now().toFixed(1);
+    if (pub.moving) { pub.vx = +(m.vx || 0).toFixed(2); pub.vy = +(m.vy || 0).toFixed(2); }
     // Monde maléfique MULTIJOUEUR (demande Guillaume 2026-07) : les
     // coordonnées RÉELLES sur la carte maléfique voyagent dans des champs
     // dédiés (ex/ey) — x/y restent figées sur la case du passage pour tout
@@ -4228,7 +4569,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // émis, sans aucun impact de gameplay (personne pour voir). Vaut pour la
   // position ET pour les entités simulées par l'hôte (greg/soan/lapins/…).
   function netCanBroadcast() { return channelReadyRef.current && !hiddenRef.current && playersRef.current.size > 0; }
-  function sendPos() { if (!netCanBroadcast()) return; const _m = meRef.current; if (_m) { lastPosSentRef.current = performance.now(); lastPosKeyRef.current = _m.moving ? ("m" + _m.dir) : "s"; } channelRef.current?.send({ type: "broadcast", event: "pos", payload: pubMe() }); }
+  // Zip 365 : la clé d'état de mouvement porte désormais le VECTEUR, plus le
+  // seul `dir`. Explication ci-dessous dans maybeSendPos.
+  function posKeyOf(m) { return m && m.moving ? ("m" + (m.vx || 0).toFixed(1) + "," + (m.vy || 0).toFixed(1)) : "s"; }
+  function sendPos() { if (!netCanBroadcast()) return; const _m = meRef.current; if (_m) { lastPosSentRef.current = performance.now(); lastPosKeyRef.current = posKeyOf(_m); } channelRef.current?.send({ type: "broadcast", event: "pos", payload: pubMe() }); }
   // FIX 242 (AOI / zone d'intérêt) : rayon "même zone d'écran" dérivé du viewport réel + marge de pré-chargement.
   function aoiRadiusTiles() { const c = canvasRef.current; if (!c) return 40; return Math.hypot(c.width, c.height) / (ZOOM * C.TILE) / 2 + C.AOI_MARGIN_TILES; }
   // Distance (tuiles) au plus proche AUTRE joueur de la même zone ; Infinity si personne.
@@ -4238,6 +4582,115 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // Un joueur distant (non-hôte) est-il à portée de vue de cette entité (ou de l'une de ces entités) ? Sinon inutile de la diffuser : hors écran ET absente de la minimap (loups/greg/soan/lapins n'y figurent pas).
   function anyRemoteNear(ex, ey) { const R = aoiRadiusTiles(); for (const p of playersRef.current.values()) { if (!p || (p.zone || "farm") !== "farm") continue; if (Math.hypot(p.x - ex, p.y - ey) <= R) return true; } return false; }
   function anyRemoteNearList(list) { if (!list || !list.length) return false; const R = aoiRadiusTiles(); for (const p of playersRef.current.values()) { if (!p || (p.zone || "farm") !== "farm") continue; for (const e of list) { if (e && Math.hypot(p.x - e.x, p.y - e.y) <= R) return true; } } return false; }
+  // Zip 364 : équivalent d'anyRemoteNearList pour le MONDE MALÉFIQUE. Les deux
+  // helpers ci-dessus filtrent sur `zone === "farm"` et lisent p.x/p.y — ils
+  // renvoient donc TOUJOURS false pour les créatures maléfiques, dont les
+  // spectateurs sont dans `zone === "evil"` avec des coordonnées séparées
+  // (p.ex/p.ey, voir applyDeltas). C'est très probablement pourquoi la garde
+  // de proximité n'avait jamais été posée sur `evilMonsters` : le helper
+  // existant l'aurait purement et simplement coupé du réseau. Celui-ci lit les
+  // bonnes coordonnées, ce qui rend la garde enfin sûre — 2 Hz de tableau
+  // complet (~2,8 ko) économisés dès que personne n'est dans le monde maléfique,
+  // ce qui est le cas la quasi-totalité du temps.
+  function anyRemoteNearEvil(list) {
+    if (!list || !list.length) return false;
+    const R = aoiRadiusTiles();
+    for (const p of playersRef.current.values()) {
+      if (!p || p.zone !== "evil" || p.ex === undefined) continue;
+      for (const e of list) { if (e && Math.hypot(p.ex - e.x, p.ey - e.y) <= R) return true; }
+    }
+    return false;
+  }
+  // Zip 364 : un joueur distant est-il PRÉSENT dans le monde maléfique ? Les
+  // messages maléfiques non positionnels (créature terrassée, morsure) doivent
+  // partir même si le joueur est loin de la créature concernée, mais restent
+  // parfaitement inutiles si personne n'est dans ce monde.
+  function anyRemoteInEvil() { for (const p of playersRef.current.values()) if (p && p.zone === "evil") return true; return false; }
+  // Zip 364 : allège le payload périodique d'un employé (Greg/Soan). `taskQueue`
+  // peut contenir jusqu'à ~260 entrées (GREG_ORDER_MAX = 200 graines, plus les
+  // "till"/"water"), soit ~8,9 ko rediffusés toutes les 0,7 s pendant toute
+  // l'exécution d'un ordre — et 0,2 s pendant SuperGreg, soit ~44 ko/s. Or
+  // AUCUN client ne lit `taskQueue` : c'est de la mécanique d'hôte pure. Seul
+  // `orderQueue` est affiché (le compteur "n/3" du menu), et il est borné à 3
+  // petites entrées : on le garde.
+  //
+  // À N'UTILISER QUE sur les diffusions périodiques passant directement par
+  // channelRef.send. Surtout PAS sur un payload envoyé via hostSend() : l'hôte
+  // se ré-applique son propre message (voir hostSend/applyDeltas, qui fait
+  // `sharedRef.current.greg = p.greg` sans garde !isHost) — il écraserait alors
+  // son propre employé avec la copie allégée et perdrait sa file de tâches.
+  // (copie explicite plutôt qu'un rest-destructuring : évite une variable
+  // `taskQueue` déclarée et jamais lue, que le lint du build refuse.)
+  function slimEmployee(e) { if (!e) return e; const out = { ...e }; delete out.taskQueue; return out; }
+
+  // ------------------------------------------------------------------
+  // Zip 364 — TRAJETS DE RÉSIDENTS : UN SEUL MESSAGE PAR FRAME.
+  //
+  // Avant : un message par résident. En régime normal ça restait discret, mais
+  // à l'instant précis où un joueur entrait dans l'AOI (`justCameIntoRange`),
+  // l'hôte renvoyait le trajet de TOUS les résidents — jusqu'à 10 messages
+  // dans la MÊME frame. Le throttle client (10 msg/s, voir l'instrumentation
+  // en tête de l'effet réseau) en laissait passer une partie et jetait le
+  // reste, en silence. Résultat : le joueur qui arrive voit un ou deux
+  // résidents figés jusqu'à leur prochaine décision de trajet. Symptôme
+  // intermittent, sans trace, déclenché par un déplacement anodin — c'est la
+  // signature exacte des gels poursuivis depuis le zip 359.
+  //
+  // Le groupage supprime la rafale par construction, et fait mécaniquement
+  // baisser le compteur de messages (ce que compte le quota Supabase) plutôt
+  // que seulement le volume d'octets.
+  // ------------------------------------------------------------------
+  function queueResidentPath(rid, path, speed) {
+    // `startAt` n'est PAS transmis : le client date le départ à la RÉCEPTION.
+    // Ces horodatages étaient écrits avec l'horloge de l'HÔTE puis comparés à
+    // l'horloge LOCALE de l'invité (voir smoothNpcPath) — à la moindre dérive
+    // entre machines, `elapsedS` devenait énorme et walkPath renvoyait
+    // directement le point d'arrivée : le PNJ se téléportait à destination.
+    // C'est la même limite de confiance que celle documentée pour launch_at /
+    // stage_launch_at dans lib/gameSync.js (SYNC_MAX_WAIT_MS). Dater à la
+    // réception supprime la dépendance à l'horloge : il ne reste que la
+    // latence réseau, de l'ordre de quelques dizaines de millisecondes.
+    resPathQueueRef.current.push({ rid, path, speed });
+  }
+  function queueResidentStop(res) {
+    resStopQueueRef.current.push({ rid: res.rid, x: +(+res.x).toFixed(2), y: +(+res.y).toFixed(2) });
+  }
+  function flushResidentNet() {
+    const paths = resPathQueueRef.current, stops = resStopQueueRef.current;
+    if (!paths.length && !stops.length) return;
+    resPathQueueRef.current = []; resStopQueueRef.current = [];
+    if (!netCanBroadcast()) return;
+    const payload = {};
+    if (paths.length) payload.residentPaths = paths;
+    if (stops.length) payload.residentStops = stops;
+    channelRef.current?.send({ type: "broadcast", event: "apply", payload });
+  }
+  // Zip 364 — PILOTE A→B SUR L'ATTROUPEMENT (demande Guillaume : « ce qui est
+  // important de partager, c'est le point de départ et le point d'arrivée »).
+  //
+  // Constat : la branche `res.tjReact` de residentRoam fait avancer x/y frame
+  // par frame et sort AVANT toute logique de roamTarget. L'émetteur A→B
+  // (`if (!res.roamTarget) continue`) ne la voyait donc jamais. Le déplacement
+  // de tout l'attroupement ne voyageait QUE dans l'objet `station` complet
+  // (~8,8 ko), diffusé au rythme des répliques de la scène (~0,5 Hz) : chez
+  // l'invité, dix PNJ se déplaçaient par bonds d'une demi-seconde, sans
+  // interpolation — au moment même où l'on veut que les deux joueurs assistent
+  // à la même scène.
+  //
+  // Or ce mouvement est le plus prévisible du jeu : départ connu, arrivée
+  // connue (rc.tx/rc.ty posés par triggerTjCrowdReaction), vitesse constante,
+  // ligne droite. Il tient donc entièrement dans un seul message groupé pour
+  // TOUT l'attroupement, que chaque client rejoue avec walkPath.
+  //
+  // `startAt` mérite une note : le décalage de départ (TJ_REACT_STAGGER, pour
+  // que l'attroupement ne parte pas d'un bloc) est une horloge HÔTE. Plutôt
+  // que de la transmettre, on n'émet le trajet d'un résident qu'au moment où
+  // il se met RÉELLEMENT en marche (rc.startAt franchi). Le décalage est ainsi
+  // reproduit naturellement, sans jamais comparer deux horloges.
+  function queueTjReactPath(res, tx, ty, speedMul) {
+    const path = [{ x: +(+res.x).toFixed(2), y: +(+res.y).toFixed(2) }, { x: +(+tx).toFixed(2), y: +(+ty).toFixed(2) }];
+    queueResidentPath(res.rid, path, C.VISITOR_SPEED * speedMul);
+  }
   // FIX 243 (emission par intention + cap 8 Hz) : on n'emet plus un flux continu.
   // On envoie quand l'ETAT de mouvement change (depart/arret/changement de
   // direction), plafonne a POS_TICK_HZ, plus un keep-alive de correction. Les
@@ -4247,24 +4700,102 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function maybeSendPos() {
     const m = meRef.current; if (!m) return;
     const now = performance.now();
-    const key = m.moving ? ("m" + m.dir) : "s";
+    // ------------------------------------------------------------------
+    // Zip 365 — CORRECTIF : les DIAGONALES ne déclenchaient aucune émission.
+    //
+    // La clé était `"m" + m.dir`. Or `dir` est calculé avec priorité absolue à
+    // l'axe X : `if (dx < 0) dir = 2; else if (dx > 0) dir = 3; else ...`.
+    // Marcher vers la droite (1, 0) et marcher en diagonale haut-droite
+    // (0.7, 0.7) donnent donc TOUS LES DEUX `dir = 3` — la clé ne changeait
+    // pas, aucun paquet n'était émis, et le destinataire continuait d'afficher
+    // un déplacement purement horizontal. Il ne rattrapait la diagonale
+    // qu'après deux paquets de keep-alive, soit jusqu'à 1,6 s de trajectoire
+    // fausse. Cela passait à peu près inaperçu tant que la vitesse était
+    // ré-estimée à partir des positions reçues (l'estimation finissait par
+    // retrouver la diagonale) ; en réplication par intention, ce serait une
+    // erreur franche.
+    //
+    // La clé porte donc le vecteur : elle change dès que l'entrée clavier
+    // change, diagonales comprises, et à ce moment-là seulement.
+    // ------------------------------------------------------------------
+    const key = posKeyOf(m);
     const minGap = 1000 / posSendHz();
     if (key !== lastPosKeyRef.current) { if (now - lastPosSentRef.current >= minGap) sendPos(); }
     else if (m.moving && now - lastPosSentRef.current >= C.POS_KEEPALIVE_MS) sendPos();
   }
-  // FIX 243 (extrapolation) : on affiche les autres joueurs a leur position
-  // PRESENTE (base recue + vitesse * temps ecoule) et non a leur derniere position
-  // recue (en retard -> sensation de lag). La vitesse vient du delta entre deux
-  // paquets (capture diagonales + mouvements rapides). Collision rejouee localement
-  // (canStand/canStandTown) car la carte est partagee -> le fantome ne traverse pas
-  // un mur. Plafonne a POS_EXTRAP_MAX_MS pour eviter la derive si un paquet manque.
+  // ======================================================================
+  // Zip 365 — RENDU DES JOUEURS DISTANTS : on relit, on ne devine plus.
+  //
+  // FIX 243 extrapolait : dernière position reçue + vitesse × temps écoulé.
+  // Le raisonnement était bon (afficher l'autre à sa position PRÉSENTE plutôt
+  // qu'en retard), mais il reposait sur une vitesse estimée à partir des
+  // intervalles d'ARRIVÉE — donc faussée par toute gigue réseau — et projetée
+  // jusqu'à 900 ms. D'où deux artefacts distincts et bien visibles à deux :
+  //   - FLOTTEMENT : vitesse surestimée -> le personnage part devant sa
+  //     position réelle, puis est ramené en arrière au paquet suivant ;
+  //   - SACCADE : `POS_EXTRAP_MAX_MS` (900) ne dépassait `POS_KEEPALIVE_MS`
+  //     (800) que de 100 ms. Comme l'écart est mesuré entre ARRIVÉES, la
+  //     moindre gigue le portait au-delà de 900 ms : l'extrapolation saturait,
+  //     le personnage se figeait, puis sautait à la réception suivante.
+  //   Ces réglages étaient cohérents entre deux joueurs proches ; ils ne le
+  //   sont plus dès que la liaison a de la latence ou de la gigue.
+  //
+  // Nouveau principe, standard des jeux en réseau : on affiche l'autre joueur
+  // avec un léger RETARD, et on INTERPOLE entre deux états réellement reçus.
+  // Tant que le tampon est alimenté, la position affichée n'est jamais une
+  // supposition — elle est encadrée par deux mesures. Aucun dépassement n'est
+  // possible, donc aucun retour en arrière.
+  //
+  // La profondeur du tampon s'ajuste seule sur la gigue mesurée (voir le
+  // handler `pos`) : quelques dizaines de millisecondes entre deux joueurs
+  // proches — imperceptible —, ~200 ms sur une liaison très longue, où c'est
+  // de toute façon le seul moyen d'obtenir un rendu stable.
+  //
+  // L'extrapolation subsiste en SECOURS, quand le tampon se vide (silence
+  // prolongé du keep-alive, paquet perdu). Elle est désormais fiable : la
+  // vitesse est celle transmise par l'expéditeur, pas une estimation.
+  // ======================================================================
+  function remoteBufferMs(p) {
+    // 1,5 × la gigue observée, encadré. Le plancher garantit qu'il reste
+    // toujours de quoi interpoler entre deux paquets ; le plafond empêche une
+    // liaison momentanément mauvaise de faire décrocher l'affichage.
+    const j = p.jitter === undefined ? C.POS_JITTER_MIN_MS : p.jitter * 1.5;
+    return Math.max(C.POS_JITTER_MIN_MS, Math.min(C.POS_JITTER_MAX_MS, j));
+  }
   function advanceRemote(p) {
-    if (!p || !p.moving || p.vx === undefined || (p.vx === 0 && p.vy === 0)) return;
-    const el = Math.min((performance.now() - (p.tRecv || 0)) / 1000, C.POS_EXTRAP_MAX_MS / 1000);
-    if (el <= 0) return;
-    const nx = p.px0 + p.vx * el, ny = p.py0 + p.vy * el;
-    if (p.zone === "town") { const tw = townWorldRef.current; p.tx = (tw && canStandTown(tw, nx, p.py0)) ? nx : p.px0; p.ty = (tw && canStandTown(tw, p.px0, ny)) ? ny : p.py0; }
-    else if (!p.zone || p.zone === "farm") { const w = worldRef.current; p.tx = (w && canStand(w, nx, p.py0)) ? nx : p.px0; p.ty = (w && canStand(w, p.px0, ny)) ? ny : p.py0; }
+    if (!p || !p.buf || !p.buf.length) return;
+    const collide = p.zone === "town"
+      ? (x, y) => { const tw = townWorldRef.current; return !!tw && canStandTown(tw, x, y); }
+      : (!p.zone || p.zone === "farm") ? (x, y) => { const w = worldRef.current; return !!w && canStand(w, x, y); } : null;
+    if (!collide) return; // zone "evil" : voie de rendu distincte (ex/ey), hors périmètre
+    const buf = p.buf;
+    const renderT = performance.now() - remoteBufferMs(p);
+    const last = buf[buf.length - 1];
+    if (renderT <= buf[0].t) { p.tx = buf[0].x; p.ty = buf[0].y; return; } // tampon encore trop jeune (arrivée du joueur)
+    if (renderT <= last.t) {
+      // Cas nominal : le temps de rendu tombe ENTRE deux états reçus.
+      for (let i = buf.length - 2; i >= 0; i--) {
+        const a = buf[i], b = buf[i + 1];
+        if (renderT >= a.t && renderT <= b.t) {
+          const span = b.t - a.t;
+          const u = span > 0 ? (renderT - a.t) / span : 1;
+          p.tx = a.x + (b.x - a.x) * u; p.ty = a.y + (b.y - a.y) * u;
+          p.moving = a.moving || b.moving; if (a.dir != null) p.dir = a.dir;
+          return;
+        }
+      }
+      return;
+    }
+    // Secours : plus rien de récent à interpoler, on prolonge la dernière
+    // intention connue. Collision rejouée localement (la carte est partagée),
+    // pour qu'un personnage prolongé ne traverse jamais un mur.
+    p.moving = last.moving;
+    if (!last.moving || (last.vx === 0 && last.vy === 0)) { p.tx = last.x; p.ty = last.y; return; }
+    const el = Math.min((renderT - last.t) / 1000, C.POS_EXTRAP_MAX_MS / 1000);
+    if (el <= 0) { p.tx = last.x; p.ty = last.y; return; }
+    const nx = last.x + last.vx * el, ny = last.y + last.vy * el;
+    p.tx = collide(nx, last.y) ? nx : last.x;
+    p.ty = collide(last.x, ny) ? ny : last.y;
   }
   // FIX 246 : lissage du rendu d'un PNJ/bête côté invité, avec état persistant
   // (npcSmoothRef, indépendant de l'objet remplacé en bloc à 2 Hz).
@@ -4767,7 +5298,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (moved) {
       minimapDirtyRef.current = true;
       horseCallAccumRef.current += dt;
-      if (horseCallAccumRef.current >= 0.7 && netCanBroadcast()) { // zip 264: 0.5 -> 0.7 s (cheval sifflé qui accourt, glissé par extrapolation — reste fluide)
+      // Zip 364 : garde AOI ajoutée, par cohérence avec Greg/Soan/Harald. Un
+      // cheval sifflé qui traverse la carte vers un joueur hors de vue de
+      // l'autre n'a aucune raison d'occuper le canal.
+      if (horseCallAccumRef.current >= 0.7 && netCanBroadcast() && anyRemoteNearList(hs)) { // zip 264: 0.5 -> 0.7 s (cheval sifflé qui accourt, glissé par extrapolation — reste fluide)
         horseCallAccumRef.current = 0;
         channelRef.current?.send({ type: "broadcast", event: "apply", payload: { horses: hs } });
       }
@@ -4780,7 +5314,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const mm = meRef.current;
     if (mm && mm.id === id) return { id, x: mm.x, y: mm.y };
     const p = playersRef.current.get(id);
-    return p ? { id, x: p.x, y: p.y } : null;
+    if (!p) return null;
+    // Zip 365 : on lit la DERNIÈRE POSITION REÇUE (px0/py0), pas la position
+    // d'AFFICHAGE (x/y). Depuis le tampon de rendu, x/y est volontairement
+    // en léger retard — parfait pour dessiner, mais ce serait une régression
+    // ici : cette fonction sert au CIBLAGE des loups côté hôte, une décision
+    // de jeu qui doit porter sur la donnée la plus fraîche disponible.
+    // (Avant ce chantier, x/y traînait déjà derrière une extrapolation qui
+    // dépassait la cible — cette lecture est donc plus juste qu'auparavant,
+    // pas seulement non régressive.)
+    const x = p.px0 !== undefined ? p.px0 : p.x, y = p.py0 !== undefined ? p.py0 : p.y;
+    return { id, x, y };
   }
   // Dénouement d'une morsure tentée (chantier 2026-07) : "win" = le fermier a
   // réagi à temps au mini-jeu (voir req.kind === "wolfBiteResult" plus bas),
@@ -4806,7 +5350,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         // que tous les clients reçoivent deadUntil et jouent l'animation.
         wf.phase = "dead"; wf.state = "dead"; wf.deadUntil = now + C.WOLF_DEATH_ANIM_MS;
         wf.tx = wf.x; wf.ty = wf.y; wf.biteWins = {};
-        channelRef.current?.send({ type: "broadcast", event: "apply", payload: { wolves: sharedRef.current.wolves } });
+        if (netCanBroadcast()) channelRef.current?.send({ type: "broadcast", event: "apply", payload: { wolves: sharedRef.current.wolves } }); // zip 364 : garde ajoutée
         addChat("🗡️", L.wolfKilledChat(nm));
         return;
       }
@@ -4894,7 +5438,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       changed = true;
     }
     if (changed) {
-      channelRef.current?.send({ type: "broadcast", event: "apply", payload: { rabbits: s.rabbits } });
+      // Zip 364 : garde ajoutée. Le repop/dépop de lapins tourne en permanence
+      // (régime jour/nuit) et diffusait le tableau complet même sans personne
+      // en ligne. La population n'est pas un état persistant partagé : un
+      // invité qui arrive reçoit la liste par l'instantané.
+      if (netCanBroadcast()) channelRef.current?.send({ type: "broadcast", event: "apply", payload: { rabbits: s.rabbits } });
       minimapDirtyRef.current = true;
       rabbitAccumRef.current = 0;
       return;
@@ -5092,10 +5640,24 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // Retrait des créatures terrassées une fois leur animation de mort finie.
     if (s.evilMonsters.some(m => m.dead && now >= (m.deadUntil || 0))) {
       s.evilMonsters = s.evilMonsters.filter(m => !(m.dead && now >= (m.deadUntil || 0)));
-      channelRef.current?.send({ type: "broadcast", event: "apply", payload: { evilMonsters: s.evilMonsters } });
+      // Zip 364 : garde ajoutée — inutile hors d'une présence dans le monde
+      // maléfique, mais volontairement large (anyRemoteInEvil, pas de test de
+      // distance) : une créature qui disparaît doit être vue même de loin,
+      // sinon un cadavre fantôme reste affiché chez l'invité.
+      if (netCanBroadcast() && anyRemoteInEvil()) channelRef.current?.send({ type: "broadcast", event: "apply", payload: { evilMonsters: s.evilMonsters } });
     }
     evilMonstersAccumRef.current += dt;
-    if (evilMonstersAccumRef.current >= 0.5 && netCanBroadcast()) {
+    // Zip 364 — LE PLUS GROS FLUX INUTILE DU JEU. Ces 9 créatures diffusaient
+    // leur tableau complet (~2,8 ko) à 2 Hz, EN PERMANENCE, sans aucune garde
+    // de proximité : ~5,6 ko/s et 2 msg/s dépensés en continu pour un monde où
+    // personne ne se trouve la quasi-totalité du temps. C'était la seule
+    // famille d'entités sans garde AOI (loups, lapins, Greg, Soan, Harald,
+    // visiteurs et résidents en ont tous une). La raison est technique et pas
+    // évidente : `anyRemoteNearList` filtre sur `zone === "farm"` et lit
+    // p.x/p.y — appliqué ici, il aurait renvoyé false en permanence et coupé
+    // le monde maléfique du réseau. D'où `anyRemoteNearEvil`, qui lit les
+    // bonnes coordonnées (p.ex/p.ey des joueurs en zone "evil").
+    if (evilMonstersAccumRef.current >= 0.5 && netCanBroadcast() && anyRemoteNearEvil(s.evilMonsters)) {
       evilMonstersAccumRef.current = 0;
       channelRef.current?.send({ type: "broadcast", event: "apply", payload: { evilMonsters: s.evilMonsters } });
     }
@@ -5124,13 +5686,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           attackTargetId: null, biteTargetId: null, biteDeadline: 0,
         });
       }
-      channelRef.current?.send({ type: "broadcast", event: "apply", payload: { wolves: s.wolves } });
+      // Zip 364 : gardes ajoutées. L'apparition (tombée de la nuit) et la
+      // disparition (aube) des loups tournaient CHAQUE nuit, y compris sur une
+      // ferme où personne n'était connecté.
+      if (netCanBroadcast()) channelRef.current?.send({ type: "broadcast", event: "apply", payload: { wolves: s.wolves } });
       minimapDirtyRef.current = true;
       return;
     } else if (!night && s.wolfNight.active) {
       s.wolfNight = { active: false, kills: 0 };
       s.wolves = [];
-      channelRef.current?.send({ type: "broadcast", event: "apply", payload: { wolves: s.wolves } });
+      if (netCanBroadcast()) channelRef.current?.send({ type: "broadcast", event: "apply", payload: { wolves: s.wolves } });
       minimapDirtyRef.current = true;
       return;
     }
@@ -5340,12 +5905,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (s.wolves.some(x => x.gone)) {
       s.wolves = s.wolves.filter(x => !x.gone);
       minimapDirtyRef.current = true;
-      channelRef.current?.send({ type: "broadcast", event: "apply", payload: { wolves: s.wolves } });
+      if (netCanBroadcast()) channelRef.current?.send({ type: "broadcast", event: "apply", payload: { wolves: s.wolves } }); // zip 364 : garde ajoutée
     }
     if (moved) minimapDirtyRef.current = true;
     if (animalsChanged) {
       dirtyRef.current = true;
-      channelRef.current?.send({ type: "broadcast", event: "apply", payload: { animals: s.animals, wolves: s.wolves } });
+      // Zip 364 : garde de PRÉSENCE seulement (pas d'AOI) — un animal dévoré
+      // est un changement d'état durable, il doit parvenir à un joueur en
+      // ligne même s'il est à l'autre bout de la carte.
+      if (netCanBroadcast()) channelRef.current?.send({ type: "broadcast", event: "apply", payload: { animals: s.animals, wolves: s.wolves } });
       wolfAccumRef.current = 0;
       return;
     }
@@ -5559,7 +6127,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const gregNetThrottle = superActive ? 0.2 : 0.7;
     if (gregAccumRef.current >= gregNetThrottle && netCanBroadcast() && anyRemoteNear(g.x, g.y)) { // zip 264: 0.5 -> 0.7 s (PNJ purement baladeur, lissé smoothNpc — aucun impact gameplay, ~30% de trafic en moins)
       gregAccumRef.current = 0;
-      channelRef.current?.send({ type: "broadcast", event: "apply", payload: { greg: g } });
+      channelRef.current?.send({ type: "broadcast", event: "apply", payload: { greg: slimEmployee(g) } }); // zip 364 : sans taskQueue (jusqu'à ~8,9 ko de file de tâches que personne ne lit côté client)
     }
   }
   // Zip 247 (demande Guillaume : "when they move in, they start working on the
@@ -5788,7 +6356,24 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         // sur lui pour toujours. À l'échéance il abandonne simplement le
         // rapprochement et regarde la scène de là où il est (phase "gathered" :
         // il s'arrête, se tourne vers le clash et commente comme les autres).
-        if (d < 0.3 || now >= rc.startAt + C.TJ_REACT_MOVE_TIMEOUT_MS) { rc.phase = "gathered"; res.moving = false; return; }
+        if (d < 0.3 || now >= rc.startAt + C.TJ_REACT_MOVE_TIMEOUT_MS) {
+          rc.phase = "gathered"; res.moving = false;
+          // Zip 364 (pilote A→B) : point d'arrivée RÉEL. Le trajet annoncé est
+          // une ligne droite, mais l'hôte, lui, glisse le long des obstacles
+          // (blockedTile ci-dessous) et peut aussi abandonner sur expiration.
+          // Ce message de recalage garantit que l'invité voit le PNJ s'arrêter
+          // exactement là où l'hôte l'a arrêté, au lieu de terminer une
+          // trajectoire théorique qui n'a pas eu lieu.
+          if (rc._pathSent) { rc._pathSent = false; queueResidentStop(res); }
+          return;
+        }
+        // Zip 364 (pilote A→B, demande Guillaume) : UNE seule annonce de
+        // trajet au moment où ce résident se met effectivement en marche —
+        // au lieu de laisser son déplacement voyager dans l'objet station
+        // complet. Émis ici et pas dans triggerTjCrowdReaction pour que le
+        // décalage de départ (TJ_REACT_STAGGER) soit reproduit sans avoir à
+        // transmettre une horloge hôte.
+        if (!rc._pathSent) { rc._pathSent = true; queueTjReactPath(res, rc.tx, rc.ty, C.TJ_REACT_SPEED_MUL); }
         const step = Math.min(d, C.VISITOR_SPEED * C.TJ_REACT_SPEED_MUL * dt);
         const nx = res.x + (dx / d) * step, ny = res.y + (dy / d) * step;
         if (!E.blockedTile(w, nx, res.y)) res.x = nx;
@@ -5815,7 +6400,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // reprend sa rôdaille normale depuis l'endroit où il se trouve (la
       // rôdaille, elle, sait se débloquer seule — voir les branches
       // d'éjection/repositionnement plus bas).
-      if (d < 0.3 || now >= (rc.returnAt || 0) + C.TJ_REACT_RETURN_TIMEOUT_MS) { delete res.tjReact; res.roamTarget = null; res.roamMeet = null; res.moving = false; res.nextRoamAt = now + 300; return; }
+      if (d < 0.3 || now >= (rc.returnAt || 0) + C.TJ_REACT_RETURN_TIMEOUT_MS) {
+        const hadPath = !!rc._pathSent;
+        delete res.tjReact; res.roamTarget = null; res.roamMeet = null; res.moving = false; res.nextRoamAt = now + 300;
+        // Zip 364 : même recalage qu'à l'arrivée — fin du retour, position réelle.
+        if (hadPath) queueResidentStop(res);
+        return;
+      }
+      // Zip 364 : trajet de RETOUR annoncé une fois, quand le dernier mot est
+      // dit et que le PNJ se remet en route (rc.returnAt franchi).
+      if (!rc._pathSent) { rc._pathSent = true; queueTjReactPath(res, rc.returnX, rc.returnY, C.TJ_REACT_RETURN_SPEED_MUL); }
       const step = Math.min(d, C.VISITOR_SPEED * C.TJ_REACT_RETURN_SPEED_MUL * dt);
       const nx = res.x + (dx / d) * step, ny = res.y + (dy / d) * step;
       if (!E.blockedTile(w, nx, res.y)) res.x = nx;
@@ -6474,6 +7068,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (residentsNearNow && netCanBroadcast()) {
       for (const res of residents) {
         if (!res || !res.roamTarget) continue;
+        // Zip 364 : un résident en pleine réaction d'attroupement (tjReact) ne
+        // se déplace PAS par roamTarget — sa trajectoire est émise par
+        // queueTjReactPath, au moment où la scène la décide. Sans cette
+        // exclusion, une roamTarget périmée écraserait le trajet de la scène.
+        if (res.tjReact) continue;
         const tgt = res.roamTarget;
         const same = !justCameIntoRange && res._pathSentFor && res._pathSentFor.x === tgt.x && res._pathSentFor.y === tgt.y;
         if (same) continue;
@@ -6482,7 +7081,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const speed = C.VISITOR_SPEED * 0.7 * gait;
         const mid = (res.stormPath && res.stormPath.length) ? res.stormPath.map(p => ({ x: +(+p.x).toFixed(2), y: +(+p.y).toFixed(2) })) : [];
         const path = [{ x: +(+res.x).toFixed(2), y: +(+res.y).toFixed(2) }, ...mid, { x: +(+tgt.x).toFixed(2), y: +(+tgt.y).toFixed(2) }];
-        channelRef.current?.send({ type: "broadcast", event: "apply", payload: { residentPath: { rid: res.rid, path, startAt: now, speed } } });
+        queueResidentPath(res.rid, path, speed);
       }
     }
     // Un résident qui s'arrête (cible atteinte, obstacle, scène figée...) :
@@ -6492,9 +7091,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (!res) continue;
       if (!res.roamTarget && res._pathSentFor) {
         res._pathSentFor = null;
-        if (netCanBroadcast()) channelRef.current?.send({ type: "broadcast", event: "apply", payload: { residentStop: { rid: res.rid, x: +(+res.x).toFixed(2), y: +(+res.y).toFixed(2) } } });
+        queueResidentStop(res);
       }
     }
+    // Zip 364 : UN SEUL message pour tout ce qui précède (voir flushResidentNet).
+    flushResidentNet();
   }
   // Chantier "rivalité Tristan/Jérôme" (2026-07, demande Guillaume) : Tristan
   // (bûcheron) et Jérôme (sucrerie) se détestent et se provoquent tous les
@@ -6947,7 +7548,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     soanAccumRef.current += dt;
     if (soanAccumRef.current >= 0.7 && netCanBroadcast() && anyRemoteNear(so.x, so.y)) { // zip 264: 0.5 -> 0.7 s (idem Greg : baladeur lissé, aucun impact gameplay)
       soanAccumRef.current = 0;
-      channelRef.current?.send({ type: "broadcast", event: "apply", payload: { soan: so } });
+      channelRef.current?.send({ type: "broadcast", event: "apply", payload: { soan: slimEmployee(so) } }); // zip 364 : idem Greg
     }
   }
 
@@ -7549,8 +8150,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (actAnimRef.current > 0) actAnimRef.current -= dt;
       for (const p of playersRef.current.values()) {
         advanceRemote(p); // FIX 243
-        p.x += (p.tx - p.x) * Math.min(1, dt * 12);
-        p.y += (p.ty - p.y) * Math.min(1, dt * 12);
+        // Zip 365 : 12 -> 22. Ce lissage ne sert plus à masquer des sauts
+        // d'extrapolation (advanceRemote n'en produit plus) mais seulement à
+        // adoucir la couture entre interpolation et mode de secours. Un gain
+        // plus élevé = moins de retard ajouté, sans réintroduire de à-coup.
+        p.x += (p.tx - p.x) * Math.min(1, dt * 22);
+        p.y += (p.ty - p.y) * Math.min(1, dt * 22);
         p.animT = p.moving ? (p.animT || 0) + dt * 9 : 0;
       }
       // FIX 246 : le lissage de Greg/Soan est désormais fait au moment du
@@ -9319,13 +9924,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         // ne fait que marcher en ville") : on retire l'ancien bonus de vitesse
         // ville (TOWN_SPEED_MULT) pour caler la marche EXACTEMENT sur la ferme
         // (PLAYER_SPEED, même bonus bonbon). Le cheval reste absent en ville.
-        const sp = C.PLAYER_SPEED * dt * (performance.now() < speedBuffUntilRef.current ? C.CANDY_SPEED_MUL : 1);
+        // Zip 365 : idem ferme — vitesse réelle (bonbon compris) mémorisée en
+        // tuiles/seconde pour être diffusée, plutôt que devinée à l'arrivée.
+        const spSec = C.PLAYER_SPEED * (performance.now() < speedBuffUntilRef.current ? C.CANDY_SPEED_MUL : 1);
+        const sp = spSec * dt;
+        m.vx = dx * spSec; m.vy = dy * spSec;
         const nx = m.x + dx * sp, ny = m.y + dy * sp;
         if (canStandTown(tw, nx, m.y)) m.x = nx;
         if (canStandTown(tw, m.x, ny)) m.y = ny;
         if (dx < 0) m.dir = 2; else if (dx > 0) m.dir = 3; else if (dy < 0) m.dir = 1; else if (dy > 0) m.dir = 0;
         m.animT += dt * 9;
-      } else m.animT = 0;
+      } else { m.animT = 0; m.vx = 0; m.vy = 0; }
       m.moving = !!moving;
       const nowP = performance.now();
       maybeSendPos();
@@ -9453,8 +10062,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       for (const p of playersRef.current.values()) {
         if (p.zone !== "town" || p.sleeping) continue;
         advanceRemote(p); // FIX 243
-        p.x += (p.tx - p.x) * Math.min(1, dt * 12);
-        p.y += (p.ty - p.y) * Math.min(1, dt * 12);
+        // Zip 365 : 12 -> 22. Ce lissage ne sert plus à masquer des sauts
+        // d'extrapolation (advanceRemote n'en produit plus) mais seulement à
+        // adoucir la couture entre interpolation et mode de secours. Un gain
+        // plus élevé = moins de retard ajouté, sans réintroduire de à-coup.
+        p.x += (p.tx - p.x) * Math.min(1, dt * 22);
+        p.y += (p.ty - p.y) * Math.min(1, dt * 22);
         p.animT = p.moving ? (p.animT || 0) + dt * 9 : 0;
         draws.push({ y: (p.y + 0.9) * T, fn: () => drawRemotePets(p, dt) });
         draws.push({ y: (p.y + 1) * T, fn: () => drawCharacter(p, false) });
@@ -9606,7 +10219,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const moving = (dx || dy) && actAnimRef.current <= 0;
       if (moving) {
         const len = Math.hypot(dx, dy); dx /= len; dy /= len;
-        const sp = C.PLAYER_SPEED * (mounted ? C.HORSE_SPEED_MULT : 1) / (swimming ? C.HORSE_WATER_SLOW : 1) * dt;
+        // Zip 365 : la vitesse EN TUILES/SECONDE est désormais retenue telle
+        // quelle sur le fermier (m.vx/m.vy) et diffusée avec la position (voir
+        // pubMe). Tous les modificateurs — cheval, nage — y sont déjà
+        // appliqués : le client distant n'a donc AUCUN calcul de vitesse à
+        // refaire, ni aucune constante à connaître. Voir advanceRemote.
+        const spSec = C.PLAYER_SPEED * (mounted ? C.HORSE_SPEED_MULT : 1) / (swimming ? C.HORSE_WATER_SLOW : 1);
+        const sp = spSec * dt;
+        m.vx = dx * spSec; m.vy = dy * spSec;
         const nx = m.x + dx * sp, ny = m.y + dy * sp;
         const stand = mounted ? canStandMounted : canStand;
         // Zip 232 escape hatch: if the CURRENT position is already inside a
@@ -9620,7 +10240,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         // Cadence d'animation ralentie à la nage (le cycle de galop devient
         // un battement de nage, voir drawCharacter/horseRun).
         m.animT += dt * (swimming ? 4 : 9);
-      } else m.animT = 0;
+      } else { m.animT = 0; m.vx = 0; m.vy = 0; }
       m.moving = !!moving;
       const now = performance.now();
       maybeSendPos();

@@ -328,14 +328,38 @@ export const PLAYER_SPEED = 5.2; // tuiles/seconde
 export const TOWN_SPEED_MULT = 1.45;
 export const POS_TICK_HZ = 8;        // FIX 243: 12 -> 8 Hz (economie position ; extrapolation cote rendu compense le ressenti)
 export const AOI_MARGIN_TILES = 8;   // FIX 242 (AOI): marge (tuiles) autour du viewport — pré-charge entités/joueurs juste avant qu'ils entrent à l'écran
-export const POS_KEEPALIVE_MS = 800;   // FIX 243 (zip 264: 500 -> 800) : en mouvement continu (meme direction), correction au moins toutes les 800 ms. Le keep-alive n'est qu'un filet anti-derive (l'extrapolation cote rendu tient l'intervalle) : l'allonger coupe ~40% du trafic de position en marche droite SANS saccade (le rendu reste lisse, cf. advanceRemote).
+// Zip 365 (800 -> 2000) : en marche continue, le keep-alive n'est plus qu'un
+// filet ANTI-DÉRIVE. Tant que la vitesse était DEVINÉE à l'arrivée, il fallait
+// la re-corriger souvent (elle était fausse dès qu'il y avait de la gigue) ;
+// maintenant qu'elle est TRANSMISE (pubMe.vx/vy), la trajectoire rejouée est
+// exacte et ne dérive que du glissement le long des obstacles. Deux secondes
+// suffisent donc largement, et un changement de direction ou un arrêt part
+// toujours immédiatement (émission par intention, voir maybeSendPos).
+// Effet : le trafic de position en marche droite passe de 1,25 à 0,5 msg/s
+// par joueur, AVEC un rendu meilleur — pas au prix du rendu.
+export const POS_KEEPALIVE_MS = 2000;
 // Zip 247 : plafond de la vitesse ESTIMÉE d'un joueur distant (extrapolation,
 // voir le handler "pos"). L'ancienne valeur codée en dur (1.6) était déjà
 // INFÉRIEURE à la vitesse à cheval (HORSE_SPEED_MULT = 1.9) et le reste à
 // celle de Valley Town avec bonbon (1.45 * 1.5 = 2.175) : les joueurs
 // distants rapides traînaient donc visuellement derrière leur vraie position.
 export const POS_EXTRAP_SPEED_CAP = 2.4;
-export const POS_EXTRAP_MAX_MS = 900;  // FIX 243 (zip 264: 600 -> 900) : doit COUVRIR l'intervalle du keep-alive (POS_KEEPALIVE_MS = 800) pour qu'une marche en ligne droite reste lissee sans micro-gel entre deux paquets. Reste une borne dure anti-derive si un paquet est vraiment perdu.
+// Zip 365 (900 -> 3000) : ce plafond ne s'applique PLUS qu'au mode de secours
+// d'advanceRemote (tampon vidé). Il doit couvrir le keep-alive (2000) plus la
+// latence et la gigue de la liaison — l'ancienne marge de 100 ms au-dessus du
+// keep-alive était le mécanisme exact de la saccade : l'écart se mesurant
+// entre ARRIVÉES, la moindre gigue faisait saturer l'extrapolation, figeant le
+// personnage jusqu'au paquet suivant. Le prolongement est désormais sûr sur
+// cette durée parce que la vitesse est reçue, non estimée.
+export const POS_EXTRAP_MAX_MS = 3000;
+// Zip 365 — tampon de rendu adaptatif des joueurs distants (voir
+// advanceRemote/remoteBufferMs). Le plancher garantit qu'il y a toujours de
+// quoi interpoler entre deux paquets ; le plafond borne le retard d'affichage
+// même sur une liaison très dégradée. Entre deux joueurs proches, la gigue
+// mesurée est faible et le tampon reste au plancher : imperceptible.
+export const POS_JITTER_MIN_MS = 30;
+export const POS_JITTER_MAX_MS = 260;
+export const POS_BUF_MAX_SAMPLES = 12; // ~24 s d'historique au keep-alive de 2 s : très au-delà du nécessaire, coût mémoire nul
 export const POS_FAR_HZ = 1;         // FIX 242 (AOI) — zip 264: 1.5 -> 1 Hz. Quand aucun autre joueur n'est à portée de vue, la position ne sert qu'à la minimap : 1 Hz suffit largement (aucun rendu du perso à l'écran). Économie directe sur les longues traversées solo-dans-le-groupe.   // fréquence de diffusion des positions (broadcast)
 export const ACT_RANGE = 1.8;    // portée d'action en tuiles
 
