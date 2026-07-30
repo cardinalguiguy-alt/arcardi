@@ -210,6 +210,52 @@ function riverCenterAtRow(riverCenter, y) {
 // dense que la ferme (ambiance plus oppressante) ; le passage retour
 // (C.EVIL_RETURN_PASSAGE) est un point fixe, jamais dérivé d'un cours d'eau
 // puisqu'il n'y a pas de rivière ici.
+/* -------------------------------------------------------------------------
+   Zip 372 : couloir garanti vers la PORTE DU DÉFI DE FUITE (bord est).
+   -------------------------------------------------------------------------
+   Appelée par generateEvilWorld ET generatePassageWorld, APRÈS toute la
+   génération : elle passe en force. C'est le seul moyen de tenir la promesse
+   « toujours accessible quelle que soit la carte » — le monde du labyrinthe
+   pose des haies sur toute la surface, et rien dans un placement aléatoire ne
+   garantit qu'un chemin subsiste.
+
+   Le tracé est un escalier qui réduit à chaque pas le plus grand des deux
+   écarts. Il traverse donc le lac : les cases d'eau redeviennent de l'herbe,
+   ce qui dessine une chaussée sombre au milieu du violet luisant. C'est voulu,
+   et ça signale le chemin au joueur sans avoir à ajouter le moindre balisage.
+
+   Largeur : RUN_CORRIDOR_HALF de chaque côté, donc 3 cases. À 1 case de large,
+   un joueur qui longe le bord se coince entre deux troncs et la garantie n'en
+   est plus une dès qu'on joue vraiment.
+   ------------------------------------------------------------------------- */
+export function carveRunCorridor(ground, objects, objHp, W, H) {
+  const clearAt = (x, y) => {
+    if (x < 0 || y < 0 || x >= W || y >= H) return;
+    const i = y * W + x;
+    if (ground[i] === C.G_WATER) ground[i] = C.G_GRASS;
+    if (objects[i] !== C.O_NONE) { objects[i] = C.O_NONE; objHp.delete(i); }
+  };
+  const half = C.RUN_CORRIDOR_HALF;
+  const swath = (x, y) => {
+    for (let dy = -half; dy <= half; dy++) for (let dx = -half; dx <= half; dx++) clearAt(x + dx, y + dy);
+  };
+
+  let x = C.EVIL_SPAWN.x, y = C.EVIL_SPAWN.y;
+  let guard = W * H; // garde-fou : jamais de boucle infinie, même sur une constante aberrante
+  swath(x, y);
+  while ((x !== C.RUN_GATE.x || y !== C.RUN_GATE.y) && guard-- > 0) {
+    if (Math.abs(C.RUN_GATE.x - x) >= Math.abs(C.RUN_GATE.y - y)) x += Math.sign(C.RUN_GATE.x - x);
+    else y += Math.sign(C.RUN_GATE.y - y);
+    swath(x, y);
+  }
+
+  // Place dégagée devant la porte : on doit pouvoir la voir venir et manœuvrer.
+  for (let dy = -C.RUN_GATE_CLEAR; dy <= C.RUN_GATE_CLEAR; dy++) {
+    for (let dx = -C.RUN_GATE_CLEAR; dx <= C.RUN_GATE_CLEAR; dx++) clearAt(C.RUN_GATE.x + dx, C.RUN_GATE.y + dy);
+  }
+  ground[C.RUN_GATE.y * W + C.RUN_GATE.x] = C.G_RUN_GATE;
+}
+
 export function generateEvilWorld() {
   const W = C.EVIL_MAP_W, H = C.EVIL_MAP_H;
   const rnd = makeRng(0xE411); // seed fixe : une seule carte maléfique, partagée par toutes les parties
@@ -304,6 +350,11 @@ export function generateEvilWorld() {
     }
   }
   ground[C.EVIL_RETURN_PASSAGE.y * W + C.EVIL_RETURN_PASSAGE.x] = C.G_DARK_PASSAGE;
+  // Zip 372 : couloir garanti vers la porte du défi. Posé AVANT les créatures
+  // ci-dessous, qui tirent leur position sur les cases libres — elles peuvent
+  // donc apparaître dans le couloir, et c'est très bien : le chemin est
+  // garanti praticable, pas garanti tranquille.
+  carveRunCorridor(ground, objects, objHp, W, H);
   // Créatures maléfiques (chantier 2026-07, demande Guillaume : "des
   // monstres qui pourchassent le joueur, lents, mais qui l'assomment et le
   // renvoient chez lui blessé au contact") : générées ici (même seed fixe
@@ -662,6 +713,19 @@ export function newFarmer(id, name, gender, outfit) {
     inv: {
       wood: 0, stone: 0, food: 0, fence: 0, wall: 0, path: 0, lamp: 0, scarecrow: 0, grass: 0, mill: 0, healKit: 0, salve: 0,
       magicOre: 0, // minerai magique miné dans le monde maléfique (chantier 2026-07), ingrédient pour de futures concoctions au chaudron
+      // Zip 372 : BONBONS, ramassés pendant le défi de fuite du monde sombre.
+      // Ressource PAR JOUEUR (pas commune) : le défi est individuel, personne
+      // ne court à deux, et une réserve commune inviterait à se disputer le
+      // fruit d'une course qu'un seul a faite. Aucun usage pour l'instant,
+      // c'est un compteur — la dépense viendra dans un chantier dédié.
+      // Aucune migration Supabase : le fermier est persisté en instantané JSON.
+      candies: 0,
+      // Meilleur score au défi de fuite. Ce n'est PAS un objet d'inventaire, et
+      // le ranger ici est assumé : `inv` est le seul bloc du fermier qui voyage
+      // déjà en entier vers son propriétaire (setMyInv, payload `farmer`).
+      // L'y poser évite quatre points de plomberie supplémentaires pour un
+      // simple compteur, sans rien coûter au réseau — `inv` était déjà envoyé.
+      runBest: 0,
       seeds: [5, 0, 0, 0], crops: [0, 0, 0, 0],
       gems: C.GEMS.map(() => 0),      // gemmes rares trouvées au minage
       fish: C.FISH.map(() => 0),      // poissons pêchés
@@ -718,6 +782,8 @@ export function normalizeFarmer(f) {
   if (typeof f.inv.wood !== "number") f.inv.wood = 0;
   if (typeof f.inv.stone !== "number") f.inv.stone = 0;
   if (typeof f.inv.magicOre !== "number") f.inv.magicOre = 0;
+  if (typeof f.inv.candies !== "number") f.inv.candies = 0; // zip 372 : défi de fuite
+  if (typeof f.inv.runBest !== "number") f.inv.runBest = 0; // zip 372 : meilleur score au défi
   if (typeof f.inv.food !== "number") f.inv.food = 0;
   if (typeof f.inv.fence !== "number") f.inv.fence = 0;
   if (typeof f.inv.wall !== "number") f.inv.wall = 0;
@@ -3708,6 +3774,11 @@ export function generatePassageWorld(worldIdx) {
     }
   }
   ground[id(C.EVIL_RETURN_PASSAGE.x, C.EVIL_RETURN_PASSAGE.y)] = C.G_DARK_PASSAGE;
+  // Zip 372 : le MÊME couloir garanti que sur la carte maléfique. C'est ici
+  // qu'il est le plus indispensable : le monde "maze" pose des haies en grille
+  // sur toute la carte, et sans ce passage en force la porte du défi serait
+  // murée une semaine sur cinq.
+  carveRunCorridor(ground, objects, objHp, W, H);
 
   // Pickups (breloques). Placés sur des cases d'herbe libres, jamais dans
   // l'eau, jamais sur un objet, jamais trop près du spawn (on veut avoir à

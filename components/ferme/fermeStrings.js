@@ -890,6 +890,19 @@ export const FERME_STR = {
     darkPassageToast: "🌑 Une obscurité glaciale t'avale...",
     darkPassageReturnToast: "☀️ Tu retrouves la lumière du jour.",
     evilMonsterCaughtToast: "👹 Une créature t'a happé... tu te réveilles chez toi, blessé.",
+    // Zip 372 : défi de fuite (porte est du monde sombre). Les textes de la
+    // course elle-même ne sont PAS ici : le défi est une page autonome servie
+    // depuis public/templerun/, avec sa propre table FR/EN (js/strings.js).
+    // Ces clés-ci ne couvrent que ce que la FERME affiche autour du défi.
+    runEnteredChat: (name) => `🏃 ${name} franchit la porte et tente la fuite !`,
+    runLostChat: (name, candies) => candies > 0
+      ? `🍬 ${name} s'est fait rattraper, mais rapporte ${candies} bonbon(s).`
+      : `🍬 ${name} s'est fait rattraper, les mains vides.`,
+    runLostToast: "🐺 La meute t'a eu... tu te réveilles à la ferme, blessé.",
+    runCandiesToast: (n) => `🍬 +${n} bonbon(s) rapporté(s) du monde sombre !`,
+    bagRunTitle: "Défi de fuite",
+    bagCandiesRow: (n) => `${n} bonbon(s)`,
+    bagRunBestSub: (n) => n > 0 ? `Meilleur score : ${n}` : "Aucun score pour l'instant.",
     drownToast: "🌊 Glouglou... tu as coulé ! Ramené à la maison, blessé (1 min).",
     mapDarkPassage: "Passage sombre",
     healPartialChat: (soigneur, blesse, mn) => `${soigneur} a appliqué un pansement à ${blesse} : encore ${mn} min de repos (un autre pansement peut aider !)`,
@@ -1810,6 +1823,19 @@ export const FERME_STR = {
     darkPassageToast: "🌑 A cold darkness swallows you...",
     darkPassageReturnToast: "☀️ You find daylight again.",
     evilMonsterCaughtToast: "👹 A creature caught you... you wake up at home, injured.",
+    // Zip 372: dark-world escape challenge (east gate). The run's own text is
+    // NOT here — the challenge is a standalone page served from
+    // public/templerun/, with its own FR/EN table (js/strings.js). These keys
+    // only cover what the FARM shows around it.
+    runEnteredChat: (name) => `🏃 ${name} steps through the gate and makes a run for it!`,
+    runLostChat: (name, candies) => candies > 0
+      ? `🍬 ${name} got caught, but brought back ${candies} candy(ies).`
+      : `🍬 ${name} got caught, empty-handed.`,
+    runLostToast: "🐺 The pack got you... you wake up on the farm, injured.",
+    runCandiesToast: (n) => `🍬 +${n} candy(ies) brought back from the dark world!`,
+    bagRunTitle: "Escape challenge",
+    bagCandiesRow: (n) => `${n} candy(ies)`,
+    bagRunBestSub: (n) => n > 0 ? `Best score: ${n}` : "No score yet.",
     drownToast: "🌊 Glub glub... you sank! Carried back home, injured (1 min).",
     mapDarkPassage: "Dark passage",
     healPartialChat: (healer, hurt, mn) => `${healer} applied a bandage to ${hurt}: ${mn} min of rest left (another bandage can help!)`,

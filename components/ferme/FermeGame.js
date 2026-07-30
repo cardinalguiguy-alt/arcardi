@@ -289,6 +289,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [buildings, setBuildings] = useState({ horseCount: 0, wellBuilt: false, animalCount: 0 });
   const [onHorse, setOnHorse] = useState(false);
   const [torchOn, setTorchOn] = useState(false); // torche allumée (chantier 2026-07) : éloigne les loups, éclaire un rayon autour du porteur
+  // Zip 372 : défi de fuite (endless runner 3D) du monde sombre. `true` tant
+  // que l'iframe plein écran est affichée. IMPORTANT : ce composant continue de
+  // tourner derrière — s'il s'arrêtait, l'hôte figerait le monde pour tout le
+  // monde pendant qu'il court (même raison d'être que l'instance cachée de
+  // FermeGame, voir app/room/[code]/page.js).
+  const [runChallenge, setRunChallenge] = useState(false);
+  const runChallengeRef = useRef(false);
   const [fishMini, setFishMini] = useState(null); // {mode, fish} pendant le minijeu, sinon null
   const [barnMini, setBarnMini] = useState(null); // {level} pendant le mini-jeu de construction de la grange, sinon null
   const [wolfBite, setWolfBite] = useState(null); // {wolfId} pendant le mini-jeu de morsure (loup agressif), sinon null
@@ -1743,6 +1750,38 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       hostSend({
         type: "broadcast", event: "apply",
         payload: { injured: { id: f.id, until: f.injuredUntil } },
+      });
+    } else if (req.kind === "runFailed") {
+      // Zip 372 : défaite au défi de fuite. Même contrat de confiance
+      // qu'"evilCaught" au-dessus — la course s'est déroulée entièrement côté
+      // client (le monde sombre n'existe pas côté hôte, le défi encore moins),
+      // l'hôte se contente de persister et de diffuser le résultat.
+      //
+      // Les valeurs venant d'un client ne sont PAS crues sur parole : la
+      // blessure est bornée comme ailleurs, et les bonbons comme le score sont
+      // plafonnés à ce qu'une course humainement possible peut produire. Ça
+      // n'empêche pas un client modifié de tricher un peu, mais ça évite qu'un
+      // message aberrant (ou un bug) n'injecte un million de bonbons dans une
+      // sauvegarde partagée et durable.
+      const nowR = Date.now();
+      const untilR = (typeof req.until === "number" && req.until > nowR && req.until <= nowR + C.RUN_INJURED_MS + 5000) ? req.until : nowR + C.RUN_INJURED_MS;
+      f.injuredUntil = untilR;
+      f.injuryKind = "run"; // même famille que "evil" : soignable par pansements
+      const gained = Math.max(0, Math.min(C.RUN_MAX_CANDIES_PER_RUN, req.candies | 0));
+      f.inv.candies = (f.inv.candies | 0) + gained;
+      const sc = Math.max(0, Math.min(C.RUN_MAX_SCORE, req.score | 0));
+      if (sc > (f.inv.runBest | 0)) f.inv.runBest = sc;
+      dirtyRef.current = true;
+      hostSend({
+        type: "broadcast", event: "apply",
+        payload: {
+          injured: { id: f.id, until: f.injuredUntil },
+          // L'inventaire complet repart au joueur concerné : c'est ce qui met à
+          // jour ses bonbons et son record chez lui (setMyInv), exactement
+          // comme le fait "heal" pour l'énergie et les outils.
+          farmer: { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv, injuredUntil: f.injuredUntil },
+          chat: { from: "\u{1F36C}", msg: L.runLostChat(f.name, gained) },
+        },
       });
     } else if (req.kind === "drown") {
       // Noyade (décision Guillaume 2026-07 : descendre du cheval en pleine
@@ -7934,6 +7973,84 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     sendReq({ kind: "evilCaught", until });
     crossPassage(false, true);
   }
+
+  /* ======================================================================
+     Zip 372 — DÉFI DE FUITE (endless runner 3D), porte est du monde sombre.
+     ----------------------------------------------------------------------
+     Le défi est une page autonome servie depuis public/templerun/, affichée
+     dans une <iframe> plein écran PAR-DESSUS la ferme. Trois raisons, toutes
+     structurantes :
+
+       1. La ferme continue de tourner derrière. Si c'est l'hôte qui court,
+          arrêter la simulation figerait le monde pour tout le monde — c'est
+          exactement le problème que règle déjà l'instance cachée de FermeGame.
+       2. Le clavier. Le défi capte flèches, WASD et Espace : les mêmes touches
+          que la ferme. Dans le même document il faudrait démêler deux jeux
+          d'écouteurs ; le focus de l'iframe tranche tout seul. On coupe quand
+          même onKeyDown côté ferme, par ceinture et bretelles.
+       3. three.js reste dans l'iframe, jamais dans le bundle de la ferme.
+          Rien à ajouter à package.json, et un CDN muet ne casse que le défi.
+
+     Le dialogue tient en trois messages (voir public/templerun/js/bridge.js).
+     ====================================================================== */
+  function openRunChallenge() {
+    if (runChallengeRef.current || zoneTransRef.current.active || isInjured()) return;
+    const m = meRef.current; if (!m) return;
+    m.moving = false;
+    // Les touches encore enfoncées au moment de basculer resteraient "collées"
+    // pendant toute la course et feraient courir le fermier tout seul dans le
+    // monde sombre pendant qu'on joue au défi.
+    keysRef.current = {};
+    runChallengeRef.current = true;
+    setRunChallenge(true);
+    sendPos();
+    broadcastChat("\u{1F3C3}", L.runEnteredChat(m.name));
+  }
+
+  // Sortie SANS conséquence : le joueur a ouvert le défi et l'a refermé sans
+  // courir. Il repart de la porte, à sa place, dans le monde sombre.
+  function closeRunChallenge() {
+    runChallengeRef.current = false;
+    setRunChallenge(false);
+    keysRef.current = {};
+  }
+
+  // Défaite (ou abandon en cours de course, voir RUN_ABORT_COUNTS_AS_LOSS).
+  // Calque exact de caughtByMonster : blessure appliquée en OPTIMISTE côté
+  // client, requête à l'hôte pour la persister et la diffuser, puis fondu et
+  // téléportation locale. La durée est RUN_INJURED_MS (10 min), pas
+  // EVIL_INJURED_MS (30 min) : on doit pouvoir retenter dans la soirée.
+  function runChallengeLost(score, candies) {
+    closeRunChallenge();
+    const until = Date.now() + C.RUN_INJURED_MS;
+    injuredUntilRef.current = until; setInjuredUntil(until);
+    sendReq({ kind: "runFailed", until, score: score | 0, candies: candies | 0 });
+    if ((candies | 0) > 0) pushToast(L.runCandiesToast(candies | 0));
+    crossPassage(false, true, "run");
+  }
+
+  // Réception des messages de l'iframe. Même origine obligatoire : la page est
+  // servie par la ferme elle-même, tout le reste est rejeté.
+  useEffect(() => {
+    if (!runChallenge) return;
+    function onMsg(e) {
+      if (e.origin !== window.location.origin) return;
+      const d = e.data;
+      if (!d || typeof d !== "object") return;
+      if (d.type === "vf-run-ready") {
+        const best = (invRef.current && invRef.current.runBest) | 0;
+        try {
+          e.source.postMessage({ type: "vf-run-init", lang, best }, window.location.origin);
+        } catch (err) {}
+      } else if (d.type === "vf-run-over") {
+        runChallengeLost(d.score, d.candies);
+      } else if (d.type === "vf-run-exit") {
+        closeRunChallenge();
+      }
+    }
+    window.addEventListener("message", onMsg);
+    return () => window.removeEventListener("message", onMsg);
+  }, [runChallenge, lang]);
   // Mini-jeu de morsure des créatures maléfiques (chantier 2026-07, demande
   // Guillaume : "ajoute un minijeu pour résister à la morsure") : au contact
   // (voir updateEvilMonsters), la créature s'arrête et ce mini-jeu s'ouvre
@@ -7959,14 +8076,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const eb = evilBiteRef.current; setEvilBite(null);
     if (eb) resolveEvilBiteOutcome(eb.monsterId, "fail");
   }
-  function crossPassage(toEvil, viaMonster) {
+  // `reason` (zip 372) ne change PAS la destination — il ne sert qu'à choisir
+  // le message affiché à l'arrivée. "run" = défaite au défi de fuite, qui
+  // renvoie au même endroit qu'une créature maléfique (le spawn de la ferme)
+  // mais ne doit pas afficher « une créature vous a attrapé ».
+  function crossPassage(toEvil, viaMonster, reason) {
     if (zoneTransRef.current.active) return; // déjà en transition : ignore un nouveau déclenchement
     // Zip 253 : le cheval reste à la ferme (décision Guillaume). Un joueur monté
     // qui franchit le passage sombre descend d'abord — sinon l'ancien `rider`
     // traînait le cheval aux coordonnées de la carte maléfique (même ghost-horse
     // que le train vers la ville). Le cheval est laissé sur la ferme à sa place.
     if (toEvil && myHorse()) sendReq({ kind: "dismount" });
-    zoneTransRef.current = { active: true, t0: performance.now(), toEvil, swapped: false, viaMonster: !!viaMonster };
+    zoneTransRef.current = { active: true, t0: performance.now(), toEvil, swapped: false, viaMonster: !!viaMonster, reason: reason || null };
   }
   // Valley Town (zip 234): the train ride reuses the exact zone-fade
   // machinery (fade to black, teleport at mid-fade, fade back) with a `dest`
@@ -8016,7 +8137,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         m.zone = "farm";
         m.x = C.SPAWN.x; m.y = C.SPAWN.y; m.moving = false;
         sendPos();
-        pushToast(L.evilMonsterCaughtToast);
+        pushToast(zt.reason === "run" ? L.runLostToast : L.evilMonsterCaughtToast);
       } else {
         const w = worldRef.current;
         m.zone = "farm";
@@ -8046,6 +8167,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (m.zone === "evil") {
       const ew = evilWorldRef.current; if (!ew) return;
       if (tx === C.EVIL_RETURN_PASSAGE.x && ty === C.EVIL_RETURN_PASSAGE.y) crossPassage(false);
+      // Zip 372 : porte du défi de fuite. Même principe que le passage sombre
+      // (marcher dessus suffit, aucune touche), mais elle n'ouvre pas une
+      // transition de zone : elle affiche le défi PAR-DESSUS la ferme, qui
+      // continue de tourner derrière. Voir openRunChallenge.
+      else if (tx === C.RUN_GATE.x && ty === C.RUN_GATE.y) openRunChallenge();
     } else {
       const w = worldRef.current; if (!w || !w.darkPassage) return;
       if (tx === w.darkPassage.x && ty === w.darkPassage.y) crossPassage(true);
@@ -8108,6 +8234,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     function onKeyDown(e) {
       if (document.activeElement === chatInputRef.current) return;
       if (fishMiniRef.current) return; // le minijeu de pêche (ou de morsure) gère ses entrées
+      // Zip 372 : pendant le défi de fuite, l'iframe a le focus et consomme le
+      // clavier. Cette garde est une ceinture de sécurité : si le focus revient
+      // à la ferme (clic sur le bord de l'écran, raccourci navigateur), le
+      // fermier ne doit surtout pas se mettre à marcher dans le monde sombre
+      // pendant qu'on court dans le défi.
+      if (runChallengeRef.current) return;
       if (isInjured()) return; // blessé : aucune entrée, en attendant la fin du repos forcé
       // Endormi : seule la touche E (se réveiller) doit rester active, pour
       // ne pas pouvoir changer d'outil/monter à cheval/etc. depuis "l'intérieur".
@@ -9812,9 +9944,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const draws = [];
       for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
         const i = y * ew.w + x, g = ew.ground[i];
-        ctx.fillStyle = g === C.G_DARK_PASSAGE ? "#3a2a55" : g === C.G_WATER ? "#241246" : "#182417";
+        ctx.fillStyle = g === C.G_DARK_PASSAGE ? "#3a2a55" : g === C.G_RUN_GATE ? "#4a3320" : g === C.G_WATER ? "#241246" : "#182417";
         ctx.fillRect(x * T, y * T, T, T);
-        if (g === C.G_DARK_PASSAGE) {
+        // Zip 372 : PORTE DU DÉFI DE FUITE. Contrairement au passage sombre,
+        // elle est faite pour être VUE de loin — c'est un défi, pas un secret.
+        // Deux braseros qui vacillent de part et d'autre, sur la même horloge
+        // que le reste du décor animé (aucun random par frame, sinon la
+        // flamme grésille au lieu de vaciller).
+        if (g === C.G_RUN_GATE) {
+          const fl = 0.55 + Math.sin(now / 130) * 0.2 + Math.sin(now / 71) * 0.1;
+          ctx.fillStyle = `rgba(255, 154, 60, ${fl})`;
+          ctx.fillRect(x * T, y * T, T, T);
+          ctx.fillStyle = "#2a1c10";
+          ctx.fillRect(x * T + 1, y * T + 2, 3, 12); ctx.fillRect(x * T + T - 4, y * T + 2, 3, 12);
+          ctx.fillStyle = `rgba(255, 226, 150, ${0.65 + Math.sin(now / 95) * 0.25})`;
+          ctx.fillRect(x * T + 1, y * T, 3, 4); ctx.fillRect(x * T + T - 4, y * T, 3, 4);
+        } else if (g === C.G_DARK_PASSAGE) {
           const pulse = 0.4 + Math.sin(now / 500) * 0.15;
           ctx.fillStyle = `rgba(140, 90, 220, ${pulse})`;
           ctx.fillRect(x * T, y * T, T, T);
@@ -12462,6 +12607,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         </div>
       )}
 
+      {/* Zip 372 : DÉFI DE FUITE. Page autonome (public/templerun/) affichée
+          par-dessus la ferme, qui continue de tourner derrière — indispensable
+          si c'est l'hôte qui joue, sinon le monde s'arrête pour tout le monde.
+          On force le focus dans l'iframe au chargement : sans ça, les flèches
+          continuent d'être lues par la ferme et le défi ne répond pas. */}
+      {runChallenge && (
+        <div className="ferme-run-overlay">
+          <iframe
+            className="ferme-run-frame"
+            src="/templerun/index.html"
+            title="Valley Farm challenge"
+            onLoad={e => { try { e.currentTarget.contentWindow.focus(); } catch (err) {} }}
+          />
+        </div>
+      )}
+
       {/* Fiche de Greg (touche Q à proximité) — menu d'ordres complet. */}
       {gregCardOpen && sharedRef.current.greg && (() => {
         const g = sharedRef.current.greg;
@@ -13001,6 +13162,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             <div className="ferme-shop-row" style={(myInv && (myInv.healKit || 0) > 0) ? { cursor: "pointer" } : undefined} onClick={() => armHealKit()}>
               <span style={{ fontSize: 26, width: 32, textAlign: "center" }}>🩹</span>
               <div className="info"><b>{L.bagHealKitRow((myInv && myInv.healKit) || 0)}</b><span>{healArmed ? L.healKitArmedTip : L.bagHealKitSub}</span></div>
+            </div>
+
+            {/* Zip 372 : bonbons rapportés du défi de fuite. Ressource par
+                joueur, sans usage pour l'instant — c'est un compteur, et le
+                record du défi vit à côté pour ne pas ouvrir un panneau rien
+                que pour lui. */}
+            <div style={{ fontSize: 11, fontWeight: 700, opacity: .7, textTransform: "uppercase", letterSpacing: .5, marginTop: 12 }}>{L.bagRunTitle}</div>
+            <div className="ferme-shop-row">
+              <span style={{ fontSize: 26, width: 32, textAlign: "center" }}>🍬</span>
+              <div className="info"><b>{L.bagCandiesRow((myInv && myInv.candies) || 0)}</b><span>{L.bagRunBestSub((myInv && myInv.runBest) || 0)}</span></div>
             </div>
 
             <div style={{ fontSize: 11, fontWeight: 700, opacity: .7, textTransform: "uppercase", letterSpacing: .5, marginTop: 12 }}>{L.bagEnergyTitle}</div>

@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Ferme Vallée — Fuite du monde sombre</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- Tous les textes sont posés par ui.js/applyLang() depuis js/strings.js.
+     Rien de visible n'est écrit en dur ici : la ferme impose sa langue au
+     chargement, et le défi doit la suivre. -->
+
+<canvas id="gl"></canvas>
+
+<!-- ------------------------------------------------------------------ HUD -->
+<div id="hud" class="layer hud">
+  <div class="hud-row">
+    <div class="stat"><span class="label" id="lScore"></span><span id="score">0</span></div>
+    <div class="stat"><span class="label" id="lCoins"></span><span id="coins">0</span></div>
+    <div class="stat"><span class="label" id="lDistance"></span><span id="distance">0 m</span></div>
+    <div class="stat"><span class="label" id="lBest"></span><span id="best">0</span></div>
+  </div>
+  <div class="danger">
+    <div class="danger-label" id="lPack"></div>
+    <div class="danger-bar"><div id="dangerFill"></div></div>
+  </div>
+</div>
+
+<!-- ---------------------------------------------------------------- TITRE -->
+<div id="title" class="layer panel visible">
+  <h1 id="tTitle"></h1>
+  <p class="sub" id="tSub"></p>
+  <div id="loadError" class="error"></div>
+  <button id="btnStart"></button>
+  <div class="controls">
+    <div id="cLane"></div>
+    <div id="cJump"></div>
+    <div id="cSlide"></div>
+    <div id="cPause"></div>
+  </div>
+  <p class="hint" id="tHint"></p>
+  <p class="hint farm" id="tHintFarm"></p>
+</div>
+
+<!-- ---------------------------------------------------------------- PAUSE -->
+<div id="pause" class="layer panel">
+  <h1 id="pTitle"></h1>
+  <button id="btnResume"></button>
+  <button id="btnQuit" class="ghost"></button>
+  <p class="hint" id="pQuitWarn"></p>
+</div>
+
+<!-- ------------------------------------------------------------ GAME OVER -->
+<div id="gameover" class="layer panel">
+  <h1 id="oTitle"></h1>
+  <p id="deathReason" class="sub"></p>
+  <div id="newBest" class="newbest"></div>
+  <div class="results">
+    <div><span id="fLScore"></span><b id="finalScore">0</b></div>
+    <div><span id="fLCoins"></span><b id="finalCoins">0</b></div>
+    <div><span id="fLDistance"></span><b id="finalDistance">0 m</b></div>
+    <div><span id="fLBest"></span><b id="finalBest">0</b></div>
+  </div>
+  <p class="hint" id="oHint"></p>
+  <button id="btnBack"></button>
+</div>
+
+<!-- three.js : build global classique (pas de module). Chargé ICI, dans
+     l'iframe, donc jamais dans le bundle Next de la ferme — et un échec de
+     CDN ne casse que le défi. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+<script src="js/strings.js"></script>
+<script src="js/bridge.js"></script>
+<script src="js/config.js"></script>
+<script src="js/input.js"></script>
+<script src="js/track.js"></script>
+<script src="js/player.js"></script>
+<script src="js/wolves.js"></script>
+<script src="js/camera.js"></script>
+<script src="js/world.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>

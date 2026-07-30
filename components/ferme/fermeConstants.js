@@ -63,6 +63,10 @@ export const G_DARK_PASSAGE = 13; // "passage sombre" (chantier 2026-07, demande
                                    // au noir + téléportation SOLO vers la carte maléfique (voir enterDarkPassage/
                                    // tryOpenNearby côté FermeGame.js). Rendu volontairement sombre (voir drawTile)
                                    // pour se distinguer du reste du décor.
+export const G_RUN_GATE = 14;      // zip 372 : porte du défi de fuite, bord EST des cartes du passage sombre.
+                                   // Contrairement au passage sombre, elle est ANNONCÉE (couloir dégagé qui y
+                                   // mène, rendu lumineux) : c'est un défi qu'on doit pouvoir trouver, pas un
+                                   // secret. Position fixe C.RUN_GATE, identique sur les cinq mondes.
 
 // Objets
 export const O_NONE = 0;
@@ -461,6 +465,49 @@ export const EVIL_SPAWN = { x: 35, y: 66 }; // arrivée du joueur, près du bord
 // suite.
 export const EVIL_RETURN_PASSAGE = { x: 12, y: 8 };
 export const ZONE_FADE_MS = 900; // durée d'une moitié de fondu (aller au noir OU revenir), écran noir tenu entre les deux
+
+/* ==========================================================================
+   Zip 372 : PORTE DU DÉFI DE FUITE (endless runner 3D), bord EST.
+   --------------------------------------------------------------------------
+   Le passage sombre ne mène pas à UNE carte mais à cinq (PASSAGE_WORLDS, une
+   par semaine de jeu), dont un labyrinthe qui pose des haies sur toute la
+   surface. Une porte posée « quelque part à l'est » serait donc accessible
+   certaines semaines et murée d'autres.
+
+   D'où RUN_GATE, un point FIXE, plus un couloir DÉGAGÉ DE FORCE entre
+   l'arrivée (EVIL_SPAWN, bord sud) et cette porte, creusé après la génération
+   dans les deux générateurs. C'est exactement ce que fait déjà
+   generatePassageWorld pour garantir l'accès au centre du labyrinthe : on
+   reprend le motif existant plutôt que d'en inventer un.
+
+   Le couloir est volontairement LARGE (RUN_CORRIDOR_HALF de part et d'autre) :
+   à 1 case, un joueur qui longe le bord se retrouve coincé entre deux troncs,
+   et la « garantie » n'en est plus une en pratique.
+   ========================================================================== */
+export const RUN_GATE = { x: 66, y: 34 };   // bord est, à mi-hauteur (carte 70x70)
+export const RUN_GATE_CLEAR = 2;            // rayon de la place dégagée autour de la porte
+export const RUN_CORRIDOR_HALF = 1;         // demi-largeur du couloir garanti (1 => 3 cases de large)
+
+// Blessure infligée par une DÉFAITE au défi (décision Guillaume) : 10 minutes,
+// nettement moins que la créature maléfique (EVIL_INJURED_MS = 30 min) parce
+// qu'on doit pouvoir retenter le défi dans la même soirée. Constante dédiée
+// plutôt que réutilisation : les deux évolueront séparément.
+export const RUN_INJURED_MS = 10 * 60 * 1000;
+
+// Abandonner depuis l'écran-titre du défi est gratuit ; abandonner une course
+// DÉJÀ COMMENCÉE compte comme une défaite. Sans ça, il suffirait de quitter
+// une demi-seconde avant de se faire rattraper pour ne jamais être blessé.
+export const RUN_ABORT_COUNTS_AS_LOSS = true;
+
+// Plafonds de confiance appliqués CÔTÉ HÔTE au résultat renvoyé par le défi
+// (req "runFailed"). La course se déroule entièrement chez le client, donc ces
+// nombres arrivent d'une page qu'on ne contrôle pas. Ils ne rendent pas la
+// triche impossible — ils empêchent un message aberrant d'injecter n'importe
+// quoi dans une sauvegarde partagée et durable. Calibrés bien au-dessus d'une
+// très bonne course (≈ 140 bonbons et ≈ 6 500 points sur 3 minutes en
+// simulation) pour ne jamais punir un bon joueur.
+export const RUN_MAX_CANDIES_PER_RUN = 2000;
+export const RUN_MAX_SCORE = 200000;
 
 // Créatures maléfiques (chantier 2026-07, demande Guillaume : "des monstres
 // qui pourchassent le joueur, lents, mais qui l'assomment et le renvoient

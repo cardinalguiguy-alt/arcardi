@@ -6907,3 +6907,17 @@ div.ferme-usage{ margin-bottom:10px; }
   max-width: 92%; align-self: flex-start;
 }
 .ferme-vheart{ text-shadow: 0 1px 0 rgba(0,0,0,.15); }
+
+/* ==========================================================================
+   Zip 372 — Défi de fuite du monde sombre (public/templerun/).
+   Affiché en <iframe> PAR-DESSUS la ferme, qui continue de tourner derrière :
+   si c'est l'hôte qui joue, arrêter la ferme figerait le monde pour tous.
+   D'où un simple recouvrement opaque, et surtout pas un démontage du canvas.
+   ========================================================================== */
+.ferme-run-overlay{
+  position:fixed; inset:0; z-index:9000;
+  background:#0b0714;
+}
+.ferme-run-frame{
+  display:block; width:100%; height:100%; border:0;
+}
