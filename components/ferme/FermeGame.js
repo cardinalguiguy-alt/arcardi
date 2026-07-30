@@ -12445,7 +12445,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 <div className="ferme-shop-row" key={"vgs-" + g.key}>
                   <div className="info">
                     <b>{g.emoji} {L.voyagerSellRow(lang === "en" ? g.nameEn : g.name, n)}</b>
-                    <span className="ferme-usage">{g.sell} or/unité</span>
+                    {/* Zip 370 : le prix de revente était écrit « or/unité » EN DUR — seul
+                        texte français en dur affiché du jeu, visible tel quel en anglais.
+                        L.voyagerUnitCost existait déjà (« gold/unit » / « or/unité ») et est
+                        déjà utilisé pour le prix d'ACHAT juste au-dessus (panneau Commander). */}
+                    <span className="ferme-usage">{L.voyagerUnitCost(g.sell)}</span>
                   </div>
                   <div style={{ display: "flex", gap: 6 }}>
                     <button onClick={() => sellWorldGood(g.key, 1)}>{lang === "en" ? "Sell 1" : "Vendre 1"}</button>
