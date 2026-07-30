@@ -504,6 +504,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [myPets, setMyPets] = useState([]); // zip 236: my individual pets, mirror of me.pets
   const myPetsRef = useRef([]);     // zip 236: draw-loop mirror of myPets
   const petFollowRef = useRef(new Map());  // zip 247: smoothed follow positions, per-player-id (self + remotes)
+  // Zip 367 : fondu d'apparition des pips de graines. `key` = case actuellement
+  // visee ("x,y"), `a` = opacite qui remonte de 0 a 1 en C.PIP_FADE_MS tant que
+  // la meme case reste visee (remise a 0 des qu'on change de case). Un seul
+  // scalaire suffit puisqu'une seule case porte l'indicateur a la fois.
+  const pipFadeRef = useRef({ key: "", a: 0 });
   // Chantier "pets à cheval" (2026-07, demande Guillaume) : pendant que le
   // propriétaire est monté à cheval, ses pets ne peuvent pas suivre et
   // rôdent sur place autour de la "zone d'abandon" (la position où il est
@@ -4488,6 +4493,31 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   }
   // "Changer de perso" en jeu : revient à l'écran de choix sans quitter la ferme.
   function changeCharacter() { autoJoinTriedRef.current = true; joinedRef.current = false; setPhase("select"); }
+  // Zip 367 — corollaire quota de MAX_PETS 2 -> 4. Le champ `pets` voyage dans
+  // CHAQUE paquet `pos` (~1,5 msg/s par joueur, le flux le plus fréquent du
+  // jeu) et transportait les objets complets {id, at} : doubler la limite
+  // aurait doublé ce surcoût permanent, or `at` n'est JAMAIS lu au rendu (seul
+  // pets[i].id l'est, voir drawPetsFor). On ne diffuse donc que les ids : à
+  // quatre pets, le champ reste plus court qu'avec deux avant ce zip. La
+  // contrepartie de compatibilité est portée par drawPetsFor, qui accepte les
+  // deux formes.
+  // Sûr au regard du piège documenté (zip 364) : `pos` part par
+  // channelRef.current.send (voir sendPos), PAS par hostSend — l'hôte ne se
+  // ré-applique donc jamais ce payload allégé et ne peut pas perdre ses
+  // propres pets. `applyDeltas` ne lit `payload.pets` que sur un joueur
+  // DISTANT (r.pets, ensureRemote) ; MES pets viennent du champ `farmer`,
+  // laissé intact avec ses objets complets.
+  function petIdsPub() {
+    const ps = myPetsRef.current;
+    if (!Array.isArray(ps) || !ps.length) return [];
+    const out = [];
+    for (let i = 0; i < ps.length; i++) {
+      const p = ps[i];
+      const id = typeof p === "string" ? p : (p && p.id);
+      if (id) out.push(id);
+    }
+    return out;
+  }
   function pubMe() {
     const m = meRef.current;
     // Tant que m.zone==="evil", la position DIFFUSÉE reste figée sur la case
@@ -4497,7 +4527,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // sur leur écran) — voir aussi le filtre zone!=="farm" au rendu (draws
     // ci-dessous), qui masque carrément son personnage pendant ce temps.
     const px = m.zone === "evil" ? m.farmX : m.x, py = m.zone === "evil" ? m.farmY : m.y;
-    const pub = { id: m.id, name: m.name, gender: m.gender, outfit: m.outfit, x: +px.toFixed(2), y: +py.toFixed(2), dir: m.dir, moving: m.zone === "evil" ? false : m.moving, tool: slotRef.current, sleeping: !!m.sleeping, torch: !!torchOnRef.current, zone: m.zone || "farm", pets: myPetsRef.current };
+    const pub = { id: m.id, name: m.name, gender: m.gender, outfit: m.outfit, x: +px.toFixed(2), y: +py.toFixed(2), dir: m.dir, moving: m.zone === "evil" ? false : m.moving, tool: slotRef.current, sleeping: !!m.sleeping, torch: !!torchOnRef.current, zone: m.zone || "farm", pets: petIdsPub() };
     // ------------------------------------------------------------------
     // Zip 365 — RÉPLICATION PAR INTENTION (correctif flottement/saccades).
     //
@@ -8204,6 +8234,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const bubbleQueue = [];
       const queueBubble = (cx, by, text, major) => bubbleQueue.push({ cx, by, text, major });
 
+      // Zip 367 : la case visee est desormais calculee UNE fois par frame, ici,
+      // avant la boucle de tuiles. Elle servait deja au lisere blanc du curseur
+      // (declare juste apres la boucle avant ce zip, meme appel, meme valeur) ;
+      // elle sert en plus au fondu des pips de graines dans la boucle. La
+      // remonter evite un appel par tuile visible.
+      const tt = targetTile();
+      {
+        const pk = tt.x + "," + tt.y, pf = pipFadeRef.current;
+        if (pf.key !== pk) { pf.key = pk; pf.a = 0; }
+        else pf.a = Math.min(1, pf.a + (dt * 1000) / C.PIP_FADE_MS);
+      }
+      const pipA = pipFadeRef.current.a;
+
       for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
         const i = idxOf(x, y), g = w.ground[i];
         let img;
@@ -8299,15 +8342,38 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           // pleine) mais bien plus discrète, dans l'esprit d'une jauge de
           // jeu plutôt que d'un badge de texte encadré qui jurait avec le
           // reste du décor pixel art.
-          {
+          // ZIP 367 (demande Guillaume : "retirer l'indicateur du nombre de
+          // graines plantées, les cinq carrés jaunes ; il doit toujours
+          // exister mais être plus discret, et ne s'afficher qu'au hover en
+          // local. Et en dehors du hover, ne pas les montrer") : le "toujours
+          // visible" des zips 288/292 est ANNULÉ. Les pips ne sont plus
+          // dessinés que sur la CASE VISÉE (`tt`, calculée une fois par frame
+          // au-dessus de la boucle) — c'est-à-dire la case sous la souris
+          // quand elle est à portée d'action, sinon la case devant le joueur,
+          // exactement la case déjà entourée du liseré blanc du curseur. Ce
+          // choix (plutôt que la stricte position souris) garde l'indicateur
+          // atteignable au clavier et au tactile, où il n'y a pas de survol.
+          // Les opacités sont par ailleurs adoucies (C.PIP_ALPHA_*) et montent
+          // en C.PIP_FADE_MS, pour que balayer le champ à la souris ne fasse
+          // pas clignoter une rangée de pastilles derrière le curseur.
+          // "en local" : c'est du rendu pur, rien n'est diffusé — un joueur ne
+          // voit jamais les pips de la case survolée par l'autre.
+          if (x === tt.x && y === tt.y && pipA > 0.02) {
             const n = c.n || 1, maxN = C.MAX_CROPS_PER_TILE;
             const full = n >= maxN;
             const pip = 2, gap = 1;
             const rowW = maxN * pip + (maxN - 1) * gap;
             const px0 = x * T + (T - rowW) / 2, py0 = y * T + T - pip - 1;
+            // Le fondu est multiplié DANS les rgba plutôt que via
+            // ctx.globalAlpha : cette boucle de rendu est longue et partagée,
+            // toucher un état global du contexte y est un risque inutile.
+            const aF = (full ? C.PIP_ALPHA_FULL : C.PIP_ALPHA_FILLED) * pipA;
+            const aE = C.PIP_ALPHA_EMPTY * pipA;
             for (let k = 0; k < maxN; k++) {
               const filled = k < n;
-              ctx.fillStyle = filled ? (full ? "rgba(230,190,60,0.95)" : "rgba(255,255,255,0.9)") : "rgba(0,0,0,0.35)";
+              ctx.fillStyle = filled
+                ? (full ? `rgba(230,190,60,${aF})` : `rgba(255,255,255,${aF})`)
+                : `rgba(0,0,0,${aE})`;
               ctx.fillRect(px0 + k * (pip + gap), py0, pip, pip);
             }
           }
@@ -8333,7 +8399,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         else if (o === C.O_BERRY_BUSH) draws.push({ y: (y + 1) * T, fn: () => ctx.drawImage(sprites.berryBush, x * T, y * T - 2) });
       }
 
-      const tt = targetTile();
+      // Zip 367 : `tt` est maintenant declaree avant la boucle de tuiles
+      // (elle y sert au fondu des pips) — l'appel a targetTile() a simplement
+      // ete remonte, ce lisere de curseur est inchange.
       if (inMap(tt.x, tt.y)) { ctx.strokeStyle = "rgba(255,255,255,0.7)"; ctx.lineWidth = 1; ctx.strokeRect(tt.x * T + 0.5, tt.y * T + 0.5, T - 1, T - 1); }
 
       draws.push({ y: (C.HOUSE.y + C.HOUSE.h) * T, fn: () => {
@@ -10310,13 +10378,31 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const bx = -[0, 0, -1, 1][m.dir], by = -[1, -1, 0, 0][m.dir];
       const now3 = performance.now();
       for (let i = 0; i < pets.length; i++) {
-        const img = sprites.pets[pets[i].id];
+        // Zip 367 : l'id du pet peut arriver sous DEUX formes — objet
+        // {id, at} pour MES pets (f.pets, persiste tel quel), simple chaîne
+        // pour les pets d'un joueur distant (payload `pos` allégé au même zip,
+        // voir pubMe). `at` n'a jamais été lu au rendu.
+        const pid = typeof pets[i] === "string" ? pets[i] : (pets[i] && pets[i].id);
+        const img = pid ? sprites.pets[pid] : null;
         if (!img) continue;
-        // target a tile behind the player, fanned sideways by pet index
-        const side = i === 0 ? -0.45 : 0.45;
+        // target a tile behind the player, fanned sideways by pet index.
+        // ZIP 367 (MAX_PETS 2 -> 4) — BUG DÉCOUVERT EN CHEMIN, pas demandé :
+        // l'éventail supposait EXACTEMENT deux pets. `i === 0 ? -0.45 : 0.45`
+        // mettait les pets 2, 3 et 4 tous du MÊME côté, et la profondeur
+        // (0.9 + i * 0.15) ne les séparait que de 0,15 tuile alors qu'un sprite
+        // de pet en occupe ~0,7 : à quatre, trois d'entre eux se seraient
+        // superposés presque parfaitement. Formation généralisée en RANGS DE
+        // DEUX — gauche/droite en alternance, rang suivant 0,55 tuile plus loin
+        // derrière — qui tient n'importe quelle valeur de MAX_PETS sans
+        // nouvel empilement. À deux pets, seule différence avec l'ancien
+        // rendu : ils sont maintenant strictement côte à côte (le second
+        // n'est plus 0,15 tuile en retrait), donc symétriques.
+        const row = i >> 1;
+        const side = (i % 2 === 0) ? -0.45 : 0.45;
+        const depth = 0.9 + row * 0.55;
         const perpX = by, perpY = -bx;
-        const followTx = m.x + bx * (0.9 + i * 0.15) + perpX * side;
-        const followTy = m.y + by * (0.9 + i * 0.15) + perpY * side;
+        const followTx = m.x + bx * depth + perpX * side;
+        const followTy = m.y + by * depth + perpY * side;
         if (!follow[i]) follow[i] = { x: followTx, y: followTy, wtx: null, wty: null, wnextAt: 0 };
         const f2 = follow[i];
         let tx, ty, ease, isMoving;

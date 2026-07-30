@@ -168,6 +168,21 @@ export const WATER_DARK_MS = 3 * H;
 // du temps déjà écoulé sur la case, pas de pousse séparée par graine).
 // Valeur extrapolée depuis la demande ("5 graines par case").
 export const MAX_CROPS_PER_TILE = 5;
+// Zip 367 (demande Guillaume : "retirer l'indicateur du nombre de graines
+// plantees -- les cinq carres jaunes ; il doit toujours exister mais etre plus
+// discret, et ne s'afficher qu'au hover en local") : duree du fondu
+// d'apparition des pips de graines, en ms. Ils ne sont plus dessines que sur la
+// CASE VISEE (targetTile) et montent en opacite pendant PIP_FADE_MS tant que la
+// meme case reste visee -- d'ou un survol qui revele l'info sans la faire
+// clignoter quand on balaie le champ a la souris. Purement local et visuel :
+// aucune incidence reseau (voir aussi PIP_ALPHA_* ci-dessous).
+export const PIP_FADE_MS = 120;
+// Opacites du zip 367, nettement adoucies par rapport au zip 292 (0.9 / 0.95 /
+// 0.35) : l'indicateur ne se lit plus de loin sur tout le champ, il se lit de
+// pres sur la seule case survolee.
+export const PIP_ALPHA_FILLED = 0.55;  // graine presente, case pas encore pleine
+export const PIP_ALPHA_FULL = 0.62;    // case pleine (teinte doree conservee)
+export const PIP_ALPHA_EMPTY = 0.18;   // emplacement libre
 
 // --- Gemmes rares (trouvées en cassant des rochers) ---
 // Chance de tomber sur une gemme quand un rocher est détruit. Tirage pondéré :
@@ -1882,7 +1897,12 @@ export const UNIQUE_PETS = [
 // catalog keyed by id so the bag can render/name any pet regardless of
 // source (visitor gift OR passage world). `hue` drives the generic pet
 // sprite tint (fermeArt.js/petSprite); `body` picks a silhouette.
-export const MAX_PETS = 2;
+// Zip 367 (demande Guillaume : "permettre d'avoir 4 animaux en simultane, et
+// plus seulement 2") : 2 -> 4. Toute la chaine etait deja parametree par cette
+// constante (sac, resolveCatchPet, migrateFarmer .slice, textes FR/EN "n / max")
+// -- SAUF l'eventail de suivi de drawPetsFor, qui supposait exactement deux
+// pets (`i === 0 ? -0.45 : 0.45`) : corrige dans le meme zip, voir FermeGame.js.
+export const MAX_PETS = 4;
 // Zip 251 (demande Guillaume : "réduire les familiers à ~la taille d'une
 // poule") : facteur d'échelle appliqué au RENDU du pet (sprite 16x16 dessiné
 // à PET_DRAW_SCALE * 16 px, ancré par le bas). Purement visuel, ajustable.
