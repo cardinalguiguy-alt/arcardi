@@ -3127,6 +3127,17 @@ export function residentHasSkill(station, skill) {
   for (const r of list) { const ro = C.VISITOR_ROSTER[r.rid]; if (ro && ro.skill === skill) return true; }
   return false;
 }
+// Zip 376 (chantier Carla Garfield) : nombre de résidents PORTEURS D'UN SKILL
+// installés sur la ferme. Sert de porte d'apparition à Carla (voir
+// spawnVisitor et C.CARLA_MIN_ARTISANS). Volontairement écrit ici et non dans
+// FermeGame.js : skilledResidents() y existe déjà mais vit côté rendu, alors
+// que la porte se joue côté HÔTE, dans le tirage du train.
+export function countSkilledResidents(station) {
+  const list = (station && station.residents) || [];
+  let n = 0;
+  for (const r of list) { const ro = C.VISITOR_ROSTER[r.rid]; if (ro && ro.skill) n++; }
+  return n;
+}
 // Chantier "rivalité Tristan/Jérôme" (2026-07) : variante de residentHasSkill
 // qui exige EN PLUS que le résident ne soit pas en ITT (injuredUntil) — sert
 // à couper la production continue (sucrerie de Jérôme) pendant une
@@ -3346,13 +3357,22 @@ export function spawnVisitor(station, rnd, stockCtx, forceRid) {
   const banned = new Set(station.blacklist || []);
   for (const res of station.residents || []) banned.add(res.rid);
   for (const cur of station.visitors || []) banned.add(cur.rid); // zip 233: no duplicates on the farm
-  const pool = C.VISITOR_ROSTER.filter(v => !banned.has(v.rid) && v.rid !== station.lastRid);
+  // Zip 376 : porte d'apparition. Un personnage porteur de `minArtisans` ne
+  // monte dans le train que si la ferme compte déjà au moins ce nombre de
+  // résidents à skill (Carla Garfield : 4). Le filtre est posé ICI, dans la
+  // constitution du pool, et non après le tirage : sinon une ferme jeune
+  // tirerait Carla puis retomberait sur un `null`, et le train arriverait
+  // vide un tirage sur trente.
+  const artisans = countSkilledResidents(station);
+  const gateOk = (v) => !(v.minArtisans > 0) || artisans >= v.minArtisans;
+  const pool = C.VISITOR_ROSTER.filter(v => !banned.has(v.rid) && v.rid !== station.lastRid && gateOk(v));
   // Zip 298 (demande Guillaume) : garantie d'apparition d'un artisan précis
   // (fromagère/bûcheron) via `forceRid` — on court-circuite le tirage pondéré
   // et on l'impose, à condition qu'il ne soit ni banni ni déjà résident/visiteur
   // (on ignore volontairement lastRid ici, la garantie prime).
   let who = null;
   if (forceRid != null && !banned.has(forceRid)) who = C.VISITOR_ROSTER.find(v => v.rid === forceRid) || null;
+  if (who && !gateOk(who)) who = null;   // zip 376 : même une garantie ne fait pas venir Carla trop tôt
   if (!who) {
     if (!pool.length) return null;
     // Zip 234 (friendship): weighted pick — the better the friendship, the more
@@ -3365,6 +3385,14 @@ export function spawnVisitor(station, rnd, stockCtx, forceRid) {
     who = pool[wi];
   }
   station.lastRid = who.rid;
+  // Zip 376 : Carla ne vient ni braquer la ferme, ni acheter des carottes, ni
+  // s'installer. Tant que la boutique de vêtements n'existe pas, sa visite est
+  // une visite de CONVERSATION et rien d'autre (répliques dédiées :
+  // carlaChatLines). On sort avant tout le tirage de disposition : hostile,
+  // riche, "stay", troc et achat sont tous hors personnage pour elle.
+  if (who.chatOnly) {
+    return finishVisitor(who, "nice", { type: "chat" }, station, r);
+  }
   let hostile = C.VISITOR_HOSTILE_CHANCE * (who.edgy ? 2 : 1);
   hostile = hostile / Math.pow(2, (station.residents || []).length);
   let disp, offer;
@@ -3378,7 +3406,11 @@ export function spawnVisitor(station, rnd, stockCtx, forceRid) {
     const n = 10 + Math.floor(r() * 11);
     offer = classifyBuyOffer({ type: "buy", crop, n, price: C.CROPS[crop].sell * 3, bonus: 300 + Math.floor(r() * 501) }, stockCtx, r, rel);
     if (offer.easy) offer.price = Math.max(offer.price, C.CROPS[offer.crop].sell * 2); // rich patrons still overpay
-  } else if (rel >= C.REL_RESIDENT_MIN && r() < 0.3) {
+  } else if (rel >= C.REL_RESIDENT_MIN && r() < 0.3 && !who.noStay) {
+    // Zip 376 : `noStay` — un personnage qui a sa vie ailleurs ne demandera
+    // jamais à emménager, si haute que soit l'amitié. (Pour Carla, `chatOnly`
+    // est déjà sorti plus haut ; le drapeau reste utile seul, pour un futur
+    // personnage qui ferait de vraies offres sans jamais s'installer.)
     // Zip 234 tweak: asking to STAY used to be the ONLY offer once rel hit
     // REL_RESIDENT_MIN, which crowded out the improved friend offers (better
     // prices/gifts). Now it's an occasional request; most friend visits are
@@ -3399,6 +3431,15 @@ export function spawnVisitor(station, rnd, stockCtx, forceRid) {
     const n = 3 + Math.floor(r() * 8);
     offer = classifyBuyOffer({ type: "buy", crop, n, price: 0 }, stockCtx, r, rel);
   }
+  return finishVisitor(who, disp, offer, station, r);
+}
+
+// Zip 376 : la fabrication de l'objet visiteur (position de descente du train,
+// vitesse de marche, phase, cadeau d'arrivée) était la queue de spawnVisitor.
+// Elle en est extraite telle quelle — aucun changement de comportement — pour
+// que le raccourci `chatOnly` puisse la réutiliser au lieu de la dupliquer.
+function finishVisitor(who, disp, offer, station, r) {
+  const rel = (station.rel && station.rel[who.rid]) || 0;
   const nv = {
     rid: who.rid, disp, offer,
     x: C.STATION_PLATFORM.x + 1, y: C.STATION.y + C.STATION.h + 1.5,

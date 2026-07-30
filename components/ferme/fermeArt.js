@@ -824,7 +824,12 @@ export function buildSprites() {
   // plus bas est déjà courte, on lui applique juste la couleur MARTIAL_HAIR.
   const MARTIAL_SKIN = "#8a5a34", MARTIAL_SKIN_D = "#6e4527", MARTIAL_HAIR = "#181818";
 
-  function drawCharFrame(g, ox, gender, outfit, dir, frame, overalls, cap, beeSuit, plaid, cheeseHat, sugarWorker) {
+  // Zip 376 : `look` (CHAÎNE) au lieu d'un énième booléen. beeSuit/plaid/
+  // cheeseHat/sugarWorker sont conservés tels quels (ils sont lus partout),
+  // mais tout nouveau personnage passe désormais par ce paramètre unique :
+  // la signature ne s'allonge plus d'un cran par tenue. Valeurs actuelles :
+  // "carla" (béret rouge, manteau jaune, top noir) et "leo" (son assistant).
+  function drawCharFrame(g, ox, gender, outfit, dir, frame, overalls, cap, beeSuit, plaid, cheeseHat, sugarWorker, look) {
     const o = C.OUTFITS[outfit % C.OUTFITS.length];
     const hair = sugarWorker ? MARTIAL_HAIR : HAIR_COLORS[outfit % HAIR_COLORS.length];
     const skin = sugarWorker ? MARTIAL_SKIN : SKIN;
@@ -1055,6 +1060,155 @@ export function buildSprites() {
         P(g, x + 3, 15 + bob, 2, 1, skin); P(g, x + 11, 15 + bob, 2, 1, skin);
       }
     }
+    // ---- Zip 376 : Carla Garfield (demande Guillaume : "élégante, béret
+    // rouge, manteau jaune, top noir"). Overlay complet par-dessus le skin de
+    // base féminin, même principe que la combinaison d'apiculteur : on
+    // reprend EXACTEMENT les coordonnées des blocs de base (jupe, pieds,
+    // torse, bras) pour ne rien laisser dépasser, plutôt que de redessiner
+    // un personnage à part. Un seul détail est REMIS après coup : ses
+    // cheveux longs, que le manteau vient de recouvrir aux épaules.
+    if (look === "carla" && !beeSuit) {
+      const COAT = "#e6b32b", COAT_D = shade(COAT), COAT_L = tint(COAT);
+      const BLK = "#17171c", BLK_L = "#2e2e38";
+      // La jupe est un cran PLUS CLAIRE que les bottines : en tout noir, du
+      // genou aux pieds, la silhouette se refermait en un bloc unique et la
+      // démarche devenait illisible.
+      const SKIRT = "#22222c", SKIRT_D = "#191921";
+      const RED = "#b4232c", RED_D = shade(RED), RED_L = tint(RED);
+      // Jupe droite (recouvre la jupe o.shirt du bloc féminin).
+      P(g, x + 4, 14 + bob, 8, 7, SKIRT);
+      P(g, x + 3, 17 + bob, 10, 4, SKIRT);
+      P(g, x + 3, 20 + bob, 10, 1, SKIRT_D);
+      // Bottines : coordonnées exactes des pieds du bloc féminin (step/bob
+      // compris, sinon la démarche se désynchronise d'une frame sur deux).
+      P(g, x + 5 + (step > 0 ? 1 : 0), 21 + bob, 2, 3 - bob, "#0e0e12");
+      P(g, x + 9 - (step < 0 ? 1 : 0), 21 + bob, 2, 3 - bob, "#0e0e12");
+      // Manteau jaune long : épaules -> hanches, ourlet marqué sur la jupe.
+      P(g, x + 4, 10 + bob, 8, 8, COAT);
+      P(g, x + 4, 10 + bob, 8, 1, COAT_L);
+      P(g, x + 4, 17 + bob, 8, 1, COAT_D);
+      // Manches.
+      if (dir === 2) {
+        P(g, x + 7 + step, 11 + bob, 2, 5, COAT);
+        P(g, x + 7 + step, 15 + bob, 2, 1, skin);
+      } else {
+        P(g, x + 3, 11 + bob, 2, 5, COAT); P(g, x + 11, 11 + bob, 2, 5, COAT_D);
+        P(g, x + 3, 15 + bob, 2, 1, skin); P(g, x + 11, 15 + bob, 2, 1, skin);
+      }
+      // Top noir sous le manteau ouvert. De face : col en V entre deux
+      // revers. De profil : une simple bande sur le devant du buste. De dos :
+      // rien, le manteau est fermé par derrière.
+      // (Un premier jet posait en plus deux revers COAT_D de part et d'autre
+      // du col : avec les cheveux longs aux deux colonnes extérieures, la
+      // ligne d'épaules devenait une bande sombre continue et le manteau ne
+      // se lisait plus. Supprimés — le V noir seul suffit.)
+      if (dir === 0) {
+        P(g, x + 7, 10 + bob, 2, 4, BLK);
+        P(g, x + 7, 10 + bob, 2, 1, BLK_L);
+      } else if (dir === 2) {
+        P(g, x + 10, 11 + bob, 2, 3, BLK);
+      }
+      // Ceinture fine à la taille.
+      P(g, x + 4, 15 + bob, 8, 1, "#6e5210");
+      // Cheveux longs REPOSÉS par-dessus les épaules : la base les dessine
+      // après le torse, le manteau vient de les effacer aux colonnes des
+      // manches. Sans ces deux lignes, elle est tondue au niveau du col.
+      P(g, x + 3, 10 + bob, 2, 3, hair); P(g, x + 11, 10 + bob, 2, 3, hair);
+      // Béret rouge porté de biais (même géométrie que le béret d'Ingrid,
+      // seules la couleur et l'inclinaison du picot changent).
+      P(g, x + 3, 1 + bob, 9, 3, RED);
+      P(g, x + 3, 1 + bob, 9, 1, RED_L);
+      P(g, x + 3, 3 + bob, 9, 1, RED_D);
+      if (dir !== 1) P(g, x + 11, 0 + bob, 2, 1, RED_D); // débord visible de face/profil
+      P(g, x + 7, 0 + bob, 1, 1, RED_D);                 // picot
+      // Bouche rouge, de face seulement (en profil la base ne pose qu'un pixel).
+      if (dir === 0) P(g, x + 6, 8 + bob, 4, 1, "#a8202c");
+    }
+    // ---- Zip 376 : Léo, l'assistant de Carla (choix Guillaume : "souffre-
+    // douleur chic"). Gilet gris trop grand, chemise blanche, nœud papillon
+    // de travers, cheveux en bataille, et une pile de cartons à chapeaux
+    // portée devant lui qui lui masque le bas de la figure — c'est elle qui
+    // dit sa fonction en un coup d'œil, à 16 pixels de haut. Overlay sur le
+    // skin masculin, mêmes coordonnées de base que Carla ci-dessus.
+    if (look === "leo" && !beeSuit) {
+      const SH = "#efe9dc", SH_D = shade(SH);
+      const VEST = "#6a6a76", VEST_D = shade(VEST);
+      const PANT = "#3a3542", PANT_D = shade(PANT);
+      const TIE = "#7e2030";
+      const BX1 = "#e3d8c0", BX1_D = shade(BX1), BX2 = "#c6d3dd", BX2_D = shade(BX2), RIB = "#b4232c";
+      // Pantalon sombre, souliers usés (coordonnées du bloc masculin).
+      P(g, x + 5, 15 + bob, 3, 6, PANT);
+      P(g, x + 8, 15 + bob, 3, 6, PANT_D);
+      P(g, x + 5 + step, 21 + bob, 3, 3 - bob, "#241c16");
+      P(g, x + 8 - step, 21 + bob, 3, 3 - bob, "#241c16");
+      // Chemise blanche.
+      P(g, x + 4, 10 + bob, 8, 6, SH);
+      P(g, x + 4, 10 + bob, 8, 1, tint(SH));
+      // Gilet gris trop grand : il bâille sur le devant et descend sous la
+      // taille (deux pans latéraux + un ourlet, la chemise reste visible au
+      // milieu).
+      P(g, x + 4, 11 + bob, 3, 6, VEST);
+      P(g, x + 9, 11 + bob, 3, 6, VEST_D);
+      P(g, x + 4, 16 + bob, 8, 1, VEST_D);
+      // Manches de chemise.
+      if (dir === 2) {
+        P(g, x + 7 + step, 11 + bob, 2, 5, SH);
+        P(g, x + 7 + step, 15 + bob, 2, 1, skin);
+      } else {
+        P(g, x + 3, 11 + bob, 2, 5, SH); P(g, x + 11, 11 + bob, 2, 5, SH_D);
+        P(g, x + 3, 15 + bob, 2, 1, skin); P(g, x + 11, 15 + bob, 2, 1, skin);
+      }
+      // Nœud papillon DE TRAVERS : une aile plus haute que l'autre. C'est un
+      // pixel de décalage, et c'est tout le personnage.
+      if (dir !== 1) {
+        P(g, x + 6, 10 + bob, 2, 1, TIE);
+        P(g, x + 9, 9 + bob, 2, 1, TIE);
+        P(g, x + 8, 10 + bob, 1, 1, shade(TIE));
+      }
+      // Cheveux en bataille : trois mèches qui dépassent du crâne.
+      P(g, x + 4, 0 + bob, 1, 1, hair); P(g, x + 8, 0 + bob, 1, 1, hair); P(g, x + 11, 0 + bob, 1, 1, hair);
+      // Pile de cartons à chapeaux, dessinée EN DERNIER : elle passe devant
+      // les bras et le buste, puisqu'il la serre contre lui.
+      //
+      // Deux règles tirées du rendu de contrôle, et elles comptent :
+      //  - les deux cartons doivent avoir des TEINTES franchement
+      //    différentes, sinon la pile se lit comme une planche unique ;
+      //  - le ruban ne doit PAS courir d'un carton à l'autre sur toute la
+      //    hauteur : à 16 px, une bande verticale partant du menton se lit
+      //    comme une cravate. Un ruban vertical sur le carton du haut, un
+      //    ruban horizontal sur celui du bas : la pile redevient une pile.
+      //
+      // Le carton du haut est PENCHÉ du côté gauche : il masque une moitié de
+      // la figure et laisse l'autre œil dehors — il a l'air d'en porter trop,
+      // ce qui est exactement le personnage.
+      if (dir === 1) {
+        // De dos : seuls les bords dépassent de part et d'autre du corps.
+        P(g, x + 2, 12 + bob, 2, 5, BX1); P(g, x + 12, 12 + bob, 2, 5, BX1_D);
+        P(g, x + 1, 6 + bob, 2, 6, BX2);
+      } else {
+        // Carton du bas : large, à hauteur de taille.
+        const bx = dir === 2 ? x + 5 : x + 2;
+        P(g, bx, 12 + bob, 12, 5, BX1);
+        P(g, bx, 12 + bob, 12, 1, tint(BX1));
+        P(g, bx, 16 + bob, 12, 1, BX1_D);
+        P(g, bx, 14 + bob, 12, 1, RIB);          // ruban horizontal
+        // Carton du haut : plus petit, penché sur le côté (vers l'avant en
+        // profil, vers la gauche de face).
+        // Largeur 6 et non 7, et débordant d'une colonne HORS du corps : le
+        // rendu de contrôle montrait qu'un carton plus large lui mangeait les
+        // deux yeux. Là il n'en masque qu'un — l'autre, et l'aile droite du
+        // nœud papillon, restent dehors.
+        const tx = dir === 2 ? x + 9 : x + 1;
+        const ty = dir === 2 ? 7 : 6;
+        P(g, tx, ty + bob, 6, 6, BX2);
+        P(g, tx, ty + bob, 6, 1, tint(BX2));
+        P(g, tx, ty + 5 + bob, 6, 1, BX2_D);
+        P(g, tx + 3, ty + bob, 1, 6, RIB);       // ruban vertical
+        // Doigts crispés sous la pile.
+        P(g, bx, 17 + bob, 1, 1, skin);
+        P(g, bx + 11, 17 + bob, 1, 1, skin);
+      }
+    }
   }
   function shade(hex) { return adjust(hex, -30); }
   function tint(hex) { return adjust(hex, 30); }
@@ -1065,12 +1219,12 @@ export function buildSprites() {
     const b = Math.max(0, Math.min(255, (n & 255) + d));
     return `rgb(${r},${gg},${b})`;
   }
-  function charSheet(gender, outfit, overalls, cap, beeSuit, plaid, cheeseHat, sugarWorker) {
+  function charSheet(gender, outfit, overalls, cap, beeSuit, plaid, cheeseHat, sugarWorker, look) {
     const [c, g] = cv(16 * 4, 24 * 3);
     for (let dir = 0; dir < 3; dir++)
       for (let f = 0; f < 4; f++) {
         g.save(); g.translate(0, dir * 24);
-        drawCharFrame(g, f * 16, gender, outfit, dir, f, overalls, cap, beeSuit, plaid, cheeseHat, sugarWorker);
+        drawCharFrame(g, f * 16, gender, outfit, dir, f, overalls, cap, beeSuit, plaid, cheeseHat, sugarWorker, look);
         g.restore();
       }
     return c;
@@ -2656,9 +2810,9 @@ house: house(),
   // FermeGame.js aligne sur le monde ; `flameX/flameY` = position LOCALE du
   // brûleur (même repère) pour percer le voile de nuit au bon endroit.
   S.balloon = balloonSprite();
-  S.getChar = (gender, outfit, overalls, cap, beeSuit, plaid, cheeseHat, sugarWorker) => {
-    const key = gender + ":" + outfit + (overalls ? ":overalls" : "") + (cap ? ":cap" : "") + (beeSuit ? ":beeSuit" : "") + (plaid ? ":plaid" : "") + (cheeseHat ? ":cheeseHat" : "") + (sugarWorker ? ":sugarWorker" : "");
-    if (!S.chars[key]) S.chars[key] = charSheet(gender, outfit, !!overalls, !!cap, !!beeSuit, !!plaid, !!cheeseHat, !!sugarWorker);
+  S.getChar = (gender, outfit, overalls, cap, beeSuit, plaid, cheeseHat, sugarWorker, look) => {
+    const key = gender + ":" + outfit + (overalls ? ":overalls" : "") + (cap ? ":cap" : "") + (beeSuit ? ":beeSuit" : "") + (plaid ? ":plaid" : "") + (cheeseHat ? ":cheeseHat" : "") + (sugarWorker ? ":sugarWorker" : "") + (look ? ":" + look : "");
+    if (!S.chars[key]) S.chars[key] = charSheet(gender, outfit, !!overalls, !!cap, !!beeSuit, !!plaid, !!cheeseHat, !!sugarWorker, look || null);
     return S.chars[key];
   };
   return S;

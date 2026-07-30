@@ -330,6 +330,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const sessionStartRef = useRef(Date.now());          // zip 298: début de la session de jeu (continu) — base du minuteur de garantie artisans
   const pitySeenRef = useRef({});                       // zip 298: artisans à skill déjà VUS cette session (rid -> true) — désamorce la garantie
   const ducksRef = useRef(null);                       // decorative ducks (client-side, seeded)
+  const leoTrailRef = useRef(null);                    // zip 376 : traîne des positions de Carla, d'où est DÉRIVÉE celle de Leo (voir leoFollow)
   const rabbitSeedDoneRef = useRef(false);             // zip 366 : peuplement initial des lapins tiré de la graine, une fois par session (même principe que ducksRef)
   const adsOpenRef = useRef(false);
   const visitorOpenRef = useRef(false);
@@ -2648,6 +2649,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const cover = sharedRef.current.station && sharedRef.current.station.covers && sharedRef.current.station.covers[ro.rid];
     return cover ? { ...ro, name: cover } : ro;
   }
+  // Zip 376 : pool de répliques de conversation d'un visiteur. Carla Garfield
+  // a le sien (carlaChatLines) — elle ne dira jamais « ça sent bon la terre
+  // fraîche ». MÊME FORME que le pool générique (3 paliers x
+  // C.VISITOR_CHAT_LINES lignes) : resolveVisitorChat tire tier/li sans
+  // savoir de qui il s'agit, un pool plus court afficherait `undefined`.
+  function chatLinesFor(rid) {
+    return rid === C.CARLA_RID ? L.carlaChatLines : L.visitorChatLines;
+  }
   function cropLabel(id) { const cr = C.CROPS[id] || C.CROPS[0]; return lang === "en" ? cr.nameEn : cr.name; }
   // Zip 280 : glyphe simple (emoji) représentant la découpe choisie, faute
   // de sprite dédié — utilisé à la fois dans le panneau de vente et l'aperçu
@@ -2983,7 +2992,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // broadcast). The global chat gets the actual spoken line too.
       const r = E.resolveVisitorChat(s, req.rid, Math.random);
       if (r.ok) {
-        const line = (L.visitorChatLines[r.tier] || L.visitorChatLines[0])[r.li] || "";
+        const line = (chatLinesFor(v.rid)[r.tier] || chatLinesFor(v.rid)[0])[r.li] || "";
         stationChat(L.visitorChatSaid(rosterOf(v.rid).name, line), "\u{1F4AC}");
         if (r.gained) stationChat(L.visitorChatDone(rosterOf(v.rid).name), "\u{1F49B}");
         broadcastStation();
@@ -4874,6 +4883,58 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   //    position reçue — fluide mais toujours LÉGÈREMENT EN RETRAIT du réel
   //    (jamais en avance), donc les loups restent faciles à éviter et aucune
   //    bête ne semble traverser un obstacle (contrainte Guillaume).
+  // ---- Zip 376 : Leo, l'assistant de Carla Garfield ----
+  // Leo N'EST PAS UNE ENTITÉ. Il n'a ni position simulée, ni paquet réseau,
+  // ni entrée dans le roster : chaque client garde une TRAÎNE des positions
+  // récentes de Carla (avec la longueur de chemin cumulée) et pose Leo au
+  // point situé C.LEO_FOLLOW_DIST tuiles en arrière SUR CE CHEMIN. C'est
+  // exactement le principe des loups du défi de fuite, posés sur la piste à
+  // partir d'un seul nombre : « si une position peut être dérivée, elle n'a
+  // pas besoin d'être calculée ».
+  //
+  // Deux propriétés viennent gratuitement avec ce choix, et ce sont les deux
+  // qui auraient coûté du code autrement : il ne peut pas traverser un mur
+  // (il rejoue un chemin déjà validé par la collision de Carla) et il ne
+  // peut pas se perdre. Coût réseau : zéro message, chez l'hôte comme chez
+  // l'invité, qui dérivent chacun la traîne de la position qu'ils affichent.
+  //
+  // La traîne est vidée sur un saut > C.LEO_TELEPORT_TILES : descente du
+  // train, changement de zone, resynchronisation d'un invité. Sans ça, Leo
+  // traverserait la carte en ligne droite pour rejoindre son retard.
+  function leoFollow(cx, cy, moving) {
+    let pts = leoTrailRef.current;
+    if (!pts) pts = leoTrailRef.current = [];
+    const last = pts.length ? pts[pts.length - 1] : null;
+    if (!last) { pts.push({ x: cx, y: cy, d: 0 }); return { x: cx, y: cy, dir: 0, moving: false }; }
+    const step = Math.hypot(cx - last.x, cy - last.y);
+    if (step > C.LEO_TELEPORT_TILES) {
+      pts.length = 0; pts.push({ x: cx, y: cy, d: 0 });
+      return { x: cx, y: cy, dir: 0, moving: false };
+    }
+    if (step >= C.LEO_TRAIL_MIN_STEP) {
+      pts.push({ x: cx, y: cy, d: last.d + step });
+      while (pts.length > C.LEO_TRAIL_MAX) pts.shift();
+    }
+    const head = pts[pts.length - 1];
+    const target = head.d - C.LEO_FOLLOW_DIST;
+    // Traîne encore trop courte (elle vient d'apparaître ou de repartir) :
+    // Leo est au plus vieux point connu, il n'y a rien de mieux à dire.
+    let a = pts[0], b = pts[0];
+    if (pts[0].d <= target) {
+      let i = pts.length - 1;
+      while (i > 0 && pts[i - 1].d > target) i--;
+      a = pts[i - 1] || pts[0]; b = pts[i];
+    }
+    const seg = b.d - a.d;
+    const t = seg > 0 ? Math.max(0, Math.min(1, (target - a.d) / seg)) : 0;
+    const lx = a.x + (b.x - a.x) * t, ly = a.y + (b.y - a.y) * t;
+    // Orientation : celle du segment qu'il est en train de parcourir, pas
+    // celle de Carla — sinon il regarde à droite en marchant vers le bas.
+    const dx = head.x - lx, dy = head.y - ly;
+    let dir = 0;
+    if (Math.abs(dx) > 0.02 || Math.abs(dy) > 0.02) dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 3 : 2) : (dy > 0 ? 0 : 1);
+    return { x: lx, y: ly, dir, moving: !!moving };
+  }
   function smoothNpc(key, sx, sy, dt, glide, moving, collide) {
     const M = npcSmoothRef.current, tnow = performance.now();
     let st = M.get(key);
@@ -9303,8 +9364,35 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           // horseWhiteRun) + la pose assise (buste + jambe fléchie) au bon
           // ancrage. Plus de dessin manuel « cheval collé derrière ».
           const onWhiteHorse = ro.skill === "voyager";
+          // Zip 376 : Carla Garfield ne se déplace jamais seule. Leo est posé
+          // sur SA traîne, C.LEO_FOLLOW_DIST tuiles en arrière (voir
+          // leoFollow) — donc dans une file d'attente il est derrière elle,
+          // dans un virage il coupe comme elle, et il ne coûte pas un
+          // message. Il est poussé dans `draws` avec SA propre profondeur :
+          // il passe devant ou derrière elle selon qui est le plus au sud,
+          // comme n'importe quel autre personnage de la scène.
+          if (vv.rid === C.CARLA_RID) {
+            const lp = leoFollow(vx, vy, !!vv.moving);
+            // animT décalé : sans ça, les deux marchent au pas cadencé, ce
+            // qui est le contraire de l'effet voulu (elle avance, il suit
+            // comme il peut).
+            const lAnimT = (vv.animT || 0) + 1.7;
+            draws.push({ y: (lp.y + 1) * T, fn: () => {
+              drawCharacter({ id: "leo", name: L.leoName, x: lp.x, y: lp.y, dir: lp.dir, moving: lp.moving, animT: lAnimT, gender: "m", outfit: 0, overalls: false, cap: false, look: "leo" }, false);
+            } });
+            // Rembarrage : bulle purement cosmétique, aucune requête, aucun
+            // message. L'indice est DÉRIVÉ de l'horloge découpée en tranches
+            // de C.CARLA_SCOLD_MS : les deux joueurs voient la même phrase au
+            // même moment sans que rien ne circule (le décalage d'horloge
+            // entre clients est négligeable devant une tranche de 26 s).
+            const scoldT = Date.now();
+            if (vv.phase !== "leave" && (scoldT % C.CARLA_SCOLD_MS) < C.CARLA_SCOLD_SHOW_MS) {
+              const sl = (L.carlaScoldLines || [])[Math.floor(scoldT / C.CARLA_SCOLD_MS) % C.CARLA_SCOLD_LINES];
+              if (sl) queueBubble(Math.round(vx * T) + 8, Math.round(vy * T) - 18, sl, false);
+            }
+          }
           draws.push({ y: (vy + 1) * T, fn: () => {
-            drawCharacter({ id: "visitor" + vv.rid, name: ro.name, x: vx, y: vy, dir: vv.dir || 0, moving: !!vv.moving, animT: vv.animT || 0, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap, plaid: ro.skill === "lumberjack", sugarWorker: ro.skill === "sugarworker", mount: onWhiteHorse ? "white" : null }, false);
+            drawCharacter({ id: "visitor" + vv.rid, name: ro.name, x: vx, y: vy, dir: vv.dir || 0, moving: !!vv.moving, animT: vv.animT || 0, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap, plaid: ro.skill === "lumberjack", sugarWorker: ro.skill === "sugarworker", look: ro.look, mount: onWhiteHorse ? "white" : null }, false);
             // Chantier "bagarre = vrai événement, en public" : même bulle de
             // réaction de foule que les résidents (voir plus bas dans la
             // boucle des résidents) — un visiteur peut lui aussi accourir et
@@ -9365,7 +9453,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           // Zip 273 : idem — Eduardo reste monté même dans ce rendu "idle"
           // (résident sans position simulée, planté près de sa maison).
           const onWhiteHorseIdle = ro.skill === "voyager";
-          draws.push({ y: (ryp + 1) * T, fn: () => drawCharacter({ id: "res" + ro.rid, name: ro.name, x: rxp, y: ryp, dir: 0, moving: false, animT: 0, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap, beeSuit: residentBeeSuit(residents[ri], ro), plaid: ro.skill === "lumberjack", cheeseHat: ro.skill === "cheesemaker", sugarWorker: ro.skill === "sugarworker", mount: onWhiteHorseIdle ? "white" : null }, false) });
+          draws.push({ y: (ryp + 1) * T, fn: () => drawCharacter({ id: "res" + ro.rid, name: ro.name, x: rxp, y: ryp, dir: 0, moving: false, animT: 0, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap, beeSuit: residentBeeSuit(residents[ri], ro), plaid: ro.skill === "lumberjack", cheeseHat: ro.skill === "cheesemaker", sugarWorker: ro.skill === "sugarworker", look: ro.look, mount: onWhiteHorseIdle ? "white" : null }, false) });
         }
       }
       // Greg, l'employé de champs (chantier 2026-07) : réutilise le rendu
@@ -9615,7 +9703,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           })();
           draws.push({ y: (ry + 1) * T, fn: () => {
             if (resSuperActive) drawCoffeeAura(Math.round(rx * T), Math.round(ry * T));
-            drawCharacter({ id: "res" + res.rid, name: ro.name, x: rx, y: ry, dir: turnAwayDir != null ? turnAwayDir : resDir, moving: resMoving, animT: resAnimT, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap, beeSuit: residentBeeSuit(res, ro), plaid: ro.skill === "lumberjack", cheeseHat: ro.skill === "cheesemaker", sugarWorker: ro.skill === "sugarworker", mount: onWhiteHorse ? "white" : null, injuredUntil: res.injuredUntil }, false);
+            drawCharacter({ id: "res" + res.rid, name: ro.name, x: rx, y: ry, dir: turnAwayDir != null ? turnAwayDir : resDir, moving: resMoving, animT: resAnimT, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap, beeSuit: residentBeeSuit(res, ro), plaid: ro.skill === "lumberjack", cheeseHat: ro.skill === "cheesemaker", sugarWorker: ro.skill === "sugarworker", look: ro.look, mount: onWhiteHorse ? "white" : null, injuredUntil: res.injuredUntil }, false);
             if (ro.skill === "breadmaker" && (inScene || (performance.now() % 12000 < 3000)) && turnAwayDir == null && resDir === 0) drawFrown(ctx, Math.round(rx * T) + 8, Math.round(ry * T) - 3);
             // Chantier fumigateur (demande Guillaume) : René tient un petit
             // fumigateur pendant sa phase de travail (même condition que la
@@ -11254,7 +11342,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     function drawCharacter(p, isSelf) {
       const sprites = spritesRef.current;
-      const sheet = sprites.getChar(p.gender, p.outfit, p.overalls, p.cap, p.beeSuit, p.plaid, p.cheeseHat, p.sugarWorker);
+      const sheet = sprites.getChar(p.gender, p.outfit, p.overalls, p.cap, p.beeSuit, p.plaid, p.cheeseHat, p.sugarWorker, p.look);
       const row = p.dir === 0 ? 0 : p.dir === 1 ? 1 : 2;
       const frame = p.moving ? Math.floor((p.animT || 0) % 4) : 0;
       // Zip 264 (demande Guillaume) : Eduardo Da Fonseca chevauche EXACTEMENT
@@ -12736,7 +12824,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               const beehiveBuilt = isBeekeeper && (sharedRef.current.crafts || {}).beehive && sharedRef.current.crafts.beehive.built;
               return (
                 <div className="ferme-shop-row" key={"emp-res-" + res.rid}>
-                  <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, isBeekeeper && res.beePhase === "working", ro.skill === "lumberjack", ro.skill === "cheesemaker", ro.skill === "sugarworker") : null} sx={16} sy={24} w={24} h={36} />
+                  <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, isBeekeeper && res.beePhase === "working", ro.skill === "lumberjack", ro.skill === "cheesemaker", ro.skill === "sugarworker", ro.look) : null} sx={16} sy={24} w={24} h={36} />
                   <div className="info">
                     <b>{ro.name} {bakerAlert ? "⚠️" : ""}{isBeekeeper && Date.now() < (res.superUntil || 0) ? "☕⚡" : ""}{isLumberjack && Date.now() < (res.superUntil || 0) ? "☕🪓⚡" : ""}</b>
                     <span className="ferme-usage" style={bakerAlert ? { color: "#c0392b", fontWeight: 700 } : undefined}>
@@ -12828,7 +12916,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   const away = res.trip && res.trip.phase === "away";
                   return (
                     <div className="ferme-shop-row" key={"kick-" + res.rid}>
-                      <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, false, ro.skill === "lumberjack", ro.skill === "cheesemaker", ro.skill === "sugarworker") : null} sx={16} sy={24} w={24} h={36} />
+                      <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, false, ro.skill === "lumberjack", ro.skill === "cheesemaker", ro.skill === "sugarworker", ro.look) : null} sx={16} sy={24} w={24} h={36} />
                       <div className="info">
                         <b>{ro.name}</b>
                         <span className="ferme-usage">{away ? L.voyagerStatusAway(fmtDuration(res.trip.returnAt - Date.now())) : L.residentTag(ro.job)}</span>
@@ -12865,7 +12953,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                     const ro = rosterOf(res.rid); if (!ro) return null;
                     return (
                       <div className="ferme-shop-row" key={"pilot-" + res.rid}>
-                        <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, false, ro.skill === "lumberjack", ro.skill === "cheesemaker", ro.skill === "sugarworker") : null} sx={16} sy={24} w={24} h={36} />
+                        <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, false, ro.skill === "lumberjack", ro.skill === "cheesemaker", ro.skill === "sugarworker", ro.look) : null} sx={16} sy={24} w={24} h={36} />
                         <div className="info"><b>{ro.name}</b><span className="ferme-usage">{L.residentTag(ro.job)}</span></div>
                         <button onClick={() => sendReq({ kind: "assignBalloonPilot", rid: res.rid })}>{L.balloonAssignBtn}</button>
                       </div>
@@ -12882,7 +12970,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                         const ro = rosterOf(res.rid); if (!ro) return null;
                         return (
                           <div className="ferme-shop-row" key={"ticket-" + res.rid}>
-                            <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, false, ro.skill === "lumberjack", ro.skill === "cheesemaker", ro.skill === "sugarworker") : null} sx={16} sy={24} w={24} h={36} />
+                            <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, false, ro.skill === "lumberjack", ro.skill === "cheesemaker", ro.skill === "sugarworker", ro.look) : null} sx={16} sy={24} w={24} h={36} />
                             <div className="info"><b>{ro.name}</b></div>
                             <button onClick={() => sendReq({ kind: "buyBalloonTicket", rid: res.rid })}>{L.balloonBuyForResidentBtn(ro.name, C.BALLOON_TICKET_PRICE)}</button>
                           </div>
@@ -13566,7 +13654,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               <button className="ferme-close-x" onClick={() => setResidentCard(null)}>✕</button>
               <h2>{ro.name}</h2>
               <div className="ferme-shop-row">
-                <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, isBeekeeper && res && res.beePhase === "working", ro.skill === "lumberjack", ro.skill === "cheesemaker", ro.skill === "sugarworker") : null} sx={16} sy={24} w={40} h={60} />
+                <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, isBeekeeper && res && res.beePhase === "working", ro.skill === "lumberjack", ro.skill === "cheesemaker", ro.skill === "sugarworker", ro.look) : null} sx={16} sy={24} w={40} h={60} />
                 <div className="info"><b>{ro.skill ? L.skillPitch(ro.skill, ro.name) : L.residentGreet(ro.name, ro.job)}</b><span>{need}</span></div>
               </div>
               <div className="ferme-shop-row">
@@ -13990,7 +14078,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             {(v.chatLog && v.chatLog.length > 0) && (
               <div style={{ maxHeight: 96, overflowY: "auto", margin: "6px 0", display: "flex", flexDirection: "column", gap: 4 }}>
                 {v.chatLog.map((cl, ci) => (
-                  <div key={ci} className="ferme-vbubble">{(L.visitorChatLines[cl.tier] || L.visitorChatLines[0])[cl.li]}</div>
+                  <div key={ci} className="ferme-vbubble">{(chatLinesFor(v.rid)[cl.tier] || chatLinesFor(v.rid)[0])[cl.li]}</div>
                 ))}
               </div>
             )}
@@ -14002,7 +14090,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             <div className="panel ferme-modal-panel" onClick={e => e.stopPropagation()} style={{ width: "min(440px, 94vw)", ...paper }}>
               <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                 <div style={{ background: "#e8dfc4", border: "2px solid #6b4a2e", borderRadius: 6, padding: "4px 6px 0" }}>
-                  <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, false, ro.skill === "lumberjack", ro.skill === "cheesemaker", ro.skill === "sugarworker") : null} sx={16} sy={24} w={32} h={48} />
+                  <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, false, ro.skill === "lumberjack", ro.skill === "cheesemaker", ro.skill === "sugarworker", ro.look) : null} sx={16} sy={24} w={32} h={48} />
                 </div>
                 <div>
                   <h3 style={{ margin: 0, color: "#1d1d1d" }}>{L.visitorPanelTitle(ro.name)}</h3>
@@ -14011,6 +14099,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                     <span style={{ fontSize: 11, opacity: .7, marginLeft: 6 }}>{L.visitorRelation(rel)}</span>
                   </div>
                   {v.disp === "hostile" && <div style={{ fontSize: 12, color: "#a33a1f", fontWeight: 700 }}>{L.visitorUrgent}</div>}
+                  {/* Zip 376 : Carla ne se présente jamais seule. Leo n'a pas
+                      de fiche à lui (ce n'est pas une entité), mais il a sa
+                      place sur la sienne — sinon le joueur voit un second
+                      personnage sur la carte sans savoir qui c'est. */}
+                  {ro.look === "carla" && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 2, fontSize: 11, opacity: .8 }}>
+                      <Sprite img={spritesReady ? spritesRef.current.getChar("m", 0, false, false, false, false, false, false, "leo") : null} sx={16} sy={24} w={16} h={24} />
+                      <span>{L.carlaAssistant}</span>
+                    </div>
+                  )}
                 </div>
               </div>
               {/* Zip 252 : visiteur à skill non encore résident -> proposer d'emménager. */}
@@ -14174,7 +14272,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                     onClick={() => setDismissedNotifs(prev => { const next = new Set(prev); next.add(vv.rid); return next; })}
                     style={{ position: "absolute", top: 2, right: 4, border: "none", background: "transparent", color: "#6b4a2e", fontSize: 14, lineHeight: 1, cursor: "pointer", padding: 2 }}
                   >×</button>
-                  <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, false, ro.skill === "lumberjack", ro.skill === "cheesemaker", ro.skill === "sugarworker") : null} sx={16} sy={24} w={24} h={36} />
+                  <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, false, ro.skill === "lumberjack", ro.skill === "cheesemaker", ro.skill === "sugarworker", ro.look) : null} sx={16} sy={24} w={24} h={36} />
                   <div style={{ fontSize: 12, lineHeight: 1.35, paddingRight: 14 }}>
                     <b>{L.notifAsk(ro.name)}</b><br />
                     {o.type === "buy" && spritesReady && <span style={{ verticalAlign: "middle", marginRight: 4, display: "inline-block" }}><Sprite img={spritesRef.current.crops[o.crop][C.CROP_STAGES - 1]} w={18} h={18} /></span>}

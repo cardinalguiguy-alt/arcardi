@@ -1451,6 +1451,47 @@ export const RESIDENT_TASK_BY_THEME = {
 // which yields well over 25 unique combinations without any new art asset.
 // `edgy: true` doubles the hostile roll for that character; `rich: true`
 // makes them eligible for rich-patron visits (big-money purchases).
+// --- Zip 376 (chantier Carla Garfield) : la vendeuse de vêtements ---
+// Carla Garfield n'est PAS un visiteur comme les autres, même si elle se
+// présente comme tel pour l'instant. Trois particularités, toutes portées
+// par des drapeaux du roster plutôt que par du code spécial dispersé :
+//
+//   `minArtisans` : elle ne monte dans le train que si la ferme compte déjà
+//     au moins CARLA_MIN_ARTISANS résidents PORTEURS D'UN SKILL (voir
+//     countSkilledResidents/spawnVisitor dans fermeEngine.js). Elle a entendu
+//     parler d'une ferme qui tourne, pas d'un champ de patates.
+//   `noStay`     : elle ne demandera JAMAIS à emménager, quel que soit le
+//     niveau d'amitié (elle a une boutique et une vie ailleurs). Le second
+//     chemin vers la résidence (bouton "proposer d'emménager" de la fiche
+//     visiteur) est déjà fermé pour elle : il exige un `skill`, elle n'en a
+//     pas.
+//   `chatOnly`   : tant que la boutique de vêtements n'existe pas, elle ne
+//     demande ni légumes ni troc — uniquement des visites de conversation,
+//     avec ses propres répliques (carlaChatLines, fermeStrings.js).
+//
+// `look` remplace la série de booléens à usage unique (beeSuit, plaid,
+// cheeseHat, sugarWorker...) : une CHAÎNE, un seul paramètre de plus à
+// getChar, extensible sans rallonger la signature à chaque personnage.
+export const CARLA_RID = 30;
+export const CARLA_MIN_ARTISANS = 4;   // résidents à skill requis pour qu'elle daigne venir
+// Léo n'est PAS une entité : sa position est DÉRIVÉE de celle de Carla
+// (il marche dans ses pas avec ce retard, en unités de chemin parcouru, cf.
+// le principe des loups posés sur la piste du défi de fuite). Zéro message
+// réseau, aucune simulation, et il ne peut pas traverser un mur puisqu'il
+// rejoue un chemin déjà validé par la collision.
+export const LEO_FOLLOW_DIST = 1.3;    // tuiles de retard le long du chemin de Carla
+export const LEO_TRAIL_MAX = 64;       // échantillons de chemin gardés (~4 s à vitesse de marche)
+export const LEO_TRAIL_MIN_STEP = 0.05;// en deçà, on n'ajoute pas d'échantillon (Carla à l'arrêt)
+export const LEO_TELEPORT_TILES = 3;   // saut plus grand = téléportation -> on vide la traîne
+// Rembarrages de Carla à Léo : bulle purement cosmétique, jouée localement.
+// L'indice de réplique est dérivé de Date.now() découpé en tranches de
+// CARLA_SCOLD_MS : sans échanger un seul message, les deux joueurs voient la
+// même phrase au même moment (même astuce que les cadences dérivées du
+// jour de jeu, et pour la même raison : le quota).
+export const CARLA_SCOLD_MS = 26 * 1000;
+export const CARLA_SCOLD_SHOW_MS = 4200;
+export const CARLA_SCOLD_LINES = 4;    // fr/en symétriques (carlaScoldLines)
+
 export const VISITOR_ROSTER = [
   { rid: 0,  name: "Margot",   gender: "f", outfit: 3, overalls: false, cap: false, theme: "market",  job: "run a market stall" },
   // Zip 315 (chantier canne à sucre) : Theo devient Jérôme Martial, artisan
@@ -1509,6 +1550,12 @@ export const VISITOR_ROSTER = [
   // Zip 259 (demande Guillaume) : il apparaît DÉSORMAIS aussi souvent que les
   // autres (le flag `rare` a été retiré) — il faut pouvoir le recruter.
   { rid: 29, name: "Eduardo Da Fonseca", gender: "m", outfit: 5, overalls: false, cap: true, theme: "market", job: "sail the world and bring back rare goods", skill: "voyager" },
+  // Zip 376 (demande Guillaume) : Carla Garfield, vendeuse de vêtements.
+  // outfit 1 : seule la couleur de CHEVEUX en est tirée (noir corbeau), le
+  // reste du skin est entièrement repeint par `look: "carla"` (béret rouge,
+  // manteau jaune, top noir). `cap: false` impératif : la casquette verte
+  // générique se dessinerait par-dessus le béret.
+  { rid: 30, name: "Carla Garfield", gender: "f", outfit: 1, overalls: false, cap: false, theme: "style", job: "dress this valley properly", look: "carla", chatOnly: true, noStay: true, minArtisans: CARLA_MIN_ARTISANS },
 ];
 // Poids de spawn d'un visiteur "rare" (aucun personnage n'est marqué `rare`
 // depuis le zip 259, mais la mécanique reste dispo pour un futur usage).

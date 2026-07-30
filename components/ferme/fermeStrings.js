@@ -85,6 +85,44 @@ export const FERME_STR = {
         "Si vous passez un jour à Valley Town, ma porte vous est ouverte.",
       ],
     ],
+    // --- Zip 376 : Carla Garfield ---
+    // Ses répliques de conversation remplacent visitorChatLines pour elle
+    // seule (voir chatLinesFor dans FermeGame.js). MÊME FORME que le pool
+    // générique — 3 paliers d'amitié x VISITOR_CHAT_LINES lignes — parce que
+    // resolveVisitorChat tire l'indice sans savoir de qui il s'agit : changer
+    // la forme casserait le tirage. Progression voulue : elle juge, puis elle
+    // s'attendrit, puis elle laisse entendre qu'elle a une idée derrière la
+    // tête (la proposition viendra à son propre chantier).
+    carlaChatLines: [
+      [
+        "Ne le prenez pas mal, mais tout le monde ici s'habille comme un sac à patates.",
+        "J'ai vu votre ferme depuis le train. J'ai surtout vu ce que vous portez.",
+        "De la bonne terre, de belles bêtes, et pas un vêtement qui tienne debout. Quel gâchis.",
+        "Carla Garfield. Retenez ce nom, vous en aurez besoin un jour.",
+      ],
+      [
+        "Vous, au moins, vous m'écoutez. Ça vous changera de la coupe que vous avez là.",
+        "Je commence à comprendre cet endroit. Il lui manque peu de chose, en vérité.",
+        "Leo, note : la ferme a du potentiel. Non, pas sur ce carnet-là, l'autre !",
+        "Un jour, je vous montrerai ce qu'on peut faire d'une silhouette pareille.",
+      ],
+      [
+        "Je ne dis pas ça à tout le monde : vous, vous pourriez porter quelque chose de bien.",
+        "J'ai des collections que personne dans cette vallée n'a jamais vues.",
+        "Gardez vos pierres précieuses. Vous saurez bientôt quoi en faire.",
+        "Nous reparlerons de tout ça, vous et moi. Leo, on y va — les malles ne se portent pas seules.",
+      ],
+    ],
+    // Rembarrages lancés à Leo en pleine balade (bulle cosmétique, jouée
+    // localement, aucun message réseau — voir C.CARLA_SCOLD_MS).
+    carlaScoldLines: [
+      "Leo. Les cartons. DROITS.",
+      "Non, Leo, pas dans la boue.",
+      "Tu respires trop fort, Leo.",
+      "Plus vite, Leo, on n'a pas la journée.",
+    ],
+    carlaAssistant: "Accompagnée de Leo, son assistant.",
+    leoName: "Leo",
     visitorThanks: (n) => `${n} vous remercie et flâne encore un peu sur la place.`,
     visitorHomeChat: (n) => `${n} rentre à la gare, ravi(e) de sa visite.`,
     visitorArrivalGift: (n, g) => `🎁 ${n} est venu(e) avec un cadeau : ${g} !`,
@@ -1221,6 +1259,39 @@ export const FERME_STR = {
         "If you ever come by Valley Town, my door is open.",
       ],
     ],
+    // Zip 376 : Carla Garfield. Règle de traduction en vigueur depuis le zip
+    // 371 — on traduit dans l'ESPRIT. "Comme des sacs à patates" devient
+    // "like a sack of potatoes", qui existe tel quel en anglais et garde la
+    // même brutalité ; la réplique à Leo sur le carnet garde le contretemps,
+    // pas les mots.
+    carlaChatLines: [
+      [
+        "Don't take this the wrong way, but everyone here dresses like a sack of potatoes.",
+        "I saw your farm from the train. Mostly I saw what you're wearing.",
+        "Good soil, fine animals, and not one garment that holds together. What a waste.",
+        "Carla Garfield. Remember the name, you'll need it one day.",
+      ],
+      [
+        "You, at least, listen to me. Which is more than that haircut does.",
+        "I'm starting to understand this place. It needs very little, truth be told.",
+        "Leo, take a note: the farm has potential. No, not in THAT notebook, the other one!",
+        "One day I'll show you what can be done with a silhouette like yours.",
+      ],
+      [
+        "I don't say this to everyone: you could actually carry something good.",
+        "I have collections nobody in this valley has ever laid eyes on.",
+        "Keep your gemstones. You'll know what to do with them soon enough.",
+        "You and I will speak of this again. Leo, we're leaving — the trunks won't carry themselves.",
+      ],
+    ],
+    carlaScoldLines: [
+      "Leo. The boxes. STRAIGHT.",
+      "Not in the mud, Leo.",
+      "You're breathing too loudly, Leo.",
+      "Faster, Leo, we haven't got all day.",
+    ],
+    carlaAssistant: "Accompanied by Leo, her assistant.",
+    leoName: "Leo",
     visitorThanks: (n) => `${n} thanks you and strolls around the square a while longer.`,
     visitorHomeChat: (n) => `${n} heads back to the station, happy with the visit.`,
     visitorArrivalGift: (n, g) => `🎁 ${n} came bearing a gift: ${g}!`,
