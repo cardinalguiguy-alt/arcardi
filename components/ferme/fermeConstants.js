@@ -827,6 +827,91 @@ export const ANIMALS = [
 // echelle coherente pour le reste du cheptel. Indexe par `id` d'ANIMALS :
 // [poule, chevre, brebis, cochon, vache].
 export const ANIMAL_DRAW_SCALE = [1, 1.35, 1.25, 1.4, 1.7];
+
+// ==========================================================================
+// Zip 369 — REFONTE DU CHEPTEL (maquettes validées par Guillaume).
+//
+// 1) SPRITES NATIFS. Jusqu'ici un canevas unique de 16x14 était AGRANDI à
+//    l'écran par ANIMAL_DRAW_SCALE ci-dessus (jusqu'à x1,7 pour la vache) :
+//    au plus proche voisin, un pixel source devenait un bloc de 1 ou 2 px
+//    selon sa position, d'où l'aspect grossier et irrégulier. Chaque animal
+//    a désormais son propre canevas, à sa taille FINALE : plus aucun
+//    agrandissement au rendu, chaque pixel dessiné est un pixel écran.
+//    ANIMAL_DRAW_SCALE n'est plus appliqué au dessin ; il est conservé parce
+//    que les tailles ci-dessous en sont dérivées (16x14 x l'échelle, arrondi)
+//    et qu'il documente les rapports voulus au zip 254.
+//
+// 2) LES CANEVAS SONT PLUS GRANDS QUE LE DESSIN AU REPOS, volontairement.
+//    Alerte de Guillaume : "attention de ne pas couper le sprite à cause de
+//    l'animation qui pourrait nécessiter d'utiliser plus de largeur". Mesure
+//    faite sur les 4 frames de marche ET les cycles complets de broutage et
+//    de repos, contour compris : les cinq sprites étaient coupés. La tête qui
+//    broute avance vers l'avant en descendant (jusqu'à 2 px à droite), et la
+//    chèvre perdait le bout de ses cornes vers le haut. Les valeurs ci-dessous
+//    sont la boîte englobante réelle de tout le cycle, plus 1 px de garde de
+//    chaque côté.
+//
+// 3) ANCRAGE SUR LE CORPS, PAS SUR LA BOÎTE. Les marges sont ASYMÉTRIQUES (de
+//    la place à droite pour le mufle, pas à gauche), donc centrer la boîte
+//    comme avant décalerait tout le troupeau au sol. `cx` = colonne du centre
+//    du CORPS, `footY` = ligne de contact au sol : le rendu place cx sur le
+//    centre de la tuile et footY sur le sol (voir FermeGame.js). `cx` sert
+//    AUSSI d'axe au retournement vers la gauche : miroiter autour de la boîte
+//    ferait sauter la bête latéralement de 2 x (cx - w/2) à chaque demi-tour.
+//    `dx`/`dy` = translation appliquée une fois au contexte dans animalSprite,
+//    pour que le code de dessin garde son repère naturel.
+export const ANIMAL_SPRITE = [
+  { w: 19, h: 16, footY: 14, cx:  9, dx:  1, dy:  0, topY: 1 }, // poule
+  { w: 24, h: 23, footY: 21, cx: 12, dx: -1, dy:  2, topY: 1 }, // chèvre
+  { w: 23, h: 18, footY: 16, cx: 11, dx:  0, dy: -2, topY: 1 }, // brebis
+  { w: 25, h: 18, footY: 16, cx: 12, dx:  0, dy: -3, topY: 1 }, // cochon
+  { w: 30, h: 24, footY: 22, cx: 15, dx: -1, dy: -1, topY: 1 }, // vache
+];
+// Robes. Demande Guillaume : "aléatoire pour les animaux d'élevage, seulement
+// cosmétique" — d'où un champ `skin` TIRÉ AU HASARD À L'ACHAT côté hôte, puis
+// PERSISTÉ avec la bête (voir s.animals.push et normalizeAnimals). Tiré une
+// fois et conservé, et non retiré à chaque affichage : sinon la même vache
+// changerait de robe à chaque session, et surtout n'aurait pas la même robe
+// sur les deux écrans. Le champ voyage déjà, `animals` étant diffusé en bloc.
+// Références fournies par Guillaume : poule chamois à camail brun, holstein
+// noire et blanche, limousine crème unie.
+export const ANIMAL_SKINS = [
+  [ { id: "blanche",   body: "#f0e8d8", hack: "#e6d9c0", tail: "#f7f1e4", comb: "#d44a3f", foot: "#e8a83a" },
+    { id: "brune",     body: "#eecf94", hack: "#a8623a", tail: "#f2e3bf", comb: "#cf3a2c", foot: "#dd9a34" } ],
+  [ { id: "fauve",     body: "#d8cbb0", patch: "#7a6a52", muz: "#b5a68a", hoof: "#3a2f26", horn: "#cbbfa4", pat: 0 } ],
+  [ { id: "blanche",   body: "#f2f0ea", patch: "#8a7c68", muz: "#9a8c78", hoof: "#2e2620", horn: "#cbbfa4", pat: 0 } ],
+  [ { id: "rose",      body: "#e8a8b0", patch: "#c07882", muz: "#c07882", hoof: "#3a2f26", horn: "#cbbfa4", pat: 0 } ],
+  [ { id: "holstein",  body: "#f4f2ee", patch: "#2c2926", muz: "#d7a9a2", udder: "#e8a89f", hoof: "#2a2622", horn: "#d8cdb4", pat: 1 },
+    { id: "limousine", body: "#d3a065", patch: "#c08d52", muz: "#e6cdae", udder: "#dda898", hoof: "#6a563c", horn: "#e2d3b0", pat: 0 } ],
+];
+// Broutage / picorage (demande Guillaume : "il faut qu'elles broutent ou
+// picorent quand elles sont à l'arrêt — tête qui pique vers le bas et remonte
+// rapidement pour les poules, tête qui reste vers le bas pendant que l'animal
+// avance lentement ou reste immobile pour le gros bétail").
+//
+// Aucune incidence réseau : animalPos (fermeEngine.js) est déjà 100 % LOCAL et
+// dérive tout de l'horloge globale, avec un déphasage par animal — les bêtes
+// ne picorent donc pas en cœur, et les deux joueurs voient la même chose sans
+// qu'un seul message soit émis. Les frames 0 à 3 restent la marche ; 4 à 7
+// sont les poses de tête basse. `seq` est parcourue sur `cycleMs`.
+export const ANIMAL_FRAMES = 8;
+export const ANIMAL_GRAZE = [
+  { cycleMs: 1450, seq: [0, 4, 5, 4, 0, 0, 4, 5, 4, 0] }, // poule : deux coups de bec brefs par cycle
+  { cycleMs: 6200, seq: [4, 5, 6, 5, 6, 5, 6, 5, 7, 0] }, // chèvre : tête basse tenue, mâchoire
+  { cycleMs: 6200, seq: [4, 5, 6, 5, 6, 5, 6, 5, 7, 0] }, // brebis
+  { cycleMs: 5400, seq: [4, 5, 6, 5, 6, 5, 6, 5, 7, 0] }, // cochon : fouille un peu plus vite
+  { cycleMs: 6200, seq: [4, 5, 6, 5, 6, 5, 6, 5, 7, 0] }, // vache
+];
+// Descente de la tête par frame de broutage (frames 4,5,6,7), en pixels, et
+// frame où la mâchoire mastique. La poule pique franchement et brièvement ; le
+// gros bétail descend plus bas et y reste.
+export const ANIMAL_HEAD_DROP = [
+  { d: [1.4, 3.8, 3.8, 1.4], chew: -1 }, // poule
+  { d: [1.8, 4.4, 4.4, 2.6], chew:  6 }, // chèvre
+  { d: [1.8, 4.4, 4.4, 2.6], chew:  6 }, // brebis
+  { d: [1.8, 4.4, 4.4, 2.6], chew:  6 }, // cochon
+  { d: [1.8, 4.4, 4.4, 2.6], chew:  6 }, // vache
+];
 // --- Missions d'équipe : SUPPRIMÉES au zip 368 -----------------------------
 // Demande Guillaume : "supprimer l'animation de team mission qui flotte (le
 // chantier qui bounce). C'est pas intéressant" -> puis, en arbitrage :

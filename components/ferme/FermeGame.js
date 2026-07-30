@@ -2358,7 +2358,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           s.money -= C.ANIMALS[at].cost;
           const ax = C.PEN.x + 1 + Math.floor(Math.random() * (C.PEN.w - 2));
           const ay = C.PEN.y + 1 + Math.floor(Math.random() * (C.PEN.h - 2));
-          s.animals.push({ type: at, hx: ax, hy: ay, readyAt: Date.now(), carriedBy: null });
+          // Zip 369 : robe tirée au hasard à l'achat (demande Guillaume :
+          // "aléatoire pour les animaux d'élevage, seulement cosmétique"),
+          // côté HÔTE donc une seule fois, puis persistée et diffusée avec
+          // `animals` — un troupeau devient naturellement bicolore sans
+          // qu'aucun joueur ait à choisir.
+          const askins = (C.ANIMAL_SKINS[at] || [0]).length;
+          s.animals.push({ type: at, hx: ax, hy: ay, readyAt: Date.now(), carriedBy: null, skin: Math.floor(Math.random() * askins) });
           out.state = shareState(); out.animals = s.animals;
           out.chat = { from: "🐮", msg: L.chatAnimalBought(lang === "en" ? C.ANIMALS[at].nameEn : C.ANIMALS[at].name) };
         }
@@ -8785,19 +8791,41 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         // d'arrêt, oriente vers la droite par défaut).
         const apos = an.carriedBy ? { x: ax, y: ay, dir: 1, frame: 0 } : E.animalPos(an, epochNow);
         ax = apos.x; ay = apos.y;
-        // Zip 254 : echelle d'affichage par type (vache ~= cheval, chevre plus
-        // grande, etc. — voir C.ANIMAL_DRAW_SCALE). Purement visuel : le sprite
-        // natif fait 16x14, on l'agrandit en gardant l'ancrage bas-centre (les
-        // pieds restent au meme endroit) pour ne pas casser l'alignement au sol.
-        const asc = (C.ANIMAL_DRAW_SCALE && C.ANIMAL_DRAW_SCALE[an.type]) || 1;
-        const aw = 16 * asc, ah = 14 * asc;
-        const adx = ax * T + 8 - aw / 2;   // recentrage horizontal
-        const ady = ay * T + 14 - ah;      // ancrage bas conserve
+        // ZIP 369 — le sprite n'est plus AGRANDI, il est natif.
+        //
+        // Avant : un canevas unique de 16x14 étiré par C.ANIMAL_DRAW_SCALE
+        // (jusqu'a x1,7), au plus proche voisin — un pixel source devenait un
+        // bloc de 1 ou 2 px selon sa position. Chaque animal a maintenant son
+        // canevas a sa taille finale (C.ANIMAL_SPRITE), et il est dessine 1:1.
+        //
+        // ANCRAGE SUR LE CORPS, PAS SUR LA BOÎTE. Les canevas portent des
+        // marges ASYMÉTRIQUES : il faut de la place à droite pour la tête qui
+        // broute (elle avance en descendant) et au-dessus pour les cornes de la
+        // chèvre, pas à gauche. Centrer la boîte comme avant décalerait donc
+        // tout le troupeau. `cx` (centre du corps) et `footY` (ligne de contact
+        // au sol) portent l'ancrage : le sol reste EXACTEMENT là où il était
+        // (ay * T + 13, dernière ligne de l'ancienne boîte), rien ne bouge sur
+        // la carte malgré des canevas plus grands.
+        const asp = C.ANIMAL_SPRITE[an.type] || { w: 16, h: 14, footY: 13, cx: 8, topY: 0 };
+        const askin = an.skin | 0;
+        const adx = ax * T + 8 - asp.cx;
+        const ady = ay * T + 13 - asp.footY;
         draws.push({ y: (ay + 1) * T, fn: () => {
-          const img = sprites.animals[an.type][apos.frame || 0];
-          if (apos.dir === 2) { ctx.save(); ctx.translate(adx + aw, ady); ctx.scale(-1, 1); ctx.drawImage(img, 0, 0, aw, ah); ctx.restore(); }
-          else ctx.drawImage(img, adx, ady, aw, ah);
-          if (!an.carriedBy && E.animalReady(an, epochNow)) { const bob = Math.sin(now / 260) * 1.5; ctx.drawImage(sprites.products[an.type], adx + aw / 2 - 6, ady - 12 + bob, 12, 12); }
+          const bank = sprites.animals[an.type] || [];
+          const row = bank[Math.min(askin, bank.length - 1)] || bank[0] || [];
+          const img = row[apos.frame || 0] || row[0];
+          if (!img) return;
+          // Retournement vers la gauche : le miroir se fait autour de `cx`, PAS
+          // autour de la boîte. Avec des marges asymétriques, miroiter la boîte
+          // (l'ancien `translate(adx + aw)`) déplacerait la bête de
+          // 2 x (cx - w/2) à chaque demi-tour : un saut latéral qu'on aurait
+          // mis sur le dos du nouveau dessin.
+          if (apos.dir === 2) { ctx.save(); ctx.translate(adx + asp.cx * 2, 0); ctx.scale(-1, 1); ctx.drawImage(img, 0, ady); ctx.restore(); }
+          else ctx.drawImage(img, adx, ady);
+          // Icône de production : elle flottait au-dessus du HAUT DE BOÎTE, qui
+          // n'est plus le haut de l'animal (garde de topY px). On repart donc du
+          // dos réel, sinon l'œuf et le lait montent d'un pixel ou deux.
+          if (!an.carriedBy && E.animalReady(an, epochNow)) { const bob = Math.sin(now / 260) * 1.5; ctx.drawImage(sprites.products[an.type], adx + asp.cx - 6, ady + (asp.topY || 0) - 12 + bob, 12, 12); }
         } });
       }
       // Chevaux libres (non montés) : plusieurs possibles désormais.
@@ -12666,7 +12694,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             <div className="ferme-tools-header">{L.shopAnimalsHeader}</div>
             {C.ANIMALS.map(a => (
               <div className="ferme-shop-row" key={"an" + a.id}>
-                <Sprite img={spritesReady ? spritesRef.current.animals[a.id][0] : null} w={32} h={28} />
+                {/* Zip 369 : le tableau de sprites a gagné un niveau (type,
+                    ROBE, frame) — `animals[a.id][0]` renvoyait désormais la
+                    rangée de robes et non un canevas, l'aperçu serait resté
+                    vide. On affiche la première robe, frame 0 (pose de
+                    marche, tête haute). La boîte n'est plus forcée à 32x28
+                    non plus : les canevas natifs n'ont plus tous le même
+                    format, un cadre fixe étirerait la poule et écraserait la
+                    vache. On garde une hauteur commune et une largeur
+                    proportionnelle. */}
+                <Sprite img={spritesReady ? spritesRef.current.animals[a.id][0][0] : null}
+                  w={Math.round((C.ANIMAL_SPRITE[a.id] ? C.ANIMAL_SPRITE[a.id].w / C.ANIMAL_SPRITE[a.id].h : 1) * 30)} h={30} />
                 <div className="info"><b>{L.animalRowTitle(lang === "en" ? a.nameEn : a.name, a.cost)}</b><span>{L.animalRowSub(lang === "en" ? a.prodEn : a.prod, a.sell, Math.round(a.prodMs / 3600000))}</span></div>
                 <button disabled={hud.money < a.cost || buildings.animalCount >= E.barnAnimalCap(barn ? barn.level : 0)} onClick={() => buyAnimal(a.id)}>{L.buyLabel}</button>
               </div>

@@ -601,7 +601,16 @@ export function animalPos(an, now) {
   if (phase < cycleMs - walkMs) {
     // Broute : immobile au point de départ de la prochaine marche, déjà
     // orienté vers celle-ci (pas de demi-tour brusque au démarrage).
-    return { x: startX, y: startY, dir, frame: 0, state: "stop" };
+    // Zip 369 (demande Guillaume : "il faut qu'elles broutent ou picorent
+    // quand elles sont à l'arrêt") : cette phase, déjà nommée "broute" depuis
+    // le zip 152, ANIME enfin la tête. La frame est tirée de C.ANIMAL_GRAZE
+    // (frames 4 à 7 = tête basse, voir animalSprite) sur l'horloge `t`, qui
+    // porte DÉJÀ le déphasage par animal (seed * 37) — deux bêtes voisines ne
+    // picorent donc pas dans la même frame, et les deux joueurs voient la même
+    // chose sans qu'un seul message réseau soit émis.
+    const gz = C.ANIMAL_GRAZE[an.type] || C.ANIMAL_GRAZE[0];
+    const slot = Math.floor((t % gz.cycleMs) / (gz.cycleMs / gz.seq.length)) % gz.seq.length;
+    return { x: startX, y: startY, dir, frame: gz.seq[slot], state: "stop" };
   }
   const tw = (phase - (cycleMs - walkMs)) / walkMs; // 0..1 sur la phase de marche
   const ease = tw < 0.5 ? 2 * tw * tw : 1 - Math.pow(-2 * tw + 2, 2) / 2; // smoothstep
@@ -624,6 +633,17 @@ export function normalizeAnimals(animals) {
     }
     if (typeof a.hx !== "number") { a.hx = typeof a.x === "number" ? a.x : 0; a.hy = typeof a.y === "number" ? a.y : 0; }
     if (a.carriedBy === undefined) a.carriedBy = null;
+    // Zip 369 : robe (cosmétique). Tirée au hasard À L'ACHAT et persistée avec
+    // la bête (voir s.animals.push). Pour les animaux d'AVANT ce zip, le champ
+    // manque : on le dérive de l'ancrage persisté hx/hy plutôt que de le
+    // retirer au hasard ici. Deux raisons — la robe doit être STABLE d'une
+    // session à l'autre (sinon la même vache change de robe à chaque
+    // chargement), et elle doit être IDENTIQUE sur les deux écrans, or
+    // normalizeAnimals tourne aussi bien chez l'hôte que chez l'invité.
+    if (typeof a.skin !== "number") {
+      const ns = (C.ANIMAL_SKINS[a.type] || [0]).length;
+      a.skin = ns > 1 ? (Math.abs(Math.round(a.hx * 31 + a.hy * 17 + a.type * 7)) % ns) : 0;
+    }
   }
   return animals || [];
 }

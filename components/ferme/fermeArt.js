@@ -2202,39 +2202,205 @@ export function buildSprites() {
   // cycle de marche à 4 temps (pattes avant/arrière opposées, comme le
   // loup), toujours vu de profil regardant à droite — le miroir gauche/
   // droite se fait au moment du dessin (FermeGame.js), pas ici.
-  function animalSprite(type, frame) {
-    const a = C.ANIMALS[type], [c, g] = cv(16, 14);
-    const body = a.body, acc = a.accent;
-    const off = [0, 2, 0, -2][(frame || 0) % 4];  // patte avant-gauche/arrière-droite
-    const off2 = -off;                            // paire opposée
-    if (type === 0) { // poule
-      P(g, 4, 6, 7, 5, body); P(g, 9, 3, 4, 4, body); // corps + tête
-      P(g, 12, 4, 2, 1, "#e8a83a"); // bec
-      P(g, 10, 2, 3, 2, acc);       // crête
-      P(g, 12, 4, 1, 1, "#1a1a1a");
-      P(g, 3, 8, 3, 2, body);       // queue
-      // Fines pattes de poule : léger pas alterné (amplitude réduite, tenu
-      // par un pied de biche plutôt qu'un sabot).
-      P(g, (6 + off * 0.5) | 0, 11, 1, 2, "#e8a83a");
-      P(g, (9 + off2 * 0.5) | 0, 11, 1, 2, "#e8a83a");
-    } else if (type === 2) { // brebis (laineuse)
-      P(g, 3, 4, 10, 7, body); P(g, 4, 3, 8, 2, body);
-      P(g, 2, 5, 2, 5, body); P(g, 12, 5, 2, 5, body);
-      P(g, 11, 6, 4, 4, acc);       // tête
-      P(g, 13, 7, 1, 1, "#1a1a1a");
-      P(g, (5 + off) | 0, 11, 1, 2, "#5a4a3a");
-      P(g, (10 + off2) | 0, 11, 1, 2, "#5a4a3a");
-    } else { // chèvre / cochon / vache (corps allongé)
-      P(g, 3, 5, 9, 6, body); P(g, 3, 5, 9, 2, tint(body));
-      P(g, 10, 3, 4, 5, body);      // tête
-      P(g, 13, 5, 1, 1, "#1a1a1a");
-      if (type === 3) { P(g, 13, 6, 2, 1, "#c07882"); } // groin cochon
-      if (type === 1) { P(g, 10, 1, 1, 3, acc); P(g, 12, 1, 1, 3, acc); } // cornes chèvre
-      if (type === 4) { P(g, 3, 6, 9, 4, body); P(g, 5, 7, 2, 2, acc); P(g, 8, 8, 2, 2, acc); } // taches vache
-      P(g, (4 + off) | 0, 11, 2, 2, "#5a4636");  // patte avant
-      P(g, (9 + off2) | 0, 11, 2, 2, "#5a4636"); // patte arrière
-      P(g, 2, 6, 2, 3, body);       // queue
+  // ==================================================================
+  // Zip 369 — REFONTE DU CHEPTEL (maquettes validées par Guillaume).
+  //
+  // Avant : un canevas de 16x14 par animal, une dizaine de fillRect chacun,
+  // agrandi jusqu'à x1,7 au rendu. Après : un canevas NATIF par animal (voir
+  // C.ANIMAL_SPRITE), des silhouettes en ellipses pixellisées, une robe par
+  // bête (C.ANIMAL_SKINS) et 8 frames — 4 de marche, 4 de tête basse pour le
+  // broutage et le picorage.
+  //
+  // Trois outils font ici le gros du travail, et c'est eux qui donnent le
+  // volume plutôt que le tracé lui-même :
+  //   aEll   : ellipse pixellisée (largeur calculée ligne par ligne) — c'est
+  //            ce qui remplace les dalles rectangulaires d'avant ;
+  //   aLight : passe de lumière. Éclaircit le pixel le PLUS HAUT de chaque
+  //            colonne et assombrit le plus bas. Générique, indépendante du
+  //            dessin, ~10 lignes, et elle suffit à donner du relief à tout.
+  //   aEdge  : contour. Retour de Guillaume sur la 1re maquette ("quand il y a
+  //            un contour, celui-ci est trop large, il faut le réduire par
+  //            deux") : le contour ne fait plus le tour complet, il ne subsiste
+  //            que du côté OMBRE (arêtes basses et arrière), soit moitié moins
+  //            de pixels, et dans un ton plus doux (-70 au lieu de -92).
+  //
+  // L'encolure est une CHAÎNE d'ellipses tracée entre l'épaule et la tête
+  // (aNeck) : elle suit la tête où qu'elle aille, ce qui est ce qui rend la
+  // tête basse possible sans redessiner un cou par pose — et réutilisable plus
+  // tard pour une tête qui se tourne vers un joueur qui approche.
+  // ==================================================================
+  function aRect(g, x, y, w, h, col) {
+    g.fillStyle = col;
+    g.fillRect(Math.round(x), Math.round(y), Math.max(1, Math.round(w)), Math.max(1, Math.round(h)));
+  }
+  function aEll(g, cx, cy, rx, ry, col) {
+    g.fillStyle = col;
+    const y0 = Math.floor(cy - ry), y1 = Math.ceil(cy + ry);
+    for (let y = y0; y < y1; y++) {
+      const t = (y + 0.5 - cy) / ry;
+      if (t <= -1 || t >= 1) continue;
+      const hw = rx * Math.sqrt(1 - t * t);
+      const xa = Math.round(cx - hw), xb = Math.round(cx + hw);
+      if (xb > xa) g.fillRect(xa, y, xb - xa, 1);
     }
+  }
+  function aNeck(g, sx, sy, hx, hy, r0, r1, col, n) {
+    for (let i = 0; i <= n; i++) {
+      const t = i / n;
+      aEll(g, sx + (hx - sx) * t, sy + (hy - sy) * t, r0 + (r1 - r0) * t, r0 + (r1 - r0) * t, col);
+    }
+  }
+  function aLeg(g, x, y, w, h, col, hoof) { aRect(g, x, y, w, h, col); aRect(g, x - 0.2, y + h - 1.2, w + 0.4, 1.2, hoof); }
+  function aLight(g, w, h, rim, und) {
+    const a = g.getImageData(0, 0, w, h).data;
+    for (let x = 0; x < w; x++) {
+      for (let y = 0; y < h; y++) if (a[(y * w + x) * 4 + 3] > 128) { g.fillStyle = rim; g.fillRect(x, y, 1, 1); break; }
+      for (let y = h - 1; y >= 0; y--) if (a[(y * w + x) * 4 + 3] > 128) { g.fillStyle = und; g.fillRect(x, y, 1, 1); break; }
+    }
+  }
+  function aEdge(g, w, h, col) {
+    const a = g.getImageData(0, 0, w, h).data, pts = [];
+    const A = (x, y) => (x < 0 || y < 0 || x >= w || y >= h) ? 0 : a[(y * w + x) * 4 + 3];
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      if (A(x, y) > 128) continue;
+      if (A(x, y - 1) > 128 || A(x + 1, y) > 128) pts.push(x, y);
+    }
+    g.fillStyle = col;
+    for (let i = 0; i < pts.length; i += 2) g.fillRect(pts[i], pts[i + 1], 1, 1);
+  }
+  // Poule : corps chamois, camail et tête d'une teinte propre à la robe (la
+  // référence de Guillaume montre une poule chamois à camail brun), crête en
+  // trois bosses, caroncule, aile marquée d'un trait, pattes à doigts.
+  function drawHen(g, sk, hd, off, of2) {
+    const b = 8;
+    aEll(g, 3.4, b - 2, 2.8, 2.6, sk.tail); aEll(g, 2.6, b - 3.2, 2, 1.7, sk.tail);
+    aEll(g, 8, b, 4.8, 3.9, sk.body); aEll(g, 10.8, b + 0.5, 3, 3.1, sk.body);
+    aEll(g, 8.4, b + 0.3, 3.1, 2.2, adjust(sk.body, -20));
+    aRect(g, 6.6, b + 1, 3.6, 0.5, adjust(sk.body, -34));
+    const hx = 12.2 + hd * 0.28, hy = b - 3.6 + hd;
+    aNeck(g, 10.8, b - 1.4, hx, hy, 1.9, 2.3, sk.hack, 3);
+    aEll(g, hx, hy, 2.4, 2.2, sk.hack);
+    aRect(g, hx - 1.2, hy - 2.5, 0.9, 1.3, sk.comb); aRect(g, hx - 0.2, hy - 2.9, 0.9, 1.6, sk.comb);
+    aRect(g, hx + 0.8, hy - 2.5, 0.9, 1.3, sk.comb); aRect(g, hx + 1.1, hy + 1, 0.9, 1.6, sk.comb);
+    aRect(g, hx + 2, hy - 0.3, 1.9, 1, sk.foot); aRect(g, hx + 2.7, hy + 0.3, 1.2, 0.7, adjust(sk.foot, -30));
+    aLeg(g, 6.6 + of2, b + 3.4, 0.9, 2.4, sk.foot, adjust(sk.foot, -30));
+    aLeg(g, 9.4 + off, b + 3.4, 0.9, 2.4, sk.foot, adjust(sk.foot, -30));
+    return { eye: [hx + 0.7, hy - 0.7] };
+  }
+  function drawGoat(g, sk, hd, off, of2, cw) {
+    const b = 10, leg = adjust(sk.body, -42);
+    aLeg(g, 6.6 + of2, b + 3.6, 1.6, 4.6, leg, sk.hoof); aLeg(g, 14.8 + off, b + 3.6, 1.6, 4.6, leg, sk.hoof);
+    aRect(g, 5.2, b - 4.4, 1, 2.9, adjust(sk.body, -24));
+    aEll(g, 10.4, b, 6.3, 3.8, sk.body); aEll(g, 6.4, b - 0.2, 3.6, 3.7, sk.body);
+    aEll(g, 14.2, b - 0.2, 3.7, 4, sk.body); aEll(g, 10.2, b + 2.4, 4.6, 1.7, adjust(sk.body, 12));
+    const hx = 18.8 + hd * 0.34, hy = b - 5.2 + hd * 1.02;
+    aNeck(g, 15.8, b - 2.6, hx, hy, 1.5, 2.3, sk.body, 4);
+    aEll(g, hx, hy, 2.5, 2.3, sk.body); aEll(g, hx + 1.9, hy + 1.1 + cw, 1.5, 1.3, sk.muz);
+    aRect(g, hx + 0.4, hy - 3.6, 0.9, 2, sk.horn); aRect(g, hx + 1, hy - 4.8, 0.9, 1.5, sk.horn);
+    aRect(g, hx + 1.7, hy - 5.6, 0.9, 1.1, sk.horn);
+    aRect(g, hx - 1.1, hy - 3.6, 0.9, 2, sk.horn); aRect(g, hx - 1.6, hy - 4.7, 0.9, 1.4, sk.horn);
+    aEll(g, hx - 1.9, hy - 1.4, 1.4, 1, sk.body);
+    aRect(g, hx + 0.2, hy + 2.2, 1.5, 2.4, sk.patch); aRect(g, hx + 0.4, hy + 4, 1.1, 1.1, adjust(sk.patch, -30));
+    aLeg(g, 8.6 + off, b + 3.6, 1.6, 4.6, sk.body, sk.hoof); aLeg(g, 12.8 + of2, b + 3.6, 1.6, 4.6, sk.body, sk.hoof);
+    return { eye: [hx + 1, hy - 0.5], nose: [hx + 2.9, hy + 1 + cw] };
+  }
+  function drawEwe(g, sk, hd, off, of2, cw) {
+    const b = 9.4, dark = adjust(sk.patch, -30);
+    aLeg(g, 6.2 + of2, b + 3.4, 1.4, 4.6, dark, sk.hoof); aLeg(g, 13.4 + off, b + 3.4, 1.4, 4.6, dark, sk.hoof);
+    aEll(g, 10, b, 6.1, 3.9, adjust(sk.body, -24));
+    aEll(g, 5.6, b - 1.1, 3.2, 3.1, sk.body); aEll(g, 8.4, b - 1.8, 3.4, 3.3, sk.body);
+    aEll(g, 11.4, b - 1.6, 3.3, 3.2, sk.body); aEll(g, 13.9, b - 0.5, 2.9, 2.9, sk.body);
+    aEll(g, 9.8, b + 1.5, 5.5, 2.7, sk.body);
+    let sd = 7;
+    for (let i = 0; i < 10; i++) { sd = (sd * 1103515245 + 12345) & 0x7fffffff; aEll(g, 4.5 + ((sd >> 7) % 11), b - 4 + ((sd >> 13) % 6), 0.75, 0.75, adjust(sk.body, -24)); }
+    const hx = 17.2 + hd * 0.3, hy = b - 1.4 + hd * 1.1;
+    aNeck(g, 15, b - 0.6, hx, hy, 1.6, 2, dark, 3);
+    aEll(g, hx, hy, 2.3, 2.1, dark); aEll(g, hx + 1.6, hy + 1 + cw, 1.4, 1.2, adjust(sk.muz, 16));
+    aEll(g, hx - 1.3, hy - 1.6, 1.3, 1.5, dark);
+    aRect(g, 4.6, b - 2.4, 1, 1.5, sk.body);
+    aLeg(g, 8.2 + off, b + 3.4, 1.4, 4.6, dark, sk.hoof); aLeg(g, 11.8 + of2, b + 3.4, 1.4, 4.6, dark, sk.hoof);
+    return { eye: [hx + 0.8, hy - 0.5] };
+  }
+  function drawPig(g, sk, hd, off, of2, cw) {
+    const b = 11, leg = adjust(sk.body, -42);
+    aLeg(g, 6.4 + of2, b + 3.8, 1.8, 4.2, leg, sk.hoof); aLeg(g, 14.8 + off, b + 3.8, 1.8, 4.2, leg, sk.hoof);
+    aRect(g, 3.9, b - 3.2, 0.9, 1.3, adjust(sk.body, -24)); aRect(g, 3.1, b - 3.9, 0.9, 1.1, adjust(sk.body, -24));
+    aRect(g, 3.7, b - 4.6, 1.3, 0.9, adjust(sk.body, -24));
+    aEll(g, 10.6, b, 6.8, 4.4, sk.body); aEll(g, 6.4, b + 0.2, 4.2, 4.2, sk.body);
+    aEll(g, 10.4, b + 2.5, 5.2, 2, adjust(sk.body, 16));
+    const hx = 17.6 + hd * 0.3, hy = b - 1 + hd * 1.05;
+    aNeck(g, 15, b - 0.4, hx, hy, 2.2, 2.8, sk.body, 3);
+    aEll(g, hx, hy, 3.2, 2.9, sk.body); aEll(g, hx + 2.8, hy + 1 + cw, 1.8, 1.6, sk.patch);
+    aRect(g, hx + 3.3, hy + 0.5 + cw, 0.7, 0.7, adjust(sk.patch, -30));
+    aRect(g, hx + 3.3, hy + 1.6 + cw, 0.7, 0.7, adjust(sk.patch, -30));
+    aEll(g, hx - 1.2, hy - 3.2, 1.7, 1.9, sk.body); aEll(g, hx - 1.2, hy - 3, 1.1, 1.3, sk.patch);
+    aLeg(g, 8.6 + off, b + 3.8, 1.8, 4.2, sk.body, sk.hoof); aLeg(g, 12.8 + of2, b + 3.8, 1.8, 4.2, sk.body, sk.hoof);
+    return { eye: [hx + 1.4, hy - 1] };
+  }
+  // Vache : proportions reprises d'après les références de Guillaume (holstein
+  // et limousine de profil). Retour sur la 1re maquette : "la vache a un trop
+  // gros cul" — la croupe est passée de 4,6 à 3,5 de large, le dos s'est
+  // allongé, la hanche est marquée par un petit relief au lieu d'une masse
+  // ronde, les pattes sont plus longues et plus fines (6,2 x 1,7 contre
+  // 5,6 x 2), la tête est plus petite et portée plus bas sur une encolure plus
+  // longue, et le ventre pend légèrement.
+  function drawCow(g, sk, hd, off, of2, cw) {
+    const b = 12.4, leg = adjust(sk.body, -42);
+    aRect(g, 4.6, b - 4.4, 0.9, 7.4, adjust(sk.body, -30)); aEll(g, 4.3, b + 3.6, 1.1, 1.7, sk.patch);
+    aLeg(g, 7.4 + of2, b + 4.6, 1.7, 6.2, leg, sk.hoof); aLeg(g, 17.8 + off, b + 4.6, 1.7, 6.2, leg, sk.hoof);
+    aEll(g, 13.2, b, 8.4, 4.3, sk.body);
+    aEll(g, 7.8, b - 0.6, 3.5, 4, sk.body);
+    aEll(g, 18.2, b - 0.2, 3.9, 4.3, sk.body);
+    aEll(g, 8.6, b - 3.4, 2.4, 1.5, sk.body);
+    aEll(g, 13, b + 2.8, 6.4, 2.1, sk.body);
+    if (sk.pat) {
+      aEll(g, 10, b - 1.8, 3, 2.2, sk.patch); aEll(g, 16.4, b + 1.4, 2.4, 1.6, sk.patch);
+      aEll(g, 6.9, b + 1.2, 1.8, 1.4, sk.patch); aEll(g, 13.6, b - 2.6, 1.7, 1.3, sk.patch);
+    }
+    aEll(g, 11.8, b + 4.4, 2, 1.4, sk.udder || "#e8a89f");
+    const hx = 24 + hd * 0.28, hy = b - 6.4 + hd * 1.5;
+    aNeck(g, 20.6, b - 3, hx, hy, 1.9, 2.6, sk.body, 4);
+    aEll(g, hx, hy, 2.9, 2.4, sk.body);
+    if (sk.pat) aEll(g, hx - 0.4, hy - 0.9, 2, 1.5, sk.patch);
+    aEll(g, hx + 2.2, hy + 1.2 + cw, 1.9, 1.6, sk.muz);
+    aRect(g, hx - 0.2, hy - 3.4, 0.9, 1.5, sk.horn); aRect(g, hx - 0.8, hy - 4.1, 1, 0.9, sk.horn);
+    aRect(g, hx + 2, hy - 3.4, 0.9, 1.5, sk.horn); aRect(g, hx + 2.5, hy - 4.1, 1, 0.9, sk.horn);
+    aEll(g, hx - 2, hy - 2.2, 1.5, 1.1, sk.body);
+    aLeg(g, 9.8 + off, b + 4.6, 1.7, 6.2, sk.body, sk.hoof); aLeg(g, 15.6 + of2, b + 4.6, 1.7, 6.2, sk.body, sk.hoof);
+    return { eye: [hx + 1.1, hy - 0.6], nose: [hx + 3, hy + 1.1 + cw] };
+  }
+  // frame 0..3 = marche (décalage des pattes), 4..7 = tête basse (broutage /
+  // picorage, pattes au repos). `skin` indexe C.ANIMAL_SKINS[type].
+  function animalSprite(type, skin, frame) {
+    const sp = C.ANIMAL_SPRITE[type], list = C.ANIMAL_SKINS[type] || [];
+    const sk = list[Math.max(0, Math.min(list.length - 1, skin | 0))] || { body: C.ANIMALS[type].body, patch: C.ANIMALS[type].accent };
+    const [c, g] = cv(sp.w, sp.h);
+    const f = (frame | 0) % C.ANIMAL_FRAMES;
+    const grazing = f >= 4;
+    const hdSpec = C.ANIMAL_HEAD_DROP[type];
+    const hd = grazing ? hdSpec.d[f - 4] : 0;
+    const cw = (grazing && f === hdSpec.chew) ? 0.5 : 0;
+    const off = grazing ? 0 : [0, 1.4, 0, -1.4][f];
+    const of2 = -off;
+    // Translation unique : le code de dessin ci-dessus garde son repère
+    // d'origine, la garde de 1 px et le recentrage sont portés ici.
+    g.translate(sp.dx, sp.dy);
+    let d;
+    if (type === 0) d = drawHen(g, sk, hd, off, of2);
+    else if (type === 1) d = drawGoat(g, sk, hd, off, of2, cw);
+    else if (type === 2) d = drawEwe(g, sk, hd, off, of2, cw);
+    else if (type === 3) d = drawPig(g, sk, hd, off, of2, cw);
+    else d = drawCow(g, sk, hd, off, of2, cw);
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    aLight(g, sp.w, sp.h, adjust(sk.body, 22), adjust(sk.body, -70));
+    aEdge(g, sp.w, sp.h, adjust(sk.body, -70));
+    g.translate(sp.dx, sp.dy);
+    if (d.eye) {
+      aRect(g, d.eye[0], d.eye[1], 1, 1, "#1a1614");
+      aRect(g, d.eye[0], d.eye[1] - 1, 1, 1, "#fffaf0");
+    }
+    if (d.nose) aRect(g, d.nose[0], d.nose[1], 1, 1, adjust(sk.body, -70));
+    g.setTransform(1, 0, 0, 1, 0, 0);
     return c;
   }
   // Icône de production d'élevage (par type d'animal).
@@ -2466,7 +2632,13 @@ house: house(),
   S.seaIcons = C.SEA_CREATURES.map((sc, i) => seaIcon(i, sc.color));
   // zip 255 : 4 frames de marche par animal (au lieu d'un sprite unique),
   // même structure que sprites.wolf/sprites.rabbit.
-  S.animals = C.ANIMALS.map(a => [0, 1, 2, 3].map(f => animalSprite(a.id, f)));
+  // Zip 369 : un tableau par ROBE, et 8 frames au lieu de 4 (les 4 dernières
+  // sont les poses de tête basse du broutage). Au total une cinquantaine de
+  // canevas de moins de 30x24 px, tous construits une seule fois au
+  // chargement — les deux passes getImageData (lumière, contour) ne tournent
+  // donc jamais pendant une frame de jeu.
+  S.animals = C.ANIMALS.map(a => (C.ANIMAL_SKINS[a.id] || [null]).map((sk, si) =>
+    Array.from({ length: C.ANIMAL_FRAMES }, (_, f) => animalSprite(a.id, si, f))));
   S.products = C.ANIMALS.map(a => productIcon(a.id));
   // Zip 235: seasonal foliage variants (autumn = orange leaves,
   // spring = pink blooms). Same size as base sprites, drawn via seasonal
