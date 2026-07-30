@@ -2,8 +2,14 @@
    world.js — Rendu Three.js. Scène, matériaux, construction des tronçons.
    -----------------------------------------------------------------------------
    Les graphismes sont VOLONTAIREMENT jetables : que des boîtes, des matériaux
-   plats, aucune texture, aucun shader. Tout est isolé dans ce fichier pour
-   pouvoir être remplacé sans toucher au gameplay.
+   plats, aucun shader. Tout est isolé dans ce fichier pour pouvoir être
+   remplacé sans toucher au gameplay.
+
+   Exception à "aucune texture" (le sol, depuis la demande de dalles en
+   ruine) : quelques textures canvas générées au démarrage, en très basse
+   résolution et NearestFilter, pour rester dans l'esprit pixel-art plutôt
+   que d'ouvrir la porte à des textures peintes finement. Voir
+   buildStoneVariants.
 
    Deux partis pris qui donnent beaucoup pour presque rien :
 
@@ -70,9 +76,92 @@ const World = (function () {
     mat.flame     = new THREE.MeshBasicMaterial({ color: CFG.COL_TORCH, transparent: true, opacity: 0.92, depthWrite: false, side: THREE.DoubleSide });
     mat.eye       = new THREE.MeshBasicMaterial({ color: CFG.COL_WOLF_EYE });
     mat.rune      = new THREE.MeshBasicMaterial({ color: CFG.COL_PURPLE, transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthWrite: false });
+    mat.stoneVariants = buildStoneVariants();
 
     buildPlayer();
     buildWolves();
+  }
+
+  /* --------------------------------------------------- SOL EN RUINE ---
+     Un petit pool de textures par palier d'usure (pas une par dalle : on
+     réutilise le pool, seul le TIRAGE est par dalle). Peint sur un canvas
+     minuscule puis figé en NearestFilter, pour rester du pixel-art plaqué
+     et non une texture "peinte" — cohérent avec le reste du rendu, qui
+     mise sur la basse résolution plutôt que sur le détail. */
+  function cssHex(hex) { return "#" + hex.toString(16).padStart(6, "0"); }
+
+  function paintStoneTile(tier) {
+    const SIZE = 32;
+    const cv = document.createElement("canvas");
+    cv.width = cv.height = SIZE;
+    const ctx = cv.getContext("2d");
+
+    // Fond + blotches de pierre plus sombre (remplace l'ancienne alternance
+    // de deux tons de dalle par une texture qui porte les deux tons elle-même).
+    ctx.fillStyle = cssHex(CFG.COL_STONE);
+    ctx.fillRect(0, 0, SIZE, SIZE);
+    ctx.fillStyle = cssHex(CFG.COL_STONE_DARK);
+    const blotches = 4 + Math.floor(Math.random() * 4);
+    for (let b = 0; b < blotches; b++) {
+      ctx.beginPath();
+      ctx.arc(Math.random() * SIZE, Math.random() * SIZE, 2 + Math.random() * 5, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.strokeStyle = cssHex(CFG.COL_STONE_EDGE);
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(0.5, 0.5, SIZE - 1, SIZE - 1);
+
+    // Taches d'humidité/mousse : plus nombreuses et plus sombres à mesure
+    // que le palier d'usure monte. 0 = quasi rien, 2 = franchement moisi.
+    const stainCounts = [1, 3, 6];
+    const n = stainCounts[tier];
+    for (let s = 0; s < n; s++) {
+      const x = Math.random() * SIZE, y = Math.random() * SIZE;
+      const r = 2.5 + Math.random() * (3 + tier * 2);
+      const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
+      grad.addColorStop(0, cssHex(CFG.COL_STAIN_DARK));
+      grad.addColorStop(1, cssHex(CFG.COL_STAIN) + "00"); // fondu transparent
+      ctx.fillStyle = grad;
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // Fêlures : lignes brisées, absentes au palier intact.
+    const crackCounts = [0, 2, 5];
+    ctx.strokeStyle = cssHex(CFG.COL_CRACK);
+    ctx.lineWidth = 1;
+    for (let c = 0; c < crackCounts[tier]; c++) {
+      let x = Math.random() * SIZE, y = Math.random() * SIZE;
+      ctx.beginPath(); ctx.moveTo(x, y);
+      const segs = 2 + Math.floor(Math.random() * 3);
+      for (let seg = 0; seg < segs; seg++) {
+        x += (Math.random() - 0.5) * SIZE * 0.5;
+        y += (Math.random() - 0.5) * SIZE * 0.5;
+        ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+
+    const tex = new THREE.CanvasTexture(cv);
+    tex.magFilter = THREE.NearestFilter;
+    tex.minFilter = THREE.NearestFilter;
+    return new THREE.MeshLambertMaterial({ map: tex });
+  }
+
+  function buildStoneVariants() {
+    const VARIANTS_PER_TIER = [3, 4, 4]; // intacte, fissurée, très abîmée
+    return VARIANTS_PER_TIER.map((n, tier) => {
+      const list = [];
+      for (let i = 0; i < n; i++) list.push(paintStoneTile(tier));
+      return list;
+    });
+  }
+
+  // Tirage pondéré du palier d'usure (voir CFG.FLOOR_WEAR_WEIGHTS).
+  function pickWearTier(roll) {
+    const w = CFG.FLOOR_WEAR_WEIGHTS;
+    if (roll < w[0]) return 0;
+    if (roll < w[0] + w[1]) return 1;
+    return 2;
   }
 
   function box(w, h, d, material, x, y, z) {
@@ -159,14 +248,39 @@ const World = (function () {
     for (const [a, b] of gaps) { if (a > cursor) solids.push([cursor, a]); cursor = Math.max(cursor, b); }
     if (cursor < node.length) solids.push([cursor, node.length]);
 
+    /* Sol pavé de dalles en ruine : chaque dalle tire son palier d'usure
+       (voir pickWearTier/CFG.FLOOR_WEAR_WEIGHTS) puis une texture au sein de
+       ce palier. Les dalles fissurées/très abîmées basculent légèrement et,
+       pour les très abîmées, s'affaissent un peu et perdent des éclats à
+       leurs bords — purement visuel, la collision reste celle du plateau
+       plat calculée ailleurs (voir OBST.GAP plus haut). */
     const tile = CFG.FLOOR_TILE;
-    let slab = 0;
+    const rngFloor = Track.makeRng(node.index * 5231 + 7);
     for (const [a, b] of solids) {
       for (let t = a; t < b - 0.01; t += tile) {
         const len = Math.min(tile, b - t);
-        const alt = (slab++ % 2) === 0;
-        place(box(CFG.TRACK_WIDTH, CFG.FLOOR_THICKNESS, Math.max(0.2, len - 0.12),
-          alt ? mat.stone : mat.stoneDark, 0, 0, 0), t + len / 2, 0, -CFG.FLOOR_THICKNESS / 2);
+        const tier = pickWearTier(rngFloor());
+        const variants = mat.stoneVariants[tier];
+        const material = variants[Math.floor(rngFloor() * variants.length)];
+
+        const tiltMax = tier === 2 ? CFG.FLOOR_TILT_RUINED : tier === 1 ? CFG.FLOOR_TILT_CRACKED : 0;
+        const sink = tier === 2 ? rngFloor() * CFG.FLOOR_SINK_RUINED : 0;
+
+        const slabMesh = box(CFG.TRACK_WIDTH, CFG.FLOOR_THICKNESS, Math.max(0.2, len - 0.12), material, 0, 0, 0);
+        slabMesh.rotation.x = (rngFloor() - 0.5) * tiltMax;
+        slabMesh.rotation.z = (rngFloor() - 0.5) * tiltMax;
+        place(slabMesh, t + len / 2, 0, -CFG.FLOOR_THICKNESS / 2 - sink);
+
+        if (tier === 2) {
+          const chips = 1 + Math.floor(rngFloor() * 2);
+          for (let c = 0; c < chips; c++) {
+            const side = rngFloor() < 0.5 ? -1 : 1;
+            const cw = 0.3 + rngFloor() * 0.5;
+            const chip = box(cw, CFG.FLOOR_THICKNESS * 0.4, cw, mat.stoneDark, 0, 0, 0);
+            chip.rotation.y = rngFloor() * 6.28;
+            place(chip, t + rngFloor() * len, side * (CFG.TRACK_WIDTH / 2 - cw / 2), -CFG.FLOOR_THICKNESS - sink - 0.05);
+          }
+        }
       }
     }
 

@@ -123,6 +123,19 @@ const CFG = {
   COL_WOLF:       0x14100f,
   COL_WOLF_EYE:   0xff3020,
   COL_OBSTACLE:   0x55503f,
+  COL_STAIN:      0x3a4a2e,  // moisissure/mousse sur la pierre, teinte verdâtre raccord évil
+  COL_STAIN_DARK: 0x22301c,  // cœur des taches d'humidité, plus sombre
+  COL_CRACK:      0x110d0b,  // fêlures dans la pierre
+
+  /* --------------------------------------------------- SOL EN RUINE ---
+     3 paliers d'usure tirés au sort par dalle (voir World.buildStoneVariants) :
+     0 intacte, 1 fissurée, 2 très abîmée. Pondération qui favorise le palier
+     du milieu — décision prise avec Guillaume, pas de dalle neuve trop
+     propre, pas de chaos permanent. */
+  FLOOR_WEAR_WEIGHTS: [0.25, 0.45, 0.30],
+  FLOOR_TILT_CRACKED: 0.02,   // rad — bascule légère des dalles fissurées
+  FLOOR_TILT_RUINED:  0.05,   // rad — bascule plus marquée des dalles très abîmées
+  FLOOR_SINK_RUINED:  0.05,   // affaissement visuel des dalles très abîmées
 
   /* Tenue du fermier — OUTFITS[0] de fermeConstants.js */
   COL_SHIRT: 0x3f7fd4,
