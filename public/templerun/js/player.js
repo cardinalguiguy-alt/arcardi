@@ -35,6 +35,7 @@ class Player {
     this.lastGroundedAt = performance.now();
 
     this.slideUntil = 0;
+    this.slideStart = 0;    // instant de départ de la glissade en cours (anim. entrée/sortie)
     this.stumbleUntil = 0;
     this.stumbleRecoverUntil = 0;
 
@@ -71,6 +72,17 @@ class Player {
   isSliding(now) { return now < this.slideUntil; }
   headHeight(now) { return this.y + (this.isSliding(now) ? CFG.SLIDE_HEIGHT : CFG.PLAYER_HEIGHT); }
 
+  /* Forme 0 -> 1 -> 0 de la bascule sur le flanc : monte en SLIDE_ROLL_MS,
+     tient à plat, puis redescend en SLIDE_ROLL_MS avant la fin de la
+     glissade. Lissée (smoothstep) pour éviter un basculement mécanique. */
+  slideRoll(now) {
+    if (!this.isSliding(now)) return 0;
+    const ease = (x) => x * x * (3 - 2 * x);
+    const rollIn = Math.min(1, (now - this.slideStart) / CFG.SLIDE_ROLL_MS);
+    const rollOut = Math.min(1, (this.slideUntil - now) / CFG.SLIDE_ROLL_MS);
+    return Math.min(ease(rollIn), ease(rollOut));
+  }
+
   /* ------------------------------------------------------------- ENTRÉES */
   handleInput(now) {
     const node = this.node();
@@ -94,6 +106,7 @@ class Player {
       }
     }
     if (Input.consume("slide")) {
+      this.slideStart = now;
       this.slideUntil = now + CFG.SLIDE_MS;
       if (!this.grounded && this.vy > 0) this.vy = -CFG.JUMP_VELOCITY * 0.55; // plaquage au sol
     }

@@ -18,7 +18,7 @@
 
 const World = (function () {
   let renderer, scene, camera, canvas;
-  let playerMesh, playerLegs, wolfMeshes = [], torchLight;
+  let playerMesh, playerLegs, playerRig, wolfMeshes = [], torchLight;
   let geo = {}, mat = {};
   let flames = [];        // plans de flamme à faire vaciller
   const nodeGroups = new Map();
@@ -84,21 +84,38 @@ const World = (function () {
 
   /* Fermier : silhouette bloc reprenant les proportions du sprite de Ferme
      Vallée (16 px de large pour 24 de haut, tête large, jambes courtes) et ses
-     couleurs OUTFITS[0]. Placeholder assumé, à remplacer par le vrai sprite. */
+     couleurs OUTFITS[0]. Placeholder assumé, à remplacer par le vrai sprite.
+
+     Structure : playerMesh (position + cap monde, comme avant) > pelvis
+     (pivot de bascule, posé à hauteur de bassin) > tout le reste du corps,
+     positionné en coordonnées RELATIVES au bassin. Au repos (rotation.z = 0)
+     ça retombe exactement sur les mêmes coordonnées monde qu'avant : seule
+     la glissade fait tourner le pelvis pour coucher le corps sur le flanc. */
   function buildPlayer() {
     playerMesh = new THREE.Group();
     const g = playerMesh;
-    g.add(box(0.95, 0.75, 0.55, mat.shirt, 0, 1.12, 0));         // torse
-    g.add(box(0.28, 0.6, 0.3, mat.skin, -0.62, 1.15, 0));        // bras g
-    g.add(box(0.28, 0.6, 0.3, mat.skin, 0.62, 1.15, 0));         // bras d
-    g.add(box(0.78, 0.68, 0.62, mat.skin, 0, 1.78, 0));          // tête
-    g.add(box(0.84, 0.24, 0.68, mat.hair, 0, 2.06, 0));          // cheveux
+
+    const pelvis = new THREE.Group();
+    pelvis.position.set(0, CFG.SLIDE_PELVIS_Y, 0);
+    g.add(pelvis);
+
+    const rel = (y) => y - CFG.SLIDE_PELVIS_Y; // reconvertit une hauteur monde en hauteur relative au bassin
+
+    const torso = box(0.95, 0.75, 0.55, mat.shirt, 0, rel(1.12), 0);
+    const armL  = box(0.28, 0.6, 0.3, mat.skin, -0.62, rel(1.15), 0); // bras gauche (se replie contre le torse en glissade)
+    const armR  = box(0.28, 0.6, 0.3, mat.skin, 0.62, rel(1.15), 0);  // bras droit (prend appui au sol en glissade)
+    const head  = box(0.78, 0.68, 0.62, mat.skin, 0, rel(1.78), 0);
+    const hair  = box(0.84, 0.24, 0.68, mat.hair, 0, rel(2.06), 0);
+    [torso, armL, armR, head, hair].forEach(m => pelvis.add(m));
+
     playerLegs = [
-      box(0.34, 0.72, 0.34, mat.pants, -0.24, 0.4, 0),
-      box(0.34, 0.72, 0.34, mat.pants, 0.24, 0.4, 0),
+      box(0.34, 0.72, 0.34, mat.pants, -0.24, rel(0.4), 0),
+      box(0.34, 0.72, 0.34, mat.pants, 0.24, rel(0.4), 0),
     ];
-    playerLegs.forEach(l => g.add(l));
+    playerLegs.forEach(l => pelvis.add(l));
+
     scene.add(g);
+    playerRig = { pelvis, torso, armL, armR, head, hair };
   }
 
   function buildWolves() {
@@ -264,14 +281,39 @@ const World = (function () {
     playerMesh.position.set(p.x, p.y, p.z);
     playerMesh.rotation.y = dirYaw(player.node().dir);
 
-    const sliding = player.isSliding(now);
-    playerMesh.scale.set(1, sliding ? 0.45 : 1, sliding ? 1.35 : 1);
+    // roll : 0 debout -> 1 couché à plat sur le flanc, lissé en entrée/sortie
+    // (voir Player.slideRoll : monte, tient, redescend avant la fin de glissade).
+    const roll = player.slideRoll(now);
+    const { pelvis, armL, armR } = playerRig;
 
-    // Course : jambes en opposition de phase, figées en l'air.
-    const swing = player.grounded ? Math.sin(now / 62) * 0.55 : 0.35;
-    playerLegs[0].position.z = swing * 0.5;
-    playerLegs[1].position.z = -swing * 0.5;
-    playerLegs[0].position.y = 0.4 + Math.abs(swing) * 0.08;
+    // Bascule du bassin (et donc tout le torse/tête/jambes accrochés dessus) :
+    // rotation négative sur Z envoie le bras DROIT vers le bas (voir plus bas),
+    // c'est physiquement lui qui prend appui au sol pendant la glissade.
+    pelvis.rotation.z = -CFG.SLIDE_ROLL_ANGLE * roll;
+    playerMesh.position.y = p.y - CFG.SLIDE_DROP * roll; // colle le flanc au sol
+
+    // Course : jambes en opposition de phase, figées en l'air, coupée en glissade
+    // (les jambes se resserrent et filent droit derrière une fois sur le flanc).
+    const runSwing = player.grounded ? Math.sin(now / 62) * 0.55 : 0.35;
+    const swing = runSwing * (1 - roll);
+    playerLegs[0].position.z = swing * 0.5 + roll * 0.3;
+    playerLegs[1].position.z = -swing * 0.5 + roll * 0.3;
+    const legLift = 0.4 + Math.abs(swing) * 0.08;
+    playerLegs[0].position.y = legLift;
+    playerLegs[1].position.y = legLift;
+    playerLegs[0].position.x = -0.24 * (1 - roll * 0.5);
+    playerLegs[1].position.x = 0.24 * (1 - roll * 0.5);
+
+    // Bras droit : passe de "le long du corps" à "tendu au sol", avec un
+    // léger va-et-vient pour donner l'impression qu'il contrôle la glissade
+    // (freinage / appui), au lieu de traîner passivement.
+    const drag = Math.sin(now / 55) * 0.12 * roll;
+    armR.rotation.z = -1.15 * roll + drag;
+    armR.position.set(0.62 + 0.35 * roll, (1.15 - CFG.SLIDE_PELVIS_Y) - 0.55 * roll, 0.18 * roll);
+
+    // Bras gauche : se replie contre le torse, hors du chemin.
+    armL.rotation.z = 0.9 * roll;
+    armL.position.set(-0.62 + 0.22 * roll, (1.15 - CFG.SLIDE_PELVIS_Y) + 0.1 * roll, -0.1 * roll);
 
     torchLight.position.set(p.x, p.y + 2.4, p.z);
   }

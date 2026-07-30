@@ -40,6 +40,10 @@ const CFG = {
   JUMP_CLEAR_HEIGHT: 1.05,  // hauteur à partir de laquelle on passe une barrière basse
   SLIDE_MS: 620,
   SLIDE_HEIGHT: 0.75,       // hauteur du gabarit en glissade
+  SLIDE_ROLL_MS: 130,       // durée du bascule sur le flanc, en entrée ET en sortie
+  SLIDE_ROLL_ANGLE: 1.22,   // inclinaison du corps en glissade (rad, ~70°, pas 90 pour rester lisible)
+  SLIDE_DROP: 0.42,         // abaissement du buste pour coller le flanc au sol
+  SLIDE_PELVIS_Y: 0.55,     // hauteur du pivot de bascule (bassin) utilisé pour coucher le corps
   COYOTE_MS: 110,           // tolérance de saut juste après avoir quitté le sol
   INPUT_BUFFER_MS: 160,     // une entrée un poil trop tôt reste valable
 
