@@ -131,9 +131,13 @@ const World = (function () {
     mat.stone     = L(CFG.COL_STONE);
     mat.stoneDark = L(CFG.COL_STONE_DARK);
     mat.edge      = L(CFG.COL_STONE_EDGE);
-    mat.obstacle  = L(CFG.COL_OBSTACLE);
-    mat.bark      = L(CFG.COL_BARK);
-    mat.barkDark  = L(CFG.COL_BARK_DARK);
+    /* Zip 380 — PLUS AUCUN VOLUME EN COULEUR UNIE (« je ne veux pas de modules
+       non texturés »). La poutre haute, les troncs proches et les mâts de
+       torche étaient les derniers aplats du décor : ils se lisaient comme des
+       primitives posées au milieu d'un monde texturé. */
+    mat.obstacle  = paintMasonry(CFG.COL_OBSTACLE, 3, 4, CFG.COL_STONE_EDGE, false, 3);
+    mat.bark      = paintWood(CFG.COL_BARK);
+    mat.barkDark  = paintWood(CFG.COL_BARK_DARK);
     mat.wolf      = L(CFG.COL_WOLF);
     mat.shirt     = L(CFG.COL_SHIRT);
     mat.shirtDark = L(shadeHex(CFG.COL_SHIRT));   // bas de jupe : voir buildPlayer
@@ -145,13 +149,13 @@ const World = (function () {
     mat.mossDark  = L(CFG.COL_MOSS_DARK);
     mat.vine      = L(CFG.COL_VINE);
     mat.mushStem  = L(0x6a5f7a);
-    mat.torchWood = L(0x241f1a);
+    mat.torchWood = paintWood(0x241f1a);
     mat.torchHead = L(0x140f0a);   // extrémité carbonisée du bâton (zip 377)
     /* Même bois que la torche, IDENTITÉ DISTINCTE. Le montant qui soutient une
        poutre haute n'est pas une torche : les confondre suffisait à faire
        échouer le contrôle « aucune torche ne flotte » de smoke-render.js sur
        trois faux positifs, et un contrôle bruyant finit ignoré, donc mort. */
-    mat.beamPost = L(0x241f1a);
+    mat.beamPost = paintWood(0x2a231c);
     mat.coin      = new THREE.MeshLambertMaterial({ color: CFG.COL_COIN, emissive: CFG.COL_COIN, emissiveIntensity: 0.45 });
 
     mat.pit       = new THREE.MeshBasicMaterial({ color: 0x05060a });   // paroi intérieure d'une crevasse
@@ -229,8 +233,12 @@ const World = (function () {
     mat.stoneVariants = buildStoneVariants();
     mat.paveVariants = buildPaveVariants();          // chaussée d'entrée (zip 379)
     mat.kerb = paintKerbMaterial();
-    mat.rail = L(CFG.COL_RAIL);
-    mat.railCap = L(CFG.COL_RAIL_CAP);
+    /* `repeat` en X : un bloc de rambarde fait ~9 unités de long pour 1,55 de
+       haut. Sans répétition, la texture s'étirerait six fois et l'appareillage
+       deviendrait un dégradé. Trois motifs sur la longueur donnent des blocs
+       d'environ trois mètres — l'échelle de la jetée 2D. */
+    mat.rail = new THREE.MeshLambertMaterial({ map: pixelTexture(paintRailWall(), 3, 1) });
+    mat.railCap = new THREE.MeshLambertMaterial({ map: pixelTexture(paintRailCap(), 3, 1) });
 
     /* Arbres morts en panneaux. `transparent` + `alphaTest` : sans alphaTest,
        deux arbres qui se recouvrent se découpent l'un l'autre selon l'ordre de
@@ -629,6 +637,130 @@ const World = (function () {
     return new THREE.MeshLambertMaterial({ map: pixelTexture(cv) });
   }
 
+  /* =================== MAÇONNERIE ET BOIS TEXTURÉS (zip 380) ==============
+     Retour de Guillaume : « la rambarde de pierre utilise un matériau non
+     texturé, qui ne correspond pas du tout au niveau attendu. Je ne veux pas
+     de modules non texturés. »
+
+     Il avait raison, et le défaut était systémique : tout ce qui n'était pas
+     le SOL était peint d'un aplat. Rambarde, couronnement, poutres, troncs,
+     mâts de torche — une douzaine de volumes en couleur unie au milieu d'un
+     décor entièrement texturé. À plat, un bloc de pierre uni ne se lit pas
+     comme de la pierre : il n'a ni assise, ni joint, ni usure, seulement une
+     silhouette.
+
+     Deux peintres génériques suffisent à tout couvrir, et c'est délibéré :
+     une fonction par objet aurait produit douze dessins qui divergent, alors
+     que la carrière doit être la même partout. */
+
+  function tone(hex, k) {
+    const r = Math.min(255, Math.round(((hex >> 16) & 255) * k));
+    const g = Math.min(255, Math.round(((hex >> 8) & 255) * k));
+    const b = Math.min(255, Math.round((hex & 255) * k));
+    return `rgb(${r},${g},${b})`;
+  }
+
+  /* MAÇONNERIE. Des assises décalées d'un demi-bloc, un mortier plus sombre,
+     une arête éclairée en haut de chaque pierre et une ombre en bas — c'est ce
+     couple d'arêtes qui donne l'épaisseur, bien plus que le joint lui-même.
+     `mossTop` coiffe la bande supérieure : la mousse pousse sur le dessus des
+     murets, pas sur leurs flancs. */
+  function paintMasonry(base, rows, cols, mortar, mossTop, wear) {
+    const S = 32;
+    const cv = makeCanvas(S, S);
+    const ctx = cv.getContext("2d");
+    ctx.fillStyle = cssHex(mortar);
+    ctx.fillRect(0, 0, S, S);
+
+    const bh = S / rows, bw = S / cols;
+    for (let r = 0; r < rows; r++) {
+      const y = r * bh;
+      const off = (r & 1) ? bw / 2 : 0;
+      for (let c = -1; c <= cols; c++) {
+        const x = c * bw + off;
+        // Chaque pierre a sa valeur : un appareillage dont tous les blocs
+        // seraient identiques se lit comme un motif imprimé, pas comme un mur.
+        ctx.fillStyle = tone(base, 0.82 + Math.random() * 0.36);
+        ctx.fillRect(x + 1, y + 1, bw - 2, bh - 2);
+        ctx.fillStyle = "rgba(255,255,255,0.10)";
+        ctx.fillRect(x + 1, y + 1, bw - 2, 1);
+        ctx.fillStyle = "rgba(0,0,0,0.30)";
+        ctx.fillRect(x + 1, y + bh - 2, bw - 2, 1);
+        // Éclats et piqûres : l'usure, sans laquelle la pierre est neuve.
+        for (let w = 0; w < wear; w++) {
+          ctx.fillStyle = Math.random() < 0.5 ? "rgba(0,0,0,0.26)" : "rgba(255,255,255,0.07)";
+          ctx.fillRect(x + 2 + Math.random() * (bw - 4), y + 2 + Math.random() * (bh - 4),
+                       1 + (Math.random() < 0.3 ? 1 : 0), 1);
+        }
+      }
+    }
+    if (mossTop) {
+      const band = S * 0.34;
+      for (let m = 0; m < 34; m++) {
+        const x = Math.random() * S, y = Math.random() * band;
+        ctx.fillStyle = Math.random() < 0.5 ? cssHex(CFG.COL_MOSS) : cssHex(CFG.COL_MOSS_DARK);
+        ctx.globalAlpha = 0.85 - (y / band) * 0.75;
+        ctx.beginPath(); ctx.arc(x, y, 1 + Math.random() * 2, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+    return new THREE.MeshLambertMaterial({ map: pixelTexture(cv) });
+  }
+
+  /* PIERRE TAILLÉE D'UN SEUL TENANT — le couronnement, les piliers de torche.
+     Pas d'assises : c'est un monolithe. Ce qui le fait vivre, c'est un grain
+     fin, une arête supérieure claire et des angles ébréchés. */
+  function paintDressedStone(base, mossy) {
+    const S = 32;
+    const cv = makeCanvas(S, S);
+    const ctx = cv.getContext("2d");
+    ctx.fillStyle = cssHex(base);
+    ctx.fillRect(0, 0, S, S);
+    for (let i = 0; i < 130; i++) {
+      ctx.fillStyle = Math.random() < 0.5 ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.10)";
+      ctx.fillRect(Math.random() * S, Math.random() * S, 1 + (Math.random() < 0.25 ? 1 : 0), 1);
+    }
+    ctx.fillStyle = "rgba(255,255,255,0.13)"; ctx.fillRect(0, 0, S, 2);
+    ctx.fillStyle = "rgba(0,0,0,0.26)"; ctx.fillRect(0, S - 2, S, 2);
+    // Angles ébréchés : deux ou trois entailles sur les bords.
+    for (let i = 0; i < 3; i++) {
+      const w = 2 + Math.random() * 3;
+      ctx.fillStyle = "rgba(0,0,0,0.34)";
+      ctx.fillRect(Math.random() < 0.5 ? 0 : S - w, Math.random() * S, w, 1 + Math.random() * 3);
+    }
+    if (mossy) {
+      for (let m = 0; m < 16; m++) {
+        ctx.fillStyle = Math.random() < 0.5 ? cssHex(CFG.COL_MOSS_DARK) : cssHex(CFG.COL_MOSS);
+        ctx.globalAlpha = 0.4 + Math.random() * 0.4;
+        ctx.beginPath(); ctx.arc(Math.random() * S, Math.random() * (S * 0.35), 1 + Math.random() * 1.8, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+    return new THREE.MeshLambertMaterial({ map: pixelTexture(cv) });
+  }
+
+  /* BOIS. Fil VERTICAL — les troncs et les mâts sont debout, et un fil
+     horizontal les ferait lire comme des rondins couchés. Quelques nœuds, et
+     des fentes plus sombres qui suivent le fil. */
+  function paintWood(base) {
+    const S = 32;
+    const cv = makeCanvas(S, S);
+    const ctx = cv.getContext("2d");
+    ctx.fillStyle = cssHex(base);
+    ctx.fillRect(0, 0, S, S);
+    for (let i = 0; i < 26; i++) {
+      const x = Math.random() * S;
+      ctx.fillStyle = Math.random() < 0.55 ? "rgba(0,0,0,0.24)" : "rgba(255,255,255,0.06)";
+      ctx.fillRect(x, 0, 1 + (Math.random() < 0.2 ? 1 : 0), S);
+    }
+    for (let i = 0; i < 3; i++) {
+      const x = 3 + Math.random() * (S - 6), y = 3 + Math.random() * (S - 6);
+      ctx.fillStyle = "rgba(0,0,0,0.42)";
+      ctx.beginPath(); ctx.arc(x, y, 1.6 + Math.random() * 1.6, 0, Math.PI * 2); ctx.fill();
+    }
+    return new THREE.MeshLambertMaterial({ map: pixelTexture(cv) });
+  }
+
   /* ------------------------------- PAVAGE DE LA CHAUSSÉE D'ENTRÉE (379) ---
      La dalle de la section de pierre. Ce n'est PAS la même matière que le sol
      de la plateforme AA, et c'est tout l'enjeu : sur les références de
@@ -648,11 +780,23 @@ const World = (function () {
     ctx.fillStyle = cssHex(CFG.COL_MORTAR);
     ctx.fillRect(0, 0, SIZE, SIZE);
 
-    // Deux assises de deux blocs, la seconde décalée d'un demi-bloc.
-    const rows = 2, cols = 2, gap = 2;
+    /* ÉCHELLE DES BLOCS — corrigée au zip 380, et c'est la cause du « sol
+       incohérent avec la version 2D » relevé par Guillaume.
+
+       La texture est plaquée UNE fois sur une dalle de 8,4 × 4 unités. Avec
+       deux blocs par côté, chaque pierre mesurait donc 4,2 m sur 2 : des
+       dalles de la taille d'une voiture, alors que la jetée 2D pose deux
+       assises par CASE, c'est-à-dire des blocs d'environ 1,3 m.
+
+       Six colonnes sur trois assises redonnent la bonne taille (1,4 × 1,33 m),
+       et le rapport 6/3 compense l'étirement : la dalle est deux fois plus
+       large que longue, il faut donc deux fois plus de colonnes que d'assises
+       pour que les pierres soient CARRÉES dans le monde. Un appareillage aux
+       pierres écrasées se lit comme du carrelage. */
+    const rows = 3, cols = 6, gap = 1;
     const bh = (SIZE - gap * (rows + 1)) / rows;
     for (let r = 0; r < rows; r++) {
-      const off = (r & 1) ? SIZE * 0.25 : 0;
+      const off = (r & 1) ? SIZE / (cols * 2) : 0;
       for (let c = -1; c <= cols; c++) {
         const bw = (SIZE - gap * (cols + 1)) / cols;
         const bx = gap + c * (bw + gap) + off;
@@ -677,7 +821,7 @@ const World = (function () {
 
     // Mousse dans les joints, très peu au palier intact : cette chaussée-là
     // est encore entretenue, c'est plus loin qu'elle se délite.
-    const mossAmount = [3, 8, 14][tier];
+    const mossAmount = [2, 5, 9][tier];
     for (let m = 0; m < mossAmount; m++) {
       const along = Math.random() * SIZE;
       const jy = Math.random() < 0.5 ? gap + bh + gap / 2 : (Math.random() < 0.5 ? 1 : SIZE - 2);
@@ -703,6 +847,92 @@ const World = (function () {
     }
 
     return new THREE.MeshLambertMaterial({ map: pixelTexture(cv) });
+  }
+
+  /* ------------------------------ RAMBARDE DE PIERRE (refaite au zip 379b) ---
+     AUDIT COMPARATIF avec la jetée 2D, sur capture de Guillaume : « la
+     plateforme en pierre du début n'est pas assez soignée, ne correspond pas
+     du tout au niveau attendu ». Trois causes distinctes, toutes trouvées en
+     comparant point par point avec drawRunDeckTile (fermeArt.js) :
+
+       1. LE MUR N'AVAIT AUCUNE TEXTURE. `mat.rail` était un simple Lambert de
+          couleur unie : la rambarde de la section soignée était donc MOINS
+          détaillée que la bordure d'AA, qui a la sienne depuis le zip 374.
+          C'est le défaut principal, et il explique à lui seul l'aplat beige.
+       2. ELLE ÉTAIT TROP CLAIRE. À 0x635b4b, éclairée par la lune, elle
+          ressortait crème sur une chaussée grise — alors qu'en 2D le muret est
+          à peine plus clair que la dalle.
+       3. ÉTIREMENT. Un bloc de 9 mètres de long reçoit UNE seule fois sa
+          texture : même bien peinte, elle se serait étalée en un dégradé.
+          D'où `repeat` réglé ici, et non à la pose.
+
+     Le motif reprend celui de la jetée 2D : deux assises de blocs taillés,
+     joints décalés d'une demi-longueur, mortier plus sombre, et une COIFFE DE
+     MOUSSE sur la bande supérieure. */
+  function paintRailWall() {
+    const S = 32;
+    const cv = makeCanvas(S, S);
+    const ctx = cv.getContext("2d");
+
+    ctx.fillStyle = cssHex(CFG.COL_MORTAR);
+    ctx.fillRect(0, 0, S, S);
+
+    // Deux assises, la seconde décalée d'un demi-bloc : c'est le décalage qui
+    // fait lire un APPAREILLAGE. Alignés, les mêmes blocs font un carrelage.
+    const gap = 2, rows = 2, cols = 2;
+    const bh = (S - gap * (rows + 1)) / rows;
+    for (let r = 0; r < rows; r++) {
+      const off = (r & 1) ? S * 0.25 : 0;
+      for (let c = -1; c <= cols; c++) {
+        const bw = (S - gap * (cols + 1)) / cols;
+        const bx = gap + c * (bw + gap) + off, by = gap + r * (bh + gap);
+        const k = 0.84 + Math.random() * 0.32;
+        const base = CFG.COL_RAIL;
+        ctx.fillStyle = `rgb(${Math.round(((base >> 16) & 255) * k)},${Math.round(((base >> 8) & 255) * k)},${Math.round((base & 255) * k)})`;
+        ctx.fillRect(bx, by, bw, bh);
+        ctx.fillStyle = "rgba(255,255,255,0.05)"; ctx.fillRect(bx, by, bw, 1);
+        ctx.fillStyle = "rgba(0,0,0,0.20)"; ctx.fillRect(bx, by + bh - 1, bw, 1);
+      }
+    }
+
+    // Coiffe de mousse sur la bande haute, dégressive vers le bas — comme
+    // paintKerbMaterial, et comme la bordure 2D.
+    const band = S * 0.26;
+    for (let m = 0; m < 22; m++) {
+      const y = Math.random() * band;
+      ctx.fillStyle = Math.random() < 0.5 ? cssHex(CFG.COL_MOSS) : cssHex(CFG.COL_MOSS_DARK);
+      ctx.globalAlpha = 0.75 - (y / band) * 0.6;
+      ctx.beginPath(); ctx.arc(Math.random() * S, y, 1 + Math.random() * 2.2, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    return cv;
+  }
+
+  /* Pierre de couronnement : une tablette lisse, coupée de rares joints
+     transversaux, avec de la mousse sur son arête extérieure. Volontairement
+     PEU détaillée — c'est une surface usée par la pluie, pas de la maçonnerie,
+     et c'est ce contraste avec le mur qui la fait lire comme une tablette. */
+  function paintRailCap() {
+    const W = 32, H = 16;
+    const cv = makeCanvas(W, H);
+    const ctx = cv.getContext("2d");
+    ctx.fillStyle = cssHex(CFG.COL_RAIL_CAP);
+    ctx.fillRect(0, 0, W, H);
+    for (let i = 0; i < 40; i++) {
+      ctx.fillStyle = Math.random() < 0.5 ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.10)";
+      ctx.fillRect(Math.random() * W, Math.random() * H, 1 + Math.random() * 2, 1);
+    }
+    ctx.fillStyle = cssHex(CFG.COL_MORTAR);
+    for (const jx of [W * 0.5]) ctx.fillRect(jx, 0, 1, H);
+    ctx.fillStyle = "rgba(0,0,0,0.28)";
+    ctx.fillRect(0, H - 2, W, 2);
+    for (let m = 0; m < 10; m++) {
+      ctx.fillStyle = Math.random() < 0.5 ? cssHex(CFG.COL_MOSS_DARK) : cssHex(CFG.COL_MOSS);
+      ctx.globalAlpha = 0.5;
+      ctx.fillRect(Math.random() * W, H - 3 - Math.random() * 3, 1 + Math.random() * 2, 1);
+    }
+    ctx.globalAlpha = 1;
+    return cv;
   }
 
   function buildPaveVariants() {
@@ -1559,6 +1789,20 @@ const World = (function () {
     /* --- 5. Fissures DÉCORATIVES : une entaille à plat, quelques éclats.
        Aucune collision — voir Track.decorate(). --- */
     for (const k of node.cracks) {
+      /* ZIP 379b — PAS DE FISSURES SUR LA CHAUSSÉE ENTRETENUE.
+         Second grief de Guillaume : « il y a de nouveaux obstacles à travers
+         lesquels on peut passer au tout début ». Ce ne sont pas des obstacles :
+         ce sont les entailles DÉCORATIVES du zip 374, qui n'ont jamais rien
+         bloqué. Mais elles étaient dessinées pour une dalle sombre et usée ;
+         posées sur la pierre claire et nette de la nouvelle section d'entrée,
+         elles ressortent comme des trous béants — et le joueur essaie de les
+         éviter, puis les traverse.
+
+         Le décor mentait donc sur ce qu'il annonçait, ce qui est plus grave
+         qu'un décor laid. On les fait apparaître AVEC l'usure : quasi aucune
+         sur l'ouvrage entretenu, toutes une fois sur AA. Le tirage est continu,
+         donc il n'y a pas de ligne où elles surgissent. */
+      if (rng() > 0.12 + 0.88 * stageAt(node, k.t)) continue;
       const c = new THREE.Mesh(geo.plane, mat.crack);
       c.scale.set(k.wide, k.len, 1);
       c.rotation.x = -Math.PI / 2;
@@ -1727,7 +1971,16 @@ const World = (function () {
           const h = 7 + rng() * 7;
           const m = new THREE.Mesh(geo.plane, mat.trees[Math.floor(rng() * mat.trees.length)]);
           m.scale.set(h * (TREE_TEX_W / TREE_TEX_H) * (0.85 + rng() * 0.3), h, 1);
-          place(m, t, off, h / 2 - 1.6);
+          /* Zip 380 : le pied descend SOUS la surface du lac. Il en émergeait
+             d'un bon mètre, et Guillaume l'a vu tout de suite — contreforts et
+             racines à l'air libre, ce qui contredit l'idée même d'arbre
+             submergé. Dérivé de CFG.LAKE_Y et non écrit en dur : si le niveau
+             du lac bouge, les arbres suivent. */
+          // Enfoncé de 15 % de sa hauteur : c'est exactement la part du dessin
+          // qu'occupent les contreforts et les racines. Proportionnel, et non
+          // fixe, sinon un grand arbre garderait ses racines à l'air et un
+          // petit disparaîtrait à mi-tronc.
+          place(m, t, off, h / 2 + CFG.LAKE_Y - h * 0.15);
           m.userData.upright = true;   // pivote autour de Y seulement (updateAmbient)
           trees.push(m);
         } else {
@@ -1738,13 +1991,13 @@ const World = (function () {
           const h = 4.5 + rng() * 5.5;
           const trunk = box(0.42, h, 0.42, mat.bark, 0, 0, 0);
           trunk.rotation.z = (rng() - 0.5) * 0.18;
-          place(trunk, t, off, h / 2 - 1.4);
+          place(trunk, t, off, h / 2 + CFG.LAKE_Y - h * 0.15);   // pied noyé (zip 380)
           const nb = CFG.TREE_BRANCHES + Math.floor(rng() * 2);
           for (let b = 0; b < nb; b++) {
             const bl = 1.4 + rng() * 2.2;
             const bm = box(0.16, bl, 0.16, mat.barkDark, 0, 0, 0);
             bm.rotation.set((rng() - 0.5) * 1.6, rng() * 6.28, (rng() - 0.5) * 1.9);
-            place(bm, t + (rng() - 0.5) * 0.5, off + (rng() - 0.5) * 0.5, h * (0.5 + rng() * 0.45) - 1.4);
+            place(bm, t + (rng() - 0.5) * 0.5, off + (rng() - 0.5) * 0.5, h * (0.5 + rng() * 0.45) + CFG.LAKE_Y - h * 0.15);
           }
         }
       } else if (kind < 0.78) {
@@ -1771,29 +2024,18 @@ const World = (function () {
       }
     }
 
-    /* --- 9 bis. RUINES IMMERGÉES (zip 379). Des blocs de la chaussée tombés
-       à l'eau, à demi noyés et de guingois. Sur les références de Guillaume,
-       c'est ce qui donne son âge à l'ouvrage : une rambarde intacte au milieu
-       d'un lac vide se lit comme un décor neuf ; les mêmes pierres éparpillées
-       autour disent qu'elle s'écroule depuis longtemps.
+    /* --- 9 bis. RUINES IMMERGÉES : RETIRÉES AU ZIP 380.
+       Elles étaient posées à CFG.LAKE_Y + 1,9, soit 70 cm sous la chaussée et
+       près de deux mètres AU-DESSUS du lac : elles ne se lisaient donc pas
+       comme des blocs tombés à l'eau mais comme des obstacles au bord de la
+       piste — et sans collision, puisque le décor n'en a jamais. Guillaume :
+       « ils arrivent trop tôt, il y en a beaucoup trop, pas de collision,
+       retire-les. »
 
-       Réservées à la section de pierre et au fondu (rien à faire tomber d'une
-       plateforme qui n'a plus de rambarde), et posées près du bord pour rester
-       dans le premier plan éclairé. --- */
-    {
-      const sMid = stageAt(node, node.length / 2);
-      const nRuins = Math.round(5 * (1 - sMid));
-      for (let i = 0; i < nRuins; i++) {
-        const t = rng() * node.length;
-        const side = rng() < 0.5 ? -1 : 1;
-        const off = side * (CFG.TRACK_WIDTH / 2 + 1.6 + rng() * 5);
-        const w = 0.8 + rng() * 1.3;
-        const b = box(w, 0.55 + rng() * 0.5, w * (0.7 + rng() * 0.8), rng() < 0.5 ? mat.rail : mat.kerb, 0, 0, 0);
-        // Basculés, et enfoncés juste sous le niveau du lac : ils affleurent.
-        b.rotation.set((rng() - 0.5) * 0.5, rng() * 6.28, (rng() - 0.5) * 0.5);
-        place(b, t, off, CFG.LAKE_Y + 1.9 + rng() * 0.5);
-      }
-    }
+       Retirées, et non pas simplement replacées plus bas : le premier plan de
+       la section de pierre est l'endroit où le joueur apprend à lire la piste,
+       et tout ce qui y ressemble à un obstacle sans en être un lui apprend le
+       contraire de ce qu'il doit savoir. --- */
 
     /* --- 10. Obstacles --- */
     for (const o of node.obstacles) {

@@ -414,8 +414,12 @@ const CFG = {
   COL_PAVE:       0x6b6353,  // dalle taillée, chaussée d'entrée
   COL_PAVE_DARK:  0x4e483c,
   COL_MORTAR:     0x3a352c,  // joints de mortier entre les blocs
-  COL_RAIL:       0x635b4b,  // blocs de la rambarde
-  COL_RAIL_CAP:   0x7a7160,  // pierre de couronnement, sur le dessus
+  /* ASSOMBRIS au zip 379b. À 0x635b4b/0x7a7160, éclairée par la lune, la
+     rambarde ressortait CRÈME sur une chaussée grise et cassait l'unité de
+     l'ouvrage — alors que sur la jetée 2D le muret n'est qu'à peine plus clair
+     que la dalle qu'il borde. On garde l'écart, on divise son ampleur. */
+  COL_RAIL:       0x4f483b,  // blocs de la rambarde
+  COL_RAIL_CAP:   0x605848,  // pierre de couronnement, sur le dessus
   RAIL_H_STONE: 1.55,       // hauteur de la rambarde côté pierre
   RAIL_H_AA: 0.80,          // ... et côté AA (les blocs bas d'aujourd'hui)
 

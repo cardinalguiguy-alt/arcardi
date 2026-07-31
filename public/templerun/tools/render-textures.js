@@ -310,11 +310,22 @@ function sheet(name, items, zoom, pad) {
 // deuxième version des mêmes dessins.
 const M = World.materials;
 sheet("ciel", [{ cv: M.skyTex.image, label: "dôme de ciel" }], 1, 8);
+/* Le SOL est plaqué sur 8,4 unités de large pour 4 de long : ses pierres sont
+   deux fois plus larges à l'écran que dans le canvas. On les montre étirées
+   d'autant, sinon la planche fait croire à des briques debout. */
+const AX_FLOOR = CFG.TRACK_WIDTH / CFG.FLOOR_TILE;
 sheet("pierre", [
-  ...M.paveVariants.flat().map((m, i) => ({ cv: m.map.image, label: "pavé " + i })),
-  ...M.stoneVariants.flat().map((m, i) => ({ cv: m.map.image, label: "dalle AA " + i })),
-  { cv: M.kerb.map.image, label: "bordure" },
-], 4, 6);
+  ...M.paveVariants.flat().map((m, i) => ({ cv: m.map.image, label: "pavé " + i, ax: AX_FLOOR })),
+  ...M.stoneVariants.flat().map((m, i) => ({ cv: m.map.image, label: "dalle AA " + i, ax: AX_FLOOR })),
+], 3, 6);
+sheet("murs", [
+  { cv: M.rail.map.image, label: "rambarde" },
+  { cv: M.railCap.map.image, label: "couronnement" },
+  { cv: M.kerb.map.image, label: "bordure AA" },
+  { cv: M.obstacle.map.image, label: "poutre" },
+  { cv: M.bark.map.image, label: "tronc" },
+  { cv: M.torchWood.map.image, label: "mât de torche" },
+], 5, 8);
 sheet("arbres", M.trees.map((m, i) => ({ cv: m.map.image, label: "arbre " + i })), 3, 8);
 
 console.log("Planches écrites — À REGARDER, pas seulement à générer :");

@@ -3,7 +3,7 @@
 Endless runner 3D façon Temple Run, intégré à Ferme Vallée comme défi du monde
 sombre.
 
-## La progression du décor (zip 379)
+## La progression du décor (zips 379-380)
 
 La course commence sur une **chaussée de pierre à rambardes**, traduction 3D de
 la jetée 2D du monde sombre : gros blocs taillés, mortier, pierre de
@@ -18,6 +18,12 @@ la rambarde s'affaisse, les dalles se délitent, le couronnement tombe, les
 flammes meurent, les champignons prennent le relais. Le pavage lui-même se
 mélange **dalle par dalle** par tirage, ce qui entremêle les deux matières sur
 une trentaine de mètres au lieu de les séparer par une ligne.
+
+**Aucun volume n'est en couleur unie** (zip 380). Rambarde, couronnement,
+poutres, troncs et mâts de torche ont leur maçonnerie ou leur fil de bois,
+peints par deux fonctions génériques — une par objet aurait produit douze
+dessins qui divergent, alors que la carrière doit être la même partout.
+Les pierres du pavage font 1,40 × 1,33 m, l'échelle de la jetée 2D.
 
 La **brume** suit son propre cycle, de période 4000 m — celle des bifurcations
 offroad. Elle est donc au plus épais pile sur les embranchements, qu'elle
@@ -157,7 +163,7 @@ node tools/check-strings.js      # parité FR/EN + ui.js exécuté contre un fau
 node tools/verify-offroad.js     # la bifurcation, vérifiée en la JOUANT (zip 377)
 node tools/verify-skin.js        # la tenue du joueur, de la ferme au défi (zip 377)
 node tools/render-runner.js      # fermier, flammes ET chaussée 3D en PNG — À REGARDER (377/379)
-node tools/render-textures.js    # toutes les textures peintes en PNG — À REGARDER (zip 379)
+node tools/render-textures.js    # toutes les textures peintes en PNG — À REGARDER (379/380)
 node tools/verify-deck.mjs       # la chaussée 2D : bord atteint, palettes accordées (zip 378)
 node tools/render-jetty.mjs      # rend la chaussée 2D en PNG — À REGARDER (zip 378)
 ```
