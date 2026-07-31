@@ -168,6 +168,12 @@ const Track = (function () {
       // atteint. Sans ça, l'écart réel entre deux sorties dériverait de
       // ~90 unités à chaque fois et la 10e serait à 4900 m de la 9e.
       this.nextExitThreshold = CFG.OFFROAD_EVERY;
+      /* Zip 379 — FIN DE LA CHAUSSÉE DE PIERRE. Distance à laquelle se
+         termine le premier tronçon qui TOURNE : c'est là que le décor de
+         pierre commence à céder la place à la plateforme AA (décision
+         Guillaume : « pierre jusqu'au premier virage »). Nul tant qu'aucun
+         virage n'a été généré. */
+      this.firstTurnEnd = null;
       // Dernier obstacle posé, en distance ABSOLUE. C'est ce qui permet à la
       // règle d'espacement de traverser les bords de tronçon (voir en-tête).
       this.prevObst = null;
@@ -235,6 +241,30 @@ const Track = (function () {
         this.nodesSinceTurn++;
       }
 
+      /* --------------------------------------- DÉCOR : FIN DE LA PIERRE ---
+         Zip 379. Résolu ICI, une fois pour toutes, et GELÉ SUR LE TRONÇON.
+         C'est la seule façon d'être sûr que le décor ne se contredira jamais :
+         un tronçon déjà construit ne se repeint pas, il ne doit donc pas
+         dépendre d'une valeur qui bougera plus tard.
+
+         La cohérence tient à deux propriétés, et il faut les deux :
+
+           * un tronçon généré AVANT tout virage est ENTIÈREMENT dans la
+             pierre — par définition, puisque la pierre va au moins jusqu'à la
+             fin de ce tronçon-là. Lui donner l'infini est donc exact, pas un
+             pis-aller ;
+           * le plafond DECOR_STONE_MAX rend la valeur MONOTONE : une fois
+             qu'un tronçon a retenu 700, aucun virage découvert plus tard ne
+             peut faire redescendre ce nombre, donc aucun tronçon voisin ne
+             peut se retrouver en désaccord avec lui. */
+      if (node.turn !== 0 && this.firstTurnEnd === null) {
+        this.firstTurnEnd = dist + node.length;
+      }
+      node.stoneEnd = Math.min(
+        this.firstTurnEnd === null ? Infinity : this.firstTurnEnd,
+        CFG.DECOR_STONE_MAX
+      );
+
       if (!isFirst) this.populate(node, diff);
       this.decorate(node);
 
@@ -277,6 +307,11 @@ const Track = (function () {
         startDist: node.startDist + node.length,
         turn: 0, exit: 0, escape: null, entryTurn: node.exit,
         obstacles: [], coins: [], cracks: [],
+        // La branche hérite du décor du tronçon dont elle part : une sortie
+        // ne peut tomber qu'à 4000 m au plus tôt, donc toujours en plein AA,
+        // mais le faire dériver plutôt que de l'écrire évite d'avoir à y
+        // repenser si la cadence des sorties changeait un jour.
+        stoneEnd: node.stoneEnd,
         built: false, group: null,
       };
     }
@@ -535,6 +570,20 @@ const Track = (function () {
         if (at > dist) return at;
       }
       return null;
+    }
+
+    /* État du décor à une distance donnée (zip 379) : 0 = chaussée de pierre,
+       1 = plateforme AA. Sert au RENDU GLOBAL (lampe chaude, brume), là où
+       world.js utilise la valeur gelée sur chaque tronçon pour la géométrie.
+
+       Les deux doivent donner le même résultat, et c'est le cas : `stoneEnd`
+       est monotone et identique sur tous les tronçons une fois le premier
+       virage passé. On lit celui du tronçon le plus avancé qu'on connaisse,
+       qui est aussi le mieux informé. */
+    stageAt(dist) {
+      const last = this.nodes[this.nodes.length - 1];
+      const end = last ? last.stoneEnd : CFG.DECOR_STONE_MAX;
+      return Math.max(0, Math.min(1, (dist - end) / CFG.DECOR_BLEND_LEN));
     }
 
     /* Convertit une distance totale en (tronçon, t). Sert aux loups. */

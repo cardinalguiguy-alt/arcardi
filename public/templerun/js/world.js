@@ -37,6 +37,7 @@ const World = (function () {
   let lake, lakeMat, lakeGlow, lakeGlowMat, mists = [];
   let geo = {}, mat = {};
   let flames = [];        // plans de flamme à faire vaciller (corps ET cœurs)
+  let trees = [];         // arbres morts en panneaux, pivotés autour de Y (zip 379)
   const flamePulse = [];  // cadences de respiration des matériaux de flamme
   let glows = [];         // plans lumineux (champignons, runes) à tourner vers la caméra
   let dust = [];          // bouffées de poussière de glissade, recyclées
@@ -146,6 +147,11 @@ const World = (function () {
     mat.mushStem  = L(0x6a5f7a);
     mat.torchWood = L(0x241f1a);
     mat.torchHead = L(0x140f0a);   // extrémité carbonisée du bâton (zip 377)
+    /* Même bois que la torche, IDENTITÉ DISTINCTE. Le montant qui soutient une
+       poutre haute n'est pas une torche : les confondre suffisait à faire
+       échouer le contrôle « aucune torche ne flotte » de smoke-render.js sur
+       trois faux positifs, et un contrôle bruyant finit ignoré, donc mort. */
+    mat.beamPost = L(0x241f1a);
     mat.coin      = new THREE.MeshLambertMaterial({ color: CFG.COL_COIN, emissive: CFG.COL_COIN, emissiveIntensity: 0.45 });
 
     mat.pit       = new THREE.MeshBasicMaterial({ color: 0x05060a });   // paroi intérieure d'une crevasse
@@ -221,7 +227,23 @@ const World = (function () {
     });
 
     mat.stoneVariants = buildStoneVariants();
+    mat.paveVariants = buildPaveVariants();          // chaussée d'entrée (zip 379)
     mat.kerb = paintKerbMaterial();
+    mat.rail = L(CFG.COL_RAIL);
+    mat.railCap = L(CFG.COL_RAIL_CAP);
+
+    /* Arbres morts en panneaux. `transparent` + `alphaTest` : sans alphaTest,
+       deux arbres qui se recouvrent se découpent l'un l'autre selon l'ordre de
+       tri, et on voit des trous rectangulaires dans la ramure au moment où la
+       caméra tourne. Avec, la découpe est décidée par pixel et le tri ne
+       compte plus. */
+    mat.trees = [];
+    for (let i = 0; i < CFG.TREE_BILLBOARD_VARIANTS; i++) {
+      mat.trees.push(new THREE.MeshLambertMaterial({
+        map: pixelTexture(paintDeadTree(4001 + i * 977)),
+        transparent: true, alphaTest: 0.5, side: THREE.DoubleSide,
+      }));
+    }
 
     buildPlayer();
     buildWolves();
@@ -341,6 +363,128 @@ const World = (function () {
       }
     }
     ctx.putImageData(img, 0, 0);
+    return cv;
+  }
+
+  /* ========================= ARBRE MORT EN PANNEAU (zip 379) ==============
+     Guillaume a fourni un pixel-art d'arbre mort et demandé d'en reprendre
+     l'idée : tronc noueux et fendu, branches griffues, lambeaux de mousse
+     pendante, souches noyées au pied. En boîtes, on n'en approcherait jamais
+     la silhouette — un arbre mort, c'est une DÉCOUPE, et une découpe se peint.
+
+     Décision Guillaume : panneaux au LOIN, boîtes tout PRÈS. Le partage se
+     fait sur le décalage latéral de l'arbre, qui ne change jamais — jamais sur
+     sa distance au joueur, sinon un arbre changerait de nature sous ses yeux
+     en s'approchant. C'est la seule façon d'avoir les deux sans que la
+     bascule se voie une seule fois.
+
+     Bénéfice collatéral, et il est décisif : un panneau coûte UN objet là où
+     un arbre en boîtes en coûte quatre à six. C'est ce qui finance les
+     rambardes de pierre de la section d'entrée.
+
+     TRACÉ. Un tronc qui monte en serpentant et s'amincit, une fourche haute,
+     des branches récursives à deux niveaux, et de la mousse suspendue aux
+     départs de branche. Tout en pas entiers : on reste du pixel-art. */
+  const TREE_TEX_W = 64, TREE_TEX_H = 128;   // proportions du panneau d'arbre
+  function paintDeadTree(seed) {
+    // 128 de haut et non 112 : à 112, la ramure des variantes les plus
+    // élancées sortait par le haut du canvas et se retrouvait tranchée net.
+    // Vu au rendu (tools/render-textures.js) ; invisible autrement, puisque
+    // la texture n'apparaît jamais qu'à cinquante mètres dans le brouillard.
+    const W = 64, H = TREE_TEX_H;
+    const cv = makeCanvas(W, H);
+    const ctx = cv.getContext("2d");
+    ctx.clearRect(0, 0, W, H);
+    const rng = Track.makeRng(seed >>> 0);
+
+    const BARK = ["#241f1a", "#1b1712", "#2e2822"];
+    const CORE = "#0d0b09";                 // fente centrale du tronc
+    // Mousse pendante NETTEMENT assombrie par rapport au premier jet : à
+    // #6d6480 elle ressortait plus clair que le tronc et se lisait comme des
+    // barres de code-barres accrochées à l'arbre. Elle doit être une nuance,
+    // pas un motif.
+    const MOSS = ["#3d3849", "#484254", "#332f3e"];
+
+    // Trait épais en pas entiers. Pas de lineTo : on veut des pixels francs,
+    // et le faux canvas des outils ne sait dessiner que des rectangles.
+    const limb = (x0, y0, x1, y1, w0, w1, col) => {
+      const n = Math.max(1, Math.round(Math.hypot(x1 - x0, y1 - y0)));
+      for (let i = 0; i <= n; i++) {
+        const k = i / n;
+        const w = Math.max(1, Math.round(w0 + (w1 - w0) * k));
+        ctx.fillStyle = col;
+        ctx.fillRect(Math.round(x0 + (x1 - x0) * k) - (w >> 1), Math.round(y0 + (y1 - y0) * k), w, 1);
+      }
+    };
+
+    // Mousse pendante : quelques mèches verticales effilées.
+    const hang = (x, y, len) => {
+      for (let s = 0; s < 1 + Math.floor(rng() * 2); s++) {
+        const hx = x + Math.round((rng() - 0.5) * 6);
+        const hl = Math.round(len * (0.5 + rng() * 0.7));
+        for (let i = 0; i < hl; i++) {
+          ctx.fillStyle = MOSS[Math.floor(rng() * MOSS.length)];
+          // Effilée sur toute sa longueur, et jamais plus de 2 px : une mèche
+          // de mousse pend, elle ne descend pas en colonne.
+          const w = i < hl * 0.35 ? 2 : 1;
+          ctx.fillRect(hx + (i > hl * 0.6 ? 1 : 0), y + i, w, 1);
+        }
+      }
+    };
+
+    // Branches récursives. Deux niveaux : au-delà, à cette résolution, on
+    // n'ajoute que du bruit.
+    const branch = (x, y, ang, len, w, depth) => {
+      const ex = x + Math.sin(ang) * len;
+      const ey = y - Math.cos(ang) * len;
+      limb(x, y, ex, ey, w, Math.max(1, w - 1), BARK[Math.floor(rng() * BARK.length)]);
+      if (depth <= 0) return;
+      const n = 2 + Math.floor(rng() * 2);
+      for (let i = 0; i < n; i++) {
+        const a = ang + (rng() - 0.5) * 1.5 + (i - (n - 1) / 2) * 0.55;
+        branch(ex, ey, a, len * (0.45 + rng() * 0.3), Math.max(2, w - 2), depth - 1);
+      }
+      if (rng() < 0.45) hang(Math.round(ex), Math.round(ey), 9 + rng() * 12);
+    };
+
+    /* Tronc : une suite de segments qui serpentent, chacun un peu plus fin.
+       C'est le serpentement qui fait l'arbre MORT — un tronc droit lit comme
+       un poteau, quelle que soit la ramure qu'on lui accroche. */
+    /* PROPORTIONS REPRISES DU PIXEL-ART DE RÉFÉRENCE, après un premier jet
+       trop grêle : là-bas, le tronc occupe près du tiers de la largeur et
+       reste massif jusqu'aux deux tiers de la hauteur. C'est cette MASSE qui
+       fait l'arbre mort — un tronc fin couvert de brindilles se lit comme un
+       arbuste, quelle que soit la torsion qu'on lui donne. */
+    let x = W / 2, y = H - 8, w = 21, ang = (rng() - 0.5) * 0.25;
+    const nodes = [];
+    for (let s = 0; s < 6; s++) {
+      const len = 10 + rng() * 6;
+      const nx = x + Math.sin(ang) * len, ny = y - Math.cos(ang) * len;
+      limb(x, y, nx, ny, w, Math.max(7, w - 2.6), BARK[0]);
+      // Fente sombre au cœur du tronc : c'est elle qui le creuse, et elle est
+      // le trait le plus reconnaissable de la référence.
+      limb(x + 1, y, nx + 1, ny, Math.max(2, w * 0.28), Math.max(1, w * 0.2), CORE);
+      // Arête éclairée d'un seul côté : un cylindre, pas une planche.
+      limb(x - w * 0.36, y, nx - w * 0.32, ny, 2, 1, BARK[2]);
+      nodes.push({ x: nx, y: ny, w });
+      x = nx; y = ny; w = Math.max(7, w - 2.4);
+      ang += (rng() - 0.5) * 0.5;
+    }
+
+    // Fourche haute : deux limbes ÉPAIS et courts, pas deux tiges.
+    branch(x, y, ang - 0.5, 13 + rng() * 7, Math.max(5, w - 2), 2);
+    branch(x, y, ang + 0.55, 11 + rng() * 7, Math.max(5, w - 2), 2);
+    // Moignons latéraux : de gros départs cassés le long du tronc.
+    for (const nd of nodes.slice(1, 5)) {
+      if (rng() < 0.8) branch(nd.x, nd.y, (rng() < 0.5 ? -1 : 1) * (0.95 + rng() * 0.55),
+                              8 + rng() * 7, Math.max(3, nd.w * 0.35), 1);
+    }
+
+    // Contreforts et racines : le pied s'évase largement avant de plonger.
+    for (let r = 0; r < 6; r++) {
+      const a = (r - 2.5) * 0.42;
+      limb(W / 2, H - 14, W / 2 + Math.sin(a) * 17, H - 1, 7 - Math.abs(r - 2.5), 2, BARK[1]);
+    }
     return cv;
   }
 
@@ -485,6 +629,91 @@ const World = (function () {
     return new THREE.MeshLambertMaterial({ map: pixelTexture(cv) });
   }
 
+  /* ------------------------------- PAVAGE DE LA CHAUSSÉE D'ENTRÉE (379) ---
+     La dalle de la section de pierre. Ce n'est PAS la même matière que le sol
+     de la plateforme AA, et c'est tout l'enjeu : sur les références de
+     Guillaume, la chaussée d'entrée est un ouvrage TAILLÉ — de gros blocs
+     rectangulaires, des joints de mortier nets, une pierre claire — là où AA
+     est une surface usée, sombre, presque du bois délavé.
+
+     Deux choses font basculer la lecture de « sol » à « ouvrage », et il faut
+     les deux : un APPAREILLAGE visible (le quadrillage de blocs, décalé d'une
+     assise à l'autre) et un MORTIER plus sombre que la pierre. Sans le
+     décalage, on lit un carrelage ; sans le mortier, on lit une texture. */
+  function paintPaveTile(tier) {
+    const SIZE = 32;
+    const cv = makeCanvas(SIZE, SIZE);
+    const ctx = cv.getContext("2d");
+
+    ctx.fillStyle = cssHex(CFG.COL_MORTAR);
+    ctx.fillRect(0, 0, SIZE, SIZE);
+
+    // Deux assises de deux blocs, la seconde décalée d'un demi-bloc.
+    const rows = 2, cols = 2, gap = 2;
+    const bh = (SIZE - gap * (rows + 1)) / rows;
+    for (let r = 0; r < rows; r++) {
+      const off = (r & 1) ? SIZE * 0.25 : 0;
+      for (let c = -1; c <= cols; c++) {
+        const bw = (SIZE - gap * (cols + 1)) / cols;
+        const bx = gap + c * (bw + gap) + off;
+        const by = gap + r * (bh + gap);
+        if (bx > SIZE || bx + bw < 0) continue;
+        // Chaque bloc a sa propre valeur : une chaussée dont toutes les
+        // pierres seraient identiques se lit comme un motif imprimé.
+        const k = 0.86 + Math.random() * 0.28;
+        const base = CFG.COL_PAVE;
+        const r8 = Math.min(255, Math.round(((base >> 16) & 255) * k));
+        const g8 = Math.min(255, Math.round(((base >> 8) & 255) * k));
+        const b8 = Math.min(255, Math.round((base & 255) * k));
+        ctx.fillStyle = `rgb(${r8},${g8},${b8})`;
+        ctx.fillRect(bx, by, bw, bh);
+        // Arête éclairée en haut, ombre en bas : le bloc a une épaisseur.
+        ctx.fillStyle = `rgba(255,255,255,0.06)`;
+        ctx.fillRect(bx, by, bw, 1);
+        ctx.fillStyle = `rgba(0,0,0,0.18)`;
+        ctx.fillRect(bx, by + bh - 1, bw, 1);
+      }
+    }
+
+    // Mousse dans les joints, très peu au palier intact : cette chaussée-là
+    // est encore entretenue, c'est plus loin qu'elle se délite.
+    const mossAmount = [3, 8, 14][tier];
+    for (let m = 0; m < mossAmount; m++) {
+      const along = Math.random() * SIZE;
+      const jy = Math.random() < 0.5 ? gap + bh + gap / 2 : (Math.random() < 0.5 ? 1 : SIZE - 2);
+      ctx.fillStyle = Math.random() < 0.55 ? cssHex(CFG.COL_MOSS_DARK) : cssHex(CFG.COL_MOSS);
+      ctx.globalAlpha = 0.45 + Math.random() * 0.35;
+      ctx.beginPath(); ctx.arc(along, jy + (Math.random() - 0.5) * 3, 1 + Math.random() * (1 + tier), 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // Fêlures : uniquement sur les paliers abîmés, et fines.
+    const crackCounts = [0, 1, 3];
+    ctx.strokeStyle = cssHex(CFG.COL_CRACK);
+    ctx.lineWidth = 1;
+    for (let c = 0; c < crackCounts[tier]; c++) {
+      let x = Math.random() * SIZE, y = Math.random() * SIZE;
+      ctx.beginPath(); ctx.moveTo(x, y);
+      for (let seg = 0; seg < 2 + Math.floor(Math.random() * 2); seg++) {
+        x += (Math.random() - 0.5) * SIZE * 0.4;
+        y += (Math.random() - 0.5) * SIZE * 0.4;
+        ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+
+    return new THREE.MeshLambertMaterial({ map: pixelTexture(cv) });
+  }
+
+  function buildPaveVariants() {
+    const VARIANTS_PER_TIER = [3, 3, 3];
+    return VARIANTS_PER_TIER.map((n, tier) => {
+      const list = [];
+      for (let i = 0; i < n; i++) list.push(paintPaveTile(tier));
+      return list;
+    });
+  }
+
   function buildStoneVariants() {
     const VARIANTS_PER_TIER = [3, 4, 4]; // intacte, fissurée, très abîmée
     return VARIANTS_PER_TIER.map((n, tier) => {
@@ -603,25 +832,64 @@ const World = (function () {
       if (cx > W - 160) drawCloud(cx - W, cy, scale, lit);
     }
 
-    // Crêtes lointaines en silhouette. Le profil PART et REVIENT à la même
-    // hauteur, sinon la ligne d'horizon a une marche visible à la couture.
-    const EDGE_Y = HORIZON - 14;
+    /* ================ MONTAGNES (refaites au zip 379) ==================
+       Sur les trois références de Guillaume, l'horizon est occupé par de
+       grandes PYRAMIDES nettes qui se chevauchent, et non par la crête
+       dentelée que peignait le zip 374. La différence n'est pas décorative :
+       une silhouette pyramidale donne une profondeur immédiate parce que
+       l'œil lit sans effort quel sommet est devant quel autre, ce qu'une
+       ligne brisée continue ne permet pas.
+
+       DEUX PLANS, et c'est ce qui fait la distance : le lointain est plus
+       haut, plus pâle et déjà mangé par la brume ; le proche est presque
+       noir. Peints dans cet ordre, ils se recouvrent tout seuls.
+
+       ENTRE LES DEUX, une bande rouge sombre. C'est elle qu'on voit briller
+       entre les pyramides sur les captures, et c'est le seul rappel chaud de
+       tout le ciel une fois les torches éteintes.
+
+       Chaque plan PART et REVIENT à la même hauteur aux deux bords, sinon la
+       ligne d'horizon a une marche visible à la couture — et on la traverse
+       à chaque virage. */
+    const EDGE_Y = HORIZON - 12;
+
+    // Rougeoiement bas, derrière tout le relief.
+    const glow = ctx.createLinearGradient(0, HORIZON - 74, 0, HORIZON);
+    glow.addColorStop(0, "rgba(126,26,48,0)");
+    glow.addColorStop(0.55, "rgba(146,30,52,0.55)");
+    glow.addColorStop(1, "rgba(92,18,40,0.85)");
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, HORIZON - 74, W, 74);
+
+    const range = (color, minH, maxH, minW, maxW, jitterY) => {
+      ctx.fillStyle = color;
+      let x = -60;
+      while (x < W + 60) {
+        const bw = minW + Math.random() * (maxW - minW);
+        const h = minH + Math.random() * (maxH - minH);
+        const baseY = HORIZON + jitterY;
+        // Une pyramide : deux versants droits et un sommet légèrement
+        // décentré. Le décentrage suffit à ce qu'aucune ne soit identique.
+        const apex = x + bw * (0.38 + Math.random() * 0.24);
+        ctx.beginPath();
+        ctx.moveTo(x, baseY);
+        ctx.lineTo(apex, baseY - h);
+        ctx.lineTo(x + bw, baseY);
+        ctx.closePath();
+        ctx.fill();
+        x += bw * (0.52 + Math.random() * 0.3);   // elles se chevauchent
+      }
+    };
+
+    // Plan LOINTAIN : plus haut, délavé par la brume.
+    range("rgba(62,40,92,0.72)", 62, 132, 150, 300, -2);
+    // Plan PROCHE : plus bas, presque noir.
+    range(cssHex(CFG.SKY_PEAKS), 42, 96, 110, 240, 6);
+
+    // Base commune : elle ferme le bas et garantit qu'aucun trou ne laisse
+    // voir le dégradé du ciel sous les montagnes.
     ctx.fillStyle = cssHex(CFG.SKY_PEAKS);
-    ctx.beginPath();
-    ctx.moveTo(0, HORIZON + 30);
-    ctx.lineTo(0, EDGE_Y);
-    let x = 0;
-    while (x < W) {
-      const step = 40 + Math.random() * 90;
-      const summit = x + step >= W ? EDGE_Y : HORIZON - 14 - Math.random() * 62;
-      ctx.lineTo(Math.min(W, x + step * 0.5), summit);
-      ctx.lineTo(Math.min(W, x + step), HORIZON - 6 - Math.random() * 18);
-      x += step;
-    }
-    ctx.lineTo(W, EDGE_Y);
-    ctx.lineTo(W, HORIZON + 30);
-    ctx.closePath();
-    ctx.fill();
+    ctx.fillRect(0, EDGE_Y + 10, W, H - EDGE_Y - 10);
 
     return cv;
   }
@@ -672,8 +940,12 @@ const World = (function () {
 
   function buildSky() {
     const geoSky = new THREE.SphereGeometry(CFG.DRAW_DISTANCE * 0.9, 24, 14);
+    // La texture est retenue dans `mat` pour que tools/render-textures.js
+    // puisse la regarder : c'est le seul dessin du jeu qu'on ne voit jamais
+    // de près, et c'est aussi le plus grand.
+    mat.skyTex = pixelTexture(paintSky());
     skyMat = new THREE.MeshBasicMaterial({
-      map: pixelTexture(paintSky()), side: THREE.BackSide, fog: false, depthWrite: false,
+      map: mat.skyTex, side: THREE.BackSide, fog: false, depthWrite: false,
     });
     sky = new THREE.Mesh(geoSky, skyMat);
     sky.renderOrder = -10;   // toujours dessiné en premier, jamais devant le décor
@@ -1014,17 +1286,85 @@ const World = (function () {
      Corps et cœur d'une MÊME torche ont eux aussi leurs propres oscillateurs :
      c'est ce décalage-là qui fait qu'une flamme paraît vivante plutôt que
      simplement animée. */
-  function addTorch(place, t, off, seed) {
+  function addTorch(place, t, off, seed, stage, side, forceLit) {
     const rng = Track.makeRng(seed >>> 0);
+    const s = Math.max(0, Math.min(1, stage === undefined ? 0 : stage));
+    /* `forceLit` : les deux torches rapprochées d'un embranchement offroad
+       brûlent TOUJOURS, même en plein AA où tout le reste est éteint.
 
-    place(box(0.20, 2.05, 0.20, mat.torchWood, 0, 0, 0), t, off, 1.02);
-    const head = box(0.29, 0.32, 0.29, mat.torchHead, 0, 0, 0);
+       Ce n'est pas une entorse à « on perdra les flammes », c'est ce qui rend
+       la règle utile : puisqu'il n'y a plus un seul feu sur la chaussée, deux
+       flammes côte à côte deviennent le repère le plus fort du jeu. Le zip 377
+       comptait dessus pour signaler la sortie ; les éteindre aurait effacé un
+       repère de GAMEPLAY au nom d'un choix d'ambiance. */
+    const fs = forceLit ? Math.min(s, 0.30) : s;
+
+    /* ZIP 379 — LA TORCHE EST FIXÉE, PLUS POSÉE.
+       Retour de Guillaume : « les torches ne devront plus flotter à côté de
+       la plateforme AA mais être fixées de manière cohérente et réaliste sur
+       les côtés ». Elles étaient un mât planté dans le vide, à 45 cm en
+       dehors de la chaussée : rien ne les tenait, et ça se voyait dès qu'on
+       passait à côté.
+
+       Elles reposent désormais sur un SOCLE posé sur la rambarde, et leur mât
+       est INCLINÉ VERS L'EXTÉRIEUR — comme une torche scellée dans un mur
+       l'est toujours, pour que la flamme ne lèche pas la pierre. C'est cette
+       inclinaison, plus que le socle, qui fait qu'on la lit comme fixée : un
+       mât parfaitement vertical à côté d'un muret reste un mât posé là.
+
+       La hauteur du socle suit celle de la rambarde, qui s'affaisse avec le
+       fondu : la torche descend donc avec elle, au lieu de rester en l'air
+       quand la pierre a fondu sous elle. */
+    const railH = CFG.RAIL_H_STONE + (CFG.RAIL_H_AA - CFG.RAIL_H_STONE) * s;
+
+    /* PILIER, et non pas socle posé sur la rambarde. La première version
+       coiffait le muret d'un petit bloc — ce qui marchait tant que la
+       rambarde était CONTINUE, c'est-à-dire uniquement sur la section de
+       pierre. Sur AA, où il ne reste que des blocs isolés séparés de vide,
+       une torche sur deux se retrouvait au-dessus d'un trou : exactement le
+       défaut que Guillaume demandait de corriger, simplement déplacé.
+
+       Le pilier, lui, DESCEND JUSQU'À LA CHAUSSÉE. Il ne peut donc rien y
+       avoir sous lui, quelle que soit la rambarde — la garantie est
+       géométrique, elle ne dépend d'aucun tirage. Il déborde volontairement de
+       la rambarde en largeur, pour se lire comme un ouvrage distinct plutôt
+       que comme un renflement du muret. */
+    const plinthH = railH + 0.10;
+    place(box(0.85, plinthH, 0.85, mat.railCap, 0, 0, 0), t, off, plinthH / 2 - 0.25);
+    const baseY = plinthH - 0.25;
+
+    const lean = (side === undefined ? 0 : side) * (0.20 + 0.10 * (1 - s));
+    const shaft = box(0.19, 1.55, 0.19, mat.torchWood, 0, 0, 0);
+    shaft.rotation.x = 0;
+    shaft.rotation.z = lean;
+    /* `baseY` est le SOMMET du pilier : le pied du mât s'y pose, et son centre
+       se trouve donc une demi-longueur plus haut — décalée par l'inclinaison.
+
+       Ce calcul portait encore, un temps, l'épaisseur de l'ancien socle
+       (+0,34) : le mât flottait de trente-quatre centimètres au-dessus de son
+       propre pilier. Invisible sur les captures, et attrapé par le contrôle
+       géométrique de smoke-render.js — qui exige, pour CHAQUE torche, une
+       continuité de pierre du sol jusqu'au pied du mât. */
+    const shaftMid = baseY + Math.cos(lean) * 0.775;
+    place(shaft, t, off + Math.sin(lean) * 0.775, shaftMid);
+
+    const headY = baseY + Math.cos(lean) * 1.55;
+    const headOff = off + Math.sin(lean) * 1.55;
+    const head = box(0.28, 0.30, 0.28, mat.torchHead, 0, 0, 0);
     head.rotation.y = rng() * 0.9;
-    place(head, t, off, 2.16);
+    head.rotation.z = lean;
+    place(head, t, headOff, headY);
+
+    /* Flamme ÉTEINTE sur AA (décision Guillaume). On ne la met pas à opacité
+       nulle : on ne la construit pas du tout. Deux objets de moins par torche
+       sur toute la piste AA, c'est-à-dire sur l'écrasante majorité de la
+       course — c'est ce qui paie la rambarde de pierre du début. */
+    if (fs > 0.92) return;
 
     const pick = Math.floor(rng() * mat.flameBody.length);
-    const h = 1.00 + rng() * 0.28;
-    const w = 0.60 + rng() * 0.18;
+    const fade = 1 - fs;                      // la flamme meurt en avançant
+    const h = (1.00 + rng() * 0.28) * (0.45 + 0.55 * fade);
+    const w = (0.60 + rng() * 0.18) * (0.55 + 0.45 * fade);
 
     /* Quatre échelles de temps, du lent au vif : le balancement d'ensemble
        (~1,3 Hz), le battement (~2,8 Hz), le grésillement (~7 Hz) et la bouffée
@@ -1037,17 +1377,19 @@ const World = (function () {
       f4: 0.00075 + rng() * 0.00065, p4: rng() * 6.283,
     });
 
-    const yBody = 2.28 + h * 0.5 - 0.14;
+    // La flamme sort de la TÊTE, qui a bougé avec le mât : elle la suit, sinon
+    // elle brûlerait à côté de sa propre torche dès que celle-ci penche.
+    const yBody = headY + 0.10 + h * 0.5;
     const body = new THREE.Mesh(geo.plane, mat.flameBody[pick]);
     body.userData = Object.assign({ w, h, y0: yBody }, osc());
-    place(body, t, off, yBody);
+    place(body, t, headOff, yBody);
     flames.push(body);
 
     const hc = h * 0.60, yCore = yBody - h * 0.17;
     const core = new THREE.Mesh(geo.plane, mat.flameCore[(pick + 2) % mat.flameCore.length]);
     core.userData = Object.assign({ w: w * 0.50, h: hc, y0: yCore }, osc());
     core.renderOrder = 1;   // toujours par-dessus le corps, jamais l'inverse
-    place(core, t, off, yCore);
+    place(core, t, headOff, yCore);
     flames.push(core);
   }
 
@@ -1085,6 +1427,17 @@ const World = (function () {
       spans = subtractSpan(spans, CFG.LANE_X[i] - CFG.LANE_WIDTH / 2, CFG.LANE_X[i] + CFG.LANE_WIDTH / 2);
     }
     return spans;
+  }
+
+  /* ÉTAT DU DÉCOR à une position donnée : 0 = chaussée de pierre pleine,
+     1 = plateforme AA. Continu, donc l'« hybride » n'est pas un cas à part.
+
+     Il se calcule depuis `node.stoneEnd`, GELÉ à la génération du tronçon
+     (voir track.js) : un tronçon déjà construit ne se repeint pas, son décor
+     ne doit donc dépendre d'aucune valeur susceptible de bouger ensuite. */
+  function stageAt(node, t) {
+    const d = node.startDist + t;
+    return Math.max(0, Math.min(1, (d - node.stoneEnd) / CFG.DECOR_BLEND_LEN));
   }
 
   function buildNode(node) {
@@ -1139,11 +1492,27 @@ const World = (function () {
       if (!xs.length) continue;
       for (let t = piece.a; t < piece.b - 0.01; t += tile) {
         const len = Math.min(tile, piece.b - t);
+        /* ZIP 379 — FONDU DU PAVAGE, dalle par dalle.
+           La bascule pierre -> AA se fait par TIRAGE et non par un seuil : à
+           mi-fondu, une dalle sur deux est encore de la chaussée taillée, et
+           les deux matières s'entremêlent sur une trentaine de mètres. C'est
+           ce qui donne l'hybride demandé — et c'est aussi ce qui rend la
+           transition invisible, puisqu'il n'existe nulle part de ligne où le
+           décor change.
+
+           Le tirage sort de rngFloor, donc du tronçon : le même tronçon
+           reconstruit donne le même damier, sans quoi la chaussée
+           scintillerait à chaque passage de streaming. */
+        const s = stageAt(node, t);
+        const stony = rngFloor() > s;
         const tier = pickWearTier(rngFloor());
-        const variants = mat.stoneVariants[tier];
+        const variants = (stony ? mat.paveVariants : mat.stoneVariants)[tier];
         const material = variants[Math.floor(rngFloor() * variants.length)];
-        const tiltMax = tier === 2 ? CFG.FLOOR_TILT_RUINED : tier === 1 ? CFG.FLOOR_TILT_CRACKED : 0;
-        const sink = tier === 2 ? rngFloor() * CFG.FLOOR_SINK_RUINED : 0;
+        // La chaussée taillée est encore d'aplomb ; c'est en se délitant
+        // qu'elle bascule et s'affaisse. On interpole donc le désordre.
+        const tiltMax = (tier === 2 ? CFG.FLOOR_TILT_RUINED : tier === 1 ? CFG.FLOOR_TILT_CRACKED : 0)
+                        * (stony ? 0.25 : 1);
+        const sink = tier === 2 ? rngFloor() * CFG.FLOOR_SINK_RUINED * (stony ? 0.2 : 1) : 0;
         const tx = (rngFloor() - 0.5) * tiltMax, tz = (rngFloor() - 0.5) * tiltMax;
 
         for (const [x0, x1] of xs) {
@@ -1215,8 +1584,21 @@ const World = (function () {
         // qu'il existe un passage — et c'est le seul endroit du jeu où la
         // bordure s'interrompt, donc il ne peut pas être confondu.
         if (node.exit === side && t > node.length - CFG.OFFROAD_MOUTH) continue;
-        if (rng() < CFG.KERB_SKIP_CHANCE) continue;
-        const jitter = (rng() - 0.5) * 1.4;
+
+        /* ZIP 379 — LA RAMBARDE S'AFFAISSE.
+           Un seul et même élément du début à la fin, qui interpole quatre
+           choses à la fois : sa HAUTEUR (1,55 -> 0,80), sa CONTINUITÉ (aucun
+           manque au début, KERB_SKIP_CHANCE une fois sur AA), sa LONGUEUR
+           (un bloc couvrait tout l'intervalle, il n'en reste que des morceaux
+           isolés) et sa PIERRE DE COURONNEMENT, qui tombe en chemin.
+
+           Écrire deux décors séparés et basculer de l'un à l'autre aurait été
+           bien plus simple à lire, et c'est exactement ce qu'il ne fallait pas
+           faire : la couture se serait vue, et l'hybride demandé n'aurait
+           jamais existé — il n'est rien d'autre que le milieu de ce fondu. */
+        const s = stageAt(node, t);
+        if (rng() < CFG.KERB_SKIP_CHANCE * s * s) continue;
+        const jitter = (rng() - 0.5) * (0.3 + 1.1 * s);
 
         if (rng() < CFG.STELE_CHANCE) {
           const h = 1.9 + rng() * 0.8;
@@ -1230,11 +1612,24 @@ const World = (function () {
           continue;
         }
 
-        const h = 0.75 + rng() * 0.45;
-        const len = 2.0 + rng() * 1.4;
-        const b = box(1.5, h, len, mat.kerb, 0, 0, 0);
-        b.rotation.y = (rng() - 0.5) * 0.12;   // blocs légèrement désalignés
+        const h = (CFG.RAIL_H_STONE + (CFG.RAIL_H_AA - CFG.RAIL_H_STONE) * s) * (0.9 + rng() * 0.2);
+        /* La LONGUEUR est ce qui distingue le plus une rambarde d'une bordure :
+           au début un bloc couvre tout l'intervalle, la pierre est continue ;
+           en fin de fondu il ne reste que des blocs isolés séparés de vide.
+           Deux fois le même mesh, deux lectures opposées. */
+        const len = (CFG.KERB_SPACING + 0.6) * (1 - s) + (2.0 + rng() * 1.4) * s;
+        const b = box(1.5 - 0.2 * s, h, len, s > 0.5 ? mat.kerb : mat.rail, 0, 0, 0);
+        b.rotation.y = (rng() - 0.5) * 0.12 * s;   // l'ouvrage se désaligne en se ruinant
         place(b, t + jitter, off, h / 2 - 0.25);
+
+        /* Pierre de COURONNEMENT : la tablette posée sur le muret, c'est elle
+           qui fait « ouvrage taillé » plutôt que « tas de blocs ». Elle
+           s'ébrèche d'abord (elle raccourcit et se décale), puis disparaît. */
+        if (s < 0.72 && rng() < 0.8) {
+          const cap = box(1.9 - 0.3 * s, 0.22, len * (1 - s * 0.5), mat.railCap, 0, 0, 0);
+          cap.rotation.y = b.rotation.y;
+          place(cap, t + jitter + (rng() - 0.5) * s * 1.6, off, h - 0.25 + 0.11);
+        }
 
         if (rng() < CFG.VINE_CHANCE) {
           const vl = 0.5 + rng() * 1.1;
@@ -1250,9 +1645,21 @@ const World = (function () {
        flammes. Elles restent le seul point CHAUD du cadre, et c'est aussi ce
        qui rend la ligne de la piste lisible de loin. --- */
     for (const side of [-1, 1]) {
+      /* L'ESPACEMENT NE CHANGE PAS avec le décor, et c'est un arbitrage de
+         budget assumé. Le rapprocher sur la section de pierre était tentant
+         (les références en montrent davantage) et coûtait 96 objets par
+         tronçon : la chaussée d'entrée passait à 261 objets pour 100 unités,
+         soit 30 % au-dessus du plafond que smoke-render.js fait respecter.
+
+         Ce qui distingue la section de pierre n'est donc pas le NOMBRE de
+         torches mais le fait qu'elles brûlent — et une flamme se voit de bien
+         plus loin qu'un mât de plus. La monture, elle, reste sur toute la
+         piste : un pilier de torche éteint tous les vingt mètres raconte mieux
+         l'abandon qu'une absence de torche. */
       for (let t = 8; t < node.length - 4; t += CFG.TORCH_SPACING) {
-        addTorch(place, t, side * (CFG.TRACK_WIDTH / 2 + 0.45),
-                 node.index * 9631 + Math.round(t) * 137 + (side > 0 ? 61 : 0));
+        addTorch(place, t, side * (CFG.TRACK_WIDTH / 2 + 0.75),
+                 node.index * 9631 + Math.round(t) * 137 + (side > 0 ? 61 : 0),
+                 stageAt(node, t), side);
       }
     }
 
@@ -1260,7 +1667,14 @@ const World = (function () {
        l'illustration. Un bouquet = quelques chapeaux + UN seul halo pour tout
        le bouquet (un halo par chapeau tripleraient le coût pour un gain nul à
        cette résolution). --- */
-    for (let i = 0; i < CFG.MUSHROOM_CLUSTERS; i++) {
+    /* Zip 379 : les champignons luminescents SE MULTIPLIENT à mesure qu'on
+       s'enfonce. Sur la chaussée d'entrée, encore entretenue et éclairée aux
+       torches, ils n'ont pas leur place ; ils prennent le relais quand le feu
+       s'éteint. C'est le même échange que partout ailleurs dans ce fondu —
+       ce qui part est remplacé, jamais simplement retiré — et c'est aussi ce
+       qui paie la pierre de couronnement de la rambarde. */
+    const nMush = Math.round(CFG.MUSHROOM_CLUSTERS * (0.4 + 0.6 * stageAt(node, node.length / 2)));
+    for (let i = 0; i < nMush; i++) {
       const t = rng() * node.length;
       const side = rng() < 0.5 ? -1 : 1;
       const off = side * (CFG.TRACK_WIDTH / 2 + 0.9 + rng() * 3.5);
@@ -1287,25 +1701,51 @@ const World = (function () {
        moussus, pierres levées. Leur pied descend SOUS le niveau de la
        chaussée — c'est ce qui donne l'impression que la piste est une digue
        posée sur le lac, et non une route flottant sur un sol invisible. --- */
-    for (let i = 0; i < CFG.DECOR_PROPS; i++) {
+    /* Zip 379 : moins de décor de fond sur la section de pierre — les blocs
+       tombés à l'eau y tiennent déjà le premier plan, et sur les références
+       de Guillaume la chaussée d'entrée est bien plus dégagée que la suite.
+       Le lac s'encombre à mesure qu'on s'éloigne de l'ouvrage. */
+    const nProps = Math.round(CFG.DECOR_PROPS * (0.55 + 0.45 * stageAt(node, node.length / 2)));
+    for (let i = 0; i < nProps; i++) {
       const t = rng() * node.length;
       const side = rng() < 0.5 ? -1 : 1;
       const off = side * (CFG.TRACK_WIDTH / 2 + 3.5 + rng() * 22);
       const kind = rng();
 
       if (kind < 0.5) {
-        // Arbre mort : tronc légèrement incliné + branches en éventail, plus
-        // fines et plus nombreuses qu'au 372 pour lire comme une ramure.
-        const h = 4.5 + rng() * 5.5;
-        const trunk = box(0.42, h, 0.42, mat.bark, 0, 0, 0);
-        trunk.rotation.z = (rng() - 0.5) * 0.18;
-        place(trunk, t, off, h / 2 - 1.4);
-        const nb = CFG.TREE_BRANCHES + Math.floor(rng() * 2);
-        for (let b = 0; b < nb; b++) {
-          const bl = 1.4 + rng() * 2.2;
-          const bm = box(0.16, bl, 0.16, mat.barkDark, 0, 0, 0);
-          bm.rotation.set((rng() - 0.5) * 1.6, rng() * 6.28, (rng() - 0.5) * 1.9);
-          place(bm, t + (rng() - 0.5) * 0.5, off + (rng() - 0.5) * 0.5, h * (0.5 + rng() * 0.45) - 1.4);
+        /* ZIP 379 — ARBRES MORTS SUBMERGÉS, deux rendus pour un seul motif.
+           Décision Guillaume : PANNEAUX au loin, BOÎTES tout près.
+
+           Le partage se fait sur `off`, le décalage latéral, qui est fixé une
+           fois pour toutes à la génération. Jamais sur la distance au joueur :
+           un arbre changerait alors de nature sous ses yeux en s'approchant,
+           et c'est précisément le défaut que « les deux » risquait
+           d'introduire. Ici, un arbre naît panneau ou boîte et le reste. */
+        if (Math.abs(off) > CFG.TREE_BILLBOARD_OFF) {
+          // Panneau peint : la silhouette noueuse du pixel-art de référence,
+          // impossible à approcher en boîtes, pour UN objet au lieu de cinq.
+          const h = 7 + rng() * 7;
+          const m = new THREE.Mesh(geo.plane, mat.trees[Math.floor(rng() * mat.trees.length)]);
+          m.scale.set(h * (TREE_TEX_W / TREE_TEX_H) * (0.85 + rng() * 0.3), h, 1);
+          place(m, t, off, h / 2 - 1.6);
+          m.userData.upright = true;   // pivote autour de Y seulement (updateAmbient)
+          trees.push(m);
+        } else {
+          // Arbre mort : tronc légèrement incliné + branches en éventail, plus
+          // fines et plus nombreuses qu'au 372 pour lire comme une ramure.
+          // Réservé aux arbres PROCHES, où la parallaxe d'un vrai volume se
+          // voit et où un panneau se trahirait en pivotant.
+          const h = 4.5 + rng() * 5.5;
+          const trunk = box(0.42, h, 0.42, mat.bark, 0, 0, 0);
+          trunk.rotation.z = (rng() - 0.5) * 0.18;
+          place(trunk, t, off, h / 2 - 1.4);
+          const nb = CFG.TREE_BRANCHES + Math.floor(rng() * 2);
+          for (let b = 0; b < nb; b++) {
+            const bl = 1.4 + rng() * 2.2;
+            const bm = box(0.16, bl, 0.16, mat.barkDark, 0, 0, 0);
+            bm.rotation.set((rng() - 0.5) * 1.6, rng() * 6.28, (rng() - 0.5) * 1.9);
+            place(bm, t + (rng() - 0.5) * 0.5, off + (rng() - 0.5) * 0.5, h * (0.5 + rng() * 0.45) - 1.4);
+          }
         }
       } else if (kind < 0.78) {
         // Colonne brisée : deux fûts décalés, la cassure fait la silhouette.
@@ -1331,6 +1771,30 @@ const World = (function () {
       }
     }
 
+    /* --- 9 bis. RUINES IMMERGÉES (zip 379). Des blocs de la chaussée tombés
+       à l'eau, à demi noyés et de guingois. Sur les références de Guillaume,
+       c'est ce qui donne son âge à l'ouvrage : une rambarde intacte au milieu
+       d'un lac vide se lit comme un décor neuf ; les mêmes pierres éparpillées
+       autour disent qu'elle s'écroule depuis longtemps.
+
+       Réservées à la section de pierre et au fondu (rien à faire tomber d'une
+       plateforme qui n'a plus de rambarde), et posées près du bord pour rester
+       dans le premier plan éclairé. --- */
+    {
+      const sMid = stageAt(node, node.length / 2);
+      const nRuins = Math.round(5 * (1 - sMid));
+      for (let i = 0; i < nRuins; i++) {
+        const t = rng() * node.length;
+        const side = rng() < 0.5 ? -1 : 1;
+        const off = side * (CFG.TRACK_WIDTH / 2 + 1.6 + rng() * 5);
+        const w = 0.8 + rng() * 1.3;
+        const b = box(w, 0.55 + rng() * 0.5, w * (0.7 + rng() * 0.8), rng() < 0.5 ? mat.rail : mat.kerb, 0, 0, 0);
+        // Basculés, et enfoncés juste sous le niveau du lac : ils affleurent.
+        b.rotation.set((rng() - 0.5) * 0.5, rng() * 6.28, (rng() - 0.5) * 0.5);
+        place(b, t, off, CFG.LAKE_Y + 1.9 + rng() * 0.5);
+      }
+    }
+
     /* --- 10. Obstacles --- */
     for (const o of node.obstacles) {
       if (o.type === OBST.GAP || o.type === OBST.CREVASSE) continue;  // traités par le sol
@@ -1345,7 +1809,7 @@ const World = (function () {
         } else if (o.type === OBST.HIGH) {
           const h = 3.2 - CFG.HIGH_CLEARANCE;
           place(box(CFG.LANE_WIDTH - 0.1, h, 0.6, mat.obstacle, 0, 0, 0), o.t, x, CFG.HIGH_CLEARANCE + h / 2);
-          place(box(0.22, CFG.HIGH_CLEARANCE, 0.22, mat.torchWood, 0, 0, 0), o.t, x + CFG.LANE_WIDTH / 2 - 0.2, CFG.HIGH_CLEARANCE / 2);
+          place(box(0.22, CFG.HIGH_CLEARANCE, 0.22, mat.beamPost, 0, 0, 0), o.t, x + CFG.LANE_WIDTH / 2 - 0.2, CFG.HIGH_CLEARANCE / 2);
         } else { // WALL
           place(box(CFG.LANE_WIDTH - 0.1, 2.6, 0.7, mat.kerb, 0, 0, 0), o.t, x, 1.3);
         }
@@ -1417,8 +1881,9 @@ const World = (function () {
       //    pour la désynchronisation, puisqu'on les voit côte à côte.
       for (let i = 0; i < 2; i++) {
         addTorch(place, t0 - CFG.OFFROAD_MOUTH - 5 + i * 2.5,
-                 side * (CFG.TRACK_WIDTH / 2 + 0.45),
-                 node.index * 9631 + 7717 + i * 4409);
+                 side * (CFG.TRACK_WIDTH / 2 + 0.75),
+                 node.index * 9631 + 7717 + i * 4409,
+                 stageAt(node, t0 - CFG.OFFROAD_MOUTH - 5), side, true);
       }
 
       // c. Chapelet de champignons qui s'enfonce dans la trouée, en biais.
@@ -1554,6 +2019,7 @@ const World = (function () {
     // fin et on continuerait d'animer des objets retirés de la scène.
     flames = flames.filter(fl => fl.parent !== g);
     glows = glows.filter(gl => gl.parent !== g);
+    trees = trees.filter(tr => tr.parent !== g);
     nodeGroups.delete(node.index);
     node.group = null;
   }
@@ -1563,6 +2029,7 @@ const World = (function () {
     nodeGroups.clear();
     flames = [];
     glows = [];
+    trees = [];
     for (const d of dust) { d.visible = false; d.userData.born = -1e9; }
   }
 
@@ -1787,6 +2254,17 @@ const World = (function () {
       gl.rotation.set(0, 0, 0);
       gl.lookAt(camera.position);
     }
+    /* --- Arbres morts en panneaux (zip 379). Ils pivotent autour de l'axe
+       VERTICAL uniquement, jamais vers la caméra comme les halos : un arbre
+       qui s'incline pour faire face à une caméra placée en hauteur se couche
+       vers le joueur, et la supercherie saute aux yeux. En ne tournant qu'en
+       lacet, il reste debout — c'est la règle de tous les billboards de
+       végétation, et elle suffit ici parce que la caméra ne survole jamais
+       la piste. --- */
+    for (const tr of trees) {
+      tr.rotation.set(0, Math.atan2(camera.position.x - tr.position.x,
+                                    camera.position.z - tr.position.z), 0);
+    }
 
     /* --- Pièces --- */
     for (const [, g] of nodeGroups) {
@@ -1872,7 +2350,7 @@ const World = (function () {
     // battait à une seconde près, ce qui s'entendait à l'œil comme un
     // clignotant. Deux périodes incommensurables suffisent à la rendre
     // irrégulière, pour le même prix.
-    torchLight.intensity = 1.35 + Math.sin(now / 110) * 0.12 + Math.sin(now / 47 + 1.7) * 0.07;
+    torchLight.intensity = (1.35 + Math.sin(now / 110) * 0.12 + Math.sin(now / 47 + 1.7) * 0.07) * torchFade;
     mushLight.intensity = 0.75 + Math.sin(now / 260) * 0.12 + flash * 0.6;
   }
 
@@ -1885,11 +2363,40 @@ const World = (function () {
 
      Remis à zéro par Game.start() : une densité laissée en l'état ferait
      commencer la course suivante dans la purée de pois. */
-  function setMist(k) {
+  function setMist(k, dist) {
     if (!scene || !scene.fog) return;
     const m = Math.max(0, Math.min(1, k));
-    scene.fog.density = CFG.FOG_NEAR_DENSITY * (1 + (CFG.ESCAPE_MIST_MULT - 1) * m);
+
+    /* CYCLE DE BRUME (zip 379). « Un très léger effet brouillard qui se
+       dissipera très très progressivement et reviendra aussi progressivement
+       tous les 4000 mètres. »
+
+       Un cosinus sur la distance, pas un seuil : il est maximal à 0, nul à
+       mi-période, et remonte — donc la brume respire sur 2000 mètres dans
+       chaque sens, ce qui est aussi progressif qu'on peut l'être. Aucune
+       dérivée discontinue nulle part, donc aucun moment où l'on « voit » la
+       brume changer d'avis.
+
+       La période est celle des bifurcations offroad. Conséquence voulue : la
+       brume est au plus épais PILE sur les embranchements, elle les annonce
+       donc plusieurs centaines de mètres à l'avance. C'est ce que demandait
+       le schéma du zip 377, obtenu ici pour toute la piste.
+
+       Le facteur de la SORTIE offroad se multiplie par-dessus au lieu de le
+       remplacer : les deux brumes ont des causes différentes et doivent
+       pouvoir s'additionner. */
+    const u = ((dist || 0) % CFG.FOG_CYCLE_DIST) / CFG.FOG_CYCLE_DIST;
+    const cycle = 1 + (CFG.FOG_CYCLE_MULT - 1) * (0.5 + Math.cos(u * Math.PI * 2) * 0.5);
+    scene.fog.density = CFG.FOG_NEAR_DENSITY * cycle * (1 + (CFG.ESCAPE_MIST_MULT - 1) * m);
   }
+
+  /* La lampe CHAUDE qui suit le joueur s'éteint avec les flammes (zip 379).
+     Elle éclairait le fermier en orange sur toute la piste ; une fois les
+     torches mortes, plus rien ne justifie cette lumière, et la garder aurait
+     annulé l'assombrissement qu'on vient de construire. La lampe violette du
+     lac, elle, reste : c'est le lac qui éclaire, et il ne s'éteint pas. */
+  let torchFade = 1;
+  function setStage(s) { torchFade = 1 - Math.max(0, Math.min(1, s)); }
 
   function resize() {
     const w = window.innerWidth, h = window.innerHeight;
@@ -1902,11 +2409,12 @@ const World = (function () {
 
   return {
     init, buildNode, dropNode, clearAll, updatePlayer, updateWolves, updateAmbient, render, resize,
-    applySkin, setMist,
+    applySkin, setMist, setStage,
     get camera() { return camera; },
     get scene() { return scene; },
     get playerMesh() { return playerMesh; },
     get playerRig() { return playerRig; },   // lecture seule, pour tools/smoke-render.js
+    get geometries() { return geo; },        // idem : identifier une boîte sans navigateur
     get materials() { return mat; },         // idem : vérifier une teinte sans navigateur
   };
 })();

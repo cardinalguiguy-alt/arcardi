@@ -1,9 +1,27 @@
 # Défi de fuite — monde sombre de Ferme Vallée
 
 Endless runner 3D façon Temple Run, intégré à Ferme Vallée comme défi du monde
-sombre. **Prototype de gameplay** : les graphismes sont volontairement jetables,
-tout l'effort est passé sur les sensations, la génération procédurale et
-l'architecture.
+sombre.
+
+## La progression du décor (zip 379)
+
+La course commence sur une **chaussée de pierre à rambardes**, traduction 3D de
+la jetée 2D du monde sombre : gros blocs taillés, mortier, pierre de
+couronnement, torches allumées, blocs tombés à l'eau. Elle court **jusqu'au
+premier virage** (188 à 700 m selon la graine, 420 en moyenne), puis se délite
+sur 340 m jusqu'à la **plateforme AA** — la passerelle usée, sombre et
+minimaliste, torches éteintes.
+
+Tout tient dans un paramètre continu, `stage`, de 0 à 1. L'« hybride » n'est
+pas un troisième décor : c'est `stage ≈ 0,5`. Rien ne bascule nulle part —
+la rambarde s'affaisse, les dalles se délitent, le couronnement tombe, les
+flammes meurent, les champignons prennent le relais. Le pavage lui-même se
+mélange **dalle par dalle** par tirage, ce qui entremêle les deux matières sur
+une trentaine de mètres au lieu de les séparer par une ligne.
+
+La **brume** suit son propre cycle, de période 4000 m — celle des bifurcations
+offroad. Elle est donc au plus épais pile sur les embranchements, qu'elle
+annonce plusieurs centaines de mètres à l'avance.
 
 ---
 
@@ -127,7 +145,7 @@ origine.
 
 ## Vérification
 
-Neuf scripts Node, depuis ce dossier. Aucune dépendance, moins de 40 secondes
+Onze scripts Node, depuis ce dossier. Aucune dépendance, moins de 40 secondes
 en tout — **les relancer tous à chaque livraison**. Un outil qu'on saute n'est
 pas un filet de sécurité, c'est un fichier mort (leçon du zip 375).
 
@@ -138,7 +156,8 @@ node tools/smoke-render.js       # rendu exercé avec un faux Three.js
 node tools/check-strings.js      # parité FR/EN + ui.js exécuté contre un faux DOM
 node tools/verify-offroad.js     # la bifurcation, vérifiée en la JOUANT (zip 377)
 node tools/verify-skin.js        # la tenue du joueur, de la ferme au défi (zip 377)
-node tools/render-runner.js      # rend le fermier ET les flammes en PNG — À REGARDER (zip 377)
+node tools/render-runner.js      # fermier, flammes ET chaussée 3D en PNG — À REGARDER (377/379)
+node tools/render-textures.js    # toutes les textures peintes en PNG — À REGARDER (zip 379)
 node tools/verify-deck.mjs       # la chaussée 2D : bord atteint, palettes accordées (zip 378)
 node tools/render-jetty.mjs      # rend la chaussée 2D en PNG — À REGARDER (zip 378)
 ```
@@ -155,6 +174,12 @@ image, et vérifie ce qui est arrivé — cadence tenue sans dérive, aucun appu
 latéral *nécessaire* dans la fenêtre d'armement (donc aucune sortie
 accidentelle possible), meute jamais posée sur la branche et toujours en train
 de s'éloigner, bout de la branche jamais atteint, score bien figé au virage.
+
+`render-textures.js` fournit un contexte 2D assez complet (dégradés, tracés,
+arcs, alpha) pour rejouer **toutes les fonctions de peinture** de world.js et
+les écrire en PNG : le ciel, les neuf pavés, les dalles AA, la bordure, les
+arbres. Jusqu'au zip 379, aucun de ces dessins n'était visible ailleurs que
+dans une partie.
 
 `render-runner.js` **rend en PNG** (rasteriseur maison, zéro dépendance) le
 fermier 3D sous trois angles et trois poses pour les deux genres, et les
@@ -180,6 +205,10 @@ collision du jeu, sur les six cartes.
 
 ## Ce qui reste à faire
 
+- ~~**Les torches flottantes**~~ : *fait au zip 379* — chaque torche est portée
+  par un pilier de pierre qui descend jusqu'à la chaussée, et `smoke-render.js`
+  vérifie cette continuité pour CHACUNE, sur les deux extrêmes du fondu. C'est
+  ce contrôle qui a trouvé le mât suspendu 34 cm au-dessus de son propre pilier.
 - ~~**Le sprite du fermier**~~ : *fait au zip 377* — il porte la tenue et le
   genre du joueur. Reste une silhouette en boîtes articulées, mais c'est
   désormais un choix (l'animation du zip 374 en dépend), plus un placeholder.

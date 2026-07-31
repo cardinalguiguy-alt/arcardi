@@ -245,6 +245,14 @@ try {
     const junctionCost = countTree(World.scene) - before - plainCost;
 
     const plainPer100 = plainCost / plain.length * 100;
+    /* Zip 379 : ce tronçon-là est tiré au DÉBUT de la piste, donc en pleine
+       chaussée de pierre — c'est le plus lourd du jeu (rambarde continue,
+       pierre de couronnement, torches allumées, blocs tombés à l'eau). Il doit
+       tenir dans le MÊME plafond que les autres, sans quoi les images par
+       seconde tomberaient pile sur les premières secondes de course. */
+    if (plainPer100 > 200) {
+      failures.push(`budget dépassé sur la chaussée de pierre : ${plainPer100.toFixed(0)} objets / 100 u (plafond 200)`);
+    }
     // La branche est bâtie avec le tronçon : sa longueur compte dans la
     // densité, sinon on s'accuse d'un coût qu'on répartit sur trop peu de
     // mètres. Le joueur voit bien les deux à l'écran en même temps.
@@ -259,6 +267,51 @@ try {
     if (countTree(World.scene) - before > 0) {
       failures.push(`dropNode ne libère pas entièrement un tronçon à bifurcation (branche orpheline ?)`);
     }
+  }
+
+  /* ======================================================================
+     ZIP 379 (a) — AUCUNE TORCHE NE FLOTTE.
+     ----------------------------------------------------------------------
+     Grief explicite de Guillaume : « les torches ne devront plus flotter à
+     côté de la plateforme mais être fixées de manière cohérente et réaliste
+     sur les côtés ». Une capture d'écran ne le prouve pas — elle montre UNE
+     torche sous UN angle, et le défaut ne concernait qu'une torche sur deux
+     (celles qui tombaient dans un trou de rambarde).
+
+     On le vérifie donc par la géométrie, sur les deux extrêmes du fondu :
+     pour CHAQUE mât de torche, il doit exister un bloc de pierre qui, à la
+     même position latérale, monte du niveau de la chaussée jusqu'au pied du
+     mât. Sans continuité de matière entre le sol et la torche, elle flotte.
+     ====================================================================== */
+  {
+    const gen = new Track.TrackGen(20260731);
+    const check = (node, label) => {
+      node.stoneEnd = label === "AA" ? 0 : Infinity;
+      World.buildNode(node);
+      const g = World.scene.children[World.scene.children.length - 1];
+      const boxes = [];
+      g.traverse(o => { if (o.isMesh && o.geometry === World.geometries.box) boxes.push(o); });
+      const shafts = boxes.filter(o => o.material === World.materials.torchWood);
+      let floating = 0;
+      for (const sh of shafts) {
+        const footY = sh.position.y - sh.scale.y / 2;
+        const ok = boxes.some(b => {
+          if (b === sh) return false;
+          const top = b.position.y + b.scale.y / 2, bot = b.position.y - b.scale.y / 2;
+          const near = Math.hypot(b.position.x - sh.position.x, b.position.z - sh.position.z) < 1.0;
+          // Le bloc doit toucher la chaussée EN BAS et le pied du mât EN HAUT.
+          return near && bot <= -0.2 && top >= footY - 0.05;
+        });
+        if (!ok) floating++;
+      }
+      console.log(`   ${label.padEnd(7)} ${shafts.length} torche(s), ${floating} sans appui jusqu'à la chaussée.`);
+      if (!shafts.length) failures.push(`[${label}] aucune torche construite : le contrôle ne vérifie rien`);
+      if (floating) failures.push(`[${label}] ${floating} torche(s) flottent : aucun bloc ne les relie à la chaussée`);
+      World.dropNode(node);
+    };
+    console.log("");
+    check(gen.nodes[1], "pierre");
+    check(gen.nodes[2], "AA");
   }
 
   /* ======================================================================
@@ -292,7 +345,7 @@ try {
       World.updatePlayer(p2, t2);
       World.updateWolves(pack2, p2, t2);
       World.updateAmbient(t2, 0);
-      World.setMist(pose.k);
+      World.setMist(pose.k, 0);
       mists.push(World.scene.fog.density);
       peakTwist = Math.max(peakTwist, Math.abs(World.playerRig.chest.rotation.y));
       peakYaw = Math.max(peakYaw, Math.abs(pose.look));
@@ -306,12 +359,15 @@ try {
     if (peakYaw < 0.98) failures.push(`le regard en arrière ne va que jusqu'à ${peakYaw.toFixed(2)} au lieu de 1`);
     if (peakTwist < CFG.ESCAPE_LOOKBACK_TORSO * 0.98) failures.push(`la torsion du buste plafonne à ${peakTwist.toFixed(2)} rad`);
     if (!(mists[mists.length - 1] > mists[0])) failures.push("la brume ne s'épaissit pas pendant la sortie");
-    if (mists[mists.length - 1] > CFG.FOG_NEAR_DENSITY * CFG.ESCAPE_MIST_MULT + 1e-9) {
-      failures.push("la brume dépasse ESCAPE_MIST_MULT");
-    }
+    /* Zip 379 : la brume de SORTIE se multiplie par le CYCLE de brume, elle
+       ne le remplace pas — les deux ont des causes distinctes. À distance 0 le
+       cycle est à son maximum, donc le plafond attendu est le produit des
+       deux facteurs, et pas seulement ESCAPE_MIST_MULT. */
+    const mistCap = CFG.FOG_NEAR_DENSITY * CFG.ESCAPE_MIST_MULT * CFG.FOG_CYCLE_MULT;
+    if (mists[mists.length - 1] > mistCap + 1e-9) failures.push("la brume dépasse le produit cycle × sortie");
     // La torsion doit être REVENUE à zéro à la fin, sinon elle survit à la
     // partie suivante — le fermier courrait la tête tournée.
-    World.setMist(0);
+    World.setMist(0, CFG.FOG_CYCLE_DIST / 2);   // creux du cycle : densité nominale
     p2.escapeNode = null;
     World.updatePlayer(p2, t2);
     if (Math.abs(World.playerRig.chest.rotation.y) > 1e-9 || Math.abs(World.playerRig.head.rotation.y) > 1e-9) {

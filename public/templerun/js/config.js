@@ -191,6 +191,47 @@ const CFG = {
   ESCAPE_FADE_MS: 1800,
   ESCAPE_MIST_MULT: 2.3,      // épaississement de la brume au bout de la branche
 
+  /* ============================ PROGRESSION DU DÉCOR (zip 379) ============
+     Demande de Guillaume, sur captures : la course commence sur une CHAUSSÉE
+     DE PIERRE À RAMBARDES, traduction 3D de la jetée 2D du monde sombre, puis
+     bascule progressivement sur la plateforme flottante actuelle — celle
+     qu'il appelle « AA » et qu'il trouve réussie. Trois états au moins, et
+     surtout aucune couture visible entre eux.
+
+     UN SEUL PARAMÈTRE porte toute la progression : `stage`, continu de 0
+     (pierre pleine) à 1 (AA). L'hybride n'est pas un troisième décor écrit à
+     part, c'est stage ≈ 0,5 — et c'est ce qui garantit qu'il n'y a nulle part
+     de bascule. Chaque élément l'interprète à sa façon : la rambarde
+     s'affaisse, les dalles se délitent, les torches s'éteignent, les blocs
+     tombent à l'eau.
+
+     OÙ S'ARRÊTE LA PIERRE : AU PREMIER VIRAGE (décision Guillaume). Ce n'est
+     pas une distance mais un ÉVÉNEMENT de la piste, et c'est bien mieux
+     qu'un nombre : la chaussée de pierre est droite, comme la jetée dont elle
+     sort, et le premier virage est exactement le moment où le joueur quitte
+     l'axe du monde sombre. DECOR_STONE_MAX n'est qu'un garde-fou pour les
+     graines où le premier virage tarde — une section de pierre de 1200 m
+     ferait de AA l'exception. */
+  DECOR_STONE_MAX: 700,     // borne haute de la section de pierre, si le 1er virage tarde
+  DECOR_BLEND_LEN: 340,     // longueur du fondu pierre -> AA (c'est l'« hybride »)
+
+  /* Brume cyclique. « Un très léger effet brouillard qui se dissipera très
+     très progressivement et reviendra aussi progressivement tous les
+     4000 mètres. » La période est celle des bifurcations offroad, et ce n'est
+     pas un hasard qu'on subit : la brume est au plus épais PILE sur les
+     embranchements, donc elle les annonce. C'est exactement ce que demandait
+     le schéma de Guillaume au zip 377 (« brume qui s'épaissit vers la
+     sortie »), obtenu ici pour tout le tracé au lieu de la seule branche. */
+  FOG_CYCLE_DIST: 4000,     // doit rester égal à OFFROAD_EVERY
+  FOG_CYCLE_MULT: 1.42,     // densité au sommet du cycle (1 = pas de cycle)
+
+  /* Arbres morts submergés. Décision Guillaume : panneaux peints au loin,
+     boîtes tout près. Le choix se fait sur le DÉCALAGE LATÉRAL de l'arbre,
+     qui est fixe, et jamais sur sa distance au joueur — sans quoi un arbre
+     changerait de nature sous les yeux du joueur en s'approchant. */
+  TREE_BILLBOARD_OFF: 11,   // au-delà de cet écart latéral, l'arbre est un panneau
+  TREE_BILLBOARD_VARIANTS: 4,
+
   /* ------------------------------------------------------------- OBSTACLES */
   OBST_SPACING_MIN: 15,     // distance minimale entre deux obstacles
   OBST_DENSITY_START: 0.45, // proportion des emplacements réellement occupés
@@ -364,6 +405,19 @@ const CFG = {
      flammes qu'on regarde. */
   DECOR_PROPS: 12,          // arbres morts, colonnes brisées et rochers par tronçon (14 au 374)
   TREE_BRANCHES: 2,         // branches par arbre mort — le poste le plus coûteux du décor (3 au 374)
+
+  /* ------------------------------- PIERRE DE LA CHAUSSÉE D'ENTRÉE (379) ---
+     La rambarde et le pavage de la section de pierre. Teintes RELEVÉES par
+     rapport à COL_STONE : sur les captures de référence, la chaussée d'entrée
+     est nettement plus claire que la plateforme AA, et c'est ce contraste qui
+     rend la dégradation lisible sur les 600 premiers mètres. */
+  COL_PAVE:       0x6b6353,  // dalle taillée, chaussée d'entrée
+  COL_PAVE_DARK:  0x4e483c,
+  COL_MORTAR:     0x3a352c,  // joints de mortier entre les blocs
+  COL_RAIL:       0x635b4b,  // blocs de la rambarde
+  COL_RAIL_CAP:   0x7a7160,  // pierre de couronnement, sur le dessus
+  RAIL_H_STONE: 1.55,       // hauteur de la rambarde côté pierre
+  RAIL_H_AA: 0.80,          // ... et côté AA (les blocs bas d'aujourd'hui)
 
   /* Tenue du fermier — OUTFITS[0] de fermeConstants.js.
      Ce ne sont plus que des VALEURS DE REPLI depuis le zip 377 : en jeu, la

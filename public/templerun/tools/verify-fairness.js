@@ -61,11 +61,24 @@ const NODES_PER_SEED = 60;
 let totalNodes = 0, totalObstacles = 0, totalGaps = 0, totalCrev = 0;
 let totalTurns = 0, totalCoins = 0, totalCracks = 0, totalLength = 0;
 let totalExits = 0, seedsWithExit = 0;
+let stoneMin = Infinity, stoneMax = 0, stoneSum = 0, stoneCapped = 0;
 
 for (let s = 0; s < SEEDS; s++) {
   const gen = new Track.TrackGen(s);
   while (gen.nodes.length < NODES_PER_SEED) gen.pushNode(false);
   if (gen.nodes.some(n => n.exit !== 0)) seedsWithExit++;
+
+  /* Zip 379 — LONGUEUR DE LA CHAUSSÉE DE PIERRE. Elle court jusqu'au premier
+     virage (décision Guillaume), donc elle DÉPEND DU TIRAGE : c'est un
+     événement de la piste, pas une constante. Il faut donc vérifier qu'elle
+     reste dans des bornes jouables sur toutes les graines — une section de
+     pierre de 40 mètres passerait inaperçue, une de 1500 ferait de la
+     plateforme AA l'exception. */
+  const st = gen.nodes[gen.nodes.length - 1].stoneEnd;
+  stoneMin = Math.min(stoneMin, st); stoneMax = Math.max(stoneMax, st); stoneSum += st;
+  if (st >= CFG.DECOR_STONE_MAX - 1e-9) stoneCapped++;
+  if (!isFinite(st)) fail(s, gen.nodes[0], `aucun virage en ${NODES_PER_SEED} tronçons : la pierre ne finit jamais`);
+  if (st < CFG.NODE_LEN_MIN) fail(s, gen.nodes[0], `chaussée de pierre de ${st.toFixed(0)} u seulement`);
 
   /* Chaîne d'espacement PORTÉE D'UN TRONÇON À L'AUTRE. Depuis le zip 374 le
      générateur la maintient lui-même ; le vérificateur doit donc la suivre de
@@ -213,6 +226,8 @@ console.log(`  pièces ${totalCoins}  |  fissures décoratives ${totalCracks}`);
 console.log(`  parades (à ${V} u/s) : saut ${(JUMP_T * V).toFixed(1)} u, glissade ${(SLIDE_T * V).toFixed(1)} u, voie ${(LANE_T * V).toFixed(1)} u`);
 console.log(`  zones franches de virage : ${CFG.TURN_CLEAR_AFTER} u après, ${CFG.TURN_CLEAR_BEFORE} u avant (calculées, pas réglées)`);
 console.log(`  bifurcations offroad : ${totalExits} sur ${seedsWithExit}/${SEEDS} graines (une tous les ${CFG.OFFROAD_EVERY} u)`);
+console.log(`  chaussée de pierre : ${stoneMin.toFixed(0)} à ${stoneMax.toFixed(0)} u (moyenne ${(stoneSum / SEEDS).toFixed(0)}), plafond atteint ${(stoneCapped / SEEDS * 100).toFixed(0)} % du temps`);
+console.log(`  puis ${CFG.DECOR_BLEND_LEN} u de fondu : la plateforme AA est atteinte entre ${(stoneMin + CFG.DECOR_BLEND_LEN).toFixed(0)} et ${(stoneMax + CFG.DECOR_BLEND_LEN).toFixed(0)} m`);
 
 /* Le compte des bifurcations est un contrôle à part entière, pas un chiffre
    d'ambiance : si le générateur cessait d'en poser, TOUTES les règles

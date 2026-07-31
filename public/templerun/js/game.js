@@ -51,7 +51,8 @@ const Game = (function () {
     player.onEscape = () => beginEscape();
 
     World.clearAll();
-    World.setMist(0);
+    World.setMist(0, 0);
+    World.setStage(0);        // on repart sur la chaussée de pierre
     UI.setFade(0);
     UI.showEscape(false);
     for (const n of track.nodes) World.buildNode(n);
@@ -163,6 +164,11 @@ const Game = (function () {
       World.updatePlayer(player, now);
       World.updateWolves(pack, player, now);
       World.updateAmbient(now, pack.danger());
+      /* Zip 379 : le décor et la brume suivent la DISTANCE, pas le tronçon.
+         Les deux sont continus, donc ils ne peuvent pas sauter à un bord de
+         tronçon — c'est ce qui rend la progression pierre -> AA invisible. */
+      World.setMist(0, player.totalDist);
+      World.setStage(track.stageAt(player.totalDist));
       const exitAt = track.nextExitAt(player.totalDist);
       UI.updateHud(score, player.coins, player.totalDist, pack.danger(),
                    exitAt === null ? null : exitAt - player.totalDist);
@@ -193,7 +199,7 @@ const Game = (function () {
       World.updatePlayer(player, now);
       World.updateWolves(pack, player, now);
       World.updateAmbient(now, 0);
-      World.setMist(pose.k);
+      World.setMist(pose.k, player.totalDist);
       UI.setFade(pose.fade);
       UI.updateHud(score, player.coins, player.escapeDist, 0, null);
       if (pose.k >= 1) finishEscape();

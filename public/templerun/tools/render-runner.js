@@ -198,8 +198,14 @@ function collectBoxes(rootObj) {
         const L = Math.hypot(v.x, v.y, v.z) || 1;
         return { x: v.x / L, y: v.y / L, z: v.z / L };
       };
+      /* Un matériau TEXTURÉ n'a pas de couleur propre (sa teinte vient de sa
+         carte), et `color.h` y vaut donc 0 : rendus tels quels, le sol et les
+         rambardes sortaient entièrement NOIRS et la planche ne montrait rien.
+         On leur prête une pierre neutre — ce rasteriseur juge les VOLUMES, les
+         textures se regardent avec tools/render-textures.js. */
+      const col = o.material.color.h || 0x8a8272;
       for (const f of F) {
-        out.push({ pts: [c[f[0]], c[f[1]], c[f[2]], c[f[3]]], n: dirOf(f[4]), col: o.material.color.h });
+        out.push({ pts: [c[f[0]], c[f[1]], c[f[2]], c[f[3]]], n: dirOf(f[4]), col });
       }
     }
     for (const ch of o.children) walk(ch, m);
@@ -211,6 +217,16 @@ function collectBoxes(rootObj) {
 const BG = [0x12, 0x0a, 0x1f];
 const LIGHT = (() => { const v = { x: -0.4, y: 1, z: 0.25 }; const L = Math.hypot(v.x, v.y, v.z); return { x: v.x / L, y: v.y / L, z: v.z / L }; })();
 
+/* Rendu d'un jeu de faces. Deux modes :
+     - ortho  : pour le fermier, qu'on juge en silhouette ;
+     - persp  : pour la chaussée, qu'on doit voir COMME LE JOUEUR la voit —
+                une rambarde jugée en projection orthographique ne dit rien de
+                ce qu'on en perçoit depuis une caméra posée trois mètres
+                derrière et quatre au-dessus. C'est précisément ce qu'il faut
+                pour vérifier qu'une torche est bien FIXÉE et ne flotte pas.
+   Les plans (flammes, halos, panneaux d'arbre) ne sont pas rendus : ce
+   rasteriseur ne connaît que les boîtes, et c'est dit ici pour qu'on ne
+   conclue pas de leur absence à un bug. */
 function renderView(faces, view, W, H, scale, center) {
   const px = new Uint8Array(W * H * 3);
   for (let i = 0; i < W * H; i++) { px[i * 3] = BG[0]; px[i * 3 + 1] = BG[1]; px[i * 3 + 2] = BG[2]; }
@@ -224,13 +240,16 @@ function renderView(faces, view, W, H, scale, center) {
   const rr = norm(cross(dd, up));
   const uu = norm(cross(rr, dd));
 
+  const persp = !!view.persp;
+  const f = persp ? (H / 2) / Math.tan((view.fov || 1.2) / 2) : 0;
   const proj = (p) => {
     const q = { x: p.x - center.x, y: p.y - center.y, z: p.z - center.z };
-    return {
-      sx: W / 2 + (q.x * rr.x + q.y * rr.y + q.z * rr.z) * scale,
-      sy: H / 2 - (q.x * uu.x + q.y * uu.y + q.z * uu.z) * scale,
-      sz: -(q.x * dd.x + q.y * dd.y + q.z * dd.z),   // grand = proche
-    };
+    const along = q.x * dd.x + q.y * dd.y + q.z * dd.z;
+    const right = q.x * rr.x + q.y * rr.y + q.z * rr.z;
+    const up2 = q.x * uu.x + q.y * uu.y + q.z * uu.z;
+    if (!persp) return { sx: W / 2 + right * scale, sy: H / 2 - up2 * scale, sz: -along };
+    const z = Math.max(0.3, along);
+    return { sx: W / 2 + (right / z) * f, sy: H / 2 - (up2 / z) * f, sz: -z, behind: along < 0.3 };
   };
 
   for (const f of faces) {
@@ -243,6 +262,9 @@ function renderView(faces, view, W, H, scale, center) {
     const g = Math.min(255, Math.round(((((f.col >> 8) & 255) * k)) + 8));
     const b = Math.min(255, Math.round((((f.col & 255) * k)) + 26));
     const P = f.pts.map(proj);
+    // Une face qui passe derrière l'œil ne se découpe pas proprement : on la
+    // saute plutôt que de la projeter à l'envers.
+    if (P.some(p => p.behind)) continue;
 
     let minY = Math.max(0, Math.floor(Math.min(...P.map(p => p.sy))));
     let maxY = Math.min(H - 1, Math.ceil(Math.max(...P.map(p => p.sy))));
@@ -448,6 +470,111 @@ for (const [label, skin] of [
   const file = path.join(outDir, "torch-flames.png");
   writePng(file, W, H, px);
   outputs.push(`${path.relative(root, file)} (${W}×${H})`);
+}
+
+/* =========================================================================
+   LA CHAUSSÉE EN 3D (zip 379)
+   -------------------------------------------------------------------------
+   Trois vues du même ouvrage, prises à la place exacte de la caméra de jeu :
+   la chaussée de PIERRE du départ, l'HYBRIDE à mi-fondu, et la plateforme AA.
+
+   C'est la seule façon de juger deux choses que Guillaume a demandées
+   nommément : que la progression soit continue (les trois vues doivent se
+   ressembler de proche en proche, pas se ranger en trois familles), et que
+   les torches soient FIXÉES — une torche qui flotte se voit immédiatement de
+   trois quarts arrière, et ne se voit nulle part ailleurs.
+
+   Rappel : les plans ne sont pas rendus. Pas de flammes, pas de halos, pas de
+   panneaux d'arbre sur ces vues — seulement la maçonnerie.
+   ====================================================================== */
+{
+  const T = vm.runInContext("Track", ctx);
+  const DW = 460, DH = 320;
+  const shots = [];
+
+  const shoot = (node, label) => {
+    World.buildNode(node);
+    const g = World.scene.children[World.scene.children.length - 1];
+    const faces = collectBoxes(g);
+    // Caméra de jeu : CAM_BACK derrière, CAM_HEIGHT au-dessus, visant
+    // CAM_LOOK_AHEAD devant. On se place au tiers du tronçon pour avoir de la
+    // pierre devant ET derrière.
+    /* La caméra se pose DANS LE REPÈRE DU TRONÇON, jamais en supposant qu'il
+       va vers -Z : dès le deuxième tronçon la piste a pu tourner, et l'oubli
+       s'était soldé par deux vues sur trois entièrement noires. */
+    const DIRS4 = [{ x: 0, z: -1 }, { x: 1, z: 0 }, { x: 0, z: 1 }, { x: -1, z: 0 }];
+    const fw = DIRS4[node.dir & 3];
+    const t0 = node.length * 0.34;
+    const at = (t, y) => ({ x: node.ox + fw.x * t, y, z: node.oz + fw.z * t });
+    const eye = at(t0 - CFG.CAM_BACK, CFG.CAM_HEIGHT);
+    const tgt = at(t0 + CFG.CAM_LOOK_AHEAD, CFG.CAM_LOOK_HEIGHT);
+    const d = { x: tgt.x - eye.x, y: tgt.y - eye.y, z: tgt.z - eye.z };
+    const px = renderView(faces, { dir: d, up: { x: 0, y: 1, z: 0 }, persp: true, fov: CFG.CAM_FOV * Math.PI / 180 },
+                          DW, DH, 1, eye);
+    shots.push({ px, label });
+    console.log(`   ${label.padEnd(9)} ${faces.length} faces, tronçon ${node.index} dir ${node.dir}`);
+    World.dropNode(node);
+  };
+
+  /* Gros plan sur une torche : c'est LA vue qui dit si elle est fixée ou
+     posée. De loin, un mât planté dans le vide et un mât scellé sur un pilier
+     se ressemblent — c'est de trois mètres, de trois quarts, qu'on voit la
+     différence, et c'est exactement le grief de Guillaume. */
+  const closeUp = (node, label) => {
+    World.buildNode(node);
+    const g = World.scene.children[World.scene.children.length - 1];
+    const faces = collectBoxes(g);
+    const DIRS4 = [{ x: 0, z: -1 }, { x: 1, z: 0 }, { x: 0, z: 1 }, { x: -1, z: 0 }];
+    const fw = DIRS4[node.dir & 3], rt = DIRS4[(node.dir + 1) & 3];
+    const tt = 30;                       // une torche y est posée (t = 8 + 22)
+    const P = (t, o, y) => ({ x: node.ox + fw.x * t + rt.x * o, y, z: node.oz + fw.z * t + rt.z * o });
+    // Depuis l'AUTRE rive de la chaussée, en biais : le pilier, le muret et le
+    // mât se détachent les uns des autres, ce qu'aucune vue de face ne donne.
+    const eye = P(tt - 11, -10, 4.6);
+    const tgt = P(tt, CFG.TRACK_WIDTH / 2 + 0.75, 0.9);
+    const px = renderView(faces, { dir: { x: tgt.x - eye.x, y: tgt.y - eye.y, z: tgt.z - eye.z },
+                                   up: { x: 0, y: 1, z: 0 }, persp: true, fov: 0.9 },
+                          DW, DH, 1, eye);
+    shots.push({ px, label });
+    World.dropNode(node);
+  };
+
+  const gen = new T.TrackGen(4242);
+  // Tronçon 1 : plein dans la pierre. On force ensuite le fondu en fabriquant
+  // des tronçons dont le `stoneEnd` place la caméra où l'on veut.
+  const stone = gen.nodes[1];
+  shoot(stone, "pierre");
+  const mid = gen.nodes[2];
+  mid.stoneEnd = mid.startDist + mid.length * 0.34 - CFG.DECOR_BLEND_LEN * 0.5;
+  shoot(mid, "hybride");
+  const aa = gen.nodes[3];
+  aa.stoneEnd = 0;
+  shoot(aa, "AA");
+  closeUp(gen.nodes[1], "torche pierre");
+  const aa2 = gen.nodes[2];
+  aa2.stoneEnd = 0;
+  closeUp(aa2, "torche AA");
+
+  const cols = Math.min(3, shots.length);
+  const rowsN = Math.ceil(shots.length / cols);
+  const W = DW * cols, H = DH * rowsN;
+  const out = new Uint8Array(W * H * 3);
+  shots.forEach((s, i) => {
+    const cx = (i % cols) * DW, cy = Math.floor(i / cols) * DH;
+    for (let y = 0; y < DH; y++) for (let x = 0; x < DW; x++) {
+      const a = (y * DW + x) * 3, b = ((cy + y) * W + cx + x) * 3;
+      out[b] = s.px[a]; out[b + 1] = s.px[a + 1]; out[b + 2] = s.px[a + 2];
+    }
+  });
+  for (let y = 0; y < H; y++) for (let i = 1; i < cols; i++) {
+    const k = (y * W + i * DW) * 3; out[k] = 60; out[k + 1] = 45; out[k + 2] = 80;
+  }
+  for (let x = 0; x < W; x++) for (let r = 1; r < rowsN; r++) {
+    const k = (r * DH * W + x) * 3; out[k] = 60; out[k + 1] = 45; out[k + 2] = 80;
+  }
+  const file = path.join(outDir, "deck-progression.png");
+  writePng(file, W, H, out);
+  outputs.push(`${path.relative(root, file)} (${W}×${H}) — ${shots.map(s => s.label).join(" / ")}`);
 }
 
 console.log("Planches écrites — À REGARDER, pas seulement à générer :");
