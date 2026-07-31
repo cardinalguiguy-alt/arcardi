@@ -163,7 +163,7 @@ const Game = (function () {
       chaseCam.update(dt, player);
       World.updatePlayer(player, now);
       World.updateWolves(pack, player, now);
-      World.updateAmbient(now, pack.danger());
+      World.updateAmbient(now, pack.danger(), player.totalDist);
       /* Zip 379 : le décor et la brume suivent la DISTANCE, pas le tronçon.
          Les deux sont continus, donc ils ne peuvent pas sauter à un bord de
          tronçon — c'est ce qui rend la progression pierre -> AA invisible. */
@@ -198,15 +198,20 @@ const Game = (function () {
       chaseCam.update(dt, player);
       World.updatePlayer(player, now);
       World.updateWolves(pack, player, now);
-      World.updateAmbient(now, 0);
+      /* Zip 382 : l'heure du jour suit la distance PENDANT la fuite aussi.
+         La passer à 0 aurait fait retomber le ciel dans la nuit en pleine
+         séquence de sortie — c'est-à-dire pile pendant les 4,4 secondes où le
+         joueur ne fait plus rien d'autre que regarder le décor. */
+      World.updateAmbient(now, 0, player.totalDist);
       World.setMist(pose.k, player.totalDist);
       UI.setFade(pose.fade);
       UI.updateHud(score, player.coins, player.escapeDist, 0, null);
       if (pose.k >= 1) finishEscape();
 
     } else if (state === STATE.OVER) {
-      // On laisse la scène vivre doucement derrière l'écran de fin.
-      World.updateAmbient(now, 1);
+      // On laisse la scène vivre doucement derrière l'écran de fin, à
+      // l'heure du jour où le joueur est mort (zip 382).
+      World.updateAmbient(now, 1, player.totalDist);
       chaseCam.update(dt, player);
     }
 

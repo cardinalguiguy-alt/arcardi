@@ -334,6 +334,70 @@ const CFG = {
   SKY_MOON:      0xd7cae8,
   SKY_PEAKS:     0x180f26,  // crêtes en silhouette sur l'horizon
 
+  /* ========================================== CYCLE JOUR / NUIT (zip 382) ===
+     Demande de Guillaume, sur une image de référence : « le même lac la
+     journée, c'est ce qu'on doit commencer à voir après 15 000 mètres environ,
+     avec un lever de soleil progressif », puis « le jour reste, puis l'orage
+     revient des milliers de mètres plus loin, et de nouveau ambiance sombre ».
+
+     UN SEUL PARAMÈTRE CONTINU, `day`, de 0 (nuit) à 1 (plein jour), calculé
+     par `World.dayAt(distance)`. Même principe que `stage` au zip 379, et pour
+     la même raison : il n'existe NULLE PART une distance où quelque chose
+     bascule. Écrire une « ambiance de jour » et une « ambiance de nuit » puis
+     passer de l'une à l'autre aurait produit exactement la couture qu'on
+     cherche à éviter — et sur un ciel, une couture est encore plus visible que
+     sur un sol, parce qu'elle occupe la moitié de l'écran.
+
+     Déroulé, en mètres parcourus :
+
+        0     ──────────── nuit franche
+        6 000 ┐
+              │ amorce : le ciel pâlit imperceptiblement (12 % du jour)
+       15 000 ┘ LEVER DE SOLEIL
+       18 000 ── plein jour
+       24 000 ┐
+              │ l'orage revient, la nuit retombe
+       27 000 ┘ nuit franche
+       33 000 ── le lever suivant, et ainsi de suite (cycle de 18 000)
+
+     L'AMORCE N'EXISTE QUE DANS LE PREMIER CYCLE. Elle sert à dire au joueur
+     qu'il se passe quelque chose bien avant les 15 000 m — sans elle, un
+     joueur qui meurt à 12 000 m n'aurait jamais rien soupçonné. Ensuite, la
+     nuit ne dure plus que 6 000 m et se lit toute entière comme une attente :
+     une amorce y serait redondante. Voir `dayAt()` dans world.js pour la
+     façon dont les deux se raccordent sans marche. */
+  DAY_PREDAWN_AT: 6000,     // début de l'amorce
+  DAY_PREDAWN_LEVEL: 0.12,  // ce qu'elle atteint au maximum, juste avant le lever
+  DAY_RISE_AT: 15000,       // le lever de soleil commence ici
+  DAY_RISE_LEN: 3000,       // ~90 s à 34 u/s
+  DAY_FULL_LEN: 6000,       // durée du plein jour
+  DAY_FALL_LEN: 3000,       // retour à la nuit, symétrique du lever
+  DAY_NIGHT_LEN: 6000,      // nuit franche avant le lever suivant
+  /* (La longueur du cycle est la SOMME des quatre, calculée plus bas à côté de
+     LANE_X plutôt qu'écrite ici : deux valeurs qui doivent s'accorder finissent
+     toujours par diverger. Un accesseur aurait fait la même chose, mais CFG est
+     recopié tel quel par plusieurs outils de `tools/` — un objet de données
+     doit le rester.) */
+
+  /* ------------------------------------------------- PALETTE DE JOUR -------
+     Relevée AU PIXEL sur l'image de référence de Guillaume, pas choisie à
+     l'œil. C'est une aube violette, pas un plein jour bleu — et c'est la
+     raison pour laquelle rien n'a eu à être éteint dans le décor : les
+     champignons, les runes et le halo des bulles restent lisibles sur ce
+     ciel-là, alors qu'un ciel bleu franc les aurait tous transformés en
+     taches laiteuses. */
+  SKY_DAY_TOP:       0x7b6ca3,  // zénith, bleu-violet doux
+  SKY_DAY_MID:       0x7f6693,
+  SKY_DAY_HORIZON:   0xbf8299,  // rose chaud du lever
+  SKY_DAY_CLOUD:     0x8f7aad,
+  SKY_DAY_CLOUD_LIT: 0xdaa9b4,  // liseré des nuages, côté soleil
+  SKY_DAY_SUN:       0xffd9c0,
+  SKY_DAY_PEAKS:     0x464365,  // crêtes proches : éclairées, plus en silhouette
+  SKY_DAY_FAR:       0x504f75,  // crêtes lointaines
+  COL_DAY_FOG:       0x7d6a9c,
+  COL_DAY_LAKE:      0x443957,  // creux des ondes, de jour
+  COL_DAY_LAKE_GLOW: 0x816aa6,  // crêtes, de jour
+
   /* --------------------------------------------------------------- ÉCLAIRS --
      Un éclair n'est pas un fondu blanc : c'est un premier coup bref, un noir
      très court, puis un second coup plus fort et plus long. Reproduire ce
@@ -468,6 +532,11 @@ CFG.LANE_X = [];
 for (let i = 0; i < CFG.LANE_COUNT; i++) {
   CFG.LANE_X.push((i - (CFG.LANE_COUNT - 1) / 2) * CFG.LANE_WIDTH);
 }
+
+/* Longueur du cycle jour/nuit : la somme de ses quatre phases, jamais un
+   nombre écrit à côté d'elles. Régler la durée du plein jour suffit donc, on
+   ne peut pas oublier de mettre le total à jour. */
+CFG.DAY_CYCLE = CFG.DAY_RISE_LEN + CFG.DAY_FULL_LEN + CFG.DAY_FALL_LEN + CFG.DAY_NIGHT_LEN;
 
 /* Durées des parades, en secondes. Elles servent à DEUX choses : l'espacement
    des obstacles (track.js) et les zones franches autour des virages. Les

@@ -34,6 +34,7 @@ const World = (function () {
   let playerMesh, playerRig, wolfMeshes = [], torchLight, mushLight;
   let ambientLight, moonLight;
   let sky, skyMat, boltMesh, boltMats = [];
+  let skyDay, skyDayMat, lakeDay, lakeDayMat;   // cycle jour/nuit (zip 382)
   let lake, lakeMat, lakeGlow, lakeGlowMat, mists = [];
   let geo = {}, mat = {};
   let flames = [];        // plans de flamme à faire vaciller (corps ET cœurs)
@@ -78,6 +79,7 @@ const World = (function () {
     mushLight = new THREE.PointLight(CFG.COL_PURPLE, 0.75, 26, 2);
     scene.add(mushLight);
 
+    buildDayNightColors();
     buildAssets();
     buildSky();
     buildLake();
@@ -1118,60 +1120,124 @@ const World = (function () {
      PIÈGE À NE PAS REFAIRE : tout ce qui est peint près des bords gauche et
      droit du canvas doit être peint DEUX FOIS (à x et à x±W), sinon la couture
      se voit — et on la traverse à chaque virage. */
-  function paintSky() {
+  /* ZIP 382 — LE MÊME PEINTRE POUR LES DEUX CIELS.
+
+     `paintSky` prend désormais une PALETTE en argument et rien d'autre n'a
+     changé : mêmes nuages, mêmes pyramides, mêmes proportions. Écrire un
+     second `paintDaySky()` aurait été beaucoup plus rapide, et c'était le
+     piège — les deux ciels se recouvrent en fondu pendant 3 000 mètres, donc
+     tout ce qui ne serait pas EXACTEMENT à la même place dans les deux
+     dessins se verrait glisser à l'écran. Une chaîne de montagnes qui bouge
+     pendant un lever de soleil est un défaut qu'aucune relecture ne rattrape,
+     parce qu'il n'apparaît que pendant le fondu.
+
+     Le hasard est semé (`mulberry32` via `Track.makeRng`) pour la même raison,
+     et c'est le vrai correctif du zip : nuages et pyramides étaient tirés au
+     `Math.random()`. Deux appels auraient donc produit deux reliefs
+     DIFFÉRENTS, et le lever de soleil aurait fait apparaître une seconde
+     chaîne de montagnes par-dessus la première. Avec la même graine, les deux
+     ciels sont le même dessin sous deux éclairages — c'est exactement ce
+     qu'est un lever de soleil.
+
+     `night` : la lune n'existe que dans le ciel de nuit, le soleil que dans
+     celui de jour. Ils sont aux deux extrémités du ciel, comme il se doit à
+     l'aube : pendant le fondu, la lune s'efface à l'ouest pendant que le
+     soleil monte à l'est, et le mouvement est offert par le fondu lui-même. */
+  function paintSky(P, night) {
     const W = 1024, H = 512;
     const cv = makeCanvas(W, H);
     const ctx = cv.getContext("2d");
     const HORIZON = H * 0.52;
+    /* Graine FIXE et partagée par les deux ciels. Voir le commentaire ci-dessus.
 
-    // Dégradé vertical : zénith presque noir -> corps violet -> rougeoiement.
+       ELLE A ÉTÉ CHOISIE EN REGARDANT, pas prise au hasard, et c'est un effet
+       de bord du zip qu'il ne fallait pas rater : tant que les nuages étaient
+       tirés au `Math.random()`, leur disposition changeait à chaque
+       chargement — la lune était donc dégagée une fois sur deux et personne
+       ne pouvait s'en plaindre. En figeant la graine, on fige AUSSI une
+       disposition particulière, et la première essayée (0x5C1A7E) enterrait
+       la lune sous le banc de nuages à tous les coups.
+
+       Huit graines rendues côte à côte avec render-textures.js, une retenue :
+       croissant entièrement dégagé, nuages répartis sur toute la largeur, et
+       une trouée à droite qui laisse passer le soleil du ciel de jour.
+       Regarder coûte cinq minutes, et c'est la seule façon de savoir. */
+    const rnd = Track.makeRng(0x314159);
+
+    // Dégradé vertical : zénith -> corps du ciel -> rougeoiement bas.
     const g = ctx.createLinearGradient(0, 0, 0, HORIZON);
-    g.addColorStop(0, cssHex(CFG.SKY_TOP));
-    g.addColorStop(0.45, cssHex(CFG.SKY_MID));
-    g.addColorStop(1, cssHex(CFG.SKY_HORIZON));
+    g.addColorStop(0, cssHex(P.top));
+    g.addColorStop(0.45, cssHex(P.mid));
+    g.addColorStop(1, cssHex(P.horizon));
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, W, HORIZON);
-    ctx.fillStyle = cssHex(CFG.SKY_TOP);
+    ctx.fillStyle = cssHex(P.top);
     ctx.fillRect(0, HORIZON, W, H - HORIZON);   // sous l'horizon : masqué par le lac
 
-    // Halo puis croissant de lune. Le croissant s'obtient en recouvrant le
-    // disque d'un second disque décalé, peint dans la couleur du ciel.
     const mx = W * 0.30, my = H * 0.19, mr = 30;
-    const halo = ctx.createRadialGradient(mx, my, 0, mx, my, mr * 5);
-    halo.addColorStop(0, "rgba(196,178,224,0.36)");
-    halo.addColorStop(1, "rgba(196,178,224,0)");
-    ctx.fillStyle = halo;
-    ctx.fillRect(mx - mr * 5, my - mr * 5, mr * 10, mr * 10);
-    ctx.fillStyle = cssHex(CFG.SKY_MOON);
-    ctx.beginPath(); ctx.arc(mx, my, mr, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = cssHex(CFG.SKY_MID);
-    ctx.beginPath(); ctx.arc(mx + mr * 0.62, my - mr * 0.30, mr * 0.94, 0, Math.PI * 2); ctx.fill();
+    if (night) {
+      // Halo puis croissant de lune. Le croissant s'obtient en recouvrant le
+      // disque d'un second disque décalé, peint dans la couleur du ciel.
+      const halo = ctx.createRadialGradient(mx, my, 0, mx, my, mr * 5);
+      halo.addColorStop(0, "rgba(196,178,224,0.36)");
+      halo.addColorStop(1, "rgba(196,178,224,0)");
+      ctx.fillStyle = halo;
+      ctx.fillRect(mx - mr * 5, my - mr * 5, mr * 10, mr * 10);
+      ctx.fillStyle = cssHex(CFG.SKY_MOON);
+      ctx.beginPath(); ctx.arc(mx, my, mr, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = cssHex(P.mid);
+      ctx.beginPath(); ctx.arc(mx + mr * 0.62, my - mr * 0.30, mr * 0.94, 0, Math.PI * 2); ctx.fill();
+    } else {
+      /* SOLEIL LEVANT, à l'opposé de la lune et BAS — son disque est aux trois
+         quarts avalé par les pyramides, qui sont peintes après lui.
+
+         C'est volontaire et c'est ce qui le distingue d'une lampe collée dans
+         le ciel : sur la référence de Guillaume on ne voit aucun disque, on ne
+         voit que le rose qu'il projette sur l'horizon. Un soleil entier et
+         haut aurait dit « midi », pas « lever ». Son halo, lui, est énorme
+         (neuf rayons) parce que c'est LUI qu'on voit, pas l'astre. */
+      const sx = W * 0.72, sy = HORIZON - 16, sr = 26;
+      const halo = ctx.createRadialGradient(sx, sy, 0, sx, sy, sr * 9);
+      halo.addColorStop(0, "rgba(255,206,178,0.55)");
+      halo.addColorStop(0.35, "rgba(233,150,152,0.28)");
+      halo.addColorStop(1, "rgba(233,150,152,0)");
+      ctx.fillStyle = halo;
+      ctx.fillRect(sx - sr * 9, sy - sr * 9, sr * 18, sr * 18);
+      ctx.fillStyle = cssHex(CFG.SKY_DAY_SUN);
+      ctx.beginPath(); ctx.arc(sx, sy, sr, 0, Math.PI * 2); ctx.fill();
+    }
 
     // Nuages déchirés : des paquets d'ellipses, avec un liseré éclairé du côté
     // de la lune. Ils s'arrêtent avant l'horizon, que les crêtes occupent.
     const drawCloud = (cx, cy, scale, lit) => {
-      const lobes = 5 + Math.floor(Math.random() * 5);
+      const lobes = 5 + Math.floor(rnd() * 5);
       for (let i = 0; i < lobes; i++) {
-        const ox = (Math.random() - 0.5) * 130 * scale;
-        const oy = (Math.random() - 0.5) * 26 * scale;
-        const rx = (26 + Math.random() * 46) * scale;
-        const ry = (8 + Math.random() * 13) * scale;
+        const ox = (rnd() - 0.5) * 130 * scale;
+        const oy = (rnd() - 0.5) * 26 * scale;
+        const rx = (26 + rnd() * 46) * scale;
+        const ry = (8 + rnd() * 13) * scale;
         if (lit) {
-          ctx.fillStyle = cssHex(CFG.SKY_CLOUD_LIT);
+          ctx.fillStyle = cssHex(P.cloudLit);
           ctx.globalAlpha = 0.5;
           ctx.beginPath(); ctx.ellipse(cx + ox, cy + oy - ry * 0.35, rx, ry, 0, 0, Math.PI * 2); ctx.fill();
         }
-        ctx.fillStyle = cssHex(CFG.SKY_CLOUD);
+        ctx.fillStyle = cssHex(P.cloud);
         ctx.globalAlpha = 0.62;
         ctx.beginPath(); ctx.ellipse(cx + ox, cy + oy, rx, ry, 0, 0, Math.PI * 2); ctx.fill();
       }
       ctx.globalAlpha = 1;
     };
+    /* Le côté ÉCLAIRÉ des nuages change d'astre : de nuit ils sont bordés du
+       côté de la lune (à l'ouest), de jour du côté du soleil (à l'est). C'est
+       le seul détail du dessin qui n'est pas identique entre les deux ciels,
+       et il ne peut pas glisser — un nuage ne change pas de place, seul son
+       liseré passe d'un bord à l'autre. */
+    const litX = night ? mx : W * 0.72;
     for (let c = 0; c < 26; c++) {
-      const cx = Math.random() * W;
-      const cy = H * 0.06 + Math.random() * (HORIZON - H * 0.14);
-      const scale = 0.6 + Math.random() * 1.1;
-      const lit = Math.abs(cx - mx) < W * 0.22;
+      const cx = rnd() * W;
+      const cy = H * 0.06 + rnd() * (HORIZON - H * 0.14);
+      const scale = 0.6 + rnd() * 1.1;
+      const lit = Math.abs(cx - litX) < W * 0.22;
       drawCloud(cx, cy, scale, lit);
       if (cx < 160) drawCloud(cx + W, cy, scale, lit);          // recouture
       if (cx > W - 160) drawCloud(cx - W, cy, scale, lit);
@@ -1198,46 +1264,73 @@ const World = (function () {
        à chaque virage. */
     const EDGE_Y = HORIZON - 12;
 
-    // Rougeoiement bas, derrière tout le relief.
-    const glow = ctx.createLinearGradient(0, HORIZON - 74, 0, HORIZON);
-    glow.addColorStop(0, "rgba(126,26,48,0)");
-    glow.addColorStop(0.55, "rgba(146,30,52,0.55)");
-    glow.addColorStop(1, "rgba(92,18,40,0.85)");
+    // Rougeoiement bas, derrière tout le relief. De jour c'est le rose du
+    // lever relevé sur la référence, et il monte plus haut : à l'aube, la
+    // couleur chaude occupe une bande bien plus large qu'un simple liseré.
+    const gh = night ? 74 : 118;
+    const glow = ctx.createLinearGradient(0, HORIZON - gh, 0, HORIZON);
+    if (night) {
+      glow.addColorStop(0, "rgba(126,26,48,0)");
+      glow.addColorStop(0.55, "rgba(146,30,52,0.55)");
+      glow.addColorStop(1, "rgba(92,18,40,0.85)");
+    } else {
+      glow.addColorStop(0, "rgba(191,130,153,0)");
+      glow.addColorStop(0.5, "rgba(199,138,152,0.62)");
+      glow.addColorStop(1, "rgba(224,164,160,0.92)");
+    }
     ctx.fillStyle = glow;
-    ctx.fillRect(0, HORIZON - 74, W, 74);
+    ctx.fillRect(0, HORIZON - gh, W, gh);
 
     const range = (color, minH, maxH, minW, maxW, jitterY) => {
       ctx.fillStyle = color;
       let x = -60;
       while (x < W + 60) {
-        const bw = minW + Math.random() * (maxW - minW);
-        const h = minH + Math.random() * (maxH - minH);
+        const bw = minW + rnd() * (maxW - minW);
+        const h = minH + rnd() * (maxH - minH);
         const baseY = HORIZON + jitterY;
         // Une pyramide : deux versants droits et un sommet légèrement
         // décentré. Le décentrage suffit à ce qu'aucune ne soit identique.
-        const apex = x + bw * (0.38 + Math.random() * 0.24);
+        const apex = x + bw * (0.38 + rnd() * 0.24);
         ctx.beginPath();
         ctx.moveTo(x, baseY);
         ctx.lineTo(apex, baseY - h);
         ctx.lineTo(x + bw, baseY);
         ctx.closePath();
         ctx.fill();
-        x += bw * (0.52 + Math.random() * 0.3);   // elles se chevauchent
+        x += bw * (0.52 + rnd() * 0.3);   // elles se chevauchent
       }
     };
 
+    /* Les deux plans gardent EXACTEMENT les mêmes hauteurs, largeurs et
+       chevauchements dans les deux ciels — seule la couleur change. C'est ce
+       que la graine partagée garantit, et c'est ce qui fait que le fondu se lit
+       comme un éclairage qui change et non comme un décor qu'on remplace. */
     // Plan LOINTAIN : plus haut, délavé par la brume.
-    range("rgba(62,40,92,0.72)", 62, 132, 150, 300, -2);
-    // Plan PROCHE : plus bas, presque noir.
-    range(cssHex(CFG.SKY_PEAKS), 42, 96, 110, 240, 6);
+    range(night ? "rgba(62,40,92,0.72)" : "rgba(80,79,117,0.78)", 62, 132, 150, 300, -2);
+    // Plan PROCHE : plus bas, presque noir de nuit ; de jour il prend enfin
+    // une couleur, parce qu'un relief qui reste en silhouette sous un ciel
+    // clair se lit comme un trou découpé dans l'image.
+    range(cssHex(night ? CFG.SKY_PEAKS : CFG.SKY_DAY_PEAKS), 42, 96, 110, 240, 6);
 
     // Base commune : elle ferme le bas et garantit qu'aucun trou ne laisse
     // voir le dégradé du ciel sous les montagnes.
-    ctx.fillStyle = cssHex(CFG.SKY_PEAKS);
+    ctx.fillStyle = cssHex(night ? CFG.SKY_PEAKS : CFG.SKY_DAY_PEAKS);
     ctx.fillRect(0, EDGE_Y + 10, W, H - EDGE_Y - 10);
 
     return cv;
   }
+
+  /* Les deux palettes, côte à côte pour qu'on voie d'un coup d'œil ce qui
+     change d'un ciel à l'autre. Les valeurs de jour sont relevées AU PIXEL sur
+     l'image de référence de Guillaume (voir config.js). */
+  const SKY_NIGHT_PAL = {
+    top: CFG.SKY_TOP, mid: CFG.SKY_MID, horizon: CFG.SKY_HORIZON,
+    cloud: CFG.SKY_CLOUD, cloudLit: CFG.SKY_CLOUD_LIT,
+  };
+  const SKY_DAY_PAL = {
+    top: CFG.SKY_DAY_TOP, mid: CFG.SKY_DAY_MID, horizon: CFG.SKY_DAY_HORIZON,
+    cloud: CFG.SKY_DAY_CLOUD, cloudLit: CFG.SKY_DAY_CLOUD_LIT,
+  };
 
   /* Un éclair DESSINÉ : une ligne brisée qui descend, doublée d'un halo, avec
      deux ramifications. Ça ne coûte qu'un plan, et ça ne se voit que pendant
@@ -1288,13 +1381,35 @@ const World = (function () {
     // La texture est retenue dans `mat` pour que tools/render-textures.js
     // puisse la regarder : c'est le seul dessin du jeu qu'on ne voit jamais
     // de près, et c'est aussi le plus grand.
-    mat.skyTex = pixelTexture(paintSky());
+    mat.skyTex = pixelTexture(paintSky(SKY_NIGHT_PAL, true));
     skyMat = new THREE.MeshBasicMaterial({
       map: mat.skyTex, side: THREE.BackSide, fog: false, depthWrite: false,
     });
     sky = new THREE.Mesh(geoSky, skyMat);
     sky.renderOrder = -10;   // toujours dessiné en premier, jamais devant le décor
     scene.add(sky);
+
+    /* ZIP 382 — SECOND DÔME, celui du jour, en fondu par-dessus le premier.
+
+       C'est UN objet permanent de plus sur 83, et zéro coût par tronçon : le
+       plafond de 200 objets / 100 unités, qui est le vrai budget de ce jeu, ne
+       le voit même pas. À comparer avec l'alternative — repeindre la texture
+       du ciel pendant la course — qui coûterait un canvas de 1024×512 plus un
+       téléversement GPU à chaque palier, en pleine course, sur mobile.
+
+       `renderOrder` : -10 pour la nuit, -9,5 pour le jour, et le décor ensuite.
+       Le ciel de jour doit passer APRÈS celui de nuit pour se fondre dessus, et
+       AVANT tout le reste pour ne jamais recouvrir un obstacle. Ni l'un ni
+       l'autre n'écrit dans le tampon de profondeur, donc l'ordre de dessin est
+       la seule chose qui les départage. */
+    mat.skyDayTex = pixelTexture(paintSky(SKY_DAY_PAL, false));
+    skyDayMat = new THREE.MeshBasicMaterial({
+      map: mat.skyDayTex, side: THREE.BackSide, fog: false,
+      transparent: true, opacity: 0, depthWrite: false,
+    });
+    skyDay = new THREE.Mesh(geoSky, skyDayMat);
+    skyDay.renderOrder = -9.5;
+    scene.add(skyDay);
 
     for (let i = 0; i < 3; i++) {
       boltMats.push(new THREE.MeshBasicMaterial({
@@ -1317,17 +1432,29 @@ const World = (function () {
 
      Le lac est en MeshBasicMaterial : il ÉMET, il ne reçoit pas la lumière.
      Une eau maléfique qui s'assombrirait dans l'ombre n'aurait aucun sens. */
-  function paintLakeWaves(seedPhase) {
+  /* ZIP 382 — les deux couleurs sont des ARGUMENTS. Le lac de jour est la même
+     houle exactement, avec le creux et la crête relevés sur la référence
+     (`COL_DAY_LAKE` / `COL_DAY_LAKE_GLOW`).
+
+     Pourquoi une seconde texture plutôt qu'une teinte sur la première : le
+     matériau du lac est un `MeshBasicMaterial`, dont la couleur MULTIPLIE la
+     texture. Or il faut passer de 0x2a1052 à 0x443957 pour le creux et de
+     0x7b3fd8 à 0x816aa6 pour la crête — deux transformations différentes, que
+     AUCUN multiplicateur unique ne réalise. J'ai essayé : le facteur qui
+     redresse le creux (×3,6 sur le vert) transforme les crêtes en turquoise
+     fluo. Une eau qui vire au cyan à l'aube, ce n'est pas un compromis, c'est
+     un bug avec une bonne excuse. */
+  function paintLakeWaves(seedPhase, deepCol, crestCol) {
     const S = 128;
     const cv = makeCanvas(S, S);
     const ctx = cv.getContext("2d");
-    ctx.fillStyle = cssHex(CFG.COL_LAKE);
+    ctx.fillStyle = cssHex(deepCol);
     ctx.fillRect(0, 0, S, S);
     const img = ctx.getImageData(0, 0, S, S);
     const d = img.data;
-    const gr = (CFG.COL_LAKE_GLOW >> 16) & 255;
-    const gg = (CFG.COL_LAKE_GLOW >> 8) & 255;
-    const gb = CFG.COL_LAKE_GLOW & 255;
+    const gr = (crestCol >> 16) & 255;
+    const gg = (crestCol >> 8) & 255;
+    const gb = crestCol & 255;
     for (let y = 0; y < S; y++) {
       for (let x = 0; x < S; x++) {
         // Somme de sinus dont les périodes DIVISENT S : la texture se répète
@@ -1353,7 +1480,8 @@ const World = (function () {
     glowUnitsPerTile = 37;
 
     lakeMat = new THREE.MeshBasicMaterial({
-      map: pixelTexture(paintLakeWaves(0), size / lakeUnitsPerTile, size / lakeUnitsPerTile), fog: true,
+      map: pixelTexture(paintLakeWaves(0, CFG.COL_LAKE, CFG.COL_LAKE_GLOW),
+                        size / lakeUnitsPerTile, size / lakeUnitsPerTile), fog: true,
     });
     lake = new THREE.Mesh(geo.plane, lakeMat);
     lake.scale.set(size, size, 1);
@@ -1362,8 +1490,29 @@ const World = (function () {
     lake.renderOrder = -5;
     scene.add(lake);
 
+    /* Le lac de jour : MÊME phase de houle (0), donc EXACTEMENT les mêmes
+       vagues aux mêmes endroits, et il défile plus bas avec le même décalage
+       de texture. Fondu par opacité par-dessus le lac de nuit.
+
+       Une phase différente aurait donné deux houles superposées pendant les
+       3 000 mètres du lever, c'est-à-dire une mer croisée qui n'existe ni de
+       jour ni de nuit — le même piège que les montagnes du ciel, et la même
+       parade : ce qui se fond doit être le même dessin. */
+    lakeDayMat = new THREE.MeshBasicMaterial({
+      map: pixelTexture(paintLakeWaves(0, CFG.COL_DAY_LAKE, CFG.COL_DAY_LAKE_GLOW),
+                        size / lakeUnitsPerTile, size / lakeUnitsPerTile), fog: true,
+      transparent: true, opacity: 0, depthWrite: false,
+    });
+    lakeDay = new THREE.Mesh(geo.plane, lakeDayMat);
+    lakeDay.scale.set(size, size, 1);
+    lakeDay.rotation.x = -Math.PI / 2;
+    lakeDay.position.y = CFG.LAKE_Y + 0.02;
+    lakeDay.renderOrder = -4.5;
+    scene.add(lakeDay);
+
     lakeGlowMat = new THREE.MeshBasicMaterial({
-      map: pixelTexture(paintLakeWaves(2.1), size / glowUnitsPerTile, size / glowUnitsPerTile),
+      map: pixelTexture(paintLakeWaves(2.1, CFG.COL_LAKE, CFG.COL_LAKE_GLOW),
+                        size / glowUnitsPerTile, size / glowUnitsPerTile),
       transparent: true, opacity: 0.4, depthWrite: false, blending: THREE.AdditiveBlending,
     });
     lakeGlow = new THREE.Mesh(geo.plane, lakeGlowMat);
@@ -1780,6 +1929,61 @@ const World = (function () {
      Il se calcule depuis `node.stoneEnd`, GELÉ à la génération du tronçon
      (voir track.js) : un tronçon déjà construit ne se repeint pas, son décor
      ne doit donc dépendre d'aucune valeur susceptible de bouger ensuite. */
+  /* ======================================= CYCLE JOUR / NUIT (zip 382) ======
+     `dayAt(dist)` : 0 = nuit franche, 1 = plein jour. Continue, dérivable à
+     l'œil, et c'est la SEULE chose que le reste du moteur consulte — ciel, lac,
+     brume, brouillard, lumières et orage en sont tous dérivés. Aucun d'eux ne
+     connaît une distance ; aucun ne peut donc se désynchroniser d'un autre.
+
+     Découpage : voir le schéma de CFG (§ CYCLE JOUR / NUIT).
+
+     LE POINT DÉLICAT est le raccord entre l'amorce, qui n'existe que dans le
+     premier cycle, et le cycle lui-même. À 15 000 m pile, l'amorce vaut 0,12 et
+     le cycle vaut 0 : les brancher bout à bout ferait chuter le ciel de 12 % en
+     une image, juste au moment où le joueur regarde le lever de soleil.
+
+     La parade est de ne PAS les mettre bout à bout mais de les SUPERPOSER, avec
+     une amorce qui s'efface exactement à la vitesse où le lever monte. La
+     composition `d + (1-d)*pre` a deux propriétés qui font tout le travail :
+     elle ne peut jamais dépasser 1, et elle vaut `pre` quand d vaut 0. Le
+     raccord est alors continu aux deux bouts, par construction et non par
+     réglage. */
+  function smooth01(x) {
+    const k = Math.max(0, Math.min(1, x));
+    return k * k * (3 - 2 * k);
+  }
+
+  function dayAt(dist) {
+    const d0 = CFG.DAY_RISE_AT;
+
+    // Cycle proprement dit. Il n'existe qu'à partir du premier lever : avant,
+    // le modulo ramènerait la course dans le « plein jour » d'un cycle
+    // imaginaire qui l'aurait précédée, et le jeu s'ouvrirait en plein soleil.
+    let d = 0;
+    if (dist >= d0) {
+      const u = (dist - d0) % CFG.DAY_CYCLE;
+      const rise = CFG.DAY_RISE_LEN;
+      const full = rise + CFG.DAY_FULL_LEN;
+      const fall = full + CFG.DAY_FALL_LEN;
+      if (u < rise)      d = smooth01(u / rise);
+      else if (u < full) d = 1;
+      else if (u < fall) d = smooth01(1 - (u - full) / CFG.DAY_FALL_LEN);
+      else               d = 0;
+    }
+
+    /* AMORCE, premier cycle seulement. Elle monte de 6 000 à 15 000 m, puis
+       s'efface sur toute la durée du lever. Un joueur qui meurt à 12 000 m aura
+       vu le ciel pâlir sans savoir pourquoi — c'est précisément ce qu'on veut :
+       la promesse d'un lever qu'il n'a pas atteint. */
+    if (dist < d0 + CFG.DAY_RISE_LEN) {
+      const p = smooth01((dist - CFG.DAY_PREDAWN_AT) / (d0 - CFG.DAY_PREDAWN_AT));
+      const fade = Math.max(0, Math.min(1, 1 - (dist - d0) / CFG.DAY_RISE_LEN));
+      const pre = CFG.DAY_PREDAWN_LEVEL * p * fade;
+      d = d + (1 - d) * pre;
+    }
+    return d;
+  }
+
   function stageAt(node, t) {
     const d = node.startDist + t;
     return Math.max(0, Math.min(1, (d - node.stoneEnd) / CFG.DECOR_BLEND_LEN));
@@ -2656,9 +2860,44 @@ const World = (function () {
     return Math.pow(1 - (age - t2) / (t3 - t2), 1.7);
   }
 
-  function updateAmbient(now, danger) {
+  /* Couleurs de travail du cycle jour/nuit, allouées UNE fois. Elles sont
+     recalculées à chaque image mais jamais réallouées : `updateAmbient` tourne
+     soixante fois par seconde, et douze voiles de brume qui recevraient chacun
+     un `new THREE.Color` feraient sept cents allocations par seconde pour rien.
+     C'est le seul endroit du fichier où ça vaut la peine d'y penser.
+
+     Elles sont remplies par `buildDayNightColors()`, appelée depuis `init()`, et
+     PAS écrites au niveau du module : rien dans ce fichier ne touche à THREE
+     avant `init()`, et c'est ce qui permet aux outils de `tools/` de charger
+     world.js puis d'installer leur faux THREE ensuite. */
+  let NIGHT_MIST, DAY_MIST, NIGHT_AMB, DAY_AMB, NIGHT_SUN, DAY_SUN;
+  let mistCol, ambCol, sunCol;
+
+  function buildDayNightColors() {
+    NIGHT_MIST = new THREE.Color(CFG.COL_PURPLE_DIM);
+    DAY_MIST   = new THREE.Color(0x9d86bd);
+    NIGHT_AMB  = new THREE.Color(CFG.COL_PURPLE_DIM);
+    DAY_AMB    = new THREE.Color(0x9f8fc4);
+    NIGHT_SUN  = new THREE.Color(0xa694d4);   // clair de lune, froid
+    DAY_SUN    = new THREE.Color(0xffcbb0);   // soleil rasant, chaud
+    mistCol = new THREE.Color();
+    ambCol  = new THREE.Color();
+    sunCol  = new THREE.Color();
+  }
+
+  /* `dist` (zip 382) : la distance parcourue, en mètres. Troisième argument et
+     non quatrième champ d'un objet d'état, pour rester dans la forme des deux
+     premiers — `updateAmbient` reçoit ce dont l'ambiance dépend, rien de plus.
+     Elle vaut 0 par défaut : l'écran-titre et l'écran de fin appellent la
+     fonction sans course en cours, et doivent montrer la nuit. */
+  function updateAmbient(now, danger, dist) {
     const dt = lastNow ? Math.min(0.1, (now - lastNow) / 1000) : 0;
     lastNow = now;
+
+    const day = dayAt(dist || 0);
+    mistCol.copy(NIGHT_MIST).lerp(DAY_MIST, day);
+    ambCol.copy(NIGHT_AMB).lerp(DAY_AMB, day);
+    sunCol.copy(NIGHT_SUN).lerp(DAY_SUN, day);
 
     /* --- Flammes (refaites au zip 377). ------------------------------------
        L'ancienne version multipliait les deux échelles par UN SEUL sinus : la
@@ -2766,7 +3005,9 @@ const World = (function () {
        centaines d'unités de course. --- */
     const cam = camera.position;
     sky.position.set(cam.x, 0, cam.z);
+    skyDay.position.set(cam.x, 0, cam.z);
     lake.position.set(cam.x, CFG.LAKE_Y, cam.z);
+    lakeDay.position.set(cam.x, CFG.LAKE_Y + 0.02, cam.z);
     lakeGlow.position.set(cam.x, CFG.LAKE_Y + 0.05, cam.z);
 
     /* Le défilement de texture COMPENSE le déplacement du plan. Sans lui, la
@@ -2777,6 +3018,12 @@ const World = (function () {
     if (lakeMat.map) {
       lakeMat.map.offset.x = cam.x / lakeUnitsPerTile;
       lakeMat.map.offset.y = -cam.z / lakeUnitsPerTile + now * 0.001 * CFG.LAKE_SCROLL;
+      // Le lac de jour reçoit le MÊME décalage, au pixel près. Sans ça, les
+      // deux houles glisseraient l'une sur l'autre pendant tout le lever.
+      if (lakeDayMat.map) {
+        lakeDayMat.map.offset.x = lakeMat.map.offset.x;
+        lakeDayMat.map.offset.y = lakeMat.map.offset.y;
+      }
     }
     if (lakeGlowMat.map) {
       lakeGlowMat.map.offset.x = cam.x / glowUnitsPerTile + now * 0.0006 * CFG.LAKE_SCROLL;
@@ -2791,8 +3038,14 @@ const World = (function () {
       );
     }
 
-    /* --- Orage --- */
-    const flash = tickLightning(now) * CFG.LIGHTNING_STRENGTH;
+    /* --- Orage. Il s'éteint avec le jour (zip 382) : `day` multiplie sa force,
+       il n'y a donc pas d'éclair en plein soleil, et il revient tout seul quand
+       la nuit retombe — sans un seul interrupteur, ni un seul seuil.
+
+       Le compteur, lui, continue de tourner sous le soleil. Le couper aurait
+       fait éclater un coup de tonnerre pile à la seconde où la nuit revient,
+       parce que l'attente accumulée se serait vidée d'un coup. --- */
+    const flash = tickLightning(now) * CFG.LIGHTNING_STRENGTH * (1 - day);
     if (flash > 0.01 && storm.bolt >= 0) {
       boltMesh.visible = true;
       boltMesh.material = boltMats[storm.bolt];
@@ -2804,21 +3057,48 @@ const World = (function () {
       boltMesh.visible = false;
     }
 
-    /* --- Couleurs d'ambiance. Plus les loups sont proches, plus la scène vire
-       au rouge sombre ; l'éclair, lui, tire tout vers le violet blanc. --- */
-    const fogCol = new THREE.Color(CFG.COL_FOG).lerp(new THREE.Color(0x3a0d12), danger * 0.8);
+    /* --- Couleurs d'ambiance. Trois influences se composent, TOUJOURS dans cet
+       ordre : le jour d'abord (c'est le fond du tableau), la meute ensuite
+       (elle vire au rouge sombre), l'éclair en dernier (il délave tout vers le
+       violet blanc).
+
+       L'ordre n'est pas indifférent : appliquer le jour APRÈS le rouge de la
+       meute effacerait l'avertissement le plus important du jeu dès que le
+       soleil se lève. Le danger doit rester lisible à toute heure. --- */
+    const fogCol = new THREE.Color(CFG.COL_FOG).lerp(new THREE.Color(CFG.COL_DAY_FOG), day);
+    fogCol.lerp(new THREE.Color(0x3a0d12), danger * 0.8);
     fogCol.lerp(new THREE.Color(CFG.COL_LIGHTNING), flash * 0.55);
     scene.fog.color.copy(fogCol);
 
     /* Le ciel est un MeshBasicMaterial texturé : sa couleur MULTIPLIE la
        texture. Passer au-dessus de 1 donne le sur-éclairement du flash sans
-       ajouter un seul objet à la scène. */
+       ajouter un seul objet à la scène. Les DEUX dômes la reçoivent, sinon un
+       éclair pendant le lever n'éclairerait que la moitié du ciel. */
     const lit = 1 + flash * 2.2;
     skyMat.color.setRGB(lit, lit, lit * 1.05);
-    lakeGlowMat.opacity = 0.4 + flash * 0.4;
+    skyDayMat.color.setRGB(lit, lit, lit * 1.05);
+    skyDayMat.opacity = day;
+    lakeDayMat.opacity = day;
 
-    ambientLight.intensity = 0.5 + flash * 1.5;
-    moonLight.intensity = 0.5 + flash * 1.9;
+    /* La crête violette du lac RESTE allumée de jour — c'est ce que montre la
+       référence de Guillaume, où l'eau garde franchement sa lueur sous un ciel
+       clair. Elle faiblit seulement d'un tiers : un additif à pleine puissance
+       sur une eau devenue claire se serait empâté en blanc. */
+    lakeGlowMat.opacity = (0.4 - 0.13 * day) + flash * 0.4;
+
+    /* La brume passe du violet sombre au lilas clair de la référence. Elle est
+       en additif : de jour, sur un lac clair, elle doit surtout ÉCLAIRCIR, d'où
+       la teinte plutôt que l'opacité. */
+    for (const m of mists) m.material.color.copy(mistCol);
+
+    /* Lumières. La lune ne devient pas un soleil par magie : elle se réchauffe
+       et force le trait. Deux fois plus d'ambiante au plein jour, c'est ce qui
+       fait ressortir la pierre des bordures — de nuit elles étaient presque des
+       silhouettes, et sous un ciel clair une silhouette se lit comme un trou. */
+    ambientLight.color.copy(ambCol);
+    ambientLight.intensity = 0.5 + day * 0.55 + flash * 1.5;
+    moonLight.color.copy(sunCol);
+    moonLight.intensity = 0.5 + day * 0.45 + flash * 1.9;
     // Zip 377 : deux harmoniques au lieu d'une. La lampe qui suit le joueur
     // battait à une seconde près, ce qui s'entendait à l'œil comme un
     // clignotant. Deux périodes incommensurables suffisent à la rendre
@@ -2883,6 +3163,9 @@ const World = (function () {
   return {
     init, buildNode, dropNode, clearAll, updatePlayer, updateWolves, updateAmbient, render, resize,
     applySkin, setMist, setStage,
+    // Exporté pour les outils : c'est la seule façon de vérifier le cycle
+    // jour/nuit sans lancer une course de 33 000 mètres (zip 382).
+    dayAt,
     get camera() { return camera; },
     get scene() { return scene; },
     get playerMesh() { return playerMesh; },

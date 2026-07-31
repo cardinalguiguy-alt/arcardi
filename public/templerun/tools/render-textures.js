@@ -309,7 +309,17 @@ function sheet(name, items, zoom, pad) {
 // façon d'être sûr qu'on regarde bien ce que le jeu utilise, et pas une
 // deuxième version des mêmes dessins.
 const M = World.materials;
-sheet("ciel", [{ cv: M.skyTex.image, label: "dôme de ciel" }], 1, 8);
+/* Zip 382 : les DEUX ciels sur la même planche, l'un au-dessus de l'autre.
+   C'est le seul moyen de vérifier ce sur quoi tout le lever de soleil repose —
+   que les nuages et les deux chaînes de pyramides sont RIGOUREUSEMENT aux mêmes
+   endroits dans les deux dessins. S'ils ne l'étaient pas, le fondu ferait
+   glisser les montagnes pendant 3 000 mètres, et c'est le genre de défaut qu'on
+   ne voit qu'en jeu, à 15 km du départ. Superposées ici, deux silhouettes qui
+   ne coïncident pas sautent aux yeux en une seconde. */
+sheet("ciel", [
+  { cv: M.skyTex.image, label: "dôme de ciel — nuit" },
+  { cv: M.skyDayTex.image, label: "dôme de ciel — jour (mêmes reliefs)" },
+], 1, 8);
 /* Le SOL est plaqué sur 8,4 unités de large pour 4 de long : ses pierres sont
    deux fois plus larges à l'écran que dans le canvas. On les montre étirées
    d'autant, sinon la planche fait croire à des briques debout. */

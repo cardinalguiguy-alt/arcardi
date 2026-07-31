@@ -69,9 +69,14 @@ const THREE = {
   Color: Col,
   FogExp2: class { constructor(c) { this.color = new Col(c); } },
   PerspectiveCamera: class extends Obj3 { constructor() { super(); this.aspect = 1; } },
-  AmbientLight: class extends Obj3 { constructor() { super(); this.intensity = 1; } },
-  DirectionalLight: class extends Obj3 { constructor() { super(); this.intensity = 1; } },
-  PointLight: class extends Obj3 { constructor() { super(); this.intensity = 1; } },
+  /* Zip 382 : les lampes ont maintenant une `color`. Le vrai three.js en donne
+     une à toutes les lumières depuis toujours ; ce faux-ci l'avait simplement
+     oubliée, parce que rien ne la touchait avant le cycle jour/nuit. Le
+     contrôle avait donc raison de casser, mais pas sur le bon fichier — c'est
+     l'outil qui mentait, pas world.js. */
+  AmbientLight: class extends Obj3 { constructor(c) { super(); this.intensity = 1; this.color = new Col(c); } },
+  DirectionalLight: class extends Obj3 { constructor(c) { super(); this.intensity = 1; this.color = new Col(c); } },
+  PointLight: class extends Obj3 { constructor(c) { super(); this.intensity = 1; this.color = new Col(c); } },
   BoxGeometry: class { dispose() {} }, OctahedronGeometry: class { dispose() {} },
   PlaneGeometry: class { dispose() {} }, SphereGeometry: class { dispose() {} },
   MeshLambertMaterial: Mat,
@@ -377,6 +382,61 @@ try {
       failures.push("setMist(0) ne rend pas la densité de brouillard d'origine");
     }
     World.dropNode(junction);
+  }
+
+  /* ======================================================================
+     ZIP 382 — LE CYCLE JOUR/NUIT NE FAIT AUCUNE MARCHE.
+     ----------------------------------------------------------------------
+     Ce qu'on promet à Guillaume n'est pas « il fait jour après 15 000 m »,
+     c'est « un lever de soleil PROGRESSIF ». On ne relit donc pas les
+     constantes de config.js — on échantillonne la courbe tous les 5 mètres
+     sur cinq cycles complets et on regarde le plus grand saut.
+
+     Le contrôle porte sur la DÉRIVÉE, pas sur les valeurs, et c'est tout
+     l'intérêt : les valeurs, on peut les lire dans CFG. Ce qu'on ne peut pas
+     lire, c'est le raccord entre l'amorce du premier cycle et le lever, qui
+     est le seul endroit du calcul où deux formules se rencontrent — donc le
+     seul endroit où une marche peut naître. Un réglage malheureux de
+     DAY_PREDAWN_LEVEL la ferait réapparaître sans casser quoi que ce soit
+     d'autre, et personne ne la verrait avant d'avoir couru 15 km.
+
+     Seuil : 0,004 par tranche de 5 m. À 34 u/s, 5 m passent en 0,15 s ; une
+     marche de 0,4 % d'un fondu de ciel y est invisible, le double ne l'est
+     déjà plus.
+     ====================================================================== */
+  {
+    const STEP = 5, SEUIL = 0.004;
+    let maxStep = 0, maxAt = 0;
+    let prev = World.dayAt(0);
+    for (let m = STEP; m <= CFG.DAY_CYCLE * 5; m += STEP) {
+      const v = World.dayAt(m);
+      const s = Math.abs(v - prev);
+      if (s > maxStep) { maxStep = s; maxAt = m; }
+      prev = v;
+    }
+    if (maxStep > SEUIL) {
+      failures.push(`marche de ${maxStep.toFixed(4)} dans le cycle jour/nuit à ${maxAt} m (seuil ${SEUIL})`);
+    }
+
+    /* Et le déroulé lui-même, aux quatre moments qui le définissent. Sans ça,
+       une courbe parfaitement lisse mais bloquée à zéro passerait le contrôle
+       de dérivée sans qu'il ne fasse jamais jour. */
+    const jalons = [
+      ["nuit au départ",            0,                                    0,    0.001],
+      ["nuit avant l'amorce",       CFG.DAY_PREDAWN_AT,                   0,    0.001],
+      ["amorce au maximum",         CFG.DAY_RISE_AT,   CFG.DAY_PREDAWN_LEVEL,   0.005],
+      ["plein jour",                CFG.DAY_RISE_AT + CFG.DAY_RISE_LEN,   1,    0.001],
+      ["encore plein jour",         CFG.DAY_RISE_AT + CFG.DAY_RISE_LEN + CFG.DAY_FULL_LEN, 1, 0.001],
+      ["nuit revenue",              CFG.DAY_RISE_AT + CFG.DAY_RISE_LEN + CFG.DAY_FULL_LEN + CFG.DAY_FALL_LEN, 0, 0.001],
+      ["cycle suivant, plein jour", CFG.DAY_RISE_AT + CFG.DAY_CYCLE + CFG.DAY_RISE_LEN, 1, 0.001],
+    ];
+    for (const [nom, m, attendu, tol] of jalons) {
+      const v = World.dayAt(m);
+      if (Math.abs(v - attendu) > tol) {
+        failures.push(`cycle jour/nuit : à ${m} m (${nom}) on lit ${v.toFixed(3)}, attendu ${attendu}`);
+      }
+    }
+    console.log(`Cycle jour/nuit : ${CFG.DAY_CYCLE} u par cycle, marche max ${maxStep.toFixed(4)} à ${maxAt} u (seuil ${SEUIL}), 7 jalons tenus.`);
   }
 
   /* ======================================================================
