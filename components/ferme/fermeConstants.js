@@ -63,12 +63,17 @@ export const G_DARK_PASSAGE = 13; // "passage sombre" (chantier 2026-07, demande
                                    // au noir + téléportation SOLO vers la carte maléfique (voir enterDarkPassage/
                                    // tryOpenNearby côté FermeGame.js). Rendu volontairement sombre (voir drawTile)
                                    // pour se distinguer du reste du décor.
-export const G_RUN_GATE = 14;      // zip 372 : porte du défi de fuite, bord EST des cartes du passage sombre.
-                                   // Contrairement au passage sombre, elle est ANNONCÉE (couloir dégagé qui y
-                                   // mène, rendu lumineux) : c'est un défi qu'on doit pouvoir trouver, pas un
-                                   // secret. Position fixe C.RUN_GATE, identique sur les cinq mondes.
-                                   // ZIP 375 : ce n'est plus un coffre/brasier posé sur l'herbe mais la
-                                   // DERNIÈRE DALLE DE LA JETÉE, au-dessus du lac (voir G_RUN_JETTY).
+export const G_RUN_GATE = 14;      // zip 372 : point de déclenchement du défi de fuite, bord EST des cartes du
+                                   // passage sombre. Position fixe C.RUN_GATE, identique sur les cinq mondes.
+                                   // ZIP 375 : ce n'est plus un coffre/brasier posé sur l'herbe mais une dalle
+                                   // de la jetée, au-dessus du lac (voir G_RUN_JETTY).
+                                   // ⚠ ZIP 378 — PLUS AUCUN RENDU PROPRE (décision Guillaume : « plus de porte
+                                   // visible, mais l'effet reste le même, et localisé au même endroit »). La
+                                   // case se dessine EXACTEMENT comme une dalle de chaussée : ni brasiers, ni
+                                   // gravures, ni lueur. Le type reste distinct parce que c'est lui qui porte le
+                                   // déclenchement (checkWalkOverPassage) — et le garder distinct plutôt que de
+                                   // tester des coordonnées évite qu'un déplacement de la chaussée désaccorde
+                                   // silencieusement le décor et la règle.
 export const G_RUN_JETTY = 15;     // zip 375 : dalle de la jetée en pierres qui avance dans le lac violet de la
                                    // rive est, et depuis laquelle on lance le défi de fuite. C'est une
                                    // réduction 2D de la chaussée du jeu de fuite (dalles fissurées, bordures
@@ -79,6 +84,11 @@ export const G_LAKE_SHORE = 16;    // zip 375 : berge du lac. Bande de galets mo
                                    // laquelle on marche normalement. Elle sert au FONDU demandé : sans elle, le
                                    // lac s'arrête sur une ligne franche de cases, et aucun dégradé de rendu ne
                                    // rattrape une silhouette en escalier.
+export const G_RUN_KERB = 17;      // zip 378 : BORDURE de la chaussée. Les blocs bas façon sarcophage du défi 3D,
+                                   // rangée extérieure de part et d'autre des trois voies praticables. Elle BLOQUE
+                                   // (voir blockedEvil) — mais elle ne retire aucun passage au joueur : c'était de
+                                   // l'eau avant, qui bloquait déjà. On ne change donc que ce qu'il VOIT, jamais où
+                                   // il peut aller, et l'ancienne géométrie de l'embuscade reste valide mot pour mot.
 
 // Objets
 export const O_NONE = 0;
@@ -519,21 +529,54 @@ export const RUN_CORRIDOR_HALF = 1;         // demi-largeur du couloir garanti (
       l'embuscade des loups lisible sans un mot d'explication.
 
    GÉOMÉTRIE, tout est dérivé de EAST_LAKE_X pour qu'un seul nombre suffise à
-   déplacer l'ensemble. La jetée avance vers l'EST depuis la dernière bande de
-   terre, et la porte est sa dernière dalle.
+   déplacer l'ensemble. La chaussée avance vers l'EST depuis la dernière bande
+   de terre.
+
+   ⚠ ZIP 378 — CE N'EST PLUS UNE JETÉE, C'EST UNE CHAUSSÉE. Retour de
+   Guillaume sur capture d'écran : « elle doit aller jusqu'au bord droit de
+   l'écran, pas s'arrêter comme ça, et l'eau violette ne doit pas la
+   contourner, la plateforme est par-dessus l'eau ».
+
+   Les trois défauts étaient distincts et il fallait les traiter séparément :
+
+     1. elle S'ARRÊTAIT quatre dalles après la berge, ce qui la faisait lire
+        comme un ponton inachevé posé au milieu d'un lac. Elle court désormais
+        jusqu'au bord EST de la carte et sort du cadre — ce qui raconte la
+        bonne chose : le défi 3D est la SUITE de cette route ;
+     2. l'eau la CONTOURNAIT : les dalles remplaçaient le lac au lieu d'être
+        posées dessus, et il n'y avait ni ombre portée ni épaisseur. C'est le
+        rendu qui traite ça (drawRunDeckTile, fermeArt.js) ;
+     3. elle n'avait que trois cases de large, sans les blocs bas qui bordent
+        la chaussée en 3D. La rangée de BORDURE (G_RUN_KERB) les apporte.
+
+   Les noms RUN_JETTY_* sont conservés : tout le code existant les emploie, et
+   les renommer aurait touché sept fichiers pour un gain nul.
    ========================================================================== */
 export const EAST_LAKE_X = 57;        // colonne moyenne de la rive ; à l'est, c'est le lac
 export const EAST_LAKE_WOBBLE = 3.2;  // amplitude du découpage irrégulier de la rive
 export const LAKE_SHORE_BAND = 2;     // épaisseur, en cases, de la berge de galets (le « fondu »)
 
-export const RUN_JETTY_BASE = { x: EAST_LAKE_X, y: 34 }; // dernière case de TERRE, pied de la jetée
-export const RUN_JETTY_LEN = 4;       // longueur de la jetée, en dalles (décision Guillaume : « courte, 3-4 cases »)
-export const RUN_JETTY_HALF_W = 1;    // demi-largeur : 1 => 3 cases, comme les 3 voies du défi
+export const RUN_JETTY_BASE = { x: EAST_LAKE_X, y: 34 }; // dernière case de TERRE, pied de la chaussée
+export const RUN_JETTY_HALF_W = 1;    // demi-largeur PRATICABLE : 1 => 3 cases, comme les 3 voies du défi
+export const RUN_KERB_HALF_W = 2;     // demi-largeur TOTALE : 2 => 5 cases, dont 2 de bordure. Proportion du défi 3D
+                                      // (3 voies de 2,6 dans une dalle de 8,4, bordée de blocs bas).
+// Zip 378 : la chaussée court jusqu'au bord EST de la carte. Dérivé de
+// EVIL_MAP_W et non écrit en dur — les six mondes du passage font tous 70×70,
+// mais c'est une propriété de la carte, pas de la chaussée.
+export const RUN_DECK_END_X = EVIL_MAP_W - 1;
+export const RUN_JETTY_LEN = RUN_DECK_END_X - RUN_JETTY_BASE.x;  // longueur réelle, en dalles
 
-// La porte est la DERNIÈRE dalle. Elle reste nommée RUN_GATE : tout le code
-// existant (checkWalkOverPassage, verify-gate.mjs, carveRunCorridor) parle
-// déjà de cette constante, seule sa position et son habillage changent.
-export const RUN_GATE = { x: RUN_JETTY_BASE.x + RUN_JETTY_LEN, y: RUN_JETTY_BASE.y };
+/* Point de DÉCLENCHEMENT du défi. Il garde exactement la place qu'il avait
+   quand la jetée s'arrêtait là (quatre dalles après la berge) — décision
+   Guillaume : « plus de porte visible, mais l'effet reste le même, et
+   localisé au même endroit ». Ce n'est donc plus le bout de quoi que ce soit,
+   d'où la constante dédiée plutôt qu'une expression dérivée de la longueur :
+   allonger la chaussée ne doit plus déplacer le déclenchement.
+
+   Le nom RUN_GATE est conservé : checkWalkOverPassage, carveRunCorridor,
+   ambushCineSpot et verify-gate.mjs le nomment tous. */
+export const RUN_GATE_OFFSET = 4;
+export const RUN_GATE = { x: RUN_JETTY_BASE.x + RUN_GATE_OFFSET, y: RUN_JETTY_BASE.y };
 
 /* --- Embuscade des darkwolves (cinématique + affrontement) ---------------
    Entièrement LOCALE : aucun de ces loups n'existe pour les autres joueurs,

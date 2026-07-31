@@ -9,11 +9,20 @@ l'architecture.
 
 ## Comment on y joue, dans le jeu
 
-Franchir le passage sombre, puis marcher jusqu'à la **porte du bord est**
-(`C.RUN_GATE`, deux braseros orange). Un couloir dégagé y mène depuis l'arrivée,
-sur les cinq mondes du passage — y compris le labyrinthe.
+Franchir le passage sombre, puis marcher vers l'**est** jusqu'à la chaussée de
+pierre qui enjambe le lac violet et sort de la carte. Un couloir dégagé y mène
+depuis l'arrivée, sur les cinq mondes du passage — y compris le labyrinthe.
 
-Marcher sur la porte ouvre le défi par-dessus la ferme. En cas de défaite :
+La chaussée (`G_RUN_JETTY`, cinq cases de large : trois praticables entre deux
+rangées de blocs bas) est une **réduction 2D de la plateforme du défi** —
+mêmes dalles à trois paliers d'usure, mêmes joints moussus, mêmes stèles à
+runes, mêmes torches, mêmes champignons luminescents, et la même pierre
+(tools/verify-deck.mjs compare les deux palettes). Elle est posée SUR le lac :
+ombre portée au sud, liseré violet au nord.
+
+S'avancer dessus jusqu'à `C.RUN_GATE` déclenche l'embuscade puis le défi.
+**Rien ne marque cette case** (décision Guillaume, zip 378) : c'est une dalle
+comme les autres, la chaussée continue derrière elle jusqu'au bord du monde. En cas de défaite :
 écran de fin, puis retour à la ferme **blessé 10 minutes** (`RUN_INJURED_MS`),
 avec les **bonbons** ramassés. Abandonner une course en cours compte comme une
 défaite ; ressortir depuis l'écran-titre est gratuit.
@@ -118,7 +127,7 @@ origine.
 
 ## Vérification
 
-Sept scripts Node, depuis ce dossier. Aucune dépendance, moins de 40 secondes
+Neuf scripts Node, depuis ce dossier. Aucune dépendance, moins de 40 secondes
 en tout — **les relancer tous à chaque livraison**. Un outil qu'on saute n'est
 pas un filet de sécurité, c'est un fichier mort (leçon du zip 375).
 
@@ -130,6 +139,8 @@ node tools/check-strings.js      # parité FR/EN + ui.js exécuté contre un fau
 node tools/verify-offroad.js     # la bifurcation, vérifiée en la JOUANT (zip 377)
 node tools/verify-skin.js        # la tenue du joueur, de la ferme au défi (zip 377)
 node tools/render-runner.js      # rend le fermier ET les flammes en PNG — À REGARDER (zip 377)
+node tools/verify-deck.mjs       # la chaussée 2D : bord atteint, palettes accordées (zip 378)
+node tools/render-jetty.mjs      # rend la chaussée 2D en PNG — À REGARDER (zip 378)
 ```
 
 `verify-fairness.js` ne vérifie pas une règle arbitraire mais une **simulation
@@ -153,6 +164,13 @@ levait la moindre erreur : la nuque du fermier posée du côté du visage depuis
 le zip 374, les mèches longues qui mangeaient le profil, et la flamme peinte à
 l'envers (ventre en haut, pointe sur la mèche — un panache de fumée suspendu
 au-dessus du bâton).
+
+`render-jetty.mjs` fait pour la carte 2D ce que `render-runner.js` fait pour
+le fermier : il rejoue la vraie génération et le vrai dessin contre un
+contexte 2D maison (fillRect seul, zéro dépendance) et écrit un PNG de la rive
+est. Les quatre corrections de la chaussée du zip 378 — pierre trop claire,
+fêlures en vermisseaux, bordures illisibles, halos en rectangles emboîtés —
+viennent toutes de là.
 
 Côté ferme, `verify-gate` (dans le zip de livraison) refait un parcours en
 largeur depuis l'arrivée du monde sombre jusqu'à la porte, avec le vrai test de

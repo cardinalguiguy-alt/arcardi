@@ -329,7 +329,11 @@ export function carveEastLake(ground, objects, objHp, W, H) {
      berge posée juste après en fait un rivage plutôt qu'une découpe. */
   const base = C.RUN_JETTY_BASE, half = C.RUN_JETTY_HALF_W;
   const runway = C.RUN_AMBUSH_START_DIST + 3;
-  for (let dy = -half - 1; dy <= half + 1; dy++) {
+  // Zip 378 : la largeur de l'esplanade est DÉRIVÉE de celle de la chaussée
+  // (RUN_KERB_HALF_W) au lieu d'être « une case de plus que les voies ». Les
+  // deux valaient 2 par coïncidence ; élargir la chaussée sans élargir son
+  // approche aurait fait déboucher les blocs de bordure sur du vide.
+  for (let dy = -C.RUN_KERB_HALF_W; dy <= C.RUN_KERB_HALF_W; dy++) {
     const yy = base.y + dy;
     if (yy < 0 || yy >= H) continue;
     for (let xx = base.x - runway; xx <= base.x; xx++) {
@@ -356,16 +360,34 @@ export function carveEastLake(ground, objects, objHp, W, H) {
   }
   for (const i of shore) { ground[i] = C.G_LAKE_SHORE; clearObj(i); }
 
-  // --- 3. La jetée ------------------------------------------------------
-  for (let k = 1; k <= C.RUN_JETTY_LEN; k++) {
-    for (let dy = -half; dy <= half; dy++) {
-      const xx = base.x + k, yy = base.y + dy;
-      if (xx < 0 || yy < 0 || xx >= W || yy >= H) continue;
-      const i = yy * W + xx;
-      ground[i] = C.G_RUN_JETTY;
+  /* --- 3. La CHAUSSÉE (zip 378) -----------------------------------------
+     Elle ne s'arrête plus quatre dalles après la berge : elle court jusqu'au
+     bord EST de la carte et sort du cadre. Retour de Guillaume sur capture :
+     une jetée qui s'interrompt au milieu d'un lac se lit comme un décor
+     inachevé, alors que la même chaussée qui file hors de l'écran raconte que
+     le défi de fuite en est la suite.
+
+     Cinq cases de large : trois praticables au centre, une rangée de BORDURE
+     de chaque côté. La bordure bloque, mais elle ne coûte aucun passage — ces
+     cases-là étaient de l'eau, qui bloquait déjà. C'est la condition pour que
+     toute la géométrie de l'embuscade, calculée sur les trois voies, reste
+     valable sans y toucher.
+
+     On s'arrête à W - 1 inclus : la dernière colonne de la carte porte donc
+     de la pierre, et la caméra, qui se bloque sur le bord, ne montre jamais
+     de fin de chaussée. */
+  for (let x = base.x + 1; x <= Math.min(C.RUN_DECK_END_X, W - 1); x++) {
+    for (let dy = -C.RUN_KERB_HALF_W; dy <= C.RUN_KERB_HALF_W; dy++) {
+      const yy = base.y + dy;
+      if (x < 0 || yy < 0 || x >= W || yy >= H) continue;
+      const i = yy * W + x;
+      ground[i] = Math.abs(dy) <= half ? C.G_RUN_JETTY : C.G_RUN_KERB;
       clearObj(i);
     }
   }
+  // Le point de déclenchement garde sa case. Posé APRÈS le pavage, sinon la
+  // boucle ci-dessus le recouvrirait — et le défi deviendrait injouable sans
+  // qu'aucune erreur ne soit levée.
   ground[C.RUN_GATE.y * W + C.RUN_GATE.x] = C.G_RUN_GATE;
 
   // --- Carte de profondeur ---------------------------------------------

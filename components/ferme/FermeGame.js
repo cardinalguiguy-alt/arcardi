@@ -30,7 +30,7 @@ import { createPortal } from "react-dom";
 import { supabase } from "@/lib/supabaseClient";
 import * as C from "./fermeConstants";
 import * as E from "./fermeEngine";
-import { buildSprites, charPalette } from "./fermeArt";
+import { buildSprites, charPalette, drawRunDeckTile, drawRunDeckOverlay } from "./fermeArt";
 import { fstr } from "./fermeStrings";
 
 const GAME_ID = "ferme";
@@ -10296,76 +10296,39 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const x0 = Math.max(0, Math.floor(cam.x / T)), x1 = Math.min(ew.w - 1, Math.ceil((cam.x + cam.vw) / T));
       const y0 = Math.max(0, Math.floor(cam.y / T)), y1 = Math.min(ew.h - 1, Math.ceil((cam.y + cam.vh) / T));
       const draws = [];
+      /* Zip 378 : la chaussée se dessine en DEUX passes. Tout ce qui déborde
+         d'une case — ombre portée sur le lac, liseré violet, halos de torche —
+         doit passer après le balayage complet, faute de quoi l'eau voisine,
+         peinte plus tard dans la boucle, recouvrirait l'ombre qu'elle reçoit.
+         C'est exactement le défaut que Guillaume a photographié : le lac
+         « contournait » la plateforme au lieu de passer dessous. */
+      const deckOver = [];
       for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
         const i = y * ew.w + x, g = ew.ground[i];
         const isDeck = g === C.G_RUN_JETTY || g === C.G_RUN_GATE;
+        const isKerb = g === C.G_RUN_KERB;
         ctx.fillStyle = g === C.G_DARK_PASSAGE ? "#3a2a55"
-          : isDeck ? "#3c372f"
+          : (isDeck || isKerb) ? "#3c372f"
           : g === C.G_LAKE_SHORE ? "#1d2119"
           : g === C.G_WATER ? "#241246" : "#182417";
         ctx.fillRect(x * T, y * T, T, T);
-        /* ZIP 375 — JETÉE EN PIERRES.
-           Réduction 2D de la chaussée du défi de fuite : mêmes dalles
-           fissurées, mêmes joints moussus, même pierre grise. Le hash de
-           case (pas de random par frame) décide de l'usure, exactement
-           comme le tirage de palier de world.js côté 3D — on veut que les
-           deux décors aient l'air taillés dans la même carrière.
+        /* ZIP 378 — CHAUSSÉE DU MONDE SOMBRE.
+           Le dessin lui-même vit dans fermeArt.js (drawRunDeckTile), au
+           niveau du module : il ne touche à aucun état de jeu, et l'en
+           sortir permet de le rasteriser hors navigateur pour le REGARDER
+           (tools/render-jetty.js). C'est de là que sont venues les
+           corrections de ce zip.
 
-           Les DEUX bordures longues (les cases extrêmes en y) portent un
-           liseré de blocs, ce qui donne à la jetée une épaisseur et empêche
-           qu'elle se lise comme un simple chemin de terre claire. */
-        if (isDeck) {
-          const h = (i * 2654435761) >>> 0;
-          const px = x * T, py = y * T;
-          // Dalles : deux tons alternés selon la case, plus des taches
-          // d'humidité sur les plus abîmées.
-          ctx.fillStyle = (h & 1) ? "#453f36" : "#514a3f";
-          ctx.fillRect(px + 1, py + 1, T - 2, T - 2);
-          if ((h >> 3 & 3) === 0) {
-            ctx.fillStyle = "rgba(26,36,21,0.55)";
-            ctx.fillRect(px + 3 + (h >> 5 & 3), py + 4 + (h >> 7 & 3), 5, 4);
-          }
-          // Fissures : deux traits sombres orientés par le hash.
-          ctx.fillStyle = "rgba(10,8,7,0.75)";
-          if (h & 2) ctx.fillRect(px + 4 + (h >> 9 & 5), py + 2, 1, T - 6);
-          if (h & 4) ctx.fillRect(px + 2, py + 5 + (h >> 11 & 5), T - 5, 1);
-          // Joints moussus sur les bords de dalle.
-          ctx.fillStyle = "rgba(70,89,46,0.5)";
-          ctx.fillRect(px, py, T, 1); ctx.fillRect(px, py + T - 1, T, 1);
-          // Liseré de bordure sur les deux longs côtés de la jetée.
-          const onEdge = Math.abs(y - C.RUN_JETTY_BASE.y) === C.RUN_JETTY_HALF_W;
-          if (onEdge) {
-            const outer = y < C.RUN_JETTY_BASE.y ? py : py + T - 3;
-            ctx.fillStyle = "#2b2721";
-            ctx.fillRect(px, outer, T, 3);
-            ctx.fillStyle = "rgba(70,89,46,0.45)";
-            ctx.fillRect(px + (h >> 13 & 7), outer, 4, 2);
-          }
+           `side` : 0 pour les trois voies praticables, -1/+1 pour les
+           rangées de bordure. Il est dérivé de la position, pas stocké :
+           la géométrie de la chaussée est déjà décrite une fois pour toutes
+           dans fermeConstants. */
+        if (isDeck || isKerb) {
+          const side = isKerb ? Math.sign(y - C.RUN_JETTY_BASE.y) : 0;
+          drawRunDeckTile(ctx, x * T, y * T, T, x, y, side);
+          if (side !== 0) deckOver.push({ x, y, side });
         }
-        /* Bout de la jetée. Ce n'est plus un coffre : c'est le seuil du défi,
-           et il doit dire « c'est ICI que ça commence » sans texte. Deux
-           braseros, plus une lueur violette montante — la même que celle qui
-           filtre des crevasses dans le jeu de fuite. Aucun random par frame :
-           sinon la flamme grésille au lieu de vaciller. */
-        if (g === C.G_RUN_GATE) {
-          const px = x * T, py = y * T;
-          const rise = 0.35 + Math.sin(now / 620) * 0.14;
-          ctx.fillStyle = `rgba(140, 90, 220, ${rise})`;
-          ctx.fillRect(px, py, T, T);
-          // Gravures : trois hampes runiques, comme sur les stèles du défi.
-          ctx.fillStyle = `rgba(200, 160, 255, ${0.5 + Math.sin(now / 430) * 0.2})`;
-          for (let r = 0; r < 3; r++) {
-            ctx.fillRect(px + 3 + r * 4, py + 5, 1, 6);
-            ctx.fillRect(px + 3 + r * 4, py + 6 + (r & 1) * 3, 3, 1);
-          }
-          const fl = 0.55 + Math.sin(now / 130) * 0.2 + Math.sin(now / 71) * 0.1;
-          ctx.fillStyle = "#2a1c10";
-          ctx.fillRect(px + 1, py + 2, 3, 12); ctx.fillRect(px + T - 4, py + 2, 3, 12);
-          ctx.fillStyle = `rgba(255, 226, 150, ${0.65 + Math.sin(now / 95) * 0.25})`;
-          ctx.fillRect(px + 1, py, 3, 4); ctx.fillRect(px + T - 4, py, 3, 4);
-          ctx.fillStyle = `rgba(255, 154, 60, ${fl * 0.35})`;
-          ctx.fillRect(px, py, T, T);
-        } else if (g === C.G_LAKE_SHORE) {
+        if (g === C.G_LAKE_SHORE) {
           /* BERGE. C'est elle qui fait le « fondu » demandé : une bande de
              galets et de mousse entre l'herbe et l'eau. Un dégradé de rendu
              appliqué directement sur un bord de cases ne fait qu'adoucir un
@@ -10484,6 +10447,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             }
           });
         }
+      }
+
+      /* Zip 378 — SECONDE PASSE de la chaussée : tout ce qui déborde de sa
+         case. L'ombre portée tombe sur l'eau du sud, le liseré du lac remonte
+         sur la pierre au nord, et les halos de torche s'étalent sur les voies.
+         Rien de tout cela ne pouvait être peint pendant le balayage : la case
+         voisine, dessinée juste après, l'aurait effacé. */
+      for (const d of deckOver) {
+        drawRunDeckOverlay(ctx, d.x * T, d.y * T, T, d.x, d.y, d.side, now, C.RUN_JETTY_BASE.x);
       }
       // Chaudron-artéfact (chantier 2026-07, demande Guillaume : "on le
       // trouve comme un artéfact interactif dans le monde maléfique avant
@@ -10657,6 +10629,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // Lac violet (chantier 2026-07, demande Guillaume) : bloque comme la
       // rivière côté ferme normale (E.isWaterTile) — pas de baignade ici.
       if (ew.ground[i] === C.G_WATER) return true;
+      // Zip 378 : bordure de la chaussée. Elle bloque comme les blocs bas du
+      // décor 3D — et elle ne retire rien au joueur : ces cases étaient de
+      // l'eau, qui bloquait déjà. Les trois voies praticables sont inchangées,
+      // donc toute la géométrie de l'embuscade reste valide telle quelle.
+      if (ew.ground[i] === C.G_RUN_KERB) return true;
       return o === C.O_TREE || o === C.O_TREE2 || o === C.O_TREE_DEAD || o === C.O_STUMP || o === C.O_ROCK;
     }
     function canStandEvil(ew, x, y) {

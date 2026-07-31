@@ -47,6 +47,392 @@ export function charPalette(gender, outfit) {
   };
 }
 
+/* ==========================================================================
+   ZIP 378 — LA CHAUSSÉE DU MONDE SOMBRE, VUE DE DESSUS.
+   --------------------------------------------------------------------------
+   Retour de Guillaume sur capture d'écran : « c'est pas beau du tout. Elle
+   doit être beaucoup plus rigoureuse graphiquement et être une représentation
+   2D fidèle de la plateforme 3D du jeu. »
+
+   L'ancien rendu (zip 375) tenait en quinze lignes glissées dans la boucle de
+   drawEvilFrame et souffrait de trois défauts qui se voyaient tous sur la
+   capture :
+
+     * les « fissures » étaient deux traits pleins de 10 et 11 pixels, donc
+       une CROIX NOIRE en travers de chaque dalle. À l'échelle du zoom, ça ne
+       lisait pas comme de la pierre fêlée mais comme un quadrillage ;
+     * il n'y avait ni ombre ni épaisseur : la chaussée était un trou découpé
+       dans le lac, pas une plateforme posée dessus ;
+     * rien du décor 3D n'y figurait — ni blocs de bordure, ni stèles, ni
+       torches, ni champignons.
+
+   POURQUOI CE CODE VIT ICI, au niveau du module, et pas dans la closure de
+   drawEvilFrame comme le reste du rendu maléfique : parce qu'il ne touche à
+   AUCUN état de jeu. Il ne lit ni le monde, ni le joueur, ni une ref — juste
+   des coordonnées et un contexte 2D. Le sortir de la closure permet de le
+   RASTERISER hors navigateur et de le regarder (tools/render-jetty.js), ce
+   qui est la seule façon honnête de juger un décor. C'est la même décision
+   que `leoFollow` au zip 376, prise pour la même raison.
+
+   DEUX PASSES, et il faut les deux :
+     1. drawRunDeckTile  — la pierre. Dessinée pendant le balayage des cases.
+     2. drawRunDeckOverlay — l'ombre portée sur l'eau, le liseré du lac et
+        les lumières (torches, runes, champignons). Elle DÉBORDE sur les cases
+        voisines, donc elle doit passer APRÈS que toutes les cases ont été
+        peintes, sans quoi le lac recouvrirait l'ombre qu'il reçoit.
+   ========================================================================== */
+
+/* Palette transcrite depuis CFG.COL_* (public/templerun/js/config.js). Le défi
+   est une page autonome, ce fichier ne peut pas la lire — mais deux palettes
+   qui divergent donneraient deux décors « presque » assortis, ce qui est pire
+   que deux décors franchement différents. tools/verify-deck.js compare donc
+   les deux listes à chaque livraison et échoue au premier écart. */
+export const RUN_DECK_PALETTE = {
+  STONE: "#565046", STONE_DARK: "#3c372f", STONE_EDGE: "#2b2721",
+  MOSS: "#46592e", MOSS_DARK: "#27351a", VINE: "#293a20",
+  CRACK: "#0a0807", STAIN: "#2f3d24", STAIN_DARK: "#1a2415",
+  TORCH: "#ff9a3c", RUNE: "#a26bff", MUSHROOM: "#b887ff",
+  LAKE: "#2a1052", LAKE_GLOW: "#7b3fd8", BARK_DARK: "#1b1712",
+};
+
+/* Le MÊME générateur que celui de la piste 3D (mulberry32, Track.makeRng).
+   Ce n'est pas de la coquetterie : une graine dérivée des coordonnées de case
+   donne un décor rigoureusement stable d'une image à l'autre. L'ancien rendu
+   utilisait déjà un hachage pour cette raison, et c'est la seule chose qu'il
+   faisait bien — une seule frame tirée au sort et la pierre grésille. */
+function deckRng(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function deckSeed(tx, ty, salt) {
+  let h = (tx * 374761393 + ty * 668265263 + (salt || 0) * 2246822519) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return (h ^ (h >>> 16)) >>> 0;
+}
+
+/* Palier d'usure d'une dalle. Pondération FLOOR_WEAR_WEIGHTS du défi 3D
+   (0,25 / 0,45 / 0,30) : ni dalle neuve trop propre, ni chaos permanent —
+   c'est la décision prise avec Guillaume au zip 373, on la reprend telle
+   quelle plutôt que d'en inventer une seconde. */
+function deckTier(r) { const v = r(); return v < 0.25 ? 0 : v < 0.70 ? 1 : 2; }
+
+/* Valeurs des dalles selon le palier d'usure.
+
+   ⚠ ELLES NE SONT PAS COL_STONE. La pierre du défi vaut bien 0x565046, mais
+   elle y est ÉCLAIRÉE par une ambiante violette à 0,5 et une lune à 0,5 :
+   à l'écran, elle rend autour de 60 % de sa valeur nominale. Reprendre le
+   nombre tel quel en 2D — où il n'y a aucune lumière — donnait une chaussée
+   beige, bien plus claire que celle du jeu de fuite, et c'est ce que montrait
+   le premier rendu. On transpose donc la valeur PERÇUE, pas la constante.
+
+   Les blocs de bordure, eux, restent plus clairs que la dalle : ils sont en
+   relief, ils prennent le peu de lumière qui vient d'en haut. C'est ce
+   contraste-là qui fait que la bordure se lit comme une bordure.
+   TROIS TEINTES PAR PALIER, et c'est ce qui manquait le plus au deuxième
+   rendu : avec une seule valeur par palier, et trois paliers très proches,
+   toute la chaussée virait à l'aplat kaki. Neuf valeurs de pierre suffisent à
+   ce que deux dalles voisines ne soient jamais identiques — c'est ce qui fait
+   lire un PAVAGE plutôt qu'une surface peinte. */
+const TIER_FILL = [
+  ["#413b31", "#3a352c", "#463f34"],   // intacte
+  ["#37322a", "#312d25", "#3c362c"],   // fissurée
+  ["#2e2a22", "#28241e", "#332e26"],   // très abîmée
+];
+const KERB_FILL = "#4b453a", KERB_LIT = "#5f594c";
+
+/* Torches : une tous les TORCH_EVERY_TILES, en alternant les rives. Le défi
+   3D les espace de 22 unités, ce qui ferait UNE torche sur toute la chaussée
+   si on transposait le nombre tel quel — l'unité 3D et la case 2D n'ont pas
+   le même rapport au personnage. On transpose donc le RYTHME (rares, mais
+   assez régulières pour tenir la ligne de la chaussée lisible de loin), pas
+   la valeur. */
+const TORCH_EVERY_TILES = 3;
+export function runDeckTorchSide(tx, baseX) {
+  const k = tx - baseX;
+  if (k < 2 || (k - 2) % TORCH_EVERY_TILES !== 0) return 0;
+  return (Math.floor((k - 2) / TORCH_EVERY_TILES) & 1) ? -1 : 1;
+}
+
+/* --------------------------------------------------------------- PASSE 1 ---
+   Une case de chaussée. `side` vaut 0 pour les trois voies praticables,
+   -1 / +1 pour les deux rangées de bordure (nord / sud). */
+export function drawRunDeckTile(g, px, py, T, tx, ty, side) {
+  const P = RUN_DECK_PALETTE;
+  const r = deckRng(deckSeed(tx, ty, 1));
+  const tier = deckTier(r);
+
+  // --- La dalle ---------------------------------------------------------
+  g.fillStyle = TIER_FILL[tier][Math.floor(r() * 3)];
+  g.fillRect(px, py, T, T);
+
+  /* Joint d'appareillage, en haut et à GAUCHE seulement. Les quatre côtés
+     donneraient un double trait entre deux dalles voisines, donc une grille
+     de 2 px — exactement le quadrillage qu'on cherche à faire disparaître. */
+  g.fillStyle = P.STONE_EDGE;
+  g.fillRect(px, py, T, 1);
+  g.fillRect(px, py, 1, T);
+
+  // --- Grain de la pierre ----------------------------------------------
+  for (let s = 0, n = 3 + Math.floor(r() * 4); s < n; s++) {
+    g.fillStyle = r() < 0.5 ? "rgba(96,90,78,0.22)" : "rgba(24,21,17,0.28)";
+    g.fillRect(px + 2 + Math.floor(r() * (T - 4)), py + 2 + Math.floor(r() * (T - 4)),
+               1 + (r() < 0.35 ? 1 : 0), 1);
+  }
+
+  // --- Taches d'humidité, comme paintStoneTile en 3D --------------------
+  for (let s = 0, n = [0, 1, 2][tier]; s < n; s++) {
+    g.fillStyle = "rgba(26,36,21,0.34)";
+    g.fillRect(px + 2 + Math.floor(r() * (T - 7)), py + 3 + Math.floor(r() * (T - 8)),
+               3 + Math.floor(r() * 3), 2 + Math.floor(r() * 2));
+  }
+
+  /* --- Fêlures. C'EST LE DÉFAUT PRINCIPAL DE L'ANCIEN RENDU, et il a fallu
+     deux passes pour le régler :
+
+       * l'ancienne version traçait deux lignes PLEINES de 10 et 11 pixels,
+         donc une croix noire en travers de chaque dalle — un quadrillage ;
+       * la première tentative de ce zip les a raccourcies mais en a mis
+         jusqu'à deux par dalle, en noir opaque : le rendu s'est couvert de
+         petits vermisseaux noirs, ce qui n'est pas mieux.
+
+     La bonne mesure, trouvée en regardant : UNE fêlure au plus, seulement sur
+     les dalles abîmées, en deux ou trois segments de 2 à 3 pixels qui
+     changent de direction, et en noir SEMI-TRANSPARENT — une fissure laisse
+     voir le fond de la pierre, elle n'est pas un trait d'encre. --- */
+  if (tier > 0 && r() < (tier === 2 ? 0.75 : 0.40)) {
+    let cx = px + 4 + Math.floor(r() * (T - 9));
+    let cy = py + 4 + Math.floor(r() * (T - 9));
+    g.fillStyle = "rgba(10,8,7,0.5)";
+    for (let seg = 0, ns = 2 + Math.floor(r() * 2); seg < ns; seg++) {
+      const len = 2 + Math.floor(r() * 2);
+      if (r() < 0.5) { g.fillRect(cx, cy, len, 1); cx += len - 1; cy += r() < 0.5 ? 1 : -1; }
+      else { g.fillRect(cx, cy, 1, len); cy += len - 1; cx += r() < 0.5 ? 1 : -1; }
+      cx = Math.max(px + 2, Math.min(px + T - 3, cx));
+      cy = Math.max(py + 2, Math.min(py + T - 3, cy));
+    }
+  }
+
+  // --- Éclat manquant sur les dalles très abîmées -----------------------
+  if (tier === 2 && r() < 0.4) {
+    g.fillStyle = P.STONE_EDGE;
+    const cw = 2 + Math.floor(r() * 2);
+    g.fillRect(r() < 0.5 ? px + 1 : px + T - 1 - cw, r() < 0.5 ? py + 1 : py + T - 1 - cw, cw, cw);
+  }
+
+  /* --- Mousse dans les JOINTS, et seulement là. C'est le détail qui fait
+     basculer la pierre grise en ruine, et il n'a de sens que sur les bords :
+     la mousse pousse dans l'eau qui stagne entre deux pierres, pas au milieu
+     d'une dalle. Même raisonnement qu'en 3D (paintStoneTile). --- */
+  for (let m = 0, n = [2, 5, 8][tier]; m < n; m++) {
+    const edge = Math.floor(r() * 4);
+    const along = Math.floor(r() * (T - 2));
+    const depth = Math.floor(r() * (1 + tier));
+    const mx = (edge === 0 || edge === 1) ? px + along : (edge === 2 ? px + depth : px + T - 1 - depth);
+    const my = (edge === 0) ? py + depth : (edge === 1 ? py + T - 1 - depth : py + along);
+    g.fillStyle = r() < 0.5 ? "rgba(70,89,46,0.62)" : "rgba(39,53,26,0.62)";
+    g.fillRect(mx, my, 1 + (r() < 0.4 ? 1 : 0), 1);
+  }
+
+  /* AMBIANTE VIOLETTE. En 3D, la chaussée est éclairée par une lumière
+     d'ambiance violette (AmbientLight COL_PURPLE_DIM, intensité 0,5) : sa
+     pierre kaki y est refroidie par le monde qui l'entoure. Sans cette
+     transposition, la même pierre posée sur un lac violet ressort jaune et se
+     détache du décor au lieu d'y appartenir — c'est ce que montrait le
+     troisième rendu. Un voile de 10 % suffit ; au-delà, la pierre devient
+     mauve et on perd la matière. */
+  g.fillStyle = "rgba(58,32,100,0.10)";
+  g.fillRect(px, py, T, T);
+
+  if (side === 0) return;
+
+  /* ====================================================================
+     BORDURE — les blocs bas façon sarcophage du décor 3D.
+     Ils s'appuient sur la dalle déjà peinte : une bordure posée sur du vide
+     flotterait, alors qu'en 3D les blocs reposent bien sur la chaussée.
+     Le tirage reprend les probabilités du défi : KERB_SKIP_CHANCE (0,30),
+     STELE_CHANCE (0,22), VINE_CHANCE (0,38). Une bordure trop régulière fait
+     décor de jeu vidéo — c'est écrit tel quel dans config.js.
+     ==================================================================== */
+  const rb = deckRng(deckSeed(tx, ty, 7));
+  if (rb() < 0.30) return;                      // bloc manquant : la chaussée respire
+
+  const north = side < 0;
+  const isStele = rb() < 0.22;
+  const bh = isStele ? T - 2 : 9 + Math.floor(rb() * 3);
+  const bx = px + 1 + Math.floor(rb() * 2);
+  const bw = isStele ? 7 : T - 2 - Math.floor(rb() * 2);
+  // Le bloc est plaqué contre le bord EXTÉRIEUR : c'est lui qui borde le vide.
+  const by = north ? py : py + T - bh;
+  const inner = north ? by + bh : by;      // arête tournée vers la chaussée
+
+  /* Ombre PORTÉE SUR LA CHAUSSÉE, avant le bloc. C'est elle qui décolle la
+     bordure du sol : sans elle, le bloc est un rectangle un peu plus clair
+     posé à plat, et les cinq cases se lisent comme cinq voies. Elle tombe du
+     côté intérieur, cohérente avec la lumière rasante venue du dehors. */
+  g.fillStyle = "rgba(8,6,12,0.42)";
+  g.fillRect(bx - 1, north ? inner : inner - 3, bw + 2, 3);
+
+  g.fillStyle = KERB_FILL;
+  g.fillRect(bx, by, bw, bh);
+  // Appareillage : deux assises, joints décalés.
+  g.fillStyle = P.STONE_EDGE;
+  g.fillRect(bx, by + Math.floor(bh / 2), bw, 1);
+  g.fillRect(bx + Math.floor(bw / 3), by, 1, Math.floor(bh / 2));
+  g.fillRect(bx + Math.floor((2 * bw) / 3), by + Math.floor(bh / 2), 1, bh - Math.floor(bh / 2));
+  // Arête éclairée côté intérieur + tranche sombre : l'épaisseur du bloc.
+  g.fillStyle = KERB_LIT;
+  g.fillRect(bx, north ? by + bh - 2 : by, bw, 2);
+  g.fillStyle = P.STONE_EDGE;
+  g.fillRect(bx, north ? by : by + bh - 1, bw, 1);
+
+  // Coiffe de mousse sur la face extérieure, dégressive — comme paintKerbMaterial.
+  for (let m = 0; m < 7; m++) {
+    const my = north ? by + Math.floor(rb() * 5) : by + bh - 1 - Math.floor(rb() * 5);
+    g.fillStyle = rb() < 0.5 ? "rgba(70,89,46,0.72)" : "rgba(39,53,26,0.72)";
+    g.fillRect(bx + Math.floor(rb() * bw), my, 1 + (rb() < 0.4 ? 1 : 0), 1);
+  }
+
+  // Lierre retombant sur la face intérieure.
+  if (!isStele && rb() < 0.38) {
+    g.fillStyle = P.VINE;
+    const vx = bx + 1 + Math.floor(rb() * (bw - 2));
+    const vl = 2 + Math.floor(rb() * 3);
+    g.fillRect(vx, north ? inner : inner - vl, 1, vl);
+  }
+
+  if (isStele) {
+    // Gravures runiques : des hampes et des chevrons, pas un alphabet — même
+    // parti pris que paintRunes() en 3D. La LUEUR, elle, est dans la passe 2 :
+    // elle déborde de la case.
+    g.fillStyle = P.RUNE;
+    for (let k = 0; k < 3; k++) {
+      const ry = by + 3 + k * 4;
+      g.fillRect(bx + 3, ry, 1, 3);
+      g.fillRect(bx + 3, ry + (k & 1 ? 0 : 2), 2, 1);
+    }
+  }
+}
+
+/* --------------------------------------------------------------- PASSE 2 ---
+   Tout ce qui DÉBORDE de la case : l'ombre portée sur le lac, le liseré que
+   le lac renvoie sur les flancs, et les lumières. Appelée après le balayage
+   complet des cases, sinon l'eau repeindrait par-dessus.
+
+   `side` : -1 rangée nord, +1 rangée sud, 0 voie centrale (rien à faire).
+   `now` : pour le vacillement. Aucun aléa par image — la pierre grésillerait. */
+export function drawRunDeckOverlay(g, px, py, T, tx, ty, side, now, baseX) {
+  if (!side) return;
+  const P = RUN_DECK_PALETTE;
+  const north = side < 0;
+
+  if (north) {
+    /* Liseré du LAC sur le flanc nord. C'est la lumière violette de l'eau qui
+       remonte sur la pierre : sans elle, la chaussée reste un bloc gris mort
+       au milieu d'un lac qui luit, et elle se lit comme un trou découpé. */
+    const pulse = 0.20 + Math.sin(now / 1100 + tx * 0.7) * 0.07;
+    g.fillStyle = `rgba(123,63,216,${pulse})`;
+    g.fillRect(px, py, T, 2);
+    // Reflet sur l'eau juste au-dessus : la chaussée éclaire ce qu'elle borde.
+    g.fillStyle = `rgba(160,110,240,${pulse * 0.55})`;
+    g.fillRect(px, py - 2, T, 2);
+  } else {
+    /* Face AVANT et OMBRE PORTÉE, côté sud. En vue de dessus, c'est ce couple
+       qui donne l'épaisseur : une tranche de pierre sombre sous la dalle, puis
+       une ombre qui s'éteint sur l'eau. C'est la réponse directe à « la
+       plateforme est par-dessus l'eau » — l'eau passe dessous, la pierre
+       flotte au-dessus. */
+    g.fillStyle = P.STONE_EDGE;
+    g.fillRect(px, py + T - 2, T, 2);
+    g.fillStyle = "rgba(6,3,14,0.55)"; g.fillRect(px, py + T, T, 2);
+    g.fillStyle = "rgba(6,3,14,0.34)"; g.fillRect(px, py + T + 2, T, 2);
+    g.fillStyle = "rgba(6,3,14,0.16)"; g.fillRect(px, py + T + 4, T, 2);
+    // Et le lac renvoie quand même un peu de lumière sur la tranche.
+    const pulse = 0.13 + Math.sin(now / 1300 + tx * 0.5) * 0.05;
+    g.fillStyle = `rgba(123,63,216,${pulse})`;
+    g.fillRect(px, py + T - 2, T, 1);
+  }
+
+  const rb = deckRng(deckSeed(tx, ty, 7));
+  const hasBlock = rb() >= 0.30;
+  const isStele = hasBlock && rb() < 0.22;
+
+  /* Halo des gravures runiques. En paliers CONCENTRIQUES et non en un seul
+     rectangle : la première version posait un carré violet plein sur la case,
+     ce qui se lisait comme une tuile colorée et pas comme une lueur. Quatre
+     paliers de faible alpha suffisent à donner une décroissance, et on reste
+     en pixel-art — un dégradé lisse jurerait avec le reste. */
+  if (isStele) {
+    const a = 0.26 + Math.sin(now / 430 + tx) * 0.10;
+    const steps = [[6, 0.16], [3, 0.22], [1, 0.30], [-1, 0.40]];
+    for (const [pad, k] of steps) {
+      g.fillStyle = `rgba(162,107,255,${a * k})`;
+      g.fillRect(px - pad, py - pad, T + pad * 2, T + pad * 2);
+    }
+  }
+
+  /* Champignons luminescents. Le motif le plus reconnaissable de
+     l'illustration de référence, et le seul autre point de couleur du décor
+     avec les torches. Posés sur la bordure, jamais sur la voie : ils
+     traverseraient les pieds du fermier. */
+  const rm = deckRng(deckSeed(tx, ty, 23));
+  if (!isStele && rm() < 0.30) {
+    const n = 2 + Math.floor(rm() * 2);
+    const cy = north ? py + T - 5 : py + 3;
+    const a = 0.42 + Math.sin(now / 700 + tx * 1.3) * 0.10;
+    g.fillStyle = `rgba(184,135,255,${a * 0.16})`;
+    g.fillRect(px, cy - 4, T, 10);
+    g.fillStyle = `rgba(184,135,255,${a * 0.22})`;
+    g.fillRect(px + 2, cy - 2, T - 4, 6);
+    for (let k = 0; k < n; k++) {
+      const mx = px + 3 + Math.floor(rm() * (T - 8));
+      g.fillStyle = "#544a60"; g.fillRect(mx + 1, cy + 1, 1, 2);
+      // Chapeau : deux pixels seulement, et jamais à pleine opacité — un
+      // champignon lumineux reste un DÉTAIL. La première version en faisait
+      // des tirets violets qui sautaient aux yeux avant la chaussée.
+      g.fillStyle = `rgba(184,135,255,0.85)`; g.fillRect(mx, cy, 2, 1);
+      g.fillStyle = `rgba(150,105,215,0.85)`; g.fillRect(mx, cy + 1, 2, 1);
+    }
+  }
+
+  /* TORCHES. Le seul point CHAUD du cadre, comme en 3D — et la seule chose
+     qui donne une échelle à la chaussée la nuit. Deux vacillements de
+     périodes incommensurables, jamais synchrones d'une torche à l'autre
+     (le décalage vient de tx), et aucun tirage par image. */
+  if (runDeckTorchSide(tx, baseX) === side) {
+    const cx = px + Math.floor(T / 2) - 1;
+    const fy = north ? py + 2 : py + T - 10;
+    const fl = 0.62 + Math.sin(now / 128 + tx * 1.7) * 0.20 + Math.sin(now / 67 + tx) * 0.10;
+
+    /* Halo posé au sol, sur la chaussée. En QUATRE paliers concentriques :
+       deux seulement laissaient voir deux rectangles orange emboîtés, ce qui
+       est pire que pas de halo du tout. On reste en paliers plutôt qu'en
+       dégradé lisse — c'est du pixel-art, et le sol l'est aussi. */
+    const halo = [[T - 2, 0.040], [9, 0.052], [4, 0.065]];
+    for (const [pad, k] of halo) {
+      g.fillStyle = `rgba(255,154,60,${k * fl})`;
+      g.fillRect(px - pad, fy - pad, T + pad * 2, T + pad * 2);
+    }
+
+    // Le mât, puis la flamme : cœur clair, corps orangé, pointe qui vacille.
+    g.fillStyle = P.BARK_DARK;
+    g.fillRect(cx, fy + 3, 2, 8);
+    g.fillStyle = `rgba(255,154,60,${0.85})`;
+    g.fillRect(cx - 1, fy + 1, 4, 3);
+    g.fillStyle = `rgba(255,206,104,${fl})`;
+    g.fillRect(cx, fy, 2, 3);
+    g.fillStyle = `rgba(255,247,212,${fl})`;
+    g.fillRect(cx, fy + 1, 2, 1);
+    // Pointe : elle penche d'un côté ou de l'autre selon le vacillement.
+    g.fillStyle = `rgba(255,206,104,${fl * 0.7})`;
+    g.fillRect(cx + (Math.sin(now / 190 + tx) > 0 ? 1 : 0), fy - 2, 1, 2);
+  }
+}
+
 export function buildSprites() {
   const T = 16;
 
