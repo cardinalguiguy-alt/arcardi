@@ -1944,6 +1944,12 @@ export function buildSprites() {
     else if (id === "eclairVanilla") { P(g, 3, 7, 10, 4, "#e7c98a"); P(g, 3, 7, 10, 1, "#fbf3da"); P(g, 4, 6, 8, 1, "#f3e2ba"); P(g, 4, 11, 8, 1, "#7a5a2a"); P(g, 5, 8, 1, 1, "#3a2a14"); P(g, 10, 8, 1, 1, "#3a2a14"); } // éclair à la vanille (glaçage clair, forme allongée)
     else if (id === "eclairChoco") { P(g, 3, 7, 10, 4, "#6b3a1e"); P(g, 3, 7, 10, 1, "#8a5228"); P(g, 4, 6, 8, 1, "#a86a3a"); P(g, 4, 11, 8, 1, "#3a2010"); P(g, 5, 8, 1, 1, "#f5d9a0"); P(g, 10, 8, 1, 1, "#f5d9a0"); } // éclair au chocolat (glaçage foncé)
     else if (id === "flanVanilla") { g.fillStyle = "#f3e2ba"; g.beginPath(); g.arc(8, 9, 6, 0, 7); g.fill(); g.fillStyle = "#caa24a"; g.beginPath(); g.arc(8, 9, 6, 0, 2.2); g.fill(); P(g, 6, 6, 1, 1, "#3a2a14"); P(g, 9, 8, 1, 1, "#3a2a14"); P(g, 7, 11, 1, 1, "#3a2a14"); } // flan pâtissier vanille de Madagascar (grains de vanille visibles)
+    // Zip suivant (demande Guillaume : yaourts nature/vanille d'Ingrid) : pot
+    // de céramique, même silhouette pour les deux, seule la teinte du corps
+    // et la présence de grains de vanille changent (même principe que
+    // flanVanilla, dont les grains foncés signalent la vanille à l'œil).
+    else if (id === "yogurtNature") { P(g, 4, 6, 8, 7, "#f5f0e6"); P(g, 4, 6, 8, 1, "#fffdf7"); P(g, 3, 12, 10, 1, "#c9a25a"); P(g, 4, 5, 8, 1, "#e8dcc4"); P(g, 6, 8, 1, 1, "#e0d6bd"); P(g, 9, 9, 1, 1, "#e0d6bd"); } // pot de yaourt nature (céramique claire, liseré doré du couvercle)
+    else if (id === "yogurtVanilla") { P(g, 4, 6, 8, 7, "#f2dfa8"); P(g, 4, 6, 8, 1, "#fbeecb"); P(g, 3, 12, 10, 1, "#c9a25a"); P(g, 4, 5, 8, 1, "#e8dcc4"); P(g, 6, 9, 1, 1, "#5a3a1e"); P(g, 9, 10, 1, 1, "#5a3a1e"); P(g, 7, 8, 1, 1, "#5a3a1e"); } // pot de yaourt vanille (crème dorée, grains de vanille visibles)
     else { P(g, 4, 8, 8, 5, "#c98a4a"); P(g, 5, 6, 6, 3, "#e8b96a"); P(g, 6, 5, 4, 2, "#f5d9a0"); P(g, 7, 4, 1, 1, "#d14a3a"); P(g, 6, 10, 1, 1, "#8a3a2a"); P(g, 9, 10, 1, 1, "#8a3a2a"); } // gâteau basque (croûte dorée, croix traditionnelle)
     outlineSprite(g, T, T, "#5a3a1e");
     return c;
@@ -3204,7 +3210,7 @@ house: house(),
   // (FermeGame.js) lit sprites.artisan.sucrerie et l'ignorait silencieusement
   // (bimg undefined -> tuile jamais dessinée) faute de cette clé.
   S.artisan = { beehive: artisanBuildingSprite("beehive"), fromagerie: artisanBuildingSprite("fromagerie"), bakery: artisanBuildingSprite("bakery"), sawmill: artisanBuildingSprite("sawmill"), sucrerie: S.sucrerie };
-  S.craftIcons = { honey: craftIcon("honey"), cheeseWheel: craftIcon("cheeseWheel"), cheesePortion: craftIcon("cheesePortion"), eclairChoco: craftIcon("eclairChoco"), eclairVanilla: craftIcon("eclairVanilla"), flanVanilla: craftIcon("flanVanilla"), gateauBasque: craftIcon("gateauBasque"), butter: craftIcon("butter"), bread: craftIcon("bread"), croissant: craftIcon("croissant"), chocolatine: craftIcon("chocolatine"), painSuisse: craftIcon("painSuisse") };
+  S.craftIcons = { honey: craftIcon("honey"), cheeseWheel: craftIcon("cheeseWheel"), cheesePortion: craftIcon("cheesePortion"), eclairChoco: craftIcon("eclairChoco"), eclairVanilla: craftIcon("eclairVanilla"), flanVanilla: craftIcon("flanVanilla"), gateauBasque: craftIcon("gateauBasque"), butter: craftIcon("butter"), bread: craftIcon("bread"), croissant: craftIcon("croissant"), chocolatine: craftIcon("chocolatine"), painSuisse: craftIcon("painSuisse"), yogurtNature: craftIcon("yogurtNature"), yogurtVanilla: craftIcon("yogurtVanilla") };
   // Zip 236: one sprite per pet id in the catalog (individual pets).
   S.pets = {};
   for (const pid of Object.keys(C.PET_CATALOG)) S.pets[pid] = petSprite(pid);

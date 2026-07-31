@@ -3421,7 +3421,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // les autres denrées (miel, fromage, beurre) gardent leur prix fixe.
       const price = C.BAKERY_SELL_ITEMS.includes(req.item)
         ? E.bakeryItemPrice(bkPr, req.item)
-        : { honey: C.HONEY_SELL, cheeseWheel: C.CHEESE_WHEEL_SELL, cheesePortion: C.CHEESE_PORTION_SELL, butter: C.BUTTER_SELL }[req.item];
+        : { honey: C.HONEY_SELL, cheeseWheel: C.CHEESE_WHEEL_SELL, cheesePortion: C.CHEESE_PORTION_SELL, butter: C.BUTTER_SELL, yogurtNature: C.YOGURT_NATURE_SELL, yogurtVanilla: C.YOGURT_VANILLA_SELL }[req.item];
       if (!price || (stock[req.item] | 0) <= 0) return true;
       const n = Math.min(stock[req.item] | 0, req.n > 0 ? req.n : 9999);
       stock[req.item] -= n; const gain = n * price;
@@ -3555,7 +3555,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (!w || !s.crafts) return;
     const now = Date.now();
     const stock = s.craftStock || (s.craftStock = E.newCraftStock());
-    let stockChanged = false, flourChanged = false, craftsMetaChanged = false, gregStockChanged = false, stationChanged = false;
+    let stockChanged = false, flourChanged = false, craftsMetaChanged = false, gregStockChanged = false, stationChanged = false, sugarChanged = false;
     const bh = s.crafts.beehive;
     // Chantier 2026-07 (demande Guillaume) : le miel ne se produit plus en
     // continu tant que la ruche est construite — René doit être ACTIVEMENT
@@ -3592,6 +3592,40 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           if (src.kind === "farmer") broadcastFarmerDelta(src.src.fm); else gregStockChanged = true;
         }
         else fr.nextAt = now + Math.min(C.CHEESE_MS, 30000); // pas de lait : réessaie bientôt
+      }
+      // Zip suivant (demande Guillaume : "Ingrid doit pouvoir faire des
+      // yaourts maintenant, nature et vanille") : filière YAOURT, sur son
+      // propre minuteur (fr.yogurtNextAt), INDÉPENDANTE du ratio fromage/
+      // beurre ci-dessus — même principe que bk.breadNextAt (Rosalie) plus
+      // bas, filière séparée dans un même bâtiment/artisan. Alternance
+      // STRICTE 1 pot sur 2 en vanille (fr.yogurtVanillaTurn) tant que le
+      // stock de vanille + sucre suffit ; si le tour vanille tombe sans
+      // stock, on produit un pot nature à la place SANS faire avancer le
+      // tour, pour que la proportion se rattrape dès que le stock revient.
+      if (!fr.yogurtNextAt || fr.yogurtNextAt > now + C.YOGURT_MS) fr.yogurtNextAt = now + C.YOGURT_MS;
+      else if (now >= fr.yogurtNextAt) {
+        const wantVanilla = !!fr.yogurtVanillaTurn;
+        const ws = (s.station && s.station.worldStock) || {};
+        const canVanilla = (ws.vanilla | 0) >= C.YOGURT_VANILLA_COST && (s.sugar | 0) >= C.YOGURT_SUGAR_COST;
+        const doVanilla = wantVanilla && canVanilla;
+        const milkSrc = findAnimalGoodsWith(C.COW_ANIMAL, C.YOGURT_MILK_COST);
+        if (milkSrc) {
+          const milkFromGreg = consumeAnimalGoods(milkSrc, C.COW_ANIMAL, C.YOGURT_MILK_COST);
+          if (milkFromGreg) gregStockChanged = true;
+          if (milkSrc.kind === "farmer") broadcastFarmerDelta(milkSrc.src.fm);
+          if (doVanilla) {
+            ws.vanilla -= C.YOGURT_VANILLA_COST; s.sugar -= C.YOGURT_SUGAR_COST;
+            stationChanged = true; sugarChanged = true;
+            stock.yogurtVanilla = (stock.yogurtVanilla | 0) + 1;
+            fr.yogurtVanillaTurn = false; // tour vanille honoré -> prochain tour nature
+          } else {
+            stock.yogurtNature = (stock.yogurtNature | 0) + 1;
+            if (!wantVanilla) fr.yogurtVanillaTurn = true; // c'était le tour nature -> prochain tour vanille
+            // si wantVanilla mais stock insuffisant : on NE touche PAS au
+            // tour, il reste sur vanille pour la prochaine fournée.
+          }
+          stockChanged = true; craftsMetaChanged = true; fr.yogurtNextAt = now + C.YOGURT_MS;
+        } else fr.yogurtNextAt = now + Math.min(C.YOGURT_MS, 30000); // pas de lait : réessaie bientôt
       }
     }
     const bk = s.crafts.bakery;
@@ -3817,12 +3851,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         }
       }
     }
-    if (stockChanged || flourChanged || craftsMetaChanged || gregStockChanged) {
+    if (stockChanged || flourChanged || craftsMetaChanged || gregStockChanged || sugarChanged) {
       dirtyRef.current = true;
       const payload = { crafts: s.crafts };
       if (stockChanged) payload.craftStock = stock;
       if (flourChanged) { payload.flour = s.flour; setFlour(s.flour); }
       if (gregStockChanged) { payload.gregStock = s.gregStock; setGregStock(s.gregStock); }
+      if (sugarChanged) { payload.sugar = s.sugar; setSugar(s.sugar); } // zip suivant : sucre consommé par les yaourts vanille d'Ingrid
       hostSend({ type: "broadcast", event: "apply", payload });
     }
     if (stationChanged) broadcastStation(); // zip 301 : cacao consommé (worldStock) -> propager aux invités
@@ -12065,7 +12100,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const bid = C.SKILL_BUILDING[ro.skill];
     if (!bid || !(crafts[bid] && crafts[bid].built)) return "";
     if (ro.skill === "beekeeper") return L.residentProdHoney(cs.honey | 0);
-    if (ro.skill === "cheesemaker") return L.residentProdCheese(cs.cheeseWheel | 0, cs.cheesePortion | 0, cs.butter | 0);
+    if (ro.skill === "cheesemaker") return L.residentProdCheese(cs.cheeseWheel | 0, cs.cheesePortion | 0, cs.butter | 0, cs.yogurtNature | 0, cs.yogurtVanilla | 0);
     // Zip 301 : Rosalie (breadmaker) — compteur pain + viennoiseries.
     if (ro.skill === "breadmaker") return L.residentProdBread(cs.bread | 0, cs.croissant | 0, cs.chocolatine | 0, cs.painSuisse | 0);
     // Zip 258 : si la boulangerie est en alerte (rupture d'intrants en
@@ -14031,7 +14066,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             {(() => {
               const cs = sharedRef.current.craftStock || {};
               const bkP = sharedRef.current.crafts && sharedRef.current.crafts.bakery;
-              const items = [["honey", C.HONEY_SELL], ["cheeseWheel", C.CHEESE_WHEEL_SELL], ["cheesePortion", C.CHEESE_PORTION_SELL], ["butter", C.BUTTER_SELL], ["eclairChoco", E.bakeryItemPrice(bkP, "eclairChoco")], ["eclairVanilla", E.bakeryItemPrice(bkP, "eclairVanilla")], ["flanVanilla", E.bakeryItemPrice(bkP, "flanVanilla")], ["gateauBasque", E.bakeryItemPrice(bkP, "gateauBasque")], ["bread", E.bakeryItemPrice(bkP, "bread")], ["croissant", E.bakeryItemPrice(bkP, "croissant")], ["chocolatine", E.bakeryItemPrice(bkP, "chocolatine")], ["painSuisse", E.bakeryItemPrice(bkP, "painSuisse")]];
+              const items = [["honey", C.HONEY_SELL], ["cheeseWheel", C.CHEESE_WHEEL_SELL], ["cheesePortion", C.CHEESE_PORTION_SELL], ["butter", C.BUTTER_SELL], ["yogurtNature", C.YOGURT_NATURE_SELL], ["yogurtVanilla", C.YOGURT_VANILLA_SELL], ["eclairChoco", E.bakeryItemPrice(bkP, "eclairChoco")], ["eclairVanilla", E.bakeryItemPrice(bkP, "eclairVanilla")], ["flanVanilla", E.bakeryItemPrice(bkP, "flanVanilla")], ["gateauBasque", E.bakeryItemPrice(bkP, "gateauBasque")], ["bread", E.bakeryItemPrice(bkP, "bread")], ["croissant", E.bakeryItemPrice(bkP, "croissant")], ["chocolatine", E.bakeryItemPrice(bkP, "chocolatine")], ["painSuisse", E.bakeryItemPrice(bkP, "painSuisse")]];
               const any = items.some(([k]) => (cs[k] | 0) > 0);
               if (!any) return null;
               return (<>
@@ -14465,7 +14500,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (!crafts[bid] || !crafts[bid].built) return null;
         const cs = sharedRef.current.craftStock || {};
         const line = bid === "beehive" ? L.residentProdHoney(cs.honey | 0)
-          : bid === "fromagerie" ? L.residentProdCheese(cs.cheeseWheel | 0, cs.cheesePortion | 0, cs.butter | 0)
+          : bid === "fromagerie" ? L.residentProdCheese(cs.cheeseWheel | 0, cs.cheesePortion | 0, cs.butter | 0, cs.yogurtNature | 0, cs.yogurtVanilla | 0)
           : (crafts.bakery && crafts.bakery.alert) ? L.bakeryAlertLine(missingIngredientList(crafts.bakery.alertMissing))
           : L.residentProdPastry(cs.eclairChoco | 0, cs.eclairVanilla | 0, cs.flanVanilla | 0, cs.gateauBasque | 0) + " · " + L.residentProdBread(cs.bread | 0, cs.croissant | 0, cs.chocolatine | 0, cs.painSuisse | 0);
         const alert = bid === "bakery" && crafts.bakery && crafts.bakery.alert;

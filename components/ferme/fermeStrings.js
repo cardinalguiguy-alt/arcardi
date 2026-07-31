@@ -189,7 +189,7 @@ export const FERME_STR = {
     toastBalloonFull: "La nacelle est complète (4 places) !",
     artisanBuilt: (b) => `🔨 ${b} construit(e) ! L'artisan peut se mettre à produire.`,
     buildingName: (bid) => ({ beehive: "Ruche", fromagerie: "Fromagerie", bakery: "Boulangerie", sawmill: "Scierie", sucrerie: "Sucrerie" }[bid] || bid),
-    craftName: (item) => ({ honey: "Pot de miel", cheeseWheel: "Roue de fromage", cheesePortion: "Part de fromage", eclairChoco: "Éclair au chocolat", eclairVanilla: "Éclair à la vanille", flanVanilla: "Flan pâtissier vanille de Madagascar", gateauBasque: "Gâteau basque", butter: "Motte de beurre", bread: "Pain", croissant: "Croissant", chocolatine: "Chocolatine", painSuisse: "Pain suisse" }[item] || item),
+    craftName: (item) => ({ honey: "Pot de miel", cheeseWheel: "Roue de fromage", cheesePortion: "Part de fromage", eclairChoco: "Éclair au chocolat", eclairVanilla: "Éclair à la vanille", flanVanilla: "Flan pâtissier vanille de Madagascar", gateauBasque: "Gâteau basque", butter: "Motte de beurre", bread: "Pain", croissant: "Croissant", chocolatine: "Chocolatine", painSuisse: "Pain suisse", yogurtNature: "Yaourt nature", yogurtVanilla: "Yaourt vanille" }[item] || item),
     craftSold: (name, n, gain) => `Vente : ${n} × ${name} (+${gain} or) ! Caisse commune enrichie.`,
     cheeseCut: (w, p) => `🧀 ${w} roue(s) découpée(s) en ${p} parts.`,
     promptResident: (n) => `Q — parler à ${n}`,
@@ -486,7 +486,7 @@ export const FERME_STR = {
     residentRoleTitle: "Production",
     residentNotWorkingYet: "Pas encore d'atelier — je m'installe.",
     residentProdHoney: (n) => `Ruche en route — ${n} pot(s) de miel en réserve.`,
-    residentProdCheese: (w, p, b) => `Fromagerie active — ${w} roue(s), ${p} part(s), ${b | 0} beurre au frais.`,
+    residentProdCheese: (w, p, b, yn, yv) => `Fromagerie active — ${w} roue(s), ${p} part(s), ${b | 0} beurre au frais, ${yn | 0} yaourt(s) nature, ${yv | 0} yaourt(s) vanille.`,
     residentProdPastry: (ec, ev, fl, gb) => `Le four tourne — ${ec} éclair(s) choco, ${ev} éclair(s) vanille, ${fl} flan(s) vanille Madagascar, ${gb} gâteau(x) basque prêt(s).`,
     // Zip 301 : filière pain + viennoiseries de Rosalie.
     residentProdBread: (pain, cr, ch, ps) => `Fournil — ${pain} pain(s), ${cr} croissant(s), ${ch} chocolatine(s), ${ps} pain(s) suisse(s).`,
@@ -1364,7 +1364,7 @@ export const FERME_STR = {
     toastBalloonFull: "The basket is full (4 seats)!",
     artisanBuilt: (b) => `🔨 ${b} built! The artisan can start producing.`,
     buildingName: (bid) => ({ beehive: "Beehive", fromagerie: "Cheese dairy", bakery: "Bakery", sawmill: "Sawmill", sucrerie: "Sugar mill" }[bid] || bid),
-    craftName: (item) => ({ honey: "Honey jar", cheeseWheel: "Cheese wheel", cheesePortion: "Cheese portion", eclairChoco: "Chocolate eclair", eclairVanilla: "Vanilla eclair", flanVanilla: "Madagascar vanilla flan", gateauBasque: "Basque cake", butter: "Butter block", bread: "Bread", croissant: "Croissant", chocolatine: "Pain au chocolat", painSuisse: "Pain suisse" }[item] || item),
+    craftName: (item) => ({ honey: "Honey jar", cheeseWheel: "Cheese wheel", cheesePortion: "Cheese portion", eclairChoco: "Chocolate eclair", eclairVanilla: "Vanilla eclair", flanVanilla: "Madagascar vanilla flan", gateauBasque: "Basque cake", butter: "Butter block", bread: "Bread", croissant: "Croissant", chocolatine: "Pain au chocolat", painSuisse: "Pain suisse", yogurtNature: "Plain yogurt", yogurtVanilla: "Vanilla yogurt" }[item] || item),
     craftSold: (name, n, gain) => `Sold: ${n} × ${name} (+${gain} gold)! Common pot topped up.`,
     cheeseCut: (w, p) => `🧀 Cut ${w} wheel(s) into ${p} portions.`,
     promptResident: (n) => `Q — talk to ${n}`,
@@ -1490,7 +1490,7 @@ export const FERME_STR = {
     residentRoleTitle: "Output",
     residentNotWorkingYet: "No workshop yet — still settling in.",
     residentProdHoney: (n) => `Hive humming — ${n} honey jar(s) in store.`,
-    residentProdCheese: (w, p, b) => `Dairy running — ${w} wheel(s), ${p} portion(s), ${b | 0} butter in store.`,
+    residentProdCheese: (w, p, b, yn, yv) => `Dairy running — ${w} wheel(s), ${p} portion(s), ${b | 0} butter in store, ${yn | 0} plain yogurt(s), ${yv | 0} vanilla yogurt(s).`,
     // Zip 301: Rosalie's bread + viennoiserie line.
     residentProdBread: (bread, cr, ch, ps) => `Bakehouse — ${bread} bread, ${cr} croissant(s), ${ch} pain(s) au chocolat, ${ps} pain(s) suisse(s).`,
     // Zip 301: cheese/butter ratio control (Ingrid's card).

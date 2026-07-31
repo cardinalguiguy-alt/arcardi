@@ -1762,6 +1762,23 @@ export const BUTTER_SELL = 300;                 // prix de vente d'une motte de 
 export const BUTTER_SELL_RESERVE = 3;
 export const FROMAGERIE_BUTTER_PCT_DEFAULT = 0; // zip 301b (demande Guillaume) : défaut = 100 % fromage (comportement historique préservé) ; le beurre n'apparaît qu'une fois le ratio réglé dans la fiche d'Ingrid
 export const FROMAGERIE_RATIO_STEP = 10;         // paliers de réglage du ratio (10 %)
+// Zip suivant (demande Guillaume : "Ingrid doit pouvoir faire des yaourts
+// maintenant, nature et vanille") : filière YAOURT de la fromagerie,
+// INDÉPENDANTE du ratio fromage/beurre ci-dessus, avec son propre minuteur
+// (crafts.fromagerie.yogurtNextAt) — même principe que le pain/viennoiseries
+// de Rosalie, filière séparée dans le même bâtiment que la pâtisserie de
+// Chloé (voir bk.breadNextAt plus bas). Nature : lait seul. Vanille : lait +
+// vanille (gousse de Madagascar, station.worldStock.vanilla) + sucre
+// (s.sugar, sucrerie). Alternance STRICTE 1 pot sur 2 en vanille tant que le
+// stock de vanille/sucre suffit (crafts.fromagerie.yogurtVanillaTurn) ; repli
+// sur nature sans faire avancer le tour si les intrants manquent, pour que
+// la proportion se rattrape dès que le stock revient (décision Guillaume).
+export const YOGURT_MS = 3 * 60 * 1000;    // cadence d'un pot (moitié du fromage, décision Guillaume)
+export const YOGURT_MILK_COST = 1;         // lait par pot, nature ou vanille
+export const YOGURT_VANILLA_COST = 1;      // gousse de vanille EN PLUS du lait, pot vanille seulement
+export const YOGURT_SUGAR_COST = 1;        // sac de sucre EN PLUS du lait, pot vanille seulement
+export const YOGURT_NATURE_SELL = 130;     // prix de vente d'un pot nature
+export const YOGURT_VANILLA_SELL = 190;    // prix de vente d'un pot vanille (assomption de départ, à ajuster avec Guillaume)
 // Zip 258 (demande Guillaume) : la boulangerie tourne 3× plus vite (3 min ->
 // 1 min entre deux fournées) mais UNIQUEMENT en journée (voir BAKERY_*_MIN).
 export const PASTRY_MS = 1 * 60 * 1000;    // cadence d'une fournée de Chloé (1 min)
