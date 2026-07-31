@@ -325,14 +325,32 @@ const CFG = {
      une fois sur un canvas et plaqué sur un dôme (voir World.buildSky) — pas
      de shader, cohérent avec le reste du rendu.
 
-     Assombri par rapport à l'image, sur demande de Guillaume. */
-  SKY_TOP:       0x120a1f,  // zénith, presque noir
-  SKY_MID:       0x2a1442,  // corps du ciel
-  SKY_HORIZON:   0x46162f,  // rougeoiement bas, celui de l'image
-  SKY_CLOUD:     0x3a2255,  // masse nuageuse
-  SKY_CLOUD_LIT: 0x6d4a92,  // liseré éclairé des nuages, côté lune
+     Assombri par rapport à l'image, sur demande de Guillaume.
+
+     ZIP 383 — SECOND ASSOMBRISSEMENT, ET LE VRAI SUJET EST LE CONTRASTE.
+     Demande de Guillaume sur une nouvelle référence : « l'ambiance peut être
+     plus sombre en fond au début quand il y a l'orage ; seul le lac reste tel
+     quel, et l'intensité des flammes et du glow ».
+
+     C'est donc une opération à SENS UNIQUE : on ne touche QUE le fond (ciel de
+     nuit, crêtes, brume). Le lac (COL_LAKE / COL_LAKE_GLOW), les torches
+     (COL_TORCH), les halos et les runes ne bougent pas d'un bit — ce sont eux
+     qui gagnent au change. Baisser le fond SANS toucher aux sources lumineuses
+     est exactement ce qui produit « plus de contraste » : la même flamme sur un
+     ciel deux fois plus sombre brûle deux fois plus.
+
+     Valeurs relevées AU PIXEL sur la référence (moyennes par bande) : zénith
+     ~#1d132d, corps du ciel ~#1a1026, bas du ciel ~#160b18, crêtes ~#0c0a15.
+     Le ciel peint est légèrement SOUS ces valeurs : la texture est ensuite
+     multipliée par la lumière de l'éclair et surtout relevée par la brume
+     additive du lac, qui la ramène à peu près à la référence à l'écran. */
+  SKY_TOP:       0x0e0818,  // zénith, presque noir
+  SKY_MID:       0x1a1029,  // corps du ciel
+  SKY_HORIZON:   0x2b1526,  // rougeoiement bas, désaturé (voir la bande, plus bas)
+  SKY_CLOUD:     0x241634,  // masse nuageuse
+  SKY_CLOUD_LIT: 0x40305e,  // liseré éclairé des nuages, côté lune
   SKY_MOON:      0xd7cae8,
-  SKY_PEAKS:     0x180f26,  // crêtes en silhouette sur l'horizon
+  SKY_PEAKS:     0x0c0a15,  // crêtes en silhouette : quasi noires, comme sur l'image
 
   /* ========================================== CYCLE JOUR / NUIT (zip 382) ===
      Demande de Guillaume, sur une image de référence : « le même lac la
@@ -446,7 +464,13 @@ const CFG = {
      Reprise de la carte maléfique de Ferme Vallée (drawEvilFrame dans
      FermeGame.js, deadTree dans fermeArt.js), puis ASSOMBRIE au zip 374 pour
      coller à l'illustration de référence tout en restant plus sombre qu'elle. */
-  COL_FOG:        0x150c26,
+  /* Zip 383 : la brume de nuit descend AVEC le ciel, et pas d'un cheveu de
+     plus. C'est la couleur vers laquelle tout le décor lointain se fond ; la
+     laisser au-dessus du ciel remettrait un voile clair devant des crêtes
+     devenues noires, et on aurait assombri la texture sans assombrir l'image.
+     Le brouillard de JOUR (COL_DAY_FOG) n'est pas touché : la demande ne porte
+     que sur le début de course, sous l'orage. */
+  COL_FOG:        0x100819,
   COL_GROUND:     0x121a12,  // sol de la carte maléfique, assombri
   COL_VOID:       0x080d10,  // fond, sous la piste
   COL_STONE:      0x565046,  // dalle de pierre du couloir

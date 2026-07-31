@@ -4591,8 +4591,45 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function doJoinWith(name, g, outfit) {
     if (!worldReady) return;
     meRef.current = { id: me.id, name, gender: g === "f" ? "f" : "m", outfit: outfit | 0, x: C.SPAWN.x, y: C.SPAWN.y, dir: 0, moving: false, animT: 0, sleeping: false, zone: "farm" };
-    invRef.current = invRef.current || { wood: 0, stone: 0, food: 0, fence: 0, wall: 0, path: 0, seeds: [5, 0, 0, 0], crops: [0, 0, 0, 0], gems: C.GEMS.map(() => 0), fish: C.FISH.map(() => 0) };
-    if (!myInv) { setMyInv(invRef.current); }
+    /* ZIP 383 — L'HÔTE RETROUVE SON PROPRE ÉTAT PRIVÉ À LA REPRISE.
+
+       Bug trouvé en cherchant pourquoi le record du défi (inv.runBest)
+       repartait à zéro : il ÉTAIT bien persisté dans ferme_saves, mais l'hôte
+       ne le relisait jamais. Le chemin de restauration de l'état privé est
+       l'évènement `apply` avec un `farmer` — or :
+         - le canal est en `self: false` (voir la souscription), l'hôte ne
+           reçoit donc PAS son propre `join` ;
+         - hostEnsureFarmer ne renvoie un `farmer` que pour un fermier
+           NOUVEAU (`if (farmersRef.current[id]) return ...` avant l'envoi) ;
+         - applySnapshot, qui restaure `mine`, ne tourne que chez les invités.
+       Résultat : l'hôte repartait sur l'inventaire vide fabriqué ici, jusqu'à
+       sa première action, dont la réponse `apply` lui rendait enfin le vrai.
+       Le record n'était pas perdu (l'objet autoritaire, lui, était intact),
+       mais il s'AFFICHAIT à zéro — et le défi, qui lit invRef au moment du
+       `vf-run-ready`, annonçait « BEST 0 » à un joueur qui avait un record.
+
+       On lit donc directement le fermier persisté, qui fait autorité chez
+       l'hôte et qui est déjà chargé à ce stade (restoreFarm). Normalisé au
+       passage : une ferme créée par un zip antérieur à `runBest` n'a pas le
+       champ, et c'est exactement le cas que normalizeFarmer existe pour
+       couvrir. Chez un invité, farmersRef est arrivé par le snapshot, qui a
+       déjà posé le même objet dans invRef — la ligne est alors sans effet.
+
+       PREMIÈRE ENTRÉE SEULEMENT (`!invRef.current`). doJoinWith sert aussi au
+       bouton « Changer de perso » en pleine partie : chez un INVITÉ,
+       farmersRef date alors du dernier snapshot et non de la dernière action,
+       et écraser l'état privé vivant avec lui ferait reculer l'inventaire de
+       quelques secondes à chaque changement de personnage. Restaurer n'a de
+       sens que quand il n'y a rien à écraser. */
+    const mineSaved = invRef.current ? null : farmersRef.current[me.id];
+    if (mineSaved) E.normalizeFarmer(mineSaved);
+    invRef.current = (mineSaved && mineSaved.inv) || invRef.current || { wood: 0, stone: 0, food: 0, fence: 0, wall: 0, path: 0, seeds: [5, 0, 0, 0], crops: [0, 0, 0, 0], gems: C.GEMS.map(() => 0), fish: C.FISH.map(() => 0) };
+    if (mineSaved) {
+      toolsRef.current = mineSaved.tools; setMyTools(mineSaved.tools);
+      energyRef.current = mineSaved.energy; setMyEnergy(mineSaved.energy);
+      setMyPets(Array.isArray(mineSaved.pets) ? mineSaved.pets.map(pt => ({ ...pt })) : []);
+    }
+    setMyInv(invRef.current);
     if (!myQuests) setMyQuests((farmersRef.current[me.id] && farmersRef.current[me.id].quests) || {});
     joinedRef.current = true;
     setPhase("playing");
@@ -8309,7 +8346,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const d = e.data;
       if (!d || typeof d !== "object") return;
       if (d.type === "vf-run-ready") {
-        const best = (invRef.current && invRef.current.runBest) | 0;
+        /* Zip 383 — DEUX SOURCES, ON GARDE LA PLUS HAUTE. `invRef` est l'état
+           privé du joueur, `farmersRef` la sauvegarde de la ferme (autoritaire
+           chez l'hôte). En régime normal les deux disent la même chose ; ils ne
+           divergent qu'au premier instant d'une reprise, c'est-à-dire
+           exactement quand on annonce un record. Prendre le max coûte une
+           ligne et interdit qu'un défi s'ouvre sur « BEST 0 » alors que la
+           ferme sait le contraire — un record affiché à zéro, le joueur le
+           lit comme un record effacé. */
+        const savedMe = farmersRef.current[me.id];
+        const best = Math.max(
+          (invRef.current && invRef.current.runBest) | 0,
+          (savedMe && savedMe.inv && savedMe.inv.runBest) | 0
+        );
         /* Zip 377 — LE FUYARD PORTE LE SKIN DU JOUEUR (demande Guillaume :
            « personnage féminin = personnage féminin, personnage aux habits
            rouges = personnage aux habits rouges »).

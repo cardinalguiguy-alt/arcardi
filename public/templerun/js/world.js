@@ -1270,9 +1270,23 @@ const World = (function () {
     const gh = night ? 74 : 118;
     const glow = ctx.createLinearGradient(0, HORIZON - gh, 0, HORIZON);
     if (night) {
-      glow.addColorStop(0, "rgba(126,26,48,0)");
-      glow.addColorStop(0.55, "rgba(146,30,52,0.55)");
-      glow.addColorStop(1, "rgba(92,18,40,0.85)");
+      /* ZIP 383 — LE « TRIANGLE RETOURNÉ ORANGE » ÉTAIT ICI, et il n'a jamais
+         été un objet : c'était CETTE bande, vue par le creux en V entre deux
+         pyramides voisines. Un rouge saturé à 0,55 d'alpha derrière une
+         silhouette presque noire ne se lit pas comme un rougeoiement d'horizon
+         mais comme une FORME — et la forme d'un creux entre deux pyramides est
+         un triangle pointe en bas. Rien n'était à supprimer côté relief : il
+         suffisait que la bande cesse d'être plus lumineuse que ce que la
+         référence montre.
+
+         Valeurs relevées sur l'image de Guillaume : le pixel le plus chaud de
+         la zone vaut ~#4a3343, soit un mauve-rouge sombre et TRÈS désaturé, pas
+         un rouge franc. La bande vise cette valeur une fois composée sur le
+         ciel : la teinte rougeâtre reste (Guillaume l'a demandée), le triangle
+         disparaît parce qu'il n'y a plus assez d'écart pour dessiner un bord. */
+      glow.addColorStop(0, "rgba(74,34,48,0)");
+      glow.addColorStop(0.55, "rgba(84,38,54,0.42)");
+      glow.addColorStop(1, "rgba(58,26,42,0.62)");
     } else {
       glow.addColorStop(0, "rgba(191,130,153,0)");
       glow.addColorStop(0.5, "rgba(199,138,152,0.62)");
@@ -1306,7 +1320,10 @@ const World = (function () {
        que la graine partagée garantit, et c'est ce qui fait que le fondu se lit
        comme un éclairage qui change et non comme un décor qu'on remplace. */
     // Plan LOINTAIN : plus haut, délavé par la brume.
-    range(night ? "rgba(62,40,92,0.72)" : "rgba(80,79,117,0.78)", 62, 132, 150, 300, -2);
+    // (zip 383 : le plan lointain de nuit suit l'assombrissement du ciel. Le
+    // laisser à son violet d'avant l'aurait fait ressortir COMME un objet
+    // éclairé au-dessus d'un ciel devenu noir — l'inverse d'un lointain.)
+    range(night ? "rgba(38,26,58,0.72)" : "rgba(80,79,117,0.78)", 62, 132, 150, 300, -2);
     // Plan PROCHE : plus bas, presque noir de nuit ; de jour il prend enfin
     // une couleur, parce qu'un relief qui reste en silhouette sous un ciel
     // clair se lit comme un trou découpé dans l'image.
