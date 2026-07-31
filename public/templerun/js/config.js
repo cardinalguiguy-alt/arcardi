@@ -351,8 +351,8 @@ const CFG = {
      Déroulé, en mètres parcourus :
 
         0     ──────────── nuit franche
-        6 000 ┐
-              │ amorce : le ciel pâlit imperceptiblement (12 % du jour)
+       10 000 ┐
+              │ éclaircie : le ciel pâlit imperceptiblement (12 % du jour)
        15 000 ┘ LEVER DE SOLEIL
        18 000 ── plein jour
        24 000 ┐
@@ -366,7 +366,29 @@ const CFG = {
      nuit ne dure plus que 6 000 m et se lit toute entière comme une attente :
      une amorce y serait redondante. Voir `dayAt()` dans world.js pour la
      façon dont les deux se raccordent sans marche. */
-  DAY_PREDAWN_AT: 6000,     // début de l'amorce
+
+  /* ZIP 382b — L'ÉCLAIRCIE COMMENCE À 10 000, PAS À 6 000.
+     Retour de Guillaume, et c'est un arbitrage d'ambiance qu'il faut retenir
+     tel qu'il l'a formulé : « je veux toujours un ciel sombre percé par les
+     thunder, c'est un élément génial et réaliste à conserver aussi longtemps
+     que possible ».
+
+     À 6 000 m, l'amorce mordait sur près de la moitié des distances que les
+     joueurs atteignent réellement (l'oracle de simulate-run.js tourne autour
+     de 5 000 m) : le ciel d'orage, qui est le décor SIGNATURE du défi, était
+     donc entamé pour presque tout le monde au profit d'un lever de soleil que
+     presque personne n'atteint. Le jeu se serait délavé pour rien.
+
+     Repoussée à 10 000, l'éclaircie ne dure plus que 5 000 m au lieu de 9 000.
+     Elle garde exactement sa fonction — annoncer ce qui vient — mais ne la
+     paie plus avec le décor qu'on voit le plus. Rien d'autre ne bouge : le
+     lever reste à 15 000, le cycle à 18 000.
+
+     Note utile pour la suite : l'orage ne faiblit QUE de 12 % pendant toute
+     l'éclaircie (sa force est multipliée par `1 - day`, et `day` plafonne à
+     DAY_PREDAWN_LEVEL avant le lever). Les éclairs restent donc pleinement là
+     jusqu'aux 15 000 m. Ce qui les éteint vraiment, c'est le lever lui-même. */
+  DAY_PREDAWN_AT: 10000,    // début de l'éclaircie
   DAY_PREDAWN_LEVEL: 0.12,  // ce qu'elle atteint au maximum, juste avant le lever
   DAY_RISE_AT: 15000,       // le lever de soleil commence ici
   DAY_RISE_LEN: 3000,       // ~90 s à 34 u/s
