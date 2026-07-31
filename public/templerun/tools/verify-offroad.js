@@ -207,7 +207,8 @@ function playAndExit(seed, whichExit) {
     maxBranchT: 0, branchLen: 0,
     minPackDist: Infinity, packOnBranch: false,
     packDistStart: 0, packDistEnd: 0,
-    escapeFrames: 0, escapeMs: 0,
+    escapeFrames: 0, escapeMs: 0, minSpeed: Infinity, exitSpeed: 0,
+    minOffAxis: Infinity, framedMs: 0, framedRun: 0, framedBest: 0,
     hudSeen: false,
   };
   let taken = false;
@@ -259,12 +260,17 @@ function playAndExit(seed, whichExit) {
         out.escapeDist = player.escapeDist;
         out.scoreAtTurn = player.escapeDist * CFG.SCORE_PER_UNIT + player.coins * CFG.SCORE_PER_COIN;
         out.branchLen = player.escapeNode.length;
+        out.exitSpeed = player.escapeSpeed;
+        // Même détachement que Game.beginEscape : la meute file à SON allure.
+        pack.detach(player.totalDist, player.escapeSpeed);
       }
+      pack.runOn(dt);
       out.escapeFrames++;
       out.maxBranchT = Math.max(out.maxBranchT, player.t);
+      out.minSpeed = Math.min(out.minSpeed, player.speed);
 
       // Où sont les loups ? On les localise EXACTEMENT comme world.js.
-      const d = player.totalDist - pack.gap - pack.offsets[0].back;
+      const d = pack.baseDist(player) - pack.gap - pack.offsets[0].back;
       const loc = track.locate(Math.max(0, d));
       if (loc.node === player.escapeNode || loc.node.isEscape) out.packOnBranch = true;
       const pw = worldPosOf(track, loc.node, loc.t, pack.offsets[0].lane);
@@ -273,6 +279,35 @@ function playAndExit(seed, whichExit) {
       out.minPackDist = Math.min(out.minPackDist, gapWorld);
       if (out.escapeFrames === 1) out.packDistStart = gapWorld;
       out.packDistEnd = gapWorld;
+
+      /* ------------------------------------------------------------------
+         LA MEUTE EST-ELLE RÉELLEMENT DANS LE CADRE ?
+         C'est LA promesse de la séquence — « on voit les loups continuer tout
+         droit » — et c'est la seule qu'aucune des règles précédentes ne
+         touche. Elle ne dépend d'aucune constante qu'on pourrait relire :
+         elle dépend d'une géométrie à trois inconnues (le fermier qui
+         décélère, la meute qui file, la caméra qui pivote), et il suffit de
+         retoucher l'une des trois pour cadrer un mur de pierre sans que
+         quoi que ce soit d'autre ne bronche.
+
+         On refait donc ici le calcul de camera.js — caméra posée derrière le
+         fermier sur la branche, direction de visée pivotée de side × π × look
+         — et on mesure l'angle sous lequel le premier loup apparaît. Demi-champ
+         HORIZONTAL à 16/9 : atan(tan(36°) × 16/9) ≈ 52°. On exige mieux que
+         45°, et pas seulement un instant : au moins 300 ms d'affilée. */
+      const bf = DIRS[player.escapeNode.dir & 3];
+      const cam = { x: me.x - bf.x * CFG.CAM_BACK, z: me.z - bf.z * CFG.CAM_BACK };
+      const pose0 = player.escapePose(CLOCK);
+      const a = player.escapeSide * Math.PI * pose0.look;
+      const ca = Math.cos(a), sa = Math.sin(a);
+      const lx = bf.x * ca + bf.z * sa, lz = bf.z * ca - bf.x * sa;
+      const vx = pw.x - cam.x, vz = pw.z - cam.z;
+      const vl = Math.hypot(vx, vz) || 1;
+      const off = Math.acos(Math.max(-1, Math.min(1, (lx * vx + lz * vz) / vl))) * 180 / Math.PI;
+      out.minOffAxis = Math.min(out.minOffAxis, off);
+      if (off < 45) { out.framedMs += dt * 1000; out.framedRun += dt * 1000; }
+      else out.framedRun = 0;
+      out.framedBest = Math.max(out.framedBest, out.framedRun);
 
       const pose = player.escapePose(CLOCK);
       if (pose.k >= 1) { out.escapeMs = CLOCK - player.escapeStart; break; }
@@ -291,6 +326,8 @@ function playAndExit(seed, whichExit) {
   const RUNS = 60;
   let totalArmed = 0, escapes = 0, worstMargin = Infinity, worstMs = 0, bestMs = 1e9;
   let minPack = Infinity, everCloser = 0, frozenGain = 0;
+  let slowest = Infinity, fastestExit = 0;
+  let bestOffAxis = Infinity, worstOffAxis = 0, shortestFramed = Infinity;
 
   for (let i = 0; i < RUNS; i++) {
     const r = playAndExit(i * 7919 + 3, 1);
@@ -308,6 +345,20 @@ function playAndExit(seed, whichExit) {
     bestMs = Math.min(bestMs, r.escapeMs);
     minPack = Math.min(minPack, r.minPackDist);
     if (r.minPackDist < 6) everCloser++;
+    slowest = Math.min(slowest, r.minSpeed);
+    fastestExit = Math.max(fastestExit, r.exitSpeed);
+    bestOffAxis = Math.min(bestOffAxis, r.minOffAxis);
+    worstOffAxis = Math.max(worstOffAxis, r.minOffAxis);
+    shortestFramed = Math.min(shortestFramed, r.framedBest);
+    if (r.framedBest < 300) {
+      fail(`course ${i} : la meute n'est dans le cadre que ${r.framedBest.toFixed(0)} ms d'affilée (angle minimal ${r.minOffAxis.toFixed(0)}°)`);
+    }
+    // La décélération doit être RÉELLE et se voir : le fermier finit sa fuite
+    // au trot, pas à la vitesse de course. C'est le principal levier de calme
+    // de la séquence — s'il cessait d'agir, rien d'autre ne le signalerait.
+    if (r.minSpeed > CFG.ESCAPE_JOG_SPEED * 1.35) {
+      fail(`course ${i} : le fermier ne ralentit pas (vitesse minimale ${r.minSpeed.toFixed(1)} u/s pour un trot à ${CFG.ESCAPE_JOG_SPEED})`);
+    }
 
     /* SCORE FIGÉ AU VIRAGE. Deux contrôles, et il faut les deux :
        - la distance retenue est EXACTEMENT celle du bord du tronçon, à la
@@ -327,7 +378,9 @@ function playAndExit(seed, whichExit) {
   console.log(`\n2. Sorties accidentelles : ${totalArmed} appui(s) de l'oracle dans une fenêtre d'armement, sur ${RUNS} courses.`);
   console.log(`3. Séquence : ${escapes}/${RUNS} sorties menées à terme, durée ${bestMs.toFixed(0)}-${worstMs.toFixed(0)} ms (cible ${CFG.ESCAPE_TOTAL_MS}).`);
   console.log(`   marge minimale avant le bout de la branche : ${worstMargin.toFixed(1)} u sur ${CFG.OFFROAD_BRANCH_LEN}`);
+  console.log(`   allure : ${fastestExit.toFixed(1)} u/s au virage -> ${slowest.toFixed(1)} u/s à la fin (trot visé ${CFG.ESCAPE_JOG_SPEED}).`);
   console.log(`4. Meute : distance minimale au fermier pendant la sortie ${minPack.toFixed(1)} u ; ${everCloser} course(s) sous 6 u.`);
+  console.log(`   DANS LE CADRE : au plus près ${bestOffAxis.toFixed(0)}°-${worstOffAxis.toFixed(0)}° de l'axe (demi-champ ~52°), visible ${shortestFramed.toFixed(0)} ms d'affilée au minimum.`);
   console.log(`   score figé : jusqu'à ${frozenGain.toFixed(0)} u parcourus après le virage ne sont PAS comptés (${(frozenGain * CFG.SCORE_PER_UNIT).toFixed(0)} points).`);
 
   if (totalArmed > 0) {

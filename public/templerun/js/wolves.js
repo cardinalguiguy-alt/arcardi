@@ -20,6 +20,16 @@ class WolfPack {
     this.track = track;
     this.gap = CFG.CHASE_START;
     this.caught = false;
+    /* Zip 377 — LA MEUTE DÉTACHÉE DU JOUEUR.
+       En temps normal, sa position se DÉDUIT de celle du fermier (`gap`), et
+       c'est tout l'intérêt du système. Mais à la sortie offroad le fermier
+       ralentit jusqu'au trot : déduite de lui, la meute aurait ralenti avec
+       lui, ce qui est exactement le contraire de ce que la scène raconte. Elle
+       ne le poursuit plus, elle file tout droit — elle a donc besoin, à ce
+       moment-là et à ce moment-là seulement, de sa propre distance.
+       `freeDist` à null = comportement d'origine, inchangé. */
+    this.freeDist = null;
+    this.freeSpeed = 0;
     // Décalages fixes : la meute court en formation, ce qui suffit à la rendre
     // lisible sans logique de groupe.
     this.offsets = [];
@@ -42,11 +52,26 @@ class WolfPack {
     if (this.gap <= 0.01) { this.caught = true; player.die("wolves"); }
   }
 
+  /* Détache la meute au moment de la sortie offroad : à partir de là elle
+     avance seule, à la vitesse qu'avait la course, sans plus jamais regarder
+     où est le fermier. */
+  detach(dist, speed) { this.freeDist = dist; this.freeSpeed = speed; }
+  runOn(dt) { if (this.freeDist !== null) this.freeDist += this.freeSpeed * dt; }
+
+  /* Distance de RÉFÉRENCE de la meute. Un seul endroit la calcule : world.js
+     s'en sert aussi pour orienter les loups, et deux formules pour la même
+     chose finiraient par se désaccorder — les corps regarderaient dans une
+     direction et se tiendraient dans une autre. */
+  baseDist(player) {
+    return this.freeDist !== null ? this.freeDist : player.totalDist;
+  }
+
   /* Positions monde des loups, pour le rendu. */
   positions(player, now) {
     const out = [];
+    const base = this.baseDist(player);
     for (const o of this.offsets) {
-      const d = player.totalDist - this.gap - o.back;
+      const d = base - this.gap - o.back;
       if (d < 0) continue;
       const loc = this.track.locate(d);
       const bob = Math.abs(Math.sin(now / 90 + o.bobPhase)) * 0.28;

@@ -77,6 +77,10 @@ const Game = (function () {
     if (state !== STATE.RUNNING) return;
     state = STATE.ESCAPING;
     score = player.escapeDist * CFG.SCORE_PER_UNIT + player.coins * CFG.SCORE_PER_COIN;
+    // La meute se détache ICI, à la vitesse qu'avait la course. Le fermier,
+    // lui, ralentit : sans ce détachement, les loups auraient ralenti avec lui
+    // et seraient restés collés dans le cadre pendant tout le fondu.
+    pack.detach(player.totalDist, player.escapeSpeed);
     Input.clear();
     UI.showEscape(true);
   }
@@ -179,6 +183,7 @@ const Game = (function () {
              tronçons devant l'embranchement existent encore pour y courir.
            * le score n'est plus recalculé (figé dans beginEscape). */
       player.update(dt, now);
+      pack.runOn(dt);          // la meute file tout droit, à SON allure
       const droppedE = track.ensureAhead(player.nodeIndex);
       for (const n of droppedE) World.dropNode(n);
       for (const n of track.nodes) if (!n.group) World.buildNode(n);

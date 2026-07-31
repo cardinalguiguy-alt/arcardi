@@ -36,7 +36,8 @@ const World = (function () {
   let sky, skyMat, boltMesh, boltMats = [];
   let lake, lakeMat, lakeGlow, lakeGlowMat, mists = [];
   let geo = {}, mat = {};
-  let flames = [];        // plans de flamme à faire vaciller
+  let flames = [];        // plans de flamme à faire vaciller (corps ET cœurs)
+  const flamePulse = [];  // cadences de respiration des matériaux de flamme
   let glows = [];         // plans lumineux (champignons, runes) à tourner vers la caméra
   let dust = [];          // bouffées de poussière de glissade, recyclées
   let lastNow = 0;
@@ -144,12 +145,51 @@ const World = (function () {
     mat.vine      = L(CFG.COL_VINE);
     mat.mushStem  = L(0x6a5f7a);
     mat.torchWood = L(0x241f1a);
+    mat.torchHead = L(0x140f0a);   // extrémité carbonisée du bâton (zip 377)
     mat.coin      = new THREE.MeshLambertMaterial({ color: CFG.COL_COIN, emissive: CFG.COL_COIN, emissiveIntensity: 0.45 });
 
     mat.pit       = new THREE.MeshBasicMaterial({ color: 0x05060a });   // paroi intérieure d'une crevasse
     mat.eye       = new THREE.MeshBasicMaterial({ color: CFG.COL_WOLF_EYE });
     mat.mushroom  = new THREE.MeshBasicMaterial({ color: CFG.COL_MUSHROOM });
-    mat.flame     = new THREE.MeshBasicMaterial({ color: CFG.COL_TORCH, transparent: true, opacity: 0.9, depthWrite: false, side: THREE.DoubleSide });
+    /* --------------------------------------------- FLAMMES (zip 377) ---
+       Remplacent le plan orange uni du 372. Deux matériaux par flamme, et
+       c'est la séparation qui fait tout le travail :
+
+         * le CORPS, en fondu normal, porte la SILHOUETTE — c'est lui qui a une
+           pointe, des épaules irrégulières et un liseré sombre. Une flamme
+           entièrement additive n'a pas de contour : elle se dissout dans le
+           fond et redevient la tache orange qu'on veut quitter.
+         * le CŒUR, additif, porte la LUMIÈRE. Plus petit, plus court, presque
+           blanc, il déborde en clair au milieu du corps.
+
+       QUATRE VARIANTES de chaque, tirées avec des graines différentes : deux
+       torches côte à côte n'ont donc pas la même découpe. Elles sont MISES EN
+       COMMUN et non clonées par torche — un matériau cloné par flamme fuirait
+       à chaque dropNode, qui ne libère que les géométries. */
+    mat.flameBody = [];
+    mat.flameCore = [];
+    for (let i = 0; i < 4; i++) {
+      mat.flameBody.push(new THREE.MeshBasicMaterial({
+        map: pixelTexture(paintFlame(1471 + i * 733, false)),
+        transparent: true, opacity: 0.86, depthWrite: false, side: THREE.DoubleSide,
+      }));
+      mat.flameCore.push(new THREE.MeshBasicMaterial({
+        map: pixelTexture(paintFlame(9043 + i * 617, true)),
+        transparent: true, opacity: 0.7, depthWrite: false, side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending,
+      }));
+    }
+    /* Respiration lumineuse des matériaux. Elle ne peut pas être par torche
+       (voir ci-dessus), mais elle n'a pas besoin de l'être : quatre cadences
+       incommensurables entre elles, combinées au vacillement propre à chaque
+       flamme, suffisent à ce qu'on ne surprenne jamais deux torches en train
+       de faire la même chose au même instant. */
+    for (let i = 0; i < mat.flameBody.length; i++) {
+      flamePulse.push({
+        fb: 0.0091 + i * 0.0017, pb: i * 2.31,
+        fc: 0.0223 + i * 0.0041, pc: i * 1.77 + 0.9,
+      });
+    }
 
     // Halo doux, réutilisé par les champignons, la brume, la poussière et le
     // fond des crevasses : une seule texture pour toutes les lueurs du jeu.
@@ -200,6 +240,107 @@ const World = (function () {
     g.addColorStop(1, "rgba(255,255,255,0)");
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, S, S);
+    return cv;
+  }
+
+  /* ============================================== FLAMME PEINTE (zip 377) ===
+     Demande de Guillaume : « une vraie flamme plus travaillée ». Avant, la
+     torche était un plan uni de la couleur COL_TORCH avec une opacité fixe —
+     donc une pastille orange, et toutes les mêmes.
+
+     TROIS CHOSES FONT QU'UNE FLAMME SE LIT COMME UNE FLAMME, et c'est ce que
+     cette texture peint :
+
+       1. UN PROFIL, pas une ellipse : effilée en pointe, la plus large vers
+          70 % de sa hauteur, pincée à la base sur la mèche. Les épaules sont
+          irrégulières (une dizaine de nœuds interpolés) et l'AXE lui-même
+          serpente — une flamme n'est jamais symétrique.
+       2. UN DÉGRADÉ DOUBLE. La chaleur monte quand on va vers l'axe ET quand
+          on descend vers la base. Une flamme est blanche en bas au centre et
+          rouge sombre en haut sur les bords ; un dégradé purement radial
+          donne un œil, pas un feu.
+       3. UN BORD QUI S'ÉTEINT. L'alpha tombe au bord et vers la pointe, ce
+          qui donne la fumée sans dessiner de fumée.
+
+     Peinte pixel par pixel dans un ImageData de 32×48, filtrée en Nearest
+     comme tout le reste : on reste du pixel-art plaqué, on n'introduit pas
+     une texture peinte finement qui jurerait avec le décor.
+
+     `inner` produit la variante CŒUR : plus étroite, plus courte, presque
+     blanche, et qui ne monte pas jusqu'à la pointe. */
+  function paintFlame(seed, inner) {
+    const W = 32, H = 48;
+    const cv = makeCanvas(W, H);
+    const ctx = cv.getContext("2d");
+    ctx.clearRect(0, 0, W, H);
+    const rng = Track.makeRng(seed >>> 0);
+
+    // Nœuds du profil et du serpentement de l'axe, interpolés linéairement.
+    const N = 9, jitter = [], sway = [];
+    for (let i = 0; i <= N; i++) {
+      jitter.push(0.76 + rng() * 0.46);
+      sway.push((rng() - 0.5) * (inner ? 2.4 : 5.0));
+    }
+    const at = (arr, v) => {
+      const x = Math.max(0, Math.min(N - 1e-6, v * N));
+      const i = Math.floor(x), f = x - i;
+      return arr[i] * (1 - f) + arr[i + 1] * f;
+    };
+
+    // Rampe de chaleur : du cœur presque blanc au liseré rouge sombre.
+    const RAMP = inner
+      ? [[1.00, 255, 253, 240], [0.55, 255, 238, 176], [0.22, 255, 198, 96], [0.00, 255, 152, 56]]
+      : [[1.00, 255, 247, 212], [0.70, 255, 208, 108], [0.44, 255, 154, 60],
+         [0.22, 224, 88, 28], [0.00, 118, 38, 22]];
+    const heatColor = (h) => {
+      for (let i = 0; i < RAMP.length - 1; i++) {
+        const a = RAMP[i], b = RAMP[i + 1];
+        if (h <= a[0] && h >= b[0]) {
+          const f = (h - b[0]) / (a[0] - b[0]);
+          return [b[1] + (a[1] - b[1]) * f, b[2] + (a[2] - b[2]) * f, b[3] + (a[3] - b[3]) * f];
+        }
+      }
+      const last = RAMP[RAMP.length - 1];
+      return [last[1], last[2], last[3]];
+    };
+
+    const img = ctx.getImageData(0, 0, W, H);
+    const d = img.data;
+    const maxHalf = W * (inner ? 0.19 : 0.41);
+
+    for (let y = 0; y < H; y++) {
+      /* v = 0 en HAUT de l'image (la pointe), 1 en BAS (la base, sur la
+         mèche). Three.js retourne les textures par défaut, donc la première
+         rangée de l'image se retrouve bien en haut du plan. */
+      const v = y / (H - 1);
+      /* Silhouette. L'EXPOSANT est le seul nombre qui compte ici, et la
+         première version l'avait à 0,58 : le ventre tombait alors à un tiers
+         DEPUIS LE HAUT et la flamme s'effilait vers le bas, ce qui donnait un
+         panache de fumée suspendu au-dessus du bâton. À 1,94, le ventre est à
+         ~70 % de la hauteur, donc BAS, près de la mèche — c'est là qu'une
+         flamme est la plus large, et c'est ce qui la fait tenir au bâton.
+
+         Rien dans le code ne signalait l'erreur : la flamme était simplement à
+         l'envers. Trouvée sur la planche de tools/render-runner.js. Le facteur
+         0,84 pince la dernière rangée sans la refermer, pour que la flamme se rétrécisse
+         sur la mèche au lieu de s'y poser à plat. */
+      let hw = Math.sin(Math.pow(v, 1.94) * Math.PI * 0.84) * maxHalf * at(jitter, v);
+      if (inner) hw *= Math.min(1, v * 2.1);       // le cœur ne monte pas en pointe
+      if (hw < 0.5) continue;
+      const axis = W / 2 + at(sway, v) * (1 - v * 0.55);   // la base bouge moins : elle tient à la mèche
+      const x0 = Math.max(0, Math.floor(axis - hw)), x1 = Math.min(W - 1, Math.ceil(axis + hw));
+      for (let x = x0; x <= x1; x++) {
+        const dd = Math.abs(x + 0.5 - axis) / hw;
+        if (dd > 1) continue;
+        const heat = Math.min(1, Math.pow(1 - dd, 1.25) * (0.30 + 0.80 * Math.pow(v, 0.75)));
+        const c = heatColor(heat);
+        const a = Math.min(1, (1 - dd) * 2.3)
+                * (inner ? 0.52 + 0.48 * v : 0.40 + 0.60 * Math.min(1, v * 1.5));
+        const k = (y * W + x) * 4;
+        d[k] = c[0] | 0; d[k + 1] = c[1] | 0; d[k + 2] = c[2] | 0; d[k + 3] = (a * 255) | 0;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
     return cv;
   }
 
@@ -850,6 +991,66 @@ const World = (function () {
     }
   }
 
+  /* ================================================= UNE TORCHE (zip 377) ===
+     Quatre meshes : le fût, sa tête carbonisée, le corps de flamme et son
+     cœur. Deux de plus qu'au 372, et c'est assumé — le budget est mesuré par
+     smoke-render.js, et le poste a été financé en retirant un objet de décor
+     de fond par tronçon (DECOR_PROPS). Les torches sont les seuls points
+     chauds du cadre et le seul repère qui rende la ligne de la piste lisible
+     de loin : c'est le bon endroit où dépenser.
+
+     La TÊTE n'est pas la coupelle écartée au 374 (qui n'épaississait la torche
+     que d'un pixel). C'est l'extrémité brûlée du bâton, plus large et presque
+     noire : elle donne un point d'accroche à la flamme, qui flottait jusqu'ici
+     au-dessus d'un manche net.
+
+     DÉSYNCHRONISATION, exigée explicitement. Elle est obtenue à trois niveaux
+     indépendants, parce qu'un seul ne suffit jamais à tromper l'œil :
+       - la DÉCOUPE (4 textures tirées séparément) ;
+       - le MOUVEMENT (quatre oscillateurs par flamme, fréquences et phases
+         tirées de la graine du tronçon — donc stables d'une reconstruction à
+         l'autre, mais différentes d'une torche à l'autre) ;
+       - la LUMIÈRE (4 cadences de respiration sur les matériaux).
+     Corps et cœur d'une MÊME torche ont eux aussi leurs propres oscillateurs :
+     c'est ce décalage-là qui fait qu'une flamme paraît vivante plutôt que
+     simplement animée. */
+  function addTorch(place, t, off, seed) {
+    const rng = Track.makeRng(seed >>> 0);
+
+    place(box(0.20, 2.05, 0.20, mat.torchWood, 0, 0, 0), t, off, 1.02);
+    const head = box(0.29, 0.32, 0.29, mat.torchHead, 0, 0, 0);
+    head.rotation.y = rng() * 0.9;
+    place(head, t, off, 2.16);
+
+    const pick = Math.floor(rng() * mat.flameBody.length);
+    const h = 1.00 + rng() * 0.28;
+    const w = 0.60 + rng() * 0.18;
+
+    /* Quatre échelles de temps, du lent au vif : le balancement d'ensemble
+       (~1,3 Hz), le battement (~2,8 Hz), le grésillement (~7 Hz) et la bouffée
+       (~0,15 Hz, brève et rare). Les quatre sont incommensurables entre elles,
+       donc le motif ne se répète jamais à l'œil. */
+    const osc = () => ({
+      f1: 0.0069 + rng() * 0.0044, p1: rng() * 6.283,
+      f2: 0.0138 + rng() * 0.0076, p2: rng() * 6.283,
+      f3: 0.0314 + rng() * 0.0189, p3: rng() * 6.283,
+      f4: 0.00075 + rng() * 0.00065, p4: rng() * 6.283,
+    });
+
+    const yBody = 2.28 + h * 0.5 - 0.14;
+    const body = new THREE.Mesh(geo.plane, mat.flameBody[pick]);
+    body.userData = Object.assign({ w, h, y0: yBody }, osc());
+    place(body, t, off, yBody);
+    flames.push(body);
+
+    const hc = h * 0.60, yCore = yBody - h * 0.17;
+    const core = new THREE.Mesh(geo.plane, mat.flameCore[(pick + 2) % mat.flameCore.length]);
+    core.userData = Object.assign({ w: w * 0.50, h: hc, y0: yCore }, osc());
+    core.renderOrder = 1;   // toujours par-dessus le corps, jamais l'inverse
+    place(core, t, off, yCore);
+    flames.push(core);
+  }
+
   /* ===================================================== TRONÇON -> MESHES ===
      Découpage du sol. Deux causes de trou, traitées séparément :
 
@@ -1050,15 +1251,8 @@ const World = (function () {
        qui rend la ligne de la piste lisible de loin. --- */
     for (const side of [-1, 1]) {
       for (let t = 8; t < node.length - 4; t += CFG.TORCH_SPACING) {
-        const off = side * (CFG.TRACK_WIDTH / 2 + 0.45);
-        // Un seul mât, pas de coupelle : à 3,4 px par pixel elle ne faisait
-        // qu'épaissir la torche d'un pixel pour un mesh de plus par torche.
-        place(box(0.22, 2.2, 0.22, mat.torchWood, 0, 0, 0), t, off, 1.1);
-        const fl = new THREE.Mesh(geo.plane, mat.flame);
-        fl.scale.set(0.7, 0.95, 1);
-        place(fl, t, off, 2.4);
-        fl.userData.phase = (node.index * 7 + t) * 0.7;
-        flames.push(fl);
+        addTorch(place, t, side * (CFG.TRACK_WIDTH / 2 + 0.45),
+                 node.index * 9631 + Math.round(t) * 137 + (side > 0 ? 61 : 0));
       }
     }
 
@@ -1219,14 +1413,12 @@ const World = (function () {
       glows.push(runeHalo);
 
       // b. Deux torches rapprochées (2,5 u d'écart, contre TORCH_SPACING = 22).
+      //    Deux graines VOISINES mais distinctes : c'est le cas le plus dur
+      //    pour la désynchronisation, puisqu'on les voit côte à côte.
       for (let i = 0; i < 2; i++) {
-        const tt = t0 - CFG.OFFROAD_MOUTH - 5 + i * 2.5;
-        place(box(0.22, 2.2, 0.22, mat.torchWood, 0, 0, 0), tt, side * (CFG.TRACK_WIDTH / 2 + 0.45), 1.1);
-        const fl = new THREE.Mesh(geo.plane, mat.flame);
-        fl.scale.set(0.7, 0.95, 1);
-        place(fl, tt, side * (CFG.TRACK_WIDTH / 2 + 0.45), 2.4);
-        fl.userData.phase = (node.index * 7 + tt) * 0.7;
-        flames.push(fl);
+        addTorch(place, t0 - CFG.OFFROAD_MOUTH - 5 + i * 2.5,
+                 side * (CFG.TRACK_WIDTH / 2 + 0.45),
+                 node.index * 9631 + 7717 + i * 4409);
       }
 
       // c. Chapelet de champignons qui s'enfonce dans la trouée, en biais.
@@ -1513,7 +1705,10 @@ const World = (function () {
       m.visible = true;
       m.position.set(pos[i].x, pos[i].y, pos[i].z);
       // Orientation : on regarde vers le joueur, ça suffit largement.
-      const loc = pack.track.locate(Math.max(0, player.totalDist - pack.gap - pack.offsets[i].back));
+      // baseDist(), pas player.totalDist : à la sortie offroad la meute est
+      // détachée du fermier (voir wolves.js). Lire la distance ici aurait
+      // orienté les corps sur une piste et posé les positions sur une autre.
+      const loc = pack.track.locate(Math.max(0, pack.baseDist(player) - pack.gap - pack.offsets[i].back));
       m.rotation.y = dirYaw(loc.node.dir);
     }
   }
@@ -1548,12 +1743,43 @@ const World = (function () {
     const dt = lastNow ? Math.min(0.1, (now - lastNow) / 1000) : 0;
     lastNow = now;
 
-    /* --- Flammes : elles regardent la caméra et respirent. --- */
+    /* --- Flammes (refaites au zip 377). ------------------------------------
+       L'ancienne version multipliait les deux échelles par UN SEUL sinus : la
+       flamme gonflait et dégonflait sans jamais changer de forme, et toutes
+       les torches le faisaient au même rythme. Ici :
+
+         * la HAUTEUR et la LARGEUR sont pilotées séparément — une flamme qui
+           monte s'AFFINE, elle ne grossit pas ;
+         * elle grandit PAR LE HAUT : le pied reste soudé à la mèche, ce qui
+           est le détail qui la relie physiquement à la torche. Sans ça, elle
+           enfle autour de son centre et se décolle du bâton à chaque bouffée ;
+         * un roulis appliqué APRÈS le billboard la fait vaciller dans le plan
+           de l'écran, donc lisiblement quel que soit l'angle de vue ;
+         * la bouffée (f4) est cubique et unilatérale : longue attente, court
+           sursaut. Un sinus rond aurait donné une respiration régulière, ce
+           qui est exactement ce qu'un feu ne fait pas. */
     for (const fl of flames) {
+      const u = fl.userData;
       fl.rotation.set(0, 0, 0);
       fl.lookAt(camera.position);
-      const s = 0.8 + Math.sin(now / 90 + fl.userData.phase) * 0.18;
-      fl.scale.set(0.7 * s, 0.95 * s, 1);
+      const a = Math.sin(now * u.f1 + u.p1);
+      const b = Math.sin(now * u.f2 + u.p2);
+      const c = Math.sin(now * u.f3 + u.p3);
+      const s4 = Math.sin(now * u.f4 + u.p4);
+      const flare = s4 > 0 ? s4 * s4 * s4 : 0;
+      const sy = u.h * (0.86 + 0.12 * a + 0.06 * c + 0.26 * flare);
+      const sx = u.w * (0.95 + 0.08 * b - 0.04 * a - 0.06 * flare);
+      fl.scale.set(sx, sy, 1);
+      fl.position.y = u.y0 + (sy - u.h) * 0.5;
+      fl.rotateZ(0.13 * b + 0.06 * c + 0.05 * a);
+    }
+    /* Respiration lumineuse des quatre matériaux partagés. Quatre lignes pour
+       toutes les torches de l'écran : c'est le seul poste de cette refonte qui
+       ne coûte rien du tout. */
+    for (let i = 0; i < flamePulse.length; i++) {
+      const q = flamePulse[i];
+      mat.flameBody[i].opacity = 0.80 + Math.sin(now * q.fb + q.pb) * 0.14;
+      mat.flameCore[i].opacity = 0.66 + Math.sin(now * q.fc + q.pc) * 0.26;
     }
     /* --- Halos (champignons, pierres levées, balises) : même billboard, sans
        le vacillement. --- */
@@ -1642,7 +1868,11 @@ const World = (function () {
 
     ambientLight.intensity = 0.5 + flash * 1.5;
     moonLight.intensity = 0.5 + flash * 1.9;
-    torchLight.intensity = 1.35 + Math.sin(now / 110) * 0.16;
+    // Zip 377 : deux harmoniques au lieu d'une. La lampe qui suit le joueur
+    // battait à une seconde près, ce qui s'entendait à l'œil comme un
+    // clignotant. Deux périodes incommensurables suffisent à la rendre
+    // irrégulière, pour le même prix.
+    torchLight.intensity = 1.35 + Math.sin(now / 110) * 0.12 + Math.sin(now / 47 + 1.7) * 0.07;
     mushLight.intensity = 0.75 + Math.sin(now / 260) * 0.12 + flash * 0.6;
   }
 

@@ -22,8 +22,10 @@ défaite ; ressortir depuis l'écran-titre est gratuit.
 sur le côté de la piste : bordure interrompue, stèle à runes au glow renforcé,
 deux torches rapprochées, et un chemin de champignons luminescents qui s'y
 engage. Tourner vers lui **quitte la course sain et sauf** — le fermier se
-retourne, on voit la meute continuer tout droit, il court seul trois secondes,
-et un fondu enchaîné le ramène **au pied de la jetée, sans un loup**.
+retourne, la caméra **marque un temps** sur la meute qui traverse
+l'embranchement et file tout droit, puis il **ralentit jusqu'au trot** et un
+fondu enchaîné le ramène **au pied de la jetée, sans un loup**. 4,4 secondes en
+tout.
 
 C'est la seule issue du défi qui ne soit pas une défaite : **aucune blessure**,
 bonbons conservés, et le score compte pour le record. Il s'arrête en revanche
@@ -127,7 +129,7 @@ node tools/smoke-render.js       # rendu exercé avec un faux Three.js
 node tools/check-strings.js      # parité FR/EN + ui.js exécuté contre un faux DOM
 node tools/verify-offroad.js     # la bifurcation, vérifiée en la JOUANT (zip 377)
 node tools/verify-skin.js        # la tenue du joueur, de la ferme au défi (zip 377)
-node tools/render-runner.js      # rend le fermier en PNG — À REGARDER (zip 377)
+node tools/render-runner.js      # rend le fermier ET les flammes en PNG — À REGARDER (zip 377)
 ```
 
 `verify-fairness.js` ne vérifie pas une règle arbitraire mais une **simulation
@@ -143,12 +145,14 @@ latéral *nécessaire* dans la fenêtre d'armement (donc aucune sortie
 accidentelle possible), meute jamais posée sur la branche et toujours en train
 de s'éloigner, bout de la branche jamais atteint, score bien figé au virage.
 
-`render-runner.js` **rend le fermier 3D en PNG** (rasteriseur maison, zéro
-dépendance) sous trois angles et trois poses, pour les deux genres. Il ne
-prouve rien : il donne à regarder. Les deux corrections de silhouette du zip
-377 — la nuque posée du côté du visage depuis le zip 374, les mèches longues
-qui mangeaient le profil — viennent de là, et aucune des deux ne levait la
-moindre erreur.
+`render-runner.js` **rend en PNG** (rasteriseur maison, zéro dépendance) le
+fermier 3D sous trois angles et trois poses pour les deux genres, et les
+quatre découpes de flamme de torche avec leur cœur. Il ne prouve rien : il
+donne à regarder. **Trois** corrections du zip 377 viennent de là, et aucune ne
+levait la moindre erreur : la nuque du fermier posée du côté du visage depuis
+le zip 374, les mèches longues qui mangeaient le profil, et la flamme peinte à
+l'envers (ventre en haut, pointe sur la mèche — un panache de fumée suspendu
+au-dessus du bâton).
 
 Côté ferme, `verify-gate` (dans le zip de livraison) refait un parcours en
 largeur depuis l'arrivée du monde sombre jusqu'à la porte, avec le vrai test de
@@ -164,7 +168,11 @@ collision du jeu, sur les six cartes.
 - **Les loups** : trois boîtes noires à yeux rouges. Le sprite existe dans
   `fermeArt.js`.
 - **Le décor** : arbres morts, colonnes, runes sont des boîtes. La palette, elle,
-  est la bonne (relevée dans `drawEvilFrame`).
+  est la bonne (relevée dans `drawEvilFrame`). Les **torches** font exception
+  depuis le zip 377 : fût + tête carbonisée + corps de flamme peint + cœur
+  additif, avec quatre découpes, quatre jeux d'oscillateurs par flamme et
+  quatre cadences de respiration — deux torches ne vacillent jamais ensemble.
+  Financé en ramenant `DECOR_PROPS` de 14 à 12 et `TREE_BRANCHES` de 3 à 2.
 - **Le son** : rien.
 - **Les bonbons** : ramassés et comptés, mais on n'en fait encore rien.
 - **La progression de la meute** : `CHASE_RECOVER` et `CHASE_LOSS_ON_STUMBLE`

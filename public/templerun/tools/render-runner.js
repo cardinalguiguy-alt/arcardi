@@ -59,7 +59,11 @@ class Obj3 {
   add(o) { o.parent = this; this.children.push(o); }
   remove(o) { const i = this.children.indexOf(o); if (i >= 0) { this.children.splice(i, 1); o.parent = null; } }
   traverse(fn) { fn(this); for (const c of this.children) c.traverse(fn); }
-  lookAt() {} updateProjectionMatrix() {}
+  lookAt() {}
+  // Zip 377 : les flammes appliquent un roulis APRÈS le billboard. Le faux
+  // objet doit donc au moins connaître la méthode, sinon il fait échouer le
+  // script sur une absence qui n'est pas un bug du jeu.
+  rotateZ(a) { this.rotation.z += a; return this; } updateProjectionMatrix() {}
 }
 class Mat {
   constructor(o) { Object.assign(this, o); this.color = this.color instanceof Col ? this.color : new Col(this.color); }
@@ -88,18 +92,34 @@ const THREE = {
   AdditiveBlending: 2, NormalBlending: 1,
 };
 
+/* Faux canvas qui RETIENT ses pixels, contrairement à celui de
+   smoke-render.js. C'est indispensable ici : les textures de flamme du zip 377
+   sont peintes pixel par pixel via getImageData/putImageData, et un faux qui
+   jette l'écriture rendrait la planche de flammes entièrement vide — sans rien
+   signaler. On ne simule que ce dont on a besoin (le chemin ImageData) ; les
+   tracés vectoriels restent des noop, ils ne servent qu'aux autres textures. */
 function fakeCanvas(w, h) {
+  const cv = { width: w || 0, height: h || 0 };
+  let buf = null;
+  const ensure = () => {
+    const n = Math.max(0, cv.width * cv.height * 4);
+    if (!buf || buf.length !== n) buf = new Uint8ClampedArray(n);
+    return buf;
+  };
   const noop = () => {};
   const ctx2d = {
     fillStyle: "", strokeStyle: "", lineWidth: 1, lineCap: "", globalAlpha: 1,
-    fillRect: noop, strokeRect: noop, clearRect: noop, beginPath: noop, closePath: noop,
+    fillRect: noop, strokeRect: noop, beginPath: noop, closePath: noop,
     moveTo: noop, lineTo: noop, arc: noop, ellipse: noop, fill: noop, stroke: noop,
+    clearRect: () => { ensure().fill(0); },
     createRadialGradient: () => ({ addColorStop: noop }),
     createLinearGradient: () => ({ addColorStop: noop }),
-    getImageData: (x, y, gw, gh) => ({ width: gw, height: gh, data: new Uint8ClampedArray(gw * gh * 4) }),
-    putImageData: noop,
+    getImageData: (x, y, gw, gh) => ({ width: gw, height: gh, data: new Uint8ClampedArray(ensure()) }),
+    putImageData: (img) => { ensure().set(img.data); },
   };
-  return { width: w || 0, height: h || 0, getContext: () => ctx2d };
+  cv.getContext = () => ctx2d;
+  cv.pixels = () => ensure();
+  return cv;
 }
 
 const ctx = vm.createContext({
@@ -361,6 +381,72 @@ for (const [label, skin] of [
 ]) {
   const file = path.join(outDir, `runner-${label}.png`);
   const { W, H } = sheet(file, skin, posesFor());
+  outputs.push(`${path.relative(root, file)} (${W}×${H})`);
+}
+
+/* =========================================================================
+   PLANCHE DES FLAMMES (zip 377)
+   -------------------------------------------------------------------------
+   « Une vraie flamme plus travaillée » ne se relit pas dans du code : ça se
+   regarde. On sort donc les quatre découpes de corps, les quatre cœurs, et
+   surtout les COMPOSITES tels qu'ils apparaîtront à l'écran — corps en fondu
+   normal, cœur en additif par-dessus, sur le fond du monde sombre, avec le
+   haut du bâton pour juger de l'accroche.
+
+   Les quatre colonnes doivent être visiblement DIFFÉRENTES entre elles : deux
+   torches côte à côte partageant la même découpe se remarquent immédiatement
+   en jeu, et c'est précisément ce que Guillaume a demandé d'éviter.
+   ====================================================================== */
+{
+  const FW = 32, FH = 48, Z = 4;                 // zoom entier : on reste net
+  const CW = FW * Z + 16, CH = FH * Z + 34;
+  const bodies = World.materials.flameBody.map(m => m.map.image);
+  const cores = World.materials.flameCore.map(m => m.map.image);
+  const N = bodies.length;
+  const W = CW * N, H = CH * 3;
+  const px = new Uint8Array(W * H * 3);
+  for (let i = 0; i < W * H; i++) { px[i * 3] = BG[0]; px[i * 3 + 1] = BG[1]; px[i * 3 + 2] = BG[2]; }
+
+  const blit = (cv, col, row, additive) => {
+    const src = cv.pixels();
+    const ox = col * CW + 8, oy = row * CH + 10;
+    for (let y = 0; y < FH; y++) for (let x = 0; x < FW; x++) {
+      const s = (y * FW + x) * 4;
+      const a = src[s + 3] / 255;
+      if (a <= 0) continue;
+      for (let dy = 0; dy < Z; dy++) for (let dx = 0; dx < Z; dx++) {
+        const d = ((oy + y * Z + dy) * W + (ox + x * Z + dx)) * 3;
+        for (let k = 0; k < 3; k++) {
+          px[d + k] = additive
+            ? Math.min(255, px[d + k] + src[s + k] * a)
+            : px[d + k] * (1 - a) + src[s + k] * a;
+        }
+      }
+    }
+  };
+  // Haut du bâton, pour juger de l'accroche de la flamme sur la mèche.
+  const stick = (col, row) => {
+    const ox = col * CW + 8 + (FW * Z) / 2, oy = row * CH + 10 + FH * Z;
+    for (let y = 0; y < 22; y++) for (let x = -5; x <= 5; x++) {
+      const d = ((oy + y) * W + (ox + x)) * 3;
+      if (d < 0 || d + 2 >= px.length) continue;
+      const c = y < 7 ? [20, 15, 10] : [36, 31, 26];
+      px[d] = c[0]; px[d + 1] = c[1]; px[d + 2] = c[2];
+    }
+  };
+
+  for (let i = 0; i < N; i++) {
+    blit(bodies[i], i, 0, false);                       // corps seuls
+    blit(cores[i], i, 1, true);                         // cœurs seuls
+    blit(bodies[i], i, 2, false);                       // composite...
+    blit(cores[(i + 2) % N], i, 2, true);               // ...avec le décalage réel d'addTorch
+    stick(i, 2);
+  }
+  for (let y = 0; y < H; y++) for (let c = 1; c < N; c++) {
+    const d = (y * W + c * CW) * 3; px[d] = 52; px[d + 1] = 40; px[d + 2] = 70;
+  }
+  const file = path.join(outDir, "torch-flames.png");
+  writePng(file, W, H, px);
   outputs.push(`${path.relative(root, file)} (${W}×${H})`);
 }
 

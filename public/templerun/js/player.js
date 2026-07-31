@@ -62,6 +62,7 @@ class Player {
     this.escapeSide = 0;    // côté pris, pour la caméra et la pose de regard en arrière
     this.escapeStart = 0;
     this.escapeDist = 0;    // distance AU MOMENT DU VIRAGE : c'est elle qui fait le score
+    this.escapeSpeed = 0;   // vitesse au virage : point de départ de la décélération
 
     this.alive = true;
     this.deathCause = null;
@@ -83,6 +84,17 @@ class Player {
   /* Vitesse effective : vitesse de base, réduite pendant un trébuchement puis
      remontée progressivement (pas d'un coup, sinon la reprise est brutale). */
   currentSpeed(now) {
+    /* Sortie offroad : le fermier lâche l'effort et passe au trot. Placé en
+       TÊTE parce que plus rien de ce qui suit n'a de sens une fois sorti — ni
+       la rampe de vitesse (la course est finie) ni le trébuchement (il n'y a
+       plus d'obstacle). C'est aussi ce qui apaise la scène le plus
+       efficacement : la foulée étant cadencée sur la DISTANCE parcourue
+       (world.js), elle se calme d'elle-même, et le fermier ne finit pas sa
+       fuite en sprintant dans le brouillard. */
+    if (this.escaping) {
+      const k = Math.exp(-(now - this.escapeStart) / CFG.ESCAPE_DECEL_TAU_MS);
+      return CFG.ESCAPE_JOG_SPEED + (this.escapeSpeed - CFG.ESCAPE_JOG_SPEED) * k;
+    }
     const base = CFG.SPEED_START + CFG.SPEED_RANGE * Math.min(1, this.totalDist / CFG.SPEED_RAMP_DIST);
     if (now < this.stumbleUntil) return base * CFG.STUMBLE_SPEED_MULT;
     if (now < this.stumbleRecoverUntil) {
@@ -155,14 +167,28 @@ class Player {
     const age = now - this.escapeStart;
     const k = Math.min(1, age / CFG.ESCAPE_TOTAL_MS);
 
+    /* Trois temps, et c'est le deuxième qui compte le plus : le PALIER. Sans
+       lui, la caméra atteignait la meute et repartait dans le même geste, ce
+       qui donnait une séquence agitée où l'on ne voyait rien. Le regard monte,
+       s'arrête, puis revient — et le retour est deux fois plus long que
+       l'aller, parce qu'on met plus de temps à se détacher d'une meute qu'à
+       se retourner dessus.
+
+       Les deux transitions sont des sinusoïdes adoucies (départ ET arrivée à
+       vitesse nulle) au lieu de la cubique sèche de la première version : une
+       courbe qui démarre à pleine vitesse se lit comme une secousse. */
     const u = Math.min(1, age / CFG.ESCAPE_LOOKBACK_MS);
-    // Montée cubique jusqu'au sommet, retour en cosinus sur le reste. Jamais
-    // un aller-retour symétrique : on se retourne d'un coup quand on vient
-    // d'échapper à une meute, on met plus longtemps à s'en détacher.
-    const pk = CFG.ESCAPE_LOOKBACK_PEAK;
-    const look = u < pk
-      ? 1 - Math.pow(1 - u / pk, 3)
-      : (1 + Math.cos(((u - pk) / (1 - pk)) * Math.PI)) / 2;
+    const rise = CFG.ESCAPE_LOOKBACK_RISE, hold = CFG.ESCAPE_LOOKBACK_HOLD;
+    let look;
+    if (u < rise) {
+      const x = u / rise;
+      look = x * x * (3 - 2 * x);                                  // adoucie aux deux bouts
+    } else if (u < hold) {
+      look = 1;                                                     // on s'arrête et on regarde
+    } else {
+      const x = (u - hold) / (1 - hold);
+      look = (1 + Math.cos(x * Math.PI)) / 2;
+    }
 
     const left = CFG.ESCAPE_TOTAL_MS - age;
     const fade = left >= CFG.ESCAPE_FADE_MS ? 0 : 1 - Math.max(0, left) / CFG.ESCAPE_FADE_MS;
@@ -365,6 +391,10 @@ class Player {
     this.escapeSide = node.exit;
     this.escapeStart = now;
     this.escapeDist = this.totalDist;        // le score s'arrête ICI, pas au fondu
+    // Vitesse D'AVANT le virage : la décélération part de là. La lire après
+    // coup donnerait la vitesse de trot dès la première image, et le fermier
+    // changerait d'allure d'un coup au moment précis du virage.
+    this.escapeSpeed = this.speed;
     this.t = Math.max(0, leftover);
     this.prevT = 0;
     this.overshoot = -1;

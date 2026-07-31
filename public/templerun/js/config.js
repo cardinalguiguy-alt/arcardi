@@ -140,29 +140,55 @@ const CFG = {
      marge, et verify-offroad.js vérifie que le joueur n'atteint JAMAIS le
      bout de la branche (sortir par le vide au dernier dixième de seconde
      serait la pire fin possible). */
-  ESCAPE_TOTAL_MS: 3000,      // durée totale de la séquence, avant le passage à la ferme
+  /* RALLONGÉE ET APAISÉE (retour de Guillaume). Ce qui rendait la première
+     version agitée n'était pas sa durée mais le fait que RIEN ne s'y arrêtait
+     jamais : la caméra atteignait son point de vue le plus intéressant et
+     repartait aussitôt, et le fermier traversait toute la scène à 34 u/s.
+     Trois changements, dans l'ordre de leur effet :
 
-  /* Le CREUX du regard en arrière est calé sur la géométrie, pas au jugé.
-     Au moment du virage, la meute est 17 à 22 unités derrière (CHASE_START/
-     CHASE_MAX) ; elle atteint donc l'embranchement environ 0,6 s plus tard, et
-     le passe. Pour qu'on la VOIE le traverser, il faut que la caméra regarde
-     en arrière un peu après ce passage, et surtout assez loin de
-     l'embranchement pour qu'il ne remplisse pas tout le cadre : le sommet est
-     placé à ~0,85 s, quand le fermier a mis une trentaine d'unités entre lui
-     et le coin. Trop tôt, on ne voit qu'un mur de pierre ; trop tard, le
-     brouillard a mangé la meute (à 0,019 de densité, 21 unités laissent encore
-     85 % de visibilité, 60 n'en laissent plus que 20 %). */
-  ESCAPE_LOOKBACK_MS: 1800,   // fenêtre complète du regard en arrière
-  ESCAPE_LOOKBACK_PEAK: 0.47, // position du sommet dans la fenêtre (=> ~845 ms)
+       1. la caméra MARQUE UN TEMPS sur la meute (ESCAPE_LOOKBACK_HOLD) au
+          lieu de la balayer ;
+       2. le fermier RALENTIT jusqu'à un petit trot (ESCAPE_JOG_SPEED) — il
+          vient d'échapper à une meute, il souffle. La foulée étant cadencée
+          sur la distance, elle se calme d'elle-même, sans une ligne de plus ;
+       3. les courbes d'entrée et de sortie du regard sont en sinusoïde
+          adoucie plutôt qu'en cubique sèche. */
+  ESCAPE_TOTAL_MS: 4400,      // durée totale de la séquence, avant le passage à la ferme
+
+  /* Le regard en arrière est calé sur la GÉOMÉTRIE, pas au jugé. Au moment du
+     virage, la meute est 17 à 22 unités derrière (CHASE_START/CHASE_MAX) et
+     court toujours à la vitesse du fermier avant sa sortie : elle franchit
+     donc l'embranchement environ 0,6 s plus tard. C'est là qu'il faut la
+     regarder — et il faut continuer de la regarder pendant qu'elle s'éloigne,
+     d'où le palier.
+
+     Les bornes sont contraintes des deux côtés. Trop tôt : le fermier est
+     encore collé au coin, qui remplit le cadre. Trop tard : la meute est
+     partie trop loin sur le côté (elle sort du champ vers 45° du centre) et le
+     brouillard l'a mangée — à 0,019 de densité, 21 unités laissent encore 85 %
+     de visibilité, 60 n'en laissent plus que 20 %. La fenêtre utile va donc de
+     ~0,65 s à ~1,25 s, et c'est exactement le palier. */
+  ESCAPE_LOOKBACK_MS: 2600,    // fenêtre complète du regard en arrière
+  ESCAPE_LOOKBACK_RISE: 0.25,  // fraction consacrée à se retourner (=> ~650 ms)
+  ESCAPE_LOOKBACK_HOLD: 0.48,  // fin du palier (=> ~1250 ms) ; le reste est le retour
   ESCAPE_LOOKBACK_TORSO: 1.20, // rotation du buste (rad)
   ESCAPE_LOOKBACK_HEAD: 0.55,  // rotation de la tête EN PLUS du buste
-  ESCAPE_BREATH_HZ: 2.4,      // cadence du souffle (respiration visible du bassin)
+  ESCAPE_BREATH_HZ: 1.5,       // cadence du souffle — ralentie avec le reste
   ESCAPE_BREATH_AMP: 0.055,
+
+  /* Décélération. Le fermier ne s'arrête pas (il fuit encore) mais passe de sa
+     vitesse de course à un trot. Décroissance exponentielle : brutale au début,
+     elle s'aplatit — c'est la forme d'un coureur qui lâche l'effort, et non
+     d'un curseur qu'on descend. */
+  ESCAPE_JOG_SPEED: 13,        // vitesse d'équilibre du trot (u/s)
+  ESCAPE_DECEL_TAU_MS: 1400,   // constante de temps de la décélération
+
   /* Le fondu commence EXACTEMENT quand la caméra a fini de revenir vers
-     l'avant (3000 - 1200 = 1800 = ESCAPE_LOOKBACK_MS). Le fermier court donc
+     l'avant (4400 - 1800 = 2600 = ESCAPE_LOOKBACK_MS). Le fermier court donc
      seul, face à la route, pendant toute la durée du fondu — ce que Guillaume
-     a décrit. Si l'une des deux valeurs bouge, l'autre doit suivre. */
-  ESCAPE_FADE_MS: 1200,
+     a décrit. Si l'une des deux valeurs bouge, l'autre doit suivre, et
+     verify-offroad.js vérifie que la séquence tient dans la branche. */
+  ESCAPE_FADE_MS: 1800,
   ESCAPE_MIST_MULT: 2.3,      // épaississement de la brume au bout de la branche
 
   /* ------------------------------------------------------------- OBSTACLES */
@@ -323,8 +349,21 @@ const CFG = {
   MUSHROOM_CLUSTERS: 5,     // bouquets de champignons luminescents par tronçon
   VINE_CHANCE: 0.38,         // part des blocs portant du lierre retombant
   TORCH_SPACING: 22,        // torches nettement plus rares qu'au 372 (13)
-  DECOR_PROPS: 14,          // arbres morts, colonnes brisées et rochers par tronçon
-  TREE_BRANCHES: 3,         // branches par arbre mort (le poste le plus coûteux du décor)
+
+  /* DEUX POSTES RÉDUITS AU ZIP 377 pour financer les flammes retravaillées.
+     La règle du fichier est explicite : « si tu ajoutes du décor, retire
+     ailleurs ». Une torche est passée de 2 à 4 objets (fût, tête carbonisée,
+     corps de flamme, cœur), soit +16 par tronçon, et le total à l'écran
+     dépassait le plafond de 1000.
+
+     Le choix de ce qu'on retire n'est pas arbitraire : les arbres morts et
+     les colonnes vivent entre 3,5 et 25 unités SUR LE CÔTÉ, donc largement
+     mangés par le brouillard, tandis que les torches sont au premier plan,
+     sont les seuls points chauds du cadre, et sont ce qui rend la ligne de la
+     piste lisible de loin. On échange des branches qu'on devine contre des
+     flammes qu'on regarde. */
+  DECOR_PROPS: 12,          // arbres morts, colonnes brisées et rochers par tronçon (14 au 374)
+  TREE_BRANCHES: 2,         // branches par arbre mort — le poste le plus coûteux du décor (3 au 374)
 
   /* Tenue du fermier — OUTFITS[0] de fermeConstants.js.
      Ce ne sont plus que des VALEURS DE REPLI depuis le zip 377 : en jeu, la

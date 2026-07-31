@@ -50,6 +50,10 @@ class Obj3 {
   remove(o) { const i = this.children.indexOf(o); if (i >= 0) { this.children.splice(i, 1); o.parent = null; } }
   traverse(fn) { fn(this); for (const c of this.children) c.traverse(fn); }
   lookAt() {}
+  // Zip 377 : les flammes appliquent un roulis APRÈS le billboard. Le faux
+  // objet doit donc au moins connaître la méthode, sinon il fait échouer le
+  // script sur une absence qui n'est pas un bug du jeu.
+  rotateZ(a) { this.rotation.z += a; return this; }
   updateProjectionMatrix() {}
 }
 function countTree(o) { let n = 1; for (const c of o.children) n += countTree(c); return n; }
@@ -281,7 +285,7 @@ try {
 
     let t2 = 0, peakTwist = 0, peakYaw = 0;
     const mists = [];
-    for (let i = 0; i < 200; i++) {
+    for (let i = 0; i < 300; i++) {   // > ESCAPE_TOTAL_MS à 60 im/s : la séquence doit aller à son terme
       p2.update(1 / 60, t2);
       const pose = p2.escapePose(t2);
       cam2.update(1 / 60, p2);
@@ -295,7 +299,7 @@ try {
       World.render();
       t2 += 1000 / 60;
     }
-    console.log(`Séquence de sortie rendue sur 200 images : torsion max du buste ${peakTwist.toFixed(2)} rad (cible ${CFG.ESCAPE_LOOKBACK_TORSO}), regard max ${peakYaw.toFixed(2)}, brume ×${(mists[mists.length - 1] / CFG.FOG_NEAR_DENSITY).toFixed(2)}.`);
+    console.log(`Séquence de sortie rendue sur 300 images : torsion max du buste ${peakTwist.toFixed(2)} rad (cible ${CFG.ESCAPE_LOOKBACK_TORSO}), regard max ${peakYaw.toFixed(2)}, brume ×${(mists[mists.length - 1] / CFG.FOG_NEAR_DENSITY).toFixed(2)}.`);
     // On vérifie que le regard en arrière a bien eu lieu À FOND : une courbe
     // qui culminerait à 0,3 passerait inaperçue en jeu (« il ne se retourne
     // pas vraiment ») mais ne casserait rien, donc rien ne la signalerait.
