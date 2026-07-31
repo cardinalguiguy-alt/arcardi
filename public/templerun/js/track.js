@@ -484,7 +484,34 @@ const Track = (function () {
         if (arrival - prev.t < needed) return null;
       }
 
-      return { t, type, lanes, free };
+      /* ZIP 381 — HABILLAGE « PLANCHE ». Un simple drapeau posé sur une
+         barrière basse : world.js la rend alors en bois abîmé sur deux cales
+         de pierre au lieu d'un bloc taillé. Rien d'autre ne le lit — ni la
+         collision, ni l'équité, ni l'espacement.
+
+         Il est tiré ICI, à la génération, et non à la construction du décor :
+         un tronçon peut être reconstruit (retour en arrière de la caméra,
+         changement de branche offroad), et un tirage fait dans buildNode
+         changerait alors la matière de l'obstacle sous les yeux du joueur.
+         Tout ce qui doit rester stable appartient au tronçon.
+
+         GÉNÉRATEUR DÉDIÉ, et non `this.rng()`. C'est le point qui a demandé
+         le plus d'attention de tout le zip. Un seul tirage de plus dans le
+         flux commun décale TOUT ce qui vient après lui — types d'obstacles,
+         voies, virages, longueurs de tronçon : la piste entière change de
+         forme pour un choix de matériau. Mesuré : le tronçon d'ouverture
+         passait de 544 à 562 unités et la densité de décor de 155 à 169
+         objets/100 u, sans qu'une seule ligne de décor ait été touchée.
+
+         Ce n'était pas faux (une piste vaut l'autre), c'était ILLISIBLE : les
+         chiffres de smoke-render.js bougeaient sans rapport avec la cause, et
+         un contrôle qu'on ne sait plus interpréter est un contrôle perdu.
+         Semé sur (index du tronçon, position), le tirage est aussi stable et
+         reproductible, et ne coûte rien au reste. */
+      const plank = type === OBST.LOW
+        && makeRng((node.index * 7717 + Math.round(t * 16) + 331) >>> 0)() < CFG.PLANK_CHANCE;
+
+      return { t, type, lanes, free, plank };
     }
 
     /* Pièces : chapelets posés dans une voie restée libre. Simple, lisible,

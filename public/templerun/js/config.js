@@ -242,6 +242,24 @@ const CFG = {
   LOW_HEIGHT: 0.95,         // barrière basse : à sauter
   HIGH_CLEARANCE: 1.15,     // poutre haute : à passer en glissade
 
+  /* ZIP 381 — LA PLANCHE TOMBÉE EN TRAVERS.
+     Part des barrières basses rendues en BOIS plutôt qu'en pierre : une
+     grosse planche abîmée posée sur deux cales, en travers de la voie.
+
+     Ce n'est PAS un nouveau type d'obstacle, et c'est délibéré. La planche
+     n'est qu'un habillage de OBST.LOW : elle hérite donc sans une ligne de
+     plus de tout l'appareil d'équité de track.js (espacement minimal, voies
+     libres garanties, distance de sécurité au départ, rampe de densité), et
+     verify-fairness.js continue de la couvrir sans savoir qu'elle existe.
+     Un type dédié aurait exigé d'étendre minSpacingAfter, worstLaneTravel et
+     les trois tables associées pour un objet qui se saute exactement comme
+     une barrière basse.
+
+     0,22 : moins d'une barrière basse sur quatre, et les barrières basses
+     sont elles-mêmes 34 % des obstacles. Soit environ une planche tous les
+     treize obstacles — assez rare pour rester un événement. */
+  PLANK_CHANCE: 0.22,
+
   /* -------------------------------------------- CREVASSE (sol effondré) ---
      Le trou au milieu de la chaussée de l'illustration de référence. À la
      différence du trou pleine largeur, il n'occupe qu'une ou deux voies : la
@@ -348,6 +366,7 @@ const CFG = {
   COL_STONE:      0x565046,  // dalle de pierre du couloir
   COL_STONE_DARK: 0x3c372f,
   COL_STONE_EDGE: 0x2b2721,
+  COL_PLANK:      0x4a3a28,  // madrier tombé en travers (zip 381)
   COL_BARK:       0x2e2822,  // arbre mort
   COL_BARK_DARK:  0x1b1712,
   COL_PURPLE:     0x8c5ADC,  // lueur du passage sombre / du lac
@@ -355,7 +374,13 @@ const CFG = {
   COL_LAKE:       0x2a1052,  // creux des ondes
   COL_LAKE_GLOW:  0x7b3fd8,  // crête des ondes : c'est elle qui « luit »
   COL_TORCH:      0xff9a3c,
-  COL_COIN:       0xf2c43d,
+  /* ZIP 381 — LES PIÈCES DEVIENNENT DES BULLES.
+     `COL_COIN` est conservé sous son nom : il est lu par l'interface (compteur
+     de pièces) et par les outils de rendu. Seule sa VALEUR change, du doré au
+     cyan, pour que le compteur ne reste pas orange au-dessus d'un ramassage
+     bleu. Renommer aurait touché sept fichiers pour zéro gain visuel. */
+  COL_COIN:       0x9fecfb,  // corps de la bulle, plein et clair
+  COL_COIN_GLOW:  0x4fd8f5,  // halo additif autour d'elle, plus saturé
   COL_WOLF:       0x0f0c0b,
   COL_WOLF_EYE:   0xff3020,
   COL_OBSTACLE:   0x453f33,

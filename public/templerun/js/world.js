@@ -123,7 +123,12 @@ const World = (function () {
 
   function buildAssets() {
     geo.box = new THREE.BoxGeometry(1, 1, 1);
-    geo.coin = new THREE.OctahedronGeometry(0.42, 0);
+    /* ZIP 381 — la pièce octaédrique devient une SPHÈRE. 10×8 segments : c'est
+       le minimum où la silhouette ne montre plus d'angle à la taille où la
+       bulle est ramassée. En dessous (8×6) le contour est un polygone visible,
+       ce qui trahit le « bien nettes » demandé — net ne veut pas dire facetté.
+       Au-dessus, on paie des triangles pour un contour déjà rond. */
+    geo.coin = new THREE.SphereGeometry(0.34, 10, 8);
     geo.plane = new THREE.PlaneGeometry(1, 1);
     geo.cap = new THREE.SphereGeometry(0.5, 6, 4);   // chapeau de champignon, très peu de segments
 
@@ -156,7 +161,35 @@ const World = (function () {
        échouer le contrôle « aucune torche ne flotte » de smoke-render.js sur
        trois faux positifs, et un contrôle bruyant finit ignoré, donc mort. */
     mat.beamPost = paintWood(0x2a231c);
-    mat.coin      = new THREE.MeshLambertMaterial({ color: CFG.COL_COIN, emissive: CFG.COL_COIN, emissiveIntensity: 0.45 });
+
+    /* ZIP 381 — PLANCHE TOMBÉE EN TRAVERS : « abîmée et robuste » (Guillaume).
+       Les deux mots tirent en sens contraire, et c'est le sujet de la texture.
+
+       ROBUSTE vient de la SECTION, pas du dessin : une madrier épais de 34 cm
+       posé sur deux cales ne peut pas se lire comme une latte. Le dessin, lui,
+       ne fait que l'ABÎMER — sinon on obtient une poutre neuve, qui dans un
+       temple noyé depuis des siècles est le plus invraisemblable des deux.
+       D'où deux couches distinctes : un veinage marqué (la fibre tient), puis
+       usure, éclats et mousse par-dessus (le temps l'a mangée).
+
+       `repeat` 2×1 : la planche fait 2,5 unités de long pour 0,34 de haut. Une
+       texture unique s'y étalerait en un dégradé, exactement le défaut relevé
+       au 379b sur la rambarde de pierre. */
+    mat.plank = new THREE.MeshLambertMaterial({ map: pixelTexture(paintPlank(), 2, 1) });
+    mat.plankEnd = paintWood(0x3a2f22);   // bois de bout, plus clair : la cassure se voit
+
+    /* ------------------------------------------------- BULLES (zip 381) ---
+       Décision Guillaume : les pièces orange deviennent des bulles cyan,
+       « bien nettes ».
+
+       MeshBasicMaterial, et non Lambert émissif comme la pièce dorée. C'est
+       tout l'enjeu du mot « nettes » : un Lambert reste éclairé par la scène,
+       donc sa face à l'ombre s'assombrit et son bord se dissout dans un
+       dégradé — sur une piste nocturne violette, la bulle devenait une tache
+       laiteuse. Un Basic ignore la lumière : la sphère est un disque d'une
+       seule couleur pleine, au contour franc, à 3,4 px par pixel comme à
+       cent mètres. C'est le même arbitrage que la flèche de virage plus bas. */
+    mat.coin      = new THREE.MeshBasicMaterial({ color: CFG.COL_COIN });
 
     mat.pit       = new THREE.MeshBasicMaterial({ color: 0x05060a });   // paroi intérieure d'une crevasse
     mat.eye       = new THREE.MeshBasicMaterial({ color: CFG.COL_WOLF_EYE });
@@ -210,6 +243,21 @@ const World = (function () {
       blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
     });
     mat.glowTex = glowTex;
+
+    /* Halo de la bulle. Il réutilise la texture de lueur commune, mais avec sa
+       propre teinte et une opacité BASSE (0,34 contre 0,55 pour mat.glow).
+
+       Un halo à l'opacité des champignons noyait le corps de la bulle : en
+       additif, la couronne finissait plus lumineuse que le disque qu'elle
+       entoure, et on retombait sur la tache floue que le Basic venait
+       justement d'éliminer. Le halo n'est là que pour dire « ça brille » à
+       vingt mètres ; c'est le disque net qui dit « c'est ramassable ». */
+    mat.coinGlow = new THREE.MeshBasicMaterial({
+      map: glowTex, color: CFG.COL_COIN_GLOW,
+      transparent: true, opacity: 0.34, depthWrite: false,
+      blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+    });
+
     mat.rune = new THREE.MeshBasicMaterial({
       map: pixelTexture(paintRunes()), color: CFG.COL_RUNE,
       transparent: true, opacity: 0.75, depthWrite: false,
@@ -759,6 +807,73 @@ const World = (function () {
       ctx.beginPath(); ctx.arc(x, y, 1.6 + Math.random() * 1.6, 0, Math.PI * 2); ctx.fill();
     }
     return new THREE.MeshLambertMaterial({ map: pixelTexture(cv) });
+  }
+
+  /* --------------------------------- PLANCHE TOMBÉE EN TRAVERS (zip 381) ---
+     Le madrier qui remplace une barrière basse sur une fois quatre. Peint et
+     non pas dérivé de paintWood() : paintWood strie sur toute la hauteur du
+     carré, ce qui donne un poteau vu de face — parfait pour un mât de torche,
+     faux pour une planche, dont la fibre court en LONGUEUR. Un mât de torche
+     retourné de 90° aurait suffi à trahir la réutilisation.
+
+     Trois couches, dans cet ordre, et l'ordre compte :
+       1. la fibre : longues stries horizontales, contraste marqué — c'est la
+          seule chose qui dit « robuste » ;
+       2. l'usure : nœuds, fentes ouvertes, éclats sur les arêtes ;
+       3. la mousse, uniquement sur l'arête basse, comme partout ailleurs dans
+          ce décor (paintKerbMaterial, paintRailCap) — c'est cette cohérence
+          qui rattache la planche à l'ouvrage au lieu d'en faire un accessoire.
+     Peindre l'usure avant la fibre l'aurait recouverte : la planche aurait
+     paru vernie. */
+  function paintPlank() {
+    const W = 48, H = 16;
+    const cv = makeCanvas(W, H);
+    const ctx = cv.getContext("2d");
+
+    ctx.fillStyle = cssHex(CFG.COL_PLANK);
+    ctx.fillRect(0, 0, W, H);
+
+    // 1. Fibre. Des stries de LONGUEUR, jamais interrompues : une strie coupée
+    //    lit comme une rayure, une strie continue lit comme du bois.
+    for (let i = 0; i < 22; i++) {
+      const y = Math.random() * H;
+      ctx.fillStyle = Math.random() < 0.5 ? "rgba(0,0,0,0.26)" : "rgba(255,255,255,0.07)";
+      ctx.fillRect(0, y, W, 1);
+    }
+
+    // 2. Usure. Nœuds sombres, fentes ouvertes le long du fil, arêtes ébréchées.
+    for (let i = 0; i < 4; i++) {
+      const x = 4 + Math.random() * (W - 8), y = 3 + Math.random() * (H - 6);
+      ctx.fillStyle = "rgba(0,0,0,0.46)";
+      ctx.beginPath(); ctx.arc(x, y, 1.4 + Math.random() * 1.5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "rgba(0,0,0,0.22)";
+      ctx.beginPath(); ctx.arc(x, y, 2.6 + Math.random() * 1.4, 0, Math.PI * 2); ctx.fill();
+    }
+    // Fentes : elles suivent le fil, donc horizontales. Une fente verticale
+    // ferait une planche fendue en deux, c'est-à-dire cassée, pas abîmée.
+    for (let i = 0; i < 5; i++) {
+      const y = 1 + Math.random() * (H - 2), x0 = Math.random() * W * 0.6;
+      ctx.fillStyle = "rgba(0,0,0,0.55)";
+      ctx.fillRect(x0, y, 4 + Math.random() * (W * 0.35), 1);
+    }
+    // Éclats sur les deux arêtes : de petites morsures dans le bord.
+    for (let i = 0; i < 14; i++) {
+      const x = Math.random() * W, w = 1 + Math.random() * 3;
+      ctx.fillStyle = "rgba(0,0,0,0.38)";
+      if (Math.random() < 0.5) ctx.fillRect(x, 0, w, 1 + Math.random() * 2);
+      else ctx.fillRect(x, H - 1 - Math.random() * 2, w, 1 + Math.random() * 2);
+    }
+
+    // 3. Mousse, arête basse seulement — le bord qui touche la pierre.
+    const band = H * 0.3;
+    for (let m = 0; m < 16; m++) {
+      const dy = Math.random() * band;
+      ctx.fillStyle = Math.random() < 0.5 ? cssHex(CFG.COL_MOSS) : cssHex(CFG.COL_MOSS_DARK);
+      ctx.globalAlpha = 0.7 - (dy / band) * 0.55;
+      ctx.fillRect(Math.random() * W, H - 1 - dy, 1 + Math.random() * 2, 1);
+    }
+    ctx.globalAlpha = 1;
+    return cv;
   }
 
   /* ------------------------------- PAVAGE DE LA CHAUSSÉE D'ENTRÉE (379) ---
@@ -1866,14 +1981,26 @@ const World = (function () {
         b.rotation.y = (rng() - 0.5) * 0.12 * s;   // l'ouvrage se désaligne en se ruinant
         place(b, t + jitter, off, h / 2 - 0.25);
 
-        /* Pierre de COURONNEMENT : la tablette posée sur le muret, c'est elle
-           qui fait « ouvrage taillé » plutôt que « tas de blocs ». Elle
-           s'ébrèche d'abord (elle raccourcit et se décale), puis disparaît. */
-        if (s < 0.72 && rng() < 0.8) {
-          const cap = box(1.9 - 0.3 * s, 0.22, len * (1 - s * 0.5), mat.railCap, 0, 0, 0);
-          cap.rotation.y = b.rotation.y;
-          place(cap, t + jitter + (rng() - 0.5) * s * 1.6, off, h - 0.25 + 0.11);
-        }
+        /* ZIP 381 — LA PIERRE DE COURONNEMENT EST RETIRÉE.
+
+           C'était une tablette de 1,9 de large et jusqu'à 9 de long posée sur
+           chaque bloc de bordure, des deux côtés, sur toute la piste. Elle
+           était censée faire « ouvrage taillé » ; à l'écran, Guillaume n'y a
+           vu que « des planches latérales qui n'ont aucune utilité apparente,
+           pas de collision et moche ».
+
+           Il a raison sur le fond, et la raison est géométrique : les dalles
+           sont à ±4,95, le joueur ne dépasse jamais 3,9. Elles étaient donc
+           les seuls objets longs et plats du cadre à hauteur de hanche, assez
+           gros pour se lire comme franchissables, et strictement inatteignables.
+           Un décor qui promet une interaction impossible coûte plus cher qu'il
+           ne rapporte, quelle que soit sa texture.
+
+           On ne la déplace pas vers l'intérieur — elle deviendrait un obstacle
+           inconnu du générateur, donc plaçable juste après un autre, donc
+           injuste. Le bois franchissable réapparaît là où il est légitime :
+           dans la roue des obstacles, sous forme de planche tombée en travers
+           (section 10). `mat.railCap` reste utilisé par le pilier des torches. */
 
         if (rng() < CFG.VINE_CHANCE) {
           const vl = 0.5 + rng() * 1.1;
@@ -2043,7 +2170,65 @@ const World = (function () {
       for (let i = 0; i < CFG.LANE_COUNT; i++) {
         if (!o.lanes[i]) continue;
         const x = CFG.LANE_X[i];
-        if (o.type === OBST.LOW) {
+        if (o.type === OBST.LOW && o.plank) {
+          /* ZIP 381 — PLANCHE TOMBÉE EN TRAVERS, sur deux cales de pierre.
+             Elle remplace le bloc taillé sur une barrière basse sur quatre
+             (CFG.PLANK_CHANCE) et c'est le seul bois franchissable du jeu.
+
+             LE SOMMET DOIT RESTER À CFG.LOW_HEIGHT, et c'est la contrainte
+             qui commande tout le reste. La collision, elle, n'a pas changé
+             d'un pouce : player.js teste `y >= JUMP_CLEAR_HEIGHT`, sans jamais
+             regarder ce qu'il y a à l'écran. Si la planche était plus basse
+             que le bloc qu'elle remplace, elle exigerait exactement le même
+             saut en paraissant enjambable — un obstacle qui ment sur sa taille
+             est le pire défaut possible dans un jeu de réflexe.
+
+             D'où le partage : cales de 0,61 + madrier de 0,34 = 0,95, la
+             valeur exacte de CFG.LOW_HEIGHT, dérivée et non écrite en dur.
+
+             « ROBUSTE » tient au madrier : 34 cm d'épaisseur sur 75 de large,
+             une section de charpente. « ABÎMÉE » tient au reste : il déborde
+             de sa voie, il n'est pas d'aplomb, et il lui manque un bout. */
+          const w = CFG.LANE_WIDTH - 0.1;
+          const chockH = CFG.LOW_HEIGHT * 0.64;      // 0,61
+          const plankH = CFG.LOW_HEIGHT - chockH;    // 0,34
+
+          // Cales : même pierre que les bordures, comme le bloc qu'on remplace.
+          // Elles sont ce qui rattache la planche à l'ouvrage — un madrier
+          // posé à même la dalle aurait l'air tombé du ciel.
+          for (const sx of [-1, 1]) {
+            place(box(0.34, chockH, 0.5, mat.kerb, 0, 0, 0),
+                  o.t, x + sx * (w / 2 - 0.24), chockH / 2);
+          }
+
+          /* Le madrier DÉBORDE de sa voie (w + 0,5) et penche légèrement.
+             Un bois parfaitement bordé à la voie se relit comme une barrière
+             de jeu vidéo — c'est précisément le reproche que la pierre évitait
+             déjà en empruntant le matériau des bordures. Le débord ne change
+             rien à la collision, qui est décidée voie par voie dans
+             player.js : il ne mord pas sur les voies libres du point de vue
+             des règles, seulement du point de vue de l'œil. */
+          const plank = box(w + 0.5, plankH, 0.75, mat.plank, 0, 0, 0);
+          plank.rotation.z = 0.045;                  // pas d'aplomb : elle a bougé
+          place(plank, o.t, x, chockH + plankH / 2);
+
+          /* L'ÉCLAT MANQUANT. Un morceau de bois de bout arraché à une
+             extrémité, plus clair que la face : c'est lui, et lui seul, qui
+             fait lire « abîmée » de loin. Les fentes et les nœuds de la
+             texture ne portent qu'à deux mètres ; une silhouette entamée
+             porte à toute la longueur de vue.
+
+             Posé À CÔTÉ du madrier et non dedans : on ne peut pas creuser une
+             BoxGeometry partagée, et en créer une par planche coûterait une
+             géométrie par obstacle. Un petit volume décalé donne la même
+             lecture pour un objet dont on connaît déjà le coût. */
+          const chip = box(0.30, plankH * 0.62, 0.62, mat.plankEnd, 0, 0, 0);
+          chip.rotation.z = 0.045;
+          chip.rotation.y = 0.22;
+          place(chip, o.t + 0.08, x + (w + 0.5) / 2 - 0.02,
+                chockH + plankH * 0.28);
+
+        } else if (o.type === OBST.LOW) {
           // Bloc de pierre tombé en travers, MÊME matériau que les bordures :
           // c'est ce qui le relie au décor au lieu d'en faire une caisse de
           // jeu vidéo posée sur un temple.
@@ -2058,13 +2243,36 @@ const World = (function () {
       }
     }
 
-    /* --- 11. Pièces --- */
+    /* --- 11. Pièces — devenues BULLES au zip 381. --- */
     for (const c of node.coins) {
       const m = new THREE.Mesh(geo.coin, mat.coin);
       m.userData.coin = c;
+      m.userData.y0 = c.y;                    // altitude de repos, pour le flottement
+      /* Phase propre à chaque bulle, dérivée de sa POSITION et non tirée au
+         hasard : un chapelet dont les bulles montent et descendent ensemble se
+         lit comme un objet unique qui pulse, et le décalage doit survivre à la
+         reconstruction du tronçon. Le pas (0,9 rad par unité) est choisi pour
+         qu'un chapelet dessine une onde lisible sur sa longueur plutôt qu'un
+         désordre. */
+      m.userData.phase = c.t * 0.9 + c.lane * 2.1;
       place(m, c.t, CFG.LANE_X[c.lane], c.y);
       if (!g.userData.coins) g.userData.coins = [];
       g.userData.coins.push(m);
+
+      /* HALO. Un plan billboardé posé au même endroit, poussé dans `glows` :
+         il tourne donc vers la caméra avec tous les autres halos du jeu, sans
+         une ligne de code de plus.
+
+         Il n'est PAS enfant de la bulle. Un enfant hériterait de sa rotation
+         locale, et `glows` écrit des rotations en repère MONDE — le halo
+         serait alors billboardé de travers dès que le tronçon n'est pas
+         orienté au nord. Il est frère, et suit la visibilité de la bulle par
+         la référence croisée ci-dessous. */
+      const halo = new THREE.Mesh(geo.plane, mat.coinGlow);
+      halo.scale.set(1.5, 1.5, 1);
+      place(halo, c.t, CFG.LANE_X[c.lane], c.y);
+      glows.push(halo);
+      m.userData.halo = halo;
     }
 
     /* --- 12. Balise de virage : deux piliers gravés au coin + flèche au sol.
@@ -2508,12 +2716,35 @@ const World = (function () {
                                     camera.position.z - tr.position.z), 0);
     }
 
-    /* --- Pièces --- */
+    /* --- Bulles (zip 381). La rotation continue de la pièce octaédrique est
+       remplacée par un FLOTTEMENT vertical.
+
+       Faire tourner une sphère ne se voit pas : la pièce dorée tirait toute sa
+       présence de ses facettes qui accrochaient la lumière tour à tour, et une
+       sphère unie sur un Basic n'a rien à accrocher. Sans mouvement, elle
+       serait un point mort dans un décor où tout respire (flammes, halos,
+       lac) ; le flottement est ce qui la rattrape.
+
+       ±11 cm à ~0,3 Hz, autour de son altitude de repos `y0` : assez pour que
+       l'œil l'attrape en périphérie, assez peu pour que le test de ramassage,
+       qui tolère 1,5 unité d'écart vertical (player.js), n'en sache rien. Le
+       gameplay ne bouge pas d'un pouce. */
     for (const [, g] of nodeGroups) {
       if (!g.userData.coins) continue;
       for (const c of g.userData.coins) {
-        c.rotation.y += 0.06;
-        c.visible = !c.userData.coin.taken;
+        const bob = Math.sin(now * 0.0019 + c.userData.phase) * 0.11;
+        c.position.y = c.userData.y0 + bob;
+        const vis = !c.userData.coin.taken;
+        c.visible = vis;
+        /* Le halo suit la bulle, en hauteur ET en visibilité. Oublier la
+           seconde laisserait une lueur cyan orpheline flotter à l'endroit
+           d'une bulle déjà ramassée — le défaut est invisible en capture fixe
+           et saute aux yeux en jeu. */
+        const halo = c.userData.halo;
+        if (halo) {
+          halo.position.y = c.userData.y0 + bob;
+          halo.visible = vis;
+        }
       }
     }
 

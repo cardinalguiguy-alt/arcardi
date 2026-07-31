@@ -325,6 +325,13 @@ sheet("murs", [
   { cv: M.obstacle.map.image, label: "poutre" },
   { cv: M.bark.map.image, label: "tronc" },
   { cv: M.torchWood.map.image, label: "mât de torche" },
+  /* Zip 381. La planche est mise SUR LA MÊME PLANCHE que le mât de torche, et
+     c'est le seul intérêt de l'ajouter ici : les deux sont du bois peint, et
+     tout le pari de paintPlank() est que sa fibre coure en longueur là où
+     celle du mât court en hauteur. Côte à côte, on le voit en une seconde ;
+     dans deux fichiers séparés, jamais. */
+  { cv: M.plank.map.image, label: "planche (fibre en longueur)" },
+  { cv: M.plankEnd.map.image, label: "bois de bout" },
 ], 5, 8);
 sheet("arbres", M.trees.map((m, i) => ({ cv: m.map.image, label: "arbre " + i })), 3, 8);
 
