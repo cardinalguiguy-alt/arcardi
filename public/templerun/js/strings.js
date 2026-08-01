@@ -44,12 +44,6 @@ const RUN_STR = {
     escapeTitle: "Vous quittez la piste",
     escapeSub: "La meute continue tout droit.",
 
-    // Zip 385 — seconde chance.
-    reviveTitle: "Rattrapé — continuer ?",
-    reviveSub: "Une seule fois par course. En cas de nouvel échec, la blessure au retour sera triplée.",
-    reviveYes: "Continuer",
-    reviveNo: "Non merci",
-
     over: "Rattrapé",
     escaped: "Échappé",
     reasonWolves: "La meute vous a rattrapé.",
@@ -65,7 +59,6 @@ const RUN_STR = {
     backFarm: "Retour à la ferme",
     backMenu: "Retour au menu",
     overHintFarm: "Vous rentrez à la ferme blessé pour 10 minutes. Les bonbons ramassés sont conservés.",
-    overHintFarmPenalty: "Vous avez continué après avoir été rattrapé : vous rentrez à la ferme blessé pour 30 minutes. Les bonbons ramassés sont conservés.",
     overHintSolo: "Prototype autonome : aucune conséquence hors du défi.",
 
     loadError: "Three.js n'a pas pu être chargé. Le défi a besoin d'un accès internet au premier lancement. Vérifiez la connexion, puis relancez.",
@@ -102,12 +95,6 @@ const RUN_STR = {
     escapeTitle: "You're off the track",
     escapeSub: "The pack keeps going straight.",
 
-    // Zip 385 — second chance.
-    reviveTitle: "Caught — keep going?",
-    reviveSub: "Once per run only. If you're caught again, the injury on your return is tripled.",
-    reviveYes: "Keep going",
-    reviveNo: "No thanks",
-
     over: "Caught",
     escaped: "Got away",
     reasonWolves: "The pack caught you.",
@@ -123,7 +110,6 @@ const RUN_STR = {
     backFarm: "Back to the farm",
     backMenu: "Back to menu",
     overHintFarm: "You return to the farm injured for 10 minutes. The candies you picked up are kept.",
-    overHintFarmPenalty: "You kept going after being caught: you return to the farm injured for 30 minutes. The candies you picked up are kept.",
     overHintSolo: "Standalone prototype: no consequences outside the challenge.",
 
     loadError: "Three.js could not be loaded. The challenge needs internet access on first launch. Check the connection, then try again.",

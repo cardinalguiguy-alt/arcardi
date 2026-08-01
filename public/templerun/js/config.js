@@ -297,16 +297,6 @@ const CFG = {
   CHASE_LOSS_ON_STUMBLE: 8, // écart perdu à chaque trébuchement
   WOLF_COUNT: 3,
 
-  /* ------------------------------------------------------- SECONDE CHANCE
-     Zip 385. Une seule offre par course, sur toute capture (loups, vide,
-     virage manqué) — pas sur un abandon volontaire, qui reste une décision,
-     pas une capture. Le joueur revit SUR PLACE : la meute est repoussée à
-     CHASE_START, exactement l'écart d'un départ de course, pas CHASE_MAX —
-     revivre doit rester tendu, pas remettre le compteur à l'écart le plus
-     confortable possible. Score et bonbons sont conservés (déjà acquis). */
-  SECOND_CHANCE_DECIDE_MS: 5000,   // fenêtre pour répondre avant fin automatique
-  SECOND_CHANCE_GAP: 17,           // écart restauré = CHASE_START (voir plus haut)
-
   /* ----------------------------------------------------------------- SCORE */
   SCORE_PER_UNIT: 0.6,      // points par unité parcourue
   SCORE_PER_COIN: 25,

@@ -438,18 +438,6 @@ class Player {
     if (this.onDeath) this.onDeath(cause);
   }
 
-  /* Seconde chance (zip 385) : symétrique de die(), pas un nouveau départ.
-     La position, la voie et la vitesse restent celles du moment de la
-     capture — seul l'écart avec la meute est rendu à Game via pack.detach
-     inverse (voir Game.acceptSecondChance). On efface juste ce qui
-     empêcherait de courir : trébuchement en cours, cause de mort. */
-  revive() {
-    this.alive = true;
-    this.deathCause = null;
-    this.stumbleUntil = 0;
-    this.stumbleRecoverUntil = 0;
-  }
-
   worldPos() {
     const n = this.node();
     return this.track.worldPos(n, this.t, this.laneOffset, this.y);

@@ -18,7 +18,6 @@ const Input = (function () {
   const held = {};          // touche physique maintenue (pour les virages)
   let touchStart = null;
   let onPause = null;
-  let onRevive = null;   // zip 385 : Espace confirme la seconde chance
 
   const KEYMAP = {
     ArrowLeft: "left", KeyA: "left", KeyQ: "left",   // KeyQ : clavier AZERTY
@@ -31,7 +30,6 @@ const Input = (function () {
 
   function onKeyDown(e) {
     if (e.code === "Escape") { if (onPause) onPause(); return; }
-    if (e.code === "Space" && onRevive && onRevive()) { e.preventDefault(); return; }
     const a = KEYMAP[e.code];
     if (!a) return;
     e.preventDefault();
@@ -57,9 +55,8 @@ const Input = (function () {
   }
 
   return {
-    init(pauseCallback, reviveCallback) {
+    init(pauseCallback) {
       onPause = pauseCallback;
-      onRevive = reviveCallback;
       window.addEventListener("keydown", onKeyDown);
       window.addEventListener("keyup", onKeyUp);
       window.addEventListener("touchstart", onTouchStart, { passive: true });

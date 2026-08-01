@@ -27,7 +27,7 @@
    ========================================================================== */
 
 const Game = (function () {
-  const STATE = { TITLE: "title", RUNNING: "running", PAUSED: "paused", ESCAPING: "escaping", REVIVE: "revive", OVER: "over" };
+  const STATE = { TITLE: "title", RUNNING: "running", PAUSED: "paused", ESCAPING: "escaping", OVER: "over" };
 
   let state = STATE.TITLE;
   let track, player, pack, chaseCam;
@@ -35,16 +35,6 @@ const Game = (function () {
   let score = 0;
   let running = false;
   let reported = false;   // "vf-run-over" / "vf-run-escape" n'est envoyé qu'une fois
-
-  /* Seconde chance (zip 385) : offerte UNE fois par course, sur toute
-     capture. `secondChanceUsed` (déjà consommée, qu'elle ait été acceptée ou
-     laissée passer) part au payload de fin — c'est ce qui dit à la ferme
-     d'appliquer la blessure ×3 plutôt que la blessure normale. Un abandon
-     volontaire (giveUp) ne passe jamais par revive : ce n'est pas une
-     capture, offrir une seconde chance là n'aurait pas de sens. */
-  let secondChanceUsed = false;
-  let reviveDeadline = 0;
-  let pendingDeathCause = null;
 
   /* ------------------------------------------------------------ DÉMARRAGE */
   function start() {
@@ -54,11 +44,10 @@ const Game = (function () {
     chaseCam = new ChaseCamera(World.camera);
     score = 0;
     reported = false;
-    secondChanceUsed = false;
 
     player.onStumble = () => { pack.onStumble(); chaseCam.addShake(0.9); };
     player.onLand = (hard) => { if (hard) chaseCam.addShake(0.35); };
-    player.onDeath = () => onPlayerCaught(player.deathCause);
+    player.onDeath = () => endRun(player.deathCause);
     player.onEscape = () => beginEscape();
 
     World.clearAll();
@@ -74,44 +63,9 @@ const Game = (function () {
     lastFrame = performance.now();
   }
 
-  /* Point d'entrée de toute capture (loups, vide, virage manqué). Remplace
-     l'ancien "onDeath -> endRun" direct : la seule différence pour les trois
-     causes est ICI, pas dans player.js, qui reste ignorant du concept de
-     seconde chance — il sait juste mourir. */
-  function onPlayerCaught(cause) {
-    if (!secondChanceUsed) { beginRevive(cause); return; }
-    endRun(cause);
-  }
-
-  function beginRevive(cause) {
-    state = STATE.REVIVE;
-    pendingDeathCause = cause;
-    reviveDeadline = performance.now() + CFG.SECOND_CHANCE_DECIDE_MS;
-    UI.showRevive(true, CFG.SECOND_CHANCE_DECIDE_MS / 1000);
-  }
-
-  /* Bouton / touche de l'écran de seconde chance. */
-  function acceptRevive() {
-    if (state !== STATE.REVIVE) return;
-    secondChanceUsed = true;
-    UI.showRevive(false);
-    player.revive();
-    pack.reprise();
-    state = STATE.RUNNING;
-    lastFrame = performance.now();
-  }
-
-  /* Délai écoulé, ou joueur qui décline explicitement. */
-  function declineRevive() {
-    if (state !== STATE.REVIVE) return;
-    secondChanceUsed = true;
-    UI.showRevive(false);
-    endRun(pendingDeathCause);
-  }
-
   function endRun(cause) {
     state = STATE.OVER;
-    UI.showGameOver(score, player.coins, player.totalDist, cause, secondChanceUsed);
+    UI.showGameOver(score, player.coins, player.totalDist, cause);
   }
 
   /* ------------------------------------------------- SORTIE OFFROAD (377)
@@ -147,7 +101,7 @@ const Game = (function () {
     UI.showEscape(false);
     UI.setFade(0);
     state = STATE.OVER;
-    UI.showGameOver(payload.score, payload.candies, payload.distance, "escape", secondChanceUsed);
+    UI.showGameOver(payload.score, payload.candies, payload.distance, "escape");
   }
 
   function togglePause() {
@@ -175,7 +129,6 @@ const Game = (function () {
           candies: player.coins | 0,
           distance: Math.floor(player.totalDist),
           cause: player.deathCause || "abort",
-          secondChanceUsed,   // décide de la blessure ×3 côté ferme (zip 385)
         });
         return;
       }
@@ -255,15 +208,6 @@ const Game = (function () {
       UI.updateHud(score, player.coins, player.escapeDist, 0, null);
       if (pose.k >= 1) finishEscape();
 
-    } else if (state === STATE.REVIVE) {
-      // Scène gelée, comme STATE.OVER : le joueur lit l'écran de décision,
-      // rien ne doit bouger pendant ce temps-là (ni la meute, ni le score).
-      World.updateAmbient(now, 1, player.totalDist);
-      chaseCam.update(dt, player);
-      const remain = Math.max(0, reviveDeadline - now);
-      UI.updateReviveCountdown(remain / 1000);
-      if (remain <= 0) declineRevive();
-
     } else if (state === STATE.OVER) {
       // On laisse la scène vivre doucement derrière l'écran de fin, à
       // l'heure du jour où le joueur est mort (zip 382).
@@ -293,25 +237,18 @@ const Game = (function () {
     }
     UI.init();
     World.init(document.getElementById("gl"));
-    Input.init(togglePause, () => {
-      if (state !== STATE.REVIVE) return false;
-      acceptRevive();
-      return true;
-    });
+    Input.init(togglePause);
 
     document.getElementById("btnStart").addEventListener("click", start);
     document.getElementById("btnResume").addEventListener("click", togglePause);
     document.getElementById("btnQuit").addEventListener("click", giveUp);
     document.getElementById("btnBack").addEventListener("click", leave);
-    document.getElementById("btnRevive").addEventListener("click", acceptRevive);
-    document.getElementById("btnReviveNo").addEventListener("click", declineRevive);
 
     UI.show("title");
     if (!running) { running = true; requestAnimationFrame(frame); }
   }
 
-  return { init, start, togglePause, giveUp, leave, acceptRevive, declineRevive,
-           get state() { return state; } };
+  return { init, start, togglePause, giveUp, leave, get state() { return state; } };
 })();
 
 window.addEventListener("load", Game.init);
