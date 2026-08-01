@@ -2549,24 +2549,46 @@ export const PASSAGE_WORLD_DAYS = 3;
    est précisément ce qu'il ne faut pas quand on teste à deux. */
 export const PASSAGE_FORCE_KEY = "candy";
 
+/* --- Zip 386 : À QUOI MÈNE LE PONT DE CHAQUE TERRE -----------------------
+   Jusqu'au zip 385, la chaussée de pierre et sa porte (G_RUN_GATE) étaient
+   construites À L'IDENTIQUE sur les six cartes, et menaient partout au défi de
+   fuite. Décision Guillaume (zip 386) : **chaque terre a son propre pont, et
+   ils ne mènent pas au même endroit.**
+
+   LA GÉOMÉTRIE, ELLE, NE CHANGE PAS D'UN PIXEL. Même tracé, même largeur,
+   même case de porte sur les six cartes — seuls l'HABILLAGE (`bridge`) et la
+   DESTINATION (`PASSAGE_GATE_DEST`) varient. C'est délibéré et c'est ce qui
+   permet à verify-gate.mjs et verify-deck.mjs de continuer à balayer les six
+   cartes sans changer de sens : ils vérifient qu'on ARRIVE au bout du pont,
+   ce qui reste vrai et reste nécessaire partout.
+
+   `bridge` est lu par drawBridgeTile/drawBridgeOverlay (fermeArt.js).
+   Une clé inconnue retombe sur la pierre — un monde ajouté sans habillage
+   sera terne, jamais cassé. */
+export const PASSAGE_GATE_DEST = {
+  evil: "run",      // défi de fuite (zip 372) — sa seule terre depuis le 386
+  candy: "candy",   // Le Gourmandin (zip 385), désormais au bout du pont arc-en-ciel
+  // maze / crystal / meadow : pont construit et habillé, destination à venir.
+};
+
 export const PASSAGE_WORLDS = [
-  { key: "evil",    name: "Terres Maléfiques",   nameEn: "Evil Lands",
+  { key: "evil", bridge: "stone",    name: "Terres Maléfiques",   nameEn: "Evil Lands",
     bg: "#0b120c", g1: "#182417", g2: "#182417", waterA: "#241246", waterB: "rgba(160,70,220,",
     pickupColor: null, pickupCount: 0,
     pet: { id: "shadowcat", name: "Chat d'ombre", nameEn: "Shadow cat" }, petHue: 260 },
-  { key: "candy",   name: "Pays des Bonbons",    nameEn: "Candy Land",
+  { key: "candy", bridge: "candy",   name: "Pays des Bonbons",    nameEn: "Candy Land",
     bg: "#f2b8d0", g1: "#f0c2d8", g2: "#eab4ce", waterA: "#c86ea8", waterB: "rgba(255,190,230,",
     pickupColor: "#e0356e", pickupCount: 14,
     pet: { id: "candyfox", name: "Renard barbe à papa", nameEn: "Cotton-candy fox" }, petHue: 300 },
-  { key: "maze",    name: "Pays du Labyrinthe",  nameEn: "Maze Land",
+  { key: "maze", bridge: "hedge",    name: "Pays du Labyrinthe",  nameEn: "Maze Land",
     bg: "#25331f", g1: "#4a6b38", g2: "#446434", waterA: "#3a7bc8", waterB: "rgba(190,225,255,",
     pickupColor: "#e8c860", pickupCount: 6,
     pet: { id: "mazemouse", name: "Souris des haies", nameEn: "Hedge mouse" }, petHue: 90 },
-  { key: "crystal", name: "Grottes de Cristal",  nameEn: "Crystal Caverns",
+  { key: "crystal", bridge: "crystal", name: "Grottes de Cristal",  nameEn: "Crystal Caverns",
     bg: "#0c1226", g1: "#1c2440", g2: "#182038", waterA: "#12386a", waterB: "rgba(120,200,255,",
     pickupColor: "#7ce0f0", pickupCount: 12,
     pet: { id: "gemturtle", name: "Tortue gemme", nameEn: "Gem turtle" }, petHue: 180 },
-  { key: "meadow",  name: "Prairie Céleste",     nameEn: "Sky Meadow",
+  { key: "meadow", bridge: "cloud",  name: "Prairie Céleste",     nameEn: "Sky Meadow",
     bg: "#a8d8f0", g1: "#8fd06a", g2: "#86c862", waterA: "#5ab0e8", waterB: "rgba(255,255,255,",
     pickupColor: "#f0b428", pickupCount: 12,
     pet: { id: "cloudlamb", name: "Agneau des nuages", nameEn: "Cloud lamb" }, petHue: 40 },
@@ -2602,8 +2624,39 @@ export const CANDY_GAME_PET_ID = "candycat";
 // bout de chemin à faire, loin de la mare (générée autour de x 22-36 / y 30-40)
 // et loin de la rive est (EAST_LAKE_X) pour ne pas se disputer l'espace avec la
 // chaussée du défi de fuite.
-export const CANDY_MONSTER_SPAWN = { x: 18, y: 52 };
-export const CANDY_MONSTER_RADIUS = 1.8;   // distance (tuiles) d'ouverture du mini-jeu
+/* Zip 386 : LE GOURMANDIN A DÉMÉNAGÉ SUR LE PONT. Il était au sud-ouest de la
+   carte (18, 52) et s'ouvrait à la touche E ; demande Guillaume : « the cut the
+   rope candy game should be accessed via this rainbow bridge ».
+
+   Il est donc posé DEUX CASES À L'EST de la porte, c'est-à-dire juste devant le
+   joueur qui avance sur le pont — et c'est la porte elle-même qui ouvre le
+   mini-jeu, en marchant dessus, sans aucune touche. Le monstre EST le repère
+   visuel de la case de déclenchement : la règle du zip 378 (« rien ne marque
+   cette case ») valait pour le défi de fuite, où la surprise de l'embuscade
+   était l'effet recherché. Ici c'est l'inverse — on doit voir où l'on va.
+
+   Conséquence : plus d'invite E, plus de dégagement de cases à la génération
+   (le tablier du pont n'a jamais d'objets), et le mini-jeu n'a plus qu'UNE
+   seule porte d'entrée au lieu de deux. */
+export const CANDY_MONSTER_SPAWN = { x: RUN_GATE.x + 2, y: RUN_GATE.y };
+
+/* --- Zip 386 : LES LICORNES DU PAYS DES BONBONS --------------------------
+   Demande Guillaume : « white unicorns with rainbow sparkly hair and tail
+   roaming around in candy land ».
+
+   DÉCORATION PURE, ET C'EST CE QUI LES REND GRATUITES. Leur position est
+   DÉRIVÉE du temps et d'un index (voir unicornAt, FermeGame.js) : aucun état,
+   aucune sauvegarde, AUCUN MESSAGE RÉSEAU. Les deux joueurs voient la même
+   licorne au même endroit parce qu'ils calculent la même fonction du même
+   temps, pas parce que quelqu'un le leur a dit.
+
+   C'est la même économie que les loups de l'embuscade (zip 375) poussée plus
+   loin : eux avaient un état local, celles-ci n'en ont aucun. Le jour où on
+   voudra les attraper, il faudra tout reprendre côté hôte — et ce sera un
+   chantier, pas un réglage. */
+export const CANDY_UNICORNS = 7;              // nombre sur toute la carte
+export const CANDY_UNICORN_ROAM = 5.5;        // rayon d'errance autour du point d'ancrage, en cases
+export const CANDY_UNICORN_PERIOD_MS = 26000; // durée d'un tour de promenade
 
 // --- Valley Town, suite (zip 235) ---
 export const TOWN_HOUSE_STYLES = 10;       // 10 façades de base gratuites (R à sa porte pour changer)

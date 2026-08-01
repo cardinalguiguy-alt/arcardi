@@ -434,6 +434,182 @@ export function drawRunDeckOverlay(g, px, py, T, tx, ty, side, now, baseX) {
 }
 
 /* ===========================================================================
+   ZIP 386 — LES PONTS DU PASSAGE, UN PAR TERRE
+   ---------------------------------------------------------------------------
+   Décision Guillaume : chaque terre a son pont, et ils ne mènent pas au même
+   endroit. La GÉOMÉTRIE reste rigoureusement identique sur les six cartes
+   (voir PASSAGE_GATE_DEST, fermeConstants.js) ; seul l'habillage change.
+
+   `drawBridgeTile` n'est donc PAS un remplacement de `drawRunDeckTile` : c'est
+   un aiguillage qui l'appelle pour le thème « stone ». La chaussée de pierre
+   du défi de fuite sort de ce zip **au pixel près telle qu'elle était** — ce
+   qui est la seule façon de laisser verify-deck.mjs (qui compare 15 couleurs
+   2D aux CFG.COL_* du défi 3D) continuer à dire quelque chose de vrai.
+
+   Toujours `fillRect` seul, pour la raison du zip 385 : le rasteriseur maison
+   ne couvre pas davantage, et un `arc()` glissé ici dessinerait juste dans le
+   jeu et faux dans l'outil.
+   ======================================================================== */
+
+// Bandes de l'arc-en-ciel, dans l'ordre. Sert au tablier du pont du Pays des
+// Bonbons ET à la crinière des licornes : une seule source, sinon les deux
+// dérivent l'une de l'autre à la première retouche.
+const RAINBOW = ["#ff4d6d", "#ff9e3d", "#ffdd44", "#7ed957", "#4dc3ff", "#8a6cff", "#e06cff"];
+
+const MALLOW_TOP = "#fff6fb", MALLOW_MID = "#ffe1ef", MALLOW_LOW = "#f6bcd8";
+
+function bridgeRng(tx, ty) {
+  let h = (((tx * 40503) ^ (ty * 2654435761)) >>> 0) || 7;
+  return function () { h = (h * 1664525 + 1013904223) >>> 0; return h / 4294967296; };
+}
+
+/* Le tablier arc-en-ciel. Les bandes courent DANS LE SENS DE LA MARCHE (comme
+   les routes de l'image de référence n°3) et sont calculées sur la coordonnée
+   ABSOLUE en y, pas sur la position dans la case : sinon chaque case
+   recommencerait sa propre petite série et on verrait une grille de sept
+   couleurs au lieu d'un ruban continu. */
+function candyDeckTile(g, px, py, T, tx, ty, deckTopY) {
+  const rowPx = (ty - deckTopY) * T;               // hauteur absolue dans le tablier
+  const BAND = 6;
+  for (let k = 0; k < T; k++) {
+    const abs = rowPx + k;
+    g.fillStyle = RAINBOW[Math.floor(abs / BAND) % RAINBOW.length];
+    g.fillRect(px, py + k, T, 1);
+  }
+  // Voile de sucre glace : sans lui les sept bandes saturées mangent le
+  // fermier, qui devient illisible dès qu'il pose un pied dessus.
+  g.fillStyle = "rgba(255,255,255,0.30)";
+  g.fillRect(px, py, T, T);
+  // Grains de sucre, semés sur la case (jamais par image : ça grouillerait).
+  const r = bridgeRng(tx, ty);
+  for (let i = 0; i < 3; i++) {
+    g.fillStyle = "rgba(255,255,255,0.85)";
+    g.fillRect(px + Math.floor(r() * (T - 2)), py + Math.floor(r() * (T - 2)), 1, 1);
+  }
+}
+
+/* La bordure en guimauve. Elle est BOMBÉE : clair en haut, sombre en bas, avec
+   un liseré rose. C'est ce dégradé qui la fait lire comme un coussin posé sur
+   le pont plutôt que comme une deuxième voie praticable — le défaut exact que
+   Guillaume avait signalé sur le couronnement des bordures au zip 381. */
+function candyKerbTile(g, px, py, T, tx, ty, side) {
+  g.fillStyle = MALLOW_MID; g.fillRect(px, py, T, T);
+  if (side < 0) {           // bordure NORD : la lumière vient d'en haut
+    g.fillStyle = MALLOW_TOP; g.fillRect(px, py, T, Math.round(T * 0.55));
+    g.fillStyle = MALLOW_LOW; g.fillRect(px, py + T - 3, T, 3);
+  } else {                  // bordure SUD
+    g.fillStyle = MALLOW_TOP; g.fillRect(px, py, T, 4);
+    g.fillStyle = MALLOW_LOW; g.fillRect(px, py + Math.round(T * 0.6), T, Math.round(T * 0.4));
+  }
+  const r = bridgeRng(tx, ty);
+  if (r() < 0.5) { g.fillStyle = "rgba(255,255,255,0.9)"; g.fillRect(px + 2 + Math.floor(r() * 6), py + 3, 3, 2); }
+}
+
+function hedgeDeckTile(g, px, py, T, tx, ty, side) {
+  const r = bridgeRng(tx, ty);
+  g.fillStyle = side === 0 ? "#5d8f3a" : "#3f6b28";
+  g.fillRect(px, py, T, T);
+  // Tressage : deux brins clairs sur deux sombres, décalés d'une case sur deux.
+  const off = ((tx + ty) & 1) ? 3 : 0;
+  for (let k = 0; k < T; k += 6) {
+    g.fillStyle = "#76a94c"; g.fillRect(px, py + ((k + off) % T), T, 2);
+  }
+  if (r() < 0.35) { g.fillStyle = "#c8e08a"; g.fillRect(px + 4 + Math.floor(r() * 6), py + 5, 2, 2); }
+}
+
+function crystalDeckTile(g, px, py, T, tx, ty, side) {
+  const r = bridgeRng(tx, ty);
+  const base = side === 0 ? ["#b8e6f5", "#a4dcef", "#c9eef9"] : ["#7fc4dd", "#6fb6d1"];
+  g.fillStyle = base[Math.floor(r() * base.length)];
+  g.fillRect(px, py, T, T);
+  // Facettes : deux triangles en escalier de pixels, l'un clair l'autre sombre.
+  for (let k = 0; k < T; k++) {
+    g.fillStyle = "rgba(255,255,255,0.35)"; g.fillRect(px + k, py + k, 1, 1);
+    g.fillStyle = "rgba(60,120,150,0.25)"; g.fillRect(px + k, py + T - 1 - k, 1, 1);
+  }
+}
+
+function cloudDeckTile(g, px, py, T, tx, ty, side) {
+  const r = bridgeRng(tx, ty);
+  g.fillStyle = side === 0 ? "#fdfdff" : "#e6ecfb";
+  g.fillRect(px, py, T, T);
+  g.fillStyle = "rgba(190,205,240,0.55)";
+  g.fillRect(px, py + T - 3, T, 3);
+  if (side !== 0) { g.fillStyle = "#ffe6a0"; g.fillRect(px, side < 0 ? py : py + T - 2, T, 2); }
+  if (r() < 0.4) { g.fillStyle = "#ffffff"; g.fillRect(px + 3 + Math.floor(r() * 7), py + 4, 5, 3); }
+}
+
+/* --------------------------------------------------------------- PASSE 1 ---
+   `side` vaut 0 pour les trois voies praticables, -1 / +1 pour les bordures.
+   `deckTopY` est la ligne du HAUT du tablier (voir candyDeckTile). */
+export function drawBridgeTile(g, px, py, T, tx, ty, side, theme, deckTopY) {
+  if (theme === "candy") {
+    if (side === 0) candyDeckTile(g, px, py, T, tx, ty, deckTopY);
+    else candyKerbTile(g, px, py, T, tx, ty, side);
+    return;
+  }
+  if (theme === "hedge") return hedgeDeckTile(g, px, py, T, tx, ty, side);
+  if (theme === "crystal") return crystalDeckTile(g, px, py, T, tx, ty, side);
+  if (theme === "cloud") return cloudDeckTile(g, px, py, T, tx, ty, side);
+  // Thème inconnu ou "stone" : la chaussée du défi de fuite, inchangée.
+  drawRunDeckTile(g, px, py, T, tx, ty, side);
+}
+
+/* --------------------------------------------------------------- PASSE 2 ---
+   Tout ce qui DÉBORDE d'une case (zip 378 : peint pendant le balayage, ce
+   serait effacé par la case voisine dessinée juste après).
+
+   Pour la pierre, c'est l'ombre portée, le liseré du lac et les halos de
+   torche. Pour la guimauve, ce sont les COULURES qui pendent au-dessus du
+   sirop — le motif de l'image de référence n°2, où tout le relief dégouline. */
+export function drawBridgeOverlay(g, px, py, T, tx, ty, side, now, baseX, theme) {
+  if (theme === "stone" || !theme) return drawRunDeckOverlay(g, px, py, T, tx, ty, side, now, baseX);
+
+  const r = bridgeRng(tx, ty);
+  const outY = side < 0 ? py - 1 : py + T;         // vers l'extérieur du pont
+  const dir = side < 0 ? -1 : 1;
+
+  if (theme === "candy") {
+    // Trois coulures de guimauve par case, longueurs tirées sur la case donc
+    // stables. Elles respirent très lentement : le sirop en dessous bouge
+    // déjà, une bordure parfaitement figée par-dessus ferait carton-pâte.
+    for (let i = 0; i < 3; i++) {
+      const dx = 2 + Math.floor(r() * (T - 5));
+      const len = 3 + Math.floor(r() * 5) + Math.round(Math.sin(now / 900 + tx + i) * 1.2);
+      g.fillStyle = MALLOW_TOP;
+      g.fillRect(px + dx, dir < 0 ? outY - len : outY, 3, len);
+      g.fillStyle = MALLOW_LOW;
+      g.fillRect(px + dx, dir < 0 ? outY - len : outY + len - 2, 3, 2);
+    }
+    return;
+  }
+  if (theme === "hedge") {
+    g.fillStyle = "rgba(30,60,20,0.35)";
+    g.fillRect(px, dir < 0 ? outY - 2 : outY, T, 2);
+    return;
+  }
+  if (theme === "crystal") {
+    // Éclats de glace qui dépassent, pointus vers l'extérieur.
+    for (let i = 0; i < 2; i++) {
+      const dx = 3 + Math.floor(r() * (T - 7));
+      const len = 2 + Math.floor(r() * 4);
+      g.fillStyle = "rgba(200,240,255,0.75)";
+      for (let k = 0; k < len; k++) {
+        g.fillRect(px + dx + k, dir < 0 ? outY - len + k : outY + k, len - k, 1);
+      }
+    }
+    return;
+  }
+  if (theme === "cloud") {
+    for (let i = 0; i < 2; i++) {
+      const dx = 1 + Math.floor(r() * (T - 6));
+      g.fillStyle = "rgba(255,255,255,0.8)";
+      g.fillRect(px + dx, dir < 0 ? outY - 3 : outY, 6, 3);
+    }
+  }
+}
+
+/* ===========================================================================
    ZIP 385 — LE SOL DU PAYS DES BONBONS
    ---------------------------------------------------------------------------
    Demande Guillaume : « the ground should be made of colour candies
@@ -2806,6 +2982,94 @@ export function buildSprites() {
      rose où tout est déjà rose. D'où le contraste maximal du monde — un violet
      sombre — sur un sol pastel, alors que tout le reste du Pays des Bonbons
      est en camaïeu. */
+  /* Zip 386 — ARBRE DE BARBE À PAPA. Demande Guillaume : « convert all trees
+     into cotton candy trees (the trunk is the stick that holds the candy floss
+     and the leaves are the candy floss) ».
+
+     Même gabarit que le chêne (32x48, ancré par le bas, dessiné à
+     (x*T-8, (y+1)*T-48)) : l'objet reste O_TREE/O_TREE2, donc la collision, la
+     coupe et le rendement en bois sont RIGOUREUSEMENT inchangés. Seul le
+     dessin change, et uniquement au Pays des Bonbons.
+
+     La nuée est faite de rangées de largeurs décroissantes puis croissantes,
+     avec des bosses tirées d'un générateur semé sur la VARIANTE (pas sur
+     l'horloge) : deux arbres voisins de la même variante sont identiques, ce
+     qui est normal en pixel art, et aucun ne bouge d'une image à l'autre. */
+  function candyTreeSprite(variant) {
+    const [c, g] = cv(32, 48);
+    const PAL = variant === 0
+      ? { hi: "#ffd3e8", mid: "#ff9dc8", lo: "#e56ba4" }   // rose
+      : { hi: "#d8e9ff", mid: "#9fc6f5", lo: "#6f9fd8" };  // bleu
+    const rnd = makeRnd(variant === 0 ? 8123 : 4471);
+
+    // Le bâtonnet : blanc cassé, deux pixels de large, avec son ombre.
+    P(g, 15, 24, 2, 24, "#f3e6cf");
+    P(g, 17, 24, 1, 24, "#cbb894");
+
+    // La nuée : 24 px de haut, bord bosselé.
+    const CX = 16, TOP = 2, BOT = 27;
+    for (let y = TOP; y < BOT; y++) {
+      const t = (y - TOP) / (BOT - TOP);
+      // demi-largeur : ovale un peu plus large que haut, plus une bosse
+      const base = Math.sqrt(Math.max(0, 1 - Math.pow((t - 0.46) / 0.54, 2))) * 14;
+      const half = Math.max(2, Math.round(base + (rnd() - 0.5) * 2.2));
+      P(g, CX - half, y, half * 2, 1, PAL.mid);
+      P(g, CX - half, y, 2, 1, PAL.lo);
+      P(g, CX + half - 2, y, 2, 1, PAL.lo);
+    }
+    // Reflet en haut à gauche, base plus dense : c'est ce qui donne du volume
+    // à une masse qui serait sinon un aplat rond.
+    for (let y = TOP + 2; y < TOP + 10; y++) {
+      const w = 9 - Math.abs(y - (TOP + 5));
+      P(g, CX - 9, y, Math.max(2, w), 1, PAL.hi);
+    }
+    for (let y = BOT - 5; y < BOT; y++) P(g, CX - 8, y, 16, 1, PAL.lo);
+    // Quelques perles de sucre prises dans la nuée.
+    const beads = ["#ffd23f", "#7ce0f0", "#ffffff", "#a8e02a"];
+    for (let i = 0; i < 5; i++) {
+      P(g, 6 + Math.floor(rnd() * 20), 5 + Math.floor(rnd() * 18), 2, 2, beads[i % 4]);
+    }
+    return c;
+  }
+
+  /* Zip 386 — LICORNE. Blanche, crinière et queue arc-en-ciel, corne dorée.
+     Un seul sprite, tourné vers la DROITE ; le rendu le retourne pour l'autre
+     sens (voir drawCandyUnicorns, FermeGame.js). Deux images d'animation : la
+     seconde lève les antérieurs, ce qui suffit à lire une allure sans payer
+     quatre poses. */
+  function unicornSprite(frame) {
+    const [c, g] = cv(28, 24);
+    const W = "#ffffff", SH = "#e3e0ee", GOLD = "#ffd23f";
+    const up = frame === 1;
+
+    // queue arc-en-ciel, à l'arrière (gauche)
+    for (let i = 0; i < RAINBOW.length; i++) {
+      P(g, 1 + Math.floor(i / 2), 9 + i, 4 - Math.floor(i / 3), 1, RAINBOW[i]);
+    }
+    // corps
+    P(g, 5, 9, 15, 7, W);
+    P(g, 5, 14, 15, 2, SH);
+    // encolure et tête, vers la droite
+    P(g, 17, 5, 6, 6, W);
+    P(g, 20, 3, 6, 5, W);
+    P(g, 25, 5, 2, 2, SH);          // museau
+    P(g, 23, 4, 1, 1, "#2a2436");   // œil
+    // corne
+    P(g, 23, 0, 1, 3, GOLD); P(g, 24, 1, 1, 2, GOLD);
+    // crinière arc-en-ciel, du garrot au front
+    for (let i = 0; i < RAINBOW.length; i++) {
+      P(g, 16 + i, 6 - Math.floor(i / 2), 1, 4 + (i % 2), RAINBOW[i]);
+    }
+    // pattes
+    P(g, 7, 16, 2, up ? 4 : 6, W);
+    P(g, 11, 16, 2, 6, W);
+    P(g, 16, 16, 2, up ? 3 : 6, W);
+    P(g, 19, 16, 2, 6, W);
+    // étincelles
+    P(g, 3, 6, 1, 1, "#fff"); P(g, 12, 4, 1, 1, GOLD); P(g, 26, 9, 1, 1, "#fff");
+    return c;
+  }
+
   function candyMonsterSprite() {
     const [c, g] = cv(30, 30);
     const FUR = "#8d5bd6", FUR_D = "#6a3fae", MOUTH = "#3a1a5e";
@@ -3335,6 +3599,8 @@ house: house(),
     sucrerie: sucrerieSprite(),
     cauldron: cauldronSprite(),
     candyMonster: candyMonsterSprite(),   // zip 385
+    candyTrees: [candyTreeSprite(0), candyTreeSprite(1)],           // zip 386
+    unicorn: [unicornSprite(0), unicornSprite(1)],                  // zip 386
     seaIcons: [],
     duck: [duckSprite(0), duckSprite(1)],
     railL: railHalf(0), railR: railHalf(1), // one wide track (zip 232)

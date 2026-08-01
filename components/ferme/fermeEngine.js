@@ -3934,6 +3934,31 @@ export function passageWorldOf(day) { return C.PASSAGE_WORLDS[passageWorldIndex(
    Sous forçage, la valeur reste celle du jour : elle continue donc d'avancer
    normalement, et le trésor du Gourmandin redevient disponible tous les trois
    jours de jeu comme il le ferait en rotation réelle. */
+/* Zip 386 — OÙ EST LA LICORNE N° i À L'INSTANT t.
+   Fonction PURE : pas d'état, pas de sauvegarde, pas un octet de réseau. Les
+   deux joueurs voient la même licorne au même endroit parce qu'ils évaluent la
+   même fonction du même temps — et l'hôte n'a rien à arbitrer.
+
+   Le point d'ancrage est tiré du seul index (donc stable d'une session à
+   l'autre), et la promenade est la composition de deux sinusoïdes de périodes
+   incommensurables : le trajet ne se referme jamais exactement sur lui-même,
+   ce qui suffit à ne pas lire une ronde mécanique.
+
+   Bornes en x volontairement 8..47 : à l'ouest de la rive est (EAST_LAKE_X),
+   pour qu'aucune licorne ne se promène sur le pont ni au-dessus du sirop. Le
+   rendu vérifie en plus la case sous ses sabots — voir drawCandyUnicorns. */
+export function unicornAt(i, nowMs) {
+  const h = (((i + 1) * 2654435761) >>> 0);
+  const ax = 8 + (h % 40);
+  const ay = 6 + ((h >>> 8) % 52);
+  const ph = ((h >>> 16) % 1000) / 1000;
+  const t = (nowMs / C.CANDY_UNICORN_PERIOD_MS + ph) * Math.PI * 2;
+  const R = C.CANDY_UNICORN_ROAM;
+  const x = ax + Math.cos(t) * R;
+  const y = ay + Math.sin(t * 0.7 + ph * 6.28) * R * 0.6;
+  return { x, y, facing: -Math.sin(t) >= 0 ? 1 : -1 };
+}
+
 export function passageBlockOf(day) {
   return Math.floor(Math.max(0, (day || 1) - 1) / C.PASSAGE_WORLD_DAYS);
 }
@@ -3998,20 +4023,38 @@ export function generatePassageWorld(worldIdx) {
     // generateEvilWorld).
     for (let n = 0; n < 220; n++) put(rnd() * W, rnd() * H, treeKind(), C.TREE_HP);
     for (let x = 1; x < W - 1; x++) { if (rnd() < 0.65) put(x, 1 + Math.floor(rnd() * 2), treeKind(), C.TREE_HP); if (rnd() < 0.65) put(x, H - 2 - Math.floor(rnd() * 2), treeKind(), C.TREE_HP); }
-    for (let i = 0; i < 220; i++) put(rnd() * W, rnd() * H, C.O_ROCK, C.EVIL_ROCK_HP);
+    /* Zip 386 — PAS UN CAILLOU AU PAYS DES BONBONS (demande Guillaume :
+       « remove all stone »).
+
+       ⚠️ LE TIRAGE EST CONSERVÉ MÊME QUAND ON NE POSE RIEN. C'est la leçon du
+       zip 381 appliquée à la lettre : sauter les 440 appels à rnd() décalerait
+       tout ce qui vient après dans le flux et changerait la carte entière du
+       Pays des Bonbons — arbres, mare, breloques — alors qu'on n'a demandé que
+       le retrait des rochers. En consommant les mêmes tirages, la carte reste
+       CELLE D'AVANT, moins les cailloux. C'est exactement ce qu'on promet, et
+       c'est vérifiable à l'œil sur deux planches successives.
+
+       Effet de bord assumé et signalé à Guillaume : le Pays des Bonbons perd
+       sa source de MINERAI MAGIQUE (les rochers du passage en donnent quand on
+       les mine). Les quatre autres terres gardent la leur. */
+    const noStone = spec.key === "candy";
+    for (let i = 0; i < 220; i++) {
+      const rx = rnd() * W, ry = rnd() * H;
+      if (!noStone) put(rx, ry, C.O_ROCK, C.EVIL_ROCK_HP);
+    }
   }
 
   // Dégage impérativement les cases d'arrivée / retour / prix maléfique, et
   // (zip 385) le repaire du Gourmandin au Pays des Bonbons : un arbre ou un
   // rocher tiré au hasard sur sa case rendrait le mini-jeu inatteignable une
   // rotation sur cinq, sans la moindre erreur visible.
+  // Zip 386 : le Gourmandin n'est plus dans cette liste — il a déménagé sur le
+  // tablier du pont, qui n'a jamais d'objet posé dessus (il est construit après
+  // coup, en écrasant le sol). Le dégagement de rayon 2 du zip 385 n'a donc
+  // plus d'objet.
   const mustClear = [C.EVIL_SPAWN, C.EVIL_RETURN_PASSAGE, C.EVIL_CAULDRON_SPAWN];
-  if (spec.key === "candy") mustClear.push(C.CANDY_MONSTER_SPAWN);
   for (const p of mustClear) {
-    // Rayon 2 pour le Gourmandin (il faut pouvoir en faire le tour et le
-    // frôler à CANDY_MONSTER_RADIUS), 1 pour les autres, comme avant.
-    const rad = (p === C.CANDY_MONSTER_SPAWN) ? 2 : 1;
-    for (let dy = -rad; dy <= rad; dy++) for (let dx = -rad; dx <= rad; dx++) {
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
       const i = id(p.x + dx, p.y + dy);
       if (i >= 0 && i < ground.length) {
         if (ground[i] === C.G_WATER) ground[i] = C.G_GRASS;

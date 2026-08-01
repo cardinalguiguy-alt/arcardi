@@ -30,7 +30,7 @@ import { createPortal } from "react-dom";
 import { supabase } from "@/lib/supabaseClient";
 import * as C from "./fermeConstants";
 import * as E from "./fermeEngine";
-import { buildSprites, charPalette, drawRunDeckTile, drawRunDeckOverlay, drawCandyGroundTile, candySyrupColor } from "./fermeArt";
+import { buildSprites, charPalette, drawBridgeTile, drawBridgeOverlay, drawCandyGroundTile, candySyrupColor } from "./fermeArt";
 import { fstr } from "./fermeStrings";
 
 const GAME_ID = "ferme";
@@ -8683,8 +8683,24 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // d'abord l'embuscade (voir startRunAmbush), et le menu vient après le
       // fondu. Le verrou runGateArmedRef évite la boucle : sorti du menu, le
       // joueur doit avoir QUITTÉ la dalle avant de pouvoir la redéclencher.
+      /* Zip 386 : LA PORTE DU PONT NE MÈNE PLUS PARTOUT AU MÊME ENDROIT.
+         La case et son verrou sont inchangés ; seule la destination est
+         maintenant lue dans C.PASSAGE_GATE_DEST, d'après la terre en cours.
+         La carte maléfique historique n'a pas de `spec` et retombe sur "run",
+         ce qui préserve son comportement d'avant à l'identique.
+
+         Une terre sans destination (labyrinthe, cristal, prairie) a bien son
+         pont, mais il ne mène nulle part POUR L'INSTANT — et il faut le DIRE.
+         Un joueur qui traverse un pont entier pour que rien ne se passe croit
+         à un bug ; un joueur à qui on annonce que la suite viendra attend. */
       else if (tx === C.RUN_GATE.x && ty === C.RUN_GATE.y) {
-        if (runGateArmedRef.current) { runGateArmedRef.current = false; startRunAmbush(); }
+        if (runGateArmedRef.current) {
+          runGateArmedRef.current = false;
+          const dest = C.PASSAGE_GATE_DEST[(ew.spec && ew.spec.key) || "evil"];
+          if (dest === "candy") openCandyGame();
+          else if (dest === "run") startRunAmbush();
+          else pushToast(L.bridgeNoDest);
+        }
       } else runGateArmedRef.current = true;
     } else {
       const w = worldRef.current; if (!w || !w.darkPassage) return;
@@ -10502,6 +10518,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // fois pour tout le balayage plutôt qu'à chaque case — la boucle passe
       // sur plusieurs milliers de cases par image.
       const isCandy = !!(ew.spec && ew.spec.key === "candy");
+      // Zip 386 : habillage du pont de CETTE terre. La carte maléfique
+      // historique n'a pas de `spec` — elle retombe donc sur la pierre, comme
+      // avant, ce qui est exactement ce qu'on veut d'elle.
+      const bridgeTheme = (ew.spec && ew.spec.bridge) || "stone";
+      const deckTopY = C.RUN_JETTY_BASE.y - C.RUN_JETTY_HALF_W;
       for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
         const i = y * ew.w + x, g = ew.ground[i];
         const isDeck = g === C.G_RUN_JETTY || g === C.G_RUN_GATE;
@@ -10537,7 +10558,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            dans fermeConstants. */
         if (isDeck || isKerb) {
           const side = isKerb ? Math.sign(y - C.RUN_JETTY_BASE.y) : 0;
-          drawRunDeckTile(ctx, x * T, y * T, T, x, y, side);
+          drawBridgeTile(ctx, x * T, y * T, T, x, y, side, bridgeTheme, deckTopY);
           if (side !== 0) deckOver.push({ x, y, side });
         }
         if (g === C.G_LAKE_SHORE) {
@@ -10645,7 +10666,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           }
         }
         const o = ew.objects[i];
-        if (o === C.O_TREE || o === C.O_TREE2) { const img = o === C.O_TREE ? sprites.oak : sprites.pine; draws.push({ y: (y + 1) * T, fn: () => ctx.drawImage(img, x * T - 8, (y + 1) * T - 48) }); }
+        if (o === C.O_TREE || o === C.O_TREE2) {
+          /* Zip 386 : au Pays des Bonbons, chêne et pin deviennent des arbres
+             de barbe à papa. L'OBJET ne change pas (O_TREE/O_TREE2) : la
+             collision, la coupe et le rendement en bois restent ceux d'avant,
+             et une carte déjà générée reste valide. Seul le sprite change,
+             et il a exactement le même gabarit (32x48, ancré par le bas). */
+          const img = isCandy ? sprites.candyTrees[o === C.O_TREE ? 0 : 1]
+            : (o === C.O_TREE ? sprites.oak : sprites.pine);
+          draws.push({ y: (y + 1) * T, fn: () => ctx.drawImage(img, x * T - 8, (y + 1) * T - 48) });
+        }
         else if (o === C.O_TREE_DEAD) draws.push({ y: (y + 1) * T, fn: () => ctx.drawImage(sprites.deadTree, x * T - 8, (y + 1) * T - 48) });
         else if (o === C.O_STUMP) draws.push({ y: (y + 1) * T, fn: () => ctx.drawImage(sprites.stump, x * T, y * T) });
         else if (o === C.O_ROCK) {
@@ -10674,7 +10704,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          Rien de tout cela ne pouvait être peint pendant le balayage : la case
          voisine, dessinée juste après, l'aurait effacé. */
       for (const d of deckOver) {
-        drawRunDeckOverlay(ctx, d.x * T, d.y * T, T, d.x, d.y, d.side, now, C.RUN_JETTY_BASE.x);
+        drawBridgeOverlay(ctx, d.x * T, d.y * T, T, d.x, d.y, d.side, now, C.RUN_JETTY_BASE.x, bridgeTheme);
       }
       // Chaudron-artéfact (chantier 2026-07, demande Guillaume : "on le
       // trouve comme un artéfact interactif dans le monde maléfique avant
@@ -10832,7 +10862,37 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          Dessiné dans le calque `draws` trié par profondeur, comme tout ce qui
          dépasse d'une case : posé dans la boucle de sol, un joueur passant
          devant lui serait recouvert par le monstre. */
+      /* Zip 386 — LES LICORNES. Décoration pure : leur position est DÉRIVÉE
+         du temps (E.unicornAt), donc aucun état, aucune sauvegarde, aucun
+         message. On ne dessine que celles qui sont dans le cadre, et
+         seulement si la case sous leurs sabots est de l'herbe — la fonction
+         les tient déjà à l'écart du lac et du pont, cette vérification est la
+         ceinture qui va avec les bretelles (une mare est tirée au hasard à
+         chaque génération, ses bords bougent). */
       if (passSpec && passSpec.key === "candy") {
+        for (let i = 0; i < C.CANDY_UNICORNS; i++) {
+          const u = E.unicornAt(i, now);
+          if (u.x < x0 - 2 || u.x > x1 + 2 || u.y < y0 - 2 || u.y > y1 + 2) continue;
+          const ti = Math.floor(u.y) * ew.w + Math.floor(u.x);
+          if (ti < 0 || ti >= ew.ground.length || ew.ground[ti] !== C.G_GRASS) continue;
+          const img = sprites.unicorn[Math.floor(now / 230 + i) % 2];
+          draws.push({ y: (u.y + 1) * T, fn: () => {
+            const px = u.x * T, py = (u.y + 1) * T - 24;
+            ctx.save();
+            // Traînée d'étincelles : trois points qui montent en s'effaçant.
+            for (let k = 0; k < 3; k++) {
+              const ph = ((now / 700 + k / 3 + i) % 1);
+              ctx.fillStyle = `rgba(255,255,255,${0.5 * (1 - ph)})`;
+              ctx.fillRect(px + 4 + k * 6, py + 18 - ph * 14, 2, 2);
+            }
+            if (u.facing < 0) { ctx.translate(px + 28, py); ctx.scale(-1, 1); ctx.drawImage(img, 0, 0); }
+            else ctx.drawImage(img, px, py);
+            ctx.restore();
+          } });
+        }
+        // Le Gourmandin, désormais AU BOUT DU PONT (zip 386). Il n'est plus
+        // un objet de la carte ni une invite E : il marque visuellement la
+        // case de porte, deux cases à l'ouest de lui.
         const gx = C.CANDY_MONSTER_SPAWN.x, gy = C.CANDY_MONSTER_SPAWN.y;
         if (gx >= x0 - 2 && gx <= x1 + 2 && gy >= y0 - 2 && gy <= y1 + 2) {
           draws.push({ y: (gy + 1) * T, fn: () => {
@@ -10868,10 +10928,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         }
       }
       if (!ppk && ew.maze && Math.abs(m.x + 0.5 - (ew.maze.prizeX + 0.5)) <= 1.5 && Math.abs(m.y + 0.5 - (ew.maze.prizeY + 0.5)) <= 1.5) ppk = "mazePrize";
-      // Zip 385 : invite du Gourmandin, au Pays des Bonbons uniquement.
-      if (!ppk && passSpec && passSpec.key === "candy"
-        && Math.abs(m.x + 0.5 - (C.CANDY_MONSTER_SPAWN.x + 0.5)) <= C.CANDY_MONSTER_RADIUS
-        && Math.abs(m.y + 0.5 - (C.CANDY_MONSTER_SPAWN.y + 0.5)) <= C.CANDY_MONSTER_RADIUS) ppk = "candyMonster";
+      // Zip 386 : plus d'invite pour le Gourmandin. Le mini-jeu s'ouvre en
+      // marchant sur la porte du pont, comme le défi de fuite sur la sienne —
+      // une seule porte d'entrée au lieu de deux.
       if (!ppk && !cauldronDone && nearTile(C.EVIL_CAULDRON_SPAWN) && passSpec && passSpec.key === "evil") ppk = "evilCauldronPickup";
       setPromptKeyThrottled(ppk);
     }
@@ -12374,13 +12433,6 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           return;
         }
       }
-      // Zip 385 : ouvrir le mini-jeu du Gourmandin (Pays des Bonbons).
-      if (ew && ew.spec && ew.spec.key === "candy"
-        && Math.abs(m0.x + 0.5 - (C.CANDY_MONSTER_SPAWN.x + 0.5)) <= C.CANDY_MONSTER_RADIUS
-        && Math.abs(m0.y + 0.5 - (C.CANDY_MONSTER_SPAWN.y + 0.5)) <= C.CANDY_MONSTER_RADIUS) {
-        openCandyGame();
-        return;
-      }
       // Carte maléfique (chantier 2026-07, demande Guillaume) : seule
       // interaction E possible ici, le chaudron-artéfact — les coordonnées de
       // la ferme (SHOP/BIN/etc.) n'ont aucun sens en zone maléfique, on sort
@@ -12940,7 +12992,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       </div>
 
       {/* Invite proximité */}
-      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "candyMonster" ? L.promptCandyMonster : promptKey === "mazePrize" ? L.promptMazePrize : promptKey.startsWith("passagePickup:") ? L.promptPassagePickup : L.promptBin}</div>}
+      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "mazePrize" ? L.promptMazePrize : promptKey.startsWith("passagePickup:") ? L.promptPassagePickup : L.promptBin}</div>}
       {mountPrompt && <div className="ferme-prompt ferme-prompt-mount">{mountPrompt === "mount" ? L.mountPrompt : L.dismountPrompt}</div>}
       {handHeldUI && !moveConfirmUI && <div className="ferme-prompt ferme-prompt-mount">{L.handHeldHint}</div>}
       {moveConfirmUI && (

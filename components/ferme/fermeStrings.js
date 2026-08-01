@@ -934,7 +934,9 @@ export const FERME_STR = {
     // Ces clés-ci ne couvrent que ce que la FERME affiche autour du défi.
     runEnteredChat: (name) => `🏃 ${name} franchit la porte et tente la fuite !`,
     // Zip 385 — Le Gourmandin (Pays des Bonbons).
-    candyEnteredChat: (name) => `🍭 ${name} s'assoit devant le Gourmandin, qui ouvre grand la bouche.`,
+    candyEnteredChat: (name) => `🍭 ${name} traverse le pont arc-en-ciel et s'assoit devant le Gourmandin.`,
+    // Zip 386 : pont construit, destination pas encore écrite.
+    bridgeNoDest: "Le pont s'arrête là. Quelque chose viendra s'y installer.",
     candyGoldChat: (name, gold) => `🪙 ${name} a rassasié le Gourmandin jusqu'au niveau 10 : il recrache ${gold} pièces d'or !`,
     candyCatChat: (name) => `🐱 ${name} a terminé les quinze niveaux du Gourmandin et repart avec un chat berlingot.`,
     runLostChat: (name, candies) => candies > 0
@@ -1022,7 +1024,6 @@ export const FERME_STR = {
     // breloque ni le coffre du labyrinthe n'avaient d'invite propre, et
     // tombaient tous deux sur promptBin — s'approcher d'un trésor proposait
     // donc « vendre au bac » depuis le zip 235.
-    promptCandyMonster: "[E] Nourrir le Gourmandin",
     promptMazePrize: "[E] Ouvrir le coffre",
     promptPassagePickup: "[E] Ramasser la breloque",
     evilCauldronPickedToast: "⚗️ Tu as récupéré le chaudron ! Ramène-le côté ferme et pose-le où tu veux (outil Construction).",
@@ -1922,7 +1923,9 @@ export const FERME_STR = {
     runEnteredChat: (name) => `🏃 ${name} steps through the gate and makes a run for it!`,
     // Zip 385 — The Muncher (Candy Land). Traduit dans l'esprit (règle zip
     // 371) : « rassasié jusqu'au niveau 10 » deviendrait lourd en anglais.
-    candyEnteredChat: (name) => `🍭 ${name} sits down in front of the Muncher, who opens wide.`,
+    candyEnteredChat: (name) => `🍭 ${name} crosses the rainbow bridge and sits down in front of the Muncher.`,
+    // Zip 386 — see the French block.
+    bridgeNoDest: "The bridge ends here. Something will move in one day.",
     candyGoldChat: (name, gold) => `🪙 ${name} fed the Muncher all the way to level 10 — out comes a treasure of ${gold} gold!`,
     candyCatChat: (name) => `🐱 ${name} cleared all fifteen Muncher levels and leaves with a candy cat.`,
     runLostChat: (name, candies) => candies > 0
@@ -1994,7 +1997,6 @@ export const FERME_STR = {
     // Zip 385 — see the French block: the last two fix a pre-existing
     // fall-through to promptBin ("sell at the bin") on trinkets and the maze
     // chest, live since zip 235.
-    promptCandyMonster: "[E] Feed the Muncher",
     promptMazePrize: "[E] Open the chest",
     promptPassagePickup: "[E] Pick up the trinket",
     evilCauldronPickedToast: "⚗️ You picked up the cauldron! Bring it back to the farm and place it anywhere (Build tool).",
