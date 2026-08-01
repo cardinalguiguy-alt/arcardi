@@ -954,6 +954,18 @@ export function normalizeFarmer(f) {
                         (-1 = jamais) — c'est lui qui rend le trésor rejouable
                         « une fois par venue » sans le rendre farmable ;
        candyCatDone   = le chat berlingot a été remis (définitif). */
+  /* Zip 393 — LE LABYRINTHE. Deux champs, tous deux dans f.inv, donc dans
+     l'instantané JSON du fermier : AUCUNE migration Supabase.
+       labBest      = meilleur score au labyrinthe ;
+       labGoldBlock = numéro de créneau de rotation où la prime de sortie a
+                      été prise (-1 = jamais). Même mécanique que
+                      candyGoldBlock : « une fois par VENUE » et non « par
+                      visite », parce qu'une visite se répète en ressortant et
+                      en rentrant par le passage, ce qui ferait de la prime un
+                      bouton à or infini. Le créneau, lui, est strictement
+                      croissant (passageBlockOf) : il ne peut pas être rejoué. */
+  if (typeof f.inv.labBest !== "number") f.inv.labBest = 0;
+  if (typeof f.inv.labGoldBlock !== "number") f.inv.labGoldBlock = -1;
   if (typeof f.inv.candyLevel !== "number") f.inv.candyLevel = 0;
   if (typeof f.inv.candyGoldBlock !== "number") f.inv.candyGoldBlock = -1;
   if (typeof f.inv.candyCatDone !== "boolean") f.inv.candyCatDone = false;
@@ -4236,6 +4248,53 @@ export function resolvePassagePickup(s, f, worldIdx, pickupId, rnd) {
      les teste, et changer la forme d'un retour pour supprimer un cas est le
      genre de nettoyage qui casse un appelant oublié. */
   void spec;
+  return res;
+}
+
+/* ===========================================================================
+   ZIP 393 — FIN D'UNE PARTIE AU LABYRINTHE
+   ---------------------------------------------------------------------------
+   Appelé par l'hôte à réception de "labFailed" ou "labWon". Comme pour le défi
+   de fuite et le Gourmandin, la partie s'est déroulée ENTIÈREMENT côté client
+   (le monde sombre n'existe pas côté hôte, le labyrinthe encore moins) :
+   l'hôte persiste et diffuse, mais ne croit rien sur parole.
+
+   TROIS GARDE-FOUS, et le troisième est le seul qui compte vraiment :
+
+     - les éclats sont plafonnés à LAB_MAX_SHARDS et le score à LAB_MAX_SCORE ;
+     - le score ne remplace le record que s'il est supérieur ;
+     - ⚠️ LA PRIME DE SORTIE NE TOMBE QU'UNE FOIS PAR CRÉNEAU, et le créneau
+       vient de l'ÉTAT DE LA FERME (s.day), jamais du message. C'est ce qui
+       empêche de refaire le labyrinthe en boucle pour 900 or à chaque fois.
+       Motif du « créneau » repris tel quel du trésor du Gourmandin (zip 385).
+
+   Les éclats sont payés MÊME EN CAS DE MORT — décision de Guillaume, « comme
+   le défi de fuite », où les bonbons ramassés reviennent avec le joueur
+   rattrapé. C'est ce qui fait qu'une partie perdue n'est pas une partie
+   perdue pour rien.
+
+   Renvoie ce qui a été RÉELLEMENT accordé, pour que l'appelant sache quoi
+   diffuser — et pas ce que le client espérait.
+   =========================================================================== */
+export function resolveLabRun(s, f, shards, score, won, block) {
+  const sh = Math.max(0, Math.min(C.LAB_MAX_SHARDS, shards | 0));
+  const sc = Math.max(0, Math.min(C.LAB_MAX_SCORE, score | 0));
+  const res = { shards: sh, gold: 0, best: false, prize: false };
+
+  const gold = sh * C.LAB_SHARD_GOLD;
+  if (gold > 0) {
+    s.money = (s.money || 0) + gold;
+    s.totalEarned = (s.totalEarned || 0) + gold;
+    res.gold += gold;
+  }
+  if (won && (f.inv.labGoldBlock | 0) !== block) {
+    f.inv.labGoldBlock = block;
+    s.money = (s.money || 0) + C.LAB_PRIZE_GOLD;
+    s.totalEarned = (s.totalEarned || 0) + C.LAB_PRIZE_GOLD;
+    res.gold += C.LAB_PRIZE_GOLD;
+    res.prize = true;
+  }
+  if (sc > (f.inv.labBest | 0)) { f.inv.labBest = sc; res.best = true; }
   return res;
 }
 

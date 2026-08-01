@@ -302,6 +302,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // voit pas les états React de son itération).
   const [candyGame, setCandyGame] = useState(false);
   const candyGameRef = useRef(false);
+  // Zip 393 : LE LABYRINTHE (au bout du pont de haies). Même couple état/ref
+  // que les deux autres mini-jeux, et pour la même raison : l'état pilote le
+  // rendu React de l'iframe, la ref est lue depuis la boucle de jeu (qui ne
+  // voit pas les états React de son itération).
+  const [labGame, setLabGame] = useState(false);
+  const labGameRef = useRef(false);
   const [fishMini, setFishMini] = useState(null); // {mode, fish} pendant le minijeu, sinon null
   const [barnMini, setBarnMini] = useState(null); // {level} pendant le mini-jeu de construction de la grange, sinon null
   const [wolfBite, setWolfBite] = useState(null); // {wolfId} pendant le mini-jeu de morsure (loup agressif), sinon null
@@ -3190,6 +3196,36 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        et catastrophique pour 10 000 (un moulin en coûte 30 000). Tout est donc
        arbitré et PERSISTÉ par l'hôte, dans f.inv — voir resolveCandyLevel, qui
        refuse aussi les sauts de niveau. */
+    /* ZIP 393 — FIN DE PARTIE AU LABYRINTHE. Deux requêtes, une seule
+       résolution : E.resolveLabRun tranche les deux cas et c'est la seule
+       description de « ce que rapporte une partie ». Les séparer aurait donné
+       deux barèmes qui auraient fini par diverger — exactement ce que le zip
+       387 documente.
+
+       La blessure, elle, reste ici : elle n'est pas une récompense mais une
+       conséquence de zone, bornée comme partout ailleurs (cf. "evilCaught" et
+       "runFailed"), et la sortie n'en inflige aucune. */
+    if (req.kind === "labFailed" || req.kind === "labWon") {
+      const won = req.kind === "labWon";
+      const r = E.resolveLabRun(s, f, req.shards | 0, req.score | 0, won, req.block | 0);
+      if (!won) {
+        const nowL = Date.now();
+        f.injuredUntil = (typeof req.until === "number" && req.until > nowL && req.until <= nowL + C.RUN_INJURED_MS + 5000)
+          ? req.until : nowL + C.RUN_INJURED_MS;
+        f.injuryKind = "run";   // même famille que "evil" : soignable par pansements
+      }
+      dirtyRef.current = true;
+      // L'inventaire complet repart au joueur concerné : c'est ce qui met à
+      // jour son record chez lui (setMyInv), comme le fait "runFailed".
+      out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv, injuredUntil: f.injuredUntil };
+      if (r.gold > 0) out.state = shareState();
+      if (!won) out.injured = { id: f.id, until: f.injuredUntil };
+      if (r.prize) out.toast = { id: f.id, key: "labPrize", n: C.LAB_PRIZE_GOLD };
+      out.chat = won
+        ? { from: "\u{1F3DB}\uFE0F", msg: L.labWonChat(f.name, r.gold) }
+        : { from: "\u{1F56F}\uFE0F", msg: L.labLostChat(f.name, r.shards) };
+      return true;
+    }
     if (req.kind === "candyLevel") {
       const r = E.resolveCandyLevel(s, f, req.level | 0, req.block | 0);
       if (!r.ok) return true;               // saut de niveau : ignoré en silence
@@ -4525,6 +4561,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (key === "petCaught")     return L.petCaughtToast(C.petName(n, lang === "en"));
     if (key === "petReleased")   return L.bagReleasedToast(C.petName(n, lang === "en"));
     if (key === "bagFull")       return L.bagPetsFull(C.MAX_PETS);
+    /* Zip 393 : prime de sortie du labyrinthe. Elle passe par un TOAST DE
+       L'HÔTE et non par un message du client, parce que le client ne peut pas
+       savoir si elle est due : c'est resolveLabRun qui compare le créneau de
+       rotation à f.inv.labGoldBlock. Un toast optimiste aurait annoncé 900 or
+       à chaque sortie, y compris la deuxième de la même venue — c'est-à-dire
+       aurait menti au joueur sur ce qu'il vient de gagner. */
+    if (key === "labPrize")      return L.labPrizeToast(n | 0);
     // Zip 388 : décoration vendue. Le libellé est reconstruit ICI à partir du
     // catalogue plutôt que transporté dans le message : un nom de décoration
     // qui voyagerait serait figé dans la langue de l'HÔTE, et les deux joueurs
@@ -8807,6 +8850,139 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     return () => window.removeEventListener("message", onMsg);
   }, [candyGame, lang]);
 
+  /* ==================================================================
+     ZIP 393 — LE LABYRINTHE (mini-jeu du Pays du Labyrinthe)
+     ------------------------------------------------------------------
+     Page autonome servie depuis public/labyrinth/, affichée dans une
+     <iframe> par-dessus la ferme, qui CONTINUE DE TOURNER derrière.
+     Même architecture qu'aux zips 372 et 385, et pour les trois mêmes
+     raisons (voir public/labyrinth/js/bridge.js).
+
+     ⚠️ IL SE COMPORTE COMME LE DÉFI DE FUITE, PAS COMME LE GOURMANDIN, et
+     c'est la décision de Guillaume : « comme le défi de fuite ». Donc
+     blessure à la défaite, butin conservé, et sortie qui repose le
+     fermier au pied du pont. Le Pays du Labyrinthe n'est pas un monde
+     paisible comme le Pays des Bonbons — il a des créatures, des trous
+     et un traqueur.
+     ================================================================== */
+  function openLabGame() {
+    if (labGameRef.current || candyGameRef.current || runChallengeRef.current || zoneTransRef.current.active) return;
+    if (isInjured()) return;   // blessé : on ne redescend pas dans le noir
+    const m = meRef.current; if (!m) return;
+    m.moving = false;
+    // Les touches encore enfoncées resteraient « collées » et feraient
+    // marcher le fermier tout seul derrière l'iframe (bug vécu au zip 372).
+    keysRef.current = {};
+    labGameRef.current = true;
+    setLabGame(true);
+    sendPos();
+    broadcastChat("\u{1F56F}\uFE0F", L.labEnteredChat(m.name));
+  }
+
+  function closeLabGame() {
+    labGameRef.current = false;
+    setLabGame(false);
+    keysRef.current = {};
+  }
+
+  /* Le créneau de rotation est calculé ICI, à partir de l'état de jeu, jamais
+     reçu de l'iframe : c'est lui qui décide si la prime de sortie est encore
+     disponible pour cette venue du labyrinthe. Motif repris de
+     candyLevelDone (zip 385).
+
+     ⚠️ Le jour vit à la RACINE de sharedRef, pas sous .state — shareState() le
+     range sous `state` dans le PAYLOAD RÉSEAU, mais l'objet local l'a à plat.
+     Cet accès est COPIÉ de candyLevelDone, y compris son repli `|| 1`, comme
+     l'impose la règle du zip 385. */
+  function labBlockNow() {
+    const day = sharedRef.current.day || 1;
+    return E.passageBlockOf(day);
+  }
+
+  // Défaite, ou abandon en cours de partie (le labyrinthe compte l'abandon
+  // comme un échec, exactement comme le défi de fuite). Calque de
+  // runChallengeLost : blessure appliquée en OPTIMISTE côté client, requête à
+  // l'hôte pour la persister et la diffuser, puis fondu et retour à la ferme.
+  function labGameLost(score, shards) {
+    closeLabGame();
+    const until = Date.now() + C.RUN_INJURED_MS;
+    injuredUntilRef.current = until; setInjuredUntil(until);
+    sendReq({ kind: "labFailed", until, score: score | 0, shards: shards | 0, block: labBlockNow() });
+    if ((shards | 0) > 0) pushToast(L.labShardsToast(shards | 0));
+    pushToast(L.labLostToast);
+    crossPassage(false, true, "run");
+  }
+
+  /* SORTIE RÉUSSIE. Le contraire exact de labGameLost, et c'est le contraste
+     qui fait tout l'intérêt : mêmes éclats, même record, mais AUCUNE blessure
+     et on reste dans le monde sombre.
+
+     Trois précautions, toutes reprises de runChallengeEscaped (zip 377) :
+       1. on ne passe PAS par crossPassage(). Le joueur ne change pas de zone :
+          il était dans le monde sombre, il y reste. Un fondu de zone le
+          téléporterait à la ferme et afficherait le mauvais toast ;
+       2. on le repose AU PIED du pont et non au bout : le bout, c'est la dalle
+          de la porte, et il rouvrirait le labyrinthe dans la seconde. Le
+          verrou runGateArmedRef est remis à faux pour la même raison ;
+       3. la blessure existante n'est pas touchée. Sortir n'inflige aucune
+          sanction, ça n'en efface pas non plus. */
+  function labGameWon(score, shards) {
+    labGameRef.current = false;
+    setLabGame(false);
+    keysRef.current = {};
+    const m = meRef.current;
+    if (m && m.zone === "evil") {
+      m.x = C.RUN_JETTY_BASE.x; m.y = C.RUN_JETTY_BASE.y;
+      m.moving = false; m.animT = 0; m.dir = 2;
+      runGateArmedRef.current = false;
+      sendPos();
+    }
+    // Le labyrinthe se termine sur un écran violet ; sans ce voile qui
+    // s'efface, on passerait de la lumière pleine à la carte d'un seul coup.
+    runReturnFadeRef.current = performance.now();
+    sendReq({ kind: "labWon", score: score | 0, shards: shards | 0, block: labBlockNow() });
+    if ((shards | 0) > 0) pushToast(L.labShardsToast(shards | 0));
+    pushToast(L.labWonToast);
+  }
+
+  useEffect(() => {
+    if (!labGame) return;
+    function onMsg(e) {
+      if (e.origin !== window.location.origin) return;
+      const d = e.data;
+      if (!d || typeof d !== "object") return;
+      if (d.type === "vf-lab-ready") {
+        /* DEUX SOURCES POUR LE RECORD, ON GARDE LA PLUS HAUTE — même
+           raisonnement qu'au zip 383 pour le défi : invRef est l'état privé du
+           joueur, farmersRef la sauvegarde (autoritaire chez l'hôte), et les
+           deux ne divergent qu'au premier instant d'une reprise, c'est-à-dire
+           exactement quand on annonce un record. */
+        const savedMe = farmersRef.current[me.id];
+        const best = Math.max(
+          (invRef.current && invRef.current.labBest) | 0,
+          (savedMe && savedMe.inv && savedMe.inv.labBest) | 0
+        );
+        // meRef, pas l'état React : cet écouteur est posé une fois pour la
+        // durée de la partie, une valeur capturée au montage serait figée.
+        const mm = meRef.current;
+        const skin = charPalette(mm && mm.gender, mm && mm.outfit);
+        try {
+          e.source.postMessage({ type: "vf-lab-init", lang, best, skin }, window.location.origin);
+        } catch (err) {}
+      } else if (d.type === "vf-lab-over") {
+        labGameLost(d.score, d.shards);
+      } else if (d.type === "vf-lab-won") {
+        labGameWon(d.score, d.shards);
+      } else if (d.type === "vf-lab-exit") {
+        // Ressortir sans être entré : aucune conséquence. Le labyrinthe n'a
+        // pas d'embuscade à l'entrée, contrairement au défi de fuite.
+        closeLabGame();
+      }
+    }
+    window.addEventListener("message", onMsg);
+    return () => window.removeEventListener("message", onMsg);
+  }, [labGame, lang]);
+
   // Réception des messages de l'iframe. Même origine obligatoire : la page est
   // servie par la ferme elle-même, tout le reste est rejeté.
   useEffect(() => {
@@ -9062,6 +9238,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           runGateArmedRef.current = false;
           const dest = C.PASSAGE_GATE_DEST[(ew.spec && ew.spec.key) || "evil"];
           if (dest === "candy") openCandyGame();
+          else if (dest === "maze") openLabGame();   // zip 393
           else if (dest === "run") startRunAmbush();
           else pushToast(L.bridgeNoDest);
         }
@@ -9167,7 +9344,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // à la ferme (clic sur le bord de l'écran, raccourci navigateur), le
       // fermier ne doit surtout pas se mettre à marcher dans le monde sombre
       // pendant qu'on court dans le défi.
-      if (runChallengeRef.current || candyGameRef.current) return; // zip 385 : idem pour le Gourmandin
+      if (runChallengeRef.current || candyGameRef.current || labGameRef.current) return; // zip 385 : idem pour le Gourmandin ; zip 393 : idem pour le labyrinthe
       if (isInjured()) return; // blessé : aucune entrée, en attendant la fin du repos forcé
       // Endormi : seule la touche E (se réveiller) doit rester active, pour
       // ne pas pouvoir changer d'outil/monter à cheval/etc. depuis "l'intérieur".
@@ -14035,6 +14212,25 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         </div>
       )}
 
+      {/* Zip 393 : LE LABYRINTHE. Page autonome (public/labyrinth/) affichée
+          par-dessus la ferme, qui continue de tourner derrière — indispensable
+          si c'est l'hôte qui joue. On réutilise TELLES QUELLES les deux classes
+          du défi de fuite (.ferme-run-overlay / .ferme-run-frame) : elles ne
+          disent rien du défi, seulement « iframe plein écran par-dessus le
+          jeu », et en créer un jumeau dans globals.css aurait donné deux
+          styles à maintenir ensemble pour zéro différence. Ce zip ne touche
+          donc PAS app/globals.css. */}
+      {labGame && (
+        <div className="ferme-run-overlay">
+          <iframe
+            className="ferme-run-frame"
+            src="/labyrinth/index.html"
+            title="Valley Farm — The Labyrinth"
+            onLoad={e => { try { e.currentTarget.contentWindow.focus(); } catch (err) {} }}
+          />
+        </div>
+      )}
+
       {/* Fiche de Greg (touche Q à proximité) — menu d'ordres complet. */}
       {gregCardOpen && sharedRef.current.greg && (() => {
         const g = sharedRef.current.greg;
@@ -14651,6 +14847,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             <div className="ferme-shop-row">
               <span style={{ fontSize: 26, width: 32, textAlign: "center" }}>🍬</span>
               <div className="info"><b>{L.bagCandiesRow((myInv && myInv.candies) || 0)}</b><span>{L.bagRunBestSub((myInv && myInv.runBest) || 0)}</span></div>
+            </div>
+
+            {/* Zip 393 : le record du labyrinthe, posé au même endroit et pour la
+                même raison que celui du défi — il n'a pas de quoi remplir un
+                panneau à lui seul. Les ÉCLATS ne s'affichent pas ici parce
+                qu'ils ne sont pas un stock : ils sont convertis en or à la
+                sortie du mini-jeu (resolveLabRun) et n'existent jamais dans le
+                sac. Afficher un compteur d'éclats aurait promis un objet qu'on
+                n'a pas. */}
+            <div style={{ fontSize: 11, fontWeight: 700, opacity: .7, textTransform: "uppercase", letterSpacing: .5, marginTop: 12 }}>{L.bagLabTitle}</div>
+            <div className="ferme-shop-row">
+              <span style={{ fontSize: 26, width: 32, textAlign: "center" }}>🕯️</span>
+              <div className="info"><b>{L.bagLabBestSub((myInv && myInv.labBest) || 0)}</b></div>
             </div>
 
             <div style={{ fontSize: 11, fontWeight: 700, opacity: .7, textTransform: "uppercase", letterSpacing: .5, marginTop: 12 }}>{L.bagEnergyTitle}</div>

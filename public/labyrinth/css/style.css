@@ -1,0 +1,85 @@
+/* =============================================================================
+   style.css — l'interface du Labyrinthe.
+   -----------------------------------------------------------------------------
+   Reprend la grammaire visuelle du défi de fuite (public/templerun/css) pour
+   que les deux mini-jeux se ressemblent : capitales espacées, chiffres gras,
+   panneaux sombres translucides. Les couleurs d'accent, elles, viennent du
+   labyrinthe : l'orange de la torche et le violet du lac.
+   ========================================================================== */
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: #0b0714; }
+body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #efe7ff; }
+#gl { display: block; width: 100vw; height: 100vh; }
+
+/* Voile d'angoisse : un halo rouge en BORD d'écran, jamais un filtre plein.
+   Un voile uniforme masque le jeu au pire moment ; un vignettage laisse le
+   centre lisible tout en serrant la gorge. */
+#dread {
+  position: fixed; inset: 0; pointer-events: none; opacity: 0; z-index: 50;
+  background: radial-gradient(ellipse at center, rgba(255,20,50,0) 42%, rgba(255,20,50,0.85) 100%);
+  transition: opacity .18s linear;
+}
+#hurtFlash {
+  position: fixed; inset: 0; pointer-events: none; opacity: 0; z-index: 51;
+  background: rgba(255,40,60,0.5);
+}
+
+.layer { position: fixed; inset: 0; z-index: 100; }
+.hud { pointer-events: none; padding: 14px 18px; }
+.hud-row { display: flex; gap: 26px; align-items: baseline; }
+.stat { display: flex; flex-direction: column; }
+.stat .label { font-size: 11px; letter-spacing: .16em; opacity: .62; }
+.stat span:last-child { font-size: 26px; font-weight: 700; }
+.stat.sword #swordIcon { font-size: 24px; opacity: .18; transition: opacity .25s; }
+.stat.sword #swordIcon.on { opacity: 1; color: #b9c2cc; }
+
+.flame { margin-top: 12px; width: 230px; }
+.flame-label { font-size: 11px; letter-spacing: .16em; opacity: .62; margin-bottom: 4px; }
+.flame-bar { height: 9px; background: rgba(255,255,255,.10); border-radius: 5px; overflow: hidden; }
+#flameFill { height: 100%; width: 100%; background: #ff9a3c; transition: width .15s linear; }
+/* Deux paliers, les mêmes que FLAME_LOW et FLAME_CRITICAL dans config.js. La
+   couleur doit basculer EN MÊME TEMPS que le comportement des créatures,
+   sinon le joueur cesse de croire à la règle. */
+#flameFill.low { background: #d8622a; }
+#flameFill.ember { background: #7a2c18; }
+
+.hearts { margin-top: 12px; display: flex; gap: 6px; }
+.heart { width: 15px; height: 15px; background: #e8356e; border-radius: 3px; }
+.heart.off { background: rgba(255,255,255,.13); }
+
+.toast {
+  position: fixed; left: 50%; bottom: 12%; transform: translateX(-50%) translateY(12px);
+  background: rgba(12,8,22,.9); border: 1px solid rgba(178,138,255,.35);
+  padding: 10px 18px; border-radius: 10px; font-size: 15px;
+  opacity: 0; transition: opacity .22s, transform .22s; pointer-events: none; z-index: 120;
+}
+.toast.visible { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+.panel {
+  display: none; flex-direction: column; align-items: center; justify-content: center;
+  background: rgba(8,5,16,.86); text-align: center; padding: 24px;
+}
+.panel.visible { display: flex; }
+.panel h1 { font-size: 40px; margin: 0 0 8px; letter-spacing: .04em; }
+.panel .sub { opacity: .78; margin: 0 0 20px; max-width: 30em; line-height: 1.5; }
+.panel button {
+  font: inherit; font-size: 18px; font-weight: 600; color: #1a1020;
+  background: #ff9a3c; border: 0; border-radius: 10px; padding: 12px 34px;
+  cursor: pointer; margin: 4px;
+}
+.panel button.ghost { background: transparent; color: #cbb8ff; border: 1px solid rgba(178,138,255,.45); }
+.panel .controls { margin-top: 20px; font-size: 13px; opacity: .68; line-height: 1.85; }
+.panel .hint { font-size: 13px; opacity: .55; max-width: 34em; margin: 10px 0 0; line-height: 1.5; }
+.panel .hint.farm { color: #b88aff; opacity: .8; }
+.panel .error { color: #ff7a7a; display: none; margin-bottom: 12px; }
+.newbest { color: #ffd36e; font-weight: 700; letter-spacing: .14em; margin-bottom: 10px; }
+.results { display: grid; grid-template-columns: auto auto; gap: 6px 28px; margin: 14px 0 22px; font-size: 16px; }
+.results div { display: contents; }
+.results b { text-align: right; }
+
+/* SORTIE : une flèche violette qui monte, 1,5 s, et on repart. Pas de bilan —
+   voir bridge.js et game.js/finish(). */
+.win { display: none; align-items: center; justify-content: center; background: rgba(140,90,220,.22); }
+.win.visible { display: flex; }
+.win-box h2 { font-size: 120px; margin: 0; color: #d9bcff; animation: rise 1.4s ease-out; }
+@keyframes rise { from { transform: translateY(40px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }

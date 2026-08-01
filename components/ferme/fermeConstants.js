@@ -2750,8 +2750,49 @@ export const PASSAGE_FORCE_KEY = null;
 export const PASSAGE_GATE_DEST = {
   evil: "run",      // défi de fuite (zip 372) — sa seule terre depuis le 386
   candy: "candy",   // Le Gourmandin (zip 385), désormais au bout du pont arc-en-ciel
-  // maze / crystal / meadow : pont construit et habillé, destination à venir.
+  maze: "maze",     // LE LABYRINTHE (zip 393), au bout du pont de haies
+  // crystal / meadow : pont construit et habillé, destination à venir.
 };
+
+/* ==========================================================================
+   ZIP 393 — LE LABYRINTHE (mini-jeu du Pays du Labyrinthe)
+   ==========================================================================
+   Troisième mini-jeu, servi depuis public/labyrinth/, au bout du pont de
+   haies. Jeu 3D à la troisième personne : on avance à la torche dans un
+   dédale de pierre POSÉ SUR LE LAC VIOLET, on trouve une épée, on affronte
+   des rôdeurs, on fuit un traqueur increvable, on évite les trous, on
+   ressort au nord.
+
+   ⚠️ NE PAS CONFONDRE AVEC `MAZE_PRIZE_GOLD` (zip 235), juste au-dessus :
+   celui-là paie le coffre au centre du labyrinthe de HAIES de la carte 2D,
+   il est bel et bien lu (voir la requête "mazePrize" dans FermeGame.js), et
+   il n'a rien à voir avec le mini-jeu 3D. Les deux coexistent sur la même
+   terre : le coffre des haies se ramasse en se promenant, la récompense
+   ci-dessous se gagne en traversant le dédale de pierre.
+
+   TROIS DÉCISIONS DE GUILLAUME, prises avant la première ligne de code :
+     - épée TROUVÉE dans le labyrinthe (donc on commence désarmé — le
+       générateur borne cette période, voir SWORD_MAX_DEPTH côté jeu) ;
+     - torche qui SE CONSUME si on ne la ravive pas ;
+     - conséquences « comme le défi de fuite » : mort → blessé 10 min, butin
+       gardé ; sortie → on ressort au pied du pont, sur la carte du monde
+       sombre, avec de l'or.
+
+   LA DURÉE DE BLESSURE EST CELLE DU DÉFI (RUN_INJURED_MS, 10 min) et non
+   EVIL_INJURED_MS (30 min) : décision Guillaume, on doit pouvoir retenter
+   dans la soirée. On réutilise la constante au lieu d'en créer une jumelle —
+   deux nombres qui doivent rester égaux finissent toujours par diverger.
+   ========================================================================== */
+export const LAB_PRIZE_GOLD = 900;         // sortie réussie, UNE FOIS PAR VENUE du labyrinthe
+export const LAB_SHARD_GOLD = 40;          // or par éclat rapporté (même en cas de mort)
+/* Plafonds anti-message-aberrant, même rôle que RUN_MAX_* : le mini-jeu se
+   déroule ENTIÈREMENT côté client, l'hôte persiste ce qu'on lui dit et ne peut
+   donc pas le croire sur parole. Ces bornes ne rendent pas la triche
+   impossible, elles empêchent qu'un bug ou un message forgé n'injecte une
+   fortune dans une sauvegarde partagée et durable. 26 éclats sont posés par
+   dédale (SHARD_COUNT) : 40 est confortable et reste borné. */
+export const LAB_MAX_SHARDS = 40;
+export const LAB_MAX_SCORE = 60000;
 
 export const PASSAGE_WORLDS = [
   { key: "evil", bridge: "stone",    name: "Terres Maléfiques",   nameEn: "Evil Lands",

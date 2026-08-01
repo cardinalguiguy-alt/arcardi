@@ -946,6 +946,21 @@ export const FERME_STR = {
     candyEnteredChat: (name) => `🍭 ${name} traverse le pont arc-en-ciel et s'assoit devant le Gourmandin.`,
     // Zip 386 : pont construit, destination pas encore écrite.
     bridgeNoDest: "Le pont s'arrête là. Quelque chose viendra s'y installer.",
+    /* Zip 393 — LE LABYRINTHE (au bout du pont de haies). Comme pour le défi
+       et le Gourmandin, les textes DU JEU ne sont pas ici : il est servi
+       depuis public/labyrinth/ avec sa propre table FR/EN (js/strings.js).
+       Ces clés-ci ne couvrent que ce que la FERME affiche autour. */
+    labEnteredChat: (name) => `🕯️ ${name} traverse le pont de haies et descend dans le labyrinthe.`,
+    labLostChat: (name, shards) => shards > 0
+      ? `🕯️ ${name} n'est pas ressorti du labyrinthe, mais rapporte ${shards} éclat(s).`
+      : `🕯️ ${name} n'est pas ressorti du labyrinthe, les mains vides.`,
+    labWonChat: (name, gold) => `🏛️ ${name} est ressorti du labyrinthe ! Le lac lui laisse ${gold} or.`,
+    labLostToast: "🕯️ Le noir t'a eu... tu te réveilles à la ferme, blessé.",
+    labShardsToast: (n) => `💎 +${n} éclat(s) rapporté(s) du labyrinthe !`,
+    labWonToast: "😮‍💨 Dehors. L'air du monde sombre n'a jamais paru aussi respirable.",
+    labPrizeToast: (gold) => `🏛️ Prime de sortie : +${gold} or ! (une fois par venue du labyrinthe)`,
+    bagLabTitle: "Labyrinthe",
+    bagLabBestSub: (n) => n > 0 ? `Meilleur score : ${n}` : "Jamais entré.",
     candyGoldChat: (name, gold) => `🪙 ${name} a rassasié le Gourmandin jusqu'au niveau 10 : il recrache ${gold} pièces d'or !`,
     candyCatChat: (name) => `🐱 ${name} a terminé les quinze niveaux du Gourmandin et repart avec un chat berlingot.`,
     runLostChat: (name, candies) => candies > 0
@@ -1996,6 +2011,18 @@ export const FERME_STR = {
     candyEnteredChat: (name) => `🍭 ${name} crosses the rainbow bridge and sits down in front of the Muncher.`,
     // Zip 386 — see the French block.
     bridgeNoDest: "The bridge ends here. Something will move in one day.",
+    // Zip 393 — The Labyrinth (end of the hedge bridge).
+    labEnteredChat: (name) => `🕯️ ${name} crosses the hedge bridge and goes down into the labyrinth.`,
+    labLostChat: (name, shards) => shards > 0
+      ? `🕯️ ${name} never came back out of the labyrinth, but brings ${shards} shard(s).`
+      : `🕯️ ${name} never came back out of the labyrinth, empty-handed.`,
+    labWonChat: (name, gold) => `🏛️ ${name} made it out of the labyrinth! The lake gives up ${gold} gold.`,
+    labLostToast: "🕯️ The dark got you... you wake up at the farm, hurt.",
+    labShardsToast: (n) => `💎 +${n} shard(s) brought back from the labyrinth!`,
+    labWonToast: "😮‍💨 Out. The dark world's air has never felt so breathable.",
+    labPrizeToast: (gold) => `🏛️ Way-out bounty: +${gold} gold! (once per visit to the labyrinth)`,
+    bagLabTitle: "Labyrinth",
+    bagLabBestSub: (n) => n > 0 ? `Best score: ${n}` : "Never went in.",
     candyGoldChat: (name, gold) => `🪙 ${name} fed the Muncher all the way to level 10 — out comes a treasure of ${gold} gold!`,
     candyCatChat: (name) => `🐱 ${name} cleared all fifteen Muncher levels and leaves with a candy cat.`,
     runLostChat: (name, candies) => candies > 0
