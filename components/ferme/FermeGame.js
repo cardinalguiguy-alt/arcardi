@@ -330,7 +330,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // même rid réaffiche une notif fraîche.
   const [dismissedNotifs, setDismissedNotifs] = useState(() => new Set());
   /* ------------------------------------------------------------------
-     Zip 389 — PANNEAU DE NOTIFICATIONS REPLIABLE.
+     Zip 392 — PANNEAU DE NOTIFICATIONS REPLIABLE.
 
      Décision Guillaume : toujours replié au chargement, AUCUNE mémorisation,
      et dépliage AU SURVOL. D'où deux états et pas un :
@@ -382,8 +382,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [binOpen, setBinOpen] = useState(false);
   const [bagOpen, setBagOpen] = useState(false); // zip 236: personal bag modal
   const [mapOpen, setMapOpen] = useState(false);
-  const [devMenuOpen, setDevMenuOpen] = useState(false); // zip 389 : menu développeur (Cmd/Ctrl+Shift+X, hôte seul)
-  const [forcedWorldUi, setForcedWorldUi] = useState(null); // zip 389 : miroir RENDABLE de sharedRef.current.forcedWorld (voir applyForcedWorld)
+  const [devMenuOpen, setDevMenuOpen] = useState(false); // zip 392 : menu développeur (Cmd/Ctrl+Shift+X, hôte seul)
+  const [forcedWorldUi, setForcedWorldUi] = useState(null); // zip 392 : miroir RENDABLE de sharedRef.current.forcedWorld (voir applyForcedWorld)
   // Menu du chaudron (chantier 2026-07, demande Guillaume : "le click sur E
   // doit ouvrir un menu chaudron que voulez-vous concocter ?") : remplace
   // l'ancien enchaînement automatique E->dépôt/E->lancement par un vrai menu
@@ -538,7 +538,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // Compteurs de trafic (voir l'enveloppe de ch.send dans l'effet réseau).
   const netStatsRef = useRef({ startedAt: Date.now(), sent: 0, dropped: 0, timedOut: 0, bytes: 0, byKey: {}, droppedByKey: {} });
   const mapOpenRef = useRef(false);
-  const devMenuOpenRef = useRef(false); // zip 389 : lu par onKeyDown, qui vit dans une closure à deps vides
+  const devMenuOpenRef = useRef(false); // zip 392 : lu par onKeyDown, qui vit dans une closure à deps vides
   const shopOpenRef = useRef(false);
   const binOpenRef = useRef(false);
   const bagOpenRef = useRef(false); // zip 236
@@ -698,7 +698,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   useEffect(() => { hatUntilRef.current = hatUntil || 0; }, [hatUntil]);
   useEffect(() => { worldReadyRef.current = worldReady; }, [worldReady]);
   useEffect(() => { mapOpenRef.current = mapOpen; }, [mapOpen]);
-  useEffect(() => { devMenuOpenRef.current = devMenuOpen; }, [devMenuOpen]); // zip 389
+  useEffect(() => { devMenuOpenRef.current = devMenuOpen; }, [devMenuOpen]); // zip 392
   useEffect(() => { shopOpenRef.current = shopOpen; }, [shopOpen]);
   useEffect(() => { cauldronMenuOpenRef.current = cauldronMenuOpen; }, [cauldronMenuOpen]);
   useEffect(() => { binOpenRef.current = binOpen; }, [binOpen]);
@@ -945,7 +945,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // Crée tout de suite l'enregistrement pour réserver le code.
       persistFarm();
     }
-    // Zip 389 : posé APRÈS le if/else, pour couvrir les DEUX branches d'un seul
+    // Zip 392 : posé APRÈS le if/else, pour couvrir les DEUX branches d'un seul
     // appel — une ferme rechargée (qui peut porter un forçage) comme une ferme
     // toute neuve (qui n'en a pas, et pour qui `saved` n'existe même pas).
     // Le placer dans chaque branche aurait été le genre d'oubli qui ne se voit
@@ -1100,7 +1100,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       decor: E.migrateDecor(payload.decor), // zip 251
       crafts: E.migrateCrafts(payload.crafts), craftStock: E.migrateCraftStock(payload.craftStock), // zip 252
     };
-    // Zip 389 : la terre forcée arrive AVEC l'instantané, donc avant toute
+    // Zip 392 : la terre forcée arrive AVEC l'instantané, donc avant toute
     // évaluation de passageWorldIndex par ce client. Posée ici et pas dans le
     // littéral ci-dessus parce que applyForcedWorld doit aussi mettre le moteur
     // à jour, et que sharedRef.current vient tout juste d'être remplacé.
@@ -1547,7 +1547,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       station: s.station, // 2026-07 station update
       decor: s.decor, // zip 251: décorations posées (ferme + Valley Town), persistées
       crafts: s.crafts, craftStock: s.craftStock, // zip 252: ateliers artisans + stock de produits
-      // Zip 389 : terre forcée par le menu développeur. Persistée à la demande
+      // Zip 392 : terre forcée par le menu développeur. Persistée à la demande
       // de Guillaume ("tout le monde + persisté") pour qu'une démonstration
       // survive à un rechargement. Champ du seul instantané JSON déjà en base :
       // AUCUNE migration Supabase. Absent d'une sauvegarde antérieure = null =
@@ -4240,7 +4240,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
   }
   /* ------------------------------------------------------------------
-     Zip 389 — LA TERRE FORCÉE PAR LE MENU DÉVELOPPEUR : UN SEUL CHEMIN.
+     Zip 392 — LA TERRE FORCÉE PAR LE MENU DÉVELOPPEUR : UN SEUL CHEMIN.
 
      `sharedRef.current.forcedWorld` est la source de vérité (diffusée par
      shareState, persistée par currentSnapshot) ; la variable de module du
@@ -4289,7 +4289,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (w && p.mills) for (const [i, wheat, nextAt] of p.mills) w.mills.set(i, { wheat, nextAt });
     // Sucreries (chantier canne à sucre) : miroir exact de p.mills ci-dessus.
     if (w && p.sucreries) for (const [i, cane, nextAt] of p.sucreries) w.sucreries.set(i, { cane, nextAt });
-    // Zip 389 : `forcedWorld` voyage dans le MÊME p.state que l'or et le jour
+    // Zip 392 : `forcedWorld` voyage dans le MÊME p.state que l'or et le jour
     // (voir shareState) — aucun message périodique ajouté, et un invité qui
     // arrive en retard le reçoit au premier apply venu. `applyForcedWorld` tient
     // le moteur à jour ; le changement d'index qui en découle est ensuite
@@ -8211,7 +8211,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   }
 
   /* ======================================================================
-     ZIP 389 — LES DEUX ACTIONS DU MENU DÉVELOPPEUR.
+     ZIP 392 — LES DEUX ACTIONS DU MENU DÉVELOPPEUR.
      ====================================================================== */
 
   /* Forcer la terre du passage, ou rendre la rotation au jeu (key = null).
@@ -8251,7 +8251,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      position ferme (m.farmX/m.farmY) à restaurer au retour. Écrire un second
      chemin de téléportation, c'est très exactement la leçon du zip 387 : deux
      descriptions d'une même chose finissent toujours par diverger. */
-  /* Se soigner instantanément (demande Guillaume, zip 389).
+  /* Se soigner instantanément (demande Guillaume, zip 392).
 
      LE POINT QUI COMPTE : ceci ne touche PAS `injuredUntilRef`. La blessure est
      une donnée arbitrée et persistée par l'hôte, dans `farmersRef` — la ref
@@ -8301,7 +8301,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     zoneTransRef.current = { active: true, t0: performance.now(), toEvil: false, swapped: false, dest: "dev:" + destKey };
   }
   /* ======================================================================
-     ZIP 389 — LE PANNEAU DE NOTIFICATIONS, EN UN SEUL ENDROIT.
+     ZIP 392 — LE PANNEAU DE NOTIFICATIONS, EN UN SEUL ENDROIT.
      ======================================================================
      Il y avait DEUX empilements indépendants collés à droite, chacun avec ses
      styles écrits en dur dans le JSX : les cartes de visiteurs (right:12,
@@ -8946,7 +8946,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       zt.swapped = true;
       const m = meRef.current;
       /* ----------------------------------------------------------------
-         ZIP 389 — destinations du menu développeur, traitées EN PREMIER.
+         ZIP 392 — destinations du menu développeur, traitées EN PREMIER.
 
          Elles sont préfixées "dev:" pour ne pouvoir entrer en collision avec
          aucune destination de jeu, présente ou future.
@@ -9128,7 +9128,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     function onKeyDown(e) {
       if (document.activeElement === chatInputRef.current) return;
       /* ------------------------------------------------------------------
-         ZIP 389 — GARDE DE MODIFICATEURS, ET MENU DÉVELOPPEUR.
+         ZIP 392 — GARDE DE MODIFICATEURS, ET MENU DÉVELOPPEUR.
 
          Ce bloc passe AVANT tout le reste, y compris avant l'écriture dans
          keysRef : c'est justement cette écriture qui posait problème.
@@ -9226,11 +9226,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
       if (e.code === "KeyT") { e.preventDefault(); setChatOpen(true); setTimeout(() => chatInputRef.current?.focus(), 0); }
       if (e.code === "KeyM") setMapOpen(o => !o);
-      if (e.code === "Escape") { setShopOpen(false); setBinOpen(false); setBagOpen(false); setMapOpen(false); setSeedMenuOpen(false); setToolMenuOpen(false); setCraftMenuOpen(null); setCauldronMenuOpen(false); setAdsOpen(false); setVisitorOpen(false); setJewelryDesignOpen(false); setDevMenuOpen(false); /* zip 389 */ }
+      if (e.code === "Escape") { setShopOpen(false); setBinOpen(false); setBagOpen(false); setMapOpen(false); setSeedMenuOpen(false); setToolMenuOpen(false); setCraftMenuOpen(null); setCauldronMenuOpen(false); setAdsOpen(false); setVisitorOpen(false); setJewelryDesignOpen(false); setDevMenuOpen(false); /* zip 392 */ }
     }
     function onKeyUp(e) { keysRef.current[e.code] = false; }
     function onMove(e) { mouseRef.current.x = e.clientX; mouseRef.current.y = e.clientY; }
-    function onDown(e) { if (e.button === 0 && !mapOpenRef.current && !shopOpenRef.current && !binOpenRef.current && !bagOpenRef.current && !cauldronMenuOpenRef.current && !fishMiniRef.current && !adsOpenRef.current && !visitorOpenRef.current && !gregCardOpenRef.current && !devMenuOpenRef.current /* zip 389 */ && !isInjured()) doAction(); }
+    function onDown(e) { if (e.button === 0 && !mapOpenRef.current && !shopOpenRef.current && !binOpenRef.current && !bagOpenRef.current && !cauldronMenuOpenRef.current && !fishMiniRef.current && !adsOpenRef.current && !visitorOpenRef.current && !gregCardOpenRef.current && !devMenuOpenRef.current /* zip 392 */ && !isInjured()) doAction(); }
     function onWheel() { }
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
@@ -9276,7 +9276,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           // Invalidate any prior evil-world reference; will be re-fetched on entry.
           if (meRef.current && meRef.current.zone !== "evil") evilWorldRef.current = null;
           /* ------------------------------------------------------------
-             ZIP 389 — ET SI ON EST DÉJÀ DANS LE PASSAGE QUAND LA TERRE CHANGE ?
+             ZIP 392 — ET SI ON EST DÉJÀ DANS LE PASSAGE QUAND LA TERRE CHANGE ?
 
              La ligne au-dessus, écrite au zip 235, refuse délibérément de lâcher
              la carte tant que le joueur s'y trouve : la remplacer sous ses pieds
@@ -15340,7 +15340,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         );
       })()}
       {/* ================================================================
-          ZIP 389 — PANNEAU DE NOTIFICATIONS UNIQUE, REPLIÉ PAR DÉFAUT.
+          ZIP 392 — PANNEAU DE NOTIFICATIONS UNIQUE, REPLIÉ PAR DÉFAUT.
 
           Remplace les DEUX empilements du zip 233 et du zip 258, qui vivaient
           à right:12/top:120 et right:12/top:320 et pouvaient s'afficher
@@ -15458,7 +15458,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       {evilBite && <EvilBiteMinigame L={L} onWin={evilBiteWon} onFail={evilBiteLost} />}
 
       {/* ================================================================
-          ZIP 389 — MENU DÉVELOPPEUR (Cmd/Ctrl+Shift+X, hôte uniquement).
+          ZIP 392 — MENU DÉVELOPPEUR (Cmd/Ctrl+Shift+X, hôte uniquement).
 
           Volontairement sobre et sans illustration : ce n'est pas un écran de
           jeu, et il ne doit jamais donner l'impression d'en être un. La double
@@ -15509,7 +15509,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               </div>
 
               <h3 style={{ margin: "14px 0 6px" }}>{L.devHealSection}</h3>
-              {/* Zip 389 — soin instantané. Le bouton est TOUJOURS présent, et
+              {/* Zip 392 — soin instantané. Le bouton est TOUJOURS présent, et
                   seulement désactivé quand il n'y a rien à soigner : une entrée
                   de menu qui apparaît et disparaît selon l'état donne
                   l'impression d'un menu qui bouge tout seul, et surtout on ne
@@ -15541,7 +15541,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         );
       })()}
 
-      {/* Zip 389 — RAPPEL PERMANENT DU FORÇAGE. Guillaume a choisi un forçage
+      {/* Zip 392 — RAPPEL PERMANENT DU FORÇAGE. Guillaume a choisi un forçage
           PERSISTÉ : il survit à un rechargement, donc il peut se faire oublier
           entre deux sessions, et « le passage mène toujours au même endroit »
           ressemblerait alors à un bug de rotation. Ce bandeau est le prix à

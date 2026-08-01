@@ -6707,7 +6707,7 @@ body.ferme-active .wrap-room > .brand{ display:none !important; }
 .ferme-hint{ font-size:12px; opacity:.75; margin-bottom:14px; }
 
 /* ==========================================================================
-   Zip 389 — PANNEAU DE NOTIFICATIONS REPLIABLE (remplace les deux
+   Zip 392 — PANNEAU DE NOTIFICATIONS REPLIABLE (remplace les deux
    empilements en dur des zips 233 et 258).
    ==========================================================================
    `top:104px` place la pastille SOUS la barre de boutons (.ferme-actions,
@@ -6793,7 +6793,7 @@ body.ferme-active .wrap-room > .brand{ display:none !important; }
   .ferme-notif-pill.pulse{ animation:none; }
 }
 
-/* Zip 389 — bandeau de rappel du forçage de terre (menu développeur).
+/* Zip 392 — bandeau de rappel du forçage de terre (menu développeur).
    En bas au centre, au-dessus du canvas mais SOUS les modales : `.ferme-modal`
    est à z-index 45 (vérifié, pas supposé — la première écriture de ce bloc
    disait 60 « sous les modales à 100 », ce qui l'aurait fait flotter PAR-DESSUS

@@ -63,7 +63,7 @@ export const FERME_STR = {
     giftDecor: (d) => `une décoration unique (${d})`,
     giftPet: (pt) => `un animal de compagnie (${pt})`,
     meetBtn: "Rejoindre à la mairie",
-    // ⚠️ ZIP 389 : PLUS LUE NULLE PART. L'ancien empilement coupait la liste à
+    // ⚠️ ZIP 392 : PLUS LUE NULLE PART. L'ancien empilement coupait la liste à
     // 3 cartes et résumait le reste par cette ligne. Le panneau repliable les
     // montre TOUTES (liste défilante) et porte le total sur sa pastille : il
     // n'y a plus de « reste » à annoncer. Conservée et commentée plutôt que
@@ -1167,7 +1167,7 @@ export const FERME_STR = {
     toastFruitPicked: (n) => `🍎 +${n} pomme(s)`,
     toastFruitCooldown: "L'arbre a déjà été cueilli aujourd'hui.",
     passageWorldToast: (name) => `🌀 Cette semaine, le passage mène à : ${name}.`,
-    // --- Zip 389 : menu développeur (Cmd/Ctrl+Shift+X, hôte uniquement) ---
+    // --- Zip 392 : menu développeur (Cmd/Ctrl+Shift+X, hôte uniquement) ---
     devMenuTitle: "🛠️ Menu développeur",
     devMenuHint: "Réservé à l'hôte. Rien ici n'est visible par les joueurs qui ne connaissent pas le raccourci.",
     devWorldSection: "Terre du passage",
@@ -1179,7 +1179,7 @@ export const FERME_STR = {
     devRotationTitle: "Retour à la rotation prévue",
     devRotationSub: (d) => `Le passage suit à nouveau le jour de jeu, ${d} jours par terre.`,
     devRotationBtn: "Rétablir",
-    // --- Zip 389 : panneau de notifications repliable ---
+    // --- Zip 392 : panneau de notifications repliable ---
     notifPanelLabel: (n) => n > 1 ? `${n} notifications. Survole pour les voir, clique pour les garder ouvertes.` : "1 notification. Survole pour la voir, clique pour la garder ouverte.",
     devHealSection: "Blessure",
     devHealTitle: "Se soigner instantanément",
@@ -1324,7 +1324,7 @@ export const FERME_STR = {
     giftDecor: (d) => `a unique decoration (${d})`,
     giftPet: (pt) => `a pet (${pt})`,
     meetBtn: "Meet me at townhall",
-    // ⚠️ ZIP 389: NO LONGER READ ANYWHERE. See the French block for why.
+    // ⚠️ ZIP 392: NO LONGER READ ANYWHERE. See the French block for why.
     notifMore: (n) => `+${n} more visitor(s) waiting`,
     visitorChatSaid: (n, l0) => `${n}: ${l0}`,
     visitorChatLines: [
@@ -2193,7 +2193,7 @@ export const FERME_STR = {
     toastFruitPicked: (n) => `🍎 +${n} apple(s)`,
     toastFruitCooldown: "This tree has already been picked today.",
     passageWorldToast: (name) => `🌀 This week the passage leads to: ${name}.`,
-    // --- Zip 389: developer menu (Cmd/Ctrl+Shift+X, host only) ---
+    // --- Zip 392: developer menu (Cmd/Ctrl+Shift+X, host only) ---
     devMenuTitle: "🛠️ Developer menu",
     devMenuHint: "Host only. Nothing here shows up for players who don't know the shortcut.",
     devWorldSection: "Passage land",
@@ -2205,7 +2205,7 @@ export const FERME_STR = {
     devRotationTitle: "Back to the normal rotation",
     devRotationSub: (d) => `The passage follows the game day again, ${d} days per land.`,
     devRotationBtn: "Restore",
-    // --- Zip 389: collapsible notification panel ---
+    // --- Zip 392: collapsible notification panel ---
     notifPanelLabel: (n) => n > 1 ? `${n} notifications. Hover to see them, click to keep them open.` : "1 notification. Hover to see it, click to keep it open.",
     devHealSection: "Injury",
     devHealTitle: "Heal yourself instantly",

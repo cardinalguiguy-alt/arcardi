@@ -2714,7 +2714,7 @@ export const PASSAGE_WORLD_DAYS = 3;
    chez Guillaume et les Grottes de Cristal chez son partenaire de jeu, ce qui
    est précisément ce qu'il ne faut pas quand on teste à deux.
 
-   >>> ZIP 389 : REMISE À null, SUR DEMANDE EXPLICITE DE GUILLAUME. <<<
+   >>> ZIP 392 : REMISE À null, SUR DEMANDE EXPLICITE DE GUILLAUME. <<<
    Elle avait traversé les zips 385, 386, 387 et 388. Ce qu'elle faisait est
    désormais fait, en mieux, par le MENU DÉVELOPPEUR (Cmd/Ctrl+Shift+X) : même
    effet partagé par tous les joueurs, mais réversible d'un clic au lieu d'une
@@ -2776,7 +2776,7 @@ export const PASSAGE_WORLDS = [
     pet: { id: "cloudlamb", name: "Agneau des nuages", nameEn: "Cloud lamb" }, petHue: 40 },
 ];
 /* ==========================================================================
-   ZIP 389 — MENU DÉVELOPPEUR (secret, hôte uniquement)
+   ZIP 392 — MENU DÉVELOPPEUR (secret, hôte uniquement)
    ==========================================================================
    Ouvert par Cmd+Shift+X (macOS) ou Ctrl+Shift+X (Windows/Linux).
 

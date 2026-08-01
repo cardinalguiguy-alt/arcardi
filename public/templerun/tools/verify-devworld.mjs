@@ -1,5 +1,5 @@
 /* ==========================================================================
-   verify-devworld.mjs — ZIP 389
+   verify-devworld.mjs — ZIP 392
    ==========================================================================
    CE QU'IL PROUVE, et pourquoi aucune relecture ne pourrait le faire.
 
@@ -59,7 +59,7 @@ function check(label, ok, detail) {
 const N_DAYS = 15000;
 const KEYS = C.PASSAGE_WORLDS.map(w => w.key);
 
-console.log("=== verify-devworld.mjs (zip 389) ===");
+console.log("=== verify-devworld.mjs (zip 392) ===");
 console.log(`${KEYS.length} terres, rotation de ${C.PASSAGE_WORLD_DAYS} jours, ${N_DAYS} jours simulés\n`);
 
 /* --- 1. Sans forçage, l'index est EXACTEMENT la rotation naturelle. -------

@@ -3961,7 +3961,7 @@ export function migrateSucrerieToArtisan(world, crafts) {
 // ==================================================================
 
 /* ==========================================================================
-   ZIP 389 — FORÇAGE DE TERRE PAR LE MENU DÉVELOPPEUR
+   ZIP 392 — FORÇAGE DE TERRE PAR LE MENU DÉVELOPPEUR
    ==========================================================================
    Le menu secret de l'hôte (Cmd/Ctrl+Shift+X, voir FermeGame.js) peut fixer la
    terre du passage, quel que soit le jour de jeu. La valeur choisie vit dans
@@ -3995,9 +3995,9 @@ export function getForcedPassageKey() { return forcedPassageKey; }
 // Semaine de jeu -> index dans C.PASSAGE_WORLDS. Un même s.day donne la même
 // semaine à tous les clients : rotation identique partout, sans synchro.
 export function passageWorldIndex(day) {
-  /* Zip 385 : forçage d'essai par constante. Zip 389 : le menu développeur
+  /* Zip 385 : forçage d'essai par constante. Zip 392 : le menu développeur
      passe DEVANT, parce qu'il se défait d'un clic là où la constante demande
-     une livraison. C.PASSAGE_FORCE_KEY est repassée à null au zip 389 et n'a
+     une livraison. C.PASSAGE_FORCE_KEY est repassée à null au zip 392 et n'a
      plus de lecteur en pratique ; elle reste lue ici comme filet, pour qu'un
      réglage en dur continue de fonctionner si quelqu'un la repose un jour. */
   const forcedKey = forcedPassageKey || C.PASSAGE_FORCE_KEY;
