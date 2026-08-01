@@ -433,6 +433,129 @@ export function drawRunDeckOverlay(g, px, py, T, tx, ty, side, now, baseX) {
   }
 }
 
+/* ===========================================================================
+   ZIP 385 — LE SOL DU PAYS DES BONBONS
+   ---------------------------------------------------------------------------
+   Demande Guillaume : « the ground should be made of colour candies
+   (marshmallow and pink cotton candy and sprinkles etc.) ».
+
+   CE QUI A ÉTÉ DÉCOUVERT EN CHEMIN, et qui change la nature du chantier : les
+   cinq mondes du passage déclarent depuis le zip 235 des couleurs propres
+   (`bg`, `g1`, `g2`, `waterA`, `waterB` dans PASSAGE_WORLDS) que PERSONNE NE
+   LIT. drawEvilFrame peint « #182417 » en dur pour toute case d'herbe, quelle
+   que soit la semaine. Le Pays des Bonbons n'était donc pas rose : il était,
+   à l'écran, rigoureusement identique aux Terres Maléfiques. Ce n'est pas une
+   retouche de teinte, c'est le premier sol propre à un monde du passage.
+
+   POURQUOI CETTE FONCTION VIT AU NIVEAU DU MODULE, et pas dans la closure de
+   la boucle de rendu : corollaire du zip 378. Elle ne touche à AUCUN état de
+   jeu — elle ne connaît qu'une position de case — donc elle peut être
+   rasterisée hors navigateur (tools/render-candy.mjs) et REGARDÉE sans lancer
+   la partie. C'est ce qui a permis de corriger la répartition des parfums
+   avant la première capture d'écran.
+
+   fillRect UNIQUEMENT, comme drawRunDeckTile. Ce n'est pas une coquetterie :
+   le rasteriseur maison (§4 du contexte, pas de paquet `canvas` disponible)
+   ne couvre qu'un sous-ensemble du contexte 2D, et un arc glissé ici
+   dessinerait juste dans le jeu et faux dans l'outil — c'est-à-dire un outil
+   qui rassure au lieu de montrer.
+
+   Rien ne DÉBORDE d'une case : pas d'ombre portée, pas de liseré sur le
+   voisin. Le piège de la seconde passe (zip 378, « l'eau contourne la
+   plateforme ») ne s'applique donc pas ici, et il n'y a volontairement pas de
+   drawCandyGroundOverlay à écrire.
+   ======================================================================== */
+
+// Hash de case -> générateur reproductible. Même case = même parfum à chaque
+// image et à chaque visite : sans ça le sol grouillerait d'une image à
+// l'autre, ce qui est le défaut le plus fatigant qu'un sol puisse avoir.
+function candyRng(tx, ty) {
+  let h = (((tx * 73856093) ^ (ty * 19349663)) >>> 0) || 1;
+  return function () { h = (h * 1664525 + 1013904223) >>> 0; return h / 4294967296; };
+}
+
+/* Quatre parfums, et leur fréquence compte autant que leur dessin :
+     - GUIMAUVE (fond) : c'est le sol, il doit dominer, sinon la carte devient
+       illisible et on ne distingue plus un joueur d'un bonbon ;
+     - SPRINKLES : la variété, fréquente mais discrète ;
+     - BARBE À PAPA : les taches roses, moyennement fréquentes ;
+     - SUCRE D'ORGE : les rayures, RARES — c'est le motif le plus fort, il ne
+       tient que par sa rareté. */
+const CANDY_MALLOW = ["#f7dfe9", "#f4d6e3", "#fae6ee"];
+const CANDY_MALLOW_SHADE = "#e3bfd2";
+const CANDY_FLOSS = ["#f5a8cd", "#f09ac4", "#f8b6d6"];
+const CANDY_STRIPE_A = "#ffffff", CANDY_STRIPE_B = "#ef4f7e";
+const SPRINKLE_COLS = ["#ffd23f", "#7ce0f0", "#a8e02a", "#ff8ab3", "#b98cff", "#ffffff"];
+
+export function drawCandyGroundTile(g, px, py, T, tx, ty) {
+  const r = candyRng(tx, ty);
+  const roll = r();
+  const flavour = roll < 0.50 ? 0 : roll < 0.78 ? 1 : roll < 0.94 ? 2 : 3;
+
+  // Fond de guimauve, toujours : les trois autres parfums se posent DESSUS.
+  // Peindre chaque parfum sur son propre fond laissait des coutures visibles
+  // entre deux cases voisines de parfums différents.
+  g.fillStyle = CANDY_MALLOW[Math.floor(r() * 3)];
+  g.fillRect(px, py, T, T);
+
+  // Coins mordus : deux pixels d'ombre en bas à droite donnent à chaque case
+  // l'épaisseur d'un coussin plutôt que d'un carrelage.
+  g.fillStyle = CANDY_MALLOW_SHADE;
+  g.fillRect(px, py + T - 2, T, 2);
+  g.fillRect(px + T - 2, py, 2, T);
+  g.fillStyle = "rgba(255,255,255,0.55)";
+  g.fillRect(px, py, T, 1);
+  g.fillRect(px, py, 1, T);
+
+  if (flavour === 1) {
+    // SPRINKLES : trois à six bâtonnets de 2x1 ou 1x2, couleurs pastel.
+    const n = 3 + Math.floor(r() * 4);
+    for (let i = 0; i < n; i++) {
+      const sx = px + 2 + Math.floor(r() * (T - 5));
+      const sy = py + 2 + Math.floor(r() * (T - 5));
+      g.fillStyle = SPRINKLE_COLS[Math.floor(r() * SPRINKLE_COLS.length)];
+      if (r() < 0.5) g.fillRect(sx, sy, 3, 1); else g.fillRect(sx, sy, 1, 3);
+    }
+  } else if (flavour === 2) {
+    // BARBE À PAPA : une touffe rose faite d'aplats empilés, jamais centrée
+    // (une tache centrée par case redonnerait une grille).
+    const cx = px + 3 + Math.floor(r() * (T - 8));
+    const cy = py + 3 + Math.floor(r() * (T - 8));
+    const col = CANDY_FLOSS[Math.floor(r() * 3)];
+    g.fillStyle = col;
+    g.fillRect(cx + 1, cy, 5, 2);
+    g.fillRect(cx, cy + 2, 7, 3);
+    g.fillRect(cx + 1, cy + 5, 5, 2);
+    g.fillStyle = "rgba(255,255,255,0.45)";
+    g.fillRect(cx + 2, cy + 1, 2, 1);
+  } else if (flavour === 3) {
+    // SUCRE D'ORGE : rayures diagonales blanches et rouges, en escalier de
+    // pixels (une diagonale « propre » n'existe pas en pixel art).
+    for (let k = -T; k < T * 2; k += 6) {
+      for (let i = 0; i < T; i++) {
+        const x = px + k + i, y = py + i;
+        if (x < px || x >= px + T) continue;
+        g.fillStyle = CANDY_STRIPE_B; g.fillRect(x, y, 3, 1);
+        g.fillStyle = CANDY_STRIPE_A; g.fillRect(x + 3, y, 3, 1);
+      }
+    }
+    // On repose l'ombre : les rayures viennent de l'écraser.
+    g.fillStyle = CANDY_MALLOW_SHADE;
+    g.fillRect(px, py + T - 1, T, 1);
+  }
+}
+
+/* L'eau du Pays des Bonbons : sirop de fraise. Même rôle que le lac violet des
+   Terres Maléfiques (voir drawEvilFrame), mais on ne peut pas se contenter de
+   reteinter — c'est la leçon du double dôme de ciel au zip 382 : une teinte
+   posée par-dessus ne transforme pas un violet profond en sirop clair, elle
+   l'assombrit ou le délave. On donne donc les valeurs directement, et la
+   profondeur (`dp`, 0 au bord, 1 au large) module comme ailleurs. */
+export function candySyrupColor(dp) {
+  const shallow = 1 - dp;
+  return `rgb(${Math.round(190 + shallow * 50)}, ${Math.round(60 + shallow * 90)}, ${Math.round(120 + shallow * 60)})`;
+}
+
 export function buildSprites() {
   const T = 16;
 
@@ -2674,6 +2797,38 @@ export function buildSprites() {
   // pour la lueur côté maléfique) avec quelques bulles et un mince filet
   // de vapeur. Dessiné plus haut qu'une tuile (comme le puits/lampadaire),
   // donc dans le calque "draws" trié par profondeur, pas la boucle de sol.
+  /* Zip 385 — LE GOURMANDIN sur la carte 2D. Dessiné plus haut qu'une tuile
+     (comme le chaudron et le puits), donc posé dans le calque « draws » trié
+     par profondeur, jamais dans la boucle de sol.
+
+     Il doit se lire comme UNE BOUCHE avant tout : c'est ce qu'on vient lui
+     donner à manger, et c'est ce qui doit attirer l'œil de loin sur une carte
+     rose où tout est déjà rose. D'où le contraste maximal du monde — un violet
+     sombre — sur un sol pastel, alors que tout le reste du Pays des Bonbons
+     est en camaïeu. */
+  function candyMonsterSprite() {
+    const [c, g] = cv(30, 30);
+    const FUR = "#8d5bd6", FUR_D = "#6a3fae", MOUTH = "#3a1a5e";
+    // corps hirsute : deux rangées de mèches, pas un disque lisse
+    P(g, 4, 9, 22, 17, FUR);
+    P(g, 2, 12, 2, 12, FUR); P(g, 26, 12, 2, 12, FUR);
+    for (let x = 4; x < 26; x += 3) P(g, x, 7, 2, 3, FUR);      // touffes du crâne
+    for (let x = 5; x < 25; x += 4) P(g, x, 26, 3, 2, FUR_D);   // pattes/mèches du bas
+    P(g, 4, 24, 22, 2, FUR_D);
+    // bouche grande ouverte, au centre du corps
+    P(g, 9, 16, 12, 8, MOUTH);
+    P(g, 10, 24, 10, 1, MOUTH);
+    P(g, 11, 16, 2, 2, "#fffdf6"); P(g, 15, 16, 2, 2, "#fffdf6"); P(g, 19, 16, 1, 2, "#fffdf6");
+    P(g, 12, 21, 7, 3, "#ff6f9e");                               // langue
+    // yeux blancs à grosses pupilles, très écartés (lecture immédiate)
+    P(g, 6, 3, 8, 8, "#fffdf6"); P(g, 16, 3, 8, 8, "#fffdf6");
+    P(g, 8, 6, 4, 4, "#20122e"); P(g, 18, 6, 4, 4, "#20122e");
+    P(g, 9, 7, 1, 1, "#ffffff"); P(g, 19, 7, 1, 1, "#ffffff");
+    // pastilles de bonbon prises dans le pelage
+    P(g, 5, 14, 2, 2, "#ffd23f"); P(g, 24, 18, 2, 2, "#7ce0f0"); P(g, 6, 21, 2, 2, "#a8e02a");
+    return c;
+  }
+
   function cauldronSprite() {
     const [c, g] = cv(20, 24);
     // vapeur légère au-dessus (statique, pas d'animation de flottement)
@@ -3179,6 +3334,7 @@ house: house(),
     mill: millSprite(),
     sucrerie: sucrerieSprite(),
     cauldron: cauldronSprite(),
+    candyMonster: candyMonsterSprite(),   // zip 385
     seaIcons: [],
     duck: [duckSprite(0), duckSprite(1)],
     railL: railHalf(0), railR: railHalf(1), // one wide track (zip 232)

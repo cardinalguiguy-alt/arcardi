@@ -947,6 +947,16 @@ export function normalizeFarmer(f) {
   if (typeof f.inv.magicOre !== "number") f.inv.magicOre = 0;
   if (typeof f.inv.candies !== "number") f.inv.candies = 0; // zip 372 : défi de fuite
   if (typeof f.inv.runBest !== "number") f.inv.runBest = 0; // zip 372 : meilleur score au défi
+  /* Zip 385 — LE GOURMANDIN. Trois champs, tous dans f.inv, donc dans
+     l'instantané JSON du fermier : AUCUNE migration Supabase.
+       candyLevel     = plus haut niveau terminé (0..CANDY_GAME_LEVELS) ;
+       candyGoldBlock = numéro de créneau de rotation où l'or a été pris
+                        (-1 = jamais) — c'est lui qui rend le trésor rejouable
+                        « une fois par venue » sans le rendre farmable ;
+       candyCatDone   = le chat berlingot a été remis (définitif). */
+  if (typeof f.inv.candyLevel !== "number") f.inv.candyLevel = 0;
+  if (typeof f.inv.candyGoldBlock !== "number") f.inv.candyGoldBlock = -1;
+  if (typeof f.inv.candyCatDone !== "boolean") f.inv.candyCatDone = false;
   if (typeof f.inv.food !== "number") f.inv.food = 0;
   if (typeof f.inv.fence !== "number") f.inv.fence = 0;
   if (typeof f.inv.wall !== "number") f.inv.wall = 0;
@@ -3900,9 +3910,33 @@ export function migrateSucrerieToArtisan(world, crafts) {
 // Semaine de jeu -> index dans C.PASSAGE_WORLDS. Un même s.day donne la même
 // semaine à tous les clients : rotation identique partout, sans synchro.
 export function passageWorldIndex(day) {
-  return Math.floor(Math.max(0, (day || 1) - 1) / C.SEASON_DAYS) % C.PASSAGE_WORLDS.length;
+  /* Zip 385 : forçage d'essai. Quand C.PASSAGE_FORCE_KEY vaut une clé de
+     monde, tout le monde y va, quel que soit son jour de jeu — c'est la seule
+     façon d'obtenir la MÊME terre chez deux joueurs dont les fermes ne sont
+     pas au même jour. À remettre à null pour rendre la rotation au jeu. */
+  if (C.PASSAGE_FORCE_KEY) {
+    const forced = C.PASSAGE_WORLDS.findIndex(w => w.key === C.PASSAGE_FORCE_KEY);
+    if (forced >= 0) return forced;
+  }
+  // Zip 385 : PASSAGE_WORLD_DAYS (3) remplace SEASON_DAYS (7). Voir le
+  // commentaire de la constante — un cycle complet fait désormais 15 jours de
+  // jeu, et SEASON_DAYS n'a plus aucun lecteur.
+  return passageBlockOf(day) % C.PASSAGE_WORLDS.length;
 }
 export function passageWorldOf(day) { return C.PASSAGE_WORLDS[passageWorldIndex(day)]; }
+
+/* Numéro de CRÉNEAU de rotation : combien de tranches de PASSAGE_WORLD_DAYS
+   jours de jeu se sont écoulées. Strictement croissant, identique chez tous
+   les clients d'une même ferme (il ne dépend que de s.day), et c'est ce qui en
+   fait un bon jeton de « une fois par venue » : contrairement à l'index de
+   monde, qui reboucle toutes les cinq terres, un créneau ne revient jamais.
+
+   Sous forçage, la valeur reste celle du jour : elle continue donc d'avancer
+   normalement, et le trésor du Gourmandin redevient disponible tous les trois
+   jours de jeu comme il le ferait en rotation réelle. */
+export function passageBlockOf(day) {
+  return Math.floor(Math.max(0, (day || 1) - 1) / C.PASSAGE_WORLD_DAYS);
+}
 
 // Génère l'une des cartes du passage sombre, à partir du même modèle que
 // generateEvilWorld (mêmes coordonnées d'arrivée/retour, mêmes dimensions),
@@ -3967,9 +4001,17 @@ export function generatePassageWorld(worldIdx) {
     for (let i = 0; i < 220; i++) put(rnd() * W, rnd() * H, C.O_ROCK, C.EVIL_ROCK_HP);
   }
 
-  // Dégage impérativement les cases d'arrivée / retour / prix maléfique.
-  for (const p of [C.EVIL_SPAWN, C.EVIL_RETURN_PASSAGE, C.EVIL_CAULDRON_SPAWN]) {
-    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+  // Dégage impérativement les cases d'arrivée / retour / prix maléfique, et
+  // (zip 385) le repaire du Gourmandin au Pays des Bonbons : un arbre ou un
+  // rocher tiré au hasard sur sa case rendrait le mini-jeu inatteignable une
+  // rotation sur cinq, sans la moindre erreur visible.
+  const mustClear = [C.EVIL_SPAWN, C.EVIL_RETURN_PASSAGE, C.EVIL_CAULDRON_SPAWN];
+  if (spec.key === "candy") mustClear.push(C.CANDY_MONSTER_SPAWN);
+  for (const p of mustClear) {
+    // Rayon 2 pour le Gourmandin (il faut pouvoir en faire le tour et le
+    // frôler à CANDY_MONSTER_RADIUS), 1 pour les autres, comme avant.
+    const rad = (p === C.CANDY_MONSTER_SPAWN) ? 2 : 1;
+    for (let dy = -rad; dy <= rad; dy++) for (let dx = -rad; dx <= rad; dx++) {
       const i = id(p.x + dx, p.y + dy);
       if (i >= 0 && i < ground.length) {
         if (ground[i] === C.G_WATER) ground[i] = C.G_GRASS;
@@ -4042,6 +4084,46 @@ export function resolvePassagePickup(s, f, worldIdx, pickupId, rnd) {
   if (r() < C.PASSAGE_PET_CATCH_CHANCE) {
     const cr = resolveCatchPet(f, spec.pet.id);
     if (cr.ok) res.pet = { id: spec.pet.id, name: spec.pet.name, nameEn: spec.pet.nameEn };
+    else res.bagFull = true;
+  }
+  return res;
+}
+
+/* Zip 385 — NIVEAU TERMINÉ AU GOURMANDIN. Appelé par l'hôte à réception d'une
+   requête "candyLevel". Le mini-jeu s'est déroulé ENTIÈREMENT côté client
+   (même contrat de confiance que le défi de fuite, cf. "runFailed"), mais
+   l'hôte ne croit pas le client sur parole pour autant :
+
+     - le niveau annoncé est borné à [1, CANDY_GAME_LEVELS] ;
+     - il doit valoir AU PLUS le niveau déjà acquis + 1. Sans cette ligne, un
+       message unique « j'ai fini le 15 » suffirait à repartir avec l'or ET le
+       chat sans avoir joué. C'est le seul vrai garde-fou du chantier ;
+     - l'or ne peut tomber qu'une fois par CRÉNEAU de rotation (block), et le
+       créneau vient de l'état de la ferme, pas du message.
+
+   Renvoie ce qui a été réellement accordé, pour que l'appelant sache quoi
+   diffuser — et pas ce que le client espérait. */
+export function resolveCandyLevel(s, f, level, block) {
+  const lv = Math.max(1, Math.min(C.CANDY_GAME_LEVELS, level | 0));
+  const res = { ok: false, level: lv, gold: 0, pet: null, bagFull: false };
+  const had = f.inv.candyLevel | 0;
+  if (lv > had + 1) return res;              // saut de niveau : on ignore
+  res.ok = true;
+  if (lv > had) f.inv.candyLevel = lv;
+
+  if (lv === C.CANDY_GAME_GOLD_LEVEL && (f.inv.candyGoldBlock | 0) !== block) {
+    f.inv.candyGoldBlock = block;
+    s.money = (s.money || 0) + C.CANDY_GAME_GOLD;
+    s.totalEarned = (s.totalEarned || 0) + C.CANDY_GAME_GOLD;
+    res.gold = C.CANDY_GAME_GOLD;
+  }
+  if (lv === C.CANDY_GAME_PET_LEVEL && !f.inv.candyCatDone) {
+    const cr = resolveCatchPet(f, C.CANDY_GAME_PET_ID);
+    // Sac plein : le chat N'EST PAS marqué comme remis. Le joueur libère une
+    // place et rejoue le niveau 15 pour le récupérer. Le contraire lui ferait
+    // perdre définitivement la seule récompense unique du jeu à cause d'un
+    // inventaire encombré, ce qui serait indéfendable.
+    if (cr.ok) { f.inv.candyCatDone = true; res.pet = C.CANDY_GAME_PET_ID; }
     else res.bagFull = true;
   }
   return res;

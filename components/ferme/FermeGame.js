@@ -30,7 +30,7 @@ import { createPortal } from "react-dom";
 import { supabase } from "@/lib/supabaseClient";
 import * as C from "./fermeConstants";
 import * as E from "./fermeEngine";
-import { buildSprites, charPalette, drawRunDeckTile, drawRunDeckOverlay } from "./fermeArt";
+import { buildSprites, charPalette, drawRunDeckTile, drawRunDeckOverlay, drawCandyGroundTile, candySyrupColor } from "./fermeArt";
 import { fstr } from "./fermeStrings";
 
 const GAME_ID = "ferme";
@@ -296,6 +296,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // FermeGame, voir app/room/[code]/page.js).
   const [runChallenge, setRunChallenge] = useState(false);
   const runChallengeRef = useRef(false);
+  // Zip 385 : mini-jeu du Gourmandin (Pays des Bonbons). Même couple
+  // état/ref que le défi de fuite, et pour la même raison : l'état pilote le
+  // rendu React de l'iframe, la ref est lue depuis la boucle de jeu (qui ne
+  // voit pas les états React de son itération).
+  const [candyGame, setCandyGame] = useState(false);
+  const candyGameRef = useRef(false);
   const [fishMini, setFishMini] = useState(null); // {mode, fish} pendant le minijeu, sinon null
   const [barnMini, setBarnMini] = useState(null); // {level} pendant le mini-jeu de construction de la grange, sinon null
   const [wolfBite, setWolfBite] = useState(null); // {wolfId} pendant le mini-jeu de morsure (loup agressif), sinon null
@@ -3125,6 +3131,28 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       s.money += C.MAZE_PRIZE_GOLD; s.totalEarned = (s.totalEarned || 0) + C.MAZE_PRIZE_GOLD;
       out.state = shareState();
       out.chat = { from: "🏆", msg: L.mazePrizeToast(C.MAZE_PRIZE_GOLD) };
+      return true;
+    }
+    /* Zip 385 — NIVEAU TERMINÉ AU GOURMANDIN. Contrairement à "mazePrize"
+       juste au-dessus, l'anti-rejeu N'EST PAS un ref client : mazePrizeClaimed
+       Ref est perdu au rechargement, ce qui est sans conséquence pour 300 or
+       et catastrophique pour 10 000 (un moulin en coûte 30 000). Tout est donc
+       arbitré et PERSISTÉ par l'hôte, dans f.inv — voir resolveCandyLevel, qui
+       refuse aussi les sauts de niveau. */
+    if (req.kind === "candyLevel") {
+      const r = E.resolveCandyLevel(s, f, req.level | 0, req.block | 0);
+      if (!r.ok) return true;               // saut de niveau : ignoré en silence
+      out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv, pets: f.pets };
+      dirtyRef.current = true;
+      if (r.gold > 0) {
+        out.state = shareState();
+        out.chat = { from: "\u{1FA99}", msg: L.candyGoldChat(f.name, r.gold) };
+      } else if (r.pet) {
+        out.chat = { from: "\u{1F431}", msg: L.candyCatChat(f.name) };
+        out.toast = { id: f.id, key: "petCaught", petId: r.pet };
+      } else if (r.bagFull) {
+        out.toast = { id: f.id, key: "bagFull" };
+      }
       return true;
     }
     if (req.kind === "berryPick") {
@@ -8372,6 +8400,89 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     return 1 - Math.max(0, k);
   }
 
+  /* ==================================================================
+     ZIP 385 — LE GOURMANDIN (mini-jeu du Pays des Bonbons)
+     ------------------------------------------------------------------
+     Page autonome servie depuis public/candyland/, affichée dans une
+     <iframe> par-dessus la ferme, qui CONTINUE DE TOURNER derrière —
+     indispensable si c'est l'hôte qui joue. Même architecture qu'au zip
+     372 pour le défi de fuite, et pour les trois mêmes raisons (voir
+     public/candyland/js/bridge.js).
+
+     Différence assumée avec le défi : aucune blessure, aucun report de
+     position, aucune cinématique. On ouvre, on joue, on revient là où
+     l'on était. Le Pays des Bonbons est un monde PAISIBLE (décision zip
+     235 : seul « evil » garde des monstres), et lui coller une sanction
+     de sortie en ferait un second monde sombre.
+     ================================================================== */
+  function openCandyGame() {
+    if (candyGameRef.current || runChallengeRef.current || zoneTransRef.current.active) return;
+    const m = meRef.current; if (!m) return;
+    m.moving = false;
+    // Les touches encore enfoncées resteraient « collées » et feraient
+    // marcher le fermier tout seul derrière l'iframe (bug vécu au zip 372).
+    keysRef.current = {};
+    candyGameRef.current = true;
+    setCandyGame(true);
+    sendPos();
+    broadcastChat("\u{1F36D}", L.candyEnteredChat(m.name));
+  }
+
+  function closeCandyGame() {
+    candyGameRef.current = false;
+    setCandyGame(false);
+    keysRef.current = {};
+  }
+
+  /* Un niveau vient d'être terminé. Le mini-jeu l'annonce DÈS la victoire
+     (et non à la fermeture de l'écran de fin, contrairement à "vf-run-over") :
+     un score se contemple, une progression se garde. Voir l'en-tête de
+     public/candyland/js/game.js.
+
+     On envoie le CRÉNEAU de rotation calculé ICI, à partir de l'état de jeu,
+     jamais depuis l'iframe : c'est lui qui décide si le trésor du niveau 10
+     est encore disponible pour cette venue du Pays des Bonbons. */
+  function candyLevelDone(level) {
+    const day = sharedRef.current.day || 1; // cf. shareState() : le jour vit à la racine de sharedRef, pas sous .state
+    sendReq({ kind: "candyLevel", level: level | 0, block: E.passageBlockOf(day) });
+  }
+
+  useEffect(() => {
+    if (!candyGame) return;
+    function onMsg(e) {
+      if (e.origin !== window.location.origin) return;
+      const d = e.data;
+      if (!d || typeof d !== "object") return;
+      if (d.type === "vf-candy-ready") {
+        // Deux sources pour la progression, on garde la plus haute — même
+        // raisonnement qu'au zip 383 pour le record du défi : invRef est
+        // l'état privé du joueur, farmersRef la sauvegarde (autoritaire chez
+        // l'hôte), et les deux ne divergent qu'au premier instant d'une
+        // reprise, c'est-à-dire exactement quand on rouvre le mini-jeu.
+        // Ouvrir sur « niveau 1 » un joueur rendu au 12 lui ferait croire que
+        // sa progression est perdue.
+        const savedMe = farmersRef.current[me.id];
+        const inv = invRef.current || {};
+        const sInv = (savedMe && savedMe.inv) || {};
+        const level = Math.max(inv.candyLevel | 0, sInv.candyLevel | 0);
+        const day = sharedRef.current.day || 1; // cf. shareState() : le jour vit à la racine de sharedRef, pas sous .state
+        const block = E.passageBlockOf(day);
+        const goldClaimed = Math.max(inv.candyGoldBlock === undefined ? -1 : inv.candyGoldBlock,
+          sInv.candyGoldBlock === undefined ? -1 : sInv.candyGoldBlock) === block;
+        const catDone = !!(inv.candyCatDone || sInv.candyCatDone);
+        try {
+          e.source.postMessage({ type: "vf-candy-init", lang, level, goldClaimed, catDone }, window.location.origin);
+        } catch (err) {}
+      } else if (d.type === "vf-candy-level") {
+        candyLevelDone(d.level);
+      } else if (d.type === "vf-candy-exit") {
+        closeCandyGame();
+      }
+    }
+    window.addEventListener("message", onMsg);
+    return () => window.removeEventListener("message", onMsg);
+  }, [candyGame, lang]);
+
   // Réception des messages de l'iframe. Même origine obligatoire : la page est
   // servie par la ferme elle-même, tout le reste est rejeté.
   useEffect(() => {
@@ -8642,7 +8753,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // à la ferme (clic sur le bord de l'écran, raccourci navigateur), le
       // fermier ne doit surtout pas se mettre à marcher dans le monde sombre
       // pendant qu'on court dans le défi.
-      if (runChallengeRef.current) return;
+      if (runChallengeRef.current || candyGameRef.current) return; // zip 385 : idem pour le Gourmandin
       if (isInjured()) return; // blessé : aucune entrée, en attendant la fin du repos forcé
       // Endormi : seule la touche E (se réveiller) doit rester active, pour
       // ne pas pouvoir changer d'outil/monter à cheval/etc. depuis "l'intérieur".
@@ -10387,15 +10498,32 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          C'est exactement le défaut que Guillaume a photographié : le lac
          « contournait » la plateforme au lieu de passer dessous. */
       const deckOver = [];
+      // Zip 385 : le monde en cours est-il le Pays des Bonbons ? Calculé UNE
+      // fois pour tout le balayage plutôt qu'à chaque case — la boucle passe
+      // sur plusieurs milliers de cases par image.
+      const isCandy = !!(ew.spec && ew.spec.key === "candy");
       for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
         const i = y * ew.w + x, g = ew.ground[i];
         const isDeck = g === C.G_RUN_JETTY || g === C.G_RUN_GATE;
         const isKerb = g === C.G_RUN_KERB;
         ctx.fillStyle = g === C.G_DARK_PASSAGE ? "#3a2a55"
           : (isDeck || isKerb) ? "#3c372f"
-          : g === C.G_LAKE_SHORE ? "#1d2119"
-          : g === C.G_WATER ? "#241246" : "#182417";
+          : g === C.G_LAKE_SHORE ? (isCandy ? "#f0cfe0" : "#1d2119")
+          : g === C.G_WATER ? (isCandy ? "#c85f8e" : "#241246")
+          : isCandy ? "#f4dbe8" : "#182417";
         ctx.fillRect(x * T, y * T, T, T);
+        /* ZIP 385 — SOL DU PAYS DES BONBONS. Le dessin lui-même vit dans
+           fermeArt.js (drawCandyGroundTile), au niveau du module, exactement
+           pour la même raison que drawRunDeckTile au zip 378 : il ne touche à
+           aucun état de jeu, donc il se rasterise hors navigateur et on peut
+           le REGARDER sans lancer une partie.
+
+           Il ne remplace le remplissage ci-dessus que sur l'HERBE : la
+           chaussée du défi, le passage de retour et le lac gardent leur
+           traitement propre. La porte du défi doit se présenter de la même
+           façon sur les six cartes (décision zip 375), et un sol en guimauve
+           sous la chaussée effacerait ce repère. */
+        if (isCandy && g === C.G_GRASS) drawCandyGroundTile(ctx, x * T, y * T, T, x, y);
         /* ZIP 378 — CHAUSSÉE DU MONDE SOMBRE.
            Le dessin lui-même vit dans fermeArt.js (drawRunDeckTile), au
            niveau du module : il ne touche à aucun état de jeu, et l'en
@@ -10464,10 +10592,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              plutôt que sur un lac entièrement noir. */
           const dp = (ew.depth ? ew.depth[i] : 255) / 255;
           const shallow = 1 - dp;
-          ctx.fillStyle = `rgb(${Math.round(36 + shallow * 34)}, ${Math.round(18 + shallow * 26)}, ${Math.round(70 + shallow * 30)})`;
+          // Zip 385 : au Pays des Bonbons, le lac est un lac de SIROP. Les
+          // valeurs viennent de fermeArt (candySyrupColor) plutôt que d'une
+          // teinte posée par-dessus le violet : c'est la leçon du double dôme
+          // de ciel (zip 382) — un voile ne transforme pas une couleur, il
+          // l'assombrit. Toute la mécanique de profondeur, d'écume et de
+          // bulles ci-dessous est CONSERVÉE telle quelle.
+          ctx.fillStyle = isCandy ? candySyrupColor(dp)
+            : `rgb(${Math.round(36 + shallow * 34)}, ${Math.round(18 + shallow * 26)}, ${Math.round(70 + shallow * 30)})`;
           ctx.fillRect(x * T, y * T, T, T);
           const glow = (0.5 + Math.sin(now / 1100 + (x + y) * 0.35) * 0.22) * (0.3 + dp * 0.7);
-          ctx.fillStyle = `rgba(160, 70, 220, ${glow})`;
+          ctx.fillStyle = isCandy ? `rgba(255, 190, 230, ${glow * 0.55})` : `rgba(160, 70, 220, ${glow})`;
           ctx.fillRect(x * T, y * T, T, T);
           // Écume : un liseré clair qui respire, uniquement sur la première
           // case d'eau, du côté où se trouve la terre.
@@ -10657,9 +10792,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
       draws.sort((a, b) => a.y - b.y);
       for (const d of draws) d.fn();
-      // Voile sombre permanent (assombrissement de l'ambiance, indépendant
-      // du cycle jour/nuit de la ferme, jamais retiré ici).
-      ctx.fillStyle = "rgba(0,0,10,0.35)";
+      /* Voile permanent (ambiance, indépendant du cycle jour/nuit de la ferme,
+         jamais retiré ici).
+
+         Zip 385 : au Pays des Bonbons ce voile PASSE AU CLAIR. C'était le
+         dernier obstacle au sol rose — un sol en guimauve sous 35 % de noir
+         redevient gris, et tout le travail de fermeArt ne se serait pas vu.
+         On garde un voile plutôt que de le retirer : sans lui, la carte perd
+         l'unité d'ambiance que les six mondes partagent, et le contraste des
+         sprites (joueur, arbres) s'effondre sur un fond trop lumineux. */
+      const candyHere = !!(ew.spec && ew.spec.key === "candy");
+      ctx.fillStyle = candyHere ? "rgba(255,215,235,0.16)" : "rgba(0,0,10,0.35)";
       ctx.fillRect(cam.x, cam.y, cam.vw, cam.vh);
       // Invite E pour ramasser le chaudron-artéfact (chantier 2026-07).
       const already = sharedRef.current.salveCraft && sharedRef.current.salveCraft.cauldronUnlocked;
@@ -10678,6 +10821,29 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           ctx.fillStyle = passSpec.pickupColor;
           ctx.beginPath(); ctx.arc(px, py, 4, 0, 7); ctx.fill();
           ctx.restore();
+        }
+      }
+      /* Zip 385 — LE GOURMANDIN. Point d'intérêt FIXE du Pays des Bonbons
+         (C.CANDY_MONSTER_SPAWN), sur le modèle exact du chaudron-artéfact :
+         ce n'est PAS un objet de ew.objects, donc il ne peut pas être abattu,
+         déplacé ni bloqué par la génération (dont les cases sont dégagées à
+         la génération, voir generatePassageWorld).
+
+         Dessiné dans le calque `draws` trié par profondeur, comme tout ce qui
+         dépasse d'une case : posé dans la boucle de sol, un joueur passant
+         devant lui serait recouvert par le monstre. */
+      if (passSpec && passSpec.key === "candy") {
+        const gx = C.CANDY_MONSTER_SPAWN.x, gy = C.CANDY_MONSTER_SPAWN.y;
+        if (gx >= x0 - 2 && gx <= x1 + 2 && gy >= y0 - 2 && gy <= y1 + 2) {
+          draws.push({ y: (gy + 1) * T, fn: () => {
+            const pulse = 0.35 + Math.sin(now / 520) * 0.18;
+            ctx.save();
+            ctx.shadowColor = `rgba(255, 120, 190, ${pulse})`; ctx.shadowBlur = 14;
+            // Le sprite fait 30 px de haut pour une case de 16 : on l'ancre
+            // par le BAS, comme les arbres, sinon il flotte au-dessus du sol.
+            ctx.drawImage(sprites.candyMonster, gx * T - 7, (gy + 1) * T - 30);
+            ctx.restore();
+          } });
         }
       }
       // Zip 235: maze center prize (only in "maze" world). Drawn as a small
@@ -10702,6 +10868,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         }
       }
       if (!ppk && ew.maze && Math.abs(m.x + 0.5 - (ew.maze.prizeX + 0.5)) <= 1.5 && Math.abs(m.y + 0.5 - (ew.maze.prizeY + 0.5)) <= 1.5) ppk = "mazePrize";
+      // Zip 385 : invite du Gourmandin, au Pays des Bonbons uniquement.
+      if (!ppk && passSpec && passSpec.key === "candy"
+        && Math.abs(m.x + 0.5 - (C.CANDY_MONSTER_SPAWN.x + 0.5)) <= C.CANDY_MONSTER_RADIUS
+        && Math.abs(m.y + 0.5 - (C.CANDY_MONSTER_SPAWN.y + 0.5)) <= C.CANDY_MONSTER_RADIUS) ppk = "candyMonster";
       if (!ppk && !cauldronDone && nearTile(C.EVIL_CAULDRON_SPAWN) && passSpec && passSpec.key === "evil") ppk = "evilCauldronPickup";
       setPromptKeyThrottled(ppk);
     }
@@ -12204,6 +12374,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           return;
         }
       }
+      // Zip 385 : ouvrir le mini-jeu du Gourmandin (Pays des Bonbons).
+      if (ew && ew.spec && ew.spec.key === "candy"
+        && Math.abs(m0.x + 0.5 - (C.CANDY_MONSTER_SPAWN.x + 0.5)) <= C.CANDY_MONSTER_RADIUS
+        && Math.abs(m0.y + 0.5 - (C.CANDY_MONSTER_SPAWN.y + 0.5)) <= C.CANDY_MONSTER_RADIUS) {
+        openCandyGame();
+        return;
+      }
       // Carte maléfique (chantier 2026-07, demande Guillaume) : seule
       // interaction E possible ici, le chaudron-artéfact — les coordonnées de
       // la ferme (SHOP/BIN/etc.) n'ont aucun sens en zone maléfique, on sort
@@ -12763,7 +12940,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       </div>
 
       {/* Invite proximité */}
-      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : L.promptBin}</div>}
+      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "candyMonster" ? L.promptCandyMonster : promptKey === "mazePrize" ? L.promptMazePrize : promptKey.startsWith("passagePickup:") ? L.promptPassagePickup : L.promptBin}</div>}
       {mountPrompt && <div className="ferme-prompt ferme-prompt-mount">{mountPrompt === "mount" ? L.mountPrompt : L.dismountPrompt}</div>}
       {handHeldUI && !moveConfirmUI && <div className="ferme-prompt ferme-prompt-mount">{L.handHeldHint}</div>}
       {moveConfirmUI && (
@@ -13241,6 +13418,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             className="ferme-run-frame"
             src="/templerun/index.html"
             title="Valley Farm challenge"
+            onLoad={e => { try { e.currentTarget.contentWindow.focus(); } catch (err) {} }}
+          />
+        </div>
+      )}
+
+      {/* Zip 385 : MINI-JEU DU GOURMANDIN. Page autonome (public/candyland/)
+          affichée par-dessus la ferme, qui continue de tourner derrière —
+          indispensable si c'est l'hôte qui joue. Focus forcé au chargement :
+          sans ça, Échap et R continuent d'être lus par la ferme. */}
+      {candyGame && (
+        <div className="ferme-run-overlay">
+          <iframe
+            className="ferme-run-frame"
+            src="/candyland/index.html"
+            title="Valley Farm — Candy Land"
             onLoad={e => { try { e.currentTarget.contentWindow.focus(); } catch (err) {} }}
           />
         </div>

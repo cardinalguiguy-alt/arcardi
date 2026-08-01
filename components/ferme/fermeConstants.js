@@ -2279,6 +2279,14 @@ export const PET_CATALOG = {
                coat: "#9a8f7a", shade: "#776d5a", belly: "#e0d8c4", mark: "#f0b8c0", eye: "#241d18", nose: "#c07888", pattern: "solid" },
   gemturtle: { name: "Tortue gemme",        nameEn: "Gem turtle",       body: "turtle",
                coat: "#5fbf7a", shade: "#3d8a55", belly: "#a8e0b0", mark: "#3fbfc8", eye: "#1f3d2a", nose: "#2e6b42", pattern: "solid" },
+  // Zip 385 : chat berlingot, prix du niveau 15 du Gourmandin. Il n'est PAS
+  // attrapable au sol comme les cinq ci-dessus (il ne remplace donc pas le
+  // renard barbe à papa du Pays des Bonbons, il s'y ajoute) : il ne s'obtient
+  // qu'en finissant le mini-jeu, une seule fois par joueur, et rejoint le sac
+  // comme n'importe quel familier — donc promenable en ferme ET en ville sans
+  // une ligne de plus (voir drawPetsFor / drawTownFrame, FermeGame.js).
+  candycat:  { name: "Chat berlingot",      nameEn: "Candy cat",        body: "cat",
+               coat: "#f7b8d8", shade: "#d98ab5", belly: "#fff0f7", mark: "#e8356e", eye: "#7ce0f0", nose: "#c65a8c", pattern: "tabby", ears: "cat", tail: "cat", fluff: 1 },
   cloudlamb: { name: "Agneau des nuages",   nameEn: "Cloud lamb",       body: "lamb",
                coat: "#f6f4f0", shade: "#dcd8d0", belly: "#ffffff", mark: "#e8c9a8", eye: "#3a3028", nose: "#c9a086", pattern: "solid", fluff: 2 },
 };
@@ -2511,6 +2519,36 @@ export const FRUIT_TREE_MOD = 3;     // 1 chêne sur FRUIT_TREE_MOD (hash de cas
 // attraper (1 tentative réussie par joueur et par semaine, chance
 // PASSAGE_PET_CATCH_CHANCE ; l'animal rejoint station.pendingGifts comme les
 // cadeaux des visiteurs, en attendant le système d'animaux).
+/* --- Zip 385 : CADENCE DE ROTATION (demande Guillaume : « chaque terre reste
+   3 jours de jeu »). Jusqu'ici l'index de monde se calculait sur SEASON_DAYS
+   (7), constante qui ne sert PLUS QU'À ÇA depuis que les saisons sont passées
+   en temps réel au zip 235. On lui donne son propre nom : une rotation de
+   monde n'est pas une saison, et les confondre a déjà failli faire changer les
+   deux d'un coup.
+
+   ARITHMÉTIQUE, à garder en tête avant de retoucher ce chiffre : 5 mondes x 3
+   jours = un cycle de 15 jours de JEU, et un jour de jeu vaut DAY_REAL_MS
+   (16 min). Le Pays des Bonbons revient donc environ toutes les 4 h de jeu
+   effectif. La demande initiale disait « tous les 10 jours » : ce serait
+   PASSAGE_WORLD_DAYS = 2. Le seul chiffre à changer est celui-ci. */
+export const PASSAGE_WORLD_DAYS = 3;
+
+/* --- Zip 385 : FORÇAGE DE MONDE, POUR LES ESSAIS. -------------------------
+   Quand cette clé n'est pas `null`, le passage sombre mène TOUJOURS au monde
+   correspondant, quel que soit le jour de jeu. Demande explicite de Guillaume
+   pour ce zip : « make candy land the land that appears upon this next update
+   so i can test how its functionality ».
+
+   >>> REMETTRE À null POUR RENDRE LA ROTATION AU JEU. <<<
+
+   C'est la SEULE chose à défaire dans cette livraison, et elle est ici, seule,
+   à cet endroit, pour cette raison. Le forçage ne pouvait pas se faire par un
+   simple décalage de l'index : la rotation est dérivée de s.day, et chaque
+   ferme est à un jour différent — un décalage aurait donné le Pays des Bonbons
+   chez Guillaume et les Grottes de Cristal chez son partenaire de jeu, ce qui
+   est précisément ce qu'il ne faut pas quand on teste à deux. */
+export const PASSAGE_FORCE_KEY = "candy";
+
 export const PASSAGE_WORLDS = [
   { key: "evil",    name: "Terres Maléfiques",   nameEn: "Evil Lands",
     bg: "#0b120c", g1: "#182417", g2: "#182417", waterA: "#241246", waterB: "rgba(160,70,220,",
@@ -2539,6 +2577,33 @@ export const PASSAGE_LOOT_GOLD_MAX = 75;
 export const MAZE_PRIZE_GOLD = 300;        // récompense du coffre au bout du labyrinthe (1x/joueur/semaine)
 export const CANDY_SPEED_MS = 60 * 1000;   // durée du bonbon magique "vitesse" (buff local)
 export const CANDY_SPEED_MUL = 1.5;
+
+/* --- Zip 385 : LE GOURMANDIN (mini-jeu du Pays des Bonbons) ---------------
+   Mini-jeu façon « Cut the Rope » servi depuis public/candyland/, ouvert en
+   s'approchant du monstre posé sur la carte. Quinze niveaux, deux paliers.
+
+   POURQUOI CES DEUX PALIERS SE COMPORTENT DIFFÉREMMENT (arbitrage Guillaume) :
+   l'or du niveau 10 est REJOUABLE — une fois par venue du Pays des Bonbons —
+   tandis que le chat berlingot du niveau 15 ne s'obtient QU'UNE FOIS.
+
+   « Une fois par venue » et non « une fois par visite » : une visite se répète
+   en ressortant et en rentrant par le passage, ce qui aurait fait de 10 000
+   pièces un bouton à or infini (un moulin en coûte 30 000). La venue, elle,
+   est le CRÉNEAU de rotation — le numéro de tranche de PASSAGE_WORLD_DAYS
+   jours — et il est strictement croissant : il ne peut pas être rejoué.
+   Voir CANDY_GAME_BLOCK / f.inv.candyGoldBlock. */
+export const CANDY_GAME_LEVELS = 15;
+export const CANDY_GAME_GOLD_LEVEL = 10;
+export const CANDY_GAME_GOLD = 10000;
+export const CANDY_GAME_PET_LEVEL = 15;
+export const CANDY_GAME_PET_ID = "candycat";
+// Position FIXE du Gourmandin sur la carte, comme EVIL_CAULDRON_SPAWN pour le
+// chaudron. Au sud-ouest : loin de l'arrivée (EVIL_SPAWN) pour qu'il y ait un
+// bout de chemin à faire, loin de la mare (générée autour de x 22-36 / y 30-40)
+// et loin de la rive est (EAST_LAKE_X) pour ne pas se disputer l'espace avec la
+// chaussée du défi de fuite.
+export const CANDY_MONSTER_SPAWN = { x: 18, y: 52 };
+export const CANDY_MONSTER_RADIUS = 1.8;   // distance (tuiles) d'ouverture du mini-jeu
 
 // --- Valley Town, suite (zip 235) ---
 export const TOWN_HOUSE_STYLES = 10;       // 10 façades de base gratuites (R à sa porte pour changer)

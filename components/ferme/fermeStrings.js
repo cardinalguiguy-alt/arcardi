@@ -933,6 +933,10 @@ export const FERME_STR = {
     // depuis public/templerun/, avec sa propre table FR/EN (js/strings.js).
     // Ces clés-ci ne couvrent que ce que la FERME affiche autour du défi.
     runEnteredChat: (name) => `🏃 ${name} franchit la porte et tente la fuite !`,
+    // Zip 385 — Le Gourmandin (Pays des Bonbons).
+    candyEnteredChat: (name) => `🍭 ${name} s'assoit devant le Gourmandin, qui ouvre grand la bouche.`,
+    candyGoldChat: (name, gold) => `🪙 ${name} a rassasié le Gourmandin jusqu'au niveau 10 : il recrache ${gold} pièces d'or !`,
+    candyCatChat: (name) => `🐱 ${name} a terminé les quinze niveaux du Gourmandin et repart avec un chat berlingot.`,
     runLostChat: (name, candies) => candies > 0
       ? `🍬 ${name} s'est fait rattraper, mais rapporte ${candies} bonbon(s).`
       : `🍬 ${name} s'est fait rattraper, les mains vides.`,
@@ -1014,6 +1018,13 @@ export const FERME_STR = {
     // posable où on veut côté ferme avec l'outil Construction (voir
     // O_CAULDRON/EVIL_CAULDRON_SPAWN, fermeConstants.js).
     promptEvilCauldronPickup: "[E] Ramasser le chaudron",
+    // Zip 385. Les deux suivantes corrigent un défaut TROUVÉ EN CHEMIN : ni la
+    // breloque ni le coffre du labyrinthe n'avaient d'invite propre, et
+    // tombaient tous deux sur promptBin — s'approcher d'un trésor proposait
+    // donc « vendre au bac » depuis le zip 235.
+    promptCandyMonster: "[E] Nourrir le Gourmandin",
+    promptMazePrize: "[E] Ouvrir le coffre",
+    promptPassagePickup: "[E] Ramasser la breloque",
     evilCauldronPickedToast: "⚗️ Tu as récupéré le chaudron ! Ramène-le côté ferme et pose-le où tu veux (outil Construction).",
     toastCauldronAlreadyTaken: "Ce chaudron a déjà été récupéré.",
     toastNoCauldronStock: "Tu ne portes pas de chaudron à poser.",
@@ -1909,6 +1920,11 @@ export const FERME_STR = {
     // public/templerun/, with its own FR/EN table (js/strings.js). These keys
     // only cover what the FARM shows around it.
     runEnteredChat: (name) => `🏃 ${name} steps through the gate and makes a run for it!`,
+    // Zip 385 — The Muncher (Candy Land). Traduit dans l'esprit (règle zip
+    // 371) : « rassasié jusqu'au niveau 10 » deviendrait lourd en anglais.
+    candyEnteredChat: (name) => `🍭 ${name} sits down in front of the Muncher, who opens wide.`,
+    candyGoldChat: (name, gold) => `🪙 ${name} fed the Muncher all the way to level 10 — out comes a treasure of ${gold} gold!`,
+    candyCatChat: (name) => `🐱 ${name} cleared all fifteen Muncher levels and leaves with a candy cat.`,
     runLostChat: (name, candies) => candies > 0
       ? `🍬 ${name} got caught, but brought back ${candies} candy(ies).`
       : `🍬 ${name} got caught, empty-handed.`,
@@ -1975,6 +1991,12 @@ export const FERME_STR = {
     cauldronReadyHint: "Recipe complete — go light your torch, then click the cauldron to start brewing!",
     cauldronIgniteHint: "Torch in hand, click the cauldron to light the fire and start brewing (1 min).",
     promptEvilCauldronPickup: "[E] Pick up the cauldron",
+    // Zip 385 — see the French block: the last two fix a pre-existing
+    // fall-through to promptBin ("sell at the bin") on trinkets and the maze
+    // chest, live since zip 235.
+    promptCandyMonster: "[E] Feed the Muncher",
+    promptMazePrize: "[E] Open the chest",
+    promptPassagePickup: "[E] Pick up the trinket",
     evilCauldronPickedToast: "⚗️ You picked up the cauldron! Bring it back to the farm and place it anywhere (Build tool).",
     toastCauldronAlreadyTaken: "This cauldron has already been picked up.",
     toastNoCauldronStock: "You aren't carrying a cauldron to place.",
