@@ -28,6 +28,12 @@
 
   /* ------------------------------------------------------------ commandes */
   let pointerDown = false, moved = false, lastPt = null;
+  // Zip 387 : point de DÉPART du geste, et « ce geste a-t-il coupé quelque
+  // chose ». Les deux servent au souffle : on ne souffle qu'avec un geste qui
+  // n'a tranché aucune corde, et on le mesure sur le geste ENTIER, pas sur le
+  // dernier fragment entre deux images — sinon la force dépendrait de la
+  // cadence d'affichage, ce qui est exactement ce qu'on refuse partout ailleurs.
+  let startPt = null, gestureCut = false;
 
   function pt(e) {
     const src = e.touches && e.touches[0] ? e.touches[0] : e;
@@ -38,6 +44,7 @@
     if (!st || paused || ended || st.status !== "run") return;
     pointerDown = true; moved = false;
     lastPt = pt(e);
+    startPt = lastPt; gestureCut = false;
     swipe.length = 0; swipe.push(lastPt);
     e.preventDefault();
   }
@@ -46,7 +53,7 @@
     if (!pointerDown || !st || st.status !== "run") return;
     const p = pt(e);
     if (Math.hypot(p.x - lastPt.x, p.y - lastPt.y) >= CFG.CUT_MIN_DIST) {
-      Phys.cut(st, lastPt.x, lastPt.y, p.x, p.y);
+      if (Phys.cut(st, lastPt.x, lastPt.y, p.x, p.y) > 0) gestureCut = true;
       lastPt = p; moved = true;
       swipe.push(p);
       if (swipe.length > 16) swipe.shift();
@@ -58,7 +65,14 @@
     // Un clic SANS déplacement crève une bulle ; un geste tranche des cordes.
     // Distinguer les deux sur le déplacement plutôt que sur deux boutons est
     // ce qui permet de jouer à la souris et au doigt avec le même code.
-    if (pointerDown && !moved && st && st.status === "run" && lastPt) Phys.pop(st, lastPt.x, lastPt.y);
+    if (pointerDown && st && st.status === "run" && lastPt) {
+      if (!moved) Phys.pop(st, lastPt.x, lastPt.y);
+      // Zip 387 : SOUFFLE. Un geste qui n'a rien tranché, assez long et assez
+      // près du bonbon, le pousse. Phys.blow applique lui-même ses seuils et
+      // ne fait rien sur un niveau qui ne déclare pas `blow` — il n'y a donc
+      // pas de règle dupliquée ici.
+      else if (!gestureCut && startPt) Phys.blow(st, startPt.x, startPt.y, lastPt.x, lastPt.y);
+    }
     pointerDown = false;
     swipe.length = 0;
     if (e && e.preventDefault) e.preventDefault();

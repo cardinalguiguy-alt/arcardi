@@ -14,7 +14,7 @@
 
 const IDS = [
   "hud", "lLevel", "level", "lStars", "stars", "lBest", "best",
-  "title", "tTitle", "tSub", "btnStart", "cCut", "cPop", "cRetry", "cPause",
+  "title", "tTitle", "tSub", "btnStart", "cCut", "cPop", "cBlow", "cRetry", "cPause",
   "tHintGoal", "tHintStars", "tHintFarm", "loadError",
   "pause", "pTitle", "btnResume", "btnQuit", "pQuitWarn",
   "won", "wTitle", "wSub", "wStars", "wPrize", "btnNext", "btnWonQuit",
@@ -45,6 +45,7 @@ const UI = (function () {
     text("tSub", L.sub);
     html("cCut", L.ctrlCut);
     html("cPop", L.ctrlPop);
+    html("cBlow", L.ctrlBlow);
     html("cRetry", L.ctrlRetry);
     html("cPause", L.ctrlPause);
     text("tHintGoal", L.hintGoal);
@@ -99,7 +100,9 @@ const UI = (function () {
   }
 
   function lost(reason) {
-    text("xReason", reason === "spike" ? L.lostSpike : reason === "rest" ? L.lostTimeout : L.lostFell);
+    text("xReason", reason === "spike" ? L.lostSpike
+      : reason === "spider" ? L.lostSpider
+      : reason === "rest" ? L.lostTimeout : L.lostFell);
     show("lost");
   }
 

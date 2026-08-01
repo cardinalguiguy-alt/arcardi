@@ -74,6 +74,28 @@ const Render = (function () {
      monstre s'installe dessus. Un monstre posé indépendamment finirait tôt ou
      tard décalé par rapport à la zone qui gagne, ce qui est le pire défaut
      possible pour ce jeu — le joueur viserait une bouche qui n'est pas là. */
+  /* Tampon de pixellisation, créé une seule fois. Le monstre y est peint à
+     CFG.PIX_SCALE, puis étiré sans lissage. */
+  let pixBuf = null, pixCtx = null;
+  function pixelated(ctx, draw) {
+    const s = CFG.PIX_SCALE;
+    if (!pixBuf) {
+      pixBuf = document.createElement("canvas");
+      pixBuf.width = Math.ceil(CFG.W * s);
+      pixBuf.height = Math.ceil(CFG.H * s);
+      pixCtx = pixBuf.getContext("2d");
+    }
+    pixCtx.setTransform(1, 0, 0, 1, 0, 0);
+    pixCtx.clearRect(0, 0, pixBuf.width, pixBuf.height);
+    pixCtx.setTransform(s, 0, 0, s, 0, 0);
+    const out = draw(pixCtx);
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(pixBuf, 0, 0, pixBuf.width, pixBuf.height, 0, 0, CFG.W, CFG.H);
+    ctx.restore();
+    return out;
+  }
+
   function drawMonster(ctx, mouth, t, eating) {
     const R = mouth.r, cx = mouth.x, cy = mouth.y;
     const bodyR = R * 2.35;
@@ -89,7 +111,8 @@ const Render = (function () {
     const N = 46;
     for (let i = 0; i <= N; i++) {
       const a = i / N * Math.PI * 2;
-      const spike = (i % 2 === 0 ? 1 : 0.9) + Math.sin(a * 7) * 0.045;
+      // Zip 387 : mèches plus profondes et plus contrastées — « fluffy ».
+      const spike = (i % 2 === 0 ? 1.06 : 0.84) + Math.sin(a * 9) * 0.07;
       const rr = bodyR * spike;
       const x = Math.cos(a) * rr, y = Math.sin(a) * rr * 0.92;
       if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
@@ -168,28 +191,114 @@ const Render = (function () {
   }
 
   /* -------------------------------------------------------------- objets -- */
-  function drawRope(ctx, r, cand) {
+  /* ⚠️ ZIP 387 — LE TRACÉ VIENT DE LA PHYSIQUE, PAS D'ICI.
+     `Phys.ropePolyline` est la SEULE description de la corde ; la coupe teste
+     le geste contre ces mêmes points. Redessiner la courbe localement, même à
+     l'identique, rouvrirait exactement le défaut qu'on vient de fermer (on
+     tranchait visiblement une corde et rien ne se passait). */
+  function drawRope(ctx, st, r) {
     if (r.cut) return;
-    const dx = cand.x - r.ax, dy = cand.y - r.ay;
-    const d = Math.hypot(dx, dy);
-    // Molle quand elle n'est pas tendue : la flèche vaut ce qui reste de
-    // longueur. C'est la seule façon de VOIR qu'une corde ne retient rien.
-    const slackAmt = Math.max(0, r.len - d);
-    const nx = -dy / (d || 1), ny = dx / (d || 1);
-    ctx.beginPath();
-    for (let i = 0; i <= CFG.ROPE_SEGMENTS; i++) {
-      const u = i / CFG.ROPE_SEGMENTS;
-      const bow = Math.sin(u * Math.PI) * slackAmt * 0.5;
-      const x = r.ax + dx * u + nx * bow * 0.15;
-      const y = r.ay + dy * u + ny * bow * 0.15 + bow * 0.85;
-      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+
+    // Corde AUTOMATIQUE pas encore accrochée : on montre l'ancre et sa portée,
+    // sinon elle happe le bonbon depuis nulle part et le joueur croit à un bug.
+    if (!r.attached) {
+      const rad = r.reach || CFG.AUTO_REACH;
+      ctx.save();
+      ctx.setLineDash([5, 6]);
+      ctx.strokeStyle = "rgba(255,255,255,0.55)"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(r.ax, r.ay, rad, 0, 7); ctx.stroke();
+      ctx.restore();
+      ctx.beginPath(); ctx.arc(r.ax, r.ay, 8, 0, 7);
+      ctx.fillStyle = CFG.COL_ANCHOR; ctx.fill();
+      ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.stroke();
+      return;
     }
+
+    const pts = Phys.ropePolyline(st, r);
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
     ctx.strokeStyle = CFG.COL_ROPE; ctx.lineWidth = 4; ctx.lineCap = "round"; ctx.stroke();
     ctx.strokeStyle = CFG.COL_ROPE_HI; ctx.lineWidth = 1.6; ctx.stroke();
 
     ctx.beginPath(); ctx.arc(r.ax, r.ay, 7, 0, 7);
     ctx.fillStyle = CFG.COL_ANCHOR; ctx.fill();
     ctx.strokeStyle = "rgba(0,0,0,0.25)"; ctx.lineWidth = 2; ctx.stroke();
+  }
+
+  // Zip 387 — épingle. Un petit champignon de sucre : le disque est la zone
+  // d'enroulement RÉELLE (p.r), pas une décoration.
+  function drawPin(ctx, p, t) {
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, 7);
+    ctx.fillStyle = "rgba(255,255,255,0.22)"; ctx.fill();
+    ctx.beginPath(); ctx.arc(p.x, p.y, 5, 0, 7);
+    ctx.fillStyle = "#ffd23f"; ctx.fill();
+    ctx.strokeStyle = "#b98a12"; ctx.lineWidth = 2; ctx.stroke();
+  }
+
+  /* Zip 387 — araignée. Posée SUR le tracé de la corde à l'abscisse `t` : elle
+     descend donc le long de la courbe qu'on voit, y compris quand la corde
+     est molle. La poser sur la droite ancre->bonbon aurait reproduit, pour
+     l'araignée, le décalage qu'on vient de corriger pour la coupe. */
+  function drawSpider(ctx, st, sp, now) {
+    if (sp.gone) return;
+    const r = st.ropes[sp.rope];
+    if (!r || r.cut || !r.attached) return;
+    const pts = Phys.ropePolyline(st, r);
+    const u = Math.max(0, Math.min(1, sp.t)) * (pts.length - 1);
+    const i = Math.min(pts.length - 2, Math.floor(u)), f = u - i;
+    const x = pts[i].x + (pts[i + 1].x - pts[i].x) * f;
+    const y = pts[i].y + (pts[i + 1].y - pts[i].y) * f;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.strokeStyle = "#2a1030"; ctx.lineWidth = 2;
+    for (let k = -1; k <= 1; k += 2) {
+      const wob = Math.sin(now / 120 + k) * 2;
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(k * 8, 5 + wob); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(k * 9, -3 + wob); ctx.stroke();
+    }
+    ctx.beginPath(); ctx.arc(0, 0, 6, 0, 7);
+    ctx.fillStyle = "#3a1550"; ctx.fill();
+    ctx.fillStyle = "#ff4d6d"; ctx.fillRect(-3, -2, 2, 2); ctx.fillRect(1, -2, 2, 2);
+    ctx.restore();
+  }
+
+  /* Zip 387 — retours visuels. Sans eux, un geste raté et un geste réussi se
+     ressemblent, et c'est le premier reproche qu'on fait à une interface. */
+  function drawFx(ctx, st, now) {
+    for (const e of st.fx) {
+      const age = (st.t - e.t) / 0.6;
+      if (age < 0 || age > 1) continue;
+      const a = 1 - age;
+      if (e.kind === "cut") {
+        ctx.strokeStyle = `rgba(255,255,255,${a})`; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(e.x, e.y, 6 + age * 26, 0, 7); ctx.stroke();
+      } else if (e.kind === "pop") {
+        ctx.strokeStyle = `rgba(255,255,255,${a * 0.9})`; ctx.lineWidth = 2;
+        for (let k = 0; k < 6; k++) {
+          const ang = k / 6 * 7;
+          ctx.beginPath();
+          ctx.moveTo(e.x + Math.cos(ang) * (8 + age * 22), e.y + Math.sin(ang) * (8 + age * 22));
+          ctx.lineTo(e.x + Math.cos(ang) * (14 + age * 30), e.y + Math.sin(ang) * (14 + age * 30));
+          ctx.stroke();
+        }
+      } else if (e.kind === "star") {
+        ctx.fillStyle = `rgba(255,210,63,${a})`;
+        ctx.beginPath(); ctx.arc(e.x, e.y - age * 24, 4 + age * 6, 0, 7); ctx.fill();
+      } else if (e.kind === "grab") {
+        ctx.strokeStyle = `rgba(255,255,255,${a})`; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(e.x, e.y, 40 - age * 30, 0, 7); ctx.stroke();
+      } else if (e.kind === "blow") {
+        ctx.strokeStyle = `rgba(255,255,255,${a * 0.8})`; ctx.lineWidth = 3;
+        for (let k = -1; k <= 1; k++) {
+          const ox = -e.dy * k * 12, oy = e.dx * k * 12;
+          ctx.beginPath();
+          ctx.moveTo(e.x + ox - e.dx * 30 * (1 - age), e.y + oy - e.dy * 30 * (1 - age));
+          ctx.lineTo(e.x + ox - e.dx * 6, e.y + oy - e.dy * 6);
+          ctx.stroke();
+        }
+      }
+    }
   }
 
   function drawCandy(ctx, st, t) {
@@ -313,15 +422,24 @@ const Render = (function () {
 
     const d = Math.hypot(st.candy.x - st.mouth.x, st.candy.y - st.mouth.y);
     const eating = Math.max(0, 1 - d / (st.mouth.r * 4));
-    const eyes = drawMonster(ctx, st.mouth, t, eating);
-    drawPupils(ctx, st.mouth, eyes, st.candy);
+    // Le monstre ET ses pupilles passent par le tampon réduit : peindre les
+    // pupilles par-dessus, en pleine résolution, aurait donné deux grains
+    // différents sur la même créature — le défaut saute aux yeux.
+    const eyes = pixelated(ctx, (g) => {
+      const e = drawMonster(g, st.mouth, t, eating);
+      drawPupils(g, st.mouth, e, st.candy);
+      return e;
+    });
 
     for (const b of st.bumpers) drawBumper(ctx, b, t);
     for (const sp of st.spikes) drawSpike(ctx, sp, t);
     for (const s of st.stars) drawStar(ctx, s, t);
-    for (const r of st.ropes) drawRope(ctx, r, st.candy);
+    for (const p of st.pins) drawPin(ctx, p, t);
+    for (const r of st.ropes) drawRope(ctx, st, r);
+    for (const sp of st.spiders) drawSpider(ctx, st, sp, t);
     drawCandy(ctx, st, t);
     for (const b of st.bubbles) drawBubble(ctx, b, t);
+    drawFx(ctx, st, t);
 
     // Geste de coupe en cours : un trait blanc qui s'efface. Sans lui, un
     // geste raté ne dit pas au joueur s'il a manqué la corde ou si le jeu ne

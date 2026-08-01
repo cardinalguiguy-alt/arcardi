@@ -60,6 +60,21 @@ const CFG = {
   OUT_MARGIN_X: 260,
   OUT_MARGIN_Y: 120,
 
+  /* ------------------------------------------- mécanismes du zip 387 -----
+     Épingles, cordes automatiques, araignées, souffle. Les quatre demandés par
+     Guillaume. Tous les réglages ici, aucun chiffre en dur dans le moteur. */
+  AUTO_REACH: 62,           // portée d'une corde automatique (px)
+  AUTO_MIN_LEN: 34,         // longueur minimale au moment où elle happe
+  SPIDER_SPEED: 0.18,       // fraction de corde parcourue par seconde (défaut)
+
+  /* Le souffle. BLOW_MIN_SWIPE est délibérément haut : un geste lent qui vise
+     une corde ne doit JAMAIS souffler par accident. Seul un vrai coup sec
+     compte, et uniquement sur les niveaux qui déclarent `blow: true`. */
+  BLOW_R: 74,               // distance max entre le geste et le bonbon
+  BLOW_MIN_SWIPE: 46,       // longueur minimale du geste (px logiques)
+  BLOW_MAX: 320,            // au-delà, le geste ne pousse pas plus fort
+  BLOW_GAIN: 0.014,         // conversion longueur de geste -> vitesse
+
   /* ------------------------------------------------------------- la coupe */
   CUT_MIN_DIST: 4,          // longueur minimale d'un geste pris en compte (px logiques)
   POP_R: 26,                // rayon de clic pour crever une bulle
@@ -92,9 +107,19 @@ const CFG = {
   COL_BUBBLE: "rgba(255,255,255,0.42)",
   COL_BUBBLE_EDGE: "rgba(255,255,255,0.85)",
   COL_FAN: "#c9a6ff",
-  COL_MONSTER: "#8d5bd6",
-  COL_MONSTER_DARK: "#6a3fae",
-  COL_MONSTER_MOUTH: "#3a1a5e",
-  COL_MONSTER_TONGUE: "#ff6f9e",
+  COL_MONSTER: "#ff9ecb",        // zip 387 : rose et pelucheux (demande Guillaume)
+  COL_MONSTER_DARK: "#e26ba6",
+  COL_MONSTER_MOUTH: "#7d1f4a",
+  COL_MONSTER_TONGUE: "#ff5c8a",
   COL_CUT: "rgba(255,255,255,0.9)",
+
+  /* Zip 387 — PIXELLISATION DU GOURMANDIN (demande Guillaume : « pixelate
+     it »). Le monstre est peint dans un tampon RÉDUIT puis agrandi sans
+     lissage : les gros pixels sont donc de vrais pixels, pas un filtre.
+
+     C'est la seule façon d'obtenir le grain de la ferme (tout le pixel art du
+     site est généré par code) sans réécrire le monstre case par case — et ça
+     garde la bouche exactement là où la physique la teste, ce qui est le point
+     à ne jamais perdre de vue dans ce jeu. */
+  PIX_SCALE: 0.25,
 };

@@ -45,16 +45,37 @@ const MAX_MS = 9000;        // au-delà, le niveau est de toute façon perdu (im
 const TRIALS = 3000;
 
 /* Rejoue une partie complète à partir d'un plan d'actions.
-   plan = { cuts: [ms | null, ...], pops: [ms | null, ...] } */
+   plan = { cuts: [ms|null], pops: [ms|null], blows: [{at, ang, len}] }
+
+   ⚠️ ZIP 387 — LE SOUFFLE FAIT PARTIE DU PLAN. Sans lui, l'outil aurait
+   déclaré le niveau 13 injouable alors qu'il est simplement conçu autour d'un
+   mécanisme que le solveur ignorait. Un contrôle qui ne connaît pas toutes les
+   commandes du jeu ne mesure pas la difficulté : il mesure sa propre ignorance.
+   C'est le corollaire du périmètre trop étroit (zip 377, verify-fairness). */
 function play(level, plan) {
   const st = Phys.makeState(level);
   let t = 0;
   const doneCut = new Array(st.ropes.length).fill(false);
   const donePop = new Array(st.bubbles.length).fill(false);
+  const doneBlow = new Array((plan.blows || []).length).fill(false);
   while (st.status === "run" && t < MAX_MS) {
     for (let i = 0; i < st.ropes.length; i++) {
       const at = plan.cuts[i];
-      if (at !== null && !doneCut[i] && t >= at) {
+      /* ⚠️ ZIP 387 — `st.ropes[i].attached` N'EST PAS UNE PRÉCAUTION, C'EST LA
+         RÈGLE DU JEU. `Phys.cut` refuse déjà les cordes non accrochées : une
+         corde automatique qui n'a encore rien happé n'existe pas pour le
+         joueur, il ne peut pas la trancher.
+
+         Le solveur, lui, écrivait `cut = true` directement et pouvait donc
+         DÉTRUIRE une corde automatique avant qu'elle serve — ce qu'aucun
+         joueur ne peut faire. Résultat : les niveaux 7, 10 et 15 sortaient à
+         moins de 0,1 % et paraissaient injustes alors qu'ils ne l'étaient pas.
+         L'outil ne mesurait pas le niveau, il mesurait son propre écart avec
+         le moteur.
+
+         La coupe est donc simplement REPORTÉE tant que la corde n'est pas
+         accrochée, ce qui est exactement ce que fait un joueur qui attend. */
+      if (at !== null && !doneCut[i] && t >= at && st.ropes[i].attached) {
         st.ropes[i].cut = true; st.acted = true; st.cuts++; doneCut[i] = true;
       }
     }
@@ -65,6 +86,18 @@ function play(level, plan) {
         b.popped = true; st.acted = true;
         if (st.inBubble === i) st.inBubble = -1;
         donePop[i] = true;
+      }
+    }
+    for (let i = 0; i < doneBlow.length; i++) {
+      const b = plan.blows[i];
+      if (!doneBlow[i] && t >= b.at) {
+        // Le souffle passe par la VRAIE fonction du moteur, avec ses seuils :
+        // le solveur ne peut donc pas gagner par un geste qu'un joueur ne
+        // pourrait pas faire.
+        const c = st.candy;
+        const x0 = c.x - Math.cos(b.ang) * b.len * 0.5, y0 = c.y - Math.sin(b.ang) * b.len * 0.5;
+        Phys.blow(st, x0, y0, x0 + Math.cos(b.ang) * b.len, y0 + Math.sin(b.ang) * b.len);
+        doneBlow[i] = true;
       }
     }
     Phys.step(st, STEP_MS);
@@ -80,7 +113,7 @@ function play(level, plan) {
        niveau 15 ne se gagne même que comme ça. Un tirage strictement
        indépendant ne trouverait jamais ces solutions.
      - ATTENDRE : une bulle se crève rarement à l'instant zéro. */
-function randomPlan(nRopes, nBubbles, rnd) {
+function randomPlan(nRopes, nBubbles, rnd, blowAllowed) {
   const group = rnd() < 0.34 ? Math.round(rnd() * 4000) : null;
   const cuts = [];
   for (let i = 0; i < nRopes; i++) {
@@ -89,7 +122,19 @@ function randomPlan(nRopes, nBubbles, rnd) {
   }
   const pops = [];
   for (let i = 0; i < nBubbles; i++) pops.push(rnd() < 0.12 ? null : Math.round(300 + rnd() * 6000));
-  return { cuts, pops };
+  const blows = [];
+  if (blowAllowed) {
+    const nb = rnd() < 0.35 ? 1 : 2;
+    for (let i = 0; i < nb; i++) {
+      blows.push({
+        at: Math.round(rnd() * 5000),
+        ang: rnd() * Math.PI * 2,
+        len: CFG.BLOW_MIN_SWIPE + rnd() * (CFG.BLOW_MAX - CFG.BLOW_MIN_SWIPE),
+      });
+    }
+    blows.sort((a, b) => a.at - b.at);
+  }
+  return { cuts, pops, blows };
 }
 
 // Générateur reproductible : un échec doit pouvoir être rejoué à l'identique.
@@ -108,9 +153,13 @@ for (const lv of LEVELS) {
   if (only && lv.n !== only) continue;
   const rnd = makeRng(0x5EED + lv.n * 7919);
   const nR = (lv.ropes || []).length, nB = (lv.bubbles || []).length;
+  // Une corde automatique ne se coupe pas tant qu'elle n'a rien happé : le
+  // plan lui réserve quand même une case, le moteur ignore la coupe si elle
+  // n'est pas accrochée.
+
   let wins = 0, best = null, bestStars = -1;
   for (let k = 0; k < TRIALS; k++) {
-    const plan = randomPlan(nR, nB, rnd);
+    const plan = randomPlan(nR, nB, rnd, !!lv.blow);
     const st = play(lv, plan);
     if (st.status === "won") {
       wins++;

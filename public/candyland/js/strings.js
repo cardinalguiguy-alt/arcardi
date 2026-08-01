@@ -25,6 +25,7 @@ const CANDY_STR = {
 
     ctrlCut: "<b>Glissez</b> la souris (ou le doigt) en travers d'une corde pour la <b>trancher</b>",
     ctrlPop: "<b>Cliquez</b> une bulle de sucre pour la faire éclater",
+    ctrlBlow: "<b>Coup sec</b> près du bonbon, sans toucher de corde — le <b>souffler</b> (niveaux 13 et 14)",
     ctrlRetry: "<b>R</b> — recommencer le niveau",
     ctrlPause: "<b>Échap</b> — pause",
     hintGoal: "Faites tomber le bonbon dans la bouche du Gourmandin. Il a très faim, et il est très patient.",
@@ -49,6 +50,7 @@ const CANDY_STR = {
     lostTitle: "Raté",
     lostFell: "Le bonbon est tombé à côté.",
     lostSpike: "Un bonbon acidulé a eu raison du vôtre.",
+    lostSpider: "L'araignée a atteint le bonbon avant vous.",
     lostTimeout: "Le bonbon s'est immobilisé hors de portée.",
     retry: "Réessayer",
 
@@ -72,6 +74,7 @@ const CANDY_STR = {
 
     ctrlCut: "<b>Swipe</b> the mouse (or your finger) across a rope to <b>cut</b> it",
     ctrlPop: "<b>Click</b> a sugar bubble to pop it",
+    ctrlBlow: "<b>Flick</b> near the candy without touching a rope — <b>blow</b> it (levels 13 and 14)",
     ctrlRetry: "<b>R</b> — restart the level",
     ctrlPause: "<b>Esc</b> — pause",
     hintGoal: "Drop the candy into the Muncher's mouth. He is very hungry, and very patient.",
@@ -96,6 +99,7 @@ const CANDY_STR = {
     lostTitle: "Missed",
     lostFell: "The candy fell wide.",
     lostSpike: "A sour drop got to your candy first.",
+    lostSpider: "The spider reached the candy before you did.",
     lostTimeout: "The candy came to rest out of reach.",
     retry: "Try again",
 
