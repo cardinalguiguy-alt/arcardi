@@ -12,7 +12,12 @@
    ========================================================================== */
 
 (function () {
-  const DT = 1 / 60;
+  /* ⚠️ LE PAS VIENT DE CFG.SIM_HZ, IL N'EST PAS ÉCRIT ICI. lib-play.mjs,
+     smoke-render.mjs et verify-controls.mjs lisent la même constante : deux
+     cadences qui doivent rester égales et qui sont écrites à deux endroits
+     finissent toujours par diverger, et un outil qui joue à 60 pendant que le
+     jeu joue à 30 mesure autre chose que le jeu. */
+  const DT = 1 / CFG.SIM_HZ;
   const MAX_STEPS = 5;          // au-delà, on laisse filer : mieux vaut sauter que geler
 
   let state = "title";
@@ -87,6 +92,12 @@
       let steps = 0;
       while (acc >= DT && steps < MAX_STEPS) {
         acc -= DT; steps++;
+        /* ⚠️ ON MÉMORISE L'ÉTAT D'AVANT AVANT DE SIMULER. C'est la moitié du
+           travail de l'interpolation : le rendu affichera un entre-deux de
+           snapPrev() et de l'état obtenu. Sans cette ligne, la simulation à
+           30 Hz se verrait comme telle sur un écran à 60 ou 144 — c'est-à-dire
+           exactement la saccade qu'on cherche à supprimer. */
+        World.snapPrev(st);
         const intent = Input.read();
         Rules.step(st, DT, intent);
         UI.events(st);
@@ -101,8 +112,10 @@
       last = now;
     }
     if (st) {
-      if (st.status === "falling") World.fallStep(st, 1 / 60);
-      World.sync(st, now);
+      if (st.status === "falling") World.fallStep(st, DT);
+      /* `alpha` est la fraction de pas déjà écoulée : 0 = on vient de simuler,
+         1 = le pas suivant est dû. C'est lui qui rend le mouvement continu. */
+      World.sync(st, now, state === "play" ? acc / DT : 1);
     }
     UI.toastTick(now);
   }

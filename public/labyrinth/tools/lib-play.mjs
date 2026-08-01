@@ -48,15 +48,18 @@ export function load(files = ["js/config.js", "js/maze.js", "js/rules.js"]) {
   // `const` au niveau d'un script vm vit dans la portée lexicale du contexte,
   // pas sur l'objet global : on va le chercher par une expression. Motif repris
   // tel quel de public/templerun/tools/verify-fairness.js.
-  return vm.runInContext("({ CFG, Maze, Rules, Paint: typeof Paint !== \"undefined\" ? Paint : null, World: typeof World !== \"undefined\" ? World : null })", ctx);
+  return vm.runInContext("({ CFG, Maze, Rules, Paint: typeof Paint !== \"undefined\" ? Paint : null, Rig: typeof Rig !== \"undefined\" ? Rig : null, World: typeof World !== \"undefined\" ? World : null })", ctx);
 }
 
-const DT = 1 / 60;   // le jeu tourne au pas fixe côté simulation (voir game.js)
+/* ⚠️ LE PAS VIENT DE CFG.SIM_HZ (zip 395), il n'est plus écrit ici. Un outil
+   qui joue à 60 pendant que le jeu joue à 30 ne mesure pas le jeu : il mesure
+   sa propre cadence. `load()` étant appelé avant, on le lit dans playOne. */
 
 /* ---------------------------------------------------------------------------
    playOne — une partie complète, image par image, par Rules.step().
    -------------------------------------------------------------------------- */
 export function playOne({ CFG, Maze, Rules }, seed, opts = {}) {
+  const DT = 1 / CFG.SIM_HZ;
   const maxSeconds = opts.maxSeconds || 480;
   const m = Maze.generate(CFG, seed);
   if (!m) return { ok: false, why: "generation" };

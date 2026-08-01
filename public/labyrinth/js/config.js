@@ -28,6 +28,36 @@
 const CFG = {
 
   /* ======================================================================
+     ZIP 395 — LE PAS DE SIMULATION, ET POURQUOI IL DESCEND À 30 Hz
+     ======================================================================
+     Guillaume : « les mouvements ne sont pas assez soignés (…) tu peux
+     réduire à 30 fps ». Les deux moitiés de la phrase vont ensemble, et la
+     seconde est l'autorisation qui permet la première.
+
+     ⚠️ 30 Hz N'EST PAS UNE BAISSE DE QUALITÉ, C'EST UN DÉCOUPLAGE. Jusqu'ici
+     la simulation ET le rendu tournaient à 60 : chaque image affichée était un
+     état de jeu brut, et tout écart de cadence du navigateur se voyait
+     directement comme une saccade. Désormais :
+
+       * la SIMULATION avance par pas fixes de 1/30 s — c'est elle qui décide
+         de tout, et c'est elle que rejouent les outils ;
+       * le RENDU tourne à la cadence de l'écran (60, 120, 144…) et INTERPOLE
+         entre les deux derniers états simulés.
+
+     Le mouvement affiché est donc continu même quand la simulation est
+     discrète, et il le reste si une image de simulation est sautée. C'est la
+     technique standard, et c'est LA réponse à « plus fluide » — bien plus que
+     n'importe quel réglage de vitesse.
+
+     ⚠️ TOUT CE QUI SIMULE DOIT LIRE CETTE CONSTANTE. game.js, lib-play.mjs,
+     smoke-render.mjs et verify-controls.mjs l'utilisent : deux cadences qui
+     doivent rester égales et qui sont écrites à deux endroits finissent
+     toujours par diverger, et un outil qui joue à 60 pendant que le jeu joue
+     à 30 mesure autre chose que le jeu. */
+  SIM_HZ: 30,
+
+
+  /* ======================================================================
      LE LABYRINTHE — GÉOMÉTRIE
      ======================================================================
      Le dédale est une grille de CELLULES. Une cellule fait CELL unités de
@@ -80,7 +110,13 @@ const CFG = {
      à chaque relâchement, la caméra partait et s'arrêtait net. On monte et on
      redescend maintenant en ~0,16 s, ce qui suffit à rendre le balayage
      continu sans donner l'impression de patiner. */
-  TURN_ACCEL: 18.0,         // rad/s² sur la vitesse de rotation
+  TURN_ACCEL: 14.0,         // rad/s² sur la vitesse de rotation
+  /* ⚠️ FREINAGE DE ROTATION, AJOUTÉ AU 395. Monter en douceur ne suffisait
+     pas : la rotation s'ARRÊTAIT net au relâchement de la flèche, ce qui est
+     exactement l'à-coup qu'on entendait dans « les rotations aussi ». On
+     décélère maintenant plus doucement qu'on n'accélère, ce qui donne à la
+     caméra une fin de course qui glisse au lieu de buter. */
+  TURN_DECEL: 9.0,          // rad/s² à la décélération (plus doux que l'accél.)
   ACCEL: 34,                // montée en vitesse, unités/s²
   BODY_R: 0.9,             // rayon de collision du fermier
 
@@ -410,6 +446,41 @@ const CFG = {
   SCORE_PER_SHARD: 25,
   SCORE_PER_KILL: 60,
   SCORE_EXIT_BONUS: 750,
+
+  /* ======================================================================
+     ZIP 395 — L'ANIMATION
+     ----------------------------------------------------------------------
+     Retour de Guillaume : « les animations ne sont pas du tout
+     satisfaisantes ». Elles ne l'étaient pas, et pour une raison simple : il
+     n'y en avait pas. Le fermier avait deux bras qui oscillaient en sinus du
+     TEMPS, des jambes qui ne bougeaient pas du tout, et rien d'autre — pas de
+     cycle de marche, pas de repos, pas d'élan d'attaque, pas de réaction au
+     coup reçu.
+
+     ⚠️ LE CYCLE DE MARCHE AVANCE À LA DISTANCE, PAS AU TEMPS. C'est la seule
+     chose qui empêche le patinage : un personnage dont les jambes battent la
+     mesure du temps glisse dès qu'il ralentit, et c'est le défaut qu'on
+     reconnaît immédiatement sans savoir le nommer. Ici, un pas se fait tous
+     les STRIDE mètres parcourus, quelle que soit la vitesse — donc le pied
+     touche le sol au même endroit du cycle, toujours. */
+  STRIDE: 2.9,              // distance parcourue par foulée complète (2 pas)
+  GAIT_SWING: 0.85,         // amplitude d'oscillation des cuisses, rad
+  GAIT_KNEE: 1.05,          // flexion maximale du genou, rad
+  GAIT_ARM: 0.62,           // amplitude des bras (contre-balancement)
+  GAIT_BOB: 0.11,           // montée/descente du bassin par pas, unités
+  GAIT_ROLL: 0.07,          // roulis des épaules, rad
+  LEAN_RUN: 0.17,           // inclinaison avant en course, rad
+  LEAN_STRAFE: 0.16,        // inclinaison latérale en pas de côté, rad
+  IDLE_BREATH: 0.030,       // respiration au repos (échelle du torse)
+  IDLE_SWAY: 0.045,         // balancement au repos, rad
+
+  /* L'ATTAQUE EN TROIS TEMPS. Un coup d'épée qui n'est qu'un balayage n'a
+     aucun poids : c'est l'ARMÉ qui donne la force, et la RÉCUPÉRATION qui
+     donne le contrecoup. Les trois fractions se rapportent à SWING_MS. */
+  SWING_WINDUP: 0.30,       // 0 → 30 % : on arme, l'épée part en arrière
+  SWING_STRIKE: 0.55,       // 30 → 55 % : le coup, très rapide
+  SWING_TWIST: 0.75,        // rotation du buste pendant le coup, rad
+  HURT_RECOIL: 0.45,        // repli du buste quand on encaisse, rad
 
   /* ======================================================================
      CAMÉRA — troisième personne, comme l'image de référence

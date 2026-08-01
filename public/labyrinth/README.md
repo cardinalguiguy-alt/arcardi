@@ -1,4 +1,12 @@
-# Le Labyrinthe — mini-jeu du Pays du Labyrinthe (zips 393-394)
+# Le Labyrinthe — mini-jeu du Pays du Labyrinthe (zips 393-395)
+
+> **ZIP 395 — LE MOUVEMENT ET LES PERSONNAGES.** Retour de Guillaume : « les
+> mouvements ne sont pas assez soignés, les animations pas du tout
+> satisfaisantes (…) tu peux réduire à 30 fps (…) le perso est pas assez
+> détaillé, et l'épée non plus (…) et les ennemis non plus ». Trois chantiers :
+> **la simulation passe à 30 Hz avec interpolation au rendu**, **`js/rig.js`
+> apporte de vrais squelettes animés**, et les trois personnages sont
+> entièrement remodelés. Voir la section « Zip 395 » en fin de fichier.
 
 > **ZIP 394 — REFONTE SUR RETOUR DE GUILLAUME.** Trois reproches, tous fondés :
 > le labyrinthe était trop étroit, les contrôles étaient **inversés**, et les
@@ -81,6 +89,7 @@ qu'on est en danger. Ressortir depuis l'écran-titre est gratuit.
 | `js/maze.js` | génération du dédale, trous, brasiers, épée — **pur**, sans DOM |
 | `js/rules.js` | **toute la simulation** : collision, torche, combat, créatures — **pur** |
 | `js/paint.js` | les textures, peintes sur canvas — ne connaît pas Three.js |
+| `js/rig.js` | **squelettes articulés et cycles d'animation** (395) |
 | `js/world.js` | tout Three.js. **Ne décide de rien**, il lit `rules.js` |
 | `js/input.js` | clavier et tactile → **intentions** |
 | `js/ui.js` | écrans, jauges, langue, record |
@@ -103,13 +112,20 @@ joueur. **Un mur visible qu'on traverse est impossible par construction.**
 
 ### Le pas fixe n'est pas un détail
 
-Toute la vérification joue à 1/60. Laisser le navigateur imposer un `dt`
-variable ferait diverger le jeu de l'outil qui le mesure, c'est-à-dire rendrait
-faux **tout** ce qui a été réglé.
+Toute la vérification joue à `1 / CFG.SIM_HZ`, soit **30 Hz depuis le 395**.
+Laisser le navigateur imposer un `dt` variable ferait diverger le jeu de
+l'outil qui le mesure, c'est-à-dire rendrait faux **tout** ce qui a été réglé.
+Et la cadence n'est écrite qu'**à un seul endroit** : `game.js`, `lib-play.mjs`,
+`smoke-render.mjs`, `verify-controls.mjs` et `verify-anim.mjs` lisent tous
+`CFG.SIM_HZ`.
+
+**Le rendu, lui, tourne à la cadence de l'écran et INTERPOLE** entre les deux
+derniers états simulés (`World.snapPrev` / `World.sync(st, now, alpha)`). C'est
+ce découplage — et non un réglage de vitesse — qui répond à « plus fluide ».
 
 ---
 
-## Vérification — huit scripts, à relancer TOUS à chaque livraison
+## Vérification — neuf scripts, à relancer TOUS à chaque livraison
 
 Un outil qu'on saute n'est pas un filet de sécurité, c'est un fichier mort
 (leçon du zip 375).
@@ -117,6 +133,7 @@ Un outil qu'on saute n'est pas un filet de sécurité, c'est un fichier mort
 ```
 node tools/verify-maze.mjs 2000    # les six garanties du générateur
 node tools/verify-controls.mjs     # les commandes vont-elles dans le bon sens ? (394)
+node tools/verify-anim.mjs         # patinage, bornes, bouclage, contre-balancement (395)
 node tools/verify-palette.mjs      # la palette n'a pas dérivé de celle du défi
 node tools/smoke-render.mjs        # world.js EXÉCUTÉ contre un faux Three.js
 node tools/check-strings.mjs       # parité FR/EN + ui.js exécuté contre un faux DOM
@@ -134,9 +151,10 @@ bloc doit pouvoir être lancé en morceaux** — sinon il n'est lancé qu'une fo
 | Script | Attendu |
 |---|---|
 | `verify-maze` | 2 000 dédales, **6 garanties**, chemin 32..56, écart max sans brasier **7** (plafond 8), épée 5..6, 1,13 essai |
-| `verify-controls` | **10 contrôles**, dont demi-tour en 1,17 s |
+| `verify-controls` | **10 contrôles**, dont demi-tour en 1,20 s |
+| `verify-anim` | **13 contrôles**, rapport foulées/distance = **1,000** |
 | `verify-palette` | **36 couleurs communes identiques au bit près**, 17 propres au labyrinthe |
-| `smoke-render` | 4 graines × 300 images, **~2 250 maillages** (plafond 6 000) |
+| `smoke-render` | 4 graines × 300 images, **~2 450 maillages** (plafond 6 000) |
 | `check-strings` | **41 = 41**, 16 identifiants |
 
 ### Les six garanties de `verify-maze.mjs`
@@ -156,7 +174,7 @@ si le jeu est jouable.
 
 ## ⚠️ Ce que la simulation a trouvé, et que personne n'aurait vu en relisant
 
-**Douze défauts, tous dans du code dont chaque ligne prise séparément est juste.**
+**Quinze défauts, tous dans du code dont chaque ligne prise séparément est juste.**
 
 | # | Défaut | Comment il se manifestait |
 |---|---|---|
@@ -172,6 +190,9 @@ si le jeu est jouable.
 | **10** | **La sortie ne se déclenchait pas** *(394)* | Il fallait avoir dépassé le premier dixième de la cellule de sortie. On arrivait sous le phare, on s'arrêtait au milieu de la porte, rien. **Ce seul correctif a fait passer le taux de sortie de 10 % à 71 %.** |
 | **11** | **Les contrôles inversés** *(394, trouvé par Guillaume)* | Flèche droite = rotation à gauche. **Aucun outil ne pouvait le voir** : l'oracle partage la convention du moteur, donc il tournait « juste » dans un monde inversé. → `verify-controls.mjs` |
 | **12** | Le lissage de caméra en `0,016` **en dur** *(394)* | Suivait deux fois trop vite à 120 Hz, deux fois trop lentement à 30 Hz. Invisible sur un écran à 60 Hz. |
+| **13** | **Aucune animation** *(395, signalé par Guillaume)* | Deux bras en sinus **du temps**, jambes immobiles. Un cycle basé sur le temps fait patiner dès qu'on ralentit — c'est le défaut qu'on reconnaît sans savoir le nommer. → `rig.js`, cycle avancé à la **distance**. |
+| **14** | Les créatures recalaient leur cap **d'un coup** *(395)* | À chaque nœud de leur chemin, elles pivotaient par saccades. Aussi laid sur un monstre que sur le joueur. |
+| **15** | `verify-anim` mesurait **sa propre hypothèse** *(395)* | Il comparait les foulées à `30 / STRIDE` en supposant 30 unités parcourues — le fermier en faisait 26, finissant contre un mur. Il signalait un patinage inexistant. Corollaire n°5 du zip 387, y compris pour l'outil écrit pour vérifier ce défaut-là. |
 
 Le neuvième mérite d'être gardé en tête : **un réglage qui paraît évident peut
 mesurablement empirer le jeu.** Il est commenté dans `config.js` pour que
@@ -181,18 +202,23 @@ personne ne le « corrige » à nouveau.
 
 ## L'équilibrage, au zip 394
 
-Dernière mesure, **194 parties jouées image par image** :
+Dernière mesure, **220 parties jouées image par image**, à 30 Hz :
 
 | Issue | Part |
 |---|---|
-| **SORTIE** | **68,6 %** |
-| temps écoulé (260 s) | 17,0 % |
-| chute dans un trou | 9,8 % |
-| LE TRAQUEUR | 3,1 % |
-| blocage de l'oracle | 1,0 % |
-| rôdeur | 0,5 % |
+| **SORTIE** | **69,5 %** |
+| temps écoulé (260 s) | 15,9 % |
+| chute dans un trou | 8,2 % |
+| LE TRAQUEUR | 3,2 % |
+| blocage de l'oracle | 2,3 % |
+| rôdeur | 0,9 % |
 
-Durée d'une partie gagnée : **médiane 103 s**, p75 132 s, max 222 s.
+Durée d'une partie gagnée : **médiane 104 s**, p75 132 s, max 254 s.
+
+> **Le passage de 60 à 30 Hz n'a rien changé à l'équilibrage** (68,6 % avant,
+> 69,5 % après, sur des lots différents). C'était le contrôle à faire : une
+> simulation dont le résultat dépend de sa cadence n'est pas déterministe, et
+> tout ce qui a été réglé depuis le 393 serait à refaire.
 
 C'est l'inverse exact du 393, où l'oracle sortait dans 11 % des cas et où 22 %
 des parties étaient des **pannes de navigation**. La bascule ne vient pas d'un
@@ -352,3 +378,94 @@ les donne comme des images du jeu qu'il veut. Entre une facilité offerte et
 deux références explicites, on suit les références. **Choix pris seul, à dire
 s'il ne convient pas** : la bascule coûterait une demi-journée, l'essentiel du
 travail étant déjà dans `updateCamera()`.
+
+
+---
+
+## ZIP 395 — LE MOUVEMENT ET LES PERSONNAGES
+
+### 1. Pourquoi 30 Hz rend le jeu PLUS fluide, et non moins
+
+Les deux moitiés de la phrase de Guillaume vont ensemble : l'autorisation de
+descendre à 30 est ce qui permet de soigner le mouvement.
+
+Jusqu'ici, simulation **et** rendu tournaient à 60 : chaque image affichée était
+un état de jeu brut, et tout écart de cadence du navigateur se voyait
+directement. Désormais :
+
+- la **simulation** avance par pas fixes de 1/30 s — c'est elle qui décide de
+  tout, et c'est elle que rejouent les neuf outils ;
+- le **rendu** tourne à la cadence de l'écran (60, 120, 144…) et **interpole**
+  entre les deux derniers états simulés.
+
+Le mouvement affiché est donc **continu** alors que la simulation reste
+discrète et déterministe. À 144 Hz d'écran on obtient près de cinq images
+distinctes par pas, au lieu de cinq fois la même suivie d'un saut.
+
+Deux pièges traités au passage : les **angles** s'interpolent par le plus court
+chemin (sinon un cap qui passe de +179° à −179° fait faire un tour complet), et
+la **foulée** aussi (elle boucle sur [0,1[, donc 0,98 → 0,03 est un pas de 5 %
+et non un retour en arrière de 95 % — sans quoi les jambes font une marche
+arrière fulgurante une fois par foulée).
+
+### 2. `js/rig.js` — de vrais squelettes
+
+| | avant | après |
+|---|---|---|
+| fermier | 9 boîtes, 0 joint | **~45 volumes, 14 joints animés** |
+| épée | 2 boîtes | **~25 volumes** (pommeau, filet, quillons, gouttière, tranchants, runes) |
+| rôdeur | 6 boîtes | **~30 volumes**, mâchoire articulée, jambes digitigrades |
+| traqueur | 7 boîtes | **~30 volumes**, six lambeaux animés en retard |
+
+**Les trois principes qui font que ça marche :**
+
+1. **Le cycle avance à la DISTANCE, jamais au temps.** `st.gait` est incrémenté
+   dans `rules.js` par la distance *réellement parcourue après collision*. Un
+   pied touche donc le sol au même endroit du cycle quelle que soit la vitesse,
+   et un personnage qui pousse un mur **cesse de pédaler**. C'est la seule
+   différence entre « il marche » et « il glisse », et aucune quantité de détail
+   ne rattrape ça. `verify-anim.mjs` le mesure : rapport foulées/distance
+   **1,000** en marche comme en course.
+
+2. **Tout passe par une hiérarchie de joints.** Un membre est un `Group` placé à
+   l'articulation ; le faire tourner pivote le membre *autour de l'épaule*, et
+   non autour de son centre. C'est la différence entre un bras et une planche
+   qui bascule. Effet de bord gratuit : la flamme de la torche, accrochée à la
+   *main*, hérite du cycle de marche et du tremblement du poignet sans une
+   ligne de plus.
+
+3. **Les contraires se répondent.** Bras gauche avec jambe droite ; le bassin
+   tourne d'un côté, le buste de l'autre, la tête compense pour stabiliser le
+   regard. Sans ce contre-balancement, on obtient un pantin qui rame.
+   Contrôlé : **54/54 images en accord**.
+
+**Le coup d'épée est en trois temps** — armé (l'épaule part à −2,35 rad),
+frappe (très rapide, avec torsion du buste et hanches en retard), récupération.
+Sans armé, un coup n'a pas de poids ; sans récupération, pas de contrecoup.
+
+**Le rôdeur a des jambes digitigrades** — cuisse en avant, genou plié en
+arrière, cheville qui rattrape. C'est ce décalage-là qui le rend non humain au
+premier coup d'œil, bien plus que sa couleur. Sa mâchoire s'ouvre quand il
+chasse et claque au rythme du pas.
+
+**Le traqueur ne marche pas, il glisse** : flottaison lente indépendante du pas,
+bras qui pendent sous les genoux, six lambeaux animés chacun en retard sur le
+précédent (c'est le retard qui fait le tissu). Et **son crâne se tourne vers le
+joueur, toujours** — un angle relatif, et c'est tout ce qu'il faut pour se
+sentir regardé.
+
+### 3. Les rotations
+
+Trois corrections : on **accélère vite et on freine doucement** (`TURN_DECEL`
+plus faible que `TURN_ACCEL`, pour une fin de course qui glisse au lieu de
+buter) ; les **créatures lissent leur cap** au lieu de le recaler d'un coup à
+chaque nœud ; et le lissage de caméra suit enfin l'**intervalle réel entre deux
+images** au lieu d'un 1/60 en dur.
+
+### Ce que `verify-anim.mjs` ne dit pas
+
+**Il ne dit pas si l'animation est belle** — il ne peut pas. Il dit qu'elle ne
+patine pas, qu'elle ne pédale pas contre un mur, qu'elle boucle proprement
+(écart 0,0001 rad entre `gait=0` et `gait=1`), qu'aucun angle ne saute ni ne
+dépasse π, et que le coup d'épée a bien un armé. **Le reste se juge à l'œil, et
+c'est toujours la seule chose qui compte.**

@@ -47,11 +47,18 @@ const World = (function () {
   let THREE_, scene, camera, renderer;
   let torchLight, ambient, hemi, beaconMat, lakeMat, skyMesh;
   const tex = {};
-  let player, sword3, torchMesh, flameMesh;
+  let player, sword3, torchMesh, flameMesh, torchHalo;
   let roamerMeshes = [], stalkerMesh, brazierMeshes = [], shardMeshes = [], potionMeshes = [];
+  let playerRig = null, roamerRigs = [], stalkerRig = null, stalkerHalo = null;
+  /* ⚠️ L'INSTANTANÉ PRÉCÉDENT, cœur de l'interpolation du zip 395. La
+     simulation avance par pas de 1/30 s ; le rendu, lui, tourne à la cadence
+     de l'écran. Sans mémoire de l'état d'avant, on afficherait deux fois la
+     même image puis un saut — c'est exactement la saccade que Guillaume
+     décrit. On garde donc le AVANT et le APRÈS, et on affiche entre les deux. */
+  let prev = null;
   let wallFlames = [], holeGlows = [];
   let skin = null;
-  let cam = { x: 0, y: 0, z: 0 };
+  let cam = { x: 0, y: 0, z: 0, ang: 0 };
   let flameCuts = [];
   let CFG_, ST_;
 
@@ -420,29 +427,28 @@ const World = (function () {
       sword3 = grp;
     }
     /* LES ÉCLATS : sphère pleine + halo additif, violets et cyans en
-       alternance — les orbes des deux images. Le halo fait le double du
-       diamètre : sans lui, une petite sphère lumineuse disparaît dès qu'elle
-       s'éloigne de trois mètres. */
+       alternance — les orbes des deux images de Guillaume. Le halo fait le
+       triple du diamètre : sans lui, une petite sphère lumineuse disparaît dès
+       qu'elle s'éloigne de trois mètres. */
     const sg = new THREE_.SphereGeometry(0.55, 10, 8);
     for (let i = 0; i < st.shards.length; i++) {
-      const s = st.shards[i];
-      const cyan = (s.x + s.y) % 2 === 0;
+      const sh = st.shards[i];
+      const cyan = (sh.x + sh.y) % 2 === 0;
       const grp = new THREE_.Group();
-      const core = new THREE_.Mesh(sg, new THREE_.MeshBasicMaterial({
-        color: cyan ? cfg.COL_COIN : cfg.COL_MUSHROOM, fog: false }));
-      grp.add(core);
+      grp.add(new THREE_.Mesh(sg, new THREE_.MeshBasicMaterial({
+        color: cyan ? cfg.COL_COIN : cfg.COL_MUSHROOM, fog: false })));
       const halo = new THREE_.Mesh(new THREE_.PlaneGeometry(3.4, 3.4),
         new THREE_.MeshBasicMaterial({
           map: cyan ? tex.haloCyan : tex.haloPurple, transparent: true, opacity: 0.75,
           blending: THREE_.AdditiveBlending, depthWrite: false, fog: false }));
       grp.add(halo);
-      const [wx, wz] = Rules.centerOf(cfg, s.x, s.y);
+      const [wx, wz] = Rules.centerOf(cfg, sh.x, sh.y);
       grp.position.set(wx, 1.9, wz);
       scene.add(grp);
-      shardMeshes.push({ mesh: grp, s, halo });
+      shardMeshes.push({ mesh: grp, s: sh, halo });
     }
     const pg = new THREE_.BoxGeometry(0.7, 1.0, 0.7);
-    for (const p of st.potions) {
+    for (const po of st.potions) {
       const grp = new THREE_.Group();
       grp.add(new THREE_.Mesh(pg, new THREE_.MeshBasicMaterial({ color: cfg.COL_MUSHROOM, fog: false })));
       const halo = new THREE_.Mesh(new THREE_.PlaneGeometry(4, 4),
@@ -450,125 +456,49 @@ const World = (function () {
           map: tex.haloPurple, transparent: true, opacity: 0.6,
           blending: THREE_.AdditiveBlending, depthWrite: false, fog: false }));
       grp.add(halo);
-      const [wx, wz] = Rules.centerOf(cfg, p.x, p.y);
+      const [wx, wz] = Rules.centerOf(cfg, po.x, po.y);
       grp.position.set(wx, 0.9, wz);
       scene.add(grp);
-      potionMeshes.push({ mesh: grp, p, halo });
+      potionMeshes.push({ mesh: grp, p: po, halo });
     }
   }
 
-  /* -----------------------------------------------------------------------
-     LE FERMIER, en boîtes articulées — même squelette qu'au défi de fuite,
-     et il PORTE LA TENUE DU JOUEUR (skin reçu dans vf-lab-init).
-     -------------------------------------------------------------------- */
-  function makeFarmer(cfg, sk) {
-    const col = sk || {};
-    const M = (c) => new THREE_.MeshLambertMaterial({ color: c });
-    const grp = new THREE_.Group();
-    const body = new THREE_.Mesh(new THREE_.BoxGeometry(0.95, 1.05, 0.55), M(col.shirt || cfg.COL_SHIRT));
-    body.position.y = 1.5; grp.add(body);
-    const legs = new THREE_.Mesh(new THREE_.BoxGeometry(0.85, 1.0, 0.5), M(col.pants || cfg.COL_PANTS));
-    legs.position.y = 0.5; grp.add(legs);
-    const head = new THREE_.Mesh(new THREE_.BoxGeometry(0.7, 0.68, 0.62), M(col.skin || cfg.COL_SKIN));
-    head.position.y = 2.35; grp.add(head);
-    const hair = new THREE_.Mesh(new THREE_.BoxGeometry(0.76, 0.24, 0.68), M(col.hair || cfg.COL_HAIR));
-    hair.position.y = 2.72; grp.add(hair);
-    /* ⚠️ LA NUQUE EST DERRIÈRE. Le zip 377 a livré, pendant trois zips, un
-       fermier dont la nuque était du côté du visage — trouvé EN REGARDANT,
-       jamais en relisant. Le personnage regarde vers -Z ; la nuque est donc
-       en +Z, et cette ligne est la seule qui le dise. */
-    const nape = new THREE_.Mesh(new THREE_.BoxGeometry(0.68, 0.4, 0.12), M(col.hair || cfg.COL_HAIR));
-    nape.position.set(0, 2.4, 0.33); grp.add(nape);
+  /* =======================================================================
+     L'INTERPOLATION — le cœur de la fluidité du zip 395.
+     -----------------------------------------------------------------------
+     game.js appelle snapPrev() JUSTE AVANT chaque pas de simulation, puis
+     sync(st, now, alpha) à chaque image d'écran avec alpha entre 0 et 1. On
+     affiche donc une position qui n'a jamais existé dans la simulation — et
+     c'est exactement ce qu'on veut : le mouvement devient continu alors que
+     la simulation reste discrète et déterministe.
 
-    const armL = new THREE_.Mesh(new THREE_.BoxGeometry(0.25, 0.9, 0.25), M(col.skin || cfg.COL_SKIN));
-    armL.position.set(-0.62, 1.5, 0); grp.add(armL);
-    const armR = new THREE_.Mesh(new THREE_.BoxGeometry(0.25, 0.9, 0.25), M(col.skin || cfg.COL_SKIN));
-    armR.position.set(0.62, 1.5, 0); grp.add(armR);
-    grp.userData.armL = armL; grp.userData.armR = armR;
-
-    // LA TORCHE, dans la main GAUCHE (l'épée occupe la droite), tendue vers
-    // l'AVANT : sur les images, la lumière part devant le personnage.
-    const t = new THREE_.Group();
-    const stick = new THREE_.Mesh(new THREE_.BoxGeometry(0.14, 1.1, 0.14),
-      new THREE_.MeshLambertMaterial({ map: tex.wood }));
-    stick.position.y = -0.15; t.add(stick);
-    const head2 = new THREE_.Mesh(new THREE_.BoxGeometry(0.24, 0.26, 0.24), M(0x1a1512));
-    head2.position.y = 0.5; t.add(head2);
-    const fl = new THREE_.Mesh(new THREE_.PlaneGeometry(1.15, 1.6),
-      new THREE_.MeshBasicMaterial({
-        map: flameCuts[0], transparent: true,
-        blending: THREE_.AdditiveBlending, depthWrite: false, fog: false }));
-    fl.position.y = 1.3; t.add(fl);
-    const halo = new THREE_.Mesh(new THREE_.PlaneGeometry(7, 7),
-      new THREE_.MeshBasicMaterial({
-        map: tex.haloWarm, transparent: true, opacity: 0.5,
-        blending: THREE_.AdditiveBlending, depthWrite: false, fog: false }));
-    halo.position.y = 1.25; t.add(halo);
-    t.position.set(-0.85, 1.7, -0.5);
-    grp.add(t);
-    torchMesh = t; flameMesh = fl;
-    grp.userData.torchHalo = halo;
-
-    // L'ÉPÉE, cachée tant qu'on ne l'a pas.
-    const sw = new THREE_.Group();
-    const blade = new THREE_.Mesh(new THREE_.BoxGeometry(0.12, 1.6, 0.3),
-      new THREE_.MeshBasicMaterial({ color: cfg.COL_STEEL, fog: false }));
-    blade.position.y = 0.8; sw.add(blade);
-    const guard = new THREE_.Mesh(new THREE_.BoxGeometry(0.55, 0.12, 0.2),
-      new THREE_.MeshBasicMaterial({ color: cfg.COL_STEEL_EDGE, fog: false }));
-    sw.add(guard);
-    sw.position.set(0.85, 1.5, -0.25);
-    sw.visible = false;
-    grp.add(sw);
-    grp.userData.sword = sw;
-    return grp;
+     ⚠️ LES ANGLES S'INTERPOLENT PAR LE PLUS COURT CHEMIN. Un cap qui passe de
+     +179° à -179° est un pas d'un degré, pas de 358 : sans ce détour, le
+     personnage ferait un tour complet sur lui-même à chaque passage par le
+     sud. C'est le genre de défaut qui n'arrive qu'une fois sur cent et qu'on
+     met une soirée à reproduire.
+     ======================================================================= */
+  function lerpA(a, b, k) {
+    let d = b - a;
+    while (d > Math.PI) d -= Math.PI * 2;
+    while (d < -Math.PI) d += Math.PI * 2;
+    return a + d * k;
   }
-
-  function makeRoamer(cfg) {
-    const grp = new THREE_.Group();
-    const M = (c) => new THREE_.MeshLambertMaterial({ color: c });
-    const body = new THREE_.Mesh(new THREE_.BoxGeometry(1.15, 1.7, 0.9), M(cfg.COL_WOLF));
-    body.position.y = 1.05; grp.add(body);
-    const head = new THREE_.Mesh(new THREE_.BoxGeometry(0.8, 0.7, 0.8), M(cfg.COL_BARK_DARK));
-    head.position.y = 2.2; grp.add(head);
-    for (const s of [-1, 1]) {
-      const eye = new THREE_.Mesh(new THREE_.BoxGeometry(0.16, 0.16, 0.07),
-        new THREE_.MeshBasicMaterial({ color: cfg.COL_WOLF_EYE, fog: false }));
-      eye.position.set(s * 0.2, 2.26, -0.42); grp.add(eye);
-    }
-    for (const s of [-1, 1]) {
-      const arm = new THREE_.Mesh(new THREE_.BoxGeometry(0.2, 1.2, 0.2), M(cfg.COL_WOLF));
-      arm.position.set(s * 0.72, 1.1, 0); grp.add(arm);
-    }
-    return grp;
+  function snapPrev(st) {
+    prev = {
+      px: st.px, pz: st.pz, ang: st.ang, gait: st.gait,
+      roamers: st.roamers.map(r => ({ x: r.x, z: r.z, ang: r.ang, gait: r.gait })),
+      sx: st.stalker.x, sz: st.stalker.z, sang: st.stalker.ang, sgait: st.stalker.gait,
+    };
   }
-
-  /* LE TRAQUEUR est plus GRAND que le joueur et plus étroit — la silhouette
-     doit se reconnaître en une image, à la limite de la lumière. Ses yeux sont
-     hors brouillard : on les voit avant lui, et c'est tout ce qu'on veut. */
-  function makeStalker(cfg) {
-    const grp = new THREE_.Group();
-    const M = (c) => new THREE_.MeshLambertMaterial({ color: c });
-    const body = new THREE_.Mesh(new THREE_.BoxGeometry(0.85, 2.9, 0.7), M(cfg.COL_STALKER));
-    body.position.y = 1.7; grp.add(body);
-    const head = new THREE_.Mesh(new THREE_.BoxGeometry(0.62, 0.8, 0.62), M(cfg.COL_STALKER));
-    head.position.y = 3.55; grp.add(head);
-    for (const s of [-1, 1]) {
-      const eye = new THREE_.Mesh(new THREE_.BoxGeometry(0.12, 0.26, 0.06),
-        new THREE_.MeshBasicMaterial({ color: cfg.COL_STALKER_EYE, fog: false }));
-      eye.position.set(s * 0.17, 3.6, -0.34); grp.add(eye);
-    }
-    const halo = new THREE_.Mesh(new THREE_.PlaneGeometry(3, 3),
-      new THREE_.MeshBasicMaterial({
-        map: tex.haloPurple, transparent: true, opacity: 0.35,
-        blending: THREE_.AdditiveBlending, depthWrite: false, fog: false }));
-    halo.position.y = 3.6; grp.add(halo);
-    grp.userData.halo = halo;
-    for (const s of [-1, 1]) {
-      const arm = new THREE_.Mesh(new THREE_.BoxGeometry(0.18, 2.0, 0.18), M(cfg.COL_STALKER));
-      arm.position.set(s * 0.58, 1.8, 0); grp.add(arm);
-    }
-    return grp;
+  /* La foulée s'interpole comme un angle : elle boucle sur [0,1[, donc passer
+     de 0,98 à 0,03 est un pas de 5 %, pas un retour en arrière de 95 %. Sans
+     ça, les jambes font une marche arrière fulgurante une fois par foulée. */
+  function lerpGait(a, b, k) {
+    let d = b - a;
+    if (d > 0.5) d -= 1;
+    if (d < -0.5) d += 1;
+    return (a + d * k + 1) % 1;
   }
 
   /* =======================================================================
@@ -588,8 +518,9 @@ const World = (function () {
        l'aurait vu, chaque ligne prise séparément étant juste. */
     roamerMeshes = []; brazierMeshes = []; shardMeshes = []; potionMeshes = [];
     wallFlames = []; holeGlows = [];
+    roamerRigs = []; playerRig = null; stalkerRig = null; stalkerHalo = null; prev = null;
     stalkerMesh = null; sword3 = null; player = null;
-    torchMesh = null; flameMesh = null; skyMesh = null;
+    torchMesh = null; flameMesh = null; torchHalo = null; skyMesh = null;
 
     scene = new THREE_.Scene();
     scene.fog = new THREE_.Fog(cfg.COL_FOG, cfg.FOG_NEAR_FULL, cfg.FOG_FAR_FULL);
@@ -622,12 +553,48 @@ const World = (function () {
     torchLight = new THREE_.PointLight(cfg.COL_TORCH, 2.6, cfg.TORCH_LIGHT_MAX, 1.7);
     scene.add(torchLight);
 
-    player = makeFarmer(cfg, sk);
+    /* ⚠️ LES ÊTRES VIVANTS SONT CONSTRUITS PAR rig.js, PAS ICI. Zip 395 :
+       world.js s'occupe du décor (2 200 maillages, aucune articulation),
+       rig.js des personnages (une centaine de volumes, huit joints animés
+       chacun). Ce sont deux métiers, et les mélanger dans un fichier de mille
+       lignes est la meilleure façon de ne plus relire ni l'un ni l'autre. */
+    Rig.init(THREE_);
+    playerRig = Rig.buildFarmer(cfg, tex, sk);
+    player = playerRig.root;
     scene.add(player);
-    for (const r of st.roamers) { const g = makeRoamer(cfg); scene.add(g); roamerMeshes.push(g); }
-    stalkerMesh = makeStalker(cfg);
+    /* LA FLAMME DE LA TORCHE est accrochée à la MAIN du rig, pas au
+       personnage : elle hérite donc du cycle de marche, du balancement du bras
+       et du tremblement du poignet, sans une ligne de code de plus. C'est tout
+       l'intérêt d'une hiérarchie de joints — l'accessoire suit, gratuitement. */
+    flameMesh = new THREE_.Mesh(new THREE_.PlaneGeometry(1.25, 1.75),
+      new THREE_.MeshBasicMaterial({ map: flameCuts[0], transparent: true,
+        blending: THREE_.AdditiveBlending, depthWrite: false, fog: false }));
+    flameMesh.position.y = 1.42;
+    playerRig.torch.add(flameMesh);
+    torchMesh = playerRig.torch;
+    torchHalo = new THREE_.Mesh(new THREE_.PlaneGeometry(7.5, 7.5),
+      new THREE_.MeshBasicMaterial({ map: tex.haloWarm, transparent: true, opacity: 0.5,
+        blending: THREE_.AdditiveBlending, depthWrite: false, fog: false }));
+    torchHalo.position.y = 1.38;
+    playerRig.torch.add(torchHalo);
+    for (const r of st.roamers) {
+      const rg = Rig.buildRoamer(cfg);
+      scene.add(rg.root);
+      roamerRigs.push(rg);
+      roamerMeshes.push(rg.root);
+    }
+    stalkerRig = Rig.buildStalker(cfg);
+    stalkerMesh = stalkerRig.root;
     stalkerMesh.visible = false;
     scene.add(stalkerMesh);
+    // Halo violet autour du crâne du traqueur : il le rend repérable au fond
+    // d'un couloir avant même qu'on distingue sa silhouette.
+    stalkerHalo = new THREE_.Mesh(new THREE_.PlaneGeometry(3.4, 3.4),
+      new THREE_.MeshBasicMaterial({ map: tex.haloPurple, transparent: true, opacity: 0.32,
+        blending: THREE_.AdditiveBlending, depthWrite: false, fog: false }));
+    stalkerRig.skull.add(stalkerHalo);
+    stalkerHalo.position.set(0, 0.3, -0.1);
+    snapPrev(st);
 
     cam.x = st.px; cam.y = cfg.CAM_HEIGHT; cam.z = st.pz + cfg.CAM_DIST;
     resize();
@@ -644,30 +611,46 @@ const World = (function () {
   /* -----------------------------------------------------------------------
      sync — l'unique fonction appelée par la boucle. Elle LIT l'état.
      -------------------------------------------------------------------- */
-  function sync(st, now) {
+  let lastFrameMs = 0, frameDt = 1 / 60;
+  function sync(st, now, alpha) {
     const cfg = CFG_;
+    // Intervalle réel entre deux images, borné : un onglet remis au premier
+    // plan produit sinon un saut de plusieurs secondes.
+    frameDt = lastFrameMs ? Math.min(0.1, Math.max(0.002, (now - lastFrameMs) / 1000)) : 1 / 60;
+    lastFrameMs = now;
     const fl = Rules.flameLevel(st);
     const t = now / 1000;
+    const a = prev ? Rig.clamp(alpha === undefined ? 1 : alpha, 0, 1) : 1;
 
-    // --- personnage
-    player.position.set(st.px, 0, st.pz);
-    player.rotation.y = st.ang;
+    /* ---- LE PERSONNAGE, à une position INTERPOLÉE.
+       C'est ici que se joue la fluidité : `a` va de 0 (l'état d'avant) à 1
+       (l'état courant), et l'écran affiche l'entre-deux. À 30 Hz de simulation
+       et 144 Hz d'écran, on obtient quatre images distinctes par pas au lieu
+       de quatre fois la même suivie d'un saut. */
+    const px = prev ? Rig.lerp(prev.px, st.px, a) : st.px;
+    const pz = prev ? Rig.lerp(prev.pz, st.pz, a) : st.pz;
+    const pang = prev ? lerpA(prev.ang, st.ang, a) : st.ang;
+    const pgait = prev ? lerpGait(prev.gait, st.gait, a) : st.gait;
+
+    player.position.set(px, 0, pz);
+    player.rotation.y = pang;
     player.visible = st.status !== "falling" || (now % 200 < 120);
-    const bob = Math.sin(t * 9) * Math.min(1, st.speed / cfg.WALK_SPEED);
-    player.userData.armL.rotation.x = bob * 0.5;
-    player.userData.armR.rotation.x = -bob * 0.5;
-    player.userData.sword.visible = st.hasSword;
-    if (st.hasSword) {
-      const k = st.swingT > 0 ? 1 - st.swingT / (cfg.SWING_MS / 1000) : 0;
-      player.userData.sword.rotation.z = st.swingT > 0 ? -1.5 + k * 2.6 : -0.25;
-      player.userData.sword.rotation.x = st.swingT > 0 ? -0.9 + k * 0.9 : 0;
-    }
+    playerRig.sword.visible = st.hasSword;
+    /* TOUTE LA POSE EST DÉLÉGUÉE À rig.js — huit joints, cycle de marche,
+       attaque en trois temps, respiration au repos. world.js ne sait plus
+       plier un bras, et c'est très bien ainsi. */
+    Rig.poseFarmer(playerRig, {
+      gait: pgait, gaitSpeed: st.gaitSpeed,
+      runAmt: st.runAmt, strafeAmt: st.strafeAmt, backAmt: st.backAmt,
+      swingT: st.swingT, hurt: st.hurtFlash, falling: st.status === "falling",
+    }, cfg, t);
     if (sword3) {
       sword3.visible = !(st.sword && st.sword.taken);
       if (sword3.visible) { sword3.rotation.y = t * 0.9; sword3.userData.halo.lookAt(camera.position); }
     }
 
-    // --- la flamme du joueur
+    // --- la flamme du joueur, accrochée à la MAIN du rig : elle suit donc le
+    //     bras, le cycle de marche et le tremblement du poignet.
     const cut = flameCuts[((t * 11) | 0) % 4];
     if (flameMesh.material.map !== cut) flameMesh.material.map = cut;
     const flick = 1 + Math.sin(t * 17.3) * cfg.TORCH_FLICKER + Math.sin(t * 6.1) * cfg.TORCH_FLICKER * 0.6;
@@ -677,13 +660,13 @@ const World = (function () {
     // Une flamme est un PLAN : vue par la tranche elle disparaît. Elle fait
     // donc toujours face à la caméra — défaut qu'on ne voit qu'en tournant.
     flameMesh.lookAt(camera.position);
-    const th = player.userData.torchHalo;
+    const th = torchHalo;
     th.visible = st.flame > 0;
     th.material.opacity = 0.2 + fl.k * 0.4;
     th.scale.set(0.5 + fl.k, 0.5 + fl.k, 1);
     th.lookAt(camera.position);
 
-    torchLight.position.set(st.px - Math.sin(st.ang) * 1.4, 3.2, st.pz - Math.cos(st.ang) * 1.4);
+    torchLight.position.set(px - Math.sin(pang) * 1.4, 3.2, pz - Math.cos(pang) * 1.4);
     torchLight.distance = cfg.TORCH_LIGHT_MIN + (cfg.TORCH_LIGHT_MAX - cfg.TORCH_LIGHT_MIN) * fl.k;
     torchLight.intensity = (0.6 + fl.k * 2.4) * flick;
 
@@ -729,18 +712,44 @@ const World = (function () {
       if (p.mesh.visible) { p.mesh.rotation.y = t * 1.1; p.halo.lookAt(camera.position); }
     }
 
-    // --- créatures
-    for (let i = 0; i < roamerMeshes.length; i++) {
-      const r = st.roamers[i], g = roamerMeshes[i];
-      g.visible = !r.dead;
-      g.position.set(r.x, 0, r.z);
-      g.rotation.y = r.ang;
+    // --- créatures, interpolées et posées par rig.js
+    for (let i = 0; i < roamerRigs.length; i++) {
+      const r = st.roamers[i], rg = roamerRigs[i];
+      rg.root.visible = !r.dead || r.deadT < 3;
+      if (!rg.root.visible) continue;
+      const pr = prev && prev.roamers[i];
+      const rx = pr ? Rig.lerp(pr.x, r.x, a) : r.x;
+      const rz = pr ? Rig.lerp(pr.z, r.z, a) : r.z;
+      rg.root.position.set(rx, 0, rz);
+      rg.root.rotation.y = pr ? lerpA(pr.ang, r.ang, a) : r.ang;
+      Rig.poseRoamer(rg, {
+        gait: pr ? lerpGait(pr.gait, r.gait, a) : r.gait,
+        gaitSpeed: r.gaitSpeed || 0,
+        chasing: r.mode === "chase",
+        stagger: r.staggerT / (cfg.ROAMER_STAGGER_MS / 1000),
+        dead: r.dead, deadT: r.deadT,
+      }, cfg, t + i * 1.7);   // décalage : deux créatures ne respirent jamais ensemble
     }
     stalkerMesh.visible = st.stalkerAwake;
     if (st.stalkerAwake) {
-      stalkerMesh.position.set(st.stalker.x, Math.sin(t * 2.6) * 0.1, st.stalker.z);
-      stalkerMesh.rotation.y = st.stalker.ang;
-      stalkerMesh.userData.halo.lookAt(camera.position);
+      const s2 = st.stalker;
+      const sx = prev ? Rig.lerp(prev.sx, s2.x, a) : s2.x;
+      const sz = prev ? Rig.lerp(prev.sz, s2.z, a) : s2.z;
+      const sang = prev ? lerpA(prev.sang, s2.ang, a) : s2.ang;
+      stalkerMesh.position.set(sx, 0, sz);
+      stalkerMesh.rotation.y = sang;
+      // Angle RELATIF vers le joueur : c'est ce qui fait tourner son crâne
+      // vers nous quoi qu'il fasse.
+      let toP = Math.atan2(-(px - sx), -(pz - sz)) - sang;
+      while (toP > Math.PI) toP -= Math.PI * 2;
+      while (toP < -Math.PI) toP += Math.PI * 2;
+      Rig.poseStalker(stalkerRig, {
+        gait: prev ? lerpGait(prev.sgait, s2.gait, a) : s2.gait,
+        gaitSpeed: s2.gaitSpeed || 0,
+        stagger: s2.staggerT / (cfg.STALK_STAGGER_MS / 1000),
+        toPlayer: toP,
+      }, cfg, t);
+      if (stalkerHalo) stalkerHalo.lookAt(camera.position);
     }
 
     // --- lac, ciel et phare
@@ -749,7 +758,7 @@ const World = (function () {
     beaconMat.opacity = 0.3 + Math.sin(t * Math.PI * 2 * CFG_.BEACON_PULSE) * 0.14;
     if (skyMesh) skyMesh.rotation.y = t * 0.004;   // très lent : le ciel bouge à peine
 
-    updateCamera(st, cfg);
+    updateCamera(st, cfg, px, pz, pang);
     renderer.render(scene, camera);
   }
 
@@ -758,22 +767,27 @@ const World = (function () {
      rapproche jusqu'à CAM_MIN_DIST. Sans ça, tout virage serré met la caméra
      DANS la pierre et l'écran devient noir — le défaut le plus banal du genre,
      et le plus insupportable. */
-  function updateCamera(st, cfg) {
+  function updateCamera(st, cfg, px, pz, pang) {
     const back = cfg.CAM_DIST;
     let d = back;
-    const dirX = Math.sin(st.ang), dirZ = Math.cos(st.ang);   // vers l'arrière
+    const dirX = Math.sin(pang), dirZ = Math.cos(pang);   // vers l'arrière
     for (let s = 0.5; s <= back; s += 0.5) {
-      const tx = st.px + dirX * s, tz = st.pz + dirZ * s;
+      const tx = px + dirX * s, tz = pz + dirZ * s;
       const near = st.idxB.near(tx, tz);
       const [ox, oz] = Rules.pushOut(tx, tz, 0.6, near);
       if (Math.abs(ox - tx) > 0.01 || Math.abs(oz - tz) > 0.01) { d = Math.max(cfg.CAM_MIN_DIST, s - 0.6); break; }
     }
-    const wantX = st.px + dirX * d, wantZ = st.pz + dirZ * d;
+    const wantX = px + dirX * d, wantZ = pz + dirZ * d;
     /* ⚠️ LISSAGE CORRIGÉ EN dt AU 394. La première version multipliait par
        0,016 en dur : à 120 Hz la caméra suivait deux fois trop vite, à 30 Hz
        deux fois trop lentement. C'est une des causes du « pas très fluide »
        signalé par Guillaume, et elle ne se voyait pas sur un écran à 60 Hz. */
-    const k = 1 - Math.exp(-cfg.CAM_LAG * (1 / 60));
+    /* ⚠️ LISSAGE EN TEMPS RÉEL D'AFFICHAGE (zip 395). Il était calé sur 1/60
+       en dur : à 144 Hz la caméra rattrapait deux fois et demie trop
+       lentement, à 30 Hz deux fois trop vite. On mesure donc l'intervalle
+       réel entre deux images. La forme exponentielle rend le lissage
+       INDÉPENDANT de la cadence — c'est la seule qui le soit. */
+    const k = 1 - Math.exp(-cfg.CAM_LAG * frameDt);
     cam.x += (wantX - cam.x) * k;
     cam.z += (wantZ - cam.z) * k;
     cam.y += (cfg.CAM_HEIGHT - cam.y) * k;
@@ -785,7 +799,7 @@ const World = (function () {
     // Pendant la chute, on regarde EN BAS : c'est le seul moment où le lac est
     // le sujet, et il faut qu'on le voie arriver.
     const lookY = st.status === "falling" ? cfg.LAKE_Y : cfg.CAM_LOOK_H;
-    camera.lookAt(st.px, lookY, st.pz);
+    camera.lookAt(px, lookY, pz);
   }
 
   function fallStep(st, dt) {
@@ -793,5 +807,5 @@ const World = (function () {
     player.position.y -= dt * 16;
   }
 
-  return { init, sync, resize, fallStep, get renderer() { return renderer; } };
+  return { init, sync, snapPrev, resize, fallStep, get renderer() { return renderer; } };
 })();

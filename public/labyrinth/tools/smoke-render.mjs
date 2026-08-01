@@ -90,7 +90,7 @@ function fakeCtx() {
 global.window = { THREE: FakeTHREE, innerWidth: 1280, innerHeight: 720, devicePixelRatio: 1, addEventListener() {} };
 global.document = { createElement: () => ({ width: 0, height: 0, getContext: fakeCtx }) };
 
-const G = load(["js/config.js", "js/maze.js", "js/rules.js", "js/paint.js", "js/world.js"]);
+const G = load(["js/config.js", "js/maze.js", "js/rules.js", "js/paint.js", "js/rig.js", "js/world.js"]);
 const { CFG, Maze, Rules, World } = G;
 
 let fails = 0;
@@ -109,9 +109,10 @@ for (const seed of SEEDS) {
   // 300 images, avec un joueur qui avance : les branches « en mouvement »,
   // « flamme basse » et « traqueur éveillé » doivent toutes être traversées.
   for (let i = 0; i < 300; i++) {
-    Rules.step(st, 1 / 60, { fwd: 1, turn: i % 90 === 0 ? 1 : 0, strafe: 0, run: i > 150 });
-    World.sync(st, i * 16.7);
-    if (st.status === "falling") World.fallStep(st, 1 / 60);
+    Rules.step(st, 1 / CFG.SIM_HZ, { fwd: 1, turn: i % 45 === 0 ? 1 : 0, strafe: 0, run: i > 150 });
+    World.snapPrev(st);
+    World.sync(st, i * 16.7, (i % 2) / 2);
+    if (st.status === "falling") World.fallStep(st, 1 / CFG.SIM_HZ);
   }
   check(`graine ${String(seed).padEnd(9)} : scène construite et 300 images rendues`, true,
     `${built} maillages, ${created} objets`);

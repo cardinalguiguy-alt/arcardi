@@ -212,6 +212,8 @@ const Rules = (function () {
       // ang = 0 regarde vers -Z, et -Z est le nord de la grille.
       px: ex, pz: ez + cfg.CELL * 0.35, ang: 0,
       vx: 0, vz: 0, speed: 0, turnVel: 0,
+      // --- matière d'animation (lue par rig.js, jamais par une règle)
+      gait: 0, gaitSpeed: 0, strafeAmt: 0, runAmt: 0, backAmt: 0,
       flame: cfg.FLAME_START,
       hearts: cfg.HEARTS,
       invulnT: 0, swingT: 0, cooldownT: 0, hasSword: false,
@@ -229,7 +231,7 @@ const Rules = (function () {
       roamers: m.roamers.map((r, i) => ({
         id: i, x: 0, z: 0, ang: 0, hp: cfg.ROAMER_HP,
         cx: r.x, cy: r.y, homeX: r.homeX, homeY: r.homeY,
-        mode: "patrol", target: null, path: null, pathI: 0,
+        mode: "patrol", target: null, path: null, pathI: 0, gait: 0, gaitSpeed: 0,
         staggerT: 0, hitT: 0, giveUpT: 0, dead: false, deadT: 0,
       })),
       stalker: null,
@@ -277,7 +279,7 @@ const Rules = (function () {
       st.stalker = {
         x: sx, z: sz + cfg.CELL * 0.5, ang: 0,
         mode: "idle", tx: m.exit.x, ty: m.exit.y,
-        path: null, pathI: 0, repathT: 0, staggerT: 0, hitT: 0,
+        path: null, pathI: 0, repathT: 0, staggerT: 0, hitT: 0, gait: 0, gaitSpeed: 0,
         knowsT: 0,
       };
     }
@@ -381,7 +383,13 @@ const Rules = (function () {
        redescend maintenant en TURN_ACCEL, ce qui coûte ~0,15 s de montée et
        rend le balayage continu. */
     const wantTurn = -(intent.turn || 0) * cfg.TURN_SPEED;
-    const dTurn = cfg.TURN_ACCEL * dt;
+    /* On ACCÉLÈRE vite et on FREINE doucement. Le départ doit répondre au
+       doigt ; la fin de course, elle, doit glisser — une rotation qui s'arrête
+       net au relâchement de la touche est exactement l'à-coup que Guillaume a
+       signalé au 395. On reconnaît le freinage au fait qu'on se rapproche de
+       zéro. */
+    const braking = Math.abs(wantTurn) < Math.abs(st.turnVel) || (wantTurn * st.turnVel) < 0;
+    const dTurn = (braking ? cfg.TURN_DECEL : cfg.TURN_ACCEL) * dt;
     if (st.turnVel < wantTurn) st.turnVel = Math.min(wantTurn, st.turnVel + dTurn);
     else st.turnVel = Math.max(wantTurn, st.turnVel - dTurn);
     st.ang += st.turnVel * dt;
@@ -399,12 +407,43 @@ const Rules = (function () {
     st.vx += (wx - st.vx) * Math.min(1, cfg.ACCEL * dt / Math.max(1, cfg.WALK_SPEED));
     st.vz += (wz - st.vz) * Math.min(1, cfg.ACCEL * dt / Math.max(1, cfg.WALK_SPEED));
     st.speed = Math.hypot(st.vx, st.vz);
+    /* Trois quantités LISSÉES pour le rendu : elles disent « à quel point »
+       on court, on se déporte, on recule. Lissées parce qu'une inclinaison de
+       buste qui bascule d'un coup à l'appui d'une touche est un à-coup de
+       plus, et qu'on en corrige justement trois dans ce zip. */
+    const k4 = Math.min(1, dt * 7);
+    st.runAmt += ((running ? 1 : 0) - st.runAmt) * k4;
+    st.strafeAmt += ((intent.strafe || 0) - st.strafeAmt) * k4;
+    st.backAmt += (((intent.fwd || 0) < 0 ? 1 : 0) - st.backAmt) * k4;
 
+    const bx = st.px, bz = st.pz;
     st.px += st.vx * dt;
     st.pz += st.vz * dt;
     const near = st.idxB.near(st.px, st.pz);
     const [nx, nz] = pushOut(st.px, st.pz, cfg.BODY_R, near);
     st.px = nx; st.pz = nz;
+
+    /* ======================================================================
+       LA FOULÉE — avancée par la DISTANCE RÉELLEMENT PARCOURUE.
+       ----------------------------------------------------------------------
+       ⚠️ C'est LA ligne qui décide si le personnage marche ou s'il patine, et
+       c'est la seule information d'animation que le moteur produise. Tout le
+       reste (angles des cuisses, des genoux, des bras, roulis, respiration)
+       s'en déduit dans rig.js.
+
+       On mesure le déplacement APRÈS la collision : un fermier qui pousse
+       contre un mur ne parcourt aucune distance, donc ses jambes s'arrêtent.
+       Un cycle basé sur le temps l'aurait laissé pédaler contre la pierre —
+       le défaut le plus visible du genre, et celui qu'on ne pardonne pas.
+
+       `gait` est un nombre de FOULÉES cumulées, jamais remis à zéro : le
+       rendu n'a qu'à en prendre le sinus. Il est borné modulo 1 pour ne pas
+       perdre en précision au bout d'une heure de jeu. */
+    const moved = Math.hypot(st.px - bx, st.pz - bz);
+    st.gait = (st.gait + moved / cfg.STRIDE) % 1;
+    // Vitesse LISSÉE : la vitesse instantanée saute au moindre frottement de
+    // mur, et une amplitude de pas qui saute est pire que pas d'animation.
+    st.gaitSpeed += (moved / Math.max(1e-6, dt) - st.gaitSpeed) * Math.min(1, dt * 8);
 
     markSeen(st);
 
@@ -703,18 +742,34 @@ const Rules = (function () {
      suivent le graphe du labyrinthe, comme le joueur doit le faire. */
   function stepAlong(st, ent, speed, dt, radius) {
     const cfg = st.cfg;
-    if (!ent.path || ent.pathI >= ent.path.length) return;
+    const bx = ent.x, bz = ent.z;
+    const advance = () => {
+      // Même règle que pour le joueur : la foulée d'une créature avance à la
+      // distance qu'elle a RÉELLEMENT parcourue, jamais au temps.
+      const mv = Math.hypot(ent.x - bx, ent.z - bz);
+      ent.gait = ((ent.gait || 0) + mv / (cfg.STRIDE * 0.8)) % 1;
+      ent.gaitSpeed = mv / Math.max(1e-6, dt);
+    };
+    if (!ent.path || ent.pathI >= ent.path.length) { advance(); return; }
     const [tcx, tcy] = ent.path[ent.pathI];
     const [tx, tz] = centerOf(cfg, tcx, tcy);
     const dx = tx - ent.x, dz = tz - ent.z;
     const d = Math.hypot(dx, dz);
-    if (d < 0.35) { ent.pathI++; return; }
-    ent.ang = Math.atan2(-dx, -dz);
+    if (d < 0.35) { ent.pathI++; advance(); return; }
+    /* L'ORIENTATION SE LISSE, elle aussi. Une créature qui recale son cap
+       d'un coup à chaque nœud de son chemin pivote par saccades — c'est ce
+       qu'on voyait, et c'est aussi laid sur un monstre que sur le joueur. */
+    const want = Math.atan2(-dx, -dz);
+    let diff = want - ent.ang;
+    while (diff > Math.PI) diff -= Math.PI * 2;
+    while (diff < -Math.PI) diff += Math.PI * 2;
+    ent.ang += diff * Math.min(1, dt * 7);
     ent.x += (dx / d) * speed * dt;
     ent.z += (dz / d) * speed * dt;
     const nb = st.idxB.near(ent.x, ent.z);
     const [ex, ez] = pushOut(ent.x, ent.z, radius, nb);
     ent.x = ex; ent.z = ez;
+    advance();
   }
 
   /* -----------------------------------------------------------------------
