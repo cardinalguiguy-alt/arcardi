@@ -63,6 +63,13 @@ export const FERME_STR = {
     giftDecor: (d) => `une décoration unique (${d})`,
     giftPet: (pt) => `un animal de compagnie (${pt})`,
     meetBtn: "Rejoindre à la mairie",
+    // ⚠️ ZIP 389 : PLUS LUE NULLE PART. L'ancien empilement coupait la liste à
+    // 3 cartes et résumait le reste par cette ligne. Le panneau repliable les
+    // montre TOUTES (liste défilante) et porte le total sur sa pastille : il
+    // n'y a plus de « reste » à annoncer. Conservée et commentée plutôt que
+    // supprimée, même convention qu'PASSAGE_PET_CATCH_CHANCE au zip 388 —
+    // elle documente l'ancien comportement, et la retirer ferait mentir le
+    // comptage de parité sans rien gagner.
     notifMore: (n) => `+${n} autre(s) visiteur(s) en attente`,
     visitorChatSaid: (n, l0) => `${n} : ${l0}`,
     visitorChatLines: [
@@ -1172,6 +1179,8 @@ export const FERME_STR = {
     devRotationTitle: "Retour à la rotation prévue",
     devRotationSub: (d) => `Le passage suit à nouveau le jour de jeu, ${d} jours par terre.`,
     devRotationBtn: "Rétablir",
+    // --- Zip 389 : panneau de notifications repliable ---
+    notifPanelLabel: (n) => n > 1 ? `${n} notifications. Survole pour les voir, clique pour les garder ouvertes.` : "1 notification. Survole pour la voir, clique pour la garder ouverte.",
     devHealSection: "Blessure",
     devHealTitle: "Se soigner instantanément",
     devHealNone: "Tu n'es pas blessé.",
@@ -1315,6 +1324,7 @@ export const FERME_STR = {
     giftDecor: (d) => `a unique decoration (${d})`,
     giftPet: (pt) => `a pet (${pt})`,
     meetBtn: "Meet me at townhall",
+    // ⚠️ ZIP 389: NO LONGER READ ANYWHERE. See the French block for why.
     notifMore: (n) => `+${n} more visitor(s) waiting`,
     visitorChatSaid: (n, l0) => `${n}: ${l0}`,
     visitorChatLines: [
@@ -2195,6 +2205,8 @@ export const FERME_STR = {
     devRotationTitle: "Back to the normal rotation",
     devRotationSub: (d) => `The passage follows the game day again, ${d} days per land.`,
     devRotationBtn: "Restore",
+    // --- Zip 389: collapsible notification panel ---
+    notifPanelLabel: (n) => n > 1 ? `${n} notifications. Hover to see them, click to keep them open.` : "1 notification. Hover to see it, click to keep it open.",
     devHealSection: "Injury",
     devHealTitle: "Heal yourself instantly",
     devHealNone: "You're not injured.",

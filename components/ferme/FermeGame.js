@@ -329,6 +329,27 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // visiteur n'est plus en attente (départ), pour qu'une future visite du
   // même rid réaffiche une notif fraîche.
   const [dismissedNotifs, setDismissedNotifs] = useState(() => new Set());
+  /* ------------------------------------------------------------------
+     Zip 389 — PANNEAU DE NOTIFICATIONS REPLIABLE.
+
+     Décision Guillaume : toujours replié au chargement, AUCUNE mémorisation,
+     et dépliage AU SURVOL. D'où deux états et pas un :
+
+     `notifHover` suit la souris. `notifPinned` suit le clic, et il existe
+     uniquement parce que le survol n'existe pas sur écran tactile — sur la
+     tablette, sans lui, le panneau serait rigoureusement impossible à ouvrir.
+     Ouvert = l'un OU l'autre. Un clic sur la pastille épingle, un second
+     désépingle ; à la souris, on peut ignorer complètement le clic.
+
+     `notifPulse` fait battre la pastille une seconde quand le compte AUGMENTE
+     — c'est ce qui remplace le dépliement automatique auquel on renonce. Sans
+     lui, une notification qui arrive pendant qu'on joue ne se signalerait par
+     rien du tout. ------------------------------------------------------ */
+  const [notifHover, setNotifHover] = useState(false);
+  const [notifPinned, setNotifPinned] = useState(false);
+  const [notifPulse, setNotifPulse] = useState(false);
+  const notifLeaveRef = useRef(0);   // minuterie de fermeture différée (voir notifEnter/notifLeave)
+  const notifCountRef = useRef(0);   // compte précédent, pour ne battre que sur une HAUSSE
   const [nearArtisan, setNearArtisan] = useState(null); // zip 259 : bid du bâtiment d'artisan proche (encart d'info production), ou null
   const repairSeenRef = useRef(0);                     // damage.until already shown (no re-open loop)
   const visitorNetRef = useRef(0);                     // host network throttle for visitorSim
@@ -8279,6 +8300,106 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     setDevMenuOpen(false);
     zoneTransRef.current = { active: true, t0: performance.now(), toEvil: false, swapped: false, dest: "dev:" + destKey };
   }
+  /* ======================================================================
+     ZIP 389 — LE PANNEAU DE NOTIFICATIONS, EN UN SEUL ENDROIT.
+     ======================================================================
+     Il y avait DEUX empilements indépendants collés à droite, chacun avec ses
+     styles écrits en dur dans le JSX : les cartes de visiteurs (right:12,
+     top:120, jusqu'à 3 cartes plus « +N ») et le bloc boulangerie/Eduardo
+     (right:12, top:320). Ils ne se connaissaient pas, faisaient 280 px de
+     large chacun, et pouvaient recouvrir la moitié droite de l'écran en même
+     temps. C'est la cause directe du « ça cache le jeu ».
+
+     `notifItems()` les fond en une seule liste, ordonnée par urgence. Elle est
+     l'UNIQUE description de « ce qu'il y a à signaler » : le compteur de la
+     pastille et la liste dépliée lisent tous les deux cette fonction, et ne
+     peuvent donc pas diverger — un compteur qui annonce 3 au-dessus d'une
+     liste de 2 est précisément le genre de défaut que deux calculs séparés
+     auraient fini par produire (leçon du zip 387).
+
+     Les conditions de masquage d'origine sont CONSERVÉES telles quelles :
+     pas de carte de visiteur si la fiche est déjà ouverte ou si l'on est à
+     la mairie (on va lui parler en personne), pas d'alerte employé si le menu
+     des employés est ouvert. Elles étaient justes, elles ne changent pas. */
+  /* `all = true` ignore les conditions de MASQUAGE (fiche visiteur ouverte,
+     joueur à la mairie, menu des employés ouvert) et ne garde que ce qui est
+     réellement en attente.
+
+     Ce paramètre existe pour la pulsation, et le défaut qu'il corrige mérite
+     d'être noté : sans lui, ouvrir puis refermer une fiche de visiteur faisait
+     tomber le compte à zéro puis remonter — donc battre la pastille comme si
+     un visiteur venait d'arriver. La pastille aurait clignoté à chaque fois
+     qu'on FINIT de traiter une notification, ce qui est exactement l'inverse
+     du signal voulu. La liste affichée, elle, garde bien les filtres. */
+  function notifItems(all) {
+    const out = [];
+    const st = stationSt;
+    if (st && (all || (!visitorOpen && !nearHall))) {
+      for (const vv of (st.visitors || [])) {
+        if (vv.phase !== "wait" || dismissedNotifs.has(vv.rid)) continue;
+        const o = vv.offer || {};
+        // Une demande d'or (« demand ») est marquée urgente à l'écran depuis le
+        // zip 233 : elle passe donc devant dans la liste, ce que l'ancien
+        // affichage ne faisait pas (ordre d'arrivée, et coupé après 3).
+        out.push({ kind: "visitor", key: "v" + vv.rid, urgent: o.type === "demand", vv });
+      }
+    }
+    if (all || !employeesOpen) {
+      const crafts = sharedRef.current.crafts || {};
+      if (crafts.bakery && crafts.bakery.built && crafts.bakery.alert) {
+        out.push({ kind: "bakery", key: "bakery", urgent: true, missing: crafts.bakery.alertMissing });
+      }
+      const notice = st && st.voyagerNotice;
+      if (notice) out.push({ kind: "voyager", key: "voyager", urgent: false, notice });
+    }
+    out.sort((a, b) => (b.urgent ? 1 : 0) - (a.urgent ? 1 : 0));
+    return out;
+  }
+  // Survol : ouverture immédiate, fermeture DIFFÉRÉE. Le délai n'est pas un
+  // détail de confort — la liste dépliée descend sous la pastille, et le
+  // moindre pixel de gouttière traversé par le curseur refermerait tout au
+  // milieu d'un geste sans lui. 260 ms est le seuil habituel : assez pour
+  // pardonner une trajectoire, trop court pour donner l'impression que ça colle.
+  function notifEnter() { clearTimeout(notifLeaveRef.current); setNotifHover(true); }
+  function notifLeave() { clearTimeout(notifLeaveRef.current); notifLeaveRef.current = setTimeout(() => setNotifHover(false), 260); }
+  useEffect(() => () => clearTimeout(notifLeaveRef.current), []);
+
+  /* Purge des visiteurs écartés à la croix qui sont depuis PARTIS. Sans elle,
+     `dismissedNotifs` grossit indéfiniment, et un roster id réutilisé plus tard
+     ferait taire une notification légitime.
+
+     Ce nettoyage existait au zip 233, mais il était fait PENDANT LE RENDU, via
+     un `setTimeout(..., 0)` pour ne pas déclencher un setState en plein render.
+     Il ne pouvait pas rester : le bloc qui l'hébergeait a disparu avec l'ancien
+     empilement. Le remettre dans un effet est de toute façon sa place — c'est
+     exactement le motif que le correctif « bouton leave » de 2026-07 a corrigé
+     ailleurs dans page.js. */
+  useEffect(() => {
+    if (!dismissedNotifs.size) return;
+    const waiting = new Set(((stationSt && stationSt.visitors) || []).filter(vv => vv.phase === "wait").map(vv => vv.rid));
+    let stale = false;
+    dismissedNotifs.forEach(rid => { if (!waiting.has(rid)) stale = true; });
+    if (!stale) return;
+    const next = new Set();
+    dismissedNotifs.forEach(rid => { if (waiting.has(rid)) next.add(rid); });
+    setDismissedNotifs(next);
+  }, [stationSt, dismissedNotifs]);
+
+  /* Battement de la pastille quand le compte AUGMENTE — et seulement alors :
+     une notification traitée fait baisser le compte, et faire clignoter pour
+     annoncer une bonne nouvelle serait du bruit. C'est ce qui remplace le
+     dépliement automatique auquel on a renoncé pour ne plus recouvrir le jeu. */
+  const notifCount = notifItems(true).length; // `true` : compte RÉEL, insensible aux menus ouverts (voir notifItems)
+  useEffect(() => {
+    if (notifCount > notifCountRef.current) {
+      setNotifPulse(true);
+      const t = setTimeout(() => setNotifPulse(false), 1000);
+      notifCountRef.current = notifCount;
+      return () => clearTimeout(t);
+    }
+    notifCountRef.current = notifCount;
+  }, [notifCount]);
+
   const buyHorse = () => sendReq({ kind: "buyHorse" });
   const buyWell = () => sendReq({ kind: "buyWell" });
   const buyJewelry = () => sendReq({ kind: "buyJewelry" });
@@ -15218,81 +15339,96 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           </div>
         );
       })()}
-      {/* Corner notifications (zip 233): one paper card per waiting visitor
-          (up to 3, then "+N more"), each with a remote "Meet me at townhall"
-          button that opens the SAME visitor card without walking over -
-          Guillaume: black text on paper, not yellow-on-dark. */}
-      {stationSt && (stationSt.visitors || []).some(vv => vv.phase === "wait") && !visitorOpen && !nearHall && (() => {
-        const waitingRids = new Set((stationSt.visitors || []).filter(vv => vv.phase === "wait").map(vv => vv.rid));
-        if (dismissedNotifs.size) {
-          let stale = false;
-          dismissedNotifs.forEach(rid => { if (!waitingRids.has(rid)) stale = true; });
-          if (stale) {
-            const next = new Set();
-            dismissedNotifs.forEach(rid => { if (waitingRids.has(rid)) next.add(rid); });
-            // Purge différée (pas pendant le rendu) pour éviter un setState en plein render.
-            setTimeout(() => setDismissedNotifs(next), 0);
-          }
-        }
-        const waiting = (stationSt.visitors || []).filter(vv => vv.phase === "wait" && !dismissedNotifs.has(vv.rid));
-        const shown = waiting.slice(0, 3);
-        const card = { background: "#f5eeda", border: "1px solid #6b4a2e", borderRadius: 10, padding: "8px 10px", display: "flex", gap: 10, alignItems: "center", color: "#1d1d1d" };
+      {/* ================================================================
+          ZIP 389 — PANNEAU DE NOTIFICATIONS UNIQUE, REPLIÉ PAR DÉFAUT.
+
+          Remplace les DEUX empilements du zip 233 et du zip 258, qui vivaient
+          à right:12/top:120 et right:12/top:320 et pouvaient s'afficher
+          ensemble. Contenu identique (visiteurs en attente, alerte pâtissière,
+          retour d'Eduardo), ordonné par urgence, et surtout : replié.
+
+          Replié = une pastille de 44 px. Déplié = la liste, au survol.
+          Toujours replié au chargement, aucune mémorisation : décision
+          Guillaume. Le survol suffit à la souris ; le clic épingle, pour la
+          tablette où le survol n'existe pas.
+
+          La zone de survol enveloppe la pastille ET la liste : descendre de
+          l'une à l'autre ne referme rien, et les boutons des cartes restent
+          donc atteignables. C'est la raison d'être du `onMouseEnter` sur le
+          conteneur plutôt que sur la seule pastille.
+          ================================================================ */}
+      {phase === "playing" && (() => {
+        const items = notifItems();
+        if (!items.length) return null;
+        const open = notifHover || notifPinned;
         return (
-          <div style={{ position: "fixed", right: 12, top: 120, zIndex: 40, display: "flex", flexDirection: "column", gap: 6, maxWidth: 280 }}>
-            {shown.map(vv => {
-              const ro = rosterOf(vv.rid);
-              const o = vv.offer || {};
-              const ask = o.type === "buy" ? L.notifWantsBuy(o.n, (lang === "en" ? (C.CROPS[o.crop] || {}).nameEn : (C.CROPS[o.crop] || {}).name))
-                : o.type === "demand" ? L.notifDemand(o.gold)
-                : o.type === "swap" ? L.notifSwap
-                : o.type === "stay" ? L.notifStay : o.type === "plea" ? L.notifPlea : L.notifWantsChat;
-              return (
-                <div key={vv.rid} style={{ ...card, position: "relative" }}>
-                  <button
-                    type="button"
-                    aria-label={L.closeBtn || "×"}
-                    onClick={() => setDismissedNotifs(prev => { const next = new Set(prev); next.add(vv.rid); return next; })}
-                    style={{ position: "absolute", top: 2, right: 4, border: "none", background: "transparent", color: "#6b4a2e", fontSize: 14, lineHeight: 1, cursor: "pointer", padding: 2 }}
-                  >×</button>
-                  <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, false, ro.skill === "lumberjack", ro.skill === "cheesemaker", ro.skill === "sugarworker", ro.look) : null} sx={16} sy={24} w={24} h={36} />
-                  <div style={{ fontSize: 12, lineHeight: 1.35, paddingRight: 14 }}>
-                    <b>{L.notifAsk(ro.name)}</b><br />
-                    {o.type === "buy" && spritesReady && <span style={{ verticalAlign: "middle", marginRight: 4, display: "inline-block" }}><Sprite img={spritesRef.current.crops[o.crop][C.CROP_STAGES - 1]} w={18} h={18} /></span>}
-                    {ask}
-                    {o.type === "demand" && <span style={{ color: "#a33a1f", fontWeight: 700 }}> · {L.visitorUrgent}</span>}
-                    <br /><span style={{ display: "inline-block", marginTop: 4 }}><PixBtn sprites={spritesReady ? spritesRef.current : null} icon="bell" small label={L.meetBtn} onClick={() => { setMyVote(null); setVisitorRid(vv.rid); setVisitorOpen(true); sendReq({ kind: "visitorRecall", rid: vv.rid }); }} /></span>
+          <div
+            className={"ferme-notif" + (open ? " open" : "")}
+            onMouseEnter={notifEnter}
+            onMouseLeave={notifLeave}
+          >
+            <button
+              type="button"
+              className={"ferme-notif-pill" + (notifPulse ? " pulse" : "") + (items.some(it => it.urgent) ? " urgent" : "")}
+              aria-expanded={open}
+              aria-label={L.notifPanelLabel(items.length)}
+              title={L.notifPanelLabel(items.length)}
+              onClick={() => setNotifPinned(p => !p)}
+            >
+              <span className="ferme-notif-bell" aria-hidden="true">🔔</span>
+              <span className="ferme-notif-count">{items.length}</span>
+            </button>
+
+            <div className="ferme-notif-list" role="list">
+              {items.map(it => {
+                if (it.kind === "visitor") {
+                  const vv = it.vv, ro = rosterOf(vv.rid), o = vv.offer || {};
+                  const ask = o.type === "buy" ? L.notifWantsBuy(o.n, (lang === "en" ? (C.CROPS[o.crop] || {}).nameEn : (C.CROPS[o.crop] || {}).name))
+                    : o.type === "demand" ? L.notifDemand(o.gold)
+                    : o.type === "swap" ? L.notifSwap
+                    : o.type === "stay" ? L.notifStay : o.type === "plea" ? L.notifPlea : L.notifWantsChat;
+                  return (
+                    <div className="ferme-notif-card" role="listitem" key={it.key}>
+                      <button
+                        type="button"
+                        className="ferme-notif-x"
+                        aria-label={L.closeBtn || "×"}
+                        onClick={() => setDismissedNotifs(prev => { const next = new Set(prev); next.add(vv.rid); return next; })}
+                      >×</button>
+                      <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, false, ro.skill === "lumberjack", ro.skill === "cheesemaker", ro.skill === "sugarworker", ro.look) : null} sx={16} sy={24} w={24} h={36} />
+                      <div className="ferme-notif-body">
+                        <b>{L.notifAsk(ro.name)}</b><br />
+                        {o.type === "buy" && spritesReady && <span style={{ verticalAlign: "middle", marginRight: 4, display: "inline-block" }}><Sprite img={spritesRef.current.crops[o.crop][C.CROP_STAGES - 1]} w={18} h={18} /></span>}
+                        {ask}
+                        {o.type === "demand" && <span style={{ color: "#a33a1f", fontWeight: 700 }}> · {L.visitorUrgent}</span>}
+                        <br /><span style={{ display: "inline-block", marginTop: 4 }}><PixBtn sprites={spritesReady ? spritesRef.current : null} icon="bell" small label={L.meetBtn} onClick={() => { setMyVote(null); setVisitorRid(vv.rid); setVisitorOpen(true); sendReq({ kind: "visitorRecall", rid: vv.rid }); }} /></span>
+                      </div>
+                    </div>
+                  );
+                }
+                if (it.kind === "bakery") {
+                  return (
+                    <div className="ferme-notif-card alert clickable" role="listitem" key={it.key} onClick={() => setEmployeesOpen(true)}>
+                      <div className="ferme-notif-body">
+                        <b>⚠️ {L.bakeryAlertTitle}</b><br />{L.bakeryAlertMsg(missingIngredientList(it.missing))}
+                      </div>
+                    </div>
+                  );
+                }
+                // Eduardo — soumis exactement à la même règle que les autres
+                // (demande Guillaume). Le clic vide l'avis et ouvre les employés,
+                // comme au zip 258 : ce comportement-là n'avait pas à changer.
+                return (
+                  <div className="ferme-notif-card clickable" role="listitem" key={it.key}
+                    onClick={() => { sharedRef.current.station.voyagerNotice = null; setStationSt(s => s ? { ...s, voyagerNotice: null } : s); setEmployeesOpen(true); }}>
+                    <div className="ferme-notif-body">
+                      <b>🧳 {L.voyagerReturnNotifTitle}</b><br />
+                      {Object.keys(it.notice.goods || {}).map(k => `${L.worldGoodName(k)} ×${it.notice.goods[k]}`).join(", ")}{it.notice.surprise ? L.voyagerSurpriseTag : ""}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-            {waiting.length > 3 && <div style={{ ...card, fontSize: 12, padding: "4px 10px" }}>{L.notifMore(waiting.length - 3)}</div>}
-          </div>
-        );
-      })()}
-      {/* Zip 258 : notifications coin haut-droite "à côté de l'écran des
-          employés" (demande Guillaume). (1) Alerte pâtissière quand le four est
-          en rupture d'ingrédients — clic -> ouvre le menu Employés (badge sur
-          la pâtissière). (2) Avis de retour d'Eduardo avec ce qu'il rapporte —
-          clic -> ouvre le menu Employés puis se dissipe. */}
-      {!employeesOpen && (() => {
-        const crafts = sharedRef.current.crafts || {};
-        const bakeryAlert = crafts.bakery && crafts.bakery.built && crafts.bakery.alert;
-        const notice = stationSt && stationSt.voyagerNotice;
-        if (!bakeryAlert && !notice) return null;
-        const card = { background: "#f5eeda", border: "1px solid #6b4a2e", borderRadius: 10, padding: "8px 10px", color: "#1d1d1d", fontSize: 12, lineHeight: 1.35, cursor: "pointer" };
-        return (
-          <div style={{ position: "fixed", right: 12, top: 320, zIndex: 40, display: "flex", flexDirection: "column", gap: 6, maxWidth: 280 }}>
-            {bakeryAlert && (
-              <div style={{ ...card, borderColor: "#c0392b" }} onClick={() => setEmployeesOpen(true)}>
-                <b>⚠️ {L.bakeryAlertTitle}</b><br />{L.bakeryAlertMsg(missingIngredientList(crafts.bakery.alertMissing))}
-              </div>
-            )}
-            {notice && (
-              <div style={card} onClick={() => { sharedRef.current.station.voyagerNotice = null; setStationSt(s => s ? { ...s, voyagerNotice: null } : s); setEmployeesOpen(true); }}>
-                <b>🧳 {L.voyagerReturnNotifTitle}</b><br />
-                {Object.keys(notice.goods || {}).map(k => `${L.worldGoodName(k)} ×${notice.goods[k]}`).join(", ")}{notice.surprise ? L.voyagerSurpriseTag : ""}
-              </div>
-            )}
+                );
+              })}
+            </div>
           </div>
         );
       })()}

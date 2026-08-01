@@ -6706,6 +6706,93 @@ body.ferme-active .wrap-room > .brand{ display:none !important; }
 .ferme-modal-panel h2{ margin-bottom:4px; }
 .ferme-hint{ font-size:12px; opacity:.75; margin-bottom:14px; }
 
+/* ==========================================================================
+   Zip 389 — PANNEAU DE NOTIFICATIONS REPLIABLE (remplace les deux
+   empilements en dur des zips 233 et 258).
+   ==========================================================================
+   `top:104px` place la pastille SOUS la barre de boutons (.ferme-actions,
+   top:10px, qui passe à deux lignes quand le bouton Employés apparaît). Les
+   anciennes cartes étaient à 120px pour la même raison ; on gagne les 16px.
+
+   Le conteneur n'a AUCUN fond : c'est la pastille qui est visible au repos.
+   Il enveloppe pastille + liste pour que le survol ne se rompe pas quand le
+   curseur descend de l'une vers l'autre. */
+.ferme-notif{
+  position:fixed; top:104px; right:12px; z-index:40;
+  display:flex; flex-direction:column; align-items:flex-end; gap:8px;
+  max-width:min(300px, 76vw);
+}
+
+.ferme-notif-pill{
+  display:flex; align-items:center; justify-content:center; gap:3px;
+  width:44px; height:44px; padding:0;
+  border-radius:999px; cursor:pointer;
+  background:#f5eeda; border:1px solid #6b4a2e; color:#1d1d1d;
+  box-shadow:0 2px 8px rgba(0,0,0,.32);
+  transition:transform .18s ease, box-shadow .18s ease, background .18s ease;
+}
+.ferme-notif-pill:hover{ transform:scale(1.06); box-shadow:0 3px 12px rgba(0,0,0,.4); }
+.ferme-notif-pill:active{ transform:scale(.97); }
+.ferme-notif-bell{ font-size:15px; line-height:1; }
+.ferme-notif-count{ font-size:13px; font-weight:800; line-height:1; }
+/* Au moins une urgence dans la liste (demande d'or d'un visiteur, four en
+   rupture) : la pastille se teinte, sans rien déplier. Le seul signal
+   permanent qu'on s'autorise. */
+.ferme-notif-pill.urgent{ background:#f6dcd2; border-color:#c0392b; }
+
+/* Battement d'une seconde à l'arrivée d'une notification. Trois pulsations
+   nettes plutôt qu'un clignotement continu : on veut attirer l'œil une fois,
+   pas installer une gêne dans le champ de vision. */
+@keyframes ferme-notif-pulse{
+  0%,100%{ transform:scale(1); box-shadow:0 2px 8px rgba(0,0,0,.32); }
+  50%    { transform:scale(1.16); box-shadow:0 0 0 7px rgba(232,200,90,.28), 0 2px 8px rgba(0,0,0,.32); }
+}
+.ferme-notif-pill.pulse{ animation:ferme-notif-pulse .33s ease-in-out 3; }
+
+/* Le dépliement. `max-height` + `opacity` + léger glissement vertical : le
+   panneau se déroule vers le bas depuis la pastille au lieu d'apparaître d'un
+   coup. `visibility` (et non `display`) pour que la transition puisse jouer,
+   et `pointer-events:none` replié pour qu'un panneau invisible n'intercepte
+   jamais un clic destiné au jeu — c'était tout le problème de départ. */
+.ferme-notif-list{
+  display:flex; flex-direction:column; gap:6px; width:280px; max-width:76vw;
+  max-height:0; opacity:0; visibility:hidden;
+  transform:translateY(-6px);
+  pointer-events:none;
+  overflow:hidden;
+  transition:max-height .26s cubic-bezier(.22,.61,.36,1), opacity .2s ease, transform .26s cubic-bezier(.22,.61,.36,1), visibility 0s linear .26s;
+}
+.ferme-notif.open .ferme-notif-list{
+  max-height:min(62vh, 560px); opacity:1; visibility:visible;
+  transform:translateY(0);
+  pointer-events:auto;
+  overflow-y:auto;
+  transition:max-height .26s cubic-bezier(.22,.61,.36,1), opacity .2s ease, transform .26s cubic-bezier(.22,.61,.36,1), visibility 0s;
+}
+
+.ferme-notif-card{
+  position:relative;
+  background:#f5eeda; border:1px solid #6b4a2e; border-radius:10px;
+  padding:8px 10px; display:flex; gap:10px; align-items:center; color:#1d1d1d;
+  box-shadow:0 2px 8px rgba(0,0,0,.28);
+}
+.ferme-notif-card.alert{ border-color:#c0392b; }
+.ferme-notif-card.clickable{ cursor:pointer; }
+.ferme-notif-card.clickable:hover{ background:#faf4e4; }
+.ferme-notif-body{ font-size:12px; line-height:1.35; padding-right:14px; }
+.ferme-notif-x{
+  position:absolute; top:2px; right:4px; padding:2px;
+  border:none; background:transparent; color:#6b4a2e;
+  font-size:14px; line-height:1; cursor:pointer;
+}
+
+/* Pas d'animation pour qui n'en veut pas (réglage système). Le panneau reste
+   parfaitement utilisable : il s'ouvre et se ferme, simplement sans transition. */
+@media (prefers-reduced-motion: reduce){
+  .ferme-notif-list, .ferme-notif-pill{ transition:none; }
+  .ferme-notif-pill.pulse{ animation:none; }
+}
+
 /* Zip 389 — bandeau de rappel du forçage de terre (menu développeur).
    En bas au centre, au-dessus du canvas mais SOUS les modales : `.ferme-modal`
    est à z-index 45 (vérifié, pas supposé — la première écriture de ce bloc
