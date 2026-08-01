@@ -118,29 +118,45 @@ function writePng(file, W, H, rgb) {
 /* ============================================================== SCÉNARIO ===
    Deux cadrages, choisis pour ce qu'ils permettent de JUGER :
 
-     1. « lair » — autour du Gourmandin. On y vérifie que ses cases sont bien
-        dégagées (generatePassageWorld) et qu'il reste de la place pour
-        l'approcher : c'est le seul endroit de la carte où une case bloquée
-        casserait tout le chantier.
-     2. « shore » — la berge du lac de sirop. On y juge le raccord entre le sol
-        rose et l'eau, c'est-à-dire l'endroit où deux teintes voisines peuvent
-        se battre.
+     1. « bridge » — le pont arc-en-ciel et guimauve (zip 386), du pied jusqu'à
+        la porte. C'est l'endroit où trois habillages se touchent : le sol en
+        bonbons, le tablier, et le sirop en dessous. Si quelque chose doit se
+        battre, c'est là.
+     2. « ground » — le sol en bonbons à l'intérieur des terres, avec les cases
+        d'ARBRES marquées. Depuis le 386 il n'y a plus un seul rocher : la
+        planche doit le montrer, pas seulement le compter.
+
+   ⚠️ Ce que cette planche ne montre PAS : les arbres de barbe à papa, les
+   licornes et le Gourmandin sont des SPRITES construits par buildSprites(),
+   qui a besoin de `document`. Ils sont hors de portée d'un rasteriseur sans
+   navigateur, et il faut le savoir avant de conclure quoi que ce soit de ces
+   images — l'outil juge le SOL et le PONT, pas le peuplement.
 
    Le voile d'ambiance clair de drawEvilFrame est appliqué à la fin, sinon la
    planche montre des couleurs plus vives que le jeu — un outil qui rassure au
-   lieu de montrer, exactement le défaut relevé au zip 379b. */
+   lieu de montrer, exactement le défaut relevé au zip 379b.
+   ========================================================================= */
 const T = C.TILE, ZOOM = 3;
 const CANDY_IDX = C.PASSAGE_WORLDS.findIndex(w => w.key === "candy");
+const CANDY_SPEC = C.PASSAGE_WORLDS[CANDY_IDX];
+const DECK_TOP_Y = C.RUN_JETTY_BASE.y - C.RUN_JETTY_HALF_W;
 
-function renderPatch(w, label, cx, cy, tw, th, now) {
+function renderPatch(w, label, cx, cy, tw, th, now, markTrees) {
   const x0 = Math.max(0, cx - (tw >> 1)), y0 = Math.max(0, cy - (th >> 1));
   const TW = tw * T, TH = th * T;
   const ctx = makeCtx(TW, TH, [244, 219, 232]);
   const PX = (x) => (x - x0) * T, PY = (y) => (y - y0) * T;
+  const over = [];
 
   for (let y = y0; y < y0 + th; y++) for (let x = x0; x < x0 + tw; x++) {
     const i = y * w.w + x, g = w.ground[i];
-    if (g === C.G_WATER) {
+    const isDeck = g === C.G_RUN_JETTY || g === C.G_RUN_GATE;
+    const isKerb = g === C.G_RUN_KERB;
+    if (isDeck || isKerb) {
+      const side = isKerb ? (y < C.RUN_JETTY_BASE.y ? -1 : 1) : 0;
+      ART.drawBridgeTile(ctx, PX(x), PY(y), T, x, y, side, CANDY_SPEC.bridge, DECK_TOP_Y);
+      if (side !== 0) over.push({ x, y, side });
+    } else if (g === C.G_WATER) {
       const dp = (w.depth ? w.depth[i] : 255) / 255;
       ctx.fillStyle = ART.candySyrupColor(dp);
       ctx.fillRect(PX(x), PY(y), T, T);
@@ -155,19 +171,20 @@ function renderPatch(w, label, cx, cy, tw, th, now) {
       ctx.fillRect(PX(x), PY(y), T, T);
       ART.drawCandyGroundTile(ctx, PX(x), PY(y), T, x, y);
     } else {
-      // Chaussée du défi, passage de retour : ils gardent leur teinte propre,
-      // et c'est voulu (la porte se présente pareil sur les six cartes).
-      ctx.fillStyle = g === C.G_DARK_PASSAGE ? "#3a2a55" : "#3c372f";
+      ctx.fillStyle = "#3a2a55";     // passage de retour
       ctx.fillRect(PX(x), PY(y), T, T);
     }
-    // Marque des cases OCCUPÉES par un arbre/rocher : le sol seul ne les
-    // montre pas, et c'est précisément ce qu'on vient vérifier au repaire.
-    if (w.objects[i] !== C.O_NONE) {
-      ctx.fillStyle = "rgba(60,30,50,0.55)";
+    // Les cases OCCUPÉES : le sol seul ne les montre pas, et depuis le 386 il
+    // ne doit plus y avoir QUE des arbres ici.
+    if (markTrees && w.objects[i] !== C.O_NONE) {
+      ctx.fillStyle = w.objects[i] === C.O_ROCK ? "rgba(255,0,0,0.75)" : "rgba(120,60,110,0.45)";
       ctx.fillRect(PX(x) + 4, PY(y) + 4, T - 8, T - 8);
     }
   }
-  // Voile d'ambiance clair, comme drawEvilFrame au Pays des Bonbons.
+  // Seconde passe : les coulures de guimauve qui pendent au-dessus du sirop.
+  for (const d of over) {
+    ART.drawBridgeOverlay(ctx, PX(d.x), PY(d.y), T, d.x, d.y, d.side, now, C.RUN_JETTY_BASE.x, CANDY_SPEC.bridge);
+  }
   ctx.fillStyle = "rgba(255,215,235,0.16)";
   ctx.fillRect(0, 0, TW, TH);
 
@@ -180,32 +197,68 @@ function renderPatch(w, label, cx, cy, tw, th, now) {
   }
   const file = path.join(outDir, `candy-${label}.png`);
   writePng(file, W, H, out);
-  return { file, W, H, x0, y0 };
+  return { file, W, H };
 }
 
 fs.mkdirSync(outDir, { recursive: true });
 const world = E.generatePassageWorld(CANDY_IDX);
 
-const lair = C.CANDY_MONSTER_SPAWN;
 const shots = [
-  renderPatch(world, "lair", lair.x, lair.y, 26, 20, 0),
-  renderPatch(world, "shore", C.EAST_LAKE_X, C.RUN_JETTY_BASE.y, 26, 20, 2400),
+  renderPatch(world, "bridge", C.RUN_GATE.x - 2, C.RUN_JETTY_BASE.y, 26, 18, 2400, false),
+  renderPatch(world, "ground", 26, 22, 26, 20, 0, true),
 ];
 
-/* Contrôle chiffré, en plus des planches : les cases du repaire DOIVENT être
-   libres. Une planche se regarde, mais un rayon de dégagement se compte — et
-   c'est le genre de chose qu'on ne voit pas sur une image si l'arbre est
-   juste au bord du cadrage. */
-let blocked = 0;
-for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
-  const i = (lair.y + dy) * world.w + (lair.x + dx);
-  if (world.objects[i] !== C.O_NONE || world.ground[i] === C.G_WATER) blocked++;
-}
+/* ================================================== CONTRÔLES CHIFFRÉS ====
+   Une planche se regarde ; ces trois-là se COMPTENT, et aucun ne se voit sur
+   une image (un rocher peut être hors cadre, une licorne peut ne mettre le
+   sabot dans le sirop qu'une fois toutes les vingt secondes). */
+const failures = [];
 
-console.log("Planches écrites — À REGARDER, pas seulement à générer :");
+// 1. Plus un seul caillou (zip 386).
+let rocks = 0;
+for (let i = 0; i < world.objects.length; i++) if (world.objects[i] === C.O_ROCK) rocks++;
+console.log(`Rochers au Pays des Bonbons : ${rocks} (attendu 0)`);
+if (rocks !== 0) failures.push(`${rocks} rocher(s) subsistent au Pays des Bonbons`);
+
+// 2. Il reste bien des ARBRES : retirer la pierre ne doit pas avoir vidé la
+//    carte. Sans ce contre-contrôle, un `put` cassé passerait pour un succès.
+let trees = 0;
+for (let i = 0; i < world.objects.length; i++) {
+  if (world.objects[i] === C.O_TREE || world.objects[i] === C.O_TREE2) trees++;
+}
+console.log(`Arbres de barbe à papa : ${trees}`);
+if (trees < 150) failures.push(`seulement ${trees} arbres — le retrait des rochers a mangé autre chose`);
+
+// 3. LES LICORNES RESTENT-ELLES SUR LA TERRE FERME ? Balayage d'un tour de
+//    promenade complet, par pas de 250 ms, pour les sept. C'est exactement le
+//    genre de défaut qu'on ne voit jamais en jouant cinq minutes et que tout
+//    le monde voit au bout d'une heure.
+let wet = 0, onDeck = 0, total = 0;
+for (let i = 0; i < C.CANDY_UNICORNS; i++) {
+  for (let t = 0; t < C.CANDY_UNICORN_PERIOD_MS; t += 250) {
+    const u = E.unicornAt(i, t);
+    const gx = Math.floor(u.x), gy = Math.floor(u.y);
+    total++;
+    if (gx < 1 || gy < 1 || gx >= world.w - 1 || gy >= world.h - 1) { wet++; continue; }
+    const g = world.ground[gy * world.w + gx];
+    if (g === C.G_WATER) wet++;
+    else if (g === C.G_RUN_JETTY || g === C.G_RUN_KERB || g === C.G_RUN_GATE) onDeck++;
+  }
+}
+console.log(`Licornes : ${total} positions balayées, ${wet} dans le sirop ou hors carte, ${onDeck} sur le pont.`);
+console.log(`   (le rendu les masque dans ces cas — ce compte dit COMBIEN DE TEMPS elles disparaissent)`);
+if (wet / total > 0.25) failures.push(`les licornes passent ${(wet / total * 100).toFixed(0)} % du temps hors de l'herbe : elles clignotent`);
+
+console.log("\nPlanches écrites — À REGARDER, pas seulement à générer :");
 for (const s of shots) console.log(`  ${path.relative(here, s.file)} (${s.W}×${s.H})`);
-console.log(`\nRepaire du Gourmandin (${lair.x}, ${lair.y}) : ${blocked} case(s) bloquée(s) sur 25 dans le rayon dégagé.`);
-console.log("À vérifier à l'œil : aucune case de sucre d'orge collée à une autre");
-console.log("(les rayures ne tiennent que par leur rareté), et la berge du lac de");
-console.log("sirop se lit comme une berge, pas comme une frontière.");
-if (blocked > 0) { console.log("\nÉCHEC : le repaire n'est pas dégagé."); process.exit(1); }
+console.log("\nÀ vérifier à l'œil :");
+console.log("  - le tablier arc-en-ciel se lit comme un RUBAN CONTINU, pas comme une grille de sept couleurs ;");
+console.log("  - la bordure en guimauve se lit comme un COUSSIN, pas comme une quatrième voie praticable ;");
+console.log("  - les coulures pendent bien au-dessus du sirop, du bon côté du pont ;");
+console.log("  - aucune case de sucre d'orge collée à une autre (les rayures ne tiennent que par leur rareté).");
+
+if (failures.length) {
+  console.log("\nÉCHECS :");
+  for (const f of failures) console.log("  - " + f);
+  process.exit(1);
+}

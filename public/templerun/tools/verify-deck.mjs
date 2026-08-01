@@ -127,6 +127,55 @@ const failures = [];
 }
 
 /* =========================================================================
+   2 bis. CHAQUE TERRE A BIEN SON PROPRE PONT (zip 386)
+   -------------------------------------------------------------------------
+   Décision Guillaume : « give each land its own themed bridge ». La promesse
+   n'est pas « il existe une fonction par thème », c'est « les cinq ponts ne se
+   ressemblent pas ». On DESSINE donc les cinq et on compare les tracés.
+
+   Ce contrôle existe parce que le mode de panne est silencieux : drawBridgeTile
+   retombe volontairement sur la pierre pour un thème inconnu (un monde ajouté
+   sans habillage doit être terne, jamais cassé). Une faute de frappe dans une
+   clé `bridge` ne produirait donc AUCUNE erreur — juste une terre de plus avec
+   la chaussée du défi de fuite, et personne ne s'en apercevrait avant de
+   tomber dessus en jeu, trois jours de jeu plus tard.
+   ====================================================================== */
+{
+  const T = 16;
+  function paint(theme, side) {
+    const buf = [];
+    const ctx = {
+      fillStyle: "",
+      fillRect(x, y, w, h) { buf.push(`${this.fillStyle}|${x}|${y}|${w}|${h}`); },
+    };
+    ART.drawBridgeTile(ctx, 0, 0, T, C.RUN_GATE.x, C.RUN_JETTY_BASE.y + side, side, theme,
+      C.RUN_JETTY_BASE.y - C.RUN_JETTY_HALF_W);
+    ART.drawBridgeOverlay(ctx, 0, 0, T, C.RUN_GATE.x, C.RUN_JETTY_BASE.y + side, side, 1234,
+      C.RUN_JETTY_BASE.x, theme);
+    return buf.join("\n");
+  }
+
+  const seen = new Map();
+  console.log("\n2 bis. Ponts par terre :");
+  for (const w of C.PASSAGE_WORLDS) {
+    const theme = w.bridge || "stone";
+    const sig = paint(theme, 0) + "\n##\n" + paint(theme, -1);
+    if (!sig.length) { failures.push(`le pont de ${w.key} ne dessine rien`); continue; }
+    const twin = seen.get(sig);
+    if (twin) failures.push(`les ponts de ${w.key} et de ${twin} sont IDENTIQUES (thème "${theme}" non pris en compte ?)`);
+    else seen.set(sig, w.key);
+    const dest = C.PASSAGE_GATE_DEST[w.key] || "—";
+    console.log(`   ${w.key.padEnd(9)} habillage « ${theme} », mène à : ${dest}`);
+  }
+  console.log(`   ${seen.size} habillage(s) distinct(s) pour ${C.PASSAGE_WORLDS.length} terres`);
+
+  // Le défi de fuite ne doit avoir QU'UNE seule terre (décision zip 386).
+  const runLands = Object.keys(C.PASSAGE_GATE_DEST).filter(k => C.PASSAGE_GATE_DEST[k] === "run");
+  console.log(`   Terres menant au défi de fuite : ${runLands.join(", ") || "aucune"}`);
+  if (runLands.length !== 1) failures.push(`${runLands.length} terres mènent au défi de fuite, une seule est attendue`);
+}
+
+/* =========================================================================
    3. LA CASE DE DÉCLENCHEMENT EST INDISCERNABLE
    ====================================================================== */
 {
