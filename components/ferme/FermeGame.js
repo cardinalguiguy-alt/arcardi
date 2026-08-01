@@ -1780,8 +1780,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // n'empêche pas un client modifié de tricher un peu, mais ça évite qu'un
       // message aberrant (ou un bug) n'injecte un million de bonbons dans une
       // sauvegarde partagée et durable.
+      // Zip 385 : la fenêtre acceptée dépend de secondChanceUsed — sinon la
+      // blessure ×3 (RUN_INJURED_MS_PENALTY) envoyée en optimiste par le
+      // client serait rabotée ici même à la valeur normale, et l'hôte
+      // republierait une durée que le joueur vient déjà de voir affichée.
       const nowR = Date.now();
-      const untilR = (typeof req.until === "number" && req.until > nowR && req.until <= nowR + C.RUN_INJURED_MS + 5000) ? req.until : nowR + C.RUN_INJURED_MS;
+      const capR = req.secondChanceUsed ? C.RUN_INJURED_MS_PENALTY : C.RUN_INJURED_MS;
+      const untilR = (typeof req.until === "number" && req.until > nowR && req.until <= nowR + capR + 5000) ? req.until : nowR + capR;
       f.injuredUntil = untilR;
       f.injuryKind = "run"; // même famille que "evil" : soignable par pansements
       const gained = Math.max(0, Math.min(C.RUN_MAX_CANDIES_PER_RUN, req.candies | 0));
@@ -8297,7 +8302,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // client, requête à l'hôte pour la persister et la diffuser, puis fondu et
   // téléportation locale. La durée est RUN_INJURED_MS (10 min), pas
   // EVIL_INJURED_MS (30 min) : on doit pouvoir retenter dans la soirée.
-  function runChallengeLost(score, candies) {
+  //
+  // Zip 385 — SECONDE CHANCE : `secondChanceUsed` vient tel quel du défi (le
+  // seul endroit qui sait si le joueur a continué après une capture). Si
+  // elle a été utilisée, la blessure est C.RUN_INJURED_MS_PENALTY (×3, prix
+  // fixé par Guillaume) au lieu de C.RUN_INJURED_MS — que la course se
+  // termine ensuite par une nouvelle capture OU par un abandon : le prix
+  // porte sur le fait d'avoir continué, pas sur la cause finale.
+  function runChallengeLost(score, candies, secondChanceUsed) {
     /* Zip 375 : l'embuscade est effacée AVANT closeRunChallenge(), qui, sinon,
        reposerait le fermier au pied de la jetée face aux loups — juste avant
        que crossPassage() ne le renvoie à la ferme. On aurait vu passer un
@@ -8306,9 +8318,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        sens que pour une sortie VOLONTAIRE du menu. */
     runAmbushRef.current = null;
     closeRunChallenge();
-    const until = Date.now() + C.RUN_INJURED_MS;
+    const ms = secondChanceUsed ? C.RUN_INJURED_MS_PENALTY : C.RUN_INJURED_MS;
+    const until = Date.now() + ms;
     injuredUntilRef.current = until; setInjuredUntil(until);
-    sendReq({ kind: "runFailed", until, score: score | 0, candies: candies | 0 });
+    sendReq({ kind: "runFailed", until, score: score | 0, candies: candies | 0, secondChanceUsed: !!secondChanceUsed });
     if ((candies | 0) > 0) pushToast(L.runCandiesToast(candies | 0));
     crossPassage(false, true, "run");
   }
@@ -8417,7 +8430,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           e.source.postMessage({ type: "vf-run-init", lang, best, skin }, window.location.origin);
         } catch (err) {}
       } else if (d.type === "vf-run-over") {
-        runChallengeLost(d.score, d.candies);
+        runChallengeLost(d.score, d.candies, !!d.secondChanceUsed);
       } else if (d.type === "vf-run-escape") {
         // Zip 377 : sortie par la bifurcation offroad. Ce n'est PAS une
         // défaite, et c'est la seule issue du défi qui ne le soit pas.

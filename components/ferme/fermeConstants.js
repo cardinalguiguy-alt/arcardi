@@ -607,6 +607,10 @@ export const RUN_AMBUSH_DESPAWN_DIST = 22;   // au-delà, le joueur a semé l'em
 // qu'on doit pouvoir retenter le défi dans la même soirée. Constante dédiée
 // plutôt que réutilisation : les deux évolueront séparément.
 export const RUN_INJURED_MS = 10 * 60 * 1000;
+// Zip 385 : prix de la seconde chance au défi de fuite, fixé par Guillaume —
+// si le joueur a continué après avoir été rattrapé et perd quand même, la
+// blessure au retour est ×3 plutôt que la durée normale ci-dessus.
+export const RUN_INJURED_MS_PENALTY = RUN_INJURED_MS * 3;
 
 // Abandonner depuis l'écran-titre du défi est gratuit ; abandonner une course
 // DÉJÀ COMMENCÉE compte comme une défaite. Sans ça, il suffirait de quitter

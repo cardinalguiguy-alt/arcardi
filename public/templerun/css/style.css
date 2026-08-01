@@ -106,6 +106,14 @@ button.ghost:hover { background: #241a3a; }
   text-shadow: 0 0 16px #ffb85c;
 }
 
+/* Zip 385 — seconde chance : le compte à rebours reprend la couleur d'alerte
+   de la jauge de danger (#dangerFill), pas celle du record — c'est une
+   menace qui expire, pas une réussite. */
+.revive-countdown {
+  font-size: 40px; font-weight: 700; color: #ff5c5c;
+  text-shadow: 0 0 20px #ff2020; letter-spacing: .04em;
+}
+
 .error {
   display: none; max-width: 520px; padding: 12px 16px;
   background: #4a121c; border: 2px solid #ff5040; border-radius: 4px;

@@ -23,6 +23,8 @@ const UI = (function () {
     "oTitle", "oHint", "btnBack", "fLScore", "fLCoins", "fLDistance", "fLBest",
     // Zip 377 — sortie offroad.
     "exitHint", "escape", "eTitle", "eSub", "fadeVeil",
+    // Zip 385 — seconde chance.
+    "revive", "rTitle", "rSub", "rCountdown", "btnRevive", "btnReviveNo",
   ];
 
   function init() {
@@ -44,6 +46,8 @@ const UI = (function () {
     txt("tHintExit", L.hintExit);
     txt("tHintFarm", Bridge.embedded ? L.hintFarm : "");
     txt("eTitle", L.escapeTitle); txt("eSub", L.escapeSub);
+    txt("rTitle", L.reviveTitle); txt("rSub", L.reviveSub);
+    txt("btnRevive", L.reviveYes); txt("btnReviveNo", L.reviveNo);
 
     txt("lScore", L.hudScore); txt("lCoins", L.hudCandies);
     txt("lDistance", L.hudDistance); txt("lBest", L.hudBest); txt("lPack", L.hudPack);
@@ -103,6 +107,18 @@ const UI = (function () {
   function showEscape(on) {
     if (el.escape) el.escape.classList.toggle("visible", !!on);
   }
+
+  /* Écran de seconde chance (zip 385). `seconds`, si fourni, initialise le
+     compte à rebours dès l'ouverture — sans ça le premier chiffre resterait
+     celui laissé par la course précédente pendant une frame. */
+  function showRevive(on, seconds) {
+    if (!el.revive) return;
+    el.revive.classList.toggle("visible", !!on);
+    if (on && seconds !== undefined) updateReviveCountdown(seconds);
+  }
+  function updateReviveCountdown(seconds) {
+    if (el.rCountdown) el.rCountdown.textContent = Math.max(0, Math.ceil(seconds));
+  }
   function setFade(a) {
     if (el.fadeVeil) el.fadeVeil.style.opacity = String(Math.max(0, Math.min(1, a)));
   }
@@ -115,7 +131,7 @@ const UI = (function () {
     })[cause] || L.reasonWolves;
   }
 
-  function showGameOver(score, coins, distance, cause) {
+  function showGameOver(score, coins, distance, cause, secondChanceUsed) {
     const s = Math.floor(score);
     const best = loadBest();
     const isNew = s > best;
@@ -132,6 +148,13 @@ const UI = (function () {
     // afficher « Rattrapé » par-dessus une fuite réussie annulerait
     // exactement ce que la mécanique vient d'accorder au joueur.
     el.oTitle.textContent = cause === "escape" ? L.escaped : L.over;
+    // Zip 385 : la blessure est ×3 si la seconde chance a été utilisée, quelle
+    // que soit l'issue finale de la course — c'est le prix fixé par Guillaume,
+    // pas une pénalité supplémentaire sur l'échec lui-même.
+    const isDefeat = cause !== "escape";
+    if (el.oHint) el.oHint.textContent = Bridge.embedded
+      ? (isDefeat && secondChanceUsed ? L.overHintFarmPenalty : L.overHintFarm)
+      : L.overHintSolo;
     show("gameover");
   }
 

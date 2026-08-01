@@ -94,6 +94,9 @@ for (const lang of ["fr", "en"]) {
     const RUNTIME = new Set(["loadError", "score", "coins", "distance", "best",
       "finalScore", "finalCoins", "finalDistance", "finalBest", "deathReason",
       "exitHint", "fadeVeil", "escape", "title", "hud", "pause", "gameover",
+      // Zip 385 : "revive" est le conteneur (comme "escape"), "rCountdown" un
+      // chiffre posé par Game/UI à l'exécution, pas par applyLang.
+      "revive", "rCountdown",
       "dangerFill"]);   // barre de remplissage : une largeur, pas un texte
     const empties = ids.filter(id => !RUNTIME.has(id) && nodes[id]
       && !nodes[id].textContent && !nodes[id].innerHTML);

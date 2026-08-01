@@ -52,6 +52,12 @@ class WolfPack {
     if (this.gap <= 0.01) { this.caught = true; player.die("wolves"); }
   }
 
+  /* Seconde chance (zip 385) : repousse la meute à l'écart de DÉPART, pas à
+     l'écart MAXIMAL (CHASE_MAX) — revivre doit rester tendu. `caught` est
+     réarmé, sinon la meute resterait figée sur son ancien verdict et
+     redéclarerait `player.die("wolves")` dès la frame suivante. */
+  reprise() { this.gap = CFG.SECOND_CHANCE_GAP; this.caught = false; }
+
   /* Détache la meute au moment de la sortie offroad : à partir de là elle
      avance seule, à la vitesse qu'avait la course, sans plus jamais regarder
      où est le fermier. */
