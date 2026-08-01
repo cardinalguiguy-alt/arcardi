@@ -8230,6 +8230,44 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      position ferme (m.farmX/m.farmY) à restaurer au retour. Écrire un second
      chemin de téléportation, c'est très exactement la leçon du zip 387 : deux
      descriptions d'une même chose finissent toujours par diverger. */
+  /* Se soigner instantanément (demande Guillaume, zip 389).
+
+     LE POINT QUI COMPTE : ceci ne touche PAS `injuredUntilRef`. La blessure est
+     une donnée arbitrée et persistée par l'hôte, dans `farmersRef` — la ref
+     locale n'en est que le miroir d'affichage. Remettre la ref à zéro aurait
+     « marché » à l'écran et ressuscité la blessure au premier rechargement, ou
+     pire, laissé les autres joueurs voir un blessé qui ne l'est plus (c'est
+     `injured` qui alimente leur repérage pour venir le soigner). C'est très
+     exactement la leçon du zip 385 : un garde-fou côté client ne protège pas
+     un état qui compte.
+
+     On écrit donc dans le fermier autoritaire, puis on passe par `hostSend`,
+     qui diffuse ET ré-applique en local — l'hôte ne recevant pas l'écho de ses
+     propres broadcasts depuis le zip 243. Le payload est celui, au champ près,
+     que la requête "heal" émet déjà (voir hostHandleReqUnsafe) : une seule
+     description de « ce joueur n'est plus blessé », pas deux.
+
+     `injuryKind` est remis à null en même temps que `injuredUntil` : le laisser
+     à "evil" sur un fermier soigné fausserait le prochain calcul de soin par
+     pansement, qui décide de retirer un tiers ou de ramener à une minute. */
+  function devHeal() {
+    if (!isHost) return;
+    const f = hostEnsureFarmer(me.id);
+    if (!f || !(f.injuredUntil > Date.now())) return;
+    f.injuredUntil = 0;
+    f.injuryKind = null;
+    dirtyRef.current = true;
+    hostSend({
+      type: "broadcast", event: "apply",
+      payload: {
+        farmer: { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv, injuredUntil: f.injuredUntil },
+        injured: { id: f.id, until: f.injuredUntil },
+      },
+    });
+    pushToast(L.devHealToast);
+    setDevMenuOpen(false);
+  }
+
   function devTeleport(destKey) {
     const m = meRef.current; if (!m) return;
     if (zoneTransRef.current.active) return; // une transition est déjà en cours
@@ -15332,6 +15370,27 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   <span className="ferme-usage">{L.devRotationSub(C.PASSAGE_WORLD_DAYS)}</span>
                 </div>
                 <button disabled={!forced} onClick={() => devSetWorld(null)}>{L.devRotationBtn}</button>
+              </div>
+
+              <h3 style={{ margin: "14px 0 6px" }}>{L.devHealSection}</h3>
+              {/* Zip 389 — soin instantané. Le bouton est TOUJOURS présent, et
+                  seulement désactivé quand il n'y a rien à soigner : une entrée
+                  de menu qui apparaît et disparaît selon l'état donne
+                  l'impression d'un menu qui bouge tout seul, et surtout on ne
+                  la découvre jamais quand on ne cherche pas.
+                  `injuredUntil` est l'état React (pas la ref) : il est déjà
+                  remis à jour par applyDeltas, donc ce bloc se redessine seul
+                  au moment de la blessure comme à celui du soin. */}
+              <div className="ferme-shop-row">
+                <div className="info">
+                  <b>{L.devHealTitle}</b>
+                  <span className="ferme-usage">
+                    {injuredUntil > Date.now()
+                      ? L.devHealRemaining(Math.ceil((injuredUntil - Date.now()) / 60000))
+                      : L.devHealNone}
+                  </span>
+                </div>
+                <button disabled={!(injuredUntil > Date.now())} onClick={devHeal}>{L.devHealBtn}</button>
               </div>
 
               <h3 style={{ margin: "14px 0 6px" }}>{L.devTeleportSection}</h3>
