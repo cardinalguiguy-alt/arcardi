@@ -1,0 +1,117 @@
+/* =============================================================================
+   style.css — Habillage du mini-jeu (zip 385).
+   -----------------------------------------------------------------------------
+   Palette du Pays des Bonbons, volontairement distincte du défi de fuite : on
+   passe d'un monde d'orage à un monde de sucre, et l'interface doit le dire
+   avant même que le décor ait fini de se peindre.
+   ========================================================================== */
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0; padding: 0; height: 100%; overflow: hidden;
+  background: #2a1430;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: #3a1d33;
+  -webkit-user-select: none; user-select: none;
+  touch-action: none;
+}
+
+/* Le canvas est centré et laisse des bandes : la scène garde son rapport 4:3
+   pour que les niveaux se jouent partout à l'identique (voir config.js). */
+#gl {
+  position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  display: block;
+  cursor: crosshair;
+  border-radius: 10px;
+  box-shadow: 0 0 60px rgba(255, 150, 200, 0.25);
+}
+
+/* ------------------------------------------------------------------- HUD */
+.hud {
+  position: absolute; top: 0; left: 0; right: 0;
+  display: flex; gap: 22px; justify-content: center;
+  padding: 12px 16px;
+  pointer-events: none;
+  transition: opacity .18s;
+}
+.hud.dim { opacity: .25; }
+.hud .stat {
+  background: rgba(255, 255, 255, .82);
+  border: 2px solid rgba(232, 53, 110, .35);
+  border-radius: 999px;
+  padding: 5px 16px;
+  font-size: 15px; font-weight: 700;
+  display: flex; gap: 9px; align-items: baseline;
+  box-shadow: 0 2px 10px rgba(120, 30, 70, .18);
+}
+.hud .label { font-weight: 500; font-size: 12px; opacity: .7; text-transform: uppercase; letter-spacing: .06em; }
+
+/* ---------------------------------------------------------------- PANNEAUX */
+.layer {
+  position: absolute; inset: 0;
+  display: none;
+  align-items: center; justify-content: center;
+  flex-direction: column;
+  text-align: center;
+  padding: 24px;
+  background: rgba(58, 20, 48, .72);
+  backdrop-filter: blur(3px);
+}
+.layer.visible { display: flex; }
+
+.panel h1 {
+  margin: 0 0 6px;
+  font-size: 40px; line-height: 1.1;
+  color: #fff2f8;
+  text-shadow: 0 3px 0 #b23a6a, 0 0 24px rgba(255, 140, 190, .55);
+}
+.panel .sub { margin: 0 0 14px; color: #ffd7e8; font-size: 17px; }
+.panel .stars { margin: 0 0 14px; color: #ffd23f; font-weight: 700; font-size: 17px; }
+
+.panel button {
+  margin: 6px;
+  padding: 13px 30px;
+  font-size: 17px; font-weight: 700;
+  color: #58122f;
+  background: linear-gradient(#fff6fa, #ffc9e0);
+  border: 3px solid #fff; border-radius: 999px;
+  cursor: pointer;
+  box-shadow: 0 5px 0 #b23a6a, 0 8px 22px rgba(0, 0, 0, .3);
+  transition: transform .08s, box-shadow .08s;
+}
+.panel button:hover { transform: translateY(-1px); }
+.panel button:active { transform: translateY(4px); box-shadow: 0 1px 0 #b23a6a; }
+.panel button.ghost {
+  background: transparent; color: #ffd7e8;
+  border-color: rgba(255, 215, 232, .5);
+  box-shadow: none;
+}
+.panel button.ghost:active { transform: translateY(2px); }
+
+.controls { margin: 14px 0 6px; color: #ffe3ef; font-size: 14px; line-height: 1.9; }
+.controls b { color: #fff; background: rgba(255, 255, 255, .16); padding: 1px 7px; border-radius: 5px; }
+.controls i { color: #ffc0dc; font-style: normal; }
+
+.hint { max-width: 620px; margin: 6px auto 0; color: #f3c9dd; font-size: 13.5px; line-height: 1.55; }
+.hint.farm { color: #ffd23f; }
+
+.prize {
+  display: none;
+  margin: 10px auto 4px; max-width: 560px;
+  padding: 12px 18px;
+  background: rgba(255, 210, 63, .14);
+  border: 2px solid rgba(255, 210, 63, .55);
+  border-radius: 14px;
+  color: #ffe9a8; font-size: 16px; font-weight: 600; line-height: 1.5;
+}
+.prize.visible { display: block; }
+
+.error { color: #ffb0b0; font-size: 14px; min-height: 18px; margin-bottom: 6px; }
+
+@media (max-width: 620px) {
+  .panel h1 { font-size: 30px; }
+  .hud { gap: 10px; padding: 8px; }
+  .hud .stat { padding: 4px 11px; font-size: 13px; }
+}

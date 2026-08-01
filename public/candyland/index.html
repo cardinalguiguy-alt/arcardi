@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Ferme Vallée — Le Gourmandin</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- Tous les textes sont posés par ui.js/applyLang() depuis js/strings.js.
+     Rien de visible n'est écrit en dur ici : la ferme impose sa langue au
+     chargement, et le mini-jeu doit la suivre. tools/check-strings.js vérifie
+     que chaque identifiant ci-dessous est bien déclaré dans la liste IDS. -->
+
+<canvas id="gl"></canvas>
+
+<!-- ------------------------------------------------------------------ HUD -->
+<div id="hud" class="hud">
+  <div class="stat"><span class="label" id="lLevel"></span><span id="level">1</span></div>
+  <div class="stat"><span class="label" id="lStars"></span><span id="stars">0</span></div>
+  <div class="stat"><span class="label" id="lBest"></span><span id="best">0</span></div>
+</div>
+
+<!-- ---------------------------------------------------------------- TITRE -->
+<div id="title" class="layer panel visible">
+  <h1 id="tTitle"></h1>
+  <p class="sub" id="tSub"></p>
+  <div id="loadError" class="error"></div>
+  <button id="btnStart"></button>
+  <div class="controls">
+    <div id="cCut"></div>
+    <div id="cPop"></div>
+    <div id="cRetry"></div>
+    <div id="cPause"></div>
+  </div>
+  <p class="hint" id="tHintGoal"></p>
+  <p class="hint" id="tHintStars"></p>
+  <p class="hint farm" id="tHintFarm"></p>
+</div>
+
+<!-- ---------------------------------------------------------------- PAUSE -->
+<div id="pause" class="layer panel">
+  <h1 id="pTitle"></h1>
+  <button id="btnResume"></button>
+  <button id="btnQuit" class="ghost"></button>
+  <p class="hint" id="pQuitWarn"></p>
+</div>
+
+<!-- -------------------------------------------------------------- GAGNÉ -->
+<div id="won" class="layer panel">
+  <h1 id="wTitle"></h1>
+  <p class="sub" id="wSub"></p>
+  <p class="stars" id="wStars"></p>
+  <div id="wPrize" class="prize"></div>
+  <button id="btnNext"></button>
+  <button id="btnWonQuit" class="ghost"></button>
+</div>
+
+<!-- --------------------------------------------------------------- PERDU -->
+<div id="lost" class="layer panel">
+  <h1 id="xTitle"></h1>
+  <p class="sub" id="xReason"></p>
+  <button id="btnRetry"></button>
+  <button id="btnLostQuit" class="ghost"></button>
+</div>
+
+<!-- ------------------------------------------------------------- LES 15 -->
+<div id="ending" class="layer panel">
+  <h1 id="eTitle"></h1>
+  <p class="sub" id="eSub"></p>
+  <button id="btnEndQuit"></button>
+</div>
+
+<!-- Aucune dépendance externe : ce mini-jeu est en canvas 2D, il n'a pas
+     besoin de three.js. Contrairement au défi de fuite, une panne de CDN ne
+     peut donc pas l'empêcher de démarrer.
+
+     Ordre imposé : config.js AVANT bridge.js (le pont borne le niveau reçu
+     avec CFG.LEVELS), et levels.js AVANT game.js. -->
+<script src="js/strings.js"></script>
+<script src="js/config.js"></script>
+<script src="js/bridge.js"></script>
+<script src="js/levels.js"></script>
+<script src="js/physics.js"></script>
+<script src="js/render.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
