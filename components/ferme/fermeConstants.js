@@ -2712,8 +2712,24 @@ export const PASSAGE_WORLD_DAYS = 3;
    simple décalage de l'index : la rotation est dérivée de s.day, et chaque
    ferme est à un jour différent — un décalage aurait donné le Pays des Bonbons
    chez Guillaume et les Grottes de Cristal chez son partenaire de jeu, ce qui
-   est précisément ce qu'il ne faut pas quand on teste à deux. */
-export const PASSAGE_FORCE_KEY = "candy";
+   est précisément ce qu'il ne faut pas quand on teste à deux.
+
+   >>> ZIP 389 : REMISE À null, SUR DEMANDE EXPLICITE DE GUILLAUME. <<<
+   Elle avait traversé les zips 385, 386, 387 et 388. Ce qu'elle faisait est
+   désormais fait, en mieux, par le MENU DÉVELOPPEUR (Cmd/Ctrl+Shift+X) : même
+   effet partagé par tous les joueurs, mais réversible d'un clic au lieu d'une
+   livraison, et affiché à l'écran tant qu'il est actif.
+
+   Ce que la remise à null rend au jeu, et qu'il faut savoir en le relisant :
+   les quatre terres autres que le Pays des Bonbons, le défi de fuite (qui n'est
+   accessible que depuis les Terres Maléfiques depuis le zip 386), et la variété
+   des familiers de terre rapportés par les visiteurs — sous forçage « candy »,
+   seul le renard barbe à papa pouvait être offert (voir passagePetOf).
+
+   Le forçage en dur reste lu par passageWorldIndex, DERRIÈRE le menu : reposer
+   une clé ici continue de fonctionner, pour les essais qui doivent survivre à
+   un rechargement sans passer par une ferme sauvegardée. */
+export const PASSAGE_FORCE_KEY = null;
 
 /* --- Zip 386 : À QUOI MÈNE LE PONT DE CHAQUE TERRE -----------------------
    Jusqu'au zip 385, la chaussée de pierre et sa porte (G_RUN_GATE) étaient
@@ -2759,6 +2775,46 @@ export const PASSAGE_WORLDS = [
     pickupColor: "#f0b428", pickupCount: 12,
     pet: { id: "cloudlamb", name: "Agneau des nuages", nameEn: "Cloud lamb" }, petHue: 40 },
 ];
+/* ==========================================================================
+   ZIP 389 — MENU DÉVELOPPEUR (secret, hôte uniquement)
+   ==========================================================================
+   Ouvert par Cmd+Shift+X (macOS) ou Ctrl+Shift+X (Windows/Linux).
+
+   POURQUOI CETTE COMBINAISON ET PAS UNE AUTRE. Contrainte posée par Guillaume :
+   ne jamais entrer en conflit avec Safari ni Chrome. Les lettres Cmd+Shift sont
+   presque toutes prises par l'un ou l'autre — N (navigation privée), T (rouvrir
+   l'onglet), W (fermer la fenêtre), R (rechargement forcé / lecteur Safari),
+   B, D, G, H, I, J, M, O, P, U, V, Y, Z... `X` est la seule lettre qui ne soit
+   réservée ni par Chrome, ni par Safari, ni par Firefox, sur aucune des trois
+   plateformes. Ne pas la changer sans refaire cette vérification.
+
+   Le raccourci est volontairement le SEUL moyen d'ouvrir ce menu : aucun bouton
+   ne l'annonce à l'écran, un joueur ne peut pas tomber dessus par hasard. */
+export const DEV_MENU_KEY = "KeyX";
+
+/* Destinations du téléporteur du menu. `zone` est la zone d'arrivée au sens de
+   m.zone ; le détail des coordonnées est résolu dans devTeleport (FermeGame.js)
+   parce que deux d'entre elles dépendent du monde généré, pas d'une constante :
+   le passage sombre est posé par la génération de la ferme (w.darkPassage), et
+   le bout du pont se dérive de RUN_GATE.
+
+   ORDRE VOLONTAIRE : de la ferme vers le plus lointain. C'est l'ordre dans
+   lequel on teste. */
+export const DEV_TELEPORTS = [
+  { key: "farm",    zone: "farm" },  // devant la maison (SPAWN)
+  { key: "passage", zone: "farm" },  // devant le passage sombre, côté ferme
+  { key: "town",    zone: "town" },  // Valley Town, descente du train
+  { key: "world",   zone: "evil" },  // arrivée dans la terre en cours (EVIL_SPAWN)
+  { key: "bridge",  zone: "evil" },  // pied du pont de la terre en cours
+];
+
+/* Le téléport « pied du pont » ne pose PAS le joueur sur RUN_GATE : marcher sur
+   cette dalle déclenche l'embuscade puis le mini-jeu de la terre (voir
+   checkWalkOverPassage). On atterrit donc quelques cases à l'OUEST, d'où l'on
+   voit le pont et où il reste un pas à faire pour l'emprunter — ce qui est
+   précisément ce qu'on veut montrer à quelqu'un. */
+export const DEV_BRIDGE_OFFSET = 3;
+
 export const PASSAGE_PET_CATCH_CHANCE = 0.35;
 // ⚠️ ZIP 388 : PLUS LUE NULLE PART. La capture d'un familier en ramassant une
 // breloque a été supprimée (voir resolvePassagePickup) — c'était l'attribution

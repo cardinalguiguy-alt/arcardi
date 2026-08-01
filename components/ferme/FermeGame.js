@@ -361,6 +361,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [binOpen, setBinOpen] = useState(false);
   const [bagOpen, setBagOpen] = useState(false); // zip 236: personal bag modal
   const [mapOpen, setMapOpen] = useState(false);
+  const [devMenuOpen, setDevMenuOpen] = useState(false); // zip 389 : menu développeur (Cmd/Ctrl+Shift+X, hôte seul)
+  const [forcedWorldUi, setForcedWorldUi] = useState(null); // zip 389 : miroir RENDABLE de sharedRef.current.forcedWorld (voir applyForcedWorld)
   // Menu du chaudron (chantier 2026-07, demande Guillaume : "le click sur E
   // doit ouvrir un menu chaudron que voulez-vous concocter ?") : remplace
   // l'ancien enchaînement automatique E->dépôt/E->lancement par un vrai menu
@@ -515,6 +517,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // Compteurs de trafic (voir l'enveloppe de ch.send dans l'effet réseau).
   const netStatsRef = useRef({ startedAt: Date.now(), sent: 0, dropped: 0, timedOut: 0, bytes: 0, byKey: {}, droppedByKey: {} });
   const mapOpenRef = useRef(false);
+  const devMenuOpenRef = useRef(false); // zip 389 : lu par onKeyDown, qui vit dans une closure à deps vides
   const shopOpenRef = useRef(false);
   const binOpenRef = useRef(false);
   const bagOpenRef = useRef(false); // zip 236
@@ -674,6 +677,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   useEffect(() => { hatUntilRef.current = hatUntil || 0; }, [hatUntil]);
   useEffect(() => { worldReadyRef.current = worldReady; }, [worldReady]);
   useEffect(() => { mapOpenRef.current = mapOpen; }, [mapOpen]);
+  useEffect(() => { devMenuOpenRef.current = devMenuOpen; }, [devMenuOpen]); // zip 389
   useEffect(() => { shopOpenRef.current = shopOpen; }, [shopOpen]);
   useEffect(() => { cauldronMenuOpenRef.current = cauldronMenuOpen; }, [cauldronMenuOpen]);
   useEffect(() => { binOpenRef.current = binOpen; }, [binOpen]);
@@ -920,6 +924,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // Crée tout de suite l'enregistrement pour réserver le code.
       persistFarm();
     }
+    // Zip 389 : posé APRÈS le if/else, pour couvrir les DEUX branches d'un seul
+    // appel — une ferme rechargée (qui peut porter un forçage) comme une ferme
+    // toute neuve (qui n'en a pas, et pour qui `saved` n'existe même pas).
+    // Le placer dans chaque branche aurait été le genre d'oubli qui ne se voit
+    // qu'en créant une ferme neuve après avoir forcé une terre sur une autre :
+    // la variable de module du moteur serait restée sur l'ancien forçage.
+    applyForcedWorld(saved && saved.forcedWorld);
     minimapDirtyRef.current = true;
     restoredRef.current = true;
     // Filet identique à applySnapshot (non-hôte) : l'hôte est aussi un joueur
@@ -1068,6 +1079,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       decor: E.migrateDecor(payload.decor), // zip 251
       crafts: E.migrateCrafts(payload.crafts), craftStock: E.migrateCraftStock(payload.craftStock), // zip 252
     };
+    // Zip 389 : la terre forcée arrive AVEC l'instantané, donc avant toute
+    // évaluation de passageWorldIndex par ce client. Posée ici et pas dans le
+    // littéral ci-dessus parce que applyForcedWorld doit aussi mettre le moteur
+    // à jour, et que sharedRef.current vient tout juste d'être remplacé.
+    applyForcedWorld(payload.forcedWorld);
     // Chantier "sucrerie déplaçable" : même conversion qu'à loadFarmByCode
     // (voir ce commentaire), au cas où ce snapshot proviendrait encore d'un
     // état pré-chantier (reprise/rejoin sur une ferme jamais rechargée
@@ -1510,6 +1526,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       station: s.station, // 2026-07 station update
       decor: s.decor, // zip 251: décorations posées (ferme + Valley Town), persistées
       crafts: s.crafts, craftStock: s.craftStock, // zip 252: ateliers artisans + stock de produits
+      // Zip 389 : terre forcée par le menu développeur. Persistée à la demande
+      // de Guillaume ("tout le monde + persisté") pour qu'une démonstration
+      // survive à un rechargement. Champ du seul instantané JSON déjà en base :
+      // AUCUNE migration Supabase. Absent d'une sauvegarde antérieure = null =
+      // rotation normale, ce qui est exactement le bon comportement.
+      forcedWorld: s.forcedWorld || null,
       hostNow: Date.now(), // correctif audit 2026-07 : relocalisation d'horloge (voir salveCraft.brewingUntil)
       // Correctif audit lancement 2026-07 (succession d'hôte) : le code de la
       // ferme voyage avec l'instantané, pour qu'un invité promu hôte
@@ -4196,7 +4218,36 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       channelRef.current?.send({ type: "broadcast", event: "apply", payload: { visitorSim: st.visitors.map(v => ({ rid: v.rid, x: v.x, y: v.y, dir: v.dir, moving: v.moving, animT: v.animT, phase: v.phase })) } });
     }
   }
-  function shareState() { const s = sharedRef.current; return { money: s.money, day: s.day, dayStartAt: s.dayStartAt, totalEarned: s.totalEarned }; }
+  /* ------------------------------------------------------------------
+     Zip 389 — LA TERRE FORCÉE PAR LE MENU DÉVELOPPEUR : UN SEUL CHEMIN.
+
+     `sharedRef.current.forcedWorld` est la source de vérité (diffusée par
+     shareState, persistée par currentSnapshot) ; la variable de module du
+     moteur n'en est que le reflet, lu par passageWorldIndex.
+
+     Les deux ne doivent jamais être écrits séparément — d'où cette fonction,
+     seul endroit du fichier qui touche l'un ou l'autre. Elle est appelée par
+     les QUATRE entrées d'état partagé (chargement par code, instantané,
+     deltas, menu) exactement comme s.money l'est, ce qui rend structurellement
+     impossible le cas « la simulation croit une terre, le dessin en montre une
+     autre » — le mode de panne qu'on ne verrait qu'à deux joueurs.
+
+     `|| null` fait partie du motif : une ferme sauvegardée avant ce zip n'a
+     pas le champ, ce qui veut dire exactement « rotation normale ». ------- */
+  function applyForcedWorld(key) {
+    const k = (key && C.PASSAGE_WORLDS.some(w => w.key === key)) ? key : null;
+    sharedRef.current.forcedWorld = k;
+    E.setForcedPassageKey(k);
+    // Troisième écriture, et elle est nécessaire : `sharedRef` est une ref, donc
+    // la modifier ne redessine RIEN. Sans cet état, le bandeau de rappel
+    // n'apparaîtrait qu'au prochain rendu provoqué par autre chose — c'est-à-dire
+    // « plus tard, parfois », le genre de défaut qu'on met une heure à
+    // reproduire. Le fait que les trois écritures soient ici, ensemble, est
+    // exactement ce qui rend cette fonction utile.
+    setForcedWorldUi(k);
+    return k;
+  }
+  function shareState() { const s = sharedRef.current; return { money: s.money, day: s.day, dayStartAt: s.dayStartAt, totalEarned: s.totalEarned, forcedWorld: s.forcedWorld || null }; }
   function toolName(k) { return (lang === "en" ? C.TOOL_NAMES_EN : C.TOOL_NAMES)[k]; }
 
   // -------- Tous : application des deltas reçus --------
@@ -4217,7 +4268,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (w && p.mills) for (const [i, wheat, nextAt] of p.mills) w.mills.set(i, { wheat, nextAt });
     // Sucreries (chantier canne à sucre) : miroir exact de p.mills ci-dessus.
     if (w && p.sucreries) for (const [i, cane, nextAt] of p.sucreries) w.sucreries.set(i, { cane, nextAt });
-    if (p.state) { const s = sharedRef.current; s.money = p.state.money; s.day = p.state.day; s.dayStartAt = p.state.dayStartAt; s.totalEarned = p.state.totalEarned; setHud(h => ({ ...h, money: s.money, day: s.day })); }
+    // Zip 389 : `forcedWorld` voyage dans le MÊME p.state que l'or et le jour
+    // (voir shareState) — aucun message périodique ajouté, et un invité qui
+    // arrive en retard le reçoit au premier apply venu. `applyForcedWorld` tient
+    // le moteur à jour ; le changement d'index qui en découle est ensuite
+    // ramassé par la détection de rotation déjà en place (passageAppliedIdxRef),
+    // qui purge les breloques, les monstres et le cache de carte toute seule.
+    if (p.state) { const s = sharedRef.current; s.money = p.state.money; s.day = p.state.day; s.dayStartAt = p.state.dayStartAt; s.totalEarned = p.state.totalEarned; applyForcedWorld(p.state.forcedWorld); setHud(h => ({ ...h, money: s.money, day: s.day })); }
     if (p.farmer && p.farmer.id !== me.id && Array.isArray(p.farmer.pets)) {
       const r = playersRef.current.get(p.farmer.id);
       if (r) r.pets = p.farmer.pets; // zip 247: everyone sees everyone's pets, not just the owner
@@ -8131,6 +8188,59 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     m.x = C.WELL_SPAWN.x; m.y = C.WELL_SPAWN.y; m.moving = false;
     sendPos(); pushToast(L.wellToast);
   }
+
+  /* ======================================================================
+     ZIP 389 — LES DEUX ACTIONS DU MENU DÉVELOPPEUR.
+     ====================================================================== */
+
+  /* Forcer la terre du passage, ou rendre la rotation au jeu (key = null).
+
+     L'HÔTE SEUL appelle ceci, et il ne demande rien à personne : il EST
+     l'arbitre. La valeur part par le canal d'état déjà en place (shareState),
+     donc les invités l'appliquent par le même chemin que l'or et le jour.
+
+     TROIS EFFETS EN CASCADE, TOUS DÉJÀ ÉCRITS, ET C'EST TOUT L'INTÉRÊT DE
+     POSER LE FORÇAGE DANS passageWorldIndex plutôt qu'ailleurs :
+       - le cache de carte se régénère au prochain accès (getEvilWorldCached
+         compare l'index, pas le jour) ;
+       - les monstres de l'ancienne terre sont purgés au tick suivant
+         (s._evilMonstersWorldIdx, déjà comparé à chaque image) ;
+       - chaque client purge ses breloques ramassées et lâche sa référence de
+         carte (passageAppliedIdxRef, dans la boucle de rendu), et annonce la
+         nouvelle terre dans le chat (passageIdxRef, côté hôte).
+     Rien de tout cela n'est réécrit ici. On change un index, le reste suit. */
+  function devSetWorld(key) {
+    if (!isHost) return;
+    const applied = applyForcedWorld(key);
+    dirtyRef.current = true;                 // -> saveTimer (3 s) -> ferme_saves
+    persistFnRef.current && persistFnRef.current(); // ...et tout de suite, pour ne pas perdre le réglage sur un départ immédiat
+    if (netCanBroadcast()) channelRef.current?.send({ type: "broadcast", event: "apply", payload: { state: shareState() } });
+    const spec = applied ? C.PASSAGE_WORLDS.find(w => w.key === applied) : null;
+    pushToast(spec ? L.devWorldForcedToast(lang === "en" ? spec.nameEn : spec.name) : L.devWorldRotationToast);
+    setDevMenuOpen(false);
+  }
+
+  /* Téléporter le joueur qui a ouvert le menu (LUI SEUL — on ne déplace jamais
+     quelqu'un d'autre sans qu'il s'y attende).
+
+     On ne pose PAS m.x/m.y à la main comme le fait teleportWell : celui-ci
+     reste dans la ferme, alors qu'ici on peut CHANGER DE ZONE. Tout passe donc
+     par zoneTransRef, la machine à états qui gère déjà le fondu au noir, la
+     bascule à mi-fondu, le sendPos() qui suit, et la mémorisation de la
+     position ferme (m.farmX/m.farmY) à restaurer au retour. Écrire un second
+     chemin de téléportation, c'est très exactement la leçon du zip 387 : deux
+     descriptions d'une même chose finissent toujours par diverger. */
+  function devTeleport(destKey) {
+    const m = meRef.current; if (!m) return;
+    if (zoneTransRef.current.active) return; // une transition est déjà en cours
+    const spec = C.DEV_TELEPORTS.find(d => d.key === destKey); if (!spec) return;
+    // Zip 253, recopié et non redéduit : un joueur monté qui change de zone
+    // laisse son cheval à la ferme, faute de quoi l'ancien `rider` traîne la
+    // monture aux coordonnées de l'autre carte (ghost-horse).
+    if (spec.zone !== "farm" && myHorse()) sendReq({ kind: "dismount" });
+    setDevMenuOpen(false);
+    zoneTransRef.current = { active: true, t0: performance.now(), toEvil: false, swapped: false, dest: "dev:" + destKey };
+  }
   const buyHorse = () => sendReq({ kind: "buyHorse" });
   const buyWell = () => sendReq({ kind: "buyWell" });
   const buyJewelry = () => sendReq({ kind: "buyJewelry" });
@@ -8676,7 +8786,47 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (!zt.swapped && elapsed >= C.ZONE_FADE_MS) {
       zt.swapped = true;
       const m = meRef.current;
-      if (zt.dest === "town") {
+      /* ----------------------------------------------------------------
+         ZIP 389 — destinations du menu développeur, traitées EN PREMIER.
+
+         Elles sont préfixées "dev:" pour ne pouvoir entrer en collision avec
+         aucune destination de jeu, présente ou future.
+
+         Le point délicat est m.farmX/m.farmY : c'est la position ferme que le
+         retour du passage restaure (voir la branche `else` en bas de cette
+         même fonction). Elle DOIT être mémorisée en quittant la ferme, et
+         jamais écrasée quand on se déplace à l'intérieur du monde du passage —
+         sans quoi revenir à pied par le passage ramènerait le joueur à des
+         coordonnées de la carte maléfique, sur la ferme. D'où le test sur la
+         zone de DÉPART plutôt qu'un enregistrement systématique. -------- */
+      if (typeof zt.dest === "string" && zt.dest.startsWith("dev:")) {
+        const dk = zt.dest.slice(4);
+        const wasFarm = (m.zone || "farm") === "farm";
+        if (dk === "world" || dk === "bridge") {
+          if (wasFarm) { m.farmX = m.x; m.farmY = m.y; }
+          evilWorldRef.current = getEvilWorldCached(E, sharedRef.current.day || 1);
+          m.zone = "evil";
+          if (dk === "world") { m.x = C.EVIL_SPAWN.x; m.y = C.EVIL_SPAWN.y; }
+          else { m.x = C.RUN_GATE.x - C.DEV_BRIDGE_OFFSET; m.y = C.RUN_GATE.y; }
+        } else if (dk === "town") {
+          if (wasFarm) { m.farmX = m.x; m.farmY = m.y; }
+          if (!townWorldRef.current) townWorldRef.current = getTownWorldCached(E);
+          m.zone = "town";
+          m.x = C.TOWN_SPAWN.x; m.y = C.TOWN_SPAWN.y;
+        } else {
+          // "farm" (devant la maison) et "passage" (devant le passage sombre,
+          // côté ferme). w.darkPassage est posé par la génération du monde ;
+          // le repli sur SPAWN reprend celui de la branche de retour ci-dessous
+          // plutôt que d'inventer un second comportement.
+          const w = worldRef.current;
+          m.zone = "farm";
+          if (dk === "passage" && w && w.darkPassage) { m.x = w.darkPassage.x; m.y = w.darkPassage.y + 1; }
+          else { m.x = C.SPAWN.x; m.y = C.SPAWN.y; }
+        }
+        m.moving = false;
+        sendPos();
+        pushToast(L.devTeleportToast(L.devTeleportName(dk)));
+      } else if (zt.dest === "town") {
         if (!townWorldRef.current) townWorldRef.current = getTownWorldCached(E);
         m.zone = "town";
         m.x = C.TOWN_SPAWN.x; m.y = C.TOWN_SPAWN.y; m.moving = false;
@@ -8818,6 +8968,40 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // ----- entrées -----
     function onKeyDown(e) {
       if (document.activeElement === chatInputRef.current) return;
+      /* ------------------------------------------------------------------
+         ZIP 389 — GARDE DE MODIFICATEURS, ET MENU DÉVELOPPEUR.
+
+         Ce bloc passe AVANT tout le reste, y compris avant l'écriture dans
+         keysRef : c'est justement cette écriture qui posait problème.
+
+         DÉFAUT PRÉEXISTANT CORRIGÉ ICI, trouvé en cherchant où brancher le
+         raccourci. Ce gestionnaire ne regardait aucun modificateur : chaque
+         raccourci navigateur bâti sur une lettre que le jeu écoute déclenchait
+         AUSSI l'action de jeu. Cmd+R faisait pivoter la clôture avant de
+         recharger la page, Cmd+T ouvrait le chat, Cmd+M la carte, Cmd+F montait
+         à cheval. Et surtout : sur macOS, le `keyup` d'une lettre n'est PAS
+         délivré tant que Cmd reste enfoncé — la touche restait donc à `true`
+         dans keysRef, et le fermier continuait de marcher tout seul après un
+         Cmd+W annulé ou un Cmd+L. Un modificateur enfoncé ne peut plus rien
+         déclencher, ni rien laisser coincé.
+
+         Le raccourci du menu est vérifié sur `e.code`, pas sur `e.key` : sur
+         un clavier AZERTY comme sur un QWERTY, `KeyX` désigne la même touche
+         physique, alors que `e.key` dépend de la disposition. C'est la même
+         discipline que tout le reste du gestionnaire. ---------------------- */
+      if (e.metaKey || e.ctrlKey || e.altKey) {
+        if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.code === C.DEV_MENU_KEY && !e.repeat) {
+          e.preventDefault();
+          // Hôte uniquement : l'invité n'arbitre rien et ne persiste rien. Le
+          // silence est délibéré — un menu secret qui répond « réservé à
+          // l'hôte » n'est plus tout à fait secret.
+          if (isHost) { keysRef.current = {}; setDevMenuOpen(o => !o); }
+        }
+        // Toute autre combinaison avec modificateur appartient au navigateur
+        // ou au système : le jeu n'y touche pas, et n'enregistre pas la touche.
+        return;
+      }
+      if (devMenuOpenRef.current && e.code !== "Escape") return; // menu ouvert : le fermier ne bouge pas derrière
       if (fishMiniRef.current) return; // le minijeu de pêche (ou de morsure) gère ses entrées
       // Zip 372 : pendant le défi de fuite, l'iframe a le focus et consomme le
       // clavier. Cette garde est une ceinture de sécurité : si le focus revient
@@ -8883,11 +9067,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
       if (e.code === "KeyT") { e.preventDefault(); setChatOpen(true); setTimeout(() => chatInputRef.current?.focus(), 0); }
       if (e.code === "KeyM") setMapOpen(o => !o);
-      if (e.code === "Escape") { setShopOpen(false); setBinOpen(false); setBagOpen(false); setMapOpen(false); setSeedMenuOpen(false); setToolMenuOpen(false); setCraftMenuOpen(null); setCauldronMenuOpen(false); setAdsOpen(false); setVisitorOpen(false); setJewelryDesignOpen(false); }
+      if (e.code === "Escape") { setShopOpen(false); setBinOpen(false); setBagOpen(false); setMapOpen(false); setSeedMenuOpen(false); setToolMenuOpen(false); setCraftMenuOpen(null); setCauldronMenuOpen(false); setAdsOpen(false); setVisitorOpen(false); setJewelryDesignOpen(false); setDevMenuOpen(false); /* zip 389 */ }
     }
     function onKeyUp(e) { keysRef.current[e.code] = false; }
     function onMove(e) { mouseRef.current.x = e.clientX; mouseRef.current.y = e.clientY; }
-    function onDown(e) { if (e.button === 0 && !mapOpenRef.current && !shopOpenRef.current && !binOpenRef.current && !bagOpenRef.current && !cauldronMenuOpenRef.current && !fishMiniRef.current && !adsOpenRef.current && !visitorOpenRef.current && !gregCardOpenRef.current && !isInjured()) doAction(); }
+    function onDown(e) { if (e.button === 0 && !mapOpenRef.current && !shopOpenRef.current && !binOpenRef.current && !bagOpenRef.current && !cauldronMenuOpenRef.current && !fishMiniRef.current && !adsOpenRef.current && !visitorOpenRef.current && !gregCardOpenRef.current && !devMenuOpenRef.current /* zip 389 */ && !isInjured()) doAction(); }
     function onWheel() { }
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
@@ -8926,11 +9110,40 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       {
         const idx = E.passageWorldIndex(sharedRef.current.day || 1);
         if (passageAppliedIdxRef.current !== idx) {
+          const wasKnown = passageAppliedIdxRef.current !== -1; // -1 = premier passage, pas un changement
           passageAppliedIdxRef.current = idx;
           pickedIdsRef.current = {};
           mazePrizeClaimedRef.current = {};
           // Invalidate any prior evil-world reference; will be re-fetched on entry.
           if (meRef.current && meRef.current.zone !== "evil") evilWorldRef.current = null;
+          /* ------------------------------------------------------------
+             ZIP 389 — ET SI ON EST DÉJÀ DANS LE PASSAGE QUAND LA TERRE CHANGE ?
+
+             La ligne au-dessus, écrite au zip 235, refuse délibérément de lâcher
+             la carte tant que le joueur s'y trouve : la remplacer sous ses pieds
+             le laisserait dans un rocher ou dans l'eau. Tant que le changement
+             ne pouvait venir que de la rotation naturelle (toutes les 3 journées
+             de jeu, soit ~48 min), c'était sans conséquence visible.
+
+             Avec le menu, le changement est INSTANTANÉ et volontaire, et les
+             deux cas de figure sont ceux qu'on veut justement montrer :
+               - l'hôte force une terre en se tenant dans le passage, et rien ne
+                 change à l'écran : ça ressemble à un menu qui ne marche pas ;
+               - un invité reste sur l'ANCIENNE carte pendant que l'hôte arbitre
+                 les breloques et les monstres sur la NOUVELLE : c'est une vraie
+                 désynchronisation, et la plus difficile à diagnostiquer qui soit.
+
+             On renvoie donc tout joueur présent dans le passage à l'arrivée de
+             la nouvelle terre, par le MÊME chemin que le menu (fondu au noir,
+             bascule à mi-fondu, sendPos) — et sur EVIL_SPAWN, dont
+             verify-devworld.mjs vérifie qu'elle est praticable sur les cinq
+             terres. Identique chez l'hôte et chez l'invité : une seule règle.
+
+             `wasKnown` évite de déclencher au tout premier calcul de l'index
+             (passageAppliedIdxRef vaut -1), où il n'y a eu aucun changement. */
+          if (wasKnown && meRef.current && meRef.current.zone === "evil" && !zoneTransRef.current.active) {
+            devTeleport("world");
+          }
         }
       }
       checkWalkOverPassage();
@@ -15069,6 +15282,85 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       {barnMini && <BarnMinigame level={barnMini.level} L={L} onWin={barnWon} onFail={barnLost} />}
       {wolfBite && <WolfBiteMinigame L={L} onWin={wolfBiteWon} onFail={wolfBiteLost} />}
       {evilBite && <EvilBiteMinigame L={L} onWin={evilBiteWon} onFail={evilBiteLost} />}
+
+      {/* ================================================================
+          ZIP 389 — MENU DÉVELOPPEUR (Cmd/Ctrl+Shift+X, hôte uniquement).
+
+          Volontairement sobre et sans illustration : ce n'est pas un écran de
+          jeu, et il ne doit jamais donner l'impression d'en être un. La double
+          garde `devMenuOpen && isHost` reprend celle du raccourci — si le rôle
+          d'hôte change pendant que le menu est ouvert (succession automatique,
+          voir claim_abandoned_host), il se ferme de lui-même.
+          ================================================================ */}
+      {devMenuOpen && isHost && (() => {
+        const today = sharedRef.current.day || 1;
+        const forced = forcedWorldUi; // même source que le bandeau : un état, pas une ref (voir applyForcedWorld)
+        // La terre que la ROTATION donnerait aujourd'hui, forçage mis de côté.
+        // Calculée ici et pas via passageWorldOf : cette fonction lit justement
+        // le forçage, et renverrait donc la terre forcée. C'est la seule
+        // duplication du calcul de rotation du projet, et elle est délibérée —
+        // d'où le rappel de sa source.
+        const natural = C.PASSAGE_WORLDS[E.passageBlockOf(today) % C.PASSAGE_WORLDS.length];
+        return (
+          <div className="ferme-modal open" onClick={() => setDevMenuOpen(false)}>
+            <div className="panel ferme-modal-panel" onClick={e => e.stopPropagation()}>
+              <button className="ferme-close-x" onClick={() => setDevMenuOpen(false)}>✕</button>
+              <h2>{L.devMenuTitle}</h2>
+              <div className="ferme-hint">{L.devMenuHint}</div>
+
+              <h3 style={{ margin: "14px 0 6px" }}>{L.devWorldSection}</h3>
+              <div className="ferme-hint">{L.devWorldNatural(lang === "en" ? natural.nameEn : natural.name, today)}</div>
+              {C.PASSAGE_WORLDS.map(w => {
+                const dest = C.PASSAGE_GATE_DEST[w.key];
+                const isOn = forced === w.key;
+                return (
+                  <div className="ferme-shop-row" key={"dev-w-" + w.key}>
+                    <div className="info">
+                      <b>{isOn ? "✅ " : ""}{lang === "en" ? w.nameEn : w.name}</b>
+                      <span className="ferme-usage">
+                        {dest === "run" ? L.devDestRun : dest === "candy" ? L.devDestCandy : L.devDestNone}
+                        {w.pet ? " — " + (lang === "en" ? w.pet.nameEn : w.pet.name) : ""}
+                      </span>
+                    </div>
+                    <button disabled={isOn} onClick={() => devSetWorld(w.key)}>{L.devForceBtn}</button>
+                  </div>
+                );
+              })}
+              <div className="ferme-shop-row">
+                <div className="info">
+                  <b>{!forced ? "✅ " : ""}{L.devRotationTitle}</b>
+                  <span className="ferme-usage">{L.devRotationSub(C.PASSAGE_WORLD_DAYS)}</span>
+                </div>
+                <button disabled={!forced} onClick={() => devSetWorld(null)}>{L.devRotationBtn}</button>
+              </div>
+
+              <h3 style={{ margin: "14px 0 6px" }}>{L.devTeleportSection}</h3>
+              <div className="ferme-hint">{L.devTeleportHint}</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {C.DEV_TELEPORTS.map(d => (
+                  <button key={"dev-t-" + d.key} onClick={() => devTeleport(d.key)}>{L.devTeleportName(d.key)}</button>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Zip 389 — RAPPEL PERMANENT DU FORÇAGE. Guillaume a choisi un forçage
+          PERSISTÉ : il survit à un rechargement, donc il peut se faire oublier
+          entre deux sessions, et « le passage mène toujours au même endroit »
+          ressemblerait alors à un bug de rotation. Ce bandeau est le prix à
+          payer de la persistance. Visible par TOUT LE MONDE, pas seulement par
+          l'hôte : c'est l'invité qui, sinon, n'aurait aucune explication. */}
+      {phase === "playing" && forcedWorldUi && (() => {
+        const spec = C.PASSAGE_WORLDS.find(w => w.key === forcedWorldUi);
+        if (!spec) return null;
+        return (
+          <div className="ferme-dev-banner" title={L.devBannerTitle}>
+            🛠️ {L.devBanner(lang === "en" ? spec.nameEn : spec.name)}
+          </div>
+        );
+      })()}
 
       {/* Carte plein écran (nouveauté) : positions live, fermeture au clic/Échap/M */}
       {mapOpen && (

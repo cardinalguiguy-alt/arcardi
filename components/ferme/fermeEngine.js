@@ -3960,15 +3960,49 @@ export function migrateSucrerieToArtisan(world, crafts) {
 // Zip 235 — mondes tournants du passage sombre + saisons runtime
 // ==================================================================
 
+/* ==========================================================================
+   ZIP 389 — FORÇAGE DE TERRE PAR LE MENU DÉVELOPPEUR
+   ==========================================================================
+   Le menu secret de l'hôte (Cmd/Ctrl+Shift+X, voir FermeGame.js) peut fixer la
+   terre du passage, quel que soit le jour de jeu. La valeur choisie vit dans
+   l'état PARTAGÉ de la ferme (`sharedRef.current.forcedWorld`, diffusé par
+   shareState et persisté dans l'instantané) — jamais en local.
+
+   POURQUOI UNE VARIABLE DE MODULE PLUTÔT QU'UN PARAMÈTRE.
+   `passageWorldIndex(day)` a SIX appelants répartis dans deux fichiers, et le
+   zip 388 a laissé deux avertissements explicites sur les pièges de signature :
+   un dernier argument optionnel qu'un appelant oublie rend exactement l'ancien
+   comportement, sans erreur et sans trace. Ici ce serait pire qu'ailleurs — un
+   seul appelant distrait suffirait à ce que la carte DESSINÉE ne soit pas celle
+   que la simulation croit, et le défaut ne se verrait qu'à deux joueurs.
+   Le forçage est donc posé UNE fois, à un seul endroit, et lu par tous.
+
+   Ce n'est pas de l'état de jeu caché : la source de vérité reste
+   `sharedRef.current.forcedWorld`. Cette variable n'en est que le reflet, et
+   elle est réécrite à chaque arrivée d'état partagé (applySnapshot,
+   applyDeltas, loadFarmByCode) — c'est-à-dire par le même chemin que tout le
+   reste de l'état de la ferme, ce qui rend une divergence impossible.
+
+   Elle est au niveau du MODULE, donc partagée entre l'instance visible de
+   FermeGame et l'instance cachée de l'hôte. C'est voulu : ces deux instances
+   simulent la MÊME ferme et doivent voir la même terre. */
+let forcedPassageKey = null;
+export function setForcedPassageKey(key) {
+  forcedPassageKey = (key && C.PASSAGE_WORLDS.some(w => w.key === key)) ? key : null;
+}
+export function getForcedPassageKey() { return forcedPassageKey; }
+
 // Semaine de jeu -> index dans C.PASSAGE_WORLDS. Un même s.day donne la même
 // semaine à tous les clients : rotation identique partout, sans synchro.
 export function passageWorldIndex(day) {
-  /* Zip 385 : forçage d'essai. Quand C.PASSAGE_FORCE_KEY vaut une clé de
-     monde, tout le monde y va, quel que soit son jour de jeu — c'est la seule
-     façon d'obtenir la MÊME terre chez deux joueurs dont les fermes ne sont
-     pas au même jour. À remettre à null pour rendre la rotation au jeu. */
-  if (C.PASSAGE_FORCE_KEY) {
-    const forced = C.PASSAGE_WORLDS.findIndex(w => w.key === C.PASSAGE_FORCE_KEY);
+  /* Zip 385 : forçage d'essai par constante. Zip 389 : le menu développeur
+     passe DEVANT, parce qu'il se défait d'un clic là où la constante demande
+     une livraison. C.PASSAGE_FORCE_KEY est repassée à null au zip 389 et n'a
+     plus de lecteur en pratique ; elle reste lue ici comme filet, pour qu'un
+     réglage en dur continue de fonctionner si quelqu'un la repose un jour. */
+  const forcedKey = forcedPassageKey || C.PASSAGE_FORCE_KEY;
+  if (forcedKey) {
+    const forced = C.PASSAGE_WORLDS.findIndex(w => w.key === forcedKey);
     if (forced >= 0) return forced;
   }
   // Zip 385 : PASSAGE_WORLD_DAYS (3) remplace SEASON_DAYS (7). Voir le
