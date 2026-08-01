@@ -613,7 +613,9 @@ export const FERME_STR = {
     craftRow: (name, n) => `${name} × ${n}`,
     craftPortionBtn: (n) => `Découper une roue → ${n} parts`,
     petFullTitle: "Sac de compagnons plein",
-    petFullSub: (petName) => `Un visiteur veut t'offrir ${petName}, mais tu as déjà 2 compagnons. Libère-en un pour l'accueillir, ou refuse le cadeau.`,
+    // Zip 388 : le plafond était écrit « 2 » en dur, valeur d'avant le zip 368
+    // (MAX_PETS est passé à 8 il y a vingt zips). Le texte mentait depuis.
+    petFullSub: (petName, max) => `Un visiteur veut t'offrir ${petName}, mais tu as déjà ${max} compagnons. Libère-en un pour l'accueillir, ou refuse le cadeau.`,
     petFullRelease: "Libérer & accepter",
     petFullDecline: "Refuser le cadeau",
     voteDiceChat: (n, r, st) => `🎲 Vote partagé, le dé donne ${r} : ${n} ${st ? "reste !" : "repart..."}`,
@@ -1204,6 +1206,32 @@ export const FERME_STR = {
     swapDone: (name, give) => `Troc conclu avec ${name} : tu reçois ${give} !`,
     notifSwap: "propose un troc",
     swapPocket: (have, n) => `${have} / ${n} en poche`,
+    /* ---- Zip 388 : fleurs en pots, vente de décos, familiers vivants ---- */
+    // Vente d'une décoration (Guillaume : « sell with confirmation »).
+    decorUnitPrice: (or) => `Revente : ${or} or pièce`,
+    decorSellOne: "Vendre 1",
+    decorSellAll: (n) => `Vendre les ${n}`,
+    decorSellTitle: "Vendre une décoration",
+    decorSellSub: (nom, n, total) => `Vendre ${n} × ${nom} pour ${total} or ?`,
+    decorSellWarn: "Les décorations sont des cadeaux : elles ne se rachètent pas.",
+    decorSellConfirm: "Vendre",
+    decorSoldToast: (n, nom, or) => `💰 ${n} × ${nom} vendu${n > 1 ? "s" : ""} pour ${or} or.`,
+    bagDecorSellHint: (n) => `${n} décoration${n > 1 ? "s" : ""} en sac. Vends celles qui s'accumulent — l'or va à la cagnotte commune.`,
+    cancelBtn: "Annuler",
+    // Familier proposé par un visiteur.
+    petOfferTitle: "Un visiteur t'offre un compagnon",
+    petOfferSub: (nom) => `On te propose ${nom}. À toi de voir.`,
+    petOfferHint: (rel) => `Seuls les visiteurs devenus des amis (${rel} points d'amitié) confient un animal.`,
+    petOfferAccept: "Accepter",
+    // Relâcher un familier.
+    petReleaseTitle: "Relâcher ce compagnon ?",
+    petReleaseSub: (nom) => `${nom} repartira vivre dans la nature.`,
+    petReleaseWarn: "C'est définitif : il ne reviendra pas.",
+    petReleaseConfirm: "Relâcher",
+    // Boutons de balade.
+    bagWalkAllBtn: "Tous en balade",
+    bagStowAllBtn: "Tous au sac",
+    bagWalkFullBtn: (max) => `Déjà ${max} dehors`,
   },
   en: {
     // --- 2026-07 station update (sea creatures, ducks, station, visitors, seasons) ---
@@ -1626,7 +1654,7 @@ export const FERME_STR = {
     craftRow: (name, n) => `${name} × ${n}`,
     craftPortionBtn: (n) => `Cut a wheel → ${n} portions`,
     petFullTitle: "Companion bag full",
-    petFullSub: (petName) => `A visitor wants to give you ${petName}, but you already have 2 companions. Release one to take it in, or decline the gift.`,
+    petFullSub: (petName, max) => `A visitor wants to give you ${petName}, but you already have ${max} companions. Release one to take it in, or decline the gift.`,
     petFullRelease: "Release & accept",
     petFullDecline: "Decline the gift",
     voteDiceChat: (n, r, st) => `🎲 Split vote, the die shows ${r}: ${n} ${st ? "stays!" : "leaves..."}`,
@@ -2170,6 +2198,28 @@ export const FERME_STR = {
     swapDone: (name, give) => `Trade done with ${name}: you get ${give}!`,
     notifSwap: "offers a trade",
     swapPocket: (have, n) => `${have} / ${n} in pocket`,
+    /* ---- Zip 388: potted flowers, selling decor, living companions ---- */
+    decorUnitPrice: (gold) => `Resale: ${gold} gold each`,
+    decorSellOne: "Sell 1",
+    decorSellAll: (n) => `Sell all ${n}`,
+    decorSellTitle: "Sell a decoration",
+    decorSellSub: (name, n, total) => `Sell ${n} × ${name} for ${total} gold?`,
+    decorSellWarn: "Decorations are gifts: you cannot buy them back.",
+    decorSellConfirm: "Sell",
+    decorSoldToast: (n, name, gold) => `💰 Sold ${n} × ${name} for ${gold} gold.`,
+    bagDecorSellHint: (n) => `${n} decoration${n > 1 ? "s" : ""} in your bag. Sell the ones piling up — the gold goes to the shared purse.`,
+    cancelBtn: "Cancel",
+    petOfferTitle: "A visitor offers you a companion",
+    petOfferSub: (name) => `They are offering you ${name}. Up to you.`,
+    petOfferHint: (rel) => `Only visitors who have become friends (${rel} friendship points) will hand over an animal.`,
+    petOfferAccept: "Accept",
+    petReleaseTitle: "Release this companion?",
+    petReleaseSub: (name) => `${name} will go back to living in the wild.`,
+    petReleaseWarn: "This is permanent: it will not come back.",
+    petReleaseConfirm: "Release",
+    bagWalkAllBtn: "Walk them all",
+    bagStowAllBtn: "Stow them all",
+    bagWalkFullBtn: (max) => `${max} already out`,
   },
 };
 

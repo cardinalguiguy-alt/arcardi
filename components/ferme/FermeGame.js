@@ -385,7 +385,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [voyagerSellOpen, setVoyagerSellOpen] = useState(false);
   const [voyagerDraft, setVoyagerDraft] = useState({});
   const [residentCard, setResidentCard] = useState(null);  // zip 252 : rid du résident dont la fiche dialogue est ouverte (ou null)
-  const [petChoice, setPetChoice] = useState(null);        // zip 252 : { petId } cadeau animal en attente quand le sac est plein
+  const [petChoice, setPetChoice] = useState(null);        // zip 252/388 : { petId, full } familier PROPOSÉ par un visiteur, en attente de réponse
+  const [decorSell, setDecorSell] = useState(null);        // zip 388 : { deco, n } vente de décoration en attente de confirmation
+  const [petRelease, setPetRelease] = useState(null);      // zip 388 : { index, petId } relâché de familier en attente de confirmation
   const gregCardOpenRef = useRef(false);
   const [promptKey, setPromptKey] = useState(null); // 'shop' | 'bin' | null
   const [mountPrompt, setMountPrompt] = useState(null); // 'mount' | 'dismount' | null
@@ -537,6 +539,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // qu'une fois par montée, pas à chaque frame. Voir isRidingId/drawPetsFor.
   const petZoneRef = useRef(new Map());
   const petRidingPrevRef = useRef(new Map());
+  // Zip 388 : horodatage du dernier instant où CE joueur bougeait, par owner
+  // id. C'est la seule mémoire des jeux de familiers — tout le reste (figure,
+  // direction, frame) est dérivé du temps ou du déplacement, donc rien à
+  // sauvegarder et rien à diffuser.
+  const petIdleRef = useRef(new Map());
   const cauldronMenuOpenRef = useRef(false);
   const brewSecsRef = useRef(0);       // miroir de brewSecs (évite un setState par frame dans la boucle de rendu)
   const cauldronPosRef = useRef(null); // cache de la position du chaudron (correctif audit 2026-07 : évite un scan complet de la carte par frame ; invalidé si l'objet n'y est plus) // miroir synchrone de cauldronMenuOpen, même rôle que shopOpenRef/binOpenRef (bloque déplacement/action pendant que le menu est ouvert)
@@ -1223,6 +1230,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       playersRef.current.delete(payload.id);
       petFollowRef.current.delete(payload.id); // zip 247: libère l'état de suivi des pets du partant
       petZoneRef.current.delete(payload.id); petRidingPrevRef.current.delete(payload.id); // chantier "pets à cheval"
+      petIdleRef.current.delete(payload.id);   // zip 388
       if (r) addChat("👋", L.chatLeave(r.name));
       setHud(h => ({ ...h, players: playersRef.current.size + 1 }));
       // Un animal porté par un joueur qui quitte est relâché sur place, pour
@@ -1408,7 +1416,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (!p) continue;
         if (now - (p.lastSeenAt || 0) > PLAYER_TTL_MS) {
           playersRef.current.delete(id);
-          petFollowRef.current.delete(id); petZoneRef.current.delete(id); petRidingPrevRef.current.delete(id);
+          petFollowRef.current.delete(id); petZoneRef.current.delete(id); petRidingPrevRef.current.delete(id); petIdleRef.current.delete(id);
           removed = true;
         }
       }
@@ -3007,7 +3015,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // Zip 237: pets can land in the seller's bag now, so include pets in the payload.
       ch?.send({ type: "broadcast", event: "apply", payload: { farmer: { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv, pets: f.pets }, state: shareState() } });
       stationChat(L.visitorDealDone(rosterOf(v.rid).name, r.gain), "\u{1F4B0}");
-      if (r.gift) { if (r.bagFull && r.gift.kind === "pet") hostSend({ type: "broadcast", event: "apply", payload: { petChoice: { id: f.id, petId: r.gift.petId } } }); else stationChat(giftChatLine(v.rid, r), "\u{1F381}"); }
+      if (r.gift) { if (r.petOffer) hostSend({ type: "broadcast", event: "apply", payload: { petChoice: { id: f.id, petId: r.gift.petId, full: r.bagFull, rid: v.rid } } }); else stationChat(giftChatLine(v.rid, r), "\u{1F381}"); }
       broadcastStation();
       return true;
     }
@@ -3017,7 +3025,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (!r.ok) { toastTo(r.toast === "visitorNotEnough" ? "swapNotEnough" : (r.toast || "actionFailed")); return true; }
       ch?.send({ type: "broadcast", event: "apply", payload: { farmer: { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv, pets: f.pets }, state: shareState() } });
       stationChat(L.swapDone(rosterOf(v.rid).name, giftLabel(r.gift)), "\u{1F501}");
-      if (r.bagFull && r.gift && r.gift.kind === "pet") hostSend({ type: "broadcast", event: "apply", payload: { petChoice: { id: f.id, petId: r.gift.petId } } });
+      if (r.petOffer && r.gift) hostSend({ type: "broadcast", event: "apply", payload: { petChoice: { id: f.id, petId: r.gift.petId, full: r.bagFull } } });
       else if (r.giftQueued || r.giftPromised) stationChat(giftChatLine(v.rid, r), "\u{1F381}");
       broadcastStation();
       return true;
@@ -3042,7 +3050,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // that nobody has claimed yet (idempotent, see resolveVisitorGreet).
       const r = E.resolveVisitorGreet(f, s, req.rid);
       if (r.ok) {
-        if (r.bagFull && r.gift && r.gift.kind === "pet") { hostSend({ type: "broadcast", event: "apply", payload: { petChoice: { id: f.id, petId: r.gift.petId } } }); }
+        if (r.petOffer && r.gift) { hostSend({ type: "broadcast", event: "apply", payload: { petChoice: { id: f.id, petId: r.gift.petId, full: r.bagFull } } }); }
         else {
           if (r.gift && !r.giftQueued) ch?.send({ type: "broadcast", event: "apply", payload: { farmer: { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv, pets: f.pets } } });
           stationChat(L.visitorArrivalGift(rosterOf(v.rid).name, giftLabel(r.gift)), "\u{1F381}");
@@ -3224,8 +3232,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const gr = E.grantReward(rf, s, null, pg.reward);
       // Zip 252 : cadeau animal différé mais sac plein -> on propose le choix
       // (libérer/refuser) plutôt que de perdre le pet ou de le mettre en file.
-      if (gr.bagFull && pg.reward.kind === "pet") {
-        hostSend({ type: "broadcast", event: "apply", payload: { petChoice: { id: pg.farmerId, petId: pg.reward.petId } } });
+      if (gr.petOffer) {
+        hostSend({ type: "broadcast", event: "apply", payload: { petChoice: { id: pg.farmerId, petId: pg.reward.petId, full: gr.bagFull } } });
       } else {
         hostSend({ type: "broadcast", event: "apply", payload: { farmer: { id: rf.id, energy: rf.energy, tools: rf.tools, inv: rf.inv, pets: rf.pets } } });
         stationChat(L.visitorGiftDelivered(rosterOf(pg.fromRid != null ? pg.fromRid : 0).name, giftLabel(pg.reward)), "\u{1F381}");
@@ -3469,11 +3477,38 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       return true;
     }
     if (req.kind === "releasePetForGift") {
-      // Zip 252 : le joueur a choisi de libérer un compagnon pour accueillir le
-      // cadeau animal en attente (sac plein).
-      E.resolveReleasePet(f, req.index | 0);
-      const cr = E.resolveCatchPet(f, req.petId);
-      hostSend({ type: "broadcast", event: "apply", payload: { farmer: { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv, pets: f.pets }, toast: { id: f.id, key: cr.ok ? "petCaught" : "bagFull", petId: req.petId } } });
+      /* Zip 252 : le joueur libérait un compagnon pour accueillir le cadeau en
+         attente (sac plein). Zip 388 : c'est devenu le chemin d'acceptation de
+         TOUT familier offert, place libre ou non — `index` négatif signifie
+         « j'accepte, j'ai de la place ».
+
+         ⚠️ CORRECTIF DE SÉCURITÉ AU PASSAGE, non demandé et signalé comme tel.
+         Cette requête servait le `petId` envoyé par le CLIENT : un message
+         forgé « donne-moi la licorne » suffisait. L'hôte ne sert désormais que
+         l'offre qu'il a lui-même posée dans f.inv.petOffer (resolveAcceptPetGift)
+         et l'efface en la servant, ce qui rend aussi la requête idempotente —
+         un double clic ne donne plus deux familiers. Même règle qu'au zip 385
+         pour les 10 000 or du Gourmandin : l'arbitrage vit chez l'hôte. */
+      const cr = E.resolveAcceptPetGift(f, req.index === undefined ? -1 : (req.index | 0));
+      hostSend({ type: "broadcast", event: "apply", payload: { farmer: { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv, pets: f.pets }, toast: { id: f.id, key: cr.ok ? "petCaught" : "bagFull", petId: cr.petId } } });
+      return true;
+    }
+    if (req.kind === "declinePetGift") {
+      // Refuser efface l'offre CHEZ L'HÔTE. Sans ça, elle resterait dans
+      // f.inv.petOffer et le prochain cadeau la trouverait déjà occupée.
+      E.resolveDeclinePetGift(f);
+      hostSend({ type: "broadcast", event: "apply", payload: { farmer: { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv, pets: f.pets } } });
+      return true;
+    }
+    if (req.kind === "sellDecor") {
+      // Zip 388 : vider le sac de décorations. Le PRIX est lu dans la table de
+      // l'hôte (C.DECOR_SELL), jamais reçu du client — même précaution que
+      // pour toute vente. L'or rejoint la cagnotte commune, comme le reste des
+      // ventes de la ferme.
+      const r = E.resolveSellDecor(s, f, req.deco, req.n | 0);
+      if (!r.ok) return true;
+      dirtyRef.current = true;
+      hostSend({ type: "broadcast", event: "apply", payload: { money: s.money, totalEarned: s.totalEarned, farmer: { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv, pets: f.pets }, toast: { id: f.id, key: "decorSold", n: { deco: r.deco, n: r.n, gold: r.gold } } } });
       return true;
     }
     if (req.kind === "voyagerOrder") {
@@ -3968,7 +4003,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         // session et n'est pas déjà résident, on force SA venue à cette visite.
         const pity = pityDueRid(st, now);
         if (pity >= 0) {
-          const nv = E.spawnVisitor(st, Math.random, visitorStockCtx(), pity);
+          // Zip 388 : le jour de jeu suit, pour que le familier offert soit
+          // celui de la terre du passage EN COURS (passagePetOf). Chemin
+          // d'accès COPIÉ d'un accès existant du même fichier, jamais écrit de
+          // mémoire — c'est le piège du zip 385, où `.state.day` avait failli
+          // passer : le jour vit à la RACINE de sharedRef.current.
+          const nv = E.spawnVisitor(st, Math.random, visitorStockCtx(), pity, sharedRef.current.day || 1);
           if (nv) {
             const usedSlots = new Set(st.visitors.map(v => v.slot | 0));
             let slot = 0; while (usedSlots.has(slot)) slot++;
@@ -3980,7 +4020,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           }
           E.scheduleNextVisit(st, E.farmPopularity(s, w), Math.random);
         } else {
-          const added = E.spawnVisitorGroup(st, Math.random, !!st.damage, visitorStockCtx());
+          const added = E.spawnVisitorGroup(st, Math.random, !!st.damage, visitorStockCtx(), sharedRef.current.day || 1);
           E.scheduleNextVisit(st, E.farmPopularity(s, w), Math.random);
           if (added.length === 1) stationChat(L.visitorArrived(rosterOf(added[0].rid).name), "\u{1F682}");
           else if (added.length > 1) stationChat(L.visitorsArrived(added.map(nv => rosterOf(nv.rid).name).join(", ")), "\u{1F682}");
@@ -4242,7 +4282,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // broadcastGlobalToast plus bas.
     if (p.toast && (p.toast.broadcast || p.toast.id === me.id)) pushToast(toastMsg(p.toast.key, p.toast.petId != null ? p.toast.petId : p.toast.n));
     // Zip 252 : cadeau animal en attente mais sac plein -> ouvre le choix.
-    if (p.petChoice && p.petChoice.id === me.id) setPetChoice({ petId: p.petChoice.petId });
+    if (p.petChoice && p.petChoice.id === me.id) setPetChoice({ petId: p.petChoice.petId, full: !!p.petChoice.full, rid: p.petChoice.rid });
     if (p.chat) addChat(p.chat.from, p.chat.msg);
     if (p.fx) for (const f of p.fx) spawnFx(f);
     if (p.horses) { sharedRef.current.horses = p.horses; syncBuildings(); }
@@ -4407,6 +4447,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (key === "petCaught")     return L.petCaughtToast(C.petName(n, lang === "en"));
     if (key === "petReleased")   return L.bagReleasedToast(C.petName(n, lang === "en"));
     if (key === "bagFull")       return L.bagPetsFull(C.MAX_PETS);
+    // Zip 388 : décoration vendue. Le libellé est reconstruit ICI à partir du
+    // catalogue plutôt que transporté dans le message : un nom de décoration
+    // qui voyagerait serait figé dans la langue de l'HÔTE, et les deux joueurs
+    // ne parlent pas forcément la même.
+    if (key === "decorSold") {
+      // `n` porte ici un OBJET {deco, n, gold} plutôt qu'un nombre. C'est le
+      // même détour que la clé "raw" ci-dessus, et pour la même raison : ce
+      // toast a besoin de trois valeurs et toastMsg n'en prend qu'une. On ne
+      // transporte SURTOUT pas le libellé formaté : il serait figé dans la
+      // langue de l'hôte, et les deux joueurs ne parlent pas forcément la
+      // même — c'est la contrainte de bilinguisme du projet.
+      const t = n || {};
+      const d = C.UNIQUE_DECORATIONS.find(x => x.id === t.deco) || {};
+      return L.decorSoldToast(t.n | 0, (lang === "en" ? d.nameEn : d.name) || t.deco, t.gold | 0);
+    }
     if (key === "walkFull")      return L.bagWalkFull(C.MAX_PETS_WALKING); // zip 368
     return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, noMillStock: L.toastNoMillStock, millNotEmpty: L.toastMillNotEmpty, noWheatToDeposit: L.toastNoWheatToDeposit, millFull: L.toastMillFull, noSucrerieStock: L.toastNoSucrerieStock, sucrerieNotEmpty: L.toastSucrerieNotEmpty, noCaneToDeposit: L.toastNoCaneToDeposit, sucrerieFull: L.toastSucrerieFull, actionFailed: L.toastActionFailed, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull, notInjured: L.toastNotInjured, noHealKit: L.toastNoHealKit, healTooFar: L.toastHealTooFar, gregNotHired: L.toastGregNotHired, gregOrderBusy: L.toastGregBusy, gregNoRoom: L.toastGregNoRoom, gregNoFertilizer: L.toastGregNoFertilizer, gregCoffeeCooldown: L.toastGregCoffeeCooldown, noCoffee: L.toastNoCoffee, soanNotHired: L.toastSoanNotHired, soanNoRiver: L.toastSoanNoRiver, soanCoffeeCooldown: L.toastSoanCoffeeCooldown, reneCoffeeCooldown: L.toastReneCoffeeCooldown, tristanNotHere: L.toastTristanNotHere, tristanCoffeeCooldown: L.toastTristanCoffeeCooldown, farCauldron: L.toastFarCauldron, noFishToDeposit: L.toastNoFishToDeposit, cauldronMissing: L.toastCauldronMissing, cauldronAlreadyTaken: L.toastCauldronAlreadyTaken, noCauldronStock: L.toastNoCauldronStock, cauldronNotEmpty: L.toastCauldronNotEmpty, cauldronBrewing: L.toastCauldronBrewing, cauldronNothingToCollect: L.toastCauldronNothingToCollect, cauldronHasEnough: L.toastCauldronHasEnough, visitorNotEnough: L.visitorNotEnough, decorNone: L.decorNone, decorPicked: L.decorPicked, objReturned: L.objReturned, residentNoRoom: L.residentNoRoom, artisanNoResident: L.artisanNoResident, voyagerBusy: L.voyagerBusyToast, kickVoted: L.kickVotedToast, jewelryNoGold: L.toastJewelryNoGold, jewelryNoGem: L.toastJewelryNoGem, cropWrongType: L.toastCropWrongType, cropMaxed: L.toastCropMaxed, beekeeperNoHive: L.toastBeekeeperNoHive, beekeeperBusy: L.toastBeekeeperBusy, balloonNotBoarding: L.toastBalloonNotBoarding, balloonFull: L.toastBalloonFull }[key] || "";
   }
@@ -11455,14 +11510,34 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // behind = opposite of facing dir
       const bx = -[0, 0, -1, 1][m.dir], by = -[1, -1, 0, 0][m.dir];
       const now3 = performance.now();
+      /* ===================================================================
+         ZIP 388 — LES FAMILIERS S'OCCUPENT QUAND LE MAÎTRE S'ARRÊTE.
+         Depuis combien de temps le propriétaire est-il immobile ? Tant qu'il
+         marche, les familiers SUIVENT et rien d'autre : des animaux qui
+         partent jouer pendant qu'on traverse la ferme donnent l'impression
+         qu'ils se perdent. `m.moving` est déjà diffusé pour les joueurs
+         distants (pubMe), donc ce test vaut aussi bien pour moi que pour eux,
+         sans un message de plus.
+         =================================================================== */
+      const perpX0 = by, perpY0 = -bx;
+      const slotOf = (k) => {
+        const row = k >> 1, side = (k % 2 === 0) ? -0.45 : 0.45, depth = 0.9 + row * 0.55;
+        return { x: m.x + bx * depth + perpX0 * side, y: m.y + by * depth + perpY0 * side };
+      };
+      if (m.moving) petIdleRef.current.set(id, now3);
+      const idleSince = petIdleRef.current.get(id);
+      const idleFor = idleSince === undefined ? 0 : now3 - idleSince;
+      const mayPlay = !riding && idleFor >= C.PET_PLAY_IDLE_MS;
       for (let i = 0; i < pets.length; i++) {
         // Zip 367 : l'id du pet peut arriver sous DEUX formes — objet
         // {id, at} pour MES pets (f.pets, persiste tel quel), simple chaîne
         // pour les pets d'un joueur distant (payload `pos` allégé au même zip,
         // voir pubMe). `at` n'a jamais été lu au rendu.
         const pid = typeof pets[i] === "string" ? pets[i] : (pets[i] && pets[i].id);
-        const img = pid ? sprites.pets[pid] : null;
-        if (!img) continue;
+        // Zip 388 : on lit désormais la PLANCHE (4 directions × 3 frames).
+        // `sprites.pets[pid]` reste le portrait, employé par l'interface.
+        const sheet = pid ? (sprites.petFrames && sprites.petFrames[pid]) : null;
+        if (!sheet) continue;
         // target a tile behind the player, fanned sideways by pet index.
         // ZIP 367 (MAX_PETS 2 -> 4) — BUG DÉCOUVERT EN CHEMIN, pas demandé :
         // l'éventail supposait EXACTEMENT deux pets. `i === 0 ? -0.45 : 0.45`
@@ -11475,14 +11550,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         // nouvel empilement. À deux pets, seule différence avec l'ancien
         // rendu : ils sont maintenant strictement côte à côte (le second
         // n'est plus 0,15 tuile en retrait), donc symétriques.
-        const row = i >> 1;
-        const side = (i % 2 === 0) ? -0.45 : 0.45;
-        const depth = 0.9 + row * 0.55;
-        const perpX = by, perpY = -bx;
-        const followTx = m.x + bx * depth + perpX * side;
-        const followTy = m.y + by * depth + perpY * side;
-        if (!follow[i]) follow[i] = { x: followTx, y: followTy, wtx: null, wty: null, wnextAt: 0 };
+        const slot = slotOf(i);
+        const followTx = slot.x, followTy = slot.y;
+        if (!follow[i]) follow[i] = { x: followTx, y: followTy, wtx: null, wty: null, wnextAt: 0, dir: 0 };
         const f2 = follow[i];
+        // Zip 388 : la figure de jeu du créneau courant. Fonction PURE du temps
+        // (fermeEngine.petPlayAt) — aucun état, aucun tirage, aucun message.
+        const play = mayPlay ? E.petPlayAt(id, i, pets.length, now3) : { figure: "idle", t: 0, partner: -1, lead: false };
         let tx, ty, ease, isMoving;
         if (riding) {
           // Rôdaille lente sur place autour de la zone d'abandon (même
@@ -11501,6 +11575,33 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         } else {
           f2.wtx = null;
           tx = followTx; ty = followTy;
+          /* ---------------- ZIP 388 : LA CIBLE PENDANT UNE FIGURE -----------
+             Seule la CIBLE change ; le lissage, lui, reste celui d'avant. Un
+             familier qui joue est un familier dont on a déplacé le point de
+             rendez-vous, pas un familier régi par un second moteur. C'est ce
+             qui garantit qu'à la fin du créneau il revient tout seul à sa
+             place, sans transition à écrire. */
+          if (play.figure === "chase" && play.partner >= 0) {
+            // Ronde autour du milieu des deux places. Le meneur et le suiveur
+            // sont diamétralement opposés : ils se courent après sans jamais
+            // se rattraper, ce qui est exactement ce qu'on veut voir.
+            const ps2 = slotOf(play.partner);
+            const mx = (followTx + ps2.x) / 2, my = (followTy + ps2.y) / 2;
+            const ang = play.t * Math.PI * 3 + (play.lead ? 0 : Math.PI);
+            tx = mx + Math.cos(ang) * C.PET_CHASE_RADIUS;
+            ty = my + Math.sin(ang) * C.PET_CHASE_RADIUS * 0.6;   // ellipse : la vue est de dessus, pas de côté
+          } else if (play.figure === "face" && play.partner >= 0) {
+            // Ils se rapprochent, se font face, se reniflent, repartent.
+            const ps2 = slotOf(play.partner);
+            const mx = (followTx + ps2.x) / 2, my = (followTy + ps2.y) / 2;
+            const k = Math.sin(play.t * Math.PI);                  // 0 -> 1 -> 0
+            tx = followTx + (mx - followTx) * k * 0.8;
+            ty = followTy + (my - followTy) * k * 0.8;
+          } else if (play.figure === "sniff") {
+            // Petit va-et-vient museau au sol, une demi-tuile devant sa place.
+            tx = followTx + Math.sin(play.t * Math.PI * 2) * 0.35;
+            ty = followTy + Math.cos(play.t * Math.PI * 2) * 0.2;
+          }
           // Redescendu de cheval : le pet revient TOUT DOUCEMENT vers sa
           // place habituelle. Une fois suffisamment proche, on retrouve
           // l'easing serré du suivi normal (comme avant ce chantier).
@@ -11508,15 +11609,78 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           ease = d > 0.6 ? Math.min(1, dt2 * 1.3) : Math.min(1, dt2 * 6);
           isMoving = m.moving || d > 0.05;
         }
+        const px0 = f2.x, py0 = f2.y;
         f2.x += (tx - f2.x) * ease;
         f2.y += (ty - f2.y) * ease;
-        const bob = isMoving ? Math.sin(now3 / 140 + i) * 1.5 : 0;
+
+        /* ============ ZIP 388 : ORIENTATION, FOULÉE, SAUT, OMBRE, ÉMOTE ====
+           L'ORIENTATION SE DÉDUIT DU DÉPLACEMENT, elle ne voyage pas. Chaque
+           client calcule déjà la position lissée du familier ; la différence
+           entre deux images suffit à savoir dans quel sens il va. C'est le
+           même principe que les licornes du zip 386 : ce qui peut être dérivé
+           n'a pas besoin d'être transmis. Coût réseau : zéro.
+
+           Sous le seuil PET_MOVE_EPS on GARDE la direction précédente, sinon
+           un familier à l'arrêt tremblerait entre deux orientations à chaque
+           micro-oscillation de l'easing. */
+        const ddx = f2.x - px0, ddy = f2.y - py0;
+        const walking = Math.abs(ddx) > C.PET_MOVE_EPS || Math.abs(ddy) > C.PET_MOVE_EPS;
+        let dir = f2.dir | 0;
+        if (walking) dir = Math.abs(ddx) > Math.abs(ddy) ? (ddx > 0 ? 3 : 2) : (ddy > 0 ? 0 : 1);
+        if (play.figure === "spin") {
+          // Tour sur soi-même : les quatre orientations défilent. C'est
+          // gratuit — l'animation existe déjà, il suffit de la lire dans
+          // l'ordre — et c'est exactement la demande « savoir tourner sur
+          // eux-mêmes ».
+          dir = Math.floor(now3 / (C.PET_SPIN_MS / C.PET_DIRS)) % C.PET_DIRS;
+        } else if (play.figure === "sit" || play.figure === "sniff") {
+          dir = 0;                                   // face au joueur : il les regarde
+        } else if (play.figure === "face" && play.partner >= 0) {
+          const ps2 = slotOf(play.partner);
+          const ax = ps2.x - f2.x, ay = ps2.y - f2.y;
+          dir = Math.abs(ax) > Math.abs(ay) ? (ax > 0 ? 3 : 2) : (ay > 0 ? 0 : 1);
+        }
+        f2.dir = dir;
+        // Foulée : deux contacts qui alternent au rythme de PET_STEP_MS. Basée
+        // sur l'horloge et non sur une distance accumulée — un familier qui
+        // ralentit doit garder la même cadence de pattes, sinon la marche se
+        // met à patiner.
+        const moving2 = walking || play.figure === "chase";
+        const frame = moving2 ? 1 + (Math.floor(now3 / C.PET_STEP_MS) % 2) : 0;
+        const img = sheet[dir][frame];
+        const bob = (isMoving || moving2) ? Math.sin(now3 / 140 + i) * 1.5 : 0;
+        const hop = play.figure === "hop" ? -Math.abs(Math.sin(play.t * Math.PI * 4)) * C.PET_HOP_H : 0;
         // Zip 251 (demande Guillaume) : pets réduits à ~la taille d'une poule.
         // On dessine le sprite 16x16 à l'échelle PET_DRAW_SCALE, ancré par le
         // BAS (les pattes restent au sol) et centré horizontalement.
         const ps = C.PET_DRAW_SCALE, dw = 16 * ps, dh = 16 * ps;
-        const dxp = f2.x * T + (16 - dw) / 2, dyp = f2.y * T - 2 + (16 - dh) + bob;
+        const dxp = f2.x * T + (16 - dw) / 2, dyp = f2.y * T - 2 + (16 - dh) + bob + hop;
+        /* OMBRE AU SOL. Elle ne suit PAS le saut : elle reste collée au sol et
+           rétrécit, c'est elle qui dit qu'il y a un saut. Une ombre qui monte
+           avec la bête annulerait tout l'effet. Dessinée ici et non dans le
+           sprite, parce qu'elle appartient au SOL, pas à l'animal — et parce
+           qu'elle doit rester sous les quatre orientations sans les
+           dupliquer. */
+        const shR = dw * 0.42 * (1 - Math.abs(hop) / (C.PET_HOP_H * 2.2));
+        ctx.save();
+        ctx.globalAlpha = C.PET_SHADOW_ALPHA;
+        ctx.fillStyle = "#000000";
+        ctx.beginPath();
+        ctx.ellipse(dxp + dw / 2, f2.y * T - 2 + 16 - 1, Math.max(1, shR), Math.max(0.6, shR * 0.42), 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
         ctx.drawImage(img, Math.round(dxp), Math.round(dyp), dw, dh);
+        /* ÉMOTE. Sans elle, « il tourne sur lui-même » et « il s'assoit » se
+           ressemblent trop de loin, à 11 pixels de haut. Même raisonnement que
+           les retours visuels du Gourmandin au zip 387 : deux actions
+           différentes doivent se distinguer. Affichée seulement au DÉBUT de la
+           figure — une bulle permanente deviendrait du bruit. */
+        const emo = { chase: "note", face: "heart", spin: "spark", sit: "zzz", hop: "spark", sniff: "excl" }[play.figure];
+        if (emo && sprites.petEmotes && sprites.petEmotes[emo]
+          && play.t * C.PET_PLAY_PERIOD_MS * C.PET_PLAY_ACTIVE < C.PET_EMOTE_MS) {
+          const float = -Math.min(4, play.t * C.PET_PLAY_PERIOD_MS * C.PET_PLAY_ACTIVE / 220);
+          ctx.drawImage(sprites.petEmotes[emo], Math.round(dxp + dw - 3), Math.round(dyp - 7 + float), 8, 8);
+        }
       }
     }
     // Zip 368 : seuls les familiers EN BALADE sont dessinés (walkPetsRef) ;
@@ -12680,7 +12844,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const buyArtisanBuilding = (bid) => sendReq({ kind: "buyArtisanBuilding", bid });
   const sellCraft = (item) => sendReq({ kind: "sellCraft", item, n: 9999 });
   const cutCheese = () => sendReq({ kind: "cutCheese", n: 1 });
-  const acceptPetGift = (index) => { sendReq({ kind: "releasePetForGift", index, petId: petChoice.petId }); setPetChoice(null); };
+  // Zip 388 : `index` < 0 = accepter sans rien libérer (il reste de la place).
+  // Le petId n'est plus transmis : l'hôte sert SA propre offre, pas celle que
+  // le client dit avoir reçue.
+  const acceptPetGift = (index) => { sendReq({ kind: "releasePetForGift", index }); setPetChoice(null); };
+  const declinePetGift = () => { sendReq({ kind: "declinePetGift" }); setPetChoice(null); };
+  // Zip 388 : vente d'une décoration, en deux temps. `decorSell` porte la
+  // demande en attente ; la confirmation est une vraie fenêtre et non un
+  // `confirm()` — un cadeau de visiteur ne se détruit pas sur un clic distrait.
+  const askSellDecor = (deco, n) => setDecorSell({ deco, n });
+  const doSellDecor = () => { if (decorSell) sendReq({ kind: "sellDecor", deco: decorSell.deco, n: decorSell.n }); setDecorSell(null); };
   // Achat d'un épouvantail (payé en or, comme le lampadaire) : équipe
   // directement l'outil Construction sur la variante "scarecrow", prêt à
   // poser au clic suivant.
@@ -13982,25 +14155,72 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 ligne porte donc deux boutons : sortir/ranger, et relâcher. */}
             <div style={{ fontSize: 11, fontWeight: 700, opacity: .7, textTransform: "uppercase", letterSpacing: .5, marginTop: 6 }}>{L.bagPetsTitle(myPets.length, C.MAX_PETS)}</div>
             {myPets.length === 0 && <div className="ferme-hint">{L.bagNoPets}</div>}
+            {/* ZIP 388 — LES BOUTONS « RANGER » ET « BALADE », REFAITS.
+                Guillaume : « améliore les boutons pour les ranger et les walk ».
+                Trois défauts, tous visibles sur la capture :
+                  1. le bouton portait l'ACTION (« Ranger ») pendant que la
+                     ligne portait l'ÉTAT (« en balade ») — deux mots
+                     contradictoires côte à côte, et rien pour dire lequel est
+                     lequel. L'état est maintenant une PASTILLE colorée, à
+                     gauche du nom, et le bouton ne dit plus que l'action ;
+                  2. le bouton « Balade » se grisait sans dire pourquoi. Il
+                     annonce désormais lui-même la raison (4/4 dehors) ;
+                  3. « Relâcher » est IRRÉVERSIBLE et se tenait juste à côté
+                     d'un bouton anodin, à un pixel près. Il passe derrière une
+                     confirmation, et se distingue par son ton.
+                Plus deux raccourcis « tout sortir / tout ranger » : à huit
+                familiers, huit clics pour rentrer promener, c'est le genre de
+                friction qui fait qu'on ne s'en sert pas. */}
             {myPets.length > 0 && (() => {
               const outN = myPets.filter(pt => pt && (pt.out === undefined || pt.out)).length;
-              return <div className="ferme-hint">{L.bagPetsWalkingLine(outN, C.MAX_PETS_WALKING)}</div>;
+              return (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", margin: "4px 0 8px" }}>
+                  <span className="ferme-hint" style={{ margin: 0 }}>{L.bagPetsWalkingLine(outN, C.MAX_PETS_WALKING)}</span>
+                  <span style={{ flex: 1 }} />
+                  <PixBtn sprites={spritesReady ? spritesRef.current : null} tone="good" small
+                    disabled={outN >= Math.min(C.MAX_PETS_WALKING, myPets.length)}
+                    label={L.bagWalkAllBtn}
+                    onClick={() => {
+                      // On envoie une requête par familier rangé, dans l'ordre,
+                      // jusqu'au plafond. L'hôte re-vérifie la place à chaque
+                      // requête (resolveSetPetWalking) : si deux joueurs — ou
+                      // deux clics — arrivent en même temps, c'est lui qui
+                      // trie, pas nous.
+                      let room = C.MAX_PETS_WALKING - outN;
+                      myPets.forEach((pt, pi) => {
+                        if (room > 0 && pt && pt.out === false) { sendReq({ kind: "petWalk", index: pi, walk: true }); room--; }
+                      });
+                    }} />
+                  <PixBtn sprites={spritesReady ? spritesRef.current : null} tone="ghost" small
+                    disabled={outN === 0} label={L.bagStowAllBtn}
+                    onClick={() => myPets.forEach((pt, pi) => { if (pt && (pt.out === undefined || pt.out)) sendReq({ kind: "petWalk", index: pi, walk: false }); })} />
+                </div>
+              );
             })()}
             {myPets.map((pt, pi) => {
               const walking = pt && (pt.out === undefined || pt.out);
               const outN = myPets.filter(q => q && (q.out === undefined || q.out)).length;
+              const walkFull = !walking && outN >= C.MAX_PETS_WALKING;
               return (
                 <div className="ferme-shop-row" key={"pet" + pi}>
                   <Sprite img={spritesReady ? spritesRef.current.pets[pt.id] : null} w={32} h={32} />
                   <div className="info">
-                    <b>{C.petName(pt.id, lang === "en")}</b>
+                    <b>
+                      <span style={{
+                        display: "inline-block", width: 8, height: 8, borderRadius: 8, marginRight: 6,
+                        verticalAlign: "middle", background: walking ? "#5fbf6a" : "#8a8274",
+                        boxShadow: walking ? "0 0 4px #5fbf6a" : "none",
+                      }} />
+                      {C.petName(pt.id, lang === "en")}
+                    </b>
                     <span>{walking ? L.bagPetWalking : L.bagPetStowed}</span>
                   </div>
                   <PixBtn sprites={spritesReady ? spritesRef.current : null} tone={walking ? "ghost" : "good"} small
-                    disabled={!walking && outN >= C.MAX_PETS_WALKING}
-                    label={walking ? L.bagStowBtn : L.bagWalkBtn}
+                    disabled={walkFull}
+                    label={walkFull ? L.bagWalkFullBtn(C.MAX_PETS_WALKING) : (walking ? L.bagStowBtn : L.bagWalkBtn)}
                     onClick={() => sendReq({ kind: "petWalk", index: pi, walk: !walking })} />
-                  <PixBtn sprites={spritesReady ? spritesRef.current : null} icon="release" tone="bad" small label={L.bagReleaseBtn} onClick={() => sendReq({ kind: "releasePet", index: pi })} />
+                  <PixBtn sprites={spritesReady ? spritesRef.current : null} icon="release" tone="bad" small label={L.bagReleaseBtn}
+                    onClick={() => setPetRelease({ index: pi, petId: pt.id })} />
                 </div>
               );
             })}
@@ -14010,14 +14230,34 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             {(() => {
               const owned = C.UNIQUE_DECORATIONS.filter(d => myInv && myInv.decor && (myInv.decor[d.id] | 0) > 0);
               if (!owned.length) return <div className="ferme-hint">{L.bagNoDecor}</div>;
+              const total = owned.reduce((a, d) => a + (myInv.decor[d.id] | 0), 0);
               return (<>
-                {owned.map(d => (
-                  <div className="ferme-shop-row" key={"decor" + d.id}>
-                    <Sprite img={spritesReady ? spritesRef.current.decor[d.id] : null} w={32} h={32} />
-                    <div className="info"><b>{(lang === "en" ? d.nameEn : d.name)} × {myInv.decor[d.id] | 0}</b></div>
-                  </div>
-                ))}
+                {/* Zip 388 : chaque pile porte son prix unitaire et deux
+                    boutons — vendre UNE, vendre TOUTE la pile. C'est ce
+                    deuxième qui répond au « on accumule trop » : à douze
+                    exemplaires du même gnome, douze clics ne sont pas une
+                    solution. Les deux passent par la même confirmation. */}
+                {owned.map(d => {
+                  const n = myInv.decor[d.id] | 0;
+                  const unit = C.DECOR_SELL[d.id] || C.DECOR_SELL_DEFAULT;
+                  return (
+                    <div className="ferme-shop-row" key={"decor" + d.id}>
+                      <Sprite img={spritesReady ? spritesRef.current.decor[d.id] : null} w={32} h={32} />
+                      <div className="info">
+                        <b>{(lang === "en" ? d.nameEn : d.name)} × {n}</b>
+                        <span>{L.decorUnitPrice(unit)}</span>
+                      </div>
+                      <PixBtn sprites={spritesReady ? spritesRef.current : null} icon="coin2" tone="ghost" small
+                        label={L.decorSellOne} onClick={() => askSellDecor(d.id, 1)} />
+                      {n > 1 && (
+                        <PixBtn sprites={spritesReady ? spritesRef.current : null} icon="coin2" tone="bad" small
+                          label={L.decorSellAll(n)} onClick={() => askSellDecor(d.id, n)} />
+                      )}
+                    </div>
+                  );
+                })}
                 <div className="ferme-hint">{L.bagDecorHint}</div>
+                <div className="ferme-hint">{L.bagDecorSellHint(total)}</div>
               </>);
             })()}
 
@@ -14178,23 +14418,93 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         );
       })()}
       {/* Zip 252 : cadeau animal, sac plein -> libérer un compagnon ou refuser. */}
+      {/* Zip 388 : confirmation de VENTE d'une décoration. Guillaume a répondu
+          « sell with confirmation » — la confirmation fait partie de la
+          demande, pas d'un excès de prudence de ma part. Elle rappelle le
+          nombre, le prix unitaire et le total : ce sont des cadeaux uniques,
+          non achetables, et on ne les rachète pas. */}
+      {decorSell && (() => {
+        const d = C.UNIQUE_DECORATIONS.find(x => x.id === decorSell.deco) || {};
+        const unit = C.DECOR_SELL[decorSell.deco] || C.DECOR_SELL_DEFAULT;
+        return (
+          <div className="ferme-modal open" onClick={() => setDecorSell(null)}>
+            <div className="panel ferme-modal-panel" onClick={e => e.stopPropagation()}>
+              <h2>{L.decorSellTitle}</h2>
+              <div className="ferme-shop-row">
+                <Sprite img={spritesReady ? spritesRef.current.decor[decorSell.deco] : null} w={40} h={40} />
+                <div className="info">
+                  <b>{L.decorSellSub(lang === "en" ? d.nameEn : d.name, decorSell.n, unit * decorSell.n)}</b>
+                  <span>{L.decorSellWarn}</span>
+                </div>
+              </div>
+              <div style={{ marginTop: 10, display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                <PixBtn sprites={spritesReady ? spritesRef.current : null} icon="coin2" tone="good" label={L.decorSellConfirm} onClick={doSellDecor} />
+                <PixBtn sprites={spritesReady ? spritesRef.current : null} icon="cross" tone="ghost" label={L.cancelBtn} onClick={() => setDecorSell(null)} />
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Zip 388 : confirmation de RELÂCHÉ. Un familier relâché ne revient
+          jamais, et le bouton se tenait à quelques pixels d'un bouton anodin
+          dans la même ligne. C'est le seul geste vraiment irréversible du sac. */}
+      {petRelease && (
+        <div className="ferme-modal open" onClick={() => setPetRelease(null)}>
+          <div className="panel ferme-modal-panel" onClick={e => e.stopPropagation()}>
+            <h2>{L.petReleaseTitle}</h2>
+            <div className="ferme-shop-row">
+              <Sprite img={spritesReady ? spritesRef.current.pets[petRelease.petId] : null} w={40} h={40} />
+              <div className="info">
+                <b>{L.petReleaseSub(C.petName(petRelease.petId, lang === "en"))}</b>
+                <span>{L.petReleaseWarn}</span>
+              </div>
+            </div>
+            <div style={{ marginTop: 10, display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <PixBtn sprites={spritesReady ? spritesRef.current : null} icon="release" tone="bad" label={L.petReleaseConfirm}
+                onClick={() => { sendReq({ kind: "releasePet", index: petRelease.index }); setPetRelease(null); }} />
+              <PixBtn sprites={spritesReady ? spritesRef.current : null} icon="cross" tone="ghost" label={L.cancelBtn} onClick={() => setPetRelease(null)} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Zip 388 : la PROPOSITION d'un familier par un visiteur. Cette boîte
+          n'apparaissait jusqu'ici que quand le sac était plein ; elle est
+          maintenant le seul chemin par lequel un familier entre dans le sac.
+          Deux cas dans la même fenêtre :
+            - il reste de la place -> un bouton « Accepter » ;
+            - le sac est plein     -> la liste des compagnons, un par ligne,
+                                      chacun avec « Libérer & accepter ».
+          Le refus n'est plus un simple clic à côté : il envoie une requête, de
+          sorte que l'hôte efface l'offre. Fermer la fenêtre sans répondre la
+          laisse en attente, ce qui est le comportement souhaitable — on peut
+          vouloir réfléchir, ou faire de la place d'abord. */}
       {petChoice && (
         <div className="ferme-modal open" onClick={() => setPetChoice(null)}>
           <div className="panel ferme-modal-panel" onClick={e => e.stopPropagation()}>
-            <h2>{L.petFullTitle}</h2>
+            <h2>{petChoice.full ? L.petFullTitle : L.petOfferTitle}</h2>
             <div className="ferme-shop-row">
               <Sprite img={spritesReady ? spritesRef.current.pets[petChoice.petId] : null} w={40} h={40} />
-              <div className="info"><b>{L.petFullSub(C.petName(petChoice.petId, lang === "en"))}</b></div>
+              <div className="info">
+                <b>{petChoice.full
+                  ? L.petFullSub(C.petName(petChoice.petId, lang === "en"), C.MAX_PETS)
+                  : L.petOfferSub(C.petName(petChoice.petId, lang === "en"))}</b>
+                <span>{L.petOfferHint(C.PET_GIFT_REL_MIN)}</span>
+              </div>
             </div>
-            {myPets.map((pt, pi) => (
+            {petChoice.full && myPets.map((pt, pi) => (
               <div className="ferme-shop-row" key={"pc" + pi}>
                 <Sprite img={spritesReady ? spritesRef.current.pets[pt.id] : null} w={32} h={32} />
                 <div className="info"><b>{C.petName(pt.id, lang === "en")}</b></div>
                 <PixBtn sprites={spritesReady ? spritesRef.current : null} icon="release" tone="good" small label={L.petFullRelease} onClick={() => acceptPetGift(pi)} />
               </div>
             ))}
-            <div style={{ marginTop: 10, textAlign: "right" }}>
-              <PixBtn sprites={spritesReady ? spritesRef.current : null} tone="bad" label={L.petFullDecline} onClick={() => setPetChoice(null)} />
+            <div style={{ marginTop: 10, display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              {!petChoice.full && (
+                <PixBtn sprites={spritesReady ? spritesRef.current : null} icon="check" tone="good" label={L.petOfferAccept} onClick={() => acceptPetGift(-1)} />
+              )}
+              <PixBtn sprites={spritesReady ? spritesRef.current : null} tone="bad" label={L.petFullDecline} onClick={() => declinePetGift()} />
             </div>
           </div>
         </div>

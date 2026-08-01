@@ -2206,11 +2206,88 @@ export const VISITOR_GIFT_DELAY_MAX_MS = 5 * 60 * 1000; // ...borne haute (aprè
 // granted yet (personal houses / pet system are still deferred): they queue
 // in station.pendingGifts (persisted, see migrateStation) until those ship.
 export const UNIQUE_SEED_CROPS = [6, 7];          // indexes in CROPS with unique: true
+
+/* ===========================================================================
+   ZIP 388 — LES FLEURS EN POTS
+   ---------------------------------------------------------------------------
+   Demande de Guillaume : « ajouter aux cadeaux de visiteurs des fleurs
+   décoratives » puis, à la question posée, « oublie les pots ; seulement des
+   fleurs qui viennent dans des pots. Autant de variété que possible, tous les
+   types. Très beau. »
+
+   Il n'y a donc PAS de catégorie "pot" séparée : le pot est le socle commun
+   de toutes les fleurs, et c'est lui qui donne au catalogue son unité — comme
+   la guimauve donne son unité au sol du Pays des Bonbons (zip 385).
+
+   POURQUOI SEIZE. Le catalogue n'en comptait que TROIS (gnome, fontaine, roue
+   solaire) alors que 35 % des cadeaux "prep" et 17 % des trocs sont des
+   décorations. Un joueur qui reçoit trente cadeaux repart avec dix gnomes.
+   C'est la cause racine du « on accumule trop de décorations dans notre
+   bag » — la vente (voir DECOR_SELL) traite le symptôme, la variété traite la
+   cause. À seize fleurs + trois anciennes, la probabilité de recevoir deux
+   fois la même passe de 1/3 à 1/19.
+
+   CHAMPS. `shape` choisit la silhouette de la floraison, `pot` la teinte du
+   pot, `sell` le prix de revente (voir DECOR_SELL). Les trois anciennes
+   décorations n'ont pas de `shape` : decorSprite (fermeArt.js) garde pour
+   elles son dessin d'origine, AU PIXEL PRÈS. Une entrée sans `shape` et sans
+   dessin dédié retomberait sur le gnome — jamais sur une case vide : un
+   catalogue étendu sans habillage doit être terne, pas cassé (règle du
+   zip 386, drawBridgeTile).
+
+   Les seize `shape` ne sont pas seize dessins recopiés : ce sont NEUF formes
+   florales (coupe, rayons, grappe, épi, clochette, rose, trompette, pompon,
+   cactus) paramétrées par une palette et une hauteur. C'est ce qui rend
+   `render-flowers.mjs` capable de les juger côte à côte.
+   =========================================================================== */
 export const UNIQUE_DECORATIONS = [
-  { id: "gnome",    name: "Gnome farceur",       nameEn: "Prankster gnome" },
-  { id: "fountain", name: "Fontaine de cristal", nameEn: "Crystal fountain" },
-  { id: "sunwheel", name: "Roue solaire",        nameEn: "Sun wheel" },
+  // --- les trois d'origine (zip 233/251), inchangées au pixel près
+  { id: "gnome",    name: "Gnome farceur",       nameEn: "Prankster gnome", sell: 320 },
+  { id: "fountain", name: "Fontaine de cristal", nameEn: "Crystal fountain", sell: 400 },
+  { id: "sunwheel", name: "Roue solaire",        nameEn: "Sun wheel",       sell: 360 },
+  // --- zip 388 : seize fleurs en pots.
+  //     shape  = silhouette de la floraison (voir flowerPotSprite, fermeArt.js)
+  //     bloom  = couleur vive de la fleur   bloom2 = seconde teinte / cœur
+  //     leaf   = feuillage                  pot    = terre du pot
+  //     tall   = la tige monte plus haut (tournesol, iris, jacinthe…)
+  { id: "f_tulips",    name: "Tulipes",         nameEn: "Tulips",            shape: "cup",
+    bloom: "#e2456b", bloom2: "#f58aa4", leaf: "#4a8f3c", pot: "#b5623c", sell: 90 },
+  { id: "f_roses",     name: "Rosier",          nameEn: "Rose bush",         shape: "rose",
+    bloom: "#c8203f", bloom2: "#ea5f78", leaf: "#3d7a34", pot: "#9c5334", sell: 120 },
+  { id: "f_sunflower", name: "Tournesol",       nameEn: "Sunflower",         shape: "ray", tall: true, single: true,
+    bloom: "#f2c42e", bloom2: "#6b4218", leaf: "#4a8f3c", pot: "#b5623c", sell: 110 },
+  { id: "f_daisies",   name: "Marguerites",     nameEn: "Daisies",           shape: "ray",
+    bloom: "#f6f3ea", bloom2: "#e8c23a", leaf: "#579c46", pot: "#c8b49a", sell: 70 },
+  { id: "f_lavender",  name: "Lavande",         nameEn: "Lavender",          shape: "spike",
+    bloom: "#8a6ec8", bloom2: "#b8a2e0", leaf: "#7d9c72", pot: "#c0a68a", sell: 85 },
+  { id: "f_orchid",    name: "Orchidée",        nameEn: "Orchid",            shape: "pad", tall: true,
+    bloom: "#d75fae", bloom2: "#f7e2f0", leaf: "#3f7a46", pot: "#e8e4dc", sell: 130 },
+  { id: "f_daffodils", name: "Jonquilles",      nameEn: "Daffodils",         shape: "trumpet",
+    bloom: "#f4d548", bloom2: "#e88a24", leaf: "#4f9440", pot: "#b5623c", sell: 80 },
+  { id: "f_hyacinth",  name: "Jacinthe",        nameEn: "Hyacinth",          shape: "spike", tall: true,
+    bloom: "#4a72d0", bloom2: "#89a6ea", leaf: "#4a8f3c", pot: "#7b8fa8", sell: 95 },
+  { id: "f_peony",     name: "Pivoine",         nameEn: "Peony",             shape: "pom",
+    bloom: "#f2a0c0", bloom2: "#fbd8e6", leaf: "#3d7a34", pot: "#e8e4dc", sell: 115 },
+  { id: "f_hydrangea", name: "Hortensia",       nameEn: "Hydrangea",         shape: "cluster",
+    bloom: "#7e8fd8", bloom2: "#c0a2e0", leaf: "#3d7a34", pot: "#9c5334", sell: 105 },
+  { id: "f_pansies",   name: "Pensées",         nameEn: "Pansies",           shape: "pad",
+    bloom: "#6f3fa0", bloom2: "#f4d548", leaf: "#579c46", pot: "#c8b49a", sell: 75 },
+  { id: "f_geranium",  name: "Géranium",        nameEn: "Geranium",          shape: "cluster",
+    bloom: "#d8283c", bloom2: "#f26a6a", leaf: "#4a8f3c", pot: "#b5623c", sell: 85 },
+  { id: "f_carnations",name: "Œillets",         nameEn: "Carnations",        shape: "pom",
+    bloom: "#e0489c", bloom2: "#f6a8cf", leaf: "#4f9440", pot: "#c0a68a", sell: 90 },
+  { id: "f_iris",      name: "Iris",            nameEn: "Iris",              shape: "bell", tall: true,
+    bloom: "#5a3fa8", bloom2: "#f4d548", leaf: "#4a8f3c", pot: "#7b8fa8", sell: 100 },
+  { id: "f_poppies",   name: "Coquelicots",     nameEn: "Poppies",           shape: "cup",
+    bloom: "#e02a24", bloom2: "#2a2320", leaf: "#579c46", pot: "#c8b49a", sell: 70 },
+  { id: "f_cactus",    name: "Cactus fleuri",   nameEn: "Flowering cactus",  shape: "cactus",
+    bloom: "#f0609c", bloom2: "#f9b0cc", leaf: "#3f8a52", pot: "#c07a4a", sell: 95 },
 ];
+// Zip 388 : la carte des prix de revente, dérivée du catalogue. Voir
+// resolveSellDecor (fermeEngine.js) — l'hôte lit CETTE table, jamais un prix
+// venu du client.
+export const DECOR_SELL = Object.fromEntries(UNIQUE_DECORATIONS.map(d => [d.id, d.sell | 0]));
+export const DECOR_SELL_DEFAULT = 60;             // filet : une déco future sans prix reste vendable
 export const UNIQUE_PETS = [
   { id: "dragon",  name: "Dragonneau",     nameEn: "Baby dragon" },
   { id: "unicorn", name: "Licorne",        nameEn: "Unicorn" },
@@ -2245,6 +2322,95 @@ export const MAX_PETS_WALKING = 4;
 // poule") : facteur d'échelle appliqué au RENDU du pet (sprite 16x16 dessiné
 // à PET_DRAW_SCALE * 16 px, ancré par le bas). Purement visuel, ajustable.
 export const PET_DRAW_SCALE = 0.7;
+
+/* ===========================================================================
+   ZIP 388 — DES FAMILIERS VIVANTS
+   ---------------------------------------------------------------------------
+   Guillaume : « ils doivent être plus animés, avoir des petites pattes qui
+   bougent quand ils marchent ; leur corps doit s'orienter selon le sens de
+   leur direction ; et ils doivent jouer entre eux ; savoir tourner sur eux-
+   mêmes etc. Il faut que ce soit vivant. »
+
+   État de départ, vérifié avant d'écrire (règle du zip 385 : vérifier par grep
+   que ce qu'on croit retoucher est réellement LU) : `petSprite` produisait UN
+   canevas 16×16, dessiné toujours de profil droit, sans la moindre frame. Il
+   n'y avait donc RIEN à améliorer — tout était à créer.
+
+   PET_DIRS × PET_FRAMES canevas par familier. Les frames 1 et 2 sont les deux
+   contacts de la foulée (patte avant gauche / patte avant droite) ; la frame 0
+   est la pose au repos, pattes jointes. La queue bouge sur les trois.
+
+   ⚠️ COÛT MÉMOIRE, calculé et non estimé : ~45 familiers × 4 × 3 = 540 canevas
+   de 16×16, soit 552 ko une fois pour toutes au chargement, plus 540 passes
+   getImageData de 256 pixels pour les contours (138 k pixels au total, contre
+   les 886 objets que le défi de fuite dessine à CHAQUE frame). C'est construit
+   une seule fois dans buildSprites, jamais pendant une frame de jeu.
+
+   ⚠️ ZÉRO MESSAGE RÉSEAU. C'est le point de conception qui compte, et il suit
+   le modèle des licornes du zip 386 : ni la direction, ni la frame, ni le jeu
+   en cours ne voyagent. La direction se DÉDUIT du déplacement du familier
+   (que chaque client calcule déjà pour son suivi lissé), et le comportement
+   de jeu est une fonction du TEMPS et d'un grain stable (id du propriétaire +
+   index du familier) — donc identique chez les deux joueurs sans qu'ils se
+   parlent. La série 373-388 reste à zéro message périodique ajouté.
+   =========================================================================== */
+export const PET_DIRS = 4;                        // 0 = face (vers le bas), 1 = dos, 2 = gauche, 3 = droite
+export const PET_FRAMES = 3;                      // 0 = repos, 1 et 2 = les deux contacts de la foulée
+export const PET_STEP_MS = 150;                   // durée d'un contact : plus vif que le fermier (petites pattes)
+export const PET_MOVE_EPS = 0.012;                // tuiles/frame en-deçà desquelles le familier est considéré à l'arrêt
+export const PET_SHADOW_ALPHA = 0.22;             // ombre au sol, posée sous le sprite
+// --- le JEU entre familiers -------------------------------------------------
+// Un familier n'entre en jeu que si son propriétaire est immobile depuis
+// PET_PLAY_IDLE_MS : tant qu'on marche, ils suivent, sinon on croirait qu'ils
+// se perdent. Le créneau de jeu est strictement dérivé du temps (voir
+// petPlayAt, fermeEngine.js) : même créneau, même figure, chez tous les
+// clients.
+export const PET_PLAY_IDLE_MS = 1400;             // immobilité du maître avant que les familiers s'occupent
+export const PET_PLAY_PERIOD_MS = 7000;           // durée d'un créneau de jeu
+export const PET_PLAY_ACTIVE = 0.62;              // part du créneau réellement jouée (le reste = pause)
+export const PET_SPIN_MS = 900;                   // durée d'un tour sur soi-même (les 4 directions défilent)
+export const PET_CHASE_RADIUS = 0.85;             // rayon de la ronde quand deux familiers se poursuivent, en tuiles
+export const PET_HOP_H = 3;                       // hauteur du petit saut, en pixels écran
+export const PET_EMOTE_MS = 1200;                 // durée d'affichage d'une émote au-dessus de la tête
+// Les figures possibles, dans l'ordre où petPlayAt les tire. "chase" et "face"
+// demandent DEUX familiers : un familier seul retombe sur les figures solo.
+export const PET_PLAY_SOLO = ["spin", "sit", "hop", "sniff"];
+export const PET_PLAY_DUO = ["chase", "face", "hop"];
+
+/* ===========================================================================
+   ZIP 388 — QUI DONNE LES FAMILIERS
+   ---------------------------------------------------------------------------
+   Guillaume : « leur attribution semble injustifiée et aléatoire : il faut que
+   les pets soient offerts par des visiteurs », puis, à la question posée :
+   « visiteur uniquement, ET il faut avoir déjà de l'amitié ».
+
+   Ce qui change :
+     - `resolvePassagePickup` ne tire PLUS de familier. Ramasser une breloque
+       au sol dans le monde du passage faisait apparaître un animal sans un
+       mot d'explication : c'était exactement l'attribution « injustifiée ».
+       L'or de la breloque, lui, ne bouge pas.
+     - un familier ne peut plus venir que d'un visiteur dont l'amitié atteint
+       PET_GIFT_REL_MIN, et il est PROPOSÉ (accepter / refuser) au lieu de
+       tomber dans le sac.
+     - seule exception, assumée : le chat berlingot du Gourmandin. Ce n'est pas
+       une attribution aléatoire, c'est le prix de quinze niveaux.
+
+   ⚠️ CONSÉQUENCE CHIFFRÉE, à surveiller manette en main. Le seuil d'amitié
+   ferme la seule source disponible en début de partie. Pour ne pas rendre la
+   collection inatteignable, la part "familier" du tirage de cadeau passe de
+   12 % à 22 % UNE FOIS le seuil franchi : un joueur ami reçoit donc plus de
+   familiers qu'avant, un inconnu n'en donne plus jamais. C'est le contraire
+   d'un nerf, c'est un déplacement.
+   =========================================================================== */
+export const PET_GIFT_REL_MIN = 6;                // même seuil que REL_RESIDENT_MIN : un ami, pas un passant
+export const PET_GIFT_SHARE = 0.22;               // part du tirage de cadeau qui devient un familier (au-delà du seuil)
+export const PET_SWAP_SHARE = 0.30;               // idem côté troc
+// Un visiteur qui revient d'un voyage rapporte le familier de la terre du
+// passage EN COURS (voir passageWorldOf) plutôt qu'un chat de gouttière : le
+// familier de terre reste lié à la rotation, donc à quelque chose que le
+// joueur peut lire dans le monde. Sinon on retombe sur du hasard opaque.
+export const PET_GIFT_WORLD_SHARE = 0.28;         // part des familiers offerts qui sont ceux d'une terre du passage
+export const PET_GIFT_UNIQUE_SHARE = 0.10;        // ...et part des familiers RARES (dragonneau, licorne, moufette)
 // Zip 248 (demande Guillaume : "the dalmatian is purple, which does not make
 // sense... make each dog and cat design accurate to their actual appearance").
 // L'ancien système ne portait qu'une TEINTE (`hue`) appliquée en HSL sur une
@@ -2594,6 +2760,13 @@ export const PASSAGE_WORLDS = [
     pet: { id: "cloudlamb", name: "Agneau des nuages", nameEn: "Cloud lamb" }, petHue: 40 },
 ];
 export const PASSAGE_PET_CATCH_CHANCE = 0.35;
+// ⚠️ ZIP 388 : PLUS LUE NULLE PART. La capture d'un familier en ramassant une
+// breloque a été supprimée (voir resolvePassagePickup) — c'était l'attribution
+// « injustifiée et aléatoire » signalée par Guillaume. La constante est
+// conservée, et commentée ici plutôt que supprimée, pour deux raisons : elle
+// documente l'ancien comportement, et la retirer obligerait à toucher un
+// fichier de plus pour zéro effet. Si les familiers redevenaient un jour
+// attrapables, c'est ici qu'on reviendrait.
 export const PASSAGE_LOOT_GOLD_MIN = 25;   // or accordé par breloque ramassée (min..max)
 export const PASSAGE_LOOT_GOLD_MAX = 75;
 export const MAZE_PRIZE_GOLD = 300;        // récompense du coffre au bout du labyrinthe (1x/joueur/semaine)

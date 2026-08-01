@@ -981,6 +981,13 @@ export function normalizeFarmer(f) {
     const clean = {};
     for (const dd of C.UNIQUE_DECORATIONS) { const n = d[dd.id] | 0; if (n > 0) clean[dd.id] = n; }
     f.inv.decor = clean; }
+  // Zip 388 : familier PROPOSÉ par un visiteur et pas encore accepté. Vit dans
+  // l'instantané JSON déjà persisté, donc aucune migration ; une ferme d'avant
+  // ce zip se recharge sans le champ, ce qui veut exactement dire « aucune
+  // offre en cours ». On le nettoie s'il désigne un familier inconnu — sinon
+  // un catalogue réduit un jour laisserait une offre inacceptable coincée dans
+  // le sac, et le joueur ne pourrait plus jamais en recevoir d'autre.
+  if (f.inv.petOffer && !C.PET_CATALOG[f.inv.petOffer]) delete f.inv.petOffer;
   f.quests = f.quests || {};
   // Zip 236: individual pets. Keep only well-formed known pets; cap at MAX_PETS.
   // (Le .filter conserve les OBJETS d'origine, donc le drapeau `out` du zip
@@ -3301,23 +3308,42 @@ export function visitorWaitMs(offer) {
 // Roll the gift attached to a "prep" order (zip 233): unique seeds are
 // granted straight into the seller's inventory on completion; decorations
 // and pets queue in station.pendingGifts until their systems exist.
-function rollGiftReward(r) {
+/* Zip 388 — QUEL FAMILIER, ET POUR QUI.
+   Un visiteur ne propose un familier que si l'amitié atteint PET_GIFT_REL_MIN.
+   En-deçà, la part "familier" du tirage RETOURNE AUX DÉCORATIONS plutôt que
+   d'être simplement supprimée : sans ça, un inconnu offrirait moins souvent,
+   ce qui n'a pas été demandé.
+
+   `worldPetId` = le familier de la terre du passage EN COURS (voir
+   passageWorldOf). Un visiteur qui revient de voyage rapporte CE familier-là,
+   pas un animal tiré de nulle part : c'est ce qui relie le cadeau à quelque
+   chose que le joueur peut lire dans le monde. Si l'appelant ne le connaît
+   pas, on retombe sur un familier commun — jamais sur une erreur. */
+function rollPetGift(r, worldPetId) {
+  const g = r();
+  if (worldPetId && g < C.PET_GIFT_WORLD_SHARE) return { kind: "pet", petId: worldPetId, fromWorld: true };
+  if (g < C.PET_GIFT_WORLD_SHARE + C.PET_GIFT_UNIQUE_SHARE) return { kind: "pet", petId: C.UNIQUE_PETS[Math.floor(r() * C.UNIQUE_PETS.length)].id };
+  return { kind: "pet", petId: C.COMMON_PET_IDS[Math.floor(r() * C.COMMON_PET_IDS.length)] };
+}
+function rollGiftReward(r, rel, worldPetId) {
+  const friend = (rel | 0) >= C.PET_GIFT_REL_MIN;
+  const petShare = friend ? C.PET_GIFT_SHARE : 0;
   const roll = r();
-  if (roll < 0.5) {
+  if (roll < petShare) return rollPetGift(r, worldPetId);
+  // Le reste du tirage garde ses proportions d'origine (50 % graine rare,
+  // 50 % décoration), simplement renormalisées sur ce qui reste.
+  const rest = (roll - petShare) / (1 - petShare);
+  if (rest < 0.5) {
     const cropId = C.UNIQUE_SEED_CROPS[Math.floor(r() * C.UNIQUE_SEED_CROPS.length)];
     return { kind: "seed", cropId };
   }
-  if (roll < 0.85) return { kind: "decor", id: C.UNIQUE_DECORATIONS[Math.floor(r() * C.UNIQUE_DECORATIONS.length)].id };
-  // Zip 237: gifted pets are now usually a COMMON pet (cat/dog breed); a rare
-  // unique pet still shows up occasionally.
-  if (roll < 0.97) return { kind: "pet", petId: C.COMMON_PET_IDS[Math.floor(r() * C.COMMON_PET_IDS.length)] };
-  return { kind: "pet", petId: C.UNIQUE_PETS[Math.floor(r() * C.UNIQUE_PETS.length)].id };
+  return { kind: "decor", id: C.UNIQUE_DECORATIONS[Math.floor(r() * C.UNIQUE_DECORATIONS.length)].id };
 }
 
 // Zip 237: build a swap offer — pick a produce the visitor wants and a reward
 // they give. `want.kind` is "crop" | "fish" | "product"; `give` mirrors the
 // gift-reward shapes plus a "useful" item kind.
-function rollSwapOffer(r, rel) {
+function rollSwapOffer(r, rel, worldPetId) {
   const wantKinds = ["crop", "fish", "product"];
   const wk = wantKinds[Math.floor(r() * wantKinds.length)];
   let wantId = 0;
@@ -3327,11 +3353,15 @@ function rollSwapOffer(r, rel) {
   const n = C.SWAP_WANT_MIN + Math.floor(r() * (C.SWAP_WANT_MAX - C.SWAP_WANT_MIN + 1));
   // Reward: friends (higher rel) skew toward better gives (pet/decor/seed);
   // strangers more often hand over a useful stack.
+  // Zip 388 : même règle d'amitié que pour les cadeaux. Un troc avec un
+  // inconnu ne porte jamais sur un être vivant — sa part va aux décorations,
+  // qui viennent justement de passer de 3 à 19 entrées.
   const gr = r();
+  const petShare = (rel | 0) >= C.PET_GIFT_REL_MIN ? C.PET_SWAP_SHARE : 0;
   let give;
-  if (gr < 0.35) give = { kind: "pet", petId: C.COMMON_PET_IDS[Math.floor(r() * C.COMMON_PET_IDS.length)] };
-  else if (gr < 0.55) give = { kind: "seed", cropId: C.UNIQUE_SEED_CROPS[Math.floor(r() * C.UNIQUE_SEED_CROPS.length)] };
-  else if (gr < 0.72) give = { kind: "decor", id: C.UNIQUE_DECORATIONS[Math.floor(r() * C.UNIQUE_DECORATIONS.length)].id };
+  if (gr < petShare) give = rollPetGift(r, worldPetId);
+  else if (gr < petShare + 0.20) give = { kind: "seed", cropId: C.UNIQUE_SEED_CROPS[Math.floor(r() * C.UNIQUE_SEED_CROPS.length)] };
+  else if (gr < petShare + 0.42) give = { kind: "decor", id: C.UNIQUE_DECORATIONS[Math.floor(r() * C.UNIQUE_DECORATIONS.length)].id };
   else { const it = C.SWAP_USEFUL_ITEMS[Math.floor(r() * C.SWAP_USEFUL_ITEMS.length)]; give = { kind: "useful", item: it.item, n: it.n }; }
   return { type: "swap", want: { kind: wk, id: wantId, n }, give };
 }
@@ -3344,7 +3374,7 @@ function rollSwapOffer(r, rel) {
 //   wait, we still fall back to the fastest-growing candidate so the offer
 //   stays completable in principle (noted simplification: real grow times
 //   are hours, so a fresh planting rarely finishes inside one visit).
-function classifyBuyOffer(offer, stockCtx, r, rel) {
+function classifyBuyOffer(offer, stockCtx, r, rel, worldPetId) {
   rel = rel || 0;
   // Zip 234 (friendship): friends pay more for the same order (up to +60%),
   // are more likely to attach a gift to a prep order, and — real friends
@@ -3369,7 +3399,7 @@ function classifyBuyOffer(offer, stockCtx, r, rel) {
     offer.easy = true;
     offer.price = Math.ceil(cr.sell * (1.05 + r() * 0.25) * priceMul); // modest: costs the farm nothing but stock
     offer.reward = (rel >= C.REL_EASY_GIFT_MIN && r() < giftChance * 0.5)
-      ? rollGiftReward(r) : { kind: "gold" };               // easy orders are cash-only for strangers
+      ? rollGiftReward(r, rel, worldPetId) : { kind: "gold" }; // easy orders are cash-only for strangers
     return offer;
   }
   const notStocked = askable.filter(cr => (stock[cr.id] || 0) < 2);
@@ -3380,12 +3410,17 @@ function classifyBuyOffer(offer, stockCtx, r, rel) {
   offer.prep = true;
   offer.prepMs = cr.growMs;
   offer.price = Math.ceil(cr.sell * (1.8 + r() * 0.7) * priceMul); // effort pays better
-  offer.reward = r() < giftChance ? rollGiftReward(r) : { kind: "gold" };
+  offer.reward = r() < giftChance ? rollGiftReward(r, rel, worldPetId) : { kind: "gold" };
   return offer;
 }
 
-export function spawnVisitor(station, rnd, stockCtx, forceRid) {
+export function spawnVisitor(station, rnd, stockCtx, forceRid, day) {
   const r = rnd || Math.random;
+  // Zip 388 : le familier de la terre du passage EN COURS. Paramètre OPTIONNEL
+  // — un appelant qui ne le passe pas obtient exactement le comportement
+  // d'avant, familiers communs compris. C'est ce qui permet d'ajouter ce
+  // chaînage sans toucher aux tests ni aux autres appels.
+  const worldPetId = passagePetOf(day);
   const banned = new Set(station.blacklist || []);
   for (const res of station.residents || []) banned.add(res.rid);
   for (const cur of station.visitors || []) banned.add(cur.rid); // zip 233: no duplicates on the farm
@@ -3423,7 +3458,7 @@ export function spawnVisitor(station, rnd, stockCtx, forceRid) {
   // carlaChatLines). On sort avant tout le tirage de disposition : hostile,
   // riche, "stay", troc et achat sont tous hors personnage pour elle.
   if (who.chatOnly) {
-    return finishVisitor(who, "nice", { type: "chat" }, station, r);
+    return finishVisitor(who, "nice", { type: "chat" }, station, r, worldPetId);
   }
   let hostile = C.VISITOR_HOSTILE_CHANCE * (who.edgy ? 2 : 1);
   hostile = hostile / Math.pow(2, (station.residents || []).length);
@@ -3436,7 +3471,7 @@ export function spawnVisitor(station, rnd, stockCtx, forceRid) {
     disp = "rich";
     const crop = Math.floor(r() * C.CROPS.length);
     const n = 10 + Math.floor(r() * 11);
-    offer = classifyBuyOffer({ type: "buy", crop, n, price: C.CROPS[crop].sell * 3, bonus: 300 + Math.floor(r() * 501) }, stockCtx, r, rel);
+    offer = classifyBuyOffer({ type: "buy", crop, n, price: C.CROPS[crop].sell * 3, bonus: 300 + Math.floor(r() * 501) }, stockCtx, r, rel, worldPetId);
     if (offer.easy) offer.price = Math.max(offer.price, C.CROPS[offer.crop].sell * 2); // rich patrons still overpay
   } else if (rel >= C.REL_RESIDENT_MIN && r() < 0.3 && !who.noStay) {
     // Zip 376 : `noStay` — un personnage qui a sa vie ailleurs ne demandera
@@ -3456,21 +3491,21 @@ export function spawnVisitor(station, rnd, stockCtx, forceRid) {
     // Zip 237: a barter — the visitor WANTS some of our produce and GIVES an
     // item (decor / useful item / rare seeds / common pet) rather than gold.
     disp = r() < 0.6 ? "nice" : "neutral";
-    offer = rollSwapOffer(r, rel);
+    offer = rollSwapOffer(r, rel, worldPetId);
   } else {
     disp = r() < 0.6 ? "nice" : "neutral";
     const crop = Math.floor(r() * C.CROPS.length);
     const n = 3 + Math.floor(r() * 8);
-    offer = classifyBuyOffer({ type: "buy", crop, n, price: 0 }, stockCtx, r, rel);
+    offer = classifyBuyOffer({ type: "buy", crop, n, price: 0 }, stockCtx, r, rel, worldPetId);
   }
-  return finishVisitor(who, disp, offer, station, r);
+  return finishVisitor(who, disp, offer, station, r, worldPetId);
 }
 
 // Zip 376 : la fabrication de l'objet visiteur (position de descente du train,
 // vitesse de marche, phase, cadeau d'arrivée) était la queue de spawnVisitor.
 // Elle en est extraite telle quelle — aucun changement de comportement — pour
 // que le raccourci `chatOnly` puisse la réutiliser au lieu de la dupliquer.
-function finishVisitor(who, disp, offer, station, r) {
+function finishVisitor(who, disp, offer, station, r, worldPetId) {
   const rel = (station.rel && station.rel[who.rid]) || 0;
   const nv = {
     rid: who.rid, disp, offer,
@@ -3487,7 +3522,7 @@ function finishVisitor(who, disp, offer, station, r) {
   // opens their card (see resolveVisitorGreet).
   if (disp !== "hostile" && rel >= C.REL_ARRIVAL_GIFT_MIN
     && r() < Math.min(C.REL_ARRIVAL_GIFT_CHANCE_MAX, rel * C.REL_ARRIVAL_GIFT_CHANCE)) {
-    nv.arrivalGift = rollGiftReward(r);
+    nv.arrivalGift = rollGiftReward(r, rel, worldPetId);
   }
   return nv;
 }
@@ -3495,7 +3530,7 @@ function finishVisitor(who, disp, offer, station, r) {
 // Spawn a whole ROUND of visitors (zip 233): random size 1..VISITORS_MAX,
 // clamped by the free room on the farm; at most one hostile at a time
 // (including during an unrepaired raid); staggered off the train one by one.
-export function spawnVisitorGroup(station, rnd, raidActive, stockCtx) {
+export function spawnVisitorGroup(station, rnd, raidActive, stockCtx, day) {
   const r = rnd || Math.random;
   if (!Array.isArray(station.visitors)) station.visitors = [];
   const room = C.VISITORS_MAX - station.visitors.length;
@@ -3506,7 +3541,7 @@ export function spawnVisitorGroup(station, rnd, raidActive, stockCtx) {
   let hostileTaken = !!raidActive || station.visitors.some(v => v.disp === "hostile" && v.phase !== "depart");
   let stagger = 0;
   for (let k = 0; k < n; k++) {
-    const nv = spawnVisitor(station, r, stockCtx);
+    const nv = spawnVisitor(station, r, stockCtx, null, day);
     if (!nv) break;
     if (nv.disp === "hostile") {
       if (hostileTaken) {
@@ -3566,7 +3601,7 @@ export function offerGiftReward(f, s, v, rw, res, rnd) {
   // graines/objets/animaux) -> soumises au même partage 80/20 que le reste.
   if (r() < C.VISITOR_GIFT_DIRECT_CHANCE) {
     const gr = grantReward(f, s, v, rw);
-    res.giftQueued = gr.queued; res.bagFull = gr.bagFull;
+    res.giftQueued = gr.queued; res.bagFull = gr.bagFull; res.petOffer = gr.petOffer;
   } else {
     // Promesse tenue : rattachée au visiteur, convertie en livraison différée
     // au moment où il monte dans le train (FermeGame: updateVisitors).
@@ -3583,16 +3618,34 @@ export function offerGiftReward(f, s, v, rw, res, rnd) {
 //  - decor -> communal pendingGifts (decoration system still deferred)
 // Returns { queued, bagFull }.
 export function grantReward(f, s, v, rw) {
-  const out = { queued: false, bagFull: false };
+  const out = { queued: false, bagFull: false, petOffer: false };
   if (!rw) return out;
   if (rw.kind === "seed") {
     f.inv.seeds[rw.cropId] = (f.inv.seeds[rw.cropId] || 0) + 3;
   } else if (rw.kind === "pet") {
-    const cr = resolveCatchPet(f, rw.petId);
-    // Zip 252 (demande Guillaume) : si le sac est plein (2 compagnons), on NE
-    // met PLUS le pet dans une file commune. On signale bagFull : l'hôte
-    // proposera au joueur de libérer un compagnon ou de refuser le cadeau.
-    if (!cr.ok) out.bagFull = true;
+    /* ZIP 388 — UN FAMILIER NE TOMBE PLUS DANS LE SAC, IL EST PROPOSÉ.
+       Avant ce zip, un familier apparaissait tout seul dans le sac au moment
+       où la commande était honorée ; la boîte de dialogue n'existait QUE dans
+       le cas du sac plein. C'est là que naissait le sentiment d'attribution
+       « injustifiée » : on se retrouvait avec une bête sans que personne ne
+       l'ait donnée à l'écran.
+
+       Désormais TOUT familier passe par la même proposition (accepter /
+       refuser), sac plein ou non. Le chemin de la boîte de dialogue existait
+       déjà et il est éprouvé : on ne l'invente pas, on l'élargit — chercher le
+       motif déjà présent avant d'en inventer un.
+
+       ⚠️ L'OFFRE EST MÉMORISÉE CHEZ L'HÔTE (`f.inv.petOffer`), et c'est un
+       correctif au passage. `releasePetForGift` acceptait jusqu'ici N'IMPORTE
+       QUEL `petId` envoyé par le client : un message forgé suffisait à
+       s'offrir la licorne. Maintenant l'hôte ne reconnaît que le familier
+       qu'il a lui-même proposé, et efface l'offre en la servant. Règle du
+       zip 385 : une récompense qui compte s'arbitre chez l'hôte, jamais sur
+       parole du client. Ce champ vit dans `f.inv`, déjà persisté : AUCUNE
+       migration. */
+    f.inv.petOffer = rw.petId;
+    out.petOffer = true;
+    out.bagFull = (Array.isArray(f.pets) ? f.pets.length : 0) >= C.MAX_PETS;
   } else if (rw.kind === "useful") {
     if (Array.isArray(f.inv[rw.item])) { /* not expected */ }
     else f.inv[rw.item] = (f.inv[rw.item] || 0) + (rw.n || 1);
@@ -3614,7 +3667,7 @@ export function grantReward(f, s, v, rw) {
 // grant the reward. Produce kinds: crop (f.inv.crops), fish (f.inv.fish),
 // product (f.inv.products).
 export function resolveVisitorSwap(f, s, m) {
-  const res = { ok: false, toast: null, gift: null, giftQueued: false, bagFull: false, giftPromised: false };
+  const res = { ok: false, toast: null, gift: null, giftQueued: false, bagFull: false, petOffer: false, giftPromised: false };
   const v = getVisitor(s, m && m.rid);
   if (!v || v.phase !== "wait" || !v.offer || v.offer.type !== "swap") { res.toast = "actionFailed"; return res; }
   const w = v.offer.want;
@@ -3670,7 +3723,7 @@ export function resolveVisitorChat(s, rid, rnd) {
 // pocket (a bit smaller than a deal reward), decorations/pets queue in
 // station.pendingGifts like deal gifts do.
 export function resolveVisitorGreet(f, s, rid) {
-  const res = { ok: false, gift: null, giftQueued: false, bagFull: false };
+  const res = { ok: false, gift: null, giftQueued: false, bagFull: false, petOffer: false };
   const v = getVisitor(s, rid);
   if (!v || !v.arrivalGift || v.greeted) return res;
   v.greeted = true;
@@ -3681,7 +3734,7 @@ export function resolveVisitorGreet(f, s, rid) {
     res.gift = { ...rw };
   } else {
     const gr = grantReward(f, s, v, rw);
-    res.gift = { ...rw }; res.giftQueued = gr.queued; res.bagFull = gr.bagFull;
+    res.gift = { ...rw }; res.giftQueued = gr.queued; res.bagFull = gr.bagFull; res.petOffer = gr.petOffer;
   }
   res.ok = true;
   return res;
@@ -3924,6 +3977,16 @@ export function passageWorldIndex(day) {
   return passageBlockOf(day) % C.PASSAGE_WORLDS.length;
 }
 export function passageWorldOf(day) { return C.PASSAGE_WORLDS[passageWorldIndex(day)]; }
+/* Zip 388 : le familier de la terre du passage en cours, ou null si le jour
+   n'est pas connu. Écrit en une ligne ici plutôt que recopié chez l'appelant :
+   `spec.pet` est optionnel sur la carte maléfique historique, et une lecture
+   directe planterait le tirage de visiteur — c'est-à-dire l'arrivée du train,
+   c'est-à-dire tout. */
+export function passagePetOf(day) {
+  if (day === undefined || day === null) return null;
+  const w = passageWorldOf(day);
+  return (w && w.pet && w.pet.id) || null;
+}
 
 /* Numéro de CRÉNEAU de rotation : combien de tranches de PASSAGE_WORLD_DAYS
    jours de jeu se sont écoulées. Strictement croissant, identique chez tous
@@ -4120,15 +4183,25 @@ export function resolvePassagePickup(s, f, worldIdx, pickupId, rnd) {
   const gold = C.PASSAGE_LOOT_GOLD_MIN + Math.floor(r() * (C.PASSAGE_LOOT_GOLD_MAX - C.PASSAGE_LOOT_GOLD_MIN + 1));
   s.money = (s.money || 0) + gold; s.totalEarned = (s.totalEarned || 0) + gold;
   const res = { gold, pet: null, bagFull: false };
-  // Zip 236: pets are INDIVIDUAL now. A successful catch lands in the
-  // collector's own bag (f.pets), capped at MAX_PETS. If their bag is full,
-  // the animal escapes (no catch) and we flag bagFull so the client can tell
-  // them to release one first. Gold is granted regardless.
-  if (r() < C.PASSAGE_PET_CATCH_CHANCE) {
-    const cr = resolveCatchPet(f, spec.pet.id);
-    if (cr.ok) res.pet = { id: spec.pet.id, name: spec.pet.name, nameEn: spec.pet.nameEn };
-    else res.bagFull = true;
-  }
+  /* ⚠️ ZIP 388 — LA CAPTURE AU SOL EST SUPPRIMÉE.
+     Guillaume : « leur attribution semble injustifiée et aléatoire ». Elle
+     venait d'ici : ramasser une breloque déclenchait un tirage à
+     PASSAGE_PET_CATCH_CHANCE et un animal apparaissait dans le sac, sans un
+     mot, sans personne à l'écran pour l'avoir donné.
+
+     Les familiers des cinq terres ne disparaissent pas pour autant : ils sont
+     désormais RAPPORTÉS PAR LES VISITEURS amis, et par préférence celui de la
+     terre en cours (voir rollPetGift / passagePetOf). On déplace la source,
+     on ne retire pas le contenu.
+
+     `spec` reste lu pour l'or ; `PASSAGE_PET_CATCH_CHANCE` n'est plus lue
+     nulle part et la constante est conservée telle quelle, commentée sur
+     place (fermeConstants.js). La retirer obligerait à toucher un fichier de
+     plus pour zéro effet.
+     `res.pet` et `res.bagFull` restent dans la forme du résultat : le client
+     les teste, et changer la forme d'un retour pour supprimer un cas est le
+     genre de nettoyage qui casse un appelant oublié. */
+  void spec;
   return res;
 }
 
@@ -4170,6 +4243,139 @@ export function resolveCandyLevel(s, f, level, block) {
     else res.bagFull = true;
   }
   return res;
+}
+
+/* ===========================================================================
+   ZIP 388 — ACCEPTER LE FAMILIER PROPOSÉ PAR UN VISITEUR
+   ---------------------------------------------------------------------------
+   `index` >= 0 : le joueur libère d'abord le familier de ce rang (sac plein).
+   `index` < 0  : il accepte simplement, il lui reste de la place.
+
+   L'hôte ne croit PAS le client sur le `petId` : il ne sert que l'offre qu'il
+   a lui-même posée dans `f.inv.petOffer`, et l'efface en la servant. Un
+   double clic, un message rejoué ou un message forgé ne peuvent donc pas
+   produire deux familiers.
+   =========================================================================== */
+export function resolveAcceptPetGift(f, index) {
+  const petId = f.inv && f.inv.petOffer;
+  if (!petId) return { ok: false, noOffer: true };
+  if ((index | 0) >= 0) resolveReleasePet(f, index | 0);
+  const cr = resolveCatchPet(f, petId);
+  // Sac toujours plein (le joueur n'a rien libéré) : on GARDE l'offre. Il
+  // pourra la reprendre après avoir fait de la place. Même arbitrage que pour
+  // le chat berlingot du zip 385 : ne jamais faire perdre définitivement une
+  // récompense à cause d'un inventaire encombré.
+  if (!cr.ok) return { ok: false, full: true, petId };
+  delete f.inv.petOffer;
+  return { ok: true, petId };
+}
+export function resolveDeclinePetGift(f) {
+  if (!f.inv || !f.inv.petOffer) return { ok: false };
+  const petId = f.inv.petOffer;
+  delete f.inv.petOffer;
+  return { ok: true, petId };
+}
+
+/* ===========================================================================
+   ZIP 388 — VENDRE UNE DÉCORATION
+   ---------------------------------------------------------------------------
+   Guillaume : « ajouter l'option de suppression de décorations (on accumule
+   trop de décorations dans notre bag) », puis, à la question posée : « sell
+   with confirmation ».
+
+   ⚠️ L'ÉCART EST SIGNALÉ, PAS GOMMÉ : vendre n'est pas supprimer. Le sac se
+   vide de la même façon, mais un cadeau de visiteur devient une source d'or,
+   ce qu'il n'était pas. Le barème est donc volontairement bas — 70 à 130 or
+   pour une fleur, 320 à 400 pour les trois décorations d'origine. Repères de
+   l'économie : lampadaire 5 000, joaillerie 15 000, moulin 30 000, et le
+   Gourmandin injecte 10 000 toutes les ~4 h de jeu. Vider un sac de trente
+   fleurs rapporte environ 2 700 or : c'est un débarras, pas un revenu.
+   Une seule constante à bouger si l'arbitrage change : le champ `sell` du
+   catalogue.
+
+   L'or va à la CAGNOTTE COMMUNE (`s.money`), comme toute vente à la ferme —
+   les décorations n'ont jamais eu de porte-monnaie séparé — tandis que le
+   stock retiré est bien celui du joueur (`f.inv.decor`).
+
+   Le prix est lu dans la table de l'hôte, JAMAIS reçu du client.
+   =========================================================================== */
+export function resolveSellDecor(s, f, deco, n) {
+  const res = { ok: false, deco, n: 0, gold: 0 };
+  if (!C.DECOR_SELL[deco]) return res;                      // id inconnu : on ne vend rien
+  if (!f.inv || !f.inv.decor) return res;
+  const have = f.inv.decor[deco] | 0;
+  const want = Math.max(1, Math.min(have, n | 0));
+  if (have <= 0) return res;
+  const unit = C.DECOR_SELL[deco] || C.DECOR_SELL_DEFAULT;
+  f.inv.decor[deco] = have - want;
+  if (f.inv.decor[deco] <= 0) delete f.inv.decor[deco];
+  const gold = unit * want;
+  s.money = (s.money || 0) + gold;
+  s.totalEarned = (s.totalEarned || 0) + gold;
+  res.ok = true; res.n = want; res.gold = gold;
+  return res;
+}
+
+/* ===========================================================================
+   ZIP 388 — LES FAMILIERS JOUENT ENTRE EUX
+   ---------------------------------------------------------------------------
+   Guillaume : « ils doivent jouer entre eux, savoir tourner sur eux-mêmes etc.
+   Il faut que ce soit vivant. »
+
+   ⚠️ FONCTION PURE DU TEMPS, et c'est tout l'intérêt. Elle ne lit aucun état,
+   n'écrit rien, ne dépend d'aucun tirage aléatoire et ne coûte AUCUN message
+   réseau. C'est le modèle des licornes du zip 386 (`unicornAt`) : les deux
+   joueurs voient la même figure au même moment parce qu'ils évaluent la même
+   fonction, pas parce qu'ils se la sont dite. La série 373-388 reste à zéro
+   message périodique ajouté sur seize zips consécutifs.
+
+   Le découpage : le temps est coupé en créneaux de PET_PLAY_PERIOD_MS. Chaque
+   créneau a sa figure, tirée d'un grain stable (identifiant du propriétaire +
+   numéro du créneau) ; seule la première fraction PET_PLAY_ACTIVE du créneau
+   est jouée, le reste est une pause — sans elle, les familiers gigoteraient
+   sans interruption et deviendraient fatigants à regarder.
+
+   Les familiers sont APPARIÉS deux à deux (0-1, 2-3…) : les figures à deux
+   (poursuite, face-à-face) ont besoin d'un partenaire. Un familier sans
+   partenaire — le dernier d'un nombre impair — retombe sur les figures solo.
+   C'est ce qui garantit qu'un joueur qui ne promène qu'un seul animal voit
+   quand même quelque chose.
+
+   `t` renvoyé va de 0 à 1 sur la durée de la figure : c'est l'appelant
+   (drawPetsFor) qui décide ce qu'il en fait, et c'est délibéré — cette
+   fonction ne doit rien savoir des pixels, sinon elle ne serait plus
+   vérifiable hors navigateur.
+   =========================================================================== */
+export function petPlayAt(ownerId, index, count, nowMs) {
+  const P = C.PET_PLAY_PERIOD_MS;
+  const slot = Math.floor(nowMs / P);
+  const inSlot = (nowMs - slot * P) / P;              // 0..1
+  const pair = index >> 1;                            // les familiers jouent deux à deux
+  const partner = (index % 2 === 0) ? index + 1 : index - 1;
+  const hasPartner = partner >= 0 && partner < count;
+  // Grain stable : mêmes entrées, même figure, chez tous les clients.
+  let h = 2166136261;
+  const key = String(ownerId) + "|" + pair + "|" + slot;
+  for (let i = 0; i < key.length; i++) { h ^= key.charCodeAt(i); h = Math.imul(h, 16777619); }
+  h >>>= 0;
+  if (inSlot >= C.PET_PLAY_ACTIVE) return { figure: "idle", t: 0, partner: -1, lead: false };
+  const t = inSlot / C.PET_PLAY_ACTIVE;
+  // Une paire sur trois ne joue pas du tout pendant son créneau : des familiers
+  // qui s'animent TOUS en même temps lisent comme un automate, pas comme des
+  // bêtes. (Réglage posé au jugé — à revoir manette en main.)
+  if (h % 3 === 0) return { figure: "idle", t: 0, partner: -1, lead: false };
+  const table = hasPartner ? C.PET_PLAY_DUO : C.PET_PLAY_SOLO;
+  const figure = table[(h >>> 4) % table.length];
+  const duo = hasPartner && (figure === "chase" || figure === "face");
+  return {
+    figure,
+    t,
+    partner: duo ? partner : -1,
+    // Dans une poursuite, l'un fuit et l'autre suit. Le meneur est le pair du
+    // couple : c'est arbitraire, mais c'est STABLE, donc les deux clients
+    // s'accordent sans se parler.
+    lead: index % 2 === 0,
+  };
 }
 
 // Zip 236: add a pet to a farmer's individual bag (max C.MAX_PETS).

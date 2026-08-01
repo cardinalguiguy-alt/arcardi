@@ -732,6 +732,694 @@ export function candySyrupColor(dp) {
   return `rgb(${Math.round(190 + shallow * 50)}, ${Math.round(60 + shallow * 90)}, ${Math.round(120 + shallow * 60)})`;
 }
 
+/* ===========================================================================
+   ZIP 388 — SPRITES SORTIS DE LA CLOSURE : FAMILIERS, FLEURS, DÉCORATIONS.
+   ---------------------------------------------------------------------------
+   Ces fonctions vivaient DANS buildSprites(), donc invisibles depuis
+   l'extérieur du module — et surtout impossibles à REGARDER sans lancer un
+   navigateur. C'est le corollaire du zip 378, qui vaut règle : « si un morceau
+   ne touche à AUCUN état de jeu, le sortir de la closure ; il devient
+   rasterisable hors navigateur, donc REGARDABLE. » C'est ce qui a rendu
+   `render-flowers.mjs` possible, et c'est cet outil qui a jugé les seize
+   fleurs — pas une intuition.
+
+   Elles ne dépendent que de `document.createElement("canvas")`, jamais d'un
+   état de jeu. buildSprites se contente désormais de les appeler.
+
+   ⚠️ CONTRAINTE VOLONTAIRE : `petSprite` et `flowerPotSprite` n'utilisent que
+   `fillRect` (plus `getImageData`/`putImageData` pour le contour et le
+   miroir). Ce n'est pas une limitation subie, c'est le contrôle : le contexte
+   2D de `render-flowers.mjs` JETTE sur `arc`, `beginPath` et compagnie. Si
+   quelqu'un glisse un dégradé dans une fleur, l'outil casse au lieu de
+   dessiner autre chose que le jeu — et un outil qui montre autre chose que le
+   jeu est pire qu'un outil absent : il rassure.
+   `decorSprite` garde ses trois dessins d'origine (gnome, fontaine, roue
+   solaire), qui eux emploient `arc`/`stroke` : le rasteriseur les saute et le
+   dit dans sa sortie.
+   =========================================================================== */
+export const SPR_T = 16;
+const SPR_PUPIL = "#16161a", SPR_OUT = "#241f1c";
+
+function sprCv(w, h) {
+  const c = document.createElement("canvas");
+  c.width = w; c.height = h;
+  const g = c.getContext("2d");
+  g.imageSmoothingEnabled = false;
+  return [c, g];
+}
+function PX(g, x, y, w, h, col) { g.fillStyle = col; g.fillRect(x, y, w, h); }
+function sprRnd(s) { return () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; }; }
+
+/* Anneau sombre d'un pixel autour de la silhouette. C'est lui qui règle le
+   « trop ambigu » du zip 248 : sans liseré, tête et corps se fondaient en une
+   seule masse illisible à 16x16. */
+export function outlineSprite(g, w, h, col) {
+  const im = g.getImageData(0, 0, w, h), d = im.data;
+  const solid = (x, y) => x >= 0 && y >= 0 && x < w && y < h && d[(y * w + x) * 4 + 3] > 0;
+  const ring = [];
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    if (solid(x, y)) continue;
+    if (solid(x - 1, y) || solid(x + 1, y) || solid(x, y - 1) || solid(x, y + 1)) ring.push(x, y);
+  }
+  g.fillStyle = col;
+  for (let i = 0; i < ring.length; i += 2) g.fillRect(ring[i], ring[i + 1], 1, 1);
+}
+
+/* Miroir horizontal PAR PIXEL, et non par `g.scale(-1, 1)`.
+   Deux raisons, et la seconde est la vraie : (1) une transformation sur un
+   canevas 16x16 non lissé décale d'un demi-pixel selon les navigateurs ;
+   (2) un rasteriseur hors navigateur devrait alors implémenter la pile de
+   transformations pour montrer la même chose que le jeu — et un outil qui
+   s'écarte du moteur mesure son propre écart (leçon du zip 387). Ici,
+   l'inversion est la MÊME opération des deux côtés. */
+function flipH(g, w, h) {
+  const im = g.getImageData(0, 0, w, h), d = im.data;
+  for (let y = 0; y < h; y++) for (let x = 0; x < (w >> 1); x++) {
+    const a = (y * w + x) * 4, b = (y * w + (w - 1 - x)) * 4;
+    for (let k = 0; k < 4; k++) { const t = d[a + k]; d[a + k] = d[b + k]; d[b + k] = t; }
+  }
+  g.putImageData(im, 0, 0);
+}
+
+/* ===========================================================================
+   LES FAMILIERS — QUATRE DIRECTIONS, TROIS FRAMES
+   ---------------------------------------------------------------------------
+   Zip 248 : chaque race porte sa VRAIE palette et son motif (fini le dalmatien
+   violet), chat et chien ont des silhouettes réellement distinctes.
+   Zip 251 : contour aminci partout sauf sur le dalmatien.
+   Zip 388 : le sprite devient une PLANCHE. `dir` 0 = face, 1 = dos, 2 = gauche,
+   3 = droite ; `frame` 0 = repos, 1 et 2 = les deux contacts de la foulée.
+
+   Ce qui fait la marche, à cette taille, tient en trois choses et pas une de
+   plus : les pattes AVANT et ARRIÈRE partent en sens opposés (`gait`), une
+   patte sur deux se raccourcit d'un pixel pour lire comme levée, et la queue
+   balaie d'un pixel (`sway`). Un quatrième effet (le corps qui monte et
+   descend) existe déjà côté rendu — c'est le `bob` de drawPetsFor — et le
+   remettre ici le doublerait.
+
+   Le profil GAUCHE est le profil droit inversé : une seule description de
+   l'animal de profil, donc aucune divergence possible entre les deux sens
+   (règle du zip 387). Face et dos sont, eux, de vrais dessins : un chat vu de
+   face n'est pas un chat de profil aplati, et c'est précisément ce que
+   Guillaume demande de corriger.
+   =========================================================================== */
+export function petSprite(petId, dir, frame) {
+  dir = (dir | 0) % C.PET_DIRS; frame = (frame | 0) % C.PET_FRAMES;
+  const spec = C.PET_CATALOG[petId] || {};
+  const kind = spec.body || "critter";
+  const coat = spec.coat || "#b0a898";
+  const shade = spec.shade || "#8a8274";
+  const belly = spec.belly || "#e2ddd2";
+  const mark = spec.mark || shade;
+  const mark2 = spec.mark2 || mark;
+  const eyeC = spec.eye || "#3a3a3a";
+  const noseC = spec.nose || "#2a2320";
+  const pattern = spec.pattern || "solid";
+  const fluff = spec.fluff | 0;
+  const ears = spec.ears || (kind === "cat" ? "cat" : "floppy");
+  const tail = spec.tail || (kind === "cat" ? "cat" : "up");
+  const T = SPR_T;
+  const [c, g] = sprCv(T, T);
+  // Aléa DÉTERMINISTE par identifiant : les taches d'un dalmatien doivent être
+  // identiques d'une session à l'autre ET d'une frame à l'autre, sinon le
+  // sprite scintille dès qu'il marche. La graine ne dépend donc NI de `dir`,
+  // NI de `frame` — c'est le piège de ce chantier, et il ne se voit qu'en
+  // mouvement.
+  let sd = 0; for (let i = 0; i < petId.length; i++) sd = (sd * 31 + petId.charCodeAt(i)) & 0x7fffffff;
+  const rnd = sprRnd(sd + 7);
+  const PUPIL = SPR_PUPIL, OUT = SPR_OUT;
+
+  // Décalages de foulée. frame 0 : à l'arrêt, tout est aligné.
+  const gait = frame === 0 ? 0 : (frame === 1 ? 1 : -1);
+  const sway = frame === 0 ? 0 : (frame === 1 ? -1 : 1);
+  const liftF = frame === 2 ? 1 : 0;    // patte avant levée sur la frame 2
+  const liftB = frame === 1 ? 1 : 0;    // patte arrière levée sur la frame 1
+  // Ton des pattes du côté OPPOSÉ (celles qu'on voit derrière le corps) :
+  // le même `shade` assombri d'un voile, pour que la paire lointaine recule
+  // sans introduire une couleur qui n'est pas dans la palette de la race.
+  const farLeg = (x, y, w, h) => { PX(g, x, y, w, h, shade); PX(g, x, y, w, h, "rgba(0,0,0,0.28)"); };
+
+  /* -------------------------------------------------- PROFIL (droite) --- */
+  function drawSide() {
+    if (kind === "cat" || kind === "dog") {
+      const isCat = kind === "cat";
+      const low = !!spec.longBody;
+      const bx = low ? 2 : 3, bw = low ? 10 : (isCat ? 8 : 9);
+      const legA = bx + 1 + gait, legB = bx + bw - 3 - gait;   // près : avant / arrière
+
+      // ---- queue (en premier : le corps recouvre sa racine) ----
+      const ty = 0 + sway;
+      if (tail === "cat") { PX(g, 1, 6 + ty, 2, 6, coat); PX(g, 2, 5 + ty, 2, 1, coat); }
+      else if (tail === "curl") { PX(g, 1, 7 + ty, 3, 2, coat); PX(g, 1, 5 + ty, 2, 3, coat); }
+      else if (tail === "plume") { PX(g, 1, 6 + ty, 3, 4, coat); PX(g, 2, 4 + ty, 2, 2, coat); }
+      else if (tail === "pom") { PX(g, 1, 6 + ty, 3, 3, coat); }
+      else if (tail === "bushy") { PX(g, 1, 7 + ty, 3, 5, coat); }
+      else if (tail === "stub") { PX(g, 2, 10, 2, 2, coat); }
+      else { PX(g, 1, 6 + ty, 2, 4, coat); }
+
+      // ---- pattes LOINTAINES (avant le corps : elles passent derrière) ----
+      farLeg(bx + 2 - gait, 13, 2, 2 - liftB);
+      farLeg(bx + bw - 4 + gait, 13, 2, 2 - liftF);
+
+      // ---- corps + pattes proches ----
+      PX(g, bx, 9, bw, 4, coat);
+      PX(g, bx + 1, 12, bw - 2, 1, belly);
+      PX(g, legA, 13, 2, 2 - liftF, shade);
+      PX(g, legB, 13, 2, 2 - liftB, shade);
+
+      // ---- tête ----
+      if (isCat) {
+        PX(g, 8, 3, 7, 6, coat);
+        PX(g, spec.flatFace ? 10 : 11, spec.flatFace ? 5 : 6, spec.flatFace ? 5 : 4, 2, belly);
+      } else {
+        PX(g, 8, 3, 6, 6, coat);
+        PX(g, 12, 6, spec.flatFace ? 2 : 3, 3, belly);
+      }
+
+      // ---- oreilles ----
+      if (ears === "cat") {
+        PX(g, 8, 1, 2, 3, coat); PX(g, 12, 1, 2, 3, coat);
+        PX(g, 9, 2, 1, 1, noseC); PX(g, 12, 2, 1, 1, noseC);
+        if (spec.tufts) { PX(g, 8, 0, 1, 1, belly); PX(g, 13, 0, 1, 1, belly); }
+      } else if (ears === "perky") {
+        PX(g, 8, 1, 2, 3, coat); PX(g, 11, 1, 2, 3, coat);
+        PX(g, 8, 2, 1, 1, noseC); PX(g, 12, 2, 1, 1, noseC);
+      } else if (ears === "semi") {
+        PX(g, 8, 2, 2, 3, coat); PX(g, 11, 2, 2, 3, coat);
+        PX(g, 8, 2, 2, 1, shade); PX(g, 11, 2, 2, 1, shade);
+      } else if (ears === "tiny") {
+        PX(g, 8, 2, 2, 2, coat); PX(g, 11, 2, 2, 2, coat);
+      } else if (ears === "rose") {
+        PX(g, 7, 4, 2, 2, shade); PX(g, 12, 3, 2, 2, shade);
+      } else if (ears === "long") {
+        PX(g, 6, 4, 2, 8, shade); PX(g, 13, 3, 1, 3, shade);
+      } else {
+        PX(g, 6, 4, 2, 6, shade); PX(g, 13, 3, 1, 3, shade);
+      }
+
+      // ---- motif : découpé sur la silhouette ----
+      g.globalCompositeOperation = "source-atop";
+      if (pattern === "tabby") {
+        for (const sx of [bx + 2, bx + 4, bx + 6]) PX(g, sx, 9, 1, 4, mark);
+        PX(g, 10, 3, 1, 2, mark); PX(g, 12, 3, 1, 2, mark);
+        PX(g, 1, 7, 2, 1, mark); PX(g, 1, 10, 2, 1, mark);
+      } else if (pattern === "spots") {
+        for (let i = 0; i < 12; i++) PX(g, 2 + Math.floor(rnd() * 11), 2 + Math.floor(rnd() * 11), 2, 2, mark);
+        for (let i = 0; i < 9; i++) PX(g, 1 + Math.floor(rnd() * 13), 2 + Math.floor(rnd() * 12), 1, 1, mark);
+      } else if (pattern === "rosette") {
+        for (let i = 0; i < 7; i++) { const sx = bx + Math.floor(rnd() * (bw - 2)), sy = 9 + Math.floor(rnd() * 3); PX(g, sx, sy, 2, 1, mark); PX(g, sx, sy + 1, 1, 1, mark); }
+        PX(g, 10, 3, 1, 2, mark); PX(g, 12, 3, 1, 2, mark);
+      } else if (pattern === "calico") {
+        PX(g, bx, 9, 4, 3, mark); PX(g, 1, 5, 3, 4, mark);
+        PX(g, 9, 1, 4, 3, mark2); PX(g, bx + 4, 10, 4, 3, mark2);
+      } else if (pattern === "points") {
+        PX(g, 8, 1, 7, 3, mark);
+        PX(g, 11, 5, 4, 4, mark);
+        PX(g, 1, 4, 3, 8, mark);
+        PX(g, legA, 13, 2, 2, mark); PX(g, legB, 13, 2, 2, mark);
+      } else if (pattern === "tuxedo") {
+        PX(g, 11, 6, 4, 2, mark);
+        PX(g, bx + 2, 10, 5, 3, mark);
+        PX(g, legA, 13, 2, 2, mark); PX(g, legB, 13, 2, 2, mark);
+      } else if (pattern === "saddle") {
+        PX(g, 8, 3, 7, 5, mark); PX(g, 6, 4, 2, 8, mark);
+        PX(g, bx, 9, bw - 2, 3, mark2);
+      } else if (pattern === "mask") {
+        PX(g, 11, 4, 4, 5, mark); PX(g, 9, 4, 2, 2, mark);
+        PX(g, bx + 1, 10, 6, 3, belly);
+        PX(g, legA, 13, 2, 2, belly); PX(g, legB, 13, 2, 2, belly);
+      } else if (pattern === "blaze") {
+        PX(g, 11, 3, 2, 4, mark);
+        PX(g, bx + 1, 10, 6, 3, mark);
+        PX(g, legA, 13, 2, 2, mark); PX(g, legB, 13, 2, 2, mark);
+      } else if (pattern === "patches") {
+        PX(g, 8, 3, 5, 4, mark);
+        PX(g, bx, 9, 4, 3, mark);
+        if (ears === "long" || ears === "floppy") PX(g, 6, 4, 2, 8, mark);
+      }
+      if (spec.curly) for (let i = 0; i < 18; i++) PX(g, 2 + Math.floor(rnd() * 12), 2 + Math.floor(rnd() * 11), 1, 1, shade);
+      if (spec.scruffy) for (let i = 0; i < 10; i++) PX(g, bx + Math.floor(rnd() * bw), 8 + Math.floor(rnd() * 5), 1, 1, shade);
+      if (fluff >= 2) PX(g, 7, 8, 2, 5, belly);
+      g.globalCompositeOperation = "source-over";
+
+      // ---- yeux / truffe ----
+      if (isCat) {
+        PX(g, 10, 5, 1, 2, eyeC); PX(g, 13, 5, 1, 2, eyeC);
+        PX(g, 10, 5, 1, 1, PUPIL); PX(g, 13, 5, 1, 1, PUPIL);
+        PX(g, 12, 7, 1, 1, noseC);
+      } else {
+        PX(g, 10, 4, 1, 2, eyeC); PX(g, 12, 4, 1, 2, eyeC);
+        PX(g, 10, 4, 1, 1, PUPIL); PX(g, 12, 4, 1, 1, PUPIL);
+        PX(g, spec.flatFace ? 13 : 14, 6, 1, 2, noseC);
+      }
+    } else if (kind === "dragon") {
+      PX(g, 3, 8, 8, 5, coat); PX(g, 4, 12, 6, 1, belly);
+      PX(g, 9, 3, 6, 6, coat); PX(g, 11, 7, 3, 1, belly);
+      PX(g, 2, 4 + sway, 4, 5, shade);                            // aile : elle bat
+      for (let i = 0; i < 4; i++) PX(g, 4 + i * 2, 6 + (i % 2), 1, 2, mark);
+      PX(g, 13, 1, 1, 3, mark); PX(g, 10, 1, 1, 2, mark);
+      PX(g, 1, 10 + sway, 3, 2, coat);
+      PX(g, 4 + gait, 13, 2, 2 - liftF, shade); PX(g, 8 - gait, 13, 2, 2 - liftB, shade);
+      PX(g, 12, 5, 1, 2, eyeC); PX(g, 12, 5, 1, 1, PUPIL);
+      PX(g, 14, 7, 1, 1, noseC);
+    } else if (kind === "horse") {
+      PX(g, 3, 8, 8, 5, coat); PX(g, 4, 12, 6, 1, belly);
+      PX(g, 10, 3, 4, 6, coat); PX(g, 12, 7, 2, 2, belly);
+      PX(g, 9, 2, 2, 6, mark);
+      PX(g, 1, 7 + sway, 3, 5, mark);
+      PX(g, 12, 0, 1, 3, "#ffd75e"); PX(g, 12, 0, 1, 1, "#fff0b0");
+      farLeg(5 - gait, 13, 2, 2 - liftB);
+      PX(g, 4 + gait, 13, 2, 2 - liftF, shade); PX(g, 9 - gait, 13, 2, 2 - liftB, shade);
+      PX(g, 12, 5, 1, 2, eyeC); PX(g, 12, 5, 1, 1, PUPIL);
+      PX(g, 13, 8, 1, 1, noseC);
+    } else if (kind === "turtle") {
+      PX(g, 2, 6, 10, 6, shade); PX(g, 3, 7, 8, 4, coat);
+      for (const [sx, sy] of [[4, 8], [7, 8], [5, 10], [8, 10]]) PX(g, sx, sy, 2, 1, mark);
+      PX(g, 11, 8 - (frame === 1 ? 1 : 0), 4, 4, coat);           // la tête sort et rentre
+      PX(g, 12, 11 - (frame === 1 ? 1 : 0), 3, 1, belly);
+      PX(g, 1, 9 + sway, 2, 2, coat);
+      PX(g, 3 + gait, 12, 2, 2 - liftF, coat); PX(g, 9 - gait, 12, 2, 2 - liftB, coat);
+      PX(g, 13, 9 - (frame === 1 ? 1 : 0), 1, 2, eyeC); PX(g, 13, 9 - (frame === 1 ? 1 : 0), 1, 1, PUPIL);
+    } else if (kind === "lamb") {
+      PX(g, 2, 5, 10, 7, coat);
+      for (let i = 0; i < 16; i++) PX(g, 2 + Math.floor(rnd() * 10), 5 + Math.floor(rnd() * 6), 1, 1, shade);
+      PX(g, 10, 7, 5, 4, mark); PX(g, 11, 10, 3, 1, belly);
+      PX(g, 9, 7, 2, 2, mark); PX(g, 14, 7, 1, 2, mark);
+      farLeg(4 - gait, 12, 2, 2 - liftB);
+      PX(g, 3 + gait, 12, 2, 2 - liftF, mark); PX(g, 9 - gait, 12, 2, 2 - liftB, mark);
+      PX(g, 12, 8, 1, 2, eyeC); PX(g, 12, 8, 1, 1, PUPIL);
+      PX(g, 14, 9, 1, 1, noseC);
+    } else {
+      // Petits mammifères (moufette, renard, souris).
+      PX(g, 4, 8, 7, 5, coat); PX(g, 5, 12, 5, 1, belly);
+      PX(g, 9, 4, 6, 5, coat); PX(g, 11, 8, 3, 1, belly);
+      PX(g, 8, 2, 3, 3, coat); PX(g, 12, 2, 3, 3, coat);
+      PX(g, 9, 3, 1, 1, noseC); PX(g, 13, 3, 1, 1, noseC);
+      PX(g, 1, 5 + sway, 4, 7, coat);
+      farLeg(6 - gait, 13, 2, 2 - liftB);
+      PX(g, 5 + gait, 13, 2, 2 - liftF, shade); PX(g, 9 - gait, 13, 2, 2 - liftB, shade);
+      g.globalCompositeOperation = "source-atop";
+      if (pattern === "stripe") { PX(g, 6, 6, 2, 7, mark); PX(g, 1, 4, 4, 5, mark); PX(g, 11, 3, 1, 4, mark); }
+      else if (pattern === "tips") { PX(g, 1, 4, 3, 3, mark); PX(g, 11, 8, 4, 2, mark); }
+      g.globalCompositeOperation = "source-over";
+      PX(g, 11, 6, 1, 2, eyeC); PX(g, 11, 6, 1, 1, PUPIL);
+      PX(g, 14, 7, 1, 1, noseC);
+    }
+  }
+
+  /* ------------------------------------------------ OREILLES DE FACE --- */
+  function earsFrontBack(front) {
+    const inner = front ? noseC : shade;
+    if (ears === "cat" || ears === "perky") {
+      PX(g, 4, 0, 2, 3, coat); PX(g, 10, 0, 2, 3, coat);
+      PX(g, 4, 1, 1, 1, inner); PX(g, 11, 1, 1, 1, inner);
+      if (spec.tufts) { PX(g, 4, 0, 1, 1, belly); PX(g, 11, 0, 1, 1, belly); }
+    } else if (ears === "semi") {
+      PX(g, 4, 1, 2, 3, coat); PX(g, 10, 1, 2, 3, coat);
+      PX(g, 4, 1, 2, 1, shade); PX(g, 10, 1, 2, 1, shade);
+    } else if (ears === "tiny") {
+      PX(g, 4, 1, 2, 2, coat); PX(g, 10, 1, 2, 2, coat);
+    } else if (ears === "rose") {
+      PX(g, 3, 4, 2, 2, shade); PX(g, 11, 4, 2, 2, shade);
+    } else if (ears === "long") {
+      PX(g, 3, 3, 2, 8, shade); PX(g, 11, 3, 2, 8, shade);
+    } else {                                   // floppy
+      PX(g, 3, 3, 2, 6, shade); PX(g, 11, 3, 2, 6, shade);
+    }
+  }
+
+  /* --------------------------------- MOTIF, VERSION FACE ET DOS --------- */
+  function patternFrontBack(front) {
+    g.globalCompositeOperation = "source-atop";
+    if (pattern === "tabby" || pattern === "rosette") {
+      PX(g, 7, 1, 2, 4, mark);                                 // raie médiane du crâne
+      for (const sx of [5, 8, 10]) PX(g, sx, 8, 1, 4, mark);
+    } else if (pattern === "spots") {
+      for (let i = 0; i < 14; i++) PX(g, 2 + Math.floor(rnd() * 12), 2 + Math.floor(rnd() * 11), 2, 2, mark);
+    } else if (pattern === "calico") {
+      PX(g, 3, 2, 4, 4, mark); PX(g, 9, 8, 4, 4, mark2);
+    } else if (pattern === "points") {
+      PX(g, 4, 0, 8, 3, mark);
+      if (front) PX(g, 5, 5, 6, 4, mark);
+      PX(g, 4, 13, 3, 2, mark); PX(g, 9, 13, 3, 2, mark);
+    } else if (pattern === "tuxedo" || pattern === "blaze") {
+      if (front) { PX(g, 7, 2, 2, 6, mark); PX(g, 5, 9, 6, 4, mark); }
+      PX(g, 4, 13, 3, 2, mark); PX(g, 9, 13, 3, 2, mark);
+    } else if (pattern === "saddle") {
+      PX(g, 4, 1, 8, 6, mark); PX(g, 5, 7, 6, 5, mark2);
+    } else if (pattern === "mask") {
+      if (front) { PX(g, 4, 3, 8, 4, mark); PX(g, 5, 9, 6, 4, belly); }
+      else PX(g, 4, 2, 8, 4, mark);
+    } else if (pattern === "patches") {
+      PX(g, 3, 2, 5, 4, mark); PX(g, 8, 8, 4, 4, mark);
+    } else if (pattern === "stripe") {
+      PX(g, 7, 0, 2, 14, mark);
+    } else if (pattern === "tips") {
+      PX(g, 4, 0, 2, 3, mark); PX(g, 10, 0, 2, 3, mark);
+    }
+    if (spec.curly) for (let i = 0; i < 18; i++) PX(g, 2 + Math.floor(rnd() * 12), 2 + Math.floor(rnd() * 11), 1, 1, shade);
+    if (fluff >= 2) { PX(g, 3, 7, 10, 3, belly); PX(g, 4, 6, 8, 1, belly); }
+    g.globalCompositeOperation = "source-over";
+  }
+
+  /* ------------------------------------------------------------- FACE --- */
+  function drawFront() {
+    // Queue : elle dépasse derrière, d'un côté, et balaie.
+    // Même précaution de face : la queue qui dépasse sur le flanc doit être
+    // cernée, sinon elle se fond dans le poitrail.
+    if (tail !== "stub") { PX(g, 11 + sway, 8, 2, 6, shade); PX(g, 11 + sway, 9, 2, 4, coat); }
+    // Pattes arrière, à peine visibles derrière le poitrail.
+    farLeg(3, 12, 2, 3); farLeg(11, 12, 2, 3);
+    /* POITRAIL PLUS ÉTROIT QUE LA TÊTE, et c'est tout le sujet. Le premier jet
+       donnait au corps et au crâne la même largeur de 8 px : à l'écran, un
+       rectangle uniforme de 14 px de haut où l'on ne distinguait plus la bête.
+       C'est mot pour mot le défaut « too ambiguous » que le zip 248 avait
+       corrigé sur le profil — et que la vue de face venait de réintroduire.
+       Tronc de 6 px, épaules de 8 px : le rétrécissement à hauteur du cou est
+       ce qui fait lire une tête. */
+    PX(g, 5, 9, 6, 4, coat);
+    PX(g, 4, 10, 8, 3, coat);                                   // épaules
+    PX(g, 6, 11, 4, 2, belly);
+    // Pattes avant.
+    PX(g, 4 + gait, 13, 3, 2 - liftF, shade);
+    PX(g, 9 - gait, 13, 3, 2 - liftB, shade);
+    // Tête, coins coupés en haut et en bas : un carré plein lit comme une boîte.
+    earsFrontBack(true);
+    PX(g, 4, 2, 8, 6, coat);
+    PX(g, 5, 1, 6, 1, coat); PX(g, 5, 8, 6, 1, coat);
+    PX(g, 5, 2, 6, 1, shade);                                   // ligne de crâne
+    PX(g, 6, 6, 4, 3, belly);                                   // museau
+    if (kind === "horse") { PX(g, 5, 0, 6, 3, mark); PX(g, 7, 0, 2, 2, "#ffd75e"); } // toupet + corne
+    if (kind === "dragon") { PX(g, 3, 0, 2, 2, mark); PX(g, 11, 0, 2, 2, mark); }    // cornes
+    if (kind === "turtle") { PX(g, 2, 6, 12, 6, shade); PX(g, 3, 7, 10, 4, coat); PX(g, 5, 2, 6, 6, coat); PX(g, 6, 6, 4, 2, belly); }
+    patternFrontBack(true);
+    // Yeux bien écartés, pupille en haut à l'extérieur : c'est ce qui rend la
+    // bestiole attachante plutôt que fixe.
+    PX(g, 5, 4, 2, 2, eyeC); PX(g, 9, 4, 2, 2, eyeC);
+    PX(g, 5, 4, 1, 1, PUPIL); PX(g, 10, 4, 1, 1, PUPIL);
+    PX(g, 7, 6, 2, 1, noseC); PX(g, 7, 7, 2, 1, "rgba(0,0,0,0.18)");
+    if (kind === "cat" || kind === "critter") { PX(g, 2, 7, 2, 1, belly); PX(g, 12, 7, 2, 1, belly); } // moustaches
+  }
+
+  /* -------------------------------------------------------------- DOS --- */
+  function drawBack() {
+    farLeg(3, 12, 2, 3); farLeg(11, 12, 2, 3);
+    PX(g, 5, 9, 6, 4, coat);                                    // croupe
+    PX(g, 4, 10, 8, 3, coat);
+    PX(g, 5, 12, 6, 1, shade);
+    PX(g, 4 + gait, 13, 3, 2 - liftF, shade);
+    PX(g, 9 - gait, 13, 3, 2 - liftB, shade);
+    earsFrontBack(false);
+    PX(g, 4, 2, 8, 6, coat);                                    // arrière du crâne
+    PX(g, 5, 1, 6, 1, coat); PX(g, 5, 8, 6, 1, coat);
+    PX(g, 5, 2, 6, 2, shade);
+    if (kind === "turtle") { PX(g, 2, 5, 12, 8, shade); PX(g, 3, 6, 10, 6, coat); for (const [sx, sy] of [[4, 7], [8, 7], [6, 10]]) PX(g, sx, sy, 2, 2, mark); }
+    patternFrontBack(false);
+    // La queue passe PAR-DESSUS le dos : c'est elle qui dit « je m'éloigne ».
+    /* ⚠️ LA QUEUE DOIT ÊTRE CERNÉE, sinon elle n'existe pas.
+       Défaut trouvé sur pets-dirs.png : peinte en `coat` par-dessus un dos
+       également en `coat`, elle était rigoureusement invisible — le chat
+       d'ombre vu de dos était un rectangle violet uni. C'est la variante,
+       pour un seul sprite, du problème que le liseré du zip 248 avait résolu
+       pour la silhouette entière : deux masses de même couleur qui se
+       touchent ne font qu'une masse.
+       On pose donc la forme d'abord en `shade`, un pixel plus large de chaque
+       côté, puis le pelage à l'intérieur. Aucun contour à calculer, et ça
+       marche pour les huit types de queue d'un coup. */
+    const tx = 7 + sway;
+    const tl = (x, y, w, h) => { PX(g, x - 1, y, w + 2, h, shade); PX(g, x, y, w, h, coat); };
+    if (tail === "cat") { tl(tx, 4, 2, 9); tl(tx, 3, 2, 2); }
+    else if (tail === "curl") { tl(tx, 6, 2, 5); tl(tx - 2, 5, 3, 2); }
+    else if (tail === "plume") { tl(tx - 1, 4, 4, 8); tl(tx, 3, 2, 2); }
+    else if (tail === "pom") { tl(tx - 1, 6, 4, 4); }
+    else if (tail === "bushy") { tl(tx - 1, 4, 4, 9); }
+    else if (tail === "stub") { tl(tx, 8, 2, 3); }
+    else { tl(tx, 5, 2, 7); }
+    if (pattern === "stripe") PX(g, tx, 4, 2, 5, mark);
+    if (pattern === "tips") PX(g, tx, 3, 2, 3, mark);
+  }
+
+  if (dir === 2 || dir === 3) { drawSide(); if (dir === 2) flipH(g, T, T); }
+  else if (dir === 0) drawFront();
+  else drawBack();
+
+  // Zip 251 : contour plein pour le dalmatien, aminci pour tous les autres.
+  const petOut = petId === "dog_dalmatian" ? OUT : "rgba(36,31,28,0.45)";
+  outlineSprite(g, T, T, petOut);
+  return c;
+}
+
+/* Petites bulles au-dessus de la tête pendant les jeux. Sans elles, un
+   familier qui tourne sur lui-même et un familier qui s'assoit se ressemblent
+   trop — c'est la même leçon que les retours visuels du Gourmandin (zip 387) :
+   un geste réussi et un geste raté doivent se distinguer. 8x8, fillRect seul. */
+export function petEmoteSprite(kind) {
+  const [c, g] = sprCv(8, 8);
+  if (kind === "heart") {
+    PX(g, 1, 2, 2, 2, "#e8456b"); PX(g, 5, 2, 2, 2, "#e8456b");
+    PX(g, 1, 3, 6, 2, "#e8456b"); PX(g, 2, 5, 4, 1, "#e8456b"); PX(g, 3, 6, 2, 1, "#e8456b");
+    PX(g, 2, 3, 1, 1, "#f7a0b8");
+  } else if (kind === "note") {
+    PX(g, 5, 1, 1, 5, "#4a3f6a"); PX(g, 3, 5, 3, 2, "#4a3f6a"); PX(g, 5, 1, 2, 1, "#4a3f6a");
+  } else if (kind === "spark") {
+    PX(g, 3, 0, 2, 8, "#f4d548"); PX(g, 0, 3, 8, 2, "#f4d548");
+    PX(g, 2, 2, 4, 4, "#fff0b0");
+  } else if (kind === "excl") {
+    PX(g, 3, 0, 2, 5, "#f2f0e8"); PX(g, 3, 6, 2, 2, "#f2f0e8");
+  } else {                                   // "zzz"
+    PX(g, 1, 1, 4, 1, "#dfe6f0"); PX(g, 3, 2, 2, 1, "#dfe6f0"); PX(g, 1, 3, 4, 1, "#dfe6f0");
+    PX(g, 4, 4, 3, 1, "#dfe6f0"); PX(g, 5, 5, 2, 1, "#dfe6f0"); PX(g, 4, 6, 3, 1, "#dfe6f0");
+  }
+  outlineSprite(g, 8, 8, "rgba(24,20,18,0.55)");
+  return c;
+}
+
+/* ===========================================================================
+   ZIP 388 — LES SEIZE FLEURS EN POTS
+   ---------------------------------------------------------------------------
+   Un seul dessinateur, neuf silhouettes de floraison, seize entrées de
+   catalogue. C'est délibéré : seize dessins recopiés auraient divergé au
+   premier ajustement (leçon du zip 387, « deux descriptions d'une même chose
+   finissent toujours par diverger »), et surtout on ne peut pas les comparer.
+   Là, `render-flowers.mjs` les dessine sur une seule planche et on VOIT
+   laquelle ne se distingue pas de sa voisine.
+
+   Le pot est commun à toutes — c'est ce qui donne son unité au catalogue —
+   mais sa terre change de teinte (`pot`), et sa forme est légèrement conique :
+   à 20 px de large, un pot rectangulaire lit comme une caisse.
+
+   Canvas 20x28, dessin ancré en bas comme les autres décorations : les pieds
+   reposent vers y = 27.
+   =========================================================================== */
+export function flowerPotSprite(spec) {
+  const W = 20, H = 28;
+  const [c, g] = sprCv(W, H);
+  const bloom = spec.bloom || "#e2456b";
+  const bloom2 = spec.bloom2 || "#f7c0d0";
+  const leaf = spec.leaf || "#4a8f3c";
+  const leafD = "rgba(0,0,0,0.22)";
+  const potC = spec.pot || "#b5623c";
+  const shape = spec.shape || "cup";
+  const cx = 10;
+  // Base de la floraison : plus haut pour les grandes tiges.
+  const ty = spec.tall ? 2 : 6;
+
+  /* ------------------------------------------------------------ LE POT --- */
+  // Rebord, puis corps conique rangée par rangée. Deux teintes seulement :
+  // la terre et un voile sombre — un pot en dégradé mangerait la fleur.
+  PX(g, 3, 18, 14, 3, potC);
+  PX(g, 3, 18, 14, 1, "rgba(255,255,255,0.22)");
+  PX(g, 4, 21, 12, 2, potC);
+  PX(g, 5, 23, 10, 2, potC);
+  PX(g, 5, 25, 10, 2, potC);
+  PX(g, 6, 27, 8, 1, potC);
+  PX(g, 12, 21, 4, 6, "rgba(0,0,0,0.20)");     // flanc droit dans l'ombre
+  PX(g, 4, 21, 2, 4, "rgba(255,255,255,0.12)"); // flanc gauche éclairé
+  PX(g, 4, 19, 12, 2, "#4a3a2a");               // terre
+  for (let i = 0; i < 5; i++) PX(g, 5 + i * 2, 19, 1, 1, "#5e4a34");
+
+  /* ------------------------------------------------------------- CACTUS --- */
+  // Le cactus n'a ni tige ni feuille : la plante EST le corps. Il sort donc
+  // AVANT le feuillage, et non en dernier avec un rectangle transparent censé
+  // effacer les tiges — un fillRect à alpha 0 ne peint rien, il ne gomme pas.
+  // (Défaut réel de la première version, trouvé sur la planche.)
+  if (shape === "cactus") {
+    PX(g, 7, 5, 6, 14, leaf);
+    PX(g, 4, 10, 3, 6, leaf); PX(g, 13, 8, 3, 7, leaf);
+    for (let y = 6; y < 19; y += 2) { PX(g, 8, y, 1, 1, "rgba(255,255,255,0.25)"); PX(g, 11, y, 1, 1, "rgba(0,0,0,0.20)"); }
+    PX(g, 5, 11, 1, 4, "rgba(255,255,255,0.20)"); PX(g, 15, 9, 1, 5, "rgba(0,0,0,0.18)");
+    PX(g, 8, 2, 4, 3, bloom); PX(g, 7, 3, 6, 1, bloom);      // fleur au sommet
+    PX(g, 9, 3, 2, 1, bloom2);
+    PX(g, 4, 8, 3, 2, bloom); PX(g, 14, 6, 2, 2, bloom);      // deux boutons latéraux
+    outlineSprite(g, W, H, "rgba(36,31,28,0.45)");
+    return c;
+  }
+
+  /* ---------------------------------------------------------- FEUILLAGE --- */
+  /* HAUTEUR DE FLORAISON, calculée et non devinée. Chaque silhouette monte
+     d'un nombre de pixels connu au-dessus du sommet de sa tige (`up`) ; on
+     dimensionne les tiges pour que la plus haute laisse UN pixel de marge en
+     haut du canevas — celui du contour.
+
+     C'est ce qui a corrigé le seul vrai défaut de la première planche : la
+     jacinthe (épi de 12 px sur une tige « tall ») sortait du cadre et se
+     faisait trancher. `render-flowers.mjs` l'a signalée avant qu'elle
+     n'arrive en jeu ; à l'œil seul, on l'aurait prise pour un choix. */
+  // Valeurs = extension RÉELLE de la silhouette au-dessus du sommet de tige,
+  // PLUS UN PIXEL pour l'anneau de contour. C'est ce « plus un » qui manquait
+  // au premier jet : cinq fleurs sur seize se faisaient trancher non par leur
+  // dessin mais par leur liseré, ce qui est indétectable en relisant le code.
+  const UP = { cup: 6, ray: spec.single ? 11 : 6, spike: 12, cluster: 6, bell: 7, rose: 6, trumpet: 6, pom: 7, pad: 6 };
+  const up = UP[shape] || 6;
+  const hMax = Math.max(4, 18 - up);
+  const hTop = spec.tall ? hMax : Math.max(4, hMax - 3);
+  // Trois tiges, jamais de même hauteur ni régulièrement espacées : alignées,
+  // elles se lisent comme un peigne. Écart de 5 px pour que trois fleurs de
+  // 5 px de large ne se touchent pas — c'est l'autre défaut de la première
+  // planche, où les trois têtes fusionnaient en une seule masse.
+  const stems = spec.single
+    ? [[cx, hTop]]
+    : [[cx - 5, hTop - 2], [cx, hTop], [cx + 5, hTop - 4]];
+  for (const [sx, sh] of stems) PX(g, sx, 19 - sh, 1, sh, leaf);
+  /* TOUFFE DE FEUILLAGE. Sur la deuxième planche, les seize fleurs lisaient
+     comme « trois bâtons surmontés d'une tache » : la moitié basse du sprite
+     était vide entre le rebord du pot et la floraison. Aucune constante ne dit
+     ça — c'est exactement le genre de défaut que seule une planche montre.
+
+     La touffe est un ÉVENTAIL qui s'évase vers le bas : rangée pleine juste
+     au-dessus du rebord, puis deux lobes qui s'écartent, puis deux feuilles
+     arquées en pointe. Symétrique en masse, jamais en pixels — une symétrie
+     exacte se lit comme un motif, pas comme une plante. */
+  PX(g, cx - 5, 17, 11, 1, leaf);
+  PX(g, cx - 6, 16, 5, 1, leaf); PX(g, cx + 2, 16, 5, 1, leaf);
+  PX(g, cx - 4, 15, 3, 1, leaf); PX(g, cx + 2, 15, 4, 1, leaf);
+  PX(g, cx - 7, 14, 3, 1, leaf); PX(g, cx + 4, 13, 3, 1, leaf);
+  PX(g, cx - 3, 13, 2, 1, leaf); PX(g, cx + 1, 12, 2, 1, leaf);
+  // Ombres portées : sans elles la touffe est un aplat vert et perd sa masse.
+  PX(g, cx - 5, 18, 11, 1, leafD);
+  PX(g, cx - 6, 17, 4, 1, leafD); PX(g, cx + 3, 17, 4, 1, leafD);
+  PX(g, cx - 4, 16, 2, 1, leafD); PX(g, cx + 3, 16, 3, 1, leafD);
+  PX(g, cx - 7, 15, 3, 1, leafD); PX(g, cx + 4, 14, 3, 1, leafD);
+  // Le tournesol n'a qu'une tige : il lui faut ses deux grandes feuilles
+  // caractéristiques, sinon la tige seule est un manche à balai.
+  if (spec.single) {
+    PX(g, cx - 6, 11, 5, 2, leaf); PX(g, cx + 2, 13, 5, 2, leaf);
+    PX(g, cx - 6, 12, 5, 1, leafD); PX(g, cx + 2, 14, 5, 1, leafD);
+  }
+
+  /* --------------------------------------------------------- FLORAISON --- */
+  const heads = stems.map(([sx, sh]) => [sx, 19 - sh]);   // sommet de chaque tige
+
+  for (const [hx, hy] of heads) {
+    if (shape === "cup") {                       // tulipe, coquelicot
+      PX(g, hx - 2, hy - 4, 5, 4, bloom);
+      PX(g, hx - 2, hy - 5, 1, 1, bloom); PX(g, hx, hy - 5, 1, 1, bloom); PX(g, hx + 2, hy - 5, 1, 1, bloom);
+      PX(g, hx - 1, hy - 3, 1, 3, bloom2);       // pli central sombre (cœur du coquelicot)
+      PX(g, hx + 1, hy - 4, 1, 2, "rgba(255,255,255,0.22)");
+    } else if (shape === "ray" && spec.single) {  // tournesol : une seule grosse tête
+      // Huit pétales POSÉS UN PAR UN, avec un creux entre chacun. Le premier
+      // jet peignait un carré plein avec un cœur au milieu : à l'écran, ça
+      // donnait une gaufre jaune à trou brun, pas un tournesol. Ce sont les
+      // CREUX qui font la fleur, pas les pétales.
+      const cyy = hy - 6;
+      PX(g, hx - 1, cyy - 4, 3, 2, bloom); PX(g, hx - 1, cyy + 3, 3, 2, bloom);
+      PX(g, hx - 4, cyy - 1, 2, 3, bloom); PX(g, hx + 3, cyy - 1, 2, 3, bloom);
+      PX(g, hx - 3, cyy - 3, 2, 2, bloom); PX(g, hx + 2, cyy - 3, 2, 2, bloom);
+      PX(g, hx - 3, cyy + 2, 2, 2, bloom); PX(g, hx + 2, cyy + 2, 2, 2, bloom);
+      PX(g, hx - 2, cyy - 2, 5, 5, bloom);                    // couronne interne
+      PX(g, hx - 2, cyy - 2, 4, 4, bloom2);                   // cœur de graines
+      PX(g, hx - 1, cyy - 1, 1, 1, "rgba(255,255,255,0.18)"); // grain qui accroche la lumière
+      PX(g, hx, cyy, 1, 1, "rgba(0,0,0,0.25)");
+    } else if (shape === "ray") {                // marguerite : trois petites têtes
+      const cyy = hy - 3;
+      PX(g, hx - 1, cyy - 2, 3, 1, bloom); PX(g, hx - 1, cyy + 2, 3, 1, bloom);
+      PX(g, hx - 2, cyy - 1, 1, 3, bloom); PX(g, hx + 2, cyy - 1, 1, 3, bloom);
+      PX(g, hx - 1, cyy - 1, 3, 3, bloom);
+      PX(g, hx, cyy, 1, 1, bloom2);                           // cœur
+    } else if (shape === "spike") {              // lavande, jacinthe
+      // Épi : segments de 3 px qui rétrécissent et se décalent d'un pixel en
+      // alternance. C'est le décalage qui fait l'épi ; alignés, on lit une
+      // colonne.
+      for (let i = 0; i < 5; i++) {
+        const w = i >= 3 ? 2 : 3;
+        PX(g, hx - 1 + (i % 2 ? 1 : 0), hy - 2 - i * 2, w, 2, i % 2 ? bloom2 : bloom);
+      }
+      PX(g, hx, hy - 11, 1, 1, bloom2);          // pointe de l'épi
+    } else if (shape === "cluster") {            // hortensia, géranium
+      PX(g, hx - 2, hy - 4, 5, 3, bloom);
+      PX(g, hx - 1, hy - 5, 3, 1, bloom);
+      PX(g, hx - 2, hy - 4, 2, 1, bloom2); PX(g, hx + 1, hy - 2, 2, 1, bloom2);
+      PX(g, hx, hy - 3, 1, 1, bloom2);
+    } else if (shape === "bell") {               // iris
+      PX(g, hx - 2, hy - 6, 5, 2, bloom);        // étendards dressés
+      PX(g, hx - 1, hy - 4, 3, 2, bloom);
+      PX(g, hx - 2, hy - 4, 1, 1, bloom); PX(g, hx + 2, hy - 4, 1, 1, bloom);
+      PX(g, hx - 1, hy - 2, 3, 2, bloom);        // sabot retombant
+      PX(g, hx, hy - 3, 1, 2, bloom2);           // barbe jaune
+    } else if (shape === "rose") {               // rosier
+      PX(g, hx - 2, hy - 5, 5, 5, bloom);
+      PX(g, hx - 1, hy - 4, 3, 3, bloom2);       // cœur enroulé
+      PX(g, hx, hy - 3, 1, 1, bloom);
+    } else if (shape === "trumpet") {            // jonquille
+      PX(g, hx - 2, hy - 4, 5, 3, bloom);        // périanthe plat
+      PX(g, hx - 1, hy - 5, 3, 3, bloom2);       // trompette, plus foncée
+      PX(g, hx, hy - 5, 1, 1, "rgba(255,255,255,0.4)");
+    } else if (shape === "pom") {                // pivoine, œillet
+      PX(g, hx - 2, hy - 5, 5, 4, bloom);
+      PX(g, hx - 1, hy - 6, 3, 1, bloom);
+      for (const [ox, oy] of [[-2, -4], [1, -4], [-1, -2], [1, -2]]) PX(g, hx + ox, hy + oy, 2, 1, bloom2);
+    } else {                                     // pad : orchidée, pensée
+      PX(g, hx - 2, hy - 4, 5, 3, bloom);        // trois pétales bas
+      PX(g, hx - 2, hy - 5, 2, 1, bloom); PX(g, hx + 1, hy - 5, 2, 1, bloom);
+      PX(g, hx - 1, hy - 3, 3, 1, bloom2);       // gorge contrastée
+      PX(g, hx, hy - 2, 1, 1, bloom2);
+    }
+  }
+
+  outlineSprite(g, W, H, "rgba(36,31,28,0.45)");
+  return c;
+}
+
+/* Zip 251 : sprites des décorations offertes. Zip 388 : la fonction devient un
+   AIGUILLAGE. Une entrée du catalogue qui porte un `shape` est une fleur en
+   pot ; les trois d'origine gardent leur dessin, au pixel près. Une entrée
+   inconnue retombe sur le gnome : un catalogue étendu sans habillage doit être
+   terne, jamais cassé (même règle que drawBridgeTile, zip 386). */
+export function decorSprite(id) {
+  const spec = C.UNIQUE_DECORATIONS.find(d => d.id === id);
+  if (spec && spec.shape) return flowerPotSprite(spec);
+  const [c, g] = sprCv(20, 28);
+  if (id === "fountain") {
+    PX(g, 3, 22, 14, 5, "#9aa0aa");                   // vasque pierre
+    PX(g, 4, 20, 12, 3, "#b6bcc6");
+    PX(g, 5, 21, 10, 2, "#3f7fd0");                   // eau
+    PX(g, 9, 10, 2, 11, "#b6bcc6");                   // colonne centrale
+    PX(g, 7, 9, 6, 2, "#9aa0aa");                     // vasque haute
+    PX(g, 8, 8, 4, 1, "#3f7fd0");
+    g.fillStyle = "rgba(210,235,255,0.9)"; PX(g, 9, 3, 2, 5, "#cfeaff"); // jet
+    PX(g, 7, 6, 1, 2, "#cfeaff"); PX(g, 12, 6, 1, 2, "#cfeaff");
+    outlineSprite(g, 20, 28, "#5a606a");
+  } else if (id === "sunwheel") {
+    PX(g, 9, 12, 2, 15, "#8a6340");                   // poteau
+    g.fillStyle = "#e8c24a"; g.beginPath(); g.arc(10, 9, 6, 0, 7); g.fill();   // disque solaire
+    g.fillStyle = "#f2d873"; g.beginPath(); g.arc(10, 9, 3, 0, 7); g.fill();
+    g.strokeStyle = "#e8c24a"; g.lineWidth = 2;      // rayons
+    for (let a = 0; a < 8; a++) { const an = a * Math.PI / 4; g.beginPath(); g.moveTo(10 + Math.cos(an) * 6, 9 + Math.sin(an) * 6); g.lineTo(10 + Math.cos(an) * 9, 9 + Math.sin(an) * 9); g.stroke(); }
+    outlineSprite(g, 20, 28, "#8a6a2a");
+  } else {                                            // gnome (et filet de sécurité)
+    PX(g, 7, 20, 6, 6, "#3f6fb0");                    // tunique bleue
+    PX(g, 6, 24, 8, 3, "#2f568c");                    // bas de tunique
+    PX(g, 8, 15, 4, 5, "#f2d3b0");                    // visage
+    PX(g, 7, 19, 6, 2, "#e8e8e8");                    // barbe blanche
+    PX(g, 8, 20, 4, 3, "#e8e8e8");
+    g.fillStyle = "#c0392b"; g.beginPath(); g.moveTo(6, 15); g.lineTo(14, 15); g.lineTo(10, 4); g.closePath(); g.fill(); // bonnet rouge
+    PX(g, 9, 16, 2, 1, "#d9a066");                    // nez
+    PX(g, 8, 17, 1, 1, "#2a2320"); PX(g, 11, 17, 1, 1, "#2a2320"); // yeux
+    outlineSprite(g, 20, 28, "#241f1c");
+  }
+  return c;
+}
+
 export function buildSprites() {
   const T = 16;
 
@@ -745,228 +1433,8 @@ export function buildSprites() {
   function P(g, x, y, w, h, col) { g.fillStyle = col; g.fillRect(x, y, w, h); }
   function makeRnd(s) { return () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; }; }
 
-  // ==================================================================
-  // Zip 248 — refonte complète des sprites de familiers (demande Guillaume :
-  // "the dalmatian is purple, which does not make sense... make each dog and
-  // cat design accurate to their actual appearance" + "improve the overall
-  // pet design - right now it looks too ambiguous").
-  //
-  // AVANT : une seule silhouette générique teintée en HSL par un `hue` — d'où
-  // un dalmatien VIOLET, et 30 races strictement identiques à la couleur près.
-  // MAINTENANT, trois changements :
-  //   1) chaque race porte sa VRAIE palette (coat/shade/belly/mark) et son
-  //      motif — voir PET_CATALOG (fermeConstants.js) ;
-  //   2) chat et chien ont des silhouettes RÉELLEMENT distinctes : le chat a
-  //      une tête ronde, des oreilles triangulaires et une longue queue
-  //      dressée ; le chien a un museau saillant avec truffe, des oreilles
-  //      selon la race (tombantes / dressées / longues / en rose) et un corps
-  //      plus trapu ;
-  //   3) un CONTOUR sombre est ajouté automatiquement (outlineSprite) — c'est
-  //      lui qui règle le "trop ambigu" : sans liseré, tête et corps se
-  //      fondaient en une seule masse illisible à 16x16.
-  // Les motifs (taches, rayures, masque, points siamois, selle, smoking…) sont
-  // peints en `source-atop` : ils se DÉCOUPENT sur la silhouette déjà dessinée,
-  // donc aucune tache ne flotte dans le vide. Yeux et truffe sont posés
-  // ensuite, et le contour tout à la fin pour rester net.
-  //
-  // Le dessin tient dans x1..x14 / y1..y14 : la marge d'un pixel est réservée
-  // au contour.
-  function outlineSprite(g, w, h, col) {
-    const im = g.getImageData(0, 0, w, h), d = im.data;
-    const solid = (x, y) => x >= 0 && y >= 0 && x < w && y < h && d[(y * w + x) * 4 + 3] > 0;
-    const ring = [];
-    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-      if (solid(x, y)) continue;
-      if (solid(x - 1, y) || solid(x + 1, y) || solid(x, y - 1) || solid(x, y + 1)) ring.push(x, y);
-    }
-    g.fillStyle = col;
-    for (let i = 0; i < ring.length; i += 2) g.fillRect(ring[i], ring[i + 1], 1, 1);
-  }
-  function petSprite(petId) {
-    const spec = C.PET_CATALOG[petId] || {};
-    const kind = spec.body || "critter";
-    const coat = spec.coat || "#b0a898";
-    const shade = spec.shade || "#8a8274";
-    const belly = spec.belly || "#e2ddd2";
-    const mark = spec.mark || shade;
-    const mark2 = spec.mark2 || mark;
-    const eyeC = spec.eye || "#3a3a3a";
-    const noseC = spec.nose || "#2a2320";
-    const pattern = spec.pattern || "solid";
-    const fluff = spec.fluff | 0;
-    const ears = spec.ears || (kind === "cat" ? "cat" : "floppy");
-    const tail = spec.tail || (kind === "cat" ? "cat" : "up");
-    const [c, g] = cv(T, T);
-    // Aléa DÉTERMINISTE par identifiant : les taches d'un dalmatien doivent
-    // être identiques d'une session à l'autre (sinon le sprite scintille).
-    let sd = 0; for (let i = 0; i < petId.length; i++) sd = (sd * 31 + petId.charCodeAt(i)) & 0x7fffffff;
-    const rnd = makeRnd(sd + 7);
-    const PUPIL = "#16161a", OUT = "#241f1c";
-
-    if (kind === "cat" || kind === "dog") {
-      const isCat = kind === "cat";
-      const low = !!spec.longBody;                       // teckel : long et bas
-      const bx = low ? 2 : 3, bw = low ? 10 : (isCat ? 8 : 9);
-      const legA = bx + 1, legB = bx + bw - 3;
-
-      // ---- queue (en premier : le corps recouvre sa racine) ----
-      if (tail === "cat") { P(g, 1, 6, 2, 6, coat); P(g, 2, 5, 2, 1, coat); }
-      else if (tail === "curl") { P(g, 1, 7, 3, 2, coat); P(g, 1, 5, 2, 3, coat); }
-      else if (tail === "plume") { P(g, 1, 6, 3, 4, coat); P(g, 2, 4, 2, 2, coat); }
-      else if (tail === "pom") { P(g, 1, 6, 3, 3, coat); }
-      else if (tail === "bushy") { P(g, 1, 7, 3, 5, coat); }
-      else if (tail === "stub") { P(g, 2, 10, 2, 2, coat); }
-      else { P(g, 1, 6, 2, 4, coat); }
-
-      // ---- corps + pattes ----
-      P(g, bx, 9, bw, 4, coat);
-      P(g, bx + 1, 12, bw - 2, 1, belly);
-      P(g, legA, 13, 2, 2, shade);
-      P(g, legB, 13, 2, 2, shade);
-
-      // ---- tête ----
-      if (isCat) {
-        P(g, 8, 3, 7, 6, coat);              // crâne rond
-        P(g, spec.flatFace ? 10 : 11, spec.flatFace ? 5 : 6, spec.flatFace ? 5 : 4, 2, belly); // museau (aplati chez le persan)
-      } else {
-        P(g, 8, 3, 6, 6, coat);              // crâne
-        // Museau raccourci pour les races à face plate (carlin, bouledogue).
-        P(g, 12, 6, spec.flatFace ? 2 : 3, 3, belly);
-      }
-
-      // ---- oreilles ----
-      if (ears === "cat") {
-        P(g, 8, 1, 2, 3, coat); P(g, 12, 1, 2, 3, coat);
-        P(g, 9, 2, 1, 1, noseC); P(g, 12, 2, 1, 1, noseC);
-        if (spec.tufts) { P(g, 8, 0, 1, 1, belly); P(g, 13, 0, 1, 1, belly); }
-      } else if (ears === "perky") {
-        P(g, 8, 1, 2, 3, coat); P(g, 11, 1, 2, 3, coat);
-        P(g, 8, 2, 1, 1, noseC); P(g, 12, 2, 1, 1, noseC);
-      } else if (ears === "semi") {
-        P(g, 8, 2, 2, 3, coat); P(g, 11, 2, 2, 3, coat);
-        P(g, 8, 2, 2, 1, shade); P(g, 11, 2, 2, 1, shade);
-      } else if (ears === "tiny") {
-        P(g, 8, 2, 2, 2, coat); P(g, 11, 2, 2, 2, coat);
-      } else if (ears === "rose") {
-        P(g, 7, 4, 2, 2, shade); P(g, 12, 3, 2, 2, shade);
-      } else if (ears === "long") {
-        P(g, 6, 4, 2, 8, shade); P(g, 13, 3, 1, 3, shade);
-      } else { // floppy
-        P(g, 6, 4, 2, 6, shade); P(g, 13, 3, 1, 3, shade);
-      }
-
-      // ---- motif : découpé sur la silhouette (source-atop) ----
-      g.globalCompositeOperation = "source-atop";
-      if (pattern === "tabby") {
-        for (const sx of [bx + 2, bx + 4, bx + 6]) P(g, sx, 9, 1, 4, mark);
-        P(g, 10, 3, 1, 2, mark); P(g, 12, 3, 1, 2, mark);
-        P(g, 1, 7, 2, 1, mark); P(g, 1, 10, 2, 1, mark);
-      } else if (pattern === "spots") {
-        for (let i = 0; i < 12; i++) P(g, 2 + Math.floor(rnd() * 11), 2 + Math.floor(rnd() * 11), 2, 2, mark);
-        for (let i = 0; i < 9; i++) P(g, 1 + Math.floor(rnd() * 13), 2 + Math.floor(rnd() * 12), 1, 1, mark);
-      } else if (pattern === "rosette") {
-        for (let i = 0; i < 7; i++) { const sx = bx + Math.floor(rnd() * (bw - 2)), sy = 9 + Math.floor(rnd() * 3); P(g, sx, sy, 2, 1, mark); P(g, sx, sy + 1, 1, 1, mark); }
-        P(g, 10, 3, 1, 2, mark); P(g, 12, 3, 1, 2, mark);
-      } else if (pattern === "calico") {
-        P(g, bx, 9, 4, 3, mark); P(g, 1, 5, 3, 4, mark);
-        P(g, 9, 1, 4, 3, mark2); P(g, bx + 4, 10, 4, 3, mark2);
-      } else if (pattern === "points") {
-        P(g, 8, 1, 7, 3, mark);                       // oreilles
-        P(g, 11, 5, 4, 4, mark);                      // masque de face
-        P(g, 1, 4, 3, 8, mark);                       // queue
-        P(g, legA, 13, 2, 2, mark); P(g, legB, 13, 2, 2, mark);
-      } else if (pattern === "tuxedo") {
-        P(g, 11, 6, 4, 2, mark);                      // museau blanc
-        P(g, bx + 2, 10, 5, 3, mark);                 // plastron
-        P(g, legA, 13, 2, 2, mark); P(g, legB, 13, 2, 2, mark);
-      } else if (pattern === "saddle") {
-        P(g, 8, 3, 7, 5, mark); P(g, 6, 4, 2, 8, mark);   // tête + oreille fauves
-        P(g, bx, 9, bw - 2, 3, mark2);                     // selle noire
-      } else if (pattern === "mask") {
-        P(g, 11, 4, 4, 5, mark); P(g, 9, 4, 2, 2, mark);   // masque facial
-        P(g, bx + 1, 10, 6, 3, belly);                     // poitrail clair
-        P(g, legA, 13, 2, 2, belly); P(g, legB, 13, 2, 2, belly);
-      } else if (pattern === "blaze") {
-        P(g, 11, 3, 2, 4, mark);                           // liste sur le chanfrein
-        P(g, bx + 1, 10, 6, 3, mark);                      // poitrail blanc
-        P(g, legA, 13, 2, 2, mark); P(g, legB, 13, 2, 2, mark);
-      } else if (pattern === "patches") {
-        P(g, 8, 3, 5, 4, mark);
-        P(g, bx, 9, 4, 3, mark);
-        if (ears === "long" || ears === "floppy") P(g, 6, 4, 2, 8, mark);
-      }
-      if (spec.curly) for (let i = 0; i < 18; i++) P(g, 2 + Math.floor(rnd() * 12), 2 + Math.floor(rnd() * 11), 1, 1, shade);
-      if (spec.scruffy) for (let i = 0; i < 10; i++) P(g, bx + Math.floor(rnd() * bw), 8 + Math.floor(rnd() * 5), 1, 1, shade);
-      if (fluff >= 2) P(g, 7, 8, 2, 5, belly);             // collerette (persan, spitz, colley…)
-      g.globalCompositeOperation = "source-over";
-
-      // ---- yeux / truffe, par-dessus le motif ----
-      if (isCat) {
-        P(g, 10, 5, 1, 2, eyeC); P(g, 13, 5, 1, 2, eyeC);
-        P(g, 10, 5, 1, 1, PUPIL); P(g, 13, 5, 1, 1, PUPIL);
-        P(g, 12, 7, 1, 1, noseC);
-      } else {
-        P(g, 10, 4, 1, 2, eyeC); P(g, 12, 4, 1, 2, eyeC);
-        P(g, 10, 4, 1, 1, PUPIL); P(g, 12, 4, 1, 1, PUPIL);
-        P(g, spec.flatFace ? 13 : 14, 6, 1, 2, noseC);
-      }
-    } else if (kind === "dragon") {
-      P(g, 3, 8, 8, 5, coat); P(g, 4, 12, 6, 1, belly);
-      P(g, 9, 3, 6, 6, coat); P(g, 11, 7, 3, 1, belly);
-      P(g, 2, 4, 4, 5, shade);                                  // aile
-      for (let i = 0; i < 4; i++) P(g, 4 + i * 2, 6 + (i % 2), 1, 2, mark);
-      P(g, 13, 1, 1, 3, mark); P(g, 10, 1, 1, 2, mark);          // cornes
-      P(g, 1, 10, 3, 2, coat);                                   // queue
-      P(g, 12, 5, 1, 2, eyeC); P(g, 12, 5, 1, 1, PUPIL);
-      P(g, 14, 7, 1, 1, noseC);
-    } else if (kind === "horse") {
-      P(g, 3, 8, 8, 5, coat); P(g, 4, 12, 6, 1, belly);
-      P(g, 10, 3, 4, 6, coat); P(g, 12, 7, 2, 2, belly);
-      P(g, 9, 2, 2, 6, mark);                                    // crinière
-      P(g, 1, 7, 3, 5, mark);                                    // queue
-      P(g, 12, 0, 1, 3, "#ffd75e"); P(g, 12, 0, 1, 1, "#fff0b0"); // corne
-      P(g, 4, 13, 2, 2, shade); P(g, 9, 13, 2, 2, shade);
-      P(g, 12, 5, 1, 2, eyeC); P(g, 12, 5, 1, 1, PUPIL);
-      P(g, 13, 8, 1, 1, noseC);
-    } else if (kind === "turtle") {
-      P(g, 2, 6, 10, 6, shade); P(g, 3, 7, 8, 4, coat);          // carapace
-      for (const [sx, sy] of [[4, 8], [7, 8], [5, 10], [8, 10]]) P(g, sx, sy, 2, 1, mark);
-      P(g, 11, 8, 4, 4, coat); P(g, 12, 11, 3, 1, belly);        // tête
-      P(g, 1, 9, 2, 2, coat);                                    // queue
-      P(g, 3, 12, 2, 2, coat); P(g, 9, 12, 2, 2, coat);
-      P(g, 13, 9, 1, 2, eyeC); P(g, 13, 9, 1, 1, PUPIL);
-    } else if (kind === "lamb") {
-      P(g, 2, 5, 10, 7, coat);                                   // toison
-      for (let i = 0; i < 16; i++) P(g, 2 + Math.floor(rnd() * 10), 5 + Math.floor(rnd() * 6), 1, 1, shade);
-      P(g, 10, 7, 5, 4, mark); P(g, 11, 10, 3, 1, belly);        // face
-      P(g, 9, 7, 2, 2, mark); P(g, 14, 7, 1, 2, mark);           // oreilles
-      P(g, 3, 12, 2, 2, mark); P(g, 9, 12, 2, 2, mark);
-      P(g, 12, 8, 1, 2, eyeC); P(g, 12, 8, 1, 1, PUPIL);
-      P(g, 14, 9, 1, 1, noseC);
-    } else {
-      // Petits mammifères (moufette, renard, souris) : corps compact, grandes
-      // oreilles rondes, grosse queue touffue.
-      P(g, 4, 8, 7, 5, coat); P(g, 5, 12, 5, 1, belly);
-      P(g, 9, 4, 6, 5, coat); P(g, 11, 8, 3, 1, belly);
-      P(g, 8, 2, 3, 3, coat); P(g, 12, 2, 3, 3, coat);           // oreilles
-      P(g, 9, 3, 1, 1, noseC); P(g, 13, 3, 1, 1, noseC);
-      P(g, 1, 5, 4, 7, coat);                                     // queue touffue
-      P(g, 5, 13, 2, 2, shade); P(g, 9, 13, 2, 2, shade);
-      g.globalCompositeOperation = "source-atop";
-      if (pattern === "stripe") { P(g, 6, 6, 2, 7, mark); P(g, 1, 4, 4, 5, mark); P(g, 11, 3, 1, 4, mark); }
-      else if (pattern === "tips") { P(g, 1, 4, 3, 3, mark); P(g, 11, 8, 4, 2, mark); }
-      g.globalCompositeOperation = "source-over";
-      P(g, 11, 6, 1, 2, eyeC); P(g, 11, 6, 1, 1, PUPIL);
-      P(g, 14, 7, 1, 1, noseC);
-    }
-    // Zip 251 (demande Guillaume : "make the black outline thinner", sauf le
-    // dalmatien) : le dalmatien garde son contour plein (OUT) ; tous les autres
-    // familiers reçoivent un contour plus léger/fin (même anneau 1 px mais
-    // semi-transparent, il lit donc comme un liseré plus fin).
-    const petOut = petId === "dog_dalmatian" ? OUT : "rgba(36,31,28,0.45)";
-    outlineSprite(g, T, T, petOut);
-    return c;
-  }
+  // Zip 388 : outlineSprite et petSprite sont passés au NIVEAU DU MODULE
+  // (voir en tête de fichier). petSprite prend désormais (petId, dir, frame).
 
   // ==================================================================
   // Zip 235 additions
@@ -1959,38 +2427,8 @@ export function buildSprites() {
   /* ---------------- Icônes d'interface ---------------- */
   // Zip 251 : sprites des décorations offertes (gnome, fontaine, roue solaire).
   // Canvas 20x28, dessin ancré en bas (les "pieds" reposent vers y=27).
-  function decorSprite(id) {
-    const [c, g] = cv(20, 28);
-    if (id === "gnome") {
-      P(g, 7, 20, 6, 6, "#3f6fb0");                    // tunique bleue
-      P(g, 6, 24, 8, 3, "#2f568c");                    // bas de tunique
-      P(g, 8, 15, 4, 5, "#f2d3b0");                    // visage
-      P(g, 7, 19, 6, 2, "#e8e8e8");                    // barbe blanche
-      P(g, 8, 20, 4, 3, "#e8e8e8");
-      g.fillStyle = "#c0392b"; g.beginPath(); g.moveTo(6, 15); g.lineTo(14, 15); g.lineTo(10, 4); g.closePath(); g.fill(); // bonnet rouge
-      P(g, 9, 16, 2, 1, "#d9a066");                    // nez
-      P(g, 8, 17, 1, 1, "#2a2320"); P(g, 11, 17, 1, 1, "#2a2320"); // yeux
-      outlineSprite(g, 20, 28, "#241f1c");
-    } else if (id === "fountain") {
-      P(g, 3, 22, 14, 5, "#9aa0aa");                   // vasque pierre
-      P(g, 4, 20, 12, 3, "#b6bcc6");
-      P(g, 5, 21, 10, 2, "#3f7fd0");                   // eau
-      P(g, 9, 10, 2, 11, "#b6bcc6");                   // colonne centrale
-      P(g, 7, 9, 6, 2, "#9aa0aa");                     // vasque haute
-      P(g, 8, 8, 4, 1, "#3f7fd0");
-      g.fillStyle = "rgba(210,235,255,0.9)"; P(g, 9, 3, 2, 5, "#cfeaff"); // jet
-      P(g, 7, 6, 1, 2, "#cfeaff"); P(g, 12, 6, 1, 2, "#cfeaff");
-      outlineSprite(g, 20, 28, "#5a606a");
-    } else { // sunwheel
-      P(g, 9, 12, 2, 15, "#8a6340");                   // poteau
-      g.fillStyle = "#e8c24a"; g.beginPath(); g.arc(10, 9, 6, 0, 7); g.fill();   // disque solaire
-      g.fillStyle = "#f2d873"; g.beginPath(); g.arc(10, 9, 3, 0, 7); g.fill();
-      g.strokeStyle = "#e8c24a"; g.lineWidth = 2;      // rayons
-      for (let a = 0; a < 8; a++) { const an = a * Math.PI / 4; g.beginPath(); g.moveTo(10 + Math.cos(an) * 6, 9 + Math.sin(an) * 6); g.lineTo(10 + Math.cos(an) * 9, 9 + Math.sin(an) * 9); g.stroke(); }
-      outlineSprite(g, 20, 28, "#8a6a2a");
-    }
-    return c;
-  }
+  // Zip 388 : decorSprite est passé au NIVEAU DU MODULE (voir en tête de
+  // fichier) pour être rasterisable hors navigateur. Rien d'autre n'a changé.
   // Zip 252 : ateliers d'artisans. Dessinés sur ~48x40, ancrés par le bas.
   // Zip 302 (demande Guillaume, maquette validée en amont) : montgolfière
   // "hyperréaliste rouge et jaune" — pixel-art HD, texture PAR PIXEL, avec
@@ -3634,8 +4072,23 @@ house: house(),
   S.artisan = { beehive: artisanBuildingSprite("beehive"), fromagerie: artisanBuildingSprite("fromagerie"), bakery: artisanBuildingSprite("bakery"), sawmill: artisanBuildingSprite("sawmill"), sucrerie: S.sucrerie };
   S.craftIcons = { honey: craftIcon("honey"), cheeseWheel: craftIcon("cheeseWheel"), cheesePortion: craftIcon("cheesePortion"), eclairChoco: craftIcon("eclairChoco"), eclairVanilla: craftIcon("eclairVanilla"), flanVanilla: craftIcon("flanVanilla"), gateauBasque: craftIcon("gateauBasque"), butter: craftIcon("butter"), bread: craftIcon("bread"), croissant: craftIcon("croissant"), chocolatine: craftIcon("chocolatine"), painSuisse: craftIcon("painSuisse"), yogurtNature: craftIcon("yogurtNature"), yogurtVanilla: craftIcon("yogurtVanilla") };
   // Zip 236: one sprite per pet id in the catalog (individual pets).
-  S.pets = {};
-  for (const pid of Object.keys(C.PET_CATALOG)) S.pets[pid] = petSprite(pid);
+  // Zip 388 : DEUX entrées, et c'est délibéré.
+  //   S.petFrames[pid][dir][frame] = la planche animée, lue par drawPetsFor ;
+  //   S.pets[pid]                  = le profil droit au repos, exactement le
+  //                                  sprite d'avant ce zip.
+  // Garder S.pets sous cette forme évite de toucher aux TROIS endroits de
+  // l'interface qui l'affichent déjà comme une simple image (sac, carte de
+  // familier, proposition de cadeau). Une planche imposée partout aurait
+  // demandé de reprendre chacun d'eux, sans rien apporter : dans un panneau,
+  // un familier est un portrait, pas une animation.
+  S.petFrames = {}; S.pets = {};
+  for (const pid of Object.keys(C.PET_CATALOG)) {
+    S.petFrames[pid] = Array.from({ length: C.PET_DIRS }, (_, d) =>
+      Array.from({ length: C.PET_FRAMES }, (_, f) => petSprite(pid, d, f)));
+    S.pets[pid] = S.petFrames[pid][3][0];
+  }
+  // Zip 388 : bulles affichées au-dessus d'un familier qui joue.
+  S.petEmotes = {}; for (const k of ["heart", "note", "spark", "excl", "zzz"]) S.petEmotes[k] = petEmoteSprite(k);
   S.gemIcons = C.GEMS.map(gm => gemIcon(gm.color));
   S.fishIcons = C.FISH.map(fs => fishIcon(fs.color));
   S.seaIcons = C.SEA_CREATURES.map((sc, i) => seaIcon(i, sc.color));
