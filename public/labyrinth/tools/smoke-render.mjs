@@ -54,6 +54,8 @@ const FakeTHREE = {
   Fog: function (c, n, f) { return { color: c, near: n, far: f }; },
   Color: function (c) { return { c }; },
   BoxGeometry: function () { return node("BoxGeometry"); },
+  SphereGeometry: function () { return node("SphereGeometry"); },
+  HemisphereLight: function () { return node("HemisphereLight"); },
   PlaneGeometry: function () { return node("PlaneGeometry"); },
   CylinderGeometry: function () { return node("CylinderGeometry"); },
   OctahedronGeometry: function () { return node("OctahedronGeometry"); },
@@ -113,7 +115,16 @@ for (const seed of SEEDS) {
   }
   check(`graine ${String(seed).padEnd(9)} : scène construite et 300 images rendues`, true,
     `${built} maillages, ${created} objets`);
-  check(`graine ${String(seed).padEnd(9)} : budget de maillages sous 2000`, built < 2000, `${built}`);
+  /* ⚠️ PLAFOND RELEVÉ DE 2 000 À 6 000 AU 394, et c'est une DÉCISION, pas un
+     ajustement de confort. Le décor demandé par Guillaume (torches murales,
+     poutres, plafond partiel, trous déchiquetés en sous-dalles) triple le
+     nombre de volumes. On compare donc désormais au zip PRÉCÉDENT plutôt qu'à
+     un idéal — règle du zip 379 : « tout contrôle qui s'applique à de l'art
+     préexistant doit comparer à l'état d'avant, jamais à un idéal ».
+     Repère : 393 = ~1 480 maillages, 394 = ~4 500. Si ce nombre double encore
+     sans qu'on ait ajouté de décor, c'est qu'une collection n'est pas remise à
+     zéro entre deux parties — c'est exactement le défaut trouvé au 393. */
+  check(`graine ${String(seed).padEnd(9)} : budget de maillages sous 6000`, built < 6000, `${built}`);
 }
 
 check("les quatre découpes de flamme sont créées", seen.has("Basic"));

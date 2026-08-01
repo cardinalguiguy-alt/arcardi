@@ -40,9 +40,19 @@ const CFG = {
      La taille de la grille est IMPAIRE par construction (voir maze.js) : un
      labyrinthe parfait se creuse de deux en deux, et une dimension paire
      laisse une bande de mur mort sur un bord. */
-  CELL: 6.0,
-  WALL: 1.2,
-  WALL_H: 5.2,              // hauteur des murs — au-dessus du champ de la caméra
+  /* ⚠️ TOUT A DOUBLÉ AU ZIP 394, SUR RETOUR DE GUILLAUME : « j'imaginais pas
+     un labyrinthe aussi étroit ». Ses deux images de référence montrent des
+     couloirs où l'on tiendrait à cinq de front, des murs qui montent hors du
+     cadre, et des salles ouvertes. La première version faisait 4,8 unités de
+     couloir pour un fermier de 1,7 de large : c'était un boyau.
+
+     11,5 - 2,0 = 9,5 unités de couloir, soit CINQ fermiers de front, et des
+     murs de 11 unités qu'on ne voit pas finir depuis une caméra à 4,4. C'est
+     l'échelle des images, mesurée sur elles : le personnage y occupe environ
+     un cinquième de la largeur du couloir et un dixième de la hauteur du mur. */
+  CELL: 11.5,
+  WALL: 2.0,
+  WALL_H: 11.0,             // les murs sortent du cadre, comme sur les images
   /* ⚠️ 21 ET NON 27, APRÈS MESURE. À 27×27 (729 cellules) l'oracle de
      tools/simulate-maze.mjs ne voyait que 70 cellules en 420 secondes : à ce
      rythme, traverser un chemin de 110 cellules demandait plus de DIX
@@ -50,18 +60,29 @@ const CFG = {
      avant de perdre. À 21×21 (441 cellules) et avec la bande de chemin
      resserrée, une partie tient dans les 3 à 6 minutes du Gourmandin et du
      défi de fuite. On perd de l'immensité, on gagne un jeu qui se termine. */
-  GRID: 21,
+  /* 15 et non 21 : la surface d'une cellule ayant presque quadruplé, garder
+     21×21 aurait donné un monde de 240 unités de côté et des parties d'un
+     quart d'heure. 15×15 à 11,5 fait 172 unités — plus grand qu'avant EN
+     DISTANCE, plus petit en nombre de décisions. C'est exactement l'échange
+     demandé : plus impressionnant, moins difficile. */
+  GRID: 15,
 
   /* ======================================================================
      LE FERMIER
      ====================================================================== */
-  WALK_SPEED: 7.2,          // unités/s en marche
-  RUN_SPEED: 11.4,          // ... en course (Maj) — bruyante, voir NOISE_*
-  BACK_SPEED: 4.2,          // en marche arrière : nettement plus lent, on ne fuit pas à reculons
-  STRAFE_SPEED: 5.6,        // pas de côté (A/E ou Q/D) — sert à esquiver, pas à voyager
-  TURN_SPEED: 3.4,          // rad/s — un demi-tour prend ~0,92 s
-  ACCEL: 26,                // montée en vitesse, unités/s²
-  BODY_R: 0.85,             // rayon de collision du fermier
+  WALK_SPEED: 9.0,          // unités/s en marche — relevée avec l'échelle
+  RUN_SPEED: 14.0,          // ... en course (Maj) — bruyante, voir STALK_HEAR_*
+  BACK_SPEED: 5.2,          // en marche arrière : nettement plus lent, on ne fuit pas à reculons
+  STRAFE_SPEED: 7.0,        // pas de côté (A/E ou Q/D) — sert à esquiver, pas à voyager
+  TURN_SPEED: 2.9,          // rad/s — un demi-tour prend ~1,08 s
+  /* ⚠️ AJOUTÉE AU 394, seconde moitié du retour « pas très très fluide ».
+     La rotation passait de 0 à pleine vitesse en UNE image : à chaque appui et
+     à chaque relâchement, la caméra partait et s'arrêtait net. On monte et on
+     redescend maintenant en ~0,16 s, ce qui suffit à rendre le balayage
+     continu sans donner l'impression de patiner. */
+  TURN_ACCEL: 18.0,         // rad/s² sur la vitesse de rotation
+  ACCEL: 34,                // montée en vitesse, unités/s²
+  BODY_R: 0.9,             // rayon de collision du fermier
 
   /* ======================================================================
      LA TORCHE — le cœur du jeu
@@ -96,9 +117,9 @@ const CFG = {
      d'explication. La simulation l'a payé cher : l'oracle restait planté
      devant un feu qu'il ne pouvait pas rallumer jusqu'à la fin du temps.
      3,4 couvre toute la cellule sauf ses coins. */
-  TORCH_USE_RANGE: 3.4,     // distance à laquelle E rallume
-  TORCH_LIGHT_MAX: 15.5,    // portée de la lumière à flamme pleine
-  TORCH_LIGHT_MIN: 3.2,     // ... à la braise
+  TORCH_USE_RANGE: 6.0,     // distance à laquelle F rallume (la cellule fait 11,5)
+  TORCH_LIGHT_MAX: 30.0,    // portée de la lumière à flamme pleine
+  TORCH_LIGHT_MIN: 7.0,      // ... à la braise
   TORCH_FLICKER: 0.10,      // amplitude du vacillement (fraction de la portée)
 
   /* ======================================================================
@@ -109,10 +130,20 @@ const CFG = {
      perd dans le noir à quelques cellules, et c'est ce noir-là qu'on regarde
      pendant toute la partie. Il suit la flamme : à la braise, il se referme
      à 5 unités et le jeu devient presque aveugle. */
-  FOG_NEAR_FULL: 3.0,
-  FOG_FAR_FULL: 27.0,
-  FOG_NEAR_EMBER: 0.6,
-  FOG_FAR_EMBER: 5.4,
+  /* ⚠️ LE BROUILLARD A RECULÉ D'UN FACTEUR TROIS AU 394. Les images de
+     Guillaume ne montrent pas un jeu noir : elles montrent une ruine
+     ÉCLAIRÉE — des dizaines de torches murales, une brume violette au fond,
+     une architecture qu'on voit en entier. La première version se refermait à
+     27 unités, c'est-à-dire deux cellules et demie : on ne voyait jamais une
+     salle, seulement le bout de son nez.
+     À 85, on voit le fond d'un couloir et l'autre rive d'une grande salle,
+     et la brume ne sert plus à cacher mais à donner de la profondeur — comme
+     sur les images. La flamme continue de moduler ce voile, mais entre
+     « loin » et « moins loin », plus entre « peu » et « rien ». */
+  FOG_NEAR_FULL: 12.0,
+  FOG_FAR_FULL: 85.0,
+  FOG_NEAR_EMBER: 2.0,
+  FOG_FAR_EMBER: 26.0,
 
   /* ======================================================================
      L'ÉPÉE — trouvée, jamais donnée
@@ -127,7 +158,7 @@ const CFG = {
 
      L'épée est posée sur un autel ÉCLAIRÉ, visible d'un couloir plus loin
      que le reste : c'est la seule chose du labyrinthe qui appelle. */
-  SWORD_MAX_DEPTH: 9,       // cellules de profondeur BFS depuis l'entrée
+  SWORD_MAX_DEPTH: 6,       // cellules de profondeur BFS depuis l'entrée (chemin de 26 à 46)
   /* ⚠️ LE PARVIS DÉBORDE L'ÉPÉE DE CINQ CELLULES, et ces cinq cellules sont
      la correction la plus importante du réglage. La première version tenait
      les rôdeurs hors des cellules de profondeur ≤ SWORD_MAX_DEPTH — c'est-à-
@@ -141,17 +172,17 @@ const CFG = {
   SANCTUARY_MARGIN: 5,
   SWING_MS: 340,            // durée du geste
   SWING_COOLDOWN_MS: 420,   // ... et repos avant le suivant
-  SWING_RANGE: 2.35,        // portée, mesurée du centre du fermier
+  SWING_RANGE: 2.9,        // portée, mesurée du centre du fermier
   SWING_ARC: 1.95,          // rad — un arc large (112°), on ne vise pas au pixel dans le noir
   SWING_DAMAGE: 1,
-  SWING_KNOCKBACK: 3.4,     // recul infligé, unités
+  SWING_KNOCKBACK: 4.6,     // recul infligé, unités
 
   /* ======================================================================
      LE FERMIER — POINTS DE VIE
      ====================================================================== */
-  HEARTS: 5,
+  HEARTS: 6,
   HURT_INVULN_MS: 1200,     // clignotement d'invulnérabilité après un coup reçu
-  HURT_KNOCKBACK: 4.2,
+  HURT_KNOCKBACK: 5.0,
   POTION_HEAL: 1,           // fiole de suif : rend un cœur
   POTION_COUNT: 4,          // fioles posées dans tout le labyrinthe
 
@@ -164,13 +195,13 @@ const CFG = {
      est l'exact contraire (voir plus bas), et c'est le contraste entre les
      deux qui fait la peur : on peut régler ses comptes avec l'un, jamais
      avec l'autre. */
-  ROAMER_COUNT: 5,
+  ROAMER_COUNT: 4,
   ROAMER_HP: 2,
-  ROAMER_SPEED: 4.6,
-  ROAMER_CHASE_SPEED: 5.4,   // ⚠️ SOUS la marche du joueur (7,2) : reculer marche TOUJOURS
-  ROAMER_SIGHT: 10.0,       // portée de détection à flamme PLEINE
-  ROAMER_SIGHT_EMBER: 4.5,  // ... à la braise : le noir protège aussi le joueur
-  ROAMER_PATROL_R: 4,       // rayon de patrouille, en cellules
+  ROAMER_SPEED: 5.6,
+  ROAMER_CHASE_SPEED: 6.6,   // ⚠️ SOUS la marche du joueur (9,0) : reculer marche TOUJOURS
+  ROAMER_SIGHT: 15.0,       // portée de détection à flamme PLEINE (échelle ×1,6)
+  ROAMER_SIGHT_EMBER: 7.0,  // ... à la braise : le noir protège aussi le joueur
+  ROAMER_PATROL_R: 3,       // rayon de patrouille, en cellules
   ROAMER_GIVEUP_MS: 4200,   // temps avant de renoncer et de rentrer au secteur
   /* ⚠️ AJOUTÉ APRÈS MESURE, et c'est un réglage de JEU avant d'être un réglage
      de coût. La première version recalculait le chemin de poursuite à chaque
@@ -184,7 +215,7 @@ const CFG = {
   ROAMER_HIT_DAMAGE: 1,
   ROAMER_HIT_COOLDOWN_MS: 1500,
   ROAMER_STAGGER_MS: 380,   // sonné après un coup reçu : c'est la fenêtre du second coup
-  ROAMER_BODY_R: 0.9,
+  ROAMER_BODY_R: 1.0,
 
   /* ======================================================================
      LE TRAQUEUR — un seul, jamais tuable
@@ -211,8 +242,8 @@ const CFG = {
      cul-de-sac. Il rattrape sur les erreurs de navigation, pas sur le
      clavier. Le frapper ne le tue pas — il RECULE (STALK_STAGGER_MS), ce qui
      achète le temps de passer, et rien de plus. */
-  STALK_SPEED: 10.6,
-  STALK_SPEED_LOST: 6.6,    // quand il a perdu la trace, il ralentit et cherche
+  STALK_SPEED: 10.2,
+  STALK_SPEED_LOST: 7.0,    // quand il a perdu la trace, il ralentit et cherche
   /* ⚠️ LA SEULE VITESSE DU JEU SUPÉRIEURE À LA COURSE DU JOUEUR (11,4), et
      c'est tout son propos. Torche éteinte, il ne cherche plus : il sait, et
      il gagne du terrain quoi qu'on fasse. C'est ce qui interdit la stratégie
@@ -220,7 +251,7 @@ const CFG = {
      dans le noir, où plus rien ne pouvait le voir. On peut encore s'en
      sortir : il faut atteindre un brasier, et c'est une course perdue
      d'avance si on l'a laissée commencer trop tard. */
-  STALK_SPEED_DARK: 12.2,
+  STALK_SPEED_DARK: 15.0,
   STALK_REPATH_MS: 620,
   STALK_HEAR_RUN: 11,       // cellules
   STALK_HEAR_WALK: 4,
@@ -238,18 +269,18 @@ const CFG = {
   STALK_STAGGER_MS: 1500,   // ce que rachète un coup d'épée
   STALK_HIT_DAMAGE: 1,
   STALK_HIT_COOLDOWN_MS: 1400,
-  STALK_BODY_R: 1.0,
+  STALK_BODY_R: 1.1,
   /* Relevé de 12 à 18 en même temps que SANCTUARY_MARGIN : à 12 il s'éveillait
      À L'INTÉRIEUR du parvis, c'est-à-dire pendant que le joueur cherche encore
      son épée dans le seul endroit censé être calme. Le parvis protège des
      rôdeurs, jamais de lui — mais il ne doit pas se lever avant qu'on en soit
      sorti une première fois. */
-  STALK_WAKE_DEPTH: 18,
+  STALK_WAKE_DEPTH: 14,
   /* Il RESPIRE, et c'est le seul signal qu'on ait de lui dans le noir : un
      souffle dont le volume ne dépend que de la distance. Sans son (le jeu
      n'en a pas encore, cf. feuille de route), c'est le HUD qui le porte —
      un halo rouge en bord d'écran, d'intensité STALK_DREAD au plus près. */
-  STALK_DREAD_RANGE: 22.0,  // unités : distance à laquelle le voile commence
+  STALK_DREAD_RANGE: 30.0,  // unités : distance à laquelle le voile commence
   STALK_DREAD_MAX: 0.42,    // opacité maximale du voile
 
   /* ======================================================================
@@ -276,8 +307,8 @@ const CFG = {
      en décision irréversible, sans jamais tuer par surprise. Elles ne sont
      posées que sur des cellules dont le retrait laisse la sortie atteignable
      (même contrôle que les GAP), sinon un joueur pouvait s'enfermer. */
-  GAP_COUNT: 8,
-  CRACK_COUNT: 9,
+  GAP_COUNT: 7,
+  CRACK_COUNT: 7,
   /* ⚠️ CE NOMBRE EST CALCULÉ, PAS CHOISI, et la première version était FAUSSE.
      Traverser une cellule prend CELL / WALK_SPEED = 6 / 7,2 = 833 ms en marche
      et 526 ms en course. À 620 ms — la valeur d'origine — une dalle fêlée
@@ -295,11 +326,17 @@ const CFG = {
      que les deux autres réunis, il n'y a pas trois dangers, il y en a un.
      1 800 ms laisse près d'une seconde de marge à qui traverse en marchant,
      et reste sans appel pour qui s'arrête, recule ou fait demi-tour dessus. */
-  CRACK_DELAY_MS: 1800,     // temps entre le premier craquement et la chute
+  /* ⚠️ RECALCULÉ AU 394 avec la nouvelle échelle. Traverser une cellule prend
+     maintenant 11,5 / 9,0 = 1 278 ms en marche et 821 ms en course. 2 400 ms
+     laisse donc 1,1 s de marge à qui marche, et reste sans appel pour qui
+     s'arrête ou fait demi-tour dessus. C'est le troisième calcul de cette
+     valeur, et les deux premiers étaient faux dans le même sens : on sous-
+     estime toujours le temps qu'il faut pour traverser une case. */
+  CRACK_DELAY_MS: 2400,     // temps entre le premier craquement et la chute
   CRACK_SHAKE: 0.09,        // tremblement de la dalle pendant ce délai
   FALL_MS: 900,             // durée de la chute avant l'écran de fin
-  LAKE_Y: -7.0,             // niveau de l'eau sous la dalle
-  LAKE_GLOW_UP: 2.4,        // hauteur du halo violet qui monte d'un trou
+  LAKE_Y: -9.0,             // niveau de l'eau sous la dalle
+  LAKE_GLOW_UP: 4.5,        // hauteur du halo violet qui monte d'un trou
 
   /* ======================================================================
      LE PHARE DE LA SORTIE
@@ -322,8 +359,33 @@ const CFG = {
      dessous, donc la même lumière que celle des trous. Le joueur apprend en
      une seconde que violet = le vide, et que la sortie est un trou comme les
      autres — sauf que celui-là, on le prend. */
-  BEACON_H: 34.0,           // hauteur de la colonne, très au-dessus de WALL_H
-  BEACON_R: 1.5,
+  /* ======================================================================
+     ZIP 394 — LE DÉCOR DES IMAGES : TORCHES MURALES, POUTRES, PLAFOND
+     ----------------------------------------------------------------------
+     Les torches murales sont l'élément le plus présent des deux captures de
+     Guillaume, et elles n'existaient tout simplement pas au 393 : on n'avait
+     que les brasiers ravivables, un tous les huit mètres. Une face de mur
+     fermée sur trois en porte une, ce qui donne une trentaine de flammes
+     visibles à la fois dans un couloir — l'image.
+
+     ⚠️ UNE TORCHE SUR DEUX SEULEMENT PORTE UNE VRAIE LUMIÈRE. WebGL plafonne
+     le nombre de sources ponctuelles d'un matériau ; au-delà, le rendu ne
+     ralentit pas, il ÉCHOUE (les lumières excédentaires sont silencieusement
+     ignorées, ou le shader refuse de compiler selon la machine). Les autres
+     éclairent par leur halo additif, qui ne coûte rien et se voit autant. */
+  WALL_TORCH_CHANCE: 0.34,   // part des faces fermées qui portent une torche
+  WALL_TORCH_H: 5.6,         // hauteur du bras, à mi-mur
+
+  /* Le plafond de l'image 2 : partiel, avec des ouvertures déchiquetées sur
+     le ciel violet, et des poutres de bois qui relient les morceaux. AUCUN
+     plafond sur les salles — c'est la grande salle à ciel ouvert de l'image 1
+     qui donne l'échelle du lieu, la couvrir supprimerait la seule vue dégagée
+     du jeu. */
+  CEILING_CHANCE: 0.42,      // part des cellules de couloir couvertes
+  BEAM_CHANCE: 0.55,         // part des cellules portant trois poutres
+
+  BEACON_H: 70.0,           // hauteur de la colonne, très au-dessus de WALL_H
+  BEACON_R: 2.6,
   BEACON_PULSE: 0.9,        // battements par seconde
 
   /* ======================================================================
@@ -333,7 +395,7 @@ const CFG = {
      en or par la ferme au retour, et gardés MÊME en cas de mort (décision
      Guillaume : « comme le défi de fuite »). Le plafond LAB_MAX_SHARDS côté
      ferme est ce qui empêche un message aberrant d'injecter une fortune. */
-  SHARD_COUNT: 26,
+  SHARD_COUNT: 22,
   SHARD_SPIN: 1.8,          // rad/s
   SHARD_BOB: 0.22,
 
@@ -355,11 +417,11 @@ const CFG = {
      Elle est BASSE et PROCHE : c'est ce qui donne l'échelle des murs (on les
      regarde d'en dessous) et ce qui empêche de voir par-dessus. Elle se colle
      au fermier quand un mur la traverserait, plutôt que de le traverser. */
-  CAM_DIST: 5.4,
-  CAM_HEIGHT: 3.15,
-  CAM_LOOK_H: 1.7,
+  CAM_DIST: 7.6,
+  CAM_HEIGHT: 4.4,
+  CAM_LOOK_H: 2.2,
   CAM_LAG: 9.0,             // suivi (plus grand = plus rigide)
-  CAM_MIN_DIST: 1.6,        // distance minimale quand un mur pousse la caméra
+  CAM_MIN_DIST: 2.2,        // distance minimale quand un mur pousse la caméra
   CAM_SHAKE_HURT: 0.35,
 
   /* ======================================================================
@@ -403,11 +465,44 @@ const CFG = {
   COL_RAIL:       0x4f483b,
   COL_RAIL_CAP:   0x605848,
 
-  /* Ciel : le même violet d'aube que le défi. On ne le voit qu'en levant les
-     yeux au-dessus des murs, et c'est voulu — c'est le seul rappel qu'on est
-     dehors, sur un lac, et pas dans une cave. */
-  SKY_TOP:        0x2a2140,
-  SKY_HORIZON:    0x5d4468,
+  /* ======================================================================
+     ZIP 394 — LES COULEURS RELEVÉES SUR LES DEUX IMAGES DE GUILLAUME
+     ----------------------------------------------------------------------
+     Elles ne sont PAS dans la comparaison de tools/verify-palette.mjs : ce
+     sont des teintes propres au labyrinthe, déclarées comme telles. Le défi
+     de fuite n'a ni brique chaude, ni ciel violet clair, ni eau lumineuse —
+     et lui imposer les nôtres le dénaturerait.
+
+     ⚠️ LA PIERRE EST CHAUDE, ET C'EST LE CHANGEMENT LE PLUS IMPORTANT DU ZIP.
+     La première version reprenait COL_STONE (0x565046), un gris-vert froid
+     parfaitement juste pour une chaussée sous l'orage… et parfaitement faux
+     pour un couloir éclairé aux torches. Sur les images, les blocs sont
+     KHAKI/SABLE : c'est la lumière du feu peinte DANS la texture. Aucune
+     lumière ponctuelle de Three.js ne rattrape une texture froide — elle la
+     multiplie, elle ne la réchauffe pas. */
+  COL_BRICK:      0x9c8b5e,   // bloc courant, khaki chaud
+  COL_BRICK_LIT:  0xc4b073,   // bloc pris de plein fouet par une torche
+  COL_BRICK_DARK: 0x6b5f42,   // bloc à l'ombre
+  COL_FLOOR:      0x6e6752,   // dalle courante (plus sombre que les murs)
+  COL_FLOOR_LIT:  0x8d8468,
+  COL_FLOOR_DARK: 0x4e4938,
+
+  /* Le ciel des images : violet franc au zénith, rose-violet à l'horizon.
+     Nettement plus CLAIR que la nuit du défi de fuite — sur les images, le
+     ciel est la zone la plus lumineuse du cadre après les flammes. */
+  SKY_TOP:        0x6b3f8f,
+  SKY_HORIZON:    0xb987c8,
+  COL_PYRAMID:    0x4a3560,   // silhouette des pyramides
+  COL_DEADTREE:   0x241a30,   // arbres morts sur l'horizon
+
+  /* L'eau du lac, vue par un trou : violet SATURÉ et lumineux, avec des
+     crêtes presque blanches. Elle éclaire le bord du trou par en dessous. */
+  COL_LAKE_BRIGHT: 0xe4b6ff,
+
+  /* Trois paliers de flamme, au lieu de deux : sur les images une torche
+     murale est une grosse tache à cœur blanc. */
+  COL_TORCH_OUT:  0xff6a18,   // frange extérieure, orange franc
+  COL_TORCH_CORE: 0xfff3cf,   // cœur, presque blanc
 
   /* Deux teintes PROPRES au labyrinthe, donc absentes du défi et exclues de
      la comparaison de palette : l'acier de l'épée et l'os du traqueur. */
@@ -436,18 +531,18 @@ const CFG = {
 
    ⚠️ VALEURS ISSUES DU BALAYAGE DE tools/tune-maze.mjs. Ne pas les « arrondir ».
    ========================================================================== */
-CFG.MAZE_BRAID = 0.18;      // part des culs-de-sac rouverts (0 = labyrinthe parfait)
-CFG.MAZE_ROOMS = 4;         // salles creusées dans le dédale (respirations + repères)
-CFG.MAZE_ROOM_MIN = 3;
-CFG.MAZE_ROOM_MAX = 5;
+CFG.MAZE_BRAID = 0.30;      // part des culs-de-sac rouverts (0 = labyrinthe parfait)
+CFG.MAZE_ROOMS = 3;         // salles creusées dans le dédale (respirations + repères)
+CFG.MAZE_ROOM_MIN = 2;
+CFG.MAZE_ROOM_MAX = 4;
 /* La BANDE de longueur du plus court chemin entrée→sortie, en cellules. Les
    deux bornes comptent : sans la haute, 2 000 graines produisaient des trajets
    optimaux de 48 à 311 cellules, soit des parties de 3 à 20 minutes tirées au
    sort avant le premier pas. Voir le commentaire de make() dans maze.js. */
-CFG.MAZE_MIN_PATH = 42;
-CFG.MAZE_MAX_PATH = 80;
-CFG.MAZE_TORCHES = 18;      // brasiers ravivables posés dans tout le dédale
-CFG.TORCH_MAX_GAP = 11;     // ⚠️ garantie dure : jamais plus de N cellules sans brasier sur le chemin
+CFG.MAZE_MIN_PATH = 32;
+CFG.MAZE_MAX_PATH = 56;
+CFG.MAZE_TORCHES = 14;      // brasiers ravivables posés dans tout le dédale
+CFG.TORCH_MAX_GAP = 8;     // ⚠️ garantie dure : jamais plus de N cellules sans brasier sur le chemin
 
 /* =============================================================================
    DÉRIVÉS — ne pas régler à la main.

@@ -1,4 +1,11 @@
-# Le Labyrinthe — mini-jeu du Pays du Labyrinthe (zip 393)
+# Le Labyrinthe — mini-jeu du Pays du Labyrinthe (zips 393-394)
+
+> **ZIP 394 — REFONTE SUR RETOUR DE GUILLAUME.** Trois reproches, tous fondés :
+> le labyrinthe était trop étroit, les contrôles étaient **inversés**, et les
+> graphismes n'étaient pas à la hauteur. Il a joint deux captures données comme
+> cibles littérales (« prends exactement les mêmes thématiques, tu peux copier
+> littéralement c'est mes images »). Voir la section « Zip 394 » en fin de
+> fichier pour le détail de ce qui a changé et pourquoi.
 
 Jeu 3D à la troisième personne, servi depuis `public/labyrinth/`, au bout du
 **pont de haies**. Troisième mini-jeu du projet, après le défi de fuite
@@ -102,13 +109,14 @@ faux **tout** ce qui a été réglé.
 
 ---
 
-## Vérification — sept scripts, à relancer TOUS à chaque livraison
+## Vérification — huit scripts, à relancer TOUS à chaque livraison
 
 Un outil qu'on saute n'est pas un filet de sécurité, c'est un fichier mort
 (leçon du zip 375).
 
 ```
 node tools/verify-maze.mjs 2000    # les six garanties du générateur
+node tools/verify-controls.mjs     # les commandes vont-elles dans le bon sens ? (394)
 node tools/verify-palette.mjs      # la palette n'a pas dérivé de celle du défi
 node tools/smoke-render.mjs        # world.js EXÉCUTÉ contre un faux Three.js
 node tools/check-strings.mjs       # parité FR/EN + ui.js exécuté contre un faux DOM
@@ -125,9 +133,10 @@ bloc doit pouvoir être lancé en morceaux** — sinon il n'est lancé qu'une fo
 
 | Script | Attendu |
 |---|---|
-| `verify-maze` | 2 000 dédales, **6 garanties**, chemin 42..80, écart max sans brasier **10** (plafond 11), épée 6..9, 1,11 essai |
-| `verify-palette` | **36 couleurs communes identiques au bit près**, 6 propres au labyrinthe |
-| `smoke-render` | 4 graines × 300 images, **~1 480 maillages** (plafond 2 000) |
+| `verify-maze` | 2 000 dédales, **6 garanties**, chemin 32..56, écart max sans brasier **7** (plafond 8), épée 5..6, 1,13 essai |
+| `verify-controls` | **10 contrôles**, dont demi-tour en 1,17 s |
+| `verify-palette` | **36 couleurs communes identiques au bit près**, 17 propres au labyrinthe |
+| `smoke-render` | 4 graines × 300 images, **~2 250 maillages** (plafond 6 000) |
 | `check-strings` | **41 = 41**, 16 identifiants |
 
 ### Les six garanties de `verify-maze.mjs`
@@ -147,7 +156,7 @@ si le jeu est jouable.
 
 ## ⚠️ Ce que la simulation a trouvé, et que personne n'aurait vu en relisant
 
-**Neuf défauts, tous dans du code dont chaque ligne prise séparément est juste.**
+**Douze défauts, tous dans du code dont chaque ligne prise séparément est juste.**
 
 | # | Défaut | Comment il se manifestait |
 |---|---|---|
@@ -160,6 +169,9 @@ si le jeu est jouable.
 | 7 | Garantie `TORCH_MAX_GAP` **fausse** | Quand la cellule visée était percée, le brasier était **sauté** : 16 cellules sans feu pour un plafond de 11. |
 | 8 | `World.init()` **cumulait** | Les collections du module n'étaient pas remises à zéro : **la deuxième partie plantait**. Celle qu'on joue toujours. |
 | 9 | `STALK_STAGGER_MS` à 2 600 | Essai **annulé** : le raisonnement était bon, la mesure l'a démenti (sortie 14,4 % → 7,7 %). Un recul plus long rend l'affrontement payant, donc on s'arrête, donc on brûle sa flamme. |
+| **10** | **La sortie ne se déclenchait pas** *(394)* | Il fallait avoir dépassé le premier dixième de la cellule de sortie. On arrivait sous le phare, on s'arrêtait au milieu de la porte, rien. **Ce seul correctif a fait passer le taux de sortie de 10 % à 71 %.** |
+| **11** | **Les contrôles inversés** *(394, trouvé par Guillaume)* | Flèche droite = rotation à gauche. **Aucun outil ne pouvait le voir** : l'oracle partage la convention du moteur, donc il tournait « juste » dans un monde inversé. → `verify-controls.mjs` |
+| **12** | Le lissage de caméra en `0,016` **en dur** *(394)* | Suivait deux fois trop vite à 120 Hz, deux fois trop lentement à 30 Hz. Invisible sur un écran à 60 Hz. |
 
 Le neuvième mérite d'être gardé en tête : **un réglage qui paraît évident peut
 mesurablement empirer le jeu.** Il est commenté dans `config.js` pour que
@@ -167,46 +179,36 @@ personne ne le « corrige » à nouveau.
 
 ---
 
-## ⚠️ CE QUI N'EST PAS RÉGLÉ — à faire avec Guillaume, manette en main
+## L'équilibrage, au zip 394
 
-**L'équilibrage n'est pas terminé, et il ne peut pas l'être sans jouer.**
-Dernière mesure, 160 parties :
+Dernière mesure, **194 parties jouées image par image** :
 
 | Issue | Part |
 |---|---|
-| **LE TRAQUEUR** | 33,8 % |
-| blocage de l'oracle *(panne de l'outil)* | 22,5 % |
-| chute dans un trou | 15,0 % |
-| temps écoulé | 13,8 % |
-| **SORTIE** | **11,3 %** |
-| rôdeur | 3,8 % |
+| **SORTIE** | **68,6 %** |
+| temps écoulé (260 s) | 17,0 % |
+| chute dans un trou | 9,8 % |
+| LE TRAQUEUR | 3,1 % |
+| blocage de l'oracle | 1,0 % |
+| rôdeur | 0,5 % |
 
-Trois choses à en dire, honnêtement :
+Durée d'une partie gagnée : **médiane 103 s**, p75 132 s, max 222 s.
 
-1. **Le taux de sortie est trop bas.** La cible est 35-50 % pour un oracle qui
-   ne panique jamais. À 11 %, le jeu est probablement trop dur — mais le
-   chiffre est **sous-estimé** par les 22,5 % de blocages, qui sont des pannes
-   de l'oracle et non des défaites.
+C'est l'inverse exact du 393, où l'oracle sortait dans 11 % des cas et où 22 %
+des parties étaient des **pannes de navigation**. La bascule ne vient pas d'un
+rééquilibrage patient mais d'**un seul défaut**, trouvé en traçant une partie
+bloquée (voir le tableau du 394, ligne 4) : la victoire exigeait d'avoir
+dépassé le premier dixième de la cellule de sortie. L'oracle arrivait sous le
+phare, s'arrêtait au milieu de la porte, et n'en repartait jamais.
 
-2. **L'oracle a encore un défaut de navigation** (22,5 % de blocages). Trois
-   causes distinctes ont déjà été trouvées et corrigées ; il en reste au moins
-   une. **Continuer à régler le JEU contre un outil défaillant, c'est régler la
-   mauvaise chose** — c'est le piège que le projet documente sous « un contrôle
-   qui sort tout le catalogue a tort, pas le catalogue ». Le réglage a donc été
-   **arrêté** ici volontairement.
+**Ce que ça veut dire pour un humain** : l'oracle ne panique pas et n'oublie
+jamais un brasier, donc un joueur mourra plus souvent — sans doute 25 à 35 %
+au lieu de 13,4 %. C'est le niveau demandé (« ça doit pas être trop
+difficile »). Trois leviers si c'est encore trop facile ou trop dur :
+`HEARTS` (6), `ROAMER_COUNT` (4), `GAP_COUNT` (7).
 
-3. **Les rôdeurs ne tuent presque personne** (3,8 % contre 33,8 % au traqueur).
-   Sur les deux dangers « créature » demandés, un seul travaille vraiment. C'est
-   défendable — le traqueur EST le danger, les rôdeurs sont ce qui donne un
-   usage à l'épée — mais ça mérite ton avis.
-
-**Ce qu'aucun outil ne peut dire, et qui est l'objet du chantier : est-ce que
-c'est angoissant ?** Le ressenti de la torche qui baisse, la lisibilité d'un
-couloir noir, le moment où on entend une dalle tomber derrière soi, la peur.
-Trois leviers sont prêts si c'est trop dur : `HEARTS` (5), `ROAMER_COUNT` (5),
-`STALK_SPEED` (10,6, contre 11,4 en course).
-
----
+**Ce qu'aucun outil ne peut dire, et qui reste l'objet du chantier : est-ce que
+c'est angoissant, et est-ce que c'est beau ?** Ça se juge à l'écran.
 
 ## Y jouer seul, pour itérer
 
@@ -253,8 +255,100 @@ Les deux côtés vérifient `event.origin`.
   qui suffit, mais c'est un placeholder — même dette que les loups du défi.
 - **`tools/render-maze.mjs`** : écrire les textures de `paint.js` en PNG, pour
   les REGARDER. `paint.js` a été écrit sans dépendance à Three.js **exactement**
-  pour ça, mais le rasteriseur n'est pas fait. **Aucune texture de ce jeu n'a
-  encore été regardée** — et le projet compte seize défauts trouvés en
-  regardant contre zéro en relisant.
+  pour ça, mais le rasteriseur n'est toujours pas fait. **Aucune texture de ce
+  jeu n'a encore été regardée hors du navigateur** — et le projet compte seize
+  défauts trouvés en regardant contre zéro en relisant. C'est, de loin, la
+  dette la plus coûteuse de ce chantier : les deux refontes graphiques (393
+  puis 394) ont été faites en aveugle.
 - **Le joystick tactile.** Le labyrinthe a ses propres commandes tactiles, mais
   elles ne touchent pas `FermeGame.js` : **la dette du zip 387 reste entière.**
+
+
+---
+
+## ZIP 394 — CE QUI A CHANGÉ, ET POURQUOI
+
+### 1. L'échelle : tout a triplé
+
+> « j'imaginais pas un labyrinthe aussi étroit »
+
+| | 393 | 394 |
+|---|---|---|
+| couloir | 4,8 unités (2,8 fermiers) | **9,5 unités (5,3 fermiers)** |
+| hauteur de mur | 5,2 | **11,0** |
+| grille | 21 × 21 = 441 cellules | **15 × 15 = 225** |
+| monde | 126 unités de côté | **173** |
+| brouillard | se referme à 27 | **85** |
+
+La grille RÉTRÉCIT pendant que le monde GRANDIT : c'est l'échange demandé —
+plus impressionnant, moins de décisions, donc moins difficile.
+
+### 2. Les contrôles étaient inversés. Il avait raison.
+
+Flèche droite faisait tourner à gauche. La démonstration tient en une ligne :
+le vecteur avant vaut `(-sin a, -cos a)`, donc sa dérivée en `a` vaut
+`(-cos a, sin a)`, soit `(-1, 0)` face au nord — faire croître l'angle emmenait
+le regard vers l'ouest.
+
+**Aucun des sept outils ne pouvait le voir**, et c'est le point à retenir : le
+joueur oracle calcule son intention de rotation **à partir de la même
+convention** que le moteur. Dans un monde inversé, il tournait « juste » et
+arrivait à destination. Il mesurait la cohérence du code avec lui-même.
+
+> **La leçon, à ajouter à celles du projet : un contrôle qui partage la
+> CONVENTION du code qu'il vérifie ne vérifie rien.** D'où
+> `tools/verify-controls.mjs`, qui ne relit aucune formule et pose la question
+> en français : « la flèche droite fait-elle tourner à droite ? »
+
+### 3. « Pas très très fluide » — trois causes distinctes
+
+- la rotation passait de 0 à 3,4 rad/s **en une image** → `TURN_ACCEL` ;
+- le lissage de caméra multipliait par `0,016` **en dur**, donc suivait deux
+  fois trop vite à 120 Hz et deux fois trop lentement à 30 Hz ;
+- la vitesse de rotation était trop élevée pour la nouvelle échelle.
+
+### 4. Le défaut qui expliquait tout le reste
+
+La victoire exigeait d'avoir dépassé `exit.y·CELL + HALF·0,4`, c'est-à-dire
+d'avoir avancé de trois pas de plus **après** être entré sous le phare. Un
+joueur qui arrive à la porte et ne voit rien se passer conclut que ce n'est pas
+la sortie. Corrigé : entrer dans la cellule suffit. **À lui seul, ce correctif a
+fait passer le taux de sortie de 10 % à 71 %.**
+
+### 5. Les graphismes, repris sur ses deux images
+
+Six ajouts, tous relevés sur les captures :
+
+1. **un ciel** — violet, avec pyramides et arbres morts en silhouette. Il n'y
+   en avait aucun : au-dessus des murs, il n'y avait que du brouillard noir ;
+2. **des torches murales sur potence**, partout (une face fermée sur trois).
+   C'est l'élément le plus présent des deux images et il n'existait pas ;
+3. **des poutres et un plafond partiel**, avec des ouvertures déchiquetées sur
+   le ciel — l'image 2 ;
+4. **des trous déchiquetés**, faits de sous-dalles retirées une à une selon un
+   rayon bruité, au lieu d'une case carrée manquante ;
+5. **un lac lumineux** qui tourne au fond des trous et les éclaire par en
+   dessous ;
+6. **des éclats en sphères à halo**, violets et cyans — les orbes des images.
+
+**Et la pierre est devenue CHAUDE.** C'est le changement le plus important et
+le moins visible dans le code : la première version reprenait `COL_STONE`
+(0x565046), un gris-vert parfaitement juste pour une chaussée sous l'orage et
+parfaitement faux pour un couloir éclairé aux torches. Sur les images, les
+blocs sont khaki-sable. **Aucune lumière ponctuelle ne rattrape une texture
+froide** — elle la multiplie, elle ne la réchauffe pas.
+
+Enfin, le lieu est maintenant **éclairé** : l'ambiante passe de 0,06 à 0,30 et
+gagne une hémisphérique. Les images de Guillaume ne montrent pas un jeu noir
+mais une ruine chaude et lisible. La tension ne vient plus de l'aveuglement
+mais de la distance de vue — ce qui est aussi la réponse à « ça doit pas être
+trop difficile ».
+
+### Ce qui n'a PAS été fait, et qui était proposé
+
+**La vue à la première personne.** Guillaume l'ouvrait (« si c'est plus facile
+pour toi »), mais ses deux images sont des vues À LA TROISIÈME PERSONNE, et il
+les donne comme des images du jeu qu'il veut. Entre une facilité offerte et
+deux références explicites, on suit les références. **Choix pris seul, à dire
+s'il ne convient pas** : la bascule coûterait une demi-journée, l'essentiel du
+travail étant déjà dans `updateCamera()`.

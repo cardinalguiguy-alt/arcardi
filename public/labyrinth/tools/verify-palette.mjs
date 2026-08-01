@@ -49,8 +49,18 @@ const run = loadCFG(RUN);
    donc exclues : l'acier de l'épée, l'os du traqueur, et le ciel (le défi a
    un cycle jour/nuit complet, le labyrinthe un ciel fixe qu'on n'aperçoit
    qu'en levant les yeux entre deux murs). */
-const OWN = new Set(["COL_STEEL", "COL_STEEL_EDGE", "COL_STALKER", "COL_STALKER_EYE",
-  "SKY_TOP", "SKY_HORIZON"]);
+const OWN = new Set([
+  "COL_STEEL", "COL_STEEL_EDGE", "COL_STALKER", "COL_STALKER_EYE",
+  "SKY_TOP", "SKY_HORIZON",
+  /* Zip 394 — les teintes relevées sur les images de Guillaume. Elles sont
+     PROPRES au labyrinthe et il ne faut surtout pas les imposer au défi de
+     fuite : sa chaussée est sous un orage, la nôtre est éclairée aux torches.
+     Les y recopier éclaircirait un jeu que personne n'a demandé d'éclaircir. */
+  "COL_BRICK", "COL_BRICK_LIT", "COL_BRICK_DARK",
+  "COL_FLOOR", "COL_FLOOR_LIT", "COL_FLOOR_DARK",
+  "COL_PYRAMID", "COL_DEADTREE", "COL_LAKE_BRIGHT",
+  "COL_TORCH_OUT", "COL_TORCH_CORE",
+]);
 
 const shared = [];
 const diverged = [];

@@ -101,6 +101,29 @@ export function playOne({ CFG, Maze, Rules }, seed, opts = {}) {
      labyrinthe — exactement le corollaire n°5 du zip 387. */
   const VISION = 3;
 
+  /* ⚠️ PROFIL DE FREINAGE, AJOUTÉ AU 394 EN MÊME TEMPS QUE TURN_ACCEL.
+     -----------------------------------------------------------------------
+     Tant que la rotation était instantanée, un simple gain proportionnel
+     (`turn = -k·écart`) suffisait à viser. Avec l'inertie de TURN_ACCEL, il ne
+     suffit plus : la vitesse de rotation ne peut pas s'annuler à l'instant où
+     l'on atteint le cap, donc l'oracle dépassait, corrigeait, redépassait — et
+     tournait sur lui-même jusqu'au bout du temps. Les blocages sont passés de
+     17 % à 39 % À LA SECONDE PRÈS où le lissage est entré dans le moteur.
+
+     C'est un cas d'école du corollaire n°5 du zip 387 : le contrôle n'était
+     pas faux, il modélisait un joueur qui n'existait plus. Un humain, lui,
+     anticipe — il relâche la touche AVANT d'être face à la sortie.
+
+     La formule est celle du freinage à décélération constante :
+     ω = √(2·a·écart), plafonnée à la vitesse maximale. Elle donne exactement
+     la vitesse depuis laquelle on peut encore s'arrêter pile sur le cap. */
+  function aimTurn(diff) {
+    const a = Math.abs(diff);
+    const w = Math.min(CFG.TURN_SPEED, Math.sqrt(2 * CFG.TURN_ACCEL * a));
+    // Le moteur fait `ang += -turn·TURN_SPEED·dt` : le signe s'inverse ici.
+    return Math.max(-1, Math.min(1, -Math.sign(diff) * (w / CFG.TURN_SPEED)));
+  }
+
   function observe() {
     const [cx, cy] = Rules.cellOf(CFG, st.px, st.pz);
     if (cx < 0 || cy < 0 || cx >= G || cy >= G) return;
@@ -362,7 +385,7 @@ export function playOne({ CFG, Maze, Rules }, seed, opts = {}) {
       let diff = want - st.ang;
       while (diff > Math.PI) diff -= Math.PI * 2;
       while (diff < -Math.PI) diff += Math.PI * 2;
-      intent.turn = Math.max(-1, Math.min(1, diff * 4.0));
+      intent.turn = aimTurn(diff);
       /* ⚠️ TROIS CAS, ET JAMAIS « NE RIEN FAIRE ». Les deux versions
          précédentes de cette ligne mettaient fwd à 0 dès que la créature
          n'était pas à bonne distance — et l'oracle restait alors immobile
@@ -394,7 +417,7 @@ export function playOne({ CFG, Maze, Rules }, seed, opts = {}) {
         let diff = want - st.ang;
         while (diff > Math.PI) diff -= Math.PI * 2;
         while (diff < -Math.PI) diff += Math.PI * 2;
-        intent.turn = Math.max(-1, Math.min(1, diff * 3.0));
+        intent.turn = aimTurn(diff);
         intent.fwd = Math.abs(diff) < 0.75 ? 1 : 0.25;
       }
     }

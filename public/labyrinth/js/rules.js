@@ -211,7 +211,7 @@ const Rules = (function () {
       // Le fermier entre par le sud, tourné vers le NORD (vers la sortie) :
       // ang = 0 regarde vers -Z, et -Z est le nord de la grille.
       px: ex, pz: ez + cfg.CELL * 0.35, ang: 0,
-      vx: 0, vz: 0, speed: 0,
+      vx: 0, vz: 0, speed: 0, turnVel: 0,
       flame: cfg.FLAME_START,
       hearts: cfg.HEARTS,
       invulnT: 0, swingT: 0, cooldownT: 0, hasSword: false,
@@ -359,8 +359,32 @@ const Rules = (function () {
     }
     st.time += dt;
 
-    // ---- orientation
-    st.ang += (intent.turn || 0) * cfg.TURN_SPEED * dt;
+    /* ---- orientation ------------------------------------------------
+       ⚠️ LE SIGNE EST NÉGATIF, ET C'ÉTAIT LE DÉFAUT SIGNALÉ PAR GUILLAUME
+       (« tes contrôles sont inversés »). Il avait raison, et la démonstration
+       tient en une ligne : le vecteur avant vaut (-sin a, -cos a), donc sa
+       dérivée en a vaut (-cos a, sin a), soit (-1, 0) quand on regarde au
+       nord. Faire CROÎTRE l'angle emmenait donc le regard vers -X, c'est-à-dire
+       vers l'OUEST — à gauche. Flèche droite = angle qui DÉCROÎT.
+
+       Aucun outil ne pouvait le voir : l'oracle de tools/lib-play.mjs calcule
+       son intention de rotation À PARTIR de la même convention, donc il
+       tournait « juste » dans un monde inversé et arrivait à destination. Un
+       contrôle qui partage la convention du code qu'il vérifie ne vérifie
+       rien. C'est le corollaire n°5 du zip 387 sous une forme nouvelle, et
+       c'est pour ça que /tmp/turn.mjs teste désormais le RÉSULTAT (« vers où
+       part le regard ? ») et non la formule.
+
+       LE LISSAGE, lui, répond à l'autre moitié du retour (« pas très très
+       fluide ») : la rotation passait de 0 à 3,4 rad/s en une image, ce qui
+       donne un à-coup à chaque appui et à chaque relâchement. On monte et on
+       redescend maintenant en TURN_ACCEL, ce qui coûte ~0,15 s de montée et
+       rend le balayage continu. */
+    const wantTurn = -(intent.turn || 0) * cfg.TURN_SPEED;
+    const dTurn = cfg.TURN_ACCEL * dt;
+    if (st.turnVel < wantTurn) st.turnVel = Math.min(wantTurn, st.turnVel + dTurn);
+    else st.turnVel = Math.max(wantTurn, st.turnVel - dTurn);
+    st.ang += st.turnVel * dt;
 
     // ---- déplacement voulu
     const running = !!intent.run && (intent.fwd || 0) > 0;
@@ -417,9 +441,20 @@ const Rules = (function () {
     if (st.hurtFlash > 0) st.hurtFlash = Math.max(0, st.hurtFlash - dt * 2.5);
     if (st.camShake > 0) st.camShake = Math.max(0, st.camShake - dt * 2.2);
 
-    // ---- sortie
+    /* ---- sortie -----------------------------------------------------
+       ⚠️ IL SUFFIT D'ENTRER DANS LA CELLULE DE SORTIE. La première version
+       exigeait en plus d'avoir dépassé le premier dixième de cette cellule
+       vers le nord (`pz < exit.y·CELL + HALF·0,4`) : autrement dit, arriver
+       sous le phare, se tenir au milieu de la porte, et ne rien voir se
+       passer. La simulation en donnait la preuve la plus nette qu'on puisse
+       avoir — l'oracle atteignait la case de sortie, s'y arrêtait, et y
+       restait jusqu'à la fin du temps imparti. C'est ce que comptait 47 % de
+       « blocages » : pas une panne de l'outil, une victoire refusée.
+
+       Un joueur ne doit jamais avoir à deviner qu'il faut avancer de trois
+       pas de plus. On franchit la porte, on est dehors. */
     const [cx, cy] = cellOf(cfg, st.px, st.pz);
-    if (cy < 0 || (cx === st.m.exit.x && cy === st.m.exit.y && st.pz < st.m.exit.y * cfg.CELL + cfg.HALF * 0.4)) {
+    if (cy < 0 || (cx === st.m.exit.x && cy === st.m.exit.y)) {
       st.status = "won";
       st.endCause = "exit";
       st.score += cfg.SCORE_EXIT_BONUS;
