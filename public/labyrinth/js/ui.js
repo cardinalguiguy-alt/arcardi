@@ -14,6 +14,9 @@ const UI = (function () {
   let L = LAB_STR.fr;
   let best = 0;
   let toastT = 0;
+  /* ZIP 399 — le compteur d'images et le réglage de qualité. */
+  let qualCb = null, qualNow = "high";
+  let fpsAcc = 0, fpsN = 0, fpsLast = 0, fpsShown = 0, perfWired = false;
 
   function show(id, on) { const e = $(id); if (e) e.classList.toggle("visible", !!on); }
 
@@ -31,6 +34,10 @@ const UI = (function () {
     set("lFlame", L.hFlame); set("lBest", L.hBest);
     set("pTitle", L.pause); set("btnResume", L.resume); set("btnQuit", L.quit);
     set("pQuitWarn", L.quitWarn);
+    // zip 399 : le réglage de qualité et l'avis d'effondrement.
+    set("qualTitle", L.qualTitle); set("qualHint", L.qualHint);
+    set("qHigh", L.qual_high); set("qMed", L.qual_med); set("qLow", L.qual_low);
+    set("hangNotice", L.hangNotice);
     set("fLScore", L.fScore); set("fLShards", L.fShards);
     set("fLDepth", L.fDepth); set("fLBest", L.fBest);
     set("btnBack", L.back);
@@ -450,9 +457,56 @@ const UI = (function () {
 
   function lockHint(on) { const e = $("lockHint"); if (e) e.classList.toggle("on", !!on); }
 
+  /* =========================================================================
+     ZIP 399 — LE RÉGLAGE DE QUALITÉ ET LE COMPTEUR D'IMAGES.
+     ====================================================================== */
+  function setQuality(name) {
+    qualNow = name;
+    for (const id of ["qHigh", "qMed", "qLow"]) {
+      const e = $(id);
+      if (e) e.classList.toggle("on", e.getAttribute("data-q") === name);
+    }
+  }
+  function onQuality(cb) {
+    qualCb = cb;
+    /* Les écouteurs sont posés UNE fois. onQuality() est appelé depuis boot(),
+       donc une seule fois aujourd'hui — mais un jour où il le serait deux, on
+       aurait deux écouteurs par bouton et le réglage s'appliquerait en double.
+       C'est le genre de défaut qui ne se voit qu'au troisième clic. */
+    if (perfWired) return;
+    perfWired = true;
+    for (const id of ["qHigh", "qMed", "qLow"]) {
+      const e = $(id);
+      if (!e) continue;
+      e.addEventListener("click", () => { if (qualCb) qualCb(e.getAttribute("data-q")); });
+    }
+  }
+  function hangNotice(on) { const e = $("hangNotice"); if (e) e.style.display = on ? "" : "none"; }
+
+  /* ⚠️ LE COMPTEUR MOYENNE SUR UNE DEMI-SECONDE. Afficher l'inverse de la
+     dernière image donne un nombre qui saute de 40 à 90 et qu'on ne peut pas
+     lire — et surtout qu'on ne peut pas RAPPORTER. Il faut qu'une capture
+     d'écran suffise à dire où on en est.
+     Il ne s'allume qu'à partir de la deuxième seconde : la première contient la
+     compilation des shaders, et un « 3 i/s » affiché au démarrage ferait croire
+     à un problème qui n'existe plus une seconde plus tard. */
+  function perf(now, p) {
+    const e = $("perf");
+    if (!e || !p) return;
+    if (fpsLast) { fpsAcc += now - fpsLast; fpsN++; }
+    fpsLast = now;
+    if (fpsAcc >= 500 && fpsN > 0) {
+      fpsShown = Math.round(1000 / (fpsAcc / fpsN));
+      fpsAcc = 0; fpsN = 0;
+      e.textContent = `${fpsShown} i/s   ${Math.round(p.res * 100)}%   ${p.pool} lampes   ${p.level}`;
+      e.classList.add("on");
+    }
+  }
+
   return {
     applyLang, setBest, hud, toast, toastTick, events, flameWarnings, over, show,
     nav, toggleMap, closeMap, lockHint,
+    setQuality, onQuality, hangNotice, perf,       // zip 399
     get L() { return L; }, get best() { return best; },
   };
 })();

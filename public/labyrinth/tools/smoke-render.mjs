@@ -25,6 +25,11 @@
 import { load } from "./lib-play.mjs";
 
 let created = 0, meshes = 0;
+/* ZIP 399 — on COMPTE les libérations. Avant ce zip il n'y avait aucun
+   `dispose()` dans world.js : chaque nouvelle partie laissait un dédale complet
+   sur le GPU. Un compteur qui reste à zéro à la deuxième construction est le
+   signe que la fuite est revenue. */
+let disposed = 0;
 const seen = new Set();
 
 /* Faux Three.js. Chaque classe compte ses instanciations et rend un objet
@@ -36,6 +41,7 @@ function node(kind) {
   seen.add(kind);
   return {
     kind,
+    dispose() { disposed++; },
     position: V3(), rotation: V3(), scale: V3(),
     visible: true, children: [], userData: {}, material: null, geometry: null,
     add(c) { this.children.push(c); },
@@ -77,13 +83,25 @@ const FakeTHREE = {
      sinon cet outil fabrique une fausse alerte au lieu de mesurer le jeu. */
   MeshPhongMaterial: function (o) { return Object.assign(node("Phong"), o || {}); },
   AmbientLight: function () { return node("AmbientLight"); },
-  PointLight: function () { const n = node("PointLight"); n.distance = 0; n.intensity = 0; return n; },
+  /* ⚠️ ZIP 399 — `color.setHex` EST OBLIGATOIRE ICI. Le groupe de lumières
+     réattribue chaque créneau du pool à un émetteur différent d'une image à
+     l'autre : la couleur d'une PointLight n'est donc plus posée une fois pour
+     toutes à la construction, elle change en cours de partie. Sans ce champ,
+     world.js jette à la première image — ce qui est très exactement le
+     contrôle voulu, et c'est comme ça que cet outil a été utile au 399. */
+  PointLight: function () {
+    const n = node("PointLight");
+    n.distance = 0; n.intensity = 0;
+    n.color = { hex: 0, setHex(h) { this.hex = h; } };
+    return n;
+  },
   CanvasTexture: function () {
     // `clone()` : la densité de texels constante du 397 clone la texture par
     // taille de mur pour lui donner sa propre répétition (l'image, elle, est
     // partagée). Un clone qui ne rendrait pas d'objet ferait échouer world.js
     // ici et nulle part ailleurs.
     const t = { magFilter: 0, minFilter: 0, wrapS: 0, wrapT: 0, needsUpdate: false,
+                dispose() { disposed++; },
                 offset: { x: 0, y: 0 }, repeat: { x: 1, y: 1, set(a, b) { this.x = a; this.y = b; } } };
     t.clone = function () { return FakeTHREE.CanvasTexture(); };
     return t;
@@ -150,6 +168,12 @@ for (const seed of SEEDS) {
   check(`graine ${String(seed).padEnd(9)} : budget de maillages sous 6000`, built < 6000, `${built}`);
 }
 
+/* ⚠️ ZIP 399 — LE CONTRÔLE QUI MANQUAIT. Les quatre graines ci-dessus
+   construisent quatre mondes d'affilée : à partir du deuxième, init() doit
+   avoir rendu le précédent. On ne vérifie pas un nombre exact (il dépend du
+   dédale), on vérifie qu'il n'est PAS NUL — c'est la différence entre « on
+   libère » et « on ne libère pas », et c'est la seule qui compte. */
+check("le monde précédent est libéré à chaque nouvelle partie", disposed > 1000, `${disposed} objets rendus au GPU`);
 check("les quatre découpes de flamme sont créées", seen.has("Basic"));
 check("aucune texture n'a utilisé de dégradé, d'arc ou de tracé", true);
 

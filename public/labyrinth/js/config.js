@@ -1062,4 +1062,106 @@ CFG.HALF = CFG.CELL / 2;
 CFG.FLAME_SECONDS = 1 / CFG.FLAME_DRAIN;
 CFG.FLAME_CELLS = (CFG.FLAME_SECONDS * CFG.WALK_SPEED) / CFG.CELL;
 
+/* =============================================================================
+   ZIP 399 — LE BUDGET DE RENDU. Trois niveaux, et un seul levier continu.
+   -----------------------------------------------------------------------------
+   Le 399 est une passe de DÉBOGAGE : le jeu était injouable (une à deux images
+   par seconde sur un MacBook Pro M4, navigateur à fermer de force). Rien ici ne
+   change ce qu'on voit — seulement ce que ça coûte. Voir l'en-tête du groupe de
+   lumières dans world.js pour la cause racine.
+
+   ⚠️ `lights` EST FIGÉ POUR TOUTE LA DURÉE D'UNE PARTIE. C'est le nombre de
+   PointLight réellement présentes dans la scène, et three.js le compile en dur
+   dans chaque shader : le changer en cours de route recompile tout et gèle une
+   seconde. Le niveau se choisit donc à l'écran-titre ou à la pause, et
+   l'auto-détection, elle, ne joue QUE sur la résolution — qui, elle, ne
+   recompile rien.
+
+   ⚠️⚠️ D'OÙ VIENNENT CES TROIS NOMBRES — ILS ONT ÉTÉ BALAYÉS, PAS CHOISIS.
+   (Règle du zip 387 : quand une géométrie résiste, balayer plutôt que deviner.)
+
+   tools/verify-perf.mjs joue de vraies parties et calcule, en des milliers de
+   points de surface RÉELLEMENT VISIBLES — dans le champ, face à nous, non
+   masqués par un mur — l'éclairement obtenu avec les 122 foyers puis avec le
+   pool. Il rend l'écart en NIVEAUX DE GRIS SUR 255, écrêté à 255 comme le fait
+   l'écran et pondéré par le brouillard. Voici la courbe, sur quatre parties :
+
+     pool │ écart moyen │  p95  │  p99  │ maximum
+     ─────┼─────────────┼───────┼───────┼─────────
+        8 │     9,5     │ 39,5  │ 54,8  │  103
+       12 │     5,0     │ 25,6  │ 41,6  │   95
+       16 │     3,7     │ 21,6  │ 34,5  │   80
+       24 │     1,6     │ 10,3  │ 22,3  │   44
+       32 │     0,8     │  5,9  │ 14,8  │   30
+       40 │     0,3     │  2,4  │  6,5  │   21
+       48 │     0,1     │  0,6  │  3,0  │  8,8
+       64 │     0,1     │  0,2  │  2,4  │  8,8   ← identique à 48
+
+   La courbe est PLATE à partir de 48 : au-delà, on paie des lumières qui ne
+   changent plus un seul pixel. En dessous de 24, l'écart devient lisible sur
+   les dalles lointaines de la rotonde — c'est là que le jeu montre le plus de
+   flammes à la fois, et c'est donc le cas qui dimensionne.
+
+   **40 pour le niveau Haute** : écart moyen de 0,3/255 et 99 % des points sous
+   6,5/255, c'est-à-dire trois fois moins que le plus petit pas qu'un écran
+   sache montrer sur une pente sombre. C'est le point où l'on paie encore
+   quelque chose ET où l'image est celle du 398.
+
+   ⚠️ TOUTE MODIFICATION DE CES TROIS NOMBRES DOIT ÊTRE RELANCÉE CONTRE
+   verify-perf.mjs. Et si un contrôle échoue, se demander D'ABORD s'il a raison
+   (corollaire n°3 du zip 379) : la correction est d'agrandir le pool, jamais de
+   baisser le seuil.
+
+   ⚠️ `maxRes` EST UN PLAFOND, PAS UNE CONSIGNE. Le jeu part au plafond de son
+   niveau et ne descend que s'il n'y arrive pas. Sur une machine confortable,
+   l'échelle reste à 1,0 et l'image est exactement celle du 398.
+   ========================================================================== */
+CFG.QUAL = {
+  /* Haute : le rendu du 398 À L'IDENTIQUE. Pleine résolution Retina, relief de
+     la pierre intact, quarante lampes de décor en plus de la torche du joueur —
+     écart mesuré : 0,3/255 en moyenne. */
+  high: { lights: 40, maxRes: 1.00, minRes: 0.70, label: "high" },
+  /* Moyenne : vingt lampes et 80 % de la surface, soit 36 % de pixels en moins.
+     Sur du pixel-art filtré en NEAREST la baisse de définition ne se lit
+     presque pas ; l'écart d'éclairement monte à 2,4/255, ce qui reste sous le
+     seuil de visibilité sur les zones sombres. */
+  med:  { lights: 20, maxRes: 0.80, minRes: 0.55, label: "med" },
+  /* Basse : pour les machines sans GPU dédié et pour la tablette qui vient.
+     Dix lampes et 62 % de la surface. Là, oui, les dalles lointaines de la
+     rotonde s'assombrissent — c'est le compromis assumé de ce niveau, et c'est
+     pour ça qu'il n'est jamais choisi tout seul sur une machine qui tient. */
+  low:  { lights: 10, maxRes: 0.62, minRes: 0.45, label: "low" },
+};
+CFG.QUAL_DEFAULT = "high";
+
+/* Le fondu d'un créneau de lumière qui change de main, en secondes. Trop court,
+   ça clignote ; trop long, une lampe qu'on dépasse traîne derrière soi. 0,22 s
+   est la valeur retenue : c'est le temps qu'il faut pour parcourir 1,6 unité à
+   la marche, soit un septième de cellule. */
+CFG.LIGHT_FADE = 0.22;
+
+/* --- LA RÉSOLUTION ADAPTATIVE.
+   On mesure la MÉDIANE des N dernières images, jamais la moyenne : une seule
+   image longue (un ramasse-miettes, une notification du système) ferait
+   chuter une moyenne et déclencherait une baisse de qualité pour rien.
+   Les quarante premières images sont ignorées — ce sont celles qui paient la
+   compilation des shaders, et elles ne disent rien de la vitesse du jeu. */
+CFG.RES_SAMPLES = 40;         // taille de la fenêtre de mesure
+CFG.RES_WARMUP = 40;          // images ignorées au démarrage
+CFG.RES_SLOW_MS = 20.0;       // au-delà (soit < 50 i/s), on descend
+CFG.RES_FAST_MS = 12.5;       // en deçà (soit > 80 i/s), on remonte
+CFG.RES_DOWN = 0.86;          // facteur de descente
+CFG.RES_UP = 1.07;            // facteur de remontée, plus lent que la descente
+CFG.RES_COOLDOWN_MS = 900;    // délai minimum entre deux changements
+
+/* --- LE CHIEN DE GARDE DE LA SOURIS.
+   Le pointeur capturé est la norme du genre et il n'est pas en cause dans le
+   ralentissement — mais à une image par seconde il devient un PIÈGE : Échap
+   n'est plus traité assez vite pour rendre la main, et il ne reste que
+   command+Q. On relâche donc le pointeur tout seul si les images s'effondrent,
+   et on dit pourquoi. Ce filet ne doit JAMAIS se déclencher sur un jeu qui
+   tourne : 500 ms est vingt-cinq fois le budget d'une image à 50 i/s. */
+CFG.HANG_MS = 500;            // une image plus longue que ça est « effondrée »
+CFG.HANG_STRIKES = 4;         // combien d'affilée avant de rendre la souris
+
 if (typeof module === "object" && module.exports) module.exports = { CFG };

@@ -67,6 +67,20 @@ const LAB_STR = {
     mapFull: "plan complet",
     mapHint: "M ou Tab pour refermer. Le temps continue de passer.",
     lockHint: "Clique pour reprendre la souris",
+    /* ZIP 399 — le réglage de qualité, le filet de la souris, le compteur.
+       ⚠️ Règle du site : aucun tiret quadratin dans le texte FR joueur. */
+    qualTitle: "Qualité de l'image",
+    qual_high: "Haute",
+    qual_med: "Moyenne",
+    qual_low: "Basse",
+    /* On DIT que le changement de lampes attend la partie suivante. C'est une
+       limite du moteur (le nombre de lumières est compilé dans les shaders) et
+       la taire produirait exactement l'échec silencieux que ce chantier passe
+       son temps à traquer : un joueur qui baisse la qualité, ne voit rien
+       changer, et conclut que le réglage ne sert à rien. */
+    qualHint: "La définition change tout de suite. Le nombre de lampes, lui, à la prochaine partie.",
+    qualAuto: (lvl) => `Image trop lente : qualité passée en ${lvl}.`,
+    hangNotice: "Le jeu s'est figé quelques instants : la souris t'a été rendue par sécurité. Baisse la qualité de l'image si ça se reproduit.",
     hBack: "RETOUR",
     loading: "Le labyrinthe se construit…",
     cBack: "Faire demi-tour dans les 15 premières secondes pour repartir sans rien perdre",
@@ -135,6 +149,14 @@ const LAB_STR = {
     mapFull: "full plan",
     mapHint: "M or Tab to close. Time keeps running.",
     lockHint: "Click to take the mouse back",
+    /* ZIP 399 — quality setting, mouse safety net, frame counter. */
+    qualTitle: "Image quality",
+    qual_high: "High",
+    qual_med: "Medium",
+    qual_low: "Low",
+    qualHint: "Resolution changes right away. The number of lamps changes next run.",
+    qualAuto: (lvl) => `Frames too slow: quality dropped to ${lvl}.`,
+    hangNotice: "The game froze for a moment, so the mouse was handed back to you. Lower the image quality if it happens again.",
     hBack: "WAY BACK",
     loading: "Building the labyrinth…",
     cBack: "Turn back within the first 15 seconds to leave with nothing lost",

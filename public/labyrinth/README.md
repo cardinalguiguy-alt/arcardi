@@ -1,4 +1,41 @@
-# Le Labyrinthe — mini-jeu du Pays du Labyrinthe (zips 393-397)
+# Le Labyrinthe — mini-jeu du Pays du Labyrinthe (zips 393-399)
+
+> **ZIP 399 — LE JEU ÉTAIT INJOUABLE, ET LA CAUSE SE COMPTAIT.**
+> Retour de Guillaume : « il fait lagger mon ordinateur à mort et m'oblige à
+> command+Q pour fermer mon navigateur (…) y a une ou deux images par seconde
+> (…) ma souris est désactivée en dehors du champ de jeu ». Sur un MacBook Pro
+> M4. Aucun outil ne le voyait, parce qu'aucun outil ne comptait la bonne
+> chose : `smoke-render.mjs` mesurait fidèlement 3 465 maillages et les
+> déclarait sous le plafond — et il avait raison, ce n'étaient pas les
+> maillages.
+>
+> **Quatre causes, toutes trouvées en comptant, aucune en relisant :**
+>
+> 1. **123 `PointLight` dans la scène.** three.js r128 est un moteur *forward* :
+>    il ne trie pas les lumières, il les compile toutes dans chaque shader et les
+>    parcourt pour chaque fragment. Depuis le 397 la pierre est en Phong
+>    (obligatoire pour le `bumpMap`) : la boucle tournait donc **par pixel**, sur
+>    1 182 maillages. ~640 millions d'évaluations d'éclairage par image.
+> 2. **Le labyrinthe était construit deux fois au démarrage.** `boot()` en
+>    bâtissait un pour l'écran-titre — avec un commentaire, depuis le 393,
+>    expliquant que c'était pour ne pas payer la construction au clic sur
+>    « Entrer » — et `start()` rappelait `newRun()` sans condition.
+> 3. **Un `WebGLRenderer` neuf à chaque partie, et aucun `dispose()` nulle
+>    part.** Les shaders étaient recompilés à chaque fois, et les mondes
+>    précédents restaient en mémoire vidéo pour toujours.
+> 4. **L'iframe de la ferme n'avait pas `allow="pointer-lock"`.**
+>
+> **La parade principale : on ne supprime pas les lumières, on les PRÊTE.** Le
+> décor déclare ses 122 foyers ; seul un pool de quarante `PointLight` est
+> réellement dans la scène, réattribué à chaque image aux foyers qui pèsent le
+> plus dans l'image. Le chiffre 40 n'a pas été choisi, il a été **balayé** :
+> voir `tools/verify-perf.mjs`, qui calcule l'écart d'éclairement en niveaux de
+> gris sur des milliers de points de surface réellement visibles.
+> **Écart mesuré au niveau Haute : 0,4/255 en moyenne.**
+>
+> Deux outils neufs : `verify-perf.mjs` et **`verify-boot.mjs`, qui exécute
+> enfin `game.js`** — le seul fichier du jeu qu'aucun outil ne faisait tourner,
+> et donc celui où la double construction avait pu dormir six zips.
 
 > **ZIP 397 — LA VUE SUBJECTIVE, ET LA FIN DE QUATRE REFONTES EN AVEUGLE.**
 > Retour de Guillaume : « beaucoup trop d'amateurisme dans les textures des
@@ -147,22 +184,34 @@ ce découplage — et non un réglage de vitesse — qui répond à « plus flui
 
 ---
 
-## Vérification — dix scripts, à relancer TOUS à chaque livraison
+## Vérification — quatorze scripts, à relancer TOUS à chaque livraison
 
 Un outil qu'on saute n'est pas un filet de sécurité, c'est un fichier mort
 (leçon du zip 375).
 
 ```
-node tools/verify-maze.mjs 2000    # les six garanties du générateur
+node tools/verify-perf.mjs 5       # LE BUDGET DE RENDU, mesuré en jouant   (399)
+node tools/verify-boot.mjs         # game.js EXÉCUTÉ, du chargement à la 2e partie (399)
+node tools/verify-maze.mjs 400     # les dix garanties du générateur
 node tools/verify-controls.mjs     # les commandes vont-elles dans le bon sens ? (394)
+node tools/verify-rig.mjs          # le squelette composé en repère monde   (396)
 node tools/verify-anim.mjs         # patinage, bornes, bouclage, contre-balancement (395)
 node tools/verify-palette.mjs      # la palette n'a pas dérivé de celle du défi
+node tools/verify-textures.mjs     # platitude, couture, relief             (397)
 node tools/smoke-render.mjs        # world.js EXÉCUTÉ contre un faux Three.js
 node tools/check-strings.mjs       # parité FR/EN + ui.js exécuté contre un faux DOM
+node tools/render-textures.mjs     # les textures en PNG, pour REGARDER     (397)
+node tools/preview-fps.mjs 4242    # la vue subjective en PNG               (397)
 node tools/batch-maze.mjs 1 60 300 > parties.jsonl   # 60 parties JOUÉES
 node tools/report-maze.mjs parties.jsonl             # ce qu'elles disent
 node tools/simulate-maze.mjs 60    # le même rapport, d'un bloc
 ```
+
+> **⚠️ CE QU'AUCUN DE CES QUATORZE SCRIPTS NE MESURE : UN TEMPS.** Il n'y a pas
+> de GPU dans node. `verify-perf.mjs` compte ce qu'on DEMANDE au GPU, jamais ce
+> que le GPU met à le faire. Le nombre d'images par seconde réel ne peut venir
+> que du **compteur en bas à gauche de l'écran**, en jouant — c'est pour ça
+> qu'il a été ajouté au 399, et c'est la seule mesure qui tranche.
 
 `batch-maze.mjs` existe parce qu'une campagne de plusieurs centaines de parties
 dépasse le temps d'une commande, et **un outil qu'on ne peut pas lancer d'un
@@ -177,7 +226,9 @@ bloc doit pouvoir être lancé en morceaux** — sinon il n'est lancé qu'une fo
 | `verify-anim` | **13 contrôles**, rapport foulées/distance = **1,000** |
 | `verify-palette` | **36 couleurs communes identiques au bit près**, 17 propres au labyrinthe |
 | `smoke-render` | 4 graines × 300 images, **~2 450 maillages** (plafond 6 000) |
-| `check-strings` | **41 = 41**, 16 identifiants |
+| `check-strings` | **65 = 65**, 28 identifiants |
+| `verify-perf` *(399)* | 42 `PointLight` (40 + torche + modèle de vue), 122 émetteurs, 3 418 maillages, **écart d'éclairement 0,4/255 en moyenne, p99 à 7,8** |
+| `verify-boot` *(399)* | 8 contrôles : **2 mondes bâtis** sur toute la séquence, **1 seul `WebGLRenderer`**, la souris rendue au bout de 4 images effondrées |
 
 ### Les six garanties de `verify-maze.mjs`
 

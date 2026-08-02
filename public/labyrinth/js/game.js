@@ -30,6 +30,22 @@
      3D soit réellement passée par renderer.render(). Tant qu'elle ne l'est
      pas, on montre l'écran de chargement. Voir boot(). */
   let firstFrame = false;
+  /* ⚠️⚠️ ZIP 399 — LE DÉDALE DE L'ÉCRAN-TITRE EST CELUI QU'ON JOUE.
+     -----------------------------------------------------------------------
+     boot() construit un labyrinthe pour que l'écran-titre montre le jeu, et le
+     commentaire de boot() explique — depuis le 393 — que c'est aussi pour que
+     « la première image d'une partie n'ait plus à payer la construction de
+     900 murs ». Sauf que start() rappelait newRun() SANS CONDITION : on payait
+     donc tout DEUX fois — génération du dédale, peinture de vingt-six textures,
+     3 465 maillages, et surtout la compilation de shaders à 123 lumières —
+     dont une fois pile au moment où le joueur clique sur « Entrer ».
+     L'optimisation était écrite, commentée, et ne servait à rien.
+
+     Le drapeau dit simplement : « ce dédale-ci n'a jamais été joué ». S'il est
+     levé, start() le prend tel quel. Il retombe dès qu'on y entre, donc
+     rejouer après une mort en construit bien un neuf — reconnaître le dédale
+     supprimerait tout le jeu dès la deuxième partie (voir newRun). */
+  let freshMaze = false;
 
   const $ = (id) => document.getElementById(id);
 
@@ -44,6 +60,7 @@
     st = Rules.create(CFG, maze, seed);
     World.init(CFG, maze, st, $("gl"), Bridge.skin);
     ended = false;
+    freshMaze = true;
     acc = 0; last = performance.now();
   }
 
@@ -55,7 +72,11 @@
     UI.show("pause", false);
     UI.closeMap();
     Input.clear();
-    newRun();
+    // zip 399 : on ne reconstruit que si le dédale affiché a déjà servi.
+    if (!freshMaze) newRun();
+    freshMaze = false;
+    ended = false;
+    acc = 0; last = performance.now();
     state = "play";
     /* ⚠️ ZIP 397 — LA CAPTURE DU POINTEUR EST DEMANDÉE ICI, ET NULLE PART
        AILLEURS OÙ CE NE SERAIT PAS UN CLIC. Les navigateurs n'accordent le
@@ -155,6 +176,41 @@
       }
       UI.flameWarnings(st);
       UI.hud(st);
+      /* ⚠️⚠️ ZIP 399 — LE FILET DE LA SOURIS CAPTURÉE.
+         -------------------------------------------------------------------
+         Guillaume : « ma souris est désactivée en dehors du champ de jeu (…)
+         m'oblige à command+Q ». Le pointeur capturé n'est PAS la cause du
+         ralentissement — c'est la norme du genre, et c'est lui qui rend la
+         visée juste. Mais à une image par seconde il devient un PIÈGE : Échap
+         est bien reçu par le navigateur, seulement la page ne redessine plus
+         assez vite pour qu'on voie quoi que ce soit, et il ne reste que de
+         fermer le navigateur.
+
+         On rend donc la souris TOUT SEUL quand quatre images d'affilée
+         dépassent une demi-seconde, on met le jeu en pause, et on DIT
+         pourquoi — un jeu qui reprend la main sans explication est aussi
+         inquiétant qu'un jeu qui la garde. Le seuil est vingt-cinq fois le
+         budget d'une image à 50 i/s : ce filet ne peut pas se déclencher sur
+         un jeu qui tourne. */
+      if (World.takeHang()) {
+        state = "pause";
+        UI.show("pause", true);
+        UI.hangNotice(true);
+        Input.clear();
+        Input.release();
+      }
+      // L'auto-détection a dû descendre d'un cran : on le dit une fois.
+      const dem = World.takeDemote();
+      if (dem) {
+        UI.toast(LAB_STR[Bridge.lang].qualAuto(LAB_STR[Bridge.lang]["qual_" + dem]));
+        UI.setQuality(dem);
+        /* ⚠️ ON MÉMORISE LA RÉTROGRADATION, ET C'EST TOUT L'INTÉRÊT DE
+           L'AUTO-DÉTECTION. Sans cette ligne, chaque venue au labyrinthe
+           recommencerait à Haute, ramerait dix secondes, redescendrait et
+           paierait à nouveau la recompilation des shaders. Une machine ne
+           devrait avoir à se faire mesurer qu'une seule fois. */
+        try { localStorage.setItem("vf-lab-qual", dem); } catch (e) {}
+      }
     } else {
       last = now;
     }
@@ -187,6 +243,11 @@
        la souris, qui est plus rapide que 30 Hz. Une boussole qui saccade est
        pire qu'une boussole absente — on cesse de la lire. */
     if (st) UI.nav(st, state === "play");
+    /* Le compteur d'images. Il n'est pas là pour décorer : c'est le SEUL moyen
+       de savoir ce que la machine de Guillaume fait vraiment, puisque
+       verify-perf.mjs, lui, ne mesure aucun temps (il n'y a pas de GPU dans
+       node). Une capture d'écran de ce coin-là vaut une heure de suppositions. */
+    UI.perf(now, World.perf);
     /* « Cliquez pour jouer » : le seul cas où le joueur doit agir pour
        récupérer sa souris. On ne le montre PAS sur tactile, où il n'y a pas de
        pointeur à capturer et où le message n'aurait aucun sens. */
@@ -206,9 +267,18 @@
       return;
     }
     Input.init();
+    /* ⚠️ LE NIVEAU EST LU AVANT LA PREMIÈRE CONSTRUCTION, et c'est obligatoire :
+       il fixe la taille du pool de lumières, qui est compilée dans les shaders.
+       Le lire après reviendrait à construire au niveau par défaut puis à tout
+       recompiler — exactement le gel qu'on vient de supprimer. */
+    let q = CFG.QUAL_DEFAULT;
+    try { q = localStorage.getItem("vf-lab-qual") || q; } catch (e) {}
+    World.setQuality(CFG, q);
+    UI.setQuality(q);
     window.addEventListener("resize", () => World.resize());
     $("btnStart").addEventListener("click", start);
     $("btnResume").addEventListener("click", () => {
+      UI.hangNotice(false);
       state = "play"; last = performance.now(); acc = 0;
       UI.show("pause", false); Input.clear();
       Input.grab();                       // même raison qu'au démarrage
@@ -220,6 +290,13 @@
       // son score avant que la ferme enchaîne son fondu au noir.
       Bridge.over({ score: st.score | 0, shards: st.shardsTaken | 0, cause: st.endCause || "dead" });
       if (!Bridge.embedded) toTitle();
+    });
+    /* Le sélecteur de qualité, à la pause. Il applique tout de suite et
+       mémorise : la partie suivante démarrera au bon niveau sans recompiler. */
+    UI.onQuality((name) => {
+      World.setQuality(CFG, name);
+      UI.setQuality(name);
+      try { localStorage.setItem("vf-lab-qual", name); } catch (e) {}
     });
     const be = $("btnExit");
     if (be) be.addEventListener("click", () => Bridge.exit());

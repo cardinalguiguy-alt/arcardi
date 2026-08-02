@@ -33,7 +33,14 @@ import { fileURLToPath } from "url";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT = path.join(HERE, "..");
 
-export function load(files = ["js/config.js", "js/maze.js", "js/rules.js"]) {
+/* ⚠️ `extra` A ÉTÉ AJOUTÉ AU 399 POUR verify-boot.mjs, ET LA RAISON VAUT D'ÊTRE
+   ÉCRITE. Un contexte `vm` reçoit gratuitement tous les objets NORMALISÉS de
+   JavaScript (Date, Math, Set…) : il ne manque que ce qui appartient au
+   NAVIGATEUR. Or game.js — le seul fichier du jeu qu'aucun outil n'exécutait —
+   se sert de `requestAnimationFrame`, de `setTimeout` et de `localStorage`.
+   C'est précisément parce qu'il n'était jamais exécuté que le défaut de la
+   double construction a survécu six zips. */
+export function load(files = ["js/config.js", "js/maze.js", "js/rules.js"], extra = {}) {
   const ctx = vm.createContext({
     Math, console, Object, Set, Map, Uint8Array, Int32Array, Float32Array, Array, Proxy, JSON,
     module: {}, performance: { now: () => Date.now() },
@@ -41,6 +48,7 @@ export function load(files = ["js/config.js", "js/maze.js", "js/rules.js"]) {
     // AVANT d'appeler load() : world.js et paint.js les cherchent là.
     window: typeof global !== "undefined" ? global.window : undefined,
     document: typeof global !== "undefined" ? global.document : undefined,
+    ...extra,
   });
   for (const f of files) {
     vm.runInContext(fs.readFileSync(path.join(ROOT, f), "utf8"), ctx, { filename: f });
@@ -452,6 +460,15 @@ export function playOne({ CFG, Maze, Rules }, seed, opts = {}) {
     }
 
     Rules.step(st, DT, intent);
+    /* ⚠️ ZIP 399 — LE CROCHET PAR PAS, ET POURQUOI IL VAUT MIEUX QU'UN SECOND
+       ORACLE. verify-perf.mjs doit mesurer le coût de RENDU pendant une VRAIE
+       partie : un joueur qui longe les murs, revient sur ses pas et traverse
+       la rotonde ne passe pas du tout aux mêmes endroits qu'un `fwd: 1`
+       perpétuel, et c'est précisément aux endroits denses en torches que le
+       groupe de lumières peut manquer de créneaux. Écrire un second joueur
+       pour l'occasion, c'aurait été deux descriptions d'une même chose — le
+       défaut que ce chantier traque depuis le 387. */
+    if (opts.onStep) opts.onStep(st, m, DT);
 
     if (opts.trace && frames % 1200 === 0) {
       const [cx, cy] = Rules.cellOf(CFG, st.px, st.pz);

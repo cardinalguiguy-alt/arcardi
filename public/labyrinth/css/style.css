@@ -210,3 +210,34 @@ body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; co
 .win.visible { display: flex; }
 .win-box h2 { font-size: 120px; margin: 0; color: #d9bcff; animation: rise 1.4s ease-out; }
 @keyframes rise { from { transform: translateY(40px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+/* =============================================================================
+   ZIP 399 — LE RÉGLAGE DE QUALITÉ, L'AVIS D'EFFONDREMENT ET LE COMPTEUR.
+   ========================================================================== */
+.qual { margin: 14px 0 6px; }
+.qual > span { display: block; font-size: 13px; opacity: .8; margin-bottom: 6px; }
+.qualRow { display: flex; gap: 8px; justify-content: center; }
+/* Les trois boutons ont la même largeur : un réglage dont les options changent
+   de taille selon la langue se lit comme trois choses différentes. */
+.qbtn {
+  flex: 1 1 0; min-width: 96px; padding: 8px 6px; font-size: 13px;
+  background: #241a35; color: #cbb8e4; border: 1px solid #4a3866; border-radius: 6px;
+  cursor: pointer;
+}
+.qbtn:hover { background: #2f2245; }
+.qbtn.on { background: #6b4ea8; color: #fff; border-color: #9b7ad6; }
+.warn {
+  margin: 6px 0 10px; padding: 8px 10px; font-size: 13px; line-height: 1.45;
+  color: #ffd9a8; background: #3a2416; border: 1px solid #7a4a20; border-radius: 6px;
+}
+/* Le compteur : en bas à GAUCHE, là où il n'y a ni boussole (haut), ni
+   minicarte (bas à droite), ni réticule (centre). Il ne doit jamais recouvrir
+   quelque chose qu'on lit en jouant. */
+.perf {
+  position: fixed; left: 8px; bottom: 8px; z-index: 60;
+  font: 11px/1.35 ui-monospace, Menlo, Consolas, monospace;
+  color: #9d8cc0; background: rgba(12, 8, 22, .55);
+  padding: 4px 7px; border-radius: 5px; pointer-events: none;
+  white-space: pre; opacity: 0; transition: opacity .2s;
+}
+.perf.on { opacity: 1; }

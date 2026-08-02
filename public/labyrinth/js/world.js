@@ -71,6 +71,410 @@ const World = (function () {
   let flameCuts = [];
   let CFG_, ST_, M_;
 
+  /* =========================================================================
+     ZIP 399 — LE GROUPE DE LUMIÈRES, ET LA CAUSE RACINE DU JEU INJOUABLE.
+     -------------------------------------------------------------------------
+     Guillaume, au 399 : « il fait lagger mon ordinateur à mort et m'oblige à
+     command+Q pour fermer mon navigateur (…) y a une ou deux images par
+     seconde ». Sur un MacBook Pro M4, c'est-à-dire sur une machine qui n'a
+     aucune excuse. La cause a été COMPTÉE, pas devinée : tools/verify-perf.mjs
+     construit le monde contre un faux Three.js et compte ce qui s'y trouve.
+     Il y avait **123 PointLight** — 82 pour les torches murales, 23 pour les
+     brasiers et les objets, 9 au fond des trous, 6 pour la rotonde, 3 pour le
+     reste.
+
+     ⚠️ THREE.JS r128 EST UN MOTEUR *FORWARD* : IL NE TRIE PAS LES LUMIÈRES.
+     Le nombre de PointLight PRÉSENTES dans la scène est compilé en dur dans le
+     shader de chaque matériau (NUM_POINT_LIGHTS), et la boucle d'éclairage les
+     parcourt TOUTES, y compris celles qui sont à l'autre bout du dédale. Et
+     depuis le 397 la pierre est en MeshPhongMaterial — obligatoire pour le
+     bumpMap, voir stoneMat — donc cette boucle tourne PAR PIXEL, sur les
+     1 182 maillages de pierre et de sol. À 2880×1800 (Retina,
+     devicePixelRatio 2), cela fait ~640 millions d'évaluations d'éclairage par
+     image, avant même de compter le recouvrement. C'est très exactement « une
+     ou deux images par seconde ».
+
+     Le commentaire de buildWallTorches le disait déjà, au 394 : « une lampe une
+     fois sur deux seulement : au-delà, on dépasse le budget de lumières
+     dynamiques de WebGL et le rendu s'effondre ». Le garde-fou était juste. Il
+     était calibré dix fois trop haut, et personne ne pouvait le voir en
+     relisant : chaque lampe, prise seule, est parfaitement légitime.
+
+     ⚠️ LA PARADE N'EST PAS DE SUPPRIMER DES LUMIÈRES, C'EST DE LES PRÊTER.
+     Une torche murale porte à CELL×1,9 = 21,8 unités ; au-delà, sa
+     contribution est MATHÉMATIQUEMENT NULLE (three.js coupe net à `distance`).
+     Sur les 123 lampes, il n'y en a donc jamais qu'une poignée qui éclaire
+     réellement le pixel qu'on regarde : tout le reste coûte plein tarif pour
+     ajouter zéro. On garde donc la liste complète des ÉMETTEURS — de simples
+     enregistrements, aucun coût GPU — et un POOL FIXE de PointLight réellement
+     présentes dans la scène, réattribuées à chaque image aux émetteurs les
+     plus proches qui portent jusqu'à l'œil.
+
+     ⚠️ C'EST LE MÊME TEST QUE FAIT LE SHADER, SAUF QU'ON LE FAIT UNE FOIS PAR
+     LAMPE AU LIEU D'UNE FOIS PAR LAMPE ET PAR PIXEL. C'est toute l'astuce, et
+     c'est pour ça que le décor est identique à l'œil : la lampe n° 47, qui
+     n'éclairait rien, ne coûte simplement plus rien non plus.
+
+     ⚠️ LA TAILLE DU POOL EST FIGÉE À L'INIT, ET CE N'EST PAS NÉGOCIABLE.
+     Changer le nombre de lumières présentes dans la scène change
+     NUM_POINT_LIGHTS, donc invalide et RECOMPILE tous les shaders — un gel
+     d'une seconde en pleine partie. Le pool est dimensionné une fois d'après
+     CFG.QUAL[niveau].lights, et les créneaux inoccupés portent une intensité
+     nulle : une lumière éteinte ne recompile rien et ne coûte qu'une poignée
+     d'opérations par pixel.
+
+     ⚠️ ET IL FAUT UN FONDU. Réattribuer un créneau d'un coup fait CLIGNOTER le
+     décor dès qu'on marche. Chaque créneau porte donc un facteur k qui monte
+     et descend en CFG.LIGHT_FADE secondes : l'émetteur qui sort s'éteint avant
+     que le créneau ne change de main, et le suivant s'allume. Comme celui qui
+     sort est toujours le PLUS LOINTAIN, donc le plus faible, le fondu ne se
+     voit pas. Un hystérésis de 25 % empêche en plus deux lampes à distance
+     quasi égale de s'échanger le créneau à chaque image.
+
+     ⚠️ CE QUE CE MÉCANISME NE PEUT PAS FAIRE : si plus de `lights` émetteurs
+     portent RÉELLEMENT jusqu'à l'œil au même instant, les surnuméraires sont
+     perdus, et là il y aurait une vraie différence visible. C'est donc la
+     seule chose à mesurer, et c'est ce que fait tools/verify-perf.mjs : il
+     JOUE des parties entières et relève, à chaque pas, combien d'émetteurs
+     atteignent la caméra. Le pool est dimensionné sur ce relevé, pas sur une
+     intuition.
+     ====================================================================== */
+  /* =========================================================================
+     ZIP 399 — LES TROIS NIVEAUX, ET LA RÉSOLUTION COMME SEUL LEVIER CONTINU.
+     -------------------------------------------------------------------------
+     Une fois les lumières réglées, le coût restant est presque entièrement du
+     REMPLISSAGE : la pierre est en Phong avec relief (deux lectures de texture
+     et deux dérivées par pixel) et 572 plans additifs se recouvrent. Ces deux
+     postes sont proportionnels au NOMBRE DE PIXELS, et à rien d'autre.
+
+     Rendre à 80 % de la largeur et de la hauteur, c'est donc rendre 36 % de
+     pixels en moins — sans retirer un seul objet du décor. C'est le seul levier
+     qui ne change pas ce qu'on VOIT, seulement la finesse avec laquelle on le
+     voit ; et sur du pixel-art filtré en NEAREST, il ne se remarque presque
+     pas. C'est aussi pour ça que le 399 ne coupe RIEN d'autre : pas de brouillard
+     rapproché, pas de halos retirés, pas de relief désactivé. Le décor du 398
+     est intact.
+
+     ⚠️ ON PART TOUJOURS DU PLAFOND ET ON NE DESCEND QUE SI ON N'Y ARRIVE PAS.
+     Sur une machine confortable, l'échelle reste à 1,0 pour toute la partie et
+     l'image est au bit près celle du 398.
+     ====================================================================== */
+  let qual = null, qName = "high";
+  let resScale = 1, baseRatio = 1, lastResChange = 0;
+  const frameLog = [];
+  let frameSeen = 0;
+  /* Le chien de garde de la souris : compté ici parce que c'est ici qu'on sait
+     combien de temps une image a duré. game.js n'a qu'à lire le drapeau. */
+  let hangStrikes = 0, hangFlag = false;
+  /* La rétrogradation automatique n'a lieu qu'une fois par partie, et
+     l'interface doit pouvoir le dire une fois — d'où le drapeau, lu et effacé
+     par takeDemote(). */
+  let demoted = false, demotedTo = null;
+
+  function qualOf(cfg, name) {
+    const Q = cfg.QUAL || {};
+    return Q[name] || Q[cfg.QUAL_DEFAULT] || Q.high;
+  }
+
+  /* Le plafond matériel : on ne rend JAMAIS au-delà de 2 pixels par point, même
+     sur un écran qui en annonce 3. Au-delà, on paie 2,25 fois le remplissage
+     pour une différence que personne ne voit. C'était déjà la règle du 397. */
+  function baseRatioOf() { return Math.min(2, (window.devicePixelRatio || 1)); }
+
+  function applyRes() {
+    if (!renderer) return;
+    renderer.setPixelRatio(baseRatio * resScale);
+    resize();
+  }
+
+  /* ⚠️ MÉDIANE, JAMAIS MOYENNE. Une seule image longue — un ramasse-miettes,
+     une notification du système, un changement d'onglet — ferait chuter une
+     moyenne et déclencherait une baisse de qualité alors que le jeu tourne
+     parfaitement. La médiane d'une fenêtre de quarante images ignore ces
+     accidents par construction.
+     ⚠️ ET LES QUARANTE PREMIÈRES IMAGES NE COMPTENT PAS : ce sont elles qui
+     paient la compilation des shaders. Les mesurer, c'est mesurer le
+     démarrage et conclure que la machine est lente. */
+  function tickRes(cfg, dtMs, now) {
+    // --- le chien de garde, d'abord : il doit répondre même pendant l'échauffement.
+    if (dtMs > cfg.HANG_MS) { if (++hangStrikes >= cfg.HANG_STRIKES) hangFlag = true; }
+    else hangStrikes = 0;
+
+    if (++frameSeen <= cfg.RES_WARMUP) return;
+    frameLog.push(dtMs);
+    if (frameLog.length < cfg.RES_SAMPLES) return;
+    if (frameLog.length > cfg.RES_SAMPLES) frameLog.shift();
+    if (now - lastResChange < cfg.RES_COOLDOWN_MS) return;
+
+    const sorted = frameLog.slice().sort((x, y) => x - y);
+    const med = sorted[sorted.length >> 1];
+    let want = resScale;
+    if (med > cfg.RES_SLOW_MS) want = Math.max(qual.minRes, resScale * cfg.RES_DOWN);
+    else if (med < cfg.RES_FAST_MS) want = Math.min(qual.maxRes, resScale * cfg.RES_UP);
+
+    /* ⚠️ LE DERNIER RECOURS : ON EST AU PLANCHER DE RÉSOLUTION ET ÇA NE SUFFIT
+       TOUJOURS PAS. La résolution ne peut plus rien : ce qui reste coûteux,
+       c'est la boucle d'éclairage, et elle ne dépend pas du nombre de pixels.
+       On descend donc d'un niveau, UNE SEULE FOIS par partie, et on lève un
+       drapeau pour que l'interface le dise. Sans ce garde-fou, une machine trop
+       faible resterait bloquée à quinze images par seconde en croyant faire de
+       son mieux. */
+    if (med > cfg.RES_SLOW_MS && resScale <= qual.minRes + 1e-3 && !demoted) {
+      const next = qName === "high" ? "med" : qName === "med" ? "low" : null;
+      if (next) {
+        demoted = true; demotedTo = next;
+        qName = next; qual = qualOf(cfg, qName);
+        resizePool(cfg);
+        resScale = qual.maxRes;
+        lastResChange = now; frameLog.length = 0;
+        applyRes();
+        return;
+      }
+    }
+    // Bande morte : sous 1,5 % d'écart, on ne réalloue pas le tampon d'image
+    // pour rien — un changement de taille coûte plus cher qu'il ne rapporte.
+    if (Math.abs(want - resScale) < 0.015) return;
+    resScale = want;
+    lastResChange = now;
+    frameLog.length = 0;         // la fenêtre repart : elle mesurait l'ancienne taille
+    applyRes();
+  }
+
+  let emitters = [];            // tous les foyers du décor — aucun coût GPU
+  let lightPool = [];           // les PointLight réellement dans la scène
+  let lightSlots = [];          // { em, k } — l'appariement courant
+  let poolReady = false;
+  let lightPeak = 0;            // le maximum d'émetteurs vus en portée (outils)
+  let lastInRange = 0;          // émetteurs réellement utiles à l'image courante
+  let lastGapOut = Infinity;    // l'émetteur le mieux placé qu'on ait DÛ jeter
+
+  /* Un émetteur n'est PAS une lumière : c'est la DESCRIPTION d'une lumière.
+     `intensity` reste public et modifiable — les brasiers l'éteignent quand ils
+     sont consommés, et la carte quand elle est décrochée, exactement comme ils
+     le faisaient sur l'objet PointLight qu'ils portaient avant le 399. Les deux
+     lignes de sync() qui écrivent `.intensity` n'ont donc PAS bougé. */
+  function addEmitter(color, intensity, distance, decay, x, y, z) {
+    const e = { color, intensity, distance, decay, x, y, z, _slot: -1, _d2: 0 };
+    emitters.push(e);
+    return e;
+  }
+
+  /* Le pool, construit UNE fois, APRÈS tout le décor : il faut connaître le
+     nombre d'émetteurs pour savoir si le pool est sous-dimensionné, et surtout
+     il ne faut ajouter des PointLight à la scène qu'une seule fois. */
+  function buildLightPool(cfg) {
+    const n = Math.max(1, qual.lights | 0);
+    lightPool = []; lightSlots = [];
+    for (let i = 0; i < n; i++) {
+      /* Intensité nulle et position hors du monde : tant qu'un créneau n'a pas
+         d'émetteur, il ne doit rien éclairer du tout. Une lumière à l'origine
+         avec une intensité résiduelle éclairerait le coin du dédale, et ce
+         genre de défaut se cherche longtemps. */
+      const L = new THREE_.PointLight(0xffffff, 0, 1, 2);
+      L.position.set(0, -9999, 0);
+      scene.add(L);
+      lightPool.push(L);
+      lightSlots.push({ em: null, k: 0 });
+    }
+    poolReady = true;
+  }
+
+  /* ⚠️ CHANGER LA TAILLE DU POOL RECOMPILE TOUS LES SHADERS, ET ÇA SE VOIT :
+     un gel d'une seconde environ. On ne le fait donc QUE dans deux cas, tous
+     deux volontaires et tous deux annoncés au joueur :
+       * il change le niveau à la main depuis la pause ;
+       * l'auto-détection constate qu'elle est au plancher de résolution et
+         qu'elle n'y arrive TOUJOURS pas — une seule fois par partie.
+     C'est le prix d'un moteur *forward* : le nombre de lumières est une
+     constante de compilation. Le cacher au joueur donnerait un jeu qui hoquette
+     sans raison apparente, ce qui est pire que d'être lent. */
+  function resizePool(cfg) {
+    const n = Math.max(1, qual.lights | 0);
+    if (!poolReady || n === lightPool.length) return false;
+    for (const L of lightPool) { L.intensity = 0; if (scene.remove) scene.remove(L); }
+    for (const e of emitters) e._slot = -1;
+    lightPool = []; lightSlots = [];
+    for (let i = 0; i < n; i++) {
+      const L = new THREE_.PointLight(0xffffff, 0, 1, 2);
+      L.position.set(0, -9999, 0);
+      scene.add(L);
+      lightPool.push(L);
+      lightSlots.push({ em: null, k: 0 });
+    }
+    return true;
+  }
+
+  /* La réattribution, une fois par image. Coût : une distance par émetteur
+     (123) et une insertion dans un tableau de huit. Quelques microsecondes, à
+     comparer aux centaines de millisecondes que coûtait la boucle de shader. */
+  /* ⚠️⚠️ CE QU'ON CLASSE N'EST PAS UNE DISTANCE, C'EST UNE CONTRIBUTION À
+     L'IMAGE — et c'est la seule vraie subtilité de tout ce mécanisme.
+
+     Deux fausses pistes ont été essayées et mesurées avant celle-ci ; les
+     garder écrites évite de les refaire.
+
+     FAUSSE PISTE N° 1 — classer par la distance à la lampe. Une torche à
+     30 unités de l'œil n'éclaire pas l'œil, mais elle éclaire LE MUR QUI EST À
+     CÔTÉ D'ELLE, et ce mur est à l'écran. La jeter éteint le fond du couloir.
+
+     FAUSSE PISTE N° 2 — classer par la distance à sa sphère d'influence
+     (`distance − portée`). Mieux, mais ça favorise mécaniquement les lampes à
+     grande portée : le fût de la rotonde (portée 69) écrasait dans le
+     classement une torche murale à trois mètres (portée 21,8), alors que c'est
+     la torche qu'on voit. verify-perf.mjs le chiffrait : 97 % des images
+     jetaient un foyer proche.
+
+     CE QU'ON CLASSE VRAIMENT : le maximum d'énergie que cette lampe peut
+     encore mettre dans un pixel affiché. Deux cas, dont on garde le plus
+     grand :
+
+       * `att` — ce qu'elle apporte AU POINT OÙ SE TIENT LE JOUEUR. C'est
+         l'atténuation EXACTE de three.js r128 en mode hérité (le mode par
+         défaut, `physicallyCorrectLights` n'étant jamais activé ici) :
+         `saturate(1 − d/portée)^decay`. preview-fps.mjs utilise déjà la même
+         formule pour la torche, et deux formules qui doivent rester égales ne
+         doivent exister qu'à un endroit — sauf qu'ici c'est le SHADER qui est
+         la source, et on la recopie de lui.
+
+       * `loin` — ce qu'elle apporte à la tache qu'elle éclaire autour d'elle,
+         quand cette tache est encore devant nous. Cette tache est vue à
+         travers `d` unités de brouillard (d'où `fogVis`) et n'occupe qu'une
+         poignée de pixels (d'où le carré de la distance). C'est ce terme, et
+         lui seul, qui garde allumé le fond d'un couloir.
+
+     ⚠️ ET LA COUPURE EST DÉMONTRABLE : au-delà de `fog.far`, tout ce que la
+     lampe peut éclairer est déjà peint en couleur de brouillard PURE. Elle ne
+     peut plus rien changer à l'image. On ne la jette pas parce qu'elle est
+     loin, on la jette parce qu'on a la preuve qu'elle est sans effet.
+
+     ⚠️ CE CLASSEMENT N'A PAS ÉTÉ CHOISI, IL A ÉTÉ MESURÉ. verify-perf.mjs
+     calcule l'éclairement en des milliers de points de surface RÉELLEMENT
+     visibles, avec les 122 foyers puis avec le pool, et rend l'écart en
+     niveaux de gris sur 255. C'est ce chiffre-là qui décide, pas l'élégance de
+     la formule. */
+  const LIGHT_R0 = 10;          // rayon de référence de la tache éclairée
+  const wantEm = [];
+  function updateLights(cx, cy, cz, dt, cfg, fogFar, fogNear) {
+    if (!poolReady) return;
+    const n = lightPool.length;
+    wantEm.length = 0;
+    let inRange = 0;
+    lastGapOut = 0;
+    const fogSpan = Math.max(1e-3, fogFar - fogNear);
+    for (let i = 0; i < emitters.length; i++) {
+      const e = emitters[i];
+      if (e.intensity <= 0) continue;
+      const dx = e.x - cx, dy = e.y - cy, dz = e.z - cz;
+      const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      if (d - e.distance > fogFar) continue;    // preuve d'inutilité, voir ci-dessus
+      // ce qu'elle donne SOUS NOS PIEDS — atténuation exacte du shader
+      const u = 1 - d / e.distance;
+      const att = u > 0 ? Math.pow(u, e.decay) : 0;
+      // ce qu'elle donne LÀ-BAS, vu à travers le brouillard et de loin
+      const vis = Math.min(1, Math.max(0, (fogFar - d) / fogSpan));
+      const k = LIGHT_R0 / Math.max(LIGHT_R0, d);
+      const score = e.intensity * Math.max(att, vis * k * k);
+      if (score <= 1e-4) continue;
+      inRange++;
+      /* Hystérésis : un foyer DÉJÀ dans le pool est jugé 25 % plus fort qu'il
+         ne l'est. Sans ça, deux lampes de contribution quasi égale s'échangent
+         le créneau à chaque image quand on marche entre les deux, et le couloir
+         se met à battre. */
+      e._d2 = -(e._slot >= 0 ? score * 1.25 : score);    // on trie par score DÉCROISSANT
+      let j = wantEm.length;
+      while (j > 0 && wantEm[j - 1]._d2 > e._d2) j--;
+      if (j >= n) { if (-e._d2 > lastGapOut) lastGapOut = -e._d2; continue; }
+      wantEm.splice(j, 0, e);
+      if (wantEm.length > n) {
+        const drop = wantEm.pop();
+        if (-drop._d2 > lastGapOut) lastGapOut = -drop._d2;
+      }
+    }
+    if (inRange > lightPeak) lightPeak = inRange;
+    lastInRange = inRange;
+
+    // 1. les créneaux qui gardent leur émetteur montent, les autres descendent.
+    const step = dt / Math.max(0.01, cfg.LIGHT_FADE);
+    for (let s = 0; s < n; s++) {
+      const sl = lightSlots[s];
+      if (sl.em && wantEm.indexOf(sl.em) >= 0) sl.k = Math.min(1, sl.k + step);
+      else {
+        sl.k = Math.max(0, sl.k - step);
+        if (sl.k <= 0 && sl.em) { sl.em._slot = -1; sl.em = null; }
+      }
+    }
+    // 2. les créneaux libérés prennent les candidats qui n'en ont pas encore.
+    for (let i = 0; i < wantEm.length; i++) {
+      const e = wantEm[i];
+      if (e._slot >= 0) continue;
+      for (let s = 0; s < n; s++) {
+        const sl = lightSlots[s];
+        if (sl.em) continue;
+        sl.em = e; sl.k = 0; e._slot = s; break;
+      }
+    }
+    // 3. on pose les lumières.
+    for (let s = 0; s < n; s++) {
+      const sl = lightSlots[s], L = lightPool[s];
+      if (!sl.em) { L.intensity = 0; continue; }
+      L.color.setHex(sl.em.color);
+      L.distance = sl.em.distance;
+      L.decay = sl.em.decay;
+      L.intensity = sl.em.intensity * sl.k;
+      L.position.set(sl.em.x, sl.em.y, sl.em.z);
+    }
+  }
+
+  /* =========================================================================
+     LA LIBÉRATION DU MONDE PRÉCÉDENT — zip 399.
+     -------------------------------------------------------------------------
+     Il n'y avait AUCUN `dispose()` dans tout le fichier avant ce zip. Une
+     géométrie, un matériau et une texture Three.js tiennent chacun un objet
+     WebGL côté pilote, et le ramasse-miettes de JavaScript ne les rend jamais :
+     il ne connaît pas le GPU. Rejouer trois fois, c'était donc garder trois
+     dédales complets en mémoire vidéo — 3 465 géométries et 26 textures
+     chacun.
+
+     ⚠️ LE GARDE `typeof … === "function"` N'EST PAS DE LA PRUDENCE DÉCORATIVE.
+     Les outils du chantier font tourner ce fichier contre un FAUX Three.js
+     (smoke-render.mjs, verify-perf.mjs) qui ne connaît que ce dont world.js se
+     sert vraiment. Le même garde existe déjà pour `renderer.clearDepth` dans
+     sync(), et pour la même raison. */
+  function walkTree(o, fn) {
+    if (!o) return;
+    fn(o);
+    const c = o.children;
+    if (c) for (let i = 0; i < c.length; i++) walkTree(c[i], fn);
+  }
+  function freeIt(x) { if (x && typeof x.dispose === "function") x.dispose(); }
+  function disposeScene() {
+    if (!scene) return;
+    const geos = new Set(), mats = new Set();
+    walkTree(scene, (o) => {
+      if (o.geometry) geos.add(o.geometry);
+      const m = o.material;
+      if (m) { if (Array.isArray(m)) { for (const x of m) mats.add(x); } else mats.add(m); }
+    });
+    if (vmScene) walkTree(vmScene, (o) => {
+      if (o.geometry) geos.add(o.geometry);
+      if (o.material) mats.add(o.material);
+    });
+    geos.forEach(freeIt);
+    /* Les textures partent AVEC leur matériau : chaque clone de pierre du 397
+       porte sa propre `map` et sa propre `bumpMap` (l'image est partagée, la
+       répétition ne l'est pas), et c'est le clone qui occupe une texture GPU. */
+    mats.forEach((m) => {
+      for (const k of ["map", "bumpMap", "alphaMap", "emissiveMap", "specularMap"]) freeIt(m[k]);
+      freeIt(m);
+    });
+    for (const k in tex) delete tex[k];
+    flameCuts = [];
+    if (renderer && renderer.renderLists && typeof renderer.renderLists.dispose === "function") {
+      renderer.renderLists.dispose();
+    }
+  }
+
+
   function canvasTex(w, h, draw, repeat) {
     const c = document.createElement("canvas");
     c.width = w; c.height = h;
@@ -411,9 +815,7 @@ const World = (function () {
       holeGlows.push(mesh);
       // Une petite lampe violette au fond de chaque trou : c'est elle qui
       // éclaire le bord par en dessous, comme sur l'image 2.
-      const lamp = new THREE_.PointLight(cfg.COL_PURPLE, 1.1, cfg.CELL * 2.6, 2);
-      lamp.position.set(wx, -2.2, wz);
-      scene.add(lamp);
+      addEmitter(cfg.COL_PURPLE, 1.1, cfg.CELL * 2.6, 2, wx, -2.2, wz);   // zip 399
     }
     const bg = new THREE_.CylinderGeometry(cfg.BEACON_R, cfg.BEACON_R * 2.2, cfg.BEACON_H, 10, 1, true);
     beaconMat = new THREE_.MeshBasicMaterial({
@@ -523,9 +925,8 @@ const World = (function () {
         grp.add(t2);
         wallFlames.push(t2);
         if (i % 3 === 0 && lvl === 0) {
-          const lamp = new THREE_.PointLight(cfg.COL_TORCH, 1.1, C * 3.2, 2);
-          lamp.position.set(ccx + Math.cos(a) * (rad - 3), h + 2, ccz + Math.sin(a) * (rad - 3));
-          grp.add(lamp);
+          addEmitter(cfg.COL_TORCH, 1.1, C * 3.2, 2,          // zip 399
+                     ccx + Math.cos(a) * (rad - 3), h + 2, ccz + Math.sin(a) * (rad - 3));
         }
       }
     }
@@ -539,9 +940,7 @@ const World = (function () {
     shaft.position.set(ccx, 18, ccz);
     grp.add(shaft);
     grp.userData.shaft = shaft;
-    const sun = new THREE_.PointLight(cfg.SKY_HORIZON, 1.3, C * 6, 2);
-    sun.position.set(ccx, 12, ccz);
-    grp.add(sun);
+    addEmitter(cfg.SKY_HORIZON, 1.3, C * 6, 2, ccx, 12, ccz);   // zip 399
 
     scene.add(grp);
     rotundaGroup = grp;
@@ -606,9 +1005,7 @@ const World = (function () {
     col.position.set(ex, 6, zEdge + cfg.PLATFORM_LEN * 0.55);
     grp.add(col);
     grp.userData.col = col;
-    const lamp = new THREE_.PointLight(cfg.COL_PURPLE, 1.5, C * 3, 2);
-    lamp.position.set(ex, 3.0, zEdge + cfg.PLATFORM_LEN * 0.5);
-    grp.add(lamp);
+    addEmitter(cfg.COL_PURPLE, 1.5, C * 3, 2, ex, 3.0, zEdge + cfg.PLATFORM_LEN * 0.5);   // zip 399
 
     scene.add(grp);
     platformGroup = grp;
@@ -966,9 +1363,8 @@ const World = (function () {
         // budget de lumières dynamiques de WebGL et le rendu s'effondre.
         // Les autres torches éclairent par leur halo, qui ne coûte rien.
         if (placed % 2 === 0) {
-          const lamp = new THREE_.PointLight(cfg.COL_TORCH, 0.85, cfg.CELL * 1.9, 2);
-          lamp.position.set(t.position.x + S.dx * -1.0, cfg.WALL_TORCH_H + 2, t.position.z + S.dz * -1.0);
-          scene.add(lamp);
+          addEmitter(cfg.COL_TORCH, 0.85, cfg.CELL * 1.9, 2,     // zip 399
+                     t.position.x + S.dx * -1.0, cfg.WALL_TORCH_H + 2, t.position.z + S.dz * -1.0);
         }
       }
     }
@@ -1065,9 +1461,9 @@ const World = (function () {
       const gy = Rules.groundY(cfg, m, wx, wz);
       g.position.set(wx, gy, wz);
       scene.add(g);
-      const lamp = new THREE_.PointLight(cfg.COL_TORCH, 1.9, cfg.CELL * 3.4, 2);
-      lamp.position.set(wx, gy + 5.2, wz);
-      scene.add(lamp);
+      // zip 399 : un ÉMETTEUR, plus une PointLight. `lamp.intensity` reste
+      // écrit tel quel par sync() quand le brasier est consommé.
+      const lamp = addEmitter(cfg.COL_TORCH, 1.9, cfg.CELL * 3.4, 2, wx, gy + 5.2, wz);
       brazierMeshes.push({ g, t, lamp });
     }
     if (st.sword) {
@@ -1090,9 +1486,7 @@ const World = (function () {
       const [wx, wz] = Rules.centerOf(cfg, st.sword.x, st.sword.y);
       grp.position.set(wx, 0, wz);
       scene.add(grp);
-      const lamp = new THREE_.PointLight(cfg.COL_COIN_GLOW, 1.6, cfg.CELL * 2.4, 2);
-      lamp.position.set(wx, 3.4, wz);
-      scene.add(lamp);
+      addEmitter(cfg.COL_COIN_GLOW, 1.6, cfg.CELL * 2.4, 2, wx, 3.4, wz);   // zip 399
       sword3 = grp;
     }
     /* LES ÉCLATS : sphère pleine + halo additif, violets et cyans en
@@ -1174,9 +1568,9 @@ const World = (function () {
       grp.position.set(wx + dx, Rules.groundY(cfg, m, wx, wz) + cfg.CHALK_H, wz + dz);
       grp.rotation.y = ry;
       scene.add(grp);
-      const lamp = new THREE_.PointLight(cfg.COL_MAPGLOW, 1.5, cfg.MAP_GLOW_RANGE, 2);
-      lamp.position.set(wx + dx * 0.4, cfg.CHALK_H, wz + dz * 0.4);
-      scene.add(lamp);
+      // zip 399 : idem — sync() écrit `mapMesh.lamp.intensity`, inchangé.
+      const lamp = addEmitter(cfg.COL_MAPGLOW, 1.5, cfg.MAP_GLOW_RANGE, 2,
+                              wx + dx * 0.4, cfg.CHALK_H, wz + dz * 0.4);
       mapMesh = { grp, it, halo, lamp };
     }
 
@@ -1359,7 +1753,24 @@ const World = (function () {
     vmScene = null; vmCam = null; vm = null;
     pitch = pitchWant = 0; swayX = swayY = 0;
     bobT = { y: 0, x: 0, roll: 0 };
+    /* ⚠️⚠️ L'ORDRE EST CRITIQUE : ON LIBÈRE AVANT DE REMPLACER.
+       `disposeScene()` parcourt `scene` — donc tant que `scene` désigne encore
+       le monde PRÉCÉDENT. Posé trois lignes plus bas, après
+       `scene = new Scene()`, il libérait consciencieusement une scène vide et
+       la fuite restait entière : c'est le premier état qu'a signalé
+       smoke-render.mjs, avec « 0 objets rendus au GPU ». Un appel juste, au
+       mauvais endroit, ne fait rien du tout et ne dit rien. */
+    disposeScene();
     matCache.clear();
+    /* ⚠️ ZIP 399 — LES ÉMETTEURS ET LE POOL SE REMETTENT À ZÉRO AVEC LE RESTE.
+       C'est la ligne qu'on oublie à chaque zip (voir le 393, le 396 et le 397 :
+       la deuxième partie plantait à chaque fois, et c'est celle qu'on joue
+       toujours). Un émetteur qui survivrait à une partie éclairerait un mur qui
+       n'existe plus, et le pool suivrait des positions du dédale précédent. */
+    emitters = []; lightPool = []; lightSlots = []; poolReady = false;
+    lightPeak = 0; wantEm.length = 0;
+    frameLog.length = 0; frameSeen = 0; hangStrikes = 0; hangFlag = false;
+    demoted = false; demotedTo = null;
 
     scene = new THREE_.Scene();
     scene.fog = new THREE_.Fog(cfg.COL_FOG, cfg.FOG_NEAR_FULL, cfg.FOG_FAR_FULL);
@@ -1371,8 +1782,37 @@ const World = (function () {
        seul qui donne l'impression que le décor n'est pas solide. */
     camera = new THREE_.PerspectiveCamera(fpsView ? cfg.FPS_FOV : cfg.CAM_FOV,
       1, fpsView ? 0.05 : 0.1, m.G * cfg.CELL * 4);
-    renderer = new THREE_.WebGLRenderer({ canvas, antialias: false });
-    renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    /* ⚠️⚠️ ZIP 399 — LE RENDERER EST RÉUTILISÉ, ET L'ANCIEN MONDE EST LIBÉRÉ.
+       C'EST LA DEUXIÈME CAUSE DU JEU INJOUABLE, ET ELLE ÉTAIT INVISIBLE.
+
+       Cette ligne disait `renderer = new THREE_.WebGLRenderer({ canvas })`, à
+       chaque appel de init() — c'est-à-dire à chaque nouvelle partie, ET une
+       fois de plus au démarrage (voir game.js/boot, qui construit un dédale
+       pour l'écran-titre). Or `canvas.getContext()` rend TOUJOURS le même
+       contexte WebGL : on n'obtenait donc pas un second contexte, on obtenait
+       un second RENDERER posé sur le premier, avec ses propres caches de
+       programmes, de textures et de tampons. Conséquences, toutes silencieuses :
+
+         * les 3 465 géométries, les 12 textures clonées et les 1 194 matériaux
+           du monde précédent restaient alloués sur le GPU pour toujours —
+           personne n'appelait `dispose()`, et il n'y en avait AUCUN dans tout
+           le fichier ;
+         * et surtout TOUS LES SHADERS ÉTAIENT RECOMPILÉS. Un shader Phong à
+           123 lumières met des centaines de millisecondes à compiler sur
+           Metal. On les payait deux fois, dont une pile au moment où le joueur
+           clique sur « Entrer » — le « gel du lancement » que le 396 croyait
+           avoir corrigé, et qui n'était qu'à moitié traité.
+
+       On garde donc un seul renderer pour toute la vie de la page (son cache de
+       programmes survit, donc rejouer ne recompile plus rien), et on rend
+       explicitement au GPU tout ce que la scène précédente tenait. */
+    if (!renderer) {
+      renderer = new THREE_.WebGLRenderer({ canvas, antialias: false });
+    }
+    qual = qualOf(cfg, qName);
+    baseRatio = baseRatioOf();
+    resScale = qual.maxRes;
+    renderer.setPixelRatio(baseRatio * resScale);
 
     buildTextures(cfg);
     buildSky(cfg, m);
@@ -1388,6 +1828,13 @@ const World = (function () {
     buildPlatform(cfg, m);      // zip 396 : le renoncement...
     buildGate(cfg, m, st);      // ... et ce qui le referme
     buildFx(cfg);               // ... et les effets du combat
+
+    /* ⚠️ LE POOL EST CONSTRUIT ICI, APRÈS TOUT LE DÉCOR, ET UNE SEULE FOIS.
+       Après, parce que c'est le décor qui déclare les émetteurs. Une seule
+       fois, parce que le nombre de PointLight présentes dans la scène est
+       compilé dans les shaders : en ajouter une en cours de partie recompile
+       tout. Voir l'en-tête du groupe de lumières. */
+    buildLightPool(cfg);
 
     /* L'ÉCLAIRAGE. ⚠️ REVU EN ENTIER AU 394 : l'ambiante passe de 0,06 à 0,30
        et gagne une hémisphérique. La première version faisait de la torche du
@@ -1531,6 +1978,16 @@ const World = (function () {
     const cfg = CFG_;
     // Intervalle réel entre deux images, borné : un onglet remis au premier
     // plan produit sinon un saut de plusieurs secondes.
+    /* ⚠️⚠️ ZIP 399 — L'INTERVALLE BRUT EST GARDÉ À CÔTÉ DU BORNÉ, ET C'EST LE
+       CONTRAIRE D'UN DÉTAIL. `frameDt` est BORNÉ À 0,1 s parce qu'il sert à
+       l'animation : un onglet remis au premier plan ferait sinon avancer les
+       flammes de plusieurs secondes d'un coup. Mais le chien de garde de la
+       souris cherche justement des images d'UNE demi-seconde — bornées à 0,1,
+       elles deviennent invisibles et le filet ne peut PLUS JAMAIS se
+       déclencher. C'est exactement ce qu'a trouvé tools/verify-boot.mjs à sa
+       première exécution : le filet était écrit, branché, testé… et muet.
+       Une valeur bornée pour animer, une valeur brute pour diagnostiquer. */
+    const rawMs = lastFrameMs ? (now - lastFrameMs) : 16.7;
     frameDt = lastFrameMs ? Math.min(0.1, Math.max(0.002, (now - lastFrameMs) / 1000)) : 1 / 60;
     lastFrameMs = now;
     const fl = Rules.flameLevel(st);
@@ -1732,6 +2189,20 @@ const World = (function () {
     if (fpsView) updateCameraFPS(st, cfg, px, pz, pang, pgait);
     else updateCamera(st, cfg, px, pz, pang);
     syncFPS(st, cfg, t, fl, px, pz, pang, pgait);
+
+    /* ⚠️ ZIP 399 — LES LUMIÈRES SONT RÉATTRIBUÉES ICI, ET PAS AILLEURS.
+       Après la caméra, parce que le classement se fait depuis l'ŒIL et qu'un
+       classement fait sur la position de l'image précédente ferait clignoter
+       la lampe qu'on longe. Avant le rendu, évidemment. Et on lui donne
+       `scene.fog.far` COURANT — il descend à 26 quand la torche n'est plus
+       qu'une braise, et c'est justement là que la coupure rapporte le plus,
+       parce que c'est là que le joueur est en danger et qu'il a besoin de ses
+       images. */
+    updateLights(camera.position.x, camera.position.y, camera.position.z,
+                 frameDt, cfg, scene.fog.far, scene.fog.near);
+    /* La mesure d'allure, et le chien de garde de la souris. Ils lisent
+       l'intervalle RÉEL entre deux images, celui que le joueur subit. */
+    tickRes(cfg, rawMs, now);
 
     /* ⚠️ DEUX PASSES, ET L'ORDRE COMPTE.
        1. le monde, avec effacement normal ;
@@ -2158,9 +2629,66 @@ const World = (function () {
     camera.updateProjectionMatrix();
   }
 
+  /* =========================================================================
+     LE RÉGLAGE DE QUALITÉ — zip 399.
+     -------------------------------------------------------------------------
+     ⚠️ CHANGER LE NIVEAU EN COURS DE PARTIE NE CHANGE QUE LA RÉSOLUTION.
+     Le nombre de lampes du pool, lui, est compilé dans les shaders : le
+     modifier gèlerait une seconde. Il est donc lu à la construction du dédale
+     suivant, et l'interface le dit (voir LAB_STR.qualNextRun). C'est une
+     limite du moteur, pas un oubli — et la cacher produirait exactement le
+     genre d'échec silencieux que ce chantier passe son temps à traquer.
+     ====================================================================== */
+  function setQuality(cfg, name) {
+    qName = (cfg.QUAL && cfg.QUAL[name]) ? name : (cfg.QUAL_DEFAULT || "high");
+    qual = qualOf(cfg, qName);
+    if (scene && poolReady) resizePool(cfg);      // gel volontaire, voir resizePool
+    if (!renderer) return;
+    baseRatio = baseRatioOf();
+    resScale = qual.maxRes;
+    lastResChange = 0; frameLog.length = 0; frameSeen = 0;
+    applyRes();
+  }
+
   return {
-    init, sync, snapPrev, resize, fallStep, reskin, addPitch, setView,
+    init, sync, snapPrev, resize, fallStep, reskin, addPitch, setView, setQuality,
     get renderer() { return renderer; },
     get fps() { return fpsView; },
+    get quality() { return qName; },
+    /* Le pool réclame-t-il plus de lampes que le niveau courant n'en donne ?
+       Lu par tools/verify-perf.mjs et par le panneau de mise au point. */
+    get perf() {
+      return { emitters: emitters.length, pool: lightPool.length,
+               inRange: lastInRange, peak: lightPeak, gapOut: lastGapOut,
+               res: resScale, ratio: baseRatio * resScale, level: qName };
+    },
+    /* ⚠️ ACCÈS RÉSERVÉ AUX OUTILS. tools/verify-perf.mjs recalcule
+       l'éclairement de milliers de points de surface avec TOUS les foyers, puis
+       avec ceux que le pool a retenus, et rend l'écart en niveaux de gris. Sans
+       cet accès il devrait se refabriquer une liste de lampes — deux
+       descriptions d'une même chose, le défaut que ce chantier traque depuis le
+       387. Le jeu, lui, ne l'appelle jamais. */
+    __lights() {
+      return { all: emitters, chosen: lightSlots.map((s) => s.em).filter(Boolean),
+               torch: torchLight, amb: 0.30, hemi: 0.45 };
+    },
+    /* Le chien de garde : game.js le lit à chaque image et rend la souris.
+       On le remet à zéro EN LE LISANT — un drapeau qu'il faut penser à
+       effacer ailleurs finit toujours par rester allumé. */
+    /* ⚠️ ON NE REMET LE COMPTEUR À ZÉRO QUE SI LE FILET A SERVI, ET LA
+       PREMIÈRE VERSION FAISAIT L'INVERSE. Elle écrivait `hangStrikes = 0`
+       inconditionnellement — or game.js appelle takeHang() à CHAQUE image :
+       le compteur retombait donc à zéro entre deux images et n'atteignait
+       jamais deux. Le filet était écrit, branché, documenté, et strictement
+       incapable de se déclencher. Trouvé par tools/verify-boot.mjs, qui
+       fabrique quatorze images d'une seconde et exige que la souris revienne.
+       Aucune relecture ne l'aurait vu : la ligne fautive était celle qui
+       « nettoie proprement ». */
+    takeHang() {
+      const h = hangFlag;
+      if (h) { hangFlag = false; hangStrikes = 0; }
+      return h;
+    },
+    takeDemote() { const d = demotedTo; demotedTo = null; return d; },
   };
 })();

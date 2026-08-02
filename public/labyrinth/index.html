@@ -81,6 +81,11 @@
      que par un geste. Sans ce panneau, un joueur qui appuie sur Échap se
      retrouve incapable de tourner sans savoir pourquoi. -->
 <div id="lockHint" class="lockhint"><span id="lockTxt"></span></div>
+<!-- ZIP 399 : le compteur d'images. Il n'est pas là pour décorer — c'est le seul
+     endroit du projet qui mesure un TEMPS réel : verify-perf.mjs compte ce qu'on
+     demande au GPU, jamais ce que le GPU met à le faire (il n'y a pas de GPU
+     dans node). Une capture de ce coin-là vaut une heure de suppositions. -->
+<div id="perf" class="perf"></div>
 
 <div id="toast" class="toast"></div>
 
@@ -121,7 +126,22 @@
 <!-- ---------------------------------------------------------------- PAUSE -->
 <div id="pause" class="layer panel">
   <h1 id="pTitle"></h1>
+  <!-- ZIP 399 : l'avis d'effondrement. Il n'apparaît QUE si le chien de garde a
+       rendu la souris tout seul, et il explique pourquoi — une souris qui
+       revient sans raison est aussi inquiétante qu'une souris confisquée. -->
+  <p class="warn" id="hangNotice" style="display:none"></p>
   <button id="btnResume"></button>
+  <!-- ZIP 399 : le réglage de qualité. À la pause plutôt qu'à l'écran-titre :
+       c'est en jouant qu'on sait si ça rame, et c'est là qu'on veut le changer. -->
+  <div class="qual" id="qualBox">
+    <span id="qualTitle"></span>
+    <div class="qualRow">
+      <button class="qbtn" data-q="high" id="qHigh"></button>
+      <button class="qbtn" data-q="med"  id="qMed"></button>
+      <button class="qbtn" data-q="low"  id="qLow"></button>
+    </div>
+    <p class="hint" id="qualHint"></p>
+  </div>
   <button id="btnQuit" class="ghost"></button>
   <p class="hint" id="pQuitWarn"></p>
 </div>

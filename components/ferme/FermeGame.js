@@ -14537,10 +14537,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           donc PAS app/globals.css. */}
       {labGame && (
         <div className="ferme-run-overlay">
+          {/* ⚠️ ZIP 399 — `allow="pointer-lock"` EST OBLIGATOIRE ET IL MANQUAIT.
+              Le labyrinthe est en vue subjective depuis le 397 : il capture le
+              pointeur (Input.grab). Dans une iframe, cette capture est régie par
+              la politique de permissions du navigateur. Chrome l'accorde par
+              défaut aux iframes de MÊME ORIGINE — c'est pourquoi ça marchait —
+              mais Safari et Firefox ne le font pas tous, et le refus est
+              SILENCIEUX : le joueur se retrouve à ne plus pouvoir tourner la
+              tête, sans qu'aucune erreur ne s'affiche. C'est le seul fichier de
+              la ferme que ce zip touche, et c'est un attribut. */}
           <iframe
             className="ferme-run-frame"
             src="/labyrinth/index.html"
             title="Valley Farm — The Labyrinth"
+            allow="pointer-lock; fullscreen"
             onLoad={e => { try { e.currentTarget.contentWindow.focus(); } catch (err) {} }}
           />
         </div>
