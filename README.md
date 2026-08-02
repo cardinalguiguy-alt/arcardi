@@ -1,5 +1,63 @@
 # ARCARDI 🎪
 
+> **ZIP 402 — LE MOULIN NE REFUSAIT PLUS RIEN EN SILENCE.**
+> Retour de Guillaume : « vérifie la posabilité des moulins. il y a une ferme
+> où c'est buggé. j'en pose ils disparaissent aussitôt. Et après on me dit que
+> le nombre max est atteint. »
+>
+> Le moteur a été **interrogé** plutôt que relu (`tools/verify-cycle.mjs`), et
+> il a répondu **quatre** fois :
+>
+> 1. **le deuxième clic reprenait le moulin, sans un mot** — poser et retirer
+>    sont le même geste sur la même case ; mesuré : 1er clic → moulin au sol,
+>    stock 5→4 ; 2e clic → plus rien, stock 4→5. C'est littéralement « j'en
+>    pose ils disparaissent aussitôt » ;
+> 2. **quinze sols le refusaient sans rien dire** — pavage, sable, rive, ponts,
+>    jetée. Sur une ferme dont la place libre est pavée, poser un moulin ne
+>    fait *rien*, et rien ne l'explique ;
+> 3. **déposer du blé sans moulin terminé sortait en silence**, et quand un
+>    moulin est plein le message est « Le moulin est plein » — ce qui se lit
+>    très exactement comme « le nombre maximum est atteint » ;
+> 4. **cliquer un moulin encore en chantier ne faisait rien du tout** — et
+>    c'est le moment précis où l'on clique dessus.
+>
+> ⚠️ **Aucune règle de jeu ne change** : ni plafond, ni verrou, ni délai. Ce
+> sont les six phrases qui manquaient. Un jeu qui refuse sans le dire est
+> indiscernable d'un jeu cassé — et c'est bien pour un jeu cassé qu'il l'a pris.
+>
+> Corrigé aussi : le rebasculement de juillet, qui repassait sur « clôture »
+> après CHAQUE pose et cassait la pose en série. Il ne rebascule plus qu'au
+> dernier moulin du sac. Et le cycle de la case 6 accueille enfin le **chaudron**
+> et les **trois variantes de pont** — les ponts n'ont pas de stock propre, ils
+> apparaissent selon le bois et la pierre disponibles.
+
+
+> **ZIP 401 — LES ARBUSTES SE TRAVERSENT, ET LA ROTATION SE VOIT.**
+> Deux demandes de Guillaume, et deux défauts de nature opposée.
+>
+> **Les arbustes fruitiers** — « ils sont en dur, provoquent une collision or
+> je veux pas cela ». `O_ORCHARD` et `O_BERRY_BUSH` sortent des DEUX listes de
+> collision, à pied comme à cheval. Ce sont les seuls objets du jeu dont on
+> récolte sans les détruire : on revient dessus tous les jours. Ce qui prend du
+> temps n'est pas de retirer deux identifiants, c'est de savoir ce que ça
+> casse — `tools/verify-cycle.mjs` le demande au moteur : on cueille encore un
+> verger **debout dessus**, et un rocher bloque toujours.
+>
+> **La rotation de la case 6** — elle EXISTAIT depuis juillet et Guillaume ne
+> l'avait jamais trouvée. Le défaut n'était pas le mécanisme, c'était
+> l'affordance : rien ne disait qu'appuyer une deuxième fois sur 6 changeait
+> quelque chose, et **trois textes de la boutique annonçaient la touche 8**,
+> qui n'est plus la bonne depuis la réorganisation de la barre. Un chevron ⟳
+> sur les cases qui tournent, le nom de la variante tenue au-dessus de la case
+> sélectionnée, et une infobulle qui liste tout le cycle.
+>
+> ⚠️ **La liste affichée EST la liste qui tourne.** `buildCycle()` et
+> `toolCycle()` sont appelées par la touche et par l'affichage. Recopier la
+> liste dans l'interface aurait produit, au premier ajout de variante, une case
+> qui en annonce une de moins qu'elle n'en propose. `verify-cycle.mjs` compte
+> les listes littérales : il doit y en avoir exactement UNE.
+
+
 Soirée de mini-jeux multijoueurs **en ligne**, à distance, entre 2 et 4+ amis. Comptes email/mot de passe, salons avec code à partager, scores synchronisés en direct via Supabase Realtime.
 
 ## Statut actuel

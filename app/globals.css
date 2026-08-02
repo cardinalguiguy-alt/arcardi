@@ -6613,6 +6613,35 @@ body.ferme-active .wrap-room > .brand{ display:none !important; }
 .ferme-slot-key{ position:absolute; top:-2px; left:2px; font-size:10px; font-weight:bold; color:var(--f-ink); opacity:.7; }
 .ferme-slot-count{ position:absolute; bottom:0; right:3px; font-size:12px; font-weight:bold; color:var(--f-ink); text-shadow:0 0 2px #fff; }
 .ferme-slot-lvl{ position:absolute; top:-2px; right:3px; font-size:10px; font-weight:bold; color:var(--f-accent); }
+/* ⚠️ ZIP 401 — RENDRE LA ROTATION VISIBLE.
+   La case outils tourne depuis le zip 251 et la case construction depuis
+   juillet ; ni l'une ni l'autre ne l'a jamais dit. Guillaume a redemandé au
+   400 une rotation qui existait déjà et qu'il n'avait pas trouvée : le
+   mécanisme n'était pas en cause, l'affordance l'était.
+
+   Deux marques, et une seule contrainte : ne rien recouvrir de ce qui est
+   déjà lu. Les trois coins occupés (touche en haut à gauche, niveau en haut à
+   droite, compteur en bas à droite) sont laissés tranquilles.
+
+   ⚠️ LE CHEVRON N'APPARAÎT QUE S'IL Y A VRAIMENT DE QUOI TOURNER. Un symbole
+   de rotation sur une case qui n'a qu'une variante en réserve promet quelque
+   chose qui n'arrivera pas — et c'est précisément la déception qui fait
+   conclure « ce réglage ne marche pas ». */
+.ferme-slot-cyc{
+  position:absolute; bottom:0px; left:3px; font-size:11px; line-height:1;
+  font-weight:bold; color:var(--f-accent); opacity:.9; pointer-events:none;
+}
+/* Le NOM de la variante tenue, au-DESSUS de la case et seulement pour la case
+   SÉLECTIONNÉE. Au-dessus parce que la barre est collée au bas de l'écran ;
+   sur la seule case sélectionnée parce que huit étiquettes en permanence
+   feraient une deuxième barre à lire, alors qu'on n'a besoin de savoir que ce
+   qu'on tient. */
+.ferme-slot-name{
+  position:absolute; bottom:calc(100% + 5px); left:50%; transform:translateX(-50%);
+  white-space:nowrap; font-size:11px; font-weight:700; letter-spacing:.02em;
+  color:var(--f-paper); background:rgba(42,28,17,.86);
+  padding:2px 7px; border-radius:5px; pointer-events:none;
+}
 /* Zip 236: personal bag button — set slightly apart from the numbered tool
    slots with a leading gap and a warmer background so it reads as a UI button
    rather than a selectable tool. */

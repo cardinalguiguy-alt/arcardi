@@ -4781,7 +4781,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        projet, et elle vaut pour chaque message qui traverse le réseau. */
     if (key === "fruitsPicked") { const t = n || {}; return L.toastFruitsPicked(t.n | 0, C.fruitName(t.fruit, lang === "en")); }
     if (key === "productMade")  { const p2 = C.fruitProduct(n); return L.toastProductMade(p2 ? (lang === "en" ? p2.nameEn : p2.name) : ""); }
-    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, noMillStock: L.toastNoMillStock, millNotEmpty: L.toastMillNotEmpty, noWheatToDeposit: L.toastNoWheatToDeposit, millFull: L.toastMillFull, noSucrerieStock: L.toastNoSucrerieStock, sucrerieNotEmpty: L.toastSucrerieNotEmpty, noCaneToDeposit: L.toastNoCaneToDeposit, sucrerieFull: L.toastSucrerieFull, actionFailed: L.toastActionFailed, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull, notInjured: L.toastNotInjured, noHealKit: L.toastNoHealKit, healTooFar: L.toastHealTooFar, gregNotHired: L.toastGregNotHired, gregOrderBusy: L.toastGregBusy, gregNoRoom: L.toastGregNoRoom, gregNoFertilizer: L.toastGregNoFertilizer, gregCoffeeCooldown: L.toastGregCoffeeCooldown, noCoffee: L.toastNoCoffee, soanNotHired: L.toastSoanNotHired, soanNoRiver: L.toastSoanNoRiver, soanCoffeeCooldown: L.toastSoanCoffeeCooldown, reneCoffeeCooldown: L.toastReneCoffeeCooldown, tristanNotHere: L.toastTristanNotHere, tristanCoffeeCooldown: L.toastTristanCoffeeCooldown, farCauldron: L.toastFarCauldron, noFishToDeposit: L.toastNoFishToDeposit, cauldronMissing: L.toastCauldronMissing, cauldronAlreadyTaken: L.toastCauldronAlreadyTaken, noCauldronStock: L.toastNoCauldronStock, cauldronNotEmpty: L.toastCauldronNotEmpty, cauldronBrewing: L.toastCauldronBrewing, cauldronNothingToCollect: L.toastCauldronNothingToCollect, cauldronHasEnough: L.toastCauldronHasEnough, visitorNotEnough: L.visitorNotEnough, decorNone: L.decorNone, decorPicked: L.decorPicked, objReturned: L.objReturned, residentNoRoom: L.residentNoRoom, artisanNoResident: L.artisanNoResident, voyagerBusy: L.voyagerBusyToast, kickVoted: L.kickVotedToast, jewelryNoGold: L.toastJewelryNoGold, jewelryNoGem: L.toastJewelryNoGem, cropWrongType: L.toastCropWrongType, cropMaxed: L.toastCropMaxed, beekeeperNoHive: L.toastBeekeeperNoHive, beekeeperBusy: L.toastBeekeeperBusy, balloonNotBoarding: L.toastBalloonNotBoarding, balloonFull: L.toastBalloonFull,
+    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, noMillStock: L.toastNoMillStock, millNotEmpty: L.toastMillNotEmpty, millPlaced: L.toastMillPlaced, millTaken: L.toastMillTaken, millGround: L.toastMillGround, millOccupied: L.toastMillOccupied, millOnCrop: L.toastMillOnCrop, noMillBuilt: L.toastNoMillBuilt, millBuilding: L.toastMillBuilding, noWheatToDeposit: L.toastNoWheatToDeposit, millFull: L.toastMillFull, noSucrerieStock: L.toastNoSucrerieStock, sucrerieNotEmpty: L.toastSucrerieNotEmpty, noCaneToDeposit: L.toastNoCaneToDeposit, sucrerieFull: L.toastSucrerieFull, actionFailed: L.toastActionFailed, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull, notInjured: L.toastNotInjured, noHealKit: L.toastNoHealKit, healTooFar: L.toastHealTooFar, gregNotHired: L.toastGregNotHired, gregOrderBusy: L.toastGregBusy, gregNoRoom: L.toastGregNoRoom, gregNoFertilizer: L.toastGregNoFertilizer, gregCoffeeCooldown: L.toastGregCoffeeCooldown, noCoffee: L.toastNoCoffee, soanNotHired: L.toastSoanNotHired, soanNoRiver: L.toastSoanNoRiver, soanCoffeeCooldown: L.toastSoanCoffeeCooldown, reneCoffeeCooldown: L.toastReneCoffeeCooldown, tristanNotHere: L.toastTristanNotHere, tristanCoffeeCooldown: L.toastTristanCoffeeCooldown, farCauldron: L.toastFarCauldron, noFishToDeposit: L.toastNoFishToDeposit, cauldronMissing: L.toastCauldronMissing, cauldronAlreadyTaken: L.toastCauldronAlreadyTaken, noCauldronStock: L.toastNoCauldronStock, cauldronNotEmpty: L.toastCauldronNotEmpty, cauldronBrewing: L.toastCauldronBrewing, cauldronNothingToCollect: L.toastCauldronNothingToCollect, cauldronHasEnough: L.toastCauldronHasEnough, visitorNotEnough: L.visitorNotEnough, decorNone: L.decorNone, decorPicked: L.decorPicked, objReturned: L.objReturned, residentNoRoom: L.residentNoRoom, artisanNoResident: L.artisanNoResident, voyagerBusy: L.voyagerBusyToast, kickVoted: L.kickVotedToast, jewelryNoGold: L.toastJewelryNoGold, jewelryNoGem: L.toastJewelryNoGem, cropWrongType: L.toastCropWrongType, cropMaxed: L.toastCropMaxed, beekeeperNoHive: L.toastBeekeeperNoHive, beekeeperBusy: L.toastBeekeeperBusy, balloonNotBoarding: L.toastBalloonNotBoarding, balloonFull: L.toastBalloonFull,
       /* zip 398 — vergers et produits */
       orchardBusy: L.toastOrchardBusy, orchardGround: L.toastOrchardGround, orchardMax: L.toastOrchardMax,
       orchardNoSapling: L.toastOrchardNoSapling, orchardYoung: L.toastOrchardYoung,
@@ -5594,7 +5594,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // ci-dessus — SAUF si l'outil Construction est équipé en variante "mill"
     // (case Construction), auquel cas le clic sert à retirer/reposer le
     // moulin lui-même (voir resolveAct cas "mill", branche sl===5 plus bas).
-    if (w.objects[i] === C.O_MILL && E.buildReady(w.objHp.get(i), Date.now()) && !(sl === 5 && buildKindRef.current === "mill")) {
+    // zip 402 : on envoie la requête MÊME si le chantier n'est pas fini, pour
+    // que l'hôte réponde « il est encore en chantier » au lieu que le clic
+    // tombe dans le vide. C'est ce vide qui faisait croire à un jeu cassé.
+    if (w.objects[i] === C.O_MILL && !(sl === 5 && buildKindRef.current === "mill")) {
       return sendReq({ kind: "act", action: "millDeposit", x: tt.x, y: tt.y });
     }
     // Sucrerie construite (chantier canne à sucre, bâtiment d'artisan
@@ -5678,7 +5681,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // inventaire. On rebascule donc sur la variante par défaut ("fence")
       // juste après avoir envoyé la pose, pour que le clic suivant sur le
       // moulin déclenche bien millDeposit.
-      if (bk === "mill") { buildKindRef.current = "fence"; setBuildKind("fence"); }
+      /* ⚠️ ZIP 402 — ON NE REBASCULE QU'UNE FOIS LE DERNIER MOULIN POSÉ.
+         Le correctif de juillet (ci-dessus) rebasculait sur « clôture » APRÈS
+         CHAQUE pose. Il réglait bien le clic de dépôt, et il cassait la pose en
+         SÉRIE : pour poser un deuxième moulin il fallait ressortir la variante
+         à la main, sans que rien ne le dise. Guillaume, au 402 : « j'en pose
+         ils disparaissent aussitôt » — c'est l'autre moitié du même défaut.
+         Tant qu'il reste des moulins dans le sac, la variante reste ; au
+         dernier, elle rebascule, et le clic suivant sur un moulin le nourrit
+         au lieu de le reprendre. L'intention de juillet est conservée
+         entière, sa conséquence non voulue disparaît. */
+      if (bk === "mill" && (myInv ? (myInv.mill | 0) : 0) <= 1) {
+        buildKindRef.current = "fence"; setBuildKind("fence");
+      }
     }
     else if (sl === 6) {
       // Outil "déplacer" : premier clic attrape l'animal visé, second clic
@@ -13615,7 +13630,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // outil équipé), sans ouvrir le mini-menu (réservé au clic souris).
   function pressToolKey() {
     if (slotRef.current === 0) {
-      setToolKind(tk => tk === "hoe" ? "axe" : tk === "axe" ? "pick" : "hoe");
+      // zip 401 : la rotation lit toolCycle(), la même liste que l'affichage.
+      const cyc = toolCycle();
+      setToolKind(tk => cyc[(cyc.indexOf(tk) + 1) % cyc.length]);
     } else {
       selectSlot(0, true);
     }
@@ -13625,13 +13642,55 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // lampadaire, épouvantail, gazon, moulin), un peu comme pressToolKey pour
   // la case outils. Ne montre que les variantes dont le stock sac est > 0 ;
   // si aucune n'est en stock, la case se sélectionne simplement sans tourner.
-  function pressBuildKey() {
-    if (slotRef.current !== 5) { selectSlot(5); return; }
-    const order = ["fence", "wall", "path", "lamp", "scarecrow", "grass", "mill"];
+  /* ⚠️⚠️ ZIP 401 — LE CYCLE EST DÉCRIT UNE FOIS, ET DEUX CHOSES LE LISENT.
+     -------------------------------------------------------------------------
+     Retour de Guillaume au 400 : « le 6 doit créer une rotation de même type
+     entre les ressources dont on dispose ». Or **elle existait déjà**, depuis
+     le chantier de juillet, et lui-même ne l'avait jamais trouvée. Ce n'était
+     donc pas un manque de mécanisme, c'était un manque d'AFFORDANCE : rien à
+     l'écran ne disait qu'appuyer une deuxième fois sur 6 changeait quelque
+     chose, et la boutique annonçait même la mauvaise touche (« touche 8 »,
+     corrigé dans ce zip).
+
+     ⚠️ ET LA PARADE NE DOIT SURTOUT PAS ÊTRE DE RECOPIER LA LISTE DANS
+     L'INTERFACE. Deux descriptions d'une même chose finissent toujours par
+     diverger (zip 387) : le jour où quelqu'un ajoute une variante à la
+     rotation, l'affichage en montrerait une de moins et personne ne le verrait
+     — c'est exactement le genre de mensonge silencieux que ce chantier traque.
+     La liste est donc rendue par UNE fonction, que la touche et l'affichage
+     appellent tous les deux. tools/verify-cycle.mjs le vérifie.
+
+     Ne sont proposées que les variantes dont le sac a du stock : une rotation
+     qui s'arrête sur une case vide fait croire que le réglage est cassé. */
+  function buildCycle() {
+    /* ⚠️ ZIP 402 — LE CHAUDRON ET LES TROIS PONTS REJOIGNENT LE CYCLE.
+       C'étaient les seules ressources posables qui n'y étaient pas : on ne
+       pouvait les équiper que par le menu Construire, donc en s'arrêtant de
+       jouer. « Tout ce qui entre dans cette catégorie doit être trouvé là
+       dedans » (Guillaume, 400) devient vrai au sens strict.
+
+       ⚠️ LES PONTS N'ONT PAS DE STOCK PROPRE : leur coût est prélevé en BOIS ou
+       en PIERRE à la pose (voir resolveAct cas « bridge »). On les propose donc
+       tant qu'on a la matière — et pas selon un `myInv.bridgeWood` qui
+       n'existe pas et retournerait toujours zéro, ce qui les aurait
+       silencieusement exclus du cycle. C'est exactement le genre de détail qui
+       fait qu'une liste « complétée » ne l'est pas. */
+    const order = ["fence", "wall", "path", "lamp", "scarecrow", "grass", "mill", "cauldron"];
     const owned = order.filter(k => myInv && (myInv[k] || 0) > 0);
+    if (myInv && (myInv.wood | 0) >= C.BRIDGE_COST_WOOD) owned.push("bridgeWood");
+    if (myInv && (myInv.stone | 0) >= C.BRIDGE_COST_STONE) { owned.push("bridgeStone"); owned.push("bridgeRenovate"); }
     // ZIP 398 : les plants de verger rejoignent le cycle, et seulement ceux
     // qu'on possède — comme les autres variantes.
     for (const o of C.ORCHARDS) if (myInv && myInv.saplings && (myInv.saplings[o.id] | 0) > 0) owned.push("orchard:" + o.id);
+    return owned;
+  }
+  /* Idem pour la case outils, qui tourne depuis le zip 251 sans jamais l'avoir
+     dit non plus. L'arrosoir n'en fait PAS partie : il a sa propre case. */
+  function toolCycle() { return ["hoe", "axe", "pick"]; }
+
+  function pressBuildKey() {
+    if (slotRef.current !== 5) { selectSlot(5); return; }
+    const owned = buildCycle();
     if (!owned.length) return;
     const cur = buildKindRef.current;
     const idx = owned.indexOf(cur);
@@ -13877,6 +13936,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
 
   // -------- Rendu React (UI par-dessus le canvas) --------
   const TOOL_NAMES = lang === "en" ? C.TOOL_NAMES_EN : C.TOOL_NAMES;
+  /* ZIP 401 — le nom court d'une variante de construction, plants de verger
+     compris. Il n'existait aucun nom court avant ce zip : la case 6 ne
+     disposait que d'infobulles en forme de phrases, ce qu'une case de 48 px ne
+     peut pas porter. C'est une des raisons pour lesquelles son cycle était
+     invisible. */
+  function buildLabel(kind) {
+    if (kind && kind.startsWith("orchard:")) {
+      const o = C.ORCHARDS.find(x => x.id === kind.slice(8));
+      return o ? (lang === "en" ? o.saplingNameEn : o.saplingName) : "";
+    }
+    return (L.buildNames && L.buildNames[kind]) || "";
+  }
   const slots = [
     { key: "tools", icon: toolKind }, { key: "can", icon: "can" },
     { key: "seeds", icon: "seeds" }, { key: "food", icon: "food" },
@@ -14077,12 +14148,29 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               : buildKind === "bridgeRenovate" ? L.bridgeRenovateTip
               : (buildKind === "bridgeWood" || buildKind === "bridgeStone") ? L.bridgeTip : L.fenceTip)
             : isHerd ? L.herdTip : isHand ? (healArmed ? L.healKitArmedTip : L.handTip) : isTools ? L.toolsTip(TOOL_NAMES[toolKind]) : TOOL_NAMES[s.key];
+          /* ⚠️ ZIP 401 — LA LISTE AFFICHÉE EST CELLE QUI TOURNE, PAS UNE COPIE.
+             `toolCycle()` et `buildCycle()` sont les fonctions que la touche
+             appelle elle-même. Recopier la liste ici aurait produit, au premier
+             ajout de variante, une case qui en annonce une de moins qu'elle
+             n'en propose — un mensonge silencieux, et le défaut que le zip 387
+             a nommé une fois pour toutes. tools/verify-cycle.mjs le vérifie. */
+          const cyc = isTools ? toolCycle() : isFence ? buildCycle() : null;
+          const curKind = isTools ? toolKind : isFence ? buildKind : null;
+          const nameOf = (k) => (isTools ? TOOL_NAMES[k] : buildLabel(k));
+          const curName = cyc ? nameOf(curKind) : "";
+          const fullTitle = cyc
+            ? title + "\n" + (cyc.length > 1
+                ? L.cycleHint(i + 1) + "\n" + L.cycleList(cyc.map(nameOf), curName)
+                : L.cycleAlone)
+            : title;
           return (
-            <div key={s.key} className={"ferme-slot" + (i === slot ? " sel" : "")} onClick={() => selectSlot(i)} title={title}>
+            <div key={s.key} className={"ferme-slot" + (i === slot ? " sel" : "")} onClick={() => selectSlot(i)} title={fullTitle}>
               <span className="ferme-slot-key">{i + 1}</span>
               <Sprite img={img} w={32} h={32} />
               {count !== "" && <span className="ferme-slot-count">{count}</span>}
               {lvl && <span className="ferme-slot-lvl">{lvl}</span>}
+              {cyc && cyc.length > 1 && <span className="ferme-slot-cyc">⟳</span>}
+              {i === slot && curName && <span className="ferme-slot-name">{curName}</span>}
             </div>
           );
         })}

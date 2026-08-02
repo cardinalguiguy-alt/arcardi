@@ -900,12 +900,30 @@ export const FERME_STR = {
     toolUpSub: (lvl, cost) => `Passer au niveau ${lvl} : ${cost} or`,
     buy1: "×1", buy5: "×5", buyOne: "Acheter",
     upgrade: "Améliorer", maxLabel: "MAX",
+    /* ⚠️ ZIP 401 — LES NOMS COURTS DES VARIANTES DE CONSTRUCTION.
+       Ils n'existaient pas : la case 6 n'avait que des INFOBULLES (wallTip,
+       pathTip…), c'est-à-dire des phrases. Or une case d'inventaire de 44 px
+       ne peut pas porter une phrase — et c'est une des raisons pour lesquelles
+       personne ne pouvait deviner que cette case tournait. Un cycle dont on ne
+       peut pas nommer les crans est un cycle invisible. */
+    buildNames: {
+      fence: "Clôture", wall: "Mur", path: "Pavage", lamp: "Lampadaire",
+      scarecrow: "Épouvantail", grass: "Herbe", mill: "Moulin",
+      cauldron: "Chaudron", bridgeWood: "Pont de bois",
+      bridgeStone: "Pont de pierre", bridgeRenovate: "Rénover en pierre",
+    },
+    /* L'astuce qui manquait depuis le zip 251. Elle est affichée SOUS la case
+       et dans l'infobulle : le joueur n'a aucun moyen de deviner qu'une touche
+       déjà appuyée fait autre chose la deuxième fois. */
+    cycleHint: (key) => `${key} à nouveau : variante suivante`,
+    cycleList: (names, cur) => `Cycle : ${names.map(n => (n === cur ? `[${n}]` : n)).join(" → ")}`,
+    cycleAlone: "Une seule variante en réserve : rien à faire tourner.",
     fenceRowTitle: (cost) => `Clôture : ${cost} or la section`,
-    fenceRowSub: (n) => `Pose ou retire une section où tu veux (touche 8) · en stock : ${n}`,
+    fenceRowSub: (n) => `Pose ou retire une section où tu veux (touche 6) · en stock : ${n}`,
     lampRowTitle: (cost) => `💡 Lampadaire : ${cost} or`,
-    lampRowSub: (n) => `Chantier de 15 min réelles avant d'être fonctionnel, puis éclaire un rayon autour de lui la nuit. Pose ou retire où tu veux (touche 8) · en stock : ${n}`,
+    lampRowSub: (n) => `Chantier de 15 min réelles avant d'être fonctionnel, puis éclaire un rayon autour de lui la nuit. Pose ou retire où tu veux (touche 6) · en stock : ${n}`,
     scarecrowRowTitle: (cost) => `🌾 Épouvantail : ${cost} or`,
-    scarecrowRowSub: (n) => `Chantier de 10 secondes réelles. Ne bloque pas le passage. Pose ou retire où tu veux (touche 8) · en stock : ${n}`,
+    scarecrowRowSub: (n) => `Chantier de 10 secondes réelles. Ne bloque pas le passage. Pose ou retire où tu veux (touche 6) · en stock : ${n}`,
     grassRowTitle: (cost) => `🌱 Herbe : ${cost} or l'unité`,
     grassRowSub: (n) => `Replante l'herbe sur une case labourée (chantier de 5 secondes réelles, définitif, pas de retrait) · en stock : ${n}`,
     millRowTitle: (cost) => `🏚️ Moulin : ${cost} or`,
@@ -1077,6 +1095,16 @@ export const FERME_STR = {
     toastMillNotEmpty: "Vide d'abord le moulin (il reste du blé à transformer) avant de le retirer.",
     toastNoWheatToDeposit: "Tu n'as pas de blé récolté à déposer.",
     toastMillFull: "Le moulin est plein de blé, attends qu'il en transforme avant d'en redéposer.",
+    /* ZIP 402 — les cinq phrases qui manquaient au moulin. Voir resolveAct :
+       poser et retirer étaient le même geste muet, quinze sols refusaient sans
+       rien dire, et déposer du blé sans moulin construit sortait en silence. */
+    toastMillPlaced: "Moulin posé. Compte une heure de chantier avant qu'il tourne.",
+    toastMillTaken: "Moulin repris dans ton sac.",
+    toastMillGround: "Un moulin se pose sur de l'herbe ou sur une case labourée, pas ici.",
+    toastMillOccupied: "Il y a déjà quelque chose sur cette case.",
+    toastMillOnCrop: "Une culture pousse ici : récolte-la d'abord.",
+    toastNoMillBuilt: "Aucun moulin terminé sur la ferme. Pose-en un et laisse le chantier finir.",
+    toastMillBuilding: "Ce moulin est encore en chantier. Le compte à rebours au-dessus dit combien de temps il reste.",
     // Petit changement (demande Guillaume) : petite notification quand un
     // moulin s'arrête faute de blé à moudre.
     millStoppedToast: "🌾 Le moulin ne tourne plus — il n'a plus de blé à moudre.",
@@ -2025,12 +2053,22 @@ export const FERME_STR = {
     toolUpSub: (lvl, cost) => `Upgrade to level ${lvl}: ${cost} gold`,
     buy1: "×1", buy5: "×5", buyOne: "Buy",
     upgrade: "Upgrade", maxLabel: "MAX",
+    // ZIP 401 — short names for the build variants (see the FR block).
+    buildNames: {
+      fence: "Fence", wall: "Wall", path: "Paving", lamp: "Lamp post",
+      scarecrow: "Scarecrow", grass: "Grass", mill: "Mill",
+      cauldron: "Cauldron", bridgeWood: "Wooden bridge",
+      bridgeStone: "Stone bridge", bridgeRenovate: "Renovate in stone",
+    },
+    cycleHint: (key) => `${key} again: next variant`,
+    cycleList: (names, cur) => `Cycle: ${names.map(n => (n === cur ? `[${n}]` : n)).join(" → ")}`,
+    cycleAlone: "Only one variant in stock: nothing to cycle through.",
     fenceRowTitle: (cost) => `Fence: ${cost} gold per section`,
-    fenceRowSub: (n) => `Place or remove a section anywhere (key 8) · in stock: ${n}`,
+    fenceRowSub: (n) => `Place or remove a section anywhere (key 6) · in stock: ${n}`,
     lampRowTitle: (cost) => `💡 Lamp post: ${cost} gold`,
-    lampRowSub: (n) => `15 real min to build before it's functional, then lights up an area around it at night. Place or remove anywhere (key 8) · in stock: ${n}`,
+    lampRowSub: (n) => `15 real min to build before it's functional, then lights up an area around it at night. Place or remove anywhere (key 6) · in stock: ${n}`,
     scarecrowRowTitle: (cost) => `🌾 Scarecrow: ${cost} gold`,
-    scarecrowRowSub: (n) => `10 real seconds to build. Does not block movement. Place or remove anywhere (key 8) · in stock: ${n}`,
+    scarecrowRowSub: (n) => `10 real seconds to build. Does not block movement. Place or remove anywhere (key 6) · in stock: ${n}`,
     grassRowTitle: (cost) => `🌱 Grass: ${cost} gold per unit`,
     grassRowSub: (n) => `Replant grass on a tilled tile (5 real seconds to build, permanent, cannot be removed) · in stock: ${n}`,
     millRowTitle: (cost) => `🏚️ Mill: ${cost} gold`,
@@ -2181,6 +2219,14 @@ export const FERME_STR = {
     toastMillNotEmpty: "Empty the mill first (it still has wheat to grind) before removing it.",
     toastNoWheatToDeposit: "You don't have any harvested wheat to deposit.",
     toastMillFull: "The mill is full of wheat, wait for it to grind some before depositing more.",
+    // ZIP 402 — the five sentences the mill was missing (see the FR block).
+    toastMillPlaced: "Mill placed. It needs about an hour of building before it runs.",
+    toastMillTaken: "Mill back in your bag.",
+    toastMillGround: "A mill goes on grass or tilled soil, not here.",
+    toastMillOccupied: "Something is already on this tile.",
+    toastMillOnCrop: "A crop is growing here: harvest it first.",
+    toastNoMillBuilt: "No finished mill on the farm. Place one and let the building finish.",
+    toastMillBuilding: "This mill is still being built. The countdown above it tells you how long is left.",
     millStoppedToast: "🌾 The mill has stopped — it's out of wheat to grind.",
     // Sugarhouse (sugar cane chantier): exact mirror of the 4 mill toasts above.
     toastNoSucrerieStock: "Out of sugarhouses, buy one at the shop!",

@@ -1448,12 +1448,57 @@ export function resolveAct(world, f, m) {
       // prudence, pour ne jamais faire disparaître du blé qu'un autre joueur
       // aurait déposé (même logique de précaution que le pont permanent,
       // zip 169, "ne jamais piéger/pénaliser un joueur").
+      /* ⚠️⚠️ ZIP 402 — TROIS ÉCHECS SILENCIEUX, ET C'EST LE BUG DE GUILLAUME.
+         ---------------------------------------------------------------------
+         Retour : « vérifie la posabilité des moulins. il y a une ferme où
+         c'est buggé. j'en pose ils disparaissent aussitôt. Et après on me dit
+         que le nombre max est atteint. »
+
+         Le moteur a été INTERROGÉ plutôt que relu, et il a répondu trois fois :
+
+         1. **LE DEUXIÈME CLIC REPRENAIT LE MOULIN, SANS UN MOT.** Poser et
+            retirer sont le MÊME geste sur la même case (comme lampadaire et
+            mur), et aucune des deux branches ne disait rien. Mesuré :
+            1er clic → moulin au sol, stock 5→4 ; 2e clic → plus rien au sol,
+            stock 4→5. C'est littéralement « j'en pose ils disparaissent
+            aussitôt », et c'est d'autant plus facile à déclencher qu'un moulin
+            en chantier est dessiné à 55 % d'opacité — on doute d'avoir réussi,
+            donc on reclique.
+
+            ⚠️ Le correctif de juillet avait déjà vu la moitié du problème
+            (« rien ne rebasculait la variante après la pose ») et rebasculait
+            sur « clôture » APRÈS chaque pose. Ça réglait le clic de DÉPÔT et
+            ça cassait la pose EN SÉRIE : pour poser un deuxième moulin il
+            fallait ressortir la variante à la main. Voir FermeGame.js.
+
+         2. **QUINZE SOLS REFUSAIENT LE MOULIN SANS RIEN DIRE.** Pavage, sable,
+            rive, ponts, jetée… La condition n'accepte que herbe, labouré et
+            arrosé, et l'absence de `else` faisait sortir la fonction en
+            silence. Sur une ferme dont la place libre est pavée, poser un
+            moulin ne fait donc RIEN, et rien ne l'explique.
+
+         3. **DÉPOSER DU BLÉ SANS AUCUN MOULIN CONSTRUIT sortait aussi en
+            silence** (`if (!millIdx.length) break;`), et quand il y en a un
+            de plein, le message est « Le moulin est plein » — ce qui se lit
+            très exactement comme « le nombre maximum est atteint ».
+
+         ⚠️ AUCUNE RÈGLE DE JEU NE CHANGE ICI. On n'ajoute ni plafond, ni
+         verrou, ni délai : on rend au joueur les trois phrases qui lui
+         manquaient. Un jeu qui refuse sans le dire est indiscernable d'un jeu
+         cassé — et c'est bien pour un jeu cassé que Guillaume l'a pris. */
       if (o === C.O_MILL) {
         const ms = world.mills.get(i);
         if (ms && (ms.wheat || 0) > 0) { res.toast = "millNotEmpty"; break; }
         world.objects[i] = C.O_NONE; world.objHp.delete(i); world.mills.delete(i);
         f.inv.mill = (f.inv.mill || 0) + 1;
         res.tiles.push(i); res.invChanged = true;
+        res.toast = "millTaken";                      // zip 402 : on le DIT
+      } else if (o !== C.O_NONE) {
+        res.toast = "millOccupied";                   // zip 402
+      } else if (world.crops.has(i)) {
+        res.toast = "millOnCrop";                     // zip 402
+      } else if (!(g === C.G_GRASS || g === C.G_TILLED || g === C.G_WATERED)) {
+        res.toast = "millGround";                     // zip 402
       } else if ((g === C.G_GRASS || g === C.G_TILLED || g === C.G_WATERED) && o === C.O_NONE && !world.crops.has(i)) {
         if (f.inv.mill > 0) {
           f.inv.mill--;
@@ -1467,6 +1512,10 @@ export function resolveAct(world, f, m) {
           // arrosage existant).
           if (g === C.G_GRASS) world.ground[i] = C.G_TILLED;
           res.tiles.push(i); res.invChanged = true;
+          // zip 402 : on annonce le chantier. Sans ça, un moulin à 55 %
+          // d'opacité passe pour un clic raté, et on reclique — ce qui le
+          // reprenait (voir le bloc ci-dessus).
+          res.toast = "millPlaced";
         } else res.toast = "noMillStock";
       }
       break;
@@ -1480,7 +1529,15 @@ export function resolveAct(world, f, m) {
       // fermier (f.inv.crops[C.MILL_WHEAT_CROP]) vers le stock COMMUN du
       // moulin (world.mills, partagé entre tous les joueurs de la ferme,
       // même esprit que les gemmes/la grange), plafonné à C.MILL_STOCK_CAP.
-      if (o !== C.O_MILL || !buildReady(world.objHp.get(i), now)) break;
+      /* ⚠️ ZIP 402 — QUATRIÈME ÉCHEC SILENCIEUX, ET LE PLUS TROMPEUR.
+         Ce garde-fou renvoyait sans un mot quand le moulin n'était pas encore
+         CONSTRUIT. Or c'est exactement le moment où le joueur clique dessus :
+         il vient de le poser, il le voit à 55 % d'opacité, il ne sait pas si
+         ça a marché, et le jeu ne répond rien. On distingue donc les deux
+         causes — pas un moulin / moulin en chantier — au lieu de sortir en
+         silence dans les deux cas. */
+      if (o !== C.O_MILL) break;
+      if (!buildReady(world.objHp.get(i), now)) { res.toast = "millBuilding"; break; }
       const have = f.inv.crops[C.MILL_WHEAT_CROP] || 0;
       if (have <= 0) { res.toast = "noWheatToDeposit"; break; }
       // Zip 301b (demande Guillaume) : un clic sur UN moulin alimente TOUS les
@@ -1491,7 +1548,10 @@ export function resolveAct(world, f, m) {
       for (let k = 0; k < world.objects.length; k++) {
         if (world.objects[k] === C.O_MILL && buildReady(world.objHp.get(k), now)) millIdx.push(k);
       }
-      if (!millIdx.length) break; // sécurité (on a pourtant cliqué un moulin prêt)
+      // zip 402 : ce `break` était muet. « On a pourtant cliqué un moulin
+      // prêt » n'est vrai que si le chantier est fini : un moulin encore en
+      // construction n'entre pas dans millIdx, et le joueur n'apprenait rien.
+      if (!millIdx.length) { res.toast = "noMillBuilt"; break; }
       let totalRoom = 0;
       for (const k of millIdx) totalRoom += Math.max(0, C.MILL_STOCK_CAP - ((world.mills.get(k) || {}).wheat || 0));
       if (totalRoom <= 0) { res.toast = "millFull"; break; }
@@ -2688,6 +2748,35 @@ export function solidBuildingAt(world, fx, fy) {
   return false;
 }
 
+/* ⚠️⚠️ ZIP 401 — LES ARBUSTES FRUITIERS NE BLOQUENT PLUS, ET C'EST UNE
+   DEMANDE EXPLICITE. Guillaume : « audit jouabilité des arbustes fruitiers.
+   ils sont en dur, provoquent une collision or je veux pas cela. »
+
+   O_BERRY_BUSH et O_ORCHARD sortent des DEUX listes — à pied comme à cheval.
+   Ce sont les seuls objets du jeu dont on RÉCOLTE sans les détruire : on
+   revient dessus tous les jours, et un buisson à hauteur de genou qui arrête
+   un fermier comme le ferait un rocher est le genre de friction qu'on ne
+   remarque qu'après en avoir planté quinze.
+
+   ⚠️ LES DEUX Y PASSENT, ET C'EST UNE DÉCISION PRISE SEULE. Guillaume ne
+   nomme que « les arbustes fruitiers », c'est-à-dire les vergers du 398. Mais
+   le buisson à baies du printemps est le même objet du point de vue du joueur
+   — un arbuste bas dont on cueille des fruits — et n'en libérer qu'un aurait
+   produit une incohérence qu'on rencontre au premier printemps. Signalé ici
+   plutôt que tu.
+
+   ⚠️ CE QUE ÇA NE CASSE PAS, VÉRIFIÉ PLUTÔT QUE SUPPOSÉ :
+     * la CUEILLETTE. targetTile() (FermeGame.js) vise la case sous la souris
+       dès qu'elle est à portée, et la distance zéro est à portée : debout sur
+       un verger, on le cueille toujours en cliquant dessus ;
+     * l'ABATTAGE à la hache, qui passe par le même chemin ;
+     * la POSE. On n'a jamais pu poser sur une case occupée, et ce test-là
+       regarde `objects[i] !== O_NONE`, pas la collision ;
+     * le RENDU. Les objets et les personnages sont dans la même liste triée en
+       y (voir `draws.sort` dans FermeGame.js) : marcher dans un verger fait
+       passer le feuillage devant les bottes, ce qui est exactement ce qu'on
+       veut voir. Rien à écrire pour l'obtenir.
+   ========================================================================= */
 export function blockedTile(world, x, y, now = Date.now()) {
   const fx = Math.floor(x), fy = Math.floor(y);
   if (!inMap(fx, fy)) return true;
@@ -2696,7 +2785,7 @@ export function blockedTile(world, x, y, now = Date.now()) {
   const g = world.ground[i], o = world.objects[i];
   if (g === C.G_WATER || g === C.G_BRIDGE_SITE || g === C.G_BRIDGE_CLOSED || g === C.G_BRIDGE_STONE_CLOSED) return true;
   if (o === C.O_LAMP || o === C.O_MILL || o === C.O_SUCRERIE) return buildReady(world.objHp.get(i), now);
-  if (o === C.O_TREE || o === C.O_TREE2 || o === C.O_ROCK || o === C.O_HOUSE || o === C.O_SHOP || o === C.O_BIN || o === C.O_STUMP || o === C.O_WELL || o === C.O_FENCE || o === C.O_FENCE_H || o === C.O_FENCE_V || o === C.O_WALL || o === C.O_BERRY_BUSH || o === C.O_ORCHARD) return true;
+  if (o === C.O_TREE || o === C.O_TREE2 || o === C.O_ROCK || o === C.O_HOUSE || o === C.O_SHOP || o === C.O_BIN || o === C.O_STUMP || o === C.O_WELL || o === C.O_FENCE || o === C.O_FENCE_H || o === C.O_FENCE_V || o === C.O_WALL) return true;
   return false;
 }
 
@@ -2715,7 +2804,7 @@ export function blockedTileMounted(world, x, y, now = Date.now()) {
   const i = idx(fx, fy);
   const o = world.objects[i];
   if (o === C.O_LAMP || o === C.O_MILL || o === C.O_SUCRERIE) return buildReady(world.objHp.get(i), now);
-  if (o === C.O_TREE || o === C.O_TREE2 || o === C.O_ROCK || o === C.O_HOUSE || o === C.O_SHOP || o === C.O_BIN || o === C.O_STUMP || o === C.O_WELL || o === C.O_FENCE || o === C.O_FENCE_H || o === C.O_FENCE_V || o === C.O_WALL || o === C.O_BERRY_BUSH || o === C.O_ORCHARD) return true;
+  if (o === C.O_TREE || o === C.O_TREE2 || o === C.O_ROCK || o === C.O_HOUSE || o === C.O_SHOP || o === C.O_BIN || o === C.O_STUMP || o === C.O_WELL || o === C.O_FENCE || o === C.O_FENCE_H || o === C.O_FENCE_V || o === C.O_WALL) return true;
   return false;
 }
 
