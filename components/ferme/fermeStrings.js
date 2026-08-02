@@ -1186,6 +1186,7 @@ export const FERME_STR = {
     /* ======================================================================
        ZIP 398 — VERGERS, FRUITS, BARQUETTES, PRODUITS, NOM DES FAMILIERS.
        ====================================================================== */
+    orchardTip: (nom) => `${nom} — clique sur une case d'herbe ou de terre pour le planter. Il restera.`,
     orchardShopTitle: "Plants de verger",
     orchardShopHint: "On les plante une fois. Ils demeurent, et donnent des fruits à chaque saison — sans jamais replanter. Pose-les avec l'outil Construction.",
     orchardRowSub: (mature, cycle, min, max, fruit, saisons) =>
@@ -2277,6 +2278,7 @@ export const FERME_STR = {
     passageWorldToast: (name) => `🌀 This week the passage leads to: ${name}.`,
     // --- Zip 392: developer menu (Cmd/Ctrl+Shift+X, host only) ---
     /* ZIP 398 — orchards, fruit, punnets, products, pet names. */
+    orchardTip: (name) => `${name} — click a grass or soil tile to plant it. It will stay.`,
     orchardShopTitle: "Orchard saplings",
     orchardShopHint: "Plant them once. They stay, and bear fruit every season — no replanting, ever. Place them with the Build tool.",
     orchardRowSub: (mature, cycle, min, max, fruit, seasons) =>

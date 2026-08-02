@@ -14036,6 +14036,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             // compteur et infobulle dépendent de la variante choisie via le
             // menu Construire/Vendre (fence/wall/path/lamp/scarecrow), pas
             // seulement clôture.
+            /* ⚠️ ZIP 398 — LA CASE CONSTRUCTION DOIT DIRE CE QU'ON TIENT.
+               Sans ces trois lignes, un joueur qui équipe un plant de verger
+               voyait une icône de CLÔTURE, le nombre de CLÔTURES en réserve et
+               l'astuce de la clôture : les trois chaînes de ternaires
+               ci-dessous retombent toutes sur "fence" pour une variante
+               qu'elles ne connaissent pas. On ne peut pas planter ce qu'on ne
+               voit pas dans sa main. */
+            const orchK = buildKind.startsWith("orchard:") ? C.ORCHARDS.findIndex(o => o.id === buildKind.slice(8)) : -1;
             const bkImg = buildKind === "wall" ? "wall" : buildKind === "path" ? "path" : buildKind === "lamp" ? "lamp" : buildKind === "scarecrow" ? "scarecrow"
               : buildKind === "grass" ? "grassPatch" : buildKind === "mill" ? "mill" : buildKind === "cauldron" ? null
               : buildKind === "bridgeWood" ? "bridge" : (buildKind === "bridgeStone" || buildKind === "bridgeRenovate") ? "bridgeStoneSprite" : "fence";
@@ -14045,17 +14053,26 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             // Chaudron (chantier 2026-07) : pas de sprite dédié pour
             // l'instant (emoji ⚗️ affiché à la place de l'icône, voir
             // ci-dessous) — non fait/limite connue, à ajouter si besoin.
-            count = myInv ? (buildKind === "wall" ? (myInv.wall || 0) : buildKind === "path" ? (myInv.path || 0) : buildKind === "lamp" ? (myInv.lamp || 0) : buildKind === "scarecrow" ? (myInv.scarecrow || 0)
+            count = myInv ? (orchK >= 0 ? ((myInv.saplings && myInv.saplings[C.ORCHARDS[orchK].id]) | 0) : buildKind === "wall" ? (myInv.wall || 0) : buildKind === "path" ? (myInv.path || 0) : buildKind === "lamp" ? (myInv.lamp || 0) : buildKind === "scarecrow" ? (myInv.scarecrow || 0)
               : buildKind === "grass" ? (myInv.grass || 0) : buildKind === "mill" ? (myInv.mill || 0) : buildKind === "cauldron" ? (myInv.cauldron || 0)
               : buildKind === "bridgeWood" ? (myInv.wood || 0) : (buildKind === "bridgeStone" || buildKind === "bridgeRenovate") ? (myInv.stone || 0) : (myInv.fence || 0)) : "";
-            img = spritesReady && bkImg ? spritesRef.current[bkImg] : null;
-            lvl = buildKind === "fence" ? (fenceDir === "h" ? "↔" : fenceDir === "v" ? "↕" : "R") : buildKind === "cauldron" ? "⚗️" : "";
+            /* L'icône d'un plant est le VERGER ADULTE EN FRUITS, pas la
+               pousse : à 32 px dans une case d'inventaire, quatre pousses
+               vertes se ressemblent toutes, alors qu'un citronnier chargé de
+               citrons se distingue d'un myrtillier au premier coup d'œil. On
+               montre ce qu'on va OBTENIR, pas ce qu'on va poser. */
+            img = orchK >= 0
+              ? (spritesReady ? spritesRef.current.orchards[orchK][3] : null)
+              : (spritesReady && bkImg ? spritesRef.current[bkImg] : null);
+            lvl = buildKind === "fence" ? (fenceDir === "h" ? "↔" : fenceDir === "v" ? "↕" : "R") : buildKind === "cauldron" ? "⚗️" : orchK >= 0 ? "🌳" : "";
           }
           else if (isHerd) { if (carryingAnimal) lvl = "●"; }
           else if (isHand) { const dn = (myInv && myInv.decor ? Object.values(myInv.decor).reduce((a, b) => a + (b | 0), 0) : 0) + (myInv ? (myInv.lamp | 0) + (myInv.scarecrow | 0) : 0); count = healArmed ? (myInv ? (myInv.healKit || 0) : "") : (dn || ""); if (healArmed) lvl = "🩹"; else if (handHeldUI || handMode) lvl = "●"; }
           else lvl = "N" + (myTools[s.key] || 1);
           const title = isSeed ? L.seedTip(seedName(seedSel)) : isFood ? L.foodTip(C.FOOD_ENERGY) : isRod ? L.rodTip
-            : isFence ? (buildKind === "wall" ? L.wallTip : buildKind === "path" ? L.pathTip : buildKind === "lamp" ? L.lampTip : buildKind === "scarecrow" ? L.scarecrowTip
+            : isFence ? (buildKind.startsWith("orchard:")
+              ? L.orchardTip((() => { const o = C.ORCHARDS.find(x => x.id === buildKind.slice(8)); return o ? (lang === "en" ? o.saplingNameEn : o.saplingName) : ""; })())
+              : buildKind === "wall" ? L.wallTip : buildKind === "path" ? L.pathTip : buildKind === "lamp" ? L.lampTip : buildKind === "scarecrow" ? L.scarecrowTip
               : buildKind === "grass" ? L.grassTip : buildKind === "mill" ? L.millTip : buildKind === "cauldron" ? L.cauldronRowSub
               : buildKind === "bridgeRenovate" ? L.bridgeRenovateTip
               : (buildKind === "bridgeWood" || buildKind === "bridgeStone") ? L.bridgeTip : L.fenceTip)
@@ -15172,7 +15189,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             <div style={{ fontSize: 11, fontWeight: 700, opacity: .7, textTransform: "uppercase", letterSpacing: .5, marginTop: 12 }}>{L.bagProductsTitle}</div>
             {C.FRUIT_PRODUCTS.map(p2 => {
               const inv = (myInv && myInv.fruits) || {};
-              const have = (myInv && myInv.products && (myInv.products[p2.id] | 0)) || 0;
+              const have = (myInv && myInv.fruitProducts && (myInv.fruitProducts[p2.id] | 0)) || 0;
               const cost = E.fruitProductCost(p2);
               const lack = (inv[p2.fruit] | 0) < cost.fruit ? "fruit"
                 /* ⚠️ `flour` et `sugar` sont les MIROIRS REACT de
@@ -15183,8 +15200,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                    ferme en a des sacs. */
                 : (cost.sugar && (sugar | 0) < cost.sugar) ? "sugar"
                 : (cost.flour && (flour | 0) < cost.flour) ? "flour"
-                : (cost.milk && ((myInv && myInv.milk) | 0) < cost.milk) ? "milk"
-                : (cost.egg && ((myInv && myInv.egg) | 0) < cost.egg) ? "egg" : null;
+                /* ⚠️ Le lait et les œufs sont des PRODUITS ANIMAUX : ils
+                   vivent dans `myInv.products`, le tableau indexé par animal.
+                   `myInv.milk` n'existe pas — le lire donnait 0, donc un
+                   bouton grisé « pas de lait » avec une étable pleine. On
+                   passe par les MÊMES fonctions que le moteur, sinon
+                   l'interface et l'arbitre ne comptent pas la même chose. */
+                : (cost.milk && E.milkStock({ inv: myInv || {} }) < cost.milk) ? "milk"
+                : (cost.egg && E.eggStock({ inv: myInv || {} }) < cost.egg) ? "egg" : null;
               return (
                 <div className="ferme-shop-row" key={"fp-" + p2.id}>
                   <Sprite img={spritesReady ? spritesRef.current.fruits[p2.fruit] : null} w={20} h={20} />

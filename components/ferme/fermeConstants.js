@@ -3138,6 +3138,23 @@ export function punnetPrice(fruitId) {
    ⚠️ LE PRIX DE VENTE EST TOUJOURS SUPÉRIEUR À LA SOMME DES INGRÉDIENTS, sinon
    transformer serait une punition. `verify-orchards.mjs` le mesure recette par
    recette, au lieu de faire confiance aux quatre nombres écrits ici. */
+/* ⚠️ QUEL ANIMAL DONNE QUOI. Les produits animaux vivent dans `f.inv.products`,
+   un TABLEAU indexé par type d'animal (voir ANIMALS) — pas dans des champs
+   `f.inv.milk` / `f.inv.egg`, qui n'existent pas.
+
+   La première écriture du 398 lisait `f.inv.milk` et `f.inv.egg` : toujours
+   `undefined`, donc toujours 0, donc **les yaourts et la tarte étaient
+   définitivement impossibles à préparer** — bouton grisé sur « pas de lait »
+   avec une étable pleine de vaches. Le genre de défaut qu'aucun contrôle de
+   syntaxe ne voit et qu'aucune relecture ne soupçonne, parce que
+   `f.inv.milk` a l'air parfaitement raisonnable.
+
+   Le lait accepte la VACHE ou la CHÈVRE, dans cet ordre : refuser le lait de
+   chèvre pour un yaourt serait une subtilité que personne ne comprendrait en
+   regardant son inventaire plein. */
+export const ANIMAL_EGG = 0;          // poule
+export const ANIMAL_MILK = [4, 1];    // vache d'abord, puis chèvre
+
 export const FRUIT_PRODUCTS = [
   { id: "jam_strawberry", shop: "sucrerie",   name: "Confiture de fraises",    nameEn: "Strawberry jam",
     fruit: "strawberry", fruitN: 5, sugar: 2, sell: 620,  ms: 40 * 60 * 1000 },

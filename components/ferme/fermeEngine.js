@@ -1010,6 +1010,21 @@ export function normalizeFarmer(f) {
   f.inv.seaCreatures = padArray(f.inv.seaCreatures, C.SEA_CREATURES.length); // 2026-07 station update
   if (typeof f.seaStreak !== "number") f.seaStreak = 0; // consecutive casts, host-side rarity gate
   f.inv.products = padArray(f.inv.products, C.ANIMALS.length);
+  /* ⚠️⚠️ ZIP 398 — `f.inv.products` EST DÉJÀ PRIS, ET C'EST UN TABLEAU.
+     Il contient les produits ANIMAUX, indexés par type (œuf, lait, laine…),
+     et la ligne ci-dessus le repasse par `padArray` à chaque normalisation.
+     La première écriture du 398 y rangeait aussi les confitures, sous des clés
+     de texte : `padArray` les effaçait toutes à la première normalisation —
+     c'est-à-dire au premier rechargement. On aurait fabriqué des confitures
+     qui disparaissent en rechargeant la page.
+     C'est la MÊME faute que O_SUCRERIE / O_BERRY_BUSH, un étage plus haut :
+     deux choses différentes sous un même nom. D'où `fruitProducts`, distinct.
+
+     Les trois champs neufs sont des OBJETS (id → nombre) et non des tableaux :
+     ajouter un fruit ou une recette un jour ne doit décaler aucun indice. */
+  if (!f.inv.saplings || typeof f.inv.saplings !== "object" || Array.isArray(f.inv.saplings)) f.inv.saplings = {};
+  if (!f.inv.fruits || typeof f.inv.fruits !== "object" || Array.isArray(f.inv.fruits)) f.inv.fruits = {};
+  if (!f.inv.fruitProducts || typeof f.inv.fruitProducts !== "object" || Array.isArray(f.inv.fruitProducts)) f.inv.fruitProducts = {};
   // Zip 251: sac de décorations (id -> quantité), nettoyé aux ids connus.
   { const d = (f.inv.decor && typeof f.inv.decor === "object") ? f.inv.decor : {};
     const clean = {};
@@ -4873,28 +4888,50 @@ export function resolveSellFruit(f, shared, fruitId, punnet) {
 export function fruitProductCost(p) {
   return { fruit: p.fruitN | 0, sugar: p.sugar | 0, milk: p.milk | 0, flour: p.flour | 0, egg: p.egg | 0 };
 }
+/* Combien de LAIT ce fermier a-t-il, toutes espèces confondues ? Et combien
+   d'ŒUFS ? Deux fonctions plutôt que deux lectures en dur : `f.inv.products`
+   est un tableau indexé par ANIMAL, et le lait vient de deux animaux. */
+export function milkStock(f) {
+  let n = 0;
+  for (const a of C.ANIMAL_MILK) n += (f.inv.products && f.inv.products[a]) | 0;
+  return n;
+}
+export function eggStock(f) { return (f.inv.products && f.inv.products[C.ANIMAL_EGG]) | 0; }
+function takeMilk(f, n) {
+  for (const a of C.ANIMAL_MILK) {
+    const have = (f.inv.products[a] | 0);
+    const take = Math.min(have, n);
+    f.inv.products[a] = have - take; n -= take;
+    if (n <= 0) return;
+  }
+}
+
 export function resolveFruitProduct(f, shared, productId) {
   const p = C.fruitProduct(productId); if (!p) return { ok: false };
-  f.inv = f.inv || {}; f.inv.fruits = f.inv.fruits || {}; f.inv.products = f.inv.products || {};
+  f.inv = f.inv || {}; f.inv.fruits = f.inv.fruits || {}; f.inv.fruitProducts = f.inv.fruitProducts || {};
   const c = fruitProductCost(p);
   if ((f.inv.fruits[p.fruit] | 0) < c.fruit) return { ok: false, toast: "productNoFruit" };
   if (c.sugar && (shared.sugar | 0) < c.sugar) return { ok: false, toast: "productNoSugar" };
   if (c.flour && (shared.flour | 0) < c.flour) return { ok: false, toast: "productNoFlour" };
-  if (c.milk && (f.inv.milk | 0) < c.milk) return { ok: false, toast: "productNoMilk" };
-  if (c.egg && (f.inv.egg | 0) < c.egg) return { ok: false, toast: "productNoEgg" };
+  /* ⚠️ LE LAIT ET LES ŒUFS VIENNENT DE `f.inv.products`, LE TABLEAU DES
+     PRODUITS ANIMAUX. La première écriture lisait `f.inv.milk` / `f.inv.egg`,
+     qui n'existent pas : les deux yaourts et la tarte étaient impossibles à
+     préparer, quoi qu'on ait dans son étable. */
+  if (c.milk && milkStock(f) < c.milk) return { ok: false, toast: "productNoMilk" };
+  if (c.egg && eggStock(f) < c.egg) return { ok: false, toast: "productNoEgg" };
   f.inv.fruits[p.fruit] -= c.fruit;
   if (c.sugar) shared.sugar = (shared.sugar | 0) - c.sugar;
   if (c.flour) shared.flour = (shared.flour | 0) - c.flour;
-  if (c.milk) f.inv.milk = (f.inv.milk | 0) - c.milk;
-  if (c.egg) f.inv.egg = (f.inv.egg | 0) - c.egg;
-  f.inv.products[p.id] = (f.inv.products[p.id] | 0) + 1;
+  if (c.milk) takeMilk(f, c.milk);
+  if (c.egg) f.inv.products[C.ANIMAL_EGG] = eggStock(f) - c.egg;
+  f.inv.fruitProducts[p.id] = (f.inv.fruitProducts[p.id] | 0) + 1;
   return { ok: true, productId: p.id };
 }
 export function resolveSellFruitProduct(f, shared, productId) {
   const p = C.fruitProduct(productId); if (!p) return { ok: false };
-  f.inv = f.inv || {}; f.inv.products = f.inv.products || {};
-  if ((f.inv.products[p.id] | 0) <= 0) return { ok: false };
-  f.inv.products[p.id] -= 1;
+  f.inv = f.inv || {}; f.inv.fruitProducts = f.inv.fruitProducts || {};
+  if ((f.inv.fruitProducts[p.id] | 0) <= 0) return { ok: false };
+  f.inv.fruitProducts[p.id] -= 1;
   shared.money += p.sell;
   shared.totalEarned = (shared.totalEarned || 0) + p.sell;
   return { ok: true, gain: p.sell };

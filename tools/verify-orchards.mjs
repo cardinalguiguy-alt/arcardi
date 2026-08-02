@@ -148,7 +148,58 @@ for (let k = 0; k < C.ORCHARDS.length; k++) {
 }
 
 /* --------------------------------------------------------------------------
-   4. LES PRODUITS : transformer doit TOUJOURS rapporter plus que vendre brut.
+   4. ⚠️ LES DONNÉES NEUVES SURVIVENT-ELLES À `normalizeFarmer` ?
+   --------------------------------------------------------------------------
+   CE CONTRÔLE EXISTE À CAUSE D'UN DÉFAUT RÉEL DU 398, trouvé en auditant, pas
+   en écrivant. La première version rangeait les confitures dans
+   `f.inv.products` — un nom déjà pris par les produits ANIMAUX, qui est un
+   TABLEAU et que `normalizeFarmer` repasse par `padArray` à chaque
+   normalisation. Les confitures étaient donc effacées **au premier
+   rechargement de la page**. On aurait fabriqué des pots qui disparaissent.
+
+   La leçon est celle du zip 387, un étage plus haut que les identifiants
+   d'objets : deux choses différentes ne peuvent pas porter le même nom. Et
+   comme un nom d'inventaire ne se compare pas d'un bout à l'autre d'un
+   fichier, on ne le relit pas — on le MESURE, en faisant passer un fermier
+   par la normalisation et en regardant ce qui reste.
+   -------------------------------------------------------------------------- */
+{
+  const f = {
+    inv: {
+      saplings: { lemon: 2, blueberry: 1 },
+      fruits: { lemon: 7, strawberry: 3 },
+      fruitProducts: { jam_blueberry: 2, tart_lemon: 1 },
+      products: [4, 0, 0, 0, 6],          // 4 œufs, 6 laits de vache
+    },
+    pets: [{ id: "cat_black", at: 1, out: true, nick: "Réglisse" }],
+  };
+  E.normalizeFarmer(f);
+  ok("⚠️ les plants survivent à normalizeFarmer", (f.inv.saplings || {}).lemon === 2, JSON.stringify(f.inv.saplings));
+  ok("⚠️ les fruits survivent à normalizeFarmer", (f.inv.fruits || {}).lemon === 7, JSON.stringify(f.inv.fruits));
+  ok("⚠️ les produits aux fruits survivent à normalizeFarmer",
+    (f.inv.fruitProducts || {}).jam_blueberry === 2, JSON.stringify(f.inv.fruitProducts));
+  ok("... et les produits ANIMAUX restent un tableau intact",
+    Array.isArray(f.inv.products) && f.inv.products[0] === 4 && f.inv.products[4] === 6, JSON.stringify(f.inv.products));
+  ok("⚠️ le nom d'un familier survit à normalizeFarmer", f.pets[0].nick === "Réglisse", f.pets[0].nick);
+  ok("E.petLabel rend le surnom, pas l'espèce", E.petLabel(f.pets[0], false) === "Réglisse");
+  ok("... et retombe sur l'espèce quand il n'y a pas de surnom",
+    E.petLabel({ id: "cat_black" }, false) === C.petName("cat_black", false));
+
+  /* Et la recette lit bien le LAIT et les ŒUFS là où ils sont réellement
+     rangés — c'est-à-dire dans le tableau des produits animaux. La première
+     écriture lisait `f.inv.milk`, toujours indéfini : les deux yaourts et la
+     tarte étaient impossibles à préparer, quoi qu'on ait dans son étable. */
+  ok("le lait est compté depuis les produits animaux (vache + chèvre)", E.milkStock(f) === 6, `${E.milkStock(f)} laits`);
+  ok("les œufs aussi", E.eggStock(f) === 4, `${E.eggStock(f)} œufs`);
+  const shared = { money: 0, totalEarned: 0, sugar: 10, flour: 10 };
+  f.inv.fruits.strawberry = 9;
+  const mk = E.resolveFruitProduct(f, shared, "yog_strawberry");
+  ok("⚠️ on peut RÉELLEMENT préparer un yaourt avec le lait de son étable", mk.ok, mk.toast || "");
+  ok("... et le lait a bien été prélevé", E.milkStock(f) === 4, `${E.milkStock(f)} laits restants`);
+}
+
+/* --------------------------------------------------------------------------
+   5. LES PRODUITS : transformer doit TOUJOURS rapporter plus que vendre brut.
    -------------------------------------------------------------------------- */
 console.log("");
 for (const p of C.FRUIT_PRODUCTS) {
