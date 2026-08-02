@@ -589,6 +589,150 @@ const Maze = (function () {
      taux de rejet — s'il monte, c'est que MAZE_MIN_PATH est devenu trop
      ambitieux pour GRID, et c'est le genre de réglage qui pourrit en silence.
      ======================================================================= */
+  /* =======================================================================
+     ZIP 397 — LA CARTE LUISANTE, ACCROCHÉE À UN MUR.
+     -----------------------------------------------------------------------
+     Guillaume : « avoir un bonus qui permet de voir le plan du maze (quand on
+     trouve une carte luisante accrochée au mur) ».
+
+     TROIS CONTRAINTES, et chacune vient d'un raisonnement de jeu, pas de code :
+
+       1. ELLE EST SUR UN MUR, donc il faut une cellule qui ait une FACE
+          FERMÉE. On rend la direction de cette face : sans elle, world.js
+          devrait la redécouvrir, c'est-à-dire redécrire ce que le générateur
+          savait déjà — et deux descriptions divergent (leçon du 387) ;
+       2. ELLE EST À PROFONDEUR MOYENNE (MAP_DEPTH_MIN..MAX). Trop tôt, le
+          labyrinthe n'a jamais existé ; trop tard, on a fini de se perdre et
+          elle ne sert plus à rien. La fenêtre est le bonus ;
+       3. ELLE N'EST PAS SUR LE CHEMIN LE PLUS COURT. Un bonus posé sur la
+          route qu'on prend de toute façon n'est pas une trouvaille, c'est une
+          distribution. On préfère donc, à profondeur égale, une cellule qui
+          n'est pas sur `m.path`.
+
+     Repli : si aucune cellule ne remplit tout, on relâche dans l'ordre 3, 2,
+     1 — un jeu où le bonus n'existe pas est pire qu'un bonus mal placé.
+     ======================================================================= */
+  function plantMap(cfg, m, rand, blocked) {
+    const { G, idx, linked } = m;
+    const onPath = new Set(m.path.map(([x, y]) => idx(x, y)));
+    const tiers = [[], [], []];
+    for (let y = 0; y < G; y++) for (let x = 0; x < G; x++) {
+      const j = idx(x, y);
+      if (!m.cells[j] || blocked.has(j)) continue;
+      if (m.rotunda && x >= m.rotunda.x && x < m.rotunda.x + m.rotunda.w &&
+          y >= m.rotunda.y && y < m.rotunda.y + m.rotunda.h) continue;
+      const d = m.dEntry[j];
+      if (d < 0) continue;
+      // une face fermée pour l'accrocher, et de préférence pas vers l'extérieur
+      const faces = [];
+      for (const dir of DIRS) {
+        if (linked(x, y, dir)) continue;
+        const nx = x + DX[dir], ny = y + DY[dir];
+        if (nx < 0 || ny < 0 || nx >= G || ny >= G) continue;
+        faces.push(dir);
+      }
+      if (!faces.length) continue;
+      const dir = faces[(rand() * faces.length) | 0];
+      const inWindow = d >= cfg.MAP_DEPTH_MIN && d <= cfg.MAP_DEPTH_MAX;
+      const off = !onPath.has(j);
+      tiers[inWindow && off ? 0 : inWindow ? 1 : 2].push({ x, y, dir, depth: d });
+    }
+    for (const t of tiers) if (t.length) return t[(rand() * t.length) | 0];
+    return null;
+  }
+
+  /* =======================================================================
+     ZIP 397 — LES MARQUES DE CRAIE. « Naviguer de manière absolument
+     évidente », sans donner le plan.
+     -----------------------------------------------------------------------
+     Trois espèces, et elles ne disent pas la même chose :
+
+       FLÈCHE — posée sur un CARREFOUR du chemin de la sortie, elle pointe vers
+         la cellule suivante de ce chemin. C'est le seul indice qui donne une
+         DIRECTION, et il n'est posé que là où il y a un choix à faire : sur un
+         couloir sans embranchement, il n'apprendrait rien et il salirait le
+         mur ;
+       CROIX — devant un trou. Elle ne dit pas « danger » dans l'absolu, elle
+         dit « quelqu'un est tombé ici ». C'est le seul indice qui parle du
+         passé, et c'est ce qui fait du dédale un lieu où d'autres sont venus ;
+       MAIN — quand un brasier est à une cellule. Le feu est la ressource
+         vitale du jeu et il est INVISIBLE derrière un mur : une main tendue au
+         bon moment vaut mieux qu'un halo qu'on ne verra qu'une fois arrivé.
+
+     ⚠️ ELLES SONT DU DÉCOR PUR. Aucune n'entre dans rules.js, aucune n'a
+     d'effet, aucune ne peut mentir sur l'état du jeu — elles décrivent la
+     TOPOLOGIE, qui ne change pas en cours de partie. C'est ce qui autorise à
+     les calculer une fois ici et à ne plus jamais y penser.
+     ======================================================================= */
+  function markChalk(cfg, m, rand, holes, torches) {
+    const { G, idx, linked } = m;
+    const out = [];
+    const used = new Set();
+    const face = (x, y) => {
+      // une face fermée au hasard, pour y coller la marque
+      const f = [];
+      for (const dir of DIRS) {
+        if (linked(x, y, dir)) continue;
+        const nx = x + DX[dir], ny = y + DY[dir];
+        if (nx < 0 || ny < 0 || nx >= G || ny >= G) continue;
+        f.push(dir);
+      }
+      return f.length ? f[(rand() * f.length) | 0] : -1;
+    };
+
+    // --- FLÈCHES aux carrefours du chemin
+    let placed = 0;
+    for (let i = 1; i < m.path.length - 1 && placed < cfg.CHALK_ARROWS; i++) {
+      const [x, y] = m.path[i];
+      const j = idx(x, y);
+      if (used.has(j)) continue;
+      let deg = 0;
+      for (const dir of DIRS) if (linked(x, y, dir)) deg++;
+      if (deg < 3) continue;                       // pas un carrefour : rien à dire
+      const f = face(x, y);
+      if (f < 0) continue;
+      const [ax, ay] = m.path[i + 1];
+      // le cap vers lequel la flèche pointe, en radians monde (ang = 0 → -Z)
+      const to = Math.atan2(-(ax - x), -(ay - y));
+      used.add(j);
+      out.push({ x, y, face: f, kind: 0, to });
+      placed++;
+    }
+    // --- CROIX devant les trous
+    let cross = 0;
+    for (const g of holes.gaps) {
+      if (cross >= cfg.CHALK_CROSSES) break;
+      for (const dir of DIRS) {
+        const nx = g.x + DX[dir], ny = g.y + DY[dir];
+        if (nx < 0 || ny < 0 || nx >= G || ny >= G) continue;
+        const j = idx(nx, ny);
+        if (!m.cells[j] || used.has(j)) continue;
+        const f = face(nx, ny);
+        if (f < 0) continue;
+        used.add(j);
+        out.push({ x: nx, y: ny, face: f, kind: 1, to: 0 });
+        cross++; break;
+      }
+    }
+    // --- MAINS vers les brasiers
+    let hands = 0;
+    for (const t of torches) {
+      if (hands >= cfg.CHALK_HANDS) break;
+      for (const dir of DIRS) {
+        const nx = t.x + DX[dir], ny = t.y + DY[dir];
+        if (nx < 0 || ny < 0 || nx >= G || ny >= G) continue;
+        const j = idx(nx, ny);
+        if (!m.cells[j] || used.has(j) || !linked(nx, ny, OPP[dir])) continue;
+        const f = face(nx, ny);
+        if (f < 0) continue;
+        used.add(j);
+        out.push({ x: nx, y: ny, face: f, kind: 3, to: Math.atan2(-(t.x - nx), -(t.y - ny)) });
+        hands++; break;
+      }
+    }
+    return out;
+  }
+
   function generate(cfg, seed) {
     let m = null, attempts = 0, s = (seed >>> 0) || 1;
     /* La graine est rebattue par un congruentiel linéaire à chaque rejet,
@@ -658,11 +802,28 @@ const Maze = (function () {
         shards.push({ x: spots[i][0], y: spots[i][1] });
     }
 
+    /* ZIP 397 — la carte, l'arbalète, les carreaux, la craie.
+       ⚠️ L'ARBALÈTE EST POSÉE PLUS LOIN QUE L'ÉPÉE (BOW_DEPTH_MIN > la
+       profondeur de l'épée), et ce n'est pas décoratif : trouver la seconde
+       arme AVANT la première annulerait tout le propos du parvis — on
+       commencerait armé à distance, donc sans jamais avoir été vulnérable, et
+       le premier tiers du jeu perdrait sa tension d'un coup. */
+    const bowDepth = Math.max(cfg.BOW_DEPTH_MIN, swordDepth + 3);
+    const bowList = scatter(cfg, m, rand, holes.blocked, 1, bowDepth);
+    const bow = bowList.length ? bowList[0] : (scatter(cfg, m, rand, holes.blocked, 1, swordDepth + 1)[0] || null);
+    const boltPacks = scatter(cfg, m, rand, holes.blocked, cfg.BOLT_PICKUPS, swordDepth + 1);
+    const mapItem = plantMap(cfg, m, rand, holes.blocked);
+    const chalk = markChalk(cfg, m, rand, holes, torches);
+
     m.gaps = holes.gaps;
     m.cracks = holes.cracks;
     m.blocked = holes.blocked;             // les GAP seuls bloquent dès le départ
     m.torches = torches;
     m.sword = sword;
+    m.bow = bow;
+    m.boltPacks = boltPacks;
+    m.mapItem = mapItem;
+    m.chalk = chalk;
     m.roamers = roamers;
     m.shards = shards;
     m.potions = potions;

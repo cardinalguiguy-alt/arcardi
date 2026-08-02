@@ -595,6 +595,16 @@ export function applyOverrides(world, saved) {
     const [i, cane, nextAt] = row;
     world.sucreries.set(i, { cane: cane || 0, nextAt: nextAt || 0 });
   }
+  /* ZIP 398 — LES VERGERS. Miroir EXACT de world.mills / world.sucreries
+     ci-dessus : même Map, même sérialisation, même chemin réseau. C'est la
+     règle du projet — un chemin d'accès à un état partagé se COPIE d'un accès
+     existant du même fichier, jamais de mémoire (leçon des zips 385/387). */
+  world.orchards = world.orchards || new Map();
+  world.orchards.clear();
+  if (saved.orchards) for (const row of saved.orchards) {
+    const [i, k, plantedAt, nextAt, ripe] = row;
+    world.orchards.set(i, { k: k | 0, plantedAt: plantedAt || 0, nextAt: nextAt || 0, ripe: ripe | 0 });
+  }
   return world;
 }
 
@@ -610,6 +620,18 @@ export function serializeCrops(world) {
 // posé (wheat:0, nextAt:0) est recréé avec ces valeurs par défaut au besoin
 // (voir resolveAct cas "millDeposit"/millTick, qui utilisent `world.mills.get(i)
 // || { wheat: 0, nextAt: 0 }`).
+export function serializeOrchards(world) {
+  const out = [];
+  // ⚠️ On écrit TOUS les vergers, contrairement aux moulins qui ne sont écrits
+  // qu'avec un état non trivial. La raison est de fond : un moulin vide est
+  // reconstructible depuis `world.objects` (c'est un bâtiment posé, sans
+  // mémoire) ; un verger, lui, PORTE son espèce et sa date de plantation. Un
+  // verger « par défaut » n'existe pas — on ne saurait pas s'il s'agit d'un
+  // citronnier ou d'un fraisier, ni depuis quand il pousse.
+  for (const [i, o] of (world.orchards || new Map())) out.push([i, o.k | 0, o.plantedAt || 0, o.nextAt || 0, o.ripe | 0]);
+  return out;
+}
+
 export function serializeMills(world) {
   const out = [];
   for (const [i, ms] of world.mills) if ((ms.wheat || 0) > 0 || (ms.nextAt || 0) > 0) out.push([i, ms.wheat || 0, ms.nextAt || 0]);
@@ -2167,6 +2189,24 @@ export function resolveBuy(f, money, m) {
     const cost = C.CROPS[st].seedCost * n;
     if (money < cost) { res.toast = "noGold"; return res; }
     res.moneyDelta = -cost; f.inv.seeds[st] += n; res.invChanged = true;
+  } else if (m.item === "sapling") {
+    /* ZIP 398 — LE PLANT DE VERGER. Même porte que les graines : la boutique
+       ne connaît qu'un catalogue et un prix. La différence avec une graine est
+       tout entière dans ce qui se passe APRÈS la plantation, pas à l'achat. */
+    /* ⚠️ LE CHAMP S'APPELLE `sap`, ET SÛREMENT PAS `kind` : `kind` est déjà le
+       DISCRIMINANT de toute requête du jeu ("buy", "act", "petWalk"…). Lire
+       `m.kind` ici aurait rendu « buy », donc aucune espèce n'aurait jamais
+       été trouvée, et l'achat aurait échoué en silence. Le genre de collision
+       de noms qu'on ne voit qu'à l'exécution. */
+    const k = C.ORCHARDS.findIndex(o => o.id === m.sap);
+    if (k < 0) return res;
+    const n = Math.max(1, Math.min(20, (m.n | 0) || 1));
+    const cost = C.ORCHARDS[k].saplingCost * n;
+    if (money < cost) { res.toast = "noGold"; return res; }
+    res.moneyDelta = -cost;
+    f.inv.saplings = f.inv.saplings || {};
+    f.inv.saplings[m.sap] = (f.inv.saplings[m.sap] | 0) + n;
+    res.invChanged = true;
   } else if (m.item === "food") {
     if (money < C.FOOD_COST) { res.toast = "noGold"; return res; }
     res.moneyDelta = -C.FOOD_COST; f.inv.food++; res.invChanged = true;
@@ -2641,7 +2681,7 @@ export function blockedTile(world, x, y, now = Date.now()) {
   const g = world.ground[i], o = world.objects[i];
   if (g === C.G_WATER || g === C.G_BRIDGE_SITE || g === C.G_BRIDGE_CLOSED || g === C.G_BRIDGE_STONE_CLOSED) return true;
   if (o === C.O_LAMP || o === C.O_MILL || o === C.O_SUCRERIE) return buildReady(world.objHp.get(i), now);
-  if (o === C.O_TREE || o === C.O_TREE2 || o === C.O_ROCK || o === C.O_HOUSE || o === C.O_SHOP || o === C.O_BIN || o === C.O_STUMP || o === C.O_WELL || o === C.O_FENCE || o === C.O_FENCE_H || o === C.O_FENCE_V || o === C.O_WALL || o === C.O_BERRY_BUSH) return true;
+  if (o === C.O_TREE || o === C.O_TREE2 || o === C.O_ROCK || o === C.O_HOUSE || o === C.O_SHOP || o === C.O_BIN || o === C.O_STUMP || o === C.O_WELL || o === C.O_FENCE || o === C.O_FENCE_H || o === C.O_FENCE_V || o === C.O_WALL || o === C.O_BERRY_BUSH || o === C.O_ORCHARD) return true;
   return false;
 }
 
@@ -2660,7 +2700,7 @@ export function blockedTileMounted(world, x, y, now = Date.now()) {
   const i = idx(fx, fy);
   const o = world.objects[i];
   if (o === C.O_LAMP || o === C.O_MILL || o === C.O_SUCRERIE) return buildReady(world.objHp.get(i), now);
-  if (o === C.O_TREE || o === C.O_TREE2 || o === C.O_ROCK || o === C.O_HOUSE || o === C.O_SHOP || o === C.O_BIN || o === C.O_STUMP || o === C.O_WELL || o === C.O_FENCE || o === C.O_FENCE_H || o === C.O_FENCE_V || o === C.O_WALL || o === C.O_BERRY_BUSH) return true;
+  if (o === C.O_TREE || o === C.O_TREE2 || o === C.O_ROCK || o === C.O_HOUSE || o === C.O_SHOP || o === C.O_BIN || o === C.O_STUMP || o === C.O_WELL || o === C.O_FENCE || o === C.O_FENCE_H || o === C.O_FENCE_V || o === C.O_WALL || o === C.O_BERRY_BUSH || o === C.O_ORCHARD) return true;
   return false;
 }
 
@@ -4685,4 +4725,222 @@ export function balloonPathPoint(seed, t) {
   const x = u * u * u * pts[0].x + 3 * u * u * tt * pts[1].x + 3 * u * tt * tt * pts[2].x + tt * tt * tt * pts[3].x;
   const y = u * u * u * pts[0].y + 3 * u * u * tt * pts[1].y + 3 * u * tt * tt * pts[2].y + tt * tt * tt * pts[3].y;
   return { x, y };
+}
+
+/* ============================================================================
+   ZIP 398 — LES VERGERS : POUSSE, CUEILLETTE, ABATTAGE. Tout est PUR.
+   ----------------------------------------------------------------------------
+   Aucune de ces fonctions ne touche au DOM, au rendu ni au réseau : elles
+   prennent un état, elles en rendent un autre. C'est ce qui permet à
+   `tools/verify-orchards.mjs` de faire tourner un verger sur plusieurs jours
+   simulés, sans navigateur — et donc de MESURER la rentabilité au lieu de la
+   supposer. Le zip 393 a montré ce que vaut un réglage supposé.
+   ========================================================================== */
+
+/* Le stade visible d'un verger : 0 = plant, 1 = jeune, 2 = adulte, 3 = en
+   fruits. Fonction PURE de l'état et de l'instant, lue par le rendu ET par les
+   contrôles — personne ne peut donc dessiner un arbre chargé de fruits qui n'en
+   porterait pas. C'est le même arbitrage que `Rules.groundY` au labyrinthe. */
+export function orchardStage(o, now) {
+  if (!o) return 0;
+  const spec = C.ORCHARDS[o.k | 0]; if (!spec) return 0;
+  if ((o.ripe | 0) > 0) return 3;
+  const age = Math.max(0, (now || Date.now()) - (o.plantedAt || 0));
+  if (age >= spec.matureMs) return 2;
+  return age >= spec.matureMs * 0.45 ? 1 : 0;
+}
+export function orchardMature(o, now) {
+  const spec = C.ORCHARDS[(o && o.k) | 0]; if (!spec) return false;
+  return Math.max(0, (now || Date.now()) - ((o && o.plantedAt) || 0)) >= spec.matureMs;
+}
+export function orchardInSeason(o, season) {
+  const spec = C.ORCHARDS[(o && o.k) | 0]; if (!spec) return false;
+  return spec.seasons.includes(season || seasonOf().key);
+}
+
+/* LE TICK. Appelé par l'hôte, comme millTick. Rend `true` quand l'état a changé
+   — donc quand il faut diffuser et persister. Un tick qui diffuserait à chaque
+   passage inonderait le réseau pour rien, et le projet a déjà payé ça (zip 264,
+   « la fuite realtime »).
+
+   ⚠️ HORS SAISON, L'HORLOGE NE COURT PAS : `nextAt` est REPOUSSÉ, pas consommé.
+   Sans cette ligne, un myrtillier passerait l'hiver à accumuler des échéances
+   et rendrait six récoltes d'un coup au printemps — ce qui viderait de tout
+   sens la saisonnalité qu'on vient d'écrire, et transformerait l'attente en
+   simple retard. */
+export function orchardTick(o, now, season) {
+  const spec = C.ORCHARDS[(o && o.k) | 0]; if (!spec) return false;
+  if (!orchardMature(o, now)) return false;
+  if ((o.ripe | 0) > 0) return false;                  // déjà mûr : on attend la cueillette
+  if (!orchardInSeason(o, season)) { o.nextAt = now + spec.cycleMs; return false; }
+  if (!o.nextAt) { o.nextAt = now + spec.cycleMs; return true; }
+  if (now < o.nextAt) return false;
+  const rnd = balloonRnd(((o.plantedAt | 0) ^ (o.nextAt | 0)) >>> 0);
+  o.ripe = spec.yieldMin + Math.floor(rnd() * (spec.yieldMax - spec.yieldMin + 1));
+  o.nextAt = 0;
+  return true;
+}
+
+/* PLANTER. Le plant vient de `f.inv.saplings[id]`, acheté à la boutique. La
+   case doit être libre et cultivable — mêmes conditions qu'un moulin, lues par
+   les mêmes champs. */
+export function resolvePlantOrchard(f, world, x, y, kindIdx) {
+  const spec = C.ORCHARDS[kindIdx | 0]; if (!spec) return { ok: false };
+  if (x < 0 || y < 0 || x >= C.MAP_W || y >= C.MAP_H) return { ok: false };
+  const i = y * C.MAP_W + x;
+  if (world.objects[i] !== C.O_NONE) return { ok: false, toast: "orchardBusy" };
+  if (world.crops && world.crops.has(i)) return { ok: false, toast: "orchardBusy" };
+  const g = world.ground[i];
+  if (g !== C.G_GRASS && g !== C.G_SOIL && g !== C.G_TILLED) return { ok: false, toast: "orchardGround" };
+  world.orchards = world.orchards || new Map();
+  if (world.orchards.size >= C.ORCHARD_MAX) return { ok: false, toast: "orchardMax" };
+  f.inv = f.inv || {};
+  f.inv.saplings = f.inv.saplings || {};
+  if ((f.inv.saplings[spec.id] | 0) <= 0) return { ok: false, toast: "orchardNoSapling" };
+  f.inv.saplings[spec.id] -= 1;
+  world.objects[i] = C.O_ORCHARD;
+  world.objHp.set(i, C.ORCHARD_HP);
+  world.orchards.set(i, { k: kindIdx | 0, plantedAt: Date.now(), nextAt: 0, ripe: 0 });
+  return { ok: true, i, kindIdx: kindIdx | 0 };
+}
+
+/* CUEILLIR. L'ARBRE RESTE — c'est toute la demande. On vide `ripe`, on relance
+   l'horloge, et on rend les fruits.
+   ⚠️ `ripe` est remis à zéro AVANT tout retour réussi : si la fonction était un
+   jour appelée deux fois pour la même image, la seconde trouverait zéro. Ici
+   c'est l'hôte qui exécute, donc il n'y a pas de course — mais une fonction
+   pure ne doit pas dépendre de qui l'appelle pour être juste. */
+export function resolveOrchardPick(f, world, x, y) {
+  if (x < 0 || y < 0 || x >= C.MAP_W || y >= C.MAP_H) return { ok: false };
+  const i = y * C.MAP_W + x;
+  if (world.objects[i] !== C.O_ORCHARD) return { ok: false };
+  const o = world.orchards ? world.orchards.get(i) : null;
+  if (!o) return { ok: false };
+  const spec = C.ORCHARDS[o.k | 0]; if (!spec) return { ok: false };
+  if (!orchardMature(o, Date.now())) return { ok: false, toast: "orchardYoung" };
+  const n = o.ripe | 0;
+  if (n <= 0) return { ok: false, toast: orchardInSeason(o) ? "orchardNotReady" : "orchardOffSeason" };
+  o.ripe = 0;
+  o.nextAt = Date.now() + spec.cycleMs;
+  f.inv = f.inv || {};
+  f.inv.fruits = f.inv.fruits || {};
+  f.inv.fruits[spec.fruit] = (f.inv.fruits[spec.fruit] | 0) + n;
+  return { ok: true, i, n, fruit: spec.fruit };
+}
+
+/* ABATTRE (hache). Rend du bois et EFFACE l'état — un verger abattu ne doit pas
+   laisser d'entrée orpheline dans la Map, sans quoi la case suivante posée là
+   hériterait de son âge et de ses fruits. C'est le genre de fuite qu'on ne
+   découvre qu'en replantant au même endroit, six semaines plus tard. */
+export function resolveOrchardChop(f, world, x, y) {
+  const i = y * C.MAP_W + x;
+  if (world.objects[i] !== C.O_ORCHARD) return { ok: false };
+  const hp = (world.objHp.get(i) | 0) - 1;
+  if (hp > 0) { world.objHp.set(i, hp); return { ok: true, done: false, i }; }
+  world.objects[i] = C.O_NONE;
+  world.objHp.delete(i);
+  if (world.orchards) world.orchards.delete(i);
+  f.inv = f.inv || {};
+  f.inv.wood = (f.inv.wood | 0) + C.ORCHARD_WOOD;
+  return { ok: true, done: true, i, wood: C.ORCHARD_WOOD };
+}
+
+/* VENDRE. À l'unité, ou par BARQUETTE de six (demande de Guillaume). La prime
+   de la barquette est dans les constantes, pas ici : c'est un réglage, pas une
+   règle, et les réglages se lisent au même endroit que tous les autres. */
+export function resolveSellFruit(f, shared, fruitId, punnet) {
+  const spec = C.fruitSpec(fruitId); if (!spec) return { ok: false };
+  f.inv = f.inv || {}; f.inv.fruits = f.inv.fruits || {};
+  const have = f.inv.fruits[fruitId] | 0;
+  const need = punnet ? C.PUNNET_SIZE : 1;
+  if (have < need) return { ok: false, toast: punnet ? "punnetShort" : "actionFailed" };
+  const gain = punnet ? C.punnetPrice(fruitId) : spec.sell;
+  f.inv.fruits[fruitId] = have - need;
+  shared.money += gain;
+  shared.totalEarned = (shared.totalEarned || 0) + gain;
+  return { ok: true, gain, n: need, punnet: !!punnet };
+}
+
+/* ============================================================================
+   ZIP 398 — LES PRODUITS AUX FRUITS (confitures, yaourts, tarte au citron).
+   ----------------------------------------------------------------------------
+   UNE seule fonction pour les six recettes : elles ne diffèrent que par leurs
+   ingrédients, et ces ingrédients sont des DONNÉES (`C.FRUIT_PRODUCTS`). Six
+   fonctions presque identiques auraient divergé au premier réglage — c'est
+   littéralement la leçon du zip 387, et elle vaut pour des recettes autant que
+   pour des géométries.
+   ========================================================================== */
+export function fruitProductCost(p) {
+  return { fruit: p.fruitN | 0, sugar: p.sugar | 0, milk: p.milk | 0, flour: p.flour | 0, egg: p.egg | 0 };
+}
+export function resolveFruitProduct(f, shared, productId) {
+  const p = C.fruitProduct(productId); if (!p) return { ok: false };
+  f.inv = f.inv || {}; f.inv.fruits = f.inv.fruits || {}; f.inv.products = f.inv.products || {};
+  const c = fruitProductCost(p);
+  if ((f.inv.fruits[p.fruit] | 0) < c.fruit) return { ok: false, toast: "productNoFruit" };
+  if (c.sugar && (shared.sugar | 0) < c.sugar) return { ok: false, toast: "productNoSugar" };
+  if (c.flour && (shared.flour | 0) < c.flour) return { ok: false, toast: "productNoFlour" };
+  if (c.milk && (f.inv.milk | 0) < c.milk) return { ok: false, toast: "productNoMilk" };
+  if (c.egg && (f.inv.egg | 0) < c.egg) return { ok: false, toast: "productNoEgg" };
+  f.inv.fruits[p.fruit] -= c.fruit;
+  if (c.sugar) shared.sugar = (shared.sugar | 0) - c.sugar;
+  if (c.flour) shared.flour = (shared.flour | 0) - c.flour;
+  if (c.milk) f.inv.milk = (f.inv.milk | 0) - c.milk;
+  if (c.egg) f.inv.egg = (f.inv.egg | 0) - c.egg;
+  f.inv.products[p.id] = (f.inv.products[p.id] | 0) + 1;
+  return { ok: true, productId: p.id };
+}
+export function resolveSellFruitProduct(f, shared, productId) {
+  const p = C.fruitProduct(productId); if (!p) return { ok: false };
+  f.inv = f.inv || {}; f.inv.products = f.inv.products || {};
+  if ((f.inv.products[p.id] | 0) <= 0) return { ok: false };
+  f.inv.products[p.id] -= 1;
+  shared.money += p.sell;
+  shared.totalEarned = (shared.totalEarned || 0) + p.sell;
+  return { ok: true, gain: p.sell };
+}
+
+/* ============================================================================
+   ZIP 398 — NOMMER UN FAMILIER.
+   ----------------------------------------------------------------------------
+   « Il faut pouvoir nommer chaque animal de compagnie qu'on a. »
+
+   ⚠️ LE NETTOYAGE EST FAIT ICI, PAS DANS LE CHAMP DE SAISIE. Un nom voyage par
+   le réseau, s'affiche au-dessus de la tête du familier chez TOUS les joueurs,
+   et se persiste. Une validation faite dans l'interface ne protège que celui
+   qui la subit — c'est la leçon du zip 385 (« un garde-fou côté client ne
+   protège pas un état qui compte »), et elle s'applique mot pour mot à un champ
+   de texte partagé.
+
+   On remplace les caractères de contrôle et les espaces exotiques (dont les
+   retours à la ligne, qui casseraient l'étiquette dessinée au-dessus du
+   familier), on réduit les blancs multiples, on tronque à `PET_NICK_MAX`. Un
+   nom vide EFFACE le surnom et rend le familier à son nom d'espèce : c'est ce
+   qu'attend quelqu'un qui vide le champ, et ça évite un second bouton. */
+export function sanitizePetNick(raw) {
+  let s = String(raw == null ? "" : raw);
+  /* ⚠️ LES CARACTÈRES SONT ÉCHAPPÉS, PAS COLLÉS. Une classe de caractères
+     contenant de VRAIS caractères de contrôle (dont un retour à la ligne)
+     coupe le littéral d'expression régulière en deux : le fichier ne se
+     charge plus du tout. Trouvé par tools/verify-orchards.mjs, qui importe
+     le moteur — le navigateur, lui, l'aurait signalé à la première partie. */
+  s = s.replace(/[\u0000-\u001f\u007f-\u009f\u00a0\u200b-\u200f\u2028\u2029\u3000]/g, " ");
+  s = s.replace(/\s+/g, " ").trim();
+  return s.slice(0, C.PET_NICK_MAX);
+}
+export function resolveRenamePet(f, index, raw) {
+  f.pets = Array.isArray(f.pets) ? f.pets : [];
+  const p = f.pets[index | 0];
+  if (!p) return { ok: false };
+  const nick = sanitizePetNick(raw);
+  if (nick) p.nick = nick; else delete p.nick;
+  return { ok: true, nick, petId: p.id };
+}
+/* Le libellé d'un familier : son surnom s'il en a un, sinon son espèce. UNE
+   seule description, lue par le sac, par l'étiquette du monde et par les
+   toasts — trois endroits qui auraient sinon écrit trois fois
+   `p.nick || C.petName(...)`, et dont l'un aurait fini par oublier le repli. */
+export function petLabel(p, en) {
+  if (!p) return "";
+  return (p.nick && String(p.nick)) || C.petName(p.id, en);
 }

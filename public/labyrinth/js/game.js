@@ -53,9 +53,17 @@
     UI.show("title", false);
     UI.show("gameover", false);
     UI.show("pause", false);
+    UI.closeMap();
     Input.clear();
     newRun();
     state = "play";
+    /* ⚠️ ZIP 397 — LA CAPTURE DU POINTEUR EST DEMANDÉE ICI, ET NULLE PART
+       AILLEURS OÙ CE NE SERAIT PAS UN CLIC. Les navigateurs n'accordent le
+       pointer lock qu'à la suite d'un geste de l'utilisateur : le clic sur
+       « Entrer » EST ce geste. Le demander dans la boucle de rendu échouerait
+       silencieusement, et le joueur se retrouverait à jouer sans pouvoir
+       tourner — sans que rien ne le lui dise. */
+    Input.grab();
   }
 
   /* ZIP 396 — LE RENONCEMENT. Demande de Guillaume : « comme un abandon sans
@@ -124,6 +132,12 @@
            exactement la saccade qu'on cherche à supprimer. */
         World.snapPrev(st);
         const intent = Input.read();
+        /* ⚠️ LE TANGAGE VA AU RENDU, PAS AU MOTEUR — et c'est ce qui permet
+           aux dix outils de continuer à rejouer exactement le même jeu. Le sol
+           est plat, on ne saute pas, une épée comme un carreau partent à
+           l'horizontale : le tangage ne décide donc de rien. Voir le bloc
+           « vue à la première personne » de config.js. */
+        if (intent.pitchDelta) World.addPitch(intent.pitchDelta, CFG);
         Rules.step(st, DT, intent);
         UI.events(st);
         if (st.status === "won") { finish(true); break; }
@@ -131,13 +145,26 @@
         if (st.status === "dead") { finish(false); break; }
       }
       if (acc > DT * MAX_STEPS) acc = 0;
-      if (Input.takePause()) { state = "pause"; UI.show("pause", true); Input.clear(); }
+      if (Input.takeMap()) UI.toggleMap(st);           // zip 397
+      if (Input.takePause()) {
+        state = "pause"; UI.show("pause", true); Input.clear();
+        /* On REND la souris à la pause. Un menu qu'on ne peut pas cliquer
+           parce que le pointeur est capturé est un piège, et c'est exactement
+           ce qui arrive si on oublie cette ligne. */
+        Input.release();
+      }
       UI.flameWarnings(st);
       UI.hud(st);
     } else {
       last = now;
     }
     if (st) {
+      /* ⚠️ L'ÉCRAN-TITRE RESTE À LA TROISIÈME PERSONNE, et ce n'est pas une
+         nostalgie du 396 : on y voit son fermier, sa tenue envoyée par la
+         ferme, sa torche allumée. En subjectif, l'écran-titre serait une photo
+         de mur. La caméra du 396 est donc conservée entière — un commutateur,
+         pas une suppression. */
+      World.setView(state !== "title");
       if (st.status === "falling") World.fallStep(st, DT);
       /* `alpha` est la fraction de pas déjà écoulée : 0 = on vient de simuler,
          1 = le pas suivant est dû. C'est lui qui rend le mouvement continu. */
@@ -155,6 +182,15 @@
         if (state === "title") UI.show("title", true);
       }
     }
+    /* La navigation est redessinée à chaque IMAGE, pas à chaque pas de
+       simulation : la minicarte tourne avec le regard, et le regard vient de
+       la souris, qui est plus rapide que 30 Hz. Une boussole qui saccade est
+       pire qu'une boussole absente — on cesse de la lire. */
+    if (st) UI.nav(st, state === "play");
+    /* « Cliquez pour jouer » : le seul cas où le joueur doit agir pour
+       récupérer sa souris. On ne le montre PAS sur tactile, où il n'y a pas de
+       pointeur à capturer et où le message n'aurait aucun sens. */
+    UI.lockHint(state === "play" && !Input.locked && !("ontouchstart" in window));
     UI.toastTick(now);
   }
 
@@ -175,6 +211,7 @@
     $("btnResume").addEventListener("click", () => {
       state = "play"; last = performance.now(); acc = 0;
       UI.show("pause", false); Input.clear();
+      Input.grab();                       // même raison qu'au démarrage
     });
     $("btnQuit").addEventListener("click", quit);
     $("btnBack").addEventListener("click", () => {

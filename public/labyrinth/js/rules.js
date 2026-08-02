@@ -360,6 +360,21 @@ const Rules = (function () {
       hearts: cfg.HEARTS,
       invulnT: 0, swingT: 0, cooldownT: 0, hasSword: false,
       hurtFlash: 0, camShake: 0,
+
+      /* ZIP 397 — LA SOURIS, LA CARTE, L'ARBALÈTE.
+         `mouseT` : temps restant pendant lequel on considère que le joueur
+         vise à la souris (voir le recalage). Un seul nombre porte l'état
+         « clavier / souris » au lieu d'un drapeau qu'il faudrait remettre à
+         zéro à la main quelque part, et qu'on oublierait.
+         `hasMap` : la carte luisante décrochée du mur. Tant qu'elle est
+         fausse, la minicarte ne montre QUE st.seen.
+         `bolts` : les carreaux. On commence l'arbalète VIDE de réserve — les
+         BOLTS_START sont dans l'arme quand on la trouve, pas dans les poches
+         au départ, puisqu'on n'a pas d'arme au départ. */
+      mouseT: 0,
+      hasMap: false, mapT: 0,
+      hasBow: false, bolts: 0, boltCd: 0, shots: 0, boltKills: 0,
+      projectiles: [],
       time: 0, score: 0, kills: 0, shardsTaken: 0, torchesUsed: 0,
       seen: new Set(), status: "play", fallT: 0, endCause: null,
       events: [],
@@ -400,6 +415,11 @@ const Rules = (function () {
       shards: m.shards.map(s => ({ x: s.x, y: s.y, taken: false })),
       potions: m.potions.map(p => ({ x: p.x, y: p.y, taken: false })),
       sword: m.sword ? { x: m.sword.x, y: m.sword.y, taken: false } : null,
+      /* ZIP 397. La carte est accrochée à un MUR (d'où `dir`, la face du mur
+         qui la porte) ; l'arbalète et les carreaux sont posés au sol. */
+      mapItem: m.mapItem ? { x: m.mapItem.x, y: m.mapItem.y, dir: m.mapItem.dir, taken: false } : null,
+      bow: m.bow ? { x: m.bow.x, y: m.bow.y, taken: false } : null,
+      boltPacks: (m.boltPacks || []).map(b => ({ x: b.x, y: b.y, taken: false })),
       roamers: m.roamers.map((r, i) => ({
         id: i, x: 0, z: 0, ang: 0, hp: cfg.ROAMER_HP,
         cx: r.x, cy: r.y, homeX: r.homeX, homeY: r.homeY,
@@ -576,6 +596,25 @@ const Rules = (function () {
     else st.turnVel = Math.max(wantTurn, st.turnVel - dTurn);
     st.ang += st.turnVel * dt;
 
+    /* ⚠️ ZIP 397 — LA SOURIS S'AJOUTE ICI, ET ELLE N'EST PAS UNE VITESSE.
+       `turnDelta` est un ANGLE déjà intégré par le périphérique (rad par pixel
+       × pixels parcourus depuis la dernière lecture). Il ne passe donc NI par
+       TURN_ACCEL, NI par TURN_DECEL, NI par le recalage sur le couloir : la
+       main du joueur est l'accélération, et elle est meilleure que la nôtre.
+
+       Le signe est le même que celui des flèches, pour la même raison
+       démontrée au 394 : le vecteur avant vaut (-sin a, -cos a), donc pousser
+       la souris vers la DROITE doit faire DÉCROÎTRE l'angle. Un contrôle de
+       verify-controls.mjs pose la question en français et refuse la formule.
+
+       ⚠️ ET C'EST BIEN LE MOTEUR QUI L'APPLIQUE, pas world.js. Un cap tenu par
+       le rendu et un cap tenu par la simulation finissent par diverger d'une
+       image, et cette image-là est exactement celle où l'on frappe. */
+    if (intent.turnDelta) {
+      st.ang -= intent.turnDelta;
+      st.mouseT = 0.35;    // « la souris vient de parler » : coupe le recalage
+    } else if (st.mouseT > 0) st.mouseT = Math.max(0, st.mouseT - dt);
+
     /* ---- LE RECALAGE SUR LE COULOIR (zip 396) ------------------------
        Seconde moitié de la réponse à « difficile à naviguer pour un simple
        clavier ». Un dédale est à angles droits ; un doigt sur une flèche ne
@@ -594,7 +633,13 @@ const Rules = (function () {
        Et il ne mord que dans une fenêtre de SNAP_WINDOW autour du multiple de
        90° : viser délibérément en diagonale reste possible, ce qui compte le
        jour où une créature arrive par un angle. */
-    if (!intent.turn && Math.abs(st.turnVel) < 0.35 && Math.abs(intent.fwd || 0) > 0) {
+    /* ⚠️ QUATRIÈME CONDITION AU 397 : la souris ne doit pas avoir parlé dans
+       la dernière fraction de seconde. Sans elle, un joueur qui vise un rôdeur
+       en diagonale à la souris se faisait recaler sur l'axe du couloir dès
+       qu'il lâchait la main — c'est-à-dire que le jeu corrigeait une visée
+       délibérée. L'aide au clavier devient une nuisance à la souris ; on la
+       coupe donc, on ne l'adoucit pas. */
+    if (!intent.turn && !st.mouseT && Math.abs(st.turnVel) < 0.35 && Math.abs(intent.fwd || 0) > 0) {
       const q = Math.PI / 2;
       let d = Math.round(st.ang / q) * q - st.ang;
       while (d > Math.PI) d -= Math.PI * 2;
@@ -694,6 +739,38 @@ const Rules = (function () {
       resolveSwing(st);
       st.events.push({ type: "swing" });
     }
+
+    /* ======================================================================
+       ZIP 397 — L'ARBALÈTE. Un carreau part, il VOLE, il touche ou il se
+       plante dans un mur.
+       ----------------------------------------------------------------------
+       ⚠️ IL EST SIMULÉ, PAS RÉSOLU D'UN COUP. Un tir instantané (« hitscan »)
+       aurait été trois fois plus court à écrire et il aurait manqué le seul
+       effet recherché : Guillaume reprochait au 396 qu'« on sait pas quand on
+       gagne, si on touche ». Un projectile qu'on VOIT partir, traverser un
+       couloir et se planter répond à ça sans un mot d'interface. C'est aussi
+       ce qui rend l'arme intéressante : elle a un temps de vol, donc une
+       créature qui bouge peut l'esquiver, donc tirer est une décision.
+
+       Le pas d'intégration est SOUS-DIVISÉ : à 62 u/s et 30 Hz, un carreau
+       avance de 2,07 unités par image, alors qu'un rôdeur fait 2,0 de large.
+       Sans sous-division, il le traverserait une fois sur deux sans rien
+       toucher — le défaut classique du projectile rapide, et celui qu'on ne
+       voit jamais en relisant parce que chaque ligne est juste.
+       ====================================================================== */
+    if (st.boltCd > 0) st.boltCd -= dt;
+    if (intent.shoot && st.hasBow && st.bolts > 0 && st.boltCd <= 0) {
+      st.bolts--; st.shots++;
+      st.boltCd = cfg.BOLT_COOLDOWN_MS / 1000;
+      st.projectiles.push({
+        x: st.px - Math.sin(st.ang) * 1.2, z: st.pz - Math.cos(st.ang) * 1.2,
+        vx: -Math.sin(st.ang) * cfg.BOLT_SPEED, vz: -Math.cos(st.ang) * cfg.BOLT_SPEED,
+        ang: st.ang, t: 0, dead: false,
+      });
+      st.events.push({ type: "shoot" });
+    }
+    stepProjectiles(st, dt);
+
     for (const r of st.roamers) {
       if (r.hitFlash > 0) r.hitFlash = Math.max(0, r.hitFlash - dt * 4);
       if (r.aimT > 0) r.aimT = Math.max(0, r.aimT - dt);
@@ -707,6 +784,11 @@ const Rules = (function () {
     updateRoamers(st, dt);
     updateStalker(st, dt, running);
 
+    /* Le plan s'ouvre SEUL pendant trois secondes au ramassage. Un bonus
+       qu'on trouve et dont il faut ensuite deviner la touche n'est pas un
+       bonus : c'est une occasion manquée. On le montre une fois, ce qui
+       apprend au passage qu'il existe une touche pour le rouvrir. */
+    if (st.mapT > 0) st.mapT = Math.max(0, st.mapT - dt);
     if (st.invulnT > 0) st.invulnT -= dt;
     if (st.hurtFlash > 0) st.hurtFlash = Math.max(0, st.hurtFlash - dt * 2.5);
     if (st.camShake > 0) st.camShake = Math.max(0, st.camShake - dt * 2.2);
@@ -875,6 +957,80 @@ const Rules = (function () {
     }
   }
 
+  /* -----------------------------------------------------------------------
+     LES CARREAUX EN VOL (zip 397).
+     -----------------------------------------------------------------------
+     Trois façons de finir, et chacune produit un effet visible :
+       * dans une créature  → dégâts, recul, gerbe d'éclats au point d'impact ;
+       * dans un mur        → il se plante, une petite poussière ;
+       * au bout de sa vie  → il tombe et s'efface.
+
+     ⚠️ LA COLLISION AVEC LES MURS PASSE PAR pushOut(), c'est-à-dire par LA
+     MÊME liste de boîtes qui arrête le joueur. Un carreau qui traverserait un
+     mur que le joueur ne peut pas traverser est le genre d'incohérence qui
+     détruit la confiance dans un décor, et la seule façon sûre de l'éviter est
+     de ne pas avoir deux descriptions de « ce qui est solide » (leçon du 387).
+     -------------------------------------------------------------------- */
+  function stepProjectiles(st, dt) {
+    const cfg = st.cfg;
+    if (!st.projectiles.length) return;
+    // 4 sous-pas : 0,52 unité par sous-pas, très en dessous du rayon d'un rôdeur
+    const SUB = 4, sdt = dt / SUB;
+    for (let i = st.projectiles.length - 1; i >= 0; i--) {
+      const p = st.projectiles[i];
+      for (let s = 0; s < SUB && !p.dead; s++) {
+        p.x += p.vx * sdt; p.z += p.vz * sdt;
+        p.t += sdt;
+
+        // --- un mur ?
+        const near = st.idxB.near(p.x, p.z);
+        const [ox, oz] = pushOut(p.x, p.z, cfg.BOLT_R, near);
+        if (Math.abs(ox - p.x) > 0.001 || Math.abs(oz - p.z) > 0.001) {
+          p.dead = true;
+          st.fx.push({ kind: "dust", x: ox, z: oz, y: cfg.EYE_H * 0.75, t: 0, ttl: 0.5 });
+          st.events.push({ type: "boltWall" });
+          break;
+        }
+        // --- une créature ? (le traqueur compris : il recule, il ne meurt pas)
+        let hitAny = false;
+        for (const r of st.roamers) {
+          if (r.dead) continue;
+          if (Math.hypot(r.x - p.x, r.z - p.z) > cfg.ROAMER_BODY_R + cfg.BOLT_R) continue;
+          r.hp -= cfg.BOLT_DAMAGE;
+          r.hitFlash = 1;
+          r.staggerT = cfg.ROAMER_STAGGER_MS / 1000;
+          const d = Math.hypot(r.x - st.px, r.z - st.pz) || 1;
+          r.x += ((r.x - st.px) / d) * cfg.SWING_KNOCKBACK * 0.6;
+          r.z += ((r.z - st.pz) / d) * cfg.SWING_KNOCKBACK * 0.6;
+          st.fx.push({ kind: "spark", x: p.x, z: p.z, y: 2.0, t: 0, ttl: 0.42 });
+          if (r.hp <= 0) {
+            r.dead = true; r.deadT = 0;
+            st.kills++; st.boltKills++; st.score += cfg.SCORE_PER_KILL;
+            st.fx.push({ kind: "score", x: r.x, z: r.z, y: 2.4, t: 0, ttl: 1.3 });
+            st.events.push({ type: "kill" });
+          } else st.events.push({ type: "boltHit" });
+          hitAny = true; break;
+        }
+        if (!hitAny && st.stalkerAwake && st.stalker &&
+            Math.hypot(st.stalker.x - p.x, st.stalker.z - p.z) <= cfg.STALK_BODY_R + cfg.BOLT_R) {
+          /* Le traqueur encaisse un carreau EXACTEMENT comme un coup d'épée :
+             il recule, et rien de plus. Le distinguer ici plutôt que dans une
+             branche « arme » est ce qui garantit qu'aucune arme ajoutée un
+             jour ne pourra le tuer par inadvertance — même arbitrage qu'au
+             393 pour l'épée. */
+          st.stalker.staggerT = cfg.BOLT_STALK_STAGGER_MS / 1000;
+          st.stalker.hitFlash = 1;
+          st.fx.push({ kind: "spark", x: p.x, z: p.z, y: 2.4, t: 0, ttl: 0.42 });
+          st.events.push({ type: "boltHit" });
+          hitAny = true;
+        }
+        if (hitAny) { p.dead = true; break; }
+        if (p.t * 1000 >= cfg.BOLT_LIFE_MS) p.dead = true;
+      }
+      if (p.dead) st.projectiles.splice(i, 1);
+    }
+  }
+
   function handlePickups(st, intent) {
     const cfg = st.cfg, m = st.m;
     const [cx, cy] = cellOf(cfg, st.px, st.pz);
@@ -895,6 +1051,33 @@ const Rules = (function () {
     if (st.sword && !st.sword.taken && hit(st.sword)) {
       st.sword.taken = true; st.hasSword = true;
       st.events.push({ type: "sword" });
+    }
+
+    /* ======================================================================
+       ZIP 397 — LA CARTE, L'ARBALÈTE, LES CARREAUX.
+       ----------------------------------------------------------------------
+       ⚠️ LA CARTE SE RAMASSE AU PASSAGE, PAS À LA TOUCHE, et c'est l'inverse
+       du choix fait pour le brasier. La raison est la même, prise par l'autre
+       bout : un brasier se CONSOMME, donc appuyer protège d'un gaspillage ;
+       une carte ne se consomme pas, et un joueur qui passe devant sans
+       comprendre qu'il fallait appuyer aurait raté le seul bonus de navigation
+       du jeu. Quand rater est irréparable, on ne demande pas de geste.
+       ====================================================================== */
+    if (st.mapItem && !st.mapItem.taken && hit(st.mapItem)) {
+      st.mapItem.taken = true; st.hasMap = true;
+      st.mapT = 3.0;                       // le plan s'ouvre tout seul, 3 secondes
+      st.events.push({ type: "map" });
+    }
+    if (st.bow && !st.bow.taken && hit(st.bow)) {
+      st.bow.taken = true; st.hasBow = true;
+      st.bolts += cfg.BOLTS_START;
+      st.events.push({ type: "bow" });
+    }
+    for (const b of st.boltPacks) {
+      if (b.taken || !hit(b)) continue;
+      b.taken = true;
+      st.bolts += cfg.BOLT_PER_PICKUP;
+      st.events.push({ type: "bolts" });
     }
     /* LE BRASIER SE PREND À LA TOUCHE, pas au passage. Deux raisons, et la
        seconde est la vraie : d'abord un rallumage automatique gaspillerait le

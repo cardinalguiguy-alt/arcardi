@@ -844,6 +844,32 @@ const CFG = {
   COL_STALKER:    0x0b0910,
   COL_STALKER_EYE:0xff2a4a,
 
+  /* ======================================================================
+     ZIP 397 — LES HUIT TEINTES QUE LA REFONTE DES TEXTURES A DEMANDÉES
+     ----------------------------------------------------------------------
+     Guillaume : « beaucoup trop d'amateurisme dans les textures des murs et
+     du sol ». En regardant enfin les PNG (tools/render-textures.mjs), la
+     cause principale saute aux yeux : le mur du 396 n'avait que DOUZE niveaux
+     de gris, parce qu'il n'était peint qu'avec les trois teintes de la
+     carrière. Trois teintes ne font pas une matière.
+
+     Ces huit-là ne sont pas des variantes des précédentes : chacune décrit un
+     PHÉNOMÈNE physique qu'on ne peut pas obtenir en mélangeant les autres.
+
+     ⚠️ TOUTES PROPRES AU LABYRINTHE, donc déclarées dans le OWN de
+     tools/verify-palette.mjs. Le défi de fuite n'a ni suie (il n'a pas de
+     torches murales), ni parchemin (il n'a pas de carte), ni craie. Les lui
+     imposer, ce serait faire dériver sa palette pour une raison qui ne le
+     concerne pas — l'inverse exact de ce que ce contrôle protège. */
+  COL_SAND:       0xd9c795,   // usure claire : l'arête polie, le sillon du sol
+  COL_SOOT:       0x1c1712,   // suie, en haut des murs — il y a une torche tous les 3 m
+  COL_OCHRE:      0x7a5a2c,   // coulure ferrugineuse sous un joint qui suinte
+  COL_CHALK:      0xe8e2cf,   // les marques laissées par ceux qui sont passés avant
+  COL_PARCH:      0xd8c79a,   // le vélin de la carte
+  COL_PARCH_DARK: 0xa8905f,
+  COL_PARCH_INK:  0x2d1f10,
+  COL_MAPGLOW:    0x9fd8ff,   // l'encre luisante du plan, et son halo sur le mur
+
   /* Tenue de repli — OUTFITS[0] de fermeConstants.js, comme le défi. En jeu,
      la ferme envoie la vraie tenue du joueur dans vf-lab-init. */
   COL_SHIRT: 0x3f7fd4,
@@ -876,6 +902,152 @@ CFG.MAZE_MIN_PATH = 40;
 CFG.MAZE_MAX_PATH = 64;
 CFG.MAZE_TORCHES = 20;      // brasiers ravivables posés dans tout le dédale
 CFG.TORCH_MAX_GAP = 8;     // ⚠️ garantie dure : jamais plus de N cellules sans brasier sur le chemin
+
+/* =============================================================================
+   ZIP 397 — LA VUE À LA PREMIÈRE PERSONNE
+   -----------------------------------------------------------------------------
+   Guillaume : « Conçois le maze en un first person pov convaincant (…) mais en
+   1st person shooter maintenant (…) ce doit être au niveau des first person
+   shooters existants. »
+
+   La bascule avait été PROPOSÉE au 394 et refusée alors, pour une raison qui
+   était bonne à ce moment-là : ses deux images de référence étaient des vues à
+   la troisième personne. Elle est maintenant demandée explicitement, et elle
+   change beaucoup plus que la position de la caméra.
+
+   ⚠️ CE QUI FAIT QU'UNE VUE SUBJECTIVE EST « CONVAINCANTE », dans l'ordre
+   d'importance mesuré en jouant — et aucun de ces quatre points n'est un
+   réglage de caméra :
+
+     1. LA SOURIS. Une vue subjective au clavier n'existe pas. Le pointeur est
+        capturé (pointer lock), la souris donne le lacet ET le tangage, et le
+        clavier ne fait plus QUE se déplacer — ZQSD/WASD deviennent quatre
+        directions, plus une seule flèche pour tourner quand on n'a pas de
+        souris. C'est le changement qui compte le plus ;
+     2. LE MODÈLE DE VUE (« viewmodel »). Des mains, une torche, une arme,
+        rendus DANS UNE SECONDE PASSE avec leur propre caméra. C'est ce qui
+        empêche l'arme de rentrer dans le mur quand on s'y colle — le défaut
+        le plus reconnaissable d'un FPS bâclé — et ça ne s'obtient d'aucune
+        autre façon ;
+     3. LE BALANCEMENT. La tête monte et descend AVEC LA FOULÉE (donc à la
+        DISTANCE parcourue, exactement comme le cycle de marche du 395), l'arme
+        traîne derrière la rotation, et le pas se sent dans le poignet. Sans
+        ça, on glisse comme un chariot sur des rails ;
+     4. LE RÉTICULE. Il doit dire quand la cible est à portée, sinon on frappe
+        dans le noir — c'est le reproche exact du 396, transposé.
+
+   ⚠️ ET LE TANGAGE N'EXISTE PAS POUR LE MOTEUR. `pitch` vit dans world.js,
+   jamais dans rules.js : le sol du labyrinthe est plat (à la rotonde près), on
+   ne peut ni sauter ni viser en hauteur, et une épée ou un carreau part
+   toujours à l'horizontale. C'est un choix, et il a une conséquence heureuse :
+   les dix outils continuent de rejouer EXACTEMENT le même jeu, parce que rien
+   de ce qui décide n'a bougé. La caméra a changé, la simulation non.
+   ========================================================================== */
+CFG.EYE_H = 3.4;              // hauteur des yeux — un fermier fait ~4 unités
+CFG.FPS_FOV = 78;             /* plus large que les 66° de la 3e personne : en vue
+                                 subjective, un champ étroit donne l'impression de
+                                 regarder par une meurtrière, et surtout il cache
+                                 les embranchements latéraux — ce qui est
+                                 rédhibitoire quand on demande « naviguer de
+                                 manière absolument évidente ». */
+CFG.MOUSE_SENS = 0.0022;      // rad par pixel de souris
+CFG.PITCH_MAX = 0.85;         // rad — on ne se casse pas la nuque
+CFG.PITCH_LERP = 22.0;        // rattrapage du tangage affiché (lissage d'affichage)
+/* LE BALANCEMENT DE MARCHE. `BOB_*` est une amplitude en unités, avancée à la
+   DISTANCE parcourue (st.gait), jamais au temps — même règle qu'au 395, et
+   pour la même raison : au temps, ça patine dès qu'on ralentit. */
+CFG.BOB_V = 0.115;            // montée/descente de la tête par pas
+CFG.BOB_H = 0.075;            // dérive latérale (elle est à la MOITIÉ de la cadence)
+CFG.BOB_ROLL = 0.019;         // roulis de la tête, rad
+CFG.BOB_RUN = 1.7;            // le balancement est amplifié en course
+CFG.STEP_LAND = 0.05;         // petit choc vertical à la pose du pied
+/* LE MODÈLE DE VUE. Rendu par une SECONDE caméra, dans une seconde passe, avec
+   son propre champ (plus étroit : une arme filmée à 78° paraît difforme). */
+CFG.VM_FOV = 55;
+CFG.VM_SWAY = 0.055;          // amplitude du retard de l'arme sur la rotation
+CFG.VM_SWAY_LAG = 7.0;        // vitesse à laquelle elle rattrape
+CFG.VM_BOB = 0.030;
+CFG.VM_LOWER = 0.16;          // l'arme descend quand on court
+
+/* =============================================================================
+   ZIP 397 — LA CARTE LUISANTE, LES INDICES, L'ARBALÈTE
+   -----------------------------------------------------------------------------
+   Trois demandes, dont une explicite : « avoir un bonus qui permet de voir le
+   plan du maze (quand on trouve une carte luisante accrochée au mur) », et
+   « ajoute des indices et armes si tu veux ».
+
+   ⚠️ LA CARTE EST UN OBJET, PAS UNE OPTION. Elle est accrochée à un MUR, à une
+   profondeur moyenne, et elle luit — donc on la voit d'un couloir plus loin,
+   comme l'autel de l'épée. Tant qu'on ne l'a pas, la minicarte ne montre que
+   ce qu'on a VU ; une fois ramassée, elle montre le plan ENTIER, la sortie et
+   la rotonde. C'est exactement la différence entre « je suis perdu » et « je
+   sais où aller mais pas comment » — la seconde est le jeu, la première est
+   une panne.
+
+   ⚠️ LES INDICES SONT DES MARQUES DE CRAIE, laissées par ceux qui sont passés
+   avant. Une FLÈCHE aux carrefours du chemin de la sortie, une CROIX devant un
+   trou, une MAIN quand un brasier est proche. Elles ne sont pas décoratives :
+   sans elles, « naviguer de manière absolument évidente » est impossible dans
+   un dédale de 289 cellules sans plan — et avec un plan, il n'y aurait plus de
+   labyrinthe. La craie est la troisième réponse : elle aide LOCALEMENT, au
+   moment de choisir, sans jamais montrer l'ensemble.
+   ========================================================================== */
+CFG.MAP_DEPTH_MIN = 8;        // profondeur BFS minimale où poser la carte
+CFG.MAP_DEPTH_MAX = 18;       // ... et maximale : trouvée en explorant, pas offerte
+CFG.MAP_GLOW_RANGE = 34.0;    // distance à laquelle son halo se voit
+CFG.CHALK_ARROWS = 14;        // flèches posées aux carrefours du chemin
+CFG.CHALK_CROSSES = 9;        // croix devant les trous
+CFG.CHALK_HANDS = 8;          // mains vers les brasiers
+CFG.CHALK_H = 4.2;            // hauteur des marques sur le mur : à hauteur d'œil
+
+/* L'ARBALÈTE — la seconde arme, et le seul moyen de toucher à distance.
+   ⚠️ ELLE NE REND PAS LE JEU PLUS FACILE, elle le rend plus LISIBLE. Le
+   reproche du 396 (« on sait pas quand on gagne, si on touche ») venait d'un
+   combat entièrement au contact, dans le noir, au clavier. Un carreau qu'on
+   voit partir, voler et se planter dit sans un mot ce qui s'est passé.
+   Les munitions sont RARES et se ramassent : on ne remplace pas l'épée, on
+   ouvre un échange qu'on ne pouvait pas gagner. */
+CFG.BOW_DEPTH_MIN = 10;       // posée plus loin que l'épée : c'est la seconde trouvaille
+CFG.BOLTS_START = 5;
+CFG.BOLT_PICKUPS = 7;         // carreaux posés dans le dédale
+CFG.BOLT_PER_PICKUP = 3;
+CFG.BOLT_SPEED = 62.0;        // unités/s — rapide, mais on le VOIT partir
+CFG.BOLT_DAMAGE = 2;          // un rôdeur a 2 PV : un carreau bien placé le tue
+CFG.BOLT_COOLDOWN_MS = 900;   // le rechargement d'une arbalète est lent, c'est son prix
+CFG.BOLT_LIFE_MS = 1400;
+CFG.BOLT_R = 0.55;            // rayon de collision du carreau
+CFG.BOLT_STALK_STAGGER_MS = 1500;   // sur le traqueur : il recule, il ne meurt pas
+
+/* =============================================================================
+   ZIP 397 — LA RÉSOLUTION DES TEXTURES, ET POURQUOI ELLE EST ICI
+   -----------------------------------------------------------------------------
+   Elle vivait en dur dans world.js (« 128 »), ce qui est exactement la faute
+   que ce fichier existe pour empêcher : un nombre de rendu écrit ailleurs que
+   dans config.js, donc introuvable, donc jamais rejugé. Elle est aussi lue par
+   tools/render-textures.mjs et tools/verify-textures.mjs — trois lecteurs, une
+   seule écriture.
+
+   ⚠️ LE PASSAGE DE 128 À 512 N'EST PAS UN CONFORT, C'EST LA CONDITION DE TOUT
+   LE RESTE. Une tuile couvre une demi-cellule de mur, soit 5,75 unités : à 128
+   px, un bloc de pierre reçoit 30 pixels, et il n'y a physiquement pas la place
+   d'y mettre un chanfrein, un grain et une piqûre. Le mur du 396 n'était pas
+   mal dessiné, il était dessiné TROP PETIT — et c'est pour ça que quatre
+   refontes n'y avaient rien changé.
+
+   Le coût est de ~0,25 s à la construction de la scène, une seule fois,
+   derrière l'écran de chargement du 396. La mémoire vidéo tient : quatre
+   textures de 512² en RGBA, mipmaps comprises, font 5,5 Mo.
+   ========================================================================== */
+CFG.TEX_WALL = 512;
+CFG.TEX_FLOOR = 512;
+/* Une tuile de mur couvre WALL_TILE unités en largeur ET en hauteur. C'est ce
+   qui donne une DENSITÉ DE TEXELS CONSTANTE : world.js calcule la répétition
+   de chaque mur à partir de sa longueur réelle, au lieu d'étirer une tuile sur
+   un mur de 11,5 et de la comprimer sur un mur de 2. Le 396 faisait ça, et
+   c'est pourquoi les blocs n'avaient pas la même taille selon le mur regardé —
+   défaut qu'aucun outil ne voyait et qui saute aux yeux dès qu'on regarde. */
+CFG.WALL_TILE = 5.75;
+CFG.FLOOR_TILE = 11.5;      // une tuile de sol = une cellule pile
 
 /* =============================================================================
    DÉRIVÉS — ne pas régler à la main.

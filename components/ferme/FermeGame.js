@@ -548,6 +548,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const shopOpenRef = useRef(false);
   const binOpenRef = useRef(false);
   const bagOpenRef = useRef(false); // zip 236
+  const [petNaming, setPetNaming] = useState(null); // zip 398 : { index, petId, value } quand on nomme un familier
   const [myPets, setMyPets] = useState([]); // zip 236: my individual pets, mirror of me.pets
   const myPetsRef = useRef([]);     // zip 236: draw-loop mirror of myPets
   // Zip 368 : miroir des seuls familiers EN BALADE (pt.out). C'est cette liste
@@ -840,7 +841,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     try { window.localStorage.setItem("ferme_lastcode", code); } catch (e) { /* ignore */ }
     if (saved && typeof saved.seed === "number") {
       const w = E.generateWorld(saved.seed);
-      E.applyOverrides(w, { groundOv: saved.groundOv, objectOv: saved.objectOv, crops: saved.crops, mills: saved.mills, sucreries: saved.sucreries });
+      E.applyOverrides(w, { groundOv: saved.groundOv, objectOv: saved.objectOv, crops: saved.crops, mills: saved.mills, sucreries: saved.sucreries, orchards: saved.orchards });
       worldRef.current = w;
       // 2026-07 station update: the pre-built station stands on cleared
       // ground even on old saves (same normalization spirit as the cauldron
@@ -1060,7 +1061,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // reprise.
   function applySnapshot(payload) {
     const w = E.generateWorld(payload.seed);
-    E.applyOverrides(w, { groundOv: payload.groundOv, objectOv: payload.objectOv, crops: payload.crops, mills: payload.mills, sucreries: payload.sucreries });
+    E.applyOverrides(w, { groundOv: payload.groundOv, objectOv: payload.objectOv, crops: payload.crops, mills: payload.mills, sucreries: payload.sucreries, orchards: payload.orchards });
     worldRef.current = w;
     overridesRef.current = { ground: { ...(payload.groundOv || {}) }, object: { ...(payload.objectOv || {}) } };
     // Chantier reprise (demande Guillaume) : même nettoyage des sucreries
@@ -1542,6 +1543,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       groundOv: overridesRef.current.ground, objectOv: overridesRef.current.object,
       crops: worldRef.current ? E.serializeCrops(worldRef.current) : [],
       mills: worldRef.current ? E.serializeMills(worldRef.current) : [],
+      // ZIP 398 — les vergers voyagent et se persistent par le MÊME chemin que
+      // les moulins. Un état partagé qui prendrait un chemin à lui finirait par
+      // ne pas être sauvegardé le jour où l'on touche à l'autre.
+      orchards: worldRef.current ? E.serializeOrchards(worldRef.current) : [],
       sucreries: worldRef.current ? E.serializeSucreries(worldRef.current) : [],
       farmers: farmersRef.current,
       horses: s.horses, animals: s.animals, wellBuilt: s.wellBuilt, barn: s.barn, salveCraft: s.salveCraft, house: s.house, evilMonsters: s.evilMonsters, gems: s.gems, flour: s.flour, sugar: s.sugar, gregStock: s.gregStock, fertilizerShop: s.fertilizerShop, wolves: s.wolves, greg: s.greg, soan: s.soan, harald: s.harald,
@@ -1704,10 +1709,135 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
 
     // 2026-07 station update: station/visitor/repair requests are resolved in
     // a dedicated handler (returns true when the request was consumed).
-    if (hostHandleStationReq(req, f)) return;
+    /* ⚠️ ZIP 398 — `out` LUI EST MAINTENANT PASSÉ, ET SA SORTIE EST ÉMISE.
+       Avant : `if (hostHandleStationReq(req, f)) return;`. Le sous-traitant
+       écrivait dans un `out` qui n'existait pas chez lui (ReferenceError
+       silencieuse), et le `return` sautait de toute façon le seul endroit qui
+       diffuse. Onze requêtes changeaient l'état sans que personne ne
+       l'apprenne — dont les familiers, les récompenses du labyrinthe et
+       celles du Gourmandin. Voir hostFlushOut. */
+    if (hostHandleStationReq(req, f, out)) { hostFlushOut(out, f, questId); return; }
     if (hostHandleDecorReq(req, f)) return; // zip 251: pose/déplacement/rangement (outil main)
     if (hostHandleArtisanReq(req, f)) return; // zip 252: recrutement / ateliers / vente produits craft
 
+    /* ==================================================================
+       ZIP 398 — LES DEUX COMMANDES SECRÈTES QUI TOUCHENT L'ÉTAT PARTAGÉ.
+       ------------------------------------------------------------------
+       Demande de Guillaume : le menu secret s'ouvre maintenant pour TOUS les
+       joueurs qui connaissent le raccourci. La téléportation, elle, n'a jamais
+       eu besoin de l'hôte (elle ne déplace que celui qui la demande, par
+       zoneTransRef). Ces deux-ci, si.
+
+       ⚠️ AUCUNE VÉRIFICATION DE RÔLE ICI, ET C'EST LE POINT. Le menu EST le
+       droit : quiconque connaît Cmd/Ctrl+Shift+X est réputé autorisé, c'est
+       littéralement ce qui a été demandé. Ajouter un contrôle côté hôte
+       reviendrait à redonner d'une main ce qu'on vient d'ouvrir de l'autre.
+
+       Ce que l'hôte garde, en revanche : il reste le SEUL à écrire et à
+       persister. Un invité ne peut donc pas désynchroniser le monde des
+       autres, même en trafiquant son client — il ne peut qu'émettre une
+       intention que l'hôte exécutera proprement, ou pas du tout s'il est
+       parti. C'est le partage habituel du projet, pas une faveur.
+       ================================================================== */
+    /* ==================================================================
+       ZIP 398 — LES VERGERS : PLANTER, CUEILLIR, ABATTRE, VENDRE.
+       ------------------------------------------------------------------
+       Les quatre passent par `out`, donc par hostFlushOut, donc par le SEUL
+       chemin de sortie du fichier — c'est la réparation structurelle faite en
+       tête de ce zip, et il aurait été absurde d'y ajouter aussitôt quatre
+       requêtes qui l'esquivent.
+       ================================================================== */
+    if (req.kind === "plantOrchard") {
+      const r = E.resolvePlantOrchard(f, w, req.x | 0, req.y | 0, req.k | 0);
+      if (r.ok) {
+        recordTileOverride(r.i);
+        out.tiles.push({ i: r.i, g: w.ground[r.i], o: w.objects[r.i], hp: w.objHp.get(r.i) });
+        const o = w.orchards.get(r.i);
+        out.orchards = [[r.i, o.k, o.plantedAt, o.nextAt, o.ripe]];
+        out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
+        dirtyRef.current = true;
+      } else if (r.toast) out.toast = { id: f.id, key: r.toast };
+    } else if (req.kind === "orchardPick") {
+      const r = E.resolveOrchardPick(f, w, req.x | 0, req.y | 0);
+      if (r.ok) {
+        const o = w.orchards.get(r.i);
+        out.orchards = [[r.i, o.k, o.plantedAt, o.nextAt, o.ripe]];
+        out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
+        out.toast = { id: f.id, key: "fruitsPicked", n: { n: r.n, fruit: r.fruit } };
+        dirtyRef.current = true;
+      } else if (r.toast) out.toast = { id: f.id, key: r.toast };
+    } else if (req.kind === "orchardChop") {
+      const r = E.resolveOrchardChop(f, w, req.x | 0, req.y | 0);
+      if (r.ok) {
+        recordTileOverride(r.i);
+        out.tiles.push({ i: r.i, g: w.ground[r.i], o: w.objects[r.i], hp: w.objHp.get(r.i) });
+        // ⚠️ k = -1 : c'est ainsi qu'on annonce un verger RETIRÉ (voir
+        // applyDeltas). Sans ce message, la Map des clients garderait une
+        // entrée fantôme et la case replantée hériterait de l'ancien arbre.
+        if (r.done) { out.orchards = [[r.i, -1, 0, 0, 0]]; out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv }; }
+        dirtyRef.current = true;
+      }
+    } else if (req.kind === "sellFruit") {
+      const r = E.resolveSellFruit(f, s, String(req.fruit || ""), !!req.punnet);
+      if (r.ok) {
+        out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
+        out.state = shareState();
+        broadcastChat("🧺", r.punnet ? L.punnetSoldChat(f.name, C.fruitName(req.fruit, lang === "en"), r.gain)
+                                     : L.fruitSoldChat(f.name, C.fruitName(req.fruit, lang === "en"), r.gain));
+      } else if (r.toast) out.toast = { id: f.id, key: r.toast };
+    } else if (req.kind === "makeFruitProduct") {
+      const r = E.resolveFruitProduct(f, s, String(req.product || ""));
+      if (r.ok) {
+        out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
+        out.state = shareState();
+        out.toast = { id: f.id, key: "productMade", n: r.productId };
+        dirtyRef.current = true;
+      } else if (r.toast) out.toast = { id: f.id, key: r.toast };
+    } else if (req.kind === "sellFruitProduct") {
+      const r = E.resolveSellFruitProduct(f, s, String(req.product || ""));
+      if (r.ok) {
+        out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
+        out.state = shareState();
+        const p = C.fruitProduct(req.product);
+        broadcastChat("🍯", L.productSoldChat(f.name, p ? (lang === "en" ? p.nameEn : p.name) : "", r.gain));
+      }
+    } else if (req.kind === "renamePet") {
+      /* ZIP 398 — nommer un familier. Le nettoyage est fait par le MOTEUR
+         (E.sanitizePetNick) et non par le champ de saisie : ce nom voyage,
+         s'affiche chez tous les joueurs et se persiste. Un garde-fou côté
+         client ne protège pas un état qui compte (leçon du zip 385). */
+      const r = E.resolveRenamePet(f, req.index | 0, req.nick);
+      if (r.ok) {
+        out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv, pets: f.pets };
+        out.toast = { id: f.id, key: "petNamed", n: r.nick || C.petName(r.petId, lang === "en") };
+        dirtyRef.current = true;
+      }
+    } else if (req.kind === "devWorld") {
+      const applied = applyForcedWorld(req.key || null);
+      dirtyRef.current = true;
+      persistFnRef.current && persistFnRef.current();
+      out.state = shareState();
+      const spec = applied ? C.PASSAGE_WORLDS.find(x => x.key === applied) : null;
+      // Annoncé dans le chat : le forçage change le monde de TOUT LE MONDE, et
+      // le bandeau permanent du 392 ne dit pas QUI l'a changé. Un joueur qui
+      // voit la terre basculer sans explication croit à un bug de rotation.
+      broadcastChat("🛠️", spec ? L.devWorldChat(f.name, lang === "en" ? spec.nameEn : spec.name)
+                                : L.devRotationChat(f.name));
+      hostFlushOut(out, f, null);
+      return;
+    }
+    if (req.kind === "devHeal") {
+      if (f.injuredUntil > Date.now()) {
+        f.injuredUntil = 0;
+        f.injuryKind = null;
+        dirtyRef.current = true;
+        out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv, injuredUntil: f.injuredUntil };
+        out.injured = { id: f.id, until: f.injuredUntil };
+        out.toast = { id: f.id, key: "devHealed" };
+      }
+      hostFlushOut(out, f, null);
+      return;
+    }
     if (req.kind === "wolfBiteResult") {
       // Dénouement du mini-jeu de morsure (chantier 2026-07) : n'affecte que
       // le loup concerné, encore en attente ("biting") et visant bien CE
@@ -2715,6 +2845,47 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (r.tiles.length) dirtyRef.current = true;
     }
 
+    hostFlushOut(out, f, questId);
+  }
+
+  /* ==========================================================================
+     ZIP 398 — LA SORTIE D'UNE REQUÊTE, EXTRAITE EN UN SEUL ENDROIT.
+     --------------------------------------------------------------------------
+     ⚠️ ELLE EXISTE POUR RÉPARER UN DÉFAUT GRAVE, TROUVÉ EN CHERCHANT POURQUOI
+     LES BOUTONS DU SAC « NE RÉAGISSENT PAS » (retour de Guillaume, zip 398).
+
+     `hostHandleStationReq` traite ONZE requêtes qui écrivent dans un objet
+     `out` — `petWalk`, `releasePet`, `passagePickup`, `mazePrize`, `labWon`,
+     `labFailed`, `candyLevel`, `berryPick`, `fruitPick`… — et **cet objet n'y
+     était pas déclaré**. Il n'appartenait qu'à `hostHandleReqUnsafe`. Chacune
+     de ces onze requêtes levait donc une `ReferenceError`, silencieusement
+     rattrapée par le `try/catch` de `hostHandleReq`.
+
+     LA CONSÉQUENCE EXACTE, ET ELLE EST PERVERSE : la résolution moteur
+     s'exécutait AVANT la ligne fautive. L'état autoritaire changeait donc
+     vraiment — le familier sortait bien du sac, l'or du labyrinthe était bien
+     crédité — mais **le broadcast qui l'annonce n'était jamais émis**. Rien à
+     l'écran. Puis, au premier autre évènement qui diffuse le fermier (un
+     ramassage, une sauvegarde, un rechargement), tout apparaissait d'un coup.
+
+     D'où « les boutons ne réagissent pas IMMÉDIATEMENT » : ils réagissaient,
+     mais plus tard, et pour une raison sans rapport avec le clic.
+
+     ⚠️ POURQUOI PERSONNE NE POUVAIT LE VOIR EN RELISANT. Chaque ligne prise
+     séparément est juste. `out.farmer = …` est correct dans son fichier, dans
+     son style, et identique à quinze autres lignes du même fichier. Ce qui est
+     faux, c'est l'ENDROIT — et un endroit ne se relit pas, il se mesure.
+     `tools/verify-req-scope.mjs` le mesure désormais.
+
+     La réparation est structurelle, pas locale : `out` est PASSÉ au
+     sous-traitant, et la sortie est écrite UNE fois, ici. On ne pouvait pas se
+     contenter de déclarer un second `out` dans `hostHandleStationReq` — ç'aurait
+     été une seconde description de « comment on répond à une requête », et
+     deux descriptions d'une même chose finissent toujours par diverger
+     (leçon du zip 387, appliquée à la couche réseau).
+     ========================================================================== */
+  function hostFlushOut(out, f, questId) {
+    const s = sharedRef.current;
     // Quêtes de découverte : première réussite d'une action listée -> or commun.
     if (questId && !f.quests[questId]) {
       const q = C.QUESTS.find(x => x.id === questId);
@@ -2730,7 +2901,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // Les quêtes accomplies voyagent avec l'état privé du fermier.
     if (out.farmer) out.farmer.quests = f.quests;
 
-    if (out.tiles.length || out.state || out.horses || out.animals || out.wellBuilt || out.gems || out.gregStock || out.mills || out.sucreries || out.house || out.flour !== undefined || out.sugar !== undefined) dirtyRef.current = true;
+    if (out.tiles.length || out.state || out.horses || out.animals || out.wellBuilt || out.gems || out.gregStock || out.mills || out.sucreries || out.orchards || out.house || out.flour !== undefined || out.sugar !== undefined) dirtyRef.current = true;
     hostSend({ type: "broadcast", event: "apply", payload: { ...out, hostNow: Date.now() } });
   }
   // -------- 2026-07 station update: host-side station module --------
@@ -3018,7 +3189,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     v.phase = "leave"; v.offer = { type: "done" }; v.votes = null;
     broadcastStation();
   }
-  function hostHandleStationReq(req, f) {
+  /* ⚠️ ZIP 398 — `out` EST UN PARAMÈTRE, il n'est pas redéclaré ici.
+     C'est la réparation du défaut décrit en tête de hostFlushOut : onze
+     requêtes de ce fichier écrivaient dans un `out` qui n'existait dans aucune
+     portée visible. Un second `out` local aurait « marché » et aurait créé une
+     seconde description de la sortie d'une requête — exactement ce que le zip
+     387 interdit. L'appelant l'apporte, l'appelant l'émet. */
+  function hostHandleStationReq(req, f, out) {
     const w = worldRef.current, s = sharedRef.current;
     if (!s.station) s.station = E.newStationState();
     const ch = { send: (m) => hostSend(m) }; // FIX 246b : ch relaie ET applique en local chez l'hôte
@@ -4323,6 +4500,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // hostHandleReqUnsafe et le dayTimer plus bas). Même mécanique que
     // p.crops ci-dessus, mais sur w.mills.
     if (w && p.mills) for (const [i, wheat, nextAt] of p.mills) w.mills.set(i, { wheat, nextAt });
+    /* ZIP 398 — les vergers. Un verger RETIRÉ (abattu) est diffusé avec k = -1 :
+       sans ce cas, la Map du client garderait une entrée fantôme, et la case
+       replantée plus tard hériterait de l'âge et des fruits de l'ancien arbre. */
+    if (w && p.orchards) {
+      w.orchards = w.orchards || new Map();
+      for (const [i, k, plantedAt, nextAt, ripe] of p.orchards) {
+        if (k < 0) w.orchards.delete(i);
+        else w.orchards.set(i, { k, plantedAt, nextAt, ripe });
+      }
+    }
     // Sucreries (chantier canne à sucre) : miroir exact de p.mills ci-dessus.
     if (w && p.sucreries) for (const [i, cane, nextAt] of p.sucreries) w.sucreries.set(i, { cane, nextAt });
     // Zip 392 : `forcedWorld` voyage dans le MÊME p.state que l'or et le jour
@@ -4584,7 +4771,24 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       return L.decorSoldToast(t.n | 0, (lang === "en" ? d.nameEn : d.name) || t.deco, t.gold | 0);
     }
     if (key === "walkFull")      return L.bagWalkFull(C.MAX_PETS_WALKING); // zip 368
-    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, noMillStock: L.toastNoMillStock, millNotEmpty: L.toastMillNotEmpty, noWheatToDeposit: L.toastNoWheatToDeposit, millFull: L.toastMillFull, noSucrerieStock: L.toastNoSucrerieStock, sucrerieNotEmpty: L.toastSucrerieNotEmpty, noCaneToDeposit: L.toastNoCaneToDeposit, sucrerieFull: L.toastSucrerieFull, actionFailed: L.toastActionFailed, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull, notInjured: L.toastNotInjured, noHealKit: L.toastNoHealKit, healTooFar: L.toastHealTooFar, gregNotHired: L.toastGregNotHired, gregOrderBusy: L.toastGregBusy, gregNoRoom: L.toastGregNoRoom, gregNoFertilizer: L.toastGregNoFertilizer, gregCoffeeCooldown: L.toastGregCoffeeCooldown, noCoffee: L.toastNoCoffee, soanNotHired: L.toastSoanNotHired, soanNoRiver: L.toastSoanNoRiver, soanCoffeeCooldown: L.toastSoanCoffeeCooldown, reneCoffeeCooldown: L.toastReneCoffeeCooldown, tristanNotHere: L.toastTristanNotHere, tristanCoffeeCooldown: L.toastTristanCoffeeCooldown, farCauldron: L.toastFarCauldron, noFishToDeposit: L.toastNoFishToDeposit, cauldronMissing: L.toastCauldronMissing, cauldronAlreadyTaken: L.toastCauldronAlreadyTaken, noCauldronStock: L.toastNoCauldronStock, cauldronNotEmpty: L.toastCauldronNotEmpty, cauldronBrewing: L.toastCauldronBrewing, cauldronNothingToCollect: L.toastCauldronNothingToCollect, cauldronHasEnough: L.toastCauldronHasEnough, visitorNotEnough: L.visitorNotEnough, decorNone: L.decorNone, decorPicked: L.decorPicked, objReturned: L.objReturned, residentNoRoom: L.residentNoRoom, artisanNoResident: L.artisanNoResident, voyagerBusy: L.voyagerBusyToast, kickVoted: L.kickVotedToast, jewelryNoGold: L.toastJewelryNoGold, jewelryNoGem: L.toastJewelryNoGem, cropWrongType: L.toastCropWrongType, cropMaxed: L.toastCropMaxed, beekeeperNoHive: L.toastBeekeeperNoHive, beekeeperBusy: L.toastBeekeeperBusy, balloonNotBoarding: L.toastBalloonNotBoarding, balloonFull: L.toastBalloonFull }[key] || "";
+    if (key === "devHealed")     return L.devHealToast;                    // zip 398
+    if (key === "petNamed")      return L.petNamedToast(String(n || ""));  // zip 398
+    /* ZIP 398 — la cueillette d'un verger transporte DEUX valeurs (combien, et
+       de quel fruit) : `n` porte donc un objet, comme le fait déjà "decorSold".
+       ⚠️ On transporte l'IDENTIFIANT du fruit, jamais son nom formaté : un nom
+       qui voyagerait serait figé dans la langue de l'HÔTE, et les deux joueurs
+       ne parlent pas forcément la même. C'est la contrainte de bilinguisme du
+       projet, et elle vaut pour chaque message qui traverse le réseau. */
+    if (key === "fruitsPicked") { const t = n || {}; return L.toastFruitsPicked(t.n | 0, C.fruitName(t.fruit, lang === "en")); }
+    if (key === "productMade")  { const p2 = C.fruitProduct(n); return L.toastProductMade(p2 ? (lang === "en" ? p2.nameEn : p2.name) : ""); }
+    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, noMillStock: L.toastNoMillStock, millNotEmpty: L.toastMillNotEmpty, noWheatToDeposit: L.toastNoWheatToDeposit, millFull: L.toastMillFull, noSucrerieStock: L.toastNoSucrerieStock, sucrerieNotEmpty: L.toastSucrerieNotEmpty, noCaneToDeposit: L.toastNoCaneToDeposit, sucrerieFull: L.toastSucrerieFull, actionFailed: L.toastActionFailed, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull, notInjured: L.toastNotInjured, noHealKit: L.toastNoHealKit, healTooFar: L.toastHealTooFar, gregNotHired: L.toastGregNotHired, gregOrderBusy: L.toastGregBusy, gregNoRoom: L.toastGregNoRoom, gregNoFertilizer: L.toastGregNoFertilizer, gregCoffeeCooldown: L.toastGregCoffeeCooldown, noCoffee: L.toastNoCoffee, soanNotHired: L.toastSoanNotHired, soanNoRiver: L.toastSoanNoRiver, soanCoffeeCooldown: L.toastSoanCoffeeCooldown, reneCoffeeCooldown: L.toastReneCoffeeCooldown, tristanNotHere: L.toastTristanNotHere, tristanCoffeeCooldown: L.toastTristanCoffeeCooldown, farCauldron: L.toastFarCauldron, noFishToDeposit: L.toastNoFishToDeposit, cauldronMissing: L.toastCauldronMissing, cauldronAlreadyTaken: L.toastCauldronAlreadyTaken, noCauldronStock: L.toastNoCauldronStock, cauldronNotEmpty: L.toastCauldronNotEmpty, cauldronBrewing: L.toastCauldronBrewing, cauldronNothingToCollect: L.toastCauldronNothingToCollect, cauldronHasEnough: L.toastCauldronHasEnough, visitorNotEnough: L.visitorNotEnough, decorNone: L.decorNone, decorPicked: L.decorPicked, objReturned: L.objReturned, residentNoRoom: L.residentNoRoom, artisanNoResident: L.artisanNoResident, voyagerBusy: L.voyagerBusyToast, kickVoted: L.kickVotedToast, jewelryNoGold: L.toastJewelryNoGold, jewelryNoGem: L.toastJewelryNoGem, cropWrongType: L.toastCropWrongType, cropMaxed: L.toastCropMaxed, beekeeperNoHive: L.toastBeekeeperNoHive, beekeeperBusy: L.toastBeekeeperBusy, balloonNotBoarding: L.toastBalloonNotBoarding, balloonFull: L.toastBalloonFull,
+      /* zip 398 — vergers et produits */
+      orchardBusy: L.toastOrchardBusy, orchardGround: L.toastOrchardGround, orchardMax: L.toastOrchardMax,
+      orchardNoSapling: L.toastOrchardNoSapling, orchardYoung: L.toastOrchardYoung,
+      orchardNotReady: L.toastOrchardNotReady, orchardOffSeason: L.toastOrchardOffSeason,
+      punnetShort: L.toastPunnetShort, productNoFruit: L.toastProductNoFruit,
+      productNoSugar: L.toastProductNoSugar, productNoFlour: L.toastProductNoFlour,
+      productNoMilk: L.toastProductNoMilk, productNoEgg: L.toastProductNoEgg }[key] || "";
   }
 
   // -------- Hôte : boucle temps + persistance --------
@@ -4660,6 +4864,29 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               break;
             }
           }
+        }
+      }
+      /* ====================================================================
+         ZIP 398 — LE TICK DES VERGERS.
+         --------------------------------------------------------------------
+         Miroir du tick des moulins : l'hôte avance l'état, et ne diffuse QUE
+         ce qui a changé. Un verger qui mûrit est un évènement rare (toutes les
+         cinq à neuf heures réelles) ; diffuser la Map entière à chaque passage
+         coûterait le réseau d'un jeu entier pour rien — c'est la « fuite
+         realtime » du zip 264, qu'on ne recommence pas.
+
+         La saison est lue UNE fois pour tous les vergers : `E.seasonOf()` fait
+         un calcul de date, et vingt-quatre appels par tick pour un résultat
+         identique est le genre de gaspillage qui ne se voit jamais. */
+      if (w.orchards && w.orchards.size) {
+        const nowT = Date.now(), season = E.seasonOf().key;
+        const changed = [];
+        for (const [oi, o] of w.orchards) {
+          if (E.orchardTick(o, nowT, season)) changed.push([oi, o.k, o.plantedAt, o.nextAt, o.ripe]);
+        }
+        if (changed.length) {
+          dirtyRef.current = true;
+          hostSend({ type: "broadcast", event: "apply", payload: { orchards: changed } });
         }
       }
       // Zip 235 — Weekly passage-world rotation announcement. Fires once per
@@ -5354,6 +5581,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // directement, quel que soit l'outil équipé (aucun objet à équiper),
     // même priorité que la récolte ci-dessus.
     if (w.objects[i] === C.O_LEVER) return sendReq({ kind: "act", action: "lever", x: tt.x, y: tt.y });
+    /* ZIP 398 — LA HACHE ABAT UN VERGER, et rien d'autre ne le peut. C'est ce
+       qui rend la plantation RÉVERSIBLE, donc ce qui en fait un choix plutôt
+       qu'un engagement définitif sur une case. On exige la hache explicitement :
+       un verger arraché par mégarde avec la houe serait une perte sèche de
+       plusieurs heures de pousse. */
+    if (w.objects[i] === C.O_ORCHARD && toolKindRef.current === "axe" && sl === 1) {
+      return sendReq({ kind: "orchardChop", x: tt.x, y: tt.y });
+    }
     // Moulin construit (chantier 2026-07, demande Guillaume) : cliquable
     // directement pour y déposer son blé, même priorité que le levier
     // ci-dessus — SAUF si l'outil Construction est équipé en variante "mill"
@@ -5413,6 +5648,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         // dédiée cauldronPlace (voir plus haut) plutôt que "act", car elle a
         // aussi besoin de s.salveCraft côté hôte (garde-fou de retrait).
         sendReq({ kind: "cauldronPlace", x: tt.x, y: tt.y });
+        return;
+      }
+      /* ZIP 398 — LES PLANTS DE VERGER SE POSENT COMME UN MOULIN, avec la
+         même main et le même geste. La variante porte l'espèce dans son nom
+         ("orchard:lemon") plutôt que dans un second état : deux états qui
+         doivent rester d'accord — « quelle variante » et « quelle espèce » —
+         finissent par ne plus l'être, et on planterait un citronnier en
+         croyant poser un fraisier. */
+      if (bk.startsWith("orchard:")) {
+        const k = C.ORCHARDS.findIndex(o => o.id === bk.slice(8));
+        if (k >= 0) sendReq({ kind: "plantOrchard", x: tt.x, y: tt.y, k });
         return;
       }
       const action = bk === "wall" ? "wall" : bk === "path" ? "path" : bk === "lamp" ? "lamp" : bk === "scarecrow" ? "scarecrow"
@@ -8273,8 +8519,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          carte (passageAppliedIdxRef, dans la boucle de rendu), et annonce la
          nouvelle terre dans le chat (passageIdxRef, côté hôte).
      Rien de tout cela n'est réécrit ici. On change un index, le reste suit. */
+  /* ⚠️ ZIP 398 — UN INVITÉ PEUT LE DEMANDER, SEUL L'HÔTE L'EXÉCUTE.
+     C'est le chemin normal de toute action du jeu depuis le zip 243 : le
+     client envoie une intention, l'hôte arbitre, persiste et diffuse. Écrire
+     `applyForcedWorld` chez l'invité aurait « marché » à son écran et
+     n'aurait changé le monde de personne — c'est la leçon du 385 (« un
+     garde-fou côté client ne protège pas un état qui compte »), prise par
+     l'autre bout : un POUVOIR côté client ne change pas un état partagé. */
   function devSetWorld(key) {
-    if (!isHost) return;
+    if (!isHost) { sendReq({ kind: "devWorld", key: key || null }); setDevMenuOpen(false); return; }
     const applied = applyForcedWorld(key);
     dirtyRef.current = true;                 // -> saveTimer (3 s) -> ferme_saves
     persistFnRef.current && persistFnRef.current(); // ...et tout de suite, pour ne pas perdre le réglage sur un départ immédiat
@@ -8315,7 +8568,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      à "evil" sur un fermier soigné fausserait le prochain calcul de soin par
      pansement, qui décide de retirer un tiers ou de ramener à une minute. */
   function devHeal() {
-    if (!isHost) return;
+    /* Même partage qu'au-dessus. L'invité DEMANDE son propre soin ; l'hôte
+       écrit dans le fermier autoritaire. La ref locale `injuredUntilRef` n'est
+       toujours touchée par personne : la remettre à zéro « marcherait » à
+       l'écran et ressusciterait la blessure au premier rechargement (zip 392). */
+    if (!isHost) { sendReq({ kind: "devHeal" }); setDevMenuOpen(false); return; }
     const f = hostEnsureFarmer(me.id);
     if (!f || !(f.injuredUntil > Date.now())) return;
     f.injuredUntil = 0;
@@ -9328,10 +9585,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (e.metaKey || e.ctrlKey || e.altKey) {
         if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.code === C.DEV_MENU_KEY && !e.repeat) {
           e.preventDefault();
-          // Hôte uniquement : l'invité n'arbitre rien et ne persiste rien. Le
-          // silence est délibéré — un menu secret qui répond « réservé à
-          // l'hôte » n'est plus tout à fait secret.
-          if (isHost) { keysRef.current = {}; setDevMenuOpen(o => !o); }
+          /* ⚠️ ZIP 398 — OUVERT À TOUS LES JOUEURS, PLUS SEULEMENT À L'HÔTE.
+             Demande de Guillaume : « je veux que chaque joueur disposant de
+             cette commande secrète puisse avoir les privilèges de
+             téléportation et de changements de monde et soin ».
+
+             Le 392 réservait le menu à l'hôte pour une raison réelle : lui
+             seul arbitre et persiste. Mais cette raison portait sur QUI
+             EXÉCUTE, jamais sur QUI DEMANDE — et c'est la confusion des deux
+             qui privait quatre joueurs sur cinq d'un outil dont ils
+             connaissent le raccourci. Les deux commandes qui touchent l'état
+             partagé passent désormais par une REQUÊTE, comme tout le reste du
+             jeu depuis toujours ; l'hôte reste le seul à décider.
+
+             Le secret, lui, tient toujours au raccourci : rien à l'écran ne
+             l'annonce, et l'invité qui ne le connaît pas ne voit rien. */
+          keysRef.current = {}; setDevMenuOpen(o => !o);
         }
         // Toute autre combinaison avec modificateur appartient au navigateur
         // ou au système : le jeu n'y touche pas, et n'enregistre pas la touche.
@@ -9716,6 +9985,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         }
         else if (o === C.O_WALL) ctx.drawImage(sprites.wall, x * T, y * T);
         else if (o === C.O_BERRY_BUSH) draws.push({ y: (y + 1) * T, fn: () => ctx.drawImage(sprites.berryBush, x * T, y * T - 2) });
+        /* ZIP 398 — LE VERGER. Le stade vient de `E.orchardStage`, la même
+           fonction pure que lisent le moteur et les contrôles : personne ne
+           peut donc dessiner un arbre chargé de fruits qui n'en porte pas.
+           Le sprite fait 24×28 et déborde vers le haut : on l'ancre par le
+           BAS de la case, comme les arbres, sinon il flotte. */
+        else if (o === C.O_ORCHARD) {
+          const oc = w.orchards && w.orchards.get(i);
+          if (oc) {
+            const st2 = E.orchardStage(oc, Date.now());
+            const img = sprites.orchards[oc.k | 0] && sprites.orchards[oc.k | 0][st2];
+            if (img) draws.push({ y: (y + 1) * T, fn: () => ctx.drawImage(img, x * T - 4, (y + 1) * T - 28) });
+          }
+        }
       }
 
       // Zip 367 : `tt` est maintenant declaree avant la boucle de tuiles
@@ -13190,6 +13472,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           if (xx < 0 || yy < 0 || xx >= C.MAP_W || yy >= C.MAP_H) continue;
           const i = yy * C.MAP_W + xx;
           if (w2.objects[i] === C.O_BERRY_BUSH) { sendReq({ kind: "berryPick", x: xx, y: yy }); return; }
+          // ZIP 398 — un verger se cueille à la touche E, comme un buisson.
+          // L'ARBRE RESTE : c'est toute la différence avec une récolte.
+          if (w2.objects[i] === C.O_ORCHARD) { sendReq({ kind: "orchardPick", x: xx, y: yy }); return; }
           if (w2.objects[i] === C.O_TREE && E.seasonOf().key === "spring" && (i * 2654435761 >>> 0) % C.FRUIT_TREE_MOD === 0) {
             sendReq({ kind: "fruitPick", x: xx, y: yy }); return;
           }
@@ -13344,6 +13629,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (slotRef.current !== 5) { selectSlot(5); return; }
     const order = ["fence", "wall", "path", "lamp", "scarecrow", "grass", "mill"];
     const owned = order.filter(k => myInv && (myInv[k] || 0) > 0);
+    // ZIP 398 : les plants de verger rejoignent le cycle, et seulement ceux
+    // qu'on possède — comme les autres variantes.
+    for (const o of C.ORCHARDS) if (myInv && myInv.saplings && (myInv.saplings[o.id] | 0) > 0) owned.push("orchard:" + o.id);
     if (!owned.length) return;
     const cur = buildKindRef.current;
     const idx = owned.indexOf(cur);
@@ -13412,6 +13700,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // suivant (herbe = replanter sur une case labourée, chantier 2026-07).
   const buyGrass = (n) => { sendReq({ kind: "buy", item: "grass", n }); buildKindRef.current = "grass"; setBuildKind("grass"); };
   const buyMill = (n) => { sendReq({ kind: "buy", item: "mill", n }); buildKindRef.current = "mill"; setBuildKind("mill"); };
+  /* ZIP 398 — l'achat d'un plant ÉQUIPE aussitôt la variante correspondante,
+     exactement comme buyMill. Sans ça, on achète un citronnier et rien ne se
+     passe : il faut deviner qu'il est rangé derrière l'outil Construction et
+     faire tourner la variante jusqu'à lui. Le confort de pose du moulin a été
+     ajouté pour cette raison au 2026-07 ; on le recopie plutôt que de le
+     redécouvrir. */
+  const buySapling = (id, n) => {
+    sendReq({ kind: "buy", item: "sapling", sap: id, n });
+    buildKindRef.current = "orchard:" + id; setBuildKind("orchard:" + id);
+  };
   // Sucrerie : achat désormais via buyArtisanBuilding("sucrerie") (chantier
   // "sucrerie déplaçable", voir la ligne générique de boutique plus bas) —
   // buySucrerieBuilding retiré, le const dédié n'a plus d'utilité.
@@ -14556,6 +14854,35 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               <div className="info"><b>{L.millRowTitle(C.MILL_COST)}</b><span>{L.millRowSub(myInv ? (myInv.mill || 0) : 0)}</span></div>
               <button disabled={hud.money < C.MILL_COST} onClick={() => buyMill(1)}>{L.buy1}</button>
             </div>
+            {/* ================================================================
+                ZIP 398 — LES PLANTS DE VERGER.
+                Demande de Guillaume : « des arbres fruitiers qui demeurent,
+                produisent périodiquement des fruits mais ne nécessitent pas de
+                replanter ».
+
+                Chaque ligne annonce les TROIS nombres qui décident de l'achat :
+                le temps de pousse, la période de production, et les saisons.
+                Un plant coûte cher et met des heures : ne pas dire ce qu'il
+                rendra, ce serait vendre une surprise à mille quatre cents or.
+                ================================================================ */}
+            <div style={{ fontSize: 11, fontWeight: 700, opacity: .7, textTransform: "uppercase", letterSpacing: .5, marginTop: 10 }}>{L.orchardShopTitle}</div>
+            <div className="ferme-hint">{L.orchardShopHint}</div>
+            {C.ORCHARDS.map((o, k) => (
+              <div className="ferme-shop-row" key={"orch-" + o.id}>
+                <Sprite img={spritesReady ? spritesRef.current.orchards[k][3] : null} w={24} h={28} />
+                <div className="info">
+                  <b>{(lang === "en" ? o.saplingNameEn : o.saplingName) + " — " + o.saplingCost + " or"}</b>
+                  <span className="ferme-usage">{L.orchardRowSub(
+                    Math.round(o.matureMs / 3600000),
+                    Math.round(o.cycleMs / 3600000),
+                    o.yieldMin, o.yieldMax,
+                    C.fruitName(o.fruit, lang === "en"),
+                    o.seasons.map(sk => L.seasonName(sk)).join(", "))}</span>
+                  <span>{L.orchardOwned((myInv && myInv.saplings && (myInv.saplings[o.id] | 0)) || 0)}</span>
+                </div>
+                <button disabled={hud.money < o.saplingCost} onClick={() => buySapling(o.id, 1)}>{L.buy1}</button>
+              </div>
+            ))}
             {/* Zip 252 : ateliers d'artisans — visibles seulement quand l'artisan concerné vit chez nous.
                 Chantier "sucrerie déplaçable" (2026-07) : la sucrerie (skill
                 "sugarworker"/Jérôme Martial) a rejoint cette liste générique
@@ -14779,16 +15106,104 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                         verticalAlign: "middle", background: walking ? "#5fbf6a" : "#8a8274",
                         boxShadow: walking ? "0 0 4px #5fbf6a" : "none",
                       }} />
-                      {C.petName(pt.id, lang === "en")}
+                      {E.petLabel(pt, lang === "en")}
                     </b>
-                    <span>{walking ? L.bagPetWalking : L.bagPetStowed}</span>
+                    {/* ZIP 398 — quand le familier a un surnom, la ligne
+                        rappelle son ESPÈCE en dessous. Sans ça, un joueur qui
+                        a nommé quatre bêtes ne sait plus laquelle est un chat
+                        et laquelle est un dragonneau. */}
+                    <span>{(pt.nick ? C.petName(pt.id, lang === "en") + " · " : "") + (walking ? L.bagPetWalking : L.bagPetStowed)}</span>
                   </div>
+                  <PixBtn sprites={spritesReady ? spritesRef.current : null} tone="plain" small
+                    label={pt.nick ? L.bagRenameBtn : L.bagNameBtn}
+                    onClick={() => setPetNaming({ index: pi, petId: pt.id, value: pt.nick || "" })} />
                   <PixBtn sprites={spritesReady ? spritesRef.current : null} tone={walking ? "ghost" : "good"} small
                     disabled={walkFull}
                     label={walkFull ? L.bagWalkFullBtn(C.MAX_PETS_WALKING) : (walking ? L.bagStowBtn : L.bagWalkBtn)}
                     onClick={() => sendReq({ kind: "petWalk", index: pi, walk: !walking })} />
                   <PixBtn sprites={spritesReady ? spritesRef.current : null} icon="release" tone="bad" small label={L.bagReleaseBtn}
                     onClick={() => setPetRelease({ index: pi, petId: pt.id })} />
+                </div>
+              );
+            })}
+
+            {/* ================================================================
+                ZIP 398 — LES FRUITS : À L'UNITÉ OU PAR BARQUETTE.
+                « Mais on peut aussi vendre les fruits par barquettes. »
+
+                La barquette (six fruits) rapporte +25 % : sans cette prime,
+                vendre par six serait exactement vendre six fois, donc un
+                bouton de plus qui ne sert à rien. Elle récompense d'avoir
+                laissé le verger tourner au lieu de cueillir au fil de l'eau.
+                Le bouton annonce lui-même ce qu'il rapporte — un prix qu'on
+                doit calculer de tête n'est pas un prix.
+                ================================================================ */}
+            <div style={{ fontSize: 11, fontWeight: 700, opacity: .7, textTransform: "uppercase", letterSpacing: .5, marginTop: 12 }}>{L.bagFruitsTitle}</div>
+            {(() => {
+              const inv = (myInv && myInv.fruits) || {};
+              const owned = C.FRUITS.filter(f => (inv[f.id] | 0) > 0);
+              if (!owned.length) return <div className="ferme-hint">{L.bagNoFruits}</div>;
+              return owned.map(f => {
+                const n = inv[f.id] | 0;
+                return (
+                  <div className="ferme-shop-row" key={"fr-" + f.id}>
+                    <Sprite img={spritesReady ? spritesRef.current.fruits[f.id] : null} w={24} h={24} />
+                    <div className="info">
+                      <b>{(lang === "en" ? f.nameEn : f.name) + " ×" + n}</b>
+                      <span className="ferme-usage">{L.fruitRowSub(f.sell, C.PUNNET_SIZE, C.punnetPrice(f.id))}</span>
+                    </div>
+                    <PixBtn sprites={spritesReady ? spritesRef.current : null} tone="plain" small
+                      label={L.sellOneBtn(f.sell)}
+                      onClick={() => sendReq({ kind: "sellFruit", fruit: f.id, punnet: false })} />
+                    <PixBtn sprites={spritesReady ? spritesRef.current : null} tone="good" small
+                      disabled={n < C.PUNNET_SIZE}
+                      label={L.sellPunnetBtn(C.punnetPrice(f.id))}
+                      onClick={() => sendReq({ kind: "sellFruit", fruit: f.id, punnet: true })} />
+                  </div>
+                );
+              });
+            })()}
+
+            {/* ZIP 398 — LES PRODUITS AUX FRUITS. Confitures, yaourts, tarte au
+                citron. Chaque ligne dit ce qu'il faut ET ce que ça rapporte :
+                une recette dont on découvre le coût en cliquant est une
+                recette qu'on ne relance pas. Le bouton « faire » est grisé,
+                avec sa raison, quand il manque un ingrédient. */}
+            <div style={{ fontSize: 11, fontWeight: 700, opacity: .7, textTransform: "uppercase", letterSpacing: .5, marginTop: 12 }}>{L.bagProductsTitle}</div>
+            {C.FRUIT_PRODUCTS.map(p2 => {
+              const inv = (myInv && myInv.fruits) || {};
+              const have = (myInv && myInv.products && (myInv.products[p2.id] | 0)) || 0;
+              const cost = E.fruitProductCost(p2);
+              const lack = (inv[p2.fruit] | 0) < cost.fruit ? "fruit"
+                /* ⚠️ `flour` et `sugar` sont les MIROIRS REACT de
+                   sharedRef.current (voir leur déclaration) — pas `hud`, qui ne
+                   porte que l'or, le jour, l'heure et le nombre de joueurs. Lire
+                   `hud.sugar` aurait donné `undefined`, donc 0, donc un bouton
+                   éternellement grisé sur « il manque du sucre » alors que la
+                   ferme en a des sacs. */
+                : (cost.sugar && (sugar | 0) < cost.sugar) ? "sugar"
+                : (cost.flour && (flour | 0) < cost.flour) ? "flour"
+                : (cost.milk && ((myInv && myInv.milk) | 0) < cost.milk) ? "milk"
+                : (cost.egg && ((myInv && myInv.egg) | 0) < cost.egg) ? "egg" : null;
+              return (
+                <div className="ferme-shop-row" key={"fp-" + p2.id}>
+                  <Sprite img={spritesReady ? spritesRef.current.fruits[p2.fruit] : null} w={20} h={20} />
+                  <div className="info">
+                    <b>{(lang === "en" ? p2.nameEn : p2.name) + (have ? " ×" + have : "")}</b>
+                    <span className="ferme-usage">{L.productRowSub(
+                      cost.fruit, C.fruitName(p2.fruit, lang === "en"),
+                      [cost.sugar ? L.ingSugar(cost.sugar) : null,
+                       cost.flour ? L.ingFlour(cost.flour) : null,
+                       cost.milk ? L.ingMilk(cost.milk) : null,
+                       cost.egg ? L.ingEgg(cost.egg) : null].filter(Boolean).join(" + "),
+                      p2.sell)}</span>
+                  </div>
+                  <PixBtn sprites={spritesReady ? spritesRef.current : null} tone="plain" small
+                    disabled={!!lack} label={lack ? L.productLack(lack) : L.productMakeBtn}
+                    onClick={() => sendReq({ kind: "makeFruitProduct", product: p2.id })} />
+                  <PixBtn sprites={spritesReady ? spritesRef.current : null} tone="good" small
+                    disabled={have <= 0} label={L.sellOneBtn(p2.sell)}
+                    onClick={() => sendReq({ kind: "sellFruitProduct", product: p2.id })} />
                 </div>
               );
             })}
@@ -15030,6 +15445,62 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       {/* Zip 388 : confirmation de RELÂCHÉ. Un familier relâché ne revient
           jamais, et le bouton se tenait à quelques pixels d'un bouton anodin
           dans la même ligne. C'est le seul geste vraiment irréversible du sac. */}
+      {/* ====================================================================
+          ZIP 398 — NOMMER UN FAMILIER.
+          « Il faut pouvoir nommer chaque animal de compagnie qu'on a. »
+
+          Une fenêtre à part plutôt qu'un champ dans la ligne du sac : à huit
+          familiers, huit champs de saisie ouverts en permanence font du sac un
+          formulaire. Ici on nomme une bête à la fois, on la voit en grand, et
+          on repart.
+
+          ⚠️ LE CHAMP N'EST PAS VALIDÉ ICI. `maxLength` est un confort
+          d'affichage ; le vrai nettoyage (caractères de contrôle, blancs
+          multiples, longueur) est fait par `E.sanitizePetNick` CÔTÉ HÔTE. Ce
+          nom voyage, s'affiche chez les autres joueurs et se persiste : un
+          garde-fou côté client ne protège pas un état qui compte (zip 385).
+          ==================================================================== */}
+      {petNaming && (
+        <div className="ferme-modal open" onClick={() => setPetNaming(null)}>
+          <div className="panel ferme-modal-panel" onClick={e => e.stopPropagation()}>
+            <button className="ferme-close-x" onClick={() => setPetNaming(null)}>✕</button>
+            <h2>{L.petNameTitle}</h2>
+            <div className="ferme-shop-row">
+              <Sprite img={spritesReady ? spritesRef.current.pets[petNaming.petId] : null} w={40} h={40} />
+              <div className="info">
+                <b>{C.petName(petNaming.petId, lang === "en")}</b>
+                <span>{L.petNameHint(C.PET_NICK_MAX)}</span>
+              </div>
+            </div>
+            <input
+              className="ferme-chat-input"
+              style={{ width: "100%", marginTop: 10 }}
+              autoFocus
+              maxLength={C.PET_NICK_MAX}
+              value={petNaming.value}
+              placeholder={C.petName(petNaming.petId, lang === "en")}
+              onChange={(e) => setPetNaming(v => ({ ...v, value: e.target.value }))}
+              onKeyDown={(e) => {
+                // Entrée valide, Échap referme. Et surtout : on ARRÊTE la
+                // propagation, sinon chaque lettre tapée serait aussi lue par
+                // le gestionnaire de jeu et ferait marcher le fermier derrière.
+                e.stopPropagation();
+                if (e.key === "Enter") { sendReq({ kind: "renamePet", index: petNaming.index, nick: petNaming.value }); setPetNaming(null); }
+                if (e.key === "Escape") setPetNaming(null);
+              }}
+            />
+            <div style={{ marginTop: 10, display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <PixBtn sprites={spritesReady ? spritesRef.current : null} tone="good" label={L.petNameConfirm}
+                onClick={() => { sendReq({ kind: "renamePet", index: petNaming.index, nick: petNaming.value }); setPetNaming(null); }} />
+              {/* Effacer = valider un nom vide. Un second chemin ne servirait
+                  qu'à donner deux façons d'obtenir le même état. */}
+              <PixBtn sprites={spritesReady ? spritesRef.current : null} tone="ghost" label={L.petNameClear}
+                onClick={() => { sendReq({ kind: "renamePet", index: petNaming.index, nick: "" }); setPetNaming(null); }} />
+            </div>
+          </div>
+        </div>
+      )}
+
       {petRelease && (
         <div className="ferme-modal open" onClick={() => setPetRelease(null)}>
           <div className="panel ferme-modal-panel" onClick={e => e.stopPropagation()}>
@@ -15667,15 +16138,25 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       {evilBite && <EvilBiteMinigame L={L} onWin={evilBiteWon} onFail={evilBiteLost} />}
 
       {/* ================================================================
-          ZIP 392 — MENU DÉVELOPPEUR (Cmd/Ctrl+Shift+X, hôte uniquement).
+          ZIP 392 — MENU DÉVELOPPEUR (Cmd/Ctrl+Shift+X).
+          ZIP 398 — OUVERT À TOUS LES JOUEURS QUI CONNAISSENT LE RACCOURCI.
 
           Volontairement sobre et sans illustration : ce n'est pas un écran de
-          jeu, et il ne doit jamais donner l'impression d'en être un. La double
-          garde `devMenuOpen && isHost` reprend celle du raccourci — si le rôle
-          d'hôte change pendant que le menu est ouvert (succession automatique,
-          voir claim_abandoned_host), il se ferme de lui-même.
+          jeu, et il ne doit jamais donner l'impression d'en être un.
+
+          ⚠️ LA GARDE `&& isHost` A SAUTÉ, ET ELLE NE MANQUE À RIEN. Elle
+          protégeait une confusion : l'hôte est le seul à ÉCRIRE l'état
+          partagé, mais rien n'obligeait à ce qu'il soit le seul à le
+          DEMANDER. Les deux commandes concernées (forcer la terre, se
+          soigner) passent maintenant par une requête, comme les cent autres
+          actions du jeu ; la troisième (téléportation) n'a jamais eu besoin
+          de l'hôte, puisqu'elle ne déplace que celui qui la demande.
+
+          Conséquence heureuse : le menu ne se referme plus tout seul quand le
+          rôle d'hôte change en cours de partie (succession automatique, voir
+          claim_abandoned_host). Il n'y a plus de rôle à perdre.
           ================================================================ */}
-      {devMenuOpen && isHost && (() => {
+      {devMenuOpen && (() => {
         const today = sharedRef.current.day || 1;
         const forced = forcedWorldUi; // même source que le bandeau : un état, pas une ref (voir applyForcedWorld)
         // La terre que la ROTATION donnerait aujourd'hui, forçage mis de côté.

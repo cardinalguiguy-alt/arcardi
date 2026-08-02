@@ -2663,7 +2663,36 @@ export const PUMPKIN_CROP_ID = 3;
 // fruits (pommes) sur une partie des chênes (E pour cueillir, 1x/jour réel
 // par arbre) et buissons à baies posés par l'hôte (E = cueillir des baies,
 // hache = bois). Baies et fruits sont des objets d'inventaire vendables au bac.
-export const O_BERRY_BUSH = 19;      // buisson à baies (printemps), hache = bois, E = baies
+/* ⚠️⚠️ ZIP 398 — COLLISION D'IDENTIFIANT RÉPARÉE : O_BERRY_BUSH VALAIT 19,
+   COMME O_SUCRERIE (voir plus haut, ligne ~130).
+   ---------------------------------------------------------------------------
+   Trouvée en cherchant un identifiant libre pour les vergers, par un contrôle
+   de trois lignes (`tools/verify-objects.mjs`) — jamais en relisant : les deux
+   déclarations sont à 2 500 lignes l'une de l'autre, chacune parfaitement
+   correcte prise seule.
+
+   CE QU'ELLE PRODUISAIT, et c'était silencieux :
+     * `world.objects[i]` ne pouvait plus distinguer une sucrerie d'un buisson.
+       `resolveBerryPick` teste `objects[i] !== O_BERRY_BUSH` : on pouvait donc
+       CUEILLIR DES BAIES SUR LA SUCRERIE ;
+     * le semeur de printemps compte les buissons existants avec le même test :
+       une sucrerie posée réduisait d'autant le nombre de buissons de la saison ;
+     * et le rendu dessinait l'un ou l'autre selon l'ordre des branches.
+
+   POURQUOI C'EST LE BUISSON QUI DÉMÉNAGE, ET PAS LA SUCRERIE. `O_SUCRERIE` est
+   déclaré LEGACY (zips 317-324) : d'anciennes sauvegardes contiennent encore
+   des 19 qui désignent des sucreries, et les relire comme des buissons ferait
+   disparaître un bâtiment payé 30 000 or. Les buissons, eux, sont du décor
+   SAISONNIER que l'hôte repose chaque printemps jusqu'à BERRY_BUSH_MAX : au
+   pire, une sauvegarde d'avant le 398 en perd quelques-uns, et la prochaine
+   saison les remet. On déplace donc ce qui se répare tout seul.
+
+   AUCUNE MIGRATION SUPABASE : ces valeurs vivent dans l'instantané JSON. */
+export const O_BERRY_BUSH = 20;      // buisson à baies (printemps), hache = bois, E = baies
+/* ZIP 398 — LES VERGERS : cultures PÉRENNES, plantées une fois.
+   Demande de Guillaume : « des arbres fruitiers qui demeurent, produisent
+   périodiquement des fruits mais ne nécessitent pas de replanter ». */
+export const O_ORCHARD = 21;
 export const BERRY_BUSH_MAX = 14;    // nombre max de buissons posés par l'hôte au printemps
 export const BERRY_BUSH_HP = 2;
 export const BERRY_BUSH_WOOD = 2;    // bois récolté en l'abattant
@@ -2964,3 +2993,169 @@ export const BALLOON_FLIGHT_REAL_MS = 3 * 60 * 1000; // durée réelle d'un surv
 // plus bas), juste au sud de la traversée nord (bridgeSites `by = 42`, rivière
 // centrée ~x=95 à cette hauteur) : une position raisonnable proche du pont.
 export const BALLOON_ANCHOR = { x: 108, y: 46 };
+
+/* ============================================================================
+   ZIP 398 — LES VERGERS : DES CULTURES QUI DEMEURENT.
+   ----------------------------------------------------------------------------
+   Demande de Guillaume, mot pour mot : « ajouter les nouvelles cultures
+   suivantes : des arbres fruitiers qui demeurent, produisent périodiquement des
+   fruits mais ne nécessitent pas de replanter. Trouve un mécanisme cohérent. »
+
+   ⚠️ POURQUOI CE N'EST PAS UNE ENTRÉE DE PLUS DANS `CROPS`, ET POURQUOI ÇA
+   COMPTE. Le pipeline `CROPS` est entièrement piloté par les données — boutique,
+   inventaire, pousse, sprite, vente — et il a une hypothèse gravée partout :
+   **une culture disparaît quand on la récolte**. `resolveHarvest` efface la case
+   et rend la parcelle à la terre nue. Ajouter un « pérenne » dans CROPS aurait
+   demandé un drapeau lu à sept endroits différents, dont trois qui ne se
+   connaissent pas. C'est le genre d'exception qui pourrit une table de données
+   propre pendant dix zips.
+
+   Un verger est donc un OBJET DE TUILE (`O_ORCHARD`) avec son état par case,
+   sur le modèle EXACT de `world.mills` : une Map idx → état, sérialisée avec le
+   monde, diffusée par `payload.orchards`, avancée par le tick de l'hôte. Ce
+   modèle est déjà écrit, déjà persisté, déjà réseau — on ne réinvente rien.
+
+   LE MÉCANISME, ET SA COHÉRENCE :
+     1. on achète un PLANT à la boutique, on le pose comme un moulin ;
+     2. il pousse pendant `matureMs` (quatre stades visibles) ;
+     3. arrivé à maturité, il porte des fruits tous les `cycleMs` ;
+     4. `E` cueille — l'arbre RESTE, le compteur repart ;
+     5. hors saison, il ne produit pas : il attend. C'est ce qui donne au
+        verger son rythme d'année et empêche qu'il devienne une rente plate ;
+     6. la hache l'abat et rend du bois. C'est réversible, donc c'est un choix.
+
+   ⚠️⚠️ LES CYCLES ET LES RENDEMENTS ONT ÉTÉ CORRIGÉS APRÈS MESURE, PAS AVANT.
+   La première écriture donnait des cycles courts (5 à 9 h) et de gros paniers
+   (jusqu'à 8 fruits). `tools/verify-orchards.mjs` a fait tourner un plant sur
+   sept jours simulés et sorti le chiffre : **1 870 or par jour et par case**
+   pour un myrtillier, contre 427 pour la meilleure culture existante (la
+   citrouille). Vingt-quatre vergers auraient rapporté plus de 300 000 or par
+   semaine — un moulin en coûte 30 000. Les neuf cultures du jeu seraient
+   devenues du décor en une soirée.
+
+   Aucun raisonnement ne donnait ça : chaque nombre pris seul paraissait
+   raisonnable, c'est leur PRODUIT qui dérapait. Les valeurs actuelles visent
+   700 à 900 or/jour/case, soit environ le double d'une bonne culture — assez
+   pour récompenser un investissement long et sans replantage, pas assez pour
+   remplacer le reste du jeu. Le contrôle compare désormais aux CULTURES
+   EXISTANTES et non à un idéal (règle du zip 379).
+
+   ⚠️ LE PRIX EST CALCULÉ, PAS CHOISI. Un plant coûte `saplingCost` et rapporte
+   `yieldAvg × fruitSell` par cycle. Le seuil de rentabilité est écrit dans
+   chaque entrée (`payback`, en cycles) : il tourne autour de 9 à 12 cycles,
+   c'est-à-dire plusieurs jours réels. Un verger doit être un INVESTISSEMENT —
+   plus cher qu'une graine, plus lent, et meilleur à la longue. S'il était
+   rentable en deux cycles, personne ne planterait plus rien d'autre, et les
+   neuf cultures existantes deviendraient du décor.
+   ========================================================================== */
+const OH = 3600 * 1000;
+export const ORCHARDS = [
+  {
+    id: "lemon", kind: "tree",
+    name: "Citronnier", nameEn: "Lemon tree",
+    saplingName: "Plant de citronnier", saplingNameEn: "Lemon sapling",
+    saplingCost: 1400, matureMs: 30 * OH, cycleMs: 11 * OH,
+    yieldMin: 3, yieldMax: 5, fruit: "lemon",
+    // Le citron est le seul à porter en hiver : c'est l'agrume, et ça donne une
+    // raison de planter un verger même quand tout le reste dort.
+    seasons: ["spring", "summer", "autumn", "winter"],
+    payback: 11,
+  },
+  {
+    id: "strawberry", kind: "low",
+    name: "Fraisier", nameEn: "Strawberry plant",
+    saplingName: "Plant de fraisier", saplingNameEn: "Strawberry plant",
+    saplingCost: 520, matureMs: 10 * OH, cycleMs: 9 * OH,
+    yieldMin: 3, yieldMax: 5, fruit: "strawberry",
+    seasons: ["spring", "summer"],
+    payback: 9,
+  },
+  {
+    id: "raspberry", kind: "bush",
+    name: "Framboisier", nameEn: "Raspberry bush",
+    saplingName: "Plant de framboisier", saplingNameEn: "Raspberry cane",
+    saplingCost: 760, matureMs: 16 * OH, cycleMs: 11 * OH,
+    yieldMin: 3, yieldMax: 5, fruit: "raspberry",
+    seasons: ["summer", "autumn"],
+    payback: 10,
+  },
+  {
+    id: "blueberry", kind: "bush",
+    name: "Myrtillier", nameEn: "Blueberry bush",
+    saplingName: "Plant de myrtillier", saplingNameEn: "Blueberry bush",
+    saplingCost: 980, matureMs: 20 * OH, cycleMs: 13 * OH,
+    yieldMin: 3, yieldMax: 5, fruit: "blueberry",
+    seasons: ["summer", "autumn"],
+    payback: 10,
+  },
+];
+export const ORCHARD_STAGES = 4;      // 0 = plant, 1 = jeune, 2 = adulte, 3 = en fruits
+export const ORCHARD_HP = 3;          // coups de hache pour l'abattre
+export const ORCHARD_WOOD = 3;        // bois rendu à l'abattage
+export const ORCHARD_MAX = 24;        // vergers plantés simultanément (toute la ferme)
+
+/* LES FRUITS. Rangés dans `f.inv.fruits` (un objet id → nombre), et non en
+   champs plats : quatre champs de plus dans l'inventaire, c'est quatre endroits
+   à toucher à chaque nouveau fruit. AUCUNE MIGRATION — `f.inv` est dans
+   l'instantané JSON. */
+export const FRUITS = [
+  { id: "lemon",      name: "Citron",    nameEn: "Lemon",      sell: 95,  color: "#f2d640", dark: "#c9a715" },
+  { id: "strawberry", name: "Fraise",    nameEn: "Strawberry", sell: 70,  color: "#e0344a", dark: "#a81f32" },
+  { id: "raspberry",  name: "Framboise", nameEn: "Raspberry",  sell: 88,  color: "#c8365f", dark: "#8e2140" },
+  { id: "blueberry",  name: "Myrtille",  nameEn: "Blueberry",  sell: 110, color: "#4a5fc8", dark: "#2c3a86" },
+];
+export function fruitSpec(id) { return FRUITS.find(f => f.id === id) || null; }
+export function fruitName(id, en) { const f = fruitSpec(id); return f ? (en ? f.nameEn : f.name) : id; }
+
+/* LA BARQUETTE (demande de Guillaume : « on peut aussi vendre les fruits par
+   barquettes »). Six fruits d'une même espèce, vendus ensemble avec une prime.
+   ⚠️ LA PRIME EST LA RAISON D'ÊTRE DE LA BARQUETTE : sans elle, vendre par six
+   serait exactement vendre six fois, donc un bouton de plus qui ne sert à rien.
+   À +25 %, elle récompense d'avoir attendu d'en avoir assez — c'est-à-dire
+   d'avoir laissé le verger tourner. */
+export const PUNNET_SIZE = 6;
+export const PUNNET_BONUS = 1.25;
+export function punnetPrice(fruitId) {
+  const f = fruitSpec(fruitId); if (!f) return 0;
+  return Math.round(f.sell * PUNNET_SIZE * PUNNET_BONUS);
+}
+
+/* ============================================================================
+   ZIP 398 — LES PRODUITS AUX FRUITS.
+   ----------------------------------------------------------------------------
+   « Ces nouvelles cultures permettront aussi d'avoir des produits qui incluent
+   cela. Des confitures, des yaourts aux fruits, des tartes aux citrons. »
+
+   Trois familles, et chacune est confiée à L'ATELIER QUI LA MÉRITE plutôt qu'à
+   un atelier neuf :
+     * la CONFITURE demande du sucre → la sucrerie, qui en produit déjà ;
+     * le YAOURT AUX FRUITS demande du lait → la fromagerie, qui fait déjà les
+       yaourts nature et vanille ;
+     * la TARTE AU CITRON demande de la farine et des œufs → la boulangerie.
+   Aucun bâtiment neuf à acheter : les vergers rendent plus utiles les trois
+   ateliers déjà payés, ce qui est un meilleur cadeau qu'un quatrième bâtiment.
+
+   ⚠️ LE PRIX DE VENTE EST TOUJOURS SUPÉRIEUR À LA SOMME DES INGRÉDIENTS, sinon
+   transformer serait une punition. `verify-orchards.mjs` le mesure recette par
+   recette, au lieu de faire confiance aux quatre nombres écrits ici. */
+export const FRUIT_PRODUCTS = [
+  { id: "jam_strawberry", shop: "sucrerie",   name: "Confiture de fraises",    nameEn: "Strawberry jam",
+    fruit: "strawberry", fruitN: 5, sugar: 2, sell: 620,  ms: 40 * 60 * 1000 },
+  { id: "jam_raspberry",  shop: "sucrerie",   name: "Confiture de framboises", nameEn: "Raspberry jam",
+    fruit: "raspberry",  fruitN: 5, sugar: 2, sell: 720,  ms: 40 * 60 * 1000 },
+  { id: "jam_blueberry",  shop: "sucrerie",   name: "Confiture de myrtilles",  nameEn: "Blueberry jam",
+    fruit: "blueberry",  fruitN: 5, sugar: 2, sell: 850,  ms: 40 * 60 * 1000 },
+  { id: "yog_strawberry", shop: "fromagerie", name: "Yaourt à la fraise",      nameEn: "Strawberry yogurt",
+    fruit: "strawberry", fruitN: 3, milk: 2,  sell: 480,  ms: 30 * 60 * 1000 },
+  { id: "yog_blueberry",  shop: "fromagerie", name: "Yaourt à la myrtille",    nameEn: "Blueberry yogurt",
+    fruit: "blueberry",  fruitN: 3, milk: 2,  sell: 610,  ms: 30 * 60 * 1000 },
+  { id: "tart_lemon",     shop: "bakery",     name: "Tarte au citron",         nameEn: "Lemon tart",
+    fruit: "lemon",      fruitN: 4, flour: 2, egg: 2, sell: 780, ms: 45 * 60 * 1000 },
+];
+export function fruitProduct(id) { return FRUIT_PRODUCTS.find(p => p.id === id) || null; }
+
+/* ZIP 398 — LE NOM DES FAMILIERS.
+   « Il faut pouvoir nommer chaque animal de compagnie qu'on a. »
+   Le surnom vit dans `f.pets[i].nick`, donc dans l'instantané JSON du fermier :
+   aucune migration. Vide = on retombe sur le nom d'espèce du catalogue. */
+export const PET_NICK_MAX = 14;

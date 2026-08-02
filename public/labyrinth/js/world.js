@@ -54,6 +54,11 @@ const World = (function () {
   let lakeMists = [], gateMesh = null, platformGroup = null, rotundaGroup = null;
   let roamerHud = [], stalkerFlash = null;
   let sparkPool = [], soulPool = [], scorePool = [];
+  /* ZIP 397 — la vue subjective. */
+  let mapMesh = null, bowMesh = null, boltPackMeshes = [], boltPool = [];
+  let vmScene = null, vmCam = null, vm = null;
+  let pitch = 0, pitchWant = 0;
+  let bobT = { y: 0, x: 0, roll: 0 }, swayX = 0, swayY = 0;
   /* ⚠️ L'INSTANTANÉ PRÉCÉDENT, cœur de l'interpolation du zip 395. La
      simulation avance par pas de 1/30 s ; le rendu, lui, tourne à la cadence
      de l'écran. Sans mémoire de l'état d'avant, on afficherait deux fois la
@@ -85,9 +90,48 @@ const World = (function () {
   function lakeSizeOf(cfg) { return cfg.GRID * cfg.CELL * 2.4; }
 
   function buildTextures(cfg) {
-    tex.wall = canvasTex(128, 128, (c) => Paint.wall(c, cfg, 128, 128, 1));
-    tex.wall2 = canvasTex(128, 128, (c) => Paint.wall(c, cfg, 128, 128, 7));
-    tex.floor = canvasTex(128, 128, (c) => Paint.floor(c, cfg, 128, 128, 3));
+    /* ⚠️ ZIP 397 — LA PIERRE PASSE À CFG.TEX_WALL (512) ET GAGNE UN RELIEF.
+       Les deux vont ensemble et ne valent rien séparément :
+
+         * à 128 px pour 5,75 unités de mur, un bloc recevait trente pixels ;
+           il n'y avait physiquement pas la place d'y mettre un chanfrein, un
+           grain et une piqûre. Le mur du 396 n'était pas mal dessiné, il était
+           dessiné TROP PETIT — c'est pourquoi quatre refontes successives n'y
+           avaient rien changé ;
+         * le `bumpMap` est la seule couche de tout ce travail qui vive à
+           L'EXÉCUTION. La torche du joueur bouge ; les creux du mortier et le
+           fond des cratères changent donc d'ombre pendant qu'on avance. Aucune
+           texture cuite ne produit ça, et c'est de très loin ce qui se voit le
+           plus en jouant.
+
+       ⚠️ ET C'EST POURQUOI LA PIERRE PASSE EN MeshPhongMaterial. Dans la r128,
+       MeshLambertMaterial N'A PAS de `bumpMap` — il l'ignore silencieusement,
+       ce qui est le pire des deux mondes : on croit avoir du relief, on n'en a
+       pas, et rien ne le dit. Phong l'accepte ; on met sa brillance à zéro et
+       son spéculaire au noir, donc on obtient très exactement un Lambert avec
+       du relief, sans reflet parasite sur une pierre mate. */
+    const TW = cfg.TEX_WALL, TF = cfg.TEX_FLOOR;
+    tex.wall = canvasTex(TW, TW, (c) => Paint.wall(c, cfg, TW, TW, 1));
+    tex.wall2 = canvasTex(TW, TW, (c) => Paint.wall(c, cfg, TW, TW, 7));
+    tex.wallB = canvasTex(TW, TW, (c) => Paint.wallBump(c, cfg, TW, TW, 1));
+    tex.wallB2 = canvasTex(TW, TW, (c) => Paint.wallBump(c, cfg, TW, TW, 7));
+    /* ⚠️ DEUX DALLAGES, ET QUATRE ORIENTATIONS — huit cellules de sol
+       différentes pour le prix d'une texture et demie.
+       Une tuile de sol couvre EXACTEMENT une cellule (FLOOR_TILE = CELL) :
+       avec un seul dessin, les 289 cellules du dédale montraient rigoureusement
+       le même dallage, et on lisait la grille du labyrinthe à travers son
+       propre sol. C'est très visible sur la vue subjective, et invisible sur
+       une planche de texture — encore une fois.
+       La rotation ne coûte RIEN (voir buildFloor : on tourne le maillage, pas
+       l'image), donc deux textures suffisent à casser la répétition. */
+    tex.floor = canvasTex(TF, TF, (c) => Paint.floor(c, cfg, TF, TF, 3));
+    tex.floor2 = canvasTex(TF, TF, (c) => Paint.floor(c, cfg, TF, TF, 23));
+    tex.floorB = canvasTex(TF, TF, (c) => Paint.floorBump(c, cfg, TF, TF, 3));
+    tex.floorB2 = canvasTex(TF, TF, (c) => Paint.floorBump(c, cfg, TF, TF, 23));
+    tex.mapSheet = canvasTex(192, 144, (c) => Paint.mapSheet(c, cfg, 192, 144));
+    /* Les quatre marques de craie. Transparentes, posées sur le mur comme un
+       décalque — voir buildChalk. */
+    tex.chalk = [0, 1, 2, 3].map(k => canvasTex(64, 64, (c) => Paint.chalk(c, cfg, 64, 64, k)));
     /* ⚠️ LA RÉPÉTITION EST CALCULÉE, PAS CHOISIE. Le défi de fuite pose une
        tuile de houle tous les 26 unités (et 37 pour la nappe additive) ; on
        reprend ces deux nombres, divisés par la taille RÉELLE du plan d'ici.
@@ -129,17 +173,71 @@ const World = (function () {
     scene.add(skyMesh);
   }
 
+  /* -----------------------------------------------------------------------
+     ⚠️ ZIP 397 — LA DENSITÉ DE TEXELS EST CONSTANTE, ET C'EST LE DEUXIÈME
+     DÉFAUT QUE LE RASTERISEUR A RENDU VISIBLE.
+     -----------------------------------------------------------------------
+     Jusqu'ici, `matX`/`matZ` étaient DEUX matériaux pour neuf cents murs de
+     longueurs différentes, et la texture n'avait pas de répétition : elle
+     était donc ÉTIRÉE sur toute la face, quelle qu'en soit la taille. Un mur
+     de 11,5 unités et un mur de 2 unités affichaient le même nombre de blocs.
+     À l'écran, ça donne des pierres deux fois plus grosses selon le couloir où
+     l'on se tient — sans qu'on sache dire pourquoi le décor « sonne faux ».
+
+     Ici, chaque taille de boîte reçoit son matériau, dont la texture est
+     CLONÉE (l'image est partagée, seule la répétition change) et réglée sur la
+     taille RÉELLE du mur divisée par CFG.WALL_TILE. Comme les murs du
+     générateur n'ont qu'une poignée de tailles distinctes, on passe de deux
+     matériaux à une douzaine — pas de quoi peser sur le rendu, et la pierre a
+     enfin la même échelle partout.
+     -------------------------------------------------------------------- */
+  const matCache = new Map();
+  function stoneMat(cfg, w, h, alt) {
+    const key = (alt ? "z" : "x") + w.toFixed(2) + "x" + h.toFixed(2);
+    let mm = matCache.get(key);
+    if (mm) return mm;
+    const map = (alt ? tex.wall2 : tex.wall).clone();
+    const bump = (alt ? tex.wallB2 : tex.wallB).clone();
+    map.needsUpdate = bump.needsUpdate = true;
+    /* ⚠️ UNE SEULE TUILE SUR LA HAUTEUR, ET C'EST VOULU. La texture porte une
+       SUIE en haut (il y a une torche murale tous les trois mètres : c'est un
+       fait, pas une coquetterie) et une MOUSSE en bas, là où l'eau stagne. Ces
+       deux couches décrivent le haut et le bas D'UN MUR, pas d'une tuile : les
+       répéter verticalement mettrait une bande de suie au milieu de la
+       maçonnerie et de la mousse à mi-hauteur.
+
+       tools/verify-textures.mjs a signalé le problème par sa mesure de
+       couture — 7,1 en y contre 2,4 en x — et c'est exactement à ça que sert un
+       chiffre : il a montré une asymétrie que personne ne cherchait, et
+       l'asymétrie avait une cause physique.
+
+       Conséquence heureuse : à 11 unités de haut pour cinq assises, un bloc
+       fait 2,2 unités — la taille relevée sur les images de référence du 394,
+       où l'on compte « quatre ou cinq assises sur toute la hauteur d'un mur ».
+       On ne répète donc plus verticalement, et il n'y a plus de couture du
+       tout dans cet axe. */
+    const rx = Math.max(1, Math.round(w / cfg.WALL_TILE));
+    map.repeat.set(rx, 1);
+    bump.repeat.set(rx, 1);
+    void h;
+    mm = new THREE_.MeshPhongMaterial({
+      map, bumpMap: bump, bumpScale: 0.55,
+      shininess: 0, specular: 0x000000,      // = Lambert + relief, sans reflet
+    });
+    matCache.set(key, mm);
+    return mm;
+  }
+
   function buildWalls(cfg, m, st) {
     const geoCache = new Map();
-    const matX = new THREE_.MeshLambertMaterial({ map: tex.wall });
-    const matZ = new THREE_.MeshLambertMaterial({ map: tex.wall2 });
     const group = new THREE_.Group();
     for (const b of st.boxes) {
       const w = b.x1 - b.x0, d = b.z1 - b.z0;
       const key = w.toFixed(2) + "x" + d.toFixed(2);
       let g = geoCache.get(key);
       if (!g) { g = new THREE_.BoxGeometry(w, cfg.WALL_H, d); geoCache.set(key, g); }
-      const mesh = new THREE_.Mesh(g, w > d ? matX : matZ);
+      const along = w > d;
+      const mesh = new THREE_.Mesh(g, stoneMat(cfg, along ? w : d, cfg.WALL_H, !along));
       mesh.position.set((b.x0 + b.x1) / 2, cfg.WALL_H / 2, (b.z0 + b.z1) / 2);
       group.add(mesh);
     }
@@ -170,7 +268,16 @@ const World = (function () {
     const full = new THREE_.PlaneGeometry(cfg.CELL, cfg.CELL);
     const SUB = 6;
     const sub = new THREE_.PlaneGeometry(cfg.CELL / SUB, cfg.CELL / SUB);
-    const mat = new THREE_.MeshLambertMaterial({ map: tex.floor });
+    // Le sol : une tuile par cellule pile (CFG.FLOOR_TILE = CELL), donc pas de
+    // répétition à régler — et le relief, lui, compte double au sol : c'est la
+    // surface qu'on voit de plus près et sous l'angle le plus rasant.
+    const mats = [
+      new THREE_.MeshPhongMaterial({ map: tex.floor, bumpMap: tex.floorB,
+        bumpScale: 0.45, shininess: 0, specular: 0x000000 }),
+      new THREE_.MeshPhongMaterial({ map: tex.floor2, bumpMap: tex.floorB2,
+        bumpScale: 0.45, shininess: 0, specular: 0x000000 }),
+    ];
+    const mat = mats[0];
     const group = new THREE_.Group();
     const RAG_MIN = 0.26, RAG_MAX = 0.46;
     for (let y = 0; y < m.G; y++) for (let x = 0; x < m.G; x++) {
@@ -180,8 +287,15 @@ const World = (function () {
       if (inRotunda(m, x, y)) continue;
       const [wx, wz] = Rules.centerOf(cfg, x, y);
       if (!st.gaps.has(j)) {
-        const mesh = new THREE_.Mesh(full, mat);
+        const mesh = new THREE_.Mesh(full, mats[(x * 7 + y * 13) % 2]);
         mesh.rotation.x = -Math.PI / 2;
+        /* ⚠️ LA ROTATION DU DALLAGE NE COÛTE RIEN ET CASSE TOUT LE MOTIF.
+           Le plan est carré et sa texture aussi : le tourner d'un quart de
+           tour dans son propre plan revient à faire pivoter l'image, sans
+           second matériau, sans seconde texture, sans un octet de mémoire.
+           Deux dessins × quatre orientations = huit dallages distincts, et la
+           grille du labyrinthe cesse de se lire à travers son sol. */
+        mesh.rotation.z = ((x * 5 + y * 3) % 4) * Math.PI / 2;
         mesh.position.set(wx, 0, wz);
         group.add(mesh);
         continue;
@@ -537,6 +651,163 @@ const World = (function () {
      réserves sont donc construites une fois et recyclées ; leur taille est le
      nombre maximal d'effets simultanés, pas une estimation.
      ======================================================================= */
+  /* =======================================================================
+     ZIP 397 — LE MODÈLE DE VUE. La pièce qui fait qu'un FPS est un FPS.
+     -----------------------------------------------------------------------
+     Guillaume : « ce doit être au niveau des first person shooters
+     existants ». Voici la différence la plus visible, et ce n'est pas la
+     caméra : ce sont LES MAINS.
+
+     ⚠️ IL EST RENDU DANS UNE SECONDE PASSE, AVEC SA PROPRE SCÈNE ET SA PROPRE
+     CAMÉRA. C'est la technique standard du genre et elle n'est pas un
+     raffinement : une arme placée dans la scène principale RENTRE DANS LE MUR
+     dès qu'on s'y colle — et dans un labyrinthe, on se colle aux murs en
+     permanence. Deux passes, `autoClear = false` entre les deux, tampon de
+     profondeur remis à zéro : l'arme est toujours devant, toujours entière,
+     et rien d'autre ne change.
+
+     Le champ de la seconde caméra est PLUS ÉTROIT (VM_FOV 55° contre 78°) :
+     une arme filmée au grand-angle paraît difforme, la crosse énorme et la
+     pointe minuscule. Tous les jeux du genre font ça, et pour cette raison-là.
+
+     ⚠️ IL EST ÉCLAIRÉ PAR SA PROPRE LUMIÈRE, chaude et fixe. Il ne peut pas
+     partager celle du monde (elle est dans l'autre scène), et c'est heureux :
+     on veut que les mains restent lisibles quand la torche meurt, sinon
+     l'écran devient noir avec un rectangle noir dessus.
+     ======================================================================= */
+  function buildViewModel(cfg, sk) {
+    vmScene = new THREE_.Scene();
+    vmCam = new THREE_.PerspectiveCamera(cfg.VM_FOV, 1, 0.02, 12);
+    vmScene.add(new THREE_.AmbientLight(0xffffff, 0.62));
+    const key = new THREE_.PointLight(cfg.COL_TORCH, 1.5, 6, 1.6);
+    key.position.set(-0.5, 0.35, -0.4);
+    vmScene.add(key);
+
+    const skinC = (sk && sk.skin) || cfg.COL_SKIN;
+    const shirtC = (sk && sk.shirt) || cfg.COL_SHIRT;
+    const lam = (c) => new THREE_.MeshLambertMaterial({ color: c });
+    const box = (w, h, d, c) => new THREE_.Mesh(new THREE_.BoxGeometry(w, h, d), lam(c));
+
+    const root = new THREE_.Group();
+    vmScene.add(root);
+
+    /* --- LA MAIN GAUCHE ET LA TORCHE.
+       Le poing est fait de quatre doigts SÉPARÉS plutôt que d'un bloc : au
+       premier plan, à trente centimètres de l'œil, un moignon se voit
+       immédiatement. C'est le seul endroit du jeu où le détail d'une main
+       compte, et c'est là qu'il faut le mettre. */
+    const left = new THREE_.Group();
+    left.position.set(-0.42, -0.34, -0.62);
+    root.add(left);
+    const sleeveL = box(0.20, 0.20, 0.42, shirtC);
+    sleeveL.position.set(0, -0.06, 0.20);
+    left.add(sleeveL);
+    const cuffL = box(0.23, 0.22, 0.09, Paint.mix(shirtC, 0xffffff, 0.25));
+    cuffL.position.set(0, -0.05, 0.02);
+    left.add(cuffL);
+    const palmL = box(0.17, 0.19, 0.16, skinC);
+    left.add(palmL);
+    for (let i = 0; i < 4; i++) {
+      const f = box(0.16, 0.042, 0.05, skinC);
+      f.position.set(0.005, 0.075 - i * 0.048, -0.075);
+      left.add(f);
+    }
+    const thumbL = box(0.055, 0.10, 0.06, skinC);
+    thumbL.position.set(0.075, 0.05, -0.03);
+    left.add(thumbL);
+    const shaft = new THREE_.Mesh(new THREE_.CylinderGeometry(0.045, 0.055, 1.15, 6),
+      new THREE_.MeshLambertMaterial({ map: tex.wood }));
+    shaft.position.set(0, 0.42, -0.02);
+    left.add(shaft);
+    const wrap = box(0.11, 0.16, 0.11, cfg.COL_BARK_DARK);
+    wrap.position.set(0, 0.02, -0.02);
+    left.add(wrap);
+    const vmFlame = new THREE_.Mesh(new THREE_.PlaneGeometry(0.62, 0.86),
+      new THREE_.MeshBasicMaterial({ map: flameCuts[0], transparent: true,
+        blending: THREE_.AdditiveBlending, depthWrite: false, fog: false }));
+    vmFlame.position.set(0, 1.28, -0.02);
+    left.add(vmFlame);
+    const vmHalo = new THREE_.Mesh(new THREE_.PlaneGeometry(2.6, 2.6),
+      new THREE_.MeshBasicMaterial({ map: tex.haloWarm, transparent: true, opacity: 0.45,
+        blending: THREE_.AdditiveBlending, depthWrite: false, fog: false }));
+    vmHalo.position.set(0, 1.22, -0.05);
+    left.add(vmHalo);
+
+    /* --- LA MAIN DROITE. Elle porte l'épée OU l'arbalète, jamais les deux :
+       `swordG.visible` / `bowG.visible` s'excluent dans sync(). Le poing, lui,
+       est commun — c'est la même main. */
+    const right = new THREE_.Group();
+    right.position.set(0.46, -0.40, -0.60);
+    root.add(right);
+    const sleeveR = box(0.20, 0.20, 0.42, shirtC);
+    sleeveR.position.set(0, -0.06, 0.20);
+    right.add(sleeveR);
+    const gloveR = box(0.19, 0.20, 0.18, cfg.COL_BARK);
+    right.add(gloveR);
+    for (let i = 0; i < 4; i++) {
+      const f = box(0.17, 0.044, 0.05, cfg.COL_BARK);
+      f.position.set(-0.005, 0.078 - i * 0.05, -0.08);
+      right.add(f);
+    }
+
+    // ---- l'épée, dans le prolongement de l'avant-bras
+    const swordG = new THREE_.Group();
+    right.add(swordG);
+    const grip = new THREE_.Mesh(new THREE_.CylinderGeometry(0.036, 0.040, 0.30, 6), lam(cfg.COL_BARK_DARK));
+    grip.position.set(0, 0.10, -0.02);
+    swordG.add(grip);
+    const pommel = box(0.09, 0.07, 0.09, cfg.COL_STEEL_EDGE);
+    pommel.position.set(0, -0.06, -0.02);
+    swordG.add(pommel);
+    const cross = box(0.42, 0.055, 0.09, cfg.COL_STEEL_EDGE);
+    cross.position.set(0, 0.26, -0.02);
+    swordG.add(cross);
+    const blade = box(0.115, 1.32, 0.036, cfg.COL_STEEL);
+    blade.position.set(0, 0.96, -0.02);
+    swordG.add(blade);
+    const fuller = box(0.036, 1.18, 0.045, cfg.COL_STEEL_EDGE);
+    fuller.position.set(0, 0.95, -0.02);
+    swordG.add(fuller);
+    const tip = box(0.075, 0.19, 0.03, cfg.COL_STEEL);
+    tip.position.set(0, 1.70, -0.02);
+    swordG.add(tip);
+    // trois runes sur la lame : ce sont elles qu'on regarde en marchant
+    for (let i = 0; i < 3; i++) {
+      const r2 = box(0.05, 0.05, 0.05, cfg.COL_RUNE);
+      r2.position.set(0, 0.62 + i * 0.30, -0.045);
+      swordG.add(r2);
+    }
+
+    // ---- l'arbalète
+    const bowG = new THREE_.Group();
+    bowG.visible = false;
+    right.add(bowG);
+    const bstock = new THREE_.Mesh(new THREE_.BoxGeometry(0.16, 0.15, 1.05),
+      new THREE_.MeshLambertMaterial({ map: tex.wood }));
+    bstock.position.set(-0.10, 0.06, -0.42);
+    bowG.add(bstock);
+    const bbutt = box(0.16, 0.22, 0.22, cfg.COL_BARK);
+    bbutt.position.set(-0.10, -0.01, 0.05);
+    bowG.add(bbutt);
+    const blimb = box(1.15, 0.085, 0.11, cfg.COL_STEEL_EDGE);
+    blimb.position.set(-0.10, 0.10, -0.86);
+    bowG.add(blimb);
+    const bstring = box(1.02, 0.022, 0.022, cfg.COL_SAND);
+    bstring.position.set(-0.10, 0.10, -0.60);
+    bowG.add(bstring);
+    const bnut = box(0.10, 0.10, 0.12, cfg.COL_STEEL);
+    bnut.position.set(-0.10, 0.13, -0.34);
+    bowG.add(bnut);
+    const loaded = box(0.05, 0.05, 0.62, cfg.COL_STEEL);
+    loaded.position.set(-0.10, 0.15, -0.66);
+    bowG.add(loaded);
+    const bhead = box(0.085, 0.085, 0.13, cfg.COL_STEEL_EDGE);
+    bhead.position.set(-0.10, 0.15, -1.02);
+    bowG.add(bhead);
+
+    vm = { root, left, right, swordG, bowG, flame: vmFlame, halo: vmHalo, loaded, key };
+  }
+
   function buildFx(cfg) {
     const sg = new THREE_.BoxGeometry(0.22, 0.22, 0.22);
     for (let i = 0; i < 48; i++) {
@@ -860,6 +1131,162 @@ const World = (function () {
       scene.add(grp);
       potionMeshes.push({ mesh: grp, p: po, halo });
     }
+
+    /* ====================================================================
+       ZIP 397 — LA CARTE LUISANTE, ACCROCHÉE AU MUR.
+       --------------------------------------------------------------------
+       Guillaume : « avoir un bonus qui permet de voir le plan du maze (quand
+       on trouve une carte luisante accrochée au mur) ».
+
+       ⚠️ ELLE EST PLAQUÉE SUR LA FACE QUE LE GÉNÉRATEUR A CHOISIE, pas sur
+       une face devinée ici. maze.js sait quelles faces sont fermées ; les
+       redécouvrir dans le rendu, ce serait une seconde description de la même
+       chose, et la seconde finit toujours par se tromper (leçon du 387) — ici
+       elle collerait un parchemin dans le vide au-dessus d'un couloir.
+
+       Le halo est PLUS GRAND que la feuille et il ne dépend pas du
+       brouillard : c'est lui qu'on voit d'abord, du bout d'un couloir, et
+       c'est tout ce qu'on lui demande. Une carte qu'on ne remarque pas est
+       une carte qui n'existe pas. */
+    if (st.mapItem) {
+      const it = st.mapItem;
+      const grp = new THREE_.Group();
+      const sheet = new THREE_.Mesh(new THREE_.PlaneGeometry(3.2, 2.4),
+        new THREE_.MeshBasicMaterial({ map: tex.mapSheet, transparent: true, fog: false,
+          side: THREE_.DoubleSide }));
+      grp.add(sheet);
+      const halo = new THREE_.Mesh(new THREE_.PlaneGeometry(11, 11),
+        new THREE_.MeshBasicMaterial({ map: tex.haloCyan, color: cfg.COL_MAPGLOW,
+          transparent: true, opacity: 0.55, blending: THREE_.AdditiveBlending,
+          depthWrite: false, fog: false }));
+      halo.position.z = -0.05;
+      grp.add(halo);
+      const [wx, wz] = Rules.centerOf(cfg, it.x, it.y);
+      /* La face : N = -Z, E = +X, S = +Z, W = -X (voir Rules.N/E/S/W). On
+         décale la feuille jusqu'au mur et on la tourne pour qu'elle regarde
+         VERS le couloir. */
+      const off = cfg.HALF - cfg.WALL * 0.5 - 0.15;
+      let dx = 0, dz = 0, ry = 0;
+      if (it.dir === Rules.N) { dz = -off; ry = 0; }
+      else if (it.dir === Rules.S) { dz = off; ry = Math.PI; }
+      else if (it.dir === Rules.E) { dx = off; ry = -Math.PI / 2; }
+      else { dx = -off; ry = Math.PI / 2; }
+      grp.position.set(wx + dx, Rules.groundY(cfg, m, wx, wz) + cfg.CHALK_H, wz + dz);
+      grp.rotation.y = ry;
+      scene.add(grp);
+      const lamp = new THREE_.PointLight(cfg.COL_MAPGLOW, 1.5, cfg.MAP_GLOW_RANGE, 2);
+      lamp.position.set(wx + dx * 0.4, cfg.CHALK_H, wz + dz * 0.4);
+      scene.add(lamp);
+      mapMesh = { grp, it, halo, lamp };
+    }
+
+    /* L'ARBALÈTE et LES CARREAUX, posés au sol. Même grammaire visuelle que
+       l'épée — un halo, une couleur froide — parce que le joueur a appris en
+       trente secondes que « froid et lumineux = à ramasser », et qu'inventer
+       une seconde grammaire pour la seconde arme, c'est la lui faire
+       réapprendre pour rien. */
+    if (st.bow) {
+      const grp = new THREE_.Group();
+      const stock = new THREE_.Mesh(new THREE_.BoxGeometry(0.34, 0.30, 2.1),
+        new THREE_.MeshLambertMaterial({ map: tex.wood }));
+      grp.add(stock);
+      const arms = new THREE_.Mesh(new THREE_.BoxGeometry(2.5, 0.20, 0.24),
+        new THREE_.MeshLambertMaterial({ color: cfg.COL_STEEL_EDGE }));
+      arms.position.z = -0.7;
+      grp.add(arms);
+      const halo = new THREE_.Mesh(new THREE_.PlaneGeometry(6.5, 6.5),
+        new THREE_.MeshBasicMaterial({ map: tex.haloCyan, transparent: true, opacity: 0.55,
+          blending: THREE_.AdditiveBlending, depthWrite: false, fog: false }));
+      grp.add(halo);
+      const [wx, wz] = Rules.centerOf(cfg, st.bow.x, st.bow.y);
+      grp.position.set(wx, Rules.groundY(cfg, m, wx, wz) + 1.5, wz);
+      scene.add(grp);
+      bowMesh = { grp, halo, b: st.bow };
+    }
+    const bg = new THREE_.BoxGeometry(0.14, 0.14, 1.5);
+    for (const bp of st.boltPacks) {
+      const grp = new THREE_.Group();
+      for (let k = 0; k < 3; k++) {
+        const b2 = new THREE_.Mesh(bg, new THREE_.MeshLambertMaterial({ color: cfg.COL_STEEL_EDGE }));
+        b2.position.set((k - 1) * 0.22, 0, 0);
+        b2.rotation.z = 0.18 * (k - 1);
+        grp.add(b2);
+      }
+      const halo = new THREE_.Mesh(new THREE_.PlaneGeometry(3.2, 3.2),
+        new THREE_.MeshBasicMaterial({ map: tex.haloCyan, transparent: true, opacity: 0.42,
+          blending: THREE_.AdditiveBlending, depthWrite: false, fog: false }));
+      grp.add(halo);
+      const [wx, wz] = Rules.centerOf(cfg, bp.x, bp.y);
+      grp.position.set(wx, Rules.groundY(cfg, m, wx, wz) + 0.9, wz);
+      scene.add(grp);
+      boltPackMeshes.push({ grp, halo, b: bp });
+    }
+    /* LES CARREAUX EN VOL. Une réserve de huit, recyclée : rules.js peut en
+       avoir plusieurs en l'air (le rechargement dure 0,9 s, le vol 1,4 s), et
+       créer un maillage par tir ferait tousser le ramasse-miettes au pire
+       moment — pendant un combat. Même motif que sparkPool. */
+    const pg2 = new THREE_.BoxGeometry(0.13, 0.13, 1.35);
+    for (let i = 0; i < 8; i++) {
+      const mm = new THREE_.Mesh(pg2, new THREE_.MeshBasicMaterial({ color: cfg.COL_STEEL, fog: false }));
+      mm.visible = false;
+      scene.add(mm);
+      boltPool.push(mm);
+    }
+  }
+
+  /* =======================================================================
+     ZIP 397 — LES MARQUES DE CRAIE, collées sur les murs.
+     -----------------------------------------------------------------------
+     Ce sont des DÉCALQUES : un plan transparent posé à deux centimètres du
+     mur. Deux détails les rendent crédibles, et les deux ont été trouvés en
+     regardant :
+
+       * elles sont posées LÉGÈREMENT DE TRAVERS (rotation.z bruitée). Une
+         marque parfaitement d'aplomb se lit comme une icône d'interface, pas
+         comme une trace laissée par quelqu'un ;
+       * la FLÈCHE est tournée vers la direction qu'elle indique — donc son
+         angle vient de maze.js, qui connaît le chemin. Une flèche qui pointe
+         au hasard serait pire que pas de flèche du tout : elle mentirait, et
+         un joueur qui a été trompé une fois n'en regarde plus aucune.
+     ======================================================================= */
+  function buildChalk(cfg, m) {
+    if (!m.chalk || !m.chalk.length) return;
+    const g = new THREE_.PlaneGeometry(3.0, 3.0);
+    const mats = tex.chalk.map(t => new THREE_.MeshBasicMaterial({
+      map: t, transparent: true, opacity: 0.82, depthWrite: false, fog: true }));
+    const grp = new THREE_.Group();
+    for (const c of m.chalk) {
+      const [wx, wz] = Rules.centerOf(cfg, c.x, c.y);
+      const off = cfg.HALF - cfg.WALL * 0.5 - 0.12;
+      let dx = 0, dz = 0, ry = 0;
+      if (c.face === Rules.N) { dz = -off; ry = 0; }
+      else if (c.face === Rules.S) { dz = off; ry = Math.PI; }
+      else if (c.face === Rules.E) { dx = off; ry = -Math.PI / 2; }
+      else { dx = -off; ry = Math.PI / 2; }
+      const mesh = new THREE_.Mesh(g, mats[c.kind] || mats[0]);
+      mesh.position.set(wx + dx, Rules.groundY(cfg, m, wx, wz) + cfg.CHALK_H, wz + dz);
+      mesh.rotation.y = ry;
+      /* ⚠️ UNE FLÈCHE SUR UN MUR NE PEUT DÉSIGNER QUE LA GAUCHE OU LA DROITE,
+         et il a fallu écrire la projection pour s'en rendre compte. Le décalque
+         est plaqué sur une surface VERTICALE : son plan ne contient pas la
+         normale du mur, donc la composante « vers l'avant » de la direction à
+         indiquer n'est pas représentable. On projette :
+
+           localX (monde) = ( cos ry, 0, −sin ry )
+           direction      = ( −sin to, 0, −cos to )     (convention ang du jeu)
+           produit        = −sin(to − ry)
+
+         Le signe de ce produit dit tout : positif, la flèche va vers son +X
+         (roulis 0) ; négatif, vers son −X (roulis π). Un roulis CONTINU aurait
+         donné des flèches pointant en biais vers le plafond — juste selon la
+         formule, absurde sur un mur. */
+      const proj = -Math.sin(c.to - ry);
+      mesh.rotation.z = (c.kind === 0 || c.kind === 3)
+        ? (proj < 0 ? Math.PI : 0) + (Paint.noise(c.x * 31 + c.y) - 0.5) * 0.18
+        : (Paint.noise(c.x * 17 + c.y * 7) - 0.5) * 0.34;
+      grp.add(mesh);
+    }
+    scene.add(grp);
   }
 
   /* =======================================================================
@@ -925,11 +1352,25 @@ const World = (function () {
     // partie plantait, celle qu'on joue toujours.
     lakeMists = []; roamerHud = []; sparkPool = []; soulPool = []; scorePool = [];
     gateMesh = null; platformGroup = null; rotundaGroup = null; stalkerFlash = null;
+    // ⚠️ Zip 397 : les collections neuves se remettent à zéro AVEC les autres.
+    // C'est la ligne qu'on oublie à chaque zip, et c'est le défaut du 393 —
+    // la deuxième partie plantait, celle qu'on joue toujours.
+    mapMesh = null; bowMesh = null; boltPackMeshes = []; boltPool = [];
+    vmScene = null; vmCam = null; vm = null;
+    pitch = pitchWant = 0; swayX = swayY = 0;
+    bobT = { y: 0, x: 0, roll: 0 };
+    matCache.clear();
 
     scene = new THREE_.Scene();
     scene.fog = new THREE_.Fog(cfg.COL_FOG, cfg.FOG_NEAR_FULL, cfg.FOG_FAR_FULL);
 
-    camera = new THREE_.PerspectiveCamera(cfg.CAM_FOV, 1, 0.1, m.G * cfg.CELL * 4);
+    /* ⚠️ LE PLAN DE COUPE PROCHE DESCEND À 0,05 EN VUE SUBJECTIVE. À 0,1, on
+       voyait à travers un mur dès qu'on s'y collait — le corps a un rayon de
+       0,9, mais l'œil, lui, peut arriver à quelques centimètres d'une arête de
+       boîte. C'est le défaut le plus banal du passage en subjectif, et le
+       seul qui donne l'impression que le décor n'est pas solide. */
+    camera = new THREE_.PerspectiveCamera(fpsView ? cfg.FPS_FOV : cfg.CAM_FOV,
+      1, fpsView ? 0.05 : 0.1, m.G * cfg.CELL * 4);
     renderer = new THREE_.WebGLRenderer({ canvas, antialias: false });
     renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
 
@@ -943,6 +1384,7 @@ const World = (function () {
     buildCeiling(cfg, m);
     buildRotunda(cfg, m);      // zip 396 : la salle centrale
     buildProps(cfg, m, st);
+    buildChalk(cfg, m);        // zip 397 : les indices de craie
     buildPlatform(cfg, m);      // zip 396 : le renoncement...
     buildGate(cfg, m, st);      // ... et ce qui le referme
     buildFx(cfg);               // ... et les effets du combat
@@ -1011,11 +1453,26 @@ const World = (function () {
         blending: THREE_.AdditiveBlending, depthWrite: false, fog: false }));
     stalkerRig.skull.add(stalkerHalo);
     stalkerHalo.position.set(0, 0.3, -0.1);
+    buildViewModel(cfg, sk);   // zip 397 : les mains, la torche, l'arme
     snapPrev(st);
 
     cam.x = st.px; cam.y = cfg.CAM_HEIGHT; cam.z = st.pz + cfg.CAM_DIST;
     cam.ang = st.ang;      // zip 396 : la caméra démarre DERRIÈRE, pas en train de rattraper
     resize();
+  }
+
+  /* -----------------------------------------------------------------------
+     LE TANGAGE — poussé depuis game.js à chaque pas, borné ici.
+     -----------------------------------------------------------------------
+     ⚠️ IL VIT DANS LE RENDU, PAS DANS LE MOTEUR, et c'est un choix assumé
+     (voir le bloc « vue à la première personne » de config.js) : le sol est
+     plat, on ne saute pas, on ne vise pas en hauteur, et une épée comme un
+     carreau partent à l'horizontale. Le tangage ne décide donc de RIEN — ce
+     qui est précisément la condition pour que les dix outils continuent de
+     rejouer le même jeu qu'avant la bascule.
+     -------------------------------------------------------------------- */
+  function addPitch(d, cfg) {
+    pitchWant = Math.max(-cfg.PITCH_MAX, Math.min(cfg.PITCH_MAX, pitchWant - d));
   }
 
   /* =======================================================================
@@ -1059,6 +1516,11 @@ const World = (function () {
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
+    /* La caméra du modèle de vue a SON propre rapport d'image. L'oublier est
+       le défaut classique de la seconde passe : l'arme s'étire au
+       redimensionnement de la fenêtre alors que le décor, lui, reste juste —
+       et on cherche longtemps du côté du décor. */
+    if (vmCam) { vmCam.aspect = w / h; vmCam.updateProjectionMatrix(); }
   }
 
   /* -----------------------------------------------------------------------
@@ -1262,8 +1724,36 @@ const World = (function () {
 
     syncGate(st, cfg, t);
     syncFx(st, cfg, t);
-    updateCamera(st, cfg, px, pz, pang);
-    renderer.render(scene, camera);
+    /* ⚠️ LA CAMÉRA EST POSÉE AVANT LE RESTE. Une bonne moitié de la scène
+       (halos, flammes, jauges) fait `lookAt(camera.position)` : la poser après
+       ferait regarder tout ce petit monde vers la position de l'image
+       PRÉCÉDENTE. Une image de retard sur un plan face-caméra ne se voit pas ;
+       sur une jauge de vie au-dessus d'un rôdeur qu'on longe, si. */
+    if (fpsView) updateCameraFPS(st, cfg, px, pz, pang, pgait);
+    else updateCamera(st, cfg, px, pz, pang);
+    syncFPS(st, cfg, t, fl, px, pz, pang, pgait);
+
+    /* ⚠️ DEUX PASSES, ET L'ORDRE COMPTE.
+       1. le monde, avec effacement normal ;
+       2. le tampon de PROFONDEUR seul est vidé (pas la couleur), puis le
+          modèle de vue est rendu par-dessus avec sa propre caméra.
+
+       Sans le `clearDepth()`, les mains seraient masquées par le mur qui se
+       trouve à trente centimètres devant elles ; sans `autoClear = false`, la
+       seconde passe effacerait le monde et on ne verrait QUE les mains. C'est
+       le montage standard du genre et il tient en trois lignes — mais chacune
+       des trois est indispensable, et il n'y a pas d'autre façon d'obtenir
+       une arme qui ne rentre jamais dans la pierre. */
+    if (fpsView && vmScene && renderer.clearDepth) {
+      renderer.autoClear = true;
+      renderer.render(scene, camera);
+      renderer.autoClear = false;
+      renderer.clearDepth();
+      renderer.render(vmScene, vmCam);
+      renderer.autoClear = true;
+    } else {
+      renderer.render(scene, camera);
+    }
   }
 
   /* -----------------------------------------------------------------------
@@ -1309,6 +1799,127 @@ const World = (function () {
   /* LES ÉTINCELLES, LES ÂMES ASPIRÉES ET LES POINTS QUI MONTENT.
      Tout est piloté par st.fx, produit par rules.js : le rendu ne décide ni
      du moment, ni de l'endroit, ni de la durée. Il lit. */
+  /* =======================================================================
+     ZIP 397 — TOUT CE QUE LA VUE SUBJECTIVE AJOUTE, EN UN SEUL ENDROIT.
+     -----------------------------------------------------------------------
+     Le corps du fermier, les objets neufs, les carreaux en vol et le modèle
+     de vue. Regroupé ici plutôt qu'éparpillé dans sync() pour une raison
+     simple : le jour où l'on voudra rebasculer en troisième personne, il n'y
+     a qu'un appel à couper — et `fpsView` existe déjà pour ça, puisque
+     l'écran-titre s'en sert.
+     ======================================================================= */
+  function syncFPS(st, cfg, t, fl, px, pz, pang, pgait) {
+    /* ⚠️ LE CORPS DISPARAÎT, MAIS LE RIG CONTINUE D'ÊTRE POSÉ. Deux raisons :
+       il redevient visible à l'écran-titre sans rien recalculer, et surtout
+       la torche du monde reste accrochée à sa main — donc la lumière et le
+       halo continuent de suivre le cycle de marche, gratuitement, comme
+       depuis le 395. Le cacher coûte un booléen ; le débrancher aurait coûté
+       de réécrire l'éclairage. */
+    if (player) player.visible = !fpsView && (st.status !== "falling" || (Date.now() % 200 < 120));
+
+    // --- la carte accrochée au mur
+    if (mapMesh) {
+      const on = !mapMesh.it.taken;
+      mapMesh.grp.visible = on;
+      mapMesh.lamp.intensity = on ? 1.5 : 0;
+      if (on) {
+        // elle respire : c'est ce qui la distingue d'une tache sur le mur
+        const k = 0.45 + Math.sin(t * 2.1) * 0.14;
+        mapMesh.halo.material.opacity = k;
+        mapMesh.halo.scale.setScalar ? mapMesh.halo.scale.setScalar(1 + Math.sin(t * 2.1) * 0.07)
+          : mapMesh.halo.scale.set(1, 1, 1);
+      }
+    }
+    if (bowMesh) {
+      bowMesh.grp.visible = !bowMesh.b.taken;
+      if (bowMesh.grp.visible) {
+        bowMesh.grp.rotation.y = t * 0.8;
+        bowMesh.grp.position.y = Rules.groundY(cfg, M_, bowMesh.grp.position.x, bowMesh.grp.position.z)
+          + 1.5 + Math.sin(t * 2.0) * 0.16;
+        bowMesh.halo.lookAt(camera.position);
+      }
+    }
+    for (const bp of boltPackMeshes) {
+      bp.grp.visible = !bp.b.taken;
+      if (bp.grp.visible) { bp.grp.rotation.y = t * 0.6; bp.halo.lookAt(camera.position); }
+    }
+
+    /* --- LES CARREAUX EN VOL. Ils viennent de rules.js et ne sont QUE lus :
+       le rendu ne décide ni de leur trajectoire ni de leur fin. Un projectile
+       dont la position serait recalculée à l'affichage finirait par se planter
+       ailleurs que là où le moteur l'a arrêté, et le joueur verrait un carreau
+       passer à travers un rôdeur qu'il vient de tuer. */
+    let ib = 0;
+    for (const p of st.projectiles) {
+      if (ib >= boltPool.length) break;
+      const mm = boltPool[ib++];
+      mm.visible = true;
+      mm.position.set(p.x, cfg.EYE_H * 0.8, p.z);
+      mm.rotation.set(0, p.ang, 0);
+    }
+    for (; ib < boltPool.length; ib++) boltPool[ib].visible = false;
+
+    if (!vm) return;
+
+    /* --- LE MODÈLE DE VUE : la flamme, l'arme, le geste. */
+    const cut = flameCuts[((t * 11) | 0) % 4];
+    if (vm.flame.material.map !== cut) vm.flame.material.map = cut;
+    const flick = 1 + Math.sin(t * 17.3) * cfg.TORCH_FLICKER + Math.sin(t * 6.1) * cfg.TORCH_FLICKER * 0.6;
+    const fs = (0.45 + fl.k * 0.75) * flick;
+    vm.flame.scale.set(fs, fs, 1);
+    vm.flame.visible = st.flame > 0;
+    vm.halo.visible = st.flame > 0;
+    vm.halo.material.opacity = 0.18 + fl.k * 0.36;
+    vm.key.intensity = 0.5 + fl.k * 1.4;
+    /* La torche s'abaisse quand la flamme meurt : le bras fatigue, et surtout
+       ça DIT que quelque chose se dégrade, sans jauge. */
+    vm.left.rotation.x = -0.10 + (1 - fl.k) * 0.34;
+
+    // l'arme tenue : l'arbalète prend la place de l'épée dès qu'on l'a
+    const useBow = st.hasBow && st.bolts > 0;
+    vm.bowG.visible = useBow;
+    vm.swordG.visible = st.hasSword && !useBow;
+    vm.right.visible = st.hasSword || st.hasBow;
+    vm.loaded.visible = useBow && st.boltCd <= 0;   // pas de carreau visible pendant le rechargement
+
+    /* LE COUP D'ÉPÉE EN VUE SUBJECTIVE — trois temps, comme au 395, mais dans
+       l'espace de l'écran : l'arme part EN HAUT À DROITE (armé), traverse le
+       cadre en diagonale (frappe), puis revient. La diagonale est ce qui rend
+       un coup lisible en subjectif ; un coup qui part et revient sur le même
+       axe ne se voit pas, parce qu'on n'a aucun repère de profondeur à trente
+       centimètres de l'œil. */
+    if (st.swingT > 0 && vm.swordG.visible) {
+      const k = 1 - st.swingT / (cfg.SWING_MS / 1000);   // 0 → 1
+      let a2, up, side;
+      if (k < cfg.SWING_WINDUP) {
+        const u = k / cfg.SWING_WINDUP;
+        a2 = -0.9 * u; up = 0.30 * u; side = 0.26 * u;
+      } else if (k < cfg.SWING_STRIKE) {
+        const u = (k - cfg.SWING_WINDUP) / (cfg.SWING_STRIKE - cfg.SWING_WINDUP);
+        a2 = -0.9 + 2.5 * u; up = 0.30 - 0.75 * u; side = 0.26 - 0.70 * u;
+      } else {
+        const u = (k - cfg.SWING_STRIKE) / (1 - cfg.SWING_STRIKE);
+        a2 = 1.6 * (1 - u); up = -0.45 * (1 - u); side = -0.44 * (1 - u);
+      }
+      vm.swordG.rotation.set(a2 * 0.45, side * 0.9, -a2);
+      vm.swordG.position.set(side * 0.5, up, -Math.abs(a2) * 0.10);
+    } else if (vm.swordG.visible) {
+      // repos : l'épée respire et penche vers l'intérieur du cadre
+      vm.swordG.rotation.set(-0.18 + Math.sin(t * 1.4) * 0.02, 0.14, -0.30);
+      vm.swordG.position.set(0, Math.sin(t * 1.4) * 0.012, 0);
+    }
+
+    /* LE RECUL DE L'ARBALÈTE. Il est court et sec — 0,9 s de rechargement
+       derrière, donc on a tout le temps de le voir revenir. Un tir sans recul
+       ne se sent pas ; un recul long donne l'impression d'une arme molle. */
+    if (vm.bowG.visible) {
+      const cd = Math.max(0, st.boltCd) / (cfg.BOLT_COOLDOWN_MS / 1000);
+      const kick = Math.max(0, cd - 0.72) / 0.28;      // les 28 % du début
+      vm.bowG.position.set(0, kick * 0.06, kick * 0.34);
+      vm.bowG.rotation.set(-0.16 + kick * 0.42 + Math.sin(t * 1.3) * 0.015, 0.05, 0);
+    }
+  }
+
   function syncFx(st, cfg, t) {
     let is = 0, iso = 0, isc = 0;
     for (const f of st.fx) {
@@ -1356,6 +1967,103 @@ const World = (function () {
      rapproche jusqu'à CAM_MIN_DIST. Sans ça, tout virage serré met la caméra
      DANS la pierre et l'écran devient noir — le défaut le plus banal du genre,
      et le plus insupportable. */
+  /* =======================================================================
+     ZIP 397 — LA CAMÉRA SUBJECTIVE, ET LE BALANCEMENT DE MARCHE.
+     -----------------------------------------------------------------------
+     Elle est à hauteur d'œil, à la position du fermier, et elle regarde là où
+     il regarde. Tout le reste de cette fonction est du BALANCEMENT, et c'est
+     là qu'est le travail :
+
+       * LA TÊTE MONTE ET DESCEND AVEC LA FOULÉE, PAS AVEC LE TEMPS. `st.gait`
+         est le cycle de marche du 395, avancé par la DISTANCE réellement
+         parcourue après collision. Une caméra qui oscille au temps continue
+         de tanguer quand on pousse un mur — c'est le défaut qu'on reconnaît
+         sans savoir le nommer, et c'est exactement celui que le 395 avait
+         corrigé pour les jambes. On réutilise la même horloge, donc le pas
+         qu'on VOIT est le pas qu'on SENT ;
+       * LE BALANCEMENT LATÉRAL EST À LA MOITIÉ DE LA CADENCE VERTICALE. Deux
+         appuis de pied par cycle, un déhanchement par cycle. Mettre les deux à
+         la même fréquence donne une démarche de crabe ;
+       * LE ROULIS suit le déhanchement, très faible (1° au plus). Au-delà, on
+         a le mal de mer en trente secondes ;
+       * LA POSE DU PIED ajoute un petit choc vers le bas — c'est ce qui donne
+         du POIDS. Sans lui, on flotte.
+
+     ⚠️ ET RIEN DE TOUT ÇA N'EST DANS rules.js. Le balancement ne décide de
+     rien : ni de ce qu'on touche, ni de ce qu'on voit venir. Les dix outils
+     rejouent donc exactement le même jeu qu'avant.
+     ======================================================================= */
+  function updateCameraFPS(st, cfg, px, pz, pang, pgait) {
+    const gy = Rules.groundY(cfg, M_, px, pz);
+
+    // --- le tangage, lissé pour l'affichage (la souris arrive par paquets)
+    const kp = 1 - Math.exp(-cfg.PITCH_LERP * frameDt);
+    pitch += (pitchWant - pitch) * kp;
+
+    // --- le balancement, à la DISTANCE
+    const phase = pgait * Math.PI * 2;
+    const amp = (0.35 + Math.min(1, st.gaitSpeed / cfg.WALK_SPEED) * 0.65) *
+      (1 + st.runAmt * (cfg.BOB_RUN - 1));
+    const kb = 1 - Math.exp(-14 * frameDt);
+    // |sin| : deux creux par cycle, un par pied. Le sinus simple donnerait une
+    // seule descente pour deux pas, et on marcherait comme un métronome mou.
+    const wantY = -Math.abs(Math.sin(phase)) * cfg.BOB_V * amp
+      - Math.max(0, Math.sin(phase * 2 - 0.6)) * cfg.STEP_LAND * amp;
+    const wantX = Math.sin(phase * 0.5) * cfg.BOB_H * amp;
+    const wantR = -Math.sin(phase * 0.5) * cfg.BOB_ROLL * amp;
+    bobT.y += (wantY - bobT.y) * kb;
+    bobT.x += (wantX - bobT.x) * kb;
+    bobT.roll += (wantR - bobT.roll) * kb;
+
+    const shake = st.camShake;
+    const sinA = Math.sin(pang), cosA = Math.cos(pang);
+    // le déport latéral est perpendiculaire au regard
+    const ox = cosA * bobT.x, oz = -sinA * bobT.x;
+    camera.position.set(
+      px + ox + (Math.random() - 0.5) * shake,
+      gy + cfg.EYE_H + bobT.y + (Math.random() - 0.5) * shake,
+      pz + oz + (Math.random() - 0.5) * shake);
+
+    /* ⚠️ ON POSE LES ANGLES D'EULER, ON N'UTILISE PAS lookAt(). lookAt ne sait
+       pas produire un ROULIS (il redresse toujours la caméra sur l'axe Y),
+       et le roulis est justement ce qui fait la démarche. L'ordre YXZ est
+       obligatoire : lacet, puis tangage, puis roulis — dans l'ordre par défaut
+       (XYZ), le tangage s'appliquerait AVANT le lacet et regarder en l'air en
+       tournant ferait basculer l'horizon. */
+    camera.rotation.order = "YXZ";
+    camera.rotation.set(
+      st.status === "falling" ? -1.15 : pitch,
+      pang, bobT.roll);
+
+    /* --- LE MODÈLE DE VUE : le retard de l'arme sur la rotation.
+       On ne suit pas la caméra instantanément ; l'arme TRAÎNE, puis revient.
+       C'est ce décalage — quelques centièmes de seconde — qui fait qu'un FPS a
+       du poids, et son absence qu'il a l'air d'un diaporama. */
+    if (vm) {
+      const dAng = angDiff(pang, vm.lastAng === undefined ? pang : vm.lastAng);
+      vm.lastAng = pang;
+      const ks = 1 - Math.exp(-cfg.VM_SWAY_LAG * frameDt);
+      swayX += (Math.max(-1, Math.min(1, -dAng * 26)) * cfg.VM_SWAY - swayX) * ks;
+      swayY += (Math.max(-1, Math.min(1, (pitch - (vm.lastPitch === undefined ? pitch : vm.lastPitch)) * 26))
+        * cfg.VM_SWAY - swayY) * ks;
+      vm.lastPitch = pitch;
+      vm.root.position.set(
+        swayX,
+        swayY + bobT.y * cfg.VM_BOB / Math.max(1e-6, cfg.BOB_V) - st.runAmt * cfg.VM_LOWER,
+        0);
+      vm.root.rotation.set(swayY * 1.5, swayX * 1.6, bobT.roll * 1.8 + st.strafeAmt * 0.05);
+    }
+  }
+  function angDiff(a, b) {
+    let d = a - b;
+    while (d > Math.PI) d -= Math.PI * 2;
+    while (d < -Math.PI) d += Math.PI * 2;
+    return d;
+  }
+
+  /* La caméra à la TROISIÈME personne du 396 est conservée telle quelle : elle
+     sert l'écran-titre, qui montre le fermier de dos pendant qu'on lit le
+     menu. La supprimer aurait fait de l'écran-titre une image de mur. */
   function updateCamera(st, cfg, px, pz, pang) {
     /* ⚠️ ZIP 396 — LA CAMÉRA A SON PROPRE CAP, ET C'EST TOUTE LA RÉPONSE À
        « la caméra bouge trop, difficile à naviguer pour un simple clavier ».
@@ -1426,5 +2134,33 @@ const World = (function () {
     player.position.y -= dt * 16;
   }
 
-  return { init, sync, snapPrev, resize, fallStep, reskin, get renderer() { return renderer; } };
+  /* `fpsView` est un booléen de MODULE, pas un réglage de config : il ne se
+     règle pas, il bascule. L'écran-titre montre le fermier de dos (troisième
+     personne), la partie se joue en subjectif. Un seul commutateur, lu à trois
+     endroits, et la troisième personne du 396 reste entièrement fonctionnelle
+     derrière — on ne jette pas six zips de travail pour un changement de vue. */
+  let fpsView = true;
+  function setView(fps) {
+    const v = !!fps;
+    if (v === fpsView) return;
+    fpsView = v;
+    if (!camera || !CFG_) return;
+    /* Le champ ET le plan de coupe proche changent avec la vue, et les deux
+       comptent : 78° en subjectif (voir config.js — un champ étroit cache les
+       embranchements latéraux, ce qui est rédhibitoire quand on demande une
+       navigation évidente), 66° en troisième personne (un champ large amplifie
+       toute rotation sur les bords, c'est le mécanisme du mal des transports).
+       Et 0,05 de coupe proche en subjectif, sans quoi on voit à travers un mur
+       auquel on se colle. */
+    camera.fov = fpsView ? CFG_.FPS_FOV : CFG_.CAM_FOV;
+    camera.near = fpsView ? 0.05 : 0.1;
+    camera.rotation.set(0, 0, 0);
+    camera.updateProjectionMatrix();
+  }
+
+  return {
+    init, sync, snapPrev, resize, fallStep, reskin, addPitch, setView,
+    get renderer() { return renderer; },
+    get fps() { return fpsView; },
+  };
 })();

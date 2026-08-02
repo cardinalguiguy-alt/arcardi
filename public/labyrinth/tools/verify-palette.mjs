@@ -60,6 +60,15 @@ const OWN = new Set([
   "COL_FLOOR", "COL_FLOOR_LIT", "COL_FLOOR_DARK",
   "COL_PYRAMID", "COL_DEADTREE", "COL_LAKE_BRIGHT",
   "COL_TORCH_OUT", "COL_TORCH_CORE",
+  /* ZIP 397 — les huit teintes de la refonte des textures et de la vue
+     subjective. Elles décrivent des phénomènes que le défi de fuite N'A PAS,
+     et c'est le critère : la suie suppose des torches murales (il n'en a
+     aucune), le parchemin suppose une carte (il n'en a pas), la craie suppose
+     que quelqu'un soit passé avant (personne ne passe deux fois dans un défi
+     de fuite). Les lui recopier ferait dériver sa palette pour une raison qui
+     ne le concerne pas — l'inverse exact de ce que ce contrôle protège. */
+  "COL_SAND", "COL_SOOT", "COL_OCHRE", "COL_CHALK",
+  "COL_PARCH", "COL_PARCH_DARK", "COL_PARCH_INK", "COL_MAPGLOW",
 ]);
 
 const shared = [];

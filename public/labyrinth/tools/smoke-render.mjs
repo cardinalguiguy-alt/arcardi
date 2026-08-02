@@ -49,7 +49,9 @@ const FakeTHREE = {
   Mesh: function (g, m) { meshes++; const n = node("Mesh"); n.geometry = g; n.material = m; return n; },
   PerspectiveCamera: function () { const n = node("Camera"); n.aspect = 1; return n; },
   WebGLRenderer: function () {
-    return { setSize() {}, setPixelRatio() {}, render() {}, domElement: {} };
+    // `autoClear` et `clearDepth` : la seconde passe du modèle de vue (397).
+    return { setSize() {}, setPixelRatio() {}, render() {}, clearDepth() {},
+             autoClear: true, domElement: {} };
   },
   Fog: function (c, n, f) { return { color: c, near: n, far: f }; },
   Color: function (c) { return { c }; },
@@ -66,10 +68,25 @@ const FakeTHREE = {
   OctahedronGeometry: function () { return node("OctahedronGeometry"); },
   MeshLambertMaterial: function (o) { return Object.assign(node("Lambert"), o || {}); },
   MeshBasicMaterial: function (o) { return Object.assign(node("Basic"), o || {}); },
+  /* ⚠️ ZIP 397 — Phong est OBLIGATOIRE ici, et pas par confort. Dans la r128,
+     MeshLambertMaterial n'a pas de `bumpMap` : il l'ignore SILENCIEUSEMENT.
+     La pierre du 397 y aurait donc perdu tout son relief sans qu'aucune erreur
+     ne soit levée — c'est-à-dire le pire cas possible, celui où le rendu est
+     faux et où rien ne le dit. world.js utilise Phong (brillance 0, spéculaire
+     noir = un Lambert avec du relief) ; le faux Three.js doit le connaître,
+     sinon cet outil fabrique une fausse alerte au lieu de mesurer le jeu. */
+  MeshPhongMaterial: function (o) { return Object.assign(node("Phong"), o || {}); },
   AmbientLight: function () { return node("AmbientLight"); },
   PointLight: function () { const n = node("PointLight"); n.distance = 0; n.intensity = 0; return n; },
   CanvasTexture: function () {
-    return { magFilter: 0, minFilter: 0, wrapS: 0, wrapT: 0, offset: { x: 0, y: 0 }, repeat: { set() {} } };
+    // `clone()` : la densité de texels constante du 397 clone la texture par
+    // taille de mur pour lui donner sa propre répétition (l'image, elle, est
+    // partagée). Un clone qui ne rendrait pas d'objet ferait échouer world.js
+    // ici et nulle part ailleurs.
+    const t = { magFilter: 0, minFilter: 0, wrapS: 0, wrapT: 0, needsUpdate: false,
+                offset: { x: 0, y: 0 }, repeat: { x: 1, y: 1, set(a, b) { this.x = a; this.y = b; } } };
+    t.clone = function () { return FakeTHREE.CanvasTexture(); };
+    return t;
   },
   NearestFilter: 1, NearestMipmapNearestFilter: 2, RepeatWrapping: 3,
   AdditiveBlending: 4, DoubleSide: 5,

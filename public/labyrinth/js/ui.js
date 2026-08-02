@@ -23,6 +23,8 @@ const UI = (function () {
     set("tTitle", L.title); set("tSub", L.sub); set("btnStart", L.start);
     set("cLane", L.cLane); set("cStrafe", L.cStrafe); set("cHit", L.cHit);
     set("cUse", L.cUse); set("cPause", L.cPause); set("cBack", L.cBack);
+    set("cLook", L.cLook); set("cShoot", L.cShoot); set("cMap", L.cMap);
+    set("mapHint", L.mapHint); set("lockTxt", L.lockHint);
     set("lBack", L.hBack); set("lLoading", L.loading);
     set("tHint", L.hint); set("tHintExit", L.hintExit);
     set("lScore", L.hScore); set("lShards", L.hShards);
@@ -90,11 +92,301 @@ const UI = (function () {
 
     // LE VOILE D'ANGOISSE. C'est le seul « son » du jeu tant qu'il n'y en a
     // pas : plus il est proche, plus le bord de l'écran rougit.
+    /* ZIP 397 — les carreaux. La rangée n'apparaît qu'une fois l'arbalète
+       trouvée : un compteur à zéro pour un objet qu'on ne possède pas apprend
+       au joueur à ne plus regarder le HUD, et c'est un pli qu'on ne défait
+       plus ensuite. */
+    const bb2 = $("boltBox");
+    if (bb2) {
+      bb2.classList.toggle("on", !!st.hasBow);
+      bb2.classList.toggle("empty", st.bolts <= 0);
+      put("boltN", st.bolts | 0);
+    }
+
     const dr = $("dread");
     if (dr) dr.style.opacity = Rules.dread(st).toFixed(3);
     const hurt = $("hurtFlash");
     if (hurt) hurt.style.opacity = (st.hurtFlash * 0.55).toFixed(3);
   }
+
+  /* =======================================================================
+     ZIP 397 — LA NAVIGATION. « Il faut pouvoir naviguer de manière
+     absolument évidente. »
+     -----------------------------------------------------------------------
+     Trois dispositifs, et ils ne se recouvrent PAS — c'est ce qui fait qu'on
+     peut les avoir tous les trois sans que le jeu devienne une visite guidée :
+
+       LA BOUSSOLE donne une DIRECTION à vol d'oiseau (« la sortie est par
+         là »), jamais un chemin. Elle ne dit rien des trois murs qui séparent,
+         donc elle supprime la question sans intérêt (« où aller ? ») et laisse
+         entière la seule qui compte (« comment y aller ? ») ;
+       LA MINICARTE donne la TOPOLOGIE DE CE QU'ON A VU. Elle répare le seul
+         vrai défaut d'un labyrinthe joué en une session : la mémoire. Un
+         joueur humain ne retient pas trente embranchements, et lui demander de
+         le faire ne produit pas de la difficulté, ça produit des allers-retours ;
+       LES MARQUES DE CRAIE (voir maze.js) donnent un CONSEIL LOCAL au moment
+         du choix. C'est la seule des trois qui parle du monde plutôt que de
+         l'interface, et c'est celle qui fait le lieu.
+
+     ⚠️ ET LE PLAN COMPLET EST UN OBJET À TROUVER. Tant qu'on n'a pas décroché
+     la carte du mur, la minicarte n'affiche QUE `st.seen` — c'est-à-dire ce
+     que le joueur a réellement vu. Le bonus demandé par Guillaume est
+     exactement ce basculement-là, et il vaut d'être gagné.
+     ======================================================================= */
+  const MC = { cv: null, ctx: null, big: null, bctx: null };
+
+  /* Une petite palette nommée, lue par les deux cartes. Écrire « #b88aff » à
+     six endroits est la meilleure façon d'en corriger cinq un jour. */
+  const MAPCOL = {
+    seen: "#6a5a86", seenLit: "#8f7bb4", unseen: "#2a2140",
+    wall: "rgba(0,0,0,0)", exit: "#b88aff", rot: "#ffd36e",
+    me: "#ff9a3c", torch: "#ff7a2c", torchOff: "#5a4a44",
+    shard: "#4fd8f5", map: "#9fd8ff", trail: "#3d3358",
+  };
+
+  function ensureMap() {
+    if (!MC.cv) { MC.cv = $("mini"); MC.ctx = MC.cv && MC.cv.getContext("2d"); }
+    if (!MC.big) { MC.big = $("mapBig"); MC.bctx = MC.big && MC.big.getContext("2d"); }
+  }
+
+  /* -----------------------------------------------------------------------
+     LE DESSIN D'UNE CARTE. Une seule fonction pour les deux — la minicarte
+     tourne avec le joueur, le grand plan est fixe au nord.
+     -----------------------------------------------------------------------
+     ⚠️ ELLE DESSINE LES LIENS, PAS LES CELLULES. Un labyrinthe rendu en
+     cellules pleines se lit comme un damier : on ne voit pas où l'on peut
+     passer, ce qui est la seule information qu'on lui demande. On peint donc
+     un point par cellule ET un trait vers chaque voisin RELIÉ, et le dessin
+     devient un plan de couloirs.
+     -------------------------------------------------------------------- */
+  function drawMap(ctx, W, H, st, opts) {
+    const m = st.m, cfg = st.cfg, G = m.G;
+    const rot = opts.rotate ? -st.ang : 0;
+    const span = opts.span || G;                    // cellules visibles de part et d'autre
+    const s = W / (span * 2 + 1);                   // pixels par cellule
+    const [pcx, pcy] = Rules.cellOf(cfg, st.px, st.pz);
+    const cxr = opts.follow ? st.px / cfg.CELL - 0.5 : (G - 1) / 2;
+    const czr = opts.follow ? st.pz / cfg.CELL - 0.5 : (G - 1) / 2;
+    const cos = Math.cos(rot), sin = Math.sin(rot);
+
+    ctx.clearRect(0, 0, W, H);
+    // projection cellule → écran
+    const P = (x, y) => {
+      const dx = (x - cxr) * s, dy = (y - czr) * s;
+      return [W / 2 + dx * cos - dy * sin, H / 2 + dx * sin + dy * cos];
+    };
+    const known = (j) => st.hasMap || st.seen.has(j);
+
+    // --- les couloirs
+    ctx.lineCap = "round";
+    for (let y = 0; y < G; y++) for (let x = 0; x < G; x++) {
+      const j = m.idx(x, y);
+      if (!m.cells[j] || !known(j)) continue;
+      const seen = st.seen.has(j);
+      /* Une cellule VUE est plus claire qu'une cellule seulement connue par la
+         carte. C'est ce qui empêche le plan de rendre l'exploration inutile :
+         on continue de voir, d'un coup d'œil, où l'on est déjà passé. */
+      ctx.strokeStyle = seen ? MAPCOL.seenLit : MAPCOL.seen;
+      ctx.lineWidth = Math.max(1.6, s * 0.44);
+      const [ax, ay] = P(x, y);
+      for (const d of m.DIRS) {
+        if (!m.linked(x, y, d)) continue;
+        const nx2 = x + m.DX[d], ny2 = y + m.DY[d];
+        if (nx2 < 0 || ny2 < 0 || nx2 >= G || ny2 >= G) continue;
+        if (!known(m.idx(nx2, ny2))) continue;
+        const [bx, by] = P((x + nx2) / 2, (y + ny2) / 2);
+        ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
+      }
+      // le point de la cellule, pour que les culs-de-sac existent aussi
+      ctx.beginPath(); ctx.arc(ax, ay, Math.max(0.9, s * 0.20), 0, 6.284);
+      ctx.fillStyle = seen ? MAPCOL.seenLit : MAPCOL.seen;
+      ctx.fill();
+    }
+
+    // --- les trous : ce sont les seules cellules qu'on veut RECONNAÎTRE
+    ctx.fillStyle = "#1a0d24";
+    for (const j of st.gaps) {
+      if (!known(j)) continue;
+      const [gx, gy] = P(j % G, (j / G) | 0);
+      ctx.beginPath(); ctx.arc(gx, gy, Math.max(1.2, s * 0.30), 0, 6.284); ctx.fill();
+    }
+
+    const dot = (x, y, col, r, ring) => {
+      const [dx, dy] = P(x, y);
+      ctx.fillStyle = col;
+      ctx.beginPath(); ctx.arc(dx, dy, r, 0, 6.284); ctx.fill();
+      if (ring) { ctx.strokeStyle = col; ctx.lineWidth = 1.2; ctx.globalAlpha = .45;
+        ctx.beginPath(); ctx.arc(dx, dy, r * 2.2, 0, 6.284); ctx.stroke(); ctx.globalAlpha = 1; }
+    };
+
+    // --- les brasiers connus. Éteint = repère de navigation (zip 393), donc
+    //     on le garde à l'écran dans une autre couleur au lieu de l'effacer.
+    for (const t of st.torches) {
+      if (!known(m.idx(t.x, t.y))) continue;
+      dot(t.x, t.y, t.spent ? MAPCOL.torchOff : MAPCOL.torch, Math.max(1.4, s * 0.24));
+    }
+    if (opts.big) {
+      for (const sh of st.shards) {
+        if (sh.taken || !known(m.idx(sh.x, sh.y))) continue;
+        dot(sh.x, sh.y, MAPCOL.shard, Math.max(1.1, s * 0.16));
+      }
+    }
+    if (st.mapItem && !st.mapItem.taken && known(m.idx(st.mapItem.x, st.mapItem.y)))
+      dot(st.mapItem.x, st.mapItem.y, MAPCOL.map, Math.max(1.8, s * 0.30), true);
+    if (st.bow && !st.bow.taken && known(m.idx(st.bow.x, st.bow.y)))
+      dot(st.bow.x, st.bow.y, MAPCOL.shard, Math.max(1.6, s * 0.26), true);
+
+    // --- la rotonde et la sortie : les deux repères qui valent le détour
+    if (m.rotunda && (st.hasMap || st.seen.has(m.idx(m.rotunda.cx, m.rotunda.cy))))
+      dot(m.rotunda.cx, m.rotunda.cy, MAPCOL.rot, Math.max(2.2, s * 0.42), true);
+    if (st.hasMap || st.seen.has(m.idx(m.exit.x, m.exit.y)))
+      dot(m.exit.x, m.exit.y, MAPCOL.exit, Math.max(2.4, s * 0.44), true);
+
+    /* --- LE JOUEUR, toujours en dernier et toujours au-dessus. Un TRIANGLE,
+       pas un point : il porte le cap, et sur une carte orientée vers l'avant
+       c'est ce qui empêche de confondre « je vais vers le haut de la carte »
+       avec « le haut de la carte est le nord ». */
+    const [mx, my] = P(cxr, czr);
+    const a0 = st.ang + rot;
+    ctx.fillStyle = MAPCOL.me;
+    ctx.beginPath();
+    const R2 = Math.max(4, s * 0.5);
+    for (const [len, off] of [[R2 * 1.5, 0], [R2, 2.5], [R2, -2.5]]) {
+      const aa = a0 + off;
+      const px2 = mx - Math.sin(aa) * len, py2 = my - Math.cos(aa) * len;
+      if (off === 0) ctx.moveTo(px2, py2); else ctx.lineTo(px2, py2);
+    }
+    ctx.closePath(); ctx.fill();
+    void pcx; void pcy;
+  }
+
+  /* -----------------------------------------------------------------------
+     LA BOUSSOLE. Un ruban de 180° autour du cap, gradué, avec les quatre
+     points cardinaux ET deux repères qui n'en sont pas : la SORTIE (violet) et
+     la ROTONDE (or) — les deux seules choses du labyrinthe dont on veuille
+     connaître la direction sans connaître le chemin.
+     -----------------------------------------------------------------------
+     ⚠️ LA SORTIE N'APPARAÎT QUE SI ON SAIT OÙ ELLE EST : soit qu'on ait la
+     carte, soit que le phare soit visible (il l'est de partout, c'était son
+     rôle depuis le 393). Ça n'ajoute donc aucune information — ça remplace un
+     coup d'œil vers le ciel par un coup d'œil au ruban, ce qui compte quand on
+     est dans un couloir couvert.
+     -------------------------------------------------------------------- */
+  function drawCompass(ctx, W, H, st) {
+    ctx.clearRect(0, 0, W, H);
+    const cfg = st.cfg, m = st.m;
+    const SPAN = Math.PI;                       // 180° d'un bord à l'autre
+    const px = (world) => {
+      let d = world - st.ang;
+      while (d > Math.PI) d -= Math.PI * 2;
+      while (d < -Math.PI) d += Math.PI * 2;
+      return W / 2 + (d / SPAN) * W;
+    };
+    ctx.fillStyle = "rgba(10,6,20,.55)";
+    ctx.fillRect(0, H - 13, W, 13);
+
+    // graduations tous les 15°, une plus haute tous les 45°
+    for (let a = 0; a < 360; a += 15) {
+      const x = px(a * Math.PI / 180);
+      if (x < -8 || x > W + 8) continue;
+      const major = a % 45 === 0;
+      ctx.fillStyle = major ? "rgba(239,231,255,.75)" : "rgba(239,231,255,.30)";
+      ctx.fillRect(Math.round(x), H - (major ? 12 : 7), 2, major ? 12 : 7);
+    }
+    /* Les points cardinaux, écrits à la fonte 3×5 de paint.js. Une police de
+       système au milieu d'un jeu tout en pixels francs se voit immédiatement —
+       c'est la règle posée au 396 pour les « +60 » qui montent. */
+    const glyph = (x, ch, col) => {
+      const s = 2;
+      const G3 = { N: ["101","111","111","101","101"], S: ["111","100","111","001","111"],
+                   E: ["111","100","111","100","111"], O: ["111","101","101","101","111"] }[ch];
+      if (!G3) return;
+      ctx.fillStyle = col;
+      for (let r = 0; r < 5; r++) for (let c = 0; c < 3; c++)
+        if (G3[r][c] === "1") ctx.fillRect(Math.round(x) - 3 + c * s, 1 + r * s, s, s);
+    };
+    /* ⚠️ ang = 0 fait regarder vers −Z, c'est-à-dire le NORD de la grille
+       (entrée au sud, sortie au nord — voir maze.js). Les trois autres
+       découlent du sens de rotation démontré au 394 : angle qui CROÎT = on
+       tourne vers l'ouest. */
+    glyph(px(0), "N", "#ffd36e");
+    glyph(px(Math.PI / 2), "O", "rgba(239,231,255,.8)");
+    glyph(px(Math.PI), "S", "rgba(239,231,255,.8)");
+    glyph(px(-Math.PI / 2), "E", "rgba(239,231,255,.8)");
+
+    const mark = (tx, ty, col) => {
+      const [wx, wz] = Rules.centerOf(cfg, tx, ty);
+      const a = Math.atan2(-(wx - st.px), -(wz - st.pz));
+      const x = px(a);
+      if (x < 2 || x > W - 2) return;
+      ctx.fillStyle = col;
+      // un chevron : il pointe vers le bas, donc vers le ruban
+      for (let i = 0; i < 5; i++) ctx.fillRect(Math.round(x) - i, H - 20 + i * 2, 1 + i * 2, 2);
+    };
+    mark(m.exit.x, m.exit.y, MAPCOL.exit);
+    if (m.rotunda && (st.hasMap || st.seen.has(m.idx(m.rotunda.cx, m.rotunda.cy))))
+      mark(m.rotunda.cx, m.rotunda.cy, MAPCOL.rot);
+  }
+
+  /* Appelé à chaque image par game.js. Il DESSINE, il ne décide rien : la
+     minicarte lit st.seen et st.hasMap, jamais une copie. */
+  let mapOpen = false;
+  function nav(st, playing) {
+    ensureMap();
+    const show2 = playing && World.fps;
+    const cw = $("compass"), mw = $("miniWrap"), rt = $("reticle");
+    if (cw) cw.classList.toggle("on", show2);
+    if (mw) mw.classList.toggle("on", show2);
+    if (rt) rt.classList.toggle("on", show2);
+    if (!show2) return;
+
+    if (MC.ctx) drawMap(MC.ctx, MC.cv.width, MC.cv.height, st,
+      { rotate: true, follow: true, span: st.hasMap ? 7 : 5 });
+    if (cw && cw.getContext) drawCompass(cw.getContext("2d"), cw.width, cw.height, st);
+
+    const tag = $("miniTag");
+    if (tag) {
+      const v = st.hasMap ? L.mapFull : L.mapPartial;
+      if (last.tag !== v) { last.tag = v; tag.textContent = v; }
+    }
+
+    /* LE RÉTICULE. Trois états, trois informations, aucune redondante :
+         écarté  — on court ou l'arbalète se recharge : on ne peut pas viser ;
+         rouge   — une créature est à portée d'épée ET atteignable ;
+         plein   — l'arbalète est chargée.
+       Le rouge passe par Rules.canTouch(), donc par le MÊME test que celui qui
+       décide si le coup porte. Un réticule qui rougirait sur une créature
+       derrière un mur serait pire qu'un réticule fixe : il mentirait. */
+    if (rt) {
+      const wide = st.runAmt > 0.4 || (st.hasBow && st.boltCd > 0);
+      let hot = false;
+      if (st.hasSword) {
+        for (const r of st.roamers) {
+          if (r.dead) continue;
+          if (Math.hypot(r.x - st.px, r.z - st.pz) > st.cfg.SWING_RANGE + 1.2) continue;
+          if (!Rules.canTouch(st.cfg, st.m, st.px, st.pz, r.x, r.z)) continue;
+          let d = Math.atan2(-(r.x - st.px), -(r.z - st.pz)) - st.ang;
+          while (d > Math.PI) d -= Math.PI * 2;
+          while (d < -Math.PI) d += Math.PI * 2;
+          if (Math.abs(d) < st.cfg.SWING_ARC / 2) { hot = true; break; }
+        }
+      }
+      rt.classList.toggle("wide", wide);
+      rt.classList.toggle("hot", hot);
+      rt.classList.toggle("ready", st.hasBow && st.bolts > 0 && st.boltCd <= 0);
+    }
+
+    // le plan déplié : ouvert à la touche, ou tout seul au ramassage
+    const open = st.hasMap && (mapOpen || st.mapT > 0);
+    show("mapFull", open);
+    if (open && MC.bctx) drawMap(MC.bctx, MC.big.width, MC.big.height, st,
+      { rotate: false, follow: false, span: (st.m.G - 1) / 2, big: true });
+  }
+  function toggleMap(st) {
+    if (!st || !st.hasMap) { toast(L.tipNoMap); return; }
+    mapOpen = !mapOpen;
+  }
+  function closeMap() { mapOpen = false; }
 
   function toast(msg) {
     const e = $("toast");
@@ -123,6 +415,9 @@ const UI = (function () {
       else if (ev.type === "abandonStart") toast(L.tipPlatform);
       else if (ev.type === "gateWarn") toast(L.tipGateWarn);
       else if (ev.type === "gateShut") toast(L.tipGateShut);
+      else if (ev.type === "map") toast(L.tipMap);          // zip 397
+      else if (ev.type === "bow") toast(L.tipBow);
+      else if (ev.type === "bolts") toast(L.tipBolts);
     }
   }
 
@@ -153,5 +448,11 @@ const UI = (function () {
     show("gameover", true);
   }
 
-  return { applyLang, setBest, hud, toast, toastTick, events, flameWarnings, over, show, get L() { return L; }, get best() { return best; } };
+  function lockHint(on) { const e = $("lockHint"); if (e) e.classList.toggle("on", !!on); }
+
+  return {
+    applyLang, setBest, hud, toast, toastTick, events, flameWarnings, over, show,
+    nav, toggleMap, closeMap, lockHint,
+    get L() { return L; }, get best() { return best; },
+  };
 })();

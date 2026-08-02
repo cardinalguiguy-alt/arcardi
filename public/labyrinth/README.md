@@ -1,4 +1,18 @@
-# Le Labyrinthe — mini-jeu du Pays du Labyrinthe (zips 393-396)
+# Le Labyrinthe — mini-jeu du Pays du Labyrinthe (zips 393-397)
+
+> **ZIP 397 — LA VUE SUBJECTIVE, ET LA FIN DE QUATRE REFONTES EN AVEUGLE.**
+> Retour de Guillaume : « beaucoup trop d'amateurisme dans les textures des
+> murs et du sol (…) conçois le maze en un first person pov convaincant (…)
+> mets tous tes efforts dans la qualité des textures (…) il faut pouvoir
+> naviguer de manière absolument évidente (…) avoir un bonus qui permet de voir
+> le plan du maze ».
+>
+> **Le zip commence par écrire le rasteriseur réclamé quatre fois et jamais
+> fait** (`tools/lib-raster.mjs`, `tools/render-textures.mjs`,
+> `tools/preview-fps.mjs`) — et par REGARDER. C'est la seule raison pour
+> laquelle cette cinquième refonte graphique pouvait aboutir alors que les
+> quatre précédentes avaient reçu le même reproche. Voir la section « Zip 397 »
+> en fin de fichier.
 
 > **ZIP 395 — LE MOUVEMENT ET LES PERSONNAGES.** Retour de Guillaume : « les
 > mouvements ne sont pas assez soignés, les animations pas du tout
@@ -64,13 +78,20 @@ quelque chose qu'on avait intérêt à gaspiller.
 
 | Touche | Effet |
 |---|---|
-| **↑ ↓** ou **W S** | avancer, reculer |
-| **← →** | **tourner** |
-| **A / E** (ou Q / D) | pas de côté |
+| **Z Q S D** / **W A S D** | se déplacer (Q/D et A/D sont des **pas de côté**) |
+| **souris** | **regarder** — lacet et tangage, pointeur capturé |
+| **← →** | tourner au clavier, pour qui n'a pas de souris |
+| **clic gauche** ou **Espace** | coup d'épée (il faut d'abord la trouver) |
+| **clic droit** ou **R** | tirer un carreau d'arbalète |
 | **Maj** | courir — **bruyant**, et la flamme brûle deux fois plus vite |
-| **Espace** | coup d'épée (il faut d'abord la trouver) |
-| **F** | raviver la torche à un brasier |
-| **Échap** | pause |
+| **E** ou **F** | raviver la torche à un brasier · ramasser |
+| **M** ou **Tab** | déplier le plan (une fois la carte trouvée) |
+| **Échap** | pause — **et rend la souris** |
+
+> **La capture du pointeur ne se reprend pas toute seule.** Les navigateurs
+> l'exigent depuis un geste : c'est le clic sur « Entrer » qui la donne, et un
+> panneau « cliquez pour jouer » qui la redemande après un Échap. Sans lui, le
+> joueur se retrouve incapable de tourner sans savoir pourquoi.
 
 AZERTY et QWERTY fonctionnent : le test porte sur `e.code` (touche physique) et
 non `e.key`, comme pour le menu développeur du zip 392.
@@ -89,6 +110,7 @@ qu'on est en danger. Ressortir depuis l'écran-titre est gratuit.
 | `js/maze.js` | génération du dédale, trous, brasiers, épée — **pur**, sans DOM |
 | `js/rules.js` | **toute la simulation** : collision, torche, combat, créatures — **pur** |
 | `js/paint.js` | les textures, peintes sur canvas — ne connaît pas Three.js |
+| `tools/lib-raster.mjs` | **le rasteriseur** : faux canvas `fillRect` → PNG (397) |
 | `js/rig.js` | **squelettes articulés et cycles d'animation** (395) |
 | `js/world.js` | tout Three.js. **Ne décide de rien**, il lit `rules.js` |
 | `js/input.js` | clavier et tactile → **intentions** |
@@ -751,3 +773,320 @@ node tools/simulate-maze.mjs 50     # le même rapport, d'un bloc
   refontes graphiques (393, 394, 395, 396) ont été faites en aveugle.
 - **Le son.** Toujours la plus grosse perte du labyrinthe.
 - **La carte partielle ramassable**, proposée au 395, non demandée, non faite.
+
+---
+
+# ZIP 397 — LA VUE SUBJECTIVE, LES TEXTURES, LA NAVIGATION
+
+Quatre demandes, et une cinquième qui n'en est pas une mais qui commande tout
+le reste : **arrêter de travailler en aveugle.**
+
+## 0. La dette qu'il fallait payer d'abord — REGARDER
+
+Les README des zips 393, 394, 395 et 396 portaient tous la même ligne, dans la
+section « ce qui n'a pas été fait » :
+
+> `tools/render-maze.mjs` : écrire les textures de `paint.js` en PNG, pour les
+> REGARDER. `paint.js` a été écrit sans dépendance à Three.js **exactement**
+> pour ça, mais le rasteriseur n'est toujours pas fait. **Aucune texture de ce
+> jeu n'a encore été regardée hors du navigateur.**
+
+Quatre refontes graphiques, quatre fois le même reproche. Ce n'était pas un
+hasard : **on ne corrige pas ce qu'on ne voit pas.** Le 397 commence donc par
+écrire trois outils, et le reste du zip découle de ce qu'ils ont montré.
+
+| Outil | Ce qu'il rend |
+|---|---|
+| `tools/lib-raster.mjs` | un faux canvas qui n'accepte QUE `fillRect`/`clearRect` — le même contrat que `smoke-render.mjs` — et un encodeur PNG écrit à la main |
+| `tools/render-textures.mjs` | chaque texture en PNG, **plus sa planche carrelée 3×3** (c'est là qu'on voit la couture, et nulle part ailleurs) |
+| `tools/preview-fps.mjs` | **la vue subjective en lancer de rayons**, contre la VRAIE liste de boîtes de `Rules.buildBoxes()` |
+| `tools/verify-textures.mjs` | les trois défauts du 396 qui se chiffrent : platitude, couture, monochromie |
+
+### Ce qu'on a vu en trente secondes, sur le mur du 396
+
+1. **Douze niveaux de gris** pour tout un mur. Chaque bloc était un aplat, plus
+   une bande claire en haut et une sombre en bas ;
+2. une **couture de 10,6** entre les bords : la tuile de 128 px se répétait
+   quatre fois par mur et les taches de mousse retombaient au pixel près au
+   même endroit — on lisait la grille, pas le mur ;
+3. le joint était **rectiligne, d'épaisseur constante, uniformément sombre** ;
+4. **tous les blocs avaient la même taille** ;
+5. **aucune usure** : pas un éclat, pas une fêlure, pas une coulure, pas de suie
+   sous les torches — alors qu'il y en a une tous les trois mètres.
+
+**Le mur du 396 n'était pas mal dessiné. Il était dessiné trop petit.** À 128 px
+pour 5,75 unités, un bloc reçoit trente pixels : il n'y a physiquement pas la
+place d'y mettre un chanfrein, un grain et une piqûre. C'est pour ça que quatre
+refontes successives n'y avaient rien changé.
+
+---
+
+## 1. La pierre — onze couches, et un relief qui vit à l'exécution
+
+`CFG.TEX_WALL` passe de 128 à **512**, et l'ordre des couches compte, chacune
+lisant la précédente :
+
+| # | Couche | Ce qu'elle répare |
+|---|---|---|
+| 1 | appareillage à tailles variables | « tous les blocs identiques » |
+| 2 | teinte par bloc + dérive | l'aplat |
+| 3 | veinage large (fbm) | la pierre uniforme |
+| 4 | grain fin, **quantifié** | les 12 niveaux de gris → **146** |
+| 5 | **chanfrein** analytique, éclairé haut-gauche | l'absence de volume |
+| 6 | piqûres seuillées | le mouchetis |
+| 7 | éclats d'arête | la ruine neuve |
+| 8 | fêlures en marche aléatoire | idem |
+| 9 | joint **d'épaisseur irrégulière** + occlusion cuite | le quadrillage |
+| 10 | coulures ferrugineuses + **suie** | trente torches et pas une trace |
+| 11 | mousse en **taches organiques** (plus en carrés) | le décalque |
+| — | **tache de fond** basse fréquence, périodes entières | la lecture de la grille à cinq mètres |
+
+**Et un champ de hauteur séparé, branché sur `bumpMap`.** C'est la seule couche
+de tout ce travail qui vive à l'exécution : la torche du joueur BOUGE, donc les
+creux du mortier et le fond des cratères changent d'ombre pendant qu'on avance.
+Aucune texture cuite ne produit ça, et c'est de très loin ce qui se voit le plus
+en jouant.
+
+> ⚠️ **La pierre passe donc en `MeshPhongMaterial`.** Dans la r128,
+> `MeshLambertMaterial` n'a pas de `bumpMap` : **il l'ignore silencieusement**.
+> On aurait cru avoir du relief, on n'en aurait pas eu, et rien ne l'aurait dit.
+> Brillance à 0 et spéculaire au noir = un Lambert avec du relief.
+
+### Trois réglages faits en REGARDANT, et qu'aucun raisonnement n'aurait donnés
+
+- **le chanfrein était trois fois trop large** (W/46). Les blocs paraissaient
+  GONFLÉS, comme du plastique moulé. Une pierre taillée a une arête franche et
+  un tout petit méplat → W/85 ;
+- **le filet de lumière était uniforme**, donc chaque bloc portait un liseré
+  doré identique : un décor de confiserie. Il est maintenant modulé par le grain ;
+- **la mousse sortait en bandes horizontales** — une assise entière verte d'un
+  bout à l'autre. Le champ était anisotrope. Vu sur la planche 3×3, invisible
+  sur une tuile seule.
+
+### La densité de texels est enfin constante
+
+Le 396 avait **deux matériaux pour neuf cents murs** et aucune répétition : la
+texture était **étirée** sur toute la face, quelle qu'en soit la taille. Un mur
+de 11,5 unités et un mur de 2 unités affichaient le même nombre de blocs — donc
+des pierres deux fois plus grosses selon le couloir où l'on se tient. Chaque
+taille de boîte a maintenant son matériau, dont la texture est **clonée**
+(l'image est partagée) et réglée sur la longueur réelle divisée par `WALL_TILE`.
+
+**Une seule tuile sur la HAUTEUR**, en revanche : la texture porte une suie en
+haut et une mousse en bas qui décrivent le haut et le bas d'un MUR, pas d'une
+tuile. `verify-textures.mjs` l'a trouvé en mesurant une asymétrie de couture
+(7,1 en y contre 2,4 en x) que personne ne cherchait.
+
+### Le sol : deux dessins, quatre orientations, huit cellules
+
+Une tuile de sol couvre exactement une cellule. Avec un seul dessin, les 289
+cellules montraient rigoureusement le même dallage : **on lisait la grille du
+labyrinthe à travers son propre sol.** La rotation d'un plan carré dans son
+propre plan ne coûte rien — deux textures suffisent donc à faire huit dallages.
+
+Deux autres réglages venus de la vue subjective : les joints tiraient des
+**lignes vert néon** à travers tout le couloir (la mousse était la seule couleur
+saturée du cadre), et le gravier faisait de la **neige**. Les deux sont invisibles
+sur une planche de texture.
+
+### Et le coût, mesuré et non supposé
+
+La première écriture appelait `fbm()` huit fois **par pixel** : **4 000 ms par
+texture**, soit seize secondes de chargement — un jeu injouable par sa page de
+garde. La cause n'était pas la formule mais **l'ordre des boucles** : par point,
+chaque octave refait un `Math.floor`, quatre hachages et deux lissages pour des
+valeurs identiques sur toute une maille. En remplissant le champ octave par
+octave : **4 000 ms → 230 ms**, au pixel près identique.
+
+> **Quand une texture procédurale est lente, ce n'est presque jamais la formule
+> qui coûte, c'est de la redemander à chaque pixel.**
+
+---
+
+## 2. La vue subjective — quatre pièces, et la caméra est la moins importante
+
+| # | Pièce | Pourquoi elle compte plus que la caméra |
+|---|---|---|
+| 1 | **la souris** (pointer lock) | une vue subjective au clavier n'existe pas |
+| 2 | **le modèle de vue** en seconde passe | sans lui, l'arme rentre dans le mur — et dans un labyrinthe, on se colle aux murs en permanence |
+| 3 | **le balancement à la foulée** | sans lui, on glisse comme un chariot sur des rails |
+| 4 | **le réticule dynamique** | c'est le « on sait pas si on touche » du 396, transposé |
+
+**La souris n'est pas une vitesse, c'est un déplacement.** `turnDelta` est un
+angle déjà intégré par le périphérique ; il ne passe ni par `TURN_ACCEL`, ni par
+`TURN_DECEL`, ni par le recalage sur le couloir. **La main du joueur est
+l'amortissement**, et elle est meilleure que le nôtre. Les trois réglages
+d'amortissement du 396 ne servent plus que le mode clavier, où ils restent.
+
+**Le modèle de vue est rendu dans une seconde passe**, avec sa propre scène, sa
+propre caméra (champ à 55° : une arme filmée au grand-angle est difforme) et sa
+propre lumière. `autoClear = false`, `clearDepth()`, puis on rend par-dessus.
+Trois lignes, et chacune est indispensable.
+
+**Le balancement avance à la DISTANCE, jamais au temps** — il réutilise
+`st.gait`, le cycle de marche du 395. Une caméra qui oscille au temps continue
+de tanguer quand on pousse un mur ; c'est le défaut qu'on reconnaît sans savoir
+le nommer, et c'est exactement celui que le 395 avait corrigé pour les jambes.
+Le déhanchement latéral est à la **moitié** de la cadence verticale : deux appuis
+de pied par cycle, un déhanchement par cycle.
+
+> ⚠️ **Le tangage n'existe pas pour le moteur.** Il vit dans `world.js`. Le sol
+> est plat, on ne saute pas, une épée comme un carreau partent à l'horizontale :
+> il ne décide donc de RIEN — ce qui est précisément la condition pour que les
+> douze outils continuent de rejouer exactement le même jeu. **La caméra a
+> changé, la simulation non.**
+
+L'écran-titre reste à la troisième personne : on y voit son fermier, sa tenue,
+sa torche. En subjectif, l'écran-titre serait une photo de mur. La caméra du 396
+est conservée entière — un commutateur, pas une suppression.
+
+---
+
+## 3. Naviguer de manière absolument évidente — trois dispositifs qui ne se recouvrent pas
+
+C'est ce qui permet de les avoir tous les trois sans que le jeu devienne une
+visite guidée :
+
+- **LA BOUSSOLE** donne une DIRECTION à vol d'oiseau (« la sortie est par là »),
+  jamais un chemin. Elle porte les quatre points cardinaux, **la sortie** et
+  **la rotonde**. Savoir que la sortie est au nord-est ne dit rien des trois
+  murs qui séparent : elle supprime la question sans intérêt (« où aller ? ») et
+  laisse entière la seule qui compte (« comment y aller ? ») ;
+- **LA MINICARTE** donne la topologie de ce qu'on a VU, **orientée vers
+  l'avant**. Elle répare le seul vrai défaut d'un labyrinthe joué en une
+  session : la mémoire. Un joueur humain ne retient pas trente embranchements,
+  et le lui demander ne produit pas de la difficulté mais des allers-retours ;
+- **LES MARQUES DE CRAIE** donnent un conseil LOCAL au moment du choix. C'est la
+  seule des trois qui parle du monde plutôt que de l'interface.
+
+### La carte luisante — le bonus demandé
+
+> « avoir un bonus qui permet de voir le plan du maze (quand on trouve une carte
+> luisante accrochée au mur) »
+
+Elle est **accrochée à une face fermée** que le générateur choisit (il sait
+quelles faces sont fermées ; les redécouvrir au rendu collerait un parchemin
+dans le vide), à profondeur **8 à 18**, et **de préférence hors du plus court
+chemin** — un bonus posé sur la route qu'on prend de toute façon n'est pas une
+trouvaille. Elle luit, elle porte sa propre lumière, et son halo la rend visible
+du bout d'un couloir : une carte qu'on ne remarque pas est une carte qui
+n'existe pas.
+
+**Elle se ramasse au PASSAGE, pas à la touche** — l'inverse du brasier, et pour
+la même raison prise par l'autre bout : un brasier se consomme, donc appuyer
+protège d'un gaspillage ; une carte ne se consomme pas, et **quand rater est
+irréparable, on ne demande pas de geste.** Le plan s'ouvre seul trois secondes,
+ce qui apprend au passage qu'une touche le rouvre.
+
+Sur la minicarte, une cellule **vue** reste plus claire qu'une cellule seulement
+**connue par la carte** : le plan ne rend donc pas l'exploration inutile.
+
+### Les indices de craie — trois espèces, trois messages
+
+| Marque | Où | Ce qu'elle dit |
+|---|---|---|
+| **flèche** | aux **carrefours du chemin de la sortie** | la direction — et seulement là où il y a un choix à faire |
+| **croix** | devant un trou | « quelqu'un est tombé ici » — la seule qui parle du passé |
+| **main** | à une cellule d'un brasier | le feu est derrière ce mur, et un mur cache tout |
+
+> ⚠️ **Une flèche sur un mur ne peut désigner que la gauche ou la droite**, et
+> il a fallu écrire la projection pour s'en rendre compte : le décalque est
+> plaqué sur une surface verticale, son plan ne contient pas la normale du mur.
+> Un roulis continu aurait donné des flèches pointant en biais vers le
+> plafond — juste selon la formule, absurde sur un mur.
+
+---
+
+## 4. L'arbalète, et pourquoi elle rend le jeu plus LISIBLE
+
+Elle est posée **plus loin que l'épée** (`BOW_DEPTH_MIN`, et jamais avant
+`swordDepth + 3`) : trouver la seconde arme avant la première annulerait tout le
+propos du parvis.
+
+**Le carreau est SIMULÉ, pas résolu d'un coup.** Un tir instantané aurait été
+trois fois plus court à écrire et il aurait manqué le seul effet recherché : un
+projectile qu'on VOIT partir, traverser un couloir et se planter répond sans un
+mot au « on sait pas quand on gagne, si on touche » du 396.
+
+> Le pas d'intégration est **sous-divisé en quatre**. À 62 u/s et 30 Hz, un
+> carreau avance de 2,07 unités par image alors qu'un rôdeur fait 2,0 de large :
+> sans sous-division, il le traverserait une fois sur deux sans rien toucher.
+> Défaut classique du projectile rapide, et invisible en relisant.
+
+La collision avec les murs passe par `pushOut()`, **la même liste de boîtes qui
+arrête le joueur**. Et le traqueur encaisse un carreau exactement comme un coup
+d'épée : il recule, et rien de plus.
+
+---
+
+## Les DOUZE outils du 397
+
+```
+node tools/render-textures.mjs      # écrit les textures en PNG        (NEUF)
+node tools/preview-fps.mjs 4242     # la vue subjective en PNG          (NEUF)
+node tools/verify-textures.mjs      # platitude, couture, relief        (NEUF)
+node tools/verify-maze.mjs 400      # les DIX garanties du générateur
+node tools/verify-controls.mjs      # les commandes, LA SOURIS, l'arbalète, la carte
+node tools/verify-rig.mjs           # le squelette en repère monde
+node tools/verify-anim.mjs          # patinage, bornes, bouclage, contre-balancement
+node tools/verify-palette.mjs       # la palette n'a pas dérivé de celle du défi
+node tools/smoke-render.mjs         # world.js EXÉCUTÉ contre un faux Three.js
+node tools/check-strings.mjs        # parité FR/EN + ui.js contre un faux DOM
+node tools/batch-maze.mjs 1 120 300 > parties.jsonl
+node tools/report-maze.mjs parties.jsonl
+```
+
+| Script | Attendu au 397 |
+|---|---|
+| `verify-textures` | **16 contrôles**, mur 146 niveaux (12 au 396), couture 2,4 (10,6 au 396), texture en 230 ms |
+| `verify-controls` | **31 contrôles** (18 au 396), dont 7 sur la souris et l'arbalète |
+| `verify-maze` | 400 dédales, 10 garanties, chemin 40..64, rotonde 400/400 |
+| `verify-rig` | 13 contrôles, 99 volumes |
+| `verify-anim` | 13 contrôles, foulées/distance 1,000 |
+| `verify-palette` | **36 couleurs communes identiques au bit près**, 25 propres |
+| `smoke-render` | 4 graines × 300 images, **~3 500 maillages** (plafond 6 000) |
+| `check-strings` | **58 = 58**, 26 identifiants |
+
+## L'équilibrage, 120 parties JOUÉES
+
+| | zip 396 | **zip 397** |
+|---|---|---|
+| **SORTIE** | 70,7 % | **73,3 %** |
+| durée médiane d'une partie gagnée | 133 s | **133 s** |
+| p75 / max | 169 s / 289 s | **169 s / 332 s** |
+| éclats ramassés (médiane) | 10 | **10** |
+| temps écoulé | 16,4 % | 14,2 % |
+| chute dans un trou | 11,4 % | 12,5 % |
+| tué par une créature | 0 % | **0 %** |
+
+**C'était le contrôle à faire, et c'est le seul chiffre qui compte ici :
+l'équilibrage n'a pas bougé.** La bascule en vue subjective, la souris,
+l'arbalète et la carte n'ont rien changé à ce que le moteur décide — ce qui est
+exactement ce qu'on voulait, puisque rien de ce qui décide n'a bougé.
+
+> ⚠️ **L'oracle ne tire jamais et ne lit jamais la carte.** Les deux ne peuvent
+> donc que rendre le jeu plus facile pour un humain, jamais plus dur : le
+> chiffre ci-dessus est un PLANCHER pour les nouveautés du 397, pas une mesure
+> de leur effet. Cet effet-là ne se mesure qu'en jouant.
+
+---
+
+## Ce qui n'a PAS été fait au 397
+
+- **Le son.** Toujours la plus grosse perte du labyrinthe, et elle grandit : en
+  vue subjective, un traqueur qu'on ENTEND respirer derrière soi vaudrait cinq
+  fois un traqueur qu'on voit. Le voile rouge du HUD reste un pis-aller.
+- **Le joystick tactile de la ferme.** Huitième zip consécutif. Le labyrinthe a
+  maintenant SES commandes tactiles (moitié gauche = déplacement, moitié droite
+  = regard au glissé, tape = coup), mais elles ne touchent pas `FermeGame.js` :
+  la dette du 387 reste entière.
+- **Le traqueur est toujours une boîte à yeux rouges.** En vue subjective il est
+  plus impressionnant qu'avant — on le voit arriver à hauteur d'homme — mais
+  c'est un placeholder, et le rig du 395 mériterait le même traitement que le
+  fermier a reçu au 396.
+- **Les ombres portées.** Aucune. En vue subjective, une torche qui ne projette
+  pas l'ombre du joueur sur le mur d'en face se remarque. C'est cher (une passe
+  de rendu de plus) et ce n'était pas demandé.
+- **`tools/preview-fps.mjs` ne connaît ni les créatures, ni les torches murales,
+  ni le modèle de vue.** Il montre l'échelle et le cadrage, ce qui suffisait à
+  ce zip. Il ne remplacera jamais le fait de jouer.

@@ -1459,6 +1459,252 @@ export function buildSprites() {
     return c;
   }
 
+  /* ========================================================================
+     ZIP 398 — LES FRUITS. « Insiste sur la qualité des sprites de citrons, de
+     blueberries, de fraises et framboises. »
+     ------------------------------------------------------------------------
+     Ce sont les seules icônes du jeu qu'on regarde de PRÈS et LONGTEMPS : dans
+     le sac, dans la boutique, dans les recettes, dans le bac de vente. Elles
+     méritent donc mieux qu'un carré de couleur — et c'est très exactement ce
+     qu'était la baie du buisson de printemps, deux `fillRect` l'un sur l'autre.
+
+     LES QUATRE RÈGLES SUIVIES ICI, dans l'ordre d'importance. Elles viennent
+     du zip 397, où l'on a enfin RENDU les textures pour les regarder :
+
+       1. TROIS VALEURS AU MINIMUM par masse — ombre, corps, lumière. Deux
+          suffisent à colorier, jamais à donner du volume. C'est la différence
+          entre « une fraise rouge » et « une fraise » ;
+       2. UN POINT SPÉCULAIRE, toujours en haut à gauche, toujours le même sur
+          les quatre fruits. C'est lui qui dit « c'est rond et c'est humide »,
+          et son placement constant est ce qui fait que les quatre appartiennent
+          au même monde ;
+       3. UNE OCCLUSION SOUS L'OBJET (une ombre portée d'un pixel), sinon le
+          fruit flotte au-dessus du fond du sac ;
+       4. UN CERNE SOMBRE, par `outlineSprite`. Sans lui, une myrtille bleu
+          foncé posée sur le violet d'un panneau disparaît — deux masses de même
+          valeur qui se touchent n'en font qu'une (leçon du zip 388).
+
+     ⚠️ ET ELLES SONT RENDUES EN PNG PAR `tools/render-fruits.mjs`, puis
+     REGARDÉES. C'est la dette que le 397 a payée pour le labyrinthe et que le
+     398 paie pour la ferme : quatre refontes graphiques du labyrinthe avaient
+     été faites en aveugle avant qu'on s'en aperçoive.
+     ====================================================================== */
+
+  // Un fruit, dessiné à 16x16 puis cerné. `spec` vient de C.FRUITS.
+  function fruitSprite(id) {
+    const [c, g] = cv(T, T);
+    const S = (x, y, w, h, col) => P(g, x, y, w, h, col);
+
+    if (id === "lemon") {
+      /* CITRON — un ovale PENCHÉ, à téton aux deux bouts.
+         ⚠️ RÉGLÉ EN REGARDANT LE PNG (tools/render-fruits.mjs). La première
+         version était un cercle jaune surmonté d'une feuille : elle se lisait
+         comme une POMME JAUNE, et c'est le genre de méprise qu'aucune
+         relecture ne signale — on sait ce qu'on a voulu dessiner.
+         Trois corrections, dans l'ordre de ce qui a compté :
+           1. la silhouette s'ALLONGE sur la diagonale (un citron est un ovale,
+              une pomme est un disque) ;
+           2. les deux TÉTONS sortent franchement du corps, en pointe. Ce sont
+              eux, et rien d'autre, qui disent « agrume » à seize pixels ;
+           3. la feuille disparaît. Elle tirait toute la lecture vers la pomme,
+              et un citron cueilli n'en porte pas. */
+      const dark = "#b8940c", body = "#e8c81e", lit = "#f6e46a", hi = "#fff6c4";
+      /* Un OVALE COUCHÉ, large de dix pixels et haut de huit. Deuxième
+         correction faite en regardant : la version « oblique » précédente
+         donnait une courge, parce qu'un décalage d'un pixel par ligne se lit
+         comme une COURBURE. Un citron n'est pas courbe, il est ALLONGÉ. */
+      S(4, 5, 8, 6, body); S(3, 6, 10, 4, body); S(5, 4, 6, 8, body);
+      S(4, 8, 8, 3, dark); S(5, 10, 6, 2, dark);            // ventre à l'ombre
+      S(5, 4, 6, 3, lit); S(6, 4, 4, 2, "#fbef9a");         // dos éclairé
+      // les deux tétons : COURTS, sur l'axe long, un pixel de plus que le corps
+      S(2, 7, 2, 2, "#c9a512"); S(1, 8, 1, 1, "#9c7c08");
+      S(12, 7, 2, 2, "#c9a512"); S(14, 8, 1, 1, "#9c7c08");
+      S(7, 2, 2, 2, "#6f8a34"); S(7, 1, 1, 1, "#8aa848");   // pédoncule, discret
+      S(6, 5, 2, 2, hi); S(6, 5, 1, 1, "#ffffff");          // point spéculaire
+      // pores : un citron n'est jamais lisse, trois pixels suffisent à le dire
+      S(9, 7, 1, 1, dark); S(7, 9, 1, 1, dark); S(11, 8, 1, 1, dark);
+    } else if (id === "strawberry") {
+      /* FRAISE — un cœur pointe en bas, calice vert en couronne, et des
+         AKÈNES : les petits points jaunes. Ce sont eux qu'on reconnaît, bien
+         avant la forme. */
+      const dark = "#9c1c2e", body = "#e0344a", lit = "#f0687a", seed = "#f8dc78";
+      S(4, 5, 8, 5, body); S(3, 6, 10, 4, body);
+      S(4, 9, 8, 3, body); S(5, 11, 6, 2, body); S(6, 12, 4, 2, body); S(7, 14, 2, 1, dark);
+      S(3, 8, 5, 5, dark); S(4, 10, 4, 3, dark);      // flanc gauche à l'ombre
+      S(7, 5, 5, 4, lit); S(8, 6, 3, 2, "#ff8a98");
+      for (const [sx, sy] of [[5, 7], [8, 8], [6, 10], [10, 7], [9, 11], [7, 12], [11, 9], [4, 9]]) S(sx, sy, 1, 1, seed);
+      // calice : cinq folioles, pas un bandeau vert
+      S(4, 4, 8, 2, "#3f8a2e");
+      S(3, 4, 2, 1, "#54a83c"); S(6, 3, 2, 1, "#54a83c"); S(9, 3, 2, 1, "#54a83c"); S(11, 4, 2, 1, "#54a83c");
+      S(7, 2, 2, 2, "#6a3a1e"); S(7, 1, 1, 1, "#8a5230");     // queue
+      S(6, 6, 2, 1, "#ff9aa6");                                // spéculaire
+    } else if (id === "raspberry") {
+      /* FRAMBOISE — une DRUPÉOLE à la fois. C'est le seul fruit des quatre
+         dont la surface est faite de boules : la dessiner lisse la
+         transformerait en fraise sans akènes. Huit petites sphères, chacune
+         avec son propre point clair, valent mieux qu'un tampon de bruit. */
+      /* ⚠️ RÉGLÉ EN REGARDANT LE PNG. La première version alignait les
+         drupéoles en COLONNES : elles se fondaient en bandes horizontales, et
+         le fruit se lisait comme une fraise rayée. Deux corrections :
+           1. les rangs sont DÉCALÉS d'un demi-motif (appareillage en quinconce,
+              comme une maçonnerie) — c'est ce décalage qui fait qu'on compte
+              des boules au lieu de lire des lignes ;
+           2. un pixel de creux SOMBRE entre les rangs. Sans séparation, deux
+              masses de même valeur qui se touchent n'en font qu'une (zip 388),
+              et c'est vrai à l'échelle de trois pixels comme à celle d'un mur.
+         Le fruit se resserre vers le bas : une framboise est un dé à coudre. */
+      const dark = "#7e1c39", body = "#c8365f", lit = "#e0688a", deep = "#5c1129";
+      const cells = [
+        [3, 5], [6, 5], [9, 5], [12, 5],
+        [4, 8], [7, 8], [10, 8],
+        [5, 11], [8, 11],
+      ];
+      /* ⚠️ DEUX PASSES, ET L'ORDRE EST LA CORRECTION. La version précédente
+         peignait chaque boule PUIS son creux : la boule suivante, dessinée
+         après, recouvrait le creux qu'on venait de tracer. Résultat, des
+         bandes horizontales — exactement le défaut qu'on croyait réparer. On
+         pose donc toutes les boules, puis tous les creux par-dessus. */
+      for (const [dx, dy] of cells) {
+        S(dx, dy, 3, 3, body);
+        S(dx, dy + 2, 3, 1, dark);        // bas de la boule
+        S(dx, dy, 2, 1, lit);             // haut éclairé
+      }
+      for (const [dx, dy] of cells) {
+        S(dx + 3, dy, 1, 3, deep);        // creux vertical, à droite de chaque boule
+        S(dx, dy + 3, 3, 1, deep);        // creux horizontal, sous chaque boule
+        S(dx, dy, 1, 1, "#f0a0b8");       // le point brillant reste au-dessus
+      }
+      S(4, 14, 7, 1, dark); S(6, 15, 3, 1, deep);    // pointe du fruit
+      S(4, 3, 8, 2, "#3f8a2e");                      // calice
+      S(3, 4, 2, 1, "#54a83c"); S(11, 4, 2, 1, "#54a83c");
+      S(6, 2, 1, 1, "#54a83c"); S(9, 2, 1, 1, "#54a83c");
+      S(7, 1, 2, 2, "#6a3a1e");
+    } else {
+      /* MYRTILLE — presque noire, avec la PRUINE (le voile bleu-gris cireux)
+         et la petite COURONNE en étoile à son sommet. Ces deux détails-là sont
+         toute la myrtille ; sans eux, c'est un raisin. */
+      /* ⚠️ RÉGLÉ EN REGARDANT LE PNG. La première version était un rectangle
+         bleu à coins vifs : elle se lisait comme un sac, pas comme un fruit.
+         Trois corrections :
+           1. les COINS SONT MANGÉS — une sphère de seize pixels doit perdre
+              son coin, sinon l'œil lit un carré arrondi ;
+           2. la COURONNE en étoile est franche et CREUSE (elle s'enfonce),
+              parce que c'est elle qui distingue une myrtille d'un raisin ;
+           3. la PRUINE — le voile cireux bleu-gris — couvre franchement le
+              dos. C'est la seule zone claire du fruit, donc la seule qui lui
+              donne du volume sur un fond sombre. */
+      const dark = "#1e2450", body = "#3a4a9c", lit = "#5f78d0", bloom = "#9db0e8";
+      S(5, 4, 6, 10, body); S(4, 5, 8, 8, body); S(3, 7, 10, 4, body);
+      S(4, 10, 8, 3, dark); S(5, 12, 6, 2, dark); S(6, 13, 4, 1, "#141838");
+      S(5, 5, 6, 4, lit);
+      S(5, 5, 5, 3, bloom); S(6, 4, 4, 2, bloom);     // pruine sur tout le dos
+      S(6, 5, 2, 2, "#d8e2f8"); S(6, 5, 1, 1, "#ffffff");
+      S(12, 8, 1, 2, lit);                             // reflet froid, flanc droit
+      /* la couronne : un creux sombre, cinq dents autour. Elle mord sur le
+         corps (y = 3..5) au lieu de se poser dessus — une couronne posée
+         ressemble à un chapeau. */
+      S(6, 3, 4, 3, "#141838");
+      S(5, 4, 1, 1, "#2c3670"); S(10, 4, 1, 1, "#2c3670");
+      S(6, 2, 1, 2, "#2c3670"); S(9, 2, 1, 2, "#2c3670"); S(7, 2, 2, 1, "#2c3670");
+      S(7, 4, 2, 1, "#0c0e24");
+    }
+    outlineSprite(g, T, T, "rgba(24,18,30,0.85)");
+    /* Ombre portée : un fruit sans contact flotte au-dessus du fond du sac.
+       ⚠️ Elle est SOMBRE et ÉTROITE. La première version était une barre grise
+       claire sur toute la largeur : sur le PNG elle se lisait comme une
+       étagère sous le fruit, pas comme son ombre. Une ombre est un trou, pas
+       un objet. */
+    P(g, 6, 15, 4, 1, "rgba(12,8,18,0.45)");
+    P(g, 5, 15, 1, 1, "rgba(12,8,18,0.22)"); P(g, 10, 15, 1, 1, "rgba(12,8,18,0.22)");
+    return c;
+  }
+
+  /* La BARQUETTE (demande de Guillaume : « on peut aussi vendre les fruits par
+     barquettes »). Une cagette de bois clair remplie du fruit choisi. Elle doit
+     se lire comme UNE UNITÉ DE VENTE et non comme six fruits en vrac : d'où le
+     cadre, les lattes, et l'étiquette claire sur le devant. */
+  function punnetSprite(id) {
+    const [c, g] = cv(24, 20);
+    const sp = (C.FRUITS.find(f => f.id === id) || C.FRUITS[0]);
+    // fruits qui dépassent, dessinés AVANT la cagette : c'est ce chevauchement
+    // qui donne la profondeur, et il ne coûte que l'ordre des lignes
+    for (const [dx, dy] of [[5, 4], [10, 3], [15, 4], [7, 6], [13, 6]]) {
+      P(g, dx, dy, 4, 4, sp.color);
+      P(g, dx, dy + 3, 4, 1, sp.dark);
+      P(g, dx, dy, 2, 1, "#ffffff22");
+      P(g, dx + 1, dy + 1, 1, 1, "rgba(255,255,255,0.55)");
+    }
+    P(g, 2, 8, 20, 10, "#c8a06a");                 // caisse
+    P(g, 2, 8, 20, 1, "#e0bd88");
+    P(g, 2, 17, 20, 1, "#8f6f42");
+    for (let x = 4; x < 22; x += 4) P(g, x, 9, 1, 8, "#a9834f");   // lattes
+    P(g, 1, 9, 1, 8, "#8f6f42"); P(g, 22, 9, 1, 8, "#8f6f42");
+    P(g, 7, 11, 10, 5, "#f2e6c8");                 // étiquette
+    P(g, 8, 12, 8, 1, sp.dark); P(g, 8, 14, 6, 1, sp.dark);
+    outlineSprite(g, 24, 20, "rgba(24,18,30,0.8)");
+    return c;
+  }
+
+  /* ========================================================================
+     ZIP 398 — LES VERGERS, à quatre stades.
+     ------------------------------------------------------------------------
+     Trois silhouettes selon `kind` : `tree` (citronnier, sur tronc),
+     `bush` (framboisier, myrtillier) et `low` (fraisier, au ras du sol).
+
+     ⚠️ LE STADE 3 (EN FRUITS) DOIT SE VOIR DE LOIN, et c'est le seul critère
+     qui compte pour ces sprites : un joueur traverse sa ferme et doit repérer
+     d'un coup d'œil lequel de ses douze plants est prêt. Les fruits y sont donc
+     PLUS GROS et PLUS CLAIRS que nature, et posés sur le pourtour du feuillage
+     plutôt qu'au milieu — au milieu, ils se noient dans le vert.
+     ====================================================================== */
+  function orchardSprite(kindIdx, stage) {
+    const spec = C.ORCHARDS[kindIdx] || C.ORCHARDS[0];
+    const fr = C.FRUITS.find(f => f.id === spec.fruit) || C.FRUITS[0];
+    const W = 24, H = 28;
+    const [c, g] = cv(W, H);
+    const leaf = "#2f6f2c", leaf2 = "#3f8a36", leafD = "#1e4a1c";
+    const bark = "#6b4a2a", barkD = "#4a3119";
+    const puff = (x, y, w, h) => { P(g, x, y, w, h, leaf); P(g, x, y, w, Math.max(1, h >> 1), leaf2); P(g, x, y + h - 1, w, 1, leafD); };
+    const fruitDot = (x, y, r) => {
+      P(g, x, y, r, r, fr.color);
+      P(g, x, y + r - 1, r, 1, fr.dark);
+      P(g, x, y, 1, 1, "rgba(255,255,255,0.75)");
+    };
+
+    if (stage === 0) {
+      // PLANT : deux feuilles et une tige. Il doit avoir l'air FRAGILE, sinon
+      // on ne ressent rien à le voir grandir.
+      P(g, 11, 20, 2, 6, "#5f8a3a");
+      puff(8, 17, 4, 3); puff(13, 18, 4, 3);
+      P(g, 6, 26, 12, 2, "#4a3a24");            // terre remuée
+    } else if (stage === 1) {
+      if (spec.kind === "tree") { P(g, 10, 16, 4, 10, bark); P(g, 10, 16, 1, 10, barkD); puff(6, 10, 12, 7); puff(8, 7, 8, 4); }
+      else { puff(5, 15, 14, 9); puff(7, 12, 10, 5); }
+      P(g, 5, 26, 14, 2, "#4a3a24");
+    } else {
+      // ADULTE (2) et EN FRUITS (3) : même feuillage, les fruits en plus.
+      if (spec.kind === "tree") {
+        P(g, 10, 15, 5, 12, bark); P(g, 10, 15, 1, 12, barkD); P(g, 14, 15, 1, 12, "#8a6236");
+        P(g, 8, 25, 9, 2, barkD);                                    // empattement
+        puff(3, 6, 18, 10); puff(5, 2, 14, 6); puff(1, 9, 6, 5); puff(17, 9, 6, 5);
+        if (stage === 3) for (const [fx, fy] of [[3, 10], [7, 13], [12, 12], [17, 10], [5, 6], [15, 5], [19, 12], [10, 3]]) fruitDot(fx, fy, 4);
+      } else if (spec.kind === "bush") {
+        puff(2, 11, 20, 13); puff(4, 7, 16, 6); puff(0, 15, 5, 7); puff(19, 15, 5, 7);
+        P(g, 11, 22, 2, 5, "#4a6b2a");
+        if (stage === 3) for (const [fx, fy] of [[2, 15], [6, 12], [10, 17], [15, 12], [19, 16], [8, 8], [16, 8], [12, 21]]) fruitDot(fx, fy, 4);
+      } else {
+        // LOW (fraisier) : une touffe ramassée, les fruits POSÉS AU SOL, comme
+        // dans un vrai carré de fraises. C'est ce détail qui le distingue du
+        // framboisier au premier coup d'œil, bien avant sa couleur.
+        puff(3, 15, 18, 9); puff(6, 11, 12, 5); puff(1, 18, 5, 5); puff(18, 18, 5, 5);
+        if (stage === 3) for (const [fx, fy] of [[3, 22], [8, 23], [13, 22], [18, 23], [6, 18], [15, 18]]) fruitDot(fx, fy, 4);
+      }
+      P(g, 4, 26, 16, 2, "#3f3220");
+    }
+    outlineSprite(g, W, H, "rgba(18,14,22,0.7)");
+    return c;
+  }
+
   // Buisson à baies (printemps) : petite touffe verte foncée piquée de baies
   // rouges. Occupe une seule tuile (16x16).
   function berryBushSprite() {
@@ -4016,6 +4262,12 @@ house: house(),
     // Zip 235: winter swap. Same 4 frames, same anim, different pelt.
     snowLeopard: [snowLeopardSprite(0), snowLeopardSprite(1), snowLeopardSprite(2), snowLeopardSprite(3)],
     berryBush: berryBushSprite(),
+    /* ZIP 398 — les fruits, les barquettes et les vergers. Tous indexés par
+       IDENTIFIANT (et non par position dans un tableau) : ajouter un fruit un
+       jour ne doit pas décaler les autres. */
+    fruits: Object.fromEntries(C.FRUITS.map(f => [f.id, fruitSprite(f.id)])),
+    punnets: Object.fromEntries(C.FRUITS.map(f => [f.id, punnetSprite(f.id)])),
+    orchards: C.ORCHARDS.map((_, k) => Array.from({ length: C.ORCHARD_STAGES }, (__, st) => orchardSprite(k, st))),
     townhall: townhallSprite(),
     townHouses: Array.from({ length: C.TOWN_HOUSE_STYLES }, (_, i) => townHouseVariant(i)),
     rabbit: [rabbitSprite(0), rabbitSprite(1), rabbitSprite(2)],

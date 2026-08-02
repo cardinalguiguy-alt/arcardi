@@ -20,6 +20,14 @@
 <div id="dread"></div>
 <div id="hurtFlash"></div>
 
+<!-- ------------------------------------------------------- ZIP 397 : VISÉE --
+     Le réticule. Il est DYNAMIQUE : il s'ouvre quand on court (l'arme est
+     basse), il rougit quand une créature est à portée d'épée, il devient un
+     cercle plein quand l'arbalète est chargée. Un réticule fixe ne dit rien ;
+     c'est justement le reproche du 396 (« on sait pas quand on touche »),
+     transposé en vue subjective. -->
+<div id="reticle"><i class="r-t"></i><i class="r-b"></i><i class="r-l"></i><i class="r-r"></i><i class="r-c"></i></div>
+
 <!-- ------------------------------------------------------------------ HUD -->
 <div id="hud" class="layer hud">
   <div class="hud-row">
@@ -27,6 +35,7 @@
     <div class="stat"><span class="label" id="lShards"></span><span id="shards">0</span></div>
     <div class="stat"><span class="label" id="lBest"></span><span id="best">0</span></div>
     <div class="stat sword"><span id="swordIcon">⚔</span></div>
+    <div class="stat bolts" id="boltBox"><span id="bowIcon">➶</span><span id="boltN">0</span></div>
     <!-- Zip 396 : le compte à rebours du renoncement. Il n'apparaît QUE
          pendant la fenêtre, et disparaît dès que la herse est tombée : un
          compteur figé à zéro est une promesse qu'on ne tient plus. -->
@@ -38,6 +47,40 @@
   </div>
   <div id="hearts" class="hearts"></div>
 </div>
+
+<!-- ------------------------------------------------- ZIP 397 : NAVIGATION --
+     « Il faut pouvoir naviguer de manière absolument évidente. »
+
+     LA BOUSSOLE est en HAUT, au centre, sous le réticule : c'est là qu'on
+     regarde déjà. Elle porte les quatre points cardinaux ET deux repères qui
+     ne sont pas cardinaux — la SORTIE et la ROTONDE. Savoir que la sortie est
+     au nord-est ne dit rien des trois murs qui séparent : la boussole donne
+     donc une DIRECTION, jamais un chemin, exactement comme le phare du 393.
+
+     LA MINICARTE est en bas à droite, orientée « le haut = devant » (une carte
+     orientée nord oblige à faire la rotation de tête soi-même, ce qui est très
+     exactement le travail qu'on veut éviter au joueur). Sans la carte
+     ramassée, elle ne montre QUE les cellules vues. Avec, elle montre tout.
+     C'est le bonus, et c'est la différence entre « je suis perdu » et « je
+     sais où aller mais pas comment ». -->
+<canvas id="compass" width="620" height="34"></canvas>
+<div id="miniWrap">
+  <canvas id="mini" width="220" height="220"></canvas>
+  <div id="miniTag"></div>
+</div>
+
+<!-- LE PLAN DÉPLIÉ (touche M). Plein écran, il ne met pas le jeu en pause :
+     s'arrêter pour lire une carte dans un labyrinthe où quelque chose vous
+     cherche est une DÉCISION, et c'est ce qui la rend intéressante. -->
+<div id="mapFull" class="layer">
+  <canvas id="mapBig" width="720" height="720"></canvas>
+  <p class="hint" id="mapHint"></p>
+</div>
+
+<!-- « Cliquez pour jouer » : la capture du pointeur ne peut être redemandée
+     que par un geste. Sans ce panneau, un joueur qui appuie sur Échap se
+     retrouve incapable de tourner sans savoir pourquoi. -->
+<div id="lockHint" class="lockhint"><span id="lockTxt"></span></div>
 
 <div id="toast" class="toast"></div>
 
@@ -61,9 +104,12 @@
   <button id="btnExit" class="ghost"></button>
   <div class="controls">
     <div id="cLane"></div>
+    <div id="cLook"></div>
     <div id="cStrafe"></div>
     <div id="cHit"></div>
+    <div id="cShoot"></div>
     <div id="cUse"></div>
+    <div id="cMap"></div>
     <div id="cPause"></div>
     <div id="cBack"></div>
   </div>

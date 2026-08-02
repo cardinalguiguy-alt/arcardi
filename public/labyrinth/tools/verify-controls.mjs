@@ -174,6 +174,115 @@ const q = Math.PI / 2;
     st.status !== "abandon", `statut « ${st.status} » (était « ${before} »)`);
 }
 
+/* =============================================================================
+   ZIP 397 — LA SOURIS. Sept contrôles neufs, posés dans les mêmes termes que
+   ceux du 394 : on ne relit AUCUNE formule, on demande où part le regard.
+   -----------------------------------------------------------------------------
+   ⚠️ C'est le même piège qu'au 393, à un périphérique près. Le signe de
+   `turnDelta` est écrit dans rules.js, et n'importe qui pourrait « corriger »
+   la ligne `st.ang -= intent.turnDelta` en la trouvant bizarre — elle l'est,
+   puisque le vecteur avant vaut (−sin a, −cos a). Sans ces contrôles, la
+   souris partirait à l'envers exactement comme les flèches en 393, et pour la
+   même raison : personne ne peut vérifier un signe en le regardant.
+   ========================================================================== */
+{
+  const st = fresh(); run(st, { turnDelta: 0.4 }, 1);
+  const [fx] = fwdOf(st);
+  ok("SOURIS vers la DROITE fait tourner à DROITE (vers l'est)", fx > 0.3, `x avant = ${fx.toFixed(2)}`);
+}
+{
+  const st = fresh(); run(st, { turnDelta: -0.4 }, 1);
+  const [fx] = fwdOf(st);
+  ok("SOURIS vers la GAUCHE fait tourner à GAUCHE (vers l'ouest)", fx < -0.3, `x avant = ${fx.toFixed(2)}`);
+}
+{
+  /* La souris est un DÉPLACEMENT, pas une vitesse : elle ne doit ni accélérer
+     ni continuer sur sa lancée. Une souris qui « glisse » après l'arrêt de la
+     main est la sensation que tous les joueurs de FPS détestent, et c'est ce
+     qu'on obtient si on la fait passer par TURN_ACCEL / TURN_DECEL. */
+  const st = fresh();
+  run(st, { turnDelta: 0.5 }, 1);
+  const a1 = st.ang;
+  run(st, {}, 20);
+  ok("la souris ne laisse AUCUNE inertie de rotation",
+    Math.abs(st.ang - a1) < 1e-9, `dérive ${(st.ang - a1).toFixed(6)} rad`);
+}
+{
+  // 200 pixels à MOUSE_SENS doivent produire exactement 200 × sens radians.
+  const st = fresh();
+  const want = 200 * CFG.MOUSE_SENS;
+  run(st, { turnDelta: want }, 1);
+  ok("le cap tourne exactement de ce que la main a parcouru",
+    Math.abs(Math.abs(st.ang) - want) < 1e-9, `${Math.abs(st.ang).toFixed(4)} rad pour ${want.toFixed(4)} demandés`);
+}
+{
+  /* ⚠️ LE RECALAGE SUR LE COULOIR DOIT SE TAIRE À LA SOURIS. Sinon un joueur
+     qui vise un rôdeur en diagonale se fait redresser sur l'axe dès qu'il
+     lâche la main — le jeu corrige une visée délibérée, ce qui est le pire
+     défaut qu'une aide puisse avoir. */
+  const st = fresh();
+  st.ang = 0.18;                                   // à 10° de l'axe
+  run(st, { fwd: 1, turnDelta: 0.001 }, 1);
+  const a1 = st.ang;
+  run(st, { fwd: 1, turnDelta: 0.001 }, 6);
+  /* Le cap doit avoir bougé EXACTEMENT de ce que la souris a demandé — six
+     images à −0,001 rad — et de rien d'autre. Le signe est négatif parce que
+     `st.ang -= turnDelta` : pousser la souris à droite fait DÉCROÎTRE l'angle
+     (démonstration au 394). La première écriture de ce contrôle attendait
+     +0,006 et échouait sur un jeu qui, lui, était juste : un contrôle faux
+     accuse le code, et on perd la matinée à chercher dans le code. */
+  ok("le recalage sur le couloir se TAIT quand on vise à la souris",
+    Math.abs((st.ang - a1) + 0.006) < 1e-6, `cap ${st.ang.toFixed(4)} rad, dérive ${(st.ang - a1).toFixed(4)}`);
+}
+{
+  // ... mais il revient dès que la souris se tait, au clavier seul.
+  const st = fresh();
+  st.ang = 0.18;
+  run(st, { fwd: 1 }, Math.ceil(CFG.SIM_HZ * 1.2));
+  ok("... et revient dès que la main s'arrête",
+    Math.abs(st.ang) < 0.05, `cap ${st.ang.toFixed(4)} rad`);
+}
+{
+  /* L'ARBALÈTE. Le carreau part DEVANT et va vers le nord quand on regarde au
+     nord. Un projectile qui part derrière est le genre de faute de signe qu'on
+     ne voit qu'en jouant, et seulement si on regarde au bon moment. */
+  const st = fresh();
+  st.hasBow = true; st.bolts = 3; st.ang = 0;
+  run(st, { shoot: true }, 1);
+  const p = st.projectiles[0];
+  ok("un carreau part DEVANT le joueur", !!p && p.z < st.pz, p ? `Δz = ${(p.z - st.pz).toFixed(2)}` : "aucun carreau");
+  ok("... et il consomme exactement un carreau", st.bolts === 2, `${st.bolts} restants`);
+  const z0 = p ? p.z : 0;
+  run(st, {}, 3);
+  ok("... et il AVANCE (il est simulé, pas instantané)",
+    !st.projectiles.length || st.projectiles[0].z < z0 - 1,
+    st.projectiles.length ? `Δz = ${(st.projectiles[0].z - z0).toFixed(2)}` : "déjà planté dans un mur");
+}
+{
+  // On ne tire pas sans arme, et on ne tire pas à vide.
+  const st = fresh();
+  run(st, { shoot: true }, 1);
+  ok("on ne tire pas sans arbalète", st.projectiles.length === 0);
+  st.hasBow = true; st.bolts = 0;
+  run(st, { shoot: true }, 1);
+  ok("on ne tire pas sans carreau", st.projectiles.length === 0);
+}
+{
+  /* LA CARTE. Elle se ramasse AU PASSAGE (voir handlePickups) : un joueur qui
+     passe devant sans comprendre qu'il fallait appuyer aurait raté le seul
+     bonus de navigation du jeu. */
+  const m = Maze.generate(CFG, 4242);
+  const st = Rules.create(CFG, m, 4242);
+  ok("le générateur a bien posé une carte sur un mur", !!st.mapItem,
+    st.mapItem ? `cellule ${st.mapItem.x},${st.mapItem.y}` : "aucune");
+  if (st.mapItem) {
+    const [wx, wz] = Rules.centerOf(CFG, st.mapItem.x, st.mapItem.y);
+    st.px = wx; st.pz = wz;
+    run(st, {}, 1);
+    ok("... et elle se ramasse au PASSAGE, sans appuyer sur rien", st.hasMap === true);
+  }
+}
+
 console.log(fails ? `\n${fails} ÉCHEC(S)\n` : "\nToutes les commandes vont dans le bon sens.\n");
 console.log(`Ce script ne dit RIEN du confort réel : il dit que chaque commande
 va dans le sens que le joueur attend, que le recalage aide sans jamais prendre

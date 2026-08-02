@@ -96,6 +96,114 @@ body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; co
 .results div { display: contents; }
 .results b { text-align: right; }
 
+/* =============================================================================
+   ZIP 397 — LA VUE SUBJECTIVE : RÉTICULE, BOUSSOLE, MINICARTE, PLAN.
+   -----------------------------------------------------------------------------
+   ⚠️ TOUT EST EN `position: fixed` ET `pointer-events: none`. C'est une
+   contrainte, pas un style : le pointeur est CAPTURÉ pendant la partie, donc
+   un élément qui intercepterait un clic mangerait un coup d'épée sans que rien
+   ne l'explique.
+   ========================================================================== */
+
+/* LE RÉTICULE. Quatre traits et un point, jamais un cercle : le trait dit la
+   direction, et le trou du milieu laisse voir ce qu'on vise — un réticule
+   plein cache très exactement ce qu'on regarde. Il s'ÉCARTE quand on court
+   (l'arme est basse, on ne peut pas viser) et rougit quand une créature est à
+   portée : c'est la réponse en vue subjective au « on sait pas si on touche »
+   du 396. */
+#reticle {
+  position: fixed; left: 50%; top: 50%; width: 42px; height: 42px;
+  transform: translate(-50%, -50%); pointer-events: none; z-index: 60;
+  opacity: 0; transition: opacity .2s;
+}
+#reticle.on { opacity: .9; }
+#reticle i {
+  position: absolute; background: #efe7ff; display: block;
+  box-shadow: 0 0 3px rgba(0,0,0,.9);
+  transition: background .12s, transform .10s ease-out;
+}
+#reticle .r-t, #reticle .r-b { width: 2px; height: 8px; left: 20px; }
+#reticle .r-l, #reticle .r-r { width: 8px; height: 2px; top: 20px; }
+#reticle .r-t { top: 0; } #reticle .r-b { bottom: 0; }
+#reticle .r-l { left: 0; } #reticle .r-r { right: 0; }
+#reticle .r-c { width: 2px; height: 2px; left: 20px; top: 20px; opacity: .55; }
+/* écarté : on court, ou l'arbalète se recharge */
+#reticle.wide .r-t { transform: translateY(-6px); }
+#reticle.wide .r-b { transform: translateY(6px); }
+#reticle.wide .r-l { transform: translateX(-6px); }
+#reticle.wide .r-r { transform: translateX(6px); }
+#reticle.hot i { background: #ff6a5a; }
+#reticle.ready .r-c { opacity: 1; background: #9fd8ff; transform: scale(2.2); }
+
+/* LA BOUSSOLE. En haut, au centre : c'est déjà là que le regard est posé. Elle
+   est peinte au canvas (donc au pixel franc, comme le reste du jeu) plutôt
+   qu'en HTML — un ruban qui défile en CSS demande une transformation par
+   image, et on en a déjà assez qui tournent. */
+#compass {
+  position: fixed; left: 50%; top: 14px; transform: translateX(-50%);
+  width: 310px; height: 17px; pointer-events: none; z-index: 61;
+  opacity: 0; transition: opacity .25s;
+  image-rendering: pixelated;
+}
+#compass.on { opacity: .92; }
+
+/* LA MINICARTE. En bas à droite, ORIENTÉE VERS L'AVANT — le haut de la carte
+   est toujours la direction du regard. Une carte orientée nord oblige le
+   joueur à faire la rotation dans sa tête, ce qui est très exactement le
+   travail qu'on cherche à lui épargner quand on demande « naviguer de manière
+   absolument évidente ». */
+#miniWrap {
+  position: fixed; right: 16px; bottom: 16px; width: 148px;
+  pointer-events: none; z-index: 61; opacity: 0; transition: opacity .25s;
+}
+#miniWrap.on { opacity: 1; }
+#mini {
+  width: 148px; height: 148px; display: block;
+  border: 1px solid rgba(178,138,255,.30); border-radius: 50%;
+  background: rgba(8,5,16,.55); image-rendering: pixelated;
+}
+#miniTag {
+  text-align: center; font-size: 10px; letter-spacing: .14em;
+  opacity: .55; margin-top: 5px; text-transform: uppercase;
+}
+
+/* LE PLAN DÉPLIÉ. Il NE MET PAS LE JEU EN PAUSE : s'arrêter pour lire une
+   carte pendant que quelque chose vous cherche est une décision, et c'est ce
+   qui la rend intéressante. D'où le fond seulement à demi opaque — on continue
+   de voir bouger le monde derrière. */
+#mapFull {
+  display: none; align-items: center; justify-content: center; flex-direction: column;
+  background: rgba(8,5,16,.72); z-index: 110; pointer-events: none;
+}
+#mapFull.visible { display: flex; }
+#mapBig {
+  width: min(78vh, 78vw); height: min(78vh, 78vw);
+  image-rendering: pixelated;
+  border: 2px solid rgba(178,138,255,.35); border-radius: 8px;
+  background: rgba(6,4,12,.85);
+}
+#mapFull .hint { margin-top: 12px; font-size: 13px; opacity: .6; }
+
+/* Les carreaux d'arbalète, dans la rangée du HUD. Cachés tant qu'on n'a pas
+   l'arme : un compteur à zéro pour un objet qu'on ne possède pas apprend au
+   joueur à ignorer le HUD. */
+.stat.bolts { display: none; }
+.stat.bolts.on { display: flex; }
+.stat.bolts #bowIcon { font-size: 15px; opacity: .7; letter-spacing: 0; }
+.stat.bolts #boltN { color: #9fd8ff; }
+.stat.bolts.empty #boltN { color: #7a6a80; }
+
+/* « Cliquez pour jouer ». La capture du pointeur ne se reprend pas toute
+   seule : après un Échap, le navigateur exige un nouveau geste. Sans ce
+   panneau, le joueur se retrouve incapable de tourner et croit à un bug. */
+.lockhint {
+  position: fixed; left: 50%; top: 62%; transform: translate(-50%, -50%);
+  background: rgba(12,8,22,.9); border: 1px solid rgba(178,138,255,.4);
+  padding: 12px 24px; border-radius: 10px; font-size: 15px;
+  z-index: 115; display: none; pointer-events: none;
+}
+.lockhint.on { display: block; }
+
 /* SORTIE : une flèche violette qui monte, 1,5 s, et on repart. Pas de bilan —
    voir bridge.js et game.js/finish(). */
 .win { display: none; align-items: center; justify-content: center; background: rgba(140,90,220,.22); }
