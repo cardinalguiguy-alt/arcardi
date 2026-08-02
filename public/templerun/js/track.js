@@ -510,8 +510,19 @@ const Track = (function () {
          reproductible, et ne coûte rien au reste. */
       const plank = type === OBST.LOW
         && makeRng((node.index * 7717 + Math.round(t * 16) + 331) >>> 0)() < CFG.PLANK_CHANCE;
+      /* ZIP 400 — le tronc mort. Même motif que la planche, et pour la même
+         raison : une graine tirée de la POSITION, jamais du flux partagé.
+         Le sel diffère (599 au lieu de 331) sans quoi planche et tronc
+         tomberaient toujours sur les mêmes obstacles.
+         Il habille soit une barrière basse PLEINE LARGEUR — trois voies, donc
+         la parade est déjà le saut —, soit un bloc, qui se contourne. Sur une
+         barrière partielle il mentirait : un tronc qui ne barre qu'une voie et
+         qu'on peut sauter OU contourner brouille la lecture. */
+      const fullWidth = lanes[0] && lanes[1] && lanes[2];
+      const trunk = ((type === OBST.LOW && fullWidth && !plank) || type === OBST.WALL)
+        && makeRng((node.index * 7717 + Math.round(t * 16) + 599) >>> 0)() < CFG.TRUNK_CHANCE;
 
-      return { t, type, lanes, free, plank };
+      return { t, type, lanes, free, plank, trunk };
     }
 
     /* Pièces : chapelets posés dans une voie restée libre. Simple, lisible,

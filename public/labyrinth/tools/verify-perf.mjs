@@ -153,7 +153,23 @@ function check(name, cond, extra) {
   if (!cond) fails++;
 }
 
-const RUNS = Math.max(3, parseInt(process.argv[2] || "12", 10));
+/* ⚠️ SIX PARTIES AU MINIMUM, ET CE N'EST PAS UN CONFORT.
+   Le zip 400 a vu ce contrôle échouer à 8,9/255 sur QUATRE parties et passer à
+   7,4 sur six comme sur huit — sans qu'une ligne de world.js ait bougé entre
+   les deux. Le p99 porte sur la queue de distribution : il dépend donc des
+   dédales tirés, et quatre dédales ne suffisent pas à la peupler.
+
+   ⚠️ ET LA CORRECTION N'EST PAS DE BAISSER LE SEUIL — c'est le corollaire n°3
+   du zip 379, et c'est le réflexe exactement inverse de celui qu'on a envie
+   d'avoir à 21 h. Le seuil disait quelque chose de vrai ; c'est
+   l'ÉCHANTILLON qui mentait. Un outil qui conclut sur trop peu de tirages doit
+   refuser de conclure, pas assouplir sa réponse. */
+const MIN_RUNS = 6;
+const asked = parseInt(process.argv[2] || "12", 10);
+const RUNS = Math.max(MIN_RUNS, asked);
+if (asked < MIN_RUNS) {
+  console.log(`\n⚠️ ${asked} parties demandées : le p99 n'est pas stable en dessous de ${MIN_RUNS}.\n   On en joue ${MIN_RUNS}.`);
+}
 const POOL_OVERRIDE = parseInt(process.env.LAB_POOL || "0", 10);
 if (POOL_OVERRIDE > 0) CFG.QUAL.high.lights = POOL_OVERRIDE;   // pour balayer, voir plus bas
 console.log(`\n=== BUDGET DE RENDU — ${RUNS} parties JOUÉES, pool de ${CFG.QUAL.high.lights} ===\n`);

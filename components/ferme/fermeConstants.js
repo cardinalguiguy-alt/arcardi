@@ -2832,7 +2832,7 @@ export const PASSAGE_WORLDS = [
     bg: "#f2b8d0", g1: "#f0c2d8", g2: "#eab4ce", waterA: "#c86ea8", waterB: "rgba(255,190,230,",
     pickupColor: "#e0356e", pickupCount: 14,
     pet: { id: "candyfox", name: "Renard barbe à papa", nameEn: "Cotton-candy fox" }, petHue: 300 },
-  { key: "maze", bridge: "hedge",    name: "Pays du Labyrinthe",  nameEn: "Maze Land",
+  { key: "maze", bridge: "mazestone", name: "Pays du Labyrinthe",  nameEn: "Maze Land",
     bg: "#25331f", g1: "#4a6b38", g2: "#446434", waterA: "#3a7bc8", waterB: "rgba(190,225,255,",
     pickupColor: "#e8c860", pickupCount: 6,
     pet: { id: "mazemouse", name: "Souris des haies", nameEn: "Hedge mouse" }, petHue: 90 },

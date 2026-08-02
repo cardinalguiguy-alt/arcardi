@@ -123,17 +123,40 @@ button.ghost:hover { background: #241a3a; }
    de meute : c'est une information, pas une alerte. Un bandeau clignotant en
    plein cadre pousserait à sortir, alors que le jeu doit rester neutre sur ce
    choix — il appartient au joueur, pas à l'interface. */
+/* ZIP 400 — au CENTRE, dans le tiers supérieur, et sans fond opaque.
+   Trois précautions pour qu'il ne gêne jamais la visibilité :
+     * `top: 17%` le pose en pleine zone de ciel — sous cette hauteur
+       commencent les montagnes, puis la piste et les obstacles ;
+     * pas de panneau plein : un simple voile en dégradé qui s'éteint sur les
+       bords. Un rectangle opaque au centre de l'écran d'un jeu de réflexe est
+       un obstacle de plus ;
+     * `pointer-events: none` sur toute la couche, comme le HUD. */
 .exit-hint {
-  margin-top: 12px; align-self: flex-start;
-  font-size: 13px; font-weight: 700; letter-spacing: .10em;
+  position: fixed; left: 0; right: 0; top: 17%;
+  z-index: 40; pointer-events: none; text-align: center;
+  font-size: 19px; font-weight: 700; letter-spacing: .14em;
   text-transform: uppercase;
   color: #b887ff;                       /* COL_MUSHROOM : la couleur du chemin lumineux */
-  text-shadow: 0 2px 0 #1a0f2e, 0 0 14px #8c5adc99;
+  text-shadow: 0 2px 0 #1a0f2e, 0 0 16px #8c5adc99;
   opacity: 0; transition: opacity .25s ease;
 }
+/* Le voile : il ne borde rien, il s'éteint. Assez pour détacher le texte d'un
+   ciel clair au lever du soleil, pas assez pour cacher quoi que ce soit. */
+.exit-hint::before {
+  content: ""; position: absolute; left: 50%; top: 50%;
+  width: 640px; height: 68px; transform: translate(-50%, -50%);
+  background: radial-gradient(ellipse at center, rgba(16,9,28,.55) 0%, rgba(16,9,28,0) 72%);
+  z-index: -1;
+}
 .exit-hint.on { opacity: 1; }
-/* Dans la fenêtre où l'appui est effectif, et seulement là. */
-.exit-hint.now { color: #ffd98a; text-shadow: 0 2px 0 #1a0f2e, 0 0 18px #ffb85c; }
+/* Dans la fenêtre où l'appui est effectif, et seulement là. Le battement ne
+   commence QUE là : il pousserait à sortir s'il courait sur les 400 mètres,
+   alors que le jeu doit rester neutre sur ce choix — il appartient au joueur. */
+.exit-hint.now {
+  color: #ffd98a; text-shadow: 0 2px 0 #1a0f2e, 0 0 20px #ffb85c;
+  animation: exitPulse .62s ease-in-out infinite alternate;
+}
+@keyframes exitPulse { from { opacity: .72; } to { opacity: 1; } }
 
 /* Bandeau de la séquence de sortie. Il entre par le bas et s'efface avec le
    fondu — il ne doit surtout pas rester lisible sur le noir final, sinon on

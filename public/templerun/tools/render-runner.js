@@ -83,7 +83,16 @@ const THREE = {
   PlaneGeometry: class { constructor() { this.kind = GEO.plane; } dispose() {} },
   SphereGeometry: class { constructor() { this.kind = GEO.sphere; } dispose() {} },
   MeshLambertMaterial: Mat, MeshBasicMaterial: Mat,
-  CanvasTexture: class { constructor(cv) { this.image = cv; this.repeat = new V2(1, 1); this.offset = new V2(0, 0); } },
+  /* ⚠️ ZIP 400 — `clone()` EST OBLIGATOIRE ICI. Les trois nappes de pluie
+     partagent une image et clonent la texture pour n'en changer que la
+     répétition et le défilement (même motif que la pierre du labyrinthe au
+     397). Sans ce champ, world.js jette à la construction — ce qui est
+     exactement le contrôle voulu, et c'est comme ça que ce faux Three.js a
+     servi au 400. */
+  CanvasTexture: class {
+    constructor(cv) { this.image = cv; this.repeat = new V2(1, 1); this.offset = new V2(0, 0); }
+    clone() { const t = new THREE.CanvasTexture(this.image); t.repeat = new V2(this.repeat.x, this.repeat.y); return t; }
+  },
   Mesh: class extends Obj3 { constructor(g, m) { super(); this.geometry = g; this.material = m; this.isMesh = true; this.renderOrder = 0; } },
   Group: class extends Obj3 {},
   Vector3: V3,

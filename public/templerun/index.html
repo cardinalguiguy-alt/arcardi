@@ -26,10 +26,26 @@
     <div class="danger-label" id="lPack"></div>
     <div class="danger-bar"><div id="dangerFill"></div></div>
   </div>
-  <!-- Zip 377 : compte à rebours de la sortie offroad. Masqué tant qu'aucune
-       sortie n'est à portée ; le texte est posé par ui.js. -->
-  <div id="exitHint" class="exit-hint"></div>
 </div>
+
+<!-- ⚠️ ZIP 400 — LE MESSAGE DE SORTIE QUITTE LE HUD ET PASSE AU CENTRE.
+     Demande de Guillaume : « l'indication du offroad au centre de l'écran
+     comme un message (QUI NE GENE PAS POUR LA VISIBILITE) ».
+
+     Il était collé sous la jauge de meute, en haut à GAUCHE, en 13 px : à
+     34 u/s, l'œil est au centre de la piste et n'y va jamais. Une information
+     qu'on ne lit pas est une information absente.
+
+     ⚠️ IL EST HORS DU HUD, ET C'EST NÉCESSAIRE. Le HUD est un conteneur en
+     colonne aligné en haut à gauche : tout ce qu'on y met hérite de cet
+     alignement. Le centrer depuis l'intérieur aurait demandé de défaire la
+     colonne, donc de déplacer le score et la jauge avec.
+
+     ⚠️ ET IL VIT DANS LE TIERS SUPÉRIEUR, EN ZONE DE CIEL. C'est la seule
+     bande de l'écran où il ne peut RIEN cacher : la piste, les obstacles et
+     les loups sont tous sous l'horizon. Voir la mesure de tools/preview-sky.js
+     — l'horizon peint tombe aux deux tiers du cadre. -->
+<div id="exitHint" class="exit-hint"></div>
 
 <!-- ------------------------------------------- SORTIE OFFROAD (zip 377) --
      Bandeau de la séquence de sortie, et voile du fondu enchaîné. Le voile

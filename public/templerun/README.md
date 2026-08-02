@@ -1,5 +1,42 @@
 # Défi de fuite — monde sombre de Ferme Vallée
 
+> **ZIP 400 — LE CIEL, LES TRONCS, LA PLUIE ET LE MESSAGE DE SORTIE.**
+> Retour de Guillaume : « au dessus des montagnes s'affichent des triangles
+> retournés oranges qui sont pas beaux. la teinte orange rougeâtre doit être
+> entre les montagnes, pas partir de leur cime (…) tu peux ajouter de la pluie
+> tu crois ? (…) l'indication du offroad au centre de l'écran comme un message
+> QUI NE GÊNE PAS POUR LA VISIBILITÉ (…) ajouter des troncs d'arbres morts en
+> travers la route ».
+>
+> **Le triangle orange n'était pas un problème de couleur, et le zip 383 s'y
+> était trompé** en désaturant la bande chaude. C'est un problème d'ORDRE DE
+> PEINTURE, et il a fallu un outil neuf pour le voir : `tools/preview-sky.js`
+> découpe la lanière du dôme réellement visible — **les lignes 202 à 266 sur
+> 512, soit 16 % du dessin** — et l'étire aux proportions de l'écran. Sur cette
+> lanière, les sommets de la chaîne lointaine sont HORS CADRE : on n'en voit
+> que les versants, qui se croisent deux à deux et dessinent des V pointe en
+> bas. La bande chaude, peinte avant tout le relief, se voyait au travers.
+> Deux corrections, toutes deux géométriques : la bande passe **après** la
+> chaîne lointaine, et le dégradé de fond reste **froid** jusqu'à la crête la
+> plus basse du plan proche. Les deux bornes sont DÉRIVÉES des hauteurs de
+> cette chaîne, jamais écrites en dur.
+>
+> **Les troncs morts ne sont pas une famille d'obstacles neuve, et c'est
+> délibéré** : ce sont deux habillages — une barrière basse pleine largeur
+> (à sauter) et un bloc (à contourner). Le tirage est semé sur la POSITION,
+> jamais sur le flux partagé (règle du 381). Preuve que rien n'a bougé :
+> `simulate-run.js` rend **exactement** les mêmes chiffres qu'au 399 —
+> 5018 m, 137,4 pièces, 0,03 trébuchement, mort passive à 14,6 s.
+> Et `smoke-render.js` a refusé la première version du tronc : 202 objets pour
+> 100 unités contre un plafond de 200. Six volumes sont devenus quatre.
+>
+> **Le pont du Pays du Labyrinthe passe de la haie tressée à la pierre du
+> dédale** (`mazeStoneDeckTile`), avec `tools/render-maze-bridge.mjs` pour le
+> regarder — et il a servi tout de suite : la première version alignait ses
+> blocs sur les bords de case, et **on lisait la grille du monde à travers son
+> propre pont**.
+
+
 Endless runner 3D façon Temple Run, intégré à Ferme Vallée comme défi du monde
 sombre.
 

@@ -1,23 +1,38 @@
 /* =============================================================================
-   tools/render-textures.js — RENDRE TOUTES LES TEXTURES PEINTES ET LES REGARDER.
+   tools/preview-sky.js — CE QU'ON VOIT VRAIMENT DU CIEL.        (NEUF AU 400)
    -----------------------------------------------------------------------------
-       node tools/render-textures.js      (écrit tools/out/tex-*.png)
+   render-textures.js montre le dôme À PLAT, en entier : 1024×512. C'est utile
+   pour juger un dessin, et c'est TROMPEUR pour juger un cadrage — parce que le
+   joueur n'en voit jamais qu'une lanière.
 
-   Zip 379. Le décor du défi n'est pas fait d'images : il est PEINT au
-   démarrage sur des canvas minuscules (le ciel, les dalles, les flammes, les
-   arbres morts, la bordure, les runes, les fêlures). Jusqu'ici, aucun de ces
-   dessins n'était visible ailleurs que dans le jeu — il fallait lancer une
-   course pour savoir à quoi ressemblait une pierre.
+   ⚠️ CE QUE CE SCRIPT A TROUVÉ, ET QUE QUATRE ZIPS N'AVAIENT PAS VU. Guillaume,
+   au 400 : « au dessus des montagnes s'affichent des triangles retournés
+   oranges (…) la teinte doit être ENTRE les montagnes, pas partir de leur
+   cime ». Le zip 383 avait cherché du côté de la COULEUR et désaturé la bande
+   chaude. Le défaut est resté, parce qu'il n'était pas dans la couleur :
 
-   Ce script fournit un contexte 2D suffisamment complet (dégradés, tracés,
-   arcs, ellipses, alpha) pour rejouer TOUTES les fonctions de peinture de
-   world.js et écrire une planche. Il ne prouve rien : il donne à regarder.
+     * la caméra est à CAM_HEIGHT et vise CAM_LOOK_HEIGHT à CAM_LOOK_AHEAD,
+       soit un tangage de -17,3°, avec un champ vertical de CAM_FOV = 72° ;
+     * **le joueur ne voit donc que les lignes 203 à 266 du dôme** — 63 lignes
+       sur 512, soit 12 % du dessin ;
+     * la chaîne LOINTAINE monte jusqu'à la ligne 132 : **ses sommets sont hors
+       écran**. On n'en voit que les versants, qui se croisent deux à deux et
+       dessinent des V pointe en bas ;
+     * et la bande chaude, peinte AVANT le relief, se voyait dans ces V.
 
-   POURQUOI UN RASTERISEUR MAISON, encore une fois : le registre npm est
-   bloqué (§3 du contexte), donc pas de paquet `canvas`. Deux cents lignes
-   suffisent pour le sous-ensemble qu'emploie world.js, et l'investissement est
-   déjà rentabilisé — les montagnes pyramidales du zip 379 ont été réglées
-   ici, pas en jeu.
+   Une planche à plat ne peut pas montrer ça : sur elle, les sommets sont bien
+   visibles et les V se lisent comme des cols normaux. Il fallait DÉCOUPER la
+   lanière et l'étirer aux proportions de l'écran. C'est tout ce que fait ce
+   script, et ça a suffi.
+
+   ⚠️ CE QU'IL NE PROUVE PAS. Ce n'est pas une capture du jeu : pas de jetée,
+   pas de brouillard, pas de lac, pas de torches, et la projection sphérique
+   est approchée par un simple étirement vertical (l'erreur est de quelques
+   pour cent sur 63 lignes, et elle ne déplace aucune silhouette). Il montre
+   OÙ SE TROUVENT LES CHOSES dans le cadre, et c'est exactement la question
+   qu'on n'arrivait pas à poser.
+
+   Usage :  node tools/preview-sky.js        (écrit tools/out/ciel-cadre.png)
    ========================================================================== */
 
 const fs = require("fs");
@@ -239,16 +254,7 @@ const THREE = {
   BoxGeometry: class { dispose() {} }, OctahedronGeometry: class { dispose() {} },
   PlaneGeometry: class { dispose() {} }, SphereGeometry: class { dispose() {} },
   MeshLambertMaterial: Mat, MeshBasicMaterial: Mat,
-  /* ⚠️ ZIP 400 — `clone()` EST OBLIGATOIRE ICI. Les trois nappes de pluie
-     partagent une image et clonent la texture pour n'en changer que la
-     répétition et le défilement (même motif que la pierre du labyrinthe au
-     397). Sans ce champ, world.js jette à la construction — ce qui est
-     exactement le contrôle voulu, et c'est comme ça que ce faux Three.js a
-     servi au 400. */
-  CanvasTexture: class {
-    constructor(cv) { this.image = cv; this.repeat = new V2(1, 1); this.offset = new V2(0, 0); }
-    clone() { const t = new THREE.CanvasTexture(this.image); t.repeat = new V2(this.repeat.x, this.repeat.y); return t; }
-  },
+  CanvasTexture: class { constructor(cv) { this.image = cv; this.repeat = new V2(1, 1); this.offset = new V2(0, 0); } },
   Mesh: class extends Obj3 { constructor(g, m) { super(); this.geometry = g; this.material = m; this.isMesh = true; this.renderOrder = 0; } },
   Group: class extends Obj3 {}, Vector3: V3,
   DoubleSide: 2, BackSide: 1, FrontSide: 0,
@@ -286,73 +292,87 @@ const BG = [16, 10, 26];
 const outputs = [];
 
 // Compose une image d'un canvas peint, sur fond sombre, avec un zoom entier.
-function blitCanvas(dst, DW, cv, ox, oy, zoom) {
-  const p = cv.ctx.pixels, w = cv.width, h = cv.height;
-  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-    const s = (y * w + x) * 4, a = p[s + 3];
-    for (let zy = 0; zy < zoom; zy++) for (let zx = 0; zx < zoom; zx++) {
-      const d = ((oy + y * zoom + zy) * DW + (ox + x * zoom + zx)) * 3;
-      if (d < 0 || d + 2 >= dst.length) continue;
-      for (let k = 0; k < 3; k++) dst[d + k] = Math.round(dst[d + k] * (1 - a) + p[s + k] * a);
+
+
+/* ======================================================= LE CADRAGE ======= */
+const M = World.materials;
+
+/* Le tangage de la caméra, LU dans config.js et jamais réécrit ici : deux
+   descriptions d'une même chose finissent toujours par diverger (zip 387). */
+const pitchDeg = Math.atan2(CFG.CAM_LOOK_HEIGHT - CFG.CAM_HEIGHT, CFG.CAM_LOOK_AHEAD) * 180 / Math.PI;
+const halfFov = CFG.CAM_FOV / 2;
+const elevTop = pitchDeg + halfFov;
+const elevBot = pitchDeg - halfFov;
+
+/* Élévation -> ligne du canvas. Sur une SphereGeometry de three.js, uv.y vaut 1
+   au pôle NORD et 0 au pôle SUD ; une CanvasTexture a flipY à vrai, donc la
+   ligne 0 du canvas atterrit au zénith. La ligne cherchée vaut donc
+   (theta/180)*H, avec theta l'angle depuis le zénith. */
+const H_TEX = 512, W_TEX = 1024;
+const rowOf = (elev) => ((90 - elev) / 180) * H_TEX;
+
+const rowTop = Math.max(0, Math.floor(rowOf(elevTop)));
+const rowBot = Math.min(H_TEX, Math.ceil(rowOf(0)) + 26);   // un peu sous l'horizon vrai
+const bandH = rowBot - rowTop;
+
+const VW = 720, VH = Math.round(VW * 9 / 16);
+
+function frame(cv, label) {
+  /* Le tampon du faux canvas vit dans `cv.ctx.pixels`, en RGBA prémultipliée
+     par l'alpha — même accès que blitCanvas de render-textures.js. */
+  const src = cv.ctx.pixels;
+  const out = new Uint8Array(VW * VH * 3);
+  for (let y = 0; y < VH; y++) {
+    const sy = Math.min(H_TEX - 1, rowTop + Math.floor((y / VH) * bandH));
+    for (let x = 0; x < VW; x++) {
+      const sx = Math.min(W_TEX - 1, Math.floor((x / VW) * W_TEX));
+      const k = (sy * W_TEX + sx) * 4, o = (y * VW + x) * 3;
+      out[o] = src[k]; out[o + 1] = src[k + 1]; out[o + 2] = src[k + 2];
     }
   }
-}
-function sheet(name, items, zoom, pad) {
-  const cw = Math.max(...items.map(i => i.cv.width)) * zoom + pad;
-  const ch = Math.max(...items.map(i => i.cv.height)) * zoom + pad;
-  const cols = Math.min(items.length, Math.max(1, Math.floor(1200 / cw)));
-  const rows = Math.ceil(items.length / cols);
-  const W = cw * cols, H = ch * rows;
-  const buf = new Uint8Array(W * H * 3);
-  for (let i = 0; i < W * H; i++) { buf[i * 3] = BG[0]; buf[i * 3 + 1] = BG[1]; buf[i * 3 + 2] = BG[2]; }
-  items.forEach((it, i) => {
-    const c = i % cols, r = Math.floor(i / cols);
-    blitCanvas(buf, W, it.cv, c * cw + pad / 2, r * ch + pad / 2, zoom);
-  });
-  const file = path.join(outDir, `tex-${name}.png`);
-  writePng(file, W, H, buf);
-  outputs.push(`${path.relative(root, file)} (${W}×${H}) — ${items.map(i => i.label).join(", ")}`);
+  /* Le trait de l'horizon PEINT (ligne 266) : c'est le repère qui manquait.
+     Tout ce qui est chaud AU-DESSUS de lui et hors des cols est le défaut. */
+  const hy = Math.round(((H_TEX * 0.52) - rowTop) / bandH * VH);
+  for (let x = 0; x < VW; x += 8) {
+    for (let d = 0; d < 4; d++) {
+      const o = ((hy + 0) * VW + x + d) * 3;
+      if (o >= 0 && o + 2 < out.length) { out[o] = 90; out[o + 1] = 255; out[o + 2] = 120; }
+    }
+  }
+  void label;
+  return out;
 }
 
-// On rappelle les fonctions de peinture par leurs matériaux : c'est la seule
-// façon d'être sûr qu'on regarde bien ce que le jeu utilise, et pas une
-// deuxième version des mêmes dessins.
-const M = World.materials;
-/* Zip 382 : les DEUX ciels sur la même planche, l'un au-dessus de l'autre.
-   C'est le seul moyen de vérifier ce sur quoi tout le lever de soleil repose —
-   que les nuages et les deux chaînes de pyramides sont RIGOUREUSEMENT aux mêmes
-   endroits dans les deux dessins. S'ils ne l'étaient pas, le fondu ferait
-   glisser les montagnes pendant 3 000 mètres, et c'est le genre de défaut qu'on
-   ne voit qu'en jeu, à 15 km du départ. Superposées ici, deux silhouettes qui
-   ne coïncident pas sautent aux yeux en une seconde. */
-sheet("ciel", [
-  { cv: M.skyTex.image, label: "dôme de ciel — nuit" },
-  { cv: M.skyDayTex.image, label: "dôme de ciel — jour (mêmes reliefs)" },
-], 1, 8);
-/* Le SOL est plaqué sur 8,4 unités de large pour 4 de long : ses pierres sont
-   deux fois plus larges à l'écran que dans le canvas. On les montre étirées
-   d'autant, sinon la planche fait croire à des briques debout. */
-const AX_FLOOR = CFG.TRACK_WIDTH / CFG.FLOOR_TILE;
-sheet("pierre", [
-  ...M.paveVariants.flat().map((m, i) => ({ cv: m.map.image, label: "pavé " + i, ax: AX_FLOOR })),
-  ...M.stoneVariants.flat().map((m, i) => ({ cv: m.map.image, label: "dalle AA " + i, ax: AX_FLOOR })),
-], 3, 6);
-sheet("murs", [
-  { cv: M.rail.map.image, label: "rambarde" },
-  { cv: M.railCap.map.image, label: "couronnement" },
-  { cv: M.kerb.map.image, label: "bordure AA" },
-  { cv: M.obstacle.map.image, label: "poutre" },
-  { cv: M.bark.map.image, label: "tronc" },
-  { cv: M.torchWood.map.image, label: "mât de torche" },
-  /* Zip 381. La planche est mise SUR LA MÊME PLANCHE que le mât de torche, et
-     c'est le seul intérêt de l'ajouter ici : les deux sont du bois peint, et
-     tout le pari de paintPlank() est que sa fibre coure en longueur là où
-     celle du mât court en hauteur. Côte à côte, on le voit en une seconde ;
-     dans deux fichiers séparés, jamais. */
-  { cv: M.plank.map.image, label: "planche (fibre en longueur)" },
-  { cv: M.plankEnd.map.image, label: "bois de bout" },
-], 5, 8);
-sheet("arbres", M.trees.map((m, i) => ({ cv: m.map.image, label: "arbre " + i })), 3, 8);
+const parts = [
+  { cv: M.skyTex.image, label: "nuit" },
+  { cv: M.skyDayTex.image, label: "jour" },
+];
+const PAD = 8;
+const OW = VW, OH = parts.length * VH + (parts.length + 1) * PAD;
+const buf = new Uint8Array(OW * OH * 3).fill(18);
+parts.forEach((p, i) => {
+  const img = frame(p.cv, p.label);
+  const oy = PAD + i * (VH + PAD);
+  for (let y = 0; y < VH; y++) {
+    for (let x = 0; x < VW; x++) {
+      const s = (y * VW + x) * 3, d = ((oy + y) * OW + x) * 3;
+      buf[d] = img[s]; buf[d + 1] = img[s + 1]; buf[d + 2] = img[s + 2];
+    }
+  }
+});
+const file = path.join(outDir, "ciel-cadre.png");
+writePng(file, OW, OH, buf);
 
-console.log("Planches écrites — À REGARDER, pas seulement à générer :");
-for (const o of outputs) console.log("  " + o);
+console.log(`
+Tangage de la caméra : ${pitchDeg.toFixed(1)}°   champ vertical : ${CFG.CAM_FOV}°
+Élévations visibles  : ${elevBot.toFixed(1)}° .. ${elevTop.toFixed(1)}°
+LIGNES DU DÔME VUES  : ${rowTop} .. ${rowBot}  (sur 512, soit ${(100 * bandH / H_TEX).toFixed(0)} %)
+Horizon peint        : ligne ${Math.round(H_TEX * 0.52)}  — trait vert sur la planche
+
+  ${path.relative(root, file)} (${OW}×${OH}) — haut : nuit, bas : jour
+
+⚠️ Ce n'est PAS une capture du jeu : ni jetée, ni brouillard, ni lac, ni
+torches, et la sphère est approchée par un étirement vertical. Il montre OÙ
+sont les choses dans le cadre. Tout ce qui est chaud au-dessus du trait vert,
+ailleurs que dans un col, est le défaut du 400.
+`);

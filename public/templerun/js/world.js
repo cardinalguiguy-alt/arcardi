@@ -34,6 +34,7 @@ const World = (function () {
   let playerMesh, playerRig, wolfMeshes = [], torchLight, mushLight;
   let ambientLight, moonLight;
   let sky, skyMat, boltMesh, boltMats = [];
+  const rainLayers = [];        // zip 400 : les trois nappes de pluie
   let skyDay, skyDayMat, lakeDay, lakeDayMat;   // cycle jour/nuit (zip 382)
   let lake, lakeMat, lakeGlow, lakeGlowMat, mists = [];
   let geo = {}, mat = {};
@@ -82,6 +83,7 @@ const World = (function () {
     buildDayNightColors();
     buildAssets();
     buildSky();
+    buildRain();                          // zip 400 : trois nappes, objets permanents
     buildLake();
     buildDust();
     resize();
@@ -1164,10 +1166,36 @@ const World = (function () {
        Regarder coûte cinq minutes, et c'est la seule façon de savoir. */
     const rnd = Track.makeRng(0x314159);
 
+    /* ⚠️⚠️ ZIP 400, SECONDE SOURCE DU DÉFAUT — ET C'EST CELLE QU'ON N'AURAIT
+       JAMAIS TROUVÉE SANS REGARDER LE CADRAGE.
+
+       Déplacer la bande chaude après la chaîne lointaine (voir plus bas) ne
+       suffisait PAS : tools/preview-sky.js montrait encore du brun-rouge dans
+       les V du plan lointain, tout en haut du cadre. La cause n'était plus la
+       bande, c'était le DÉGRADÉ DE FOND. Il court du zénith jusqu'à l'horizon
+       et finit sur P.horizon, qui est un violet ROUGE (0x2b1526 la nuit) : à la
+       ligne 202 — la première que le joueur voit — il en est déjà aux trois
+       quarts. Tout le ciel bas était donc chaud, et n'importe quel creux le
+       laissait voir.
+
+       On tient donc le corps du ciel FROID jusqu'à la crête la plus basse du
+       plan proche, et on ne bascule vers la teinte chaude que sous cette
+       ligne. Résultat, exactement la phrase de Guillaume : la teinte chaude
+       n'existe plus qu'ENTRE les montagnes.
+
+       ⚠️ LA BORNE EST CALCULÉE, PAS ÉCRITE. Elle vient de `warmTop`, lui-même
+       tiré des hauteurs de la chaîne proche. Changer ces hauteurs demain
+       déplacera la borne toute seule — c'est la différence entre un réglage et
+       un nombre magique, et c'est la leçon que le 383 avait manquée en
+       corrigeant une couleur au lieu d'une géométrie. */
+    const NEAR_MIN_H = 42, NEAR_BASE_DY = 6;
+    const warmTop = HORIZON - (NEAR_MIN_H - NEAR_BASE_DY);   // ligne du col le plus bas
+
     // Dégradé vertical : zénith -> corps du ciel -> rougeoiement bas.
     const g = ctx.createLinearGradient(0, 0, 0, HORIZON);
     g.addColorStop(0, cssHex(P.top));
     g.addColorStop(0.45, cssHex(P.mid));
+    g.addColorStop(Math.min(0.98, warmTop / HORIZON), cssHex(P.mid));
     g.addColorStop(1, cssHex(P.horizon));
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, W, HORIZON);
@@ -1264,10 +1292,52 @@ const World = (function () {
        à chaque virage. */
     const EDGE_Y = HORIZON - 12;
 
-    // Rougeoiement bas, derrière tout le relief. De jour c'est le rose du
-    // lever relevé sur la référence, et il monte plus haut : à l'aube, la
-    // couleur chaude occupe une bande bien plus large qu'un simple liseré.
-    const gh = night ? 74 : 118;
+    /* ⚠️⚠️ ZIP 400 — LE « TRIANGLE ORANGE RETOURNÉ » N'ÉTAIT PAS UN PROBLÈME DE
+       COULEUR, C'EST UN PROBLÈME D'ORDRE DE PEINTURE. Le 383 avait cherché du
+       côté de la teinte et désaturé la bande ; ça a réduit le contraste et le
+       défaut est resté, parce que la teinte n'y était pour rien.
+
+       Retour de Guillaume au 400 : « au dessus des montagnes s'affichent des
+       triangles retournés oranges (…) la teinte orange rougeâtre doit être
+       ENTRE les montagnes, pas partir de leur cime ».
+
+       LA GÉOMÉTRIE, mesurée et non supposée (voir tools/preview-sky.js, qui
+       découpe la bande de dôme réellement à l'écran) :
+
+         * le dôme fait 1024×512 et l'horizon peint est à la ligne 266 ;
+         * la caméra est à 4,3 de haut, vise 1,5 à 9 devant — soit un tangage
+           de -17,3° — avec un champ vertical de 72° ;
+         * **le joueur ne voit donc JAMAIS que les lignes 203 à 266 du ciel.**
+           Soixante-trois lignes sur cinq cent douze ;
+         * or la chaîne LOINTAINE monte jusqu'à 132 px au-dessus de l'horizon,
+           c'est-à-dire jusqu'à la ligne 132. **Ses sommets sont hors écran par
+           le haut** : à l'image, on n'en voit que les VERSANTS, qui se
+           croisent deux à deux et dessinent des V pointe en bas ;
+         * et la bande chaude, peinte AVANT tout le relief, se voyait au
+           travers de ces V. Un creux entre deux versants rempli de rouge, c'est
+           un triangle retourné orange. Exactement ce que Guillaume décrit, et
+           exactement là où il le décrit : à hauteur de la cime des montagnes
+           proches.
+
+       LA PARADE : la bande ne change pas de couleur, elle change de PLACE dans
+       l'ordre de peinture. Elle passe APRÈS la chaîne lointaine et AVANT la
+       proche. Conséquences, toutes voulues :
+
+         * les V de la chaîne lointaine se remplissent désormais de CIEL, donc
+           de violet froid : plus un seul triangle chaud ;
+         * la chaleur ne se voit plus que dans les creux de la chaîne PROCHE,
+           c'est-à-dire littéralement « entre les montagnes » ;
+         * et elle lave le pied de la chaîne lointaine, ce qui donne la brume
+           basse que le commentaire du 379 décrivait déjà sans jamais l'obtenir.
+
+       ⚠️ ET SA HAUTEUR EST BORNÉE À LA CRÊTE PROCHE, PAS CHOISIE. La chaîne
+       proche mesure 42 à 96 px pour une base à HORIZON+6 : sa crête la plus
+       BASSE est donc à 36 px au-dessus de l'horizon. Une bande plus haute que
+       36 dépasserait des cols les plus bas et on retrouverait des triangles,
+       plus petits. On prend cette borne telle quelle plutôt qu'un nombre écrit
+       à la main — si quelqu'un change les hauteurs de la chaîne proche demain,
+       la bande suivra toute seule. */
+    const gh = HORIZON - warmTop;      // = 36 px, la même borne que le dégradé
     const glow = ctx.createLinearGradient(0, HORIZON - gh, 0, HORIZON);
     if (night) {
       /* ZIP 383 — LE « TRIANGLE RETOURNÉ ORANGE » ÉTAIT ICI, et il n'a jamais
@@ -1292,8 +1362,11 @@ const World = (function () {
       glow.addColorStop(0.5, "rgba(199,138,152,0.62)");
       glow.addColorStop(1, "rgba(224,164,160,0.92)");
     }
-    ctx.fillStyle = glow;
-    ctx.fillRect(0, HORIZON - gh, W, gh);
+    /* ⚠️ LA BANDE N'EST PAS PEINTE ICI. Voir le bloc ci-dessus : elle attend
+       que la chaîne lointaine soit posée. Le dégradé est seulement PRÉPARÉ à
+       cet endroit parce que c'est là que vivent les deux palettes, et qu'un
+       dégradé décrit à côté des couleurs qu'il emploie est un dégradé qu'on
+       relit. */
 
     const range = (color, minH, maxH, minW, maxW, jitterY) => {
       ctx.fillStyle = color;
@@ -1324,10 +1397,17 @@ const World = (function () {
     // laisser à son violet d'avant l'aurait fait ressortir COMME un objet
     // éclairé au-dessus d'un ciel devenu noir — l'inverse d'un lointain.)
     range(night ? "rgba(38,26,58,0.72)" : "rgba(80,79,117,0.78)", 62, 132, 150, 300, -2);
+
+    /* ⚠️⚠️ ICI, ET PAS AVANT — c'est tout le correctif du zip 400.
+       Entre les deux chaînes : elle lave le pied du lointain, et elle ne se
+       verra plus que dans les cols du plan proche, qui est peint juste après. */
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, HORIZON - gh, W, gh);
+
     // Plan PROCHE : plus bas, presque noir de nuit ; de jour il prend enfin
     // une couleur, parce qu'un relief qui reste en silhouette sous un ciel
     // clair se lit comme un trou découpé dans l'image.
-    range(cssHex(night ? CFG.SKY_PEAKS : CFG.SKY_DAY_PEAKS), 42, 96, 110, 240, 6);
+    range(cssHex(night ? CFG.SKY_PEAKS : CFG.SKY_DAY_PEAKS), NEAR_MIN_H, 96, 110, 240, NEAR_BASE_DY);
 
     // Base commune : elle ferme le bas et garantit qu'aucun trou ne laisse
     // voir le dégradé du ciel sous les montagnes.
@@ -1391,6 +1471,95 @@ const World = (function () {
       ctx.stroke();
     }
     return cv;
+  }
+
+  /* ⚠️ ZIP 400 — LA PLUIE, PEINTE AU fillRect ET RIEN D'AUTRE.
+     Une traînée est une colonne de petits rectangles décalés d'un pixel tous
+     les quatre : c'est ce qui lui donne son inclinaison, en escalier, sans un
+     seul tracé vectoriel. La contrainte n'est pas décorative — c'est la
+     signature pixel-art du site, et c'est aussi ce qui permet aux rasteriseurs
+     maison de la rendre (ils ne connaissent que fillRect en toute rigueur).
+
+     La texture est TRANSPARENTE hors des traînées, et elle se répète : trois
+     nappes la partagent, avec trois répétitions et trois vitesses. */
+  function paintRain() {
+    const W = 128, H = 256;
+    const cv = makeCanvas(W, H);
+    const ctx = cv.getContext("2d");
+    ctx.clearRect(0, 0, W, H);
+    const rnd = Track.makeRng(0x7A1DEE);
+    for (let i = 0; i < 46; i++) {
+      const x0 = Math.floor(rnd() * W);
+      const y0 = Math.floor(rnd() * H);
+      const len = 16 + Math.floor(rnd() * 34);
+      const thick = rnd() < 0.25 ? 2 : 1;
+      /* Les gouttes proches sont plus longues ET plus claires : sans cet écart,
+         une nappe unique se lit comme une grille et non comme de la pluie. */
+      const a = 0.20 + rnd() * 0.42;
+      for (let k = 0; k < len; k++) {
+        // ⚠️ On reboucle en Y à la main : une traînée coupée par le bord du
+        // canvas ferait une couture horizontale visible à chaque répétition.
+        const y = (y0 + k) % H;
+        const x = (x0 + ((k / 4) | 0)) % W;
+        ctx.globalAlpha = a * (1 - k / len) * 0.9 + a * 0.1;
+        ctx.fillStyle = "#cfd6ff";
+        ctx.fillRect(x, y, thick, 1);
+      }
+    }
+    ctx.globalAlpha = 1;
+    return cv;
+  }
+
+  /* Trois nappes devant l'œil, à trois profondeurs. Elles sont reposées à
+     chaque image devant la caméra : ce sont des objets PERMANENTS, donc hors
+     du budget par tronçon, et elles ne suivent aucun tronçon. */
+  function buildRain() {
+    const texR = pixelTexture(paintRain(), 1, 1);
+    const layers = [
+      { d: 5.5, w: 22, h: 15, rx: 2.0, ry: 1.6, sp: 1.00, op: 1.00 },
+      { d: 12.0, w: 40, h: 24, rx: 3.4, ry: 2.6, sp: 0.62, op: 0.70 },
+      { d: 22.0, w: 66, h: 38, rx: 5.2, ry: 3.8, sp: 0.38, op: 0.45 },
+    ];
+    for (const L of layers) {
+      /* Une texture CLONÉE par nappe : l'image est partagée (une seule montée
+         sur le GPU), seuls la répétition et le défilement diffèrent. Même
+         motif que la pierre du labyrinthe au 397. */
+      const t = texR.clone();
+      t.needsUpdate = true;
+      t.wrapS = THREE.RepeatWrapping; t.wrapT = THREE.RepeatWrapping;
+      t.repeat.set(L.rx, L.ry);
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(L.w, L.h),
+        new THREE.MeshBasicMaterial({
+          map: t, transparent: true, opacity: 0, depthWrite: false,
+          fog: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
+      m.renderOrder = 40;          // après le décor, avant le HUD
+      m.userData.L = L;
+      scene.add(m);
+      rainLayers.push(m);
+    }
+  }
+
+  /* Elle monte avec les mètres, et elle s'arrête net au premier millier :
+     un joueur qui démarre sous l'averse n'a aucun moyen de savoir qu'elle
+     s'intensifie, et l'effet ne raconte plus rien. */
+  function tickRain(now, dist) {
+    if (!rainLayers.length || CFG.RAIN_MAX <= 0) return;
+    const k = Math.max(0, Math.min(1,
+      (dist - CFG.RAIN_START_DIST) / Math.max(1, CFG.RAIN_RAMP_DIST - CFG.RAIN_START_DIST)));
+    const yaw = camera.rotation.y;
+    const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
+    for (const m of rainLayers) {
+      const L = m.userData.L;
+      m.material.opacity = CFG.RAIN_MAX * L.op * k;
+      m.visible = m.material.opacity > 0.004;
+      if (!m.visible) continue;
+      m.position.set(camera.position.x + fx * L.d, camera.position.y + 1.6, camera.position.z + fz * L.d);
+      m.lookAt(camera.position);
+      // Le défilement, et une dérive latérale : une pluie strictement verticale
+      // sur un joueur qui court à 34 u/s ne peut pas être juste.
+      m.material.map.offset.y = (-now * 0.001 * CFG.RAIN_FALL * L.sp) % 1;
+      m.material.map.offset.x = (now * 0.00012 * L.sp) % 1;
+    }
   }
 
   function buildSky() {
@@ -2385,6 +2554,56 @@ const World = (function () {
        et tout ce qui y ressemble à un obstacle sans en être un lui apprend le
        contraire de ce qu'il doit savoir. --- */
 
+    /* ⚠️ ZIP 400 — UN SEUL DESSIN DE TRONC POUR LES DEUX PARADES. Deux
+       fonctions auraient fini par diverger (leçon du 387, appliquée ici
+       d'avance) : c'est la même chose vue à deux tailles, donc c'est UNE
+       description avec une hauteur en argument.
+
+       Tout est proportionnel à `h` : un tronc deux fois et demie plus haut a
+       des branches deux fois et demie plus longues, et il continue de se lire
+       comme le même objet. La seule chose qui ne l'est pas est la LARGEUR,
+       qui suit la voie — un tronc doit border sa voie, sinon la collision, qui
+       est décidée voie par voie dans player.js, cesse d'être lisible. */
+    function trunkAcross(o, x, h, depth) {
+      const w = CFG.LANE_WIDTH - 0.1;
+      // Deux étages : le gros du fût, puis un dos plus étroit. C'est ce qui
+      // fait la rondeur sans cylindre.
+      const hLow = h * 0.66, hTop = h - hLow;   // quatre volumes en tout, voir plus bas
+      place(box(w, hLow, depth, mat.bark, 0, 0, 0), o.t, x, hLow / 2);
+      place(box(w, hTop, depth * 0.76, mat.bark, 0, 0, 0), o.t, x, hLow + hTop / 2);
+      /* LE BOIS DE BOUT, D'UN SEUL CÔTÉ — et le côté ALTERNE.
+         C'est lui qui dit « tronc » et pas « poutre » : une section claire, à
+         l'endroit où l'arbre a cassé. Même matériau que l'éclat de la planche
+         du 381 : deux bois de bout de deux couleurs dans le même jeu se
+         verraient tout de suite.
+
+         ⚠️ UN SEUL CÔTÉ, ET CE N'EST PAS UNE ÉCONOMIE DE CONFORT.
+         tools/smoke-render.js a refusé la première version : 202 objets pour
+         100 unités de chaussée, contre un plafond de 200. Ce plafond est le
+         VRAI budget de ce jeu — c'est celui qui décide s'il tourne sur la
+         tablette — et le contrôle avait raison contre le dessin. Six volumes
+         par tronc sont devenus quatre : deux étages de fût, une section, un
+         moignon. Effet de bord heureux : un tronc cassé d'un seul côté est
+         plus juste qu'un tronc scié aux deux bouts. */
+      const sx = (Math.round(o.t * 16) & 1) ? 1 : -1;
+      place(box(0.12, hLow * 0.92, depth * 0.92, mat.plankEnd, 0, 0, 0),
+            o.t, x + sx * (w / 2 + 0.05), hLow / 2);
+      /* DEUX MOIGNONS DE BRANCHE, décalés et penchés. Ils ne changent rien à
+         la collision (elle ne regarde que la voie) et ils font toute la
+         silhouette : un fût nu se relit comme un rouleau posé là, un fût
+         ébranché se lit comme un arbre mort tombé. Leur position vient de la
+         POSITION de l'obstacle, jamais d'un tirage — deux troncs voisins
+         doivent être différents, et le même tronc doit être identique d'une
+         reconstruction de tronçon à l'autre. */
+      const seed = Math.abs(Math.round(o.t * 16) + Math.round(x * 8));
+      const bl = h * (0.55 + (seed % 3) * 0.16);
+      const br = box(0.16, bl, 0.16, mat.bark, 0, 0, 0);
+      br.rotation.z = -sx * (0.55 + (seed % 4) * 0.13);   // il part À L'OPPOSÉ de la cassure
+      br.rotation.x = ((seed % 5) - 2) * 0.10;
+      place(br, o.t + (seed % 2 ? 0.18 : -0.16), x + ((seed % 5) - 2) * (w * 0.12),
+            hLow + hTop + bl * 0.32);
+    }
+
     /* --- 10. Obstacles --- */
     for (const o of node.obstacles) {
       if (o.type === OBST.GAP || o.type === OBST.CREVASSE) continue;  // traités par le sol
@@ -2449,6 +2668,25 @@ const World = (function () {
           place(chip, o.t + 0.08, x + (w + 0.5) / 2 - 0.02,
                 chockH + plankH * 0.28);
 
+        } else if (o.type === OBST.LOW && o.trunk) {
+          /* ⚠️ ZIP 400 — TRONC MORT COUCHÉ EN TRAVERS, VERSION « À SAUTER ».
+             Il n'existe que sur une barrière PLEINE LARGEUR : sur trois voies,
+             la parade annoncée est déjà le saut, donc l'habillage ne promet
+             rien de neuf. Voir CFG.TRUNK_CHANCE pour la raison de fond.
+
+             ⚠️ SON SOMMET EST À CFG.LOW_HEIGHT, EXACTEMENT, et c'est la même
+             contrainte que celle de la planche du 381 : player.js teste
+             `y >= JUMP_CLEAR_HEIGHT` sans jamais regarder ce qu'il y a à
+             l'écran. Un tronc plus bas que le bloc qu'il remplace exigerait le
+             même saut en paraissant enjambable — un obstacle qui ment sur sa
+             taille est le pire défaut possible dans un jeu de réflexe. Les
+             deux hauteurs sont donc DÉRIVÉES de LOW_HEIGHT, jamais écrites.
+
+             La rondeur se fait en DEUX ÉTAGES de largeurs différentes plutôt
+             qu'avec un cylindre : c'est du pixel-art en volume, la signature du
+             projet depuis la rotonde du 396, et ça ne coûte pas une géométrie
+             de plus par obstacle. */
+          trunkAcross(o, x, CFG.LOW_HEIGHT, 0.95);
         } else if (o.type === OBST.LOW) {
           // Bloc de pierre tombé en travers, MÊME matériau que les bordures :
           // c'est ce qui le relie au décor au lieu d'en faire une caisse de
@@ -2458,6 +2696,14 @@ const World = (function () {
           const h = 3.2 - CFG.HIGH_CLEARANCE;
           place(box(CFG.LANE_WIDTH - 0.1, h, 0.6, mat.obstacle, 0, 0, 0), o.t, x, CFG.HIGH_CLEARANCE + h / 2);
           place(box(0.22, CFG.HIGH_CLEARANCE, 0.22, mat.beamPost, 0, 0, 0), o.t, x + CFG.LANE_WIDTH / 2 - 0.2, CFG.HIGH_CLEARANCE / 2);
+        } else if (o.trunk) {
+          /* TRONC MORT, VERSION « À CONTOURNER ». Même matière, même grammaire,
+             mais 2,6 de haut au lieu de 0,95 : c'est la hauteur du bloc qu'il
+             remplace, et c'est elle qui dit « celui-là, on ne le saute pas ».
+             La différence entre les deux troncs doit se lire À PLEINE VITESSE
+             et à trente mètres — d'où un rapport de près de trois, et non un
+             écart de nuance. */
+          trunkAcross(o, x, 2.6, 1.25);
         } else { // WALL
           place(box(CFG.LANE_WIDTH - 0.1, 2.6, 0.7, mat.kerb, 0, 0, 0), o.t, x, 1.3);
         }
@@ -3021,6 +3267,7 @@ const World = (function () {
        laisser fixes ferait apparaître leurs bords au bout de quelques
        centaines d'unités de course. --- */
     const cam = camera.position;
+    tickRain(now, dist);                 // zip 400
     sky.position.set(cam.x, 0, cam.z);
     skyDay.position.set(cam.x, 0, cam.z);
     lake.position.set(cam.x, CFG.LAKE_Y, cam.z);

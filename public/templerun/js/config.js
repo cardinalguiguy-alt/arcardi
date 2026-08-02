@@ -260,6 +260,31 @@ const CFG = {
      treize obstacles — assez rare pour rester un événement. */
   PLANK_CHANCE: 0.22,
 
+  /* ⚠️ ZIP 400 — LES TRONCS MORTS EN TRAVERS. Demande de Guillaume : « ajouter
+     des troncs d'arbres morts en travers la route comme obstacles pour ajouter
+     de la variété », et il a coché LES DEUX parades — à sauter ET à contourner.
+
+     ⚠️⚠️ CE N'EST PAS UNE FAMILLE D'OBSTACLES NEUVE, ET C'EST DÉLIBÉRÉ. Un
+     type neuf voudrait dire : une parade neuve, un espacement minimal neuf,
+     une règle de solvabilité neuve, et tout l'équilibrage de 120 parties à
+     refaire. Le tronc est un HABILLAGE de deux obstacles existants :
+
+       * posé sur une barrière basse PLEINE LARGEUR, il se saute — c'est le
+         tronc « à sauter » ;
+       * posé sur un bloc, il se contourne — c'est le tronc « à contourner ».
+
+     La collision, l'espacement et la solvabilité ne bougent donc pas d'un
+     pouce, et simulate-run.js doit rendre EXACTEMENT les mêmes chiffres
+     qu'au 399. C'est le contrôle de ce chantier : si les chiffres bougent,
+     c'est qu'on a touché à autre chose que l'apparence.
+
+     ⚠️ ET LE TIRAGE NE PASSE PAS PAR LE FLUX PARTAGÉ. Il est semé sur la
+     POSITION de l'obstacle, comme PLANK_CHANCE depuis le 381 : ajouter un
+     appel à this.rng() décalerait tous les tirages suivants et changerait la
+     piste entière (« ne jamais ajouter un tirage dans un flux aléatoire
+     partagé », zip 381). */
+  TRUNK_CHANCE: 0.30,       // part des barrières pleine largeur et des blocs habillés en tronc
+
   /* -------------------------------------------- CREVASSE (sol effondré) ---
      Le trou au milieu de la chaussée de l'illustration de référence. À la
      différence du trou pleine largeur, il n'occupe qu'une ou deux voies : la
@@ -442,6 +467,27 @@ const CFG = {
      Un éclair n'est pas un fondu blanc : c'est un premier coup bref, un noir
      très court, puis un second coup plus fort et plus long. Reproduire ce
      rythme coûte trois nombres et fait toute la différence. */
+  /* ⚠️ ZIP 400 — LA PLUIE. Guillaume l'avait demandée en toutes lettres
+     (« Tu peux ajouter de la pluie tu crois ? ») puis ne l'a PAS cochée dans
+     les options. DÉCISION PRISE SEULE, et signalée comme telle : on la fait,
+     discrète, et RAIN_MAX à 0 la supprime entièrement sans toucher au code.
+
+     ⚠️ ELLE NE TOUCHE PAS À LA CONDUITE, et c'est une contrainte, pas un
+     choix esthétique : le jeu est réglé sur 120 parties jouées (simulate-run),
+     et rendre la piste glissante rejouerait tout cet équilibrage pour un
+     effet de décor. Elle vit entièrement dans le rendu.
+
+     TROIS NAPPES, pas trois cents gouttes. Le vrai budget de ce jeu est le
+     nombre d'objets (200 pour 100 unités de chaussée, voir smoke-render.js) :
+     un système de particules le ferait exploser sur la tablette. Trois plans
+     texturés qui défilent à trois vitesses différentes donnent la même
+     parallaxe pour trois objets — c'est le même raisonnement que les deux
+     nappes du lac au 396. */
+  RAIN_MAX: 0.55,           // opacité de la nappe la plus proche, à pleine intensité
+  RAIN_RAMP_DIST: 6000,     // distance à laquelle la pluie atteint son maximum
+  RAIN_START_DIST: 900,     // avant ça, pas une goutte : le départ reste clair
+  RAIN_FALL: 1.35,          // vitesse de défilement de la nappe la plus proche
+
   LIGHTNING_MIN_MS: 7000,   // attente minimale entre deux éclairs
   LIGHTNING_MAX_MS: 19000,
   LIGHTNING_PRE_MS: 70,     // premier coup

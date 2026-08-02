@@ -505,6 +505,123 @@ function candyKerbTile(g, px, py, T, tx, ty, side) {
   if (r() < 0.5) { g.fillStyle = "rgba(255,255,255,0.9)"; g.fillRect(px + 2 + Math.floor(r() * 6), py + 3, 3, 2); }
 }
 
+/* ===========================================================================
+   ZIP 400 — LE PONT DU LABYRINTHE, EN PIERRE DU LABYRINTHE.
+   ---------------------------------------------------------------------------
+   Demande de Guillaume : « Utilise la même texture que les murs pour composer
+   le pont menant au jeu maze 3D. » Le Pays du Labyrinthe avait un pont de
+   HAIE tressée depuis le 386 — vert, végétal, et sans aucun rapport avec la
+   maçonnerie khaki qu'on trouve trois secondes plus tard de l'autre côté.
+
+   ⚠️ « LA MÊME TEXTURE » NE PEUT PAS ÊTRE UN COPIER-COLLER, ET IL FAUT LE
+   DIRE. La pierre du 397 est peinte en onze couches sur 512 px pour 5,75
+   unités de mur ; une case de ferme fait T pixels pour une case entière. À
+   cette échelle, un bloc du dédale ferait moins de deux pixels de haut et la
+   texture rendrait une bouillie grise. Ce qui se transporte, ce n'est pas
+   l'image : c'est la PALETTE et l'APPAREILLAGE.
+
+   ⚠️ ET LA PALETTE EST RECOPIÉE À LA MAIN, EN CONNAISSANCE DE CAUSE. La ferme
+   (bundle Next) et le labyrinthe (public/, hors bundle) ne peuvent pas se
+   partager un module — c'est la même frontière qui a imposé RUN_STR, CANDY_STR
+   et LAB_STR. Les valeurs viennent de public/labyrinth/js/config.js :
+   COL_BRICK 0x9c8b5e, COL_BRICK_LIT 0xc4b073, COL_BRICK_DARK 0x6b5f42,
+   COL_MORTAR 0x3a352c, COL_MOSS 0x46592e, COL_STONE_EDGE 0x2b2721.
+   **Si elles changent là-bas, elles doivent changer ici**, et c'est
+   exactement le genre de dette que verify-palette.mjs surveille déjà entre le
+   défi de fuite et le labyrinthe. Un contrôle du même ordre reste à écrire
+   pour ce pont — dit ici plutôt que tu, faute de quoi personne ne le saura.
+
+   Appareillage : trois assises par case, joints DÉCALÉS d'une demi-longueur
+   d'une assise à l'autre. Un appareillage aligné donne une grille, et c'est
+   très exactement le défaut que le 397 a corrigé sur les murs du dédale.
+   ======================================================================== */
+const MAZE_BRICK = "#9c8b5e", MAZE_LIT = "#c4b073", MAZE_DARK = "#6b5f42";
+const MAZE_MORTAR = "#3a352c", MAZE_MOSS = "#46592e", MAZE_EDGE = "#2b2721";
+
+function mazeStoneDeckTile(g, px, py, T, tx, ty, side) {
+  // Le mortier d'abord, en fond : les blocs se posent dessus et laissent le
+  // joint apparaître entre eux. C'est l'ordre du 397, et il évite d'avoir à
+  // dessiner chaque joint.
+  g.fillStyle = MAZE_MORTAR;
+  g.fillRect(px, py, T, T);
+
+  /* ⚠️⚠️ L'APPAREILLAGE EST CALCULÉ EN COORDONNÉES ABSOLUES, PAS DANS LA CASE.
+     La première version posait ses blocs à partir du bord gauche de la tuile
+     et décalait les assises avec `(row + tx + ty) & 1`. Résultat, visible d'un
+     coup d'œil sur tools/render-maze-bridge.mjs : tous les blocs s'alignaient
+     sur les bords de case, et **on lisait la grille du monde à travers son
+     propre pont**. C'est exactement le défaut que le 396 avait sur le sol du
+     labyrinthe, et que le 397 a corrigé là-bas.
+
+     On raisonne donc en pixels ABSOLUS (tx * T) : un bloc à cheval sur deux
+     cases est dessiné en deux morceaux qui se rejoignent, et la maçonnerie
+     court d'un bout à l'autre du pont sans qu'aucune couture ne se voie.
+
+     DEUX ASSISES PAR CASE ET DES BLOCS LARGES, pas trois assises de petits
+     blocs : à trois, la planche montrait une natte, pas un mur. Le mur du
+     dédale compte cinq assises sur onze unités de hauteur, soit un bloc de
+     2,2 unités pour 11,5 de case — deux assises par case est la transposition
+     juste, et elle vient de là, pas d'un réglage à l'œil. */
+  const ROWS = 2;
+  const rh = T / ROWS;
+  const bw = Math.round(T * 0.62);        // un bloc fait un peu moins de deux tiers de case
+  const absX = tx * T;
+
+  for (let row = 0; row < ROWS; row++) {
+    const y = py + Math.round(row * rh);
+    const h = Math.round((row + 1) * rh) - Math.round(row * rh) - 1;   // 1 px de joint
+    // Décalage d'une demi-longueur une assise sur deux, en ABSOLU : il ne
+    // dépend donc plus de la case, seulement de l'assise et de la position du
+    // pont dans le monde.
+    const shift = (row & 1) ? Math.round(bw * 0.5) : 0;
+    const first = Math.floor((absX - shift) / bw) - 1;
+    for (let k = first; k <= first + Math.ceil(T / bw) + 1; k++) {
+      const bx = k * bw + shift;                       // bord gauche ABSOLU du bloc
+      const x0 = Math.max(absX, bx), x1 = Math.min(absX + T, bx + bw - 1);
+      if (x1 <= x0) continue;
+      /* La teinte du bloc vient de SA position absolue, jamais d'un tirage :
+         un bloc à cheval sur deux cases doit recevoir la même couleur des deux
+         côtés, sinon il se coupe en deux au milieu et la couture revient par
+         la fenêtre. C'est le même raisonnement que la phase des bulles du
+         défi de fuite au 381. */
+      const hsh = ((k * 73856093) ^ (row * 19349663) ^ (ty * 83492791)) >>> 0;
+      const v = (hsh % 1000) / 1000;
+      /* ⚠️ CONTRASTE RESSERRÉ. La première version tirait un tiers de blocs
+         clairs et un tiers de sombres : à l'écran, un damier. La pierre du
+         dédale est presque unie — ce sont les JOINTS qui la dessinent, pas
+         l'écart entre deux blocs voisins. Un bloc clair sur six, un sombre sur
+         quatre, le reste au ton courant. */
+      g.fillStyle = v < 0.16 ? MAZE_LIT : v < 0.42 ? MAZE_DARK : MAZE_BRICK;
+      g.fillRect(x0 - absX + px, y, x1 - x0, h);
+      // Chanfrein clair sur l'arête haute : à cette échelle, c'est lui qui
+      // donne le relief, là où le bumpMap du 397 le donne en 3D.
+      if (h > 3) {
+        g.globalAlpha = 0.26;
+        g.fillStyle = MAZE_LIT;
+        g.fillRect(x0 - absX + px, y, x1 - x0, 1);
+        g.globalAlpha = 1;
+      }
+    }
+  }
+
+  /* Les BORDS du tablier prennent la mousse, comme le pied des murs du dédale.
+     `side` vaut -1 ou +1 sur les rives, 0 au milieu. */
+  if (side !== 0) {
+    g.globalAlpha = 0.42;
+    g.fillStyle = MAZE_MOSS;
+    g.fillRect(px, side < 0 ? py : py + T - 2, T, 2);
+    g.globalAlpha = 1;
+  }
+  /* Une pierre descellée de loin en loin : le dédale est une ruine, et une
+     maçonnerie parfaite se relit comme un carrelage. Tirée sur la case, donc
+     stable d'une image à l'autre. */
+  const r = bridgeRng(tx, ty);
+  if (r() < 0.09) {
+    g.fillStyle = MAZE_EDGE;
+    g.fillRect(px + Math.floor(r() * (T - 5)), py + Math.floor(r() * (T - 4)), 4, 3);
+  }
+}
+
 function hedgeDeckTile(g, px, py, T, tx, ty, side) {
   const r = bridgeRng(tx, ty);
   g.fillStyle = side === 0 ? "#5d8f3a" : "#3f6b28";
@@ -548,6 +665,7 @@ export function drawBridgeTile(g, px, py, T, tx, ty, side, theme, deckTopY) {
     else candyKerbTile(g, px, py, T, tx, ty, side);
     return;
   }
+  if (theme === "mazestone") return mazeStoneDeckTile(g, px, py, T, tx, ty, side);   // zip 400
   if (theme === "hedge") return hedgeDeckTile(g, px, py, T, tx, ty, side);
   if (theme === "crystal") return crystalDeckTile(g, px, py, T, tx, ty, side);
   if (theme === "cloud") return cloudDeckTile(g, px, py, T, tx, ty, side);
@@ -581,6 +699,17 @@ export function drawBridgeOverlay(g, px, py, T, tx, ty, side, now, baseX, theme)
       g.fillStyle = MALLOW_LOW;
       g.fillRect(px + dx, dir < 0 ? outY - len : outY + len - 2, 3, 2);
     }
+    return;
+  }
+  if (theme === "mazestone") {
+    /* Le bord du pont : une assise de bloc vue de chant, plus sombre, et une
+       ligne de mousse dessous — la même mousse que le bas des murs du dédale.
+       C'est ce liseré qui donne l'épaisseur : sans lui, le pont est un
+       autocollant posé sur l'eau. */
+    g.fillStyle = MAZE_EDGE;
+    g.fillRect(px, dir < 0 ? outY - 3 : outY, T, 3);
+    g.fillStyle = MAZE_MOSS;
+    g.fillRect(px, dir < 0 ? outY - 1 : outY + 2, T, 1);
     return;
   }
   if (theme === "hedge") {
