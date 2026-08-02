@@ -1,5 +1,43 @@
 # ARCARDI 🎪
 
+> **ZIP 403 — LA BARRE PASSE DE HUIT CASES À CINQ.**
+> Demande de Guillaume : « 4 5 7 et 8 doivent être fusionnés avec rotation »,
+> puis, mis en options, une réponse qui sort du cadre et qui fait foi :
+> « **Mettre la canne, les snacks dans le bag finalement. Au clic, on pourra
+> les consommer (snacks) ou les déployer ; et retirer les cases qui étaient
+> attribuées.** »
+>
+> | avant | après |
+> |---|---|
+> | 1 outils ⟳ · 2 arrosoir · 3 graines · 4 nourriture · 5 canne · 6 **construction** ⟳ · 7 troupeau · 8 main | 1 outils ⟳ · 2 arrosoir · 3 graines · 4 **construction** ⟳ · 5 troupeau/main ⟳ |
+>
+> **Manger et pêcher ne sont pas des outils qu'on tient, ce sont des gestes
+> qu'on fait de temps en temps.** Ils descendent dans le sac, en deux lignes
+> cliquables copiées sur celle de la trousse de soins : le joueur connaît déjà
+> ce geste. « Déployer » la canne l'ARME ; elle se range dès qu'on choisit une
+> case, sans quoi on pêcherait en croyant labourer.
+>
+> ⚠️ **LE VRAI CHANTIER N'ÉTAIT PAS LA BARRE, C'ÉTAIT LES TRENTE INDICES EN
+> DUR.** La position d'une case était comparée EN CHIFFRE à trente endroits de
+> `FermeGame.js` : réordonner la barre, c'était retrouver trente comparaisons
+> dans seize mille lignes, et **une seule oubliée donne une touche qui fait
+> silencieusement autre chose**. L'ordre est donc décrit **une fois**
+> (`SLOT_ORDER`), tout le reste le lit, et `verify-cycle.mjs` **interdit qu'un
+> seul indice en chiffre revienne** — le contrôle a été écrit AVANT la
+> correction, et il a échoué, ce qui est la seule preuve qu'il mesure quelque
+> chose.
+>
+> Le contrôle des touches annoncées dans les textes a été **généralisé** : il
+> compare à la position RÉELLE de la case au lieu de chercher un chiffre écrit
+> en dur. Celui du 401 cherchait « touche 8 » et aurait laissé passer
+> « touche 6 », qui est devenue fausse à son tour.
+>
+> **Trouvé en relisant, pas en jouant :** la première écriture des menus rendait
+> le panneau des décorations **inatteignable** — plus personne n'appelait
+> `setHandMenuOpen(true)`. Règle retenue : *le premier clic demande ce qu'on
+> veut porter, les suivants ouvrent ce qu'on porte.*
+
+
 > **ZIP 402 — LE MOULIN NE REFUSAIT PLUS RIEN EN SILENCE.**
 > Retour de Guillaume : « vérifie la posabilité des moulins. il y a une ferme
 > où c'est buggé. j'en pose ils disparaissent aussitôt. Et après on me dit que

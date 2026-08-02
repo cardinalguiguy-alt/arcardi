@@ -229,6 +229,53 @@ const gameSrc = game;
 ok("les nouveaux messages sont BRANCHÉS dans la table de FermeGame.js",
    /millPlaced: L\.toastMillPlaced/.test(gameSrc) && /noMillBuilt: L\.toastNoMillBuilt/.test(gameSrc));
 
+/* --------------------------------------------------------------------------
+   5. LA BARRE D'INVENTAIRE — zip 403.
+      Guillaume a demandé de fusionner des cases et d'en supprimer deux. La
+      position d'une case était comparée EN CHIFFRE à trente endroits de
+      FermeGame.js : réordonner la barre, c'était retrouver trente comparaisons
+      dans seize mille lignes, et **une seule oubliée donne une touche qui fait
+      silencieusement autre chose**.
+
+      ⚠️ CE CONTRÔLE A ÉTÉ ÉCRIT AVANT LA CORRECTION, ET IL A ÉCHOUÉ — c'est
+      comme ça qu'on sait qu'il mesure quelque chose. Il interdit désormais
+      qu'un seul indice en chiffre revienne : le jour où quelqu'un réécrit
+      `slotRef.current === 3` par réflexe, l'outil casse avant le jeu.
+   -------------------------------------------------------------------------- */
+{
+  /* On enlève d'abord les commentaires : un exemple cité dans une explication
+     n'est pas du code, et un contrôle qui ne sait pas les distinguer oblige à
+     écrire des commentaires évasifs — donc à moins bien documenter. */
+  const code = game.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+  const hard = code.match(/slotRef\.current [=!<>]==? \d|\bsl [=!]== \d|selectSlot\(\d|\bslot === \d/g) || [];
+  ok("⚠️ aucun indice de case n'est écrit en chiffre", hard.length === 0,
+     hard.length ? "EN DUR : " + hard.join(" · ") : "tout passe par SLOT.*");
+
+  ok("l'ordre de la barre n'est décrit qu'une fois",
+     (game.match(/const SLOT_ORDER = /g) || []).length === 1);
+
+  /* La barre attendue, telle que Guillaume l'a arrêtée : cinq cases, la canne
+     et les snacks descendus dans le sac. */
+  const m = game.match(/const SLOT_ORDER = \[([^\]]*)\]/);
+  const order = m ? m[1].split(",").map(x => x.trim().replace(/["']/g, "")).filter(Boolean) : [];
+  ok("la barre a bien cinq cases", order.length === 5, order.join(" · "));
+  ok("ni la nourriture ni la canne n'ont plus de case",
+     !order.includes("food") && !order.includes("rod"));
+  ok("troupeau et main sont fusionnés en une case", order.includes("carry"));
+
+  /* ⚠️ LA TOUCHE ANNONCÉE DANS LES TEXTES DOIT ÊTRE LA VRAIE.
+     Au 401 on avait corrigé « touche 8 » en « touche 6 » ; le 403 déplace la
+     construction en 4. Un contrôle qui cherchait « touche 8 » aurait laissé
+     passer « touche 6 ». Il compare donc à la POSITION RÉELLE, calculée. */
+  const buildKey = order.indexOf("build") + 1;
+  ok("la position de la case construction est connue", buildKey > 0, "touche " + buildKey);
+  const wrongFr = (strSrc.match(/\(touche (\d)\)/g) || []).filter(t => t !== `(touche ${buildKey})`);
+  const wrongEn = (strSrc.match(/\(key (\d)\)/g) || []).filter(t => t !== `(key ${buildKey})`);
+  ok("tous les textes annoncent la BONNE touche de construction",
+     wrongFr.length === 0 && wrongEn.length === 0,
+     [...wrongFr, ...wrongEn].join(", ") || `touche ${buildKey} partout`);
+}
+
 console.log(fails ? `\n${fails} ÉCHEC(S)\n` : "\nTout est passé.\n");
 console.log(`Ce script ne dit RIEN de l'apparence de la barre : ni le chevron, ni
 l'étiquette de variante ne sont vérifiables sans navigateur. Il dit que les

@@ -235,6 +235,50 @@ function pushGregOrderTasks(g, w2, res, cropIdx) {
   }
 }
 
+/* =============================================================================
+   ZIP 403 — L'ORDRE DE LA BARRE, ÉCRIT UNE SEULE FOIS.
+   -----------------------------------------------------------------------------
+   Demande de Guillaume : « 4 5 7 et 8 doivent être fusionnés avec rotation »,
+   puis, mis en options, une réponse qui sort du cadre et qui fait foi :
+   « **Mettre la canne, les snacks dans le bag finalement. Au clic, on pourra
+   les consommer (snacks) ou les déployer ; et retirer les cases qui étaient
+   attribuées.** »
+
+   La barre passe donc de HUIT cases à CINQ :
+
+     avant : 1 outils · 2 arrosoir · 3 graines · 4 nourriture · 5 canne ·
+             6 CONSTRUCTION · 7 troupeau · 8 main
+     après : 1 outils · 2 arrosoir · 3 graines · 4 CONSTRUCTION ·
+             5 troupeau/main
+
+   ⚠️⚠️ POURQUOI CES CONSTANTES EXISTENT, ET POURQUOI ELLES SONT ÉCRITES ICI.
+   Avant ce zip, la position d'une case était comparée EN CHIFFRE à trente
+   endroits de ce fichier, écrite en dur. Réordonner la barre revenait donc à retrouver trente
+   comparaisons dans seize mille lignes, et **une seule oubliée donne une touche
+   qui fait silencieusement autre chose**. C'est très exactement la famille de
+   défauts que les zips 401 et 402 ont passé leur temps à réparer (la rotation
+   invisible, les quatre refus muets du moulin).
+
+   L'ordre est donc décrit UNE fois, ici, et tout le reste le lit :
+   `SLOT.build` ne peut pas se désynchroniser de la position réelle de la case
+   Construction, parce qu'il EST cette position. `tools/verify-cycle.mjs`
+   interdit qu'un seul indice en chiffre revienne.
+
+   ⚠️ ET UN PIÈGE QUI N'EST DANS AUCUN `grep` : L'INDICE VOYAGE SUR LE RÉSEAU.
+   `tool: slotRef.current` est diffusé aux autres joueurs (voir la publication
+   d'état) et sert à dessiner ce que tient chaque fermier. Changer l'ordre change
+   donc le sens du champ sur le fil. Tout le monde se met à jour en même temps,
+   donc pas de migration — mais **un client resté sur l'ancienne version
+   dessinerait le mauvais outil, sans la moindre erreur**. C'est écrit ici pour
+   que le prochain qui touche à cet ordre le sache avant, pas après.
+   ========================================================================== */
+const SLOT_ORDER = ["tools", "can", "seeds", "build", "carry"];
+const SLOT = SLOT_ORDER.reduce((o, k, n) => { o[k] = n; return o; }, {});
+/* La case fusionnée a deux modes. Ils tournent à la touche 5 et se choisissent
+   au clic, dans un petit menu — comme la case graines, et pour la raison
+   apprise au 401 : un cycle que rien ne montre n'est jamais trouvé. */
+const CARRY_MODES = ["herd", "hand"];
+
 export default function FermeGame({ room, me, isHost, players, t, lang, onFinish, savedCode, onCodeLoaded, hidden }) {
   const L = fstr(lang);
 
@@ -618,13 +662,32 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // logique de soin existante (req "heal"/"healResident").
   const healArmedRef = useRef(false);
   const [healArmed, setHealArmed] = useState(false);
+  /* ZIP 403 — la case fusionnée et la canne armée depuis le sac. */
+  const [carryMode, setCarryMode] = useState("herd");
+  const carryModeRef = useRef("herd");
+  const [carryMenuOpen, setCarryMenuOpen] = useState(false);
+  const [rodArmed, setRodArmed] = useState(false);
+  const rodArmedRef = useRef(false);
+  /* ⚠️ « DÉPLOYER » LA CANNE, C'EST L'ARMER — et c'est copié sur armHealKit
+     (388) plutôt qu'inventé : le joueur connaît déjà ce geste pour la trousse
+     de soins. Le mode reste actif jusqu'à ce qu'on change de case, sans quoi il
+     faudrait rouvrir le sac entre deux poissons. */
+  function armRod() {
+    handModeRef.current = null; setHandMode(null);
+    handHeldRef.current = null; setHandHeldUI(null);
+    healArmedRef.current = false; setHealArmed(false);
+    rodArmedRef.current = true; setRodArmed(true);
+    setBagOpen(false);
+    pushToast(L.rodArmedToast);
+  }
   function armHealKit() {
     if (!(myInv && (myInv.healKit || 0) > 0)) return;
     handModeRef.current = null; setHandMode(null);
     handHeldRef.current = null; setHandHeldUI(null);
     moveConfirmRef.current = null; setMoveConfirmUI(null);
     healArmedRef.current = true; setHealArmed(true);
-    selectSlot(7);
+    selectSlot(SLOT.carry);
+    carryModeRef.current = "hand"; setCarryMode("hand");
     setBagOpen(false);
   }
   const horseCallAccumRef = useRef(0); // accumulateur (secondes) pour throttler la diffusion réseau des chevaux sifflés en course
@@ -5563,7 +5626,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function doAction() {
     const m = meRef.current; if (!m || actAnimRef.current > 0 || fishMiniRef.current || m.sleeping || isInjured()) return;
     if (m.zone === "evil") return doActionEvil();
-    if (slotRef.current === 7) return handAction(); // zip 251 : outil main (ferme ET ville)
+    // zip 403 : la main est un MODE de la case fusionnée, plus une case à elle.
+    if (slotRef.current === SLOT.carry && carryModeRef.current === "hand") return handAction();
     if (m.zone === "town") return; // Valley Town (zip 234): no farm tools here — E interactions only (see tryOpenNearby)
     const w = worldRef.current; if (!w) return;
     // Priorité : ramasser la production d'un animal proche.
@@ -5573,7 +5637,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (!inMap(tt.x, tt.y)) return;
     const i = idxOf(tt.x, tt.y);
     const sl = slotRef.current;
-    if (sl === 4) { startFishing(tt); return; } // pêche = minijeu
+    /* ⚠️ ZIP 403 — LA PÊCHE N'A PLUS DE CASE : ELLE S'ARME DEPUIS LE SAC.
+       « Mettre la canne dans le bag (…) au clic on pourra la déployer. »
+       Déployer = armer, exactement comme la trousse de soins depuis le 388
+       (voir armHealKit) : le mode reste actif jusqu'à ce qu'on change de case,
+       donc on peut enchaîner les poissons sans rouvrir le sac à chaque fois. */
+    if (rodArmedRef.current) { startFishing(tt); return; }
     actAnimRef.current = 0.28;
     const c = w.crops.get(i);
     if (c && E.cropGrowState(c, Date.now()).mature) return sendReq({ kind: "act", action: "harvest", x: tt.x, y: tt.y });
@@ -5586,7 +5655,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        qu'un engagement définitif sur une case. On exige la hache explicitement :
        un verger arraché par mégarde avec la houe serait une perte sèche de
        plusieurs heures de pousse. */
-    if (w.objects[i] === C.O_ORCHARD && toolKindRef.current === "axe" && sl === 1) {
+    if (w.objects[i] === C.O_ORCHARD && toolKindRef.current === "axe" && sl === SLOT.tools) {
       return sendReq({ kind: "orchardChop", x: tt.x, y: tt.y });
     }
     // Moulin construit (chantier 2026-07, demande Guillaume) : cliquable
@@ -5597,7 +5666,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // zip 402 : on envoie la requête MÊME si le chantier n'est pas fini, pour
     // que l'hôte réponde « il est encore en chantier » au lieu que le clic
     // tombe dans le vide. C'est ce vide qui faisait croire à un jeu cassé.
-    if (w.objects[i] === C.O_MILL && !(sl === 5 && buildKindRef.current === "mill")) {
+    if (w.objects[i] === C.O_MILL && !(sl === SLOT.build && buildKindRef.current === "mill")) {
       return sendReq({ kind: "act", action: "millDeposit", x: tt.x, y: tt.y });
     }
     // Sucrerie construite (chantier canne à sucre, bâtiment d'artisan
@@ -5622,7 +5691,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // (voir cauldronInteract), quel que soit l'outil équipé, même priorité
     // que le levier/moulin ci-dessus.
     if (w.objects[i] === C.O_CAULDRON && E.buildReady(w.objHp.get(i), Date.now())) { actAnimRef.current = 0; return cauldronInteract(); }
-    if (sl === 0) {
+    if (sl === SLOT.tools) {
       // Case "outils" (simplification barre d'outils) : houe/hache/pioche
       // regroupées, l'action dépend de toolKindRef.current (choisi via la
       // touche 1 en rotation, ou le mini-menu au clic).
@@ -5630,10 +5699,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const action = tk === "axe" ? "chop" : tk === "pick" ? "mine" : "till";
       sendReq({ kind: "act", action, x: tt.x, y: tt.y });
     }
-    else if (sl === 1) sendReq({ kind: "act", action: "water", x: tt.x, y: tt.y });
-    else if (sl === 2) sendReq({ kind: "act", action: "plant", seed: seedSelRef.current, x: tt.x, y: tt.y });
-    else if (sl === 3) sendReq({ kind: "eat" });
-    else if (sl === 5) {
+    else if (sl === SLOT.can) sendReq({ kind: "act", action: "water", x: tt.x, y: tt.y });
+    else if (sl === SLOT.seeds) sendReq({ kind: "act", action: "plant", seed: seedSelRef.current, x: tt.x, y: tt.y });
+    // zip 403 : manger se fait depuis le sac, en cliquant un snack.
+    else if (sl === SLOT.build) {
       // Outil "Construction" (case Construction) : variante choisie via le
       // menu Construire/Vendre (fence = clôture bois, wall = mur pierre,
       // path = chemin dallé, lamp = lampadaire acheté en or, scarecrow =
@@ -5695,7 +5764,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         buildKindRef.current = "fence"; setBuildKind("fence");
       }
     }
-    else if (sl === 6) {
+    else if (sl === SLOT.carry) {
       // Outil "déplacer" : premier clic attrape l'animal visé, second clic
       // le dépose sur la case visée (n'importe où sur la ferme, hors case
       // bloquée). Aucune limite d'enclos : le joueur choisit librement.
@@ -5734,7 +5803,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function doActionEvil() {
     const m = meRef.current; if (!m || actAnimRef.current > 0) return;
     const ew = evilWorldRef.current; if (!ew) return;
-    if (slotRef.current !== 0) return;
+    if (slotRef.current !== SLOT.tools) return;
     if (toolKindRef.current === "pick") { doMineEvil(m, ew); return; }
     if (toolKindRef.current !== "axe") return;
     const tt = targetTileEvil();
@@ -9636,8 +9705,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       keysRef.current[e.code] = true;
       if (e.code >= "Digit1" && e.code <= "Digit9") {
         const idx = +e.code.slice(5) - 1;
-        if (idx === 0) pressToolKey();
-        else if (idx === 5) pressBuildKey();
+        /* zip 403 : les touches au-delà de la dernière case ne font plus rien.
+           Avant, une touche non attribuée sélectionnait une case inexistante et la barre
+           n'avait plus aucune case en surbrillance — sans rien dire. */
+        if (idx >= SLOT_ORDER.length) { /* touche non attribuée */ }
+        else if (idx === SLOT.tools) pressToolKey();
+        else if (idx === SLOT.build) pressBuildKey();
+        else if (idx === SLOT.carry) pressCarryKey();
         else selectSlot(idx);
       }
       // Correctif audit 2026-07 : Espace/E n'agissent plus "à travers" un
@@ -9654,8 +9728,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (e.code === "KeyF") toggleMount();
       // Zip 251 : R avec l'outil main tenant un objet -> le remet dans le sac
       // (prioritaire sur le cycle de façade ville / d'orientation clôture).
-      if (e.code === "KeyR" && slotRef.current === 7 && handHeldRef.current) { handStoreHeld(); return; }
-      if (e.code === "KeyR" && slotRef.current === 5 && buildKindRef.current === "fence") {
+      if (e.code === "KeyR" && slotRef.current === SLOT.carry && carryModeRef.current === "hand" && handHeldRef.current) { handStoreHeld(); return; }
+      if (e.code === "KeyR" && slotRef.current === SLOT.build && buildKindRef.current === "fence") {
         fenceDirRef.current = fenceDirRef.current === "auto" ? "h" : fenceDirRef.current === "h" ? "v" : "auto";
         setFenceDir(fenceDirRef.current);
         pushToast(L.fenceDirToast(fenceDirRef.current));
@@ -11355,7 +11429,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // manuel, qui exige toujours cet outil. Même anti-spam que la récolte.
     function checkWalkOverWater() {
       const m = meRef.current, w = worldRef.current;
-      if (!m || !w || slotRef.current !== 1 || fishMiniRef.current || shopOpenRef.current || binOpenRef.current || mapOpenRef.current || cauldronMenuOpenRef.current) return;
+      if (!m || !w || slotRef.current !== SLOT.can || fishMiniRef.current || shopOpenRef.current || binOpenRef.current || mapOpenRef.current || cauldronMenuOpenRef.current) return;
       const tx = Math.floor(m.x + 0.5), ty = Math.floor(m.y + 0.5);
       if (!inMap(tx, ty)) return;
       const i = idxOf(tx, ty);
@@ -12535,9 +12609,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     function drawRemotePets(p, dt2) { drawPetsFor(p.id, p.pets, p, dt2); }
     function drawSelf(m) {
       drawCharacter(m, true);
-      if (actAnimRef.current > 0 && slotRef.current < 2) {
+      if (actAnimRef.current > 0 && slotRef.current <= SLOT.can) {
         const sprites = spritesRef.current;
-        const key = slotRef.current === 0 ? toolKindRef.current : "can";
+        const key = slotRef.current === SLOT.tools ? toolKindRef.current : "can";
         const px = Math.round(m.x * T), py = Math.round(m.y * T);
         const fx2 = [0, 0, -1, 1][m.dir], fy2 = [1, -1, 0, 0][m.dir];
         ctx.drawImage(sprites.icons[key], px + fx2 * 10 + 2, py + fy2 * 8 - 4);
@@ -13606,16 +13680,40 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // du menu). `noToolMenu` permet à pressToolKey de sélectionner la case 0
   // sans déclencher l'ouverture du menu.
   function selectSlot(s, noToolMenu) {
-    if (s === 2) setSeedMenuOpen(o => (slotRef.current === 2 ? !o : true));
+    if (s === SLOT.seeds) setSeedMenuOpen(o => (slotRef.current === SLOT.seeds ? !o : true));
     else setSeedMenuOpen(false);
-    if (s === 0 && !noToolMenu) setToolMenuOpen(o => (slotRef.current === 0 ? !o : true));
+    if (s === SLOT.tools && !noToolMenu) setToolMenuOpen(o => (slotRef.current === SLOT.tools ? !o : true));
     else setToolMenuOpen(false);
     // Zip 251 : la case main (7) ouvre/ferme son menu de décorations ; en
     // quittant l'outil main on abandonne toute pose armée / objet attrapé
     // (l'attrape est purement locale, l'objet reste en place sur la carte).
-    if (s === 7) setHandMenuOpen(o => (slotRef.current === 7 ? !o : true));
-    else setHandMenuOpen(false);
-    if (s !== 7) { handModeRef.current = null; setHandMode(null); handHeldRef.current = null; setHandHeldUI(null); moveConfirmRef.current = null; setMoveConfirmUI(null); healArmedRef.current = false; setHealArmed(false); }
+    /* ⚠️ ZIP 403 — LES DEUX MENUS DE LA CASE FUSIONNÉE, ET L'ORDRE QUI LES
+       DÉPARTAGE. La case en porte deux : celui qui choisit le MODE (troupeau /
+       main), et celui des DÉCORATIONS, qui n'existe qu'en mode main et qui
+       vivait sur l'ancienne case 8.
+
+       La première écriture de ce bloc n'ouvrait plus jamais le second : plus
+       personne n'appelait `setHandMenuOpen(true)`, et le menu des décorations
+       devenait **inatteignable** — un panneau entier perdu, sans une erreur.
+       Trouvé en relisant les appels, pas en jouant.
+
+       La règle retenue, et elle se raconte en une phrase : **le premier clic
+       demande ce qu'on veut porter, les suivants ouvrent ce qu'on porte.** */
+    const carryAlready = slotRef.current === SLOT.carry;
+    if (s === SLOT.carry && carryAlready && carryModeRef.current === "hand") {
+      setCarryMenuOpen(false);
+      setHandMenuOpen(o => !o);
+    } else if (s === SLOT.carry) {
+      setHandMenuOpen(false);
+      setCarryMenuOpen(o => (carryAlready ? !o : true));
+    } else {
+      setCarryMenuOpen(false);
+      setHandMenuOpen(false);
+    }
+    // zip 403 : choisir une case range la canne. Une canne qui resterait armée
+    // pendant qu'on tient une houe ferait pêcher au lieu de labourer.
+    if (rodArmedRef.current) { rodArmedRef.current = false; setRodArmed(false); }
+    if (s !== SLOT.carry) { handModeRef.current = null; setHandMode(null); handHeldRef.current = null; setHandHeldUI(null); moveConfirmRef.current = null; setMoveConfirmUI(null); healArmedRef.current = false; setHealArmed(false); }
     setCraftMenuOpen(null);
     // Changer d'outil en portant un animal l'annule (relâché sans être
     // déplacé), pour ne jamais le laisser "coincé" en main d'un joueur.
@@ -13629,12 +13727,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // pick -> hoe ; sinon sélectionne simplement la case (garde le dernier
   // outil équipé), sans ouvrir le mini-menu (réservé au clic souris).
   function pressToolKey() {
-    if (slotRef.current === 0) {
+    if (slotRef.current === SLOT.tools) {
       // zip 401 : la rotation lit toolCycle(), la même liste que l'affichage.
       const cyc = toolCycle();
       setToolKind(tk => cyc[(cyc.indexOf(tk) + 1) % cyc.length]);
     } else {
-      selectSlot(0, true);
+      selectSlot(SLOT.tools, true);
     }
   }
   // Touche 6 (case construction) : demande Guillaume — si déjà équipée, fait
@@ -13687,9 +13785,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   /* Idem pour la case outils, qui tourne depuis le zip 251 sans jamais l'avoir
      dit non plus. L'arrosoir n'en fait PAS partie : il a sa propre case. */
   function toolCycle() { return ["hoe", "axe", "pick"]; }
+  /* zip 403 : le cycle de la case fusionnée. Même forme que les deux autres,
+     donc l'affichage le lit de la même façon et ne peut pas en diverger. */
+  function carryCycle() { return CARRY_MODES; }
+  function setCarryTo(mode) {
+    carryModeRef.current = mode; setCarryMode(mode);
+    if (mode !== "hand") { handModeRef.current = null; setHandMode(null); setHandMenuOpen(false); }
+  }
+  function pressCarryKey() {
+    if (slotRef.current !== SLOT.carry) { selectSlot(SLOT.carry); return; }
+    const c = carryCycle();
+    setCarryTo(c[(c.indexOf(carryModeRef.current) + 1) % c.length]);
+  }
 
   function pressBuildKey() {
-    if (slotRef.current !== 5) { selectSlot(5); return; }
+    if (slotRef.current !== SLOT.build) { selectSlot(SLOT.build); return; }
     const owned = buildCycle();
     if (!owned.length) return;
     const cur = buildKindRef.current;
@@ -13876,7 +13986,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // quelqu'un d'autre au même instant) : sélectionner l'outil sans rien
     // porter ne pose simplement rien au clic (voir resolveCauldronPlace,
     // noCauldronStock).
-    selectSlot(5);
+    selectSlot(SLOT.build);
     buildKindRef.current = "cauldron"; setBuildKind("cauldron");
   };
   // Usage de la pommade (inchangé) : applique l'immunité IMMÉDIATEMENT en
@@ -13901,7 +14011,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function craftBuild(item, n) {
     sendReq({ kind: "craft", item, n });
     buildKindRef.current = item; setBuildKind(item);
-    selectSlot(5);
+    selectSlot(SLOT.build);
     setCraftMenuOpen(null);
   }
   // Équiper le pont (chantier 2026-07) : contrairement à craftBuild, aucune
@@ -13912,7 +14022,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function equipBridge(mat) {
     buildKindRef.current = mat === "stone" ? "bridgeStone" : "bridgeWood";
     setBuildKind(mat === "stone" ? "bridgeStone" : "bridgeWood");
-    selectSlot(5);
+    selectSlot(SLOT.build);
     setCraftMenuOpen(null);
   }
   // Équiper la rénovation en pierre (chantier 2026-07, demande Guillaume) :
@@ -13922,7 +14032,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function equipBridgeRenovate() {
     buildKindRef.current = "bridgeRenovate";
     setBuildKind("bridgeRenovate");
-    selectSlot(5);
+    selectSlot(SLOT.build);
     setCraftMenuOpen(null);
   }
   const sellFish = (fishId) => sendReq({ kind: "sell", item: "fish", fish: fishId, n: 9999 });
@@ -13948,12 +14058,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     return (L.buildNames && L.buildNames[kind]) || "";
   }
-  const slots = [
-    { key: "tools", icon: toolKind }, { key: "can", icon: "can" },
-    { key: "seeds", icon: "seeds" }, { key: "food", icon: "food" },
-    { key: "rod", icon: "rod" }, { key: "fence", icon: "fence" }, { key: "herd", icon: "herd" },
-    { key: "hand", icon: "hand" }, // zip 251 : outil main (poser/déplacer/ranger objets)
-  ];
+  /* ⚠️ LE TABLEAU EST DÉRIVÉ DE SLOT_ORDER, JAMAIS RÉÉCRIT. Une seconde liste
+     ici et l'affichage finirait par ne plus décrire la même barre que les
+     comparaisons — le défaut nommé au zip 387, et celui que le 401 a évité de
+     justesse sur le cycle de construction. */
+  const SLOT_ICON = { tools: toolKind, can: "can", seeds: "seeds", build: "fence",
+                      carry: carryMode === "hand" ? "hand" : "herd" };
+  const slots = SLOT_ORDER.map(k => ({ key: k, icon: SLOT_ICON[k] }));
   const clockStr = (() => { const h = Math.floor(hud.timeMin / 60) % 24, mn = hud.timeMin % 60; return `${h}h${String(mn).padStart(2, "0")}`; })();
 
   // Écran de code de ferme (hôte uniquement) : choisit quelle ferme durable ouvrir.
@@ -14096,11 +14207,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       {/* Barre d'outils */}
       <div className="ferme-toolbar panel">
         {slots.map((s, i) => {
-          const isSeed = s.key === "seeds", isFood = s.key === "food", isRod = s.key === "rod", isFence = s.key === "fence", isHerd = s.key === "herd", isTools = s.key === "tools", isHand = s.key === "hand";
+          /* zip 403 : cinq cases. `isHerd`/`isHand` deviennent deux MODES de la
+             même case ; tout le reste du bloc les lit comme avant, ce qui
+             évite de réécrire deux cents lignes d'infobulles. */
+          const isSeed = s.key === "seeds", isFence = s.key === "build", isTools = s.key === "tools";
+          const isCarry = s.key === "carry";
+          const isHerd = isCarry && carryMode === "herd", isHand = isCarry && carryMode === "hand";
           let count = "", lvl = "", img = spritesReady ? spritesRef.current.icons[s.icon] : null;
           if (isSeed) { count = myInv ? myInv.seeds[seedSel] : ""; img = spritesReady ? spritesRef.current.crops[seedSel][C.CROP_STAGES - 1] : null; }
-          else if (isFood) count = myInv ? myInv.food : "";
-          else if (isRod) { /* pas de niveau ni de compteur */ }
           else if (isTools) lvl = "N" + (myTools[toolKind] || 1);
           else if (isFence) {
             // Outil "Construction" générique (chantier 2026-07) : icône,
@@ -14140,7 +14254,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           else if (isHerd) { if (carryingAnimal) lvl = "●"; }
           else if (isHand) { const dn = (myInv && myInv.decor ? Object.values(myInv.decor).reduce((a, b) => a + (b | 0), 0) : 0) + (myInv ? (myInv.lamp | 0) + (myInv.scarecrow | 0) : 0); count = healArmed ? (myInv ? (myInv.healKit || 0) : "") : (dn || ""); if (healArmed) lvl = "🩹"; else if (handHeldUI || handMode) lvl = "●"; }
           else lvl = "N" + (myTools[s.key] || 1);
-          const title = isSeed ? L.seedTip(seedName(seedSel)) : isFood ? L.foodTip(C.FOOD_ENERGY) : isRod ? L.rodTip
+          const title = isSeed ? L.seedTip(seedName(seedSel))
             : isFence ? (buildKind.startsWith("orchard:")
               ? L.orchardTip((() => { const o = C.ORCHARDS.find(x => x.id === buildKind.slice(8)); return o ? (lang === "en" ? o.saplingNameEn : o.saplingName) : ""; })())
               : buildKind === "wall" ? L.wallTip : buildKind === "path" ? L.pathTip : buildKind === "lamp" ? L.lampTip : buildKind === "scarecrow" ? L.scarecrowTip
@@ -14154,9 +14268,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              ajout de variante, une case qui en annonce une de moins qu'elle
              n'en propose — un mensonge silencieux, et le défaut que le zip 387
              a nommé une fois pour toutes. tools/verify-cycle.mjs le vérifie. */
-          const cyc = isTools ? toolCycle() : isFence ? buildCycle() : null;
-          const curKind = isTools ? toolKind : isFence ? buildKind : null;
-          const nameOf = (k) => (isTools ? TOOL_NAMES[k] : buildLabel(k));
+          const cyc = isTools ? toolCycle() : isFence ? buildCycle() : isCarry ? carryCycle() : null;
+          const curKind = isTools ? toolKind : isFence ? buildKind : isCarry ? carryMode : null;
+          const nameOf = (k) => (isTools ? TOOL_NAMES[k] : isCarry ? (L.carryNames[k] || k) : buildLabel(k));
           const curName = cyc ? nameOf(curKind) : "";
           const fullTitle = cyc
             ? title + "\n" + (cyc.length > 1
@@ -14203,7 +14317,28 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       )}
 
       {/* Zip 251 : menu de l'outil main — décorations posables + aide au déplacement. */}
-      {handMenuOpen && slot === 7 && (
+      {/* ⚠️ ZIP 403 — LE MENU DE LA CASE FUSIONNÉE, AU CLIC.
+          Guillaume, sur la question posée : « il ouvre un petit menu qui liste
+          les variantes ». C'est la leçon du 401 appliquée d'avance : la case
+          construction tournait depuis six mois et personne ne l'avait trouvée,
+          parce que rien ne la montrait. La touche 5 reste le raccourci rapide
+          pour qui connaît ; le menu est là pour qui ne connaît pas. */}
+      {carryMenuOpen && slot === SLOT.carry && (
+        <div className="ferme-seed-menu-ov" onClick={() => setCarryMenuOpen(false)}>
+          <div className="ferme-seed-menu panel" onClick={e => e.stopPropagation()}>
+            <div className="ferme-seed-menu-title">{L.carryMenuTitle}</div>
+            {CARRY_MODES.map(mode => (
+              <div key={mode} className={"ferme-seed-menu-row" + (carryMode === mode ? " sel" : "")}
+                onClick={() => { setCarryTo(mode); setCarryMenuOpen(false); }}>
+                <Sprite img={spritesReady ? spritesRef.current.icons[mode] : null} w={26} h={26} />
+                <span className="name">{L.carryNames[mode]}</span>
+                <span className="count">{L.carrySubs[mode]}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {handMenuOpen && slot === SLOT.carry && carryMode === "hand" && (
         <div className="ferme-seed-menu-ov" onClick={() => setHandMenuOpen(false)}>
           <div className="ferme-seed-menu panel" onClick={e => e.stopPropagation()}>
             <div className="ferme-seed-menu-title">{L.handMenuTitle}</div>
@@ -15370,6 +15505,32 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               <span style={{ fontSize: 26, width: 32, textAlign: "center" }}>🧪</span>
               <div className="info"><b>{L.bagSalveRow((myInv && myInv.salve) || 0)}</b><span>{L.bagSalveSub}</span></div>
             </div>
+            {/* ⚠️ ZIP 403 — LES SNACKS ET LA CANNE DESCENDENT ICI.
+                Guillaume : « Mettre la canne, les snacks dans le bag finalement.
+                Au clic, on pourra les consommer (snacks) ou les déployer ; et
+                retirer les cases qui étaient attribuées. »
+
+                Deux cases de la barre disparaissent au profit de deux lignes de
+                sac. Le raisonnement tient en une phrase : **manger et pêcher ne
+                sont pas des OUTILS qu'on tient, ce sont des gestes qu'on fait de
+                temps en temps.** Une case de barre est un emplacement de main —
+                elle doit servir à ce qu'on garde en main. Les cinq restantes
+                (outils, arrosoir, graines, construction, porter) le sont
+                vraiment.
+
+                On reprend la ligne cliquable de la trousse de soins telle
+                quelle : le joueur connaît déjà ce geste. */}
+            <div style={{ fontSize: 11, fontWeight: 700, opacity: .7, textTransform: "uppercase", letterSpacing: .5, marginTop: 12 }}>{L.bagGearTitle}</div>
+            <div className="ferme-shop-row" style={(myInv && (myInv.food || 0) > 0) ? { cursor: "pointer" } : undefined}
+                 onClick={() => { if (myInv && (myInv.food || 0) > 0) { sendReq({ kind: "eat" }); } }}>
+              <span style={{ fontSize: 26, width: 32, textAlign: "center" }}>🥪</span>
+              <div className="info"><b>{L.bagFoodRow((myInv && myInv.food) || 0)}</b><span>{L.bagFoodSub(C.FOOD_ENERGY)}</span></div>
+            </div>
+            <div className="ferme-shop-row" style={{ cursor: "pointer" }} onClick={() => armRod()}>
+              <span style={{ fontSize: 26, width: 32, textAlign: "center" }}>🎣</span>
+              <div className="info"><b>{L.bagRodRow}</b><span>{rodArmed ? L.rodArmedTip : L.bagRodSub}</span></div>
+            </div>
+
             <div className="ferme-shop-row" style={(myInv && (myInv.healKit || 0) > 0) ? { cursor: "pointer" } : undefined} onClick={() => armHealKit()}>
               <span style={{ fontSize: 26, width: 32, textAlign: "center" }}>🩹</span>
               <div className="info"><b>{L.bagHealKitRow((myInv && myInv.healKit) || 0)}</b><span>{healArmed ? L.healKitArmedTip : L.bagHealKitSub}</span></div>
