@@ -95,7 +95,30 @@ const CFG = {
      quart d'heure. 15×15 à 11,5 fait 172 unités — plus grand qu'avant EN
      DISTANCE, plus petit en nombre de décisions. C'est exactement l'échange
      demandé : plus impressionnant, moins difficile. */
-  GRID: 15,
+  /* ⚠️ 19 ET NON 15 AU 396. Demande de Guillaume : « il faut pas que ce soit
+     trop difficile, seulement que ce soit relativement long et avec des
+     surprises ». Les deux moitiés de la phrase tirent dans des sens opposés,
+     et il faut les traiter séparément :
+
+     ⚠️ SEPT CONFIGURATIONS ONT ÉTÉ JOUÉES, 45 parties chacune, avant de
+     trancher. Le résultat est contre-intuitif et vaut d'être écrit :
+
+       grille 15 (celle du 395) → 58 % de sortie, médiane 114 s, p75 199 s
+       grille 17                → 69 % de sortie, médiane 125 s, p75 156 s
+       grille 19                → majorité de parties non finies en 10 min
+
+     PLUS GRAND EST PLUS FACILE ENTRE 15 ET 17, ce qu'aucun raisonnement ne
+     donnait : la rotonde occupe 25 cellules. Sur une grille de 15 elle en
+     mange 11 %, étrangle le dédale autour et fait exploser les détours (p75 à
+     199 s) ; sur 17 elle n'en mange que 8,6 % et redevient ce qu'elle doit
+     être — un carrefour, pas un bouchon. Au-delà, la surface l'emporte et on
+     ne termine plus.
+
+     LE RESTE MONTE AVEC : brasiers 14 → 20, fioles 4 → 6, éclats 22 → 34,
+     salles 3 → 4. Les dangers, eux, montent MOINS vite que la surface (trous
+     7 → 9 pour 28 % de cellules en plus) : la densité de danger BAISSE. C'est
+     ainsi qu'on obtient plus long ET moins difficile, ce qui était demandé. */
+  GRID: 17,
 
   /* ======================================================================
      LE FERMIER
@@ -104,7 +127,12 @@ const CFG = {
   RUN_SPEED: 14.0,          // ... en course (Maj) — bruyante, voir STALK_HEAR_*
   BACK_SPEED: 5.2,          // en marche arrière : nettement plus lent, on ne fuit pas à reculons
   STRAFE_SPEED: 7.0,        // pas de côté (A/E ou Q/D) — sert à esquiver, pas à voyager
-  TURN_SPEED: 2.9,          // rad/s — un demi-tour prend ~1,08 s
+  /* ⚠️ 2,6 ET NON 2,9 AU 396. Baisse volontairement MODESTE : l'essentiel de
+     « la caméra bouge trop » est traité par le découplage caméra/cap (voir
+     CAM_ANG_LAG) et par le recalage sur le couloir (SNAP_*), pas ici. Une
+     rotation nettement plus lente aurait rendu le demi-tour de fuite — le
+     geste qu'on fait quand le traqueur apparaît — trop long pour servir. */
+  TURN_SPEED: 2.6,          // rad/s — un demi-tour prend ~1,30 s
   /* ⚠️ AJOUTÉE AU 394, seconde moitié du retour « pas très très fluide ».
      La rotation passait de 0 à pleine vitesse en UNE image : à chaque appui et
      à chaque relâchement, la caméra partait et s'arrêtait net. On monte et on
@@ -137,7 +165,7 @@ const CFG = {
   FLAME_START: 1.0,
   FLAME_DRAIN: 0.009,       // par seconde, en marche → 111 s de torche pleine
   FLAME_DRAIN_RUN: 0.016,   // courir consomme presque le double : l'air attise
-  FLAME_DRAIN_HIT: 0.05,    // chaque coup d'épée porté fait plonger la flamme
+  FLAME_DRAIN_HIT: 0.03,    // chaque coup d'épée porté fait plonger la flamme (0,05 au 395)
   FLAME_LOW: 0.35,          // seuil « basse » : halo qui se referme, brume qui monte
   FLAME_CRITICAL: 0.12,     // seuil « braise » : on ne voit plus que ses mains
   FLAME_REVIVE: 1.0,        // ce que rend un brasier : la totalité, jamais un appoint
@@ -206,12 +234,60 @@ const CFG = {
      Avec la marge, on ne peut plus mourir sans avoir eu l'occasion de
      s'armer — et si on sort quand même désarmé, c'est un choix. */
   SANCTUARY_MARGIN: 5,
-  SWING_MS: 340,            // durée du geste
-  SWING_COOLDOWN_MS: 420,   // ... et repos avant le suivant
-  SWING_RANGE: 2.9,        // portée, mesurée du centre du fermier
-  SWING_ARC: 1.95,          // rad — un arc large (112°), on ne vise pas au pixel dans le noir
+  /* ======================================================================
+     ⚠️ ZIP 396 — LE COMBAT DEVIENT PLUS PERMISSIF. C'EST UNE DEMANDE, ET ELLE
+     EST ASSUMÉE AVEC SON COÛT.
+     ----------------------------------------------------------------------
+     Guillaume : « les scènes de bagarre avec le monstre noir ne sont pas
+     claires, on sait pas quand on gagne, si on touche etc. ça doit être plus
+     assisté et plus user friendly », et, à la question « seulement plus
+     lisible, ou plus facile aussi ? » : PLUS FACILE AUSSI.
+
+     Cinq nombres bougent, et chacun répond à un moment précis du reproche :
+
+       SWING_RANGE 2,9 → 3,8   le fermier fait 1,7 de large et le rôdeur 2,0 :
+                               à 2,9 il fallait être quasiment au contact,
+                               c'est-à-dire déjà dans la portée de SES griffes ;
+       SWING_ARC  1,95 → 2,35  135° au lieu de 112°. On ne vise pas au pixel
+                               dans le noir, et encore moins au clavier ;
+       SWING_MS    340 → 300   le geste rend la main plus vite ;
+       SWING_COOLDOWN 420→240  DEUX coups d'affilée deviennent possibles dans
+                               la fenêtre de ROAMER_STAGGER_MS, ce qui veut
+                               dire qu'un rôdeur (2 PV) peut être tué en un
+                               échange. C'est ce qui manquait le plus : on
+                               frappait, il reculait, il revenait, on n'avait
+                               rien gagné ;
+       FLAME_DRAIN_HIT 0,05→0,03  se battre coûtait 5 % de flamme par coup, et
+                               deux coups par créature sur quatre créatures
+                               faisaient 40 % d'une torche. Le jeu punissait
+                               ce qu'il demandait de faire.
+
+     ⚠️ LE COÛT, ÉCRIT NOIR SUR BLANC : l'équilibrage mesuré sur 220 parties au
+     395 (69,5 % de sortie) NE VAUT PLUS. La campagne est refaite au 396 et le
+     nouveau chiffre est dans le README et dans le texte de contexte. Leçon du
+     393 à garder en tête : un réglage qui paraît évident peut mesurablement
+     EMPIRER le jeu — c'est pour ça qu'on remesure au lieu de supposer. */
+  SWING_MS: 300,            // durée du geste
+  SWING_COOLDOWN_MS: 240,   // ... et repos avant le suivant
+  SWING_RANGE: 3.8,         // portée, mesurée du centre du fermier
+  SWING_ARC: 2.35,          // rad — un arc très large (135°)
   SWING_DAMAGE: 1,
   SWING_KNOCKBACK: 4.6,     // recul infligé, unités
+
+  /* L'ASSISTANCE À LA VISÉE, choisie par Guillaume au 396.
+     Au moment du coup — et à ce moment SEULEMENT — le cap du fermier pivote
+     vers la créature la plus proche située dans une fenêtre de AIM_ARC autour
+     de son regard. Il ne pivote jamais de plus de AIM_MAX_TURN : l'assistance
+     corrige une visée approximative, elle ne retourne pas le personnage.
+
+     ⚠️ ELLE NE S'APPLIQUE QU'À CE QUI EST DÉJÀ ATTEIGNABLE : la cible doit
+     passer canTouch() (pas de mur entre les deux) et être dans la portée. On
+     ne peut donc pas frapper à travers une cloison, et l'assistance ne change
+     RIEN à la portée réelle de l'épée — elle change seulement la probabilité
+     qu'un joueur au clavier soit bien orienté au moment où il appuie. */
+  AIM_ARC: 1.25,            // rad — demi-fenêtre de recherche de cible
+  AIM_MAX_TURN: 0.85,       // rad — pivotement maximal consenti par coup
+  AIM_MARGIN: 1.4,          // unités — la cible peut être un peu hors de portée
 
   /* ======================================================================
      LE FERMIER — POINTS DE VIE
@@ -220,7 +296,7 @@ const CFG = {
   HURT_INVULN_MS: 1200,     // clignotement d'invulnérabilité après un coup reçu
   HURT_KNOCKBACK: 5.0,
   POTION_HEAL: 1,           // fiole de suif : rend un cœur
-  POTION_COUNT: 4,          // fioles posées dans tout le labyrinthe
+  POTION_COUNT: 6,          // fioles posées dans tout le labyrinthe (4 au 395)
 
   /* ======================================================================
      LES RÔDEURS — les créatures « ordinaires »
@@ -250,8 +326,24 @@ const CFG = {
   ROAMER_REPATH_MS: 480,
   ROAMER_HIT_DAMAGE: 1,
   ROAMER_HIT_COOLDOWN_MS: 1500,
-  ROAMER_STAGGER_MS: 380,   // sonné après un coup reçu : c'est la fenêtre du second coup
+  /* ⚠️ 620 ET NON 380 AU 396, et ce nombre se lit AVEC SWING_COOLDOWN_MS.
+     Le second coup demande SWING_MS + SWING_COOLDOWN_MS = 540 ms. À 380 ms de
+     sonnerie, le rôdeur était donc TOUJOURS revenu avant qu'on puisse
+     enchaîner : la fenêtre du second coup n'existait pas, malgré son nom. À
+     620 elle existe et vaut 80 ms — étroite, mais réelle. C'est elle qui rend
+     un rôdeur tuable en un échange, donc le combat gagnable.
+
+     ⚠️ NE PAS CONFONDRE AVEC STALK_STAGGER_MS, dont l'allongement a été essayé
+     puis ANNULÉ au 393 (voir son commentaire). Le traqueur et le rôdeur ne
+     jouent pas le même rôle : on doit pouvoir régler ses comptes avec l'un,
+     jamais avec l'autre. */
+  ROAMER_STAGGER_MS: 620,   // sonné après un coup reçu : c'est la fenêtre du second coup
   ROAMER_BODY_R: 1.0,
+  /* Distance à laquelle la jauge de vie d'un rôdeur s'affiche. Demande de
+     Guillaume au 396 : « on doit voir la jauge ». Bornée pour que le HUD ne
+     se remplisse pas de barres au fond d'un couloir : au-delà, la créature
+     n'est de toute façon qu'une silhouette. */
+  HP_BAR_RANGE: 26.0,
 
   /* ======================================================================
      LE TRAQUEUR — un seul, jamais tuable
@@ -311,7 +403,7 @@ const CFG = {
      son épée dans le seul endroit censé être calme. Le parvis protège des
      rôdeurs, jamais de lui — mais il ne doit pas se lever avant qu'on en soit
      sorti une première fois. */
-  STALK_WAKE_DEPTH: 14,
+  STALK_WAKE_DEPTH: 17,
   /* Il RESPIRE, et c'est le seul signal qu'on ait de lui dans le noir : un
      souffle dont le volume ne dépend que de la distance. Sans son (le jeu
      n'en a pas encore, cf. feuille de route), c'est le HUD qui le porte —
@@ -343,8 +435,8 @@ const CFG = {
      en décision irréversible, sans jamais tuer par surprise. Elles ne sont
      posées que sur des cellules dont le retrait laisse la sortie atteignable
      (même contrôle que les GAP), sinon un joueur pouvait s'enfermer. */
-  GAP_COUNT: 7,
-  CRACK_COUNT: 7,
+  GAP_COUNT: 9,
+  CRACK_COUNT: 9,   /* 9 et non 7 : la surface a monté de 60 %, les dangers de 29 %. La densité de trous BAISSE donc d'un tiers — c'est la moitié « pas plus difficile » du 396. */
   /* ⚠️ CE NOMBRE EST CALCULÉ, PAS CHOISI, et la première version était FAUSSE.
      Traverser une cellule prend CELL / WALK_SPEED = 6 / 7,2 = 833 ms en marche
      et 526 ms en course. À 620 ms — la valeur d'origine — une dalle fêlée
@@ -425,13 +517,86 @@ const CFG = {
   BEACON_PULSE: 0.9,        // battements par seconde
 
   /* ======================================================================
+     ZIP 396 — LE PARVIS DE RENONCEMENT ET LA HERSE
+     ----------------------------------------------------------------------
+     Demande de Guillaume, mot pour mot : « au début du labyrinthe, quand on se
+     retourne on doit voir une plateforme qui si on l'emprunte nous ramène
+     directe dans le maze world. Comme un abandon sans coût. Mais on ne peut
+     faire ça que dans les 15 premières secondes : une porte se referme après
+     et nous force à avancer. »
+
+     ⚠️ ELLE RÉPARE AUSSI UN VRAI TROU, trouvé en cherchant où la poser. Le
+     générateur OUVRE le mur sud de la cellule d'entrée (rules.js /
+     buildBoxes / openWall) pour faire une porte — et rien ne fermait derrière.
+     Un joueur qui reculait franchissait donc cette porte, sortait de la
+     grille, et se retrouvait sur le VIDE : handleFloor ne traite que les
+     cellules valides, il n'y avait donc ni sol, ni chute, ni sortie. On
+     flottait au-dessus du lac, indéfiniment. La plateforme comble exactement
+     ce trou, et la herse le referme.
+
+     LE DÉCOMPTE PART AU PREMIER PAS, réponse explicite de Guillaume. Les 15 s
+     ne commencent donc pas à l'apparition de la scène : on peut regarder
+     autour de soi, lire le HUD, comprendre où l'on est. L'horloge démarre
+     quand le fermier a réellement bougé (ABANDON_START_DIST), ce qui est aussi
+     ce que fait un joueur qui a décidé de jouer.
+
+     LA HERSE EST UNE BOÎTE DE COLLISION COMME LES AUTRES : elle s'ajoute à la
+     liste de Rules.buildBoxes() quand elle est tombée, donc le moteur l'arrête
+     et world.js la dessine, par le même chemin que tous les murs. Un mur
+     visible qu'on traverse reste impossible par construction. */
+  /* ======================================================================
+     ZIP 396 — LA ROTONDE, LA SALLE CENTRALE CIRCULAIRE
+     ----------------------------------------------------------------------
+     Demande de Guillaume, avec une image de référence : « je veux une salle
+     centrale circulaire avec escaliers ». On y relève, et on reprend :
+       * un mur COURBE en gros blocs khaki, avec une torche murale tous les
+         quelques mètres, sur deux hauteurs ;
+       * un sol EN CONTREBAS, atteint par un escalier de pierre large ;
+       * le ciel violet visible par-dessus : c'est la seule vue dégagée ;
+       * des orbes qui flottent au-dessus du sol.
+
+     ⚠️ ELLE EST TOUJOURS AU CENTRE ET TOUJOURS IDENTIQUE, à l'inverse de tout
+     le reste du dédale. C'est ce qui en fait un REPÈRE : le seul endroit dont
+     un joueur puisse dire « je suis déjà passé par là ». Sans point fixe, un
+     labyrinthe aléatoire ne produit pas de l'exploration mais de l'errance,
+     et l'errance ne fait pas de souvenirs.
+
+     Sa taille est IMPAIRE pour qu'elle ait une cellule centrale franche.
+     À 5 cellules de 11,5, elle fait 57 unités de diamètre — trente fermiers
+     de front, une place de village. */
+  ROTUNDA_CELLS: 5,         // côté de la salle, en cellules (impair)
+  ROTUNDA_BLOCK: 2.4,       // taille d'un bloc du mur rond : c'est la « résolution » du cercle
+  ROTUNDA_RIM: 7.0,         // largeur du pourtour plat, avant le premier gradin
+  ROTUNDA_RINGS: 3,         // nombre de gradins
+  ROTUNDA_DROP: 1.17,       // hauteur d'un gradin — 3 gradins = 3,51 de fond
+  ROTUNDA_STAIR_W: 7.5,     // largeur de l'escalier nord-sud
+  ROTUNDA_STEP: 1.55,       // profondeur d'une marche
+  /* ⚠️ 0,27 N'EST PAS CHOISI : il est CALCULÉ pour que l'escalier arrive au
+     même niveau que le dernier gradin. Le rayon utile vaut (5×11,5)/2 - 1 - 7 =
+     20,75 unités, soit 13 marches de 1,55 ; 13 × 0,27 = 3,51 = 3 × ROTUNDA_DROP.
+     Si l'un des quatre nombres bouge sans les autres, l'escalier débouche sur
+     une marche fantôme au milieu de la salle. tools/verify-maze.mjs le
+     contrôle, justement parce que c'est invisible en relisant. */
+  ROTUNDA_STEP_H: 0.27,     // ... et sa hauteur
+  ROTUNDA_TORCHES: 14,      // torches murales de la couronne, par étage
+  ROTUNDA_SHARDS: 5,        // éclats posés au fond : la récompense de la descente
+
+  PLATFORM_LEN: 15.0,       // longueur de la plateforme au sud de l'entrée
+  PLATFORM_DROP: 0.35,      // elle est légèrement plus basse que le dédale
+  ABANDON_MS: 15000,        // fenêtre de renoncement, à partir du premier pas
+  ABANDON_START_DIST: 1.2,  // distance à parcourir pour que l'horloge démarre
+  GATE_FALL_MS: 1100,       // durée de la chute de la herse
+  GATE_WARN_MS: 3500,       // ... et avertissement avant qu'elle tombe
+  GATE_TEETH: 7,            // barreaux de la herse
+
+  /* ======================================================================
      LES ÉCLATS — ce qu'on rapporte
      ----------------------------------------------------------------------
      Équivalent des bonbons du défi : ramassés pendant la partie, convertis
      en or par la ferme au retour, et gardés MÊME en cas de mort (décision
      Guillaume : « comme le défi de fuite »). Le plafond LAB_MAX_SHARDS côté
      ferme est ce qui empêche un message aberrant d'injecter une fortune. */
-  SHARD_COUNT: 22,
+  SHARD_COUNT: 34,
   SHARD_SPIN: 1.8,          // rad/s
   SHARD_BOB: 0.22,
 
@@ -474,6 +639,50 @@ const CFG = {
   IDLE_BREATH: 0.030,       // respiration au repos (échelle du torse)
   IDLE_SWAY: 0.045,         // balancement au repos, rad
 
+  /* ======================================================================
+     ZIP 396 — LES QUATRE ANGLES QUI RÉPARENT « l'épée rentre dans le corps »
+     ----------------------------------------------------------------------
+     Ils ne sont pas décoratifs : ce sont les quatre écartements qui tiennent
+     la lame et le flambeau LOIN du buste. tools/verify-rig.mjs les vérifie en
+     construisant le vrai squelette et en testant les volumes deux à deux : si
+     quelqu'un les remet à zéro un jour, l'outil échoue au lieu de laisser la
+     pointe repasser par le crâne.
+
+     TORCH_TILT est une inclinaison RÉSIDUELLE : poseFarmer annule d'abord
+     l'angle cumulé du bras gauche, puis ajoute celle-ci. La torche penche donc
+     toujours de 0,18 rad vers l'avant, quelle que soit la pose du bras. */
+  /* ⚠️ LA HAUTEUR DU BASSIN, ET POURQUOI ELLE ARRIVE ICI AU 396.
+     Elle valait 1,02 et elle était ÉCRITE DEUX FOIS dans rig.js — une fois
+     dans buildFarmer (la position du joint), une fois dans poseFarmer (la
+     ligne du rebond). Deux descriptions d'une même chose : la leçon du 387,
+     dans le fichier même qui la cite.
+
+     Et elle était FAUSSE. En cinématique directe, le point le plus bas des
+     bottes tombait à y = -0,41 : le fermier avait les pieds enfoncés d'un
+     tiers d'unité SOUS la dalle, en permanence, depuis le 395. Personne ne
+     pouvait le voir en relisant — chaque segment pris séparément avait la
+     bonne longueur, c'est leur SOMME qui dépassait. tools/verify-rig.mjs le
+     trouve à sa neuvième question, qui ne lit aucune longueur : « aucun pied
+     ne s'enfonce sous le sol ? ». */
+  FARMER_HIP_Y: 1.40,       // hauteur du bassin au repos (1,02 au 395 : les pieds passaient sous la dalle)
+
+  TORCH_TILT: -0.18,        // rad — inclinaison du flambeau, après annulation du bras
+  ARM_OUT_GUARD: 0.30,      // rad — écartement du bras d'épée au repos (vers l'extérieur)
+  ARM_OUT_SWING: 0.16,      // rad — ... pendant le coup, où le bras passe plus haut
+  BLADE_OUT: 0.22,          // rad — la lame s'écarte encore de la jambe droite
+
+  /* ======================================================================
+     ZIP 396 — LA MORT D'UN RÔDEUR SE VOIT
+     ----------------------------------------------------------------------
+     Demande de Guillaume : « on sait pas quand on gagne (…) animation de
+     désintégration et aspiration par le haut du monstre vaincu ». La créature
+     ne s'affaisse plus : elle se défait en ses six membres, qui montent en
+     tournant et s'effacent en fin de course. La montée est ACCÉLÉRÉE (en k²)
+     — c'est ce qui distingue « aspiré » de « soulevé ». */
+  KILL_VANISH_MS: 1500,     // durée totale de la désintégration
+  KILL_RISE: 7.0,           // hauteur dont le corps monte pendant ce temps
+  KILL_MOTES: 16,           // éclats qui montent avec lui (world.js)
+
   /* L'ATTAQUE EN TROIS TEMPS. Un coup d'épée qui n'est qu'un balayage n'a
      aucun poids : c'est l'ARMÉ qui donne la force, et la RÉCUPÉRATION qui
      donne le contrecoup. Les trois fractions se rapportent à SWING_MS. */
@@ -491,9 +700,62 @@ const CFG = {
   CAM_DIST: 7.6,
   CAM_HEIGHT: 4.4,
   CAM_LOOK_H: 2.2,
-  CAM_LAG: 9.0,             // suivi (plus grand = plus rigide)
+  CAM_LAG: 9.0,             // suivi en POSITION (plus grand = plus rigide)
   CAM_MIN_DIST: 2.2,        // distance minimale quand un mur pousse la caméra
-  CAM_SHAKE_HURT: 0.35,
+  /* ⚠️ DIVISÉ PAR DEUX AU 396. Retour de Guillaume : « la caméra bouge trop ».
+     Une secousse de 0,35 unité à chaque coup reçu, sur une caméra déjà collée
+     au personnage, se lit comme une perte de contrôle plutôt que comme un
+     impact. 0,18 se sent encore et ne désoriente plus. */
+  CAM_SHAKE_HURT: 0.18,
+
+  /* ======================================================================
+     ZIP 396 — LA CAMÉRA N'EST PLUS SOUDÉE AU CAP
+     ----------------------------------------------------------------------
+     Retour de Guillaume : « la caméra bouge trop, difficile à naviguer pour
+     un simple clavier ». Le défaut n'était pas la vitesse de rotation mais le
+     COUPLAGE : la caméra se plaçait à `CAM_DIST` derrière le cap COURANT du
+     fermier, donc le moindre appui sur une flèche faisait pivoter tout le
+     décor immédiatement et à la même vitesse que le personnage. Le lissage de
+     position du 395 n'y pouvait rien — il lissait un point qui, lui, tournait
+     déjà en bloc.
+
+     Trois réglages, et ils travaillent ensemble :
+
+       * CAM_ANG_LAG : la caméra a désormais SON PROPRE CAP, qui rattrape
+         celui du fermier de façon exponentielle. On voit donc le fermier
+         tourner DANS le cadre avant que le cadre ne tourne, ce qui est
+         exactement ce qu'on veut ressentir ;
+       * CAM_ANG_DEAD : en dessous de cet écart, la caméra ne bouge PAS du
+         tout. C'est elle qui supprime le frémissement permanent des petites
+         corrections de trajectoire ;
+       * CAM_FOV : 74° était très large. Un champ large amplifie tout
+         mouvement de rotation sur les bords de l'image — c'est le mécanisme
+         du mal des transports en jeu. 66° calme sans rétrécir le couloir de
+         façon perceptible (les murs font 11 unités et la caméra est à 4,4). */
+  CAM_ANG_LAG: 3.6,         // rattrapage du cap de la caméra, par seconde
+  CAM_ANG_DEAD: 0.11,       // rad — en deçà, la caméra ne bouge pas
+  CAM_FOV: 66,              // degrés (74 au 395)
+
+  /* ======================================================================
+     ZIP 396 — LE RECALAGE SUR LE COULOIR
+     ----------------------------------------------------------------------
+     Seconde moitié de la réponse à « difficile à naviguer pour un simple
+     clavier ». Le dédale est à angles droits ; un joueur au clavier, lui, ne
+     lâche jamais sa flèche pile sur l'axe. Il avance donc en biais, frotte un
+     mur, corrige, frotte l'autre — et c'est CE frottement permanent qui rend
+     la conduite pénible, pas la vitesse de rotation.
+
+     Quand aucune flèche de rotation n'est enfoncée ET que le fermier avance,
+     son cap glisse doucement vers le multiple de 90° le plus proche, mais
+     SEULEMENT s'il en est déjà proche (SNAP_WINDOW). Au-delà, on ne touche à
+     rien : le joueur qui vise délibérément en diagonale (pour frapper une
+     créature de biais, par exemple) garde la main.
+
+     ⚠️ C'EST UNE RÈGLE, donc elle vit dans rules.js et pas dans world.js. Un
+     recalage fait au rendu aurait fait diverger l'affichage du moteur, et
+     tous les outils auraient continué de mesurer l'ancien jeu. */
+  SNAP_WINDOW: 0.42,        // rad — écart max au multiple de 90° pour que le recalage agisse
+  SNAP_SPEED: 1.9,          // rad/s — vitesse du recalage (bien plus lent que TURN_SPEED)
 
   /* ======================================================================
      PALETTE — RECOPIÉE de public/templerun/js/config.js
@@ -602,17 +864,17 @@ const CFG = {
 
    ⚠️ VALEURS ISSUES DU BALAYAGE DE tools/tune-maze.mjs. Ne pas les « arrondir ».
    ========================================================================== */
-CFG.MAZE_BRAID = 0.30;      // part des culs-de-sac rouverts (0 = labyrinthe parfait)
-CFG.MAZE_ROOMS = 3;         // salles creusées dans le dédale (respirations + repères)
+CFG.MAZE_BRAID = 0.36;      // part des culs-de-sac rouverts (0 = labyrinthe parfait)
+CFG.MAZE_ROOMS = 4;         // salles creusées dans le dédale (respirations + repères)
 CFG.MAZE_ROOM_MIN = 2;
 CFG.MAZE_ROOM_MAX = 4;
 /* La BANDE de longueur du plus court chemin entrée→sortie, en cellules. Les
    deux bornes comptent : sans la haute, 2 000 graines produisaient des trajets
    optimaux de 48 à 311 cellules, soit des parties de 3 à 20 minutes tirées au
    sort avant le premier pas. Voir le commentaire de make() dans maze.js. */
-CFG.MAZE_MIN_PATH = 32;
-CFG.MAZE_MAX_PATH = 56;
-CFG.MAZE_TORCHES = 14;      // brasiers ravivables posés dans tout le dédale
+CFG.MAZE_MIN_PATH = 40;
+CFG.MAZE_MAX_PATH = 64;
+CFG.MAZE_TORCHES = 20;      // brasiers ravivables posés dans tout le dédale
 CFG.TORCH_MAX_GAP = 8;     // ⚠️ garantie dure : jamais plus de N cellules sans brasier sur le chemin
 
 /* =============================================================================

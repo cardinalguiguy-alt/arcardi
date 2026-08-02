@@ -33,6 +33,25 @@ body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; co
 .stat.sword #swordIcon { font-size: 24px; opacity: .18; transition: opacity .25s; }
 .stat.sword #swordIcon.on { opacity: 1; color: #b9c2cc; }
 
+/* Le compte à rebours du renoncement (zip 396). Violet, comme tout ce qui est
+   une issue dans ce jeu — les trous, le phare, la passerelle. Il passe au
+   rouge dans les trois dernières secondes, en même temps que la herse se met
+   à trembler : deux signaux pour le même fait, l'un dans le monde, l'autre
+   dans le HUD. */
+.stat.back { display: none; }
+.stat.back.on { display: flex; }
+.stat.back span:last-child { color: #c9a4ff; }
+.stat.back.urgent span:last-child { color: #ff7a7a; animation: blink .5s steps(2) infinite; }
+@keyframes blink { to { opacity: .35; } }
+
+/* L'écran de chargement. Trois carrés qui pulsent : pas de rotation, pas de
+   dégradé, rien qui ne soit du pixel franc — c'est la grammaire du site. */
+.spin { display: flex; gap: 8px; margin-bottom: 18px; }
+.spin i { width: 14px; height: 14px; background: #ff9a3c; display: block; animation: pulse 1s infinite; }
+.spin i:nth-child(2) { animation-delay: .16s; background: #c9a4ff; }
+.spin i:nth-child(3) { animation-delay: .32s; }
+@keyframes pulse { 0%, 100% { opacity: .25; transform: translateY(0); } 45% { opacity: 1; transform: translateY(-7px); } }
+
 .flame { margin-top: 12px; width: 230px; }
 .flame-label { font-size: 11px; letter-spacing: .16em; opacity: .62; margin-bottom: 4px; }
 .flame-bar { height: 9px; background: rgba(255,255,255,.10); border-radius: 5px; overflow: hidden; }

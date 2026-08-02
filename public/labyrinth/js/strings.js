@@ -51,6 +51,14 @@ const LAB_STR = {
     tipStalker: "Quelque chose s'est mis en marche, quelque part au nord.",
     tipPotion: "Un champignon de suif : un cœur retrouvé.",
 
+    /* ZIP 396 — le renoncement, la herse, et l'écran de chargement. */
+    tipPlatform: "Derrière toi, une passerelle : tu peux repartir sans rien risquer.",
+    tipGateWarn: "La herse tremble au-dessus de la porte.",
+    tipGateShut: "La herse est tombée. Il n'y a plus qu'à avancer.",
+    hBack: "RETOUR",
+    loading: "Le labyrinthe se construit…",
+    cBack: "Faire demi-tour dans les 15 premières secondes pour repartir sans rien perdre",
+
     overTitle: "Le labyrinthe t'a gardé",
     overFall: "Tu es passé à travers la dalle. Le lac t'attendait dessous.",
     overRoamer: "Une créature a eu raison de toi.",
@@ -98,6 +106,14 @@ const LAB_STR = {
     tipCrack: "The slab is cracking under you. Do not stand still.",
     tipStalker: "Something started moving, somewhere to the north.",
     tipPotion: "A tallow mushroom: one heart back.",
+
+    /* ZIP 396 — giving up, the portcullis, and the loading screen. */
+    tipPlatform: "There is a walkway behind you: you can still leave, free of charge.",
+    tipGateWarn: "The portcullis is shaking above the doorway.",
+    tipGateShut: "The portcullis is down. The only way now is forward.",
+    hBack: "WAY BACK",
+    loading: "Building the labyrinth…",
+    cBack: "Turn back within the first 15 seconds to leave with nothing lost",
 
     overTitle: "The labyrinth kept you",
     overFall: "You went through the slab. The lake was waiting underneath.",

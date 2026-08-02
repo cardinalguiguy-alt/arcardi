@@ -249,33 +249,68 @@ const Paint = (function () {
      dessous. On peint donc clair sur clair, en spirales concentriques
      décalées, avec des crêtes presque blanches.
      -------------------------------------------------------------------- */
-  function lake(ctx, cfg, W, H) {
-    ctx.fillStyle = hex(cfg.COL_LAKE);
-    ctx.fillRect(0, 0, W, H);
-    // Volutes : des anneaux carrés décalés, de plus en plus clairs vers le
-    // centre. En pixel franc, un anneau carré se lit comme un tourbillon dès
-    // qu'il tourne (l'offset de texture est animé dans world.js).
-    const rings = 14;
-    for (let r = rings; r > 0; r--) {
-      const t = r / rings;
-      const s = W * 0.5 * t;
-      const cx = W / 2 + Math.sin(r * 1.7) * W * 0.06;
-      const cy = H / 2 + Math.cos(r * 2.3) * H * 0.06;
-      const col = mix(cfg.COL_LAKE_GLOW, cfg.COL_LAKE_BRIGHT, 1 - t);
-      ctx.fillStyle = hex(col);
-      const th = Math.max(2, W / 46);
-      ctx.fillRect(cx - s, cy - s, s * 2, th);
-      ctx.fillRect(cx - s, cy + s - th, s * 2, th);
-      ctx.fillRect(cx - s, cy - s, th, s * 2);
-      ctx.fillRect(cx + s - th, cy - s, th, s * 2);
+  /* -----------------------------------------------------------------------
+     ⚠️ L'EAU DU LAC — REPRISE À L'IDENTIQUE DU DÉFI DE FUITE. ZIP 396.
+     -----------------------------------------------------------------------
+     Retour de Guillaume : « le rendu de l'eau du lac n'est pas convaincant.
+     Copie simplement ce qu'il y a dans le endless run. C'est la texture
+     parfaite. »
+
+     CE QU'IL Y AVAIT AVANT, ET POURQUOI ÇA NE POUVAIT PAS MARCHER. La version
+     du 394 peignait quatorze ANNEAUX CARRÉS concentriques, répétés dix fois
+     par dix sur un plan de 414 unités. Un anneau carré répété en grille ne se
+     lit pas comme un tourbillon : il se lit comme un circuit imprimé, et c'est
+     très exactement ce qu'on voit sur la capture de Guillaume. Le motif était
+     en plus CENTRÉ sur sa tuile, donc la répétition sautait aux yeux — le
+     défaut qu'une somme de sinus n'a jamais.
+
+     CE QUI EST RECOPIÉ, ligne pour ligne, de paintLakeWaves() dans
+     public/templerun/js/world.js :
+       * une somme de TROIS sinus, en x, en y et en diagonale ;
+       * des périodes qui DIVISENT la taille de la tuile (3, 2 et 5 pour 128) —
+         c'est ce qui fait que la texture se répète sans couture, condition
+         indispensable avec RepeatWrapping ;
+       * une puissance 3,2 sur le mélange : crêtes fines, creux larges. C'est
+         cette courbe-là qui fait « eau » plutôt que « damier flou » ;
+       * les deux mêmes couleurs, COL_LAKE pour le creux et COL_LAKE_GLOW pour
+         la crête — toutes deux dans la palette COMMUNE aux deux jeux, donc
+         contrôlées par tools/verify-palette.mjs.
+
+     ⚠️ ET LA RÈGLE DU `fillRect` SEUL EST INTACTE. Le défi de fuite écrit sa
+     houle avec getImageData / putImageData ; ici c'est interdit, et pour une
+     bonne raison — c'est ce refus qui fait tout le contrôle de
+     tools/smoke-render.mjs. On peint donc pixel par pixel, 16 384 fillRect de
+     1×1, UNE SEULE FOIS à la construction de la scène. Le résultat est le
+     même au bit près, et aucun outil n'a été affaibli pour l'obtenir.
+     Affaiblir un contrôle pour faire passer une texture, c'est perdre le
+     contrôle et garder la texture.
+     -------------------------------------------------------------------- */
+  function lakeWaves(ctx, cfg, W, H, seedPhase, deepCol, crestCol) {
+    const S = Math.min(W, H);
+    const dr = (deepCol >> 16) & 255, dg = (deepCol >> 8) & 255, db = deepCol & 255;
+    const gr = (crestCol >> 16) & 255, gg = (crestCol >> 8) & 255, gb = crestCol & 255;
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const a = Math.sin((x / S) * Math.PI * 2 * 3 + seedPhase);
+        const b = Math.sin((y / S) * Math.PI * 2 * 2 - seedPhase * 1.7);
+        const c = Math.sin(((x + y) / S) * Math.PI * 2 * 5 + seedPhase * 0.5);
+        let k = (a * 0.45 + b * 0.35 + c * 0.20 + 1) / 2;
+        k = Math.pow(k, 3.2);                 // crêtes fines, creux larges
+        const r = (dr + (gr - dr) * k) | 0;
+        const g = (dg + (gg - dg) * k) | 0;
+        const bl = (db + (gb - db) * k) | 0;
+        ctx.fillStyle = hex((r << 16) | (g << 8) | bl);
+        ctx.fillRect(x, y, 1, 1);
+      }
     }
-    // Écume : quelques éclats presque blancs, c'est ce qui fait « ça bouge ».
-    for (let i = 0; i < 26; i++) {
-      const u = Math.max(2, W / 40);
-      ctx.fillStyle = hex(cfg.COL_LAKE_BRIGHT);
-      ctx.fillRect(noise(i * 13) * (W - u), noise(i * 29) * (H - u), u, u * 0.6);
-    }
+    void cfg;
   }
+  /* Les deux appels du jeu. La seconde nappe a une PHASE différente (2,1) et
+     défile plus lentement à une autre échelle : c'est le décalage entre les
+     deux qui produit le miroitement, et aucune des deux textures ne le
+     contient. Même astuce que deux calques de nuages, et ça coûte deux plans. */
+  function lake(ctx, cfg, W, H) { lakeWaves(ctx, cfg, W, H, 0, cfg.COL_LAKE, cfg.COL_LAKE_GLOW); }
+  function lakeGlow(ctx, cfg, W, H) { lakeWaves(ctx, cfg, W, H, 2.1, cfg.COL_LAKE, cfg.COL_LAKE_GLOW); }
 
   /* -----------------------------------------------------------------------
      LA FLAMME. Quatre découpes, reprises du défi de fuite.
@@ -374,7 +409,60 @@ const Paint = (function () {
     }
   }
 
-  return { wall, floor, sky, lake, flame, wood, rune, halo, noise, mix, hex };
+  /* -----------------------------------------------------------------------
+     LES CHIFFRES QUI MONTENT (zip 396) — une fonte 3×5 peinte au fillRect.
+     -----------------------------------------------------------------------
+     Guillaume : « on sait pas quand on gagne ». Un « +60 » qui monte de
+     l'endroit exact où la créature tombe le dit sans faire lever les yeux vers
+     le HUD, et c'est là toute la différence : au moment où on gagne un
+     échange, on regarde la créature, pas le coin de l'écran.
+
+     ⚠️ POURQUOI PAS DU TEXTE DU NAVIGATEUR. `fillText` est interdit par la
+     règle du fillRect seul (et smoke-render.mjs le refuserait), mais ce n'est
+     pas la vraie raison — la vraie raison est que tout le graphisme du site
+     est GÉNÉRÉ, jusqu'aux lettres. Une police de système au milieu d'un décor
+     en pixels francs se voit immédiatement.
+
+     Chaque glyphe est cerné de noir : posé sur un halo violet ou une flamme
+     orange, un chiffre clair sans cerne disparaît (leçon du 388 — deux masses
+     de même couleur qui se touchent n'en font qu'une).
+     -------------------------------------------------------------------- */
+  const GLYPH = {
+    "0": ["111", "101", "101", "101", "111"],
+    "1": ["010", "110", "010", "010", "111"],
+    "2": ["111", "001", "111", "100", "111"],
+    "3": ["111", "001", "111", "001", "111"],
+    "4": ["101", "101", "111", "001", "001"],
+    "5": ["111", "100", "111", "001", "111"],
+    "6": ["111", "100", "111", "101", "111"],
+    "7": ["111", "001", "010", "010", "010"],
+    "8": ["111", "101", "111", "101", "111"],
+    "9": ["111", "101", "111", "001", "111"],
+    "+": ["000", "010", "111", "010", "000"],
+  };
+  function number(ctx, cfg, W, H, text, color) {
+    const s = String(text);
+    const cw = 4, ch = 5;                       // 3 colonnes + 1 d'espace
+    const px = Math.max(1, Math.floor(Math.min(W / (s.length * cw + 2), H / (ch + 2))));
+    const ox = ((W - s.length * cw * px) / 2) | 0;
+    const oy = ((H - ch * px) / 2) | 0;
+    for (let pass = 0; pass < 2; pass++) {
+      ctx.fillStyle = pass === 0 ? "#000000" : hex(color);
+      for (let i = 0; i < s.length; i++) {
+        const g = GLYPH[s[i]];
+        if (!g) continue;
+        for (let r = 0; r < ch; r++) for (let c = 0; c < 3; c++) {
+          if (g[r][c] !== "1") continue;
+          const x = ox + (i * cw + c) * px, y = oy + r * px;
+          if (pass === 0) ctx.fillRect(x - px, y - px, px * 3, px * 3);  // cerne
+          else ctx.fillRect(x, y, px, px);
+        }
+      }
+    }
+    void cfg;
+  }
+
+  return { wall, floor, sky, lake, lakeGlow, lakeWaves, number, flame, wood, rune, halo, noise, mix, hex };
 })();
 
 if (typeof module === "object" && module.exports) module.exports = { Paint };

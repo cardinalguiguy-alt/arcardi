@@ -76,6 +76,46 @@ const Maze = (function () {
     const idx = (x, y) => y * G + x;
     const inside = (x, y) => x >= 0 && y >= 0 && x < G && y < G;
 
+    /* ==================================================================
+       LA MAÇONNERIE DE LA ROTONDE, DÉCIDÉE AVANT TOUT CREUSEMENT (zip 396).
+       ------------------------------------------------------------------
+       ⚠️ CET ORDRE EST LA CORRECTION LA PLUS COÛTEUSE DU CHANTIER, et elle a
+       été trouvée en MESURANT, jamais en relisant.
+
+       Première version : on creusait le dédale, PUIS on retirait les cellules
+       de la rotonde qui tombent hors de son cercle. Chaque ligne était juste.
+       Le résultat ne l'était pas — un dédale creusé en profondeur est un
+       ARBRE, et dans un arbre presque toute cellule est un point
+       d'articulation. Retirer douze cellules d'un coup en détachait douze
+       sous-arbres : sur la graine 1, la moitié du labyrinthe (140 cellules sur
+       277) devenait inaccessible depuis l'entrée, et le taux de sortie tombait
+       de 78 % à 25 %.
+
+       La parade est celle qui vaut partout : on ne répare pas après, on pose
+       la contrainte AVANT. Les cellules de pierre sont marquées ici ; le
+       creusement, le tressage, les salles et la rotonde elle-même les évitent
+       tous. La connexité ne peut donc plus se casser — elle n'a jamais eu
+       l'occasion d'exister à travers eux.
+
+       CE QUI EST DE LA PIERRE : toute cellule du carré central dont le centre
+       tombe à moins de 0,30 cellule du mur rond. Les blocs de la couronne font
+       ROTUNDA_BLOCK de côté, donc leur face intérieure peut mordre un
+       demi-bloc en deçà du rayon nominal ; sans cette marge, le fermier (rayon
+       BODY_R) est poussé dehors en permanence et s'y coince. */
+    const RWc = cfg.ROTUNDA_CELLS;
+    const rx0c = ((G - RWc) / 2) | 0, ry0c = ((G - RWc) / 2) | 0;
+    const solid = new Uint8Array(G * G);
+    {
+      const radW = (RWc * cfg.CELL) / 2 - cfg.WALL / 2;
+      const ccxW = (rx0c + RWc / 2) * cfg.CELL, cczW = (ry0c + RWc / 2) * cfg.CELL;
+      for (let y = ry0c; y < ry0c + RWc; y++) for (let x = rx0c; x < rx0c + RWc; x++) {
+        const px = (x + 0.5) * cfg.CELL, pz = (y + 0.5) * cfg.CELL;
+        if (Math.hypot(px - ccxW, pz - cczW) <= radW - cfg.CELL * 0.30) continue;
+        solid[idx(x, y)] = 1;
+      }
+    }
+    const isSolid = (x, y) => solid[idx(x, y)] === 1;
+
     function link(x, y, d) {
       const nx = x + DX[d], ny = y + DY[d];
       if (!inside(nx, ny)) return false;
@@ -100,6 +140,9 @@ const Maze = (function () {
        genre de panne qu'on met une heure à comprendre. */
     const stack = [[(G / 2) | 0, G - 1]];
     const seen = new Uint8Array(G * G);
+    // La pierre de la rotonde est marquée « déjà vue » : le creusement ne
+    // l'atteindra donc jamais, et aucun passage n'y mènera.
+    for (let i = 0; i < seen.length; i++) if (solid[i]) seen[i] = 1;
     seen[idx(stack[0][0], stack[0][1])] = 1;
     while (stack.length) {
       const [x, y] = stack[stack.length - 1];
@@ -134,7 +177,8 @@ const Maze = (function () {
       const roll = rand();
       const pick = rand();
       if (roll > cfg.MAZE_BRAID) continue;
-      const closed = DIRS.filter(d => !linked(x, y, d) && inside(x + DX[d], y + DY[d]));
+      const closed = DIRS.filter(d => !linked(x, y, d) && inside(x + DX[d], y + DY[d])
+        && !isSolid(x + DX[d], y + DY[d]));
       if (!closed.length) continue;
       link(x, y, closed[(pick * closed.length) | 0]);
     }
@@ -158,11 +202,58 @@ const Maze = (function () {
       const rx = 2 + ((rand() * (G - w - 4)) | 0);
       const ry = 2 + ((rand() * (G - h - 4)) | 0);
       for (let y = ry; y < ry + h; y++) for (let x = rx; x < rx + w; x++) {
-        if (x + 1 < rx + w) link(x, y, E);
-        if (y + 1 < ry + h) link(x, y, S);
+        if (isSolid(x, y)) continue;   // une salle ne perce pas la rotonde
+        if (x + 1 < rx + w && !isSolid(x + 1, y)) link(x, y, E);
+        if (y + 1 < ry + h && !isSolid(x, y + 1)) link(x, y, S);
       }
       rooms.push({ x: rx, y: ry, w, h });
     }
+
+    /* ------------------------------------------------------------------
+       3 bis. LA ROTONDE (zip 396) — la salle centrale circulaire.
+       ------------------------------------------------------------------
+       Demande de Guillaume, image de référence à l'appui : « je veux une
+       salle centrale circulaire avec escaliers ».
+
+       Elle est TOUJOURS là, TOUJOURS au centre, TOUJOURS de la même taille.
+       C'est le contraire de tout le reste du générateur, et c'est délibéré :
+       un labyrinthe entièrement aléatoire n'a aucun point de repère, donc
+       aucun souvenir. La rotonde est le seul endroit dont on puisse dire
+       « j'y suis déjà passé », et c'est ce qui transforme une errance en
+       exploration. Elle est aussi le seul lieu à ciel ouvert, la seule vue
+       dégagée, et le seul endroit où l'on peut souffler.
+
+       ⚠️ ELLE SE CREUSE COMME UNE SALLE, c'est-à-dire APRÈS le dédale, en
+       abattant des murs internes. La connexité ne peut donc que s'améliorer.
+       Sa géométrie ronde, elle, n'est pas ici : elle vit dans les BOÎTES
+       (Rules.buildBoxes), parce que le mur circulaire doit être exactement
+       ce qui arrête le joueur — une salle ronde dessinée sur une pièce carrée
+       est un mur qu'on traverse, et c'est le défaut qu'on refuse depuis le 393.
+
+       Sa taille est IMPAIRE pour qu'elle ait une cellule centrale franche, où
+       poser le brasier et le fût de lumière. */
+    const RW = RWc, rx0 = rx0c, ry0 = ry0c;
+    for (let y = ry0; y < ry0 + RW; y++) for (let x = rx0; x < rx0 + RW; x++) {
+      if (isSolid(x, y)) continue;
+      if (x + 1 < rx0 + RW && !isSolid(x + 1, y)) link(x, y, E);
+      if (y + 1 < ry0 + RW && !isSolid(x, y + 1)) link(x, y, S);
+    }
+    /* ⚠️ ON LUI GARANTIT QUATRE PORTES, une par côté, et ce n'est pas du
+       confort : le creusement peut parfaitement n'attacher la zone centrale
+       au reste que par un seul couloir. Une rotonde en cul-de-sac serait un
+       détour pur, or on veut qu'elle soit un CARREFOUR — l'endroit où l'on
+       revient, où l'on choisit, où l'on se réoriente. Quatre portes en font
+       un vrai nœud du dédale. */
+    const rc = (RW / 2) | 0;
+    const doors = [
+      [rx0 + rc, ry0, N], [rx0 + rc, ry0 + RW - 1, S],
+      [rx0, ry0 + rc, W], [rx0 + RW - 1, ry0 + rc, E],
+    ];
+    for (const [dx2, dy2, d] of doors) {
+      const nx = dx2 + DX[d], ny = dy2 + DY[d];
+      if (inside(nx, ny)) link(dx2, dy2, d);
+    }
+    const rotunda = { x: rx0, y: ry0, w: RW, h: RW, cx: rx0 + rc, cy: ry0 + rc };
 
     /* ------------------------------------------------------------------
        4. ENTRÉE ET SORTIE.
@@ -240,7 +331,7 @@ const Maze = (function () {
     }
 
     return {
-      seed, G, cells, rooms, entry, exit, path,
+      seed, G, cells, rooms, rotunda, entry, exit, path,
       dEntry, dExit, pathLen: bestD,
       idx, inside, linked,
       // exposés pour les outils ET pour le monde 3D : une seule description
@@ -274,15 +365,23 @@ const Maze = (function () {
      enfermé sans faute de sa part. Le test garantit qu'il reste toujours une
      route, même si toutes les dalles fêlées du labyrinthe sont tombées.
      ======================================================================= */
-  function reachable(m, blocked) {
+  /* ⚠️ LE BUT EST DEVENU UN PARAMÈTRE AU 396, et ce n'est pas de la
+     généralisation gratuite. Un trou n'a plus seulement à laisser la SORTIE
+     atteignable : il doit aussi laisser LA ROTONDE atteignable. Mesuré, sans
+     ce second appel : 2 % des dédales enfermaient la salle centrale derrière
+     les trous — c'est-à-dire qu'une partie sur cinquante ne montrait jamais
+     au joueur la seule chose qu'on ait construite pour être vue. Un contenu
+     qu'on peut ne jamais rencontrer n'est pas une surprise, c'est une perte. */
+  function reachable(m, blocked, target) {
     const { G, idx, linked, DIRS, DX, DY } = m;
+    const goal = target || m.exit;
     if (blocked.has(idx(m.entry.x, m.entry.y))) return false;
     const seen = new Uint8Array(G * G);
     seen[idx(m.entry.x, m.entry.y)] = 1;
     const q = [[m.entry.x, m.entry.y]];
     for (let h = 0; h < q.length; h++) {
       const [x, y] = q[h];
-      if (x === m.exit.x && y === m.exit.y) return true;
+      if (x === goal.x && y === goal.y) return true;
       for (const d of DIRS) {
         if (!linked(x, y, d)) continue;
         const nx = x + DX[d], ny = y + DY[d];
@@ -304,6 +403,23 @@ const Maze = (function () {
     for (const p of [m.entry, m.exit]) {
       bar(p.x, p.y);
       bar(p.x + 1, p.y); bar(p.x - 1, p.y); bar(p.x, p.y + 1); bar(p.x, p.y - 1);
+    }
+    /* ⚠️ AUCUN TROU DANS LA ROTONDE (zip 396), ET CE N'EST PAS UN CHOIX DE
+       CONFORT — C'EST UN TROU INVISIBLE QU'ON REFUSE.
+       -------------------------------------------------------------------
+       world.js/buildFloor ne dessine PAS le sol des cellules de la rotonde :
+       elle a le sien, en gradins (buildRotunda). Un trou posé là aurait donc
+       été parfaitement mortel et parfaitement INVISIBLE — pas de bord
+       déchiqueté, pas de lueur violette qui monte, rien. Mesuré : les chutes
+       passaient de 5 % à 17 % des fins de partie dès l'arrivée de la salle,
+       et aucune relecture ne pouvait le voir, chaque fichier ayant raison de
+       son côté.
+       C'est aussi cohérent avec ce que la salle EST : le seul refuge du
+       dédale. On y trouve du feu, on n'y meurt pas d'un pas de travers. */
+    if (m.rotunda) {
+      const R = m.rotunda;
+      for (let y = R.y - 1; y <= R.y + R.h; y++)
+        for (let x = R.x - 1; x <= R.x + R.w; x++) bar(x, y);
     }
     // Les trois premières cellules du chemin sont épargnées : tomber dans les
     // deux premières secondes de jeu n'apprend rien, ça donne juste envie
@@ -333,7 +449,9 @@ const Maze = (function () {
         if (avoidPath && onPath.has(j)) continue;
         if (!m.cells[j]) continue;                 // cellule murée de toutes parts : rien à percer
         blocked.add(j);
-        if (reachable(m, blocked)) list.push({ x, y });
+        if (reachable(m, blocked) &&
+            (!m.rotunda || reachable(m, blocked, { x: m.rotunda.cx, y: m.rotunda.cy })))
+          list.push({ x, y });
         else blocked.delete(j);                    // le trou coupait la sortie : refusé
       }
     }
@@ -505,6 +623,40 @@ const Maze = (function () {
     const roamers = placeRoamers(cfg, m, rand, holes.blocked, swordDepth);
     const shards = scatter(cfg, m, rand, holes.blocked, cfg.SHARD_COUNT, 2);
     const potions = scatter(cfg, m, rand, holes.blocked, cfg.POTION_COUNT, swordDepth + 2);
+
+    /* ==================================================================
+       LA ROTONDE EST DOTÉE À LA MAIN (zip 396), et c'est le seul endroit du
+       générateur où l'on pose quelque chose sans tirer au sort.
+
+       POURQUOI. Une salle qu'on descend doit RÉCOMPENSER la descente, sinon
+       elle n'est qu'un détour photogénique — et le joueur, qui l'apprend en
+       une visite, ne redescendra plus jamais. Elle reçoit donc :
+         * UN BRASIER en son centre, toujours. C'est le seul point du dédale
+           dont on sache, avant d'entrer, qu'on y retrouvera du feu. Ça en
+           fait un refuge, donc un but, donc un choix ;
+         * DES ÉCLATS sur les gradins du fond, qu'on ne ramasse qu'en
+           descendant vraiment.
+
+       ⚠️ ON RETIRE D'ABORD CE QUE LE TIRAGE AURAIT PU Y METTRE, pour ne pas
+       poser deux objets sur la même cellule — un éclat invisible sous un
+       brasier est un point qu'on ne comprend jamais avoir raté. */
+    if (m.rotunda) {
+      const R = m.rotunda;
+      const inRot = (o) => o.x >= R.x && o.x < R.x + R.w && o.y >= R.y && o.y < R.y + R.h;
+      const cj = m.idx(R.cx, R.cy);
+      for (let i = torches.length - 1; i >= 0; i--)
+        if (m.idx(torches[i].x, torches[i].y) === cj) torches.splice(i, 1);
+      torches.push({ x: R.cx, y: R.cy, spent: false, onPath: true, rotunda: true });
+
+      for (let i = shards.length - 1; i >= 0; i--) if (inRot(shards[i])) shards.splice(i, 1);
+      /* Les quatre cellules en croix autour du centre, plus le centre lui-
+         même s'il reste de la place : ce sont les seules du fond de la
+         cuvette, donc celles qu'on n'atteint qu'en descendant l'escalier. */
+      const spots = [[R.cx, R.cy - 1], [R.cx, R.cy + 1], [R.cx - 1, R.cy], [R.cx + 1, R.cy],
+                     [R.cx - 1, R.cy - 1], [R.cx + 1, R.cy + 1]];
+      for (let i = 0; i < Math.min(cfg.ROTUNDA_SHARDS, spots.length); i++)
+        shards.push({ x: spots[i][0], y: spots[i][1] });
+    }
 
     m.gaps = holes.gaps;
     m.cracks = holes.cracks;

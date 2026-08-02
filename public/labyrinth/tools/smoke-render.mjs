@@ -58,6 +58,11 @@ const FakeTHREE = {
   HemisphereLight: function () { return node("HemisphereLight"); },
   PlaneGeometry: function () { return node("PlaneGeometry"); },
   CylinderGeometry: function () { return node("CylinderGeometry"); },
+  /* Zip 396 : la rotonde. Un anneau pour son pourtour, des cylindres pour ses
+     gradins. Le faux Three.js doit connaître EXACTEMENT ce que le vrai code
+     appelle — une classe manquante ici ne signale pas une erreur du jeu, elle
+     fabrique une fausse alerte, ce qui est pire. */
+  RingGeometry: function () { return node("RingGeometry"); },
   OctahedronGeometry: function () { return node("OctahedronGeometry"); },
   MeshLambertMaterial: function (o) { return Object.assign(node("Lambert"), o || {}); },
   MeshBasicMaterial: function (o) { return Object.assign(node("Basic"), o || {}); },

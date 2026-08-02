@@ -48,7 +48,15 @@ export function load(files = ["js/config.js", "js/maze.js", "js/rules.js"]) {
   // `const` au niveau d'un script vm vit dans la portée lexicale du contexte,
   // pas sur l'objet global : on va le chercher par une expression. Motif repris
   // tel quel de public/templerun/tools/verify-fairness.js.
-  return vm.runInContext("({ CFG, Maze, Rules, Paint: typeof Paint !== \"undefined\" ? Paint : null, Rig: typeof Rig !== \"undefined\" ? Rig : null, World: typeof World !== \"undefined\" ? World : null })", ctx);
+  /* ⚠️ TOUT EST OPTIONNEL DEPUIS LE 396. verify-rig.mjs ne charge que
+     config.js et rig.js — il n'a rien à faire d'un labyrinthe — et
+     l'expression, qui nommait `Maze` et `Rules` en dur, jetait alors une
+     ReferenceError avant le premier contrôle. Un chargeur partagé doit rendre
+     ce qu'il trouve, pas exiger tout le jeu. */
+  const opt = (n) => `typeof ${n} !== "undefined" ? ${n} : null`;
+  return vm.runInContext(
+    `({ CFG: ${opt("CFG")}, Maze: ${opt("Maze")}, Rules: ${opt("Rules")},` +
+    ` Paint: ${opt("Paint")}, Rig: ${opt("Rig")}, World: ${opt("World")} })`, ctx);
 }
 
 /* ⚠️ LE PAS VIENT DE CFG.SIM_HZ (zip 395), il n'est plus écrit ici. Un outil

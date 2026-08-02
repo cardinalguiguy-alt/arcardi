@@ -83,7 +83,149 @@ const Rules = (function () {
     };
     openWall(m.entry.x, m.entry.y, "s");
     openWall(m.exit.x, m.exit.y, "n");
+
+    /* ==================================================================
+       LA ROTONDE (zip 396) — UN MUR ROND FAIT DE BLOCS CARRÉS.
+       ------------------------------------------------------------------
+       Guillaume : « je veux une salle centrale circulaire avec escaliers »,
+       image de référence à l'appui.
+
+       ⚠️ LE PROBLÈME, ET SA SEULE SOLUTION HONNÊTE. Une boîte de collision de
+       ce moteur est un rectangle aligné sur les axes : on ne peut pas en faire
+       un cercle. Deux fausses solutions se présentaient, et elles sont fausses
+       de la même façon — dessiner un mur rond par-dessus une collision carrée,
+       ou l'inverse. Dans les deux cas on obtient un mur qu'on traverse ou un
+       mur invisible qui bloque, c'est-à-dire le défaut que ce fichier refuse
+       depuis sa première ligne.
+
+       La vraie solution est celle du site : on PIXÉLISE le cercle. La couronne
+       est faite de petits blocs carrés posés là où la distance au centre
+       dépasse le rayon — un cercle de Bresenham en maçonnerie. Le moteur et
+       world.js lisent la même liste, donc le mur qu'on voit est exactement le
+       mur qui arrête, escalier de pierre compris. Et c'est du pixel-art en
+       volume, ce qui est la signature du projet plutôt qu'un pis-aller.
+
+       LES PORTES sont taillées d'après les LIAISONS RÉELLES du dédale : pour
+       chaque cellule du bord de la rotonde qui communique avec l'extérieur, on
+       épargne le couloir correspondant. Elles ne peuvent donc pas se retrouver
+       ailleurs que là où le générateur a ouvert — c'est encore la même règle :
+       une seule description, plusieurs lecteurs.
+       ================================================================== */
+    if (m.rotunda) {
+      const R = m.rotunda;
+      const x0 = R.x * C, z0 = R.y * C, x1 = (R.x + R.w) * C, z1 = (R.y + R.h) * C;
+      const ccx = (x0 + x1) / 2, ccz = (z0 + z1) / 2;
+      const rad = (R.w * C) / 2 - Wt / 2;          // le cercle inscrit dans la salle
+      const B = cfg.ROTUNDA_BLOCK;
+
+      // 1. On RETIRE tout ce que la grille avait posé à l'intérieur du carré :
+      //    poteaux et pans compris. La salle est un espace d'un seul tenant.
+      for (let i = boxes.length - 1; i >= 0; i--) {
+        const b = boxes[i];
+        const mx = (b.x0 + b.x1) / 2, mz = (b.z0 + b.z1) / 2;
+        if (mx > x0 + 0.01 && mx < x1 - 0.01 && mz > z0 + 0.01 && mz < z1 - 0.01) boxes.splice(i, 1);
+      }
+
+      // 2. Les couloirs à épargner, un par liaison réelle vers l'extérieur.
+      const halls = [];
+      const sides = [[0, -1, "n"], [1, 0, "e"], [0, 1, "s"], [-1, 0, "w"]];
+      for (let y = R.y; y < R.y + R.h; y++) for (let x = R.x; x < R.x + R.w; x++) {
+        for (const [dx2, dz2] of sides) {
+          const nx = x + dx2, ny = y + dz2;
+          if (nx >= R.x && nx < R.x + R.w && ny >= R.y && ny < R.y + R.h) continue;
+          const dir = dz2 < 0 ? N : dz2 > 0 ? S : dx2 > 0 ? E : W;
+          if (!m.linked(x, y, dir)) continue;
+          const [hx, hz] = centerOf(cfg, x, y);
+          halls.push({ x: hx, z: hz, ax: dx2, az: dz2 });
+        }
+      }
+      const inHall = (px, pz) => {
+        const half = (C - Wt) / 2;
+        for (const h of halls) {
+          if (h.ax) { if (Math.abs(pz - h.z) < half && (h.ax > 0 ? px > h.x : px < h.x)) return true; }
+          else { if (Math.abs(px - h.x) < half && (h.az > 0 ? pz > h.z : pz < h.z)) return true; }
+        }
+        return false;
+      };
+
+      // 3. La couronne : un bloc partout où l'on sort du cercle, sauf dans un
+      //    couloir. Les coins du carré se remplissent donc de maçonnerie
+      //    pleine, ce qui donne son épaisseur au mur rond.
+      const n = Math.round((R.w * C) / B);
+      const step = (R.w * C) / n;
+      for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+        const bx0 = x0 + i * step, bz0 = z0 + j * step;
+        const mx = bx0 + step / 2, mz = bz0 + step / 2;
+        if (Math.hypot(mx - ccx, mz - ccz) < rad) continue;   // dedans : c'est la salle
+        if (inHall(mx, mz)) continue;                          // c'est une porte
+        boxes.push({ x0: bx0, z0: bz0, x1: bx0 + step, z1: bz0 + step, kind: "rot" });
+      }
+    }
     return boxes;
+  }
+
+  /* =======================================================================
+     LE SOL DE LA ROTONDE — TROIS TERRASSES ET DEUX ESCALIERS (zip 396).
+     -----------------------------------------------------------------------
+     ⚠️ C'EST UNE FONCTION PURE, et c'est ce qui la rend acceptable ici. Elle
+     ne lit aucun état, ne modifie rien, et rend une hauteur pour un point du
+     monde. Le rendu s'en sert pour poser le fermier, les créatures et la
+     caméra ; le moteur, lui, continue d'ignorer complètement la verticale.
+
+     POURQUOI PAS UNE VRAIE HAUTEUR DANS LE MOTEUR. Ajouter un axe Y à la
+     simulation, c'est ajouter la gravité, les sauts, les chutes de faible
+     hauteur, et refaire la collision entière — pour une salle. Ici la descente
+     est une DESCENTE VISIBLE, pas une contrainte de jeu : on ne peut ni tomber
+     d'une terrasse, ni se coincer dessous. C'est un arbitrage, il est assumé,
+     et il est écrit noir sur blanc pour que personne ne croie plus tard que
+     le jeu a une troisième dimension jouable.
+
+     La forme : trois terrasses concentriques, plus deux escaliers taillés
+     nord-sud qui les traversent en marches fines. Sur les escaliers on
+     descend par petites marches régulières ; ailleurs, par grands gradins —
+     exactement l'amphithéâtre de l'image de référence.
+     ======================================================================= */
+  function groundY(cfg, m, x, z) {
+    const R = m && m.rotunda;
+    if (!R) return 0;
+    const C = cfg.CELL;
+    const ccx = (R.x + R.w / 2) * C, ccz = (R.y + R.h / 2) * C;
+    const d = Math.hypot(x - ccx, z - ccz);
+    const rad = (R.w * C) / 2 - cfg.WALL / 2;
+    const pit = rad - cfg.ROTUNDA_RIM;          // au-delà, on est sur le pourtour plat
+    if (d >= pit) return 0;
+    const depth = (pit - d) / pit;               // 0 au bord du gradin, 1 au centre
+    // L'ESCALIER : une bande nord-sud, marches fines et régulières.
+    if (Math.abs(x - ccx) < cfg.ROTUNDA_STAIR_W / 2)
+      return -Math.floor((pit - d) / cfg.ROTUNDA_STEP) * cfg.ROTUNDA_STEP_H;
+    // LES GRADINS : trois marches larges.
+    const ring = Math.min(cfg.ROTUNDA_RINGS - 1, Math.floor(depth * cfg.ROTUNDA_RINGS));
+    return -(ring + 1) * cfg.ROTUNDA_DROP;
+  }
+
+  /* -----------------------------------------------------------------------
+     LA HERSE (zip 396) — la boîte qui referme la porte d'entrée.
+     -----------------------------------------------------------------------
+     Elle est construite ici, avec les autres murs, et pour la même raison :
+     `World.buildWalls()` et le moteur lisent la MÊME description. Une herse
+     dessinée d'un côté et bloquante de l'autre finirait par ne plus tomber au
+     même endroit — c'est la leçon du 387, et c'est le seul défaut que ce
+     découpage rend impossible.
+
+     Elle n'est PAS dans la liste au départ : on l'y ajoute au moment où elle
+     touche le sol (voir dropGate). Jusque-là, la porte est franchement
+     ouverte, ce qui est tout le propos du renoncement sans coût.
+
+     ⚠️ ELLE OCCUPE EXACTEMENT L'EMPRISE DU PAN QU'openWall A RETIRÉ, sans un
+     centimètre de plus. Un barreau qui déborderait sur les cellules voisines
+     bloquerait un couloir que le générateur croit ouvert, et verify-maze.mjs
+     ne le verrait pas : il contrôle la grille, pas la maçonnerie.
+     -------------------------------------------------------------------- */
+  function gateBoxOf(cfg, m) {
+    const C = cfg.CELL, h = cfg.WALL / 2;
+    const zEdge = (m.entry.y + 1) * C;
+    return { x0: m.entry.x * C + h, z0: zEdge - h,
+             x1: (m.entry.x + 1) * C - h, z1: zEdge + h, kind: "gate" };
   }
 
   /* Index spatial : les boîtes rangées par cellule, pour ne tester que le
@@ -221,6 +363,36 @@ const Rules = (function () {
       time: 0, score: 0, kills: 0, shardsTaken: 0, torchesUsed: 0,
       seen: new Set(), status: "play", fallT: 0, endCause: null,
       events: [],
+
+      /* ==================================================================
+         ZIP 396 — LE RENONCEMENT, ET L'HORLOGE QUI LE FERME
+         ------------------------------------------------------------------
+         `walked` est la distance TOTALE parcourue depuis le premier instant.
+         C'est elle qui décide que la partie a commencé — décision de
+         Guillaume : « le décompte part au premier pas ». Pas au chargement,
+         pas à l'appui sur Entrer : au premier pas. On peut donc regarder
+         autour de soi, lire le HUD, comprendre où l'on est, sans que le
+         couperet tombe pendant qu'on lit.
+
+         `abandonT` vaut -1 tant que l'horloge n'a pas démarré, puis décroît
+         de ABANDON_MS jusqu'à zéro. Un seul nombre porte donc les trois
+         états (pas commencé / en cours / fini), ce qui évite le drapeau
+         redondant qui finit toujours par se désaccorder de la valeur. */
+      walked: 0, abandonT: -1,
+      gate: { state: 0, t: 0 },   // 0 = ouverte, 1 = elle tombe, 2 = fermée
+      gateBox: gateBoxOf(cfg, m),
+
+      /* LES EFFETS. ⚠️ Ils vivent dans l'ÉTAT et pas dans `events`, et la
+         raison est mécanique : `events` est vidé à chaque pas de simulation
+         (30 Hz) alors que le rendu tourne à la cadence de l'écran (60, 144…).
+         Une gerbe d'étincelles publiée par un évènement serait donc vue une
+         image sur deux, ou pas du tout. Ici chaque effet porte sa propre
+         durée de vie, décomptée par le moteur : le rendu n'a qu'à lire.
+
+         Ils restent parfaitement DÉTERMINISTES — position, type, durée — donc
+         les outils rejouent exactement les mêmes, et un effet ne peut pas
+         faire diverger une partie de sa rediffusion. */
+      fx: [],
       gaps: gapSet,
       cracks: crackMap,
       fallen: new Set(),          // dalles tombées : elles s'ajoutent à `gaps` pour tout le monde
@@ -233,6 +405,16 @@ const Rules = (function () {
         cx: r.x, cy: r.y, homeX: r.homeX, homeY: r.homeY,
         mode: "patrol", target: null, path: null, pathI: 0, gait: 0, gaitSpeed: 0,
         staggerT: 0, hitT: 0, giveUpT: 0, dead: false, deadT: 0,
+        /* ZIP 396 — les deux nombres qui rendent le combat lisible.
+           `hitFlash` : la créature BLANCHIT une fraction de seconde quand on
+           la touche. C'est le retour le plus important du chantier — sans lui
+           on frappe dans le noir sans savoir si le coup a porté, et c'est mot
+           pour mot le reproche de Guillaume.
+           `hpMax` : le plein, pour que la jauge sache de quoi elle est la
+           fraction. Écrit ici plutôt que relu dans CFG au rendu, parce qu'une
+           jauge qui divise par une constante différente de celle qui a servi
+           à créer la créature ment le jour où on change ROAMER_HP. */
+        hitFlash: 0, hpMax: cfg.ROAMER_HP, aimT: 0,
       })),
       stalker: null,
       stalkerAwake: false,
@@ -280,7 +462,7 @@ const Rules = (function () {
         x: sx, z: sz + cfg.CELL * 0.5, ang: 0,
         mode: "idle", tx: m.exit.x, ty: m.exit.y,
         path: null, pathI: 0, repathT: 0, staggerT: 0, hitT: 0, gait: 0, gaitSpeed: 0,
-        knowsT: 0,
+        knowsT: 0, hitFlash: 0, aimT: 0,
       };
     }
     markSeen(st);
@@ -394,6 +576,35 @@ const Rules = (function () {
     else st.turnVel = Math.max(wantTurn, st.turnVel - dTurn);
     st.ang += st.turnVel * dt;
 
+    /* ---- LE RECALAGE SUR LE COULOIR (zip 396) ------------------------
+       Seconde moitié de la réponse à « difficile à naviguer pour un simple
+       clavier ». Un dédale est à angles droits ; un doigt sur une flèche ne
+       l'est pas. On lâche la touche à 8° de l'axe, on avance en biais, on
+       frotte un mur, on corrige, on frotte l'autre — et c'est CE frottement,
+       pas la vitesse de rotation, qui rend la conduite pénible.
+
+       Trois conditions, et les trois comptent :
+         * aucune flèche de rotation enfoncée — sinon on se battrait contre le
+           joueur, ce qui est le défaut classique de ce genre d'aide ;
+         * la rotation est presque arrêtée (turnVel faible) — sinon le recalage
+           mangerait la fin de course glissée qu'on a ajoutée au 395 ;
+         * on AVANCE. À l'arrêt, on tourne pour regarder ; recaler quelqu'un
+           qui inspecte un mur serait exactement le contraire du service rendu.
+
+       Et il ne mord que dans une fenêtre de SNAP_WINDOW autour du multiple de
+       90° : viser délibérément en diagonale reste possible, ce qui compte le
+       jour où une créature arrive par un angle. */
+    if (!intent.turn && Math.abs(st.turnVel) < 0.35 && Math.abs(intent.fwd || 0) > 0) {
+      const q = Math.PI / 2;
+      let d = Math.round(st.ang / q) * q - st.ang;
+      while (d > Math.PI) d -= Math.PI * 2;
+      while (d < -Math.PI) d += Math.PI * 2;
+      if (Math.abs(d) < cfg.SNAP_WINDOW) {
+        const s = Math.sign(d) * Math.min(Math.abs(d), cfg.SNAP_SPEED * dt);
+        st.ang += s;
+      }
+    }
+
     // ---- déplacement voulu
     const running = !!intent.run && (intent.fwd || 0) > 0;
     const fwdSpeed = (intent.fwd || 0) > 0
@@ -440,12 +651,17 @@ const Rules = (function () {
        rendu n'a qu'à en prendre le sinus. Il est borné modulo 1 pour ne pas
        perdre en précision au bout d'une heure de jeu. */
     const moved = Math.hypot(st.px - bx, st.pz - bz);
+    st.walked += moved;
     st.gait = (st.gait + moved / cfg.STRIDE) % 1;
     // Vitesse LISSÉE : la vitesse instantanée saute au moindre frottement de
     // mur, et une amplitude de pas qui saute est pire que pas d'animation.
     st.gaitSpeed += (moved / Math.max(1e-6, dt) - st.gaitSpeed) * Math.min(1, dt * 8);
 
     markSeen(st);
+
+    // ---- la porte de renoncement et sa herse
+    updateGate(st, dt);
+    if (st.status !== "play") return st;
 
     // ---- la flamme
     const drain = running ? cfg.FLAME_DRAIN_RUN : cfg.FLAME_DRAIN;
@@ -454,6 +670,12 @@ const Rules = (function () {
     // ---- trous et dalles
     handleFloor(st, dt);
     if (st.status !== "play") return st;
+
+    // ---- les effets visuels vieillissent (voir st.fx dans create())
+    for (let i = st.fx.length - 1; i >= 0; i--) {
+      st.fx[i].t += dt;
+      if (st.fx[i].t >= st.fx[i].ttl) st.fx.splice(i, 1);
+    }
 
     // ---- ramassages et brasiers
     handlePickups(st, intent);
@@ -465,11 +687,20 @@ const Rules = (function () {
       if (st.swingT <= 0) st.swingT = 0;
     }
     if (intent.attack && st.hasSword && st.swingT <= 0 && st.cooldownT <= 0) {
+      aimAssist(st);                       // zip 396 : on se tourne vers la cible
       st.swingT = cfg.SWING_MS / 1000;
       st.cooldownT = (cfg.SWING_MS + cfg.SWING_COOLDOWN_MS) / 1000;
       st.flame = Math.max(0, st.flame - cfg.FLAME_DRAIN_HIT);
       resolveSwing(st);
       st.events.push({ type: "swing" });
+    }
+    for (const r of st.roamers) {
+      if (r.hitFlash > 0) r.hitFlash = Math.max(0, r.hitFlash - dt * 4);
+      if (r.aimT > 0) r.aimT = Math.max(0, r.aimT - dt);
+    }
+    if (st.stalker) {
+      if (st.stalker.hitFlash > 0) st.stalker.hitFlash = Math.max(0, st.stalker.hitFlash - dt * 4);
+      if (st.stalker.aimT > 0) st.stalker.aimT = Math.max(0, st.stalker.aimT - dt);
     }
 
     // ---- créatures
@@ -502,13 +733,111 @@ const Rules = (function () {
     return st;
   }
 
+  /* =======================================================================
+     LA PLATEFORME DE RENONCEMENT ET LA HERSE (zip 396)
+     -----------------------------------------------------------------------
+     Demande de Guillaume : « au début du labyrinthe, quand on se retourne on
+     doit voir une plateforme qui si on l'emprunte nous ramène directe dans le
+     maze world. Comme un abandon sans coût. Mais on ne peut faire ça que dans
+     les 15 premières secondes : une porte se referme après et nous force à
+     avancer. »
+
+     ⚠️ ÇA RÉPARE AUSSI UN TROU RÉEL, découvert en cherchant où poser la
+     plateforme. Le générateur retire le pan sud de la cellule d'entrée pour
+     faire une porte, et RIEN ne fermait derrière. Un joueur qui reculait
+     sortait donc de la grille — où handleFloor ne fait rien du tout, puisqu'il
+     ne traite que les cellules valides. On ne tombait pas, on ne gagnait pas,
+     on ne mourait pas : on flottait au-dessus du lac, indéfiniment. Aucun des
+     neuf outils ne pouvait le voir, parce que l'oracle ne recule jamais au
+     premier pas — il n'a aucune raison de le faire.
+     ======================================================================= */
+  function onPlatform(cfg, m, x, z) {
+    const C = cfg.CELL, h = cfg.WALL / 2;
+    const zEdge = (m.entry.y + 1) * C;
+    return x > m.entry.x * C + h && x < (m.entry.x + 1) * C - h &&
+           z >= zEdge - 0.01 && z <= zEdge + cfg.PLATFORM_LEN;
+  }
+
+  function updateGate(st, dt) {
+    const cfg = st.cfg, m = st.m, g = st.gate;
+
+    /* 1. L'HORLOGE DÉMARRE AU PREMIER PAS, et pas avant. Réponse explicite de
+          Guillaume. On mesure une DISTANCE et non un appui de touche : une
+          touche enfoncée contre un mur ne fait pas commencer une partie. */
+    if (st.abandonT < 0 && g.state === 0 && st.walked >= cfg.ABANDON_START_DIST) {
+      st.abandonT = cfg.ABANDON_MS / 1000;
+      st.events.push({ type: "abandonStart" });
+    }
+    if (st.abandonT > 0) {
+      const was = st.abandonT;
+      st.abandonT -= dt;
+      // Un seul avertissement, au franchissement du seuil : répété à chaque
+      // image, il chasserait tous les autres messages du jeu.
+      if (was > cfg.GATE_WARN_MS / 1000 && st.abandonT <= cfg.GATE_WARN_MS / 1000)
+        st.events.push({ type: "gateWarn" });
+      if (st.abandonT <= 0) {
+        st.abandonT = 0;
+        g.state = 1; g.t = 0;
+        st.events.push({ type: "gateFall" });
+      }
+    }
+
+    /* 2. ELLE TOMBE. Purement temporel : le rendu lit g.t pour la descendre. */
+    if (g.state === 1) {
+      g.t += dt;
+      if (g.t * 1000 >= cfg.GATE_FALL_MS) {
+        g.state = 2;
+        /* ⚠️ ON POUSSE LE JOUEUR À L'INTÉRIEUR PLUTÔT QUE DE L'ÉCRASER.
+           Décision prise seul, et ce n'est pas du confort : sans elle il
+           existe une position — pile sous la herse — où le joueur se retrouve
+           coincé DANS une boîte de collision, que pushOut ne sait pas
+           trancher (il n'y a pas de « dehors » le plus proche évident au
+           centre d'un pan). C'est le genre de trou où une partie se fige. La
+           herse ne blesse jamais : elle ferme, c'est tout. Le labyrinthe
+           punit les mauvais chemins, pas le mauvais timing. */
+        const b = st.gateBox;
+        if (st.px > b.x0 - cfg.BODY_R && st.px < b.x1 + cfg.BODY_R &&
+            st.pz > b.z0 - cfg.BODY_R && st.pz < b.z1 + cfg.BODY_R) {
+          st.pz = b.z0 - cfg.BODY_R - 0.15;      // vers le nord : dans le dédale
+          st.vz = 0;
+        }
+        /* La herse rejoint les murs, et l'index spatial est refait. Une fois
+           par partie : c'est le seul endroit du moteur où la géométrie change,
+           et le refaire coûte moins cher que maintenir un drapeau « active »
+           sur chaque boîte, lu à chaque image par chaque créature. */
+        st.boxes.push(b);
+        st.idxB = indexBoxes(cfg, m, st.boxes);
+        st.events.push({ type: "gateShut" });
+      }
+    }
+
+    /* 3. LE RENONCEMENT. On s'en va quand on a franchi la moitié de la
+          plateforme : assez loin pour que ce soit un choix, assez près pour
+          qu'on n'ait pas l'impression de marcher dans le vide. */
+    const zEdge = (m.entry.y + 1) * cfg.CELL;
+    if (st.pz > zEdge + cfg.PLATFORM_LEN * 0.55) {
+      st.status = "abandon";
+      st.endCause = "abandon";
+      st.events.push({ type: "abandon" });
+    }
+  }
+
   /* -----------------------------------------------------------------------
      LE SOL. Trois cas, et le troisième est la mécanique du chantier.
      -------------------------------------------------------------------- */
   function handleFloor(st, dt) {
     const cfg = st.cfg, m = st.m;
     const [cx, cy] = cellOf(cfg, st.px, st.pz);
-    if (cx < 0 || cy < 0 || cx >= m.G || cy >= m.G) return;
+    if (cx < 0 || cy < 0 || cx >= m.G || cy >= m.G) {
+      /* Hors de la grille : la SEULE surface qui existe est la plateforme de
+         renoncement. Partout ailleurs, c'est le lac — et on tombe, comme dans
+         n'importe quel trou. Avant le 396 on ne tombait pas : on flottait. */
+      if (!onPlatform(cfg, m, st.px, st.pz)) {
+        st.status = "falling"; st.fallT = 0;
+        st.events.push({ type: "fall" });
+      }
+      return;
+    }
     const j = m.idx(cx, cy);
 
     // 1. trou ouvert, ou dalle déjà tombée : on tombe.
@@ -594,6 +923,52 @@ const Rules = (function () {
      qui garantit qu'on ne pourra jamais le tuer « par accident » en ajoutant
      une arme un jour.
      -------------------------------------------------------------------- */
+  /* -----------------------------------------------------------------------
+     L'ASSISTANCE À LA VISÉE (zip 396, choisie par Guillaume).
+     -----------------------------------------------------------------------
+     Au moment du coup, et à ce moment SEULEMENT, le cap pivote vers la
+     créature la plus proche située dans une fenêtre de AIM_ARC autour du
+     regard. Trois garde-fous, et ils font toute la différence entre une aide
+     et une triche :
+
+       1. la cible doit être ATTEIGNABLE — canTouch(), donc pas de mur entre
+          les deux. On ne peut pas frapper à travers une cloison, ce qui reste
+          la règle la plus importante du combat dans un décor de cloisons ;
+       2. le pivotement est plafonné à AIM_MAX_TURN. L'assistance corrige une
+          visée approximative ; elle ne retourne pas le personnage vers une
+          créature qu'on avait décidé d'ignorer ;
+       3. elle ne touche NI la portée NI les dégâts. Un coup qui rate reste un
+          coup qui rate — c'est seulement la probabilité d'être bien orienté
+          au moment où le doigt appuie qui change, et c'était exactement le
+          problème au clavier.
+
+     ⚠️ ELLE CHANGE st.ang, donc c'est une RÈGLE, donc elle est ici. Faite au
+     rendu, elle aurait fait diverger ce qu'on voit de ce que le moteur
+     calcule, et les neuf outils auraient continué de mesurer l'ancien jeu.
+     -------------------------------------------------------------------- */
+  function aimAssist(st) {
+    const cfg = st.cfg;
+    const reach = cfg.SWING_RANGE + cfg.AIM_MARGIN;
+    let best = null, bestD = 1e9;
+    const consider = (e, r) => {
+      const dx = e.x - st.px, dz = e.z - st.pz;
+      const d = Math.hypot(dx, dz);
+      if (d > reach + r || d < 0.001) return;
+      let a = Math.atan2(-dx, -dz) - st.ang;      // même convention que le moteur
+      while (a > Math.PI) a -= Math.PI * 2;
+      while (a < -Math.PI) a += Math.PI * 2;
+      if (Math.abs(a) > cfg.AIM_ARC) return;
+      if (!canTouch(cfg, st.m, st.px, st.pz, e.x, e.z)) return;
+      if (d < bestD) { bestD = d; best = { e, a }; }
+    };
+    for (const r of st.roamers) if (!r.dead) consider(r, cfg.ROAMER_BODY_R);
+    if (st.stalker && st.stalkerAwake) consider(st.stalker, cfg.STALK_BODY_R);
+    if (!best) return;
+    st.ang += Math.sign(best.a) * Math.min(Math.abs(best.a), cfg.AIM_MAX_TURN);
+    st.turnVel = 0;                 // on ne repart pas en glissade après le coup
+    best.e.aimT = 0.5;              // liseré sur la cible, lu par world.js
+  }
+
   function resolveSwing(st) {
     const cfg = st.cfg;
     const fx = -Math.sin(st.ang), fz = -Math.cos(st.ang);
@@ -617,9 +992,21 @@ const Rules = (function () {
       const nb = st.idxB.near(r.x, r.z);
       const [rx, rz] = pushOut(r.x, r.z, cfg.ROAMER_BODY_R, nb);
       r.x = rx; r.z = rz;
+      /* ZIP 396 — LE COUP SE VOIT. Trois signaux d'un coup, et pas un de
+         plus : la créature BLANCHIT (hitFlash), une gerbe part du point de
+         contact (fx), et elle recule (déjà là). Un coup dans le vide ne
+         produit RIEN — c'est le contraste qui informe, pas l'effet. */
+      r.hitFlash = 1;
+      const cx2 = (r.x + st.px) / 2, cz2 = (r.z + st.pz) / 2;
+      st.fx.push({ kind: "spark", x: cx2, y: 1.7, z: cz2, t: 0, ttl: 0.45 });
       if (r.hp <= 0) {
         r.dead = true; r.deadT = 0;
         st.kills++; st.score += cfg.SCORE_PER_KILL;
+        // La colonne d'aspiration et le compte de points montent d'où elle
+        // tombe : le joueur n'a pas à chercher le score en haut de l'écran
+        // pour savoir qu'il a gagné l'échange.
+        st.fx.push({ kind: "soul", x: r.x, y: 0, z: r.z, t: 0, ttl: cfg.KILL_VANISH_MS / 1000 });
+        st.fx.push({ kind: "score", x: r.x, y: 2.6, z: r.z, v: cfg.SCORE_PER_KILL, t: 0, ttl: 1.5 });
         st.events.push({ type: "kill" });
       } else st.events.push({ type: "hit" });
     }
@@ -633,7 +1020,12 @@ const Rules = (function () {
       const [sx2, sz2] = pushOut(s.x, s.z, cfg.STALK_BODY_R, nb);
       s.x = sx2; s.z = sz2;
       s.path = null;
-      st.events.push({ type: "stalkerHit" });
+      // Il blanchit lui aussi, et il étincelle — mais il n'a pas de jauge et
+      // ne meurt pas. Le joueur doit voir qu'il a TOUCHÉ sans jamais croire
+      // qu'il peut le tuer : c'est exactement l'écart qu'on veut lui faire
+      // sentir entre les deux créatures.
+      s.hitFlash = 1;
+      st.fx.push({ kind: "spark", x: (s.x + st.px) / 2, y: 2.4, z: (s.z + st.pz) / 2, t: 0, ttl: 0.45 });
     }
   }
 
@@ -878,7 +1270,7 @@ const Rules = (function () {
     return k * k * st.cfg.STALK_DREAD_MAX;
   }
 
-  return { create, step, buildBoxes, indexBoxes, pushOut, cellOf, centerOf, canTouch, flameLevel, blockedNow, dread, hurt, N, E, S, W };
+  return { create, step, buildBoxes, indexBoxes, gateBoxOf, onPlatform, groundY, pushOut, cellOf, centerOf, canTouch, flameLevel, blockedNow, dread, hurt, N, E, S, W };
 })();
 
 if (typeof module === "object" && module.exports) module.exports = { Rules };

@@ -25,6 +25,11 @@
   let acc = 0, last = 0;
   let seed = 0;
   let ended = false;
+  /* ⚠️ ZIP 396 — LE DRAPEAU QUI FAIT DISPARAÎTRE LE GEL DU LANCEMENT.
+     Le titre n'est plus affiché par le HTML : il attend que la PREMIÈRE IMAGE
+     3D soit réellement passée par renderer.render(). Tant qu'elle ne l'est
+     pas, on montre l'écran de chargement. Voir boot(). */
+  let firstFrame = false;
 
   const $ = (id) => document.getElementById(id);
 
@@ -51,6 +56,26 @@
     Input.clear();
     newRun();
     state = "play";
+  }
+
+  /* ZIP 396 — LE RENONCEMENT. Demande de Guillaume : « comme un abandon sans
+     coût ». On sort donc par Bridge.exit(), le MÊME message que le bouton
+     « Ressortir » de l'écran-titre — celui que la ferme traite déjà comme
+     « ressortir sans être entré : aucune conséquence » (voir closeLabGame
+     dans FermeGame.js). Aucune blessure, aucune requête réseau, aucun score.
+
+     ⚠️ ON NE PASSE SURTOUT PAS PAR quit(), qui compte l'abandon comme un
+     ÉCHEC et renvoie le fermier blessé pour dix minutes. Les deux gestes
+     portent le même mot en français et n'ont rien à voir : abandonner en
+     plein dédale coûte, faire demi-tour dans les quinze premières secondes ne
+     coûte rien. C'est toute la mécanique demandée. */
+  function leaveFree() {
+    if (ended) return;
+    ended = true;
+    state = "over";
+    Input.clear();
+    Bridge.exit();
+    if (!Bridge.embedded) { newRun(); toTitle(); }
   }
 
   function finish(won) {
@@ -102,6 +127,7 @@
         Rules.step(st, DT, intent);
         UI.events(st);
         if (st.status === "won") { finish(true); break; }
+        if (st.status === "abandon") { leaveFree(); break; }   // zip 396
         if (st.status === "dead") { finish(false); break; }
       }
       if (acc > DT * MAX_STEPS) acc = 0;
@@ -116,6 +142,18 @@
       /* `alpha` est la fraction de pas déjà écoulée : 0 = on vient de simuler,
          1 = le pas suivant est dû. C'est lui qui rend le mouvement continu. */
       World.sync(st, now, state === "play" ? acc / DT : 1);
+      /* ⚠️ LE TITRE ATTEND LA PREMIÈRE IMAGE, ET C'EST LA MOITIÉ VISIBLE DE LA
+         RÉPARATION DE LA PAGE DE LANCEMENT (zip 396). Il était affiché par le
+         HTML, donc AVANT que three.js ait compilé le moindre shader : on
+         voyait un panneau posé sur du noir, puis le décor apparaissait
+         derrière d'un coup — c'est ce que Guillaume décrit par « la page de
+         lancement bug un peu avant de s'afficher ». On bascule ici, une seule
+         fois, après le premier renderer.render() réellement passé. */
+      if (!firstFrame) {
+        firstFrame = true;
+        UI.show("loading", false);
+        if (state === "title") UI.show("title", true);
+      }
     }
     UI.toastTick(now);
   }
@@ -124,6 +162,11 @@
     if (!window.THREE) {
       const e = $("loadError");
       if (e) { e.textContent = LAB_STR[Bridge.lang].loadError; e.style.display = "block"; }
+      // ⚠️ Sans trois.js il n'y aura JAMAIS de première image, donc jamais de
+      // bascule : l'écran de chargement tournerait indéfiniment et l'erreur
+      // resterait cachée derrière lui. On montre le titre à la main.
+      UI.show("loading", false);
+      UI.show("title", true);
       return;
     }
     Input.init();
@@ -157,8 +200,19 @@
   Bridge.init(() => {
     UI.applyLang(Bridge.lang);
     if (Bridge.externalBest !== null) UI.setBest(Bridge.externalBest);
-    // Le fermier reçoit sa tenue APRÈS la construction : on la rejoue.
-    if (st) newRun();
+    /* ⚠️ ZIP 396 — LA CAUSE RACINE DU GEL DE LA PAGE DE LANCEMENT.
+       Cette ligne disait `if (st) newRun();` : la ferme envoyant la tenue du
+       joueur APRÈS le chargement de l'iframe, le labyrinthe était construit
+       DEUX FOIS — génération du dédale, peinture de sept textures,
+       reconstruction de 2 600 maillages — pour changer quatre couleurs de
+       vêtement. Le second passage tombait pile au moment où l'écran-titre
+       devait apparaître, d'où le hoquet que Guillaume a vu.
+
+       On ne refait plus que le fermier (voir World.reskin), une centaine de
+       volumes. Et on ne rejoue rien du tout si la partie est commencée : on
+       ne va pas régénérer le dédale d'un joueur au motif qu'un message est
+       arrivé tard. */
+    if (st) World.reskin(CFG, Bridge.skin);
   });
   UI.applyLang(Bridge.lang);
   /* Hors ferme (double-clic sur index.html), le record vit en localStorage.

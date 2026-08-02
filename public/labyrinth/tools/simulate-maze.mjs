@@ -39,7 +39,12 @@ for (let s = 1; s <= RUNS; s++) {
   const key = r.status === "won" ? "sortie"
     : r.cause === "fall" ? "chute"
     : r.cause === "creature" ? "creature"
-    : r.status === "play" ? "abandon/temps" : (r.cause || r.status);
+    /* ⚠️ RENOMMÉ AU 396. L'ancien libellé « abandon/temps » désignait la fin
+       du temps imparti — mais le 396 introduit un VRAI abandon (la plateforme
+       de renoncement, cause "abandon"), et deux issues distinctes qui portent
+       le même mot dans un tableau de mesure, c'est une conclusion fausse en
+       attente. Le temps écoulé s'appelle donc « temps écoulé ». */
+    : r.status === "play" ? "temps écoulé" : (r.cause || r.status);
   causes[key] = (causes[key] || 0) + 1;
   if (r.status === "won") { wins++; times.push(r.time); scores.push(r.score); }
   shards.push(r.shards);

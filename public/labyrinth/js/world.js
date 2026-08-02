@@ -45,11 +45,15 @@
 const World = (function () {
 
   let THREE_, scene, camera, renderer;
-  let torchLight, ambient, hemi, beaconMat, lakeMat, skyMesh;
+  let torchLight, ambient, hemi, beaconMat, lakeMat, lakeGlowMat, skyMesh;
   const tex = {};
   let player, sword3, torchMesh, flameMesh, torchHalo;
   let roamerMeshes = [], stalkerMesh, brazierMeshes = [], shardMeshes = [], potionMeshes = [];
   let playerRig = null, roamerRigs = [], stalkerRig = null, stalkerHalo = null;
+  /* ZIP 396 — le décor et les effets neufs. */
+  let lakeMists = [], gateMesh = null, platformGroup = null, rotundaGroup = null;
+  let roamerHud = [], stalkerFlash = null;
+  let sparkPool = [], soulPool = [], scorePool = [];
   /* ⚠️ L'INSTANTANÉ PRÉCÉDENT, cœur de l'interpolation du zip 395. La
      simulation avance par pas de 1/30 s ; le rendu, lui, tourne à la cadence
      de l'écran. Sans mémoire de l'état d'avant, on afficherait deux fois la
@@ -60,7 +64,7 @@ const World = (function () {
   let skin = null;
   let cam = { x: 0, y: 0, z: 0, ang: 0 };
   let flameCuts = [];
-  let CFG_, ST_;
+  let CFG_, ST_, M_;
 
   function canvasTex(w, h, draw, repeat) {
     const c = document.createElement("canvas");
@@ -74,11 +78,26 @@ const World = (function () {
     return t;
   }
 
+  /* La taille du plan d'eau, écrite UNE fois : buildTextures en a besoin pour
+     calculer la répétition, buildLake pour poser le plan. Deux formules qui
+     doivent rester égales et qui vivraient à deux endroits finiraient par
+     diverger, et l'échelle des vagues partirait sans que personne comprenne. */
+  function lakeSizeOf(cfg) { return cfg.GRID * cfg.CELL * 2.4; }
+
   function buildTextures(cfg) {
     tex.wall = canvasTex(128, 128, (c) => Paint.wall(c, cfg, 128, 128, 1));
     tex.wall2 = canvasTex(128, 128, (c) => Paint.wall(c, cfg, 128, 128, 7));
     tex.floor = canvasTex(128, 128, (c) => Paint.floor(c, cfg, 128, 128, 3));
-    tex.lake = canvasTex(128, 128, (c) => Paint.lake(c, cfg, 128, 128), [10, 10]);
+    /* ⚠️ LA RÉPÉTITION EST CALCULÉE, PAS CHOISIE. Le défi de fuite pose une
+       tuile de houle tous les 26 unités (et 37 pour la nappe additive) ; on
+       reprend ces deux nombres, divisés par la taille RÉELLE du plan d'ici.
+       Écrire « 10, 10 » comme au 394 donnait des vagues six fois trop grandes
+       et un motif dont on voyait la grille — c'est ce qu'on voit sur la
+       capture de Guillaume, autant que le dessin lui-même. */
+    const rep = lakeSizeOf(cfg) / 26, repG = lakeSizeOf(cfg) / 37;
+    tex.lake = canvasTex(128, 128, (c) => Paint.lake(c, cfg, 128, 128), [rep, rep]);
+    tex.lakeGlow = canvasTex(128, 128, (c) => Paint.lakeGlow(c, cfg, 128, 128), [repG, repG]);
+    tex.score = canvasTex(64, 32, (c) => Paint.number(c, cfg, 64, 32, "+" + cfg.SCORE_PER_KILL, 0xffe9a8));
     tex.wood = canvasTex(16, 64, (c) => Paint.wood(c, cfg, 16, 64));
     tex.rune = canvasTex(48, 96, (c) => Paint.rune(c, cfg, 48, 96));
     tex.sky = canvasTex(1024, 256, (c) => Paint.sky(c, cfg, 1024, 256));
@@ -143,6 +162,10 @@ const World = (function () {
      (RAG_MAX < 0,5) : mieux vaut tomber en voyant encore un bout de dalle sous
      soi que marcher sur une dalle qui n'existe pas.
      -------------------------------------------------------------------- */
+  const inRotunda = (m, x, y) => m.rotunda &&
+    x >= m.rotunda.x && x < m.rotunda.x + m.rotunda.w &&
+    y >= m.rotunda.y && y < m.rotunda.y + m.rotunda.h;
+
   function buildFloor(cfg, m, st) {
     const full = new THREE_.PlaneGeometry(cfg.CELL, cfg.CELL);
     const SUB = 6;
@@ -153,6 +176,8 @@ const World = (function () {
     for (let y = 0; y < m.G; y++) for (let x = 0; x < m.G; x++) {
       const j = m.idx(x, y);
       if (!m.cells[j]) continue;
+      // La rotonde a son propre sol, en gradins : voir buildRotunda.
+      if (inRotunda(m, x, y)) continue;
       const [wx, wz] = Rules.centerOf(cfg, x, y);
       if (!st.gaps.has(j)) {
         const mesh = new THREE_.Mesh(full, mat);
@@ -181,15 +206,77 @@ const World = (function () {
     return group;
   }
 
-  /* LE LAC. Un seul plan, très bas, avec sa texture qui DÉRIVE en continu —
-     c'est la dérive qui fait le tourbillon, pas la texture. */
+  /* =======================================================================
+     LE LAC — REPRIS DU DÉFI DE FUITE, ZIP 396.
+     -----------------------------------------------------------------------
+     Retour de Guillaume : « le rendu de l'eau du lac n'est pas convaincant.
+     Copie simplement ce qu'il y a dans le endless run. C'est la texture
+     parfaite. »
+
+     Ce n'est pas seulement la TEXTURE qui a été reprise (voir Paint.lakeWaves,
+     recopiée ligne pour ligne de public/templerun/js/world.js) mais tout le
+     MONTAGE, parce que l'aspect de cette eau ne vient qu'à moitié de son
+     dessin :
+
+       1. DEUX NAPPES superposées, de phases et d'échelles différentes, qui
+          dérivent à des vitesses différentes. Le miroitement naît du décalage
+          entre les deux — aucune des deux textures ne le contient. C'est le
+          cœur de l'effet, et c'était ce qui manquait le plus ;
+       2. la seconde est ADDITIVE, à 0,4 d'opacité : elle éclaire les crêtes
+          sans éclaircir les creux ;
+       3. des VOILES DE BRUME qui traînent à la surface et ORBITENT autour du
+          joueur. Neuf suffisent à entourer n'importe quelle position, là où en
+          semer sur 414 unités en demanderait des centaines.
+
+     ⚠️ L'ÉCHELLE PHYSIQUE DES VAGUES EST CELLE DU DÉFI, pas une valeur
+     ressemblante : 26 unités par tuile pour la nappe profonde, 37 pour la
+     nappe additive. Ce sont ces deux nombres-là qui font que la houle a la
+     bonne taille par rapport à un fermier, et ils ne se devinent pas.
+
+     ⚠️ ET LE BROUILLARD EST REVENU. L'ancien lac était en `fog: false` : il
+     restait donc parfaitement net jusqu'à 400 unités, ce qui affichait le bord
+     du plan et étalait le motif répété sur tout l'horizon — c'est très
+     visible sur la capture de Guillaume. Avec le brouillard, l'eau se perd
+     dans le violet sombre comme dans le défi de fuite.
+     ======================================================================= */
   function buildLake(cfg, m) {
-    const g = new THREE_.PlaneGeometry(m.G * cfg.CELL * 2.4, m.G * cfg.CELL * 2.4);
-    lakeMat = new THREE_.MeshBasicMaterial({ map: tex.lake, fog: false });
-    const mesh = new THREE_.Mesh(g, lakeMat);
-    mesh.rotation.x = -Math.PI / 2;
-    mesh.position.set(m.G * cfg.CELL / 2, cfg.LAKE_Y, m.G * cfg.CELL / 2);
-    scene.add(mesh);
+    const size = lakeSizeOf(cfg);
+    const cx = m.G * cfg.CELL / 2, cz = m.G * cfg.CELL / 2;
+    const g = new THREE_.PlaneGeometry(size, size);
+
+    lakeMat = new THREE_.MeshBasicMaterial({ map: tex.lake, fog: true });
+    const deep = new THREE_.Mesh(g, lakeMat);
+    deep.rotation.x = -Math.PI / 2;
+    deep.position.set(cx, cfg.LAKE_Y, cz);
+    scene.add(deep);
+
+    lakeGlowMat = new THREE_.MeshBasicMaterial({
+      map: tex.lakeGlow, transparent: true, opacity: 0.4,
+      depthWrite: false, blending: THREE_.AdditiveBlending, fog: true });
+    const glow = new THREE_.Mesh(g, lakeGlowMat);
+    glow.rotation.x = -Math.PI / 2;
+    glow.position.set(cx, cfg.LAKE_Y + 0.05, cz);
+    scene.add(glow);
+
+    /* Les voiles. COL_LAKE_BRIGHT sert ICI, et c'est sa seule lecture depuis
+       que la houle a remplacé les anneaux : une constante déclarée que
+       personne ne lit est une constante fausse en attente (leçon du 385). */
+    const mg = new THREE_.PlaneGeometry(1, 1);
+    for (let i = 0; i < 9; i++) {
+      const mm = new THREE_.Mesh(mg, new THREE_.MeshBasicMaterial({
+        map: tex.haloPurple, color: cfg.COL_LAKE_BRIGHT,
+        transparent: true, opacity: 0.10 + Paint.noise(i * 31) * 0.08,
+        depthWrite: false, blending: THREE_.AdditiveBlending, fog: false,
+        side: THREE_.DoubleSide }));
+      const s = 40 + Paint.noise(i * 7) * 90;
+      mm.scale.set(s, s * 0.5, 1);
+      mm.rotation.x = -Math.PI / 2;
+      mm.userData.orbit = Paint.noise(i * 13) * Math.PI * 2;
+      mm.userData.radius = 25 + Paint.noise(i * 19) * 95;
+      mm.userData.speed = 0.04 + Paint.noise(i * 23) * 0.09;
+      scene.add(mm);
+      lakeMists.push(mm);
+    }
   }
 
   /* La colonne de lumière qui monte de chaque trou, et le PHARE de la sortie.
@@ -222,6 +309,308 @@ const World = (function () {
     const [ex, ez] = Rules.centerOf(cfg, m.exit.x, m.exit.y);
     bm.position.set(ex, cfg.BEACON_H / 2 - 3, ez);
     scene.add(bm);
+  }
+
+  /* =======================================================================
+     LA ROTONDE — ZIP 396. La salle centrale circulaire à escaliers.
+     -----------------------------------------------------------------------
+     Demande de Guillaume, avec une capture du défi de fuite comme référence :
+     un mur courbe en gros blocs chauds, une couronne de torches murales, un
+     sol EN CONTREBAS, un escalier de pierre, et le ciel violet par-dessus.
+
+     ⚠️ LE MUR ROND N'EST PAS DESSINÉ ICI. Il est déjà là : Rules.buildBoxes()
+     pose la couronne de blocs, et buildWalls() la dessine avec tous les autres
+     murs. C'est la règle du chantier depuis le 393 — les murs sont les boîtes
+     de collision, littéralement — et c'est ce qui rend impossible le défaut
+     que cette salle appelait à grands cris : un mur courbe qu'on traverse.
+
+     CE QUI EST ICI, c'est le SOL, et il est fait de quatre choses :
+
+       1. LE POURTOUR : un anneau plat au niveau du dédale. C'est par là qu'on
+          entre, et c'est de là qu'on découvre la salle d'un coup d'œil ;
+       2. TROIS GRADINS, trois cylindres empilés de rayons décroissants. Leurs
+          flancs sont les contremarches — on les obtient gratuitement, là où
+          des blocs séparés auraient coûté quatre cents maillages ;
+       3. DEUX ESCALIERS taillés nord-sud, treize marches chacun, qui
+          descendent au fond. Ils sont POSÉS SUR les gradins, et leur hauteur
+          est exactement celle que rend Rules.groundY : une seule description
+          de « à quelle hauteur est le sol ici », lue par le rendu ET par le
+          placement des personnages ;
+       4. UNE COURONNE DE TORCHES sur deux étages, plus un fût de lumière
+          au centre.
+
+     ⚠️ ET ELLE EST VISIBLE DE LOIN. Le fût central est plus haut que les murs :
+     c'est ce qui fait qu'on ne la rate pas. Une salle-surprise qu'on peut ne
+     jamais trouver n'est pas une surprise, c'est un contenu perdu.
+     ======================================================================= */
+  function buildRotunda(cfg, m) {
+    const R = m.rotunda;
+    if (!R) return;
+    const C = cfg.CELL;
+    const ccx = (R.x + R.w / 2) * C, ccz = (R.y + R.h / 2) * C;
+    const rad = (R.w * C) / 2 - cfg.WALL / 2;
+    const pit = rad - cfg.ROTUNDA_RIM;
+    const grp = new THREE_.Group();
+    const matF = new THREE_.MeshLambertMaterial({ map: tex.floor });
+    const matW = new THREE_.MeshLambertMaterial({ map: tex.wall });
+
+    // 1. Le pourtour plat.
+    const rim = new THREE_.Mesh(new THREE_.RingGeometry(pit, rad + 0.6, 44), matF);
+    rim.rotation.x = -Math.PI / 2;
+    rim.position.set(ccx, 0.02, ccz);
+    grp.add(rim);
+
+    // 2. Les gradins. Trois cylindres pleins, dont les flancs FONT les
+    //    contremarches. Les rayons viennent de la même division que
+    //    Rules.groundY : ring = floor(((pit - d) / pit) * RINGS).
+    for (let i = 0; i < cfg.ROTUNDA_RINGS; i++) {
+      const r = pit * (1 - i / cfg.ROTUNDA_RINGS);
+      const top = -(i + 1) * cfg.ROTUNDA_DROP;
+      const H = 14;
+      const cyl = new THREE_.Mesh(new THREE_.CylinderGeometry(r, r, H, 40), i % 2 ? matW : matF);
+      cyl.position.set(ccx, top - H / 2, ccz);
+      grp.add(cyl);
+    }
+
+    // 3. Les deux escaliers. La hauteur de chaque marche est LUE dans
+    //    Rules.groundY : on ne la recalcule pas, on demande.
+    const stepGeo = new THREE_.BoxGeometry(cfg.ROTUNDA_STAIR_W, 7, cfg.ROTUNDA_STEP);
+    for (const side of [1, -1]) {
+      for (let k = 0; ; k++) {
+        const r = pit - (k + 0.5) * cfg.ROTUNDA_STEP;
+        if (r < 0.8) break;
+        const z = ccz + side * r;
+        const top = Rules.groundY(cfg, m, ccx, z);
+        const s2 = new THREE_.Mesh(stepGeo, matF);
+        s2.position.set(ccx, top - 3.5, z);
+        grp.add(s2);
+      }
+      // Une joue de pierre de chaque côté de la volée : sans elle, un escalier
+      // en boîtes flotte au-dessus des gradins au lieu d'y être taillé.
+      for (const w of [1, -1]) {
+        const cheek = new THREE_.Mesh(
+          new THREE_.BoxGeometry(0.8, 8, pit), matW);
+        cheek.position.set(ccx + w * (cfg.ROTUNDA_STAIR_W / 2 + 0.4),
+                           -cfg.ROTUNDA_RINGS * cfg.ROTUNDA_DROP / 2 - 4, ccz + side * pit / 2);
+        grp.add(cheek);
+      }
+    }
+
+    // 4. La couronne de torches, deux étages, toutes tournées vers le centre.
+    for (let lvl = 0; lvl < 2; lvl++) {
+      const h = lvl === 0 ? cfg.WALL_TORCH_H : cfg.WALL_TORCH_H + 3.4;
+      for (let i = 0; i < cfg.ROTUNDA_TORCHES; i++) {
+        const a = (i + (lvl ? 0.5 : 0)) / cfg.ROTUNDA_TORCHES * Math.PI * 2;
+        const t2 = wallTorch(cfg, i * 3 + lvl);
+        t2.position.set(ccx + Math.cos(a) * (rad - 0.5), h, ccz + Math.sin(a) * (rad - 0.5));
+        // Le bras d'une torche murale part vers son -Z local : on tourne le
+        // groupe pour que ce -Z pointe vers le centre de la salle.
+        t2.rotation.y = Math.atan2(Math.cos(a), Math.sin(a));
+        grp.add(t2);
+        wallFlames.push(t2);
+        if (i % 3 === 0 && lvl === 0) {
+          const lamp = new THREE_.PointLight(cfg.COL_TORCH, 1.1, C * 3.2, 2);
+          lamp.position.set(ccx + Math.cos(a) * (rad - 3), h + 2, ccz + Math.sin(a) * (rad - 3));
+          grp.add(lamp);
+        }
+      }
+    }
+
+    // 5. Le fût de lumière central, plus haut que les murs : c'est lui qu'on
+    //    voit d'un couloir, et c'est lui qui donne envie d'aller voir.
+    const shaft = new THREE_.Mesh(
+      new THREE_.CylinderGeometry(cfg.ROTUNDA_STAIR_W * 0.5, cfg.ROTUNDA_STAIR_W * 0.9, 46, 12, 1, true),
+      new THREE_.MeshBasicMaterial({ color: cfg.COL_TORCH_CORE, transparent: true, opacity: 0.10,
+        blending: THREE_.AdditiveBlending, side: THREE_.DoubleSide, depthWrite: false, fog: false }));
+    shaft.position.set(ccx, 18, ccz);
+    grp.add(shaft);
+    grp.userData.shaft = shaft;
+    const sun = new THREE_.PointLight(cfg.SKY_HORIZON, 1.3, C * 6, 2);
+    sun.position.set(ccx, 12, ccz);
+    grp.add(sun);
+
+    scene.add(grp);
+    rotundaGroup = grp;
+  }
+
+  /* =======================================================================
+     LA PLATEFORME DE RENONCEMENT ET LA HERSE — ZIP 396.
+     -----------------------------------------------------------------------
+     « quand on se retourne on doit voir une plateforme qui si on l'emprunte
+     nous ramène directe dans le maze world. »
+
+     Elle doit se lire en une seconde, de dos, dans le noir, sans un mot. Trois
+     choses s'en chargent, et aucune n'est un texte :
+       * elle est ÉCLAIRÉE en violet — la couleur qui, depuis le 393, veut dire
+         « ceci est une issue » (les trous, le phare de la sortie) ;
+       * elle est PLUS BASSE que la dalle du dédale, donc on la voit descendre
+         vers le monde d'où l'on vient ;
+       * elle a des BORDS francs et pas de garde-corps : on voit le lac de
+         chaque côté, donc on comprend qu'elle mène dehors.
+
+     La herse, elle, est suspendue AU-DESSUS de la porte dès la première image.
+     C'est délibéré : on doit voir la chose qui va tomber avant qu'elle ne
+     tombe, sinon sa chute est une punition arbitraire au lieu d'une échéance
+     annoncée.
+     ======================================================================= */
+  function buildPlatform(cfg, m) {
+    const grp = new THREE_.Group();
+    const C = cfg.CELL, W = cfg.WALL;
+    const wide = C - W;
+    const zEdge = (m.entry.y + 1) * C;
+    const [ex] = Rules.centerOf(cfg, m.entry.x, m.entry.y);
+    const matF = new THREE_.MeshLambertMaterial({ map: tex.floor });
+    const matR = new THREE_.MeshLambertMaterial({ map: tex.rune });
+
+    // Le tablier, en trois dalles : les jointures cassent l'aplat, et la
+    // dernière déborde un peu pour qu'on voie où ça s'arrête.
+    for (let i = 0; i < 3; i++) {
+      const len = cfg.PLATFORM_LEN / 3;
+      const slab = new THREE_.Mesh(new THREE_.BoxGeometry(wide - i * 0.9, 0.5, len - 0.25), matF);
+      slab.position.set(ex, -cfg.PLATFORM_DROP - 0.25, zEdge + len * (i + 0.5));
+      grp.add(slab);
+    }
+    // Deux stèles à runes en entrée de pont : le même vocabulaire que les
+    // brasiers, donc « ceci est un objet du jeu », pas un morceau de décor.
+    for (const s of [-1, 1]) {
+      const st2 = new THREE_.Mesh(new THREE_.BoxGeometry(0.8, 3.2, 0.8), matR);
+      st2.position.set(ex + s * (wide / 2 - 0.6), 1.3 - cfg.PLATFORM_DROP, zEdge + 1.4);
+      grp.add(st2);
+      const halo = new THREE_.Mesh(new THREE_.PlaneGeometry(6, 6),
+        new THREE_.MeshBasicMaterial({ map: tex.haloPurple, transparent: true, opacity: 0.55,
+          blending: THREE_.AdditiveBlending, depthWrite: false, fog: false }));
+      halo.position.set(ex + s * (wide / 2 - 0.6), 3.0, zEdge + 1.4);
+      grp.add(halo);
+      grp.userData["halo" + s] = halo;
+    }
+    // La colonne violette du renoncement : plus courte et plus large que le
+    // phare de la sortie, pour qu'on ne confonde jamais les deux.
+    const col = new THREE_.Mesh(
+      new THREE_.CylinderGeometry(wide * 0.30, wide * 0.45, 16, 10, 1, true),
+      new THREE_.MeshBasicMaterial({ color: cfg.COL_PURPLE, transparent: true, opacity: 0.26,
+        blending: THREE_.AdditiveBlending, side: THREE_.DoubleSide, depthWrite: false, fog: false }));
+    col.position.set(ex, 6, zEdge + cfg.PLATFORM_LEN * 0.55);
+    grp.add(col);
+    grp.userData.col = col;
+    const lamp = new THREE_.PointLight(cfg.COL_PURPLE, 1.5, C * 3, 2);
+    lamp.position.set(ex, 3.0, zEdge + cfg.PLATFORM_LEN * 0.5);
+    grp.add(lamp);
+
+    scene.add(grp);
+    platformGroup = grp;
+  }
+
+  /* LA HERSE. Des barreaux et une traverse, taillés sur l'emprise EXACTE de
+     la boîte que rules.js ajoutera aux murs — c'est la même description lue
+     deux fois, jamais deux descriptions. */
+  function buildGate(cfg, m, st) {
+    const b = st.gateBox;
+    const grp = new THREE_.Group();
+    const mat = new THREE_.MeshLambertMaterial({ map: tex.wall2 });
+    const iron = new THREE_.MeshLambertMaterial({ color: 0x2b2721 });
+    const w = b.x1 - b.x0, d = b.z1 - b.z0;
+    grp.add(new THREE_.Mesh(new THREE_.BoxGeometry(w, 0.9, d * 1.1), mat));   // traverse haute
+    const n = cfg.GATE_TEETH;
+    for (let i = 0; i < n; i++) {
+      const bar = new THREE_.Mesh(new THREE_.BoxGeometry(w / (n * 2.2), cfg.WALL_H, d * 0.8), iron);
+      bar.position.set(-w / 2 + w * (i + 0.5) / n, -cfg.WALL_H / 2 - 0.4, 0);
+      grp.add(bar);
+      // Pointe en bas : c'est elle qui fait lire « herse » et non « grille ».
+      const tip = new THREE_.Mesh(new THREE_.BoxGeometry(w / (n * 3.4), 0.7, d * 0.55), iron);
+      tip.position.set(-w / 2 + w * (i + 0.5) / n, -cfg.WALL_H - 1.0, 0);
+      grp.add(tip);
+    }
+    grp.position.set((b.x0 + b.x1) / 2, cfg.WALL_H + 1.2, (b.z0 + b.z1) / 2);
+    scene.add(grp);
+    gateMesh = grp;
+    void m;
+  }
+
+  /* =======================================================================
+     LES TROIS EFFETS DU COMBAT — ZIP 396.
+     -----------------------------------------------------------------------
+     « on sait pas quand on gagne, si on touche etc. »
+
+     ⚠️ TOUT EST EN RÉSERVE, RIEN N'EST CRÉÉ EN COURS DE PARTIE. Fabriquer une
+     géométrie au moment de l'impact, c'est allouer pendant l'image la plus
+     chargée de la partie — et c'est le hoquet qu'on remarque. Les trois
+     réserves sont donc construites une fois et recyclées ; leur taille est le
+     nombre maximal d'effets simultanés, pas une estimation.
+     ======================================================================= */
+  function buildFx(cfg) {
+    const sg = new THREE_.BoxGeometry(0.22, 0.22, 0.22);
+    for (let i = 0; i < 48; i++) {
+      const m2 = new THREE_.Mesh(sg, new THREE_.MeshBasicMaterial({
+        color: i % 3 ? cfg.COL_TORCH_CORE : cfg.COL_STEEL, fog: false,
+        transparent: true, opacity: 1, depthWrite: false, blending: THREE_.AdditiveBlending }));
+      m2.visible = false;
+      scene.add(m2);
+      sparkPool.push(m2);
+    }
+    const cg = new THREE_.CylinderGeometry(1.1, 2.0, 9, 8, 1, true);
+    for (let i = 0; i < 4; i++) {
+      const m2 = new THREE_.Mesh(cg, new THREE_.MeshBasicMaterial({
+        color: cfg.COL_PURPLE, transparent: true, opacity: 0, side: THREE_.DoubleSide,
+        depthWrite: false, blending: THREE_.AdditiveBlending, fog: false }));
+      m2.visible = false;
+      scene.add(m2);
+      soulPool.push(m2);
+    }
+    const pg = new THREE_.PlaneGeometry(3.4, 1.7);
+    for (let i = 0; i < 4; i++) {
+      const m2 = new THREE_.Mesh(pg, new THREE_.MeshBasicMaterial({
+        map: tex.score, transparent: true, opacity: 0, depthWrite: false, fog: false }));
+      m2.visible = false;
+      scene.add(m2);
+      scorePool.push(m2);
+    }
+  }
+
+  /* LA JAUGE DE VIE. Demande explicite : « on doit voir la jauge ».
+     Le remplissage est un plan DÉCALÉ dans un groupe qu'on met à l'échelle :
+     c'est le seul moyen de faire décroître une barre par la droite sans
+     recalculer sa géométrie, puisqu'un plan se met à l'échelle autour de son
+     centre. Détail idiot, défaut classique — une barre qui rétrécit des deux
+     côtés à la fois ne se lit pas comme une perte de vie. */
+  function buildRoamerHud(cfg, rg) {
+    const W = 2.4, H = 0.30;
+    const grp = new THREE_.Group();
+    const back = new THREE_.Mesh(new THREE_.PlaneGeometry(W + 0.16, H + 0.14),
+      new THREE_.MeshBasicMaterial({ color: 0x140d18, transparent: true, opacity: 0.75,
+        depthWrite: false, fog: false }));
+    grp.add(back);
+    const fillG = new THREE_.Group();
+    const fill = new THREE_.Mesh(new THREE_.PlaneGeometry(W, H),
+      new THREE_.MeshBasicMaterial({ color: 0xe8356e, transparent: true, opacity: 0.95,
+        depthWrite: false, fog: false }));
+    fill.position.x = W / 2;
+    fillG.add(fill);
+    fillG.position.x = -W / 2;
+    grp.add(fillG);
+    grp.position.y = 3.5;
+    grp.visible = false;
+    scene.add(grp);
+
+    // Le blanchiment du coup porté : une boîte additive blanche autour du
+    // tronc. Additive sur une créature presque noire, c'est un éclair.
+    const flash = new THREE_.Mesh(new THREE_.BoxGeometry(1.5, 2.4, 1.3),
+      new THREE_.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0,
+        depthWrite: false, blending: THREE_.AdditiveBlending, fog: false }));
+    flash.position.y = 0.5;
+    rg.hips.add(flash);
+
+    // Le liseré de la cible visée : un disque au sol, sous ses pieds. Au sol
+    // plutôt qu'autour d'elle parce qu'un contour se perd dans un couloir
+    // encombré, alors qu'une tache au sol se voit toujours.
+    const ring = new THREE_.Mesh(new THREE_.PlaneGeometry(4.2, 4.2),
+      new THREE_.MeshBasicMaterial({ map: tex.haloCyan, transparent: true, opacity: 0,
+        depthWrite: false, blending: THREE_.AdditiveBlending, fog: false }));
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = 0.12;
+    ring.visible = false;
+    scene.add(ring);
+
+    return { grp, fillG, flash, ring, W };
   }
 
   /* -----------------------------------------------------------------------
@@ -286,6 +675,9 @@ const World = (function () {
     for (let y = 0; y < m.G; y++) for (let x = 0; x < m.G; x++) {
       const j = m.idx(x, y);
       if (!m.cells[j]) continue;
+      // La rotonde a sa propre couronne de torches (voir buildRotunda) : celles
+      // de la grille tomberaient dans la maçonnerie des coins.
+      if (inRotunda(m, x, y)) continue;
       for (const S of SIDES) {
         k++;
         if (m.linked(x, y, S.d)) continue;              // face ouverte : pas de mur
@@ -325,7 +717,12 @@ const World = (function () {
      à supprimer la seule vue dégagée du jeu.
      -------------------------------------------------------------------- */
   function buildCeiling(cfg, m) {
-    const inRoom = (x, y) => m.rooms.some(r => x >= r.x - 1 && x < r.x + r.w + 1 && y >= r.y - 1 && y < r.y + r.h + 1);
+    /* ⚠️ LA ROTONDE EST À CIEL OUVERT, comme les salles — c'est même la seule
+       vraie vue dégagée du jeu, et la couvrir supprimerait tout ce qu'elle
+       apporte. On l'ajoute donc au test, avec une cellule de marge. */
+    const inRoom = (x, y) => m.rooms.some(r => x >= r.x - 1 && x < r.x + r.w + 1 && y >= r.y - 1 && y < r.y + r.h + 1)
+      || (m.rotunda && x >= m.rotunda.x - 1 && x < m.rotunda.x + m.rotunda.w + 1
+                    && y >= m.rotunda.y - 1 && y < m.rotunda.y + m.rotunda.h + 1);
     const woodMat = new THREE_.MeshLambertMaterial({ map: tex.wood });
     const slabMat = new THREE_.MeshLambertMaterial({ map: tex.wall2 });
     const beamGeo = new THREE_.BoxGeometry(cfg.CELL, 0.55, 0.75);
@@ -394,10 +791,11 @@ const World = (function () {
     for (const t of st.torches) {
       const g = brazier(cfg);
       const [wx, wz] = Rules.centerOf(cfg, t.x, t.y);
-      g.position.set(wx, 0, wz);
+      const gy = Rules.groundY(cfg, m, wx, wz);
+      g.position.set(wx, gy, wz);
       scene.add(g);
       const lamp = new THREE_.PointLight(cfg.COL_TORCH, 1.9, cfg.CELL * 3.4, 2);
-      lamp.position.set(wx, 5.2, wz);
+      lamp.position.set(wx, gy + 5.2, wz);
       scene.add(lamp);
       brazierMeshes.push({ g, t, lamp });
     }
@@ -443,9 +841,10 @@ const World = (function () {
           blending: THREE_.AdditiveBlending, depthWrite: false, fog: false }));
       grp.add(halo);
       const [wx, wz] = Rules.centerOf(cfg, sh.x, sh.y);
-      grp.position.set(wx, 1.9, wz);
+      const gy = Rules.groundY(cfg, m, wx, wz);
+      grp.position.set(wx, gy + 1.9, wz);
       scene.add(grp);
-      shardMeshes.push({ mesh: grp, s: sh, halo });
+      shardMeshes.push({ mesh: grp, s: sh, halo, gy });
     }
     const pg = new THREE_.BoxGeometry(0.7, 1.0, 0.7);
     for (const po of st.potions) {
@@ -457,7 +856,7 @@ const World = (function () {
           blending: THREE_.AdditiveBlending, depthWrite: false, fog: false }));
       grp.add(halo);
       const [wx, wz] = Rules.centerOf(cfg, po.x, po.y);
-      grp.position.set(wx, 0.9, wz);
+      grp.position.set(wx, Rules.groundY(cfg, m, wx, wz) + 0.9, wz);
       scene.add(grp);
       potionMeshes.push({ mesh: grp, p: po, halo });
     }
@@ -506,7 +905,7 @@ const World = (function () {
      ======================================================================= */
   function init(cfg, m, st, canvas, sk) {
     THREE_ = window.THREE;
-    CFG_ = cfg; ST_ = st; skin = sk;
+    CFG_ = cfg; ST_ = st; M_ = m; skin = sk;
 
     /* ⚠️ ON REPART DE ZÉRO. Sans cette remise à zéro, un second appel à init()
        CUMULAIT les collections du module — et init() est rappelé à chaque
@@ -521,11 +920,16 @@ const World = (function () {
     roamerRigs = []; playerRig = null; stalkerRig = null; stalkerHalo = null; prev = null;
     stalkerMesh = null; sword3 = null; player = null;
     torchMesh = null; flameMesh = null; torchHalo = null; skyMesh = null;
+    // ⚠️ Zip 396 : les collections neuves se remettent à zéro AVEC les autres.
+    // C'est la ligne qu'on oublie, et c'est le défaut du 393 — la deuxième
+    // partie plantait, celle qu'on joue toujours.
+    lakeMists = []; roamerHud = []; sparkPool = []; soulPool = []; scorePool = [];
+    gateMesh = null; platformGroup = null; rotundaGroup = null; stalkerFlash = null;
 
     scene = new THREE_.Scene();
     scene.fog = new THREE_.Fog(cfg.COL_FOG, cfg.FOG_NEAR_FULL, cfg.FOG_FAR_FULL);
 
-    camera = new THREE_.PerspectiveCamera(74, 1, 0.1, m.G * cfg.CELL * 4);
+    camera = new THREE_.PerspectiveCamera(cfg.CAM_FOV, 1, 0.1, m.G * cfg.CELL * 4);
     renderer = new THREE_.WebGLRenderer({ canvas, antialias: false });
     renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
 
@@ -537,7 +941,11 @@ const World = (function () {
     buildGlows(cfg, m, st);
     buildWallTorches(cfg, m);
     buildCeiling(cfg, m);
+    buildRotunda(cfg, m);      // zip 396 : la salle centrale
     buildProps(cfg, m, st);
+    buildPlatform(cfg, m);      // zip 396 : le renoncement...
+    buildGate(cfg, m, st);      // ... et ce qui le referme
+    buildFx(cfg);               // ... et les effets du combat
 
     /* L'ÉCLAIRAGE. ⚠️ REVU EN ENTIER AU 394 : l'ambiante passe de 0,06 à 0,30
        et gagne une hémisphérique. La première version faisait de la torche du
@@ -582,11 +990,20 @@ const World = (function () {
       scene.add(rg.root);
       roamerRigs.push(rg);
       roamerMeshes.push(rg.root);
+      roamerHud.push(buildRoamerHud(cfg, rg));   // zip 396 : jauge, éclair, liseré
     }
     stalkerRig = Rig.buildStalker(cfg);
     stalkerMesh = stalkerRig.root;
     stalkerMesh.visible = false;
     scene.add(stalkerMesh);
+    // Le traqueur a l'éclair du coup porté mais NI jauge NI liseré : il n'a
+    // pas de points de vie et on ne le tue pas. Lui donner une barre serait
+    // promettre qu'on peut la vider.
+    stalkerFlash = new THREE_.Mesh(new THREE_.BoxGeometry(1.4, 3.4, 1.2),
+      new THREE_.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0,
+        depthWrite: false, blending: THREE_.AdditiveBlending, fog: false }));
+    stalkerFlash.position.y = 0.6;
+    stalkerRig.spine.add(stalkerFlash);
     // Halo violet autour du crâne du traqueur : il le rend repérable au fond
     // d'un couloir avant même qu'on distingue sa silhouette.
     stalkerHalo = new THREE_.Mesh(new THREE_.PlaneGeometry(3.4, 3.4),
@@ -597,7 +1014,43 @@ const World = (function () {
     snapPrev(st);
 
     cam.x = st.px; cam.y = cfg.CAM_HEIGHT; cam.z = st.pz + cfg.CAM_DIST;
+    cam.ang = st.ang;      // zip 396 : la caméra démarre DERRIÈRE, pas en train de rattraper
     resize();
+  }
+
+  /* =======================================================================
+     reskin — ZIP 396 : CHANGER LA TENUE SANS RECONSTRUIRE LE LABYRINTHE.
+     -----------------------------------------------------------------------
+     C'est la moitié de la réparation de la page de lancement. La ferme envoie
+     la tenue du joueur (vf-lab-init) APRÈS le chargement de la page ; game.js
+     rejouait alors newRun() en entier, c'est-à-dire regénérait le dédale,
+     repeignait les textures et reconstruisait 2 400 maillages — pour changer
+     quatre couleurs. D'où le gel signalé par Guillaume, juste avant que
+     l'écran-titre s'affiche.
+
+     Ici on ne refait QUE le fermier : une centaine de volumes, quelques
+     millisecondes. Le décor, lui, n'a jamais rien eu à voir avec la tenue.
+
+     ⚠️ ON REPREND LA POSITION ET LA VISIBILITÉ DE L'ÉPÉE de l'ancien rig. Un
+     joueur qui change de tenue au milieu d'une partie (ça n'arrive pas
+     aujourd'hui, mais rien ne l'interdit) ne doit pas être téléporté à
+     l'origine ni désarmé.
+     ======================================================================= */
+  function reskin(cfg, sk) {
+    if (!playerRig || !scene) return;
+    const old = playerRig;
+    const pos = old.root.position, rot = old.root.rotation.y, armed = old.sword.visible;
+    scene.remove(old.root);
+    skin = sk;
+    playerRig = Rig.buildFarmer(cfg, tex, sk);
+    player = playerRig.root;
+    player.position.set(pos.x, pos.y, pos.z);
+    player.rotation.y = rot;
+    playerRig.sword.visible = armed;
+    scene.add(player);
+    playerRig.torch.add(flameMesh);
+    playerRig.torch.add(torchHalo);
+    torchMesh = playerRig.torch;
   }
 
   function resize() {
@@ -632,7 +1085,13 @@ const World = (function () {
     const pang = prev ? lerpA(prev.ang, st.ang, a) : st.ang;
     const pgait = prev ? lerpGait(prev.gait, st.gait, a) : st.gait;
 
-    player.position.set(px, 0, pz);
+    /* ⚠️ LA HAUTEUR DU SOL VIENT DE Rules.groundY (zip 396), jamais d'un
+       calcul local. C'est une fonction PURE du moteur : le fermier, les
+       créatures, la caméra et les marches de l'escalier lisent tous la même,
+       donc personne ne peut flotter au-dessus d'une marche que quelqu'un
+       d'autre aurait posée ailleurs. */
+    const pY = Rules.groundY(cfg, M_, px, pz);
+    player.position.set(px, pY, pz);
     player.rotation.y = pang;
     player.visible = st.status !== "falling" || (now % 200 < 120);
     playerRig.sword.visible = st.hasSword;
@@ -666,7 +1125,7 @@ const World = (function () {
     th.scale.set(0.5 + fl.k, 0.5 + fl.k, 1);
     th.lookAt(camera.position);
 
-    torchLight.position.set(px - Math.sin(pang) * 1.4, 3.2, pz - Math.cos(pang) * 1.4);
+    torchLight.position.set(px - Math.sin(pang) * 1.4, pY + 3.2, pz - Math.cos(pang) * 1.4);
     torchLight.distance = cfg.TORCH_LIGHT_MIN + (cfg.TORCH_LIGHT_MAX - cfg.TORCH_LIGHT_MIN) * fl.k;
     torchLight.intensity = (0.6 + fl.k * 2.4) * flick;
 
@@ -704,7 +1163,7 @@ const World = (function () {
     for (const s of shardMeshes) {
       s.mesh.visible = !s.s.taken;
       if (!s.mesh.visible) continue;
-      s.mesh.position.y = 1.9 + Math.sin(t * 2.2 + s.s.x) * CFG_.SHARD_BOB;
+      s.mesh.position.y = (s.gy || 0) + 1.9 + Math.sin(t * 2.2 + s.s.x) * CFG_.SHARD_BOB;
       s.halo.lookAt(camera.position);
     }
     for (const p of potionMeshes) {
@@ -714,13 +1173,18 @@ const World = (function () {
 
     // --- créatures, interpolées et posées par rig.js
     for (let i = 0; i < roamerRigs.length; i++) {
-      const r = st.roamers[i], rg = roamerRigs[i];
-      rg.root.visible = !r.dead || r.deadT < 3;
-      if (!rg.root.visible) continue;
+      const r = st.roamers[i], rg = roamerRigs[i], hud = roamerHud[i];
+      // ⚠️ La durée de vie du cadavre vient de CFG.KILL_VANISH_MS, la même
+      // constante que celle qui pilote la désintégration dans rig.js. Au 395
+      // elle était écrite « 3 » ici et nulle part ailleurs : la créature
+      // disparaissait donc au milieu de son animation de mort si l'une des
+      // deux valeurs bougeait.
+      rg.root.visible = !r.dead || r.deadT < cfg.KILL_VANISH_MS / 1000;
+      if (!rg.root.visible) { hud.grp.visible = false; hud.ring.visible = false; continue; }
       const pr = prev && prev.roamers[i];
       const rx = pr ? Rig.lerp(pr.x, r.x, a) : r.x;
       const rz = pr ? Rig.lerp(pr.z, r.z, a) : r.z;
-      rg.root.position.set(rx, 0, rz);
+      rg.root.position.set(rx, Rules.groundY(cfg, M_, rx, rz), rz);
       rg.root.rotation.y = pr ? lerpA(pr.ang, r.ang, a) : r.ang;
       Rig.poseRoamer(rg, {
         gait: pr ? lerpGait(pr.gait, r.gait, a) : r.gait,
@@ -729,14 +1193,37 @@ const World = (function () {
         stagger: r.staggerT / (cfg.ROAMER_STAGGER_MS / 1000),
         dead: r.dead, deadT: r.deadT,
       }, cfg, t + i * 1.7);   // décalage : deux créatures ne respirent jamais ensemble
+
+      /* ---- ZIP 396 : LA JAUGE, L'ÉCLAIR ET LE LISERÉ.
+         La jauge ne s'affiche pas en permanence : elle apparaît quand la
+         créature est ASSEZ PRÈS pour qu'on la combatte. Une barre au fond d'un
+         couloir ne renseigne sur rien et trahit une position que le noir était
+         censé cacher — le noir protège aussi le joueur, c'est une règle du
+         393 qu'un HUD trop bavard annulerait. */
+      const dPlayer = Math.hypot(rx - px, rz - pz);
+      const near = !r.dead && dPlayer < cfg.HP_BAR_RANGE;
+      hud.grp.visible = near;
+      if (near) {
+        hud.grp.position.set(rx, Rules.groundY(cfg, M_, rx, rz) + 3.9, rz);
+        hud.grp.lookAt(camera.position);
+        const k2 = Math.max(0, Math.min(1, r.hp / (r.hpMax || cfg.ROAMER_HP)));
+        hud.fillG.scale.set(k2, 1, 1);
+      }
+      hud.flash.material.opacity = (r.hitFlash || 0) * 0.55;
+      hud.ring.visible = (r.aimT || 0) > 0 && !r.dead;
+      if (hud.ring.visible) {
+        hud.ring.position.set(rx, Rules.groundY(cfg, M_, rx, rz) + 0.12, rz);
+        hud.ring.material.opacity = Math.min(0.7, r.aimT * 1.4);
+      }
     }
     stalkerMesh.visible = st.stalkerAwake;
+    if (stalkerFlash) stalkerFlash.material.opacity = (st.stalker.hitFlash || 0) * 0.45;
     if (st.stalkerAwake) {
       const s2 = st.stalker;
       const sx = prev ? Rig.lerp(prev.sx, s2.x, a) : s2.x;
       const sz = prev ? Rig.lerp(prev.sz, s2.z, a) : s2.z;
       const sang = prev ? lerpA(prev.sang, s2.ang, a) : s2.ang;
-      stalkerMesh.position.set(sx, 0, sz);
+      stalkerMesh.position.set(sx, Rules.groundY(cfg, M_, sx, sz), sz);
       stalkerMesh.rotation.y = sang;
       // Angle RELATIF vers le joueur : c'est ce qui fait tourner son crâne
       // vers nous quoi qu'il fasse.
@@ -752,14 +1239,116 @@ const World = (function () {
       if (stalkerHalo) stalkerHalo.lookAt(camera.position);
     }
 
-    // --- lac, ciel et phare
+    /* --- LAC, CIEL ET PHARE.
+       ⚠️ LES DEUX NAPPES DÉRIVENT À DES VITESSES DIFFÉRENTES, et c'est tout
+       l'effet : c'est leur décalage qui miroite, pas leur dessin. Les deux
+       vitesses sont celles du défi de fuite. */
     lakeMat.map.offset.x = t * 0.035;
     lakeMat.map.offset.y = t * 0.022;
+    if (lakeGlowMat) {
+      lakeGlowMat.map.offset.x = -t * 0.021;
+      lakeGlowMat.map.offset.y = t * 0.014;
+    }
+    // Les voiles orbitent autour du JOUEUR : ils l'entourent donc toujours,
+    // où qu'il soit, sans qu'on en sème sur 414 unités de côté.
+    for (let i = 0; i < lakeMists.length; i++) {
+      const mm = lakeMists[i], u = mm.userData;
+      const ang = u.orbit + t * u.speed;
+      mm.position.set(px + Math.cos(ang) * u.radius, cfg.LAKE_Y + 0.9 + Math.sin(t * 0.3 + i) * 0.5,
+                      pz + Math.sin(ang) * u.radius);
+    }
     beaconMat.opacity = 0.3 + Math.sin(t * Math.PI * 2 * CFG_.BEACON_PULSE) * 0.14;
     if (skyMesh) skyMesh.rotation.y = t * 0.004;   // très lent : le ciel bouge à peine
 
+    syncGate(st, cfg, t);
+    syncFx(st, cfg, t);
     updateCamera(st, cfg, px, pz, pang);
     renderer.render(scene, camera);
+  }
+
+  /* -----------------------------------------------------------------------
+     LA HERSE ET LA PLATEFORME, à l'image (zip 396).
+     -----------------------------------------------------------------------
+     ⚠️ LA HERSE NE DÉCIDE DE RIEN ICI : rules.js a déjà tranché son état
+     (0 ouverte, 1 elle tombe, 2 fermée) et le moment où sa boîte rejoint les
+     murs. On ne fait que la POSER à la hauteur que dit gate.t. Une porte qui
+     descendrait au rendu et bloquerait au moteur à un autre instant, c'est
+     très exactement le défaut du zip 387 — deux descriptions d'une même chose.
+     -------------------------------------------------------------------- */
+  function syncGate(st, cfg, t) {
+    if (!gateMesh) return;
+    const g = st.gate;
+    const top = cfg.WALL_H + 1.2;
+    if (g.state === 0) {
+      // Suspendue, et elle FRÉMIT quand l'échéance approche : c'est le seul
+      // avertissement non écrit, et il vaut mieux qu'un compte à rebours.
+      const soon = st.abandonT > 0 && st.abandonT < cfg.GATE_WARN_MS / 1000;
+      gateMesh.position.y = top + (soon ? Math.sin(t * 34) * 0.09 : 0);
+    } else if (g.state === 1) {
+      // Chute accélérée : une herse ne descend pas, elle TOMBE.
+      const k = Math.min(1, g.t * 1000 / cfg.GATE_FALL_MS);
+      gateMesh.position.y = top - (top - cfg.WALL_H / 2 + 0.4) * (k * k);
+    } else {
+      gateMesh.position.y = cfg.WALL_H / 2 - 0.4;
+    }
+    if (platformGroup) {
+      // La plateforme s'éteint une fois la herse close : elle ne mène plus
+      // nulle part, et une lumière qui invite vers une porte fermée est un
+      // mensonge de plus dans un jeu qui en a déjà assez.
+      const open = g.state !== 2;
+      const pulse = 0.20 + Math.sin(t * 2.2) * 0.07;
+      if (platformGroup.userData.col)
+        platformGroup.userData.col.material.opacity = open ? pulse : 0.03;
+      for (const s of [-1, 1]) {
+        const h = platformGroup.userData["halo" + s];
+        if (h) { h.material.opacity = open ? 0.45 + Math.sin(t * 2.6 + s) * 0.12 : 0.06; h.lookAt(camera.position); }
+      }
+    }
+  }
+
+  /* LES ÉTINCELLES, LES ÂMES ASPIRÉES ET LES POINTS QUI MONTENT.
+     Tout est piloté par st.fx, produit par rules.js : le rendu ne décide ni
+     du moment, ni de l'endroit, ni de la durée. Il lit. */
+  function syncFx(st, cfg, t) {
+    let is = 0, iso = 0, isc = 0;
+    for (const f of st.fx) {
+      const k = f.t / f.ttl;
+      if (f.kind === "spark") {
+        // Huit éclats par gerbe, chacun sur sa propre trajectoire tirée du
+        // rang : déterministe, donc identique d'une rediffusion à l'autre.
+        for (let i = 0; i < 8 && is < sparkPool.length; i++, is++) {
+          const m2 = sparkPool[is];
+          const a2 = Paint.noise(i * 17 + 3) * Math.PI * 2;
+          const el = 0.3 + Paint.noise(i * 29) * 1.6;
+          const sp = 3.4 + Paint.noise(i * 13) * 4.0;
+          m2.visible = true;
+          m2.position.set(f.x + Math.cos(a2) * sp * f.t,
+                          f.y + el * f.t * 3.2 - 9 * f.t * f.t,
+                          f.z + Math.sin(a2) * sp * f.t);
+          const s = Math.max(0.05, 1 - k);
+          m2.scale.set(s, s, s);
+          m2.material.opacity = 1 - k;
+        }
+      } else if (f.kind === "soul" && iso < soulPool.length) {
+        const m2 = soulPool[iso++];
+        m2.visible = true;
+        m2.position.set(f.x, 4.5 + k * cfg.KILL_RISE, f.z);
+        // Elle s'étrangle en montant : une colonne d'aspiration se resserre,
+        // sinon on lit « explosion » et pas « aspiration ».
+        m2.scale.set(1 - k * 0.75, 1 + k * 0.8, 1 - k * 0.75);
+        m2.material.opacity = 0.55 * (1 - k * k);
+      } else if (f.kind === "score" && isc < scorePool.length) {
+        const m2 = scorePool[isc++];
+        m2.visible = true;
+        m2.position.set(f.x, f.y + k * 2.6, f.z);
+        m2.lookAt(camera.position);
+        m2.material.opacity = k < 0.15 ? k / 0.15 : 1 - (k - 0.15) / 0.85;
+      }
+    }
+    for (; is < sparkPool.length; is++) sparkPool[is].visible = false;
+    for (; iso < soulPool.length; iso++) soulPool[iso].visible = false;
+    for (; isc < scorePool.length; isc++) scorePool[isc].visible = false;
+    void t;
   }
 
   /* LA CAMÉRA NE TRAVERSE PAS LES MURS. Elle voudrait se poser à CAM_DIST
@@ -768,9 +1357,37 @@ const World = (function () {
      DANS la pierre et l'écran devient noir — le défaut le plus banal du genre,
      et le plus insupportable. */
   function updateCamera(st, cfg, px, pz, pang) {
+    /* ⚠️ ZIP 396 — LA CAMÉRA A SON PROPRE CAP, ET C'EST TOUTE LA RÉPONSE À
+       « la caméra bouge trop, difficile à naviguer pour un simple clavier ».
+
+       Jusqu'ici cette fonction recevait `pang` — le cap du FERMIER — et posait
+       la caméra derrière lui. Elle tournait donc exactement avec lui, à la
+       même vitesse, à la même image : appuyer sur une flèche faisait pivoter
+       le décor entier d'un bloc. Le lissage de POSITION ajouté au 395 n'y
+       pouvait rien, puisqu'il lissait un point qui tournait déjà.
+
+       Maintenant, `cam.ang` RATTRAPE `pang` :
+         * rien ne bouge tant que l'écart reste sous CAM_ANG_DEAD. C'est cette
+           zone morte qui supprime le frémissement permanent des micro-
+           corrections, et c'est elle qu'on sent le plus ;
+         * au-delà, on rattrape en exponentielle, donc indépendamment de la
+           cadence d'écran — la seule forme qui le soit.
+
+       Conséquence recherchée : on voit le fermier PIVOTER DANS LE CADRE avant
+       que le cadre ne suive. C'est ce décalage qui rend un virage lisible, et
+       c'est aussi ce qui fait qu'on ne perd plus le nord dans un croisement. */
+    let d0 = pang - cam.ang;
+    while (d0 > Math.PI) d0 -= Math.PI * 2;
+    while (d0 < -Math.PI) d0 += Math.PI * 2;
+    const over = Math.abs(d0) - cfg.CAM_ANG_DEAD;
+    if (over > 0) {
+      const k0 = 1 - Math.exp(-cfg.CAM_ANG_LAG * frameDt);
+      cam.ang += Math.sign(d0) * over * k0;
+    }
+
     const back = cfg.CAM_DIST;
     let d = back;
-    const dirX = Math.sin(pang), dirZ = Math.cos(pang);   // vers l'arrière
+    const dirX = Math.sin(cam.ang), dirZ = Math.cos(cam.ang);   // vers l'arrière
     for (let s = 0.5; s <= back; s += 0.5) {
       const tx = px + dirX * s, tz = pz + dirZ * s;
       const near = st.idxB.near(tx, tz);
@@ -790,7 +1407,9 @@ const World = (function () {
     const k = 1 - Math.exp(-cfg.CAM_LAG * frameDt);
     cam.x += (wantX - cam.x) * k;
     cam.z += (wantZ - cam.z) * k;
-    cam.y += (cfg.CAM_HEIGHT - cam.y) * k;
+    /* La caméra suit le sol elle aussi : sans ça, descendre dans la rotonde
+       la ferait raser les gradins puis passer sous le fermier. */
+    cam.y += (cfg.CAM_HEIGHT + Rules.groundY(cfg, M_, px, pz) - cam.y) * k;
     const shake = st.camShake;
     camera.position.set(
       cam.x + (Math.random() - 0.5) * shake,
@@ -798,7 +1417,7 @@ const World = (function () {
       cam.z + (Math.random() - 0.5) * shake);
     // Pendant la chute, on regarde EN BAS : c'est le seul moment où le lac est
     // le sujet, et il faut qu'on le voie arriver.
-    const lookY = st.status === "falling" ? cfg.LAKE_Y : cfg.CAM_LOOK_H;
+    const lookY = st.status === "falling" ? cfg.LAKE_Y : cfg.CAM_LOOK_H + Rules.groundY(cfg, M_, px, pz);
     camera.lookAt(px, lookY, pz);
   }
 
@@ -807,5 +1426,5 @@ const World = (function () {
     player.position.y -= dt * 16;
   }
 
-  return { init, sync, snapPrev, resize, fallStep, get renderer() { return renderer; } };
+  return { init, sync, snapPrev, resize, fallStep, reskin, get renderer() { return renderer; } };
 })();

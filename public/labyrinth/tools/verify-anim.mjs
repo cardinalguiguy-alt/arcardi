@@ -175,20 +175,34 @@ const JOINTS = (r) => [
 
 {
   /* 6. contraires : bras gauche avec jambe droite.
-     ⚠️ ON ARME LE FERMIER AVANT DE MESURER. Le bras droit porte un décalage
-     de garde (-0,30 rad) qui n'existe QUE l'épée en main ; sans ça, le test
-     compensait un décalage absent et se trompait de signe six images sur
-     cinquante-quatre, près des passages par zéro. Le contrôle mesurait son
-     propre décalage, pas le contre-balancement. */
+     ⚠️ ON ARME LE FERMIER AVANT DE MESURER : le bras droit porte un décalage
+     de garde qui n'existe QUE l'épée en main.
+
+     ⚠️ ET ON NE CONNAÎT PLUS CE DÉCALAGE (correction du 396). La version
+     précédente ajoutait « +0,30 » en dur, c'est-à-dire la valeur de garde du
+     zip 395 recopiée dans le contrôle. Le 396 a changé cette pose — signes
+     d'articulation corrigés — et le contrôle a échoué alors que le
+     contre-balancement, lui, était parfaitement juste : il mesurait l'écart
+     entre le code et SA PROPRE COPIE d'une constante, pas le balancement des
+     bras. C'est le piège du 394 en miniature.
+
+     La parade est celle qu'on applique partout ailleurs : on ne suppose rien,
+     on MESURE la position moyenne du bras sur le cycle et on regarde s'il
+     oscille autour d'elle en opposition avec la jambe. Ça reste vrai quelle
+     que soit la garde, aujourd'hui et dans dix zips. */
   rig.sword.visible = true;
+  const poseAt = (gait) => Rig.poseFarmer(rig,
+    { gait, gaitSpeed: CFG.WALK_SPEED, runAmt: 0, strafeAmt: 0, backAmt: 0,
+      swingT: 0, hurt: 0, falling: false }, CFG, 0);
+  let mean = 0;
+  for (let i = 0; i < 60; i++) { poseAt(i / 60); mean += rig.armR.sh.rotation.x; }
+  mean /= 60;
   let agree = 0, n = 0;
   for (let i = 0; i < 60; i++) {
-    const gait = i / 60;
-    Rig.poseFarmer(rig, { gait, gaitSpeed: CFG.WALK_SPEED, runAmt: 0, strafeAmt: 0, backAmt: 0,
-      swingT: 0, hurt: 0, falling: false }, CFG, 0);
+    poseAt(i / 60);
     // La jambe gauche avance quand hip.x > 0 ; le bras DROIT doit alors avancer
-    // aussi (il est libre), donc sh.x et hip gauche de même signe.
-    const legL = rig.legL.hip.rotation.x, armR = rig.armR.sh.rotation.x + 0.30;
+    // aussi (il est libre), donc s'écarter de sa moyenne dans le même sens.
+    const legL = rig.legL.hip.rotation.x, armR = rig.armR.sh.rotation.x - mean;
     if (Math.abs(legL) > 0.15) { n++; if (Math.sign(legL) === Math.sign(armR)) agree++; }
   }
   ok("bras droit et jambe gauche se répondent", n > 20 && agree / n > 0.9, `${agree}/${n} images en accord`);

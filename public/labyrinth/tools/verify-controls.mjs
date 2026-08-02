@@ -99,5 +99,84 @@ const fwdOf = (st) => [-Math.sin(st.ang), -Math.cos(st.ang)];
   ok("un demi-tour se fait en moins de 1,5 s", f / CFG.SIM_HZ < 1.5, `${(f / CFG.SIM_HZ).toFixed(2)} s`);
 }
 
+/* ===========================================================================
+   ZIP 396 — LE RECALAGE SUR LE COULOIR, LA PASSERELLE, LA HERSE
+   ---------------------------------------------------------------------------
+   Trois mécaniques neuves, et les trois se posent comme des questions en
+   français sur un RÉSULTAT — jamais sur une formule. C'est la seule façon de
+   ne pas refaire l'erreur du 394, où sept scripts partageaient la convention
+   du code qu'ils vérifiaient et ne voyaient donc pas des commandes inversées.
+   ========================================================================= */
+const q = Math.PI / 2;
+{
+  /* On lâche le fermier à 0,25 rad de l'axe, en marche avant, sans toucher aux
+     flèches. Le recalage doit le ramener sur l'axe — c'est exactement le geste
+     d'un joueur qui a relâché sa flèche un peu trop tard. */
+  const st = fresh();
+  st.ang = 0.25;
+  run(st, { fwd: 1 }, 30);
+  ok("lâcher la flèche recale-t-il le cap sur le couloir ?",
+    Math.abs(st.ang) < 0.06, `cap ${st.ang.toFixed(3)} rad après 1 s (départ 0,250)`);
+}
+{
+  /* ... mais PAS quand on vise délibérément en diagonale. À 0,70 rad on est
+     hors de SNAP_WINDOW : le jeu doit laisser la main. */
+  const st = fresh();
+  st.ang = 0.70;
+  run(st, { fwd: 1 }, 30);
+  ok("viser en diagonale reste-t-il possible (hors fenêtre de recalage) ?",
+    Math.abs(st.ang - 0.70) < 0.02, `cap ${st.ang.toFixed(3)} rad, inchangé`);
+}
+{
+  /* ... ni à l'arrêt : on tourne pour REGARDER, et recaler quelqu'un qui
+     inspecte un mur serait le contraire du service rendu. */
+  const st = fresh();
+  st.ang = 0.25;
+  run(st, {}, 30);
+  ok("à l'arrêt, le cap est-il laissé tranquille ?",
+    Math.abs(st.ang - 0.25) < 0.02, `cap ${st.ang.toFixed(3)} rad, inchangé`);
+}
+{
+  /* LA PASSERELLE. On repart de la VRAIE position de départ (fresh() déplace
+     le fermier au large) et on recule, ce que fait un joueur qui se retourne. */
+  const m = Maze.generate(CFG, 4242);
+  const st = Rules.create(CFG, m, 4242);
+  let f = 0;
+  while (st.status === "play" && f < 300) { run(st, { fwd: -1 }, 1); f++; }
+  ok("reculer au départ mène-t-il dehors, sans mourir ?",
+    st.status === "abandon", `issue « ${st.status} » en ${(f / CFG.SIM_HZ).toFixed(1)} s`);
+}
+{
+  /* LA HERSE. On attend, immobile : l'horloge ne doit PAS démarrer — décision
+     de Guillaume, « le décompte part au premier pas ». */
+  const m = Maze.generate(CFG, 4242);
+  const st = Rules.create(CFG, m, 4242);
+  run(st, {}, CFG.SIM_HZ * 20);
+  ok("rester immobile laisse-t-il la porte ouverte indéfiniment ?",
+    st.gate.state === 0 && st.abandonT < 0, `herse état ${st.gate.state}, horloge ${st.abandonT.toFixed(1)}`);
+}
+{
+  /* On avance quelques pas, puis on attend : la herse doit tomber, et la porte
+     doit être RÉELLEMENT bloquée après — pas seulement dessinée fermée. */
+  const m = Maze.generate(CFG, 4242);
+  const st = Rules.create(CFG, m, 4242);
+  const boxes0 = st.boxes.length;
+  run(st, { fwd: 1 }, 8);                              // le premier pas
+  run(st, {}, Math.ceil(CFG.SIM_HZ * (CFG.ABANDON_MS + CFG.GATE_FALL_MS) / 1000) + 4);
+  ok("la herse tombe-t-elle après les 15 secondes ?",
+    st.gate.state === 2, `état ${st.gate.state}`);
+  ok("... et bloque-t-elle vraiment le passage ?",
+    st.boxes.length === boxes0 + 1, `${st.boxes.length - boxes0} boîte de maçonnerie ajoutée`);
+  // On repousse le fermier vers la porte : il ne doit plus sortir.
+  const before = st.status;
+  run(st, { fwd: -1 }, 200);
+  ok("... au point qu'on ne peut plus faire demi-tour ?",
+    st.status !== "abandon", `statut « ${st.status} » (était « ${before} »)`);
+}
+
 console.log(fails ? `\n${fails} ÉCHEC(S)\n` : "\nToutes les commandes vont dans le bon sens.\n");
+console.log(`Ce script ne dit RIEN du confort réel : il dit que chaque commande
+va dans le sens que le joueur attend, que le recalage aide sans jamais prendre
+la main, et que la passerelle puis la herse font ce qu'elles promettent. Le
+confort, lui, se juge une manette à la main.\n`);
 process.exit(fails ? 1 : 0);

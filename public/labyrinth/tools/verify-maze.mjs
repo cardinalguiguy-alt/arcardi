@@ -58,6 +58,7 @@ let pathMin = 1e9, pathMax = 0, pathSum = 0;
 let gapMax = 0, gapSum = 0, gapN = 0;
 let swordMin = 1e9, swordMax = 0;
 let attempts = 0;
+let rotDoors = 0, rotN = 0;   // zip 396 : la rotonde
 
 const t0 = Date.now();
 for (let s = 1; s <= SEEDS; s++) {
@@ -121,6 +122,74 @@ for (let s = 1; s <= SEEDS; s++) {
   for (const sh of m.shards) if (buried(sh.x, sh.y)) fail(s, "éclat posé dans une cellule murée");
   if (m.sword && buried(m.sword.x, m.sword.y)) fail(s, "épée posée dans une cellule murée");
 
+  /* --- 7. LA ROTONDE (zip 396) — quatre garanties, toutes trouvées en
+     mesurant plutôt qu'en relisant. Elles couvrent la seule chose que cette
+     salle a introduite de dangereux : sa géométrie n'est plus celle de la
+     grille, donc le GRAPHE et le MONDE ont deux descriptions à tenir
+     d'accord. */
+  if (m.rotunda) {
+    const R = m.rotunda;
+    const inRot = (x, y) => x >= R.x && x < R.x + R.w && y >= R.y && y < R.y + R.h;
+
+    // 7a. Elle est ATTEIGNABLE, tous les trous ouverts. Une salle centrale
+    //     qu'on ne peut pas atteindre n'est pas une salle, c'est un décor.
+    {
+      const blk = new Set(st.gaps);
+      const seen = new Uint8Array(m.G * m.G);
+      const q = [[m.entry.x, m.entry.y]];
+      seen[m.idx(m.entry.x, m.entry.y)] = 1;
+      let touched = false;
+      for (let h = 0; h < q.length && !touched; h++) {
+        const [x, y] = q[h];
+        if (inRot(x, y)) { touched = true; break; }
+        for (const d of m.DIRS) {
+          if (!m.linked(x, y, d)) continue;
+          const nx = x + m.DX[d], ny = y + m.DY[d], nj = m.idx(nx, ny);
+          if (seen[nj] || blk.has(nj)) continue;
+          seen[nj] = 1; q.push([nx, ny]);
+        }
+      }
+      if (!touched) fail(s, "la rotonde n'est pas atteignable depuis l'entrée");
+    }
+
+    // 7b. Elle a au moins DEUX portes. Avec une seule, ce serait un
+    //     cul-de-sac : on y descend, on remonte, on n'y revient jamais.
+    let doors = 0;
+    for (let y = R.y; y < R.y + R.h; y++) for (let x = R.x; x < R.x + R.w; x++) {
+      if (!m.cells[m.idx(x, y)]) continue;
+      for (const d of m.DIRS) {
+        const nx = x + m.DX[d], ny = y + m.DY[d];
+        if (inRot(nx, ny)) continue;
+        if (m.inside(nx, ny) && m.linked(x, y, d)) doors++;
+      }
+    }
+    if (doors < 2) fail(s, `la rotonde n'a que ${doors} porte(s)`);
+    rotDoors += doors;
+
+    // 7c. AUCUN TROU dedans. world.js n'y dessine pas le sol de la grille :
+    //     un trou y serait mortel ET invisible. Mesuré au 396 : les chutes
+    //     passaient de 5 % à 17 % des fins de partie.
+    for (const g of m.gaps) if (inRot(g.x, g.y)) fail(s, "trou posé DANS la rotonde (il y serait invisible)");
+    for (const c of m.cracks) if (inRot(c.x, c.y)) fail(s, "dalle fêlée posée DANS la rotonde");
+
+    // 7d. Toute cellule ANNONCÉE ouverte est réellement franchissable : son
+    //     centre doit tomber dans le cercle, pas dans la maçonnerie des
+    //     angles. C'est LE contrôle qui aurait trouvé d'emblée l'effondrement
+    //     du taux de sortie de 78 % à 25 % au début du chantier.
+    {
+      const rad = (R.w * CFG.CELL) / 2 - CFG.WALL / 2;
+      const cx = (R.x + R.w / 2) * CFG.CELL, cz = (R.y + R.h / 2) * CFG.CELL;
+      for (let y = R.y; y < R.y + R.h; y++) for (let x = R.x; x < R.x + R.w; x++) {
+        if (!m.cells[m.idx(x, y)]) continue;
+        const [wx, wz] = Rules.centerOf(CFG, x, y);
+        if (Math.hypot(wx - cx, wz - cz) > rad - CFG.BODY_R)
+          fail(s, `cellule (${x},${y}) annoncée ouverte alors qu'elle est dans la pierre de la rotonde`);
+      }
+      void cz;
+    }
+    rotN++;
+  }
+
   nGaps += m.gaps.length; nCracks += m.cracks.length; nTorches += m.torches.length;
   nRooms += m.rooms.length;
   for (let i = 0; i < m.G * m.G; i++) { const c = m.cells[i]; if (c && (c & (c - 1)) === 0) nBraid++; }
@@ -132,6 +201,7 @@ console.log(`  chemin entrée→sortie   min ${pathMin}  moy ${(pathSum / SEEDS)
 console.log(`  écart max sans brasier moy ${(gapSum / gapN).toFixed(1)}  max ${gapMax}  (plafond ${CFG.TORCH_MAX_GAP})`);
 console.log(`  profondeur de l'épée   ${swordMin}..${swordMax}  (plafond ${CFG.SWORD_MAX_DEPTH})`);
 console.log(`  par dédale : ${avg(nGaps)} trous · ${avg(nCracks)} dalles fêlées · ${avg(nTorches)} brasiers · ${avg(nRooms)} salles · ${avg(nBraid)} culs-de-sac`);
+console.log(`  rotonde                ${rotN}/${SEEDS} présentes · ${(rotDoors / Math.max(1, rotN)).toFixed(1)} portes en moyenne · aucun trou dedans`);
 console.log(`  essais de génération   ${(attempts / SEEDS).toFixed(2)} par dédale (1,00 = aucun rejet)`);
 
 if (errors.length) {
@@ -139,7 +209,7 @@ if (errors.length) {
   for (const e of errors) console.log("   " + e);
   process.exit(1);
 }
-console.log("\nLes six garanties tiennent sur toutes les graines.\n");
+console.log("\nLes dix garanties tiennent sur toutes les graines.\n");
 console.log(`Ce script ne prouve RIEN de l'équilibrage (voir batch-maze.mjs et
 report-maze.mjs), RIEN du rendu (smoke-render.mjs), et rien du plaisir. Un
-labyrinthe peut passer les six contrôles et rester ennuyeux.\n`);
+labyrinthe peut passer les dix contrôles et rester ennuyeux.\n`);

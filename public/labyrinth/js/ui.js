@@ -22,7 +22,8 @@ const UI = (function () {
     const set = (id, v) => { const e = $(id); if (e) e.textContent = v; };
     set("tTitle", L.title); set("tSub", L.sub); set("btnStart", L.start);
     set("cLane", L.cLane); set("cStrafe", L.cStrafe); set("cHit", L.cHit);
-    set("cUse", L.cUse); set("cPause", L.cPause);
+    set("cUse", L.cUse); set("cPause", L.cPause); set("cBack", L.cBack);
+    set("lBack", L.hBack); set("lLoading", L.loading);
     set("tHint", L.hint); set("tHintExit", L.hintExit);
     set("lScore", L.hScore); set("lShards", L.hShards);
     set("lFlame", L.hFlame); set("lBest", L.hBest);
@@ -69,6 +70,24 @@ const UI = (function () {
     const swd = $("swordIcon");
     if (swd) swd.classList.toggle("on", !!st.hasSword);
 
+    /* ZIP 396 — LE COMPTE À REBOURS DU RENONCEMENT.
+       ⚠️ IL LIT st.abandonT, il ne compte pas lui-même. Une horloge tenue par
+       l'interface et une autre par le moteur finissent toujours par ne plus
+       dire la même chose, et le jour où elles divergent c'est la porte qui se
+       ferme au mauvais moment. Ici l'interface ne sait rien : elle affiche.
+       Le compteur n'apparaît QUE pendant la fenêtre — avant le premier pas
+       (abandonT < 0) et une fois la herse tombée, il n'y a rien à montrer. */
+    const bb = $("backBox");
+    if (bb) {
+      const live = st.abandonT > 0 && st.gate.state === 0;
+      bb.classList.toggle("on", live);
+      if (live) {
+        const s = Math.ceil(st.abandonT);
+        if (last.bk !== s) { last.bk = s; const e = $("backT"); if (e) e.textContent = s; }
+        bb.classList.toggle("urgent", st.abandonT <= st.cfg.GATE_WARN_MS / 1000);
+      }
+    }
+
     // LE VOILE D'ANGOISSE. C'est le seul « son » du jeu tant qu'il n'y en a
     // pas : plus il est proche, plus le bord de l'écran rougit.
     const dr = $("dread");
@@ -100,6 +119,10 @@ const UI = (function () {
       else if (ev.type === "crack") toast(L.tipCrack);
       else if (ev.type === "potion") toast(L.tipPotion);
       else if (ev.type === "stalkerWake") toast(L.tipStalker);
+      // Zip 396 : le renoncement s'annonce au premier pas, pas plus tôt.
+      else if (ev.type === "abandonStart") toast(L.tipPlatform);
+      else if (ev.type === "gateWarn") toast(L.tipGateWarn);
+      else if (ev.type === "gateShut") toast(L.tipGateShut);
     }
   }
 

@@ -1,4 +1,4 @@
-# Le Labyrinthe — mini-jeu du Pays du Labyrinthe (zips 393-395)
+# Le Labyrinthe — mini-jeu du Pays du Labyrinthe (zips 393-396)
 
 > **ZIP 395 — LE MOUVEMENT ET LES PERSONNAGES.** Retour de Guillaume : « les
 > mouvements ne sont pas assez soignés, les animations pas du tout
@@ -125,7 +125,7 @@ ce découplage — et non un réglage de vitesse — qui répond à « plus flui
 
 ---
 
-## Vérification — neuf scripts, à relancer TOUS à chaque livraison
+## Vérification — dix scripts, à relancer TOUS à chaque livraison
 
 Un outil qu'on saute n'est pas un filet de sécurité, c'est un fichier mort
 (leçon du zip 375).
@@ -469,3 +469,285 @@ patine pas, qu'elle ne pédale pas contre un mur, qu'elle boucle proprement
 (écart 0,0001 rad entre `gait=0` et `gait=1`), qu'aucun angle ne saute ni ne
 dépasse π, et que le coup d'épée a bien un armé. **Le reste se juge à l'œil, et
 c'est toujours la seule chose qui compte.**
+
+---
+
+# ZIP 396 — LA ROTONDE, LES ARTICULATIONS, LES COMBATS
+
+Sept retours de Guillaume en trois messages. Tous fondés, aucun visible par un outil
+existant. Ce zip est celui où le labyrinthe cesse d'être une démonstration technique
+pour devenir un lieu.
+
+## 1. « L'épée rentre dans le corps. Les bras semblent retournés. »
+
+Les deux reproches n'en font qu'un, et la cause tient en trois lignes de `rig.js`.
+
+Le fermier regarde vers **-Z**. Pour un joint dont l'enfant pend vers le bas, une
+`rotation.x` **positive** envoie l'extrémité vers l'AVANT. Le genou plie donc en
+négatif, et le coude en **positif** : les deux articulations ont des signes OPPOSÉS.
+Le 395 leur donnait le même. Conséquences, mesurées en cinématique directe :
+
+| Ce qui était faux | Ce qu'on mesurait |
+|---|---|
+| coudes en flexion inverse | les deux bras pliaient vers l'arrière |
+| main gauche | la torche était portée à **z = +0,85**, c'est-à-dire dans le dos |
+| inclinaison de course | le fermier se penchait en **arrière** en courant |
+| épée sans rotation propre | la lame remontait l'avant-bras : **9 instants sur 21** du coup d'épée la mettaient dans le buste, les épaules ou le crâne |
+| hauteur du bassin | les bottes descendaient à **y = -0,41**, sous la dalle, en permanence |
+
+L'épée et la torche passent désormais par des joints dédiés (`grip`, `torchJ`). La
+lame **prolonge** l'avant-bras ; le flambeau annule l'angle du bras et reste vertical,
+donc il le restera même si on change la pose demain.
+
+Le fermier a été **redessiné** dans la foulée (demande explicite) : 45 → 99 volumes,
+sans un joint de plus. Visage, mains à pouce, gant d'épée, plis de chemise, revers de
+manche, bottes à semelle et talon, cape courte. Toutes les nuances sont **dérivées**
+de la tenue envoyée par la ferme (`Rig.shade`) : aucune couleur neuve.
+
+### `tools/verify-rig.mjs` — l'outil qui manquait
+
+Il construit le VRAI squelette contre un faux Three.js, compose lui-même les matrices,
+et pose **treize questions en français sur des positions monde** : « la lame reste-t-elle
+hors du corps ? », « le flambeau est-il devant ? », « le coude plie-t-il vers l'avant et
+le genou vers l'arrière ? », « aucun pied ne s'enfonce sous le sol ? ».
+
+Il ne lit **aucun angle**. C'est ce qui le distingue de `verify-anim.mjs`, qui relisait
+des angles et ne pouvait donc rien voir : un angle n'a pas de sens tant qu'on ne l'a pas
+composé avec ceux de ses parents.
+
+> Au passage, `verify-anim.mjs` recopiait « +0,30 » en dur — la garde du 395 — pour
+> tester le contre-balancement des bras. Le 396 a changé cette pose, et le contrôle a
+> échoué alors que le balancement était juste : il mesurait l'écart du code avec **sa
+> propre copie d'une constante**. Il mesure maintenant la moyenne du bras sur le cycle.
+
+## 2. « La caméra bouge trop, difficile à naviguer pour un simple clavier. »
+
+Deux causes, deux remèdes, aucun n'est un réglage de vitesse.
+
+**La caméra était SOUDÉE au cap.** Elle se plaçait derrière le cap courant du fermier :
+une flèche faisait pivoter le décor entier, à la même vitesse, à la même image. Elle a
+maintenant **son propre cap** (`CAM_ANG_LAG`), avec une **zone morte** (`CAM_ANG_DEAD`)
+en deçà de laquelle elle ne bouge pas du tout. On voit le fermier tourner DANS le cadre
+avant que le cadre ne suive. Le champ passe de 74° à 66° (un champ large amplifie toute
+rotation sur les bords : c'est le mécanisme du mal des transports en jeu), et la
+secousse de blessure est divisée par deux.
+
+**Le dédale est à angles droits, un doigt sur une flèche ne l'est pas.** On lâche la
+touche à 8° de l'axe, on avance en biais, on frotte un mur, on corrige, on frotte
+l'autre. Le cap glisse maintenant vers le multiple de 90° le plus proche — mais
+seulement si aucune flèche n'est enfoncée, seulement si la rotation est presque
+arrêtée, seulement si on AVANCE, et seulement dans une fenêtre de `SNAP_WINDOW`. Viser
+en diagonale reste possible. Trois contrôles neufs de `verify-controls.mjs` le disent.
+
+## 3. « Le rendu de l'eau du lac n'est pas convaincant. Copie le endless run. »
+
+L'ancienne texture peignait quatorze **anneaux carrés concentriques**, répétés dix fois
+par dix sur un plan de 414 unités. Un anneau carré répété en grille ne se lit pas comme
+un tourbillon : il se lit comme un circuit imprimé. Le motif était en plus centré sur sa
+tuile, donc la répétition sautait aux yeux.
+
+`Paint.lakeWaves` est recopiée **ligne pour ligne** de `paintLakeWaves` dans
+`public/templerun/js/world.js` : somme de trois sinus dont les périodes divisent la
+tuile (donc sans couture), puissance 3,2 (crêtes fines, creux larges), mêmes deux
+couleurs. Le **montage** aussi : deux nappes de phases et d'échelles différentes qui
+dérivent à des vitesses différentes — c'est leur décalage qui miroite, aucune des deux
+textures ne le contient — plus neuf voiles de brume qui orbitent autour du joueur.
+
+L'échelle physique des vagues est celle du défi (26 et 37 unités par tuile), pas une
+valeur ressemblante. Et le brouillard est revenu sur le lac : il restait net jusqu'à
+400 unités, ce qui étalait le motif sur tout l'horizon.
+
+> **La règle du `fillRect` seul est intacte.** Le défi de fuite écrit sa houle avec
+> `getImageData`/`putImageData`, interdits ici — c'est ce refus qui fait tout le
+> contrôle de `smoke-render.mjs`. On peint donc pixel par pixel, 16 384 `fillRect` de
+> 1×1, une seule fois à la construction. Résultat identique, aucun outil affaibli.
+> Affaiblir un contrôle pour faire passer une texture, c'est perdre le contrôle et
+> garder la texture.
+
+## 4. La passerelle de renoncement et la herse
+
+> « au début du labyrinthe, quand on se retourne on doit voir une plateforme qui si on
+> l'emprunte nous ramène directe dans le maze world. Comme un abandon sans coût. Mais on
+> ne peut faire ça que dans les 15 premières secondes : une porte se referme après. »
+
+Le décompte **part au premier pas** (réponse explicite de Guillaume) : on mesure une
+DISTANCE parcourue, pas un appui de touche. On peut donc regarder autour de soi, lire le
+HUD, comprendre où l'on est, sans que le couperet tombe pendant qu'on lit.
+
+La sortie passe par `vf-lab-exit`, le même message que le bouton « Ressortir » de
+l'écran-titre — celui que la ferme traite déjà comme « aucune conséquence ». Surtout
+**pas** par `quit()`, qui compte l'abandon comme un échec et renvoie le fermier blessé.
+
+> **Ça répare aussi un vrai trou.** Le générateur ouvre le mur sud de la cellule
+> d'entrée pour faire une porte, et **rien ne fermait derrière**. Un joueur qui reculait
+> sortait de la grille — où `handleFloor` ne traite rien, puisqu'il ne connaît que les
+> cellules valides. On ne tombait pas, on ne gagnait pas, on ne mourait pas : on
+> **flottait au-dessus du lac**, indéfiniment. Aucun des neuf outils ne pouvait le voir,
+> parce que l'oracle ne recule jamais au premier pas.
+
+La herse est une boîte de collision comme les autres : elle rejoint `Rules.buildBoxes`
+quand elle touche le sol, donc le moteur l'arrête et `world.js` la dessine par le même
+chemin que tous les murs. Un joueur pile dessous est **poussé vers l'intérieur**, jamais
+écrasé ni coincé — décision prise seul : sans elle il existe une position où la partie
+se fige.
+
+## 5. « On sait pas quand on gagne, si on touche. Il faut voir la jauge. »
+
+Quatre retours visuels, et un cinquième inventé par Guillaume dans sa réponse.
+
+- **Une jauge de vie** au-dessus de chaque rôdeur, face caméra, visible sous 26 unités.
+  Le remplissage est un plan décalé dans un groupe qu'on met à l'échelle : une barre qui
+  rétrécit des deux côtés à la fois ne se lit pas comme une perte de vie.
+- **Le coup porté** : la créature blanchit (boîte additive), une gerbe de huit éclats
+  part du point de contact, et le recul existait déjà. Un coup dans le vide ne produit
+  **rien** — c'est le contraste qui informe, pas l'effet.
+- **La mise à mort** : « +60 » qui monte de l'endroit exact où elle tombe, peint par une
+  fonte 3×5 au `fillRect` (`Paint.number`). Au moment où l'on gagne un échange, on
+  regarde la créature, pas le coin de l'écran.
+- **La désintégration**, demandée mot pour mot : le corps se défait en ses six membres,
+  qui montent en tournant et s'effacent en fin de course. La montée est en k² —
+  accélérée, donc « aspirée » et non « soulevée » — et une colonne violette qui
+  s'étrangle en montant accompagne le tout.
+- **L'assistance à la visée** : le cap pivote vers la créature la plus proche dans la
+  fenêtre du coup. Plafonnée à `AIM_MAX_TURN`, et seulement vers une cible déjà
+  atteignable (`canTouch`). Elle ne change ni la portée ni les dégâts.
+
+Et le combat est **matériellement plus permissif**, choix explicite de Guillaume :
+portée 2,9 → 3,8, arc 112° → 135°, repos 420 → 240 ms, coût en flamme 5 % → 3 %, et
+surtout sonnerie du rôdeur 380 → **620 ms**. Ce dernier nombre se lit avec le repos : le
+second coup demande 540 ms, donc à 380 la « fenêtre du second coup » **n'existait pas**,
+malgré son nom. Elle vaut maintenant 80 ms — étroite, mais réelle. C'est elle qui rend
+un rôdeur tuable en un échange.
+
+## 6. « Revoir la page de lancement qui bug un peu avant de s'afficher. »
+
+Cause racine trouvée : le labyrinthe était construit **deux fois**. La ferme envoie la
+tenue du joueur (`vf-lab-init`) APRÈS le chargement de l'iframe, et `game.js` rejouait
+alors `newRun()` en entier — génération du dédale, sept textures, 3 300 maillages —
+pour changer quatre couleurs de vêtement. Le second passage tombait pile au moment où
+l'écran-titre devait apparaître.
+
+`World.reskin()` ne refait que le fermier. Et le titre n'est plus affiché par le HTML :
+il attend que la **première image 3D** soit réellement passée par `renderer.render()`,
+derrière un écran de chargement.
+
+## 7. LA ROTONDE — la salle centrale circulaire à escaliers
+
+> « je veux une salle centrale circulaire avec escaliers comme montrée ici. »
+
+Toujours au centre, toujours identique, toujours 5 cellules de côté — à l'inverse de
+tout le reste du générateur. C'est délibéré : un labyrinthe entièrement aléatoire n'a
+aucun point de repère, donc aucun souvenir. La rotonde est le seul endroit dont on
+puisse dire « j'y suis déjà passé », et c'est ce qui transforme une errance en
+exploration. Elle est aussi le seul lieu à ciel ouvert, la seule vue dégagée, le seul
+brasier dont on sache l'existence avant d'y arriver, et son fût de lumière dépasse les
+murs — on ne peut pas la rater.
+
+**Le mur rond est fait de blocs carrés**, posés là où la distance au centre dépasse le
+rayon : un cercle de Bresenham en maçonnerie. Ce n'est pas un pis-aller. Une boîte de
+collision de ce moteur est un rectangle aligné sur les axes ; dessiner un mur courbe
+par-dessus une collision carrée (ou l'inverse) donne un mur qu'on traverse ou un mur
+invisible qui bloque. En pixélisant, le moteur et le rendu lisent **la même liste**, et
+on obtient du pixel-art en volume — la signature du projet.
+
+Le sol : un pourtour plat, trois gradins (trois cylindres empilés, dont les flancs FONT
+les contremarches, ce qui économise quatre cents maillages), et deux escaliers
+nord-sud de treize marches. `Rules.groundY()` est une fonction **pure** qui rend la
+hauteur du sol en un point ; le fermier, les créatures, la caméra, les objets posés et
+les marches elles-mêmes la lisent tous. Le moteur, lui, ignore toujours la verticale :
+on ne peut ni tomber d'un gradin ni se coincer dessous. C'est un arbitrage assumé —
+ajouter un axe Y à la simulation, c'est ajouter la gravité, les sauts et refaire la
+collision entière, pour une salle.
+
+### ⚠️ Les deux défauts que la rotonde a créés, et que seule la MESURE a vus
+
+**1. Le graphe annonçait un passage là où le monde avait un bloc plein.** Les coins du
+carré tombent hors du cercle : ils sont de la pierre. Première version, on les retirait
+APRÈS le creusement — or un dédale creusé en profondeur est un ARBRE, et dans un arbre
+presque toute cellule est un point d'articulation. Retirer douze cellules d'un coup en
+détachait douze sous-arbres : sur la graine 1, **140 cellules sur 277** devenaient
+inaccessibles, et le taux de sortie tombait de **78 % à 25 %**. La maçonnerie est
+maintenant décidée AVANT tout creusement ; le creusement, le tressage, les salles et la
+rotonde l'évitent tous. La connexité n'a plus l'occasion de se casser.
+
+**2. Un trou dans la rotonde aurait été mortel ET invisible**, puisque `buildFloor` n'y
+dessine pas le sol de la grille. Les chutes passaient de 5 % à 17 % des fins de partie.
+Aucun trou ni dalle fêlée ne s'y pose plus, et `verify-maze.mjs` le contrôle.
+
+Quatre garanties neuves du générateur, donc **dix** au total : la rotonde est
+atteignable, elle a au moins deux portes, elle ne contient aucun trou, et toute cellule
+qu'elle annonce ouverte est réellement franchissable.
+
+## 8. Plus long, pas plus difficile
+
+> « il faut pas que ce soit trop difficile, seulement que ce soit relativement long et
+> avec des surprises. »
+
+Sept configurations **jouées**, 45 parties chacune, avant de trancher :
+
+| Configuration | Sortie | Médiane | p75 |
+|---|---|---|---|
+| grille 15 (celle du 395) | 58 % | 114 s | 199 s |
+| **grille 17** | **69 %** | **125 s** | **156 s** |
+| grille 19 | majorité de parties non finies en 10 min | | |
+
+**Plus grand est plus FACILE entre 15 et 17**, ce qu'aucun raisonnement ne donnait : la
+rotonde occupe 25 cellules. Sur une grille de 15 elle en mange 11 %, étrangle le dédale
+autour et fait exploser les détours ; sur 17 elle n'en mange que 8,6 % et redevient un
+carrefour au lieu d'un bouchon. Au-delà, la surface l'emporte.
+
+Les ressources montent avec la taille (brasiers 14 → 20, fioles 4 → 6, éclats 22 → 34,
+salles 3 → 4) ; les dangers montent **moins vite** que la surface (trous 7 → 9 pour 28 %
+de cellules en plus). La densité de danger BAISSE.
+
+### L'équilibrage du 396, mesuré sur 140 parties JOUÉES
+
+| | zip 395 | **zip 396** |
+|---|---|---|
+| **SORTIE** | 69,5 % | **70,7 %** |
+| durée médiane d'une partie gagnée | 104 s | **133 s** |
+| p75 / max | 132 s / 254 s | **169 s / 289 s** |
+| éclats ramassés (médiane) | 5 | **10** |
+| temps écoulé | 15,9 % | 16,4 % |
+| chute dans un trou | 8,2 % | 11,4 % |
+| tué par une créature | 4,1 % | **0 %** |
+| blocage de l'oracle (panne) | 2,3 % | 1,4 % |
+
+Même taux de réussite, parties **28 % plus longues**, deux fois plus de butin, et les
+créatures ne tuent plus l'oracle du tout — ce qui est exactement l'effet demandé sur le
+combat. Un humain, lui, mourra encore : l'oracle ne panique pas et n'oublie jamais un
+brasier.
+
+## Les DIX outils du 396
+
+```
+node tools/verify-maze.mjs 400      # les DIX garanties du générateur
+node tools/verify-controls.mjs      # les commandes, le recalage, la passerelle, la herse
+node tools/verify-rig.mjs           # le squelette en repère monde  (NEUF)
+node tools/verify-anim.mjs          # patinage, bornes, bouclage, contre-balancement
+node tools/verify-palette.mjs       # la palette n'a pas dérivé de celle du défi
+node tools/smoke-render.mjs         # world.js EXÉCUTÉ contre un faux Three.js
+node tools/check-strings.mjs        # parité FR/EN + ui.js contre un faux DOM
+node tools/batch-maze.mjs 1 90 300 > parties.jsonl
+node tools/report-maze.mjs parties.jsonl
+node tools/simulate-maze.mjs 50     # le même rapport, d'un bloc
+```
+
+| Script | Attendu au 396 |
+|---|---|
+| `verify-maze` | 400 dédales, **10 garanties**, chemin 40..64, écart max 7 (plafond 8), rotonde 400/400 avec 4,0 portes |
+| `verify-controls` | **18 contrôles** (10 au 395), demi-tour en 1,30 s |
+| `verify-rig` | **13 contrôles**, 99 volumes, aucun contact lame/corps |
+| `verify-anim` | **13 contrôles**, rapport foulées/distance 1,000 |
+| `verify-palette` | 36 couleurs communes identiques au bit près, 17 propres |
+| `smoke-render` | 4 graines × 300 images, **~3 400 maillages** (plafond 6 000) |
+| `check-strings` | **47 = 47**, 18 identifiants |
+
+## Ce qui n'a PAS été fait au 396
+
+- **Le joystick tactile de la ferme.** Septième zip consécutif. Il touche `FermeGame.js`,
+  ce zip n'y touche pas du tout — et ce chantier-ci était entièrement dans `public/`.
+- **`tools/render-maze.mjs`.** Toujours aucun PNG ne sort de `paint.js`. Les quatre
+  refontes graphiques (393, 394, 395, 396) ont été faites en aveugle.
+- **Le son.** Toujours la plus grosse perte du labyrinthe.
+- **La carte partielle ramassable**, proposée au 395, non demandée, non faite.
