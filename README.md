@@ -1,5 +1,75 @@
 # ARCARDI 🎪
 
+> **ZIP 404 — LE VERGER SE SÈME COMME UNE GRAINE, ET LES FRUITS DESCENDENT AU BAC.**
+> Demande de Guillaume : « pour les nouveaux arbustes fruitiers et buissons, il
+> faut que greg puisse aussi les planter. Donc **même mécanisme que les seeds et
+> crops habituels**, pour qu'ils apparaissent au même endroit dans le shop, et
+> que greg puisse les planter. aussi, **je ne sais pas pourquoi les fruits
+> apparaissent dans le bag...** »
+>
+> | | avant | après |
+> |---|---|---|
+> | **on plante un plant** | case 4 (Construction) | **case 3 (Graines)**, dans le même menu |
+> | **on l'achète** | section Constructions | **section Graines & cultures** |
+> | **Greg** | ne sait pas | **plante, et abat sur sélection** |
+> | **on vend un fruit** | dans le sac | **au bac**, avec les cultures |
+>
+> ⚠️ **CE QUI NE POUVAIT PAS ÊTRE FAIT, ET POURQUOI CE N'EST PAS GRAVE.** Le 398
+> a sorti les vergers de `CROPS` exprès : le pipeline des cultures tient sur une
+> hypothèse gravée partout — *une culture disparaît quand on la récolte*. Un
+> pérenne dans `CROPS` demanderait un drapeau lu à sept endroits dont trois qui
+> ne se connaissent pas. Mais la demande porte sur le **geste**, pas sur la table
+> de données : où on l'achète, avec quelle touche on le pose, qui d'autre sait le
+> poser. Tout cela a été rattrapé **sans toucher au modèle et sans un seul
+> message réseau neuf** — un plant part en `plantOrchard`, la requête que l'hôte
+> connaît depuis le 398.
+>
+> ⚠️ **DEUX CHOSES S'APPELAIENT « FRUIT », ET C'EST PROBABLEMENT LA VRAIE CAUSE
+> DE SA QUESTION.** `f.inv.fruit`, la pomme ramassée sur un arbre de la forêt,
+> 18 or, vendue **au bac** sous le libellé « Fruit ». Et `f.inv.fruits`, les
+> citrons/fraises/framboises/myrtilles des vergers, 70 à 110 or, vendus **dans le
+> sac**. Deux stocks, deux prix, un seul mot à l'écran. **Mon propre contrôle est
+> tombé dans le piège** : écrit avant la correction, il a cru les fruits de
+> verger déjà au bac — il avait trouvé le bouton de la POMME. Une collision de
+> noms qui trompe l'outil chargé de la détecter trompe aussi le joueur. La pomme
+> s'appelle désormais « pomme des bois », et `sellFruit` s'appelle
+> `sellWildApple`.
+>
+> **Greg abat sur sélection au clic**, hors des options proposées et il a eu
+> raison : abattre est irréversible — des heures de pousse et jusqu'à 1 400 or.
+> On marque les arbres un par un (cadre rouge + croix), le panneau compte, et on
+> valide. **L'hôte revalide chaque case** avec la même fonction que le marquage.
+>
+> ⚠️ **TROUVÉ EN CHEMIN, HORS DE LA DEMANDE : UN INDICE EN DUR AVAIT SURVÉCU AU
+> 403 ET LÂCHAIT L'ANIMAL QU'ON PORTE.** `selectSlot` testait `s !== 6`. La case
+> troupeau était l'indice 6 avant le 403 ; depuis, l'indice le plus haut est 4,
+> donc la condition était **toujours vraie** : porter un agneau et cliquer sur sa
+> propre case pour ouvrir le menu — geste que le 403 a précisément rendu normal —
+> le reposait au sol **sans un mot**. Le contrôle du 403 cherchait quatre formes
+> (`slotRef.current === N`, `sl === N`, `slot === N`, `selectSlot(N)`) et le
+> paramètre s'appelle `s`. **Un contrôle qui énumère des formes ne protège que
+> des formes énumérées** — `verify-cycle.mjs` couvre `s` et `setSlot(` depuis ce
+> zip.
+>
+> ⚠️ **ET J'AI ÉCRIT LE PIÈGE 375 MOI-MÊME, EN DIRECT.** La marque d'abattage
+> était dessinée en lisant l'état React `gregChopMarks` — or le dessin vit dans
+> la closure du gros `useEffect`. Le compte du panneau flottant aurait augmenté à
+> chaque clic et **aucune marque ne serait apparue sur la ferme** : la moitié
+> visible de la fonctionnalité marche, donc on cherche le défaut partout sauf là.
+> Corrigé en refs, et `verify-vergers.mjs` interdit le retour de l'état React à
+> cet endroit.
+>
+> **Le numéro de touche a quitté les textes.** Le 401 a corrigé « touche 8 » en
+> « touche 6 », le 403 a dû recorriger en « touche 4 », et le contrôle généralisé
+> du 403 rendait la phrase des vergers littéralement impossible à écrire juste,
+> puisqu'elle parle d'une AUTRE case. `orchardShopHint` reçoit désormais sa
+> touche de `SLOT_ORDER`. **Un texte qui contient un numéro de touche est un
+> texte qui périme.**
+>
+> **Un outil neuf** : `tools/verify-vergers.mjs` — 58 contrôles,
+> écrit AVANT la correction, **16 échecs au premier lancement**.
+
+
 > **ZIP 403 — LA BARRE PASSE DE HUIT CASES À CINQ.**
 > Demande de Guillaume : « 4 5 7 et 8 doivent être fusionnés avec rotation »,
 > puis, mis en options, une réponse qui sort du cadre et qui fait foi :

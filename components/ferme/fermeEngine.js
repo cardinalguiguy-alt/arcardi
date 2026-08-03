@@ -4885,6 +4885,28 @@ export function orchardTick(o, now, season) {
   return true;
 }
 
+/* ⚠️ ZIP 404 — « OÙ PEUT-ON PLANTER UN VERGER » N'EST DÉCRIT QU'UNE FOIS.
+   Le 404 donne un second planteur au jeu : Greg. À partir de là, la question
+   « cette case accepte-t-elle un plant ? » a deux clients — la pose du joueur
+   et la recherche de cases de Greg — et deux réponses écrites séparément
+   auraient divergé au premier sol ajouté (le piège du 387, et la raison
+   d'être de `buildCycle()` au 401). Greg se serait mis à viser des cases que
+   la pose refuse ensuite : il y marche, il n'y arrive à rien, et il ne dit
+   rien — c'est-à-dire très exactement l'échec silencieux du 402.
+
+   ⚠️ ET LA FONCTION REND LA RAISON, PAS UN BOOLÉEN. Un refus sans motif
+   redevient un jeu muet ; `resolveAct` a payé ce prix quatre fois au 402. Tout
+   chemin qui refuse ici repart avec une clé de message. */
+export function orchardRefusal(world, i) {
+  if (!(i >= 0 && i < C.MAP_W * C.MAP_H)) return "orchardBusy";
+  if (world.objects[i] !== C.O_NONE) return "orchardBusy";
+  if (world.crops && world.crops.has(i)) return "orchardBusy";
+  const g = world.ground[i];
+  if (g !== C.G_GRASS && g !== C.G_SOIL && g !== C.G_TILLED) return "orchardGround";
+  return null;
+}
+export function orchardPlantable(world, i) { return orchardRefusal(world, i) === null; }
+
 /* PLANTER. Le plant vient de `f.inv.saplings[id]`, acheté à la boutique. La
    case doit être libre et cultivable — mêmes conditions qu'un moulin, lues par
    les mêmes champs. */
@@ -4892,10 +4914,8 @@ export function resolvePlantOrchard(f, world, x, y, kindIdx) {
   const spec = C.ORCHARDS[kindIdx | 0]; if (!spec) return { ok: false };
   if (x < 0 || y < 0 || x >= C.MAP_W || y >= C.MAP_H) return { ok: false };
   const i = y * C.MAP_W + x;
-  if (world.objects[i] !== C.O_NONE) return { ok: false, toast: "orchardBusy" };
-  if (world.crops && world.crops.has(i)) return { ok: false, toast: "orchardBusy" };
-  const g = world.ground[i];
-  if (g !== C.G_GRASS && g !== C.G_SOIL && g !== C.G_TILLED) return { ok: false, toast: "orchardGround" };
+  const why = orchardRefusal(world, i);
+  if (why) return { ok: false, toast: why };
   world.orchards = world.orchards || new Map();
   if (world.orchards.size >= C.ORCHARD_MAX) return { ok: false, toast: "orchardMax" };
   f.inv = f.inv || {};
@@ -4947,6 +4967,90 @@ export function resolveOrchardChop(f, world, x, y) {
   f.inv = f.inv || {};
   f.inv.wood = (f.inv.wood | 0) + C.ORCHARD_WOOD;
   return { ok: true, done: true, i, wood: C.ORCHARD_WOOD };
+}
+
+/* =============================================================================
+   ZIP 404 — GREG SAIT PLANTER UN VERGER, ET L'ABATTRE.
+   -----------------------------------------------------------------------------
+   Guillaume : « il faut que greg puisse aussi les planter. Donc même mécanisme
+   que les seeds et crops habituels ». Le mécanisme des graines, côté Greg,
+   c'est trois tâches : labourer, planter, arroser. UN VERGER N'EN VEUT AUCUNE
+   DES TROIS — il se pose sur l'herbe nue comme un moulin, et ne s'arrose
+   jamais. C'est donc une quatrième tâche à écrire, pas un paramètre à changer,
+   et c'est le genre de détail qu'on ne voit pas en relisant l'ordre existant :
+   `gregOrder` aurait accepté un plant, poussé un « till » sur sa case, et le
+   labour aurait rendu la case… toujours plantable. Rien n'aurait échoué. Ça
+   aurait juste fait perdre à Greg trois trajets par arbre, en silence.
+   ========================================================================== */
+
+/* Les cases à verger autour de l'ancre, SERRÉES — un plant par case, sans
+   allée. C'est le choix de Guillaume (« un plan par case libre, serré ») et il
+   a une conséquence chiffrée : le plafond de 24 vergers du 398 est atteint
+   dans un carré de 5×5 autour de lui, donc sous ses yeux, au lieu de s'étaler
+   sur toute la ferme.
+   ⚠️ Le test de plantabilité n'est PAS recopié ici : `orchardPlantable` est la
+   même fonction que celle qu'utilise la pose du joueur. Sans quoi Greg
+   viserait des cases que la pose refuse, marcherait jusqu'à elles, et n'y
+   ferait rien — sans un mot. */
+export function findFreeOrchardTiles(world, anchor, count) {
+  const out = [], seen = new Set();
+  for (let r = 0; r < 24 && out.length < count; r++) {
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue; // seulement l'anneau
+        const x = anchor.x + dx, y = anchor.y + dy;
+        if (!inMap(x, y)) continue;
+        const i = idx(x, y);
+        if (seen.has(i)) continue;
+        seen.add(i);
+        if (orchardPlantable(world, i)) out.push(i);
+      }
+    }
+  }
+  return out.slice(0, count);
+}
+
+/* La pose par Greg. Le coût a déjà été prélevé sur l'or COMMUN au moment de
+   l'ordre — comme les graines depuis le zip 291. Greg ne touche donc à
+   `f.inv.saplings` de personne : un ordre lancé par un joueur ne peut pas
+   vider la réserve d'un autre. Renvoie `false` quand la ferme est pleine ;
+   c'est l'appelant qui le dit au joueur (voir updateGreg). */
+export function gregPlantOrchard(world, i, kindIdx) {
+  const spec = C.ORCHARDS[kindIdx | 0]; if (!spec) return false;
+  if (!orchardPlantable(world, i)) return false;
+  world.orchards = world.orchards || new Map();
+  if (world.orchards.size >= C.ORCHARD_MAX) return false;
+  world.objects[i] = C.O_ORCHARD;
+  world.objHp.set(i, C.ORCHARD_HP);
+  world.orchards.set(i, { k: kindIdx | 0, plantedAt: Date.now(), nextAt: 0, ripe: 0 });
+  return true;
+}
+
+/* ⚠️ CE QU'ON MARQUE POUR L'ABATTAGE. Abattre est irréversible : un verger
+   perdu, ce sont des heures de pousse et jusqu'à 1 400 or. La sélection au
+   clic doit donc pouvoir refuser une case AVANT la validation, et refuser en
+   particulier les ARBRES DE LA FORÊT — qui sont `O_TREE`, pas `O_ORCHARD` : on
+   ne marque que ce qu'on a planté soi-même. */
+export function isChoppableOrchard(world, i) {
+  if (!(i >= 0 && i < C.MAP_W * C.MAP_H)) return false;
+  return world.objects[i] === C.O_ORCHARD && !!(world.orchards && world.orchards.has(i));
+}
+
+/* L'abattage par Greg. Même forme de retour que `gregChop` (l'arbre ordinaire)
+   pour que la file de tâches les traite pareil, et même destination du bois :
+   le stock COMMUN, jamais le sac d'un joueur. Le `mult` est SuperGreg.
+   ⚠️ On efface l'entrée de la Map, comme le fait la hache du joueur depuis le
+   398 : une entrée orpheline ferait hériter la case suivante de l'âge et des
+   fruits de l'ancien arbre — une fuite qu'on ne découvre qu'en replantant au
+   même endroit, des semaines plus tard. */
+export function gregChopOrchard(world, i, mult) {
+  if (!isChoppableOrchard(world, i)) return { done: false, wood: 0 };
+  const hp = (world.objHp.get(i) || 1) - Math.max(1, C.GREG_AXE_LVL * (mult || 1));
+  if (hp > 0) { world.objHp.set(i, hp); return { done: false, wood: 0 }; }
+  world.objects[i] = C.O_NONE;
+  world.objHp.delete(i);
+  world.orchards.delete(i);
+  return { done: true, wood: C.ORCHARD_WOOD };
 }
 
 /* VENDRE. À l'unité, ou par BARQUETTE de six (demande de Guillaume). La prime

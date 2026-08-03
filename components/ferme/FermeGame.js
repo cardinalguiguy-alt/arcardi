@@ -279,6 +279,39 @@ const SLOT = SLOT_ORDER.reduce((o, k, n) => { o[k] = n; return o; }, {});
    apprise au 401 : un cycle que rien ne montre n'est jamais trouvé. */
 const CARRY_MODES = ["herd", "hand"];
 
+/* =============================================================================
+   ZIP 404 — CE QUE TIENT LA CASE GRAINES, DÉCRIT PAR UNE SEULE VARIABLE.
+   -----------------------------------------------------------------------------
+   Guillaume : « pour les nouveaux arbustes fruitiers et buissons, il faut que
+   greg puisse aussi les planter. Donc même mécanisme que les seeds et crops
+   habituels. » La case Graines porte donc maintenant DEUX familles : les neuf
+   graines de `CROPS`, et les quatre plants de `ORCHARDS`.
+
+   ⚠️ ET LA TENTATION, C'EST D'AJOUTER UN SECOND ÉTAT. « `seedSel` pour les
+   graines, `sapSel` pour les plants, et un booléen pour savoir lequel des deux
+   fait foi. » Trois états qui doivent rester d'accord : au premier chemin qui
+   n'en met qu'un à jour, on sème du blé en croyant planter un citronnier, et
+   RIEN NE LE DIT — c'est le défaut du 387, et c'est exactement la forme qu'il
+   prend à chaque fois. Le 398 avait déjà tranché ça pour la case Construction
+   (« la variante porte l'espèce dans son nom, pas dans un second état ») ; on
+   reprend sa décision mot pour mot.
+
+   Une seule variable, donc, et un préfixe qui dit de quelle famille il s'agit :
+   `"c:3"` est la quatrième graine, `"o:lemon"` est le plant de citronnier.
+
+   ⚠️ CE QUI VOYAGE SUR LE RÉSEAU N'A PAS CHANGÉ POUR AUTANT. Le décodage se
+   fait à l'envoi : une graine part en `act/plant` avec son indice numérique
+   comme avant, un plant part en `plantOrchard` — le message que l'hôte connaît
+   depuis le 398. Ce chantier ne crée AUCUN message neuf : il rebranche un
+   geste sur un chemin déjà écrit, déjà persisté, déjà diffusé. C'est ce qui
+   permet de ne demander aucune migration.
+   ========================================================================== */
+const SEL_CROP = (id) => "c:" + id;
+const SEL_SAP = (id) => "o:" + id;
+const selIsSap = (k) => typeof k === "string" && k.charAt(0) === "o";
+const selCropId = (k) => (typeof k === "string" ? (parseInt(k.slice(2), 10) | 0) : (k | 0));
+const selSapId = (k) => (selIsSap(k) ? k.slice(2) : null);
+
 export default function FermeGame({ room, me, isHost, players, t, lang, onFinish, savedCode, onCodeLoaded, hidden }) {
   const L = fstr(lang);
 
@@ -312,7 +345,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [questOpen, setQuestOpen] = useState(true);
   const [questsHidden, setQuestsHidden] = useState(false); // true = checklist remplie depuis plus de 30 min -> disparition définitive
   const [slot, setSlot] = useState(0);
-  const [seedSel, setSeedSel] = useState(0);
+  /* zip 404 : porte une graine ("c:<n>") OU un plant de verger ("o:<id>") —
+     voir SEL_CROP/SEL_SAP en tête de fichier. Un seul état, jamais deux. */
+  const [seedSel, setSeedSel] = useState(SEL_CROP(0));
   const [seedMenuOpen, setSeedMenuOpen] = useState(false); // mini-menu de choix de graine
   // Outil "tools" (simplification barre d'outils) : houe/hache/pioche sont
   // regroupées sous une seule case (touche 1). toolKind mémorise lequel des
@@ -419,7 +454,27 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // travaille et confirme via le bouton flottant (gregOrderFab) — l'ancre de
   // recherche de cases est alors sa position réelle à cet instant (px/py),
   // pas la boutique où il était en train de choisir.
-  const [gregOrderPending, setGregOrderPending] = useState(null); // {crop, count} | null
+  /* zip 404 : `gregOrderPending` porte maintenant DEUX formes d'ordre —
+     {crop, count} pour les graines, {sap, count} pour les plants de verger.
+     Un seul état, avec le champ présent qui fait foi : deux « pending »
+     parallèles auraient pu être armés tous les deux, et le bouton flottant
+     n'aurait su lequel lancer. */
+  const [gregOrderPending, setGregOrderPending] = useState(null); // {crop, count} | {sap, count} | null
+  const [gregOrderSap, setGregOrderSap] = useState(0);            // indice dans C.ORCHARDS
+  const [gregOrderSapCount, setGregOrderSapCount] = useState(4);
+  /* ⚠️ ZIP 404 — LE MODE DE MARQUAGE DES VERGERS À ABATTRE.
+     Réponse de Guillaume : « Sélection de plusieurs cases au clic, et
+     validation ». `gregChopArmed` est vrai pendant qu'on désigne ;
+     `gregChopMarks` est la liste des cases marquées, en INDICES de tuile —
+     jamais en coordonnées, pour que la comparaison avec ce que renvoie le
+     moteur soit exacte et non « à peu près la même case ».
+     La ref double l'état parce que le clic est lu depuis le canvas, hors du
+     rendu React (même raison que seedSelRef et toutes les autres refs
+     d'entrée du fichier). */
+  const [gregChopArmed, setGregChopArmed] = useState(false);
+  const [gregChopMarks, setGregChopMarks] = useState([]);
+  const gregChopArmedRef = useRef(false);
+  const gregChopMarksRef = useRef([]);
   // Soan, l'employé pêcheur (chantier 2026-07, demande Guillaume) : pas de
   // panneau de choix (culture/nombre) comme Greg — un seul ordre possible,
   // envoyé directement au clic ("Envoyer pêcher"), donc aucun state
@@ -554,7 +609,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const mouseRef = useRef({ x: 0, y: 0 });
   const slotRef = useRef(0);
   const toolKindRef = useRef("hoe"); // miroir synchrone de toolKind (hoe/axe/pick)
-  const seedSelRef = useRef(0);
+  const seedSelRef = useRef(SEL_CROP(0)); // zip 404 : même encodage que seedSel
   const actAnimRef = useRef(0);
   const fxRef = useRef([]);
   const joinedRef = useRef(false);
@@ -2379,6 +2434,102 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             out.chat = { from: "🧑‍🌾", msg: lang === "en" ? `Greg will do it after his current tasks (position ${pos}/3 in queue).` : `Greg le fera après ses tâches en cours (position ${pos}/3 dans la file).` };
           }
         }
+      }
+    } else if (req.kind === "gregOrchardOrder") {
+      /* ==================================================================
+         ZIP 404 — L'ORDRE DE PLANTATION DE VERGERS.
+         ------------------------------------------------------------------
+         Guillaume : « il faut que greg puisse aussi les planter ».
+
+         ⚠️ POURQUOI UNE REQUÊTE À PART, ET PAS UN DRAPEAU DANS `gregOrder`.
+         L'ordre de graines fait trois choses — labourer, planter, arroser —
+         et un verger n'en veut aucune. Le glisser dans `gregOrder` aurait
+         demandé un « si c'est un plant » à huit endroits d'une branche qui
+         en fait déjà quatre-vingts lignes : c'est exactement l'exception
+         que le 398 a refusé d'ajouter à `CROPS`, et pour la même raison.
+         Deux ordres distincts, une seule file d'attente commune.
+
+         ⚠️ ET LE PLAFOND DÉCIDE AVANT L'ARGENT. La ferme n'accepte que
+         `ORCHARD_MAX` vergers (24, chiffre mesuré au 398 : au-delà, les neuf
+         cultures du jeu deviennent du décor). Un ordre de 200 plants au prix
+         du citronnier coûterait 280 000 or pour en poser 24 — on borne donc
+         la demande aux places RÉELLEMENT libres avant de débiter quoi que ce
+         soit, et on le dit quand il n'y en a plus.
+         ================================================================== */
+      const g = s.greg;
+      const w2 = worldRef.current;
+      const k = C.ORCHARDS.findIndex(o => o.id === String(req.sap || ""));
+      const room = Math.max(0, C.ORCHARD_MAX - ((w2.orchards && w2.orchards.size) || 0));
+      const asked = Math.max(1, Math.min(C.GREG_ORDER_MAX, req.count | 0));
+      if (!g || g.expiresAt <= Date.now()) out.toast = { id: f.id, key: "gregNotHired" };
+      else if (k < 0) out.toast = { id: f.id, key: "noGold" };
+      else if ((g.orderQueue = g.orderQueue || []).length >= 3) out.toast = { id: f.id, key: "gregOrderBusy" };
+      else if (room <= 0) out.toast = { id: f.id, key: "gregNoOrchardRoom" };
+      else {
+        const want = Math.min(asked, room);
+        const unit = C.ORCHARDS[k].saplingCost;
+        if (s.money < unit * want) out.toast = { id: f.id, key: "noGold" };
+        else {
+          const anchor = { x: Math.round(px), y: Math.round(py) };
+          const busy = g.taskQueue && g.taskQueue.some(t => t.a === "till" || t.a === "plant" || t.a === "plantOrchard");
+          if (!busy && g.orderQueue.length === 0) {
+            const tiles = E.findFreeOrchardTiles(w2, anchor, want);
+            if (!tiles.length) out.toast = { id: f.id, key: "gregNoRoom" };
+            else {
+              s.money -= unit * tiles.length;
+              g.taskQueue = g.taskQueue || [];
+              for (const i of tiles) g.taskQueue.push({ a: "plantOrchard", i, k });
+              out.state = shareState(); out.greg = g;
+              out.chat = { from: "🧑‍🌾", msg: lang === "en"
+                ? `Greg is on it: ${tiles.length} ${C.ORCHARDS[k].saplingNameEn.toLowerCase()}(s).`
+                : `Greg s'y met : ${tiles.length} ${C.ORCHARDS[k].saplingName.toLowerCase()}(s).` };
+            }
+          } else {
+            /* Ordre empilé : on débite `want` maintenant, comme le fait
+               l'ordre de graines depuis le 291. ⚠️ MAIS ON REMBOURSE LA
+               DIFFÉRENCE À L'ACTIVATION (voir updateGreg). L'ordre de graines
+               ne le fait pas et c'est supportable à 12 or la graine ; à
+               1 400 or le plant de citronnier, dix plants perdus faute de
+               place, c'est quatorze mille or partis sans un mot — et un
+               prélèvement muet est la version comptable de l'échec silencieux
+               du 402. */
+            s.money -= unit * want;
+            g.orderQueue.push({ kind: "gregOrchardOrder", k, count: want, anchor, paid: unit * want });
+            out.state = shareState(); out.greg = g;
+            const pos = g.orderQueue.length;
+            out.chat = { from: "🧑‍🌾", msg: lang === "en" ? `Greg will plant them after his current tasks (position ${pos}/3 in queue).` : `Greg les plantera après ses tâches en cours (position ${pos}/3 dans la file).` };
+          }
+        }
+      }
+    } else if (req.kind === "gregChopOrder") {
+      /* ==================================================================
+         ZIP 404 — L'ABATTAGE SUR SÉLECTION.
+         ------------------------------------------------------------------
+         Réponse de Guillaume, hors des options proposées : « Sélection de
+         plusieurs cases au clic, et validation ».
+
+         ⚠️ L'HÔTE REVALIDE CHAQUE CASE. Les marques posées par le client ne
+         sont qu'une INTENTION : entre le clic et la validation, un autre
+         joueur a pu abattre l'arbre, ou en planter un ailleurs. On refiltre
+         donc par `isChoppableOrchard` — la même fonction que le client
+         utilise pour marquer, jamais une seconde description de la règle.
+         Et le refus n'est pas muet : une sélection devenue vide le DIT.
+         ================================================================== */
+      const g = s.greg;
+      const w2 = worldRef.current;
+      const list = (Array.isArray(req.tiles) ? req.tiles : [])
+        .map(v => v | 0).filter((v, n, a) => a.indexOf(v) === n)
+        .filter(i => E.isChoppableOrchard(w2, i))
+        .slice(0, C.ORCHARD_MAX);
+      if (!g || g.expiresAt <= Date.now()) out.toast = { id: f.id, key: "gregNotHired" };
+      else if (!list.length) out.toast = { id: f.id, key: "gregChopNone" };
+      else {
+        g.taskQueue = g.taskQueue || [];
+        for (const i of list) g.taskQueue.push({ a: "chopOrchard", i });
+        out.greg = g;
+        out.toast = { id: f.id, key: "gregChopDone", n: list.length };
+        out.chat = { from: "🧑‍🌾", msg: lang === "en" ? `Greg is off to fell ${list.length} orchard(s).` : `Greg part abattre ${list.length} verger(s).` };
+        dirtyRef.current = true;
       }
     } else if (req.kind === "gregCoffee") {
       // Chantier 3 (feuille de route) : active le mode SuperGreg (x10 sur le
@@ -4844,11 +4995,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        projet, et elle vaut pour chaque message qui traverse le réseau. */
     if (key === "fruitsPicked") { const t = n || {}; return L.toastFruitsPicked(t.n | 0, C.fruitName(t.fruit, lang === "en")); }
     if (key === "productMade")  { const p2 = C.fruitProduct(n); return L.toastProductMade(p2 ? (lang === "en" ? p2.nameEn : p2.name) : ""); }
+    /* zip 404 : combien de vergers Greg part abattre. Comme "fruitsPicked",
+       c'est un COMPTE qui voyage, jamais une phrase formatée — elle serait
+       figée dans la langue de l'hôte. */
+    if (key === "gregChopDone") return L.toastGregChopDone(n | 0);
     return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, noMillStock: L.toastNoMillStock, millNotEmpty: L.toastMillNotEmpty, millPlaced: L.toastMillPlaced, millTaken: L.toastMillTaken, millGround: L.toastMillGround, millOccupied: L.toastMillOccupied, millOnCrop: L.toastMillOnCrop, noMillBuilt: L.toastNoMillBuilt, millBuilding: L.toastMillBuilding, noWheatToDeposit: L.toastNoWheatToDeposit, millFull: L.toastMillFull, noSucrerieStock: L.toastNoSucrerieStock, sucrerieNotEmpty: L.toastSucrerieNotEmpty, noCaneToDeposit: L.toastNoCaneToDeposit, sucrerieFull: L.toastSucrerieFull, actionFailed: L.toastActionFailed, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull, notInjured: L.toastNotInjured, noHealKit: L.toastNoHealKit, healTooFar: L.toastHealTooFar, gregNotHired: L.toastGregNotHired, gregOrderBusy: L.toastGregBusy, gregNoRoom: L.toastGregNoRoom, gregNoFertilizer: L.toastGregNoFertilizer, gregCoffeeCooldown: L.toastGregCoffeeCooldown, noCoffee: L.toastNoCoffee, soanNotHired: L.toastSoanNotHired, soanNoRiver: L.toastSoanNoRiver, soanCoffeeCooldown: L.toastSoanCoffeeCooldown, reneCoffeeCooldown: L.toastReneCoffeeCooldown, tristanNotHere: L.toastTristanNotHere, tristanCoffeeCooldown: L.toastTristanCoffeeCooldown, farCauldron: L.toastFarCauldron, noFishToDeposit: L.toastNoFishToDeposit, cauldronMissing: L.toastCauldronMissing, cauldronAlreadyTaken: L.toastCauldronAlreadyTaken, noCauldronStock: L.toastNoCauldronStock, cauldronNotEmpty: L.toastCauldronNotEmpty, cauldronBrewing: L.toastCauldronBrewing, cauldronNothingToCollect: L.toastCauldronNothingToCollect, cauldronHasEnough: L.toastCauldronHasEnough, visitorNotEnough: L.visitorNotEnough, decorNone: L.decorNone, decorPicked: L.decorPicked, objReturned: L.objReturned, residentNoRoom: L.residentNoRoom, artisanNoResident: L.artisanNoResident, voyagerBusy: L.voyagerBusyToast, kickVoted: L.kickVotedToast, jewelryNoGold: L.toastJewelryNoGold, jewelryNoGem: L.toastJewelryNoGem, cropWrongType: L.toastCropWrongType, cropMaxed: L.toastCropMaxed, beekeeperNoHive: L.toastBeekeeperNoHive, beekeeperBusy: L.toastBeekeeperBusy, balloonNotBoarding: L.toastBalloonNotBoarding, balloonFull: L.toastBalloonFull,
       /* zip 398 — vergers et produits */
       orchardBusy: L.toastOrchardBusy, orchardGround: L.toastOrchardGround, orchardMax: L.toastOrchardMax,
       orchardNoSapling: L.toastOrchardNoSapling, orchardYoung: L.toastOrchardYoung,
       orchardNotReady: L.toastOrchardNotReady, orchardOffSeason: L.toastOrchardOffSeason,
+      /* zip 404 — Greg et les vergers */
+      gregNoOrchardRoom: L.toastGregNoOrchardRoom, gregChopNone: L.gregChopNone,
       punnetShort: L.toastPunnetShort, productNoFruit: L.toastProductNoFruit,
       productNoSugar: L.toastProductNoSugar, productNoFlour: L.toastProductNoFlour,
       productNoMilk: L.toastProductNoMilk, productNoEgg: L.toastProductNoEgg }[key] || "";
@@ -5626,6 +5783,25 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function doAction() {
     const m = meRef.current; if (!m || actAnimRef.current > 0 || fishMiniRef.current || m.sleeping || isInjured()) return;
     if (m.zone === "evil") return doActionEvil();
+    /* ⚠️ ZIP 404 — EN MODE MARQUAGE, LE CLIC DÉSIGNE, IL N'AGIT PAS.
+       Réponse de Guillaume : « Sélection de plusieurs cases au clic, et
+       validation ». Ce retour est placé TOUT EN HAUT, avant même la récolte
+       automatique et la canne : si on marquait un verger mûr, la cueillette
+       aurait pris le clic la première, et on aurait cru le mode cassé.
+       Un clic ailleurs qu'un verger ne coûte rien mais le DIT (leçon du 402) :
+       un mode où la moitié des clics ne fait rien ni ne répond est
+       indiscernable d'un mode qui ne marche pas. */
+    if (gregChopArmedRef.current) {
+      const w0 = worldRef.current; if (!w0) return;
+      const t0 = targetTile();
+      if (!inMap(t0.x, t0.y)) return;
+      const i0 = idxOf(t0.x, t0.y);
+      if (!E.isChoppableOrchard(w0, i0)) { pushToast(L.gregChopNone); return; }
+      const cur = gregChopMarksRef.current;
+      const next = cur.includes(i0) ? cur.filter(v => v !== i0) : cur.concat(i0);
+      gregChopMarksRef.current = next; setGregChopMarks(next);
+      return;
+    }
     // zip 403 : la main est un MODE de la case fusionnée, plus une case à elle.
     if (slotRef.current === SLOT.carry && carryModeRef.current === "hand") return handAction();
     if (m.zone === "town") return; // Valley Town (zip 234): no farm tools here — E interactions only (see tryOpenNearby)
@@ -5700,7 +5876,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       sendReq({ kind: "act", action, x: tt.x, y: tt.y });
     }
     else if (sl === SLOT.can) sendReq({ kind: "act", action: "water", x: tt.x, y: tt.y });
-    else if (sl === SLOT.seeds) sendReq({ kind: "act", action: "plant", seed: seedSelRef.current, x: tt.x, y: tt.y });
+    else if (sl === SLOT.seeds) {
+      /* ⚠️ ZIP 404 — LA CASE GRAINES SÈME ET PLANTE, DEPUIS UN SEUL ÉTAT.
+         Guillaume : « même mécanisme que les seeds et crops habituels ». Le
+         décodage se fait ICI et nulle part ailleurs : c'est le seul endroit du
+         fichier qui a besoin de savoir qu'un plant n'est pas une graine. Les
+         deux requêtes existent déjà — `act/plant` depuis toujours,
+         `plantOrchard` depuis le 398 — donc rien de neuf ne circule sur le
+         réseau et aucune sauvegarde ne change de forme. */
+      const sap = selSapId(seedSelRef.current);
+      if (sap !== null) {
+        const k = C.ORCHARDS.findIndex(o => o.id === sap);
+        if (k >= 0) sendReq({ kind: "plantOrchard", x: tt.x, y: tt.y, k });
+      } else sendReq({ kind: "act", action: "plant", seed: selCropId(seedSelRef.current), x: tt.x, y: tt.y });
+    }
     // zip 403 : manger se fait depuis le sac, en cliquant un snack.
     else if (sl === SLOT.build) {
       // Outil "Construction" (case Construction) : variante choisie via le
@@ -5722,17 +5911,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         sendReq({ kind: "cauldronPlace", x: tt.x, y: tt.y });
         return;
       }
-      /* ZIP 398 — LES PLANTS DE VERGER SE POSENT COMME UN MOULIN, avec la
-         même main et le même geste. La variante porte l'espèce dans son nom
-         ("orchard:lemon") plutôt que dans un second état : deux états qui
-         doivent rester d'accord — « quelle variante » et « quelle espèce » —
-         finissent par ne plus l'être, et on planterait un citronnier en
-         croyant poser un fraisier. */
-      if (bk.startsWith("orchard:")) {
-        const k = C.ORCHARDS.findIndex(o => o.id === bk.slice(8));
-        if (k >= 0) sendReq({ kind: "plantOrchard", x: tt.x, y: tt.y, k });
-        return;
-      }
+      /* ZIP 404 — le chemin « orchard: » qui était ici a été RETIRÉ, pas
+         seulement contourné. Un plant se pose désormais depuis la case
+         Graines, et un chemin mort qui sait encore poser un verger est une
+         invitation à le rebrancher un jour « pour dépanner », c'est-à-dire à
+         recréer les deux descriptions qu'on vient de supprimer. */
       const action = bk === "wall" ? "wall" : bk === "path" ? "path" : bk === "lamp" ? "lamp" : bk === "scarecrow" ? "scarecrow"
         : bk === "grass" ? "grass" : bk === "mill" ? "mill"
         : bk === "bridgeRenovate" ? "renovateBridge"
@@ -6848,6 +7031,26 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         // de remboursement prévu par la feuille de route pour ce cas —
         // comportement volontairement simple, à revoir si ça se révèle
         // frustrant en jeu.
+      } else if (next.kind === "gregOrchardOrder") {
+        /* ZIP 404 — activation d'un ordre de vergers empilé. Les cases sont
+           résolues ICI, pas à la pose en file : c'est le seul moment où le
+           monde reflète ce que les ordres précédents ont déjà consommé.
+           ⚠️ ET ON REMBOURSE CE QUI N'A PAS PU ÊTRE PLANTÉ. L'ordre de graines
+           ne le fait pas — 12 or la graine, c'est indolore. Un plant de
+           citronnier coûte 1 400 or : dix plants perdus faute de place, ce
+           sont quatorze mille or partis sans un mot, et un prélèvement muet
+           est la version comptable de l'échec silencieux du 402. */
+        const tiles = E.findFreeOrchardTiles(w, next.anchor, next.count | 0);
+        const unit = (C.ORCHARDS[next.k | 0] || {}).saplingCost | 0;
+        const rendu = Math.max(0, ((next.count | 0) - tiles.length)) * unit;
+        if (rendu > 0) {
+          s.money += rendu;
+          addChat("🧑‍🌾", lang === "en" ? `No room for ${(next.count | 0) - tiles.length} sapling(s): ${rendu} gold refunded.` : `Pas de place pour ${(next.count | 0) - tiles.length} plant(s) : ${rendu} or rendus.`);
+        }
+        if (tiles.length) {
+          for (const i of tiles) g.taskQueue.push({ a: "plantOrchard", i, k: next.k | 0 });
+          addChat("🧑‍🌾", lang === "en" ? `Greg is on it: ${tiles.length} ${C.ORCHARDS[next.k | 0].saplingNameEn.toLowerCase()}(s).` : `Greg s'y met : ${tiles.length} ${C.ORCHARDS[next.k | 0].saplingName.toLowerCase()}(s).`);
+        }
       } else if (next.kind === "gregFertilizeOrder") {
         const tiles = E.findFertilizableTiles(w, next.anchor, now);
         if (tiles.length) {
@@ -6881,6 +7084,52 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         let ok = false, patch = null;
         if (t.a === "till") { ok = E.gregTill(w, t.i); if (ok) { recordTileOverride(t.i); patch = { tiles: [{ i: t.i, g: w.ground[t.i], o: w.objects[t.i] }] }; } }
         else if (t.a === "plant") { ok = E.gregPlant(w, t.i, t.crop, now); if (ok) patch = { crops: [{ i: t.i, c: w.crops.get(t.i) }] }; }
+        /* ⚠️ ZIP 404 — LA POSE D'UN VERGER PAR GREG DIFFUSE DEUX CHOSES.
+           Une culture tient dans `crops`. Un verger, lui, vit dans DEUX
+           endroits : la case (`objects`/`objHp`, comme un moulin) et sa fiche
+           de croissance (`orchards`). N'en diffuser qu'un des deux donne
+           exactement le défaut que le 398 avait déjà nommé : les autres
+           joueurs verraient un arbre qui ne pousse jamais, ou une fiche sans
+           arbre. Les deux partent ensemble, dans le même patch. */
+        else if (t.a === "plantOrchard") {
+          ok = E.gregPlantOrchard(w, t.i, t.k | 0);
+          if (ok) {
+            recordTileOverride(t.i);
+            const o = w.orchards.get(t.i);
+            patch = { tiles: [{ i: t.i, g: w.ground[t.i], o: w.objects[t.i], hp: w.objHp.get(t.i) }],
+                      orchards: [[t.i, o.k, o.plantedAt, o.nextAt, o.ripe]] };
+          }
+          /* La ferme s'est remplie pendant qu'il marchait (un autre joueur a
+             planté). Il faut le DIRE : une file de tâches qui se vide sans
+             rien poser est, pour le joueur, un employé qui ne fait rien.
+             C'est le réflexe du 402 appliqué à Greg. */
+          else if ((w.orchards ? w.orchards.size : 0) >= C.ORCHARD_MAX) {
+            g.taskQueue = g.taskQueue.filter(x => x.a !== "plantOrchard");
+            addChat("🧑‍🌾", lang === "en" ? "The farm has no room left for another orchard — Greg stops planting." : "La ferme n'a plus de place pour un verger — Greg arrête de planter.");
+            dirtyRef.current = true;
+            return;
+          }
+        }
+        else if (t.a === "chopOrchard") {
+          /* Même forme que "chop"/"mine" ci-dessous : l'abattage prend
+             plusieurs passages, on ne retire la tâche qu'une fois l'arbre à
+             terre, et le bois va au stock COMMUN — jamais dans le sac du
+             joueur qui a donné l'ordre. */
+          const r = E.gregChopOrchard(w, t.i, superActive ? C.SUPERGREG_SPEED_MULT : 1);
+          recordTileOverride(t.i);
+          const stock = sharedRef.current.gregStock || (sharedRef.current.gregStock = { wood: 0, stone: 0 });
+          if (r.wood) stock.wood += r.wood;
+          patch = { tiles: [{ i: t.i, g: w.ground[t.i], o: w.objects[t.i], hp: w.objHp.get(t.i) }], gregStock: stock };
+          /* ⚠️ k = -1 : c'est ainsi qu'on annonce un verger RETIRÉ (voir
+             applyDeltas). Sans ce message, la Map des autres clients garderait
+             une entrée fantôme et la case replantée hériterait de l'âge et des
+             fruits de l'ancien arbre. Le 398 l'avait écrit pour la hache du
+             joueur ; l'oublier ici aurait recréé la fuite pour Greg seul. */
+          if (r.done) { patch.orchards = [[t.i, -1, 0, 0, 0]]; g.taskQueue.shift(); }
+          dirtyRef.current = true;
+          channelRef.current?.send({ type: "broadcast", event: "apply", payload: patch });
+          return;
+        }
         else if (t.a === "water") { ok = E.gregWater(w, t.i, now); if (ok) patch = { crops: [{ i: t.i, c: w.crops.get(t.i) }] }; }
         else if (t.a === "fertilize") { ok = E.gregFertilize(w, t.i, now); if (ok) patch = { crops: [{ i: t.i, c: w.crops.get(t.i) }] }; }
         else if (t.a === "chop") {
@@ -8796,11 +9045,38 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // mémorise juste le choix et on ferme boutique + panneau ; le joueur va
   // ensuite où il veut, puis confirme via le bouton flottant (fireGregOrder).
   const armGregOrder = () => { setGregOrderPending({ crop: gregOrderCrop, count: gregOrderCount }); setGregOrderOpen(false); setShopOpen(false); };
+  /* zip 404 : même schéma différé pour les plants — on choisit à la boutique,
+     on marche jusqu'à l'endroit voulu, et l'ancre est la position RÉELLE au
+     moment de la confirmation. Le verger étant permanent, se tromper d'endroit
+     coûte bien plus cher qu'avec une graine : raison de plus pour ne pas
+     lancer depuis la boutique. */
+  const armGregSaplingOrder = (n) => { setGregOrderPending({ sap: gregOrderSap, count: n }); setGregOrderOpen(false); setShopOpen(false); };
   const cancelGregOrder = () => setGregOrderPending(null);
   const fireGregOrder = () => {
-    if (!gregOrderPending) return;
-    sendReq({ kind: "gregOrder", crop: gregOrderPending.crop, count: gregOrderPending.count });
+    const p = gregOrderPending;
+    if (!p) return;
+    if (p.sap !== undefined) sendReq({ kind: "gregOrchardOrder", sap: C.ORCHARDS[p.sap | 0].id, count: p.count });
+    else sendReq({ kind: "gregOrder", crop: p.crop, count: p.count });
     setGregOrderPending(null);
+  };
+  /* ⚠️ ZIP 404 — LE MARQUAGE DES VERGERS À ABATTRE.
+     Armer n'abat rien et ne coûte rien : on entre dans un mode où le clic
+     désigne au lieu d'agir. Tout se ferme, parce qu'un panneau ouvert
+     par-dessus la ferme empêcherait précisément de voir ce qu'on désigne. */
+  const armGregChop = () => {
+    gregChopMarksRef.current = []; setGregChopMarks([]);
+    gregChopArmedRef.current = true; setGregChopArmed(true);
+    setGregOrderOpen(false); setShopOpen(false); setEmployeesOpen(false);
+    pushToast(L.gregChopArmHint);
+  };
+  const cancelGregChop = () => {
+    gregChopArmedRef.current = false; setGregChopArmed(false);
+    gregChopMarksRef.current = []; setGregChopMarks([]);
+  };
+  const fireGregChop = () => {
+    const list = gregChopMarksRef.current.slice();
+    cancelGregChop();
+    if (list.length) sendReq({ kind: "gregChopOrder", tiles: list });
   };
   const buyFertilizer = () => sendReq({ kind: "buyFertilizer" });
   const armFertilizerOrder = () => { setFertilizerOrderPending(true); setFertilizerOrderOpen(false); setShopOpen(false); };
@@ -10093,6 +10369,42 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // (elle y sert au fondu des pips) — l'appel a targetTile() a simplement
       // ete remonte, ce lisere de curseur est inchange.
       if (inMap(tt.x, tt.y)) { ctx.strokeStyle = "rgba(255,255,255,0.7)"; ctx.lineWidth = 1; ctx.strokeRect(tt.x * T + 0.5, tt.y * T + 0.5, T - 1, T - 1); }
+
+      /* ⚠️ ZIP 404 — LA MARQUE D'ABATTAGE, DESSINÉE PAR CODE COMME TOUT LE RESTE.
+         Un cadre rouge sur la case et une croix par-dessus l'arbre. Elle est
+         posée APRÈS le liseré blanc du curseur, sinon le curseur la recouvrirait
+         sur la case visée — c'est-à-dire exactement celle qu'on vient de
+         marquer, donc la seule qu'on regarde. C'est le piège d'ordre de peinture
+         du 400, en plus petit : le bon dessin au mauvais moment ne se voit pas.
+         ⚠️ Et la croix est tracée à partir du HAUT du sprite de verger (28 px
+         au-dessus du sol, voir le dessin des vergers plus haut), pas du centre
+         de la tuile : un verger déborde de sa case, et une marque centrée sur
+         la case tomberait dans son tronc au lieu de son feuillage. */
+      /* ⚠️⚠️ ET ON LIT LES REFS, PAS L'ÉTAT REACT. Ce dessin vit DANS LA
+         CLOSURE du gros useEffect ([phase, spritesReady]) : lire
+         `gregChopMarks` ici aurait capturé le tableau du PREMIER rendu, c'est-
+         à-dire un tableau vide, pour toujours. On aurait cliqué, le compte du
+         panneau flottant aurait augmenté (lui est bien en React), et AUCUNE
+         marque ne serait apparue sur la ferme. C'est le piège de portée du
+         375, et il est particulièrement traître ici parce que la moitié
+         visible de la fonctionnalité aurait marché. */
+      if (gregChopArmedRef.current && gregChopMarksRef.current.length) {
+        ctx.save();
+        for (const mi of gregChopMarksRef.current) {
+          const mx = (mi % C.MAP_W) * T, my = Math.floor(mi / C.MAP_W) * T;
+          ctx.strokeStyle = "rgba(214,64,52,0.95)"; ctx.lineWidth = 2;
+          ctx.strokeRect(mx + 1, my + 1, T - 2, T - 2);
+          ctx.fillStyle = "rgba(214,64,52,0.18)";
+          ctx.fillRect(mx + 1, my + 1, T - 2, T - 2);
+          const cx = mx + T / 2, cy = my + T - 16;
+          ctx.strokeStyle = "rgba(255,236,230,0.95)"; ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.moveTo(cx - 6, cy - 6); ctx.lineTo(cx + 6, cy + 6);
+          ctx.moveTo(cx + 6, cy - 6); ctx.lineTo(cx - 6, cy + 6);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
 
       draws.push({ y: (C.HOUSE.y + C.HOUSE.h) * T, fn: () => {
         // Maison à niveaux (2026-07) : sprite selon le niveau ; pendant les
@@ -13680,6 +13992,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // du menu). `noToolMenu` permet à pressToolKey de sélectionner la case 0
   // sans déclencher l'ouverture du menu.
   function selectSlot(s, noToolMenu) {
+    /* ⚠️ ZIP 404 — CHOISIR UNE CASE SORT DU MODE DE MARQUAGE.
+       Exactement la règle que le 403 a posée pour la canne : « elle se range
+       dès qu'on choisit une case, sans quoi on pêcherait en croyant labourer ».
+       Ici c'est pire, parce que le marquage AVALE le clic : sans cette ligne,
+       on prendrait la houe, on cliquerait sur son champ, et il ne se passerait
+       rien — un labour muet, la panne préférée de ce projet. */
+    if (gregChopArmedRef.current) cancelGregChop();
     if (s === SLOT.seeds) setSeedMenuOpen(o => (slotRef.current === SLOT.seeds ? !o : true));
     else setSeedMenuOpen(false);
     if (s === SLOT.tools && !noToolMenu) setToolMenuOpen(o => (slotRef.current === SLOT.tools ? !o : true));
@@ -13715,9 +14034,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (rodArmedRef.current) { rodArmedRef.current = false; setRodArmed(false); }
     if (s !== SLOT.carry) { handModeRef.current = null; setHandMode(null); handHeldRef.current = null; setHandHeldUI(null); moveConfirmRef.current = null; setMoveConfirmUI(null); healArmedRef.current = false; setHealArmed(false); }
     setCraftMenuOpen(null);
-    // Changer d'outil en portant un animal l'annule (relâché sans être
-    // déplacé), pour ne jamais le laisser "coincé" en main d'un joueur.
-    if (s !== 6 && heldAnimalRef.current !== -1) {
+    /* ⚠️⚠️ ZIP 404 — UN INDICE EN DUR AVAIT SURVÉCU AU 403, ET IL LÂCHAIT
+       L'ANIMAL QU'ON PORTE. Trouvé en chemin, hors de la demande de Guillaume.
+
+       Cette ligne disait `s !== 6`. Avant le 403, la case 7 « troupeau » était
+       l'indice 6, et la règle voulait dire : « quitter le troupeau relâche la
+       bête ». Depuis que la barre est passée à cinq cases, l'indice le plus
+       haut est 4 : `s !== 6` est TOUJOURS VRAI. Porter un agneau et cliquer sur
+       sa propre case pour ouvrir le menu troupeau/main — un geste que le 403 a
+       précisément rendu normal — le reposait donc au sol, sans un mot.
+
+       ⚠️ ET LE CONTRÔLE DU 403 NE L'A PAS VU. Il cherchait
+       `slotRef.current === N`, `sl === N`, `slot === N` et `selectSlot(N)` : le
+       paramètre de `selectSlot` s'appelle `s`, une forme qu'aucun de ces quatre
+       motifs ne couvre. Un contrôle qui énumère des formes ne protège que des
+       formes énumérées — `tools/verify-cycle.mjs` couvre `s` depuis ce zip. */
+    if (s !== SLOT.carry && heldAnimalRef.current !== -1) {
       sendReq({ kind: "dropAnimal", animal: heldAnimalRef.current });
       heldAnimalRef.current = -1; setCarryingAnimal(false);
     }
@@ -13777,9 +14109,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const owned = order.filter(k => myInv && (myInv[k] || 0) > 0);
     if (myInv && (myInv.wood | 0) >= C.BRIDGE_COST_WOOD) owned.push("bridgeWood");
     if (myInv && (myInv.stone | 0) >= C.BRIDGE_COST_STONE) { owned.push("bridgeStone"); owned.push("bridgeRenovate"); }
-    // ZIP 398 : les plants de verger rejoignent le cycle, et seulement ceux
-    // qu'on possède — comme les autres variantes.
-    for (const o of C.ORCHARDS) if (myInv && myInv.saplings && (myInv.saplings[o.id] | 0) > 0) owned.push("orchard:" + o.id);
+    /* ⚠️ ZIP 404 — LES PLANTS DE VERGER ONT QUITTÉ CE CYCLE.
+       Le 398 les avait rangés ici parce qu'ils se POSENT comme un moulin. Mais
+       Guillaume, au 404 : « même mécanisme que les seeds et crops habituels ».
+       Ils sont descendus dans la case Graines, et surtout ils ne sont PAS
+       restés aussi ici : deux chemins pour le même geste, c'est deux
+       descriptions de la même chose, et elles finissent toujours par diverger
+       (387) — au premier cerisier ajouté d'un seul côté, on achète un plant
+       qu'on ne retrouve nulle part. `tools/verify-vergers.mjs` interdit
+       qu'une seule revienne dans cette liste. */
     return owned;
   }
   /* Idem pour la case outils, qui tourne depuis le zip 251 sans jamais l'avoir
@@ -13875,9 +14213,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      faire tourner la variante jusqu'à lui. Le confort de pose du moulin a été
      ajouté pour cette raison au 2026-07 ; on le recopie plutôt que de le
      redécouvrir. */
+  /* zip 404 : l'achat d'un plant équipe la case GRAINES (et plus la case
+     Construction), avec la même sélection unique que les graines. Même confort
+     qu'au 398 — on ressort de la boutique prêt à planter — mais sur la case
+     que Guillaume a choisie. */
   const buySapling = (id, n) => {
     sendReq({ kind: "buy", item: "sapling", sap: id, n });
-    buildKindRef.current = "orchard:" + id; setBuildKind("orchard:" + id);
+    seedSelRef.current = SEL_SAP(id); setSeedSel(SEL_SAP(id));
+    selectSlot(SLOT.seeds);
   };
   // Sucrerie : achat désormais via buyArtisanBuilding("sucrerie") (chantier
   // "sucrerie déplaçable", voir la ligne générique de boutique plus bas) —
@@ -14039,7 +14382,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const sellSea = (seaId) => sendReq({ kind: "sell", item: "sea", sea: seaId, n: 9999 }); // 2026-07 station update
   // Zip 235: berries/fruit (spring gathering).
   const sellBerry = () => sendReq({ kind: "sell", item: "berry", n: 9999 });
-  const sellFruit = () => sendReq({ kind: "sell", item: "fruit", n: 9999 });
+  /* ⚠️ ZIP 404 — RENOMMÉE, PARCE QUE DEUX CHOSES S'APPELAIENT « FRUIT ».
+     Celle-ci vend la POMME DES BOIS (`f.inv.fruit`, 18 or, ramassée sur un
+     arbre de la forêt). Les fruits de VERGER (`f.inv.fruits`, 70 à 110 or)
+     passent par la requête `sellFruit`, qui portait exactement le même nom.
+     Ce n'est pas de la cosmétique : mon propre contrôle, écrit avant la
+     correction, a cru que les fruits de verger étaient déjà au bac — il avait
+     trouvé CE bouton-ci et pris l'un pour l'autre. Une collision de noms qui
+     trompe l'outil chargé de la détecter trompe aussi le joueur, et c'est très
+     probablement ce que Guillaume a vu. */
+  const sellWildApple = () => sendReq({ kind: "sell", item: "fruit", n: 9999 });
   const sellCommonFish = (fishId) => sendReq({ kind: "sell", item: "commonFish", fish: fishId, n: 9999 });
   const sellCommonAnimal = (pid) => sendReq({ kind: "sell", item: "commonAnimal", product: pid, n: 9999 }); // zip 260
   const sellGem = (gemId) => sendReq({ kind: "sell", item: "gem", gem: gemId, n: 9999 });
@@ -14051,11 +14403,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      disposait que d'infobulles en forme de phrases, ce qu'une case de 48 px ne
      peut pas porter. C'est une des raisons pour lesquelles son cycle était
      invisible. */
+  /* zip 404 : la branche « orchard: » a disparu d'ici en même temps que du
+     cycle. Une fonction qui sait encore nommer un plant dans la case
+     Construction laisse croire qu'un plant peut s'y trouver. */
   function buildLabel(kind) {
-    if (kind && kind.startsWith("orchard:")) {
-      const o = C.ORCHARDS.find(x => x.id === kind.slice(8));
-      return o ? (lang === "en" ? o.saplingNameEn : o.saplingName) : "";
-    }
     return (L.buildNames && L.buildNames[kind]) || "";
   }
   /* ⚠️ LE TABLEAU EST DÉRIVÉ DE SLOT_ORDER, JAMAIS RÉÉCRIT. Une seconde liste
@@ -14180,6 +14531,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           <button className="ferme-greg-order-cancel" title={L.gregOrderCancel} onClick={cancelFertilizerOrder}>✕</button>
         </div>
       )}
+      {/* ⚠️ ZIP 404 — LE PANNEAU DE MARQUAGE. Il réutilise EXACTEMENT
+          l'habillage des ordres de Greg (ferme-greg-order-wrap) : le geste
+          « je choisis, je marche, je valide, ou j'annule par la croix » est
+          déjà connu du joueur depuis le chantier de juillet, et un troisième
+          habillage pour un quatrième bouton flottant n'aurait rien appris à
+          personne. Le compte est affiché en clair AVANT la validation : c'est
+          la seule chose qui sépare un abattage voulu d'un abattage subi.
+          Le bouton est grisé à zéro marque — pas caché : un bouton qui
+          disparaît laisse croire qu'on a raté quelque chose. */}
+      {gregChopArmed && (
+        <div className="ferme-greg-order-wrap">
+          <span className="ferme-greg-order-fab" style={{ pointerEvents: "none", opacity: .9 }}>{L.gregChopCount(gregChopMarks.length)}</span>
+          <button className="ferme-greg-order-fab" disabled={gregChopMarks.length === 0} onClick={fireGregChop}>{L.gregChopFab}</button>
+          <button className="ferme-greg-order-cancel" title={L.gregOrderCancel} onClick={cancelGregChop}>✕</button>
+        </div>
+      )}
 
       {/* Boutons flottants (nouveautés incluses) */}
       <div className="ferme-actions">
@@ -14214,21 +14581,45 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           const isCarry = s.key === "carry";
           const isHerd = isCarry && carryMode === "herd", isHand = isCarry && carryMode === "hand";
           let count = "", lvl = "", img = spritesReady ? spritesRef.current.icons[s.icon] : null;
-          if (isSeed) { count = myInv ? myInv.seeds[seedSel] : ""; img = spritesReady ? spritesRef.current.crops[seedSel][C.CROP_STAGES - 1] : null; }
+          /* ⚠️ ZIP 404 — LA CASE GRAINES DOIT DIRE CE QU'ON TIENT, plant compris.
+             C'est le correctif exact que le 398 avait dû écrire pour la case
+             Construction : sans ces deux lignes, un joueur qui équipe un plant
+             de citronnier verrait l'icône du BLÉ et le nombre de graines de
+             blé — parce que `myInv.seeds["o:lemon"]` vaut `undefined` et que
+             `crops["o:lemon"]` n'existe pas. On ne peut pas planter ce qu'on
+             ne voit pas dans sa main.
+             L'icône d'un plant est le verger ADULTE EN FRUITS, comme au 398 :
+             à 32 px, quatre pousses vertes se ressemblent toutes, alors qu'un
+             citronnier chargé se distingue d'un myrtillier au premier coup
+             d'œil. On montre ce qu'on va OBTENIR. */
+          if (isSeed) {
+            const sapId = selSapId(seedSel);
+            if (sapId !== null) {
+              const sk = C.ORCHARDS.findIndex(o => o.id === sapId);
+              count = myInv ? ((myInv.saplings && myInv.saplings[sapId]) | 0) : "";
+              img = (spritesReady && sk >= 0) ? spritesRef.current.orchards[sk][3] : null;
+              lvl = "🌳";
+            } else {
+              const cid = selCropId(seedSel);
+              count = myInv ? myInv.seeds[cid] : "";
+              img = spritesReady ? spritesRef.current.crops[cid][C.CROP_STAGES - 1] : null;
+            }
+          }
           else if (isTools) lvl = "N" + (myTools[toolKind] || 1);
           else if (isFence) {
             // Outil "Construction" générique (chantier 2026-07) : icône,
             // compteur et infobulle dépendent de la variante choisie via le
             // menu Construire/Vendre (fence/wall/path/lamp/scarecrow), pas
             // seulement clôture.
-            /* ⚠️ ZIP 398 — LA CASE CONSTRUCTION DOIT DIRE CE QU'ON TIENT.
-               Sans ces trois lignes, un joueur qui équipe un plant de verger
-               voyait une icône de CLÔTURE, le nombre de CLÔTURES en réserve et
-               l'astuce de la clôture : les trois chaînes de ternaires
-               ci-dessous retombent toutes sur "fence" pour une variante
-               qu'elles ne connaissent pas. On ne peut pas planter ce qu'on ne
-               voit pas dans sa main. */
-            const orchK = buildKind.startsWith("orchard:") ? C.ORCHARDS.findIndex(o => o.id === buildKind.slice(8)) : -1;
+            /* ⚠️ ZIP 398/404 — LA CASE CONSTRUCTION DOIT DIRE CE QU'ON TIENT.
+               Les trois chaînes de ternaires ci-dessous retombent toutes sur
+               "fence" pour une variante qu'elles ne connaissent pas : une
+               variante ajoutée sans y toucher s'affiche donc comme une clôture,
+               avec le nombre de clôtures en réserve, sans que rien ne le dise.
+               Le 398 avait dû ajouter le cas du plant de verger pour ça ; le
+               404 l'a retiré parce que le plant est descendu dans la case
+               Graines. La règle, elle, reste : toute variante neuve se déclare
+               dans les TROIS. */
             const bkImg = buildKind === "wall" ? "wall" : buildKind === "path" ? "path" : buildKind === "lamp" ? "lamp" : buildKind === "scarecrow" ? "scarecrow"
               : buildKind === "grass" ? "grassPatch" : buildKind === "mill" ? "mill" : buildKind === "cauldron" ? null
               : buildKind === "bridgeWood" ? "bridge" : (buildKind === "bridgeStone" || buildKind === "bridgeRenovate") ? "bridgeStoneSprite" : "fence";
@@ -14238,26 +14629,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             // Chaudron (chantier 2026-07) : pas de sprite dédié pour
             // l'instant (emoji ⚗️ affiché à la place de l'icône, voir
             // ci-dessous) — non fait/limite connue, à ajouter si besoin.
-            count = myInv ? (orchK >= 0 ? ((myInv.saplings && myInv.saplings[C.ORCHARDS[orchK].id]) | 0) : buildKind === "wall" ? (myInv.wall || 0) : buildKind === "path" ? (myInv.path || 0) : buildKind === "lamp" ? (myInv.lamp || 0) : buildKind === "scarecrow" ? (myInv.scarecrow || 0)
+            count = myInv ? (buildKind === "wall" ? (myInv.wall || 0) : buildKind === "path" ? (myInv.path || 0) : buildKind === "lamp" ? (myInv.lamp || 0) : buildKind === "scarecrow" ? (myInv.scarecrow || 0)
               : buildKind === "grass" ? (myInv.grass || 0) : buildKind === "mill" ? (myInv.mill || 0) : buildKind === "cauldron" ? (myInv.cauldron || 0)
               : buildKind === "bridgeWood" ? (myInv.wood || 0) : (buildKind === "bridgeStone" || buildKind === "bridgeRenovate") ? (myInv.stone || 0) : (myInv.fence || 0)) : "";
-            /* L'icône d'un plant est le VERGER ADULTE EN FRUITS, pas la
-               pousse : à 32 px dans une case d'inventaire, quatre pousses
-               vertes se ressemblent toutes, alors qu'un citronnier chargé de
-               citrons se distingue d'un myrtillier au premier coup d'œil. On
-               montre ce qu'on va OBTENIR, pas ce qu'on va poser. */
-            img = orchK >= 0
-              ? (spritesReady ? spritesRef.current.orchards[orchK][3] : null)
-              : (spritesReady && bkImg ? spritesRef.current[bkImg] : null);
-            lvl = buildKind === "fence" ? (fenceDir === "h" ? "↔" : fenceDir === "v" ? "↕" : "R") : buildKind === "cauldron" ? "⚗️" : orchK >= 0 ? "🌳" : "";
+            img = spritesReady && bkImg ? spritesRef.current[bkImg] : null;
+            lvl = buildKind === "fence" ? (fenceDir === "h" ? "↔" : fenceDir === "v" ? "↕" : "R") : buildKind === "cauldron" ? "⚗️" : "";
           }
           else if (isHerd) { if (carryingAnimal) lvl = "●"; }
           else if (isHand) { const dn = (myInv && myInv.decor ? Object.values(myInv.decor).reduce((a, b) => a + (b | 0), 0) : 0) + (myInv ? (myInv.lamp | 0) + (myInv.scarecrow | 0) : 0); count = healArmed ? (myInv ? (myInv.healKit || 0) : "") : (dn || ""); if (healArmed) lvl = "🩹"; else if (handHeldUI || handMode) lvl = "●"; }
           else lvl = "N" + (myTools[s.key] || 1);
-          const title = isSeed ? L.seedTip(seedName(seedSel))
-            : isFence ? (buildKind.startsWith("orchard:")
-              ? L.orchardTip((() => { const o = C.ORCHARDS.find(x => x.id === buildKind.slice(8)); return o ? (lang === "en" ? o.saplingNameEn : o.saplingName) : ""; })())
-              : buildKind === "wall" ? L.wallTip : buildKind === "path" ? L.pathTip : buildKind === "lamp" ? L.lampTip : buildKind === "scarecrow" ? L.scarecrowTip
+          const title = isSeed ? (selIsSap(seedSel) ? L.orchardTip(sapName(selSapId(seedSel))) : L.seedTip(seedName(selCropId(seedSel))))
+            : isFence ? (buildKind === "wall" ? L.wallTip : buildKind === "path" ? L.pathTip : buildKind === "lamp" ? L.lampTip : buildKind === "scarecrow" ? L.scarecrowTip
               : buildKind === "grass" ? L.grassTip : buildKind === "mill" ? L.millTip : buildKind === "cauldron" ? L.cauldronRowSub
               : buildKind === "bridgeRenovate" ? L.bridgeRenovateTip
               : (buildKind === "bridgeWood" || buildKind === "bridgeStone") ? L.bridgeTip : L.fenceTip)
@@ -14305,11 +14687,33 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           <div className="ferme-seed-menu panel" onClick={e => e.stopPropagation()}>
             <div className="ferme-seed-menu-title">{L.seedMenuTitle}</div>
             {C.CROPS.filter(cr => !cr.unique || (myInv && myInv.seeds && myInv.seeds[cr.id] > 0)).map(cr => (
-              <div key={cr.id} className={"ferme-seed-menu-row" + (cr.id === seedSel ? " sel" : "")}
-                onClick={() => { setSeedSel(cr.id); setSeedMenuOpen(false); }}>
+              <div key={cr.id} className={"ferme-seed-menu-row" + (SEL_CROP(cr.id) === seedSel ? " sel" : "")}
+                onClick={() => { setSeedSel(SEL_CROP(cr.id)); setSeedMenuOpen(false); }}>
                 <Sprite img={spritesReady ? spritesRef.current.crops[cr.id][C.CROP_STAGES - 1] : null} w={26} h={26} />
                 <span className="name">{seedName(cr.id)}</span>
                 <span className="count">× {myInv ? myInv.seeds[cr.id] : 0}</span>
+              </div>
+            ))}
+            {/* ================================================================
+                ZIP 404 — LES PLANTS DE VERGER, DANS LE MÊME MENU.
+                Guillaume : « même mécanisme que les seeds et crops habituels ».
+
+                ⚠️ ILS S'AFFICHENT MÊME À ZÉRO, ET LES GRAINES AUSSI. C'est
+                délibéré et c'est la leçon du 401 : la rotation de la case
+                construction existait depuis juillet, personne ne l'avait
+                trouvée, parce que rien ne la montrait. Un plant qui
+                n'apparaîtrait qu'une fois acheté serait invisible à qui n'en a
+                jamais acheté — c'est-à-dire à tout le monde, la première fois.
+                L'intertitre suffit à séparer les deux familles ; le zéro dit
+                « ça existe, va en acheter », pas « ça n'existe pas ».
+                ================================================================ */}
+            <div className="ferme-seed-menu-title" style={{ marginTop: 8 }}>{L.seedMenuOrchardTitle}</div>
+            {C.ORCHARDS.map((o, k) => (
+              <div key={"sap-" + o.id} className={"ferme-seed-menu-row" + (SEL_SAP(o.id) === seedSel ? " sel" : "")}
+                onClick={() => { setSeedSel(SEL_SAP(o.id)); setSeedMenuOpen(false); }}>
+                <Sprite img={spritesReady ? spritesRef.current.orchards[k][3] : null} w={26} h={26} />
+                <span className="name">{sapName(o.id)}</span>
+                <span className="count">× {(myInv && myInv.saplings && (myInv.saplings[o.id] | 0)) || 0}</span>
               </div>
             ))}
           </div>
@@ -14431,6 +14835,58 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               <button disabled={hud.money < C.CROPS[gregOrderCrop].seedCost * gregOrderCount} onClick={armGregOrder}>{L.gregOrderArmBtn}</button>
             </div>
             <div className="ferme-seed-menu-hint">{L.gregOrderHint}</div>
+
+            {/* ================================================================
+                ZIP 404 — GREG PLANTE AUSSI LES VERGERS.
+                Guillaume : « il faut que greg puisse aussi les planter ».
+
+                ⚠️ LE NOMBRE DEMANDÉ EST BORNÉ AUX PLACES RÉELLEMENT LIBRES, ET
+                LE PANNEAU LE DIT AVANT DE CLIQUER. Sans ça, on commande dix
+                citronniers à 1 400 or, il en pose trois, et il ne se passe
+                rien pour les sept autres — un prélèvement sans contrepartie et
+                sans un mot. L'hôte reborne de son côté (il est le seul à
+                connaître le monde à cet instant) et rembourse la différence ;
+                ici, on empêche simplement de demander l'impossible.
+                ================================================================ */}
+            {(() => {
+              const w2 = worldRef.current;
+              const room = Math.max(0, C.ORCHARD_MAX - ((w2 && w2.orchards && w2.orchards.size) || 0));
+              const spec = C.ORCHARDS[gregOrderSap] || C.ORCHARDS[0];
+              const n = Math.max(1, Math.min(room, gregOrderSapCount));
+              const cost = spec.saplingCost * n;
+              return (<>
+                <div className="ferme-seed-menu-title" style={{ marginTop: 10 }}>{L.gregOrderSaplingTitle}</div>
+                {C.ORCHARDS.map((o, k) => (
+                  <div key={"gsap-" + o.id} className={"ferme-seed-menu-row" + (k === gregOrderSap ? " sel" : "")}
+                    onClick={() => setGregOrderSap(k)}>
+                    <Sprite img={spritesReady ? spritesRef.current.orchards[k][3] : null} w={26} h={26} />
+                    <span className="name">{sapName(o.id)}</span>
+                    <span className="count">{L.perPiece(o.saplingCost)}</span>
+                  </div>
+                ))}
+                <div className="ferme-shop-row">
+                  <div className="info"><b>{L.gregOrderSaplingCountLabel}</b><span>{L.gregOrderSaplingRoom(room)}</span></div>
+                  <input type="number" min={1} max={Math.max(1, room)} value={gregOrderSapCount}
+                    onChange={e => setGregOrderSapCount(Math.max(1, Math.min(Math.max(1, room), parseInt(e.target.value) || 1)))}
+                    style={{ width: 60 }} />
+                </div>
+                <div className="ferme-shop-row">
+                  <div className="info"><span>{L.gregOrderCost(cost)}</span></div>
+                  <button disabled={room <= 0 || hud.money < cost} onClick={() => armGregSaplingOrder(n)}>{L.gregOrderArmBtn}</button>
+                </div>
+                <div className="ferme-seed-menu-hint">{L.gregOrderSaplingHint(C.ORCHARD_MAX)}</div>
+              </>);
+            })()}
+
+            {/* ⚠️ ABATTRE EST IRRÉVERSIBLE — d'où la sélection au clic voulue
+                par Guillaume, et non un ordre lancé depuis ce panneau. Ce
+                bouton n'abat RIEN : il arme le mode de marquage et ferme tout,
+                pour qu'on aille désigner les arbres soi-même, les compter, et
+                seulement ensuite valider. */}
+            <div className="ferme-shop-row" style={{ marginTop: 10 }}>
+              <div className="info"><b>{L.gregOrderChopBtn}</b><span>{L.gregChopArmHint}</span></div>
+              <button onClick={armGregChop}>{L.gregOrderArmBtn}</button>
+            </div>
             {/* Chantier 2 (feuille de route) : nombre d'ordres déjà en
                 attente, pour que le joueur sache où il en est avant d'en
                 poser un de plus (pas obligatoire au fonctionnement, mais
@@ -15012,6 +15468,42 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               <button disabled={hud.money < C.GRASS_COST} onClick={() => buyGrass(1)}>{L.buy1}</button>
               <button disabled={hud.money < C.GRASS_COST * 5} onClick={() => buyGrass(5)}>{L.buy5}</button>
             </div>
+            {/* ================================================================
+                ZIP 398/404 — LES PLANTS DE VERGER, DANS LA SECTION GRAINES.
+                Demande de Guillaume au 398 : « des arbres fruitiers qui
+                demeurent, produisent périodiquement des fruits mais ne
+                nécessitent pas de replanter ». Puis au 404 : « qu'ils
+                apparaissent au même endroit dans le shop ».
+
+                ⚠️ SEULE LA PLACE A CHANGÉ, PAS UNE LIGNE DU CONTENU. Le bloc a
+                été DÉPLACÉ tel quel depuis la section Constructions, où le 398
+                l'avait rangé parce qu'un plant se pose comme un moulin. Il
+                tombe maintenant à la fin de « Graines & cultures », juste avant
+                les animaux — là où on va chercher ce qui pousse.
+
+                Chaque ligne annonce les TROIS nombres qui décident de l'achat :
+                le temps de pousse, la période de production, et les saisons.
+                Un plant coûte cher et met des heures : ne pas dire ce qu'il
+                rendra, ce serait vendre une surprise à mille quatre cents or.
+                ================================================================ */}
+            <div style={{ fontSize: 11, fontWeight: 700, opacity: .7, textTransform: "uppercase", letterSpacing: .5, marginTop: 10 }}>{L.orchardShopTitle}</div>
+            <div className="ferme-hint">{L.orchardShopHint(SLOT.seeds + 1)}</div>
+            {C.ORCHARDS.map((o, k) => (
+              <div className="ferme-shop-row" key={"orch-" + o.id}>
+                <Sprite img={spritesReady ? spritesRef.current.orchards[k][3] : null} w={24} h={28} />
+                <div className="info">
+                  <b>{(lang === "en" ? o.saplingNameEn : o.saplingName) + " — " + o.saplingCost + " or"}</b>
+                  <span className="ferme-usage">{L.orchardRowSub(
+                    Math.round(o.matureMs / 3600000),
+                    Math.round(o.cycleMs / 3600000),
+                    o.yieldMin, o.yieldMax,
+                    C.fruitName(o.fruit, lang === "en"),
+                    o.seasons.map(sk => L.seasonName(sk)).join(", "))}</span>
+                  <span>{L.orchardOwned((myInv && myInv.saplings && (myInv.saplings[o.id] | 0)) || 0)}</span>
+                </div>
+                <button disabled={hud.money < o.saplingCost} onClick={() => buySapling(o.id, 1)}>{L.buy1}</button>
+              </div>
+            ))}
             <div className="ferme-tools-header">{L.shopAnimalsHeader}</div>
             {C.ANIMALS.map(a => (
               <div className="ferme-shop-row" key={"an" + a.id}>
@@ -15104,35 +15596,6 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               <div className="info"><b>{L.millRowTitle(C.MILL_COST)}</b><span>{L.millRowSub(myInv ? (myInv.mill || 0) : 0)}</span></div>
               <button disabled={hud.money < C.MILL_COST} onClick={() => buyMill(1)}>{L.buy1}</button>
             </div>
-            {/* ================================================================
-                ZIP 398 — LES PLANTS DE VERGER.
-                Demande de Guillaume : « des arbres fruitiers qui demeurent,
-                produisent périodiquement des fruits mais ne nécessitent pas de
-                replanter ».
-
-                Chaque ligne annonce les TROIS nombres qui décident de l'achat :
-                le temps de pousse, la période de production, et les saisons.
-                Un plant coûte cher et met des heures : ne pas dire ce qu'il
-                rendra, ce serait vendre une surprise à mille quatre cents or.
-                ================================================================ */}
-            <div style={{ fontSize: 11, fontWeight: 700, opacity: .7, textTransform: "uppercase", letterSpacing: .5, marginTop: 10 }}>{L.orchardShopTitle}</div>
-            <div className="ferme-hint">{L.orchardShopHint}</div>
-            {C.ORCHARDS.map((o, k) => (
-              <div className="ferme-shop-row" key={"orch-" + o.id}>
-                <Sprite img={spritesReady ? spritesRef.current.orchards[k][3] : null} w={24} h={28} />
-                <div className="info">
-                  <b>{(lang === "en" ? o.saplingNameEn : o.saplingName) + " — " + o.saplingCost + " or"}</b>
-                  <span className="ferme-usage">{L.orchardRowSub(
-                    Math.round(o.matureMs / 3600000),
-                    Math.round(o.cycleMs / 3600000),
-                    o.yieldMin, o.yieldMax,
-                    C.fruitName(o.fruit, lang === "en"),
-                    o.seasons.map(sk => L.seasonName(sk)).join(", "))}</span>
-                  <span>{L.orchardOwned((myInv && myInv.saplings && (myInv.saplings[o.id] | 0)) || 0)}</span>
-                </div>
-                <button disabled={hud.money < o.saplingCost} onClick={() => buySapling(o.id, 1)}>{L.buy1}</button>
-              </div>
-            ))}
             {/* Zip 252 : ateliers d'artisans — visibles seulement quand l'artisan concerné vit chez nous.
                 Chantier "sucrerie déplaçable" (2026-07) : la sucrerie (skill
                 "sugarworker"/Jérôme Martial) a rejoint cette liste générique
@@ -15376,43 +15839,6 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 </div>
               );
             })}
-
-            {/* ================================================================
-                ZIP 398 — LES FRUITS : À L'UNITÉ OU PAR BARQUETTE.
-                « Mais on peut aussi vendre les fruits par barquettes. »
-
-                La barquette (six fruits) rapporte +25 % : sans cette prime,
-                vendre par six serait exactement vendre six fois, donc un
-                bouton de plus qui ne sert à rien. Elle récompense d'avoir
-                laissé le verger tourner au lieu de cueillir au fil de l'eau.
-                Le bouton annonce lui-même ce qu'il rapporte — un prix qu'on
-                doit calculer de tête n'est pas un prix.
-                ================================================================ */}
-            <div style={{ fontSize: 11, fontWeight: 700, opacity: .7, textTransform: "uppercase", letterSpacing: .5, marginTop: 12 }}>{L.bagFruitsTitle}</div>
-            {(() => {
-              const inv = (myInv && myInv.fruits) || {};
-              const owned = C.FRUITS.filter(f => (inv[f.id] | 0) > 0);
-              if (!owned.length) return <div className="ferme-hint">{L.bagNoFruits}</div>;
-              return owned.map(f => {
-                const n = inv[f.id] | 0;
-                return (
-                  <div className="ferme-shop-row" key={"fr-" + f.id}>
-                    <Sprite img={spritesReady ? spritesRef.current.fruits[f.id] : null} w={24} h={24} />
-                    <div className="info">
-                      <b>{(lang === "en" ? f.nameEn : f.name) + " ×" + n}</b>
-                      <span className="ferme-usage">{L.fruitRowSub(f.sell, C.PUNNET_SIZE, C.punnetPrice(f.id))}</span>
-                    </div>
-                    <PixBtn sprites={spritesReady ? spritesRef.current : null} tone="plain" small
-                      label={L.sellOneBtn(f.sell)}
-                      onClick={() => sendReq({ kind: "sellFruit", fruit: f.id, punnet: false })} />
-                    <PixBtn sprites={spritesReady ? spritesRef.current : null} tone="good" small
-                      disabled={n < C.PUNNET_SIZE}
-                      label={L.sellPunnetBtn(C.punnetPrice(f.id))}
-                      onClick={() => sendReq({ kind: "sellFruit", fruit: f.id, punnet: true })} />
-                  </div>
-                );
-              });
-            })()}
 
             {/* ZIP 398 — LES PRODUITS AUX FRUITS. Confitures, yaourts, tarte au
                 citron. Chaque ligne dit ce qu'il faut ET ce que ça rapporte :
@@ -15894,9 +16320,58 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               <div className="ferme-shop-row" key="fruit">
                 <Sprite img={spritesReady ? spritesRef.current.crops[0][C.CROP_STAGES - 1] : null} w={32} h={32} />
                 <div className="info"><b>{L.fruitLabel} × {myInv.fruit}</b><span>{L.perPiece(C.FRUIT_SELL)}</span></div>
-                <button onClick={sellFruit}>{L.sellAll}</button>
+                <button onClick={sellWildApple}>{L.sellAll}</button>
               </div>
             )}
+            {/* ================================================================
+                ZIP 398/404 — LES FRUITS : À L'UNITÉ OU PAR BARQUETTE, AU BAC.
+                « Mais on peut aussi vendre les fruits par barquettes. » (398)
+                « je ne sais pas pourquoi les fruits apparaissent dans le
+                bag... » (404)
+
+                ⚠️ IL AVAIT RAISON, ET CE N'ÉTAIT PAS UN CHOIX. Le 398 avait
+                posé ces deux boutons dans le SAC, à côté des produits qu'on y
+                fabrique. Mais tout ce qui se récolte et se vend — les neuf
+                cultures, les poissons, les baies, la pomme des bois — se vend
+                AU BAC. Un fruit de verger est une récolte : il n'y avait aucune
+                raison qu'il fasse exception, sinon l'ordre dans lequel les deux
+                systèmes ont été écrits. Le bloc est DÉPLACÉ tel quel ; les
+                produits transformés, eux, restent au sac, parce qu'on les
+                FABRIQUE et qu'un atelier n'est pas un stock.
+
+                La barquette (six fruits) rapporte +25 % : sans cette prime,
+                vendre par six serait exactement vendre six fois, donc un
+                bouton de plus qui ne sert à rien. Elle récompense d'avoir
+                laissé le verger tourner au lieu de cueillir au fil de l'eau.
+                Le bouton annonce lui-même ce qu'il rapporte — un prix qu'on
+                doit calculer de tête n'est pas un prix.
+                ================================================================ */}
+            <div style={{ fontSize: 11, fontWeight: 700, opacity: .7, textTransform: "uppercase", letterSpacing: .5, marginTop: 12 }}>{L.binFruitsTitle}</div>
+            {(() => {
+              const inv = (myInv && myInv.fruits) || {};
+              const owned = C.FRUITS.filter(f => (inv[f.id] | 0) > 0);
+              if (!owned.length) return <div className="ferme-hint">{L.binNoFruits}</div>;
+              return owned.map(f => {
+                const n = inv[f.id] | 0;
+                return (
+                  <div className="ferme-shop-row" key={"fr-" + f.id}>
+                    <Sprite img={spritesReady ? spritesRef.current.fruits[f.id] : null} w={24} h={24} />
+                    <div className="info">
+                      <b>{(lang === "en" ? f.nameEn : f.name) + " ×" + n}</b>
+                      <span className="ferme-usage">{L.fruitRowSub(f.sell, C.PUNNET_SIZE, C.punnetPrice(f.id))}</span>
+                    </div>
+                    <PixBtn sprites={spritesReady ? spritesRef.current : null} tone="plain" small
+                      label={L.sellOneBtn(f.sell)}
+                      onClick={() => sendReq({ kind: "sellFruit", fruit: f.id, punnet: false })} />
+                    <PixBtn sprites={spritesReady ? spritesRef.current : null} tone="good" small
+                      disabled={n < C.PUNNET_SIZE}
+                      label={L.sellPunnetBtn(C.punnetPrice(f.id))}
+                      onClick={() => sendReq({ kind: "sellFruit", fruit: f.id, punnet: true })} />
+                  </div>
+                );
+              });
+            })()}
+
             {/* Poissons pêchés par Soan, pool COMMUN (chantier 2026-07,
                 demande Guillaume : "le poisson est direct notre propriété et
                 on peut aller le vendre") — même principe d'affichage que les
@@ -16544,6 +17019,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   );
 
   function seedName(i) { return lang === "en" ? C.CROPS[i].seedNameEn : C.CROPS[i].seedName; }
+  /* zip 404 : le pendant de seedName pour les plants de verger. Les deux sont
+     appelés depuis les mêmes endroits (case de la barre, menu, boutique) — un
+     seul nom manquant afficherait « undefined » au-dessus de la case. */
+  function sapName(id) { const o = C.ORCHARDS.find(x => x.id === id); return o ? (lang === "en" ? o.saplingNameEn : o.saplingName) : String(id || ""); }
 }
 
 /* Petit composant : dessine un sprite (canvas hors-écran) à une taille donnée.

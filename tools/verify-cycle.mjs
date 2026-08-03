@@ -247,7 +247,18 @@ ok("les nouveaux messages sont BRANCHÉS dans la table de FermeGame.js",
      n'est pas du code, et un contrôle qui ne sait pas les distinguer oblige à
      écrire des commentaires évasifs — donc à moins bien documenter. */
   const code = game.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
-  const hard = code.match(/slotRef\.current [=!<>]==? \d|\bsl [=!]== \d|selectSlot\(\d|\bslot === \d/g) || [];
+  /* ⚠️ CE MOTIF A LAISSÉ PASSER UN DÉFAUT, ET LE 404 L'A PAYÉ.
+     Le 403 cherchait quatre formes : `slotRef.current === N`, `sl === N`,
+     `selectSlot(N)` et `slot === N`. Il en manquait une, et pas une rare : le
+     PARAMÈTRE de `selectSlot` s'appelle `s`, et la ligne `if (s !== 6 && …)`
+     est passée sous le radar. Elle lâchait au sol l'animal qu'on portait dès
+     qu'on cliquait sa propre case — 6 n'existant plus, la condition était
+     toujours vraie. Trouvé au 404, en relisant `selectSlot` pour autre chose.
+
+     La leçon est plus large que la ligne : UN CONTRÔLE QUI ÉNUMÈRE DES FORMES
+     NE PROTÈGE QUE DES FORMES ÉNUMÉRÉES. On couvre donc aussi `s`, `sl` et
+     `slot` avec tous les opérateurs de comparaison, et `setSlot(N)`. */
+  const hard = code.match(/slotRef\.current [=!<>]==? \d|\b(?:s|sl|slot) [=!<>]==? \d\b|selectSlot\(\d|setSlot\(\d/g) || [];
   ok("⚠️ aucun indice de case n'est écrit en chiffre", hard.length === 0,
      hard.length ? "EN DUR : " + hard.join(" · ") : "tout passe par SLOT.*");
 

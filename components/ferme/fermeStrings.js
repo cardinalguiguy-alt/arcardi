@@ -1158,6 +1158,23 @@ export const FERME_STR = {
     gregOrderArmBtn: "Choisir cet ordre",
     gregOrderFab: "📍 Lancer Greg ici",
     gregOrderCancel: "Annuler l'ordre",
+    /* ======================================================================
+       ZIP 404 — GREG PLANTE LES VERGERS, ET LES ABAT SUR SÉLECTION.
+       ====================================================================== */
+    gregOrderSaplingTitle: "Plants de verger",
+    gregOrderSaplingHint: (max) => `Greg pose un plant par case libre, serrés autour de l'endroit où tu lanceras l'ordre. Il n'y a pas de labour ni d'arrosage : un verger n'en a pas besoin. La ferme n'accepte que ${max} vergers en tout — il s'arrête net au plafond et te le dit.`,
+    gregOrderSaplingCountLabel: "Nombre de plants",
+    gregOrderSaplingRoom: (n) => `Places restantes sur la ferme : ${n}`,
+    /* ⚠️ ABATTRE EST IRRÉVERSIBLE : des heures de pousse et jusqu'à 1 400 or.
+       D'où la sélection au clic voulue par Guillaume plutôt qu'un ordre à
+       l'aveugle — on désigne, on compte, on relit, PUIS on valide. */
+    gregOrderChopBtn: "🪓 Marquer des vergers à abattre",
+    gregChopArmHint: "Clique les vergers à abattre. Reclique pour retirer une marque.",
+    gregChopCount: (n) => `${n} verger${n > 1 ? "s" : ""} marqué${n > 1 ? "s" : ""}`,
+    gregChopFab: "🪓 Envoyer Greg abattre",
+    gregChopNone: "Ce n'est pas un de tes vergers.",
+    toastGregChopDone: (n) => `🪓 Greg s'y met : ${n} verger${n > 1 ? "s" : ""} à abattre.`,
+    toastGregNoOrchardRoom: "La ferme a déjà tout son verger — Greg n'a plus où planter !",
     toastGregNotHired: "Greg n'est pas (ou plus) engagé !",
     toastGregBusy: "Greg finit déjà une commande, attends qu'il ait terminé !",
     toastGregNoRoom: "Greg ne trouve plus de place libre pour ça !",
@@ -1216,10 +1233,17 @@ export const FERME_STR = {
     fertilizerOrderAvailable: (n) => `Engrais disponible : ${n}`,
     // --- Zip 235 ---
     berryLabel: "Baies",
-    fruitLabel: "Pommes",
+    /* ⚠️ ZIP 404 — DEUX CHOSES S'APPELAIENT « FRUIT », ET C'EST PROBABLEMENT
+       LA VRAIE CAUSE DE LA QUESTION DE GUILLAUME (« je ne sais pas pourquoi
+       les fruits apparaissent dans le bag »). Ici, la pomme ramassée sur un
+       arbre de la forêt : 18 or, vendue au bac. Plus bas, `binFruitsTitle` :
+       les citrons, fraises, framboises et myrtilles des vergers, 70 à 110 or.
+       Deux stocks, deux prix, un seul mot à l'écran — et maintenant que les
+       deux se vendent au MÊME endroit, le même mot deviendrait illisible. */
+    fruitLabel: "Pommes des bois",
     perPiece: (p) => `${p} or / pièce`,
     toastBerriesPicked: (n) => `🫐 +${n} baie(s)`,
-    toastFruitPicked: (n) => `🍎 +${n} pomme(s)`,
+    toastFruitPicked: (n) => `🍎 +${n} pomme(s) des bois`,
     toastFruitCooldown: "L'arbre a déjà été cueilli aujourd'hui.",
     passageWorldToast: (name) => `🌀 Cette semaine, le passage mène à : ${name}.`,
     // --- Zip 392 : menu développeur (Cmd/Ctrl+Shift+X, hôte uniquement) ---
@@ -1228,7 +1252,16 @@ export const FERME_STR = {
        ====================================================================== */
     orchardTip: (nom) => `${nom} — clique sur une case d'herbe ou de terre pour le planter. Il restera.`,
     orchardShopTitle: "Plants de verger",
-    orchardShopHint: "On les plante une fois. Ils demeurent, et donnent des fruits à chaque saison — sans jamais replanter. Pose-les avec l'outil Construction.",
+    /* ⚠️ ZIP 404 — LE NUMÉRO DE TOUCHE N'EST PLUS ÉCRIT DANS LE TEXTE, IL EST
+       PASSÉ EN PARAMÈTRE. Le 401 avait corrigé « touche 8 » en « touche 6 », le
+       403 a dû recorriger « touche 6 » en « touche 4 », et le contrôle
+       généralisé du 403 interdit désormais tout numéro qui ne soit pas celui de
+       la construction — ce qui rendait cette phrase-ci impossible à écrire
+       juste. La vraie leçon des trois : UN TEXTE QUI CONTIENT UN NUMÉRO DE
+       TOUCHE EST UN TEXTE QUI PÉRIME. Celui-ci reçoit le sien de `SLOT_ORDER`,
+       donc il ne peut plus mentir, et il n'y a plus rien à recorriger au
+       prochain réordonnancement de la barre. */
+    orchardShopHint: (touche) => `On les plante une fois. Ils demeurent, et donnent des fruits à chaque saison — sans jamais replanter. Choisis-les dans la case Graines (touche ${touche}), puis clique une case d'herbe ou de terre.`,
     orchardRowSub: (mature, cycle, min, max, fruit, saisons) =>
       `Mûr en ${mature} h · ${min}–${max} ${fruit.toLowerCase()}s toutes les ${cycle} h · ${saisons}`,
     orchardOwned: (n) => `En réserve : ${n}`,
@@ -1241,8 +1274,14 @@ export const FERME_STR = {
     toastOrchardNotReady: "Rien à cueillir pour le moment — il refait ses fruits.",
     toastOrchardOffSeason: "Ce n'est pas la saison de ce fruit.",
     toastFruitsPicked: (n, fruit) => `🧺 ${n} ${fruit.toLowerCase()}${n > 1 ? "s" : ""} ! L'arbre reste.`,
-    bagFruitsTitle: "Fruits",
-    bagNoFruits: "Aucun fruit. Plante un verger : il donnera sans qu'on replante.",
+    /* ZIP 404 — les fruits de verger descendent AU BAC, avec les cultures, les
+       poissons et les baies. Guillaume : « je ne sais pas pourquoi les fruits
+       apparaissent dans le bag... » — il a raison, c'était une incohérence et
+       pas un choix. Le sac garde ce qu'on FABRIQUE (confitures, yaourts,
+       tarte), parce qu'un atelier n'est pas un stock. */
+    binFruitsTitle: "Fruits de verger",
+    binNoFruits: "Aucun fruit de verger. Plante un verger : il donnera sans qu'on replante.",
+    seedMenuOrchardTitle: "Plants de verger",
     fruitRowSub: (unit, taille, prix) => `${unit} or l'unité · barquette de ${taille} : ${prix} or (+25 %)`,
     sellOneBtn: (or) => `Vendre ${or}`,
     sellPunnetBtn: (or) => `Barquette ${or}`,
@@ -2286,6 +2325,21 @@ export const FERME_STR = {
     gregOrderHint: "Greg will till smartly around wherever you're standing when you launch the order: he tops up tiles already planted with the same crop first, then plants new tiles (up to 5 seeds each) until the requested seeds are used up.",
     gregOrderArmBtn: "Choose this order",
     gregOrderFab: "📍 Send Greg here",
+    /* ZIP 404 — Greg plants orchards, and fells the ones you mark. */
+    gregOrderSaplingTitle: "Orchard saplings",
+    gregOrderSaplingHint: (max) => `Greg drops one sapling per free tile, packed tight around wherever you launch the order. No tilling, no watering: an orchard needs neither. The farm only takes ${max} orchards in all — he stops dead at the cap and says so.`,
+    gregOrderSaplingCountLabel: "Number of saplings",
+    gregOrderSaplingRoom: (n) => `Room left on the farm: ${n}`,
+    /* ⚠️ FELLING IS IRREVERSIBLE: hours of growth and up to 1,400 gold. Hence
+       Guillaume's click-selection rather than a blind order — you point, you
+       count, you re-read, THEN you confirm. */
+    gregOrderChopBtn: "🪓 Mark orchards to fell",
+    gregChopArmHint: "Click the orchards to fell. Click again to unmark one.",
+    gregChopCount: (n) => `${n} orchard${n > 1 ? "s" : ""} marked`,
+    gregChopFab: "🪓 Send Greg to fell them",
+    gregChopNone: "That's not one of your orchards.",
+    toastGregChopDone: (n) => `🪓 Greg is on it: ${n} orchard${n > 1 ? "s" : ""} to fell.`,
+    toastGregNoOrchardRoom: "The farm already has a full orchard — Greg has nowhere left to plant!",
     gregOrderCancel: "Cancel order",
     toastGregNotHired: "Greg isn't hired (anymore)!",
     toastGregBusy: "Greg is still finishing an order — wait until he's done!",
@@ -2340,17 +2394,25 @@ export const FERME_STR = {
     fertilizerOrderAvailable: (n) => `Fertilizer available: ${n}`,
     // --- Zip 235 ---
     berryLabel: "Berries",
-    fruitLabel: "Apples",
+    /* ⚠️ ZIP 404 — see the French block: two different things were called
+       "fruit". This one is the apple picked off a forest tree (18 gold); the
+       orchard fruit lives under `binFruitsTitle` (70 to 110 gold). Now that
+       both sell in the SAME place, one shared word would be unreadable. */
+    fruitLabel: "Wild apples",
     perPiece: (p) => `${p} gold / each`,
     toastBerriesPicked: (n) => `🫐 +${n} berrie(s)`,
-    toastFruitPicked: (n) => `🍎 +${n} apple(s)`,
+    toastFruitPicked: (n) => `🍎 +${n} wild apple(s)`,
     toastFruitCooldown: "This tree has already been picked today.",
     passageWorldToast: (name) => `🌀 This week the passage leads to: ${name}.`,
     // --- Zip 392: developer menu (Cmd/Ctrl+Shift+X, host only) ---
     /* ZIP 398 — orchards, fruit, punnets, products, pet names. */
     orchardTip: (name) => `${name} — click a grass or soil tile to plant it. It will stay.`,
     orchardShopTitle: "Orchard saplings",
-    orchardShopHint: "Plant them once. They stay, and bear fruit every season — no replanting, ever. Place them with the Build tool.",
+    /* ⚠️ ZIP 404 — the key number is a PARAMETER now, not text. 401 fixed
+       "key 8" into "key 6", 403 had to fix "key 6" into "key 4": a text that
+       spells out a key number is a text that goes stale. This one gets its
+       number from `SLOT_ORDER`, so it can no longer lie. */
+    orchardShopHint: (key) => `Plant them once. They stay, and bear fruit every season — no replanting, ever. Pick them from the Seeds slot (key ${key}), then click a grass or soil tile.`,
     orchardRowSub: (mature, cycle, min, max, fruit, seasons) =>
       `Ripe in ${mature} h · ${min}–${max} ${fruit.toLowerCase()} every ${cycle} h · ${seasons}`,
     orchardOwned: (n) => `In store: ${n}`,
@@ -2363,8 +2425,12 @@ export const FERME_STR = {
     toastOrchardNotReady: "Nothing to pick yet — it is growing its fruit back.",
     toastOrchardOffSeason: "This fruit is out of season.",
     toastFruitsPicked: (n, fruit) => `🧺 ${n} ${fruit.toLowerCase()}${n > 1 ? "s" : ""}! The tree stays.`,
-    bagFruitsTitle: "Fruit",
-    bagNoFruits: "No fruit. Plant an orchard: it gives without replanting.",
+    /* ZIP 404 — orchard fruit moved down to the SELLING BIN, next to the crops,
+       the fish and the berries. The bag keeps what you MAKE (jams, yoghurts,
+       tart), because a workshop is not a stock. */
+    binFruitsTitle: "Orchard fruit",
+    binNoFruits: "No orchard fruit yet. Plant an orchard: it gives without replanting.",
+    seedMenuOrchardTitle: "Orchard saplings",
     fruitRowSub: (unit, size, price) => `${unit} gold each · punnet of ${size}: ${price} gold (+25%)`,
     sellOneBtn: (gold) => `Sell ${gold}`,
     sellPunnetBtn: (gold) => `Punnet ${gold}`,
