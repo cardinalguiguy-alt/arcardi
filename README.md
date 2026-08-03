@@ -1,5 +1,34 @@
 # ARCARDI 🎪
 
+> **ZIP 405 — LE DÉCOR CESSE DE MENTIR, ET LE COMBAT CESSE DE SE FIGER.**
+> Quatre défauts signalés par Guillaume en jouant au labyrinthe, et **cinq
+> causes** — deux d'entre elles se cachaient derrière le même symptôme.
+>
+> | ce qu'il a vu | la cause | après |
+> |---|---|---|
+> | « je suis mort en tombant dans le lac alors que je ne suis pas allé dans la crevasse » | le trou **dessiné** faisait 3 à 5 unités, le trou **qui tue** faisait la cellule entière (11,5) | une seule description, lue par le dessin ET par le moteur |
+> | *(même symptôme, autre cause)* | une dalle effondrée **restait dessinée pour toujours** — `buildFloor` était appelé sans qu'on garde son résultat | elle tremble, elle tombe, elle disparaît, un fût violet la remplace |
+> | « leurs déplacements sont absurdes pendant le combat » | `pathTo` rend `[]` quand la créature est dans VOTRE case : elle **se figeait**. Mesuré : **0,000 unité en 2 secondes** | elle marche droit sur vous dès qu'aucun mur ne s'interpose |
+> | « ils finissent par gagner ou despawn sans vraiment mourir » | joueur injoignable → chemin `null` → `\|\| []` → statue définitive | elle rentre chez elle, ce qui se voit |
+> | « des interstices où l'on voit le lac » | pourtour en **44**-gone contre gradins en **40**-gones, et 40 cm de sol manquants **aux quatre portes** | un seul pas de découpe (64), et le pourtour couvre les seuils |
+> | « au centre on s'enfonce un peu dans le sol » | les 3 gradins étaient des cylindres **pleins** : le premier masquait les deux autres. On marchait **2,34 unités sous le sol visible** | des anneaux et des contremarches ouvertes — **0/2 688 points** hors tolérance |
+> | « l'arbalète doit tirer à distance et one shot les monstres » | l'assistance à la visée n'avait jamais été branchée sur le tir, et la portée (86,8) tenait à 1,8 unité de la portée de vue (85) | elle vise comme l'épée, elle porte à 105, et **elle seule** peut abattre le traqueur |
+>
+> **Décision de Guillaume au 405 : le traqueur devient tuable, en plusieurs
+> carreaux.** L'épée le repousse toujours sans l'entamer. C'est la première fois
+> depuis le 393 que les deux armes disent deux choses différentes.
+>
+> **Deux outils neufs, et les deux ont trouvé plus que ce qu'on leur demandait :**
+> `verify-crevasse.mjs` (17 contrôles — **13 échouaient sur le 404**) et
+> `verify-rotonde.mjs` (7 contrôles — **6 échouaient**, dont 792 points de
+> mesure sur 1 520). Plus `preview-rotonde.mjs`, qui DESSINE la coupe de la
+> salle : c'est lui qui a trouvé le troisième défaut de la rotonde, celui que
+> personne n'avait signalé.
+>
+> **Équilibrage : 72,0 % de sortie sur 100 parties** (73,3 % sur 120 au 404).
+> Les chutes passent de **12,5 % à 9,0 %** des fins de partie, et les créatures
+> tuent enfin — elles ne le faisaient jamais, puisqu'elles se figeaient.
+
 > **ZIP 404 — LE VERGER SE SÈME COMME UNE GRAINE, ET LES FRUITS DESCENDENT AU BAC.**
 > Demande de Guillaume : « pour les nouveaux arbustes fruitiers et buissons, il
 > faut que greg puisse aussi les planter. Donc **même mécanisme que les seeds et

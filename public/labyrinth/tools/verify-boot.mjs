@@ -65,6 +65,9 @@ const T = {
   BoxGeometry: function () { return node("G"); }, SphereGeometry: function () { return node("G"); },
   PlaneGeometry: function () { return node("G"); }, CylinderGeometry: function () { return node("G"); },
   RingGeometry: function () { return node("G"); }, OctahedronGeometry: function () { return node("G"); },
+  // Zip 405 : la terrasse du fond de la rotonde est un disque. Voir la note de
+  // smoke-render.mjs — ici le faux Three.js avait un trou, pas le jeu.
+  CircleGeometry: function () { return node("G"); },
   HemisphereLight: function () { return node("L"); }, AmbientLight: function () { return node("L"); },
   PointLight: function () { const n = node("PointLight"); n.distance = 0; n.intensity = 0;
                             n.color = { setHex() {} }; return n; },

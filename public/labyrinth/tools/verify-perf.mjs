@@ -105,6 +105,10 @@ const T = {
   PlaneGeometry: function (w, h) { const n = node("Pla"); n.__area = (w||1) * (h||1); return n; },
   CylinderGeometry: function (a, b, h) { const n = node("Cyl"); n.__area = 3.14 * ((a||1)+(b||1)) * (h||1); return n; },
   RingGeometry: function () { return node("Ring"); },
+  // Zip 405 : voir la note de smoke-render.mjs — troisième faux Three.js à
+  // apprendre CircleGeometry, et le seul cas jusqu'ici où c'est le faux qui
+  // avait tort et non le jeu.
+  CircleGeometry: function () { return node("Circle"); },
   OctahedronGeometry: function () { return node("Oct"); },
   HemisphereLight: function () { return node("Hemi"); },
   AmbientLight: function () { return node("Amb"); },

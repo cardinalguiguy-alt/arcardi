@@ -62,6 +62,16 @@ const LAB_STR = {
     tipMap: "Un plan du dédale ! La minicarte montre maintenant tout — M pour le déplier.",
     tipBow: "Une arbalète, et cinq carreaux. Clic droit pour tirer.",
     tipBolts: "Des carreaux.",
+    /* ZIP 405 — le traqueur tombe, et il faut le DIRE.
+       ⚠️ DEUX PHRASES ET PAS UNE. La première se déclenche au premier carreau
+       planté : c'est le seul moment où le joueur apprend que cette chose-là
+       peut mourir, et le laisser le déduire d'une barre qui vient d'apparaître,
+       en pleine fuite, dans le noir, c'est le laisser ne pas l'apprendre. La
+       seconde marque la fin de l'échange le plus cher de la partie.
+       Aucune des deux ne nomme une touche : règle du 404, un texte qui contient
+       un numéro de touche est un texte qui périme. */
+    tipStalkerHurt: "Le carreau s'est planté dans le traqueur. Alors il peut saigner.",
+    tipStalkerDead: "Le traqueur s'effondre. Le dédale n'a plus que ses murs.",
     tipNoMap: "Tu n'as pas encore trouvé de plan. Cherche une carte luisante accrochée à un mur.",
     mapPartial: "ce que tu as vu",
     mapFull: "plan complet",
@@ -144,6 +154,9 @@ const LAB_STR = {
     tipMap: "A plan of the maze! The minimap now shows everything — press M to unfold it.",
     tipBow: "A crossbow, and five bolts. Right click to shoot.",
     tipBolts: "Bolts.",
+    /* ZIP 405 — the stalker can fall now, and it has to be said out loud. */
+    tipStalkerHurt: "The bolt sank into the stalker. So it can bleed.",
+    tipStalkerDead: "The stalker goes down. The maze has only its walls left.",
     tipNoMap: "You have not found a plan yet. Look for a glowing map pinned to a wall.",
     mapPartial: "what you have seen",
     mapFull: "full plan",

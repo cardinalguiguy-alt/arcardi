@@ -1141,3 +1141,225 @@ exactement ce qu'on voulait, puisque rien de ce qui décide n'a bougé.
 - **`tools/preview-fps.mjs` ne connaît ni les créatures, ni les torches murales,
   ni le modèle de vue.** Il montre l'échelle et le cadrage, ce qui suffisait à
   ce zip. Il ne remplacera jamais le fait de jouer.
+
+---
+
+# ZIP 405 — LE DÉCOR CESSE DE MENTIR, ET LE COMBAT CESSE DE SE FIGER
+
+Guillaume, après avoir joué au 404 :
+
+> « je suis mort en tombant dans le lac alors que je ne suis pas allé dans la
+> crevasse. aussi, tuer les ennemis doit être plus simple, les monstres sont
+> vraiment inquiétants mais parfois leurs déplacements sont absurdes pendant le
+> combat et ils finissent par gagner ou despawn sans vraiment mourir. aussi
+> problème de remplissage des textures sur la rotonde : il y a des interstices
+> où l'on voit le lac, et au centre on s'enfonce un peu dans le sol.
+> l'arbalète doit tirer à distance et one shot les monstres aussi »
+
+Quatre phrases, **cinq causes**, et une leçon qui vaut pour tout le chantier :
+**deux d'entre elles se cachaient derrière le même symptôme.** La première
+phrase décrit une seule mort ; il y avait deux façons distinctes de mourir
+comme ça, et corriger l'une aurait laissé l'autre intacte, avec un joueur qui
+signale « c'est toujours là » et un modèle qui ne comprend pas pourquoi.
+
+## 1. Mourir sur de la pierre — DEUX causes, pas une
+
+### 1a. Le trou dessiné et le trou mortel n'avaient pas la même forme
+
+`world.js/buildFloor` découpait un disque déchiqueté de **0,26 à 0,46 de
+cellule**, soit 3,0 à 5,3 unités. `rules.js/handleFloor` faisait tomber sur
+`gaps.has(j)` : **la cellule entière**, 11,5 × 11,5. Entre les deux, un anneau
+de pierre parfaitement dessinée, sur lequel on se tient, qu'on voit sous ses
+pieds, et qui tue. **187 des 324 sous-dalles dessinées d'une cellule trouée
+étaient mortelles** — c'est le chiffre que rend `verify-crevasse.mjs` lancé sur
+le zip 404.
+
+C'est le cas d'école de la leçon du 387 : *deux descriptions d'une même chose
+finissent toujours par diverger*. La forme vit maintenant dans `rules.js`
+(`holeR`, `inHole`) et ses trois nombres dans `config.js` ; `world.js` la
+DEMANDE au lieu de la redécrire. Le moteur s'accorde une margelle de
+`HOLE_GRIP` (3 cm) pour que la dernière sous-dalle du bord PORTE — sans quoi on
+aurait remplacé un décor qui ment par un décor qui pinaille.
+
+**Pourquoi aucun outil ne l'avait vu :** l'oracle de `simulate-maze.mjs`
+contourne la CELLULE. Il n'a jamais eu l'occasion de marcher sur le bord.
+
+### 1b. Une dalle effondrée restait dessinée pour toujours
+
+`buildFloor(cfg, m, st);` était appelé **sans qu'on garde son résultat**.
+Personne ne pouvait donc toucher une dalle après la construction. Conséquences,
+toutes les trois muettes :
+
+* une dalle fêlée ne tremblait pas — `CRACK_SHAKE` était déclaré dans
+  `config.js` et **lu par personne** depuis le 394 ;
+* on tombait à travers un dallage intact ;
+* la cellule effondrée **continuait de se présenter comme de la pierre saine**
+  jusqu'à la fin de la partie. On pouvait y revenir vingt minutes plus tard et
+  mourir dessus sans le moindre avertissement.
+
+`syncFloor()` lit maintenant `st.cracks` à chaque image : la dalle tremble de
+plus en plus fort à mesure que le sursis s'épuise, puis disparaît, et un fût
+violet s'allume à sa place — la cellule rejoint les trous d'origine et se lit
+comme eux.
+
+## 2. Le combat — la créature ne se figeait pas « parfois », elle se figeait toujours
+
+Toute la locomotion des créatures passe par `stepAlong()`, qui suit un chemin de
+CELLULES rendu par `Maze.pathTo()`. Or `pathTo` commence par
+`if (s === t) return []`. **Un rôdeur entré dans la cellule du joueur n'avait
+plus rien à suivre**, et `stepAlong` sortait à sa première ligne.
+
+Mesuré avant correction, sur une sonde : *un rôdeur en mode « chase », au
+contact du joueur, a parcouru **0,000 unité en deux secondes**.*
+
+À une cellule de distance ce n'était guère mieux : il visait le **centre** de la
+cellule du joueur, et une cellule fait 11,5 unités. Il pouvait viser avec
+application un point à cinq mètres de vous — d'où la démarche que Guillaume
+décrit, qui avance de biais, dépasse et repart.
+
+Trois corrections, aucune touchant l'équilibre :
+
+1. **la marche directe à vue.** Dès que `canTouch()` dit qu'aucun mur ne
+   s'interpose, la créature marche droit sur le joueur. Même `canTouch()` que
+   l'épée et que l'assistance à la visée — une seule description de « y a-t-il
+   un mur entre nous » ;
+2. **le recul jette le chemin.** `SWING_KNOCKBACK` vaut 4,6 : sans ça la
+   créature repartait vers un nœud désormais derrière elle. La ligne existait
+   pour le traqueur depuis le 393 et pour lui seul ;
+3. **le chemin introuvable ne laisse plus une statue.** `|| []` transformait
+   « je ne peux pas y aller » en « je n'ai rien à faire ». Le joueur replié dans
+   le parvis est injoignable **par construction** — la créature restait plantée
+   au seuil jusqu'à la fin de la partie. De loin, ça ne se distingue pas d'une
+   créature effacée : c'est très probablement le « despawn sans vraiment
+   mourir ».
+
+**Rien n'a été rendu plus facile ni plus difficile**, et le nombre le dit :
+`ROAMER_CHASE_SPEED` vaut 6,6 contre 9,0 pour la marche du joueur. **Reculer
+marche toujours.** On a rendu la créature cohérente — et une créature cohérente
+est une créature qu'on peut enfin frapper, ce qui était la demande.
+
+## 3. La rotonde — trois défauts de géométrie, zéro problème de texture
+
+**Les gradins étaient des cylindres PLEINS.** `CylinderGeometry` a des
+chapeaux : le premier gradin (rayon 20,75, dessus à −1,17) couvrait toute la
+fosse et masquait les deux autres. La salle « en gradins » était une assiette
+plate, pendant que `Rules.groundY` — qui pose le fermier, les créatures et la
+caméra — descendait bien jusqu'à −3,51. **On marchait 2,34 unités sous le sol
+visible.** Désormais : un ANNEAU par terrasse et une contremarche OUVERTE.
+
+**Deux fentes différentes sur le lac.** Le pourtour était un 44-gone, les
+gradins des 40-gones, inscrits dans les mêmes cercles : jusqu'à 11 mm de vide
+entre leurs cordes. Et le pourtour s'arrêtait à 28,35 quand la cellule de
+rotonde va jusqu'à 28,75 : **40 cm de sol manquants aux quatre portes**, pile
+là où l'on entre. Un seul pas de découpe (`ROTUNDA_SEG = 64`), un chevauchement
+volontaire (`ROTUNDA_LAP`), un pourtour qui couvre les seuils.
+
+**Un troisième défaut, que personne n'avait signalé.** `groundY` comptait la
+descente de l'escalier en DISTANCE AU CENTRE, alors que les marches sont posées
+selon |z − ccz|. Les deux formules donnent le même résultat **sur l'axe de la
+volée** — c'est-à-dire précisément sur la ligne qu'on regarde quand on vérifie
+un escalier. À côté, le fermier flottait de 54 cm. Trouvé par
+`preview-rotonde.mjs`, un outil écrit pour tout autre chose.
+
+**Et les deux joues de pierre ont été SUPPRIMÉES** (décision prise seul, voir le
+commentaire de `buildRotunda` pour la façon de les rétablir sans refaire le
+défaut) : à hauteur fixe le long d'un escalier qui descend, elles devenaient un
+parapet visible que `groundY` ignore, donc qu'on traverse en marchant.
+
+## 4. L'arbalète — et le traqueur devient tuable
+
+**« Tirer à distance » n'était pas une demande de portée, c'était un défaut.**
+L'assistance à la visée avait été écrite au 396 pour l'épée ; l'arbalète est
+arrivée au 397, un zip plus tard, et personne n'a rebranché le fil. **La seule
+arme qui demande de viser était la seule à ne recevoir aucune aide**, dans un
+jeu qui se joue dans le noir, au clavier, sur des silhouettes presque noires.
+Et `BOLT_LIFE_MS` portait à 86,8 unités quand la vue s'arrête à 85 : 1,8 unité
+de marge, c'est-à-dire rien. Un carreau tiré au fond d'une galerie mourait de
+vieillesse à un pas de sa cible, **en silence**. Porté à 1 700 ms = 105 unités.
+
+**Le traqueur tombe en quatre carreaux, et seulement à l'arbalète** (choix de
+Guillaume). L'épée continue de ne faire que le repousser. C'est un
+renversement de la décision du 393 — assumé — et il donne enfin à l'arbalète une
+raison d'exister autre que « l'épée, en plus lent » :
+
+> l'**ÉPÉE** tue les rôdeurs et REPOUSSE le traqueur ;
+> l'**ARBALÈTE** tue les rôdeurs d'un carreau, et c'est la seule chose au monde
+> qui puisse abattre le traqueur.
+
+Sa jauge n'apparaît **qu'au premier carreau planté** : tant qu'on ne l'a pas
+touché, rien n'annonce qu'il puisse tomber.
+
+## Les VINGT outils du 405
+
+Deux neufs et un troisième pour regarder :
+
+```
+node tools/verify-crevasse.mjs   # NEUF : le trou qu'on voit est le trou qui tue
+node tools/verify-rotonde.mjs    # NEUF : le sol qu'on voit est celui où l'on marche
+node tools/preview-rotonde.mjs   # NEUF : la COUPE de la salle, en PNG
+```
+
+`verify-controls.mjs` reçoit en plus **dix contrôles de combat** — dont
+« un rôdeur au contact BOUGE encore », qui rend **0,00 u en 2 s** sur le 404.
+
+### Ce que les deux contrôles neufs donnaient sur le zip 404
+
+| script | sur le 404 | sur le 405 |
+|---|---|---|
+| `verify-crevasse` | **13 échecs / 17** | 17/17 |
+| `verify-rotonde` | **6 échecs / 7**, 792 points sur 1 520 hors tolérance, pire écart −2,34 u | 7/7, **0 point sur 2 688** |
+| `verify-controls` | **10 échecs** | tout passe |
+
+C'est la leçon du 404, appliquée : *un contrôle qui passe du premier coup sur du
+code non corrigé est un contrôle FAUX.* Ce sont ces échecs-là, et rien d'autre,
+qui autorisent à faire confiance aux contrôles quand ils passent.
+
+### Trois fois où le contrôle avait tort, et une où le faux Three.js avait tort
+
+* `verify-crevasse` cherchait `RAG_MIN` dans `world.js` — et le trouvait **dans
+  le commentaire qui explique pourquoi il n'y est plus**. On juge le code, on
+  laisse le texte tranquille : ces commentaires sont la mémoire du chantier ;
+* `verify-controls` comptait les appels à `aimAssist` avec un motif qui
+  attrapait aussi **la déclaration** : il trouvait 2 sur le 404 et PASSAIT sur
+  le code fautif. Motif exact du 404 (« un contrôle qui énumère des formes ne
+  protège que des formes énumérées ») ;
+* `verify-controls` mesurait l'approche d'un rôdeur… en oubliant que `hurt()`
+  **repousse le joueur de 5,0**. Il mesurait le recul du joueur en croyant
+  mesurer l'approche de la créature ;
+* `preview-rotonde` annonçait 1,170 unité d'écart : c'était le ruban de 3 cm de
+  `ROTUNDA_LAP`, le chevauchement qu'on a mis exprès. **L'outil avait tort, la
+  salle avait raison.**
+
+Et pour la première fois depuis le 399, **le faux Three.js avait tort** :
+`CircleGeometry` existe bel et bien dans la r128, trois outils ne la
+connaissaient pas. « En général c'est l'outil qui a raison » n'est pas
+« toujours ».
+
+## L'équilibrage
+
+| | 404 (120 parties) | 405 (100 parties) |
+|---|---|---|
+| sortie | 73,3 % | **72,0 %** |
+| temps écoulé | 14,2 % | 18,0 % |
+| chute | **12,5 %** | **9,0 %** |
+| créature | **0,0 %** | 1,0 % |
+
+Les créatures **ne tuaient jamais** — elles se figeaient. C'est la seule ligne
+qui bouge vraiment, et elle va dans le sens de la réparation, pas de la
+difficulté.
+
+`simulate-run.js` du défi de fuite rend **exactement** les mêmes chiffres qu'au
+399 : 5 018 m, 137,4 pièces, 0,03 trébuchement, mort passive à 14,6 s. Rien n'a
+bougé dans le flux aléatoire partagé.
+
+## Ce qui n'a PAS été fait au 405
+
+* **Le joystick tactile.** Treizième zip. Guillaume a choisi le découpage
+  « 405 = les quatre corrections, 406 = le joystick ». **C'est le chantier du
+  406, décidé par lui.**
+* **Regarder la rotonde corrigée dans le jeu.** `preview-fps.mjs` ne dessine que
+  les murs et le dallage ordinaire : il ignore la salle. La preuve du 405 est
+  géométrique (0 point sur 2 688) et graphique (la coupe), **pas une capture
+  d'écran.** Il n'y a que Guillaume qui puisse en faire une.
+* **L'équilibrage du traqueur tuable.** `STALK_HP = 4` est un nombre choisi, pas
+  mesuré : l'oracle de `simulate-maze` ne tire pas à l'arbalète.

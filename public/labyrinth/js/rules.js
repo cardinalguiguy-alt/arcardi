@@ -30,6 +30,69 @@ const Rules = (function () {
 
   const N = 1, E = 2, S = 4, W = 8;
 
+  /* =======================================================================
+     LA FORME D'UN TROU — UNE SEULE DESCRIPTION (zip 405).
+     -----------------------------------------------------------------------
+     ⚠️ CE BLOC RÉPARE LE DÉFAUT LE PLUS CHER DU LABYRINTHE, ET C'EST UN CAS
+     D'ÉCOLE DE LA LEÇON DU 387 : « deux descriptions d'une même chose
+     finissent toujours par diverger ».
+
+     Retour de Guillaume au 404 : « je suis mort en tombant dans le lac alors
+     que je ne suis pas allé dans la crevasse. » Il a raison, et le code le
+     dit sans ambiguïté :
+
+       * LE TROU QU'ON VOIT était décrit dans world.js/buildFloor : un disque
+         déchiqueté de rayon 0,26 à 0,46 de cellule, soit 3,0 à 5,3 unités ;
+       * LE TROU QUI TUE était décrit dans rules.js/handleFloor : `gaps.has(j)`,
+         c'est-à-dire LA CELLULE ENTIÈRE, 11,5 × 11,5 unités.
+
+     Entre les deux, un anneau de pierre parfaitement dessinée, large de 2,8
+     unités sur les côtés et jusqu'à 5,1 dans les coins, sur lequel on peut se
+     tenir, qu'on voit sous ses pieds, et qui tue. Ce n'est pas une difficulté :
+     c'est un décor qui ment. Et aucun outil ne pouvait le voir, parce que
+     l'oracle de simulate-maze contourne la CELLULE — il n'a jamais eu
+     l'occasion de marcher sur le bord.
+
+     Depuis le 405, la forme est décrite ICI, une seule fois, et lue par les
+     deux : world.js demande à `holeR()` où poser ses sous-dalles, handleFloor
+     demande à `inHole()` si le joueur est au-dessus du vide. Elles ne peuvent
+     plus diverger — c'est littéralement la même fonction.
+
+     ⚠️ POURQUOI UN BRUIT LOCAL PLUTÔT QUE Paint.noise. La forme doit être
+     connue du MOTEUR, et rules.js ne charge pas paint.js : les outils
+     (simulate-maze, verify-maze) n'ont ni Three.js ni canvas. Le générateur
+     ci-dessous est le hachage de Paint.noise recopié — huit lignes — et c'est
+     le prix à payer pour que la vérité sur les trous vive du côté du moteur.
+     Il est contrôlé par verify-crevasse.mjs, qui compare les deux à la
+     troisième décimale sur les 852 angles de toutes les cellules.
+     ======================================================================= */
+  function hnoise(i) {
+    let t = (i + 0x6d2b79f5) | 0;
+    t = Math.imul(t ^ (t >>> 15), 1 | t);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  }
+
+  /* Rayon du trou de la cellule `j` dans la direction `ang`, EN FRACTION DE
+     CELLULE (0,26 à 0,46). C'est le bruit par secteur angulaire qui fait le
+     bord déchiqueté plutôt qu'un disque propre. */
+  function holeR(cfg, j, ang) {
+    const wob = hnoise(j * 31 + ((ang * 3) | 0) * 7) * (cfg.HOLE_R_MAX - cfg.HOLE_R_MIN);
+    return cfg.HOLE_R_MIN + wob;
+  }
+
+  /* Le point (fx, fz), donné en fraction de cellule depuis son centre, est-il
+     AU-DESSUS DU VIDE ? `margin` (en fraction de cellule) rétrécit le trou :
+     le rendu s'en sert à 0 (il dessine le bord exact), le moteur à
+     HOLE_GRIP pour qu'on puisse encore poser le pied sur la dernière
+     sous-dalle sans basculer. */
+  function inHole(cfg, j, fx, fz, margin) {
+    const d = Math.hypot(fx, fz);
+    if (d < 1e-6) return true;                       // le centre est toujours le vide
+    const r = holeR(cfg, j, Math.atan2(fz, fx)) - (margin || 0);
+    return d < r;
+  }
+
   /* -----------------------------------------------------------------------
      LES BOÎTES.
      Deux familles, et la distinction n'est pas cosmétique :
@@ -195,9 +258,23 @@ const Rules = (function () {
     const pit = rad - cfg.ROTUNDA_RIM;          // au-delà, on est sur le pourtour plat
     if (d >= pit) return 0;
     const depth = (pit - d) / pit;               // 0 au bord du gradin, 1 au centre
-    // L'ESCALIER : une bande nord-sud, marches fines et régulières.
+    /* L'ESCALIER : une bande nord-sud, marches fines et régulières.
+       ⚠️ ZIP 405 — LA MARCHE SE COMPTE SUR L'AXE NORD-SUD, PAS EN DISTANCE AU
+       CENTRE, et c'est une correction trouvée par preview-rotonde.mjs, un outil
+       écrit pour tout autre chose.
+       L'escalier est une bande : ses marches sont posées à z = ccz ± r, sur
+       toute la largeur ROTUNDA_STAIR_W. Le dessin les place donc selon |z−ccz|.
+       Cette fonction, elle, descendait selon la DISTANCE AU CENTRE — ce qui est
+       la même chose sur l'axe de la volée, et faux partout ailleurs dans la
+       bande. Au point (ccx + 3, ccz), la formule rendait −2,97 alors qu'aucune
+       marche n'y est dessinée : il n'y a là que la terrasse du fond, à −3,51.
+       Le fermier y flottait de 54 cm. Personne ne pouvait le voir en relisant :
+       les deux descriptions étaient identiques SUR LA LIGNE qu'on regarde
+       naturellement quand on vérifie un escalier, celle où l'on monte.
+       Sous la dernière marche (|z−ccz| < 0,6), la formule rend exactement
+       −3,51, c'est-à-dire la terrasse du fond : le raccord se fait tout seul. */
     if (Math.abs(x - ccx) < cfg.ROTUNDA_STAIR_W / 2)
-      return -Math.floor((pit - d) / cfg.ROTUNDA_STEP) * cfg.ROTUNDA_STEP_H;
+      return -Math.floor((pit - Math.abs(z - ccz)) / cfg.ROTUNDA_STEP) * cfg.ROTUNDA_STEP_H;
     // LES GRADINS : trois marches larges.
     const ring = Math.min(cfg.ROTUNDA_RINGS - 1, Math.floor(depth * cfg.ROTUNDA_RINGS));
     return -(ring + 1) * cfg.ROTUNDA_DROP;
@@ -483,6 +560,13 @@ const Rules = (function () {
         mode: "idle", tx: m.exit.x, ty: m.exit.y,
         path: null, pathI: 0, repathT: 0, staggerT: 0, hitT: 0, gait: 0, gaitSpeed: 0,
         knowsT: 0, hitFlash: 0, aimT: 0,
+        /* ZIP 405 — il a une réserve, maintenant. `wounded` reste faux tant
+           qu'aucun carreau ne l'a touché : c'est lui, et pas `hp`, que le HUD
+           interroge pour décider d'afficher la jauge. Deux champs plutôt qu'un
+           test `hp < STALK_HP` parce que le jour où un carreau infligera 0 (une
+           résistance, une armure, n'importe quoi), le test se tairait alors que
+           le joueur, lui, aurait bien tiré. */
+        hp: cfg.STALK_HP, dead: false, deadT: 0, wounded: false,
       };
     }
     markSeen(st);
@@ -762,6 +846,21 @@ const Rules = (function () {
     if (intent.shoot && st.hasBow && st.bolts > 0 && st.boltCd <= 0) {
       st.bolts--; st.shots++;
       st.boltCd = cfg.BOLT_COOLDOWN_MS / 1000;
+      /* ⚠️ ZIP 405 — L'ASSISTANCE À LA VISÉE S'APPLIQUE AUSSI AU TIR.
+         Elle avait été écrite au 396 pour l'épée et pour elle seule, ce qui
+         était juste tant que l'arbalète n'était pas là — elle est arrivée au
+         397, un zip plus tard, et personne n'a rebranché le fil. Résultat : la
+         seule arme qui demande de VISER était la seule à ne recevoir aucune
+         aide, dans un jeu qui se joue dans le noir, au clavier, sur des
+         silhouettes presque noires. C'est exactement le reproche « l'arbalète
+         doit tirer à distance ».
+         La même fonction, à la même condition qu'à l'épée : la cible doit être
+         DÉJÀ atteignable — aucun mur entre les deux (canTouch), dans la fenêtre
+         AIM_ARC, et le cap ne pivote jamais de plus de AIM_MAX_TURN. On corrige
+         une visée approximative, on ne tire pas à la place du joueur. La
+         portée, elle, ne change pas : `aimShotRange` étend seulement la
+         RECHERCHE de cible à ce qu'un carreau peut réellement parcourir. */
+      aimAssist(st, cfg.BOLT_SPEED * cfg.BOLT_LIFE_MS / 1000);
       st.projectiles.push({
         x: st.px - Math.sin(st.ang) * 1.2, z: st.pz - Math.cos(st.ang) * 1.2,
         vx: -Math.sin(st.ang) * cfg.BOLT_SPEED, vz: -Math.cos(st.ang) * cfg.BOLT_SPEED,
@@ -922,11 +1021,28 @@ const Rules = (function () {
     }
     const j = m.idx(cx, cy);
 
-    // 1. trou ouvert, ou dalle déjà tombée : on tombe.
-    if (st.gaps.has(j) || st.fallen.has(j)) {
+    /* 1a. UNE DALLE DÉJÀ TOMBÉE : elle a cédé EN ENTIER, sous nos yeux, et le
+           rendu retire la cellule entière. Ici, cellule = vide, sans nuance. */
+    if (st.fallen.has(j)) {
       st.status = "falling"; st.fallT = 0;
       st.events.push({ type: "fall" });
       return;
+    }
+    /* 1b. UN TROU D'ORIGINE : on ne tombe QUE là où l'on voit le vide.
+           ⚠️ ZIP 405 — c'est la correction du défaut signalé par Guillaume.
+           Le trou dessiné est un disque déchiqueté qui n'occupe qu'un tiers à
+           deux tiers de sa cellule ; le reste est de la pierre, et de la
+           pierre, ça porte. On interroge donc la MÊME description que le
+           dessin (voir inHole en tête de fichier), avec une margelle de
+           HOLE_GRIP : le dernier demi-pas de bord tient encore, ce qui rend le
+           contournement possible au lieu d'être une loterie au pixel. */
+    if (st.gaps.has(j)) {
+      const [wx, wz] = centerOf(cfg, cx, cy);
+      if (inHole(cfg, j, (st.px - wx) / cfg.CELL, (st.pz - wz) / cfg.CELL, cfg.HOLE_GRIP)) {
+        st.status = "falling"; st.fallT = 0;
+        st.events.push({ type: "fall" });
+      }
+      return;                 // une cellule trouée n'a ni fêlure ni rien d'autre
     }
     // 2. dalle fêlée : elle commence à céder au premier pas, PAS avant.
     const cr = st.cracks.get(j);
@@ -1011,17 +1127,43 @@ const Rules = (function () {
           } else st.events.push({ type: "boltHit" });
           hitAny = true; break;
         }
-        if (!hitAny && st.stalkerAwake && st.stalker &&
+        if (!hitAny && st.stalkerAwake && st.stalker && !st.stalker.dead &&
             Math.hypot(st.stalker.x - p.x, st.stalker.z - p.z) <= cfg.STALK_BODY_R + cfg.BOLT_R) {
-          /* Le traqueur encaisse un carreau EXACTEMENT comme un coup d'épée :
-             il recule, et rien de plus. Le distinguer ici plutôt que dans une
-             branche « arme » est ce qui garantit qu'aucune arme ajoutée un
-             jour ne pourra le tuer par inadvertance — même arbitrage qu'au
-             393 pour l'épée. */
-          st.stalker.staggerT = cfg.BOLT_STALK_STAGGER_MS / 1000;
-          st.stalker.hitFlash = 1;
+          /* ⚠️ ZIP 405 — LE CARREAU L'ENTAME, ET C'EST LA SEULE CHOSE QUI LE
+             FASSE. L'épée continue de ne faire que le repousser (voir
+             resolveSwing) : ce n'est pas une inégalité de dégâts, c'est la
+             ligne de partage entre les deux armes, et c'est ce qui donne enfin
+             à l'arbalète une raison d'exister autre que « l'épée, en plus
+             lent ». Le distinguer ICI plutôt que dans une branche « arme »
+             reste l'arbitrage du 397 : aucune arme ajoutée un jour ne pourra
+             l'entamer sans qu'on ait écrit la ligne exprès. */
+          const s2 = st.stalker;
+          s2.hp = (s2.hp === undefined ? cfg.STALK_HP : s2.hp) - cfg.STALK_BOLT_DAMAGE;
+          s2.staggerT = cfg.BOLT_STALK_STAGGER_MS / 1000;
+          s2.hitFlash = 1;
+          s2.path = null;
+          /* La révélation, UNE SEULE FOIS. `wounded` est lu par le HUD pour
+             afficher la jauge et sert ici de verrou : quatre carreaux ne
+             doivent pas produire quatre fois « alors il peut saigner ». Un même
+             drapeau pour les deux, parce que c'est une seule et même chose —
+             « le joueur sait désormais qu'il est mortel ». */
+          if (!s2.wounded) { s2.wounded = true; st.events.push({ type: "stalkerHurt" }); }
           st.fx.push({ kind: "spark", x: p.x, z: p.z, y: 2.4, t: 0, ttl: 0.42 });
-          st.events.push({ type: "boltHit" });
+          if (s2.hp <= 0) {
+            /* ⚠️ IL MEURT COMME UN RÔDEUR, EN PLUS GRAND. Réutiliser « soul »
+               plutôt qu'inventer une fin propre au traqueur n'est pas de la
+               paresse : le joueur a appris au premier rôdeur que cette colonne
+               veut dire « c'est fini ». La lui redire dans une autre langue au
+               moment le plus important de sa partie serait le seul instant où
+               il aurait le droit de douter. */
+            s2.dead = true; s2.deadT = 0;
+            st.stalkerAwake = false;
+            st.kills++; st.boltKills++; st.stalkerKilled = true;
+            st.score += cfg.SCORE_PER_KILL * 4;
+            st.fx.push({ kind: "soul", x: s2.x, y: 0, z: s2.z, t: 0, ttl: cfg.KILL_VANISH_MS / 1000 });
+            st.fx.push({ kind: "score", x: s2.x, y: 3.2, z: s2.z, v: cfg.SCORE_PER_KILL * 4, t: 0, ttl: 1.8 });
+            st.events.push({ type: "stalkerDead" });
+          } else st.events.push({ type: "boltHit" });
           hitAny = true;
         }
         if (hitAny) { p.dead = true; break; }
@@ -1129,9 +1271,16 @@ const Rules = (function () {
      rendu, elle aurait fait diverger ce qu'on voit de ce que le moteur
      calcule, et les neuf outils auraient continué de mesurer l'ancien jeu.
      -------------------------------------------------------------------- */
-  function aimAssist(st) {
+  /* `range` est FACULTATIF et vaut la portée de l'épée : c'est ce que faisait
+     la fonction avant le 405, et les appels de l'épée n'ont pas bougé.
+     ⚠️ PIÈGE DE SIGNATURE (376, 388) : un paramètre ajouté en dernière position
+     et optionnel est un mode de panne silencieux. Il est ici parce que les deux
+     armes visent VRAIMENT la même chose à deux portées près — mais il est le
+     dernier qu'on ajoutera de cette façon, et verify-controls.mjs contrôle
+     désormais que les DEUX armes appellent bien aimAssist. */
+  function aimAssist(st, range) {
     const cfg = st.cfg;
-    const reach = cfg.SWING_RANGE + cfg.AIM_MARGIN;
+    const reach = (range === undefined ? cfg.SWING_RANGE : range) + cfg.AIM_MARGIN;
     let best = null, bestD = 1e9;
     const consider = (e, r) => {
       const dx = e.x - st.px, dz = e.z - st.pz;
@@ -1145,7 +1294,7 @@ const Rules = (function () {
       if (d < bestD) { bestD = d; best = { e, a }; }
     };
     for (const r of st.roamers) if (!r.dead) consider(r, cfg.ROAMER_BODY_R);
-    if (st.stalker && st.stalkerAwake) consider(st.stalker, cfg.STALK_BODY_R);
+    if (st.stalker && st.stalkerAwake && !st.stalker.dead) consider(st.stalker, cfg.STALK_BODY_R);
     if (!best) return;
     st.ang += Math.sign(best.a) * Math.min(Math.abs(best.a), cfg.AIM_MAX_TURN);
     st.turnVel = 0;                 // on ne repart pas en glissade après le coup
@@ -1175,6 +1324,15 @@ const Rules = (function () {
       const nb = st.idxB.near(r.x, r.z);
       const [rx, rz] = pushOut(r.x, r.z, cfg.ROAMER_BODY_R, nb);
       r.x = rx; r.z = rz;
+      /* ⚠️ ZIP 405 — LE RECUL JETTE LE CHEMIN, comme il le fait pour le
+         traqueur depuis le 393. SWING_KNOCKBACK vaut 4,6 : la créature se
+         retrouve à près d'une demi-cellule de là où son chemin la croyait, et
+         reprenait sa route vers un nœud désormais DERRIÈRE elle. On la voyait
+         donc reculer sous le coup… puis contourner le joueur pour retourner à
+         un point de passage périmé. C'était l'autre moitié des « déplacements
+         absurdes pendant le combat », et c'est la même ligne qui manquait
+         depuis le 393 — elle n'avait été écrite que pour le traqueur. */
+      r.path = null; r.repathT = 0;
       /* ZIP 396 — LE COUP SE VOIT. Trois signaux d'un coup, et pas un de
          plus : la créature BLANCHIT (hitFlash), une gerbe part du point de
          contact (fx), et elle recule (déjà là). Un coup dans le vide ne
@@ -1194,7 +1352,7 @@ const Rules = (function () {
       } else st.events.push({ type: "hit" });
     }
     const s = st.stalker;
-    if (s && inArc(s.x, s.z, cfg.STALK_BODY_R)) {
+    if (s && !s.dead && inArc(s.x, s.z, cfg.STALK_BODY_R)) {
       s.staggerT = cfg.STALK_STAGGER_MS / 1000;
       const d = Math.hypot(s.x - st.px, s.z - st.pz) || 1;
       s.x += ((s.x - st.px) / d) * cfg.SWING_KNOCKBACK * 1.5;
@@ -1268,6 +1426,84 @@ const Rules = (function () {
         if (r.giveUpT <= 0) r.mode = "home";
       }
 
+      /* ==================================================================
+         ZIP 405 — LA MARCHE DROIT SUR LE JOUEUR, ET C'EST LA CORRECTION DU
+         « leurs déplacements sont absurdes pendant le combat ».
+         ------------------------------------------------------------------
+         ⚠️ LE DÉFAUT, ET IL EST PIRE QUE « ABSURDE » : LE RÔDEUR SE FIGEAIT.
+         Toute la locomotion des créatures passait par stepAlong(), qui suit un
+         chemin de CELLULES rendu par Maze.pathTo(). Or pathTo() commence par
+         `if (s === t) return []` — départ et arrivée dans la même cellule,
+         chemin vide. Un rôdeur entré dans la cellule du joueur n'avait donc
+         plus rien à suivre, et stepAlong() sortait à sa première ligne.
+
+         Mesuré avant correction, sur une sonde : un rôdeur en mode « chase »,
+         au contact du joueur, a parcouru 0,000 unité en deux secondes. Il ne
+         poursuivait pas mal — il ne poursuivait plus du tout.
+
+         Et à une cellule de distance, ce n'était guère mieux : il visait le
+         CENTRE de la cellule du joueur. Une cellule fait 11,5 unités ; le
+         joueur peut donc se tenir à cinq mètres du point que la créature vise
+         avec application, ce qui donne exactement la démarche que Guillaume
+         décrit — elle avance de biais, elle dépasse, elle repart. Elle finit
+         par toucher parce qu'on revient sur elle, jamais parce qu'elle a
+         visé juste.
+
+         La règle neuve tient en une phrase : DÈS QU'ELLE VOUS VOIT VRAIMENT —
+         c'est-à-dire dès que canTouch() dit qu'aucun mur ne s'interpose — elle
+         marche droit sur vous. Sinon, elle reprend le graphe du labyrinthe
+         comme avant. C'est le même canTouch() que l'épée et que l'assistance à
+         la visée : une seule description de « y a-t-il un mur entre nous »,
+         lue par les trois.
+
+         ⚠️ CE N'EST PAS UN RÉGLAGE DE DIFFICULTÉ, et le contrôle est dans le
+         nombre : ROAMER_CHASE_SPEED vaut 6,6 contre 9,0 pour la marche du
+         joueur. Reculer marche toujours. On a rendu la créature COHÉRENTE,
+         pas plus rapide — et une créature cohérente est une créature qu'on
+         peut enfin frapper, ce qui était la demande.
+         ================================================================== */
+      const seesPlayer = r.mode === "chase" &&
+        canTouch(cfg, m, r.x, r.z, st.px, st.pz);
+      if (seesPlayer) {
+        const bx = r.x, bz = r.z;                   // d'où elle part, pour la foulée
+        const dx = st.px - r.x, dz = st.pz - r.z;
+        const d = Math.hypot(dx, dz);
+        // La distance d'arrêt : elle vient au CONTACT, pas dans le joueur.
+        const stop = cfg.BODY_R + cfg.ROAMER_BODY_R;
+        if (d > 0.001) {
+          const want = Math.atan2(-dx, -dz);
+          let diff = want - r.ang;
+          while (diff > Math.PI) diff -= Math.PI * 2;
+          while (diff < -Math.PI) diff += Math.PI * 2;
+          r.ang += diff * Math.min(1, dt * 7);
+          if (d > stop) {
+            const step2 = Math.min(cfg.ROAMER_CHASE_SPEED * dt, d - stop);
+            r.x += (dx / d) * step2;
+            r.z += (dz / d) * step2;
+            const nb2 = st.idxB.near(r.x, r.z);
+            const [rx2, rz2] = pushOut(r.x, r.z, cfg.ROAMER_BODY_R, nb2);
+            r.x = rx2; r.z = rz2;
+          }
+          // La foulée avance à la distance RÉELLEMENT parcourue, comme dans
+          // stepAlong : sans ça, une créature bloquée contre un mur pédale.
+          const mv = Math.hypot(r.x - bx, r.z - bz);
+          r.gait = ((r.gait || 0) + mv / (cfg.STRIDE * 0.8)) % 1;
+          r.gaitSpeed = mv / Math.max(1e-6, dt);
+        }
+        /* Le chemin est jeté : au moment où elle reperdra le joueur de vue,
+           elle doit en recalculer un depuis là où elle est VRAIMENT. Garder
+           l'ancien la ferait repartir vers un nœud qu'elle a dépassé, ce qui
+           est l'autre moitié de la démarche absurde. */
+        r.path = null; r.repathT = 0;
+        // le contact, avec la distance d'APRÈS le pas (voir plus bas)
+        const dNow = Math.hypot(st.px - r.x, st.pz - r.z);
+        if (dNow < cfg.BODY_R + cfg.ROAMER_BODY_R + 0.15 && r.hitT <= 0) {
+          if (hurt(st, cfg.ROAMER_HIT_DAMAGE, r.x, r.z, "roamer")) r.hitT = cfg.ROAMER_HIT_COOLDOWN_MS / 1000;
+          if (st.status !== "play") return;
+        }
+        continue;
+      }
+
       let tgt;
       if (r.mode === "chase") tgt = [pcx, pcy];
       else if (r.mode === "home") {
@@ -1296,14 +1532,34 @@ const Rules = (function () {
       const exhausted = !r.path || !r.path.length || r.pathI >= r.path.length;
       if (exhausted || r.repathT <= 0) {
         r.repathT = cfg.ROAMER_REPATH_MS / 1000;
-        r.path = Maze.pathTo(m, rcx, rcy, tgt[0], tgt[1], blk) || [];
-        r.pathI = 0;
+        const p2 = Maze.pathTo(m, rcx, rcy, tgt[0], tgt[1], blk);
+        /* ⚠️ ZIP 405 — LE CHEMIN INTROUVABLE NE LAISSE PLUS UNE STATUE.
+           `|| []` transformait « je ne peux pas y aller » en « je n'ai rien à
+           faire », et stepAlong() sort sur un chemin vide : le rôdeur
+           s'immobilisait, définitivement. Ça arrive pour de bon — le joueur
+           qui se replie dans le parvis est INJOIGNABLE par construction
+           (blockedForRoamers y ajoute le sanctuaire), et la créature restait
+           alors plantée au seuil, en mode « chase », jusqu'à la fin de la
+           partie. C'est très probablement l'autre moitié de ce que Guillaume
+           décrit par « ils finissent par gagner ou despawn sans vraiment
+           mourir » : elle ne disparaît pas, elle se pétrifie, et de loin ça ne
+           se distingue pas d'une créature effacée.
+           Elle rentre donc chez elle, ce qui est visible, fini, et vrai. */
+        if (p2) { r.path = p2; r.pathI = 0; }
+        else if (r.mode === "chase") { r.mode = "home"; r.path = null; r.giveUpT = 0; }
+        else if (r.mode === "home") { r.mode = "patrol"; r.path = null; r.target = null; }
+        else { r.path = []; r.pathI = 0; r.target = null; }
       }
       const spd = r.mode === "chase" ? cfg.ROAMER_CHASE_SPEED : cfg.ROAMER_SPEED;
       stepAlong(st, r, spd, dt, cfg.ROAMER_BODY_R);
 
-      // contact
-      if (dToPlayer < cfg.BODY_R + cfg.ROAMER_BODY_R + 0.15 && r.hitT <= 0 &&
+      /* contact — ⚠️ la distance est CELLE D'APRÈS LE PAS (zip 405). Elle était
+         mesurée avant, donc en retard d'une image : la créature touchait pour
+         une position qu'elle venait de quitter, et ratait celle où elle venait
+         d'arriver. À 6,6 u/s ça fait 22 cm d'erreur par image, dans le mauvais
+         sens à chaque fois. */
+      const dNow = Math.hypot(st.px - r.x, st.pz - r.z);
+      if (dNow < cfg.BODY_R + cfg.ROAMER_BODY_R + 0.15 && r.hitT <= 0 &&
           canTouch(cfg, m, st.px, st.pz, r.x, r.z)) {
         if (hurt(st, cfg.ROAMER_HIT_DAMAGE, r.x, r.z, "roamer")) r.hitT = cfg.ROAMER_HIT_COOLDOWN_MS / 1000;
         if (st.status !== "play") return;
@@ -1405,6 +1661,12 @@ const Rules = (function () {
     const cfg = st.cfg, m = st.m;
     const s = st.stalker;
     if (!s) return;
+    /* ⚠️ ZIP 405 — IL PEUT ÊTRE MORT, MAINTENANT. Cette ligne est la première
+       du corps de la fonction et pas la troisième, et ce n'est pas un détail :
+       tout ce qui suit — le réveil, la recherche de chemin, la locomotion, le
+       CONTACT — ferait vivre un cadavre. `deadT` court pour que le rendu
+       finisse sa désintégration ; rien d'autre ne bouge. */
+    if (s.dead) { s.deadT += dt; return; }
     if (s.hitT > 0) s.hitT -= dt;
     if (s.staggerT > 0) { s.staggerT -= dt; return; }
 
@@ -1447,13 +1709,19 @@ const Rules = (function () {
      description de « à quel point c'est proche ». */
   function dread(st) {
     const s = st.stalker;
-    if (!s || !st.stalkerAwake) return 0;
+    // ⚠️ Zip 405 : `s.dead` explicitement, en plus de stalkerAwake. Les deux
+    // disent la même chose aujourd'hui ; le voile rouge est la dernière trace
+    // du traqueur à l'écran, et un voile qui survivrait à sa mort serait la
+    // pire des fins possibles pour l'échange le plus cher de la partie.
+    if (!s || s.dead || !st.stalkerAwake) return 0;
     const d = Math.hypot(st.px - s.x, st.pz - s.z);
     const k = 1 - Math.min(1, d / st.cfg.STALK_DREAD_RANGE);
     return k * k * st.cfg.STALK_DREAD_MAX;
   }
 
-  return { create, step, buildBoxes, indexBoxes, gateBoxOf, onPlatform, groundY, pushOut, cellOf, centerOf, canTouch, flameLevel, blockedNow, dread, hurt, N, E, S, W };
+  /* ⚠️ `holeR` et `inHole` SONT EXPORTÉES POUR world.js, et c'est tout l'objet
+     du 405 : le dessin ne redécrit plus le trou, il le demande. */
+  return { create, step, buildBoxes, indexBoxes, gateBoxOf, onPlatform, groundY, pushOut, cellOf, centerOf, canTouch, flameLevel, blockedNow, dread, hurt, holeR, inHole, N, E, S, W };
 })();
 
 if (typeof module === "object" && module.exports) module.exports = { Rules };

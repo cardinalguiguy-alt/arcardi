@@ -425,6 +425,12 @@ const UI = (function () {
       else if (ev.type === "map") toast(L.tipMap);          // zip 397
       else if (ev.type === "bow") toast(L.tipBow);
       else if (ev.type === "bolts") toast(L.tipBolts);
+      /* ZIP 405 — le premier carreau planté dans le traqueur, et sa chute.
+         `stalkerHurt` n'est poussé QU'UNE FOIS par le moteur (au passage de
+         `wounded` à vrai) : sans ça, quatre carreaux donneraient quatre fois la
+         même révélation, et une révélation répétée n'en est plus une. */
+      else if (ev.type === "stalkerHurt") toast(L.tipStalkerHurt);
+      else if (ev.type === "stalkerDead") toast(L.tipStalkerDead);
     }
   }
 

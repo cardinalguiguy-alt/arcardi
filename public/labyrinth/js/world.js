@@ -53,6 +53,7 @@ const World = (function () {
   /* ZIP 396 — le décor et les effets neufs. */
   let lakeMists = [], gateMesh = null, platformGroup = null, rotundaGroup = null;
   let roamerHud = [], stalkerFlash = null;
+  let stalkerHud = null;      // zip 405 : sa jauge, qui n'existait pas
   let sparkPool = [], soulPool = [], scorePool = [];
   /* ZIP 397 — la vue subjective. */
   let mapMesh = null, bowMesh = null, boltPackMeshes = [], boltPool = [];
@@ -66,6 +67,11 @@ const World = (function () {
      décrit. On garde donc le AVANT et le APRÈS, et on affiche entre les deux. */
   let prev = null;
   let wallFlames = [], holeGlows = [];
+  /* ZIP 405 — les dalles saines, rangées par indice de cellule, pour que
+     syncFloor() puisse en faire trembler une puis la retirer. `holeGlowGeo` et
+     `holeGlowMat` sont gardés pour allumer un fût violet sur une cellule qui
+     vient de s'effondrer : un trou neuf doit se lire comme les autres. */
+  let floorTiles = new Map(), holeGlowGeo = null, holeGlowMat = null;
   let skin = null;
   let cam = { x: 0, y: 0, z: 0, ang: 0 };
   let flameCuts = [];
@@ -670,7 +676,13 @@ const World = (function () {
 
   function buildFloor(cfg, m, st) {
     const full = new THREE_.PlaneGeometry(cfg.CELL, cfg.CELL);
-    const SUB = 6;
+    /* ⚠️ ZIP 405 — SUB, RAG_MIN ET RAG_MAX ONT QUITTÉ CE FICHIER. Ils
+       décrivaient la forme du trou du côté du DESSIN, pendant que
+       rules.js/handleFloor faisait tomber sur la cellule entière : de la
+       pierre visible, praticable, et mortelle sur 2,8 unités de large. On
+       demande maintenant la forme au moteur (Rules.holeR), qui est le seul
+       à avoir le droit de dire où est le vide. */
+    const SUB = cfg.HOLE_SUB;
     const sub = new THREE_.PlaneGeometry(cfg.CELL / SUB, cfg.CELL / SUB);
     // Le sol : une tuile par cellule pile (CFG.FLOOR_TILE = CELL), donc pas de
     // répétition à régler — et le relief, lui, compte double au sol : c'est la
@@ -683,7 +695,6 @@ const World = (function () {
     ];
     const mat = mats[0];
     const group = new THREE_.Group();
-    const RAG_MIN = 0.26, RAG_MAX = 0.46;
     for (let y = 0; y < m.G; y++) for (let x = 0; x < m.G; x++) {
       const j = m.idx(x, y);
       if (!m.cells[j]) continue;
@@ -692,6 +703,19 @@ const World = (function () {
       const [wx, wz] = Rules.centerOf(cfg, x, y);
       if (!st.gaps.has(j)) {
         const mesh = new THREE_.Mesh(full, mats[(x * 7 + y * 13) % 2]);
+        /* ⚠️ ZIP 405 — LA DALLE EST RETENUE PAR SON INDICE, et c'est une
+           correction, pas une commodité. buildFloor était appelé UNE fois et
+           son résultat jeté (`buildFloor(cfg, m, st);` sans affectation) :
+           plus personne ne pouvait donc toucher une dalle après la
+           construction. Conséquence, découverte en cherchant tout autre
+           chose : une dalle fêlée ne tremblait pas (CRACK_SHAKE était déclaré
+           et lu par PERSONNE), et une dalle EFFONDRÉE restait dessinée pour
+           toujours. On tombait donc à travers un dallage intact, et — bien
+           pire — la cellule effondrée continuait de se présenter comme de la
+           pierre saine pendant tout le reste de la partie. C'est la seconde
+           cause, indépendante de la première, du « je suis mort en tombant
+           dans le lac alors que je ne suis pas allé dans la crevasse ». */
+        floorTiles.set(j, mesh);
         mesh.rotation.x = -Math.PI / 2;
         /* ⚠️ LA ROTATION DU DALLAGE NE COÛTE RIEN ET CASSE TOUT LE MOTIF.
            Le plan est carré et sa texture aussi : le tourner d'un quart de
@@ -706,12 +730,11 @@ const World = (function () {
       }
       for (let sj = 0; sj < SUB; sj++) for (let si = 0; si < SUB; si++) {
         const fx = (si + 0.5) / SUB - 0.5, fz = (sj + 0.5) / SUB - 0.5;
-        const ang = Math.atan2(fz, fx);
-        // Rayon du trou, bruité par l'angle : c'est ce bruit-là qui fait le
-        // bord déchiqueté plutôt qu'un disque propre.
-        const wob = Paint.noise(j * 31 + ((ang * 3) | 0) * 7) * (RAG_MAX - RAG_MIN);
-        const r = RAG_MIN + wob;
-        if (Math.hypot(fx, fz) < r) continue;      // dans le trou : pas de dalle
+        // Le bord déchiqueté vient du MOTEUR, sans marge : le rendu dessine le
+        // contour exact, le moteur s'accorde HOLE_GRIP de margelle par-dessus.
+        // C'est le seul écart entre les deux, il est d'un tiers de sous-dalle,
+        // et il va dans le sens du joueur.
+        if (Rules.inHole(cfg, j, fx, fz, 0)) continue;   // dans le trou : pas de dalle
         const mesh = new THREE_.Mesh(sub, mat);
         mesh.rotation.x = -Math.PI / 2;
         // Les sous-dalles du bord s'affaissent un peu : elles vont tomber.
@@ -805,7 +828,15 @@ const World = (function () {
     const mat = new THREE_.MeshBasicMaterial({
       color: cfg.COL_LAKE_GLOW, transparent: true, opacity: 0.34,
       blending: THREE_.AdditiveBlending, side: THREE_.DoubleSide, depthWrite: false, fog: false });
-    const g = new THREE_.CylinderGeometry(cfg.CELL * 0.30, cfg.CELL * 0.40, cfg.LAKE_GLOW_UP, 8, 1, true);
+    /* ⚠️ ZIP 405 — LE FÛT VIOLET FAIT DÉSORMAIS LA TAILLE DU TROU. Il était
+       écrit 0,30 / 0,40 de cellule, tout près des 0,26 / 0,46 du trou sans
+       jamais les valoir : la colonne qui dit « ici, le vide » débordait donc
+       d'un côté et rentrait de l'autre. Maintenant qu'on ne tombe QUE dans le
+       trou, ce halo est la seule chose qu'on voie du bord à distance : il doit
+       en donner la mesure exacte, sinon il redevient un décor qui ment. */
+    const g = new THREE_.CylinderGeometry(cfg.CELL * cfg.HOLE_R_MIN, cfg.CELL * cfg.HOLE_R_MAX,
+                                          cfg.LAKE_GLOW_UP, 8, 1, true);
+    holeGlowGeo = g; holeGlowMat = mat;   // zip 405 : relus par syncFloor()
     for (const j of st.gaps) {
       const x = j % m.G, y = (j / m.G) | 0;
       const [wx, wz] = Rules.centerOf(cfg, x, y);
@@ -870,22 +901,74 @@ const World = (function () {
     const matF = new THREE_.MeshLambertMaterial({ map: tex.floor });
     const matW = new THREE_.MeshLambertMaterial({ map: tex.wall });
 
-    // 1. Le pourtour plat.
-    const rim = new THREE_.Mesh(new THREE_.RingGeometry(pit, rad + 0.6, 44), matF);
+    /* ⚠️ ZIP 405 — UN SEUL NOMBRE DE SEGMENTS POUR TOUTE LA SALLE.
+       Le pourtour était un 44-gone, les gradins des 40-gones, tous inscrits
+       dans les MÊMES cercles : deux polygones de pas différents ne se
+       rejoignent nulle part, et entre leurs cordes s'ouvraient des croissants
+       de 11 mm par lesquels on voyait le lac neuf mètres plus bas. Guillaume :
+       « il y a des interstices où l'on voit le lac. » Un seul pas, partout, et
+       le défaut devient impossible plutôt que corrigé. */
+    const SEG = cfg.ROTUNDA_SEG;
+
+    /* 1. Le pourtour plat.
+       ⚠️ IL DÉBORDE MAINTENANT DE ROTUNDA_LAP DES DEUX CÔTÉS, et les deux
+       débordements réparent deux fentes distinctes :
+         * VERS L'INTÉRIEUR, il chevauche le premier gradin : plus aucune
+           corde ne peut découvrir le vide, même si les pas divergeaient un
+           jour ;
+         * VERS L'EXTÉRIEUR, il dépassait à rad + 0,6 = 28,35 alors que le
+           dallage ordinaire s'arrête au bord de la cellule de rotonde, à
+           28,75. Il manquait donc 40 cm de sol AUX QUATRE PORTES — pile à
+           l'endroit où l'on entre, et pile là où l'on regarde ses pieds. Le
+           reste de cet anneau est sous la maçonnerie de la couronne : il ne
+           coûte rien et ne se voit pas. */
+    const rim = new THREE_.Mesh(
+      new THREE_.RingGeometry(pit - cfg.ROTUNDA_LAP, rad + cfg.ROTUNDA_RIM_OUT, SEG), matF);
     rim.rotation.x = -Math.PI / 2;
     rim.position.set(ccx, 0.02, ccz);
     grp.add(rim);
 
-    // 2. Les gradins. Trois cylindres pleins, dont les flancs FONT les
-    //    contremarches. Les rayons viennent de la même division que
-    //    Rules.groundY : ring = floor(((pit - d) / pit) * RINGS).
+    /* 2. LES GRADINS — DES ANNEAUX, PLUS DES DISQUES. C'est la correction du
+       second reproche : « au centre on s'enfonce un peu dans le sol ».
+
+       ⚠️ CE QUI SE PASSAIT, ET POURQUOI PERSONNE NE L'AVAIT VU. Les trois
+       gradins étaient des CylinderGeometry, donc des cylindres PLEINS,
+       chapeaux compris. Le premier — rayon 20,75, dessus à −1,17 — couvrait
+       donc à lui seul toute la fosse, et masquait les deux autres : la salle
+       en gradins était en réalité une assiette plate. Pendant ce temps
+       Rules.groundY, elle, descendait bien jusqu'à −3,51 au centre, et c'est
+       elle qui pose le fermier. On marchait donc SOUS le sol qu'on voyait,
+       jusqu'à 2,34 unités plus bas — un fermier à mi-cuisses dans la pierre.
+       Chaque ligne était juste : c'est la GÉOMÉTRIE qui mentait, et il fallait
+       la regarder de côté pour le voir.
+
+       Maintenant : un ANNEAU horizontal par terrasse (le plat sur lequel on
+       marche) et une contremarche OUVERTE à son bord (le flanc qu'on voit).
+       Les rayons et les hauteurs restent ceux de Rules.groundY, terme pour
+       terme — c'est toujours elle qui décrit le sol, on ne fait que le
+       dessiner. */
     for (let i = 0; i < cfg.ROTUNDA_RINGS; i++) {
-      const r = pit * (1 - i / cfg.ROTUNDA_RINGS);
+      const rOut = pit * (1 - i / cfg.ROTUNDA_RINGS);
+      const rIn = i === cfg.ROTUNDA_RINGS - 1 ? 0 : pit * (1 - (i + 1) / cfg.ROTUNDA_RINGS);
       const top = -(i + 1) * cfg.ROTUNDA_DROP;
-      const H = 14;
-      const cyl = new THREE_.Mesh(new THREE_.CylinderGeometry(r, r, H, 40), i % 2 ? matW : matF);
-      cyl.position.set(ccx, top - H / 2, ccz);
-      grp.add(cyl);
+      // le plat : un anneau, ou un disque pour la dernière terrasse
+      const tread = new THREE_.Mesh(
+        rIn > 0 ? new THREE_.RingGeometry(rIn - cfg.ROTUNDA_LAP, rOut, SEG)
+                : new THREE_.CircleGeometry(rOut, SEG), i % 2 ? matW : matF);
+      tread.rotation.x = -Math.PI / 2;
+      tread.position.set(ccx, top, ccz);
+      grp.add(tread);
+      /* la contremarche : un cylindre OUVERT (pas de chapeau, donc rien à
+         masquer), qui descend du gradin précédent jusqu'à celui-ci. Il est
+         allongé de ROTUNDA_LAP vers le bas pour mordre sur le plat suivant :
+         deux surfaces qui se touchent pile finissent toujours par laisser
+         passer un trait de lumière. DoubleSide parce qu'on la voit de dedans
+         en descendant et de dehors en remontant. */
+      const riser = new THREE_.Mesh(
+        new THREE_.CylinderGeometry(rOut, rOut, cfg.ROTUNDA_DROP + cfg.ROTUNDA_LAP, SEG, 1, true),
+        new THREE_.MeshLambertMaterial({ map: tex.wall, side: THREE_.DoubleSide }));
+      riser.position.set(ccx, top + cfg.ROTUNDA_DROP / 2 - cfg.ROTUNDA_LAP / 2, ccz);
+      grp.add(riser);
     }
 
     // 3. Les deux escaliers. La hauteur de chaque marche est LUE dans
@@ -898,19 +981,39 @@ const World = (function () {
         const z = ccz + side * r;
         const top = Rules.groundY(cfg, m, ccx, z);
         const s2 = new THREE_.Mesh(stepGeo, matF);
-        s2.position.set(ccx, top - 3.5, z);
+        /* ⚠️ ZIP 405 — LES MARCHES SONT RELEVÉES DE ROTUNDA_LAP. Elles étaient
+           posées à la hauteur EXACTE de Rules.groundY, ce qui est juste ; mais
+           au centre de la salle, la dernière marche et la dernière terrasse
+           tombent au même millimètre (−3,51 toutes les deux), et deux plans
+           coplanaires scintillent l'un à travers l'autre. Un millimètre de
+           préséance coûte moins qu'un test de plus, et il va dans le bon
+           sens : c'est l'escalier qu'on doit voir posé sur les gradins. */
+        s2.position.set(ccx, top - 3.5 + cfg.ROTUNDA_LAP, z);
         grp.add(s2);
       }
-      // Une joue de pierre de chaque côté de la volée : sans elle, un escalier
-      // en boîtes flotte au-dessus des gradins au lieu d'y être taillé.
-      for (const w of [1, -1]) {
-        const cheek = new THREE_.Mesh(
-          new THREE_.BoxGeometry(0.8, 8, pit), matW);
-        cheek.position.set(ccx + w * (cfg.ROTUNDA_STAIR_W / 2 + 0.4),
-                           -cfg.ROTUNDA_RINGS * cfg.ROTUNDA_DROP / 2 - 4, ccz + side * pit / 2);
-        grp.add(cheek);
-      }
     }
+    /* ⚠️ LES DEUX JOUES DE PIERRE ONT ÉTÉ RETIRÉES AU 405 — DÉCISION PRISE
+       SEUL, ET VOICI POURQUOI, POUR QU'ELLE PUISSE ÊTRE ANNULÉE.
+       C'étaient deux longues boîtes par volée, tendues sur toute la descente à
+       une hauteur FIXE (dessus à −1,76), posées au 396 pour que « l'escalier en
+       boîtes ne flotte pas au-dessus des gradins ». Une hauteur fixe le long
+       d'un escalier qui descend de 0 à −3,51 ne peut être juste qu'en un
+       point : partout ailleurs la joue plonge sous les marches, ou DÉPASSE
+       au-dessus de la terrasse voisine. Et là elle devient un parapet de pierre
+       parfaitement visible que Rules.groundY ignore — donc qu'on traverse en
+       marchant. C'est le défaut jumeau de celui qu'on répare ici : d'un côté on
+       marchait sous le sol, de l'autre on marchait dans un mur.
+       C'est verify-rotonde.mjs qui les a dénoncées, sur 16 points de mesure,
+       sans qu'on lui ait demandé de les chercher.
+       Elles ne sont pas remplacées, elles sont SUPPRIMÉES, parce que le
+       problème qu'elles réglaient n'existe plus : les marches sont des boîtes
+       de 7 unités de haut et les gradins sont désormais dessinés en anneaux
+       avec leurs contremarches, si bien que le flanc de l'escalier est de la
+       pierre pleine et se voit taillé dans la pente. Si à l'œil la volée
+       paraissait quand même nue, la façon de les rétablir sans refaire le
+       défaut est de les poser PAR MARCHE et ENTIÈREMENT dans la bande de
+       l'escalier (|x − ccx| < ROTUNDA_STAIR_W/2), là où groundY décrit la
+       marche et non la terrasse. */
 
     // 4. La couronne de torches, deux étages, toutes tournées vers le centre.
     for (let lvl = 0; lvl < 2; lvl++) {
@@ -1738,6 +1841,10 @@ const World = (function () {
        l'aurait vu, chaque ligne prise séparément étant juste. */
     roamerMeshes = []; brazierMeshes = []; shardMeshes = []; potionMeshes = [];
     wallFlames = []; holeGlows = [];
+    // ⚠️ Zip 405 : les collections neuves se remettent à zéro AVEC les autres.
+    // Sans cette ligne, la seconde partie garderait les dalles de la première
+    // et en cacherait au hasard — le défaut du 393, à l'identique.
+    floorTiles = new Map(); holeGlowGeo = null; holeGlowMat = null;
     roamerRigs = []; playerRig = null; stalkerRig = null; stalkerHalo = null; prev = null;
     stalkerMesh = null; sword3 = null; player = null;
     torchMesh = null; flameMesh = null; torchHalo = null; skyMesh = null;
@@ -1746,6 +1853,7 @@ const World = (function () {
     // partie plantait, celle qu'on joue toujours.
     lakeMists = []; roamerHud = []; sparkPool = []; soulPool = []; scorePool = [];
     gateMesh = null; platformGroup = null; rotundaGroup = null; stalkerFlash = null;
+    stalkerHud = null;          // zip 405, et pour la même raison que les autres
     // ⚠️ Zip 397 : les collections neuves se remettent à zéro AVEC les autres.
     // C'est la ligne qu'on oublie à chaque zip, et c'est le défaut du 393 —
     // la deuxième partie plantait, celle qu'on joue toujours.
@@ -1885,9 +1993,35 @@ const World = (function () {
     stalkerMesh = stalkerRig.root;
     stalkerMesh.visible = false;
     scene.add(stalkerMesh);
-    // Le traqueur a l'éclair du coup porté mais NI jauge NI liseré : il n'a
-    // pas de points de vie et on ne le tue pas. Lui donner une barre serait
-    // promettre qu'on peut la vider.
+    /* ⚠️ ZIP 405 — LE COMMENTAIRE QUI TENAIT ICI DEPUIS LE 393 EST DEVENU FAUX,
+       ET LE VOICI, POUR MÉMOIRE : « Le traqueur a l'éclair du coup porté mais
+       NI jauge NI liseré : il n'a pas de points de vie et on ne le tue pas. Lui
+       donner une barre serait promettre qu'on peut la vider. » Il avait raison
+       tant que la promesse était fausse. Guillaume a décidé au 405 qu'elle
+       serait vraie — plusieurs carreaux, et il tombe — donc la barre est
+       exactement ce qu'il faut : elle promet ce que le jeu tient.
+       Elle est plus large et plus haute que celle d'un rôdeur, et elle est
+       VIOLETTE et non rose : ce n'est pas la même créature, et on ne doit pas
+       croire une demi-seconde qu'on vient de blesser un rôdeur particulièrement
+       grand. */
+    stalkerHud = (function () {
+      const W = 4.0, H = 0.42;
+      const grp = new THREE_.Group();
+      grp.add(new THREE_.Mesh(new THREE_.PlaneGeometry(W + 0.22, H + 0.20),
+        new THREE_.MeshBasicMaterial({ color: 0x0a0710, transparent: true, opacity: 0.8,
+          depthWrite: false, fog: false })));
+      const fillG = new THREE_.Group();
+      const fill = new THREE_.Mesh(new THREE_.PlaneGeometry(W, H),
+        new THREE_.MeshBasicMaterial({ color: cfg.COL_STALKER_EYE, transparent: true, opacity: 0.95,
+          depthWrite: false, fog: false }));
+      fill.position.x = W / 2;
+      fillG.add(fill);
+      fillG.position.x = -W / 2;
+      grp.add(fillG);
+      grp.visible = false;
+      scene.add(grp);
+      return { grp, fillG, W };
+    })();
     stalkerFlash = new THREE_.Mesh(new THREE_.BoxGeometry(1.4, 3.4, 1.2),
       new THREE_.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0,
         depthWrite: false, blending: THREE_.AdditiveBlending, fog: false }));
@@ -2135,9 +2269,33 @@ const World = (function () {
         hud.ring.material.opacity = Math.min(0.7, r.aimT * 1.4);
       }
     }
-    stalkerMesh.visible = st.stalkerAwake;
+    /* ⚠️ ZIP 405 — IL RESTE VISIBLE APRÈS SA MORT, LE TEMPS DE MOURIR. `dead`
+       coupe stalkerAwake côté moteur (le voile rouge s'éteint, il cesse de
+       chasser) ; ici on garde la silhouette pendant KILL_VANISH_MS pour que la
+       colonne d'aspiration ait un corps d'où partir. Même durée, même
+       constante et même règle que pour un rôdeur : l'échange le plus cher de
+       la partie ne doit pas se terminer par une créature qui clignote hors
+       d'existence. */
+    const sDead = st.stalker.dead;
+    const sVanish = sDead && st.stalker.deadT >= cfg.KILL_VANISH_MS / 1000;
+    stalkerMesh.visible = (st.stalkerAwake || sDead) && !sVanish;
     if (stalkerFlash) stalkerFlash.material.opacity = (st.stalker.hitFlash || 0) * 0.45;
-    if (st.stalkerAwake) {
+    if (stalkerHud) {
+      /* LA JAUGE DU TRAQUEUR. Elle n'apparaît qu'une fois `wounded`, c'est-à-
+         dire au premier carreau planté : tant qu'on ne l'a pas touché, rien à
+         l'écran n'annonce qu'il puisse tomber. Une jauge montrée d'emblée
+         aurait vendu la mèche avant même qu'on ait l'arbalète. */
+      const show = st.stalker.wounded && !sVanish;
+      stalkerHud.grp.visible = show;
+      if (show) {
+        const k = Math.max(0, st.stalker.hp) / cfg.STALK_HP;
+        stalkerHud.fillG.scale.x = k;
+        stalkerHud.grp.position.set(st.stalker.x, Rules.groundY(cfg, M_, st.stalker.x, st.stalker.z) + 5.2,
+                                    st.stalker.z);
+        stalkerHud.grp.lookAt(camera.position);
+      }
+    }
+    if (stalkerMesh.visible) {
       const s2 = st.stalker;
       const sx = prev ? Rig.lerp(prev.sx, s2.x, a) : s2.x;
       const sz = prev ? Rig.lerp(prev.sz, s2.z, a) : s2.z;
@@ -2179,6 +2337,7 @@ const World = (function () {
     beaconMat.opacity = 0.3 + Math.sin(t * Math.PI * 2 * CFG_.BEACON_PULSE) * 0.14;
     if (skyMesh) skyMesh.rotation.y = t * 0.004;   // très lent : le ciel bouge à peine
 
+    syncFloor(st, cfg, t);      // zip 405 : les dalles qui cèdent, enfin visibles
     syncGate(st, cfg, t);
     syncFx(st, cfg, t);
     /* ⚠️ LA CAMÉRA EST POSÉE AVANT LE RESTE. Une bonne moitié de la scène
@@ -2236,6 +2395,56 @@ const World = (function () {
      descendrait au rendu et bloquerait au moteur à un autre instant, c'est
      très exactement le défaut du zip 387 — deux descriptions d'une même chose.
      -------------------------------------------------------------------- */
+  /* =======================================================================
+     LE SOL QUI CÈDE — ZIP 405.
+     -----------------------------------------------------------------------
+     ⚠️ CETTE FONCTION N'EXISTAIT PAS, ET C'EST TOUT LE PROBLÈME. Le moteur
+     tenait un état complet des dalles fêlées depuis le 394 — trois états, un
+     compte à rebours, un tremblement réglé par CRACK_SHAKE — et le rendu n'en
+     lisait pas un seul octet. Une dalle fêlée était donc INDISCERNABLE d'une
+     dalle saine jusqu'à la seconde où elle vous tuait, puis restait dessinée,
+     intacte et mortelle, pour le reste de la partie.
+
+     Trois états, trois images, et aucune n'est un texte :
+       0. saine                    — rien ;
+       1. elle cède                — elle tremble et s'enfonce, de plus en plus
+                                     fort à mesure que le délai s'épuise. Le
+                                     tremblement CROÎT : c'est ce qui distingue
+                                     « attention » de « maintenant » ;
+       2. tombée                   — elle disparaît, et un fût violet s'allume
+                                     à sa place. La cellule rejoint les trous
+                                     d'origine, et se lit comme eux.
+
+     ⚠️ ELLE SE LIT DEPUIS `st`, PAS DEPUIS UN COMPTE À REBOURS RECOPIÉ ICI.
+     Deux descriptions d'une même chose finissent toujours par diverger (387) —
+     et ici le rendu avait déjà divergé jusqu'à ne plus rien décrire du tout.
+     ======================================================================= */
+  function syncFloor(st, cfg, t) {
+    if (!st.cracks || !st.cracks.size) return;
+    for (const c of st.cracks.values()) {
+      const j = M_.idx(c.x, c.y);
+      const tile = floorTiles.get(j);
+      if (!tile) continue;
+      if (c.state === 1) {
+        // k va de 0 à 1 sur toute la durée du sursis : le tremblement enfle.
+        const k = Math.min(1, (c.t * 1000) / cfg.CRACK_DELAY_MS);
+        const amp = cfg.CRACK_SHAKE * (0.35 + k * k * 2.2);
+        const [wx, wz] = Rules.centerOf(cfg, c.x, c.y);
+        tile.position.set(wx + Math.sin(t * 47 + c.x) * amp, -k * k * 0.30,
+                          wz + Math.sin(t * 41 + c.y * 2.3) * amp);
+      } else if (c.state === 2 && tile.visible) {
+        tile.visible = false;
+        if (holeGlowGeo && holeGlowMat) {
+          const [wx, wz] = Rules.centerOf(cfg, c.x, c.y);
+          const mesh = new THREE_.Mesh(holeGlowGeo, holeGlowMat);
+          mesh.position.set(wx, cfg.LAKE_GLOW_UP / 2 - 1.0, wz);
+          scene.add(mesh);
+          holeGlows.push(mesh);
+        }
+      }
+    }
+  }
+
   function syncGate(st, cfg, t) {
     if (!gateMesh) return;
     const g = st.gate;

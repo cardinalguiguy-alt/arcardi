@@ -71,6 +71,16 @@ const FakeTHREE = {
      appelle — une classe manquante ici ne signale pas une erreur du jeu, elle
      fabrique une fausse alerte, ce qui est pire. */
   RingGeometry: function () { return node("RingGeometry"); },
+  /* ⚠️ ZIP 405 — CircleGeometry, ET LE FAUX A EU TORT CETTE FOIS. La règle
+     posée aux 399 et 400 est que « quand world.js jette dans un outil, c'est en
+     général l'outil qui a raison » : deux faux Three.js avaient alors mis le
+     doigt sur de vrais défauts (color.setHex, clone()). Ici, non.
+     CircleGeometry existe bel et bien dans la r128, la rotonde en a besoin pour
+     sa terrasse du fond (un disque, là où les deux autres sont des anneaux), et
+     le faux ne la connaissait pas parce que personne n'en avait eu besoin
+     jusqu'ici. « En général » n'est pas « toujours », et la façon de trancher
+     est la même dans les deux sens : aller lire ce que la r128 expose. */
+  CircleGeometry: function () { return node("CircleGeometry"); },
   OctahedronGeometry: function () { return node("OctahedronGeometry"); },
   MeshLambertMaterial: function (o) { return Object.assign(node("Lambert"), o || {}); },
   MeshBasicMaterial: function (o) { return Object.assign(node("Basic"), o || {}); },

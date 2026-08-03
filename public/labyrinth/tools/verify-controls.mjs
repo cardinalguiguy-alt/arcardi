@@ -23,7 +23,9 @@
    rien du tactile, rien de la caméra.
    ========================================================================== */
 
-import { load } from "./lib-play.mjs";
+import fs from "fs";
+import path from "path";
+import { load, ROOT } from "./lib-play.mjs";
 
 const { CFG, Maze, Rules } = load();
 let fails = 0;
@@ -281,6 +283,139 @@ const q = Math.PI / 2;
     run(st, {}, 1);
     ok("... et elle se ramasse au PASSAGE, sans appuyer sur rien", st.hasMap === true);
   }
+}
+
+
+/* =============================================================================
+   ZIP 405 — LE COMBAT. Ajouté ici plutôt que dans un outil neuf parce que ces
+   contrôles disent la même chose que tous les autres de ce fichier : « le jeu
+   va-t-il dans le sens que le joueur attend ». Une créature qui se fige pendant
+   qu'on la frappe est une commande qui ne répond pas.
+   ⚠️ LES QUATRE PREMIERS ÉCHOUENT SUR LE ZIP 404. C'est la condition pour leur
+   faire confiance ici (leçon du 404).
+   ========================================================================== */
+{
+  /* 1. LE RÔDEUR NE SE FIGE PLUS DANS VOTRE CASE.
+     Maze.pathTo(x,y → x,y) rend [] : toute la locomotion des créatures passait
+     par un chemin de cellules, donc un rôdeur entré dans la cellule du joueur
+     n'avait plus rien à suivre. Mesuré sur le 404 : 0,000 unité parcourue en
+     deux secondes, en mode « chase », au contact. */
+  const st = fresh();
+  st.invulnT = 999;               // on mesure un déplacement, pas une survie
+  const r = st.roamers[0];
+  r.dead = false; r.mode = "chase"; r.giveUpT = 9; r.staggerT = 0;
+  r.x = st.px + 3.0; r.z = st.pz + 3.0;
+  st.torch = 1;
+  const bx = r.x, bz = r.z;
+  run(st, {}, 60);
+  const moved = Math.hypot(r.x - bx, r.z - bz);
+  ok("un rôdeur au contact BOUGE encore", moved > 0.5, `${moved.toFixed(2)} u en 2 s`);
+}
+{
+  /* 2. ... ET IL VIENT SUR LE JOUEUR, pas sur le centre de la cellule. Une
+     cellule fait 11,5 unités : viser son centre, c'est viser à cinq mètres. */
+  const st = fresh();
+  /* ⚠️ LE JOUEUR EST RENDU INVULNÉRABLE, ET PAS PAR COMMODITÉ. Sans ça, le
+     rôdeur arrive, touche, et hurt() REPOUSSE le joueur de HURT_KNOCKBACK
+     (5,0) : la distance mesurée AUGMENTE alors qu'il fait exactement ce qu'on
+     lui demande. Le premier lancement de ce contrôle a échoué comme ça, et
+     c'est le contrôle qui avait tort — il mesurait le recul du joueur en
+     croyant mesurer l'approche de la créature. */
+  st.invulnT = 999;
+  const r = st.roamers[0];
+  r.dead = false; r.mode = "chase"; r.giveUpT = 9; r.staggerT = 0;
+  // on met le joueur dans un COIN de sa cellule, loin du centre
+  st.px += CFG.CELL * 0.35; st.pz += CFG.CELL * 0.35;
+  r.x = st.px - 6.0; r.z = st.pz - 6.0;
+  st.torch = 1;
+  const d0 = Math.hypot(r.x - st.px, r.z - st.pz);
+  run(st, {}, 60);
+  const d1 = Math.hypot(r.x - st.px, r.z - st.pz);
+  ok("il se rapproche VRAIMENT du joueur, pas du centre de sa case",
+    d1 < CFG.BODY_R + CFG.ROAMER_BODY_R + 0.5, `${d0.toFixed(2)} → ${d1.toFixed(2)} u`);
+}
+{
+  /* 3. LE RECUL D'UN COUP JETTE SON CHEMIN. SWING_KNOCKBACK vaut 4,6 : sans
+     ça, la créature repart vers un nœud désormais derrière elle. */
+  const st = fresh();
+  const r = st.roamers[0];
+  r.dead = false; r.hp = 9; r.staggerT = 0; r.path = [[0, 0], [1, 1]]; r.pathI = 1;
+  r.x = st.px; r.z = st.pz - 2.4;      // droit devant, à portée
+  st.hasSword = true; st.swingT = 0; st.swingCd = 0;
+  run(st, { attack: true }, 2);
+  ok("un rôdeur frappé oublie son chemin (il ne repart pas en arrière)",
+    r.path === null || r.path.length === 0, `path = ${JSON.stringify(r.path)}`);
+}
+{
+  /* 4. L'ASSISTANCE À LA VISÉE SERT LES DEUX ARMES. Elle avait été écrite au
+     396 pour l'épée ; l'arbalète est arrivée au 397 et personne n'a rebranché
+     le fil. La seule arme qui demande de viser était la seule sans aide. */
+  const src = fs.readFileSync(path.join(ROOT, "js/rules.js"), "utf8")
+    .replace(/\/\*[\s\S]*?\*\//g, " ");
+  /* ⚠️ ON RETIRE LA DÉCLARATION AVANT DE COMPTER. Premier jet : le motif
+     `aimAssist(st` attrapait aussi `function aimAssist(st)`. Le contrôle
+     trouvait donc 2 sur le zip 404 — une déclaration et un seul appel — et
+     PASSAIT sur le code fautif. C'est le motif exact du 404 (« un contrôle qui
+     énumère des formes ne protège que des formes énumérées ») et la même
+     famille de faute : un contrôle qui compte des appels doit d'abord retirer
+     ce qui n'en est pas un. */
+  const calls = (src.replace(/function\s+aimAssist\s*\([^)]*\)/g, " ")
+    .match(/aimAssist\s*\(\s*st/g) || []).length;
+  ok("aimAssist est appelée par les DEUX armes", calls >= 2, `${calls} appel(s)`);
+  const st = fresh();
+  st.hasBow = true; st.bolts = 3; st.boltCd = 0; st.torch = 1;
+  const r = st.roamers[0];
+  r.dead = false; r.staggerT = 0;
+  // une cible LÉGÈREMENT à côté du regard : c'est le cas que l'aide existe pour
+  r.x = st.px + 4.0; r.z = st.pz - 16.0;
+  const a0 = st.ang;
+  run(st, { shoot: true }, 1);
+  ok("tirer recale le cap vers une cible proche du regard", Math.abs(st.ang - a0) > 0.01,
+    `${(st.ang - a0).toFixed(3)} rad`);
+}
+{
+  /* 5. LE TRAQUEUR : l'épée ne l'entame pas, le carreau si. C'est la ligne de
+     partage entre les deux armes, décidée par Guillaume au 405. */
+  const st = fresh();
+  const s = st.stalker;
+  st.stalkerAwake = true; s.staggerT = 0;
+  s.x = st.px; s.z = st.pz - 2.4;
+  st.hasSword = true; st.swingT = 0; st.swingCd = 0;
+  const hp0 = s.hp;
+  run(st, { attack: true }, 2);
+  ok("l'épée ne fait AUCUN dégât au traqueur (elle le repousse)", s.hp === hp0,
+    `${hp0} → ${s.hp}`);
+  ok("... mais elle le repousse bien", s.staggerT > 0);
+}
+{
+  const st = fresh();
+  const s = st.stalker;
+  st.stalkerAwake = true; s.staggerT = 0;
+  s.x = st.px; s.z = st.pz - 14.0;
+  st.hasBow = true; st.bolts = 9; st.boltCd = 0;
+  let shots = 0;
+  while (!s.dead && shots < 12) { st.boltCd = 0; run(st, { shoot: true }, 20); shots++; }
+  ok("le traqueur tombe à l'arbalète", s.dead === true, `${shots} tir(s)`);
+  ok("... et il faut PLUSIEURS carreaux", CFG.STALK_HP >= 3, `STALK_HP = ${CFG.STALK_HP}`);
+  ok("... et il cesse alors de chasser", st.stalkerAwake === false);
+  ok("... et le voile rouge s'éteint", Rules.dread(st) === 0);
+}
+{
+  /* 6. LE CARREAU TUE UN RÔDEUR D'UN SEUL COUP. Déjà vrai au 397 (2 dégâts
+     pour 2 PV) ; on le fige, parce que « one shot les monstres » est une
+     demande explicite de Guillaume et qu'un réglage de PV suffirait à la
+     défaire sans bruit. */
+  ok("un carreau tue un rôdeur d'un seul coup", CFG.BOLT_DAMAGE >= CFG.ROAMER_HP,
+    `${CFG.BOLT_DAMAGE} dégâts pour ${CFG.ROAMER_HP} PV`);
+  /* ⚠️ UNE MARGE DE 15 %, PAS « PLUS LOIN QUE ». Au 404 la portée valait 86,8
+     pour 85 unités de vue : le contrôle « strictement supérieur » passait,
+     avec 1,8 unité d'avance, c'est-à-dire rien. Un carreau tiré sur une
+     silhouette au fond d'une galerie mourait de vieillesse à un pas d'elle, et
+     EN SILENCE. Un seuil qui passe de justesse sur un défaut réel est un
+     seuil faux. */
+  const reach = CFG.BOLT_SPEED * CFG.BOLT_LIFE_MS / 1000;
+  ok("un carreau porte franchement plus loin que la vue", reach > CFG.FOG_FAR_FULL * 1.15,
+    `${reach.toFixed(0)} u pour ${CFG.FOG_FAR_FULL} u de vue (seuil ${(CFG.FOG_FAR_FULL * 1.15).toFixed(0)})`);
 }
 
 console.log(fails ? `\n${fails} ÉCHEC(S)\n` : "\nToutes les commandes vont dans le bon sens.\n");

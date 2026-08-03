@@ -467,6 +467,32 @@ const CFG = {
   LAKE_GLOW_UP: 4.5,        // hauteur du halo violet qui monte d'un trou
 
   /* ======================================================================
+     LA FORME D'UN TROU — ZIP 405, ET C'EST UNE CORRECTION, PAS UN RÉGLAGE.
+     ----------------------------------------------------------------------
+     Ces trois nombres étaient écrits EN DUR dans world.js/buildFloor
+     (`RAG_MIN = 0.26, RAG_MAX = 0.46`, `SUB = 6`), c'est-à-dire du côté du
+     DESSIN, pendant que le moteur, lui, faisait tomber sur la cellule
+     entière. Guillaume l'a signalé de la seule façon dont ça se signale : en
+     mourant sur de la pierre. Ils vivent maintenant ici, et les deux côtés les
+     lisent par Rules.holeR() / Rules.inHole().
+
+     ⚠️ HOLE_R_MAX (0,46) NE DOIT JAMAIS ATTEINDRE 0,5. À 0,5 le trou touche le
+     bord de sa cellule, donc le bord de la suivante, et deux trous voisins
+     fusionnent en une tranchée qu'aucun contrôle ne cherche. La marge de 0,04
+     — soit 46 cm — est le liseré de pierre qui garantit qu'on peut toujours
+     longer un trou.
+     ====================================================================== */
+  HOLE_R_MIN: 0.26,         // rayon du trou, en fraction de cellule : au plus étroit
+  HOLE_R_MAX: 0.46,         // ... et au plus large. Le bruit entre les deux fait le bord déchiqueté.
+  HOLE_SUB: 6,              // sous-dalles par côté de cellule trouée (rendu)
+  /* La margelle. Le moteur rétrécit le trou de 0,03 cellule (35 cm) avant de
+     décider qu'on tombe : autrement dit la dernière sous-dalle du bord PORTE.
+     Sans elle, longer un trou reviendrait à viser au pixel un contour
+     déchiqueté qu'on ne voit qu'à moitié dans le noir — on aurait remplacé un
+     décor qui ment par un décor qui pinaille. */
+  HOLE_GRIP: 0.03,
+
+  /* ======================================================================
      LE PHARE DE LA SORTIE
      ----------------------------------------------------------------------
      ⚠️ AJOUT NON DEMANDÉ, ASSUMÉ, et pris seul après mesure. Sans lui, le
@@ -578,6 +604,38 @@ const CFG = {
      une marche fantôme au milieu de la salle. tools/verify-maze.mjs le
      contrôle, justement parce que c'est invisible en relisant. */
   ROTUNDA_STEP_H: 0.27,     // ... et sa hauteur
+  /* ======================================================================
+     LES TROIS NOMBRES NEUFS DU 405 — ET CE SONT DES RÉPARATIONS.
+     ----------------------------------------------------------------------
+     Retour de Guillaume : « problème de remplissage des textures sur la
+     rotonde : il y a des interstices où l'on voit le lac, et au centre on
+     s'enfonce un peu dans le sol. » Deux reproches, deux causes séparées, et
+     aucune des deux n'était un problème de TEXTURE — c'était de la géométrie,
+     ce qui est le genre de diagnostic qu'on ne pose qu'en regardant.
+
+     ROTUNDA_SEG remplace deux nombres qui n'auraient jamais dû différer : le
+     pourtour était découpé en 44, les gradins en 40. Inscrits dans le même
+     cercle, un 44-gone et un 40-gone ne se touchent qu'en de rares points ;
+     partout ailleurs il reste jusqu'à 11 mm de vide, et sous ce vide il n'y a
+     rien du tout — le lac est à −9. 64 partout, et la question ne se repose
+     plus. (Coût mesuré : ~70 triangles de plus sur 3 400 maillages. Rien.)
+
+     ROTUNDA_LAP est le chevauchement. Deux surfaces qui se rejoignent
+     EXACTEMENT finissent toujours par laisser passer un trait de lumière —
+     erreur d'arrondi, interpolation de profondeur, ou simplement un cercle
+     approché par un polygone. On les fait donc mordre l'une sur l'autre de
+     3 cm, ce qui est invisible et définitif.
+
+     ROTUNDA_RIM_OUT : le pourtour s'arrêtait à rad + 0,6 = 28,35, alors que le
+     dallage ordinaire commence au bord de la cellule de rotonde, à 28,75. Il
+     manquait 40 cm de sol AUX QUATRE PORTES. Ailleurs la couronne de
+     maçonnerie couvre la fente ; aux portes, justement, il n'y a pas de
+     maçonnerie — c'est ce qui en fait des portes.
+     ====================================================================== */
+  ROTUNDA_SEG: 64,          // découpe de TOUS les cercles de la salle. Un seul pas, partout.
+  ROTUNDA_LAP: 0.03,        // chevauchement des surfaces, en unités
+  ROTUNDA_RIM_OUT: 1.6,     // débord du pourtour au-delà de `rad` : couvre le seuil des portes
+
   ROTUNDA_TORCHES: 14,      // torches murales de la couronne, par étage
   ROTUNDA_SHARDS: 5,        // éclats posés au fond : la récompense de la descente
 
@@ -1014,9 +1072,51 @@ CFG.BOLT_PER_PICKUP = 3;
 CFG.BOLT_SPEED = 62.0;        // unités/s — rapide, mais on le VOIT partir
 CFG.BOLT_DAMAGE = 2;          // un rôdeur a 2 PV : un carreau bien placé le tue
 CFG.BOLT_COOLDOWN_MS = 900;   // le rechargement d'une arbalète est lent, c'est son prix
-CFG.BOLT_LIFE_MS = 1400;
+/* ⚠️ 1 400 → 1 700 MS AU 405, ET LE NOMBRE EST CALCULÉ. À 62 u/s, 1 400 ms
+   portaient à 86,8 unités — pendant que la vue, à flamme pleine, s'arrête au
+   brouillard de FOG_FAR_FULL = 85. La marge était donc de 1,8 unité, c'est-à-
+   dire rien : un carreau tiré sur une silhouette tout au fond d'une longue
+   galerie mourait de vieillesse à un pas d'elle, et il mourait EN SILENCE, ce
+   qui est la définition de l'échec silencieux du 402. À 1 700 ms il porte à
+   105 unités, soit un cinquième au-delà de tout ce qu'on peut voir : plus
+   aucun tir ne peut échouer parce qu'il a duré trop longtemps. Régler la
+   portée sur ce que le joueur VOIT, pas sur un nombre rond. */
+CFG.BOLT_LIFE_MS = 1700;
 CFG.BOLT_R = 0.55;            // rayon de collision du carreau
-CFG.BOLT_STALK_STAGGER_MS = 1500;   // sur le traqueur : il recule, il ne meurt pas
+
+/* =============================================================================
+   ZIP 405 — LE TRAQUEUR DEVIENT TUABLE, MAIS SEULEMENT À L'ARBALÈTE.
+   -----------------------------------------------------------------------------
+   Demande de Guillaume : « l'arbalète doit tirer à distance et one shot les
+   monstres aussi », et, à la question de savoir si le traqueur était compris :
+   « plusieurs carreaux ».
+
+   ⚠️ C'EST UN RENVERSEMENT DE LA DÉCISION DU 393, ET IL FAUT LE DIRE. Depuis le
+   393, le traqueur ne pouvait pas mourir : c'était le pilier du contraste entre
+   les deux créatures — « on peut régler ses comptes avec l'un, jamais avec
+   l'autre ». Guillaume a tranché autrement, et sa réponse a une conséquence que
+   l'ancienne règle n'avait pas : elle DONNE UNE RAISON D'ÊTRE À L'ARBALÈTE.
+   Jusqu'ici elle faisait, en plus lent et en plus rare, ce que l'épée faisait
+   déjà. Maintenant les deux armes disent deux choses différentes :
+
+     l'ÉPÉE tue les rôdeurs et REPOUSSE le traqueur ;
+     l'ARBALÈTE tue les rôdeurs d'un carreau, et c'est la SEULE chose au monde
+     qui puisse abattre le traqueur.
+
+   Quatre carreaux sur cinq de réserve de départ : le compte est fait pour que
+   l'abattre coûte presque tout ce qu'on a, donc pour que ce soit une décision
+   et non une routine. Et l'épée continue de ne lui faire aucun mal — c'est ce
+   qui empêche que « tuable » devienne « tuable par accident au corps à corps »,
+   ce qui aurait effacé la peur d'un coup.
+
+   ⚠️ LA JAUGE NE PARAÎT QU'AU PREMIER CARREAU PLANTÉ. Tant qu'on ne l'a pas
+   touché, rien n'indique qu'il puisse tomber : la découverte reste une
+   découverte. Une jauge affichée d'emblée aurait annoncé la fin du monstre
+   avant qu'on ait l'arme pour l'écrire.
+   ============================================================================= */
+CFG.STALK_HP = 4;                   // carreaux nécessaires. L'épée ne l'entame pas.
+CFG.STALK_BOLT_DAMAGE = 1;          // un carreau = un point. Écrit à part : voir PIÈGE DE SIGNATURE.
+CFG.BOLT_STALK_STAGGER_MS = 1500;   // sur le traqueur : il recule ET il encaisse
 
 /* =============================================================================
    ZIP 397 — LA RÉSOLUTION DES TEXTURES, ET POURQUOI ELLE EST ICI
