@@ -36,7 +36,7 @@ const World = (function () {
   let ambient, sun, fill;
   let skyDome, skyMat, mountainsNear, mountainsFar, snowFall;
   let sledRig, sledParts = {};
-  let stars, dust;
+  let stars, dust, lines;
   let geo = {}, mat = {};
   let lastNow = 0;
   let pendingSkin = null;
@@ -101,23 +101,45 @@ const World = (function () {
     return c;
   }
 
-  /* LA PISTE. Des tourbillons de barbe à papa, clairs sur rose. Le motif est
-     étiré dans le sens de la marche (repeat très différent en x et en y) :
-     un motif carré donnerait un damier qui défile, et le damier qui défile est
-     le meilleur moyen de donner mal au cœur. */
+  /* LA PISTE. ⚠️ ELLE EST DAMÉE, ET C'EST CE QUI LUI DONNE SA VITESSE.
+     Première version : des tourbillons de barbe à papa, et rien d'autre. Le
+     reproche « y a pas de texture au sol » venait d'abord d'un défaut d'UV
+     (voir ribbon), mais pas seulement — des tourbillons ronds sur un sol qui
+     défile ne DONNENT AUCUN SENS DE MOUVEMENT. Ce qui donne la vitesse dans un
+     jeu de descente, ce sont les SILLONS DE LA DAMEUSE : des lignes parallèles
+     à la marche, qui filent sous la luge et qu'on lit du coin de l'œil.
+
+     Les deux sont donc superposés, dans cet ordre : les sillons portent la
+     vitesse, les tourbillons disent que c'est de la barbe à papa. Un seul des
+     deux et il manque quelque chose. */
   function paintPiste() {
     const W = 256, H = 256, c = cv(W, H), g = c.getContext("2d");
     g.fillStyle = hex(CFG.COL_PISTE); g.fillRect(0, 0, W, H);
+
+    /* 1. LES SILLONS. Verticaux dans la texture, donc DANS LE SENS DE LA
+       MARCHE une fois posés (l'axe v du ruban suit la piste). Alternés clair /
+       sombre : un sillon est un creux, il a une arête éclairée et une ombre. */
+    for (let x = 0; x < W; x += 16) {
+      g.fillStyle = "rgba(255,255,255,0.20)"; g.fillRect(x, 0, 8, H);
+      g.fillStyle = "rgba(190,90,140,0.09)"; g.fillRect(x + 8, 0, 3, H);
+    }
+
+    /* 2. LES TOURBILLONS, par-dessus et translucides : ils marbrent le rose
+       sans effacer les sillons. Une spirale de deux tours — la forme de la
+       barbe à papa roulée, et elle se lit encore écrasée par la perspective. */
     g.strokeStyle = hex(CFG.COL_PISTE_SWIRL);
     g.lineCap = "round";
-    for (let n = 0; n < 22; n++) {
+    /* ⚠️ DISCRETS. Au premier rendu texturé ils étaient à 0,42 d'opacité et
+       marbraient la piste au point qu'elle avait l'air sale : sur une surface
+       qui occupe le tiers du cadre et qui DÉFILE, un motif trop contrasté ne
+       se lit plus comme une matière mais comme du bruit. Ils sont là pour dire
+       « barbe à papa » du coin de l'œil, pas pour être regardés. */
+    for (let n = 0; n < 9; n++) {
       const cx = Math.random() * W, cy = Math.random() * H;
-      const r = 12 + Math.random() * 30;
-      g.globalAlpha = 0.30 + Math.random() * 0.35;
-      g.lineWidth = 3 + Math.random() * 5;
+      const r = 18 + Math.random() * 30;
+      g.globalAlpha = 0.10 + Math.random() * 0.10;
+      g.lineWidth = 5 + Math.random() * 7;
       g.beginPath();
-      // Une spirale de deux tours : c'est la forme de la barbe à papa roulée,
-      // et elle se lit encore quand la texture est écrasée par la perspective.
       for (let a = 0; a < Math.PI * 4; a += 0.25) {
         const rr = r * (a / (Math.PI * 4));
         const x = cx + Math.cos(a) * rr, y = cy + Math.sin(a) * rr * 0.75;
@@ -129,17 +151,46 @@ const World = (function () {
     return c;
   }
 
-  /* LA NEIGE SUCRÉE. Presque unie, avec un grain très fin — sans grain, les
-     grandes surfaces blanches deviennent des aplats morts dès qu'elles
-     occupent la moitié du cadre. */
+  /* LA NEIGE SUCRÉE. ⚠️ TROIS ÉCHELLES, ET IL EN FAUT TROIS.
+     La première version n'avait qu'un grain de deux pixels : sur un carreau de
+     onze mètres, ça ne se voit pas — la neige était un aplat blanc mort, ce que
+     Guillaume a vu tout de suite. Une surface qui occupe la moitié du cadre a
+     besoin de structure à la taille où on la regarde, c'est-à-dire à plusieurs
+     tailles à la fois :
+       * de grandes ondes pâles (les congères) qu'on lit à vingt mètres ;
+       * des plaques moyennes qui cassent leur régularité ;
+       * des paillettes de sucre qu'on ne voit que sous la luge, et qui sont
+         exactement ce qui fait dire « c'est du sucre » et pas « c'est blanc ». */
   function paintSnow() {
-    const W = 128, H = 128, c = cv(W, H), g = c.getContext("2d");
+    const W = 256, H = 256, c = cv(W, H), g = c.getContext("2d");
     g.fillStyle = hex(CFG.COL_SNOW); g.fillRect(0, 0, W, H);
-    for (let n = 0; n < 900; n++) {
-      g.globalAlpha = 0.05 + Math.random() * 0.13;
-      g.fillStyle = Math.random() < 0.5 ? "#ffffff" : hex(CFG.COL_SNOW_SHADE);
-      const s = 1 + Math.random() * 2;
-      g.fillRect(Math.random() * W, Math.random() * H, s, s);
+
+    // 1. Les congères : de grandes ellipses très pâles, à peine plus foncées.
+    for (let n = 0; n < 14; n++) {
+      g.globalAlpha = 0.30;
+      g.fillStyle = hex(CFG.COL_SNOW_SHADE);
+      g.beginPath();
+      g.ellipse(Math.random() * W, Math.random() * H,
+        34 + Math.random() * 58, 20 + Math.random() * 34,
+        Math.random() * Math.PI, 0, Math.PI * 2);
+      g.fill();
+    }
+    // 2. Les plaques moyennes, en blanc pur : elles rattrapent la lumière.
+    for (let n = 0; n < 26; n++) {
+      g.globalAlpha = 0.34;
+      g.fillStyle = "#ffffff";
+      g.beginPath();
+      g.ellipse(Math.random() * W, Math.random() * H,
+        10 + Math.random() * 22, 7 + Math.random() * 14,
+        Math.random() * Math.PI, 0, Math.PI * 2);
+      g.fill();
+    }
+    // 3. Les paillettes de sucre.
+    for (let n = 0; n < 1400; n++) {
+      g.globalAlpha = 0.10 + Math.random() * 0.5;
+      g.fillStyle = Math.random() < 0.62 ? "#ffffff" : "#ffd9ee";
+      const sz = 1 + Math.random() * 2.2;
+      g.fillRect(Math.random() * W, Math.random() * H, sz, sz);
     }
     g.globalAlpha = 1;
     return c;
@@ -216,8 +267,8 @@ const World = (function () {
     geo.plane = new THREE.PlaneGeometry(1, 1);
 
     const L = (c, extra) => new THREE.MeshLambertMaterial(Object.assign({ color: c }, extra || {}));
-    mat.snow = new THREE.MeshLambertMaterial({ map: tex(paintSnow(), 26, 26) });
-    mat.piste = new THREE.MeshLambertMaterial({ map: tex(paintPiste(), 2, 26) });
+    mat.snow = new THREE.MeshLambertMaterial({ map: tex(paintSnow(), 1, 1) });
+    mat.piste = new THREE.MeshLambertMaterial({ map: tex(paintPiste(), 1, 1) });
     mat.pisteEdge = L(CFG.COL_PISTE_EDGE);
     mat.cane = new THREE.MeshLambertMaterial({ map: tex(paintCane(), 1, 3) });
     mat.white = L(0xfffdff);
@@ -237,6 +288,7 @@ const World = (function () {
     mat.hair = L(CFG.COL_HAIR);
     mat.skin = L(CFG.COL_SKIN);
     mat.scarf = L(CFG.COL_SCARF);
+    mat.boot = L(CFG.COL_BOOT);
     mat.eye = L(0x2a1c2e);
     mat.candy = CFG.COL_CANDY_SET.map((c) => L(c));
     mat.candyGlow = CFG.COL_CANDY_SET.map((c) => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.35, fog: false }));
@@ -424,38 +476,98 @@ const World = (function () {
     body.add(box(mat.sledDark, 1.5, 0.12, 0.16, 0, 0.6, -1.45));
     body.add(box(mat.sledDark, 1.5, 0.12, 0.16, 0, 0.6, 1.45));
 
-    /* Le PILOTE. `rider` est le groupe qui se penche dans les virages : le
-       faire pencher AVEC la luge donnerait un bloc rigide, alors qu'un lugeur
-       contre-braque toujours un peu du buste. */
+    /* ======================================================================
+       LE PILOTE — ⚠️ C'EST LE FERMIER, PAS UN BONHOMME DE PLUS.
+       ----------------------------------------------------------------------
+       Reproche de Guillaume au premier jet : « le perso principal n'est pas
+       travaillé (il doit ressembler au fermier) ». Il avait raison, et le
+       défaut était de méthode : on avait empilé des boîtes au jugé au lieu de
+       reprendre CELLES DU FERMIER.
+
+       Les proportions ci-dessous sont donc RECOPIÉES de buildPlayer() dans
+       public/templerun/js/world.js, à l'unité près : tête 0,78 × 0,68 × 0,62,
+       calotte de cheveux 0,84 × 0,24 × 0,68, nuque en +Z, cou 0,34 de large,
+       torse 0,95 × 0,75 × 0,55, et l'échelle générale de 0,88. Ce sont
+       elles-mêmes les proportions du sprite 2D de la ferme (fermeArt.js). Le
+       même homme doit se reconnaître d'un jeu à l'autre — c'est déjà vrai
+       entre la ferme, le défi de fuite et le labyrinthe, ça doit l'être ici.
+
+       ⚠️ LA NUQUE EST EN +Z, ET C'EST LA SEULE CHOSE QUI DIT DE QUEL CÔTÉ IL
+       REGARDE. Le zip 377 avait posé la sienne du mauvais côté au défi de
+       fuite : le fermier courait avec sa nuque sur le front pendant toute une
+       version, et ça ne s'est vu qu'en le RENDANT. Ici la convention est la
+       même : il regarde vers son -Z local, la caméra est en +Z.
+
+       ⚠️ ET IL EXISTE EN FEMME. Le pont envoie `skin.gender` ; les cheveux
+       longs sont construits masqués et révélés par applySkin, exactement comme
+       au défi de fuite. Un fermier qui redevient un homme en montant sur une
+       luge, c'est le genre de détail qui casse tout le reste.
+
+       LA POSTURE est la seule chose qui change : assis, jambes tendues vers
+       l'avant, buste incliné, bras tendus sur la corde. Un personnage debout
+       sur une luge ressemble à un surfeur, ce qui n'est pas ce jeu.
+       ====================================================================== */
     const rider = new THREE.Group();
-    rider.position.set(0, 0.62, 0.25);
+    rider.position.set(0, 0.66, 0.15);
+    rider.scale.setScalar(0.88);            // la même réduction qu'au défi de fuite
     sledParts.rider = rider;
     body.add(rider);
 
-    rider.add(box(mat.pants, 0.72, 0.34, 0.62, 0, 0.2, 0.15));      // bassin
-    for (const side of [-1, 1]) {                                    // jambes tendues
-      rider.add(box(mat.pants, 0.26, 0.24, 1.15, side * 0.2, 0.2, -0.6));
-      rider.add(box(mat.sledDark, 0.28, 0.2, 0.42, side * 0.2, 0.14, -1.25));  // bottes
+    // Le bassin, posé sur le plancher.
+    rider.add(box(mat.pants, 0.86, 0.34, 0.62, 0, 0.17, 0.12));
+
+    /* Les jambes, TENDUES VERS L'AVANT. Deux segments comme le fermier
+       (cuisse + mollet), mais alignés à plat au lieu d'être articulés : une
+       luge n'a pas de place pour un genou plié, et une jambe en un seul bloc
+       se lit comme une planche. */
+    for (const side of [-1, 1]) {
+      rider.add(box(mat.pants, 0.32, 0.30, 0.86, side * 0.24, 0.19, -0.52));
+      rider.add(box(mat.pants, 0.30, 0.28, 0.62, side * 0.24, 0.16, -1.14));
+      rider.add(box(mat.boot, 0.34, 0.24, 0.46, side * 0.24, 0.12, -1.58));
     }
+
     const torso = new THREE.Group();
-    torso.position.set(0, 0.34, 0.1);
+    torso.position.set(0, 0.30, 0.06);
     sledParts.torso = torso;
     rider.add(torso);
-    torso.add(box(mat.shirt, 0.74, 0.72, 0.5, 0, 0.28, 0));
-    torso.add(box(mat.white, 0.5, 0.3, 0.52, 0, 0.3, 0.02));         // dossard
-    torso.add(box(mat.scarf, 0.8, 0.16, 0.56, 0, 0.6, 0));           // écharpe
-    torso.add(box(mat.skin, 0.46, 0.44, 0.44, 0, 0.9, 0));           // tête
-    torso.add(box(mat.hair, 0.52, 0.2, 0.5, 0, 1.14, 0));            // bonnet
-    torso.add(sph(mat.hair, 0.12, 0, 1.28, 0, true));                // pompon
+
+    torso.add(box(mat.shirt, 0.95, 0.75, 0.55, 0, 0.34, 0));     // torse du fermier
+    torso.add(box(mat.scarf, 0.86, 0.16, 0.60, 0, 0.68, 0));     // écharpe (la seule pièce propre à la luge)
+    torso.add(box(mat.skin, 0.34, 0.16, 0.34, 0, 0.78, 0));      // cou
+
+    const head = new THREE.Group();
+    head.position.set(0, 0.86, 0);
+    torso.add(head);
+    head.add(box(mat.skin, 0.78, 0.68, 0.62, 0, 0.34, 0));       // tête
+    head.add(box(mat.hair, 0.84, 0.24, 0.68, 0, 0.62, 0));       // calotte
+    const nape = box(mat.hair, 0.86, 0.44, 0.16, 0, 0.36, 0.26); // nuque, en +Z
+    head.add(nape);
+    sledParts.nape = nape;
+
+    // Cheveux longs, masqués par défaut (révélés si la ferme annonce "f").
+    const femHead = [
+      box(mat.hair, 0.20, 0.72, 0.40, -0.40, 0.24, 0.08),
+      box(mat.hair, 0.20, 0.72, 0.40, 0.40, 0.24, 0.08),
+      box(mat.hair, 0.88, 0.76, 0.18, 0, 0.26, 0.30),
+    ];
+    for (const m of femHead) { m.visible = false; head.add(m); }
+    sledParts.femHead = femHead;
+
+    /* Les bras : épaule à hauteur de poitrine, tendus vers la corde. Deux
+       segments, comme le fermier — un bras en une seule boîte ne peut pas
+       avoir de coude, et c'est le coude qui fait qu'on tient quelque chose. */
     const arms = new THREE.Group();
-    arms.position.set(0, 0.5, 0);
+    arms.position.set(0, 0.56, 0);
     sledParts.arms = arms;
     torso.add(arms);
     for (const side of [-1, 1]) {
-      const a = box(mat.shirt, 0.2, 0.2, 0.8, side * 0.44, 0, -0.32);
-      a.rotation.x = -0.45; arms.add(a);
-      arms.add(box(mat.skin, 0.2, 0.2, 0.2, side * 0.44, -0.16, -0.68));
+      const up = box(mat.shirt, 0.26, 0.26, 0.52, side * 0.56, 0, -0.22);
+      up.rotation.x = -0.30; arms.add(up);
+      const lo = box(mat.skin, 0.24, 0.24, 0.48, side * 0.56, -0.10, -0.62);
+      lo.rotation.x = -0.55; arms.add(lo);
+      arms.add(box(mat.skin, 0.24, 0.22, 0.20, side * 0.54, -0.22, -0.86));  // main
     }
+
     // La corde de guidage, tendue entre les mains et le nez de la luge.
     const rope = box(mat.trunk, 0.05, 0.05, 1.5, 0, 1.0, -1.6);
     rope.rotation.x = 0.5; body.add(rope);
@@ -463,13 +575,23 @@ const World = (function () {
     scene.add(sledRig);
   }
 
-  function applySkin(s) {
-    if (!s) return;
-    if (!mat.shirt) { pendingSkin = s; return; }
-    mat.shirt.color.setHex(s.shirt);
-    mat.pants.color.setHex(s.pants);
-    mat.hair.color.setHex(s.hair);
-    mat.skin.color.setHex(s.skin);
+  /* ⚠️ LA TENUE ARRIVE PAR MESSAGE, DONC PARFOIS AVANT LA SCÈNE. `pendingSkin`
+     retient la première et init() la rejoue — c'est le même dispositif qu'au
+     défi de fuite, et il rend l'ordre d'arrivée indifférent. Sans lui, un
+     joueur sur une connexion rapide voyait le fermier par défaut. */
+  function applySkin(sk) {
+    if (!sk) return;
+    if (!mat.shirt) { pendingSkin = sk; return; }
+    mat.shirt.color.setHex(sk.shirt);
+    mat.pants.color.setHex(sk.pants);
+    mat.hair.color.setHex(sk.hair);
+    mat.skin.color.setHex(sk.skin);
+    const fem = sk.gender === "f";
+    if (sledParts.femHead) for (const m of sledParts.femHead) m.visible = fem;
+    /* La nuque est MASQUÉE chez la femme : les cheveux longs la recouvrent
+       entièrement, et deux volumes de cheveux superposés se battraient en
+       profondeur sur toute la descente. Même raison qu'au zip 377. */
+    if (sledParts.nape) sledParts.nape.visible = !fem;
   }
 
   /* ======================================================================
@@ -501,10 +623,13 @@ const World = (function () {
   function buildParticles() {
     stars = makePoints(CFG.FX_STAR_MAX, paintStar(), CFG.FX_STAR_SIZE, 0.95, true);
     dust = makePoints(CFG.FX_DUST_MAX, paintDust(), CFG.FX_DUST_SIZE, 0.5, false);
+    lines = makePoints(CFG.FX_LINE_MAX, paintDust(), CFG.FX_LINE_SIZE, 0.42, true);
     scene.add(stars.points);
     scene.add(dust.points);
+    scene.add(lines.points);
     for (let i = 0; i < CFG.FX_STAR_MAX; i++) stars.live.push({ t: -1 });
     for (let i = 0; i < CFG.FX_DUST_MAX; i++) dust.live.push({ t: -1 });
+    for (let i = 0; i < CFG.FX_LINE_MAX; i++) lines.live.push({ t: -1 });
   }
 
   function emit(sys, x, y, z, vx, vy, vz, life, r, g, b) {
@@ -560,8 +685,26 @@ const World = (function () {
      d'avoir une piste qui suit exactement la courbe. Un plan déformé ou une
      suite de quads posés bout à bout laisse toujours voir ses jointures dans
      les virages — le défaut qu'on voit dans tous les jeux de descente ratés. */
-  function ribbon(s0, s1, uL, uR, yOff, m, uvRepeat, terrain) {
+  /* ⚠️ LES UV SONT EN UNITÉS DU MONDE, PAS EN 0..1. C'est LA correction du
+     zip 412, et c'est ce qui donnait un sol « sans texture » :
+
+     l'ancienne version posait `u = 0` d'un bord et `u = 1` de l'autre. Sur une
+     bande de neige large de cent cinquante unités, le motif était donc étiré
+     cent cinquante fois en travers — une bouillie uniforme, c'est-à-dire un
+     aplat. Et sur la piste, la coordonnée le long de la marche était divisée
+     par 34 puis multipliée par 26 (le `repeat` du matériau) : le motif se
+     répétait tous les 1,3 mètre, ce qui à l'écran ne se lit plus comme un
+     motif mais comme du bruit.
+
+     Ici, `tile` est une TAILLE RÉELLE en unités : « ce carreau fait 6 mètres
+     de côté ». Les deux axes sont traités pareil, le motif est donc carré au
+     sol quelle que soit la largeur du ruban, et il ne change pas d'échelle
+     quand la piste s'élargit. Les `repeat` des matériaux repassent à 1.
+     ⚠️ NE PAS REVENIR À DES UV NORMALISÉS : c'est exactement la faute qu'on
+     vient de corriger, et elle ne se voit qu'à l'écran. */
+  function ribbon(s0, s1, uL, uR, yOff, m, tile, terrain) {
     const N = SUB;
+    const T = tile || 6;
     const verts = [], uvs = [], idx = [];
     for (let i = 0; i <= N; i++) {
       const s = s0 + (s1 - s0) * (i / N);
@@ -572,8 +715,8 @@ const World = (function () {
       const a = terrain ? Slope.terrainAt(s, uL) : Slope.pointAt(s, uL);
       const b = terrain ? Slope.terrainAt(s, uR) : Slope.pointAt(s, uR);
       verts.push(a.x, a.y + yOff, a.z, b.x, b.y + yOff, b.z);
-      const v = (s / (uvRepeat || 10));
-      uvs.push(0, v, 1, v);
+      const v = s / T;
+      uvs.push(uL / T, v, uR / T, v);
     }
     for (let i = 0; i < N; i++) {
       const k = i * 2;
@@ -698,16 +841,16 @@ const World = (function () {
     for (const side of [-1, 1]) {
       for (let k = 0; k < BANDS.length - 1; k++) {
         g.add(ribbon(s0, s1, side * (half + BANDS[k]), side * (half + BANDS[k + 1]),
-          0, mat.snow, 8, true));
+          0, mat.snow, 11, true));
       }
     }
 
     /* 2. LA PISTE : le dessus, puis un liseré vertical de chaque côté. Le
        liseré est l'épaisseur du ruban (règle 5) — c'est lui qui garde la piste
        lisible quand la caméra s'abaisse dans les virages relevés. */
-    g.add(ribbon(s0, s1, -half, half, 0, mat.piste, 34));
+    g.add(ribbon(s0, s1, -half, half, 0, mat.piste, 7.5));
     for (const side of [-1, 1]) {
-      const e = ribbon(s0, s1, side * half, side * half, -0.34, mat.pisteEdge, 10);
+      const e = ribbon(s0, s1, side * half, side * half, -0.34, mat.pisteEdge, 4);
       // Le liseré est un ruban de largeur nulle : on l'épaissit en écartant
       // ses deux bords en HAUTEUR plutôt qu'en largeur.
       const pos = e.geometry.attributes.position.array;
@@ -976,8 +1119,35 @@ const World = (function () {
         CFG.FX_DUST_LIFE, 1, 0.93, 0.99);
     }
 
+    /* ⚠️ LES TRAITS DE VITESSE (412). Ils ne sortent pas de la luge : ils
+       naissent AUTOUR DE LA CAMÉRA, sur les côtés, et filent vers l'arrière.
+       C'est leur position dans le CADRE qui compte, pas leur position dans le
+       monde — l'œil estime une vitesse en lisant ce qui défile dans les coins,
+       jamais en regardant le centre. Émis depuis la luge, ils seraient au
+       milieu de l'écran, cachés par la luge elle-même, et ne serviraient à
+       rien.
+
+       ⚠️ ET ILS N'EXISTENT QU'AU-DELÀ D'UN SEUIL. Une traînée permanente est
+       un décor ; une traînée qui APPARAÎT à 34 u/s est une information. */
+    if (sled.v > CFG.SPEED_LINE_FROM && camera) {
+      const k = Math.min(1, (sled.v - CFG.SPEED_LINE_FROM) / (CFG.SLED_SPEED_MAX - CFG.SPEED_LINE_FROM));
+      const n = Math.round(CFG.FX_LINE_RATE * k * dt);
+      const c = camera.position;
+      for (let i = 0; i < n; i++) {
+        const side = Math.random() < 0.5 ? -1 : 1;
+        const spread = 4.5 + Math.random() * 7;
+        emit(lines,
+          c.x + f.right.x * side * spread + (p.x - c.x) * 0.55,
+          c.y - 1.2 + Math.random() * 4.5,
+          c.z + f.right.z * side * spread + (p.z - c.z) * 0.55,
+          -f.fwd.x * (30 + 26 * k), -f.fwd.y * 8, -f.fwd.z * (30 + 26 * k),
+          CFG.FX_LINE_LIFE, 1, 0.94, 1);
+      }
+    }
+
     stepParticles(stars, dt, 9);
     stepParticles(dust, dt, -0.6);   // la poudre MONTE : c'est ce qui la rend féérique
+    stepParticles(lines, dt, 0);
   }
 
   /* Le décor lointain suit la caméra (règle 3) et la neige tombe. */
@@ -1013,6 +1183,7 @@ const World = (function () {
     for (const kind in pool) pool[kind].length = 0;
     if (stars) for (const p of stars.live) p.t = -1;
     if (dust) for (const p of dust.live) p.t = -1;
+    if (lines) for (const p of lines.live) p.t = -1;
   }
 
   function render() { renderer.render(scene, camera); }

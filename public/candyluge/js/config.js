@@ -31,17 +31,29 @@ const CFG = {
          fait entrer le paysage dans le tiers supérieur du cadre.
      Une caméra basse et proche donnerait un jeu plus nerveux — et un paysage
      réduit à une bande de piste. Ce n'est pas ce jeu-là. */
-  CAM_FOV: 75,
-  CAM_BACK: 13.0,          // recul derrière la luge, en unités
-  CAM_HEIGHT: 7.2,         // hauteur au-dessus de la piste
-  CAM_LOOK_AHEAD: 26,      // distance du point visé, devant la luge
-  CAM_LOOK_HEIGHT: 3.6,    // hauteur du point visé
-  CAM_LAG: 5.2,            // raideur du suivi (plus haut = plus collé)
-  CAM_YAW_LAG: 3.4,        // raideur du suivi d'ORIENTATION, plus molle que la position
+  /* ⚠️ RECALIBRÉE AU 412 : « le jeu doit être aussi dynamique et vif et
+     époustouflant que le endless run ». La première caméra était posée à
+     13 unités de recul et visait 26 unités devant — un cadrage de carte
+     postale, magnifique et MOU. Le défi de fuite, lui, est à 7,2 de recul et
+     vise 9 devant : c'est ce qui le rend nerveux.
+
+     On ne copie pas ses chiffres (on perdrait le paysage, qui est la raison
+     d'être de ce jeu-là), on prend le milieu ET on compense par le CHAMP : à
+     82° qui s'ouvrent jusqu'à 98 en vitesse, on voit plus large qu'avant tout
+     en étant deux fois plus près. Un champ large et une caméra proche, c'est
+     précisément la recette du « ça va vite » — les bords du cadre défilent,
+     et ce sont eux que l'œil lit pour estimer une vitesse. */
+  CAM_FOV: 82,
+  CAM_BACK: 9.0,           // recul derrière la luge, en unités
+  CAM_HEIGHT: 4.6,         // hauteur au-dessus de la piste
+  CAM_LOOK_AHEAD: 15,      // distance du point visé, devant la luge
+  CAM_LOOK_HEIGHT: 2.3,    // hauteur du point visé
+  CAM_LAG: 7.0,            // raideur du suivi (plus haut = plus collé)
+  CAM_YAW_LAG: 4.2,        // raideur du suivi d'ORIENTATION, plus molle que la position
   /* Le champ s'ouvre avec la vitesse : +12° au maximum. C'est le plus vieux
      truc du jeu de course et il n'a pas d'équivalent — sans lui, 30 u/s et
      55 u/s se ressemblent, parce que rien à l'écran ne change de taille. */
-  CAM_FOV_SPEED: 12,
+  CAM_FOV_SPEED: 16,
   /* Roulis de la caméra dans le sens du virage. ⚠️ TRÈS discret : 4°, pas plus.
      La piste est DÉJÀ banquée jusqu'à 11° dans les grands virages ; les deux
      roulis s'additionnent à l'écran, et la première planche de
@@ -124,11 +136,11 @@ const CFG = {
      C'est cette FOURCHETTE qui fait le jeu : le joueur sent la pente changer
      sous lui. Un drag plus fort l'écraserait, un drag plus faible ferait de
      chaque mur une accélération sans fin. */
-  GRAVITY: 52,             // u/s², la pesanteur du monde bonbon
-  SLED_DRAG: 0.0047,       // frottement de l'air, quadratique — c'est lui qui fixe la vitesse d'équilibre
+  GRAVITY: 68,             // u/s², la pesanteur du monde bonbon
+  SLED_DRAG: 0.0042,       // frottement de l'air, quadratique — c'est lui qui fixe la vitesse d'équilibre
   SLED_FRICTION: 1.6,      // frottement de la neige sucrée, constant — c'est lui qui arrête sur un plat
-  SLED_SPEED_MIN: 11,      // en dessous, la pente relance (on ne reste jamais planté)
-  SLED_SPEED_MAX: 56,      // plafond dur, pour que la caméra et les collisions restent lisibles
+  SLED_SPEED_MIN: 14,      // en dessous, la pente relance (on ne reste jamais planté)
+  SLED_SPEED_MAX: 72,      // plafond dur, pour que la caméra et les collisions restent lisibles
 
   /* La DIRECTION. Deux nombres, et leur rapport est tout le pilotage :
        - STEER_RATE : à quelle vitesse la luge s'oriente quand on tient une flèche ;
@@ -137,9 +149,9 @@ const CFG = {
      Quand le second est plus petit que le premier, la luge glisse : elle
      pointe déjà à gauche alors qu'elle file encore tout droit. C'est ça, un
      dérapage — pas une animation posée par-dessus. */
-  SLED_STEER_RATE: 2.35,   // rad/s d'orientation gagnés à fond de flèche
+  SLED_STEER_RATE: 2.95,   // rad/s d'orientation gagnés à fond de flèche
   SLED_STEER_MAX: 0.85,    // rad, angle maximal entre la luge et la piste
-  SLED_GRIP: 5.6,          // conversion orientation -> vitesse latérale
+  SLED_GRIP: 6.4,          // conversion orientation -> vitesse latérale
   SLED_GRIP_DRIFT: 2.1,    // la même, en dérapage : la luge « chasse »
   SLED_STEER_SPEED_FALLOFF: 0.55, // à SPEED_MAX, il ne reste que 55 % de la direction
   /* ⚠️ LE FREIN NE DOIT PAS TUER LA VITESSE : c'est avec lui qu'on amorce un
@@ -266,11 +278,18 @@ const CFG = {
   COL_RUNNER: 0xffd98a,      // les patins, en caramel doré
   /* La tenue par défaut du lugeur. Elle est ÉCRASÉE par celle reçue de la
      ferme (voir bridge.js) : on doit se reconnaître d'un monde à l'autre. */
-  COL_SHIRT: 0x3f7fd0,
-  COL_PANTS: 0x2b4c86,
-  COL_HAIR: 0x4a3220,
-  COL_SKIN: 0xf0c39a,
+  COL_SHIRT: 0x3f7fd4,
+  COL_PANTS: 0x454f66,
+  COL_HAIR: 0x5a3a1e,
+  COL_SKIN: 0xf0c8a0,
   COL_SCARF: 0xff5478,
+  COL_BOOT: 0x4a3a2c,        // les bottes du fermier
+  /* ⚠️ CES QUATRE-LÀ SONT CELLES DU DÉFI DE FUITE, VALEUR POUR VALEUR
+     (public/templerun/js/config.js), et elles viennent elles-mêmes de
+     HAIR_COLORS[0] / charPalette() dans fermeArt.js. Ce sont des REPLIS : la
+     ferme envoie la vraie tenue du joueur. Elles ne comptent que quand on
+     ouvre la page directement, hors ferme — mais alors le fermier doit quand
+     même être LE fermier, pas un bonhomme bleu inventé pour l'occasion. */
 
   /* Les six teintes des sucettes et des buissons de gomme. Six, pas trois :
      en dessous, la forêt se lit comme un motif répété. */
@@ -295,16 +314,28 @@ const CFG = {
 
      Les confondre en un seul système donnerait soit un dérapage noyé, soit une
      traînée qui clignote. */
-  FX_STAR_MAX: 260,
-  FX_STAR_RATE: 150,       // étoiles par seconde, à dérapage plein
+  FX_STAR_MAX: 340,
+  FX_STAR_RATE: 210,       // étoiles par seconde, à dérapage plein
   FX_STAR_LIFE: 0.95,
   FX_STAR_SIZE: 1.5,
   FX_STAR_SPREAD: 9.5,     // vitesse d'éjection latérale
   FX_STAR_RISE: 4.2,
-  FX_DUST_MAX: 340,
-  FX_DUST_RATE: 90,
+  FX_DUST_MAX: 460,
+  FX_DUST_RATE: 130,
   FX_DUST_LIFE: 1.5,
   FX_DUST_SIZE: 1.1,
+  /* ⚠️ LES TRAITS DE VITESSE (412). De longues traînées pâles éjectées vers
+     l'arrière, de part et d'autre de la caméra, et SEULEMENT au-delà de
+     SPEED_LINE_FROM. C'est le troisième pilier du « ça va vite », après la
+     caméra proche et le champ qui s'ouvre : elles passent dans les coins du
+     cadre, là où l'œil mesure le défilement sans regarder. En dessous du
+     seuil il n'y en a aucune — sinon on ne sait plus si on va vite. */
+  FX_LINE_MAX: 90,
+  FX_LINE_RATE: 46,
+  FX_LINE_LIFE: 0.42,
+  FX_LINE_SIZE: 2.4,
+  SPEED_LINE_FROM: 34,     // u/s à partir desquels elles apparaissent
+
   /* La neige qui tombe : très peu dense, très lente. Elle sert à remplir le
      ciel vide au-dessus de l'horizon, là où il n'y a ni piste ni décor. */
   FX_SNOW_COUNT: 420,

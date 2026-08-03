@@ -27,9 +27,10 @@
        image sans étoiles ne veut donc PAS dire que le dérapage ne brille pas.
      * pas d'ombres portées, pas d'anticrénelage, pas de transparence — les
        halos de bonbons sont rendus opaques.
-     * les textures ne sont pas plaquées : chaque matériau texturé est rendu par
-       la MOYENNE de sa texture (avgColor). Les tourbillons de la piste ne se
-       voient donc pas ; sa TEINTE, si, et c'est ce qu'on juge ici.
+     * les textures des RUBANS (piste, neige) sont désormais VRAIMENT plaquées,
+       avec leurs UV (zip 412) — c'est la seule façon de juger un sol texturé.
+       Celles des primitives (barrières en sucre d'orge) restent rendues par la
+       moyenne de leur image : elles n'ont pas d'UV dans ce faux three.js.
 
    Il montre : la composition du cadre, la place de l'horizon, la silhouette de
    la piste dans ses virages, la densité du décor, la lisibilité des gourmands
@@ -234,8 +235,15 @@ function tessellate(g) {
     if (!pos) return T;
     const idx = g.index;
     const P = (k) => [pos[k * 3], pos[k * 3 + 1], pos[k * 3 + 2]];
-    if (idx) for (let i = 0; i < idx.length; i += 3) T.push([P(idx[i]), P(idx[i + 1]), P(idx[i + 2])]);
-    else for (let i = 0; i < pos.length / 3; i += 3) T.push([P(i), P(i + 1), P(i + 2)]);
+    const uvA = g.attributes.uv && g.attributes.uv.array;
+    const U = (k) => (uvA ? [uvA[k * 2], uvA[k * 2 + 1]] : null);
+    const push3 = (a, b, c) => {
+      const tri = [P(a), P(b), P(c)];
+      if (uvA) tri.uv = [U(a), U(b), U(c)];
+      T.push(tri);
+    };
+    if (idx) for (let i = 0; i < idx.length; i += 3) push3(idx[i], idx[i + 1], idx[i + 2]);
+    else for (let i = 0; i < pos.length / 3; i += 3) push3(i, i + 1, i + 2);
   } else {
     console.log("  ⚠️ géométrie non tessellée : " + g.kind + " — elle sera INVISIBLE dans la planche");
   }
@@ -256,6 +264,15 @@ function collect(rootObj) {
     const m = mul(parentM, localMatrix(o));
     if (o.isMesh && o.geometry) {
       const col = matColor(o.material);
+      /* ⚠️ LA TEXTURE EST ÉCHANTILLONNÉE POUR DE VRAI DEPUIS LE 412, et il a
+         fallu ça pour pouvoir répondre à « y a pas de texture au sol ». Tant
+         que la planche rendait chaque matériau par la MOYENNE de sa texture,
+         un sol correctement texturé et un sol uni donnaient exactement la même
+         image — l'outil ne pouvait pas voir le défaut qu'on lui demandait de
+         juger. Un outil qui ne montre pas ce qu'on juge est pire qu'un outil
+         absent : il rassure. */
+      const map = (o.material && o.material.map && o.material.map.image
+        && o.material.map.image.ctx) ? o.material.map.image : null;
       const unlit = !!(o.material && o.material.fog === false && o.material.side === 1); // le dôme de ciel
       if (!unlit) {
         for (const tri of tessellate(o.geometry)) {
@@ -264,7 +281,7 @@ function collect(rootObj) {
           const vx = p[2].x - p[0].x, vy = p[2].y - p[0].y, vz = p[2].z - p[0].z;
           let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
           const L = Math.hypot(nx, ny, nz) || 1;
-          faces.push({ p, n: { x: nx / L, y: ny / L, z: nz / L }, col });
+          faces.push({ p, n: { x: nx / L, y: ny / L, z: nz / L }, col, map, uv: tri.uv });
         }
       }
     }
@@ -341,7 +358,16 @@ function render(faces, cam, W, H, skyPx, skyW, skyH) {
     if (P.some((p) => p.z < 0.4)) continue;                 // derrière l'œil : on saute plutôt que de découper
     const zAvg = (P[0].z + P[1].z + P[2].z) / 3;
     if (zAvg > CFG.DRAW_DISTANCE) continue;
-    const [r, g, b] = shade(face.col, face.n, zAvg, sun, fillL);
+    const lit = shade(face.col, face.n, zAvg, sun, fillL);
+    /* L'échantillonnage de texture se fait par pixel, mais l'ÉCLAIRAGE est
+       calculé une fois par face (facettes plates, comme le reste de la
+       planche) : on garde donc le rapport entre la couleur éclairée et la
+       couleur brute, et on l'applique au texel. */
+    const kr = lit[0] / Math.max(1, (face.col >> 16) & 255);
+    const kg = lit[1] / Math.max(1, (face.col >> 8) & 255);
+    const kb = lit[2] / Math.max(1, face.col & 255);
+    const fogF = 1 - Math.exp(-Math.pow(zAvg * 0.0022, 2));
+    const [r, g, b] = lit;
 
     const minY = Math.max(0, Math.floor(Math.min(P[0].sy, P[1].sy, P[2].sy)));
     const maxY = Math.min(H - 1, Math.ceil(Math.max(P[0].sy, P[1].sy, P[2].sy)));
@@ -361,7 +387,22 @@ function render(faces, cam, W, H, skyPx, skyW, skyH) {
       if (z >= zbuf[idx]) continue;
       zbuf[idx] = z;
       const i = idx * 3;
-      px[i] = r; px[i + 1] = g; px[i + 2] = b;
+      if (face.map && face.uv) {
+        // UV barycentriques, puis répétition (les UV du jeu sont en unités du
+        // monde et sortent donc largement de [0,1] — c'est le principe).
+        const u0 = face.uv[0], u1 = face.uv[1], u2 = face.uv[2];
+        const tu = w0 * u0[0] + w1 * u1[0] + w2 * u2[0];
+        const tv = w0 * u0[1] + w1 * u1[1] + w2 * u2[1];
+        const im = face.map, ip = im.ctx.pixels;
+        const sx2 = ((Math.floor(tu * im.width) % im.width) + im.width) % im.width;
+        const sy2 = ((Math.floor(tv * im.height) % im.height) + im.height) % im.height;
+        const si = (sy2 * im.width + sx2) * 4;
+        px[i] = Math.min(255, ip[si] * kr * (1 - fogF) + 0xff * fogF) | 0;
+        px[i + 1] = Math.min(255, ip[si + 1] * kg * (1 - fogF) + 0xee * fogF) | 0;
+        px[i + 2] = Math.min(255, ip[si + 2] * kb * (1 - fogF) + 0xdd * fogF) | 0;
+      } else {
+        px[i] = r; px[i + 1] = g; px[i + 2] = b;
+      }
     }
   }
   return px;
