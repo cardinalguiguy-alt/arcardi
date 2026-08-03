@@ -61,10 +61,17 @@ const Game = (function () {
     state = STATE.RUNNING;
     UI.show("hud");
     lastFrame = performance.now();
+
+    // Son d'ouverture : une seule fois, à la toute première frame de la
+    // course. La boucle de pas démarre en même temps ; c'est frame() qui la
+    // coupera/reprendra ensuite au gré des sauts et glissades.
+    AudioFX.playOpening();
+    AudioFX.startFootsteps();
   }
 
   function endRun(cause) {
     state = STATE.OVER;
+    AudioFX.stopFootsteps();
     UI.showGameOver(score, player.coins, player.totalDist, cause);
   }
 
@@ -77,6 +84,7 @@ const Game = (function () {
   function beginEscape() {
     if (state !== STATE.RUNNING) return;
     state = STATE.ESCAPING;
+    AudioFX.stopFootsteps();
     score = player.escapeDist * CFG.SCORE_PER_UNIT + player.coins * CFG.SCORE_PER_COIN;
     // La meute se détache ICI, à la vitesse qu'avait la course. Le fermier,
     // lui, ralentit : sans ce détachement, les loups auraient ralenti avec lui
@@ -105,8 +113,15 @@ const Game = (function () {
   }
 
   function togglePause() {
-    if (state === STATE.RUNNING) { state = STATE.PAUSED; UI.show("pause"); }
-    else if (state === STATE.PAUSED) { state = STATE.RUNNING; lastFrame = performance.now(); UI.show("hud"); }
+    if (state === STATE.RUNNING) { state = STATE.PAUSED; AudioFX.stopFootsteps(); UI.show("pause"); }
+    else if (state === STATE.PAUSED) {
+      state = STATE.RUNNING;
+      lastFrame = performance.now();
+      UI.show("hud");
+      // Reprise immédiate ; frame() réévaluera de toute façon dès la
+      // prochaine frame, mais on évite un silence d'une frame ici.
+      AudioFX.setFootsteps(player.grounded && !player.isSliding(performance.now()));
+    }
   }
 
   /* Bouton "Abandonner" de l'écran de pause. */
@@ -160,6 +175,9 @@ const Game = (function () {
       for (const n of track.nodes) if (!n.group) World.buildNode(n);
 
       score = player.totalDist * CFG.SCORE_PER_UNIT + player.coins * CFG.SCORE_PER_COIN;
+      // Pas au sol uniquement : coupés en l'air (saut) et pendant la
+      // glissade, repris dès que le joueur retouche terre debout.
+      AudioFX.setFootsteps(player.grounded && !player.isSliding(now));
       chaseCam.update(dt, player);
       World.updatePlayer(player, now);
       World.updateWolves(pack, player, now);
@@ -236,6 +254,7 @@ const Game = (function () {
       return;
     }
     UI.init();
+    AudioFX.init();
     World.init(document.getElementById("gl"));
     Input.init(togglePause);
 
