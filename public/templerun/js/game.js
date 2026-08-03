@@ -63,15 +63,15 @@ const Game = (function () {
     lastFrame = performance.now();
 
     // Son d'ouverture : une seule fois, à la toute première frame de la
-    // course. La boucle de pas démarre en même temps ; c'est frame() qui la
-    // coupera/reprendra ensuite au gré des sauts et glissades.
+    // course. La respiration, elle, est seulement ARMÉE ici : elle ne se fera
+    // entendre qu'au bout de BREATH_FIRST_MS, une fois l'ouverture passée.
     AudioFX.playOpening();
-    AudioFX.startFootsteps();
+    AudioFX.armBreath(lastFrame);
   }
 
   function endRun(cause) {
     state = STATE.OVER;
-    AudioFX.stopFootsteps();
+    AudioFX.stopAll();
     UI.showGameOver(score, player.coins, player.totalDist, cause);
   }
 
@@ -84,7 +84,9 @@ const Game = (function () {
   function beginEscape() {
     if (state !== STATE.RUNNING) return;
     state = STATE.ESCAPING;
-    AudioFX.stopFootsteps();
+    // Le fermier est tiré d'affaire : il cesse de souffler, et l'orage qu'il
+    // laisse derrière lui n'a plus à gronder par-dessus le fondu.
+    AudioFX.stopAll();
     score = player.escapeDist * CFG.SCORE_PER_UNIT + player.coins * CFG.SCORE_PER_COIN;
     // La meute se détache ICI, à la vitesse qu'avait la course. Le fermier,
     // lui, ralentit : sans ce détachement, les loups auraient ralenti avec lui
@@ -113,14 +115,17 @@ const Game = (function () {
   }
 
   function togglePause() {
-    if (state === STATE.RUNNING) { state = STATE.PAUSED; AudioFX.stopFootsteps(); UI.show("pause"); }
+    if (state === STATE.RUNNING) { state = STATE.PAUSED; AudioFX.stopAll(); UI.show("pause"); }
     else if (state === STATE.PAUSED) {
       state = STATE.RUNNING;
       lastFrame = performance.now();
       UI.show("hud");
-      // Reprise immédiate ; frame() réévaluera de toute façon dès la
-      // prochaine frame, mais on évite un silence d'une frame ici.
-      AudioFX.setFootsteps(player.grounded && !player.isSliding(performance.now()));
+      /* La pause a désarmé la respiration ; on la réarme au lieu de la
+         reprendre où elle en était. Reprendre supposerait de retrancher la
+         durée de la pause à l'échéance, c'est-à-dire de tenir une horloge de
+         jeu séparée pour un seul son — et un joueur qui revient de pause
+         n'entendra jamais qu'il a « perdu » un souffle. */
+      AudioFX.armBreath(lastFrame);
     }
   }
 
@@ -136,6 +141,7 @@ const Game = (function () {
      de la mort : le joueur doit pouvoir lire son score avant que la ferme
      enchaîne son fondu au noir. */
   function leave() {
+    AudioFX.stopAll();   // on ne rentre pas à la ferme avec un coup de tonnerre en attente
     if (Bridge.embedded) {
       if (player && !reported) {
         reported = true;
@@ -175,9 +181,9 @@ const Game = (function () {
       for (const n of track.nodes) if (!n.group) World.buildNode(n);
 
       score = player.totalDist * CFG.SCORE_PER_UNIT + player.coins * CFG.SCORE_PER_COIN;
-      // Pas au sol uniquement : coupés en l'air (saut) et pendant la
-      // glissade, repris dès que le joueur retouche terre debout.
-      AudioFX.setFootsteps(player.grounded && !player.isSliding(now));
+      // Le fermier souffle par moments : AudioFX tient son propre compte à
+      // rebours, cet appel ne fait rien tant que l'échéance n'est pas atteinte.
+      AudioFX.tickBreath(now);
       chaseCam.update(dt, player);
       World.updatePlayer(player, now);
       World.updateWolves(pack, player, now);
@@ -256,6 +262,22 @@ const Game = (function () {
     UI.init();
     AudioFX.init();
     World.init(document.getElementById("gl"));
+
+    /* LE TONNERRE SUIT L'ÉCLAIR (410). world.js annonce le flash, Game décide.
+       Deux décisions se prennent ici et nulle part ailleurs :
+
+         * SEULE UNE COURSE TONNE. updateAmbient() tourne aussi sur l'écran de
+           fin (état OVER) et pendant la sortie offroad (ESCAPING) pour laisser
+           la scène vivre : sans ce filtre, l'orage gronderait par-dessus
+           l'écran de fin, indéfiniment, alors que plus personne ne court. La
+           règle est celle du score au 377 — ce qui suit la course n'est plus
+           la course.
+         * LE DÉLAI N'EST PAS ICI. Il appartient à AudioFX, qui possède déjà le
+           minuteur ; Game se contente de dire « il y a eu un éclair ». */
+    World.setLightningListener(() => {
+      if (state === STATE.RUNNING) AudioFX.thunder();
+    });
+
     Input.init(togglePause);
 
     document.getElementById("btnStart").addEventListener("click", start);

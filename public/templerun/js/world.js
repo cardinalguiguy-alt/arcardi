@@ -52,8 +52,20 @@ const World = (function () {
      les désaccorder (l'eau se mettrait à filer avec la caméra). */
   let lakeUnitsPerTile = 26, glowUnitsPerTile = 37;
 
-  /* État de l'orage. Voir tickLightning(). */
-  const storm = { nextAt: 0, startedAt: -1e9, bolt: -1, boltU: 0 };
+  /* État de l'orage. Voir tickLightning().
+     `flashed` (410) : ce coup-ci a-t-il déjà prévenu l'extérieur ? Remis à
+     false à chaque nouvel éclair, passé à true à la première image où le flash
+     est réellement visible. */
+  const storm = { nextAt: 0, startedAt: -1e9, bolt: -1, boltU: 0, flashed: true };
+
+  /* L'ABONNÉ AUX ÉCLAIRS (410). world.js ne connaît pas le son : il ne sait pas
+     qu'il existe un AudioFX, encore moins qu'un délai sépare l'éclair du
+     tonnerre. Il annonce simplement « un éclair vient d'apparaître », et c'est
+     Game qui décide quoi en faire — exactement le partage posé au 409 pour les
+     pas. Un appel direct à AudioFX ici aurait rendu world.js inchargeable par
+     les outils de tools/, qui n'ont ni navigateur ni <audio>. */
+  let onLightning = null;
+  function setLightningListener(fn) { onLightning = fn; }
 
   /* --------------------------------------------------------------- SETUP */
   function init(canvasEl) {
@@ -3465,6 +3477,7 @@ const World = (function () {
       storm.startedAt = now;
       storm.bolt = Math.floor(Math.random() * boltMats.length);
       storm.boltU = Math.random() * Math.PI * 2;
+      storm.flashed = false;    // ce coup-ci n'a encore prévenu personne
       storm.nextAt = now + CFG.LIGHTNING_MIN_MS
         + Math.random() * (CFG.LIGHTNING_MAX_MS - CFG.LIGHTNING_MIN_MS);
     }
@@ -3665,6 +3678,18 @@ const World = (function () {
        fait éclater un coup de tonnerre pile à la seconde où la nuit revient,
        parce que l'attente accumulée se serait vidée d'un coup. --- */
     const flash = tickLightning(now) * CFG.LIGHTNING_STRENGTH * (1 - day);
+
+    /* ⚠️ L'ANNONCE SE FAIT ICI, PAS DANS tickLightning() — et la nuance vaut
+       d'être écrite. tickLightning() sait qu'un éclair a COMMENCÉ ; seul cet
+       endroit sait qu'il est VU, parce que `day` l'y multiplie. Prévenir plus
+       haut ferait tonner un ciel de plein midi, où le compteur tourne pourtant
+       toujours (voir le commentaire juste au-dessus). Le seuil est le même que
+       celui du dessin de l'éclair : ce qui tonne est exactement ce qui brille. */
+    if (!storm.flashed && flash > 0.01) {
+      storm.flashed = true;
+      if (onLightning) onLightning(now);
+    }
+
     if (flash > 0.01 && storm.bolt >= 0) {
       boltMesh.visible = true;
       boltMesh.material = boltMats[storm.bolt];
@@ -3782,6 +3807,8 @@ const World = (function () {
   return {
     init, buildNode, dropNode, clearAll, updatePlayer, updateWolves, updateAmbient, render, resize,
     applySkin, setMist, setStage,
+    // Zip 410 : l'unique fil entre l'orage et le son. Voir setLightningListener.
+    setLightningListener,
     // Exporté pour les outils : c'est la seule façon de vérifier le cycle
     // jour/nuit sans lancer une course de 33 000 mètres (zip 382).
     dayAt,

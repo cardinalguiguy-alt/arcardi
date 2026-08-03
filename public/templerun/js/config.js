@@ -670,6 +670,35 @@ const CFG = {
   LIGHTNING_STRENGTH: 0.9,  // 0 = invisible, 1 = ciel entièrement délavé
   COL_LIGHTNING: 0xcdb6ff,  // teinte du flash : violet-blanc, pas blanc pur
 
+  /* ---------------------------------------------------------------- SON ----
+     TONNERRE (410). Le coup ne part PAS avec l'éclair : le son voyage à
+     340 m/s, la lumière non. Une seconde de retard = 340 mètres de distance.
+     La fourchette 1,2 s – 3,4 s place donc l'orage entre 400 m et 1,2 km :
+     assez loin pour ne pas être au-dessus de la tête du joueur, assez près
+     pour qu'on relie encore le bruit au flash qu'on vient de voir. Au-delà de
+     quatre secondes, le lien se perd et le coup passe pour un son d'ambiance.
+
+     ⚠️ THUNDER_DELAY_MAX_MS doit rester nettement sous LIGHTNING_MIN_MS
+     (7000) : sinon un coup pourrait encore attendre quand le suivant part. */
+  THUNDER_DELAY_MIN_MS: 1200,
+  THUNDER_DELAY_MAX_MS: 3400,
+  /* Le délai dit la distance, la distance dit le volume : un coup qui tarde
+     est un coup lointain, donc plus sourd. Ces deux bornes sont interpolées
+     par le même tirage que le délai (voir audio.js). */
+  THUNDER_VOL_NEAR: 0.90,
+  THUNDER_VOL_FAR: 0.45,
+
+  /* RESPIRATION (410). Le fermier souffle « par moments ». Le premier souffle
+     attend FIRST + un peu (SPREAD) — on ne s'essouffle pas au troisième pas,
+     et le son d'ouverture a le temps de finir. Ensuite, un souffle toutes les
+     MIN..MAX millisecondes. La fenêtre est large exprès : à intervalle fixe,
+     le souffle devient un métronome, et un métronome ne s'entend plus comme
+     une respiration. */
+  BREATH_FIRST_MS: 9000,
+  BREATH_SPREAD_MS: 5000,
+  BREATH_MIN_MS: 14000,
+  BREATH_MAX_MS: 26000,
+
   /* ------------------------------------------------------------------- LAC --
      Le lac violet inquiétant. La chaussée le franchit : c'est exactement ce
      que fait déjà carveRunCorridor côté ferme en creusant un couloir à

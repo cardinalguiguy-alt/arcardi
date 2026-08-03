@@ -1,66 +1,137 @@
 /* =============================================================================
    audio.js — Sons du endless run.
    -----------------------------------------------------------------------------
-   Volontairement minimal, sur le modèle des autres petits modules du jeu :
-   deux <audio> HTML, pas de Web Audio API, pas de mixeur. On ajoutera les
-   sons au fur et à mesure ; pas besoin d'architecture plus lourde pour deux
-   pistes.
+   Toujours minimal : des <audio> HTML, pas de Web Audio API, pas de mixeur.
+   Mais depuis le 410 les pistes sont décrites par UNE TABLE `{nom: réglages}`
+   et non plus par une variable chacune — c'était la consigne laissée au 409 dès
+   qu'une troisième piste apparaîtrait. Ajouter un son se fait désormais en
+   ajoutant une ligne à TRACKS, sans toucher au reste du fichier.
 
-   - OPENING  : jouée une seule fois, au lancement de la course (Game.start),
-     donc à la toute première frame de la partie. Jamais rejouée ensuite.
-   - FOOTSTEPS : boucle continue pendant la course. Coupée pendant le saut
-     (joueur en l'air) et pendant la glissade, reprise dès que le joueur est
-     de nouveau au sol et ne glisse plus. C'est Game qui pilote ce play/pause
-     frame par frame, via setFootsteps(active) — Audio ne connaît rien de
-     player.js, il ne fait qu'obéir.
+   LES TROIS PISTES DU 410 :
+
+   - OPENING  : jouée une seule fois, au lancement de la course (Game.start).
+   - THUNDER  : déclenchée par l'ÉCLAIR, mais APRÈS UN DÉLAI. Voir thunder().
+   - BREATH   : le fermier qui souffle, par moments, pendant la course. Voir
+     armBreath()/tickBreath().
+
+   ⚠️ LES PAS ONT ÉTÉ RETIRÉS AU 410. `footsteps.mp3` est supprimé, et toute
+   l'API `startFootsteps/setFootsteps/stopFootsteps` avec lui. Ce n'était pas
+   une piste qui déplaisait à moitié : Guillaume l'a retirée, il n'en reste
+   donc rien — ni fichier, ni fonction morte, ni appel commenté dans game.js.
+
+   QUI PILOTE QUOI. Comme au 409, Audio n'observe rien : c'est Game qui appelle,
+   frame par frame ou sur événement. La seule chose qu'Audio décide tout seul,
+   c'est QUAND souffler dans la fenêtre aléatoire que la config lui donne — un
+   compte à rebours interne, pas une lecture de l'état du jeu.
    ========================================================================== */
 
 const AudioFX = (function () {
-  let opening = null;
-  let footsteps = null;
-  let footstepsActive = false; // état voulu par Game, indépendant du <audio>.paused
+  /* La table. `vol` est le volume de repos de la piste : c'est ici, et nulle
+     part ailleurs, qu'on rééquilibre deux sons l'un par rapport à l'autre
+     (point 2 laissé en suspens au 409). Le tonnerre, lui, module le sien à
+     chaque coup — voir thunder(). */
+  const TRACKS = {
+    opening: { file: "sounds/opening.mp3", vol: 1.0 },
+    thunder: { file: "sounds/thunder.mp3", vol: 0.85 },
+    breath:  { file: "sounds/breath.mp3",  vol: 0.85 },
+  };
+
+  const el = {};            // nom -> <audio>, rempli par init()
+  let thunderTimer = 0;     // setTimeout en attente entre l'éclair et son coup
+  let breathAt = 0;         // date de la prochaine respiration ; 0 = désarmé
 
   function init() {
-    opening = new window.Audio("sounds/opening.mp3");
-    opening.preload = "auto";
-
-    footsteps = new window.Audio("sounds/footsteps.mp3");
-    footsteps.loop = true;
-    footsteps.preload = "auto";
+    for (const name in TRACKS) {
+      const t = TRACKS[name];
+      const a = new window.Audio(t.file);
+      a.preload = "auto";
+      a.volume = t.vol;
+      el[name] = a;
+    }
   }
 
-  /* Jouée une fois, au tout début de la course. */
-  function playOpening() {
-    if (!opening) return;
-    opening.currentTime = 0;
-    opening.play().catch(() => {}); // autoplay peut être bloqué avant tout geste utilisateur ; on ignore
+  /* Joue une piste depuis le début. `vol` est optionnel : sans lui, la piste
+     garde le volume de sa table. L'autoplay peut être refusé par le navigateur
+     tant qu'aucun geste utilisateur n'a eu lieu ; ici Game.start() vient d'un
+     clic, donc le cas ne se présente pas — on ignore le rejet en silence. */
+  function play(name, vol) {
+    const a = el[name];
+    if (!a) return;
+    if (vol !== undefined) a.volume = vol;
+    a.currentTime = 0;
+    a.play().catch(() => {});
   }
 
-  /* Démarre la boucle de pas depuis le début (nouvelle course). */
-  function startFootsteps() {
-    if (!footsteps) return;
-    footsteps.currentTime = 0;
-    footstepsActive = true;
-    footsteps.play().catch(() => {});
+  function stop(name) {
+    const a = el[name];
+    if (!a) return;
+    a.pause();
   }
 
-  /* Appelée à chaque frame par Game pendant STATE.RUNNING : active=true si le
-     joueur est au sol et ne glisse pas, false pendant saut/glissade. Ne fait
-     rien si l'état demandé est déjà l'état courant, pour ne pas relancer le
-     fichier à chaque frame. */
-  function setFootsteps(active) {
-    if (!footsteps || footstepsActive === active) return;
-    footstepsActive = active;
-    if (active) footsteps.play().catch(() => {});
-    else footsteps.pause();
+  /* ------------------------------------------------------------ OUVERTURE */
+  function playOpening() { play("opening"); }
+
+  /* --------------------------------------------------------------- ORAGE --
+     ⚠️ LE TONNERRE NE PART PAS AVEC L'ÉCLAIR — C'EST TOUT L'INTÉRÊT.
+     La lumière arrive tout de suite, le son met une seconde à parcourir trois
+     cents mètres. Un coup de tonnerre simultané au flash ne se lit pas comme un
+     orage : il se lit comme un bruitage collé sur une animation. Le délai EST
+     l'effet.
+
+     Deuxième conséquence, gratuite : le délai dit la distance, donc il dit
+     aussi le volume. Un coup qui tarde vient de loin, il doit être plus sourd.
+     Les deux sont tirés d'un SEUL nombre aléatoire — sans ça on obtiendrait un
+     éclair lointain qui claque à côté de l'oreille une fois sur deux. */
+  function thunder() {
+    const lo = CFG.THUNDER_DELAY_MIN_MS;
+    const hi = CFG.THUNDER_DELAY_MAX_MS;
+    const d = lo + Math.random() * (hi - lo);
+    const far = (d - lo) / Math.max(1, hi - lo);        // 0 = tout près, 1 = au loin
+    const vol = CFG.THUNDER_VOL_NEAR + (CFG.THUNDER_VOL_FAR - CFG.THUNDER_VOL_NEAR) * far;
+
+    /* Un seul coup en attente à la fois. Les éclairs sont espacés d'au moins
+       LIGHTNING_MIN_MS (7 s) et le délai plafonne bien en dessous, donc le cas
+       ne devrait jamais arriver ; le clearTimeout est là pour que, s'il
+       arrivait, le compte à rebours reparte du dernier éclair vu plutôt que de
+       laisser deux minuteurs vivre en parallèle sur un unique <audio>. */
+    if (thunderTimer) clearTimeout(thunderTimer);
+    thunderTimer = setTimeout(function () {
+      thunderTimer = 0;
+      play("thunder", vol);
+    }, d);
   }
 
-  /* Coupe tout : pause, fin de course, écran de fin, sortie offroad. */
-  function stopFootsteps() {
-    if (!footsteps) return;
-    footstepsActive = false;
-    footsteps.pause();
+  /* --------------------------------------------------------- RESPIRATION --
+     « Par moments » : ni en boucle, ni à chaque saut. Le fichier est le DÉBUT
+     de l'enregistrement fourni — quelques souffles courts — et pas les
+     respirations lourdes de la fin, qui sonnaient comme un autre personnage.
+
+     armBreath() pose la première échéance, tickBreath() est appelée à chaque
+     frame par Game et ne fait rien 99 % du temps. Le premier souffle est
+     volontairement retardé (BREATH_FIRST_MS) : on ne s'essouffle pas au
+     troisième pas, et le son d'ouverture a le temps de finir. */
+  function armBreath(now) {
+    breathAt = now + CFG.BREATH_FIRST_MS + Math.random() * CFG.BREATH_SPREAD_MS;
   }
 
-  return { init, playOpening, startFootsteps, setFootsteps, stopFootsteps };
+  function tickBreath(now) {
+    if (!breathAt || now < breathAt) return;
+    play("breath");
+    breathAt = now + CFG.BREATH_MIN_MS
+      + Math.random() * (CFG.BREATH_MAX_MS - CFG.BREATH_MIN_MS);
+  }
+
+  /* ------------------------------------------------------------ SILENCE --
+     Pause, mort, sortie offroad, retour à la ferme : plus un son de course, et
+     surtout PLUS DE COUP DE TONNERRE EN ATTENTE. Sans le clearTimeout, un
+     éclair survenu une demi-seconde avant la mort du joueur ferait tonner
+     l'écran de fin. */
+  function stopAll() {
+    if (thunderTimer) { clearTimeout(thunderTimer); thunderTimer = 0; }
+    breathAt = 0;
+    stop("thunder");
+    stop("breath");
+  }
+
+  return { init, playOpening, thunder, armBreath, tickBreath, stopAll };
 })();
