@@ -7056,3 +7056,33 @@ div.ferme-usage{ margin-bottom:10px; }
 .ferme-run-frame{
   display:block; width:100%; height:100%; border:0;
 }
+
+/* ⚠️ ZIP 411 — L'INVITE DU MONSTRE DU LAC (Pays des Bonbons).
+   Elle est posée EN BAS du cadre, pas au centre : au centre, elle masquerait
+   le monstre dont elle parle, et une question qui cache son sujet oblige le
+   joueur à répondre sans regarder. Le z-index reste sous celui des iframes de
+   mini-jeu (9000) — la question n'a plus rien à faire à l'écran une fois le
+   jeu ouvert. Habillage bonbon, opaque : sur le rose pâle du Pays des Bonbons,
+   un panneau translucide sombre est illisible. */
+.ferme-candy-ask{
+  position:fixed; left:0; right:0; bottom:28px; z-index:8000;
+  display:flex; justify-content:center; pointer-events:none;
+}
+.ferme-candy-ask-box{
+  pointer-events:auto;
+  padding:14px 26px 16px; text-align:center;
+  background:linear-gradient(#fff3f9,#ffdcec);
+  border:3px solid #fff8fc; border-radius:20px;
+  box-shadow:0 6px 0 rgba(190,90,140,.35), 0 10px 26px rgba(120,40,80,.3);
+  color:#8a2f57; font-family:inherit;
+}
+.ferme-candy-ask-title{ font-size:19px; font-weight:bold; }
+.ferme-candy-ask-sub{ font-size:13px; opacity:.75; margin-top:3px; }
+.ferme-candy-ask-row{ display:flex; gap:12px; justify-content:center; margin-top:12px; }
+.ferme-candy-ask-row button{
+  font-family:inherit; font-size:16px; font-weight:bold; cursor:pointer;
+  padding:8px 26px; border-radius:14px; border:3px solid #fff8fc; color:#fff6fa;
+}
+.ferme-candy-yes{ background:linear-gradient(#ff7aa8,#e0335c); box-shadow:0 4px 0 #a8243f; }
+.ferme-candy-no{ background:linear-gradient(#c9b8c6,#9c8a99); box-shadow:0 4px 0 #6f6070; }
+.ferme-candy-ask-row button:active{ transform:translateY(3px); box-shadow:none; }

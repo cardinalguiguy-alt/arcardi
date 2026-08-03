@@ -1,0 +1,173 @@
+/* =============================================================================
+   style.css — L'habillage de la descente.
+   -----------------------------------------------------------------------------
+   ⚠️ LE HUD EST EN BONBON, PAS EN VERRE FUMÉ. Le défi de fuite a un HUD sombre
+   et translucide, parce qu'il se joue dans un monde sombre. Repris tel quel
+   ici, il ferait deux taches grises sur un paysage pastel — et une interface
+   qui jure avec son jeu se remarque avant le jeu.
+
+   Les plaques sont donc opaques, arrondies, bordées de blanc crème, avec une
+   ombre portée douce : des pastilles de sucre posées sur l'image. C'est ce que
+   fait la capture de référence, et c'est ce qui marche sur fond clair —
+   contrairement au translucide, qui devient illisible dès que le ciel passe
+   derrière.
+   ========================================================================== */
+
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0; height: 100%; overflow: hidden;
+  background: #ffe9f2;
+  font-family: "Trebuchet MS", "Segoe UI", system-ui, sans-serif;
+  color: #5a2a44;
+  user-select: none;
+  cursor: crosshair;   /* la souris pilote : le curseur doit se voir sur la neige */
+}
+#gl { display: block; width: 100%; height: 100%; }
+
+/* ============================================================== LE HUD ==== */
+.hud {
+  position: fixed; inset: 0; pointer-events: none;
+  opacity: 0; transition: opacity 0.25s;
+}
+.hud.visible { opacity: 1; }
+.corner { position: absolute; display: flex; flex-direction: column; gap: 8px; }
+.tl { top: 18px; left: 18px; align-items: flex-start; }
+.tr { top: 18px; right: 18px; align-items: flex-end; }
+.bl { bottom: 18px; left: 18px; }
+.br { bottom: 18px; right: 18px; }
+
+/* La plaque : une pastille de bonbon. Le liseré clair intérieur (box-shadow
+   inset) est ce qui lui donne son relief de sucre — sans lui, c'est un
+   rectangle rouge. */
+.plate {
+  display: flex; align-items: baseline; gap: 10px;
+  padding: 7px 16px;
+  background: linear-gradient(#e0455f, #b8283f);
+  border: 3px solid #fff4f8;
+  border-radius: 16px;
+  box-shadow: 0 4px 0 rgba(120, 20, 45, 0.35), 0 6px 14px rgba(90, 20, 40, 0.25),
+              inset 0 2px 0 rgba(255, 255, 255, 0.35);
+  color: #fff6fa;
+  text-shadow: 0 2px 0 rgba(120, 20, 45, 0.5);
+}
+.plate .label { font-size: 15px; letter-spacing: 0.06em; opacity: 0.92; text-transform: uppercase; }
+.plate .val { font-size: 27px; font-weight: bold; font-variant-numeric: tabular-nums; }
+.plate.small { padding: 5px 12px; }
+.plate.small .val { font-size: 19px; }
+.plate.speed .val { font-size: 40px; line-height: 1; }
+/* Le chrono en chiffres tabulaires : sans ça, les millisecondes font danser
+   la largeur de la plaque dix fois par seconde. */
+.plate.time { padding: 5px 14px; background: linear-gradient(#c8324c, #8e1e33); }
+.plate.time .val { font-size: 24px; font-variant-numeric: tabular-nums; }
+
+/* La gaufrette du palier, en bas à gauche — comme la capture de référence. */
+.wafer {
+  display: flex; align-items: baseline; gap: 9px;
+  padding: 7px 18px;
+  background: linear-gradient(#f0d9a8, #d9b878);
+  border: 3px solid #fff8ec;
+  border-radius: 12px;
+  box-shadow: 0 4px 0 rgba(150, 110, 50, 0.35), 0 6px 14px rgba(120, 90, 40, 0.2);
+  color: #6a4416;
+  text-transform: uppercase; letter-spacing: 0.08em;
+}
+.wafer .val { font-size: 24px; font-weight: bold; }
+
+/* La charge du turbo : une barre au bas du cadre, centrée sous la luge. Elle
+   est là et pas ailleurs parce que c'est là que le regard est déjà. */
+.drift-bar {
+  position: absolute; left: 50%; bottom: 26px; transform: translateX(-50%);
+  width: 220px; height: 12px;
+  background: rgba(255, 255, 255, 0.5);
+  border: 3px solid #fff4f8; border-radius: 9px;
+  box-shadow: 0 3px 10px rgba(120, 40, 80, 0.25);
+  opacity: 0; transition: opacity 0.18s;
+  overflow: hidden;
+}
+.drift-bar.visible { opacity: 1; }
+#driftFill {
+  height: 100%; width: 0;
+  background: linear-gradient(90deg, #ffd166, #ff7aa8);
+  transition: width 0.08s linear;
+}
+#driftFill.full {
+  background: linear-gradient(90deg, #fff6c2, #7ee0c9, #fff6c2);
+  animation: driftPulse 0.35s infinite alternate;
+}
+@keyframes driftPulse { from { filter: brightness(1); } to { filter: brightness(1.5); } }
+
+.boost-tag {
+  position: absolute; left: 50%; bottom: 48px; transform: translateX(-50%);
+  font-size: 26px; font-weight: bold; letter-spacing: 0.16em;
+  color: #fff9d0; text-shadow: 0 0 12px #ff9ad4, 0 3px 0 #d43f6a;
+  opacity: 0; transition: opacity 0.12s;
+}
+.boost-tag.visible { opacity: 1; animation: boostPop 0.3s infinite alternate; }
+@keyframes boostPop { from { transform: translateX(-50%) scale(1); } to { transform: translateX(-50%) scale(1.12); } }
+
+/* ========================================================== LES PANNEAUX == */
+.layer {
+  position: fixed; inset: 0;
+  display: none; flex-direction: column; align-items: center; justify-content: center;
+  gap: 14px; text-align: center; padding: 24px;
+}
+.layer.visible { display: flex; }
+/* Un voile rose très pâle plutôt qu'un noir : on doit continuer à VOIR le
+   paysage derrière l'écran-titre, c'est lui qui donne envie de jouer. */
+.panel { background: rgba(255, 236, 245, 0.62); backdrop-filter: blur(3px); }
+.panel h1 {
+  margin: 0; font-size: 46px; letter-spacing: 0.02em;
+  color: #d83f6e;
+  text-shadow: 0 3px 0 #fff6fa, 0 6px 16px rgba(200, 60, 110, 0.3);
+}
+.panel .sub { margin: 0; font-size: 18px; max-width: 640px; color: #7a3355; }
+.panel .hint { margin: 0; font-size: 14px; color: #96536f; max-width: 560px; }
+.panel .hint.farm { color: #b07090; font-style: italic; }
+.panel button {
+  pointer-events: auto;
+  margin-top: 6px; padding: 13px 40px;
+  font-family: inherit; font-size: 22px; font-weight: bold;
+  color: #fff6fa; cursor: pointer;
+  background: linear-gradient(#ff6f96, #e0335c);
+  border: 3px solid #fff4f8; border-radius: 18px;
+  box-shadow: 0 5px 0 #a8243f, 0 8px 18px rgba(160, 40, 80, 0.3);
+  transition: transform 0.08s, box-shadow 0.08s;
+}
+.panel button:hover { transform: translateY(-2px); box-shadow: 0 7px 0 #a8243f, 0 10px 22px rgba(160, 40, 80, 0.34); }
+.panel button:active { transform: translateY(3px); box-shadow: 0 2px 0 #a8243f; }
+.panel button:disabled { opacity: 0.45; cursor: default; transform: none; }
+.panel button.ghost {
+  background: rgba(255, 255, 255, 0.7); color: #b03a63;
+  box-shadow: 0 4px 0 rgba(180, 120, 145, 0.5);
+}
+.controls {
+  display: flex; flex-wrap: wrap; gap: 10px; justify-content: center;
+  margin-top: 8px; font-size: 14px;
+}
+.controls div {
+  padding: 6px 14px; border-radius: 12px;
+  background: rgba(255, 255, 255, 0.78); color: #8a3a60;
+  border: 2px solid #ffd9e7;
+}
+.results {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px 34px;
+  margin: 6px 0; font-size: 17px; color: #7a3355;
+}
+.results div { display: flex; justify-content: space-between; gap: 18px; min-width: 200px; }
+.results b { color: #d83f6e; font-variant-numeric: tabular-nums; }
+.newbest {
+  display: none; padding: 6px 20px; border-radius: 14px;
+  background: linear-gradient(#ffe9a8, #ffc95e);
+  color: #7a4a10; font-weight: bold; letter-spacing: 0.08em;
+  border: 3px solid #fff8e8;
+}
+.newbest.visible { display: block; }
+.error { display: none; color: #a8243f; font-size: 15px; max-width: 520px; }
+.error.visible { display: block; }
+
+@media (max-width: 720px) {
+  .panel h1 { font-size: 32px; }
+  .plate .val { font-size: 21px; }
+  .plate.speed .val { font-size: 30px; }
+  .corner { gap: 6px; }
+}

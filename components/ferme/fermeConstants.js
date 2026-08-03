@@ -2778,7 +2778,13 @@ export const PASSAGE_FORCE_KEY = null;
    sera terne, jamais cassé. */
 export const PASSAGE_GATE_DEST = {
   evil: "run",      // défi de fuite (zip 372) — sa seule terre depuis le 386
-  candy: "candy",   // Le Gourmandin (zip 385), désormais au bout du pont arc-en-ciel
+  /* ⚠️ ZIP 411 — LE PONT ARC-EN-CIEL A CHANGÉ DE DESTINATION.
+     Il menait au Gourmandin depuis le 386 ; il mène désormais à LA GRANDE
+     DESCENTE (public/candyluge/). Le Gourmandin, lui, n'a pas disparu : il a
+     déménagé au milieu du lac (voir CANDY_MONSTER_APPROACH). Demande de
+     Guillaume, et le déplacement est le chantier — le mini-jeu lui-même n'est
+     pas touché d'une ligne. */
+  candy: "luge",    // LA GRANDE DESCENTE (zip 411), au bout du pont arc-en-ciel
   maze: "maze",     // LE LABYRINTHE (zip 393), au bout du pont de haies
   // crystal / meadow : pont construit et habillé, destination à venir.
 };
@@ -2937,7 +2943,51 @@ export const CANDY_GAME_PET_ID = "candycat";
    Conséquence : plus d'invite E, plus de dégagement de cases à la génération
    (le tablier du pont n'a jamais d'objets), et le mini-jeu n'a plus qu'UNE
    seule porte d'entrée au lieu de deux. */
-export const CANDY_MONSTER_SPAWN = { x: RUN_GATE.x + 2, y: RUN_GATE.y };
+/* ⚠️ ZIP 411 — LE GOURMANDIN DÉMÉNAGE UNE SECONDE FOIS : AU MILIEU DU LAC.
+   Demande de Guillaume : « mets un monstre similaire au monstre du mini jeu au
+   milieu du lac du monde candy et quand on s'approche du lac central un message
+   "donne à manger au gentil monstre Candy" oui/non s'affiche ».
+
+   TROIS CONSÉQUENCES, et la troisième est la plus importante :
+
+     1. SA POSITION N'EST PLUS UNE CONSTANTE. Le lac est tiré au sort à la
+        génération du monde ; le monstre est donc posé sur `ew.lake`, exporté
+        pour l'occasion par generatePassageWorld. Une constante en dur aurait
+        planté le monstre dans l'herbe quatre semaines sur cinq.
+
+     2. ON NE MARCHE PLUS SUR RIEN. Le déclenchement du 386 était une CASE : on
+        posait le pied dessus, le jeu s'ouvrait. Ici la case est de l'eau, et
+        l'eau ne se marche pas. C'est donc une APPROCHE (rayon ci-dessous) qui
+        pose une question — et une question se refuse, ce que la case ne
+        permettait pas.
+
+     3. ELLE SE RÉARME EN S'ÉLOIGNANT. Sans ce verrou (le même que
+        runGateArmedRef pour la porte du pont), répondre « non » rouvrirait la
+        question à l'image suivante, puisqu'on est toujours près du lac. Le
+        joueur serait prisonnier de sa propre réponse. */
+export const CANDY_MONSTER_APPROACH = 5.5;   // distance de déclenchement, en cases
+export const CANDY_MONSTER_REARM = 8.0;      // ... et distance de réarmement (toujours > la précédente)
+
+/* --- Zip 411 : LA GRANDE DESCENTE (public/candyluge/) --------------------
+   Quatrième mini-jeu, au bout du pont arc-en-ciel, à la place du Gourmandin.
+   Descente en luge sur une piste de barbe à papa : on évite des gourmands
+   mobiles aux flèches, on ramasse des bonbons, on dérape.
+
+   ⚠️ IL SE COMPORTE COMME LE GOURMANDIN, PAS COMME LE DÉFI DE FUITE : aucune
+   blessure, aucun report de position, aucune cinématique. Le Pays des Bonbons
+   est un monde PAISIBLE (décision du zip 235 : seul « evil » garde des
+   monstres), et lui coller une sanction de sortie en ferait un second monde
+   sombre. On ouvre, on descend, on revient là où l'on était.
+
+   Les plafonds ont le même rôle que RUN_MAX_* et LAB_MAX_* : le mini-jeu se
+   déroule ENTIÈREMENT côté client, l'hôte persiste ce qu'on lui dit et ne peut
+   donc pas le croire sur parole. Ils n'empêchent pas la triche, ils empêchent
+   qu'un bogue ou un message forgé n'injecte une fortune dans une sauvegarde
+   partagée et durable. */
+export const LUGE_GOLD_PER_CANDY = 6;      // or par bonbon ramassé
+export const LUGE_FINISH_GOLD = 450;       // prime d'arrivée, UNE FOIS PAR VENUE au Pays des Bonbons
+export const LUGE_MAX_CANDIES = 200;
+export const LUGE_MAX_SCORE = 60000;
 
 /* --- Zip 386 : LES LICORNES DU PAYS DES BONBONS --------------------------
    Demande Guillaume : « white unicorns with rainbow sparkly hair and tail

@@ -989,6 +989,10 @@ export function normalizeFarmer(f) {
   if (typeof f.inv.labBest !== "number") f.inv.labBest = 0;
   if (typeof f.inv.labGoldBlock !== "number") f.inv.labGoldBlock = -1;
   if (typeof f.inv.candyLevel !== "number") f.inv.candyLevel = 0;
+  // Zip 411 : la descente. `lugeBlock` = créneau où la prime d'arrivée a déjà
+  // été touchée ; `lugeBest` = meilleur temps, en ms (0 = jamais fini).
+  if (typeof f.inv.lugeRuns !== "number") f.inv.lugeRuns = 0;
+  if (typeof f.inv.lugeBest !== "number") f.inv.lugeBest = 0;
   if (typeof f.inv.candyGoldBlock !== "number") f.inv.candyGoldBlock = -1;
   if (typeof f.inv.candyCatDone !== "boolean") f.inv.candyCatDone = false;
   if (typeof f.inv.food !== "number") f.inv.food = 0;
@@ -4359,7 +4363,16 @@ export function generatePassageWorld(worldIdx) {
     }
   }
 
-  return { w: W, h: H, ground, objects, objHp, depth, monsters, pickups, spec, maze, worldIdx };
+  /* ⚠️ ZIP 411 — LE LAC EST DÉSORMAIS EXPORTÉ, et ce n'est pas de la commodité.
+     Le Gourmandin déménage au MILIEU du lac du Pays des Bonbons (demande
+     Guillaume), or ce lac est tiré au sort à la génération : ses coordonnées
+     ne vivaient que dans deux variables locales de cette fonction. Sans elles,
+     FermeGame n'avait aucun moyen de savoir où poser le monstre — il aurait
+     fallu redevinier le tirage ailleurs, c'est-à-dire écrire deux fois la même
+     chose et les voir diverger au premier réglage (leçon du zip 387). */
+  const lake = { x: lakeCx, y: lakeCy, r: 6 };
+
+  return { w: W, h: H, ground, objects, objHp, depth, monsters, pickups, spec, maze, worldIdx, lake };
 }
 
 // Ramassage d'une breloque : gain d'or + potentielle capture d'animal
@@ -4456,6 +4469,40 @@ export function resolveLabRun(s, f, shards, score, won, block) {
 
    Renvoie ce qui a été réellement accordé, pour que l'appelant sache quoi
    diffuser — et pas ce que le client espérait. */
+/* ===========================================================================
+   ZIP 411 — UNE DESCENTE TERMINÉE
+   ---------------------------------------------------------------------------
+   Même contrat de confiance que "candyLevel" et "runFailed" : le mini-jeu s'est
+   déroulé ENTIÈREMENT côté client, l'hôte ne peut pas le rejouer. Il ne croit
+   donc pas le client sur parole, il BORNE :
+
+     - les bonbons sont plafonnés (LUGE_MAX_CANDIES) et payés à l'unité ;
+     - la PRIME D'ARRIVÉE ne tombe qu'une fois par CRÉNEAU de rotation, et le
+       créneau vient de l'état de la ferme, jamais du message.
+
+   ⚠️ POURQUOI DEUX RÉCOMPENSES DE NATURES DIFFÉRENTES. Les bonbons sont
+   rejouables sans limite : c'est le revenu du joueur qui aime la descente, et
+   il est petit exprès. La prime, elle, est grosse et unique par venue — c'est
+   elle qui donne une raison de revenir au Pays des Bonbons plutôt qu'une
+   raison d'y rester. Le même arbitrage exactement qu'au zip 385 pour l'or du
+   niveau 10 du Gourmandin, et pour la même raison : un bouton à or infini
+   dévalue tout le reste de l'économie (un moulin coûte 30 000). */
+export function resolveLugeFinish(s, f, candies, block) {
+  const n = Math.max(0, Math.min(C.LUGE_MAX_CANDIES, candies | 0));
+  const res = { candies: n, gold: 0, bonus: false };
+  let gold = n * C.LUGE_GOLD_PER_CANDY;
+  if ((f.inv.lugeBlock === undefined ? -1 : f.inv.lugeBlock) !== block) {
+    f.inv.lugeBlock = block;
+    gold += C.LUGE_FINISH_GOLD;
+    res.bonus = true;
+  }
+  f.inv.lugeRuns = (f.inv.lugeRuns | 0) + 1;
+  s.money = (s.money || 0) + gold;
+  s.totalEarned = (s.totalEarned || 0) + gold;
+  res.gold = gold;
+  return res;
+}
+
 export function resolveCandyLevel(s, f, level, block) {
   const lv = Math.max(1, Math.min(C.CANDY_GAME_LEVELS, level | 0));
   const res = { ok: false, level: lv, gold: 0, pet: null, bagFull: false };

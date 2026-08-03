@@ -381,6 +381,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // voit pas les états React de son itération).
   const [candyGame, setCandyGame] = useState(false);
   const candyGameRef = useRef(false);
+  /* Zip 411 — LA GRANDE DESCENTE et L'INVITE DU MONSTRE DU LAC.
+     `candyAsk` porte la question oui/non ; `candyArmedRef` est le verrou qui
+     empêche la question de se reposer à l'image suivante quand on a répondu
+     non (on est toujours près du lac). Il se réarme en s'éloignant, exactement
+     comme runGateArmedRef pour la porte du pont. */
+  const [lugeGame, setLugeGame] = useState(false);
+  const lugeGameRef = useRef(false);
+  const [candyAsk, setCandyAsk] = useState(false);
+  const candyAskRef = useRef(false);
+  const candyArmedRef = useRef(true);
   // Zip 393 : LE LABYRINTHE (au bout du pont de haies). Même couple état/ref
   // que les deux autres mini-jeux, et pour la même raison : l'état pilote le
   // rendu React de l'iframe, la ref est lue depuis la boucle de jeu (qui ne
@@ -3615,6 +3625,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       out.chat = won
         ? { from: "\u{1F3DB}\uFE0F", msg: L.labWonChat(f.name, r.gold) }
         : { from: "\u{1F56F}\uFE0F", msg: L.labLostChat(f.name, r.shards) };
+      return true;
+    }
+    if (req.kind === "lugeFinish") {
+      const r = E.resolveLugeFinish(s, f, req.candies | 0, req.block | 0);
+      out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv, pets: f.pets };
+      dirtyRef.current = true;
+      out.state = shareState();
+      out.chat = { from: "\u{1F6F7}", msg: L.lugeFinishChat(f.name, r.gold) };
       return true;
     }
     if (req.kind === "candyLevel") {
@@ -9418,6 +9436,142 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     keysRef.current = {};
   }
 
+  /* ⚠️ ZIP 411 — ON N'OUVRE PLUS LE GOURMANDIN SÈCHEMENT, ON Y ENTRE PAR UN
+     FONDU ENCHAÎNÉ. Demande de Guillaume : « on quitte le monde candy avec un
+     fondu enchaîné (celui utilisé pour téléportation) ».
+
+     C'est le fondu de `zoneTransRef`, celui du passage sombre et du train de
+     Valley Town, réutilisé TEL QUEL avec une destination de plus. On ne
+     réécrit pas une machine à fondu : celle-ci sait déjà couper les entrées,
+     agir à mi-fondu et se refermer toute seule, et elle est la seule à savoir
+     le faire de la même façon que partout ailleurs dans le jeu. Un second
+     fondu maison aurait duré 40 ms de plus ou 40 de moins, et ça se voit.
+
+     La différence avec les autres destinations : celle-ci ne change PAS de
+     zone. À mi-fondu on ouvre l'iframe, c'est tout — le fermier reste où il
+     est, et il le retrouvera en sortant. */
+  function openCandyGameFaded() {
+    if (candyGameRef.current || lugeGameRef.current || runChallengeRef.current
+      || zoneTransRef.current.active) return;
+    const m = meRef.current; if (!m) return;
+    m.moving = false;
+    keysRef.current = {};
+    zoneTransRef.current = { active: true, t0: performance.now(), toEvil: false, swapped: false, dest: "candyGame" };
+  }
+
+  /* ==================================================================
+     ZIP 411 — LA GRANDE DESCENTE (public/candyluge/)
+     ------------------------------------------------------------------
+     Même architecture que les zips 372, 385 et 393, et pour les mêmes
+     raisons (voir public/templerun/js/bridge.js, qui fait autorité).
+
+     ⚠️ ELLE SE COMPORTE COMME LE GOURMANDIN, PAS COMME LE DÉFI DE FUITE :
+     aucune blessure, aucun report de position, aucune cinématique. Le
+     Pays des Bonbons est un monde PAISIBLE (décision du zip 235) et lui
+     coller une sanction de sortie en ferait un second monde sombre.
+     ================================================================== */
+  function openLugeGame() {
+    if (lugeGameRef.current || candyGameRef.current || runChallengeRef.current
+      || zoneTransRef.current.active) return;
+    const m = meRef.current; if (!m) return;
+    m.moving = false;
+    keysRef.current = {};
+    lugeGameRef.current = true;
+    setLugeGame(true);
+    sendPos();
+    broadcastChat("\u{1F6F7}", L.lugeEnteredChat(m.name));
+  }
+
+  function closeLugeGame() {
+    lugeGameRef.current = false;
+    setLugeGame(false);
+    keysRef.current = {};
+  }
+
+  useEffect(() => {
+    if (!lugeGame) return;
+    function onMsg(e) {
+      if (e.origin !== window.location.origin) return;
+      const d = e.data;
+      if (!d || typeof d !== "object") return;
+      if (d.type === "vf-luge-ready") {
+        try {
+          e.source.postMessage({
+            type: "vf-luge-init", lang,
+            best: (invRef.current && invRef.current.lugeBest) || 0,
+            /* La MÊME source de tenue que le défi de fuite et le labyrinthe :
+               charPalette(), qui vit à côté de drawCharFrame dans fermeArt.js.
+               Le lugeur ne peut donc pas dériver du sprite 2D sans que les
+               deux dérivent ensemble. On lit meRef et non l'état React :
+               l'écouteur est posé une fois pour la durée de la descente, une
+               valeur capturée au montage serait figée. */
+            skin: (function () { const mm = meRef.current; return charPalette(mm && mm.gender, mm && mm.outfit); })(),
+          }, window.location.origin);
+        } catch (err) {}
+      } else if (d.type === "vf-luge-finish") {
+        /* ⚠️ LES BORNES SONT APPLIQUÉES ICI, AVANT L'ENVOI À L'HÔTE. Le
+           mini-jeu tourne entièrement côté client : l'hôte persiste ce qu'on
+           lui dit et ne peut pas le vérifier. Ces plafonds n'empêchent pas la
+           triche, ils empêchent qu'un bogue n'injecte une fortune dans une
+           sauvegarde partagée et durable. */
+        const day = sharedRef.current.day || 1;
+        sendReq({
+          kind: "lugeFinish",
+          candies: Math.max(0, Math.min(C.LUGE_MAX_CANDIES, d.candies | 0)),
+          score: Math.max(0, Math.min(C.LUGE_MAX_SCORE, d.score | 0)),
+          timeMs: Math.max(0, d.timeMs | 0),
+          block: E.passageBlockOf(day),
+        });
+      } else if (d.type === "vf-luge-over") {
+        // Une descente ratée ne rapporte rien : c'est la contrepartie de
+        // l'absence totale de sanction (voir l'en-tête).
+        closeLugeGame();
+      } else if (d.type === "vf-luge-exit") {
+        closeLugeGame();
+      }
+    }
+    window.addEventListener("message", onMsg);
+    return () => window.removeEventListener("message", onMsg);
+  }, [lugeGame, lang]);
+
+  /* ------------------------------------------------------------------
+     L'APPROCHE DU MONSTRE DU LAC (zip 411).
+     ------------------------------------------------------------------
+     ⚠️ CE N'EST PLUS UNE CASE, C'EST UN RAYON — et il a fallu changer de
+     mécanisme, pas seulement de coordonnées. Le déclencheur du 386 était une
+     dalle sur laquelle on marchait ; le monstre est maintenant au milieu de
+     l'eau, et l'eau ne se marche pas. Une approche, en revanche, pose une
+     QUESTION — et une question se refuse, ce que la dalle ne permettait pas.
+
+     Le verrou `candyArmedRef` est indispensable et se comprend en une phrase :
+     sans lui, répondre « non » rouvrirait la question à l'image suivante,
+     puisqu'on est toujours à côté du lac. Il ne se réarme qu'après s'être
+     éloigné de CANDY_MONSTER_REARM — strictement plus loin que le seuil de
+     déclenchement, sinon on obtient un clignotement à la frontière.
+     ------------------------------------------------------------------ */
+  function checkCandyMonster() {
+    const m = meRef.current;
+    if (!m || m.zone !== "evil") return;
+    if (candyGameRef.current || lugeGameRef.current || runChallengeRef.current
+      || labGameRef.current || zoneTransRef.current.active) return;
+    const ew = evilWorldRef.current;
+    if (!ew || !ew.lake || !ew.spec || ew.spec.key !== "candy") return;
+    const d = Math.hypot(m.x - ew.lake.x, m.y - ew.lake.y);
+    if (d > C.CANDY_MONSTER_REARM) { candyArmedRef.current = true; if (candyAskRef.current) { candyAskRef.current = false; setCandyAsk(false); } return; }
+    if (d <= C.CANDY_MONSTER_APPROACH && candyArmedRef.current && !candyAskRef.current) {
+      candyArmedRef.current = false;
+      candyAskRef.current = true;
+      setCandyAsk(true);
+    }
+  }
+  function candyAskYes() {
+    candyAskRef.current = false; setCandyAsk(false);
+    openCandyGameFaded();
+  }
+  function candyAskNo() {
+    candyAskRef.current = false; setCandyAsk(false);
+  }
+
   /* Un niveau vient d'être terminé. Le mini-jeu l'annonce DÈS la victoire
      (et non à la fermeture de l'écran de fin, contrairement à "vf-run-over") :
      un score se contemple, une progression se garde. Voir l'en-tête de
@@ -9778,6 +9932,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         m.moving = false;
         sendPos();
         pushToast(L.devTeleportToast(L.devTeleportName(dk)));
+      } else if (zt.dest === "candyGame") {
+        /* ⚠️ ZIP 411 — LA SEULE DESTINATION QUI NE CHANGE PAS DE ZONE.
+           À mi-fondu, on n'emmène le fermier nulle part : on ouvre l'iframe du
+           Gourmandin par-dessus. Il reste exactement où il était, au bord du
+           lac, et il l'y retrouvera en sortant. C'est ce qui permet de
+           réutiliser le fondu de téléportation — demandé par Guillaume — sans
+           inventer un déplacement qui n'a pas lieu. */
+        openCandyGame();
       } else if (zt.dest === "town") {
         if (!townWorldRef.current) townWorldRef.current = getTownWorldCached(E);
         m.zone = "town";
@@ -9854,7 +10016,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (runGateArmedRef.current) {
           runGateArmedRef.current = false;
           const dest = C.PASSAGE_GATE_DEST[(ew.spec && ew.spec.key) || "evil"];
-          if (dest === "candy") openCandyGame();
+          if (dest === "luge") openLugeGame();      // zip 411 : LA GRANDE DESCENTE
+          else if (dest === "candy") openCandyGame();
           else if (dest === "maze") openLabGame();   // zip 393
           else if (dest === "run") startRunAmbush();
           else pushToast(L.bridgeNoDest);
@@ -10117,6 +10280,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         }
       }
       checkWalkOverPassage();
+      checkCandyMonster();      // zip 411 : l'approche du monstre du lac
       if (m.zone === "evil") {
         updateRunAmbush(dt); // zip 375 : embuscade locale de la jetée
         drawEvilFrame(now);
@@ -12140,11 +12304,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           ctx.restore();
         }
       }
-      /* Zip 385 — LE GOURMANDIN. Point d'intérêt FIXE du Pays des Bonbons
-         (C.CANDY_MONSTER_SPAWN), sur le modèle exact du chaudron-artéfact :
-         ce n'est PAS un objet de ew.objects, donc il ne peut pas être abattu,
-         déplacé ni bloqué par la génération (dont les cases sont dégagées à
-         la génération, voir generatePassageWorld).
+      /* Zip 385, déplacé au 411 — LE GOURMANDIN. Point d'intérêt du Pays des
+         Bonbons, posé désormais au MILIEU DU LAC (`ew.lake`, exporté par
+         generatePassageWorld depuis le 411) et non plus au bout du pont.
+         Ce n'est PAS un objet de ew.objects : il ne peut donc être ni abattu,
+         ni déplacé, ni bloqué par la génération.
 
          Dessiné dans le calque `draws` trié par profondeur, comme tout ce qui
          dépasse d'une case : posé dans la boucle de sol, un joueur passant
@@ -12177,20 +12341,41 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             ctx.restore();
           } });
         }
-        // Le Gourmandin, désormais AU BOUT DU PONT (zip 386). Il n'est plus
-        // un objet de la carte ni une invite E : il marque visuellement la
-        // case de porte, deux cases à l'ouest de lui.
-        const gx = C.CANDY_MONSTER_SPAWN.x, gy = C.CANDY_MONSTER_SPAWN.y;
-        if (gx >= x0 - 2 && gx <= x1 + 2 && gy >= y0 - 2 && gy <= y1 + 2) {
-          draws.push({ y: (gy + 1) * T, fn: () => {
-            const pulse = 0.35 + Math.sin(now / 520) * 0.18;
-            ctx.save();
-            ctx.shadowColor = `rgba(255, 120, 190, ${pulse})`; ctx.shadowBlur = 14;
-            // Le sprite fait 30 px de haut pour une case de 16 : on l'ancre
-            // par le BAS, comme les arbres, sinon il flotte au-dessus du sol.
-            ctx.drawImage(sprites.candyMonster, gx * T - 7, (gy + 1) * T - 30);
-            ctx.restore();
-          } });
+        /* ⚠️ ZIP 411 — LE GOURMANDIN A QUITTÉ LE PONT POUR LE MILIEU DU LAC.
+           Sa position n'est plus une constante : elle vient de `ew.lake`,
+           exporté depuis le 411 par generatePassageWorld. Une constante en dur
+           l'aurait planté dans l'herbe quatre semaines sur cinq, le lac étant
+           tiré au sort à chaque rotation.
+
+           IL FLOTTE, et ça se voit : une oscillation verticale lente, plus
+           une ondulation claire dessinée à ses pieds. Sans elles, un sprite
+           posé sur de l'eau se lit comme un sprite mal placé — c'est la même
+           raison qui a fait donner une cheminée aux maisons de pain d'épices
+           du 411 : ce sont les petits signes qui disent « c'est voulu ». */
+        if (ew.lake) {
+          const gx = ew.lake.x, gy = ew.lake.y;
+          if (gx >= x0 - 3 && gx <= x1 + 3 && gy >= y0 - 3 && gy <= y1 + 3) {
+            draws.push({ y: (gy + 1) * T, fn: () => {
+              const bob = Math.sin(now / 900) * 2.2;
+              const pulse = 0.35 + Math.sin(now / 520) * 0.18;
+              ctx.save();
+              // Les ondulations : deux ellipses claires qui s'écartent.
+              for (let k = 0; k < 2; k++) {
+                const ph = ((now / 2200 + k / 2) % 1);
+                ctx.strokeStyle = `rgba(255, 245, 252, ${0.5 * (1 - ph)})`;
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.ellipse(gx * T + T / 2, (gy + 1) * T - 3,
+                  6 + ph * 16, 3 + ph * 7, 0, 0, Math.PI * 2);
+                ctx.stroke();
+              }
+              ctx.shadowColor = `rgba(255, 120, 190, ${pulse})`; ctx.shadowBlur = 16;
+              // Le sprite fait 30 px de haut pour une case de 16 : on l'ancre
+              // par le BAS, comme les arbres, sinon il flotte au-dessus du sol.
+              ctx.drawImage(sprites.candyMonster, gx * T - 7, (gy + 1) * T - 30 + bob);
+              ctx.restore();
+            } });
+          }
         }
       }
       // Zip 235: maze center prize (only in "maze" world). Drawn as a small
@@ -15206,6 +15391,24 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         </div>
       )}
 
+      {/* ⚠️ ZIP 411 — LA GRANDE DESCENTE. Page autonome (public/candyluge/),
+          au bout du pont arc-en-ciel, à la place du Gourmandin. On réutilise
+          TELLES QUELLES les deux classes du défi de fuite
+          (.ferme-run-overlay / .ferme-run-frame) : elles ne disent rien du
+          défi, seulement « iframe plein écran par-dessus le jeu », et en créer
+          un jumeau dans globals.css aurait donné deux styles à maintenir
+          ensemble pour zéro différence. */}
+      {lugeGame && (
+        <div className="ferme-run-overlay">
+          <iframe
+            className="ferme-run-frame"
+            src="/candyluge/index.html"
+            title="Valley Farm — The Great Descent"
+            onLoad={e => { try { e.currentTarget.contentWindow.focus(); } catch (err) {} }}
+          />
+        </div>
+      )}
+
       {/* Zip 393 : LE LABYRINTHE. Page autonome (public/labyrinth/) affichée
           par-dessus la ferme, qui continue de tourner derrière — indispensable
           si c'est l'hôte qui joue. On réutilise TELLES QUELLES les deux classes
@@ -16893,6 +17096,28 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       {barnMini && <BarnMinigame level={barnMini.level} L={L} onWin={barnWon} onFail={barnLost} />}
       {wolfBite && <WolfBiteMinigame L={L} onWin={wolfBiteWon} onFail={wolfBiteLost} />}
       {evilBite && <EvilBiteMinigame L={L} onWin={evilBiteWon} onFail={evilBiteLost} />}
+
+      {/* ⚠️ ZIP 411 — L'INVITE DU MONSTRE DU LAC.
+          Demande de Guillaume, mot pour mot : « quand on s'approche du lac
+          central un message "donne à manger au gentil monstre Candy" oui/non
+          s'affiche. si on met oui ça ouvre le mini jeu ».
+
+          C'est une QUESTION, pas une notification : elle a donc deux boutons,
+          et « Non » est un vrai choix qui ne rouvre rien (voir le verrou
+          candyArmedRef). Elle est posée en bas du cadre et non au centre — au
+          centre, elle masquerait le monstre dont elle parle. */}
+      {candyAsk && (
+        <div className="ferme-candy-ask">
+          <div className="ferme-candy-ask-box">
+            <div className="ferme-candy-ask-title">{L.candyMonsterAsk}</div>
+            <div className="ferme-candy-ask-sub">{L.candyMonsterSub}</div>
+            <div className="ferme-candy-ask-row">
+              <button className="ferme-candy-yes" onClick={candyAskYes}>{L.yes}</button>
+              <button className="ferme-candy-no" onClick={candyAskNo}>{L.no}</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ================================================================
           ZIP 392 — MENU DÉVELOPPEUR (Cmd/Ctrl+Shift+X).

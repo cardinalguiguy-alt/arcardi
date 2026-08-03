@@ -973,7 +973,22 @@ export const FERME_STR = {
     // Ces clés-ci ne couvrent que ce que la FERME affiche autour du défi.
     runEnteredChat: (name) => `🏃 ${name} franchit la porte et tente la fuite !`,
     // Zip 385 — Le Gourmandin (Pays des Bonbons).
-    candyEnteredChat: (name) => `🍭 ${name} traverse le pont arc-en-ciel et s'assoit devant le Gourmandin.`,
+    /* ⚠️ ZIP 411 — LE GOURMANDIN N'EST PLUS AU BOUT DU PONT. Le message le
+       disait, il aurait menti. On ne laisse pas traîner un texte qui décrit
+       l'ancienne carte : c'est ce qu'un joueur lit, et c'est ce qu'un modèle
+       qui reprend le projet croira. */
+    candyEnteredChat: (name) => `🍭 ${name} nourrit le gentil monstre Candy au milieu du lac.`,
+    lugeEnteredChat: (name) => `🛷 ${name} traverse le pont arc-en-ciel et s'élance dans la Grande Descente.`,
+    // L'invite du monstre du lac. Le mot « gentil » est de Guillaume, et il
+    // compte : c'est lui qui dit qu'on n'est pas dans le monde sombre.
+    candyMonsterAsk: "Donne à manger au gentil monstre Candy ?",
+    candyMonsterSub: "Il garde l'entrée de son jeu au fond du lac de sirop.",
+    yes: "Oui",
+    no: "Non",
+    lugeFinishToast: (gold) => `🛷 Descente terminée ! +${gold} pièces.`,
+    lugeCandyToast: (gold) => `🍬 Bonbons rapportés : +${gold} pièces.`,
+    lugeAgainToast: "La piste reste ouverte, mais la prime d'arrivée attendra ta prochaine venue.",
+    lugeFinishChat: (name, gold) => `🛷 ${name} dévale la Grande Descente jusqu'en bas ! +${gold} pièces.`,
     // Zip 386 : pont construit, destination pas encore écrite.
     bridgeNoDest: "Le pont s'arrête là. Quelque chose viendra s'y installer.",
     /* Zip 393 — LE LABYRINTHE (au bout du pont de haies). Comme pour le défi
@@ -2165,7 +2180,16 @@ export const FERME_STR = {
     runEnteredChat: (name) => `🏃 ${name} steps through the gate and makes a run for it!`,
     // Zip 385 — The Muncher (Candy Land). Traduit dans l'esprit (règle zip
     // 371) : « rassasié jusqu'au niveau 10 » deviendrait lourd en anglais.
-    candyEnteredChat: (name) => `🍭 ${name} crosses the rainbow bridge and sits down in front of the Muncher.`,
+    candyEnteredChat: (name) => `🍭 ${name} feeds the friendly Candy monster in the middle of the lake.`,
+    lugeEnteredChat: (name) => `🛷 ${name} crosses the rainbow bridge and drops into the Great Descent.`,
+    candyMonsterAsk: "Feed the friendly Candy monster?",
+    candyMonsterSub: "It guards the way into its game at the bottom of the syrup lake.",
+    yes: "Yes",
+    no: "No",
+    lugeFinishToast: (gold) => `🛷 Run complete! +${gold} coins.`,
+    lugeCandyToast: (gold) => `🍬 Sweets brought back: +${gold} coins.`,
+    lugeAgainToast: "The slope stays open, but the finish bonus waits for your next visit.",
+    lugeFinishChat: (name, gold) => `🛷 ${name} rode the Great Descent all the way down! +${gold} coins.`,
     // Zip 386 — see the French block.
     bridgeNoDest: "The bridge ends here. Something will move in one day.",
     // Zip 393 — The Labyrinth (end of the hedge bridge).
