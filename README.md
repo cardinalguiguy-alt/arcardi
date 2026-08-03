@@ -1,5 +1,37 @@
 # ARCARDI 🎪
 
+> **ZIP 406 — LE CIEL TIENT ENFIN DANS LE CADRE, ET LA PLUIE TOMBE DANS LE BON SENS.**
+> Quatre chantiers sur le défi de fuite, et **le premier durait depuis trois zips
+> parce qu'on cherchait au mauvais endroit.**
+>
+> | ce qu'il a vu | la cause | après |
+> |---|---|---|
+> | « les triangles lumineux ne sont pas beaux » | pas la couleur (383), pas l'ordre de peinture (400) : **la TAILLE**. Les montagnes montaient à 132 px quand le joueur n'en voit que 64 — leurs sommets étaient hors cadre et il ne restait à l'écran que les V entre les versants | des montagnes ENTIÈRES, 4 à 5 par écran, 37 % de ciel libre au-dessus |
+> | *(même reproche)* | une seule montagne pouvait faire 300 px de large pour 297 px de champ visible : **un versant plein écran** | largeurs divisées par deux |
+> | « une luminosité évoquée par dégradé » | la bande chaude était un APLAT, et un aplat a un bord, et un bord dessine une forme | un dégradé qui part de zéro d'opacité : plus de bord, donc plus rien à dessiner |
+> | « les rambardes… trop plates, pas d'aspérités » | une SEULE boîte par intervalle, texture de 32 px | des pierres qui dépassent, un couronnement dentelé, une texture de 64 px à trois assises |
+> | « la pluie tombe à l'envers » | un signe de trop sur `offset.y` | elle tombe — et elle s'éteint de 3 500 à 6 000 m |
+> | « les bras s'articulent à l'envers » | **le piège du 396 n'avait jamais été appliqué ici** : les trois coudes étaient négatifs, comme des genoux | coude positif, genou négatif, contrôlés sur toute la foulée |
+>
+> **Deux outils étaient morts, et c'est la découverte du zip.**
+> `preview-sky.js` — celui-là même qui avait trouvé le triangle orange au 400 —
+> **jetait depuis le zip 400** : la pluie ajoutée ce jour-là clone sa texture, et
+> son faux Three.js n'avait pas `clone()`. L'outil qui voit les défauts du ciel
+> est mort le jour où il a servi, et personne ne l'a relancé pendant cinq zips.
+> Et une fois réparé, il **mentait sur les largeurs** : il découpait la lanière
+> visible en hauteur mais étalait les 1024 colonnes de la texture sur toute la
+> planche, soit un écrasement de sept fois. La leçon du 400 — « une planche à
+> plat peut mentir sur un cadrage » — s'appliquait à l'outil qui l'avait énoncée.
+>
+> **Deux outils neufs :** `verify-ambiance.mjs` (19 contrôles, **15 échouaient
+> sur le 405**) et `verify-pose.mjs` (8 contrôles, **5 échouaient**).
+>
+> **Le budget d'objets a refusé la première rambarde** — 255 pour un plafond de
+> 200 — et il avait raison : c'est la section où la partie commence. On n'a pas
+> relâché le plafond, on a payé : un bloc de rambarde neuve en couvre désormais
+> deux, ce qui est invisible à l'écran puisqu'elle est continue, et les volumes
+> ainsi libérés financent les pierres saillantes. **195 avant le zip, 199 après.**
+
 > **ZIP 405 — LE DÉCOR CESSE DE MENTIR, ET LE COMBAT CESSE DE SE FIGER.**
 > Quatre défauts signalés par Guillaume en jouant au labyrinthe, et **cinq
 > causes** — deux d'entre elles se cachaient derrière le même symptôme.

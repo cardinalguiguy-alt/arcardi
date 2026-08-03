@@ -459,6 +459,70 @@ const CFG = {
   SKY_DAY_SUN:       0xffd9c0,
   SKY_DAY_PEAKS:     0x464365,  // crêtes proches : éclairées, plus en silhouette
   SKY_DAY_FAR:       0x504f75,  // crêtes lointaines
+
+  /* ======================================================================
+     ⚠️⚠️ ZIP 406 — LA TAILLE DES MONTAGNES, ET C'EST LA VRAIE CAUSE DES
+     « TRIANGLES ». Ces huit nombres vivaient en dur dans world.js/paintSky.
+     ----------------------------------------------------------------------
+     Retour de Guillaume au 405 : « il existe toujours un problème géométrique
+     sur le endless run, les triangles lumineux ne sont pas beaux. »
+
+     Le 383 avait cherché du côté de la COULEUR. Le 400 avait trouvé l'ORDRE DE
+     PEINTURE — et il avait raison, les triangles ont cessé d'être oranges. Ils
+     n'ont jamais cessé d'être des triangles, et voici pourquoi :
+
+       * le dôme fait 1024×512, l'horizon est peint à la ligne 266, et
+         tools/preview-sky.js établit que **le joueur ne voit que les lignes
+         202 à 282**. Au-dessus de l'horizon, cela fait SOIXANTE-QUATRE lignes ;
+       * la chaîne lointaine montait à 62-132 px et la proche à 42-96. **Leurs
+         sommets étaient donc au-dessus du cadre**, et ce qui restait à l'écran
+         n'était pas des montagnes : c'étaient les VERSANTS qui se croisent, et
+         entre eux des V pointe en bas remplis de ciel.
+       * horizontalement, c'est pire : le champ visible ne couvre que ~302 px
+         de texture, et une montagne lointaine faisait jusqu'à 300 px de large.
+         **Une seule montagne pouvait occuper tout l'écran.** Un versant plein
+         écran ne se lit pas comme un relief, il se lit comme un triangle.
+
+     LA CORRECTION EST UNE MISE À L'ÉCHELLE, pas un repeint : on rentre les
+     sommets dans le cadre. Les hauteurs sont calées pour que le relief occupe
+     environ 60 % de la lanière visible — la proportion relevée sur l'image de
+     référence de Guillaume — et les largeurs pour qu'on en voie CINQ ou SIX à
+     l'écran au lieu d'une ou deux.
+
+     ⚠️ LES DEUX ÉCHELLES NE SONT PAS LA MÊME, et c'est le piège de ce réglage.
+     Sur une équirectangulaire, 1 px de texture vaut ~4,7 px d'écran en
+     HORIZONTAL et ~11,7 px en VERTICAL. Une pyramide qui paraît haute dans la
+     texture est écrasée à l'écran, et inversement. **Ne jamais juger ces huit
+     nombres sur la texture : lancer tools/preview-sky.js, qui découpe la
+     lanière réellement visible, et regarder.**
+
+     ⚠️ LA PALETTE N'A PAS BOUGÉ D'UN BIT (consigne explicite de Guillaume au
+     406 : « ne change pas la palette relevée »). Les couleurs sont celles
+     relevées au pixel sur ses références ; seule la GÉOMÉTRIE change.
+     ====================================================================== */
+  SKY_FAR_H_MIN: 20,        // chaîne LOINTAINE : hauteur min, en px de texture
+  SKY_FAR_H_MAX: 38,        // ... et max. Sommet le plus haut = ligne 228 sur 202 visibles.
+  SKY_FAR_W_MIN: 70,        // largeur min : ~330 px d'écran
+  SKY_FAR_W_MAX: 140,
+  SKY_NEAR_H_MIN: 16,       // chaîne PROCHE : plus basse, elle passe DEVANT
+  SKY_NEAR_H_MAX: 34,
+  SKY_NEAR_W_MIN: 62,
+  SKY_NEAR_W_MAX: 128,
+  /* La hauteur du rougeoiement bas. ⚠️ ELLE NE SUIT PLUS LA CRÊTE LA PLUS
+     BASSE, et c'est un changement de méthode assumé.
+     Le 400 avait BORNÉ la bande chaude à la hauteur du col le plus bas de la
+     chaîne proche, pour qu'elle ne dépasse jamais d'un col — sans quoi elle
+     redessinait des triangles. C'était juste tant que la bande avait un BORD :
+     un aplat qui s'arrête quelque part dessine forcément une forme.
+     Guillaume au 406 : « une luminosité évoquée par dégradé ». Un dégradé qui
+     part de zéro d'opacité n'a pas de bord — il ne peut donc rien dessiner, et
+     il n'a plus besoin d'être borné par le relief. On le fait donc PLUS HAUT
+     que le col le plus bas (ce qui était interdit avant), et il s'éteint tout
+     seul avant d'atteindre quoi que ce soit de visible.
+     Il reste peint ENTRE les deux chaînes — ça, c'est le correctif du 400 et
+     il n'a pas bougé : la chaleur ne se voit que dans les cols du plan PROCHE,
+     c'est-à-dire littéralement « entre les montagnes ». */
+  SKY_GLOW_H: 34,
   COL_DAY_FOG:       0x7d6a9c,
   COL_DAY_LAKE:      0x443957,  // creux des ondes, de jour
   COL_DAY_LAKE_GLOW: 0x816aa6,  // crêtes, de jour
@@ -484,8 +548,30 @@ const CFG = {
      parallaxe pour trois objets — c'est le même raisonnement que les deux
      nappes du lac au 396. */
   RAIN_MAX: 0.55,           // opacité de la nappe la plus proche, à pleine intensité
-  RAIN_RAMP_DIST: 6000,     // distance à laquelle la pluie atteint son maximum
+  /* ======================================================================
+     ⚠️ ZIP 406 — L'ORAGE A UNE FIN, ET C'EST UNE DEMANDE DE GUILLAUME.
+     ----------------------------------------------------------------------
+     « la pluie doit surtout disparaître progressivement de 3 000 à 5 000
+     mètres » — puis, sur options : « pleine de 2 200 à 3 500 puis réduction
+     progressive jusqu'à extinction à 6 000 ».
+
+     La courbe monte donc plus vite qu'avant (elle atteignait son maximum à
+     6 000 m, c'est-à-dire au-delà de la partie moyenne : autant dire jamais),
+     tient huit cents mètres à pleine force, puis s'efface.
+
+     ⚠️ ET LES QUATRE NOMBRES SE LISENT AVEC DEUX AUTRES, AILLEURS DANS CE
+     FICHIER. La partie moyenne fait 5 018 m (simulate-run.js, inchangé depuis
+     le 399) : l'orage couvre donc TOUTE la partie type, et son extinction est
+     une chose que seuls ceux qui vont plus loin verront. Et DAY_PREDAWN_AT
+     vaut 10 000 : la pluie cesse quatre mille mètres avant que le ciel
+     commence à pâlir, ce qui fait de sa disparition l'annonce de l'éclaircie
+     plutôt que sa contradiction. Un orage qui s'arrête pendant que le jour se
+     lève ne raconte rien ; un orage qui s'arrête AVANT annonce quelque chose.
+     ====================================================================== */
   RAIN_START_DIST: 900,     // avant ça, pas une goutte : le départ reste clair
+  RAIN_RAMP_DIST: 2200,     // pleine intensité atteinte ici
+  RAIN_HOLD_DIST: 3500,     // ... et tenue jusqu'ici
+  RAIN_END_DIST: 6000,      // extinction complète : plus une goutte au-delà
   RAIN_FALL: 1.35,          // vitesse de défilement de la nappe la plus proche
 
   LIGHTNING_MIN_MS: 7000,   // attente minimale entre deux éclairs
@@ -599,6 +685,27 @@ const CFG = {
      rambarde ressortait CRÈME sur une chaussée grise et cassait l'unité de
      l'ouvrage — alors que sur la jetée 2D le muret n'est qu'à peine plus clair
      que la dalle qu'il borde. On garde l'écart, on divise son ampleur. */
+  /* ⚠️ ZIP 406 — LE NOMBRE DE PIERRES SAILLANTES PAR TRONÇON DE RAMBARDE.
+     Trois, sur la section d'entrée neuve, et zéro une fois l'ouvrage ruiné
+     (le tirage est multiplié par 1 - s). C'est le seul nombre à toucher si la
+     rambarde devient trop chargée ou trop lisse — et le seul à surveiller côté
+     coût : chaque unité ajoute ~2 volumes par intervalle et par côté sur la
+     seule section d'entrée. Mesuré contre le plafond de tools/smoke-render.js
+     (≤ 200 objets / 100 u de chaussée) avant livraison. */
+  /* ⚠️ COMBIEN D'INTERVALLES UN SEUL BLOC COUVRE, TANT QUE L'OUVRAGE EST NEUF.
+     Deux, soit 17,6 unités d'un seul tenant. Quand la rambarde est continue,
+     rien à l'écran ne distingue un bloc long de deux blocs accolés — mais le
+     moteur, lui, compte deux objets au lieu d'un. C'est ce que ce nombre
+     récupère, et c'est lui qui PAIE les pierres saillantes : 195 objets par
+     100 u de chaussée de pierre avant le 406, 185 après la fusion, 199 une
+     fois les saillies posées, pour un plafond de 200. Repasse-le à 1 et
+     smoke-render.js refusera la livraison — ce qui est exactement ce qu'on lui
+     demande.
+     ⚠️ Il ne vaut QUE sur l'ouvrage neuf (s < 0,35). Passé le fondu les blocs
+     sont isolés : en fusionner deux ferait un trou d'un intervalle entier dans
+     une bordure déjà trouée. */
+  RAIL_MERGE: 2,
+  RAIL_ASPERITY: 1,
   COL_RAIL:       0x4f483b,  // blocs de la rambarde
   COL_RAIL_CAP:   0x605848,  // pierre de couronnement, sur le dessus
   RAIL_H_STONE: 1.55,       // hauteur de la rambarde côté pierre

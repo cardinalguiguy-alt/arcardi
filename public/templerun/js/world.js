@@ -989,28 +989,79 @@ const World = (function () {
      joints décalés d'une demi-longueur, mortier plus sombre, et une COIFFE DE
      MOUSSE sur la bande supérieure. */
   function paintRailWall() {
-    const S = 32;
+    /* ⚠️⚠️ ZIP 406 — 32 px POUR TROIS ASSISES, C'ÉTAIT LA MOITIÉ DU REPROCHE.
+       Guillaume : « les rambardes en pierre au début ne sont pas assez
+       réalistes (trop plates, pas d'aspérités, on dirait des boîtes en bois
+       plus que des empilements de pierres) ».
+
+       « Boîtes en BOIS » est le mot qui désigne la cause. À 32 px pour deux
+       assises de deux blocs, un bloc reçoit 14×14 pixels : il n'y a
+       physiquement pas la place d'y mettre un bord éclairé, un bord d'ombre,
+       un éclat et un grain. Il ne reste qu'un rectangle uni séparé du voisin
+       par un trait — c'est-à-dire exactement la façon dont on dessine une
+       PLANCHE. C'est le même raisonnement qu'au 397 pour la pierre du
+       labyrinthe (128 → 512), et il donne ici 64 px pour trois assises, soit
+       un bloc de 19×18 : la place d'un relief.
+
+       QUATRE COUCHES, et chacune répond à un mot de Guillaume :
+         1. le mortier CREUSÉ (deux pixels d'ombre sous chaque bloc, un pixel
+            de lumière au-dessus) — c'est ce qui fait « empilement » ;
+         2. le grain par bloc : chaque pierre a sa teinte ET son bruit propre ;
+         3. les ÉCLATS de coin — quelques pixels du bloc rendus au mortier.
+            Une pierre taillée depuis longtemps n'a pas d'angle droit ;
+         4. la mousse, déjà là, inchangée.
+
+       ⚠️ MAIS LA TEXTURE NE SUFFIT PAS, et c'est le point : « pas
+       d'aspérités » décrit la SILHOUETTE. Voir la pose de la rambarde, où le
+       406 ajoute des pierres qui dépassent. Une texture, si fine soit-elle,
+       ne change jamais un contour. */
+    const S = 64;
     const cv = makeCanvas(S, S);
     const ctx = cv.getContext("2d");
+    const shade = (base, k) => `rgb(${Math.round(((base >> 16) & 255) * k)},` +
+      `${Math.round(((base >> 8) & 255) * k)},${Math.round((base & 255) * k)})`;
 
     ctx.fillStyle = cssHex(CFG.COL_MORTAR);
     ctx.fillRect(0, 0, S, S);
 
-    // Deux assises, la seconde décalée d'un demi-bloc : c'est le décalage qui
-    // fait lire un APPAREILLAGE. Alignés, les mêmes blocs font un carrelage.
-    const gap = 2, rows = 2, cols = 2;
+    // Trois assises, décalées d'un demi-bloc l'une sur l'autre : c'est le
+    // décalage qui fait lire un APPAREILLAGE. Alignés, les mêmes blocs font
+    // un carrelage.
+    const gap = 3, rows = 3, cols = 3;
     const bh = (S - gap * (rows + 1)) / rows;
     for (let r = 0; r < rows; r++) {
-      const off = (r & 1) ? S * 0.25 : 0;
+      const off = (r & 1) ? S * 0.17 : 0;
       for (let c = -1; c <= cols; c++) {
         const bw = (S - gap * (cols + 1)) / cols;
         const bx = gap + c * (bw + gap) + off, by = gap + r * (bh + gap);
-        const k = 0.84 + Math.random() * 0.32;
+        const k = 0.80 + Math.random() * 0.38;
         const base = CFG.COL_RAIL;
-        ctx.fillStyle = `rgb(${Math.round(((base >> 16) & 255) * k)},${Math.round(((base >> 8) & 255) * k)},${Math.round((base & 255) * k)})`;
+        ctx.fillStyle = shade(base, k);
         ctx.fillRect(bx, by, bw, bh);
-        ctx.fillStyle = "rgba(255,255,255,0.05)"; ctx.fillRect(bx, by, bw, 1);
-        ctx.fillStyle = "rgba(0,0,0,0.20)"; ctx.fillRect(bx, by + bh - 1, bw, 1);
+
+        // Grain : la pierre n'est pas un aplat. Sept touches suffisent parce
+        // qu'on les voit à travers le bumpMap du matériau.
+        for (let n = 0; n < 7; n++) {
+          ctx.fillStyle = shade(base, k * (0.86 + Math.random() * 0.28));
+          ctx.fillRect(bx + Math.random() * bw, by + Math.random() * bh,
+                       1 + Math.random() * 2, 1 + Math.random() * 2);
+        }
+        // Le relief du joint : lumière en haut, ombre EN BAS et sur deux
+        // pixels — une pierre porte celle du dessus, son ombre est du côté où
+        // elle reçoit.
+        ctx.fillStyle = "rgba(255,255,255,0.10)"; ctx.fillRect(bx, by, bw, 1);
+        ctx.fillStyle = "rgba(0,0,0,0.32)"; ctx.fillRect(bx, by + bh - 2, bw, 2);
+        ctx.fillStyle = "rgba(0,0,0,0.16)"; ctx.fillRect(bx + bw - 1, by, 1, bh);
+
+        // Éclats de coin : on rend au mortier deux ou trois angles au hasard.
+        for (let n = 0; n < 3; n++) {
+          if (Math.random() > 0.45) continue;
+          const cw = 1 + Math.random() * 3, ch = 1 + Math.random() * 2;
+          const cxp = Math.random() < 0.5 ? bx : bx + bw - cw;
+          const cyp = Math.random() < 0.5 ? by : by + bh - ch;
+          ctx.fillStyle = cssHex(CFG.COL_MORTAR);
+          ctx.fillRect(cxp, cyp, cw, ch);
+        }
       }
     }
 
@@ -1188,14 +1239,31 @@ const World = (function () {
        déplacera la borne toute seule — c'est la différence entre un réglage et
        un nombre magique, et c'est la leçon que le 383 avait manquée en
        corrigeant une couleur au lieu d'une géométrie. */
-    const NEAR_MIN_H = 42, NEAR_BASE_DY = 6;
-    const warmTop = HORIZON - (NEAR_MIN_H - NEAR_BASE_DY);   // ligne du col le plus bas
+    const NEAR_MIN_H = CFG.SKY_NEAR_H_MIN, NEAR_BASE_DY = 6;
+    /* ⚠️ ZIP 406 — LE HAUT DU ROUGEOIEMENT NE SUIT PLUS LE COL LE PLUS BAS.
+       Il valait `HORIZON - (NEAR_MIN_H - NEAR_BASE_DY)`, c'est-à-dire la crête
+       la plus basse de la chaîne proche : la bande chaude ne pouvait ainsi
+       jamais dépasser d'un col. C'était la parade du 400 contre un APLAT, qui
+       a forcément un bord, et dont le bord dessine une forme. Le 406 la
+       remplace par un vrai dégradé partant de zéro d'opacité : sans bord, il
+       n'y a plus rien à borner, et la hauteur devient un réglage d'ambiance
+       (SKY_GLOW_H) au lieu d'une conséquence du relief. */
+    const warmTop = HORIZON - CFG.SKY_GLOW_H;
 
-    // Dégradé vertical : zénith -> corps du ciel -> rougeoiement bas.
+    /* Dégradé vertical : zénith -> corps du ciel -> rougeoiement bas.
+       ⚠️ ZIP 406 — LES ARRÊTS BOUGENT, LES COULEURS NON. Guillaume a demandé
+       « une luminosité évoquée par dégradé » ET « ne change pas la palette
+       relevée » : les trois teintes sont donc exactement celles de config.js,
+       relevées au pixel sur ses références, et c'est leur RÉPARTITION qui
+       change. `mid` tenait jusqu'à `warmTop` — qui valait 230 sur 266, soit
+       86 % de la hauteur : le ciel était donc un aplat de `mid` sur presque
+       toute sa surface, et virait à `horizon` dans les 36 derniers pixels.
+       Un aplat plus une bascule, ce n'est pas un dégradé. Réparti de 0,42 à
+       1, on obtient une descente continue du zénith à l'horizon — c'est-à-dire
+       la lumière évoquée plutôt que posée. */
     const g = ctx.createLinearGradient(0, 0, 0, HORIZON);
     g.addColorStop(0, cssHex(P.top));
-    g.addColorStop(0.45, cssHex(P.mid));
-    g.addColorStop(Math.min(0.98, warmTop / HORIZON), cssHex(P.mid));
+    g.addColorStop(0.42, cssHex(P.mid));
     g.addColorStop(1, cssHex(P.horizon));
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, W, HORIZON);
@@ -1337,7 +1405,7 @@ const World = (function () {
        plus petits. On prend cette borne telle quelle plutôt qu'un nombre écrit
        à la main — si quelqu'un change les hauteurs de la chaîne proche demain,
        la bande suivra toute seule. */
-    const gh = HORIZON - warmTop;      // = 36 px, la même borne que le dégradé
+    const gh = HORIZON - warmTop;      // = SKY_GLOW_H
     const glow = ctx.createLinearGradient(0, HORIZON - gh, 0, HORIZON);
     if (night) {
       /* ZIP 383 — LE « TRIANGLE RETOURNÉ ORANGE » ÉTAIT ICI, et il n'a jamais
@@ -1396,7 +1464,8 @@ const World = (function () {
     // (zip 383 : le plan lointain de nuit suit l'assombrissement du ciel. Le
     // laisser à son violet d'avant l'aurait fait ressortir COMME un objet
     // éclairé au-dessus d'un ciel devenu noir — l'inverse d'un lointain.)
-    range(night ? "rgba(38,26,58,0.72)" : "rgba(80,79,117,0.78)", 62, 132, 150, 300, -2);
+    range(night ? "rgba(38,26,58,0.72)" : "rgba(80,79,117,0.78)",
+          CFG.SKY_FAR_H_MIN, CFG.SKY_FAR_H_MAX, CFG.SKY_FAR_W_MIN, CFG.SKY_FAR_W_MAX, -2);
 
     /* ⚠️⚠️ ICI, ET PAS AVANT — c'est tout le correctif du zip 400.
        Entre les deux chaînes : elle lave le pied du lointain, et elle ne se
@@ -1407,7 +1476,9 @@ const World = (function () {
     // Plan PROCHE : plus bas, presque noir de nuit ; de jour il prend enfin
     // une couleur, parce qu'un relief qui reste en silhouette sous un ciel
     // clair se lit comme un trou découpé dans l'image.
-    range(cssHex(night ? CFG.SKY_PEAKS : CFG.SKY_DAY_PEAKS), NEAR_MIN_H, 96, 110, 240, NEAR_BASE_DY);
+    range(cssHex(night ? CFG.SKY_PEAKS : CFG.SKY_DAY_PEAKS),
+          CFG.SKY_NEAR_H_MIN, CFG.SKY_NEAR_H_MAX,
+          CFG.SKY_NEAR_W_MIN, CFG.SKY_NEAR_W_MAX, NEAR_BASE_DY);
 
     // Base commune : elle ferme le bas et garantit qu'aucun trou ne laisse
     // voir le dégradé du ciel sous les montagnes.
@@ -1539,13 +1610,31 @@ const World = (function () {
     }
   }
 
-  /* Elle monte avec les mètres, et elle s'arrête net au premier millier :
-     un joueur qui démarre sous l'averse n'a aucun moyen de savoir qu'elle
-     s'intensifie, et l'effet ne raconte plus rien. */
+  /* L'INTENSITÉ DE L'ORAGE EN FONCTION DE LA DISTANCE — une seule fonction,
+     lue par le rendu et par tools/verify-rain.mjs (zip 406).
+     -----------------------------------------------------------------------
+     Quatre bornes, trois pentes : rien avant START, montée jusqu'à RAMP,
+     plein régime jusqu'à HOLD, extinction jusqu'à END, plus rien après.
+     ⚠️ ELLE EST EXPORTÉE. Écrire la courbe ici et la redécrire dans le
+     contrôle, c'est deux descriptions d'une même chose (387) — et sur une
+     courbe, elles divergent au premier réglage. */
+  function rainLevel(dist) {
+    if (dist <= CFG.RAIN_START_DIST) return 0;
+    if (dist >= CFG.RAIN_END_DIST) return 0;
+    if (dist < CFG.RAIN_RAMP_DIST)
+      return (dist - CFG.RAIN_START_DIST) /
+             Math.max(1, CFG.RAIN_RAMP_DIST - CFG.RAIN_START_DIST);
+    if (dist <= CFG.RAIN_HOLD_DIST) return 1;
+    return 1 - (dist - CFG.RAIN_HOLD_DIST) /
+               Math.max(1, CFG.RAIN_END_DIST - CFG.RAIN_HOLD_DIST);
+  }
+
+  /* Elle monte avec les mètres, elle ne commence pas au premier pas — un
+     joueur qui démarre sous l'averse n'a aucun moyen de savoir qu'elle
+     s'intensifie — et depuis le 406 elle FINIT. */
   function tickRain(now, dist) {
     if (!rainLayers.length || CFG.RAIN_MAX <= 0) return;
-    const k = Math.max(0, Math.min(1,
-      (dist - CFG.RAIN_START_DIST) / Math.max(1, CFG.RAIN_RAMP_DIST - CFG.RAIN_START_DIST)));
+    const k = rainLevel(dist);
     const yaw = camera.rotation.y;
     const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
     for (const m of rainLayers) {
@@ -1555,9 +1644,21 @@ const World = (function () {
       if (!m.visible) continue;
       m.position.set(camera.position.x + fx * L.d, camera.position.y + 1.6, camera.position.z + fz * L.d);
       m.lookAt(camera.position);
-      // Le défilement, et une dérive latérale : une pluie strictement verticale
-      // sur un joueur qui court à 34 u/s ne peut pas être juste.
-      m.material.map.offset.y = (-now * 0.001 * CFG.RAIN_FALL * L.sp) % 1;
+      /* Le défilement, et une dérive latérale : une pluie strictement verticale
+         sur un joueur qui court à 34 u/s ne peut pas être juste.
+         ⚠️⚠️ ZIP 406 — LE SIGNE ÉTAIT INVERSÉ, ET LA PLUIE MONTAIT.
+         Guillaume : « la pluie tombe à l'envers (bas vers le haut) ». Le
+         raisonnement, pour qu'on n'ait plus jamais à le refaire : le shader
+         échantillonne `uv + offset`. Quand `offset.y` AUGMENTE, un même point
+         de l'écran va lire un texel plus haut dans l'image — donc le motif
+         DESCEND à l'écran. Sur un PlaneGeometry, v croît vers le haut, et une
+         CanvasTexture a flipY à vrai : les deux inversions se compensent, et
+         la règle tient en une phrase — **offset.y qui monte = la pluie qui
+         tombe.** Le moins de trop faisait exactement le contraire.
+         C'est un défaut qu'on ne voit pas en relisant (la ligne est
+         parfaitement bien écrite) et qu'on ne voit pas non plus sur une image
+         fixe : il faut regarder bouger. */
+      m.material.map.offset.y = (now * 0.001 * CFG.RAIN_FALL * L.sp) % 1;
       m.material.map.offset.x = (now * 0.00012 * L.sp) % 1;
     }
   }
@@ -2327,6 +2428,10 @@ const World = (function () {
        joueur, donc sans masquer le ciel ni le lac. --- */
     for (const side of [-1, 1]) {
       const off = side * (CFG.TRACK_WIDTH / 2 + 0.75);
+      // zip 406 : le compteur d'intervalles, lu par la fusion des blocs neufs,
+      // et le flux aléatoire PROPRE aux pierres saillantes (règle du 381).
+      let kerbIdx = 0;
+      const rngAsp = Track.makeRng(node.index * 7717 + 29 + (side > 0 ? 3 : 0));
       for (let t = 3; t < node.length - 3; t += CFG.KERB_SPACING) {
         // Zip 377 : on N'OUVRE PAS la bordure au ciseau, on l'interrompt. Une
         // trouée franche dans une haie de blocs est le signal le plus lisible
@@ -2365,11 +2470,114 @@ const World = (function () {
         /* La LONGUEUR est ce qui distingue le plus une rambarde d'une bordure :
            au début un bloc couvre tout l'intervalle, la pierre est continue ;
            en fin de fondu il ne reste que des blocs isolés séparés de vide.
-           Deux fois le même mesh, deux lectures opposées. */
-        const len = (CFG.KERB_SPACING + 0.6) * (1 - s) + (2.0 + rng() * 1.4) * s;
-        const b = box(1.5 - 0.2 * s, h, len, s > 0.5 ? mat.kerb : mat.rail, 0, 0, 0);
+           Deux fois le même mesh, deux lectures opposées.
+
+           ⚠️⚠️ ZIP 406 — SUR L'OUVRAGE NEUF, UN BLOC COUVRE DEUX INTERVALLES,
+           ET C'EST CE QUI FINANCE LES ASPÉRITÉS.
+           ------------------------------------------------------------------
+           tools/smoke-render.js a refusé la première version : 255 objets par
+           100 u de chaussée de pierre pour un plafond de 200. Le contrôle avait
+           RAISON, et son commentaire dit pourquoi mieux que moi — la section
+           d'entrée « doit tenir dans le MÊME plafond que les autres, sans quoi
+           les images par seconde tomberaient pile sur les premières secondes de
+           course ». C'est-à-dire précisément là où Guillaume regarde la
+           rambarde. Relâcher le plafond aurait été rendre le contrôle muet
+           (leçon du 404) ; on change donc la CHOSE.
+
+           Mesuré : la chaussée de pierre était déjà à 195 sur 200 avant ce zip.
+           Il n'y avait pas cinq objets de marge, il fallait en LIBÉRER. Or
+           quand la rambarde est neuve elle est CONTINUE : deux blocs voisins se
+           touchent bout à bout et rien, à l'écran, ne distingue un bloc de 17,6
+           unités de deux blocs de 8,8 accolés. On en pose donc un sur deux, deux
+           fois plus long — zéro différence visible, la moitié des volumes — et
+           on dépense ce qu'on vient d'économiser en pierres qui dépassent.
+           À l'arrivée : même budget qu'avant le zip, une silhouette qui n'est
+           plus une boîte.
+
+           ⚠️ ET SEULEMENT SUR L'OUVRAGE NEUF. Passé le fondu, les blocs sont
+           ISOLÉS : en fusionner deux ferait un trou d'un intervalle entier dans
+           une bordure déjà trouée. Le seuil est bas (s < 0,35) pour que la
+           fusion cesse bien avant que les vides n'apparaissent. */
+        const mergeN = s < 0.35 ? CFG.RAIL_MERGE : 1;
+        if (mergeN > 1 && (kerbIdx % mergeN)) { kerbIdx++; continue; }
+        kerbIdx++;
+        const len = (CFG.KERB_SPACING * mergeN + 0.6) * (1 - s)
+                  + (2.0 + rng() * 1.4) * s;
+        const bw0 = 1.5 - 0.2 * s;
+        const b = box(bw0, h, len, s > 0.5 ? mat.kerb : mat.rail, 0, 0, 0);
         b.rotation.y = (rng() - 0.5) * 0.12 * s;   // l'ouvrage se désaligne en se ruinant
         place(b, t + jitter, off, h / 2 - 0.25);
+
+        /* ⚠️⚠️ ZIP 406 — LES PIERRES QUI DÉPASSENT, ET C'EST LE VRAI CORRECTIF.
+           ------------------------------------------------------------------
+           Guillaume : « trop plates, pas d'aspérités, on dirait des boîtes en
+           bois plus que des empilements de pierres ». Les deux premiers mots
+           décrivent une SILHOUETTE, pas une peinture — et la silhouette d'une
+           rambarde, c'était une seule boîte, donc une arête parfaitement
+           droite sur toute la longueur du tronçon. Aucune texture n'y peut
+           quoi que ce soit : un contour droit reste un contour droit, et un
+           volume long, droit et lisse, l'œil le lit comme une planche.
+
+           Deux familles de saillies, et il faut LES DEUX :
+
+             * LE COURONNEMENT DENTELÉ. Deux à quatre pierres posées sur le
+               dessus, à des hauteurs différentes, avec des vides entre elles.
+               C'est ce qui casse la ligne du HAUT — celle qu'on suit du regard
+               en courant, et donc celle qui trahissait la boîte ;
+             * LES PIERRES DÉBOÎTÉES. Une ou deux qui sortent du parement, du
+               côté de la piste, à mi-hauteur. C'est ce qui donne l'épaisseur
+               et dit qu'il y a plusieurs pierres et non un bloc.
+
+           ⚠️ ELLES SUIVENT L'USURE À L'ENVERS DU RESTE, ET C'EST VOULU. Tout
+           le reste de la rambarde se DÉGRADE quand s monte (elle s'affaisse,
+           se troue, se désaligne) ; les saillies, elles, se raréfient — parce
+           qu'en fin de fondu il ne reste plus une rambarde mais des blocs
+           isolés dans l'herbe, et poser un couronnement sur une ruine
+           reviendrait à soigner ce qui est censé être abandonné. Le facteur
+           (1 - s) fait exactement ça, et il finance aussi le budget : les
+           saillies n'existent QUE sur la section d'entrée, la seule que
+           Guillaume regarde en démarrant.
+
+           ⚠️ AUCUNE COLLISION. Ces pierres sont posées dans le groupe du
+           décor, comme les fissures et le lierre. La rambarde n'a jamais eu de
+           collision — le joueur ne dépasse pas ±3,9 et elle est à ±4,95 — et
+           en donner une à des cailloux de 30 cm serait le meilleur moyen de
+           tuer quelqu'un pour un détail décoratif. */
+        /* ⚠️⚠️ UN FLUX ALÉATOIRE À ELLES, ET C'EST LA RÈGLE DU 381 : « ne
+           jamais ajouter un tirage dans un flux aléatoire partagé ». Les
+           saillies tirent une demi-douzaine de nombres par bloc ; les prendre
+           dans `rng` aurait décalé TOUT ce qui suit dans le tronçon — quelles
+           bordures deviennent des stèles, où tombent les fissures, quelles
+           torches s'allument. Je l'ai fait dans la première version, et le
+           budget mesuré est passé de 200 à 209 objets sans qu'une seule
+           saillie ait été ajoutée : ce n'était pas le coût des cailloux, c'était
+           le décor entier qui avait changé de tirage. Un flux séparé rend les
+           mesures comparables ET garantit qu'on peut régler RAIL_ASPERITY sans
+           redessiner la piste. */
+        const asp = Math.round(CFG.RAIL_ASPERITY * (1 - s));
+        for (let a = 0; a < asp; a++) {
+          const top = rngAsp() < 0.62;
+          if (top) {
+            // couronnement : une pierre sur le dessus, jamais centrée
+            const sw = bw0 * (0.5 + rngAsp() * 0.45);
+            const sh = 0.14 + rngAsp() * 0.22;
+            const sl = 0.5 + rngAsp() * Math.min(1.3, len * 0.5);
+            const st2 = box(sw, sh, sl, s > 0.5 ? mat.kerb : mat.rail, 0, 0, 0);
+            st2.rotation.y = (rngAsp() - 0.5) * 0.30;
+            place(st2, t + jitter + (rngAsp() - 0.5) * (len - sl),
+                  off + (rngAsp() - 0.5) * (bw0 - sw), h - 0.25 + sh / 2 - 0.02);
+          } else {
+            // pierre déboîtée : elle sort du parement, côté piste
+            const sw = 0.22 + rngAsp() * 0.20;
+            const sh = 0.20 + rngAsp() * 0.26;
+            const sl = 0.45 + rngAsp() * 0.7;
+            const st2 = box(sw, sh, sl, s > 0.5 ? mat.kerb : mat.rail, 0, 0, 0);
+            st2.rotation.y = (rngAsp() - 0.5) * 0.22;
+            place(st2, t + jitter + (rngAsp() - 0.5) * (len - sl),
+                  off - side * (bw0 / 2 + sw * 0.35),
+                  -0.25 + h * (0.28 + rngAsp() * 0.5));
+          }
+        }
 
         /* ZIP 381 — LA PIERRE DE COURONNEMENT EST RETIRÉE.
 
@@ -2392,11 +2600,11 @@ const World = (function () {
            dans la roue des obstacles, sous forme de planche tombée en travers
            (section 10). `mat.railCap` reste utilisé par le pilier des torches. */
 
-        if (rng() < CFG.VINE_CHANCE) {
-          const vl = 0.5 + rng() * 1.1;
+        if (rngAsp() < CFG.VINE_CHANCE) {
+          const vl = 0.5 + rngAsp() * 1.1;
           const v = box(0.1, vl, 0.1, mat.vine, 0, 0, 0);
-          v.rotation.z = (rng() - 0.5) * 0.35;
-          place(v, t + jitter + (rng() - 0.5) * len * 0.6, off + side * 0.7, h - 0.25 - vl / 2);
+          v.rotation.z = (rngAsp() - 0.5) * 0.35;
+          place(v, t + jitter + (rngAsp() - 0.5) * len * 0.6, off + side * 0.7, h - 0.25 - vl / 2);
         }
       }
     }
@@ -3020,15 +3228,49 @@ const World = (function () {
     legR.hip.rotation.x = mix(-swing, 0.30);
     legR.knee.rotation.x = mix(kneeRun(-swing), -1.65);
 
-    // Bras en opposition avec la jambe du même côté ; coude toujours un peu
-    // fléchi, un bras droit à la course fait pantin.
+    /* ⚠️⚠️ ZIP 406 — LE COUDE PLIE EN POSITIF, LE GENOU EN NÉGATIF. C'EST LE
+       PIÈGE DU 396, ET IL N'AVAIT JAMAIS ÉTÉ APPLIQUÉ ICI.
+       -------------------------------------------------------------------
+       Retour de Guillaume au 405 : « les bras du personnage semblent
+       s'articuler à l'envers (avant-bras qui s'orientent dans le mauvais sens
+       pendant la course) ».
+
+       La géométrie, et elle ne se devine pas — elle se pose. Dans limb2(), le
+       segment inférieur pend vers -Y depuis son pivot. Une rotation de θ
+       autour de +X envoie ce (0,-1,0) sur (0, -cos θ, -sin θ) : **θ POSITIF
+       pousse le segment vers -Z, c'est-à-dire VERS L'AVANT.** Le fermier court
+       vers -Z.
+
+       Donc :
+         * un GENOU replie le tibia vers l'ARRIÈRE, talon vers la fesse
+           → rotation NÉGATIVE. C'est ce que fait kneeRun(), et c'est juste
+           depuis le 374 ;
+         * un COUDE replie l'avant-bras vers l'AVANT, main vers l'épaule
+           → rotation POSITIVE.
+
+       Les trois lignes de coude étaient toutes NÉGATIVES : les avant-bras se
+       repliaient donc exactement comme des tibias, poignets partant vers
+       l'arrière. Vu de dos, c'est le seul défaut d'animation qu'on remarque
+       sans savoir le nommer — et c'est précisément la formule que Guillaume a
+       employée, « semblent s'articuler à l'envers ».
+
+       ⚠️ ET POURQUOI ÇA A SURVÉCU DEPUIS LE 374 : les DEUX bras étaient faux
+       DU MÊME CÔTÉ. Une asymétrie se voit tout de suite ; une symétrie fausse
+       se lit comme un style. Le 396 avait posé la règle des signes opposés
+       pour le labyrinthe (rig.js) et personne n'est revenu la vérifier ici.
+       verify-pose.mjs (zip 406) évalue désormais les quatre angles sur toute
+       la foulée ET toute la glissade, et exige que les deux familles restent de
+       signes opposés.
+
+       Le bras d'appui de la GLISSADE garde un coude presque tendu (+0,15) :
+       une main plantée au sol le bras cassé ne porte rien. */
     armL.hip.rotation.x = mix(-swing * (ARM_SWING / RUN_SWING), 0.55);
     armL.hip.rotation.z = 0.85 * k;
-    armL.knee.rotation.x = mix(-0.35 - Math.max(0, -swing) * 0.5, -1.1);
+    armL.knee.rotation.x = mix(0.35 + Math.max(0, -swing) * 0.5, 1.10);
 
     armR.hip.rotation.x = mix(swing * (ARM_SWING / RUN_SWING), -1.75 + dragArm);
     armR.hip.rotation.z = -0.55 * k;
-    armR.knee.rotation.x = mix(-0.35 - Math.max(0, swing) * 0.5, -0.25);
+    armR.knee.rotation.x = mix(0.35 + Math.max(0, swing) * 0.5, 0.15);
 
     /* ------------------------------------ SORTIE OFFROAD : IL SE RETOURNE ---
        Zip 377. Le fermier ne s'arrête pas de courir — il jette un œil
@@ -3430,6 +3672,10 @@ const World = (function () {
     // Exporté pour les outils : c'est la seule façon de vérifier le cycle
     // jour/nuit sans lancer une course de 33 000 mètres (zip 382).
     dayAt,
+    // Zip 406, même raison exactement : la courbe de l'orage se contrôle sans
+    // courir 6 000 mètres, et le contrôle lit LA fonction du jeu, pas une
+    // seconde écriture de la même courbe.
+    rainLevel,
     get camera() { return camera; },
     get scene() { return scene; },
     get playerMesh() { return playerMesh; },

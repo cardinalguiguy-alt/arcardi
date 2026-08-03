@@ -267,3 +267,206 @@ collision du jeu, sur les six cartes.
 - **Les bonbons** : ramassés et comptés, mais on n'en fait encore rien.
 - **La progression de la meute** : `CHASE_RECOVER` et `CHASE_LOSS_ON_STUMBLE`
   sont fixes du début à la fin d'une course (voir l'audit).
+
+---
+
+# ZIP 406 — LE CIEL TIENT DANS LE CADRE, ET LA PLUIE TOMBE
+
+Guillaume, après avoir joué au 405, avec deux captures :
+
+> « il existe toujours un problème géométrique sur le endless run, les triangles
+> lumineux sont pas beaux. harmonise tout ça. (…) s'assurer que le fond reste
+> stylisé comme tu l'as fait mais sans le triangle lumineux violet, tu peux
+> avoir une meilleure façon d'intégrer la lumière dégradée, discrète. »
+> « les rambardes en pierre au début ne sont pas assez réalistes (trop plates,
+> pas d'aspérités, on dirait des boîtes en bois plus que des empilements de
+> pierres). »
+> « La pluie tombe à l'envers (bas vers le haut) ; à changer. Mais elle doit
+> surtout disparaître progressivement de 3000 à 5000 mètres. »
+> « les bras du personnage semblent s'articuler à l'envers (avant-bras qui
+> s'orientent dans le mauvais sens pendant la course) »
+
+## 0. La dette qu'il fallait payer d'abord — L'OUTIL ÉTAIT MORT
+
+**`preview-sky.js` jetait depuis le zip 400.** Le 400 a ajouté la pluie ;
+`buildRain()` clone la texture d'une nappe par couche ; le faux Three.js de
+preview-sky n'avait pas `clone()`. Il levait donc `texR.clone is not a function`
+à sa première ligne utile.
+
+Ce n'est pas une anecdote : **c'est CET outil qui avait trouvé le triangle
+orange du 400**, en découpant la lanière de ciel réellement visible. Il est mort
+le jour même où il a servi, et pendant cinq zips personne ne l'a relancé —
+pendant que Guillaume continuait, lui, de voir des triangles.
+
+> **Un outil qu'on saute n'est pas un filet de sécurité, c'est un fichier mort.
+> Un outil qui JETTE et qu'on ne relance pas est PIRE : il donne l'impression
+> qu'il existe.**
+
+**Et une fois réparé, il mentait.** Il découpait bien la lanière visible en
+HAUTEUR, mais étalait les 1024 colonnes de la texture sur toute la largeur de la
+planche — alors que le champ horizontal n'en couvre que 297. L'image était donc
+écrasée d'un facteur sept en largeur, et présentait comme un remplissage serré
+de petits pics ce qui est à l'écran quatre grandes pyramides. C'est très
+exactement la leçon du 400 — *une planche à plat peut mentir sur un cadrage* —
+appliquée à l'outil qui avait servi à l'énoncer.
+
+## 1. Les triangles — trois zips, trois hypothèses, et la bonne est la TAILLE
+
+| zip | hypothèse | résultat |
+|---|---|---|
+| 383 | c'est la COULEUR | désaturé, le triangle reste |
+| 400 | c'est l'ORDRE DE PEINTURE | il cesse d'être ORANGE, il reste un triangle |
+| **406** | **c'est le CADRAGE** | il n'y a plus de triangle : on voit les sommets |
+
+La mesure, faite et non supposée :
+
+* la caméra vise 17,3° vers le bas, champ vertical 72°. Sur un dôme de 1024×512
+  dont l'horizon est peint à la ligne 266, **le joueur ne voit que les lignes
+  202 à 282** — soixante-quatre lignes de ciel ;
+* la chaîne lointaine montait à **62-132 px**, la proche à **42-96**. Leurs
+  sommets étaient donc **au-dessus du cadre**. Ce qui restait à l'écran n'était
+  pas un relief : c'étaient deux versants qui se croisent, et entre eux un V ;
+* horizontalement, une montagne lointaine faisait jusqu'à **300 px de large**
+  pour **297 px de champ visible**. Une seule montagne pouvait occuper tout
+  l'écran. Un versant plein écran ne se lit pas comme un relief.
+
+**La correction est une mise à l'échelle, pas un repeint.** Huit nombres passent
+de world.js à config.js — où l'on peut enfin les trouver — et sont calés pour que
+le relief occupe ~60 % de la lanière visible (la proportion relevée sur la
+référence de Guillaume) avec quatre à cinq sommets à l'écran.
+
+**⚠️ Les deux échelles ne sont pas la même**, et c'est le piège de ce réglage :
+sur une équirectangulaire, 1 px de texture vaut ~4,7 px d'écran en horizontal et
+~11,7 en vertical. **Ne jamais juger ces nombres sur la texture.**
+
+**La palette n'a pas bougé d'un bit** — consigne explicite : « ne change pas la
+palette relevée ». Seule la géométrie change, et la RÉPARTITION du dégradé de
+fond : `mid` tenait jusqu'à 86 % de la hauteur puis basculait sur `horizon` dans
+les 36 derniers pixels. Un aplat plus une bascule, ce n'est pas un dégradé.
+
+**Et le rougeoiement devient un vrai dégradé.** Le 400 avait dû le BORNER à la
+hauteur du col le plus bas, parce qu'un aplat a un bord et qu'un bord dessine une
+forme. Un dégradé qui part de zéro d'opacité n'a pas de bord : il ne peut donc
+rien dessiner, et il n'a plus besoin d'être borné. C'est la « lumière évoquée par
+dégradé » demandée — et il reste peint ENTRE les deux chaînes, ce qui est le
+correctif du 400 et n'a pas bougé.
+
+## 2. Les rambardes — « pas d'aspérités » décrit une SILHOUETTE
+
+Deux causes, et la texture n'est que la seconde.
+
+**La silhouette.** Une seule boîte par intervalle, donc une arête parfaitement
+droite sur tout le tronçon. Aucune texture n'y peut rien : un contour droit reste
+un contour droit, et un volume long, droit et lisse, l'œil le lit comme une
+planche — d'où « boîtes en bois ». Deux familles de saillies, et il faut les
+deux : un **couronnement dentelé** (ce qui casse la ligne du haut, celle qu'on
+suit du regard en courant) et des **pierres déboîtées** sortant du parement.
+
+**La texture.** 32 px pour deux assises de deux blocs = 14×14 px par pierre : il
+n'y a physiquement pas la place d'y mettre un bord éclairé, un bord d'ombre, un
+éclat et un grain. Il ne reste qu'un rectangle uni bordé d'un trait, c'est-à-dire
+la façon dont on dessine une PLANCHE. Passée à 64 px, trois assises, mortier
+creusé sur deux pixels, grain par bloc, éclats de coin.
+
+### ⚠️ LE BUDGET A REFUSÉ LA PREMIÈRE VERSION, ET IL AVAIT RAISON
+
+`smoke-render.js` : **255 objets / 100 u sur la chaussée de pierre, plafond
+200.** Son commentaire dit pourquoi mieux que moi — cette section « doit tenir
+dans le MÊME plafond que les autres, sans quoi les images par seconde tomberaient
+pile sur les premières secondes de course ». C'est-à-dire là où Guillaume regarde
+la rambarde.
+
+Relâcher le plafond, c'était rendre le contrôle muet (leçon du 404). **On a donc
+changé la chose.** Mesure : la chaussée de pierre était déjà à **195 sur 200**
+avant ce zip — il n'y avait pas cinq objets de marge, il fallait en LIBÉRER. Or
+quand la rambarde est neuve elle est CONTINUE : rien à l'écran ne distingue un
+bloc de 17,6 unités de deux blocs de 8,8 accolés. On en pose donc un sur deux,
+deux fois plus long, et on dépense ce qu'on vient d'économiser en pierres qui
+dépassent.
+
+**195 avant, 185 après la fusion, 199 avec les saillies.**
+
+### ⚠️ ET J'AI ENFREINT LA RÈGLE DU 381 EN CHEMIN
+
+Les saillies tiraient dans `rng`, le flux du tronçon. Le budget mesuré est passé
+de 200 à 209 objets **sans qu'une seule saillie soit ajoutée** : ce n'était pas
+le coût des cailloux, c'était le décor entier qui avait changé de tirage — quelles
+bordures deviennent des stèles, où tombent les fissures. Un flux dédié
+(`rngAsp`), et les mesures redeviennent comparables. *Ne jamais ajouter un tirage
+dans un flux aléatoire partagé (381).*
+
+## 3. La pluie — un signe, et une fin
+
+`offset.y` décroissait avec le temps. La règle, pour n'avoir plus jamais à la
+refaire : le shader échantillonne `uv + offset` ; quand `offset.y` augmente, un
+même point de l'écran lit un texel plus haut, donc le motif DESCEND. Sur un
+PlaneGeometry v croît vers le haut et une CanvasTexture a flipY à vrai : les deux
+inversions se compensent. **offset.y qui monte = la pluie qui tombe.**
+
+C'est un défaut qu'on ne voit ni en relisant (la ligne est parfaitement écrite),
+ni sur une image fixe. **Il faut regarder BOUGER.**
+
+La courbe, choisie par Guillaume : pleine de **2 200 à 3 500 m**, puis extinction
+progressive jusqu'à **6 000 m**, et plus rien ensuite. Elle se lit avec deux
+autres nombres : la partie moyenne fait 5 018 m (l'orage couvre donc toute la
+partie type) et `DAY_PREDAWN_AT` vaut 10 000 (la pluie cesse quatre mille mètres
+avant que le ciel pâlisse, ce qui fait de sa fin l'ANNONCE de l'éclaircie).
+
+## 4. Les bras — le piège du 396, jamais appliqué ici
+
+> « PIÈGE DE SIGNE D'ARTICULATION (396) : le genou plie en NÉGATIF et le coude en
+> POSITIF, signes opposés. »
+
+Écrit au 396 **pour le labyrinthe**, jamais vérifié sur le défi de fuite — dont
+le fermier a pourtant exactement la même construction à deux segments. Les trois
+angles de coude étaient négatifs **depuis le zip 374** : les avant-bras se
+repliaient comme des tibias.
+
+La géométrie, posée une fois pour toutes : dans `limb2()` le segment inférieur
+pend vers -Y ; une rotation de θ autour de +X envoie (0,-1,0) sur
+(0, -cos θ, -sin θ), donc **θ positif pousse vers -Z, c'est-à-dire vers l'avant**.
+Le genou replie le tibia vers l'arrière (négatif), le coude replie l'avant-bras
+vers l'avant (positif).
+
+**⚠️ Pourquoi ça a tenu trente zips : les DEUX bras étaient faux du même côté.**
+Une asymétrie saute aux yeux ; une symétrie fausse se lit comme un parti pris.
+C'est le mode de panne le plus durable d'une animation.
+
+## Les VINGT-ET-UN outils du défi de fuite
+
+```
+node tools/verify-ambiance.mjs   # NEUF (406) : sommets dans le cadre, pluie qui tombe
+node tools/verify-pose.mjs       # NEUF (406) : coude positif, genou négatif
+node tools/preview-sky.js        # RÉPARÉ (406) : il jetait depuis le 400, et il mentait sur les largeurs
+```
+
+### Trois fois où le contrôle avait tort, encore
+
+* `verify-ambiance` situait le rougeoiement par rapport à `SKY_NEAR_H_MIN` avec
+  `indexOf` — et trouvait sa première mention, qui est un CALCUL en haut de
+  paintSky, pas le DESSIN. Il sonnait sur du code juste. Même famille qu'au 405 ;
+* `verify-pose` échappait deux fois ses expressions régulières et déclarait
+  « introuvables » trois angles parfaitement présents : **un contrôle qui accuse
+  le jeu de sa propre faute**, la pire des sorties ;
+* et `RAIL_MERGE` a été inséré au mauvais endroit de config.js : la constante
+  n'existait pas, `len` valait **NaN**, et les blocs de rambarde étaient
+  construits avec une longueur non finie. Rien n'a levé. C'est le budget mesuré,
+  incohérent avec la mesure précédente, qui l'a trahi. *Une constante absente ne
+  fait pas d'erreur en JavaScript : elle fait du NaN, et le NaN se propage en
+  silence.*
+
+## Ce qui n'a PAS été fait au 406
+
+* **Les pièces qui flottent dans les airs.** Guillaume a mentionné une troisième
+  capture qui n'est pas arrivée, et sa phrase se coupe. Sur options, il a choisi
+  de reporter — **c'est un chantier du 407**. Ne pas corriger une pente au
+  jugé : demander la capture (leçon du 402).
+* **Le joystick tactile.** Quatorzième zip. La forme est désormais ARRÊTÉE par
+  Guillaume, et elle n'est plus la même pour les deux jeux :
+  * **défi de fuite** — les commandes de Temple Run : des BALAYAGES. Gauche/droite
+    pour changer de voie, haut pour sauter, bas pour glisser. Pas de joystick.
+  * **labyrinthe** — un joystick pour se déplacer, le balayage pour tourner la
+    caméra (« pas trop vite »), et **taper sur l'ennemi pour le frapper**.
+* **Regarder le ciel corrigé DANS LE JEU.** `preview-sky.js` montre le cadrage,
+  pas la course : ni brouillard, ni lac, ni torches, ni jetée. La preuve du 406
+  est géométrique et graphique en planche, **pas une capture d'écran.**

@@ -254,7 +254,19 @@ const THREE = {
   BoxGeometry: class { dispose() {} }, OctahedronGeometry: class { dispose() {} },
   PlaneGeometry: class { dispose() {} }, SphereGeometry: class { dispose() {} },
   MeshLambertMaterial: Mat, MeshBasicMaterial: Mat,
-  CanvasTexture: class { constructor(cv) { this.image = cv; this.repeat = new V2(1, 1); this.offset = new V2(0, 0); } },
+  /* ⚠️ ZIP 406 — `clone()` MANQUAIT, ET CE SCRIPT NE TOURNAIT PLUS DEPUIS LE
+     ZIP 400. C'est le 400 qui a ajouté la pluie (buildRain clone sa texture par
+     nappe), et c'est le 400 qui, avec CE script, avait trouvé le « triangle
+     orange » en découpant la lanière de ciel réellement visible. L'outil qui
+     voit les défauts du ciel est donc mort le jour même où il a servi, et
+     personne ne l'a relancé pendant cinq zips — pendant lesquels Guillaume a
+     continué de voir des triangles. Un outil qu'on saute n'est pas un filet de
+     sécurité, c'est un fichier mort ; un outil qui JETTE et qu'on ne relance
+     pas est pire, parce qu'il donne l'impression qu'il existe. */
+  CanvasTexture: class {
+    constructor(cv) { this.image = cv; this.repeat = new V2(1, 1); this.offset = new V2(0, 0); }
+    clone() { const t = new this.constructor(this.image); t.repeat = new V2(this.repeat.x, this.repeat.y); return t; }
+  },
   Mesh: class extends Obj3 { constructor(g, m) { super(); this.geometry = g; this.material = m; this.isMesh = true; this.renderOrder = 0; } },
   Group: class extends Obj3 {}, Vector3: V3,
   DoubleSide: 2, BackSide: 1, FrontSide: 0,
@@ -315,7 +327,23 @@ const rowTop = Math.max(0, Math.floor(rowOf(elevTop)));
 const rowBot = Math.min(H_TEX, Math.ceil(rowOf(0)) + 26);   // un peu sous l'horizon vrai
 const bandH = rowBot - rowTop;
 
-const VW = 720, VH = Math.round(VW * 9 / 16);
+/* ⚠️⚠️ ZIP 406 — LE CADRAGE HORIZONTAL MANQUAIT, ET CET OUTIL MENTAIT SUR LES
+   LARGEURS. Il découpait la lanière verticale réellement visible — c'est ce
+   qui a trouvé le triangle orange au 400 — mais il étalait ensuite les 1024
+   colonnes de la texture sur toute la planche. Or le joueur n'en voit que
+   ~297 : le champ horizontal fait 104,5° sur les 360° du dôme. La planche
+   écrasait donc l'image d'un facteur SEPT en largeur, et présentait comme un
+   remplissage serré de petits pics ce qui est à l'écran cinq grandes pyramides.
+   C'est très exactement la leçon du 400 — « une planche à plat peut mentir sur
+   un cadrage » — appliquée à l'outil qui avait servi à l'énoncer.
+   Le champ horizontal se DÉDUIT du vertical et du format d'écran, il ne
+   s'écrit pas : hFOV = 2·atan(tan(vFOV/2)·aspect). */
+const ASPECT = 16 / 9;
+const hFovDeg = 2 * Math.atan(Math.tan(CFG.CAM_FOV / 2 * Math.PI / 180) * ASPECT) * 180 / Math.PI;
+const bandW = (hFovDeg / 360) * W_TEX;
+const colLeft = W_TEX / 2 - bandW / 2;
+
+const VW = 720, VH = Math.round(VW / ASPECT);
 
 function frame(cv, label) {
   /* Le tampon du faux canvas vit dans `cv.ctx.pixels`, en RGBA prémultipliée
@@ -325,7 +353,7 @@ function frame(cv, label) {
   for (let y = 0; y < VH; y++) {
     const sy = Math.min(H_TEX - 1, rowTop + Math.floor((y / VH) * bandH));
     for (let x = 0; x < VW; x++) {
-      const sx = Math.min(W_TEX - 1, Math.floor((x / VW) * W_TEX));
+      const sx = Math.min(W_TEX - 1, Math.floor(colLeft + (x / VW) * bandW));
       const k = (sy * W_TEX + sx) * 4, o = (y * VW + x) * 3;
       out[o] = src[k]; out[o + 1] = src[k + 1]; out[o + 2] = src[k + 2];
     }
@@ -367,12 +395,20 @@ console.log(`
 Tangage de la caméra : ${pitchDeg.toFixed(1)}°   champ vertical : ${CFG.CAM_FOV}°
 Élévations visibles  : ${elevBot.toFixed(1)}° .. ${elevTop.toFixed(1)}°
 LIGNES DU DÔME VUES  : ${rowTop} .. ${rowBot}  (sur 512, soit ${(100 * bandH / H_TEX).toFixed(0)} %)
+CHAMP HORIZONTAL     : ${hFovDeg.toFixed(1)}°  soit ${Math.round(bandW)} colonnes sur 1024 (${(100 * bandW / W_TEX).toFixed(0)} %)
 Horizon peint        : ligne ${Math.round(H_TEX * 0.52)}  — trait vert sur la planche
 
   ${path.relative(root, file)} (${OW}×${OH}) — haut : nuit, bas : jour
 
 ⚠️ Ce n'est PAS une capture du jeu : ni jetée, ni brouillard, ni lac, ni
-torches, et la sphère est approchée par un étirement vertical. Il montre OÙ
-sont les choses dans le cadre. Tout ce qui est chaud au-dessus du trait vert,
-ailleurs que dans un col, est le défaut du 400.
+torches, et la sphère est approchée par un étirement. Il montre OÙ sont les
+choses dans le cadre — en HAUTEUR comme en LARGEUR depuis le 406, ce qui n'était
+pas le cas avant et faussait tout jugement sur la taille des montagnes.
+
+LIRE CETTE PLANCHE. Deux questions, dans cet ordre :
+  1. VOIT-ON LES SOMMETS ? Un versant qui sort par le haut du cadre ne se lit
+     pas comme une montagne : il se lit comme un triangle, et c'est le reproche
+     que Guillaume a formulé aux 383, 400 et 405.
+  2. LA CHALEUR EST-ELLE DANS LES COLS ? Tout ce qui est chaud au-dessus du
+     trait vert ailleurs que dans un creux est le défaut du 400.
 `);
