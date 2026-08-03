@@ -547,7 +547,49 @@ const CFG = {
      texturés qui défilent à trois vitesses différentes donnent la même
      parallaxe pour trois objets — c'est le même raisonnement que les deux
      nappes du lac au 396. */
-  RAIN_MAX: 0.55,           // opacité de la nappe la plus proche, à pleine intensité
+  /* ======================================================================
+     ⚠️⚠️ ZIP 407 — LA PLUIE EST REFAITE EN ENTIER, SUR QUATRE REPROCHES.
+     ----------------------------------------------------------------------
+     Guillaume, après avoir joué au 406 : « la pluie n'est pas satisfaisante.
+     la réduire en intensité — et elle ne disparaît pas comme convenu ?? on a
+     dit disparition progressive à partir de 3000 m. et son étendue ne couvre
+     pas tout l'écran ; et le sens du vent que son orientation oblique évoque
+     est incohérent, car lorsqu'on tourne, les gouttes tombent toujours
+     direction NO-SE. »
+
+     Quatre reproches, quatre causes distinctes, et TROIS d'entre elles sont
+     des nombres posés à la main là où il fallait un calcul.
+
+       1. L'INTENSITÉ. 0,55 en additif sur trois nappes superposées : l'image
+          entière blanchissait. Guillaume demande **un crachin — mais qui
+          tombe BEAUCOUP plus vite**. C'est une réponse hors options, et elle
+          est meilleure que les trois proposées : une goutte pâle et LENTE se
+          lit comme du bruit d'image, une goutte pâle et RAPIDE se lit comme
+          de la pluie. Ce n'est pas l'opacité qui dit « il pleut », c'est la
+          vitesse.
+
+       2. LA DÉCRUE COMMENÇAIT À 3 500 ET NON À 3 000. Sa demande d'origine
+          disait 3 000 → 5 000 ; l'option qu'il avait cochée au 406 disait
+          3 500 → 6 000 ; il revient à sa demande d'origine. **Quand il
+          rappelle un nombre qu'il avait donné en clair, c'est celui-là.**
+
+       3. L'ÉTENDUE. Les trois nappes étaient posées « à camera.y + 1,6 »,
+          c'est-à-dire à une hauteur choisie au jugé, avec des tailles
+          choisies au jugé elles aussi (22×15, 40×24, 66×38). Mesuré : à
+          l'écran il manquait **6,3° de pluie en bas pour la nappe proche,
+          12,4° pour la médiane et 14,9° pour la lointaine** — soit tout le
+          quart bas de l'image, celui où se trouve la chaussée. Les tailles
+          sont maintenant DÉDUITES du tronc de vue (voir buildRain).
+
+       4. LE VENT. Les traînées obliques étaient peintes dans la TEXTURE, et
+          la nappe faisait face à la caméra : l'inclinaison était donc fixe à
+          l'ÉCRAN, ce qui veut dire que le vent tournait avec le joueur.
+          Guillaume a tranché : **pas de vent, la pluie tombe droit.** Les
+          traînées deviennent verticales et la nappe cesse de basculer avec le
+          tangage — sans quoi « droit » voudrait dire « droit à l'écran »,
+          c'est-à-dire 17,3° de travers dans le monde.
+     ====================================================================== */
+  RAIN_MAX: 0.18,           // opacité de la nappe la plus proche, à pleine intensité — un CRACHIN
   /* ======================================================================
      ⚠️ ZIP 406 — L'ORAGE A UNE FIN, ET C'EST UNE DEMANDE DE GUILLAUME.
      ----------------------------------------------------------------------
@@ -570,9 +612,40 @@ const CFG = {
      ====================================================================== */
   RAIN_START_DIST: 900,     // avant ça, pas une goutte : le départ reste clair
   RAIN_RAMP_DIST: 2200,     // pleine intensité atteinte ici
-  RAIN_HOLD_DIST: 3500,     // ... et tenue jusqu'ici
-  RAIN_END_DIST: 6000,      // extinction complète : plus une goutte au-delà
-  RAIN_FALL: 1.35,          // vitesse de défilement de la nappe la plus proche
+  RAIN_HOLD_DIST: 3000,     // ... et tenue jusqu'ici (3 500 au 406 : c'était la faute)
+  RAIN_END_DIST: 5000,      // extinction complète : plus une goutte au-delà
+  /* ⚠️ ZIP 407 — UNE VITESSE DE CHUTE EN UNITÉS PAR SECONDE, ET PLUS UN
+     COEFFICIENT DE DÉFILEMENT DE TEXTURE.
+     `RAIN_FALL: 1.35` était un multiplicateur d'`offset.y`, c'est-à-dire un
+     nombre qui ne veut rien dire tant qu'on ne connaît pas la taille de la
+     nappe ET sa répétition — les trois nappes tombaient donc à trois vitesses
+     sans rapport, réglées à la main par un facteur `sp` par couche.
+     Ici c'est une VRAIE vitesse : les trois nappes tombent à la même vitesse
+     dans le MONDE, et la parallaxe vient toute seule de leur distance, comme
+     dans la vraie vie. Le facteur `sp` par couche a disparu avec.
+     32 u/s, soit à peu près la vitesse de course en fin de rampe : c'est ce
+     qui fait qu'un crachin pâle se lit quand même comme de la pluie. Une
+     goutte pâle et LENTE se lit comme du bruit d'image. */
+  RAIN_SPEED: 32.0,         // unités/s — vitesse de chute, la même pour les trois nappes
+  /* Les trois nappes : à quelle distance de la caméra. Leur TAILLE, elle,
+     n'est plus écrite nulle part — elle est déduite du tronc de vue à cette
+     distance-là (voir buildRain). C'est la correction du reproche « son
+     étendue ne couvre pas tout l'écran ». */
+  /* Le côté d'une tuile de pluie, en unités de monde. Il vaut pour les trois
+     nappes : c'est lui qui garantit qu'une goutte de la nappe lointaine est
+     dessinée à la même taille RÉELLE qu'une goutte de la nappe proche, donc
+     plus petite à l'écran. Avec des répétitions choisies à la main (l'ancienne
+     version) les gouttes du fond étaient les plus grosses — l'inverse de la
+     perspective, et l'une des raisons pour lesquelles l'averse se lisait comme
+     un voile plutôt que comme de la pluie. */
+  RAIN_TILE: 9.0,
+  RAIN_LAYER_D: [5.5, 12.0, 22.0],
+  RAIN_LAYER_OP: [1.00, 0.62, 0.34],   // poids relatif de chaque nappe
+  /* La marge de sécurité sur la taille calculée. 1,12 = 12 % de rab : le
+     tronc de vue est calculé pour un écran 16/9, et un écran plus large en
+     demande davantage sur les côtés. Un joueur en 21/9 ne doit pas découvrir
+     une bordure sèche. */
+  RAIN_COVER_MARGIN: 1.12,
 
   LIGHTNING_MIN_MS: 7000,   // attente minimale entre deux éclairs
   LIGHTNING_MAX_MS: 19000,

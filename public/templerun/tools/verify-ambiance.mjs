@@ -199,9 +199,16 @@ ok(R(CFG.RAIN_END_DIST) === 0 && R(CFG.RAIN_END_DIST + 5000) === 0,
 }
 /* Elle doit couvrir la partie TYPE, sinon on l'a réglée pour personne :
    5 018 m de distance moyenne (simulate-run.js, inchangé depuis le 399). */
-ok(R(2500) > 0.5 && R(5018) > 0,
-  "l'orage couvre la partie moyenne (5 018 m)",
-  `à 2 500 m : ${R(2500).toFixed(2)} · à 5 018 m : ${R(5018).toFixed(2)}`);
+ok(R(2500) > 0.5 && R(4000) > 0,
+  "l'orage couvre la partie moyenne (5 018 m) sur l'essentiel de sa longueur",
+  `à 2 500 m : ${R(2500).toFixed(2)} · à 4 000 m : ${R(4000).toFixed(2)}`);
+/* ⚠️ ET LA DÉCRUE COMMENCE BIEN À 3 000, pas à 3 500. C'est le reproche exact
+   du 407 (« on a dit disparition progressive à partir de 3000 m ») et le seul
+   contrôle de ce fichier qui porte sur un NOMBRE demandé en clair par
+   Guillaume. Un contrôle sur un nombre qu'il a donné lui-même vaut plus qu'un
+   contrôle sur un seuil qu'on s'est fixé. */
+ok(CFG.RAIN_HOLD_DIST === 3000,
+  "⚠️ la décrue commence à 3 000 m, comme demandé", `${CFG.RAIN_HOLD_DIST} m`);
 /* ... et il finit AVANT que le jour se lève, sinon sa fin ne raconte rien. */
 ok(CFG.RAIN_END_DIST < CFG.DAY_PREDAWN_AT,
   "il cesse avant l'éclaircie (sa fin l'ANNONCE au lieu de la contredire)",
@@ -213,6 +220,77 @@ ok(CFG.RAIN_END_DIST < CFG.DAY_PREDAWN_AT,
 ok(/map\.offset\.y\s*=\s*\(\s*now\s*\*/.test(SRC),
   "⚠️ la pluie TOMBE (offset.y croît avec le temps)",
   /map\.offset\.y\s*=\s*\(\s*-\s*now/.test(SRC) ? "un signe moins : elle monte" : "");
+
+/* =============================================== 3. L'AVERSE DU 407 ======= */
+console.log("");
+
+/* L'ÉTENDUE. On refait la projection et on vérifie que CHAQUE nappe couvre le
+   tronc de vue à sa distance. C'est le reproche « son étendue ne couvre pas
+   tout l'écran », et c'est un contrôle qu'on ne pouvait pas écrire tant que
+   les tailles étaient des nombres posés à la main : il n'y avait rien à
+   comparer. Depuis qu'elles sont CALCULÉES, le contrôle refait le calcul par
+   l'autre bout — de la taille vers l'angle couvert. */
+{
+  const pitch = Math.atan2(CFG.CAM_LOOK_HEIGHT - CFG.CAM_HEIGHT, CFG.CAM_LOOK_AHEAD);
+  const halfV = CFG.CAM_FOV / 2 * Math.PI / 180;
+  const halfH = Math.atan(Math.tan(halfV) * ASPECT);
+  let worstBot = 99, worstSide = 99, allOk = true;
+  for (const d of (CFG.RAIN_LAYER_D || [])) {
+    const yTop = d * Math.tan(pitch + halfV), yBot = d * Math.tan(pitch - halfV);
+    const h = (yTop - yBot) * CFG.RAIN_COVER_MARGIN;
+    const w = 2 * d * Math.tan(halfH) * CFG.RAIN_COVER_MARGIN;
+    const yc = (yTop + yBot) / 2;
+    const bot = Math.atan2(yc - h / 2, d), top = Math.atan2(yc + h / 2, d);
+    const side = Math.atan2(w / 2, d);
+    if (bot > pitch - halfV || top < pitch + halfV || side < halfH) allOk = false;
+    worstBot = Math.min(worstBot, (pitch - halfV - bot) * 180 / Math.PI);
+    worstSide = Math.min(worstSide, (side - halfH) * 180 / Math.PI);
+  }
+  ok(Array.isArray(CFG.RAIN_LAYER_D) && CFG.RAIN_LAYER_D.length > 0,
+    "les nappes sont décrites par leur DISTANCE seule (leur taille se calcule)");
+  /* ⚠️ `length > 0` DANS LA CONDITION, ET CE N'EST PAS DE LA PARANOÏA. Sans
+     lui, sur un zip où RAIN_LAYER_D n'existe pas, la boucle ne tourne pas,
+     `allOk` reste vrai et le contrôle PASSE — sur du code où la pluie ne
+     couvre justement pas l'écran. Un contrôle qui parcourt une liste doit
+     exiger que la liste existe : c'est la version « boucle » du contrôle muet
+     du 404. */
+  ok(allOk && (CFG.RAIN_LAYER_D || []).length > 0,
+    "⚠️ chaque nappe couvre TOUT le tronc de vue, bas de l'image compris",
+    `marge la plus faible : ${worstBot.toFixed(1)}° en bas, ${worstSide.toFixed(1)}° sur les côtés`);
+  ok(!/camera\.position\.y\s*\+\s*1\.6/.test(SRC),
+    "la nappe n'est plus posée à une hauteur choisie au jugé");
+}
+
+/* L'APLOMB ET LE VENT. Deux contrôles, une seule idée : rien ne doit pouvoir
+   donner à la pluie une direction. `lookAt` la couchait de 17,3° (le tangage),
+   la dérive en X lui donnait un vent qui tournait avec le joueur, et
+   l'obliquité peinte dans la texture faisait la même chose en pire. */
+{
+  const tick = SRC.slice(SRC.indexOf("function tickRain"), SRC.indexOf("function buildSky"));
+  ok(!/lookAt/.test(tick),
+    "⚠️ la nappe ne bascule plus vers la caméra (sinon la pluie tombe le long de l'AXE DE VUE)");
+  ok(/m\.rotation\.set\(0,\s*yaw,\s*0\)/.test(tick),
+    "... elle ne pivote qu'en LACET, donc elle reste d'aplomb");
+  ok(/map\.offset\.x\s*=\s*0/.test(tick),
+    "⚠️ plus de dérive latérale : pas de vent, donc rien à contredire quand on tourne");
+  const paint = SRC.slice(SRC.indexOf("function paintRain"), SRC.indexOf("function buildRain"));
+  ok(!/x0\s*\+\s*\(\(\s*k\s*\/\s*\d+\s*\)\s*\|\s*0\)/.test(paint),
+    "⚠️ les traînées sont VERTICALES dans la texture (l'obliquité peinte était le vent qui tourne)");
+}
+
+/* LA VITESSE. Elle est en unités par seconde depuis le 407, ce qui veut dire
+   qu'on peut la juger : « 32 u/s » se compare à SPEED_MAX (34). « 1,35 »,
+   l'ancien coefficient de défilement, ne se comparait à rien. */
+ok(typeof CFG.RAIN_SPEED === "number" && CFG.RAIN_SPEED > 0,
+  "la chute est une VITESSE (u/s), plus un coefficient de défilement",
+  `${CFG.RAIN_SPEED} u/s, à comparer aux ${CFG.SPEED_MAX} u/s de la course`);
+ok(CFG.RAIN_SPEED >= CFG.SPEED_MAX * 0.6,
+  "⚠️ elle tombe VITE — c'est ce qui fait lire un crachin comme de la pluie",
+  `${CFG.RAIN_SPEED} u/s (plancher ${(CFG.SPEED_MAX * 0.6).toFixed(0)})`);
+ok(CFG.RAIN_MAX <= 0.25,
+  "... et elle reste un CRACHIN", `opacité ${CFG.RAIN_MAX} (plafond 0,25)`);
+ok(!/L\.sp/.test(SRC),
+  "les trois nappes tombent à la même vitesse dans le monde (la parallaxe vient de la distance)");
 
 console.log(`\n${fail === 0 ? "Tout est passé." : `${fail} contrôle(s) en échec.`}  (${pass}/${pass + fail})\n`);
 console.log(`Ce script ne dit RIEN de l'allure du ciel ni de l'ambiance de

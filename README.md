@@ -1,5 +1,31 @@
 # ARCARDI 🎪
 
+> **ZIP 407 — LA PLUIE, REFAITE EN ENTIER SUR QUATRE REPROCHES.**
+> Guillaume, après le 406 : « la pluie n'est pas satisfaisante. la réduire en
+> intensité — et elle ne disparaît pas comme convenu ?? on a dit disparition
+> progressive à partir de 3000 m. et son étendue ne couvre pas tout l'écran ;
+> et le sens du vent que son orientation oblique évoque est incohérent, car
+> lorsqu'on tourne, les gouttes tombent toujours direction NO-SE. »
+>
+> **Quatre reproches, quatre causes, et trois d'entre elles sont des nombres
+> posés à la main là où il fallait un calcul.**
+>
+> | ce qu'il a vu | la cause | après |
+> |---|---|---|
+> | trop intense | 0,55 d'opacité en additif sur trois nappes superposées | **0,18 — un crachin.** Mais **32 u/s de chute** au lieu d'un coefficient de défilement sans unité : une goutte pâle et LENTE se lit comme du bruit d'image, une goutte pâle et RAPIDE se lit comme de la pluie |
+> | « elle ne disparaît pas à 3 000 » | la décrue commençait à **3 500** — sa demande d'origine disait 3 000 | pleine de 2 200 à **3 000**, éteinte à **5 000** |
+> | « son étendue ne couvre pas tout l'écran » | les nappes étaient posées à `camera.y + 1,6`, hauteur au jugé, avec des tailles au jugé. **Il manquait 6,3° de pluie en bas pour la nappe proche, 12,4° pour la médiane, 14,9° pour la lointaine** — tout le quart bas de l'image, celui où se trouve la chaussée | tailles et hauteur **DÉDUITES du tronc de vue** : 2,0° de marge en bas, 3,1° sur les côtés |
+> | « le vent tourne avec moi » | l'obliquité était peinte dans la TEXTURE et la nappe faisait face à la caméra : l'inclinaison était donc fixe à l'ÉCRAN | traînées verticales, plus de dérive latérale, et la nappe ne pivote plus qu'en **lacet** — elle basculait aussi en tangage, ce qui faisait tomber les gouttes 17,3° de travers |
+>
+> **Sa réponse était encore hors options, et encore meilleure.** Aux trois
+> intensités proposées il a répondu « **un crachin, mais la vitesse de chute
+> doit être bien plus rapide** ». Ce n'est pas l'opacité qui dit « il pleut »,
+> c'est la vitesse — et aucune des trois options ne le voyait.
+>
+> **`verify-ambiance.mjs` passe de 19 à 31 contrôles, dont 12 échouaient sur le
+> 406.** Il refait la projection de la caméra pour vérifier que chaque nappe
+> couvre le cadre, y compris le bas.
+
 > **ZIP 406 — LE CIEL TIENT ENFIN DANS LE CADRE, ET LA PLUIE TOMBE DANS LE BON SENS.**
 > Quatre chantiers sur le défi de fuite, et **le premier durait depuis trois zips
 > parce qu'on cherchait au mauvais endroit.**

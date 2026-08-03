@@ -470,3 +470,122 @@ node tools/preview-sky.js        # RÉPARÉ (406) : il jetait depuis le 400, et 
 * **Regarder le ciel corrigé DANS LE JEU.** `preview-sky.js` montre le cadrage,
   pas la course : ni brouillard, ni lac, ni torches, ni jetée. La preuve du 406
   est géométrique et graphique en planche, **pas une capture d'écran.**
+
+---
+
+# ZIP 407 — LA PLUIE, REFAITE SUR QUATRE REPROCHES
+
+Le 406 avait redressé le sens de la pluie et lui avait donné une fin. Guillaume
+a joué, et les quatre phrases suivantes disent que ça ne suffisait pas :
+
+> « la pluie n'est pas satisfaisante. la réduire en intensité — et elle ne
+> disparaît pas comme convenu ?? on a dit disparition progressive à partir de
+> 3000 m. et son étendue ne couvre pas tout l'écran ; et le sens du vent que son
+> orientation oblique évoque est incohérent, car lorsqu'on tourne, les gouttes
+> tombent toujours direction NO-SE. »
+
+**Trois des quatre causes sont des nombres posés à la main là où il fallait un
+calcul.** C'est le motif de ce zip, et il vaut au-delà de la pluie.
+
+## 1. L'intensité — et la réponse hors options
+
+Trois intensités lui étaient proposées. Il a répondu à côté des trois :
+**« un crachin, mais la vitesse de chute des gouttes doit être bien plus
+rapide »** — et c'est meilleur que les trois, pour une raison qui n'était dans
+aucune : **ce n'est pas l'opacité qui dit « il pleut », c'est la vitesse.** Une
+goutte pâle et lente se lit comme du bruit d'image ; une goutte pâle et rapide
+se lit comme de la pluie.
+
+L'opacité tombe donc de 0,55 à **0,18**, et la chute passe de « 1,35 » — un
+coefficient de défilement de texture, c'est-à-dire un nombre qui ne veut rien
+dire tant qu'on ne connaît ni la taille de la nappe ni sa répétition — à
+**32 unités par seconde**, une vraie vitesse, qui se compare aux 34 u/s de la
+course. Et les traînées s'allongent dans la même proportion : ce qui dit la
+vitesse à l'œil, c'est le FILÉ.
+
+**Conséquence de bord, et elle était fausse depuis le 400 :** les trois nappes
+avaient chacune leur facteur `sp`, donc trois vitesses sans rapport entre elles,
+et des répétitions choisies à la main qui rendaient les gouttes du FOND plus
+grosses que celles du premier plan — l'inverse de la perspective. Elles tombent
+maintenant à la même vitesse dans le monde, avec des tuiles de la même taille
+réelle : la parallaxe vient de la distance, comme dans la vraie vie.
+
+## 2. La décrue commençait à 3 500
+
+Sa demande d'origine disait « de 3 000 à 5 000 ». L'option qu'il avait cochée au
+406 disait 3 500 → 6 000. Il revient à sa demande d'origine.
+
+> **Quand il rappelle un nombre qu'il avait donné en clair, c'est celui-là.**
+
+Pleine de 2 200 à **3 000**, éteinte à **5 000**. La partie moyenne fait
+5 018 m : l'averse finit donc pile où la course type se termine.
+
+## 3. L'étendue — le quart bas de l'image n'avait pas de pluie
+
+Les trois nappes étaient posées à `camera.position.y + 1,6` avec des tailles
+écrites à la main (22×15, 40×24, 66×38). Or **la caméra regarde vers le bas de
+17,3°** avec un demi-champ vertical de 36° : le bord bas de l'écran est donc à
+−53,3° sous l'horizontale, quand une nappe posée 1,6 au-dessus de la caméra ne
+descend qu'à −47°.
+
+| nappe | manquait en bas |
+|---|---|
+| proche (d = 5,5) | **6,3°** |
+| médiane (d = 12) | **12,4°** |
+| lointaine (d = 22) | **14,9°** |
+
+C'est tout le quart bas de l'image — celui où se trouve la chaussée,
+c'est-à-dire celui qu'on regarde en courant.
+
+**Les six nombres sont remplacés par une règle** : à la distance d, le tronc de
+vue occupe de `d·tan(tangage − demi-champ)` à `d·tan(tangage + demi-champ)`. On
+dimensionne et on CENTRE là-dessus, avec 12 % de marge pour les écrans plus
+larges que le 16/9. Le jour où quelqu'un touche au tangage ou au champ, les
+nappes suivent toutes seules. Marge obtenue : 2,0° en bas, 3,1° sur les côtés.
+
+## 4. Le vent qui tourne avec le joueur
+
+Trois choses donnaient une direction à la pluie, et il fallait les retirer
+toutes les trois :
+
+* **l'obliquité peinte dans la texture** (`x0 + ((k / 4) | 0)`, soit ~14°). La
+  nappe faisant face à la caméra, cette inclinaison était fixe à l'ÉCRAN : le
+  vent tournait donc avec le joueur. C'est très exactement « les gouttes tombent
+  toujours direction NO-SE » ;
+* **la dérive latérale** de `offset.x`, qui ajoutait un souffle constant ;
+* **`lookAt(camera.position)`**, qui inclinait la nappe vers la caméra et faisait
+  donc tomber les gouttes le long de l'AXE DE VUE — 17,3° de travers par rapport
+  aux murs et à la chaussée. Sans le retirer, « la pluie tombe droit » aurait
+  voulu dire « droit à l'écran ». La nappe ne pivote plus qu'en **lacet**.
+
+Guillaume a tranché : **pas de vent.** Une traînée parfaitement verticale
+n'évoque aucune direction, donc n'en contredit aucune.
+
+## Le contrôle
+
+`verify-ambiance.mjs` passe de 19 à **31 contrôles**, dont **12 échouaient sur
+le 406**. Le plus utile refait la projection de la caméra et vérifie que chaque
+nappe couvre le tronc de vue — un contrôle qu'on ne POUVAIT PAS écrire tant que
+les tailles étaient des nombres posés à la main : il n'y avait rien à comparer.
+
+> **⚠️ Et il a fallu le corriger une fois de plus.** La boucle de couverture
+> parcourait `CFG.RAIN_LAYER_D` — qui n'existe pas sur le 406. La boucle ne
+> tournait donc pas, `allOk` restait vrai, et le contrôle **passait** sur du code
+> où la pluie ne couvre justement pas l'écran. **Un contrôle qui parcourt une
+> liste doit exiger que la liste existe** : c'est la version « boucle » du
+> contrôle muet du 404.
+
+`simulate-run.js` rend exactement les mêmes chiffres qu'au 399 : 5 018 m,
+137,4 pièces, 0,03 trébuchement, mort passive à 14,6 s.
+
+## Ce qui n'a PAS été fait au 407
+
+* **Les pièces qui flottent dans les airs.** Toujours en attente de la capture
+  qui n'est jamais arrivée. Ne pas corriger une pente au jugé (leçon du 402).
+* **Le joystick tactile.** Quinzième zip. Trois chantiers distincts, forme
+  arrêtée par Guillaume au 406 : balayages pour le défi de fuite, joystick +
+  balayage caméra + tap sur l'ennemi pour le labyrinthe, et la demande d'origine
+  du 387 pour la ferme.
+* **Regarder la pluie tourner.** Aucun outil ne rend une image animée : la preuve
+  du 407 est géométrique. **Un défaut de mouvement ne se voit qu'en jouant** —
+  c'est ce qui a fait vivre le sens inversé jusqu'au 406.

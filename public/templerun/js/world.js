@@ -1559,22 +1559,45 @@ const World = (function () {
     const ctx = cv.getContext("2d");
     ctx.clearRect(0, 0, W, H);
     const rnd = Track.makeRng(0x7A1DEE);
-    for (let i = 0; i < 46; i++) {
+    /* ⚠️⚠️ ZIP 407 — LES TRAÎNÉES SONT VERTICALES, ET PLUS LONGUES.
+       -----------------------------------------------------------------------
+       VERTICALES : l'ancienne version décalait la traînée d'un pixel tous les
+       quatre (`x0 + ((k / 4) | 0)`), ce qui la couchait à ~14°. Cette
+       obliquité était peinte dans la TEXTURE, et la nappe faisait face à la
+       caméra : elle était donc fixe à L'ÉCRAN, et le vent tournait avec le
+       joueur. Guillaume, au 406 : « lorsqu'on tourne, les gouttes tombent
+       toujours direction NO-SE ». Il a tranché : pas de vent. Une traînée
+       parfaitement verticale n'évoque aucune direction, donc n'en contredit
+       aucune.
+
+       PLUS LONGUES, ET C'EST LA CONTREPARTIE DU CRACHIN. Guillaume demande
+       « un crachin, mais la vitesse de chute des gouttes doit être bien plus
+       rapide » — réponse hors options, et meilleure que les trois proposées.
+       Une goutte pâle et LENTE se lit comme du bruit d'image ; une goutte pâle
+       et RAPIDE se lit comme de la pluie. Or ce qui dit la vitesse à l'œil,
+       c'est le FILÉ : une goutte rapide laisse une trace longue. On allonge
+       donc les traînées dans la même proportion qu'on accélère la chute, et on
+       les affine (une seule fois sur huit à deux pixels au lieu d'une sur
+       quatre) pour que l'ensemble reste léger.
+
+       ⚠️ MOINS DE TRAÎNÉES, AUSSI : 34 au lieu de 46. À 0,18 d'opacité et avec
+       des filés deux fois plus longs, la surface couverte augmenterait sans ça
+       — et un crachin dont on a seulement baissé l'opacité reste un voile. */
+    for (let i = 0; i < 34; i++) {
       const x0 = Math.floor(rnd() * W);
       const y0 = Math.floor(rnd() * H);
-      const len = 16 + Math.floor(rnd() * 34);
-      const thick = rnd() < 0.25 ? 2 : 1;
-      /* Les gouttes proches sont plus longues ET plus claires : sans cet écart,
-         une nappe unique se lit comme une grille et non comme de la pluie. */
-      const a = 0.20 + rnd() * 0.42;
+      const len = 34 + Math.floor(rnd() * 58);
+      const thick = rnd() < 0.12 ? 2 : 1;
+      /* Les gouttes ne sont pas toutes également claires : sans cet écart, une
+         nappe unique se lit comme une grille et non comme de la pluie. */
+      const a = 0.18 + rnd() * 0.40;
       for (let k = 0; k < len; k++) {
         // ⚠️ On reboucle en Y à la main : une traînée coupée par le bord du
         // canvas ferait une couture horizontale visible à chaque répétition.
         const y = (y0 + k) % H;
-        const x = (x0 + ((k / 4) | 0)) % W;
         ctx.globalAlpha = a * (1 - k / len) * 0.9 + a * 0.1;
         ctx.fillStyle = "#cfd6ff";
-        ctx.fillRect(x, y, thick, 1);
+        ctx.fillRect(x0, y, thick, 1);
       }
     }
     ctx.globalAlpha = 1;
@@ -1584,13 +1607,56 @@ const World = (function () {
   /* Trois nappes devant l'œil, à trois profondeurs. Elles sont reposées à
      chaque image devant la caméra : ce sont des objets PERMANENTS, donc hors
      du budget par tronçon, et elles ne suivent aucun tronçon. */
+  /* ⚠️⚠️ ZIP 407 — LA TAILLE D'UNE NAPPE SE CALCULE, ELLE NE SE CHOISIT PAS.
+     -------------------------------------------------------------------------
+     Reproche de Guillaume : « son étendue ne couvre pas tout l'écran ». Il a
+     raison, et le chiffre est net : les trois nappes étaient posées à
+     `camera.y + 1,6` avec des tailles écrites à la main (22×15, 40×24,
+     66×38). Or la caméra REGARDE VERS LE BAS de 17,3°, avec un demi-champ
+     vertical de 36° : le bord bas de l'écran est donc à −53,3° sous
+     l'horizontale, quand une nappe posée 1,6 au-dessus de la caméra ne
+     descend qu'à −47°. **Il manquait 6,3° de pluie en bas pour la nappe
+     proche, 12,4° pour la médiane, 14,9° pour la lointaine** — tout le quart
+     bas de l'image, celui où se trouve la chaussée, c'est-à-dire celui qu'on
+     regarde en courant.
+
+     La règle qui remplace les six nombres : à la distance horizontale d, le
+     tronc de vue occupe en hauteur de `d·tan(tangage − demi-champ)` à
+     `d·tan(tangage + demi-champ)` autour de la caméra. On dimensionne et on
+     centre là-dessus, avec RAIN_COVER_MARGIN de rab. Le jour où quelqu'un
+     touche au tangage ou au champ, les nappes suivent toutes seules.
+
+     ⚠️ ET LA NAPPE EST DÉSORMAIS D'APLOMB. Elle basculait vers la caméra
+     (`lookAt`), donc sa verticale suivait le TANGAGE : « la pluie tombe
+     droit » aurait voulu dire « droit à l'écran », c'est-à-dire 17,3° de
+     travers par rapport aux murs et à la chaussée. Elle ne pivote plus qu'en
+     LACET. Voir tickRain. */
+  function rainLayerSize(d) {
+    const pitch = Math.atan2(CFG.CAM_LOOK_HEIGHT - CFG.CAM_HEIGHT, CFG.CAM_LOOK_AHEAD);
+    const halfV = CFG.CAM_FOV / 2 * Math.PI / 180;
+    // 16/9 est le format de référence ; RAIN_COVER_MARGIN paie les écrans plus larges.
+    const halfH = Math.atan(Math.tan(halfV) * (16 / 9));
+    const yTop = d * Math.tan(pitch + halfV);
+    const yBot = d * Math.tan(pitch - halfV);
+    const h = (yTop - yBot) * CFG.RAIN_COVER_MARGIN;
+    const w = 2 * d * Math.tan(halfH) * CFG.RAIN_COVER_MARGIN;
+    // `yc` est la hauteur du CENTRE du tronc de vue à cette distance, relative
+    // à la caméra : c'est là qu'il faut centrer la nappe, et nulle part ailleurs.
+    return { w, h, yc: (yTop + yBot) / 2 };
+  }
+
   function buildRain() {
     const texR = pixelTexture(paintRain(), 1, 1);
-    const layers = [
-      { d: 5.5, w: 22, h: 15, rx: 2.0, ry: 1.6, sp: 1.00, op: 1.00 },
-      { d: 12.0, w: 40, h: 24, rx: 3.4, ry: 2.6, sp: 0.62, op: 0.70 },
-      { d: 22.0, w: 66, h: 38, rx: 5.2, ry: 3.8, sp: 0.38, op: 0.45 },
-    ];
+    /* La répétition suit la TAILLE : une tuile de pluie fait RAIN_TILE unités
+       de côté quelle que soit la nappe, sinon les gouttes de la nappe
+       lointaine seraient dessinées trois fois plus grosses que celles de la
+       proche — l'inverse de la perspective. */
+    const TILE = CFG.RAIN_TILE;
+    const layers = CFG.RAIN_LAYER_D.map((d, i) => {
+      const s = rainLayerSize(d);
+      return { d, w: s.w, h: s.h, yc: s.yc,
+               rx: s.w / TILE, ry: s.h / TILE, op: CFG.RAIN_LAYER_OP[i] };
+    });
     for (const L of layers) {
       /* Une texture CLONÉE par nappe : l'image est partagée (une seule montée
          sur le GPU), seuls la répétition et le défilement diffèrent. Même
@@ -1642,11 +1708,34 @@ const World = (function () {
       m.material.opacity = CFG.RAIN_MAX * L.op * k;
       m.visible = m.material.opacity > 0.004;
       if (!m.visible) continue;
-      m.position.set(camera.position.x + fx * L.d, camera.position.y + 1.6, camera.position.z + fz * L.d);
-      m.lookAt(camera.position);
-      /* Le défilement, et une dérive latérale : une pluie strictement verticale
-         sur un joueur qui court à 34 u/s ne peut pas être juste.
-         ⚠️⚠️ ZIP 406 — LE SIGNE ÉTAIT INVERSÉ, ET LA PLUIE MONTAIT.
+      /* ⚠️ ZIP 407 — CENTRÉE SUR LE TRONC DE VUE, ET D'APLOMB.
+         `camera.position.y + 1.6` était une hauteur au jugé : elle plaçait le
+         centre de la nappe à 33° AU-DESSUS du centre de l'écran, si bien que
+         le bas de l'image n'avait pas de pluie. `L.yc` est la hauteur du
+         centre du tronc de vue à cette distance — calculée, pas choisie.
+         Et `lookAt` a disparu : il inclinait la nappe vers la caméra, donc
+         faisait tomber les gouttes le long de l'axe de VUE (17,3° de travers)
+         au lieu de la verticale du MONDE. La nappe ne pivote plus qu'en
+         LACET, elle reste debout, et « la pluie tombe droit » veut enfin dire
+         ce que ça dit. */
+      m.position.set(camera.position.x + fx * L.d,
+                     camera.position.y + L.yc,
+                     camera.position.z + fz * L.d);
+      m.rotation.set(0, yaw, 0);
+      /* ⚠️⚠️ ZIP 407 — LE DÉFILEMENT EST UNE VITESSE, ET LA DÉRIVE LATÉRALE A
+         DISPARU.
+         Une tuile de pluie fait TILE unités de haut dans le monde ; avancer
+         `offset.y` d'une unité fait défiler une tuile. Pour tomber à
+         RAIN_SPEED unités par seconde, il faut donc avancer de
+         RAIN_SPEED / TILE par seconde — la même valeur pour les trois nappes,
+         puisqu'elles ont toutes des tuiles de même taille. La parallaxe naît
+         de la perspective et non d'un coefficient par couche : c'est ce que
+         faisait l'ancien facteur `sp`, à la main et sans rapport avec la
+         distance réelle.
+         Et la dérive en X est retirée : c'était elle, le « vent » dont
+         Guillaume dit que la direction est incohérente quand on tourne. Sans
+         vent, il n'y a plus de direction à contredire.
+         ⚠️ ZIP 406 — LE SIGNE ÉTAIT INVERSÉ, ET LA PLUIE MONTAIT.
          Guillaume : « la pluie tombe à l'envers (bas vers le haut) ». Le
          raisonnement, pour qu'on n'ait plus jamais à le refaire : le shader
          échantillonne `uv + offset`. Quand `offset.y` AUGMENTE, un même point
@@ -1658,8 +1747,8 @@ const World = (function () {
          C'est un défaut qu'on ne voit pas en relisant (la ligne est
          parfaitement bien écrite) et qu'on ne voit pas non plus sur une image
          fixe : il faut regarder bouger. */
-      m.material.map.offset.y = (now * 0.001 * CFG.RAIN_FALL * L.sp) % 1;
-      m.material.map.offset.x = (now * 0.00012 * L.sp) % 1;
+      m.material.map.offset.y = (now * 0.001 * (CFG.RAIN_SPEED / CFG.RAIN_TILE)) % 1;
+      m.material.map.offset.x = 0;      // plus de vent : plus de dérive
     }
   }
 
