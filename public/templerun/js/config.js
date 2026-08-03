@@ -369,13 +369,28 @@ const CFG = {
      Le ciel peint est légèrement SOUS ces valeurs : la texture est ensuite
      multipliée par la lumière de l'éclair et surtout relevée par la brume
      additive du lac, qui la ramène à peu près à la référence à l'écran. */
-  SKY_TOP:       0x0e0818,  // zénith, presque noir
-  SKY_MID:       0x1a1029,  // corps du ciel
-  SKY_HORIZON:   0x2b1526,  // rougeoiement bas, désaturé (voir la bande, plus bas)
+  SKY_TOP:       0x070410,  // zénith, presque noir
+  SKY_MID:       0x0d0817,  // corps du ciel
+  SKY_HORIZON:   0x150a14,  // rougeoiement bas, désaturé (voir la bande, plus bas)
   SKY_CLOUD:     0x241634,  // masse nuageuse
   SKY_CLOUD_LIT: 0x40305e,  // liseré éclairé des nuages, côté lune
   SKY_MOON:      0xd7cae8,
-  SKY_PEAKS:     0x0c0a15,  // crêtes en silhouette : quasi noires, comme sur l'image
+  /* ⚠️ ZIP 408 — COMBIEN DE NUAGES. Zéro : Guillaume les a fait retirer en
+     même temps qu'il a demandé la nuit d'encre. Le nombre existe plutôt qu'un
+     bloc supprimé pour deux raisons : la décision est ANNULABLE d'un chiffre,
+     et SKY_CLOUD / SKY_CLOUD_LIT restent lues par le code, donc ne deviennent
+     pas des constantes mortes en attente (leçon du 385).
+     ⚠️ La boucle tourne quand même à vide : ses tirages appartiennent au flux
+     partagé du ciel, et en retirer un décalerait les montagnes (règle du 381,
+     dans l'autre sens). Voir paintSky. */
+  SKY_CLOUD_COUNT: 0,
+  /* ⚠️ ZIP 408 — ENCORE PLUS NOIRES. À 0x0c0a15 sur un ciel devenu 0x0d0817,
+     la chaîne PROCHE avait exactement la teinte du fond : elle disparaissait,
+     et les deux plans de relief n'en faisaient plus qu'un. Trois niveaux sont
+     nécessaires pour que la profondeur se lise — ciel très sombre, chaîne
+     lointaine à peine plus claire, chaîne proche franchement NOIRE — et c'est
+     le troisième qui manquait. */
+  SKY_PEAKS:     0x030207,  // crêtes proches : noires, elles se découpent sur tout
 
   /* ========================================== CYCLE JOUR / NUIT (zip 382) ===
      Demande de Guillaume, sur une image de référence : « le même lac la
@@ -500,12 +515,12 @@ const CFG = {
      406 : « ne change pas la palette relevée »). Les couleurs sont celles
      relevées au pixel sur ses références ; seule la GÉOMÉTRIE change.
      ====================================================================== */
-  SKY_FAR_H_MIN: 20,        // chaîne LOINTAINE : hauteur min, en px de texture
-  SKY_FAR_H_MAX: 38,        // ... et max. Sommet le plus haut = ligne 228 sur 202 visibles.
+  SKY_FAR_H_MIN: 28,        // chaîne LOINTAINE : hauteur min, en px de texture
+  SKY_FAR_H_MAX: 50,        // ... et max. Sommet le plus haut = ligne 228 sur 202 visibles.
   SKY_FAR_W_MIN: 70,        // largeur min : ~330 px d'écran
   SKY_FAR_W_MAX: 140,
-  SKY_NEAR_H_MIN: 16,       // chaîne PROCHE : plus basse, elle passe DEVANT
-  SKY_NEAR_H_MAX: 34,
+  SKY_NEAR_H_MIN: 22,       // chaîne PROCHE : plus basse, elle passe DEVANT
+  SKY_NEAR_H_MAX: 44,
   SKY_NEAR_W_MIN: 62,
   SKY_NEAR_W_MAX: 128,
   /* La hauteur du rougeoiement bas. ⚠️ ELLE NE SUIT PLUS LA CRÊTE LA PLUS
@@ -522,7 +537,7 @@ const CFG = {
      Il reste peint ENTRE les deux chaînes — ça, c'est le correctif du 400 et
      il n'a pas bougé : la chaleur ne se voit que dans les cols du plan PROCHE,
      c'est-à-dire littéralement « entre les montagnes ». */
-  SKY_GLOW_H: 34,
+  SKY_GLOW_H: 20,
   COL_DAY_FOG:       0x7d6a9c,
   COL_DAY_LAKE:      0x443957,  // creux des ondes, de jour
   COL_DAY_LAKE_GLOW: 0x816aa6,  // crêtes, de jour

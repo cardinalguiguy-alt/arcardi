@@ -1263,7 +1263,7 @@ const World = (function () {
        la lumière évoquée plutôt que posée. */
     const g = ctx.createLinearGradient(0, 0, 0, HORIZON);
     g.addColorStop(0, cssHex(P.top));
-    g.addColorStop(0.42, cssHex(P.mid));
+    g.addColorStop(0.76, cssHex(P.mid));
     g.addColorStop(1, cssHex(P.horizon));
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, W, HORIZON);
@@ -1328,12 +1328,27 @@ const World = (function () {
        le seul détail du dessin qui n'est pas identique entre les deux ciels,
        et il ne peut pas glisser — un nuage ne change pas de place, seul son
        liseré passe d'un bord à l'autre. */
+    /* ⚠️⚠️ ZIP 408 — LES NUAGES SONT RETIRÉS, ET LE TIRAGE EST CONSERVÉ.
+       Demande de Guillaume : « nuit d'encre et les nuages retirés ». Ils
+       étaient la seule masse CLAIRE du ciel (0x241634 et 0x40305e sur un
+       zénith à 0x070410) : sur une lanière visible où le relief n'occupe plus
+       tout le cadre, ils redevenaient le sujet — et une nuit qui doit faire
+       peur n'a pas de gros nuages pâles au-dessus de la tête.
+       ⚠️ LA BOUCLE TOURNE QUAND MÊME, À VIDE, ET C'EST DÉLIBÉRÉ. Elle tire
+       quatre nombres par nuage dans `rnd`, le flux PARTAGÉ du ciel : la
+       supprimer décalerait tout ce qui vient après — donc les montagnes, donc
+       le dessin entier. C'est la règle du 381 (« ne jamais ajouter un tirage
+       dans un flux aléatoire partagé »), appliquée à l'envers : en RETIRER un
+       est tout aussi grave. On garde donc les tirages et on ne dessine plus.
+       SKY_CLOUD_COUNT à 0 les éteint ; le remettre à 26 les rend tels quels,
+       à l'identique, sans un pixel de différence ailleurs. */
     const litX = night ? mx : W * 0.72;
     for (let c = 0; c < 26; c++) {
       const cx = rnd() * W;
       const cy = H * 0.06 + rnd() * (HORIZON - H * 0.14);
       const scale = 0.6 + rnd() * 1.1;
       const lit = Math.abs(cx - litX) < W * 0.22;
+      if (c >= CFG.SKY_CLOUD_COUNT) continue;   // zip 408 : tirage gardé, dessin coupé
       drawCloud(cx, cy, scale, lit);
       if (cx < 160) drawCloud(cx + W, cy, scale, lit);          // recouture
       if (cx > W - 160) drawCloud(cx - W, cy, scale, lit);
@@ -1423,8 +1438,8 @@ const World = (function () {
          ciel : la teinte rougeâtre reste (Guillaume l'a demandée), le triangle
          disparaît parce qu'il n'y a plus assez d'écart pour dessiner un bord. */
       glow.addColorStop(0, "rgba(74,34,48,0)");
-      glow.addColorStop(0.55, "rgba(84,38,54,0.42)");
-      glow.addColorStop(1, "rgba(58,26,42,0.62)");
+      glow.addColorStop(0.55, "rgba(84,38,54,0.12)");
+      glow.addColorStop(1, "rgba(58,26,42,0.18)");
     } else {
       glow.addColorStop(0, "rgba(191,130,153,0)");
       glow.addColorStop(0.5, "rgba(199,138,152,0.62)");
@@ -1464,7 +1479,16 @@ const World = (function () {
     // (zip 383 : le plan lointain de nuit suit l'assombrissement du ciel. Le
     // laisser à son violet d'avant l'aurait fait ressortir COMME un objet
     // éclairé au-dessus d'un ciel devenu noir — l'inverse d'un lointain.)
-    range(night ? "rgba(38,26,58,0.72)" : "rgba(80,79,117,0.78)",
+    /* ⚠️⚠️ ZIP 408 — LA CHAÎNE LOINTAINE EST RABAISSÉE AVEC LE CIEL, SINON ELLE
+       DEVIENT L'OBJET LE PLUS CLAIR DE L'IMAGE. Sur un zénith à 0x070410, le
+       violet du 379 (38,26,58 à 0,72) composait à ~(31,21,45) : plus clair que
+       le ciel, donc des triangles PÂLES sur du noir. C'est très exactement le
+       mot que Guillaume employait aux 383, 400 et 405 — « les triangles
+       lumineux » — et on le retrouvait par l'autre bout en noircissant le
+       fond. Une teinte n'est jamais claire ou sombre en soi : elle l'est par
+       rapport à ce qu'il y a derrière. En noircissant un ciel, il faut
+       noircir ce qui s'y découpe, ou l'inverser. */
+    range(night ? "rgba(24,17,38,0.62)" : "rgba(80,79,117,0.78)",
           CFG.SKY_FAR_H_MIN, CFG.SKY_FAR_H_MAX, CFG.SKY_FAR_W_MIN, CFG.SKY_FAR_W_MAX, -2);
 
     /* ⚠️⚠️ ICI, ET PAS AVANT — c'est tout le correctif du zip 400.

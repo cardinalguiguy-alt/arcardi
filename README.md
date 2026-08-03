@@ -1,5 +1,41 @@
 # ARCARDI 🎪
 
+> **ZIP 408 — NUIT D'ENCRE, RELIEF REMONTÉ, NUAGES RETIRÉS.**
+> Guillaume : « la palette de ciel et montagnes est encore trop lumineuse
+> (surtout à cause de la réduction de la taille des montagnes opérée quelques
+> zips auparavant…), cela rend le jeu moins effrayant. »
+>
+> **Sa cause est la bonne, et j'en avais ajouté une seconde au 406 sans la
+> voir.** Tant que les montagnes montaient hors cadre, elles MASQUAIENT le
+> ciel : la palette pouvait être ce qu'elle voulait, on ne la voyait pas. En
+> les rentrant dans le cadre (406) on a exposé 40 % de ciel qui n'avait jamais
+> été jugé. Et en redistribuant le dégradé de fond — `mid` à 42 % au lieu de
+> 86 % — j'avais fait glisser toute la lanière visible vers `horizon`, la
+> teinte la plus chaude de la palette. **Deux causes, et la seconde est de
+> moi.**
+>
+> | | avant | après |
+> |---|---|---|
+> | zénith / corps / horizon | 0x0e0818 · 0x1a1029 · 0x2b1526 | **0x070410 · 0x0d0817 · 0x150a14** |
+> | rougeoiement bas | 0,42 → 0,62 d'alpha sur 34 px | **0,12 → 0,18 sur 20 px** |
+> | répartition du dégradé | `mid` à 42 % | **76 %** |
+> | chaîne lointaine | 20-38 px | **28-50 px** |
+> | chaîne proche | 16-34 px | **22-44 px**, et **0x030207** (elle était 0x0c0a15) |
+> | nuages | 26 | **0** |
+>
+> **Et il a fallu une seconde passe, trouvée en regardant.** Une fois le ciel
+> noirci, la chaîne LOINTAINE — inchangée depuis le 379 — composait plus CLAIR
+> que le fond : des triangles **pâles** sur du noir, c'est-à-dire très
+> exactement le mot que Guillaume employait aux 383, 400 et 405, retrouvé par
+> l'autre bout. **Une teinte n'est jamais claire ou sombre en soi : elle l'est
+> par rapport à ce qu'il y a derrière.** En noircissant un ciel, il faut
+> noircir ce qui s'y découpe.
+>
+> Les nuages sont éteints par un compte (`SKY_CLOUD_COUNT: 0`) et non
+> supprimés : **la boucle tourne encore à vide**, parce que ses tirages
+> appartiennent au flux aléatoire partagé du ciel et qu'en retirer un
+> décalerait les montagnes. C'est la règle du 381, appliquée à l'envers.
+
 > **ZIP 407 — LA PLUIE, REFAITE EN ENTIER SUR QUATRE REPROCHES.**
 > Guillaume, après le 406 : « la pluie n'est pas satisfaisante. la réduire en
 > intensité — et elle ne disparaît pas comme convenu ?? on a dit disparition

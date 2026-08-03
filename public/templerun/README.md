@@ -589,3 +589,100 @@ les tailles étaient des nombres posés à la main : il n'y avait rien à compar
 * **Regarder la pluie tourner.** Aucun outil ne rend une image animée : la preuve
   du 407 est géométrique. **Un défaut de mouvement ne se voit qu'en jouant** —
   c'est ce qui a fait vivre le sens inversé jusqu'au 406.
+
+---
+
+# ZIP 408 — NUIT D'ENCRE, RELIEF REMONTÉ, NUAGES RETIRÉS
+
+> « la palette de ciel et montagnes est encore trop lumineuse (surtout à cause
+> de la réduction de la taille des montagnes opérée quelques zips
+> auparavant…), cela rend le jeu moins effrayant. »
+
+**Sa parenthèse est le diagnostic, et elle est juste.** Tant que les montagnes
+montaient à 132 px sur une lanière visible de 63, elles **masquaient le ciel** :
+la palette pouvait être ce qu'elle voulait, on n'en voyait presque rien. Le 406
+a rentré les sommets dans le cadre — correction nécessaire, et qui a coûté trois
+zips à trouver — et a du même coup **exposé 40 % de ciel qui n'avait jamais été
+jugé**. Le défaut n'a pas été créé par le 406 : il a été RÉVÉLÉ.
+
+> **La leçon, et elle est générale : une correction peut rendre visible un
+> défaut vieux de trente zips.** Après avoir retiré ce qui masquait quelque
+> chose, aller regarder ce qu'on vient de découvrir. Personne n'avait jamais vu
+> ce ciel-là, parce que personne ne l'avait jamais vu.
+
+**Et j'y avais ajouté une seconde cause au 406, sans la voir.** En redistribuant
+le dégradé de fond (`mid` à 42 % au lieu de 86 %), j'ai fait glisser toute la
+lanière visible — qui est entièrement dans la moitié basse — vers `horizon`,
+c'est-à-dire vers la teinte la plus chaude de la palette. Le geste était bon (un
+aplat plus une bascule n'est pas un dégradé) et son effet ne l'était pas.
+
+## Ce qui change
+
+Trois leviers, dans l'ordre de leur effet sur la lanière visible :
+
+1. **la répartition du dégradé** : `mid` revient à 76 %, donc le ciel visible
+   reste près du corps sombre au lieu de virer au chaud ;
+2. **le rougeoiement** : de 0,42/0,62 d'alpha sur 34 px à **0,12/0,18 sur 20**.
+   Il ne se lit plus que dans les cols du plan proche, ce qui était son but
+   depuis le 400 ;
+3. **la palette elle-même** : zénith, corps et horizon descendent tous les trois.
+
+Plus **le relief remonté** (lointaine 28-50, proche 22-44), qui est la réponse
+directe à sa parenthèse : plus de silhouette, moins de ciel exposé. Il reste
+18 % de ciel libre au-dessus des sommets — le contrôle en exige 15, et c'est lui
+qui garde la porte contre un retour des sommets hors cadre.
+
+Et **les nuages retirés**.
+
+## La seconde passe — trouvée en regardant, pas en calculant
+
+Le premier rendu de la nuit d'encre montrait des **triangles PÂLES sur du noir**.
+La chaîne lointaine, `rgba(38,26,58,0.72)`, inchangée depuis le 379, composait à
+~(31,21,45) sur un zénith devenu (7,4,16) : elle était devenue **l'objet le plus
+clair de l'image**. C'est très exactement le mot employé par Guillaume aux 383,
+400 et 405 — « les triangles lumineux » — retrouvé par l'autre bout, en
+noircissant le fond.
+
+Et la chaîne PROCHE, à 0x0c0a15, avait désormais la teinte du ciel : elle
+disparaissait, et les deux plans de relief n'en faisaient plus qu'un.
+
+> **Une teinte n'est jamais claire ou sombre en soi : elle l'est par rapport à
+> ce qu'il y a derrière.** En noircissant un fond, il faut noircir ce qui s'y
+> découpe — ou l'inverser délibérément.
+
+Trois niveaux sont nécessaires pour que la profondeur se lise : ciel très
+sombre, chaîne lointaine à peine plus claire (24,17,38 à 0,62), chaîne proche
+franchement **noire** (0x030207).
+
+## Les nuages : éteints, pas supprimés
+
+`SKY_CLOUD_COUNT: 0`. La boucle tourne **encore, à vide**, et ce n'est pas de la
+timidité : elle tire quatre nombres par nuage dans `rnd`, le flux partagé du
+ciel. La supprimer décalerait tout ce qui vient après — donc les montagnes, donc
+le dessin entier. **C'est la règle du 381 appliquée à l'envers : retirer un
+tirage d'un flux partagé est aussi grave qu'en ajouter un.**
+
+Bénéfice de bord : la décision est annulable d'un chiffre, et `SKY_CLOUD` /
+`SKY_CLOUD_LIT` restent lues, donc ne deviennent pas des constantes mortes en
+attente (leçon du 385).
+
+## Le contrôle
+
+`verify-ambiance.mjs` : **31/31**, dont « il reste du CIEL au-dessus des
+montagnes » à 18 % (plancher 15) et « les montagnes occupent quand même le
+cadre » à 79 %. C'est ce contrôle qui autorise à remonter le relief sans
+craindre le retour des sommets hors cadre — sans lui, ce zip aurait été un pari.
+
+`simulate-run.js` : 5 018 m, 137,4 pièces, 0,03 trébuchement, mort passive à
+14,6 s — *inchangés depuis le 399*.
+
+## Ce qui n'a PAS été fait au 408
+
+* **Le ciel de JOUR n'a pas bougé.** La demande portait sur la nuit — « cela rend
+  le jeu moins effrayant » — et le lever de soleil à 10 000 m est un moment de
+  répit assumé depuis le 382. Mais l'écart entre les deux ciels vient de
+  DOUBLER : le fondu sera plus spectaculaire, et peut-être trop. **À regarder en
+  jouant.**
+* **Les pièces qui flottent.** Toujours en attente de la capture.
+* **Le joystick tactile.** Seizième zip. Trois chantiers distincts, forme
+  arrêtée au 406.
