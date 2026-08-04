@@ -1394,3 +1394,48 @@ bougé dans le flux aléatoire partagé.
   d'écran.** Il n'y a que Guillaume qui puisse en faire une.
 * **L'équilibrage du traqueur tuable.** `STALK_HP = 4` est un nombre choisi, pas
   mesuré : l'oracle de `simulate-maze` ne tire pas à l'arbalète.
+
+
+---
+
+## ZIP 417 — LE LABYRINTHE PASSE DERRIÈRE UN MUR DE CHANTIER
+
+Demande de Guillaume : *« mettre le labyrinthe derrière le même blocage
+développeur que le jeu de descente, indiquant au visiteur qu'il est encore en
+construction — toujours même commande pour bypass »*.
+
+Au chargement, la page affiche **« Galerie en travaux »** et rien d'autre n'est
+accessible. On l'ouvre avec **⌘⇧X pressé DEUX FOIS** (ou Ctrl+Maj+X hors Mac),
+les deux pressions à moins de 3,5 s d'intervalle. Le déverrouillage tient pour
+**la session de l'onglet** ; fermer l'onglet remet le mur.
+
+- Deux pressions et non une : un raccourci unique se déclenche par accident.
+- `LabGate` est en tête de `js/game.js`, en **phase de capture**, pour ne pas
+  dépendre de l'ordre de chargement des fichiers.
+- Le mur hérite de la bascule du 399 : il n'apparaît qu'après la première image
+  3D réellement rendue, sinon on verrait un panneau posé sur du noir puis le
+  décor surgir derrière.
+- **⚠️ CE N'EST PAS UNE PROTECTION.** Les fichiers sont publics ; le but est de
+  ne pas proposer un jeu inachevé, pas de garder un secret.
+- **Pour rouvrir le jeu à tous**, remplacer `UI.show(LabGate.unlocked() ?
+  "title" : "construction", true)` par `UI.show("title", true)` aux deux
+  endroits — le reste peut rester en place.
+
+⚠️ **`LabGate` est une COPIE de `candyluge/js/game.js`, et c'est assumé.** Les
+trois mini-jeux sont des pages autonomes qui ne partagent aucun fichier
+JavaScript — pas même `bridge.js`, dupliqué depuis toujours. Créer un premier
+module commun pour vingt lignes figées, destinées à disparaître le jour où les
+jeux ouvrent, coûterait plus que la duplication.
+
+⚠️ **La seule chose qui DIFFÈRE est la clé de session** (`vf-lab-wip` contre
+`vf-luge-wip`), et elle doit différer : ouvrir le labyrinthe pour le tester ne
+doit pas rouvrir la descente au passage. Même geste, mémoires séparées — c'est
+exactement ce que vérifie `tools/verify-gates.mjs` à la racine du dépôt, qui
+relie deux fichiers que rien, dans le code, ne relie.
+
+`verify-boot.mjs` gagne cinq contrôles et tape **le vrai code sur les vrais
+écouteurs de `window`** : le mur tient, une mauvaise touche ne l'ouvre pas, UNE
+seule pression non plus, la première allume le halo, la seconde fait tomber le
+mur. ⚠️ Il a fallu pour cela que le stub retienne enfin **ce qui est montré**
+(`classList.toggle` ne faisait rien) — il exécutait tout `game.js` sans pouvoir
+rien dire de ce que le joueur voit.

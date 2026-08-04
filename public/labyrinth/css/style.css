@@ -241,3 +241,39 @@ body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; co
   white-space: pre; opacity: 0; transition: opacity .2s;
 }
 .perf.on { opacity: 1; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LE MUR DE CHANTIER (417), repris de la descente (415).
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️ MÊME MÉCANIQUE, MAIS PAS MÊME TON. Le mur de la descente est chaleureux
+   parce que le Pays des Bonbons l'est ; celui-ci est posé sur un dédale
+   souterrain, et un panneau pastel y sonnerait comme une erreur de site. Le
+   panneau reste donc celui du labyrinthe (les styles `.layer.panel` existants),
+   et on n'ajoute que les deux éléments propres au chantier.
+   Le décor continue de tourner derrière, comme pour tous les autres calques :
+   on voit le couloir qu'on n'a pas encore le droit de parcourir.
+   ═══════════════════════════════════════════════════════════════════════════ */
+#construction .site-sign {
+  font-size: clamp(44px, 8.5vw, 88px);
+  line-height: 1;
+  margin-bottom: 8px;
+  filter: drop-shadow(0 6px 16px rgba(0, 0, 0, 0.55));
+  animation: signBob 3.2s ease-in-out infinite;
+}
+@keyframes signBob {
+  0%, 100% { transform: translateY(0) rotate(-3deg); }
+  50%      { transform: translateY(-7px) rotate(3deg); }
+}
+
+/* ⚠️ L'ACCUSÉ DE RÉCEPTION DE LA PREMIÈRE MOITIÉ DU CODE.
+   Il faut un retour, sinon on ne sait pas si la première pression a été prise
+   et l'on reste bêtement à en attendre l'effet. Mais il doit être ASSEZ
+   DISCRET pour ne rien révéler à quelqu'un qui aurait tapé ce raccourci par
+   accident : un très léger halo au bord du panneau, aucune icône, aucun texte.
+   Celui qui connaît le code le remarque, celui qui l'ignore n'y voit rien.
+   La teinte est celle du lac — la couleur qui, dans ce jeu, veut déjà dire
+   « par ici ». */
+#construction.armed {
+  box-shadow: inset 0 0 0 3px rgba(155, 105, 235, 0.5);
+  transition: box-shadow 0.12s ease;
+}

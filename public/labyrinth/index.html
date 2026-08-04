@@ -100,6 +100,33 @@
   <p class="sub" id="lLoading"></p>
 </div>
 
+<!-- ═══════════════════════════════════════════════════════════ CHANTIER ═══
+     ⚠️ LE MUR DE CHANTIER (417), REPRIS TEL QUEL DE LA DESCENTE (415).
+     Demande de Guillaume : « mettre le labyrinthe derrière le même blocage
+     développeur que le jeu de descente, indiquant au visiteur qu'il est encore
+     en construction — toujours même commande pour bypass ».
+
+     ⚠️ « MÊME COMMANDE » EST UNE CONTRAINTE FORTE, ET C'EST ELLE QUI DICTE
+     TOUT LE RESTE. Un second mur avec un second code serait un second secret à
+     retenir, donc un secret oublié. Le raccourci, la fenêtre de 3,5 s, la
+     double pression et le halo d'accusé de réception sont donc IDENTIQUES —
+     seule la CLÉ de session diffère (`vf-lab-wip` contre `vf-luge-wip`), parce
+     que les deux jeux doivent pouvoir être ouverts indépendamment : on peut
+     vouloir tester le labyrinthe sans rouvrir la descente au même moment.
+
+     ⚠️ IL EST POSÉ AVANT L'ÉCRAN DE CHARGEMENT DANS LE DOCUMENT, mais c'est
+     `game.js` qui décide lequel des deux montre — voir Gate.
+     ⚠️ ET LE BOUTON DE RETOUR EST INDISPENSABLE : sans lui, un joueur qui ouvre
+     le labyrinthe depuis la ferme se retrouve enfermé dans l'iframe. Un mur
+     n'est pas un cul-de-sac. -->
+<div id="construction" class="layer panel">
+  <div class="site-sign">🚧</div>
+  <h1 id="wTitle"></h1>
+  <p class="sub" id="wSub"></p>
+  <p class="hint" id="wHint"></p>
+  <button id="btnConstructionBack" class="ghost"></button>
+</div>
+
 <!-- ---------------------------------------------------------------- TITRE -->
 <div id="title" class="layer panel">
   <h1 id="tTitle"></h1>

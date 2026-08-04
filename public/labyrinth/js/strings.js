@@ -108,6 +108,16 @@ const LAB_STR = {
     fDepth: "Cellules explorées",
     fBest: "Record",
     loadError: "Impossible de charger le moteur 3D (three.js). Vérifie ta connexion, puis recharge.",
+
+    /* LE MUR DE CHANTIER (417). ⚠️ Aucun de ces textes ne mentionne le code
+       secret, et il ne faut pas en ajouter un qui le ferait : un mur qui
+       explique comment le franchir n'est plus un mur. Le ton reste celui du
+       labyrinthe — inquiétant plutôt qu'administratif : un panneau de chantier
+       neutre dans un dédale sous la terre sonnerait comme une panne du site,
+       alors qu'il doit sonner comme une partie du monde. */
+    wipTitle: "Galerie en travaux",
+    wipSub: "Le Labyrinthe n'est pas encore ouvert. Reviens plus tard !",
+    wipHint: "On étaie encore les voûtes. Quelque chose attend derrière.",
   },
   en: {
     title: "The Labyrinth",
@@ -187,5 +197,9 @@ const LAB_STR = {
     fDepth: "Cells explored",
     fBest: "Best",
     loadError: "Could not load the 3D engine (three.js). Check your connection, then reload.",
+
+    wipTitle: "Tunnel under works",
+    wipSub: "The Labyrinth isn't open yet. Come back later!",
+    wipHint: "The vaults are still being propped up. Something waits behind them.",
   },
 };

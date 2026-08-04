@@ -118,7 +118,28 @@ mur.
    La bande au sol d'une porte disparaît derrière la première crête ; ce sont
    les montants et le rideau qui se voient à cent mètres. Vrai des barrières en
    sucre d'orge, des fanions de checkpoint, et maintenant des portes.
-11. **(416) Un décalque posé au sol est une GRILLE échantillonnée sur la piste**
+11. **(417) Le cap de la luge est un ANGLE D'ÉQUILIBRE, pas une intégrale.**
+   `heading += (yawRate − heading·STEER_DAMP)·dt`. Sans le terme de rappel, tenir
+   une touche fait tourner le nez sans fin jusqu'à la butée — mesuré : 48,7°
+   atteints en moins d'une seconde, à toutes les vitesses. C'est ce que
+   Guillaume appelait « perpendiculaire à la piste », et c'est aussi ce qui
+   donnait l'impression d'un « contrôle par l'arrière » : un véhicule dont le
+   cap s'écarte continûment de sa trajectoire pivote sur place.
+   ⚠️ Le frein à main DIVISE ce rappel (`BRAKE_DAMP_MUL`), parce que
+   l'amortissement de lacet vient de l'adhérence arrière et qu'un frein à main
+   la fait décrocher. C'est ce qui garde les deux régimes distincts.
+12. **(417) Le lacet de la luge pivote autour des patins ARRIÈRE**
+   (`SLED_PIVOT`), pas autour du milieu de l'engin. Tout véhicule dirigé par
+   l'avant fait ça, et ça ne coûte qu'un nœud de plus dans la hiérarchie :
+   le lacet de la PISTE reste sur le rig (avec le tangage et le roulis, qui
+   doivent s'appliquer dans le repère du tracé), seul `sled.heading` passe sur
+   le nœud décalé.
+13. **(417) On ne dérape pas en l'air.** `gripMax` est divisé par quatre hors du
+   sol — c'est juste — mais l'excédent ne doit PAS alimenter `skid` : le
+   dérapage n'est pas « je n'ai pas d'adhérence », c'est « mes patins ripent sur
+   la neige ». Le défaut datait du 413 et n'est apparu qu'au 417, quand la luge
+   est devenue assez rapide pour décoller.
+14. **(416) Un décalque posé au sol est une GRILLE échantillonnée sur la piste**
    (`layDecal`), jamais un plan rigide. Une ombre plate sur une pente à 12° a un
    demi-mètre d'écart à ses extrémités : elle s'enterre d'un côté et lévite de
    l'autre, et `polygonOffset` n'y peut rien — il traite le z-fighting entre

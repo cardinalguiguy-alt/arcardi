@@ -291,7 +291,36 @@ Sled.prototype.update = function (dt, now, finishK) {
     * (this.grounded ? 1 : 0.25)
     * (0.78 + 0.22 * Math.abs(this.edge))
     * (1 - this.deep * (1 - CFG.SNOW_DEEP_GRIP));
-  const over = Math.max(0, need - gripMax);
+  /* ══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ ON NE DÉRAPE PAS EN L'AIR (417) — TROUVÉ PAR LE BANC D'ESSAI, ET LE
+     DÉFAUT ÉTAIT LÀ DEPUIS LE 413.
+     ──────────────────────────────────────────────────────────────────────────
+     `gripMax` est divisé par quatre hors du sol, ce qui est juste : on ne tient
+     pas une ligne en l'air. Mais l'excédent était quand même versé dans `skid`,
+     et `skid` n'est pas « je n'ai pas d'adhérence » — c'est « MES PATINS
+     RIPENT SUR LA NEIGE ». Une luge en vol ne rape rien du tout.
+
+     Conséquences, et elles étaient toutes visibles sans qu'on les relie :
+       * le dérapage montait à 0,88 en plein saut, donc la luge se mettait en
+         travers dans les airs et le pilote prenait sa pose de dérapage ;
+       * la charge saturait, donc le champ de la caméra s'ouvrait à fond ;
+       * et au 416, la gerbe de neige jaillissait… au-dessus du vide (elle est
+         heureusement conditionnée à `grounded`, sinon on aurait vu de la neige
+         voler à trois mètres du sol).
+
+     ⚠️ ET IL A FALLU QUE LA LUGE DEVIENNE ASSEZ RAPIDE POUR DÉCOLLER. Le 417
+     redresse le cap, la luge perd donc moins de vitesse, le turbo la pousse
+     au-delà de 62 u/s, et elle s'envole sur une bosse qu'elle avalait avant.
+     Le contrôle « elle ne décroche pas en carvant » est alors tombé — sur un
+     défaut qui n'avait rien à voir avec le cap. C'est le meilleur argument
+     qu'on ait pour garder ces bancs d'essai : ils échouent sur ce qu'on n'a pas
+     changé.
+
+     La correction est d'une ligne : hors du sol, l'excédent d'adhérence ne
+     produit plus de dérapage. Le dérapage déjà acquis, lui, continue de
+     décroître — on atterrit donc dans l'état où l'on a décollé, ce qui est ce
+     qu'on veut : un saut ne rattrape pas une faute, il la met en pause. */
+  const over = Math.max(0, need - gripMax) * (this.grounded ? 1 : 0);
   /* ⚠️ LA CHARGE. Elle se lit AVANT le décrochage, contrairement à `skid` qui
      ne dit quelque chose qu'une fois la limite passée. C'est la grandeur que
      tout le retour sensoriel du 414 utilise — sans elle, le joueur n'a aucun
@@ -309,24 +338,83 @@ Sled.prototype.update = function (dt, now, finishK) {
   /* Le décrochage ÉLARGIT l'arc : une luge qui dérape tourne MOINS que ce
      qu'on lui demande. C'est la sensation qui apprend au joueur qu'il en a
      trop demandé — et elle ne s'explique pas, elle se subit. */
-  this.heading += yawRate * (1 - this.skid * 0.55) * dt;
+  /* ══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ L'AMORTISSEMENT DE LACET (417) — « ELLE SE RETROUVE TROP SOUVENT
+     PERPENDICULAIRE À LA PISTE, ON DIRAIT QUE LE CONTRÔLE SE FAIT PAR L'ARRIÈRE
+     DE L'ENGIN. C'EST UN PEU EXTRÊME. »
+     ──────────────────────────────────────────────────────────────────────────
+     Les deux moitiés de la phrase décrivent LE MÊME défaut, et il tenait en une
+     ligne : jusqu'ici le cap s'INTÉGRAIT librement et n'était retenu que par une
+     BUTÉE.
+
+         heading += yawRate · dt        puis        clamp(±SLED_STEER_MAX)
+
+     Autrement dit, tant qu'on tient la touche, le nez tourne, tourne, tourne —
+     et ne s'arrête que contre le mur. Mesuré au banc : **le cap atteignait la
+     butée de 48,7° en moins d'une seconde, à toutes les vitesses, et y
+     restait.** Quarante-neuf degrés en travers d'une piste, c'est exactement ce
+     que Guillaume appelle « perpendiculaire », et ce n'était pas une impression.
+
+     ⚠️ ET C'EST AUSSI CE QUI FAISAIT « CONTRÔLE PAR L'ARRIÈRE ». Un véhicule
+     dont le cap s'écarte continûment de sa trajectoire est un véhicule qui
+     PIVOTE SUR PLACE pendant qu'il glisse : le nez part d'un côté, la masse
+     continue tout droit, et l'œil lit ça comme un train arrière qui décroche.
+     Une luge qui carve fait le contraire — elle décrit un arc, et son nez reste
+     à peu près tangent à cet arc.
+
+     LA CORRECTION EST UN TERME DE RAPPEL PROPORTIONNEL AU CAP, TOUJOURS ACTIF :
+
+         heading += (yawRate − heading · yawDamp) · dt
+
+     C'est l'amortissement de lacet de n'importe quel véhicule réel, et il change
+     la NATURE de la commande : au lieu d'une VITESSE de rotation qu'on intègre
+     sans fin, la touche commande désormais un ANGLE D'ÉQUILIBRE — celui où le
+     braquage et le rappel se compensent, `heading = yawRate / yawDamp`. Tenir la
+     touche donne un cap stable d'une quinzaine de degrés, avec lequel on
+     traverse la piste en biais ; la butée redevient ce qu'elle aurait toujours
+     dû être, un garde-fou qu'on ne touche jamais en conduite normale.
+
+     ⚠️⚠️ ET IL REMPLACE `STEER_RETURN` DU 416, IL NE S'Y AJOUTE PAS. Le 416
+     avait vu la moitié du problème (« entre deux appuis, elle dérivait ») et
+     ajouté un rappel qui ne s'appliquait QUE touche relâchée. C'était traiter le
+     symptôme : la dérive entre deux appuis et le cap qui part en travers PENDANT
+     l'appui sont le même défaut — un cap sans rappel. Un seul terme, actif tout
+     le temps, fait les deux, et il fait mieux le premier.
+
+     ⚠️ LE RAPPEL MONTE AVEC LA VITESSE (effet de girouette, conservé du 416) :
+     un rappel constant donne une luge docile au pas et flottante à cinquante,
+     l'inverse exact du besoin.
+
+     ⚠️ CE QUE ÇA NE TOUCHE PAS, ET C'EST VOLONTAIRE : LE FREIN À MAIN. Il
+     multiplie `yawRate` par BRAKE_TURN_MUL, donc il multiplie aussi l'angle
+     d'équilibre — on passe d'une quinzaine de degrés à plus de vingt-cinq. Les
+     deux régimes de conduite du 413 restent donc parfaitement distincts, et ils
+     sont même PLUS lisibles qu'avant : la carre tient un cap serré, le frein à
+     main met vraiment en travers. Avant, tout finissait à 48,7°. */
+  const vkD = clampN(this.v / CFG.SLED_SPEED_MAX, 0, 1);
+  /* ⚠️⚠️ LE FREIN À MAIN COUPE L'AMORTISSEMENT, ET SANS CETTE LIGNE LA
+     CORRECTION AURAIT TUÉ LE DÉRAPAGE. Première mesure après avoir posé le
+     rappel : la carre tenait 12°… et le frein à main 10°. Autrement dit, le
+     geste censé mettre la luge EN TRAVERS la mettait moins en travers que la
+     conduite normale — les deux régimes du 413 s'étaient effondrés l'un sur
+     l'autre.
+
+     La cause est physique et elle est intéressante : l'amortissement de lacet
+     vient de l'ADHÉRENCE ARRIÈRE. C'est parce que les patins accrochent que
+     l'engin se remet dans l'axe tout seul, comme une girouette. Un frein à main
+     fait exactement l'inverse — il fait DÉCROCHER l'arrière. Un modèle qui
+     garderait le même rappel en dérapage décrirait une luge dont le train
+     arrière tiendrait pendant qu'il glisse, ce qui n'a aucun sens.
+
+     ⚠️ ET C'EST CE QUI REND LES DEUX RÉGIMES PLUS LISIBLES QU'AVANT LE 417 :
+     `yawRate` est multiplié par BRAKE_TURN_MUL et le rappel divisé par deux, le
+     cap d'équilibre est donc trois à quatre fois plus ouvert. La carre tient un
+     cap serré, le frein à main met vraiment en travers. Au 416, tout finissait
+     indistinctement à 48,7°. */
+  const yawDamp = CFG.STEER_DAMP * (1 + CFG.STEER_DAMP_V * vkD)
+    * (braking && this.grounded ? CFG.BRAKE_DAMP_MUL : 1);
+  this.heading += (yawRate * (1 - this.skid * 0.55) - this.heading * yawDamp) * dt;
   this.heading = clampN(this.heading, -CFG.SLED_STEER_MAX, CFG.SLED_STEER_MAX);
-  /* ⚠️ LE RAPPEL DANS L'AXE — LE NOMBRE DE LA STABILITÉ (416).
-     Il était écrit en dur (2,2) et c'était doublement fautif : la règle du
-     projet veut que TOUS les nombres de conduite vivent dans config.js, et
-     celui-ci n'y étant pas, il n'a jamais été relu ni réglé — alors que c'est
-     lui, et pas l'adhérence, qui décide de ce qu'on ressent entre deux appuis.
-     ⚠️ ET IL MONTE AVEC LA VITESSE : c'est l'effet de girouette de tout
-     véhicule réel. Un rappel constant donne une luge docile au pas et
-     flottante à cinquante — l'inverse exact du besoin, puisque c'est vite
-     qu'on a besoin d'être posé. Le rappel ne coûte RIEN au pilotage : il ne
-     s'applique que touche relâchée, donc uniquement quand le joueur ne
-     demande rien. */
-  if (Math.abs(steer) < 0.05) {
-    const vk = clampN(this.v / CFG.SLED_SPEED_MAX, 0, 1);
-    const back = CFG.STEER_RETURN * (1 + CFG.STEER_RETURN_V * vk);
-    this.heading = damp(this.heading, 0, back, dt);
-  }
 
   /* ==================================================== 3. LA VITESSE =====
      Pesanteur le long de la pente, moins : la traînée (position d'œuf

@@ -29,6 +29,12 @@ const UI = (function () {
     set("cLook", L.cLook); set("cShoot", L.cShoot); set("cMap", L.cMap);
     set("mapHint", L.mapHint); set("lockTxt", L.lockHint);
     set("lBack", L.hBack); set("lLoading", L.loading);
+    /* LE MUR DE CHANTIER (417). Même règle que partout : RIEN n'est écrit en
+       dur dans index.html. Un texte oublié ici se voit tout de suite — il
+       apparaît vide à l'écran — alors qu'un texte oublié dans le HTML ne se
+       voit qu'en anglais, chez quelqu'un d'autre. */
+    set("wTitle", L.wipTitle); set("wSub", L.wipSub); set("wHint", L.wipHint);
+    set("btnConstructionBack", L.back);
     set("tHint", L.hint); set("tHintExit", L.hintExit);
     set("lScore", L.hScore); set("lShards", L.hShards);
     set("lFlame", L.hFlame); set("lBest", L.hBest);

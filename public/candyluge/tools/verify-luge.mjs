@@ -511,9 +511,33 @@ function sustained(steerLevel, seconds) {
   return sled;
 }
 const longCarve = sustained(0.85, 10);
-ok(longCarve.v > 26,
+/* ══════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ ON COMPARE À UNE DESCENTE DROITE, PLUS À UN SEUIL ABSOLU (417).
+   ──────────────────────────────────────────────────────────────────────────────
+   Ce contrôle exigeait « plus de 26 u/s après dix secondes de carre », et il a
+   failli tomber au 417 sur un chantier qui n'avait rien à voir avec le labour :
+   33,9 u/s au 416, **26,4 au 417**. Il aurait accusé une résistance qui n'a pas
+   bougé d'un chiffre.
+
+   La cause est bête et elle invalide le contrôle, pas le jeu : la luge du 417
+   ne part plus en travers, elle va donc PLUS LOIN en dix secondes — 324 unités
+   contre 240. Or la pente de cette piste est une somme de sinus. Les deux luges
+   ne sont tout simplement pas au même endroit du terrain à la fin de l'essai, et
+   la seconde finit sur un replat. **Le seuil mesurait le relief autant que le
+   labour.**
+
+   ⚠️ LA RÈGLE, ET ELLE EST GÉNÉRALE : UN SEUIL ABSOLU SUR UNE GRANDEUR QUI
+   DÉPEND DU TERRAIN MESURE LE TERRAIN. La question qu'on veut poser n'a jamais
+   été « va-t-elle encore à 26 u/s ? » mais « la carre coûte-t-elle trop cher ? ».
+   Elle se pose donc en RAPPORT : on refait exactement le même trajet sans
+   toucher à rien, et on compare. La descente droite subit le même relief, il
+   s'annule, et il ne reste que ce qu'on voulait mesurer.
+   ══════════════════════════════════════════════════════════════════════════ */
+const longStraight = sustained(0, 10);
+const carveKeep = longCarve.v / longStraight.v;
+ok(carveKeep > 0.5,
   "⚠️⚠️ LE LABOUR FREINE SANS ÉTOUFFER : dix secondes de carre tenue ne clouent pas la luge",
-  `${longCarve.v.toFixed(1)} u/s après 10 s de carre (il faut rester au-dessus de 26)`);
+  `${longCarve.v.toFixed(1)} u/s contre ${longStraight.v.toFixed(1)} tout droit, soit ${(carveKeep * 100).toFixed(0)} % (plancher 50 %)`);
 ok(longCarve.load > 0.45,
   "⚠️⚠️ ... et à cette vitesse la LIMITE reste atteignable — c'est le piège du 414 : une résistance trop forte SUPPRIME le dérapage",
   `charge ${longCarve.load.toFixed(2)} sur 1`);

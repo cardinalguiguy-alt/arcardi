@@ -259,16 +259,45 @@ const CFG = {
   EDGE_CROSS_MUL: 0.5,        // ⚠️ NE PAS MONTER : c'est le poids de l'engin
   EDGE_SPEED_FALLOFF: 0.72,   // à pleine vitesse, il reste 72 % de cette vivacité
   EDGE_AIR_MUL: 0.3,          // en l'air, on oriente à peine
-  /* ⚠️ LE RAPPEL DANS L'AXE (416). Il existait déjà, mais écrit en dur dans
-     sled.js (« damp(this.heading, 0, 2.2, dt) ») — donc invisible depuis
-     config.js, donc jamais réglé, alors que c'est LE nombre de la stabilité.
-     Règle du fichier : aucun nombre de conduite ne vit ailleurs qu'ici. */
-  STEER_RETURN: 4.6,          // rad/s de retour du nez dans l'axe, touche relâchée
-  /* ⚠️ ET LE RAPPEL EST PLUS FORT À HAUTE VITESSE, comme sur tout véhicule
-     réel : c'est l'effet de girouette. Sans lui, la luge est docile à
-     l'arrêt et flottante à 50 u/s — exactement l'inverse de ce qu'on veut,
-     puisque c'est vite qu'on a besoin d'être posé. */
-  STEER_RETURN_V: 0.9,        // part ajoutée à pleine vitesse (×STEER_RETURN)
+  /* ══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ L'AMORTISSEMENT DE LACET (417) — LE NOMBRE QUI DÉCIDE À QUEL POINT LA
+     LUGE SE MET EN TRAVERS.
+     ──────────────────────────────────────────────────────────────────────────
+     Il REMPLACE `STEER_RETURN` du 416, qui ne s'appliquait que touche relâchée.
+     La démonstration est dans sled.js et elle vaut d'être lue ; en deux lignes :
+     sans rappel permanent, tenir une touche fait tourner le nez SANS FIN
+     jusqu'à la butée, et le banc mesurait 48,7° atteints en moins d'une seconde,
+     à toutes les vitesses. Guillaume : « elle se retrouve trop souvent
+     perpendiculaire à la piste ».
+
+     ⚠️ AVEC CE TERME, LA TOUCHE NE COMMANDE PLUS UNE VITESSE DE ROTATION MAIS
+     UN ANGLE D'ÉQUILIBRE : `heading = yawRate / STEER_DAMP`. C'est le nombre à
+     bouger — et le seul — si la luge paraît encore trop ou pas assez en
+     travers. Le MONTER redresse (cap plus serré, traversée plus lente), le
+     BAISSER remet en biais.
+
+     ⚠️ NE PAS LE CONFONDRE AVEC `LAT_GRIP`, qui dit à quelle vitesse la
+     TRAJECTOIRE rejoint le nez. Celui-ci dit jusqu'où le NEZ s'écarte de l'axe.
+     Les deux se ressemblent en jouant et n'ont rien à voir : le premier corrige
+     un flottement, le second un travers. */
+  STEER_DAMP: 2.9,            // rappel du cap vers l'axe, en 1/s — TOUJOURS actif
+  /* ⚠️ ET IL MONTE AVEC LA VITESSE, comme sur tout véhicule réel : c'est
+     l'effet de girouette. Sans lui, la luge est docile à l'arrêt et flottante à
+     50 u/s — exactement l'inverse du besoin, puisque c'est vite qu'on a besoin
+     d'être posé. */
+  STEER_DAMP_V: 0.6,          // part ajoutée à pleine vitesse (×STEER_DAMP)
+  /* ⚠️ LE FREIN À MAIN DIVISE LE RAPPEL PAR DEUX, et c'est ce qui garde les
+     deux régimes de conduite distincts (voir sled.js) : l'amortissement de
+     lacet vient de l'adhérence ARRIÈRE, or un frein à main la fait décrocher.
+     ⚠️ C'est le second nombre à toucher si le dérapage paraît fade — jamais
+     SLED_STEER_MAX, qui n'est qu'un garde-fou. */
+  BRAKE_DAMP_MUL: 0.5,
+  /* ⚠️ LE PIVOT VISUEL DE LACET (417), en unités vers l'ARRIÈRE du point suivi.
+     Il ne change RIEN à la physique — pas une collision, pas une trajectoire —
+     et il change tout à la lecture : un véhicule dirigé par l'avant pivote
+     autour de son train arrière, jamais autour de son milieu. Voir buildSled.
+     Les patins font 3,4 unités de long, l'arrière est donc vers z = +1,2. */
+  SLED_PIVOT: 1.2,
 
   /* LA SOURIS (416). Elle pilote le même axe que les flèches, mais elle donne
      un nombre CONTINU là où le clavier donne −1, 0 ou +1 : sans courbe de
@@ -534,7 +563,16 @@ const CFG = {
 
   ROLL_PER_EDGE: 0.62,        // inclinaison visuelle de la luge à pleine carre
 
-  SLED_STEER_MAX: 0.85,       // rad, angle maximal entre le nez et la piste
+  /* ⚠️ CE N'EST PLUS UN RÉGLAGE MAIS UN GARDE-FOU (417). Jusqu'au 416, le cap
+     venait TOUJOURS buter dessus — c'était donc lui, et non la conduite, qui
+     décidait de l'angle de la luge. Depuis que STEER_DAMP tient le cap à un
+     angle d'équilibre, on ne l'atteint plus qu'au frein à main, ce qui est
+     exactement ce qu'une butée doit faire : ne rien limiter en conduite
+     normale, et empêcher l'absurde (une luge à 90° de sa trajectoire).
+     ⚠️ Ne PAS le baisser pour « redresser » la luge : c'est STEER_DAMP.
+     Baisser la butée écrêterait le frein à main, donc supprimerait le second
+     régime de conduite au lieu de corriger le premier. */
+  SLED_STEER_MAX: 0.62,       // rad (35°), garde-fou ; le frein à main y monte, la carre non
 
   /* Le SAUT. Court, bas, et surtout : il ne rend PAS invulnérable. Sauter
      par-dessus un gourmand est une fenêtre de 0,55 s à viser, pas un bouton

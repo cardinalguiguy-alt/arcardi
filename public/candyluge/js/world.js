@@ -914,9 +914,45 @@ const World = (function () {
   function buildSled() {
     sledRig = new THREE.Group();
 
+    /* ══════════════════════════════════════════════════════════════════════
+       ⚠️⚠️ LE PIVOT DE LACET EST AUX PATINS ARRIÈRE (417) — « ON DIRAIT QUE LE
+       CONTRÔLE SE FAIT PAR L'ARRIÈRE DE L'ENGIN ».
+       ──────────────────────────────────────────────────────────────────────
+       La moitié du reproche venait de la physique (voir l'amortissement de
+       lacet dans sled.js) ; l'autre moitié est PUREMENT VISUELLE, et elle tient
+       à l'endroit où l'on fait tourner le modèle.
+
+       Jusqu'au 416, tout le lacet — celui de la piste ET celui de la luge —
+       était posé sur `sledRig`, dont l'origine est au MILIEU de l'engin. Braquer
+       faisait donc pivoter la luge sur son centre : le nez partait d'un côté et
+       la queue de l'autre, en même temps et d'autant. C'est le mouvement d'un
+       objet qu'on fait tourner sur place — un palet, une toupie — et l'œil le
+       lit comme un train arrière qui décroche, quoi que fasse la physique.
+
+       ⚠️ TOUT VÉHICULE DIRIGÉ PAR L'AVANT PIVOTE AUTOUR DE SON TRAIN ARRIÈRE.
+       C'est vrai d'une voiture, d'un vélo, d'une luge : l'avant s'inscrit dans
+       le virage, l'arrière suit la même trace. Il suffit donc de déplacer le
+       centre de rotation d'un mètre vers l'arrière pour que le même angle, la
+       même physique et le même modèle se lisent comme « je dirige » au lieu de
+       « ça part en tête-à-queue ».
+
+       ⚠️ ET SEUL LE CAP DE LA LUGE BOUGE DE PIVOT, PAS CELUI DE LA PISTE. Le
+       lacet du tracé reste sur `sledRig` (avec le tangage et le roulis, qui
+       doivent s'appliquer dans le repère de la piste) ; seul `sled.heading`
+       passe sur le nœud décalé. Les confondre ferait décrire à la luge un arc
+       parasite d'un mètre à chaque virage de la piste.
+       ══════════════════════════════════════════════════════════════════════ */
+    const yawNode = new THREE.Group();
+    yawNode.position.z = CFG.SLED_PIVOT;      // +Z = vers l'arrière
+    sledParts.yaw = yawNode;
+    sledRig.add(yawNode);
+
     const body = new THREE.Group();
+    // ... et le corps est ramené d'autant vers l'avant, pour qu'à cap nul la
+    // luge se retrouve exactement là où la physique la place.
+    body.position.z = -CFG.SLED_PIVOT;
     sledParts.body = body;
-    sledRig.add(body);
+    yawNode.add(body);
 
     // Les patins : deux longues barres de caramel, recourbées à l'avant par
     // trois segments d'inclinaison croissante.
@@ -2030,11 +2066,19 @@ const World = (function () {
   function updateSled(sled, now) {
     const p = sled.worldPos();
     sledRig.position.set(p.x, p.y + 0.02, p.z);
-    // L'orientation : le lacet de la PISTE, plus l'angle propre de la luge.
+    /* L'orientation, en DEUX étages depuis le 417 (voir buildSled) :
+         * le rig porte le lacet de la PISTE, le tangage et le roulis — donc
+           tout ce qui doit s'appliquer dans le repère du tracé ;
+         * le nœud de lacet porte le cap PROPRE de la luge, et il pivote autour
+           des patins arrière.
+       Les additionner sur le rig, comme jusqu'au 416, faisait tourner l'engin
+       sur son milieu : le nez d'un côté, la queue de l'autre, c'est-à-dire
+       l'image d'un tête-à-queue permanent. */
     sledRig.rotation.set(0, 0, 0);
-    sledRig.rotation.y = Slope.yawAt(sled.s) + sled.heading;
+    sledRig.rotation.y = Slope.yawAt(sled.s);
     sledRig.rotation.x = sled.pitchVis;
     sledRig.rotation.z = sled.roll;
+    if (sledParts.yaw) sledParts.yaw.rotation.y = sled.heading;
 
     /* Le buste CONTRE-BRAQUE : il se penche un peu moins que la luge, et un
        peu en retard. C'est ce qui empêche l'ensemble de se lire comme un bloc

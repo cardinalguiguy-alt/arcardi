@@ -11,6 +11,108 @@
    un plafond pour ne pas exploser après un onglet mis en veille.
    ========================================================================== */
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   LA PORTE DÉROBÉE — « galerie en travaux » et son code secret (417).
+   ───────────────────────────────────────────────────────────────────────────
+   Demande de Guillaume : « mettre le labyrinthe derrière le même blocage
+   développeur que le jeu de descente — toujours même commande pour bypass ».
+   Le mur s'ouvre donc par ⌘⇧X (ou Ctrl+Maj+X) pressé DEUX FOIS, exactement
+   comme celui de la descente.
+
+   ⚠️ CE BLOC EST UNE COPIE VOLONTAIRE DE `candyluge/js/game.js`, ET C'EST UN
+   ARBITRAGE QU'IL FAUT ASSUMER PLUTÔT QUE SUBIR. La règle du projet est
+   « une seule écriture de la vérité », et on la contredit ici. Trois raisons :
+
+     1. LES TROIS MINI-JEUX SONT DES PAGES AUTONOMES, servies dans des
+        `<iframe>` distinctes. Ils ne partagent AUCUN fichier JavaScript — pas
+        même `bridge.js`, qui est dupliqué depuis toujours et dont
+        `templerun/js/bridge.js` fait autorité. Créer un premier module commun
+        pour vingt lignes obligerait à décider où il vit, à l'ajouter aux trois
+        pages, et à le charger avant tout le reste.
+     2. CE CODE EST FIGÉ. Ce n'est pas de la logique de jeu qu'on va régler ;
+        c'est un raccourci clavier et une clé de session. La duplication ne
+        coûte que si elle diverge, et celle-ci n'a aucune raison de diverger.
+     3. ⚠️ ET IL EST DESTINÉ À DISPARAÎTRE. Le jour où les deux jeux ouvrent,
+        on retire deux blocs indépendants au lieu de démonter un module partagé
+        dont il faudrait vérifier que plus personne ne se sert.
+
+   ⚠️ LA SEULE CHOSE QUI DIFFÈRE EST LA CLÉ DE SESSION (`vf-lab-wip` contre
+   `vf-luge-wip`), et elle DOIT différer : les deux jeux s'ouvrent
+   indépendamment. Ouvrir le labyrinthe pour le tester ne doit pas rouvrir la
+   descente au passage — sans quoi un seul code déverrouillerait tout le site,
+   et l'on ne saurait plus ce qui est montré au public.
+
+   ⚠️ ET ON NE FAIT QUE MASQUER UN PANNEAU. Ce n'est PAS une protection : les
+   fichiers sont publics et quiconque sait lire du JavaScript franchira ce mur
+   en trente secondes. Ce n'est pas le but — le but est de ne pas proposer aux
+   joueurs un jeu qui n'est pas fini. Ne jamais mettre derrière ce mur quoi que
+   ce soit qui doive VRAIMENT rester secret.
+
+   ⚠️ POUR ROUVRIR LE LABYRINTHE À TOUS : remplacer, dans `boot()`, l'appel
+   `UI.show(LabGate.unlocked() ? "title" : "construction", true)` par
+   `UI.show("title", true)` — et l'idem dans la bascule de première image. Le
+   reste peut rester en place.
+   ══════════════════════════════════════════════════════════════════════════ */
+const LabGate = (function () {
+  const KEY = "vf-lab-wip";
+  const WINDOW_MS = 3500;      // délai maximal entre les deux pressions
+  let armed = 0;               // date de la première pression, 0 si aucune
+  let onOpen = null;
+
+  function unlocked() {
+    try { return sessionStorage.getItem(KEY) === "1"; } catch (e) { return false; }
+  }
+  function remember() {
+    try { sessionStorage.setItem(KEY, "1"); } catch (e) { /* mode privé : tant pis */ }
+  }
+
+  function init(cb) {
+    onOpen = cb;
+    if (unlocked()) return;
+    /* ⚠️ EN PHASE DE CAPTURE (`true`), donc AVANT le gestionnaire de input.js.
+       Sans ça, l'ordre des écouteurs déciderait de qui voit la touche en
+       premier — et input.js efface toutes les touches enfoncées dès qu'un
+       modificateur apparaît (voir onKey). Un code secret ne doit pas dépendre
+       de l'ordre de chargement des fichiers. */
+    window.addEventListener("keydown", onKey, true);
+  }
+
+  function onKey(e) {
+    if (unlocked()) return;
+    // ⚠️ `e.code` et non `e.key` : avec Maj enfoncée, `key` vaut "X" majuscule,
+    // et il change complètement de valeur sur un clavier non-latin. `code`
+    // désigne la TOUCHE PHYSIQUE, qui est ce qu'on veut pour un raccourci.
+    if (e.code !== "KeyX" || !e.shiftKey || !(e.metaKey || e.ctrlKey)) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const now = Date.now();
+    if (armed && now - armed < WINDOW_MS) {
+      armed = 0;
+      remember();
+      window.removeEventListener("keydown", onKey, true);
+      const panel = document.getElementById("construction");
+      if (panel) panel.classList.remove("armed");
+      if (onOpen) onOpen();
+      return;
+    }
+    // Première pression : on arme, avec un retour très discret (voir le CSS).
+    armed = now;
+    const panel = document.getElementById("construction");
+    if (panel) {
+      panel.classList.add("armed");
+      setTimeout(() => {
+        if (Date.now() - armed >= WINDOW_MS - 50) {
+          armed = 0;
+          panel.classList.remove("armed");
+        }
+      }, WINDOW_MS);
+    }
+  }
+
+  return { init, unlocked };
+})();
+
 (function () {
   /* ⚠️ LE PAS VIENT DE CFG.SIM_HZ, IL N'EST PAS ÉCRIT ICI. lib-play.mjs,
      smoke-render.mjs et verify-controls.mjs lisent la même constante : deux
@@ -235,7 +337,13 @@
       if (!firstFrame) {
         firstFrame = true;
         UI.show("loading", false);
-        if (state === "title") UI.show("title", true);
+        /* ⚠️ LE MUR PASSE AVANT LE TITRE (417). C'est ici, et pas au chargement
+           du document, que les panneaux apparaissent : tant que la première
+           image 3D n'est pas rendue, on montre l'écran de chargement (zip 399).
+           Le mur de chantier hérite donc de la même bascule — sans quoi on
+           verrait le panneau posé sur du noir, puis le décor apparaître d'un
+           coup derrière, ce qui est exactement le défaut que le 399 a corrigé. */
+        if (state === "title") UI.show(LabGate.unlocked() ? "title" : "construction", true);
       }
     }
     /* La navigation est redessinée à chaque IMAGE, pas à chaque pas de
@@ -263,7 +371,7 @@
       // bascule : l'écran de chargement tournerait indéfiniment et l'erreur
       // resterait cachée derrière lui. On montre le titre à la main.
       UI.show("loading", false);
-      UI.show("title", true);
+      UI.show(LabGate.unlocked() ? "title" : "construction", true);
       return;
     }
     Input.init();
@@ -300,6 +408,20 @@
     });
     const be = $("btnExit");
     if (be) be.addEventListener("click", () => Bridge.exit());
+    /* ⚠️ LE BOUTON DE RETOUR DU MUR EST INDISPENSABLE. Sans lui, un joueur qui
+       ouvre le labyrinthe depuis la ferme est enfermé dans l'iframe : pas de
+       barre d'adresse, pas d'échappatoire. Un mur n'est pas un cul-de-sac. */
+    const bcb = $("btnConstructionBack");
+    if (bcb) bcb.addEventListener("click", () => Bridge.exit());
+    /* La porte dérobée. ⚠️ Armée AVANT la première image : le code doit
+       fonctionner pendant l'écran de chargement, sinon il faut attendre que la
+       scène soit prête pour pouvoir la déverrouiller — et sur une machine lente
+       c'est plusieurs secondes pendant lesquelles le raccourci ne répond pas,
+       ce qui donne l'impression qu'il ne marche plus. */
+    LabGate.init(() => {
+      UI.show("construction", false);
+      if (state === "title" && firstFrame) UI.show("title", true);
+    });
 
     /* On construit un labyrinthe DÈS L'ÉCRAN-TITRE, et on le laisse tourner
        derrière. Deux raisons : le titre montre le jeu au lieu d'un fond noir,

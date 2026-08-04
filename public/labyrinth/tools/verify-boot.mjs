@@ -93,9 +93,22 @@ const permissive2D = () => new Proxy({ fillStyle: "", strokeStyle: "", lineWidth
 const handlers = new Map(), els = new Map(), winHandlers = new Map();
 let rafQueue = [];
 function el(id) {
-  return {
+  const o = {
     id, textContent: "", innerHTML: "", style: {}, className: "", width: 220, height: 220,
-    classList: { toggle() {}, add() {}, remove() {} },
+    /* ⚠️ LE STUB RETIENT MAINTENANT CE QUI EST MONTRÉ (417). Jusqu'ici
+       `classList.toggle` ne faisait rien du tout : l'outil exécutait bien tout
+       game.js, mais il ne pouvait rien dire de CE QUE LE JOUEUR VOIT. C'était
+       suffisant tant qu'on ne vérifiait que la construction du monde ; ça ne
+       l'est plus depuis que le mur de chantier décide quel panneau apparaît.
+       Un mot-clé retenu, et le banc d'essai sait enfin répondre à « le
+       labyrinthe est-il fermé au public ? ». */
+    visible: false,
+    armed: false,
+    classList: {
+      toggle(c, on) { if (c === "visible") o.visible = !!on; },
+      add(c) { if (c === "armed") o.armed = true; if (c === "visible") o.visible = true; },
+      remove(c) { if (c === "armed") o.armed = false; if (c === "visible") o.visible = false; },
+    },
     appendChild() {}, getContext: permissive2D,
     addEventListener(type, fn) {
       const k = id + ":" + type;
@@ -104,6 +117,7 @@ function el(id) {
     },
     getAttribute() { return "med"; },
   };
+  return o;
 }
 const click = (id) => { for (const fn of handlers.get(id + ":click") || []) fn({}); };
 const fireWin = (t) => { for (const fn of winHandlers.get(t) || []) fn({}); };
@@ -111,6 +125,17 @@ const fireWin = (t) => { for (const fn of winHandlers.get(t) || []) fn({}); };
 global.window = {
   THREE: T, innerWidth: 1440, innerHeight: 900, devicePixelRatio: 2,
   addEventListener(t, fn) { if (!winHandlers.has(t)) winHandlers.set(t, []); winHandlers.get(t).push(fn); },
+  /* ⚠️ AJOUTÉ AU 417, ET L'OUBLI ÉTAIT UN PLANTAGE SEC. `LabGate` se retire
+     lui-même de `window` une fois le code accepté — un écouteur de clavier qui
+     survivrait à son utilité est exactement le genre de résidu qu'on ne
+     retrouve plus. Le stub n'avait que `addEventListener`, parce que rien du
+     jeu n'avait jamais eu besoin de se désabonner. Un banc d'essai n'imite que
+     ce dont on s'est servi jusque-là ; il se complète en même temps qu'on
+     ajoute une capacité, jamais après. */
+  removeEventListener(t, fn) {
+    const a = winHandlers.get(t); if (!a) return;
+    const i = a.indexOf(fn); if (i >= 0) a.splice(i, 1);
+  },
 };
 global.document = {
   getElementById(i) { if (!els.has(i)) els.set(i, el(i)); return els.get(i); },
@@ -127,6 +152,15 @@ const G = load(
     requestAnimationFrame(fn) { rafQueue.push(fn); return rafQueue.length; },
     setTimeout() { return 0; },       // l'écran de victoire : on ne l'attend pas
     localStorage: { getItem: () => null, setItem() {} },
+    /* ⚠️ LA SESSION EST FOURNIE, ET VIDE. Sans elle, `LabGate.unlocked()`
+       lèverait une ReferenceError attrapée par son propre `try` et rendrait
+       « verrouillé » — le bon résultat, mais pour la mauvaise raison, et l'on
+       ne pourrait alors pas tester le DÉVERROUILLAGE. Un stub qui donne
+       accidentellement la bonne réponse est un stub qui ment. */
+    sessionStorage: (() => {
+      const m = new Map();
+      return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)) };
+    })(),
     /* Le pont vers la ferme, réduit à ce que game.js lui demande. Son rappel
        part TOUT DE SUITE, comme la ferme le fait en envoyant la tenue : c'est
        ce chemin-là qui construisait le monde une fois de trop avant le 396. */
@@ -153,6 +187,62 @@ fireWin("load");                       // boot()
 const afterBoot = worlds();
 frames(5, 1000);
 check("le chargement bâtit UN labyrinthe pour l'écran-titre", afterBoot === 1, `${afterBoot}`);
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   LE MUR DE CHANTIER (417) — le jeu est-il vraiment fermé, et s'ouvre-t-il ?
+   ──────────────────────────────────────────────────────────────────────────────
+   ⚠️ DEUX QUESTIONS, ET LA PREMIÈRE COMPTE PLUS QUE LA SECONDE. Un mur qui
+   refuse de s'ouvrir se remarque en trois secondes (on tape le code, rien ne se
+   passe, on va lire le fichier). Un mur qui NE SE FERME PAS ne se remarque
+   jamais : la page s'ouvre normalement chez celui qui l'a déjà déverrouillé
+   dans son onglet, et c'est le public — qui, lui, n'a rien demandé — qui se
+   retrouve devant un jeu inachevé. On vérifie donc d'abord la fermeture.
+
+   ⚠️ ET ON TAPE LE VRAI CODE, sur les vrais écouteurs de `window`, plutôt que
+   d'appeler `LabGate` directement. C'est la seule façon de couvrir ce qui peut
+   réellement casser : la phase de capture, le test de `e.code`, la double
+   pression, et la fenêtre de temps. Appeler la fonction interne testerait la
+   partie du code qui n'a jamais de raison de mal marcher.
+   ══════════════════════════════════════════════════════════════════════════ */
+{
+  /* ⚠️ `document.getElementById` ET NON `els.get` : le panneau du titre n'est
+     JAMAIS touché tant que le mur est debout — personne n'appelle
+     `UI.show("title")` — il n'existe donc pas encore dans la table du stub.
+     Le lire avec `els.get` rendait `undefined`, et le contrôle échouait en
+     annonçant « titre caché », ce qui était vrai et n'était pas la question.
+     Un élément que personne n'a montré n'est pas visible : c'est bien ce que
+     `getElementById` fabrique ici, avec `visible: false`. */
+  const panel = document.getElementById("construction");
+  const title = document.getElementById("title");
+  check("⚠️ le labyrinthe est FERMÉ au public : c'est le mur qu'on voit, pas le titre",
+    panel.visible && !title.visible,
+    `mur ${panel.visible ? "visible" : "caché"}, titre ${title.visible ? "VISIBLE" : "caché"}`);
+
+  const key = (extra) => Object.assign({ code: "KeyX", shiftKey: true, metaKey: true,
+    preventDefault() {}, stopPropagation() {} }, extra || {});
+  const press = (e) => { for (const fn of winHandlers.get("keydown") || []) fn(e); };
+
+  // Une touche qui n'est pas le code ne doit rien ouvrir.
+  press(key({ code: "KeyZ" }));
+  press(key({ shiftKey: false }));
+  press(key({ metaKey: false, ctrlKey: false }));
+  check("... et il ne s'ouvre pas sur n'importe quelle touche",
+    panel.visible, panel.visible ? "" : "le mur est tombé sans le bon raccourci");
+
+  // ⚠️ UNE SEULE pression ne doit rien ouvrir non plus — c'est toute la raison
+  // d'être de la double pression : un raccourci unique part par accident.
+  press(key());
+  check("... ni sur UNE SEULE pression du bon raccourci",
+    panel.visible, panel.visible ? `halo d'accusé de réception ${panel.armed ? "allumé" : "ÉTEINT"}` : "le mur est tombé trop tôt");
+  check("... mais la première pression accuse réception (le halo discret)", panel.armed);
+
+  // La seconde, dans la fenêtre : le mur tombe.
+  press(key());
+  check("⚠️⚠️ DEUX pressions de ⌘⇧X ouvrent le labyrinthe",
+    !panel.visible && title.visible,
+    `mur ${panel.visible ? "encore là" : "tombé"}, titre ${title.visible ? "affiché" : "TOUJOURS CACHÉ"}`);
+}
+
 
 click("btnStart");                     // « Entrer »
 frames(30, 2000);
