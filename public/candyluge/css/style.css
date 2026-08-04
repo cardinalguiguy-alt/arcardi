@@ -171,3 +171,98 @@ html, body {
   .plate.speed .val { font-size: 30px; }
   .corner { gap: 6px; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LES ÉLÉMENTS DU MODÈLE À CHECKPOINTS (414).
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️ TOUT DISPARAÎT TOUT SEUL, ET C'EST LA RÈGLE ENTIÈRE DE CET AJOUT. Un jeu
+   dont on demande qu'il soit « beau » ne peut pas se permettre un élément
+   d'interface permanent au milieu du cadre : le centre de l'écran est la piste,
+   l'horizon et les montagnes, c'est-à-dire tout ce pour quoi le cadrage large
+   a été payé. Ces deux annonces l'empruntent une seconde et le rendent.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* L'annonce de checkpoint : elle monte et s'efface. Le mouvement vers le HAUT
+   n'est pas décoratif — il l'éloigne de la piste au lieu de la traverser. */
+.cp-tag {
+  position: absolute;
+  left: 50%; top: 30%;
+  transform: translate(-50%, 0) scale(0.9);
+  font-weight: 800;
+  font-size: clamp(20px, 3.4vw, 40px);
+  letter-spacing: 0.14em;
+  color: #eafff9;
+  text-shadow: 0 2px 0 #2c8f7c, 0 0 26px rgba(95, 224, 196, 0.85);
+  opacity: 0;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.cp-tag.visible { animation: cpPop 1.5s ease-out forwards; }
+@keyframes cpPop {
+  0%   { opacity: 0; transform: translate(-50%, 14px) scale(0.86); }
+  14%  { opacity: 1; transform: translate(-50%, 0) scale(1.06); }
+  26%  { transform: translate(-50%, 0) scale(1); }
+  70%  { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -26px) scale(1); }
+}
+
+/* Le bandeau de remise en place. Il pulse doucement : c'est un état qui DURE
+   (contrairement à l'annonce de checkpoint, qui est un instant), et un texte
+   parfaitement fixe pendant deux secondes se lit comme un écran figé. */
+.reset-tag {
+  position: absolute;
+  left: 50%; top: 44%;
+  transform: translate(-50%, -50%);
+  font-weight: 800;
+  font-size: clamp(15px, 2.2vw, 26px);
+  letter-spacing: 0.08em;
+  color: #fff4fa;
+  text-shadow: 0 2px 0 #b0416e, 0 0 22px rgba(255, 140, 190, 0.7);
+  opacity: 0;
+  transition: opacity 0.18s ease;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.reset-tag.visible { opacity: 1; animation: resetPulse 1.1s ease-in-out infinite; }
+@keyframes resetPulse {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); }
+  50%      { transform: translate(-50%, -50%) scale(1.05); }
+}
+
+/* Le compteur de chutes : masqué tant qu'on n'est jamais tombé. */
+.plate.wipes { opacity: 0; transition: opacity 0.25s ease; }
+.plate.wipes.visible { opacity: 1; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LE MUR DE CHANTIER (415).
+   ───────────────────────────────────────────────────────────────────────────
+   Volontairement CHALEUREUX et non austère : c'est le Pays des Bonbons, et le
+   joueur qui tombe dessus n'a rien fait de mal. Un panneau gris « accès
+   refusé » dans un monde de barbe à papa donnerait l'impression d'une panne
+   plutôt que d'un chantier.
+   Le décor continue de tourner derrière, comme pour tous les autres calques :
+   on voit la piste qu'on n'a pas encore le droit de descendre, ce qui est
+   exactement l'effet qu'on veut.
+   ═══════════════════════════════════════════════════════════════════════════ */
+#construction .site-sign {
+  font-size: clamp(46px, 9vw, 92px);
+  line-height: 1;
+  margin-bottom: 6px;
+  filter: drop-shadow(0 6px 14px rgba(160, 40, 80, 0.28));
+  animation: signBob 3.2s ease-in-out infinite;
+}
+@keyframes signBob {
+  0%, 100% { transform: translateY(0) rotate(-3deg); }
+  50%      { transform: translateY(-7px) rotate(3deg); }
+}
+
+/* ⚠️ L'ACCUSÉ DE RÉCEPTION DE LA PREMIÈRE MOITIÉ DU CODE.
+   Il faut un retour, sinon on ne sait pas si la première pression a été prise
+   et l'on reste bêtement à en attendre l'effet. Mais il doit être ASSEZ
+   DISCRET pour ne rien révéler à quelqu'un qui aurait tapé ce raccourci par
+   accident : un très léger halo au bord du panneau, aucune icône, aucun texte.
+   Celui qui connaît le code le remarque, celui qui l'ignore n'y voit rien. */
+#construction.armed {
+  box-shadow: inset 0 0 0 3px rgba(120, 230, 205, 0.55);
+  transition: box-shadow 0.12s ease;
+}

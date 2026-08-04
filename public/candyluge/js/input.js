@@ -7,7 +7,8 @@
    se jouent à quelques minutes d'intervalle, et deux schémas de touches
    différents feraient perdre la première descente à chaque fois.
 
-     ← →  diriger        ↑  sauter        ↓  freiner/déraper       Échap  pause
+     ← →  poser la carre     ↑  sauter (pression) / œuf (maintien)
+     ↓   frein à main         Échap  pause
 
    DEUX DIFFÉRENCES, ET ELLES VIENNENT DE LA NATURE DU JEU :
 
@@ -100,6 +101,14 @@ const Input = (function () {
     return p;
   };
   const sliding = () => any(KEY_DOWN) || !!held.MouseSlide;
+  /* ⚠️ LA FLÈCHE HAUT A DEUX SENS DEPUIS LE 413, et ce n'est pas une
+     surcharge maladroite : c'est le même geste physique. Une PRESSION fait
+     sauter (impulsion), le MAINTIEN met en position d'œuf (on rentre la tête,
+     on coupe le vent). Un lugeur qui veut aller vite se ramasse ; un lugeur
+     qui veut sauter se détend. La touche unique dit exactement ça, et elle
+     évite d'ajouter une cinquième commande à un jeu qui doit rester jouable
+     d'une main. */
+  const tucking = () => any(KEY_UP) || !!held.MouseJump;
 
   function clear() {
     for (const k in held) held[k] = false;
@@ -107,5 +116,5 @@ const Input = (function () {
     mouseAxis = 0;
   }
 
-  return { init, axis, jumpPressed, sliding, clear };
+  return { init, axis, jumpPressed, sliding, tucking, clear };
 })();

@@ -30,6 +30,9 @@
   <div class="corner tr">
     <div class="plate speed"><span class="label" id="lSpeed"></span><span class="val" id="speed">0</span></div>
     <div class="plate time"><span class="val" id="time">00:00.000</span></div>
+    <!-- Le compteur de chutes (414). Il n'apparaît qu'à partir de la première :
+         un « 0 » permanent serait un reproche par anticipation. -->
+    <div class="plate small wipes" id="wipesPlate"><span class="label" id="lWipes"></span><span class="val" id="wipes">0</span></div>
   </div>
   <div class="corner bl">
     <div class="wafer"><span class="label" id="lStage"></span><span class="val" id="stage">1</span></div>
@@ -43,10 +46,40 @@
        ne dit rien 95 % du temps. -->
   <div id="driftBar" class="drift-bar"><div id="driftFill"></div></div>
   <div id="boostTag" class="boost-tag"></div>
+
+  <!-- ⚠️ LES DEUX ANNONCES DU MODÈLE À CHECKPOINTS (414). Elles sont AU CENTRE
+       et non dans un coin, ce qui est le seul endroit du cadre qu'on avait
+       jusqu'ici gardé vide — et c'est justifié : ce sont les deux seuls
+       moments de la descente où le joueur doit lever les yeux de la piste.
+       L'une annonce un acquis, l'autre une remise en place ; les deux
+       disparaissent d'elles-mêmes. -->
+  <div id="cpTag" class="cp-tag"></div>
+  <div id="resetTag" class="reset-tag"></div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════ CHANTIER ═══
+     ⚠️ LE MUR DE CHANTIER. Il est posé AVANT l'écran-titre dans le document et
+     il est le seul calque visible au chargement : la descente n'est pas
+     ouverte au public tant qu'elle se construit.
+
+     ⚠️ IL NE DIT RIEN DU CODE SECRET, ET C'EST TOUT L'INTÉRÊT. Un mur qui
+     annoncerait « appuyez sur telle touche pour entrer » ne bloquerait
+     personne. Celui qui doit entrer sait ; les autres lisent un panneau poli et
+     s'en vont. Voir la porte dérobée dans game.js.
+
+     Le bouton de retour est INDISPENSABLE : sans lui, un joueur qui ouvre la
+     descente depuis la ferme se retrouve enfermé dans l'iframe, sans aucun
+     moyen de revenir. Un mur n'est pas un cul-de-sac. -->
+<div id="construction" class="layer panel visible">
+  <div class="site-sign">🚧</div>
+  <h1 id="wTitle"></h1>
+  <p class="sub" id="wSub"></p>
+  <p class="hint" id="wHint"></p>
+  <button id="btnConstructionBack" class="ghost"></button>
 </div>
 
 <!-- ---------------------------------------------------------------- TITRE -->
-<div id="title" class="layer panel visible">
+<div id="title" class="layer panel">
   <h1 id="tTitle"></h1>
   <p class="sub" id="tSub"></p>
   <div id="loadError" class="error"></div>
@@ -56,6 +89,7 @@
     <div id="cJump"></div>
     <div id="cSlide"></div>
     <div id="cPause"></div>
+    <div id="cReset"></div>
   </div>
   <p class="hint" id="tHint"></p>
   <p class="hint" id="tHintExit"></p>
@@ -79,6 +113,7 @@
     <div><span id="fLScore"></span><b id="finalScore">0</b></div>
     <div><span id="fLCandies"></span><b id="finalCandies">0</b></div>
     <div><span id="fLTime"></span><b id="finalTime">--:--.---</b></div>
+    <div><span id="fLWipes"></span><b id="finalWipes">0</b></div>
     <div><span id="fLBest"></span><b id="finalBest">--:--.---</b></div>
   </div>
   <p class="hint" id="oHint"></p>

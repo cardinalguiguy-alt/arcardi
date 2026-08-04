@@ -17,7 +17,15 @@ const STR = {
     cJump: "↑ : sauter la bosse",
     cSlide: "↓ : freiner et déraper",
     cPause: "Échap : pause",
-    hint: "Plus la pente est raide, plus tu vas vite — et moins tu tournes.",
+    /* ⚠️ AUCUNE COMMANDE NOUVELLE AU 414, et c'est une demande explicite :
+       « pas besoin de mettre trop de commandes différentes ». Tout ce que le
+       zip ajoute — la résistance du sol, la charge, le sillon, la gerbe, les
+       checkpoints — se pilote avec les QUATRE MÊMES TOUCHES. Une mécanique qui
+       réclame un bouton de plus est presque toujours une mécanique mal pensée :
+       la profondeur vient de ce qu'une touche connue fait de plus, jamais du
+       nombre de touches. */
+    cReset: "Une chute te ramène au dernier fanion.",
+    hint: "La neige damée du milieu est rapide ; les bords sont profonds et freinent.",
     hintExit: "La descente se termine toute seule en bas de la vallée.",
     hintFarm: "Tes bonbons et ton meilleur temps sont rapportés au Pays des Bonbons.",
     loadError: "La 3D n'a pas pu se charger. Vérifie ta connexion, puis recharge la page.",
@@ -46,6 +54,16 @@ const STR = {
 
     boost: "TURBO",
     drift: "DÉRAPAGE",
+
+    /* LE MUR DE CHANTIER. ⚠️ Aucun de ces textes ne mentionne le code secret,
+       et il ne faut pas en ajouter un qui le ferait : un mur qui explique
+       comment le franchir n'est plus un mur. */
+    wipTitle: "Jeu en construction",
+    wipSub: "La Grande Descente n'est pas encore ouverte. Reviens plus tard !",
+    wipHint: "Les pisteurs dament encore la barbe à papa.",
+    checkpoint: "FANION",
+    resetting: "On remonte au fanion…",
+    wipes: "Chutes",
   },
 
   en: {
@@ -56,7 +74,8 @@ const STR = {
     cJump: "↑ : jump the bump",
     cSlide: "↓ : brake and drift",
     cPause: "Esc : pause",
-    hint: "The steeper it gets, the faster you go — and the less you turn.",
+    cReset: "A crash sends you back to the last flag.",
+    hint: "The groomed middle is fast; the edges are deep and slow you down.",
     hintExit: "The run ends by itself at the bottom of the valley.",
     hintFarm: "Your sweets and best time are carried back to Candy Land.",
     loadError: "3D failed to load. Check your connection, then reload the page.",
@@ -85,5 +104,12 @@ const STR = {
 
     boost: "BOOST",
     drift: "DRIFT",
+
+    wipTitle: "Under construction",
+    wipSub: "The Great Descent isn't open yet. Come back later!",
+    wipHint: "The groomers are still combing the cotton candy.",
+    checkpoint: "FLAG",
+    resetting: "Back to the flag…",
+    wipes: "Crashes",
   },
 };

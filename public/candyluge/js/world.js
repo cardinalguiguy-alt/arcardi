@@ -33,10 +33,11 @@
 
 const World = (function () {
   let renderer, scene, camera, canvas;
-  let ambient, sun, fill;
+  let ambient, sun, fill, hemi;
   let skyDome, skyMat, mountainsNear, mountainsFar, snowFall;
   let sledRig, sledParts = {};
-  let stars, dust, lines;
+  let stars, dust, lines, spray;
+  let trail = null;      // le sillon gravé (414)
   let geo = {}, mat = {};
   let lastNow = 0;
   let pendingSkin = null;
@@ -112,16 +113,62 @@ const World = (function () {
      Les deux sont donc superposés, dans cet ordre : les sillons portent la
      vitesse, les tourbillons disent que c'est de la barbe à papa. Un seul des
      deux et il manque quelque chose. */
+  /* ⚠️⚠️ REPEINTE À L'ÉCHELLE RÉELLE AU 414 — 512 PIXELS POUR 15 UNITÉS.
+     C'est la troisième et dernière moitié de la correction du moiré, et c'est
+     celle qui manquait : élargir les sillons ne servait à rien tant que les
+     TOURBILLONS, eux, restaient tracés à des largeurs de trait de cinq à douze
+     pixels sur une tuile de 7,5 unités — c'est-à-dire des traits de quinze à
+     trente-cinq CENTIMÈTRES, encore plus fins que les sillons qu'on venait de
+     corriger. Ce sont eux qui dessinaient les grands chevrons en travers du
+     cadre.
+
+     ⚠️ LA MÉTHODE, ET C'EST ELLE QU'IL FAUT RETENIR : ON NE PEINT PLUS EN
+     PIXELS, ON PEINT EN UNITÉS DU MONDE. `PX` donne le nombre de pixels par
+     unité ; toute dimension s'écrit « tant d'unités × PX ». On peut alors LIRE
+     la taille réelle de chaque motif dans le code, au lieu de la déduire d'une
+     division entre une taille de canevas et une taille de tuile décidées à deux
+     endroits différents. C'est exactement l'erreur qui a produit le moiré, et
+     cette écriture la rend impossible à refaire.
+
+     Le repère : rien ne doit descendre sous ~1,5 unité de période. */
   function paintPiste() {
-    const W = 256, H = 256, c = cv(W, H), g = c.getContext("2d");
+    const TILE = 15;                    // la tuile fait 15 unités de côté
+    const W = 512, H = 512, c = cv(W, H), g = c.getContext("2d");
+    const PX = W / TILE;                // ≈ 34 pixels par unité
     g.fillStyle = hex(CFG.COL_PISTE); g.fillRect(0, 0, W, H);
 
     /* 1. LES SILLONS. Verticaux dans la texture, donc DANS LE SENS DE LA
        MARCHE une fois posés (l'axe v du ruban suit la piste). Alternés clair /
-       sombre : un sillon est un creux, il a une arête éclairée et une ombre. */
-    for (let x = 0; x < W; x += 16) {
-      g.fillStyle = "rgba(255,255,255,0.20)"; g.fillRect(x, 0, 8, H);
-      g.fillStyle = "rgba(190,90,140,0.09)"; g.fillRect(x + 8, 0, 3, H);
+       sombre : un sillon est un creux, il a une arête éclairée et une ombre.
+
+       ⚠️⚠️ ÉLARGIS D'UN FACTEUR QUATRE AU 414, ET CE N'EST PAS UN GOÛT : C'EST
+       UNE CORRECTION DE BOGUE VISUEL. La première planche rendue du 413
+       montrait la piste entière couverte de CHEVRONS EN ZIGZAG — un moiré si
+       violent que le sol ne se lisait plus comme une matière mais comme un
+       écran cassé. C'est le défaut le plus visible de tout le zip, et il était
+       invisible à la lecture du code.
+
+       La cause est arithmétique. Un sillon tous les 16 pixels sur une tuile de
+       256, plaquée à 7,5 unités de côté, fait UN SILLON TOUS LES 47 CENTIMÈTRES.
+       À trente mètres de la caméra, ces 47 cm occupent une fraction de pixel :
+       l'écran doit alors représenter dix rayures dans un pixel, il en attrape
+       une sur trois au hasard, et le battement entre la grille des rayures et
+       la grille des pixels DESSINE des chevrons qui n'existent nulle part dans
+       la texture. C'est le repliement de spectre, et aucun filtrage ne le
+       rattrape une fois qu'on est sous la limite d'échantillonnage.
+
+       ⚠️ LA RÈGLE : UN MOTIF DE SOL NE DOIT JAMAIS DESCENDRE SOUS ~1,5 UNITÉ DE
+       PÉRIODE. En dessous, il ne se voit plus de près et il scintille de loin —
+       il coûte donc de la performance pour dégrader l'image. On passe à quatre
+       sillons par tuile (1,9 unité de période), et on BAISSE leur contraste :
+       une dameuse laisse des creux doux, pas des rayures peintes. Le sens de la
+       vitesse, lui, est désormais porté par le SILLON GRAVÉ de la luge et par
+       la gerbe — c'est-à-dire par ce qui bouge, ce qui est sa vraie place. */
+    // Sillons de 2,5 unités de période : la trace d'une vraie dameuse.
+    const PITCH = 2.5 * PX;
+    for (let x = 0; x < W; x += PITCH) {
+      g.fillStyle = "rgba(255,255,255,0.14)"; g.fillRect(x, 0, PITCH * 0.46, H);
+      g.fillStyle = "rgba(150,60,105,0.08)"; g.fillRect(x + PITCH * 0.46, 0, PITCH * 0.18, H);
     }
 
     /* 2. LES TOURBILLONS, par-dessus et translucides : ils marbrent le rose
@@ -134,13 +181,20 @@ const World = (function () {
        qui occupe le tiers du cadre et qui DÉFILE, un motif trop contrasté ne
        se lit plus comme une matière mais comme du bruit. Ils sont là pour dire
        « barbe à papa » du coin de l'œil, pas pour être regardés. */
-    for (let n = 0; n < 9; n++) {
+    /* ⚠️ ET SURTOUT : DES TRAITS ÉPAIS. Ils faisaient 5 à 12 pixels pour une
+       tuile de 7,5 unités, soit 15 à 35 centimètres de large — c'est-à-dire
+       DEUX FOIS PLUS FIN que les sillons dont on vient de dire qu'ils étaient
+       trop fins. Ce sont eux qui dessinaient les grands chevrons en travers du
+       cadre, et non les sillons qu'on avait d'abord accusés. On passe à des
+       traits d'une demi-unité sur des spirales de deux à quatre unités : la
+       barbe à papa se lit toujours, et plus rien ne scintille. */
+    for (let n = 0; n < 6; n++) {
       const cx = Math.random() * W, cy = Math.random() * H;
-      const r = 18 + Math.random() * 30;
-      g.globalAlpha = 0.10 + Math.random() * 0.10;
-      g.lineWidth = 5 + Math.random() * 7;
+      const r = (1.4 + Math.random() * 1.7) * PX;
+      g.globalAlpha = 0.07 + Math.random() * 0.06;
+      g.lineWidth = (0.34 + Math.random() * 0.26) * PX;
       g.beginPath();
-      for (let a = 0; a < Math.PI * 4; a += 0.25) {
+      for (let a = 0; a < Math.PI * 4; a += 0.2) {
         const rr = r * (a / (Math.PI * 4));
         const x = cx + Math.cos(a) * rr, y = cy + Math.sin(a) * rr * 0.75;
         if (a === 0) g.moveTo(x, y); else g.lineTo(x, y);
@@ -161,35 +215,53 @@ const World = (function () {
        * des plaques moyennes qui cassent leur régularité ;
        * des paillettes de sucre qu'on ne voit que sous la luge, et qui sont
          exactement ce qui fait dire « c'est du sucre » et pas « c'est blanc ». */
+  /* ⚠️ MÊME MÉTHODE QUE paintPiste AU 414 : ON PEINT EN UNITÉS DU MONDE.
+     La tuile fait 16 unités, le canevas 512 pixels, et chaque dimension est
+     écrite comme « tant d'unités × PX ». On lit donc directement qu'une
+     congère fait quatre mètres et une paillette vingt centimètres, ce qui est
+     la seule façon de vérifier d'un coup d'œil qu'aucun motif ne passe sous la
+     limite d'échantillonnage. */
   function paintSnow() {
-    const W = 256, H = 256, c = cv(W, H), g = c.getContext("2d");
+    const TILE = 16;
+    const W = 512, H = 512, c = cv(W, H), g = c.getContext("2d");
+    const PX = W / TILE;               // 32 pixels par unité
     g.fillStyle = hex(CFG.COL_SNOW); g.fillRect(0, 0, W, H);
 
-    // 1. Les congères : de grandes ellipses très pâles, à peine plus foncées.
+    // 1. Les congères : de grandes ellipses (3 à 6 unités), à peine plus foncées.
     for (let n = 0; n < 14; n++) {
       g.globalAlpha = 0.30;
       g.fillStyle = hex(CFG.COL_SNOW_SHADE);
       g.beginPath();
       g.ellipse(Math.random() * W, Math.random() * H,
-        34 + Math.random() * 58, 20 + Math.random() * 34,
+        (2.2 + Math.random() * 3.6) * PX, (1.3 + Math.random() * 2.1) * PX,
         Math.random() * Math.PI, 0, Math.PI * 2);
       g.fill();
     }
-    // 2. Les plaques moyennes, en blanc pur : elles rattrapent la lumière.
+    // 2. Les plaques moyennes (1 à 2 unités), en blanc pur : elles rattrapent
+    //    la lumière et cassent la régularité des congères.
     for (let n = 0; n < 26; n++) {
-      g.globalAlpha = 0.34;
+      g.globalAlpha = 0.32;
       g.fillStyle = "#ffffff";
       g.beginPath();
       g.ellipse(Math.random() * W, Math.random() * H,
-        10 + Math.random() * 22, 7 + Math.random() * 14,
+        (0.65 + Math.random() * 1.4) * PX, (0.45 + Math.random() * 0.9) * PX,
         Math.random() * Math.PI, 0, Math.PI * 2);
       g.fill();
     }
-    // 3. Les paillettes de sucre.
-    for (let n = 0; n < 1400; n++) {
-      g.globalAlpha = 0.10 + Math.random() * 0.5;
-      g.fillStyle = Math.random() < 0.62 ? "#ffffff" : "#ffd9ee";
-      const sz = 1 + Math.random() * 2.2;
+    /* 3. Les paillettes de sucre. ⚠️ QUATRE FOIS MOINS NOMBREUSES ET TROIS FOIS
+       PLUS GROSSES QU'AU 413, pour exactement la raison expliquée dans
+       paintPiste() : mille quatre cents grains de deux pixels sur une tuile de
+       onze unités font un grain tous les huit centimètres, c'est-à-dire très
+       au-dessous de ce qu'un pixel d'écran peut représenter à dix mètres. Le
+       résultat n'est pas « du sucre fin », c'est du bruit qui grésille dès que
+       la caméra bouge — et sur une surface qui occupe la moitié du cadre, ce
+       grésillement fatigue en trente secondes.
+       Moins nombreuses et plus grosses, elles se VOIENT sous la luge (ce qui
+       est leur seul emploi) et se moyennent proprement au loin. */
+    for (let n = 0; n < 420; n++) {
+      g.globalAlpha = 0.12 + Math.random() * 0.40;
+      g.fillStyle = Math.random() < 0.62 ? "#ffffff" : "#ffd0e8";
+      const sz = (0.16 + Math.random() * 0.20) * PX;    // 16 à 36 cm : visible sous la luge
       g.fillRect(Math.random() * W, Math.random() * H, sz, sz);
     }
     g.globalAlpha = 1;
@@ -245,10 +317,63 @@ const World = (function () {
     return c;
   }
 
+  /* LA GERBE (414) : un FLOCON GRUMELEUX, et surtout pas un rond flou.
+     ⚠️ LA DIFFÉRENCE AVEC LA POUDRE EST DANS LA TEXTURE ELLE-MÊME, et c'est ce
+     qui fait que les deux ne se confondent pas à l'écran alors qu'elles sont
+     toutes deux blanches. Un dégradé radial parfait se lit comme du GAZ : une
+     brume, une vapeur, quelque chose d'impalpable. Or ce qu'on projette ici est
+     de la MATIÈRE arrachée au sol, et la matière a des bords. On empile donc
+     quelques disques opaques décentrés : le grain obtenu est irrégulier, il a
+     une silhouette, et une fois multiplié par trois cents il donne un rideau de
+     neige qui a du POIDS. C'est la moitié visuelle de « la résistance du sol ».
+     Le cœur reste bien opaque — c'est lui qui masque la piste au passage. */
+  function paintSpray() {
+    const S = 64, c = cv(S, S), g = c.getContext("2d");
+    const R = S / 2;
+    const d = g.createRadialGradient(R, R, 0, R, R, R);
+    d.addColorStop(0, "rgba(255,255,255,0.98)");
+    d.addColorStop(0.45, "rgba(255,246,252,0.72)");
+    d.addColorStop(0.8, "rgba(252,226,242,0.22)");
+    d.addColorStop(1, "rgba(250,220,240,0)");
+    g.fillStyle = d; g.fillRect(0, 0, S, S);
+    // Les grumeaux : quelques disques pleins, décentrés, qui cassent le rond.
+    for (let i = 0; i < 7; i++) {
+      const a = Math.random() * Math.PI * 2, rr = Math.random() * R * 0.42;
+      g.globalAlpha = 0.30 + Math.random() * 0.45;
+      g.fillStyle = "#ffffff";
+      g.beginPath();
+      g.arc(R + Math.cos(a) * rr, R + Math.sin(a) * rr, R * (0.13 + Math.random() * 0.2), 0, Math.PI * 2);
+      g.fill();
+    }
+    g.globalAlpha = 1;
+    return c;
+  }
+
+  /* ⚠️ L'ANISOTROPIE EST LA SECONDE MOITIÉ DE LA CORRECTION DU MOIRÉ (414), et
+     elle est indispensable ICI plus qu'ailleurs. Un sol de jeu de descente est
+     vu SOUS UN ANGLE TRÈS RASANT : à trente mètres, une tuile carrée occupe à
+     l'écran une bande de deux pixels de haut sur quarante de large. Le filtrage
+     par défaut (mipmap isotrope) choisit un seul niveau de détail pour les deux
+     axes : il prend donc le plus grossier des deux, et floute la texture DANS
+     LE SENS DE LA LARGEUR autant que dans celui de la profondeur. On perd la
+     netteté sans gagner la stabilité — le pire des deux.
+     Le filtrage anisotrope échantillonne plusieurs fois le long de l'axe étiré :
+     c'est exactement le cas d'usage, et c'est ce qui rend un sol à la fois net
+     de près et calme au loin. Seize échantillons est le maximum utile ; les
+     cartes qui n'en font pas tant plafonnent d'elles-mêmes.
+     ⚠️ Il faut donc que `init()` ait déjà construit le renderer quand on
+     appelle buildAssets() — c'est le cas, et c'est pour ça que l'ordre des deux
+     ne doit pas être inversé. */
   function tex(canvasEl, rx, ry) {
     const t = new THREE.CanvasTexture(canvasEl);
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
     if (rx) t.repeat.set(rx, ry === undefined ? rx : ry);
+    t.generateMipmaps = true;
+    t.minFilter = THREE.LinearMipmapLinearFilter;
+    t.magFilter = THREE.LinearFilter;
+    if (renderer && renderer.capabilities) {
+      t.anisotropy = Math.min(16, renderer.capabilities.getMaxAnisotropy());
+    }
     return t;
   }
 
@@ -291,7 +416,25 @@ const World = (function () {
     mat.boot = L(CFG.COL_BOOT);
     mat.eye = L(0x2a1c2e);
     mat.candy = CFG.COL_CANDY_SET.map((c) => L(c));
+    /* ⚠️ LA PALETTE LOINTAINE (414). Les mêmes six teintes, descendues d'un cran
+       de valeur et tirées vers le bleu. C'est la perspective atmosphérique
+       appliquée aux OBJETS, et pas seulement au brouillard — sans elle, un
+       sapin à deux cents mètres avait exactement la couleur d'un sapin à dix,
+       la forêt entière se lisait donc comme collée sur une même vitre, et le
+       paysage n'avait aucune profondeur malgré ses trois rangs d'arbres.
+       Un matériau de plus, et le décor gagne ses trois plans. */
+    mat.candyFar = CFG.COL_CANDY_FAR.map((c) => L(c));
+    mat.trunkFar = L(0x8a6b52);
     mat.candyGlow = CFG.COL_CANDY_SET.map((c) => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.35, fog: false }));
+
+    /* LES PORTES DE CHECKPOINT (414). Le fanion et la bande au sol sont en
+       Basic et non en Lambert : ce sont des SIGNAUX, pas du décor. Un repère
+       dont la lisibilité dépendrait de l'orientation du soleil serait bien
+       éclairé dans un virage et invisible dans l'autre — c'est exactement ce
+       qu'un repère ne doit pas faire. */
+    mat.cpFlag = new THREE.MeshBasicMaterial({ color: 0x5fe0c4, transparent: true, opacity: 0.95 });
+    mat.cpGlow = new THREE.MeshBasicMaterial({ color: 0x7ff0d8, fog: false });
+    mat.cpBand = new THREE.MeshBasicMaterial({ color: 0x5fe0c4, transparent: true, opacity: 0.55 });
   }
 
   /* Petit constructeur : un mesh boîte posé en (x,y,z) avec une taille. Il
@@ -332,23 +475,52 @@ const World = (function () {
        propos du cadrage large — mais il est indispensable : sans lui, la piste
        et les montagnes se découpent net sur le ciel et le décor devient une
        maquette. */
-    scene.fog = new THREE.FogExp2(0xffeedd, 0.0022);
+    scene.fog = new THREE.FogExp2(CFG.COL_FOG, CFG.FOG_DENSITY);
 
     camera = new THREE.PerspectiveCamera(CFG.CAM_FOV, 1, 0.5, CFG.DRAW_DISTANCE);
 
-    /* L'ÉCLAIRAGE : trois sources, et le monde est LUMINEUX. C'est une
-       demande — « aussi beau et lumineux ». L'ambiante est très forte (0,78) :
-       dans un monde pastel, une ambiante faible creuse des ombres grises qui
-       salissent toutes les teintes claires. Le soleil est chaud et rasant, la
-       lampe d'appoint est froide et vient d'en bas pour simuler le rebond de
-       la neige — c'est elle qui empêche les dessous d'être noirs. */
-    ambient = new THREE.AmbientLight(0xfff0f6, 0.78);
+    /* ══════════════════════════════════════════════════════════════════════
+       L'ÉCLAIRAGE — ⚠️ REFAIT AU 414, ET C'EST LUI QUI RENDAIT L'IMAGE FADE.
+       ══════════════════════════════════════════════════════════════════════
+       Le 413 était réglé sur la consigne « un monde lumineux » et l'avait prise
+       au pied de la lettre : ambiante 0,78 contre soleil 0,72. Or une ambiante
+       qui DOMINE le soleil éclaire toutes les faces également — c'est la
+       définition d'un rendu sans volume. Le décor était donc bien lumineux, et
+       parfaitement plat : des cônes sans versants, une neige sans creux, une
+       piste sans épaisseur. On ne s'en aperçoit qu'en RENDANT une image, ce que
+       tools/preview-luge.js permet enfin de faire.
+
+       ⚠️ LE RAPPORT EST INVERSÉ, ET C'EST LA SEULE CHOSE QUI COMPTE ICI : le
+       soleil domine (1,05), l'ambiante pure tombe à 0,20. Le reste vient d'une
+       LUMIÈRE D'HÉMISPHÈRE, qui est l'outil exact pour un champ de neige :
+       elle éclaire le dessus des choses avec le bleu du ciel et leur dessous
+       avec le rose renvoyé par la neige. C'est physiquement ce qui se passe, ça
+       ne coûte rien à calculer, et ça donne gratuitement la seule chose qu'on
+       cherchait — du rose en pleine lumière, du violine dans l'ombre, sans
+       jamais tomber dans le gris qui salirait le pastel.
+
+       ⚠️ NE PAS REMONTER L'AMBIANTE POUR « ÉCLAIRCIR ». C'est exactement la
+       faute qu'on vient de corriger : ça n'éclaircit pas, ça aplatit. Si le
+       cadre paraît sombre, c'est LIGHT_SUN qu'on monte. */
+    ambient = new THREE.AmbientLight(0xfff0f6, CFG.LIGHT_AMBIENT);
     scene.add(ambient);
-    sun = new THREE.DirectionalLight(0xfff2d8, 0.72);
-    sun.position.set(-0.55, 1, 0.35);
+    hemi = new THREE.HemisphereLight(CFG.COL_LIGHT_SKY, CFG.COL_LIGHT_GROUND, CFG.LIGHT_SKY);
+    scene.add(hemi);
+    sun = new THREE.DirectionalLight(CFG.COL_LIGHT_SUN, CFG.LIGHT_SUN);
+    /* ⚠️ LE SOLEIL EST RASANT (y = 0,52 pour x = -0,8), et c'est délibéré. Un
+       soleil au zénith éclaire tous les versants pareil et redonne exactement
+       le rendu plat qu'on vient de fuir ; un soleil bas creuse un côté de
+       chaque bosse et de chaque montagne. C'est la lumière de fin d'après-midi
+       des paysages de Lonely Mountains, et c'est la plus généreuse en relief.
+       Il vient du MÊME côté que le soleil peint dans la texture de ciel — deux
+       sources contradictoires font « sonner faux » un décor sans qu'on sache
+       dire pourquoi. */
+    sun.position.set(-0.8, 0.52, 0.3);
     scene.add(sun);
-    fill = new THREE.DirectionalLight(0xd8e8ff, 0.26);
-    fill.position.set(0.5, -0.4, -0.6);
+    /* La lampe d'appoint, froide et venue d'en bas : elle empêche les dessous
+       d'être noirs sans rien aplatir, parce qu'elle est faible. */
+    fill = new THREE.DirectionalLight(0xc4d8ff, 0.18);
+    fill.position.set(0.6, -0.35, -0.7);
     scene.add(fill);
 
     buildAssets();
@@ -357,6 +529,7 @@ const World = (function () {
     buildSnowFall();
     buildSled();
     buildParticles();
+    buildTrail();
     resize();
     window.addEventListener("resize", resize);
     if (pendingSkin) applySkin(pendingSkin);
@@ -390,32 +563,80 @@ const World = (function () {
 
      C'est la perspective atmosphérique, et c'est ce qui donne sa profondeur au
      cadre large qu'on demande. */
+  /* ⚠️ REPRISE AU 414 — LA CHAÎNE ÉTAIT UNE RANGÉE DE TRIANGLES IDENTIQUES.
+     Sur la planche rendue du 413, l'horizon montrait huit cônes du même profil,
+     posés à la même hauteur, à intervalles réguliers : ça ne se lisait pas
+     comme une montagne mais comme une frise. Une chaîne de montagnes n'a
+     justement PAS de motif — c'est un désordre, et c'est ce désordre qui la
+     rend crédible.
+
+     Trois corrections, toutes gratuites, et aucune n'ajoute d'objet :
+       1. LES SOMMETS SONT INCLINÉS ET TOURNÉS, chacun différemment. Un cône
+          droit se lit comme un cône ; un cône penché de quelques degrés se lit
+          comme un pic. C'est le changement le plus efficace des trois.
+       2. ILS SONT ÉCRASÉS OU ÉTIRÉS EN LARGEUR, séparément selon x et z. La
+          silhouette cesse d'être un triangle isocèle, et donc de se répéter.
+       3. UN CONTREFORT plus petit est accolé à un sommet sur deux. Deux masses
+          inégales qui se chevauchent lisent comme un massif ; une masse seule
+          lit comme une tente.
+     ⚠️ Le hasard est DÉRIVÉ DE L'INDICE et non tiré : la chaîne est la même
+     pour tout le monde et ne redanse pas d'une image à l'autre. */
   function ring(count, radius, minR, maxR, minH, maxH, m, capM, group, seedBase) {
+    const sb = seedBase || 0;
     for (let i = 0; i < count; i++) {
-      const a = (i / count) * Math.PI * 2 + Math.sin(i * 7.3) * 0.09;
-      const rad = radius * (0.82 + ((i * 37) % 100) / 100 * 0.36);
-      const r = minR + ((i * 53) % 100) / 100 * (maxR - minR);
-      const h = minH + ((i * 71) % 100) / 100 * (maxH - minH);
+      const a = (i / count) * Math.PI * 2 + Math.sin(i * 7.3 + sb) * 0.16;
+      const rad = radius * (0.72 + hash(i + sb, 71) * 0.56);
+      const r = minR + hash(i + sb, 53) * (maxR - minR);
+      const h = minH + hash(i + sb, 31) * (maxH - minH);
       const x = Math.cos(a) * rad, z = Math.sin(a) * rad;
+
       const c = coneM(m, r, h, x, h / 2 - 18, z);
+      // Écrasement séparé sur les deux axes : la base cesse d'être un cercle.
+      c.scale.x *= 0.72 + hash(i + sb, 11) * 0.75;
+      c.scale.z *= 0.72 + hash(i + sb, 13) * 0.75;
+      // L'inclinaison : c'est elle qui transforme un cône en pic.
+      c.rotation.z = (hash(i + sb, 17) - 0.5) * 0.30;
+      c.rotation.x = (hash(i + sb, 19) - 0.5) * 0.30;
+      c.rotation.y = hash(i + sb, 23) * Math.PI;
       group.add(c);
+
       if (capM) {
         /* La calotte : un second cône, plus petit, posé au sommet. Deux cônes
            valent mieux qu'une texture — la ligne de neige suit alors vraiment
-           la silhouette, quel que soit l'angle sous lequel on la voit. */
-        const ch = h * 0.34;
-        group.add(coneM(capM, r * 0.34, ch, x, h - ch / 2 - 18, z));
+           la silhouette, quel que soit l'angle sous lequel on la voit.
+           Elle reprend l'inclinaison du sommet, sinon elle glisse sur le côté. */
+        const ch = h * (0.26 + hash(i + sb, 29) * 0.18);
+        const cap = coneM(capM, r * 0.36, ch, x, h - ch / 2 - 18, z);
+        cap.scale.x = c.scale.x * (r * 0.36 * 2) / (r * 2);
+        cap.scale.z = c.scale.z * (r * 0.36 * 2) / (r * 2);
+        cap.rotation.copy(c.rotation);
+        group.add(cap);
+      }
+
+      // Le contrefort, un sommet sur deux : deux masses inégales font un massif.
+      if (hash(i + sb, 37) < 0.55) {
+        const bh = h * (0.42 + hash(i + sb, 41) * 0.26);
+        const br = r * (0.5 + hash(i + sb, 43) * 0.3);
+        const off = r * (0.8 + hash(i + sb, 47) * 0.7);
+        const ang = hash(i + sb, 59) * Math.PI * 2;
+        const b = coneM(m, br, bh, x + Math.cos(ang) * off, bh / 2 - 18, z + Math.sin(ang) * off);
+        b.rotation.z = (hash(i + sb, 61) - 0.5) * 0.34;
+        group.add(b);
       }
     }
   }
 
   function buildMountains() {
     mountainsNear = new THREE.Group();
-    ring(CFG.WORLD_MOUNTAINS, 330, 46, 108, 62, 148, mat.mount, mat.mountCap, mountainsNear);
+    ring(CFG.WORLD_MOUNTAINS, 330, 46, 108, 62, 148, mat.mount, mat.mountCap, mountainsNear, 3);
     scene.add(mountainsNear);
 
+    /* ⚠️ UNE GRAINE DIFFÉRENTE POUR LA CHAÎNE LOINTAINE. Avec la même, les deux
+       rangs auraient exactement le même désordre à deux échelles près — l'œil
+       repère instantanément une silhouette répétée, même agrandie, et les deux
+       chaînes se seraient lues comme une seule dédoublée. */
     mountainsFar = new THREE.Group();
-    ring(CFG.WORLD_MOUNTAINS_FAR, 640, 90, 190, 110, 235, mat.mountFar, null, mountainsFar);
+    ring(CFG.WORLD_MOUNTAINS_FAR, 640, 90, 190, 110, 235, mat.mountFar, null, mountainsFar, 91);
     mountainsFar.renderOrder = -5;
     scene.add(mountainsFar);
   }
@@ -624,12 +845,241 @@ const World = (function () {
     stars = makePoints(CFG.FX_STAR_MAX, paintStar(), CFG.FX_STAR_SIZE, 0.95, true);
     dust = makePoints(CFG.FX_DUST_MAX, paintDust(), CFG.FX_DUST_SIZE, 0.5, false);
     lines = makePoints(CFG.FX_LINE_MAX, paintDust(), CFG.FX_LINE_SIZE, 0.42, true);
+    /* ⚠️ LA GERBE EST EN FONDU NORMAL, PAS ADDITIF, et c'est ce qui la sépare
+       des étoiles. Un fondu additif ÉCLAIRCIT ce qu'il recouvre : c'est parfait
+       pour une étincelle magique, et c'est faux pour de la neige, qui est de la
+       MATIÈRE — elle doit cacher ce qu'il y a derrière, pas l'illuminer. Une
+       gerbe additive sur une piste rose donnerait une brume blanche lumineuse ;
+       en fondu normal, on obtient un vrai rideau opaque qui masque la piste
+       l'espace d'un instant. C'est cette opacité qui dit « le sol résiste ». */
+    spray = makePoints(CFG.FX_SPRAY_MAX, paintSpray(), CFG.FX_SPRAY_SIZE, 0.82, false);
     scene.add(stars.points);
     scene.add(dust.points);
     scene.add(lines.points);
+    scene.add(spray.points);
     for (let i = 0; i < CFG.FX_STAR_MAX; i++) stars.live.push({ t: -1 });
     for (let i = 0; i < CFG.FX_DUST_MAX; i++) dust.live.push({ t: -1 });
     for (let i = 0; i < CFG.FX_LINE_MAX; i++) lines.live.push({ t: -1 });
+    for (let i = 0; i < CFG.FX_SPRAY_MAX; i++) spray.live.push({ t: -1 });
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     LE SILLON GRAVÉ — la trace que la luge laisse dans la neige.
+     ──────────────────────────────────────────────────────────────────────────
+     ⚠️ C'ÉTAIT LE CHANTIER N°1 ANNONCÉ DU 414, et la raison est simple : le 413
+     avait réécrit toute la conduite autour d'une limite d'adhérence, et cette
+     limite ne se voyait NULLE PART. Le joueur avait sous les doigts un système à
+     deux régimes — carrer proprement, ou décrocher — dont l'écran ne montrait
+     rien d'autre qu'une luge un peu plus penchée. Un jeu dont la mécanique
+     centrale est invisible ne s'apprend pas : il se devine, et personne ne
+     devine.
+
+     COMMENT. Un unique maillage à tampon circulaire, alloué UNE SEULE FOIS au
+     démarrage. À chaque TRAIL_STEP unités parcourues on réécrit le plus vieux
+     quadrilatère à la position courante. ⚠️ AUCUNE ALLOCATION PAR IMAGE, et
+     c'est non négociable : une trace qui créerait une géométrie par segment
+     ferait travailler le ramasse-miettes trois fois par seconde pendant toute
+     la descente, ce qui produit exactement les micro-saccades qu'un jeu de
+     temps ne peut pas se permettre.
+
+     CE QU'IL FAUT VOIR À L'ÉCRAN, et c'est tout le propos :
+       * SUR LA CARRE — deux traits FINS, nets, sombres, écartés de la largeur
+         des patins. Ce sont deux entailles dans la neige tassée. Elles disent
+         « j'ai gravé », et elles sont belles parce qu'elles sont propres.
+       * EN DÉRAPAGE — une seule bavure LARGE et PÂLE. C'est de la neige
+         retournée, pulvérisée, étalée. Elle dit « j'ai chassé, et j'ai payé ».
+     Le contraste entre les deux est l'information. Un joueur qui jette un œil
+     derrière lui sait immédiatement ce qu'il vient de faire — et surtout, il le
+     voit se former EN CONTINU, ce qui est la seule façon d'apprendre où est la
+     limite avant de l'avoir franchie.
+     ══════════════════════════════════════════════════════════════════════════ */
+  function buildTrail() {
+    const N = CFG.TRAIL_MAX;
+    /* Quatre sommets par segment (un quadrilatère), et deux quadrilatères par
+       segment : un par patin. On alloue les deux d'un coup, et le dérapage se
+       contente de les élargir jusqu'à ce qu'ils se rejoignent — c'est ce qui
+       fait que le passage de « deux traits » à « une bavure » est CONTINU au
+       lieu d'être un basculement, exactement comme la physique qui le pilote. */
+    const quads = N * 2;
+    const pos = new Float32Array(quads * 4 * 3);
+    const col = new Float32Array(quads * 4 * 3);
+    const idx = [];
+    for (let q = 0; q < quads; q++) {
+      const v = q * 4;
+      idx.push(v, v + 2, v + 1, v + 1, v + 2, v + 3);
+    }
+    // Tout est replié à l'origine et en noir : un segment jamais écrit est
+    // invisible, sans avoir à gérer un compteur de segments valides.
+    /* ⚠️ LES NORMALES SONT OBLIGATOIRES DEPUIS QUE LE MATÉRIAU EST LAMBERT.
+       Une géométrie éclairée sans attribut `normal` est rendue NOIRE par
+       three.js — panne muette et déroutante, puisque la trace serait bien là,
+       bien placée, et parfaitement invisible. On ne peut pas non plus appeler
+       computeVertexNormals() : les positions changent à chaque segment écrit,
+       il faudrait tout recalculer soixante fois par seconde pour un résultat
+       qu'on connaît déjà. On les écrit donc à la main dans pushTrail, où la
+       pente de la piste est de toute façon sous la main. */
+    const nrm = new Float32Array(quads * 4 * 3);
+    for (let i = 1; i < nrm.length; i += 3) nrm[i] = 1;    // (0,1,0) par défaut
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    g.setAttribute("normal", new THREE.BufferAttribute(nrm, 3));
+    g.setAttribute("color", new THREE.BufferAttribute(col, 3));
+    /* ⚠️ UN TABLEAU SIMPLE, PAS UN BufferAttribute — et c'est la façon dont
+       `ribbon` procède déjà, dix lignes plus bas. Les deux marchent dans
+       three.js, mais le premier jet du sillon passait un BufferAttribute et la
+       trace était INVISIBLE sur la planche alors que le compteur annonçait plus
+       de mille sommets gravés : tools/preview-luge.js lit `g.index` comme un
+       tableau indexable, ce qu'un BufferAttribute n'est pas. La trace existait,
+       elle n'avait simplement aucun triangle.
+       Ne pas « améliorer » ce point : il n'y a rien à gagner, et l'outil de
+       contrôle redeviendrait aveugle à l'effet principal du zip. */
+    g.setIndex(idx);
+    /* ⚠️ `depthWrite: false` ET un léger décalage de polygone. La trace est
+       posée à deux centimètres AU-DESSUS de la piste, ce qui suffirait en
+       théorie ; en pratique, à trois cents mètres, la précision du tampon de
+       profondeur ne distingue plus deux centimètres et les deux surfaces se
+       battent — la trace clignote. Le décalage de polygone règle ça dans le
+       matériel, ce qui est sa raison d'être. */
+    /* ⚠️ LAMBERT ET NON BASIC, ET C'EST UN DÉFAUT VU AU RENDU. En Basic, la
+       trace n'est PAS éclairée : elle garde sa pleine luminosité pendant que la
+       piste, elle, s'assombrit dans les versants à l'ombre. Résultat, sur la
+       planche, deux sillons plus CLAIRS que la neige qu'ils creusent — ils
+       avaient l'air de briller, ce qui dit exactement le contraire de ce qu'un
+       creux doit dire.
+       Une trace est de la matière au sol : elle doit prendre la même lumière
+       que le sol, sinon elle flotte au-dessus au lieu d'y être gravée. */
+    const m = new THREE.MeshLambertMaterial({
+      vertexColors: true, transparent: true, opacity: 0.92,
+      depthWrite: false, polygonOffset: true,
+      polygonOffsetFactor: -4, polygonOffsetUnits: -8,
+    });
+    const mesh = new THREE.Mesh(g, m);
+    mesh.frustumCulled = false;    // le tampon circulaire couvre toute la descente
+    mesh.renderOrder = 1;
+    scene.add(mesh);
+    trail = { mesh, pos, col, nrm, N, head: 0, lastS: -1e9, prevL: null, prevR: null };
+  }
+
+  /* Écrit un segment de trace. Appelé depuis updateFx, une fois tous les
+     TRAIL_STEP unités — jamais par image : à 60 images par seconde et 35 u/s on
+     avance de 0,58 unité par image, on écrirait donc deux segments par unité,
+     soit quatre fois trop de géométrie pour exactement le même résultat. */
+  function pushTrail(sled) {
+    if (!trail) return;
+    if (sled.s - trail.lastS < CFG.TRAIL_STEP) return;
+    /* En l'air, on ne grave rien — et il faut COUPER la continuité, sinon le
+       segment suivant se raccorde par-dessus le saut et dessine un long ruban
+       tendu dans le vide. C'est le défaut classique des systèmes de traces, et
+       il ne se voit qu'après le premier saut. */
+    if (!sled.grounded || sled.wipe > 0) { trail.prevL = trail.prevR = null; trail.lastS = sled.s; return; }
+    trail.lastS = sled.s;
+
+    const f = Slope.frameAt(sled.s);
+    const p = Slope.pointAt(sled.s, sled.u);
+    const yaw = Slope.yawAt(sled.s) + sled.heading;
+    /* La trace est perpendiculaire à la marche RÉELLE de la luge, pas à la
+       piste : c'est ce qui fait qu'une trace de dérapage est OBLIQUE, donc
+       lisible comme un dérapage. */
+    const rx = Math.cos(yaw), rz = Math.sin(yaw);
+
+    const skid = sled.skid || 0;
+    const carve = Math.abs(sled.edge || 0);
+    // La largeur : fine sur la carre, large en dérapage. Interpolation directe,
+    // donc continue — comme la physique.
+    const w = CFG.TRAIL_W_CARVE + (CFG.TRAIL_W_SKID - CFG.TRAIL_W_CARVE) * skid;
+    const gauge = CFG.TRAIL_GAUGE;
+    /* ⚠️⚠️ LA TRACE S'EFFACE VERS LA COULEUR DE LA PISTE, ET SURTOUT PAS VERS LE
+       NOIR — c'est la correction la plus visible du chantier, et le premier jet
+       s'est trompé de façon spectaculaire.
+
+       Le raisonnement de départ était bon : un matériau n'a qu'une opacité
+       GLOBALE, la baisser effacerait toute la trace d'un coup, y compris le
+       segment qu'on vient d'écrire. Il faut donc moduler la couleur par sommet.
+       L'erreur a été de MULTIPLIER la teinte par la visibilité. Multiplier une
+       couleur par 0,28, ce n'est pas la rendre discrète : c'est la rendre
+       SOMBRE. La planche montrait deux bandes quasi noires filant derrière la
+       luge — du goudron sur de la barbe à papa.
+
+       ⚠️ LA RÈGLE, VALABLE PARTOUT OÙ L'ON MODULE UNE COULEUR PAR SOMMET : pour
+       atténuer, on INTERPOLE VERS LE FOND, on ne multiplie pas. Multiplier ne
+       fonctionne que sur un fondu ADDITIF, où le noir est justement
+       l'invisible — c'est le cas des étoiles et de la poudre (voir
+       stepParticles), et c'est ce cas-là qu'on avait recopié sans voir qu'il ne
+       s'appliquait pas ici. En fondu normal, l'invisible n'est pas le noir :
+       c'est la couleur de ce qu'il y a derrière.
+
+       On interpole donc du rose de la piste vers la teinte du geste. La trace
+       devient un CREUX dans la neige — présente en permanence, discrète quand
+       on roule droit, franche quand on engage. */
+    const P0 = CFG.COL_PISTE;
+    const cCarve = CFG.COL_CARVE, cSkid = CFG.COL_SKID;
+    const mix = (a, b, k) => a + (b - a) * k;
+    // 1. La teinte du geste : du sillon sombre à la bavure pâle.
+    const tr = mix((cCarve >> 16 & 255), (cSkid >> 16 & 255), skid);
+    const tg = mix((cCarve >> 8 & 255), (cSkid >> 8 & 255), skid);
+    const tb = mix((cCarve & 255), (cSkid & 255), skid);
+    /* 2. ⚠️ UN PLANCHER DE VISIBILITÉ. Sans lui, une luge qui roule tout droit
+       ne laisse RIEN derrière elle, ce qui est faux (des patins tracent
+       toujours) et surtout dommage : la trace permanente donne un repère de
+       vitesse au ras du sol, et elle rend le renforcement de la carre bien plus
+       lisible — on voit le trait S'ÉPAISSIR et FONCER au lieu de le voir
+       apparaître de nulle part. Un signal qui varie se lit mieux qu'un signal
+       qui s'allume. */
+    const visible = Math.max(0.30, carve * 0.9, skid);
+    // 3. Et l'interpolation depuis la piste, qui est tout le propos ci-dessus.
+    const r = mix((P0 >> 16 & 255), tr, visible) / 255;
+    const gg = mix((P0 >> 8 & 255), tg, visible) / 255;
+    const bb = mix((P0 & 255), tb, visible) / 255;
+
+    for (const side of [-1, 1]) {
+      const c0 = sled.u + side * gauge;
+      const a = Slope.pointAt(sled.s, c0 - w), b = Slope.pointAt(sled.s, c0 + w);
+      const q = trail.head * 2 + (side > 0 ? 1 : 0);
+      const prev = side < 0 ? trail.prevL : trail.prevR;
+      const cur = {
+        ax: a.x, ay: a.y + 0.03, az: a.z,
+        bx: b.x, by: b.y + 0.03, bz: b.z,
+      };
+      const P = trail.pos, C = trail.col, Nn = trail.nrm;
+      const o = q * 12;
+      if (!prev) {
+        // Pas de segment précédent (départ, saut, chute) : quadrilatère replié.
+        for (let i = 0; i < 12; i++) P[o + i] = 0;
+        for (let i = 0; i < 12; i++) C[o + i] = 0;
+      } else {
+        P[o] = prev.ax; P[o + 1] = prev.ay; P[o + 2] = prev.az;
+        P[o + 3] = prev.bx; P[o + 4] = prev.by; P[o + 5] = prev.bz;
+        P[o + 6] = cur.ax; P[o + 7] = cur.ay; P[o + 8] = cur.az;
+        P[o + 9] = cur.bx; P[o + 10] = cur.by; P[o + 11] = cur.bz;
+        /* La normale de la surface à cette abscisse : la verticale basculée par
+           la PENTE. C'est celle du sol sous la trace, ce qui est le seul choix
+           qui la fasse s'éclairer exactement comme la piste — et donc se lire
+           comme un creux DANS la neige plutôt que comme un ruban POSÉ dessus. */
+        const cp = Math.cos(f.pitch), sp = Math.sin(f.pitch);
+        const nx = Math.sin(f.yaw) * sp, ny = cp, nz = -Math.cos(f.yaw) * sp;
+        for (let k = 0; k < 4; k++) {
+          C[o + k * 3] = r; C[o + k * 3 + 1] = gg; C[o + k * 3 + 2] = bb;
+          Nn[o + k * 3] = nx; Nn[o + k * 3 + 1] = ny; Nn[o + k * 3 + 2] = nz;
+        }
+      }
+      if (side < 0) trail.prevL = cur; else trail.prevR = cur;
+      // Le décalage vers rx/rz sert la perpendicularité au cap réel : on
+      // l'applique en écartant les points le long de l'axe droit de la LUGE.
+      void rx; void rz; void p;
+    }
+    trail.head = (trail.head + 1) % trail.N;
+    trail.mesh.geometry.attributes.position.needsUpdate = true;
+    trail.mesh.geometry.attributes.color.needsUpdate = true;
+    trail.mesh.geometry.attributes.normal.needsUpdate = true;
+  }
+
+  function clearTrail() {
+    if (!trail) return;
+    trail.pos.fill(0);
+    trail.col.fill(0);
+    trail.head = 0; trail.lastS = -1e9; trail.prevL = trail.prevR = null;
+    trail.mesh.geometry.attributes.position.needsUpdate = true;
+    trail.mesh.geometry.attributes.color.needsUpdate = true;
   }
 
   function emit(sys, x, y, z, vx, vy, vz, life, r, g, b) {
@@ -759,12 +1209,16 @@ const World = (function () {
   /* Un SAPIN DE GOMME : trois sphères aplaties, de la plus large à la plus
      petite, sur un tronc. Trois teintes tirées de la même palette, jamais la
      même deux fois de suite sur un même arbre. */
-  function gumTree(g, x, y, z, h, i) {
-    g.add(cylM(mat.trunk, 0.22, h * 0.42, x, y + h * 0.21, z, true));
+  /* `far` bascule sur la palette assombrie : c'est ce qui donne au décor ses
+     trois plans (voir mat.candyFar). Un seul argument, et la profondeur
+     apparaît. */
+  function gumTree(g, x, y, z, h, i, far) {
+    const pal = far ? mat.candyFar : mat.candy;
+    g.add(cylM(far ? mat.trunkFar : mat.trunk, 0.22, h * 0.42, x, y + h * 0.21, z, true));
     for (let k = 0; k < 3; k++) {
       const r = h * (0.42 - k * 0.1);
       const hue = Math.floor(hash(i, 30 + k) * CFG.COL_CANDY_SET.length);
-      const s = sph(mat.candy[hue], r, x, y + h * (0.42 + k * 0.26), z);
+      const s = sph(pal[hue], r, x, y + h * (0.42 + k * 0.26), z);
       s.scale.y *= 0.78;
       g.add(s);
     }
@@ -804,8 +1258,13 @@ const World = (function () {
     const c = Slope.pointAt(s, 0);
     const f = Slope.frameAt(s);
     const arc = new THREE.Mesh(geo.torus, mat.cane);
-    const R = width * 0.56;
-    arc.scale.set(R, R, 1.6);
+    /* ⚠️ AFFINÉE AU 414. À 1,6 d'épaisseur pour un rayon de quinze unités, le
+       tube faisait plus de deux mètres de diamètre : l'arche remplissait un
+       tiers du cadre en rose plein, et comme elle revenait tous les 136 unités,
+       on passait la descente derrière un rideau. Un repère de distance doit se
+       voir, pas cacher ce qu'on est venu regarder. */
+    const R = width * 0.52;
+    arc.scale.set(R, R, 1.0);
     arc.position.set(c.x, c.y, c.z);
     arc.rotation.y = f.yaw;
     g.add(arc);
@@ -817,6 +1276,51 @@ const World = (function () {
       g.add(sph(mat.candy[Math.floor(hash(s | 0, 5) * CFG.COL_CANDY_SET.length)], 0.5,
         p.x, p.y + 1.6, p.z));
     }
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     UNE PORTE DE CHECKPOINT (414).
+     ──────────────────────────────────────────────────────────────────────────
+     ⚠️ ELLE DOIT SE VOIR DE TRÈS LOIN, ET C'EST SA SEULE VRAIE CONTRAINTE. Un
+     checkpoint qu'on franchit sans l'avoir vu venir ne remplit pas la moitié de
+     son travail : il sécurise, mais il ne SOULAGE pas. Or le soulagement — « je
+     l'ai eu, ce que je viens de faire est acquis » — est précisément ce qui
+     donne son rythme à une descente à checkpoints, et c'est ce qui pousse à
+     tenter le passage suivant un peu plus vite.
+
+     D'où deux fanions HAUTS (quatre unités, au-dessus de la ligne d'horizon du
+     cadrage) plutôt qu'une ligne peinte au sol : à quarante mètres et sous une
+     caméra rasante, tout ce qui est posé à plat sur la piste disparaît. La
+     règle est générale et vaut pour tout repère de jeu — ce qui doit se voir de
+     loin doit être VERTICAL.
+
+     Elle est volontairement DISTINCTE des arches de menthe poivrée, qui ne
+     marquent que la distance : deux repères qui se ressemblent ne se lisent
+     plus que comme un seul. */
+  function checkpointGate(g, s, width) {
+    const half = width / 2 + 1.2;
+    for (const side of [-1, 1]) {
+      const p = Slope.pointAt(s, side * half);
+      // Le mât : blanc, fin, haut.
+      g.add(cylM(mat.white, 0.15, 4.2, p.x, p.y + 2.1, p.z, true));
+      /* Le fanion : un triangle de sucre menthe, tourné DANS L'AXE DE LA PISTE
+         pour être vu de face par une luge qui arrive. Un fanion perpendiculaire
+         serait un trait, et un trait ne signale rien. */
+      const flag = new THREE.Mesh(geo.plane, mat.cpFlag);
+      flag.scale.set(2.4, 1.5, 1);
+      flag.position.set(p.x, p.y + 3.7, p.z);
+      flag.rotation.y = Slope.yawAt(s) + Math.PI / 2;
+      flag.material.side = THREE.DoubleSide;
+      g.add(flag);
+      // Le bonbon au sommet du mât : il attrape la lumière et pointe le mât.
+      g.add(sph(mat.cpGlow, 0.42, p.x, p.y + 4.35, p.z, true));
+    }
+    /* La bande au sol : elle ne sert pas à repérer la porte de loin (elle en
+       est incapable), elle sert à dire l'INSTANT exact du franchissement, au
+       moment où l'on passe dessus. Les deux rôles sont distincts et demandent
+       deux objets — c'est pour ça qu'il y a les deux. */
+    const band = ribbon(s - 0.9, s + 0.9, -width / 2, width / 2, 0.05, mat.cpBand, 3);
+    g.add(band);
   }
 
   /* ----------------------------------------------------------------------
@@ -841,14 +1345,14 @@ const World = (function () {
     for (const side of [-1, 1]) {
       for (let k = 0; k < BANDS.length - 1; k++) {
         g.add(ribbon(s0, s1, side * (half + BANDS[k]), side * (half + BANDS[k + 1]),
-          0, mat.snow, 11, true));
+          0, mat.snow, 16, true));
       }
     }
 
     /* 2. LA PISTE : le dessus, puis un liseré vertical de chaque côté. Le
        liseré est l'épaisseur du ruban (règle 5) — c'est lui qui garde la piste
        lisible quand la caméra s'abaisse dans les virages relevés. */
-    g.add(ribbon(s0, s1, -half, half, 0, mat.piste, 7.5));
+    g.add(ribbon(s0, s1, -half, half, 0, mat.piste, 15));
     for (const side of [-1, 1]) {
       const e = ribbon(s0, s1, side * half, side * half, -0.34, mat.pisteEdge, 4);
       // Le liseré est un ruban de largeur nulle : on l'épaissit en écartant
@@ -911,7 +1415,8 @@ const World = (function () {
       if (hash(base, 10) < 0.75) {
         const u = Math.min(half + 142, far + 26 + hash(base, 11) * 70);
         const p = Slope.terrainAt(s - 2, side * u);
-        gumTree(g, p.x, p.y, p.z, 6 + hash(base, 12) * 7, base + 999);
+        // `true` : palette lointaine. C'est ce rang-là qui doit reculer.
+        gumTree(g, p.x, p.y, p.z, 6 + hash(base, 12) * 7, base + 999, true);
       }
     }
 
@@ -929,6 +1434,10 @@ const World = (function () {
     if (node.i % CFG.WORLD_ARCH_EVERY === 0 && node.i > 2) {
       archOver(g, s0 + CFG.NODE_LEN / 2, W);
     }
+
+    // La porte de checkpoint, si l'une tombe dans ce tronçon.
+    const cp = Slope.checkpointIn(s0, s1);
+    if (cp) checkpointGate(g, cp.s, Slope.widthAt(cp.s));
 
     node.group = g;
     scene.add(g);
@@ -1145,9 +1654,62 @@ const World = (function () {
       }
     }
 
+    /* ══════════════════════════════════════════════════════════════════════
+       LA GERBE DE NEIGE (414) — la résistance du sol, rendue visible.
+       ──────────────────────────────────────────────────────────────────────
+       ⚠️ ELLE NE SORT PAS DU DÉRAPAGE SEUL, ET C'EST LE POINT ENTIER. Une gerbe
+       qui n'apparaîtrait qu'au décrochage se lirait comme une alarme : « tu as
+       raté ». Or une carre franche projette elle aussi de la neige — c'est même
+       l'image emblématique du ski, ce petit rideau qui part de la spatule quand
+       la lame mord. On lit donc les DEUX, avec des visages opposés :
+
+         * SUR LA CARRE : un rideau MINCE, serré, qui part vers l'intérieur du
+           virage et s'élève peu. C'est joli, c'est net, et ça récompense.
+         * EN DÉRAPAGE : un nuage LARGE, haut, désordonné, projeté vers
+           l'extérieur. C'est spectaculaire, et ça annonce qu'on freine.
+
+       Le débit suit `load` — la charge sur l'adhérence — et non la seule
+       vitesse : la gerbe grossit donc À MESURE qu'on approche de la limite, ce
+       qui en fait le seul indicateur ANTICIPÉ du jeu. C'est ce que le joueur
+       regarde du coin de l'œil pour savoir s'il peut serrer davantage. */
+    const load = sled.load || 0;
+    const carveK = (sled.carve || 0);
+    const sprayK = Math.min(1, carveK * load * 1.25 + (sled.skid || 0) * 1.5);
+    if (sprayK > 0.04 && sled.grounded && sled.v > 12) {
+      const n = Math.round(CFG.FX_SPRAY_RATE * sprayK * dt);
+      // Sur la carre, la neige part vers l'INTÉRIEUR du virage (du côté où la
+      // luge est couchée) ; en dérapage, vers l'extérieur. Le signe bascule
+      // avec le décrochage, ce qui rend les deux gestes lisibles d'un coup.
+      const inward = -Math.sign(sled.edge || 1);
+      const dir = (sled.skid > CFG.SKID_BREAK) ? -inward : inward;
+      const wide = 0.35 + (sled.skid || 0) * 1.5;
+      for (let i = 0; i < n; i++) {
+        // Le point d'émission : sous la carre engagée, décalé vers l'avant —
+        // une gerbe naît à la spatule, pas derrière le siège.
+        const along = 0.4 + Math.random() * 1.5;
+        const ex = p.x - back.x * along * 0.35 + f.right.x * (-inward) * 0.7;
+        const ez = p.z - back.z * along * 0.35 + f.right.z * (-inward) * 0.7;
+        const sp = CFG.FX_SPRAY_OUT * (0.4 + sprayK) * (0.5 + Math.random());
+        emit(spray,
+          ex + (Math.random() - 0.5) * wide, p.y + 0.1 + Math.random() * 0.35,
+          ez + (Math.random() - 0.5) * wide,
+          f.right.x * dir * sp + (Math.random() - 0.5) * 3 - f.fwd.x * sled.v * 0.18,
+          CFG.FX_SPRAY_UP * (0.35 + Math.random() * sprayK * 1.3),
+          f.right.z * dir * sp + (Math.random() - 0.5) * 3 - f.fwd.z * sled.v * 0.18,
+          CFG.FX_SPRAY_LIFE * (0.6 + Math.random() * 0.7),
+          1, 0.97, 0.99);
+      }
+    }
+
+    /* LE SILLON. Écrit ici parce que c'est le seul endroit qui tourne à chaque
+       image avec la luge sous la main — mais il ne s'écrit qu'une fois tous les
+       TRAIL_STEP unités, pushTrail() s'en charge. */
+    pushTrail(sled);
+
     stepParticles(stars, dt, 9);
     stepParticles(dust, dt, -0.6);   // la poudre MONTE : c'est ce qui la rend féérique
     stepParticles(lines, dt, 0);
+    stepParticles(spray, dt, CFG.FX_SPRAY_GRAVITY);   // ... et la gerbe RETOMBE : c'est de la matière
   }
 
   /* Le décor lointain suit la caméra (règle 3) et la neige tombe. */
@@ -1158,12 +1720,28 @@ const World = (function () {
     skyDome.position.set(c.x, c.y, c.z);
     mountainsNear.position.set(c.x, 0, c.z);
     mountainsFar.position.set(c.x, 0, c.z);
-    // Les montagnes suivent en x/z mais PAS en y : elles restent au niveau de
-    // la vallée, donc on les surplombe de plus en plus en descendant. C'est
-    // exactement ce qu'on veut voir dans une descente — le paysage monte
-    // autour de soi.
-    mountainsNear.position.y = Math.max(-260, c.y * 0.55 - 60);
-    mountainsFar.position.y = Math.max(-380, c.y * 0.35 - 90);
+    /* Les montagnes suivent en x/z mais seulement PARTIELLEMENT en y : elles
+       restent en arrière du mouvement, donc le paysage monte autour de soi à
+       mesure qu'on descend. C'est exactement ce qu'on veut voir dans une
+       descente.
+
+       ⚠️⚠️ MAIS LA BUTÉE ÉTAIT DU MAUVAIS CÔTÉ, ET ÇA DONNAIT DES MONTAGNES QUI
+       FLOTTAIENT DANS LE CIEL (corrigé au 414, vu sur une planche rendue en bas
+       de piste). Le `Math.max` plafonnait leur DESCENTE à −260. Or la descente
+       fait environ sept cents unités de dénivelé : passé la mi-parcours, la
+       caméra tombe plus bas que cette butée, et les montagnes — figées, elles —
+       se retrouvent AU-DESSUS d'elle. À l'arrivée, la chaîne entière planait à
+       quatre cents unités en l'air, socle compris, détachée sur le ciel.
+
+       ⚠️ Personne n'aurait vu ça en lisant `Math.max(-260, …)`, qui a l'air
+       d'une précaution raisonnable. Il fallait rendre une image en BAS de la
+       piste — et c'est pour ça que la liste des planches en contient une
+       désormais.
+
+       La butée correcte est RELATIVE À LA CAMÉRA et non absolue : les montagnes
+       peuvent monter dans le cadre, mais jamais décoller de l'horizon. */
+    mountainsNear.position.y = Math.min(c.y + 8, c.y * 0.55 - 60);
+    mountainsFar.position.y = Math.min(c.y + 20, c.y * 0.35 - 90);
 
     if (snowFall) {
       snowFall.position.set(c.x, 0, c.z);
@@ -1184,16 +1762,34 @@ const World = (function () {
     if (stars) for (const p of stars.live) p.t = -1;
     if (dust) for (const p of dust.live) p.t = -1;
     if (lines) for (const p of lines.live) p.t = -1;
+    if (spray) for (const p of spray.live) p.t = -1;
+    clearTrail();
+  }
+
+  /* ⚠️ APPELÉ À CHAQUE REMISE EN PLACE AU CHECKPOINT (414), et pas seulement au
+     départ. Sans ça, la trace resterait tendue entre l'endroit de la chute et
+     le checkpoint : un ruban de plusieurs centaines de mètres en travers du
+     paysage, qui est exactement le genre d'artefact qu'on ne remarque qu'une
+     fois et qu'on ne peut plus ignorer ensuite. On coupe simplement la
+     continuité — les segments déjà gravés en amont, eux, restent, et c'est très
+     bien : le joueur revoit sa propre trace du passage précédent, ce qui est
+     une information utile et gratuite. */
+  function cutTrail() {
+    if (!trail) return;
+    trail.prevL = trail.prevR = null;
+    trail.lastS = -1e9;
   }
 
   function render() { renderer.render(scene, camera); }
 
   return {
-    init, resize, render, buildNode, dropNode, clearAll,
+    init, resize, render, buildNode, dropNode, clearAll, cutTrail,
     updateSled, updateCritters, updateFx, updateAmbient, applySkin,
     get camera() { return camera; },
     get scene() { return scene; },
     get sledRig() { return sledRig; },
+    // Pour tools/preview-luge.js : vérifier que le sillon a bien été gravé.
+    trailColors: () => (trail ? trail.col : null),
     get materials() { return mat; },
     get geometries() { return geo; },
   };

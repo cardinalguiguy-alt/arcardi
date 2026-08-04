@@ -106,7 +106,18 @@ const THREE = {
     dispose() {}
   },
   BufferAttribute: class { constructor(array, itemSize) { this.array = array; this.itemSize = itemSize; } },
-  MeshLambertMaterial: Mat, MeshBasicMaterial: Mat, PointsMaterial: Mat,
+  MeshLambertMaterial: Mat,
+  /* ⚠️ BASIC ET LAMBERT NE PEUVENT PLUS ÊTRE LA MÊME CLASSE (414). Tant que la
+     planche les confondait, elle ÉCLAIRAIT des matériaux qui, dans le jeu, ne
+     le sont pas — la chaîne de montagnes lointaine, les halos de bonbons, les
+     fanions de checkpoint. Ils apparaissaient donc plus contrastés sur l'image
+     que dans le navigateur, ce qui est exactement le genre de mensonge qui fait
+     régler une palette dans le vide. */
+  MeshBasicMaterial: class extends Mat { constructor(o) { super(o); this.__basic = true; } },
+  PointsMaterial: Mat,
+  HemisphereLight: class extends Obj3 {
+    constructor(sky, ground, i) { super(); this.color = new Col(sky); this.groundColor = new Col(ground); this.intensity = i; }
+  },
   CanvasTexture: class {
     constructor(cv) { this.image = cv; this.repeat = new V2(1, 1); this.offset = new V2(0, 0); }
     clone() { return new THREE.CanvasTexture(this.image); }
@@ -152,8 +163,12 @@ const { CFG, World, Slope, Sled, Critters, ChaseCamera } = vm.runInContext(
   "({ CFG, World, Slope, Sled, Critters, ChaseCamera })", ctxVm);
 
 /* Le faux Input : la luge doit pouvoir tourner pour qu'on voie un dérapage. */
-let steerValue = 0;
-ctxVm.Input = { axis: () => steerValue, jumpPressed: () => false, sliding: () => false, clear() {} };
+var steerValue = 0;
+var brakeValue = false;
+ctxVm.Input = {
+  axis: () => steerValue, jumpPressed: () => false,
+  sliding: () => brakeValue, tucking: () => false, clear() {},
+};
 vm.runInContext("var Input = Input;", ctxVm);
 
 /* ================================================= MATRICES ET TRIANGLES == */
@@ -237,9 +252,31 @@ function tessellate(g) {
     const P = (k) => [pos[k * 3], pos[k * 3 + 1], pos[k * 3 + 2]];
     const uvA = g.attributes.uv && g.attributes.uv.array;
     const U = (k) => (uvA ? [uvA[k * 2], uvA[k * 2 + 1]] : null);
+    /* LES COULEURS PAR SOMMET (414) : c'est par elles que vit le sillon gravé,
+       dont toute l'information — carre sombre contre bavure pâle, et
+       l'effacement progressif — est portée par la couleur et par rien d'autre.
+       Sans cette lecture, la trace apparaîtrait d'un blanc uniforme sur la
+       planche, c'est-à-dire exactement le contraire de ce qu'on veut juger.
+       ⚠️ Un triangle dont les trois sommets sont noirs est un segment JAMAIS
+       ÉCRIT (tampon circulaire au repos) : on le jette, sans quoi trois cents
+       quadrilatères repliés à l'origine barreraient le bas du cadre. */
+    const colA = g.attributes.color && g.attributes.color.array;
     const push3 = (a, b, c) => {
+      if (colA) {
+        const sum = colA[a * 3] + colA[a * 3 + 1] + colA[a * 3 + 2]
+                  + colA[b * 3] + colA[b * 3 + 1] + colA[b * 3 + 2]
+                  + colA[c * 3] + colA[c * 3 + 1] + colA[c * 3 + 2];
+        if (sum < 0.02) return;
+      }
       const tri = [P(a), P(b), P(c)];
       if (uvA) tri.uv = [U(a), U(b), U(c)];
+      if (colA) {
+        const m3 = (k) => [colA[k * 3], colA[k * 3 + 1], colA[k * 3 + 2]];
+        const q = [m3(a), m3(b), m3(c)];
+        tri.vcol = [(q[0][0] + q[1][0] + q[2][0]) / 3,
+                    (q[0][1] + q[1][1] + q[2][1]) / 3,
+                    (q[0][2] + q[1][2] + q[2][2]) / 3];
+      }
       T.push(tri);
     };
     if (idx) for (let i = 0; i < idx.length; i += 3) push3(idx[i], idx[i + 1], idx[i + 2]);
@@ -273,15 +310,17 @@ function collect(rootObj) {
          absent : il rassure. */
       const map = (o.material && o.material.map && o.material.map.image
         && o.material.map.image.ctx) ? o.material.map.image : null;
-      const unlit = !!(o.material && o.material.fog === false && o.material.side === 1); // le dôme de ciel
-      if (!unlit) {
+      const isSky = !!(o.material && o.material.fog === false && o.material.side === 1);
+      // Un matériau Basic n'est PAS éclairé — dans le jeu comme ici.
+      const flat = !!(o.material && o.material.__basic);
+      if (!isSky) {
         for (const tri of tessellate(o.geometry)) {
           const p = tri.map((v) => apply(m, v));
           const ux = p[1].x - p[0].x, uy = p[1].y - p[0].y, uz = p[1].z - p[0].z;
           const vx = p[2].x - p[0].x, vy = p[2].y - p[0].y, vz = p[2].z - p[0].z;
           let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
           const L = Math.hypot(nx, ny, nz) || 1;
-          faces.push({ p, n: { x: nx / L, y: ny / L, z: nz / L }, col, map, uv: tri.uv });
+          faces.push({ p, n: { x: nx / L, y: ny / L, z: nz / L }, col, map, uv: tri.uv, flat, vcol: tri.vcol });
         }
       }
     }
@@ -297,18 +336,70 @@ const skyCanvas = (function () {
   return vm.runInContext("(function(){ return null; })()", ctxVm);
 })();
 
-function shade(col, n, dist, sun, fillL) {
+/* ══════════════════════════════════════════════════════════════════════════
+   L'ÉCLAIRAGE DE LA PLANCHE — ⚠️ REFAIT AU 414 EN MÊME TEMPS QUE CELUI DU JEU.
+   ──────────────────────────────────────────────────────────────────────────
+   ⚠️ CES DEUX ÉCRITURES DOIVENT RESTER D'ACCORD, ET C'EST LA SEULE DETTE QUE
+   CET OUTIL FAIT PORTER AU PROJET. Le jeu éclaire avec three.js, la planche
+   réimplémente le même modèle à la main : si world.js change de lumière et
+   qu'on oublie ici, l'outil continue de rendre de belles images qui ne
+   ressemblent plus à rien de ce que le joueur voit. Un outil de contrôle qui
+   ment est pire qu'un outil absent, parce qu'il rassure.
+
+   Le modèle, recopié terme à terme sur World.init() :
+     * une AMBIANTE faible et uniforme (0,20) ;
+     * une lumière d'HÉMISPHÈRE (0,46) : three.js la calcule en interpolant du
+       sol vers le ciel selon `0,5·n.y + 0,5`, c'est-à-dire par l'ORIENTATION
+       VERTICALE de la face. C'est elle qui donne le bleu sur les dessus et le
+       rose sur les dessous, donc toute la couleur d'ombre du décor ;
+     * le SOLEIL (1,05), chaud et rasant, qui domine et creuse le relief ;
+     * un APPOINT froid (0,18), qui empêche les dessous d'être noirs.
+   ══════════════════════════════════════════════════════════════════════════ */
+const SUN_C = [((CFG.COL_LIGHT_SUN >> 16) & 255) / 255, ((CFG.COL_LIGHT_SUN >> 8) & 255) / 255, (CFG.COL_LIGHT_SUN & 255) / 255];
+const SKY_C = [((CFG.COL_LIGHT_SKY >> 16) & 255) / 255, ((CFG.COL_LIGHT_SKY >> 8) & 255) / 255, (CFG.COL_LIGHT_SKY & 255) / 255];
+const GND_C = [((CFG.COL_LIGHT_GROUND >> 16) & 255) / 255, ((CFG.COL_LIGHT_GROUND >> 8) & 255) / 255, (CFG.COL_LIGHT_GROUND & 255) / 255];
+const FOG_C = [(CFG.COL_FOG >> 16) & 255, (CFG.COL_FOG >> 8) & 255, CFG.COL_FOG & 255];
+
+/* Le facteur d'éclairage, PAR CANAL — et il le faut : tout l'intérêt du
+   nouveau modèle est que le rouge et le bleu ne sont PAS éclairés pareil selon
+   qu'une face regarde le ciel ou le sol. Un facteur scalaire unique, comme au
+   413, ne pouvait par construction produire que du plus clair et du plus
+   sombre, jamais du plus chaud et du plus froid — c'est-à-dire pas la moitié de
+   ce qu'on cherche à juger. */
+function lightK(n, sun, fillL) {
   const cs = Math.max(0, n.x * sun.x + n.y * sun.y + n.z * sun.z);
   const cf = Math.max(0, n.x * fillL.x + n.y * fillL.y + n.z * fillL.z);
-  // Les mêmes trois sources que world.js : ambiante 0,78 chaude, soleil 0,72,
-  // appoint froid 0,26. Recopiées et non devinées — un rendu qui n'éclaire pas
-  // comme le jeu ne sert à rien pour juger une teinte.
-  const k = 0.78 + 0.72 * cs + 0.26 * cf;
-  let r = ((col >> 16) & 255) * k, g = ((col >> 8) & 255) * k * 0.99, b = (col & 255) * k * 0.99;
-  // Brouillard exponentiel de world.js (FogExp2, 0.0022, couleur 0xffeedd).
-  const f = 1 - Math.exp(-Math.pow(dist * 0.0022, 2));
-  r = r * (1 - f) + 0xff * f; g = g * (1 - f) + 0xee * f; b = b * (1 - f) + 0xdd * f;
-  return [Math.min(255, r) | 0, Math.min(255, g) | 0, Math.min(255, b) | 0];
+  const hemiT = 0.5 * n.y + 0.5;          // 1 = face au ciel, 0 = face au sol
+  const A = CFG.LIGHT_AMBIENT, Hh = CFG.LIGHT_SKY, S = CFG.LIGHT_SUN;
+  const k = [0, 0, 0];
+  for (let i = 0; i < 3; i++) {
+    k[i] = A
+      + Hh * (GND_C[i] + (SKY_C[i] - GND_C[i]) * hemiT)
+      + S * SUN_C[i] * cs
+      + 0.18 * [0.77, 0.85, 1.0][i] * cf;
+  }
+  return k;
+}
+
+function fogMix(r, g, b, dist) {
+  const f = 1 - Math.exp(-Math.pow(dist * CFG.FOG_DENSITY, 2));
+  return [
+    Math.min(255, r * (1 - f) + FOG_C[0] * f) | 0,
+    Math.min(255, g * (1 - f) + FOG_C[1] * f) | 0,
+    Math.min(255, b * (1 - f) + FOG_C[2] * f) | 0,
+  ];
+}
+
+function shade(col, n, dist, sun, fillL, flat, vcol) {
+  let r = (col >> 16) & 255, g = (col >> 8) & 255, b = col & 255;
+  if (vcol) { r *= vcol[0]; g *= vcol[1]; b *= vcol[2]; }
+  // Un matériau Basic n'est pas éclairé : il garde sa teinte, il subit
+  // seulement le brouillard. C'est ce que fait three.js.
+  if (!flat) {
+    const k = lightK(n, sun, fillL);
+    r *= k[0]; g *= k[1]; b *= k[2];
+  }
+  return fogMix(r, g, b, dist);
 }
 
 function render(faces, cam, W, H, skyPx, skyW, skyH) {
@@ -358,7 +449,7 @@ function render(faces, cam, W, H, skyPx, skyW, skyH) {
     if (P.some((p) => p.z < 0.4)) continue;                 // derrière l'œil : on saute plutôt que de découper
     const zAvg = (P[0].z + P[1].z + P[2].z) / 3;
     if (zAvg > CFG.DRAW_DISTANCE) continue;
-    const lit = shade(face.col, face.n, zAvg, sun, fillL);
+    const lit = shade(face.col, face.n, zAvg, sun, fillL, face.flat, face.vcol);
     /* L'échantillonnage de texture se fait par pixel, mais l'ÉCLAIRAGE est
        calculé une fois par face (facettes plates, comme le reste de la
        planche) : on garde donc le rapport entre la couleur éclairée et la
@@ -366,7 +457,7 @@ function render(faces, cam, W, H, skyPx, skyW, skyH) {
     const kr = lit[0] / Math.max(1, (face.col >> 16) & 255);
     const kg = lit[1] / Math.max(1, (face.col >> 8) & 255);
     const kb = lit[2] / Math.max(1, face.col & 255);
-    const fogF = 1 - Math.exp(-Math.pow(zAvg * 0.0022, 2));
+    const fogF = 1 - Math.exp(-Math.pow(zAvg * CFG.FOG_DENSITY, 2));
     const [r, g, b] = lit;
 
     const minY = Math.max(0, Math.floor(Math.min(P[0].sy, P[1].sy, P[2].sy)));
@@ -390,16 +481,45 @@ function render(faces, cam, W, H, skyPx, skyW, skyH) {
       if (face.map && face.uv) {
         // UV barycentriques, puis répétition (les UV du jeu sont en unités du
         // monde et sortent donc largement de [0,1] — c'est le principe).
+        /* ⚠️⚠️ INTERPOLATION PERSPECTIVE-CORRECTE — CORRECTION DU 414, ET ELLE A
+           FAILLI COÛTER TRÈS CHER.
+
+           Cette ligne interpolait les UV directement par les poids
+           barycentriques calculés À L'ÉCRAN. C'est du placage AFFINE, exactement
+           celui de la PlayStation 1, et il a un défaut caractéristique : sur une
+           grande surface vue sous un angle rasant, la texture se TORD en chevrons
+           en zigzag de part et d'autre de la diagonale de chaque quadrilatère.
+
+           ⚠️ ON A DONC PASSÉ TROIS ITÉRATIONS À CORRIGER, DANS LE JEU, UN DÉFAUT
+           QUI N'EXISTAIT QUE DANS CET OUTIL. Les grands chevrons roses en travers
+           de la piste — accusés d'être du moiré, puis mis sur le compte des
+           sillons, puis des tourbillons — étaient produits ici, à cette ligne.
+           (Les corrections de texture faites entre-temps restent bonnes et
+           nécessaires par ailleurs : les motifs étaient réellement trop fins, et
+           ça, ça se serait vu dans le navigateur. Mais ce n'était pas la cause
+           des chevrons.)
+
+           ⚠️ LA LEÇON, ET ELLE VAUT POUR TOUT OUTIL DE CONTRÔLE : quand une
+           planche montre un défaut, la première question est « le jeu a-t-il ce
+           défaut, ou seulement la planche ? ». Un rasteriseur logiciel écrit à la
+           main ne fait PAS ce que fait une carte graphique, et chaque écart entre
+           les deux est un faux positif en puissance.
+
+           La correction est celle de tous les rasteriseurs depuis 1996 : ce qui
+           s'interpole linéairement à l'écran n'est pas u, mais u/z — on
+           interpole donc u/z et 1/z, puis on divise l'un par l'autre. */
         const u0 = face.uv[0], u1 = face.uv[1], u2 = face.uv[2];
-        const tu = w0 * u0[0] + w1 * u1[0] + w2 * u2[0];
-        const tv = w0 * u0[1] + w1 * u1[1] + w2 * u2[1];
+        const iz0 = 1 / P[0].z, iz1 = 1 / P[1].z, iz2 = 1 / P[2].z;
+        const iz = w0 * iz0 + w1 * iz1 + w2 * iz2;
+        const tu = (w0 * u0[0] * iz0 + w1 * u1[0] * iz1 + w2 * u2[0] * iz2) / iz;
+        const tv = (w0 * u0[1] * iz0 + w1 * u1[1] * iz1 + w2 * u2[1] * iz2) / iz;
         const im = face.map, ip = im.ctx.pixels;
         const sx2 = ((Math.floor(tu * im.width) % im.width) + im.width) % im.width;
         const sy2 = ((Math.floor(tv * im.height) % im.height) + im.height) % im.height;
         const si = (sy2 * im.width + sx2) * 4;
-        px[i] = Math.min(255, ip[si] * kr * (1 - fogF) + 0xff * fogF) | 0;
-        px[i + 1] = Math.min(255, ip[si + 1] * kg * (1 - fogF) + 0xee * fogF) | 0;
-        px[i + 2] = Math.min(255, ip[si + 2] * kb * (1 - fogF) + 0xdd * fogF) | 0;
+        px[i] = Math.min(255, ip[si] * kr * (1 - fogF) + FOG_C[0] * fogF) | 0;
+        px[i + 1] = Math.min(255, ip[si + 1] * kg * (1 - fogF) + FOG_C[1] * fogF) | 0;
+        px[i + 2] = Math.min(255, ip[si + 2] * kb * (1 - fogF) + FOG_C[2] * fogF) | 0;
       } else {
         px[i] = r; px[i + 1] = g; px[i + 2] = b;
       }
@@ -410,26 +530,108 @@ function render(faces, cam, W, H, skyPx, skyW, skyH) {
 
 /* ================================================================ SCÈNES == */
 const W = 1200, H = 720;
+/* ⚠️ LE SURÉCHANTILLONNAGE (414), ET IL EST DEVENU INDISPENSABLE.
+   Ce rasteriseur prend UN texel par pixel, au plus proche. Il n'a ni mipmaps ni
+   filtrage anisotrope — c'est-à-dire précisément les deux choses qui, dans le
+   navigateur, empêchent une texture de sol de scintiller sous un angle rasant.
+   Conséquence : la planche montrait un moiré BEAUCOUP PLUS VIOLENT que le jeu,
+   et l'écart n'allait pas dans le sens qu'on croit. On risquait donc de courir
+   après un défaut déjà corrigé, ou pire, de le juger insoluble.
 
-function shot(name, sAt, uAt, steer, driftFake, label) {
+   En rendant à 2×2 puis en moyennant, chaque pixel final agrège quatre
+   échantillons : c'est un filtrage grossier, mais c'est le même GENRE de
+   filtrage que celui du matériel, et la planche redevient représentative. On y
+   gagne en prime un anticrénelage des silhouettes, qui manquait aussi.
+   Quatre fois plus de pixels à rasteriser — quelques secondes de plus, pour
+   des images sur lesquelles on peut enfin conclure. */
+const SS = 2;
+
+function shot(name, sAt, uAt, steer, driftFake, label, sim) {
   // On monte la scène une fois par planche : les tronçons construits dépendent
   // de la position, et on veut voir exactement ce que le joueur verrait là.
-  World.init(makeCanvasEl(W, H));
+  World.init(makeCanvasEl(W * SS, H * SS));
   const slope = new Slope.SlopeGen();
   const sled = new Sled();
   const field = new Critters.Field();
   const cam = new ChaseCamera(World.camera);
 
-  sled.s = sAt; sled.u = uAt; sled.v = 34;
-  sled.heading = steer * 0.5;
-  sled.drift = driftFake;
-  sled.roll = -sled.heading * 0.55;
-  sled.pitchVis = -Slope.pitchAt(sAt) * 0.5;
+  /* ══════════════════════════════════════════════════════════════════════
+     ⚠️ ON SIMULE VRAIMENT LA DESCENTE (414), ON NE POSE PLUS LA LUGE.
+     ══════════════════════════════════════════════════════════════════════
+     Jusqu'au 413, la planche PLAÇAIT la luge à une abscisse et lui affectait
+     un `drift` à la main. Ça suffisait tant qu'on ne jugeait qu'un décor. Ça ne
+     suffit plus du tout, pour deux raisons qui sont tout l'objet de ce zip :
 
-  const nodeIndex = Math.floor(sled.s / CFG.NODE_LEN);
-  slope.ensureAhead(nodeIndex);
+       1. LE SILLON GRAVÉ N'EXISTE QUE SI L'ON A ROULÉ. C'est une trace : sans
+          plusieurs secondes de trajectoire derrière soi, il n'y a rien à
+          montrer. Une luge téléportée ne laisse aucune trace, et on ne pourrait
+          donc jamais regarder l'effet principal du 414.
+       2. LES ÉTATS DE CONDUITE NE SE FABRIQUENT PAS À LA MAIN. `edge`, `skid`,
+          `load`, `deep`, la suspension : ce sont des états à INERTIE, liés
+          entre eux. Les poser arbitrairement produit des combinaisons que la
+          physique ne peut pas atteindre — on jugerait alors une image du jeu
+          qui n'arrive jamais.
+
+     On fait donc rouler la vraie physique, avec les vraies touches, jusqu'à
+     l'abscisse voulue. Ce qu'on voit sur la planche est ce que le joueur voit. */
+  const nodeIndex0 = Math.floor(Math.max(0, sAt - 260) / CFG.NODE_LEN);
+  slope.ensureAhead(nodeIndex0);
   for (const n of slope.nodes) World.buildNode(n);
-  field.update(0.016, 1000, sled);
+
+  if (sim) {
+    sled.s = Math.max(0, sAt - 240);
+    sled.v = 30;
+    let t = 0;
+    // 25 secondes au plus : la luge atteint toujours la cible avant.
+    for (let i = 0; i < 1500 && sled.s < sAt; i++) {
+      t += 1 / 60;
+      /* Une manière de conduire rend soit un axe, soit { steer, brake } : le
+         frein à main est le VRAI outil du dérapage volontaire (il fait chuter
+         l'adhérence, voir BRAKE_GRIP_MUL), et sans lui on ne peut pas montrer
+         le second régime de conduite du jeu. */
+      const cmd = sim(t, sled);
+      if (typeof cmd === "number") { steerValue = cmd; brakeValue = false; }
+      else { steerValue = cmd.steer; brakeValue = !!cmd.brake; }
+      const wasReset = sled.reset;
+      sled.update(1 / 60, t * 1000, slope.finishK(sled.s));
+      const ni = Math.floor(sled.s / CFG.NODE_LEN);
+      /* ⚠️ ON REJOUE LE RECUL DE FENÊTRE DU JEU (voir SlopeGen.rewind). Sans
+         cette branche, la planche ne montrerait pas le bogue de piste vide
+         après une chute — et c'est ELLE qui l'a trouvé. Un outil de contrôle
+         qui simplifie le cas d'erreur ne contrôle plus rien. */
+      if (!wasReset && sled.reset > 0) {
+        for (const n of slope.rewind(ni)) World.dropNode(n);
+        field.rewind(sled.s);
+      } else {
+        for (const n of slope.ensureAhead(ni)) World.dropNode(n);
+      }
+      for (const n of slope.nodes) if (!n.group) World.buildNode(n);
+      field.update(1 / 60, t * 1000, sled);
+      World.updateFx(sled, 1 / 60, t * 1000);      // c'est lui qui grave le sillon
+      cam.update(1 / 60, sled, t * 1000);
+    }
+    /* On compte les segments de sillon RÉELLEMENT écrits. C'est le seul moyen
+       de distinguer « la trace ne se voit pas sur l'image » de « la trace n'a
+       jamais été gravée » — deux pannes très différentes qui produisent
+       exactement la même planche. */
+    let segs = 0;
+    const tc = World.trailColors && World.trailColors();
+    if (tc) for (let i = 0; i < tc.length; i += 3) if (tc[i] + tc[i + 1] + tc[i + 2] > 0.02) segs++;
+    console.log(`      simulé : v=${sled.v.toFixed(1)} u/s, carre=${sled.edge.toFixed(2)},`
+      + ` dérapage=${sled.skid.toFixed(2)}, charge=${sled.load.toFixed(2)}, profond=${sled.deep.toFixed(2)},`
+      + ` chutes=${sled.wipes}, sillon=${segs} sommets`);
+  } else {
+    sled.s = sAt; sled.u = uAt; sled.v = 34;
+    sled.heading = steer * 0.5;
+    sled.drift = driftFake;
+    sled.roll = -sled.heading * 0.55;
+    sled.pitchVis = -Slope.pitchAt(sAt) * 0.5;
+    const ni = Math.floor(sled.s / CFG.NODE_LEN);
+    slope.ensureAhead(ni);
+    for (const n of slope.nodes) if (!n.group) World.buildNode(n);
+    field.update(0.016, 1000, sled);
+  }
+
   World.updateSled(sled, 1000);
   World.updateCritters(field, 1000);
   // Trois appels : la caméra est amortie, une seule image la laisserait à
@@ -447,17 +649,96 @@ function shot(name, sAt, uAt, steer, driftFake, label) {
     skyPx[i * 4 + 2] = sp[i * 4 + 2] | 0; skyPx[i * 4 + 3] = 255;
   }
 
-  const px = render(faces, cam, W, H, skyPx, skyImg.width, skyImg.height);
+  const big = render(faces, cam, W * SS, H * SS, skyPx, skyImg.width, skyImg.height);
+  // Réduction : la moyenne des SS×SS échantillons (voir la note sur SS).
+  const px = new Uint8Array(W * H * 3);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    let r = 0, g = 0, b = 0;
+    for (let dy = 0; dy < SS; dy++) for (let dx = 0; dx < SS; dx++) {
+      const j = (((y * SS + dy) * W * SS) + (x * SS + dx)) * 3;
+      r += big[j]; g += big[j + 1]; b += big[j + 2];
+    }
+    const i = (y * W + x) * 3, k = SS * SS;
+    px[i] = (r / k) | 0; px[i + 1] = (g / k) | 0; px[i + 2] = (b / k) | 0;
+  }
   const file = path.join(outDir, name + ".png");
   writePng(file, W, H, px);
   console.log(`  ${name}.png  — ${label}  (${faces.length} triangles, s=${sAt})`);
 }
 
+/* Les manières de conduire qu'on veut REGARDER. Ce sont des fonctions du temps
+   qui rendent l'axe de direction, exactement comme le ferait un joueur — et
+   elles sont choisies pour montrer chacune un régime différent de la conduite
+   du 414, puisque c'est ce régime qu'on juge. */
+/* ⚠️ UN PILOTE QUI TIENT UNE LIGNE, ET NON UN BRAQUAGE CONSTANT. Le premier
+   jeu de manières de conduire braquait à fond sans jamais corriger : la luge
+   partait donc en spirale jusqu'à la barrière, se vautrait, et on mesurait la
+   chute d'un pilote absurde au lieu de mesurer la conduite. Aucun joueur ne
+   tient une carre pleine pendant huit secondes sans regarder où il va.
+   Toutes les manières ci-dessous VISENT une position latérale et la tiennent ;
+   ce qui les distingue est l'AGRESSIVITÉ avec laquelle elles la rejoignent,
+   c'est-à-dire exactement ce qu'on veut comparer. */
+/* ⚠️ MÊME CORRECTIF QUE LE PILOTE DE verify-luge.mjs (voir la longue note sur
+   l'oscillation là-bas) : gain modéré et amortissement sur la vitesse de
+   travers RÉELLE. Sans ça, ces manières de conduire plaquaient la luge contre
+   la barrière — les planches montraient alors un enfoncement de 1,00 et une
+   vitesse de 13 u/s, c'est-à-dire une luge à l'agonie au lieu du beau geste
+   qu'on voulait précisément photographier. */
+function hold(sled, target, gain) {
+  const v = Math.max(8, sled.v);
+  const wantLat = Math.max(-0.45 * v, Math.min(0.45 * v, (target - sled.u) * (gain || 1.0)));
+  const wantHead = Math.asin(Math.max(-0.6, Math.min(0.6, wantLat / v)));
+  return Math.max(-1, Math.min(1, (wantHead - sled.heading) * 3.0 - (sled.lat / v) * 0.8));
+}
+const DRIVE = {
+  // Une carre franche tenue : on traverse la piste d'un bord à l'autre, une
+  // fois, et on tient. C'est le geste qu'on veut réussir — deux sillons fins.
+  /* ⚠️ UN BALAYAGE LENT ET CONTINU, ET NON UNE POSITION À REJOINDRE. Un pilote
+     qui ATTEINT sa cible cesse de braquer : la planche montrait alors une luge
+     parfaitement droite, carre à 0,02 — c'est-à-dire tout sauf le geste qu'on
+     voulait photographier. Pour voir une carre, il faut être EN TRAIN d'en
+     tenir une au moment du déclenchement. */
+  /* ⚠️ LA CIBLE CHANGE SELON L'ABSCISSE, PAS SELON LE TEMPS. La simulation
+     s'arrête à une POSITION donnée, jamais à un instant donné : une consigne
+     pilotée par le temps tombe donc à une phase quelconque, et les deux
+     premières tentatives ont photographié une luge parfaitement droite (carre
+     0,02) sur la planche censée montrer une carre. En changeant de bord tous
+     les 120 unités, on est certain qu'un appui a commencé au plus 120 unités
+     avant le déclenchement — donc qu'on est EN TRAIN de carver. */
+  /* ⚠️ UNE CARRE FRANCHE ET TENUE, ET NON UN ASSERVISSEMENT. `hold` est un
+     correcteur : il ANNULE le braquage dès que la trajectoire est bonne, ce qui
+     est exactement ce qu'on veut d'un pilote et exactement ce qu'on ne veut pas
+     d'une photo. Pour montrer une carre, il faut en TENIR une — donc commander
+     l'angle directement, et ne rendre la main que près de la barrière. */
+  carve: (t, sled) => (Math.abs(sled.u) > 5
+    ? hold(sled, 0, 1.5)
+    : (Math.floor(sled.s / 105) % 2 ? 0.95 : -0.95)),
+  // Un appui, puis l'autre : montre le coût du changement de carre.
+  slalom: (t, sled) => hold(sled, (Math.floor(sled.s / 85) % 2 ? 7 : -7), 1.6),
+  /* Le décrochage : on demande beaucoup PLUS que l'adhérence ne peut donner.
+     ⚠️ C'est le seul cas où l'on braque volontairement à fond — c'est le
+     propos : montrer ce que ça fait quand on en demande trop. */
+  // Le frein à main en plein virage : l'adhérence chute, ça part en travers.
+  skid: (t, sled) => (sled.s % 160 < 90 ? { steer: hold(sled, -7, 1.5), brake: false }
+                                        : { steer: 1, brake: true }),
+  straight: (t, sled) => hold(sled, 0, 1.0),
+};
+
 console.log("\n=== preview-luge — on regarde la descente ===\n");
 shot("luge-depart", 60, 0, 0, 0, "le départ, vue d'ensemble");
-shot("luge-virage", 420, -7, -1, 0.8, "un virage, luge en dérapage");
-shot("luge-village", 1000, 2, 0.2, 0.1, "le hameau de pain d'épices");
+shot("luge-carve", 520, 0, 0, 0, "⭐ LA CARRE TENUE — deux sillons fins", DRIVE.carve);
+shot("luge-derapage", 760, 0, 0, 0, "⭐ LE DÉCROCHAGE — une bavure large", DRIVE.skid);
+shot("luge-slalom", 1180, 0, 0, 0, "⭐ deux appuis enchaînés", DRIVE.slalom);
+shot("luge-village", 1000, 2, 0.2, 0.1, "le hameau de pain d'épices", DRIVE.straight);
 shot("luge-gourmands", 700, 0, 0, 0, "une vague de gourmands");
-shot("luge-hauteurs", 3400, 0, 0.4, 0.3, "les hauteurs, palier 4");
+shot("luge-checkpoint", 380, 0, 0, 0, "⭐ une porte de checkpoint", DRIVE.straight);
+shot("luge-hauteurs", 3400, 0, 0.4, 0.3, "les hauteurs, palier 4", DRIVE.slalom);
+/* ⚠️ UNE PLANCHE EN BAS DE PISTE, AJOUTÉE AU 414. Toutes les précédentes étaient
+   prises dans le premier tiers de la descente, où la caméra n'est descendue que
+   d'une centaine d'unités. C'est ce trou dans la couverture qui a laissé passer
+   la chaîne de montagnes flottant dans le ciel : le défaut ne commençait qu'à
+   mi-parcours, et aucune planche ne regardait aussi loin. Un jeu de descente se
+   contrôle aussi EN BAS. */
+shot("luge-bas", 4700, 0, 0.2, 0.1, "⭐ le bas de la piste, 700 unités plus bas", DRIVE.slalom);
 console.log("\nPlanches écrites dans public/candyluge/tools/out/.\n"
   + "⚠️ Ni particules, ni textures plaquées, ni transparence : voir l'en-tête.\n");

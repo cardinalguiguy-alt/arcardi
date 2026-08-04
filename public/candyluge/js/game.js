@@ -19,6 +19,101 @@
    où l'on était.
    ========================================================================== */
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   LA PORTE DÉROBÉE — « jeu en construction » et son code secret (415).
+   ───────────────────────────────────────────────────────────────────────────
+   La descente n'est pas ouverte au public tant qu'elle se construit. Elle
+   s'ouvre par ⌘⇧X (ou Ctrl+Maj+X) pressé DEUX FOIS.
+
+   ⚠️ POURQUOI DEUX FOIS PLUTÔT QU'UNE. Un raccourci unique se déclenche par
+   accident — et le jour où ça arrive, le mur est tombé sans que personne ne
+   sache pourquoi ni comment le remettre. Deux pressions successives dans une
+   fenêtre de temps courte ne se produisent jamais par hasard : c'est une
+   INTENTION, et c'est tout ce qu'on demande à un code secret.
+
+   ⚠️ CTRL EST ACCEPTÉ EN PLUS DE CMD, et ce n'est pas une trahison de la
+   consigne (« command shift X ») : `metaKey` n'existe tout simplement pas sur
+   un clavier Windows ou Linux. S'en tenir à Cmd rendrait le jeu définitivement
+   inaccessible depuis ces machines, y compris pour celui qui connaît le code.
+   Sur Mac, ⌘⇧X marche exactement comme demandé.
+
+   ⚠️ LE DÉVERROUILLAGE TIENT POUR LA SESSION DE L'ONGLET, pas pour toujours.
+   `sessionStorage` et non `localStorage`, et c'est un arbitrage :
+     * avec localStorage, un navigateur ayant vu le code une fois serait ouvert
+       POUR TOUJOURS — y compris sur une machine prêtée ou une démo, et sans
+       qu'on puisse vérifier que le mur tient encore ;
+     * sans rien du tout, il faudrait retaper le code à chaque rechargement,
+       ce qui est pénible quand on teste le jeu vingt fois de suite.
+   La session est le bon milieu : on ouvre une fois, on teste tranquillement, et
+   une nouvelle visite retrouve le mur. Pour re-verrouiller tout de suite :
+   fermer l'onglet, ou vider le stockage de session.
+
+   ⚠️ ET ON NE FAIT QUE MASQUER UN PANNEAU. Ce n'est PAS une protection : les
+   fichiers du jeu sont publics et n'importe qui sachant lire du JavaScript
+   franchira ce mur en trente secondes. Ce n'est pas le but — le but est de ne
+   pas proposer aux joueurs un jeu qui n'est pas fini. Ne jamais mettre derrière
+   ce mur quoi que ce soit qui doive VRAIMENT rester secret.
+   ═══════════════════════════════════════════════════════════════════════════ */
+const Gate = (function () {
+  const KEY = "vf-luge-wip";
+  const WINDOW_MS = 3500;      // délai maximal entre les deux pressions
+  let armed = 0;               // date de la première pression, 0 si aucune
+  let onOpen = null;
+
+  function unlocked() {
+    try { return sessionStorage.getItem(KEY) === "1"; } catch (e) { return false; }
+  }
+  function remember() {
+    try { sessionStorage.setItem(KEY, "1"); } catch (e) { /* mode privé : tant pis */ }
+  }
+
+  function init(cb) {
+    onOpen = cb;
+    if (unlocked()) return;
+    /* ⚠️ EN PHASE DE CAPTURE (`true`), donc AVANT le gestionnaire de input.js.
+       Sans ça, l'ordre des écouteurs déciderait de qui voit la touche en
+       premier — et input.js appelle preventDefault sur une partie du clavier.
+       Un code secret ne doit pas dépendre de l'ordre de chargement des
+       fichiers. */
+    window.addEventListener("keydown", onKey, true);
+  }
+
+  function onKey(e) {
+    if (unlocked()) return;
+    // ⚠️ `e.code` et non `e.key` : avec Maj enfoncée, `key` vaut "X" majuscule,
+    // et il change complètement de valeur sur un clavier non-latin. `code`
+    // désigne la TOUCHE PHYSIQUE, qui est ce qu'on veut pour un raccourci.
+    if (e.code !== "KeyX" || !e.shiftKey || !(e.metaKey || e.ctrlKey)) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const now = Date.now();
+    if (armed && now - armed < WINDOW_MS) {
+      armed = 0;
+      remember();
+      window.removeEventListener("keydown", onKey, true);
+      const panel = document.getElementById("construction");
+      if (panel) panel.classList.remove("armed");
+      if (onOpen) onOpen();
+      return;
+    }
+    // Première pression : on arme, avec un retour très discret (voir le CSS).
+    armed = now;
+    const panel = document.getElementById("construction");
+    if (panel) {
+      panel.classList.add("armed");
+      setTimeout(() => {
+        if (Date.now() - armed >= WINDOW_MS - 50) {
+          armed = 0;
+          panel.classList.remove("armed");
+        }
+      }, WINDOW_MS);
+    }
+  }
+
+  return { init, unlocked };
+})();
+
 const Game = (function () {
   const STATE = { TITLE: "title", RUNNING: "running", PAUSED: "paused", OVER: "over" };
 
@@ -28,6 +123,7 @@ const Game = (function () {
   let score = 0, driftScore = 0;
   let running = false;
   let reported = false;
+  let cpFlash = -1e9;
 
   /* ------------------------------------------------------------ DÉMARRAGE */
   function start() {
@@ -39,8 +135,39 @@ const Game = (function () {
     elapsed = 0;
     reported = false;
 
+    /* ⚠️ UNE CHUTE RENVOIE AU DERNIER CHECKPOINT (414). Elle n'arrête toujours
+       pas la descente — la seule fin possible reste le bas de la piste ou
+       l'abandon — mais elle coûte désormais le morceau de piste à refaire, et
+       c'est ce qui met enfin quelque chose en jeu. */
+    sled.onWipe = () => chaseCam.addShake(1);
     sled.onCrash = () => { chaseCam.addShake(1); setTimeout(endRun, 900); };
-    sled.onLand = (hard) => { if (hard) chaseCam.addShake(0.4); };
+    sled.onLand = (hard, q) => { if (hard) chaseCam.addShake(0.35 + (1 - q) * 0.5); };
+    sled.onCheckpoint = (i) => { cpFlash = performance.now(); UI.flashCheckpoint(i); };
+    /* ⚠️ LA TRACE EST COUPÉE À LA REMISE EN PLACE, sans quoi elle resterait
+       tendue entre le lieu de la chute et le checkpoint : un ruban de plusieurs
+       centaines de mètres en travers du paysage. La caméra, elle, est
+       RÉINITIALISÉE — un suivi amorti qui verrait la luge se téléporter
+       traverserait tout le décor en glissant pendant deux secondes. */
+    sled.onRespawn = () => {
+      World.cutTrail();
+      chaseCam.reset();
+      /* ⚠️ ET ON RECONSTRUIT LA PISTE AUTOUR DU POINT DE REPRISE. Sans ces trois
+         lignes, le joueur repart DANS LE VIDE : les tronçons du checkpoint ont
+         été jetés quand il est passé devant, et `ensureAhead` ne sait que
+         construire vers l'avant (voir la note dans slope.js). Bogue trouvé en
+         RENDANT une image après une chute — la physique, elle, était juste. */
+      const ni = Math.floor(sled.s / CFG.NODE_LEN);
+      for (const n of slope.rewind(ni)) World.dropNode(n);
+      for (const n of slope.nodes) if (!n.group) World.buildNode(n);
+      /* Les gourmands et les bonbons doivent redescendre avec la luge. Sans
+         ça, on refait le passage DÉSERT : les vagues déjà consommées ne
+         reviennent pas, et le morceau à refaire n'est plus le même que celui
+         qu'on vient de rater — ce qui vide le checkpoint de son sens. */
+      field.rewind(sled.s, sled.cpTries);
+    };
+    // Le décrochage se SECOUE : c'est le seul retour immédiat qui dit « tu en
+    // as trop demandé », et il arrive avant que le compteur ne baisse.
+    sled.onCarveBreak = () => chaseCam.addShake(0.22);
     sled.onBoost = () => chaseCam.addShake(0.18);
 
     World.clearAll();
@@ -119,8 +246,13 @@ const Game = (function () {
     if (dt <= 0) return;
 
     if (state === STATE.RUNNING) {
-      // Le chrono s'arrête À LA LIGNE, pas quand la luge s'immobilise : le
-      // dégagement qui suit n'est plus de la course.
+      /* Le chrono s'arrête À LA LIGNE, pas quand la luge s'immobilise : le
+         dégagement qui suit n'est plus de la course.
+         ⚠️ ET IL NE S'ARRÊTE PAS PENDANT UNE CHUTE (414). C'est LUI la sanction
+         du modèle Lonely Mountains — pas un écran, pas une vie perdue. Un
+         chrono qui se suspendrait pendant la culbute et la remise en place
+         rendrait la chute gratuite, et on retomberait exactement dans le 413
+         qu'on vient de quitter. */
       if (!sled.finished) elapsed = now - startedAt;
       const finishK = slope.finishK(sled.s);
       sled.update(dt, now, finishK);
@@ -131,11 +263,12 @@ const Game = (function () {
       for (const n of dropped) World.dropNode(n);
       for (const n of slope.nodes) if (!n.group) World.buildNode(n);
 
-      /* Le score suit la distance ET le dérapage tenu. Le second terme n'est
-         pas décoratif : il dit au joueur, en chiffres, que la plus belle chose
-         du jeu est aussi la plus payante. Un joueur qui ne dérape jamais finit
-         la descente ; un joueur qui dérape la gagne. */
-      driftScore += sled.drift * CFG.SCORE_DRIFT_PER_SEC * dt;
+      /* ⚠️ LE SCORE SUIT LA CARRE, PAS LE DÉRAPAGE (413). Au 412 il payait le
+         dérapage, ce qui devient une faute dès lors que la carre existe : on
+         payait le geste sale et lent. Un joueur qui ne carve jamais finit la
+         descente ; un joueur qui carve la gagne — et c'est la même phrase que
+         se disent tous les jeux de glisse depuis trente ans. */
+      driftScore += sled.carve * CFG.SCORE_CARVE_PER_SEC * dt;
       score = sled.s * CFG.SCORE_PER_UNIT
             + sled.candies * CFG.CANDY_SCORE
             + driftScore;
@@ -145,7 +278,7 @@ const Game = (function () {
       World.updateCritters(field, now);
       World.updateFx(sled, dt, now);
       World.updateAmbient(now, sled);
-      UI.updateHud(sled, score, elapsed, slope.stageAt(sled.s));
+      UI.updateHud(sled, score, elapsed, slope.stageAt(sled.s), now - cpFlash);
 
       if (sled.finished && sled.v < 3) endRun();
 
@@ -186,6 +319,14 @@ const Game = (function () {
       UI.init();
       UI.showLoadError();
       document.getElementById("btnStart").disabled = true;
+      /* ⚠️ MÊME DANS CETTE BRANCHE, LE MUR PASSE AVANT (415). Depuis que
+         l'écran-titre n'est plus visible par défaut, ne rien afficher ici
+         laisserait une page vide : le message d'erreur vit DANS le titre. On
+         montre donc l'un ou l'autre selon le verrou — et le mur reste
+         prioritaire, parce qu'un jeu en construction dont la 3D n'a pas chargé
+         est toujours un jeu en construction. */
+      UI.show(Gate.unlocked() ? "title" : "construction");
+      Gate.init(() => UI.show("title"));
       return;
     }
     UI.init();
@@ -196,6 +337,16 @@ const Game = (function () {
     document.getElementById("btnResume").addEventListener("click", togglePause);
     document.getElementById("btnQuit").addEventListener("click", giveUp);
     document.getElementById("btnBack").addEventListener("click", leave);
+    /* ⚠️ LE RETOUR DEPUIS LE MUR SORT DIRECTEMENT, IL NE PASSE PAS PAR leave().
+       `leave()` déclare une descente PERDUE à la ferme (Bridge.over) quand une
+       luge existe et n'a pas fini — or il en existe toujours une, construite
+       pour animer l'écran-titre. Un joueur qui ouvre la descente, lit « jeu en
+       construction » et repart se verrait donc compter une partie ratée, avec
+       la cause « abandon ». On n'a rien joué : on sort, un point c'est tout. */
+    const btnWip = document.getElementById("btnConstructionBack");
+    if (btnWip) btnWip.addEventListener("click", () => {
+      if (Bridge.embedded) Bridge.exit();
+    });
 
     /* La scène du menu : on construit la piste et on pose la caméra dessus,
        sans luge. L'écran-titre montre alors le vrai paysage du jeu au lieu
@@ -208,7 +359,14 @@ const Game = (function () {
     for (const n of slope.nodes) World.buildNode(n);
     World.updateSled(sled, 0);
 
-    UI.show("title");
+    /* ⚠️ LE MUR DE CHANTIER (415). Il remplace l'écran-titre tant que le code
+       secret n'a pas été donné. La SCÈNE, elle, tourne quand même derrière :
+       le décor est déjà construit, la caméra dérive, et on voit donc la piste
+       qu'on n'a pas encore le droit de descendre. C'est plus engageant qu'un
+       panneau sur fond noir, et ça ne coûte rien puisque tout est là. */
+    UI.show(Gate.unlocked() ? "title" : "construction");
+    Gate.init(() => UI.show("title"));
+
     if (!running) { running = true; requestAnimationFrame(frame); }
   }
 

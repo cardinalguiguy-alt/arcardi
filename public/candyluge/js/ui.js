@@ -25,6 +25,8 @@ const UI = (function () {
       "hud", "title", "pause", "gameover", "score", "candies", "speed", "time",
       "best", "stage", "finalScore", "finalCandies", "finalTime", "finalBest",
       "oTitle", "overReason", "newBest", "boostTag", "driftBar", "driftFill",
+      "cpTag", "resetTag", "wipes", "wipesPlate", "finalWipes",
+      "construction",
     ]) el[id] = $(id);
     best = loadBest();
     applyLang();
@@ -50,6 +52,10 @@ const UI = (function () {
       pTitle: L.pause, btnResume: L.resume, btnQuit: L.quit, pQuitWarn: L.quitWarn,
       fLScore: L.score, fLCandies: L.candies, fLTime: L.time, fLBest: L.best,
       btnBack: L.back, oHint: L.overHint, boostTag: L.boost,
+      lWipes: L.wipes, fLWipes: L.wipes, resetTag: L.resetting,
+      cReset: L.cReset,
+      wTitle: L.wipTitle, wSub: L.wipSub, wHint: L.wipHint,
+      btnConstructionBack: L.back,
     };
     for (const id in t) { const n = $(id); if (n) n.textContent = t[id]; }
     if (el.best) el.best.textContent = fmtTime(best);
@@ -66,19 +72,58 @@ const UI = (function () {
     return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}.${String(t).padStart(3, "0")}`;
   }
 
+  /* ⚠️ « construction » EST UN CALQUE COMME LES AUTRES, et il devait l'être :
+     géré à part, il aurait pu rester affiché PAR-DESSUS l'écran-titre après le
+     déverrouillage, ou disparaître sans que le titre le remplace. Un seul
+     calque visible à la fois est une propriété qu'on obtient en les listant au
+     même endroit, pas en s'en souvenant. */
   function show(which) {
-    for (const k of ["title", "pause", "gameover"]) {
+    for (const k of ["construction", "title", "pause", "gameover"]) {
       if (el[k]) el[k].classList.toggle("visible", k === which);
     }
     if (el.hud) el.hud.classList.toggle("visible", which === "hud");
   }
 
-  function updateHud(sled, score, ms, stage) {
+  /* L'annonce de checkpoint (414). Elle apparaît, elle s'efface toute seule.
+     ⚠️ ELLE EST INDISPENSABLE ET NE COÛTE RIEN : un checkpoint qui ne
+     s'annonce pas ne procure aucun SOULAGEMENT, et le soulagement est
+     exactement ce qu'on achète en adoptant le modèle Lonely Mountains. Le
+     joueur doit savoir, à l'instant précis où ça arrive, que ce qu'il vient de
+     réussir est acquis — c'est ce qui lui donne envie d'attaquer le morceau
+     suivant plus fort. */
+  function flashCheckpoint(i) {
+    if (!el.cpTag) return;
+    el.cpTag.textContent = L.checkpoint + " " + (i + 1) + "/" + Slope.checkpointCount();
+    el.cpTag.classList.remove("visible");
+    // Redéclenche l'animation CSS : sans ce reflow forcé, deux checkpoints
+    // rapprochés ne rejoueraient pas l'apparition.
+    void el.cpTag.offsetWidth;
+    el.cpTag.classList.add("visible");
+  }
+
+  function updateHud(sled, score, ms, stage, sinceCp) {
     el.score.textContent = Math.floor(score);
     el.candies.textContent = sled.candies;
     el.speed.textContent = sled.kmh();
     el.time.textContent = fmtTime(ms);
     el.stage.textContent = stage + 1;
+    if (el.cpTag && sinceCp !== undefined && sinceCp > CFG.CP_FLASH_MS) {
+      el.cpTag.classList.remove("visible");
+    }
+    /* ⚠️ LE COMPTEUR DE CHUTES EST LE SECOND CHIFFRE DU JEU (414), à côté du
+       chrono. Dans Lonely Mountains, on ne se souvient pas de son temps : on se
+       souvient d'être descendu SANS TOMBER. Afficher les chutes en fait un
+       objectif à part entière, et un objectif que le joueur se fixe lui-même —
+       ce qui est la meilleure espèce. Il n'apparaît qu'à la première chute :
+       un « 0 » permanent serait un reproche par anticipation. */
+    if (el.wipes) {
+      el.wipes.textContent = sled.wipes;
+      el.wipesPlate.classList.toggle("visible", sled.wipes > 0);
+    }
+    // Le bandeau de remise en place, pendant la culbute et le retour.
+    if (el.resetTag) {
+      el.resetTag.classList.toggle("visible", sled.wipe > 0 || sled.reset > 0);
+    }
     /* La jauge de charge du turbo. Elle n'apparaît QUE pendant un dérapage :
        une jauge toujours visible et presque toujours vide est un élément
        d'interface qui ne dit rien 95 % du temps. */
@@ -96,6 +141,7 @@ const UI = (function () {
     el.finalScore.textContent = Math.floor(score);
     el.finalCandies.textContent = sled.candies;
     el.finalTime.textContent = finished ? fmtTime(ms) : "--:--.---";
+    if (el.finalWipes) el.finalWipes.textContent = sled.wipes;
     /* ⚠️ LE RECORD EST UN TEMPS, DONC LE PLUS PETIT GAGNE — et il ne se met à
        jour QUE sur une descente TERMINÉE. Un abandon à mi-parcours produit un
        temps court qui n'est pas une performance : le compter ferait du record
@@ -114,6 +160,7 @@ const UI = (function () {
 
   return {
     init, applyLang, show, updateHud, showGameOver, showLoadError, fmtTime,
+    flashCheckpoint,
     get best() { return best; },
     get L() { return L; },
   };

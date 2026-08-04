@@ -257,6 +257,54 @@ const Slope = (function () {
     return dropped;
   };
 
+  /* ══════════════════════════════════════════════════════════════════════════
+     ⚠️ LE RECUL DE LA FENÊTRE — BOGUE TROUVÉ AU RENDU, PAS À LA LECTURE (414).
+     ──────────────────────────────────────────────────────────────────────────
+     `ensureAhead` a une hypothèse cachée qui a été vraie pendant treize zips :
+     LA LUGE N'AVANCE QUE VERS L'AVANT. Elle ne construit donc que devant le
+     dernier tronçon connu, et jette tout ce qui passe derrière — définitivement,
+     puisque plus rien ne redemandera jamais ces indices-là.
+
+     Les checkpoints cassent cette hypothèse pour la première fois. Après une
+     remise en place, la luge REVIENT plusieurs centaines d'unités en arrière,
+     dans une zone dont les tronçons ont été jetés : `ensureAhead` ne rajoute
+     rien (le dernier indice connu est déjà bien au-delà) et ne jette rien. Le
+     joueur se retrouve donc à rouler DANS LE VIDE — pas de piste, pas de
+     barrières, pas de décor, juste le ciel et les montagnes au loin — jusqu'à
+     ce qu'il rattrape l'ancienne fenêtre.
+
+     ⚠️ ÇA NE SE VOIT PAS EN LISANT LE CODE, et ça ne se voit pas non plus dans
+     un banc d'essai sans rendu : la physique, elle, marchait parfaitement — la
+     luge descendait une piste correcte, simplement invisible. Il a fallu
+     RENDRE une image après une chute pour le découvrir. C'est le meilleur
+     argument qu'on ait pour tools/preview-luge.js, et il vaut d'être noté.
+
+     La correction reconstruit la fenêtre complète autour d'un indice, dans les
+     deux sens. On la rend au jeu, qui possède les meshes et doit donc décider
+     quoi bâtir : ce module ne connaît pas three.js et ce n'est pas à lui de
+     l'apprendre.
+     ══════════════════════════════════════════════════════════════════════════ */
+  SlopeGen.prototype.rewind = function (nodeIndex) {
+    const lo = Math.max(0, nodeIndex - CFG.NODES_BEHIND);
+    const hi = nodeIndex + CFG.NODES_AHEAD;
+    const dropped = [];
+    // 1. On jette tout ce qui sort de la nouvelle fenêtre, des deux côtés.
+    const kept = [];
+    for (const n of this.nodes) {
+      if (n.i < lo || n.i > hi) dropped.push(n); else kept.push(n);
+    }
+    // 2. On complète les trous. `kept` est trié, la piste étant construite en
+    //    ordre : un simple index suffit, pas de tri.
+    const have = new Set(kept.map((n) => n.i));
+    const out = [];
+    for (let i = lo; i <= hi; i++) {
+      if (have.has(i)) out.push(kept[kept.findIndex((n) => n.i === i)]);
+      else out.push(makeNode(i));
+    }
+    this.nodes = out;
+    return dropped;
+  };
+
   SlopeGen.prototype.stageAt = function (s) {
     return Math.min(5, Math.floor(s / CFG.STAGE_LEN));
   };
@@ -265,8 +313,56 @@ const Slope = (function () {
      à ralentir la luge et à ouvrir le décor sur la vallée. */
   SlopeGen.prototype.finishK = function (s) { return finishKAt(s); };
 
+  /* ══════════════════════════════════════════════════════════════════════════
+     LES CHECKPOINTS (414).
+     ──────────────────────────────────────────────────────────────────────────
+     ⚠️ ILS VIVENT DANS LA PISTE ET NON DANS LE JEU, et c'est le même choix que
+     pour la zone d'arrivée : ce sont des positions sur une courbe, pas des
+     événements. Trois conséquences, et les trois comptent :
+
+       1. tools/verify-luge.mjs peut les lire sans navigateur, donc CONTRÔLER
+          qu'aucun ne tombe dans un passage impossible ;
+       2. world.js peut construire la porte au moment où il bâtit le tronçon,
+          sans rien demander à personne ;
+       3. la luge sait où revenir sans qu'aucun module ne tienne une liste — il
+          n'y a qu'une seule écriture de la vérité, donc rien à désynchroniser.
+
+     ⚠️ LE DERNIER CHECKPOINT S'ARRÊTE AVANT LA ZONE D'ARRIVÉE. Une porte posée
+     dans le dégagement final renverrait le joueur DERRIÈRE la ligne alors qu'il
+     a déjà fini, ce qui est le genre de bogue absurde qu'on préfère rendre
+     impossible par construction plutôt que de le corriger par un cas
+     particulier ailleurs. */
+  function checkpointCount() {
+    const last = CFG.DESCENT_LENGTH - CFG.FINISH_FADE - CFG.CP_EVERY * 0.5;
+    return Math.max(1, Math.floor((last - CFG.CP_FIRST) / CFG.CP_EVERY) + 1);
+  }
+
+  function checkpointAt(i) {
+    return CFG.CP_FIRST + i * CFG.CP_EVERY;
+  }
+
+  /* L'indice du dernier checkpoint FRANCHI à l'abscisse s, ou -1 avant le
+     premier. Avant le premier, la luge revient au départ — ce qui n'arrive que
+     sur les 380 premières unités, soit une dizaine de secondes. */
+  function checkpointIndexAt(s) {
+    if (s < CFG.CP_FIRST) return -1;
+    return Math.min(checkpointCount() - 1, Math.floor((s - CFG.CP_FIRST) / CFG.CP_EVERY));
+  }
+
+  /* Vrai si un checkpoint tombe dans [s0, s1[ — c'est ce que buildNode
+     interroge pour savoir s'il doit construire une porte. */
+  function checkpointIn(s0, s1) {
+    const n = checkpointCount();
+    for (let i = 0; i < n; i++) {
+      const cs = checkpointAt(i);
+      if (cs >= s0 && cs < s1) return { i, s: cs };
+    }
+    return null;
+  }
+
   return {
     SlopeGen, yawAt, pitchAt, bumpAt, widthAt, curveAt, bankAt,
     centerAt, frameAt, pointAt, terrainAt, finishKAt,
+    checkpointCount, checkpointAt, checkpointIndexAt, checkpointIn,
   };
 })();
