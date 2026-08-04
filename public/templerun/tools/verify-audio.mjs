@@ -60,10 +60,16 @@ let timers = [], nextId = 1, clock = 0;
 
 function FakeAudio(src) {
   this.src = src; this.volume = 1; this.currentTime = 0; this.preload = "";
+  /* ⚠️ `playbackRate` AJOUTÉ AU 416. Le vrai <audio> l'a toujours eu ; le faux
+     ne l'avait pas, parce qu'aucune piste ne s'en servait avant les bulles.
+     Un banc d'essai n'imite que ce dont on s'est servi jusque-là — c'est
+     normal, et c'est aussi pourquoi il faut le compléter en même temps qu'on
+     ajoute une capacité, jamais après. */
+  this.playbackRate = 1;
   this.paused = true;
   this.play = () => {
     this.paused = false;
-    played.push({ src: this.src, at: clock, vol: this.volume });
+    played.push({ src: this.src, at: clock, vol: this.volume, rate: this.playbackRate, el: this });
     return { catch() {} };
   };
   this.pause = () => { this.paused = true; };
@@ -230,6 +236,68 @@ ok(/STATE\.PAUSED;\s*AudioFX\.stopAll\(\)/.test(GC) && /armBreath/.test(GC),
   "la pause coupe et la reprise réarme la respiration");
 ok(/STATE\.RUNNING[\s\S]{0,1200}?AudioFX\.tickBreath\(now\)/.test(GC),
   "tickBreath est appelée dans la boucle, branche RUNNING");
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   LES BULLES BLEUES (416).
+   ──────────────────────────────────────────────────────────────────────────────
+   ⚠️ TROIS PROPRIÉTÉS, ET AUCUNE NE S'ENTEND EN LISANT LE CODE : que six bulles
+   ramassées coup sur coup produisent SIX sons (et non un seul qui se coupe
+   cinq fois), que leur hauteur MONTE, et qu'elle PLAFONNE. La première est la
+   plus importante : c'est le défaut qu'on obtient toujours en rejouant un même
+   <audio>, et il ne se manifeste que sur un chapelet — c'est-à-dire jamais
+   pendant qu'on teste une bulle à la main.
+   ══════════════════════════════════════════════════════════════════════════ */
+{
+  played.length = 0;
+  AudioFX.resetChain();
+  // Un chapelet serré : neuf bulles espacées de 120 ms, ce que donne la
+  // vitesse de course sur COIN_SPACING (voir la note de config.js).
+  for (let i = 0; i < 9; i++) { AudioFX.bubble(clock); advance(120); }
+  const bubs = played.filter((p) => p.src.indexOf("bubble.mp3") >= 0);
+  ok(bubs.length === 9, "⚠️ neuf bulles ramassées produisent NEUF sons (les voix ne se coupent pas)",
+    `${bubs.length} sons pour 9 bulles`);
+  /* ⚠️ ON VÉRIFIE AUSSI QUE LES VOIX SONT DIFFÉRENTES, et pas seulement qu'il y
+     a neuf appels. Neuf `play()` sur le MÊME élément donneraient neuf entrées
+     dans le journal et un seul son à l'oreille — le contrôle passerait en
+     mesurant exactement le défaut qu'il cherche. */
+  const distinct = new Set(bubs.slice(0, 6).map((p) => p.el)).size;
+  ok(distinct === 6, "... et sur six voix distinctes, pas six fois la même",
+    `${distinct} voix pour 6 bulles`);
+  const rates = bubs.map((p) => p.rate);
+  ok(rates[0] < rates[3] && rates[3] < rates[6], "⚠️ la hauteur MONTE le long du chapelet",
+    `${rates[0].toFixed(2)} → ${rates[3].toFixed(2)} → ${rates[6].toFixed(2)}`);
+  const cap = Math.pow(2, CFG.BUBBLE_MAX_STEPS / 12);
+  ok(Math.max(...rates) <= cap + 1e-9, "... et elle PLAFONNE (au-delà, le son claque au lieu de sonner)",
+    `${Math.max(...rates).toFixed(3)} pour un plafond de ${cap.toFixed(3)}`);
+  ok(played.some((p) => p.src.indexOf("bubble-run.mp3") >= 0),
+    "... et un chapelet complet se conclut par un accord");
+}
+{
+  /* La rupture par le temps. Deux bulles séparées d'un long silence ne forment
+     pas une série — sinon la montée n'aurait plus aucun sens sur une course
+     entière, et on finirait la partie sept demi-tons trop haut. */
+  played.length = 0;
+  AudioFX.resetChain();
+  AudioFX.bubble(clock); advance(CFG.BUBBLE_CHAIN_MS + 200);
+  AudioFX.bubble(clock);
+  const r = played.filter((p) => p.src.indexOf("bubble.mp3") >= 0).map((p) => p.rate);
+  ok(r.length === 2 && Math.abs(r[0] - r[1]) < 1e-9,
+    "⚠️ deux bulles isolées ne forment pas une série : la hauteur repart du bas",
+    `${r.map((x) => x.toFixed(3)).join(" puis ")}`);
+}
+{
+  // Et stopAll() remet le compteur à plat : la partie suivante repart en bas.
+  played.length = 0;
+  AudioFX.resetChain();
+  for (let i = 0; i < 5; i++) { AudioFX.bubble(clock); advance(100); }
+  AudioFX.stopAll();
+  played.length = 0;
+  AudioFX.bubble(clock);
+  const r = played.filter((p) => p.src.indexOf("bubble.mp3") >= 0)[0];
+  ok(r && Math.abs(r.rate - 1) < 1e-9,
+    "⚠️ stopAll() remet la série à zéro (une partie ne démarre pas sept demi-tons trop haut)",
+    r ? `taux ${r.rate.toFixed(3)}` : "aucun son");
+}
 
 console.log(`\n${fail === 0 ? "Tout est passé." : `${fail} contrôle(s) en échec.`}  (${pass}/${pass + fail})\n`);
 console.log(`Ce script ne dit RIEN de ce qu'on entend : ni si le coup de

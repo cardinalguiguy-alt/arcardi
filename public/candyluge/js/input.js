@@ -63,13 +63,24 @@ const Input = (function () {
     window.addEventListener("mousemove", (e) => {
       mouseSeen = true;
       const half = window.innerWidth / 2;
-      // Zone morte de 6 % au centre (on ne braque pas en effleurant) et pleine
-      // butée à 55 % de la demi-largeur (on ne doit pas avoir à sortir du cadre
-      // pour braquer à fond).
-      const raw = (e.clientX - half) / (half * 0.55);
-      const dead = 0.06;
+      // Zone morte au centre (on ne braque pas en effleurant) et pleine butée
+      // à MOUSE_FULL de la demi-largeur (on ne doit pas avoir à sortir du
+      // cadre pour braquer à fond).
+      const raw = (e.clientX - half) / (half * CFG.MOUSE_FULL);
+      const dead = CFG.MOUSE_DEAD;
       const a = Math.abs(raw) < dead ? 0 : (raw - Math.sign(raw) * dead) / (1 - dead);
-      mouseAxis = Math.max(-1, Math.min(1, a));
+      const k = Math.max(-1, Math.min(1, a));
+      /* ⚠️ COURBE DE RÉPONSE (416), LA MÊME QUE CELLE DU LABYRINTHE ET POUR LA
+         MÊME RAISON. Une réponse linéaire donne, au centre de l'écran, autant
+         de braquage par pixel qu'aux bords — donc une luge qui part au moindre
+         frémissement de la main, et c'est encore pire au pavé tactile où le
+         curseur saute de plusieurs pixels d'un coup.
+         En élevant à la puissance, les petits déplacements deviennent PRÉCIS
+         (on peut viser une trajectoire) sans rien retirer aux grands, qui
+         gardent leur pleine butée. L'exposant est le SEUL réglage : au-delà de
+         2, le centre devient mort et l'on a l'impression que la souris ne
+         répond plus. */
+      mouseAxis = Math.sign(k) * Math.pow(Math.abs(k), CFG.MOUSE_CURVE);
     });
     window.addEventListener("mouseleave", () => { mouseAxis = 0; });
     // Clic gauche = freiner/déraper, clic droit = sauter : la descente doit

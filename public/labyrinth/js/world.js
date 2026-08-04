@@ -542,6 +542,13 @@ const World = (function () {
     /* Les quatre marques de craie. Transparentes, posées sur le mur comme un
        décalque — voir buildChalk. */
     tex.chalk = [0, 1, 2, 3].map(k => canvasTex(64, 64, (c) => Paint.chalk(c, cfg, 64, 64, k)));
+    /* LA FLAQUE DU SILLAGE DE SORTIE (416). ⚠️ SES BORDS SONT MOUS, ce qui est
+       la moitié de l'effet : des carrés nets se liraient comme un damier
+       d'interface posé sur le sol, alors que des taches molles qui se
+       recouvrent donnent une COULÉE. Le filtre reste au plus proche voisin
+       comme tout le reste du jeu — la signature graphique du site est le pixel
+       franc, et une flaque lissée jurerait au milieu de murs pixelisés. */
+    tex.trail = canvasTex(32, 32, (c) => Paint.puddle(c, cfg, 32, 32));
     /* ⚠️ LA RÉPÉTITION EST CALCULÉE, PAS CHOISIE. Le défi de fuite pose une
        tuile de houle tous les 26 unités (et 37 pour la nappe additive) ; on
        reprend ces deux nombres, divisés par la taille RÉELLE du plan d'ici.
@@ -2338,6 +2345,7 @@ const World = (function () {
     if (skyMesh) skyMesh.rotation.y = t * 0.004;   // très lent : le ciel bouge à peine
 
     syncFloor(st, cfg, t);      // zip 405 : les dalles qui cèdent, enfin visibles
+    syncTrail(st, cfg, t);      // zip 416 : le sillage de sortie, après un kill
     syncGate(st, cfg, t);
     syncFx(st, cfg, t);
     /* ⚠️ LA CAMÉRA EST POSÉE AVANT LE RESTE. Une bonne moitié de la scène
@@ -2419,6 +2427,83 @@ const World = (function () {
      Deux descriptions d'une même chose finissent toujours par diverger (387) —
      et ici le rendu avait déjà divergé jusqu'à ne plus rien décrire du tout.
      ======================================================================= */
+  /* ══════════════════════════════════════════════════════════════════════════
+     LE SILLAGE DE SORTIE (416) — une coulée d'eau du lac vers la porte.
+     ──────────────────────────────────────────────────────────────────────────
+     Le moteur pose `st.trail = { cells, t }` quand un ennemi tombe (voir
+     rules.js) ; ici on le dessine, et c'est tout ce que ce module en sait.
+
+     ⚠️ UNE FLAQUE PAR CASE, ET NON UN RUBAN CONTINU. Un ruban qui suivrait
+     exactement le couloir demanderait de connaître les murs, les seuils et les
+     dalles tombées — c'est-à-dire de recopier ici la moitié de maze.js, et de
+     la voir diverger au premier changement. Des flaques carrées centrées sur
+     chaque case se recouvrent naturellement (2,6 unités pour des cases de
+     CELL), donnent une coulée continue à l'œil, et ne savent rien du dédale.
+
+     ⚠️ ET ELLES SONT CRÉÉES À LA DEMANDE, PUIS GARDÉES. Une partie en réclame
+     au plus la longueur du plus long chemin ; les rendre à chaque sillage
+     ferait travailler le ramasse-miettes pendant qu'on se bat. Même réserve
+     que partout ailleurs : on cache, on ne détruit pas.
+     ══════════════════════════════════════════════════════════════════════════ */
+  let trailPool = [], trailGeo = null;
+
+  function syncTrail(st, cfg, t) {
+    const tr = st.trail;
+    if (!tr || !tr.cells || !tr.cells.length) {
+      for (const m of trailPool) m.visible = false;
+      return;
+    }
+    /* ⚠️ UN MATÉRIAU NEUF PAR FLAQUE, ET SURTOUT PAS UN `clone()`.
+       L'opacité est par-flaque (le fondu, la propagation, la respiration
+       déphasée), donc un matériau partagé est exclu — toutes prendraient la
+       valeur de la dernière. Restait à choisir entre cloner un modèle et en
+       construire un neuf : on construit.
+       ⚠️ La raison est venue de tools/verify-perf.mjs, qui monte tout le rendu
+       avec un three.js de substitution : son `MeshBasicMaterial` n'a pas de
+       `clone()`, et l'outil est tombé sec à la première flaque. Un stub
+       incomplet est le lot de tout banc d'essai sans navigateur ; le code de
+       jeu a intérêt à n'employer que le strict nécessaire de l'API, sans quoi
+       c'est le banc d'essai qu'il faut rattraper à chaque nouveauté. */
+    if (!trailGeo) trailGeo = new THREE_.PlaneGeometry(cfg.TRAIL_W, cfg.TRAIL_W);
+    const newTrailMat = () => new THREE_.MeshBasicMaterial({
+      map: tex.trail, color: cfg.COL_LAKE_BRIGHT, transparent: true,
+      depthWrite: false, fog: true, blending: THREE_.AdditiveBlending,
+    });
+    /* ⚠️ LE FONDU EST UN PALIER PUIS UNE PENTE, et les deux nombres viennent
+       de la demande : dix secondes pleines, puis extinction jusqu'à quinze.
+       Un fondu qui commencerait dès la première seconde donnerait l'impression
+       que l'indication s'efface pendant qu'on la lit. */
+    const ms = tr.t * 1000;
+    const life = ms <= cfg.TRAIL_FULL_MS ? 1
+      : Math.max(0, 1 - (ms - cfg.TRAIL_FULL_MS) / (cfg.TRAIL_TOTAL_MS - cfg.TRAIL_FULL_MS));
+    // La coulée court vers la sortie au lieu d'apparaître d'un bloc.
+    const reach = (tr.t * cfg.TRAIL_SPEED) / cfg.CELL;
+    let n = 0;
+    for (let i = 0; i < tr.cells.length; i++) {
+      const grow = Math.max(0, Math.min(1, reach - i));
+      if (grow <= 0) break;
+      while (trailPool.length <= n) {
+        const m = new THREE_.Mesh(trailGeo, newTrailMat());
+        m.rotation.x = -Math.PI / 2;
+        m.renderOrder = 3;
+        m.visible = false;
+        scene.add(m);
+        trailPool.push(m);
+      }
+      const m = trailPool[n++];
+      const [wx, wz] = Rules.centerOf(cfg, tr.cells[i][0], tr.cells[i][1]);
+      m.visible = true;
+      m.position.set(wx, Rules.groundY(cfg, M_, wx, wz) + cfg.TRAIL_H, wz);
+      /* La respiration : elle est DÉPHASÉE le long du chemin, ce qui fait
+         courir une onde de lumière vers la sortie. Une pulsation en phase
+         ferait clignoter toute la coulée ensemble, ce qui dit « alarme » au
+         lieu de dire « par ici ». */
+      const beat = 0.72 + 0.28 * Math.sin(t * cfg.TRAIL_PULSE - i * 0.55);
+      m.material.opacity = cfg.TRAIL_OPACITY * life * grow * beat;
+    }
+    for (let i = n; i < trailPool.length; i++) trailPool[i].visible = false;
+  }
+
   function syncFloor(st, cfg, t) {
     if (!st.cracks || !st.cracks.size) return;
     for (const c of st.cracks.values()) {

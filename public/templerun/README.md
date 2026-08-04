@@ -686,3 +686,45 @@ craindre le retour des sommets hors cadre — sans lui, ce zip aurait été un p
 * **Les pièces qui flottent.** Toujours en attente de la capture.
 * **Le joystick tactile.** Seizième zip. Trois chantiers distincts, forme
   arrêtée au 406.
+
+---
+
+## ZIP 416 — LE SON DES BULLES BLEUES
+
+Demande de Guillaume : *« ajoute enfin quelques sons pour la collecte de bulles
+bleues dans le endless run »*. Deux fichiers (`sounds/bubble.mp3`,
+`sounds/bubble-run.mp3`), synthétisés — un « plop » cristallin à glissando
+montant, et un accord de conclusion.
+
+⚠️ **CE SONT LES PREMIÈRES PISTES DÉCLENCHÉES PAR UNE ACTION DU JOUEUR**, et ça
+change tout leur cahier des charges. L'ouverture, le tonnerre et le souffle sont
+des sons d'ambiance : ils arrivent quand ils veulent, une fois de temps en
+temps, et personne ne les relie à un geste. Une bulle doit sonner **au moment**
+où on la traverse, et il peut y en avoir neuf en trois secondes. Trois
+conséquences, dont aucune n'était vraie des trois pistes existantes :
+
+1. **Il faut plusieurs voix.** Un seul `<audio>` rejoué se coupe lui-même : on
+   n'entendrait que la dernière bulle de chaque chapelet. Six voix, en
+   tourniquet, créées AU CHARGEMENT — un `cloneNode()` à chaud ferait hoqueter
+   le premier chapelet pendant que le navigateur va rechercher ce qu'il a déjà.
+2. **Il faut que ça monte.** Un demi-ton par bulle via `playbackRate`, plafonné
+   à sept (au-delà le son claque au lieu de sonner). Neuf fois le même son,
+   c'est neuf fois rien ; neuf fois le même son qui monte, c'est une phrase.
+3. **Il faut une chute.** `bubble-run.mp3` conclut un chapelet complet, sur la
+   dernière bulle et pas après un délai — un accord qui tomberait une
+   demi-seconde plus tard, pendant qu'on saute un obstacle, se lirait comme un
+   son sans cause.
+
+⚠️ **La série se rompt par le TEMPS, pas par la géométrie.** On pourrait
+demander à `track.js` quel chapelet est en cours ; ce serait plus exact et ce
+serait une faute, parce que le son suivrait alors une structure que le joueur ne
+voit pas. Ce qu'il entend comme « une série », c'est « des bulles qui se suivent
+de près ». `BUBBLE_CHAIN_MS` (420 ms) se déduit du jeu : à `COIN_SPACING` = 3,2
+et 22–34 u/s, une bulle tombe toutes les 95 à 145 ms — la fenêtre encaisse donc
+trois bulles ratées d'affilée sans casser la montée.
+
+`verify-audio.mjs` passe à **37 contrôles**, dont trois qui ne s'entendent que
+sur un chapelet et jamais en testant une bulle à la main : neuf bulles font neuf
+sons, **sur six voix distinctes** (sans ce second contrôle, neuf `play()` sur le
+même élément passeraient le premier tout en produisant un seul son), et la
+hauteur monte puis plafonne.

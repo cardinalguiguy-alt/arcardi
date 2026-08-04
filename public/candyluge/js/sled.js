@@ -311,7 +311,22 @@ Sled.prototype.update = function (dt, now, finishK) {
      trop demandé — et elle ne s'explique pas, elle se subit. */
   this.heading += yawRate * (1 - this.skid * 0.55) * dt;
   this.heading = clampN(this.heading, -CFG.SLED_STEER_MAX, CFG.SLED_STEER_MAX);
-  if (Math.abs(steer) < 0.05) this.heading = damp(this.heading, 0, 2.2, dt);
+  /* ⚠️ LE RAPPEL DANS L'AXE — LE NOMBRE DE LA STABILITÉ (416).
+     Il était écrit en dur (2,2) et c'était doublement fautif : la règle du
+     projet veut que TOUS les nombres de conduite vivent dans config.js, et
+     celui-ci n'y étant pas, il n'a jamais été relu ni réglé — alors que c'est
+     lui, et pas l'adhérence, qui décide de ce qu'on ressent entre deux appuis.
+     ⚠️ ET IL MONTE AVEC LA VITESSE : c'est l'effet de girouette de tout
+     véhicule réel. Un rappel constant donne une luge docile au pas et
+     flottante à cinquante — l'inverse exact du besoin, puisque c'est vite
+     qu'on a besoin d'être posé. Le rappel ne coûte RIEN au pilotage : il ne
+     s'applique que touche relâchée, donc uniquement quand le joueur ne
+     demande rien. */
+  if (Math.abs(steer) < 0.05) {
+    const vk = clampN(this.v / CFG.SLED_SPEED_MAX, 0, 1);
+    const back = CFG.STEER_RETURN * (1 + CFG.STEER_RETURN_V * vk);
+    this.heading = damp(this.heading, 0, back, dt);
+  }
 
   /* ==================================================== 3. LA VITESSE =====
      Pesanteur le long de la pente, moins : la traînée (position d'œuf

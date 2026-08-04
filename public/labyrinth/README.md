@@ -969,6 +969,37 @@ angle déjà intégré par le périphérique ; il ne passe ni par `TURN_ACCEL`, 
 l'amortissement**, et elle est meilleure que le nôtre. Les trois réglages
 d'amortissement du 396 ne servent plus que le mode clavier, où ils restent.
 
+### ⚠️⚠️ ZIP 416 — `CFG.MOUSE_SENS` N'ÉTAIT LUE NULLE PART, PENDANT VINGT ZIPS
+
+Guillaume : *« le contrôle de la souris est trop sensible : incontrôlable sur
+pavé tactile, c'est n'importe quoi »*. Ce n'était pas un réglage à baisser :
+**c'était une conversion d'unité manquante**. `js/input.js` initialisait sa
+sensibilité à `1` et n'appelait jamais `setSens()`. La phrase ci-dessus — « un
+angle déjà intégré par le périphérique » — décrivait donc une intention et pas
+le code : le périphérique n'intégrait rien, `turnDelta` valait des PIXELS, et le
+moteur les lisait comme des radians. **57° par pixel.**
+
+⚠️ **Et rien ne pouvait le voir, pour une raison qui vaut d'être retenue.**
+`tools/verify-controls.mjs` teste bien que `rules.js` applique `turnDelta`
+correctement — en lui passant `200 × CFG.MOUSE_SENS`. Autrement dit **il suppose
+que l'entrée a déjà converti**. Le moteur était juste, la constante était juste,
+le test était juste, et le raccord entre eux n'existait pas.
+
+> **UN TEST QUI FABRIQUE SES PROPRES ENTRÉES NE TESTE PAS LEUR PROVENANCE.**
+> C'est la même famille de faute que `Field.rewind` dans la descente au 414
+> (mesuré en étant désactivé, parce que l'outil ne branchait pas le rappel) :
+> deux modules corrects, une couture que personne ne regarde. Quand une
+> constante existe, il faut vérifier qu'elle est **lue**, pas seulement qu'elle
+> est juste. `verify-controls.mjs` le fait désormais, en relisant le TEXTE de
+> `input.js` — grossier, mais au bon endroit.
+
+S'y ajoute une **zone de précision** (`MOUSE_FINE`, `MOUSE_SOFT`) pour le pavé
+tactile, qui envoie des sauts et non un flot continu. ⚠️ Ce n'est pas de
+l'accélération de souris — c'est l'inverse : le gain est RÉDUIT sous les petits
+déplacements et n'est **jamais** amplifié au-delà de `MOUSE_SENS`. Une
+accélération rendrait le geste imprévisible ; une zone de précision se borne par
+le haut, donc s'apprend.
+
 **Le modèle de vue est rendu dans une seconde passe**, avec sa propre scène, sa
 propre caméra (champ à 55° : une arme filmée au grand-angle est difforme) et sa
 propre lumière. `autoClear = false`, `clearDepth()`, puis on rend par-dessus.

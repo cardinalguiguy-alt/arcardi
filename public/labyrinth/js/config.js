@@ -1008,7 +1008,23 @@ CFG.FPS_FOV = 78;             /* plus large que les 66° de la 3e personne : en 
                                  les embranchements latéraux — ce qui est
                                  rédhibitoire quand on demande « naviguer de
                                  manière absolument évidente ». */
+/* ⚠️ CETTE CONSTANTE A EXISTÉ VINGT ZIPS SANS ÊTRE LUE (corrigé au 416).
+   Elle était définie ici, documentée dans le README, et vérifiée par
+   tools/verify-controls.mjs — mais `js/input.js` initialisait sa sensibilité à
+   1 et n'appelait jamais `setSens()`. La souris tournait donc à UN RADIAN PAR
+   PIXEL, soit 57° pour un frémissement du doigt.
+   ⚠️ Ne pas la baisser davantage si le regard paraît encore vif : c'est
+   MOUSE_FINE qu'on baisse. Cette valeur-ci fixe la course totale (un balayage
+   de mille pixels vaut 126°) et la changer déséquilibre tous les gestes
+   larges. */
 CFG.MOUSE_SENS = 0.0022;      // rad par pixel de souris
+/* LA ZONE DE PRÉCISION (416), pour le pavé tactile. En dessous de MOUSE_SOFT
+   pixels par image, le gain tombe progressivement à MOUSE_FINE — les petits
+   gestes deviennent fins, les grands ne changent pas.
+   ⚠️ MOUSE_FINE trop bas (< 0,25) donne un centre MORT : on croit que la
+   souris ne répond plus, et c'est un défaut pire que celui qu'on corrige. */
+CFG.MOUSE_FINE = 0.42;        // gain relatif d'un mouvement minuscule
+CFG.MOUSE_SOFT = 16;          // pixels par image au-delà desquels le gain est plein
 CFG.PITCH_MAX = 0.85;         // rad — on ne se casse pas la nuque
 CFG.PITCH_LERP = 22.0;        // rattrapage du tangage affiché (lissage d'affichage)
 /* LE BALANCEMENT DE MARCHE. `BOB_*` est une amplitude en unités, avancée à la
@@ -1261,6 +1277,41 @@ CFG.RES_COOLDOWN_MS = 900;    // délai minimum entre deux changements
    command+Q. On relâche donc le pointeur tout seul si les images s'effondrent,
    et on dit pourquoi. Ce filet ne doit JAMAIS se déclencher sur un jeu qui
    tourne : 500 ms est vingt-cinq fois le budget d'une image à 50 i/s. */
+/* ══════════════════════════════════════════════════════════════════════════════
+   LE SILLAGE DE SORTIE (416) — le chemin qui s'allume quand on tue.
+   ──────────────────────────────────────────────────────────────────────────────
+   ⚠️ SA COULEUR EST CELLE DU LAC, ET CE N'EST PAS DÉCORATIF. Le violet lumineux
+   du lac est déjà, dans ce jeu, la couleur de CE QUI VIENT D'EN DESSOUS et de ce
+   qui guide : c'est celle du phare qui monte du trou de la rotonde, celle des
+   halos qui signalent les crevasses. Le joueur l'a donc déjà apprise sans qu'on
+   la lui explique. Reprendre une couleur qui veut déjà dire quelque chose coûte
+   zéro pédagogie ; en inventer une neuve en coûte toute une.
+
+   ⚠️ ET C'EST LA SEULE COULEUR VIVE QUI NE SOIT PAS UNE MENACE. Le rouge est
+   celui du sang et des rôdeurs, l'or celui des éclats. En prenant le violet, le
+   sillage ne peut être confondu avec rien.
+
+   LES DEUX DURÉES SONT SÉPARÉES ET IL LE FAUT. Guillaume : « cette indication
+   durera 10 secondes et fades away après les quinze secondes passées ». Dix
+   secondes PLEINES — de quoi lire le chemin, choisir un embranchement, et
+   commencer à le suivre sans que ça clignote — puis cinq secondes de fondu.
+   ⚠️ Un fondu qui commencerait tout de suite serait perçu comme un
+   dysfonctionnement (« ça s'efface pendant que je regarde ») ; une coupure nette
+   à quinze secondes serait perçue comme un bogue. Le palier, puis la sortie.
+   ══════════════════════════════════════════════════════════════════════════ */
+CFG.TRAIL_FULL_MS = 10000;    // durée à pleine intensité
+CFG.TRAIL_TOTAL_MS = 15000;   // ... puis fondu jusque-là, et plus rien
+CFG.TRAIL_W = 2.6;            // largeur de la coulée au sol, en unités
+CFG.TRAIL_H = 0.06;           // décollement du sol (z-fighting)
+CFG.TRAIL_OPACITY = 0.72;
+/* ⚠️ LE SILLAGE S'ALLUME EN COURANT VERS LA SORTIE, une case après l'autre, au
+   lieu d'apparaître d'un bloc. Une nappe qui surgit d'un coup se lit comme un
+   calque d'interface ; une coulée qui PART DES PIEDS et file dans le couloir se
+   lit comme quelque chose que le monde vient de faire — et elle dit son sens de
+   parcours au passage, ce qu'une nappe ne dit pas. */
+CFG.TRAIL_SPEED = 26;         // unités par seconde de propagation
+CFG.TRAIL_PULSE = 2.4;        // rad/s de la respiration lumineuse
+
 CFG.HANG_MS = 500;            // une image plus longue que ça est « effondrée »
 CFG.HANG_STRIKES = 4;         // combien d'affilée avant de rendre la souris
 

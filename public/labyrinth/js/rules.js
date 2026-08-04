@@ -453,6 +453,12 @@ const Rules = (function () {
       hasBow: false, bolts: 0, boltCd: 0, shots: 0, boltKills: 0,
       projectiles: [],
       time: 0, score: 0, kills: 0, shardsTaken: 0, torchesUsed: 0,
+      /* LE SILLAGE DE SORTIE (416). `trailKills` mémorise le compte de kills
+         déjà honoré : c'est lui qui fait que le déclenchement se lit à un seul
+         endroit de step() au lieu d'être appelé depuis chaque mise à mort.
+         `trail` vaut null la plupart du temps ; c'est un objet éphémère, et
+         personne d'autre que world.js ne le lit. */
+      trailKills: 0, trail: null,
       seen: new Set(), status: "play", fallT: 0, endCause: null,
       events: [],
 
@@ -905,6 +911,51 @@ const Rules = (function () {
        Un joueur ne doit jamais avoir à deviner qu'il faut avancer de trois
        pas de plus. On franchit la porte, on est dehors. */
     const [cx, cy] = cellOf(cfg, st.px, st.pz);
+
+    /* ══════════════════════════════════════════════════════════════════════
+       LE SILLAGE DE SORTIE (416) — la récompense d'un ennemi abattu.
+       ──────────────────────────────────────────────────────────────────────
+       Guillaume : « quand on tue un ennemi, il faut que ça nous donne une
+       indication marquée au sol (traînée couleur eau du lac) sur le chemin à
+       suivre pour sortir du labyrinthe (le plus court chemin) ».
+
+       ⚠️ C'EST LA PREMIÈRE RÉCOMPENSE DU JEU QUI PAIE EN INFORMATION, ET C'EST
+       ce qui la rend intéressante. Jusqu'ici tuer rapportait des points — une
+       ligne qui monte dans un coin de l'écran, c'est-à-dire rien qu'on ressente.
+       Un chemin qui s'allume est une récompense qu'on UTILISE, immédiatement, et
+       qui change ce qu'on fait dans les dix secondes qui suivent. C'est aussi
+       une raison d'affronter un rôdeur plutôt que de le fuir : le combat avait
+       tout à perdre et rien à gagner.
+
+       ⚠️⚠️ ET ELLE SE DÉCLENCHE ICI, EN COMPARANT LE COMPTEUR DE KILLS — PAS
+       AUX TROIS ENDROITS OÙ L'ON TUE. Il y a trois sites de mise à mort dans ce
+       fichier (carreau sur rôdeur, carreau sur traqueur, coup d'épée), et il y
+       en aura un quatrième le jour où l'on ajoutera une arme. Poser l'appel sur
+       chacun, c'est garantir qu'on l'oubliera sur le prochain — c'est
+       exactement la faute de `Field.rewind` au 414, branché depuis l'extérieur
+       et donc jamais exécuté par les outils. Le compteur `st.kills`, lui, est
+       la seule écriture de la vérité « quelqu'un est mort », et il est déjà
+       incrémenté par les trois.
+
+       ⚠️ LE CHEMIN EST RECALCULÉ DEPUIS LA POSITION DU JOUEUR, à l'instant du
+       kill. Un chemin figé depuis l'entrée serait faux dès le premier
+       croisement ; recalculé À CHAQUE IMAGE, il coûterait un parcours en
+       largeur de tout le dédale soixante fois par seconde ET il se mettrait à
+       jour sous les pieds du joueur, ce qui retirerait tout intérêt au fait de
+       s'en souvenir. Une photographie du bon chemin, prise au moment de la
+       récompense : on la suit ou on la perd. */
+    if (st.kills > st.trailKills) {
+      st.trailKills = st.kills;
+      const p = Maze.pathTo(st.m, cx, cy, st.m.exit.x, st.m.exit.y);
+      // `pathTo` rend null si la sortie est injoignable (elle ne l'est jamais,
+      // le dédale est connexe par construction) et [] si l'on y est déjà.
+      if (p && p.length) st.trail = { cells: p, t: 0 };
+    }
+    if (st.trail) {
+      st.trail.t += dt;
+      if (st.trail.t >= cfg.TRAIL_TOTAL_MS / 1000) st.trail = null;
+    }
+
     if (cy < 0 || (cx === st.m.exit.x && cy === st.m.exit.y)) {
       st.status = "won";
       st.endCause = "exit";

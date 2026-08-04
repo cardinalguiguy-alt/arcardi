@@ -275,7 +275,7 @@ const Game = (function () {
 
       chaseCam.update(dt, sled, now);
       World.updateSled(sled, now);
-      World.updateCritters(field, now);
+      World.updateCritters(field, now, sled);
       World.updateFx(sled, dt, now);
       World.updateAmbient(now, sled);
       UI.updateHud(sled, score, elapsed, slope.stageAt(sled.s), now - cpFlash);
@@ -303,7 +303,7 @@ const Game = (function () {
       World.updateAmbient(now, sled);
       if (sled) {
         chaseCam.update(dt, sled, now);
-        World.updateCritters(field, now);
+        World.updateCritters(field, now, sled);
         World.updateFx(sled, dt, now);
       }
     }

@@ -36,7 +36,8 @@ const World = (function () {
   let ambient, sun, fill, hemi;
   let skyDome, skyMat, mountainsNear, mountainsFar, snowFall;
   let sledRig, sledParts = {};
-  let stars, dust, lines, spray;
+  let stars, dust, lines, spray, rain;
+  let rainT = 0;          // secondes écoulées depuis le franchissement de la ligne (416)
   let trail = null;      // le sillon gravé (414)
   let geo = {}, mat = {};
   let lastNow = 0;
@@ -47,6 +48,27 @@ const World = (function () {
      Mesh par gourmand fait travailler le ramasse-miettes pendant qu'on essaie
      de tenir 60 images par seconde. */
   const pool = { gum: [], marsh: [], jelly: [], candy: [] };
+
+  /* ⚠️ LES DÉCALQUES DE LISIBILITÉ (416) NE SONT PAS DANS `pool`, ET LA
+     DIFFÉRENCE EST DE FOND. `pool` est une réserve d'objets qu'on PRÊTE à un
+     gourmand : il l'emprunte en naissant, le rend en mourant, et c'est à lui
+     d'y penser. Les ombres et les portes, elles, ne sont possédées par
+     personne : on en garde un tableau, on repositionne les N premières à
+     chaque image et on cache les autres.
+     C'est la leçon de `Field.rewind` du 414, appliquée d'avance : un cycle de
+     vie partagé entre deux modules est un cycle de vie qui se désynchronise le
+     jour où un troisième cas apparaît (ici : la remise en place au fanion, qui
+     efface toutes les vagues d'un coup). Sans propriétaire, rien à
+     désynchroniser — la seule chose qui existe est « voilà ce qu'il faut
+     afficher cette image-ci ». */
+  /* ⚠️ UN TABLEAU PAR FORME, ET NON UN TABLEAU PAR RÔLE. Première écriture :
+     les bandes de porte et leurs montants partageaient le tableau `gate`,
+     rangés en bande-montant-montant. Ça marche tant que le nombre de portes ne
+     change pas — et il change à chaque vague qui apparaît. L'indice 3 était
+     alors une bande à une image et un montant à la suivante, sur un objet dont
+     la GÉOMÉTRIE est fixée à la création : on obtenait des plans couchés
+     traités comme des poteaux. Un tableau ne peut contenir qu'une seule forme. */
+  const decals = { shadow: [], warn: [], gate: [], post: [], curtain: [] };
 
   /* ======================================================================
      TEXTURES — peintes au canvas 2D au démarrage.
@@ -349,6 +371,151 @@ const World = (function () {
     return c;
   }
 
+  /* ══════════════════════════════════════════════════════════════════════════
+     L'OMBRE PORTÉE (416) — un disque noir dégradé, et rien de plus.
+     ──────────────────────────────────────────────────────────────────────────
+     ⚠️ ON NE FAIT PAS D'OMBRES CALCULÉES, ET C'EST UN CHOIX, PAS UN RENONCEMENT.
+     Une shadow map coûterait une passe de rendu complète par image, sur une
+     scène qui se reconstruit en continu, pour un jeu qui doit tourner dans une
+     iframe au-dessus d'une ferme qui tourne aussi. Et elle donnerait une ombre
+     DURE, projetée par un soleil rasant : elle s'étirerait sur quinze mètres en
+     travers de la piste et ne dirait plus du tout où est l'objet.
+
+     Ce qu'on veut d'une ombre ici est UNE SEULE CHOSE : où l'objet touche le
+     sol. Un disque flou posé à la verticale le dit mieux qu'une vraie ombre, et
+     c'est ce que font tous les jeux de plateforme depuis trente ans pour
+     exactement cette raison. Le dégradé est très doux au bord : une ombre nette
+     se lirait comme une tache peinte sur la neige.
+     ══════════════════════════════════════════════════════════════════════════ */
+  function paintShadow() {
+    const S = 64, c = cv(S, S), g = c.getContext("2d");
+    const R = S / 2;
+    const d = g.createRadialGradient(R, R, 0, R, R, R);
+    /* ⚠️ LE CŒUR EST PLAT, PAS POINTU — corrigé après regard sur planche. Un
+       dégradé radial « naturel » (opaque au centre exact, décroissant partout
+       ailleurs) ne donne sa densité qu'en UN pixel : sur de la barbe à papa
+       déjà soutenue, l'ombre entière disparaissait, alors même que l'outil
+       mesurait vingt mille pixels écrits. Une ombre portée n'est pas une
+       auréole : elle a un CŒUR PLEIN (l'objet touche le sol sur toute sa
+       surface) et une pénombre courte au bord. D'où les deux premiers arrêts
+       à la même opacité. */
+    d.addColorStop(0, "rgba(46,16,46,0.98)");
+    d.addColorStop(0.34, "rgba(52,20,52,0.94)");
+    d.addColorStop(0.62, "rgba(70,32,72,0.52)");
+    d.addColorStop(0.85, "rgba(96,54,96,0.14)");
+    d.addColorStop(1, "rgba(120,72,116,0)");
+    g.fillStyle = d; g.fillRect(0, 0, S, S);
+    return c;
+  }
+
+  /* LE CERNE D'ALERTE (416) : un anneau, pas un disque. Il doit se distinguer
+     de l'ombre qu'il entoure au premier coup d'œil — un second disque, même
+     coloré, se lirait comme une ombre plus grande. */
+  function paintWarn() {
+    const S = 64, c = cv(S, S), g = c.getContext("2d");
+    const R = S / 2;
+    const d = g.createRadialGradient(R, R, R * 0.52, R, R, R);
+    d.addColorStop(0, "rgba(255,77,125,0)");
+    d.addColorStop(0.42, "rgba(255,110,150,0.85)");
+    d.addColorStop(0.72, "rgba(255,150,180,0.5)");
+    d.addColorStop(1, "rgba(255,180,200,0)");
+    g.fillStyle = d; g.fillRect(0, 0, S, S);
+    return c;
+  }
+
+  /* LA PORTE AU SOL (416) : une bande dégradée dans la longueur, très marquée
+     sur ses deux bords et creuse au milieu. ⚠️ LE CREUX EST L'IDÉE : une bande
+     pleine se lirait comme un obstacle à ne pas franchir (c'est ce que dit une
+     ligne peinte en travers d'une piste, partout ailleurs). Deux bords
+     lumineux et un milieu translucide se lisent comme une PORTE — on passe
+     entre, pas dessus. */
+  function paintGate() {
+    const S = 64, c = cv(S, S), g = c.getContext("2d");
+    /* ⚠️ PEINT LIGNE PAR LIGNE PLUTÔT QU'EN DEUX DÉGRADÉS SUPERPOSÉS.
+       L'écriture naturelle serait un dégradé en travers, puis un fondu dans la
+       longueur appliqué en `globalCompositeOperation = "destination-in"`. Le
+       navigateur sait le faire ; le canvas de tools/lib-canvas2d.js ne connaît
+       pas les opérations de composition, et il les IGNORE EN SILENCE — la
+       texture serait donc correcte dans le jeu et fausse sur la planche, ce qui
+       est le pire des deux mondes (voir la leçon des chevrons roses du 414 :
+       un outil qui ne rend pas comme le jeu fait chasser des défauts qui
+       n'existent pas). On multiplie donc les deux profils à la main : quatre
+       lignes de plus, et les deux rendus disent la même chose. */
+    const ctx2 = g;
+    const across = (u) => {
+      // deux bords lumineux, un milieu presque vide : c'est une PORTE, pas une
+      // ligne d'arrêt. Une bande pleine en travers d'une piste se lit partout
+      // ailleurs comme « ne pas franchir », soit l'inverse du message.
+      const e = Math.min(u, 1 - u);
+      if (e < 0.035) return 0.95;
+      if (e < 0.10) return 0.85 - (e - 0.035) / 0.065 * 0.63;
+      return 0.10 + 0.12 * Math.exp(-(e - 0.10) * 9);
+    };
+    // dans la longueur : un fondu doux aux deux extrémités, pour que la bande
+    // ne se termine pas par une arête franche sur la neige.
+    const along = (v) => Math.min(1, Math.sin(Math.PI * Math.max(0, Math.min(1, v))) * 1.35);
+    for (let y = 0; y < S; y++) {
+      const av = along((y + 0.5) / S);
+      for (let x = 0; x < S; x++) {
+        const a = across((x + 0.5) / S) * av;
+        if (a <= 0.004) continue;
+        const e = Math.min((x + 0.5) / S, 1 - (x + 0.5) / S);
+        // Le cœur des bords tire vers le blanc : c'est ce qui les fait « briller ».
+        const w = e < 0.05 ? 1 : 0;
+        ctx2.fillStyle = `rgba(${w ? 255 : 150},255,${w ? 255 : 190},${a.toFixed(3)})`;
+        ctx2.fillRect(x, y, 1, 1);
+      }
+    }
+    return c;
+  }
+
+  /* UN BONBON DE LA PLUIE D'ARRIVÉE (416) : un disque PLEIN et net, cerné de
+     blanc, avec un petit éclat.
+     ⚠️ IL NE DOIT SURTOUT PAS ÊTRE UN DÉGRADÉ FLOU. Les quatre autres textures
+     de particules en sont (étoile, poudre, gerbe, traînée) parce qu'elles
+     représentent toutes de la lumière ou de la poussière. Un bonbon est un
+     OBJET : il a un bord franc, il occulte, il a une taille. Un rond flou
+     coloré ne se lirait pas comme une pluie de bonbons mais comme un filtre
+     posé sur l'image — et c'est exactement la différence entre « il pleut des
+     confettis » et « l'écran devient rose ». */
+  function paintCandyBit() {
+    const S = 48, c = cv(S, S), g = c.getContext("2d");
+    const R = S / 2;
+    g.fillStyle = "rgba(255,255,255,0.92)";
+    g.beginPath(); g.arc(R, R, R * 0.92, 0, Math.PI * 2); g.fill();
+    g.fillStyle = "rgba(255,255,255,1)";
+    g.beginPath(); g.arc(R, R, R * 0.74, 0, Math.PI * 2); g.fill();
+    // L'éclat en haut à gauche : c'est lui qui donne le vernis du bonbon.
+    g.fillStyle = "rgba(255,255,255,0.55)";
+    g.beginPath(); g.arc(R * 0.68, R * 0.66, R * 0.22, 0, Math.PI * 2); g.fill();
+    return c;
+  }
+
+  /* LE RIDEAU DE PORTE : dense au ras du sol, éteint en haut. C'est ce profil
+     et lui seul qui le fait lire comme une lumière qui MONTE plutôt que comme
+     une paroi tendue — une opacité uniforme, même faible, dessine un plan, et
+     un plan en travers d'une piste est un mur. Les bords gauche et droit sont
+     renforcés : ils prolongent les montants et ferment la porte. */
+  function paintCurtain() {
+    const S = 64, c = cv(S, S), g = c.getContext("2d");
+    for (let y = 0; y < S; y++) {
+      // ⚠️ Les UV de three.js ont leur origine EN BAS : la ligne y=S-1 de la
+      // texture est le bas du rideau. D'où le renversement, sans quoi on
+      // obtient un voile dense EN HAUT — c'est-à-dire un auvent.
+      const v = 1 - (y + 0.5) / S;
+      const dens = Math.pow(1 - v, 1.7);
+      for (let x = 0; x < S; x++) {
+        const e = Math.min((x + 0.5) / S, 1 - (x + 0.5) / S);
+        const edge = e < 0.07 ? 1 + (0.07 - e) * 9 : 1;
+        const a = Math.min(1, dens * edge * 0.9);
+        if (a <= 0.004) continue;
+        g.fillStyle = `rgba(190,255,215,${a.toFixed(3)})`;
+        g.fillRect(x, y, 1, 1);
+      }
+    }
+    return c;
+  }
+
   /* ⚠️ L'ANISOTROPIE EST LA SECONDE MOITIÉ DE LA CORRECTION DU MOIRÉ (414), et
      elle est indispensable ICI plus qu'ailleurs. Un sol de jeu de descente est
      vu SOUS UN ANGLE TRÈS RASANT : à trente mètres, une tuile carrée occupe à
@@ -392,8 +559,28 @@ const World = (function () {
     geo.plane = new THREE.PlaneGeometry(1, 1);
 
     const L = (c, extra) => new THREE.MeshLambertMaterial(Object.assign({ color: c }, extra || {}));
-    mat.snow = new THREE.MeshLambertMaterial({ map: tex(paintSnow(), 1, 1) });
-    mat.piste = new THREE.MeshLambertMaterial({ map: tex(paintPiste(), 1, 1) });
+    /* ⚠️⚠️ LE SOL EST À DOUBLE FACE DEPUIS LE 416, ET C'EST LA CEINTURE DU
+       CORRECTIF « SOL TRANSPARENT » (la bretelle étant la garde au sol de
+       camera.js, qui est le vrai correctif).
+
+       Un ruban de neige est une face simple : vue de dessous, elle n'existe
+       pas. Tant que la caméra restait au-dessus du terrain, personne ne
+       pouvait le savoir ; le jour où elle est passée dessous, le sol a
+       littéralement disparu et le ciel est apparu à sa place. Guillaume l'a
+       décrit exactement comme ça : « le sol paraît transparent, on dirait que
+       la vue est en dessous du sol ».
+
+       ⚠️ ON GARDE LES DEUX CORRECTIFS ET PAS UN SEUL, parce qu'ils ne disent
+       pas la même chose. La garde au sol empêche d'être dessous ; la double
+       face fait qu'être dessous ne produit plus une image cassée. Le premier
+       traite la cause et devrait suffire — mais il ne couvre pas ce que la
+       caméra ne connaît pas : la barrière qu'on traverse en chutant, le
+       ralenti de sortie de route, un futur replay, un futur mode photo. Une
+       face manquante est un défaut de RENDU, il se corrige dans le rendu.
+       Le coût est un doublement du remplissage sur deux matériaux ; sur une
+       scène de quelques milliers de triangles, il n'est pas mesurable. */
+    mat.snow = new THREE.MeshLambertMaterial({ map: tex(paintSnow(), 1, 1), side: THREE.DoubleSide });
+    mat.piste = new THREE.MeshLambertMaterial({ map: tex(paintPiste(), 1, 1), side: THREE.DoubleSide });
     mat.pisteEdge = L(CFG.COL_PISTE_EDGE);
     mat.cane = new THREE.MeshLambertMaterial({ map: tex(paintCane(), 1, 3) });
     mat.white = L(0xfffdff);
@@ -435,6 +622,45 @@ const World = (function () {
     mat.cpFlag = new THREE.MeshBasicMaterial({ color: 0x5fe0c4, transparent: true, opacity: 0.95 });
     mat.cpGlow = new THREE.MeshBasicMaterial({ color: 0x7ff0d8, fog: false });
     mat.cpBand = new THREE.MeshBasicMaterial({ color: 0x5fe0c4, transparent: true, opacity: 0.55 });
+
+    /* ══════════════════════════════════════════════════════════════════════
+       LES TROIS MATÉRIAUX DE LA LISIBILITÉ (416).
+       ──────────────────────────────────────────────────────────────────────
+       ⚠️ TOUS LES TROIS SONT `depthWrite: false` AVEC UN POLYGON OFFSET
+       NÉGATIF, et c'est la même raison que pour le sillon gravé (voir plus
+       bas) : ce sont des DÉCALQUES posés sur une surface, à quelques
+       centimètres d'elle. Sans le décalage, la carte graphique n'arrive pas à
+       trancher qui est devant et l'ombre clignote en damier quand on roule —
+       le z-fighting. Sans `depthWrite: false`, deux décalques qui se
+       chevauchent se découpent mutuellement au lieu de s'additionner.
+
+       ⚠️ ET AUCUN N'EST ADDITIF. Une ombre additive éclaircirait ce qu'elle
+       assombrit, ce qui est absurde ; un repère additif blanchirait sur de la
+       neige déjà claire et deviendrait invisible là où il sert le plus. C'est
+       la leçon du sillon du 414, transposée. */
+    const decal = (extra) => new THREE.MeshBasicMaterial(Object.assign({
+      transparent: true, depthWrite: false, fog: true,
+      polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -6,
+    }, extra));
+    mat.shadow = decal({ map: tex(paintShadow()), opacity: CFG.SHADOW_OPACITY });
+    mat.warn = decal({ map: tex(paintWarn()), color: CFG.COL_WARN, opacity: 0.7, fog: false });
+    mat.gate = decal({ map: tex(paintGate()), color: CFG.COL_GATE, opacity: CFG.GATE_OPACITY, fog: false });
+    /* Les montants : en Basic non brumeux comme le fanion de checkpoint, et
+       pour la même raison — un repère dont la lisibilité dépend du soleil est
+       un repère qui ment une fois sur deux. */
+    mat.gatePost = new THREE.MeshBasicMaterial({
+      color: CFG.COL_GATE_POST, transparent: true, opacity: 0.8, fog: false, depthWrite: false,
+    });
+    /* Le rideau : DOUBLE FACE obligatoire — on le traverse, et une porte qui
+       disparaît au moment où on la franchit ne confirme jamais qu'on l'a bien
+       franchie. Additif, contrairement à tout le reste des repères : c'est de
+       la lumière tendue en l'air, pas de la matière posée au sol, et l'additif
+       est ce qui l'empêche de se lire comme une paroi. */
+    mat.gateCurtain = new THREE.MeshBasicMaterial({
+      map: tex(paintCurtain()), color: CFG.COL_GATE, transparent: true,
+      opacity: CFG.GATE_CURTAIN_OPACITY, fog: false, depthWrite: false,
+      side: THREE.DoubleSide, blending: THREE.AdditiveBlending,
+    });
   }
 
   /* Petit constructeur : un mesh boîte posé en (x,y,z) avec une taille. Il
@@ -470,6 +696,20 @@ const World = (function () {
     renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
 
     scene = new THREE.Scene();
+    /* ⚠️⚠️ LES RÉSERVES SONT VIDÉES ICI, ET LE MANQUE A COÛTÉ UNE DEMI-HEURE
+       DE FAUSSE PISTE AU 416. `pool` et `decals` vivent au niveau du module,
+       donc ILS SURVIVENT À UN SECOND `init()` — et ils contiennent des meshes
+       rattachés à l'ANCIENNE scène, qui vient d'être remplacée. Toutes les
+       ombres, toutes les portes et tous les gourmands recyclés étaient donc
+       invisibles à partir de la deuxième planche : on cherchait une erreur de
+       géométrie dans un code qui n'avait rien de faux.
+
+       ⚠️ Le jeu, lui, n'appelle `init()` qu'une fois — le défaut lui est donc
+       invisible, et c'est justement pour ça qu'il faut l'écrire ici : un état
+       de module est un piège pour tout appelant qui recommence, et
+       tools/preview-luge.js recommence à chaque planche. */
+    for (const k in pool) pool[k].length = 0;
+    for (const k in decals) decals[k].length = 0;
     /* ⚠️ RÈGLE 4 : le brouillard porte la couleur du ciel À L'HORIZON, pas une
        teinte grise. Il est très peu dense — on veut voir loin, c'est tout le
        propos du cadrage large — mais il est indispensable : sans lui, la piste
@@ -853,14 +1093,24 @@ const World = (function () {
        en fondu normal, on obtient un vrai rideau opaque qui masque la piste
        l'espace d'un instant. C'est cette opacité qui dit « le sol résiste ». */
     spray = makePoints(CFG.FX_SPRAY_MAX, paintSpray(), CFG.FX_SPRAY_SIZE, 0.82, false);
+    /* LA PLUIE DE BONBONS (416). Fondu NORMAL — un bonbon est de la matière,
+       il cache ce qu'il y a derrière. Voir la note de config.js, et surtout la
+       correction de stepParticles : c'est le premier système de particules
+       écrit APRÈS qu'on a compris pourquoi un fondu normal ne peut pas
+       s'éteindre vers le noir. */
+    rain = makePoints(CFG.FX_RAIN_MAX, paintCandyBit(), CFG.FX_RAIN_SIZE, 0.95, false);
+    rain.noFade = true;        // voir stepParticles : un bonbon ne blanchit pas
     scene.add(stars.points);
     scene.add(dust.points);
     scene.add(lines.points);
     scene.add(spray.points);
+    scene.add(rain.points);
     for (let i = 0; i < CFG.FX_STAR_MAX; i++) stars.live.push({ t: -1 });
     for (let i = 0; i < CFG.FX_DUST_MAX; i++) dust.live.push({ t: -1 });
     for (let i = 0; i < CFG.FX_LINE_MAX; i++) lines.live.push({ t: -1 });
     for (let i = 0; i < CFG.FX_SPRAY_MAX; i++) spray.live.push({ t: -1 });
+    for (let i = 0; i < CFG.FX_RAIN_MAX; i++) rain.live.push({ t: -1 });
+    rainT = 0;
   }
 
   /* ══════════════════════════════════════════════════════════════════════════
@@ -1100,17 +1350,66 @@ const World = (function () {
   /* ⚠️ L'EXTINCTION SE FAIT PAR LA COULEUR, PAS PAR L'OPACITÉ. `PointsMaterial`
      n'a qu'une opacité GLOBALE, la même pour toutes les particules du système :
      la faire décroître éteindrait la gerbe entière d'un coup, y compris les
-     étoiles qui viennent de naître. En modulant la couleur par particule (les
-     étoiles sont en fondu additif, une couleur qui tend vers le noir tend donc
-     vers l'invisible), chaque étincelle s'éteint pour son compte.
+     étoiles qui viennent de naître. En modulant la couleur par particule,
+     chaque étincelle s'éteint pour son compte.
      Le fondu est quadratique : une extinction linéaire donne une gerbe qui
      « coupe », parce que l'œil lit la luminosité en gamma. */
+  /* ══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️⚠️ LE DÉFAUT LE PLUS GRAVE TROUVÉ AU 416, ET IL DURAIT DEPUIS LE 414 :
+     LA GERBE DE NEIGE ÉTAIT UN NUAGE DE FUMÉE NOIRE.
+     ──────────────────────────────────────────────────────────────────────────
+     Le commentaire d'origine disait, mot pour mot : « une couleur qui tend vers
+     le noir tend donc vers l'invisible ». C'est VRAI EN FONDU ADDITIF — ajouter
+     zéro ne change rien — et c'est FAUX EN FONDU NORMAL, où peindre du noir
+     peint... du noir. Deux des quatre systèmes de particules sont en fondu
+     normal : la POUDRE et surtout LA GERBE, c'est-à-dire l'effet central du
+     414, celui qui devait rendre visible « la résistance du sol ».
+
+     Résultat : chaque grain de neige projeté s'assombrissait pendant sa vie et
+     mourait en charbon. À trois cents grains par seconde, la luge traînait
+     derrière elle un panache de fumée noire au milieu d'un pays de bonbons.
+
+     ⚠️ ET PERSONNE NE POUVAIT LE VOIR. Le raisonnement est juste à la lecture
+     (il l'était même assez pour être écrit noir sur blanc en commentaire), le
+     banc d'essai ne rend rien, et `preview-luge.js` ne rendait pas les
+     particules — le 414 le notait lui-même en dernier point de sa passation :
+     « la gerbe et les étoiles n'ont jamais été regardées ». Il a suffi de les
+     rendre pour que le défaut saute aux yeux à la première planche.
+
+     ⚠️⚠️ ET C'EST EXACTEMENT LA MÊME FAUTE QUE CELLE DU SILLON GRAVÉ AU 414,
+     dont le 414 avait déjà tiré la règle : « ON INTERPOLE VERS LE FOND, ON NE
+     MULTIPLIE PAS ; multiplier ne marche que sur un fondu additif. » La règle
+     était écrite, elle était juste, elle n'avait été appliquée qu'au sillon.
+     Une leçon notée dans un fichier n'est apprise que le jour où on la
+     cherche partout où elle s'applique.
+
+     La correction : chaque système sait s'il est additif.
+       * ADDITIF (étoiles, traînées de vitesse) : on multiplie vers le NOIR,
+         qui est bien le neutre de l'addition.
+       * NORMAL (poudre, gerbe) : on interpole vers la couleur du DÉCOR — la
+         neige. Un grain qui s'éteint devient un grain de neige pâle sur de la
+         neige pâle, c'est-à-dire rien, ce qui est le but.
+     ══════════════════════════════════════════════════════════════════════════ */
+  const FADE_TO = [((CFG.COL_SNOW >> 16) & 255) / 255,
+                   ((CFG.COL_SNOW >> 8) & 255) / 255,
+                   (CFG.COL_SNOW & 255) / 255];
+
   function stepParticles(sys, dt, gravity) {
     const P = sys.pos, C = sys.col;
+    /* ⚠️ Le neutre d'extinction dépend du fondu, pas du système. On le lit sur
+       le matériau plutôt que de le passer en argument : un argument s'oublie
+       au prochain système ajouté, un matériau ne ment jamais sur son fondu. */
+    const add = sys.points.material.blending === THREE.AdditiveBlending;
     for (let i = 0; i < sys.n; i++) {
       const p = sys.live[i];
       if (p.t <= 0) {
-        P[i * 3 + 1] = -99999;          // hors champ, et la couleur reste noire
+        /* ⚠️ MORTE = NOIRE, DANS LES DEUX CAS, ET C'EST VOLONTAIRE. La couleur
+           noire est la convention par laquelle la géométrie du sillon ET
+           tools/preview-luge.js reconnaissent un emplacement inutilisé. Une
+           particule morte est de toute façon parquée à −99999 : elle n'est
+           jamais rendue, sa couleur ne se voit pas, et la convention reste
+           lisible par tout le monde. */
+        P[i * 3 + 1] = -99999;
         C[i * 3] = C[i * 3 + 1] = C[i * 3 + 2] = 0;
         continue;
       }
@@ -1120,7 +1419,26 @@ const World = (function () {
       P[i * 3] = p.x; P[i * 3 + 1] = p.y; P[i * 3 + 2] = p.z;
       const k = Math.max(0, p.t / p.life);
       const f = k * k;
-      C[i * 3] = p.r * f; C[i * 3 + 1] = p.g * f; C[i * 3 + 2] = p.b * f;
+      if (sys.noFade) {
+        /* ⚠️ CERTAINES PARTICULES NE DOIVENT PAS S'ÉTEINDRE DU TOUT, et la
+           pluie de bonbons est le cas d'école. Les deux extinctions ci-dessous
+           ramènent la couleur vers un neutre — le noir pour l'additif, la
+           neige pour le fondu normal — et c'est juste tant que la particule
+           REPRÉSENTE de la lumière ou de la neige. Un bonbon framboise qui
+           blanchit en tombant ne s'éteint pas : il devient un bonbon BLANC,
+           et une pluie de confettis délavés n'a plus rien de festif.
+           On le laisse donc à pleine saturation toute sa vie. Ce n'est pas un
+           renoncement : sa vie est calée sur son temps de chute, il disparaît
+           donc AU MOMENT OÙ IL TOUCHE LA NEIGE, ce qui se lit comme un
+           atterrissage et non comme une disparition. */
+        C[i * 3] = p.r; C[i * 3 + 1] = p.g; C[i * 3 + 2] = p.b;
+      } else if (add) {
+        C[i * 3] = p.r * f; C[i * 3 + 1] = p.g * f; C[i * 3 + 2] = p.b * f;
+      } else {
+        C[i * 3] = FADE_TO[0] + (p.r - FADE_TO[0]) * f;
+        C[i * 3 + 1] = FADE_TO[1] + (p.g - FADE_TO[1]) * f;
+        C[i * 3 + 2] = FADE_TO[2] + (p.b - FADE_TO[2]) * f;
+      }
     }
     sys.points.geometry.attributes.position.needsUpdate = true;
     sys.points.geometry.attributes.color.needsUpdate = true;
@@ -1248,6 +1566,159 @@ const World = (function () {
     }
     // Une cheminée, parce qu'une maison sans cheminée se lit comme une caisse.
     g.add(box(mat.gingerDark, 0.5 * sc, 1.1 * sc, 0.5 * sc, x + w * 0.24, y + h + 1.2 * sc, z - d * 0.22));
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     LE DÉCOR DU 416 — SIX OBJETS DE PLUS, ET LE CHOIX N'EST PAS ARBITRAIRE.
+     ──────────────────────────────────────────────────────────────────────────
+     Guillaume : « peut-être ajouter plus de détails dans le décor, toujours en
+     gardant le même thème bonbons général ».
+
+     ⚠️ LE PIÈGE EST DE MULTIPLIER LES SUCETTES. Le 414 a déjà tranché ce
+     débat pour la couleur (« le réflexe est d'ajouter des objets ; c'est le
+     mauvais ») et la même logique vaut pour la forme : un paysage se lit par
+     ses SILHOUETTES et par ses ÉCHELLES, pas par son nombre de pièces. Trente
+     sucettes de plus ne donnent pas trente fois plus de décor, elles donnent
+     une texture. Ce qui manquait au 415 n'était pas la quantité — c'était :
+
+       1. LES PETITES ÉCHELLES. Entre la barrière (1,5 u) et le sapin (7 u), il
+          n'y avait RIEN. Le regard sautait donc du bord de piste au fond, et
+          la vitesse ne se lisait nulle part : il faut des objets PROCHES et
+          BAS pour que quelque chose défile vite. D'où les galets de bonbon,
+          les cannes plantées et les cristaux.
+       2. LES SILHOUETTES RECONNAISSABLES. Un bonhomme de guimauve ou un ourson
+          assis se nomment d'un coup d'œil ; une boule colorée non. Un décor
+          dont on peut nommer les objets paraît habité — c'est déjà ce que fait
+          la maison de pain d'épices, seule contre tout le reste.
+       3. LA VARIÉTÉ PAR PALIER. Les nouveaux objets sont distribués PAR
+          PALIER, comme le hameau : chaque tiers de descente doit se souvenir
+          d'un paysage différent, sinon la progression n'existe qu'au compteur.
+
+     ⚠️ ET TOUT EST POSÉ SUR `terrainAt`, JAMAIS `pointAt` — règle du 414, la
+     surface banquée n'existe qu'entre les barrières.
+     ══════════════════════════════════════════════════════════════════════════ */
+
+  /* UN BONHOMME DE GUIMAUVE. Trois boules, deux yeux de réglisse, une écharpe.
+     ⚠️ Sa valeur est sa SILHOUETTE : c'est la seule forme humaine du décor, et
+     l'œil la trouve à deux cents mètres au milieu de n'importe quoi. */
+  function marshmallowMan(g, x, y, z, sc, i) {
+    const R = 0.95 * sc;
+    g.add(sph(mat.white, R, x, y + R, z));
+    g.add(sph(mat.white, R * 0.72, x, y + R * 2.5, z));
+    g.add(sph(mat.white, R * 0.52, x, y + R * 3.7, z));
+    const hue = Math.floor(hash(i, 41) * CFG.COL_CANDY_SET.length);
+    // L'écharpe : c'est elle qui apporte la couleur, et une seule suffit.
+    g.add(cylM(mat.candy[hue], R * 0.56, R * 0.34, x, y + R * 3.1, z));
+    g.add(sph(mat.eye, R * 0.12, x - R * 0.18, y + R * 3.8, z - R * 0.44, true));
+    g.add(sph(mat.eye, R * 0.12, x + R * 0.18, y + R * 3.8, z - R * 0.44, true));
+    // Les bras : deux bâtons de sucre plantés en biais.
+    for (const side of [-1, 1]) {
+      const a = cylM(mat.cane, 0.07 * sc, R * 1.5, x + side * R * 0.8, y + R * 2.6, z, true);
+      a.rotation.z = side * 0.9;
+      g.add(a);
+    }
+  }
+
+  /* UN ROCHER DE MENTHE POIVRÉE : une grosse sphère écrasée, rayée par la
+     texture des cannes. ⚠️ C'est le seul VOLUME du décor — tout le reste est
+     mince ou petit. Un paysage n'a de profondeur que s'il contient des masses
+     qui se recouvrent les unes les autres. */
+  function peppermintRock(g, x, y, z, r, i) {
+    const b = sph(mat.cane, r, x, y + r * 0.62, z);
+    b.scale.y *= 0.72;
+    b.rotation.y = hash(i, 43) * 3.1;
+    g.add(b);
+    // Une calotte de glaçage : la neige qui s'est posée dessus.
+    const cap = sph(mat.icing, r * 0.78, x, y + r * 1.02, z, true);
+    cap.scale.y *= 0.34;
+    g.add(cap);
+  }
+
+  /* UNE PILE DE MACARONS. Trois disques et leur ganache, empilés de travers.
+     ⚠️ LE DÉCALAGE EST L'IDÉE : trois disques alignés font une colonne, trois
+     disques décalés font une PILE — c'est-à-dire quelque chose que quelqu'un a
+     posé là. La différence tient en deux lignes et se voit tout de suite. */
+  function macaronStack(g, x, y, z, sc, i) {
+    let yy = y;
+    for (let k = 0; k < 3; k++) {
+      const r = (0.85 - k * 0.09) * sc;
+      const hue = Math.floor(hash(i, 50 + k) * CFG.COL_CANDY_SET.length);
+      const dx = (hash(i, 55 + k) - 0.5) * r * 0.5;
+      const dz = (hash(i, 58 + k) - 0.5) * r * 0.5;
+      const sh = cylM(mat.candy[hue], r, 0.3 * sc, x + dx, yy + 0.15 * sc, z + dz, true);
+      g.add(sh);
+      g.add(cylM(mat.icing, r * 0.92, 0.16 * sc, x + dx, yy + 0.38 * sc, z + dz, true));
+      g.add(cylM(mat.candy[hue], r, 0.3 * sc, x + dx, yy + 0.61 * sc, z + dz, true));
+      yy += 0.78 * sc;
+    }
+  }
+
+  /* UNE CANNE DE SUCRE PLANTÉE, avec sa crosse. ⚠️ Elle utilise le demi-tore
+     déjà en réserve (règle 2 : tout est mutualisé) — un objet de plus, zéro
+     géométrie de plus. */
+  function candyCane(g, x, y, z, h, tilt) {
+    const stick = cylM(mat.cane, 0.11, h, x, y + h / 2, z, true);
+    stick.rotation.z = tilt;
+    g.add(stick);
+    const hook = new THREE.Mesh(geo.torus, mat.cane);
+    hook.scale.set(0.34, 0.34, 0.7);
+    hook.position.set(x - Math.sin(tilt) * h + 0.34, y + h * Math.cos(tilt), z);
+    hook.rotation.z = Math.PI;
+    g.add(hook);
+  }
+
+  /* UN AMAS DE CRISTAUX DE SUCRE : trois à cinq cônes serrés, tous différents.
+     ⚠️ C'est le seul objet POINTU du décor, et c'est ce qui le rend utile :
+     tout le reste est rond, donc tout le reste se ressemble de loin. */
+  function sugarCluster(g, x, y, z, sc, i) {
+    const n = 3 + Math.floor(hash(i, 61) * 3);
+    for (let k = 0; k < n; k++) {
+      const a = hash(i, 63 + k) * Math.PI * 2;
+      const d = hash(i, 68 + k) * 0.8 * sc;
+      const h = (0.7 + hash(i, 72 + k) * 1.5) * sc;
+      const c = coneM(mat.icing, 0.24 * sc, h, x + Math.cos(a) * d, y + h / 2, z + Math.sin(a) * d);
+      c.rotation.z = (hash(i, 76 + k) - 0.5) * 0.5;
+      g.add(c);
+    }
+  }
+
+  /* DES GALETS DE BONBON au bord de la piste. ⚠️ CE SONT EUX QUI DONNENT LA
+     VITESSE, et c'est le plus important des six ajouts.
+     Un jeu de descente se lit par ce qui DÉFILE. Or entre la barrière et les
+     sapins il n'y avait rien de proche : tout le décor était à vingt mètres ou
+     plus, donc tout se déplaçait lentement à l'écran, donc rien ne disait
+     qu'on allait à cent vingt à l'heure. Une poignée de cailloux à trois
+     mètres du bord change cela plus qu'une forêt entière. */
+  function candyPebbles(g, s0, side, half, i) {
+    for (let k = 0; k < 5; k++) {
+      const s = s0 + hash(i, 80 + k) * CFG.NODE_LEN;
+      const u = side * (half + 1.4 + hash(i, 86 + k) * 4.5);
+      const p = Slope.terrainAt(s, u);
+      const r = 0.16 + hash(i, 92 + k) * 0.3;
+      const hue = Math.floor(hash(i, 98 + k) * CFG.COL_CANDY_SET.length);
+      const b = sph(mat.candy[hue], r, p.x, p.y + r * 0.5, p.z, true);
+      b.scale.y *= 0.7;
+      g.add(b);
+    }
+  }
+
+  /* UN OURSON EN GOMME ASSIS AU BORD. ⚠️ C'est le clin d'œil du décor : le
+     gourmand qu'on esquive sur la piste, tranquillement assis à la regarder
+     passer. Il ne coûte rien (la géométrie du gourmand existe déjà) et il
+     raconte quelque chose — un monde dont les habitants sont les obstacles. */
+  function sittingBear(g, x, y, z, sc, i) {
+    const hue = Math.floor(hash(i, 105) * CFG.COL_CANDY_SET.length);
+    const m = mat.candy[hue];
+    g.add(sph(m, 0.62 * sc, x, y + 0.55 * sc, z));
+    g.add(sph(m, 0.44 * sc, x, y + 1.35 * sc, z));
+    g.add(sph(m, 0.17 * sc, x - 0.34 * sc, y + 1.65 * sc, z, true));
+    g.add(sph(m, 0.17 * sc, x + 0.34 * sc, y + 1.65 * sc, z, true));
+    g.add(sph(mat.icing, 0.19 * sc, x, y + 1.26 * sc, z - 0.34 * sc, true));
+    for (const side of [-1, 1]) {
+      g.add(sph(m, 0.26 * sc, x + side * 0.62 * sc, y + 0.3 * sc, z - 0.2 * sc, true));
+    }
+    g.add(sph(mat.eye, 0.08 * sc, x - 0.16 * sc, y + 1.44 * sc, z - 0.36 * sc, true));
+    g.add(sph(mat.eye, 0.08 * sc, x + 0.16 * sc, y + 1.44 * sc, z - 0.36 * sc, true));
   }
 
   /* Une ARCHE DE MENTHE POIVRÉE au-dessus de la piste. Elle a deux fonctions,
@@ -1418,6 +1889,39 @@ const World = (function () {
         // `true` : palette lointaine. C'est ce rang-là qui doit reculer.
         gumTree(g, p.x, p.y, p.z, 6 + hash(base, 12) * 7, base + 999, true);
       }
+
+      /* ══════════════════════════════════════════════════════════════════
+         LE MOBILIER DU 416, PAR PALIER.
+         ──────────────────────────────────────────────────────────────────
+         ⚠️ UN SEUL OBJET PAR CÔTÉ ET PAR TRONÇON, TIRÉ DANS UNE TABLE. On
+         aurait pu tester chaque objet avec sa propre densité ; on aurait
+         alors obtenu, aux tronçons chanceux, un tas de six objets empilés au
+         même endroit — le défaut classique du décor tiré au sort, et il ne se
+         voit qu'à l'écran. Un tirage UNIQUE dans une liste garantit
+         l'espacement par construction, et la liste change avec le palier, donc
+         le paysage aussi.
+         ⚠️ La densité est volontairement basse (45 %) : ces objets s'ajoutent
+         aux sucettes et aux sapins, qui sont déjà là. Un décor trop plein ne
+         se lit plus comme un paysage mais comme un magasin. */
+      if (hash(base, 110) < 0.45) {
+        const p = Slope.terrainAt(s + 1.5, side * (half + 6 + hash(base, 111) * 16));
+        const menu = st <= 1 ? ["bear", "cane", "macaron"]
+          : st <= 3 ? ["marsh", "rock", "cane"]
+            : ["cluster", "rock", "marsh"];
+        const pick = menu[Math.floor(hash(base, 112) * menu.length)];
+        const sc = 0.85 + hash(base, 113) * 0.7;
+        if (pick === "bear") sittingBear(g, p.x, p.y, p.z, sc * 1.3, base);
+        else if (pick === "cane") candyCane(g, p.x, p.y, p.z, 2.2 + hash(base, 114) * 2.4, (hash(base, 115) - 0.5) * 0.34);
+        else if (pick === "macaron") macaronStack(g, p.x, p.y, p.z, sc, base);
+        else if (pick === "marsh") marshmallowMan(g, p.x, p.y, p.z, sc, base);
+        else if (pick === "rock") peppermintRock(g, p.x, p.y, p.z, 1.4 + hash(base, 116) * 2.2, base);
+        else sugarCluster(g, p.x, p.y, p.z, sc * 1.5, base);
+      }
+
+      /* Les galets, EUX, sont sur presque tous les tronçons — c'est leur
+         raison d'être : ce qui donne la vitesse doit être continu, sinon on
+         voit passer des paquets de cailloux au lieu d'un défilement. */
+      if (hash(base, 120) < 0.8) candyPebbles(g, s0, side, half, base);
     }
 
     // Le hameau de pain d'épices : seulement au palier 0 et 3, et toujours du
@@ -1542,8 +2046,253 @@ const World = (function () {
     }
   }
 
-  function updateCritters(field, now) {
+  /* ══════════════════════════════════════════════════════════════════════════
+     LES DÉCALQUES DE LISIBILITÉ (416) — ombres, cernes d'alerte, portes.
+     ──────────────────────────────────────────────────────────────────────────
+     Trois tableaux, une seule mécanique : on demande le n-ième objet du
+     tableau, on le crée s'il n'existe pas encore, on le place. À la fin de
+     l'image, tout ce qui n'a pas servi est caché. Aucun objet n'est jamais
+     détruit — une descente en réclame une vingtaine au plus, et un tableau qui
+     ne rend rien ne peut pas fuir.
+     ══════════════════════════════════════════════════════════════════════════ */
+  /* ══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ UN DÉCALQUE EST UNE GRILLE POSÉE SUR LA PISTE, PAS UN PLAN POSÉ
+     DEVANT — ET LA PREMIÈRE ÉCRITURE FAISAIT L'INVERSE.
+     ──────────────────────────────────────────────────────────────────────────
+     Version initiale : un `PlaneGeometry` couché à l'horizontale, remonté de
+     cinq centimètres. Sur la planche, l'ombre de la luge apparaissait coupée en
+     deux par une diagonale nette — une moitié visible, l'autre disparue.
+
+     La cause n'a rien d'un bogue de rendu : LA PISTE DESCEND. Une ombre longue
+     de cinq unités, posée à plat sur une pente de 12°, s'écarte du sol d'un
+     demi-mètre à chacune de ses extrémités — elle s'enfonce d'un côté et
+     lévite de l'autre. Le tampon de profondeur fait alors exactement son
+     travail : il enterre la moitié amont. Et la piste est aussi BANQUÉE (dévers
+     jusqu'à 11°) et BOSSELÉE (±0,85 unité), donc aucune orientation fixe ne
+     peut convenir partout.
+
+     ⚠️ ET `polygonOffset` N'Y PEUT RIEN, ce qui vaut d'être noté parce qu'on
+     est tenté de monter sa valeur jusqu'à ce que ça passe. Le décalage de
+     polygone traite le z-fighting entre surfaces COPLANAIRES ; ici les deux
+     surfaces ne sont pas parallèles, elles se CROISENT. Aucun décalage ne
+     rattrape une intersection — le remonter ne ferait que décoller le décalque
+     du sol, ce qui est un autre défaut.
+
+     La bonne réponse est celle que `ribbon()` emploie déjà pour la piste
+     elle-même : on échantillonne la surface. Une grille de 4×4 sommets posés
+     sur `Slope.pointAt` épouse la pente, le dévers et les bosses par
+     construction, dans les virages comme dans les murs. Dix-huit triangles par
+     décalque, une vingtaine de décalques : le coût est invisible.
+     ══════════════════════════════════════════════════════════════════════════ */
+  const DECAL_N = 3;                       // subdivisions ; 3 → 4×4 sommets
+
+  function makeDecalGrid() {
+    const N = DECAL_N, V = (N + 1) * (N + 1);
+    const g = new THREE.BufferGeometry();
+    const pos = new Float32Array(V * 3);
+    const uv = new Float32Array(V * 2);
+    const idx = [];
+    for (let j = 0; j <= N; j++) for (let i = 0; i <= N; i++) {
+      const k = j * (N + 1) + i;
+      uv[k * 2] = i / N; uv[k * 2 + 1] = j / N;
+    }
+    for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+      const a = j * (N + 1) + i, b = a + 1, c = a + N + 1, d = c + 1;
+      idx.push(a, c, b, b, c, d);
+    }
+    g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    g.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+    g.setIndex(idx);
+    g.__decalPos = pos;
+    return g;
+  }
+
+  function decal(kind, i, material, geometry) {
+    const arr = decals[kind];
+    while (arr.length <= i) {
+      /* ⚠️⚠️ LE MATÉRIAU EST CLONÉ, ET C'EST LA SEULE ENTORSE À LA RÈGLE 2
+         (« tout est mutualisé ») DE TOUT LE FICHIER. Elle est obligatoire :
+         l'opacité de ces décalques est PAR OBJET — chaque ombre a sa hauteur
+         de vol, chaque porte sa distance d'approche. Avec un matériau partagé,
+         écrire `m.material.opacity` dans une boucle donne à TOUS les objets la
+         valeur du dernier, et le défaut est particulièrement traître : les
+         ombres existent, elles sont au bon endroit, elles clignotent
+         simplement toutes ensemble sans qu'on comprenne pourquoi.
+         Le coût est nul : une vingtaine de matériaux au total sur la descente,
+         qui partagent tous la même texture (three.js ne copie que la
+         référence). Ce qu'il ne faut PAS faire, c'est cloner par IMAGE — ici on
+         clone une fois, à la création, et l'objet vit jusqu'à la fin. */
+      const m = new THREE.Mesh(geometry || makeDecalGrid(), material.clone());
+      /* Les décalques passent APRÈS le sol (renderOrder 1 = celui du sillon) et
+         AVANT rien : ils ne s'écrivent pas dans le tampon de profondeur, donc
+         leur ordre entre eux ne compte que pour la superposition. 2 pour que
+         le cerne se pose sur l'ombre, jamais l'inverse. */
+      m.renderOrder = 2;
+      m.visible = false;
+      scene.add(m);
+      arr.push(m);
+    }
+    const m = arr[i];
+    m.visible = true;
+    return m;
+  }
+
+  function hideDecalsFrom(kind, i) {
+    const arr = decals[kind];
+    for (; i < arr.length; i++) arr[i].visible = false;
+  }
+
+  /* Pose un décalque SUR la piste, centré en (s, u), large de `w` en travers et
+     long de `len` dans le sens de la marche.
+
+     ⚠️ SUR `pointAt` ET NON `terrainAt` : la piste est banquée, le terrain ne
+     l'est pas, et une ombre posée sur la mauvaise des deux surfaces s'enfonce
+     ou lévite dès qu'on s'écarte de l'axe — c'est la faute que le 414 a
+     corrigée sur tout le décor, on ne la refait pas ici.
+
+     ⚠️ ET LES SOMMETS SONT EN COORDONNÉES DU MONDE, l'objet restant à
+     l'origine sans rotation ni échelle. C'est plus direct qu'un repère local
+     (pas d'Euler à composer, pas d'ordre de rotation à deviner) et surtout
+     c'est la seule façon d'épouser une surface COURBE : une transformation
+     rigide ne peut, par définition, que déplacer un plan — jamais le plier. */
+  function layDecal(m, s, u, w, len, lift, opacity) {
+    const N = DECAL_N;
+    const pos = m.geometry.__decalPos;
+    for (let j = 0; j <= N; j++) {
+      const ds = (j / N - 0.5) * len;
+      for (let i = 0; i <= N; i++) {
+        const du = (i / N - 0.5) * w;
+        const p = Slope.pointAt(Math.max(0, s + ds), u + du);
+        const k = (j * (N + 1) + i) * 3;
+        pos[k] = p.x; pos[k + 1] = p.y + lift; pos[k + 2] = p.z;
+      }
+    }
+    m.geometry.attributes.position.needsUpdate = true;
+    m.position.set(0, 0, 0);
+    m.material.opacity = opacity;
+  }
+
+  function updateReadability(field, sled, now) {
     const t = now / 1000;
+    let ns = 0, nw = 0, ng = 0, np = 0, nc = 0;
+
+    /* ---- 1. Les ombres, et la première est celle de la LUGE. Elle n'a rien
+       à voir avec l'évitement, mais elle a tout à voir avec la sensation de
+       vol : sans ombre, un saut ne se distingue pas d'une bosse. */
+    if (sled && sled.alive) {
+      const air = Math.max(0, sled.air || 0);
+      const m = decal("shadow", ns++, mat.shadow);
+      // Elle s'agrandit et pâlit avec la hauteur — c'est ce qui dit COMBIEN on
+      // est en l'air, information qu'aucun autre élément ne donne.
+      const k = Math.min(1, air / 6);
+      const sw = 3.4 * (1 + k * 0.8);
+      // Plus longue que large : une luge est un objet allongé, son ombre aussi.
+      layDecal(m, sled.s, sled.u, sw, sw * 1.5, CFG.SHADOW_LIFT,
+        CFG.SHADOW_OPACITY * (1 - k * 0.55));
+    }
+
+    /* ---- 2. Les gourmands : une ombre chacun, plus un cerne quand ils
+       entrent dans la zone d'alerte. */
+    for (const c of field.list) {
+      if (!c.alive) continue;
+      const d = c.s - (sled ? sled.s : 0);
+      if (d < -8 || d > CFG.CRITTER_SPAWN_AHEAD) continue;
+      const m = decal("shadow", ns++, mat.shadow);
+      const cw = CFG.CRITTER_RADIUS * 2.6 * CFG.SHADOW_SIZE;
+      layDecal(m, c.s, c.u, cw, cw, CFG.SHADOW_LIFT, CFG.SHADOW_OPACITY);
+      /* ⚠️ LE CERNE NE DIT RIEN DE NOUVEAU — IL DIT « MAINTENANT ». Le joueur
+         a déjà vu ce gourmand vingt fois pendant l'approche ; ce qui lui
+         manque n'est pas de savoir qu'il existe, c'est de savoir que celui-ci
+         est le prochain. D'où un battement RAPIDE (7,5 rad/s contre 2,1 pour
+         la porte) : deux signaux qui pulsent à la même vitesse se lisent
+         comme un seul. */
+      if (d > 0 && d < CFG.WARN_FROM) {
+        const near = 1 - d / CFG.WARN_FROM;
+        const w = decal("warn", nw++, mat.warn);
+        const beat = 0.55 + 0.45 * Math.sin(t * CFG.WARN_PULSE + c.hop);
+        const ww = CFG.CRITTER_RADIUS * (3.6 + near * 1.2);
+        layDecal(w, c.s, c.u, ww, ww, CFG.SHADOW_LIFT + 0.02, 0.16 + 0.5 * near * beat);
+      }
+    }
+
+    /* ---- 3. Les portes. Une bande au sol large du passage garanti, deux
+       montants lumineux à ses bords. */
+    for (const g of (field.gates || [])) {
+      const d = g.s - (sled ? sled.s : 0);
+      if (d < -4 || d > CFG.GATE_SHOW_FROM) continue;
+      /* ⚠️ L'APPARITION EST PROGRESSIVE ET COMMENCE TRÈS LOIN (300 unités,
+         soit ~7 s à pleine vitesse). Une porte qui s'allumerait d'un coup à
+         portée d'action arriverait toujours trop tard : il faut deux à trois
+         secondes pour se déporter, et la décision se prend avant. Elle monte
+         donc en intensité pendant toute l'approche — le joueur la voit venir
+         de loin, faible, et elle est à pleine force au moment où il doit
+         avoir choisi. */
+      const k = d <= CFG.GATE_FULL_FROM ? 1
+        : 1 - (d - CFG.GATE_FULL_FROM) / (CFG.GATE_SHOW_FROM - CFG.GATE_FULL_FROM);
+      const fade = Math.max(0, Math.min(1, k));
+      // Le dernier mètre : la porte s'efface plutôt que de traverser la
+      // caméra. Un décalque qui passe sous l'objectif fait un éclair blanc.
+      const out = d < 6 ? Math.max(0, d / 6) : 1;
+      const mid = (g.gapL + g.gapR) / 2;
+      const w = g.gapR - g.gapL;
+      const beat = 0.82 + 0.18 * Math.sin(t * CFG.GATE_PULSE + g.s);
+      const band = decal("gate", ng++, mat.gate);
+      layDecal(band, g.s, mid, w, CFG.GATE_LEN, CFG.GATE_LIFT,
+        CFG.GATE_OPACITY * fade * out * beat);
+
+      /* Les deux montants. ⚠️ ILS SONT INDISPENSABLES, et pas décoratifs : une
+         bande peinte au sol, vue sous un angle rasant à cinquante mètres,
+         n'occupe que deux pixels de haut. C'est la VERTICALE qui porte
+         l'information à distance — comme les fanions de checkpoint, comme les
+         portes d'un slalom, et pour la même raison. */
+      const postH = CFG.GATE_POST_H * (0.25 + 0.75 * fade) * out;
+      for (const side of [-1, 1]) {
+        const p = decal("post", np++, mat.gatePost, geo.cyl6);
+        const q = Slope.pointAt(g.s, mid + side * w / 2);
+        // Un montant qui monte et redescend avec l'approche : il POUSSE hors de
+        // la neige quand la porte s'allume, ce qui attire l'œil sans clignoter.
+        p.position.set(q.x, q.y + postH / 2, q.z);
+        p.rotation.set(0, 0, 0);
+        p.scale.set(0.36, Math.max(0.01, postH), 0.36);
+        p.material.opacity = 0.8 * fade * out;
+      }
+
+      /* LE RIDEAU. ⚠️ IL EST DRESSÉ, PAS COUCHÉ — c'est tout ce qui le
+         distingue de la bande, et c'est ce qui le rend visible : un plan
+         vertical garde sa hauteur à l'écran quel que soit l'angle, là où un
+         décalque au sol s'écrase à deux pixels et se fait manger par la
+         première bosse. */
+      /* ⚠️ LE RIDEAU EST LE SEUL DÉCALQUE QUI GARDE UN VRAI `PlaneGeometry`,
+         et c'est cohérent : il est DEBOUT. Une grille collée à la piste n'a de
+         sens que pour ce qui est posé dessus ; un voile vertical, lui, se pose
+         par une position, une rotation et une échelle, comme n'importe quel
+         objet. Lui donner une grille de terrain le ferait ramper au sol. */
+      const cur = decal("curtain", nc++, mat.gateCurtain, geo.plane);
+      const cq = Slope.pointAt(g.s, mid);
+      const ch = CFG.GATE_CURTAIN_H * (0.3 + 0.7 * fade) * out;
+      cur.position.set(cq.x, cq.y + ch / 2, cq.z);
+      // Debout (pas de -90° en x) et tourné dans l'axe de la piste.
+      cur.rotation.set(0, -Slope.yawAt(g.s), 0);
+      cur.scale.set(w, Math.max(0.01, ch), 1);
+      cur.material.opacity = CFG.GATE_CURTAIN_OPACITY * fade * out * beat;
+    }
+    hideDecalsFrom("shadow", ns);
+    hideDecalsFrom("warn", nw);
+    hideDecalsFrom("gate", ng);
+    hideDecalsFrom("post", np);
+    hideDecalsFrom("curtain", nc);
+  }
+
+  /* ⚠️ LA LISIBILITÉ EST APPELÉE DEPUIS `updateCritters`, PAS DEPUIS `game.js`.
+     C'est la leçon d'architecture du 414 (`Field.rewind` appelé de l'extérieur,
+     donc jamais branché par les outils, donc mesuré en étant désactivé), et on
+     l'applique d'avance ici : si dessiner les ombres et les portes réclamait un
+     appel de plus, `tools/preview-luge.js` l'oublierait, et on regarderait des
+     planches où l'on aurait justement retiré ce qu'on cherche à juger.
+     Les gourmands et leurs repères sont la même image : un seul appel. */
+  function updateCritters(field, now, sled) {
+    const t = now / 1000;
+    updateReadability(field, sled, now);
     for (const c of field.list) {
       if (!c.mesh) c.mesh = takeCritter(c.kind);
       const p = Slope.pointAt(c.s, c.u);
@@ -1701,6 +2450,52 @@ const World = (function () {
       }
     }
 
+    /* ══════════════════════════════════════════════════════════════════════
+       LA PLUIE DE BONBONS DE L'ARRIVÉE (416).
+       ──────────────────────────────────────────────────────────────────────
+       ⚠️ ELLE EST PILOTÉE PAR UN COMPTEUR REMIS À ZÉRO TANT QU'ON N'A PAS FINI,
+       et non par un événement « on vient de franchir la ligne ». La raison est
+       la leçon d'architecture du 414 (`Field.rewind` appelé de l'extérieur,
+       donc oublié par les outils) : un effet déclenché par un rappel n'existe
+       que si quelqu'un pense à le brancher. Ici, `updateFx` reçoit déjà la
+       luge à chaque image et `sled.finished` porte toute la vérité. Rien à
+       câbler dans game.js, rien à oublier dans preview-luge.js, et la pluie
+       se remet d'aplomb toute seule à la partie suivante.
+
+       ⚠️ ET ELLE DÉCROÎT AU LIEU DE S'ARRÊTER NET. Une salve pleine de 2,6 s
+       puis une extinction jusqu'à 6 s : c'est la forme d'un feu d'artifice, et
+       c'est ce qui évite le « clac » d'un effet qu'on coupe. Le joueur roule
+       encore pendant tout ce temps — la zone de dégagement fait cent unités. */
+    if (!sled.finished) {
+      rainT = 0;
+    } else if (rainT < CFG.FX_RAIN_TAIL) {
+      rainT += dt;
+      // Pleine puissance pendant la salve, puis décroissance jusqu'à zéro.
+      const k = rainT <= CFG.FX_RAIN_BURST ? 1
+        : Math.max(0, 1 - (rainT - CFG.FX_RAIN_BURST) / (CFG.FX_RAIN_TAIL - CFG.FX_RAIN_BURST));
+      const n = Math.round(CFG.FX_RAIN_RATE * k * dt);
+      for (let i = 0; i < n; i++) {
+        /* ⚠️ ON ARROSE DEVANT LA LUGE, PAS AUTOUR D'ELLE. Un bonbon met deux
+           secondes et demie à tomber de trente-quatre unités ; pendant ce
+           temps la luge parcourt encore trente à quarante unités. Semés au-
+           dessus de sa tête, les bonbons atterriraient tous DERRIÈRE elle et
+           le joueur ne verrait qu'un ciel vide. On sème donc en avant, sur la
+           distance qu'elle va couvrir. */
+        const ahead = CFG.FX_RAIN_AHEAD_MIN
+          + Math.random() * (CFG.FX_RAIN_AHEAD_MAX - CFG.FX_RAIN_AHEAD_MIN);
+        const side = (Math.random() - 0.5) * CFG.FX_RAIN_SPREAD;
+        const q = Slope.pointAt(Math.max(0, sled.s + ahead), side);
+        const hue = CFG.COL_CANDY_SET[(Math.random() * CFG.COL_CANDY_SET.length) | 0];
+        emit(rain,
+          q.x, q.y + CFG.FX_RAIN_HEIGHT * (0.45 + Math.random() * 0.75), q.z,
+          (Math.random() - 0.5) * CFG.FX_RAIN_DRIFT * 2,
+          -1 - Math.random() * 2,
+          (Math.random() - 0.5) * CFG.FX_RAIN_DRIFT * 2,
+          CFG.FX_RAIN_LIFE * (0.7 + Math.random() * 0.6),
+          ((hue >> 16) & 255) / 255, ((hue >> 8) & 255) / 255, (hue & 255) / 255);
+      }
+    }
+
     /* LE SILLON. Écrit ici parce que c'est le seul endroit qui tourne à chaque
        image avec la luge sous la main — mais il ne s'écrit qu'une fois tous les
        TRAIL_STEP unités, pushTrail() s'en charge. */
@@ -1710,6 +2505,7 @@ const World = (function () {
     stepParticles(dust, dt, -0.6);   // la poudre MONTE : c'est ce qui la rend féérique
     stepParticles(lines, dt, 0);
     stepParticles(spray, dt, CFG.FX_SPRAY_GRAVITY);   // ... et la gerbe RETOMBE : c'est de la matière
+    stepParticles(rain, dt, CFG.FX_RAIN_FALL);
   }
 
   /* Le décor lointain suit la caméra (règle 3) et la neige tombe. */

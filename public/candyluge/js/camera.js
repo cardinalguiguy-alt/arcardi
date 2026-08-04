@@ -43,7 +43,73 @@ function ChaseCamera(camera) {
   this.fov = CFG.CAM_FOV;
   this.shake = 0;
   this.ready = false;
+  this.lift = 0;            // relèvement courant imposé par la garde au sol
 }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ LA GARDE AU SOL (416) — LE CORRECTIF DU « SOL TRANSPARENT »
+   ──────────────────────────────────────────────────────────────────────────────
+   Guillaume : « le sol paraît transparent, on dirait que la vue est en dessous
+   du sol ». Les deux moitiés de la phrase disent la même chose, et la seconde
+   est la cause de la première.
+
+   RIEN N'EST TRANSPARENT. Les rubans de neige et de piste sont des faces
+   simples : elles n'existent que d'un côté. Une caméra passée SOUS le terrain
+   ne voit donc pas un sol translucide, elle ne voit AUCUN sol — le ciel
+   apparaît là où devrait être la neige, et la piste flotte au-dessus comme une
+   plaque posée sur rien. C'est exactement l'image envoyée.
+
+   POURQUOI ELLE PASSAIT DESSOUS. La caméra recule À L'HORIZONTALE derrière la
+   luge, et c'est un bon choix (reculer le long de la pente la plaquerait au sol
+   dans les murs, là où l'on a le plus besoin de voir loin). Mais l'horizontale,
+   dans une descente, MONTE : à 17° de pente et 12 unités de recul, le sol
+   derrière la luge est 3,7 unités plus haut qu'elle. Une hauteur de caméra
+   fixe est donc fausse par construction, et elle l'était de 0,56 unité sur
+   l'axe, de près de 3 en déport latéral.
+
+   ⚠️ POURQUOI UN PLANCHER MESURÉ ET PAS UN RÉGLAGE. On aurait pu monter
+   CAM_HEIGHT jusqu'à ce que le cas ne se produise plus. Ce serait faux :
+     * la pente varie du simple au triple le long de la descente ;
+     * le terrain HORS PISTE remonte en racine carrée (talus), donc le côté est
+       toujours plus haut que l'axe, et d'autant plus qu'on est déporté ;
+     * les bosses ajoutent ±0,85 unité, la suspension autant ;
+     * une remise en place au fanion TÉLÉPORTE la luge de plusieurs centaines
+       d'unités, dans une pente qu'on n'a pas choisie.
+   Un réglage rendrait la faute RARE. Le plancher la rend IMPOSSIBLE, et c'est
+   la même doctrine que la garantie de passage entre les gourmands ou que la
+   zone dégagée à la reprise : quand une propriété doit être vraie, on la fait
+   tenir par construction plutôt que par essais.
+
+   ⚠️ ON ÉCHANTILLONNE PLUSIEURS POINTS, PAS UN SEUL. Le sol entre la luge et
+   la caméra n'est pas un plan : c'est une crête. Ne tester que sous la caméra
+   laisserait passer le cas où c'est le MILIEU du segment qui crève l'image —
+   et c'est le pire, parce qu'alors le relief bouche le cadre sans qu'on
+   comprenne pourquoi. Cinq points suffisent, la piste est lisse.
+
+   ⚠️ ET LE RELÈVEMENT EST AMORTI DE FAÇON ASYMÉTRIQUE : rapide à monter
+   (CAM_CLEAR_RATE), lent à redescendre (CAM_CLEAR_FALL). Symétrique, la caméra
+   pomperait verticalement sur chaque bosse — exactement ce que CAM_LAG_Y
+   s'échine à éviter depuis le 413. Monter vite ne se voit pas (on évite un
+   mur) ; redescendre vite se voit toujours.
+   ═══════════════════════════════════════════════════════════════════════════ */
+ChaseCamera.prototype.groundFloor = function (sled) {
+  const back = CFG.CAM_BACK + CFG.CAM_BACK_SPEED;
+  const pit = Slope.pitchAt(sled.s);
+  // Le recul est horizontal : en abscisse curviligne, il vaut back/cos(pente).
+  const ds = back / Math.max(0.35, Math.cos(pit));
+  const N = CFG.CAM_CLEAR_TAPS;
+  let hi = -Infinity;
+  for (let k = 0; k <= N; k++) {
+    const s = Math.max(0, sled.s - ds * (k / N));
+    // La piste est banquée, le terrain ne l'est pas : les deux comptent, et
+    // c'est le PLUS HAUT des deux qui borne (voir Slope.terrainAt).
+    const a = Slope.pointAt(s, sled.u).y;
+    const b = Slope.terrainAt(s, sled.u).y;
+    const c = Slope.terrainAt(s, sled.u * 1.6).y;   // le talus, du côté où l'on est
+    hi = Math.max(hi, a, b, c);
+  }
+  return hi + CFG.CAM_CLEAR;
+};
 
 ChaseCamera.prototype.addShake = function (k) {
   this.shake = Math.min(1, this.shake + k);
@@ -60,6 +126,7 @@ ChaseCamera.prototype.addShake = function (k) {
 ChaseCamera.prototype.reset = function () {
   this.ready = false;
   this.shake = 0;
+  this.lift = 0;
 };
 
 ChaseCamera.prototype.update = function (dt, sled, now) {
@@ -113,10 +180,38 @@ ChaseCamera.prototype.update = function (dt, sled, now) {
     this.pos.y += (want.y - this.pos.y) * (1 - Math.exp(-CFG.CAM_LAG_Y * dt));
   }
 
+  /* ⚠️ LA GARDE AU SOL S'APPLIQUE ICI, APRÈS TOUS LES AMORTISSEMENTS ET AVANT
+     TOUT LE RESTE. C'est ce qui en fait une invariante et non un réglage de
+     plus : rien de ce qui suit ne peut la contredire, et le `lift` s'ajoute au
+     dernier moment sans jamais entrer dans l'état amorti — sinon la caméra
+     mémoriserait le relèvement et resterait haute une fois le mur passé.
+     Voir groundFloor() pour le pourquoi, qui est long et vaut d'être lu. */
+  const floorY = this.groundFloor(sled);
+  const wantLift = Math.max(0, floorY - this.pos.y);
+  this.lift += (wantLift - this.lift) * (1 - Math.exp(-CFG.CAM_CLEAR_FALL * dt));
+  /* ⚠️⚠️ ET LE RELÈVEMENT N'EST AMORTI QUE VERS LE BAS. C'est le point qui
+     transforme un réglage en garantie, et il a été trouvé en le mesurant :
+     avec un amortissement symétrique (même très raide, 14/s), 426 images sur
+     40 000 passaient encore sous la garde. Un lissage introduit du RETARD par
+     définition, et un plancher en retard n'est pas un plancher.
+
+     Monter d'un coup ne se voit pas : le plancher est une hauteur de terrain,
+     donc une grandeur LISSE le long de la descente — une caméra qui le suit
+     exactement suit quelque chose de lisse. Redescendre d'un coup, en
+     revanche, se verrait à chaque bosse franchie. D'où l'asymétrie : contrainte
+     dure en montant, souvenir amorti en redescendant. */
+  if (this.lift < wantLift) this.lift = wantLift;
+
   // Le point visé : loin devant, sur la piste. C'est lui qui fait entrer le
   // paysage dans le cadre — viser la luge le ferait sortir.
   const ahead = Slope.pointAt(sled.s + CFG.CAM_LOOK_AHEAD, sled.u * 0.25);
-  this.look = { x: ahead.x, y: ahead.y + CFG.CAM_LOOK_HEIGHT, z: ahead.z };
+  /* ⚠️ LE POINT VISÉ MONTE AVEC LA CAMÉRA, ET DE MOITIÉ SEULEMENT. S'il ne
+     montait pas, relever la caméra ferait plonger la visée vers le sol : on
+     aurait échangé « on voit sous le sol » contre « on ne voit que le sol »,
+     ce qui n'est pas mieux. S'il montait d'autant, le relèvement serait
+     invisible et ne servirait à rien. La moitié garde l'horizon en place tout
+     en dégageant le premier plan. */
+  this.look = { x: ahead.x, y: ahead.y + CFG.CAM_LOOK_HEIGHT + this.lift * 0.5, z: ahead.z };
 
   /* ⚠️ LE CHAMP S'OUVRE AUSSI AVEC LA CHARGE (414), et c'est la traduction
      visuelle la plus directe de « la résistance du sol ». La charge dit combien
@@ -157,7 +252,7 @@ ChaseCamera.prototype.update = function (dt, sled, now) {
   const jx = sh * Math.sin(now / 21) + rk * Math.sin(now / 61);
   const jy = sh * Math.sin(now / 17 + 1.7) + rk * Math.sin(now / 43 + 2.1);
 
-  this.cam.position.set(this.pos.x + jx, this.pos.y + jy, this.pos.z);
+  this.cam.position.set(this.pos.x + jx, this.pos.y + this.lift + jy, this.pos.z);
   this.cam.lookAt(this.look.x, this.look.y, this.look.z);
   /* Le roulis s'ajoute APRÈS le lookAt : appliqué avant, il serait écrasé.
      C'est la même mécanique que le roulis des flammes du défi de fuite. */

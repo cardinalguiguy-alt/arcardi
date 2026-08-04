@@ -195,14 +195,39 @@ const Critters = (function () {
         });
       }
     }
+    /* ⚠️ LE TROU EST ACCROCHÉ À LA LISTE, PAS RECALCULÉ AILLEURS (416).
+       world.js doit dessiner la porte au sol ; il pourrait la déduire en
+       cherchant le plus grand intervalle libre entre les gourmands, et ce
+       serait une faute :
+         * ce calcul-là donnerait un trou QUI BOUGE (les gourmands oscillent),
+           alors que le trou tiré ici est FIXE par construction — et c'est
+           précisément sa fixité qui le rend visable ;
+         * il pourrait tomber sur un intervalle libre qui n'est pas le passage
+           garanti, donc montrer au joueur une porte que rien ne protège ;
+         * et il y aurait alors DEUX écritures de la même vérité, qui
+           divergeraient au premier réglage.
+       Une seule écriture, portée par la vague elle-même. */
+    if (out.length) { out.gapL = gapL; out.gapR = gapR; out.s = s; }
     return out;
   }
 
   /* Le nombre total de vagues d'une descente. Calculé une fois : il sert au
      jeu ET à l'outil de contrôle, qui doit toutes les examiner. */
+  /* ⚠️⚠️ LES VAGUES S'ARRÊTENT AVANT LA ZONE D'ARRIVÉE (416), exactement comme
+     les checkpoints depuis le 414 — et pour une raison de même nature.
+     Une aire d'arrivée est PLATE ET DROITE (voir finishKAt dans slope.js) :
+     la luge y est en roue libre, elle ralentit, et le dévers comme le braquage
+     y sont neutralisés. C'est-à-dire qu'on y a le moins de contrôle de toute
+     la descente. Y planter des gourmands, c'est demander une esquive à
+     quelqu'un à qui l'on vient de retirer les moyens d'esquiver — et le
+     punir d'un renvoi au fanion pour une descente qu'il a DÉJÀ finie.
+     ⚠️ Ça s'est vu sur la planche de l'arrivée : trois gourmands en travers du
+     dégagement, sous la pluie de bonbons. On ne fête pas quelqu'un en lui
+     tendant un croche-pied. */
   function waveCount() {
+    const last = CFG.DESCENT_LENGTH - CFG.FINISH_FADE;
     let s = 240, w = 0;
-    while (s < CFG.DESCENT_LENGTH && w < 400) {
+    while (s < last && w < 400) {
       const st = Math.min(5, Math.floor(s / CFG.STAGE_LEN));
       s += CFG.CRITTER_SPACING[st];
       w++;
@@ -215,6 +240,11 @@ const Critters = (function () {
     this.nextWave = 0;
     this.candies = [];
     this.nextGarland = 0;
+    /* Les PORTES en piste (416) : { s, gapL, gapR } pour chaque vague vivante.
+       world.js les dessine, personne d'autre ne les lit. Elles suivent
+       exactement le cycle de vie des vagues — apparition et nettoyage au même
+       endroit — pour qu'aucune porte ne puisse survivre à ses gourmands. */
+    this.gates = [];
   }
 
   /* Les BONBONS ne sont pas là pour le score : ils sont là pour DESSINER LA
@@ -258,6 +288,10 @@ const Critters = (function () {
       this.gone = (this.gone || []).concat(this.list);
       this.list = [];
     }
+    // ⚠️ Les portes tombent avec leurs vagues. Les oublier ici laisserait des
+    // passages lumineux flottant devant une piste vide après chaque chute —
+    // exactement le genre de résidu qui fait douter de tout le reste.
+    this.gates = [];
     if (this.candies.length) {
       this.gone = (this.gone || []).concat(this.candies.filter((k) => k.mesh));
       this.candies = [];
@@ -348,6 +382,10 @@ const Critters = (function () {
       const ws = wv.length ? wv[0].s : Infinity;
       if (ws > sled.s + CFG.CRITTER_SPAWN_AHEAD) break;
       this.list.push(...wv);
+      // La porte naît AVEC sa vague : une porte sans gourmands montrerait un
+      // passage là où il n'y a pas d'obstacle, ce qui n'apprend rien et use
+      // le signal pour rien.
+      if (wv.length) this.gates.push({ s: wv.s, gapL: wv.gapL, gapR: wv.gapR, wave: this.nextWave });
       this.nextWave++;
     }
     while (this.nextGarland * CFG.CANDY_SPACING * CFG.CANDY_RUN + 120 < sled.s + CFG.CRITTER_SPAWN_AHEAD
@@ -387,6 +425,9 @@ const Critters = (function () {
     // Nettoyage derrière. Les meshes sont détruits par world.js, qui les
     // possède : on marque, on ne libère pas.
     const cut = sled.s - CFG.CRITTER_DESPAWN_BEHIND;
+    // Les portes n'ont pas de mesh à elles (world.js en garde une réserve
+    // qu'il repositionne) : un simple filtre suffit, rien à signaler.
+    this.gates = this.gates.filter((g) => g.s >= cut);
     this.gone = [];
     this.list = this.list.filter((c) => {
       if (c.s < cut) { this.gone.push(c); return false; }

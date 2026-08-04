@@ -24,8 +24,17 @@ les mêmes raisons (voir `public/templerun/js/bridge.js`, qui fait autorité).
 
 ```
 node public/candyluge/tools/verify-luge.mjs    # 34 contrôles — la descente est jouable
-node public/candyluge/tools/preview-luge.js    # 9 planches PNG — la descente est belle
+node public/candyluge/tools/preview-luge.js    # 11 planches PNG — la descente est belle
 ```
+
+⚠️ **AU 416, `preview-luge` REND ENFIN LA TRANSPARENCE ET LES PARTICULES** —
+c'était le point 3 des « en suspens » du 414 (« la gerbe et les étoiles n'ont
+jamais été regardées »), et il ne pouvait plus attendre : les quatre
+nouveautés du 416 sont TOUTES des voiles ou des points (ombres, cernes, portes,
+pluie de bonbons). Il a suffi de les rendre pour trouver, à la première image,
+que **la gerbe de neige du 414 sortait en FUMÉE NOIRE** depuis un zip entier
+(voir `stepParticles`). Deux planches nouvelles vont avec : `luge-evitement`
+(lit-on où passer ?) et `luge-arrivee` (la pluie de bonbons).
 
 **Les deux sont nécessaires et aucun ne remplace l'autre.** `verify-luge` prouve
 qu'un pilote maladroit arrive en bas ; `preview-luge` montre à quoi ça
@@ -90,3 +99,27 @@ mur.
 7. **(414) Un motif de sol ne descend jamais sous ~1,5 unité de période**, et se
    peint EN UNITÉS DU MONDE (`PX` dans `paintPiste`/`paintSnow`), jamais en
    pixels. En dessous, il ne se voit plus de près et il scintille de loin.
+8. **(416) La caméra ne descend jamais sous `CAM_CLEAR` au-dessus du sol.**
+   C'est une INVARIANTE mesurée à chaque image (`ChaseCamera.groundFloor`), pas
+   un réglage de hauteur. Une hauteur fixe est fausse quelque part par
+   construction : la pente varie du simple au triple, le talus remonte en racine
+   carrée, les bosses ajoutent ±0,85, et une chute téléporte la luge. C'est ce
+   qui produisait « le sol paraît transparent » — la caméra passait dessous, et
+   un ruban de neige n'a pas de face de ce côté-là.
+9. **(416) Un fondu NORMAL ne s'éteint pas vers le noir.** Multiplier une
+   couleur par zéro ne rend invisible qu'en fondu ADDITIF. La gerbe de neige du
+   414 s'assombrissait pendant sa vie et sortait en fumée noire, pendant un zip
+   entier, sans que personne puisse le voir. `stepParticles` interpole donc vers
+   le décor pour les systèmes normaux, et vers le noir pour les additifs.
+   C'est la règle du sillon gravé (« on interpole VERS LE FOND, on ne multiplie
+   pas »), qui était écrite depuis le 414 mais n'avait été appliquée qu'au
+   sillon.
+10. **(416) Un repère de piste porte par sa VERTICALE, pas par son décalque.**
+   La bande au sol d'une porte disparaît derrière la première crête ; ce sont
+   les montants et le rideau qui se voient à cent mètres. Vrai des barrières en
+   sucre d'orge, des fanions de checkpoint, et maintenant des portes.
+11. **(416) Un décalque posé au sol est une GRILLE échantillonnée sur la piste**
+   (`layDecal`), jamais un plan rigide. Une ombre plate sur une pente à 12° a un
+   demi-mètre d'écart à ses extrémités : elle s'enterre d'un côté et lévite de
+   l'autre, et `polygonOffset` n'y peut rien — il traite le z-fighting entre
+   surfaces parallèles, pas deux surfaces qui se croisent.

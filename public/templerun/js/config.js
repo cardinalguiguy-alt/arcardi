@@ -325,6 +325,22 @@ const CFG = {
   /* ----------------------------------------------------------------- SCORE */
   SCORE_PER_UNIT: 0.6,      // points par unité parcourue
   SCORE_PER_COIN: 25,
+  /* ══════════════════════════════════════════════════════════════════════════
+     LE SON DES BULLES (416).
+     ──────────────────────────────────────────────────────────────────────────
+     ⚠️ BUBBLE_CHAIN_MS EST LE SEUL NOMBRE QUI COMPTE VRAIMENT ICI, et il se
+     déduit du jeu plutôt qu'il ne se choisit : les bulles sont espacées de
+     COIN_SPACING (3,2 unités) et le fermier court entre 22 et 34 u/s, soit une
+     bulle toutes les 95 à 145 millisecondes. Une fenêtre de 420 ms laisse donc
+     passer trois bulles manquées d'affilée sans casser la série — c'est ce
+     qu'on veut, un chapelet ramassé de travers reste un chapelet — tout en
+     rompant franchement entre deux chapelets, qui sont séparés de bien plus.
+     ⚠️ Trop court, la montée se remet à zéro au milieu d'une série et le son
+     paraît cassé. Trop long, deux chapelets distants s'enchaînent et la montée
+     ne veut plus rien dire. */
+  BUBBLE_CHAIN_MS: 420,     // au-delà, la série est rompue
+  BUBBLE_MAX_STEPS: 7,      // ⚠️ plafond de la montée, en demi-tons
+  BUBBLE_RUN_AT: 6,         // longueur à partir de laquelle l'accord conclut
   STORAGE_KEY: "vf_templerun_best_v1",
 
   /* ---------------------------------------------------------------- CAMÉRA */

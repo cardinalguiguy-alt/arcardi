@@ -1078,6 +1078,39 @@ const Paint = (function () {
   }
 
   /* -----------------------------------------------------------------------
+     LA FLAQUE DU SILLAGE DE SORTIE (zip 416).
+     -----------------------------------------------------------------------
+     Une tache ronde à bords mous, en pixels francs. ⚠️ LES DEUX MOITIÉS DE
+     CETTE PHRASE SE CONTREDISENT EN APPARENCE, et c'est tout le sujet : le
+     site a pour signature le pixel net (filtre au plus proche voisin partout),
+     donc on ne peut pas lisser la texture ; mais une flaque à bord net se lit
+     comme un carreau de damier, pas comme de l'eau.
+     La sortie est de faire le dégradé DANS la texture, en pixels : chaque
+     pixel a sa propre opacité, décroissante avec la distance au centre et
+     bruitée. On obtient un bord irrégulier et pixelisé — ce qui est
+     exactement ce qu'on veut ici, et ce qu'un flou n'aurait pas donné.
+     -------------------------------------------------------------------- */
+  function puddle(ctx, cfg, W, H) {
+    ctx.clearRect(0, 0, W, H);
+    const cx = W / 2, cy = H / 2, R = Math.min(W, H) / 2;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const d = Math.hypot(x + 0.5 - cx, y + 0.5 - cy) / R;
+      // Le bruit ronge le bord : une flaque parfaitement ronde est une pastille.
+      const n = h2(x, y, 7);
+      const a = Math.max(0, 1 - d * (0.86 + n * 0.34));
+      if (a <= 0.02) continue;
+      /* ⚠️ La couleur va du cœur PÂLE vers le bord SATURÉ, et non l'inverse.
+         C'est ce que fait l'eau peu profonde : le fond se voit au bord, la
+         masse au centre. Peint dans l'autre sens, on obtient une auréole —
+         c'est-à-dire un halo d'interface. */
+      ctx.globalAlpha = Math.min(1, a * a * 1.3);
+      ctx.fillStyle = hex(mix(cfg.COL_LAKE_BRIGHT, cfg.COL_LAKE_GLOW, Math.min(1, d * 1.1)));
+      ctx.fillRect(x, y, 1, 1);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  /* -----------------------------------------------------------------------
      LES CHIFFRES QUI MONTENT (zip 396) — une fonte 3×5 peinte au fillRect.
      Élargie au 397 aux lettres dont le HUD a besoin.
      -------------------------------------------------------------------- */
@@ -1123,7 +1156,7 @@ const Paint = (function () {
 
   return {
     wall, wallBump, floor, floorBump, sky, lake, lakeGlow, lakeWaves,
-    number, flame, wood, rune, halo, mapSheet, chalk,
+    number, flame, wood, rune, halo, mapSheet, chalk, puddle,
     noise, mix, hex, fbm, ridge, emit,
   };
 })();

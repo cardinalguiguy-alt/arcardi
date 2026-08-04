@@ -418,6 +418,98 @@ const q = Math.PI / 2;
     `${reach.toFixed(0)} u pour ${CFG.FOG_FAR_FULL} u de vue (seuil ${(CFG.FOG_FAR_FULL * 1.15).toFixed(0)})`);
 }
 
+/* ══════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ LA COUTURE ENTRE L'ENTRÉE ET LE MOTEUR (416) — LE CONTRÔLE QUI MANQUAIT.
+   ──────────────────────────────────────────────────────────────────────────────
+   Tout ce qui précède teste `rules.js` en lui FOURNISSANT `turnDelta` en
+   radians. C'est nécessaire et ce n'est pas suffisant : pendant vingt zips,
+   `js/input.js` a envoyé des PIXELS dans ce paramètre, parce que sa variable
+   `sens` valait 1 et que `CFG.MOUSE_SENS` n'était lue nulle part. La souris
+   tournait à 57° par pixel, le jeu était injouable à la main, et TOUS LES
+   CONTRÔLES CI-DESSUS PASSAIENT — ils passaient même parfaitement, puisque le
+   moteur, lui, était juste.
+
+   ⚠️ LA RÈGLE : UN TEST QUI FABRIQUE SES PROPRES ENTRÉES NE TESTE PAS LEUR
+   PROVENANCE. Chaque fois qu'un banc d'essai remplace un module par une valeur
+   écrite à la main, il crée exactement là un angle mort — et c'est justement là
+   que se logent les défauts, parce que c'est la seule partie du code que
+   personne ne regarde jamais.
+
+   `input.js` ne peut pas tourner ici (il lui faut `window`, `document` et un
+   canvas). On lit donc son TEXTE : c'est grossier, ça ne prouve pas que le
+   calcul est juste, mais ça prouve que la constante est LUE — et c'est
+   exactement ce qui manquait. Un contrôle grossier au bon endroit vaut mieux
+   qu'un contrôle exact au mauvais.
+   ══════════════════════════════════════════════════════════════════════════ */
+{
+  const src = fs.readFileSync(path.join(ROOT, "js/input.js"), "utf8");
+  ok("⚠️ l'ENTRÉE convertit bien les pixels en radians (elle lit CFG.MOUSE_SENS)",
+    /sens\s*=\s*CFG\.MOUSE_SENS/.test(src),
+    /sens\s*=\s*CFG\.MOUSE_SENS/.test(src) ? "" : "js/input.js n'utilise pas CFG.MOUSE_SENS — la souris tournera en RADIANS PAR PIXEL");
+  ok("... et la zone de précision du pavé tactile est branchée",
+    /CFG\.MOUSE_FINE/.test(src) && /CFG\.MOUSE_SOFT/.test(src));
+  /* La borne haute : la courbe de précision ne doit jamais AMPLIFIER. On
+     rejoue sa formule ici — c'est la seule partie qu'on puisse vérifier sans
+     navigateur, et c'est la seule qui pourrait rendre le regard imprévisible. */
+  let worst = 0;
+  for (let px = 0; px <= 400; px += 1) {
+    const k = CFG.MOUSE_FINE + (1 - CFG.MOUSE_FINE) * Math.min(1, px / CFG.MOUSE_SOFT);
+    worst = Math.max(worst, k);
+  }
+  ok("... et elle n'AMPLIFIE jamais : le gain reste borné par MOUSE_SENS",
+    worst <= 1 + 1e-9, `gain maximal ${worst.toFixed(3)} × MOUSE_SENS`);
+  ok("... sans créer de centre mort (un geste minuscule tourne encore)",
+    CFG.MOUSE_FINE >= 0.25, `MOUSE_FINE = ${CFG.MOUSE_FINE}`);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   LE SILLAGE DE SORTIE (416) — cinq questions, toutes posées en français.
+   ──────────────────────────────────────────────────────────────────────────────
+   ⚠️ ON DÉCLENCHE LE SILLAGE EN INCRÉMENTANT `st.kills` À LA MAIN, et ce n'est
+   pas de la triche : c'est précisément la couture qu'on veut vérifier. Le
+   moteur ne réagit pas à « un carreau a touché » ni à « l'épée a porté » mais au
+   COMPTEUR, justement pour qu'un quatrième site de mise à mort n'ait rien à
+   brancher. Tester en tuant vraiment un rôdeur vérifierait un chemin d'appel
+   particulier ; tester par le compteur vérifie la règle.
+   ══════════════════════════════════════════════════════════════════════════ */
+{
+  const st = fresh();
+  const m = st.m;
+  const cell = [Math.floor(st.px / CFG.CELL), Math.floor(st.pz / CFG.CELL)];
+  st.kills++;
+  run(st, {}, 1);
+  ok("⚠️ tuer un ennemi allume un chemin vers la sortie",
+    !!(st.trail && st.trail.cells && st.trail.cells.length), st.trail ? `${st.trail.cells.length} cases` : "aucun sillage");
+
+  if (st.trail) {
+    const last = st.trail.cells[st.trail.cells.length - 1];
+    ok("... et ce chemin arrive BIEN à la porte de sortie",
+      last[0] === m.exit.x && last[1] === m.exit.y,
+      `fin en (${last[0]},${last[1]}) pour une sortie en (${m.exit.x},${m.exit.y})`);
+
+    /* ⚠️ « LE PLUS COURT CHEMIN » EST UNE PROMESSE, PAS UNE INTENTION. On la
+       mesure en refaisant le parcours en largeur depuis la même case : un BFS
+       rend par construction le plus court chemin, donc toute longueur
+       supérieure trahirait un chemin bricolé. */
+    const ref = Maze.pathTo(m, cell[0], cell[1], m.exit.x, m.exit.y);
+    ok("... et c'est le PLUS COURT, pas un chemin quelconque",
+      ref && st.trail.cells.length === ref.length,
+      `${st.trail.cells.length} cases contre ${ref ? ref.length : "?"} au plus court`);
+
+    /* Les deux durées, et elles sont distinctes : PLEIN jusqu'à dix secondes,
+       puis fondu, puis plus rien à quinze. Un seul nombre ne pourrait pas
+       exprimer les deux, et c'est exactement ce que demandait Guillaume. */
+    const a = fresh(); a.kills++;
+    run(a, {}, Math.round(CFG.SIM_HZ * 9.5));
+    ok("... il tient encore à 9,5 s (dix secondes PLEINES)",
+      !!a.trail, a.trail ? `âge ${a.trail.t.toFixed(1)} s` : "déjà éteint");
+    const b = fresh(); b.kills++;
+    run(b, {}, Math.round(CFG.SIM_HZ * 15.5));
+    ok("... et il a totalement disparu à 15,5 s",
+      !b.trail, b.trail ? `encore là, âge ${b.trail.t.toFixed(1)} s` : "");
+  }
+}
+
 console.log(fails ? `\n${fails} ÉCHEC(S)\n` : "\nToutes les commandes vont dans le bon sens.\n");
 console.log(`Ce script ne dit RIEN du confort réel : il dit que chaque commande
 va dans le sens que le joueur attend, que le recalage aide sans jamais prendre

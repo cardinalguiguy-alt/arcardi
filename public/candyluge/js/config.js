@@ -43,20 +43,65 @@ const CFG = {
      en étant deux fois plus près. Un champ large et une caméra proche, c'est
      précisément la recette du « ça va vite » — les bords du cadre défilent,
      et ce sont eux que l'œil lit pour estimer une vitesse. */
-  CAM_FOV: 82,
-  CAM_BACK: 9.0,           // recul derrière la luge, en unités
-  CAM_HEIGHT: 4.6,         // hauteur au-dessus de la piste
-  CAM_LOOK_AHEAD: 15,      // distance du point visé, devant la luge
-  CAM_LOOK_HEIGHT: 2.3,    // hauteur du point visé
+  /* ══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ RECALIBRÉE AU 416 — « LE SOL PARAÎT TRANSPARENT, ON DIRAIT QUE LA VUE
+     EST EN DESSOUS DU SOL ». Trois fautes, et elles se cumulaient.
+     ──────────────────────────────────────────────────────────────────────────
+     1. LA CAMÉRA PASSAIT VRAIMENT SOUS LE TERRAIN. Elle recule de 9 à 12,4
+        unités À L'HORIZONTALE derrière la luge (c'est voulu, voir camera.js) —
+        mais la piste MONTE derrière la luge, puisqu'on descend. À 17° de pente
+        et 12,4 unités de recul, le sol derrière est 3,8 unités PLUS HAUT que
+        la luge, alors que la caméra n'était qu'à 3,1 au-dessus d'elle. Le
+        calcul est sans appel : garde minimale MOINS 0,56 unité sur l'axe, et
+        moins 2,94 en déport latéral (le terrain hors piste remonte en plus).
+        15 % de la descente se jouait à moins de 1,2 unité du sol.
+        ⚠️ ET C'EST LÀ QUE LE « SOL TRANSPARENT » NAÎT : les rubans de neige
+        sont des faces simples, invisibles par derrière. Une caméra sous le
+        terrain ne voit donc pas de sol du tout — elle voit le CIEL à travers,
+        avec la piste qui flotte au-dessus comme une plaque. Rien n'est
+        transparent : il n'y a simplement pas de face de ce côté-là.
+     2. LE CHAMP ÉTAIT DÉMESURÉ. 82° de champ VERTICAL, c'est 114° à
+        l'horizontale en 16/9. Au-delà de ~95° l'œil ne lit plus une
+        perspective mais un fisheye : le sol proche s'étale sur les deux tiers
+        bas du cadre et se bombe. Sur les planches du 414, la piste occupe
+        littéralement la moitié de l'image en pure surface plate.
+     3. LA CAMÉRA ÉTAIT TROP BASSE POUR SON CHAMP. Haute et large ne vont pas
+        ensemble : plus le champ est ouvert, plus il faut de hauteur pour que
+        le sol proche ne mange pas le cadre.
+     ⚠️ LES TROIS SE CORRIGENT ENSEMBLE ET PAS SÉPARÉMENT. Monter la caméra
+     sans fermer le champ ne fait que montrer plus de neige ; fermer le champ
+     sans monter ne fait que rapprocher un sol déjà trop présent. Et AUCUN des
+     deux ne suffit sans la GARDE AU SOL de camera.js, parce qu'un réglage ne
+     démontre rien : il rend le défaut rare au lieu de le rendre impossible.
+     ══════════════════════════════════════════════════════════════════════════ */
+  CAM_FOV: 62,             // champ VERTICAL. 62 ≈ 95° à l'horizontale en 16/9.
+  CAM_BACK: 11.5,          // recul derrière la luge, en unités
+  CAM_HEIGHT: 7.4,         // hauteur au-dessus de la piste
+  CAM_LOOK_AHEAD: 20,      // distance du point visé, devant la luge
+  CAM_LOOK_HEIGHT: 2.6,    // hauteur du point visé
   CAM_LAG: 7.0,            // raideur du suivi horizontal (plus haut = plus collé)
   CAM_LAG_Y: 2.4,          // ⚠️ et le suivi VERTICAL est bien plus mou : voir camera.js
   CAM_BACK_SPEED: 3.4,     // recul supplémentaire à pleine vitesse
-  CAM_DROP_SPEED: 1.5,     // ... et abaissement, sur la même plage
+  CAM_DROP_SPEED: 1.2,     // ... et abaissement, sur la même plage
   CAM_YAW_LAG: 4.2,        // raideur du suivi d'ORIENTATION, plus molle que la position
-  /* Le champ s'ouvre avec la vitesse : +12° au maximum. C'est le plus vieux
-     truc du jeu de course et il n'a pas d'équivalent — sans lui, 30 u/s et
-     55 u/s se ressemblent, parce que rien à l'écran ne change de taille. */
-  CAM_FOV_SPEED: 16,
+  /* ⚠️ LA GARDE AU SOL (416). La caméra ne descend JAMAIS à moins de
+     CAM_CLEAR unités au-dessus de la surface la plus haute qu'elle survole.
+     Ce n'est pas un amortisseur de plus : c'est une INVARIANTE, et elle est
+     imposée après tous les amortissements, donc rien ne peut la contourner.
+     ⚠️ NE PAS LA REMPLACER PAR « UNE CAMÉRA UN PEU PLUS HAUTE ». Une hauteur
+     fixe est fausse quelque part par construction : le terrain hors piste
+     remonte en racine carrée, la pente varie du simple au triple, les bosses
+     ajoutent ±0,85, et une chute téléporte la luge. Seul un plancher mesuré à
+     chaque image tient dans tous ces cas. */
+  CAM_CLEAR: 2.6,          // garde minimale au-dessus du sol, en unités
+  CAM_CLEAR_FALL: 5,       // vitesse de RETOUR seulement : on monte d'un coup, on redescend doucement
+  CAM_CLEAR_TAPS: 6,       // points de sondage entre la luge et la caméra (le sol est une crête, pas un plan)
+  /* Le champ s'ouvre avec la vitesse. ⚠️ RELEVÉ AU 416 pour compenser le champ
+     de base plus fermé : l'ouverture RELATIVE compte plus que la valeur
+     absolue, c'est elle qui produit la sensation de vitesse. 62 → 82 au lieu
+     de 82 → 98 : l'écart est plus grand qu'avant, l'effet est donc plus fort,
+     et on ne part pas d'un fisheye. */
+  CAM_FOV_SPEED: 20,
   /* Roulis de la caméra dans le sens du virage. ⚠️ TRÈS discret : 4°, pas plus.
      La piste est DÉJÀ banquée jusqu'à 11° dans les grands virages ; les deux
      roulis s'additionnent à l'écran, et la première planche de
@@ -177,10 +222,64 @@ const CFG = {
         l'engin : changer de carre oblige à repasser à plat, donc coûte deux
         fois plus de temps que d'en engager une. Sans lui, on obtient un
         zigzag gratuit — le défaut le plus visible d'un jeu de glisse raté. */
-  EDGE_RATE: 4.2,
-  EDGE_CROSS_MUL: 0.5,
-  EDGE_SPEED_FALLOFF: 0.62,   // à pleine vitesse, il reste 62 % de cette vivacité
+  /* ══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ RÉGLÉE AU 416 — « un peu trop mou et manque de stabilité ».
+     ──────────────────────────────────────────────────────────────────────────
+     Les deux moitiés de la phrase se contredisent en apparence (une luge plus
+     vive est d'ordinaire moins stable) et c'est ce qui rend le diagnostic
+     intéressant : ELLES NE PARLENT PAS DU MÊME MOMENT.
+
+       * « MOU » parle de l'ENTRÉE. Entre la touche pressée et la luge qui
+         s'incline, il s'écoule le temps de EDGE_RATE — et au-delà d'un tiers
+         de seconde, la main ne relie plus le geste à son effet. La luge ne
+         paraît pas lourde, elle paraît DÉBRANCHÉE. C'est le pire défaut d'un
+         jeu de conduite parce qu'il ne s'apprend pas : on ne s'habitue jamais
+         à un retard, on renonce.
+       * « MANQUE DE STABILITÉ » parle de TOUT LE RESTE DU TEMPS. Une fois la
+         touche relâchée, la luge ne se remettait dans l'axe qu'en une demi-
+         seconde et demie (rappel de 2,2/s), et sa trajectoire rejoignait son
+         nez mollement (LAT_GRIP). Entre deux appuis, elle DÉRIVAIT — le joueur
+         corrigeait donc en permanence une luge qui n'allait nulle part, ce
+         qu'on ressent exactement comme « ça flotte ».
+
+     ⚠️ LA LEÇON, ET ELLE VAUT POUR TOUTE CONDUITE : « VIF » ET « STABLE » NE
+     SONT PAS OPPOSÉS, ILS SONT ORTHOGONAUX. Le premier est le temps de
+     RÉPONSE à une commande, le second le temps de RETOUR au repos quand il n'y
+     en a plus. On peut monter les deux ensemble, et il le faut : c'est ce que
+     font tous les bons jeux de glisse. Ce qui s'oppose vraiment à la vivacité,
+     c'est le POIDS — et le poids est porté par EDGE_CROSS_MUL, qu'on ne
+     touche pas.
+
+     ⚠️ EDGE_CROSS_MUL RESTE À 0,5, ET C'EST DÉLIBÉRÉ. C'est lui qui interdit le
+     zigzag gratuit, c'est-à-dire lui qui rend la trajectoire intéressante :
+     changer de carre coûte deux fois plus que d'en engager une, donc choisir
+     son côté à l'avance a une valeur. Le monter aurait « réglé le mou » en
+     supprimant le jeu. */
+  EDGE_RATE: 6.4,             // (416) 4,2 → 6,4 : ~160 ms pour engager, au lieu de 240
+  EDGE_CROSS_MUL: 0.5,        // ⚠️ NE PAS MONTER : c'est le poids de l'engin
+  EDGE_SPEED_FALLOFF: 0.72,   // à pleine vitesse, il reste 72 % de cette vivacité
   EDGE_AIR_MUL: 0.3,          // en l'air, on oriente à peine
+  /* ⚠️ LE RAPPEL DANS L'AXE (416). Il existait déjà, mais écrit en dur dans
+     sled.js (« damp(this.heading, 0, 2.2, dt) ») — donc invisible depuis
+     config.js, donc jamais réglé, alors que c'est LE nombre de la stabilité.
+     Règle du fichier : aucun nombre de conduite ne vit ailleurs qu'ici. */
+  STEER_RETURN: 4.6,          // rad/s de retour du nez dans l'axe, touche relâchée
+  /* ⚠️ ET LE RAPPEL EST PLUS FORT À HAUTE VITESSE, comme sur tout véhicule
+     réel : c'est l'effet de girouette. Sans lui, la luge est docile à
+     l'arrêt et flottante à 50 u/s — exactement l'inverse de ce qu'on veut,
+     puisque c'est vite qu'on a besoin d'être posé. */
+  STEER_RETURN_V: 0.9,        // part ajoutée à pleine vitesse (×STEER_RETURN)
+
+  /* LA SOURIS (416). Elle pilote le même axe que les flèches, mais elle donne
+     un nombre CONTINU là où le clavier donne −1, 0 ou +1 : sans courbe de
+     réponse, chaque pixel de tremblement de la main devient du braquage.
+     ⚠️ MOUSE_CURVE > 1 rend les petits mouvements précis SANS retirer la
+     pleine butée aux grands ; c'est la même correction qu'au labyrinthe, où
+     Guillaume a signalé le problème en premier (« incontrôlable sur pavé
+     tactile »). Deux jeux, un même défaut, une même courbe. */
+  MOUSE_DEAD: 0.10,           // zone morte au centre, en fraction de la course
+  MOUSE_FULL: 0.62,           // fraction de la demi-largeur qui donne la butée
+  MOUSE_CURVE: 1.7,           // exposant ; ⚠️ au-delà de 2 le centre paraît mort
 
   /* 2. L'ARC. Un braquage plein trace un arc dont la courbure sature avec la
         vitesse : `CARVE_K · v/(v+CARVE_V0)`. C'est la forme classique, et
@@ -202,7 +301,17 @@ const CFG = {
         conduite paraît trop facile (baisser) ou trop punitive (monter). */
   GRIP_MAX: 40,
   SKID_BREAK: 0.22,           // au-delà, on considère la carre « décrochée » (gerbe, son, score)
-  LAT_GRIP: 8.5,              // vitesse à laquelle la trajectoire rejoint le nez, sur la carre
+  /* ⚠️ MONTÉ AU 416 (8,5 → 11,5), ET C'EST LA SECONDE MOITIÉ DE LA STABILITÉ.
+     `LAT_GRIP` dit à quelle vitesse la TRAJECTOIRE rejoint le NEZ. Trop bas, la
+     luge glisse en permanence légèrement en crabe : elle ne dérape pas (skid
+     reste à zéro, tous les contrôles passent), elle ne va simplement jamais
+     tout à fait là où elle pointe. On ne peut pas le nommer en jouant — on dit
+     « ça flotte » — et aucun nombre du banc d'essai ne le montrait, parce
+     qu'aucun ne mesurait l'écart entre cap et trajectoire en régime établi.
+     ⚠️ NE PAS CONFONDRE AVEC `GRIP_MAX`, qui décide QUAND ça décroche. Celui-ci
+     décide de la netteté quand ça NE décroche PAS. Les monter ensemble rendrait
+     le jeu plat ; c'est celui-ci seul qu'il fallait. */
+  LAT_GRIP: 11.5,             // vitesse à laquelle la trajectoire rejoint le nez, sur la carre
 
   /* 4. LE FREIN (touche bas) EST UN FREIN À MAIN, pas un frein. Il ferme le
         rayon ET fait chuter l'adhérence : c'est l'outil du dérapage volontaire,
@@ -537,6 +646,92 @@ const CFG = {
      monter en difficulté dans un jeu à conduite lente. */
   CRITTER_PER_WAVE: [2, 2, 3, 3, 4, 4],
 
+  /* ══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ LA LISIBILITÉ DE L'ÉVITEMENT (416) — « les mécanismes d'évitement ne
+     sont pas clairs ».
+     ──────────────────────────────────────────────────────────────────────────
+     Le reproche est juste, et le plus instructif est qu'AUCUN NOMBRE DE
+     GAMEPLAY N'ÉTAIT EN CAUSE. Le passage garanti existe (prouvé sur les 27
+     vagues et toute leur oscillation), il fait 7,7 unités pour une luge de
+     2,7, le gourmand est plafonné en vitesse latérale, la vague apparaît à
+     420 unités. Tout ce qu'il faut pour esquiver était là. RIEN NE LE DISAIT
+     AU JOUEUR.
+
+     ⚠️ LA RÈGLE, ET ELLE VAUT POUR TOUT LE JEU : UNE GARANTIE QUI NE SE VOIT
+     PAS N'EN EST PAS UNE. C'est exactement la faute du 413 sur la limite
+     d'adhérence — mécanique centrale, invisible, donc inapprenable — et on la
+     refait ici sur l'évitement. Le réflexe est d'adoucir la difficulté ; c'est
+     le mauvais, et il aurait cassé tout ce que le 414 a construit.
+
+     TROIS AJOUTS, ET AUCUN NE TOUCHE À UNE COLLISION :
+
+       1. LA PORTE (GATE_*). Une bande lumineuse posée AU SOL, en travers de la
+          piste, exactement large du passage garanti et à l'abscisse de la
+          vague. Elle ne se déduit pas : elle EST le trou tiré par
+          `buildWave`. Le joueur ne calcule plus un intervalle libre entre des
+          créatures qui bougent, il vise une porte éclairée.
+          ⚠️ ET ELLE NE BOUGE PAS, alors que les gourmands oscillent. C'est le
+          point : viser une cible mobile qu'on ne rejoint qu'en trois secondes
+          est un exercice de prédiction ; viser une porte fixe est un exercice
+          de PILOTAGE, et c'est ce jeu-là qu'on fait.
+
+       2. L'OMBRE PORTÉE (SHADOW_*). Un gourmand est une forme colorée sur de
+          la neige rose, à mi-hauteur du cadre : rien ne dit à quelle DISTANCE
+          il est ni sur quelle position latérale il se trouve. Une ombre au sol
+          répond aux deux d'un coup — c'est le plus vieux truc du jeu en 3D, et
+          il n'a pas d'équivalent. Elle sert aussi les bonbons et la luge.
+
+       3. LE CERNE D'ALERTE (WARN_*). L'ombre s'entoure d'un anneau qui bat
+          quand le gourmand entre dans les dernières WARN_FROM unités. Il ne
+          donne aucune information nouvelle — il donne le MOMENT. Un joueur qui
+          regarde loin devant a besoin qu'on lui dise « celui-ci, maintenant ».
+
+     ⚠️ CE QUE ÇA NE FAIT PAS : rendre le jeu plus facile. La porte est
+     toujours hors de l'axe (DEAD_EDGE), il faut toujours deux à trois secondes
+     pour s'y déporter, et les gourmands qui bordent le trou restent mortels.
+     On a rendu VISIBLE une difficulté qui était OBSCURE, ce qui est le
+     contraire de l'avoir baissée.
+     ══════════════════════════════════════════════════════════════════════════ */
+  GATE_SHOW_FROM: 300,       // distance à laquelle la porte commence à apparaître
+  GATE_FULL_FROM: 150,       // ... et à laquelle elle est à pleine intensité
+  GATE_LEN: 4.2,             // longueur de la bande au sol, en unités de piste
+  GATE_LIFT: 0.06,           // décollement du sol, en unités (contre le z-fighting)
+  GATE_OPACITY: 0.5,         // ⚠️ discrète : c'est un repère, pas un tapis
+  /* ⚠️⚠️ LES MONTANTS FONT SEPT UNITÉS, ET C'EST LA PREMIÈRE PLANCHE
+     `luge-evitement` QUI L'A IMPOSÉ. À 3,4 unités — la hauteur « raisonnable »
+     d'une porte de slalom — ils apparaissaient comme deux traits verts de
+     quarante pixels perdus au bord du cadre, alors que la bande au sol, elle,
+     était PUREMENT ET SIMPLEMENT INVISIBLE : la piste a des bosses et des
+     crêtes, et un repère peint au sol disparaît derrière la première.
+
+     ⚠️ LA RÈGLE, ET ELLE VAUT POUR TOUT REPÈRE DE JEU DE DESCENTE : C'EST LA
+     VERTICALE QUI PORTE À DISTANCE. Un décalque au sol vu sous un angle rasant
+     n'occupe que quelques pixels de haut et se fait masquer par le moindre
+     relief. C'est déjà la raison d'être des barrières en sucre d'orge et des
+     fanions de checkpoint ; on l'avait oubliée en dessinant une porte à plat.
+     La bande au sol reste — elle est parfaite dans les vingt dernières unités,
+     quand on ajuste — mais elle ne peut pas être le signal principal. */
+  GATE_POST_H: 7.0,          // hauteur des deux montants de sucre d'orge
+  /* LE RIDEAU : un voile lumineux tendu entre les montants, dégradé vers le
+     haut. ⚠️ IL EST TRÈS TRANSPARENT ET TRÈS BAS, et les deux comptent : un
+     voile dense ou haut se lirait comme un MUR, c'est-à-dire l'inverse exact du
+     message. À 0,16 d'opacité et deux unités de haut, il se lit comme de la
+     lumière qui monte du sol — on passe dedans sans y penser, et on le voit de
+     deux cents mètres. */
+  GATE_CURTAIN_H: 2.2,
+  GATE_CURTAIN_OPACITY: 0.16,
+  GATE_PULSE: 2.1,           // rad/s de la respiration lumineuse
+  COL_GATE: 0x63f58f,        // vert pomme : le seul ton franchement absent de la piste
+  COL_GATE_POST: 0xa8ffc4,
+
+  SHADOW_SIZE: 1.0,          // multiplicateur du rayon de l'ombre
+  SHADOW_OPACITY: 0.5,
+  SHADOW_LIFT: 0.05,
+
+  WARN_FROM: 52,             // distance à laquelle le cerne d'alerte s'allume
+  WARN_PULSE: 7.5,           // rad/s : nettement plus rapide que la porte
+  COL_WARN: 0xff4d7d,
+
   /* ============================================================ LES BONBONS
      Ramassés en passant dessus. Ils ne sont pas là pour le score : ils sont là
      pour DESSINER LA BONNE TRAJECTOIRE. Une file de bonbons dans la corde d'un
@@ -696,6 +891,68 @@ const CFG = {
 
   /* La neige qui tombe : très peu dense, très lente. Elle sert à remplir le
      ciel vide au-dessus de l'horizon, là où il n'y a ni piste ni décor. */
+  /* ══════════════════════════════════════════════════════════════════════════
+     LA PLUIE DE BONBONS DE L'ARRIVÉE (416) — demande explicite de Guillaume.
+     ──────────────────────────────────────────────────────────────────────────
+     ⚠️ CINQUIÈME SYSTÈME DE PARTICULES, ET IL NE RESSEMBLE À AUCUN DES QUATRE
+     AUTRES — sinon il n'aurait pas fallu l'écrire. Ce qui le distingue :
+
+       * IL EST COLORÉ ET SATURÉ, tiré de la palette des bonbons. Les quatre
+         autres sont blancs ou pâles (neige, poudre, gerbe, traînées) : c'est
+         la première fois que le ciel se remplit de couleur, et c'est ce qui
+         fait l'événement.
+       * IL TOMBE DU CIEL au lieu de sortir de la luge. Il n'est pas la
+         conséquence d'un geste, il est une RÉCOMPENSE — donc il vient d'en
+         haut, comme des confettis, et pas de sous les patins.
+       * IL EST EN FONDU NORMAL. Un bonbon est de la MATIÈRE : il doit cacher
+         ce qu'il y a derrière. En additif on obtiendrait une pluie de lumière,
+         jolie et impalpable — exactement la faute que le 414 avait raisonnée
+         pour la gerbe et que le 416 a dû corriger dans stepParticles.
+       * IL DURE. Deux secondes et demie de chute pour chaque bonbon, et la
+         pluie s'entretient pendant tout le dégagement : on doit avoir le temps
+         de la regarder en s'arrêtant.
+
+     ⚠️ ET ELLE SE DÉCLENCHE À LA LIGNE, PAS À L'ARRÊT. `sled.finished` passe à
+     vrai dès l'entrée dans la zone de dégagement ; l'écran de fin, lui,
+     n'arrive qu'une fois la luge posée, plusieurs secondes plus tard. Fêter à
+     l'écran de fin serait fêter APRÈS coup, devant un panneau — la pluie doit
+     tomber pendant qu'on roule encore, sur le paysage, en pleine glisse. */
+  FX_RAIN_MAX: 300,
+  /* ⚠️ DÉBIT ET TAILLE DIVISÉS PAR TROIS APRÈS REGARD SUR PLANCHE. Premier
+     réglage : 210 bonbons par seconde de 2,2 unités. L'image est revenue
+     ILLISIBLE — deux cents disques pastel géants recouvrant la piste, les
+     montagnes et la luge. On ne voyait plus le jeu.
+     ⚠️ UN EFFET DE FÊTE SE JUGE À CE QU'IL LAISSE VOIR, PAS À CE QU'IL AJOUTE.
+     Le joueur vient de finir une descente de trois minutes : ce qu'il veut
+     regarder, c'est SA luge qui franchit la ligne. La pluie encadre ce
+     moment, elle ne le remplace pas. */
+  FX_RAIN_RATE: 62,          // bonbons par seconde pendant la salve
+  FX_RAIN_BURST: 2.6,        // durée de la salve pleine, en secondes
+  FX_RAIN_TAIL: 6.0,         // ... puis elle décroît jusqu'à cette durée totale
+  FX_RAIN_LIFE: 2.6,
+  FX_RAIN_SIZE: 1.25,        // plus gros qu'une étincelle (0,55) sans occuper le cadre
+  /* ⚠️⚠️ LA HAUTEUR A DÛ ÊTRE DIVISÉE PAR DEUX APRÈS REGARD SUR PLANCHE, ET LA
+     RAISON EST GÉOMÉTRIQUE, PAS ESTHÉTIQUE. Premier réglage : trente-quatre
+     unités, « la hauteur d'un vrai lâcher de confettis ». La planche est
+     revenue VIDE — pas un bonbon.
+     Le champ vertical de la caméra fait 62°, donc 31° au-dessus de l'axe visé.
+     Un bonbon lâché à 34 unités au-dessus d'un point situé à 30 unités devant
+     est à 48° : il est HORS CADRE. Et il meurt de vieillesse avant d'être
+     redescendu dans le champ.
+     ⚠️ LA RÈGLE : UN EFFET AÉRIEN SE RÈGLE SUR LE CHAMP DE LA CAMÉRA, PAS SUR
+     LA VRAISEMBLANCE. Ce qu'on ne cadre pas n'existe pas. Quinze unités est à
+     peu près la limite haute de ce qu'on voit à trente unités devant. */
+  FX_RAIN_HEIGHT: 15,        // hauteur d'apparition au-dessus de la piste
+  /* ⚠️ ET ON EN SÈME AUSSI DERRIÈRE LA LUGE (valeurs négatives) : ceux-là
+     passent tout près de l'objectif, énormes et flous. C'est ce qui fait la
+     différence entre « il y a des bonbons dans le ciel » et « on est DANS la
+     pluie de bonbons » — le premier plan, toujours. */
+  FX_RAIN_AHEAD_MIN: 4,
+  FX_RAIN_AHEAD_MAX: 52,
+  FX_RAIN_SPREAD: 46,        // largeur de la zone arrosée, en unités
+  FX_RAIN_FALL: 11,          // gravité ; ⚠️ FAIBLE : des confettis flottent
+  FX_RAIN_DRIFT: 3.2,        // dérive latérale, pour que ça ne tombe pas droit
+
   FX_SNOW_COUNT: 420,
   FX_SNOW_AREA: 120,
   FX_SNOW_FALL: 2.4,

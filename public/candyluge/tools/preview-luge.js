@@ -79,6 +79,15 @@ class Obj3 {
 }
 class Mat {
   constructor(o) { Object.assign(this, o || {}); this.color = new Col(o && typeof o.color === "number" ? o.color : 0xffffff); }
+  /* ⚠️ AJOUTÉ AU 416, ET LE MANQUE ÉTAIT UN PLANTAGE SEC, PAS UNE OMISSION
+     ESTHÉTIQUE. Les décalques de lisibilité (ombres, cernes, portes) clonent
+     leur matériau à la création parce que leur opacité est par-objet ; le
+     stub n'avait pas de `clone()`, et l'outil est tombé à la première image.
+     C'est la bonne nouvelle : un stub incomplet se signale par une exception,
+     jamais par une image subtilement fausse. Le clone recopie les champs et
+     REFAIT une couleur — partager l'objet Col rendrait toutes les copies
+     solidaires, ce qui est exactement le défaut qu'on clone pour éviter. */
+  clone() { const m = new this.constructor({}); Object.assign(m, this); m.color = new Col(this.color.h); return m; }
 }
 function G(kind, p) { return Object.assign({ kind }, p, { dispose() {} }); }
 
@@ -244,7 +253,18 @@ function tessellate(g) {
       }
     }
   } else if (g.kind === "plane") {
-    quad([-0.5, -0.5, 0], [0.5, -0.5, 0], [0.5, 0.5, 0], [-0.5, 0.5, 0]);
+    /* ⚠️ LE PLAN EST LA SEULE PRIMITIVE QUI AIT BESOIN DE SES UV (416), et il
+       les lui fallait dès qu'on a posé des décalques dessus : ombres, cernes
+       d'alerte et portes au sol sont TOUS des plans texturés dont l'information
+       est entièrement dans la texture. Sans UV, la planche les rendait en aplat
+       — un carré plein à la place d'un dégradé rond, c'est-à-dire précisément
+       l'image qui aurait fait croire à un bogue du jeu.
+       Les autres primitives s'en passent : elles portent des matériaux unis. */
+    const a = [-0.5, -0.5, 0], b = [0.5, -0.5, 0], c = [0.5, 0.5, 0], d = [-0.5, 0.5, 0];
+    // three.js met l'origine des UV en BAS À GAUCHE du plan.
+    const ua = [0, 0], ub = [1, 0], uc = [1, 1], ud = [0, 1];
+    const t1 = [a, b, c]; t1.uv = [ua, ub, uc]; T.push(t1);
+    const t2 = [a, c, d]; t2.uv = [ua, uc, ud]; T.push(t2);
   } else if (g.kind === "buffer") {
     const pos = g.attributes.position && g.attributes.position.array;
     if (!pos) return T;
@@ -294,11 +314,98 @@ const matColor = (m) => {
   return m.color.h;
 };
 
+/* ══════════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ LA TRANSPARENCE ET LES PARTICULES (416) — LE POINT 3 DES « EN SUSPENS »
+   DU 414, ET IL BLOQUAIT TOUT LE RESTE.
+   ──────────────────────────────────────────────────────────────────────────────
+   Le 414 notait, en dernière ligne de sa passation : « LES PARTICULES NE SONT
+   SUR AUCUNE PLANCHE — la gerbe et les étoiles n'ont donc JAMAIS été regardées.
+   C'est le premier chantier du 415 si l'on veut juger le rendu. » C'était vrai
+   et c'est resté vrai un zip de plus. Le 416 le fait, et pas par acquit de
+   conscience : il ajoute au jeu quatre choses qui sont TOUTES transparentes ou
+   faites de points — les ombres portées, les cernes d'alerte, les portes au
+   sol, et la pluie de bonbons de l'arrivée. Sans cette passe, on les aurait
+   livrées sans les avoir vues une seule fois, ce qui est exactement ce que ces
+   deux outils existent pour empêcher.
+
+   ⚠️ POURQUOI ÇA NE MARCHAIT PAS TOUT SEUL. Le rasteriseur est un z-buffer
+   opaque : chaque pixel garde le triangle le plus proche et écrase le reste. Un
+   triangle à moitié transparent y devient donc soit totalement opaque, soit
+   absent — il n'y a pas de troisième possibilité dans ce schéma. Il faut une
+   SECONDE PASSE, et elle obéit à trois règles qui sont celles de toutes les
+   cartes graphiques depuis toujours :
+
+     1. LES OPAQUES D'ABORD, avec écriture de profondeur. Ils construisent le
+        décor et le tampon de profondeur qui servira de masque.
+     2. LES TRANSPARENTS ENSUITE, TRIÉS DU PLUS LOIN AU PLUS PROCHE. Le tri est
+        obligatoire : le fondu n'est pas commutatif, deux voiles mélangés dans
+        le mauvais ordre ne donnent pas la même couleur.
+     3. ILS TESTENT LA PROFONDEUR MAIS NE L'ÉCRIVENT PAS. Écrire masquerait les
+        transparents situés derrière eux — un rideau de gerbe effacerait la
+        gerbe qu'il y a derrière au lieu de s'y ajouter. C'est exactement ce que
+        dit `depthWrite: false` dans world.js, et c'est pour ça que tous les
+        matériaux de particules le portent.
+
+   ⚠️ ET LE FONDU ADDITIF N'EST PAS LE FONDU NORMAL. Le 414 insiste là-dessus
+   pour la gerbe (« c'est de la matière, elle doit cacher, pas illuminer ») ;
+   une planche qui les confondrait rendrait le jugement impossible sur
+   précisément le point qu'on a passé un zip à régler. Les deux sont donc
+   implémentés séparément : `dst + src·a` d'un côté, `dst·(1−a) + src·a` de
+   l'autre.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* L'alpha d'un texel, s'il y en a un. ⚠️ NÉCESSAIRE ET PAS OPTIONNEL : toutes
+   les textures d'effet du jeu (étoile, poudre, gerbe, ombre, cerne, porte)
+   sont des dégradés qui vont à alpha 0 sur leurs bords. Ignorer ce canal
+   donnerait des CARRÉS pleins à la place de chaque particule — ce qui aurait
+   l'air d'un bogue de rendu du jeu, alors que ce serait un bogue de l'outil. */
+function texel(im, tu, tv) {
+  const ip = im.ctx.pixels;
+  const sx = ((Math.floor(tu * im.width) % im.width) + im.width) % im.width;
+  const sy = ((Math.floor(tv * im.height) % im.height) + im.height) % im.height;
+  const si = (sy * im.width + sx) * 4;
+  return [ip[si], ip[si + 1], ip[si + 2], ip[si + 3]];
+}
+
 function collect(rootObj) {
   const faces = [];
   (function walk(o, parentM) {
     if (!o.visible) return;
     const m = mul(parentM, localMatrix(o));
+    if (o.isPoints && o.geometry && o.geometry.attributes.position) {
+      /* Les PARTICULES. three.js les rend comme des carrés toujours face à la
+         caméra, dont la taille à l'écran vaut `size · f / z` quand
+         `sizeAttenuation` est vrai. On ne peut pas le faire ici (on ne connaît
+         pas encore la caméra), donc on ne fabrique pas de triangles : on
+         collecte les points bruts et le rasteriseur les projettera lui-même.
+         C'est aussi ce qui permet de les trier avec les triangles transparents,
+         dans un seul et même tri — les particules et les voiles se croisent. */
+      const M = o.material || {};
+      const pos = o.geometry.attributes.position.array;
+      const colA = o.geometry.attributes.color && o.geometry.attributes.color.array;
+      const map = (M.map && M.map.image && M.map.image.ctx) ? M.map.image : null;
+      for (let i = 0; i < pos.length; i += 3) {
+        // Une particule morte est parquée à l'origine (voir world.js) : on ne
+        // la rend pas, sinon toute la réserve inutilisée s'empilerait au
+        // point (0,0,0), c'est-à-dire à la ligne de départ.
+        if (pos[i] === 0 && pos[i + 1] === 0 && pos[i + 2] === 0) continue;
+        // ⚠️ `apply` prend un TABLEAU, pas un objet {x,y,z} — les deux formes
+        // coexistent dans ce fichier (les sommets sont des tableaux, les
+        // positions du monde des objets) et les confondre donne des NaN
+        // silencieux : tout disparaît sans qu'une seule erreur soit levée.
+        const p = apply(m, [pos[i], pos[i + 1], pos[i + 2]]);
+        const c = colA ? [colA[i], colA[i + 1], colA[i + 2]] : [1, 1, 1];
+        // Une particule tout à fait noire est éteinte : les systèmes du jeu
+        // remettent la couleur à zéro pour recycler un grain (voir updateFx).
+        if (c[0] + c[1] + c[2] < 0.004 && colA) continue;
+        faces.push({
+          point: p, size: M.size || 1, map, vcol: c,
+          alpha: M.opacity === undefined ? 1 : M.opacity,
+          additive: M.blending === THREE.AdditiveBlending,
+          blend: true, tint: M.color ? M.color.h : 0xffffff,
+        });
+      }
+    }
     if (o.isMesh && o.geometry) {
       const col = matColor(o.material);
       /* ⚠️ LA TEXTURE EST ÉCHANTILLONNÉE POUR DE VRAI DEPUIS LE 412, et il a
@@ -320,7 +427,28 @@ function collect(rootObj) {
           const vx = p[2].x - p[0].x, vy = p[2].y - p[0].y, vz = p[2].z - p[0].z;
           let nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
           const L = Math.hypot(nx, ny, nz) || 1;
-          faces.push({ p, n: { x: nx / L, y: ny / L, z: nz / L }, col, map, uv: tri.uv, flat, vcol: tri.vcol });
+          const M = o.material || {};
+          faces.push({
+            p, n: { x: nx / L, y: ny / L, z: nz / L }, col, map, uv: tri.uv, flat, vcol: tri.vcol,
+            /* ⚠️ `tint` EST LA COULEUR DU MATÉRIAU, `col` EST LA MOYENNE DE SA
+               TEXTURE. Les deux existent et ne servent pas à la même chose : la
+               passe opaque n'a besoin que d'une teinte représentative pour
+               calculer un rapport d'éclairage, la passe transparente doit
+               MULTIPLIER le texel par la couleur, comme le fait three.js
+               (`final = map.rgb × color.rgb`). Les confondre teinterait deux
+               fois — un cerne d'alerte rose sur une texture rose donnerait du
+               rouge sombre. */
+            tint: M.color ? M.color.h : 0xffffff,
+            /* ⚠️ `blend` EST DÉDUIT DU MATÉRIAU, PAS DÉCIDÉ ICI. C'est le même
+               drapeau que lit three.js : si le jeu change d'avis sur
+               l'opacité d'un objet, la planche suit sans qu'on y touche. Toute
+               autre solution (une liste de noms, une convention) diverge au
+               premier ajout — et c'est précisément ce qu'on reproche aux deux
+               écritures de l'éclairage plus bas. */
+            blend: !!M.transparent && (M.opacity === undefined || M.opacity < 1),
+            alpha: M.opacity === undefined ? 1 : M.opacity,
+            additive: M.blending === THREE.AdditiveBlending,
+          });
         }
       }
     }
@@ -438,7 +566,28 @@ function render(faces, cam, W, H, skyPx, skyW, skyH) {
   const sun = norm({ x: -0.55, y: 1, z: 0.35 });
   const fillL = norm({ x: 0.5, y: -0.4, z: -0.6 });
 
-  for (const face of faces) {
+  /* La projection d'un point du monde vers l'écran. Sortie en fonction plutôt
+     qu'en ligne : la passe transparente et les particules en ont besoin aussi,
+     et trois copies de la même formule sont trois occasions de diverger. */
+  const project = (p) => {
+    const q = { x: p.x - cam.pos.x, y: p.y - cam.pos.y, z: p.z - cam.pos.z };
+    const along = q.x * dd.x + q.y * dd.y + q.z * dd.z;
+    const right = q.x * rr.x + q.y * rr.y + q.z * rr.z;
+    const up = q.x * uu.x + q.y * uu.y + q.z * uu.z;
+    return {
+      sx: W / 2 + (right / Math.max(0.05, along)) * f,
+      sy: H / 2 - (up / Math.max(0.05, along)) * f,
+      z: along,
+    };
+  };
+
+  /* ⚠️ LA SÉPARATION SE FAIT AVANT LE RENDU ET PAS PENDANT. Une seule boucle
+     avec un `if` ne suffirait pas : les transparents doivent être TRIÉS entre
+     eux, ce qui suppose de tous les connaître d'abord. */
+  const solid = [], veils = [];
+  for (const fc of faces) (fc.blend ? veils : solid).push(fc);
+
+  for (const face of solid) {
     const P = face.p.map((p) => {
       const q = { x: p.x - cam.pos.x, y: p.y - cam.pos.y, z: p.z - cam.pos.z };
       const along = q.x * dd.x + q.y * dd.y + q.z * dd.z;
@@ -525,6 +674,165 @@ function render(faces, cam, W, H, skyPx, skyW, skyH) {
       }
     }
   }
+
+  /* ════════════════════════════════════════════════════════════════════════
+     SECONDE PASSE — LES VOILES ET LES PARTICULES, DU PLUS LOIN AU PLUS PRÈS.
+     ════════════════════════════════════════════════════════════════════════ */
+  const drawn = [];
+  for (const fc of veils) {
+    if (fc.point) {
+      const P = project(fc.point);
+      if (P.z < 0.4 || P.z > CFG.DRAW_DISTANCE) continue;
+      drawn.push({ fc, P, z: P.z });
+    } else {
+      const P = fc.p.map(project);
+      if (P.some((p) => p.z < 0.4)) continue;
+      const z = (P[0].z + P[1].z + P[2].z) / 3;
+      if (z > CFG.DRAW_DISTANCE) continue;
+      drawn.push({ fc, P, z });
+    }
+  }
+  // ⚠️ DÉCROISSANT : on peint le plus lointain en premier, et chaque voile plus
+  // proche vient par-dessus. L'ordre inverse donnerait des particules qui
+  // s'effacent les unes les autres au lieu de s'empiler.
+  drawn.sort((a, b) => b.z - a.z);
+
+  /* Le mélange d'un pixel. `add` distingue les deux fondus du jeu : additif
+     pour les étoiles (de la lumière, ça s'ajoute), normal pour la gerbe, les
+     ombres et les portes (de la matière et des repères, ça recouvre).
+
+     ⚠️⚠️ LA SOURCE EST DÉJÀ PRÉMULTIPLIÉE PAR SON ALPHA, ET C'EST UNE
+     PROPRIÉTÉ DU CANVAS DE lib-canvas2d.js, PAS UNE CONVENTION QU'ON CHOISIT.
+     Son `_put` compose en partant d'un tampon NOIR : `px = px·(1−a) + c·a`
+     avec px = 0 au départ donne px = c·a. La couleur rangée dans la texture
+     est donc déjà la couleur multipliée par la couverture, et l'alpha est rangé
+     à part dans le quatrième canal.
+     Si l'on remultipliait ici, chaque dégradé serait élevé au carré : les
+     particules deviendraient des points minuscules et durs, les ombres
+     quasiment invisibles, et on passerait la journée à remonter des opacités
+     dans config.js pour compenser un défaut d'outil. C'est exactement le piège
+     des chevrons roses du 414 sous une autre forme. */
+  const blendPx = (i, sr, sg, sb, a, add) => {
+    if (a <= 0.002) return;
+    if (add) {
+      px[i] = Math.min(255, px[i] + sr) | 0;
+      px[i + 1] = Math.min(255, px[i + 1] + sg) | 0;
+      px[i + 2] = Math.min(255, px[i + 2] + sb) | 0;
+    } else {
+      /* ⚠️⚠️ LE `Math.min` N'EST PAS UNE PRÉCAUTION, IL EST OBLIGATOIRE, ET SON
+         ABSENCE A PRODUIT LE DÉFAUT LE PLUS SPECTACULAIRE DU 416 : un GROS
+         NUAGE NOIR à la place de la gerbe de neige.
+         `px` est un Uint8Array, et un Uint8Array ne SATURE PAS — il prend le
+         reste modulo 256. Une gerbe blanche à 209 posée sur une piste claire à
+         51 donne 260, c'est-à-dire 4 : du noir presque pur, exactement là où
+         l'on attendait le blanc le plus vif. Le fondu additif, lui, avait déjà
+         son `Math.min` et ne montrait rien — ce qui rendait le défaut d'autant
+         plus déroutant, puisque les étoiles étaient parfaites juste à côté.
+         ⚠️ La règle : toute écriture dans un tampon d'octets se sature à la
+         main. JavaScript ne le fera pas, et il ne préviendra pas. */
+      px[i] = Math.min(255, px[i] * (1 - a) + sr) | 0;
+      px[i + 1] = Math.min(255, px[i + 1] * (1 - a) + sg) | 0;
+      px[i + 2] = Math.min(255, px[i + 2] * (1 - a) + sb) | 0;
+    }
+  };
+
+  for (const item of drawn) {
+    const fc = item.fc;
+
+    /* ---------------------------------------------------- UNE PARTICULE ---
+       Un carré face à la caméra. ⚠️ SA TAILLE À L'ÉCRAN VAUT `size·f/z`, ce
+       qui est la formule exacte de `sizeAttenuation` dans three.js — et il
+       faut la respecter au facteur près, sinon on juge des particules deux
+       fois trop grosses ou trop fines et on règle FX_*_SIZE dans le vide. */
+    if (fc.point) {
+      const P = item.P;
+      const half = (fc.size * f) / (2 * P.z);
+      if (half < 0.35) continue;                     // sous le pixel : invisible
+      const x0 = Math.max(0, Math.floor(P.sx - half)), x1 = Math.min(W - 1, Math.ceil(P.sx + half));
+      const y0 = Math.max(0, Math.floor(P.sy - half)), y1 = Math.min(H - 1, Math.ceil(P.sy + half));
+      // La teinte finale : couleur du matériau × couleur du sommet, comme
+      // three.js. Les particules du jeu portent leur couleur au sommet (c'est
+      // ce qui leur fait tirer toute la palette des bonbons) et laissent le
+      // matériau en blanc — mais on n'en fait pas l'hypothèse.
+      const kr = ((fc.tint >> 16) & 255) / 255 * fc.vcol[0];
+      const kg = ((fc.tint >> 8) & 255) / 255 * fc.vcol[1];
+      const kb = (fc.tint & 255) / 255 * fc.vcol[2];
+      for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+        const idx = y * W + x;
+        // Test de profondeur SANS écriture : une particule derrière une
+        // montagne disparaît, mais elle ne masque pas celles de derrière.
+        if (P.z >= zbuf[idx]) continue;
+        const tu = (x + 0.5 - (P.sx - half)) / (2 * half);
+        const tv = (y + 0.5 - (P.sy - half)) / (2 * half);
+        if (tu < 0 || tu > 1 || tv < 0 || tv > 1) continue;
+        let a = fc.alpha;
+        let sr = 255 * kr, sg2 = 255 * kg, sb2 = 255 * kb;
+        if (fc.map) {
+          const t = texel(fc.map, tu * 0.999, tv * 0.999);
+          a *= t[3];
+          sr = t[0] * kr; sg2 = t[1] * kg; sb2 = t[2] * kb;
+        }
+        // La source prémultipliée doit l'être aussi par l'opacité du matériau,
+        // qui ne fait pas partie de la texture.
+        blendPx(idx * 3, sr * fc.alpha, sg2 * fc.alpha, sb2 * fc.alpha, a, fc.additive);
+      }
+      continue;
+    }
+
+    /* ------------------------------------------------------- UN TRIANGLE --
+       Même rasterisation que la passe opaque, au fondu et à l'absence
+       d'écriture de profondeur près. On ne factorise pas les deux : la passe
+       opaque est le chemin chaud (deux cent mille triangles), et l'alourdir de
+       tests qui ne la concernent pas coûterait plus que la duplication. */
+    const P = item.P;
+    /* Un voile est presque toujours en matériau Basic (les repères le sont
+       tous, par principe : voir mat.cpFlag dans world.js). On garde quand même
+       la branche éclairée pour le cas où un objet de décor deviendrait
+       translucide — mais on l'applique à la TEINTE du matériau, jamais à la
+       moyenne de sa texture. */
+    const tr = (fc.tint >> 16) & 255, tg = (fc.tint >> 8) & 255, tb = fc.tint & 255;
+    let kr = tr / 255, kg = tg / 255, kb = tb / 255;
+    if (!fc.flat) {
+      const k = lightK(fc.n, sun, fillL);
+      kr *= k[0]; kg *= k[1]; kb *= k[2];
+    }
+    const minY = Math.max(0, Math.floor(Math.min(P[0].sy, P[1].sy, P[2].sy)));
+    const maxY = Math.min(H - 1, Math.ceil(Math.max(P[0].sy, P[1].sy, P[2].sy)));
+    const minX = Math.max(0, Math.floor(Math.min(P[0].sx, P[1].sx, P[2].sx)));
+    const maxX = Math.min(W - 1, Math.ceil(Math.max(P[0].sx, P[1].sx, P[2].sx)));
+    if (maxX < minX || maxY < minY) continue;
+    const d1 = (P[1].sx - P[0].sx) * (P[2].sy - P[0].sy) - (P[2].sx - P[0].sx) * (P[1].sy - P[0].sy);
+    if (Math.abs(d1) < 1e-9) continue;
+    for (let y = minY; y <= maxY; y++) for (let x = minX; x <= maxX; x++) {
+      const pxc = x + 0.5, pyc = y + 0.5;
+      const w0 = ((P[1].sx - pxc) * (P[2].sy - pyc) - (P[2].sx - pxc) * (P[1].sy - pyc)) / d1;
+      const w1 = ((P[2].sx - pxc) * (P[0].sy - pyc) - (P[0].sx - pxc) * (P[2].sy - pyc)) / d1;
+      const w2 = 1 - w0 - w1;
+      if (w0 < 0 || w1 < 0 || w2 < 0) continue;
+      const z = w0 * P[0].z + w1 * P[1].z + w2 * P[2].z;
+      const idx = y * W + x;
+      /* ⚠️ LA TOLÉRANCE DE PROFONDEUR REMPLACE LE `polygonOffset` DU JEU. Les
+         ombres et les portes sont posées à cinq centimètres du sol : sans
+         marge, la moitié des pixels d'un décalque passe le test et l'autre
+         non, ce qui donne un damier scintillant — le z-fighting, exactement
+         celui que `polygonOffset` évite dans le navigateur. Vingt centimètres
+         suffisent et ne laissent rien traverser de ce qui compte. */
+      if (z >= zbuf[idx] + 0.2) continue;
+      let a = fc.alpha;
+      let sr = 255 * kr, sg2 = 255 * kg, sb2 = 255 * kb;
+      if (fc.map && fc.uv) {
+        const iz0 = 1 / P[0].z, iz1 = 1 / P[1].z, iz2 = 1 / P[2].z;
+        const iz = w0 * iz0 + w1 * iz1 + w2 * iz2;
+        const tu = (w0 * fc.uv[0][0] * iz0 + w1 * fc.uv[1][0] * iz1 + w2 * fc.uv[2][0] * iz2) / iz;
+        const tv = (w0 * fc.uv[0][1] * iz0 + w1 * fc.uv[1][1] * iz1 + w2 * fc.uv[2][1] * iz2) / iz;
+        const t = texel(fc.map, tu, tv);
+        a *= t[3];
+        sr = t[0] * kr; sg2 = t[1] * kg; sb2 = t[2] * kb;
+      }
+      blendPx(idx * 3, sr * fc.alpha, sg2 * fc.alpha, sb2 * fc.alpha, a, fc.additive);
+    }
+  }
+
   return px;
 }
 
@@ -546,7 +854,7 @@ const W = 1200, H = 720;
    des images sur lesquelles on peut enfin conclure. */
 const SS = 2;
 
-function shot(name, sAt, uAt, steer, driftFake, label, sim) {
+function shot(name, sAt, uAt, steer, driftFake, label, sim, runup) {
   // On monte la scène une fois par planche : les tronçons construits dépendent
   // de la position, et on veut voir exactement ce que le joueur verrait là.
   World.init(makeCanvasEl(W * SS, H * SS));
@@ -574,12 +882,23 @@ function shot(name, sAt, uAt, steer, driftFake, label, sim) {
 
      On fait donc rouler la vraie physique, avec les vraies touches, jusqu'à
      l'abscisse voulue. Ce qu'on voit sur la planche est ce que le joueur voit. */
-  const nodeIndex0 = Math.floor(Math.max(0, sAt - 260) / CFG.NODE_LEN);
+  /* ⚠️ LA LONGUEUR D'ÉLAN EST RÉGLABLE DEPUIS LE 416, ET IL LE FALLAIT.
+     Deux cent quarante unités d'élan sont parfaites au milieu de la piste :
+     assez pour graver un sillon, assez pour que les états de conduite
+     s'établissent. Elles sont FATALES près de l'arrivée — le pilote « tout
+     droit » percute les dernières vagues, retourne au fanion, recommence, et
+     la simulation épuise ses 1 500 images sans jamais franchir la ligne. La
+     planche de l'arrivée montrait donc l'avant-dernier kilomètre, sans un seul
+     bonbon dans le ciel, et l'effet paraissait ne pas exister.
+     ⚠️ Une planche qui ne va pas là où on l'envoie est pire qu'une planche
+     absente : on croit avoir regardé. */
+  const RUNUP = runup === undefined ? 240 : runup;
+  const nodeIndex0 = Math.floor(Math.max(0, sAt - RUNUP - 20) / CFG.NODE_LEN);
   slope.ensureAhead(nodeIndex0);
   for (const n of slope.nodes) World.buildNode(n);
 
   if (sim) {
-    sled.s = Math.max(0, sAt - 240);
+    sled.s = Math.max(0, sAt - RUNUP);
     sled.v = 30;
     let t = 0;
     // 25 secondes au plus : la luge atteint toujours la cible avant.
@@ -633,12 +952,17 @@ function shot(name, sAt, uAt, steer, driftFake, label, sim) {
   }
 
   World.updateSled(sled, 1000);
-  World.updateCritters(field, 1000);
+  World.updateCritters(field, 1000, sled);
   // Trois appels : la caméra est amortie, une seule image la laisserait à
   // l'origine et la planche montrerait le fond de la vallée depuis nulle part.
   for (let i = 0; i < 40; i++) cam.update(0.016, sled, 1000 + i * 16);
   World.updateAmbient(1000, sled);
 
+  if (process.env.DBG) {
+    let np=0,nv=0,npt=0;
+    World.scene.traverse(o=>{ if(o.visible&&o.isMesh&&o.material&&o.material.transparent) nv++; if(o.visible&&o.isPoints) npt++; if(o.isMesh) np++; });
+    console.log("      DBG meshes",np,"visibles transparents",nv,"points",npt,"gates",field.gates?field.gates.length:"?","critters",field.list.length);
+  }
   const faces = collect(World.scene);
   const sky = World.scene.children.find((o) => o.isMesh && o.material && o.material.side === 1);
   const skyImg = sky.material.map.image;
@@ -731,6 +1055,14 @@ shot("luge-derapage", 760, 0, 0, 0, "⭐ LE DÉCROCHAGE — une bavure large", D
 shot("luge-slalom", 1180, 0, 0, 0, "⭐ deux appuis enchaînés", DRIVE.slalom);
 shot("luge-village", 1000, 2, 0.2, 0.1, "le hameau de pain d'épices", DRIVE.straight);
 shot("luge-gourmands", 700, 0, 0, 0, "une vague de gourmands");
+/* ⚠️ LA PLANCHE DE L'ÉVITEMENT (416). Elle est cadrée juste AVANT une vague et
+   non dessus, et c'est tout son intérêt : ce qu'on juge ici n'est pas à quoi
+   ressemble un gourmand, c'est si l'on comprend OÙ PASSER en le voyant de
+   loin. Une planche prise au moment du croisement montrerait une image que le
+   joueur n'a plus le temps de lire.
+   ⚠️ Une nouveauté sans sa planche est une nouveauté qu'on livre sans l'avoir
+   regardée — c'est précisément ce qui est arrivé à la gerbe du 414. */
+shot("luge-evitement", 575, 0, 0, 0, "⭐ LA PORTE ET LES OMBRES — lit-on où passer ?", DRIVE.straight);
 shot("luge-checkpoint", 380, 0, 0, 0, "⭐ une porte de checkpoint", DRIVE.straight);
 shot("luge-hauteurs", 3400, 0, 0.4, 0.3, "les hauteurs, palier 4", DRIVE.slalom);
 /* ⚠️ UNE PLANCHE EN BAS DE PISTE, AJOUTÉE AU 414. Toutes les précédentes étaient
@@ -740,5 +1072,12 @@ shot("luge-hauteurs", 3400, 0, 0.4, 0.3, "les hauteurs, palier 4", DRIVE.slalom)
    mi-parcours, et aucune planche ne regardait aussi loin. Un jeu de descente se
    contrôle aussi EN BAS. */
 shot("luge-bas", 4700, 0, 0.2, 0.1, "⭐ le bas de la piste, 700 unités plus bas", DRIVE.slalom);
+/* ⚠️ LA PLANCHE DE L'ARRIVÉE (416). La zone d'arrivée commence à 4 940 ; on
+   cadre à 5 010, soit soixante-dix unités après la ligne — le moment où la
+   salve de bonbons est à pleine puissance et où la luge roule encore.
+   Sans cette planche, la pluie serait livrée sans avoir été regardée une seule
+   fois, ce qui est exactement le sort qu'a connu la gerbe du 414 : elle
+   existait, elle était noire, et personne ne pouvait le savoir. */
+shot("luge-arrivee", 5040, 0, 0, 0, "⭐ LA PLUIE DE BONBONS À L'ARRIVÉE", DRIVE.straight, 110);
 console.log("\nPlanches écrites dans public/candyluge/tools/out/.\n"
-  + "⚠️ Ni particules, ni textures plaquées, ni transparence : voir l'en-tête.\n");
+  + "⚠️ Textures, TRANSPARENCE et PARTICULES rendues depuis le 416. Hors planche : les ombres calculées — le jeu n'en a pas non plus.\n");

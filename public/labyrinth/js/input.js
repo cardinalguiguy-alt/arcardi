@@ -56,7 +56,36 @@ const Input = (function () {
      mouvement » perdrait 94 % du geste, et la visée serait molle. */
   let mdx = 0, mdy = 0;
   let locked = false, wantLock = false;
-  let invertY = false, sens = 1;
+  /* ══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️⚠️ LE DÉFAUT LE PLUS GROS DU LABYRINTHE, ET IL A SURVÉCU À VINGT ZIPS :
+     `sens` VALAIT 1, DONC UN PIXEL DE SOURIS VALAIT UN RADIAN.
+     ──────────────────────────────────────────────────────────────────────────
+     Guillaume, au 416 : « le contrôle de la souris est trop sensible :
+     incontrôlable sur pavé tactile, c'est n'importe quoi ». Ce n'était pas un
+     problème de réglage — c'était une conversion d'unité MANQUANTE.
+
+     `CFG.MOUSE_SENS = 0.0022` (« rad par pixel de souris ») existait depuis le
+     zip 397. Elle était documentée dans le README. Elle était même VÉRIFIÉE par
+     tools/verify-controls.mjs. Elle n'était simplement JAMAIS LUE : `sens`
+     était initialisé à 1 et `setSens()` n'a jamais été appelé par personne. Le
+     moindre frémissement du doigt faisait donc pivoter le joueur de plusieurs
+     dizaines de degrés — 57° par pixel, très exactement.
+
+     ⚠️⚠️ POURQUOI AUCUN CONTRÔLE NE L'A VU, ET C'EST LA VRAIE LEÇON.
+     `verify-controls.mjs` teste que `rules.js` fait bien `st.ang -= turnDelta`,
+     et il le teste bien : il lui passe `turnDelta = 200 × CFG.MOUSE_SENS` et
+     vérifie l'angle obtenu. Autrement dit, IL SUPPOSE QUE L'ENTRÉE A DÉJÀ
+     CONVERTI. Le moteur était juste, la constante était juste, le test était
+     juste — et le raccord entre les deux n'existait pas.
+
+     ⚠️ LA RÈGLE, ET ELLE VAUT POUR TOUT LE PROJET : UN TEST QUI FOURNIT
+     LUI-MÊME SES ENTRÉES NE TESTE PAS LEUR PROVENANCE. C'est la même famille
+     de faute que `Field.rewind` au 414 (mesuré en étant désactivé, parce que
+     l'outil ne branchait pas le rappel) : deux modules corrects, une couture
+     que personne ne regarde. Quand une constante existe, il faut vérifier
+     qu'elle est LUE, pas seulement qu'elle est juste.
+     ══════════════════════════════════════════════════════════════════════════ */
+  let invertY = false, sens = CFG.MOUSE_SENS;
   let canvas = null;
 
   function isDown(...codes) { for (const c of codes) if (down[c]) return true; return false; }
@@ -193,8 +222,38 @@ const Input = (function () {
          RÉEL si quelqu'un joue en QWERTY avec les doigts d'un AZERTY. On
          garde F comme second « utiliser », historique et sans ambiguïté. */
 
-      intent.turnDelta = mdx * sens;
-      intent.pitchDelta = (invertY ? -mdy : mdy) * sens;
+      /* ══════════════════════════════════════════════════════════════════
+         LA COURBE DE PRÉCISION (416) — pour le PAVÉ TACTILE.
+         ──────────────────────────────────────────────────────────────────
+         Convertir les pixels en radians remet le regard dans l'ordre, mais ça
+         ne suffit pas au pavé tactile, et il faut dire pourquoi : un pavé
+         n'envoie pas un flot continu comme une souris, il envoie des SAUTS de
+         plusieurs pixels séparés de blancs. Une conversion strictement
+         linéaire transforme donc chaque saut en à-coup, et viser une porte à
+         dix mètres devient un exercice de patience.
+
+         ⚠️ ET CE N'EST PAS DE L'ACCÉLÉRATION DE SOURIS — C'EST L'INVERSE.
+         L'accélération classique AUGMENTE le gain quand la main va vite ; ici
+         on le RÉDUIT quand elle va lentement. La différence est capitale :
+         l'accélération rend le geste imprévisible (le même déplacement ne
+         donne pas le même angle selon la vitesse, donc on ne peut rien
+         apprendre), alors qu'une zone de précision borne le gain PAR LE HAUT.
+         Ici le gain ne dépasse JAMAIS `sens` : un grand balayage garde
+         exactement le comportement d'avant, seul le petit geste s'affine.
+
+         ⚠️ ET ON NE TOUCHE PAS À LA DIRECTION DE COURSE — demande explicite de
+         Guillaume, « ne touche pas la direction de course qui est excellente ».
+         Cette courbe ne s'applique qu'au REGARD (turnDelta/pitchDelta) ; le
+         déplacement, le recalage sur le couloir et la rotation au clavier
+         (`intent.turn`) ne sont pas modifiés d'une ligne. */
+      const soften = (d) => {
+        const a = Math.abs(d);
+        if (a < 1e-6) return 0;
+        const k = CFG.MOUSE_FINE + (1 - CFG.MOUSE_FINE) * Math.min(1, a / CFG.MOUSE_SOFT);
+        return d * sens * k;
+      };
+      intent.turnDelta = soften(mdx);
+      intent.pitchDelta = soften(invertY ? -mdy : mdy);
       mdx = mdy = 0;
 
       if (touch) {

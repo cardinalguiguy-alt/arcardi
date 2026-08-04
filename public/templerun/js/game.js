@@ -49,6 +49,11 @@ const Game = (function () {
     player.onLand = (hard) => { if (hard) chaseCam.addShake(0.35); };
     player.onDeath = () => endRun(player.deathCause);
     player.onEscape = () => beginEscape();
+    /* LE SON DES BULLES (416). ⚠️ Le rappel est branché ICI, avec les quatre
+       autres, et pas dans player.js : `player` ne connaît pas le son, il
+       connaît sa physique et ses ramassages. C'est la même séparation que
+       depuis le 409 — Audio n'observe rien, Game appelle. */
+    player.onCoin = () => AudioFX.bubble(lastFrame);
 
     World.clearAll();
     World.setMist(0, 0);
