@@ -1002,6 +1002,14 @@ export const FERME_STR = {
     labWonChat: (name, gold) => `🏛️ ${name} est ressorti du labyrinthe ! Le lac lui laisse ${gold} or.`,
     labLostToast: "🕯️ Le noir t'a eu... tu te réveilles à la ferme, blessé.",
     labShardsToast: (n) => `💎 +${n} éclat(s) rapporté(s) du labyrinthe !`,
+    /* ⚠️ ZIP 418 — LA VALLÉE DE VERRE. Comme pour le défi de fuite et le
+       labyrinthe, ces clés vivent ici alors que le jeu a sa propre table
+       (public/crystal/js/strings.js) : ce sont les textes que la FERME affiche
+       autour du mini-jeu, jamais ceux du mini-jeu lui-même. */
+    cryEnteredChat: (name) => `❄️ ${name} traverse le pont de cristal et descend dans la vallée.`,
+    cryLeftChat: (name) => `❄️ ${name} remonte de la vallée de verre.`,
+    cryChapterToast: (n) => `📖 Chapitre ${n} terminé — la vallée se souvient de vous.`,
+    cryShardsToast: (n) => `💎 +${n} éclat(s) de givre rapporté(s) de la vallée !`,
     labWonToast: "😮‍💨 Dehors. L'air du monde sombre n'a jamais paru aussi respirable.",
     labPrizeToast: (gold) => `🏛️ Prime de sortie : +${gold} or ! (une fois par venue du labyrinthe)`,
     bagLabTitle: "Labyrinthe",
@@ -2200,6 +2208,11 @@ export const FERME_STR = {
     labWonChat: (name, gold) => `🏛️ ${name} made it out of the labyrinth! The lake gives up ${gold} gold.`,
     labLostToast: "🕯️ The dark got you... you wake up at the farm, hurt.",
     labShardsToast: (n) => `💎 +${n} shard(s) brought back from the labyrinth!`,
+    // Zip 418 — The Glass Valley (public/crystal/).
+    cryEnteredChat: (name) => `❄️ ${name} crosses the crystal bridge and goes down into the valley.`,
+    cryLeftChat: (name) => `❄️ ${name} climbs back out of the glass valley.`,
+    cryChapterToast: (n) => `📖 Chapter ${n} complete — the valley remembers you.`,
+    cryShardsToast: (n) => `💎 +${n} frost shard(s) brought back from the valley!`,
     labWonToast: "😮‍💨 Out. The dark world's air has never felt so breathable.",
     labPrizeToast: (gold) => `🏛️ Way-out bounty: +${gold} gold! (once per visit to the labyrinth)`,
     bagLabTitle: "Labyrinth",

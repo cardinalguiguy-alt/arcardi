@@ -2786,8 +2786,46 @@ export const PASSAGE_GATE_DEST = {
      pas touché d'une ligne. */
   candy: "luge",    // LA GRANDE DESCENTE (zip 411), au bout du pont arc-en-ciel
   maze: "maze",     // LE LABYRINTHE (zip 393), au bout du pont de haies
-  // crystal / meadow : pont construit et habillé, destination à venir.
+  /* ⚠️ ZIP 418 — LE PONT DE CRISTAL MÈNE ENFIN QUELQUE PART.
+     Il était « construit et habillé, destination à venir » depuis le 386, soit
+     trente-deux zips. Il ouvre sur LA VALLÉE DE VERRE (public/crystal/), et ce
+     mini-jeu ne ressemble à aucun des trois autres : c'est un récit à
+     chapitres, avec des cinématiques et des choix, pas une partie qu'on gagne
+     ou qu'on perd. Voir CRY_* plus bas pour ce que ça change. */
+  crystal: "vallee", // LA VALLÉE DE VERRE (zip 418), au bout du pont de cristal
+  // meadow : pont construit et habillé, destination à venir.
 };
+
+/* ==========================================================================
+   ZIP 418 — LA VALLÉE DE VERRE (mini-jeu des Grottes de Cristal)
+   ==========================================================================
+   Quatrième mini-jeu, servi depuis public/crystal/, au bout du pont de
+   cristal. Jeu NARRATIF : sept chapitres, des cinématiques en pixel art, des
+   choix qui posent des drapeaux, et un segment jouable par chapitre.
+
+   ⚠️ IL NE RAPPORTE PAS UN SCORE, IL RAPPORTE UN AVANCEMENT — et c'est la
+   seule chose à comprendre avant de brancher quoi que ce soit. Les trois
+   autres mini-jeux ont une fin : on meurt, on gagne, on recommence pour faire
+   mieux. Celui-ci a des CHAPITRES : on ne le rejoue pas, on le continue. Coller
+   un tableau de scores à la fin d'un chapitre casserait exactement ce qu'on
+   essaie de construire.
+
+   ⚠️ CONSÉQUENCE : PAS DE BLESSURE, PAS DE PRIME, PAS ENCORE. Au chapitre 1 on
+   ne peut ni mourir ni gagner d'or — il n'y a rien à perdre dans la vallée
+   avant qu'on n'y ait des bêtes à perdre (chapitre 3). Les constantes
+   ci-dessous existent pour le jour où ce sera le cas, et elles ne sont pas
+   encore lues. C'est délibéré et c'est écrit ici pour qu'on ne les croie pas
+   branchées.
+
+   ⚠️ LE BUT DU JEU EST DE RAMENER DEUX CHOSES À LA FERME : des animaux
+   (renne d'aurore, chevaux de verre, tortue gemme — le familier canon de ce
+   monde —, chouette de givre) et UN HOMME, Aubin, qui deviendra un second
+   ouvrier à côté de Greg, spécialisé dans la survie des bêtes en hiver.
+   ========================================================================== */
+export const CRY_SHARD_GOLD = 30;      // or par éclat de givre rapporté
+export const CRY_PRIZE_GOLD = 1200;    // fin du récit, UNE FOIS par ferme
+export const CRY_MAX_SHARDS = 60;      // plafond anti-message-aberrant, cf. LAB_MAX_*
+export const CRY_MAX_CHAPTER = 7;
 
 /* ==========================================================================
    ZIP 393 — LE LABYRINTHE (mini-jeu du Pays du Labyrinthe)

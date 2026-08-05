@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Ferme Vallée — La Vallée de Verre</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- Tous les textes sont posés par ui.js/applyLang() depuis js/strings.js, et
+     les répliques par cine.js depuis js/story.js. Rien de visible n'est écrit
+     en dur ici : la ferme impose sa langue au chargement, et la vallée doit la
+     suivre. -->
+
+<div id="stage">
+  <canvas id="gl"></canvas>
+
+  <!-- ─────────────────────────────────────────────────── LA RÉPLIQUE ──────
+       Elle est en DOM et pas dans le tampon : à 480 px de large, une police
+       bitmap donnerait des caractères de cinq pixels de haut. Voir l'en-tête
+       de cine.js — c'est la seule séparation assumée entre le décor et le
+       texte, et elle est là pour la lisibilité, pas par facilité. -->
+  <div id="dialog" class="dialog">
+    <div id="dName" class="dname"></div>
+    <p id="dText" class="dtext"></p>
+    <span id="dMore" class="dmore">▾</span>
+  </div>
+
+  <!-- ─────────────────────────────────────────────────────── LES CHOIX ──── -->
+  <div id="choices" class="choices">
+    <p id="cQuestion" class="cq"></p>
+    <div id="cList" class="clist"></div>
+  </div>
+
+  <!-- ────────────────────────────────────────────── LE CARTON DE CHAPITRE ── -->
+  <div id="chapterCard" class="chapter"><h2 id="chapterTxt"></h2></div>
+
+  <!-- ──────────────────────────────────────────────────────────── LE HUD ───
+       Repris de la première référence de Guillaume : SCORE / ÉCLATS /
+       DISTANCE / RECORD, plus une jauge et un libellé de chapitre. La jauge
+       n'est pas une meute : c'est le CHANT, qui monte à chaque brasero passé.
+       Le chapitre 1 n'a pas de poursuivant, et lui en inventer un pour
+       remplir la même barre aurait été un contresens. -->
+  <div id="hud" class="hud">
+    <div class="hud-row">
+      <div class="stat"><span class="label" id="lScore"></span><span id="score">0</span></div>
+      <div class="stat"><span class="label" id="lShards"></span><span id="shards">0</span></div>
+      <div class="stat"><span class="label" id="lDist"></span><span id="dist">0 m</span></div>
+      <div class="stat"><span class="label" id="lBest"></span><span id="best">0</span></div>
+    </div>
+    <div class="gauge">
+      <span class="glabel" id="lChant"></span>
+      <div class="gbar"><i id="chantFill"></i></div>
+      <span class="gtag" id="hLabel"></span>
+    </div>
+    <div class="goal"><i id="goalFill"></i></div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <!-- ───────────────────────────────────────────────────── CHARGEMENT ────── -->
+  <div id="loading" class="layer panel">
+    <div class="spin"><i></i><i></i><i></i></div>
+    <p class="sub" id="lLoading"></p>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════ CHANTIER ═════
+       ⚠️ LE MUR DE CHANTIER, REPRIS TEL QUEL DE LA DESCENTE (415) ET DU
+       LABYRINTHE (417). Même geste — ⌘⇧X deux fois en moins de 3,5 s — parce
+       que « même commande pour bypass » est une contrainte explicite de
+       Guillaume : un second code serait un second secret à retenir, donc un
+       secret oublié. Seule la CLÉ DE SESSION diffère (`vf-cry-wip`), et elle
+       doit différer, sans quoi un seul code déverrouillerait tout le site.
+
+       ⚠️ ET LE BOUTON DE RETOUR EST INDISPENSABLE : sans lui, un joueur qui
+       ouvre la vallée depuis la ferme se retrouve enfermé dans l'iframe. Un
+       mur n'est pas un cul-de-sac. -->
+  <div id="construction" class="layer panel">
+    <div class="site-sign">🚧</div>
+    <h1 id="wTitle"></h1>
+    <p class="sub" id="wSub"></p>
+    <p class="hint" id="wHint"></p>
+    <button id="btnConstructionBack" class="ghost"></button>
+  </div>
+
+  <!-- ──────────────────────────────────────────────────────────── TITRE ──── -->
+  <div id="title" class="layer panel">
+    <h1 id="tTitle"></h1>
+    <p class="sub" id="tSub"></p>
+    <button id="btnStart"></button>
+    <button id="btnExit" class="ghost"></button>
+    <div class="controls">
+      <div id="cSkip"></div>
+      <div id="cWalk"></div>
+      <div id="cPause"></div>
+    </div>
+  </div>
+
+  <!-- ──────────────────────────────────────────────────────────── PAUSE ──── -->
+  <div id="pause" class="layer panel">
+    <h1 id="pTitle"></h1>
+    <button id="btnResume"></button>
+    <button id="btnQuit" class="ghost"></button>
+    <p class="hint" id="pQuitWarn"></p>
+  </div>
+
+  <!-- ────────────────────────────────────────────────── FIN DE CHAPITRE ──── -->
+  <div id="gameover" class="layer panel">
+    <h1 id="oTitle"></h1>
+    <div class="results">
+      <div><span id="fLShards"></span><b id="finalShards">0</b></div>
+    </div>
+    <p class="reslabel" id="fLChoices"></p>
+    <ul id="finalChoices" class="choicelog"></ul>
+    <p class="hint" id="oNote"></p>
+    <button id="btnBack"></button>
+  </div>
+</div>
+
+<!-- ⚠️ ORDRE OBLIGATOIRE. `pix.js` avant tout (tout le monde s'en sert),
+     `config.js` avant les fichiers de dessin (ils lisent CFG.PAL), les
+     fichiers de dessin avant `scenes.js`, `scenes.js` avant `walk.js` (il lui
+     emprunte la vignette et le grain), `story.js` avant `cine.js`, et
+     `game.js` en dernier. Aucun module, aucun bundler : ce sont des scripts
+     classiques, exactement comme les trois autres mini-jeux, et c'est ce qui
+     permet à `tools/preview.mjs` de les charger tels quels dans node. -->
+<script src="js/pix.js"></script>
+<script src="js/config.js"></script>
+<script src="js/strings.js"></script>
+<script src="js/bridge.js"></script>
+<script src="js/sky.js"></script>
+<script src="js/land.js"></script>
+<script src="js/flora.js"></script>
+<script src="js/props.js"></script>
+<script src="js/scenes.js"></script>
+<script src="js/shots.js"></script>
+<script src="js/walk.js"></script>
+<script src="js/story.js"></script>
+<script src="js/cine.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>

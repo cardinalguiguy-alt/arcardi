@@ -397,6 +397,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // voit pas les états React de son itération).
   const [labGame, setLabGame] = useState(false);
   const labGameRef = useRef(false);
+  // Zip 418 : LA VALLÉE DE VERRE (public/crystal/), au bout du pont de cristal.
+  const [cryGame, setCryGame] = useState(false);
+  const cryGameRef = useRef(false);
   const [fishMini, setFishMini] = useState(null); // {mode, fish} pendant le minijeu, sinon null
   const [barnMini, setBarnMini] = useState(null); // {level} pendant le mini-jeu de construction de la grange, sinon null
   const [wolfBite, setWolfBite] = useState(null); // {wolfId} pendant le mini-jeu de morsure (loup agressif), sinon null
@@ -9553,7 +9556,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const m = meRef.current;
     if (!m || m.zone !== "evil") return;
     if (candyGameRef.current || lugeGameRef.current || runChallengeRef.current
-      || labGameRef.current || zoneTransRef.current.active) return;
+      || labGameRef.current || cryGameRef.current || zoneTransRef.current.active) return;
     const ew = evilWorldRef.current;
     if (!ew || !ew.lake || !ew.spec || ew.spec.key !== "candy") return;
     const d = Math.hypot(m.x - ew.lake.x, m.y - ew.lake.y);
@@ -9656,6 +9659,54 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     keysRef.current = {};
   }
 
+  /* ==================================================================
+     ZIP 418 — LA VALLÉE DE VERRE (mini-jeu des Grottes de Cristal)
+     ------------------------------------------------------------------
+     Calque d'openLabGame, à trois différences près, et les trois viennent
+     du même fait : CE JEU EST UN RÉCIT, PAS UNE PARTIE.
+
+       1. ⚠️ AUCUNE BLESSURE, DONC AUCUN `isInjured()` À L'ENTRÉE. On ne
+          meurt pas dans la vallée — pas encore. Interdire l'entrée à un
+          joueur blessé par le labyrinthe reviendrait à lui interdire de
+          LIRE la suite d'une histoire parce qu'il s'est fait mordre
+          ailleurs.
+       2. ⚠️ AUCUN `crossPassage()` À LA SORTIE. Il n'y a ni victoire ni
+          défaite à mettre en scène : on referme l'iframe et le joueur se
+          retrouve exactement où il était, au pied du pont. Le verrou
+          `runGateArmedRef` est remis à faux, sinon la dalle de la porte
+          rouvrirait la vallée dans la seconde (piège du zip 393).
+       3. ⚠️ CE QUI REMONTE EST UN CHAPITRE ET DES DRAPEAUX, pas un score.
+          Rien ne les lit encore côté ferme, et c'est volontaire : le jour
+          où le chapitre 7 décidera qui revient à la ferme, la sauvegarde
+          aura déjà la mémoire des choix. Un état narratif qu'on commence à
+          persister le jour où on en a besoin est un état narratif vide.
+     ================================================================== */
+  function openCryGame() {
+    if (cryGameRef.current || labGameRef.current || candyGameRef.current
+        || runChallengeRef.current || zoneTransRef.current.active) return;
+    const m = meRef.current; if (!m) return;
+    m.moving = false;
+    // Les touches encore enfoncées resteraient « collées » et feraient marcher
+    // le fermier tout seul derrière l'iframe (bug vécu au zip 372).
+    keysRef.current = {};
+    cryGameRef.current = true;
+    setCryGame(true);
+    sendPos();
+    broadcastChat("\u2744\uFE0F", L.cryEnteredChat(m.name));
+  }
+
+  function closeCryGame() {
+    cryGameRef.current = false;
+    setCryGame(false);
+    keysRef.current = {};
+    runGateArmedRef.current = false;
+    const m = meRef.current;
+    if (m) { m.moving = false; m.animT = 0; }
+    // Le jeu se termine sur un fondu au noir ; sans ce voile qui s'efface, on
+    // passerait de la nuit de la vallée à la carte d'un seul coup.
+    runReturnFadeRef.current = performance.now();
+  }
+
   /* Le créneau de rotation est calculé ICI, à partir de l'état de jeu, jamais
      reçu de l'iframe : c'est lui qui décide si la prime de sortie est encore
      disponible pour cette venue du labyrinthe. Motif repris de
@@ -9753,6 +9804,51 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     window.addEventListener("message", onMsg);
     return () => window.removeEventListener("message", onMsg);
   }, [labGame, lang]);
+
+  /* ZIP 418 — messages de la vallée de verre. Même origine obligatoire.
+     ⚠️ TROIS MESSAGES SEULEMENT, contre quatre pour le labyrinthe : il n'y a
+     pas de `over`, parce qu'on ne perd pas. `chapter` remplace à la fois `won`
+     et `over` — il dit où le joueur en est, pas comment il s'en est tiré. */
+  useEffect(() => {
+    if (!cryGame) return;
+    function onMsg(e) {
+      if (e.origin !== window.location.origin) return;
+      const d = e.data;
+      if (!d || typeof d !== "object") return;
+      if (d.type === "vf-cry-ready") {
+        const savedMe = farmersRef.current[me.id];
+        const best = Math.max(
+          (invRef.current && invRef.current.cryChapter) | 0,
+          (savedMe && savedMe.inv && savedMe.inv.cryChapter) | 0
+        );
+        // meRef, pas l'état React : cet écouteur est posé une fois pour la
+        // durée de la partie, une valeur capturée au montage serait figée.
+        const mm = meRef.current;
+        const skin = charPalette(mm && mm.gender, mm && mm.outfit);
+        try {
+          e.source.postMessage({ type: "vf-cry-init", lang, best, skin }, window.location.origin);
+        } catch (err) {}
+      } else if (d.type === "vf-cry-chapter") {
+        /* ⚠️ LES BORNES SONT ICI ET PAS DANS L'IFRAME. Le mini-jeu se déroule
+           ENTIÈREMENT côté client : l'hôte persiste ce qu'on lui dit et ne peut
+           pas le croire sur parole. Ces plafonds n'empêchent pas la triche, ils
+           empêchent qu'un bug ou un message forgé n'injecte n'importe quoi dans
+           une sauvegarde partagée et durable. Même raisonnement que LAB_MAX_*. */
+        const n = Math.max(0, Math.min(C.CRY_MAX_CHAPTER, d.n | 0));
+        const sh = Math.max(0, Math.min(C.CRY_MAX_SHARDS, d.shards | 0));
+        if (sh > 0) pushToast(L.cryShardsToast(sh));
+        if (n > 0) pushToast(L.cryChapterToast(n));
+        // ⚠️ On ne referme PAS ici : le joueur lit son bilan de chapitre et
+        // ferme lui-même. Fermer sous ses yeux serait lui arracher la page.
+      } else if (d.type === "vf-cry-exit") {
+        const m = meRef.current;
+        closeCryGame();
+        if (m) broadcastChat("\u2744\uFE0F", L.cryLeftChat(m.name));
+      }
+    }
+    window.addEventListener("message", onMsg);
+    return () => window.removeEventListener("message", onMsg);
+  }, [cryGame, lang]);
 
   // Réception des messages de l'iframe. Même origine obligatoire : la page est
   // servie par la ferme elle-même, tout le reste est rejeté.
@@ -10019,6 +10115,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           if (dest === "luge") openLugeGame();      // zip 411 : LA GRANDE DESCENTE
           else if (dest === "candy") openCandyGame();
           else if (dest === "maze") openLabGame();   // zip 393
+          else if (dest === "vallee") openCryGame(); // zip 418
           else if (dest === "run") startRunAmbush();
           else pushToast(L.bridgeNoDest);
         }
@@ -10136,7 +10233,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // à la ferme (clic sur le bord de l'écran, raccourci navigateur), le
       // fermier ne doit surtout pas se mettre à marcher dans le monde sombre
       // pendant qu'on court dans le défi.
-      if (runChallengeRef.current || candyGameRef.current || labGameRef.current) return; // zip 385 : idem pour le Gourmandin ; zip 393 : idem pour le labyrinthe
+      if (runChallengeRef.current || candyGameRef.current || labGameRef.current || cryGameRef.current) return; // zip 385 : idem pour le Gourmandin ; zip 393 : idem pour le labyrinthe
       if (isInjured()) return; // blessé : aucune entrée, en attendant la fin du repos forcé
       // Endormi : seule la touche E (se réveiller) doit rester active, pour
       // ne pas pouvoir changer d'outil/monter à cheval/etc. depuis "l'intérieur".
@@ -15433,6 +15530,24 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             src="/labyrinth/index.html"
             title="Valley Farm — The Labyrinth"
             allow="pointer-lock; fullscreen"
+            onLoad={e => { try { e.currentTarget.contentWindow.focus(); } catch (err) {} }}
+          />
+        </div>
+      )}
+
+      {/* ZIP 418 — LA VALLÉE DE VERRE.
+          ⚠️ PAS DE `pointer-lock` ICI, contrairement au labyrinthe : ce jeu est
+          en 2D, il n'a ni vue subjective ni capture de pointeur. Recopier
+          l'attribut « au cas où » demanderait une permission dont personne n'a
+          besoin — et une permission accordée sans raison finit par être
+          accordée partout. */}
+      {cryGame && (
+        <div className="ferme-run-overlay">
+          <iframe
+            className="ferme-run-frame"
+            src="/crystal/index.html"
+            title="Valley Farm — The Glass Valley"
+            allow="fullscreen"
             onLoad={e => { try { e.currentTarget.contentWindow.focus(); } catch (err) {} }}
           />
         </div>
