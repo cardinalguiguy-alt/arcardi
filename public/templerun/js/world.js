@@ -627,6 +627,77 @@ const World = (function () {
     return cv;
   }
 
+  /* ⚠️⚠️ ZIP 425 — LE GRAIN DE LA PIERRE, ET IL EST ÉCRIT UNE SEULE FOIS.
+     ==========================================================================
+     Retour de Guillaume : « la texture du sol a l'air trop lisse ».
+
+     MESURE AVANT DE TOUCHER À QUOI QUE CE SOIT (méthode §7 du contexte, et
+     elle a tout de suite désigné le coupable) : sur la chaussée d'entrée,
+     **50 % des couples de texels voisins étaient STRICTEMENT identiques**, et
+     66 % sur la dalle d'AA. La luminosité moyenne était juste, l'écart-type
+     honnête (17,2) — et pourtant l'image était plate, exactement comme au 421
+     où la moyenne était juste et l'image fausse. La raison est géométrique :
+     à 32 px pour six colonnes sur trois assises, une pierre reçoit 5×9 texels,
+     et elle était remplie d'UN aplat. Tout l'écart-type venait des JOINTS,
+     c'est-à-dire du contour des pierres, jamais de leur matière. De près, on
+     regarde la matière.
+
+     Deux corrections, et il faut les deux :
+       1. 64 px au lieu de 32. Une pierre passe de 5×9 à 10×19 texels : sans
+          cette place, il n'y a physiquement pas où mettre du grain.
+       2. Ce grain, semé PAR AMAS DE 2×2 TEXELS et non texel par texel.
+     ⚠️ ET LE 2×2 N'EST PAS UNE COMMODITÉ D'ÉCRITURE, C'EST CE QUI EMPÊCHE LE
+     SCINTILLEMENT. Les textures du jeu sont en NearestFilter SANS mipmap
+     (pixelTexture) et le tampon fait 376×212 (PIXEL_SCALE 3,4) : à vingt
+     mètres, une dalle ne couvre plus que quelques pixels d'écran, et un grain
+     à la fréquence du texel se met à grouiller image après image. Un amas de
+     2×2 sur 64 px a exactement la fréquence spatiale d'un texel de l'ancienne
+     texture 32 px — donc on gagne le grain de près SANS ajouter une seule
+     fréquence que le rendu ne sait pas échantillonner. C'est la raison pour
+     laquelle on ne monte pas à 128 px.
+
+     ⚠️ L'ÉCHELLE DES PIERRES NE BOUGE PAS D'UN POUCE. `rows`/`cols` restent 3
+     et 6 : ils ont été DÉRIVÉS au 380 de la taille des blocs de la jetée 2D
+     (1,4 × 1,33 m) et les redécider ici rouvrirait le grief « sol incohérent
+     avec la version 2D ». Seule la finesse du dessin change.
+     ========================================================================== */
+  const TEX_K = 2;   // 32 -> 64 px. Tout ce qui était en unités de 32 px se multiplie par lui.
+
+  function lumOf(hex) {
+    return 0.2126 * ((hex >> 16) & 255) + 0.7152 * ((hex >> 8) & 255) + 0.0722 * (hex & 255);
+  }
+
+  /* Semis de grain sur un rectangle. On peint en blanc ou en noir très
+     transparent, ce qui garde le TON de la surface (le grain doit marcher sur
+     la pierre claire de l'entrée comme sur la dalle sombre d'AA).
+
+     ⚠️⚠️ MAIS L'OPACITÉ NE PEUT PAS ÊTRE LA MÊME DES DEUX CÔTÉS, et la
+     première version du 425 s'y est fait prendre — mesurée, comme d'habitude.
+     Un blanc à 6 % sur une pierre à L=63 ajoute 0,06 × (255−63) ≈ +11 ; un
+     noir à 6 % sur la même pierre retire 0,06 × 63 ≈ −4. À opacité égale, un
+     bruit « symétrique » ÉCLAIRCIT donc toute surface sombre : la dalle d'AA
+     est remontée de 63,5 à 69,4 sans que personne n'ait demandé à la
+     rallumer. C'est le corollaire de palette du §7, vu par un autre bout.
+
+     On raisonne donc en ÉCART DE LUMINOSITÉ (`dL`, en unités 0-255, la même
+     échelle que les mesures) et on en dérive les deux opacités à partir de la
+     luminosité de la surface. `dL` est alors ce qu'on croit régler quand on le
+     règle, et la moyenne de l'image ne bouge pas. */
+  function grain(ctx, x, y, w, h, baseL, dL, dens) {
+    const cell = 2;   // voir l'avertissement ci-dessus : 2, jamais 1
+    const aUp = Math.min(0.5, dL / Math.max(12, 255 - baseL));
+    const aDn = Math.min(0.5, dL / Math.max(12, baseL));
+    for (let gy = y; gy < y + h; gy += cell) {
+      for (let gx = x; gx < x + w; gx += cell) {
+        if (Math.random() > dens) continue;
+        const up = Math.random() < 0.5;
+        const k = 0.35 + Math.random() * 0.65;
+        ctx.fillStyle = up ? `rgba(255,255,255,${aUp * k})` : `rgba(0,0,0,${aDn * k})`;
+        ctx.fillRect(gx, gy, Math.min(cell, x + w - gx), Math.min(cell, y + h - gy));
+      }
+    }
+  }
+
   /* ------------------------------------------------------ SOL EN RUINE ---
      Un petit pool de textures par palier d'usure (pas une par dalle : on
      réutilise le pool, seul le TIRAGE est par dalle).
@@ -636,7 +707,7 @@ const World = (function () {
      c'est là qu'elle pousse — dans l'eau qui stagne entre deux pierres. C'est
      ce détail-là qui fait basculer le sol de « pierre grise » à « ruine ». */
   function paintStoneTile(tier) {
-    const SIZE = 32;
+    const SIZE = 32 * TEX_K;
     const cv = makeCanvas(SIZE, SIZE);
     const ctx = cv.getContext("2d");
 
@@ -646,9 +717,17 @@ const World = (function () {
     const blotches = 4 + Math.floor(Math.random() * 4);
     for (let b = 0; b < blotches; b++) {
       ctx.beginPath();
-      ctx.arc(Math.random() * SIZE, Math.random() * SIZE, 2 + Math.random() * 5, 0, Math.PI * 2);
+      ctx.arc(Math.random() * SIZE, Math.random() * SIZE, (2 + Math.random() * 5) * TEX_K, 0, Math.PI * 2);
       ctx.fill();
     }
+
+    /* Zip 425 — LE GRAIN, posé sur la pierre et SOUS la saleté. L'ordre compte :
+       mousse, taches et fêlures sont des choses qui se DÉPOSENT, elles ne
+       doivent pas être grenées elles-mêmes. La dalle d'AA en prend plus que la
+       chaussée d'entrée (0,06 contre 0,05) : c'est une pierre plus vieille et
+       plus poreuse, et c'est le seul endroit où les deux surfaces diffèrent
+       volontairement. */
+    grain(ctx, 0, 0, SIZE, SIZE, lumOf(CFG.COL_STONE), 7 + tier * 2, 0.75);
 
     // Mousse des joints : on longe les quatre bords, la taille et la quantité
     // montant avec l'usure.
@@ -656,25 +735,25 @@ const World = (function () {
     for (let m = 0; m < mossAmount; m++) {
       const edge = Math.floor(Math.random() * 4);
       const along = Math.random() * SIZE;
-      const depth = Math.random() * (2 + tier * 2.5);
+      const depth = Math.random() * (2 + tier * 2.5) * TEX_K;
       const x = (edge === 0 || edge === 1) ? along : (edge === 2 ? depth : SIZE - depth);
       const y = (edge === 0) ? depth : (edge === 1 ? SIZE - depth : along);
       ctx.fillStyle = Math.random() < 0.55 ? cssHex(CFG.COL_MOSS_DARK) : cssHex(CFG.COL_MOSS);
       ctx.globalAlpha = 0.55 + Math.random() * 0.35;
-      ctx.beginPath(); ctx.arc(x, y, 1.5 + Math.random() * (1.5 + tier), 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(x, y, (1.5 + Math.random() * (1.5 + tier)) * TEX_K, 0, Math.PI * 2); ctx.fill();
     }
     ctx.globalAlpha = 1;
 
     ctx.strokeStyle = cssHex(CFG.COL_STONE_EDGE);
-    ctx.lineWidth = 1.5;
-    ctx.strokeRect(0.5, 0.5, SIZE - 1, SIZE - 1);
+    ctx.lineWidth = 1.5 * TEX_K;
+    ctx.strokeRect(0.5 * TEX_K, 0.5 * TEX_K, SIZE - TEX_K, SIZE - TEX_K);
 
     // Taches d'humidité : plus nombreuses et plus sombres à mesure que le
     // palier d'usure monte. 0 = quasi rien, 2 = franchement moisi.
     const stainCounts = [1, 3, 6];
     for (let s = 0; s < stainCounts[tier]; s++) {
       const x = Math.random() * SIZE, y = Math.random() * SIZE;
-      const r = 2.5 + Math.random() * (3 + tier * 2);
+      const r = (2.5 + Math.random() * (3 + tier * 2)) * TEX_K;
       const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
       grad.addColorStop(0, cssHex(CFG.COL_STAIN_DARK));
       grad.addColorStop(1, cssHex(CFG.COL_STAIN) + "00"); // fondu transparent
@@ -685,7 +764,7 @@ const World = (function () {
     // Fêlures : lignes brisées, absentes au palier intact.
     const crackCounts = [0, 2, 5];
     ctx.strokeStyle = cssHex(CFG.COL_CRACK);
-    ctx.lineWidth = 1;
+    ctx.lineWidth = 1 * TEX_K;
     for (let c = 0; c < crackCounts[tier]; c++) {
       let x = Math.random() * SIZE, y = Math.random() * SIZE;
       ctx.beginPath(); ctx.moveTo(x, y);
@@ -904,7 +983,7 @@ const World = (function () {
      assise à l'autre) et un MORTIER plus sombre que la pierre. Sans le
      décalage, on lit un carrelage ; sans le mortier, on lit une texture. */
   function paintPaveTile(tier) {
-    const SIZE = 32;
+    const SIZE = 32 * TEX_K;   // zip 425 : voir l'avertissement au-dessus de paintStoneTile
     const cv = makeCanvas(SIZE, SIZE);
     const ctx = cv.getContext("2d");
 
@@ -924,7 +1003,7 @@ const World = (function () {
        large que longue, il faut donc deux fois plus de colonnes que d'assises
        pour que les pierres soient CARRÉES dans le monde. Un appareillage aux
        pierres écrasées se lit comme du carrelage. */
-    const rows = 3, cols = 6, gap = 1;
+    const rows = 3, cols = 6, gap = 1 * TEX_K;
     const bh = (SIZE - gap * (rows + 1)) / rows;
     for (let r = 0; r < rows; r++) {
       const off = (r & 1) ? SIZE / (cols * 2) : 0;
@@ -942,11 +1021,40 @@ const World = (function () {
         const b8 = Math.min(255, Math.round((base & 255) * k));
         ctx.fillStyle = `rgb(${r8},${g8},${b8})`;
         ctx.fillRect(bx, by, bw, bh);
-        // Arête éclairée en haut, ombre en bas : le bloc a une épaisseur.
-        ctx.fillStyle = `rgba(255,255,255,0.06)`;
-        ctx.fillRect(bx, by, bw, 1);
-        ctx.fillStyle = `rgba(0,0,0,0.18)`;
-        ctx.fillRect(bx, by + bh - 1, bw, 1);
+        /* ⚠️ ZIP 425 — LE GRAIN EST DÉCOUPÉ SUR LE BLOC, PAS ÉTALÉ SUR LA
+           DALLE. Un semis passé d'un seul coup sur les 64×64 traverserait les
+           joints, et c'est précisément ce qui distingue une pierre taillée
+           d'un enduit : chaque pierre a sa propre matière, elle s'arrête à son
+           arête. Le surcoût est nul (on peint la même surface en six fois
+           moins large), la lecture change du tout au tout. */
+        grain(ctx, bx, by, bw, bh, lumOf(base) * k, 7, 0.75);
+        /* Arêtes. Le couple haut clair / bas sombre existait déjà et donnait
+           l'épaisseur ; le 425 lui ajoute les DEUX CÔTÉS, à moitié moins fort.
+           Sans eux, une pierre est un ruban horizontal : elle a une tranche en
+           haut et en bas, et rien sur les flancs — ce qui la recolle à sa
+           voisine dès que le joint fait moins de deux pixels à l'écran. */
+        ctx.fillStyle = `rgba(255,255,255,0.07)`;
+        ctx.fillRect(bx, by, bw, TEX_K);
+        ctx.fillStyle = `rgba(0,0,0,0.20)`;
+        ctx.fillRect(bx, by + bh - TEX_K, bw, TEX_K);
+        ctx.fillStyle = `rgba(255,255,255,0.035)`;
+        ctx.fillRect(bx, by, 1, bh);
+        ctx.fillStyle = `rgba(0,0,0,0.10)`;
+        ctx.fillRect(bx + bw - 1, by, 1, bh);
+        /* Coins ÉBRÉCHÉS, et ils suivent le palier d'usure. Une pierre
+           parfaitement rectangulaire est la dernière chose qui reste « lisse »
+           une fois qu'elle a du grain et des arêtes : le contour. Deux ou
+           trois texels mangés au coin suffisent, et ils ne sont pris que sur
+           les paliers abîmés — la chaussée d'entrée est ENTRETENUE (règle du
+           379), c'est plus loin qu'elle se délite. */
+        const chips = [0, 1, 2][tier];
+        for (let ch = 0; ch < chips; ch++) {
+          if (Math.random() > 0.55) continue;
+          const cx = Math.random() < 0.5 ? bx : bx + bw - 2 * TEX_K;
+          const cy = Math.random() < 0.5 ? by : by + bh - 2 * TEX_K;
+          ctx.fillStyle = cssHex(CFG.COL_MORTAR);
+          ctx.fillRect(cx, cy, TEX_K * (1 + Math.round(Math.random())), TEX_K);
+        }
       }
     }
 
@@ -955,17 +1063,17 @@ const World = (function () {
     const mossAmount = [2, 5, 9][tier];
     for (let m = 0; m < mossAmount; m++) {
       const along = Math.random() * SIZE;
-      const jy = Math.random() < 0.5 ? gap + bh + gap / 2 : (Math.random() < 0.5 ? 1 : SIZE - 2);
+      const jy = Math.random() < 0.5 ? gap + bh + gap / 2 : (Math.random() < 0.5 ? TEX_K : SIZE - 2 * TEX_K);
       ctx.fillStyle = Math.random() < 0.55 ? cssHex(CFG.COL_MOSS_DARK) : cssHex(CFG.COL_MOSS);
       ctx.globalAlpha = 0.45 + Math.random() * 0.35;
-      ctx.beginPath(); ctx.arc(along, jy + (Math.random() - 0.5) * 3, 1 + Math.random() * (1 + tier), 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(along, jy + (Math.random() - 0.5) * 3 * TEX_K, (1 + Math.random() * (1 + tier)) * TEX_K, 0, Math.PI * 2); ctx.fill();
     }
     ctx.globalAlpha = 1;
 
     // Fêlures : uniquement sur les paliers abîmés, et fines.
     const crackCounts = [0, 1, 3];
     ctx.strokeStyle = cssHex(CFG.COL_CRACK);
-    ctx.lineWidth = 1;
+    ctx.lineWidth = 1 * TEX_K;
     for (let c = 0; c < crackCounts[tier]; c++) {
       let x = Math.random() * SIZE, y = Math.random() * SIZE;
       ctx.beginPath(); ctx.moveTo(x, y);

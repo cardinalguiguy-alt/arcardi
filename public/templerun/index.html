@@ -101,9 +101,23 @@
 </div>
 
 <!-- three.js : build global classique (pas de module). Chargé ICI, dans
-     l'iframe, donc jamais dans le bundle Next de la ferme — et un échec de
-     CDN ne casse que le défi. -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+     l'iframe, donc jamais dans le bundle Next de la ferme.
+
+     ⚠️ ZIP 425 — ON PASSE AU LOCAL, comme candyluge au 422. C'est EXACTEMENT
+     le même fichier r128 (603 Ko, copié depuis npm three@0.128.0) : zéro
+     déplacement de teinte, aucun réglage à revoir. Ce qu'on y gagne :
+
+       * plus de script tiers chargé sans `integrity` (le grief du §10 du
+         contexte, qui vaut aussi pour labyrinth — LUI N'EST PAS ENCORE
+         MIGRÉ) ;
+       * le fichier est partagé avec candyluge, donc déjà dans le cache du
+         navigateur dès qu'on a ouvert l'un des deux jeux ;
+       * plus de dépendance au réseau au lancement. ⚠️ Ce n'était PAS la cause
+         des saccades signalées par Guillaume — mesure faite, la cause est la
+         ferme qui repeignait derrière l'iframe (voir FermeGame.js, zip 425) —
+         mais une seconde d'attente sur cdnjs se lit comme un jeu qui rame,
+         et il n'y a aucune raison de la garder. -->
+<script src="/vendor/three-r128/three.min.js"></script>
 
 <!-- Ordre : config.js AVANT bridge.js depuis le zip 377. Le pont valide
      désormais les couleurs de tenue reçues et retombe sur CFG.COL_* quand

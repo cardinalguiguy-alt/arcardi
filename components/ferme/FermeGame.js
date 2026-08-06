@@ -10433,6 +10433,42 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const w = worldRef.current, m = meRef.current, sprites = spritesRef.current;
       if (!w || !m || !sprites) return;
 
+      /* ⚠️⚠️ ZIP 425 — LA FERME NE PEINT PLUS DERRIÈRE UNE IFRAME DE MINI-JEU.
+         ---------------------------------------------------------------------
+         Cause mesurée du « l'endless run lag beaucoup ». Le défi de fuite ne
+         lague PAS tout seul : servi en page autonome, il tient en ~2,2 ms par
+         image (rendu synchronisé GPU, 1035 appels de dessin, 376×212 —
+         PIXEL_SCALE 3,4). Il lague parce qu'il ne tourne jamais seul : depuis
+         le zip 372 il vit dans une <iframe> POSÉE PAR-DESSUS la ferme, et
+         `.ferme-run-overlay` est `position:fixed; inset:0; background:#0b0714`,
+         donc parfaitement OPAQUE. Pendant toute la course, cette boucle-ci
+         continuait de repeindre le monde maléfique en entier — « la boucle
+         passe sur plusieurs milliers de cases par image », dit le commentaire
+         de drawEvilFrame, et chaque case porte son propre dessin procédural —
+         dans un canvas plein écran que PERSONNE ne voit. Deux jeux se
+         partageaient les 16,7 ms, dont un invisible.
+
+         ⚠️ ON NE COUPE QUE LA PEINTURE, JAMAIS LA SIMULATION. C'est la raison
+         d'être de l'iframe (zip 372, point 1) : si c'est l'hôte qui court, le
+         monde doit continuer d'avancer pour tout le monde. Tout ce qui précède
+         ce drapeau — updateWolves, updateGreg, updateVisitors, la transition de
+         zone, les positions distantes — tourne exactement comme avant. C'est la
+         même séparation que `netCanBroadcast()` vs `netHasAudience()` (§3) :
+         diffuser et afficher sont deux questions distinctes.
+
+         ⚠️ ET ON NE TESTE PAS LES ÉTATS REACT, MAIS LES REFS. Une boucle rAF
+         capture les valeurs du rendu où elle a été créée ; `runChallenge` y
+         vaudrait faux à jamais. Les refs sont posées par les ouvreurs
+         (openRunChallenge, openCandyGame, openLugeGame, openLabGame,
+         openCryGame) au moment même où l'iframe est montée.
+
+         ⚠️ LE VOILE D'EMBUSCADE N'EST PAS CONCERNÉ : runAmbushRef monte le
+         fondu au noir AVANT que l'iframe existe, et runChallengeRef ne passe à
+         vrai qu'à la fin de ce fondu. La cinématique de la jetée continue donc
+         de se peindre normalement. */
+      const overlayUp = runChallengeRef.current || candyGameRef.current
+        || lugeGameRef.current || labGameRef.current || cryGameRef.current;
+
       updateMe(dt);
       if (isHost) updateWhistledHorses(dt);
       if (isHost) updateWolves(dt);
@@ -10495,6 +10531,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       checkCandyMonster();      // zip 411 : l'approche du monstre du lac
       if (m.zone === "evil") {
         updateRunAmbush(dt); // zip 375 : embuscade locale de la jetée
+        // Zip 425 : c'est ICI que se joue l'essentiel du gain — les cinq
+        // mini-jeux s'ouvrent tous depuis le monde maléfique, donc c'est cette
+        // peinture-là qui doublonnait avec la leur. Voir `overlayUp` plus haut.
+        if (overlayUp) return;
         drawEvilFrame(now);
         // TROIS voiles distincts depuis le zip 377, et ils doivent le rester :
         // celui de la zone (aller au noir puis revenir, avec téléportation au
@@ -10510,6 +10550,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // Valley Town (zip 234): same early-return pattern as the evil map; the
       // host sims above keep running on the farm world regardless.
       if (m.zone === "town") {
+        if (overlayUp) return;   // zip 425, même raison exactement
         drawTownFrame(now, dt);
         const fa = zoneFadeAlpha();
         if (fa > 0) { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = "black"; ctx.globalAlpha = fa; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.globalAlpha = 1; }
@@ -10543,6 +10584,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // en bloc) — d'où le saccadé. On se contente d'élaguer la map si des
       // ids de lapins/loups périmés s'y accumulent sur une longue session.
       if (npcSmoothRef.current.size > 400) npcSmoothRef.current.clear();
+
+      /* Zip 425 : aucun mini-jeu ne s'ouvre depuis la ferme aujourd'hui — ils
+         partent tous du monde maléfique — mais la garde est posée ici aussi,
+         et c'est délibéré : le jour où une porte s'ouvrira depuis la ferme,
+         elle héritera du correctif au lieu de rouvrir le même défaut.
+         ⚠️ ELLE EST APRÈS le lissage des joueurs distants et avant la
+         PEINTURE. advanceRemote() doit continuer de tourner : c'est lui qui
+         garde les avatars distants à jour, et un joueur qui ressort d'un
+         mini-jeu ne doit pas voir ses camarades se téléporter. */
+      if (overlayUp) return;
 
       const cam = getCam();
       ctx.setTransform(ZOOM, 0, 0, ZOOM, -Math.round(cam.x * ZOOM), -Math.round(cam.y * ZOOM));
