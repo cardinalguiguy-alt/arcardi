@@ -888,7 +888,17 @@ function lightK(n, sun, fillL, shade) {
   const cf = Math.max(0, n.x * fillL.x + n.y * fillL.y + n.z * fillL.z);
   const hemiT = 0.5 * n.y + 0.5;          // 1 = face au ciel, 0 = face au sol
   const A = CFG.LIGHT_AMBIENT, Hh = CFG.LIGHT_SKY, S = CFG.LIGHT_SUN, F = CFG.LIGHT_FILL;
-  const E = CFG.ENV_DIFFUSE;
+  /* ⚠️⚠️ 423 : LE DIFFUS D'ENVIRONNEMENT SE DÉRIVE DE `ENV_INTENSITY`, COMME
+     DANS r128 — ET C'EST LA CORRECTION QUI COMPTE LE PLUS DANS CE FICHIER.
+     Au 422 il était une constante indépendante (`ENV_DIFFUSE: 0.18`), réglée
+     pour que la planche soit belle. Le jeu, lui, applique `envMapIntensity` aux
+     DEUX termes indirects : la planche sous-estimait donc l'ambiante d'environ
+     0,3 sur chaque surface, et personne ne pouvait le voir ici. C'est comme ça
+     qu'un rendu « trop réfléchissant, on ne voit plus la piste » a pu être
+     livré avec des planches qui semblaient justes.
+     ⚠️ RÈGLE GÉNÉRALE : un paramètre de l'outil qui DOUBLE un paramètre du jeu
+     est une divergence en attente. Il doit toujours être DÉRIVÉ, jamais réglé. */
+  const E = CFG.ENV_INTENSITY * CFG.ENV_DIFFUSE;
   const k = [0, 0, 0];
   for (let i = 0; i < 3; i++) {
     k[i] = A

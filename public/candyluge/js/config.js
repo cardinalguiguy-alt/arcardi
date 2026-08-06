@@ -615,9 +615,34 @@ const CFG = {
      qu'avant. C'est la CHAÎNE qui change, pas les teintes. Une couleur de
      bonbon reste exactement la couleur qu'on lit dans ce fichier, à la
      compression des hautes lumières près. */
-  TONE_EXPOSURE: 1.42,       // ⚠️ ACES assombrit les tons moyens : on compense ici, et NULLE PART ailleurs
-  ENV_INTENSITY: 0.55,       // force de l'éclairage d'environnement (le ciel réfléchi) sur les PBR
-  ENV_DIFFUSE: 0.18,         // ⚠️ l'environnement éclaire AUSSI en diffus (r128 le fait) — il compte double si on l'oublie
+  /* ⚠️⚠️ ZIP 423 — CES TROIS NOMBRES ONT ÉTÉ DIVISÉS, ET LA CAUSE EST UNE
+     ERREUR DE MODÈLE DANS L'OUTIL, PAS DANS LE JEU.
+     ──────────────────────────────────────────────────────────────────────────
+     Guillaume, sur le rendu réel : « les reflets sont bien trop intenses, on ne
+     voit quasiment plus la piste ». Les planches du 422 ne le montraient pas —
+     et c'est ÇA qu'il fallait comprendre, parce qu'un outil qui rassure est
+     pire qu'un outil absent.
+
+     Dans three.js r128, `scene.environment` alimente DEUX termes :
+     `RE_IndirectSpecular` (le reflet, celui auquel on pense) ET
+     `RE_IndirectDiffuse` (une ambiante colorée par le ciel). Les deux sont
+     multipliés par `envMapIntensity`. Or l'environnement est ici fabriqué à
+     partir de la TEXTURE DE CIEL, dont la radiance moyenne est très élevée
+     (~0,8 en linéaire : c'est un ciel de plein jour). Le terme diffus valait
+     donc en vrai ≈ 0,8 × 0,55 = 0,44 — alors que la planche le modélisait
+     comme une constante séparée à 0,18.
+
+     Conséquence : le jeu recevait ~0,3 de lumière ambiante de plus que la
+     planche sur CHAQUE surface. Ça lave l'image, ça écrase les ombres, et ça
+     fait glisser une nappe spéculaire sur la piste.
+     ⚠️ LA CORRECTION DE FOND EST DANS L'OUTIL : `preview-luge.js` calcule
+     désormais le diffus d'environnement à partir de `ENV_INTENSITY`, comme
+     r128, et non plus depuis une constante indépendante. `ENV_DIFFUSE` n'est
+     plus qu'un facteur de forme (l'irradiance d'un hémisphère vaut moins que
+     la radiance de la source), et il n'y a plus qu'un seul nombre à régler. */
+  TONE_EXPOSURE: 1.44,       // ⚠️ ACES assombrit les tons moyens : on compense ici, et NULLE PART ailleurs
+  ENV_INTENSITY: 0.22,       // force de l'éclairage d'environnement (le ciel réfléchi) sur les PBR
+  ENV_DIFFUSE: 0.75,         // facteur de forme du diffus d'environnement, ×ENV_INTENSITY
   ENV_SIZE: 256,             // côté de l'équirectangulaire servant à fabriquer l'environnement
 
   /* ── LES RUGOSITÉS. Elles font autant que la couleur, et c'est nouveau. ──
@@ -625,17 +650,33 @@ const CFG = {
      différence entre « du plastique coloré » et « du bonbon » est là, pas dans
      la teinte. ⚠️ La neige n'est PAS mate : la neige tassée d'une piste renvoie
      un éclat large et doux, c'est ce qui la distingue d'une nappe blanche. */
-  RGH_SNOW: 0.68,
-  RGH_PISTE: 0.52,           // la piste est plus lisse que la neige : elle est damée
-  RGH_CANDY: 0.26,           // le bonbon : vernis
-  RGH_CANE: 0.22,            // le sucre d'orge : verre
-  RGH_ICING: 0.80,           // le glaçage : mat et poudreux
+  /* ⚠️⚠️ ZIP 423 — LA NEIGE ET LA PISTE SONT REMONTÉES EN RUGOSITÉ, ET LA
+     CARTE DE RUGOSITÉ DE LA PISTE A ÉTÉ RETIRÉE.
+     Deux fautes cumulées au 422, et la seconde était sournoise :
+       1. 0,52 pour un sol est une valeur de PLASTIQUE VERNI. De la neige damée
+          renvoie un éclat LARGE, jamais un éclat net ;
+       2. `roughnessMap` MULTIPLIE la rugosité par le canal VERT de la texture.
+          Le vert de la barbe à papa vaut ~0,59 : la piste se retrouvait donc à
+          0,52 × 0,59 = **0,31**, deux fois plus lisse que voulu, et sur la
+          surface qui occupe la moitié du cadre. C'est la nappe qui « mangeait »
+          la piste. La neige, elle, est presque blanche (vert ~0,96) et n'était
+          quasiment pas affectée — d'où le fait que seule la piste posait
+          problème.
+     ⚠️ LA NEIGE GARDE SA CARTE, LA PISTE NON. Sur la neige, la variation casse
+     la bande spéculaire uniforme et c'est utile ; sur la piste, la texture est
+     colorée, donc sa luminance n'a AUCUN rapport avec sa rugosité. Une carte de
+     rugosité ne se dérive d'une carte de couleur que si la couleur est neutre. */
+  RGH_SNOW: 0.86,
+  RGH_PISTE: 0.80,           // la piste est un peu plus lisse que la neige : elle est damée
+  RGH_CANDY: 0.34,           // le bonbon : vernis
+  RGH_CANE: 0.30,            // le sucre d'orge : verre
+  RGH_ICING: 0.92,           // le glaçage : mat et poudreux
   RGH_GINGER: 0.86,          // le pain d'épices : franchement mat
   RGH_WOOD: 0.72,            // le bois de la luge
   RGH_CLOTH: 0.92,           // les vêtements du fermier
-  RGH_MOUNT: 0.90,           // les montagnes : mates, elles doivent RECULER
-  CLEARCOAT_CANDY: 0.85,     // le vernis du bonbon, en couche par-dessus
-  METAL_RUNNER: 0.55,        // les patins en caramel doré : à demi métalliques, ils brillent
+  RGH_MOUNT: 0.96,           // les montagnes : mates, elles doivent RECULER
+  CLEARCOAT_CANDY: 0.55,     // le vernis du bonbon, en couche par-dessus
+  METAL_RUNNER: 0.30,        // les patins en caramel doré : à demi métalliques, ils brillent
 
   /* ══ LES OMBRES (422) — ON EST PASSÉ À DE VRAIES SHADOW MAPS. ═════════════
      ⚠️ ET LA SEULE RAISON POUR LAQUELLE ÇA TIENT, C'EST QUE LE VOLUME D'OMBRE
@@ -687,7 +728,7 @@ const CFG = {
      ressembler une image à une photo de fin de journée plutôt qu'à un rendu. */
   GRADE_WARM: 0.055,
   GRADE_COOL: 0.070,
-  GRADE_SAT: 1.06,           // ACES désature : on rend un peu de saturation, pas plus
+  GRADE_SAT: 1.00,           // ACES désature : on rend un peu de saturation, pas plus
   /* ⚠️⚠️ LE CONTRASTE FINAL, ET C'EST LA MESURE QUI L'A IMPOSÉ, PAS LE GOÛT.
      Méthode du 421 (réduire à 480×270, mesurer bande par bande), appliquée à la
      référence de Guillaume et à la planche :
@@ -705,7 +746,7 @@ const CFG = {
      ⚠️ NE PAS CORRIGER ÇA EN BAISSANT L'EXPOSITION : on obtiendrait la même
      image en plus sombre, écart-type inchangé, et on aurait perdu les hautes
      lumières en prime. Ce qu'il faut est un ÉCART, pas un décalage. */
-  GRADE_CONTRAST: 1.28,      // pivot sur le gris moyen, appliqué après ACES
+  GRADE_CONTRAST: 1.34,      // pivot sur le gris moyen, appliqué après ACES
 
   /* ══ LES PALIERS DE QUALITÉ (422) ═════════════════════════════════════════
      ⚠️ MESURÉS, PAS SUPPOSÉS. `QUALITY_AUTO` fait tourner un compteur d'images
@@ -1013,8 +1054,22 @@ const CFG = {
      neige tassée, le dérapage étale une bavure PÂLE (de la neige retournée,
      pulvérisée). On lit donc d'un coup d'œil, derrière soi, ce qu'on vient de
      faire — et c'est tout l'objet du chantier. */
-  COL_CARVE: 0xd2699a,       // le sillon : plus sombre que la piste, sans virer au brun
-  COL_SKID: 0xffd9ea,        // la bavure : plus claire, neige retournée
+  /* ⚠️⚠️ ZIP 423 — LES DEUX TEINTES ONT ÉTÉ ÉCARTÉES, ET C'EST LE PASSAGE EN
+     LINÉAIRE QUI L'IMPOSAIT. Guillaume : « la traînée est quasi invisible
+     maintenant sur les virages ».
+     Le sillon était réglé au 414 par comparaison de valeurs GAMMA : 0xd2699a
+     contre 0xfa96c0 pour la piste, soit un écart qui SEMBLE net dans un
+     sélecteur de couleur. En linéaire, ces deux valeurs sont beaucoup plus
+     proches qu'elles n'en ont l'air (la courbe sRGB étire les tons sombres et
+     tasse les clairs), et le tone mapping ACES les rapproche encore.
+     ⚠️ LA LEÇON GÉNÉRALE, ET ELLE VAUT POUR TOUTE LA PALETTE : deux couleurs
+     réglées « à l'œil » côte à côte dans un pipeline gamma ne gardent PAS leur
+     écart apparent une fois le rendu passé en linéaire. Ce n'est pas une
+     dérive de palette, c'est un changement d'unité — et ça ne se voit que sur
+     les paires dont l'écart EST l'information. Il y en a trois dans ce jeu :
+     le sillon, la bavure, et le liseré de piste. */
+  COL_CARVE: 0xa83e6f,  // le sillon : franchement plus sombre
+  COL_SKID: 0xfff0f8,        // la bavure : franchement plus claire, neige pulvérisée
   /* ⚠️⚠️ REFROIDIES AU 422, ET C'EST LE SEUL DÉPLACEMENT DE PALETTE DU ZIP.
      La valeur du 414 (0xe2cbc0) était réglée sous une lumière NEUTRE. Sous le
      soleil ambré du 422, la même teinte vire au brun : les montagnes prenaient

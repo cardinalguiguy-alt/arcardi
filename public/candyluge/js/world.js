@@ -636,6 +636,57 @@ const World = (function () {
   }
 
   /* ══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️⚠️ ZIP 423 — LES TEXTURES D'EFFET N'ONT PLUS DE MIPMAPS, ET C'EST LA
+     CORRECTION DES « CARRÉS BLANCS OU NOIRS EN FOND DE DÉCOR ».
+     ──────────────────────────────────────────────────────────────────────────
+     LE DÉFAUT, ET IL EST PARFAITEMENT LOGIQUE UNE FOIS ÉNONCÉ. Toutes les
+     textures d'effet du jeu sont des DÉGRADÉS QUI VONT À ALPHA 0 SUR LEURS
+     BORDS : ombre portée, cerne d'alerte, étoile, poudre, gerbe, halo solaire,
+     bonbon de pluie. Leur transparence est ce qui leur donne leur forme — un
+     disque, un anneau, un point.
+
+     Or un mipmap est une MOYENNE. Le niveau 1×1 d'un dégradé radial n'est pas
+     « un petit disque » : c'est un carré uniforme dont la couleur est la
+     couleur moyenne et dont l'alpha est l'alpha moyen. Dès qu'un décalque
+     s'éloigne assez, ou qu'un sprite de particule devient petit à l'écran, le
+     matériel choisit un mip élevé et le quad entier devient un APLAT
+     TRANSLUCIDE — c'est-à-dire un carré.
+
+     D'où les deux couleurs observées, et elles s'expliquent chacune :
+       * les CARRÉS NOIRS sont les ombres portées des gourmands lointains.
+         `paintShadow` est un violet très sombre (46,16,46) : sa moyenne est
+         sombre, donc le carré est sombre.
+       * les CARRÉS BLANCS sont les voiles et sprites additifs — halo solaire,
+         rideau de porte, poudre. Leur moyenne est claire, et l'additif la
+         rend plus claire encore.
+
+     ⚠️ ET LE DÉFAUT PRÉEXISTE AU 422 : `tex()` a toujours posé
+     `generateMipmaps = true`. Ce qui a changé, c'est que la scène est devenue
+     plus contrastée et que les décalques sont maintenant tenus à distance
+     (relais avec la carte d'ombre) — donc les carrés sont passés du seuil de
+     l'invisible à celui de l'évident. On ne « casse » donc rien en corrigeant.
+
+     ⚠️ POURQUOI PAS SIMPLEMENT UN MIP CLAMPÉ : parce qu'aucune de ces textures
+     n'en a besoin. Un mipmap sert à filtrer un motif RÉPÉTÉ vu de loin (la
+     neige, la piste, le sucre d'orge — qui les gardent). Un dégradé unique posé
+     sur un quad ne se répète jamais : il n'y a rien à filtrer, et le filtrage
+     bilinéaire du niveau 0 suffit.
+     ⚠️ ET `ClampToEdgeWrapping` VA AVEC. En `RepeatWrapping`, le filtrage
+     bilinéaire au bord d'un quad va chercher le texel du bord OPPOSÉ ; sur ces
+     dégradés les deux bords sont à alpha 0, donc c'est sans effet aujourd'hui —
+     mais ça cesserait de l'être au premier dégradé non centré, et ce serait
+     encore un bord dur inexplicable. */
+  function texFx(canvasEl) {
+    const t = new THREE.CanvasTexture(canvasEl);
+    t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+    t.generateMipmaps = false;
+    t.minFilter = THREE.LinearFilter;
+    t.magFilter = THREE.LinearFilter;
+    t.encoding = THREE.LinearEncoding;
+    return t;
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════════
      LES COULEURS (422) — sRGB → LINÉAIRE, UNE FOIS POUR TOUTES.
      ──────────────────────────────────────────────────────────────────────────
      Toutes les constantes `COL_*` de config.js sont, et restent, des valeurs
@@ -737,7 +788,6 @@ const World = (function () {
        ses creux des zones plus mates. C'est physiquement plausible et ça ne
        coûte pas une texture de plus. */
     const snowRough = texData(paintSnow(), 1, 1);
-    const pisteRough = texData(paintPiste(), 1, 1);
     mat.snow = new THREE.MeshStandardMaterial({
       map: tex(paintSnow(), 1, 1), side: THREE.DoubleSide,
       roughness: CFG.RGH_SNOW, metalness: 0.0, roughnessMap: snowRough,
@@ -745,7 +795,10 @@ const World = (function () {
     });
     mat.piste = new THREE.MeshStandardMaterial({
       map: tex(paintPiste(), 1, 1), side: THREE.DoubleSide,
-      roughness: CFG.RGH_PISTE, metalness: 0.0, roughnessMap: pisteRough,
+      /* ⚠️ PAS DE `roughnessMap` ICI — voir RGH_PISTE dans config.js. Le canal
+         vert d'une texture COLORÉE n'a aucun rapport avec sa rugosité, et
+         l'utiliser rendait la piste deux fois plus lisse que voulu. */
+      roughness: CFG.RGH_PISTE, metalness: 0.0,
       envMapIntensity: CFG.ENV_INTENSITY,
     });
     mat.pisteEdge = L(CFG.COL_PISTE_EDGE, { roughness: CFG.RGH_PISTE });
@@ -847,9 +900,9 @@ const World = (function () {
       transparent: true, depthWrite: false, fog: true,
       polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -6,
     }, extra));
-    mat.shadow = decal({ map: texData(paintShadow()), opacity: CFG.SHADOW_OPACITY });
-    mat.warn = decal({ map: texData(paintWarn()), color: sc(CFG.COL_WARN), opacity: 0.7, fog: false });
-    mat.gate = decal({ map: texData(paintGate()), color: sc(CFG.COL_GATE), opacity: CFG.GATE_OPACITY, fog: false });
+    mat.shadow = decal({ map: texFx(paintShadow()), opacity: CFG.SHADOW_OPACITY });
+    mat.warn = decal({ map: texFx(paintWarn()), color: sc(CFG.COL_WARN), opacity: 0.7, fog: false });
+    mat.gate = decal({ map: texFx(paintGate()), color: sc(CFG.COL_GATE), opacity: CFG.GATE_OPACITY, fog: false });
     /* Les montants : en Basic non brumeux comme le fanion de checkpoint, et
        pour la même raison — un repère dont la lisibilité dépend du soleil est
        un repère qui ment une fois sur deux. */
@@ -862,7 +915,7 @@ const World = (function () {
        la lumière tendue en l'air, pas de la matière posée au sol, et l'additif
        est ce qui l'empêche de se lire comme une paroi. */
     mat.gateCurtain = new THREE.MeshBasicMaterial({
-      map: texData(paintCurtain()), color: sc(CFG.COL_GATE).multiplyScalar(1.6), transparent: true,
+      map: texFx(paintCurtain()), color: sc(CFG.COL_GATE).multiplyScalar(1.6), transparent: true,
       opacity: CFG.GATE_CURTAIN_OPACITY, fog: false, depthWrite: false,
       side: THREE.DoubleSide, blending: THREE.AdditiveBlending,
     });
@@ -1354,7 +1407,7 @@ const World = (function () {
       const m = new THREE.Mesh(
         new THREE.PlaneGeometry(size * 2, size * 2),
         new THREE.MeshBasicMaterial({
-          map: texData(paintGlow(coreStop)),
+          map: texFx(paintGlow(coreStop)),
           color: sc(colHex).multiplyScalar(gain),
           transparent: true, depthWrite: false, depthTest: false,
           fog: false, blending: THREE.AdditiveBlending,
@@ -1404,7 +1457,7 @@ const World = (function () {
        poussières toutes identiques dans le jeu : l'outil aurait validé un
        effet qui n'existe pas. C'est exactement le mensonge que ce fichier
        s'interdit (cf. l'en-tête de preview-luge.js). */
-    const mmap = texData(paintDust());
+    const mmap = texFx(paintDust());
     const mmat = new THREE.ShaderMaterial({
       uniforms: {
         uMap: { value: mmap }, uOpacity: { value: 0.42 }, uScale: { value: 300 },
@@ -1531,7 +1584,7 @@ const World = (function () {
     const g = new THREE.BufferGeometry();
     g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
     snowFall = new THREE.Points(g, new THREE.PointsMaterial({
-      map: tex(paintDust()), size: 0.55, transparent: true, opacity: 0.75,
+      map: texFx(paintDust()), size: 0.55, transparent: true, opacity: 0.75,
       depthWrite: false, sizeAttenuation: true, fog: false,
     }));
     scene.add(snowFall);
@@ -1899,7 +1952,7 @@ const World = (function () {
     g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
     g.setAttribute("color", new THREE.BufferAttribute(col, 3));
     g.setAttribute("aSize", new THREE.BufferAttribute(siz, 1));
-    const map = tex(texCanvas);
+    const map = texFx(texCanvas);
     const m = new THREE.ShaderMaterial({
       uniforms: {
         uMap: { value: map },
@@ -2059,8 +2112,12 @@ const World = (function () {
        on regarde derrière soi face au soleil. Le Lambert ne pouvait pas le
        dire : il ne connaît pas la rugosité. */
     const m = new THREE.MeshStandardMaterial({
-      vertexColors: true, transparent: true, opacity: 0.92,
-      roughness: 0.34, metalness: 0.0, envMapIntensity: CFG.ENV_INTENSITY * 0.8,
+      vertexColors: true, transparent: true, opacity: 0.96,
+      /* ⚠️ 423 : rugosité remontée de 0,34 à 0,70. À 0,34 la trace attrapait un
+         éclat spéculaire qui l'ÉCLAIRCISSAIT exactement là où elle doit être
+         un creux sombre — le sillon disparaissait dans le reflet au lieu de se
+         détacher. Une trace tassée est plus lisse que la neige, pas vernie. */
+      roughness: 0.70, metalness: 0.0, envMapIntensity: CFG.ENV_INTENSITY * 0.6,
       depthWrite: false, polygonOffset: true,
       polygonOffsetFactor: -4, polygonOffsetUnits: -8,
     });
@@ -2136,7 +2193,15 @@ const World = (function () {
        lisible — on voit le trait S'ÉPAISSIR et FONCER au lieu de le voir
        apparaître de nulle part. Un signal qui varie se lit mieux qu'un signal
        qui s'allume. */
-    const visible = Math.max(0.30, carve * 0.9, skid);
+    /* ⚠️ 423 : LE PLANCHER MONTE ET LA PENTE AUSSI. Le sillon de carre n'était
+       « quasi invisible en virage » pour deux raisons cumulées — les teintes
+       trop proches (corrigé dans config.js) ET ce mélange, qui à `carve = 0,6`
+       ne délivrait que 0,54 de la couleur du geste. Une carre franche doit
+       donner une trace FRANCHE : c'est le seul retour visuel du geste central
+       du jeu, et un retour à moitié effacé n'apprend rien.
+       ⚠️ Le plancher reste bas (0,26) : c'est la trace de roulage en ligne
+       droite, elle doit exister sans se remarquer. */
+    const visible = Math.max(0.26, Math.min(1, carve * 1.45), Math.min(1, skid * 1.3));
     // 3. Et l'interpolation depuis la piste, qui est tout le propos ci-dessus.
     /* ⚠️ 422 : LE MÉLANGE SE FAIT EN sRGB, LA SORTIE EST CONVERTIE EN LINÉAIRE.
        L'ordre importe et n'est pas interchangeable : les trois teintes de
