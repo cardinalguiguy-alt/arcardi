@@ -28,6 +28,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "@/lib/supabaseClient";
+import { noteSend } from "@/lib/realtimeQuota";
 import * as C from "./fermeConstants";
 import * as E from "./fermeEngine";
 import { buildSprites, charPalette, drawBridgeTile, drawBridgeOverlay, drawCandyGroundTile, candySyrupColor } from "./fermeArt";
@@ -655,6 +656,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const resStopQueueRef = useRef([]);
   // Compteurs de trafic (voir l'enveloppe de ch.send dans l'effet réseau).
   const netStatsRef = useRef({ startedAt: Date.now(), sent: 0, dropped: 0, timedOut: 0, bytes: 0, byKey: {}, droppedByKey: {} });
+  // Audit août 2026 : throttle de l'avertissement console « message jeté »
+  // (le dépassement du plafond 10 msg/s est continu, pas ponctuel).
+  const lastDropWarnRef = useRef(0);
   const mapOpenRef = useRef(false);
   const devMenuOpenRef = useRef(false); // zip 392 : lu par onKeyDown, qui vit dans une closure à deps vides
   const shopOpenRef = useRef(false);
@@ -1335,11 +1339,45 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         st.sent++;
         st.byKey[key] = (st.byKey[key] || 0) + 1;
         try { st.bytes += JSON.stringify(msg.payload || {}).length; } catch { /* payload non sérialisable : on compte le message, pas ses octets */ }
+        // Audit août 2026 — comptabilisation du QUOTA (distincte des stats de
+        // debug ci-dessus). Ce canal est en `self:false` : les destinataires
+        // facturés sont donc les AUTRES joueurs uniquement, d'où
+        // `playersRef.current.size` sans +1. Coût réel = 1 (envoi) + size.
+        noteSend(playersRef.current.size, "ferme:" + key);
         const r = rawSend(msg, opts);
         // `send()` renvoie une Promise résolue sur "ok" | "timed out" | "rate limited".
         if (r && typeof r.then === "function") {
           r.then(res => {
-            if (res === "rate limited") { st.dropped++; st.droppedByKey[key] = (st.droppedByKey[key] || 0) + 1; }
+            if (res === "rate limited") {
+              st.dropped++; st.droppedByKey[key] = (st.droppedByKey[key] || 0) + 1;
+              // ----------------------------------------------------------
+              // Audit août 2026 — ALERTE AUTOMATIQUE SUR MESSAGE JETÉ.
+              //
+              // `lib/supabaseClient.js` fixe eventsPerSecond: 10. Au-delà,
+              // `send()` ne transmet RIEN et résout silencieusement sur
+              // "rate limited". Aucun des ~57 sites d'émission de ce fichier
+              // ne lisait ce retour : un message perdu était strictement
+              // indétectable. Or l'hôte dépasse ce plafond en régime normal
+              // (ferme peuplée : ~8,2 Hz de simulation + ~4 Hz de position).
+              //
+              // Un `residentPath` ou un `station` perdu = un PNJ figé chez
+              // l'invité, sans trace ni console ni log — la signature exacte
+              // des gels poursuivis des zips 359 à 365.
+              //
+              // Jusqu'ici il fallait PENSER à taper __fermeNet() au bon
+              // moment. Maintenant ça crie tout seul, avec un throttle à 5 s
+              // pour ne pas noyer la console (le dépassement est continu).
+              // ----------------------------------------------------------
+              const nowMs = Date.now();
+              if (nowMs - lastDropWarnRef.current > 5000) {
+                lastDropWarnRef.current = nowMs;
+                console.warn(
+                  "[FERME/REALTIME] Message JETÉ par le throttle client (" + key + "). " +
+                  "Total jetés : " + st.dropped + " sur " + st.sent + " envois. " +
+                  "Des PNJ peuvent se figer chez les invités. Tapez __fermeNet() pour le détail par système."
+                );
+              }
+            }
             else if (res === "timed out") st.timedOut++;
           }).catch(() => {});
         }
@@ -1819,7 +1857,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // sont protégées par les gardes !isHost dans applyDeltas -> pas de double
   // application nuisible ; le reste (tiles/crops/animals...) est idempotent.
   function hostSend(msg) {
-    channelRef.current?.send(msg);
+    // Audit août 2026 : ne part sur le réseau QUE s'il y a quelqu'un pour le
+    // recevoir (voir netHasAudience). L'application LOCALE ci-dessous reste
+    // inconditionnelle — c'est elle qui fait avancer la ferme de l'hôte, elle
+    // ne doit jamais dépendre de la présence d'un invité.
+    if (netHasAudience()) channelRef.current?.send(msg);
     if (isHost && msg && msg.event === "apply") applyDeltas(msg.payload);
   }
   function hostHandleReq(req) {
@@ -5258,13 +5300,43 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
 
   // Invité : retente `hello` tant que le monde n'est pas arrivé (au cas où
   // l'hôte se soit abonné après nous et ait raté notre premier `hello`).
+  //
+  // ------------------------------------------------------------------
+  // Audit août 2026 — BACKOFF EXPONENTIEL.
+  //
+  // Avant : un `hello` toutes les 1,2 s, INDÉFINIMENT, tant que `worldReady`
+  // était faux. Or l'hôte reste sur l'écran « entrez le code de la ferme »
+  // aussi longtemps qu'il le veut (facilement 1 à 2 minutes en début de
+  // soirée), et il répond `nofarm` à CHAQUE `hello`. Soit 2 send toutes les
+  // 1,2 s = ~1,7 send/s = ~3,3 messages facturés par seconde, pour rien.
+  // Environ 400 messages gaspillés par démarrage de ferme.
+  //
+  // Ce retry n'est qu'un filet de sécurité : le chemin nominal est que l'hôte
+  // diffuse spontanément un `broadcastSnapshot()` dès que son monde est prêt
+  // (voir le handler `subscribe`). Il n'a donc aucun besoin d'être serré.
+  //
+  // 1,2 s -> 2,4 s -> 4,8 s -> plafond 6 s : on garde une reprise rapide sur
+  // les deux premières tentatives (le cas réel « l'hôte s'est abonné juste
+  // après nous » se résout là), puis on lève le pied. Sur 2 minutes d'attente
+  // on passe de ~100 `hello` à ~22, soit -78 % sur cette phase.
+  // ------------------------------------------------------------------
   useEffect(() => {
     if (isHost || worldReady) return;
-    const it = setInterval(() => {
-      if (worldReady || !channelReadyRef.current) return;
-      channelRef.current?.send({ type: "broadcast", event: "hello", payload: { id: me.id } });
-    }, 1200);
-    return () => clearInterval(it);
+    const FIRST_MS = 1200, MAX_MS = 6000;
+    let delay = FIRST_MS;
+    let timer = null;
+    const tick = () => {
+      if (!worldReady && channelReadyRef.current) {
+        channelRef.current?.send({ type: "broadcast", event: "hello", payload: { id: me.id } });
+        // On ne rallonge le délai QUE si le message est effectivement parti :
+        // tant que le canal n'est pas prêt, on n'a encore rien tenté, donc
+        // rien à espacer.
+        delay = Math.min(MAX_MS, delay * 2);
+      }
+      timer = setTimeout(tick, delay);
+    };
+    timer = setTimeout(tick, delay);
+    return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isHost, worldReady]);
 
@@ -5418,6 +5490,25 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // émis, sans aucun impact de gameplay (personne pour voir). Vaut pour la
   // position ET pour les entités simulées par l'hôte (greg/soan/lapins/…).
   function netCanBroadcast() { return channelReadyRef.current && !hiddenRef.current && playersRef.current.size > 0; }
+  // ------------------------------------------------------------------
+  // Audit août 2026 — garde d'audience pour les messages d'ÉTAT DE JEU.
+  //
+  // Distincte de netCanBroadcast() ci-dessus, et la différence est cruciale :
+  // celle-ci NE TESTE PAS hiddenRef. Un hôte dont l'onglet passe en arrière-plan
+  // doit continuer à diffuser les `apply` (récolte, arrosage, artisanat…),
+  // sinon les invités restés dans la ferme se désynchronisent silencieusement.
+  // Couper la SIMULATION décorative quand personne ne regarde est gratuit ;
+  // couper l'ÉTAT PARTAGÉ ne l'est pas.
+  //
+  // Ce qu'elle apporte : `hostSend` (51 appels, l'essentiel des 97 sites
+  // `event: "apply"`) n'avait AUCUNE garde. Un hôte qui joue seul — cas très
+  // courant : il attend l'invité, ou l'invité est reparti — émettait donc un
+  // message par action de jeu. Le canal est en `self:false`, donc avec zéro
+  // abonné ça coûte quand même 1 message facturé à chaque fois (la règle
+  // Supabase facture « 1 message envoyé » indépendamment du nombre de
+  // récepteurs). De l'ordre de 0,5 à 2 send/s de gaspillage pur.
+  // ------------------------------------------------------------------
+  function netHasAudience() { return channelReadyRef.current && playersRef.current.size > 0; }
   // Zip 365 : la clé d'état de mouvement porte désormais le VECTEUR, plus le
   // seul `dir`. Explication ci-dessous dans maybeSendPos.
   function posKeyOf(m) { return m && m.moving ? ("m" + (m.vx || 0).toFixed(1) + "," + (m.vy || 0).toFixed(1)) : "s"; }

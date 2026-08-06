@@ -18,6 +18,7 @@ import ConnectFour from "@/components/ConnectFour";
 import PetitsChevaux from "@/components/PetitsChevaux";
 import EchoesRoom from "@/components/EchoesRoom";
 import RoomChat from "@/components/RoomChat";
+import QuotaBadge from "@/components/QuotaBadge";
 import DiapasonGame from "@/components/diapason/DiapasonGame";
 import HeistRoom from "@/components/heist/HeistRoom";
 import ChromatikGame from "@/components/cards/ChromatikGame";
@@ -201,6 +202,31 @@ export default function Room() {
 
   useEffect(() => {
     let roomSub, playersSub;
+    // ------------------------------------------------------------------
+    // AUDIT REALTIME (août 2026) — FUITE DE CANAUX.
+    //
+    // Les deux abonnements ci-dessous sont créés APRÈS cinq aller-retours
+    // réseau (getSession, select profiles, select rooms, select ferme_saves,
+    // upsert room_players, loadPlayers). Si le composant se démonte PENDANT
+    // ces `await`, le cleanup s'exécutait avec `roomSub`/`playersSub` encore
+    // `undefined` : il ne supprimait rien, l'IIFE se poursuivait, et les deux
+    // canaux `postgres_changes` créés ensuite n'étaient JAMAIS fermés.
+    //
+    // En dev (React 18 StrictMode : montage -> démontage -> remontage) c'était
+    // systématique — deux canaux orphelins à chaque chargement de salon. En
+    // prod : navigation rapide, retour arrière, réseau lent.
+    //
+    // Coût : chaque orphelin reste abonné pour la durée de vie de l'onglet.
+    // Chaque UPDATE de `rooms`/`room_players` est alors FACTURÉ deux fois (la
+    // règle Supabase est « 1 message par client qui écoute l'événement ») et
+    // déclenche autant de `loadPlayers()` redondants. C'est exactement la
+    // signature « listener dupliqué » cherchée après le dépassement de quota.
+    //
+    // Le drapeau `cancelled` ferme les deux fenêtres : celle d'AVANT la
+    // création (on ne crée rien pour rien) et celle d'APRÈS (course résiduelle
+    // si le démontage tombe entre les deux `subscribe()`).
+    // ------------------------------------------------------------------
+    let cancelled = false;
 
     (async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -248,6 +274,10 @@ export default function Room() {
 
       await loadPlayers(roomRow.id);
 
+      // Démontage survenu pendant les `await` ci-dessus : ne pas créer de
+      // canaux dont plus personne ne tient la référence (voir en tête d'effet).
+      if (cancelled) return;
+
       playersSub = supabase
         .channel("rp_" + roomRow.id)
         .on("postgres_changes", { event: "*", schema: "public", table: "room_players", filter: `room_id=eq.${roomRow.id}` },
@@ -282,9 +312,18 @@ export default function Room() {
             setFermeAway(null);
           })
         .subscribe();
+
+      // Course résiduelle : le démontage a pu tomber entre les deux
+      // `subscribe()` ci-dessus, alors que le cleanup avait déjà lu des
+      // variables encore vides. On rattrape ici.
+      if (cancelled) {
+        supabase.removeChannel(playersSub); playersSub = null;
+        supabase.removeChannel(roomSub); roomSub = null;
+      }
     })();
 
     return () => {
+      cancelled = true;
       if (roomSub) supabase.removeChannel(roomSub);
       if (playersSub) supabase.removeChannel(playersSub);
     };
@@ -1394,6 +1433,12 @@ export default function Room() {
           transitions lobby <-> jeu : l'historique de discussion et la
           connexion au canal restent intacts pendant toute la session. */}
       <RoomChat room={room} me={me} t={t} />
+
+      {/* Garde-fou de quota Realtime (audit août 2026). Supabase ne propose
+          aucune alerte de seuil sur le plan gratuit : ce badge est le seul
+          avertissement automatique avant les 2 M messages/mois. Invisible en
+          pratique tant qu'on est sous 60 % du budget. Voir lib/realtimeQuota.js. */}
+      <QuotaBadge />
     </div>
   );
 }

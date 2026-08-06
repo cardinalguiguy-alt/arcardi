@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Chess } from "chess.js";
 import { supabase } from "@/lib/supabaseClient";
+import { noteSend } from "@/lib/realtimeQuota";
 import { saveGameState, readGameState, resetRoomToLobby, recordMatchResult } from "@/lib/gameSync";
 import { playChessMove, playChessCapture, playGameWin, playGameLose, playConfirmChime } from "@/lib/sfx";
 import Crossfade from "../Crossfade";
@@ -13,6 +14,12 @@ const GAME_ID = "chess";
 const BOT_ID = "__arcardi_bot__"; // identifiant du siège tenu par l'ordinateur (mode solo)
 const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 const CLOCK_SEC = 10 * 60; // pendule par défaut : 10 min (sans incrément en v1)
+// Audit Realtime août 2026 : période de RESYNCHRONISATION de la pendule sur le
+// réseau. L'hôte décompte toujours à la seconde (autorité + chute du drapeau),
+// mais ne diffuse qu'à cette cadence ; les clients interpolent entre deux
+// messages. Voir l'effet « pendule locale » et le commentaire dans l'effet
+// d'arbitrage de la pendule. 10 s = compromis entre trafic et dérive visible.
+const CLOCK_SYNC_SEC = 10;
 // Cadences proposées au démarrage (secondes par joueur, sans incrément).
 const CADENCES = [
   { min: 3, sec: 3 * 60, tagKey: "chessBlitz" },
@@ -101,6 +108,11 @@ export default function ChessGame({ room, me, isHost, players, t, lang, onFinish
   const botTimerRef = useRef(null);     // minuteur du coup du bot (pour l'annuler : takeback/abandon/démontage)
   const permsRef = useRef({});          // miroir de `perms` pour l'arbitrage hôte
   const modeRef = useRef("game");       // "game" (partie chronométrée) | "analysis" (échiquier d'analyse)
+  // Audit août 2026 : l'effet réseau a des deps figées ([room.id, isHost]), sa
+  // closure ne verrait donc jamais un `players` à jour. Ref nécessaire pour que
+  // le comptage de quota utilise le nombre RÉEL d'abonnés au moment de l'envoi.
+  const playersRef = useRef(players);
+  useEffect(() => { playersRef.current = players; }, [players]);
   const cadenceRef = useRef(CLOCK_SEC); // cadence choisie (le bot y adapte son temps de réflexion)
 
   useEffect(() => { statusRef.current = status; }, [status]);
@@ -261,6 +273,17 @@ export default function ChessGame({ room, me, isHost, players, t, lang, onFinish
   // ---- Canal Realtime propre au jeu (host-authoritative, self:true) ----
   useEffect(() => {
     const ch = supabase.channel("chess_" + room.id, { config: { broadcast: { self: true } } });
+    // Audit août 2026 — comptabilisation du quota Realtime (voir
+    // lib/realtimeQuota.js). Ce canal est en `self:true` : l'émetteur est
+    // lui-même abonné, les destinataires facturés sont donc TOUS les joueurs
+    // du salon. Coût par send = 1 (envoi) + players.length (réceptions).
+    {
+      const rawSend = ch.send.bind(ch);
+      ch.send = (msg, opts) => {
+        noteSend(playersRef.current.length, "chess:" + ((msg && msg.event) || "?"));
+        return rawSend(msg, opts);
+      };
+    }
     channelRef.current = ch;
 
     ch.on("broadcast", { event: "match_start" }, ({ payload }) => {
@@ -567,13 +590,67 @@ export default function ChessGame({ room, me, isHost, players, t, lang, onFinish
             clockW: clockRef.current.w, clockB: clockRef.current.b,
           },
         });
-      } else {
+      } else if (val % CLOCK_SYNC_SEC === 0) {
+        // --------------------------------------------------------------
+        // Audit août 2026 — DIFFUSION DU CHRONO TOUTES LES 10 s, PAS 1 s.
+        //
+        // Avant : un broadcast `clock` CHAQUE seconde pendant toute la
+        // partie. Règle de facturation Supabase : 1 message pour l'envoi
+        // + 1 par client abonné. Sur ce canal `self:true`, à 2 joueurs, un
+        // send coûte donc 3 messages -> 3 msg/s en continu, soit ~3 600
+        // messages pour une partie de 20 minutes. De très loin le plus gros
+        // consommateur des 21 mini-jeux (une partie de Quiz complète en
+        // coûte ~420).
+        //
+        // L'autorité ne bouge pas d'un pouce : l'hôte continue de décompter
+        // à la seconde dans clockRef, et c'est toujours lui — et lui seul —
+        // qui détecte la chute du drapeau (branche `val <= 0` ci-dessus,
+        // inchangée, diffusée immédiatement). Seul l'AFFICHAGE des autres
+        // clients est désormais interpolé localement entre deux syncs (voir
+        // l'effet « pendule locale » plus bas).
+        //
+        // Le `val % CLOCK_SYNC_SEC === 0` fait que la resynchronisation tombe
+        // sur des valeurs rondes du camp au trait, ce qui rend la correction
+        // invisible à l'œil. Dérive maximale entre deux syncs : < 1 s.
+        //
+        // Gain : -90 % sur ce jeu (3 600 -> ~360 messages par partie).
+        // --------------------------------------------------------------
         channelRef.current?.send({ type: "broadcast", event: "clock", payload: { clockW: clockRef.current.w, clockB: clockRef.current.b } });
       }
     }, 1000);
     return () => clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isHost, phase]);
+
+  // ---- Pendule LOCALE : interpolation de l'affichage entre deux syncs ----
+  // ------------------------------------------------------------------
+  // Corollaire du passage de la diffusion à CLOCK_SYNC_SEC (voir ci-dessus).
+  // L'hôte ne diffuse plus la pendule qu'une fois toutes les 10 s ; sans cet
+  // effet, l'affichage de TOUS les clients avancerait par bonds de 10 s.
+  //
+  // « Tous » y compris l'hôte : le canal est en `self:true`, donc son propre
+  // affichage passait lui aussi par le réseau (setClockW/setClockB sur
+  // réception de `clock`). Cet effet tourne donc sans distinction d'hôte.
+  //
+  // Il ne fait QUE de l'affichage : aucune décision de jeu n'en dépend, la
+  // chute du drapeau reste arbitrée par l'hôte sur clockRef. Chaque `clock`
+  // ou `state` reçu écrase ces valeurs interpolées — la dérive ne s'accumule
+  // jamais au-delà d'un cycle de sync.
+  //
+  // Dépendance à `fen` : l'effet se relance à chaque coup, ce qui bascule le
+  // décompte sur le nouveau camp au trait au bon moment, et remet la phase de
+  // la seconde à zéro (comportement identique à une vraie pendule d'échecs).
+  // ------------------------------------------------------------------
+  useEffect(() => {
+    if (phase !== "playing" || countingDown || terminal) return;
+    if (modeRef.current === "analysis") return; // l'échiquier d'analyse n'a pas de pendules
+    const side = turnColor; // "w" | "b", dérivé du FEN reçu
+    const iv = setInterval(() => {
+      if (side === "w") setClockW(v => (typeof v === "number" ? Math.max(0, v - 1) : v));
+      else setClockB(v => (typeof v === "number" ? Math.max(0, v - 1) : v));
+    }, 1000);
+    return () => clearInterval(iv);
+  }, [phase, countingDown, terminal, turnColor, fen]);
 
   // ---- Écran de réglage (l'hôte choisit la cadence ou l'échiquier d'analyse) ----
   // Plus de démarrage automatique : l'hôte voit un écran de choix. Les invités

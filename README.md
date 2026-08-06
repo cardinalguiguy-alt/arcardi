@@ -1,5 +1,72 @@
 # ARCARDI 🎪
 
+> **ZIP 419 — AUDIT REALTIME : UNE FUITE, DES MESSAGES JETÉS EN SILENCE, ET UN
+> QUOTA PLUS SERRÉ QU'ON NE CROYAIT.**
+> Guillaume, après la migration Supabase forcée par un dépassement à ~7 M
+> messages/mois : « il faut être beaucoup plus vigilant sur tout ce qui touche
+> au Realtime. Donner une estimation du volume pour vérifier qu'on reste très
+> en dessous des 2 M/mois. »
+>
+> **On n'y est pas « très en dessous ». C'est le résultat principal de l'audit.**
+> La règle de facturation Supabase explique tout, et elle n'est pas intuitive :
+> un broadcast coûte **1 message pour l'envoi + 1 par client abonné**. À deux
+> joueurs, un seul `send()` coûte donc 3 messages en `self:true`, 2 en
+> `self:false` — ce qui valide rétroactivement le « FIX 243 : self:false
+> (-33 % à 2j) », 3 → 2 exactement. **Corollaire à retenir : seul le NOMBRE de
+> `send()` compte, jamais la taille des payloads.** Alléger un message sans en
+> réduire le nombre ne rapporte rien.
+>
+> | | msg/heure | heures avant 2 M |
+> |---|---|---|
+> | ferme calme, 2 joueurs | ~43 000 | ~46 h |
+> | **ferme peuplée, 2 joueurs** | **~101 000** | **~20 h** |
+> | ferme peuplée, 3 joueurs | ~194 000 | ~10 h |
+> | soirée de 10 mini-jeux tour par tour | ~10 000 au total | négligeable |
+>
+> **La ferme pèse ~99 % de la consommation. Tout le reste est du bruit.**
+>
+> **Une seule vraie fuite, et elle était structurelle.** Dans
+> `app/room/[code]/page.js`, les deux abonnements `postgres_changes` étaient
+> créés après cinq aller-retours réseau dans une IIFE `async`. Démontage pendant
+> les `await` → le cleanup lisait des variables encore `undefined`, ne supprimait
+> rien, et les canaux créés ensuite n'étaient **jamais fermés**. Systématique en
+> dev sous StrictMode. Corrigé par un drapeau `cancelled` qui ferme les deux
+> fenêtres de course. Pour le reste, le cycle de vie des canaux est sain : 24
+> canaux, un `removeChannel` par `channel()`, dépendances d'effets stables, aucun
+> `send()` dans un `requestAnimationFrame` ni un `pointermove`.
+>
+> **Le point le plus important n'est pas le quota.** `eventsPerSecond: 10` est un
+> plafond CÔTÉ CLIENT : au-delà, `send()` ne transmet rien et résout
+> silencieusement sur `"rate limited"`. Aucun des ~57 sites d'émission de
+> `FermeGame.js` ne lisait ce retour. Or l'hôte **dépasse ce plafond en régime
+> normal** — ~8,2 Hz de simulation permanente (visiteurs, loups, créatures, Greg,
+> Soan, Harald) plus ~4 Hz de position. Un `residentPath` perdu = un PNJ figé
+> chez l'invité, sans trace. **C'est très probablement la famille de bugs
+> poursuivie des zips 359 à 365.** Le zip 419 ne la corrige pas : il la rend
+> visible, par un `console.warn` automatique à chaque message jeté.
+>
+> **Supabase n'offre aucune alerte de seuil** — la doc est explicite, le Spend Cap
+> « doesn't allow for [...] receiving notifications when certain costs are
+> reached », et il est réservé au plan Pro. D'où `lib/realtimeQuota.js` et son
+> badge : le seul avertissement automatique possible avant le mur.
+>
+> Trois gaspillages supprimés au passage. **`hostSend`** (51 appels) n'avait
+> aucune garde d'audience : un hôte jouant seul émettait un message par action,
+> facturé même sans destinataire. Nouvelle garde `netHasAudience()`, volontairement
+> distincte de `netCanBroadcast()` — elle ne teste PAS `hiddenRef`, car couper la
+> simulation décorative est gratuit mais couper l'état de jeu partagé
+> désynchroniserait les invités. **La boucle `hello`** tournait à 1,2 s
+> indéfiniment pendant que l'hôte saisissait son code, ~400 messages par
+> démarrage : backoff jusqu'à 6 s, -78 %. **La pendule d'échecs** diffusait chaque
+> seconde, ~3 600 messages par partie de 20 min : diffusion toutes les 10 s et
+> interpolation locale sur tous les clients, l'hôte restant seul juge de la chute
+> du drapeau. -90 %.
+>
+> **Ce qui n'a PAS été touché, sciemment** : l'instance cachée de la ferme
+> (`display:none` quand l'hôte revient au salon) continue de simuler et de
+> diffuser. Ce n'est pas un bug — les invités restés à la ferme en ont besoin —
+> mais le compteur tourne pendant que l'hôte croit avoir quitté.
+
 > **ZIP 408 — NUIT D'ENCRE, RELIEF REMONTÉ, NUAGES RETIRÉS.**
 > Guillaume : « la palette de ciel et montagnes est encore trop lumineuse
 > (surtout à cause de la réduction de la taille des montagnes opérée quelques
