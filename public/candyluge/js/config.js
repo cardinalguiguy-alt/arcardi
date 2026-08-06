@@ -187,6 +187,67 @@ const CFG = {
   DESCENT_LENGTH: 5200,    // longueur totale d'une descente, en unités
   FINISH_FADE: 260,        // longueur de la zone d'arrivée (ralentissement)
 
+  /* ══════════════════════════════════════════════════════════════════════════
+     LA LIGNE D'ARRIVÉE (ZIP 424) — demande explicite de Guillaume.
+     ──────────────────────────────────────────────────────────────────────────
+     ⚠️ IL N'Y AVAIT AUCUNE LIGNE, ET C'EST TOUT LE DÉFAUT. La piste s'aplanissait
+     sur `FINISH_FADE` unités, le chrono se figeait sans rien dire, la pluie de
+     bonbons tombait, et le panneau de score n'arrivait que plusieurs secondes
+     plus tard, à l'arrêt complet. Le joueur ne savait ni QUAND il avait fini, ni
+     qu'il avait fini.
+
+     ⚠️ LA LIGNE EST EXACTEMENT LÀ OÙ `finishKAt` PASSE AU-DESSUS DE ZÉRO, soit
+     `DESCENT_LENGTH − FINISH_FADE`. Elle n'a PAS de constante à elle : elle est
+     DÉRIVÉE (voir Slope.finishSAt). Deux nombres décrivant le même endroit, c'est
+     la divergence garantie du jour où l'un des deux bouge — la leçon la plus
+     coûteuse du projet, écrite au §7 de CLAUDE.md.
+
+     ⚠️ ET C'EST BIEN LA LIGNE, PAS LE BAS DE LA PISTE. Ce qui suit est le
+     DÉGAGEMENT : dans une station, on franchit la ligne à pleine vitesse et on
+     s'arrête après. Mettre la ligne au bout des 5 200 unités la placerait là où
+     la luge est déjà immobile depuis longtemps.
+
+     LE RUBAN SE ROMPT. C'est le seul objet du jeu qui change d'état au passage,
+     et c'est pour ça qu'il a été choisi : un portail qu'on traverse ne prouve
+     rien, un ruban qui se casse dit « c'est fait » sans un mot de texte. */
+  FINISH_POST_H: 5.6,        // hauteur des mâts, en unités
+  FINISH_POST_R: 0.30,
+  /* ⚠️ LE RUBAN EST BAS ET HAUT DE VISAGE, pas tendu à trois mètres. La caméra
+     est à 2,6 unités derrière la luge et regarde légèrement vers le bas : un
+     ruban trop haut sort du cadre à l'instant même où il faudrait le voir se
+     rompre. 2,4 est la hauteur à laquelle il coupe l'horizon du cadrage. */
+  FINISH_BANNER_Y: 2.4,      // hauteur du centre du ruban
+  FINISH_BANNER_H: 1.45,     // sa largeur de bande
+  FINISH_BREAK_MS: 1700,     // durée de vol des deux moitiés après la rupture
+  FINISH_BREAK_OUT: 7.5,     // vitesse d'écartement latéral, u/s
+  FINISH_BREAK_UP: 3.2,      // et vers le haut : elles s'envolent, elles ne tombent pas
+  FINISH_BREAK_SPIN: 3.4,    // rad/s — elles vrillent, sinon elles glissent
+  COL_FINISH_POST: 0xfff4fa,
+  COL_FINISH_BANNER: 0xff5b93,   // le rose le plus saturé du jeu : rien d'autre ne l'est autant
+  COL_FINISH_TRIM: 0xffe066,     // le liseré doré, pour que le ruban ne soit pas un aplat
+
+  /* LE FREINAGE D'ARRIVÉE (424). ⚠️ IL REMPLACE UN `finishK * 10` ÉCRIT EN DUR
+     DANS sled.js, ET IL CORRIGE UN VRAI BOGUE DE PARTIE : en enchaînant les
+     turbos après la ligne, `BOOST_ACCEL` (30) dépassait la décélération (10 au
+     maximum), la luge ne descendait jamais sous les 3 u/s exigés par `endRun`,
+     et LA PARTIE NE SE TERMINAIT JAMAIS. Rapporté par Guillaume.
+     Deux verrous, et il faut les deux : le turbo est coupé à la ligne (on ne
+     conduit plus, on dégage), et la décélération est franche.
+     ⚠️ ELLE COMMENCE DÉJÀ FORTE (0,55) au lieu de partir de zéro avec `finishK`.
+     Un freinage qui monte depuis rien laisse filer trois secondes de roue libre
+     avant de mordre — exactement l'attente que ce zip supprime. */
+  FINISH_BRAKE: 26,          // u/s² à pleine zone
+  FINISH_BRAKE_BASE: 0.55,   // fraction déjà appliquée dès la ligne
+  /* Le dérapage VISUEL du dégagement. Il ne freine pas (c'est FINISH_BRAKE qui
+     freine) : il met la luge en travers et ouvre la gerbe, pour que l'arrêt se
+     lise comme un geste de pilote et non comme une panne de moteur. */
+  FINISH_SKID: 0.8,
+  /* ⚠️ LE FILET DE SÉCURITÉ. Même avec tout ce qui précède, `endRun` ne doit pas
+     dépendre d'une condition de vitesse pour se produire : un jour, un réglage
+     rendra le seuil inatteignable et la partie se figera de nouveau. Passé ce
+     délai on termine, quoi qu'il arrive. C'est la ceinture, pas la bretelle. */
+  FINISH_MAX_MS: 4600,
+
   /* ============================================================= LA LUGE ===
      ⚠️ ELLE N'A PAS DE MOTEUR. Toute la vitesse vient de la pente, et c'est ce
      qui fait la différence avec le défi de fuite, où le fermier accélère tout
@@ -1231,6 +1292,56 @@ const CFG = {
   FX_RAIN_SPREAD: 46,        // largeur de la zone arrosée, en unités
   FX_RAIN_FALL: 11,          // gravité ; ⚠️ FAIBLE : des confettis flottent
   FX_RAIN_DRIFT: 3.2,        // dérive latérale, pour que ça ne tombe pas droit
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     LES CONFETTIS DE L'ARRIVÉE (ZIP 424).
+     ──────────────────────────────────────────────────────────────────────────
+     ⚠️ POURQUOI UN SYSTÈME DE PLUS PLUTÔT QU'UNE VARIANTE DE LA PLUIE. Un
+     système de points n'a QU'UNE texture : on ne peut pas mêler des bonbons
+     ronds et des confettis plats dans le même. Et le mélange est justement
+     l'effet recherché — deux tailles, deux formes et deux vitesses de chute
+     lues ensemble, c'est ça qui fait « fête » plutôt que « pluie colorée ».
+
+     ⚠️ LEUR GÉOMÉTRIE D'ÉMISSION EST CELLE DE LA PLUIE, RÉUTILISÉE TELLE QUELLE
+     (hauteur, avance, largeur d'arrosage). Ce ne sont pas des réglages libres :
+     ce sont des contraintes du CHAMP DE LA CAMÉRA, démontrées au 416 (voir
+     FX_RAIN_HEIGHT). Les recopier en les retouchant, c'est reconstituer la
+     divergence que le §7 interdit — on les DÉRIVE.
+
+     Ce qui leur appartient en propre : ils sont PLUS PETITS, PLUS NOMBREUX,
+     ils tombent DEUX FOIS PLUS LENTEMENT et dérivent DEUX FOIS PLUS. Un
+     confetti est une feuille : il ne tombe pas, il descend en tournoyant. */
+  FX_CONF_MAX: 280,
+  FX_CONF_RATE: 130,         // par seconde pendant la salve — le double des bonbons
+  FX_CONF_LIFE: 3.4,
+  FX_CONF_SIZE: 0.42,        // un tiers d'un bonbon de pluie (1,25)
+  FX_CONF_FALL: 5.0,         // ⚠️ moitié de FX_RAIN_FALL : ils PLANENT
+  FX_CONF_DRIFT: 6.0,        // et partent de côté bien plus que les bonbons
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     LES BALLONS DE L'ARRIVÉE (ZIP 424) — lâchés à la ligne, gonflés à l'hélium.
+     ──────────────────────────────────────────────────────────────────────────
+     ⚠️ ILS MONTENT, ET C'EST LEUR SEULE RAISON D'EXISTER. Tout ce qui tombe
+     déjà (bonbons, confettis) dit la même chose ; un mouvement à CONTRE-SENS
+     dans le même cadre est ce qui transforme une pluie en fête. Deux directions
+     opposées se lisent instantanément, là où trois systèmes qui tombent
+     ensemble se lisent comme un seul, plus dense.
+
+     ⚠️ ET CE NE SONT PAS DES PARTICULES : ce sont de vrais objets, avec une
+     ficelle. Un point de sprite ne peut pas porter de ficelle, et c'est la
+     ficelle qui fait lire « ballon » plutôt que « bulle » — à seize exemplaires,
+     le coût est nul et la lecture est acquise.
+
+     ⚠️ ILS SORTENT DU CADRE PAR LE HAUT, VITE. Un ballon qui traînerait dans le
+     champ pendant tout le dégagement masquerait la piste au moment où le joueur
+     regarde son arrêt. Ils montent, ils partent, on ne les revoit pas. */
+  FINISH_BALLOONS: 16,
+  FINISH_BALLOON_R: 0.60,
+  FINISH_BALLOON_RISE: 4.6,      // u/s, vers le haut
+  FINISH_BALLOON_SPREAD: 20,     // largeur du lâcher, en travers de la piste
+  FINISH_BALLOON_SWAY: 0.65,     // amplitude du balancement latéral
+  FINISH_BALLOON_LIFE: 7.0,      // secondes avant disparition
+  FINISH_BALLOON_STRING: 1.5,    // longueur de la ficelle, en unités
 
   /* ══════════════════════════ LE SOLEIL ET SON HALO (ZIP 422) ══════════════
      ⚠️ LE SOLEIL N'ÉTAIT QU'UNE TACHE PEINTE DANS LA TEXTURE DE CIEL. Une tache

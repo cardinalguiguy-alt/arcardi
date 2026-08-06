@@ -45,7 +45,15 @@ const World = (function () {
   let skyDome, skyMat, mountainsNear, mountainsFar, snowFall;
   let sunDisc, sunHalo, motes;
   let sledRig, sledParts = {};
-  let stars, dust, lines, spray, rain;
+  let stars, dust, lines, spray, rain, conf;
+  /* ⚠️⚠️ 424 — TOUT SYSTÈME DE POINTS S'INSCRIT ICI, ET `makePoints` S'EN CHARGE
+     TOUT SEUL. `resize()` doit recaler l'échelle en pixels de CHAQUE système à
+     chaque redimensionnement : la liste y était écrite à la main, et un système
+     oublié aurait gardé l'échelle provisoire de 300 — des grains de la bonne
+     taille chez celui qui a écrit le code, de la mauvaise partout ailleurs.
+     C'est le défaut que `makePoints` documente déjà pour `aSize`, et il n'y a
+     aucune raison de le laisser possible une seconde fois. */
+  const pointSystems = [];
   let rainT = 0;          // secondes écoulées depuis le franchissement de la ligne (416)
   let trail = null;      // le sillon gravé (414)
   let geo = {}, mat = {};
@@ -562,6 +570,65 @@ const World = (function () {
     return c;
   }
 
+  /* ══════════════════════════════════════════════════════════════════════════
+     UN CONFETTI (424) — UN RECTANGLE, ET C'EST TOUT L'INTÉRÊT.
+     ──────────────────────────────────────────────────────────────────────────
+     ⚠️ TOUT LE RESTE DU JEU EST ROND : bonbons, étincelles, poudre, gerbe,
+     halos. Un système de plus qui serait rond n'ajouterait que de la densité.
+     Ce qui fait lire « confetti » n'est ni la couleur ni la taille — c'est la
+     forme ANGULEUSE, seule de son espèce dans le cadre.
+
+     ⚠️ IL EST PENCHÉ DANS LA TEXTURE, et c'est le seul moyen de le faire
+     tourner : un sprite de points est toujours aligné sur l'écran, `gl_PointCoord`
+     ne se fait pas pivoter. Un rectangle droit se lirait comme un pixel géant.
+     Deux teintes dans la longueur donnent l'impression d'une feuille qui se
+     retourne — c'est un trompe-l'œil, et il suffit à cette taille.
+
+     ⚠️ ET SES BORDS VONT À ALPHA 0 (le fond du canvas reste vide) : c'est la
+     règle du 423, texFx ne pardonne pas un dégradé qui touche le bord. */
+  function paintConfetti() {
+    const S = 32, c = cv(S, S), g = c.getContext("2d");
+    g.translate(S / 2, S / 2);
+    g.rotate(-0.45);
+    // La moitié pleine et la moitié en demi-teinte : le « dos » de la feuille.
+    g.fillStyle = "rgba(255,255,255,1)";
+    g.fillRect(-S * 0.30, -S * 0.13, S * 0.60, S * 0.13);
+    g.fillStyle = "rgba(255,255,255,0.62)";
+    g.fillRect(-S * 0.30, 0, S * 0.60, S * 0.13);
+    return c;
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     LE RUBAN D'ARRIVÉE (424) — un motif RÉPÉTÉ, donc il garde ses mipmaps.
+     ──────────────────────────────────────────────────────────────────────────
+     ⚠️ C'est la moitié « oui » de la règle du 423 : les mipmaps ne sont un piège
+     que sur les dégradés qui vont à alpha 0 sur leurs bords. Celui-ci est un
+     motif OPAQUE qui se répète huit fois en travers de la piste ; sans mipmaps
+     il crénellerait dès qu'on le voit de loin. On passe donc par `tex()`, pas
+     par `texFx()`.
+
+     Deux liserés dorés en haut et en bas, des chevrons obliques au milieu. Les
+     chevrons ne sont pas décoratifs : ils donnent au ruban une DIRECTION, donc
+     une lecture de vitesse quand on fonce dessus. */
+  function paintBanner() {
+    const W = 96, H = 32, c = cv(W, H), g = c.getContext("2d");
+    g.fillStyle = hex(CFG.COL_FINISH_BANNER);
+    g.fillRect(0, 0, W, H);
+    // Les chevrons clairs, obliques, qui débordent des deux côtés pour que la
+    // répétition ne laisse pas de couture visible.
+    g.fillStyle = "rgba(255,252,246,0.95)";
+    for (let i = -1; i < 4; i++) {
+      g.beginPath();
+      const x = i * (W / 3);
+      g.moveTo(x, H); g.lineTo(x + W / 7, H); g.lineTo(x + W / 7 + H * 0.8, 0); g.lineTo(x + H * 0.8, 0);
+      g.closePath(); g.fill();
+    }
+    g.fillStyle = hex(CFG.COL_FINISH_TRIM);
+    g.fillRect(0, 0, W, H * 0.16);
+    g.fillRect(0, H * 0.84, W, H * 0.16);
+    return c;
+  }
+
   /* LE RIDEAU DE PORTE : dense au ras du sol, éteint en haut. C'est ce profil
      et lui seul qui le fait lire comme une lumière qui MONTE plutôt que comme
      une paroi tendue — une opacité uniforme, même faible, dessine un plan, et
@@ -882,6 +949,32 @@ const World = (function () {
     mat.cpBand = new THREE.MeshBasicMaterial({ color: sc(0x5fe0c4), transparent: true, opacity: 0.55 });
 
     /* ══════════════════════════════════════════════════════════════════════
+       LA LIGNE D'ARRIVÉE (424).
+       ──────────────────────────────────────────────────────────────────────
+       ⚠️ AUCUN DES TROIS N'EST TRANSPARENT, ET C'EST DÉLIBÉRÉ. Tout le reste de
+       la signalétique du jeu (portes, cernes, ombres, rideaux) est en fondu,
+       parce que ce sont des REPÈRES posés sur le monde. Le ruban, lui, est un
+       OBJET : on le voit, on le touche, il se casse. Un ruban translucide
+       n'aurait rien à rompre.
+       Corollaire pratique : les deux moitiés s'en vont en volant hors du cadre
+       plutôt qu'en s'effaçant — pas d'opacité à animer, donc pas de matériau à
+       cloner par moitié (règle 2 : tout est mutualisé).
+
+       ⚠️ ET LE RUBAN EST À DOUBLE FACE. On le franchit : la caméra le voit par
+       l'arrière une fraction de seconde après la rupture, et une face manquante
+       à cet instant précis ferait disparaître la moitié qui part à gauche. */
+    mat.finishPost = L(CFG.COL_FINISH_POST, { roughness: 0.62 });
+    mat.finishTrim = L(CFG.COL_FINISH_TRIM, { roughness: 0.35, envMapIntensity: CFG.ENV_INTENSITY * 1.4 });
+    mat.finishBanner = L(0xffffff, {
+      map: tex(paintBanner(), 8, 1), side: THREE.DoubleSide, roughness: 0.55,
+    });
+    /* ⚠️ LES BALLONS N'ONT PAS DE MATÉRIAU À EUX : ils reprennent `mat.candy`,
+       la palette des bonbons (définie plus bas dans cette même fonction). C'est
+       la même fête — une septième teinte inventée pour eux seuls trancherait au
+       mauvais endroit — et c'est la règle 2 du fichier. La ficelle prend
+       `mat.white`, déjà en réserve. */
+
+    /* ══════════════════════════════════════════════════════════════════════
        LES TROIS MATÉRIAUX DE LA LISIBILITÉ (416).
        ──────────────────────────────────────────────────────────────────────
        ⚠️ TOUS LES TROIS SONT `depthWrite: false` AVEC UN POLYGON OFFSET
@@ -924,6 +1017,33 @@ const World = (function () {
   /* Petit constructeur : un mesh boîte posé en (x,y,z) avec une taille. Il
      revient si souvent que l'écrire à la main quinze fois par objet noierait
      la forme sous la plomberie. */
+  /* ══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ ZIP 424 — `window.Models` VALAIT TOUJOURS `undefined`, ET LES DIX
+     ACCESSOIRES BLENDER DU 422 N'ONT DONC JAMAIS ÉTÉ CHARGÉS.
+     ──────────────────────────────────────────────────────────────────────────
+     `models.js` déclare `const Models = (function(){…})()`. Un `const` de haut
+     niveau dans un script classique crée une liaison LEXICALE globale — elle
+     n'est PAS une propriété de `window` (seuls `var` et `function` le sont).
+     `window.Models` était donc systématiquement faux, `Models.load()` n'était
+     jamais appelé, `Models.ready` restait à faux pour toujours, et le jeu
+     retombait en silence sur ses primitives du 416. Exactement le repli prévu
+     par la règle 2 de models.js — sauf qu'il ne se repliait pas sur un accroc
+     réseau, il se repliait sur RIEN.
+
+     ⚠️ AUCUNE ERREUR, AUCUN AVERTISSEMENT : le repli est justement conçu pour
+     être muet. Le seul indicateur était `__lugePerf().modeles`, qui affichait
+     « primitives » — et qui se trompait lui aussi de raison, puisqu'il testait
+     la même expression fausse. Trouvé en lisant `Models.ready` À LA MAIN dans
+     la console du navigateur.
+
+     ⚠️ `typeof` EST OBLIGATOIRE. Écrire simplement `Models` lèverait une
+     ReferenceError si `models.js` n'avait pas chargé — c'est-à-dire précisément
+     le cas que le repli existe pour absorber. La liaison lexicale ne se teste
+     pas autrement. */
+  function hasModels() {
+    return typeof Models !== "undefined" && !!Models;
+  }
+
   function box(m, w, h, d, x, y, z) {
     const o = new THREE.Mesh(geo.box, m);
     o.scale.set(w, h, d); o.position.set(x, y, z);
@@ -1101,7 +1221,7 @@ const World = (function () {
        bâtis ; on les jette et on les refait, ce qui coûte quelques
        millisecondes une seule fois — et, en pratique, sur une liste VIDE,
        puisque les modèles arrivent pendant l'écran-titre. */
-    if (window.Models) {
+    if (hasModels()) {          // ⚠️ PAS `window.Models` — voir hasModels() (424)
       Models.load();
       Models.onReady(() => {
         for (const n of built.slice()) { dropNode(n); buildNode(n); }
@@ -1114,6 +1234,7 @@ const World = (function () {
     buildMotes();
     buildSled();
     buildParticles();
+    buildBalloons();     // 424 : construits une fois, masqués, lâchés à la ligne
     buildTrail();
     resize();
     if (wantPost) buildComposer();
@@ -1228,7 +1349,9 @@ const World = (function () {
        jamais chez soi. La formule est celle de three.js : la moitié de la
        hauteur de rendu divisée par tan(fov/2). */
     const ps = (h * renderer.getPixelRatio() * 0.5) / Math.tan((camera.fov * Math.PI / 180) / 2);
-    for (const sys of [stars, dust, lines, spray, rain]) {
+    // ⚠️ 424 : la liste était écrite à la main ici, un système ajouté plus tard
+    // s'y oubliait en silence. Voir `pointSystems`.
+    for (const sys of pointSystems) {
       if (sys && sys.points.material.uniforms) sys.points.material.uniforms.uScale.value = ps;
     }
     if (motes && motes.material.uniforms) motes.material.uniforms.uScale.value = ps;
@@ -1463,7 +1586,10 @@ const World = (function () {
         uMap: { value: mmap }, uOpacity: { value: 0.42 }, uScale: { value: 300 },
         uFogColor: { value: sc(CFG.COL_FOG) }, uAdditive: { value: 1 },
       },
-      vertexShader: POINT_VERT.replace("FOGD", (CFG.FOG_DENSITY * 0.35).toExponential()),
+      // ⚠️ `pointVert` et non une `replace` à la main : voir sa définition (424).
+      // Les poussières traînent moins de brouillard que les autres systèmes —
+      // elles vivent à trois mètres de l'objectif — d'où le 0,35.
+      vertexShader: pointVert(CFG.FOG_DENSITY * 0.35),
       fragmentShader: POINT_FRAG,
       transparent: true, depthWrite: false, vertexColors: true,
       blending: THREE.AdditiveBlending,
@@ -1658,7 +1784,7 @@ const World = (function () {
        corps de la luge, il ne se pencherait plus dans les virages — or c'est
        le seul mouvement du personnage, et c'est lui qui rend la carre lisible
        de dos, à onze mètres, quand rien d'autre ne bouge. */
-    const sledModel = window.Models ? Models.raw("sled", mat) : null;
+    const sledModel = hasModels() ? Models.raw("sled", mat) : null;   // 424
     if (sledModel) {
       buildSledFromModel(sledModel, body);
     } else buildSledPrimitives(body);
@@ -1921,6 +2047,45 @@ const World = (function () {
       gl_PointSize = clamp(aSize * uScale / max(d, 0.1), 1.0, 220.0);
       gl_Position = projectionMatrix * mv;
     }`;
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️⚠️ ZIP 424 — LA SUBSTITUTION DE `FOGD` PASSE PAR ICI, ET PAR NULLE PART
+     AILLEURS. C'EST LA VRAIE CAUSE DES « CARRÉS BLANCS OU NOIRS ».
+     ──────────────────────────────────────────────────────────────────────────
+     LE DÉFAUT, EN UNE LIGNE : `FOGD` apparaît DEUX FOIS dans POINT_VERT (le
+     brouillard FogExp2 est en `d²`, donc le facteur est écrit deux fois), et le
+     422 substituait avec `chaîne.replace("FOGD", …)`. ⚠️ `String.replace` AVEC
+     UNE CHAÎNE NE REMPLACE QUE LA PREMIÈRE OCCURRENCE. La seconde restait
+     littérale, le vertex shader ne compilait pas, le programme ne se liait pas.
+
+     ⚠️ ET VOILÀ POURQUOI ÇA NE RESSEMBLAIT PAS À UN BOGUE DE SHADER. Quand
+     `useProgram` échoue (« INVALID_OPERATION: program not valid » dans la
+     console, seul indice visible), WebGL NE DÉLIE PAS le programme courant : il
+     laisse en place CELUI D'AVANT. L'appel de dessin suivant s'exécute donc
+     avec le shader et les attributs d'un autre matériau — d'où un quadrilatère
+     géant, plaqué à l'écran, dont la COULEUR est celle du matériau voisin dans
+     la liste de rendu. Rose, menthe, crème, noir, blanc : ça change à chaque
+     partie parce que l'ordre de la passe transparente change. C'est pour ça que
+     les carrés survivaient au correctif de mipmaps du 423 : ils n'ont jamais eu
+     de rapport avec une texture.
+
+     ⚠️ ET LES SIX SYSTÈMES DE PARTICULES N'ÉTAIENT PAS DESSINÉS DEPUIS LE 422 —
+     étoiles, poudre, lignes de vitesse, gerbe, poussières de sucre ET la pluie
+     de bonbons de l'arrivée. Aucun n'a jamais été vu sur un GPU : `preview-luge`
+     n'exécute pas de shader, il rend les points lui-même, donc il montrait des
+     particules impeccables pour un jeu qui n'en affichait aucune. C'est
+     exactement le mensonge de stub décrit dans l'en-tête de l'outil, à ceci
+     près qu'il portait cette fois sur la moitié des effets du jeu.
+
+     ⚠️ ON NE FAIT DONC PAS QUE METTRE UN `/g` : la substitution est ENFERMÉE
+     dans cette fonction, seul endroit du fichier qui connaisse le jeton. Deux
+     appelants faisaient la même `replace` à la main (les particules et les
+     poussières de sucre) — deux occasions de refaire la faute, dont une l'avait
+     déjà refaite. */
+  function pointVert(density) {
+    return POINT_VERT.replace(/FOGD/g, density.toExponential());
+  }
+
   const POINT_FRAG = `
     uniform sampler2D uMap;
     uniform float uOpacity;
@@ -1961,7 +2126,7 @@ const World = (function () {
         uFogColor: { value: sc(CFG.COL_FOG) },
         uAdditive: { value: additive ? 1 : 0 },
       },
-      vertexShader: POINT_VERT.replace("FOGD", CFG.FOG_DENSITY.toExponential()),
+      vertexShader: pointVert(CFG.FOG_DENSITY),
       fragmentShader: POINT_FRAG,
       transparent: true, depthWrite: false, vertexColors: true,
       blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
@@ -1976,7 +2141,96 @@ const World = (function () {
     m.map = map;
     const p = new THREE.Points(g, m);
     p.frustumCulled = false;    // les particules vivent autour de la luge, jamais autour de l'origine
-    return { points: p, pos, col, siz, n, base: size, live: [] };
+    const sys = { points: p, pos, col, siz, n, base: size, live: [] };
+    pointSystems.push(sys);     // 424 : inscription automatique, voir pointSystems
+    return sys;
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     LES BALLONS DE L'ARRIVÉE (424).
+     ──────────────────────────────────────────────────────────────────────────
+     ⚠️ CE SONT DE VRAIS OBJETS, PAS DES PARTICULES, et le choix se justifie en
+     une phrase : un sprite de points ne peut pas porter de FICELLE. Or c'est la
+     ficelle qui fait lire « ballon » plutôt que « grosse bulle » — sans elle on
+     obtient exactement la pluie de bonbons, en train de monter.
+
+     ⚠️ ILS SONT CONSTRUITS UNE FOIS ET RÉUTILISÉS, comme les gourmands (règle 2
+     du fichier). Seize sphères et seize cylindres créés au chargement puis
+     masqués : le lâcher ne coûte alors qu'un `visible = true`, ce qui compte au
+     moment précis où la scène a le plus à faire.
+
+     ⚠️ ET ILS NE SONT PAS DANS LE GROUPE DU TRONÇON. Le dégagement traverse
+     plusieurs tronçons, dont ceux qui portent la ligne finissent par être jetés
+     (`dropNode`) : des ballons rangés là disparaîtraient en plein vol. */
+  let balloons = null;
+
+  function buildBalloons() {
+    const list = [];
+    for (let i = 0; i < CFG.FINISH_BALLOONS; i++) {
+      const g = new THREE.Group();
+      const b = sph(mat.candy[i % mat.candy.length], CFG.FINISH_BALLOON_R, 0, 0, 0);
+      // Un ballon n'est pas une bille : il est plus HAUT que large, et sa pointe
+      // est en bas. Deux échelles et un cône minuscule suffisent à le dire.
+      b.scale.set(1, 1.22, 1);
+      g.add(b);
+      g.add(coneM(mat.candy[i % mat.candy.length], CFG.FINISH_BALLOON_R * 0.42,
+        CFG.FINISH_BALLOON_R * 0.7, 0, -CFG.FINISH_BALLOON_R * 1.1, 0));
+      const str = cylM(mat.white, 0.035, CFG.FINISH_BALLOON_STRING,
+        0, -CFG.FINISH_BALLOON_R * 1.3 - CFG.FINISH_BALLOON_STRING / 2, 0, true);
+      g.add(str);
+      g.visible = false;
+      scene.add(g);
+      list.push({ obj: g, t: -1, x: 0, z: 0, y0: 0, ph: 0, sw: 0 });
+    }
+    balloons = list;
+  }
+
+  /* Le lâcher. Appelé UNE FOIS, à l'instant du franchissement — `updateFx` s'en
+     charge, comme pour la pluie de bonbons, pour la raison d'architecture du
+     414 : un effet branché sur un rappel n'existe que si quelqu'un pense à le
+     brancher. */
+  function releaseBalloons(s) {
+    if (!balloons) return;
+    for (let i = 0; i < balloons.length; i++) {
+      const b = balloons[i];
+      /* ⚠️ ILS PARTENT DE LA LIGNE, ÉTALÉS EN TRAVERS, ET LÉGÈREMENT EN AVANT.
+         Lâchés exactement sur la ligne, ils seraient déjà derrière la caméra
+         deux dixièmes de seconde plus tard — la luge la franchit à 50 u/s. On
+         les sème sur les vingt unités qui suivent : le joueur les traverse. */
+      const u = (i / (balloons.length - 1) - 0.5) * CFG.FINISH_BALLOON_SPREAD;
+      const p = Slope.pointAt(s + 3 + (i % 4) * 5, u);
+      b.x = p.x; b.z = p.z; b.y0 = p.y + 1.2;
+      b.t = 0;
+      b.ph = Math.random() * 6.28;
+      b.sw = 0.6 + Math.random() * 0.8;      // chacun se balance à son rythme
+      b.obj.position.set(p.x, b.y0, p.z);
+      b.obj.visible = true;
+    }
+  }
+
+  function updateBalloons(dt, now) {
+    if (!balloons) return;
+    for (const b of balloons) {
+      if (b.t < 0) continue;
+      b.t += dt;
+      if (b.t > CFG.FINISH_BALLOON_LIFE) { b.t = -1; b.obj.visible = false; continue; }
+      /* La montée s'ACCÉLÈRE légèrement (t*0.35) : un ballon d'hélium prend de
+         la vitesse en montant, et surtout il quitte le cadre franchement au
+         lieu de rester en suspens au-dessus de la piste. */
+      const rise = CFG.FINISH_BALLOON_RISE * (1 + b.t * 0.35);
+      b.obj.position.y = b.y0 + rise * b.t;
+      const sway = Math.sin(now / 900 * b.sw + b.ph) * CFG.FINISH_BALLOON_SWAY;
+      b.obj.position.x = b.x + sway;
+      b.obj.position.z = b.z + Math.cos(now / 1100 * b.sw + b.ph) * CFG.FINISH_BALLOON_SWAY * 0.6;
+      // Il s'incline dans le sens de son balancement : une sphère qui glisse
+      // latéralement sans jamais pencher se lit comme un objet téléporté.
+      b.obj.rotation.z = -sway * 0.22;
+    }
+  }
+
+  function hideBalloons() {
+    if (!balloons) return;
+    for (const b of balloons) { b.t = -1; b.obj.visible = false; }
   }
 
   function buildParticles() {
@@ -1998,6 +2252,12 @@ const World = (function () {
        s'éteindre vers le noir. */
     rain = makePoints(CFG.FX_RAIN_MAX, paintCandyBit(), CFG.FX_RAIN_SIZE, 0.95, false);
     rain.noFade = true;        // voir stepParticles : un bonbon ne blanchit pas
+    /* LES CONFETTIS (424). Mêmes règles que la pluie de bonbons — fondu NORMAL
+       (du papier, pas de la lumière) et `noFade` (un confetti garde sa couleur
+       jusqu'au bout, il ne blanchit pas en tombant). Ce qui les sépare est
+       ailleurs : la forme, la taille et la lenteur. Voir paintConfetti(). */
+    conf = makePoints(CFG.FX_CONF_MAX, paintConfetti(), CFG.FX_CONF_SIZE, 0.95, false);
+    conf.noFade = true;
     /* LES GAINS (422). Voir l'en-tête d'`emit`. Seuls les systèmes qui
        REPRÉSENTENT DE LA LUMIÈRE dépassent 1 : les étincelles de dérapage et
        les traits de vitesse. La gerbe de neige et la pluie de bonbons sont de
@@ -2006,7 +2266,10 @@ const World = (function () {
     lines.gain = 1.5;
     dust.gain = 1.0;
     spray.gain = 1.0;
-    rain.gain = 1.15;          // juste assez pour que les confettis « claquent » au soleil
+    rain.gain = 1.15;          // juste assez pour que les bonbons « claquent » au soleil
+    conf.gain = 1.15;          // le même : ils tombent dans la même lumière
+    scene.add(conf.points);
+    for (let i = 0; i < CFG.FX_CONF_MAX; i++) conf.live.push({ t: -1 });
     scene.add(stars.points);
     scene.add(dust.points);
     scene.add(lines.points);
@@ -2518,7 +2781,15 @@ const World = (function () {
        voit : trois étages de trois couleurs différentes faisaient un totem, un
        arbre d'une seule teinte fait une MASSE — et c'est de masses qu'un
        paysage a besoin pour se lire de loin (leçon du 416). */
-    const mm = Models.place("gumtree", mat, x, y, z, h / 3.6,
+    /* ⚠️ 424 : l'échelle est DÉRIVÉE de la hauteur du gabarit, plus devinée.
+       `h / 3.6` supposait un gabarit de 3,6 unités ; il en fait 1,2, donc le
+       sapin modelé sortait à h/3 quand la primitive ci-dessous en fait 1,16·h
+       — trois fois et demie trop petit, et c'est l'objet le plus NOMBREUX du
+       décor : la crête a perdu ses masses le jour où les modèles se sont
+       enfin chargés. Voir Models.fit(). Le 1,16 n'est pas un réglage : c'est
+       la hauteur qu'atteint la primitive juste dessous (h*0.94 + r du dernier
+       étage), et les deux doivent occuper le même volume. */
+    const mm = Models.place("gumtree", mat, x, y, z, Models.fit("gumtree", h * 1.16),
       hash(i, 33) * 6.28, Math.floor(hash(i, 30) * CFG.COL_CANDY_SET.length), far);
     if (mm) { g.add(mm); return; }
     const pal = far ? mat.candyFar : mat.candy;
@@ -2802,6 +3073,79 @@ const World = (function () {
     g.add(band);
   }
 
+  /* ══════════════════════════════════════════════════════════════════════════
+     LA LIGNE D'ARRIVÉE (424) — DEUX MÂTS ET UN RUBAN QUI SE ROMPT.
+     ──────────────────────────────────────────────────────────────────────────
+     ⚠️ ELLE DOIT ÊTRE LISIBLE COMME UNE FIN, PAS COMME UN REPÈRE DE PLUS. La
+     descente en compte déjà deux familles — les arches de menthe (distance) et
+     les portes à fanions (checkpoints) — et la règle établie au 414 vaut ici
+     doublement : deux repères qui se ressemblent ne se lisent plus que comme
+     un seul. D'où trois différences assumées :
+       * elle est ROSE SATURÉE et OR, les deux seules teintes de ce niveau de
+         saturation dans tout le jeu ;
+       * elle BARRE la piste au lieu de l'encadrer — c'est le seul objet du jeu
+         qu'on traverse au lieu de l'éviter ;
+       * elle CHANGE D'ÉTAT. Rien d'autre ne le fait.
+
+     ⚠️ LE RUBAN EST EN DEUX MOITIÉS DÈS LA CONSTRUCTION, jointives au milieu.
+     Le casser au moment du passage demanderait de reconstruire une géométrie
+     pendant l'image la plus chargée de la descente (pluie, confettis, ballons,
+     bannière). Deux quadrilatères posés côte à côte sont indiscernables d'un
+     seul tant qu'on ne les sépare pas — et la rupture n'est plus alors qu'une
+     translation.
+
+     ⚠️ ET ELLE S'ENREGISTRE DANS `finishRig`, PAS DANS LE TRONÇON. `updateFx` a
+     besoin de retrouver les deux moitiés à chaque image ; les chercher dans la
+     scène coûterait un parcours complet. Le lien est coupé dans `dropNode`,
+     sans quoi on animerait des objets retirés du monde. */
+  let finishRig = null;
+
+  function finishLine(g, s, width) {
+    const half = width / 2 + 1.6;
+    const yaw = Slope.yawAt(s);
+
+    for (const side of [-1, 1]) {
+      const p = Slope.pointAt(s, side * half);
+      // Le mât : plus haut et plus épais qu'un fanion de checkpoint (4,2 × 0,15).
+      g.add(cylM(mat.finishPost, CFG.FINISH_POST_R, CFG.FINISH_POST_H,
+        p.x, p.y + CFG.FINISH_POST_H / 2, p.z, true));
+      // Le pompon doré du sommet : il attrape le soleil et pointe le mât, comme
+      // le bonbon des fanions le fait depuis le 414.
+      g.add(sph(mat.finishTrim, 0.55, p.x, p.y + CFG.FINISH_POST_H + 0.35, p.z));
+    }
+
+    /* LES DEUX MOITIÉS DU RUBAN. Chacune part de son mât et s'arrête au centre.
+       ⚠️ Elles sont posées à plat dans le repère du monde puis tournées du lacet
+       de la piste : les orienter à partir de `pointAt` des deux extrémités
+       donnerait le même résultat à un cheveu près, mais se casserait sur une
+       piste banquée — or l'arrivée est justement l'endroit où le dévers est
+       neutralisé (finishKAt), donc autant écrire le cas simple et vrai. */
+    const c = Slope.pointAt(s, 0);
+    const halves = [];
+    for (const side of [-1, 1]) {
+      const m = new THREE.Mesh(geo.plane, mat.finishBanner);
+      m.scale.set(half, CFG.FINISH_BANNER_H, 1);
+      const q = Slope.pointAt(s, side * half / 2);
+      /* ⚠️ LA HAUTEUR VIENT DU CENTRE DE PISTE, PAS DU POINT LATÉRAL. Vu au
+         rendu : la piste est encore BANQUÉE à la ligne (`finishKAt` y vaut
+         exactement 0 et ne redresse qu'ensuite), donc les deux demi-rubans
+         posés chacun à la hauteur de leur propre bord se retrouvaient DÉCALÉS
+         d'une bonne demi-unité — un ruban cassé en deux marches avant même
+         qu'on l'ait touché. Un ruban est un objet RIGIDE : il est horizontal,
+         quoi que fasse le dévers sous lui. */
+      m.position.set(q.x, c.y + CFG.FINISH_BANNER_Y, q.z);
+      m.rotation.y = -yaw;
+      m.userData.side = side;
+      // Mémorisé pour que la rupture reparte TOUJOURS de la position tendue,
+      // même si le tronçon est reconstruit après une chute (voir onRespawn).
+      m.userData.home = m.position.clone();
+      g.add(m);
+      halves.push(m);
+    }
+
+    finishRig = { group: g, halves, t: -1, s, c };
+  }
+
   /* ----------------------------------------------------------------------
      LE TRONÇON COMPLET.
      ---------------------------------------------------------------------- */
@@ -2951,6 +3295,13 @@ const World = (function () {
     const cp = Slope.checkpointIn(s0, s1);
     if (cp) checkpointGate(g, cp.s, Slope.widthAt(cp.s));
 
+    /* LA LIGNE D'ARRIVÉE (424), si elle tombe dans ce tronçon. ⚠️ Son abscisse
+       vient de `Slope.finishSAt()` et n'est recalculée nulle part : c'est le
+       même nombre que celui où `finishK` décolle, donc que celui où le chrono
+       s'arrête. Voir la note de finishSAt dans slope.js. */
+    const fs = Slope.finishSAt();
+    if (fs >= s0 && fs < s1) finishLine(g, fs, Slope.widthAt(fs));
+
     /* ══════════════════════════════════════════════════════════════════════
        LES DRAPEAUX D'OMBRE (422) — POSÉS ICI, EN UNE SEULE PASSE.
        ──────────────────────────────────────────────────────────────────────
@@ -2994,6 +3345,14 @@ const World = (function () {
 
   function dropNode(node) {
     if (!node.group) return;
+    /* ⚠️ 424 : on coupe le lien vers le ruban AVANT de retirer le tronçon.
+       `updateFx` anime `finishRig.halves` à chaque image ; garder la référence
+       après la suppression du groupe reviendrait à animer des objets qui ne
+       sont plus dans la scène — muet, et impossible à relier au symptôme
+       (« le ruban ne se casse plus, mais seulement parfois »). Le cas se
+       produit pour de bon : une chute juste avant la ligne reconstruit les
+       tronçons alentour (voir onRespawn dans game.js). */
+    if (finishRig && finishRig.group === node.group) finishRig = null;
     const k = built.indexOf(node);
     if (k >= 0) built.splice(k, 1);
     scene.remove(node.group);
@@ -3589,9 +3948,35 @@ const World = (function () {
        puis une extinction jusqu'à 6 s : c'est la forme d'un feu d'artifice, et
        c'est ce qui évite le « clac » d'un effet qu'on coupe. Le joueur roule
        encore pendant tout ce temps — la zone de dégagement fait cent unités. */
+    /* ══════════════════════════════════════════════════════════════════════
+       LE FRANCHISSEMENT (424) — LA RUPTURE DU RUBAN ET LE LÂCHER DE BALLONS.
+       ──────────────────────────────────────────────────────────────────────
+       ⚠️ MÊME PRINCIPE QUE LA PLUIE : ON LIT UN ÉTAT, ON N'ATTEND PAS UN
+       RAPPEL. `rainT === 0` ne se produit qu'à la toute première image où
+       `sled.finished` est vrai — c'est donc l'instant du franchissement, et il
+       est déduit de la même variable que tout le reste de la fête. Rien à
+       câbler dans game.js, rien à oublier dans un outil.
+
+       ⚠️ ET LES DEUX MOITIÉS PARTENT VERS LE HAUT, PAS VERS LE BAS. Un ruban
+       qui tombe sort du cadre par le sol — c'est-à-dire là où le joueur
+       regarde sa piste — et il y traîne. Vers le haut et sur les côtés, il
+       quitte le champ en une demi-seconde et ne masque jamais rien. */
     if (!sled.finished) {
       rainT = 0;
+      hideBalloons();
+      if (finishRig) {
+        finishRig.t = -1;
+        for (const m of finishRig.halves) {
+          m.position.copy(m.userData.home);
+          m.rotation.set(0, -Slope.yawAt(finishRig.s), 0);
+          m.visible = true;
+        }
+      }
     } else if (rainT < CFG.FX_RAIN_TAIL) {
+      if (rainT === 0) {
+        releaseBalloons(Slope.finishSAt());
+        if (finishRig) finishRig.t = 0;
+      }
       rainT += dt;
       // Pleine puissance pendant la salve, puis décroissance jusqu'à zéro.
       const k = rainT <= CFG.FX_RAIN_BURST ? 1
@@ -3624,7 +4009,73 @@ const World = (function () {
              l'effet passait pour « joli mais un peu plat ». */
           0.55 + Math.random() * 1.6);
       }
+
+      /* ════════════════════════════════════════════════════════════════════
+         LES CONFETTIS (424) — LA MÊME SALVE, L'AUTRE MATIÈRE.
+         ────────────────────────────────────────────────────────────────────
+         ⚠️ ILS PARTAGENT `rainT`, DONC LA MÊME COURBE DE SALVE ET LA MÊME
+         EXTINCTION. Deux compteurs pour un seul événement finiraient par se
+         décaler, et une fête où les confettis s'arrêtent trois secondes avant
+         les bonbons n'a pas de fin, elle a deux fins.
+
+         ⚠️ ET LEUR GÉOMÉTRIE D'ÉMISSION EST CELLE DE LA PLUIE, RÉUTILISÉE.
+         Hauteur, avance, largeur d'arrosage : ce sont des contraintes du CHAMP
+         DE LA CAMÉRA démontrées au 416 (voir FX_RAIN_HEIGHT dans config.js),
+         pas des goûts. Les recopier en les retouchant, c'est refaire la
+         divergence que le §7 interdit.
+
+         ⚠️ ILS SONT SEMÉS PLUS HAUT ET PLUS LARGE que les bonbons (×1,2), et
+         c'est ce qui les mêle au lieu de les superposer : deux nappes
+         exactement confondues se lisent comme une seule, plus dense. */
+      const nc = Math.round(CFG.FX_CONF_RATE * k * dt);
+      for (let i = 0; i < nc; i++) {
+        const ahead = CFG.FX_RAIN_AHEAD_MIN
+          + Math.random() * (CFG.FX_RAIN_AHEAD_MAX - CFG.FX_RAIN_AHEAD_MIN);
+        const side = (Math.random() - 0.5) * CFG.FX_RAIN_SPREAD * 1.2;
+        const q = Slope.pointAt(Math.max(0, sled.s + ahead), side);
+        const hue = CFG.COL_CANDY_SET[(Math.random() * CFG.COL_CANDY_SET.length) | 0];
+        emit(conf,
+          q.x, q.y + CFG.FX_RAIN_HEIGHT * (0.6 + Math.random() * 0.8), q.z,
+          (Math.random() - 0.5) * CFG.FX_CONF_DRIFT * 2,
+          // ⚠️ CERTAINS PARTENT VERS LE HAUT (jusqu'à +1,5). Un confetti lâché
+          // avec une vitesse strictement descendante tombe en rideau ; c'est le
+          // petit désordre initial qui donne le « jeté ».
+          1.5 - Math.random() * 3.5,
+          (Math.random() - 0.5) * CFG.FX_CONF_DRIFT * 2,
+          CFG.FX_CONF_LIFE * (0.7 + Math.random() * 0.6),
+          ((hue >> 16) & 255) / 255, ((hue >> 8) & 255) / 255, (hue & 255) / 255,
+          0.7 + Math.random() * 0.9);
+      }
     }
+
+    /* LA RUPTURE DU RUBAN (424). Les deux moitiés s'écartent, montent et
+       vrillent, puis disparaissent. ⚠️ Le mouvement est ACCÉLÉRÉ en début de
+       vol (t²) : un ruban qui se romprait à vitesse constante glisserait
+       latéralement au lieu de CLAQUER, et c'est le claquement qui dit qu'on a
+       cassé quelque chose. */
+    if (finishRig && finishRig.t >= 0) {
+      finishRig.t += dt;
+      const t = finishRig.t;
+      const dur = CFG.FINISH_BREAK_MS / 1000;
+      if (t >= dur) {
+        for (const m of finishRig.halves) m.visible = false;
+      } else {
+        const e = t / dur;
+        const push = t * (1 + e * 1.6);
+        for (const m of finishRig.halves) {
+          const side = m.userData.side;
+          const h = m.userData.home;
+          const right = Slope.frameAt(finishRig.s).right;
+          m.position.set(
+            h.x + right.x * side * CFG.FINISH_BREAK_OUT * push,
+            h.y + CFG.FINISH_BREAK_UP * push,
+            h.z + right.z * side * CFG.FINISH_BREAK_OUT * push);
+          m.rotation.z = side * CFG.FINISH_BREAK_SPIN * t;
+          m.rotation.x = CFG.FINISH_BREAK_SPIN * 0.4 * t;
+        }
+      }
+    }
+    updateBalloons(dt, now);
 
     /* LE SILLON. Écrit ici parce que c'est le seul endroit qui tourne à chaque
        image avec la luge sous la main — mais il ne s'écrit qu'une fois tous les
@@ -3636,6 +4087,9 @@ const World = (function () {
     stepParticles(lines, dt, 0);
     stepParticles(spray, dt, CFG.FX_SPRAY_GRAVITY);   // ... et la gerbe RETOMBE : c'est de la matière
     stepParticles(rain, dt, CFG.FX_RAIN_FALL);
+    // ⚠️ Une gravité DEUX FOIS plus faible que celle des bonbons : c'est ce qui
+    // sépare visuellement les deux nappes. Un confetti plane, un bonbon tombe.
+    stepParticles(conf, dt, CFG.FX_CONF_FALL);
   }
 
   /* Le décor lointain suit la caméra (règle 3) et la neige tombe. */
@@ -3728,10 +4182,13 @@ const World = (function () {
 
   function clearAll() {
     for (const kind in pool) pool[kind].length = 0;
-    if (stars) for (const p of stars.live) p.t = -1;
-    if (dust) for (const p of dust.live) p.t = -1;
-    if (lines) for (const p of lines.live) p.t = -1;
-    if (spray) for (const p of spray.live) p.t = -1;
+    /* ⚠️ 424 : la liste des systèmes était écrite à la main ICI AUSSI, et la
+       pluie de bonbons y manquait déjà — une salve en cours survivait donc à
+       un « rejouer ». On balaie `pointSystems`, qui les connaît tous. */
+    for (const sys of pointSystems) for (const p of sys.live) p.t = -1;
+    rainT = 0;
+    hideBalloons();
+    if (finishRig) finishRig.t = -1;
     clearTrail();
   }
 
@@ -3848,7 +4305,11 @@ const World = (function () {
       triangles: info ? info.render.triangles : null,
       geometries: info ? info.memory.geometries : null,
       textures: info ? info.memory.textures : null,
-      modeles: window.Models ? (Models.ready ? "glTF" : "primitives (repli)") : "primitives",
+      /* ⚠️ 424 : testait `window.Models`, donc annonçait « primitives » quoi
+         qu'il arrive — l'instrument mentait de la même façon que le code
+         qu'il mesurait. C'est le pire cas possible pour un compteur. */
+      modeles: hasModels() ? (Models.ready ? "glTF" : "primitives (repli)") : "primitives",
+      trianglesModeles: hasModels() ? Models.triangles : 0,
     };
   }
   if (typeof window !== "undefined") window.__lugePerf = perf;

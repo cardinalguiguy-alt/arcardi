@@ -206,6 +206,52 @@ html, body {
   100% { opacity: 0; transform: translate(-50%, -26px) scale(1); }
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   LA BANNIÈRE D'ARRIVÉE (424).
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️ ELLE EST PLUS GROSSE QUE TOUT LE RESTE DU HUD, ET C'EST LA SEULE QUI A LE
+   DROIT DE L'ÊTRE. C'est le seul instant de la descente qui arrive UNE FOIS —
+   les checkpoints reviennent onze fois, les remises en place autant qu'on
+   tombe. Une annonce de fin dimensionnée comme une annonce de passage se lirait
+   comme un douzième checkpoint.
+
+   ⚠️ ELLE DESCEND AU LIEU DE MONTER. L'annonce de checkpoint s'éloigne vers le
+   haut pour libérer la piste, parce qu'on doit continuer à piloter. Ici on ne
+   pilote plus : elle peut se poser au centre et y rester le temps qu'on la
+   lise. C'est aussi ce qui la distingue au premier coup d'œil.
+
+   ⚠️ ELLE TIENT 2,2 s ET S'EFFACE SEULE, sans attendre l'arrêt de la luge : le
+   panneau chiffré prend le relais juste après, et deux textes superposés au
+   centre du cadre ne se lisent ni l'un ni l'autre. */
+.finish-tag {
+  position: absolute;
+  left: 50%; top: 34%;
+  transform: translate(-50%, -50%) scale(0.8);
+  font-weight: 900;
+  font-size: clamp(34px, 7vw, 86px);
+  letter-spacing: 0.10em;
+  color: #fffdf4;
+  /* Le liseré doré du ruban, repris en ombre portée : la bannière et l'objet
+     3D qu'on vient de crever doivent se lire comme la même chose. */
+  text-shadow:
+    0 3px 0 #d8306e,
+    0 0 30px rgba(255, 224, 102, 0.95),
+    0 0 70px rgba(255, 91, 147, 0.75);
+  opacity: 0;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.finish-tag.visible { animation: finishPop 2.2s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+@keyframes finishPop {
+  0%   { opacity: 0; transform: translate(-50%, -140%) scale(0.55) rotate(-5deg); }
+  16%  { opacity: 1; transform: translate(-50%, -50%) scale(1.14) rotate(2deg); }
+  26%  { transform: translate(-50%, -50%) scale(0.98) rotate(0deg); }
+  34%  { transform: translate(-50%, -50%) scale(1.03); }
+  44%  { transform: translate(-50%, -50%) scale(1); }
+  80%  { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.06); }
+}
+
 /* Le bandeau de remise en place. Il pulse doucement : c'est un état qui DURE
    (contrairement à l'annonce de checkpoint, qui est un instant), et un texte
    parfaitement fixe pendant deux secondes se lit comme un écran figé. */

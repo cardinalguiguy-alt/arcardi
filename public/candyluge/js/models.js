@@ -170,6 +170,36 @@ const Models = (function () {
       o.rotation.y = yaw || 0;
       return bind(o, mats, hue | 0, !!far);
     },
+    /* ═══════════════════════════════════════════════════════════════════════
+       ⚠️⚠️ ZIP 424 — L'ÉCHELLE D'UN ACCESSOIRE SE DÉRIVE, ELLE NE SE RÈGLE PAS.
+       ───────────────────────────────────────────────────────────────────────
+       C'est la leçon la plus coûteuse du projet (CLAUDE.md §7) appliquée ici :
+       « un paramètre de l'outil qui DOUBLE un paramètre du jeu est une
+       divergence en attente ». Le 422 posait des diviseurs à la main —
+       `h / 3.6` pour le sapin de gomme — en supposant la hauteur du gabarit.
+       Le gabarit fait 1,2 unité, pas 3,6 : le sapin sortait donc à h/3 là où
+       la primitive qu'il remplace fait 1,16·h, soit TROIS FOIS ET DEMIE trop
+       petit. Et comme les modèles n'étaient de toute façon jamais chargés
+       (voir hasModels() dans world.js), personne ne l'a jamais vu.
+
+       `fit` mesure le gabarit et rend l'échelle qui lui donne exactement la
+       hauteur demandée. L'appelant écrit alors une hauteur de JEU — la même
+       grandeur que celle de sa primitive de repli — et les deux ne peuvent
+       plus diverger.
+
+       ⚠️ RENVOIE 1 SI LE GABARIT MANQUE, sans jamais lever : `place()` rendra
+       `null` juste après et l'appelant retombera sur sa primitive. Une
+       exception ici casserait précisément le repli que ce fichier existe pour
+       garantir (règle 2). */
+    fit(name, targetHeight) {
+      const t = tpl[name];
+      if (!t) return 1;
+      if (t.userData.__h === undefined) {
+        const b = new THREE.Box3().setFromObject(t);
+        t.userData.__h = Math.max(1e-4, b.max.y - b.min.y);
+      }
+      return targetHeight / t.userData.__h;
+    },
     /* Le gabarit brut, pour la luge : world.js l'assemble dans sa propre
        hiérarchie de pivots (voir SLED_PIVOT) et ne peut pas se contenter d'un
        objet posé. */

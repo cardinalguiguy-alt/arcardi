@@ -124,6 +124,10 @@ const Game = (function () {
   let running = false;
   let reported = false;
   let cpFlash = -1e9;
+  /* L'instant du franchissement de la ligne (424), ou 0 tant qu'on n'a pas
+     fini. Il sert à DEUX choses qui n'ont rien à voir : annoncer l'arrivée une
+     seule fois, et garantir que la partie se termine (voir plus bas). */
+  let finishAt = 0;
 
   /* ------------------------------------------------------------ DÉMARRAGE */
   function start() {
@@ -134,6 +138,7 @@ const Game = (function () {
     score = 0;
     elapsed = 0;
     reported = false;
+    finishAt = 0;
 
     /* ⚠️ UNE CHUTE RENVOIE AU DERNIER CHECKPOINT (414). Elle n'arrête toujours
        pas la descente — la seule fin possible reste le bas de la piste ou
@@ -280,7 +285,28 @@ const Game = (function () {
       World.updateAmbient(now, sled);
       UI.updateHud(sled, score, elapsed, slope.stageAt(sled.s), now - cpFlash);
 
-      if (sled.finished && sled.v < 3) endRun();
+      /* ══════════════════════════════════════════════════════════════════════
+         L'ARRIVÉE (424) — DEUX MOMENTS, ET IL FAUT LES DEUX.
+         ──────────────────────────────────────────────────────────────────────
+         1. À LA LIGNE : la bannière « ARRIVÉE ! », tout de suite. Le joueur
+            roule encore, la pluie de bonbons, les confettis et les ballons
+            partent au même instant (world.js les tire de `sled.finished`).
+            Fêter à l'écran de fin, c'est fêter APRÈS coup devant un panneau.
+         2. À L'ARRÊT : le panneau chiffré. On garde ainsi le plaisir du
+            dégagement — c'est la seule portion de la descente qu'on regarde
+            au lieu de la piloter.
+
+         ⚠️ LA SECONDE CONDITION N'EST PAS UN CONFORT, C'EST UN VERROU. La seule
+         condition d'arrêt était `v < 3`, et elle pouvait ne JAMAIS être vraie
+         (voir FINISH_BRAKE dans config.js : le turbo accélérait plus fort que
+         le dégagement ne freinait). Une fin de partie ne doit pas dépendre
+         d'un seuil de vitesse qu'un réglage futur peut rendre inatteignable :
+         passé FINISH_MAX_MS, on termine, point. */
+      if (sled.finished && !finishAt) {
+        finishAt = now;
+        UI.flashFinish();
+      }
+      if (sled.finished && (sled.v < 3 || now - finishAt > CFG.FINISH_MAX_MS)) endRun();
 
     } else if (state === STATE.TITLE) {
       /* L'écran-titre montre LE VRAI PAYSAGE, caméra posée en haut de la piste

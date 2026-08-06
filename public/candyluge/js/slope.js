@@ -45,8 +45,20 @@ const Slope = (function () {
      glissait doucement dans la barrière sans que le joueur puisse rien faire.
      Une aire d'arrivée est plate et droite, dans une station de ski comme
      ici — et ça règle le problème par le décor plutôt que par une exception. */
+  /* ⚠️⚠️ ZIP 424 — L'ABSCISSE DE LA LIGNE EST DÉFINIE ICI, UNE FOIS, ET LE
+     RUBAN COMME LE FREINAGE LA LISENT. Elle était calculée en dur à quatre
+     endroits (ici, dans critters.js, dans checkpointIn, et elle allait l'être
+     une cinquième fois pour le décor). Un nombre qui décrit LE MÊME ENDROIT en
+     plusieurs exemplaires finit toujours par en décrire deux — et le jour où
+     `FINISH_FADE` bougera, le ruban se retrouvera à cinquante mètres de
+     l'endroit où le chrono s'arrête, sans que rien ne lève d'erreur.
+     C'est la règle du §7 de CLAUDE.md : DÉRIVÉ, jamais réglé. */
+  function finishSAt() {
+    return CFG.DESCENT_LENGTH - CFG.FINISH_FADE;
+  }
+
   function finishKAt(s) {
-    const start = CFG.DESCENT_LENGTH - CFG.FINISH_FADE;
+    const start = finishSAt();
     if (s < start) return 0;
     return Math.min(1, (s - start) / CFG.FINISH_FADE);
   }
@@ -312,6 +324,8 @@ const Slope = (function () {
   /* La zone d'arrivée : 0 avant, monte à 1 sur les derniers FINISH_FADE. Sert
      à ralentir la luge et à ouvrir le décor sur la vallée. */
   SlopeGen.prototype.finishK = function (s) { return finishKAt(s); };
+  /* L'abscisse de la LIGNE elle-même (424) : world.js y plante le ruban. */
+  SlopeGen.prototype.finishS = function () { return finishSAt(); };
 
   /* ══════════════════════════════════════════════════════════════════════════
      LES CHECKPOINTS (414).
@@ -333,7 +347,7 @@ const Slope = (function () {
      impossible par construction plutôt que de le corriger par un cas
      particulier ailleurs. */
   function checkpointCount() {
-    const last = CFG.DESCENT_LENGTH - CFG.FINISH_FADE - CFG.CP_EVERY * 0.5;
+    const last = finishSAt() - CFG.CP_EVERY * 0.5;      // 424 : dérivé, voir finishSAt
     return Math.max(1, Math.floor((last - CFG.CP_FIRST) / CFG.CP_EVERY) + 1);
   }
 
@@ -362,7 +376,7 @@ const Slope = (function () {
 
   return {
     SlopeGen, yawAt, pitchAt, bumpAt, widthAt, curveAt, bankAt,
-    centerAt, frameAt, pointAt, terrainAt, finishKAt,
+    centerAt, frameAt, pointAt, terrainAt, finishKAt, finishSAt,
     checkpointCount, checkpointAt, checkpointIndexAt, checkpointIn,
   };
 })();

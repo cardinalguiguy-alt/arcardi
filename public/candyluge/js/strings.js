@@ -48,6 +48,12 @@ const STR = {
     overTitle: "Fin de la descente",
     finish: "Vallée atteinte !",
     finishSub: "La luge s'arrête d'elle-même au bord du lac de sirop.",
+    /* ⚠️ EN MAJUSCULES DANS LA CHAÎNE, PAS EN `text-transform` (424). Demande
+       explicite de Guillaume, et il vaut mieux qu'elle soit lisible ici : une
+       capitalisation posée en CSS se perd au premier changement de feuille de
+       style, et la traduction ne peut pas la contredire quand une langue ne
+       l'accepte pas. */
+    finishTag: "ARRIVÉE !",
     newBest: "Nouveau record !",
     back: "Retour au Pays des Bonbons",
     overHint: "Reviens quand tu veux : le monstre du lac garde la piste ouverte.",
@@ -98,6 +104,7 @@ const STR = {
     overTitle: "Run over",
     finish: "Valley reached!",
     finishSub: "The sled coasts to a stop at the edge of the syrup lake.",
+    finishTag: "FINISH!",
     newBest: "New best!",
     back: "Back to Candy Land",
     overHint: "Come back any time — the lake monster keeps the slope open.",

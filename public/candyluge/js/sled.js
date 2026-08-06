@@ -463,7 +463,30 @@ Sled.prototype.update = function (dt, now, finishK) {
 
   if (braking && this.grounded) acc -= CFG.SLED_SLIDE_BRAKE;
   if (this.boost > 0) acc += CFG.BOOST_ACCEL;
-  if (finishK > 0) acc -= finishK * 10;
+  /* ══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ ZIP 424 — APRÈS LA LIGNE, ON NE CONDUIT PLUS : ON DÉGAGE.
+     ──────────────────────────────────────────────────────────────────────────
+     LE BOGUE CORRIGÉ ICI, ET IL FAISAIT UNE PARTIE SANS FIN. Le 416 écrivait
+     `acc -= finishK * 10`, soit 10 u/s² au maximum et ZÉRO à la ligne. Or
+     `BOOST_ACCEL` vaut 30 : un joueur qui enchaînait les turbos dans le
+     dégagement accélérait plus vite qu'il ne freinait, ne repassait jamais sous
+     les 3 u/s qu'exige `endRun`, et LA DESCENTE NE SE TERMINAIT PAS. Rapporté
+     par Guillaume, reproduit, et ce n'est pas un cas tordu : charger le turbo
+     est précisément ce qu'on a passé toute la descente à apprendre à faire.
+
+     ⚠️ COUPER LE TURBO NE SUFFISAIT PAS, ET METTRE UN FREIN NON PLUS. Il faut
+     les deux : sans la coupure, une charge déjà pleine au moment de la ligne
+     redonne 1,1 s d'accélération ; sans le frein, la roue libre laisse filer
+     dix secondes d'attente devant un panneau qui ne vient pas.
+
+     ⚠️ ET LE FREIN NE PART PAS DE ZÉRO (FINISH_BRAKE_BASE). Un freinage
+     proportionnel à `finishK` est nul À LA LIGNE, c'est-à-dire exactement là où
+     la luge va le plus vite. On mordait donc au moment le moins utile. */
+  if (finishK > 0) {
+    this.boost = 0;
+    this.driftCharge = 0;
+    acc -= CFG.FINISH_BRAKE * (CFG.FINISH_BRAKE_BASE + (1 - CFG.FINISH_BRAKE_BASE) * finishK);
+  }
 
   /* ================================= 4. LA SUSPENSION ET LE POMPAGE =======
      ⚠️ LE GESTE SIGNATURE DE STEEP, ET IL NE COÛTE QU'UN RESSORT. La surface
@@ -601,6 +624,20 @@ Sled.prototype.update = function (dt, now, finishK) {
   this.roll = damp(this.roll, wantRoll, 8, dt);
   this.pitchVis = damp(this.pitchVis,
     -pitch * 0.5 - this.comp * 0.09 - this.tuck * 0.12 - (this.grounded ? 0 : 0.16), 7, dt);
+
+  /* ⚠️ LE DÉRAPAGE D'ARRIVÉE (424) EST ÉCRIT ICI, APRÈS TOUT LE RESTE, ET C'EST
+     VOULU : il est VISUEL. `this.skid` a déjà servi plus haut à la physique de
+     cette image ; l'écraser maintenant ne change donc rien au calcul en cours,
+     mais il alimente le roulis, la trace et la gerbe — et il freinera un peu
+     plus à l'image suivante, ce qui va dans le bon sens.
+     Guillaume : « un freinage auto type gros dérapage ». Un arrêt par simple
+     décélération se lit comme une panne ; une luge mise en travers qui envoie
+     un rideau de neige se lit comme un pilote qui pose sa luge. Le geste
+     s'efface avec la vitesse (rien à 0 u/s) : une luge à l'arrêt en travers
+     resterait plantée de biais devant le panneau de score. */
+  if (finishK > 0) {
+    this.skid = Math.max(this.skid, CFG.FINISH_SKID * Math.min(1, this.v / 18));
+  }
 
   if (finishK > 0 && !this.finished) this.finished = true;
 };

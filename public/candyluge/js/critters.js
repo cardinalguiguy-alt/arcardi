@@ -225,7 +225,7 @@ const Critters = (function () {
      dégagement, sous la pluie de bonbons. On ne fête pas quelqu'un en lui
      tendant un croche-pied. */
   function waveCount() {
-    const last = CFG.DESCENT_LENGTH - CFG.FINISH_FADE;
+    const last = Slope.finishSAt();     // 424 : dérivé, une seule écriture (slope.js)
     let s = 240, w = 0;
     while (s < last && w < 400) {
       const st = Math.min(5, Math.floor(s / CFG.STAGE_LEN));

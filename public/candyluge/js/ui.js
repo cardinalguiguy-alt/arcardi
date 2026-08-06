@@ -26,7 +26,7 @@ const UI = (function () {
       "best", "stage", "finalScore", "finalCandies", "finalTime", "finalBest",
       "oTitle", "overReason", "newBest", "boostTag", "driftBar", "driftFill",
       "cpTag", "resetTag", "wipes", "wipesPlate", "finalWipes",
-      "construction",
+      "construction", "finishTag",
     ]) el[id] = $(id);
     best = loadBest();
     applyLang();
@@ -101,6 +101,31 @@ const UI = (function () {
     el.cpTag.classList.add("visible");
   }
 
+  /* LA BANNIÈRE D'ARRIVÉE (424). Appelée UNE FOIS, à l'instant du
+     franchissement du ruban — pas à l'arrêt de la luge.
+
+     ⚠️ ELLE MASQUE LE BANDEAU DE REMISE EN PLACE. Le cas se produit : on peut
+     chuter dans les derniers mètres avant la ligne, être renvoyé au fanion, et
+     repasser la ligne pendant que `resetTag` s'affiche encore. Deux textes
+     empilés au centre du cadre, dont l'un dit « on remonte » et l'autre
+     « ARRIVÉE », c'est illisible ET contradictoire. L'arrivée gagne : elle est
+     définitive, l'autre ne l'est pas.
+
+     ⚠️ LE REFLOW FORCÉ EST INDISPENSABLE, MÊME SI ELLE N'ARRIVE QU'UNE FOIS PAR
+     DESCENTE. L'animation est en `forwards` : après elle, l'élément GARDE la
+     classe et reste à opacité 0. À la deuxième descente de la session, rajouter
+     une classe déjà présente ne relance rien — la bannière n'apparaîtrait
+     jamais plus qu'une seule fois par chargement de page. C'est exactement le
+     piège déjà rencontré sur deux checkpoints rapprochés. */
+  function flashFinish() {
+    if (el.resetTag) el.resetTag.classList.remove("visible");
+    if (!el.finishTag) return;
+    el.finishTag.textContent = L.finishTag;
+    el.finishTag.classList.remove("visible");
+    void el.finishTag.offsetWidth;
+    el.finishTag.classList.add("visible");
+  }
+
   function updateHud(sled, score, ms, stage, sinceCp) {
     el.score.textContent = Math.floor(score);
     el.candies.textContent = sled.candies;
@@ -135,6 +160,11 @@ const UI = (function () {
   }
 
   function showGameOver(sled, score, ms, finished) {
+    /* ⚠️ 424 : la bannière s'efface quand le panneau arrive. Une luge qui
+       s'arrête vite (chute juste avant la ligne, donc peu de vitesse à dissiper)
+       amène le panneau AVANT la fin des 2,2 s d'animation, et « ARRIVÉE ! » se
+       retrouve écrit par-dessus le score. */
+    if (el.finishTag) el.finishTag.classList.remove("visible");
     el.oTitle.textContent = finished ? L.finish : L.overTitle;
     el.overReason.textContent = finished ? L.finishSub
       : (sled.cause === "crash" ? L.overCrash : sled.cause === "fence" ? L.overFence : L.overAbort);
@@ -160,7 +190,7 @@ const UI = (function () {
 
   return {
     init, applyLang, show, updateHud, showGameOver, showLoadError, fmtTime,
-    flashCheckpoint,
+    flashCheckpoint, flashFinish,
     get best() { return best; },
     get L() { return L; },
   };
