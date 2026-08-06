@@ -35,22 +35,46 @@ const Story = (function () {
 
   const CH1 = [
 
-    /* ═══ I. LA CORNICHE ═══════════════════════════════════════════════════
-       ⚠️ ON OUVRE SUR LE PAYSAGE, PAS SUR LE PASSAGE. La tentation était de
-       montrer la traversée : un tunnel, un noir, une arrivée. Mais le sujet
-       du chapitre n'est pas « je suis passé », c'est « ce que je découvre en
-       arrivant ». On coupe donc APRÈS le passage, et la première image du
-       monde cristal est la plus belle qu'on sache faire. */
+    /* ═══ 0. LA COURSE ═════════════════════════════════════════════════════
+       ⚠️ DÉCISION RENVERSÉE AU 421, ET LA PRÉCÉDENTE EST GARDÉE ICI PARCE
+       QU'ELLE ÉTAIT BONNE. Le 418 avait écrit : « ON OUVRE SUR LE PAYSAGE,
+       PAS SUR LE PASSAGE — le sujet du chapitre n'est pas *je suis passé*,
+       c'est *ce que je découvre en arrivant*. » Le raisonnement tenait, et il
+       tient toujours contre l'idée qu'il visait : montrer un tunnel, un noir,
+       une arrivée.
+
+       Ce n'est pas ce qu'on fait. On n'ouvre pas sur le PASSAGE, on ouvre sur
+       une COURSE — et la différence est entière :
+
+         - le passage est un événement passé, qu'on illustrerait ; la course
+           est une action présente, que le joueur EXÉCUTE. La toute première
+           chose qu'il fait dans ce jeu est d'avancer, pas de lire ;
+         - elle ne montre rien avant la corniche. On court dans un couloir
+           d'arbres, la vallée est cachée derrière le bord — et c'est
+           l'ARRIVÉE au bord qui déclenche le tableau. La première image du
+           monde cristal reste donc la plus belle qu'on sache faire, et elle
+           arrive maintenant comme une RÉCOMPENSE au lieu d'un lever de rideau ;
+         - on ne peut pas perdre, il n'y a ni HUD ni éclat à ramasser : la
+           course n'est pas une épreuve, c'est une manière d'entrer.
+
+       ⚠️ CE QUI SUIT NE DOIT PLUS PARLER DE PASSAGE. Les trois répliques du
+       seuil disaient « le passage s'est refermé derrière vous » — elles ont
+       été réécrites, sans quoi le texte raconterait une scène que le joueur
+       vient de ne pas jouer. C'est le genre d'incohérence qui survit dix zips
+       parce qu'aucun outil ne la voit. */
+    { t: "play", id: "run" },
+
+    /* ═══ I. LA CORNICHE ════════════════════════════════════════════════════ */
     { t: "scene", id: "seuil", cam: 0, fade: 3800 },
     { t: "cam", to: 24, ms: 18000 },
     { t: "wait", ms: 2400 },
 
-    { t: "say", who: "", fr: "Le passage s'est refermé derrière vous. Il n'a fait aucun bruit.",
-      en: "The passage closed behind you. It made no sound at all." },
+    { t: "say", who: "", fr: "Vous vous arrêtez parce que le sol s'arrête. Pas parce que vous l'avez décidé.",
+      en: "You stop because the ground stops. Not because you decided to." },
     { t: "say", who: "", fr: "Le froid n'est pas une température, ici. C'est une épaisseur. On le traverse.",
       en: "Cold isn't a temperature here. It's a thickness. You walk through it." },
-    { t: "say", who: "", fr: "Devant vous, la roche s'ouvre sur quelque chose de très grand et de très silencieux.",
-      en: "Ahead of you the rock opens onto something very large and very quiet." },
+    { t: "say", who: "", fr: "Et de l'autre côté du bord, il y a quelque chose de très grand et de très silencieux.",
+      en: "And beyond the edge, there is something very large and very quiet." },
 
     { t: "scene", id: "corniche", cam: 0, fade: 2600 },
     { t: "cam", to: 92, ms: 26000 },
@@ -124,7 +148,19 @@ const Story = (function () {
     { t: "say", who: "", fr: "Quelqu'un a voulu qu'on puisse traverser sans se perdre. Ou qu'on ne s'arrête pas.",
       en: "Someone wanted this crossing to be walkable. Or wanted no one to stop." },
 
-    /* ═══ II. LA MARCHE (JOUABLE) ═══════════════════════════════════════════ */
+    /* ═══ II. LA MARCHE (JOUABLE) ═══════════════════════════════════════════
+       ⚠️ QUESTION OUVERTE, LAISSÉE OUVERTE EXPRÈS (421). Le chapitre a
+       désormais DEUX segments jouables : la course d'ouverture et celui-ci.
+       Guillaume a demandé de trancher plus tard, en les voyant tourner tous
+       les deux. Les deux options ont un coût :
+         - les garder — le chapitre respire deux fois, mais la seconde marche
+           risque de se lire comme une redite de la première, sur le même
+           moteur et le même décor ;
+         - supprimer celle-ci — le milieu du chapitre devient une longue suite
+           de tableaux sans main rendue au joueur.
+       ⚠️ NE PAS TRANCHER EN PASSANT. Retirer cette ligne retire aussi le seul
+       endroit où l'on ramasse des éclats, donc le compte final de fin de
+       chapitre (`finalShards`, game.js) et la jauge de Chant. */
     { t: "play", id: "walk" },
 
     /* ═══ III. LE PONT ══════════════════════════════════════════════════════ */

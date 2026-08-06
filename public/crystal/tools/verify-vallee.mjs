@@ -359,6 +359,61 @@ head("5. La marche sur le lac gelé");
   ok(uniques === Walk.S.shards, `chaque éclat n'est ramassé qu'une fois (${uniques})`);
 }
 
+/* ═══ 5 bis. LA COURSE D'OUVERTURE ET SA FALAISE (421) ═══════════════════════
+   ⚠️ CES CONTRÔLES EXISTENT À CAUSE D'UN PIÈGE QUI NE LÈVE AUCUNE ERREUR : la
+   caméra est DERRIÈRE le personnage, qui vit 2,6 unités devant elle. Arrêter
+   la caméra sur la lèvre place donc le personnage AU-DELÀ du bord, debout sur
+   le vide — et le rendu, qui ne compare que des distances, n'a rien à
+   signaler. C'est exactement le genre de défaut qu'aucune relecture ne
+   trouve et qu'aucune planche ne montre si on ne la prend pas au bon
+   instant. On le mesure donc, ici, en unités-monde. */
+head("5 bis. La course d'ouverture");
+{
+  const K = CFG.WALK;
+  Walk.reset("run");
+  ok(Walk.S.mode === "run", "le mode « run » est bien retenu");
+  ok(Walk.S.M.hud === false, "l'ouverture n'affiche pas de HUD");
+  ok(Walk.S.M.shards === false, "et ne pose aucun éclat à ramasser");
+
+  const input = { left: false, right: false };
+  let steps = 0;
+  while (!Walk.S.done && steps < 60 * 400) { Walk.step(1 / 60, input); steps++; }
+  ok(Walk.S.done, "on arrive au bout de la course");
+  const secs = steps / 60;
+  ok(secs > 12 && secs < 60, `l'ouverture dure ${secs.toFixed(0)} s (entre 12 et 60)`);
+
+  const cz = Walk.cliffZ();
+  ok(isFinite(cz), "la falaise existe en mode « run »");
+  ok(Walk.S.z <= cz - 0.01, `la caméra ne franchit pas la lèvre (z=${Walk.S.z.toFixed(1)} < ${cz.toFixed(1)})`);
+  /* LE CONTRÔLE QUI COMPTE : le personnage lui-même, pas la caméra. */
+  const heroZ = Walk.S.z + 2.6;
+  ok(heroZ < cz, `le personnage reste EN DEÇÀ du bord (${heroZ.toFixed(1)} < ${cz.toFixed(1)})`);
+  ok(Walk.S.spd === 0, "et il est complètement arrêté quand la course se termine");
+  ok(Walk.S.shards === 0, "aucun éclat ramassé pendant l'ouverture");
+
+  /* La falaise ne doit PAS exister dans le segment du milieu — sans quoi la
+     marche s'arrêterait au même endroit et personne ne saurait pourquoi. */
+  Walk.reset("walk");
+  ok(!isFinite(Walk.cliffZ()), "pas de falaise en mode « walk »");
+  ok(Walk.S.M.hud === true, "le segment du milieu garde son HUD");
+
+  /* ⚠️ LE FREINAGE EST MONOTONE. Une décélération qui remonterait, même d'un
+     cheveu, se lirait comme un à-coup — et une racine mal bornée peut très
+     bien produire ça sans jamais dépasser de borne. */
+  Walk.reset("run");
+  let prev = Infinity, monotone = true, seen = 0;
+  for (let i = 0; i < 60 * 400 && !Walk.S.done; i++) {
+    Walk.step(1 / 60, input);
+    if (Walk.S.spd < K.SPEED - 1e-9) {
+      seen++;
+      if (Walk.S.spd > prev + 1e-9) monotone = false;
+      prev = Walk.S.spd;
+    }
+  }
+  ok(seen > 30, `le freinage dure (${seen} pas de simulation)`);
+  ok(monotone, "et la vitesse ne remonte jamais pendant le freinage");
+}
+
 /* ═══ 6. LA PASSERELLE VERS LA FERME ═════════════════════════════════════════ */
 head("6. La passerelle");
 {

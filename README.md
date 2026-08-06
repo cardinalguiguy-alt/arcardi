@@ -1,5 +1,86 @@
 # ARCARDI 🎪
 
+> **ZIP 421 — LA COURSE OUVRE LE CHAPITRE, ET L'IMAGE ÉTAIT CINQUANTE ET UN
+> POINTS TROP SOMBRE.**
+>
+> **Une décision écrite a été renversée, et elle est conservée dans le code.**
+> `story.js` portait depuis le 418 : « ON OUVRE SUR LE PAYSAGE, PAS SUR LE
+> PASSAGE ». Le chapitre 1 s'ouvre désormais sur la course. Le raisonnement
+> d'origine tenait — et il tient toujours contre ce qu'il visait, qui était de
+> montrer un tunnel et une arrivée. Ce n'est pas ce qu'on fait : on n'ouvre pas
+> sur un événement passé qu'on illustre, on ouvre sur une action que le joueur
+> **exécute**. La course ne montre rien de la vallée ; elle court dans un
+> couloir d'arbres, et c'est l'**arrivée au bord de la falaise** qui déclenche
+> le tableau. La plus belle image du jeu arrive maintenant comme une
+> récompense au lieu d'un lever de rideau. Les trois répliques du seuil, qui
+> parlaient d'un passage refermé, ont été réécrites — sans quoi le texte
+> racontait une scène que le joueur venait de ne pas jouer.
+>
+> **Le vrai résultat du zip est chiffré.** Les références de Guillaume réduites
+> à 480×270 et comparées bande par bande aux planches de `preview.mjs` :
+>
+> | | référence | jeu (419) | jeu (421) |
+> |---|---|---|---|
+> | L global | 135,2 | 84,1 | **117,0** |
+> | bande y 0–45 | 106,9 | 37,7 | **79,2** |
+> | haut gauche / centre / droite | 118 / 61 / 142 | 30 / 55 / 28 | **95 / 52 / 91** |
+> | pixels sous L30 | 2,5 % | **21,8 %** | **1,9 %** |
+>
+> **La ligne qui compte est la troisième.** Le jeu n'était pas seulement trop
+> sombre : il était sombre **au mauvais endroit**. La référence a les coins
+> hauts clairs et le centre sombre — des arbres noyés de brume qui ferment le
+> cadre, et un ciel dégagé pour l'aurore. Le jeu faisait exactement l'inverse.
+> Aucune correction de couleur ne répare ça : **il manquait de la matière**,
+> et le 420 avait déjà mesuré que monter le ciel d'un cran rendait +5,7 et
+> doubler le halo d'aurore +0,1.
+>
+> **Trois trouvailles, dont deux n'étaient visibles que sur planche.**
+> 1. *La canopée peinte à l'envers.* Deux planches perdues à densifier des
+>    traits clairs sur un ciel noir — à 700 puis 1 900 troncs, on lisait de la
+>    **pluie verticale**. Une forêt noyée n'est pas un fond sombre rayé de
+>    clair : c'est un **champ clair** où les troncs creusent des vides. On pose
+>    le lavis d'abord, les troncs ensuite. Tant qu'on peint la figure au lieu du
+>    fond, aucune densité ne suffit.
+> 2. *La vignette se battait contre la correction.* Elle assombrissait les
+>    coins avec `sky0` — précisément les quatre zones qu'on venait de remplir.
+>    0,46 → 0,22 : ce qui ferme les coins, désormais, c'est de la matière.
+> 3. *Le noir est une ressource rare.* Les arbres de bord de route tiraient
+>    vers `sil1`, la valeur des branches de **cadrage**. Quand le décor courant
+>    utilise le noir du cadrage, le cadrage ne découpe plus rien.
+>
+> **Et un défaut que seul le banc d'essai pouvait trouver.** L'ouverture ne
+> DESSINE pas les éclats de givre — on en avait conclu qu'ils n'existaient pas.
+> Ils existaient, et on les **ramassait invisibles** : le compteur de fin de
+> chapitre partait à trois ou quatre sans que rien n'apparaisse à l'écran.
+> `verify-vallee.mjs` compte désormais 74 contrôles (+14), dont celui qui
+> vérifie que **le personnage** — et pas la caméra, qui est 2,6 unités derrière
+> lui — reste en deçà du bord.
+>
+> **La falaise a été recadrée sur la composition, pas sur la vraisemblance.**
+> Arrêter le personnage « au bord » (3,7 unités) plaçait la lèvre aux quatre
+> cinquièmes du cadre : trois bandes horizontales empilées, tenues deux
+> secondes, pour le plan le plus important de l'ouverture. À 8 unités il
+> s'arrête à une trentaine de mètres du vide — personne ne le remarque, tout le
+> monde voit la différence de cadrage.
+>
+> **Fichiers touchés : sept, tous dans `public/crystal/`.** `config.js`,
+> `flora.js` (nouveau `Flora.canopy`), `walk.js`, `story.js`, `game.js`,
+> `tools/preview.mjs`, `tools/verify-vallee.mjs`. Aucun fichier Next.js, aucun
+> composant, **aucune migration Supabase**.
+>
+> **⚠️ RESTE OUVERT :** le chapitre a maintenant **deux** segments jouables. Le
+> second (`story.js`, beat `play id:"walk"`) est conservé en attendant de les
+> voir tourner tous les deux. Le retirer retirerait aussi le seul endroit où
+> l'on ramasse des éclats, donc `finalShards` et la jauge de Chant.
+>
+> **⚠️ NON PROPAGÉ :** `Flora.canopy` n'est appelée que par `walk.js`. Les neuf
+> tableaux de `scenes.js` et `shots.js` ont le même défaut de coins hauts, et la
+> même correction les attend — mais elle n'a pas été appliquée sans validation
+> visuelle, et `seuil` (« presque noir », délibéré) comme `memoire` (le pivot,
+> l'aurore doit y être seule) devront probablement en être exclus.
+
+---
+
 > **ZIP 419 — AUDIT REALTIME : UNE FUITE, DES MESSAGES JETÉS EN SILENCE, ET UN
 > QUOTA PLUS SERRÉ QU'ON NE CROYAIT.**
 > Guillaume, après la migration Supabase forcée par un dépassement à ~7 M

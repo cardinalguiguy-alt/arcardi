@@ -176,17 +176,33 @@ const CryGate = (function () {
     let steps = 0;
     while (acc >= DT && steps < 8) { tick(DT); acc -= DT; steps++; }
 
-    if (state === "walk") Walk.render(fb, Cine.clock);
-    else Cine.render(fb);
+    if (state === "walk") {
+      Walk.render(fb, Cine.clock);
+      /* Le fondu se fait DANS le tampon, comme dans `Cine.render` et pour la
+         même raison : en CSS, le grain et la vignette resteraient nets sur du
+         noir, et ça se voit. */
+      if (Cine.S.fade > 0.001) {
+        for (let y = 0; y < CFG.H; y++) fb.hline(0, CFG.W - 1, y, CFG.PAL.sky0, Cine.S.fade);
+      }
+    } else Cine.render(fb);
     present();
   }
 
   function tick(dt) {
     if (state === "walk") {
-      Cine.S.clock += dt;                      // le décor continue de vivre
+      /* ⚠️ ON APPELLE `Cine.update` ET NON PLUS `clock += dt` (421). En mode
+         "play" cette fonction ne fait AVANCER QUE le temps du décor, le fondu
+         et les interpolations — elle ne touche pas au script, dont le mode
+         n'est pas "run". C'est ce qui permet au fondu d'ouverture de la
+         course de se dérouler alors que le récit est en pause. Remplacer cet
+         appel par l'incrément d'horloge d'origine figerait le fondu à
+         l'écran, plein noir, jusqu'à la fin de la course. */
+      Cine.update(dt);
       Walk.step(dt, input);
-      UI.hudSet(Walk.S.shards, Walk.metres(), Walk.goal, best,
-                Walk.S.chant, Walk.S.shards * 40 + Walk.metres());
+      if (Walk.S.M && Walk.S.M.hud) {
+        UI.hudSet(Walk.S.shards, Walk.metres(), Walk.goal, best,
+                  Walk.S.chant, Walk.S.shards * 40 + Walk.metres());
+      }
       if (Walk.S.done) {
         UI.hud(false);
         state = "cine";
@@ -212,10 +228,21 @@ const CryGate = (function () {
     UI.clearChapter();
     Walk.reset();
     state = "cine";
+    /* ⚠️ DEUX IDENTIFIANTS JOUABLES DEPUIS LE 421, ET LE HUD SUIT LE MODE.
+       `run` est la course d'ouverture : pas de HUD, parce qu'un compteur de
+       score sur la toute première image annonce un jeu d'arcade alors qu'on
+       ouvre un récit. `walk` est le segment du milieu, avec son HUD. Le choix
+       n'est pas fait ici : il est lu dans `CFG.WALK.MODES`, pour qu'il n'y ait
+       qu'un seul endroit où il se décide. */
     Cine.onPlay = function (id) {
-      if (id !== "walk") { Cine.resumeFromPlay(); return; }
-      Walk.reset();
-      UI.hud(true);
+      if (id !== "walk" && id !== "run") { Cine.resumeFromPlay(); return; }
+      Walk.reset(id);
+      UI.hud(!!(Walk.S.M && Walk.S.M.hud));
+      /* Le fondu d'ouverture. ⚠️ SANS LUI, ON PASSE DE L'ÉCRAN-TITRE À UNE
+         COURSE À PLEINE VITESSE EN UNE IMAGE. Le récit démarrait jusqu'ici
+         sur une instruction `scene`, qui pose son propre fondu ; un `play` en
+         tête de script n'en pose aucun, et rien ne l'aurait signalé. */
+      Cine.S.fade = 1; Cine.S.fadeDir = -1; Cine.S.fadeMs = 2600; Cine.S.fadeEl = 0;
       state = "walk";
     };
     Cine.onEnd = function () {

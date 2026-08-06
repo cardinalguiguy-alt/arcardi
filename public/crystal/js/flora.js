@@ -19,6 +19,16 @@
    ⚠️ LA RÈGLE QUI GOUVERNE TOUT : plus c'est loin, plus c'est clair et moins
    c'est détaillé. Un arbre lointain dessiné avec autant de branches qu'un
    arbre proche ramène le fond au premier plan, même bien coloré.
+
+   ⚠️ IL Y A QUATRE POPULATIONS, PAS CINQ (421). `canopy` s'ajoute au fichier
+   mais n'ajoute pas de plan : c'est le PLAN 4 vu de plus près, là où la forêt
+   ne tient plus dans la bande d'horizon et sort par le haut du cadre. Même
+   nature — une texture, pas des arbres —, même famille de couleurs, même
+   absence de détail. Ce qui change est la GÉOMÉTRIE : elle se pose sur une
+   ligne d'écran au lieu d'un profil de sol, et elle a un trou au milieu.
+   Lui donner le statut de cinquième plan aurait invité à lui inventer des
+   règles propres, et la doctrine des quatre valeurs aurait fini par en avoir
+   cinq.
    ========================================================================== */
 
 const Flora = (function () {
@@ -133,6 +143,130 @@ const Flora = (function () {
     }
   }
 
+  /* ═══════════════════════════════════════════════════════════════════════
+     LA CANOPÉE HAUTE — LE PLAN 4 QUI SORT PAR LE HAUT DU CADRE (421)
+     ───────────────────────────────────────────────────────────────────────
+     ⚠️ POURQUOI ELLE EXISTE : parce qu'on l'a MESURÉE. Les références
+     réduites à 480×270 et comparées bande par bande aux planches du jeu
+     donnaient, sur la bande y 0–45 :
+
+         référence 106,9   ·   jeu 37,7   ·   écart −69
+
+     et sur la course, 21,8 % de pixels sous L30 contre 2,5 %. Décomposé par
+     tiers, le défaut était entièrement dans les COINS : côté référence 56 %
+     des pixels du tiers gauche dépassent L90, côté jeu 0 %.
+
+     ⚠️ ET DEUX CORRECTIONS ÉVIDENTES ONT ÉTÉ MESURÉES PUIS ÉCARTÉES (420) :
+     monter le dégradé du ciel d'un cran rend +5,7 sur un écart de 56, et
+     doubler le halo d'aurore rend +0,1 — rigoureusement rien. Le ciel n'est
+     pas en cause : il MANQUE de la matière dans les coins hauts, et aucune
+     couleur ne remplace de la matière.
+
+     ⚠️ LE TROU DU MILIEU EST LA MOITIÉ DE L'IDÉE. Une canopée pleine largeur
+     ferme le ciel et efface l'aurore, qui est le sujet. Les arbres tiennent
+     donc les deux tiers extérieurs et libèrent le centre — c'est ce que font
+     les deux références, et c'est ce qui concentre le regard là où il faut.
+     `gap0`/`gap1` bornent le vide, `fade` donne sa largeur au fondu : sans ce
+     fondu on ne voit pas une clairière, on voit deux murs.
+
+     ⚠️ ET ELLE EST PÂLE, PRESQUE À LA VALEUR DE LA BRUME. La tentation est de
+     la peindre lisible ; une canopée lisible se lit comme un plan proche et
+     ramène le fond au premier plan. Elle doit être à la limite de disparaître.
+     ═══════════════════════════════════════════════════════════════════════ */
+  function canopy(fb, ox, cfg) {
+    const R = Pix.rng(cfg.seed || 4021);
+    const n = cfg.count || 620;
+    const baseY = cfg.baseY === undefined ? 150 : cfg.baseY;
+    const par = cfg.par === undefined ? 0.26 : cfg.par;
+    const g0 = cfg.gap0 === undefined ? 150 : cfg.gap0;
+    const g1 = cfg.gap1 === undefined ? 330 : cfg.gap1;
+    const fade = cfg.fade === undefined ? 62 : cfg.fade;
+    const hMin = cfg.hMin === undefined ? 90 : cfg.hMin;
+    const hMax = cfg.hMax === undefined ? 240 : cfg.hMax;
+    const c0 = cfg.c0 || mix(P.tre3, P.fog, 0.45);
+    const c1 = cfg.c1 || mix(P.fog, P.sn4, 0.35);
+    const alpha = cfg.alpha === undefined ? 0.85 : cfg.alpha;
+
+    /* Le poids d'une abscisse : 1 dehors, 0 dans la trouée, et entre les deux
+       une rampe cubique. ⚠️ EN CUBIQUE ET NON LINÉAIRE — une rampe linéaire
+       laisse une densité constante sur toute sa largeur, donc une frange
+       régulière qui se voit comme un dégradé de calque. */
+    function weight(x) {
+      if (x <= g0 - fade || x >= g1 + fade) return 1;
+      if (x >= g0 && x <= g1) return 0;
+      const u = x < g0 ? (g0 - x) / fade : (x - g1) / fade;
+      return u * u * u;
+    }
+
+    /* ═══ LE LAVIS, AVANT LES TRONCS ═══════════════════════════════════════
+       ⚠️ C'EST L'INVERSION QUI A DÉBLOQUÉ LE 421, ET ELLE VAUT D'ÊTRE ÉCRITE.
+       Deux planches ont été perdues à densifier des traits clairs sur un ciel
+       noir : à 700 puis à 1 900 troncs, on lisait de la PLUIE VERTICALE, et
+       la bande haute ne remontait que de 38 à 59 pour une cible à 107.
+
+       Une forêt lointaine noyée de brume n'est pas un fond sombre rayé de
+       clair. C'est un CHAMP CLAIR — l'air lui-même, éclairé — dans lequel les
+       troncs creusent des vides à peine plus foncés. Tant qu'on peint la
+       figure au lieu du fond, aucune densité ne suffit : on ne fait
+       qu'ajouter des rayures.
+
+       On pose donc d'abord le champ, dégradé vers le haut (l'air est plus
+       épais au ras de l'horizon), puis les troncs par-dessus. Le lavis
+       respecte la même enveloppe horizontale que les troncs : le centre reste
+       ouvert, sinon l'aurore se pose sur un voile. */
+    if (cfg.wash !== false) {
+      const wk = cfg.wash === undefined ? 0.55 : cfg.wash;
+      const top = Math.max(0, baseY - hMax);
+      for (let x = 0; x < W; x++) {
+        const w = weight(x);
+        if (w <= 0) continue;
+        for (let y = top; y <= baseY && y < H; y++) {
+          if (y < 0) continue;
+          /* Plus dense en bas de la bande, plus léger vers les cimes — mais
+             ⚠️ LA MODULATION RESTE FAIBLE (0,68 → 1,0). Premier essai à
+             0,25 → 1,0 : le champ s'effaçait avant d'atteindre le haut du
+             cadre, et les coins hauts restaient noirs, c'est-à-dire que le
+             lavis ne réparait rien là où était tout le défaut. Une forêt
+             noyée ne s'éclaircit pas vers le haut : elle disparaît d'un coup
+             quand les arbres s'arrêtent. */
+          const u = (y - top) / Math.max(1, baseY - top);
+          fb.blend(x, y, c1, wk * w * (0.68 + Math.pow(u, 0.8) * 0.32));
+        }
+      }
+    }
+
+    for (let i = 0; i < n; i++) {
+      const wx = R() * (W + 320) - 160;
+      const x = Math.round(wx - ox * par);
+      /* ⚠️ LA HAUTEUR EST TIRÉE EN PUISSANCE 0,55, PAS UNIFORMÉMENT. Un
+         tirage uniforme entre deux bornes donne des cimes réparties à peu
+         près à la même altitude : on obtient un PEIGNE, et à l'écran ça se lit
+         comme de la pluie verticale — défaut vu à la première planche du 421.
+         La puissance concentre les tirages vers le haut tout en gardant une
+         minorité d'arbres bas, et c'est cette minorité qui casse la ligne des
+         cimes et fabrique une masse. */
+      const h = hMin + Math.pow(R(), 0.55) * (hMax - hMin);
+      const c = mix(c0, c1, R());
+      const jitter = R();                    // tiré même si l'arbre est rejeté
+      if (x < -2 || x >= W + 2) continue;
+      /* ⚠️ LE TIRAGE A LIEU AVANT LE REJET, TOUJOURS. Si on sortait de la
+         boucle sans consommer le même nombre de tirages, la trouée du milieu
+         décalerait la suite du flux et TOUS les arbres de droite changeraient
+         quand on déplace le bord gauche. Règle du 381, appliquée ici. */
+      if (jitter >= weight(x)) continue;
+      const top = baseY - h;
+      fb.vline(x, Math.max(-1, top), baseY, c, alpha);
+      // deux à quatre moignons : au-delà on lit un arbre, et ce n'en est pas un
+      const nb = 1 + (R() * 3) | 0;
+      for (let b = 0; b < nb; b++) {
+        const by = baseY - h * (0.30 + R() * 0.62);
+        const bl = 1 + (R() * 3) | 0;
+        const dir = R() < 0.5 ? -1 : 1;
+        for (let k = 1; k <= bl; k++) fb.blend(x + dir * k, by - k * 0.6, c, 0.7 * alpha);
+      }
+    }
+  }
+
   /* PLAN 3 & 2 — semis d'arbres complets sur un profil de sol. */
   function grove(fb, ox, cfg) {
     const R = Pix.rng(cfg.seed || 991);
@@ -188,7 +322,7 @@ const Flora = (function () {
     }
   }
 
-  return { tree, grove, distantMass, foreground, limb };
+  return { tree, grove, distantMass, canopy, foreground, limb };
 })();
 
 if (typeof module !== "undefined" && module.exports) module.exports = Flora;

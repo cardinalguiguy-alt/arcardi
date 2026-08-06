@@ -115,11 +115,28 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const scale = 2;
 
   if (wantWalk) {
-    const t = parseFloat(process.argv[3] || "6");
-    const fb = new ctx.Pix.Buffer(ctx.CFG.W, ctx.CFG.H);
-    ctx.Walk.debugRender(fb, t);
-    writePNG(path.join(OUT, `walk-${t}.png`), ctx.CFG.W, ctx.CFG.H, fb.d, scale);
-    console.log(`walk-${t}.png`);
+    /* ⚠️ SANS ARGUMENT DE TEMPS, ON REND LA COURSE D'OUVERTURE EN ENTIER
+       (421) — départ, milieu, entrée du freinage, arrivée au bord. La falaise
+       n'apparaît qu'aux deux dernières ; une planche unique prise « au milieu »
+       ne l'aurait jamais montrée, et c'est exactement le genre d'oubli qui a
+       fait exister cet outil. Les instants sont déduits de `CFG.WALK` pour
+       qu'ils suivent le réglage au lieu de le doubler. */
+    const mode = process.argv[4] === "walk" ? "walk" : "run";
+    const K = ctx.CFG.WALK;
+    let times;
+    if (process.argv[3]) times = [parseFloat(process.argv[3])];
+    else if (mode === "run") {
+      const tCruise = (K.MODES.run.endM / 3.1 - K.EDGE_GAP - K.BRAKE_M / 3.1) / K.SPEED;
+      times = [1.5, tCruise * 0.5, tCruise - 0.3, tCruise + 2.4, tCruise + 9];
+    } else times = [6, 14, 26];
+    for (const t of times) {
+      const tt = Math.round(t * 10) / 10;
+      const fb = new ctx.Pix.Buffer(ctx.CFG.W, ctx.CFG.H);
+      ctx.Walk.debugRender(fb, tt, mode);
+      const name = `${mode}-t${tt}.png`;
+      writePNG(path.join(OUT, name), ctx.CFG.W, ctx.CFG.H, fb.d, scale);
+      console.log(`${name}   z=${ctx.Walk.S.z.toFixed(1)}  ${ctx.Walk.metres()} m`);
+    }
   } else if (process.argv[2]) {
     const id = process.argv[2];
     const t = parseFloat(process.argv[3] || "0");

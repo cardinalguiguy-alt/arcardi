@@ -143,9 +143,85 @@ const CFG = (function () {
       FAR: 78,           // distance de coupure (au-delà : brume pure)
       SPEED: 7.4,        // unités/seconde en marche
       STRAFE: 4.1,       // vitesse latérale
-      GOAL_M: 500,       // longueur du chapitre 1, en mètres affichés
+      /* ⚠️ LA LONGUEUR N'EST PLUS ICI, ELLE EST DANS `MODES` (421). Il y a
+         désormais DEUX parcours de longueurs différentes ; un `GOAL_M`
+         unique au-dessus d'eux aurait été lu par l'un et ignoré par l'autre,
+         ce qui est exactement la forme de réglage dont on finit par croire
+         qu'il fait quelque chose. */
       SHARD_EVERY: 11,   // un éclat tous les N unités environ
       BRAZIER_EVERY: 26, // un brasero tous les N unités
+
+      /* ── LE VOILE ATMOSPHÉRIQUE (421) ─────────────────────────────────
+         ⚠️ CES TROIS NOMBRES ONT ÉTÉ MESURÉS, PAS CHOISIS. La référence de
+         la course a été réduite à 480×270 et comparée bande par bande au
+         rendu de `preview.mjs`. Verdict du 421 :
+
+             bande y      référence   jeu (avant)
+             0–45           106,9        37,7
+             90–135         162,8        91,9
+             L global       135,2        84,1
+             pixels < L30    2,5 %      21,8 %
+
+         Le jeu était CINQUANTE ET UN points de luminance trop sombre, et il
+         écrasait neuf fois trop de pixels dans le noir. Ce n'était pas la
+         palette (elle tient, vérifié au 420) : c'était l'absence de voile.
+
+         ⚠️ ET LE VOILE N'EST PAS UN CALQUE POSÉ À LA FIN. Un voile final
+         éclaircirait AUSSI les branches de cadrage, qui sont la seule chose
+         de l'image qui doit rester noire. Il est donc appliqué par
+         PROFONDEUR, dans `fogAt` — chaque ligne d'écran a sa distance, donc
+         sa brume, exactement comme la référence. */
+      FOG_MIN: 0.20,     // brume plancher : même à trois pas, l'air est épais
+      FOG_NEAR: 3.0,     // distance à laquelle la brume commence à monter
+      FOG_POW: 1.05,     // courbe. ⚠️ était 1,35 : trop tardive, elle laissait
+                         // le plan moyen noir pendant que le fond blanchissait.
+
+      /* ── LA FALAISE DE L'OUVERTURE (421) ──────────────────────────────
+         La chaussée S'ARRÊTE. La lèvre est au mètre `endM` du mode ;
+         `BRAKE_M` est la distance de freinage avant elle, `HOLD_S` le temps
+         pendant lequel on reste au bord avant que la cinématique parte.
+         ⚠️ Le freinage n'est pas cosmétique : sans lui le personnage arrive
+         à pleine vitesse contre un vide et l'image se coupe sur un mouvement,
+         ce qui lit comme une chute, pas comme une arrivée. */
+      BRAKE_M: 46,       // on décélère sur les 46 derniers mètres
+      HOLD_S: 2.2,       // temps d'arrêt au bord avant le fondu
+      /* Distance CAMÉRA → lèvre à l'arrêt. Le personnage vivant à 2,6 unités
+         devant la caméra, ce chiffre lui laisse le reste en sol devant les
+         pieds.
+
+         ⚠️ IL A ÉTÉ RÉGLÉ SUR LA COMPOSITION, PAS SUR LA VRAISEMBLANCE, ET
+         C'EST UN ARBITRAGE QU'IL FAUT CONNAÎTRE AVANT D'Y TOUCHER. À 3,7 —
+         « au bord », le choix évident — la lèvre tombe aux quatre cinquièmes
+         du cadre et le vide occupe TOUTE la moitié médiane. Regardé sur
+         planche : trois bandes horizontales empilées, tenues deux secondes.
+         La scène la plus importante de l'ouverture était la plus plate.
+
+         À 8, la lèvre remonte près de l'horizon, le vide se réduit à une
+         bande étroite, et la chaussée qui fuit reprend les deux tiers de
+         l'image — c'est-à-dire que la composition redevient celle du reste de
+         la course, ce qui est exactement ce qu'on veut d'un plan final. Le
+         personnage s'arrête à une trentaine de mètres du bord au lieu d'un
+         mètre. Personne ne le remarque ; tout le monde voit la différence de
+         cadrage. */
+      EDGE_GAP: 8.0,
+
+      /* ── LES DEUX USAGES DU MÊME MOTEUR (421) ─────────────────────────
+         ⚠️ UN SEUL MOTEUR, DEUX PRÉRÉGLAGES — PAS DEUX FICHIERS. La course
+         d'ouverture et le segment jouable du milieu de chapitre sont le même
+         code : même projection, même chaussée, même brume. Les dupliquer
+         aurait garanti qu'une correction de perspective ne soit appliquée
+         qu'à un seul des deux, et le joueur aurait vu deux jeux.
+
+         `run`  — l'ouverture. On court vers la falaise, on ne peut pas
+                  perdre, et il n'y a PAS DE HUD : un compteur de score sur
+                  la première image du jeu annonce un jeu d'arcade, alors
+                  qu'on ouvre un récit. Pas d'éclats non plus — rien à
+                  ramasser tant qu'on ne sait pas ce que c'est.
+         `walk` — le segment du milieu, inchangé depuis le 419. */
+      MODES: {
+        run:  { endM: 420, hud: false, shards: false, braziers: true,  cliff: true  },
+        walk: { endM: 500, hud: true,  shards: true,  braziers: true,  cliff: false },
+      },
     },
 
     /* ── L'AURORE ────────────────────────────────────────────────────────
