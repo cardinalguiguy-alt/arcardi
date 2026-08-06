@@ -120,10 +120,44 @@
   <button id="btnBack"></button>
 </div>
 
-<!-- three.js : build global classique (pas de module). Chargé ICI, dans
-     l'iframe, donc jamais dans le bundle Next de la ferme — et un échec de CDN
-     ne casse que la descente. -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<!-- ═══════════════════════════════════════════════════ THREE.JS (ZIP 422) ═══
+     ⚠️⚠️ RAPATRIÉ EN LOCAL, ET CE N'EST PAS UNE PRÉCAUTION D'HYGIÈNE : C'EST CE
+     QUI DÉBLOQUE TOUT LE RESTE DU ZIP.
+
+     Jusqu'au 421 la descente chargeait r128 depuis cdnjs, sans `integrity`.
+     Le problème n'était pas la fragilité du CDN — c'est que **cdnjs ne publie
+     que `three.min.js`** et AUCUN des scripts du dossier `examples/js` :
+     GLTFLoader, EffectComposer, UnrealBloomPass, ShaderPass. Sans eux, ni
+     modèles glTF ni post-traitement. Le contexte de reprise du 421 en
+     concluait qu'il fallait d'abord MIGRER vers un three.js moderne.
+
+     ⚠️ CETTE CONCLUSION ÉTAIT FAUSSE, ET C'EST LE SEUL ENDROIT OÙ CE ZIP
+     DÉSOBÉIT À SON PLAN. r128 EXPÉDIE elle-même ces fichiers, en scripts
+     classiques qui posent `THREE.GLTFLoader` etc. sur le global — ils sont
+     simplement absents du miroir cdnjs. Il suffisait donc de les copier depuis
+     le paquet npm `three@0.128.0`, ce que fait `public/vendor/three-r128/`.
+
+     Ce qu'on y gagne, et c'est décisif : la migration r128 → r15x+ aurait
+     DÉPLACÉ TOUTES LES COULEURS (gestion colorimétrique automatique à partir de
+     r152), sur un projet dont les palettes ont été réglées à la main sur quatre
+     zips (405-408). On obtient les mêmes fonctionnalités pour zéro déplacement
+     de teinte. La migration reste souhaitable un jour, pour `templerun` et
+     `labyrinth` ; elle n'est plus un préalable ici.
+
+     ⚠️ L'ORDRE EST OBLIGATOIRE : three.min.js d'abord, les shaders avant les
+     passes qui les utilisent, CopyShader avant EffectComposer (qui s'en sert
+     pour sa passe de copie finale). Une passe chargée avant son shader ne lève
+     PAS d'erreur au chargement — elle échoue à la construction, bien plus tard,
+     avec un message qui ne dit pas ça. -->
+<script src="../vendor/three-r128/three.min.js"></script>
+<script src="../vendor/three-r128/js/shaders/CopyShader.js"></script>
+<script src="../vendor/three-r128/js/shaders/LuminosityHighPassShader.js"></script>
+<script src="../vendor/three-r128/js/postprocessing/EffectComposer.js"></script>
+<script src="../vendor/three-r128/js/postprocessing/RenderPass.js"></script>
+<script src="../vendor/three-r128/js/postprocessing/ShaderPass.js"></script>
+<script src="../vendor/three-r128/js/postprocessing/MaskPass.js"></script>
+<script src="../vendor/three-r128/js/postprocessing/UnrealBloomPass.js"></script>
+<script src="../vendor/three-r128/js/loaders/GLTFLoader.js"></script>
 
 <!-- L'ordre compte sur deux points seulement : config.js avant bridge.js (le
      pont retombe sur CFG.COL_* quand la ferme n'envoie pas de tenue), et
@@ -137,6 +171,8 @@
 <script src="js/sled.js"></script>
 <script src="js/critters.js"></script>
 <script src="js/camera.js"></script>
+<!-- models.js AVANT world.js : `World.init()` appelle `Models.load()`. -->
+<script src="js/models.js"></script>
 <script src="js/world.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/game.js"></script>

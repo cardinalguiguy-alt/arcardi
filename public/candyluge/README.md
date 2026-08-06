@@ -25,7 +25,25 @@ les mêmes raisons (voir `public/templerun/js/bridge.js`, qui fait autorité).
 ```
 node public/candyluge/tools/verify-luge.mjs    # 34 contrôles — la descente est jouable
 node public/candyluge/tools/preview-luge.js    # 11 planches PNG — la descente est belle
+__lugePerf()                                   # dans la console de l'IFRAME — ce que ça coûte
 ```
+
+⚠️ **AU 422, `preview-luge` REND LES OMBRES, LE TONE MAPPING ET LE BLOOM.** Son
+tampon est devenu FLOTTANT et non borné, il porte une carte d'ombre logicielle
+(rendu de profondeur depuis le soleil, PCF 2×2) et une passe finale qui rejoue
+ACES, l'étalonnage, la vignette et le grain. Sans ça il aurait continué à rendre
+de belles images d'un jeu qui n'existe plus : le 422 change précisément les
+choses qu'un tampon d'octets ne peut pas représenter.
+
+⚠️ **ET IL LIT LES .glb.** Un lecteur synchrone de trente lignes, qui ne gère QUE
+ce que `candyluge_props.py` produit — pas de Draco, pas de textures, pas
+d'animation. Il refuse bruyamment tout le reste, et c'est voulu : un stub qui
+accepterait à moitié rendrait une planche à moitié fausse.
+
+⚠️ **`__lugePerf()` N'EST PAS UN GADGET.** Les planches prouvent ce qu'on VOIT,
+elles ne prouvent rien sur ce qu'on PAIE — ce rasteriseur logiciel n'a aucun
+rapport avec un GPU. Le 422 a été écrit sans navigateur : le framerate n'a pas
+été mesuré, et c'est écrit tel quel plutôt que supposé.
 
 ⚠️ **AU 416, `preview-luge` REND ENFIN LA TRANSPARENCE ET LES PARTICULES** —
 c'était le point 3 des « en suspens » du 414 (« la gerbe et les étoiles n'ont
@@ -74,6 +92,22 @@ mur.
 - **Pour rouvrir le jeu à tous**, il suffira de remplacer l'appel
   `UI.show(Gate.unlocked() ? "title" : "construction")` par `UI.show("title")`
   aux deux endroits de `init()` — le reste peut rester en place.
+
+## Les modèles (422)
+
+`models/*.glb`, produits par `candyluge_props.py` (script Blender, conservé hors
+dépôt avec les autres outils de modélisation). Dix accessoires, 328 à 4 320
+triangles chacun, 300 Ko en tout.
+
+⚠️ **AUCUN N'EMBARQUE DE MATÉRIAU.** Les maillages sont nommés `part_<clé>` où
+`<clé>` est une clé de `mat` dans `world.js` ; `models.js` rebranche. Changer la
+couleur d'un sapin de gomme reste une ligne de `config.js`.
+
+⚠️ **LE REPLI SUR LES PRIMITIVES N'EST PAS DU CODE MORT.** Chaque accessoire de
+`world.js` a deux écritures : le modèle, puis la primitive du 416. Un fichier non
+déployé ou un cache vide laisserait sinon un décor NU sur une page servie en
+iframe par-dessus la ferme. Et la primitive est la seule qui documente ce que la
+forme veut dire.
 
 ## Les trois choses à ne pas défaire
 
@@ -144,3 +178,26 @@ mur.
    demi-mètre d'écart à ses extrémités : elle s'enterre d'un côté et lévite de
    l'autre, et `polygonOffset` n'y peut rien — il traite le z-fighting entre
    surfaces parallèles, pas deux surfaces qui se croisent.
+
+15. **(422) LE RENDU EST LINÉAIRE, ET LES QUATRE ÉTAPES SONT SOLIDAIRES.**
+   sRGB → linéaire à la création des couleurs, éclairage sans plafond, ACES,
+   encodage sRGB. En retirer une ne donne pas « presque le bon résultat » : ça
+   donne une image délavée (linéaire non ré-encodé) ou noire (sRGB compté deux
+   fois), et les deux ressemblent à un réglage de couleur à retoucher.
+   ⚠️ Corollaire : **aucun `new THREE.Color(CFG.COL_…)` nu** dans `world.js`,
+   tout passe par `sc()`. Et **aucun `setHex()`** sur un matériau déjà construit
+   — c'est le bogue qu'`applySkin` a eu.
+16. **(422) UN MeshStandardMaterial SANS ENVIRONNEMENT EST PIRE QU'UN LAMBERT.**
+   Sa composante spéculaire réfléchit ce qu'il y a autour ; s'il n'y a rien, elle
+   réfléchit du noir. `scene.environment` n'est pas une amélioration facultative
+   du passage au PBR, c'en est une condition.
+17. **(422) LE VOLUME D'OMBRE SUIT LA LUGE, ET SON CENTRE EST QUANTIFIÉ.** Sans
+   le suivi, la résolution est inutilisable ; sans la quantification au texel, le
+   bord des ombres chatoie — et le réflexe (augmenter la résolution) empire les
+   choses en rendant le pas plus fin.
+18. **(422) LE SEUIL DE BLOOM EST HAUT (0,92), ET C'EST LUI QUI FAIT LE TRAVAIL.**
+   Le bloom ne sert pas à « faire briller » : il sert à dire qu'une valeur dépasse
+   le blanc. À seuil bas, le champ de neige déborde en entier et on obtient le
+   voile laiteux qu'on reconnaît dans tous les jeux qui en abusent. Les seules
+   choses au-dessus de 1,0 sont le soleil, les bonbons de checkpoint et les
+   étincelles.

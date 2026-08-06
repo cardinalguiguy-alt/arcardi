@@ -552,14 +552,175 @@ const CFG = {
      modèle physique d'un champ de neige au soleil, ça ne coûte pas une image
      par seconde, et ça donne gratuitement le rose-en-lumière / violine-à-
      l'ombre qui EST la « neige rose bonbon » qu'on cherche. */
-  LIGHT_SUN: 1.05,           // le soleil, chaud et rasant — il DOMINE (était 0,72)
-  LIGHT_SKY: 0.46,           // l'hémisphère : bleu du ciel en haut, rose de la neige en bas
-  LIGHT_AMBIENT: 0.20,       // et ce qui reste d'ambiante pure (était 0,78 : voir ci-dessus)
-  COL_LIGHT_SUN: 0xfff0cc,   // lumière chaude
-  COL_LIGHT_SKY: 0xa8c4ff,   // le ciel, franchement bleu
-  COL_LIGHT_GROUND: 0xffc0dd, // le rebond de la neige, franchement rose
-  FOG_DENSITY: 0.0016,       // moins dense qu'au 413 : le brouillard mangeait les montagnes
+  /* ⚠️⚠️ ZIP 422 — CES TROIS NOMBRES SONT MAINTENANT EXPRIMÉS EN LINÉAIRE, ET
+     C'EST POUR ÇA QU'ILS ONT BAISSÉ. Voir le bloc RENDU ci-dessous : depuis
+     que le rendu se fait en espace linéaire avec sortie sRGB, une intensité de
+     1,05 ne donne plus du tout la même image qu'avant — l'ancien pipeline
+     multipliait des valeurs DÉJÀ encodées en gamma, ce qui écrasait
+     silencieusement les hautes lumières. On ne compare donc PAS ces valeurs à
+     celles du 414 : elles ne sont pas dans la même unité.
+     ⚠️ Et le rapport de force du 414 reste tenu, parce que c'est LUI qui compte
+     et pas les valeurs absolues : soleil ≫ hémisphère > ambiante. */
+  /* ⚠️⚠️ CES QUATRE VALEURS ONT ÉTÉ RÉGLÉES SUR PLANCHE RENDUE, PAS CALCULÉES.
+     Premier jet du 422 : soleil 2,45, hémisphère 0,62. Raisonnement « il faut
+     compenser le passage en linéaire, donc il faut monter » — et le résultat
+     était une image ENTIÈREMENT BLANCHE, montagnes, arbres et neige confondus.
+     La leçon est celle du 414 sous une autre forme : on ne devine pas une
+     lumière, on la regarde.
+     Le repère utile, si l'on doit y revenir : une face de neige EN PLEIN SOLEIL
+     doit totaliser ~1,15 en linéaire (ACES la ramène à 0,83, soit un blanc
+     franc mais non écrêté), et la MÊME face à l'ombre ~0,40 (soit 0,63 à
+     l'écran). C'est cet écart de 1 à 3 qui fait le relief ; le monter davantage
+     brûle, le baisser aplatit. */
+  LIGHT_SUN: 1.28,           // le soleil, chaud et rasant — il DOMINE
+  LIGHT_SKY: 0.22,           // l'hémisphère : bleu du ciel en haut, rose de la neige en bas
+  LIGHT_AMBIENT: 0.03,       // et ce qui reste d'ambiante pure (l'environnement l'a remplacée)
+  LIGHT_FILL: 0.16,          // l'appoint froid à contre-jour (422 : c'est lui qui dessine les bords)
+  COL_LIGHT_SUN: 0xffd9a0,   // ⚠️ 422 : nettement plus AMBRÉ — c'est le « golden hour » demandé
+  COL_LIGHT_SKY: 0x9fbcff,   // le ciel, franchement bleu
+  COL_LIGHT_GROUND: 0xffb8d8, // le rebond de la neige, franchement rose
+  COL_LIGHT_FILL: 0xa8c0ff,  // l'appoint : bleu franc, il vient de derrière-dessous
+  FOG_DENSITY: 0.00125,       // moins dense qu'au 413 : le brouillard mangeait les montagnes
   COL_FOG: 0xffdccb,
+
+  /* ═══════════════════════════════════════════════ LE RENDU (ZIP 422) ══════
+     ──────────────────────────────────────────────────────────────────────────
+     ⚠️⚠️ CE BLOC EST LE CŒUR DU 422, ET IL FAUT COMPRENDRE UNE SEULE CHOSE POUR
+     LE LIRE : jusqu'au 421 le jeu calculait sa lumière DANS L'ESPACE GAMMA.
+     three.js multipliait des octets déjà encodés (0xfa96c0 tel quel) par un
+     facteur d'éclairage, ce qui n'a aucun sens physique — c'est comme
+     additionner des décibels. Conséquences visibles, et toutes présentes sur
+     les planches du 421 : les dégradés d'ombre virent au sale, deux lumières
+     qui se croisent donnent une valeur trop claire, et surtout AUCUNE haute
+     lumière ne peut exister puisque tout sature à 1,0 d'un coup.
+
+     Le 422 remet la chaîne à l'endroit :
+       1. les couleurs de matériaux sont converties sRGB → LINÉAIRE à la
+          création (`convertSRGBToLinear`), les textures portent
+          `encoding = sRGBEncoding` ;
+       2. l'éclairage se calcule en linéaire, sans plafond — un reflet peut
+          valoir 4,0 et c'est très bien, c'est ce qui donne le bloom ;
+       3. le tone mapping ACES Filmic ramène ce domaine ouvert dans [0,1] avec
+          un genou doux, comme une pellicule ;
+       4. l'encodage sRGB final ramène le tout à l'écran.
+
+     ⚠️ NE PAS RETIRER L'UNE DES QUATRE ÉTAPES EN CROYANT SIMPLIFIER. Elles ne
+     sont correctes qu'ensemble ; à trois sur quatre, l'image est soit délavée
+     (linéaire non ré-encodé) soit noire (sRGB compté deux fois), et les deux
+     ressemblent assez à « un réglage de couleur à retoucher » pour qu'on perde
+     une journée à chercher ailleurs.
+
+     ⚠️ LA SENSIBILITÉ AUX PALETTES (zips 405-408) EST RESPECTÉE PAR
+     CONSTRUCTION : toutes les constantes COL_* restent les mêmes valeurs sRGB
+     qu'avant. C'est la CHAÎNE qui change, pas les teintes. Une couleur de
+     bonbon reste exactement la couleur qu'on lit dans ce fichier, à la
+     compression des hautes lumières près. */
+  TONE_EXPOSURE: 1.42,       // ⚠️ ACES assombrit les tons moyens : on compense ici, et NULLE PART ailleurs
+  ENV_INTENSITY: 0.55,       // force de l'éclairage d'environnement (le ciel réfléchi) sur les PBR
+  ENV_DIFFUSE: 0.18,         // ⚠️ l'environnement éclaire AUSSI en diffus (r128 le fait) — il compte double si on l'oublie
+  ENV_SIZE: 256,             // côté de l'équirectangulaire servant à fabriquer l'environnement
+
+  /* ── LES RUGOSITÉS. Elles font autant que la couleur, et c'est nouveau. ──
+     Une surface de rugosité 1,0 est un plâtre ; à 0,2 c'est un vernis. Toute la
+     différence entre « du plastique coloré » et « du bonbon » est là, pas dans
+     la teinte. ⚠️ La neige n'est PAS mate : la neige tassée d'une piste renvoie
+     un éclat large et doux, c'est ce qui la distingue d'une nappe blanche. */
+  RGH_SNOW: 0.68,
+  RGH_PISTE: 0.52,           // la piste est plus lisse que la neige : elle est damée
+  RGH_CANDY: 0.26,           // le bonbon : vernis
+  RGH_CANE: 0.22,            // le sucre d'orge : verre
+  RGH_ICING: 0.80,           // le glaçage : mat et poudreux
+  RGH_GINGER: 0.86,          // le pain d'épices : franchement mat
+  RGH_WOOD: 0.72,            // le bois de la luge
+  RGH_CLOTH: 0.92,           // les vêtements du fermier
+  RGH_MOUNT: 0.90,           // les montagnes : mates, elles doivent RECULER
+  CLEARCOAT_CANDY: 0.85,     // le vernis du bonbon, en couche par-dessus
+  METAL_RUNNER: 0.55,        // les patins en caramel doré : à demi métalliques, ils brillent
+
+  /* ══ LES OMBRES (422) — ON EST PASSÉ À DE VRAIES SHADOW MAPS. ═════════════
+     ⚠️ ET LA SEULE RAISON POUR LAQUELLE ÇA TIENT, C'EST QUE LE VOLUME D'OMBRE
+     SUIT LA LUGE. Une shadow map couvrant les 900 unités de tirage aurait une
+     résolution de 0,9 unité par texel : de la bouillie. Ici la caméra d'ombre
+     est une boîte de SHADOW_RADIUS unités recentrée sur la luge à chaque
+     image — soit ~4 cm par texel en 2048. C'est la « cascade à un seul étage »,
+     et pour un jeu où la caméra ne quitte jamais la luge, c'est suffisant :
+     personne ne regarde jamais l'ombre d'une montagne.
+     ⚠️ Les décalques 2D du 416 N'ONT PAS ÉTÉ RETIRÉS pour autant — ils servent
+     désormais aux gourmands lointains, hors du volume d'ombre, où la shadow map
+     ne peut rien. Les deux se relaient, voir SHADOW_DECAL_FROM. */
+  SHADOW_ON: true,
+  SHADOW_MAP: 2048,          // côté de la carte d'ombre (1024 en qualité réduite)
+  SHADOW_RADIUS: 46,         // demi-côté du volume d'ombre autour de la luge, en unités
+  SHADOW_NEAR: 1,
+  SHADOW_FAR: 240,
+  SHADOW_BIAS: -0.0009,      // ⚠️ NÉGATIF : sinon la luge « décolle » de son ombre
+  SHADOW_NORMAL_BIAS: 0.035, // et celui-ci coupe l'acné sur les surfaces rasantes (la neige EST rasante)
+  SHADOW_SOFT: 3.0,          // rayon du PCF, en texels
+  SHADOW_CAST_RANGE: 62,     // au-delà, un décor ne projette plus : hors volume, ça ne coûterait rien pour rien
+  SHADOW_DECAL_FROM: 34,     // en deçà, le décalque d'un gourmand s'efface (la vraie ombre prend le relais)
+
+  /* ══ LE POST-TRAITEMENT (422) ═════════════════════════════════════════════
+     ⚠️ LE BLOOM NE SERT PAS À « FAIRE BRILLER », IL SERT À DIRE QU'UNE VALEUR
+     DÉPASSE LE BLANC. C'est pour ça que le seuil est HAUT (0,92) : à 0,6 tout
+     le champ de neige déborderait et on obtiendrait le voile laiteux qu'on
+     reconnaît dans tous les jeux qui abusent du bloom. Ici, seuls les émissifs
+     (bonbons, fanions de checkpoint, rideau de porte, soleil) passent le
+     seuil — et ils le passent franchement, parce qu'ils sont au-dessus de 1,0
+     en linéaire. */
+  BLOOM_ON: true,
+  BLOOM_STRENGTH: 0.62,
+  BLOOM_RADIUS: 0.55,
+  BLOOM_THRESHOLD: 0.92,
+  BLOOM_SCALE: 0.5,          // la passe de bloom tourne à demi-résolution : invisible, et 4× moins cher
+
+  /* Le vignettage et le grain. ⚠️ LES DEUX SONT VOLONTAIREMENT À LA LIMITE DU
+     PERCEPTIBLE. Un vignettage qu'on remarque est un vignettage raté : son
+     travail est de retenir le regard au centre, pas de se faire voir. Le grain,
+     lui, a une fonction technique en plus de l'ambiance — il casse le banding
+     des grands dégradés de ciel, qui est le défaut le plus visible d'un ciel
+     pastel en 8 bits. */
+  VIGNETTE: 0.34,            // force au coin de l'image
+  VIGNETTE_SOFT: 0.62,       // rayon où elle commence
+  GRAIN: 0.022,
+  /* L'étalonnage final : un soupçon de « split toning » — hautes lumières
+     tirées vers l'ambre, ombres vers le violet. C'est le geste qui fait
+     ressembler une image à une photo de fin de journée plutôt qu'à un rendu. */
+  GRADE_WARM: 0.055,
+  GRADE_COOL: 0.070,
+  GRADE_SAT: 1.06,           // ACES désature : on rend un peu de saturation, pas plus
+  /* ⚠️⚠️ LE CONTRASTE FINAL, ET C'EST LA MESURE QUI L'A IMPOSÉ, PAS LE GOÛT.
+     Méthode du 421 (réduire à 480×270, mesurer bande par bande), appliquée à la
+     référence de Guillaume et à la planche :
+
+              | référence | 422 premier jet |
+       L global |   180,6 |          177,9  ← identique, donc « bien exposé »
+       ÉCART-TYPE|   47,7 |           28,4  ← LA MOITIÉ
+       < L60     |   2,1 % |          0,0 % ← AUCUN NOIR DANS L'IMAGE
+
+     Autrement dit : la luminosité MOYENNE était juste et l'image était fausse.
+     C'est exactement la leçon du 421 sous une autre forme — « le jeu n'était pas
+     trop sombre, il était sombre à l'envers ». Ici il n'est pas trop clair : il
+     est PLAT. Une image sans aucun pixel sous L60 n'a pas d'ombre, donc pas de
+     volume, quelle que soit la qualité de son éclairage.
+     ⚠️ NE PAS CORRIGER ÇA EN BAISSANT L'EXPOSITION : on obtiendrait la même
+     image en plus sombre, écart-type inchangé, et on aurait perdu les hautes
+     lumières en prime. Ce qu'il faut est un ÉCART, pas un décalage. */
+  GRADE_CONTRAST: 1.28,      // pivot sur le gris moyen, appliqué après ACES
+
+  /* ══ LES PALIERS DE QUALITÉ (422) ═════════════════════════════════════════
+     ⚠️ MESURÉS, PAS SUPPOSÉS. `QUALITY_AUTO` fait tourner un compteur d'images
+     pendant les QUALITY_WINDOW premières secondes ; si la moyenne tombe sous
+     QUALITY_DROP_FPS, on descend d'un palier (bloom coupé, puis ombres, puis
+     résolution). Le jeu tourne dans une iframe par-dessus une ferme temps réel :
+     le budget n'est PAS celui d'une page seule, et il varie selon ce que fait
+     la ferme derrière. Un réglage fixe serait faux la moitié du temps.
+     ⚠️ La remontée existe aussi (QUALITY_RAISE_FPS), avec une hystérésis large :
+     sans elle, une seule saccade condamnerait la descente entière au palier bas. */
+  QUALITY_AUTO: true,
+  QUALITY_WINDOW: 2.5,       // secondes d'observation avant de trancher
+  QUALITY_DROP_FPS: 48,
+  QUALITY_RAISE_FPS: 58,
+  QUALITY_MAX_PIXEL_RATIO: 2,
 
   ROLL_PER_EDGE: 0.62,        // inclinaison visuelle de la luge à pleine carre
 
@@ -572,6 +733,16 @@ const CFG = {
      ⚠️ Ne PAS le baisser pour « redresser » la luge : c'est STEER_DAMP.
      Baisser la butée écrêterait le frein à main, donc supprimerait le second
      régime de conduite au lieu de corriger le premier. */
+  /* ⚠️ L'ÉCHELLE DU MODÈLE DE LUGE (422). Le modèle Blender est écrit à sa
+     taille naturelle (≈2,7 unités de long) ; la luge du 413, elle, avait grandi
+     à 3,7 au fil des réglages de cadrage. Ce facteur les raccorde, et il est
+     ICI et pas dans le modèle pour une raison précise : la taille apparente de
+     la luge est un réglage de CADRAGE (elle se juge contre la largeur de piste
+     et la focale), pas une propriété de l'objet. La régler dans Blender
+     obligerait à rouvrir Blender pour un essai. */
+  SLED_MODEL_SCALE: 1.42,
+  SLED_MODEL_SEAT: 0.95,      // hauteur du pivot du buste, en unités de jeu
+
   SLED_STEER_MAX: 0.62,       // rad (35°), garde-fou ; le frein à main y monte, la carre non
 
   /* Le SAUT. Court, bas, et surtout : il ne rend PAS invulnérable. Sauter
@@ -844,13 +1015,28 @@ const CFG = {
      faire — et c'est tout l'objet du chantier. */
   COL_CARVE: 0xd2699a,       // le sillon : plus sombre que la piste, sans virer au brun
   COL_SKID: 0xffd9ea,        // la bavure : plus claire, neige retournée
-  COL_MOUNT: 0xe2cbc0,       // chocolat blanc des montagnes, assombri pour qu'elles aient des faces
+  /* ⚠️⚠️ REFROIDIES AU 422, ET C'EST LE SEUL DÉPLACEMENT DE PALETTE DU ZIP.
+     La valeur du 414 (0xe2cbc0) était réglée sous une lumière NEUTRE. Sous le
+     soleil ambré du 422, la même teinte vire au brun : les montagnes prenaient
+     le tiers haut du cadre en chocolat au lait, alors que la référence de
+     Guillaume les montre blanches, bleutées dans l'ombre. La teinte n'a pas
+     changé d'intention — « chocolat blanc, assombri pour avoir des faces » —
+     elle a été recalée pour la donner sous la nouvelle lumière.
+     ⚠️ ON NE COMPENSE PAS ÇA EN REFROIDISSANT LE SOLEIL : il éclaire tout le
+     reste, et tout le reste est correct. Quand un seul objet vire, c'est cet
+     objet qu'on corrige. */
+  COL_MOUNT: 0xd8cede,       // chocolat blanc des montagnes, tiré vers le lilas (était 0xe2cbc0)
   COL_MOUNT_CAP: 0xfffaf6,   // leur calotte de sucre glace, restée le point le plus clair
   COL_MOUNT_FAR: 0xb9aed6,   // la chaîne lointaine, bleuie par l'air ET assez sombre pour se voir
   COL_CANE_RED: 0xff5478,    // sucre d'orge
   COL_CANE_WHITE: 0xfff4f8,
-  COL_GINGER: 0xc98a4b,      // pain d'épices
-  COL_GINGER_DARK: 0xa96f38,
+  /* ⚠️ DÉSATURÉ AU 422, MÊME RAISON QUE COL_MOUNT : sous un soleil ambré, un
+     brun déjà chaud vire à l'ORANGE VIF, et le hameau devenait la chose la plus
+     saturée du cadre — devant les bonbons, qui sont ce qu'on doit repérer. La
+     règle du 414 (« une surface qui couvre beaucoup d'écran ne peut pas être
+     aussi la plus saturée ») vaut pour un village comme pour la piste. */
+  COL_GINGER: 0xb98a63,      // pain d'épices (était 0xc98a4b)
+  COL_GINGER_DARK: 0x9a6f4c,
   COL_ICING: 0xfff7f0,       // glaçage
   COL_TRUNK: 0xb98a5e,
   COL_SYRUP: 0x7fc8e8,       // la rivière de sirop, bleu bonbon
@@ -990,6 +1176,32 @@ const CFG = {
   FX_RAIN_SPREAD: 46,        // largeur de la zone arrosée, en unités
   FX_RAIN_FALL: 11,          // gravité ; ⚠️ FAIBLE : des confettis flottent
   FX_RAIN_DRIFT: 3.2,        // dérive latérale, pour que ça ne tombe pas droit
+
+  /* ══════════════════════════ LE SOLEIL ET SON HALO (ZIP 422) ══════════════
+     ⚠️ LE SOLEIL N'ÉTAIT QU'UNE TACHE PEINTE DANS LA TEXTURE DE CIEL. Une tache
+     peinte ne peut pas déborder : elle est plafonnée à 1,0 par construction,
+     donc elle ne passe jamais le seuil du bloom, donc elle ne rayonne pas. Le
+     ciel avait un soleil, le monde n'en avait pas.
+     On pose donc un vrai disque dans la scène, à une valeur linéaire très
+     supérieure à 1 — c'est la SEULE source de l'image qui vaille plus que le
+     blanc, et c'est pour elle que le seuil de bloom a été réglé haut.
+     ⚠️ IL EST DANS LE GROUPE DU CIEL, donc il suit la caméra : un soleil qu'on
+     pourrait approcher serait un lampion. C'est la règle 3 de world.js. */
+  SUN_DISC: 26,              // rayon du disque, en unités, à la distance du dôme
+  SUN_DISC_GAIN: 7.0,        // sa valeur linéaire : très au-dessus du blanc
+  SUN_HALO: 190,             // rayon du halo diffus qui l'entoure
+  SUN_HALO_GAIN: 0.42,
+  COL_SUN_DISC: 0xfff2d8,
+  COL_SUN_HALO: 0xffd9b0,
+
+  /* Les POUSSIÈRES DE SUCRE en suspension (422). ⚠️ Elles ne tombent pas et ne
+     sont pas de la neige : elles FLOTTENT, très près de la caméra, et leur seul
+     travail est de donner de l'épaisseur à l'air entre l'objectif et le
+     paysage. C'est le plan le plus proche de toute l'image, et il n'existait
+     pas — le cadre commençait à la piste, c'est-à-dire à dix mètres. */
+  FX_MOTE_COUNT: 130,
+  FX_MOTE_AREA: 26,
+  FX_MOTE_SIZE: 0.16,
 
   FX_SNOW_COUNT: 420,
   FX_SNOW_AREA: 120,

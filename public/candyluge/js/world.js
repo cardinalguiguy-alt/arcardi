@@ -34,7 +34,16 @@
 const World = (function () {
   let renderer, scene, camera, canvas;
   let ambient, sun, fill, hemi;
+  /* Le post-traitement (422). `composer` reste nul quand les scripts de
+     `public/vendor/three-r128/js/postprocessing/` n'ont pas été chargés — la
+     descente rend alors directement, en ACES par le renderer. C'est le seul
+     mode dégradé qui doit rester correct sans surveillance : `preview-luge.js`
+     l'emprunte, et un joueur au palier de qualité bas aussi. */
+  let composer = null, bloomPass = null, gradePass = null;
+  let quality = 2;            // 2 = tout, 1 = sans bloom, 0 = sans ombres ni bloom
+  let fpsAcc = 0, fpsFrames = 0, fpsClock = 0;
   let skyDome, skyMat, mountainsNear, mountainsFar, snowFall;
+  let sunDisc, sunHalo, motes;
   let sledRig, sledParts = {};
   let stars, dust, lines, spray, rain;
   let rainT = 0;          // secondes écoulées depuis le franchissement de la ligne (416)
@@ -69,6 +78,13 @@ const World = (function () {
      la GÉOMÉTRIE est fixée à la création : on obtenait des plans couchés
      traités comme des poteaux. Un tableau ne peut contenir qu'une seule forme. */
   const decals = { shadow: [], warn: [], gate: [], post: [], curtain: [] };
+
+  /* Les tronçons actuellement bâtis. ⚠️ SERT UNIQUEMENT à les reconstruire
+     quand les modèles glTF finissent d'arriver (voir init). Ce n'est PAS une
+     source d'autorité sur la piste : c'est `Slope` qui décide quels tronçons
+     existent, et ce tableau n'en est qu'un miroir passif. Les confondre serait
+     se donner deux vérités sur la même chose. */
+  const built = [];
 
   /* ======================================================================
      TEXTURES — peintes au canvas 2D au démarrage.
@@ -220,6 +236,61 @@ const World = (function () {
         const rr = r * (a / (Math.PI * 4));
         const x = cx + Math.cos(a) * rr, y = cy + Math.sin(a) * rr * 0.75;
         if (a === 0) g.moveTo(x, y); else g.lineTo(x, y);
+      }
+      g.stroke();
+    }
+    /* ══════════════════════════════════════════════════════════════════════
+       3. LES VEINES BLEUES (422) — LE MOTIF DE LA RÉFÉRENCE.
+       ──────────────────────────────────────────────────────────────────────
+       ⚠️ ELLES VIENNENT DE L'IMAGE DE RÉFÉRENCE DE GUILLAUME, et elles sont ce
+       qui distingue une PISTE DE SIROP d'une moquette rose. Sur la référence,
+       le couloir n'est pas d'une seule couleur : c'est une rivière tressée où
+       le rose et le bleu s'enroulent, et c'est ce tressage qui donne à la fois
+       le mouvement et la fraîcheur.
+
+       ⚠️ ELLES SONT LONGITUDINALES, JAMAIS TRANSVERSALES. Une veine en travers
+       de la piste se lit comme une LIGNE D'ARRIVÉE ou comme un obstacle : sur
+       un jeu de descente, tout trait perpendiculaire à la marche est un signal
+       de jeu, et en peindre un pour décorer est un mensonge d'interface. Elles
+       suivent donc l'axe (vertical dans la texture), légèrement ondulantes.
+
+       ⚠️ ET ELLES RESTENT TRÈS PÂLES. Le bleu est la couleur du sirop
+       (COL_SYRUP) à 12 % : assez pour refroidir le rose et le sortir du
+       monochrome, jamais assez pour concurrencer les repères de jeu — qui sont
+       menthe (checkpoints) et vert pomme (portes). Un décor ne doit pas
+       emprunter les teintes de l'interface. */
+    g.globalAlpha = 1;
+    /* ⚠️ PAS `COL_SYRUP` — ET C'EST TOUT LE RÉGLAGE. Un cyan franc posé en
+       transparence sur du rose ne donne PAS du bleu bonbon : il donne du GRIS
+       BLEUTÉ, parce que les deux teintes sont presque complémentaires et que
+       leur mélange passe par le gris. La piste avait l'air sale, exactement
+       comme au 414 avec les tourbillons trop opaques — et baisser encore
+       l'opacité n'aurait fait qu'un gris plus pâle.
+       La sortie n'est pas dans l'opacité, elle est dans la VALEUR : un bleu
+       très clair, presque blanc, ne se mélange plus au rose, il l'ÉCLAIRCIT en
+       le refroidissant. On lit alors un reflet de ciel sur du sirop, ce qui est
+       exactement ce que montre la référence. */
+    g.strokeStyle = "#d9edfb";
+    g.lineCap = "round";
+    /* ⚠️ TROIS VEINES, PAS CINQ, ET À 4 % D'OPACITÉ, PAS 12 %. Premier réglage :
+       cinq veines larges à 6-13 % — la piste ressemblait à un mât de barbier,
+       rayée rose et bleu sur toute sa largeur, et le regard ne trouvait plus la
+       trajectoire. C'est la même leçon qu'au 414 sur les tourbillons (« ils
+       marbraient la piste au point qu'elle avait l'air sale ») : sur une
+       surface qui occupe le tiers du cadre ET qui défile à cent à l'heure,
+       l'opacité utile est trois à quatre fois plus basse que celle qui paraît
+       juste sur une texture regardée à plat. On règle un sol EN LE CONDUISANT,
+       pas en le regardant. */
+    for (let n = 0; n < 3; n++) {
+      const x0 = (n + 0.5) * (W / 3) + (Math.random() - 0.5) * PX;
+      g.globalAlpha = 0.040 + Math.random() * 0.032;
+      g.lineWidth = (0.34 + Math.random() * 0.40) * PX;
+      g.beginPath();
+      for (let y = -PX; y <= H + PX; y += PX * 0.5) {
+        // L'ondulation boucle sur la hauteur de la tuile, sinon la jointure
+        // se voit tous les 15 mètres comme une cassure nette.
+        const x = x0 + Math.sin((y / H) * Math.PI * 2 + n) * 1.1 * PX;
+        if (y <= -PX) g.moveTo(x, y); else g.lineTo(x, y);
       }
       g.stroke();
     }
@@ -538,11 +609,48 @@ const World = (function () {
     t.generateMipmaps = true;
     t.minFilter = THREE.LinearMipmapLinearFilter;
     t.magFilter = THREE.LinearFilter;
+    /* ⚠️⚠️ ZIP 422 — SANS CETTE LIGNE, TOUT LE PASSAGE EN LINÉAIRE EST FAUX, ET
+       IL EST FAUX SANS LEVER LA MOINDRE ERREUR. Une texture peinte au canvas
+       2D contient des valeurs sRGB (c'est ce que `#fa96c0` veut dire). Sans le
+       marquage, three.js les prend pour du linéaire, ne les décode pas, et la
+       piste ressort ÉCLAIRCIE et délavée d'environ deux crans — exactement
+       l'image qu'on croirait devoir corriger en baissant une couleur, ce qui
+       enfoncerait le clou. Le seul symptôme lisible est que TOUT est délavé de
+       la même façon ; s'il apparaît, c'est ici qu'on regarde d'abord. */
+    t.encoding = THREE.sRGBEncoding;
     if (renderer && renderer.capabilities) {
       t.anisotropy = Math.min(16, renderer.capabilities.getMaxAnisotropy());
     }
     return t;
   }
+
+  /* ⚠️ LA MÊME CHOSE, MAIS POUR LES TEXTURES QUI NE PORTENT PAS DE COULEUR.
+     Un masque de particule, une carte de rugosité ou un dégradé d'opacité sont
+     des NOMBRES, pas des teintes : les décoder du sRGB les déformerait. C'est
+     la moitié de la règle que tout le monde oublie, et elle se voit sur les
+     bords des voiles, qui deviennent trop durs ou trop mous. */
+  function texData(canvasEl, rx, ry) {
+    const t = tex(canvasEl, rx, ry);
+    t.encoding = THREE.LinearEncoding;
+    return t;
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     LES COULEURS (422) — sRGB → LINÉAIRE, UNE FOIS POUR TOUTES.
+     ──────────────────────────────────────────────────────────────────────────
+     Toutes les constantes `COL_*` de config.js sont, et restent, des valeurs
+     sRGB : c'est ce qu'on lit dans un sélecteur de couleur, et c'est la seule
+     forme dans laquelle une palette se règle à la main. Le rendu, lui, doit
+     travailler en linéaire. La conversion se fait donc ICI, au seul endroit où
+     une couleur entre dans la scène.
+
+     ⚠️ NE PAS APPELER `convertSRGBToLinear()` DEUX FOIS SUR LA MÊME COULEUR.
+     C'est idempotent en apparence (aucune erreur) et catastrophique en
+     pratique : la couleur s'assombrit de nouveau, et le seul symptôme est « le
+     décor est un peu sombre ». Passer systématiquement par `sc()` est ce qui
+     rend la faute impossible — aucun `new THREE.Color(CFG.COL_…)` nu ne doit
+     subsister dans ce fichier. */
+  function sc(hex) { return new THREE.Color(hex).convertSRGBToLinear(); }
 
   /* ======================================================================
      ASSETS PARTAGÉS (règle 2 : tout est mutualisé).
@@ -558,7 +666,45 @@ const World = (function () {
     geo.torus = new THREE.TorusGeometry(1, 0.14, 8, 26, Math.PI);
     geo.plane = new THREE.PlaneGeometry(1, 1);
 
-    const L = (c, extra) => new THREE.MeshLambertMaterial(Object.assign({ color: c }, extra || {}));
+    /* ══════════════════════════════════════════════════════════════════════
+       ⚠️⚠️ ZIP 422 — `L` N'EST PLUS DU LAMBERT. C'est le changement le plus
+       lourd de conséquences du zip, et il tient en une substitution.
+       ──────────────────────────────────────────────────────────────────────
+       MeshLambertMaterial ne connaît QUE la diffusion. Pas de rugosité, pas de
+       reflet, pas d'environnement. Sur un monde de bonbons c'est une perte
+       sèche : ce qui distingue un bonbon d'un plot de plastique coloré n'est
+       PAS sa teinte, c'est son vernis — un éclat étroit et net qui glisse à la
+       surface quand on bouge. Aucune palette ne remplace ça.
+
+       On passe donc en MeshStandardMaterial partout, avec une rugosité par
+       famille (voir les RGH_* de config.js, où vivent tous les nombres). Le
+       coût réel est un shader plus cher au fragment ; il est absorbé, et
+       mesuré — voir le compteur de qualité dans `init`.
+
+       ⚠️ `envMapIntensity` COMPTE AUTANT QUE `roughness`, et c'est le piège de
+       ce genre de migration : un MeshStandardMaterial SANS environnement rend
+       plus SOMBRE et plus mort qu'un Lambert, parce que sa composante spéculaire
+       n'a rien à réfléchir. Passer en PBR sans poser `scene.environment` donne
+       donc un résultat objectivement pire, et on conclut à tort que « le PBR ne
+       rend pas bien sur ce style ». L'environnement est construit dans
+       `buildEnvironment()` et il n'est pas optionnel.
+
+       ⚠️ TOUTES LES COULEURS PASSENT PAR `sc()`. Voir son commentaire. */
+    const L = (c, extra) => new THREE.MeshStandardMaterial(Object.assign({
+      color: sc(c), roughness: 0.75, metalness: 0.0, envMapIntensity: CFG.ENV_INTENSITY,
+    }, extra || {}));
+    /* Le bonbon verni : une couche de vernis PAR-DESSUS la couleur, ce que
+       `roughness` seul ne sait pas faire. Un bonbon a deux réflexions —
+       l'une large et colorée dans la masse, l'autre étroite et blanche à la
+       surface — et c'est leur écart qui le rend appétissant.
+       ⚠️ RÉSERVÉ AUX SIX TEINTES PROCHES. Le clearcoat est le seul matériau
+       vraiment cher du fichier ; l'étendre au décor lointain paierait un
+       éclat que le brouillard mange de toute façon. */
+    const Candy = (c) => new THREE.MeshPhysicalMaterial({
+      color: sc(c), roughness: CFG.RGH_CANDY, metalness: 0.0,
+      clearcoat: CFG.CLEARCOAT_CANDY, clearcoatRoughness: 0.10,
+      envMapIntensity: CFG.ENV_INTENSITY * 1.25,
+    });
     /* ⚠️⚠️ LE SOL EST À DOUBLE FACE DEPUIS LE 416, ET C'EST LA CEINTURE DU
        CORRECTIF « SOL TRANSPARENT » (la bretelle étant la garde au sol de
        camera.js, qui est le vrai correctif).
@@ -579,30 +725,75 @@ const World = (function () {
        face manquante est un défaut de RENDU, il se corrige dans le rendu.
        Le coût est un doublement du remplissage sur deux matériaux ; sur une
        scène de quelques milliers de triangles, il n'est pas mesurable. */
-    mat.snow = new THREE.MeshLambertMaterial({ map: tex(paintSnow(), 1, 1), side: THREE.DoubleSide });
-    mat.piste = new THREE.MeshLambertMaterial({ map: tex(paintPiste(), 1, 1), side: THREE.DoubleSide });
-    mat.pisteEdge = L(CFG.COL_PISTE_EDGE);
-    mat.cane = new THREE.MeshLambertMaterial({ map: tex(paintCane(), 1, 3) });
-    mat.white = L(0xfffdff);
-    mat.icing = L(CFG.COL_ICING);
-    mat.ginger = L(CFG.COL_GINGER);
-    mat.gingerDark = L(CFG.COL_GINGER_DARK);
-    mat.trunk = L(CFG.COL_TRUNK);
-    mat.mount = L(CFG.COL_MOUNT);
-    mat.mountCap = L(CFG.COL_MOUNT_CAP);
-    mat.mountFar = new THREE.MeshBasicMaterial({ color: CFG.COL_MOUNT_FAR, fog: false });
-    mat.syrup = L(CFG.COL_SYRUP);
-    mat.sled = L(CFG.COL_SLED);
-    mat.sledDark = L(CFG.COL_SLED_DARK);
-    mat.runner = L(CFG.COL_RUNNER);
-    mat.shirt = L(CFG.COL_SHIRT);
-    mat.pants = L(CFG.COL_PANTS);
-    mat.hair = L(CFG.COL_HAIR);
-    mat.skin = L(CFG.COL_SKIN);
-    mat.scarf = L(CFG.COL_SCARF);
-    mat.boot = L(CFG.COL_BOOT);
-    mat.eye = L(0x2a1c2e);
-    mat.candy = CFG.COL_CANDY_SET.map((c) => L(c));
+    /* ⚠️ LA NEIGE ET LA PISTE PORTENT UNE CARTE DE RUGOSITÉ (422), et c'est ce
+       qui les sauve d'un défaut que le Lambert cachait : une grande surface
+       PBR d'une rugosité parfaitement constante attrape la lumière du soleil
+       en une seule bande large, parfaitement régulière, qui BALAIE l'écran
+       quand la caméra tourne. C'est le « plastique mouillé » qu'on voit dans
+       les jeux qui passent au PBR sans y penser. Une rugosité qui varie un peu
+       casse la bande en granulation, et la neige redevient de la neige.
+       On réutilise la texture de couleur comme carte de rugosité : ses
+       tourbillons clairs deviennent des zones plus lisses (de la neige tassée),
+       ses creux des zones plus mates. C'est physiquement plausible et ça ne
+       coûte pas une texture de plus. */
+    const snowRough = texData(paintSnow(), 1, 1);
+    const pisteRough = texData(paintPiste(), 1, 1);
+    mat.snow = new THREE.MeshStandardMaterial({
+      map: tex(paintSnow(), 1, 1), side: THREE.DoubleSide,
+      roughness: CFG.RGH_SNOW, metalness: 0.0, roughnessMap: snowRough,
+      envMapIntensity: CFG.ENV_INTENSITY * 0.9,
+    });
+    mat.piste = new THREE.MeshStandardMaterial({
+      map: tex(paintPiste(), 1, 1), side: THREE.DoubleSide,
+      roughness: CFG.RGH_PISTE, metalness: 0.0, roughnessMap: pisteRough,
+      envMapIntensity: CFG.ENV_INTENSITY,
+    });
+    mat.pisteEdge = L(CFG.COL_PISTE_EDGE, { roughness: CFG.RGH_PISTE });
+    /* Le sucre d'orge : la surface la plus VITRÉE du jeu. Un peu de
+       transmission serait plus juste encore, mais elle impose un rendu en deux
+       passes dans r128 et le gain ne vaut pas ce prix sur des piquets de
+       barrière. Le clearcoat en donne l'essentiel : l'éclat de surface. */
+    mat.cane = new THREE.MeshPhysicalMaterial({
+      map: tex(paintCane(), 1, 3), roughness: CFG.RGH_CANE, metalness: 0.0,
+      clearcoat: 0.9, clearcoatRoughness: 0.06, envMapIntensity: CFG.ENV_INTENSITY * 1.4,
+    });
+    mat.white = L(0xfffdff, { roughness: CFG.RGH_ICING });
+    mat.icing = L(CFG.COL_ICING, { roughness: CFG.RGH_ICING });
+    mat.ginger = L(CFG.COL_GINGER, { roughness: CFG.RGH_GINGER });
+    mat.gingerDark = L(CFG.COL_GINGER_DARK, { roughness: CFG.RGH_GINGER });
+    mat.trunk = L(CFG.COL_TRUNK, { roughness: CFG.RGH_WOOD });
+    /* ⚠️ LES MONTAGNES SONT DÉLIBÉRÉMENT LES PLUS MATES DU JEU (0,90). Une
+       montagne qui brille avance dans le cadre ; or son seul travail est de
+       reculer. La règle de la perspective atmosphérique du 414 s'applique
+       maintenant aussi à la RUGOSITÉ, pas seulement à la teinte. */
+    mat.mount = L(CFG.COL_MOUNT, { roughness: CFG.RGH_MOUNT, envMapIntensity: CFG.ENV_INTENSITY * 0.45 });
+    mat.mountCap = L(CFG.COL_MOUNT_CAP, { roughness: 0.85, envMapIntensity: CFG.ENV_INTENSITY * 0.5 });
+    mat.mountFar = new THREE.MeshBasicMaterial({ color: sc(CFG.COL_MOUNT_FAR), fog: false });
+    mat.syrup = L(CFG.COL_SYRUP, { roughness: 0.12, envMapIntensity: CFG.ENV_INTENSITY * 1.6 });
+    mat.sled = L(CFG.COL_SLED, { roughness: CFG.RGH_WOOD });
+    mat.sledDark = L(CFG.COL_SLED_DARK, { roughness: CFG.RGH_WOOD });
+    /* Les patins : à demi métalliques. C'est le seul métal du jeu et il est
+       là pour une raison précise — un éclat mobile sous la luge est ce qui dit
+       « ça glisse ». Sans lui, la luge a l'air posée. */
+    mat.runner = L(CFG.COL_RUNNER, { roughness: 0.20, metalness: CFG.METAL_RUNNER, envMapIntensity: CFG.ENV_INTENSITY * 1.5 });
+    mat.shirt = L(CFG.COL_SHIRT, { roughness: CFG.RGH_CLOTH });
+    mat.pants = L(CFG.COL_PANTS, { roughness: CFG.RGH_CLOTH });
+    mat.hair = L(CFG.COL_HAIR, { roughness: 0.62 });
+    mat.skin = L(CFG.COL_SKIN, { roughness: 0.66 });
+    mat.scarf = L(CFG.COL_SCARF, { roughness: CFG.RGH_CLOTH });
+    mat.boot = L(CFG.COL_BOOT, { roughness: 0.55 });
+    mat.eye = L(0x2a1c2e, { roughness: 0.18, envMapIntensity: CFG.ENV_INTENSITY * 2.0 });
+    /* ⚠️ LES BONBONS SONT LÉGÈREMENT ÉMISSIFS (422), ET C'EST CE QUI LES REND
+       « MAGIQUES » PLUTÔT QUE SIMPLEMENT COLORÉS. L'émission est faible (8 %) :
+       elle ne les éclaire pas, elle les pousse juste au-dessus du seuil de
+       bloom dans les hautes lumières, si bien qu'un bonbon en plein soleil
+       déborde un peu et qu'un bonbon dans l'ombre non. C'est exactement ce
+       qu'on veut — un halo qui obéit à la lumière, pas un néon permanent. */
+    mat.candy = CFG.COL_CANDY_SET.map((c) => {
+      const m = Candy(c);
+      m.emissive = sc(c); m.emissiveIntensity = 0.08;
+      return m;
+    });
     /* ⚠️ LA PALETTE LOINTAINE (414). Les mêmes six teintes, descendues d'un cran
        de valeur et tirées vers le bleu. C'est la perspective atmosphérique
        appliquée aux OBJETS, et pas seulement au brouillard — sans elle, un
@@ -610,18 +801,32 @@ const World = (function () {
        la forêt entière se lisait donc comme collée sur une même vitre, et le
        paysage n'avait aucune profondeur malgré ses trois rangs d'arbres.
        Un matériau de plus, et le décor gagne ses trois plans. */
-    mat.candyFar = CFG.COL_CANDY_FAR.map((c) => L(c));
-    mat.trunkFar = L(0x8a6b52);
-    mat.candyGlow = CFG.COL_CANDY_SET.map((c) => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.35, fog: false }));
+    /* ⚠️ LE LOINTAIN RESTE SANS VERNIS, ET C'EST VOLONTAIRE (422). Rugosité
+       haute, environnement réduit de moitié : un éclat à deux cents mètres
+       ramène l'objet au premier plan, ce qui défait exactement le travail de
+       perspective atmosphérique du 414. La profondeur se joue autant sur la
+       BRILLANCE que sur la valeur. */
+    mat.candyFar = CFG.COL_CANDY_FAR.map((c) => L(c, { roughness: 0.72, envMapIntensity: CFG.ENV_INTENSITY * 0.4 }));
+    mat.trunkFar = L(0x8a6b52, { roughness: 0.9, envMapIntensity: CFG.ENV_INTENSITY * 0.4 });
+    mat.candyGlow = CFG.COL_CANDY_SET.map((c) => new THREE.MeshBasicMaterial({ color: sc(c), transparent: true, opacity: 0.35, fog: false }));
 
     /* LES PORTES DE CHECKPOINT (414). Le fanion et la bande au sol sont en
        Basic et non en Lambert : ce sont des SIGNAUX, pas du décor. Un repère
        dont la lisibilité dépendrait de l'orientation du soleil serait bien
        éclairé dans un virage et invisible dans l'autre — c'est exactement ce
        qu'un repère ne doit pas faire. */
-    mat.cpFlag = new THREE.MeshBasicMaterial({ color: 0x5fe0c4, transparent: true, opacity: 0.95 });
-    mat.cpGlow = new THREE.MeshBasicMaterial({ color: 0x7ff0d8, fog: false });
-    mat.cpBand = new THREE.MeshBasicMaterial({ color: 0x5fe0c4, transparent: true, opacity: 0.55 });
+    mat.cpFlag = new THREE.MeshBasicMaterial({ color: sc(0x5fe0c4), transparent: true, opacity: 0.95 });
+    /* ⚠️ LE BONBON DU SOMMET DE MÂT EST LA SEULE COULEUR DU JEU QUI DÉPASSE
+       FRANCHEMENT 1,0 (422), et c'est ce qui lui donne son halo. En linéaire,
+       « plus clair que le blanc » a un sens : la valeur passe le seuil du
+       bloom (0,92) et déborde, alors que la neige la plus éclairée, elle,
+       reste juste en dessous. C'est le seul moyen d'obtenir un halo qui ne
+       bave PAS sur tout le champ de neige — un bloom à seuil bas donnerait
+       les deux ensemble, ou aucun.
+       ⚠️ Le facteur multiplie une couleur DÉJÀ linéarisée : l'ordre compte,
+       multiplier avant la conversion donnerait un vert acide. */
+    mat.cpGlow = new THREE.MeshBasicMaterial({ color: sc(0x7ff0d8).multiplyScalar(2.6), fog: false });
+    mat.cpBand = new THREE.MeshBasicMaterial({ color: sc(0x5fe0c4), transparent: true, opacity: 0.55 });
 
     /* ══════════════════════════════════════════════════════════════════════
        LES TROIS MATÉRIAUX DE LA LISIBILITÉ (416).
@@ -642,14 +847,14 @@ const World = (function () {
       transparent: true, depthWrite: false, fog: true,
       polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -6,
     }, extra));
-    mat.shadow = decal({ map: tex(paintShadow()), opacity: CFG.SHADOW_OPACITY });
-    mat.warn = decal({ map: tex(paintWarn()), color: CFG.COL_WARN, opacity: 0.7, fog: false });
-    mat.gate = decal({ map: tex(paintGate()), color: CFG.COL_GATE, opacity: CFG.GATE_OPACITY, fog: false });
+    mat.shadow = decal({ map: texData(paintShadow()), opacity: CFG.SHADOW_OPACITY });
+    mat.warn = decal({ map: texData(paintWarn()), color: sc(CFG.COL_WARN), opacity: 0.7, fog: false });
+    mat.gate = decal({ map: texData(paintGate()), color: sc(CFG.COL_GATE), opacity: CFG.GATE_OPACITY, fog: false });
     /* Les montants : en Basic non brumeux comme le fanion de checkpoint, et
        pour la même raison — un repère dont la lisibilité dépend du soleil est
        un repère qui ment une fois sur deux. */
     mat.gatePost = new THREE.MeshBasicMaterial({
-      color: CFG.COL_GATE_POST, transparent: true, opacity: 0.8, fog: false, depthWrite: false,
+      color: sc(CFG.COL_GATE_POST).multiplyScalar(1.8), transparent: true, opacity: 0.8, fog: false, depthWrite: false,
     });
     /* Le rideau : DOUBLE FACE obligatoire — on le traverse, et une porte qui
        disparaît au moment où on la franchit ne confirme jamais qu'on l'a bien
@@ -657,7 +862,7 @@ const World = (function () {
        la lumière tendue en l'air, pas de la matière posée au sol, et l'additif
        est ce qui l'empêche de se lire comme une paroi. */
     mat.gateCurtain = new THREE.MeshBasicMaterial({
-      map: tex(paintCurtain()), color: CFG.COL_GATE, transparent: true,
+      map: texData(paintCurtain()), color: sc(CFG.COL_GATE).multiplyScalar(1.6), transparent: true,
       opacity: CFG.GATE_CURTAIN_OPACITY, fog: false, depthWrite: false,
       side: THREE.DoubleSide, blending: THREE.AdditiveBlending,
     });
@@ -692,8 +897,41 @@ const World = (function () {
      ====================================================================== */
   function init(canvasEl) {
     canvas = canvasEl;
-    renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-    renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    /* ⚠️ `antialias` EST COUPÉ QUAND LE POST-TRAITEMENT EST ACTIF, ET CE N'EST
+       PAS UNE ÉCONOMIE : le MSAA du contexte ne s'applique qu'au tampon de
+       l'écran. Avec un EffectComposer, la scène est rendue dans une cible
+       intermédiaire — le MSAA demandé ici est alors intégralement payé et
+       intégralement inutile. C'est la fuite de performance la plus classique
+       d'un pipeline à passes, et elle ne produit aucun symptôme visible : juste
+       un tiers de remplissage jeté. Le crénelage est repris par le
+       suréchantillonnage de la cible (voir `buildComposer`). */
+    const wantPost = !!(CFG.BLOOM_ON && window.THREE && THREE.EffectComposer);
+    renderer = new THREE.WebGLRenderer({
+      canvas, antialias: !wantPost, powerPreference: "high-performance", stencil: false,
+    });
+    renderer.setPixelRatio(Math.min(CFG.QUALITY_MAX_PIXEL_RATIO, window.devicePixelRatio || 1));
+
+    /* ══════════════════════════════════════════════════════════════════════
+       LA CHAÎNE COLORIMÉTRIQUE (422). Voir le bloc RENDU de config.js.
+       ══════════════════════════════════════════════════════════════════════
+       ⚠️ LE TONE MAPPING EST POSÉ ICI **OU** DANS LA PASSE FINALE, JAMAIS LES
+       DEUX. Appliqué deux fois, il compresse deux fois : l'image devient
+       laiteuse et sans noirs, et le réflexe est alors de monter le contraste
+       ailleurs — ce qui empile un second défaut sur le premier.
+       Quand le composer est actif, la scène est rendue en HDR SANS compression
+       (c'est ce qui permet au bloom de voir les valeurs > 1) et c'est la passe
+       finale qui fait ACES. Sans composer, c'est le renderer. */
+    renderer.outputEncoding = THREE.sRGBEncoding;
+    renderer.toneMapping = wantPost ? THREE.NoToneMapping : THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = CFG.TONE_EXPOSURE;
+    if (CFG.SHADOW_ON) {
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      /* ⚠️ `autoUpdate` RESTE VRAI. La tentation est de ne recalculer l'ombre
+         qu'une image sur deux, mais le volume d'ombre SUIT la luge : une carte
+         d'une image de retard laisse l'ombre glisser d'un demi-mètre à 45 u/s,
+         ce qui se voit précisément sur l'objet qu'on regarde le plus. */
+    }
 
     scene = new THREE.Scene();
     /* ⚠️⚠️ LES RÉSERVES SONT VIDÉES ICI, ET LE MANQUE A COÛTÉ UNE DEMI-HEURE
@@ -710,12 +948,19 @@ const World = (function () {
        tools/preview-luge.js recommence à chaque planche. */
     for (const k in pool) pool[k].length = 0;
     for (const k in decals) decals[k].length = 0;
+    built.length = 0;
     /* ⚠️ RÈGLE 4 : le brouillard porte la couleur du ciel À L'HORIZON, pas une
        teinte grise. Il est très peu dense — on veut voir loin, c'est tout le
        propos du cadrage large — mais il est indispensable : sans lui, la piste
        et les montagnes se découpent net sur le ciel et le décor devient une
        maquette. */
-    scene.fog = new THREE.FogExp2(CFG.COL_FOG, CFG.FOG_DENSITY);
+    /* ⚠️ 422 : la couleur du brouillard passe elle aussi par `sc()`. three.js
+       mélange le brouillard DANS l'espace de travail du shader, qui est
+       maintenant linéaire ; une couleur laissée en sRGB ferait un brouillard
+       trop clair d'un cran et demi, visible surtout sur les montagnes proches —
+       le genre d'écart qu'on attribue au brouillard lui-même et qu'on essaie de
+       corriger avec `FOG_DENSITY`, ce qui déplace le problème. */
+    scene.fog = new THREE.FogExp2(sc(CFG.COL_FOG), CFG.FOG_DENSITY);
 
     camera = new THREE.PerspectiveCamera(CFG.CAM_FOV, 1, 0.5, CFG.DRAW_DISTANCE);
 
@@ -741,12 +986,39 @@ const World = (function () {
 
        ⚠️ NE PAS REMONTER L'AMBIANTE POUR « ÉCLAIRCIR ». C'est exactement la
        faute qu'on vient de corriger : ça n'éclaircit pas, ça aplatit. Si le
-       cadre paraît sombre, c'est LIGHT_SUN qu'on monte. */
-    ambient = new THREE.AmbientLight(0xfff0f6, CFG.LIGHT_AMBIENT);
+       cadre paraît sombre, c'est LIGHT_SUN qu'on monte.
+
+       ══════════════════════════════════════════════════════════════════════
+       ⚠️⚠️ REPRIS AU 422 — ET LE 414 AVAIT RAISON SUR LE RAPPORT, TORT SUR LA
+       QUATRIÈME LAMPE.
+       ──────────────────────────────────────────────────────────────────────
+       Trois changements, et le troisième est celui qui se voit :
+
+       1. LES VALEURS SONT EN LINÉAIRE. Elles ne se comparent pas à celles du
+          414, qui multipliaient des octets encodés en gamma. Le rapport de
+          force, lui, est conservé et même accentué.
+
+       2. IL Y A UN ENVIRONNEMENT (`buildEnvironment`). C'est la nouveauté qui
+          rend le PBR possible : sans ciel à réfléchir, une surface vernie n'est
+          qu'une surface sombre. L'ambiante pure tombe donc de 0,20 à 0,10 —
+          l'environnement fait mieux son travail, et en couleur.
+
+       3. ⚠️ L'APPOINT N'EST PLUS EN DESSOUS, IL EST DERRIÈRE. Le 414 l'avait
+          placé sous l'horizon (y = −0,35) pour « éviter les dessous noirs ».
+          C'était résoudre par une lampe un problème qui relève de l'ambiante,
+          et ça coûtait cher : une lumière venue d'en bas efface le contact au
+          sol, c'est-à-dire exactement l'information qu'une ombre porte. Depuis
+          qu'il y a de vraies ombres, ce faux-jour est devenu nuisible.
+          Il est donc remonté et reculé : c'est maintenant un CONTRE-JOUR, à
+          l'opposé du soleil. Son travail n'est plus d'éclairer mais de tracer
+          un liseré froid sur le bord des volumes — le geste qui sépare un
+          objet de son fond, et le plus efficace de tout ce zip pour le prix
+          d'un vecteur changé. */
+    ambient = new THREE.AmbientLight(sc(0xfff0f6), CFG.LIGHT_AMBIENT);
     scene.add(ambient);
-    hemi = new THREE.HemisphereLight(CFG.COL_LIGHT_SKY, CFG.COL_LIGHT_GROUND, CFG.LIGHT_SKY);
+    hemi = new THREE.HemisphereLight(sc(CFG.COL_LIGHT_SKY), sc(CFG.COL_LIGHT_GROUND), CFG.LIGHT_SKY);
     scene.add(hemi);
-    sun = new THREE.DirectionalLight(CFG.COL_LIGHT_SUN, CFG.LIGHT_SUN);
+    sun = new THREE.DirectionalLight(sc(CFG.COL_LIGHT_SUN), CFG.LIGHT_SUN);
     /* ⚠️ LE SOLEIL EST RASANT (y = 0,52 pour x = -0,8), et c'est délibéré. Un
        soleil au zénith éclaire tous les versants pareil et redonne exactement
        le rendu plat qu'on vient de fuir ; un soleil bas creuse un côté de
@@ -754,25 +1026,140 @@ const World = (function () {
        des paysages de Lonely Mountains, et c'est la plus généreuse en relief.
        Il vient du MÊME côté que le soleil peint dans la texture de ciel — deux
        sources contradictoires font « sonner faux » un décor sans qu'on sache
-       dire pourquoi. */
-    sun.position.set(-0.8, 0.52, 0.3);
+       dire pourquoi.
+       ⚠️ 422 : ENCORE ABAISSÉ (0,52 → 0,42). Avec de vraies ombres portées,
+       chaque degré gagné vers l'horizon allonge les ombres au sol, et ce sont
+       elles qui racontent le relief de la piste. */
+    sun.position.set(-0.8, 0.42, 0.3);
     scene.add(sun);
-    /* La lampe d'appoint, froide et venue d'en bas : elle empêche les dessous
-       d'être noirs sans rien aplatir, parce qu'elle est faible. */
-    fill = new THREE.DirectionalLight(0xc4d8ff, 0.18);
-    fill.position.set(0.6, -0.35, -0.7);
+    if (CFG.SHADOW_ON) setupSunShadow();
+    /* Le CONTRE-JOUR froid (422). Voir le point 3 ci-dessus. */
+    fill = new THREE.DirectionalLight(sc(CFG.COL_LIGHT_FILL), CFG.LIGHT_FILL);
+    fill.position.set(0.75, 0.30, -0.85);
     scene.add(fill);
 
     buildAssets();
+    /* ══════════════════════════════════════════════════════════════════════
+       LES MODÈLES (422). Chargés en tâche de fond ; le décor se construit avec
+       ses primitives en attendant et se RECONSTRUIT quand ils arrivent.
+       ⚠️ LA RECONSTRUCTION EST GÉRÉE ICI ET NON DANS game.js, et c'est
+       délibéré : la boucle de jeu n'a aucune raison de savoir qu'un décor
+       existe en deux qualités. `built` est la liste des tronçons qu'on a
+       bâtis ; on les jette et on les refait, ce qui coûte quelques
+       millisecondes une seule fois — et, en pratique, sur une liste VIDE,
+       puisque les modèles arrivent pendant l'écran-titre. */
+    if (window.Models) {
+      Models.load();
+      Models.onReady(() => {
+        for (const n of built.slice()) { dropNode(n); buildNode(n); }
+      });
+    }
+    buildEnvironment();
     buildSky();
     buildMountains();
     buildSnowFall();
+    buildMotes();
     buildSled();
     buildParticles();
     buildTrail();
     resize();
+    if (wantPost) buildComposer();
     window.addEventListener("resize", resize);
     if (pendingSkin) applySkin(pendingSkin);
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     LA CARTE D'OMBRE (422) — UN SEUL ÉTAGE, MAIS QUI SUIT LA LUGE.
+     ──────────────────────────────────────────────────────────────────────────
+     ⚠️ LA QUESTION POSÉE ÉTAIT « UNE VRAIE SHADOW MAP TIENT-ELLE LA PERF ? », ET
+     LA RÉPONSE EST OUI — À UNE CONDITION, QUI EST TOUT LE SUJET.
+
+     Une carte d'ombre couvrant le tirage complet (900 unités) en 2048 donne
+     0,44 unité par texel : l'ombre d'une luge de 2,7 unités tiendrait sur six
+     texels. C'est le calcul qu'il faut faire AVANT d'écrire du code, et c'est
+     lui qui a fait renoncer au 416 — à juste titre, si l'on ne voit pas la
+     sortie.
+
+     La sortie : la caméra du jeu ne quitte JAMAIS la luge. On n'a donc aucun
+     besoin d'ombrer les 900 unités ; il suffit d'ombrer la boîte que la caméra
+     cadre. Un volume de 92 unités de côté en 2048 donne 4,5 cm par texel, soit
+     soixante fois mieux — et on recentre ce volume sur la luge à chaque image
+     (`updateSunShadow`). C'est une cascade à un seul étage, ce qui est le bon
+     nombre d'étages quand il n'y a qu'une seule distance qui compte.
+
+     ⚠️ LE PIÈGE DU RECENTRAGE, ET IL EST CLASSIQUE : une caméra d'ombre qui
+     bouge en continu fait CHATOYER le bord des ombres, parce que la grille de
+     texels glisse sous la géométrie. On quantifie donc le centre sur un pas
+     égal à la taille d'un texel monde — l'ombre avance alors par sauts d'un
+     texel exactement, et le chatoiement disparaît. Sans ça, tout le décor
+     grésille dès qu'on prend de la vitesse, et le réflexe (augmenter la
+     résolution) ne fait qu'empirer les choses en rendant le pas plus fin. */
+  let shadowTexel = 0;
+  function setupSunShadow() {
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(CFG.SHADOW_MAP, CFG.SHADOW_MAP);
+    const R = CFG.SHADOW_RADIUS;
+    const c = sun.shadow.camera;
+    c.left = -R; c.right = R; c.top = R; c.bottom = -R;
+    c.near = CFG.SHADOW_NEAR; c.far = CFG.SHADOW_FAR;
+    c.updateProjectionMatrix();
+    sun.shadow.bias = CFG.SHADOW_BIAS;
+    sun.shadow.normalBias = CFG.SHADOW_NORMAL_BIAS;
+    sun.shadow.radius = CFG.SHADOW_SOFT;
+    shadowTexel = (2 * R) / CFG.SHADOW_MAP;
+  }
+
+  /* Recentre le volume d'ombre sur la luge. Appelé depuis updateAmbient, donc
+     une fois par image, après que la luge a bougé. */
+  function updateSunShadow(target) {
+    if (!sun || !sun.castShadow || !target) return;
+    const q = shadowTexel > 0 ? shadowTexel : 1;
+    // La quantification anti-chatoiement : voir l'en-tête.
+    const cx = Math.round(target.x / q) * q;
+    const cz = Math.round(target.z / q) * q;
+    const cy = Math.round(target.y / q) * q;
+    /* ⚠️ LA LUMIÈRE EST DÉPLACÉE AVEC SA CIBLE, PAS SEULEMENT ORIENTÉE. Une
+       DirectionalLight de three.js éclaire de `position` vers `target.position`
+       et son volume d'ombre est accroché à la POSITION. Bouger la cible seule
+       ferait tourner la direction du soleil à mesure qu'on descend — le soleil
+       se coucherait pendant la partie. On garde donc le vecteur constant et on
+       translate l'ensemble. */
+    const d = CFG.SHADOW_FAR * 0.42;
+    sun.position.set(cx - 0.8 * d, cy + 0.42 * d, cz + 0.3 * d);
+    sun.target.position.set(cx, cy, cz);
+    sun.target.updateMatrixWorld();
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     L'ENVIRONNEMENT (422) — LE CIEL, RÉFLÉCHI.
+     ──────────────────────────────────────────────────────────────────────────
+     ⚠️ SANS LUI, TOUT LE PASSAGE EN PBR EST UNE RÉGRESSION, et c'est le point
+     qu'on ne découvre qu'après avoir tout converti. Un MeshStandardMaterial
+     calcule sa réflexion spéculaire à partir de ce qu'il y a AUTOUR ; s'il n'y
+     a rien, il réfléchit du noir. Un bonbon verni sans environnement est donc
+     un bonbon mat et sombre — moins bien qu'en Lambert.
+
+     On ne charge pas de HDRI : on rend la TEXTURE DE CIEL DÉJÀ PEINTE dans une
+     petite sphère, et on la passe au PMREMGenerator. L'environnement porte donc
+     exactement les couleurs du ciel du jeu, gratuitement et sans fichier — ce
+     qui est aussi la seule façon de garantir qu'il reste d'accord avec lui si
+     la palette du ciel change un jour. C'est la règle 4 (« le brouillard porte
+     la couleur du ciel ») étendue aux reflets.
+
+     Coût : un rendu de 256×128 et une passe de PMREM, UNE SEULE FOIS au
+     démarrage. Rien par image. */
+  function buildEnvironment() {
+    if (!renderer || !THREE.PMREMGenerator) return;
+    const S = CFG.ENV_SIZE;
+    const t = tex(paintSky());
+    t.mapping = THREE.EquirectangularReflectionMapping;
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    pmrem.compileEquirectangularShader();
+    const rt = pmrem.fromEquirectangular(t);
+    scene.environment = rt.texture;
+    pmrem.dispose();
+    t.dispose();
+    void S;
   }
 
   function resize() {
@@ -780,6 +1167,165 @@ const World = (function () {
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
+    /* ⚠️ L'ÉCHELLE DES PARTICULES DÉPEND DE LA HAUTEUR DE LA FENÊTRE ET DE LA
+       FOCALE, et elle doit être recalculée à chaque redimensionnement. C'est ce
+       que `PointsMaterial` faisait tout seul ; en shader maison, l'oublier
+       donne des grains de la bonne taille sur l'écran du développeur et de la
+       mauvaise partout ailleurs — le pire genre de défaut, celui qu'on ne voit
+       jamais chez soi. La formule est celle de three.js : la moitié de la
+       hauteur de rendu divisée par tan(fov/2). */
+    const ps = (h * renderer.getPixelRatio() * 0.5) / Math.tan((camera.fov * Math.PI / 180) / 2);
+    for (const sys of [stars, dust, lines, spray, rain]) {
+      if (sys && sys.points.material.uniforms) sys.points.material.uniforms.uScale.value = ps;
+    }
+    if (motes && motes.material.uniforms) motes.material.uniforms.uScale.value = ps;
+    if (composer) {
+      const dpr = renderer.getPixelRatio();
+      composer.setSize(w, h);
+      composer.setPixelRatio(dpr);
+      if (bloomPass) bloomPass.setSize(w * CFG.BLOOM_SCALE, h * CFG.BLOOM_SCALE);
+      if (gradePass) gradePass.uniforms.uRes.value.set(w * dpr, h * dpr);
+    }
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     LA PASSE FINALE (422) — ACES, ÉTALONNAGE, VIGNETTE, GRAIN, sRGB.
+     ──────────────────────────────────────────────────────────────────────────
+     ⚠️ TOUT EST DANS UNE SEULE PASSE, ET C'EST UNE DÉCISION DE PERFORMANCE, PAS
+     DE PARESSE. Chaque ShaderPass supplémentaire, c'est un plein écran lu et un
+     plein écran écrit : quatre petits effets en quatre passes coûtent quatre
+     fois la bande passante d'un seul shader qui les enchaîne en registres. Sur
+     une puce à mémoire unifiée (M3/M4/M5), la bande passante est justement la
+     ressource qu'on ne veut pas gaspiller — c'est elle qu'on partage avec la
+     ferme qui tourne derrière.
+
+     ⚠️ L'ORDRE DES OPÉRATIONS À L'INTÉRIEUR N'EST PAS LIBRE :
+       exposition → ACES → étalonnage → vignette → grain → sRGB.
+     L'étalonnage APRÈS le tone mapping (sinon il est écrasé par la compression),
+     la vignette APRÈS l'étalonnage (elle assombrit une image déjà étalonnée), et
+     l'encodage sRGB EN DERNIER, toujours — c'est le passage à l'affichage, rien
+     ne se calcule après. Un grain appliqué après l'encodage, par exemple, serait
+     deux fois trop visible dans les ombres. */
+  const GradeShader = {
+    uniforms: {
+      tDiffuse: { value: null },
+      uExposure: { value: CFG.TONE_EXPOSURE },
+      uVignette: { value: CFG.VIGNETTE },
+      uVigSoft: { value: CFG.VIGNETTE_SOFT },
+      uGrain: { value: CFG.GRAIN },
+      uWarm: { value: CFG.GRADE_WARM },
+      uCool: { value: CFG.GRADE_COOL },
+      uSat: { value: CFG.GRADE_SAT },
+      uContrast: { value: CFG.GRADE_CONTRAST },
+      uTime: { value: 0 },
+      uRes: { value: new THREE.Vector2(1, 1) },
+    },
+    vertexShader: `
+      varying vec2 vUv;
+      void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }
+    `,
+    fragmentShader: `
+      uniform sampler2D tDiffuse;
+      uniform float uExposure, uVignette, uVigSoft, uGrain, uWarm, uCool, uSat, uContrast, uTime;
+      uniform vec2 uRes;
+      varying vec2 vUv;
+
+      // ACES Filmic, approximation de Krzysztof Narkowicz — la même courbe que
+      // THREE.ACESFilmicToneMapping, réécrite ici parce que la passe reçoit du
+      // HDR que le renderer n'a volontairement pas compressé.
+      vec3 aces(vec3 x){
+        const float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;
+        return clamp((x*(a*x+b))/(x*(c*x+d)+e), 0.0, 1.0);
+      }
+      vec3 toSRGB(vec3 c){
+        return mix(c*12.92, 1.055*pow(max(c,vec3(0.0)), vec3(0.41666)) - 0.055, step(vec3(0.0031308), c));
+      }
+      float hash12(vec2 p){
+        vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+        p3 += dot(p3, p3.yzx + 33.33);
+        return fract((p3.x + p3.y) * p3.z);
+      }
+
+      void main(){
+        vec3 col = texture2D(tDiffuse, vUv).rgb * uExposure;
+        col = aces(col);
+
+        /* L'ÉTALONNAGE PARTAGÉ : ambre dans les hautes lumières, violet dans les
+           ombres. C'est ce qui distingue une image de fin de journée d'un rendu
+           neutre — et sur un monde déjà rose, c'est aussi ce qui empêche les
+           ombres de virer au gris sale. */
+        float l = dot(col, vec3(0.2126, 0.7152, 0.0722));
+        col += uWarm * vec3(1.0, 0.62, 0.10) * smoothstep(0.55, 1.0, l);
+        col += uCool * vec3(0.28, 0.20, 1.0) * (1.0 - smoothstep(0.0, 0.42, l));
+        // ACES désature : on en rend une part, sans jamais dépasser l'original.
+        col = mix(vec3(l), col, uSat);
+        /* LE CONTRASTE. Pivot sur 0,42 et non sur 0,5 : le monde est pastel,
+           son gris moyen est plus clair que celui d'une image quelconque, et
+           pivoter sur 0,5 assombrirait toute la neige au lieu de creuser les
+           ombres. Voir la mesure dans config.js. */
+        col = (col - 0.42) * uContrast + 0.42;
+
+        // LA VIGNETTE. Rayon en coordonnées corrigées de l'aspect, sinon elle
+        // s'ovalise en 21/9 et se met à se voir — ce qu'une vignette ne doit pas.
+        vec2 d = (vUv - 0.5) * vec2(max(1.0, uRes.x/max(uRes.y,1.0)), 1.0);
+        float v = smoothstep(uVigSoft, 1.15, length(d) * 1.42);
+        col *= 1.0 - uVignette * v;
+
+        /* LE GRAIN. ⚠️ Il a une fonction TECHNIQUE en plus de l'ambiance : il
+           casse le banding des grands dégradés de ciel, qui est le défaut le
+           plus visible d'un ciel pastel en 8 bits et qu'aucun réglage de
+           couleur ne corrige. Il est pondéré par (1 − luminance) : du grain
+           dans les hautes lumières se lit comme du bruit de capteur, du grain
+           dans les ombres se lit comme de la matière. */
+        float g = hash12(gl_FragCoord.xy + vec2(uTime * 60.0, uTime * 37.0)) - 0.5;
+        col += g * uGrain * (1.0 - l * 0.7);
+
+        gl_FragColor = vec4(toSRGB(max(col, 0.0)), 1.0);
+      }
+    `,
+  };
+
+  function buildComposer() {
+    if (!THREE.EffectComposer || !THREE.RenderPass || !THREE.ShaderPass) return;
+    const w = window.innerWidth, h = window.innerHeight;
+    /* ⚠️ LA CIBLE EST EN HALF-FLOAT, ET C'EST OBLIGATOIRE, PAS UN LUXE. Une
+       cible 8 bits écrête à 1,0 : les valeurs « plus claires que le blanc » —
+       les seules que le bloom doit voir — seraient perdues AVANT la passe de
+       bloom. On obtiendrait alors un bloom qui déborde uniformément sur toute
+       la neige claire, c'est-à-dire le voile laiteux qu'on cherche à éviter.
+       Le HDR n'est pas là pour la précision, il est là pour que le seuil ait
+       un sens. */
+    const rt = new THREE.WebGLRenderTarget(w, h, {
+      minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter,
+      format: THREE.RGBAFormat, type: THREE.HalfFloatType,
+      encoding: THREE.LinearEncoding, stencilBuffer: false, depthBuffer: true,
+    });
+    composer = new THREE.EffectComposer(renderer, rt);
+    composer.addPass(new THREE.RenderPass(scene, camera));
+
+    if (CFG.BLOOM_ON && THREE.UnrealBloomPass) {
+      bloomPass = new THREE.UnrealBloomPass(
+        new THREE.Vector2(w * CFG.BLOOM_SCALE, h * CFG.BLOOM_SCALE),
+        CFG.BLOOM_STRENGTH, CFG.BLOOM_RADIUS, CFG.BLOOM_THRESHOLD);
+      composer.addPass(bloomPass);
+    }
+    gradePass = new THREE.ShaderPass(GradeShader);
+    gradePass.renderToScreen = true;
+    composer.addPass(gradePass);
+    resize();
+  }
+
+  /* Un dégradé radial doux, pour le disque solaire et son halo. */
+  function paintGlow(coreStop) {
+    const S = 128, c = cv(S, S), g = c.getContext("2d");
+    const R = S / 2;
+    const d = g.createRadialGradient(R, R, 0, R, R, R);
+    d.addColorStop(0, "rgba(255,255,255,1)");
+    d.addColorStop(coreStop, "rgba(255,255,255,0.85)");
+    d.addColorStop(Math.min(0.98, coreStop + 0.30), "rgba(255,255,255,0.18)");
+    d.addColorStop(1, "rgba(255,255,255,0)");
+    g.fillStyle = d; g.fillRect(0, 0, S, S);
+    return c;
   }
 
   /* -------------------------------------------------------------- LE CIEL */
@@ -790,6 +1336,95 @@ const World = (function () {
     skyDome = new THREE.Mesh(new THREE.SphereGeometry(CFG.DRAW_DISTANCE * 0.92, 24, 16), skyMat);
     skyDome.renderOrder = -10;
     scene.add(skyDome);
+
+    /* ══════════════════════════════════════════════════════════════════════
+       LE SOLEIL ET SON HALO (422). Voir SUN_DISC dans config.js.
+       ──────────────────────────────────────────────────────────────────────
+       ⚠️ DEUX PLANS ET NON UN, et la différence n'est pas cosmétique : le
+       DISQUE est petit et très au-dessus du blanc (il alimente le bloom, c'est
+       lui qui rayonne), le HALO est immense et faible (il donne l'éblouissement
+       autour, celui qui délave le ciel près du soleil). Un seul objet ne peut
+       pas faire les deux — le grossir noierait le cadre, le garder petit
+       supprimerait l'atmosphère.
+       ⚠️ `depthWrite: false` ET `renderOrder` juste après le dôme : ils sont à
+       l'infini, ils ne doivent occulter aucun sommet de montagne. */
+    const sunDir = new THREE.Vector3(-0.8, 0.42, 0.3).normalize();
+    const D = CFG.DRAW_DISTANCE * 0.80;
+    const glow = (size, colHex, gain, coreStop, order) => {
+      const m = new THREE.Mesh(
+        new THREE.PlaneGeometry(size * 2, size * 2),
+        new THREE.MeshBasicMaterial({
+          map: texData(paintGlow(coreStop)),
+          color: sc(colHex).multiplyScalar(gain),
+          transparent: true, depthWrite: false, depthTest: false,
+          fog: false, blending: THREE.AdditiveBlending,
+        }));
+      m.position.copy(sunDir).multiplyScalar(D);
+      // L'écart au centre de la caméra, mémorisé : updateAmbient le rejoue à
+      // chaque image (le soleil suit la caméra, règle 3).
+      m.userData.ox = m.position.x; m.userData.oy = m.position.y; m.userData.oz = m.position.z;
+      m.renderOrder = order;
+      return m;
+    };
+    sunHalo = glow(CFG.SUN_HALO, CFG.COL_SUN_HALO, CFG.SUN_HALO_GAIN, 0.06, -9);
+    sunDisc = glow(CFG.SUN_DISC, CFG.COL_SUN_DISC, CFG.SUN_DISC_GAIN, 0.42, -8);
+    scene.add(sunHalo);
+    scene.add(sunDisc);
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     LES POUSSIÈRES DE SUCRE (422) — LE PREMIER PLAN QUI MANQUAIT.
+     ──────────────────────────────────────────────────────────────────────────
+     ⚠️ CE N'EST PAS DE LA NEIGE QUI TOMBE, ET LES DEUX NE SE REMPLACENT PAS.
+     La neige de `buildSnowFall` remplit le CIEL, au-dessus de l'horizon, et
+     tombe. Celles-ci flottent dans une petite boîte AUTOUR DE LA CAMÉRA, à
+     quelques mètres de l'objectif, et ne tombent presque pas.
+     Leur rôle est un rôle de photographe : donner de la matière au tout premier
+     plan. Sans elles, la profondeur du cadre commence à la piste — c'est-à-dire
+     à dix mètres — et l'image reste « propre » d'une façon qui sent le rendu.
+     Quelques points flous qui passent vite tout près de l'objectif suffisent à
+     la faire respirer, et ils coûtent 130 particules. */
+  function buildMotes() {
+    const n = CFG.FX_MOTE_COUNT, A = CFG.FX_MOTE_AREA;
+    const pos = new Float32Array(n * 3);
+    const siz = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      pos[i * 3] = (Math.random() - 0.5) * A * 2;
+      pos[i * 3 + 1] = (Math.random() - 0.5) * A;
+      pos[i * 3 + 2] = (Math.random() - 0.5) * A * 2;
+      siz[i] = CFG.FX_MOTE_SIZE * (0.5 + Math.pow(Math.random(), 2) * 2.2);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    g.setAttribute("aSize", new THREE.BufferAttribute(siz, 1));
+    /* ⚠️ LE MÊME SHADER QUE LES AUTRES SYSTÈMES, ET PAS UN `PointsMaterial`.
+       Première écriture : un PointsMaterial, plus simple — mais il IGNORE
+       l'attribut `aSize`, alors que la planche, elle, le lit. On aurait donc
+       eu des poussières de tailles variées dans l'outil de contrôle et des
+       poussières toutes identiques dans le jeu : l'outil aurait validé un
+       effet qui n'existe pas. C'est exactement le mensonge que ce fichier
+       s'interdit (cf. l'en-tête de preview-luge.js). */
+    const mmap = texData(paintDust());
+    const mmat = new THREE.ShaderMaterial({
+      uniforms: {
+        uMap: { value: mmap }, uOpacity: { value: 0.42 }, uScale: { value: 300 },
+        uFogColor: { value: sc(CFG.COL_FOG) }, uAdditive: { value: 1 },
+      },
+      vertexShader: POINT_VERT.replace("FOGD", (CFG.FOG_DENSITY * 0.35).toExponential()),
+      fragmentShader: POINT_FRAG,
+      transparent: true, depthWrite: false, vertexColors: true,
+      blending: THREE.AdditiveBlending,
+    });
+    mmat.size = CFG.FX_MOTE_SIZE; mmat.opacity = 0.42; mmat.map = mmap;
+    // La couleur par sommet : les poussières sont toutes de la même teinte,
+    // mais le shader la lit par sommet — on la pose donc une fois pour toutes.
+    const mcol = new Float32Array(n * 3);
+    const cw = sc(0xfff0f8).multiplyScalar(1.5);
+    for (let i = 0; i < n; i++) { mcol[i * 3] = cw.r; mcol[i * 3 + 1] = cw.g; mcol[i * 3 + 2] = cw.b; }
+    g.setAttribute("color", new THREE.BufferAttribute(mcol, 3));
+    motes = new THREE.Points(g, mmat);
+    motes.frustumCulled = false;
+    scene.add(motes);
   }
 
   /* ------------------------------------------------------- LES MONTAGNES --
@@ -954,6 +1589,75 @@ const World = (function () {
     sledParts.body = body;
     yawNode.add(body);
 
+    /* ══════════════════════════════════════════════════════════════════════
+       LA LUGE MODELÉE (422) — point 7 du chantier.
+       ──────────────────────────────────────────────────────────────────────
+       ⚠️ ON REMPLACE LA GÉOMÉTRIE, PAS LE SQUELETTE. Toute la hiérarchie du
+       417 — `yawNode` au pivot des patins arrière, `body` ramené vers l'avant,
+       `torso` qui se penche — reste EXACTEMENT en place, et c'est non
+       négociable : c'est elle qui porte le sentiment de conduite (« le
+       contrôle se fait par l'arrière de l'engin »), qui a coûté un zip entier
+       à régler, et qui n'a rien à voir avec l'apparence.
+       Le modèle Blender ne fournit donc que des maillages, qu'on RANGE dans
+       les nœuds existants selon leur nom.
+
+       ⚠️ ET LE PILOTE VA DANS `torso`, PAS DANS `body`. S'il allait dans le
+       corps de la luge, il ne se pencherait plus dans les virages — or c'est
+       le seul mouvement du personnage, et c'est lui qui rend la carre lisible
+       de dos, à onze mètres, quand rien d'autre ne bouge. */
+    const sledModel = window.Models ? Models.raw("sled", mat) : null;
+    if (sledModel) {
+      buildSledFromModel(sledModel, body);
+    } else buildSledPrimitives(body);
+    finishSledRig();
+    return;
+  }
+
+  /* Range les pièces du modèle dans les nœuds animés du rig. */
+  function buildSledFromModel(model, body) {
+    const S = CFG.SLED_MODEL_SCALE;
+    const HULL = { runner: 1, sled: 1, trunk: 1 };
+    /* Le buste : même position et même rôle que celui des primitives — c'est
+       lui que `updateSled` fait tanguer et rouler. */
+    const torso = new THREE.Group();
+    torso.position.set(0, CFG.SLED_MODEL_SEAT, 0);
+    sledParts.torso = torso;
+    const rider = new THREE.Group();
+    sledParts.rider = rider;
+    rider.add(torso);
+    body.add(rider);
+    /* ⚠️ `arms` RESTE, ET IL RESTE VIDE. `updateSled` écrit
+       `sledParts.arms.rotation.x` à chaque image ; le retirer serait une
+       exception par image. Les bras sont modelés dans le buste (un pilote de
+       luge tient sa corde, ses bras ne battent pas indépendamment), donc le
+       nœud n'a plus rien à porter — mais il doit exister.
+       C'est un renoncement assumé et il est visible : l'ancien modèle ouvrait
+       un peu les bras en dérapage. Le gain de silhouette vaut cette perte. */
+    const arms = new THREE.Group();
+    sledParts.arms = arms;
+    torso.add(arms);
+
+    const fem = [];
+    for (const child of model.children.slice()) {
+      const m = /^part_([A-Za-z0-9]+)/.exec(child.name || "");
+      const key = m ? m[1] : "";
+      child.scale.setScalar(S);
+      child.position.multiplyScalar(S);
+      if (HULL[key]) { child.position.y += 0; body.add(child); continue; }
+      // Le pilote : on le remonte au niveau du siège, puisque le buste y est.
+      child.position.y -= CFG.SLED_MODEL_SEAT;
+      if (key === "hairlong") { child.visible = false; fem.push(child); }
+      torso.add(child);
+    }
+    sledParts.femHead = fem;
+    /* La nuque n'existe plus séparément : la chevelure longue la recouvre par
+       construction, ce que les primitives ne savaient pas faire (d'où le
+       masquage manuel du 377). Un problème résolu par la forme n'a plus besoin
+       d'être résolu par du code. */
+    sledParts.nape = null;
+  }
+
+  function buildSledPrimitives(body) {
     // Les patins : deux longues barres de caramel, recourbées à l'avant par
     // trois segments d'inclinaison croissante.
     for (const side of [-1, 1]) {
@@ -1068,7 +1772,18 @@ const World = (function () {
     // La corde de guidage, tendue entre les mains et le nez de la luge.
     const rope = box(mat.trunk, 0.05, 0.05, 1.5, 0, 1.0, -1.6);
     rope.rotation.x = 0.5; body.add(rope);
+  }
 
+  function finishSledRig() {
+    /* ⚠️ LA LUGE EST LE SEUL OBJET DONT L'OMBRE COMPTE VRAIMENT (422). C'est
+       elle qu'on regarde, et c'est son ombre qui dit à quelle hauteur elle est
+       — donc si l'on vient de décoller. Le décalque du 416 le disait déjà,
+       approximativement ; la vraie ombre le dit en donnant EN PLUS la forme du
+       terrain sous elle, ce qu'un disque plat ne peut pas faire.
+       ⚠️ Elle ne REÇOIT pas : une luge de 2,7 unités auto-ombrée en PCF donne
+       des bandes sur le pilote, pour un gain nul — la lumière d'hémisphère
+       modèle déjà ses volumes. */
+    sledRig.traverse((o) => { if (o.isMesh) o.castShadow = true; });
     scene.add(sledRig);
   }
 
@@ -1079,10 +1794,20 @@ const World = (function () {
   function applySkin(sk) {
     if (!sk) return;
     if (!mat.shirt) { pendingSkin = sk; return; }
-    mat.shirt.color.setHex(sk.shirt);
-    mat.pants.color.setHex(sk.pants);
-    mat.hair.color.setHex(sk.hair);
-    mat.skin.color.setHex(sk.skin);
+    /* ⚠️⚠️ ZIP 422 — `setHex` NU EST DEVENU UN BOGUE, ET C'EST LE PIÈGE LE PLUS
+       DISCRET DU PASSAGE EN LINÉAIRE. La ferme envoie des couleurs sRGB (ce
+       sont celles de `charPalette()` dans fermeArt.js, choisies à l'œil dans un
+       sélecteur). Les poser telles quelles écrase la conversion faite à la
+       construction du matériau : le fermier ressortait DÉLAVÉ, et lui seul —
+       tout le reste du monde restant correct, on aurait cherché du côté du
+       pont, du skin, de la ferme, partout sauf ici.
+       ⚠️ C'est aussi pour ça que la tenue par défaut, elle, était juste : elle
+       passe par `L(CFG.COL_SHIRT)`, donc par `sc()`. Le défaut n'apparaissait
+       QUE dans la ferme, jamais en ouvrant la page seule. */
+    mat.shirt.color.copy(sc(sk.shirt));
+    mat.pants.color.copy(sc(sk.pants));
+    mat.hair.color.copy(sc(sk.hair));
+    mat.skin.color.copy(sc(sk.skin));
     const fem = sk.gender === "f";
     if (sledParts.femHead) for (const m of sledParts.femHead) m.visible = fem;
     /* La nuque est MASQUÉE chez la femme : les cheveux longs la recouvrent
@@ -1100,21 +1825,105 @@ const World = (function () {
      regarde pas : elle donne la vitesse au coin de l'œil. Un seul système
      réglé au milieu ne ferait ni l'un ni l'autre.
      ====================================================================== */
+  /* ══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ ZIP 422 — LES PARTICULES ONT UNE TAILLE PAR GRAIN, ET IL A FALLU
+     ABANDONNER `PointsMaterial` POUR ÇA.
+     ──────────────────────────────────────────────────────────────────────────
+     Le chantier demande « une gerbe de neige avec de la variance de taille, de
+     vitesse et de durée de vie ». Les deux dernières existaient déjà (elles se
+     règlent à l'émission). La PREMIÈRE était impossible : `PointsMaterial.size`
+     est un uniforme, une seule valeur pour tout le système. Trois cents grains
+     rigoureusement identiques, c'est ce qui fait qu'une gerbe se lit comme un
+     MOTIF plutôt que comme de la matière — l'œil trouve la répétition avant de
+     trouver l'effet, et aucune quantité de particules ne rattrape ça.
+
+     On passe donc à un `ShaderMaterial` de dix lignes, avec un attribut
+     `aSize` par sommet. Ce n'est pas un raffinement : de tous les changements
+     du 422 sur les effets, c'est celui qui se voit le plus, parce qu'il casse
+     la seule régularité que l'œil ne pardonne pas.
+
+     ⚠️ CE SHADER REFAIT À LA MAIN CE QUE `PointsMaterial` FAISAIT, et trois
+     détails ne doivent pas être perdus :
+       * `sizeAttenuation` : `gl_PointSize = size · f / −mvPosition.z`. Sans le
+         `f = 1/tan(fov/2)` correct, les particules ne grossissent pas au bon
+         rythme quand on s'en approche et tout le réglage des FX_*_SIZE est à
+         refaire. On le reprend de la matrice de projection, qui le contient.
+       * LE BROUILLARD. `PointsMaterial` l'appliquait tout seul ; un
+         ShaderMaterial non. Une gerbe qui ignore le brouillard reste vive à
+         deux cents mètres pendant que le décor s'estompe : elle décolle du
+         paysage. On le recalcule donc (FogExp2, même formule).
+       * LE PLAFOND DE `gl_PointSize`. Un grain qui passe devant l'objectif
+         couvrirait tout l'écran ; les cartes ont leur propre limite, mais elle
+         varie, donc on écrête nous-mêmes. */
+  const POINT_VERT = `
+    attribute float aSize;
+    varying vec3 vCol;
+    varying float vFog;
+    uniform float uScale;
+    void main() {
+      vCol = color;
+      vec4 mv = modelViewMatrix * vec4(position, 1.0);
+      float d = -mv.z;
+      vFog = 1.0 - exp(-(d * FOGD) * (d * FOGD));
+      gl_PointSize = clamp(aSize * uScale / max(d, 0.1), 1.0, 220.0);
+      gl_Position = projectionMatrix * mv;
+    }`;
+  const POINT_FRAG = `
+    uniform sampler2D uMap;
+    uniform float uOpacity;
+    uniform vec3 uFogColor;
+    uniform float uAdditive;
+    varying vec3 vCol;
+    varying float vFog;
+    void main() {
+      vec4 t = texture2D(uMap, gl_PointCoord);
+      vec3 c = t.rgb * vCol;
+      /* ⚠️ LE BROUILLARD S'APPLIQUE DIFFÉREMMENT SELON LE FONDU, et c'est la
+         règle du 416 appliquée au brouillard : en fondu NORMAL on interpole
+         vers la couleur du brouillard (la particule se noie dans l'air), en
+         fondu ADDITIF on interpole vers le NOIR (la lumière s'éteint). Mélanger
+         une étincelle additive vers un brouillard clair l'ÉCLAIRCIRAIT à
+         distance — une étincelle plus visible de loin que de près. */
+      c = mix(c, mix(uFogColor, vec3(0.0), uAdditive), vFog);
+      gl_FragColor = vec4(c, t.a * uOpacity);
+      if (gl_FragColor.a < 0.01) discard;
+    }`;
+
   function makePoints(n, texCanvas, size, opacity, additive) {
     const pos = new Float32Array(n * 3);
     const col = new Float32Array(n * 3);
+    const siz = new Float32Array(n);
     for (let i = 0; i < n * 3; i++) pos[i] = 0;
+    for (let i = 0; i < n; i++) siz[i] = size;
     const g = new THREE.BufferGeometry();
     g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
     g.setAttribute("color", new THREE.BufferAttribute(col, 3));
-    const m = new THREE.PointsMaterial({
-      map: tex(texCanvas), size, transparent: true, opacity,
-      depthWrite: false, sizeAttenuation: true, vertexColors: true,
+    g.setAttribute("aSize", new THREE.BufferAttribute(siz, 1));
+    const map = tex(texCanvas);
+    const m = new THREE.ShaderMaterial({
+      uniforms: {
+        uMap: { value: map },
+        uOpacity: { value: opacity },
+        uScale: { value: 300 },       // recalé dans resize(), voir plus bas
+        uFogColor: { value: sc(CFG.COL_FOG) },
+        uAdditive: { value: additive ? 1 : 0 },
+      },
+      vertexShader: POINT_VERT.replace("FOGD", CFG.FOG_DENSITY.toExponential()),
+      fragmentShader: POINT_FRAG,
+      transparent: true, depthWrite: false, vertexColors: true,
       blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
     });
+    /* Ces deux-là sont lus par tools/preview-luge.js, qui n'exécute pas de
+       shader : sans eux la planche ne saurait ni la taille de base des grains
+       ni leur fondu, et rendrait des carrés opaques. Les garder d'accord avec
+       les uniformes est le prix de l'outil — et il est écrit ici pour qu'on
+       n'oublie pas de les mettre à jour ensemble. */
+    m.size = size;
+    m.opacity = opacity;
+    m.map = map;
     const p = new THREE.Points(g, m);
     p.frustumCulled = false;    // les particules vivent autour de la luge, jamais autour de l'origine
-    return { points: p, pos, col, n, live: [] };
+    return { points: p, pos, col, siz, n, base: size, live: [] };
   }
 
   function buildParticles() {
@@ -1136,6 +1945,15 @@ const World = (function () {
        s'éteindre vers le noir. */
     rain = makePoints(CFG.FX_RAIN_MAX, paintCandyBit(), CFG.FX_RAIN_SIZE, 0.95, false);
     rain.noFade = true;        // voir stepParticles : un bonbon ne blanchit pas
+    /* LES GAINS (422). Voir l'en-tête d'`emit`. Seuls les systèmes qui
+       REPRÉSENTENT DE LA LUMIÈRE dépassent 1 : les étincelles de dérapage et
+       les traits de vitesse. La gerbe de neige et la pluie de bonbons sont de
+       la MATIÈRE — les faire déborder les transformerait en plasma. */
+    stars.gain = 2.2;
+    lines.gain = 1.5;
+    dust.gain = 1.0;
+    spray.gain = 1.0;
+    rain.gain = 1.15;          // juste assez pour que les confettis « claquent » au soleil
     scene.add(stars.points);
     scene.add(dust.points);
     scene.add(lines.points);
@@ -1234,8 +2052,15 @@ const World = (function () {
        creux doit dire.
        Une trace est de la matière au sol : elle doit prendre la même lumière
        que le sol, sinon elle flotte au-dessus au lieu d'y être gravée. */
-    const m = new THREE.MeshLambertMaterial({
+    /* ⚠️ 422 : STANDARD ET NON PLUS LAMBERT, pour la raison du fichier entier —
+       une trace de patin dans la neige est de la neige TASSÉE, c'est-à-dire
+       plus lisse que la neige autour. C'est précisément ce qu'une rugosité
+       plus basse dit, et c'est ce qui donne à la trace un éclat rasant quand
+       on regarde derrière soi face au soleil. Le Lambert ne pouvait pas le
+       dire : il ne connaît pas la rugosité. */
+    const m = new THREE.MeshStandardMaterial({
       vertexColors: true, transparent: true, opacity: 0.92,
+      roughness: 0.34, metalness: 0.0, envMapIntensity: CFG.ENV_INTENSITY * 0.8,
       depthWrite: false, polygonOffset: true,
       polygonOffsetFactor: -4, polygonOffsetUnits: -8,
     });
@@ -1313,9 +2138,17 @@ const World = (function () {
        qui s'allume. */
     const visible = Math.max(0.30, carve * 0.9, skid);
     // 3. Et l'interpolation depuis la piste, qui est tout le propos ci-dessus.
-    const r = mix((P0 >> 16 & 255), tr, visible) / 255;
-    const gg = mix((P0 >> 8 & 255), tg, visible) / 255;
-    const bb = mix((P0 & 255), tb, visible) / 255;
+    /* ⚠️ 422 : LE MÉLANGE SE FAIT EN sRGB, LA SORTIE EST CONVERTIE EN LINÉAIRE.
+       L'ordre importe et n'est pas interchangeable : les trois teintes de
+       référence (piste, sillon, bavure) ont été RÉGLÉES À L'ŒIL, donc dans
+       l'espace où l'œil les voit. Interpoler en linéaire entre elles donnerait
+       un dégradé qui ne passe plus par les valeurs intermédiaires choisies —
+       le sillon deviendrait franchement plus sombre à mi-course, et le réglage
+       si patiemment fait du 414 serait perdu. On mélange donc là où l'on a
+       réglé, et on convertit à la toute fin. */
+    const r = S2L(mix((P0 >> 16 & 255), tr, visible) / 255);
+    const gg = S2L(mix((P0 >> 8 & 255), tg, visible) / 255);
+    const bb = S2L(mix((P0 & 255), tb, visible) / 255);
 
     for (const side of [-1, 1]) {
       const c0 = sled.u + side * gauge;
@@ -1368,14 +2201,44 @@ const World = (function () {
     trail.mesh.geometry.attributes.color.needsUpdate = true;
   }
 
-  function emit(sys, x, y, z, vx, vy, vz, life, r, g, b) {
+  /* ⚠️⚠️ ZIP 422 — LA CONVERSION sRGB → LINÉAIRE DES PARTICULES SE FAIT ICI, ET
+     NULLE PART AILLEURS. Tous les appelants d'`emit` passent des composantes
+     tirées de `CFG.COL_CANDY_SET` divisées par 255, c'est-à-dire du sRGB. Les
+     couleurs par sommet sont, elles, consommées telles quelles par le shader —
+     donc en linéaire. Sans conversion, toute étincelle sortait DÉLAVÉE : le
+     rose bonbon devenait rose pâle, et seul le dérapage était concerné, ce qui
+     aurait envoyé chercher du côté du fondu additif.
+
+     `sRGBToLinear` est écrit à la main plutôt qu'appelé sur un THREE.Color :
+     on émet quelques centaines de particules par seconde, et allouer un objet
+     Color par étincelle est exactement le genre de déchet qui fait travailler
+     le ramasse-miettes pendant une descente (voir l'en-tête du sillon gravé).
+
+     ⚠️ ET `sys.gain` PEUT DÉPASSER 1. C'est ce qui rend les étincelles
+     lumineuses AU SENS DU BLOOM : au-dessus de 1,0 en linéaire, elles passent
+     le seuil et débordent. Une étincelle « blanche à 100 % » ne déborde pas ;
+     une étincelle à 2,2 déborde et fait de la lumière. C'est la seule façon
+     d'obtenir des étincelles qui brillent VRAIMENT sans monter l'opacité, ce
+     qui les rendrait juste opaques. */
+  const S2L = (c) => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+
+  function emit(sys, x, y, z, vx, vy, vz, life, r, g, b, sizeMul) {
+    const k = sys.gain === undefined ? 1 : sys.gain;
+    const lr = S2L(r) * k, lg = S2L(g) * k, lb = S2L(b) * k;
     for (let i = 0; i < sys.n; i++) {
       const p = sys.live[i];
       if (p.t > 0) continue;
       p.t = life; p.life = life;
       p.x = x; p.y = y; p.z = z;
       p.vx = vx; p.vy = vy; p.vz = vz;
-      p.r = r; p.g = g; p.b = b;      // couleur de naissance, gardée pour l'extinction
+      p.r = lr; p.g = lg; p.b = lb;   // couleur de naissance, gardée pour l'extinction
+      /* ⚠️ 422 : LA TAILLE EST TIRÉE À LA NAISSANCE ET NE CHANGE PLUS. On
+         pourrait la faire varier pendant la vie du grain — c'est tentant, ça
+         « respire » — mais un grain de neige ne grossit pas en tombant, et
+         l'œil le sait. Ce qui doit varier, c'est la taille D'UN GRAIN À
+         L'AUTRE ; ce qui doit rester fixe, c'est celle d'un grain donné. */
+      p.sz = sys.base * (sizeMul === undefined ? 1 : sizeMul);
+      sys.siz[i] = p.sz;
       return;
     }
     // Réserve pleine : on laisse tomber. Recycler la plus ancienne ferait
@@ -1426,12 +2289,17 @@ const World = (function () {
          neige. Un grain qui s'éteint devient un grain de neige pâle sur de la
          neige pâle, c'est-à-dire rien, ce qui est le but.
      ══════════════════════════════════════════════════════════════════════════ */
-  const FADE_TO = [((CFG.COL_SNOW >> 16) & 255) / 255,
-                   ((CFG.COL_SNOW >> 8) & 255) / 255,
-                   (CFG.COL_SNOW & 255) / 255];
+  /* ⚠️ 422 : EN LINÉAIRE, comme les couleurs de naissance. L'interpolation
+     d'extinction se fait donc dans le même espace que les valeurs qu'elle
+     mélange — mélanger du linéaire vers une cible sRGB donnerait une gerbe qui
+     s'éteint en s'ASSOMBRISSANT d'abord, ce qui est très exactement le défaut
+     de la fumée noire qu'on a mis un zip entier à voir. */
+  const FADE_TO = [S2L(((CFG.COL_SNOW >> 16) & 255) / 255),
+                   S2L(((CFG.COL_SNOW >> 8) & 255) / 255),
+                   S2L((CFG.COL_SNOW & 255) / 255)];
 
   function stepParticles(sys, dt, gravity) {
-    const P = sys.pos, C = sys.col;
+    const P = sys.pos, C = sys.col, S = sys.siz;
     /* ⚠️ Le neutre d'extinction dépend du fondu, pas du système. On le lit sur
        le matériau plutôt que de le passer en argument : un argument s'oublie
        au prochain système ajouté, un matériau ne ment jamais sur son fondu. */
@@ -1439,6 +2307,7 @@ const World = (function () {
     for (let i = 0; i < sys.n; i++) {
       const p = sys.live[i];
       if (p.t <= 0) {
+        if (S[i] !== 0) S[i] = 0;      // un grain mort n'occupe aucun pixel
         /* ⚠️ MORTE = NOIRE, DANS LES DEUX CAS, ET C'EST VOLONTAIRE. La couleur
            noire est la convention par laquelle la géométrie du sillon ET
            tools/preview-luge.js reconnaissent un emplacement inutilisé. Une
@@ -1455,6 +2324,7 @@ const World = (function () {
       P[i * 3] = p.x; P[i * 3 + 1] = p.y; P[i * 3 + 2] = p.z;
       const k = Math.max(0, p.t / p.life);
       const f = k * k;
+      if (S[i] !== p.sz) S[i] = p.sz;
       if (sys.noFade) {
         /* ⚠️ CERTAINES PARTICULES NE DOIVENT PAS S'ÉTEINDRE DU TOUT, et la
            pluie de bonbons est le cas d'école. Les deux extinctions ci-dessous
@@ -1478,6 +2348,7 @@ const World = (function () {
     }
     sys.points.geometry.attributes.position.needsUpdate = true;
     sys.points.geometry.attributes.color.needsUpdate = true;
+    sys.points.geometry.attributes.aSize.needsUpdate = true;
   }
 
   /* ======================================================================
@@ -1550,7 +2421,17 @@ const World = (function () {
   /* Une SUCETTE : un bâton et un disque. Le disque est légèrement incliné vers
      la piste — une sucette vue de profil est un trait, et une forêt de traits
      n'est pas une forêt. */
+  /* ⚠️⚠️ ZIP 422 — CHAQUE ACCESSOIRE A DEUX ÉCRITURES, ET LES DEUX RESTENT.
+     La première essaie le modèle Blender (`Models.place`), la seconde est la
+     primitive du 416, inchangée. Ce n'est pas de l'indécision : un modèle
+     absent — fichier non déployé, cache vide, erreur réseau — laisserait
+     sinon un décor vide, sur une page servie en iframe par-dessus la ferme.
+     ⚠️ Le repli n'est pas du code mort : `preview-luge.js` et le palier de
+     qualité bas peuvent l'emprunter, et il est le seul à documenter ce que la
+     forme VEUT dire. On ne le supprime pas quand on est content des modèles. */
   function lollipop(g, x, y, z, r, hue, tilt) {
+    const m = Models.place("lollipop", mat, x, y, z, r / 0.95, tilt * 0.6, hue, false);
+    if (m) { g.add(m); return; }
     g.add(cylM(mat.white, 0.09, r * 2.1, x, y + r * 1.05, z, true));
     const head = new THREE.Mesh(geo.disc, mat.candy[hue]);
     head.scale.set(r * 2, 1, r * 2);
@@ -1567,6 +2448,14 @@ const World = (function () {
      trois plans (voir mat.candyFar). Un seul argument, et la profondeur
      apparaît. */
   function gumTree(g, x, y, z, h, i, far) {
+    /* ⚠️ LA TEINTE EST TIRÉE UNE SEULE FOIS POUR TOUT L'ARBRE, alors que la
+       primitive en tirait une par étage. C'est un changement voulu et il se
+       voit : trois étages de trois couleurs différentes faisaient un totem, un
+       arbre d'une seule teinte fait une MASSE — et c'est de masses qu'un
+       paysage a besoin pour se lire de loin (leçon du 416). */
+    const mm = Models.place("gumtree", mat, x, y, z, h / 3.6,
+      hash(i, 33) * 6.28, Math.floor(hash(i, 30) * CFG.COL_CANDY_SET.length), far);
+    if (mm) { g.add(mm); return; }
     const pal = far ? mat.candyFar : mat.candy;
     g.add(cylM(far ? mat.trunkFar : mat.trunk, 0.22, h * 0.42, x, y + h * 0.21, z, true));
     for (let k = 0; k < 3; k++) {
@@ -1583,6 +2472,9 @@ const World = (function () {
      silhouette « construite » : c'est lui qui dit qu'on traverse un pays
      habité et pas un terrain vague enneigé. */
   function gingerHouse(g, x, y, z, sc, i) {
+    const mm = Models.place("gingerhouse", mat, x, y, z, sc * 2.0,
+      (hash(i, 26) - 0.5) * 0.9, Math.floor(hash(i, 60) * CFG.COL_CANDY_SET.length), false);
+    if (mm) { g.add(mm); return; }
     const w = 3.4 * sc, h = 2.6 * sc, d = 3.0 * sc;
     g.add(box(mat.ginger, w, h, d, x, y + h / 2, z));
     // Le toit : deux plans inclinés qui se rejoignent en faîte.
@@ -1638,6 +2530,9 @@ const World = (function () {
      ⚠️ Sa valeur est sa SILHOUETTE : c'est la seule forme humaine du décor, et
      l'œil la trouve à deux cents mètres au milieu de n'importe quoi. */
   function marshmallowMan(g, x, y, z, sc, i) {
+    const mm = Models.place("marshmallow", mat, x, y, z, sc * 1.75,
+      (hash(i, 44) - 0.5) * 1.2, Math.floor(hash(i, 41) * CFG.COL_CANDY_SET.length), false);
+    if (mm) { g.add(mm); return; }
     const R = 0.95 * sc;
     g.add(sph(mat.white, R, x, y + R, z));
     g.add(sph(mat.white, R * 0.72, x, y + R * 2.5, z));
@@ -1660,6 +2555,8 @@ const World = (function () {
      mince ou petit. Un paysage n'a de profondeur que s'il contient des masses
      qui se recouvrent les unes les autres. */
   function peppermintRock(g, x, y, z, r, i) {
+    const mm = Models.place("peppermint", mat, x, y, z, r / 0.62, hash(i, 43) * 6.28, 0, false);
+    if (mm) { g.add(mm); return; }
     const b = sph(mat.cane, r, x, y + r * 0.62, z);
     b.scale.y *= 0.72;
     b.rotation.y = hash(i, 43) * 3.1;
@@ -1675,6 +2572,9 @@ const World = (function () {
      disques décalés font une PILE — c'est-à-dire quelque chose que quelqu'un a
      posé là. La différence tient en deux lignes et se voit tout de suite. */
   function macaronStack(g, x, y, z, sc, i) {
+    const mm = Models.place("macaron", mat, x, y, z, sc, hash(i, 57) * 6.28,
+      Math.floor(hash(i, 50) * CFG.COL_CANDY_SET.length), false);
+    if (mm) { g.add(mm); return; }
     let yy = y;
     for (let k = 0; k < 3; k++) {
       const r = (0.85 - k * 0.09) * sc;
@@ -1693,6 +2593,8 @@ const World = (function () {
      déjà en réserve (règle 2 : tout est mutualisé) — un objet de plus, zéro
      géométrie de plus. */
   function candyCane(g, x, y, z, h, tilt) {
+    const mm = Models.place("candycane", mat, x, y, z, h / 1.8, tilt * 2.4, 0, false);
+    if (mm) { mm.rotation.z = tilt; g.add(mm); return; }
     const stick = cylM(mat.cane, 0.11, h, x, y + h / 2, z, true);
     stick.rotation.z = tilt;
     g.add(stick);
@@ -1707,6 +2609,8 @@ const World = (function () {
      ⚠️ C'est le seul objet POINTU du décor, et c'est ce qui le rend utile :
      tout le reste est rond, donc tout le reste se ressemble de loin. */
   function sugarCluster(g, x, y, z, sc, i) {
+    const mm = Models.place("sugarcluster", mat, x, y, z, sc * 0.85, hash(i, 62) * 6.28, 0, false);
+    if (mm) { g.add(mm); return; }
     const n = 3 + Math.floor(hash(i, 61) * 3);
     for (let k = 0; k < n; k++) {
       const a = hash(i, 63 + k) * Math.PI * 2;
@@ -1743,6 +2647,9 @@ const World = (function () {
      passer. Il ne coûte rien (la géométrie du gourmand existe déjà) et il
      raconte quelque chose — un monde dont les habitants sont les obstacles. */
   function sittingBear(g, x, y, z, sc, i) {
+    const mm = Models.place("bear", mat, x, y, z, sc * 1.15,
+      (hash(i, 106) - 0.5) * 1.4, Math.floor(hash(i, 105) * CFG.COL_CANDY_SET.length), false);
+    if (mm) { g.add(mm); return; }
     const hue = Math.floor(hash(i, 105) * CFG.COL_CANDY_SET.length);
     const m = mat.candy[hue];
     g.add(sph(m, 0.62 * sc, x, y + 0.55 * sc, z));
@@ -1979,12 +2886,51 @@ const World = (function () {
     const cp = Slope.checkpointIn(s0, s1);
     if (cp) checkpointGate(g, cp.s, Slope.widthAt(cp.s));
 
+    /* ══════════════════════════════════════════════════════════════════════
+       LES DRAPEAUX D'OMBRE (422) — POSÉS ICI, EN UNE SEULE PASSE.
+       ──────────────────────────────────────────────────────────────────────
+       ⚠️ POURQUOI À LA FIN ET NON À LA CRÉATION DE CHAQUE OBJET : parce que la
+       règle dépend d'une PROPRIÉTÉ GLOBALE (la distance à l'axe de la piste),
+       que les petits constructeurs `box`/`sph`/`cylM` ne connaissent pas et
+       n'ont aucune raison de connaître. Leur passer un drapeau de plus, c'est
+       le passer à quinze appels par objet de décor et l'oublier une fois sur
+       trois — le genre de dette qui produit un décor où deux sucettes sur cinq
+       n'ont pas d'ombre, sans qu'on comprenne pourquoi.
+
+       ⚠️ ET LES RUBANS NE PROJETTENT PAS, ILS REÇOIVENT. Un ruban est une
+       surface à double face de cent cinquante unités de large : le faire
+       projeter le ferait s'auto-ombrer sur toute sa longueur en rayures — le
+       classique « shadow acne » sur géométrie rasante, qu'aucun biais ne
+       rattrape parce que le problème est la double face, pas le biais.
+
+       ⚠️ `SHADOW_CAST_RANGE` : au-delà, on ne projette plus. Ce n'est pas une
+       économie théorique — le volume d'ombre fait 46 unités de rayon autour de
+       la luge, donc un sapin à 140 unités du bord ne peut RIEN y projeter. Le
+       marquer `castShadow` ferait payer son test de culling à chaque image
+       pour un résultat qui est nul par construction. */
+    const mid = Slope.pointAt((s0 + s1) / 2, 0);
+    g.traverse((o) => {
+      if (!o.isMesh) return;
+      if (o.geometry && o.geometry.__ribbon) { o.receiveShadow = true; return; }
+      // Les repères de jeu (fanions, bandes, halos) ne participent pas : ce
+      // sont des signaux, et un signal qui s'assombrit dans une ombre ment.
+      if (o.material && o.material.isMeshBasicMaterial) return;
+      const dx = o.position.x - mid.x, dz = o.position.z - mid.z;
+      if (dx * dx + dz * dz < CFG.SHADOW_CAST_RANGE * CFG.SHADOW_CAST_RANGE) {
+        o.castShadow = true;
+      }
+      o.receiveShadow = true;
+    });
+
     node.group = g;
     scene.add(g);
+    if (built.indexOf(node) < 0) built.push(node);
   }
 
   function dropNode(node) {
     if (!node.group) return;
+    const k = built.indexOf(node);
+    if (k >= 0) built.splice(k, 1);
     scene.remove(node.group);
     node.group.traverse((o) => {
       // ⚠️ ON NE DÉTRUIT QUE LES GÉOMÉTRIES PROPRES AU TRONÇON (les rubans).
@@ -2033,6 +2979,16 @@ const World = (function () {
       g.add(sph(mat.eye, 0.17, -0.38, 1.55, -1.0, true));
       g.add(sph(mat.eye, 0.17, 0.38, 1.55, -1.0, true));
     }
+    /* ⚠️ UN GOURMAND PROJETTE, MAIS NE REÇOIT PAS (422). Il projette parce que
+       son ombre au sol est ce qui dit OÙ IL EST — c'est une information de
+       jeu avant d'être un effet, et c'est même la plus utile de la descente :
+       à cent à l'heure, on lit l'ombre avant de lire le gourmand.
+       Il ne reçoit pas parce qu'il est fait de sphères mutualisées à faible
+       maillage : le PCF y produit un liseré sale sur le terminateur, pour rien.
+       ⚠️ Posé ICI et non dans `takeCritter` : la réserve prête des meshes
+       DÉJÀ construits, et un drapeau posé à l'emprunt serait reposé cent fois
+       par descente sur les mêmes objets. */
+    g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
     return g;
   }
 
@@ -2216,6 +3172,21 @@ const World = (function () {
     m.material.opacity = opacity;
   }
 
+  /* La carte d'ombre est-elle réellement active ? Ni `CFG.SHADOW_ON` ni
+     `quality` seuls ne suffisent à le dire : le premier est une intention, le
+     second peut avoir été abaissé par le compteur d'images. On lit donc l'état
+     du renderer, qui est la seule vérité. */
+  function shadowsLive() {
+    return !!(renderer && renderer.shadowMap && renderer.shadowMap.enabled);
+  }
+  /* Le fondu croisé décrit plus bas, sorti en fonction : il sert au décalque
+     du gourmand et servirait à tout ce qu'on ajouterait de la même famille. */
+  function decalK(d) {
+    if (!shadowsLive()) return 1;
+    const a = CFG.SHADOW_DECAL_FROM, b = CFG.SHADOW_RADIUS;
+    return Math.max(0, Math.min(1, (Math.abs(d) - a) / Math.max(1e-3, b - a)));
+  }
+
   function updateReadability(field, sled, now) {
     const t = now / 1000;
     let ns = 0, nw = 0, ng = 0, np = 0, nc = 0;
@@ -2223,7 +3194,16 @@ const World = (function () {
     /* ---- 1. Les ombres, et la première est celle de la LUGE. Elle n'a rien
        à voir avec l'évitement, mais elle a tout à voir avec la sensation de
        vol : sans ombre, un saut ne se distingue pas d'une bosse. */
-    if (sled && sled.alive) {
+    /* ⚠️⚠️ ZIP 422 — LE DÉCALQUE DE LA LUGE S'EFFACE QUAND LA VRAIE OMBRE
+       EXISTE, ET C'EST TOUT CE QU'IL FALLAIT CHANGER ICI.
+       Les deux ensemble donnent une DOUBLE ombre : la vraie, qui épouse le
+       terrain, plus un disque plat par-dessus. Le résultat est plus laid que
+       chacune des deux séparément, et c'est le piège de ce genre de migration —
+       on ajoute le nouveau système sans retirer l'ancien, l'image empire, et on
+       conclut que le nouveau système ne marche pas.
+       Le décalque reste en place pour le palier de qualité 0, où la carte
+       d'ombre est coupée. C'est sa seule raison d'exister désormais. */
+    if (sled && sled.alive && !shadowsLive()) {
       const air = Math.max(0, sled.air || 0);
       const m = decal("shadow", ns++, mat.shadow);
       // Elle s'agrandit et pâlit avec la hauteur — c'est ce qui dit COMBIEN on
@@ -2241,9 +3221,26 @@ const World = (function () {
       if (!c.alive) continue;
       const d = c.s - (sled ? sled.s : 0);
       if (d < -8 || d > CFG.CRITTER_SPAWN_AHEAD) continue;
+      /* ⚠️⚠️ ZIP 422 — LE RELAIS ENTRE LA VRAIE OMBRE ET LE DÉCALQUE. C'est la
+         réponse honnête au point 2 du chantier : on N'A PAS remplacé les
+         décalques par une shadow map, on a fait travailler les deux là où
+         chacune est bonne.
+
+         La carte d'ombre couvre 46 unités autour de la luge — nette, épousant
+         le terrain, mais NULLE au-delà. Or les gourmands qui comptent le plus
+         sont ceux qu'on voit arriver à cent cinquante unités, et c'est
+         justement là que le décalque, lui, marche : à cette distance personne
+         ne peut voir qu'un disque n'est pas une vraie ombre, et ce disque est
+         la seule chose qui dise « il y a quelqu'un là, sur cette ligne ».
+
+         D'où un fondu croisé sur `SHADOW_DECAL_FROM`..`SHADOW_RADIUS` : le
+         décalque est éteint sous la carte d'ombre, monte pendant la douzaine
+         d'unités de recouvrement, et règne seul au-delà. Le raccord est
+         invisible parce qu'il se fait à une distance où les deux se
+         ressemblent, ce qui est exactement le critère à viser. */
       const m = decal("shadow", ns++, mat.shadow);
       const cw = CFG.CRITTER_RADIUS * 2.6 * CFG.SHADOW_SIZE;
-      layDecal(m, c.s, c.u, cw, cw, CFG.SHADOW_LIFT, CFG.SHADOW_OPACITY);
+      layDecal(m, c.s, c.u, cw, cw, CFG.SHADOW_LIFT, CFG.SHADOW_OPACITY * decalK(d));
       /* ⚠️ LE CERNE NE DIT RIEN DE NOUVEAU — IL DIT « MAINTENANT ». Le joueur
          a déjà vu ce gourmand vingt fois pendant l'approche ; ce qui lui
          manque n'est pas de savoir qu'il existe, c'est de savoir que celui-ci
@@ -2400,7 +3397,13 @@ const World = (function () {
           CFG.FX_STAR_RISE * (0.5 + Math.random()),
           f.right.z * outward * sp * (0.6 + Math.random() * 0.8) + (Math.random() - 0.5) * 2,
           CFG.FX_STAR_LIFE * (0.7 + Math.random() * 0.6),
-          ((c >> 16) & 255) / 255, ((c >> 8) & 255) / 255, (c & 255) / 255);
+          ((c >> 16) & 255) / 255, ((c >> 8) & 255) / 255, (c & 255) / 255,
+          /* Les étincelles : quelques-unes NETTEMENT plus grosses que les
+             autres. Une pluie d'étincelles calibrées se lit comme un effet de
+             particules ; deux ou trois grosses au milieu des petites se lisent
+             comme des éclats projetés. C'est la même distribution biaisée que
+             la gerbe, plus tendue. */
+          0.55 + Math.pow(Math.random(), 4) * 2.4);
       }
     }
     // Le TURBO crache une gerbe blanche vers l'arrière, une seule fois.
@@ -2408,7 +3411,7 @@ const World = (function () {
       for (let i = 0; i < 26; i++) {
         emit(stars, p.x + back.x, p.y + 0.4, p.z + back.z,
           (Math.random() - 0.5) * 7, 2 + Math.random() * 5, (Math.random() - 0.5) * 7,
-          0.8, 1, 0.95, 1);
+          0.8, 1, 0.95, 1, 0.8 + Math.random() * 1.9);
       }
     }
     // La POUDRE : en permanence, proportionnelle à la vitesse.
@@ -2418,7 +3421,8 @@ const World = (function () {
         p.x + back.x + (Math.random() - 0.5) * 1.6, p.y + 0.15 + Math.random() * 0.5,
         p.z + back.z + (Math.random() - 0.5) * 1.6,
         (Math.random() - 0.5) * 1.4, 0.8 + Math.random() * 1.2, (Math.random() - 0.5) * 1.4,
-        CFG.FX_DUST_LIFE, 1, 0.93, 0.99);
+        CFG.FX_DUST_LIFE * (0.7 + Math.random() * 0.7), 1, 0.93, 0.99,
+        0.5 + Math.pow(Math.random(), 2) * 1.7);
     }
 
     /* ⚠️ LES TRAITS DE VITESSE (412). Ils ne sortent pas de la luge : ils
@@ -2490,7 +3494,17 @@ const World = (function () {
           CFG.FX_SPRAY_UP * (0.35 + Math.random() * sprayK * 1.3),
           f.right.z * dir * sp + (Math.random() - 0.5) * 3 - f.fwd.z * sled.v * 0.18,
           CFG.FX_SPRAY_LIFE * (0.6 + Math.random() * 0.7),
-          1, 0.97, 0.99);
+          1, 0.97, 0.99,
+          /* ⚠️ LA VARIANCE DE TAILLE EST BIAISÉE VERS LE PETIT, ET C'EST CE QUI
+             FAIT LA GERBE. Un tirage uniforme donne autant de gros que de
+             petits grains, donc une bouillie homogène. Une vraie gerbe est un
+             NUAGE DE POUSSIÈRE parsemé de quelques MOTTES : beaucoup de petits,
+             peu de gros. `r³` produit exactement cette distribution — un grain
+             sur huit dépasse la moitié de la taille maximale.
+             ⚠️ Et la taille suit la CHARGE : plus on appuie sur la carre, plus
+             les mottes sont grosses. La gerbe devient alors lisible comme une
+             jauge, ce qu'elle est censée être depuis le 414. */
+          0.42 + Math.pow(Math.random(), 3) * (1.5 + sprayK * 1.4));
       }
     }
 
@@ -2536,7 +3550,14 @@ const World = (function () {
           -1 - Math.random() * 2,
           (Math.random() - 0.5) * CFG.FX_RAIN_DRIFT * 2,
           CFG.FX_RAIN_LIFE * (0.7 + Math.random() * 0.6),
-          ((hue >> 16) & 255) / 255, ((hue >> 8) & 255) / 255, (hue & 255) / 255);
+          ((hue >> 16) & 255) / 255, ((hue >> 8) & 255) / 255, (hue & 255) / 255,
+          /* ⚠️ LES BONBONS ONT DES TAILLES FRANCHEMENT DIFFÉRENTES, sans le
+             biais des deux autres systèmes — ici on veut lire des OBJETS
+             distincts (des dragées, des rubans, des gros bonbons), pas une
+             matière. Une pluie dont tous les grains ont la même taille se lit
+             comme de la neige colorée ; c'est ce qui manquait au 416, où
+             l'effet passait pour « joli mais un peu plat ». */
+          0.55 + Math.random() * 1.6);
       }
     }
 
@@ -2557,7 +3578,50 @@ const World = (function () {
     const dt = lastNow ? Math.min(0.1, (now - lastNow) / 1000) : 0;
     lastNow = now;
     const c = camera.position;
+
+    /* Le volume d'ombre suit la LUGE et non la caméra (422) : c'est la luge
+       qu'on regarde, c'est son ombre qui doit être nette. La caméra est onze
+       unités derrière — centrer sur elle gâcherait un quart du volume dans le
+       dos du joueur. */
+    if (CFG.SHADOW_ON) {
+      const t = sled ? sled.worldPos() : c;
+      updateSunShadow(t);
+    }
+    stepQuality(dt);
+    if (gradePass) gradePass.uniforms.uTime.value = now / 1000;
+
     skyDome.position.set(c.x, c.y, c.z);
+    /* Le soleil et son halo suivent la caméra comme le dôme, et ils REGARDENT
+       la caméra — un plan vu de biais est une ellipse, et une ellipse solaire
+       est le genre de détail qui trahit un décor de théâtre. */
+    if (sunDisc) {
+      sunDisc.position.set(c.x + sunDisc.userData.ox, c.y + sunDisc.userData.oy, c.z + sunDisc.userData.oz);
+      sunHalo.position.set(c.x + sunHalo.userData.ox, c.y + sunHalo.userData.oy, c.z + sunHalo.userData.oz);
+      sunDisc.lookAt(c.x, c.y, c.z);
+      sunHalo.lookAt(c.x, c.y, c.z);
+    }
+    if (motes) {
+      /* ⚠️ ELLES SE REPLIENT AUTOUR DE LA CAMÉRA PAR MODULO, elles ne sont pas
+         recréées. Un champ de poussières qu'on régénère « quand il sort du
+         cadre » produit des apparitions visibles ; un repliement torique le
+         rend impossible par construction, et ne coûte que trois soustractions
+         par grain. */
+      const A = CFG.FX_MOTE_AREA;
+      const P = motes.geometry.attributes.position.array;
+      for (let i = 0; i < P.length; i += 3) {
+        P[i + 1] -= dt * 0.35;
+        P[i] += Math.sin(now / 1400 + i) * dt * 0.25;
+        const wrap = (v, o, span) => {
+          let d = v - o;
+          if (d > span) d -= span * 2; else if (d < -span) d += span * 2;
+          return d + o;
+        };
+        P[i] = wrap(P[i], c.x, A);
+        P[i + 1] = wrap(P[i + 1], c.y, A * 0.5);
+        P[i + 2] = wrap(P[i + 2], c.z, A);
+      }
+      motes.geometry.attributes.position.needsUpdate = true;
+    }
     mountainsNear.position.set(c.x, 0, c.z);
     mountainsFar.position.set(c.x, 0, c.z);
     /* Les montagnes suivent en x/z mais seulement PARTIELLEMENT en y : elles
@@ -2620,10 +3684,113 @@ const World = (function () {
     trail.lastS = -1e9;
   }
 
-  function render() { renderer.render(scene, camera); }
+  /* ══════════════════════════════════════════════════════════════════════════
+     LE RENDU, ET LE COMPTEUR QUI DÉCIDE DE SA QUALITÉ (422).
+     ──────────────────────────────────────────────────────────────────────────
+     ⚠️ « TOUTE PERTE DE PERFORMANCE DOIT ÊTRE MESURÉE, PAS SUPPOSÉE. » Ce
+     paragraphe est la traduction en code de cette consigne, et il ne mesure pas
+     une machine : il mesure CETTE partie, sur CETTE machine, DERRIÈRE cette
+     ferme. C'est la seule mesure qui veut dire quelque chose, parce que le
+     budget disponible dépend de ce que la ferme fait au même instant — un
+     réglage figé au chargement serait faux dès qu'un troupeau se déplace.
+
+     Trois paliers, retirés dans l'ordre du coût décroissant par unité de
+     beauté :
+       2 → tout ;
+       1 → sans bloom (la passe la plus chère : trois flous à demi-résolution) ;
+       0 → sans ombres non plus (la seconde plus chère, et la plus visible —
+           d'où son rang : on ne la retire qu'en dernier recours).
+     ⚠️ La descente en palier est FRANCHE, la remontée est LENTE et à seuil plus
+     haut. Sans cette hystérésis, une seule saccade — le chargement d'un tronçon,
+     une rafale réseau de la ferme — ferait osciller la qualité en permanence,
+     ce qui est bien plus désagréable qu'un palier bas assumé. */
+  function stepQuality(dt) {
+    if (!CFG.QUALITY_AUTO || dt <= 0 || dt > 0.5) return;
+    fpsAcc += 1 / dt; fpsFrames++; fpsClock += dt;
+    if (fpsClock < CFG.QUALITY_WINDOW) return;
+    const fps = fpsAcc / Math.max(1, fpsFrames);
+    fpsAcc = 0; fpsFrames = 0; fpsClock = 0;
+    if (fps < CFG.QUALITY_DROP_FPS && quality > 0) setQuality(quality - 1);
+    else if (fps > CFG.QUALITY_RAISE_FPS && quality < 2) setQuality(quality + 1);
+  }
+
+  function setQuality(q) {
+    quality = Math.max(0, Math.min(2, q));
+    if (bloomPass) bloomPass.enabled = quality >= 2;
+    if (renderer && renderer.shadowMap) {
+      const on = CFG.SHADOW_ON && quality >= 1;
+      if (renderer.shadowMap.enabled !== on) {
+        renderer.shadowMap.enabled = on;
+        /* ⚠️ IL FAUT FORCER LA RECOMPILATION. Basculer `shadowMap.enabled` ne
+           suffit pas dans r128 : les shaders déjà compilés gardent leur code
+           d'ombre. Sans ce marquage, couper les ombres ne rend RIEN — on paie
+           encore la carte, on ne voit plus le résultat, et le compteur en
+           déduit que couper les ombres ne sert à rien. */
+        scene.traverse((o) => {
+          if (o.isMesh && o.material) {
+            const ms = Array.isArray(o.material) ? o.material : [o.material];
+            for (const m of ms) m.needsUpdate = true;
+          }
+        });
+      }
+    }
+  }
+
+  /* ⚠️ ON PASSE PAR LE COMPOSER MÊME QUAND LE BLOOM EST COUPÉ. La passe
+     d'étalonnage (ACES + vignette + grain) n'est pas un supplément décoratif :
+     sans elle, la scène sort en HDR non compressé, c'est-à-dire délavée. Couper
+     le bloom désactive UNE passe, jamais la chaîne. */
+  function render() {
+    if (composer) composer.render();
+    else renderer.render(scene, camera);
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     LA MESURE (422) — `__lugePerf()` DANS LA CONSOLE DU NAVIGATEUR.
+     ──────────────────────────────────────────────────────────────────────────
+     ⚠️ ELLE EXISTE PARCE QUE LA CONSIGNE EST « TOUTE PERTE DE PERFORMANCE DOIT
+     ÊTRE MESURÉE, PAS SUPPOSÉE » — ET QUE LE ZIP A ÉTÉ ÉCRIT SANS NAVIGATEUR.
+     Les planches de `preview-luge.js` prouvent ce qu'on voit ; elles ne
+     prouvent RIEN sur ce qu'on paie : ce rasteriseur logiciel n'a aucun rapport
+     avec un GPU. Prétendre le contraire serait exactement le genre d'affirmation
+     que ce projet s'interdit (« ne jamais annoncer une fiabilité qu'on n'a
+     pas »).
+
+     Donc : on livre l'instrument, on ne livre pas le résultat. Ouvrir la
+     descente, presser ⌘⇧X deux fois, faire une descente, puis dans la console
+     de l'IFRAME :
+
+         __lugePerf()
+
+     Rend les images par seconde observées, le palier de qualité en cours (2 =
+     tout, 1 = sans bloom, 0 = sans ombres), le nombre d'appels de dessin et de
+     triangles réellement soumis par image. ⚠️ `render.calls` et
+     `render.triangles` sont les compteurs du renderer : ce sont les VRAIS
+     nombres après élagage, pas une estimation à partir de la scène.
+
+     ⚠️ ET IL FAUT LE FAIRE AVEC LA FERME DERRIÈRE, pas sur la page seule. Le
+     budget disponible dépend de ce que la ferme simule au même instant, et
+     c'est précisément pour ça que le palier de qualité s'ajuste tout seul. */
+  function perf() {
+    const info = renderer ? renderer.info : null;
+    return {
+      fps: fpsFrames > 0 ? +(fpsAcc / fpsFrames).toFixed(1) : null,
+      qualite: quality,
+      bloom: !!(bloomPass && bloomPass.enabled),
+      ombres: !!(renderer && renderer.shadowMap && renderer.shadowMap.enabled),
+      pixelRatio: renderer ? renderer.getPixelRatio() : null,
+      appels: info ? info.render.calls : null,
+      triangles: info ? info.render.triangles : null,
+      geometries: info ? info.memory.geometries : null,
+      textures: info ? info.memory.textures : null,
+      modeles: window.Models ? (Models.ready ? "glTF" : "primitives (repli)") : "primitives",
+    };
+  }
+  if (typeof window !== "undefined") window.__lugePerf = perf;
 
   return {
-    init, resize, render, buildNode, dropNode, clearAll, cutTrail,
+    init, resize, render, buildNode, dropNode, clearAll, cutTrail, perf,
+    setQuality,
     updateSled, updateCritters, updateFx, updateAmbient, applySkin,
     get camera() { return camera; },
     get scene() { return scene; },

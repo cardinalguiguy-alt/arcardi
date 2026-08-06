@@ -1,5 +1,123 @@
 # ARCARDI 🎪
 
+> **ZIP 422 — LA GRANDE DESCENTE SORT DE LA BÊTA, ET LE COUPABLE ÉTAIT LA
+> CHAÎNE COLORIMÉTRIQUE.**
+>
+> **Le Gourmandin d'abord, parce que c'était une ligne.** Depuis le 411,
+> l'approche du monstre du lac arme un fondu enchaîné puis appelle
+> `openCandyGame()` **à mi-fondu** — or la garde de cette fonction refusait
+> d'ouvrir quand une transition est active. L'appelant était devenu sa propre
+> cause de refus : le fondu jouait en entier, et rien ne s'ouvrait. Le défi de
+> fuite n'avait pas le problème parce qu'il n'est jamais ouvert à mi-fondu ; le
+> Gourmandin est le seul, et c'est aussi la seule destination du fondu qui ne
+> change pas de zone.
+>
+> **Et maintenant le gros morceau.** `public/candyluge/` rendait **en espace
+> gamma** : three.js multipliait des octets déjà encodés par un facteur
+> d'éclairage, ce qui n'a aucun sens physique. Trois conséquences, toutes
+> visibles sur les planches du 421 et aucune attribuable à une couleur en
+> particulier — d'où quatre zips passés à régler des teintes sans jamais
+> attraper la cause :
+>
+> * aucune haute lumière ne pouvait exister (tout sature à 1,0 d'un coup) ;
+> * deux lumières qui se croisent donnaient une valeur trop claire ;
+> * les dégradés d'ombre viraient au sale.
+>
+> Le 422 remet la chaîne à l'endroit : couleurs converties en linéaire à la
+> création, éclairage en linéaire **sans plafond**, tone mapping **ACES
+> Filmic**, encodage sRGB en sortie. ⚠️ **Les quatre étapes ne sont correctes
+> qu'ensemble** — à trois sur quatre l'image est soit délavée soit noire, et les
+> deux ressemblent assez à « un réglage de couleur à retoucher » pour qu'on
+> perde une journée à chercher ailleurs.
+>
+> **Le résultat est chiffré, méthode du 421 (réduction à 480×270).** Moyenne sur
+> cinq planches, contre la référence de Guillaume :
+>
+> | | référence | 421 | 422 |
+> |---|---|---|---|
+> | L global | 180,6 | 177,9 | **174,4** |
+> | **écart-type de L** | **47,7** | **28,4** | **36,5** |
+> | saturation moyenne | 27,8 % | 22,1 % | **26,3 %** |
+> | pixels > L230 | 7,7 % | 5,2 % | **10,1 %** |
+> | pixels < L60 | 2,1 % | **0,0 %** | 0,3 % |
+>
+> **La ligne qui explique tout est la deuxième.** Au 421, la luminosité MOYENNE
+> était déjà juste — et l'image était fausse : **écart-type moitié moindre, et
+> pas un seul pixel sous L60**. Une image sans aucun noir n'a pas d'ombre, donc
+> pas de volume, quelle que soit la qualité de son éclairage. C'est la leçon du
+> 421 sous une autre forme : là-bas le jeu n'était pas trop sombre, il était
+> sombre **à l'envers** ; ici il n'est pas trop clair, il est **plat**.
+> ⚠️ On ne corrige pas ça en baissant l'exposition — on obtient la même image en
+> plus sombre, écart-type inchangé. Il faut un **écart**, pas un décalage.
+> ⚠️ Et l'écart-type reste **sous** la référence : voir « ce qui n'y est pas ».
+>
+> **Ce que le zip a fait, dans l'ordre du chantier :**
+>
+> 1. **Matériaux PBR et lumière** — `MeshLambertMaterial` → `MeshStandard` /
+>    `MeshPhysical` partout, rugosité par famille, vernis (`clearcoat`) sur les
+>    bonbons et le sucre d'orge, patins à demi métalliques. ⚠️ **Un PBR sans
+>    environnement est une RÉGRESSION** : une surface vernie sans ciel à
+>    réfléchir réfléchit du noir. `buildEnvironment()` fabrique donc un
+>    environnement PMREM **à partir de la texture de ciel déjà peinte** — zéro
+>    fichier, et il reste d'accord avec le ciel par construction.
+>    Le contre-jour froid est passé de *sous* l'horizon à *derrière* : depuis
+>    qu'il y a de vraies ombres, un faux-jour venu d'en bas efface le contact au
+>    sol, c'est-à-dire l'information que l'ombre porte.
+> 2. **Ombres** — de vraies shadow maps, **et elles tiennent parce que le volume
+>    d'ombre suit la luge**. Une carte couvrant les 900 unités de tirage donnerait
+>    0,44 unité par texel ; une boîte de 92 unités recentrée sur la luge à chaque
+>    image en donne 4,5 cm. C'est une cascade à un seul étage, et c'est le bon
+>    nombre d'étages quand la caméra ne quitte jamais son sujet. ⚠️ Le centre est
+>    **quantifié au texel**, sinon le bord des ombres chatoie dès qu'on accélère.
+>    Les décalques du 416 **restent**, et se relaient avec la carte : éteints
+>    dessous, seuls au-delà — chacun là où il est bon.
+> 3. **Décors modelés** — dix accessoires refaits sous Blender, exportés en glTF.
+>    ⚠️ **Aucune couleur n'est dans les binaires** : les maillages sont nommés
+>    `part_<clé>` et `models.js` rebranche les matériaux du jeu. La palette reste
+>    entièrement dans `config.js`, ce que la sensibilité aux couleurs du projet
+>    (405-408) rendait non négociable. Le repli sur les primitives du 416 est
+>    conservé et n'est pas du code mort.
+> 4. **Post-traitement** — `EffectComposer` : bloom **à seuil haut** (0,92 : à
+>    0,6 tout le champ de neige déborde et on obtient le voile laiteux qu'on
+>    reconnaît partout), puis une passe unique qui enchaîne ACES, étalonnage
+>    chaud/froid, contraste, vignette, grain et encodage sRGB. Une seule passe,
+>    parce que quatre petits effets en quatre passes coûtent quatre fois la
+>    bande passante d'un shader qui les enchaîne en registres.
+> 5. **Particules** — taille **par grain**, ce que `PointsMaterial` ne sait pas
+>    faire : il a fallu passer à un `ShaderMaterial`. Trois cents grains
+>    identiques se lisent comme un motif, pas comme de la matière. La
+>    distribution est biaisée vers le petit (`r³`) : beaucoup de poussière,
+>    quelques mottes — et la taille des mottes suit la charge sur la carre.
+> 6. **Atmosphère** — un vrai soleil dans la scène (une tache peinte dans la
+>    texture de ciel est plafonnée à 1,0, donc elle ne peut pas rayonner), son
+>    halo, et un plan de **poussières de sucre** tout près de l'objectif : le
+>    cadre commençait à dix mètres.
+> 7. **La luge** — remodelée, patins recourbés d'un seul tenant, tablier à
+>    lattes, pilote assis aux volumes arrondis. ⚠️ **Le squelette du 417 est
+>    intact** : pivot de lacet aux patins arrière, buste qui se penche. On a
+>    remplacé la géométrie, pas la conduite.
+>
+> **Trois pièges valent d'être connus, parce qu'ils étaient tous MUETS :**
+>
+> | où | ce qui se passait | pourquoi invisible |
+> |---|---|---|
+> | `preview-luge.js` | le stub de matériau n'acceptait qu'un **nombre** comme couleur ; depuis `sc()` c'est un **objet** → tout le monde retombait sur blanc | l'image restait plausible : bien éclairée, bien ombrée, bien exposée — et entièrement blanche. On a d'abord accusé le tone mapping, puis la saturation, puis l'exposition |
+> | `applySkin()` | `color.setHex()` écrasait la conversion linéaire | le fermier sortait délavé **et lui seul**, uniquement depuis la ferme, jamais en ouvrant la page nue |
+> | la luge sous Blender | écrite en Y-up (repère du jeu) dans un logiciel Z-up | l'exporteur convertit **fidèlement** une orientation fausse : la luge sortait debout sur le nez, sans le moindre avertissement |
+>
+> **Ce qui n'y est pas, et il faut le dire :** le framerate **n'a pas été
+> mesuré** — ce zip a été écrit sans navigateur, et un rasteriseur logiciel ne
+> dit rien d'un GPU. On livre donc l'instrument et pas le résultat :
+> `__lugePerf()` dans la console de l'iframe rend les images par seconde, le
+> palier de qualité, les appels de dessin et les triangles réellement soumis.
+> Un palier de qualité **automatique** (bloom coupé, puis ombres) est en place
+> précisément parce que la mesure manque. Et l'écart-type de luminance reste à
+> 36,5 contre 47,7 : il manque des **noirs**, que seuls des volumes plus
+> contrastés au premier plan apporteront.
+>
+> `verify-luge.mjs` : **34/34**. La physique, la piste, les gourmands et les
+> checkpoints n'ont pas été touchés.
+
 > **ZIP 421 — LA COURSE OUVRE LE CHAPITRE, ET L'IMAGE ÉTAIT CINQUANTE ET UN
 > POINTS TROP SOMBRE.**
 >

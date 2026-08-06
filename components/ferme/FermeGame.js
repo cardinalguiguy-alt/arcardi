@@ -9511,8 +9511,27 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      235 : seul « evil » garde des monstres), et lui coller une sanction
      de sortie en ferait un second monde sombre.
      ================================================================== */
-  function openCandyGame() {
-    if (candyGameRef.current || runChallengeRef.current || zoneTransRef.current.active) return;
+  /* ⚠️ ZIP 422 — LE GOURMANDIN NE S'OUVRAIT PLUS DEPUIS LE LAC, ET LE FONDU
+     ÉTAIT LE COUPABLE. Depuis le 411 l'approche du monstre passe par
+     `openCandyGameFaded()`, qui arme `zoneTransRef` puis appelle
+     `openCandyGame()` À MI-FONDU (voir la branche `zt.dest === "candyGame"` de
+     `updateZoneTransition`). Or la garde ci-dessous refusait justement
+     d'ouvrir quand une transition est active : l'appelant était devenu sa
+     propre cause de refus. Résultat exactement conforme au symptôme décrit —
+     « il y a bien l'écran », le fondu jouait en entier, et rien ne s'ouvrait.
+
+     Le défi de fuite n'avait pas le problème parce qu'il n'a jamais été ouvert
+     à mi-fondu ; le Gourmandin est le SEUL à l'être, et c'est la seule
+     destination du fondu qui ne change pas de zone.
+
+     On ne retire pas la garde : elle protège le cas normal (marcher sur la
+     dalle du pont pendant un fondu de téléportation). On la lève seulement
+     pour l'appel qui vient DE la transition, qui sait ce qu'il fait.
+     `lugeGameRef` rejoint au passage la liste — la Grande Descente et le
+     Gourmandin s'excluent, `openLugeGame` le disait déjà dans l'autre sens. */
+  function openCandyGame(fromFade) {
+    if (candyGameRef.current || lugeGameRef.current || runChallengeRef.current) return;
+    if (!fromFade && zoneTransRef.current.active) return;
     const m = meRef.current; if (!m) return;
     m.moving = false;
     // Les touches encore enfoncées resteraient « collées » et feraient
@@ -10125,8 +10144,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            Gourmandin par-dessus. Il reste exactement où il était, au bord du
            lac, et il l'y retrouvera en sortant. C'est ce qui permet de
            réutiliser le fondu de téléportation — demandé par Guillaume — sans
-           inventer un déplacement qui n'a pas lieu. */
-        openCandyGame();
+           inventer un déplacement qui n'a pas lieu.
+
+           ⚠️ ZIP 422 — `true` N'EST PAS DÉCORATIF. On est ici À L'INTÉRIEUR de
+           la transition : `zoneTransRef.current.active` vaut encore `true` et
+           le restera jusqu'à la fin du fondu sortant. Sans ce drapeau, la
+           garde d'`openCandyGame` renvoyait l'appel — c'est le bogue du 422. */
+        openCandyGame(true);
       } else if (zt.dest === "town") {
         if (!townWorldRef.current) townWorldRef.current = getTownWorldCached(E);
         m.zone = "town";
