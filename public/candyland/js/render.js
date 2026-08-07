@@ -15,6 +15,27 @@ const Render = (function () {
   /* Le canvas est mis à l'échelle pour tenir dans la fenêtre en gardant le
      rapport 4:3 de la scène logique. On centre le reste en bandes. Le jeu se
      joue donc pareil partout — voir l'en-tête de config.js. */
+
+  /* ⚠️ ZIP 425 — L'ÉCHELLE DU DESSIN N'A QU'UN SEUL PROPRIÉTAIRE, ET C'EST ICI.
+     Symptôme observé par Guillaume : « le jeu s'affiche dans le coin haut
+     gauche et pas en page complète ». Le canvas était pourtant correctement
+     dimensionné et centré (mesuré : 960x720 CSS, tampon 1920x1440) — c'est le
+     DESSIN qui ne remplissait qu'un huitième du tampon.
+
+     Cause : l'échelle était posée à DEUX endroits. `game.js` faisait
+     `ctx.setTransform(scale, ...)` juste avant d'appeler `draw()`, et la
+     première ligne de `draw()` faisait `ctx.setTransform(1, ...)` pour repartir
+     propre. La deuxième écrasait la première, sans jamais lever d'erreur : tout
+     était peint à l'échelle 1 dans le coin, et le `clearRect` qui suit ne
+     nettoyait que la même portion.
+
+     C'est exactement la leçon du 424 (§7 du contexte) : un paramètre réglé à
+     deux endroits est une divergence en attente, il doit être DÉRIVÉ. `fit()`
+     retient donc l'échelle, `draw()` la repose, et l'appelant n'a plus rien à
+     savoir. La valeur de retour est conservée par confort de mise au point
+     (elle est lisible depuis la console) mais plus personne ne la stocke. */
+  let drawScale = 1;
+
   function fit(canvas) {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const availW = window.innerWidth, availH = window.innerHeight;
@@ -23,7 +44,8 @@ const Render = (function () {
     canvas.style.height = Math.round(CFG.H * scale) + "px";
     canvas.width = Math.round(CFG.W * scale * dpr);
     canvas.height = Math.round(CFG.H * scale * dpr);
-    return scale * dpr;
+    drawScale = scale * dpr;
+    return drawScale;
   }
 
   // Écran -> scène. Sans ça, toute la coupe serait fausse dès qu'on
@@ -414,7 +436,11 @@ const Render = (function () {
 
   /* ------------------------------------------------------------- la scène */
   function draw(ctx, st, t, swipe) {
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    // Zip 425 : on repose l'échelle retenue par fit(), au lieu de l'identité.
+    // Avec l'identité, tout le jeu était peint dans le coin haut gauche du
+    // tampon (voir le commentaire de fit()). Le clearRect qui suit est en
+    // coordonnées LOGIQUES : il couvre donc bien tout le canvas.
+    ctx.setTransform(drawScale, 0, 0, drawScale, 0, 0);
     ctx.clearRect(0, 0, CFG.W, CFG.H);
     drawBackground(ctx, t);
 

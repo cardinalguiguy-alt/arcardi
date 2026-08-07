@@ -17,7 +17,8 @@
   const canvas = document.getElementById("gl");
   const ctx = canvas.getContext("2d");
 
-  let scale = 1;
+  // Zip 425 : plus de `scale` ici. Il n'était plus lu que par le setTransform
+  // de la boucle, supprimé le même jour — l'échelle appartient à Render.
   let st = null;              // état de physique du niveau en cours
   let level = 1;              // niveau affiché
   let best = 0;               // plus haut niveau terminé
@@ -157,13 +158,30 @@
           UI.hud(level, Phys.starsGot(st), st.stars.length, best);
         }
       }
-      ctx.setTransform(scale, 0, 0, scale, 0, 0);
+      // Zip 425 : plus de setTransform ici. L'échelle appartient à Render, qui
+      // la retient dans fit() et la repose dans draw(). Cette ligne posait la
+      // bonne échelle, que la première ligne de Render.draw() effaçait aussitôt
+      // — le jeu se dessinait donc dans le coin haut gauche.
       Render.draw(ctx, st, t, swipe);
     }
   }
 
-  function resize() { scale = Render.fit(canvas); }
+  function resize() { Render.fit(canvas); }
   window.addEventListener("resize", resize);
+
+  /* ⚠️ ZIP 425 — LE CAS « IFRAME PAS ENCORE MESURÉE ».
+     Rencontré pour de vrai en vérifiant le correctif d'échelle : si la page
+     démarre alors que le cadre n'a pas encore de taille, window.innerWidth vaut
+     0, fit() calcule une échelle de 0, et le canvas reste à 0x0 — écran vide,
+     aucune erreur en console, et plus aucun `resize` ne vient corriger puisque
+     la fenêtre, elle, n'a pas bougé.
+
+     C'est exactement le genre de panne muette que le contexte décrit au §4. Un
+     ResizeObserver sur la racine du document rattrape la mise en page quand
+     elle arrive, ce que l'événement `resize` ne fait pas. */
+  if (typeof ResizeObserver !== "undefined") {
+    new ResizeObserver(resize).observe(document.documentElement);
+  }
 
   /* ------------------------------------------------------------ démarrage */
   function boot() {
