@@ -2247,6 +2247,241 @@ export function buildSprites() {
     P(g, 3, 8, 26, 1, "#c08f5e");
     return c;
   }
+  /* ══════════════════════════════════════════════════════════════════════════
+     ZIP 427 — LES DEUX COMMERCES DE LA HAUTE-VILLE.
+     ──────────────────────────────────────────────────────────────────────────
+     ⚠️ « CHIC » N'EST PAS UNE COULEUR, C'EST UNE PROPORTION. Le premier réflexe
+     pour une boutique de luxe est de tout dorer ; à 16 px par case, ça donne un
+     bâtiment jaune. Ce qui lit « chic » vue de dessus tient à trois choses, et
+     aucune n'est une teinte : une façade SOMBRE (elle fait ressortir tout ce
+     qu'on y pose), une VITRINE qui occupe presque toute la largeur (un commerce
+     de luxe montre, il ne stocke pas), et une SYMÉTRIE stricte — les trois
+     monuments de la ville sont symétriques, les maisons ne le sont pas ; c'est
+     ce contraste qui range un bâtiment du côté « institution ».
+     L'or n'arrive qu'en LISERÉS : enseigne, corniche, montants de vitrine.
+
+     ⚠️ ET ELLE PORTE SON NOM EN TOUTES LETTRES. Le 426 a établi la règle avec
+     les plaques du tribunal : un bâtiment muet passe pour cassé. Une boutique
+     dont on ne sait pas que c'est celle de Carla n'est qu'une maison noire. */
+  function townBoutiqueSprite() {
+    const W = C.TOWN_BOUTIQUE.w * T, H = C.TOWN_BOUTIQUE.h * T + 48;  // 128 x 128
+    const [c, g] = cv(W, H);
+    const BASE = H - 4;                       // le bas du mur (4 px de marge, comme l'église)
+    const NOIR = "#25222a", NOIR_L = "#37333e", NOIR_D = "#16141a";
+    const OR = "#d9b04a", OR_L = "#f2d883", OR_D = "#9c7a26";
+    const VITRE = "#2f4a63", VITRE_L = "#79a6c8";
+    const ROSE = "#c0455f", ROSE_L = "#dd6d86";
+    // Soubassement de pierre noire + deux marches centrées.
+    P(g, 2, BASE - 10, W - 4, 10, NOIR_D);
+    for (let s = 0; s < 2; s++) P(g, W / 2 - 22 - s * 4, BASE - 4 + s * 2, 44 + s * 8, 2, s % 2 ? NOIR : NOIR_L);
+    // Corps : mur sombre, panneaux verticaux (les refends font le « sur mesure »).
+    P(g, 6, 40, W - 12, BASE - 46, NOIR);
+    for (let x = 14; x < W - 12; x += 20) P(g, x, 40, 1, BASE - 46, NOIR_L);
+    P(g, 6, 40, W - 12, 2, NOIR_L);
+    // La VITRINE : deux grandes glaces de part et d'autre de la porte, montants
+    // dorés. Le reflet est une DIAGONALE claire — c'est ce qui dit « verre »
+    // plutôt que « trou bleu ».
+    const vy = 66, vh = BASE - 76;
+    for (const vx of [12, W / 2 + 8]) {
+      P(g, vx - 2, vy - 2, 44, vh + 4, OR_D); P(g, vx - 2, vy - 2, 44, 2, OR);
+      P(g, vx, vy, 40, vh, VITRE);
+      g.fillStyle = "rgba(210,235,255,0.30)";
+      g.beginPath(); g.moveTo(vx + 4, vy + vh); g.lineTo(vx + 20, vy); g.lineTo(vx + 30, vy); g.lineTo(vx + 14, vy + vh); g.fill();
+      // Deux mannequins par vitrine : une silhouette et une tache de couleur
+      // suffisent, un visage ne se lirait pas à cette taille.
+      for (let mI = 0; mI < 2; mI++) {
+        const mx = vx + 9 + mI * 18;
+        P(g, mx, vy + vh - 22, 6, 14, mI ? ROSE : OR);
+        P(g, mx + 1, vy + vh - 8, 4, 8, "#cfc7bb");
+        g.fillStyle = "#e8dccb"; g.beginPath(); g.arc(mx + 3, vy + vh - 25, 3, 0, 7); g.fill();
+      }
+    }
+    // La PORTE, au milieu de la façade sud (comme tous les bâtiments de la
+    // ville : c'est ce que `nearCivicDoor` suppose, et il n'y a qu'une règle).
+    const dw = 20, dx = (W / 2 - dw / 2) | 0, dy = BASE - 34;
+    P(g, dx - 3, dy - 3, dw + 6, 37, OR_D); P(g, dx - 3, dy - 3, dw + 6, 2, OR);
+    P(g, dx, dy, dw, 34, NOIR_L);
+    P(g, dx + 3, dy + 3, dw - 6, 16, VITRE); P(g, dx + 3, dy + 3, dw - 6, 2, VITRE_L);
+    P(g, dx + dw - 6, dy + 24, 2, 4, OR_L);                        // poignée
+    // MARQUISE festonnée rose au-dessus de la porte : la seule courbe de la
+    // façade, et c'est elle qui empêche la symétrie d'être froide.
+    for (let i = 0; i < 5; i++) { g.fillStyle = i % 2 ? ROSE : ROSE_L; g.beginPath(); g.arc(dx - 4 + 3 + i * 5.5, dy - 6, 3, 0, Math.PI); g.fill(); }
+    P(g, dx - 6, dy - 10, dw + 12, 4, ROSE); P(g, dx - 6, dy - 10, dw + 12, 1, ROSE_L);
+    /* CORNICHE + ENSEIGNE. ⚠️⚠️ LE NOM N'EST PAS PEINT DANS LE SPRITE, ET C'EST
+       UNE RÈGLE DU FICHIER, PAS UNE PRÉFÉRENCE. Premier jet : un `fillText`
+       ici même. Deux problèmes, et le second est disqualifiant :
+         1. du texte antialiasé au milieu d'un fichier entièrement dessiné en
+            pixels pleins — il jure, et il change de forme selon le navigateur ;
+         2. `fillText` N'EST PAS RASTÉRISABLE hors navigateur, donc le sprite
+            devenait invisible au banc de rendu (tools/render-tribunal.mjs a
+            planté net). Un dessin qu'on ne peut plus REGARDER, c'est le §8 en
+            entier qui tombe.
+       Le bandeau reste donc doré et NU, avec un monogramme en pixels ; le nom
+       est écrit VIVANT par le rendu, comme la plaque de chaque maison de la
+       ville depuis le 235 (drawTownFrame). Une seule façon d'écrire sur un
+       bâtiment de Valley Town, et elle est déjà là. */
+    P(g, 2, 34, W - 4, 8, OR); P(g, 2, 34, W - 4, 2, OR_L); P(g, 2, 41, W - 4, 1, OR_D);
+    // Monogramme « G » en pixels pleins, centré, encadré de deux fleurons.
+    const mgx = (W / 2 - 4) | 0;
+    P(g, mgx, 35, 8, 1, NOIR_D); P(g, mgx, 39, 8, 1, NOIR_D);
+    P(g, mgx, 35, 1, 5, NOIR_D); P(g, mgx + 7, 37, 1, 3, NOIR_D); P(g, mgx + 4, 37, 4, 1, NOIR_D);
+    for (const fx of [mgx - 14, mgx + 14]) { P(g, fx, 37, 6, 1, NOIR_D); P(g, fx + 2, 36, 2, 3, NOIR_D); }
+    // TOIT en zinc à faible pente + acrotère : un toit de commerce urbain, pas
+    // une charpente de maison — c'est aussi ce qui le distingue des parcelles
+    // voisines de la terrasse.
+    P(g, 0, 22, W, 14, "#4a4f58"); P(g, 0, 22, W, 3, "#6b717c"); P(g, 0, 34, W, 2, "#33373d");
+    P(g, 4, 16, W - 8, 8, "#3b3f47"); P(g, 4, 16, W - 8, 2, "#585d66");
+    // Trois lanternes dorées sur l'acrotère, allumées : une devanture de luxe
+    // est éclairée, c'est ce qui la fait exister de loin.
+    for (let i = 0; i < 3; i++) {
+      const lx = 20 + i * ((W - 40) / 2);
+      P(g, lx - 2, 8, 5, 9, OR_D); P(g, lx - 1, 10, 3, 5, OR_L);
+      g.fillStyle = "rgba(255,225,150,0.30)"; g.beginPath(); g.arc(lx, 12, 7, 0, 7); g.fill();
+    }
+    // Deux buis en pot encadrant l'entrée, posés SUR le perron.
+    for (const tx of [10, W - 18]) {
+      P(g, tx, BASE - 16, 8, 6, OR_D); P(g, tx, BASE - 16, 8, 1, OR);
+      g.fillStyle = "#2f6b34"; g.beginPath(); g.arc(tx + 4, BASE - 22, 6, 0, 7); g.fill();
+      g.fillStyle = "#3f8a44"; g.beginPath(); g.arc(tx + 3, BASE - 24, 4, 0, 7); g.fill();
+    }
+    return c;
+  }
+  /* LE SALON DE COIFFURE, « ouverture prochaine ».
+     ⚠️ IL EST DÉLIBÉRÉMENT INACHEVÉ, ET ÇA SE VOIT AU PREMIER COUP D'ŒIL. Une
+     boutique fermée qui ressemble à une boutique ouverte est un bug pour le
+     joueur : il tourne autour, il appuie sur E, il conclut que la porte est
+     cassée. Trois signes, donc : la BANDEROLE en travers de la façade, les
+     vitrines encore blanchies au blanc d'Espagne (pas de reflet, pas de
+     mannequin — rien à voir dedans), et un ÉCHAFAUDAGE d'un côté.
+     ⚠️ Mais l'enseigne, elle, est déjà posée et le mât de barbier tourne : on
+     annonce « bientôt », pas « peut-être ». */
+  function townSalonSprite() {
+    const W = C.TOWN_SALON.w * T, H = C.TOWN_SALON.h * T + 44;   // 112 x 108
+    const [c, g] = cv(W, H);
+    const BASE = H - 4;
+    const MUR = "#e8dfe6", MUR_D = "#c6bcc6", MUR_L = "#f6f0f4";
+    const MENUIS = "#5a4a5e", TURQ = "#4fb3a8", TURQ_L = "#78d4c9";
+    const BLANCHI = "#dfe6e4";
+    /* ⚠️⚠️ TOUT EST EN COORDONNÉES ABSOLUES, SANS `translate` NI `rotate`, ET
+       C'EST UNE LEÇON DE CE ZIP. Premier jet : la banderole était dessinée dans
+       un `save()/translate(W/2,52)/rotate(-0.07)`. En jeu elle tombait au bon
+       endroit ; au banc de rendu, dont le faux canvas ignore les
+       transformations, elle atterrissait EN L'AIR au-dessus du toit — et j'ai
+       d'abord cru à un défaut de dessin. Un sprite qu'on ne peut pas rastériser
+       fidèlement est un sprite qu'on ne peut plus REGARDER (§8), donc qu'on ne
+       peut plus corriger. L'inclinaison de la banderole est obtenue en
+       décalant ses rangées d'un pixel, ce qui est de toute façon la bonne
+       façon de pencher quelque chose en pixel art. */
+
+    // ---- Soubassement + corps.
+    P(g, 2, BASE - 8, W - 4, 8, MUR_D); P(g, 2, BASE - 8, W - 4, 1, "#d8ccd6");
+    P(g, 6, 34, W - 12, BASE - 42, MUR);
+    P(g, 6, 34, W - 12, 2, MUR_L);
+    P(g, 6, 34, 2, BASE - 42, MUR_L); P(g, W - 8, 34, 2, BASE - 42, MUR_D);
+
+    /* ---- LES DEUX VITRINES, BLANCHIES AU BLANC D'ESPAGNE. C'est le signe le
+       plus fort de « pas encore ouvert » : une vitrine qu'on ne peut pas voir à
+       travers. Elles s'arrêtent AU-DESSUS du soubassement et LAISSENT LA PLACE À
+       LA PORTE — le premier jet les faisait courir sur toute la largeur, et la
+       porte se dessinait par-dessus : on lisait une devanture confuse, sans
+       entrée identifiable. */
+    /* ⚠️ TROIS RÉGLAGES SORTIS DU BANC DE RENDU, ET AUCUN NE SE VOYAIT AU CODE :
+       les vitrines passent de 30 à 26 px de large et descendent à y=58, sinon
+       (1) la banderole leur mangeait le haut et (2) le mât de barbier chevauchait
+       le montant de celle de droite — il avait l'air d'être RANGÉ DEDANS. */
+    const vy = 58, vh = BASE - 74;
+    for (const vx of [10, W - 36]) {
+      P(g, vx - 2, vy - 2, 30, vh + 4, MENUIS);
+      P(g, vx, vy, 26, vh, BLANCHI);
+      P(g, vx, vy, 26, 1, "#f2f8f6");
+      // Les traits de badigeon : des croix larges, tracées en pixels pleins
+      // (un `stroke` fin disparaîtrait au vrai zoom du jeu).
+      for (let k = 0; k < 3; k++) {
+        for (let t2 = 0; t2 < 22; t2++) {
+          P(g, vx + 2 + t2, vy + 4 + k * 7 + Math.floor(t2 / 5), 2, 2, "rgba(255,255,255,0.9)");
+          P(g, vx + 2 + t2, vy + 9 + k * 7 - Math.floor(t2 / 5), 2, 2, "rgba(255,255,255,0.75)");
+        }
+      }
+    }
+
+    // ---- LA PORTE, au MILIEU de la façade sud (règle commune à tous les
+    // bâtiments de la ville : c'est ce que suppose nearCivicDoor), condamnée
+    // par une planche clouée en travers.
+    const dw = 18, dx = (W / 2 - dw / 2) | 0, dy = BASE - 34;
+    P(g, dx - 2, dy - 2, dw + 4, 36, MENUIS);
+    P(g, dx, dy, dw, 34, "#8a7690"); P(g, dx, dy, dw, 1, "#a08fa6");
+    P(g, dx + 3, dy + 4, dw - 6, 9, BLANCHI);                    // hublot blanchi
+    P(g, dx - 7, dy + 16, dw + 14, 4, "#9a7a4e"); P(g, dx - 7, dy + 16, dw + 14, 1, "#b8965e");
+    for (const nx of [dx - 4, dx + dw + 2]) P(g, nx, dy + 17, 2, 2, "#5c4630");   // les clous
+
+    // ---- ENSEIGNE turquoise + ciseaux croisés (le nom est écrit vivant par le
+    // rendu, voir la note de townBoutiqueSprite).
+    P(g, 4, 26, W - 8, 10, TURQ); P(g, 4, 26, W - 8, 2, TURQ_L); P(g, 4, 35, W - 8, 1, "#2f8a80");
+    for (let k = 0; k < 12; k++) {
+      P(g, W / 2 - 6 + k, 28 + Math.floor(k / 2), 2, 2, "#f2f6f5");
+      P(g, W / 2 + 6 - k, 28 + Math.floor(k / 2), 2, 2, "#f2f6f5");
+    }
+    P(g, W / 2 - 8, 33, 3, 3, "#dfe8e6"); P(g, W / 2 + 5, 33, 3, 3, "#dfe8e6");   // les anneaux
+
+    // ---- Toit à faible pente.
+    P(g, 0, 16, W, 12, "#8f8a96"); P(g, 0, 16, W, 3, "#a9a4b0"); P(g, 0, 26, W, 2, "#6e6a76");
+
+    /* ---- LA BANDEROLE, en travers de la façade. Penchée d'un pixel toutes les
+       huit colonnes : c'est ce qui la fait lire comme une toile tendue à la
+       main plutôt que comme un bandeau imprimé. Elle reste VIERGE — le texte
+       « ouverture prochaine » est écrit vivant, donc dans la langue du joueur. */
+    for (let x2 = 6; x2 < W - 6; x2++) {
+      const ty = 42 + Math.floor((W / 2 - x2) / 26);
+      P(g, x2, ty, 1, 15, "#f4ead2");
+      P(g, x2, ty, 1, 2, "#fffaf0");
+      P(g, x2, ty + 13, 1, 2, "#cfc2a2");
+      P(g, x2, ty + 3, 1, 1, "#c8785e");
+      P(g, x2, ty + 11, 1, 1, "#c8785e");
+    }
+    P(g, 5, 40, 3, 8, "#b09a72"); P(g, W - 8, 40, 3, 8, "#b09a72");   // ses deux attaches
+
+    /* ---- LE MÂT DE BARBIER, À DROITE DE LA PORTE ET SUR LE MUR — pas sur une
+       vitrine. Le premier jet le posait à x=14, c'est-à-dire au milieu de la
+       vitrine gauche : il avait l'air d'être RANGÉ DANS le magasin. */
+    const px2 = dx + dw + 2;
+    P(g, px2 - 1, BASE - 40, 9, 5, "#9aa0a8");
+    P(g, px2, BASE - 36, 7, 26, "#cfd4d8");
+    for (let k = 0; k < 6; k++) P(g, px2, BASE - 34 + k * 4, 7, 2, k % 2 ? "#c0303a" : "#2f5aa8");
+    P(g, px2 - 1, BASE - 11, 9, 4, "#9aa0a8");
+
+    /* ---- L'ÉCHAFAUDAGE, contre le pignon de gauche, HORS des vitrines. Il dit
+       « chantier en cours » sans rien masquer de ce qu'on veut montrer. */
+    P(g, 1, 30, 2, BASE - 34, "#a98a5a"); P(g, 7, 30, 2, BASE - 34, "#a98a5a");
+    for (let k = 0; k < 4; k++) P(g, 1, 42 + k * 14, 8, 2, "#c2a06a");
+    P(g, 0, 66, 14, 3, "#8a6f46"); P(g, 0, 66, 14, 1, "#a88a5e");
+    P(g, 10, 62, 3, 4, "#6b5a3a");                                   // un seau posé dessus
+    return c;
+  }
+  /* LE TABLEAU DES NOUVELLES de la place. C'est le seul décor de ce zip qui
+     porte une MÉCANIQUE (il se lit à la touche E, et il dit qui est en ville et
+     qui s'entend avec qui) : il devait donc se distinguer d'un panneau de rue
+     au premier regard — d'où le double battant vitré, le toit à deux pentes et
+     les affiches punaisées qui débordent. */
+  function townNewsBoardSprite() {
+    const [c, g] = cv(36, 44);
+    const B = "#6b4a2e", BL = "#8a6038", BD = "#4a3120";
+    P(g, 6, 34, 3, 9, BD); P(g, 27, 34, 3, 9, BD);              // pieds
+    P(g, 2, 8, 32, 28, B); P(g, 2, 8, 32, 2, BL);
+    P(g, 5, 12, 26, 21, "#efe6d2");                              // le fond de liège
+    // Les affiches : quatre papiers de tailles différentes, jamais alignés —
+    // un panneau d'affichage bien rangé n'a l'air d'avoir servi à personne.
+    P(g, 7, 14, 10, 8, "#f8f4e4"); P(g, 7, 14, 10, 1, "#ffffff");
+    P(g, 19, 13, 9, 11, "#e8f0d8");
+    P(g, 8, 24, 13, 7, "#f2e0c8");
+    P(g, 23, 26, 6, 6, "#dfe8f4");
+    for (const [px, py] of [[12, 14], [23, 13], [14, 24], [26, 26]]) P(g, px, py, 1, 1, "#b03030");  // punaises
+    for (let k = 0; k < 3; k++) { P(g, 9, 16 + k * 2, 6, 1, "#9a9484"); P(g, 21, 16 + k * 2, 5, 1, "#9a9484"); }
+    // Toit à deux pentes, débordant : il protège l'affichage, donc il déborde.
+    g.fillStyle = "#4f7a4a"; g.beginPath(); g.moveTo(0, 9); g.lineTo(18, 0); g.lineTo(36, 9); g.fill();
+    g.fillStyle = "#639159"; g.beginPath(); g.moveTo(0, 9); g.lineTo(18, 0); g.lineTo(18, 3); g.lineTo(4, 9); g.fill();
+    P(g, 0, 8, 36, 2, "#2f5a2c");
+    return c;
+  }
   function plazaTopiarySprite() {
     const [c, g] = cv(32, 40);
     P(g, 10, 32, 12, 6, "#7a6a52"); P(g, 10, 32, 12, 1, "#95866c");  // bac
@@ -3458,6 +3693,166 @@ export function buildSprites() {
         P(g, bx + 11, 17 + bob, 1, 1, skin);
       }
     }
+    /* ══════════════════════════════════════════════════════════════════════
+       ZIP 427 — LA GARDE-ROBE DE LA MAISON GARFIELD.
+       ──────────────────────────────────────────────────────────────────────
+       ⚠️ ELLE SE POSE EN DERNIER, ET C'EST OBLIGATOIRE. Un chapeau acheté doit
+       passer PAR-DESSUS les cheveux, la casquette générique et jusqu'aux
+       tenues de métier — c'est ce que « je viens de l'acheter » veut dire.
+       Ordre à l'intérieur, du dessous vers le dessus : teinte → tenue →
+       écharpe → chapeau. Une écharpe sous une cape ne se verrait pas ;
+       un chapeau sous une écharpe non plus.
+
+       ⚠️ LA TEINTE N'EST PAS UN `globalAlpha` SUR TOUT LE SPRITE. Repeindre la
+       feuille entière colorerait la peau et les cheveux — c'est la version
+       « personnage » du piège du §4 (« teinter un sprite avec un fillRect
+       dessine une boîte »). On REPEINT donc les blocs du vêtement, aux
+       coordonnées exactes des blocs de base, comme le font déjà Carla et Leo.
+       Corollaire assumé : la teinte n'a pas d'effet visible sur un skin qui
+       repeint déjà tout son torse (apiculteur en combinaison, par ex.) — et
+       c'est le bon comportement, on ne teint pas une combinaison d'apiculture.
+
+       ⚠️ INDICES DÉCALÉS DE 1, 0 = RIEN. Voir wardrobeLook() dans les
+       constantes : c'est ce qui permet de RETIRER un chapeau sans inventer un
+       article « pas de chapeau » dans la vitrine.
+       ══════════════════════════════════════════════════════════════════════ */
+    const wd = parseWardrobeLook(look);
+    if (wd) {
+      const CT = wd.tint ? C.WARDROBE_TINTS[wd.tint - 1] : null;
+      const base = CT ? CT.col : null;
+      // ---- 1. LA TEINTE : on repeint le haut (et la jupe, au féminin) aux
+      // coordonnées EXACTES des blocs de base, step/bob compris — sinon la
+      // couleur se désynchronise du corps d'une frame sur deux.
+      if (base) {
+        const bD = shade(base), bL = tint(base);
+        P(g, x + 4, 10 + bob, 8, (gender === "f" ? 5 : 6), base);
+        P(g, x + 4, 10 + bob, 8, 1, bL);
+        if (gender === "f") { P(g, x + 4, 14 + bob, 8, 7, base); P(g, x + 3, 17 + bob, 10, 4, base); P(g, x + 3, 20 + bob, 10, 1, bD); }
+        if (dir === 2) P(g, x + 7 + step, 11 + bob, 2, 5, base);
+        else { P(g, x + 3, 11 + bob, 2, 5, base); P(g, x + 11, 11 + bob, 2, 5, bD); }
+        // Les mains ressortent des manches qu'on vient de repeindre.
+        if (dir === 2) P(g, x + 7 + step, 15 + bob, 2, 1, skin);
+        else { P(g, x + 3, 15 + bob, 2, 1, skin); P(g, x + 11, 15 + bob, 2, 1, skin); }
+      }
+      // ---- 2. LA TENUE. Chacune est une SILHOUETTE, pas une texture : à
+      // 16 px de haut, ce qu'on reconnaît est le contour (une robe s'évase,
+      // une cape tombe droit, un tailleur est étroit et net).
+      const gar = wd.outfit ? C.WARDROBE_OUTFITS[wd.outfit - 1] : null;
+      if (gar) {
+        const GC = base || "#3a3550", GD = shade(GC), GL = tint(GC);
+        if (gar.id === "gown") {
+          // Robe du soir : le buste reste étroit, la jupe s'évase jusqu'aux
+          // pieds et les efface — une robe longue n'a pas de chevilles.
+          P(g, x + 4, 13 + bob, 8, 5, GC);
+          P(g, x + 3, 17 + bob, 10, 4, GC);
+          P(g, x + 2, 20 + bob, 12, 4 - bob, GC);
+          P(g, x + 2, 23 - bob, 12, 1, GD);
+          P(g, x + 4, 13 + bob, 8, 1, GL);
+        } else if (gar.id === "cape") {
+          // Cape : deux pans droits qui tombent des épaules, col relevé.
+          P(g, x + 2, 10 + bob, 12, 11, GC);
+          P(g, x + 2, 10 + bob, 12, 1, GL);
+          P(g, x + 2, 20 + bob, 12, 1, GD);
+          P(g, x + 7, 11 + bob, 2, 10, GD);             // ouverture au milieu
+          P(g, x + 5, 8 + bob, 6, 2, GD);               // col relevé
+        } else if (gar.id === "suit") {
+          // Tailleur : veste courte, revers clairs, taille marquée.
+          P(g, x + 4, 10 + bob, 8, 7, GC);
+          P(g, x + 4, 10 + bob, 8, 1, GL);
+          P(g, x + 6, 10 + bob, 1, 5, GL); P(g, x + 9, 10 + bob, 1, 5, GL);
+          P(g, x + 4, 15 + bob, 8, 1, GD);
+          if (dir === 0) P(g, x + 7, 11 + bob, 2, 3, "#efe9dc");  // chemise
+        } else if (gar.id === "poncho") {
+          // Poncho : un trapèze qui déborde des épaules, franges en bas.
+          P(g, x + 2, 10 + bob, 12, 8, GC);
+          P(g, x + 2, 10 + bob, 12, 1, GL);
+          P(g, x + 2, 13 + bob, 12, 1, GD);
+          for (let k = 0; k < 6; k++) P(g, x + 2 + k * 2, 18 + bob, 1, 2, GD);
+        } else {
+          // Tutu : une jupe TRÈS large sur deux rangées, jambes bien dehors.
+          P(g, x + 1, 15 + bob, 14, 3, GL);
+          P(g, x + 2, 17 + bob, 12, 2, GC);
+          P(g, x + 3, 13 + bob, 10, 2, GC);
+          P(g, x + 1, 15 + bob, 14, 1, "rgba(255,255,255,0.5)");
+        }
+      }
+      // ---- 3. L'ÉCHARPE, autour du cou, par-dessus la tenue. Le PAN qui
+      // pend est ce qui la distingue d'un col : sans lui, ce n'est qu'une
+      // ligne de couleur sous le menton.
+      const sc = wd.scarf ? C.WARDROBE_SCARVES[wd.scarf - 1] : null;
+      if (sc) {
+        const SCC = sc.id === "silk" ? (base || "#d94f6e") : sc.id === "feather" ? "#f2e6f2"
+                  : sc.id === "fur" ? "#c9b79a" : (base || "#8a4a3a");
+        const SCD = shade(SCC);
+        P(g, x + 4, 9 + bob, 8, 2, SCC);
+        P(g, x + 4, 10 + bob, 8, 1, SCD);
+        if (sc.id === "feather") { for (let k = 0; k < 5; k++) P(g, x + 4 + k * 2, 8 + bob, 1, 1, "#ffffff"); }
+        if (sc.id === "fur") { P(g, x + 3, 9 + bob, 10, 1, tint(SCC)); P(g, x + 3, 10 + bob, 1, 2, SCC); P(g, x + 12, 10 + bob, 1, 2, SCC); }
+        if (dir !== 1) { P(g, x + 10, 11 + bob, 2, 4, SCC); P(g, x + 10, 14 + bob, 2, 1, SCD); }  // le pan
+      }
+      // ---- 4. LE CHAPEAU, tout en haut, par-dessus tout — y compris la
+      // casquette générique, qui n'a plus à être vue si on porte un chapeau.
+      const ht = wd.hat ? C.WARDROBE_HATS[wd.hat - 1] : null;
+      if (ht) {
+        if (ht.id === "beret") {
+          const R = base || "#b4232c";
+          P(g, x + 3, 1 + bob, 9, 3, R); P(g, x + 3, 1 + bob, 9, 1, tint(R)); P(g, x + 3, 3 + bob, 9, 1, shade(R));
+          P(g, x + 7, 0 + bob, 1, 1, shade(R));
+        } else if (ht.id === "capeline") {
+          // Capeline : le BORD est le personnage. Il déborde de deux colonnes
+          // de chaque côté du crâne, sinon c'est un bonnet de paille.
+          const S = base || "#e0c274";
+          P(g, x + 1, 3 + bob, 14, 2, S); P(g, x + 1, 3 + bob, 14, 1, tint(S)); P(g, x + 1, 4 + bob, 14, 1, shade(S));
+          P(g, x + 4, 0 + bob, 8, 3, S); P(g, x + 4, 2 + bob, 8, 1, "#8a3c4a");   // ruban
+        } else if (ht.id === "tophat") {
+          /* ⚠️ LE HAUT-DE-FORME NE PEUT PAS DÉPASSER DU CADRE. Une case de
+             feuille fait 16×24 et le personnage l'occupe entièrement : tout
+             pixel posé au-dessus de y=0 est SILENCIEUSEMENT découpé par le
+             canevas (les frames sont dessinées côte à côte, translatées par
+             `dir * 24`). Premier jet : calotte de y=-4 à y=3 — un chapeau
+             décapité, et rien pour le signaler. La calotte tient donc dans les
+             quatre pixels du haut, le bord juste dessous ; ce qui est perdu en
+             hauteur est repris en LARGEUR de bord, qui est de toute façon ce
+             qui fait lire un haut-de-forme vu de dessus. */
+          const K = base || "#1c1a22";
+          P(g, x + 2, 4 + bob, 12, 2, K); P(g, x + 2, 4 + bob, 12, 1, tint(K)); // bord large
+          P(g, x + 4, 0 + bob, 8, 4, K); P(g, x + 4, 0 + bob, 8, 1, tint(K));   // calotte
+          P(g, x + 4, 3 + bob, 8, 1, "#d9b04a");                                // ganse dorée
+        } else if (ht.id === "beanie") {
+          const K = base || "#5a6a8a";
+          P(g, x + 3, 1 + bob, 10, 4, K);
+          for (let k = 0; k < 5; k++) P(g, x + 3 + k * 2, 1 + bob, 1, 4, shade(K));  // côtes
+          P(g, x + 3, 4 + bob, 10, 1, tint(K));
+          P(g, x + 7, 0 + bob, 2, 1, tint(K));                  // pompon
+        } else {
+          // Diadème : trois pointes et un éclat. Le plus petit article de la
+          // vitrine, et le plus cher — c'est aussi une blague.
+          const O = "#e8c860";
+          P(g, x + 4, 2 + bob, 8, 1, O);
+          P(g, x + 5, 1 + bob, 1, 1, O); P(g, x + 8, 0 + bob, 1, 2, O); P(g, x + 10, 1 + bob, 1, 1, O);
+          P(g, x + 8, 0 + bob, 1, 1, "#ffffff");
+        }
+      }
+    }
+  }
+  /* ⚠️ UNE SEULE FONCTION RELIT LA CHAÎNE, ET UNE SEULE LA FABRIQUE
+     (`wardrobeLook`, dans fermeConstants.js). Deux décodages du même vêtement,
+     c'est la garantie qu'un jour on porte un chapeau que les autres ne voient
+     pas — et le seul indice serait une capture d'écran comparée à une autre. */
+  function parseWardrobeLook(look) {
+    if (typeof look !== "string" || look.length !== 5 || look[0] !== "w") return null;
+    const d = (k) => {
+      const n = look.charCodeAt(k) - 48;
+      return n >= 0 && n <= 9 ? n : 0;
+    };
+    const w = { hat: d(1), scarf: d(2), outfit: d(3), tint: d(4) };
+    // Un indice hors catalogue = rien porté. Un article retiré du catalogue un
+    // jour ne doit pas faire planter le dessin d'un fermier qui l'avait acheté.
+    if (w.hat > C.WARDROBE_HATS.length) w.hat = 0;
+    if (w.scarf > C.WARDROBE_SCARVES.length) w.scarf = 0;
+    if (w.outfit > C.WARDROBE_OUTFITS.length) w.outfit = 0;
+    if (w.tint > C.WARDROBE_TINTS.length) w.tint = 0;
+    return (w.hat || w.scarf || w.outfit || w.tint) ? w : null;
   }
   function shade(hex) { return adjust(hex, -30); }
   function tint(hex) { return adjust(hex, 30); }
@@ -5104,6 +5499,13 @@ house: house(),
     townStatue: townStatueSprite(),
     townWell: townWellSprite(),
     townCrate: crateSprite(),
+    /* Zip 427 — les deux commerces de la Haute-Ville + le tableau des nouvelles
+       de la place. Le tableau est le seul décor de ce zip qui porte une
+       MÉCANIQUE (il se lit à la touche E) ; il est donc dans `props`, comme les
+       bancs, et pas dessiné à part — un décor et sa collision au même endroit. */
+    townBoutique: townBoutiqueSprite(),
+    townSalon: townSalonSprite(),
+    townNewsBoard: townNewsBoardSprite(),
     /* Zip 426 — l'intérieur du tribunal, indexé par `kind` (jamais par
        position dans un tableau : ajouter un meuble ne doit rien décaler). */
     courtProps: Object.fromEntries(COURT_PROP_KINDS.map(k => [k, courtPropSprite(k)])),

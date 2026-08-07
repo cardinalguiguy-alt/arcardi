@@ -192,7 +192,31 @@ export function generateWorld(seed) {
   }
   ground[idx(darkPassage.x, darkPassage.y)] = C.G_DARK_PASSAGE;
 
-  return { w: W, h: H, ground, objects, objHp, crops, mills, bridgeSites, bridgeLeverPos, riverCenter, darkPassage };
+  /* ⚠️⚠️ ZIP 425 — CORRECTION D'UN BOGUE QUI RENDAIT IMPOSSIBLE DE CRÉER UNE
+     FERME NEUVE. Trouvé en ouvrant le jeu en local pour la première fois depuis
+     que `node` existe sur cette machine.
+     ─────────────────────────────────────────────────────────────────────────
+     Ce monde sortait d'ici SANS `sucreries` ni `orchards`. Les deux Map
+     n'étaient créées que par `applyOverrides`, qu'on n'appelle QUE sur une
+     ferme rechargée depuis une sauvegarde. La branche « nouveau code de
+     ferme » (voir loadFarmByCode dans FermeGame.js) enchaînait donc
+     `generateWorld()` puis `persistFarm()`, lequel appelle
+     `serializeSucreries` — qui fait `for (const [i, s] of world.sucreries)`
+     sur `undefined`. Résultat : « TypeError: world.sucreries is not iterable »
+     et un écran de personnage figé, à la première ouverture d'un code inédit.
+
+     ⚠️ POURQUOI PERSONNE NE L'AVAIT VU : toutes les fermes existantes passent
+     par la branche « sauvegarde », donc par applyOverrides, qui répare le
+     manque au passage. Le défaut ne se déclenche QUE sur un code jamais
+     utilisé — c'est-à-dire pour un nouveau joueur, et jamais pour nous.
+     C'est aussi pour ça qu'il a survécu au zip 398, qui a ajouté `orchards`
+     en copiant fidèlement le chemin de `sucreries`... et son oubli avec.
+
+     ⚠️ LA CORRECTION EST ICI ET NON DANS L'APPELANT : un monde doit sortir
+     COMPLET de son constructeur. Le réparer côté chargement, c'était rendre la
+     validité du monde dépendante de qui l'a fabriqué — exactement la faute que
+     `serializeOrchards` se donne du mal à éviter dix lignes plus bas. */
+  return { w: W, h: H, ground, objects, objHp, crops, mills, sucreries: new Map(), orchards: new Map(), bridgeSites, bridgeLeverPos, riverCenter, darkPassage };
 }
 
 function riverCenterAtRow(riverCenter, y) {
@@ -1087,6 +1111,61 @@ function useEnergy(f, action, toolKey) {
   if (f.energy < cost) return false;
   f.energy = Math.round((f.energy - cost) * 10) / 10;
   return true;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZIP 426 — LA COUPE À VALLEY TOWN, CÔTÉ HÔTE.
+   ───────────────────────────────────────────────────────────────────────────
+   Voir la longue note de TOWN_TREE_REGROW_MS : la carte de la ville est un
+   singleton de module et ne doit JAMAIS être mutée. Ces deux fonctions ne
+   touchent donc qu'au dictionnaire `chop` de l'état partagé.
+
+   ⚠️ ELLES SONT PURES AU SENS DU PROJET : elles mutent ce qu'on leur passe et
+   ne lisent aucune horloge implicite (`now` est un paramètre). C'est ce qui
+   permet au banc de les rejouer et à l'hôte de les appeler dans son tick.
+   ═══════════════════════════════════════════════════════════════════════════ */
+// Un arbre est-il debout sur cette case ? Prend en compte la coupe en cours.
+export function townTreeStanding(tw, chop, i) {
+  if (!tw) return false;
+  const o = tw.objects[i];
+  if (o !== C.O_TREE && o !== C.O_TREE2) return false;
+  const e = chop && chop[i];
+  return !(e && e.r);   // `r` = abattu, en repousse
+}
+export function resolveTownChop(chop, tw, f, i, now) {
+  const res = { changed: false, wood: 0, felled: false, toast: null };
+  if (!tw || !chop) return res;
+  if (!townTreeStanding(tw, chop, i)) return res;
+  normalizeFarmer(f);
+  /* ⚠️ MÊME COÛT, MÊME OUTIL, MÊME RENDEMENT QU'À LA FERME. C'est la seule
+     façon de ne pas créer un second équilibrage : un joueur qui découvre qu'on
+     coupe plus vite en ville se met à faire l'aller-retour en train, et le
+     déséquilibre ne vient d'aucune ligne en particulier. */
+  if (!useEnergy(f, "chop", "axe")) { res.toast = "tired"; return res; }
+  const prev = chop[i];
+  const hp = ((prev && prev.hp) || C.TREE_HP) - f.tools.axe;
+  res.changed = true;
+  if (hp <= 0) {
+    chop[i] = { r: now + C.TOWN_TREE_REGROW_MS };
+    res.wood = toolYield(C.TREE_WOOD, f.tools.axe);
+    f.inv.wood += res.wood;
+    res.felled = true;
+  } else chop[i] = { hp };
+  return res;
+}
+/* LA REPOUSSE. Appelée par le tick de l'hôte ; renvoie les cases redevenues des
+   arbres, pour que l'appelant sache s'il a quelque chose à diffuser.
+   ⚠️ ON SUPPRIME L'ENTRÉE plutôt que d'écrire « arbre à nouveau debout » : un
+   dictionnaire qui ne garde que les EXCEPTIONS reste petit quoi qu'il arrive,
+   et il se persiste sans jamais gonfler la sauvegarde. */
+export function townTreeRegrow(chop, now) {
+  const back = [];
+  if (!chop) return back;
+  for (const k of Object.keys(chop)) {
+    const e = chop[k];
+    if (e && e.r && now >= e.r) { delete chop[k]; back.push(+k); }
+  }
+  return back;
 }
 
 /* -------------------------------------------------------------------------
@@ -3394,34 +3473,588 @@ export function farmPopularity(s, w) {
 // a 2x2 fountain pool, a platform by the rails, and grass. House sprites,
 // rails and signs are drawn client-side from the TOWN_* constants; trees stay
 // world objects so the existing sprite/collision patterns apply.
+/* ═══════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ ZIP 425 — GÉNÉRATEUR REFAIT POUR LA CARTE 192×144 (voir l'en-tête des
+   constantes TOWN_* dans fermeConstants.js).
+   ───────────────────────────────────────────────────────────────────────────
+   Il rend maintenant CINQ tableaux au lieu de trois, et les deux nouveaux
+   portent tout ce que la refonte ajoute :
+
+     `elev`  — l'altitude de chaque case, en unités (0, 1, 2 et les quarts
+               intermédiaires des marches). Voir la longue note de TOWN_ELEV_PX.
+     `solid` — les cases infranchissables, CALCULÉES UNE FOIS ICI.
+
+   ⚠️ POURQUOI `solid` PLUTÔT QU'UN TEST À LA VOLÉE. `blockedTown` était une
+   boucle sur TOWN_HOUSES, appelée quatre fois par déplacement. Avec huit
+   maisons c'était invisible ; avec vingt maisons, trois monuments, les bancs,
+   les lampadaires et les jardinières, ça devenait une centaine de comparaisons
+   par image pour une information qui NE CHANGE JAMAIS — la ville est
+   regénérée à l'identique et rien ne s'y construit. On la calcule donc au
+   moment où on la connaît, et la collision redevient une lecture de tableau.
+   ⚠️ Corollaire : tout ce qui bloque doit être marqué ICI. Un décor ajouté
+   plus tard et dessiné sans être marqué serait TRAVERSABLE, sans erreur.
+   ═══════════════════════════════════════════════════════════════════════════ */
 export function generateTownWorld() {
   const W = C.TOWN_MAP_W, H = C.TOWN_MAP_H;
   const rnd = makeRng(0x7041); // fixed seed: one Valley Town for everyone
   const ground = new Array(W * H).fill(C.G_GRASS);
   const objects = new Array(W * H).fill(C.O_NONE);
   const objHp = new Map();
+  const elev = new Float32Array(W * H);      // 425 : altitude, voir TOWN_ELEV_PX
+  const solid = new Uint8Array(W * H);       // 425 : cases bloquées, pré-calculées
+  const props = [];                          // 425 : mobilier urbain (dessiné client-side)
+  /* ⚠️ 425 — LES HAIES SONT UNE COUCHE, PAS UNE LISTE D'OBJETS. Il y en a
+     plusieurs centaines (le pourtour de vingt jardins, les bordures du parc et
+     du verger) : une liste obligerait le rendu à la parcourir en entier à
+     chaque image pour savoir quoi dessiner dans la fenêtre visible, alors qu'un
+     tableau parallèle se lit en même temps que le sol, à l'index qu'on a déjà.
+     C'est le même raisonnement que `solid`. */
+  const hedge = new Uint8Array(W * H);
   const id = (x, y) => y * W + x;
-  // Main street (west-east, from the platform to the east edge) + cross
-  // street (north-south) as packed dirt paths.
-  for (let x = C.TOWN_PLATFORM.x; x < W - 2; x++) for (let dy = 0; dy < 2; dy++) ground[id(x, C.TOWN_MAIN_ST_Y + dy)] = C.G_PATH;
-  for (let y = 6; y < H - 5; y++) for (let dx = 0; dx < 2; dx++) ground[id(C.TOWN_CROSS_ST_X + dx, y)] = C.G_PATH;
-  // Central plaza: stone paving, with the fountain pool (2x2 water) in the
-  // middle — water blocks movement like everywhere else.
-  for (let y = C.TOWN_PLAZA.y; y < C.TOWN_PLAZA.y + C.TOWN_PLAZA.h; y++)
-    for (let x = C.TOWN_PLAZA.x; x < C.TOWN_PLAZA.x + C.TOWN_PLAZA.w; x++) ground[id(x, y)] = C.G_PATH_STONE;
-  for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) ground[id(C.TOWN_FOUNTAIN.x + dx, C.TOWN_FOUNTAIN.y + dy)] = C.G_WATER;
-  // Short walkway from each house door down to its street.
-  for (const hsn of C.TOWN_HOUSES) {
-    const doorX = hsn.x + 2;
-    for (let y = hsn.y + C.TOWN_HOUSE_H; y <= hsn.y + C.TOWN_HOUSE_H + 3; y++) {
-      if (y >= 0 && y < H) { ground[id(doorX, y)] = C.G_PATH; ground[id(doorX + 1, y)] = C.G_PATH; }
+  const inMap = (x, y) => x >= 0 && y >= 0 && x < W && y < H;
+  const rect = (r, fn) => {
+    for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) if (inMap(x, y)) fn(x, y, id(x, y));
+  };
+
+  /* ---------------------------------------------------------------- RELIEF
+     Il est posé EN PREMIER, avant la moindre rue, et l'ordre compte : tout ce
+     qui suit consulte `elev` pour ne pas paver une falaise ni planter un arbre
+     sur une marche. Une rue tracée avant le relief aurait fallu être
+     re-découpée après, ce qui est exactement la sorte de reprise qui laisse
+     un pavé orphelin au bord d'un à-pic. */
+  rect(C.TOWN_UPPER, (x, y, i) => { elev[i] = 1; });
+  rect(C.TOWN_BELVEDERE, (x, y, i) => { elev[i] = 2; });
+  for (const st of C.TOWN_STAIRS) {
+    const span = st.to - st.from;
+    for (let k = 0; k < st.len; k++) {
+      /* La marche la plus proche du palier haut porte presque son altitude, la
+         plus basse presque celle du sol : `len + 1` intervalles pour `len`
+         marches, donc AUCUN saut ne dépasse span/(len+1) — soit 0,2 avec les
+         réglages actuels, sous TOWN_STEP_MAX. C'est ce qui rend l'escalier
+         franchissable SANS aucun cas particulier dans la collision. */
+      const h = st.dir === "e"
+        ? st.to - span * (st.len - k) / (st.len + 1)
+        : st.to - span * (k + 1) / (st.len + 1);
+      for (let w = 0; w < st.w; w++) {
+        const x = st.dir === "e" ? st.x + k : st.x + w;
+        const y = st.dir === "e" ? st.y + w : st.y + k;
+        if (!inMap(x, y)) continue;
+        elev[id(x, y)] = h;
+        ground[id(x, y)] = C.G_TOWN_STAIR;
+      }
     }
   }
-  // Greenery: a tree ring along the borders plus light scatter, kept away
-  // from streets, plaza, platform, rails and house plots.
+
+  /* ------------------------------------------------------------------ RUES
+     ⚠️ UNE RUE S'ARRÊTE AU PIED D'UNE FALAISE. `paveRun` refuse toute case
+     dont l'altitude n'est pas nulle : sans ce test, l'artère de l'est
+     (colonne 150) montait tout droit sur la terrasse et l'on aurait vu une
+     rue pavée grimper un à-pic de quatorze pixels. C'est le genre de défaut
+     qu'aucune erreur ne signale et qu'on ne voit qu'en s'y promenant. */
+  const paveRow = (y0, x0, x1) => {
+    for (let x = x0; x <= x1; x++) for (let dy = 0; dy < 2; dy++) {
+      if (inMap(x, y0 + dy) && elev[id(x, y0 + dy)] === 0) ground[id(x, y0 + dy)] = C.G_PATH;
+    }
+  };
+  const paveCol = (x0, y0, y1) => {
+    for (let y = y0; y <= y1; y++) for (let dx = 0; dx < 2; dx++) {
+      if (inMap(x0 + dx, y) && elev[id(x0 + dx, y)] === 0) ground[id(x0 + dx, y)] = C.G_PATH;
+    }
+  };
+  for (const ry of C.TOWN_ST_ROWS) paveRow(ry, ry === C.TOWN_MAIN_ST_Y ? C.TOWN_PLATFORM.x : 10, W - 3);
+  /* ⚠️ 426 — UNE ARTÈRE NORD-SUD S'ARRÊTE À LA DERNIÈRE AVENUE, pas au bord de
+     la carte. Elle allait jusqu'à H-11 ; avec le lac du sud, deux d'entre elles
+     descendaient droit dans l'eau (le pavage refuse l'eau, mais s'arrêtait donc
+     sur un bord déchiqueté, à un pas du rivage). Une rue finit à un carrefour :
+     on le DÉRIVE de TOWN_ST_ROWS plutôt que d'écrire un nombre qui mentirait au
+     prochain déplacement d'avenue. */
+  const lastRow = C.TOWN_ST_ROWS[C.TOWN_ST_ROWS.length - 1];
+  for (const cx of C.TOWN_ST_COLS) paveCol(cx, 10, lastRow + 1);
+  // La promenade de la Haute-Ville : une rue à elle, sur la terrasse, sinon la
+  // terrasse est un plateau nu qu'on traverse dans l'herbe.
+  for (let x = C.TOWN_UPPER.x + 1; x < C.TOWN_UPPER.x + C.TOWN_UPPER.w - 1; x++) {
+    for (let dy = 0; dy < 2; dy++) {
+      const y = C.TOWN_UPPER.y + C.TOWN_UPPER.h - 4 + dy;
+      if (inMap(x, y) && elev[id(x, y)] === 1) ground[id(x, y)] = C.G_PATH;
+    }
+  }
+
+  /* ------------------------------------------------------- PLACE CENTRALE
+     Demande de Guillaume : « améliorer la place centrale pour la rendre plus
+     soignée graphiquement ». Elle était douze cases sur douze, entièrement
+     dallées, avec un bassin au milieu — c'est-à-dire un parking.
+     Ce qui la rend soignée tient en quatre choses, et aucune n'est un dessin
+     plus détaillé : une BORDURE (le dallage s'arrête net, il ne se fond pas
+     dans l'herbe), des PARTERRES engazonnés qui cassent la surface, une
+     SYMÉTRIE nord-sud autour de la rue qui la traverse, et du MOBILIER posé
+     sur des axes plutôt que semé. */
+  rect(C.TOWN_PLAZA, (x, y, i) => { ground[i] = C.G_PATH_STONE; });
+  const pz = C.TOWN_PLAZA;
+  // Quatre parterres, aux quatre angles, à trois cases des bords.
+  for (const [ox, oy] of [[3, 3], [pz.w - 8, 3], [3, pz.h - 8], [pz.w - 8, pz.h - 8]]) {
+    rect({ x: pz.x + ox, y: pz.y + oy, w: 5, h: 5 }, (x, y, i) => { ground[i] = C.G_TOWN_LAWN; });
+  }
+  // Le bassin de la fontaine (l'eau bloque, comme partout).
+  for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) ground[id(C.TOWN_FOUNTAIN.x + dx, C.TOWN_FOUNTAIN.y + dy)] = C.G_WATER;
+  // Le monument, pendant sud de la fontaine : il bloque, il n'est pas de l'eau.
+  for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) solid[id(C.TOWN_MONUMENT.x + dx, C.TOWN_MONUMENT.y + dy)] = 1;
+
+  /* Le mobilier. Il est posé sur des AXES (les médianes de la place, les bords
+     de la rue principale) et jamais au hasard : c'est la différence entre une
+     place dessinée et une place saupoudrée. */
+  const addProp = (x, y, kind, blocks) => {
+    if (!inMap(x, y)) return;
+    props.push({ x, y, kind });
+    if (blocks) solid[id(x, y)] = 1;
+  };
+  // Lampadaires : les quatre angles de la place, plus deux paires en garde
+  // d'honneur de part et d'autre de la fontaine et du monument.
+  for (const [lx, ly] of [
+    [pz.x + 1, pz.y + 1], [pz.x + pz.w - 2, pz.y + 1],
+    [pz.x + 1, pz.y + pz.h - 2], [pz.x + pz.w - 2, pz.y + pz.h - 2],
+    [C.TOWN_FOUNTAIN.x - 3, C.TOWN_FOUNTAIN.y], [C.TOWN_FOUNTAIN.x + 4, C.TOWN_FOUNTAIN.y],
+    [C.TOWN_MONUMENT.x - 3, C.TOWN_MONUMENT.y + 1], [C.TOWN_MONUMENT.x + 4, C.TOWN_MONUMENT.y + 1],
+  ]) addProp(lx, ly, "lamp", true);
+  // Bancs : tournés vers la fontaine au nord, vers le monument au sud.
+  for (const [bx, by] of [
+    [C.TOWN_FOUNTAIN.x - 2, C.TOWN_FOUNTAIN.y + 3], [C.TOWN_FOUNTAIN.x + 2, C.TOWN_FOUNTAIN.y + 3],
+    [C.TOWN_MONUMENT.x - 2, C.TOWN_MONUMENT.y - 2], [C.TOWN_MONUMENT.x + 2, C.TOWN_MONUMENT.y - 2],
+  ]) addProp(bx, by, "bench", true);
+  // Arbres taillés au centre de chaque parterre : quatre masses vertes qui
+  // donnent son échelle à la place.
+  for (const [ox, oy] of [[5, 5], [pz.w - 6, 5], [5, pz.h - 6], [pz.w - 6, pz.h - 6]]) {
+    addProp(pz.x + ox, pz.y + oy, "topiary", true);
+  }
+  /* Lampadaires le long de la rue principale, tous les huit pas, hors place.
+     ⚠️ 426 — ET JAMAIS SUR UN CARREFOUR. Le banc de circulation
+     (tools/verify-vallee.mjs) l'a trouvé dès sa première exécution : avec la
+     nouvelle artère x = 196, un lampadaire de cette boucle tombait pile au
+     milieu de la chaussée et coupait la rue en deux. Il était parfaitement
+     visible — donc pas un « mur invisible » — mais tout aussi infranchissable.
+     ⚠️ LA LEÇON : un décor posé sur une trame régulière rencontrera un jour une
+     AUTRE trame régulière. On teste donc le sol, qui sait déjà tout. */
+  for (let x = 12; x < W - 6; x += 8) {
+    if (x >= pz.x - 1 && x < pz.x + pz.w + 1) continue;
+    const li = id(x, C.TOWN_MAIN_ST_Y - 1);
+    if (ground[li] === C.G_PATH || ground[li] === C.G_PATH_STONE || solid[li]) continue;
+    addProp(x, C.TOWN_MAIN_ST_Y - 1, "lamp", true);
+  }
+
+  /* ------------------------------------------------- PARVIS DES MONUMENTS
+     ⚠️⚠️ LE PREMIER JET DONNAIT UN GRAND RECTANGLE GRIS AUTOUR DE CHAQUE
+     BÂTIMENT, ET ÇA NE MARCHAIT PAS DU TOUT — le banc de rendu l'a montré tout
+     de suite : l'église et l'hôtel de ville flottaient sur des dalles grises
+     posées dans l'herbe, sans le moindre chemin pour y arriver. Un parvis n'est
+     pas un socle : c'est un ESPACE DEVANT, et il est RELIÉ À LA RUE.
+
+     Trois choses, donc, et les trois comptent :
+       1. le dallage ne déborde que d'une case sur les côtés et se développe
+          DEVANT (au sud), là où l'on arrive ;
+       2. une allée le raccorde à la rue la plus proche — sans elle, le bâtiment
+          n'appartient à rien ;
+       3. une bordure de gazon sur les flancs, pour que la pierre ne se répande
+          pas jusqu'à l'herbe sans transition. */
+  const forecourt = (b, front) => {
+    const e0 = elev[id(b.x, b.y)];
+    rect({ x: b.x - 1, y: b.y, w: b.w + 2, h: b.h + front }, (x, y, i) => {
+      if (elev[i] === e0) ground[i] = C.G_PATH_STONE;
+    });
+    // Gazon sur les flancs : la transition pierre → herbe.
+    for (const sx of [b.x - 3, b.x + b.w + 1]) {
+      rect({ x: sx, y: b.y, w: 2, h: b.h + front }, (x, y, i) => {
+        if (elev[i] === e0 && ground[i] === C.G_GRASS) ground[i] = C.G_TOWN_LAWN;
+      });
+    }
+    // L'allée jusqu'à la rue : deux cases de large, dans l'axe de la porte.
+    const doorX = b.x + Math.floor(b.w / 2) - 1, y0 = b.y + b.h + front;
+    const street = C.TOWN_ST_ROWS.find((r) => r >= y0 && r - y0 <= 14);
+    if (street !== undefined) {
+      for (let y = y0; y <= street + 1; y++) {
+        if (!inMap(doorX, y) || elev[id(doorX, y)] !== e0) break;
+        ground[id(doorX, y)] = C.G_PATH; ground[id(doorX + 1, y)] = C.G_PATH;
+      }
+    }
+  };
+  forecourt(C.TOWN_CHURCH, 5);
+  forecourt(C.TOWN_HALL, 4);
+  forecourt(C.TOWN_COURT, 6);
+  /* ZIP 427 — LES DEUX COMMERCES DE LA HAUTE-VILLE. Ils passent par le MÊME
+     `forecourt` que les monuments, et ce n'est pas de la paresse : c'est lui qui
+     dalle le devant, pose le gazon des flancs et tire l'allée jusqu'à la rue. Un
+     bâtiment posé sans lui aurait été une boîte dans l'herbe — et se serait vu
+     immédiatement à côté de trois monuments qui, eux, ont leur parvis.
+     ⚠️ Un parvis COURT (2) : la promenade de la terrasse passe à quatre rangées
+     du bord (voir plus haut), un parvis profond l'aurait avalée. */
+  forecourt(C.TOWN_BOUTIQUE, 2);
+  forecourt(C.TOWN_SALON, 2);
+  for (const b of [C.TOWN_CHURCH, C.TOWN_HALL, C.TOWN_COURT, C.TOWN_BOUTIQUE, C.TOWN_SALON]) rect(b, (x, y, i) => { solid[i] = 1; });
+
+  /* --------------------------------------------------------- LES MAISONS
+     Empreinte bloquante + allée jusqu'à la rue SOUS la parcelle.
+     ⚠️ L'ALLÉE S'ARRÊTE DÈS QUE L'ALTITUDE CHANGE. Les deux parcelles de la
+     terrasse n'ont pas de rue en dessous — elles ont un à-pic. Sans ce test,
+     leur allée descendait le vide en pavés flottants. */
+  for (const hsn of C.TOWN_HOUSES) {
+    rect({ x: hsn.x, y: hsn.y, w: C.TOWN_HOUSE_W, h: C.TOWN_HOUSE_H }, (x, y, i) => { solid[i] = 1; });
+    const doorX = hsn.x + 2, doorY = hsn.y + C.TOWN_HOUSE_H;
+    const e0 = inMap(doorX, doorY) ? elev[id(doorX, doorY)] : 0;
+    /* ⚠️ LE JARDIN CLOS (425). C'est LA correction qui transforme la carte.
+       Vingt maisons posées dans une prairie donnent un lotissement fantôme :
+       rien ne dit où finit l'une et où commence l'autre, et tout l'espace entre
+       les rues reste un pré. Un jardin — gazon + haie sur le pourtour, avec une
+       ouverture devant la porte — donne d'un coup une PARCELLE, donc une ville.
+       ⚠️ La haie borne, elle n'enferme pas : l'ouverture est garantie plus bas
+       en effaçant la haie sur l'allée, APRÈS l'avoir posée. Poser la haie « sauf
+       devant la porte » aurait marché aussi, mais un jour un décalage d'une case
+       aurait muré quelqu'un chez lui — et personne n'aurait pu le faire sortir. */
+    const gx = hsn.x - 2, gy = hsn.y - 1, gw = C.TOWN_HOUSE_W + 4, gh = C.TOWN_HOUSE_H + 4;
+    rect({ x: gx, y: gy, w: gw, h: gh }, (x, y, i) => {
+      if (elev[i] !== e0 || solid[i] || ground[i] === C.G_PATH || ground[i] === C.G_PATH_STONE) return;
+      const edge = (x === gx || x === gx + gw - 1 || y === gy || y === gy + gh - 1);
+      if (edge) hedge[i] = 1; else if (ground[i] === C.G_GRASS) ground[i] = C.G_TOWN_LAWN;
+    });
+    const street = C.TOWN_ST_ROWS.find((r) => r >= doorY && r - doorY <= 8);
+    const last = street === undefined ? doorY + 2 : street;
+    for (let y = doorY; y <= last; y++) {
+      if (!inMap(doorX, y) || elev[id(doorX, y)] !== e0) break;
+      for (const dx of [0, 1]) {
+        const i = id(doorX + dx, y);
+        ground[i] = C.G_PATH; hedge[i] = 0;      // l'allée perce la haie
+      }
+    }
+  }
+  for (let i = 0; i < W * H; i++) if (hedge[i]) solid[i] = 1;
+
+  /* ═══════════════════════════════════════════════════════════════════════
+     LES TROIS ÎLOTS OCCUPÉS (425) — parc, verger, champ de foire.
+     ───────────────────────────────────────────────────────────────────────
+     ⚠️ ILS EXISTENT PARCE QUE LE BANC DE RENDU A MONTRÉ UNE PRAIRIE. Multiplier
+     la surface par neuf sans rien y mettre ne fait pas une grande ville : ça
+     fait une petite ville perdue. Ces trois-là occupent les trois plus grands
+     vides du centre. Il en reste d'autres, et c'est assumé — la parité avec la
+     ferme est un chantier de plusieurs sessions, pas une case à cocher.
+     ═══════════════════════════════════════════════════════════════════════ */
+  const plantTree = (x, y) => {
+    if (!inMap(x, y)) return;
+    const i = id(x, y);
+    if (solid[i] || objects[i] !== C.O_NONE) return;
+    if (ground[i] === C.G_PATH || ground[i] === C.G_PATH_STONE || ground[i] === C.G_WATER || ground[i] === C.G_TOWN_STAIR) return;
+    objects[i] = rnd() < 0.5 ? C.O_TREE : C.O_TREE2; objHp.set(i, C.TREE_HP);
+  };
+  // LE PARC : gazon, un étang, une allée en croix, des bancs au bord de l'eau.
+  {
+    const p = C.TOWN_PARK;
+    rect(p, (x, y, i) => { if (ground[i] === C.G_GRASS) ground[i] = C.G_TOWN_LAWN; });
+    const cx = p.x + (p.w >> 1), cy = p.y + (p.h >> 1);
+    for (let x = p.x; x < p.x + p.w; x++) for (const dy of [0, 1]) ground[id(x, cy + dy)] = C.G_PATH;
+    for (let y = p.y; y < p.y + p.h; y++) for (const dx of [0, 1]) ground[id(cx + dx, y)] = C.G_PATH;
+    // L'étang, dans le quart nord-ouest, en ovale grossier.
+    const px0 = p.x + 4, py0 = p.y + 3, pw = 11, ph = 7;
+    for (let y = 0; y < ph; y++) for (let x = 0; x < pw; x++) {
+      const u = (x - (pw - 1) / 2) / ((pw - 1) / 2), v = (y - (ph - 1) / 2) / ((ph - 1) / 2);
+      if (u * u + v * v <= 1) ground[id(px0 + x, py0 + y)] = C.G_WATER;
+    }
+    // Bordure d'arbres + bancs face à l'étang.
+    for (let x = p.x; x < p.x + p.w; x += 3) { plantTree(x, p.y); plantTree(x + 1, p.y + p.h - 1); }
+    for (let y = p.y + 2; y < p.y + p.h - 2; y += 4) { plantTree(p.x, y); plantTree(p.x + p.w - 1, y + 1); }
+    for (const [bx, by] of [[px0 + 2, py0 + ph + 1], [px0 + 6, py0 + ph + 1]]) {
+      if (inMap(bx, by) && !solid[id(bx, by)]) { props.push({ x: bx, y: by, kind: "bench" }); solid[id(bx, by)] = 1; }
+    }
+    for (const [tx, ty] of [[cx - 3, cy + 4], [cx + 4, cy + 4], [cx - 3, cy - 4], [cx + 4, cy - 4]]) {
+      if (inMap(tx, ty) && !solid[id(tx, ty)] && ground[id(tx, ty)] !== C.G_WATER) { props.push({ x: tx, y: ty, kind: "topiary" }); solid[id(tx, ty)] = 1; }
+    }
+  }
+  // LE VERGER : des arbres EN RANGS. C'est l'alignement qui dit « planté par
+  // quelqu'un » — un semis aléatoire, à deux pas d'une rue, dit « friche ».
+  {
+    const o = C.TOWN_ORCHARD;
+    rect(o, (x, y, i) => { if (ground[i] === C.G_GRASS) ground[i] = C.G_TOWN_LAWN; });
+    for (let y = o.y + 1; y < o.y + o.h - 1; y += 4) for (let x = o.x + 1; x < o.x + o.w - 1; x += 3) plantTree(x, y);
+    /* ⚠️⚠️ L'ALLÉE EST TRACÉE AVANT LA HAIE, ET C'EST TOUTE LA CORRECTION.
+       Premier jet : haie sur tout le pourtour, sans ouverture. Le verger s'est
+       refermé sur lui-même — 309 cases devenues inatteignables, dans une ville
+       où l'on peut se promener partout ailleurs. Ça ne lève évidemment aucune
+       erreur : c'est juste un enclos.
+       ⚠️ LA LEÇON VAUT POUR TOUTE CLÔTURE : on perce d'abord le passage, on
+       clôt ensuite ce qui reste. L'inverse (« poser la haie partout SAUF
+       devant l'entrée ») marche aussi le jour où on l'écrit, et se casse au
+       premier décalage d'une case — sans que rien ne le dise. C'est le même
+       raisonnement que pour les allées de jardin plus haut.
+       Le portail regarde l'est, vers la rue nord-sud la plus proche. */
+    const gateY = o.y + (o.h >> 1);
+    const street = C.TOWN_ST_COLS.find((cx2) => cx2 >= o.x + o.w);
+    const upto = street === undefined ? o.x + o.w + 2 : street + 1;
+    for (let x = o.x + 1; x <= upto; x++) for (const dy of [0, 1]) {
+      const i = id(x, gateY + dy);
+      if (!inMap(x, gateY + dy) || solid[i]) continue;
+      ground[i] = C.G_PATH; objects[i] = C.O_NONE; objHp.delete(i); hedge[i] = 0;
+    }
+    rect(o, (x, y, i) => {
+      const edge = (x === o.x || x === o.x + o.w - 1 || y === o.y || y === o.y + o.h - 1);
+      if (edge && !solid[i] && objects[i] === C.O_NONE && ground[i] !== C.G_PATH) hedge[i] = 1;
+    });
+  }
+  // LE CHAMP DE FOIRE : une esplanade dallée, bordée d'arbres et de lampadaires.
+  // Elle ne sert encore à rien — c'est une PLACE À REMPLIR, et il en faut une.
+  {
+    const mk = C.TOWN_MARKET;
+    rect(mk, (x, y, i) => { if (ground[i] === C.G_GRASS || ground[i] === C.G_TOWN_LAWN) ground[i] = C.G_PATH; });
+    rect({ x: mk.x + 2, y: mk.y + 2, w: mk.w - 4, h: mk.h - 4 }, (x, y, i) => { ground[i] = C.G_PATH_STONE; });
+    for (let x = mk.x; x < mk.x + mk.w; x += 5) { plantTree(x, mk.y - 1); plantTree(x + 2, mk.y + mk.h); }
+    for (const [lx, ly] of [[mk.x + 1, mk.y + 1], [mk.x + mk.w - 2, mk.y + 1], [mk.x + 1, mk.y + mk.h - 2], [mk.x + mk.w - 2, mk.y + mk.h - 2]]) {
+      if (inMap(lx, ly) && !solid[id(lx, ly)]) { props.push({ x: lx, y: ly, kind: "lamp" }); solid[id(lx, ly)] = 1; }
+    }
+  }
+  /* ═══════════════════════════════════════════════════════════════════════
+     ZIP 426 — CE QUI REMPLIT L'AGRANDISSEMENT, ET LE CHAMP DE FOIRE.
+     ───────────────────────────────────────────────────────────────────────
+     ⚠️ L'ORDRE DE CE BLOC N'EST PAS LIBRE : il vient APRÈS les rues, les
+     parcelles et les trois îlots du 425 (il consulte `solid` et le dallage
+     pour ne rien recouvrir), et AVANT la passe `hedge → solid` finale, sans
+     quoi l'enclos du cimetière ne bloquerait rien. La leçon du 425 vaut aussi
+     dans l'autre sens : une haie qui ne bloque pas est une clôture qu'on
+     traverse, et ça ne lève pas plus d'erreur qu'un mur invisible.
+     ═══════════════════════════════════════════════════════════════════════ */
+  // ---- LE CHAMP DE FOIRE ENFIN OCCUPÉ. Le 425 l'a laissé nu en le disant
+  // (« une PLACE À REMPLIR, et il en faut une ») : voilà la foire. Deux rangées
+  // d'étals se faisant face de part et d'autre d'une allée centrale — c'est
+  // l'allée qui fait le marché, des étals semés ne font qu'un entrepôt.
+  {
+    const mk = C.TOWN_MARKET;
+    const axis = mk.y + (mk.h >> 1);          // l'allée centrale, laissée libre
+    /* ⚠️ LA COULEUR DE LA BÂCHE EST CHOISIE ICI, PAS AU RENDU. Premier jet : le
+       rendu la déduisait d'un hachage de la position — et comme les étals sont
+       posés tous les QUATRE pas, tous ceux d'une rangée tombaient sur la même
+       bâche. Un hachage non linéaire améliorait sans convaincre. Le générateur,
+       lui, connaît l'INDICE de l'étal : il n'a pas à le deviner. C'est la règle
+       du §8 de CLAUDE.md — ce qui peut être dérivé de la source ne se
+       re-devine pas plus loin. */
+    let stall = 0;
+    for (const row of [axis - 3, axis + 2]) {
+      for (let k = 0; k < 5; k++) {
+        const sx = mk.x + 3 + k * 4;
+        if (sx >= mk.x + mk.w - 2) break;
+        if (!inMap(sx, row) || solid[id(sx, row)]) continue;
+        props.push({ x: sx, y: row, kind: "stall", v: stall++ % 4 });
+        solid[id(sx, row)] = 1;
+      }
+    }
+    // Le puits de la foire, au bout de l'allée : un point de rendez-vous, et
+    // la raison pour laquelle un marché s'installe là plutôt qu'ailleurs.
+    addProp(mk.x + (mk.w >> 1), axis + 6, "townWell", true);
+    for (const [cx2, cy2] of [[mk.x + 3, axis + 6], [mk.x + mk.w - 4, axis + 6]]) addProp(cx2, cy2, "crate", true);
+  }
+  // ---- LE KIOSQUE À MUSIQUE, dans le parc. Il occupe 3×3 cases : son emprise
+  // entière bloque, sinon on marcherait au travers de son estrade.
+  {
+    const k = C.TOWN_KIOSK;
+    for (let dy = 0; dy < 3; dy++) for (let dx = 0; dx < 3; dx++) {
+      const x = k.x + dx, y = k.y + dy;
+      if (!inMap(x, y)) continue;
+      if (ground[id(x, y)] === C.G_WATER) continue;
+      objects[id(x, y)] = C.O_NONE; objHp.delete(id(x, y));
+      ground[id(x, y)] = C.G_PATH_STONE;
+      solid[id(x, y)] = 1;
+    }
+    props.push({ x: k.x + 1, y: k.y + 2, kind: "kiosk" });   // dessiné depuis sa case du bas, au centre
+  }
+  // ---- LE CIMETIÈRE DE L'ÉGLISE. ⚠️ ON PERCE LE PORTAIL AVANT DE POSER
+  // L'ENCLOS (règle du 425, verger) : l'allée est tracée d'abord, la haie
+  // ensuite, et seulement là où il n'y a pas d'allée.
+  {
+    const cm = C.TOWN_CEMETERY;
+    rect(cm, (x, y, i) => { if (ground[i] === C.G_GRASS) ground[i] = C.G_TOWN_LAWN; objects[i] = C.O_NONE; objHp.delete(i); });
+    const gateX = cm.x + (cm.w >> 1);
+    for (let y = cm.y + 1; y <= cm.y + cm.h; y++) for (const dx of [0, 1]) {
+      const i = id(gateX + dx, y);
+      if (inMap(gateX + dx, y) && !solid[i]) { ground[i] = C.G_PATH; hedge[i] = 0; }
+    }
+    rect(cm, (x, y, i) => {
+      const edge = (x === cm.x || x === cm.x + cm.w - 1 || y === cm.y || y === cm.y + cm.h - 1);
+      if (edge && !solid[i] && ground[i] !== C.G_PATH) hedge[i] = 1;
+    });
+    // Les tombes EN RANGS, comme les arbres du verger : c'est l'alignement qui
+    // dit « entretenu ». Deux colonnes de part et d'autre de l'allée.
+    for (let y = cm.y + 2; y < cm.y + cm.h - 2; y += 3) {
+      for (const x of [cm.x + 2, cm.x + 4, cm.x + cm.w - 5, cm.x + cm.w - 3]) addProp(x, y, "grave", true);
+    }
+    plantTree(cm.x + 1, cm.y + cm.h - 2); plantTree(cm.x + cm.w - 2, cm.y + 1);
+  }
+  // ---- LE LAC DU SUD, SA PROMENADE ET SON PONTON.
+  /* ⚠️⚠️ TOUT SE DÉDUIT DE LA LIGNE DE RIVAGE, ET C'EST LA CORRECTION QUI A
+     SAUVÉ CE QUARTIER. Premier jet : l'eau était découpée par une ondulation,
+     mais la promenade et le ponton restaient posés sur des lignes DROITES. Vu
+     en jeu : une bande d'herbe traversait la promenade et l'eau, et le ponton
+     partait du pré, à quatre cases du bord. Un ponton qui ne touche pas l'eau
+     est la définition d'un décor faux.
+     Il n'y a donc qu'UNE seule description du rivage — `shore(x)` — et la
+     promenade, les bancs, les lampadaires et le ponton s'y accrochent tous. */
+  {
+    const lk = C.TOWN_LAKE;
+    // Une ondulation lente et déterministe : deux sinus, jamais un tirage par
+    // case (qui ferait de l'écume, pas une berge).
+    const shore = (x) => lk.y + Math.round(Math.sin(x * 0.21) * 1.6 + Math.sin(x * 0.07 + 1.3) * 1.2);
+    for (let x = lk.x; x < lk.x + lk.w; x++) {
+      const sy = shore(x);
+      for (let y = sy; y < lk.y + lk.h; y++) {
+        if (!inMap(x, y)) continue;
+        const i = id(x, y);
+        if (solid[i] || ground[i] === C.G_PATH) continue;
+        ground[i] = C.G_WATER; objects[i] = C.O_NONE; objHp.delete(i);
+      }
+      // La promenade : elle SUIT le rivage, deux rangées au-dessus de l'eau.
+      for (let y = sy - C.TOWN_QUAY_H; y < sy; y++) {
+        if (!inMap(x, y)) continue;
+        const i = id(x, y);
+        if (solid[i] || ground[i] === C.G_WATER) continue;
+        ground[i] = C.G_PATH_STONE; objects[i] = C.O_NONE; objHp.delete(i);
+      }
+    }
+    /* LE PONTON, POSÉ AVANT LE MOBILIER. Du bois SUR l'eau : il part de la
+       promenade et s'avance. Il ne bloque pas — c'est le seul endroit d'où l'on
+       marche au-dessus du lac.
+       ⚠️ L'ORDRE N'EST PAS UN DÉTAIL : il EFFACE `solid` sur son emprise. Posé
+       après les bancs, il en libérait un — un banc qu'on traverse, dessiné au
+       milieu du ponton. Le banc de contrôle l'a vu (« aucun décor n'est
+       traversable ») ; à l'œil, on aurait juste trouvé le ponton encombré. */
+    const pierTop = shore(C.TOWN_PIER.x) - C.TOWN_QUAY_H;
+    for (let y = pierTop; y < pierTop + C.TOWN_PIER.h + C.TOWN_QUAY_H; y++) {
+      for (let x = C.TOWN_PIER.x; x < C.TOWN_PIER.x + C.TOWN_PIER.w; x++) {
+        if (!inMap(x, y) || y >= lk.y + lk.h) continue;
+        ground[id(x, y)] = C.G_BRIDGE; solid[id(x, y)] = 0; objects[id(x, y)] = C.O_NONE;
+      }
+    }
+    const freeQuay = (x, y) => inMap(x, y) && !solid[id(x, y)] && ground[id(x, y)] !== C.G_BRIDGE && ground[id(x, y)] !== C.G_WATER;
+    for (let x = lk.x + 4; x < lk.x + lk.w - 4; x += 8) {
+      const sy = shore(x);
+      if (freeQuay(x, sy - 1)) addProp(x, sy - 1, "bench", true);
+      const lx = x + 4, ly = shore(lx) - 2;
+      if (((x - lk.x) / 8) % 2 === 0 && freeQuay(lx, ly)) addProp(lx, ly, "lamp", true);
+    }
+  }
+  // ---- LE QUARTIER DES ARTISANS, à l'est. Trois parcelles (TOWN_HOUSES) plus
+  // un petit square d'atelier : des caisses, un puits, des lampadaires. Il ne
+  // s'agit pas de meubler — un quartier sans mobilier de rue se lit comme un
+  // lotissement posé la veille.
+  {
+    const ar = C.TOWN_ARTISANS;
+    for (let y = ar.y + 6; y < ar.y + ar.h; y += 18) {
+      addProp(ar.x + 14, y, "townWell", true);
+      addProp(ar.x + 12, y + 1, "crate", true);
+      addProp(ar.x + 16, y + 1, "crate", true);
+    }
+    for (let y = ar.y + 2; y < ar.y + ar.h; y += 12) addProp(ar.x + 9, y, "lamp", true);
+  }
+  // ---- LE MOBILIER QUI MANQUAIT PARTOUT AILLEURS.
+  // Jardinières fleuries sur la place (elles cassent la pierre sans rien
+  // bloquer de la circulation, posées le long des bords), panneaux aux
+  // carrefours, statues en Haute-Ville.
+  {
+    const pz2 = C.TOWN_PLAZA;
+    for (const [px2, py2] of [
+      [pz2.x + 6, pz2.y + 1], [pz2.x + pz2.w - 7, pz2.y + 1],
+      [pz2.x + 6, pz2.y + pz2.h - 2], [pz2.x + pz2.w - 7, pz2.y + pz2.h - 2],
+      [pz2.x + 1, pz2.y + 8], [pz2.x + pz2.w - 2, pz2.y + 8],
+      [pz2.x + 1, pz2.y + pz2.h - 9], [pz2.x + pz2.w - 2, pz2.y + pz2.h - 9],
+    ]) addProp(px2, py2, "planter", true);
+    // Un panneau à chaque croisement d'avenues : c'est ce qui rend une ville
+    // ORIENTABLE. On le pose sur l'angle nord-ouest, hors chaussée.
+    for (const ry of C.TOWN_ST_ROWS) for (const cx2 of C.TOWN_ST_COLS) {
+      const sx = cx2 - 2, sy = ry - 1;
+      if (!inMap(sx, sy)) continue;
+      if (solid[id(sx, sy)] || ground[id(sx, sy)] === C.G_PATH) continue;
+      addProp(sx, sy, "streetSign", true);
+    }
+    // Deux statues sur la terrasse : le belvédère et le parvis du tribunal se
+    // regardent, il fallait quelque chose à regarder.
+    addProp(C.TOWN_BELVEDERE.x + (C.TOWN_BELVEDERE.w >> 1), C.TOWN_BELVEDERE.y + 5, "statue", true);
+    addProp(C.TOWN_COURT.x - 3, C.TOWN_COURT.y + C.TOWN_COURT.h + 3, "statue", true);
+  }
+  /* ═══ ZIP 427 — LE MOBILIER DE LA VIE SOCIALE ═══
+     Trois ajouts, et chacun répond à une mécanique de ce zip plutôt qu'à un
+     souci de décoration :
+       * LE TABLEAU DES NOUVELLES, sur la place. C'est lui qui rend LISIBLE
+         l'architecture sociale : qui est en ville, qui s'entend avec qui, qui
+         s'évite. Sans lui, les affinités restent un fichier de constantes que
+         personne ne voit jamais — exactement ce qu'elles étaient avant.
+       * DEUX BANCS DE VITRINE devant la Maison Garfield. Un banc n'est pas un
+         meuble ici, c'est une ACTIVITÉ (TOWN_ACTS.sit) : le poser devant la
+         boutique, c'est décider qu'on vient s'y asseoir pour regarder les gens
+         qui en sortent.
+       * LE BANC DU PARVIS DU TRIBUNAL, pour la même raison — on attend son tour
+         quelque part.
+     ⚠️ AUCUN N'EST POSÉ DEVANT UNE PORTE. Les portes des deux commerces sont au
+     milieu de leur façade sud (comme tous les bâtiments de la ville) : les bancs
+     sont décalés aux extrémités, jamais dans l'axe. C'est la version « ville »
+     du garde-fou `doorGuard` du tribunal (426), et le banc de contrôle le
+     vérifie explicitement plutôt que de me croire sur parole. */
+  {
+    const bo = C.TOWN_BOUTIQUE, sa = C.TOWN_SALON;
+    addProp(bo.x, bo.y + bo.h + 1, "bench", true);
+    addProp(bo.x + bo.w - 1, bo.y + bo.h + 1, "bench", true);
+    addProp(bo.x - 2, bo.y + bo.h, "lamp", true);
+    addProp(bo.x + bo.w + 1, bo.y + bo.h, "lamp", true);
+    addProp(sa.x + sa.w - 1, sa.y + sa.h + 1, "bench", true);
+    addProp(C.TOWN_COURT.x + C.TOWN_COURT.w + 1, C.TOWN_COURT.y + C.TOWN_COURT.h + 4, "bench", true);
+    // Le tableau des nouvelles : plein nord de la place, dans l'axe de la
+    // fontaine, hors des parterres et hors de la chaussée qui la traverse.
+    addProp(C.TOWN_PLAZA.x + 10, C.TOWN_PLAZA.y + 1, "newsBoard", true);
+    /* ⚠️ ET UN PANNEAU AU PIED DES MARCHES. Une boutique qu'on ne découvre
+       qu'en montant par hasard n'existe pas : c'est la version urbaine du
+       principe du 426 (« un bâtiment muet passe pour cassé »). On le pose au
+       bas de la volée la plus fréquentée — celle qui monte au tribunal — en
+       DÉDUISANT sa position de TOWN_STAIRS, jamais en l'écrivant à la main. */
+    const mainStair = C.TOWN_STAIRS[0];
+    if (mainStair) {
+      // Au PIED de la volée, décalé d'une case sur le côté : dans l'axe, il
+      // barrerait l'escalier — et un panneau qu'on doit contourner pour monter
+      // est pire que pas de panneau. La marche la plus BASSE est celle qui
+      // s'éloigne du palier haut, donc la dernière de la boucle du générateur.
+      const sx = mainStair.x - 2;
+      const sy = mainStair.dir === "e" ? mainStair.y + mainStair.w + 1 : mainStair.y + mainStair.len - 1;
+      if (inMap(sx, sy) && !solid[id(sx, sy)] && ground[id(sx, sy)] !== C.G_PATH) addProp(sx, sy, "streetSign", true);
+    }
+  }
+
+  for (let i = 0; i < W * H; i++) if (hedge[i]) solid[i] = 1;
+
+  /* LES ALIGNEMENTS D'ARBRES LE LONG DES AVENUES. Deux rangées régulières, en
+     retrait d'une case du bitume. C'est ce qui donne aux rues leur épaisseur —
+     une chaussée nue au milieu d'un pré n'est pas une avenue. */
+  for (const ry of C.TOWN_ST_ROWS) {
+    for (let x = 12; x < W - 8; x += 6) { plantTree(x, ry - 2); plantTree(x + 3, ry + 3); }
+  }
+
+  /* ------------------------------------------------------- LA GARE, LES RAILS
+     Le quai est dallé pour se distinguer du ballast ; le reste du dessin des
+     rails est client-side, comme avant. */
+  rect(C.TOWN_PLATFORM, (x, y, i) => { ground[i] = C.G_PATH_STONE; });
+  paveRow(C.TOWN_SPAWN.y - 1, C.TOWN_PLATFORM.x, C.TOWN_PLATFORM.x + 6);
+  /* ZIP 427 — LE BÂTIMENT DE GARE (voir TOWN_STATION). Il complète le quai :
+     une voie et des planches sans gare, c'est un arrêt de bus. Dallage devant
+     lui pour le relier au quai, empreinte bloquante — un bâtiment traversable
+     est la réciproque exacte du mur invisible du 425, et tout aussi muette. */
+  {
+    const ts = C.TOWN_STATION;
+    rect({ x: ts.x - 1, y: ts.y, w: ts.w + 2, h: ts.h + 4 }, (x, y, i) => {
+      if (elev[i] === 0 && ground[i] !== C.G_PATH) ground[i] = C.G_PATH_STONE;
+    });
+    rect(ts, (x, y, i) => { solid[i] = 1; objects[i] = C.O_NONE; objHp.delete(i); });
+  }
+
+  /* ------------------------------------------------------------- VERDURE
+     Rideau d'arbres sur les quatre bords + semis léger. `clearOf` a gagné les
+     tests qui manquaient : altitude non nulle, case déjà solide, dallage. */
   const clearOf = (x, y) => {
+    const i = id(x, y);
+    if (solid[i]) return false;
+    if (ground[i] !== C.G_GRASS && ground[i] !== C.G_TOWN_LAWN) return false;
     if (x <= C.TOWN_RAIL_X + 2 && y >= C.TOWN_PLATFORM.y - 2 && y <= C.TOWN_PLATFORM.y + C.TOWN_PLATFORM.h + 2) return false;
-    if (ground[id(x, y)] !== C.G_GRASS) return false;
+    // Jamais sur un bord de falaise : l'arbre serait dessiné à cheval sur deux
+    // altitudes et paraîtrait flotter.
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      if (inMap(x + dx, y + dy) && Math.abs(elev[id(x + dx, y + dy)] - elev[i]) > 0.01) return false;
+    }
     for (const hsn of C.TOWN_HOUSES) {
       if (x >= hsn.x - 1 && x < hsn.x + C.TOWN_HOUSE_W + 1 && y >= hsn.y - 4 && y < hsn.y + C.TOWN_HOUSE_H + 2) return false;
     }
@@ -3430,14 +4063,401 @@ export function generateTownWorld() {
   const put = (x, y) => {
     x = Math.round(x); y = Math.round(y);
     if (x < C.TOWN_RAIL_X + 2 || y < 1 || x >= W - 1 || y >= H - 1) return;
+    /* ⚠️ 426 — LE CŒUR URBAIN REFUSE ENFIN LE SEMIS, et c'est un défaut du 425
+       qu'on corrige, pas une nouveauté : la constante TOWN_CORE existait, son
+       commentaire annonçait exactement cette règle... et RIEN NE LA LISAIT. Le
+       semis tombait donc entre les rues, ce que le même commentaire décrit
+       comme le défaut à éviter (« des arbres épars faisaient lire toute la
+       ville comme une clairière »). Les arbres du centre sont PLANTÉS —
+       alignements, parc, verger, cimetière, place ; ceux du semis peuplent la
+       ceinture. ⚠️ Une constante que personne ne lit ment plus qu'elle
+       n'informe : c'est le même piège qu'un stub qui retombe sur une valeur
+       raisonnable (§10 de CLAUDE.md). */
+    const cr = C.TOWN_CORE;
+    if (x >= cr.x && y >= cr.y && x < cr.x + cr.w && y < cr.y + cr.h) return;
     const i = id(x, y);
     if (objects[i] !== C.O_NONE || !clearOf(x, y)) return;
     objects[i] = rnd() < 0.5 ? C.O_TREE : C.O_TREE2; objHp.set(i, C.TREE_HP);
   };
-  for (let x = 5; x < W - 1; x += 1) { if (rnd() < 0.75) put(x, 1 + Math.floor(rnd() * 3)); if (rnd() < 0.75) put(x, H - 2 - Math.floor(rnd() * 3)); }
-  for (let y = 1; y < H - 1; y += 1) if (rnd() < 0.75) put(W - 2 - Math.floor(rnd() * 3), y);
-  for (let i = 0; i < 70; i++) put(rnd() * W, rnd() * H);
-  return { w: W, h: H, ground, objects, objHp };
+  for (let x = 5; x < W - 1; x += 1) { if (rnd() < 0.75) put(x, 1 + Math.floor(rnd() * 4)); if (rnd() < 0.75) put(x, H - 2 - Math.floor(rnd() * 4)); }
+  for (let y = 1; y < H - 1; y += 1) if (rnd() < 0.75) put(W - 2 - Math.floor(rnd() * 4), y);
+  // Le semis suit la surface : 70 arbres sur 3 072 cases faisaient un parc,
+  // les mêmes 70 sur 27 648 auraient fait un désert.
+  for (let i = 0; i < 620; i++) put(rnd() * W, rnd() * H);
+  /* ⚠️⚠️ `hedge` FAIT PARTIE DU RETOUR, ET L'OUBLIER A COÛTÉ SIX CENTS MURS
+     INVISIBLES. Premier jet : la couche était construite, servait à remplir
+     `solid`... et n'était pas rendue. Le jeu recevait donc des centaines de
+     cases bloquantes que RIEN ne dessinait — on butait dans le vide au milieu
+     d'une pelouse, sans le moindre message d'erreur, et le rendu des haies que
+     l'on venait d'écrire ne s'affichait jamais (il testait `tw.hedge`, qui
+     valait `undefined`).
+     ⚠️ LA LEÇON : une couche qui décide d'une COLLISION doit toujours sortir
+     avec le monde, même quand on croit n'en avoir besoin que « pour construire
+     autre chose ». Le contrôle qui l'a trouvée est simple et vaut d'être
+     gardé : « toute case bloquante doit être dessinée par quelqu'un ». */
+  return { w: W, h: H, ground, objects, objHp, elev, solid, props, hedge };
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZIP 427 — LES ENDROITS OÙ L'ON VIT, DÉRIVÉS DE LA CARTE.
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️⚠️ CETTE LISTE N'EST PAS ÉCRITE, ELLE EST LUE. C'est l'application directe
+   de la leçon la plus coûteuse du projet (§8 de CLAUDE.md) : « un paramètre qui
+   DOUBLE un autre paramètre est une divergence en attente ; il doit être DÉRIVÉ,
+   jamais réglé ». Une table de coordonnées « voici les bancs de Valley Town »
+   posée à côté du générateur qui pose les bancs aurait tenu exactement jusqu'au
+   jour où l'on déplace un banc — et le symptôme aurait été un résident debout
+   dans le vide, en position assise, sans la moindre erreur.
+   Donc : le mobilier vient de `tw.props` (c'est le générateur qui l'a posé), et
+   les monuments viennent de leurs constantes (c'est là qu'ils sont définis).
+
+   ⚠️ LE POINT RENVOYÉ EST OÙ L'ON SE TIENT, PAS L'OBJET. Un banc est SOLIDE :
+   viser sa case, c'est viser un endroit où l'on ne peut pas aller. On vise donc
+   la case du DESSOUS (`sy`), celle depuis laquelle on s'assoit — et le dessin
+   « assis » posera le personnage sur le banc, décalé vers le haut.
+
+   ⚠️ ET ELLE EST MISE EN CACHE À PART, JAMAIS SUR LE MONDE. `getTownWorldCached`
+   rend un SINGLETON de module partagé par tous les remontages de l'onglet :
+   écrire `tw.spots = …` dessus serait une mutation de la carte en cache, c'est-
+   à-dire précisément l'interdit du §4. Le cache vit ici, il est purement dérivé,
+   il ne porte aucun état de partie. */
+const TOWN_SPOT_CACHE = { w: null, list: null };
+export function townSpots(tw) {
+  if (!tw) return [];
+  if (TOWN_SPOT_CACHE.w === tw && TOWN_SPOT_CACHE.list) return TOWN_SPOT_CACHE.list;
+  const list = [];
+  const add = (x, y, act, extra) => {
+    x = Math.round(x); y = Math.round(y);
+    if (x < 0 || y < 0 || x >= tw.w || y >= tw.h) return;
+    const i = y * tw.w + x;
+    // Un endroit inaccessible n'est pas un endroit : on ne propose jamais une
+    // destination sur une case solide, sur l'eau, ou sous un arbre.
+    if (tw.solid[i] || tw.ground[i] === C.G_WATER) return;
+    if (tw.objects[i] === C.O_TREE || tw.objects[i] === C.O_TREE2) return;
+    list.push({ x, y, act, ...(extra || {}) });
+  };
+  // ---- Le mobilier (posé par le générateur, donc lu chez lui).
+  for (const pr of tw.props || []) {
+    if (pr.kind === "bench") add(pr.x, pr.y + 1, "sit", { bx: pr.x, by: pr.y });
+    else if (pr.kind === "kiosk") { add(pr.x - 2, pr.y + 1, "kiosk"); add(pr.x + 2, pr.y + 1, "kiosk"); }
+    else if (pr.kind === "stall") add(pr.x, pr.y + 1, "stall");
+    else if (pr.kind === "townWell") add(pr.x + 1, pr.y + 1, "well");
+    else if (pr.kind === "grave") add(pr.x, pr.y + 1, "grave");
+    else if (pr.kind === "statue") add(pr.x, pr.y + 2, "statue");
+    else if (pr.kind === "newsBoard") add(pr.x, pr.y + 1, "board");
+  }
+  // ---- Les lieux, définis par leurs constantes.
+  const fo = C.TOWN_FOUNTAIN;
+  for (const [dx, dy] of [[-1, 0], [2, 0], [-1, 1], [2, 1], [0, 2], [1, 2], [0, -1], [1, -1]]) add(fo.x + dx, fo.y + dy, "fountain");
+  // Le ponton : on va jusqu'au bout, c'est tout l'intérêt d'un ponton.
+  add(C.TOWN_PIER.x + 1, C.TOWN_PIER.y + C.TOWN_PIER.h - 1, "pier");
+  add(C.TOWN_PIER.x + 2, C.TOWN_PIER.y + C.TOWN_PIER.h - 2, "pier");
+  // Le belvédère : on regarde vers le sud, donc on se poste au bord sud.
+  add(C.TOWN_BELVEDERE.x + 4, C.TOWN_BELVEDERE.y + C.TOWN_BELVEDERE.h - 2, "view");
+  add(C.TOWN_BELVEDERE.x + C.TOWN_BELVEDERE.w - 5, C.TOWN_BELVEDERE.y + C.TOWN_BELVEDERE.h - 2, "view");
+  // Le parvis de l'église.
+  add(C.TOWN_CHURCH.x + 3, C.TOWN_CHURCH.y + C.TOWN_CHURCH.h + 2, "pray");
+  // La vitrine de la Maison Garfield : on s'y colle le nez, on n'entre pas.
+  add(C.TOWN_BOUTIQUE.x + 1, C.TOWN_BOUTIQUE.y + C.TOWN_BOUTIQUE.h + 1, "window");
+  add(C.TOWN_BOUTIQUE.x + C.TOWN_BOUTIQUE.w - 2, C.TOWN_BOUTIQUE.y + C.TOWN_BOUTIQUE.h + 1, "window");
+  add(C.TOWN_SALON.x + 1, C.TOWN_SALON.y + C.TOWN_SALON.h + 1, "window");
+  TOWN_SPOT_CACHE.w = tw; TOWN_SPOT_CACHE.list = list;
+  return list;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZIP 426 — L'INTÉRIEUR DU TRIBUNAL. Voir le long en-tête des constantes
+   COURT_* : le plan est déduit des usages, les trois niveaux tiennent dans une
+   seule grille empilée, et le niveau se LIT dans `y`.
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️ CE GÉNÉRATEUR EST PUR ET SANS GRAINE. Il n'y a rien d'aléatoire dans un
+   bâtiment : deux visites doivent donner exactement le même couloir, sans quoi
+   deux joueurs ne décriraient pas le même endroit. Le seul « hasard » toléré
+   serait décoratif, et il n'en reste aucun.
+   ⚠️ ET IL SORT COMPLET. Leçon du 425 (« un monde doit sortir complet de son
+   constructeur ») : `tile`, `solid`, `props`, `doors` et `rooms` sont tous
+   remplis ici, y compris ce dont le rendu seul a besoin. Rien n'est ajouté
+   plus tard par un chemin d'appel particulier.
+   ═══════════════════════════════════════════════════════════════════════════ */
+export function courtFloorY0(f) { return f * (C.COURT_FLOOR_H + C.COURT_FLOOR_GAP); }
+export function courtFloorOf(y) {
+  const step = C.COURT_FLOOR_H + C.COURT_FLOOR_GAP;
+  const f = Math.floor(y / step);
+  return Math.max(0, Math.min(C.COURT_FLOORS.length - 1, f));
+}
+export function generateCourtWorld() {
+  const W = C.COURT_MAP_W, H = C.COURT_MAP_H;
+  const tile = new Uint8Array(W * H);      // CT_VOID partout au départ
+  const solid = new Uint8Array(W * H).fill(1);
+  const props = [];                        // { x, y, kind, dir? } — mobilier, dessiné client-side
+  const doors = [];                        // { x, y, floor, room } — pour les plaques et les invites
+  const id = (x, y) => y * W + x;
+  const inMap = (x, y) => x >= 0 && y >= 0 && x < W && y < H;
+  const set = (x, y, t) => {
+    if (!inMap(x, y)) return;
+    tile[id(x, y)] = t;
+    solid[id(x, y)] = (t === C.CT_VOID || t === C.CT_WALL || t === C.CT_WINDOW || t === C.CT_BARS) ? 1 : 0;
+  };
+  const fill = (x0, y0, w, h, t) => { for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) set(x, y, t); };
+  const border = (x0, y0, w, h, t) => {
+    for (let x = x0; x < x0 + w; x++) { set(x, y0, t); set(x, y0 + h - 1, t); }
+    for (let y = y0; y < y0 + h; y++) { set(x0, y, t); set(x0 + w - 1, y, t); }
+  };
+  /* ⚠️⚠️ AUCUN MEUBLE DEVANT UNE PORTE — ET C'EST UN GARDE-FOU, PAS UNE
+     CONVENTION. Premier jet : les colonnes du couloir (posées tous les cinq
+     pas) et le panneau d'affichage tombaient devant quatre portes sur dix-sept.
+     Résultat : SIX PIÈCES INACCESSIBLES, dont la salle d'audience et les
+     cellules — un bâtiment de dix-sept pièces dont un tiers est murées, sans
+     la moindre erreur à l'exécution. Trouvé par tools/verify-vallee.mjs, pas à
+     la relecture : une colonne à (19,12) et une porte à (18,12) sont écrites à
+     cent lignes l'une de l'autre.
+     ⚠️ IL PARLE. Un meuble refusé en silence, c'est un panneau d'affichage qui
+     disparaît sans que personne ne le sache — exactement le repli menteur que
+     CLAUDE.md proscrit. On refuse ET on le dit. */
+  const doorGuard = new Set();
+  for (const r of C.COURT_ROOMS) {
+    const fy = courtFloorY0(r.floor);
+    for (const d of r.doors) {
+      for (const [dx, dy] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) doorGuard.add(`${d.x + dx},${fy + d.y + dy}`);
+    }
+  }
+  for (let f = 0; f < C.COURT_FLOORS.length; f++) {
+    const fy = courtFloorY0(f);
+    for (const sw of C.COURT_STAIRWELLS) {
+      for (let y = sw.y; y < sw.y + sw.h + 1; y++) for (let x = sw.x; x < sw.x + sw.w; x++) doorGuard.add(`${x},${fy + y}`);
+    }
+  }
+  for (const dx of [0, 1]) for (const dy of [0, -1]) doorGuard.add(`${C.COURT_ENTRY.x + dx},${C.COURT_ENTRY.y + dy}`);
+  const addProp = (x, y, kind, blocks, extra) => {
+    if (!inMap(x, y)) return;
+    if (blocks && doorGuard.has(`${x},${y}`)) {
+      console.warn(`[TRIBUNAL] meuble « ${kind} » refusé en (${x},${y}) : il bouchait une porte, un escalier ou le seuil.`);
+      return;
+    }
+    props.push({ x, y, kind, ...(extra || {}) });
+    if (blocks) solid[id(x, y)] = 1;
+  };
+
+  for (let f = 0; f < C.COURT_FLOORS.length; f++) {
+    const y0 = courtFloorY0(f);
+    const groundFloor = f === 0, basement = f === 2;
+    // ---- L'ENVELOPPE : le couloir occupe tout le niveau, les pièces viennent
+    // le découper. On pose donc le sol partout puis le mur d'enceinte.
+    fill(0, y0, C.COURT_FLOOR_W, C.COURT_FLOOR_H, basement ? C.CT_STONE : C.CT_MARBLE);
+    border(0, y0, C.COURT_FLOOR_W, C.COURT_FLOOR_H, C.CT_WALL);
+    /* Les FENÊTRES du mur d'enceinte. Elles ne servent à rien mécaniquement —
+       et c'est justement pour ça qu'il en faut : un couloir aveugle de 46 cases
+       se lit comme une cave, à tous les étages. Le sous-sol n'en a pas, ce qui
+       est exactement ce qui le fait ressembler à un sous-sol. */
+    if (!basement) {
+      for (let x = 3; x < C.COURT_FLOOR_W - 3; x += 5) { set(x, y0, C.CT_WINDOW); set(x, y0 + C.COURT_FLOOR_H - 1, C.CT_WINDOW); }
+      for (let y = y0 + 3; y < y0 + C.COURT_FLOOR_H - 3; y += 5) { set(0, y, C.CT_WINDOW); set(C.COURT_FLOOR_W - 1, y, C.CT_WINDOW); }
+    }
+
+    // ---- LES PIÈCES DE CE NIVEAU.
+    for (const r of C.COURT_ROOMS) {
+      if (r.floor !== f) continue;
+      const rx = r.x, ry = y0 + r.y;
+      border(rx, ry, r.w, r.h, C.CT_WALL);
+      fill(rx + 1, ry + 1, r.w - 2, r.h - 2, basement ? C.CT_STONE : (r.kind === "courtroom" ? C.CT_CARPET : C.CT_WOOD));
+      for (const d of r.doors) {
+        set(d.x, y0 + d.y, C.CT_DOOR);
+        doors.push({ x: d.x, y: y0 + d.y, floor: f, room: r.key });
+      }
+      courtFurnish(r, rx, ry, addProp, set, fill);
+    }
+
+    /* ---- LE COULOIR CENTRAL (la « salle des pas perdus »). Colonnes le long
+       des deux cloisons, bancs entre elles. ⚠️ LES COLONNES BLOQUENT : une
+       colonne qu'on traverse est pire que pas de colonne, parce qu'elle promet
+       une architecture qu'on démentira au premier pas. */
+    const cx0 = C.COURT_CORRIDOR.x + 1, cx1 = C.COURT_CORRIDOR.x + C.COURT_CORRIDOR.w - 2;
+    for (let y = y0 + 7; y < y0 + C.COURT_FLOOR_H - 2; y += 5) {
+      addProp(cx0, y, "pillar", true);
+      addProp(cx1, y, "pillar", true);
+      addProp(cx0 + 1, y + 2, "bench", true);
+      addProp(cx1 - 1, y + 2, "bench", true);
+    }
+    /* ---- LES ESCALIERS. Une cage n'apparaît qu'aux DEUX niveaux qu'elle relie,
+       et son sens se DÉDUIT des altitudes (voir COURT_FLOORS.alt) : la même
+       cage est « qui monte » d'un côté et « qui descend » de l'autre, sans
+       qu'aucune table ne l'affirme deux fois. */
+    for (const sw of C.COURT_STAIRWELLS) {
+      const other = sw.a === f ? sw.b : sw.b === f ? sw.a : -1;
+      if (other < 0) continue;
+      const up = C.COURT_FLOORS[other].alt > C.COURT_FLOORS[f].alt;
+      fill(sw.x, y0 + sw.y, sw.w, sw.h, up ? C.CT_STAIR_UP : C.CT_STAIR_DOWN);
+    }
+    if (groundFloor) {
+      // LE SEUIL. Deux cases au mur sud : c'est par là qu'on entre et qu'on
+      // ressort, et c'est la seule ouverture du bâtiment.
+      set(C.COURT_ENTRY.x, y0 + C.COURT_ENTRY.y, C.CT_EXIT);
+      set(C.COURT_ENTRY.x + 1, y0 + C.COURT_ENTRY.y, C.CT_EXIT);
+      // La statue de la Justice entre les deux volées, au fond du hall : le
+      // point de fuite du couloir. Sans elle, on entre face à un mur nu.
+      addProp(22, y0 + 4, "justice", true);
+      addProp(23, y0 + 4, "justice2", true);   // moitié droite (le sprite fait deux cases)
+      // Le PANNEAU D'AFFICHAGE, à droite en entrant : c'est lui qui annonce
+      // l'ouverture prochaine des services (voir COURT_BOARD_ORDER).
+      addProp(26, y0 + 20, "board", true);   // hors de l'axe des portes (voir doorGuard)
+      addProp(19, y0 + 20, "plant", true);
+    }
+    if (f === 1) addProp(22, y0 + 4, "plant", true);
+    if (basement) { addProp(22, y0 + 4, "crate", true); addProp(23, y0 + 5, "crate", true); }
+  }
+  return { w: W, h: H, tile, solid, props, doors, rooms: C.COURT_ROOMS };
+}
+
+/* LE MOBILIER, PIÈCE PAR TYPE. ⚠️ IL EST DÉRIVÉ DU RECTANGLE, jamais écrit en
+   coordonnées absolues : les pièces ont bougé quatre fois pendant l'écriture du
+   plan, et pas une position de bureau n'a eu à être retouchée. C'est la même
+   règle que les téléporteurs du 425 (§7 : ce qui double un autre paramètre doit
+   être DÉRIVÉ). `ix/iy/iw/ih` = l'intérieur, murs exclus. */
+function courtFurnish(r, rx, ry, addProp, set, fill) {
+  const ix = rx + 1, iy = ry + 1, iw = r.w - 2, ih = r.h - 2;
+  const cx = ix + (iw >> 1), cy = iy + (ih >> 1);
+  switch (r.kind) {
+    case "courtroom": {
+      /* LA SALLE D'AUDIENCE. Elle se lit du fond vers l'entrée, et c'est la
+         seule pièce du bâtiment dont la disposition n'est pas négociable :
+         l'estrade et le juge au fond (nord), la barre au milieu, le public
+         devant la porte. Un tribunal où le public est derrière le juge n'est
+         plus un tribunal, c'est une salle de réunion. */
+      fill(ix + 2, iy + 1, iw - 4, 4, C.CT_DAIS);            // l'estrade
+      addProp(cx - 1, iy + 3, "judgeBench", true);           // le siège du juge (2 cases)
+      addProp(cx, iy + 3, "judgeBench2", true);
+      addProp(cx - 3, iy + 2, "flag", true); addProp(cx + 2, iy + 2, "flag", true);
+      addProp(ix + 1, iy + 5, "desk", true);                 // le greffier, au pied de l'estrade
+      addProp(ix + iw - 2, iy + 5, "witnessBox", true);      // la barre des témoins, en face
+      for (let k = 0; k < 3; k++) addProp(ix + 1, iy + 8 + k, "juryBench", true); // le banc des jurés, à l'ouest
+      // La BARRE qui sépare le prétoire du public : une balustrade basse. Elle
+      // bloque, sauf au portillon central — sinon la salle n'a pas de seuil.
+      for (let x = ix; x < ix + iw; x++) {
+        if (x === cx || x === cx + 1) continue;
+        addProp(x, iy + 12, "railing", true);
+      }
+      // Les bancs du public, de part et d'autre de l'allée centrale.
+      // ⚠️ DEUX RANGÉES, PAS TROIS : la troisième tombait sur le mur sud de la
+      // salle. Le compte se DÉDUIT de la hauteur intérieure plutôt que d'être
+      // choisi — c'est la seule façon de ne pas avoir à y repenser si la salle
+      // change de taille.
+      for (let k = 0; iy + 14 + k * 2 < iy + ih - 1; k++) {
+        addProp(ix + 2, iy + 14 + k * 2, "pew", true);
+        addProp(ix + iw - 5, iy + 14 + k * 2, "pew", true);
+      }
+      break;
+    }
+    case "office": {
+      // Bureau, fauteuil derrière, deux chaises de visiteur devant : c'est ce
+      // triangle qui dit « on vient y demander quelque chose ».
+      addProp(cx, iy + 2, "desk", true);
+      addProp(cx, iy + 1, "chair", true);
+      addProp(cx - 1, iy + 4, "chair", true); addProp(cx + 1, iy + 4, "chair", true);
+      addProp(ix, iy, "shelf", true); addProp(ix + 1, iy, "shelf", true);
+      addProp(ix + iw - 1, iy, "cabinet", true);
+      addProp(ix + iw - 1, iy + ih - 1, "plant", true);
+      break;
+    }
+    case "counter": {
+      // Un GUICHET, pas un bureau : le comptoir barre la pièce dans sa largeur
+      // et le public reste du bon côté. C'est la différence de lecture entre
+      // « service ouvert au public » et « bureau où l'on entre ».
+      for (let x = ix + 1; x < ix + iw - 1; x++) addProp(x, iy + 2, "counter", true);
+      addProp(ix + 1, iy, "chair", true);
+      for (let k = 0; k < 3; k++) addProp(ix + iw - 1 - k, iy, "cabinet", true);
+      addProp(ix, iy + ih - 1, "plant", true);
+      for (let k = 0; k < 2; k++) addProp(ix + 2 + k * 4, iy + ih - 2, "bench", true);
+      break;
+    }
+    case "robing": {
+      for (let x = ix; x < ix + iw; x += 2) addProp(x, iy, "locker", true);
+      addProp(cx, cy, "table", true);
+      addProp(ix, iy + ih - 1, "bench", true); addProp(ix + 4, iy + ih - 1, "bench", true);
+      addProp(ix + iw - 1, cy, "mirror", true);
+      break;
+    }
+    case "waiting": {
+      for (let k = 0; k < 4; k++) { addProp(ix + 1 + k * 4, iy + 1, "bench", true); addProp(ix + 1 + k * 4, iy + ih - 2, "bench", true); }
+      addProp(ix, cy, "plant", true); addProp(ix + iw - 1, cy, "plant", true);
+      addProp(cx, iy + 1, "table", true);
+      break;
+    }
+    case "meeting": {
+      // La table de délibération, au centre, entourée de chaises : la pièce EST
+      // la table. Une salle du jury sans table est un placard.
+      for (let x = cx - 3; x <= cx + 3; x++) addProp(x, cy, "table", true);
+      for (let x = cx - 3; x <= cx + 3; x += 2) { addProp(x, cy - 1, "chair", true); addProp(x, cy + 1, "chair", true); }
+      addProp(ix, iy, "shelf", true);
+      addProp(ix + iw - 1, iy + ih - 1, "plant", true);
+      break;
+    }
+    case "library": {
+      for (let y = iy; y < iy + ih - 1; y += 3) for (let x = ix; x < ix + iw; x++) {
+        if (x === cx || x === cx + 1) continue;      // l'allée centrale
+        addProp(x, y, "shelf", true);
+      }
+      addProp(cx, iy + ih - 1, "table", true);
+      break;
+    }
+    case "archive": {
+      // Des rayonnages EN RANGS serrés, avec une seule allée : c'est la densité
+      // qui dit « archives » — trois étagères espacées disent « bureau ».
+      for (let y = iy + 1; y < iy + ih - 1; y += 2) for (let x = ix; x < ix + iw; x++) {
+        if (x === cx) continue;
+        addProp(x, y, "shelf", true);
+      }
+      break;
+    }
+    case "storage": {
+      for (let y = iy; y < iy + ih; y += 3) for (let x = ix; x < ix + iw; x += 3) {
+        if (x === cx) continue;
+        addProp(x, y, "crate", true);
+      }
+      addProp(ix + iw - 1, iy, "shelf", true);
+      break;
+    }
+    case "cells": {
+      /* LES CELLULES. Trois cages alignées le long du mur du fond, séparées par
+         des cloisons, fermées par une GRILLE (CT_BARS) — un mur qu'on voit au
+         travers. ⚠️ Les grilles sont dans le SOL et non dans les props : elles
+         bloquent, donc elles doivent être une propriété de la case, comme tout
+         ce qui décide d'une collision (leçon du 425). */
+      // ⚠️ 4 CASES DE LARGE, ET LE COMPTE EST SERRÉ : trois cellules + leurs
+      // cloisons doivent tenir dans les 17 cases utiles. À 5, la troisième
+      // grille tombait SUR le mur d'enceinte — c'est-à-dire une cellule sans
+      // paroi est, ouverte sur le vide, et rien ne l'aurait signalé.
+      const cw = 4;
+      for (let k = 0; k < 3; k++) {
+        const bx = ix + 1 + k * (cw + 1);
+        // ⚠️ LES CLOISONS MONTENT JUSQU'AU MUR DU FOND (iy, et non iy+1) : une
+        // rangée laissée libre en haut faisait communiquer les trois cellules
+        // par l'arrière. Trois cellules qui communiquent, c'est une seule.
+        for (let y = iy; y <= iy + 5; y++) { set(bx - 1, y, C.CT_WALL); set(bx + cw, y, C.CT_WALL); }
+        for (let x = bx; x < bx + cw; x++) set(x, iy + 6, C.CT_BARS);
+        set(bx + 2, iy + 6, C.CT_DOOR);                       // la porte de la cellule
+        addProp(bx, iy + 1, "bunk", true);
+        addProp(bx + cw - 1, iy + 4, "stoolC", true);
+      }
+      addProp(ix, iy + ih - 2, "desk", true);                 // le poste de garde
+      addProp(ix, iy + ih - 3, "chair", true);
+      // La colonne qui reste à l'est des trois cages : trois cellules de quatre
+      // cases et leurs cloisons laissent une case de rab. On la MEUBLE plutôt
+      // que de la laisser en alcôve borgne — un recoin vide dans une prison se
+      // lit comme une erreur de plan.
+      // ⚠️ TOUTE la colonne, pas une case sur deux : le banc a trouvé deux cases
+      // libres PRISES AU PIÈGE entre deux armoires, dans un recoin d'une case de
+      // large. Un espace libre inatteignable est un mur invisible qui s'ignore.
+      for (let y = iy; y <= iy + 6; y++) addProp(ix + iw - 1, y, "cabinet", true);
+      break;
+    }
+    case "boiler": {
+      addProp(cx, iy + 1, "boiler", true);
+      addProp(cx + 2, iy + 1, "boiler", true);
+      for (let k = 0; k < 3; k++) addProp(ix + k, iy + ih - 1, "crate", true);
+      break;
+    }
+    default: break;
+  }
 }
 
 // Schedule the next visit on the host clock: random base window, shortened

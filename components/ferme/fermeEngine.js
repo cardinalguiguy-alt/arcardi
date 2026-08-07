@@ -3678,7 +3678,16 @@ export function generateTownWorld() {
   forecourt(C.TOWN_CHURCH, 5);
   forecourt(C.TOWN_HALL, 4);
   forecourt(C.TOWN_COURT, 6);
-  for (const b of [C.TOWN_CHURCH, C.TOWN_HALL, C.TOWN_COURT]) rect(b, (x, y, i) => { solid[i] = 1; });
+  /* ZIP 427 — LES DEUX COMMERCES DE LA HAUTE-VILLE. Ils passent par le MÊME
+     `forecourt` que les monuments, et ce n'est pas de la paresse : c'est lui qui
+     dalle le devant, pose le gazon des flancs et tire l'allée jusqu'à la rue. Un
+     bâtiment posé sans lui aurait été une boîte dans l'herbe — et se serait vu
+     immédiatement à côté de trois monuments qui, eux, ont leur parvis.
+     ⚠️ Un parvis COURT (2) : la promenade de la terrasse passe à quatre rangées
+     du bord (voir plus haut), un parvis profond l'aurait avalée. */
+  forecourt(C.TOWN_BOUTIQUE, 2);
+  forecourt(C.TOWN_SALON, 2);
+  for (const b of [C.TOWN_CHURCH, C.TOWN_HALL, C.TOWN_COURT, C.TOWN_BOUTIQUE, C.TOWN_SALON]) rect(b, (x, y, i) => { solid[i] = 1; });
 
   /* --------------------------------------------------------- LES MAISONS
      Empreinte bloquante + allée jusqu'à la rue SOUS la parcelle.
@@ -3961,6 +3970,51 @@ export function generateTownWorld() {
     addProp(C.TOWN_BELVEDERE.x + (C.TOWN_BELVEDERE.w >> 1), C.TOWN_BELVEDERE.y + 5, "statue", true);
     addProp(C.TOWN_COURT.x - 3, C.TOWN_COURT.y + C.TOWN_COURT.h + 3, "statue", true);
   }
+  /* ═══ ZIP 427 — LE MOBILIER DE LA VIE SOCIALE ═══
+     Trois ajouts, et chacun répond à une mécanique de ce zip plutôt qu'à un
+     souci de décoration :
+       * LE TABLEAU DES NOUVELLES, sur la place. C'est lui qui rend LISIBLE
+         l'architecture sociale : qui est en ville, qui s'entend avec qui, qui
+         s'évite. Sans lui, les affinités restent un fichier de constantes que
+         personne ne voit jamais — exactement ce qu'elles étaient avant.
+       * DEUX BANCS DE VITRINE devant la Maison Garfield. Un banc n'est pas un
+         meuble ici, c'est une ACTIVITÉ (TOWN_ACTS.sit) : le poser devant la
+         boutique, c'est décider qu'on vient s'y asseoir pour regarder les gens
+         qui en sortent.
+       * LE BANC DU PARVIS DU TRIBUNAL, pour la même raison — on attend son tour
+         quelque part.
+     ⚠️ AUCUN N'EST POSÉ DEVANT UNE PORTE. Les portes des deux commerces sont au
+     milieu de leur façade sud (comme tous les bâtiments de la ville) : les bancs
+     sont décalés aux extrémités, jamais dans l'axe. C'est la version « ville »
+     du garde-fou `doorGuard` du tribunal (426), et le banc de contrôle le
+     vérifie explicitement plutôt que de me croire sur parole. */
+  {
+    const bo = C.TOWN_BOUTIQUE, sa = C.TOWN_SALON;
+    addProp(bo.x, bo.y + bo.h + 1, "bench", true);
+    addProp(bo.x + bo.w - 1, bo.y + bo.h + 1, "bench", true);
+    addProp(bo.x - 2, bo.y + bo.h, "lamp", true);
+    addProp(bo.x + bo.w + 1, bo.y + bo.h, "lamp", true);
+    addProp(sa.x + sa.w - 1, sa.y + sa.h + 1, "bench", true);
+    addProp(C.TOWN_COURT.x + C.TOWN_COURT.w + 1, C.TOWN_COURT.y + C.TOWN_COURT.h + 4, "bench", true);
+    // Le tableau des nouvelles : plein nord de la place, dans l'axe de la
+    // fontaine, hors des parterres et hors de la chaussée qui la traverse.
+    addProp(C.TOWN_PLAZA.x + 10, C.TOWN_PLAZA.y + 1, "newsBoard", true);
+    /* ⚠️ ET UN PANNEAU AU PIED DES MARCHES. Une boutique qu'on ne découvre
+       qu'en montant par hasard n'existe pas : c'est la version urbaine du
+       principe du 426 (« un bâtiment muet passe pour cassé »). On le pose au
+       bas de la volée la plus fréquentée — celle qui monte au tribunal — en
+       DÉDUISANT sa position de TOWN_STAIRS, jamais en l'écrivant à la main. */
+    const mainStair = C.TOWN_STAIRS[0];
+    if (mainStair) {
+      // Au PIED de la volée, décalé d'une case sur le côté : dans l'axe, il
+      // barrerait l'escalier — et un panneau qu'on doit contourner pour monter
+      // est pire que pas de panneau. La marche la plus BASSE est celle qui
+      // s'éloigne du palier haut, donc la dernière de la boucle du générateur.
+      const sx = mainStair.x - 2;
+      const sy = mainStair.dir === "e" ? mainStair.y + mainStair.w + 1 : mainStair.y + mainStair.len - 1;
+      if (inMap(sx, sy) && !solid[id(sx, sy)] && ground[id(sx, sy)] !== C.G_PATH) addProp(sx, sy, "streetSign", true);
+    }
+  }
 
   for (let i = 0; i < W * H; i++) if (hedge[i]) solid[i] = 1;
 
@@ -3976,6 +4030,17 @@ export function generateTownWorld() {
      rails est client-side, comme avant. */
   rect(C.TOWN_PLATFORM, (x, y, i) => { ground[i] = C.G_PATH_STONE; });
   paveRow(C.TOWN_SPAWN.y - 1, C.TOWN_PLATFORM.x, C.TOWN_PLATFORM.x + 6);
+  /* ZIP 427 — LE BÂTIMENT DE GARE (voir TOWN_STATION). Il complète le quai :
+     une voie et des planches sans gare, c'est un arrêt de bus. Dallage devant
+     lui pour le relier au quai, empreinte bloquante — un bâtiment traversable
+     est la réciproque exacte du mur invisible du 425, et tout aussi muette. */
+  {
+    const ts = C.TOWN_STATION;
+    rect({ x: ts.x - 1, y: ts.y, w: ts.w + 2, h: ts.h + 4 }, (x, y, i) => {
+      if (elev[i] === 0 && ground[i] !== C.G_PATH) ground[i] = C.G_PATH_STONE;
+    });
+    rect(ts, (x, y, i) => { solid[i] = 1; objects[i] = C.O_NONE; objHp.delete(i); });
+  }
 
   /* ------------------------------------------------------------- VERDURE
      Rideau d'arbres sur les quatre bords + semis léger. `clearOf` a gagné les
@@ -4031,6 +4096,73 @@ export function generateTownWorld() {
      autre chose ». Le contrôle qui l'a trouvée est simple et vaut d'être
      gardé : « toute case bloquante doit être dessinée par quelqu'un ». */
   return { w: W, h: H, ground, objects, objHp, elev, solid, props, hedge };
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZIP 427 — LES ENDROITS OÙ L'ON VIT, DÉRIVÉS DE LA CARTE.
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️⚠️ CETTE LISTE N'EST PAS ÉCRITE, ELLE EST LUE. C'est l'application directe
+   de la leçon la plus coûteuse du projet (§8 de CLAUDE.md) : « un paramètre qui
+   DOUBLE un autre paramètre est une divergence en attente ; il doit être DÉRIVÉ,
+   jamais réglé ». Une table de coordonnées « voici les bancs de Valley Town »
+   posée à côté du générateur qui pose les bancs aurait tenu exactement jusqu'au
+   jour où l'on déplace un banc — et le symptôme aurait été un résident debout
+   dans le vide, en position assise, sans la moindre erreur.
+   Donc : le mobilier vient de `tw.props` (c'est le générateur qui l'a posé), et
+   les monuments viennent de leurs constantes (c'est là qu'ils sont définis).
+
+   ⚠️ LE POINT RENVOYÉ EST OÙ L'ON SE TIENT, PAS L'OBJET. Un banc est SOLIDE :
+   viser sa case, c'est viser un endroit où l'on ne peut pas aller. On vise donc
+   la case du DESSOUS (`sy`), celle depuis laquelle on s'assoit — et le dessin
+   « assis » posera le personnage sur le banc, décalé vers le haut.
+
+   ⚠️ ET ELLE EST MISE EN CACHE À PART, JAMAIS SUR LE MONDE. `getTownWorldCached`
+   rend un SINGLETON de module partagé par tous les remontages de l'onglet :
+   écrire `tw.spots = …` dessus serait une mutation de la carte en cache, c'est-
+   à-dire précisément l'interdit du §4. Le cache vit ici, il est purement dérivé,
+   il ne porte aucun état de partie. */
+const TOWN_SPOT_CACHE = { w: null, list: null };
+export function townSpots(tw) {
+  if (!tw) return [];
+  if (TOWN_SPOT_CACHE.w === tw && TOWN_SPOT_CACHE.list) return TOWN_SPOT_CACHE.list;
+  const list = [];
+  const add = (x, y, act, extra) => {
+    x = Math.round(x); y = Math.round(y);
+    if (x < 0 || y < 0 || x >= tw.w || y >= tw.h) return;
+    const i = y * tw.w + x;
+    // Un endroit inaccessible n'est pas un endroit : on ne propose jamais une
+    // destination sur une case solide, sur l'eau, ou sous un arbre.
+    if (tw.solid[i] || tw.ground[i] === C.G_WATER) return;
+    if (tw.objects[i] === C.O_TREE || tw.objects[i] === C.O_TREE2) return;
+    list.push({ x, y, act, ...(extra || {}) });
+  };
+  // ---- Le mobilier (posé par le générateur, donc lu chez lui).
+  for (const pr of tw.props || []) {
+    if (pr.kind === "bench") add(pr.x, pr.y + 1, "sit", { bx: pr.x, by: pr.y });
+    else if (pr.kind === "kiosk") { add(pr.x - 2, pr.y + 1, "kiosk"); add(pr.x + 2, pr.y + 1, "kiosk"); }
+    else if (pr.kind === "stall") add(pr.x, pr.y + 1, "stall");
+    else if (pr.kind === "townWell") add(pr.x + 1, pr.y + 1, "well");
+    else if (pr.kind === "grave") add(pr.x, pr.y + 1, "grave");
+    else if (pr.kind === "statue") add(pr.x, pr.y + 2, "statue");
+    else if (pr.kind === "newsBoard") add(pr.x, pr.y + 1, "board");
+  }
+  // ---- Les lieux, définis par leurs constantes.
+  const fo = C.TOWN_FOUNTAIN;
+  for (const [dx, dy] of [[-1, 0], [2, 0], [-1, 1], [2, 1], [0, 2], [1, 2], [0, -1], [1, -1]]) add(fo.x + dx, fo.y + dy, "fountain");
+  // Le ponton : on va jusqu'au bout, c'est tout l'intérêt d'un ponton.
+  add(C.TOWN_PIER.x + 1, C.TOWN_PIER.y + C.TOWN_PIER.h - 1, "pier");
+  add(C.TOWN_PIER.x + 2, C.TOWN_PIER.y + C.TOWN_PIER.h - 2, "pier");
+  // Le belvédère : on regarde vers le sud, donc on se poste au bord sud.
+  add(C.TOWN_BELVEDERE.x + 4, C.TOWN_BELVEDERE.y + C.TOWN_BELVEDERE.h - 2, "view");
+  add(C.TOWN_BELVEDERE.x + C.TOWN_BELVEDERE.w - 5, C.TOWN_BELVEDERE.y + C.TOWN_BELVEDERE.h - 2, "view");
+  // Le parvis de l'église.
+  add(C.TOWN_CHURCH.x + 3, C.TOWN_CHURCH.y + C.TOWN_CHURCH.h + 2, "pray");
+  // La vitrine de la Maison Garfield : on s'y colle le nez, on n'entre pas.
+  add(C.TOWN_BOUTIQUE.x + 1, C.TOWN_BOUTIQUE.y + C.TOWN_BOUTIQUE.h + 1, "window");
+  add(C.TOWN_BOUTIQUE.x + C.TOWN_BOUTIQUE.w - 2, C.TOWN_BOUTIQUE.y + C.TOWN_BOUTIQUE.h + 1, "window");
+  add(C.TOWN_SALON.x + 1, C.TOWN_SALON.y + C.TOWN_SALON.h + 1, "window");
+  TOWN_SPOT_CACHE.w = tw; TOWN_SPOT_CACHE.list = list;
+  return list;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

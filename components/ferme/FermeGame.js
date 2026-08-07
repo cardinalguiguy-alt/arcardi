@@ -416,6 +416,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [injuredUntil, setInjuredUntil] = useState(0); // horodatage de fin d'indisponibilité (0 = pas blessé), survit à un refresh (voir farmer.injuredUntil)
   const [immunityUntil, setImmunityUntil] = useState(0); // pommade de protection (chantier 2026-07) : horodatage de fin d'immunité/répulsion aux créatures maléfiques (0 = inactif), effet purement local, ne survit pas à un refresh
   const [shopOpen, setShopOpen] = useState(false);
+  /* Zip 427 — Maison Garfield. `boutiqueOpen` porte l'onglet courant plutôt
+     qu'un simple booléen : la vitrine a quatre rayons et on y revient toujours
+     sur le même. `wardrobeTick` ne sert QU'À redessiner l'interface quand la
+     garde-robe change — l'état, lui, vit dans `sharedRef` (il est partagé et
+     sauvegardé), pas dans un état React qui en serait la copie. Deux vérités
+     pour une tenue, c'est un chapeau qu'on porte dans le menu et pas dans le
+     monde. */
+  const [boutiqueOpen, setBoutiqueOpen] = useState(null);
+  const [newsBoardOpen, setNewsBoardOpen] = useState(false);
+  const [wardrobeTick, setWardrobeTick] = useState(0);
   // Zip 280 (bijouterie) : modale de design ouverte + brouillon en cours
   // (purement local tant que "Fabriquer" n'est pas cliqué — rien n'est
   // envoyé à l'hôte avant validation).
@@ -465,6 +475,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const pitySeenRef = useRef({});                       // zip 298: artisans à skill déjà VUS cette session (rid -> true) — désamorce la garantie
   const ducksRef = useRef(null);                       // decorative ducks (client-side, seeded)
   const leoTrailRef = useRef(null);                    // zip 376 : traîne des positions de Carla, d'où est DÉRIVÉE celle de Leo (voir leoFollow)
+  /* Zip 427 — Valley Town habitée. Deux cadences côté HÔTE (départs/retours de
+     séjour, appariement des rencontres) et une table de traînes pour les
+     ACCOMPAGNANTS, qui suivent leur résident exactement comme Leo suit Carla.
+     ⚠️ LA TABLE DES TRAÎNES EST UNE `Map`, PAS UN CHAMP SUR LE RÉSIDENT : elle
+     est purement locale et cosmétique (chaque client la reconstruit), alors que
+     `res` est un objet PARTAGÉ qui part dans `broadcastStation`. Y coller
+     soixante-quatre échantillons de position par résident aurait gonflé un
+     message déjà gros — pour une donnée que le destinataire recalcule
+     lui-même. */
+  const townTripNextCheckRef = useRef(0);
+  const townMeetNextRef = useRef(0);
+  const guestTrailsRef = useRef(new Map());
+  const townKioskUntilRef = useRef(0);   // notes de musique au kiosque (purement local, cf. TOWN_KIOSK_NOTE_MS)
   const rabbitSeedDoneRef = useRef(false);             // zip 366 : peuplement initial des lapins tiré de la graine, une fois par session (même principe que ducksRef)
   const adsOpenRef = useRef(false);
   const visitorOpenRef = useRef(false);
@@ -647,7 +670,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const meRef = useRef(null);
   const playersRef = useRef(new Map()); // id -> remote farmer render data
   const farmersRef = useRef({});        // hôte : id -> état privé arbitré
-  const sharedRef = useRef({ seed: 0, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, barn: E.newBarnState(), salveCraft: E.newSalveCraftState(), house: { level: 1, upgradeUntil: 0 }, evilMonsters: [], flour: 0, sugar: 0, gregStock: { wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) }, fertilizerShop: { stock: 0, lastRestockDay: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], greg: null, soan: null, harald: null, station: E.newStationState(), decor: [], crafts: E.newCrafts(), craftStock: E.newCraftStock(), townChop: {} });
+  const sharedRef = useRef({ seed: 0, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, barn: E.newBarnState(), salveCraft: E.newSalveCraftState(), house: { level: 1, upgradeUntil: 0 }, evilMonsters: [], flour: 0, sugar: 0, gregStock: { wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) }, fertilizerShop: { stock: 0, lastRestockDay: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], greg: null, soan: null, harald: null, station: E.newStationState(), decor: [], crafts: E.newCrafts(), craftStock: E.newCraftStock(), townChop: {}, wardrobe: {} });
   const invRef = useRef(null);
   const toolsRef = useRef({ hoe: 1, can: 1, axe: 1, pick: 1 });
   const energyRef = useRef(C.MAX_ENERGY);
@@ -1056,6 +1079,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            ANTÉRIEURE = ville intacte, et c'est le bon comportement — aucune
            migration à écrire, exactement comme `forcedWorld` au 392. */
         townChop: (saved && saved.townChop) || {},
+        /* ZIP 427 — LA GARDE-ROBE ACHETÉE À LA MAISON GARFIELD, par joueur.
+           ⚠️ AUCUNE MIGRATION SQL : c'est un champ de plus dans le JSON de
+           `ferme_saves`, exactement comme `townChop` au 426 et `forcedWorld` au
+           392. Absente d'une sauvegarde antérieure = tout le monde habillé comme
+           avant, ce qui est le bon comportement.
+           Forme : { [playerId]: { owned: { hat:[..], scarf:[..], outfit:[..], tint:[..] },
+                                   worn: { hat, scarf, outfit, tint } } }, indices
+           décalés de 1 (0 = rien porté, voir wardrobeLook). */
+        wardrobe: (saved && saved.wardrobe) || {},
         crafts: E.migrateCrafts(saved.crafts), craftStock: E.migrateCraftStock(saved.craftStock), // zip 252
         greg: (saved.greg && saved.greg.expiresAt > Date.now())
           // Chantier 2 (feuille de route) : `orderQueue` est un ajout — les
@@ -1279,6 +1311,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       decor: E.migrateDecor(payload.decor), // zip 251
       crafts: E.migrateCrafts(payload.crafts), craftStock: E.migrateCraftStock(payload.craftStock), // zip 252
       townChop: payload.townChop || {}, // zip 426
+      wardrobe: payload.wardrobe || {},  // zip 427
     };
     // Zip 392 : la terre forcée arrive AVEC l'instantané, donc avant toute
     // évaluation de passageWorldIndex par ce client. Posée ici et pas dans le
@@ -1770,6 +1803,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          chemin à lui finirait par ne pas être sauvegardé le jour où l'on touche
          à l'autre (leçon des vergers, zip 398). */
       townChop: s.townChop || {},
+      // Zip 427 : la garde-robe suit le même chemin, pour la même raison.
+      wardrobe: s.wardrobe || {},
       // Zip 392 : terre forcée par le menu développeur. Persistée à la demande
       // de Guillaume ("tout le monde + persisté") pour qu'une démonstration
       // survive à un rechargement. Champ du seul instantané JSON déjà en base :
@@ -2039,6 +2074,42 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // voit la terre basculer sans explication croit à un bug de rotation.
       broadcastChat("🛠️", spec ? L.devWorldChat(f.name, lang === "en" ? spec.nameEn : spec.name)
                                 : L.devRotationChat(f.name));
+      hostFlushOut(out, f, null);
+      return;
+    }
+    if (req.kind === "devResidents") {
+      /* ═══ ZIP 427 — PEUPLER LA FERME D'UN COUP (menu développeur) ═══
+         ⚠️ CE N'EST PAS UN CONFORT, C'EST CE QUI REND LA VIE SOCIALE
+         VÉRIFIABLE. Tout ce que ce zip ajoute — les séjours en ville, les
+         rencontres, les invités de la famille, le tableau des nouvelles —
+         n'existe qu'À PARTIR de plusieurs résidents installés. Or un résident
+         s'obtient par un visiteur, une amitié et un vote : compter une heure
+         de jeu avant de pouvoir REGARDER ce qu'on vient d'écrire, c'est la
+         définition d'un travail livré sans être regardé (§9 de CLAUDE.md).
+         ⚠️ L'HÔTE ARBITRE, comme pour tout le reste (§3) : la requête ne fait
+         que demander, et elle respecte MAX_RESIDENTS. On installe des rids
+         RÉELS du roster, dans l'ordre, sans doublon — un résident inventé
+         planterait `rosterOf` partout ailleurs. */
+      const st2 = s.station || (s.station = E.newStationState());
+      const have = new Set((st2.residents || []).map(r2 => r2.rid));
+      const want = Math.max(0, Math.min(C.MAX_RESIDENTS, req.n | 0));
+      /* ⚠️ LES ARTISANS NOMMÉS D'ABORD, ET CE N'EST PAS COSMÉTIQUE. Ce sont eux
+         qui portent TOUT ce qu'on vient chercher en peuplant la ferme : la
+         rivalité Tristan/Jérôme, la dispute Chloé/Rosalie, les affinités du
+         tableau des nouvelles, les familles de RESIDENT_FAMILY, et la boutique
+         de Carla — qui n'ouvre que si elle habite ici. Prendre le roster dans
+         l'ordre donnait vingt figurants sans une seule de ces mécaniques :
+         l'outil peuplait la ferme et ne montrait rien. */
+      const order = [...C.VISITOR_ROSTER].sort((x, y) => (y.skill ? 1 : 0) - (x.skill ? 1 : 0));
+      for (const ro2 of order) {
+        if ((st2.residents || []).length >= want) break;
+        if (have.has(ro2.rid)) continue;
+        st2.residents.push({ rid: ro2.rid, job: ro2.job });
+        have.add(ro2.rid);
+      }
+      dirtyRef.current = true;
+      broadcastStation();
+      broadcastChat("\u{1F6E0}", L.devResidentsChat(f.name, (st2.residents || []).length));
       hostFlushOut(out, f, null);
       return;
     }
@@ -2344,6 +2415,79 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         else out.fx.push({ k: "chop", x: req.x | 0, y: req.y | 0, zone: "town" });
       }
       if (r.toast) out.toast = { id: f.id, key: r.toast };
+    } else if (req.kind === "wardrobeBuy" || req.kind === "wardrobeWear") {
+      /* ═══ ZIP 427 — LA MAISON GARFIELD, ARBITRÉE PAR L'HÔTE ═══
+         ⚠️ L'OR EST TOUJOURS DÉPENSÉ CÔTÉ HÔTE, ET C'EST NON NÉGOCIABLE : c'est
+         la règle §3 (« l'hôte est l'autorité, toujours »), et un cosmétique
+         n'est pas une exception — l'or, lui, est partagé. Le client n'ouvre que
+         la vitrine ; il ne débite rien.
+         ⚠️ ET LA GARDE-ROBE EST DIFFUSÉE ENTIÈRE, PAS EN DELTA. Elle est
+         minuscule (quelques entiers par joueur) et elle change rarement : un
+         format de delta serait un second encodage à tenir à jour pour une
+         économie d'octets qui n'est pas facturée. */
+      const s2 = sharedRef.current;
+      if (!s2.wardrobe) s2.wardrobe = {};
+      const wr = s2.wardrobe[f.id] || (s2.wardrobe[f.id] = { owned: {}, worn: {} });
+      const slot = C.WARDROBE_SLOTS.includes(req.slot) ? req.slot : null;
+      const cat = slot ? C.wardrobeCatalog(slot) : null;
+      const idx = req.idx | 0;                       // décalé de 1 : 0 = « rien »
+      if (!slot || !cat || idx < 0 || idx > cat.length) {
+        // Rien : une requête hors catalogue ne doit RIEN faire, surtout pas
+        // écrire un indice que le dessin relirait plus tard (parseWardrobeLook
+        // le rattraperait, mais un état invalide en base finit par ressortir).
+      } else if (req.kind === "wardrobeBuy") {
+        const own = wr.owned[slot] || (wr.owned[slot] = []);
+        if (idx === 0 || own.includes(idx)) {
+          /* déjà acquis : on ne dit rien plutôt que d'annoncer un achat qui
+             n'a pas eu lieu. Un toast vide vaut mieux qu'un toast qui ment. */
+        } else {
+          const price = cat[idx - 1].price | 0;
+          if (s.money < price) out.toast = { id: f.id, key: "boutiqueNoGold" };
+          else {
+            s.money -= price; own.push(idx);
+            wr.worn[slot] = idx;                      // on l'essaie tout de suite : c'est une boutique
+            out.state = shareState();
+            out.wardrobe = s2.wardrobe;
+            /* ⚠️ ON TRANSPORTE L'IDENTIFIANT DE L'ARTICLE, JAMAIS SON NOM
+               FORMATÉ. Un libellé mis dans le message serait figé dans la langue
+               de l'HÔTE, et les deux joueurs ne parlent pas forcément la même —
+               c'est la contrainte de bilinguisme du projet (voir "decorSold"
+               dans toastMsg, même détour, même raison). */
+            out.toast = { id: f.id, key: "boutiqueBought", n: { slot, idx } };
+            dirtyRef.current = true;
+          }
+        }
+      } else {
+        const own = wr.owned[slot] || [];
+        if (idx === 0 || own.includes(idx)) {
+          wr.worn[slot] = idx;
+          out.wardrobe = s2.wardrobe;
+          dirtyRef.current = true;
+        }
+      }
+    } else if (req.kind === "townWish") {
+      /* LE VŒU DE LA FONTAINE (427). Une pièce jetée, une fois par jour de jeu
+         et par joueur, et parfois la fontaine rend plus qu'elle n'a reçu.
+         ⚠️ LE VERROU EST SUR LE FERMIER, PAS SUR LA FONTAINE : deux joueurs
+         doivent pouvoir faire un vœu le même jour. `wishAt` vit dans
+         l'instantané du fermier, donc aucune migration (même raison que le
+         surnom des familiers au 398). */
+      const now2 = Date.now();
+      if (now2 - (f.wishAt || 0) < C.TOWN_WISH_COOLDOWN_MS) out.toast = { id: f.id, key: "wishCooldown" };
+      else if (s.money < C.TOWN_WISH_COST) out.toast = { id: f.id, key: "wishNoGold", n: C.TOWN_WISH_COST };
+      else {
+        f.wishAt = now2;
+        s.money -= C.TOWN_WISH_COST;
+        // La fontaine rend, ou pas. La générosité monte avec le nombre de
+        // résidents : une ville habitée jette plus de pièces dedans.
+        const pop = ((s.station && s.station.residents) || []).length;
+        const back = Math.random() < 0.45 + Math.min(0.25, pop * 0.02)
+          ? C.TOWN_WISH_GOLD_MIN + Math.floor(Math.random() * (C.TOWN_WISH_GOLD_MAX - C.TOWN_WISH_GOLD_MIN + 1)) : 0;
+        if (back > 0) s.money += back;
+        out.state = shareState();
+        out.toast = { id: f.id, key: back > 0 ? "wishBack" : "wishNothing", n: back };
+        dirtyRef.current = true;
+      }
     } else if (req.kind === "buy") {
       const r = E.resolveBuy(f, s.money, req);
       if (r.moneyDelta) { s.money += r.moneyDelta; out.state = shareState(); }
@@ -4848,6 +4992,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        hache serait payer une taille pour une information d'une case.
        ⚠️ Une entrée `null` signifie « l'arbre a repoussé » : on SUPPRIME la
        clé, sans quoi le dictionnaire ne redescendrait jamais. */
+    /* ZIP 427 — la garde-robe. ⚠️ ELLE ARRIVE ENTIÈRE (voir la note du
+       handler) : on la remplace, on ne la fusionne pas.
+       ⚠️ ET ON RÉÉMET SA POSITION QUAND C'EST LA SIENNE. Ma tenue voyage dans le
+       paquet de position (`pubMe.look`, zéro message dédié) ; sans ce coup de
+       pouce, les autres joueurs ne verraient mon nouveau chapeau qu'au prochain
+       pas que je fais — ce qui, dans une cabine d'essayage, est précisément le
+       moment où l'on ne bouge pas. */
+    if (p.wardrobe) {
+      const before = wardrobeLookOf(me.id);
+      sharedRef.current.wardrobe = p.wardrobe;
+      if (wardrobeLookOf(me.id) !== before) { setWardrobeTick(t => t + 1); sendPos(); }
+    }
     if (p.townChop) {
       const s3 = sharedRef.current;
       if (!s3.townChop) s3.townChop = {};
@@ -5026,14 +5182,33 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const tRecv = Date.now();
       for (const rp of p.residentPaths) {
         const r = list.find(rr => rr.rid === rp.rid);
-        if (r) { r.netPath = rp.path; r.netPathStartAt = tRecv; r.netPathSpeed = rp.speed; }
+        if (!r) continue;
+        r.netPath = rp.path; r.netPathStartAt = tRecv; r.netPathSpeed = rp.speed;
+        /* ⚠️ ZIP 427 — LA ZONE EST POSÉE AVANT LA POSITION, PAS APRÈS. Le
+           trajet qui suit est en coordonnées de Valley Town : si `r.zone`
+           restait "farm" ne serait-ce qu'une image, la boucle de la ferme
+           dessinerait ce résident quelque part au milieu des champs (le
+           mélange de cartes du §4). Une même ligne fait donc les deux. */
+        r.zone = rp.z === 1 ? "town" : "farm";
+        if (r.zone === "farm") { r.act = null; r.sitOn = null; }
       }
     }
     if (Array.isArray(p.residentStops) && !isHost) {
       const list = (sharedRef.current.station && sharedRef.current.station.residents) || [];
       for (const rs of p.residentStops) {
         const r = list.find(rr => rr.rid === rs.rid);
-        if (r) { r.netPath = null; r.x = rs.x; r.y = rs.y; }
+        if (!r) continue;
+        r.netPath = null; r.x = rs.x; r.y = rs.y;
+        r.zone = rs.z === 1 ? "town" : "farm";
+        // Zip 427 : l'activité arrive avec l'arrêt (voir queueResidentStop).
+        // `actAt` est la GRAINE de la réplique, pas une échéance : elle n'est
+        // jamais comparée à une horloge, seulement hachée — donc aucune
+        // relocalisation d'horodatage n'est nécessaire ici (§3).
+        r.act = rs.a || null;
+        r.actAt = rs.at || 0;
+        if (rs.d !== undefined) r.dir = rs.d | 0;
+        r.meetTone = rs.t || null; r.meetWith = rs.m;
+        r.sitOn = rs.s ? { x: rs.s[0], y: rs.s[1] } : null;
       }
     }
     if (p.visitorSim && !isHost) {
@@ -5126,6 +5301,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       const d = C.UNIQUE_DECORATIONS.find(x => x.id === t.deco) || {};
       return L.decorSoldToast(t.n | 0, (lang === "en" ? d.nameEn : d.name) || t.deco, t.gold | 0);
     }
+    // ZIP 427 — Maison Garfield et fontaine à vœux.
+    if (key === "boutiqueNoGold") return L.boutiqueNoGold;
+    if (key === "boutiqueBought") {
+      const t = n || {};
+      const it = (C.wardrobeCatalog(t.slot) || [])[(t.idx | 0) - 1];
+      return L.boutiqueBought(it ? (lang === "en" ? it.nameEn : it.name) : "?");
+    }
+    if (key === "wishCooldown")  return L.wishCooldown;
+    if (key === "wishNoGold")    return L.wishNoGold(n | 0);
+    if (key === "wishBack")      return L.wishBack(n | 0);
+    if (key === "wishNothing")   return L.wishNothing;
     if (key === "walkFull")      return L.bagWalkFull(C.MAX_PETS_WALKING); // zip 368
     if (key === "devHealed")     return L.devHealToast;                    // zip 398
     if (key === "petNamed")      return L.petNamedToast(String(n || ""));  // zip 398
@@ -5542,6 +5728,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     return out;
   }
+  /* ⚠️ ZIP 427 — UNE SEULE FONCTION DIT CE QUE PORTE UN JOUEUR, et tout le
+     monde la lit : mon propre dessin, le paquet de position que j'émets, et
+     l'interface de la boutique. Trois lectures directes de `shared.wardrobe`
+     auraient fini par ne plus s'accorder — et le symptôme aurait été le pire de
+     tous pour un cosmétique : un chapeau que je vois et que l'autre joueur ne
+     voit pas, sans la moindre erreur pour le dire. */
+  function wardrobeLookOf(playerId) {
+    const wr = (sharedRef.current.wardrobe || {})[playerId];
+    return wr ? C.wardrobeLook(wr.worn) : null;
+  }
   function pubMe() {
     const m = meRef.current;
     // Tant que m.zone==="evil", la position DIFFUSÉE reste figée sur la case
@@ -5569,6 +5765,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // Coût : ~25 octets par paquet de position, très largement repayés par
     // l'allongement du keep-alive que cette précision autorise.
     // ------------------------------------------------------------------
+    /* La tenue achetée à la Maison Garfield. ⚠️ ELLE VOYAGE ICI, dans le paquet
+       qui part déjà, et nulle part ailleurs : quatre caractères, aucun `send()`
+       de plus, et le destinataire n'a rien à réconcilier — la chaîne EST la
+       clé de cache de la feuille de sprite (voir S.getChar). Omise quand rien
+       n'est porté, donc invisible pour la quasi-totalité des paquets. */
+    const wlook = wardrobeLookOf(m.id);
+    if (wlook) pub.look = wlook;
     pub.st = +performance.now().toFixed(1);
     if (pub.moving) { pub.vx = +(m.vx || 0).toFixed(2); pub.vy = +(m.vy || 0).toFixed(2); }
     // Monde maléfique MULTIJOUEUR (demande Guillaume 2026-07) : les
@@ -5618,6 +5821,32 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // Un joueur distant (non-hôte) est-il à portée de vue de cette entité (ou de l'une de ces entités) ? Sinon inutile de la diffuser : hors écran ET absente de la minimap (loups/greg/soan/lapins n'y figurent pas).
   function anyRemoteNear(ex, ey) { const R = aoiRadiusTiles(); for (const p of playersRef.current.values()) { if (!p || (p.zone || "farm") !== "farm") continue; if (Math.hypot(p.x - ex, p.y - ey) <= R) return true; } return false; }
   function anyRemoteNearList(list) { if (!list || !list.length) return false; const R = aoiRadiusTiles(); for (const p of playersRef.current.values()) { if (!p || (p.zone || "farm") !== "farm") continue; for (const e of list) { if (e && Math.hypot(p.x - e.x, p.y - e.y) <= R) return true; } } return false; }
+  /* ⚠️⚠️ ZIP 427 — LA MÊME QUESTION, MAIS EN COMPARANT LES ZONES.
+     `anyRemoteNearList` ci-dessus compare TOUJOURS des coordonnées de ferme :
+     c'est correct tant que toutes les entités y vivent, et c'est faux dès qu'un
+     résident descend à Valley Town. Deux défauts, tous deux silencieux :
+       * un joueur seul EN VILLE ne comptait plus comme audience -> l'hôte
+         n'émettait rien -> tous les résidents de la ville figés pour lui ;
+       * un joueur à la FERME pouvait se retrouver « à portée » d'un résident
+         qui est en ville, simplement parce que les deux cartes se recouvrent
+         numériquement — c'est le mélange de cartes du §4, appliqué à l'AOI.
+     ⚠️ Une entité sans `zone` vaut "farm" : les résidents d'une sauvegarde
+     antérieure, Greg, Soan, les loups, tout le monde garde son comportement. */
+  function anyRemoteNearZoned(list) {
+    if (!list || !list.length) return false;
+    const R = aoiRadiusTiles();
+    for (const p of playersRef.current.values()) {
+      if (!p) continue;
+      const pz = p.zone || "farm";
+      if (pz !== "farm" && pz !== "town") continue;   // monde maléfique, tribunal : aucun résident n'y va
+      for (const e of list) {
+        if (!e || !Number.isFinite(e.x)) continue;
+        if ((e.zone === "town" ? "town" : "farm") !== pz) continue;
+        if (Math.hypot(p.x - e.x, p.y - e.y) <= R) return true;
+      }
+    }
+    return false;
+  }
   // Zip 364 : équivalent d'anyRemoteNearList pour le MONDE MALÉFIQUE. Les deux
   // helpers ci-dessus filtrent sur `zone === "farm"` et lisent p.x/p.y — ils
   // renvoient donc TOUJOURS false pour les créatures maléfiques, dont les
@@ -5676,7 +5905,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // baisser le compteur de messages (ce que compte le quota Supabase) plutôt
   // que seulement le volume d'octets.
   // ------------------------------------------------------------------
-  function queueResidentPath(rid, path, speed) {
+  function queueResidentPath(rid, path, speed, zone) {
     // `startAt` n'est PAS transmis : le client date le départ à la RÉCEPTION.
     // Ces horodatages étaient écrits avec l'horloge de l'HÔTE puis comparés à
     // l'horloge LOCALE de l'invité (voir smoothNpcPath) — à la moindre dérive
@@ -5686,10 +5915,30 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // stage_launch_at dans lib/gameSync.js (SYNC_MAX_WAIT_MS). Dater à la
     // réception supprime la dépendance à l'horloge : il ne reste que la
     // latence réseau, de l'ordre de quelques dizaines de millisecondes.
-    resPathQueueRef.current.push({ rid, path, speed });
+    /* ⚠️ ZIP 427 — `z` EST LA ZONE, ET ELLE VOYAGE ICI PLUTÔT QUE DANS UN
+       MESSAGE À ELLE. Un résident change de carte au plus une fois par séjour,
+       toujours au moment précis où il reçoit un nouveau trajet (ou un arrêt) :
+       l'information est donc gratuite dans les messages qui partent déjà, et
+       elle arrive forcément AVANT que le client ait à dessiner le personnage
+       ailleurs. Un champ omis vaut "farm" — une sauvegarde et un client
+       d'avant ce zip continuent donc de fonctionner mot pour mot. */
+    resPathQueueRef.current.push(zone === "town" ? { rid, path, speed, z: 1 } : { rid, path, speed });
   }
+  /* ⚠️ L'ARRÊT PORTE L'ACTIVITÉ (`a`), ET C'EST VOULU : un résident qui
+     s'assoit, qui se recueille ou qui engage la conversation S'ARRÊTE, par
+     définition. L'activité n'a donc jamais besoin d'un message à elle — elle
+     part avec l'arrêt, ou elle ne part pas du tout. `t`/`m` complètent la
+     scène de rencontre (le ton et l'interlocuteur), qui sinon ne serait qu'un
+     PNJ planté sans raison visible chez l'invité. */
   function queueResidentStop(res) {
-    resStopQueueRef.current.push({ rid: res.rid, x: +(+res.x).toFixed(2), y: +(+res.y).toFixed(2) });
+    const e = { rid: res.rid, x: +(+res.x).toFixed(2), y: +(+res.y).toFixed(2) };
+    if (resZone(res) === "town") {
+      e.z = 1;
+      if (res.act) { e.a = res.act; e.at = res.actAt || Date.now(); e.d = res.dir | 0; }
+      if (res.act === "talk") { e.t = res.meetTone; e.m = res.meetWith; }
+      if (res.sitOn) e.s = [res.sitOn.x, res.sitOn.y];
+    }
+    resStopQueueRef.current.push(e);
   }
   function flushResidentNet() {
     const paths = resPathQueueRef.current, stops = resStopQueueRef.current;
@@ -5864,8 +6113,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // train, changement de zone, resynchronisation d'un invité. Sans ça, Leo
   // traverserait la carte en ligne droite pour rejoindre son retard.
   function leoFollow(cx, cy, moving) {
-    let pts = leoTrailRef.current;
-    if (!pts) pts = leoTrailRef.current = [];
+    if (!leoTrailRef.current) leoTrailRef.current = [];
+    return trailFollow(leoTrailRef.current, cx, cy, moving, C.LEO_FOLLOW_DIST);
+  }
+  /* ⚠️ ZIP 427 — LE SUIVEUR DEVIENT GÉNÉRAL, ET SON CORPS N'A PAS BOUGÉ D'UNE
+     LIGNE. Les accompagnants des résidents en ville (RESIDENT_FAMILY) sont
+     exactement le même objet que Leo : une position DÉRIVÉE de celle de
+     quelqu'un d'autre, zéro message, aucune collision propre. Écrire une
+     seconde fonction « comme leoFollow mais pour la famille » aurait été le
+     doublon du §8 — deux suiveurs réglés séparément dérivent, et le symptôme
+     serait un enfant qui traverse un mur pendant que Leo, lui, le contourne.
+     `pts` est passé en paramètre : Leo a la sienne, chaque invité a la sienne
+     (guestTrailsRef, indexée par rid). */
+  function trailFollow(pts, cx, cy, moving, dist) {
     const last = pts.length ? pts[pts.length - 1] : null;
     if (!last) { pts.push({ x: cx, y: cy, d: 0 }); return { x: cx, y: cy, dir: 0, moving: false }; }
     const step = Math.hypot(cx - last.x, cy - last.y);
@@ -5878,7 +6138,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       while (pts.length > C.LEO_TRAIL_MAX) pts.shift();
     }
     const head = pts[pts.length - 1];
-    const target = head.d - C.LEO_FOLLOW_DIST;
+    const target = head.d - dist;
     // Traîne encore trop courte (elle vient d'apparaître ou de repartir) :
     // Leo est au plus vieux point connu, il n'y a rien de mieux à dire.
     let a = pts[0], b = pts[0];
@@ -8258,6 +8518,285 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
     }
   }
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 427 — LA VIE DES RÉSIDENTS À VALLEY TOWN (100 % CÔTÉ HÔTE).
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️ MÊME DISCIPLINE QUE LES DEUX SCÈNES EXISTANTES (Chloé/Rosalie et
+     Tristan/Jérôme) : tout ce qui DÉCIDE tourne chez l'hôte, tout ce qui
+     DESSINE tourne partout. C'est la correction du zip « dispute vue de tous » :
+     deux clients qui décideraient chacun d'une rencontre en verraient deux
+     différentes, et personne ne saurait laquelle est la vraie.
+
+     ⚠️ ET LE SÉJOUR EN VILLE EST UN ÉTAT, PAS UN TÉLÉPORT. `res.zone` bascule,
+     `res.x/res.y` sont RÉÉCRITES aux coordonnées du quai de Valley Town, et le
+     rendu de la ferme cesse de le dessiner. Un résident n'a jamais deux
+     positions — voir la note d'en-tête des constantes TOWN_TRIP_*.
+     ═══════════════════════════════════════════════════════════════════════════ */
+  function residentTownEligible(res, ro, now) {
+    if (!res || !ro) return false;
+    if (res.trip && res.trip.phase === "away") return false;   // déjà parti en mission (Eduardo)
+    if (res.injuredUntil && res.injuredUntil > now) return false;
+    if (res.hidden || res.storming || res.tjReact) return false;
+    const s = sharedRef.current;
+    // Une scène en cours retient ses protagonistes à la ferme : les faire
+    // monter dans le train en plein milieu couperait la réplique.
+    const cr = s.station && s.station.crScene, tj = s.station && s.station.tjBrawl;
+    if (cr && (cr.rosalieRid === res.rid || cr.chloeRid === res.rid)) return false;
+    if (tj && (tj.aRid === res.rid || tj.bRid === res.rid)) return false;
+    return true;
+  }
+  function residentFamilyOf(rid) { return C.RESIDENT_FAMILY[rid] || null; }
+  function residentGuestName(res) {
+    const fam = residentFamilyOf(res && res.rid);
+    if (!fam || typeof res.guest !== "number") return null;
+    const g = fam[res.guest];
+    return g ? g.name : null;
+  }
+  function startTownTrip(res, ro, now) {
+    const tw = townWorldNow(); if (!tw) return;
+    res.zone = "town";
+    res.townUntil = now + C.TOWN_TRIP_MIN_MS + Math.random() * (C.TOWN_TRIP_MAX_MS - C.TOWN_TRIP_MIN_MS);
+    /* On descend du train sur le quai, comme un joueur. ⚠️ Le petit décalage
+       n'est pas cosmétique : sans lui, deux résidents partis à la même seconde
+       occupent la MÊME case et se poussent l'un l'autre indéfiniment (chacun
+       glisse sur l'autre, aucun n'avance). */
+    res.x = C.TOWN_SPAWN.x + (Math.random() - 0.5) * 1.4;
+    res.y = C.TOWN_SPAWN.y + (Math.random() - 0.5) * 1.4;
+    res.dir = 3; res.moving = false; res.animT = 0;
+    res.roamTarget = null; res.townPath = null; res.act = null; res.actUntil = 0;
+    res.nextRoamAt = now + 400 + Math.random() * 900;
+    res._pathSentFor = null; res.stuckT = 0;
+    /* ⚠️ ON NE SE SALUE PAS SUR LE QUAI (voir TOWN_MEET_ARRIVE_GRACE_MS). Le
+       délai est posé ICI, à la descente, parce que c'est le seul endroit où
+       l'on sait que le résident vient d'arriver — et c'est là que tout le
+       monde est agglutiné. Décalé pour que le groupe ne se libère pas d'un
+       bloc : sinon on aurait juste retardé l'embouteillage de vingt-cinq
+       secondes. */
+    res.meetCd = now + C.TOWN_MEET_ARRIVE_GRACE_MS + Math.random() * 8000;
+    // L'invité. ⚠️ IL EST TIRÉ ICI ET NULLE PART AILLEURS : c'est le seul
+    // moment où il peut l'être sans avoir à réconcilier quoi que ce soit, et
+    // `res.guest` part ensuite avec la station comme un champ ordinaire.
+    const fam = residentFamilyOf(res.rid);
+    res.guest = null;
+    if (fam && fam.length) {
+      const always = C.ALWAYS_GUEST_RIDS.includes(res.rid);
+      if (always || Math.random() < C.TOWN_GUEST_CHANCE) res.guest = Math.floor(Math.random() * fam.length);
+    }
+    const gname = residentGuestName(res);
+    stationChat(gname ? L.townTripGuestChat(ro.name, gname) : L.townTripChat(ro.name), "\u{1F686}");
+  }
+  function endTownTrip(res, ro, now) {
+    res.zone = "farm";
+    res.townUntil = 0; res.guest = null;
+    res.act = null; res.actUntil = 0; res.townPath = null; res.roamTarget = null;
+    /* ⚠️ ON EFFACE LA POSITION, ON N'EN CONVERTIT AUCUNE. Les coordonnées de
+       Valley Town n'ont AUCUN sens sur la carte de la ferme (§4 : « deux cartes
+       sans repère commun finissent par se mélanger »). Effacée, elle est
+       reposée proprement près de l'ancre du résident au premier tick de
+       residentRoam — exactement ce que fait déjà le retour de voyage d'Eduardo. */
+    delete res.x; delete res.y;
+    res.moving = false; res.nextRoamAt = 0;
+    /* ⚠️⚠️ ON ARME VOLONTAIREMENT L'ÉMETTEUR D'ARRÊT, ET C'EST LE SEUL MOYEN DE
+       FAIRE RENTRER LE PNJ CHEZ LES INVITÉS. Sans cette ligne, `_pathSentFor`
+       serait nul, la boucle « un résident qui s'arrête » ne dirait rien, et
+       l'invité continuerait d'afficher ce résident À VALLEY TOWN jusqu'à sa
+       prochaine décision de trajet — plusieurs secondes pendant lesquelles deux
+       joueurs voient la même personne à deux endroits. La valeur n'a aucune
+       importance (elle n'est comparée à rien avant d'être écrasée), seul compte
+       le fait qu'elle soit non nulle : l'arrêt qui part dans la même image
+       porte la position de FERME que residentRoam vient de poser, et pas de `z`
+       — donc « il est rentré ». */
+    res._pathSentFor = { x: 0, y: 0 };
+    stationChat(L.townTripBackChat(ro.name), "\u{1F686}");
+  }
+  function updateTownTrips(residents, now) {
+    if (now < (townTripNextCheckRef.current || 0)) return;
+    townTripNextCheckRef.current = now + C.TOWN_TRIP_CHECK_MS;
+    let inTown = 0;
+    for (const res of residents) if (resZone(res) === "town") inTown++;
+    for (const res of residents) {
+      if (!res) continue;
+      const ro = rosterOf(res.rid); if (!ro) continue;
+      if (resZone(res) === "town") {
+        if (now >= (res.townUntil || 0)) { endTownTrip(res, ro, now); inTown--; }
+        continue;
+      }
+      if (inTown >= C.TOWN_VISITORS_MAX) continue;
+      if (!residentTownEligible(res, ro, now)) continue;
+      if (Math.random() >= C.TOWN_TRIP_CHANCE) continue;
+      startTownTrip(res, ro, now); inTown++;
+    }
+  }
+  /* Choisir où aller. Le tirage est pondéré par la DISTANCE (on va plus souvent
+     à côté qu'à l'autre bout de la ville) et par le MÉTIER — c'est ce qui fait
+     que Tristan traîne au marché et que René regarde le lac, sans une seule
+     ligne de code par personnage. */
+  const TOWN_SKILL_TASTE = {
+    lumberjack: ["stall", "well", "sit"], sugarworker: ["stall", "kiosk", "sit"],
+    baker: ["stall", "window", "board"], breadmaker: ["stall", "grave", "sit"],
+    cheesemaker: ["stall", "window", "fountain"], beekeeper: ["pier", "view", "pray"],
+    voyager: ["view", "pier", "board"], stylist: ["window", "view", "statue"],
+  };
+  function pickTownSpot(res, ro, tw) {
+    const spots = E.townSpots(tw);
+    if (!spots.length) return null;
+    const taste = TOWN_SKILL_TASTE[ro.skill] || null;
+    let best = null, bestScore = -Infinity;
+    // Échantillonnage : douze tirages suffisent à donner une destination
+    // plausible sur plusieurs centaines d'endroits, et ça reste O(1) — la
+    // boucle tourne pour vingt résidents chez un hôte qui a déjà tout le reste
+    // à faire.
+    for (let k = 0; k < 12; k++) {
+      const sp = spots[Math.floor(Math.random() * spots.length)];
+      if (res.lastSpot && sp.x === res.lastSpot.x && sp.y === res.lastSpot.y) continue;
+      const d = Math.hypot(sp.x - res.x, sp.y - res.y);
+      let score = -d / 40 + Math.random();
+      if (taste && taste.includes(sp.act)) score += 0.9;
+      if (score > bestScore) { bestScore = score; best = sp; }
+    }
+    return best;
+  }
+  function townDecideDestination(res, ro, tw, now) {
+    const sp = pickTownSpot(res, ro, tw);
+    if (!sp) { res.nextRoamAt = now + 2000; return; }
+    const e0 = townElevAt(tw, res.x, res.y + 0.2), e1 = townElevAt(tw, sp.x, sp.y + 0.2);
+    const legs = townStairRoute(e0, e1, res.x, res.y);
+    legs.push({ x: sp.x, y: sp.y });
+    res.townPath = legs;
+    res.roamTarget = legs[0];
+    res.lastSpot = { x: sp.x, y: sp.y };
+    res.townAct = sp.act;
+    res.townSpot = sp;
+    res.stuckT = 0;
+    /* ⚠️ UN SEUL MESSAGE POUR TOUT L'ITINÉRAIRE, escaliers compris. Le format
+       `residentPaths` accepte une liste de points depuis le zip 364 ; monter au
+       belvédère coûte donc exactement autant de `send()` que traverser la
+       place, et l'invité rejoue la montée au lieu de voir un PNJ se téléporter
+       d'un palier à l'autre. */
+    queueTownResidentPath(res, legs);
+  }
+  function queueTownResidentPath(res, legs) {
+    const gait = res.gait || (res.gait = 0.6 + Math.random() * 0.6);
+    const speed = C.VISITOR_SPEED * 0.7 * gait;
+    const path = [{ x: +(+res.x).toFixed(2), y: +(+res.y).toFixed(2) },
+                  ...legs.map(p => ({ x: +(+p.x).toFixed(2), y: +(+p.y).toFixed(2) }))];
+    res._pathSentFor = { x: path[path.length - 1].x, y: path[path.length - 1].y };
+    queueResidentPath(res.rid, path, speed, "town");
+  }
+  function townResidentRoam(res, tw, now, dt, ro, peers) {
+    // Ceinture identique à celle de residentRoam (v363) : aucun état de
+    // déplacement ne survit à une position invalide.
+    if (!Number.isFinite(res.x) || !Number.isFinite(res.y)) {
+      res.x = C.TOWN_SPAWN.x; res.y = C.TOWN_SPAWN.y;
+      res.roamTarget = null; res.townPath = null; res.act = null; res.moving = false;
+    }
+    // 1. Une activité en cours immobilise. C'est TOUT ce que « vivre » veut dire
+    //    ici : s'arrêter quelque part pour une raison, assez longtemps pour
+    //    qu'on le voie depuis l'autre bout de la place.
+    if (res.act) {
+      if (now < res.actUntil) { res.moving = false; return; }
+      res.act = null; res.actUntil = 0;
+      res.nextRoamAt = now + 500 + Math.random() * 1500;
+    }
+    // 2. Un trajet en cours.
+    if (res.roamTarget) {
+      const tgt = res.roamTarget;
+      const dx = tgt.x - res.x, dy = tgt.y - res.y, d = Math.hypot(dx, dy);
+      if (d < 0.35) {
+        // Étape franchie. S'il en reste, on enchaîne SANS émettre : l'invité
+        // rejoue déjà l'itinéraire complet reçu au départ.
+        res.townPath = (res.townPath || []).slice(1);
+        if (res.townPath.length) { res.roamTarget = res.townPath[0]; return; }
+        res.roamTarget = null; res.moving = false; res.townPath = null;
+        const spec = C.TOWN_ACTS[res.townAct] || C.TOWN_ACTS.sit;
+        res.act = res.townAct || "sit";
+        res.actUntil = now + spec.ms[0] + Math.random() * (spec.ms[1] - spec.ms[0]);
+        res.actAt = now;                       // graine partagée de la réplique (voir townActLine)
+        // Assis : on regarde ce qu'on est venu regarder, donc le banc est
+        // derrière soi — la case du banc est au NORD du point où l'on se tient.
+        if (spec.sit && res.townSpot && res.townSpot.bx !== undefined) { res.sitOn = { x: res.townSpot.bx, y: res.townSpot.by }; res.dir = 0; }
+        else res.sitOn = null;
+        return;
+      }
+      const gait = res.gait || (res.gait = 0.6 + Math.random() * 0.6);
+      const sp = C.VISITOR_SPEED * 0.7 * gait * dt;
+      const ux = dx / d, uy = dy / d;
+      /* ⚠️ L'ALTITUDE DE DÉPART EST RELUE AVANT CHAQUE AXE, comme pour le
+         joueur (425). Sur une volée, un déplacement diagonal qui compare les
+         deux axes à la MÊME altitude d'origine se voit refuser le second : le
+         PNJ monte en crabe, une case sur deux, et finit par abandonner. */
+      let moved = false;
+      const nx = res.x + ux * sp;
+      if (townCanStand(tw, nx, res.y, townElevAt(tw, res.x, res.y + 0.2))) { res.x = nx; moved = true; }
+      const ny = res.y + uy * sp;
+      if (townCanStand(tw, res.x, ny, townElevAt(tw, res.x, res.y + 0.2))) { res.y = ny; moved = true; }
+      res.moving = true;
+      res.animT = (res.animT || 0) + dt * 9;
+      if (Math.abs(ux) > Math.abs(uy)) res.dir = ux < 0 ? 2 : 3; else res.dir = uy < 0 ? 1 : 0;
+      /* ⚠️ LE GARDE ANTI-BLOCAGE EST OBLIGATOIRE, ET LA v363 EN EST LA PREUVE :
+         un trajet en ligne droite coupé par un bâtiment ne se termine JAMAIS, le
+         PNJ reste collé au mur pour toujours et rien ne le signale. Ici on
+         abandonne proprement : on s'arrête là où l'on est, on fait quand même
+         l'activité prévue (on regarde de loin — c'est exactement ce que fait
+         l'attroupement du 364 à l'expiration), et l'arrêt est diffusé. */
+      if (!moved) {
+        res.stuckT = (res.stuckT || 0) + dt;
+        if (res.stuckT > 2.4) {
+          res.roamTarget = null; res.townPath = null; res.moving = false; res.sitOn = null;
+          res.act = res.townAct || "sit"; res.actAt = now;
+          res.actUntil = now + C.TOWN_ACT_MIN_MS;
+        }
+      } else res.stuckT = 0;
+      return;
+    }
+    // 3. Rien à faire : on choisit une destination.
+    if (now >= (res.nextRoamAt || 0)) townDecideDestination(res, ro, tw, now);
+    else res.moving = false;
+  }
+  /* ---- LES RENCONTRES. L'architecture sociale tient dans cette fonction, et
+     elle est volontairement courte : deux résidents assez proches, pas déjà
+     occupés à parler, et un cooldown pour qu'ils ne se saluent pas en boucle.
+     Le TON vient de RESIDENT_AFFINITIES — la table du chantier « relations
+     entre résidents », qui était purement informative jusqu'ici et qui devient
+     enfin quelque chose qu'on VOIT. */
+  function onTownPlatform(res) {
+    return res.x < C.TOWN_PLATFORM.x + C.TOWN_PLATFORM.w + 4
+        && res.y > C.TOWN_PLATFORM.y - 3 && res.y < C.TOWN_PLATFORM.y + C.TOWN_PLATFORM.h + 3;
+  }
+  function updateTownMeets(residents, now) {
+    if (now < (townMeetNextRef.current || 0)) return;
+    townMeetNextRef.current = now + 3000;
+    const list = residents.filter(r => r && resZone(r) === "town" && Number.isFinite(r.x));
+    for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
+      const a = list[i], b = list[j];
+      if (a.act === "talk" || b.act === "talk") continue;
+      if (now < (a.meetCd || 0) || now < (b.meetCd || 0)) continue;
+      if (Math.abs(townElevAt(townWorldNow(), a.x, a.y + 0.2) - townElevAt(townWorldNow(), b.x, b.y + 0.2)) > 0.01) continue; // pas de conversation d'un étage à l'autre
+      if (Math.hypot(a.x - b.x, a.y - b.y) > C.TOWN_MEET_DIST) continue;
+      // Ceinture : même hors délai de grâce, le quai reste un lieu de passage.
+      // Deux résidents qui s'y croisent au moment d'un départ se rebloqueraient
+      // mutuellement, et c'est l'endroit précis où ça se voit le plus mal.
+      if (onTownPlatform(a) || onTownPlatform(b)) continue;
+      if (Math.random() > C.TOWN_MEET_CHANCE) continue;
+      const rel = C.residentAffinitiesFor(a.rid);
+      const tone = rel.allies.includes(b.rid) ? "ally" : rel.enemies.includes(b.rid) ? "foe" : "neutral";
+      /* ⚠️ ILS S'ARRÊTENT LÀ OÙ ILS SONT, ILS NE SE REJOIGNENT PAS. Deux PNJ
+         qui convergent, c'est un déplacement de plus à diffuser, un risque de
+         plus de rester coincés dans un mur, et à l'écran ça ne se lit pas mieux
+         qu'un simple face-à-face : ils sont déjà à trois cases l'un de l'autre.
+         Ils se TOURNENT l'un vers l'autre, ce qui ne coûte rien et se voit. */
+      for (const [p, q] of [[a, b], [b, a]]) {
+        p.roamTarget = null; p.townPath = null; p.moving = false; p.sitOn = null;
+        p.act = "talk"; p.actAt = now;
+        p.actUntil = now + C.TOWN_MEET_MS;
+        p.meetTone = tone; p.meetWith = q.rid;
+        p.meetCd = now + C.TOWN_MEET_MS + C.TOWN_MEET_COOLDOWN_MS;
+        const ddx = q.x - p.x, ddy = q.y - p.y;
+        p.dir = Math.abs(ddx) > Math.abs(ddy) ? (ddx < 0 ? 2 : 3) : (ddy < 0 ? 1 : 0);
+        queueResidentStop(p);
+      }
+    }
+  }
   function updateResidents(dt) {
     const w = worldRef.current; if (!w) return;
     const s = sharedRef.current, st = s.station;
@@ -8265,10 +8804,26 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const residents = st.residents || [];
     if (!residents.length) return;
     const now = Date.now();
+    // Zip 427 : qui descend à Valley Town, qui en revient. Arbitré à sa propre
+    // cadence (TOWN_TRIP_CHECK_MS), jamais à chaque image.
+    updateTownTrips(residents, now);
     for (const res of residents) {
       if (!res) continue;
       const ro = rosterOf(res.rid);
       if (!ro) continue;
+      /* ⚠️⚠️ ZIP 427 — UN RÉSIDENT EN VILLE SORT ICI, ET C'EST LA BRANCHE LA
+         PLUS IMPORTANTE DU FICHIER POUR CE ZIP. Tout ce qui suit (rôdaille de
+         ferme, boulangerie, scènes, tours de travail) raisonne en coordonnées
+         de FERME : le laisser continuer, c'est faire arroser un champ par
+         quelqu'un qui est à trente kilomètres, et surtout comparer un x de
+         Valley Town à un x de la ferme — le mélange de cartes du §4, en direct.
+         ⚠️ ET IL NE TRAVAILLE PAS. C'est le prix explicite du voyage (même
+         traitement que la mission d'Eduardo, juste en dessous). */
+      if (resZone(res) === "town") {
+        const tw = townWorldNow();
+        if (tw) townResidentRoam(res, tw, now, dt, ro, residents);
+        continue;
+      }
       // Zip 258 : Eduardo en voyage. Tant qu'il n'est pas rentré, il ne se
       // balade pas et ne travaille pas (il est absent du village). À l'échéance
       // (res.trip.returnAt), on dépose la commande + une éventuelle surprise
@@ -8391,7 +8946,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // même si le trajet zigzague, et surtout beaucoup MOINS de trafic qu'un
     // flux continu (un message par décision, pas un message toutes les
     // 750ms tant qu'un joueur est proche).
-    const residentsNearNow = anyRemoteNearList(residents);
+    // Zip 427 : les rencontres en ville, appariées par l'hôte (voir la note de
+    // updateTownMeets). Après la rôdaille, donc sur des positions à jour.
+    updateTownMeets(residents, now);
+    /* ⚠️⚠️ ZIP 427 — L'AOI DEVIENT ZONÉE, ET SANS ÇA RIEN NE MARCHAIT.
+       `anyRemoteNearList` ne regardait QUE les joueurs restés à la ferme
+       (`p.zone !== "farm" -> continue`, hérité du 264). Conséquence si on ne
+       touche à rien : un joueur SEUL EN VILLE n'est jamais « à portée » d'un
+       résident, l'hôte n'émet donc aucun trajet, et les résidents de Valley
+       Town restent parfaitement figés pour lui — sans erreur, sans trace, et
+       en donnant l'impression que toute la fonctionnalité est cassée.
+       C'est la même famille de piège que `anyRemoteNear` qui renvoie toujours
+       `false` pour le monde maléfique (§4) : une garde d'audience écrite pour
+       UNE zone, appliquée à toutes. */
+    const residentsNearNow = anyRemoteNearZoned(residents);
     // Un joueur distant vient d'entrer à portée : renvoyer le trajet en
     // cours de TOUS les résidents concernés (sinon un joueur qui vient
     // d'arriver ne connaît aucun trajet et le PNJ resterait figé).
@@ -8400,6 +8968,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (residentsNearNow && netCanBroadcast()) {
       for (const res of residents) {
         if (!res || !res.roamTarget) continue;
+        /* Zip 427 : un résident de Valley Town émet son itinéraire COMPLET au
+           moment où il le décide (townDecideDestination), escaliers compris.
+           Le laisser passer ici le ferait ré-émettre à chaque étape franchie —
+           un message par palier, ce qui est exactement le modèle par-résident
+           que le 364 a supprimé. Seul le rattrapage `justCameIntoRange` le
+           concerne encore, juste en dessous. */
+        if (resZone(res) === "town") {
+          if (justCameIntoRange && res.townPath && res.townPath.length) queueTownResidentPath(res, res.townPath);
+          continue;
+        }
         // Zip 364 : un résident en pleine réaction d'attroupement (tjReact) ne
         // se déplace PAS par roamTarget — sa trajectoire est émise par
         // queueTjReactPath, au moment où la scène la décide. Sans cette
@@ -8470,6 +9048,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // repartait sur `undefined` et le figeait définitivement. Même filtre que
       // le rendu et que le déclencheur au Q (voir les autres « phase === "away" »).
       if (r.trip && r.trip.phase === "away") continue;
+      /* ⚠️ ZIP 427 — MÊME FILTRE, MÊME RAISON, NOUVELLE ABSENCE. Un résident
+         descendu à Valley Town n'est pas sur la carte de la ferme, mais il a un
+         x/y parfaitement numérique — celui de la VILLE. Sans ce test il
+         recevrait un `tjReact` avec un point de rassemblement en coordonnées de
+         ferme, qu'il essaierait d'atteindre à Valley Town : il partirait droit
+         dans un mur, à l'autre bout d'une autre carte, et resterait figé là.
+         C'est mot pour mot le défaut « Eduardo en voyage » de la v363, avec une
+         seconde carte au lieu d'une absence. */
+      if (resZone(r) === "town") continue;
       if (typeof r.x !== "number") continue;
       const angle = Math.random() * Math.PI * 2;
       const dist = C.TJ_REACT_GATHER_MIN_DIST + Math.random() * (C.TJ_REACT_GATHER_MAX_DIST - C.TJ_REACT_GATHER_MIN_DIST);
@@ -8539,6 +9126,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const tristan = residents.find(r => r && r.rid === C.TRISTAN_RID);
     const jerome = residents.find(r => r && r.rid === C.JEROME_RID);
     if (!tristan || !jerome || typeof tristan.x !== "number" || typeof jerome.x !== "number") return;
+    // Zip 427 : pas de provocation si l'un des deux est descendu en ville. Leurs
+    // coordonnées seraient celles de deux cartes différentes — la distance qui
+    // déclenche la scène n'aurait aucun sens, et elle pourrait très bien être
+    // PETITE par pure coïncidence numérique.
+    if (resZone(tristan) === "town" || resZone(jerome) === "town") return;
     const brawl = st.tjBrawl;
     if (brawl) {
       // Fenêtre "imminente" en cours (jet déjà positif, voir plus bas) : on
@@ -8653,6 +9245,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // cette fonction sortait en amont (`!rosalie`), Chloé recevait tranquillement
     // sa position, et le bug ne pouvait pas se produire.
     if (!chloe || !rosalie) return;
+    // Zip 427 : même raison qu'au-dessus — une dispute ne se déclenche pas entre
+    // deux personnes qui ne sont pas sur la même carte.
+    if (resZone(chloe) === "town" || resZone(rosalie) === "town") return;
     if (!Number.isFinite(rosalie.x) || !Number.isFinite(rosalie.y)) return;
     if (!Number.isFinite(chloe.x) || !Number.isFinite(chloe.y)) return;
     const scene = st.crScene;
@@ -10249,7 +10844,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           m.zone = "evil";
           if (dk === "world") { m.x = C.EVIL_SPAWN.x; m.y = C.EVIL_SPAWN.y; }
           else { m.x = C.RUN_GATE.x - C.DEV_BRIDGE_OFFSET; m.y = C.RUN_GATE.y; }
-        } else if (dk === "town" || dk === "townPlaza" || dk === "townCourt" || dk === "townBelvedere" || dk === "townMarket" || dk === "townLake") {
+        } else if (dk === "town" || dk === "townPlaza" || dk === "townCourt" || dk === "townBelvedere" || dk === "townMarket" || dk === "townLake" || dk === "townBoutique") {
           if (wasFarm) { m.farmX = m.x; m.farmY = m.y; }
           if (!townWorldRef.current) townWorldRef.current = getTownWorldCached(E);
           m.zone = "town";
@@ -10266,6 +10861,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           else if (dk === "townLake") { m.x = C.TOWN_PIER.x + C.TOWN_PIER.w / 2; m.y = C.TOWN_LAKE.y - C.TOWN_QUAY_H - 1; }
           else if (dk === "townCourt") { m.x = C.TOWN_COURT.x + C.TOWN_COURT.w / 2; m.y = C.TOWN_COURT.y + C.TOWN_COURT.h + 2; }
           else if (dk === "townBelvedere") { m.x = C.TOWN_BELVEDERE.x + C.TOWN_BELVEDERE.w / 2; m.y = C.TOWN_BELVEDERE.y + C.TOWN_BELVEDERE.h - 3; }
+          /* Zip 427 : la Haute-Ville commerçante. ⚠️ ELLE MÉRITE SON ARRÊT parce
+             qu'elle est le seul endroit de la ville qu'on n'atteint qu'en
+             montant : y aller à pied pour vérifier une vitrine coûte une minute
+             à chaque essai, et c'est exactement ce qui fait qu'on cesse de
+             vérifier. On se pose devant la porte de la boutique, le salon est à
+             vingt pas à l'est. */
+          else if (dk === "townBoutique") { m.x = C.TOWN_BOUTIQUE.x + C.TOWN_BOUTIQUE.w / 2; m.y = C.TOWN_BOUTIQUE.y + C.TOWN_BOUTIQUE.h + 1; }
           else { m.x = C.TOWN_SPAWN.x; m.y = C.TOWN_SPAWN.y; }
         } else if (dk === "court" || dk === "courtUpper" || dk === "courtBasement") {
           /* Zip 426 — les trois arrêts du tribunal. ⚠️ ON N'ENTRE PAS AU
@@ -11943,6 +12545,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           const ro = rosterOf(res.rid); if (!ro) continue;
           if (res.trip && res.trip.phase === "away") continue; // zip 258 : Eduardo absent (en voyage)
           if (res.hidden) continue; // zip suivant : Chloé/Rosalie, "à l'intérieur" de la boulangerie (voir updateBakeryVisibility)
+          /* ⚠️⚠️ ZIP 427 — LE FILTRE DE ZONE, ET C'EST LE PLUS IMPORTANT DE TOUT
+             LE ZIP. Sans lui, un résident descendu à Valley Town continue d'être
+             dessiné ICI, aux coordonnées de la VILLE interprétées comme des
+             coordonnées de FERME. C'est exactement le défaut corrigé au 425 sur
+             le repli « idle » quelques lignes plus haut, et il resterait tout
+             aussi discret : la ville fait 224x168, la ferme 180x140, donc la
+             plupart des positions tombent quelque part dans les champs et ont
+             l'air d'un placement voulu. */
+          if (resZone(res) === "town") continue;
           if (typeof res.x !== "number") continue;
           const rp = isHost ? res : smoothNpcPath("resident:" + res.rid, res, dt);
           const rx = rp.x, ry = rp.y;
@@ -11985,6 +12596,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             if (!line || !line.turn) return null;
             return resDir === 0 ? 1 : resDir === 1 ? 0 : resDir;
           })();
+          /* ZIP 427 — CARLA RÉSIDENTE NE SE PROMÈNE PAS SEULE À LA FERME NON
+             PLUS. Le 376 en avait fait une règle de personnage (« Leo n'est pas
+             une entité, sa position est DÉRIVÉE de la sienne ») ; elle ne
+             valait jusqu'ici que pour la Carla VISITEUSE, parce qu'elle ne
+             pouvait pas être autre chose. Maintenant qu'elle peut emménager, la
+             casser à la ferme la contredirait à l'endroit même où on vient de
+             l'écrire pour la ville.
+             ⚠️ On réutilise `leoTrailRef` sans conflit possible : un résident
+             est exclu du tirage des visiteurs (voir pickVisitor), donc les deux
+             Carla ne coexistent jamais. */
+          if (ro.look === "carla") {
+            const lp2 = leoFollow(rx, ry, resMoving);
+            const lAnimT2 = resMoving ? (performance.now() / 110) : 0;
+            draws.push({ y: (lp2.y + 1) * T - 1, fn: () => drawCharacter({ id: "leo", name: L.leoName, x: lp2.x, y: lp2.y, dir: lp2.dir, moving: lp2.moving, animT: lAnimT2, gender: "m", outfit: 0, overalls: false, cap: false, look: "leo" }, false) });
+          }
           draws.push({ y: (ry + 1) * T, fn: () => {
             if (resSuperActive) drawCoffeeAura(Math.round(rx * T), Math.round(ry * T));
             drawCharacter({ id: "res" + res.rid, name: ro.name, x: rx, y: ry, dir: turnAwayDir != null ? turnAwayDir : resDir, moving: resMoving, animT: resAnimT, gender: ro.gender, outfit: ro.outfit, overalls: ro.overalls, cap: ro.cap, beeSuit: residentBeeSuit(res, ro), plaid: ro.skill === "lumberjack", cheeseHat: ro.skill === "cheesemaker", sugarWorker: ro.skill === "sugarworker", look: ro.look, mount: onWhiteHorse ? "white" : null, injuredUntil: res.injuredUntil }, false);
@@ -13248,6 +13874,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         y: wy - ey * EP,
         fn: () => { ctx.save(); ctx.translate(0, -ey * EP); fn(); ctx.restore(); },
       });
+      /* ZIP 427 — LES BULLES DE LA VILLE, EN PASSE FINALE. Même raison qu'à la
+         ferme (le tri se fait par ancrage AU SOL, pas par étendue visuelle) :
+         une bulle dessinée dans son `draw` se fait recouvrir par le premier
+         bâtiment dont la base est plus basse. Elles sont donc mises en file ici
+         et rendues après tout le reste.
+         ⚠️ ET ELLES PORTENT DÉJÀ LEUR DÉCALAGE D'ALTITUDE. La file est vidée
+         HORS de `pushE`, donc sans sa translation : un résident en Haute-Ville
+         aurait une bulle trente pixels sous ses pieds. Le décalage est appliqué
+         par l'appelant, une fois, au moment de la mise en file. */
+      const townBubbles = [];
+      const queueTownBubble = (cx, by, text, major) => townBubbles.push({ cx, by, text, major });
       for (let y = y0; y <= yBot; y++) for (let x = x0; x <= x1; x++) {
         const i = y * tw.w + x, g = tw.ground[i];
         const e = tw.elev[i], oy = -e * EP;
@@ -13390,19 +14027,24 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           }
         }
 
-        // Rails on the west edge (same look as the farm side: dark bed,
-        // lighter ties, two steel rails).
+        /* ⚠️⚠️ ZIP 427 — LA VOIE FERRÉE DE LA VILLE EST CELLE DE LA FERME,
+           LITTÉRALEMENT. Ce qu'il y avait ici depuis le 234, ce sont les six
+           lignes remplacées ci-dessous : un ballast plat, une traverse une
+           rangée sur deux, deux traits d'acier. À côté, la ferme posait le
+           sprite `railHalf` du zip 232 — ballast granuleux, traverses larges,
+           rail éclairé sur son arête. Deux dessins de la MÊME voie ferrée,
+           c'est-à-dire le doublon du §8 : le même objet, deux fois moins soigné
+           d'un côté, et rien pour le signaler tant qu'on ne compare pas les deux
+           écrans. Demande de Guillaume, mot pour mot : « la même forme et
+           attention graphique ... pour cohérence visuelle ».
+           On ne dessine donc plus une seconde voie : on pose la première.
+           Zéro sprite nouveau, et la divergence redevient impossible. */
         if (x >= C.TOWN_RAIL_X && x <= C.TOWN_RAIL_X + 1) {
-          ctx.fillStyle = "#5c5348"; ctx.fillRect(px, py, T, T);
-          if (y % 2 === 0) { ctx.fillStyle = "#7a6a52"; ctx.fillRect(px, py + 6, T, 3); }
-          ctx.fillStyle = "#9aa0aa";
-          if (x === C.TOWN_RAIL_X) ctx.fillRect(px + 11, py, 2, T);
-          else ctx.fillRect(px + 3, py, 2, T);
+          ctx.drawImage(x === C.TOWN_RAIL_X ? sprites.railL : sprites.railR, px, py);
         }
-        // Platform planks alongside the rails.
+        // Le quai : les planches bordées de pierre de la ferme (platformTile).
         if (x >= C.TOWN_PLATFORM.x && x < C.TOWN_PLATFORM.x + C.TOWN_PLATFORM.w && y >= C.TOWN_PLATFORM.y && y < C.TOWN_PLATFORM.y + C.TOWN_PLATFORM.h) {
-          ctx.fillStyle = "#b09468"; ctx.fillRect(px, py, T, T);
-          ctx.fillStyle = "#9c8158"; ctx.fillRect(px, py + (y % 2 ? 4 : 10), T, 2);
+          ctx.drawImage(sprites.platform, px, py);
         }
         // Reflet respirant sur l'eau — les mares du parc, pas la fontaine, qui
         // a le sien (voir plus bas) : ses cases sont peintes en pierre.
@@ -13560,6 +14202,71 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       drawCivic(C.TOWN_HALL, sprites.townHall2, 0);
       // LE TRIBUNAL (425) : idem, le perron touche le bas du canevas.
       drawCivic(C.TOWN_COURT, sprites.courthouse, 0);
+      /* ZIP 427 — LES DEUX COMMERCES DE LA HAUTE-VILLE. Ils passent par le MÊME
+         `drawCivic` que les trois monuments : même ancrage par le bas, même
+         embase, même règle de porte au milieu de la façade sud — donc
+         `nearCivicDoor` fonctionne sur eux sans une ligne de plus, et l'invite
+         ne peut pas se désaccorder de la touche E. La marge basse de 4 px est
+         celle de leurs canevas (voir fermeArt.js). */
+      drawCivic(C.TOWN_BOUTIQUE, sprites.townBoutique, 4);
+      drawCivic(C.TOWN_SALON, sprites.townSalon, 4);
+      /* ⚠️⚠️ LEURS NOMS SONT ÉCRITS ICI, PAS DANS LEURS SPRITES. Deux raisons,
+         la seconde étant celle qui tranche :
+           1. Valley Town écrit déjà sur ses bâtiments de cette façon exactement
+              (la plaque de chaque maison, depuis le 235, quinze lignes plus
+              bas) — une seule façon d'écrire sur un bâtiment de cette ville ;
+           2. `fillText` cuit dans un sprite n'est PAS rastérisable hors
+              navigateur : le banc de rendu (tools/render-tribunal.mjs) plantait
+              net, et on perdait la seule façon de REGARDER ces dessins.
+         ⚠️ Et le texte est BILINGUE, ce qu'un sprite baké ne pourrait jamais
+         être : il est peint une fois pour toutes, avec une langue dedans. */
+      {
+        const plate = (b, img, txt, sub) => {
+          if (!img) return;
+          const by = (b.y + b.h) * T, e = elAt(b.x, b.y + b.h - 1);
+          pushE(by + 0.5, e, () => {
+            /* ⚠️ LA PLAQUE SE CALE SUR LA HAUTEUR DU SPRITE, PAS SUR UN NOMBRE.
+               Premier jet : `by - 96`, la valeur des maisons — dont le canevas
+               fait justement 96 px. Ces deux bâtiments-ci en font 128 et 108 :
+               la plaque tombait EN PLEIN MILIEU de la façade, invisible sur le
+               noir de la boutique. Vu en jeu, et c'est exactement le doublon du
+               §8 (un nombre qui recopie une propriété d'un autre objet). */
+            const cx2 = b.x * T + b.w * T / 2, ty2 = by - img.height - 2;
+            ctx.font = "bold 8px monospace"; ctx.textAlign = "center";
+            const wpx = Math.max(ctx.measureText(txt).width, sub ? ctx.measureText(sub).width : 0) + 10;
+            const hpx = sub ? 20 : 11;
+            ctx.fillStyle = "#f5eeda"; ctx.fillRect(cx2 - wpx / 2, ty2 - 8, wpx, hpx);
+            ctx.strokeStyle = "#6b4a2e"; ctx.lineWidth = 1; ctx.strokeRect(cx2 - wpx / 2 + 0.5, ty2 - 7.5, wpx - 1, hpx - 1);
+            ctx.fillStyle = "#1d1d1d"; ctx.fillText(txt, cx2, ty2);
+            if (sub) { ctx.fillStyle = "#a83c30"; ctx.fillText(sub, cx2, ty2 + 9); }
+            ctx.textAlign = "left";
+          });
+        };
+        plate(C.TOWN_BOUTIQUE, sprites.townBoutique, L.boutiqueTitle, null);
+        plate(C.TOWN_SALON, sprites.townSalon, "Salon", L.salonPlate);
+      }
+      /* LA GARE DE VALLEY TOWN (427) : le bâtiment de la ferme, tel quel. Une
+         voie et des planches sans gare, c'est un arrêt de bus — et la demande
+         était la cohérence, pas une seconde gare à inventer. Il est ancré par
+         son bord BAS (son toit à pignon dépasse de l'emprise, exactement comme
+         côté ferme) et il est bloquant dans le générateur. */
+      if (sprites.station) {
+        const ts = C.TOWN_STATION, tsBy = (ts.y + ts.h) * T;
+        pushE(tsBy, elAt(ts.x, ts.y + ts.h - 1), () => {
+          const tcx = ts.x * T + sprites.station.width / 2;
+          /* ⚠️ PAS D'ELLIPSE D'OMBRE ICI, SEULEMENT L'EMBASE — et c'est la note
+             du 425 sur les monuments, vérifiée en jeu sur cette gare-ci. Côté
+             ferme, `drawBuildingShadow` pose son croissant sur de l'HERBE et
+             fonctionne. Ici le devant de la gare est dallé de pierre CLAIRE (le
+             quai) : au premier lancement, le même noir à 25 % ne se lisait plus
+             comme une ombre mais comme une TACHE grise étalée sur les planches.
+             On ne « corrige » donc pas la fonction — on cesse de l'appeler là
+             où son hypothèse de sol ne tient pas. Exactement le raisonnement
+             appliqué à l'église, à la mairie et au tribunal. */
+          ctx.drawImage(sprites.station, ts.x * T, tsBy - sprites.station.height);
+          drawBuildingFooting(ctx, tcx, tsBy, sprites.station.width / 2);
+        });
+      }
 
       /* L'OBÉLISQUE de la place. Ancré par le bas comme les bâtiments, centré
          sur son emprise de deux cases. */
@@ -13597,7 +14304,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   : pr.kind === "streetSign" ? sprites.townStreetSign
                   : pr.kind === "statue" ? sprites.townStatue
                   : pr.kind === "townWell" ? sprites.townWell
-                  : pr.kind === "crate" ? sprites.townCrate : null;
+                  : pr.kind === "crate" ? sprites.townCrate
+                  : pr.kind === "newsBoard" ? sprites.townNewsBoard : null;   // zip 427
         if (!img) continue;
         const by = (pr.y + 1) * T, cxp = pr.x * T + T / 2;
         pushE(by, elAt(pr.x, pr.y), () => {
@@ -13605,6 +14313,37 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           ctx.beginPath(); ctx.ellipse(cxp, by - 2, img.width * 0.28, 3.5, 0, 0, 7); ctx.fill();
           ctx.drawImage(img, cxp - img.width / 2, by - img.height);
         });
+      }
+      /* ZIP 427 — LE KIOSQUE JOUE. ⚠️ LA CONDITION EST UN ÉTAT PARTAGÉ, PAS UN
+         MINUTEUR LOCAL : la musique se déclenche quand AU MOINS UN résident est
+         en train d'y faire son activité "kiosk" (état diffusé avec l'arrêt), ou
+         quelques secondes après qu'un joueur y a appuyé sur E. Le premier cas
+         est vu par tout le monde en même temps sans un octet de plus ; le second
+         est local et assumé — c'est un retour à MON action, pas un événement du
+         monde. Les notes elles-mêmes sont dérivées du temps : aucune particule
+         n'est simulée, donc aucune ne peut désynchroniser quoi que ce soit. */
+      {
+        const kx = C.TOWN_KIOSK.x + 1, ky = C.TOWN_KIOSK.y + 1;
+        const resPlaying = ((sharedRef.current.station && sharedRef.current.station.residents) || [])
+          .some(r => resZone(r) === "town" && r.act === "kiosk");
+        if (resPlaying || performance.now() < townKioskUntilRef.current) {
+          const kb = (ky + 1) * T;
+          pushE(kb + 1, elAt(kx, ky), () => {
+            const tms = performance.now();
+            for (let n = 0; n < 5; n++) {
+              const ph = ((tms / (C.TOWN_KIOSK_NOTE_MS * 8) + n / 5) % 1);
+              const a2 = Math.max(0, 0.9 * (1 - ph));
+              if (a2 <= 0.03) continue;
+              const nx2 = kx * T + 8 + Math.sin(tms / 420 + n * 2.3) * 12;
+              const ny2 = kb - 34 - ph * 40;
+              ctx.globalAlpha = a2;
+              ctx.font = "bold 11px monospace"; ctx.textAlign = "center";
+              ctx.fillStyle = "#1d1d1d"; ctx.fillText(n % 2 ? "\u266A" : "\u266B", nx2 + 1, ny2 + 1);
+              ctx.fillStyle = ["#f2e6a0", "#e8b4c8", "#a8d8e8"][n % 3]; ctx.fillText(n % 2 ? "\u266A" : "\u266B", nx2, ny2);
+              ctx.globalAlpha = 1; ctx.textAlign = "left";
+            }
+          });
+        }
       }
       // Houses: one per known farmer (deterministic order), leftovers show a
       // "for sale" plate. Zip 235: 10 basic free façade styles — the owner
@@ -13648,6 +14387,67 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
       // Station sign (ride back to the farm), reusing the farm's ad board sprite.
       draws.push({ y: (C.TOWN_STATION_SIGN.y + 1) * T, fn: () => ctx.drawImage(sprites.signBoard, C.TOWN_STATION_SIGN.x * T - 1, C.TOWN_STATION_SIGN.y * T - 6) });
+      /* ╔════════════════════════════════════════════════════════════════════
+         ║ ZIP 427 — LES RÉSIDENTS DE VALLEY TOWN, ET LEUR FAMILLE.
+         ╚════════════════════════════════════════════════════════════════════
+         Même structure que la boucle « baladeurs » de la ferme : l'hôte affiche
+         sa simulation, l'invité rejoue le trajet reçu (smoothNpcPath). La seule
+         chose qui change ici, c'est l'ALTITUDE — et elle ne se reçoit pas, elle
+         se lit sous les pieds du personnage, exactement comme pour les joueurs
+         depuis le 425. Un résident au sommet des marches est au sommet des
+         marches sur tous les écrans, sans un octet de plus. */
+      {
+        const residents = (sharedRef.current.station && sharedRef.current.station.residents) || [];
+        for (const res of residents) {
+          if (resZone(res) !== "town") continue;
+          const ro = rosterOf(res.rid); if (!ro) continue;
+          if (!Number.isFinite(res.x)) continue;
+          const rp = isHost ? res : smoothNpcPath("resident:" + res.rid, res, dt);
+          const rx = rp.x, ry = rp.y;
+          const sitting = !!(res.act && res.sitOn && (C.TOWN_ACTS[res.act] || {}).sit);
+          // Assis : on se dessine SUR le banc, un poil au sud pour passer
+          // devant lui au tri (voir la branche `p.sit` de drawCharacter).
+          const dx2 = sitting ? res.sitOn.x : rx;
+          const dy2 = sitting ? res.sitOn.y + 0.45 : ry;
+          const rDir = res.act ? (res.dir | 0) : (isHost ? (res.dir || 0) : (rp.dir != null ? rp.dir : 0));
+          const rMoving = res.act ? false : (isHost ? !!res.moving : !!rp.moving);
+          const rAnim = isHost ? (res.animT || 0) : (rp.animT || 0);
+          const pe = townElevAt(tw, dx2, dy2 + 0.2);
+          const charOf = (extra) => ({
+            id: "res" + res.rid, name: ro.name, gender: ro.gender, outfit: ro.outfit,
+            overalls: ro.overalls, cap: ro.cap, look: ro.look,
+            plaid: ro.skill === "lumberjack", cheeseHat: ro.skill === "cheesemaker",
+            sugarWorker: ro.skill === "sugarworker",
+            mount: ro.skill === "voyager" ? "white" : null, ...extra,
+          });
+          /* L'ACCOMPAGNANT. ⚠️ IL EST DÉRIVÉ, PAS SIMULÉ — voir RESIDENT_FAMILY
+             et trailFollow. Sa traîne est alimentée avec la position AFFICHÉE
+             (celle que ce client-ci dessine), donc chaque machine obtient la
+             même chose sans que rien ne circule. On l'alimente même quand le
+             résident est assis : sinon l'invité « rattrape » d'un coup au
+             moment où il se relève. */
+          const fam = residentFamilyOf(res.rid);
+          const guest = (fam && typeof res.guest === "number") ? fam[res.guest] : null;
+          if (guest) {
+            let tr = guestTrailsRef.current.get(res.rid);
+            if (!tr) { tr = []; guestTrailsRef.current.set(res.rid, tr); }
+            const gp = trailFollow(tr, rx, ry, rMoving, C.TOWN_GUEST_FOLLOW_DIST);
+            const gAnim = rMoving ? (performance.now() / 110) : 0;
+            const gpe = townElevAt(tw, gp.x, gp.y + 0.2);
+            pushE((gp.y + 1) * T - 1, gpe, () => drawCharacter({
+              id: "guest" + res.rid, name: guest.name, x: gp.x, y: gp.y, dir: gp.dir,
+              moving: rMoving, animT: gAnim, gender: guest.gender, outfit: guest.outfit,
+              overalls: !!guest.overalls, cap: !!guest.cap, look: guest.look || null,
+              scale: guest.small ? C.TOWN_GUEST_CHILD_SCALE : 1,
+            }, false));
+          }
+          pushE((dy2 + 1) * T, pe, () => {
+            drawCharacter(charOf({ x: dx2, y: dy2, dir: rDir, moving: rMoving, animT: rAnim, sit: sitting, injuredUntil: res.injuredUntil }), false);
+            const line = townActLine(res);
+            if (line) queueTownBubble(Math.round(dx2 * T) + 8, Math.round(dy2 * T) - 18 - pe * C.TOWN_ELEV_PX, line, res.act === "talk");
+          });
+        }
+      }
       // Remote players in town: their pos broadcast carries real town coords
       // (zone "town"); lerp locally exactly like the farm loop does — the
       // farm loop early-returns before its own lerp while we are here.
@@ -13723,6 +14523,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // draws suivants (dont des maisons plus bas à l'écran) n'étaient plus
       // dessinés. On isole chaque draw : une frame ne peut plus être amputée.
       for (const d of draws) { try { d.fn(); } catch (e) { console.error("[FERME] town draw ignoré", e); } }
+      // Zip 427 : la passe finale des bulles (voir queueTownBubble).
+      townBubbles.sort((a, b) => a.by - b.by);
+      for (const bq of townBubbles) { try { drawSpeechBubble(ctx, bq.cx, bq.by, bq.text, bq.major); } catch (e) { console.error("[FERME] bulle ville ignorée", e); } }
       /* ZIP 426 — LE CURSEUR DE VISÉE, en ville, quand la hache est en main.
          ⚠️ SANS LUI, LA COUPE EN VILLE EST INJOUABLE : à la ferme, un liseré
          blanc dit en permanence sur quelle case le clic va tomber ; ici il n'y
@@ -13753,6 +14556,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       else if (nearBuildingDoor(C.TOWN_CHURCH)) tpk = "townChurch";
       else if (nearBuildingDoor(C.TOWN_HALL)) tpk = "townHall";
       else if (nearBuildingDoor(C.TOWN_COURT)) tpk = "townCourt";
+      /* ZIP 427 — les invites des nouveaux lieux. ⚠️ MÊME ORDRE QUE `tryOpenNearby`,
+         et ce n'est pas une coïncidence : les deux lisent les MÊMES fonctions de
+         proximité (nearCivicDoor / nearTownProp / nearTownRect). Une invite et
+         une action qui ne s'accordent pas, c'est un jeu qui propose puis refuse
+         — la leçon du 426, réappliquée telle quelle. */
+      else if (nearBuildingDoor(C.TOWN_BOUTIQUE)) tpk = carlaIsResident() ? "townBoutique" : "townBoutiqueShut";
+      else if (nearBuildingDoor(C.TOWN_SALON)) tpk = "townSalon";
+      else if (nearTownProp("newsBoard", 1.7)) tpk = "townNews";
+      else if (nearTownProp("bench", 1.2)) tpk = "townBench";
+      else if (nearTownRect(C.TOWN_FOUNTAIN.x - 1, C.TOWN_FOUNTAIN.y - 1, 4, 4)) tpk = "townWish";
+      else if (nearTownProp("kiosk", 2.6)) tpk = "townKiosk";
+      else if (nearTownRect(C.TOWN_PIER.x, C.TOWN_PIER.y, C.TOWN_PIER.w, C.TOWN_PIER.h + 2)) tpk = "townPier";
+      else if (nearTownRect(C.TOWN_BELVEDERE.x, C.TOWN_BELVEDERE.y, C.TOWN_BELVEDERE.w, C.TOWN_BELVEDERE.h)) tpk = "townView";
       else {
         for (const hsn of owners) {
           const doorX = hsn.x + C.TOWN_HOUSE_W / 2, doorY = hsn.y + C.TOWN_HOUSE_H + 0.5;
@@ -14472,7 +15288,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     function drawMyPets(m, dt2) { drawPetsFor(me.id, walkPetsRef.current, m, dt2); }
     function drawRemotePets(p, dt2) { drawPetsFor(p.id, p.pets, p, dt2); }
     function drawSelf(m) {
-      drawCharacter(m, true);
+      // Zip 427 : ma tenue vient du même endroit que celle des autres (voir
+      // wardrobeLookOf) — un joueur doit se voir exactement comme on le voit.
+      drawCharacter({ ...m, look: wardrobeLookOf(m.id) || m.look || null }, true);
       if (actAnimRef.current > 0 && slotRef.current <= SLOT.can) {
         const sprites = spritesRef.current;
         const key = slotRef.current === SLOT.tools ? toolKindRef.current : "can";
@@ -14777,6 +15595,29 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         ctx.fillStyle = "#241c14";  // botte
         ctx.fillRect(10, 19, 4, 3);
         ctx.restore();
+      } else if (p.sit) {
+        /* ⚠️ ZIP 427 — ASSIS SUR UN BANC : ON COUPE LES JAMBES, ON NE LES PLIE
+           PAS. Vu de dessus, un personnage assis sur un banc a ses jambes
+           CACHÉES par l'assise ; les dessiner pliées demanderait une pose de
+           plus dans la feuille de sprite (donc une variante par tenue, par
+           métier et par article de la garde-robe) pour un gain nul à 16 px.
+           On dessine donc les 17 pixels du haut — buste, tête, chapeau — posés
+           un cran plus bas. Le tri fait le reste : l'appelant place l'assis
+           légèrement au SUD du banc, il passe donc devant lui.
+           ⚠️ Frame 0 imposée : un cycle de marche sur quelqu'un d'assis donne
+           un gigotement permanent. */
+        if (flip) { ctx.translate(px + 16, py - 4); ctx.scale(-1, 1); ctx.drawImage(sheet, 0, row * 24, 16, 17, 0, 0, 16, 17); }
+        else ctx.drawImage(sheet, 0, row * 24, 16, 17, px, py - 4, 16, 17);
+      } else if (p.scale && p.scale !== 1) {
+        /* Zip 427 — LES ENFANTS DE LA FAMILLE. Une simple mise à l'échelle
+           ANCRÉE AUX PIEDS : le sprite rétrécit vers le bas, donc l'enfant reste
+           posé au sol au lieu de flotter. Un jeu de sprites « enfant » aurait
+           coûté une variante par tenue pour un personnage qu'on reconnaît déjà
+           à sa taille. */
+        const sc = p.scale, w2 = 16 * sc, h2 = 24 * sc;
+        const bx2 = px + (16 - w2) / 2, by2 = (py - 8 - lift) + (24 - h2);
+        if (flip) { ctx.translate(bx2 + w2, by2); ctx.scale(-1, 1); ctx.drawImage(sheet, frame * 16, row * 24, 16, 24, 0, 0, w2, h2); }
+        else ctx.drawImage(sheet, frame * 16, row * 24, 16, 24, bx2, by2, w2, h2);
       } else if (flip) { ctx.translate(px + 16, py - 8 - lift); ctx.scale(-1, 1); ctx.drawImage(sheet, frame * 16, row * 24, 16, 24, 0, 0, 16, 24); }
       else ctx.drawImage(sheet, frame * 16, row * 24, 16, 24, px, py - 8 - lift, 16, 24);
       ctx.restore();
@@ -15041,6 +15882,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         [C.TOWN_CEMETERY.x + C.TOWN_CEMETERY.w / 2, C.TOWN_CEMETERY.y + C.TOWN_CEMETERY.h / 2, "🪦", L.mapTownCemetery],
         [C.TOWN_LAKE.x + C.TOWN_LAKE.w / 2, C.TOWN_LAKE.y + C.TOWN_LAKE.h / 2, "🏞️", L.mapTownLake],
         [C.TOWN_BELVEDERE.x + C.TOWN_BELVEDERE.w / 2, C.TOWN_BELVEDERE.y + C.TOWN_BELVEDERE.h / 2, "🔭", L.mapTownBelvedere],
+        // Zip 427 : les deux commerces. ⚠️ UNE CARTE QUI NE LES MONTRE PAS LES
+        // REND INTROUVABLES : ils sont en Haute-Ville, donc hors du chemin de
+        // quiconque ne monte pas exprès. C'est le pendant du panneau posé au
+        // pied des marches — un lieu qu'on ne peut découvrir que par hasard
+        // n'existe pas.
+        [C.TOWN_BOUTIQUE.x + C.TOWN_BOUTIQUE.w / 2, C.TOWN_BOUTIQUE.y + C.TOWN_BOUTIQUE.h, "👗", L.mapTownBoutique],
+        [C.TOWN_SALON.x + C.TOWN_SALON.w / 2, C.TOWN_SALON.y + C.TOWN_SALON.h, "💈", L.mapTownSalon],
       ];
       g.textAlign = "center";
       for (const [mx, my, emo, label] of marks) {
@@ -15050,6 +15898,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         g.font = "bold 9px monospace";
         g.fillStyle = "#000"; g.fillText(label, px + 1, py - 7 + 1);
         g.fillStyle = "#ffeec8"; g.fillText(label, px, py - 7);
+      }
+      /* Zip 427 — LES RÉSIDENTS EN VILLE, sur le plan. ⚠️ MÊME FILTRE DE ZONE
+         QUE LES JOUEURS, et pour la même raison exactement : afficher les
+         coordonnées de ferme d'un résident sur un plan de ville, c'est le
+         mélange de cartes du §4 — sauf qu'ici il serait bien VISIBLE, ce qui en
+         fait le seul endroit du jeu où ce défaut se serait signalé tout seul. */
+      for (const res of ((sharedRef.current.station && sharedRef.current.station.residents) || [])) {
+        if (resZone(res) !== "town" || !Number.isFinite(res.x)) continue;
+        const ro = rosterOf(res.rid); if (!ro) continue;
+        const px = res.x * scale, py = res.y * scale;
+        g.fillStyle = "#000"; g.beginPath(); g.arc(px, py, 4, 0, 7); g.fill();
+        g.fillStyle = "#8fd8a0"; g.beginPath(); g.arc(px, py, 2.5, 0, 7); g.fill();
+        g.font = "bold 9px monospace";
+        g.fillStyle = "#000"; g.fillText(ro.name, px + 1, py - 6 + 1);
+        g.fillStyle = "#cdf0d6"; g.fillText(ro.name, px, py - 6);
       }
       // Les joueurs présents EN VILLE (les autres sont ailleurs : les dessiner
       // reviendrait à afficher des coordonnées de ferme sur un plan de ville).
@@ -15525,7 +16388,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const list = (sharedRef.current.station && sharedRef.current.station.residents) || [];
     let best = null, bestD = C.HEAL_RANGE;
     for (const r of list) {
-      if (r && r.injuredUntil && r.injuredUntil > Date.now() && typeof r.x === "number") {
+      // Zip 427 : la zone AVANT la distance. Un résident blessé descendu en
+      // ville tomberait sinon « à portée » d'un joueur resté à la ferme par
+      // simple coïncidence de coordonnées, et la touche E soignerait quelqu'un
+      // qui n'est pas là.
+      if (r && resZone(r) === (m.zone === "town" ? "town" : "farm")
+          && r.injuredUntil && r.injuredUntil > Date.now() && typeof r.x === "number") {
         const d = Math.hypot(r.x - m.x, r.y - m.y);
         if (d <= bestD) { bestD = d; best = r; }
       }
@@ -15539,6 +16407,197 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function townChopAt(i) {
     const ch = sharedRef.current.townChop;
     return (ch && ch[i]) || null;
+  }
+
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 427 — VALLEY TOWN HABITÉE : LES OUTILS COMMUNS.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ CE BLOC EST AU NIVEAU DU COMPOSANT, ET C'EST UNE DÉCISION, PAS UN
+     RANGEMENT. Trois familles d'appelants ont besoin d'exactement les mêmes
+     réponses, et elles ne vivent PAS dans la même closure :
+       * l'HÔTE, qui simule les résidents en ville (updateResidents tourne même
+         quand l'hôte est resté à la ferme — voir « l'instance cachée », §4) ;
+       * le RENDU de la ville (drawTownFrame, dans la closure de la boucle) ;
+       * la touche E et les invites (tryOpenNearby, hors de cette closure).
+     Le 426 avait déjà payé cette leçon avec `nearCivicDoor` : deux copies du
+     même seuil, c'est la garantie qu'un jour le jeu propose puis refuse.
+     La boucle de rendu ALIASE donc ces fonctions au lieu d'en garder les
+     siennes.
+
+     ⚠️ ET L'HÔTE DOIT POUVOIR OBTENIR LA CARTE DE LA VILLE SANS Y ÊTRE. C'est
+     tout l'objet de `townWorldNow()` : `townWorldRef` n'est renseigné que
+     lorsqu'on entre en ville, or un hôte resté au champ doit quand même faire
+     marcher ses résidents là-bas. Le singleton de module est gratuit à obtenir
+     (il est déjà construit dès qu'un joueur de l'onglet est passé en ville, et
+     sinon il se construit une fois).
+     ⚠️ ON NE MUTE JAMAIS CE QU'IL REND (§4) : c'est un SINGLETON partagé par
+     tous les remontages de l'onglet. Tout ce qui change vit dans `shared`. */
+  function townWorldNow() {
+    return townWorldRef.current || (townWorldRef.current = getTownWorldCached(E));
+  }
+  function townBlockedAt(tw, x, y) {
+    const fx = Math.floor(x), fy = Math.floor(y);
+    if (fx < 0 || fy < 0 || fx >= tw.w || fy >= tw.h) return true;
+    if (fx <= C.TOWN_RAIL_X + 1 && !(fy >= C.TOWN_PLATFORM.y && fy < C.TOWN_PLATFORM.y + C.TOWN_PLATFORM.h)) return true;
+    const i = fy * tw.w + fx;
+    if (tw.solid && tw.solid[i]) return true;
+    if (tw.ground[i] === C.G_WATER) return true;
+    const o = tw.objects[i];
+    if (o !== C.O_TREE && o !== C.O_TREE2 && o !== C.O_STUMP) return false;
+    const e = townChopAt(i);
+    if (e && e.r) return C.TOWN_STUMP_BLOCKS;
+    return true;
+  }
+  function townElevAt(tw, x, y) {
+    if (!tw || !tw.elev) return 0;
+    const fx = Math.floor(x), fy = Math.floor(y);
+    if (fx < 0 || fy < 0 || fx >= tw.w || fy >= tw.h) return 0;
+    return tw.elev[fy * tw.w + fx];
+  }
+  function townCanStand(tw, x, y, fromE) {
+    const r = 0.3;
+    const pts = [[x - r, y], [x + r, y], [x - r, y + 0.35], [x + r, y + 0.35]];
+    for (const [px, py] of pts) {
+      if (townBlockedAt(tw, px, py)) return false;
+      if (fromE !== undefined && Math.abs(townElevAt(tw, px, py) - fromE) > C.TOWN_STEP_MAX) return false;
+    }
+    return true;
+  }
+  // La zone d'un résident, avec sa valeur par défaut. ⚠️ ÉCRIRE `res.zone ===
+  // "town"` un peu partout marcherait aussi, jusqu'au jour où quelqu'un écrit
+  // `res.zone !== "farm"` ailleurs : une sauvegarde d'avant ce zip n'a PAS de
+  // champ `zone`, et les deux tests ne répondent alors pas la même chose.
+  function resZone(res) { return res && res.zone === "town" ? "town" : "farm"; }
+
+  /* ---- LES ESCALIERS, VUS PAR UN PNJ ----------------------------------------
+     ⚠️⚠️ UN RÉSIDENT NE TROUVE PAS UN ESCALIER TOUT SEUL, ET IL NE FAUT SURTOUT
+     PAS LUI DONNER UN PATHFINDING POUR ÇA. Sa rôdaille est une ligne droite qui
+     glisse le long des obstacles (c'est le modèle de tout le jeu depuis le 252,
+     et c'est ce qui permet de décrire un trajet en DEUX POINTS dans un message).
+     Face à une falaise, cette ligne droite ne monte jamais : le résident se
+     colle au pied de l'à-pic et y reste jusqu'à l'expiration — c'est-à-dire
+     qu'aucun résident ne monterait JAMAIS en Haute-Ville, sans la moindre
+     erreur pour le dire.
+     La réponse n'est pas un A*, c'est un ITINÉRAIRE : la ville n'a que trois
+     volées, elles sont dans `TOWN_STAIRS`, et un trajet qui change d'altitude
+     passe forcément par l'une d'elles. On DÉRIVE donc les points de passage de
+     la table qui définit déjà les escaliers — jamais d'une seconde table de
+     « points de passage » qui divergerait au premier escalier déplacé (§8).
+     ⚠️ Et le trajet complet tient dans UN SEUL message : `residentPaths` accepte
+     une liste de points depuis le 364. Monter au belvédère coûte donc exactement
+     autant de `send()` que traverser la place. */
+  /* ---- LES PROXIMITÉS DE VALLEY TOWN (zip 427) -----------------------------
+     Même discipline que `nearCivicDoor` (426) : UNE définition par question,
+     lue par l'invite ET par la touche E. Deux copies d'un seuil de proximité,
+     c'est un jeu qui propose puis refuse. */
+  function nearTownProp(kind, r) {
+    const m = meRef.current, tw = townWorldNow();
+    if (!m || !tw || m.zone !== "town") return null;
+    for (const pr of tw.props || []) {
+      if (pr.kind !== kind) continue;
+      if (Math.abs(m.x - pr.x) <= r && Math.abs(m.y - pr.y) <= r + 0.6) return pr;
+    }
+    return null;
+  }
+  function nearTownRect(x, y, w, h) {
+    const m = meRef.current;
+    if (!m || m.zone !== "town") return false;
+    return m.x >= x - 1.2 && m.x <= x + w + 0.2 && m.y >= y - 1.2 && m.y <= y + h + 0.2;
+  }
+  function townResidentsNear(x, y, r) {
+    const list = (sharedRef.current.station && sharedRef.current.station.residents) || [];
+    return list.filter(res => resZone(res) === "town" && Number.isFinite(res.x) && Math.hypot(res.x - x, res.y - y) <= r);
+  }
+  function carlaIsResident() {
+    const list = (sharedRef.current.station && sharedRef.current.station.residents) || [];
+    return list.some(r => r && r.rid === C.CARLA_RID);
+  }
+  /* ⚠️ UNE RÉPLIQUE D'AMBIANCE SE TIRE D'UNE GRAINE PARTAGÉE, JAMAIS DE
+     `Math.random()`. Deux joueurs côte à côte devant la même fontaine doivent
+     lire la même chose : c'est la règle posée au 376 pour les rembarrages de
+     Carla, et elle vaut pour tout ce qui est « joué localement mais vu à
+     deux ». La graine est une tranche de temps, donc elle ne coûte rien. */
+  function pickShared(pool, seed) {
+    if (!pool || !pool.length) return "";
+    return pool[townHash(seed, 7919) % pool.length];
+  }
+
+  /* ---- CE QUE DIT UN RÉSIDENT EN VILLE -------------------------------------
+     ⚠️⚠️ AUCUNE RÉPLIQUE NE VOYAGE SUR LE RÉSEAU, ET C'EST LA MÊME ASTUCE QUE
+     LES REMBARRAGES DE CARLA À LEO (376) : l'indice est HACHÉ à partir de deux
+     nombres que les deux clients possèdent déjà — le `rid` du résident et
+     `actAt`, l'instant où l'activité a commencé, qui arrive avec le message
+     d'arrêt. Deux joueurs lisent donc la même phrase au même moment sans qu'un
+     seul octet de texte ne circule.
+     ⚠️ COROLLAIRE À NE JAMAIS OUBLIER : une réplique ne doit dépendre d'AUCUN
+     état local (l'or du joueur, sa langue mise à part, la saison de son
+     client). Le jour où l'une d'elles le fera, les deux écrans divergeront —
+     et rien ne le signalera, puisque chacun aura l'air cohérent avec lui-même.
+     ⚠️ La bulle ne dure que TOWN_RES_BUBBLE_MS, pas toute l'activité : un PNJ
+     assis dix secondes avec une bulle collée au-dessus de la tête a l'air
+     bloqué, pas pensif. Une conversation, elle, ENCHAÎNE (c'est ce qui la fait
+     lire comme un échange plutôt que comme deux monologues simultanés). */
+  function townHash(a, b) {
+    let h = (a | 0) * 2654435761 ^ (b | 0) * 40503;
+    h ^= h >>> 13; h = (h * 1274126177) >>> 0;
+    return h;
+  }
+  function townActLine(res) {
+    if (!res || !res.act) return null;
+    const since = Date.now() - (res.actAt || 0);
+    if (res.act === "talk") {
+      const pool = res.meetTone === "ally" ? L.townMeetAlly : res.meetTone === "foe" ? L.townMeetFoe : L.townMeetNeutral;
+      if (!pool || !pool.length) return null;
+      // Un tour de parole toutes les TOWN_RES_BUBBLE_MS : l'un parle, puis
+      // l'autre. Le décalage vient du `rid`, donc ils ne parlent jamais en même
+      // temps — et c'est ce décalage, à lui seul, qui fait un dialogue.
+      const step = Math.floor(since / C.TOWN_RES_BUBBLE_MS);
+      if (step % 2 !== (res.rid % 2)) return null;
+      return pool[townHash(res.rid, res.actAt + step) % pool.length];
+    }
+    if (since > C.TOWN_RES_BUBBLE_MS) return null;
+    const pool = (L.townActLines || {})[res.act];
+    if (!pool || !pool.length) return null;
+    return pool[townHash(res.rid, res.actAt) % pool.length];
+  }
+  function townStairEnds(st) {
+    // `low`/`high` sont les cases de PALIER, une case au-delà de la volée : on
+    // vise le sol de départ et le sol d'arrivée, jamais une marche (viser une
+    // marche, c'est viser une altitude intermédiaire, donc s'arrêter dessus).
+    if (st.dir === "e") {
+      const cy = st.y + (st.w - 1) / 2;
+      return { low: { x: st.x - 1.5, y: cy }, high: { x: st.x + st.len + 0.5, y: cy } };
+    }
+    const cx = st.x + (st.w - 1) / 2;
+    return { low: { x: cx, y: st.y + st.len + 0.5 }, high: { x: cx, y: st.y - 1.5 } };
+  }
+  function townStairRoute(fromE, toE, fx, fy) {
+    const out = [];
+    let cur = fromE, cx = fx, cy = fy;
+    // Trois sauts au maximum : la ville a deux niveaux au-dessus de la rue, donc
+    // deux volées enchaînées suffisent toujours. La borne est là pour qu'une
+    // table d'escaliers mal fichue ne fasse pas boucler l'hôte.
+    for (let guard = 0; guard < 3 && Math.abs(cur - toE) > 0.01; guard++) {
+      const up = toE > cur;
+      let best = null, bestD = Infinity;
+      for (const st of C.TOWN_STAIRS) {
+        const entry = up ? st.from : st.to, exit = up ? st.to : st.from;
+        if (Math.abs(entry - cur) > 0.01) continue;
+        // Ne pas dépasser : une volée qui monte plus haut que la cible nous
+        // ferait redescendre par une autre, et le trajet deviendrait absurde.
+        if (up ? exit > toE + 0.01 : exit < toE - 0.01) continue;
+        const ends = townStairEnds(st);
+        const e0 = up ? ends.low : ends.high;
+        const d = Math.hypot(e0.x - cx, e0.y - cy);
+        if (d < bestD) { bestD = d; best = { st, ends, up, exit }; }
+      }
+      if (!best) break;   // aucune volée : le trajet restera plat, et c'est mieux qu'une boucle
+      const a = best.up ? best.ends.low : best.ends.high;
+      const b = best.up ? best.ends.high : best.ends.low;
+      out.push(a, b);
+      cur = best.exit; cx = b.x; cy = b.y;
+    }
+    return out;
   }
   /* ⚠️ ZIP 426 — CES TROIS-LÀ SONT AU NIVEAU DU COMPOSANT, ET PAS DANS LA
      BOUCLE DE RENDU, pour la même raison que nearCivicDoor juste dessous : elles
@@ -15643,6 +16702,40 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // simple message — ils n'ont pas d'intérieur, et le dire vaut mieux que
       // de laisser croire à une porte cassée.
       if (nearCivicDoor(C.TOWN_COURT)) { enterCourt(); return; }
+      /* ═══ ZIP 427 — CE QU'ON PEUT FAIRE EN VILLE ═══
+         ⚠️ L'ORDRE COMPTE, et il va du PLUS PRÉCIS au plus large : les deux
+         portes de commerce d'abord (elles sont dans un rayon étroit), puis le
+         mobilier, puis les lieux. Un test large placé en tête avalerait les
+         autres — c'est ce qui rend une touche unique lisible : elle fait
+         toujours la chose la plus spécifique disponible. */
+      if (nearCivicDoor(C.TOWN_BOUTIQUE)) {
+        /* ⚠️ LA BOUTIQUE N'OUVRE QUE SI CARLA HABITE LA VALLÉE — demande
+           explicite de Guillaume. Et elle le DIT, avec la raison : une porte qui
+           ne s'ouvre pas sans explication passe pour cassée (leçon des plaques du
+           tribunal, 426). Le local existe donc, il est loué, les malles sont
+           dedans, et il ne manque que la propriétaire. */
+        if (carlaIsResident()) { setBoutiqueOpen("hat"); return; }
+        pushToast(L.boutiqueLockedToast); return;
+      }
+      if (nearCivicDoor(C.TOWN_SALON)) { pushToast(L.salonToast); return; }
+      if (nearTownProp("newsBoard", 1.7)) { setNewsBoardOpen(true); return; }
+      if (nearTownProp("bench", 1.2)) { pushToast(L.benchToast); return; }
+      if (nearTownRect(C.TOWN_FOUNTAIN.x - 1, C.TOWN_FOUNTAIN.y - 1, 4, 4)) { sendReq({ kind: "townWish" }); return; }
+      if (nearTownProp("kiosk", 2.6)) {
+        // Le kiosque joue quand quelqu'un est là pour l'entendre — c'est-à-dire
+        // quand un résident traîne dans le parc. Sinon, on l'admet.
+        const near = townResidentsNear(C.TOWN_KIOSK.x + 1, C.TOWN_KIOSK.y + 1, 8);
+        if (!near.length) { pushToast(L.kioskEmpty); return; }
+        townKioskUntilRef.current = performance.now() + 4200;
+        pushToast(pickShared(L.kioskLines, Math.floor(Date.now() / 60000)));
+        return;
+      }
+      if (nearTownRect(C.TOWN_PIER.x, C.TOWN_PIER.y, C.TOWN_PIER.w, C.TOWN_PIER.h + 2)) {
+        pushToast(pickShared(L.pierLines, Math.floor(Date.now() / 30000))); return;
+      }
+      if (nearTownRect(C.TOWN_BELVEDERE.x, C.TOWN_BELVEDERE.y, C.TOWN_BELVEDERE.w, C.TOWN_BELVEDERE.h)) {
+        pushToast(pickShared(L.spyglassLines, Math.floor(Date.now() / 30000))); return;
+      }
       const ids = Object.keys(farmersRef.current || {}).sort();
       for (let hi = 0; hi < C.TOWN_HOUSES.length; hi++) {
         const hsn = C.TOWN_HOUSES[hi];
@@ -16369,7 +17462,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       </div>
 
       {/* Invite proximité */}
-      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townJump" ? L.promptTownJump : promptKey === "townChurch" ? L.promptTownChurch : promptKey === "townHall" ? L.promptTownHall : promptKey === "townCourt" ? L.promptTownCourt : promptKey === "courtExit" ? L.promptCourtExit : promptKey === "courtBoard" ? L.promptCourtBoard : promptKey.startsWith("courtDoor:") ? L.promptCourtDoor(L.courtRoomName(promptKey.slice(10))) : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "mazePrize" ? L.promptMazePrize : promptKey.startsWith("passagePickup:") ? L.promptPassagePickup : L.promptBin}</div>}
+      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townJump" ? L.promptTownJump : promptKey === "townChurch" ? L.promptTownChurch : promptKey === "townHall" ? L.promptTownHall : promptKey === "townCourt" ? L.promptTownCourt : promptKey === "townBoutique" ? L.promptTownBoutique : promptKey === "townBoutiqueShut" ? L.promptTownBoutiqueShut : promptKey === "townSalon" ? L.promptTownSalon : promptKey === "townNews" ? L.promptTownNews : promptKey === "townBench" ? L.promptTownBench : promptKey === "townWish" ? L.promptTownWish : promptKey === "townKiosk" ? L.promptTownKiosk : promptKey === "townPier" ? L.promptTownPier : promptKey === "townView" ? L.promptTownView : promptKey === "courtExit" ? L.promptCourtExit : promptKey === "courtBoard" ? L.promptCourtBoard : promptKey.startsWith("courtDoor:") ? L.promptCourtDoor(L.courtRoomName(promptKey.slice(10))) : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "mazePrize" ? L.promptMazePrize : promptKey.startsWith("passagePickup:") ? L.promptPassagePickup : L.promptBin}</div>}
       {mountPrompt && <div className="ferme-prompt ferme-prompt-mount">{mountPrompt === "mount" ? L.mountPrompt : L.dismountPrompt}</div>}
       {handHeldUI && !moveConfirmUI && <div className="ferme-prompt ferme-prompt-mount">{L.handHeldHint}</div>}
       {moveConfirmUI && (
@@ -18812,6 +19905,143 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           </div>
         </div>
       )}
+      {/* ═══════════════════════════════════════════════════════════════════
+          ZIP 427 — LA MAISON GARFIELD.
+          ───────────────────────────────────────────────────────────────────
+          ⚠️ LA VITRINE NE DÉBITE RIEN. Elle affiche, elle envoie une `req`, et
+          c'est l'HÔTE qui décide (§3). Ce qui est affiché ici — l'or, ce qu'on
+          possède, ce qu'on porte — vient TOUJOURS de `sharedRef`, jamais d'une
+          copie locale : une garde-robe React qui doublerait l'état partagé
+          finirait par montrer un chapeau qu'on ne porte pas dans le monde.
+          `wardrobeTick` ne sert qu'à redemander un rendu, il ne PORTE rien.
+          ⚠️ Et Leo commente à chaque ouverture d'onglet. C'est le personnage :
+          il approuve tout, y compris ce que personne n'a encore choisi. */}
+      {boutiqueOpen && (() => {
+        const slot = C.WARDROBE_SLOTS.includes(boutiqueOpen) ? boutiqueOpen : "hat";
+        const cat = C.wardrobeCatalog(slot);
+        const wr = (sharedRef.current.wardrobe || {})[me.id] || { owned: {}, worn: {} };
+        const owned = wr.owned[slot] || [];
+        const worn = wr.worn[slot] | 0;
+        const gold = sharedRef.current.money | 0;
+        const tabLabel = { hat: L.boutiqueSlotHat, scarf: L.boutiqueSlotScarf, outfit: L.boutiqueSlotOutfit, tint: L.boutiqueSlotTint };
+        // Répliques dérivées du temps, comme partout ailleurs dans ce zip :
+        // deux joueurs dans la même boutique lisent la même chose.
+        const carlaLine = pickShared(L.carlaShopLines, Math.floor(Date.now() / C.LEO_UPSELL_MS));
+        const leoLine = pickShared(L.leoUpsellLines, Math.floor(Date.now() / C.LEO_UPSELL_MS) + 1);
+        return (
+          <div className="ferme-modal open" onClick={() => setBoutiqueOpen(null)}>
+            <div className="panel ferme-modal-panel" onClick={e => e.stopPropagation()} data-tick={wardrobeTick}>
+              <button className="ferme-close-x" onClick={() => setBoutiqueOpen(null)}>✕</button>
+              <h2>{L.boutiqueTitle}</h2>
+              <div className="ferme-hint">{L.boutiqueSub} — {L.boutiqueGold(gold)}</div>
+              <div className="ferme-shop-row" style={{ alignItems: "flex-start" }}>
+                <Sprite img={spritesReady ? spritesRef.current.getChar("f", 1, false, false, false, false, false, false, "carla") : null} sx={16} sy={24} w={32} h={48} />
+                <div className="info"><b>Carla Garfield</b><span className="ferme-usage">{carlaLine}</span></div>
+              </div>
+              <div className="ferme-shop-row" style={{ alignItems: "flex-start" }}>
+                <Sprite img={spritesReady ? spritesRef.current.getChar("m", 0, false, false, false, false, false, false, "leo") : null} sx={16} sy={24} w={24} h={36} />
+                <div className="info"><b>{L.leoRole}</b><span className="ferme-usage">{leoLine}</span></div>
+              </div>
+              <div style={{ display: "flex", gap: 6, margin: "12px 0 6px", flexWrap: "wrap" }}>
+                {C.WARDROBE_SLOTS.map(sl => (
+                  <button key={"wslot-" + sl} className={"ferme-btn" + (sl === slot ? " on" : "")} onClick={() => setBoutiqueOpen(sl)}>{tabLabel[sl]}</button>
+                ))}
+              </div>
+              {/* « Rien » n'est PAS un article : c'est l'indice 0, et il est
+                  toujours proposé. Sans lui, on ne pourrait plus retirer un
+                  chapeau une fois acheté — et il faudrait vendre « pas de
+                  chapeau » en vitrine, ce qui serait absurde à voir. */}
+              <div className="ferme-shop-row">
+                <div className="info"><b>{L.boutiqueNothing}</b></div>
+                {worn === 0
+                  ? <span className="ferme-usage">{L.boutiqueWorn}</span>
+                  : <button className="ferme-btn" onClick={() => sendReq({ kind: "wardrobeWear", slot, idx: 0 })}>{L.boutiqueRemove}</button>}
+              </div>
+              {cat.map((it, i) => {
+                const idx = i + 1, has = owned.includes(idx), isWorn = worn === idx;
+                return (
+                  <div className="ferme-shop-row" key={"w-" + slot + "-" + it.id}>
+                    {it.col && <span style={{ display: "inline-block", width: 18, height: 18, borderRadius: 4, background: it.col, border: "1px solid rgba(0,0,0,0.35)" }} />}
+                    <div className="info">
+                      <b>{lang === "en" ? it.nameEn : it.name}</b>
+                      <span className="ferme-usage">{has ? L.boutiqueOwned : L.boutiqueGold(it.price)}</span>
+                    </div>
+                    {isWorn ? <span className="ferme-usage">{L.boutiqueWorn}</span>
+                      : has ? <button className="ferme-btn" onClick={() => sendReq({ kind: "wardrobeWear", slot, idx })}>{L.boutiqueWear}</button>
+                        : <button className="ferme-btn" disabled={gold < it.price} onClick={() => sendReq({ kind: "wardrobeBuy", slot, idx })}>{L.boutiqueBuy}</button>}
+                  </div>
+                );
+              })}
+              <div style={{ marginTop: 12 }}><button className="ferme-btn" onClick={() => setBoutiqueOpen(null)}>{L.boutiqueClose}</button></div>
+            </div>
+          </div>
+        );
+      })()}
+      {/* ═══════════════════════════════════════════════════════════════════
+          ZIP 427 — LE TABLEAU DES NOUVELLES.
+          ───────────────────────────────────────────────────────────────────
+          ⚠️ C'EST LUI QUI REND L'ARCHITECTURE SOCIALE VISIBLE, et c'est sa
+          seule raison d'être. `RESIDENT_AFFINITIES` existe depuis le chantier
+          « relations entre résidents » et n'était lu que par une fiche de
+          présentation : autant dire que personne ne savait que Tristan et
+          Jérôme se détestent avant de les voir se battre. Ici, la ville le
+          dit — qui est descendu, avec qui, et qui ne se salue plus.
+          ⚠️ TOUT EST DÉRIVÉ DE L'ÉTAT PARTAGÉ, rien n'est stocké : ce panneau
+          n'a pas d'état à sauvegarder, donc pas d'état à désynchroniser. */}
+      {newsBoardOpen && (() => {
+        const list = ((sharedRef.current.station && sharedRef.current.station.residents) || []).filter(r => resZone(r) === "town");
+        const all = (sharedRef.current.station && sharedRef.current.station.residents) || [];
+        const nameOf = (rid) => { const ro = rosterOf(rid); return ro ? ro.name : "?"; };
+        const seen = new Set(), ties = [];
+        for (const res of all) {
+          const rel = C.residentAffinitiesFor(res.rid);
+          for (const a2 of rel.allies) {
+            if (!all.some(x => x.rid === a2)) continue;              // les deux doivent habiter ici
+            const k = [res.rid, a2].sort().join("-"); if (seen.has(k)) continue; seen.add(k);
+            ties.push(L.newsBoardAlly(nameOf(res.rid), nameOf(a2)));
+          }
+          for (const e2 of rel.enemies) {
+            if (!all.some(x => x.rid === e2)) continue;
+            const k = "x" + [res.rid, e2].sort().join("-"); if (seen.has(k)) continue; seen.add(k);
+            ties.push(L.newsBoardFoe(nameOf(res.rid), nameOf(e2)));
+          }
+        }
+        return (
+          <div className="ferme-modal open" onClick={() => setNewsBoardOpen(false)}>
+            <div className="panel ferme-modal-panel" onClick={e => e.stopPropagation()}>
+              <button className="ferme-close-x" onClick={() => setNewsBoardOpen(false)}>✕</button>
+              <h2>{L.newsBoardTitle}</h2>
+              <div className="ferme-hint">{L.newsBoardSub}</div>
+              <h3 style={{ margin: "14px 0 6px" }}>{L.newsBoardInTown}</h3>
+              {!list.length && <div className="ferme-hint">{L.newsBoardNobody}</div>}
+              {list.map(res => {
+                const ro = rosterOf(res.rid); if (!ro) return null;
+                const g = residentGuestName(res);
+                const fam = residentFamilyOf(res.rid);
+                const gi = fam && typeof res.guest === "number" ? fam[res.guest] : null;
+                return (
+                  <div className="ferme-shop-row" key={"nb-" + res.rid}>
+                    <div className="info">
+                      <b>{ro.name}</b>
+                      <span className="ferme-usage">
+                        {g ? L.newsBoardWith(g + " (" + L.townGuestOf((L.townGuestRel || {})[gi.rel] || gi.rel, ro.name) + ")") : ro.job}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+              <h3 style={{ margin: "14px 0 6px" }}>{L.newsBoardTies}</h3>
+              {!ties.length && <div className="ferme-hint">{L.newsBoardNoTies}</div>}
+              {ties.map((t, i) => <div className="ferme-hint" key={"tie-" + i}>• {t}</div>)}
+              <h3 style={{ margin: "14px 0 6px" }}>{L.newsBoardNotices}</h3>
+              <div className="ferme-hint">• {carlaIsResident() ? L.newsBoardBoutique : L.newsBoardBoutiqueSoon}</div>
+              <div className="ferme-hint">• {L.newsBoardSalon}</div>
+              <div className="ferme-hint">• {L.newsBoardCourt}</div>
+              <div style={{ marginTop: 12 }}><button className="ferme-btn" onClick={() => setNewsBoardOpen(false)}>{L.newsBoardClose}</button></div>
+            </div>
+          </div>
+        );
+      })()}
       {devMenuOpen && (() => {
         const today = sharedRef.current.day || 1;
         const forced = forcedWorldUi; // même source que le bandeau : un état, pas une ref (voir applyForcedWorld)
@@ -18854,6 +20084,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 <button disabled={!forced} onClick={() => devSetWorld(null)}>{L.devRotationBtn}</button>
               </div>
 
+              {/* Zip 427 — peupler la ferme. Voir la note du handler : sans
+                  lui, la vie sociale de Valley Town n'est vérifiable qu'après
+                  une heure de jeu, donc en pratique jamais. */}
+              <h3 style={{ margin: "14px 0 6px" }}>{L.devResidentsSection}</h3>
+              <div className="ferme-hint">{L.devResidentsHint(C.MAX_RESIDENTS)}</div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {[6, 12, C.MAX_RESIDENTS].map(n => (
+                  <button key={"devres-" + n} className="ferme-btn" onClick={() => { sendReq({ kind: "devResidents", n }); setDevMenuOpen(false); }}>
+                    {L.devResidentsBtn(n)}
+                  </button>
+                ))}
+              </div>
               <h3 style={{ margin: "14px 0 6px" }}>{L.devHealSection}</h3>
               {/* Zip 392 — soin instantané. Le bouton est TOUJOURS présent, et
                   seulement désactivé quand il n'y a rien à soigner : une entrée

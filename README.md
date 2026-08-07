@@ -1,5 +1,78 @@
 # ARCARDI 🎪
 
+> **ZIP 427 — VALLEY TOWN SE MET À VIVRE.**
+>
+> **Vingt résidents au lieu de dix, et zéro message réseau de plus.** La seule question
+> qui comptait pour doubler la population était « combien de `send()` en plus ? ». La réponse,
+> mesurée sur le code et pas au jugé, est *aucun* : depuis le zip 364, tout ce qui bouge chez
+> un résident tient dans **un seul message groupé par image**, et la taille d'un paquet n'est
+> pas facturée. Le vrai coût du passage à vingt est du calcul chez l'hôte. C'est le bon
+> échange : le processeur est gratuit, le quota Supabase non.
+>
+> **Les résidents descendent à Valley Town.** Ils prennent le train (six en même temps au
+> plus, pour un séjour de trois à dix minutes), ils s'éparpillent, ils choisissent un endroit
+> et ils y font quelque chose : s'asseoir sur un banc, regarder la fontaine, faire leur
+> marché, tirer de l'eau au puits, se recueillir au cimetière, écouter le kiosque, lécher la
+> vitrine, monter au belvédère, aller au bout du ponton. Pendant ce temps ils **ne travaillent
+> pas** à la ferme — c'est le prix du voyage, il est explicite. Les endroits où l'on s'arrête
+> ne sont écrits nulle part : ils sont **déduits de la carte elle-même**, si bien que déplacer
+> un banc déplace l'endroit où l'on s'assoit, et qu'aucune liste ne peut mentir.
+>
+> **Ils montent les escaliers.** Ça a l'air d'un détail, c'en est un piège : un personnage
+> qui marche en ligne droite ne trouve jamais une volée de marches. Il se colle au pied de la
+> falaise et abandonne, sans la moindre erreur — et le symptôme, « personne ne va jamais en
+> Haute-Ville », ressemble à un choix de conception. La réponse n'est pas un algorithme de
+> recherche de chemin mais un **itinéraire déduit de la table des escaliers**, qui tient dans
+> le message de trajet existant : monter au belvédère coûte exactement autant que traverser
+> la place.
+>
+> **Ils se parlent, et ce qu'ils se disent dépend de qui ils sont.** Deux résidents qui se
+> croisent engagent la conversation, sur un ton amical, froid ou neutre selon la table
+> d'affinités qui existait depuis longtemps et que personne ne voyait jamais. Le **tableau des
+> nouvelles** planté sur la place la rend enfin lisible : qui est en ville, avec qui, et qui
+> ne se salue plus. Aucune réplique ne circule sur le réseau — les deux joueurs lisent la même
+> phrase au même moment parce qu'elle est tirée d'une graine qu'ils possèdent déjà tous les
+> deux.
+>
+> **De la famille en visite.** Certains résidents descendent accompagnés : une épouse, un
+> frère, une grand-mère, un petit-fils, un cousin. Ce sont de nouveaux personnages, et ils ne
+> coûtent rien : leur position est **dérivée** de celle de la personne qu'ils suivent, exactement
+> comme Leo marche dans les pas de Carla depuis le zip 376. Zéro message, aucune collision à
+> calculer, et l'impossibilité de traverser un mur puisqu'ils rejouent un chemin déjà validé.
+> Les enfants sont dessinés à la même feuille de sprite, en plus petit.
+>
+> **La Maison Garfield ouvre — si Carla habite la vallée.** Elle n'était jusqu'ici qu'une
+> visiteuse qui ne pouvait pas emménager, avec pour raison écrite qu'elle « a une boutique et
+> une vie ailleurs ». Cette raison tombe : la boutique est ici, en Haute-Ville, à côté du
+> tribunal, parce que les hauteurs sont les belles adresses et qu'une boutique chic au ras de
+> la rue n'est qu'une échoppe de plus. Carla devient donc recrutable, et tant qu'elle n'a pas
+> emménagé la porte le DIT au lieu de rester muette. Dedans : chapeaux, écharpes, tenues et
+> couleurs, tout très cher, Carla qui juge et **Leo à la caisse qui approuve absolument tout**
+> (« C'est une pièce unique. Nous en avons quatorze. »). Toute la tenue d'un joueur tient dans
+> une chaîne de cinq caractères, qui voyage dans le paquet de position déjà émis.
+>
+> **Un salon de coiffure, volontairement inachevé, et qui le dit** : banderole en travers,
+> vitrines passées au blanc d'Espagne, porte condamnée par une planche, échafaudage sur le
+> pignon. L'enseigne et le mât de barbier sont déjà là. Il manque le coiffeur, et c'est
+> assumé.
+>
+> **Et la gare de Valley Town cesse d'être le parent pauvre.** Depuis le zip 234, la ville
+> peignait ses rails à la main — un ballast plat, une traverse une rangée sur deux — pendant
+> que la ferme posait le vrai sprite de voie ferrée du zip 232. Deux dessins du même objet,
+> dont un deux fois moins soigné, et rien pour le signaler tant qu'on ne comparait pas les
+> deux écrans. La ville réutilise désormais les rails, le quai et le bâtiment de la ferme,
+> tels quels : la cohérence est garantie par construction, pas par relecture.
+>
+> *Vérifié : `verify-vallee.mjs` passe de 88 à **113 contrôles, 113/113** — il a sorti tout
+> seul les quatre-vingts cases bloquantes des trois nouveaux bâtiments avant qu'elles
+> n'arrivent en jeu, et il refuse maintenant un endroit d'activité inatteignable ou un
+> itinéraire d'escalier qui n'arrive nulle part. Le banc de rendu a montré un haut-de-forme
+> décapité par le cadre du sprite et deux défauts de façade du salon. Deux défauts trouvés en
+> jouant : l'ombre de la gare qui faisait une tache sur le quai clair, et cinq résidents qui
+> se saluaient en boucle sur le quai sans jamais partir.*
+> **Aucune migration Supabase.**
+
+
 > **ZIP 426 — LE TRIBUNAL S'OUVRE (ET IL EST VIDE, ET IL LE DIT).**
 >
 > **Un intérieur complet, sur trois niveaux.** Le tribunal de Valley Town avait

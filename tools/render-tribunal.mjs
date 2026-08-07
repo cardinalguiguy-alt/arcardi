@@ -30,6 +30,7 @@ const OUT = path.join(ROOT, "tools", "out");
 installFakeDOM();
 const mods = await loadFerme(ROOT, ["fermeConstants", "fermeArt"]);
 const A = mods.fermeArt;
+const C = mods.fermeConstants;
 const S = A.buildSprites();
 
 // Les trois sols du bâtiment, repris À L'IDENTIQUE des couleurs de
@@ -105,4 +106,58 @@ for (const [n, im] of townKinds) {
   const up = scale(sh.px, sh.width, sh.height, 3);
   writePNG(path.join(OUT, "ville-decors.png"), up.px, up.W, up.H);
 }
-console.log("\nÉcrit : tribunal-mobilier-{parquet,marbre,dalle}.png, ville-decors.png\n");
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZIP 427 — LES DEUX COMMERCES DE LA HAUTE-VILLE ET LE TABLEAU DES NOUVELLES.
+   ⚠️ SUR LEUR VRAI SOL, ET LA HAUTE-VILLE EST DALLÉE DE PIERRE CLAIRE, pas
+   herbue : un bâtiment noir jugé sur du vert paraît net et se dilue sur du
+   gris. C'est la leçon du fond de ce banc, appliquée aux bâtiments.
+   ⚠️ Et ils sont rendus À CÔTÉ DE LA GARE, qui est le repère : la demande du
+   zip est la COHÉRENCE visuelle, et une cohérence se juge en mettant les
+   choses l'une à côté de l'autre, jamais l'une après l'autre. */
+const PAVE = [0xb3, 0xb2, 0xb8];
+const bldKinds = [
+  ["maison-garfield", S.townBoutique], ["salon", S.townSalon],
+  ["tableau-nouvelles", S.townNewsBoard], ["gare", S.station],
+  ["eglise", S.church], ["mairie", S.townHall2], ["tribunal", S.courthouse],
+];
+console.log("\n=== zip 427 — bâtiments de la Haute-Ville → tools/out/ ===\n");
+for (const [n, im] of bldKinds) {
+  const st = stats(im);
+  console.log(`${n.padEnd(18)}${String(st.cols).padStart(6)}${String(st.opaque).padStart(11)}`);
+}
+{
+  const sh = sheet(bldKinds.map(t => t[1]), PAVE, 200, 10);
+  const up = scale(sh.px, sh.width, sh.height, 2);
+  writePNG(path.join(OUT, "ville-batiments-427.png"), up.px, up.W, up.H);
+}
+/* LA GARDE-ROBE, PORTÉE. ⚠️ UN VÊTEMENT NE SE JUGE PAS À PLAT : ce qu'on veut
+   voir, c'est s'il tient sur les trois orientations du personnage et s'il ne
+   déborde pas du cadre de 16×24 (le canevas DÉCOUPE en silence ce qui dépasse —
+   c'est exactement comme ça que le premier haut-de-forme est sorti décapité). */
+{
+  const rows = [];
+  const push = (label, look) => rows.push([label, S.getChar("f", 1, false, false, false, false, false, false, look)]);
+  push("aucune", null);
+  C.WARDROBE_HATS.forEach((h, i) => push("chapeau:" + h.id, "w" + (i + 1) + "000"));
+  C.WARDROBE_SCARVES.forEach((h, i) => push("echarpe:" + h.id, "w0" + (i + 1) + "00"));
+  C.WARDROBE_OUTFITS.forEach((h, i) => push("tenue:" + h.id, "w00" + (i + 1) + "0"));
+  C.WARDROBE_TINTS.forEach((h, i) => push("teinte:" + h.id, "w000" + (i + 1)));
+  push("tout", "w3158");
+  console.log("\n=== zip 427 — la garde-robe portée → tools/out/ ===\n");
+  /* ⚠️ UNE GRILLE, PAS UNE FRISE. Vingt-quatre tenues alignées sur une seule
+     rangée donnent une image de cinq mille pixels de large qu'on ne peut plus
+     regarder — c'est-à-dire un banc de rendu qui ne sert plus à rien. Six par
+     rangée, agrandies six fois : à cette échelle on voit un pixel de travers,
+     et c'est le seul but. */
+  const perRow = 6, cellW = 16 * 4, cellH = 24 * 3, pad = 6;
+  const gr = Math.ceil(rows.length / perRow);
+  const sh = makeCanvas(perRow * (cellW + pad) + pad, gr * (cellH + pad) + pad);
+  sh.ctx.fillStyle = "rgba(92,158,78,1)"; sh.ctx.fillRect(0, 0, sh.width, sh.height);
+  rows.forEach(([label, im], i) => {
+    sh.ctx.drawImage(im, pad + (i % perRow) * (cellW + pad), pad + Math.floor(i / perRow) * (cellH + pad));
+    console.log(`${label.padEnd(20)} ${stats(im).cols} couleurs`);
+  });
+  const up = scale(sh.px, sh.width, sh.height, 5);
+  writePNG(path.join(OUT, "garde-robe-427.png"), up.px, up.W, up.H);
+}
+console.log("\nÉcrit : tribunal-mobilier-{parquet,marbre,dalle}.png, ville-decors.png, ville-batiments-427.png, garde-robe-427.png\n");

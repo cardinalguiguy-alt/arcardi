@@ -1616,7 +1616,26 @@ export const VISITOR_ROSTER = [
   // reste du skin est entièrement repeint par `look: "carla"` (béret rouge,
   // manteau jaune, top noir). `cap: false` impératif : la casquette verte
   // générique se dessinerait par-dessus le béret.
-  { rid: 30, name: "Carla Garfield", gender: "f", outfit: 1, overalls: false, cap: false, theme: "style", job: "dress this valley properly", look: "carla", chatOnly: true, noStay: true, minArtisans: CARLA_MIN_ARTISANS },
+  /* ⚠️⚠️ ZIP 427 — CARLA DEVIENT RECRUTABLE, ET C'EST UN CHANGEMENT DE STATUT,
+     PAS UN RÉGLAGE. Le 376 lui avait posé `noStay: true` avec une raison
+     explicite : « elle a une boutique et une vie ailleurs ». Cette raison
+     tombe, parce que la boutique est maintenant ICI (TOWN_BOUTIQUE, en ville) —
+     c'est exactement ce que Guillaume demande : « la boutique chic de Carla
+     Garfield ... quand on aura accepté Carla Garfield comme résidente ».
+     Deux drapeaux sautent donc, et pas un de plus :
+       * `noStay` — sans lui, le chemin normal (amitié ≥ REL_RESIDENT_MIN, elle
+         demande à rester) s'ouvre comme pour n'importe qui ;
+       * `chatOnly` — le 376 le justifiait par « tant que la boutique n'existe
+         pas ». Elle existe.
+     `skill: "stylist"` ouvre le SECOND chemin (le bouton « proposer
+     d'emménager » de la fiche visiteur, qui exige un skill).
+     ⚠️ ET `SKILL_BUILDING.stylist` VAUT `null`, COMME LE VOYAGEUR : son lieu de
+     travail n'est PAS un atelier achetable à la ferme, c'est un bâtiment de
+     Valley Town qui existe déjà sur la carte. Lui inventer une échoppe de ferme
+     aurait fait deux boutiques pour une seule vendeuse.
+     `minArtisans` reste : elle ne se dérange toujours pas pour un champ de
+     patates. */
+  { rid: 30, name: "Carla Garfield", gender: "f", outfit: 1, overalls: false, cap: false, theme: "style", job: "dress this valley properly", look: "carla", skill: "stylist", minArtisans: CARLA_MIN_ARTISANS },
 ];
 // Poids de spawn d'un visiteur "rare" (aucun personnage n'est marqué `rare`
 // depuis le zip 259, mais la mécanique reste dispo pour un futur usage).
@@ -1695,7 +1714,10 @@ export const ARTISAN_DRAW_SCALE_OVERRIDE = { sucrerie: 1 };
 // Zip 260 : lumberjack -> sawmill (le bûcheron s'ancre/rôde autour de sa
 // scierie une fois construite ; sinon rôde près du spawn comme avant).
 // Zip 301 : breadmaker (Rosalie) partage la boulangerie de baker (Chloé).
-export const SKILL_BUILDING = { beekeeper: "beehive", cheesemaker: "fromagerie", baker: "bakery", breadmaker: "bakery", lumberjack: "sawmill", voyager: null, sugarworker: "sucrerie" };
+// Zip 427 : `stylist` (Carla) rejoint `voyager` du côté `null` — son lieu de
+// travail est la boutique de Valley Town, pas un atelier de ferme à acheter.
+// Voir la note de son entrée dans VISITOR_ROSTER.
+export const SKILL_BUILDING = { beekeeper: "beehive", cheesemaker: "fromagerie", baker: "bakery", breadmaker: "bakery", lumberjack: "sawmill", voyager: null, sugarworker: "sucrerie", stylist: null };
 // Cadences de production (ms réelles) et valeurs de vente (or).
 // Zip 258 (demande Guillaume : "le miel est une denrée rare") : cadence ÷3
 // (4 min -> 12 min entre deux pots) et prix du pot fortement relevé à 7000.
@@ -2836,12 +2858,25 @@ export const TOWN_HOUSES = [                        // door faces south onto a s
 // tard — pour l'instant, les résidents au-delà des maisons disponibles sont
 // simplement dessinés près d'un point par défaut (voir le rendu des résidents
 // dans FermeGame.js), ce qui est assumé.
-/* ⚠️ 425 : MAX_RESIDENTS RESTE À 10 ALORS QUE LES PARCELLES PASSENT À 20, et
-   ce n'est pas un oubli. Les deux nombres sont indépendants depuis le zip 260 :
-   celui-ci plafonne les résidents recrutés, celui-là décrit la VILLE. Vingt
-   parcelles pour dix résidents et quelques joueurs, c'est simplement une ville
-   qui a de la place — et le panneau « à vendre » du zip 234 a enfin un sens. */
-export const MAX_RESIDENTS = 10;
+/* ⚠️⚠️ ZIP 427 — LE PLAFOND PASSE DE 10 À 20, ET LA SEULE QUESTION QUI COMPTE
+   EST « COMBIEN DE `send()` EN PLUS ? ». Réponse mesurée sur le code, pas au
+   jugé : ZÉRO. Tout ce qui bouge chez un résident passe par UN SEUL message
+   groupé par image (`flushResidentNet`, zip 364) — doubler la population double
+   la TAILLE du paquet, et la taille n'est pas facturée (§3 de CLAUDE.md).
+   Les autres canaux sont eux aussi indifférents au nombre :
+     * `broadcastStation()` diffuse la station ENTIÈRE, résidents compris, à sa
+       propre cadence : un objet deux fois plus gros, toujours un message ;
+     * la rôdaille, les scènes et les trajets de ville n'émettent que par
+       DÉCISION (A→B), jamais par tick.
+   ⚠️ CE QUI AURAIT COÛTÉ, ET QU'ON NE FAIT DONC PAS : un message par résident
+   (le modèle d'avant le 364) — vingt résidents auraient alors dépassé à eux
+   seuls le plafond de 10 msg/s à chaque `justCameIntoRange`, EN SILENCE.
+   Le vrai coût du passage à 20 est donc du CPU chez l'hôte (rôdaille + travail),
+   pas du réseau. C'est le bon échange : le CPU est gratuit, le quota non.
+   ⚠️ Et ça reste DÉCORRÉLÉ du nombre de parcelles (27 depuis le 426, zip 260
+   pour la règle) : ce nombre-ci plafonne les résidents RECRUTÉS, celui-là
+   décrit la ville. */
+export const MAX_RESIDENTS = 20;
 /* ═══════════════════════════════════════════════════════════════════════════
    LES TROIS MONUMENTS (425).
    ───────────────────────────────────────────────────────────────────────────
@@ -3352,6 +3387,7 @@ export const DEV_TELEPORTS = [
      Les coordonnées se DÉRIVENT des repères de la ville dans devTeleport, elles
      ne sont pas recopiées ici : déplacer la place ne doit pas laisser un
      téléporteur pointé sur l'herbe. */
+  { key: "townBoutique",  zone: "town" },  // zip 427 : la Haute-Ville, devant la Maison Garfield (le seul quartier qu'on n'atteint qu'en montant)
   { key: "townPlaza",     zone: "town" },  // la place centrale, devant la fontaine
   { key: "townCourt",     zone: "town" },  // le parvis du tribunal, en Haute-Ville
   { key: "townBelvedere", zone: "town" },  // le second palier
@@ -3711,3 +3747,278 @@ export function fruitProduct(id) { return FRUIT_PRODUCTS.find(p => p.id === id) 
    Le surnom vit dans `f.pets[i].nick`, donc dans l'instantané JSON du fermier :
    aucune migration. Vide = on retombe sur le nom d'espèce du catalogue. */
 export const PET_NICK_MAX = 14;
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZIP 427 — VALLEY TOWN HABITÉE.
+   ───────────────────────────────────────────────────────────────────────────
+   Demande de Guillaume : « donner vie à Valley Town ... les résidents doivent
+   pouvoir s'y balader, s'y trouver, utiliser les infrastructures (s'asseoir sur
+   les bancs, monter descendre les escaliers, vivre en gros) ».
+
+   ⚠️⚠️ LE PRINCIPE QUI TIENT TOUT LE CHAPITRE : UN RÉSIDENT A UNE ZONE, PAS
+   DEUX POSITIONS. `res.zone` vaut "farm" ou "town", et `res.x/res.y` sont ses
+   coordonnées DANS CETTE ZONE. C'est la seule forme qui résiste au piège déjà
+   payé deux fois dans ce projet (§4 de CLAUDE.md, « deux cartes sans repère
+   commun finissent par se mélanger ») : avec deux couples de coordonnées, il
+   existe forcément un chemin de code qui lit le mauvais — et ça se voit le jour
+   où la petite carte ne tient plus dans la grande, c'est-à-dire trop tard.
+   Avec UNE position tagguée, le pire défaut possible est un résident invisible,
+   jamais un résident dessiné à Valley Town au milieu d'un champ de blé.
+
+   ⚠️ ET LA ZONE VOYAGE DANS LES MESSAGES QUI EXISTENT DÉJÀ. Le trajet groupé du
+   zip 364 (`residentPaths` / `residentStops`, UN message par image pour tout le
+   monde) gagne un champ `z`. Zéro `send()` de plus, quel que soit le nombre de
+   résidents en vadrouille — c'est la même arithmétique que celle qui autorise
+   MAX_RESIDENTS = 20.
+
+   ⚠️ L'ALTITUDE NE VOYAGE TOUJOURS PAS, ni pour les joueurs (425) ni pour les
+   résidents : elle se lit sous leurs pieds dans `elev`. Un résident en haut des
+   marches est en haut des marches sur tous les écrans, sans un octet. */
+
+// Cadence d'arbitrage des séjours en ville. C'est un TIRAGE, pas un horaire :
+// une ville dont on connaît les horaires de passage n'a plus l'air vivante.
+export const TOWN_TRIP_CHECK_MS = 18 * 1000;
+export const TOWN_TRIP_CHANCE = 0.30;      // par résident éligible, à chaque contrôle
+/* ⚠️ COMBIEN DE RÉSIDENTS EN VILLE À LA FOIS, ET POURQUOI PAS TOUS. Deux
+   raisons, la seconde étant la vraie : d'abord la ferme ne doit pas se vider
+   (ils y travaillent, c'est leur contribution) ; ensuite une ville où l'on
+   croise deux ou trois têtes connues est vivante, alors qu'une ville où l'on
+   croise les vingt d'un coup est une file d'attente. Le plafond est un
+   PLANCHER de qualité, pas une économie. */
+export const TOWN_VISITORS_MAX = 6;
+export const TOWN_TRIP_MIN_MS = 3 * 60 * 1000;   // séjour le plus court
+export const TOWN_TRIP_MAX_MS = 10 * 60 * 1000;  // le plus long
+// ⚠️ UN RÉSIDENT EN VILLE NE TRAVAILLE PAS. C'est le prix du voyage, il est
+// explicite, et c'est ce qui empêche la ville d'être un bonus gratuit.
+// (Même traitement que le voyage d'Eduardo, res.trip.phase === "away".)
+
+/* ---- LES ACTIVITÉS. Une activité = un endroit + une durée + une réplique.
+   ⚠️ ELLE EST DIFFUSÉE DANS LE MESSAGE D'ARRÊT QUI EXISTE DÉJÀ (`residentStops`
+   gagne un champ `a`), jamais dans un message à elle. Un résident qui s'assoit
+   s'arrête forcément : l'information voyage donc avec l'arrêt, ou pas du tout. */
+// Plancher de durée d'activité : il ne sert QUE de repli, quand un résident abandonne son
+// trajet (obstacle) et fait sur place ce qu'il était parti faire. Les durées normales sont
+// dans TOWN_ACTS, activité par activité — un maximum global en plus serait un second réglage
+// pour la même chose, donc une divergence en attente (§8).
+export const TOWN_ACT_MIN_MS = 7 * 1000;
+export const TOWN_RES_BUBBLE_MS = 5200;    // durée d'affichage d'une réplique d'activité
+/* Les activités connues. `sit` = le personnage est dessiné ASSIS (buste seul,
+   posé sur le banc) — c'est la seule qui change le dessin, les autres se
+   contentent d'une pose immobile et d'une bulle.
+   ⚠️ La liste des ENDROITS n'est pas ici : elle est DÉRIVÉE de la carte
+   (E.townSpots), pour la raison du §8 — un décor et sa liste d'endroits réglés
+   séparément divergent au premier déplacement de banc. */
+export const TOWN_ACTS = {
+  sit:      { ms: [12000, 26000], sit: true },  // banc : on y reste plus longtemps
+  fountain: { ms: [8000, 16000] },              // regarder la fontaine
+  kiosk:    { ms: [10000, 20000] },             // écouter (ou faire) de la musique
+  stall:    { ms: [7000, 14000] },              // faire son marché
+  well:     { ms: [6000, 12000] },              // tirer de l'eau
+  grave:    { ms: [10000, 18000] },             // se recueillir
+  pier:     { ms: [12000, 24000] },             // regarder le lac
+  view:     { ms: [12000, 22000] },             // le belvédère
+  window:   { ms: [8000, 16000] },              // lécher la vitrine de la boutique
+  board:    { ms: [6000, 12000] },              // lire le tableau des nouvelles
+  statue:   { ms: [6000, 12000] },
+  pray:     { ms: [8000, 16000] },              // le parvis de l'église
+};
+
+/* ---- LES RENCONTRES. C'est l'architecture sociale, et elle tient en une
+   phrase : DEUX RÉSIDENTS QUI SE CROISENT EN VILLE SE PARLENT, et ce qu'ils se
+   disent dépend de RESIDENT_AFFINITIES (zip « relations entre résidents »), qui
+   existait déjà et n'était qu'informatif.
+   ⚠️ C'EST L'HÔTE QUI APPARIE, ET LUI SEUL. Deux clients qui décideraient
+   chacun d'une rencontre en verraient deux différentes — c'est exactement le
+   défaut corrigé au zip « dispute Chloé/Rosalie vue de tous », on ne le refait
+   pas. La scène voyage ensuite dans le message d'arrêt (`a` = "talk"), et les
+   RÉPLIQUES sont dérivées d'une graine partagée, jamais transmises. */
+export const TOWN_MEET_DIST = 3.4;             // distance de déclenchement
+export const TOWN_MEET_MS = 15 * 1000;         // durée d'une conversation
+export const TOWN_MEET_COOLDOWN_MS = 75 * 1000; // avant que les deux mêmes se reparlent
+export const TOWN_MEET_CHANCE = 0.55;
+/* ⚠️ PAS DE « DISTANCE DE RAPPROCHEMENT » ICI, ET C'EST UN CHOIX MESURÉ. Le premier
+   jet faisait converger les deux résidents l'un vers l'autre : un déplacement de plus à
+   diffuser, un risque de plus de rester coincé dans un mur, et à l'écran ça ne se lit pas
+   mieux qu'un face-à-face — ils sont déjà à trois cases. Ils se TOURNENT l'un vers l'autre,
+   ce qui ne coûte rien et se voit. Une constante que personne ne lit ment plus qu'elle
+   n'informe (leçon de TOWN_CORE au 426) : celle-là a donc été supprimée plutôt que gardée
+   « au cas où ». */
+/* ⚠️⚠️ LE DÉLAI DE GRÂCE À LA DESCENTE DU TRAIN, ET IL A ÉTÉ TROUVÉ EN JEU, PAS
+   À LA RELECTURE. Sans lui, la vie sociale s'étrangle elle-même : cinq
+   résidents descendent le même quai à la même seconde, donc tous à moins de
+   TOWN_MEET_DIST les uns des autres, donc l'hôte les apparie IMMÉDIATEMENT.
+   Chacun se fige quinze secondes pour bavarder, repart, se retrouve encore
+   collé aux autres, et se refige. Résultat observé : la moitié de la ville
+   plantée sur le quai à se dire bonjour en boucle, et pas un seul résident qui
+   arrive jamais à la place. Personne ne quitte la gare.
+   La correction n'est pas de baisser la distance de rencontre (ça les
+   empêcherait de se parler ailleurs, là où c'est justement le but) : c'est de
+   dire qu'on ne se salue pas SUR LE QUAI. Un débarquement n'est pas une
+   rencontre — d'abord on s'éparpille, ensuite on se croise. */
+export const TOWN_MEET_ARRIVE_GRACE_MS = 25 * 1000;
+
+/* ---- LA FAMILLE (nouveaux personnages).
+   Demande : « certains membres de leur famille puissent être présents ... en
+   tant qu'invités à Valley Town ».
+
+   ⚠️⚠️ UN INVITÉ N'EST PAS UNE ENTITÉ, ET C'EST TOUT L'INTÉRÊT. Sa position est
+   DÉRIVÉE de celle du résident qu'il accompagne, exactement comme Leo derrière
+   Carla depuis le 376 : il marche dans ses pas avec un retard mesuré le long du
+   chemin déjà parcouru. Conséquences, toutes bonnes : zéro message réseau, zéro
+   simulation, et il ne peut pas traverser un mur puisqu'il rejoue un trajet que
+   la collision a déjà validé. Vingt résidents peuvent donc sortir accompagnés
+   sans coûter un octet de plus.
+
+   Ce qui voyage : UN entier, `res.guest`, l'index dans la liste ci-dessous —
+   posé au départ du séjour, effacé au retour. Il part avec la station.
+
+   `small: true` = un enfant : même feuille de sprite, dessinée à
+   TOWN_GUEST_CHILD_SCALE. Pas un octet d'art en plus pour un personnage qu'on
+   reconnaît au premier coup d'œil. */
+export const TOWN_GUEST_CHANCE = 0.42;         // un séjour sur deux, à peu près
+export const TOWN_GUEST_FOLLOW_DIST = 1.15;    // en cases, le long du chemin (cf. LEO_FOLLOW_DIST)
+export const TOWN_GUEST_CHILD_SCALE = 0.74;
+export const RESIDENT_FAMILY = {
+  1:  [{ name: "Solène Martial", rel: "spouse", gender: "f", outfit: 4 },
+       { name: "Ti-Jo", rel: "son", gender: "m", outfit: 2, small: true }],
+  16: [{ name: "Hubert", rel: "brother", gender: "m", outfit: 0, cap: true }],
+  25: [{ name: "Maryse", rel: "spouse", gender: "f", outfit: 6 },
+       { name: "Nono", rel: "grandson", gender: "m", outfit: 5, small: true }],
+  26: [{ name: "Katrin", rel: "sister", gender: "f", outfit: 2 }],
+  27: [{ name: "Bérangère", rel: "spouse", gender: "f", outfit: 7 },
+       { name: "Loulou", rel: "daughter", gender: "f", outfit: 3, small: true }],
+  28: [{ name: "Mamie Odette", rel: "grandmother", gender: "f", outfit: 5 }],
+  29: [{ name: "Duarte", rel: "cousin", gender: "m", outfit: 6, cap: true }],
+  30: [{ name: "Leo", rel: "assistant", gender: "m", outfit: 0, look: "leo" }],
+};
+/* ⚠️ CARLA SORT TOUJOURS AVEC LEO, JAMAIS SEULE — et ce n'est pas un tirage.
+   Le 376 en avait fait une règle de personnage ; la casser en ville la
+   contredirait à l'endroit même où elle est censée régner. Son entrée dans
+   RESIDENT_FAMILY est donc une famille d'UN SEUL membre, tirée à coup sûr. */
+export const ALWAYS_GUEST_RIDS = [CARLA_RID];
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZIP 427 — LES DEUX NOUVELLES ADRESSES DE LA HAUTE-VILLE.
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️ ELLES SONT EN HAUT DES MARCHES, ET C'EST UN CHOIX DE LECTURE. Le 425 avait
+   écrit la règle en posant deux parcelles sur la terrasse : « les hauteurs sont
+   les belles adresses ». Une boutique chic au niveau de la rue, entre le
+   marché aux légumes et le puits, n'aurait pas été chic — elle aurait été une
+   échoppe de plus. Posée au sommet de la volée monumentale, à côté du tribunal,
+   elle achète sa réputation avec la montée, comme le tribunal achète la sienne
+   avec le fronton. Et ça donne à l'escalier une TROISIÈME raison d'exister.
+   ⚠️ Un panneau au pied des marches l'annonce (voir TOWN_STREET_SIGNS dans le
+   générateur) : une boutique qu'on ne trouve qu'en montant par hasard n'existe
+   pas. */
+export const TOWN_BOUTIQUE = { x: 121, y: 12, w: 8, h: 5 };   // Maison Garfield
+export const TOWN_SALON = { x: 152, y: 12, w: 7, h: 4 };      // salon de coiffure, « ouverture prochaine »
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZIP 427 — LA GARDE-ROBE DE LA MAISON GARFIELD.
+   ───────────────────────────────────────────────────────────────────────────
+   Demande : « tout est très cher mais permettra de changer ses vêtements,
+   styles, couleurs de vêtements, etc. ; accessoires comme chapeaux, écharpes,
+   robes originales ».
+
+   ⚠️⚠️ TOUT LE COSMÉTIQUE TIENT DANS UNE CHAÎNE, ET IL LE FAUT. Le paramètre
+   `look` de getChar/drawCharFrame (zip 376) a justement été créé pour ne plus
+   allonger la signature d'un booléen par personnage ; on s'en sert. La tenue
+   d'un joueur s'encode `"w<chapeau><écharpe><tenue><teinte>"`, quatre chiffres,
+   par ex. `"w2103"`. Conséquences en chaîne, toutes voulues :
+     * ELLE TIENT DANS LE PAQUET DE POSITION qui circule déjà (`pubMe`), donc
+       zéro message de plus pour que les autres voient mes vêtements ;
+     * elle sert de CLÉ DE CACHE de feuille de sprite telle quelle (S.getChar),
+       donc une tenue donnée n'est peinte qu'une fois ;
+     * une sauvegarde ancienne (pas de chaîne) donne un fermier habillé comme
+       avant, ce qui est exactement le bon comportement.
+   ⚠️ ET LES INDICES SONT DÉCALÉS DE 1 : 0 = « rien ». Le chiffre 0 doit vouloir
+   dire « pas de chapeau », sinon on ne peut plus retirer un chapeau une fois
+   acheté — et on se retrouve à ajouter un article « pas de chapeau » à la
+   boutique, ce qui est absurde à voir dans une vitrine. */
+export const WARDROBE_HATS = [
+  { id: "beret",   name: "Béret cerise",        nameEn: "Cherry beret",     price: 2400 },
+  { id: "capeline",name: "Capeline de paille",  nameEn: "Straw capeline",   price: 3600 },
+  { id: "tophat",  name: "Haut-de-forme",       nameEn: "Top hat",          price: 6800 },
+  { id: "beanie",  name: "Bonnet côtelé",       nameEn: "Ribbed beanie",    price: 1500 },
+  { id: "crown",   name: "Diadème de la vallée",nameEn: "Valley tiara",     price: 14000 },
+];
+export const WARDROBE_SCARVES = [
+  { id: "silk",    name: "Écharpe de soie",     nameEn: "Silk scarf",       price: 2200 },
+  { id: "feather", name: "Boa de plumes",       nameEn: "Feather boa",      price: 5200 },
+  { id: "fur",     name: "Étole de fourrure",   nameEn: "Fur stole",        price: 8800 },
+  { id: "knit",    name: "Grosse maille",       nameEn: "Chunky knit",      price: 1200 },
+];
+export const WARDROBE_OUTFITS = [
+  { id: "gown",    name: "Robe du soir",        nameEn: "Evening gown",     price: 9500 },
+  { id: "cape",    name: "Cape de velours",     nameEn: "Velvet cape",      price: 7400 },
+  { id: "suit",    name: "Tailleur strict",     nameEn: "Sharp suit",       price: 6600 },
+  { id: "poncho",  name: "Poncho de la vallée", nameEn: "Valley poncho",    price: 3100 },
+  { id: "tutu",    name: "Tutu d'apparat",      nameEn: "Ceremonial tutu",  price: 12500 },
+];
+/* Les teintes. ⚠️ ELLES S'APPLIQUENT AU VÊTEMENT, PAS AU SPRITE ENTIER : teinter
+   la feuille complète colorerait la peau et les cheveux (et c'est le même piège
+   que le `fillRect` de teinte du §4 — on croit assombrir, on peint une boîte).
+   `price` unique : une couleur ne vaut pas plus qu'une autre, sauf l'or. */
+export const WARDROBE_TINTS = [
+  { id: "cherry",  name: "Cerise",     nameEn: "Cherry",    col: "#c0304a", price: 900 },
+  { id: "ink",     name: "Encre",      nameEn: "Ink",       col: "#26314f", price: 900 },
+  { id: "moss",    name: "Mousse",     nameEn: "Moss",      col: "#3d6b3a", price: 900 },
+  { id: "cream",   name: "Crème",      nameEn: "Cream",     col: "#e8dcc0", price: 900 },
+  { id: "plum",    name: "Prune",      nameEn: "Plum",      col: "#5b2d54", price: 1400 },
+  { id: "ocean",   name: "Océan",      nameEn: "Ocean",     col: "#20707f", price: 1400 },
+  { id: "rose",    name: "Rose thé",   nameEn: "Tea rose",  col: "#d98aa0", price: 1400 },
+  { id: "gold",    name: "Or Garfield",nameEn: "Garfield gold", col: "#d8a93a", price: 4500 },
+];
+export const WARDROBE_SLOTS = ["hat", "scarf", "outfit", "tint"];
+export function wardrobeCatalog(slot) {
+  return slot === "hat" ? WARDROBE_HATS : slot === "scarf" ? WARDROBE_SCARVES
+       : slot === "outfit" ? WARDROBE_OUTFITS : WARDROBE_TINTS;
+}
+/* ⚠️ UNE SEULE FONCTION FABRIQUE LA CHAÎNE, ET UNE SEULE LA RELIT (voir
+   `parseLookWardrobe` dans fermeArt.js). Deux encodages du même vêtement, c'est
+   la garantie qu'un jour on porte un chapeau que les autres ne voient pas. */
+export function wardrobeLook(worn) {
+  if (!worn) return null;
+  const d = (n) => String(Math.max(0, Math.min(9, n | 0)));
+  const s = "w" + d(worn.hat) + d(worn.scarf) + d(worn.outfit) + d(worn.tint);
+  return s === "w0000" ? null : s;   // rien porté = pas de chaîne du tout
+}
+// Léo tient la caisse, et il en fait des tonnes : le prix affiché est le prix
+// payé, mais il l'annonce toujours avec une flatterie (voir leoUpsellLines).
+export const LEO_UPSELL_MS = 5200;
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZIP 427 — CE QU'ON PEUT FAIRE EN VILLE (les points d'intérêt animés).
+   ⚠️ CHACUN COÛTE UNE SEULE CHOSE AU RÉSEAU : RIEN. Le vœu de la fontaine passe
+   par une `req` déjà existante (l'or est arbitré par l'hôte, comme tout achat) ;
+   le reste est purement local et dérivé du temps de jeu partagé, comme les
+   rembarrages de Carla à Leo (CARLA_SCOLD_MS). */
+export const TOWN_WISH_COST = 25;              // pièce jetée dans la fontaine
+export const TOWN_WISH_COOLDOWN_MS = DAY_REAL_MS; // un vœu par jour de jeu et par joueur
+export const TOWN_WISH_GOLD_MIN = 0, TOWN_WISH_GOLD_MAX = 400; // ce que la fontaine rend, parfois
+export const TOWN_KIOSK_NOTE_MS = 380;         // cadence des notes de musique au kiosque
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZIP 427 — LA GARE DE VALLEY TOWN.
+   ───────────────────────────────────────────────────────────────────────────
+   Demande de Guillaume : « donne la même forme et attention graphique aux rails
+   et à la station de Valley Town qu'à celles de Valley Farm, pour cohérence
+   visuelle ».
+
+   ⚠️⚠️ LA RÉPONSE N'EST PAS DE DESSINER UNE SECONDE GARE, C'EST D'ARRÊTER D'EN
+   DESSINER UNE DEUXIÈME. Depuis le 234, la ville peignait ses rails à la main,
+   dans la boucle de rendu : trois `fillRect` (ballast plat, une traverse une
+   rangée sur deux, deux traits d'acier) pendant que la ferme, elle, posait le
+   sprite `railHalf` du zip 232 (ballast granuleux, traverses larges, rail
+   éclairé sur son arête). Deux dessins d'une même voie ferrée — c'est le doublon
+   du §8, et il a donné exactement ce qu'un doublon donne : le même objet, deux
+   fois moins soigné d'un côté, et personne pour s'en apercevoir avant qu'on
+   compare les deux écrans.
+   La ville réutilise donc `railL`/`railR`/`platform` TELS QUELS, et le bâtiment
+   `station` tel quel. Zéro sprite nouveau, zéro divergence possible, et le
+   « même soin » est garanti par construction plutôt que par relecture.
+
+   ⚠️ ET LE BÂTIMENT DOIT ÊTRE BLOQUANT DANS LE GÉNÉRATEUR. Un décor massif qui
+   ne bloque pas, c'est la réciproque du mur invisible du 425 — on traverse une
+   gare. Le banc de contrôle teste les deux sens. */
+export const TOWN_STATION = { x: 6, y: 62, w: 4, h: 3 };   // même gabarit que STATION (ferme)

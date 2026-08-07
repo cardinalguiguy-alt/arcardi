@@ -201,3 +201,43 @@ forme veut dire.
    voile laiteux qu'on reconnaît dans tous les jeux qui en abusent. Les seules
    choses au-dessus de 1,0 sont le soleil, les bonbons de checkpoint et les
    étincelles.
+
+---
+
+## LA DETTE, AU MOMENT DE LA MISE EN PAUSE (déplacée depuis CLAUDE.md au zip 427)
+
+⚠️ **CE CHAPITRE FAIT DÉSORMAIS AUTORITÉ ICI, ET PLUS DANS `CLAUDE.md`.** La raison est
+celle du §14 de ce dernier : il décrit le PRÉSENT du projet, et `candyluge` est en pause
+depuis le 425. La dette d'un jeu à l'arrêt n'a rien à faire dans un fichier qu'on relit à
+chaque session pour travailler sur autre chose — elle a tout à faire à côté du code
+qu'elle concerne.
+
+Physique, piste et gourmands **inchangés depuis le 417**. Acquis du 425 : 10 fanions
+(`CP_COUNT` est le réglage, l'espacement en découle), HUD des fanions, traînée rose (quatre
+objets dérivés de `COL_SKID` par `FX_TRAIL_TINT`), menu dev.
+
+**⚠️ CE QUI N'EST PAS FAIT**, par ordre de gravité :
+
+1. ⚠️⚠️ **LA LUGE DÉRIVE SEULE** — `this.lat += trackPull * dt` s'ajoute **sans condition** :
+   sans pilote elle percute la barrière en quelques secondes. Correctif :
+   `trackPull * (base + (1 − base) * skid)`, `base ≈ 0,25`.
+   ⚠️ Conséquence pratique à ne pas oublier : **la descente ne peut PAS être parcourue sans
+   pilote**, donc toute vérification passe par le menu dev.
+2. **Le cœur de la traînée sature encore** : question de DENSITÉ des grains et de bloom, pas
+   de teinte. Passe de calibrage annoncée au 424.
+3. **`clearAll()` ne retire pas les tronçons de la scène** : chaque ruban est dessiné en double.
+4. **Les bras du pilote ne s'animent plus** (`sledParts.arms` VIDE ; le nœud DOIT rester).
+5. Direction à assouplir (`EDGE_RATE`, `EDGE_CROSS_MUL`, `LAT_GRIP`, `CARVE_K`) · boosts à
+   chevrons · huit échelles glTF non vérifiées · étincelles trop grosses (`stars.gain = 2.2`).
+
+**Piste non implémentée : bonbon empoisonné noir, vision en négatif.** Presque gratuit
+techniquement (`GradeShader` + un uniforme) ; **le travail est de CONCEPTION** — un malus qui
+gêne la lisibilité à 125 km/h, dans un monde décidé paisible.
+
+⚠️ **LE JEU RESTE DERRIÈRE LE MUR DE CHANTIER** (⌘⇧X deux fois en moins de 3,5 s).
+
+⚠️ **Où sont les nombres** : `public/candyluge/js/config.js` porte **tous** les réglages de la
+descente, et rien n'en vit ailleurs. `slope.js` définit la piste (`finishSAt()` / `cpEvery()`
+sont les définitions, pas des copies). Vérification : un serveur de fichiers sur `public/`
+suffit — ⚠️ **avec `Cache-Control: no-store`** —, puis la console (`program not valid` !),
+`__lugePerf()` et `Models.ready`.

@@ -141,6 +141,11 @@ const spots = [
   ["le bout du ponton", C.TOWN_PIER.x + 1, C.TOWN_PIER.y + C.TOWN_PIER.h - 1],
   ["le kiosque à musique (son pied)", C.TOWN_KIOSK.x + 1, C.TOWN_KIOSK.y + 3],
   ["le quartier des artisans", C.TOWN_ARTISANS.x + 8, C.TOWN_ARTISANS.y + 40],
+  // Zip 427 — les nouveautés. La porte d'un commerce inaccessible, c'est une
+  // fonctionnalité entière (la garde-robe) qu'aucune erreur ne signalerait.
+  ["la porte de la Maison Garfield", C.TOWN_BOUTIQUE.x + Math.floor(C.TOWN_BOUTIQUE.w / 2), C.TOWN_BOUTIQUE.y + C.TOWN_BOUTIQUE.h + 1],
+  ["la porte du salon de coiffure", C.TOWN_SALON.x + Math.floor(C.TOWN_SALON.w / 2), C.TOWN_SALON.y + C.TOWN_SALON.h + 1],
+  ["le devant de la gare", C.TOWN_STATION.x + 1, C.TOWN_STATION.y + C.TOWN_STATION.h + 1],
 ];
 for (const [name, x, y] of spots) ok(`${name} est accessible`, reach(x, y), `(${x},${y})`);
 
@@ -156,7 +161,12 @@ for (let i = 0; i < W * H; i++) {
   if (tw.objects[i] === C.O_TREE || tw.objects[i] === C.O_TREE2 || tw.objects[i] === C.O_STUMP) explained[i] = 1;
   if (tw.ground[i] === C.G_WATER) explained[i] = 1;
 }
-for (const b of [C.TOWN_CHURCH, C.TOWN_HALL, C.TOWN_COURT]) markRect(b);
+/* ⚠️ ZIP 427 — LES TROIS BÂTIMENTS NOUVEAUX ENTRENT ICI, ET LE BANC LES A
+   RÉCLAMÉS TOUT SEUL : au premier lancement après leur ajout au générateur, il a
+   sorti 80 cases bloquantes orphelines — les emprises de la boutique, du salon
+   et de la gare, bloquantes et pas encore rendues. C'est exactement le défaut
+   des six cents haies du 425, attrapé cette fois AVANT d'aller en jeu. */
+for (const b of [C.TOWN_CHURCH, C.TOWN_HALL, C.TOWN_COURT, C.TOWN_BOUTIQUE, C.TOWN_SALON, C.TOWN_STATION]) markRect(b);
 for (const h of C.TOWN_HOUSES) markRect({ x: h.x, y: h.y }, C.TOWN_HOUSE_W, C.TOWN_HOUSE_H);
 for (const p of tw.props) mark(p.x, p.y);
 markRect({ x: C.TOWN_KIOSK.x, y: C.TOWN_KIOSK.y }, 3, 3);
@@ -181,7 +191,8 @@ section("Valley Town — géométrie");
   // Aucun bâtiment ne doit mordre sur une rue, un escalier, ou deux altitudes.
   const bad = [];
   const allB = [
-    ...[C.TOWN_CHURCH, C.TOWN_HALL, C.TOWN_COURT].map((b, k) => [["église", "mairie", "tribunal"][k], b]),
+    ...[C.TOWN_CHURCH, C.TOWN_HALL, C.TOWN_COURT, C.TOWN_BOUTIQUE, C.TOWN_SALON, C.TOWN_STATION]
+      .map((b, k) => [["église", "mairie", "tribunal", "boutique", "salon", "gare"][k], b]),
     ...C.TOWN_HOUSES.map((h, k) => [`maison#${k}`, { x: h.x, y: h.y, w: C.TOWN_HOUSE_W, h: C.TOWN_HOUSE_H }]),
   ];
   for (const [name, b] of allB) {
@@ -381,6 +392,182 @@ for (let f = 0; f < C.COURT_FLOORS.length; f++) {
    coupés fuiteraient d'une ferme à l'autre — et personne ne relierait jamais
    « ma ville neuve est déboisée » à « j'ai coupé du bois sur l'autre code ».
    ═══════════════════════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZIP 427 — VALLEY TOWN HABITÉE.
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️ CE QU'ON VÉRIFIE ICI N'EST PAS « LES RÉSIDENTS SE BALADENT » (personne ne
+   peut le vérifier hors du jeu), MAIS LES DEUX CHOSES QUI, SI ELLES SONT
+   FAUSSES, NE LÈVENT AUCUNE ERREUR ET NE SE VOIENT PAS :
+     1. un ENDROIT où l'on envoie un résident et où il ne peut pas se tenir —
+        il s'y colle, il abandonne au bout de 2,4 s, et on croit juste que les
+        PNJ sont mous ;
+     2. un ITINÉRAIRE d'escalier qui n'arrive pas — c'est-à-dire AUCUN résident
+        ne monte jamais en Haute-Ville, ce qui a exactement l'air d'un choix.
+   C'est la même famille que « la montée arrivait dans un mur » du 426.
+   ═══════════════════════════════════════════════════════════════════════════ */
+section("Valley Town habitée — les endroits où l'on vit");
+const spotList = E.townSpots(tw);
+ok("la ville a des endroits où s'arrêter", spotList.length > 20, `${spotList.length} endroits`);
+{
+  const kinds = new Set(spotList.map(s2 => s2.act));
+  // Chaque famille d'activité doit exister quelque part, sinon la moitié des
+  // répliques écrites ne sortira jamais — et rien ne le dira.
+  const want = ["sit", "fountain", "kiosk", "stall", "well", "grave", "pier", "view", "window", "board", "statue", "pray"];
+  const missing = want.filter(k => !kinds.has(k));
+  ok("chaque activité a au moins un endroit", missing.length === 0, missing.join(" "));
+}
+{
+  const bad = spotList.filter(s2 => !walkable(s2.x, s2.y));
+  ok("aucun endroit n'est sur une case bloquée", bad.length === 0, bad.slice(0, 8).map(s2 => `${s2.act}(${s2.x},${s2.y})`).join(" "));
+}
+{
+  const bad = spotList.filter(s2 => !seen[idx(s2.x, s2.y)]);
+  ok("tous les endroits sont ATTEIGNABLES depuis la gare", bad.length === 0, bad.slice(0, 8).map(s2 => `${s2.act}(${s2.x},${s2.y})`).join(" "));
+}
+{
+  // Un banc doit être JUSTE AU NORD de son point d'assise : c'est ce que
+  // suppose le dessin « assis » (il pose le personnage sur la case du banc).
+  const bad = (spotList.filter(s2 => s2.act === "sit")).filter(s2 => {
+    if (s2.bx === undefined) return true;
+    if (s2.bx !== s2.x || s2.by !== s2.y - 1) return true;
+    return !tw.props.some(pr => pr.kind === "bench" && pr.x === s2.bx && pr.y === s2.by);
+  });
+  ok("chaque assise correspond à un vrai banc, juste au nord", bad.length === 0, bad.slice(0, 6).map(s2 => `(${s2.x},${s2.y})`).join(" "));
+}
+{
+  /* ⚠️ AUCUN MEUBLE DEVANT UNE PORTE DE COMMERCE — la version « ville » du
+     garde-fou du tribunal (426), où les colonnes du couloir muraient six pièces
+     sur dix-sept. Les portes sont au MILIEU de la façade sud (c'est ce que
+     suppose nearCivicDoor) : on vérifie les trois cases devant chacune. */
+  const bad = [];
+  for (const [name, b] of [["boutique", C.TOWN_BOUTIQUE], ["salon", C.TOWN_SALON], ["tribunal", C.TOWN_COURT], ["gare", C.TOWN_STATION]]) {
+    const dx = b.x + Math.floor(b.w / 2);
+    for (let k = -1; k <= 1; k++) for (let dy = 1; dy <= 2; dy++) {
+      if (!walkable(dx + k, b.y + b.h + dy - 1)) bad.push(`${name}(${dx + k},${b.y + b.h + dy - 1})`);
+    }
+  }
+  ok("aucun meuble ne bouche l'entrée d'un commerce", bad.length === 0, bad.slice(0, 8).join(" "));
+}
+
+section("Valley Town habitée — les itinéraires d'escalier");
+/* Le banc rejoue `townStairRoute` (recopiée ici depuis FermeGame.js : elle vit
+   dans le composant, donc elle n'est pas importable — c'est la SEULE
+   duplication de ce banc, et elle est signalée pour qu'on la corrige des deux
+   côtés le jour où la table des escaliers change). */
+function stairEnds(st) {
+  if (st.dir === "e") {
+    const cy = st.y + (st.w - 1) / 2;
+    return { low: { x: st.x - 1.5, y: cy }, high: { x: st.x + st.len + 0.5, y: cy } };
+  }
+  const cx = st.x + (st.w - 1) / 2;
+  return { low: { x: cx, y: st.y + st.len + 0.5 }, high: { x: cx, y: st.y - 1.5 } };
+}
+function stairRoute(fromE, toE, fx, fy) {
+  const out = [];
+  let cur = fromE, cx = fx, cy = fy;
+  for (let guard = 0; guard < 3 && Math.abs(cur - toE) > 0.01; guard++) {
+    const up = toE > cur;
+    let best = null, bestD = Infinity;
+    for (const st of C.TOWN_STAIRS) {
+      const entry = up ? st.from : st.to, exit = up ? st.to : st.from;
+      if (Math.abs(entry - cur) > 0.01) continue;
+      if (up ? exit > toE + 0.01 : exit < toE - 0.01) continue;
+      const ends = stairEnds(st);
+      const e0 = up ? ends.low : ends.high;
+      const d = Math.hypot(e0.x - cx, e0.y - cy);
+      if (d < bestD) { bestD = d; best = { st, ends, up, exit }; }
+    }
+    if (!best) break;
+    const a2 = best.up ? best.ends.low : best.ends.high;
+    const b2 = best.up ? best.ends.high : best.ends.low;
+    out.push(a2, b2); cur = best.exit; cx = b2.x; cy = b2.y;
+  }
+  return out;
+}
+const elevAt = (x, y) => tw.elev[idx(Math.round(x), Math.round(y))];
+{
+  // Tous les paliers d'escalier doivent être des cases où l'on peut SE TENIR,
+  // et à la bonne altitude : viser une marche, c'est s'arrêter dessus.
+  const bad = [];
+  for (const st of C.TOWN_STAIRS) {
+    const e = stairEnds(st);
+    for (const [tag, pt, want] of [["bas", e.low, st.from], ["haut", e.high, st.to]]) {
+      const x = Math.round(pt.x), y = Math.round(pt.y);
+      if (!walkable(x, y)) bad.push(`${tag}(${x},${y}) bloqué`);
+      else if (Math.abs(elevAt(x, y) - want) > 0.01) bad.push(`${tag}(${x},${y}) alt ${elevAt(x, y)}≠${want}`);
+    }
+  }
+  ok("chaque volée a deux paliers libres, à la bonne altitude", bad.length === 0, bad.join(" · "));
+}
+{
+  /* L'ITINÉRAIRE COMPLET, depuis la gare vers chaque endroit en hauteur. C'est
+     LE contrôle du chapitre : sans lui, « aucun résident ne monte jamais » est
+     un comportement parfaitement silencieux. */
+  const bad = [];
+  const sx = Math.round(C.TOWN_SPAWN.x), sy = Math.round(C.TOWN_SPAWN.y);
+  const highSpots = spotList.filter(s2 => elevAt(s2.x, s2.y) > 0.01);
+  for (const sp of highSpots) {
+    const legs = stairRoute(elevAt(sx, sy), elevAt(sp.x, sp.y), sx, sy);
+    if (!legs.length) { bad.push(`${sp.act}(${sp.x},${sp.y}) sans itinéraire`); continue; }
+    for (const pt of legs) {
+      const x = Math.round(pt.x), y = Math.round(pt.y);
+      if (!walkable(x, y) || !seen[idx(x, y)]) { bad.push(`${sp.act} palier(${x},${y})`); break; }
+    }
+  }
+  ok(`les ${highSpots.length} endroits en hauteur ont un itinéraire praticable`, bad.length === 0, bad.slice(0, 6).join(" · "));
+  ok("il y a bien des endroits en hauteur", highSpots.length > 0, `${highSpots.length}`);
+}
+
+section("Valley Town habitée — la famille et la garde-robe");
+{
+  const bad = [];
+  for (const [rid, fam] of Object.entries(C.RESIDENT_FAMILY)) {
+    const ro = C.VISITOR_ROSTER.find(r => r.rid === Number(rid));
+    if (!ro) { bad.push(`rid ${rid} inconnu du roster`); continue; }
+    for (const g of fam) {
+      if (!g.name || !g.rel) bad.push(`${ro.name}: membre incomplet`);
+      if (g.gender !== "m" && g.gender !== "f") bad.push(`${ro.name}/${g.name}: genre`);
+      if (!(g.outfit >= 0 && g.outfit < C.OUTFITS.length)) bad.push(`${ro.name}/${g.name}: outfit hors catalogue`);
+    }
+  }
+  ok("chaque famille est rattachée à un résident réel et complète", bad.length === 0, bad.slice(0, 6).join(" · "));
+  ok("Carla sort toujours accompagnée", C.ALWAYS_GUEST_RIDS.includes(C.CARLA_RID) && (C.RESIDENT_FAMILY[C.CARLA_RID] || []).length > 0);
+  const carla = C.VISITOR_ROSTER.find(r => r.rid === C.CARLA_RID);
+  ok("Carla est recrutable (elle a un skill et plus de noStay)", !!carla && !!carla.skill && !carla.noStay);
+  ok("son métier n'exige aucun atelier de ferme", C.SKILL_BUILDING[carla.skill] === null);
+}
+{
+  /* ⚠️ L'ENCODAGE DE LA TENUE FAIT L'ALLER-RETOUR, ou un chapeau acheté ne se
+     verra pas chez l'autre joueur — et c'est le genre de défaut qu'on ne trouve
+     qu'en jouant à deux, donc rarement. */
+  const bad = [];
+  for (const slot of C.WARDROBE_SLOTS) {
+    const cat = C.wardrobeCatalog(slot);
+    if (!cat || !cat.length) { bad.push(`${slot}: catalogue vide`); continue; }
+    if (cat.length > 9) bad.push(`${slot}: ${cat.length} articles, l'encodage n'en tient que 9`);
+    for (const it of cat) {
+      if (!it.name || !it.nameEn) bad.push(`${slot}/${it.id}: nom manquant`);
+      if (!(it.price > 0)) bad.push(`${slot}/${it.id}: prix`);
+    }
+  }
+  ok("les quatre rayons tiennent dans l'encodage à un chiffre", bad.length === 0, bad.join(" · "));
+  ok("rien porté = aucune chaîne", C.wardrobeLook({ hat: 0, scarf: 0, outfit: 0, tint: 0 }) === null);
+  ok("rien du tout = aucune chaîne", C.wardrobeLook(null) === null);
+  const enc = C.wardrobeLook({ hat: 3, scarf: 1, outfit: 5, tint: 8 });
+  ok("la tenue s'encode en cinq caractères", enc === "w3158", enc);
+  ok("les articles de la Maison Garfield sont CHERS", C.WARDROBE_HATS.every(h => h.price >= 1000), "min " + Math.min(...C.WARDROBE_HATS.map(h => h.price)));
+}
+{
+  ok("le plafond de résidents est bien passé à 20", C.MAX_RESIDENTS === 20, String(C.MAX_RESIDENTS));
+  ok("moins de résidents en ville que de résidents tout court", C.TOWN_VISITORS_MAX < C.MAX_RESIDENTS, `${C.TOWN_VISITORS_MAX} / ${C.MAX_RESIDENTS}`);
+  ok("un séjour dure moins longtemps que sa borne haute", C.TOWN_TRIP_MIN_MS < C.TOWN_TRIP_MAX_MS);
+  // Les durées d'activité doivent être ordonnées, sinon `min + rnd*(max-min)`
+  // rendrait une durée NÉGATIVE et l'activité se terminerait immédiatement —
+  // un PNJ qui arrive quelque part et repart aussitôt, sans erreur.
+  const bad = Object.entries(C.TOWN_ACTS).filter(([, v]) => !(v.ms[0] > 0 && v.ms[1] >= v.ms[0]));
+  ok("chaque activité a une durée ordonnée et positive", bad.length === 0, bad.map(([k]) => k).join(" "));
+}
+
 section("Valley Town — couper du bois");
 {
   // Un fermier de banc, au format de newFarmer.
