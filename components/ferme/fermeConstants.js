@@ -90,6 +90,17 @@ export const G_RUN_KERB = 17;      // zip 378 : BORDURE de la chaussée. Les blo
                                    // l'eau avant, qui bloquait déjà. On ne change donc que ce qu'il VOIT, jamais où
                                    // il peut aller, et l'ancienne géométrie de l'embuscade reste valide mot pour mot.
 
+export const G_TOWN_STAIR = 18;    // zip 425 : marche d'escalier de Valley Town. ⚠️ ELLE N'EXISTE QUE SUR LA CARTE
+                                   // DE LA VILLE, qui est REGÉNÉRÉE à chaque visite et n'est jamais persistée — c'est
+                                   // ce qui autorise à ajouter une valeur de sol sans aucune migration. Une nouvelle
+                                   // valeur sur la carte de FERME, elle, obligerait à relire toutes les sauvegardes.
+                                   // Son rôle est double : elle se DESSINE en marches, et elle AUTORISE le changement
+                                   // de niveau (voir TOWN_STEP_MAX) — les deux vont ensemble, un escalier qu'on ne
+                                   // voit pas est un mur invisible et un escalier qui ne monte pas est un décor.
+export const G_TOWN_LAWN = 19;     // zip 425 : pelouse tondue des squares et parterres de la place centrale. Purement
+                                   // visuelle (elle ne bloque pas), mais elle sépare le « jardin » du simple herbage
+                                   // sauvage : sans elle, une place « soignée » n'a aucun moyen de le montrer.
+
 // Objets
 export const O_NONE = 0;
 export const O_TREE = 1;
@@ -2598,33 +2609,235 @@ export const VISITOR_STAGGER_MAX_MS = 4200;       // ...so they walk in a loose 
 // each other there. Houses are assigned deterministically (see townHouseOwners
 // in FermeGame.js): known farmers sorted by id -> plots in order; leftover
 // plots show a "for sale" sign. Interiors are deferred.
-export const TOWN_MAP_W = 64;
-export const TOWN_MAP_H = 48;
+/* ═══════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ ZIP 425 — VALLEY TOWN EST REFAITE, ET LA CARTE EST 3× PLUS GRANDE DANS
+   CHAQUE DIMENSION (64×48 → 192×144, soit NEUF fois la surface).
+   ───────────────────────────────────────────────────────────────────────────
+   Demande de Guillaume : « on va tout recommencer sur cette map, car on veut
+   une map bien plus grande. La grille doit être au moins 3x plus étendue. »
+   L'objectif annoncé est un VERSANT ÉGAL À LA FERME en points d'intérêt — ce
+   qui ne se construira pas en une session. Ce zip pose donc la GÉOGRAPHIE
+   (quartiers, rues, reliefs, monuments) en laissant délibérément des parcelles
+   vides : une ville qu'on remplit est un chantier, une ville trop petite pour
+   ce qu'on veut y mettre est une impasse.
+
+   ⚠️ POURQUOI 3× EN LINÉAIRE ET NON 3× EN SURFACE. « 3× plus étendue » se lit
+   des deux façons, et 3× en surface (≈ 110×83) n'aurait donné qu'un tiers de
+   rue en plus dans chaque direction — c'est-à-dire une ville qui a l'air de la
+   même. La demande porte sur la SENSATION d'espace, qui suit la distance, pas
+   l'aire. On prend donc le sens le plus généreux.
+
+   ⚠️ ET ÇA NE COÛTE RIEN AU RENDU : drawTownFrame ne dessine que la fenêtre
+   visible (x0..x1 / y0..y1 calculés depuis la caméra). Le surcoût est celui de
+   trois tableaux de 27 648 entrées construits UNE FOIS par chargement de page
+   (le cache module de getTownWorldCached), soit une poignée de millisecondes.
+   ⚠️ ET RIEN N'EST PERSISTÉ : la ville est regénérée à graine fixe, identique
+   pour tout le monde, à chaque visite. Il n'y a donc aucune migration à écrire
+   — c'est ce qui rend cette refonte possible d'un bloc.
+
+   ⚠️ CE QUI NE DEVAIT PAS CASSER, ET QUI N'A PAS CASSÉ :
+     * les RÉSIDENTS. townHouseOwners() attribue les parcelles par index (les
+       fermiers connus triés par id, puis les résidents). On a AUGMENTÉ le
+       nombre de parcelles et gardé l'ordre : les huit premières entrées de
+       TOWN_HOUSES restent les quatre du nord et les quatre du sud de la rue
+       principale, exactement comme avant. Un propriétaire garde donc son rang.
+     * la TÉLÉPORTATION DÉVELOPPEUR (dev:town), qui pose le joueur sur
+       TOWN_SPAWN — déplacé avec la gare, jamais recopié ailleurs.
+     * le TRAIN, qui arrive et repart sur les mêmes deux repères.
+   ═══════════════════════════════════════════════════════════════════════════ */
+export const TOWN_MAP_W = 192;
+export const TOWN_MAP_H = 144;
 export const TOWN_RAIL_X = 2;                       // rails on columns 2..3, full height, like the farm
-export const TOWN_PLATFORM = { x: 4, y: 18, w: 2, h: 8 };
-export const TOWN_SPAWN = { x: 6, y: 22 };          // step off the train here
-export const TOWN_STATION_SIGN = { x: 7, y: 24 };   // E here to ride back to the farm
-export const TOWN_MAIN_ST_Y = 22;                   // main street rows y..y+1, from the platform to the east edge
-export const TOWN_CROSS_ST_X = 31;                  // cross street columns x..x+1, north-south through the plaza
-export const TOWN_PLAZA = { x: 26, y: 17, w: 12, h: 12 }; // paved central square
-export const TOWN_FOUNTAIN = { x: 31, y: 22 };      // 2x2 fountain, top-left tile (blocks movement)
+export const TOWN_PLATFORM = { x: 4, y: 66, w: 2, h: 8 };
+export const TOWN_SPAWN = { x: 6, y: 70 };          // step off the train here
+export const TOWN_STATION_SIGN = { x: 7, y: 72 };   // E here to ride back to the farm
+
+/* LES RUES. Quatre est-ouest, trois nord-sud, toutes larges de deux cases.
+   ⚠️ ELLES SONT DÉCLARÉES ICI ET NON DESSINÉES À LA MAIN DANS LE GÉNÉRATEUR,
+   parce que trois autres endroits en ont besoin : le placement des parcelles
+   (une maison a une allée qui rejoint la rue SOUS elle), l'écartement des
+   arbres, et le mobilier urbain. Une rue recopiée est une rue qui bougera
+   d'un côté seulement. */
+export const TOWN_MAIN_ST_Y = 70;                   // rue principale (gare → bord est) : lignes y..y+1
+export const TOWN_ST_ROWS = [34, 70, 108, 128];     // toutes les rues est-ouest
+export const TOWN_CROSS_ST_X = 92;                  // artère centrale nord-sud, colonnes x..x+1
+export const TOWN_ST_COLS = [34, 92, 150];          // toutes les rues nord-sud
+
+/* LA PLACE CENTRALE. Elle a triplé (12×12 → 30×26) et n'est plus un simple
+   rectangle dallé : voir townPlazaDeco() dans fermeEngine.js. */
+export const TOWN_PLAZA = { x: 78, y: 58, w: 30, h: 26 };
+export const TOWN_FOUNTAIN = { x: 92, y: 63 };      // 2x2 fountain, top-left tile (blocks movement)
+/* ⚠️ LE MONUMENT EST LE PENDANT SUD DE LA FONTAINE, et il ne sert qu'à ça :
+   la rue principale traverse la place en son milieu, donc la fontaine seule
+   posait tout le poids visuel au nord et la moitié sud paraissait vide. Deux
+   masses symétriques de part et d'autre de la rue font une PLACE ; une seule
+   fait un carrefour avec une fontaine dessus. */
+export const TOWN_MONUMENT = { x: 92, y: 78 };      // 2x2, obélisque + vasques
+/* ⚠️ 425 — LES QUARTIERS. Sans eux, une carte neuf fois plus grande n'est pas
+   une ville neuf fois plus riche : c'est la même petite ville posée au milieu
+   d'un très grand pré, et c'est EXACTEMENT ce que le premier jet a donné à
+   l'écran. Une ville, c'est d'abord des ÎLOTS occupés entre les rues.
+   Ces trois-là sont les premiers ; il reste de la place pour la suite, et c'est
+   voulu (voir l'en-tête : la parité avec la ferme se construira au fil des
+   mises à jour, pas en une session). */
+/* ⚠️ AUCUN DE CES TROIS NE DOIT MORDRE SUR UNE RUE NI SUR UNE PARCELLE — le
+   banc de rendu le contrôle (« aucun bâtiment ne coupe une rue »), mais rien ne
+   contrôle l'inverse. Les hauteurs sont donc calées pour s'arrêter AVANT les
+   rangées de maisons du sud (y = 102) : 74 + 26 = 100. */
+export const TOWN_PARK = { x: 108, y: 74, w: 34, h: 26 };     // le parc et son étang
+export const TOWN_ORCHARD = { x: 12, y: 38, w: 18, h: 24 };   // le verger municipal
+export const TOWN_MARKET = { x: 38, y: 74, w: 26, h: 26 };    // le champ de foire, dallé et bordé d'arbres
+/* Le CŒUR URBAIN : au-dedans, on ne sème PAS d'arbres au hasard. C'est la
+   correction la plus efficace du deuxième jet — des arbres épars entre les rues
+   faisaient lire toute la ville comme une clairière. Les arbres du centre sont
+   désormais PLANTÉS : alignements, parc, verger, parterres de la place. */
+export const TOWN_CORE = { x: 8, y: 22, w: 176, h: 112 };
 export const TOWN_HOUSE_W = 6;                      // house sprite is 96px = 6 tiles wide
 export const TOWN_HOUSE_H = 3;                      // blocked footprint rows (the visual roof overlaps north of it)
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LE RELIEF (425) — LA HAUTE-VILLE, LES ESCALIERS, ET LE SAUT.
+   ───────────────────────────────────────────────────────────────────────────
+   Demande de Guillaume : « des sections avec des escaliers réalistes, des
+   mécaniques de climb up and jump off ».
+
+   ⚠️ IL N'Y A PAS DE COORDONNÉE Z, ET IL NE FAUT PAS EN INTRODUIRE UNE. Le
+   joueur n'a que x/y — c'est ce qui voyage dans le réseau (pubMe), ce que
+   lisent les collisions, ce que dessinent les autres clients. Ajouter une
+   troisième coordonnée obligerait à la diffuser, à la réconcilier, et à la
+   gérer dans chaque chemin qui manipule une position : un coût énorme pour
+   une carte sur quatre.
+
+   ⚠️ L'ALTITUDE EST DONC UNE PROPRIÉTÉ DE LA CASE, PAS DU PERSONNAGE. Un
+   tableau `elev` parallèle au sol donne la hauteur de chaque case ; celle d'un
+   personnage se LIT sous ses pieds. Trois conséquences, et les trois sont des
+   cadeaux :
+     1. les joueurs distants sont à la bonne hauteur sans qu'on diffuse quoi
+        que ce soit — leur x/y suffit ;
+     2. rien à sauvegarder, rien à synchroniser, rien à désynchroniser ;
+     3. un ancien client qui n'aurait pas ce zip verrait les autres au bon
+        endroit sur la carte, simplement à plat.
+
+   ⚠️ LES VALEURS SONT FRACTIONNAIRES, ET C'EST CE QUI FAIT L'ESCALIER. Une
+   marche d'escalier vaut 0,25 ; un rebord de terrasse vaut 1,0 d'un coup. La
+   règle de déplacement est alors la MÊME dans les deux cas — « on ne franchit
+   pas plus de TOWN_STEP_MAX d'un pas » — et il n'y a aucun cas particulier à
+   écrire : l'escalier passe parce qu'il monte doucement, la falaise bloque
+   parce qu'elle monte d'un coup. Un booléen « c'est un escalier » aurait
+   demandé de connaître le SENS de chaque marche.
+
+   ⚠️ ET LE PERSONNAGE MONTE VISUELLEMENT PENDANT QU'IL GRAVIT, sans une ligne
+   d'animation : son décalage à l'écran vaut `elev × TOWN_ELEV_PX`, lu case par
+   case. C'est la même valeur qui décide s'il peut passer et où il se dessine —
+   donc elles ne peuvent pas diverger (§7 de CLAUDE.md). */
+/* ⚠️ 30 px, ET LE PREMIER RÉGLAGE À 14 ÉTAIT FAUX — vu au banc de rendu, pas à
+   la lecture. Quatorze pixels sur une tuile de seize, c'est la hauteur d'une
+   BORDURE DE TROTTOIR : la terrasse ne se lisait pas comme un étage, les
+   escaliers avaient l'air de dalles grises posées dans l'herbe, et le mur de
+   soutènement passait pour un trait. À 30 px (presque deux tuiles), le parement
+   a la place d'exister et la Haute-Ville est enfin EN HAUT.
+   ⚠️ Ce nombre ne change RIEN à ce qui est franchissable : la marche et le saut
+   ne lisent que `elev`, jamais des pixels. C'est un réglage purement optique,
+   et c'est exactement pour ça qu'on peut le pousser sans rien re-tester. */
+export const TOWN_ELEV_PX = 30;      // décalage vertical à l'écran, par unité d'altitude
+export const TOWN_STEP_MAX = 0.34;   // dénivelé franchissable EN MARCHANT (une marche vaut 0,25)
+/* Le SAUT depuis un rebord (Espace). Il ne sert qu'à DESCENDRE : on grimpe par
+   les marches, on redescend où l'on veut. C'est le contrat de tous les jeux qui
+   ont ce couple, et il tient à une raison de lisibilité — un saut qui monterait
+   rendrait les escaliers facultatifs, donc décoratifs. */
+export const TOWN_JUMP_MS = 380;     // durée du saut
+export const TOWN_JUMP_TILES = 1.9;  // distance franchie, en cases (assez pour dégager le pied du rebord)
+export const TOWN_JUMP_ARC_PX = 16;  // hauteur de la cloche, en px écran
+export const TOWN_JUMP_MIN_DROP = 0.5; // dénivelé minimal devant soi pour que le saut soit proposé
+
+/* LA HAUTE-VILLE : la terrasse du nord-est, à une unité d'altitude. Elle porte
+   le tribunal, deux parcelles de maisons et le belvédère. */
+export const TOWN_UPPER = { x: 120, y: 8, w: 66, h: 22 };
+/* LE BELVÉDÈRE : un second palier, à deux unités, dans l'angle de la
+   Haute-Ville. ⚠️ Deux niveaux et pas trois : au-delà, le décalage vertical
+   cumulé (2 × 14 px) commence à faire flotter les personnages au-dessus de
+   leur propre ombre, et un troisième palier n'ajouterait aucune lecture. */
+export const TOWN_BELVEDERE = { x: 164, y: 10, w: 16, h: 11 };
+/* LES ESCALIERS. `dir` donne le sens de la MONTÉE : "n" = on monte vers le
+   nord (la volée est parcourue du sud au nord). La longueur de la volée
+   (`len`) découle du dénivelé : quatre marches pour une unité, ce qui donne
+   les 0,25 de TOWN_STEP_MAX. */
+export const TOWN_STAIRS = [
+  // La volée monumentale, dans l'axe du tribunal : six cases de large, on la
+  // voit depuis la place.
+  { x: 140, y: 30, w: 6, len: 4, dir: "n", from: 0, to: 1 },
+  // La volée de service, à l'ouest, pour ne pas obliger à traverser toute la
+  // ville quand on arrive de la gare.
+  { x: 116, y: 18, w: 4, len: 4, dir: "e", from: 0, to: 1 },
+  // La montée du belvédère, courte et étroite.
+  { x: 170, y: 21, w: 3, len: 4, dir: "n", from: 1, to: 2 },
+];
+
+export const TOWN_HOUSES = [                        // door faces south onto a street
+  /* ⚠️ LES HUIT PREMIÈRES SONT LES HUIT D'AVANT, DANS LE MÊME ORDRE (quatre au
+     nord de la rue principale, quatre au sud) : voir la note d'en-tête. Elles
+     ont changé de coordonnées — la carte entière a changé — mais pas de RANG,
+     et c'est le rang qui désigne le propriétaire. */
+  { x: 14, y: 64 }, { x: 26, y: 64 }, { x: 46, y: 64 }, { x: 58, y: 64 },   // nord de la rue principale
+  { x: 14, y: 28 }, { x: 46, y: 28 }, { x: 58, y: 28 }, { x: 100, y: 28 },  // le long de l'avenue du nord
+  // Zip 425 : les parcelles nouvelles. Une ville neuf fois plus grande avec
+  // huit maisons se lit comme une ville abandonnée.
+  { x: 14, y: 102 }, { x: 26, y: 102 }, { x: 46, y: 102 }, { x: 58, y: 102 },
+  { x: 116, y: 102 }, { x: 128, y: 102 }, { x: 160, y: 102 },
+  { x: 46, y: 122 }, { x: 100, y: 122 }, { x: 160, y: 122 },
+  // ... et deux sur la terrasse : les hauteurs sont les belles adresses.
+  { x: 122, y: 24 }, { x: 152, y: 24 },
+];
 // Zip 260 (demande Guillaume) : plafond de résidents porté à 10, INDÉPENDANT
 // du nombre de maisons de Valley Town. L'attribution de maison sera revue plus
 // tard — pour l'instant, les résidents au-delà des maisons disponibles sont
 // simplement dessinés près d'un point par défaut (voir le rendu des résidents
 // dans FermeGame.js), ce qui est assumé.
+/* ⚠️ 425 : MAX_RESIDENTS RESTE À 10 ALORS QUE LES PARCELLES PASSENT À 20, et
+   ce n'est pas un oubli. Les deux nombres sont indépendants depuis le zip 260 :
+   celui-ci plafonne les résidents recrutés, celui-là décrit la VILLE. Vingt
+   parcelles pour dix résidents et quelques joueurs, c'est simplement une ville
+   qui a de la place — et le panneau « à vendre » du zip 234 a enfin un sens. */
 export const MAX_RESIDENTS = 10;
-export const TOWN_HOUSES = [                        // door faces south onto a street
-  { x: 14, y: 13 }, { x: 22, y: 13 }, { x: 38, y: 13 }, { x: 46, y: 13 },   // north side of main street
-  { x: 14, y: 27 }, { x: 22, y: 27 }, { x: 38, y: 27 }, { x: 46, y: 27 },   // south side
-];
-// Zip 235: Valley Town townhall — big civic building anchored just north of
-// the plaza, replacing the old "just another house" look. Sprite is 128x128,
-// footprint occupies 8x5 tiles (blockedTown extends to cover it, see
-// FermeGame.js/blockedTown).
-export const TOWN_HALL = { x: 28, y: 4, w: 8, h: 5 };
+/* ═══════════════════════════════════════════════════════════════════════════
+   LES TROIS MONUMENTS (425).
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️ L'ANCIENNE MAIRIE DEVIENT L'ÉGLISE, ET ON NE TOUCHE PAS À SON DESSIN.
+   Demande de Guillaume : « garder l'actuel townhall et le renommer église ».
+   Le sprite `townhallSprite()` de fermeArt.js reste mot pour mot celui du
+   235 — et c'était déjà la bonne lecture : le commentaire du zip 279 l'appelle
+   « l'espèce d'église blanche ». On ne renomme donc pas un bâtiment, on lui
+   rend son nom. Seuls la CONSTANTE et l'ÉTIQUETTE changent.
+   ⚠️ `TOWN_CHURCH` est délibérément un nom NEUF plutôt qu'un TOWN_HALL réutilisé
+   pour l'église : `TOWN_HALL` continue d'exister et désigne maintenant un AUTRE
+   bâtiment, à un AUTRE endroit. Garder l'ancien nom pour le nouveau sens aurait
+   fait mentir tous les commentaires antérieurs d'un coup.
+
+   ⚠️ ET ELLE SORT DE L'AXE CENTRAL. Elle était plantée sur la colonne de
+   l'artère nord-sud, qu'elle bouchait ; on ne s'en apercevait pas parce que
+   cette artère s'arrêtait avant. Sur une carte trois fois plus longue, une rue
+   interrompue par un bâtiment se voit tout de suite. */
+export const TOWN_CHURCH = { x: 66, y: 46, w: 8, h: 5 };   // ex-TOWN_HALL du zip 235, sprite 128×128
+
+/* LE NOUVEL HÔTEL DE VILLE. Demande : « un nouveau bâtiment townhall différent
+   des autres quelque part au centre ». Il borde la place à l'est, face à la
+   fontaine — la position d'une mairie sur une place de village. Brique et
+   pierre, beffroi à horloge : rien de commun avec le portique blanc de
+   l'église ni avec le péristyle du tribunal, pour qu'aucun des trois ne puisse
+   être confondu avec un autre à distance. Sprite 160×144, soit 10×9 cases,
+   dont 6 rangées bloquantes. */
+export const TOWN_HALL = { x: 112, y: 52, w: 10, h: 6 };
+
+/* LE TRIBUNAL. Demande : « un autre bâtiment élégant néoclassique nommé
+   tribunal, imposant, qui ressemble à un tribunal ».
+   ⚠️ IL EST EN HAUTEUR, ET C'EST LE POINT ENTIER. Un tribunal néoclassique se
+   regarde D'EN BAS : le perron, le péristyle et le fronton n'existent que pour
+   ça. Le poser au niveau de la rue en aurait fait une grosse maison à colonnes.
+   Posé au sommet de la volée monumentale, il est la RÉCOMPENSE de la montée —
+   ce qui donne du même coup une raison d'être aux escaliers demandés par
+   Guillaume, au lieu d'un escalier-démonstration qui ne mène nulle part.
+   Sprite 192×176 (12×11 cases), 7 rangées bloquantes. */
+export const TOWN_COURT = { x: 136, y: 14, w: 12, h: 7 };
 export const TRAIN_BOARD = { x: 5, y: 30 };         // farm-side boarding spot on the platform (E to ride)
 
 // --- Seasons (timing chosen by the model, per Guillaume's delegation) ---
@@ -2918,6 +3131,19 @@ export const DEV_TELEPORTS = [
   { key: "farm",    zone: "farm" },  // devant la maison (SPAWN)
   { key: "passage", zone: "farm" },  // devant le passage sombre, côté ferme
   { key: "town",    zone: "town" },  // Valley Town, descente du train
+  /* ⚠️ 425 — TROIS ARRÊTS DE PLUS DANS VALLEY TOWN, ET C'EST LA CARTE QUI LES
+     RÉCLAME. Elle mesurait 64×48 : la descente du train suffisait, on voyait
+     tout en dix secondes. Elle fait 192×144, et rejoindre le belvédère à pied
+     demande une minute de marche — à répéter à chaque rechargement, pour
+     regarder une ombre. Un outil de test dont le coût dépasse ce qu'il fait
+     gagner cesse d'être utilisé, et c'est comme ça qu'on finit par livrer sans
+     regarder (§9 de CLAUDE.md).
+     Les coordonnées se DÉRIVENT des repères de la ville dans devTeleport, elles
+     ne sont pas recopiées ici : déplacer la place ne doit pas laisser un
+     téléporteur pointé sur l'herbe. */
+  { key: "townPlaza",     zone: "town" },  // la place centrale, devant la fontaine
+  { key: "townCourt",     zone: "town" },  // le parvis du tribunal, en Haute-Ville
+  { key: "townBelvedere", zone: "town" },  // le second palier
   { key: "world",   zone: "evil" },  // arrivée dans la terre en cours (EVIL_SPAWN)
   { key: "bridge",  zone: "evil" },  // pied du pont de la terre en cours
 ];

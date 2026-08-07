@@ -182,6 +182,13 @@
 <script src="js/models.js"></script>
 <script src="js/world.js"></script>
 <script src="js/ui.js"></script>
+<!-- ⚠️ dev.js AVANT game.js, et ce n'est pas cosmétique : `Game.init()` teste
+     `typeof Dev` pour lui passer ses crochets. Un `const` de haut niveau n'est
+     PAS une propriété de `window` (le piège du 422, §4 de CLAUDE.md) — il n'y a
+     donc rien à retrouver après coup, il faut simplement que la déclaration ait
+     été exécutée. Le menu ne construit son panneau qu'à la première ouverture :
+     charger ce fichier ne coûte rien à une partie normale. -->
+<script src="js/dev.js"></script>
 <script src="js/game.js"></script>
 </body>
 </html>

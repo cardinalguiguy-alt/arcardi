@@ -608,6 +608,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // Valley Town (zip 234) : carte locale de CE joueur, comme evilWorldRef —
   // mais le zone "town" est MULTIJOUEUR (positions publiees normalement).
   const townWorldRef = useRef(null);
+  /* Zip 425 — LE SAUT DEPUIS UN REBORD, en Valley Town uniquement.
+     ⚠️ UN `ref` ET NON UN `state` : il est lu et écrit à chaque image par la
+     boucle de jeu, qui vit dans une closure à dépendances vides. Un state
+     provoquerait un rendu React par image, et la boucle lirait de toute façon
+     une valeur périmée. C'est la même raison que pour tous les autres refs de
+     ce fichier — voir devMenuOpenRef.
+     { active, t0, fx, fy, tx, ty, e0, e1 } : le trajet est FIGÉ au décollage. */
+  const townJumpRef = useRef({ active: false, t0: 0, fx: 0, fy: 0, tx: 0, ty: 0, e0: 0, e1: 0 });
   // Transition en fondu au noir (aller ET retour) : { active, t0, toEvil,
   // swapped }. `swapped` marque le moment (mi-fondu, écran totalement noir)
   // où la téléportation réelle a lieu, pour qu'elle soit invisible.
@@ -10120,11 +10128,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           m.zone = "evil";
           if (dk === "world") { m.x = C.EVIL_SPAWN.x; m.y = C.EVIL_SPAWN.y; }
           else { m.x = C.RUN_GATE.x - C.DEV_BRIDGE_OFFSET; m.y = C.RUN_GATE.y; }
-        } else if (dk === "town") {
+        } else if (dk === "town" || dk === "townPlaza" || dk === "townCourt" || dk === "townBelvedere") {
           if (wasFarm) { m.farmX = m.x; m.farmY = m.y; }
           if (!townWorldRef.current) townWorldRef.current = getTownWorldCached(E);
           m.zone = "town";
-          m.x = C.TOWN_SPAWN.x; m.y = C.TOWN_SPAWN.y;
+          /* Zip 425 : les trois arrêts de Valley Town. ⚠️ CHAQUE POINT EST
+             DÉRIVÉ d'un repère de la ville, jamais écrit en dur — c'est la
+             règle du §7 de CLAUDE.md, et elle a déjà servi ici : la place et le
+             tribunal ont bougé deux fois pendant ce zip, et ces trois lignes
+             n'ont pas eu à être retouchées.
+             ⚠️ On se pose DEVANT (au sud de) chaque monument, pas dessus : leur
+             emprise est bloquante, et arriver à l'intérieur d'un bâtiment
+             coincerait le joueur — la même précaution que DEV_BRIDGE_OFFSET. */
+          if (dk === "townPlaza") { m.x = C.TOWN_FOUNTAIN.x; m.y = C.TOWN_FOUNTAIN.y + 3; }
+          else if (dk === "townCourt") { m.x = C.TOWN_COURT.x + C.TOWN_COURT.w / 2; m.y = C.TOWN_COURT.y + C.TOWN_COURT.h + 2; }
+          else if (dk === "townBelvedere") { m.x = C.TOWN_BELVEDERE.x + C.TOWN_BELVEDERE.w / 2; m.y = C.TOWN_BELVEDERE.y + C.TOWN_BELVEDERE.h - 3; }
+          else { m.x = C.TOWN_SPAWN.x; m.y = C.TOWN_SPAWN.y; }
         } else {
           // "farm" (devant la maison) et "passage" (devant le passage sombre,
           // côté ferme). w.darkPassage est posé par la génération du monde ;
@@ -10369,7 +10388,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // menu ouvert (le clic était déjà bloqué, voir onDown ; Échap/T/M
       // restent actifs pour fermer/naviguer).
       const uiOpen = mapOpenRef.current || shopOpenRef.current || binOpenRef.current || bagOpenRef.current || cauldronMenuOpenRef.current || adsOpenRef.current || visitorOpenRef.current || gregCardOpenRef.current;
-      if (e.code === "Space") { e.preventDefault(); if (!uiOpen) doAction(); }
+      /* ⚠️ 425 — ESPACE SAUTE EN VILLE, ET AGIT PARTOUT AILLEURS. Ce n'est pas
+         une surcharge risquée : `doAction()` sort déjà immédiatement quand la
+         zone est "town" (aucun outil de ferme n'y sert), donc la touche ne
+         faisait RIEN là-bas. On lui donne le seul geste qui manquait, et on
+         n'en ajoute aucun ailleurs — la règle du 414 vaut aussi ici : la
+         profondeur vient de ce qu'une touche connue fait de plus.
+         Le repli sur `doAction()` reste inconditionnel : hors d'un rebord, en
+         ville, Espace ne fait toujours rien, exactement comme avant. */
+      if (e.code === "Space") {
+        e.preventDefault();
+        if (!uiOpen) { if (!tryTownJump()) doAction(); }
+      }
       if (e.code === "KeyE") { if (!uiOpen) tryOpenNearby(); }
       // Zip 233 (Guillaume): Q, not E, talks to visitors - opens the unified
       // visitor card for the nearest one waiting within reach. NOTE: KeyQ is
@@ -11474,7 +11504,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           } });
         }
         const residents = (st && st.residents) || [];
-        const houseOwners = townHouseOwners();
+        /* Zip 425 : `townHouseOwners()` n'est plus appelé ici — voir la note du
+           repli ci-dessous. Il était recalculé À CHAQUE IMAGE DE LA FERME (un
+           tri des fermiers connus + une construction de vingt objets) pour une
+           donnée de Valley Town dont ce rendu-ci n'avait pas à se servir. */
         for (let ri = 0; ri < residents.length; ri++) {
           const ro = rosterOf(residents[ri].rid); if (!ro) continue;
           if (residents[ri].trip && residents[ri].trip.phase === "away") continue; // zip 258 : Eduardo absent (en voyage)
@@ -11488,9 +11521,35 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           // un doublon figé à côté de sa version animée. On saute donc tout
           // résident qui a déjà une position simulée.
           if (typeof residents[ri].x === "number") continue;
-          const hsn = houseOwners.find(h => h.resident && h.resident.rid === residents[ri].rid);
-          const rxp = hsn ? hsn.x + C.TOWN_HOUSE_W / 2 : 47.5 + (ri % 3) * 1.6;
-          const ryp = hsn ? hsn.y + C.TOWN_HOUSE_H + 0.6 : 37.5 + Math.floor(ri / 3) * 1.4;
+          /* ⚠️⚠️ ZIP 425 — CORRECTION D'UN DÉFAUT LATENT, TROUVÉ EN AGRANDISSANT
+             VALLEY TOWN, ET QUI N'AVAIT RIEN À VOIR AVEC ELLE.
+             ─────────────────────────────────────────────────────────────────
+             Ce repli est dessiné SUR LA CARTE DE LA FERME (on est dans loop(),
+             branche ferme). Il allait pourtant chercher la parcelle Valley Town
+             du résident et l'employait telle quelle comme coordonnée de FERME :
+             deux cartes différentes, un seul repère.
+
+             ⚠️ ÇA NE SE VOYAIT PAS, ET POUR UNE SEULE RAISON : la ville faisait
+             64×48 et la ferme fait 180×140. N'IMPORTE QUELLE coordonnée de
+             ville tombait donc quelque part sur la ferme, dans le quart
+             nord-ouest — assez près du centre pour passer pour un placement
+             voulu. La ville passe à 192×144 et le défaut devient éclatant : un
+             résident logé au sud-est se serait retrouvé projeté à l'autre bout
+             de la ferme, voire dans le lac.
+
+             ⚠️ LA LEÇON EST GÉNÉRALE ET VAUT D'ÊTRE ÉCRITE : deux cartes qui
+             partagent un système de coordonnées sans partager de repère finissent
+             toujours par se mélanger quelque part, et le mélange reste INVISIBLE
+             tant que la plus petite tient dans la plus grande. Redimensionner
+             une carte, c'est révéler ces confusions-là.
+
+             Le repli redevient donc ce qu'il aurait toujours dû être : l'ancre
+             ferme, près de la mairie — la même que celle des visiteurs
+             (WP dans le tick de la gare) et que le repli qui existait déjà pour
+             les résidents sans maison. Il n'y avait donc même pas de
+             comportement à inventer : il fallait ENLEVER la branche fautive. */
+          const rxp = 47.5 + (ri % 3) * 1.6;
+          const ryp = 37.5 + Math.floor(ri / 3) * 1.4;
           // Zip 273 : idem — Eduardo reste monté même dans ce rendu "idle"
           // (résident sans position simulée, planté près de sa maison).
           const onWhiteHorseIdle = ro.skill === "voyager";
@@ -12793,22 +12852,132 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (fx < 0 || fy < 0 || fx >= tw.w || fy >= tw.h) return true;
       if (fx <= C.TOWN_RAIL_X + 1 && !(fy >= C.TOWN_PLATFORM.y && fy < C.TOWN_PLATFORM.y + C.TOWN_PLATFORM.h)) return true; // rails: only reachable along the platform
       const i = fy * tw.w + fx;
+      /* ⚠️ 425 : LES BÂTIMENTS ET LE MOBILIER SONT DANS `solid`, calculé une
+         fois par le générateur (voir generateTownWorld). La boucle sur
+         TOWN_HOUSES qui vivait ici a disparu : avec vingt parcelles, trois
+         monuments et le mobilier de la place, elle serait devenue une centaine
+         de comparaisons par image pour une information qui ne change jamais.
+         ⚠️ Corollaire : un décor ajouté plus tard doit être marqué DANS le
+         générateur, sans quoi on le traversera — silencieusement. */
+      if (tw.solid && tw.solid[i]) return true;
       if (tw.ground[i] === C.G_WATER) return true; // fountain pool
-      // Zip 235: townhall footprint blocks like a building.
-      if (fx >= C.TOWN_HALL.x && fx < C.TOWN_HALL.x + C.TOWN_HALL.w && fy >= C.TOWN_HALL.y && fy < C.TOWN_HALL.y + C.TOWN_HALL.h) return true;
-      for (const hsn of C.TOWN_HOUSES) {
-        if (fx >= hsn.x && fx < hsn.x + C.TOWN_HOUSE_W && fy >= hsn.y && fy < hsn.y + C.TOWN_HOUSE_H) return true;
-      }
       const o = tw.objects[i];
       return o === C.O_TREE || o === C.O_TREE2 || o === C.O_STUMP;
     }
-    function canStandTown(tw, x, y) {
+    /* L'altitude sous un point (425). Hors carte : 0 — c'est le niveau de la
+       rue, donc le choix qui ne crée pas de falaise fantôme au bord du monde. */
+    function elevTown(tw, x, y) {
+      if (!tw || !tw.elev) return 0;
+      const fx = Math.floor(x), fy = Math.floor(y);
+      if (fx < 0 || fy < 0 || fx >= tw.w || fy >= tw.h) return 0;
+      return tw.elev[fy * tw.w + fx];
+    }
+    /* L'altitude d'un personnage : celle de la case sous ses PIEDS, et non
+       sous son ancre. Sa boîte de collision est y..y+0.35 (voir canStandTown) ;
+       +0,2 tombe au milieu, ce qui évite qu'il change de niveau un demi-pas
+       avant ou après le reste de son corps. */
+    function playerElevTown(tw, p) { return elevTown(tw, p.x, p.y + 0.2); }
+    /* ⚠️ 425 — `fromE` EST FACULTATIF, ET LE LAISSER DE CÔTÉ EST UN CHOIX.
+       Passé, il interdit de franchir plus de TOWN_STEP_MAX de dénivelé : c'est
+       ce qui fait tenir les falaises et ce qui rend les escaliers praticables,
+       avec la MÊME règle et aucun cas particulier (voir TOWN_ELEV_PX).
+       Omis, on ne teste que les obstacles — c'est ce qu'il faut pour les
+       familiers, qui suivent leur maître de case en case et n'ont pas à se
+       voir refuser un raccourci par une marche. */
+    function canStandTown(tw, x, y, fromE) {
       const r = 0.3;
-      return !blockedTown(tw, x - r, y) && !blockedTown(tw, x + r, y) && !blockedTown(tw, x - r, y + 0.35) && !blockedTown(tw, x + r, y + 0.35);
+      const pts = [[x - r, y], [x + r, y], [x - r, y + 0.35], [x + r, y + 0.35]];
+      for (const [px, py] of pts) {
+        if (blockedTown(tw, px, py)) return false;
+        if (fromE !== undefined && Math.abs(elevTown(tw, px, py) - fromE) > C.TOWN_STEP_MAX) return false;
+      }
+      return true;
+    }
+
+    /* ══════════════════════════════════════════════════════════════════════
+       LE SAUT DEPUIS UN REBORD (425) — « jump off ».
+       ──────────────────────────────────────────────────────────────────────
+       ⚠️ IL NE SERT QU'À DESCENDRE. On grimpe par les marches, on redescend où
+       l'on veut : c'est le contrat de tous les jeux qui ont ce couple, et il
+       tient à une raison de lisibilité — un saut qui monterait rendrait les
+       escaliers facultatifs, donc purement décoratifs, et la Haute-Ville
+       cesserait d'être en hauteur pour de vrai.
+
+       ⚠️ TROIS CONDITIONS, ET IL FAUT LES TROIS. On regarde la case JUSTE
+       devant (le rebord : elle doit être plus basse d'au moins
+       TOWN_JUMP_MIN_DROP), puis la case d'ARRIVÉE, deux cases plus loin : elle
+       doit être libre ET au niveau du rebord. Sans la troisième, on saute
+       par-dessus une falaise pour atterrir dans le vide d'une seconde — ou pire,
+       DANS un bâtiment, puisque le saut ignore les collisions pendant sa durée.
+
+       ⚠️ ET LE SAUT NE DIFFUSE RIEN DE NOUVEAU. Pendant la cloche, la position
+       publiée reste x/y, qui avance normalement : les autres joueurs voient
+       quelqu'un traverser le rebord, simplement sans l'arc. C'est la
+       conséquence assumée du choix « l'altitude est une propriété de la case »
+       (voir TOWN_ELEV_PX) — et le prix est ridicule comparé à une coordonnée
+       de plus à synchroniser pour 380 ms d'animation. */
+    /* ⚠️ UNE SEULE FONCTION DÉCIDE, ET DEUX APPELANTS S'EN SERVENT : la touche
+       Espace (qui saute) et le bandeau d'invite (qui l'annonce). Écrire deux
+       fois les mêmes trois conditions garantissait qu'un jour l'invite propose
+       un saut refusé, ou pire, qu'un saut soit possible sans jamais s'annoncer.
+       Renvoie la cible, ou `null`. */
+    function townJumpTarget() {
+      const m = meRef.current, tw = townWorldRef.current;
+      if (!m || !tw || m.zone !== "town") return null;
+      if (townJumpRef.current.active || m.sleeping) return null;
+      const d = m.dir | 0;                       // 0 sud, 1 nord, 2 ouest, 3 est
+      const vx = d === 2 ? -1 : d === 3 ? 1 : 0;
+      const vy = d === 0 ? 1 : d === 1 ? -1 : 0;
+      if (!vx && !vy) return null;
+      const e0 = playerElevTown(tw, m);
+      // 1. Le REBORD : la case juste devant doit être nettement plus basse.
+      const ledgeE = elevTown(tw, m.x + vx, m.y + 0.2 + vy);
+      if (e0 - ledgeE < C.TOWN_JUMP_MIN_DROP) return null;
+      // 2. L'ARRIVÉE : libre, sans quoi le saut — qui ignore les collisions
+      //    pendant sa cloche — déposerait le joueur DANS un mur.
+      const tx = m.x + vx * C.TOWN_JUMP_TILES, ty = m.y + vy * C.TOWN_JUMP_TILES;
+      if (!canStandTown(tw, tx, ty)) return null;
+      // 3. ... et au niveau du rebord : on saute d'un étage, pas de deux.
+      const landE = elevTown(tw, tx, ty + 0.2);
+      if (Math.abs(landE - ledgeE) > C.TOWN_STEP_MAX) return null;
+      return { tx, ty, e0, e1: landE };
+    }
+    function canTownJumpNow() { return townJumpTarget() !== null; }
+    function tryTownJump() {
+      const t = townJumpTarget();
+      if (!t) return false;
+      const m = meRef.current;
+      townJumpRef.current = { active: true, t0: performance.now(), fx: m.x, fy: m.y, ...t };
+      return true;
+    }
+    /* Suis-je devant la porte d'un bâtiment civique ? La porte est au milieu de
+       la façade sud, comme pour les maisons — les trois monuments sont dessinés
+       ainsi (voir fermeArt.js), et c'est la seule façade qu'on peut approcher. */
+    function nearBuildingDoor(b) {
+      const m = meRef.current; if (!m) return false;
+      const doorX = b.x + b.w / 2, doorY = b.y + b.h + 0.5;
+      return Math.abs(m.x + 0.5 - doorX) <= b.w / 2 && Math.abs(m.y - doorY) <= 1.6;
     }
     function updateMeTown(dt) {
       const m = meRef.current, tw = townWorldRef.current, keys = keysRef.current;
       if (!tw) return;
+      /* ---- LE SAUT EN COURS (425). Il prend la main sur les commandes : on ne
+         pilote pas en l'air, et la trajectoire est décidée au décollage (voir
+         tryTownJump). ⚠️ On interpole la POSITION, pas la vitesse : une
+         intégration ferait dépendre le point d'arrivée du nombre d'images, donc
+         du matériel — et le contrôle d'arrivée fait au décollage ne vaudrait
+         plus rien. */
+      const jp = townJumpRef.current;
+      if (jp.active) {
+        const k = Math.min(1, (performance.now() - jp.t0) / C.TOWN_JUMP_MS);
+        m.x = jp.fx + (jp.tx - jp.fx) * k;
+        m.y = jp.fy + (jp.ty - jp.fy) * k;
+        m.animT += dt * 4;
+        m.moving = true;
+        if (k >= 1) { jp.active = false; m.x = jp.tx; m.y = jp.ty; }
+        maybeSendPos();
+        return;
+      }
       const uiBlocked = mapOpenRef.current || document.activeElement === chatInputRef.current;
       let dx = 0, dy = 0;
       if (!uiBlocked) {
@@ -12830,8 +12999,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const sp = spSec * dt;
         m.vx = dx * spSec; m.vy = dy * spSec;
         const nx = m.x + dx * sp, ny = m.y + dy * sp;
-        if (canStandTown(tw, nx, m.y)) m.x = nx;
-        if (canStandTown(tw, m.x, ny)) m.y = ny;
+        /* ⚠️ 425 : L'ALTITUDE DE DÉPART EST RELUE AVANT CHAQUE AXE, et non une
+           fois pour les deux. Un déplacement en diagonale sur une volée
+           d'escalier change de marche sur l'axe X puis se voit refuser l'axe Y
+           s'il compare encore à l'altitude d'avant — on se retrouve à monter en
+           crabe, une case sur deux. Deux lectures d'un tableau ne coûtent rien. */
+        if (canStandTown(tw, nx, m.y, playerElevTown(tw, m))) m.x = nx;
+        if (canStandTown(tw, m.x, ny, playerElevTown(tw, m))) m.y = ny;
         if (dx < 0) m.dir = 2; else if (dx > 0) m.dir = 3; else if (dy < 0) m.dir = 1; else if (dy > 0) m.dir = 0;
         m.animT += dt * 9;
       } else { m.animT = 0; m.vx = 0; m.vy = 0; }
@@ -12848,72 +13022,332 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       ctx.fillRect(cam.x, cam.y, cam.vw, cam.vh);
       const x0 = Math.max(0, Math.floor(cam.x / T)), x1 = Math.min(tw.w - 1, Math.ceil((cam.x + cam.vw) / T));
       const y0 = Math.max(0, Math.floor(cam.y / T)), y1 = Math.min(tw.h - 1, Math.ceil((cam.y + cam.vh) / T));
+      /* ══════════════════════════════════════════════════════════════════════
+         ZIP 425 — LE RELIEF À L'ÉCRAN, EN TROIS LIGNES DE PRINCIPE.
+         ──────────────────────────────────────────────────────────────────────
+         1. UNE CASE EN HAUTEUR SE DESSINE PLUS HAUT. Décalage vertical =
+            altitude × TOWN_ELEV_PX. C'est tout le truc, et c'est celui de tous
+            les jeux vus de dessus depuis trente ans.
+         2. LE VIDE QUE ÇA LAISSE EST LA FALAISE. Là où une case est plus haute
+            que sa voisine du DESSOUS, le décalage ouvre un trou d'exactement
+            (différence × TOWN_ELEV_PX) pixels : on le remplit d'un parement de
+            pierre. La falaise n'est donc pas dessinée « en plus », elle est
+            littéralement le trou — donc jamais décalée d'un pixel.
+         3. TOUT CE QUI SE POSE DESSUS SUIT LE MÊME DÉCALAGE, et sa profondeur
+            de tri aussi (`sortY`), faute de quoi un personnage sur la terrasse
+            passerait derrière un arbre situé plus bas mais dessiné plus haut.
+
+         ⚠️ LA FENÊTRE DE TUILES DÉBORDE VERS LE BAS (`yBot`). Une case élevée
+         située SOUS le bord inférieur de l'écran remonte à l'image : sans cette
+         marge, la terrasse s'arrêterait net à quelques pixels du bas du cadre
+         dès qu'on la regarde d'en dessous.
+         ══════════════════════════════════════════════════════════════════════ */
+      const EP = C.TOWN_ELEV_PX;
+      const MAXE = 2;                                    // altitude maximale de la ville
+      const yBot = Math.min(tw.h - 1, y1 + Math.ceil((MAXE * EP) / T) + 1);
+      const elAt = (x, y) => (x < 0 || y < 0 || x >= tw.w || y >= tw.h ? 0 : tw.elev[y * tw.w + x]);
       const draws = [];
-      for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+      /* Pose un dessin en tenant compte de l'altitude : `wy` est sa profondeur
+         de tri AU SOL, `ey` son altitude. Une seule porte d'entrée pour les
+         deux corrections — on ne peut pas décaler l'un en oubliant l'autre. */
+      const pushE = (wy, ey, fn) => draws.push({
+        y: wy - ey * EP,
+        fn: () => { ctx.save(); ctx.translate(0, -ey * EP); fn(); ctx.restore(); },
+      });
+      for (let y = y0; y <= yBot; y++) for (let x = x0; x <= x1; x++) {
         const i = y * tw.w + x, g = tw.ground[i];
+        const e = tw.elev[i], oy = -e * EP;
+        const px = x * T, py = y * T + oy;
         // Zip 235: use the real farm sprite tiles for a match with the farm
         // look (grass/path/stone), keeping the fountain water for the pool.
-        if (g === C.G_GRASS) ctx.drawImage(sprites.grass[(x * 37 + y * 17) % sprites.grass.length], x * T, y * T);
-        else if (g === C.G_PATH) ctx.drawImage(sprites.path, x * T, y * T);
-        else if (g === C.G_PATH_STONE) { ctx.fillStyle = ((x + y) % 2 === 0) ? "#a9a9b2" : "#9f9fa8"; ctx.fillRect(x * T, y * T, T, T); }
-        else if (g === C.G_WATER) { ctx.fillStyle = "#3f7fd0"; ctx.fillRect(x * T, y * T, T, T); }
-        else ctx.drawImage(sprites.grass[0], x * T, y * T);
+        if (g === C.G_GRASS) ctx.drawImage(sprites.grass[(x * 37 + y * 17) % sprites.grass.length], px, py);
+        else if (g === C.G_PATH) ctx.drawImage(sprites.path, px, py);
+        else if (g === C.G_PATH_STONE) {
+          /* 425 : le dallage n'est plus un damier à deux gris. Un joint clair
+             au nord et à l'ouest de chaque dalle suffit à donner du relief, et
+             une teinte qui varie très légèrement (hachage de la position) casse
+             la régularité de l'imprimante. Une place « soignée », c'est
+             d'abord une place qui n'a pas l'air imprimée. */
+          const v = ((x * 41 + y * 23) % 5);
+          ctx.fillStyle = ((x + y) % 2 === 0) ? ["#b3b2b8", "#b6b5bb", "#afaeb4", "#b1b0b6", "#b4b3b9"][v]
+                                              : ["#a5a4ab", "#a8a7ae", "#a2a1a8", "#a6a5ac", "#a3a2a9"][v];
+          ctx.fillRect(px, py, T, T);
+          ctx.fillStyle = "rgba(255,255,255,0.13)"; ctx.fillRect(px, py, T, 1); ctx.fillRect(px, py, 1, T);
+          ctx.fillStyle = "rgba(60,58,66,0.16)"; ctx.fillRect(px, py + T - 1, T, 1); ctx.fillRect(px + T - 1, py, 1, T);
+          /* ⚠️ LA BORDURE (425). Vue au vrai zoom du jeu, une esplanade dallée
+             qui s'arrête net dans l'herbe a l'air DÉCOUPÉE AUX CISEAUX — c'est
+             ce que montrait la première passe. Une place a un bord : une
+             pierre de taille, plus claire, posée tout autour. Elle se déduit du
+             voisinage plutôt que de la géométrie de TOWN_PLAZA, et sert donc
+             AUSSI les parvis et le champ de foire, sans une ligne de plus. */
+          const st4 = (xx, yy) => {
+            if (xx < 0 || yy < 0 || xx >= tw.w || yy >= tw.h) return false;
+            return tw.ground[yy * tw.w + xx] === C.G_PATH_STONE;
+          };
+          ctx.fillStyle = "#cfcabb";
+          if (!st4(x, y - 1)) ctx.fillRect(px, py, T, 3);
+          if (!st4(x, y + 1)) ctx.fillRect(px, py + T - 3, T, 3);
+          if (!st4(x - 1, y)) ctx.fillRect(px, py, 3, T);
+          if (!st4(x + 1, y)) ctx.fillRect(px + T - 3, py, 3, T);
+          ctx.fillStyle = "rgba(70,66,60,0.22)";
+          if (!st4(x, y + 1)) ctx.fillRect(px, py + T - 1, T, 1);
+        }
+        else if (g === C.G_TOWN_LAWN) {
+          // 425 : gazon tondu des parterres — l'herbe de la ferme, assombrie et
+          // rayée dans un seul sens, comme une pelouse qui vient d'être passée.
+          ctx.drawImage(sprites.grass[(x * 13 + y * 7) % sprites.grass.length], px, py);
+          ctx.fillStyle = (x % 2 === 0) ? "rgba(24,70,30,0.20)" : "rgba(120,190,110,0.14)";
+          ctx.fillRect(px, py, T, T);
+        }
+        else if (g === C.G_TOWN_STAIR) {
+          /* 425 : LES MARCHES. Quatre par case, dessinées perpendiculairement
+             au sens de la montée — qu'on DÉDUIT du gradient d'altitude plutôt
+             que de le rechercher dans TOWN_STAIRS. Deux descriptions du même
+             escalier finiraient par se contredire (§7 de CLAUDE.md) ; ici, une
+             volée retournée se redessine juste toute seule. */
+          const gx = elAt(x + 1, y) - elAt(x - 1, y), gy = elAt(x, y + 1) - elAt(x, y - 1);
+          const vertical = Math.abs(gy) >= Math.abs(gx);
+          ctx.fillStyle = "#b8b4ab"; ctx.fillRect(px, py, T, T);
+          for (let s = 0; s < 4; s++) {
+            if (vertical) {
+              ctx.fillStyle = "rgba(255,255,255,0.22)"; ctx.fillRect(px, py + s * 4, T, 1);
+              ctx.fillStyle = "rgba(58,54,48,0.30)"; ctx.fillRect(px, py + s * 4 + 3, T, 1);
+            } else {
+              ctx.fillStyle = "rgba(255,255,255,0.22)"; ctx.fillRect(px + s * 4, py, 1, T);
+              ctx.fillStyle = "rgba(58,54,48,0.30)"; ctx.fillRect(px + s * 4 + 3, py, 1, T);
+            }
+          }
+          // Limons latéraux : sans eux la volée se confond avec du dallage.
+          ctx.fillStyle = "#8d8981";
+          if (vertical) { ctx.fillRect(px, py, 1, T); ctx.fillRect(px + T - 1, py, 1, T); }
+          else { ctx.fillRect(px, py, T, 1); ctx.fillRect(px, py + T - 1, T, 1); }
+        }
+        else if (g === C.G_WATER) {
+          /* ⚠️ 425 — LES DEUX CASES DE LA FONTAINE NE SE PEIGNENT PAS EN EAU.
+             Elles restent G_WATER parce que c'est ce qui les rend
+             INFRANCHISSABLES (blockedTown teste le sol, pas le décor), mais
+             leur eau carrée débordait de tous les côtés du bassin rond — un
+             rectangle bleu autour d'une vasque de pierre, vu en jeu.
+             La collision et le dessin n'ont aucune raison de coïncider ici :
+             on les sépare, et la vraie eau est peinte plus bas, à la forme du
+             bassin. C'est le seul endroit de la ville où l'on fait ça, d'où le
+             test étroit sur l'emprise exacte de la fontaine. */
+          const inFtn = x >= C.TOWN_FOUNTAIN.x && x < C.TOWN_FOUNTAIN.x + 2
+                     && y >= C.TOWN_FOUNTAIN.y && y < C.TOWN_FOUNTAIN.y + 2;
+          if (inFtn) { ctx.fillStyle = "#adacb3"; ctx.fillRect(px, py, T, T); }
+          else { ctx.fillStyle = "#3f7fd0"; ctx.fillRect(px, py, T, T); }
+        }
+        else ctx.drawImage(sprites.grass[0], px, py);
+
+        /* ---- LA FALAISE. Le parement qui bouche le trou ouvert par le
+           décalage, vers le sud. On le dessine en assises de pierre, avec une
+           arête claire au sommet (le nez du rebord, qui accroche la lumière) et
+           une ombre portée au pied. */
+        const drop = e - elAt(x, y + 1);
+        if (drop > 0.01) {
+          const fh = drop * EP;
+          ctx.fillStyle = "#8f8a80"; ctx.fillRect(px, py + T, T, fh);
+          for (let b = 0; b < fh; b += 5) {
+            ctx.fillStyle = "rgba(46,43,38,0.28)"; ctx.fillRect(px, py + T + b, T, 1);
+            ctx.fillStyle = "rgba(255,255,255,0.10)"; ctx.fillRect(px, py + T + b + 1, T, 1);
+          }
+          // Joints verticaux décalés d'une assise sur deux : c'est ce qui
+          // sépare un mur appareillé d'un aplat gris.
+          ctx.fillStyle = "rgba(46,43,38,0.22)";
+          ctx.fillRect(px + ((x % 2) ? 5 : 11), py + T, 1, fh);
+          ctx.fillStyle = "#c6c1b6"; ctx.fillRect(px, py + T - 2, T, 2);          // nez du rebord
+          ctx.fillStyle = "rgba(20,26,16,0.30)"; ctx.fillRect(px, py + T + fh, T, 3); // ombre au pied
+        }
+        /* ---- ARÊTES EST/OUEST. Un liseré suffit pour une terrasse : sans lui,
+           vue de côté, elle n'a pas d'épaisseur.
+           ⚠️ MAIS PAS POUR UN ESCALIER, ET LE BANC DE RENDU L'A PROUVÉ (425).
+           Le flanc d'une volée présente un dénivelé de 0,4 à 0,6 unité : assez
+           pour BLOQUER (au-delà de TOWN_STEP_MAX) et trop peu pour former une
+           vraie falaise — c'est-à-dire un mur invisible, la pire espèce. Les
+           douze cas trouvés étaient tous là. On leur donne donc ce qu'un vrai
+           escalier a de toute façon : un LIMON, une joue de pierre qui borde la
+           volée. Le blocage devient une chose qu'on voit et qu'on comprend. */
+        const isStair = g === C.G_TOWN_STAIR;
+        for (const sd of [-1, 1]) {
+          const dside = e - elAt(x + sd, y);
+          if (dside <= 0.01) continue;
+          const bw = isStair ? 4 : 2;
+          const bx2 = sd < 0 ? px : px + T - bw;
+          if (isStair) {
+            ctx.fillStyle = "#8f8a80"; ctx.fillRect(bx2, py, bw, T);                       // parement du limon
+            ctx.fillStyle = "#cfcabe"; ctx.fillRect(bx2, py, bw, 2);                       // dessus, éclairé
+            ctx.fillStyle = "rgba(46,43,38,0.30)"; ctx.fillRect(bx2, py + T, bw, dside * EP); // il descend avec la volée
+          } else {
+            ctx.fillStyle = "rgba(46,43,38,0.35)"; ctx.fillRect(bx2, py, bw, T);
+          }
+        }
+
         // Rails on the west edge (same look as the farm side: dark bed,
         // lighter ties, two steel rails).
         if (x >= C.TOWN_RAIL_X && x <= C.TOWN_RAIL_X + 1) {
-          ctx.fillStyle = "#5c5348"; ctx.fillRect(x * T, y * T, T, T);
-          if (y % 2 === 0) { ctx.fillStyle = "#7a6a52"; ctx.fillRect(x * T, y * T + 6, T, 3); }
+          ctx.fillStyle = "#5c5348"; ctx.fillRect(px, py, T, T);
+          if (y % 2 === 0) { ctx.fillStyle = "#7a6a52"; ctx.fillRect(px, py + 6, T, 3); }
           ctx.fillStyle = "#9aa0aa";
-          if (x === C.TOWN_RAIL_X) ctx.fillRect(x * T + 11, y * T, 2, T);
-          else ctx.fillRect(x * T + 3, y * T, 2, T);
+          if (x === C.TOWN_RAIL_X) ctx.fillRect(px + 11, py, 2, T);
+          else ctx.fillRect(px + 3, py, 2, T);
         }
         // Platform planks alongside the rails.
         if (x >= C.TOWN_PLATFORM.x && x < C.TOWN_PLATFORM.x + C.TOWN_PLATFORM.w && y >= C.TOWN_PLATFORM.y && y < C.TOWN_PLATFORM.y + C.TOWN_PLATFORM.h) {
-          ctx.fillStyle = "#b09468"; ctx.fillRect(x * T, y * T, T, T);
-          ctx.fillStyle = "#9c8158"; ctx.fillRect(x * T, y * T + (y % 2 ? 4 : 10), T, 2);
+          ctx.fillStyle = "#b09468"; ctx.fillRect(px, py, T, T);
+          ctx.fillStyle = "#9c8158"; ctx.fillRect(px, py + (y % 2 ? 4 : 10), T, 2);
         }
-        // Fountain pool: gently breathing highlight, like the farm river.
+        // Reflet respirant sur l'eau — les mares du parc, pas la fontaine, qui
+        // a le sien (voir plus bas) : ses cases sont peintes en pierre.
         if (g === C.G_WATER) {
-          const glow = 0.25 + Math.sin(now / 900 + (x + y)) * 0.12;
-          ctx.fillStyle = `rgba(190, 225, 255, ${glow})`;
-          ctx.fillRect(x * T, y * T, T, T);
+          const inFtn2 = x >= C.TOWN_FOUNTAIN.x && x < C.TOWN_FOUNTAIN.x + 2
+                      && y >= C.TOWN_FOUNTAIN.y && y < C.TOWN_FOUNTAIN.y + 2;
+          if (!inFtn2) {
+            const glow = 0.25 + Math.sin(now / 900 + (x + y)) * 0.12;
+            ctx.fillStyle = `rgba(190, 225, 255, ${glow})`;
+            ctx.fillRect(px, py, T, T);
+          }
+        }
+        /* ⚠️⚠️ LA HAIE SE DESSINE, ET C'EST NON NÉGOCIABLE (425). Le générateur
+           la marque dans `solid` : si on ne la peignait pas, on obtiendrait
+           plusieurs centaines de MURS INVISIBLES autour des jardins — le pire
+           défaut possible dans un monde qu'on parcourt à pied, et celui qui ne
+           lève jamais d'erreur. C'est arrivé : la haie a été posée dans le
+           générateur avant d'être peinte ici, et le premier passage en jeu
+           montrait des maisons entourées de rien du tout, infranchissable.
+           ⚠️ Elle est plus HAUTE que sa case (elle déborde de 7 px vers le
+           nord) : c'est ce débord qui lui donne du volume et qui dit « ça
+           arrête ». Une haie dessinée à plat dans sa case ressemble à de la
+           moquette verte, et on essaie de marcher dessus. */
+        if (tw.hedge && tw.hedge[i]) {
+          pushE((y + 1) * T, e, () => {
+            const hx = x * T, hy = (y + 1) * T;
+            ctx.fillStyle = "rgba(20,34,16,0.28)"; ctx.fillRect(hx, hy - 3, T, 3);   // ombre au pied
+            ctx.fillStyle = "#2c5c2a"; ctx.fillRect(hx, hy - 20, T, 18);             // masse
+            ctx.fillStyle = "#3d7a36"; ctx.fillRect(hx, hy - 20, T, 7);              // face éclairée
+            ctx.fillStyle = "#55a047"; ctx.fillRect(hx, hy - 21, T, 3);              // crête taillée
+            // Le feuillage : quelques touches déterministes (jamais aléatoires,
+            // sinon la haie scintille d'une image à l'autre).
+            for (let k = 0; k < 4; k++) {
+              const ox = ((x * 7 + y * 13 + k * 5) % 13);
+              ctx.fillStyle = (k % 2) ? "rgba(120,190,90,0.45)" : "rgba(18,44,16,0.35)";
+              ctx.fillRect(hx + ox, hy - 18 + ((x + k) % 3) * 5, 2, 2);
+            }
+          });
         }
         const o = tw.objects[i];
-        if (o === C.O_TREE || o === C.O_TREE2) { const _se = E.seasonOf().key; const img = o === C.O_TREE ? (_se === "autumn" ? sprites.oakAutumn : _se === "spring" ? sprites.oakSpring : sprites.oak) : (_se === "autumn" ? sprites.pineAutumn : _se === "spring" ? sprites.pineSpring : sprites.pine); draws.push({ y: (y + 1) * T, fn: () => ctx.drawImage(img, x * T - 8, (y + 1) * T - 48) }); }
+        if (o === C.O_TREE || o === C.O_TREE2) { const _se = E.seasonOf().key; const img = o === C.O_TREE ? (_se === "autumn" ? sprites.oakAutumn : _se === "spring" ? sprites.oakSpring : sprites.oak) : (_se === "autumn" ? sprites.pineAutumn : _se === "spring" ? sprites.pineSpring : sprites.pine); pushE((y + 1) * T, e, () => ctx.drawImage(img, x * T - 8, (y + 1) * T - 48)); }
       }
-      // Fountain rim + spray, on top of the pool tiles.
-      {
-        const fx0 = C.TOWN_FOUNTAIN.x * T, fy0 = C.TOWN_FOUNTAIN.y * T;
-        ctx.fillStyle = "#8a8a94";
-        ctx.fillRect(fx0 - 3, fy0 - 3, T * 2 + 6, 3); ctx.fillRect(fx0 - 3, fy0 + T * 2, T * 2 + 6, 3);
-        ctx.fillRect(fx0 - 3, fy0, 3, T * 2); ctx.fillRect(fx0 + T * 2, fy0, 3, T * 2);
-        const jet = Math.sin(now / 260) * 2;
-        ctx.fillStyle = "rgba(210, 235, 255, 0.9)";
-        ctx.fillRect(fx0 + T - 1, fy0 + T - 8 + jet, 2, 8 - jet);
-        for (let d = 0; d < 4; d++) {
-          const ph = ((now / 700) + d * 0.25) % 1;
-          ctx.fillStyle = `rgba(210, 235, 255, ${0.7 * (1 - ph)})`;
-          ctx.fillRect(fx0 + T - 6 + d * 3, fy0 + T - 2 - ph * 6, 2, 2);
-        }
+      /* ══════════════════════════════════════════════════════════════════════
+         LA FONTAINE (425). Le bassin de pierre est un SPRITE (voir
+         plazaFountainSprite), le jet et les gouttes restent dessinés ici.
+         ⚠️ LE PARTAGE N'EST PAS ARBITRAIRE : ce qui ne bouge pas va dans le
+         canevas (dessiné une fois pour toute la partie), ce qui bouge reste du
+         code. L'ancienne margelle « quatre rectangles » était du code pour
+         quelque chose d'immobile — c'est-à-dire du travail refait soixante fois
+         par seconde, et surtout un dessin qu'on ne pouvait pas soigner. */
+      if (sprites.plazaFountain) {
+        const fo = C.TOWN_FOUNTAIN, fBy = (fo.y + 2) * T, fCx = fo.x * T + T;
+        pushE(fBy, elAt(fo.x, fo.y), () => {
+          const im = sprites.plazaFountain;
+          ctx.fillStyle = "rgba(20,26,16,0.20)";
+          ctx.beginPath(); ctx.ellipse(fCx, fBy - 4, 27, 7, 0, 0, 7); ctx.fill();
+          /* L'EAU, à la forme du bassin, sous la margelle. Deux ellipses (le
+             grand bassin, la vasque haute) et un reflet qui respire — la même
+             pulsation lente que la rivière de la ferme, pour que les deux eaux
+             du jeu se ressemblent. */
+          const wob = 0.5 + Math.sin(now / 900) * 0.5;
+          for (const [wy, wrx, wry] of [[fBy - 16, 19, 8], [fBy - 36, 8, 3.5]]) {
+            ctx.fillStyle = "#3f7fd0";
+            ctx.beginPath(); ctx.ellipse(fCx, wy, wrx, wry, 0, 0, 7); ctx.fill();
+            ctx.fillStyle = `rgba(190, 225, 255, ${0.22 + wob * 0.16})`;
+            ctx.beginPath(); ctx.ellipse(fCx, wy - wry * 0.25, wrx * 0.72, wry * 0.5, 0, 0, 7); ctx.fill();
+          }
+          ctx.drawImage(im, fCx - im.width / 2, fBy - im.height);
+          // Le JET : il part du bouton de la colonne et retombe dans la vasque.
+          const jet = 3 + Math.sin(now / 260) * 2;
+          ctx.fillStyle = "rgba(226, 244, 255, 0.92)";
+          ctx.fillRect(fCx - 1, fBy - 60 - jet, 2, 10 + jet);
+          // ... et les gouttes, qui retombent en cloche des deux côtés.
+          for (let d = 0; d < 8; d++) {
+            const ph = ((now / 620) + d * 0.125) % 1;
+            const sgn = d % 2 ? 1 : -1;
+            const dx2 = sgn * (2 + ph * 11), dy2 = -46 + ph * ph * 30;
+            ctx.fillStyle = `rgba(226, 244, 255, ${0.85 * (1 - ph * 0.7)})`;
+            ctx.fillRect(fCx + dx2, fBy + dy2, 2, 2);
+          }
+        });
       }
-      // Zip 235: townhall sprite anchored on TOWN_HALL (128x128, anchored
-      // by its bottom edge like the houses).
-      {
-        const th = C.TOWN_HALL, thBy = (th.y + th.h) * T;
-        draws.push({ y: thBy, fn: () => {
-          const thCx = th.x * T + th.w * T / 2;
-          // Zip 279 (demande Guillaume, screenshots à l'appui : "l'espèce
-          // d'église blanche" doit passer au même modèle que grange/
-          // boutique/maisons Valley Town) : le canevas `townhallSprite()`
-          // (fermeArt.js) a lui aussi une marge transparente en bas — marches
-          // dessinées jusqu'à y=124 sur un canevas de 128, soit 4px de vide —
-          // d'où la même correction de `groundY` que pour les maisons (8px)
-          // et la grange (BARN_SHADOW_PAD), juste avec sa propre marge.
-          const thShadowGy = thBy - 4;
-          drawBuildingShadowConnected(ctx, thCx, thShadowGy, 64);
-          ctx.drawImage(sprites.townhall, th.x * T + (th.w * T - 128) / 2, thBy - 128);
-          drawBuildingFooting(ctx, thCx, thShadowGy, 64);
-        } });
+      /* ══════════════════════════════════════════════════════════════════════
+         LES TROIS MONUMENTS (425) — église, hôtel de ville, tribunal.
+         ──────────────────────────────────────────────────────────────────────
+         ⚠️ UNE SEULE FONCTION POUR LES TROIS, et pas trois blocs recopiés. Ils
+         partagent exactement la même mécanique d'ancrage (bord bas du canevas
+         sur le bord bas de l'emprise, ombre portée puis embase), et c'est
+         précisément la mécanique que le zip 279 a dû corriger DEUX fois parce
+         qu'elle était écrite deux fois. Le seul paramètre qui les distingue est
+         `pad` : la marge transparente sous le dessin, propre à chaque canevas.
+         ⚠️ `pad` NE SE DEVINE PAS — il se lit dans fermeArt.js, au dessin. Un
+         pad faux ne lève rien : l'ombre flotte sous le bâtiment, et c'est
+         exactement le défaut que Guillaume avait signalé captures à l'appui. */
+      const drawCivic = (b, img, pad) => {
+        if (!img) return;
+        const by = (b.y + b.h) * T;
+        const e = elAt(b.x, b.y + b.h - 1);
+        pushE(by, e, () => {
+          const cx2 = b.x * T + b.w * T / 2, gy = by - pad;
+          /* ⚠️⚠️ 425 — PAS D'ELLIPSE D'OMBRE SOUS LES MONUMENTS, SEULEMENT
+             L'EMBASE. Vu en jeu, et c'est une question d'échelle, pas de goût.
+             `drawBuildingShadowConnected` marche par RECOUVREMENT : l'ellipse
+             est dessinée avant le sprite, qui la cache presque entièrement — il
+             ne doit dépasser qu'un croissant sous le mur (c'est écrit noir sur
+             blanc dans la note du zip 277). Elle est calibrée sur des maisons
+             de 96 px. À 128, 160 et 192 px de large, le rayon vertical (rx/3)
+             passe de 13 à 25 px de débord : le croissant devient une FLAQUE.
+             Et elle tombe ici sur un parvis de pierre CLAIRE, où un noir à 25 %
+             ne se lit plus comme une ombre mais comme une tache.
+             ⚠️ LES MAISONS, ELLES, LA GARDENT — c'était la demande explicite du
+             zip 277, et à leur taille la recette est juste. On ne « corrige »
+             donc pas la fonction : on cesse de l'appeler là où son hypothèse
+             de taille ne tient pas. */
+          ctx.drawImage(img, b.x * T + (b.w * T - img.width) / 2, by - img.height);
+          drawBuildingFooting(ctx, cx2, gy, img.width / 2);
+        });
+      };
+      // L'ÉGLISE : le bâtiment du zip 235, dessin inchangé, nom corrigé.
+      // Sa marge basse (4 px sur 128) est celle relevée au zip 279.
+      drawCivic(C.TOWN_CHURCH, sprites.church, 4);
+      // L'HÔTEL DE VILLE (425) : le canevas descend jusqu'à son bord, pas de marge.
+      drawCivic(C.TOWN_HALL, sprites.townHall2, 0);
+      // LE TRIBUNAL (425) : idem, le perron touche le bas du canevas.
+      drawCivic(C.TOWN_COURT, sprites.courthouse, 0);
+
+      /* L'OBÉLISQUE de la place. Ancré par le bas comme les bâtiments, centré
+         sur son emprise de deux cases. */
+      if (sprites.plazaMonument) {
+        const mo = C.TOWN_MONUMENT, moBy = (mo.y + 2) * T;
+        pushE(moBy, elAt(mo.x, mo.y), () => {
+          const mcx = mo.x * T + T;
+          drawBuildingShadowConnected(ctx, mcx, moBy, 20);
+          ctx.drawImage(sprites.plazaMonument, mcx - sprites.plazaMonument.width / 2, moBy - sprites.plazaMonument.height);
+        });
+      }
+
+      /* LE MOBILIER URBAIN (425). La liste vient du générateur — c'est LUI qui
+         a marqué ces cases comme bloquantes, donc lui qui sait où elles sont.
+         Dessiner ici une liste écrite à la main créerait deux vérités : des
+         bancs invisibles qui bloquent, ou des bancs qu'on traverse. */
+      for (const pr of (tw.props || [])) {
+        if (pr.x < x0 - 2 || pr.x > x1 + 2 || pr.y < y0 - 3 || pr.y > yBot + 2) continue;
+        const img = pr.kind === "lamp" ? sprites.plazaLamp
+                  : pr.kind === "bench" ? sprites.plazaBench
+                  : pr.kind === "topiary" ? sprites.plazaTopiary : null;
+        if (!img) continue;
+        const by = (pr.y + 1) * T, cxp = pr.x * T + T / 2;
+        pushE(by, elAt(pr.x, pr.y), () => {
+          ctx.fillStyle = "rgba(20,26,16,0.22)";
+          ctx.beginPath(); ctx.ellipse(cxp, by - 2, img.width * 0.28, 3.5, 0, 0, 7); ctx.fill();
+          ctx.drawImage(img, cxp - img.width / 2, by - img.height);
+        });
       }
       // Houses: one per known farmer (deterministic order), leftovers show a
       // "for sale" plate. Zip 235: 10 basic free façade styles — the owner
@@ -12929,7 +13363,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         // drawImage) — voir aussi le try/catch par-draw plus bas.
         const img = (sprites.townHouses && sprites.townHouses[styleIdx % C.TOWN_HOUSE_STYLES]) || (sprites.houses && sprites.houses[hi % sprites.houses.length]) || null;
         const bx = hsn.x * T, by = (hsn.y + C.TOWN_HOUSE_H) * T;
-        draws.push({ y: by, fn: () => {
+        // 425 : deux parcelles sont sur la terrasse — elles suivent son altitude.
+        pushE(by, elAt(hsn.x, hsn.y + C.TOWN_HOUSE_H - 1), () => {
           if (img) {
             const hCx = bx + img.width / 2;
             // Zip 272 (demande Guillaume, screenshots à l'appui) : les
@@ -12952,7 +13387,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           ctx.strokeStyle = "#6b4a2e"; ctx.lineWidth = 1; ctx.strokeRect(tx2 - wpx / 2 + 0.5, ty2 - 7.5, wpx - 1, 10);
           ctx.fillStyle = "#1d1d1d"; ctx.fillText(label, tx2, ty2);
           ctx.textAlign = "left";
-        } });
+        });
       }
       // Station sign (ride back to the farm), reusing the farm's ad board sprite.
       draws.push({ y: (C.TOWN_STATION_SIGN.y + 1) * T, fn: () => ctx.drawImage(sprites.signBoard, C.TOWN_STATION_SIGN.x * T - 1, C.TOWN_STATION_SIGN.y * T - 6) });
@@ -12969,18 +13404,36 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         p.x += (p.tx - p.x) * Math.min(1, dt * 22);
         p.y += (p.ty - p.y) * Math.min(1, dt * 22);
         p.animT = p.moving ? (p.animT || 0) + dt * 9 : 0;
-        draws.push({ y: (p.y + 0.9) * T, fn: () => drawRemotePets(p, dt) });
-        draws.push({ y: (p.y + 1) * T, fn: () => drawCharacter(p, false) });
+        /* ⚠️ 425 — L'ALTITUDE D'UN JOUEUR DISTANT SE LIT SOUS SES PIEDS, elle
+           ne se reçoit pas. C'est tout l'intérêt d'avoir mis la hauteur dans la
+           CASE et non dans le personnage : les x/y qui circulaient déjà
+           suffisent, aucun octet et surtout aucun message de plus (§3 de
+           CLAUDE.md — seul le nombre de send() est facturé, mais un champ de
+           plus, c'est surtout un champ à réconcilier). Un client d'avant ce zip
+           voit donc les autres au bon endroit, simplement à plat. */
+        const pe = playerElevTown(tw, p);
+        pushE((p.y + 0.9) * T, pe, () => drawRemotePets(p, dt));
+        pushE((p.y + 1) * T, pe, () => drawCharacter(p, false));
       }
-      if (!m.sleeping) draws.push({ y: (m.y + 0.9) * T, fn: () => drawMyPets(m, dt) });
-      draws.push({ y: (m.y + 1) * T, fn: () => drawSelf(m) });
+      /* MON altitude. Pendant un saut, elle s'interpole du rebord au sol ET
+         reçoit la cloche : c'est la seule animation du saut, et elle est
+         entièrement portée par ce décalage — le personnage lui-même n'a pas
+         une image de plus à dessiner. */
+      const jpv = townJumpRef.current;
+      let myE = playerElevTown(tw, m);
+      if (jpv.active) {
+        const k = Math.min(1, (performance.now() - jpv.t0) / C.TOWN_JUMP_MS);
+        myE = jpv.e0 + (jpv.e1 - jpv.e0) * k + (Math.sin(Math.PI * k) * C.TOWN_JUMP_ARC_PX) / C.TOWN_ELEV_PX;
+      }
+      if (!m.sleeping) pushE((m.y + 0.9) * T, myE, () => drawMyPets(m, dt));
+      pushE((m.y + 1) * T, myE, () => drawSelf(m));
       // Zip 251 : décorations posées en Valley Town (même liste partagée,
       // filtrée sur zone "town" ; persistées avec la ferme).
       for (const e of (sharedRef.current.decor || [])) {
         if (e.zone !== "town") continue;
         const dimg = sprites.decor && sprites.decor[e.deco]; if (!dimg) continue;
         const dex = e.x, dey = e.y;
-        draws.push({ y: (dey + 0.5) * T, fn: () => ctx.drawImage(dimg, Math.round(dex * T - dimg.width / 2), Math.round(dey * T - dimg.height + 6)) });
+        pushE((dey + 0.5) * T, elevTown(tw, dex, dey), () => ctx.drawImage(dimg, Math.round(dex * T - dimg.width / 2), Math.round(dey * T - dimg.height + 6)));
       }
       draws.sort((a, b) => a.y - b.y);
       // Zip 250 (bug "les maisons disparaissent à deux") : la boucle exécutait
@@ -12991,7 +13444,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       for (const d of draws) { try { d.fn(); } catch (e) { console.error("[FERME] town draw ignoré", e); } }
       // Prompts: E at the sign to ride home; near a house door, name it.
       let tpk = null;
-      if (nearTile(C.TOWN_STATION_SIGN)) tpk = "trainBack";
+      /* ⚠️ 425 — LE SAUT PASSE AVANT TOUT LE RESTE. Il est la seule invite du
+         jeu qui décrive une ACTION DISPONIBLE MAINTENANT et qui disparaîtra au
+         pas suivant ; une plaque de bâtiment, elle, sera encore là dans dix
+         secondes. Quand les deux se disputent le bandeau, c'est l'éphémère qui
+         doit gagner — sinon on ne découvre jamais qu'on peut sauter. */
+      if (canTownJumpNow()) tpk = "townJump";
+      else if (nearTile(C.TOWN_STATION_SIGN)) tpk = "trainBack";
+      else if (nearBuildingDoor(C.TOWN_CHURCH)) tpk = "townChurch";
+      else if (nearBuildingDoor(C.TOWN_HALL)) tpk = "townHall";
+      else if (nearBuildingDoor(C.TOWN_COURT)) tpk = "townCourt";
       else {
         for (const hsn of owners) {
           const doorX = hsn.x + C.TOWN_HOUSE_W / 2, doorY = hsn.y + C.TOWN_HOUSE_H + 0.5;
@@ -13951,8 +14413,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (fx <= C.TOWN_RAIL_X + 1) return false;                       // rails / bord ouest
     const i = fy * tw.w + fx;
     if (tw.ground[i] === C.G_WATER) return false;                    // bassin de la fontaine
-    if (fx >= C.TOWN_HALL.x && fx < C.TOWN_HALL.x + C.TOWN_HALL.w && fy >= C.TOWN_HALL.y && fy < C.TOWN_HALL.y + C.TOWN_HALL.h) return false;
-    for (const hsn of C.TOWN_HOUSES) if (fx >= hsn.x && fx < hsn.x + C.TOWN_HOUSE_W && fy >= hsn.y && fy < hsn.y + C.TOWN_HOUSE_H) return false;
+    /* Zip 425 : bâtiments, monuments et mobilier viennent tous de `solid`
+       (voir generateTownWorld). ⚠️ ET LES MARCHES SONT EXCLUES EN PLUS : elles
+       ne bloquent pas — c'est tout leur objet — mais une jardinière posée au
+       milieu d'une volée coupe le seul accès à la Haute-Ville, et personne ne
+       pourrait la retirer d'en haut. */
+    if (tw.solid && tw.solid[i]) return false;
+    if (tw.ground[i] === C.G_TOWN_STAIR) return false;
     const o = tw.objects[i];
     return !(o === C.O_TREE || o === C.O_TREE2 || o === C.O_STUMP);
   }
@@ -15009,7 +15476,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       </div>
 
       {/* Invite proximité */}
-      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "mazePrize" ? L.promptMazePrize : promptKey.startsWith("passagePickup:") ? L.promptPassagePickup : L.promptBin}</div>}
+      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townJump" ? L.promptTownJump : promptKey === "townChurch" ? L.promptTownChurch : promptKey === "townHall" ? L.promptTownHall : promptKey === "townCourt" ? L.promptTownCourt : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "mazePrize" ? L.promptMazePrize : promptKey.startsWith("passagePickup:") ? L.promptPassagePickup : L.promptBin}</div>}
       {mountPrompt && <div className="ferme-prompt ferme-prompt-mount">{mountPrompt === "mount" ? L.mountPrompt : L.dismountPrompt}</div>}
       {handHeldUI && !moveConfirmUI && <div className="ferme-prompt ferme-prompt-mount">{L.handHeldHint}</div>}
       {moveConfirmUI && (

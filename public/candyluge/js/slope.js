@@ -346,13 +346,24 @@ const Slope = (function () {
      a déjà fini, ce qui est le genre de bogue absurde qu'on préfère rendre
      impossible par construction plutôt que de le corriger par un cas
      particulier ailleurs. */
+  /* ⚠️⚠️ ZIP 425 — L'ESPACEMENT EST DÉRIVÉ DU NOMBRE, ET PLUS L'INVERSE.
+     Voir la note de CP_COUNT dans config.js : le réglage est « dix fanions »,
+     et la distance entre deux portes s'en déduit. Les dix se répartissent
+     régulièrement de CP_FIRST au dernier point autorisé, qui reste CP_LAST_GAP
+     unités AVANT la ligne — la raison du 414 n'a pas changé : une porte posée
+     dans le dégagement final renverrait un joueur DÉJÀ ARRIVÉ derrière la
+     ligne. */
+  function cpEvery() {
+    const span = finishSAt() - CFG.CP_LAST_GAP - CFG.CP_FIRST;
+    return span / Math.max(1, (CFG.CP_COUNT | 0) - 1);
+  }
+
   function checkpointCount() {
-    const last = finishSAt() - CFG.CP_EVERY * 0.5;      // 424 : dérivé, voir finishSAt
-    return Math.max(1, Math.floor((last - CFG.CP_FIRST) / CFG.CP_EVERY) + 1);
+    return Math.max(1, CFG.CP_COUNT | 0);
   }
 
   function checkpointAt(i) {
-    return CFG.CP_FIRST + i * CFG.CP_EVERY;
+    return CFG.CP_FIRST + i * cpEvery();
   }
 
   /* L'indice du dernier checkpoint FRANCHI à l'abscisse s, ou -1 avant le
@@ -360,7 +371,7 @@ const Slope = (function () {
      sur les 380 premières unités, soit une dizaine de secondes. */
   function checkpointIndexAt(s) {
     if (s < CFG.CP_FIRST) return -1;
-    return Math.min(checkpointCount() - 1, Math.floor((s - CFG.CP_FIRST) / CFG.CP_EVERY));
+    return Math.min(checkpointCount() - 1, Math.floor((s - CFG.CP_FIRST) / cpEvery()));
   }
 
   /* Vrai si un checkpoint tombe dans [s0, s1[ — c'est ce que buildNode
@@ -377,6 +388,6 @@ const Slope = (function () {
   return {
     SlopeGen, yawAt, pitchAt, bumpAt, widthAt, curveAt, bankAt,
     centerAt, frameAt, pointAt, terrainAt, finishKAt, finishSAt,
-    checkpointCount, checkpointAt, checkpointIndexAt, checkpointIn,
+    checkpointCount, checkpointAt, checkpointIndexAt, checkpointIn, cpEvery,
   };
 })();

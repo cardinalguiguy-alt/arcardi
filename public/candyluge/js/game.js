@@ -283,7 +283,17 @@ const Game = (function () {
       World.updateCritters(field, now, sled);
       World.updateFx(sled, dt, now);
       World.updateAmbient(now, sled);
-      UI.updateHud(sled, score, elapsed, slope.stageAt(sled.s), now - cpFlash);
+      /* ⚠️ 425 — LE COMPTEUR EN BAS À GAUCHE SUIT LES FANIONS, PLUS LES PALIERS.
+         Il affichait `stageAt()`, c'est-à-dire l'un des six paliers de 900
+         unités qui pilotent la DIFFICULTÉ (les vagues de gourmands dans
+         critters.js) et le décor. Ces paliers sont un réglage interne : ils ne
+         correspondent à rien que le joueur puisse voir, et le chiffre changeait
+         donc au milieu de nulle part. Le fanion, lui, est un objet PLANTÉ SUR LA
+         PISTE qu'on franchit avec une bannière — c'est le seul repère de
+         progression que le joueur ait, et c'est celui que le HUD doit compter.
+         ⚠️ `stageAt()` reste et ne doit pas être supprimée : les paliers de
+         difficulté existent toujours, ils ne s'affichent simplement plus. */
+      UI.updateHud(sled, score, elapsed, Slope.checkpointIndexAt(sled.s) + 1, now - cpFlash);
 
       /* ══════════════════════════════════════════════════════════════════════
          L'ARRIVÉE (424) — DEUX MOMENTS, ET IL FAUT LES DEUX.
@@ -335,6 +345,73 @@ const Game = (function () {
     }
 
     World.render();
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     LE CROCHET DU MENU DÉVELOPPEUR (425) — voir dev.js pour l'interface.
+     ──────────────────────────────────────────────────────────────────────────
+     ⚠️ IL VIT ICI ET NON DANS dev.js, parce que TOUT ce qu'il touche est privé
+     à ce module : `state`, `sled`, `slope`, `field`, `finishAt`, `startedAt`.
+     Un menu qui irait les chercher lui-même devrait d'abord les exposer — et
+     une fois exposés, ils sont modifiables par n'importe qui. Le menu demande,
+     la boucle de jeu décide : c'est le même partage que l'hôte et l'invité
+     côté ferme.
+
+     ⚠️ ET IL N'EST PAS DERRIÈRE UN INDICATEUR « DEV » À OUBLIER DE REMETTRE.
+     Ces deux fonctions ne font rien de plus que ce que le jeu fait déjà tout
+     seul (une remise en place, une pause) : les laisser en place ne peut pas
+     casser une partie normale. Ce qui est verrouillé, c'est le MENU — par le
+     mur de chantier, qui est déjà le bon verrou et le seul à maintenir. */
+
+  /* Le gel pendant qu'on lit le menu. On ne passe PAS par togglePause() :
+     celui-ci affiche le panneau de pause, qui recouvrirait le menu. */
+  let devPrev = null;
+  function devFreeze(on) {
+    if (on) {
+      if (devPrev === null) devPrev = state;
+      if (state === STATE.RUNNING) state = STATE.PAUSED;
+    } else {
+      if (devPrev === STATE.RUNNING && state === STATE.PAUSED) state = STATE.RUNNING;
+      devPrev = null;
+      // Sans ça, `dt` vaudrait tout le temps passé le menu ouvert. Il est
+      // plafonné à 0,05 s plus bas, mais on préfère ne pas s'appuyer dessus.
+      lastFrame = performance.now();
+    }
+  }
+
+  /* La téléportation. `sled.warpTo` remet la physique et la piste d'accord
+     (voir sa note dans sled.js) ; ce qui reste ici est ce que la PARTIE tient :
+     l'instant du franchissement et l'origine du chrono. */
+  function devWarp(target, speed) {
+    const frozen = devPrev !== null;
+    if (!sled || !sled.alive || state === STATE.TITLE || state === STATE.OVER) {
+      /* ⚠️ IL FAUT UNE VRAIE PARTIE, pas la luge de l'écran-titre : celle-ci
+         n'a AUCUN rappel branché (ils le sont dans start()), donc `onRespawn`
+         ne reconstruirait pas les tronçons et l'on se téléporterait dans le
+         vide — le bogue du 414, à l'identique. */
+      driftScore = 0;
+      start();
+      if (frozen) { devPrev = STATE.RUNNING; state = STATE.PAUSED; }
+    }
+    const s = Math.max(0, Math.min(CFG.DESCENT_LENGTH - 1, target));
+    sled.warpTo(s);
+    if (speed) sled.v = speed;
+    finishAt = 0;
+    /* Le chrono repart de la valeur qu'il avait : une téléportation n'est pas
+       une descente, et remettre `elapsed` à zéro ferait croire à un record. */
+    startedAt = performance.now() - elapsed;
+    UI.show("hud");
+    return s;
+  }
+
+  function devInfo() {
+    if (!sled) return { s: 0, flag: 0, count: Slope.checkpointCount(), running: false };
+    return {
+      s: sled.s,
+      flag: Slope.checkpointIndexAt(sled.s) + 1,
+      count: Slope.checkpointCount(),
+      running: state === STATE.RUNNING || state === STATE.PAUSED,
+    };
   }
 
   /* --------------------------------------------------------------- INIT */
@@ -392,6 +469,15 @@ const Game = (function () {
        panneau sur fond noir, et ça ne coûte rien puisque tout est là. */
     UI.show(Gate.unlocked() ? "title" : "construction");
     Gate.init(() => UI.show("title"));
+
+    /* ⚠️ APRÈS Gate.init(), ET L'ORDRE EST LA MOITIÉ DU MÉCANISME. Les deux
+       écouteurs sont en phase de CAPTURE sur window : ils se déclenchent donc
+       dans l'ordre d'inscription. Le mur voit ⌘⇧X en premier tant qu'il est
+       debout (il consomme la touche), et il se retire de lui-même une fois
+       franchi — le menu hérite alors du raccourci sans qu'aucun des deux n'ait
+       à connaître l'autre. Inverser ces deux lignes ouvrirait le menu par-dessus
+       le panneau « jeu en construction ». */
+    if (typeof Dev !== "undefined") Dev.init({ warp: devWarp, freeze: devFreeze, info: devInfo, unlocked: Gate.unlocked });
 
     if (!running) { running = true; requestAnimationFrame(frame); }
   }

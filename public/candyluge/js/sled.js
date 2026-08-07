@@ -682,8 +682,13 @@ Sled.prototype.bail = function (cause) {
    injouable : on se remettrait en travers, à l'endroit exact où l'on vient
    d'échouer. Un checkpoint est un état PROPRE, c'est sa définition.
    ══════════════════════════════════════════════════════════════════════════ */
-Sled.prototype.respawn = function () {
-  this.s = Math.max(0, this.cp - CFG.CP_BACK);
+/* ⚠️ 425 — L'ÉTAT PROPRE A ÉTÉ EXTRAIT, ET IL LE FALLAIT. Le menu développeur
+   téléporte lui aussi la luge (voir `warpTo`), et une seconde copie de cette
+   liste de vingt remises à zéro aurait divergé au premier champ ajouté à la
+   physique — en ne cassant, bien sûr, que le chemin de test, c'est-à-dire celui
+   que personne ne regarde. */
+Sled.prototype.placeAt = function (s) {
+  this.s = Math.max(0, s);
   this.u = 0;
   this.v = CFG.CP_SPEED;
   this.lat = 0;
@@ -702,6 +707,38 @@ Sled.prototype.respawn = function () {
      interpréterait ça comme un tremplin — la luge décollerait de dix mètres à
      chaque remise en place. Le genre de bogue qu'on ne trouve qu'en jouant. */
   this.lastBump = Slope.bumpAt(this.s);
+};
+
+Sled.prototype.respawn = function () {
+  this.placeAt(this.cp - CFG.CP_BACK);
+  if (this.onRespawn) this.onRespawn();
+};
+
+/* ══════════════════════════════════════════════════════════════════════════
+   LA TÉLÉPORTATION DE DÉVELOPPEMENT (425) — voir dev.js.
+   ──────────────────────────────────────────────────────────────────────────
+   ⚠️ ELLE N'EST PAS UN `sled.s = x`. C'est la première chose qu'on essaie, et
+   elle produit une luge qui roule dans le vide (les tronçons de la zone visée
+   n'existent pas — voir la longue note de `rewind` dans slope.js), qui décolle
+   de dix mètres (lastBump désynchronisé), qui traîne un ruban de trace tendu
+   sur toute la piste, et dont le fanion courant ment. Il y a SIX états à
+   remettre d'accord, et c'est exactement ce que fait déjà la remise en place
+   après une chute : on passe donc par le même chemin.
+
+   ⚠️ ET `finished` DOIT POUVOIR REDESCENDRE. Il ne le pouvait pas — la ligne
+   ne se franchit qu'une fois par descente, un drapeau qui ne retombe jamais
+   était donc juste. Le menu, lui, permet d'aller voir l'arrivée PUIS de revenir
+   au fanion 3 : sans cette ligne, la luge resterait « arrivée » pour toujours,
+   le chrono figé et le freinage d'arrivée collé au plancher, et on croirait à
+   une régression de la physique. */
+Sled.prototype.warpTo = function (s) {
+  this.wipe = 0; this.reset = 0; this.spin = 0;
+  this.placeAt(s);
+  const i = Slope.checkpointIndexAt(this.s);
+  this.cpIndex = i;
+  this.cp = i >= 0 ? Slope.checkpointAt(i) : 0;
+  this.cpTries = 0;
+  this.finished = Slope.finishKAt(this.s) > 0;
   if (this.onRespawn) this.onRespawn();
 };
 

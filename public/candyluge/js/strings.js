@@ -35,7 +35,11 @@ const STR = {
     speed: "KM/H",
     time: "Temps",
     best: "Record",
-    stage: "Palier",
+    /* ⚠️ 425 : « Palier » → « Fanion ». L'étiquette suit ce que la case compte
+       vraiment depuis que le HUD montre les fanions et non plus les paliers de
+       difficulté (voir game.js). Une étiquette laissée derrière est pire qu'un
+       mauvais chiffre : elle rend le bon chiffre incompréhensible. */
+    stage: "Fanion",
 
     pause: "Pause",
     resume: "Reprendre",
@@ -91,7 +95,7 @@ const STR = {
     speed: "KM/H",
     time: "Time",
     best: "Best",
-    stage: "Stage",
+    stage: "Flag",       // 425 : voir la note côté français
 
     pause: "Paused",
     resume: "Resume",

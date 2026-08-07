@@ -187,6 +187,16 @@ const CFG = {
   DESCENT_LENGTH: 5200,    // longueur totale d'une descente, en unités
   FINISH_FADE: 260,        // longueur de la zone d'arrivée (ralentissement)
 
+  /* ⚠️ 425 — LES DEUX SEULS NOMBRES DU MENU DÉVELOPPEUR (js/dev.js), et ils
+     sont ici parce que c'est ici que vivent TOUS les nombres du jeu : un outil
+     interne qui garderait les siens en privé finirait par en avoir un qui
+     contredit le jeu, et c'est exactement le défaut que le 424 a payé trois
+     fois (§7 de CLAUDE.md).
+     L'élan est mesuré depuis la ligne, JAMAIS depuis DESCENT_LENGTH : c'est
+     `Slope.finishSAt()` qui sait où elle est. */
+  DEV_FINISH_RUNUP: 140,   // on se pose tant d'unités AVANT la ligne, pour la franchir
+  DEV_FINISH_SPEED: 46,    // ... et lancé, sinon le ruban se rompt au ralenti
+
   /* ══════════════════════════════════════════════════════════════════════════
      LA LIGNE D'ARRIVÉE (ZIP 424) — demande explicite de Guillaume.
      ──────────────────────────────────────────────────────────────────────────
@@ -519,7 +529,27 @@ const CFG = {
      secondes est une punition ; une descente de six minutes et demie est un
      abandon. La bonne mesure d'un checkpoint n'est pas sa distance mais LE
      TEMPS QU'IL FAUT POUR REVENIR — on vise une quinzaine de secondes. */
-  CP_EVERY: 420,             // une porte tous les N unités (≈ 11 sur la descente)
+  /* ══════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ ZIP 425 — ON RÈGLE LE NOMBRE DE FANIONS, PLUS LEUR ESPACEMENT.
+     ══════════════════════════════════════════════════════════════════════
+     Jusqu'au 424, `CP_EVERY: 420` était le réglage et le nombre de portes en
+     TOMBAIT (onze, et personne ne les avait comptées : le commentaire annonçait
+     « ≈ 11 » sans que rien ne le garantisse). Guillaume demande DIX fanions —
+     c'est-à-dire une propriété du nombre, pas de la distance.
+
+     ⚠️ ET C'EST EXACTEMENT LA RÈGLE DU §7 DE CLAUDE.md, appliquée à l'envers de
+     l'habitude : la grandeur qu'on veut tenir doit être celle qu'on écrit. Si
+     on avait « corrigé » en cherchant le CP_EVERY qui donne dix (482,2…), le
+     jour où DESCENT_LENGTH ou FINISH_FADE bouge, on serait revenu à onze
+     fanions sans qu'aucune erreur ne se lève — et le HUD, qui affiche
+     désormais « n/10 », aurait menti.
+
+     L'espacement est donc DÉRIVÉ dans slope.js (`Slope.cpEvery()`), et il n'y a
+     plus de constante CP_EVERY à désynchroniser. Elle valait 420 ; elle vaut
+     maintenant 482 — soit une quinzaine de secondes de piste à refaire après une
+     chute, ce qui reste dans le budget fixé au 414 (voir ci-dessus). */
+  CP_COUNT: 10,              // LE réglage : dix fanions, du premier au dernier
+  CP_LAST_GAP: 220,          // ... et le dernier reste à tant d'unités AVANT la ligne
   CP_FIRST: 380,             // la première, tôt : on ne renvoie jamais au tout début
   CP_BACK: 14,               // on repart légèrement EN AMONT de la porte, jamais dessus
   CP_RESET_MS: 700,          // le temps de la remise en place
@@ -598,6 +628,54 @@ const CFG = {
   FX_SPRAY_OUT: 7.5,         // vitesse d'éjection latérale
   FX_SPRAY_UP: 5.0,
   FX_SPRAY_GRAVITY: 13,      // elle RETOMBE, contrairement à la poudre qui monte
+  /* ══════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ 425 — LA TRAÎNÉE EST FAITE DE QUATRE CHOSES, ET IL A FALLU LES
+     CHERCHER À L'ÉCRAN POUR LE SAVOIR.
+     ══════════════════════════════════════════════════════════════════════
+     Guillaume : « la traînée est trop blanche, je veux une petite teinte rose
+     bonbon clair ». Le premier réflexe a été de corriger COL_SKID — la bavure
+     du sillon, qui valait 0xfff0f8, c'est-à-dire du blanc. C'était juste, et
+     ça n'a RIEN changé à l'image : ce que l'on voit derrière la luge n'est
+     presque pas le sillon.
+
+     ⚠️ LA MÉTHODE QUI A TROUVÉ LA RÉPONSE MÉRITE D'ÊTRE NOTÉE, parce qu'elle
+     resservira : on a éteint les systèmes UN PAR UN dans la console du
+     navigateur, en regardant l'image après chaque extinction. Deux fausses
+     pistes au passage — la gerbe (on l'a coupée, le blanc est resté) puis la
+     poudre (idem). Le coupable principal ne dépendait d'AUCUN réglage de débit :
+     c'est la bouffée de turbo, 26 étoiles blanches additives tirées d'un bloc.
+     ⚠️ « Couper le débit » n'éteint pas un système à bouffées. Un effet qui ne
+     s'éteint pas quand on met son taux à zéro n'est pas innocenté : il est
+     seulement piloté par autre chose.
+
+     LES QUATRE, ET ILS DISENT TOUS LA MÊME CHOSE — de la piste pulvérisée :
+       1. le SILLON en dérapage (COL_SKID, plus bas) ;
+       2. la GERBE arrachée par la carre (FX_SPRAY_*) ;
+       3. la POUDRE permanente derrière la luge — c'est ELLE la « traînée » au
+          sens propre, celle qu'on voit tout le temps ;
+       4. la BOUFFÉE DE TURBO, la plus visible des quatre parce qu'additive.
+     Ils étaient réglés à quatre endroits, en quatre blancs légèrement
+     différents. Ils tirent maintenant tous de COL_SKID, par ce seul curseur —
+     le jour où la piste change de rose, les quatre suivent ensemble (§7).
+
+     0 = le blanc d'avant, 1 = pleinement COL_SKID.
+
+     ⚠️ ON EST À 1, ET LE PREMIER JET À 0,55 ÉTAIT UNE ERREUR DE RAISONNEMENT.
+     « Une petite teinte » avait été lu comme « un petit curseur » ; à l'écran,
+     0,55 ne se voyait PAS. La raison est que ces trois systèmes se SUPERPOSENT :
+     dix grains translucides empilés au même endroit saturent vers le blanc, et
+     le bloom étale ce qui dépasse. Une teinte à moitié appliquée disparaît donc
+     entièrement dans le cœur de la traînée — la seule partie qu'on regarde.
+     La « petite teinte » demandée vient de COL_SKID lui-même, qui est un rose
+     TRÈS clair : à 1, la traînée est rose bonbon pâle, pas magenta.
+
+     ⚠️ IL RESTE UN CŒUR BLANC, et ce n'est pas ce curseur qui le réglera : il
+     vient de la DENSITÉ des grains et du bloom, pas de leur couleur. C'est la
+     passe de calibrage des particules annoncée au 424 (§6 de CLAUDE.md), et
+     elle reste à faire — on ne l'a pas mêlée à ce changement-ci pour que
+     Guillaume puisse juger la teinte seule (règle du 424 : un seul changement
+     visuel par livraison). */
+  FX_TRAIL_TINT: 1.0,
 
   /* ═════════════════════════════════════════════════════ LA LUMIÈRE (414) ==
      ⚠️ TROIS NOMBRES, ET ILS EXPLIQUENT À EUX SEULS POURQUOI LE 413 ÉTAIT FADE.
@@ -1130,7 +1208,17 @@ const CFG = {
      les paires dont l'écart EST l'information. Il y en a trois dans ce jeu :
      le sillon, la bavure, et le liseré de piste. */
   COL_CARVE: 0xa83e6f,  // le sillon : franchement plus sombre
-  COL_SKID: 0xfff0f8,        // la bavure : franchement plus claire, neige pulvérisée
+  /* ⚠️ ZIP 425 — LA BAVURE EST ROSE BONBON CLAIR, PLUS BLANCHE. Demande de
+     Guillaume : « la traînée est trop blanche ». À 0xfff0f8 elle était du blanc
+     à peine teinté — sur une piste rose, une bavure blanche se lit comme un
+     objet ÉTRANGER posé dessus (de la neige de station), pas comme de la piste
+     retournée. On garde tout ce qui faisait son travail — elle reste NETTEMENT
+     plus claire que COL_PISTE, donc l'écart avec COL_CARVE reste l'information
+     du §6 — et on lui rend simplement la teinte du monde : du sucre rose
+     pulvérisé. ⚠️ NE PAS LA DESCENDRE PLUS BAS EN VALEUR : sous 0xffc0dc elle
+     croise la piste en luminance linéaire et la bavure disparaît en plein
+     soleil, exactement le défaut corrigé au 423. */
+  COL_SKID: 0xffd4ea,        // la bavure : rose bonbon CLAIR, sucre pulvérisé (était 0xfff0f8, quasi blanc)
   /* ⚠️⚠️ REFROIDIES AU 422, ET C'EST LE SEUL DÉPLACEMENT DE PALETTE DU ZIP.
      La valeur du 414 (0xe2cbc0) était réglée sous une lumière NEUTRE. Sous le
      soleil ambré du 422, la même teinte vire au brun : les montagnes prenaient

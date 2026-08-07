@@ -312,3 +312,66 @@ html, body {
   box-shadow: inset 0 0 0 3px rgba(120, 230, 205, 0.55);
   transition: box-shadow 0.12s ease;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LE MENU DÉVELOPPEUR (425) — voir js/dev.js.
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️ IL NE RESSEMBLE PAS AU JEU, ET C'EST DÉLIBÉRÉ. Tout le reste de cette
+   feuille est rose, arrondi et chaleureux ; ce panneau est sombre, carré et
+   monospace. La raison est pratique et pas esthétique : un outil qui se
+   confondrait avec l'interface de jeu finit un jour par être pris en photo dans
+   une capture d'écran, ou laissé ouvert sans qu'on s'en aperçoive. Ici, on voit
+   au premier coup d'œil qu'on n'est pas dans le jeu.
+
+   ⚠️ IL EST EN HAUT ET NON AU CENTRE : le centre du cadre est la piste, et
+   c'est justement ce qu'on veut regarder en se téléportant. Un panneau posé
+   dessus rendrait le menu inutile pour ce à quoi il sert.
+
+   ⚠️ Z-INDEX AU-DESSUS DES CALQUES. Le menu s'ouvre aussi depuis l'écran-titre
+   (`.layer` est en `position: fixed`), et il doit passer devant.
+   ═══════════════════════════════════════════════════════════════════════════ */
+#devMenu {
+  position: fixed; left: 50%; top: 14px; transform: translateX(-50%);
+  z-index: 50;
+  display: none; flex-direction: column; gap: 8px; align-items: center;
+  padding: 14px 20px 12px;
+  max-width: min(680px, 94vw);
+  background: rgba(18, 12, 22, 0.90);
+  border: 2px solid #6de3c6;
+  border-radius: 10px;
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.45);
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  color: #d8f5ec;
+  pointer-events: auto;
+}
+#devMenu.visible { display: flex; }
+#devMenu h2 {
+  margin: 0; font-size: 13px; letter-spacing: 0.22em; color: #6de3c6;
+  font-weight: bold;
+}
+/* Le relevé chiffré. `tabular-nums` : sans lui, l'abscisse danse de quelques
+   pixels à chaque téléportation et l'œil croit que la ligne entière a changé. */
+.dev-readout {
+  font-size: 12px; color: #9fd8ff; font-variant-numeric: tabular-nums;
+  text-align: center; line-height: 1.5;
+}
+.dev-label {
+  font-size: 11px; color: #8a95a8; letter-spacing: 0.06em;
+  margin-top: 4px;
+}
+.dev-grid { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+#devMenu button {
+  font-family: inherit; font-size: 13px; font-weight: bold;
+  min-width: 38px; padding: 7px 10px;
+  color: #d8f5ec; cursor: pointer;
+  background: #2a2136;
+  border: 1px solid #55496b; border-radius: 6px;
+}
+#devMenu button:hover { background: #3b3049; border-color: #6de3c6; }
+#devMenu button:active { background: #6de3c6; color: #12101a; }
+.dev-grid.wide button { min-width: 62px; }
+/* Le bouton d'arrivée : c'est celui qu'on cherche neuf fois sur dix, il doit se
+   trouver sans lire. */
+#devMenu button.hot { background: #4a2038; border-color: #ff6f96; color: #ffd7e5; }
+#devMenu button.hot:hover { background: #6a2a4e; }
+.dev-hint { margin: 2px 0 0; font-size: 10px; color: #6f7889; text-align: center; }

@@ -1895,6 +1895,318 @@ export function buildSprites() {
     return c;
   }
 
+  /* ══════════════════════════════════════════════════════════════════════════
+     ZIP 425 — LE TRIBUNAL DE VALLEY TOWN.
+     ──────────────────────────────────────────────────────────────────────────
+     Demande de Guillaume : « un autre bâtiment élégant néoclassique nommé
+     tribunal (doit être imposant et ressembler à un tribunal) ».
+
+     ⚠️ CE QUI FAIT « TRIBUNAL » N'EST NI LA TAILLE NI LES COLONNES — l'église
+     du 235 a déjà les deux. Ce sont TROIS choses, et il les faut toutes :
+       1. UN PERRON QUI OCCUPE TOUTE LA FAÇADE, haut de plusieurs marches. Un
+          bâtiment de justice se GRAVIT ; c'est la première chose que dit un
+          palais de justice, avant même son nom sur le fronton.
+       2. UN PÉRISTYLE PROFOND — huit colonnes, et une ombre portée derrière
+          elles. Une simple rangée de colonnes plaquées sur un mur fait un
+          portique de banque ; le RETRAIT fait le temple.
+       3. UN FRONTON SCULPTÉ, avec la balance. C'est le seul endroit du jeu où
+          l'on écrit un symbole plutôt qu'un mot, et c'est le bon : il se lit à
+          la taille d'un sprite, ce qu'un mot ne fait pas.
+
+     ⚠️ ET IL EST GRIS-PIERRE, PAS CRÈME. L'église est crème (0xefe6cc). Deux
+     bâtiments à colonnes de la même couleur, à trois écrans l'un de l'autre,
+     seraient LE MÊME bâtiment pour le joueur — c'est le piège habituel des
+     tuiles civiques. Le tribunal est en pierre froide, l'hôtel de ville en
+     brique : à distance, la teinte suffit à les nommer.
+
+     ⚠️ POURQUOI PAS BLENDER (proposé par Guillaume). BlenderMCP est installé et
+     répond, mais la ferme n'a AUCUN pipeline d'image : tous ses sprites sont
+     des canevas procéduraux dessinés dans ce fichier (voir §8 de CLAUDE.md —
+     le pipeline A sert à `crystal`, qui TRANSCRIT un rendu en table de données,
+     et le B aux jeux three.js). Introduire un PNG ici créerait un troisième
+     pipeline, avec son chargement, son cache et sa palette hors-fichier, pour
+     un bâtiment. On garde l'unique façon de faire du fichier.
+
+     Canevas 192×176, ancré par son bord bas comme tous les bâtiments.
+     ══════════════════════════════════════════════════════════════════════════ */
+  function courthouseSprite() {
+    const W = 192, H = 176;
+    const [c, g] = cv(W, H);
+    const STONE = "#c9c6bd", STONE_L = "#dedbd2", STONE_D = "#a8a49a", STONE_XD = "#8b8880";
+    const SHADE = "#6f6d67";      // le fond du péristyle, dans l'ombre
+    const BRONZE = "#8a6a3a";     // la poignée de la porte, seule touche chaude
+
+    // ---- 1. LE PERRON. Cinq marches pleine largeur, chacune un cran plus
+    // étroite : c'est ce dégradé de largeur qui donne la perspective, pas un
+    // dessin en biais.
+    for (let s = 0; s < 5; s++) {
+      const inset = s * 5, y = H - 6 - s * 6;
+      P(g, inset, y, W - inset * 2, 6, s % 2 ? STONE_D : STONE);
+      P(g, inset, y, W - inset * 2, 1, STONE_L);          // nez de marche éclairé
+      P(g, inset, y + 5, W - inset * 2, 1, STONE_XD);     // contremarche à l'ombre
+    }
+    // Deux socles latéraux (ils portent les vasques) : ils encadrent la volée
+    // et empêchent le perron de « couler » sur les côtés.
+    for (const bx of [2, W - 20]) {
+      P(g, bx, H - 34, 18, 28, STONE_D); P(g, bx, H - 34, 18, 2, STONE_L);
+      P(g, bx + 3, H - 44, 12, 10, STONE); P(g, bx + 3, H - 44, 12, 2, STONE_L);
+    }
+
+    // ---- 2. LE STYLOBATE (la plateforme sur laquelle reposent les colonnes).
+    P(g, 12, H - 42, W - 24, 12, STONE); P(g, 12, H - 42, W - 24, 2, STONE_L);
+    P(g, 12, H - 31, W - 24, 2, STONE_XD);
+
+    // ---- 3. LE MUR DU FOND, EN RETRAIT ET DANS L'OMBRE. Il est dessiné AVANT
+    // les colonnes : c'est lui qui donne la profondeur du péristyle.
+    P(g, 24, 52, W - 48, H - 94, SHADE);
+    P(g, 30, 60, W - 60, H - 106, "#7e7c75");
+    // La grande porte de bronze, à deux battants, au fond du portique.
+    const dw = 30, dx = (W - dw) / 2, dy = 92;
+    P(g, dx - 4, dy - 6, dw + 8, 6, "#6a6862");
+    P(g, dx, dy, dw, H - 42 - dy, "#4a4238");
+    P(g, dx + dw / 2, dy, 1, H - 42 - dy, "#2c261e");
+    for (let r = 0; r < 4; r++) {
+      P(g, dx + 4, dy + 8 + r * 10, dw / 2 - 7, 7, "#5c5248");
+      P(g, dx + dw / 2 + 3, dy + 8 + r * 10, dw / 2 - 7, 7, "#5c5248");
+    }
+    P(g, dx + dw / 2 - 4, dy + 20, 3, 3, BRONZE); P(g, dx + dw / 2 + 2, dy + 20, 3, 3, BRONZE);
+
+    // ---- 4. LES HUIT COLONNES. Fût cannelé (trois traits verticaux), base et
+    // chapiteau débordants.
+    for (let i = 0; i < 8; i++) {
+      const cx = 18 + i * 22;
+      P(g, cx, 56, 14, H - 98, STONE);
+      P(g, cx, 56, 3, H - 98, STONE_L);            // côté éclairé
+      P(g, cx + 11, 56, 3, H - 98, STONE_D);       // côté à l'ombre
+      P(g, cx + 6, 60, 1, H - 106, STONE_D);       // cannelure
+      P(g, cx - 2, 52, 18, 5, STONE_L);            // chapiteau
+      P(g, cx - 2, 56, 18, 1, STONE_D);
+      P(g, cx - 3, H - 46, 20, 5, STONE);          // base
+      P(g, cx - 3, H - 46, 20, 1, STONE_L);
+    }
+
+    // ---- 5. L'ENTABLEMENT ET LE FRONTON.
+    P(g, 8, 40, W - 16, 12, STONE); P(g, 8, 40, W - 16, 2, STONE_L);
+    P(g, 8, 50, W - 16, 2, STONE_D);
+    // Denticules sous la corniche : quatre pixels sur deux, et le bâtiment
+    // gagne d'un coup son siècle.
+    for (let x = 12; x < W - 12; x += 6) P(g, x, 52, 3, 3, STONE_D);
+    g.fillStyle = STONE_D;
+    g.beginPath(); g.moveTo(4, 42); g.lineTo(W / 2, 6); g.lineTo(W - 4, 42); g.fill();
+    g.fillStyle = STONE;
+    g.beginPath(); g.moveTo(10, 41); g.lineTo(W / 2, 11); g.lineTo(W - 10, 41); g.fill();
+    g.fillStyle = STONE_L;
+    g.beginPath(); g.moveTo(10, 41); g.lineTo(W / 2, 11); g.lineTo(W / 2, 15); g.lineTo(14, 41); g.fill();
+
+    // ---- 6. LA BALANCE, sculptée au tympan. Fléau, deux plateaux, colonnette.
+    {
+      const bx = W / 2, by = 30;
+      P(g, bx - 1, by - 10, 2, 12, STONE_XD);            // colonnette
+      P(g, bx - 16, by - 10, 32, 2, STONE_XD);           // fléau
+      for (const s of [-1, 1]) {
+        P(g, bx + s * 15 - 1, by - 9, 1, 5, STONE_XD);   // suspente
+        P(g, bx + s * 15 - 5, by - 4, 10, 2, STONE_XD);  // plateau
+        P(g, bx + s * 15 - 4, by - 2, 8, 1, STONE_D);
+      }
+      P(g, bx - 6, by + 2, 12, 2, STONE_XD);             // socle
+    }
+    // Acrotères aux trois pointes du fronton : de petits blocs qui empêchent
+    // le triangle de finir en pointe molle.
+    P(g, W / 2 - 3, 2, 6, 6, STONE_L);
+    P(g, 2, 38, 6, 6, STONE_L); P(g, W - 8, 38, 6, 6, STONE_L);
+    return c;
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     ZIP 425 — LE NOUVEL HÔTEL DE VILLE DE VALLEY TOWN.
+     ──────────────────────────────────────────────────────────────────────────
+     Demande : « un nouveau bâtiment townhall différent des autres quelque part
+     au centre ». « Différent des autres » est la contrainte principale, et elle
+     porte sur ce qu'on voit de loin :
+       * l'ÉGLISE est blanche, symétrique, à fronton ;
+       * le TRIBUNAL est gris-pierre, à péristyle profond et grand perron ;
+       * l'HÔTEL DE VILLE est en BRIQUE ROUGE, et il est ASYMÉTRIQUE — un
+         beffroi à horloge décalé sur la gauche, un corps de logis plus bas à
+         droite. C'est ce déséquilibre qui le rend reconnaissable en une
+         fraction de seconde, bien plus que n'importe quel détail.
+     Canevas 160×144, ancré par son bord bas.
+     ══════════════════════════════════════════════════════════════════════════ */
+  function townHall2Sprite() {
+    const W = 160, H = 144;
+    const [c, g] = cv(W, H);
+    const BRICK = "#a8503c", BRICK_D = "#7e3728", BRICK_L = "#c26a52";
+    const STONE = "#e2dccb", STONE_D = "#bfb8a4";
+    const ROOF = "#4a5a70", ROOF_D = "#33415a", ROOF_L = "#66788f";
+
+    // Soubassement de pierre + trois marches devant l'entrée.
+    P(g, 4, H - 12, W - 8, 12, STONE_D); P(g, 4, H - 12, W - 8, 2, STONE);
+    for (let s = 0; s < 3; s++) P(g, 58 - s * 3, H - 6 + s * 2, 44 + s * 6, 2, s % 2 ? STONE : STONE_D);
+
+    // ---- Corps principal (droite), deux niveaux de brique.
+    P(g, 52, 44, W - 58, H - 56, BRICK);
+    for (let y = 46; y < H - 12; y += 4) P(g, 52, y, W - 58, 1, BRICK_D);       // assises
+    P(g, 52, 44, 2, H - 56, BRICK_L);
+    // Chaînages d'angle en pierre : c'est ce qui fait « bâtiment public » et
+    // pas « grange en brique ».
+    for (let y = 44; y < H - 12; y += 8) { P(g, 52, y, 6, 4, STONE); P(g, W - 12, y, 6, 4, STONE); }
+    // Bandeau de pierre entre les deux étages.
+    P(g, 52, 76, W - 58, 4, STONE); P(g, 52, 76, W - 58, 1, "#f2eddd");
+    // Fenêtres cintrées, deux rangées de trois.
+    for (let r = 0; r < 2; r++) for (let i = 0; i < 3; i++) {
+      const wx = 64 + i * 26, wy = 54 + r * 32;
+      P(g, wx - 2, wy - 2, 16, 22, STONE);
+      P(g, wx, wy, 12, 18, "#3d5c78");
+      P(g, wx, wy, 12, 3, "#7fa8c8");
+      P(g, wx + 5, wy, 2, 18, STONE_D); P(g, wx, wy + 8, 12, 1, STONE_D);
+      g.fillStyle = STONE; g.beginPath(); g.arc(wx + 6, wy, 8, Math.PI, 2 * Math.PI); g.fill();
+      g.fillStyle = "#3d5c78"; g.beginPath(); g.arc(wx + 6, wy, 6, Math.PI, 2 * Math.PI); g.fill();
+    }
+    // Toit d'ardoise à deux pentes, débordant.
+    g.fillStyle = ROOF;
+    g.beginPath(); g.moveTo(46, 46); g.lineTo(106, 22); g.lineTo(W - 2, 46); g.fill();
+    g.fillStyle = ROOF_L;
+    g.beginPath(); g.moveTo(46, 46); g.lineTo(106, 22); g.lineTo(106, 27); g.lineTo(54, 46); g.fill();
+    P(g, 46, 44, W - 48, 4, ROOF_D);
+
+    // ---- LE BEFFROI (gauche), plus haut que tout le reste.
+    P(g, 8, 26, 40, H - 38, BRICK);
+    for (let y = 28; y < H - 12; y += 4) P(g, 8, y, 40, 1, BRICK_D);
+    P(g, 8, 26, 3, H - 38, BRICK_L);
+    for (let y = 26; y < H - 12; y += 8) { P(g, 8, y, 5, 4, STONE); P(g, 43, y, 5, 4, STONE); }
+    // Porche du beffroi : c'est l'entrée de la mairie.
+    P(g, 18, 96, 20, H - 108, "#5a3a26"); P(g, 27, 96, 2, H - 108, "#3c2618");
+    g.fillStyle = "#5a3a26"; g.beginPath(); g.arc(28, 96, 10, Math.PI, 2 * Math.PI); g.fill();
+    P(g, 15, 84, 26, 4, STONE); P(g, 15, 84, 26, 1, "#f2eddd");
+    // Horloge.
+    P(g, 14, 40, 28, 28, STONE); P(g, 14, 40, 28, 2, "#f2eddd");
+    g.fillStyle = "#2e2a24"; g.beginPath(); g.arc(28, 54, 11, 0, 7); g.fill();
+    g.fillStyle = "#f6f2e4"; g.beginPath(); g.arc(28, 54, 9, 0, 7); g.fill();
+    P(g, 27, 47, 2, 8, "#2e2a24"); P(g, 28, 53, 7, 2, "#2e2a24");
+    for (const [hx, hy] of [[28, 46], [28, 62], [20, 54], [36, 54]]) P(g, hx, hy, 1, 1, "#2e2a24");
+    // Couronnement : corniche, toit pyramidal, girouette.
+    P(g, 4, 22, 48, 6, STONE); P(g, 4, 22, 48, 1, "#f2eddd");
+    g.fillStyle = ROOF;
+    g.beginPath(); g.moveTo(2, 23); g.lineTo(28, 2); g.lineTo(54, 23); g.fill();
+    g.fillStyle = ROOF_L;
+    g.beginPath(); g.moveTo(2, 23); g.lineTo(28, 2); g.lineTo(28, 7); g.fill();
+    P(g, 27, 0, 2, 4, "#8a8a94");
+    P(g, 29, 0, 7, 3, "#d8b45a");   // girouette dorée : le point le plus haut de la ville basse
+    return c;
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════════
+     ZIP 425 — LE MOBILIER DE LA PLACE ET LES MARCHES.
+     ──────────────────────────────────────────────────────────────────────────
+     ⚠️ CE SONT DES SPRITES DE 32×32 (ou 32×48 pour le lampadaire), ancrés par
+     leur bord BAS comme les bâtiments, et non des tuiles de 16 : un banc ou un
+     lampadaire dessiné dans sa case déborde forcément sur la case du dessus, et
+     c'est exactement ce qui lui donne du volume. C'est déjà le contrat de
+     `decor` et des maisons — on ne réinvente rien.
+     ══════════════════════════════════════════════════════════════════════════ */
+  function plazaLampSprite() {
+    const [c, g] = cv(32, 48);
+    P(g, 12, 42, 8, 5, "#4a4a52"); P(g, 12, 42, 8, 1, "#6a6a74");   // socle
+    P(g, 14, 12, 4, 31, "#3c3c44"); P(g, 14, 12, 1, 31, "#5e5e68"); // fût
+    P(g, 10, 20, 12, 2, "#3c3c44");                                  // bague
+    P(g, 11, 6, 10, 8, "#2e2e36");                                   // lanterne
+    P(g, 12, 7, 8, 6, "#ffe9a8"); P(g, 13, 8, 6, 4, "#fff6d4");      // verre allumé
+    g.fillStyle = "#2e2e36"; g.beginPath(); g.moveTo(9, 6); g.lineTo(16, 0); g.lineTo(23, 6); g.fill();
+    P(g, 15, 0, 2, 2, "#2e2e36");
+    return c;
+  }
+  function plazaBenchSprite() {
+    const [c, g] = cv(32, 32);
+    const W1 = "#8a6038", W2 = "#a8794a", IR = "#3c3c44";
+    P(g, 4, 24, 3, 6, IR); P(g, 25, 24, 3, 6, IR);                   // pieds fonte
+    for (let i = 0; i < 3; i++) P(g, 3, 20 + i * 2, 26, 2, i % 2 ? W1 : W2); // assise
+    for (let i = 0; i < 3; i++) P(g, 3, 8 + i * 4, 26, 3, i % 2 ? W1 : W2);  // dossier
+    P(g, 3, 8, 3, 14, IR); P(g, 26, 8, 3, 14, IR);                   // montants
+    P(g, 3, 8, 26, 1, "#c08f5e");
+    return c;
+  }
+  function plazaTopiarySprite() {
+    const [c, g] = cv(32, 40);
+    P(g, 10, 32, 12, 6, "#7a6a52"); P(g, 10, 32, 12, 1, "#95866c");  // bac
+    P(g, 15, 24, 2, 9, "#6a4a2e");                                    // tronc
+    g.fillStyle = "#2f6b34"; g.beginPath(); g.arc(16, 16, 11, 0, 7); g.fill();
+    g.fillStyle = "#3f8a44"; g.beginPath(); g.arc(14, 13, 8, 0, 7); g.fill();
+    g.fillStyle = "#57a85c"; g.beginPath(); g.arc(12, 11, 4, 0, 7); g.fill();
+    return c;
+  }
+  /* ══════════════════════════════════════════════════════════════════════════
+     ZIP 425 — LA FONTAINE DE LA PLACE.
+     ──────────────────────────────────────────────────────────────────────────
+     ⚠️ ELLE ÉTAIT UN CARRÉ BLEU. Depuis le zip 234, la « fontaine » était deux
+     cases d'eau plus quatre traits de margelle dessinés à la volée dans
+     drawTownFrame : vue au vrai zoom du jeu, ça donne un rectangle bleu posé
+     sur du dallage, et c'est la première chose que l'œil trouve laide sur une
+     place qu'on nous demande de rendre soignée.
+
+     ⚠️ LE CENTRE DU CANEVAS EST TRANSPARENT, ET C'EST TOUT LE PRINCIPE. Le
+     sprite ne dessine que la PIERRE — margelle octogonale, pied, vasque haute.
+     L'eau reste celle des cases G_WATER dessous, qui respire déjà (voir le
+     reflet animé de drawTownFrame). Peindre l'eau ici l'aurait figée, et il
+     aurait fallu deux sources de vérité pour une même flaque.
+     Canevas 56×64, ancré par son bord bas comme les bâtiments. */
+  function plazaFountainSprite() {
+    const W = 56, H = 64;
+    const [c, g] = cv(W, H);
+    const S = "#c6c2b6", SL = "#e2ded1", SD = "#9d9a8f", SXD = "#7c7a71";
+    const cx = W / 2;
+    // ---- La margelle octogonale, vue de trois quarts : deux ellipses de
+    // pierre et un anneau d'ombre entre les deux.
+    const ring = (ry, rx, col) => { g.fillStyle = col; g.beginPath(); g.ellipse(cx, ry, rx, rx * 0.42, 0, 0, 7); g.fill(); };
+    ring(H - 12, 26, SXD);          // socle, un peu débordant
+    ring(H - 14, 25, SD);
+    ring(H - 16, 24, S);
+    ring(H - 17, 23, SL);           // arête éclairée de la margelle
+    /* Le bassin lui-même : on DÉCOUPE, on ne peint pas du bleu. `destination-out`
+       rend la zone transparente, l'eau animée des tuiles apparaît au travers. */
+    g.globalCompositeOperation = "destination-out";
+    g.beginPath(); g.ellipse(cx, H - 16, 19, 8, 0, 0, 7); g.fill();
+    g.globalCompositeOperation = "source-over";
+    // Un liseré sombre à l'intérieur de la margelle : c'est lui qui donne la
+    // PROFONDEUR du bassin. Sans lui, l'eau a l'air posée par-dessus.
+    g.strokeStyle = "rgba(40,44,38,0.45)"; g.lineWidth = 2;
+    g.beginPath(); g.ellipse(cx, H - 16, 19, 8, 0, 0, 7); g.stroke();
+
+    // ---- Le pied et la vasque haute.
+    P(g, cx - 4, H - 34, 8, 20, S); P(g, cx - 4, H - 34, 3, 20, SL); P(g, cx + 2, H - 34, 2, 20, SD);
+    ring(H - 34, 13, SD); ring(H - 36, 12, S); ring(H - 37, 11, SL);
+    g.globalCompositeOperation = "destination-out";
+    g.beginPath(); g.ellipse(cx, H - 36, 8, 3.5, 0, 0, 7); g.fill();
+    g.globalCompositeOperation = "source-over";
+    g.strokeStyle = "rgba(40,44,38,0.40)"; g.lineWidth = 1;
+    g.beginPath(); g.ellipse(cx, H - 36, 8, 3.5, 0, 0, 7); g.stroke();
+    // ---- La colonne et le bouton d'où sort le jet (le jet lui-même est animé
+    // dans drawTownFrame : il bouge, donc il ne peut pas vivre dans un canevas).
+    P(g, cx - 2, H - 50, 4, 15, S); P(g, cx - 2, H - 50, 1, 15, SL);
+    g.fillStyle = SL; g.beginPath(); g.arc(cx, H - 51, 4, 0, 7); g.fill();
+    g.fillStyle = SD; g.beginPath(); g.arc(cx + 1, H - 50, 2, 0, 7); g.fill();
+    return c;
+  }
+
+  /* L'OBÉLISQUE de la place. ⚠️ Il n'est PAS une seconde fontaine : deux
+     bassins symétriques auraient fait un jardin d'eau, pas une place. Une masse
+     de pierre verticale au sud répond à une masse d'eau horizontale au nord —
+     ce sont les contraires qui équilibrent, pas les copies. */
+  function plazaMonumentSprite() {
+    const [c, g] = cv(48, 72);
+    const S = "#cfcabc", SL = "#e6e1d2", SD = "#a9a496";
+    P(g, 6, 62, 36, 9, SD); P(g, 6, 62, 36, 2, S);                   // emmarchement
+    P(g, 11, 54, 26, 9, S); P(g, 11, 54, 26, 2, SL);                 // socle
+    P(g, 15, 46, 18, 9, SD); P(g, 15, 46, 18, 1, S);                 // dé
+    g.fillStyle = S;                                                  // fût effilé
+    g.beginPath(); g.moveTo(18, 46); g.lineTo(21, 8); g.lineTo(27, 8); g.lineTo(30, 46); g.fill();
+    g.fillStyle = SL;
+    g.beginPath(); g.moveTo(18, 46); g.lineTo(21, 8); g.lineTo(23, 8); g.lineTo(21, 46); g.fill();
+    g.fillStyle = "#d8b45a";                                          // pyramidion doré
+    g.beginPath(); g.moveTo(20, 9); g.lineTo(24, 0); g.lineTo(28, 9); g.fill();
+    P(g, 14, 50, 20, 1, "#8f8a7c");                                   // inscription
+    P(g, 16, 52, 16, 1, "#8f8a7c");
+    return c;
+  }
+
   // ----- 10 façades de maison basiques pour Valley Town (zip 235). Toutes
   // au même canevas 96x96 que la maison de ferme, ancrées par leur bord bas.
   function townHouseVariant(styleIdx) {
@@ -4397,7 +4709,22 @@ house: house(),
     fruits: Object.fromEntries(C.FRUITS.map(f => [f.id, fruitSprite(f.id)])),
     punnets: Object.fromEntries(C.FRUITS.map(f => [f.id, punnetSprite(f.id)])),
     orchards: C.ORCHARDS.map((_, k) => Array.from({ length: C.ORCHARD_STAGES }, (__, st) => orchardSprite(k, st))),
-    townhall: townhallSprite(),
+    /* ⚠️ 425 : `townhall` DEVIENT `church`, ET C'EST LA SEULE CHOSE QUI CHANGE.
+       Le dessin n'a pas bougé d'un pixel — demande de Guillaume : « garder
+       l'actuel townhall et le renommer église ». On ne garde PAS l'ancienne
+       clé en alias : elle désignerait le bâtiment que la ville n'appelle plus
+       ainsi, à trois lignes d'un `townHall2` qui est, lui, la vraie mairie. Un
+       registre où `townhall` n'est pas la mairie est un piège posé pour plus
+       tard. La fonction, elle, garde son nom historique : c'est la trace du
+       zip 235, et elle n'est appelée qu'ici. */
+    church: townhallSprite(),
+    courthouse: courthouseSprite(),    // 425 : le tribunal néoclassique
+    townHall2: townHall2Sprite(),      // 425 : le NOUVEL hôtel de ville (brique + beffroi)
+    plazaLamp: plazaLampSprite(),      // 425 : mobilier de la place
+    plazaBench: plazaBenchSprite(),
+    plazaTopiary: plazaTopiarySprite(),
+    plazaMonument: plazaMonumentSprite(),
+    plazaFountain: plazaFountainSprite(),
     townHouses: Array.from({ length: C.TOWN_HOUSE_STYLES }, (_, i) => townHouseVariant(i)),
     rabbit: [rabbitSprite(0), rabbitSprite(1), rabbitSprite(2)],
     torch: torchSprite(),

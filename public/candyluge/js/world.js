@@ -2550,6 +2550,38 @@ const World = (function () {
      qui les rendrait juste opaques. */
   const S2L = (c) => (c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
 
+  /* ⚠️ 425 — LA TEINTE DE LA TRAÎNÉE, POUR LES TROIS SYSTÈMES DE PARTICULES QUI
+     LA COMPOSENT (gerbe, poudre, bouffée de turbo). Voir FX_TRAIL_TINT dans
+     config.js : les trois naissaient chacun dans son propre blanc, et corriger
+     l'un sans les autres ne se voyait pas à l'écran.
+     `blanc` est le blanc D'ORIGINE du système appelant — on le garde parce que
+     les trois n'étaient pas tout à fait le même, et que ces écarts minuscules
+     font la différence entre trois effets et un seul effet répété.
+     En sRGB : c'est `emit` qui convertit en linéaire, et lui passer une valeur
+     déjà linéaire donnerait une traînée deux fois trop sombre sans lever la
+     moindre erreur.
+     ⚠️ Calculée une fois par système, jamais par grain : à pleine charge on
+     émet jusqu'à deux cents particules par seconde. */
+  /* ⚠️ UN OBJET DE TRAVAIL PARTAGÉ, RECYCLÉ À CHAQUE APPEL — pas un objet neuf.
+     C'est la règle de tout ce fichier (« aucune allocation par image ») : à
+     pleine charge on émet deux cents grains par seconde, et rendre un littéral
+     ferait travailler le ramasse-miettes en continu pendant la descente.
+     L'appelant s'en sert IMMÉDIATEMENT et `emit` recopie les trois nombres : il
+     n'y a donc rien à conserver.
+     ⚠️ ET ON NE PRÉCALCULE PAS LES TROIS TEINTES AU CHARGEMENT, bien que ce
+     serait moins cher. Figées, elles ne répondraient plus à un
+     `CFG.FX_TRAIL_TINT = 0.8` tapé dans la console — or c'est exactement comme
+     ça qu'on règle une couleur (§7 : mesurer, corriger, re-mesurer), et un
+     réglage qu'on ne peut essayer qu'en rechargeant la page ne se règle pas. */
+  const _tint = { r: 0, g: 0, b: 0 };
+  function trailTint(r0, g0, b0) {
+    const k = CFG.FX_TRAIL_TINT;
+    _tint.r = r0 + ((CFG.COL_SKID >> 16 & 255) / 255 - r0) * k;
+    _tint.g = g0 + ((CFG.COL_SKID >> 8 & 255) / 255 - g0) * k;
+    _tint.b = b0 + ((CFG.COL_SKID & 255) / 255 - b0) * k;
+    return _tint;
+  }
+
   function emit(sys, x, y, z, vx, vy, vz, life, r, g, b, sizeMul) {
     const k = sys.gain === undefined ? 1 : sys.gain;
     const lr = S2L(r) * k, lg = S2L(g) * k, lb = S2L(b) * k;
@@ -3830,22 +3862,33 @@ const World = (function () {
           0.55 + Math.pow(Math.random(), 4) * 2.4);
       }
     }
-    // Le TURBO crache une gerbe blanche vers l'arrière, une seule fois.
+    /* Le TURBO crache une bouffée vers l'arrière, une seule fois.
+       ⚠️ 425 — C'ÉTAIT LA PRINCIPALE SOURCE DU « TROP BLANC », et la dernière
+       qu'on ait trouvée : vingt-six grains ADDITIFS tirés d'un bloc, à la
+       taille maximale du jeu, donc une tache qui sature à blanc et que le bloom
+       étale encore. ⚠️ Elle ne dépend d'AUCUN taux d'émission — c'est pour ça
+       qu'elle a survécu à trois extinctions successives dans la console et
+       qu'on l'a longtemps crue innocente (voir la note de FX_TRAIL_TINT). */
     if (sled.boost > 0 && sled.boostFlash < 90) {
+      const tBoost = trailTint(1.00, 0.95, 1.00);
       for (let i = 0; i < 26; i++) {
         emit(stars, p.x + back.x, p.y + 0.4, p.z + back.z,
           (Math.random() - 0.5) * 7, 2 + Math.random() * 5, (Math.random() - 0.5) * 7,
-          0.8, 1, 0.95, 1, 0.8 + Math.random() * 1.9);
+          0.8, tBoost.r, tBoost.g, tBoost.b, 0.8 + Math.random() * 1.9);
       }
     }
     // La POUDRE : en permanence, proportionnelle à la vitesse.
     const dn = Math.round(CFG.FX_DUST_RATE * Math.min(1, sled.v / 34) * dt);
+    const tDust = trailTint(1.00, 0.93, 0.99);
     for (let i = 0; i < dn; i++) {
       emit(dust,
         p.x + back.x + (Math.random() - 0.5) * 1.6, p.y + 0.15 + Math.random() * 0.5,
         p.z + back.z + (Math.random() - 0.5) * 1.6,
         (Math.random() - 0.5) * 1.4, 0.8 + Math.random() * 1.2, (Math.random() - 0.5) * 1.4,
-        CFG.FX_DUST_LIFE * (0.7 + Math.random() * 0.7), 1, 0.93, 0.99,
+        CFG.FX_DUST_LIFE * (0.7 + Math.random() * 0.7),
+        // 425 : la poudre est la traînée AU SENS PROPRE — celle qu'on voit en
+        // permanence derrière la luge. Voir trailTint.
+        tDust.r, tDust.g, tDust.b,
         0.5 + Math.pow(Math.random(), 2) * 1.7);
     }
 
@@ -3904,6 +3947,7 @@ const World = (function () {
       const inward = -Math.sign(sled.edge || 1);
       const dir = (sled.skid > CFG.SKID_BREAK) ? -inward : inward;
       const wide = 0.35 + (sled.skid || 0) * 1.5;
+      const tSpray = trailTint(1.00, 0.97, 0.99);   // 425 : la gerbe de carre
       for (let i = 0; i < n; i++) {
         // Le point d'émission : sous la carre engagée, décalé vers l'avant —
         // une gerbe naît à la spatule, pas derrière le siège.
@@ -3918,7 +3962,7 @@ const World = (function () {
           CFG.FX_SPRAY_UP * (0.35 + Math.random() * sprayK * 1.3),
           f.right.z * dir * sp + (Math.random() - 0.5) * 3 - f.fwd.z * sled.v * 0.18,
           CFG.FX_SPRAY_LIFE * (0.6 + Math.random() * 0.7),
-          1, 0.97, 0.99,
+          tSpray.r, tSpray.g, tSpray.b,   // 425 : voir trailTint
           /* ⚠️ LA VARIANCE DE TAILLE EST BIAISÉE VERS LE PETIT, ET C'EST CE QUI
              FAIT LA GERBE. Un tirage uniforme donne autant de gros que de
              petits grains, donc une bouillie homogène. Une vraie gerbe est un

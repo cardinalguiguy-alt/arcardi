@@ -1,0 +1,25 @@
+# Ajouté au zip 425. Le dépôt n'en avait aucun — ça n'avait jamais gêné parce
+# que personne n'avait encore installé les dépendances sur cette machine
+# (§9 de CLAUDE.md : `node` n'existait pas). Depuis qu'un `npm install` est
+# possible en local, `node_modules/` et `.next/` apparaissent dans GitHub
+# Desktop par dizaines de milliers de fichiers, et noient les vraies
+# modifications.
+
+# Dépendances et sorties de build
+/node_modules
+/.next
+/out
+/build
+
+# Environnement local. ⚠️ NE JAMAIS COMMITTER : ce fichier porte l'URL et la
+# clé Supabase. En production, ces valeurs viennent des variables
+# d'environnement Vercel.
+.env
+.env.local
+.env.*.local
+
+# Journaux et fichiers système
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.DS_Store

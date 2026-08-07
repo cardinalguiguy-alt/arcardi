@@ -126,12 +126,18 @@ const UI = (function () {
     el.finishTag.classList.add("visible");
   }
 
-  function updateHud(sled, score, ms, stage, sinceCp) {
+  function updateHud(sled, score, ms, flag, sinceCp) {
     el.score.textContent = Math.floor(score);
     el.candies.textContent = sled.candies;
     el.speed.textContent = sled.kmh();
     el.time.textContent = fmtTime(ms);
-    el.stage.textContent = stage + 1;
+    /* ⚠️ 425 — « n/10 » ET NON « n ». Le chiffre est désormais le nombre de
+       fanions FRANCHIS (voir game.js), et il doit dire la même chose que la
+       bannière « FANION 3/10 » qui vient de passer au centre du cadre. Deux
+       façons de compter la même progression, à deux endroits de l'écran, est
+       exactement la sorte de détail qui fait douter le joueur de ce qu'il lit.
+       Le total est LU depuis Slope, jamais écrit ici : c'est la règle du §7. */
+    el.stage.textContent = flag + "/" + Slope.checkpointCount();
     if (el.cpTag && sinceCp !== undefined && sinceCp > CFG.CP_FLASH_MS) {
       el.cpTag.classList.remove("visible");
     }

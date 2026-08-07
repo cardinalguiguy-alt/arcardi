@@ -148,6 +148,18 @@ export const FERME_STR = {
     toastTheirHouse: (n) => `C'est la maison de ${n}.`,
     toastHouseSale: "Cette maison attend un nouveau fermier.",
     townSaleSign: "À vendre",
+    /* Zip 425 — Valley Town refaite. ⚠️ LE MOT « MAIRIE » EST DÉSORMAIS PRIS :
+       le bâtiment blanc à colonnes du zip 235 devient l'ÉGLISE (demande de
+       Guillaume), et la mairie est un bâtiment NEUF, ailleurs. Les deux libellés
+       doivent donc être aussi éloignés l'un de l'autre que les deux bâtiments. */
+    promptTownChurch: "⛪ Église de Valley Town",
+    promptTownHall: "🏛️ Hôtel de ville",
+    promptTownCourt: "⚖️ Tribunal de Valley Town",
+    /* ⚠️ L'INVITE DE SAUT EST LA SEULE FAÇON D'APPRENDRE LA MÉCANIQUE. Elle
+       n'apparaît QUE lorsque le saut est réellement possible (voir tryTownJump) :
+       une invite affichée en permanence deviendrait du décor, et une invite qui
+       ment une fois n'est plus jamais crue. */
+    promptTownJump: "Espace : sauter du rebord",
     cropTipReady: "mûr !",
     cropTipWater: "à arroser",
     adsGiftsTitle: "🎁 Cadeaux promis",
@@ -1365,7 +1377,10 @@ export const FERME_STR = {
     devTeleportName: (k) => ({
       farm: "🏠 La ferme",
       passage: "🌑 Devant le passage",
-      town: "🚉 Valley Town",
+      town: "🚉 Valley Town — la gare",
+      townPlaza: "⛲ Valley Town — la place",           // zip 425
+      townCourt: "⚖️ Valley Town — le tribunal",
+      townBelvedere: "🔭 Valley Town — le belvédère",
       world: "🌀 La terre en cours",
       bridge: "🌉 Le pied du pont",
     }[k] || k),
@@ -1571,6 +1586,10 @@ export const FERME_STR = {
     toastTheirHouse: (n) => `This is ${n}'s house.`,
     toastHouseSale: "This house is waiting for a new farmer.",
     townSaleSign: "For sale",
+    promptTownChurch: "⛪ Valley Town church",     // zip 425 : voir la note côté français
+    promptTownHall: "🏛️ Town hall",
+    promptTownCourt: "⚖️ Valley Town courthouse",
+    promptTownJump: "Space: jump off the ledge",
     cropTipReady: "ready!",
     cropTipWater: "needs water",
     adsGiftsTitle: "🎁 Promised gifts",
@@ -2524,7 +2543,10 @@ export const FERME_STR = {
     devTeleportName: (k) => ({
       farm: "🏠 The farm",
       passage: "🌑 By the passage",
-      town: "🚉 Valley Town",
+      town: "🚉 Valley Town — the station",
+      townPlaza: "⛲ Valley Town — the plaza",          // zip 425
+      townCourt: "⚖️ Valley Town — the courthouse",
+      townBelvedere: "🔭 Valley Town — the belvedere",
       world: "🌀 The current land",
       bridge: "🌉 Foot of the bridge",
     }[k] || k),

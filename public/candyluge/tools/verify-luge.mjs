@@ -580,9 +580,14 @@ ok(edgeRun.deep > 0.4,
 /* Les checkpoints. Trois propriétés, et chacune correspond à une façon dont un
    système de reprise peut être injuste. */
 const nCp = Slope.checkpointCount();
-ok(nCp >= 8 && nCp <= 20,
-  "⚠️ la descente a assez de checkpoints pour que la reprise reste courte",
-  `${nCp} portes sur ${CFG.DESCENT_LENGTH} unités, une tous les ${CFG.CP_EVERY}`);
+/* ⚠️ 425 : ON CONTRÔLE LE NOMBRE EXACT, plus une fourchette. Depuis que
+   CP_COUNT est le réglage (voir config.js), « entre 8 et 20 » ne prouve plus
+   rien : c'est justement la valeur écrite qu'il faut voir arriver au bout de la
+   dérivation, sinon le HUD — qui affiche « n/10 » — mentirait. Et l'espacement
+   se LIT depuis Slope, il ne se recopie pas. */
+ok(nCp === CFG.CP_COUNT,
+  "⚠️ la descente a exactement le nombre de fanions demandé",
+  `${nCp} portes sur ${CFG.DESCENT_LENGTH} unités, une tous les ${Slope.cpEvery().toFixed(1)}`);
 ok(Slope.checkpointAt(nCp - 1) < CFG.DESCENT_LENGTH - CFG.FINISH_FADE,
   "⚠️ aucune porte ne tombe dans la zone d'arrivée — on ne renvoie jamais quelqu'un qui a déjà fini",
   `dernière à ${Slope.checkpointAt(nCp - 1)}, arrivée dès ${CFG.DESCENT_LENGTH - CFG.FINISH_FADE}`);
@@ -618,7 +623,7 @@ ok(cpBad === 0,
     `s ${sled.s.toFixed(0)} (porte à ${sled.cp}), u ${sled.u.toFixed(1)}, nez ${sled.heading.toFixed(2)} rad`);
   ok(sled.s > sled.cp - CFG.CP_BACK - 60,
     "... et jamais plus loin en arrière que la porte franchie",
-    `recul de ${(1500 - sled.s).toFixed(0)} u, plafond théorique ${CFG.CP_EVERY + CFG.CP_BACK}`);
+    `recul de ${(1500 - sled.s).toFixed(0)} u, plafond théorique ${(Slope.cpEvery() + CFG.CP_BACK).toFixed(0)}`);
 }
 
 console.log(`\n${fail === 0 ? "Tout est passé." : `${fail} contrôle(s) en échec.`}  (${pass}/${pass + fail})\n`);
