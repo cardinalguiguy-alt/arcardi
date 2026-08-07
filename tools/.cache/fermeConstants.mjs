@@ -90,6 +90,17 @@ export const G_RUN_KERB = 17;      // zip 378 : BORDURE de la chaussée. Les blo
                                    // l'eau avant, qui bloquait déjà. On ne change donc que ce qu'il VOIT, jamais où
                                    // il peut aller, et l'ancienne géométrie de l'embuscade reste valide mot pour mot.
 
+export const G_TOWN_STAIR = 18;    // zip 425 : marche d'escalier de Valley Town. ⚠️ ELLE N'EXISTE QUE SUR LA CARTE
+                                   // DE LA VILLE, qui est REGÉNÉRÉE à chaque visite et n'est jamais persistée — c'est
+                                   // ce qui autorise à ajouter une valeur de sol sans aucune migration. Une nouvelle
+                                   // valeur sur la carte de FERME, elle, obligerait à relire toutes les sauvegardes.
+                                   // Son rôle est double : elle se DESSINE en marches, et elle AUTORISE le changement
+                                   // de niveau (voir TOWN_STEP_MAX) — les deux vont ensemble, un escalier qu'on ne
+                                   // voit pas est un mur invisible et un escalier qui ne monte pas est un décor.
+export const G_TOWN_LAWN = 19;     // zip 425 : pelouse tondue des squares et parterres de la place centrale. Purement
+                                   // visuelle (elle ne bloque pas), mais elle sépare le « jardin » du simple herbage
+                                   // sauvage : sans elle, une place « soignée » n'a aucun moyen de le montrer.
+
 // Objets
 export const O_NONE = 0;
 export const O_TREE = 1;
@@ -2598,34 +2609,447 @@ export const VISITOR_STAGGER_MAX_MS = 4200;       // ...so they walk in a loose 
 // each other there. Houses are assigned deterministically (see townHouseOwners
 // in FermeGame.js): known farmers sorted by id -> plots in order; leftover
 // plots show a "for sale" sign. Interiors are deferred.
-export const TOWN_MAP_W = 64;
-export const TOWN_MAP_H = 48;
+/* ═══════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ ZIP 425 — VALLEY TOWN EST REFAITE, ET LA CARTE EST 3× PLUS GRANDE DANS
+   CHAQUE DIMENSION (64×48 → 192×144, soit NEUF fois la surface).
+   ───────────────────────────────────────────────────────────────────────────
+   Demande de Guillaume : « on va tout recommencer sur cette map, car on veut
+   une map bien plus grande. La grille doit être au moins 3x plus étendue. »
+   L'objectif annoncé est un VERSANT ÉGAL À LA FERME en points d'intérêt — ce
+   qui ne se construira pas en une session. Ce zip pose donc la GÉOGRAPHIE
+   (quartiers, rues, reliefs, monuments) en laissant délibérément des parcelles
+   vides : une ville qu'on remplit est un chantier, une ville trop petite pour
+   ce qu'on veut y mettre est une impasse.
+
+   ⚠️ POURQUOI 3× EN LINÉAIRE ET NON 3× EN SURFACE. « 3× plus étendue » se lit
+   des deux façons, et 3× en surface (≈ 110×83) n'aurait donné qu'un tiers de
+   rue en plus dans chaque direction — c'est-à-dire une ville qui a l'air de la
+   même. La demande porte sur la SENSATION d'espace, qui suit la distance, pas
+   l'aire. On prend donc le sens le plus généreux.
+
+   ⚠️ ET ÇA NE COÛTE RIEN AU RENDU : drawTownFrame ne dessine que la fenêtre
+   visible (x0..x1 / y0..y1 calculés depuis la caméra). Le surcoût est celui de
+   trois tableaux de 27 648 entrées construits UNE FOIS par chargement de page
+   (le cache module de getTownWorldCached), soit une poignée de millisecondes.
+   ⚠️ ET RIEN N'EST PERSISTÉ : la ville est regénérée à graine fixe, identique
+   pour tout le monde, à chaque visite. Il n'y a donc aucune migration à écrire
+   — c'est ce qui rend cette refonte possible d'un bloc.
+
+   ⚠️ CE QUI NE DEVAIT PAS CASSER, ET QUI N'A PAS CASSÉ :
+     * les RÉSIDENTS. townHouseOwners() attribue les parcelles par index (les
+       fermiers connus triés par id, puis les résidents). On a AUGMENTÉ le
+       nombre de parcelles et gardé l'ordre : les huit premières entrées de
+       TOWN_HOUSES restent les quatre du nord et les quatre du sud de la rue
+       principale, exactement comme avant. Un propriétaire garde donc son rang.
+     * la TÉLÉPORTATION DÉVELOPPEUR (dev:town), qui pose le joueur sur
+       TOWN_SPAWN — déplacé avec la gare, jamais recopié ailleurs.
+     * le TRAIN, qui arrive et repart sur les mêmes deux repères.
+   ═══════════════════════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════════════════════
+   ⚠️ ZIP 426 — LA CARTE S'AGRANDIT UNE SECONDE FOIS : 192×144 → 224×168.
+   ───────────────────────────────────────────────────────────────────────────
+   Demande de Guillaume : « tu peux aussi agrandir encore la map ».
+   ⚠️ ON N'AGRANDIT PAS AVANT D'AVOIR DE QUOI REMPLIR. Le 425 a montré ce que
+   coûte l'inverse (une prairie entre les rues) ; les 32 colonnes et 24 rangées
+   de ce zip arrivent DONC avec leur contenu, décidé d'abord :
+     * au SUD (y ≥ 144) : une cinquième avenue (y = 150), une rangée de
+       parcelles, le CIMETIÈRE et le LAC avec sa promenade et son ponton ;
+     * à l'EST (x ≥ 190) : une quatrième artère nord-sud (x = 196) et le
+       QUARTIER DES ARTISANS, trois parcelles de plus.
+   ⚠️ ET LE BORD SUD N'EST PLUS UNE RUE. `paveCol` s'arrêtait à H-11 : avec la
+   promenade du lac en dessous, une artère nord-sud plongeait dans l'eau. Elles
+   s'arrêtent maintenant à la DERNIÈRE avenue (dérivée de TOWN_ST_ROWS), ce qui
+   est de toute façon ce qu'on veut dire — une rue finit à un carrefour.
+   ═══════════════════════════════════════════════════════════════════════════ */
+export const TOWN_MAP_W = 224;
+export const TOWN_MAP_H = 168;
 export const TOWN_RAIL_X = 2;                       // rails on columns 2..3, full height, like the farm
-export const TOWN_PLATFORM = { x: 4, y: 18, w: 2, h: 8 };
-export const TOWN_SPAWN = { x: 6, y: 22 };          // step off the train here
-export const TOWN_STATION_SIGN = { x: 7, y: 24 };   // E here to ride back to the farm
-export const TOWN_MAIN_ST_Y = 22;                   // main street rows y..y+1, from the platform to the east edge
-export const TOWN_CROSS_ST_X = 31;                  // cross street columns x..x+1, north-south through the plaza
-export const TOWN_PLAZA = { x: 26, y: 17, w: 12, h: 12 }; // paved central square
-export const TOWN_FOUNTAIN = { x: 31, y: 22 };      // 2x2 fountain, top-left tile (blocks movement)
+export const TOWN_PLATFORM = { x: 4, y: 66, w: 2, h: 8 };
+export const TOWN_SPAWN = { x: 6, y: 70 };          // step off the train here
+export const TOWN_STATION_SIGN = { x: 7, y: 72 };   // E here to ride back to the farm
+
+/* LES RUES. Quatre est-ouest, trois nord-sud, toutes larges de deux cases.
+   ⚠️ ELLES SONT DÉCLARÉES ICI ET NON DESSINÉES À LA MAIN DANS LE GÉNÉRATEUR,
+   parce que trois autres endroits en ont besoin : le placement des parcelles
+   (une maison a une allée qui rejoint la rue SOUS elle), l'écartement des
+   arbres, et le mobilier urbain. Une rue recopiée est une rue qui bougera
+   d'un côté seulement. */
+export const TOWN_MAIN_ST_Y = 70;                   // rue principale (gare → bord est) : lignes y..y+1
+export const TOWN_ST_ROWS = [34, 70, 108, 128, 150];     // toutes les rues est-ouest (426 : + celle du sud)
+export const TOWN_CROSS_ST_X = 92;                  // artère centrale nord-sud, colonnes x..x+1
+export const TOWN_ST_COLS = [34, 92, 150, 196];     // toutes les rues nord-sud (426 : + celle des artisans)
+
+/* LA PLACE CENTRALE. Elle a triplé (12×12 → 30×26) et n'est plus un simple
+   rectangle dallé : voir townPlazaDeco() dans fermeEngine.js. */
+export const TOWN_PLAZA = { x: 78, y: 58, w: 30, h: 26 };
+export const TOWN_FOUNTAIN = { x: 92, y: 63 };      // 2x2 fountain, top-left tile (blocks movement)
+/* ⚠️ LE MONUMENT EST LE PENDANT SUD DE LA FONTAINE, et il ne sert qu'à ça :
+   la rue principale traverse la place en son milieu, donc la fontaine seule
+   posait tout le poids visuel au nord et la moitié sud paraissait vide. Deux
+   masses symétriques de part et d'autre de la rue font une PLACE ; une seule
+   fait un carrefour avec une fontaine dessus. */
+export const TOWN_MONUMENT = { x: 92, y: 78 };      // 2x2, obélisque + vasques
+/* ⚠️ 425 — LES QUARTIERS. Sans eux, une carte neuf fois plus grande n'est pas
+   une ville neuf fois plus riche : c'est la même petite ville posée au milieu
+   d'un très grand pré, et c'est EXACTEMENT ce que le premier jet a donné à
+   l'écran. Une ville, c'est d'abord des ÎLOTS occupés entre les rues.
+   Ces trois-là sont les premiers ; il reste de la place pour la suite, et c'est
+   voulu (voir l'en-tête : la parité avec la ferme se construira au fil des
+   mises à jour, pas en une session). */
+/* ⚠️ AUCUN DE CES TROIS NE DOIT MORDRE SUR UNE RUE NI SUR UNE PARCELLE — le
+   banc de rendu le contrôle (« aucun bâtiment ne coupe une rue »), mais rien ne
+   contrôle l'inverse. Les hauteurs sont donc calées pour s'arrêter AVANT les
+   rangées de maisons du sud (y = 102) : 74 + 26 = 100. */
+export const TOWN_PARK = { x: 108, y: 74, w: 34, h: 26 };     // le parc et son étang
+export const TOWN_ORCHARD = { x: 12, y: 38, w: 18, h: 24 };   // le verger municipal
+export const TOWN_MARKET = { x: 38, y: 74, w: 26, h: 26 };    // le champ de foire, dallé et bordé d'arbres
+/* ═══════════════════════════════════════════════════════════════════════════
+   LES QUARTIERS DU ZIP 426 — ce qui remplit l'agrandissement.
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️ CHACUN RÉPOND À UN VIDE CONSTATÉ, pas à une envie de décor :
+     * le CHAMP DE FOIRE était une esplanade nue (le 425 le dit lui-même) : il
+       reçoit ses étals et son kiosque à musique — c'est enfin une foire ;
+     * l'ÉGLISE n'avait rien autour d'elle : le cimetière lui donne son enclos
+       et une raison d'aller à l'ouest ;
+     * le SUD ajouté serait un pré : le lac lui donne un bord, une promenade
+       et un ponton — c'est-à-dire un but de promenade ;
+     * l'EST ajouté serait un pré aussi : les artisans lui donnent une rue.
+   ⚠️ AUCUN NE MORD SUR UNE RUE NI SUR UNE PARCELLE — même règle qu'au 425, et
+   c'est le générateur qui l'applique (il refuse toute case déjà pavée). */
+export const TOWN_CEMETERY = { x: 46, y: 40, w: 14, h: 16 };  // l'enclos de l'église, à l'ouest de son parvis
+export const TOWN_LAKE = { x: 56, y: 154, w: 96, h: 12 };     // le lac du sud + sa promenade (voir TOWN_QUAY_H)
+export const TOWN_QUAY_H = 2;                                 // rangées de dallage entre l'avenue du sud et l'eau
+export const TOWN_PIER = { x: 100, y: 154, w: 4, h: 8 };      // le ponton de bois, plein sud, dans l'axe de l'artère centrale
+export const TOWN_KIOSK = { x: 122, y: 84 };                  // kiosque à musique du parc (3×3, case nord-ouest)
+export const TOWN_ARTISANS = { x: 190, y: 36, w: 32, h: 96 }; // le quartier de l'est, le long de l'artère x=196
+/* Le CŒUR URBAIN : au-dedans, on ne sème PAS d'arbres au hasard. C'est la
+   correction la plus efficace du deuxième jet — des arbres épars entre les rues
+   faisaient lire toute la ville comme une clairière. Les arbres du centre sont
+   désormais PLANTÉS : alignements, parc, verger, parterres de la place. */
+export const TOWN_CORE = { x: 8, y: 22, w: 208, h: 132 };
 export const TOWN_HOUSE_W = 6;                      // house sprite is 96px = 6 tiles wide
 export const TOWN_HOUSE_H = 3;                      // blocked footprint rows (the visual roof overlaps north of it)
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LE RELIEF (425) — LA HAUTE-VILLE, LES ESCALIERS, ET LE SAUT.
+   ───────────────────────────────────────────────────────────────────────────
+   Demande de Guillaume : « des sections avec des escaliers réalistes, des
+   mécaniques de climb up and jump off ».
+
+   ⚠️ IL N'Y A PAS DE COORDONNÉE Z, ET IL NE FAUT PAS EN INTRODUIRE UNE. Le
+   joueur n'a que x/y — c'est ce qui voyage dans le réseau (pubMe), ce que
+   lisent les collisions, ce que dessinent les autres clients. Ajouter une
+   troisième coordonnée obligerait à la diffuser, à la réconcilier, et à la
+   gérer dans chaque chemin qui manipule une position : un coût énorme pour
+   une carte sur quatre.
+
+   ⚠️ L'ALTITUDE EST DONC UNE PROPRIÉTÉ DE LA CASE, PAS DU PERSONNAGE. Un
+   tableau `elev` parallèle au sol donne la hauteur de chaque case ; celle d'un
+   personnage se LIT sous ses pieds. Trois conséquences, et les trois sont des
+   cadeaux :
+     1. les joueurs distants sont à la bonne hauteur sans qu'on diffuse quoi
+        que ce soit — leur x/y suffit ;
+     2. rien à sauvegarder, rien à synchroniser, rien à désynchroniser ;
+     3. un ancien client qui n'aurait pas ce zip verrait les autres au bon
+        endroit sur la carte, simplement à plat.
+
+   ⚠️ LES VALEURS SONT FRACTIONNAIRES, ET C'EST CE QUI FAIT L'ESCALIER. Une
+   marche d'escalier vaut 0,25 ; un rebord de terrasse vaut 1,0 d'un coup. La
+   règle de déplacement est alors la MÊME dans les deux cas — « on ne franchit
+   pas plus de TOWN_STEP_MAX d'un pas » — et il n'y a aucun cas particulier à
+   écrire : l'escalier passe parce qu'il monte doucement, la falaise bloque
+   parce qu'elle monte d'un coup. Un booléen « c'est un escalier » aurait
+   demandé de connaître le SENS de chaque marche.
+
+   ⚠️ ET LE PERSONNAGE MONTE VISUELLEMENT PENDANT QU'IL GRAVIT, sans une ligne
+   d'animation : son décalage à l'écran vaut `elev × TOWN_ELEV_PX`, lu case par
+   case. C'est la même valeur qui décide s'il peut passer et où il se dessine —
+   donc elles ne peuvent pas diverger (§7 de CLAUDE.md). */
+/* ⚠️ 30 px, ET LE PREMIER RÉGLAGE À 14 ÉTAIT FAUX — vu au banc de rendu, pas à
+   la lecture. Quatorze pixels sur une tuile de seize, c'est la hauteur d'une
+   BORDURE DE TROTTOIR : la terrasse ne se lisait pas comme un étage, les
+   escaliers avaient l'air de dalles grises posées dans l'herbe, et le mur de
+   soutènement passait pour un trait. À 30 px (presque deux tuiles), le parement
+   a la place d'exister et la Haute-Ville est enfin EN HAUT.
+   ⚠️ Ce nombre ne change RIEN à ce qui est franchissable : la marche et le saut
+   ne lisent que `elev`, jamais des pixels. C'est un réglage purement optique,
+   et c'est exactement pour ça qu'on peut le pousser sans rien re-tester. */
+export const TOWN_ELEV_PX = 30;      // décalage vertical à l'écran, par unité d'altitude
+export const TOWN_STEP_MAX = 0.34;   // dénivelé franchissable EN MARCHANT (une marche vaut 0,25)
+/* Le SAUT depuis un rebord (Espace). Il ne sert qu'à DESCENDRE : on grimpe par
+   les marches, on redescend où l'on veut. C'est le contrat de tous les jeux qui
+   ont ce couple, et il tient à une raison de lisibilité — un saut qui monterait
+   rendrait les escaliers facultatifs, donc décoratifs. */
+export const TOWN_JUMP_MS = 380;     // durée du saut
+export const TOWN_JUMP_TILES = 1.9;  // distance franchie, en cases (assez pour dégager le pied du rebord)
+export const TOWN_JUMP_ARC_PX = 16;  // hauteur de la cloche, en px écran
+export const TOWN_JUMP_MIN_DROP = 0.5; // dénivelé minimal devant soi pour que le saut soit proposé
+
+/* LA HAUTE-VILLE : la terrasse du nord-est, à une unité d'altitude. Elle porte
+   le tribunal, deux parcelles de maisons et le belvédère. */
+export const TOWN_UPPER = { x: 120, y: 8, w: 66, h: 22 };
+/* LE BELVÉDÈRE : un second palier, à deux unités, dans l'angle de la
+   Haute-Ville. ⚠️ Deux niveaux et pas trois : au-delà, le décalage vertical
+   cumulé (2 × 14 px) commence à faire flotter les personnages au-dessus de
+   leur propre ombre, et un troisième palier n'ajouterait aucune lecture. */
+export const TOWN_BELVEDERE = { x: 164, y: 10, w: 16, h: 11 };
+/* LES ESCALIERS. `dir` donne le sens de la MONTÉE : "n" = on monte vers le
+   nord (la volée est parcourue du sud au nord). La longueur de la volée
+   (`len`) découle du dénivelé : quatre marches pour une unité, ce qui donne
+   les 0,25 de TOWN_STEP_MAX. */
+export const TOWN_STAIRS = [
+  // La volée monumentale, dans l'axe du tribunal : six cases de large, on la
+  // voit depuis la place.
+  { x: 140, y: 30, w: 6, len: 4, dir: "n", from: 0, to: 1 },
+  // La volée de service, à l'ouest, pour ne pas obliger à traverser toute la
+  // ville quand on arrive de la gare.
+  { x: 116, y: 18, w: 4, len: 4, dir: "e", from: 0, to: 1 },
+  // La montée du belvédère, courte et étroite.
+  { x: 170, y: 21, w: 3, len: 4, dir: "n", from: 1, to: 2 },
+];
+
+export const TOWN_HOUSES = [                        // door faces south onto a street
+  /* ⚠️ LES HUIT PREMIÈRES SONT LES HUIT D'AVANT, DANS LE MÊME ORDRE (quatre au
+     nord de la rue principale, quatre au sud) : voir la note d'en-tête. Elles
+     ont changé de coordonnées — la carte entière a changé — mais pas de RANG,
+     et c'est le rang qui désigne le propriétaire. */
+  { x: 14, y: 64 }, { x: 26, y: 64 }, { x: 46, y: 64 }, { x: 58, y: 64 },   // nord de la rue principale
+  { x: 14, y: 28 }, { x: 46, y: 28 }, { x: 58, y: 28 }, { x: 100, y: 28 },  // le long de l'avenue du nord
+  // Zip 425 : les parcelles nouvelles. Une ville neuf fois plus grande avec
+  // huit maisons se lit comme une ville abandonnée.
+  { x: 14, y: 102 }, { x: 26, y: 102 }, { x: 46, y: 102 }, { x: 58, y: 102 },
+  { x: 116, y: 102 }, { x: 128, y: 102 }, { x: 160, y: 102 },
+  { x: 46, y: 122 }, { x: 100, y: 122 }, { x: 160, y: 122 },
+  // ... et deux sur la terrasse : les hauteurs sont les belles adresses.
+  { x: 122, y: 24 }, { x: 152, y: 24 },
+  /* Zip 426 — les parcelles de l'agrandissement. ⚠️ ELLES SONT AJOUTÉES EN
+     QUEUE, jamais intercalées : le RANG désigne le propriétaire (voir
+     townHouseOwners), donc insérer une parcelle au milieu déménagerait tout le
+     monde d'une maison — silencieusement, et sans que rien ne le signale.
+     ⚠️ Chaque `y` est calé sur une avenue : la porte est en y+3 et l'allée
+     rejoint la rue si elle est à 8 rangées ou moins (générateur). */
+  { x: 200, y: 64 }, { x: 200, y: 102 }, { x: 200, y: 122 },   // le quartier des artisans, à l'est
+  { x: 26, y: 144 }, { x: 60, y: 144 }, { x: 100, y: 144 }, { x: 140, y: 144 }, // la rangée du sud, face au lac
+];
 // Zip 260 (demande Guillaume) : plafond de résidents porté à 10, INDÉPENDANT
 // du nombre de maisons de Valley Town. L'attribution de maison sera revue plus
 // tard — pour l'instant, les résidents au-delà des maisons disponibles sont
 // simplement dessinés près d'un point par défaut (voir le rendu des résidents
 // dans FermeGame.js), ce qui est assumé.
+/* ⚠️ 425 : MAX_RESIDENTS RESTE À 10 ALORS QUE LES PARCELLES PASSENT À 20, et
+   ce n'est pas un oubli. Les deux nombres sont indépendants depuis le zip 260 :
+   celui-ci plafonne les résidents recrutés, celui-là décrit la VILLE. Vingt
+   parcelles pour dix résidents et quelques joueurs, c'est simplement une ville
+   qui a de la place — et le panneau « à vendre » du zip 234 a enfin un sens. */
 export const MAX_RESIDENTS = 10;
-export const TOWN_HOUSES = [                        // door faces south onto a street
-  { x: 14, y: 13 }, { x: 22, y: 13 }, { x: 38, y: 13 }, { x: 46, y: 13 },   // north side of main street
-  { x: 14, y: 27 }, { x: 22, y: 27 }, { x: 38, y: 27 }, { x: 46, y: 27 },   // south side
-];
-// Zip 235: Valley Town townhall — big civic building anchored just north of
-// the plaza, replacing the old "just another house" look. Sprite is 128x128,
-// footprint occupies 8x5 tiles (blockedTown extends to cover it, see
-// FermeGame.js/blockedTown).
-export const TOWN_HALL = { x: 28, y: 4, w: 8, h: 5 };
+/* ═══════════════════════════════════════════════════════════════════════════
+   LES TROIS MONUMENTS (425).
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️ L'ANCIENNE MAIRIE DEVIENT L'ÉGLISE, ET ON NE TOUCHE PAS À SON DESSIN.
+   Demande de Guillaume : « garder l'actuel townhall et le renommer église ».
+   Le sprite `townhallSprite()` de fermeArt.js reste mot pour mot celui du
+   235 — et c'était déjà la bonne lecture : le commentaire du zip 279 l'appelle
+   « l'espèce d'église blanche ». On ne renomme donc pas un bâtiment, on lui
+   rend son nom. Seuls la CONSTANTE et l'ÉTIQUETTE changent.
+   ⚠️ `TOWN_CHURCH` est délibérément un nom NEUF plutôt qu'un TOWN_HALL réutilisé
+   pour l'église : `TOWN_HALL` continue d'exister et désigne maintenant un AUTRE
+   bâtiment, à un AUTRE endroit. Garder l'ancien nom pour le nouveau sens aurait
+   fait mentir tous les commentaires antérieurs d'un coup.
+
+   ⚠️ ET ELLE SORT DE L'AXE CENTRAL. Elle était plantée sur la colonne de
+   l'artère nord-sud, qu'elle bouchait ; on ne s'en apercevait pas parce que
+   cette artère s'arrêtait avant. Sur une carte trois fois plus longue, une rue
+   interrompue par un bâtiment se voit tout de suite. */
+export const TOWN_CHURCH = { x: 66, y: 46, w: 8, h: 5 };   // ex-TOWN_HALL du zip 235, sprite 128×128
+
+/* LE NOUVEL HÔTEL DE VILLE. Demande : « un nouveau bâtiment townhall différent
+   des autres quelque part au centre ». Il borde la place à l'est, face à la
+   fontaine — la position d'une mairie sur une place de village. Brique et
+   pierre, beffroi à horloge : rien de commun avec le portique blanc de
+   l'église ni avec le péristyle du tribunal, pour qu'aucun des trois ne puisse
+   être confondu avec un autre à distance. Sprite 160×144, soit 10×9 cases,
+   dont 6 rangées bloquantes. */
+export const TOWN_HALL = { x: 112, y: 52, w: 10, h: 6 };
+
+/* LE TRIBUNAL. Demande : « un autre bâtiment élégant néoclassique nommé
+   tribunal, imposant, qui ressemble à un tribunal ».
+   ⚠️ IL EST EN HAUTEUR, ET C'EST LE POINT ENTIER. Un tribunal néoclassique se
+   regarde D'EN BAS : le perron, le péristyle et le fronton n'existent que pour
+   ça. Le poser au niveau de la rue en aurait fait une grosse maison à colonnes.
+   Posé au sommet de la volée monumentale, il est la RÉCOMPENSE de la montée —
+   ce qui donne du même coup une raison d'être aux escaliers demandés par
+   Guillaume, au lieu d'un escalier-démonstration qui ne mène nulle part.
+   Sprite 192×176 (12×11 cases), 7 rangées bloquantes. */
+export const TOWN_COURT = { x: 136, y: 14, w: 12, h: 7 };
 export const TRAIN_BOARD = { x: 5, y: 30 };         // farm-side boarding spot on the platform (E to ride)
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZIP 426 — COUPER DU BOIS À VALLEY TOWN.
+   ───────────────────────────────────────────────────────────────────────────
+   Demande de Guillaume : « on doit pouvoir chop trees sur Valley Town aussi »,
+   avec trois décisions prises explicitement : la coupe est **partagée et
+   sauvegardée** (l'hôte arbitre, ça survit à la session), **tous** les arbres
+   sont coupables, **ça repousse**, et seule la **hache** est réactivée en ville.
+
+   ⚠️⚠️ LA COUPE NE TOUCHE PAS `townWorld.objects`, ET C'EST LA DÉCISION QUI
+   PROTÈGE TOUT LE RESTE. La carte de la ville est un SINGLETON de module
+   (`getTownWorldCached`) partagé par tous les remontages de l'onglet : y écrire
+   ferait fuiter les arbres coupés d'une ferme à l'autre, dans le même onglet,
+   sans le moindre message — on chargerait un code neuf et la ville arriverait
+   déjà déboisée. L'état vit donc DANS L'ÉTAT PARTAGÉ (`shared.townChop`), il est
+   consulté au dessin et à la collision, et il est sauvegardé avec la ferme.
+
+   ⚠️ ET IL N'Y A AUCUNE MIGRATION SQL : `townChop` est un champ de plus dans le
+   JSON de `ferme_saves`, comme `forcedWorld` au 392. Absent d'une sauvegarde
+   antérieure = ville intacte, ce qui est exactement le bon comportement.
+
+   Forme d'une entrée, indexée par case : `{ hp }` = arbre entamé, encore debout ;
+   `{ r }` = arbre abattu, souche visible et TRAVERSABLE, qui repousse à `r`. */
+export const TOWN_TREE_REGROW_MS = 2 * DAY_REAL_MS;  // deux jours de jeu (32 min réelles)
+/* ⚠️ LA SOUCHE NE BLOQUE PAS, contrairement à celle de la ferme. Deux raisons,
+   et la seconde est la vraie : d'abord un arbre abattu doit OUVRIR le passage,
+   sinon couper en ville ne sert à rien ; ensuite la souche est le seul indice
+   visible qu'un arbre repoussera là — une case redevenue vide ne dirait rien, et
+   la repousse aurait l'air d'un arbre qui apparaît de nulle part. */
+export const TOWN_STUMP_BLOCKS = false;
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZIP 426 — L'INTÉRIEUR DU TRIBUNAL, SUR TROIS NIVEAUX.
+   ───────────────────────────────────────────────────────────────────────────
+   Demande de Guillaume : « un intérieur complet pour le tribunal avec étages,
+   assez grand, avec différents bureaux, une salle d'audience etc. Tout ce
+   qu'il faut pour mimer un tribunal dans un jeu comme Valley Farm — anticipe
+   les usages du bâtiment et déduis-en le plan. »
+
+   ⚠️ LE PLAN EST DÉDUIT DES USAGES, ET C'EST L'ESSENTIEL DE CE BLOC. Chaque
+   pièce existe parce qu'une mécanique du jeu, existante ou évidente, a besoin
+   d'un GUICHET quelque part :
+     * le CADASTRE  ← les vingt-sept parcelles de Valley Town, qui affichent
+       « à vendre » depuis le zip 234 sans qu'on puisse en acheter une ;
+     * les PERMIS   ← la grange, le puits, le pont, la maison à niveaux : la
+       ferme ne sait construire que par l'argent, jamais par l'autorisation ;
+     * le NOTAIRE   ← les échanges entre joueurs, aujourd'hui impossibles ;
+     * l'ÉTAT CIVIL ← les noms de ferme, les unions, les familiers déclarés ;
+     * la SALLE D'AUDIENCE ← les litiges entre joueurs et les amendes ;
+     * les SCELLÉS et les OBJETS TROUVÉS ← ce qu'on perd (mort, blessure) ;
+     * les CELLULES ← la sanction, pendant naturel de l'audience ;
+     * les ARCHIVES ← l'histoire de la ferme, déjà écrite mais jamais lisible.
+   ⚠️ AUCUNE N'EST OPÉRATIONNELLE DANS CE ZIP, ET LE JEU LE DIT. Chaque porte
+   porte sa plaque, chaque plaque annonce son service et sa mise en service
+   « prochainement » (voir COURT_ROOMS.soon et le panneau d'affichage du hall).
+   Un bâtiment qu'on visite en sachant à quoi il servira est une promesse ; le
+   même bâtiment muet est un décor qu'on croit cassé.
+
+   ⚠️⚠️ LES TROIS NIVEAUX TIENNENT DANS UNE SEULE GRILLE, EMPILÉE VERTICALEMENT,
+   ET C'EST LA DÉCISION STRUCTURANTE. Il n'y a AUCUNE coordonnée d'étage : le
+   niveau se DÉDUIT de `y` (voir courtFloorOf). Conséquences, toutes gratuites :
+     * un joueur distant est au bon étage sans qu'on diffuse quoi que ce soit —
+       ses x/y suffisent, exactement comme l'altitude de Valley Town (§3, §6) ;
+     * rien à réconcilier, rien à désynchroniser, aucun champ de plus ;
+     * les escaliers ne sont qu'un saut de coordonnée, pas un changement d'état.
+   C'est le MÊME raisonnement que « l'altitude est une propriété de la case ».
+   ═══════════════════════════════════════════════════════════════════════════ */
+export const COURT_FLOOR_W = 46;    // largeur d'un niveau, en cases (murs compris)
+export const COURT_FLOOR_H = 28;    // hauteur d'un niveau
+export const COURT_FLOOR_GAP = 3;   // rangées de vide entre deux niveaux empilés
+export const COURT_MAP_W = COURT_FLOOR_W;
+export const COURT_MAP_H = 3 * (COURT_FLOOR_H + COURT_FLOOR_GAP);
+// Les niveaux, du haut de la grille vers le bas. ⚠️ L'ORDRE EST LE PLAN : le
+// rez-de-chaussée d'abord (c'est là qu'on entre), puis l'étage, puis le
+// sous-sol — et non l'ordre physique (sous-sol en bas), qui obligerait à des
+// index négatifs pour rien.
+/* ⚠️ `alt` EST L'ALTITUDE RÉELLE DU NIVEAU, et elle n'est pas décorative : c'est
+   elle qui décide si une volée se dessine « qui monte » ou « qui descend »,
+   DÉDUIT au lieu d'être écrit deux fois. L'ordre du tableau, lui, reste l'ordre
+   du plan (on entre par le rez-de-chaussée), pas l'ordre physique. */
+export const COURT_FLOORS = [
+  { key: "ground",   emoji: "⚖️", alt: 0 },
+  { key: "upper",    emoji: "🗂️", alt: 1 },
+  { key: "basement", emoji: "🔒", alt: -1 },
+];
+// Sol / structure. ⚠️ ENUM PROPRE À L'INTÉRIEUR, jamais les G_* de la ferme :
+// ces valeurs ne sortent pas du tribunal (carte regénérée, jamais persistée),
+// donc rien à migrer — et un G_ de plus, lui, se paierait sur les sauvegardes.
+export const CT_VOID = 0;       // hors bâtiment (jamais dessiné, toujours bloquant)
+export const CT_MARBLE = 1;     // dallage du hall
+export const CT_WOOD = 2;       // parquet des bureaux
+export const CT_CARPET = 3;     // tapis de la salle d'audience
+export const CT_STONE = 4;      // dalle brute du sous-sol
+export const CT_WALL = 5;
+export const CT_DOOR = 6;       // porte de pièce (traversable, porte une plaque)
+export const CT_STAIR_UP = 7;   // marche vers le niveau précédent dans COURT_FLOORS
+export const CT_STAIR_DOWN = 8; // ... et vers le suivant
+export const CT_EXIT = 9;       // le seuil : on ressort en ville
+export const CT_DAIS = 10;      // estrade de la salle d'audience (traversable, surélevée au dessin)
+export const CT_WINDOW = 11;    // mur percé d'une fenêtre (bloque comme un mur)
+export const CT_BARS = 12;      // grille de cellule (bloque, se voit au travers)
+
+/* LES PIÈCES. `x,y,w,h` est le rectangle MURS COMPRIS — deux pièces mitoyennes
+   partagent donc leur cloison, et le générateur n'a aucun cas particulier à
+   traiter. `doors` donne les cases de porte, TOUJOURS sur le mur qui touche le
+   couloir central (x = 18 à l'ouest, x = 27 à l'est).
+   ⚠️ `kind` PILOTE LE MOBILIER (voir courtFurnish) : c'est ce qui évite d'écrire
+   quatre cents positions de meubles à la main et de les voir dériver du plan. */
+export const COURT_CORRIDOR = { x: 18, y: 0, w: 10, h: 28 };
+export const COURT_ROOMS = [
+  // ---------------- REZ-DE-CHAUSSÉE : ce qui se passe en public.
+  /* ⚠️ LA PORTE DE LA SALLE D'AUDIENCE EST AU SUD DE LA BARRE (y = 15), et pas
+     au milieu du mur : on entre du côté du PUBLIC. Placée plus haut, elle
+     déposait le visiteur dans le prétoire, derrière la balustrade — c'est-à-dire
+     à la place des avocats, en ayant traversé une barrière qui est justement là
+     pour dire qu'on ne la traverse pas. */
+  { floor: 0, key: "courtroom", kind: "courtroom", x: 0, y: 0, w: 19, h: 20, doors: [{ x: 18, y: 15 }] },
+  { floor: 0, key: "witness",   kind: "waiting",   x: 0, y: 19, w: 19, h: 9,  doors: [{ x: 18, y: 23 }] },
+  { floor: 0, key: "clerk",     kind: "counter",   x: 27, y: 0, w: 19, h: 11, doors: [{ x: 27, y: 5 }] },
+  { floor: 0, key: "robing",    kind: "robing",    x: 27, y: 10, w: 19, h: 10, doors: [{ x: 27, y: 14 }] },
+  { floor: 0, key: "reception", kind: "counter",   x: 27, y: 19, w: 19, h: 9,  doors: [{ x: 27, y: 23 }] },
+  // ---------------- ÉTAGE : les guichets, c'est-à-dire l'avenir du bâtiment.
+  { floor: 1, key: "judge",     kind: "office",    x: 0, y: 0, w: 19, h: 11, doors: [{ x: 18, y: 5 }] },
+  { floor: 1, key: "jury",      kind: "meeting",   x: 0, y: 10, w: 19, h: 10, doors: [{ x: 18, y: 14 }] },
+  { floor: 1, key: "library",   kind: "library",   x: 0, y: 19, w: 19, h: 9,  doors: [{ x: 18, y: 23 }] },
+  { floor: 1, key: "landreg",   kind: "office",    x: 27, y: 0, w: 19, h: 9,  doors: [{ x: 27, y: 4 }] },
+  { floor: 1, key: "permits",   kind: "office",    x: 27, y: 8, w: 19, h: 8,  doors: [{ x: 27, y: 11 }] },
+  { floor: 1, key: "notary",    kind: "office",    x: 27, y: 15, w: 19, h: 7, doors: [{ x: 27, y: 18 }] },
+  { floor: 1, key: "registry",  kind: "office",    x: 27, y: 21, w: 19, h: 7, doors: [{ x: 27, y: 24 }] },
+  // ---------------- SOUS-SOL : ce qu'on garde, et ce qu'on enferme.
+  { floor: 2, key: "archives",  kind: "archive",   x: 0, y: 0, w: 19, h: 14, doors: [{ x: 18, y: 7 }] },
+  { floor: 2, key: "evidence",  kind: "storage",   x: 0, y: 13, w: 19, h: 15, doors: [{ x: 18, y: 20 }] },
+  /* ⚠️ LA PORTE DES CELLULES OUVRE SUR LE COULOIR DE GARDE (y = 9), au sud des
+     grilles. À y = 6 elle ouvrait sur une CLOISON entre deux cellules : la
+     pièce entière était inaccessible, et seule la porte avait l'air correcte.
+     C'est le banc qui l'a vu — de l'extérieur, une porte percée dans un mur
+     ressemble à une porte percée dans un mur. */
+  { floor: 2, key: "cells",     kind: "cells",     x: 27, y: 0, w: 19, h: 14, doors: [{ x: 27, y: 9 }] },
+  { floor: 2, key: "lostfound", kind: "storage",   x: 27, y: 13, w: 19, h: 9, doors: [{ x: 27, y: 17 }] },
+  { floor: 2, key: "boiler",    kind: "boiler",    x: 27, y: 21, w: 19, h: 7, doors: [{ x: 27, y: 24 }] },
+];
+/* ═══════════════════════════════════════════════════════════════════════════
+   LES CAGES D'ESCALIER. ⚠️ UNE CAGE EST UN LIEU, PAS UN TRAJET — et c'est la
+   correction qui a fait passer le banc de contrôle.
+   ───────────────────────────────────────────────────────────────────────────
+   Premier jet : deux volées (« celle qui monte », « celle qui descend ») et une
+   table de liaisons orientées. Résultat immédiat, trouvé par
+   tools/verify-vallee.mjs : la liaison RDC → étage arrivait sur la volée
+   DESCENDANTE de l'étage, c'est-à-dire nulle part — on montait dans un mur.
+   Deux descriptions de la même cage (« la volée du départ » et « la volée de
+   l'arrivée ») ne peuvent pas rester d'accord ; c'est le §8 de CLAUDE.md, mot
+   pour mot, appliqué à de la géométrie.
+
+   Une cage relie donc DEUX niveaux, au MÊME endroit, et tout le reste se
+   déduit : le sens de la volée vient de la comparaison des `alt`, la
+   destination vient de « l'autre niveau de ma cage ». Il n'y a plus rien à
+   tenir en accord. */
+export const COURT_STAIRWELLS = [
+  { x: 20, y: 2, w: 2, h: 3, a: 0, b: 1 },   // la cage ouest : rez-de-chaussée ↔ étage
+  { x: 24, y: 2, w: 2, h: 3, a: 0, b: 2 },   // la cage est : rez-de-chaussée ↔ sous-sol
+];
+export const COURT_ENTRY = { x: 22, y: 27 };  // le seuil, deux cases (x et x+1) au mur sud du RDC
+export const COURT_SPAWN = { x: 22.5, y: 25 }; // où l'on se retrouve en entrant
+export const COURT_ELEV_PX = 6;   // relief de l'estrade, en pixels d'écran
+// Les services annoncés, dans l'ordre du panneau d'affichage du hall. Le libellé
+// et le détail vivent dans fermeStrings (courtRoom*), jamais ici : ce tableau
+// dit QUOI et OÙ, pas comment ça se raconte.
+export const COURT_BOARD_ORDER = ["landreg", "permits", "notary", "registry", "courtroom", "clerk", "archives", "lostfound", "evidence", "cells"];
 
 // --- Seasons (timing chosen by the model, per Guillaume's delegation) ---
 // One season lasts SEASON_DAYS in-game days; purely visual for now (tint +
@@ -2786,8 +3210,46 @@ export const PASSAGE_GATE_DEST = {
      pas touché d'une ligne. */
   candy: "luge",    // LA GRANDE DESCENTE (zip 411), au bout du pont arc-en-ciel
   maze: "maze",     // LE LABYRINTHE (zip 393), au bout du pont de haies
-  // crystal / meadow : pont construit et habillé, destination à venir.
+  /* ⚠️ ZIP 418 — LE PONT DE CRISTAL MÈNE ENFIN QUELQUE PART.
+     Il était « construit et habillé, destination à venir » depuis le 386, soit
+     trente-deux zips. Il ouvre sur LA VALLÉE DE VERRE (public/crystal/), et ce
+     mini-jeu ne ressemble à aucun des trois autres : c'est un récit à
+     chapitres, avec des cinématiques et des choix, pas une partie qu'on gagne
+     ou qu'on perd. Voir CRY_* plus bas pour ce que ça change. */
+  crystal: "vallee", // LA VALLÉE DE VERRE (zip 418), au bout du pont de cristal
+  // meadow : pont construit et habillé, destination à venir.
 };
+
+/* ==========================================================================
+   ZIP 418 — LA VALLÉE DE VERRE (mini-jeu des Grottes de Cristal)
+   ==========================================================================
+   Quatrième mini-jeu, servi depuis public/crystal/, au bout du pont de
+   cristal. Jeu NARRATIF : sept chapitres, des cinématiques en pixel art, des
+   choix qui posent des drapeaux, et un segment jouable par chapitre.
+
+   ⚠️ IL NE RAPPORTE PAS UN SCORE, IL RAPPORTE UN AVANCEMENT — et c'est la
+   seule chose à comprendre avant de brancher quoi que ce soit. Les trois
+   autres mini-jeux ont une fin : on meurt, on gagne, on recommence pour faire
+   mieux. Celui-ci a des CHAPITRES : on ne le rejoue pas, on le continue. Coller
+   un tableau de scores à la fin d'un chapitre casserait exactement ce qu'on
+   essaie de construire.
+
+   ⚠️ CONSÉQUENCE : PAS DE BLESSURE, PAS DE PRIME, PAS ENCORE. Au chapitre 1 on
+   ne peut ni mourir ni gagner d'or — il n'y a rien à perdre dans la vallée
+   avant qu'on n'y ait des bêtes à perdre (chapitre 3). Les constantes
+   ci-dessous existent pour le jour où ce sera le cas, et elles ne sont pas
+   encore lues. C'est délibéré et c'est écrit ici pour qu'on ne les croie pas
+   branchées.
+
+   ⚠️ LE BUT DU JEU EST DE RAMENER DEUX CHOSES À LA FERME : des animaux
+   (renne d'aurore, chevaux de verre, tortue gemme — le familier canon de ce
+   monde —, chouette de givre) et UN HOMME, Aubin, qui deviendra un second
+   ouvrier à côté de Greg, spécialisé dans la survie des bêtes en hiver.
+   ========================================================================== */
+export const CRY_SHARD_GOLD = 30;      // or par éclat de givre rapporté
+export const CRY_PRIZE_GOLD = 1200;    // fin du récit, UNE FOIS par ferme
+export const CRY_MAX_SHARDS = 60;      // plafond anti-message-aberrant, cf. LAB_MAX_*
+export const CRY_MAX_CHAPTER = 7;
 
 /* ==========================================================================
    ZIP 393 — LE LABYRINTHE (mini-jeu du Pays du Labyrinthe)
@@ -2880,6 +3342,29 @@ export const DEV_TELEPORTS = [
   { key: "farm",    zone: "farm" },  // devant la maison (SPAWN)
   { key: "passage", zone: "farm" },  // devant le passage sombre, côté ferme
   { key: "town",    zone: "town" },  // Valley Town, descente du train
+  /* ⚠️ 425 — TROIS ARRÊTS DE PLUS DANS VALLEY TOWN, ET C'EST LA CARTE QUI LES
+     RÉCLAME. Elle mesurait 64×48 : la descente du train suffisait, on voyait
+     tout en dix secondes. Elle fait 192×144, et rejoindre le belvédère à pied
+     demande une minute de marche — à répéter à chaque rechargement, pour
+     regarder une ombre. Un outil de test dont le coût dépasse ce qu'il fait
+     gagner cesse d'être utilisé, et c'est comme ça qu'on finit par livrer sans
+     regarder (§9 de CLAUDE.md).
+     Les coordonnées se DÉRIVENT des repères de la ville dans devTeleport, elles
+     ne sont pas recopiées ici : déplacer la place ne doit pas laisser un
+     téléporteur pointé sur l'herbe. */
+  { key: "townPlaza",     zone: "town" },  // la place centrale, devant la fontaine
+  { key: "townCourt",     zone: "town" },  // le parvis du tribunal, en Haute-Ville
+  { key: "townBelvedere", zone: "town" },  // le second palier
+  { key: "townMarket",    zone: "town" },  // zip 426 : le champ de foire, enfin occupé
+  { key: "townLake",      zone: "town" },  // zip 426 : la promenade du lac, au sud
+  /* ⚠️ 426 — LES TROIS NIVEAUX DU TRIBUNAL, ET C'EST LE MÊME RAISONNEMENT QU'AU
+     425 : traverser la ville, entrer, puis monter deux volées à chaque
+     rechargement pour regarder un bureau finit par ne plus se faire du tout.
+     Un outil de test dont le coût dépasse ce qu'il fait gagner cesse d'être
+     utilisé — et c'est comme ça qu'on livre sans regarder. */
+  { key: "court",         zone: "court" }, // le hall, au rez-de-chaussée
+  { key: "courtUpper",    zone: "court" }, // l'étage des bureaux
+  { key: "courtBasement", zone: "court" }, // le sous-sol
   { key: "world",   zone: "evil" },  // arrivée dans la terre en cours (EVIL_SPAWN)
   { key: "bridge",  zone: "evil" },  // pied du pont de la terre en cours
 ];

@@ -1,5 +1,78 @@
 # ARCARDI 🎪
 
+> **ZIP 426 — LE TRIBUNAL S'OUVRE (ET IL EST VIDE, ET IL LE DIT).**
+>
+> **Un intérieur complet, sur trois niveaux.** Le tribunal de Valley Town avait
+> une façade et rien derrière. Il a maintenant dix-sept pièces : au
+> rez-de-chaussée le hall à colonnes, la salle d'audience (estrade, barre, banc
+> des jurés, bancs du public), la salle des témoins, le greffe, le vestiaire des
+> robes et l'accueil ; à l'étage le cabinet du juge, la salle du jury, la
+> bibliothèque, le cadastre, les permis, le notaire et l'état civil ; au sous-sol
+> les archives, les scellés, trois cellules à grilles, les objets trouvés et la
+> chaufferie.
+>
+> **Le plan a été déduit des USAGES, pas l'inverse.** Chaque bureau répond à une
+> mécanique qui existe déjà et qui n'a nulle part où se faire : les parcelles de
+> Valley Town affichent « à vendre » depuis le zip 234 sans qu'on puisse en
+> acheter une (→ le cadastre), la ferme ne sait construire que par l'argent
+> (→ les permis), deux joueurs ne peuvent pas s'échanger quoi que ce soit
+> (→ le notaire), on perd des objets sans jamais les retrouver (→ les objets
+> trouvés). **Rien de tout cela ne fonctionne encore, et le jeu le dit** : une
+> plaque sur chaque porte, une description et un « bientôt opérationnel » à la
+> touche E, et un panneau d'affichage dans le hall qui récapitule les dix
+> services à venir avec leur étage. Un bâtiment muet passe pour cassé ; un
+> bâtiment qui annonce sa suite est une promesse.
+>
+> **Trois étages, aucune coordonnée d'étage.** Les niveaux sont empilés dans la
+> même grille et l'étage se DÉDUIT du `y` — exactement comme l'altitude de la
+> ville se lit sous les pieds du joueur depuis le 425. Conséquence gratuite :
+> deux joueurs se voient au bon étage sans qu'un seul octet de plus ne circule.
+>
+> **La ville s'agrandit une seconde fois : 192×144 → 224×168.** Et elle
+> s'agrandit AVEC de quoi la remplir, parce que le 425 avait montré ce que coûte
+> l'inverse. Au sud : une cinquième avenue, une rangée de parcelles, un lac avec
+> sa promenade et son ponton. À l'est : une quatrième artère et le quartier des
+> artisans. Au centre : le champ de foire enfin garni (dix étals, un puits), un
+> cimetière derrière l'église, un kiosque à musique dans le parc, des jardinières
+> sur la place, des panneaux aux carrefours, des statues en Haute-Ville. Vingt
+> parcelles deviennent vingt-sept.
+>
+> **La carte n'est plus un écran noir en ville.** Le défaut n'était pas dans son
+> dessin : `drawFullMap` n'était tout simplement JAMAIS APPELÉE depuis que la
+> ville a sa propre boucle de rendu. Elle affiche désormais la ville avec ses
+> onze repères nommés et son relief, et le PLAN du tribunal étage par étage
+> (pièces, portes, escaliers, seuil).
+>
+> **Et un banc de contrôle qui n'existait pas.** Le contexte affirmait depuis le
+> 425 que `tools/verify-vallee.mjs` tournait avec 74 contrôles ; le fichier
+> n'existait pas. Il existe maintenant (75 contrôles, 75/75), il importe le vrai
+> moteur et PARCOURT la ville comme un joueur. Il a trouvé six défauts que
+> personne ne pouvait voir à la relecture : un lampadaire planté au milieu de la
+> nouvelle artère, six pièces du tribunal murées par les colonnes du couloir, un
+> escalier qui montait dans un mur, une porte de cellules ouvrant sur une
+> cloison, deux cases prises au piège entre deux armoires, et un banc traversable
+> posé sur le ponton. Tous corrigés — aucun n'aurait levé la moindre erreur.
+>
+> **Et on coupe enfin du bois en ville.** Quatre décisions prises explicitement :
+> la coupe est PARTAGÉE et SAUVEGARDÉE (l'hôte arbitre, ça survit à la session),
+> tous les arbres sont coupables, ça REPOUSSE au bout de deux jours de jeu, et
+> seule la HACHE est réactivée en ville — houe, arrosoir et pioche restent
+> inertes, parce qu'il n'y a rien à labourer sur du pavé. Même coût d'énergie,
+> même rendement et même quête « chop » qu'à la ferme : un second équilibrage
+> aurait juste créé des allers-retours en train. ⚠️ La carte de la ville n'est
+> JAMAIS mutée — elle est partagée par tous les remontages de l'onglet, et y
+> écrire ferait arriver déboisée la prochaine ferme chargée dans le même onglet.
+>
+> **Et un dernier défaut, trouvé en jouant** : le verrou anti-répétition des
+> actions n'était décrémenté que dans la boucle de la FERME. En ville, le premier
+> coup de hache le bloquait pour toujours — un seul coup par visite, sans le
+> moindre message. Même famille que la carte restée noire : une zone qui gagne sa
+> propre boucle hérite de tout ce que la boucle commune faisait pour elle.
+>
+> ⚠️ **Aucune manipulation Supabase n'est nécessaire** : Valley Town et le
+> tribunal sont regénérés à graine fixe et ne sont jamais persistés ; les arbres
+> coupés voyagent dans le JSON de `ferme_saves` qui existe déjà.
+
 > **ZIP 422 — LA GRANDE DESCENTE SORT DE LA BÊTA, ET LE COUPABLE ÉTAIT LA
 > CHAÎNE COLORIMÉTRIQUE.**
 >

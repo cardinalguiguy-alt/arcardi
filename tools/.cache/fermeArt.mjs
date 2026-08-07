@@ -8,7 +8,7 @@
    du site respectée.
    ========================================================================== */
 
-import * as C from "./fermeConstants";
+import * as C from "./fermeConstants.mjs";
 
 /* ---------------------------------------------------------------- PALETTE ---
    Zip 377. Ces deux constantes vivaient DANS buildSprites(), donc invisibles

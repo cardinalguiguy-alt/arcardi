@@ -78,6 +78,14 @@ function getTownWorldCached(E2) {
   if (!townWorldModuleCache) townWorldModuleCache = E2.generateTownWorld();
   return townWorldModuleCache;
 }
+// Zip 426 : l'intérieur du tribunal, MÊME motif de cache. Il est purement
+// déterministe (aucune graine, voir generateCourtWorld) : deux joueurs y voient
+// donc rigoureusement le même bâtiment sans qu'une seule donnée ne circule.
+let courtWorldModuleCache = null;
+function getCourtWorldCached(E2) {
+  if (!courtWorldModuleCache) courtWorldModuleCache = E2.generateCourtWorld();
+  return courtWorldModuleCache;
+}
 const HOST_MEM_CACHE_MS = 20000;
 
 // Petit hash stable d'une chaîne -> seed positive (monde stable par salon).
@@ -502,6 +510,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [bagOpen, setBagOpen] = useState(false); // zip 236: personal bag modal
   const [mapOpen, setMapOpen] = useState(false);
   const [devMenuOpen, setDevMenuOpen] = useState(false); // zip 392 : menu développeur (Cmd/Ctrl+Shift+X, hôte seul)
+  const [courtBoardOpen, setCourtBoardOpen] = useState(false); // zip 426 : le panneau d'affichage du tribunal
   const [forcedWorldUi, setForcedWorldUi] = useState(null); // zip 392 : miroir RENDABLE de sharedRef.current.forcedWorld (voir applyForcedWorld)
   // Menu du chaudron (chantier 2026-07, demande Guillaume : "le click sur E
   // doit ouvrir un menu chaudron que voulez-vous concocter ?") : remplace
@@ -608,6 +617,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // Valley Town (zip 234) : carte locale de CE joueur, comme evilWorldRef —
   // mais le zone "town" est MULTIJOUEUR (positions publiees normalement).
   const townWorldRef = useRef(null);
+  /* Zip 426 — L'INTÉRIEUR DU TRIBUNAL. Même statut que townWorldRef : une carte
+     locale, multijoueur, jamais persistée. ⚠️ ET LE NIVEAU N'EST PAS ICI : il
+     se déduit de `y` (courtFloorOf), donc il n'y a rien à stocker ni à
+     diffuser — voir l'en-tête des constantes COURT_*. */
+  const courtWorldRef = useRef(null);
+  /* L'escalier est un DÉCLENCHEMENT AU PASSAGE (on marche dessus, aucune touche)
+     et il faut donc désarmer : à l'arrivée on est PAR CONSTRUCTION sur la volée
+     jumelle, qui renverrait aussitôt d'où l'on vient — un aller-retour infini à
+     soixante images par seconde. Même verrou que runGateArmedRef (zip 375). */
+  const courtStairArmedRef = useRef(true);
+  const courtBoardOpenRef = useRef(false);   // zip 426 : lu par la boucle (closure à deps vides), comme devMenuOpenRef
+  // Zip 426 : la carte de la ville, construite une fois (la ville ne change
+  // jamais) — voir buildTownMinimapBase. Le tribunal, lui, se dessine en PLAN
+  // et n'a donc aucune image à garder.
+  const townMinimapImgRef = useRef(null);
   /* Zip 425 — LE SAUT DEPUIS UN REBORD, en Valley Town uniquement.
      ⚠️ UN `ref` ET NON UN `state` : il est lu et écrit à chaque image par la
      boucle de jeu, qui vit dans une closure à dépendances vides. Un state
@@ -623,7 +647,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const meRef = useRef(null);
   const playersRef = useRef(new Map()); // id -> remote farmer render data
   const farmersRef = useRef({});        // hôte : id -> état privé arbitré
-  const sharedRef = useRef({ seed: 0, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, barn: E.newBarnState(), salveCraft: E.newSalveCraftState(), house: { level: 1, upgradeUntil: 0 }, evilMonsters: [], flour: 0, sugar: 0, gregStock: { wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) }, fertilizerShop: { stock: 0, lastRestockDay: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], greg: null, soan: null, harald: null, station: E.newStationState(), decor: [], crafts: E.newCrafts(), craftStock: E.newCraftStock() });
+  const sharedRef = useRef({ seed: 0, money: C.START_MONEY, day: 1, dayStartAt: Date.now(), totalEarned: 0, horses: [], animals: [], wellBuilt: false, barn: E.newBarnState(), salveCraft: E.newSalveCraftState(), house: { level: 1, upgradeUntil: 0 }, evilMonsters: [], flour: 0, sugar: 0, gregStock: { wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) }, fertilizerShop: { stock: 0, lastRestockDay: 0 }, wolves: [], wolfNight: { active: false, kills: 0 }, rabbits: [], greg: null, soan: null, harald: null, station: E.newStationState(), decor: [], crafts: E.newCrafts(), craftStock: E.newCraftStock(), townChop: {} });
   const invRef = useRef(null);
   const toolsRef = useRef({ hoe: 1, can: 1, axe: 1, pick: 1 });
   const energyRef = useRef(C.MAX_ENERGY);
@@ -848,6 +872,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   useEffect(() => { hatUntilRef.current = hatUntil || 0; }, [hatUntil]);
   useEffect(() => { worldReadyRef.current = worldReady; }, [worldReady]);
   useEffect(() => { mapOpenRef.current = mapOpen; }, [mapOpen]);
+  useEffect(() => { courtBoardOpenRef.current = courtBoardOpen; }, [courtBoardOpen]); // zip 426
   useEffect(() => { devMenuOpenRef.current = devMenuOpen; }, [devMenuOpen]); // zip 392
   useEffect(() => { shopOpenRef.current = shopOpen; }, [shopOpen]);
   useEffect(() => { cauldronMenuOpenRef.current = cauldronMenuOpen; }, [cauldronMenuOpen]);
@@ -1027,6 +1052,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         // like wolves) - migrateStation drops them on plain loads.
         station: E.migrateStation(saved.station),
         decor: E.migrateDecor(saved.decor), // zip 251: décorations posées (ferme + ville)
+        /* Zip 426 : les arbres coupés à Valley Town. ⚠️ ABSENT D'UNE SAUVEGARDE
+           ANTÉRIEURE = ville intacte, et c'est le bon comportement — aucune
+           migration à écrire, exactement comme `forcedWorld` au 392. */
+        townChop: (saved && saved.townChop) || {},
         crafts: E.migrateCrafts(saved.crafts), craftStock: E.migrateCraftStock(saved.craftStock), // zip 252
         greg: (saved.greg && saved.greg.expiresAt > Date.now())
           // Chantier 2 (feuille de route) : `orderQueue` est un ajout — les
@@ -1249,6 +1278,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       station: E.migrateStation(payload.station, payload.hostNow),
       decor: E.migrateDecor(payload.decor), // zip 251
       crafts: E.migrateCrafts(payload.crafts), craftStock: E.migrateCraftStock(payload.craftStock), // zip 252
+      townChop: payload.townChop || {}, // zip 426
     };
     // Zip 392 : la terre forcée arrive AVEC l'instantané, donc avant toute
     // évaluation de passageWorldIndex par ce client. Posée ici et pas dans le
@@ -1735,6 +1765,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       station: s.station, // 2026-07 station update
       decor: s.decor, // zip 251: décorations posées (ferme + Valley Town), persistées
       crafts: s.crafts, craftStock: s.craftStock, // zip 252: ateliers artisans + stock de produits
+      /* Zip 426 : les arbres coupés à Valley Town voyagent et se persistent par
+         le MÊME chemin que tout le reste. Un état partagé qui prendrait un
+         chemin à lui finirait par ne pas être sauvegardé le jour où l'on touche
+         à l'autre (leçon des vergers, zip 398). */
+      townChop: s.townChop || {},
       // Zip 392 : terre forcée par le menu développeur. Persistée à la demande
       // de Guillaume ("tout le monde + persisté") pour qu'une démonstration
       // survive à un rechargement. Champ du seul instantané JSON déjà en base :
@@ -2287,6 +2322,28 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // Sucrerie : le dépôt de canne ne passe plus par "act" (chantier
       // "sucrerie déplaçable" — voir hostHandleDecorReq/kind "sucrerieDeposit",
       // qui broadcast directement crafts.sucrerie).
+    } else if (req.kind === "townChop") {
+      /* ZIP 426 — COUPER UN ARBRE À VALLEY TOWN.
+         ⚠️ L'HÔTE VALIDE SUR SA PROPRE CARTE DE VILLE, pas sur celle de
+         l'émetteur : la ville est regénérée à graine fixe et identique partout,
+         donc les deux coïncident — mais c'est l'autorité de l'hôte qui compte
+         (§3), et un client bricolé n'obtiendra rien de plus qu'un arbre qui
+         existe vraiment. La portée n'est PAS vérifiée par `canReach` : celle-ci
+         lit `f.x/f.y`, les coordonnées FERME du fermier, qui ne veulent rien
+         dire pendant qu'il est en ville. La garde utile est ailleurs — l'énergie
+         et les points de vie de l'arbre plafonnent naturellement la cadence. */
+      const tw = townWorldRef.current || (townWorldRef.current = getTownWorldCached(E));
+      const s2 = sharedRef.current;
+      if (!s2.townChop) s2.townChop = {};
+      const r = E.resolveTownChop(s2.townChop, tw, f, req.i | 0, Date.now());
+      if (r.changed) {
+        out.townChop = { [req.i | 0]: s2.townChop[req.i | 0] };
+        out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
+        dirtyRef.current = true;                       // à sauvegarder
+        if (r.felled) { out.fx.push({ k: "treedown", x: req.x | 0, y: req.y | 0, wood: r.wood, zone: "town" }); questId = "chop"; }
+        else out.fx.push({ k: "chop", x: req.x | 0, y: req.y | 0, zone: "town" });
+      }
+      if (r.toast) out.toast = { id: f.id, key: r.toast };
     } else if (req.kind === "buy") {
       const r = E.resolveBuy(f, s.money, req);
       if (r.moneyDelta) { s.money += r.moneyDelta; out.state = shareState(); }
@@ -4785,6 +4842,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // hostHandleReqUnsafe et le dayTimer plus bas). Même mécanique que
     // p.crops ci-dessus, mais sur w.mills.
     if (w && p.mills) for (const [i, wheat, nextAt] of p.mills) w.mills.set(i, { wheat, nextAt });
+    /* Zip 426 — les arbres de Valley Town. On reçoit un DELTA (les cases
+       changées), jamais le dictionnaire entier : une ville bien déboisée tient
+       en quelques dizaines d'entrées, mais l'envoyer en bloc à chaque coup de
+       hache serait payer une taille pour une information d'une case.
+       ⚠️ Une entrée `null` signifie « l'arbre a repoussé » : on SUPPRIME la
+       clé, sans quoi le dictionnaire ne redescendrait jamais. */
+    if (p.townChop) {
+      const s3 = sharedRef.current;
+      if (!s3.townChop) s3.townChop = {};
+      for (const k of Object.keys(p.townChop)) {
+        const v = p.townChop[k];
+        if (v) s3.townChop[k] = v; else delete s3.townChop[k];
+      }
+    }
     /* ZIP 398 — les vergers. Un verger RETIRÉ (abattu) est diffusé avec k = -1 :
        sans ce cas, la Map du client garderait une entrée fantôme, et la case
        replantée plus tard hériterait de l'âge et des fruits de l'ancien arbre. */
@@ -5101,6 +5172,23 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           dirtyRef.current = true;
           channelRef.current?.send({ type: "broadcast", event: "apply", payload: { house: { ...hh0 }, hostNow: Date.now() } });
           broadcastChat("🏠", L.houseUpgraded(hh0.level));
+        }
+      }
+      /* ZIP 426 — LA REPOUSSE DES ARBRES DE VALLEY TOWN.
+         ⚠️ ELLE EST PLACÉE AVANT LE `return` SUR `!w` (le monde FERME) : la
+         ville n'a rien à voir avec la carte de la ferme, et un hôte qui n'aurait
+         pas encore son monde chargé n'a aucune raison de laisser la ville figée.
+         Le parcours ne coûte rien : le dictionnaire ne contient que les
+         EXCEPTIONS, c'est-à-dire les quelques arbres coupés. */
+      {
+        const sc = sharedRef.current;
+        const back = E.townTreeRegrow(sc.townChop, Date.now());
+        if (back.length) {
+          dirtyRef.current = true;
+          // `null` = « repoussé, oublie cette case » (voir applyDeltas).
+          const delta = {};
+          for (const i of back) delta[i] = null;
+          channelRef.current?.send({ type: "broadcast", event: "apply", payload: { townChop: delta } });
         }
       }
       const s = sharedRef.current, w = worldRef.current;
@@ -5924,7 +6012,25 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     // zip 403 : la main est un MODE de la case fusionnée, plus une case à elle.
     if (slotRef.current === SLOT.carry && carryModeRef.current === "hand") return handAction();
-    if (m.zone === "town") return; // Valley Town (zip 234): no farm tools here — E interactions only (see tryOpenNearby)
+    /* ⚠️ ZIP 426 — LA HACHE, ET ELLE SEULE, EST RÉACTIVÉE À VALLEY TOWN.
+       Le zip 250 avait coupé TOUS les outils en ville, et c'était juste : il n'y
+       a rien à labourer, rien à arroser, rien à miner sur du pavé. La hache est
+       la seule dont la cible existe vraiment (des centaines d'arbres), d'où
+       cette exception étroite plutôt qu'un retour de la barre entière — une
+       houe qui « ne fait rien » sur un trottoir est un outil cassé, pas un
+       outil inutile.
+       ⚠️ Le tribunal, lui, ne reçoit AUCUN outil : on n'abat pas une colonne. */
+    if (m.zone === "court") return;
+    if (m.zone === "town") {
+      if (slotRef.current !== SLOT.tools || toolKindRef.current !== "axe") return;
+      const tw = townWorldRef.current; if (!tw) return;
+      const tt2 = targetTileTown();
+      const ti = tt2.y * tw.w + tt2.x;
+      if (!E.townTreeStanding(tw, sharedRef.current.townChop, ti)) return;
+      actAnimRef.current = 0.28;   // même durée d'animation que la coupe à la ferme (voir plus bas)
+      sendReq({ kind: "townChop", i: ti, x: tt2.x, y: tt2.y });
+      return;
+    }
     const w = worldRef.current; if (!w) return;
     // Priorité : ramasser la production d'un animal proche.
     const ai = nearestCollectable();
@@ -10099,6 +10205,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (toTown && myHorse()) sendReq({ kind: "dismount" });
     zoneTransRef.current = { active: true, t0: performance.now(), toEvil: false, swapped: false, dest: toTown ? "town" : "farmFromTown" };
   }
+  /* Zip 426 — entrer au tribunal / en ressortir. Même machinerie de fondu que
+     le train, avec deux destinations de plus. ⚠️ ET LE MÊME GARDE-FOU : une
+     transition déjà en cours ignore la demande, sans quoi franchir le seuil
+     pendant le fondu d'entrée relancerait la sortie (§4 : « un ouvreur appelé à
+     mi-fondu ne doit pas tester zoneTransRef.active » — ici on n'est PAS un
+     ouvreur de mini-jeu, on est bien un changement de zone, donc le test est
+     non seulement permis mais nécessaire). */
+  function enterCourt() {
+    if (zoneTransRef.current.active) return;
+    zoneTransRef.current = { active: true, t0: performance.now(), toEvil: false, swapped: false, dest: "court" };
+  }
+  function leaveCourt() {
+    if (zoneTransRef.current.active) return;
+    zoneTransRef.current = { active: true, t0: performance.now(), toEvil: false, swapped: false, dest: "townFromCourt" };
+  }
   function updateZoneTransition() {
     const zt = zoneTransRef.current;
     if (!zt.active) return;
@@ -10128,7 +10249,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           m.zone = "evil";
           if (dk === "world") { m.x = C.EVIL_SPAWN.x; m.y = C.EVIL_SPAWN.y; }
           else { m.x = C.RUN_GATE.x - C.DEV_BRIDGE_OFFSET; m.y = C.RUN_GATE.y; }
-        } else if (dk === "town" || dk === "townPlaza" || dk === "townCourt" || dk === "townBelvedere") {
+        } else if (dk === "town" || dk === "townPlaza" || dk === "townCourt" || dk === "townBelvedere" || dk === "townMarket" || dk === "townLake") {
           if (wasFarm) { m.farmX = m.x; m.farmY = m.y; }
           if (!townWorldRef.current) townWorldRef.current = getTownWorldCached(E);
           m.zone = "town";
@@ -10141,9 +10262,27 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              emprise est bloquante, et arriver à l'intérieur d'un bâtiment
              coincerait le joueur — la même précaution que DEV_BRIDGE_OFFSET. */
           if (dk === "townPlaza") { m.x = C.TOWN_FOUNTAIN.x; m.y = C.TOWN_FOUNTAIN.y + 3; }
+          else if (dk === "townMarket") { m.x = C.TOWN_MARKET.x + C.TOWN_MARKET.w / 2; m.y = C.TOWN_MARKET.y + C.TOWN_MARKET.h / 2; } // zip 426
+          else if (dk === "townLake") { m.x = C.TOWN_PIER.x + C.TOWN_PIER.w / 2; m.y = C.TOWN_LAKE.y - C.TOWN_QUAY_H - 1; }
           else if (dk === "townCourt") { m.x = C.TOWN_COURT.x + C.TOWN_COURT.w / 2; m.y = C.TOWN_COURT.y + C.TOWN_COURT.h + 2; }
           else if (dk === "townBelvedere") { m.x = C.TOWN_BELVEDERE.x + C.TOWN_BELVEDERE.w / 2; m.y = C.TOWN_BELVEDERE.y + C.TOWN_BELVEDERE.h - 3; }
           else { m.x = C.TOWN_SPAWN.x; m.y = C.TOWN_SPAWN.y; }
+        } else if (dk === "court" || dk === "courtUpper" || dk === "courtBasement") {
+          /* Zip 426 — les trois arrêts du tribunal. ⚠️ ON N'ENTRE PAS AU
+             TRIBUNAL SANS PASSER PAR LA VILLE : `townX/townY` est la position
+             que la sortie restaure, et elle DOIT exister. Un dev-téléport
+             depuis la ferme la pose donc sur le parvis, ce qui est le seul
+             endroit dont on soit sûr qu'il est dehors, praticable, et devant la
+             porte — exactement comme farmX/farmY pour le passage sombre. */
+          if (wasFarm) { m.farmX = m.x; m.farmY = m.y; }
+          if ((m.zone || "farm") === "town") { m.townX = m.x; m.townY = m.y; }
+          else { m.townX = C.TOWN_COURT.x + C.TOWN_COURT.w / 2; m.townY = C.TOWN_COURT.y + C.TOWN_COURT.h + 2; }
+          if (!townWorldRef.current) townWorldRef.current = getTownWorldCached(E);
+          if (!courtWorldRef.current) courtWorldRef.current = getCourtWorldCached(E);
+          m.zone = "court";
+          const cf = dk === "courtUpper" ? 1 : dk === "courtBasement" ? 2 : 0;
+          m.x = C.COURT_SPAWN.x; m.y = E.courtFloorY0(cf) + (cf === 0 ? C.COURT_SPAWN.y : 8);
+          courtStairArmedRef.current = false;   // on atterrit peut-être sur une volée
         } else {
           // "farm" (devant la maison) et "passage" (devant le passage sombre,
           // côté ferme). w.darkPassage est posé par la génération du monde ;
@@ -10176,6 +10315,28 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         m.x = C.TOWN_SPAWN.x; m.y = C.TOWN_SPAWN.y; m.moving = false;
         sendPos(); // publish the town position right away (multiplayer zone)
         pushToast(L.trainToTownToast);
+      } else if (zt.dest === "court") {
+        /* ZIP 426 — ON ENTRE AU TRIBUNAL.
+           ⚠️ LA POSITION EN VILLE EST MÉMORISÉE ICI ET NULLE PART AILLEURS,
+           exactement comme farmX/farmY pour le passage sombre : on ressort par
+           où l'on est entré. La recalculer à la sortie (« devant la porte »)
+           aurait marché aussi, jusqu'au jour où le bâtiment bouge. */
+        if (!courtWorldRef.current) courtWorldRef.current = getCourtWorldCached(E);
+        m.townX = m.x; m.townY = m.y;
+        m.zone = "court";
+        m.x = C.COURT_SPAWN.x; m.y = C.COURT_SPAWN.y; m.moving = false;
+        courtStairArmedRef.current = true;
+        sendPos();
+        pushToast(L.courtEnterToast);
+      } else if (zt.dest === "townFromCourt") {
+        m.zone = "town";
+        // Repli sur le parvis si la position d'entrée manque (téléport
+        // développeur d'un client rechargé) : jamais d'atterrissage à (0,0).
+        m.x = (typeof m.townX === "number" ? m.townX : C.TOWN_COURT.x + C.TOWN_COURT.w / 2);
+        m.y = (typeof m.townY === "number" ? m.townY : C.TOWN_COURT.y + C.TOWN_COURT.h + 2);
+        m.moving = false;
+        sendPos();
+        pushToast(L.courtExitToast);
       } else if (zt.dest === "farmFromTown") {
         m.zone = "farm";
         m.x = C.TRAIN_BOARD.x; m.y = C.TRAIN_BOARD.y - 0.5; m.moving = false;
@@ -10219,7 +10380,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function checkWalkOverPassage() {
     if (zoneTransRef.current.active) return; // pas de nouveau déclenchement pendant une transition en cours
     const m = meRef.current;
-    if (m.zone === "town") return; // zip 234: Valley Town rides back via E at the sign, never by walk-over (its coords would collide with farm passage math)
+    if (m.zone === "town" || m.zone === "court") return; // zip 234: Valley Town rides back via E at the sign, never by walk-over (its coords would collide with farm passage math). Zip 426 : idem à l'intérieur du tribunal — ses coordonnées sont celles d'une TROISIÈME carte.
     const tx = Math.floor(m.x + 0.5), ty = Math.floor(m.y + 0.5);
     if (m.zone === "evil") {
       const ew = evilWorldRef.current; if (!ew) return;
@@ -10263,7 +10424,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // -------- Téléport maison (nouveauté) --------
   function teleportHome() {
     const m = meRef.current; if (!m) return;
-    if (m.zone === "evil" || m.zone === "town") { pushToast(L.homeBlockedToast); return; } // zip 234: teleporting home from Valley Town would desync zone/coords — ride the train back instead
+    if (m.zone === "evil" || m.zone === "town" || m.zone === "court") { pushToast(L.homeBlockedToast); return; } // zip 234: teleporting home from Valley Town would desync zone/coords — ride the train back instead (zip 426 : et depuis le tribunal, il faut d'abord ressortir)
     m.x = C.SPAWN.x; m.y = C.SPAWN.y; m.moving = false;
     sendPos();
     pushToast(L.homeToast);
@@ -10577,11 +10738,34 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (fa > 0) { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = "black"; ctx.globalAlpha = fa; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.globalAlpha = 1; }
         return;
       }
+      /* ⚠️⚠️ ZIP 426 — LE MINUTEUR D'ANIMATION D'ACTION SE DÉCRÉMENTE DANS
+         TOUTES LES ZONES, ET L'OUBLI A COÛTÉ UNE FONCTIONNALITÉ ENTIÈRE.
+         `actAnimRef` sert de verrou anti-répétition : `doAction` refuse tout
+         tant qu'il est positif. Il n'était décrémenté que dans la partie FERME
+         de la boucle, après les sorties anticipées des autres zones — donc en
+         ville, le PREMIER coup de hache le montait à 0,28 et il n'y redescendait
+         JAMAIS. Résultat : un seul coup possible par visite, l'arbre restait
+         debout, et rien n'indiquait pourquoi. C'est le même défaut que la carte
+         restée noire (§4) : une zone qui gagne sa boucle hérite de tout ce que
+         la boucle commune faisait pour elle. */
+      if (actAnimRef.current > 0 && (m.zone === "town" || m.zone === "court" || m.zone === "evil")) actAnimRef.current -= dt;
       // Valley Town (zip 234): same early-return pattern as the evil map; the
       // host sims above keep running on the farm world regardless.
       if (m.zone === "town") {
         if (overlayUp) return;   // zip 425, même raison exactement
         drawTownFrame(now, dt);
+        if (mapOpenRef.current) drawFullMap();   // zip 426 : la carte marche enfin en ville
+        const fa = zoneFadeAlpha();
+        if (fa > 0) { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = "black"; ctx.globalAlpha = fa; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.globalAlpha = 1; }
+        return;
+      }
+      // Intérieur du tribunal (zip 426) : même sortie anticipée que les deux
+      // autres cartes. La simulation hôte de la ferme, elle, a déjà tourné
+      // au-dessus — on ne quitte que le RENDU de la ferme.
+      if (m.zone === "court") {
+        if (overlayUp) return;
+        drawCourtFrame(now, dt);
+        if (mapOpenRef.current) drawFullMap();   // ici : le PLAN du bâtiment
         const fa = zoneFadeAlpha();
         if (fa > 0) { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.fillStyle = "black"; ctx.globalAlpha = fa; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.globalAlpha = 1; }
         return;
@@ -10597,7 +10781,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const disp = Math.round(sleepStartEnergyRef.current + (C.MAX_ENERGY - sleepStartEnergyRef.current) * frac);
         if (disp !== energyRef.current) { energyRef.current = disp; setMyEnergy(disp); }
       }
-      if (actAnimRef.current > 0) actAnimRef.current -= dt;
+      if (actAnimRef.current > 0) actAnimRef.current -= dt;   // ⚠️ voir tickActAnim
       for (const p of playersRef.current.values()) {
         advanceRemote(p); // FIX 243
         // Zip 365 : 12 -> 22. Ce lissage ne sert plus à masquer des sauts
@@ -11657,7 +11841,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           } });
         }
       }
-      for (const p of playersRef.current.values()) if (!p.sleeping && p.zone !== "evil" && p.zone !== "town") { draws.push({ y: (p.y + 0.9) * T, fn: () => drawRemotePets(p, dt) }); draws.push({ y: (p.y + 1) * T, fn: () => drawRemote(p) }); } // zip 234: town players are drawn on the town map, not here — zip 247: their pets follow them here too
+      for (const p of playersRef.current.values()) if (!p.sleeping && (p.zone || "farm") === "farm") { draws.push({ y: (p.y + 0.9) * T, fn: () => drawRemotePets(p, dt) }); draws.push({ y: (p.y + 1) * T, fn: () => drawRemote(p) }); } // zip 234: town players are drawn on the town map, not here — zip 247: their pets follow them here too
       // Sommeil : aucune animation d'entrée, le dormeur disparaît juste de la
       // carte (voir ci-dessus, non ajouté à `draws`) ; des "Zzz" flottent
       // au-dessus des fenêtres de la maison tant qu'AU MOINS un joueur dort
@@ -12862,7 +13046,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (tw.solid && tw.solid[i]) return true;
       if (tw.ground[i] === C.G_WATER) return true; // fountain pool
       const o = tw.objects[i];
-      return o === C.O_TREE || o === C.O_TREE2 || o === C.O_STUMP;
+      if (o !== C.O_TREE && o !== C.O_TREE2 && o !== C.O_STUMP) return false;
+      /* ⚠️ ZIP 426 — UN ARBRE ABATTU NE BLOQUE PLUS, et l'information ne vient
+         PAS de `tw.objects` : la carte de la ville est un singleton de module
+         qu'on ne mute jamais (voir TOWN_TREE_REGROW_MS). Elle vient de l'état
+         partagé, donc elle est la même pour tout le monde et elle survit à la
+         session. La souche, elle, se traverse (TOWN_STUMP_BLOCKS). */
+      const ch = sharedRef.current.townChop;
+      const e = ch && ch[i];
+      if (e && e.r) return C.TOWN_STUMP_BLOCKS;
+      return true;
     }
     /* L'altitude sous un point (425). Hors carte : 0 — c'est le niveau de la
        rue, donc le choix qui ne crée pas de falaise fantôme au bord du monde. */
@@ -12952,12 +13145,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     /* Suis-je devant la porte d'un bâtiment civique ? La porte est au milieu de
        la façade sud, comme pour les maisons — les trois monuments sont dessinés
-       ainsi (voir fermeArt.js), et c'est la seule façade qu'on peut approcher. */
-    function nearBuildingDoor(b) {
-      const m = meRef.current; if (!m) return false;
-      const doorX = b.x + b.w / 2, doorY = b.y + b.h + 0.5;
-      return Math.abs(m.x + 0.5 - doorX) <= b.w / 2 && Math.abs(m.y - doorY) <= 1.6;
-    }
+       ainsi (voir fermeArt.js), et c'est la seule façade qu'on peut approcher.
+       ⚠️ ZIP 426 : LE CALCUL A DÉMÉNAGÉ AU NIVEAU DU COMPOSANT (nearCivicDoor) et
+       cette fonction n'est plus qu'un alias. Il est désormais lu par DEUX
+       appelants — l'invite, ici, et la touche E (tryOpenNearby, qui vit hors de
+       cette closure) — et deux copies du même seuil de proximité, c'est la
+       garantie qu'un jour l'invite propose une porte que E refuse d'ouvrir. */
+    const nearBuildingDoor = nearCivicDoor;
     function updateMeTown(dt) {
       const m = meRef.current, tw = townWorldRef.current, keys = keysRef.current;
       if (!tw) return;
@@ -13137,6 +13331,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           if (inFtn) { ctx.fillStyle = "#adacb3"; ctx.fillRect(px, py, T, T); }
           else { ctx.fillStyle = "#3f7fd0"; ctx.fillRect(px, py, T, T); }
         }
+        else if (g === C.G_BRIDGE) {
+          /* Zip 426 — LE PONTON DU LAC. Des lames de bois posées SUR l'eau : on
+             peint donc l'eau d'abord (le ponton ne la remplace pas, il la
+             couvre), puis les planches et leur ombre portée. Sans l'eau
+             dessous, le ponton flotterait sur du vert. */
+          ctx.fillStyle = "#3f7fd0"; ctx.fillRect(px, py, T, T);
+          ctx.fillStyle = "#a9834f"; ctx.fillRect(px, py, T, T);
+          for (let k = 0; k < 4; k++) {
+            ctx.fillStyle = (k % 2) ? "#b78f58" : "#9c7746";
+            ctx.fillRect(px, py + k * 4, T, 4);
+            ctx.fillStyle = "rgba(60,40,24,0.30)"; ctx.fillRect(px, py + k * 4 + 3, T, 1);
+          }
+          ctx.fillStyle = "rgba(20,40,70,0.30)"; ctx.fillRect(px, py + T - 2, T, 2);
+        }
         else ctx.drawImage(sprites.grass[0], px, py);
 
         /* ---- LA FALAISE. Le parement qui bouche le trou ouvert par le
@@ -13235,7 +13443,39 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           });
         }
         const o = tw.objects[i];
-        if (o === C.O_TREE || o === C.O_TREE2) { const _se = E.seasonOf().key; const img = o === C.O_TREE ? (_se === "autumn" ? sprites.oakAutumn : _se === "spring" ? sprites.oakSpring : sprites.oak) : (_se === "autumn" ? sprites.pineAutumn : _se === "spring" ? sprites.pineSpring : sprites.pine); pushE((y + 1) * T, e, () => ctx.drawImage(img, x * T - 8, (y + 1) * T - 48)); }
+        if (o === C.O_TREE || o === C.O_TREE2) {
+          /* ZIP 426 — l'arbre, ou la souche s'il a été coupé. ⚠️ L'ÉTAT SE LIT
+             DANS `shared.townChop` À CHAQUE IMAGE, jamais dans `tw.objects` :
+             c'est la même source que la collision, donc elles ne peuvent pas
+             diverger — et la carte de la ville reste intacte pour la ferme
+             suivante chargée dans le même onglet. */
+          const che = townChopAt(i);
+          if (che && che.r) {
+            if (sprites.stump) pushE((y + 1) * T, e, () => ctx.drawImage(sprites.stump, x * T, (y + 1) * T - 16));
+          } else {
+            const _se = E.seasonOf().key;
+            const img = o === C.O_TREE ? (_se === "autumn" ? sprites.oakAutumn : _se === "spring" ? sprites.oakSpring : sprites.oak) : (_se === "autumn" ? sprites.pineAutumn : _se === "spring" ? sprites.pineSpring : sprites.pine);
+            pushE((y + 1) * T, e, () => {
+              /* ⚠️ UN ARBRE ENTAMÉ S'ASSOMBRIT, ET ÇA PASSE PAR `ctx.filter`,
+                 PAS PAR UN RECTANGLE. Premier jet : un `fillRect` teinté sur
+                 l'emprise du sprite — vu en jeu, ça dessine une BOÎTE GRISE
+                 autour de l'arbre, parce qu'un sprite est transparent partout
+                 sauf sur lui-même. `filter` s'applique au dessin, donc à ses
+                 pixels opaques seulement.
+                 ⚠️ ET IL FAUT LE REMETTRE À "none" : le filtre est un état du
+                 contexte, il contaminerait tout ce qui est dessiné ensuite. */
+              const che2 = che && che.hp ? 1 - che.hp / C.TREE_HP : 0;
+              if (che2 > 0) ctx.filter = `brightness(${(1 - che2 * 0.45).toFixed(2)})`;
+              ctx.drawImage(img, x * T - 8, (y + 1) * T - 48);
+              if (che2 > 0) {
+                ctx.filter = "none";
+                // ... et des copeaux au pied, qui disent où l'on tape.
+                ctx.fillStyle = "rgba(190,150,90,0.75)";
+                for (let c2 = 0; c2 < 3; c2++) ctx.fillRect(x * T + 2 + c2 * 5, (y + 1) * T - 3 + (c2 % 2), 3, 2);
+              }
+            });
+          }
+        }
       }
       /* ══════════════════════════════════════════════════════════════════════
          LA FONTAINE (425). Le bassin de pierre est un SPRITE (voir
@@ -13338,9 +13578,26 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          bancs invisibles qui bloquent, ou des bancs qu'on traverse. */
       for (const pr of (tw.props || [])) {
         if (pr.x < x0 - 2 || pr.x > x1 + 2 || pr.y < y0 - 3 || pr.y > yBot + 2) continue;
+        /* Zip 426 : le mobilier nouveau. ⚠️ LES ÉTALS SE CHOISISSENT PAR
+           HACHAGE DE LEUR POSITION, jamais par tirage : un `Math.random()` ici
+           changerait de bâche à chaque image et la foire clignoterait. C'est la
+           même règle que le feuillage des haies (425).
+           ⚠️⚠️ ET LA BÂCHE DES ÉTALS VIENT DU GÉNÉRATEUR (`pr.v`), pas d'un
+           hachage calculé ici. Le premier jet hachait la position — les étals
+           étant posés tous les quatre pas, TOUTE LA RANGÉE sortait de la même
+           couleur (vu au banc de rendu). Le générateur, lui, connaît l'indice de
+           l'étal : il n'a rien à deviner. Voir la note du champ de foire. */
         const img = pr.kind === "lamp" ? sprites.plazaLamp
                   : pr.kind === "bench" ? sprites.plazaBench
-                  : pr.kind === "topiary" ? sprites.plazaTopiary : null;
+                  : pr.kind === "topiary" ? sprites.plazaTopiary
+                  : pr.kind === "stall" ? (sprites.townStalls || [])[(pr.v | 0) % 4]
+                  : pr.kind === "kiosk" ? sprites.townKiosk
+                  : pr.kind === "grave" ? sprites.townGrave
+                  : pr.kind === "planter" ? sprites.townPlanter
+                  : pr.kind === "streetSign" ? sprites.townStreetSign
+                  : pr.kind === "statue" ? sprites.townStatue
+                  : pr.kind === "townWell" ? sprites.townWell
+                  : pr.kind === "crate" ? sprites.townCrate : null;
         if (!img) continue;
         const by = (pr.y + 1) * T, cxp = pr.x * T + T / 2;
         pushE(by, elAt(pr.x, pr.y), () => {
@@ -13435,6 +13692,30 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const dex = e.x, dey = e.y;
         pushE((dey + 0.5) * T, elevTown(tw, dex, dey), () => ctx.drawImage(dimg, Math.round(dex * T - dimg.width / 2), Math.round(dey * T - dimg.height + 6)));
       }
+      /* Zip 426 — LES EFFETS (copeaux, « +6 bois »). Ils sont poussés dans le
+         MÊME `fxRef` que la ferme : un joueur n'est jamais dans deux zones à la
+         fois, et `spawnFx` refuse déjà tout effet d'une autre zone que la
+         sienne. Ils sont dessinés au-dessus du décor, sans tri : une particule
+         qui passerait derrière un arbre ne se verrait pas. */
+      {
+        const fx = fxRef.current;
+        for (let k = fx.length - 1; k >= 0; k--) {
+          const f = fx[k]; f.t += dt;
+          if (f.t > f.life) { fx.splice(k, 1); continue; }
+          const a = 1 - f.t / f.life;
+          if (f.kind === "p") {
+            f.x += f.vx * dt; f.y += f.vy * dt; f.vy += 6 * dt;
+            draws.push({ y: 1e9, fn: () => { ctx.fillStyle = f.col; ctx.globalAlpha = a; ctx.fillRect(f.x * T + 8, f.y * T + 8, 2, 2); ctx.globalAlpha = 1; } });
+          } else {
+            draws.push({ y: 1e9, fn: () => {
+              ctx.globalAlpha = a; ctx.font = "bold 8px monospace"; ctx.textAlign = "center";
+              ctx.fillStyle = "#00000090"; ctx.fillText(f.txt, f.x * T + 8 + 1, f.y * T - f.t * 12 + 1);
+              ctx.fillStyle = f.col; ctx.fillText(f.txt, f.x * T + 8, f.y * T - f.t * 12);
+              ctx.globalAlpha = 1; ctx.textAlign = "left";
+            } });
+          }
+        }
+      }
       draws.sort((a, b) => a.y - b.y);
       // Zip 250 (bug "les maisons disparaissent à deux") : la boucle exécutait
       // les draws triés d'un bloc — si UN seul draw levait une exception (ex.
@@ -13442,6 +13723,24 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // draws suivants (dont des maisons plus bas à l'écran) n'étaient plus
       // dessinés. On isole chaque draw : une frame ne peut plus être amputée.
       for (const d of draws) { try { d.fn(); } catch (e) { console.error("[FERME] town draw ignoré", e); } }
+      /* ZIP 426 — LE CURSEUR DE VISÉE, en ville, quand la hache est en main.
+         ⚠️ SANS LUI, LA COUPE EN VILLE EST INJOUABLE : à la ferme, un liseré
+         blanc dit en permanence sur quelle case le clic va tomber ; ici il n'y
+         en avait aucun, parce qu'aucun outil n'y servait. On ne le montre que
+         lorsqu'il y a quelque chose à couper — un curseur qui s'affiche partout
+         redevient du décor, et on cesse de le lire. */
+      if (slotRef.current === SLOT.tools && toolKindRef.current === "axe") {
+        const ct = targetTileTown();
+        const ci = ct.y * tw.w + ct.x;
+        if (E.townTreeStanding(tw, sharedRef.current.townChop, ci)) {
+          const ce = elAt(ct.x, ct.y);
+          ctx.save();
+          ctx.translate(0, -ce * EP);
+          ctx.strokeStyle = "rgba(255,255,255,0.85)"; ctx.lineWidth = 1;
+          ctx.strokeRect(ct.x * T + 0.5, ct.y * T + 0.5, T - 1, T - 1);
+          ctx.restore();
+        }
+      }
       // Prompts: E at the sign to ride home; near a house door, name it.
       let tpk = null;
       /* ⚠️ 425 — LE SAUT PASSE AVANT TOUT LE RESTE. Il est la seule invite du
@@ -13462,6 +13761,348 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
       setPromptKeyThrottled(tpk);
       setMountPromptThrottled(null); // zip 234 debug fix: clear a stale farm mount hint while in town
+    }
+
+    /* ══════════════════════════════════════════════════════════════════════════
+       ZIP 426 — L'INTÉRIEUR DU TRIBUNAL : collision, déplacement, rendu.
+       ──────────────────────────────────────────────────────────────────────────
+       Même séparation stricte que la carte maléfique et que Valley Town :
+       caméra, collision et rendu dédiés sur courtWorldRef, jamais un octet de
+       worldRef. Comme Valley Town, la zone est MULTIJOUEUR — les x/y voyagent
+       dans la diffusion de position habituelle, avec zone "court".
+
+       ⚠️ ET LE NIVEAU NE VOYAGE PAS : il se lit dans `y` (E.courtFloorOf). Un
+       joueur qui monte à l'étage disparaît de l'écran de celui qui reste en
+       bas, sans qu'aucun champ n'ait été ajouté nulle part. C'est le pendant
+       exact de « l'altitude est une propriété de la case » (§6).
+       ══════════════════════════════════════════════════════════════════════════ */
+    function courtFloorRect(f) {
+      const y0 = E.courtFloorY0(f);
+      return { x0: 0, y0, x1: C.COURT_FLOOR_W, y1: y0 + C.COURT_FLOOR_H };
+    }
+    function getCamCourt() {
+      const m = meRef.current;
+      const vw = canvas.width / ZOOM, vh = canvas.height / ZOOM;
+      const fr = courtFloorRect(E.courtFloorOf(m.y));
+      const fw = (fr.x1 - fr.x0) * T, fh = (fr.y1 - fr.y0) * T;
+      /* ⚠️ LA CAMÉRA EST BORNÉE AU NIVEAU COURANT, PAS À LA GRILLE ENTIÈRE.
+         Sans ça, on verrait le sous-sol par-dessous le rez-de-chaussée dès
+         qu'on s'approche du mur sud — les trois niveaux sont empilés dans la
+         MÊME grille, c'est tout l'intérêt et c'est aussi le seul piège.
+         Et si le niveau est plus petit que la fenêtre, on le CENTRE : le
+         clamp classique le collerait en haut à gauche. */
+      let cx = (m.x + 0.5) * T - vw / 2, cy = (m.y + 0.5) * T - vh / 2;
+      cx = fw <= vw ? fr.x0 * T + (fw - vw) / 2 : Math.max(fr.x0 * T, Math.min(fr.x1 * T - vw, cx));
+      cy = fh <= vh ? fr.y0 * T + (fh - vh) / 2 : Math.max(fr.y0 * T, Math.min(fr.y1 * T - vh, cy));
+      return { x: cx, y: cy, vw, vh };
+    }
+    function courtTileAt(cw, x, y) {
+      const fx = Math.floor(x), fy = Math.floor(y);
+      if (fx < 0 || fy < 0 || fx >= cw.w || fy >= cw.h) return C.CT_VOID;
+      return cw.tile[fy * cw.w + fx];
+    }
+    function blockedCourt(cw, x, y) {
+      const fx = Math.floor(x), fy = Math.floor(y);
+      if (fx < 0 || fy < 0 || fx >= cw.w || fy >= cw.h) return true;
+      return !!cw.solid[fy * cw.w + fx];
+    }
+    function canStandCourt(cw, x, y) {
+      const r = 0.28;
+      for (const [px, py] of [[x - r, y], [x + r, y], [x - r, y + 0.35], [x + r, y + 0.35]]) {
+        if (blockedCourt(cw, px, py)) return false;
+      }
+      return true;
+    }
+    // La case sous les pieds (même règle que Valley Town : +0,2, le milieu de
+    // la boîte de collision) — c'est elle qui décide de l'étage et des
+    // déclenchements au passage.
+    function courtFootTile(cw, p) { return courtTileAt(cw, p.x, p.y + 0.2); }
+    /* LES ESCALIERS, EN TROIS LIGNES. Marcher sur une volée téléporte à la
+       MÊME case du niveau visé (voir COURT_LINKS) : le trajet est
+       lisible et il n'y a aucune table de destinations à tenir à jour.
+       ⚠️ LE DÉSARMEMENT EST OBLIGATOIRE : on arrive par construction sur la
+       volée jumelle, qui renverrait aussitôt d'où l'on vient. */
+    function checkCourtStairs() {
+      const m = meRef.current, cw = courtWorldRef.current;
+      if (!m || !cw || m.zone !== "court") return;
+      const t = courtFootTile(cw, m);
+      const onStair = (t === C.CT_STAIR_UP || t === C.CT_STAIR_DOWN);
+      if (!onStair) { courtStairArmedRef.current = true; return; }
+      if (!courtStairArmedRef.current) return;
+      const f = E.courtFloorOf(m.y + 0.2);
+      /* ⚠️ LA DESTINATION EST « L'AUTRE NIVEAU DE MA CAGE », rien de plus. Il n'y
+         a donc aucune table de trajets à tenir en accord avec la géométrie —
+         c'est tout l'intérêt d'avoir fait de la cage un LIEU (voir
+         COURT_STAIRWELLS). La case d'arrivée est la même, à l'étage près. */
+      const fx = Math.floor(m.x), fy = Math.floor(m.y + 0.2) - E.courtFloorY0(f);
+      const sw = C.COURT_STAIRWELLS.find(w2 => (w2.a === f || w2.b === f)
+        && fx >= w2.x && fx < w2.x + w2.w && fy >= w2.y && fy < w2.y + w2.h);
+      if (!sw) return;
+      const to = sw.a === f ? sw.b : sw.a;
+      courtStairArmedRef.current = false;
+      const dy = E.courtFloorY0(to) - E.courtFloorY0(f);
+      m.y += dy;
+      m.moving = false;
+      sendPos();   // le changement d'étage EST un changement de position : il se diffuse comme tel
+    }
+    function updateMeCourt(dt) {
+      const m = meRef.current, cw = courtWorldRef.current, keys = keysRef.current;
+      if (!cw) return;
+      const uiBlocked = mapOpenRef.current || courtBoardOpenRef.current || document.activeElement === chatInputRef.current;
+      let dx = 0, dy = 0;
+      if (!uiBlocked) {
+        if (keys["ArrowUp"] || keys["KeyW"] || keys["KeyZ"]) dy -= 1;
+        if (keys["ArrowDown"] || keys["KeyS"]) dy += 1;
+        if (keys["ArrowLeft"] || keys["KeyA"] || keys["KeyQ"]) dx -= 1;
+        if (keys["ArrowRight"] || keys["KeyD"]) dx += 1;
+      }
+      const moving = (dx || dy) && actAnimRef.current <= 0;
+      if (moving) {
+        const len = Math.hypot(dx, dy); dx /= len; dy /= len;
+        // Même vitesse qu'en ville et à la ferme (décision du zip 250 : « on ne
+        // fait que marcher »). Le bonbon de vitesse reste actif — il n'y a
+        // aucune raison qu'un couloir l'annule.
+        const spSec = C.PLAYER_SPEED * (performance.now() < speedBuffUntilRef.current ? C.CANDY_SPEED_MUL : 1);
+        const sp = spSec * dt;
+        m.vx = dx * spSec; m.vy = dy * spSec;
+        const nx = m.x + dx * sp, ny = m.y + dy * sp;
+        if (canStandCourt(cw, nx, m.y)) m.x = nx;
+        if (canStandCourt(cw, m.x, ny)) m.y = ny;
+        if (dx < 0) m.dir = 2; else if (dx > 0) m.dir = 3; else if (dy < 0) m.dir = 1; else if (dy > 0) m.dir = 0;
+        m.animT += dt * 9;
+      } else { m.animT = 0; m.vx = 0; m.vy = 0; }
+      m.moving = !!moving;
+      checkCourtStairs();
+      maybeSendPos();
+    }
+    function drawCourtFrame(now, dt) {
+      const cw = courtWorldRef.current, m = meRef.current, sprites = spritesRef.current;
+      if (!cw || !sprites) return;
+      const cam = getCamCourt();
+      const myFloor = E.courtFloorOf(m.y + 0.2);
+      const fr = courtFloorRect(myFloor);
+      ctx.setTransform(ZOOM, 0, 0, ZOOM, -Math.round(cam.x * ZOOM), -Math.round(cam.y * ZOOM));
+      // Le dehors : un gris très sombre. ⚠️ PAS DU NOIR PUR — le noir se
+      // confond avec le voile de transition de zone, et l'on ne sait plus si
+      // l'image est en train de charger ou si le bâtiment s'arrête là.
+      ctx.fillStyle = "#191a1f";
+      ctx.fillRect(cam.x - T, cam.y - T, cam.vw + T * 2, cam.vh + T * 2);
+      const x0 = Math.max(fr.x0, Math.floor(cam.x / T)), x1 = Math.min(fr.x1 - 1, Math.ceil((cam.x + cam.vw) / T));
+      const y0 = Math.max(fr.y0, Math.floor(cam.y / T)), y1 = Math.min(fr.y1 - 1, Math.ceil((cam.y + cam.vh) / T));
+      const EP = C.COURT_ELEV_PX;
+      const draws = [];
+      const tileAt = (x, y) => (x < fr.x0 || y < fr.y0 || x >= fr.x1 || y >= fr.y1 ? C.CT_VOID : cw.tile[y * cw.w + x]);
+      const isDais = (x, y) => tileAt(x, y) === C.CT_DAIS;
+
+      // ---------------------------------------------------------------- SOLS
+      for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+        const t = tileAt(x, y);
+        if (t === C.CT_VOID) continue;
+        const px = x * T, py = y * T - (t === C.CT_DAIS ? EP : 0);
+        if (t === C.CT_MARBLE) {
+          /* LE DALLAGE DU HALL. Damier clair/sombre + un joint blanc au nord et
+             à l'ouest : exactement la recette du dallage de la place (425), qui
+             a fait ses preuves. Une veine sur une dalle sur sept suffit à faire
+             lire du MARBRE plutôt que du carrelage. */
+          const dark = (x + y) % 2 === 0;
+          ctx.fillStyle = dark ? "#cdc9bd" : "#bdb9ae";
+          ctx.fillRect(px, py, T, T);
+          if ((x * 31 + y * 17) % 7 === 0) {
+            ctx.fillStyle = "rgba(120,116,110,0.25)";
+            ctx.fillRect(px + 3, py + 4 + ((x + y) % 5), 10, 1);
+          }
+          ctx.fillStyle = "rgba(255,255,255,0.16)"; ctx.fillRect(px, py, T, 1); ctx.fillRect(px, py, 1, T);
+        } else if (t === C.CT_WOOD || t === C.CT_DAIS) {
+          // PARQUET : lames de 4 px, décalées d'une rangée sur deux. C'est le
+          // décalage qui fait le parquet — des lames alignées font une grille.
+          ctx.fillStyle = "#8a6440"; ctx.fillRect(px, py, T, T);
+          for (let k = 0; k < 4; k++) {
+            ctx.fillStyle = ["#96704a", "#8a6440", "#7e5a38", "#906a44"][(x * 3 + y * 5 + k) % 4];
+            ctx.fillRect(px, py + k * 4, T, 4);
+            ctx.fillStyle = "rgba(60,40,24,0.35)"; ctx.fillRect(px, py + k * 4 + 3, T, 1);
+          }
+          ctx.fillStyle = "rgba(60,40,24,0.30)";
+          ctx.fillRect(px + ((y % 2) ? 4 : 11), py, 1, T);
+        } else if (t === C.CT_CARPET) {
+          // Le tapis de la salle d'audience : bordure déduite du VOISINAGE, pas
+          // de la géométrie de la pièce (même principe que la bordure du
+          // dallage de la place — elle sert donc aussi si la salle change).
+          ctx.fillStyle = ((x + y) % 2) ? "#7a2530" : "#742330";
+          ctx.fillRect(px, py, T, T);
+          ctx.fillStyle = "rgba(255,230,200,0.05)"; ctx.fillRect(px, py, T, 1);
+          const car = (xx, yy) => tileAt(xx, yy) === C.CT_CARPET || tileAt(xx, yy) === C.CT_DAIS;
+          ctx.fillStyle = "#c8a45a";
+          if (!car(x, y - 1)) ctx.fillRect(px, py + 1, T, 2);
+          if (!car(x, y + 1)) ctx.fillRect(px, py + T - 3, T, 2);
+          if (!car(x - 1, y)) ctx.fillRect(px + 1, py, 2, T);
+          if (!car(x + 1, y)) ctx.fillRect(px + T - 3, py, 2, T);
+        } else if (t === C.CT_STONE) {
+          ctx.fillStyle = ((x * 7 + y * 13) % 5 < 2) ? "#6e6f74" : "#76777c";
+          ctx.fillRect(px, py, T, T);
+          ctx.fillStyle = "rgba(30,30,34,0.35)"; ctx.fillRect(px, py + T - 1, T, 1); ctx.fillRect(px + T - 1, py, 1, T);
+          if ((x * 5 + y * 11) % 9 === 0) { ctx.fillStyle = "rgba(20,20,24,0.30)"; ctx.fillRect(px + 4, py + 6, 7, 1); }
+        } else if (t === C.CT_STAIR_UP || t === C.CT_STAIR_DOWN) {
+          // Les marches, dessinées comme celles de la ville (le joueur les a
+          // apprises dehors : il ne doit pas avoir à les réapprendre dedans).
+          ctx.fillStyle = "#b8b4ab"; ctx.fillRect(px, py, T, T);
+          for (let s = 0; s < 4; s++) {
+            ctx.fillStyle = "rgba(255,255,255,0.22)"; ctx.fillRect(px, py + s * 4, T, 1);
+            ctx.fillStyle = "rgba(58,54,48,0.30)"; ctx.fillRect(px, py + s * 4 + 3, T, 1);
+          }
+          ctx.fillStyle = "#8d8981"; ctx.fillRect(px, py, 1, T); ctx.fillRect(px + T - 1, py, 1, T);
+        } else if (t === C.CT_EXIT) {
+          // LE SEUIL : du dallage, et la lumière du dehors qui entre. C'est
+          // cette tache claire qui fait qu'on retrouve la sortie sans carte.
+          ctx.fillStyle = "#cdc9bd"; ctx.fillRect(px, py, T, T);
+          const gl = 0.30 + Math.sin(now / 1400) * 0.05;
+          ctx.fillStyle = `rgba(255,244,210,${gl})`; ctx.fillRect(px, py, T, T);
+        } else if (t === C.CT_DOOR) {
+          ctx.fillStyle = "#a89880"; ctx.fillRect(px, py, T, T);
+          ctx.fillStyle = "rgba(60,50,36,0.25)"; ctx.fillRect(px, py, T, 2); ctx.fillRect(px, py + T - 2, T, 2);
+        } else {
+          ctx.fillStyle = "#5a5b62"; ctx.fillRect(px, py, T, T);   // sous un mur : jamais vu, jamais noir
+        }
+        /* LA JOUE DE L'ESTRADE. Même principe que les falaises de Valley Town :
+           le décalage vers le haut OUVRE un trou vers le sud, et ce trou EST la
+           marche. Elle n'est donc jamais dessinée à côté de sa position. */
+        if (t === C.CT_DAIS && !isDais(x, y + 1)) {
+          ctx.fillStyle = "#6d4c2e"; ctx.fillRect(px, py + T, T, EP);
+          ctx.fillStyle = "#a3794c"; ctx.fillRect(px, py + T - 2, T, 2);
+          ctx.fillStyle = "rgba(30,20,12,0.30)"; ctx.fillRect(px, py + T + EP, T, 2);
+        }
+      }
+
+      // ------------------------------------------------------------- MURS
+      /* ⚠️ LES MURS SE DESSINENT APRÈS TOUS LES SOLS, ET PLUS HAUT QU'EUX.
+         Un mur peint dans sa seule case donne un plan d'architecte vu de
+         dessus : il faut qu'il DÉBORDE vers le nord pour qu'on lise une
+         élévation. Le débord recouvre donc la case du dessus, ce qui n'est
+         correct que si tous les sols sont déjà posés. */
+      const WALL_H = 10;
+      const wallAt = (x, y) => { const t = tileAt(x, y); return t === C.CT_WALL || t === C.CT_WINDOW || t === C.CT_VOID; };
+      for (let y = y0; y <= y1 + 1; y++) for (let x = x0; x <= x1; x++) {
+        const t = tileAt(x, y);
+        if (t !== C.CT_WALL && t !== C.CT_WINDOW && t !== C.CT_BARS) continue;
+        const px = x * T, py = y * T;
+        if (t === C.CT_BARS) {
+          // La grille de cellule : on voit au travers, donc on peint le sol
+          // derrière puis les barreaux. Un mur plein ici tuerait la lecture.
+          ctx.fillStyle = "#6e6f74"; ctx.fillRect(px, py, T, T);
+          ctx.fillStyle = "#3a3d44"; ctx.fillRect(px, py - 12, T, 4);
+          for (let k = 0; k < 4; k++) { ctx.fillStyle = "#4a4e56"; ctx.fillRect(px + 1 + k * 4, py - 12, 2, 26); ctx.fillStyle = "rgba(200,206,214,0.25)"; ctx.fillRect(px + 1 + k * 4, py - 12, 1, 26); }
+          continue;
+        }
+        // Le corps du mur : une masse, une plinthe sombre, une arête claire au
+        // sommet, et un lambris à mi-hauteur (c'est lui qui « meuble » un
+        // couloir de quarante-six cases sans un seul meuble).
+        ctx.fillStyle = "#8e8a80"; ctx.fillRect(px, py - WALL_H, T, T + WALL_H);
+        ctx.fillStyle = "#a5a196"; ctx.fillRect(px, py - WALL_H, T, 4);
+        ctx.fillStyle = "#c6c2b6"; ctx.fillRect(px, py - WALL_H, T, 1);
+        ctx.fillStyle = "rgba(46,43,38,0.30)"; ctx.fillRect(px, py + T - 3, T, 3);
+        ctx.fillStyle = "#7a6a4e"; ctx.fillRect(px, py + 2, T, 2);
+        if (!wallAt(x + 1, y)) { ctx.fillStyle = "rgba(46,43,38,0.22)"; ctx.fillRect(px + T - 2, py - WALL_H, 2, T + WALL_H); }
+        if (t === C.CT_WINDOW) {
+          ctx.fillStyle = "#3d5a70"; ctx.fillRect(px + 2, py - WALL_H + 3, T - 4, 11);
+          ctx.fillStyle = "#8fb6cc"; ctx.fillRect(px + 3, py - WALL_H + 4, T - 6, 5);
+          ctx.fillStyle = "#c8dae6"; ctx.fillRect(px + 3, py - WALL_H + 4, 4, 3);
+          ctx.fillStyle = "#6a6458"; ctx.fillRect(px + 7, py - WALL_H + 3, 1, 11);
+          ctx.fillStyle = "#c6c2b6"; ctx.fillRect(px + 1, py - WALL_H + 13, T - 2, 2);
+        }
+      }
+
+      // ----------------------------------------------------- PORTES & PLAQUES
+      /* La plaque au-dessus de chaque porte. ⚠️ ELLE EST LE MODE D'EMPLOI DU
+         BÂTIMENT : sans elle, dix-sept pièces meublées ne se distinguent que par
+         leur mobilier, et le joueur ne peut pas savoir que ce bureau-ci sera le
+         cadastre. C'est aussi ce qui rend l'ensemble lisible sur une capture. */
+      for (const d of cw.doors) {
+        if (d.floor !== myFloor || d.x < x0 - 2 || d.x > x1 + 2 || d.y < y0 - 2 || d.y > y1 + 2) continue;
+        const px = d.x * T, py = d.y * T;
+        // L'encadrement de la porte, dessiné par-dessus le mur : montants,
+        // linteau, et l'ombre du chambranle.
+        ctx.fillStyle = "#5a4230"; ctx.fillRect(px - 1, py - 14, T + 2, 14);
+        ctx.fillStyle = "#3a2a1c"; ctx.fillRect(px + 1, py - 11, T - 2, 11);
+        ctx.fillStyle = "#7a5232"; ctx.fillRect(px - 1, py - 14, T + 2, 2);
+        const label = L.courtRoomName(d.room);
+        draws.push({ y: (d.y + 0.6) * T, fn: () => {
+          ctx.font = "bold 8px monospace"; ctx.textAlign = "center";
+          const wpx = ctx.measureText(label).width + 8;
+          const tx = px + T / 2, ty = py - 16;
+          ctx.fillStyle = "#f5eeda"; ctx.fillRect(tx - wpx / 2, ty - 8, wpx, 11);
+          ctx.strokeStyle = "#6b4a2e"; ctx.lineWidth = 1; ctx.strokeRect(tx - wpx / 2 + 0.5, ty - 7.5, wpx - 1, 10);
+          ctx.fillStyle = "#1d1d1d"; ctx.fillText(label, tx, ty);
+          ctx.textAlign = "left";
+        } });
+      }
+
+      // ------------------------------------------------------------ MOBILIER
+      for (const pr of (cw.props || [])) {
+        if (E.courtFloorOf(pr.y) !== myFloor) continue;
+        if (pr.x < x0 - 2 || pr.x > x1 + 2 || pr.y < y0 - 3 || pr.y > y1 + 3) continue;
+        const img = sprites.courtProps && sprites.courtProps[pr.kind];
+        if (!img) continue;
+        const raised = isDais(pr.x, pr.y) ? EP : 0;
+        const by = (pr.y + 1) * T - raised, cxp = pr.x * T + T / 2;
+        draws.push({ y: by, fn: () => {
+          ctx.fillStyle = "rgba(20,16,12,0.22)";
+          ctx.beginPath(); ctx.ellipse(cxp, by - 1, img.width * 0.30, 2.5, 0, 0, 7); ctx.fill();
+          ctx.drawImage(img, Math.round(cxp - img.width / 2), by - img.height);
+        } });
+      }
+
+      // ------------------------------------------------------------- JOUEURS
+      // Les autres visiteurs, filtrés sur l'ÉTAGE — qui se déduit de leur y.
+      for (const p of playersRef.current.values()) {
+        if (p.zone !== "court" || p.sleeping) continue;
+        advanceRemote(p);
+        p.x += (p.tx - p.x) * Math.min(1, dt * 22);
+        p.y += (p.ty - p.y) * Math.min(1, dt * 22);
+        p.animT = p.moving ? (p.animT || 0) + dt * 9 : 0;
+        if (E.courtFloorOf(p.y + 0.2) !== myFloor) continue;
+        const rz = isDais(Math.floor(p.x), Math.floor(p.y + 0.2)) ? EP : 0;
+        draws.push({ y: (p.y + 0.9) * T - rz, fn: () => { ctx.save(); ctx.translate(0, -rz); drawRemotePets(p, dt); ctx.restore(); } });
+        draws.push({ y: (p.y + 1) * T - rz, fn: () => { ctx.save(); ctx.translate(0, -rz); drawCharacter(p, false); ctx.restore(); } });
+      }
+      const myRz = isDais(Math.floor(m.x), Math.floor(m.y + 0.2)) ? EP : 0;
+      draws.push({ y: (m.y + 0.9) * T - myRz, fn: () => { ctx.save(); ctx.translate(0, -myRz); drawMyPets(m, dt); ctx.restore(); } });
+      draws.push({ y: (m.y + 1) * T - myRz, fn: () => { ctx.save(); ctx.translate(0, -myRz); drawSelf(m); ctx.restore(); } });
+      draws.sort((a, b) => a.y - b.y);
+      // Même isolation qu'en ville (zip 250) : un draw qui lève n'ampute plus
+      // toute la fin de l'image.
+      for (const d of draws) { try { d.fn(); } catch (e) { console.error("[FERME] court draw ignoré", e); } }
+
+      /* L'AMBIANCE. Une vignette chaude, plus dense au sous-sol : c'est le seul
+         effet du bâtiment, et il fait tout le travail que la lumière du jour
+         fait dehors. ⚠️ AUCUN VOILE DE NUIT ICI : il fait le même temps dans un
+         couloir à 3 h qu'à midi, et un intérieur qui s'assombrit la nuit
+         donnerait surtout l'impression d'un bug d'éclairage. */
+      const vig = myFloor === 2 ? 0.42 : 0.20;
+      const gvig = ctx.createRadialGradient(cam.x + cam.vw / 2, cam.y + cam.vh / 2, Math.min(cam.vw, cam.vh) * 0.25,
+                                            cam.x + cam.vw / 2, cam.y + cam.vh / 2, Math.max(cam.vw, cam.vh) * 0.72);
+      gvig.addColorStop(0, "rgba(0,0,0,0)");
+      gvig.addColorStop(1, `rgba(8,6,10,${vig})`);
+      ctx.fillStyle = gvig; ctx.fillRect(cam.x, cam.y, cam.vw, cam.vh);
+
+      // ---- Le bandeau d'étage, en espace ÉCRAN (il ne suit pas la caméra).
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      const fname = `${C.COURT_FLOORS[myFloor].emoji} ${L.courtFloorName(C.COURT_FLOORS[myFloor].key)}`;
+      ctx.font = "bold 15px monospace"; ctx.textAlign = "left";
+      const bw = ctx.measureText(fname).width + 22;
+      ctx.fillStyle = "rgba(24,20,16,0.72)"; ctx.fillRect(16, canvas.height - 54, bw, 26);
+      ctx.strokeStyle = "rgba(230,214,170,0.45)"; ctx.lineWidth = 1; ctx.strokeRect(16.5, canvas.height - 53.5, bw - 1, 25);
+      ctx.fillStyle = "#f2e6c8"; ctx.fillText(fname, 27, canvas.height - 36);
+
+      // ---- Les invites. Même hiérarchie qu'en ville : l'action éphémère
+      // d'abord (ici il n'y en a pas), puis ce qui est devant soi.
+      let cpk = null;
+      if (nearCourtExit()) cpk = "courtExit";
+      else if (nearCourtBoard()) cpk = "courtBoard";
+      else {
+        const d = nearestCourtDoor();
+        if (d) cpk = "courtDoor:" + d.room;
+      }
+      setPromptKeyThrottled(cpk);
+      setMountPromptThrottled(null);
     }
     // Créatures maléfiques (chantier 2026-07, demande Guillaume : "des
     // monstres qui pourchassent le joueur, lents, mais qui l'assomment et le
@@ -13558,6 +14199,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
       if (m.zone === "evil") { updateMeEvil(dt); return; }
       if (m.zone === "town") { updateMeTown(dt); return; } // Valley Town (zip 234)
+      if (m.zone === "court") { updateMeCourt(dt); return; } // intérieur du tribunal (zip 426)
       const w = worldRef.current;
       const horseNow = (sharedRef.current.horses || []).find(h => h.rider2 === me.id);
       if (horseNow) {
@@ -14282,7 +14924,23 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (tmin < DEEP_END) return 0.3 + Math.min(1, (tmin - DUSK_MID) / (DEEP_END - DUSK_MID)) * (NIGHT_MAX - 0.3); // approfondissement
       return NIGHT_MAX; // cœur de nuit jusqu'au lendemain matin
     }
+    /* ══════════════════════════════════════════════════════════════════════
+       ZIP 426 — LA CARTE MARCHE DANS LES TROIS ZONES.
+       ──────────────────────────────────────────────────────────────────────
+       ⚠️ ELLE ÉTAIT UN ÉCRAN NOIR EN VILLE, et le défaut n'était pas dans le
+       dessin : `drawFullMap` n'était TOUT SIMPLEMENT PAS APPELÉE. La boucle
+       sort tôt en zone "town" (comme pour la carte maléfique) et l'appel
+       vivait après cette sortie — donc le canevas du modal restait vierge,
+       c'est-à-dire noir. Aucune erreur, aucun symptôme ailleurs.
+       ⚠️ LA LEÇON : quand une zone gagne sa propre boucle de rendu, elle hérite
+       de la responsabilité de TOUT ce que la boucle commune faisait pour elle.
+       Ici c'était la carte ; c'est le genre d'oubli qui ne se voit qu'en
+       ouvrant l'écran concerné depuis cette zone-là.
+       ══════════════════════════════════════════════════════════════════════ */
     function drawFullMap() {
+      const mz = (meRef.current && meRef.current.zone) || "farm";
+      if (mz === "town") return drawTownMap();
+      if (mz === "court") return drawCourtMap();
       const mc = mapCanvasRef.current; if (!mc) return;
       const w = worldRef.current;
       if (minimapDirtyRef.current || !minimapImgRef.current) buildMinimapBase();
@@ -14317,6 +14975,166 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         g.fillStyle = "#000"; g.fillText(L.mapDarkPassage, dpx + 1, dpy - 9 + 1);
         g.fillStyle = "#d9c2ff"; g.fillText(L.mapDarkPassage, dpx, dpy - 9);
       }
+    }
+
+    /* ══════════════════════════════════════════════════════════════════════
+       LA CARTE DE VALLEY TOWN (zip 426).
+       ──────────────────────────────────────────────────────────────────────
+       ⚠️ ELLE SE CONSTRUIT UNE FOIS ET SE GARDE. La ville ne change jamais
+       (graine fixe, rien de persisté, rien de constructible) : redessiner
+       224 × 168 pixels à chaque image d'un modal ouvert serait payer, soixante
+       fois par seconde, une image rigoureusement identique.
+       ⚠️ ET ELLE MONTRE LE RELIEF. Sans lui, la Haute-Ville est un rectangle
+       vert comme les autres et la carte ment sur le seul endroit où l'on ne
+       passe pas partout — on éclaircit donc chaque case selon son altitude.
+       ══════════════════════════════════════════════════════════════════════ */
+    function buildTownMinimapBase(tw) {
+      const c = document.createElement("canvas"); c.width = tw.w; c.height = tw.h;
+      const g = c.getContext("2d");
+      const im = g.createImageData(tw.w, tw.h);
+      for (let i = 0; i < tw.w * tw.h; i++) {
+        const gr = tw.ground[i], o = tw.objects[i];
+        let col = [92, 158, 78];                                   // herbe
+        if (gr === C.G_TOWN_LAWN) col = [76, 140, 66];
+        else if (gr === C.G_PATH) col = [156, 122, 84];
+        else if (gr === C.G_PATH_STONE) col = [176, 174, 168];
+        else if (gr === C.G_TOWN_STAIR) col = [200, 196, 186];
+        else if (gr === C.G_WATER) col = [58, 123, 200];
+        else if (gr === C.G_BRIDGE) col = [140, 100, 60];
+        if (o === C.O_TREE || o === C.O_TREE2) col = [42, 100, 40];
+        if (tw.hedge && tw.hedge[i]) col = [46, 108, 44];
+        // Tout ce qui bloque et n'est ni arbre ni haie est bâti : une seule
+        // teinte chaude pour les maisons, les monuments et le mobilier — la
+        // carte doit se lire d'un coup d'œil, pas se déchiffrer.
+        if (tw.solid[i] && gr !== C.G_WATER && o !== C.O_TREE && o !== C.O_TREE2 && !(tw.hedge && tw.hedge[i])) col = [168, 96, 76];
+        const e = tw.elev ? tw.elev[i] : 0;
+        if (e > 0.01) { const k = 1 + Math.min(0.30, e * 0.15); col = [Math.min(255, col[0] * k), Math.min(255, col[1] * k), Math.min(255, col[2] * k)]; }
+        im.data.set([col[0] | 0, col[1] | 0, col[2] | 0, 255], i * 4);
+      }
+      g.putImageData(im, 0, 0);
+      townMinimapImgRef.current = c;
+      return c;
+    }
+    function drawTownMap() {
+      const mc = mapCanvasRef.current; if (!mc) return;
+      const tw = townWorldRef.current; if (!tw) return;
+      const base = townMinimapImgRef.current || buildTownMinimapBase(tw);
+      const g = mc.getContext("2d"); g.imageSmoothingEnabled = false;
+      const maxW = Math.min(window.innerWidth * 0.86, 900), scale = maxW / tw.w;
+      const dispW = Math.round(tw.w * scale), dispH = Math.round(tw.h * scale);
+      if (mc.width !== dispW || mc.height !== dispH) { mc.width = dispW; mc.height = dispH; }
+      g.clearRect(0, 0, dispW, dispH);
+      g.drawImage(base, 0, 0, tw.w, tw.h, 0, 0, dispW, dispH);
+      /* LES REPÈRES. ⚠️ CHACUN EST DÉRIVÉ DE SA CONSTANTE, jamais d'un couple
+         de nombres recopié : la ville a déjà bougé deux fois (425, 426) et une
+         carte qui garde les anciens noms au bon endroit est pire qu'une carte
+         sans noms. */
+      const marks = [
+        [C.TOWN_SPAWN.x, C.TOWN_SPAWN.y, "🚉", L.mapTownStation],
+        [C.TOWN_FOUNTAIN.x, C.TOWN_FOUNTAIN.y, "⛲", L.mapTownPlaza],
+        [C.TOWN_COURT.x + C.TOWN_COURT.w / 2, C.TOWN_COURT.y + C.TOWN_COURT.h, "⚖️", L.mapTownCourt],
+        [C.TOWN_HALL.x + C.TOWN_HALL.w / 2, C.TOWN_HALL.y + C.TOWN_HALL.h, "🏛️", L.mapTownHall],
+        [C.TOWN_CHURCH.x + C.TOWN_CHURCH.w / 2, C.TOWN_CHURCH.y + C.TOWN_CHURCH.h, "⛪", L.mapTownChurch],
+        [C.TOWN_PARK.x + C.TOWN_PARK.w / 2, C.TOWN_PARK.y + C.TOWN_PARK.h / 2, "🌳", L.mapTownPark],
+        [C.TOWN_ORCHARD.x + C.TOWN_ORCHARD.w / 2, C.TOWN_ORCHARD.y + C.TOWN_ORCHARD.h / 2, "🍎", L.mapTownOrchard],
+        [C.TOWN_MARKET.x + C.TOWN_MARKET.w / 2, C.TOWN_MARKET.y + C.TOWN_MARKET.h / 2, "🎪", L.mapTownMarket],
+        [C.TOWN_CEMETERY.x + C.TOWN_CEMETERY.w / 2, C.TOWN_CEMETERY.y + C.TOWN_CEMETERY.h / 2, "🪦", L.mapTownCemetery],
+        [C.TOWN_LAKE.x + C.TOWN_LAKE.w / 2, C.TOWN_LAKE.y + C.TOWN_LAKE.h / 2, "🏞️", L.mapTownLake],
+        [C.TOWN_BELVEDERE.x + C.TOWN_BELVEDERE.w / 2, C.TOWN_BELVEDERE.y + C.TOWN_BELVEDERE.h / 2, "🔭", L.mapTownBelvedere],
+      ];
+      g.textAlign = "center";
+      for (const [mx, my, emo, label] of marks) {
+        const px = mx * scale, py = my * scale;
+        g.font = "11px monospace";
+        g.fillText(emo, px, py + 4);
+        g.font = "bold 9px monospace";
+        g.fillStyle = "#000"; g.fillText(label, px + 1, py - 7 + 1);
+        g.fillStyle = "#ffeec8"; g.fillText(label, px, py - 7);
+      }
+      // Les joueurs présents EN VILLE (les autres sont ailleurs : les dessiner
+      // reviendrait à afficher des coordonnées de ferme sur un plan de ville).
+      const all = [meRef.current, ...playersRef.current.values()];
+      for (const p of all) {
+        if (!p || (p.zone || "farm") !== "town") continue;
+        const px = p.x * scale, py = p.y * scale;
+        const self = p.id === me.id;
+        g.fillStyle = "#000"; g.beginPath(); g.arc(px, py, 4.5, 0, 7); g.fill();
+        g.fillStyle = self ? "#ffffff" : "#ffe060"; g.beginPath(); g.arc(px, py, 3, 0, 7); g.fill();
+        g.font = "bold 10px monospace";
+        g.fillStyle = "#000"; g.fillText(self ? L.mapYou : p.name, px + 1, py - 6 + 1);
+        g.fillStyle = self ? "#fff" : "#ffe9a8"; g.fillText(self ? L.mapYou : p.name, px, py - 6);
+      }
+      g.textAlign = "left";
+    }
+
+    /* LE PLAN DU TRIBUNAL (zip 426). ⚠️ CE N'EST PAS UNE MINIATURE DES TUILES
+       mais un PLAN : à trois pixels par case, un rendu tuile à tuile donnerait
+       une bouillie grise où l'on ne distingue ni une pièce ni une porte. On
+       dessine donc ce qui compte — les pièces, leur nom, les portes, les
+       escaliers — et seulement l'étage où l'on se trouve. */
+    function drawCourtMap() {
+      const mc = mapCanvasRef.current; if (!mc) return;
+      const cw = courtWorldRef.current, m = meRef.current; if (!cw || !m) return;
+      const f = E.courtFloorOf(m.y + 0.2), fy0 = E.courtFloorY0(f);
+      const g = mc.getContext("2d");
+      const maxW = Math.min(window.innerWidth * 0.86, 900), scale = maxW / C.COURT_FLOOR_W;
+      const dispW = Math.round(C.COURT_FLOOR_W * scale), dispH = Math.round(C.COURT_FLOOR_H * scale) + 26;
+      if (mc.width !== dispW || mc.height !== dispH) { mc.width = dispW; mc.height = dispH; }
+      g.clearRect(0, 0, dispW, dispH);
+      g.fillStyle = "#20222a"; g.fillRect(0, 0, dispW, dispH);
+      // Le titre de l'étage : la seule chose qui change quand on monte, donc
+      // la première à afficher.
+      g.font = "bold 14px monospace"; g.textAlign = "left"; g.fillStyle = "#f2e6c8";
+      g.fillText(`${C.COURT_FLOORS[f].emoji} ${L.courtFloorName(C.COURT_FLOORS[f].key)}`, 8, 18);
+      const OY = 26;
+      g.fillStyle = "#3a3d46"; g.fillRect(0, OY, dispW, dispH - OY);
+      // Le couloir, puis les pièces par-dessus.
+      g.fillStyle = "#6b6f7a";
+      g.fillRect(C.COURT_CORRIDOR.x * scale, OY, C.COURT_CORRIDOR.w * scale, C.COURT_FLOOR_H * scale);
+      for (const r of C.COURT_ROOMS) {
+        if (r.floor !== f) continue;
+        const rx = r.x * scale, ry = OY + r.y * scale, rw = r.w * scale, rh = r.h * scale;
+        g.fillStyle = r.kind === "courtroom" ? "#7a3a44" : r.kind === "cells" ? "#4a4450" : "#8a7a5e";
+        g.fillRect(rx, ry, rw, rh);
+        g.strokeStyle = "#20222a"; g.lineWidth = 2; g.strokeRect(rx + 1, ry + 1, rw - 2, rh - 2);
+        g.fillStyle = "#f7f1e0"; g.font = "bold 10px monospace"; g.textAlign = "center";
+        // Le nom, coupé au premier espace après l'emoji si la pièce est étroite :
+        // un libellé qui déborde sur la pièce voisine désigne la mauvaise porte.
+        const label = L.courtRoomName(r.key);
+        const fit = g.measureText(label).width <= rw - 8 ? label : label.split(" ")[0];
+        g.fillText(fit, rx + rw / 2, ry + rh / 2 + 3);
+        for (const d of r.doors) {
+          g.fillStyle = "#f2c85a";
+          g.fillRect(d.x * scale, OY + d.y * scale, scale, scale);
+        }
+      }
+      for (const sw of C.COURT_STAIRWELLS) {
+        const other = sw.a === f ? sw.b : sw.b === f ? sw.a : -1;
+        if (other < 0) continue;
+        const up = C.COURT_FLOORS[other].alt > C.COURT_FLOORS[f].alt;
+        g.fillStyle = "#cfcabe";
+        g.fillRect(sw.x * scale, OY + sw.y * scale, sw.w * scale, sw.h * scale);
+        g.fillStyle = "#20222a"; g.font = "bold 11px monospace"; g.textAlign = "center";
+        g.fillText(up ? "▲" : "▼", (sw.x + sw.w / 2) * scale, OY + (sw.y + sw.h / 2) * scale + 4);
+      }
+      if (f === 0) {
+        g.fillStyle = "#f2e6c8";
+        g.fillRect(C.COURT_ENTRY.x * scale, OY + C.COURT_ENTRY.y * scale, 2 * scale, scale);
+      }
+      // Les visiteurs du MÊME étage. Les autres sont réellement ailleurs.
+      const all = [meRef.current, ...playersRef.current.values()];
+      for (const p of all) {
+        if (!p || (p.zone || "farm") !== "court") continue;
+        if (E.courtFloorOf(p.y + 0.2) !== f) continue;
+        const px = p.x * scale, py = OY + (p.y - fy0) * scale;
+        const self = p.id === me.id;
+        g.fillStyle = "#000"; g.beginPath(); g.arc(px, py, 4.5, 0, 7); g.fill();
+        g.fillStyle = self ? "#ffffff" : "#ffe060"; g.beginPath(); g.arc(px, py, 3, 0, 7); g.fill();
+        g.font = "bold 10px monospace"; g.textAlign = "center";
+        g.fillStyle = "#000"; g.fillText(self ? L.mapYou : p.name, px + 1, py - 6 + 1);
+        g.fillStyle = self ? "#fff" : "#ffe9a8"; g.fillText(self ? L.mapYou : p.name, px, py - 6);
+      }
+      g.textAlign = "left";
     }
 
     return () => {
@@ -14481,6 +15299,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // attrape l'objet visé.
   function handAction() {
     const m = meRef.current; if (!m) return;
+    /* ⚠️ ZIP 426 — L'INTÉRIEUR DU TRIBUNAL N'EST PAS UNE ZONE DE POSE. Sans ce
+       garde-fou, `zone` serait retombé sur "farm" et la déco armée aurait été
+       posée aux coordonnées du tribunal SUR LA FERME — c'est-à-dire n'importe
+       où, sans le moindre message. C'est exactement le repli silencieux dont
+       CLAUDE.md dit qu'il ment mieux qu'un plantage (§10). */
+    if (m.zone === "court") { pushToast(L.decorBadSpot); return; }
     const zone = m.zone === "town" ? "town" : "farm";
     const tt = zone === "town" ? targetTileTown() : targetTile();
     const armed = handModeRef.current;
@@ -14708,8 +15532,63 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     return best;
   }
+  /* Zip 426 : l'état de coupe d'une case de Valley Town. Une seule lecture pour
+     le rendu, la collision et l'action — trois copies de ce test finiraient par
+     ne plus dire la même chose, et l'écart serait un arbre qu'on voit et qu'on
+     traverse (ou l'inverse). */
+  function townChopAt(i) {
+    const ch = sharedRef.current.townChop;
+    return (ch && ch[i]) || null;
+  }
+  /* ⚠️ ZIP 426 — CES TROIS-LÀ SONT AU NIVEAU DU COMPOSANT, ET PAS DANS LA
+     BOUCLE DE RENDU, pour la même raison que nearCivicDoor juste dessous : elles
+     ont DEUX appelants qui ne vivent pas dans la même closure — l'invite
+     (drawCourtFrame) et la touche E (tryOpenNearby). Une invite et une action
+     qui ne s'accordent pas sur « suis-je devant la porte » est le défaut le plus
+     désagréable qui soit : le jeu propose, puis refuse. */
+  function nearestCourtDoor() {
+    const m = meRef.current, cw = courtWorldRef.current;
+    if (!m || !cw) return null;
+    const f = E.courtFloorOf(m.y + 0.2);
+    let best = null, bestD = 1.9;
+    for (const d of cw.doors) {
+      if (d.floor !== f) continue;
+      const dd = Math.hypot(d.x + 0.5 - (m.x + 0.5), d.y + 0.5 - (m.y + 0.2));
+      if (dd < bestD) { bestD = dd; best = d; }
+    }
+    return best;
+  }
+  function nearCourtBoard() {
+    const m = meRef.current, cw = courtWorldRef.current;
+    if (!m || !cw) return false;
+    const b = (cw.props || []).find(p => p.kind === "board");
+    return !!b && Math.abs(m.x - b.x) <= 1.6 && Math.abs(m.y - b.y) <= 1.6;
+  }
+  function nearCourtExit() {
+    const m = meRef.current;
+    if (!m) return false;
+    return E.courtFloorOf(m.y + 0.2) === 0
+      && Math.abs(m.x - (C.COURT_ENTRY.x + 0.5)) <= 1.8 && Math.abs(m.y - C.COURT_ENTRY.y) <= 2.2;
+  }
+  // Zip 426 : voir la note de drawTownFrame — une seule définition de « je suis
+  // devant la porte de ce monument », partagée par l'invite et par la touche E.
+  function nearCivicDoor(b) {
+    const m = meRef.current; if (!m) return false;
+    const doorX = b.x + b.w / 2, doorY = b.y + b.h + 0.5;
+    return Math.abs(m.x + 0.5 - doorX) <= b.w / 2 && Math.abs(m.y - doorY) <= 1.6;
+  }
   function tryOpenNearby() {
     const m0 = meRef.current;
+    /* ---- INTÉRIEUR DU TRIBUNAL (zip 426). Sortie anticipée, comme la carte
+       maléfique : les coordonnées de la ferme n'ont aucun sens ici, et une
+       coïncidence de coordonnées ouvrirait la boutique depuis les archives. */
+    if (m0 && m0.zone === "court") {
+      if (nearCourtExit()) { leaveCourt(); return; }
+      if (nearCourtBoard()) { setCourtBoardOpen(true); return; }
+      const d = nearestCourtDoor();
+      if (d) pushToast(L.courtRoomToast(L.courtRoomName(d.room)) + " " + L.courtRoomDesc(d.room));
+      return;
+    }
     // Carte maléfique (chantier 2026-07, demande Guillaume) : seule
     // interaction E possible ici, le chaudron-artéfact — les coordonnées de
     // la ferme (SHOP/BIN/etc.) n'ont aucun sens en zone maléfique, on sort
@@ -14760,6 +15639,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // Valley Town (zip 234): E at the sign rides the train home; E at a
       // house door just introduces the place (interiors deferred).
       if (nearTile(C.TOWN_STATION_SIGN)) { rideTrain(false); return; }
+      // Zip 426 : le tribunal s'ouvre. Les deux autres monuments gardent leur
+      // simple message — ils n'ont pas d'intérieur, et le dire vaut mieux que
+      // de laisser croire à une porte cassée.
+      if (nearCivicDoor(C.TOWN_COURT)) { enterCourt(); return; }
       const ids = Object.keys(farmersRef.current || {}).sort();
       for (let hi = 0; hi < C.TOWN_HOUSES.length; hi++) {
         const hsn = C.TOWN_HOUSES[hi];
@@ -14841,6 +15724,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   }
 
   function spawnFx(m) {
+    /* ⚠️ ZIP 426 — UN EFFET DE VILLE NE SE JOUE QU'EN VILLE, et c'est un
+       garde-fou contre le piège maison du projet : l'ALIASING DE COORDONNÉES.
+       Les x/y d'un effet de Valley Town n'ont aucun sens sur la carte de ferme
+       (deux cartes, une seule paire de coordonnées) ; sans ce test, un joueur
+       resté à la ferme verrait des copeaux de bois jaillir d'un point au hasard
+       de SON champ à chaque coup de hache donné en ville. Personne n'aurait
+       relié les deux. Voir aussi les gardes `zone !== "farm"` de nearestVisitor
+       et consorts, posés au 234 pour exactement la même raison. */
+    const myZone = (meRef.current && meRef.current.zone) || "farm";
+    if ((m.zone || "farm") !== myZone) return;
     const fx = fxRef.current, base = { x: m.x, y: m.y, t: 0 };
     switch (m.k) {
       case "water": for (let i = 0; i < 6; i++) fx.push({ ...base, kind: "p", col: "#5a9be0", vx: (Math.random() - .5) * 2, vy: -Math.random() * 2, life: .5 }); break;
@@ -15476,7 +16369,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       </div>
 
       {/* Invite proximité */}
-      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townJump" ? L.promptTownJump : promptKey === "townChurch" ? L.promptTownChurch : promptKey === "townHall" ? L.promptTownHall : promptKey === "townCourt" ? L.promptTownCourt : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "mazePrize" ? L.promptMazePrize : promptKey.startsWith("passagePickup:") ? L.promptPassagePickup : L.promptBin}</div>}
+      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townJump" ? L.promptTownJump : promptKey === "townChurch" ? L.promptTownChurch : promptKey === "townHall" ? L.promptTownHall : promptKey === "townCourt" ? L.promptTownCourt : promptKey === "courtExit" ? L.promptCourtExit : promptKey === "courtBoard" ? L.promptCourtBoard : promptKey.startsWith("courtDoor:") ? L.promptCourtDoor(L.courtRoomName(promptKey.slice(10))) : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "mazePrize" ? L.promptMazePrize : promptKey.startsWith("passagePickup:") ? L.promptPassagePickup : L.promptBin}</div>}
       {mountPrompt && <div className="ferme-prompt ferme-prompt-mount">{mountPrompt === "mount" ? L.mountPrompt : L.dismountPrompt}</div>}
       {handHeldUI && !moveConfirmUI && <div className="ferme-prompt ferme-prompt-mount">{L.handHeldHint}</div>}
       {moveConfirmUI && (
@@ -17886,6 +18779,39 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           rôle d'hôte change en cours de partie (succession automatique, voir
           claim_abandoned_host). Il n'y a plus de rôle à perdre.
           ================================================================ */}
+      {/* ═══════════════════════════════════════════════════════════════════
+          ZIP 426 — LE PANNEAU D'AFFICHAGE DU TRIBUNAL.
+          ⚠️ C'EST LA PIÈCE MAÎTRESSE DE LA LIVRAISON, PAS UN BONUS. Le
+          bâtiment est entièrement visitable et RIEN n'y fonctionne : sans un
+          endroit qui l'explique noir sur blanc, dix-sept portes qui ne font
+          qu'afficher un message se lisent comme dix-sept bugs. Il énumère donc
+          les services à venir dans l'ordre de COURT_BOARD_ORDER, chacun avec
+          l'étage où il s'installera. */}
+      {courtBoardOpen && (
+        <div className="ferme-modal open" onClick={() => setCourtBoardOpen(false)}>
+          <div className="panel ferme-modal-panel" onClick={e => e.stopPropagation()}>
+            <button className="ferme-close-x" onClick={() => setCourtBoardOpen(false)}>✕</button>
+            <h2>{L.courtBoardTitle}</h2>
+            <div className="ferme-hint">{L.courtBoardIntro}</div>
+            {C.COURT_BOARD_ORDER.map(k => {
+              const r = C.COURT_ROOMS.find(rr => rr.key === k);
+              if (!r) return null;
+              return (
+                <div className="ferme-shop-row" key={"court-" + k}>
+                  <div className="info">
+                    <b>{L.courtRoomName(k)}</b>
+                    <span className="ferme-usage">
+                      {L.courtFloorName(C.COURT_FLOORS[r.floor].key)} — {L.courtRoomDesc(k)}
+                    </span>
+                  </div>
+                  <span className="ferme-usage">{L.courtSoon}</span>
+                </div>
+              );
+            })}
+            <div className="ferme-hint" style={{ marginTop: 10 }}>{L.courtBoardFooter}</div>
+          </div>
+        </div>
+      )}
       {devMenuOpen && (() => {
         const today = sharedRef.current.day || 1;
         const forced = forcedWorldUi; // même source que le bandeau : un état, pas une ref (voir applyForcedWorld)
