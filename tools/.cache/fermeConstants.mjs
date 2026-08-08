@@ -1512,29 +1512,50 @@ export const RESIDENT_TASK_BY_THEME = {
 // which yields well over 25 unique combinations without any new art asset.
 // `edgy: true` doubles the hostile roll for that character; `rich: true`
 // makes them eligible for rich-patron visits (big-money purchases).
-// --- Zip 376 (chantier Carla Garfield) : la vendeuse de vêtements ---
-// Carla Garfield n'est PAS un visiteur comme les autres, même si elle se
-// présente comme tel pour l'instant. Trois particularités, toutes portées
-// par des drapeaux du roster plutôt que par du code spécial dispersé :
-//
-//   `minArtisans` : elle ne monte dans le train que si la ferme compte déjà
-//     au moins CARLA_MIN_ARTISANS résidents PORTEURS D'UN SKILL (voir
-//     countSkilledResidents/spawnVisitor dans fermeEngine.js). Elle a entendu
-//     parler d'une ferme qui tourne, pas d'un champ de patates.
-//   `noStay`     : elle ne demandera JAMAIS à emménager, quel que soit le
-//     niveau d'amitié (elle a une boutique et une vie ailleurs). Le second
-//     chemin vers la résidence (bouton "proposer d'emménager" de la fiche
-//     visiteur) est déjà fermé pour elle : il exige un `skill`, elle n'en a
-//     pas.
-//   `chatOnly`   : tant que la boutique de vêtements n'existe pas, elle ne
-//     demande ni légumes ni troc — uniquement des visites de conversation,
-//     avec ses propres répliques (carlaChatLines, fermeStrings.js).
-//
-// `look` remplace la série de booléens à usage unique (beeSuit, plaid,
-// cheeseHat, sugarWorker...) : une CHAÎNE, un seul paramètre de plus à
-// getChar, extensible sans rallonger la signature à chaque personnage.
-export const CARLA_RID = 30;
+// --- Carla Garfield, la vendeuse de vêtements (376 → 430) ---
+/* ⚠️⚠️ CE COMMENTAIRE DÉCRIVAIT UN ÉTAT PÉRIMÉ, ET C'EST LE PIRE ENDROIT
+   POSSIBLE POUR ÇA. Jusqu'au 430 il expliquait encore, en trois paragraphes,
+   que Carla portait `noStay` (« elle ne demandera JAMAIS à emménager ») et
+   `chatOnly` (« tant que la boutique n'existe pas ») — alors que le 427 avait
+   retiré les deux et que sa fiche, quarante lignes plus bas, dit exactement
+   l'inverse. Quiconque lisait ce bloc pour comprendre son statut repartait avec
+   la version d'il y a trois zips. C'est la règle §14.1 de CLAUDE.md appliquée
+   au code : **une information périmée se supprime, elle ne se date pas.**
+
+   CARLA N'EST PAS UN VISITEUR COMME LES AUTRES, et ses particularités sont
+   toutes portées par des DRAPEAUX DU ROSTER, jamais par du code spécial
+   dispersé — c'est ce qui permet d'en ajouter un sans chercher où elle est
+   traitée à part :
+
+     `minArtisans` : elle ne monte dans le train que si la ferme compte déjà
+       CARLA_MIN_ARTISANS résidents porteurs d'un skill. Elle a entendu parler
+       d'une ferme qui tourne, pas d'un champ de patates.
+     `skill: "stylist"` : elle est RECRUTABLE depuis le 427, par les deux
+       chemins (amitié, et le bouton « proposer d'emménager » qui exige un
+       skill). ⚠️ `SKILL_BUILDING.stylist` vaut `null` : son lieu de travail
+       n'est pas un atelier achetable à la ferme, c'est la Maison Garfield, qui
+       existe déjà sur la carte de Valley Town.
+     `noKick` (430) : ⚠️ **ON NE PEUT PAS LA VIRER COMME LES AUTRES.** Demande
+       explicite de Guillaume. Ce n'est pas une faveur cosmétique : le vote
+       d'exclusion (259) envoie un résident dans la file des exilés, d'où il
+       revient supplier — un traitement qui n'a aucun sens pour quelqu'un qui a
+       sa propre boutique en ville et n'a jamais eu besoin de la ferme. La
+       partir serait SA décision, pas la nôtre.
+     `weeklyShift` (430) : ⚠️ **ELLE NE TRAVAILLE PAS TOUS LES JOURS.** Un jour
+       par semaine de jeu, à sa boutique. Les autres jours elle vit sa vie —
+       aucun tour de travail, et la Maison Garfield est FERMÉE. Voir
+       E.isShopDay et la note de CARLA_WORK_DAY. */export const CARLA_RID = 30;
 export const CARLA_MIN_ARTISANS = 4;   // résidents à skill requis pour qu'elle daigne venir
+/* ⚠️ LE JOUR DE SERVICE EST DÉRIVÉ DU NUMÉRO DE JOUR, comme le cours du marché
+   et le jour d'orage : `day % 7 === CARLA_WORK_DAY`. Aucun état, aucun message,
+   aucune migration — et les deux joueurs d'un salon lisent forcément le même
+   jour. Un champ « prochain jour de service » dans `shared` aurait été un
+   compteur de plus à faire tourner, à diffuser et à réconcilier, pour quelque
+   chose qui est une pure fonction du calendrier.
+   ⚠️ ET IL EST DÉCALÉ DU JOUR DE MARCHÉ (MARKET_DAY_EVERY vaut 7, reste 0) :
+   les deux tombant le même jour, on aurait un jour où tout se passe et six où
+   rien ne se passe. Décalés, la semaine a deux rendez-vous. */
+export const CARLA_WORK_DAY = 3;
 // Léo n'est PAS une entité : sa position est DÉRIVÉE de celle de Carla
 // (il marche dans ses pas avec ce retard, en unités de chemin parcouru, cf.
 // le principe des loups posés sur la piste du défi de fuite). Zéro message
@@ -1635,7 +1656,7 @@ export const VISITOR_ROSTER = [
      aurait fait deux boutiques pour une seule vendeuse.
      `minArtisans` reste : elle ne se dérange toujours pas pour un champ de
      patates. */
-  { rid: 30, name: "Carla Garfield", gender: "f", outfit: 1, overalls: false, cap: false, theme: "style", job: "dress this valley properly", look: "carla", skill: "stylist", minArtisans: CARLA_MIN_ARTISANS },
+  { rid: 30, name: "Carla Garfield", gender: "f", outfit: 1, overalls: false, cap: false, theme: "style", job: "dress this valley properly", look: "carla", skill: "stylist", minArtisans: CARLA_MIN_ARTISANS, noKick: true, weeklyShift: CARLA_WORK_DAY },
 ];
 // Poids de spawn d'un visiteur "rare" (aucun personnage n'est marqué `rare`
 // depuis le zip 259, mais la mécanique reste dispo pour un futur usage).
@@ -3890,6 +3911,19 @@ export const GPS_MARK_PX = 11;        // demi-hauteur du triangle
 export const GPS_ORBIT_PX = 46;       // rayon de l'orbite autour du joueur
 export const GPS_ARRIVE_TILES = 2.2;  // en deçà, on est arrivé et la boussole s'éteint
 export const GPS_CLEAR_TILES = 3;     // recliquer à moins de ça sur le plan efface la destination
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZIP 430 — LE MARCHÉ DU CHAMP DE FOIRE.
+   ⚠️ AUCUNE DE CES VALEURS N'EST UN ÉTAT : le cours du jour est une pure
+   fonction du numéro de jour (voir E.marketRate). Rien n'est stocké, rien n'est
+   diffusé, rien n'est à migrer. */
+export const MARKET_SPREAD = 0.35;     // cote entre +0 % et +35 % du prix de la ferme
+export const MARKET_DAY_EVERY = 7;     // un jour de marché par semaine de jeu
+/* La zone où l'on vend. ⚠️ ELLE EST PLUS LARGE QUE LE CHAMP DE FOIRE lui-même :
+   les étals sont solides, on se tient FORCÉMENT à côté et jamais dessus, et un
+   rayon calé au pixel sur l'emprise refuserait la vente à quelqu'un qui est
+   visiblement au marché. Une portée qui refuse alors que le jeu propose est le
+   défaut que le 426 s'est juré de ne plus commettre. */
+export const MARKET_RANGE_TILES = 4;
 export const TOWN_SEATS_PER_BENCH = 3;
 export const TOWN_SEAT_SPACING = 0.69;   // 11 px sur les 52 du sprite (voir plazaBenchSprite)
 /* ═══════════════════════════════════════════════════════════════════════════

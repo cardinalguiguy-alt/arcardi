@@ -7086,3 +7086,72 @@ div.ferme-usage{ margin-bottom:10px; }
 .ferme-candy-yes{ background:linear-gradient(#ff7aa8,#e0335c); box-shadow:0 4px 0 #a8243f; }
 .ferme-candy-no{ background:linear-gradient(#c9b8c6,#9c8a99); box-shadow:0 4px 0 #6f6070; }
 .ferme-candy-ask-row button:active{ transform:translateY(3px); box-shadow:none; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ZIP 430 — LES COMMANDES TACTILES DE LA FERME.
+   ⚠️⚠️ `touch-action: none` EST LA LIGNE INDISPENSABLE, pas une précaution.
+   Sans elle, Safari iOS interprète un glissement sur le pavé comme un
+   défilement de page : il avale les `pointermove` au bout de quelques pixels
+   et le personnage se fige en pleine marche, sans qu'aucune erreur ne soit
+   levée. C'est le symptôme qu'on aurait mis une heure à comprendre.
+   ⚠️ `env(safe-area-inset-*)` : sur iPad et iPhone, la barre de gestes du bas
+   recouvre les 20 derniers pixels. Un bouton posé dessous se déclenche une
+   fois sur deux et fait sortir de l'application l'autre fois.
+   ⚠️ Les cibles font 72 px : en dessous de ~48 px un pouce rate, et un pouce
+   qui rate sur le SEUL moyen de jouer fait rebrancher le clavier.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.ferme-touch-pad{
+  position:fixed; z-index:12; touch-action:none; user-select:none; -webkit-user-select:none;
+  left:calc(env(safe-area-inset-left, 0px) + 14px);
+  bottom:calc(env(safe-area-inset-bottom, 0px) + 92px);
+  width:150px; height:150px; border-radius:50%;
+  background:radial-gradient(circle at 50% 50%, rgba(255,238,200,.10), rgba(20,14,10,.34));
+  border:2px solid rgba(255,238,200,.28);
+  box-shadow:0 4px 18px rgba(0,0,0,.45);
+  display:grid; place-items:center;
+}
+.ferme-touch-pad .ring{
+  width:58px; height:58px; border-radius:50%;
+  background:radial-gradient(circle at 40% 35%, #ffe9a8, #c9922a);
+  border:2px solid rgba(20,14,10,.55);
+  box-shadow:0 2px 8px rgba(0,0,0,.5);
+  transition:transform .04s linear;
+}
+.ferme-touch-btns{
+  position:fixed; z-index:12; touch-action:none; user-select:none; -webkit-user-select:none;
+  right:calc(env(safe-area-inset-right, 0px) + 14px);
+  bottom:calc(env(safe-area-inset-bottom, 0px) + 92px);
+  display:flex; flex-direction:column; align-items:flex-end; gap:10px;
+}
+/* ⚠️ Le bouton d'action est ROND et large : c'est le seul qu'on presse sans
+   regarder, parce qu'on regarde le personnage. Il s'allume quand il y a
+   vraiment quelque chose à faire — un bouton toujours actif redevient du décor
+   et on cesse de le lire (la leçon du curseur de visée, 426). */
+.ferme-touch-act{
+  width:104px; height:104px; border-radius:50%; cursor:pointer;
+  font-family:inherit; font-weight:bold; font-size:12px; line-height:1.15;
+  color:rgba(255,238,200,.45); padding:6px;
+  background:radial-gradient(circle at 40% 32%, rgba(90,74,52,.55), rgba(28,20,14,.72));
+  border:3px solid rgba(255,238,200,.22);
+  box-shadow:0 4px 18px rgba(0,0,0,.45);
+}
+.ferme-touch-act.on{
+  color:#241a10;
+  background:radial-gradient(circle at 40% 32%, #ffe9a8, #d8a63a);
+  border-color:rgba(20,14,10,.55);
+}
+.ferme-touch-act .lbl{ display:block; word-break:break-word; }
+.ferme-touch-row{ display:flex; gap:10px; }
+.ferme-touch-mini{
+  width:72px; height:72px; border-radius:22px; cursor:pointer; font-size:26px;
+  background:rgba(28,20,14,.66); border:3px solid rgba(255,238,200,.22);
+  box-shadow:0 4px 14px rgba(0,0,0,.4);
+}
+.ferme-touch-mini.on{ background:#2f6b34; border-color:#8fd8a0; }
+/* Sur un écran étroit (iPhone), on resserre — mais on ne descend JAMAIS sous
+   la taille de cible : on préfère chevaucher le décor que rater le bouton. */
+@media (max-width: 560px){
+  .ferme-touch-pad{ width:124px; height:124px; bottom:calc(env(safe-area-inset-bottom, 0px) + 78px); }
+  .ferme-touch-act{ width:88px; height:88px; }
+  .ferme-touch-mini{ width:60px; height:60px; font-size:22px; }
+}

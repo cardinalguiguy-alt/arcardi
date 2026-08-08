@@ -1,4 +1,4 @@
-# Valley Town, le tribunal, et la vie qui s'y passe — état au 429
+# Valley Town, le tribunal, et la vie qui s'y passe — état au 430
 
 Ce fichier est **l'autorité** sur la seconde carte du jeu et sur ses habitants. Il a été
 extrait de `CLAUDE.md` §6 au zip 428, sur l'ordre laissé par le §14.2 du 427 et sur le modèle
@@ -13,9 +13,9 @@ qu'un paragraphe d'orientation, et les pièges qui valent pour tout le projet re
 - pas d'intérieur de maison ;
 - **vingt blocs de 28×28 sont de la prairie non aménagée** (mesuré au 428). Le sud-est
   surtout. Ce n'est pas un oubli, c'est une question ouverte : voir `CLAUDE.md` §13 ;
-- **le marché, les commissions et les rendez-vous datés sont décidés mais pas construits**
-  (zip 428, décision de Guillaume). Le socle sur lequel ils reposeront — navigation, endroits
-  de vie, assise — est en place et mesuré ;
+- **les commissions et les rendez-vous datés ne sont toujours pas construits** (décidés au
+  428). Le marché, lui, est livré au 430 — et il porte déjà la graine du troisième : le
+  **jour de marché** hebdomadaire est un rendez-vous daté, dérivé du calendrier ;
 - **les MAISONS et le LAC n'ont pas été retouchés au 429** alors que Guillaume les a nommés
   dans sa revue. Leurs échelles sont justes (×3,48 et sans objet), et les défauts qu'on leur
   trouve sont de CONTENU, pas de dessin : dix façades pour vingt-sept parcelles (donc des
@@ -410,3 +410,131 @@ entrée percée dans la haie ; sur un mur uniforme, ce trou d'une case ne se dis
 On lisait la haie, on faisait demi-tour, et on longeait. Une haie regarde désormais ses
 voisines : une extrémité reçoit un bord ébréché et une ombre latérale, une case de milieu non.
 Un passage est encadré par deux bouts visibles.
+
+
+---
+
+## 11. Le marché du champ de foire (430)
+
+**C'est le chantier qui relie les deux cartes**, et c'est sa seule raison d'être. Jusqu'ici
+Valley Town était un beau décor qu'on visite : on y montait par curiosité, on redescendait, et
+la ferme continuait sans elle. **Le train n'avait aucune raison ÉCONOMIQUE d'être pris.** Les
+dix étals du champ de foire existaient depuis le 426 et ne servaient à rien.
+
+`E` au champ de foire ouvre le marché : on y vend tout ce qui se vend au bac de la ferme, à un
+cours qui **change chaque jour**, et **jamais moins cher qu'au bac**.
+
+⚠️⚠️ **LE PRIX N'EST PAS UN ÉTAT PARTAGÉ, ET C'EST LA DÉCISION DE CE CHANTIER.** Un tableau de
+cours dans `shared` aurait voulu dire : un champ de plus dans le JSON de `ferme_saves`, une
+valeur à faire tourner chaque jour chez l'hôte, un message pour la diffuser, une
+réconciliation quand un invité arrive à mi-journée, et une sauvegarde d'avant ce zip à
+rattraper. Pour quelque chose qui est une **pure fonction du jour**. Le cours est donc HACHÉ à
+partir du numéro de jour et de la famille de produit (`E.marketRate`) — l'astuce des répliques
+d'ambiance du 427 appliquée à l'économie. **Zéro `send()`, zéro migration SQL, zéro champ à
+réconcilier.**
+⚠️ Corollaire à ne jamais oublier : le cours ne doit dépendre QUE du jour et de la famille. Le
+jour où il dépendra du stock d'un joueur, de son or ou de sa saison locale, **les deux écrans
+afficheront des prix différents et chacun aura l'air cohérent avec lui-même.**
+
+⚠️ **ON COTE CINQ FAMILLES, PAS TRENTE ARTICLES.** Un cours par culture donnerait neuf courbes
+sur un tableau de dix lignes : le joueur ne lirait plus rien et « le marché » deviendrait une
+loterie. Cinq familles, c'est ce qu'on tient en tête en montant dans le train — donc ce qu'on
+peut ANTICIPER, et anticiper est tout l'intérêt d'un cours qui varie. Les cinq cotes sont
+affichées **en tête du panneau, même quand on ne porte rien** : un cours qu'on ne découvre
+qu'en ayant déjà la marchandise en poche ne peut pas être anticipé.
+
+⚠️ **LE PANNEAU MONTRE L'ÉCART, PAS LE PRIX.** « Blé : 26 or » n'apprend rien — personne ne
+connaît par cœur le prix du bac. C'est le « +N » qui transforme une liste en DÉCISION.
+
+⚠️⚠️ **`resolveTownSell` N'EST PAS `resolveSell` AVEC UN MULTIPLICATEUR**, et la raison est le
+piège des deux cartes. `resolveSell` commence par `nearT(f, C.BIN)`, qui lit `f.x/f.y` — les
+coordonnées **de ferme**. Pendant qu'on est en ville, elles ne veulent rien dire : la vente
+serait acceptée ou refusée selon l'endroit où l'on a laissé son personnage au champ. La portée
+est donc vérifiée sur `px/py`, que `sendReq` remplit avec la position courante.
+⚠️ **Le prix est recalculé chez l'hôte.** Le client affiche une cote, il ne l'envoie pas : l'or
+est partagé (§3), donc c'est l'hôte qui cote comme c'est lui qui débite.
+
+**Huit contrôles** dans `verify-vallee`, dont celui qui compte : le cours est **déterministe**.
+Si deux clients ne trouvaient pas le même chiffre, chacun aurait un écran parfaitement cohérent
+avec lui-même et les deux joueurs se disputeraient sur le prix du blé sans qu'aucune erreur ne
+soit levée — le défaut le plus cher possible pour un jeu à deux, et le moins visible.
+
+---
+
+## 12. Carla Garfield, plus libre que les autres (430)
+
+**Son statut était à jour dans le code — et FAUX dans le commentaire qui le décrit.** Le bloc
+d'en-tête de `fermeConstants.js` expliquait encore, en trois paragraphes, qu'elle portait
+`noStay` (« elle ne demandera JAMAIS à emménager ») et `chatOnly`, alors que le 427 avait
+retiré les deux et que sa fiche, quarante lignes plus bas, disait l'inverse. **Trois zips.**
+Réécrit, et **vérifié par le banc** désormais : la seule chose qui ne ment pas sur un statut,
+c'est un contrôle qui le lit.
+
+Deux libertés ajoutées, toutes deux portées par un **drapeau de roster** et non par un
+`rid === CARLA_RID` dispersé :
+
+- **`noKick`** — on ne la vire pas. Le vote d'exclusion (259) envoie un résident dans la file
+  des exilés, d'où il revient *supplier* : ça n'a aucun sens pour quelqu'un qui a sa propre
+  boutique en ville et n'a jamais eu besoin de la ferme. **Partir serait SA décision.**
+  ⚠️ Le bouton DISPARAÎT de sa fiche et dit pourquoi — l'hôte refuse déjà, mais un bouton qui
+  se laisse cliquer pour répondre « non » est le « le jeu propose puis refuse » du 426.
+- **`weeklyShift`** — elle tient boutique **un jour par semaine** (`CARLA_WORK_DAY`), pas tous
+  les jours. Les autres jours : aucun tour de travail, et la Maison Garfield est **fermée**.
+  ⚠️ Le jour est **dérivé du numéro de jour** (`E.isShopDay`), comme le cours du marché : aucun
+  état, et les deux joueurs d'un salon lisent forcément le même jour.
+  ⚠️ Il est **décalé du jour de marché** : les deux ensemble, la semaine n'aurait qu'un seul
+  jour où il se passe quelque chose.
+  ⚠️ **Son jour de service, elle descend en ville d'office** — devant les autres et devant le
+  plafond de visiteurs — et elle vise sa vitrine. Sans ça, la boutique serait « ouverte » avec
+  personne dedans. Un devoir n'est pas une préférence : le goût du métier
+  (`TOWN_SKILL_TASTE`) ne fait que pondérer, une styliste de service pouvait passer sa journée
+  au cimetière.
+  ⚠️ **La porte fermée annonce le nombre de jours** avant l'ouverture. Une boutique fermée sans
+  explication est le « bâtiment muet » du 426 ; une boutique fermée qui annonce son jour est un
+  **rendez-vous** — c'est-à-dire la seule façon qu'une ouverture hebdomadaire devienne du jeu
+  plutôt qu'une gêne.
+
+---
+
+## 13. Jouer sans clavier (430)
+
+⚠️⚠️ **AVANT CE ZIP, LA FERME ÉTAIT LITTÉRALEMENT INJOUABLE AU DOIGT.** Vérifié : **aucun**
+écouteur `touch*`/`pointer*` dans tout le rendu de la ferme ; le canevas n'écoutait que
+`mousemove` et `mousedown`. Un tap suffisait à UTILISER un outil (iOS synthétise le clic), mais
+rien ne permettait de **se déplacer**, ni d'appuyer sur `E`. Et le 429 avait aggravé le cas en
+ajoutant `Maj`. Un des trois joueurs les plus actifs devait brancher un clavier Bluetooth pour
+entrer dans le seul monde partagé du projet.
+
+⚠️⚠️ **LE PAVÉ ÉCRIT LES QUATRE MÊMES BOOLÉENS QUE LES FLÈCHES**, et c'est LA décision. Le jeu
+a **trois** boucles de déplacement qui lisent `keysRef.current["ArrowUp"]` & co. Un second canal
+(`touchMoveRef = {dx, dy}`) aurait voulu dire modifier les trois — puis penser à la quatrième le
+jour où une zone s'ajoute. C'est exactement le motif qui a produit la carte noire (426), le
+minuteur d'action (426) et le ciel absent (429). En écrivant dans `keysRef`, **aucune ligne à
+changer dans les boucles**, et le doigt ne *peut pas* se comporter autrement que le clavier :
+c'est la même variable. Idem pour la course, qui écrit dans `ShiftLeft`.
+
+⚠️ **L'AFFICHAGE SUIT LA DERNIÈRE ENTRÉE UTILISÉE, il ne se règle pas.** Une touche du doigt
+allume les commandes, une touche du clavier les éteint. Ce joueur-là branche son clavier une
+fois sur deux : un réglage l'obligerait à le changer deux fois par soirée, et un
+`maxTouchPoints > 0` collerait des boutons sur tous les écrans tactiles même clavier branché.
+**Testé dans les deux sens.**
+
+⚠️ **LE PAVÉ EST FLOTTANT** : son centre se pose là où le pouce se pose. Sur un iPad tenu à
+deux mains on ne regarde pas ses pouces ; avec un centre fixe on rate le rond une fois sur
+trois, on croit que le jeu ne répond pas, et **on rebranche le clavier**.
+⚠️ Il **capture le pointeur** — sans quoi un pouce qui glisse hors de la zone rend les
+`pointermove` à l'élément du dessous, et le personnage part en ligne droite sans s'arrêter.
+⚠️ **`touch-action: none` est la ligne indispensable** : sans elle Safari lit le glissement
+comme un défilement de page, avale les `pointermove`, et le personnage se fige en pleine
+marche sans qu'aucune erreur ne soit levée.
+
+⚠️ **LE BOUTON D'ACTION PORTE LE LIBELLÉ DE L'INVITE**, et il n'a rien à calculer pour ça :
+`promptKey` est déjà mis à jour à chaque image dans les trois zones depuis le 426. C'est ce qui
+rend ce chantier petit — et sans libellé, un rond « A » dans un coin obligerait à deviner, ce
+qui est injouable sur une carte de 224×168 avec dix-sept portes.
+⚠️ **Il appelle exactement les mêmes fonctions que les touches**, il n'en réimplémente aucune :
+un troisième chemin d'entrée qui déciderait tout seul finirait par proposer une chose et en
+faire une autre — cette fois sur l'appareil de quelqu'un qui n'a pas de clavier pour s'en
+sortir.
+⚠️ **La course est une BASCULE au doigt et un maintien au clavier** : tenir un bouton virtuel
+du pouce en dirigeant de l'autre est le geste le plus pénible d'un jeu tactile.

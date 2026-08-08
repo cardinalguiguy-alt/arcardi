@@ -417,6 +417,32 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [injuredUntil, setInjuredUntil] = useState(0); // horodatage de fin d'indisponibilité (0 = pas blessé), survit à un refresh (voir farmer.injuredUntil)
   const [immunityUntil, setImmunityUntil] = useState(0); // pommade de protection (chantier 2026-07) : horodatage de fin d'immunité/répulsion aux créatures maléfiques (0 = inactif), effet purement local, ne survit pas à un refresh
   const [shopOpen, setShopOpen] = useState(false);
+  const [marketOpen, setMarketOpen] = useState(false);   // zip 430 : le marché du champ de foire
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 430 — JOUER SANS CLAVIER. (demande de Guillaume : l'un des trois
+     ║ joueurs les plus actifs est sur iPad et voudrait ne pas avoir à brancher
+     ║ son clavier Bluetooth.)
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ AVANT CE ZIP, LA FERME ÉTAIT LITTÉRALEMENT INJOUABLE AU DOIGT. Vérifié :
+     aucun écouteur `touch*`/`pointer*` dans tout le rendu de la ferme ; le
+     canevas n'écoutait que `mousemove` et `mousedown`. Un tap suffisait à
+     UTILISER un outil (iOS synthétise le clic), mais rien — strictement rien —
+     ne permettait de SE DÉPLACER, ni d'appuyer sur E. Et j'ai aggravé le cas au
+     429 en ajoutant `Maj` pour courir.
+
+     ⚠️ L'AFFICHAGE SUIT LA DERNIÈRE ENTRÉE UTILISÉE, il ne se règle pas. Ce
+     joueur-là a un clavier Bluetooth qu'il branche parfois : un réglage
+     « mode tactile » l'obligerait à le changer deux fois par soirée, et un
+     `maxTouchPoints > 0` collerait des boutons sur tous les écrans tactiles
+     même quand un clavier est branché. La règle est donc : **une touche du
+     doigt allume les commandes, une touche du clavier les éteint.** Rien à
+     configurer, rien à mémoriser, et le cas « iPad + clavier » se règle tout
+     seul dans les deux sens. */
+  const [touchUi, setTouchUi] = useState(false);
+  const touchUiRef = useRef(false);
+  const [touchPrompt, setTouchPrompt] = useState(null);   // ce que le bouton d'action ferait, maintenant
+  const [running, setRunning] = useState(false);          // la course, en BASCULE (voir plus bas)
+  const marketOpenRef = useRef(false);
   /* Zip 427 — Maison Garfield. `boutiqueOpen` porte l'onglet courant plutôt
      qu'un simple booléen : la vitrine a quatre rayons et on y revient toujours
      sur le même. `wardrobeTick` ne sert QU'À redessiner l'interface quand la
@@ -924,6 +950,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   useEffect(() => { courtBoardOpenRef.current = courtBoardOpen; }, [courtBoardOpen]); // zip 426
   useEffect(() => { devMenuOpenRef.current = devMenuOpen; }, [devMenuOpen]); // zip 392
   useEffect(() => { shopOpenRef.current = shopOpen; }, [shopOpen]);
+  useEffect(() => { marketOpenRef.current = marketOpen; }, [marketOpen]);
+  /* ⚠️ LE BOUTON TACTILE NE PORTE QUE LES INVITES COURTES. `promptText` peut
+     être une phrase entière (« E : entrer au tribunal ») ; on garde ce qui suit
+     le « : », c'est-à-dire le VERBE. Un bouton de 72 px n'affiche pas une
+     phrase, et un bouton dont le texte déborde ne se lit pas du tout. */
+  useEffect(() => {
+    if (!promptKey) { setTouchPrompt(null); return; }
+    const raw = document.querySelector(".ferme-prompt");
+    const txt = raw ? raw.textContent : "";
+    const cut = txt.includes(":") ? txt.slice(txt.indexOf(":") + 1) : txt;
+    setTouchPrompt(cut.trim().slice(0, 22) || null);
+  }, [promptKey]);
   useEffect(() => { cauldronMenuOpenRef.current = cauldronMenuOpen; }, [cauldronMenuOpen]);
   useEffect(() => { binOpenRef.current = binOpen; }, [binOpen]);
   useEffect(() => {
@@ -2587,6 +2625,24 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (r.invChanged) out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
       if (r.toast) out.toast = { id: f.id, key: r.toast };
       if (r.gain > 0) { out.fx.push({ k: "sell", x: C.BIN.x, y: C.BIN.y, gain: r.gain }); out.chat = { from: "💰", msg: L.chatSell(r.gain, s.money) }; questId = "sell"; }
+    } else if (req.kind === "townSell") {
+      /* ZIP 430 — VENDRE AU MARCHÉ DE VALLEY TOWN.
+         ⚠️ MÊME AUTORITÉ QUE LE BAC : l'or est partagé, donc l'hôte cote, débite
+         et crédite. Le client n'affiche qu'une estimation.
+         ⚠️ ET L'EFFET « +N or » EST POSÉ EN COORDONNÉES DE VILLE, avec sa zone.
+         Sans le champ `zone`, `spawnFx` le peindrait au même point sur la carte
+         de la FERME — c'est-à-dire un « +240 » qui jaillit d'un coin de champ
+         chez le joueur resté au champ (le défaut corrigé au 426 sur les copeaux
+         de hache, mot pour mot). */
+      const r = E.resolveTownSell(f, req, s.day || 1);
+      if (r.moneyDelta) { s.money += r.moneyDelta; s.totalEarned += r.earnedDelta; out.state = shareState(); }
+      if (r.invChanged) out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
+      if (r.toast) out.toast = { id: f.id, key: r.toast };
+      if (r.gain > 0) {
+        out.fx.push({ k: "sell", x: Math.round(+req.px || 0), y: Math.round(+req.py || 0), gain: r.gain, zone: "town" });
+        out.chat = { from: "\u{1F3AA}", msg: L.chatMarketSell(r.gain, r.gain - r.base, s.money) };
+        questId = "sell";
+      }
     } else if (req.kind === "craft") {
       const r = E.resolveCraft(f, req);
       if (r.invChanged) out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
@@ -4142,6 +4198,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // revenir supplier plus tard (voir hostSpawnPlea / updateVisitors).
       const rid = req.rid | 0;
       if (!st || !(st.residents || []).some(r => r.rid === rid)) return true;
+      /* ⚠️ ZIP 430 — CERTAINS RÉSIDENTS NE SE VIRENT PAS (demande de Guillaume
+         pour Carla Garfield). Le vote d'exclusion envoie un résident dans la
+         file des exilés, d'où il revient SUPPLIER qu'on le reprenne : ça n'a
+         aucun sens pour quelqu'un qui a sa propre boutique en ville et n'a
+         jamais eu besoin de la ferme. Partir serait SA décision.
+         ⚠️ Le refus est porté par un DRAPEAU du roster (`noKick`), pas par un
+         `rid === C.CARLA_RID` : le jour où un second personnage aura le même
+         statut, il suffira de le poser sur sa fiche. Et le refus PARLE — un
+         bouton qui ne fait rien passe pour cassé (leçon du 426). */
+      {
+        const roK = rosterOf(rid);
+        if (roK && roK.noKick) {
+          hostSend({ type: "broadcast", event: "apply", payload: { toast: { id: req.id, key: "kickRefused" } } });
+          return true;
+        }
+      }
       // Zip 260 (correctif Guillaume : "le vote n'exclut pas vraiment,
       // Exclusion 1/1 sans effet") : on compte les joueurs RÉELLEMENT
       // CONNECTÉS (soi-même + playersRef), pas farmersRef qui conserve des
@@ -5374,7 +5446,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        c'est un COMPTE qui voyage, jamais une phrase formatée — elle serait
        figée dans la langue de l'hôte. */
     if (key === "gregChopDone") return L.toastGregChopDone(n | 0);
-    return { tired: L.toastTired, farShop: L.toastFarShop, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, noMillStock: L.toastNoMillStock, millNotEmpty: L.toastMillNotEmpty, millPlaced: L.toastMillPlaced, millTaken: L.toastMillTaken, millGround: L.toastMillGround, millOccupied: L.toastMillOccupied, millOnCrop: L.toastMillOnCrop, noMillBuilt: L.toastNoMillBuilt, millBuilding: L.toastMillBuilding, noWheatToDeposit: L.toastNoWheatToDeposit, millFull: L.toastMillFull, noSucrerieStock: L.toastNoSucrerieStock, sucrerieNotEmpty: L.toastSucrerieNotEmpty, noCaneToDeposit: L.toastNoCaneToDeposit, sucrerieFull: L.toastSucrerieFull, actionFailed: L.toastActionFailed, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull, notInjured: L.toastNotInjured, noHealKit: L.toastNoHealKit, healTooFar: L.toastHealTooFar, gregNotHired: L.toastGregNotHired, gregOrderBusy: L.toastGregBusy, gregNoRoom: L.toastGregNoRoom, gregNoFertilizer: L.toastGregNoFertilizer, gregCoffeeCooldown: L.toastGregCoffeeCooldown, noCoffee: L.toastNoCoffee, soanNotHired: L.toastSoanNotHired, soanNoRiver: L.toastSoanNoRiver, soanCoffeeCooldown: L.toastSoanCoffeeCooldown, reneCoffeeCooldown: L.toastReneCoffeeCooldown, tristanNotHere: L.toastTristanNotHere, tristanCoffeeCooldown: L.toastTristanCoffeeCooldown, farCauldron: L.toastFarCauldron, noFishToDeposit: L.toastNoFishToDeposit, cauldronMissing: L.toastCauldronMissing, cauldronAlreadyTaken: L.toastCauldronAlreadyTaken, noCauldronStock: L.toastNoCauldronStock, cauldronNotEmpty: L.toastCauldronNotEmpty, cauldronBrewing: L.toastCauldronBrewing, cauldronNothingToCollect: L.toastCauldronNothingToCollect, cauldronHasEnough: L.toastCauldronHasEnough, visitorNotEnough: L.visitorNotEnough, decorNone: L.decorNone, decorPicked: L.decorPicked, objReturned: L.objReturned, residentNoRoom: L.residentNoRoom, artisanNoResident: L.artisanNoResident, voyagerBusy: L.voyagerBusyToast, kickVoted: L.kickVotedToast, jewelryNoGold: L.toastJewelryNoGold, jewelryNoGem: L.toastJewelryNoGem, cropWrongType: L.toastCropWrongType, cropMaxed: L.toastCropMaxed, beekeeperNoHive: L.toastBeekeeperNoHive, beekeeperBusy: L.toastBeekeeperBusy, balloonNotBoarding: L.toastBalloonNotBoarding, balloonFull: L.toastBalloonFull,
+    return { tired: L.toastTired, farShop: L.toastFarShop, farMarket: L.toastFarMarket, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, noMillStock: L.toastNoMillStock, millNotEmpty: L.toastMillNotEmpty, millPlaced: L.toastMillPlaced, millTaken: L.toastMillTaken, millGround: L.toastMillGround, millOccupied: L.toastMillOccupied, millOnCrop: L.toastMillOnCrop, noMillBuilt: L.toastNoMillBuilt, millBuilding: L.toastMillBuilding, noWheatToDeposit: L.toastNoWheatToDeposit, millFull: L.toastMillFull, noSucrerieStock: L.toastNoSucrerieStock, sucrerieNotEmpty: L.toastSucrerieNotEmpty, noCaneToDeposit: L.toastNoCaneToDeposit, sucrerieFull: L.toastSucrerieFull, actionFailed: L.toastActionFailed, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull, notInjured: L.toastNotInjured, noHealKit: L.toastNoHealKit, healTooFar: L.toastHealTooFar, gregNotHired: L.toastGregNotHired, gregOrderBusy: L.toastGregBusy, gregNoRoom: L.toastGregNoRoom, gregNoFertilizer: L.toastGregNoFertilizer, gregCoffeeCooldown: L.toastGregCoffeeCooldown, noCoffee: L.toastNoCoffee, soanNotHired: L.toastSoanNotHired, soanNoRiver: L.toastSoanNoRiver, soanCoffeeCooldown: L.toastSoanCoffeeCooldown, reneCoffeeCooldown: L.toastReneCoffeeCooldown, tristanNotHere: L.toastTristanNotHere, tristanCoffeeCooldown: L.toastTristanCoffeeCooldown, farCauldron: L.toastFarCauldron, noFishToDeposit: L.toastNoFishToDeposit, cauldronMissing: L.toastCauldronMissing, cauldronAlreadyTaken: L.toastCauldronAlreadyTaken, noCauldronStock: L.toastNoCauldronStock, cauldronNotEmpty: L.toastCauldronNotEmpty, cauldronBrewing: L.toastCauldronBrewing, cauldronNothingToCollect: L.toastCauldronNothingToCollect, cauldronHasEnough: L.toastCauldronHasEnough, visitorNotEnough: L.visitorNotEnough, decorNone: L.decorNone, decorPicked: L.decorPicked, objReturned: L.objReturned, residentNoRoom: L.residentNoRoom, artisanNoResident: L.artisanNoResident, voyagerBusy: L.voyagerBusyToast, kickVoted: L.kickVotedToast, kickRefused: L.kickRefused, jewelryNoGold: L.toastJewelryNoGold, jewelryNoGem: L.toastJewelryNoGem, cropWrongType: L.toastCropWrongType, cropMaxed: L.toastCropMaxed, beekeeperNoHive: L.toastBeekeeperNoHive, beekeeperBusy: L.toastBeekeeperBusy, balloonNotBoarding: L.toastBalloonNotBoarding, balloonFull: L.toastBalloonFull,
       /* zip 398 — vergers et produits */
       orchardBusy: L.toastOrchardBusy, orchardGround: L.toastOrchardGround, orchardMax: L.toastOrchardMax,
       orchardNoSapling: L.toastOrchardNoSapling, orchardYoung: L.toastOrchardYoung,
@@ -8431,6 +8503,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
   }
   function residentSkillShift(res, ro, w, s) {
+    /* ⚠️⚠️ ZIP 430 — UN RÉSIDENT « À LA SEMAINE » NE TRAVAILLE QU'UN JOUR SUR
+       SEPT (demande de Guillaume pour Carla). Le repli est placé ICI, en tête
+       du tour de travail, et pas dans chaque branche : c'est la seule position
+       qui couvre aussi les métiers qu'on ajoutera. Les autres jours elle ne
+       fait RIEN de professionnel — ce qui ne veut pas dire qu'elle disparaît :
+       elle continue de rôder, de descendre en ville et de parler, parce que
+       tout ça vit dans residentRoam et non ici. C'est exactement la différence
+       qu'on veut donner à voir : elle habite la vallée, elle n'y est pas
+       employée. */
+    if (!E.isShopDay(ro, (s.day | 0) || 1)) return;
     if (ro.skill === "lumberjack") {
       const stock = s.gregStock || (s.gregStock = { wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) });
       const tiles = [];
@@ -8666,7 +8748,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   }
   function endTownTrip(res, ro, now) {
     res.zone = "farm";
-    res.townUntil = 0; res.guest = null;
+    res.townUntil = 0; res.guest = null; res.shopDuty = false;   // zip 430
     res.act = null; res.actUntil = 0; res.townPath = null; res.roamTarget = null;
     /* ⚠️ ON EFFACE LA POSITION, ON N'EN CONVERTIT AUCUNE. Les coordonnées de
        Valley Town n'ont AUCUN sens sur la carte de la ferme (§4 : « deux cartes
@@ -8700,10 +8782,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (now >= (res.townUntil || 0)) { endTownTrip(res, ro, now); inTown--; }
         continue;
       }
-      if (inTown >= C.TOWN_VISITORS_MAX) continue;
       if (!residentTownEligible(res, ro, now)) continue;
-      if (Math.random() >= C.TOWN_TRIP_CHANCE) continue;
-      startTownTrip(res, ro, now); inTown++;
+      /* ⚠️⚠️ ZIP 430 — UN RÉSIDENT DE SERVICE DESCEND, POINT. Carla tient
+         boutique un jour par semaine ; si ce jour-là elle restait à la ferme au
+         gré du tirage habituel (30 % par contrôle), la Maison Garfield serait
+         « ouverte » avec personne dedans — un magasin sans commerçante, ce qui
+         est précisément le genre de détail que ce projet passe son temps à
+         corriger. Son jour de service, elle passe donc devant les autres ET
+         devant le plafond de visiteurs : c'est du travail, pas une promenade. */
+      const duty = E.isShopDay(ro, (sharedRef.current.day | 0) || 1) && ro.weeklyShift != null;
+      if (!duty) {
+        if (inTown >= C.TOWN_VISITORS_MAX) continue;
+        if (Math.random() >= C.TOWN_TRIP_CHANCE) continue;
+      }
+      startTownTrip(res, ro, now); if (duty) res.shopDuty = true; inTown++;
     }
   }
   /* Choisir où aller. Le tirage est pondéré par la DISTANCE (on va plus souvent
@@ -8728,6 +8820,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function pickTownSpot(res, ro, tw, peers) {
     const spots = E.townSpots(tw);
     if (!spots.length) return null;
+    /* ⚠️ DE SERVICE, ON VA À SA BOUTIQUE — et on n'en bouge pas. Le goût du
+       métier (TOWN_SKILL_TASTE) ne suffisait pas : il ne fait que PONDÉRER, si
+       bien qu'une styliste de service pouvait très bien passer sa journée au
+       cimetière. Un devoir n'est pas une préférence. */
+    if (res.shopDuty) {
+      const shop = spots.filter(sp => sp.act === "window"
+        && Math.abs(sp.x - (C.TOWN_BOUTIQUE.x + C.TOWN_BOUTIQUE.w / 2)) < C.TOWN_BOUTIQUE.w);
+      if (shop.length) return shop[Math.floor(Math.random() * shop.length)];
+    }
     const taste = TOWN_SKILL_TASTE[ro.skill] || null;
     let best = null, bestScore = -Infinity;
     // Échantillonnage : douze tirages suffisent à donner une destination
@@ -11335,6 +11436,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // Endormi : seule la touche E (se réveiller) doit rester active, pour
       // ne pas pouvoir changer d'outil/monter à cheval/etc. depuis "l'intérieur".
       if (meRef.current?.sleeping && e.code !== "KeyE") return;
+      /* ⚠️ UNE TOUCHE DE CLAVIER ÉTEINT LES COMMANDES TACTILES. Voir la note de
+         `touchUi` : l'affichage suit la dernière entrée utilisée, il ne se
+         règle pas. Ce joueur-ci branche son clavier une fois sur deux. */
+      if (touchUiRef.current) { touchUiRef.current = false; setTouchUi(false); }
       keysRef.current[e.code] = true;
       if (e.code >= "Digit1" && e.code <= "Digit9") {
         const idx = +e.code.slice(5) - 1;
@@ -11350,7 +11455,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // Correctif audit 2026-07 : Espace/E n'agissent plus "à travers" un
       // menu ouvert (le clic était déjà bloqué, voir onDown ; Échap/T/M
       // restent actifs pour fermer/naviguer).
-      const uiOpen = mapOpenRef.current || shopOpenRef.current || binOpenRef.current || bagOpenRef.current || cauldronMenuOpenRef.current || adsOpenRef.current || visitorOpenRef.current || gregCardOpenRef.current;
+      const uiOpen = mapOpenRef.current || shopOpenRef.current || binOpenRef.current || bagOpenRef.current || cauldronMenuOpenRef.current || adsOpenRef.current || visitorOpenRef.current || gregCardOpenRef.current || marketOpenRef.current;
       /* ⚠️ 425 — ESPACE SAUTE EN VILLE, ET AGIT PARTOUT AILLEURS. Ce n'est pas
          une surcharge risquée : `doAction()` sort déjà immédiatement quand la
          zone est "town" (aucun outil de ferme n'y sert), donc la touche ne
@@ -11361,7 +11466,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          ville, Espace ne fait toujours rien, exactement comme avant. */
       if (e.code === "Space") {
         e.preventDefault();
-        if (!uiOpen) { if (!tryTownJump()) doAction(); }
+        if (!uiOpen) pressJumpOrAct();
       }
       if (e.code === "KeyE") { if (!uiOpen) tryOpenNearby(); }
       // Zip 233 (Guillaume): Q, not E, talks to visitors - opens the unified
@@ -11409,10 +11514,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     function onKeyUp(e) { keysRef.current[e.code] = false; }
     function onMove(e) { mouseRef.current.x = e.clientX; mouseRef.current.y = e.clientY; }
-    function onDown(e) { if (e.button === 0 && !mapOpenRef.current && !shopOpenRef.current && !binOpenRef.current && !bagOpenRef.current && !cauldronMenuOpenRef.current && !fishMiniRef.current && !adsOpenRef.current && !visitorOpenRef.current && !gregCardOpenRef.current && !devMenuOpenRef.current /* zip 392 */ && !isInjured()) doAction(); }
+    function onDown(e) { if (e.button === 0 && !marketOpenRef.current && !mapOpenRef.current && !shopOpenRef.current && !binOpenRef.current && !bagOpenRef.current && !cauldronMenuOpenRef.current && !fishMiniRef.current && !adsOpenRef.current && !visitorOpenRef.current && !gregCardOpenRef.current && !devMenuOpenRef.current /* zip 392 */ && !isInjured()) doAction(); }
     function onWheel() { }
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
+    /* ⚠️⚠️ ZIP 430 — LE PREMIER CONTACT ALLUME LES COMMANDES, ET IL EST ÉCOUTÉ
+       SUR `window`, PAS SUR LE CANEVAS. Sur iPad, la toute première chose qu'on
+       touche n'est pas forcément le jeu : c'est souvent une case de la barre
+       d'outils ou le bouton du chat. Écouter le canevas seul aurait laissé un
+       joueur taper trois fois dans l'interface sans jamais voir apparaître de
+       quoi marcher — et conclure que ça ne marche pas.
+       ⚠️ `passive: true` : on n'annule rien ici, on observe. Le blocage du
+       défilement se fait sur les commandes elles-mêmes (`touch-action: none`),
+       pas globalement — bloquer le défilement de toute la page empêcherait de
+       faire défiler les menus, qui en ont besoin. */
+    function onFirstTouch() { if (!touchUiRef.current) { touchUiRef.current = true; setTouchUi(true); } }
+    window.addEventListener("touchstart", onFirstTouch, { passive: true });
     canvas.addEventListener("mousemove", onMove);
     canvas.addEventListener("mousedown", onDown);
     canvas.addEventListener("wheel", onWheel, { passive: true });
@@ -13954,7 +14071,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         maybeSendPos();
         return;
       }
-      const uiBlocked = mapOpenRef.current || document.activeElement === chatInputRef.current;
+      const uiBlocked = mapOpenRef.current || marketOpenRef.current || document.activeElement === chatInputRef.current;
       let dx = 0, dy = 0;
       if (!uiBlocked) {
         if (keys["ArrowUp"] || keys["KeyW"] || keys["KeyZ"]) dy -= 1;
@@ -14846,6 +14963,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          — la leçon du 426, réappliquée telle quelle. */
       else if (nearBuildingDoor(C.TOWN_BOUTIQUE)) tpk = carlaIsResident() ? "townBoutique" : "townBoutiqueShut";
       else if (nearBuildingDoor(C.TOWN_SALON)) tpk = "townSalon";
+      else if (nearMarket()) tpk = "townMarket";
       else if (nearTownProp("newsBoard", 1.7)) tpk = "townNews";
       else if (nearTownProp("bench", 1.2)) tpk = "townBench";
       else if (nearTownRect(C.TOWN_FOUNTAIN.x - 1, C.TOWN_FOUNTAIN.y - 1, 4, 4)) tpk = "townWish";
@@ -16523,6 +16641,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       window.removeEventListener("resize", resize);
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
+      window.removeEventListener("touchstart", onFirstTouch);
       canvas.removeEventListener("mousemove", onMove);
       canvas.removeEventListener("mousedown", onDown);
       canvas.removeEventListener("wheel", onWheel);
@@ -16689,6 +16808,53 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
     }
     return true;
+  }
+  /* ---- LE MARCHÉ (430) ------------------------------------------------------
+     ⚠️ `sendReq` JOINT DÉJÀ MA POSITION (`px/py`), et c'est elle que l'hôte lit
+     pour vérifier que je suis bien au champ de foire — pas `f.x/f.y`, qui sont
+     mes coordonnées de FERME et ne veulent rien dire pendant que je suis en
+     ville. Voir la note de E.resolveTownSell. */
+  function sellAtMarket(item, extra) { sendReq({ kind: "townSell", item, ...(extra || {}) }); }
+  /* La cote du jour, telle que le joueur la voit. ⚠️ ELLE EST CALCULÉE
+     LOCALEMENT ET NE VOYAGE PAS : c'est une pure fonction du numéro de jour,
+     donc tout le monde lit le même chiffre sans qu'un octet ne circule. Le
+     prix qui fait foi reste celui que l'hôte recalcule à la vente. */
+  function marketDay() { return (sharedRef.current && sharedRef.current.day) || 1; }
+  function marketUnit(item, base) { return E.marketPrice(marketDay(), item, base); }
+  function nearMarket() {
+    const m = meRef.current;
+    if (!m || m.zone !== "town") return false;
+    const mk = C.TOWN_MARKET, R = C.MARKET_RANGE_TILES;
+    return m.x >= mk.x - R && m.x <= mk.x + mk.w + R && m.y >= mk.y - R && m.y <= mk.y + mk.h + R;
+  }
+  /* ---- CE QUE FONT ESPACE ET E, EN UN SEUL ENDROIT (430) --------------------
+     ⚠️ LE BOUTON TACTILE APPELLE EXACTEMENT CES FONCTIONS, il n'en réimplémente
+     aucune. C'est la règle qui a évité au 426 que l'invite et la touche E se
+     désaccordent, poussée d'un cran : un troisième chemin d'entrée qui
+     déciderait tout seul de ce qu'il fait finirait par proposer une chose et en
+     faire une autre, et cette fois-là sur l'appareil de quelqu'un qui n'a pas
+     de clavier pour s'en sortir. */
+  function pressJumpOrAct() { if (!tryTownJump()) doAction(); }
+  /* Le bouton d'action tactile. ⚠️ IL SUIT LA MÊME PRIORITÉ QUE L'INVITE, et
+     c'est ce qui le rend lisible : ce que le bandeau annonce est ce que le
+     bouton fait. En ville, le saut de rebord passe avant l'interaction (règle du
+     425) ; ailleurs, E interagit et le tap sur le décor utilise l'outil. */
+  function pressTouchAction() {
+    const m = meRef.current; if (!m) return;
+    if (isInjured() || m.sleeping) { tryOpenNearby(); return; }   // endormi : E réveille
+    if (m.zone === "town" && canTownJumpNow()) { tryTownJump(); return; }
+    tryOpenNearby();
+  }
+  /* ⚠️ LA COURSE EST UNE BASCULE AU DOIGT, ET UN MAINTIEN AU CLAVIER — même
+     mécanique, deux gestes. Tenir un bouton virtuel du pouce pendant qu'on
+     dirige de l'autre est le geste le plus pénible d'un jeu tactile ; le
+     clavier, lui, n'a aucune raison de changer. Les deux écrivent dans la MÊME
+     case de `keysRef`, donc `isRunningNow` n'a pas à savoir laquelle est
+     branchée : il n'y a toujours qu'une définition de « je cours ». */
+  function toggleRun() {
+    const on = !keysRef.current.ShiftLeft;
+    keysRef.current.ShiftLeft = on;
+    setRunning(on);
   }
   function nearTile(tl, d = 2.5) { const m = meRef.current; return m && Math.abs(m.x - tl.x) <= d && Math.abs(m.y - tl.y) <= d; }
   // ---- Zip 251 : outil main (poser/déplacer/ranger décos + lampadaires) ----
@@ -17215,6 +17381,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const list = (sharedRef.current.station && sharedRef.current.station.residents) || [];
     return list.filter(res => resZone(res) === "town" && Number.isFinite(res.x) && Math.hypot(res.x - x, res.y - y) <= r);
   }
+  /* Combien de jours avant sa prochaine ouverture. ⚠️ DÉRIVÉ, comme le jour de
+     service lui-même : rien n'est stocké, donc rien ne peut être faux après un
+     rechargement ou une reprise de sauvegarde. */
+  function carlaDaysToOpen() {
+    const ro = rosterOf(C.CARLA_RID);
+    if (!ro || ro.weeklyShift == null) return 0;
+    const day = (sharedRef.current.day | 0) || 1;
+    return ((ro.weeklyShift - (day % 7)) + 7) % 7;
+  }
   function carlaIsResident() {
     const list = (sharedRef.current.station && sharedRef.current.station.residents) || [];
     return list.some(r => r && r.rid === C.CARLA_RID);
@@ -17389,10 +17564,24 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            ne s'ouvre pas sans explication passe pour cassée (leçon des plaques du
            tribunal, 426). Le local existe donc, il est loué, les malles sont
            dedans, et il ne manque que la propriétaire. */
-        if (carlaIsResident()) { setBoutiqueOpen("hat"); return; }
-        pushToast(L.boutiqueLockedToast); return;
+        /* ⚠️ ZIP 430 — LA BOUTIQUE N'OUVRE QUE LE JOUR DE SERVICE DE CARLA, ET
+           LA PORTE DIT QUAND ELLE REVIENT. Une boutique fermée sans explication
+           est le « bâtiment muet » du 426 ; une boutique fermée qui annonce son
+           jour est un RENDEZ-VOUS — c'est-à-dire la seule façon qu'une
+           ouverture hebdomadaire devienne du jeu plutôt qu'une gêne. */
+        if (!carlaIsResident()) { pushToast(L.boutiqueLockedToast); return; }
+        if (!E.isShopDay(rosterOf(C.CARLA_RID), (sharedRef.current.day | 0) || 1)) {
+          pushToast(L.boutiqueClosedToast(carlaDaysToOpen())); return;
+        }
+        setBoutiqueOpen("hat"); return;
       }
       if (nearCivicDoor(C.TOWN_SALON)) { pushToast(L.salonToast); return; }
+      /* ZIP 430 — LE MARCHÉ. Placé ici, c'est-à-dire après les portes de
+         commerce et le tableau des nouvelles (rayons étroits) et avant les
+         lieux larges : c'est la règle d'ordre posée au 427, du plus précis au
+         plus large. Le champ de foire couvre 26×26 cases plus quatre de marge —
+         le tester trop tôt avalerait tout ce qui s'y trouve. */
+      if (nearMarket()) { setMarketOpen(true); return; }
       if (nearTownProp("newsBoard", 1.7)) { setNewsBoardOpen(true); return; }
       /* ZIP 428 — LE BANC SE PREND. Il ne rendait qu'un message depuis le 427 :
          sur onze interactions de la ville, quatre n'étaient qu'un toast, et
@@ -18141,7 +18330,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       </div>
 
       {/* Invite proximité */}
-      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townJump" ? L.promptTownJump : promptKey === "townChurch" ? L.promptTownChurch : promptKey === "townHall" ? L.promptTownHall : promptKey === "townCourt" ? L.promptTownCourt : promptKey === "townBoutique" ? L.promptTownBoutique : promptKey === "townBoutiqueShut" ? L.promptTownBoutiqueShut : promptKey === "townSalon" ? L.promptTownSalon : promptKey === "townNews" ? L.promptTownNews : promptKey === "townBench" ? L.promptTownBench : promptKey === "townStand" ? L.promptTownStand : promptKey === "townWish" ? L.promptTownWish : promptKey === "townKiosk" ? L.promptTownKiosk : promptKey === "townPier" ? L.promptTownPier : promptKey === "townView" ? L.promptTownView : promptKey === "courtExit" ? L.promptCourtExit : promptKey === "courtBoard" ? L.promptCourtBoard : promptKey.startsWith("courtDoor:") ? L.promptCourtDoor(L.courtRoomName(promptKey.slice(10))) : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "mazePrize" ? L.promptMazePrize : promptKey.startsWith("passagePickup:") ? L.promptPassagePickup : L.promptBin}</div>}
+      {/* ⚠️ ZIP 430 — LE LIBELLÉ DU BOUTON TACTILE EST CALCULÉ ICI, dans la même
+          expression que le bandeau, et pas ailleurs. Deux traductions du même
+          `promptKey` finiraient par diverger d'un libellé, et la divergence
+          tomberait sur l'appareil du joueur qui n'a QUE ce bouton. */}
+      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townJump" ? L.promptTownJump : promptKey === "townChurch" ? L.promptTownChurch : promptKey === "townHall" ? L.promptTownHall : promptKey === "townCourt" ? L.promptTownCourt : promptKey === "townBoutique" ? L.promptTownBoutique : promptKey === "townBoutiqueShut" ? L.promptTownBoutiqueShut : promptKey === "townSalon" ? L.promptTownSalon : promptKey === "townNews" ? L.promptTownNews : promptKey === "townMarket" ? L.promptTownMarket : promptKey === "townBench" ? L.promptTownBench : promptKey === "townStand" ? L.promptTownStand : promptKey === "townWish" ? L.promptTownWish : promptKey === "townKiosk" ? L.promptTownKiosk : promptKey === "townPier" ? L.promptTownPier : promptKey === "townView" ? L.promptTownView : promptKey === "courtExit" ? L.promptCourtExit : promptKey === "courtBoard" ? L.promptCourtBoard : promptKey.startsWith("courtDoor:") ? L.promptCourtDoor(L.courtRoomName(promptKey.slice(10))) : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "mazePrize" ? L.promptMazePrize : promptKey.startsWith("passagePickup:") ? L.promptPassagePickup : L.promptBin}</div>}
       {mountPrompt && <div className="ferme-prompt ferme-prompt-mount">{mountPrompt === "mount" ? L.mountPrompt : L.dismountPrompt}</div>}
       {handHeldUI && !moveConfirmUI && <div className="ferme-prompt ferme-prompt-mount">{L.handHeldHint}</div>}
       {moveConfirmUI && (
@@ -18623,7 +18816,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                         <b>{ro.name}</b>
                         <span className="ferme-usage">{away ? L.voyagerStatusAway(fmtDuration(res.trip.returnAt - Date.now())) : L.residentTag(ro.job)}</span>
                       </div>
-                      <button onClick={() => sendReq({ kind: "kickResident", rid: res.rid })}>{nv > 0 ? L.kickTally(nv, online) : L.kickBtn}</button>
+                      {/* ⚠️ ZIP 430 — LE BOUTON DISPARAÎT POUR QUI NE SE VIRE PAS.
+                          L'hôte refuse déjà (voir `noKick` dans hostHandleReq), mais
+                          un bouton qui se laisse cliquer pour répondre « non » est
+                          exactement le « le jeu propose puis refuse » que le 426
+                          s'est juré de ne plus commettre. On DIT pourquoi à la
+                          place — sinon l'absence du bouton ressemble à un oubli. */}
+                      {(rosterOf(res.rid) || {}).noKick
+                        ? <span className="ferme-usage">{L.kickRefused}</span>
+                        : <button onClick={() => sendReq({ kind: "kickResident", rid: res.rid })}>{nv > 0 ? L.kickTally(nv, online) : L.kickBtn}</button>}
                     </div>
                   );
                 })}
@@ -19885,6 +20086,144 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           </div>
         </div>
       )}
+      {/* ══════════════════════════════════════════════════════════════════════
+           ZIP 430 — LE MARCHÉ DU CHAMP DE FOIRE.
+           ⚠️ IL MONTRE L'ÉCART, PAS LE PRIX. Un tableau qui n'affiche que « blé :
+           26 or » n'apprend rien : le joueur ne connaît pas par cœur le prix du
+           bac de la ferme, donc il ne peut pas savoir s'il fait une bonne
+           affaire, donc le cours variable ne sert à rien. C'est le « +N % » qui
+           transforme une liste de prix en DÉCISION — et c'est la décision qui
+           donne une raison de prendre le train.
+           ⚠️ ET LES CINQ FAMILLES SONT AFFICHÉES EN TÊTE, même celles dont on ne
+           porte rien : un cours qu'on ne découvre qu'en ayant déjà la
+           marchandise dans les poches ne peut pas être anticipé. On monte en
+           ville POUR le cours, pas l'inverse. */}
+      {/* ╔══════════════════════════════════════════════════════════════════════
+             ║ ZIP 430 — LES COMMANDES TACTILES.
+             ╚══════════════════════════════════════════════════════════════════
+             ⚠️⚠️ LE JOYSTICK ÉCRIT LES QUATRE MÊMES BOOLÉENS QUE LES FLÈCHES,
+             et c'est LA décision de tout ce chantier. Le jeu a TROIS boucles de
+             déplacement (ferme, ville, tribunal) qui lisent chacune
+             `keysRef.current["ArrowUp"]` & co. Un second canal d'entrée —
+             `touchMoveRef = {dx, dy}` — aurait voulu dire modifier les trois,
+             puis penser à modifier la quatrième le jour où une zone s'ajoute.
+             C'est exactement le motif qui a produit la carte noire (426), le
+             minuteur d'action jamais décrémenté (426) et le ciel absent (429) :
+             trois zones, trois occasions d'oublier. En écrivant dans `keysRef`,
+             il n'y a **aucune ligne à changer** dans les boucles, et le doigt ne
+             peut pas se comporter autrement que le clavier — c'est la même
+             variable.
+             ⚠️ Corollaire assumé : on perd l'analogique (quatre directions au
+             lieu d'un angle continu). Le jeu se joue déjà en huit directions au
+             clavier ; un joystick plus fin donnerait une vitesse que la
+             réplication réseau (`vx/vy`, zip 365) transporte très bien, mais
+             qui ne correspondrait à rien de ce que fait un joueur au clavier. */}
+      {touchUi && !mapOpen && !shopOpen && !binOpen && !marketOpen && !bagOpen && (
+        <TouchPad
+          onVec={(dx, dy) => {
+            const k = keysRef.current;
+            k["ArrowLeft"] = dx < -0.35; k["ArrowRight"] = dx > 0.35;
+            k["ArrowUp"] = dy < -0.35; k["ArrowDown"] = dy > 0.35;
+          }}
+          onRelease={() => {
+            const k = keysRef.current;
+            k["ArrowLeft"] = k["ArrowRight"] = k["ArrowUp"] = k["ArrowDown"] = false;
+          }}
+        />
+      )}
+      {touchUi && !mapOpen && !shopOpen && !binOpen && !marketOpen && !bagOpen && (
+        <div className="ferme-touch-btns">
+          {/* ⚠️ LE BOUTON PORTE LE LIBELLÉ DE L'INVITE, et il n'a rien à
+              calculer pour ça : `promptKey` est déjà mis à jour à chaque image
+              par le rendu, dans les trois zones. C'est ce qui rend ce chantier
+              petit — l'interface tactile réutilise le travail que le jeu fait
+              depuis le 426 pour ne jamais proposer ce qu'il ne fera pas.
+              Sans libellé, un rond « A » dans un coin oblige à deviner : sur
+              une carte de 224×168 avec dix-sept portes, c'est injouable. */}
+          <button className={"ferme-touch-act" + (touchPrompt ? " on" : "")}
+                  onPointerDown={e => { e.preventDefault(); pressTouchAction(); }}>
+            <span className="lbl">{touchPrompt || "·"}</span>
+          </button>
+          <div className="ferme-touch-row">
+            <button className={"ferme-touch-mini" + (running ? " on" : "")}
+                    onPointerDown={e => { e.preventDefault(); toggleRun(); }} title={L.touchRun}>🏃</button>
+            <button className="ferme-touch-mini"
+                    onPointerDown={e => { e.preventDefault(); setMapOpen(o => !o); }} title={L.touchMap}>🗺️</button>
+            {/* ⚠️ ESPACE A SON PROPRE BOUTON, séparé de l'action. En ville il
+                est absorbé par le bouton contextuel (le saut passe avant) ;
+                à la ferme il sert d'outil, ce que le tap sur le décor fait
+                déjà — mais le tap exige de VISER, et viser au pouce sur un
+                iPad tenu à deux mains ne marche pas. Ce bouton frappe la case
+                devant soi, comme Espace au clavier. */}
+            <button className="ferme-touch-mini"
+                    onPointerDown={e => { e.preventDefault(); pressJumpOrAct(); }} title={L.touchAct}>✋</button>
+          </div>
+        </div>
+      )}
+      {marketOpen && (
+        <div className="ferme-modal open" onClick={() => setMarketOpen(false)}>
+          <div className="panel ferme-modal-panel" onClick={e => e.stopPropagation()}>
+            <button className="ferme-close-x" onClick={() => setMarketOpen(false)}>✕</button>
+            <h2>🎪 {L.marketTitle}</h2>
+            <div className="ferme-hint">{E.isMarketDay(marketDay()) ? L.marketDayHint : L.marketHint}</div>
+            <div className="ferme-shop-row" style={{ flexWrap: "wrap", gap: 8 }}>
+              {E.MARKET_FAMILIES.map(fam => {
+                const pct = Math.round((E.marketRate(marketDay(), fam) - 1) * 100);
+                return (
+                  <span key={fam} style={{ padding: "2px 8px", borderRadius: 6, fontWeight: "bold",
+                    background: pct >= 20 ? "#2f6b34" : pct >= 8 ? "#5a5a2e" : "#4a3a2e", color: "#ffeec8" }}>
+                    {L.marketFamily(fam)} +{pct} %
+                  </span>
+                );
+              })}
+            </div>
+            {(() => {
+              /* ⚠️ UNE SEULE LIGNE GÉNÉRIQUE POUR TOUT CE QUI SE VEND, plutôt que
+                 la suite de blocs du bac. Le bac a huit familles écrites huit
+                 fois ; y ajouter une neuvième demande de penser à huit endroits.
+                 Ici la liste est CONSTRUITE, donc un article qui devient
+                 vendable le devient partout à la fois. */
+              const rows = [];
+              const push = (key, img, label, n, item, unit, extra) => {
+                if (!n) return;
+                rows.push({ key, img, label, n, item, unit, extra });
+              };
+              const S = spritesReady ? spritesRef.current : null;
+              C.CROPS.forEach(cr => push("c" + cr.id, S && S.crops[cr.id][C.CROP_STAGES - 1], cropName(cr.id),
+                myInv ? myInv.crops[cr.id] : 0, "crop", cr.sell, { crop: cr.id }));
+              C.FISH.forEach(fs => push("f" + fs.id, S && S.fishIcons[fs.id], lang === "en" ? fs.nameEn : fs.name,
+                myInv && myInv.fish ? myInv.fish[fs.id] : 0, "fish", fs.sell, { fish: fs.id }));
+              C.SEA_CREATURES.forEach(sc => push("s" + sc.id, S && S.seaIcons[sc.id], lang === "en" ? sc.nameEn : sc.name,
+                myInv && myInv.seaCreatures ? myInv.seaCreatures[sc.id] : 0, "sea", sc.sell, { sea: sc.id }));
+              C.ANIMALS.forEach((an, i) => push("p" + i, S && S.products ? S.products[i] : null, lang === "en" ? an.prodEn : an.prod,
+                myInv && myInv.products ? myInv.products[i] : 0, "product", an.sell, { product: i }));
+              push("berry", S && S.berryBush, L.berryLabel, myInv ? (myInv.berries || 0) : 0, "berry", C.BERRY_SELL);
+              push("fruit", S && S.crops ? S.crops[0][C.CROP_STAGES - 1] : null, L.fruitLabel, myInv ? (myInv.fruit || 0) : 0, "fruit", C.FRUIT_SELL);
+              push("wood", S && S.icons ? S.icons.axe : null, L.woodLabel, myInv ? (myInv.wood || 0) : 0, "wood", C.WOOD_SELL);
+              push("stone", S && S.icons ? S.icons.pick : null, L.stoneLabel, myInv ? (myInv.stone || 0) : 0, "stone", C.STONE_SELL);
+              /* ⚠️ LE BOIS ET LA PIERRE SONT AUSSI DES MATÉRIAUX DE CONSTRUCTION.
+                 Les proposer ici sans le dire, c'est laisser vendre au meilleur
+                 cours de la semaine la clôture qu'on comptait poser le soir même.
+                 L'avertissement suffit — on n'interdit pas, on prévient. */
+              if (!rows.length) return <div className="ferme-hint">{L.marketEmpty}</div>;
+              return rows.map(r => {
+                const unit = marketUnit(r.item, r.unit);
+                const bonus = unit - r.unit;
+                return (
+                  <div className="ferme-shop-row" key={"mk" + r.key}>
+                    <Sprite img={r.img} w={32} h={32} />
+                    <div className="info">
+                      <b>{r.label} × {r.n}</b>
+                      <span>{L.marketUnitLine(unit, r.unit)}{bonus > 0 ? " " + L.marketBonus(bonus) : ""}</span>
+                    </div>
+                    <button onClick={() => sellAtMarket(r.item, r.extra)}>{L.sellAll} · {unit * r.n}</button>
+                  </div>
+                );
+              });
+            })()}
+          </div>
+        </div>
+      )}
       {binOpen && (
         <div className="ferme-modal open" onClick={() => setBinOpen(false)}>
           <div className="panel ferme-modal-panel" onClick={e => e.stopPropagation()}>
@@ -20853,6 +21192,61 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
 
 /* Petit composant : dessine un sprite (canvas hors-écran) à une taille donnée.
    sx/sy = découpe source (pour n'afficher qu'une frame d'une feuille). */
+/* ══════════════════════════════════════════════════════════════════════════
+   ZIP 430 — LE PAVÉ DIRECTIONNEL TACTILE.
+   ──────────────────────────────────────────────────────────────────────────
+   ⚠️⚠️ IL EST « FLOTTANT » : le centre du joystick est posé LÀ OÙ LE POUCE SE
+   POSE, pas à une position fixe. C'est la seule forme qui marche sur un iPad
+   tenu à deux mains, parce qu'on ne regarde pas ses pouces : avec un centre
+   fixe, on rate le rond une fois sur trois, on croit que le jeu ne répond pas,
+   et on rebranche le clavier. Avec un centre flottant, il n'y a rien à viser —
+   on pose, et ça marche.
+   ⚠️ ET IL CAPTURE LE POINTEUR (`setPointerCapture`). Sans ça, un pouce qui
+   glisse hors de la zone pendant qu'on marche rend le `pointermove` à
+   l'élément du dessous : le personnage part en ligne droite et ne s'arrête
+   plus, jusqu'à ce qu'on retouche l'écran. C'est exactement le défaut décrit
+   dans NavalGame.js à propos de `pointerdown` sans capture explicite.
+   ⚠️ `touch-action: none` est INDISPENSABLE (posé en CSS) : sans lui, Safari
+   interprète le glissement comme un défilement de page, avale les
+   `pointermove` au bout de quelques pixels, et le personnage se fige.
+   ⚠️ La zone morte (0,18) n'est pas du confort : un pouce posé n'est jamais
+   parfaitement immobile, et sans elle le personnage tremble sur place et
+   diffuse une position toutes les images. */
+function TouchPad({ onVec, onRelease }) {
+  const ref = useRef(null);
+  const origin = useRef(null);
+  const [knob, setKnob] = useState(null);
+  const R = 52;                      // rayon utile, en pixels CSS
+  const handle = (e) => {
+    const o = origin.current; if (!o) return;
+    let dx = e.clientX - o.x, dy = e.clientY - o.y;
+    const d = Math.hypot(dx, dy);
+    if (d > R) { dx *= R / d; dy *= R / d; }
+    setKnob({ x: dx, y: dy });
+    const nx = dx / R, ny = dy / R;
+    if (Math.hypot(nx, ny) < 0.18) onRelease();
+    else onVec(nx, ny);
+  };
+  const down = (e) => {
+    e.preventDefault();
+    origin.current = { x: e.clientX, y: e.clientY };
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch (e2) { /* navigateur sans capture */ }
+    handle(e);
+  };
+  const up = (e) => {
+    e.preventDefault();
+    origin.current = null; setKnob(null); onRelease();
+  };
+  return (
+    <div ref={ref} className="ferme-touch-pad"
+         onPointerDown={down}
+         onPointerMove={e => { if (origin.current) { e.preventDefault(); handle(e); } }}
+         onPointerUp={up} onPointerCancel={up} onLostPointerCapture={up}>
+      <div className="ring" style={knob ? { transform: `translate(${knob.x}px, ${knob.y}px)` } : undefined} />
+    </div>
+  );
+}
+
 function Sprite({ img, w = 32, h = 32, sx, sy }) {
   const ref = useCallback((node) => {
     if (!node || !img) return;

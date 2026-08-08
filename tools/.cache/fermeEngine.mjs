@@ -2500,6 +2500,69 @@ export function resolveSell(f, m) {
   return res;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZIP 430 — VENDRE AU MARCHÉ DE VALLEY TOWN.
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️⚠️ CETTE FONCTION NE PEUT PAS ÊTRE `resolveSell` AVEC UN MULTIPLICATEUR,
+   ET LA RAISON EST LE PIÈGE DES DEUX CARTES (§4). `resolveSell` commence par
+   `nearT(f, C.BIN)`, qui lit `f.x/f.y` — les coordonnées FERME du fermier.
+   Pendant qu'il est en ville, ces coordonnées ne veulent rien dire : selon
+   l'endroit où il a laissé son personnage au champ, la vente serait tantôt
+   acceptée, tantôt refusée, sans aucun rapport avec l'endroit où il se trouve
+   VRAIMENT. C'est exactement le défaut qu'on a payé au 426 sur la coupe de bois
+   en ville, et la note de `townChop` le dit déjà.
+   La portée est donc vérifiée sur la position TRANSMISE dans la requête
+   (`px/py`, que `sendReq` remplit avec la position courante, donc de ville
+   quand on est en ville) — jamais sur `f.x/f.y`.
+   ⚠️ ET LE PRIX EST RECALCULÉ ICI, CHEZ L'HÔTE. Le client affiche une cote ; il
+   ne l'envoie pas. Un prix qui voyagerait dans la requête serait un prix qu'un
+   client bricolé pourrait choisir — l'or est partagé (§3), donc c'est l'hôte
+   qui cote, comme c'est lui qui débite.
+   ═══════════════════════════════════════════════════════════════════════════ */
+export function resolveTownSell(f, m, day) {
+  normalizeFarmer(f);
+  const res = { moneyDelta: 0, earnedDelta: 0, invChanged: false, toast: null, gain: 0, base: 0 };
+  const px = +m.px, py = +m.py;
+  const mk = C.TOWN_MARKET, R = C.MARKET_RANGE_TILES;
+  const inMarket = Number.isFinite(px) && Number.isFinite(py)
+    && px >= mk.x - R && px <= mk.x + mk.w + R && py >= mk.y - R && py <= mk.y + mk.h + R;
+  if (!inMarket) { res.toast = "farMarket"; return res; }
+  /* ⚠️ LA QUANTITÉ ET LE STOCK SONT LUS EXACTEMENT COMME AU BAC. On recopie la
+     forme de `resolveSell` plutôt que de l'appeler : l'appeler obligerait à
+     court-circuiter son test de portée, c'est-à-dire à créer un chemin où une
+     vente se fait SANS vérification de position. Un jour quelqu'un l'emprunte
+     depuis autre chose. */
+  const take = (have, want) => Math.min(have, Math.max(1, (want | 0) || have));
+  let n = 0, unit = 0;
+  if (m.item === "crop") {
+    const ct = m.crop | 0; if (ct < 0 || ct >= C.CROPS.length) return res;
+    n = take(f.inv.crops[ct], m.n); f.inv.crops[ct] -= n; unit = C.CROPS[ct].sell;
+  } else if (m.item === "wood") {
+    n = take(f.inv.wood, m.n); f.inv.wood -= n; unit = C.WOOD_SELL;
+  } else if (m.item === "stone") {
+    n = take(f.inv.stone, m.n); f.inv.stone -= n; unit = C.STONE_SELL;
+  } else if (m.item === "fish") {
+    const ft = m.fish | 0; if (ft < 0 || ft >= C.FISH.length) return res;
+    n = take(f.inv.fish[ft], m.n); f.inv.fish[ft] -= n; unit = C.FISH[ft].sell;
+  } else if (m.item === "sea") {
+    const st = m.sea | 0; if (st < 0 || st >= C.SEA_CREATURES.length) return res;
+    n = take(f.inv.seaCreatures[st], m.n); f.inv.seaCreatures[st] -= n; unit = C.SEA_CREATURES[st].sell;
+  } else if (m.item === "berry") {
+    n = take(f.inv.berries || 0, m.n); f.inv.berries = (f.inv.berries || 0) - n; unit = C.BERRY_SELL;
+  } else if (m.item === "fruit") {
+    n = take(f.inv.fruit || 0, m.n); f.inv.fruit = (f.inv.fruit || 0) - n; unit = C.FRUIT_SELL;
+  } else if (m.item === "product") {
+    const pt = m.product | 0; if (pt < 0 || pt >= C.ANIMALS.length) return res;
+    n = take(f.inv.products[pt], m.n); f.inv.products[pt] -= n; unit = C.ANIMALS[pt].sell;
+  } else return res;
+  if (n <= 0) return res;
+  const priced = marketPrice(day, m.item, unit);
+  res.gain = res.moneyDelta = res.earnedDelta = n * priced;
+  res.base = n * unit;
+  res.invChanged = true;
+  return res;
+}
+
 // Vente d'une gemme depuis le pool COMMUN à la salle (chantier 2026-07,
 // demande Guillaume : les gemmes/diamants sont partagés entre tous les
 // joueurs de la ferme, pas privés à chacun). `gems` = tableau partagé
@@ -2793,6 +2856,95 @@ export function bakeryItemPrice(bk, item) {
 export function isStormyDay(day) {
   return C.STORM_EVERY_N_DAYS > 0 && (day | 0) % C.STORM_EVERY_N_DAYS === 0;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZIP 430 — LE MARCHÉ DE VALLEY TOWN.
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️⚠️ C'EST LE CHANTIER QUI RELIE LES DEUX CARTES, et c'est sa seule raison
+   d'être. Jusqu'ici Valley Town était un beau décor qu'on visite : on y montait
+   par curiosité, on redescendait, et la ferme continuait sans elle. Le train
+   n'avait aucune raison ÉCONOMIQUE d'être pris. Le champ de foire et ses dix
+   étals existent depuis le 426 et ne servaient à rien.
+
+   ⚠️⚠️ ET LE PRIX N'EST PAS UN ÉTAT PARTAGÉ. C'est LA décision de ce chantier.
+   Un tableau de prix stocké dans `shared` aurait voulu dire : un champ de plus
+   dans le JSON de `ferme_saves`, une valeur à faire tourner chaque jour chez
+   l'hôte, un message pour la diffuser, une réconciliation quand un invité se
+   connecte à mi-journée, et une sauvegarde d'avant ce zip à rattraper. Pour
+   quelque chose qui est une PURE FONCTION DU JOUR.
+   Le prix est donc HACHÉ à partir du numéro de jour et de la famille de
+   produit. Deux joueurs, à deux bouts du monde, lisent le même chiffre sans
+   qu'un octet ne circule — exactement l'astuce des répliques d'ambiance du 427
+   (`townHash`), appliquée à l'économie. Zéro `send()`, zéro migration SQL,
+   zéro champ à réconcilier.
+   ⚠️ Corollaire à ne jamais oublier : le prix ne doit dépendre QUE du jour et
+   de la famille. Le jour où l'un d'eux dépendra du stock d'un joueur, de son
+   or ou de sa saison locale, les deux écrans afficheront des prix différents
+   et chacun aura l'air cohérent avec lui-même. */
+export function marketHash(a, b) {
+  let h = ((a | 0) + 1) * 2246822519 ^ ((b | 0) + 1) * 3266489917;
+  h ^= h >>> 15; h = (h * 2654435761) >>> 0;
+  return h;
+}
+/* Les familles. ⚠️ ON COTE DES FAMILLES, PAS DES ARTICLES. Un prix par culture
+   donnerait neuf courbes à surveiller sur un tableau de dix lignes : le joueur
+   ne lirait plus rien, et « le marché » deviendrait une loterie. Cinq familles,
+   c'est ce qu'on peut tenir en tête en montant dans le train — donc ce qu'on
+   peut ANTICIPER, et anticiper est tout l'intérêt d'un cours qui varie. */
+export const MARKET_FAMILIES = ["crop", "fish", "product", "forage", "material"];
+export function marketFamilyOf(item) {
+  if (item === "crop") return "crop";
+  if (item === "fish" || item === "sea") return "fish";
+  if (item === "product") return "product";
+  if (item === "berry" || item === "fruit") return "forage";
+  if (item === "wood" || item === "stone") return "material";
+  return null;
+}
+/* Le cours du jour, en pourcentage du prix de la ferme.
+   ⚠️ LE MARCHÉ EST TOUJOURS AU MOINS AUSSI CHER QUE LE BAC DE LA FERME, et
+   c'est un choix de conception, pas un réglage. Si vendre en ville pouvait
+   rapporter MOINS, la réponse optimale serait « ne jamais prendre le train »,
+   et on aurait ajouté un menu que personne n'ouvre. Le plancher est donc à
+   +0 % : au pire on ne gagne rien de plus, jamais on ne perd. Ce qu'on vend en
+   ville, on a de toute façon payé le voyage en temps.
+   ⚠️ ET LE JOUR DE MARCHÉ EST LE MÊME POUR TOUT LE MONDE, dérivé lui aussi. */
+export function isMarketDay(day) {
+  return C.MARKET_DAY_EVERY > 0 && (day | 0) % C.MARKET_DAY_EVERY === 0;
+}
+export function marketRate(day, family) {
+  const fi = MARKET_FAMILIES.indexOf(family);
+  if (fi < 0) return 1;
+  const h = marketHash(day, fi);
+  // Une cote dans [1 ; 1 + MARKET_SPREAD], par pas de 1 % — des chiffres ronds
+  // se retiennent, et on veut que le joueur DISE « le blé est à +18 aujourd'hui ».
+  const span = Math.round(C.MARKET_SPREAD * 100);
+  let pct = h % (span + 1);
+  /* ⚠️ LE JOUR DE MARCHÉ NE REMPLACE PAS LE TIRAGE, IL LE RELÈVE. Le
+     remplacer par une valeur fixe ferait de ce jour-là une constante connue
+     d'avance, donc le seul jour où l'on vend — et les six autres deviendraient
+     du décor. En relevant le plancher, un jour de marché reste variable :
+     il vaut la peine, sans être une évidence. */
+  if (isMarketDay(day)) pct = Math.max(pct, span - (h % Math.max(1, Math.round(span / 3))));
+  return 1 + pct / 100;
+}
+/* ⚠️ ZIP 430 — LE JOUR DE SERVICE D'UN RÉSIDENT « À LA SEMAINE ». Dérivé du
+   numéro de jour, donc identique chez tous les clients sans qu'un octet ne
+   circule (même astuce que le cours du marché juste au-dessus et que le jour
+   d'orage). `weeklyShift` est l'indice du jour dans la semaine ; un résident
+   qui ne le porte pas travaille tous les jours, comme avant. */
+export function isShopDay(ro, day) {
+  if (!ro || ro.weeklyShift === undefined || ro.weeklyShift === null) return true;
+  return ((day | 0) % 7) === (ro.weeklyShift | 0);
+}
+export function marketPrice(day, item, basePrice) {
+  const fam = marketFamilyOf(item);
+  if (!fam) return basePrice;
+  // ⚠️ Arrondi au SUPÉRIEUR : à petits prix (une baie vaut 3), un arrondi au
+  // plus proche mangerait toute la prime et le marché n'existerait que pour
+  // les articles chers. Une baie à +20 % doit rapporter 4, pas 3.
+  return Math.max(basePrice, Math.ceil(basePrice * marketRate(day, fam)));
+}
+
 
 // Collision : true si la tuile bloque le déplacement d'un fermier.
 // `now` (correctif chantier 2026-07) : une infrastructure encore EN CHANTIER

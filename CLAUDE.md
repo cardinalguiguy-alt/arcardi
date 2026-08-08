@@ -4,22 +4,21 @@
 Il remplace l'exploration du dépôt pour tout ce qui est global. Le README est un journal
 chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
-État à jour du **zip 429**. Chantier actif : **Valley Town jouable** — la ville a été auditée
-en la MESURANT, et le socle refait : navigation des résidents, endroits de vie, pose assise,
-dézoom des monuments, ciel (nuit + météo), course, boussole GPS, revue d'échelle des décors.
-Tout ce qui la concerne est dans **`components/ferme/README.md`**, qui fait autorité.
-**`candyluge` et `crystal` sont EN PAUSE.**
+État à jour du **zip 430**. Chantier actif : **relier les deux cartes et jouer sans clavier** —
+le marché du champ de foire donne enfin une raison ÉCONOMIQUE de prendre le train, et la ferme
+devient jouable au doigt. Tout ce qui concerne la ville et ses habitants est dans
+**`components/ferme/README.md`**, qui fait autorité. **`candyluge` et `crystal` sont EN PAUSE.**
 
-⚠️ **507 → 490 au 428, 518 au 429** pour un plafond de 200. La scission ordonnée par le §14.2 a bien eu
-lieu : §6 est parti dans `components/ferme/README.md`, à côté du code, sur le modèle de
-`candyluge`. **C'est le premier zip depuis longtemps où ce fichier RÉTRÉCIT.** Il reste très
-au-dessus du plafond, et §14.2 dit ce qui part ensuite.
+⚠️⚠️ **LA FERME ÉTAIT INJOUABLE SANS CLAVIER JUSQU'AU 430**, et personne ne l'avait écrit :
+aucun écouteur tactile dans tout son rendu. Un des trois joueurs les plus actifs devait
+brancher un clavier Bluetooth pour entrer dans le seul monde partagé du projet. **Une
+plateforme qui exige un périphérique n'a pas un défaut d'ergonomie, elle a un défaut d'accès.**
 
-⚠️⚠️ **CE ZIP A INVERSÉ UNE DÉCISION ÉCRITE ICI**, et c'est la chose la plus importante à en
-retenir : le 427 interdisait explicitement le pathfinding aux PNJ de la ville. La mesure a
-montré que **quatre trajets sur cinq n'aboutissaient pas**. Une doctrine ne survit pas à un
-chiffre — mais il fallait le chiffre, et personne ne l'avait pris pendant deux zips. **Avant
-de défendre une règle de ce fichier, mesurer.**
+⚠️⚠️ **ET UN COMMENTAIRE PEUT MENTIR PENDANT TROIS ZIPS.** Celui qui décrivait le statut de
+Carla Garfield annonçait encore deux verrous retirés au 427, à quarante lignes de sa fiche qui
+disait l'inverse. §14.1 s'applique au CODE autant qu'à ce fichier : une information périmée se
+supprime, elle ne se date pas. **Et la seule chose qui ne ment pas sur un statut, c'est un
+contrôle qui le lit** — il y en a quatre désormais.
 
 ---
 
@@ -147,6 +146,21 @@ protection, alors que c'est le banc.
   bouge, la note de l'époque le dit elle-même. La ville a eu deux mairies pendant quatre zips,
   dont l'une s'appelait église. C'est le « bâtiment muet » du 426 en plus sournois : **ici le
   bâtiment parle, et il ment.**
+- ⚠️⚠️ **CE QUI EST UNE PURE FONCTION DU TEMPS NE SE STOCKE PAS** (430). Le cours du marché, le
+  jour de marché et le jour de service de Carla sont HACHÉS à partir du numéro de jour : deux
+  joueurs lisent le même chiffre sans qu'un octet ne circule. Stockés dans `shared`, chacun
+  aurait coûté un champ dans le JSON de sauvegarde, un compteur à faire tourner chez l'hôte, un
+  message pour le diffuser, une réconciliation à la connexion d'un invité, et une sauvegarde
+  d'avant le zip à rattraper. C'est l'astuce des répliques d'ambiance du 427, appliquée à
+  l'économie et au calendrier. ⚠️ **Corollaire vital : une telle valeur ne doit dépendre QUE du
+  temps.** Le jour où elle dépendra du stock d'un joueur ou de son or, les deux écrans
+  afficheront des chiffres différents **et chacun aura l'air cohérent avec lui-même**.
+- ⚠️⚠️ **UN SECOND CANAL D'ENTRÉE EST UN QUATRIÈME OUBLI EN PRÉPARATION** (430). Le pavé tactile
+  écrit dans `keysRef` — les mêmes booléens que les flèches — au lieu d'avoir son propre
+  vecteur. Sinon il aurait fallu modifier les TROIS boucles de déplacement, puis penser à la
+  quatrième le jour où une zone s'ajoute : très exactement le motif qui a produit la carte
+  noire, le minuteur d'action et le ciel absent. **En partageant la variable, le doigt ne PEUT
+  pas se comporter autrement que le clavier.**
 - ⚠️⚠️ **UNE CARTE EN CACHE DE MODULE NE SE MUTE JAMAIS.** `getTownWorldCached` (et son
   jumeau du tribunal) rend un SINGLETON partagé par tous les remontages de l'onglet : y
   écrire ferait fuiter l'état d'une ferme à l'autre. Tout ce qui change vit dans l'état
@@ -349,7 +363,7 @@ BUILD S'ARRÊTE APRÈS LA COMPILATION** sur `Error: supabaseUrl is required` (pr
 `✓ Compiled successfully` juste avant.**
 
 **Bancs `.mjs` — ce qui existe VRAIMENT** (§14.6) :
-- **`tools/verify-vallee.mjs` — 123 contrôles, 123/123 (429 ; 113 au 427, 88 au 426).** Il
+- **`tools/verify-vallee.mjs` — 137 contrôles, 137/137 (430 ; 113 au 427, 88 au 426).** Il
   importe le VRAI moteur : circulation, murs invisibles ET décors traversables, géométrie des
   bâtiments, rebords sautables, le tribunal pièce par pièce, la coupe de bois, les familles,
   la garde-robe.
@@ -459,18 +473,20 @@ erreur** en choisissant mal.
   Ce n'est plus une impression, c'est un chiffre. On n'y a délibérément posé AUCUN endroit de
   vie : des résidents qui vont contempler un champ vide, c'est du remplissage. La question
   n'est donc pas « comment les meubler » mais **« qu'est-ce qu'on construit là »**.
-- ⚠️ **LES TROIS CHANTIERS DE JOUABILITÉ DÉCIDÉS AU 428 ET NON CONSTRUITS.** Guillaume les a
-  choisis, le socle est posé et mesuré, il ne manque que le travail :
-  **1. le marché** — le champ de foire et ses dix étals deviennent l'endroit où l'on VEND sa
-  production de la ferme, à prix variables. C'est ce qui donnerait une raison économique de
-  prendre le train, donc ce qui relierait les deux cartes au lieu de les juxtaposer ;
-  **2. les commissions** — le tableau des nouvelles distribue des demandes de la ville, qu'on
-  remplit depuis la ferme, à deux, contre paiement ;
-  **3. les rendez-vous datés** — concert au kiosque, jour de marché, foire : des événements au
-  calendrier partagé qui rassemblent résidents ET joueurs au même endroit à la même heure.
-  ⚠️ **L'ordre compte** : le marché fait exister l'économie, les commissions s'appuient dessus,
-  les rendez-vous donnent une raison d'y être ENSEMBLE. Pris dans le désordre, chacun est un
-  menu de plus.
+- ⚠️ **DEUX DES TROIS CHANTIERS DE JOUABILITÉ RESTENT À CONSTRUIRE.** Le marché est livré au
+  430 (il fait exister l'économie, et son **jour de marché** hebdomadaire est déjà un
+  rendez-vous daté). Restent :
+  **1. les commissions** — le tableau des nouvelles distribue des demandes de la ville, qu'on
+  remplit depuis la ferme, à deux, contre paiement. Elles s'appuient sur l'économie qui existe
+  désormais ;
+  **2. les rendez-vous datés** — concert au kiosque, foire : des événements au calendrier
+  partagé qui rassemblent résidents ET joueurs au même endroit à la même heure. ⚠️ Le patron
+  est déjà écrit deux fois (jour de marché, jour de service de Carla) : **une pure fonction du
+  numéro de jour, jamais un état**.
+- ⚠️⚠️ **LE TACTILE NE COUVRE QUE LA FERME, LA VILLE ET LE TRIBUNAL** (430). Les 21 autres jeux
+  de la plateforme n'ont pas été audités au doigt. Certains ont déjà des `pointer*` (puzzle,
+  naval, yahtzee), d'autres non — **personne ne sait lesquels**, et c'est exactement l'angle
+  mort qui a laissé la ferme injouable pendant des années.
 - **La garde-robe** (427) : les prix sont volontairement très hauts. À jouer pour savoir si
   « très cher » veut dire « on économise pour » ou « on n'y va jamais ».
 - **`candyluge`** : voir `public/candyluge/README.md`, qui fait autorité. La décision qui
@@ -497,7 +513,7 @@ erreur** en choisissant mal.
    se supprime, elle ne se date pas.
 2. **200 lignes = passe d'élagage obligatoire. Ne pas relever le seuil.** L'élagage se fait
    AVANT d'ajouter. **Le 428 a exécuté l'ordre du 427 : §6 est parti dans
-   `components/ferme/README.md`, et le fichier avait RÉTRÉCI pour la première fois (507 → 490) ; le 429 le remonte à 518.**
+   `components/ferme/README.md`, et le fichier avait RÉTRÉCI pour la première fois (507 → 490) ; il est remonté à 534 depuis. **La scission de §4 n'est plus reportable.**
    ⚠️ **L'ORDRE DU PROCHAIN ZIP : §4 SE SCINDE À SON TOUR.** C'est devenu le plus gros chapitre
    (près de cent lignes), et il mélange deux choses qui n'ont rien à voir : les pièges de la
    FERME/VILLE, qui appartiennent à `components/ferme/README.md` comme le reste, et les pièges

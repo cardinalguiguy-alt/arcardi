@@ -1721,6 +1721,28 @@ export const FERME_STR = {
     gpsCleared: "🧭 Destination effacée.",
     gpsArrived: "🧭 Vous y êtes.",
     gpsHint: "Clic sur le plan : fixer une destination",
+    /* Zip 430 — le marché du champ de foire. ⚠️ Les textes DISENT que le cours
+       change chaque jour : un prix variable qu'on ne sait pas variable est un
+       prix qui a l'air arbitraire. */
+    marketTitle: "Marché du champ de foire",
+    marketHint: "Les cours changent chaque jour. Ici on paie toujours au moins le prix du bac de la ferme — jamais moins.",
+    marketDayHint: "🎉 JOUR DE MARCHÉ. Les cours sont hauts aujourd'hui, toute la vallée est descendue.",
+    marketEmpty: "Vos poches sont vides. Remontez avec quelque chose à vendre.",
+    marketFamily: (f) => ({ crop: "Cultures", fish: "Pêche", product: "Ferme", forage: "Cueillette", material: "Matériaux" }[f] || f),
+    marketUnitLine: (p, base) => p + " or pièce (bac : " + base + ")",
+    marketBonus: (b) => "· +" + b + " par pièce",
+    promptTownMarket: "E : vendre au marché",
+    touchRun: "Courir (bascule)", touchMap: "Carte", touchAct: "Agir / sauter",
+    /* Zip 430 — Carla est plus libre que les autres. ⚠️ Les deux messages
+       DISENT la règle : un refus muet et une porte close sans raison passent
+       tous les deux pour des bogues. */
+    kickRefused: "💅 Carla Garfield n'est employée par personne ici. Elle partira si elle veut.",
+    boutiqueClosedToast: (d) => d === 0
+      ? "💅 La Maison Garfield ouvre aujourd'hui — Carla n'est pas encore arrivée."
+      : "💅 Fermé. Carla ne tient boutique qu'un jour par semaine : rendez-vous dans " + d + " jour" + (d > 1 ? "s" : "") + ".",
+    carlaOffDuty: "💅 Carla n'est pas de service aujourd'hui.",
+    chatMarketSell: (gain, bonus, money) => "Vendu au marché : " + gain + " or (+" + bonus + " vs le bac). Caisse : " + money + ".",
+    toastFarMarket: "🎪 Il faut être au champ de foire pour vendre.",
     promptTownStand: "↑ ↓ ← → : se lever",
   },
   en: {
@@ -3112,6 +3134,22 @@ export const FERME_STR = {
     gpsCleared: "🧭 Destination cleared.",
     gpsArrived: "🧭 You have arrived.",
     gpsHint: "Click the map to set a destination",
+    marketTitle: "Fairground market",
+    marketHint: "Prices move every day. You never get less here than at the farm bin — only more.",
+    marketDayHint: "🎉 MARKET DAY. Prices are high today, the whole valley came down.",
+    marketEmpty: "Your pockets are empty. Come back with something to sell.",
+    marketFamily: (f) => ({ crop: "Crops", fish: "Fishing", product: "Farm", forage: "Foraging", material: "Materials" }[f] || f),
+    marketUnitLine: (p, base) => p + " gold each (bin: " + base + ")",
+    marketBonus: (b) => "· +" + b + " each",
+    promptTownMarket: "E: sell at the market",
+    touchRun: "Run (toggle)", touchMap: "Map", touchAct: "Act / jump",
+    kickRefused: "💅 Carla Garfield works for nobody here. She'll leave when she chooses to.",
+    boutiqueClosedToast: (d) => d === 0
+      ? "💅 Maison Garfield opens today — Carla hasn't arrived yet."
+      : "💅 Closed. Carla only keeps shop one day a week: come back in " + d + " day" + (d > 1 ? "s" : "") + ".",
+    carlaOffDuty: "💅 Carla is off duty today.",
+    chatMarketSell: (gain, bonus, money) => "Sold at the market: " + gain + " gold (+" + bonus + " vs the bin). Till: " + money + ".",
+    toastFarMarket: "🎪 You need to be at the fairground to sell.",
     promptTownStand: "↑ ↓ ← → : stand up",
   },
 };

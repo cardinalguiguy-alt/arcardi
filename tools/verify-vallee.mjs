@@ -693,6 +693,67 @@ function walkTo(from, sp) {
   ok("chaque volée a deux paliers libres, à la bonne altitude", bad.length === 0, bad.join(" · "));
 }
 
+section("Valley Town — le marché du champ de foire (430)");
+{
+  /* ⚠️⚠️ CE QU'ON VÉRIFIE ICI EST LA SEULE CHOSE QUI PUISSE CASSER EN SILENCE :
+     que le cours soit une PURE FONCTION DU JOUR. Tout le reste du marché
+     (l'or, les stocks) est arbitré par l'hôte et se voit tout de suite si
+     c'est faux. Le cours, lui, est calculé SÉPARÉMENT chez chaque joueur — si
+     deux clients ne trouvaient pas le même chiffre, chacun aurait un écran
+     parfaitement cohérent avec lui-même et ils se disputeraient sur le prix du
+     blé sans qu'aucune erreur ne soit levée. C'est le défaut le plus cher
+     possible pour un jeu à deux, et le moins visible. */
+  let stable = true, inRange = true, floored = true;
+  for (let day = 1; day <= 400; day++) {
+    for (const fam of E.MARKET_FAMILIES) {
+      const a = E.marketRate(day, fam), b = E.marketRate(day, fam);
+      if (a !== b) stable = false;                       // déterminisme strict
+      if (a < 1 || a > 1 + C.MARKET_SPREAD + 0.001) inRange = false;
+    }
+  }
+  ok("le cours est déterministe (même jour, même famille, même prix)", stable);
+  ok(`le cours reste dans [0 ; +${Math.round(C.MARKET_SPREAD * 100)} %]`, inRange);
+  /* ⚠️ LE PLANCHER EST UNE PROMESSE FAITE AU JOUEUR, pas une conséquence : le
+     texte du marché dit « jamais moins que le bac ». Un arrondi malheureux sur
+     un article à 3 or suffirait à en faire un mensonge. */
+  for (let day = 1; day <= 200; day++) {
+    for (const [item, base] of [["crop", 3], ["berry", 1], ["wood", 2], ["fish", 7], ["product", 125]]) {
+      if (E.marketPrice(day, item, base) < base) floored = false;
+    }
+  }
+  ok("le marché ne paie JAMAIS moins que le bac de la ferme", floored);
+  {
+    // Le jour de marché doit exister, revenir régulièrement, et payer mieux
+    // qu'un jour ordinaire EN MOYENNE — sans quoi l'événement n'en est pas un.
+    let mdays = 0, sumM = 0, sumN = 0, nN = 0;
+    for (let day = 1; day <= 700; day++) {
+      const r = E.MARKET_FAMILIES.reduce((a2, f2) => a2 + E.marketRate(day, f2), 0) / E.MARKET_FAMILIES.length;
+      if (E.isMarketDay(day)) { mdays++; sumM += r; } else { sumN += r; nN++; }
+    }
+    ok("il y a bien un jour de marché par semaine", mdays === Math.floor(700 / C.MARKET_DAY_EVERY), `${mdays} sur 700 jours`);
+    ok("un jour de marché paie mieux qu'un jour ordinaire", sumM / mdays > sumN / nN,
+       `${((sumM / mdays - 1) * 100).toFixed(1)} % contre ${((sumN / nN - 1) * 100).toFixed(1)} %`);
+  }
+  {
+    /* ⚠️ TOUT CE QUI SE VEND AU BAC DOIT SE VENDRE AU MARCHÉ. Une famille
+       oubliée dans `marketFamilyOf` ne lève rien : elle se vend simplement au
+       prix de la ferme, en ville, pour toujours — et le joueur conclut que le
+       marché « ne marche pas pour le poisson ». */
+    const sellable = ["crop", "fish", "sea", "product", "berry", "fruit", "wood", "stone"];
+    const orphan = sellable.filter(i2 => !E.marketFamilyOf(i2));
+    ok("chaque article vendable au bac a une famille au marché", orphan.length === 0, orphan.join(" "));
+  }
+  {
+    // Le champ de foire doit être ATTEIGNABLE et sa zone de vente praticable :
+    // un marché où l'on ne peut pas se tenir est un menu qui ne s'ouvre jamais.
+    const mk = C.TOWN_MARKET;
+    const cx2 = mk.x + (mk.w >> 1), cy2 = mk.y + (mk.h >> 1);
+    ok("on atteint le centre du champ de foire depuis la gare", !!seen[idx(cx2, cy2)], `(${cx2},${cy2})`);
+    const stalls = tw.props.filter(pr => pr.kind === "stall");
+    ok("le champ de foire a bien ses étals", stalls.length >= 6, `${stalls.length} étals`);
+  }
+}
+
 section("Valley Town habitée — la famille et la garde-robe");
 {
   const bad = [];
@@ -709,6 +770,29 @@ section("Valley Town habitée — la famille et la garde-robe");
   ok("Carla sort toujours accompagnée", C.ALWAYS_GUEST_RIDS.includes(C.CARLA_RID) && (C.RESIDENT_FAMILY[C.CARLA_RID] || []).length > 0);
   const carla = C.VISITOR_ROSTER.find(r => r.rid === C.CARLA_RID);
   ok("Carla est recrutable (elle a un skill et plus de noStay)", !!carla && !!carla.skill && !carla.noStay);
+  /* ⚠️⚠️ ZIP 430 — SON STATUT EST VÉRIFIÉ, PAS SUPPOSÉ. Le commentaire qui la
+     décrivait dans fermeConstants.js est resté FAUX pendant trois zips (il
+     annonçait encore `noStay` et `chatOnly` alors que le 427 les avait
+     retirés) : la seule chose qui ne ment pas sur un statut, c'est un contrôle
+     qui le lit. */
+  ok("Carla n'a plus AUCUN des deux verrous du 376", !!carla && !carla.noStay && !carla.chatOnly);
+  ok("on ne peut pas la virer", !!carla && carla.noKick === true);
+  ok("elle ne travaille qu'un jour par semaine", !!carla && carla.weeklyShift === C.CARLA_WORK_DAY);
+  {
+    // Le jour de service doit exister une fois par semaine, et TOMBER UN AUTRE
+    // JOUR QUE LE MARCHÉ : les deux ensemble, la semaine n'a plus qu'un seul
+    // jour où il se passe quelque chose.
+    let n = 0, clash = 0;
+    for (let day = 1; day <= 700; day++) {
+      if (E.isShopDay(carla, day)) { n++; if (E.isMarketDay(day)) clash++; }
+    }
+    ok("sa boutique ouvre un jour sur sept", n === 100, `${n} jours sur 700`);
+    ok("son jour de service ne tombe pas le jour de marché", clash === 0, `${clash} collisions`);
+    // Et un résident ORDINAIRE travaille toujours tous les jours : le drapeau
+    // ne doit pas fuir sur les autres.
+    const greg = C.VISITOR_ROSTER.find(r2 => r2.skill === "lumberjack");
+    ok("un résident ordinaire travaille tous les jours", !!greg && [1, 2, 3, 4, 5, 6, 7].every(d => E.isShopDay(greg, d)));
+  }
   ok("son métier n'exige aucun atelier de ferme", C.SKILL_BUILDING[carla.skill] === null);
 }
 {

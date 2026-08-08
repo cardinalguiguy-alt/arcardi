@@ -1,5 +1,49 @@
 # ARCARDI 🎪
 
+> **ZIP 430 — LE TRAIN A ENFIN UNE RAISON D'ÊTRE PRIS, ET L'IPAD N'A PLUS BESOIN DE CLAVIER.**
+>
+> **Valley Town était un beau décor qu'on visite.** On y montait par curiosité, on
+> redescendait, et la ferme continuait sans elle : rien, dans toute la ville, ne valait le
+> voyage. Les dix étals du champ de foire existaient depuis quatre zips et ne servaient à rien.
+> **Le marché ouvre** : on y vend tout ce qui se vend au bac de la ferme, à un cours qui change
+> chaque jour et qui n'est **jamais inférieur** à celui du bac — au pire on ne gagne rien de
+> plus, jamais on ne perd. Un jour par semaine, c'est **jour de marché** et toute la vallée
+> descend.
+>
+> Le cours n'est stocké nulle part. Il est **haché à partir du numéro de jour** : deux joueurs
+> à deux bouts du monde lisent le même chiffre sans qu'un octet ne circule. Pas un champ de
+> sauvegarde, pas un message, pas une migration. Et le panneau affiche l'**écart** avec le prix
+> de la ferme, pas le prix — parce que personne ne connaît par cœur le prix du bac, et que
+> c'est le « +18 % » qui transforme une liste de chiffres en décision.
+>
+> **La ferme était injouable sans clavier, et personne ne l'avait écrit.** Vérification faite :
+> aucun écouteur tactile dans tout son rendu. Un tap permettait d'utiliser un outil, mais rien
+> — strictement rien — ne permettait de se déplacer ni d'interagir. L'un des trois joueurs les
+> plus actifs devait brancher un clavier Bluetooth pour entrer dans le seul monde partagé du
+> projet. Il y a maintenant un **pavé directionnel flottant** (son centre se pose là où le
+> pouce se pose : sur un iPad tenu à deux mains, on ne regarde pas ses pouces) et un **bouton
+> d'action qui porte le nom de ce qu'il va faire** — « s'asseoir », « entrer au tribunal »,
+> « vendre au marché ». Il ne le calcule pas : le jeu le sait déjà à chaque image depuis le 426.
+>
+> **L'affichage suit la dernière entrée utilisée, il ne se règle pas.** Un doigt allume les
+> commandes, une touche du clavier les éteint. Ce joueur-là rebranche son clavier une fois sur
+> deux ; un réglage l'aurait obligé à le changer deux fois par soirée.
+>
+> Et le pavé écrit **les quatre mêmes booléens que les flèches**. C'est la décision qui rend
+> tout le chantier petit : le jeu a trois boucles de déplacement, un second canal d'entrée
+> aurait voulu dire les modifier toutes les trois — puis oublier la quatrième. En partageant la
+> variable, le doigt ne *peut pas* se comporter autrement que le clavier.
+>
+> **Carla Garfield est plus libre que les autres.** Son statut était à jour dans le code et
+> FAUX dans le commentaire qui le décrit : il annonçait encore, trois zips après, deux verrous
+> retirés depuis longtemps. Désormais elle est **inexpulsable** — le vote d'exclusion envoie un
+> résident supplier qu'on le reprenne, ce qui n'a aucun sens pour quelqu'un qui a sa propre
+> boutique en ville et n'a jamais eu besoin de la ferme ; partir sera sa décision — et elle
+> **ne tient boutique qu'un jour par semaine**. Les autres jours, la Maison Garfield est
+> fermée, et la porte dit dans combien de jours elle rouvre. Ce jour-là, elle descend en ville
+> d'office : une boutique ouverte sans commerçante dedans n'aurait été qu'un détail de plus à
+> corriger plus tard.
+
 > **ZIP 429 — LA VILLE A UN CIEL, DES JAMBES, ET UNE BOUSSOLE.**
 >
 > **Il faisait midi de printemps à Valley Town depuis le zip 234.** Pas par choix : le voile
