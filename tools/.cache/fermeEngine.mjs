@@ -4134,11 +4134,44 @@ export function townSpots(tw) {
     // destination sur une case solide, sur l'eau, ou sous un arbre.
     if (tw.solid[i] || tw.ground[i] === C.G_WATER) return;
     if (tw.objects[i] === C.O_TREE || tw.objects[i] === C.O_TREE2) return;
+    /* ⚠️ ZIP 428 — ET ON S'Y TIENT DEBOUT, PAS SEULEMENT « LA CASE EST LIBRE ».
+       Trois endroits (deux coins de la fontaine, une vitrine) passaient le test
+       de case et échouaient au test de BOÎTE : le personnage fait 0,6 case de
+       large, sa coordonnée exacte tombait dans le décor voisin. Le résident y
+       arrivait puis se faisait refouler d'un demi-pas, indéfiniment. C'est le
+       même défaut d'échelle que « la case du banc est solide » corrigé au 427,
+       à un cran plus fin. */
+    if (!townBoxFree(tw, x, y)) return;
     list.push({ x, y, act, ...(extra || {}) });
+  };
+  /* ⚠️⚠️ ZIP 428 — ON S'ASSOIT PAR LE CÔTÉ QUI EST LIBRE, PAS TOUJOURS PAR LE
+     SUD. Le 427 posait le point d'assise sur la case AU SUD du banc, sans
+     alternative. Ça marche pour les onze bancs de la place et du parc ; ça ne
+     marche pas pour les TROIS BANCS DE LA PROMENADE DU LAC, dont le sud est…
+     le lac. Leur point d'assise tombait dans l'eau, `add` le refusait en
+     silence, et ces bancs-là n'existaient tout simplement pas pour les
+     résidents — personne ne s'est jamais assis au bord du lac de Valley Town.
+     Trouvé au 428 par le contrôle de couverture des quartiers, pas à l'œil :
+     ça ne se voit qu'en remarquant une absence, et une absence ne se remarque
+     pas.
+     ⚠️ L'ORDRE DES CÔTÉS N'EST PAS ARBITRAIRE : le sud d'abord, parce que c'est
+     l'orientation du sprite de banc (dossier en haut, assise en bas) et donc la
+     seule où l'on s'assoit vraiment « dedans ». Les autres sont des replis, et
+     ils valent mieux qu'un banc mort.
+     ⚠️ Le point rendu est celui où l'on SE TIENT ; `bx/by` reste la case du
+     banc, et c'est elle que le dessin utilise pour poser l'assis. Les deux ne
+     coïncident plus forcément — c'est justement ce qui rend le repli possible. */
+  const addBench = (pr) => {
+    for (const [dx, dy] of [[0, 1], [-1, 0], [1, 0], [0, -1]]) {
+      const before = list.length;
+      add(pr.x + dx, pr.y + dy, "sit", { bx: pr.x, by: pr.y });
+      if (list.length > before) return;
+    }
   };
   // ---- Le mobilier (posé par le générateur, donc lu chez lui).
   for (const pr of tw.props || []) {
-    if (pr.kind === "bench") add(pr.x, pr.y + 1, "sit", { bx: pr.x, by: pr.y });
+    if (pr.kind === "bench") addBench(pr);
+    else if (pr.kind === "planter") add(pr.x, pr.y + 1, "flowers");
     else if (pr.kind === "kiosk") { add(pr.x - 2, pr.y + 1, "kiosk"); add(pr.x + 2, pr.y + 1, "kiosk"); }
     else if (pr.kind === "stall") add(pr.x, pr.y + 1, "stall");
     else if (pr.kind === "townWell") add(pr.x + 1, pr.y + 1, "well");
@@ -4161,8 +4194,463 @@ export function townSpots(tw) {
   add(C.TOWN_BOUTIQUE.x + 1, C.TOWN_BOUTIQUE.y + C.TOWN_BOUTIQUE.h + 1, "window");
   add(C.TOWN_BOUTIQUE.x + C.TOWN_BOUTIQUE.w - 2, C.TOWN_BOUTIQUE.y + C.TOWN_BOUTIQUE.h + 1, "window");
   add(C.TOWN_SALON.x + 1, C.TOWN_SALON.y + C.TOWN_SALON.h + 1, "window");
+
+  /* ═════════════════════════════════════════════════════════════════════════
+     ZIP 428 — LES QUARTIERS QUE PERSONNE N'HABITAIT.
+     ─────────────────────────────────────────────────────────────────────────
+     ⚠️⚠️ MESURÉ AVANT D'ÊTRE CORRIGÉ : découpée en blocs de 28×28, la ville
+     comptait 48 blocs ouverts, et 33 D'ENTRE EUX N'AVAIENT AUCUN ENDROIT DE
+     VIE. Le verger, le lac, le quartier des artisans, le champ de foire, le
+     parc, les avenues : rien à y viser, donc personne n'y allait jamais. Pire,
+     la répartition était franchement fausse — SEIZE des 61 endroits étaient des
+     tombes, si bien qu'un quart de la vie sociale de Valley Town se passait au
+     cimetière. Ce n'était pas une intention, c'était une conséquence : le
+     cimetière est le seul décor dont le générateur pose seize exemplaires.
+
+     ⚠️ LA RÈGLE NE CHANGE PAS D'UN IOTA : tout ce qui suit est DÉRIVÉ de la
+     carte ou de ses constantes, jamais d'une liste de coordonnées écrite à la
+     main (voir l'en-tête de cette fonction). Ce qu'on ajoute, ce sont des
+     LIEUX — un bord de lac, une allée de verger, une rue — pas des points.
+     ⚠️ ET LE PAS D'ÉCHANTILLONNAGE COMPTE AUTANT QUE LE LIEU. Trop serré, on
+     fabrique douze endroits identiques à trois cases l'un de l'autre et le
+     tirage pondéré ne voit plus qu'eux ; trop lâche, le quartier reste mort.
+     Les pas ci-dessous donnent un endroit tous les 8 à 14 pas, soit à peu près
+     un par « coin » qu'un promeneur distinguerait. */
+
+  // ---- LA PROMENADE DU LAC. On s'accoude au bord de l'eau : on cherche donc
+  // la première case SÈCHE au-dessus de l'eau, colonne par colonne — la rive
+  // est irrégulière, une ligne droite tomberait dedans.
+  {
+    const lk = C.TOWN_LAKE;
+    for (let x = lk.x + 3; x < lk.x + lk.w - 3; x += 9) {
+      for (let y = lk.y; y < lk.y + lk.h; y++) {
+        const i = y * tw.w + x;
+        if (tw.ground[i] === C.G_WATER) { add(x, y - 1, "shore"); break; }
+      }
+    }
+  }
+  // ---- LE VERGER MUNICIPAL. On lève le nez vers les branches.
+  {
+    const or = C.TOWN_ORCHARD;
+    for (let y = or.y + 3; y < or.y + or.h - 2; y += 8)
+      for (let x = or.x + 2; x < or.x + or.w - 2; x += 7) add(x, y, "orchard");
+  }
+  // ---- LE PARC ET SON ÉTANG. Même méthode que le lac : on longe l'eau.
+  {
+    const pk = C.TOWN_PARK;
+    for (let x = pk.x + 2; x < pk.x + pk.w - 2; x += 6) {
+      for (let y = pk.y; y < pk.y + pk.h; y++) {
+        const i = y * tw.w + x;
+        if (tw.ground[i] === C.G_WATER) { add(x, y - 1, "pond"); break; }
+      }
+    }
+  }
+  // ---- LE QUARTIER DES ARTISANS. On regarde travailler ; c'est ce qu'on fait
+  // dans un quartier d'ateliers, et c'est ce qui lui donne son bruit.
+  {
+    const ar = C.TOWN_ARTISANS;
+    for (let y = ar.y + 4; y < ar.y + ar.h; y += 14) { add(ar.x + 7, y, "craft"); add(ar.x + 13, y + 5, "craft"); }
+  }
+  // ---- LE CHAMP DE FOIRE, ailleurs que devant les étals : on traîne entre
+  // les rangées, ce qui est précisément ce qui fait une foire plutôt qu'un
+  // alignement de commerces.
+  {
+    const mk = C.TOWN_MARKET;
+    for (let y = mk.y + 3; y < mk.y + mk.h - 2; y += 9)
+      for (let x = mk.x + 3; x < mk.x + mk.w - 3; x += 10) add(x, y, "fair");
+  }
+  /* ---- LES CARREFOURS. ⚠️ C'EST L'AJOUT QUI CHANGE LE PLUS LA VILLE, et c'est
+     le moins spectaculaire. Sans endroit dans les rues, un résident semble se
+     téléporter d'un point d'intérêt à l'autre : on ne le croise jamais EN TRAIN
+     d'aller quelque part. Une rue où personne ne s'arrête est un couloir.
+
+     ⚠️⚠️ MAIS ON PREND LES CARREFOURS, PAS UN POINT TOUS LES N PAS — ET C'EST
+     LE BANC QUI A TRANCHÉ. Premier jet : un endroit tous les 26 pas le long de
+     chaque avenue. Résultat mesuré : 58 endroits de rue sur 148, soit 39 % de
+     la ville. On venait de remplacer « un quart de la vie sociale se passe au
+     cimetière » par « deux cinquièmes se passent sur le trottoir » — le même
+     défaut de répartition, à l'autre bout. C'est exactement pour ça que le
+     contrôle « aucune activité n'écrase les autres » a été écrit AVANT
+     d'ajouter quoi que ce soit.
+     Le croisement de deux avenues est en plus le bon endroit en soi : c'est là
+     qu'on hésite, qu'on se salue, qu'on regarde le panneau. Et il est DÉRIVÉ
+     des deux tables qui définissent déjà les rues — vingt endroits qui se
+     déplacent tout seuls le jour où l'on déplace une avenue. */
+  for (const ry of C.TOWN_ST_ROWS) for (const cx2 of C.TOWN_ST_COLS) add(cx2 + 2, ry + 2, "stroll");
+
   TOWN_SPOT_CACHE.w = tw; TOWN_SPOT_CACHE.list = list;
   return list;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZIP 428 — LA NAVIGATION DE VALLEY TOWN. ON REVIENT SUR UNE DÉCISION ÉCRITE.
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️⚠️ LE 427 A TRANCHÉ « LA PARADE N'EST PAS UN A*, C'EST UN ITINÉRAIRE » —
+   ET C'ÉTAIT FAUX. Mesuré au 428 en rejouant le VRAI `townResidentRoam` (ligne
+   droite + glissement + garde de 2,4 s) sur la VRAIE carte :
+
+       depuis le quai .............  15/64 destinations atteintes (23 %)
+       d'un endroit à un autre ....  94/394               (24 %)
+       vie complète simulée ....... 416/2000 déplacements (21 %)
+
+   Quatre trajets sur cinq échouaient. Et la cause n'était pas la topologie :
+   un parcours en largeur avec la règle de dénivelé du jeu trouve 33 198 des
+   33 199 cases praticables depuis le quai, les 64 endroits sont TOUS
+   atteignables, et le détour médian ne vaut que 1,28× la ligne droite. La
+   ville est parfaitement connexe ; c'est la ligne droite qui meurt contre la
+   première des 27 haies.
+   ⚠️ ET LE SYMPTÔME MENTAIT : à l'abandon, le résident joue quand même son
+   activité SUR PLACE, sept à vingt-six secondes. Un résident bloqué contre une
+   haie n'avait donc pas l'air bloqué — il avait l'air de contempler une haie.
+   C'est la signature exacte des pièges de ce projet : aucune erreur, et ça
+   ressemble à une intention.
+
+   Ce qui NE change pas, et c'est ce qui rendait l'A* refusé au 427 :
+   ⚠️ LE COÛT RÉSEAU EST STRICTEMENT LE MÊME. Le chemin est calculé chez l'hôte
+   puis RÉDUIT à quelques points de passage (`simplify` ci-dessous) avant de
+   partir dans le message `residentPaths` qui existe depuis le 364 et qui
+   accepte déjà une liste de points. Un trajet = un `send()`, hier comme
+   aujourd'hui — et seul le nombre de `send()` est facturé (§3).
+   ⚠️ ET LES ESCALIERS CESSENT D'ÊTRE UN CAS PARTICULIER. `townStairRoute`
+   dérivait des points de passage de `TOWN_STAIRS` pour compenser l'aveuglement
+   de la ligne droite ; un chemin qui connaît le dénivelé monte l'escalier
+   parce que c'est le seul endroit où il PEUT monter. Une table de moins à
+   tenir d'accord avec la carte.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ⚠️ LA GRILLE DE NAVIGATION EST STATIQUE, ET C'EST DÉMONTRABLE PLUTÔT QUE
+   COMMODE. Le seul obstacle de la ville qui change en cours de partie est un
+   arbre qu'on abat (`shared.townChop`) — or un arbre est TOUJOURS bloquant et
+   une souche ne l'est jamais (TOWN_STUMP_BLOCKS = false). Couper ne peut donc
+   qu'OUVRIR une case. Une grille qui ignore la coupe est pessimiste, jamais
+   optimiste : elle fait parfois faire un détour, elle n'envoie jamais dans un
+   mur. C'est ce qui autorise à la calculer une fois pour toutes.
+   ⚠️ ET ELLE VIT DANS SON PROPRE CACHE, PAS SUR `tw`. Même raison que
+   TOWN_SPOT_CACHE juste au-dessus : `getTownWorldCached` rend un singleton
+   partagé par tous les remontages de l'onglet, y écrire ferait fuiter l'état
+   d'une ferme à l'autre (§4). */
+const TOWN_NAV_CACHE = { w: null, nav: null };
+export function townNav(tw) {
+  if (!tw) return null;
+  if (TOWN_NAV_CACHE.w === tw && TOWN_NAV_CACHE.nav) return TOWN_NAV_CACHE.nav;
+  const W = tw.w, H = tw.h, N = W * H;
+  const walk = new Uint8Array(N);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const i = y * W + x;
+    // Mêmes refus que townBlockedAt côté jeu, la coupe en moins (voir ci-dessus).
+    if (x <= C.TOWN_RAIL_X + 1 && !(y >= C.TOWN_PLATFORM.y && y < C.TOWN_PLATFORM.y + C.TOWN_PLATFORM.h)) continue;
+    if (tw.solid && tw.solid[i]) continue;
+    if (tw.ground[i] === C.G_WATER) continue;
+    const o = tw.objects[i];
+    if (o === C.O_TREE || o === C.O_TREE2 || o === C.O_STUMP) continue;
+    walk[i] = 1;
+  }
+  /* ---- LES COMPOSANTES CONNEXES. ⚠️ C'EST LE PLAFOND DE COÛT DE L'A*, ET LA
+     SEULE RAISON POUR LAQUELLE ON PEUT S'EN SERVIR VINGT FOIS PAR MINUTE. Un
+     A* qui ÉCHOUE est le seul qui coûte cher : il explore tout ce qu'il peut
+     atteindre avant de se rendre. Savoir AVANT de partir que la destination
+     est dans une autre poche, c'est transformer le pire cas (37 632 cases
+     visitées) en une comparaison de deux entiers. Le calcul est fait une fois,
+     ici, en un parcours en largeur. */
+  const comp = new Int32Array(N).fill(-1);
+  const stack = new Int32Array(N);
+  let nComp = 0;
+  for (let s = 0; s < N; s++) {
+    if (!walk[s] || comp[s] >= 0) continue;
+    const id = nComp++;
+    let sp = 0; stack[sp++] = s; comp[s] = id;
+    while (sp > 0) {
+      const i = stack[--sp], x = i % W, y = (i / W) | 0, e = tw.elev[i];
+      for (let k = 0; k < 4; k++) {
+        const nx = x + (k === 0 ? 1 : k === 1 ? -1 : 0), ny = y + (k === 2 ? 1 : k === 3 ? -1 : 0);
+        if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+        const j = ny * W + nx;
+        if (!walk[j] || comp[j] >= 0) continue;
+        // La règle unique du relief (§6) : pas plus de TOWN_STEP_MAX d'un pas.
+        // Écrite ICI, elle fait que l'escalier est le seul chemin vers le haut
+        // sans qu'aucun code ne connaisse l'existence d'un escalier.
+        if (Math.abs(tw.elev[j] - e) > C.TOWN_STEP_MAX) continue;
+        comp[j] = id; stack[sp++] = j;
+      }
+    }
+  }
+  /* Les tampons de l'A*, alloués UNE FOIS et réutilisés. ⚠️ `stamp` évite de
+     les remettre à zéro à chaque appel : effacer 37 632 entrées coûterait plus
+     cher que la recherche elle-même sur un trajet court. */
+  const nav = {
+    w: W, h: H, walk, comp, nComp,
+    g: new Float32Array(N), f: new Float32Array(N),
+    from: new Int32Array(N), stamp: new Int32Array(N), closed: new Uint8Array(N),
+    /* ⚠️⚠️ LE TAS EST UN TABLEAU ORDINAIRE, ET C'EST UN BOGUE PAYÉ AU 428.
+       Premier jet : `new Int32Array(N + 1)`, en raisonnant « il y a N cases,
+       donc au plus N entrées ». FAUX. Cet A* n'a pas de décrémentation de clé
+       (elle coûterait un index de position dans le tas, pour un gain nul à
+       cette taille) : une case AMÉLIORÉE est repoussée sans que l'ancienne
+       entrée soit retirée. Le tas peut donc dépasser N.
+       ⚠️ ET LE DÉPASSEMENT EST TOTALEMENT MUET : écrire hors bornes d'un
+       tableau typé en JavaScript ne lève rien, ça ne fait simplement RIEN. La
+       recherche perdait des nœuds, se terminait sans avoir trouvé, et rendait
+       `null` — ce qui a l'air d'une réponse (« il n'y a pas de chemin »). Un
+       seul trajet sur 3 660 tombait dessus, du sud du lac vers le belvédère,
+       c'est-à-dire la diagonale la plus longue de la ville.
+       Un tableau ordinaire grandit tout seul, et le coût est invisible face à
+       une recherche à 0,17 ms. */
+    run: 0, heap: [], heapKey: [],
+  };
+  TOWN_NAV_CACHE.w = tw; TOWN_NAV_CACHE.nav = nav;
+  return nav;
+}
+export function townWalkableTile(tw, x, y) {
+  const nav = townNav(tw); if (!nav) return false;
+  const fx = Math.floor(x), fy = Math.floor(y);
+  if (fx < 0 || fy < 0 || fx >= nav.w || fy >= nav.h) return false;
+  return !!nav.walk[fy * nav.w + fx];
+}
+/* Deux cases sont-elles dans la même poche de la ville ? Sert de garde AVANT
+   tout A*, et de filtre à `townSpots` quand on choisit une destination. */
+export function townSameArea(tw, x0, y0, x1, y1) {
+  const nav = townNav(tw); if (!nav) return false;
+  const a = townCompAt(nav, x0, y0), b = townCompAt(nav, x1, y1);
+  return a >= 0 && a === b;
+}
+function townCompAt(nav, x, y) {
+  const fx = Math.floor(x), fy = Math.floor(y);
+  if (fx < 0 || fy < 0 || fx >= nav.w || fy >= nav.h) return -1;
+  return nav.comp[fy * nav.w + fx];
+}
+
+/* ⚠️ ON SE DÉPLACE DE CENTRE DE CASE À CENTRE DE CASE, ET CE N'EST PAS UN
+   DÉTAIL DE CONFORT. La boîte du personnage fait 0,6 case de large et 0,35 de
+   haut (voir townCanStand) : posée au CENTRE d'une case libre, elle tient
+   toujours entièrement dedans. Viser un bord, c'est viser une position que le
+   test de collision peut refuser alors que la case est libre — un chemin
+   parfaitement valide qui échouerait à l'exécution, c'est-à-dire le retour du
+   défaut qu'on est en train de corriger. */
+const TC = 0.5;
+const TOWN_LOS_MAX = 48;   // portée de visée de la réduction, en cases (voir townSimplifyPath)
+export function townFindPath(tw, x0, y0, x1, y1, maxNodes) {
+  const nav = townNav(tw); if (!nav) return null;
+  const W = nav.w, H = nav.h;
+  const sx = Math.floor(x0), sy = Math.floor(y0), gx = Math.floor(x1), gy = Math.floor(y1);
+  if (sx < 0 || sy < 0 || sx >= W || sy >= H || gx < 0 || gy < 0 || gx >= W || gy >= H) return null;
+  const start = sy * W + sx, goal = gy * W + gx;
+  if (!nav.walk[start] || !nav.walk[goal]) return null;
+  if (start === goal) return [{ x: gx + TC, y: gy + TC }];
+  // Le garde-fou : deux poches différentes, on ne cherche même pas.
+  if (nav.comp[start] !== nav.comp[goal]) return null;
+  const run = ++nav.run;
+  const { g, f, from, stamp, closed, heap, heapKey, walk, comp } = nav;
+  const elev = tw.elev;
+  /* ⚠️ LE PLAFOND DE NŒUDS EST UNE CEINTURE, PAS UN RÉGLAGE — ET IL A FAILLI
+     DEVENIR UN BOGUE. Premier jet à 12 000 : douze recherches sur quatre cents
+     échouaient, TOUTES sur la même forme (Haute-Ville → cimetière, c'est-à-dire
+     la ville en diagonale). Elles n'échouaient pas parce que le chemin
+     n'existait pas — les deux cases étaient dans la même poche — mais parce que
+     la recherche s'arrêtait avant de le trouver. Un plafond qui coupe un
+     résultat VALIDE est exactement le stub menteur du §10 : ça retombe sur
+     « pas de chemin », ce qui a l'air d'une réponse.
+     Le garde des poches ci-dessus ayant déjà éliminé le seul cas réellement
+     coûteux (chercher ce qui n'existe pas), le plafond n'a plus qu'à être plus
+     grand que la ville. */
+  const CAP = maxNodes || (W * H);
+  /* ⚠️⚠️ L'HEURISTIQUE EST OCTILE, PAS MANHATTAN, ET C'EST UNE CORRECTION DU
+     428 TROUVÉE PAR LE BANC. Manhattan (|dx|+|dy|) SURESTIME le coût réel dès
+     qu'on se déplace en diagonale, où deux cases ne coûtent pas 2 mais 1,414.
+     Une heuristique qui surestime n'est pas seulement « non optimale » : elle
+     est INCONSISTANTE, donc l'A* rouvre sans cesse des nœuds qu'il avait déjà
+     fermés, et le nombre d'expansions explose bien au-delà du nombre de cases.
+     Le plafond de sécurité sautait alors AVANT que le but soit atteint, et la
+     fonction rendait `null` — c'est-à-dire « il n'y a pas de chemin », ce qui a
+     tout l'air d'une réponse. Un trajet sur 3 660 tombait dessus : le sud du
+     lac vers le belvédère, la plus longue diagonale de la ville, exactement le
+     cas où Manhattan se trompe le plus.
+     La forme octile est le coût EXACT en terrain libre : elle ne surestime
+     jamais, donc aucun nœud n'est rouvert. */
+  const D2 = 1.41421356;
+  const h = (i) => {
+    const dxh = Math.abs((i % W) - gx), dyh = Math.abs(((i / W) | 0) - gy);
+    return (dxh + dyh) + (D2 - 2) * Math.min(dxh, dyh);
+  };
+  let hn = 0;
+  heap.length = 1; heapKey.length = 1;   // l'indice 0 est inutilisé (tas 1-indexé)
+  const push = (i, key) => {
+    let c = ++hn; heap[c] = i; heapKey[c] = key;
+    while (c > 1) { const p = c >> 1; if (heapKey[p] <= heapKey[c]) break; const ti = heap[p], tk = heapKey[p]; heap[p] = heap[c]; heapKey[p] = heapKey[c]; heap[c] = ti; heapKey[c] = tk; c = p; }
+  };
+  const pop = () => {
+    const top = heap[1];
+    heap[1] = heap[hn]; heapKey[1] = heapKey[hn]; hn--;
+    let c = 1;
+    for (;;) { const l = c << 1, r = l + 1; let m = c;
+      if (l <= hn && heapKey[l] < heapKey[m]) m = l;
+      if (r <= hn && heapKey[r] < heapKey[m]) m = r;
+      if (m === c) break;
+      const ti = heap[m], tk = heapKey[m]; heap[m] = heap[c]; heapKey[m] = heapKey[c]; heap[c] = ti; heapKey[c] = tk; c = m; }
+    return top;
+  };
+  stamp[start] = run; g[start] = 0; f[start] = h(start); from[start] = -1; closed[start] = 0;
+  push(start, f[start]);
+  let expanded = 0, found = false;
+  while (hn > 0) {
+    const i = pop();
+    if (closed[i] === 1 && stamp[i] === run) continue;
+    closed[i] = 1;
+    if (i === goal) { found = true; break; }
+    if (++expanded > CAP) break;
+    const x = i % W, y = (i / W) | 0, e = elev[i];
+    for (let k = 0; k < 8; k++) {
+      const dx = k < 4 ? (k === 0 ? 1 : k === 1 ? -1 : 0) : (k === 4 || k === 6 ? 1 : -1);
+      const dy = k < 4 ? (k === 2 ? 1 : k === 3 ? -1 : 0) : (k === 4 || k === 5 ? 1 : -1);
+      const nx = x + dx, ny = y + dy;
+      if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+      const j = ny * W + nx;
+      if (!walk[j] || comp[j] !== comp[i]) continue;
+      if (Math.abs(elev[j] - e) > C.TOWN_STEP_MAX) continue;
+      /* ⚠️ PAS DE COIN COUPÉ. Une diagonale ne passe que si les DEUX cases
+         orthogonales sont libres : sinon le chemin frôle l'angle d'une haie,
+         et la boîte du personnage — 0,6 case, pas un point — s'y accroche. Le
+         chemin serait juste sur le papier et faux à l'exécution. */
+      if (dx && dy) {
+        const a = y * W + (x + dx), b = (y + dy) * W + x;
+        if (!walk[a] || !walk[b]) continue;
+        if (Math.abs(elev[a] - e) > C.TOWN_STEP_MAX || Math.abs(elev[b] - e) > C.TOWN_STEP_MAX) continue;
+      }
+      const step = (dx && dy) ? D2 : 1;
+      const ng = g[i] + step;
+      if (stamp[j] === run && ng >= g[j]) continue;
+      stamp[j] = run; g[j] = ng; from[j] = i; closed[j] = 0;
+      f[j] = ng + h(j);
+      push(j, f[j]);
+    }
+  }
+  if (!found) return null;
+  const raw = [];
+  for (let i = goal; i !== -1; i = from[i]) { raw.push(i); if (i === start) break; }
+  raw.reverse();
+  /* ⚠️ LA RÉDUCTION PART DE LA POSITION RÉELLE, PAS DU CENTRE DE LA CASE DE
+     DÉPART. Le résident n'est presque jamais au centre d'une case : valider le
+     premier segment depuis le centre reviendrait à valider un segment que
+     personne ne parcourra. Repli sur le centre si la position réelle ne tient
+     pas la boîte — ce qui n'arrive que si le résident a été poussé dans un
+     coin, et le centre de sa case est alors le meilleur point de rattrapage. */
+  const from0 = townBoxFree(tw, x0, y0) ? { x: x0, y: y0 } : null;
+  return townSimplifyPath(tw, raw, W, x1, y1, from0);
+}
+
+/* ---- LA RÉDUCTION EN POINTS DE PASSAGE -------------------------------------
+   ⚠️⚠️ ELLE EST OBLIGATOIRE, ET PAS POUR LE RÉSEAU. Le suiveur, chez l'hôte
+   comme chez l'invité, avance EN LIGNE DROITE d'un point au suivant : c'est le
+   modèle de tout le jeu depuis le 252 et on n'y touche pas. Un chemin d'A*
+   rendu case par case donnerait un PNJ qui zigzague d'un centre de case à
+   l'autre. On ne garde donc que les points où il faut vraiment tourner — mais
+   on ne les choisit pas géométriquement : on garde un point dès que le segment
+   direct depuis le dernier point retenu N'EST PLUS PRATICABLE. Le critère est
+   donc EXACTEMENT celui qui sera appliqué en jeu, ce qui est la seule façon de
+   garantir qu'un segment validé ici sera parcouru là-bas.
+   ⚠️ Effet de bord voulu : le chemin cesse de raser les murs. Deux virages en
+   diagonale valent mieux que douze petits pas contre une haie. */
+function townSimplifyPath(tw, raw, W, tx, ty, from0) {
+  const pt = (i) => ({ x: (i % W) + TC, y: ((i / W) | 0) + TC });
+  const out = [];
+  let anchor = from0 || pt(raw[0]);
+  /* ⚠️⚠️ `base` NE RECULE JAMAIS, ET C'EST UNE GARANTIE D'ARRÊT, PAS UN
+     RAFFINEMENT. Premier jet du 428 : on gardait « le dernier point qui
+     passait » sans forcer sa progression. Le jour où DEUX CASES VOISINES ont
+     échoué au test de segment (rendu plus strict le même jour, au ras d'un
+     escalier), le point retenu cessait d'avancer : la boucle repoussait
+     éternellement le même point de passage et Node tombait sur un dépassement
+     de mémoire — c'est-à-dire le seul bogue de ce zip qui, lui, ait fait du
+     bruit. Ici `base` est le point retenu et `k` repart TOUJOURS de `base + 1` :
+     l'avancée d'au moins une case par tour est vraie par construction, quel que
+     soit ce que répond le test de segment.
+     ⚠️ Deux cases voisines du chemin sont traversables par construction (l'A*
+     ne relie que des cases dont il a vérifié l'arête) : les accepter sans les
+     retester n'est pas une concession, c'est la même règle lue au bon endroit. */
+  let base = 0;
+  while (base < raw.length - 1) {
+    /* ⚠️ LA PORTÉE DE VISÉE EST BORNÉE, ET C'EST UN PLAFOND DE COÛT, PAS UNE
+       LIMITE DE QUALITÉ. Sans borne, un chemin de deux cents cases teste des
+       segments de deux cents cases à chaque pas : la réduction coûterait plus
+       cher que la recherche. Au-delà de TOWN_LOS_MAX on coupe le trajet en
+       tronçons — quelques points de passage de plus, sur une liste qui n'est
+       pas facturée à la taille (§3). */
+    let last = base + 1;
+    const far = Math.min(raw.length - 1, base + TOWN_LOS_MAX);
+    for (let k = base + 2; k <= far; k++) {
+      const cand = pt(raw[k]);
+      if (!townSegmentClear(tw, anchor.x, anchor.y, cand.x, cand.y)) break;
+      last = k;
+    }
+    const keep = pt(raw[last]);
+    out.push(keep); anchor = keep; base = last;
+  }
+  const end = pt(raw[raw.length - 1]);
+  if (!out.length || out[out.length - 1].x !== end.x || out[out.length - 1].y !== end.y) out.push(end);
+  /* La destination EXACTE en dernier. Les endroits de `townSpots` sont donnés
+     en coordonnées de case ; s'arrêter au centre de la case suffirait presque,
+     mais « presque » est ce qui décale un personnage assis d'un demi-banc. */
+  if (Number.isFinite(tx) && Number.isFinite(ty)) {
+    const e = out[out.length - 1];
+    if (Math.abs(e.x - tx) > 0.01 || Math.abs(e.y - ty) > 0.01) {
+      if (townSegmentClear(tw, e.x, e.y, tx, ty)) out.push({ x: tx, y: ty });
+    }
+  }
+  return out;
+}
+/* La boîte du personnage, en dur : c'est celle de townCanStand côté jeu.
+   ⚠️ ELLE EST ÉCRITE ICI ET LUE LÀ-BAS, pas l'inverse — deux boîtes réglées
+   séparément, c'est la divergence en attente du §8. */
+export function townBoxFree(tw, x, y, fromE) {
+  const nav = townNav(tw); if (!nav) return false;
+  const r = 0.3, W = nav.w, H = nav.h;
+  /* ⚠️⚠️ SANS ALTITUDE DE RÉFÉRENCE, ON PREND CELLE DE LA CASE SOUS LES PIEDS —
+     ET ON VÉRIFIE QUAND MÊME. Un `fromE` absent voulait dire « ne regarde pas
+     le relief », ce qui laissait passer une boîte à cheval sur une falaise :
+     le personnage tient dans la case, mais son épaule est un demi-étage plus
+     bas. Le jeu, lui, relit l'altitude à chaque image et refuse. La boîte ne
+     doit JAMAIS enjamber plus qu'une marche, c'est l'invariant — pas un
+     paramètre de l'appelant. */
+  const eRef = fromE !== undefined ? fromE : townElevTile(tw, x, y + 0.2);
+  for (let p = 0; p < 4; p++) {
+    const px = x + (p % 2 ? r : -r), py = y + (p < 2 ? 0 : 0.35);
+    const fx = Math.floor(px), fy = Math.floor(py);
+    if (fx < 0 || fy < 0 || fx >= W || fy >= H) return false;
+    const i = fy * W + fx;
+    if (!nav.walk[i]) return false;
+    if (Math.abs(tw.elev[i] - eRef) > C.TOWN_STEP_MAX) return false;
+  }
+  return true;
+}
+/* Le segment A→B est-il parcourable EN LIGNE DROITE ?
+   ⚠️⚠️ L'ALTITUDE DE RÉFÉRENCE EST CELLE DE L'ÉCHANTILLON COURANT, PAS DU
+   PRÉCÉDENT, ET C'EST LE DERNIER DÉFAUT DE NAVIGATION DU 428. Premier jet :
+   `prevE` retenait l'altitude de l'échantillon d'avant, à un quart de case en
+   arrière — en imitant le jeu, qui compare bien la boîte NOUVELLE à
+   l'altitude ANCIENNE. Mais le jeu avance de 0,025 case par image, pas de
+   0,25 : son « ancienne » altitude est celle d'il y a un quarantième de case.
+   Sur un escalier dont chaque marche vaut 0,2 et dont le seuil est 0,34, ce
+   décalage suffit à faire dire « ça passe » à un segment que le jeu refuse.
+   Symptôme : le chemin franchissait un escalier EN BIAIS par le côté, ce qui
+   n'existe pas, et le résident restait planté au pied des marches de la
+   Haute-Ville — encore une fois sans la moindre erreur.
+   Sans décalage du tout, le test devient l'invariant lui-même (« la boîte
+   n'enjambe jamais plus qu'une marche »), donc au moins aussi strict que le
+   jeu à n'importe quelle vitesse. Un test de navigation doit se tromper du
+   côté du refus. */
+export function townSegmentClear(tw, ax, ay, bx, by) {
+  const dx = bx - ax, dy = by - ay, d = Math.hypot(dx, dy);
+  const n = Math.max(1, Math.ceil(d / 0.2));
+  for (let s = 1; s <= n; s++) {
+    const t = s / n, x = ax + dx * t, y = ay + dy * t;
+    if (!townBoxFree(tw, x, y)) return false;
+  }
+  return true;
+}
+export function townElevTile(tw, x, y) {
+  if (!tw || !tw.elev) return 0;
+  const fx = Math.floor(x), fy = Math.floor(y);
+  if (fx < 0 || fy < 0 || fx >= tw.w || fy >= tw.h) return 0;
+  return tw.elev[fy * tw.w + fx];
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

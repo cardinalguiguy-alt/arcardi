@@ -421,18 +421,80 @@ ok("la ville a des endroits où s'arrêter", spotList.length > 20, `${spotList.l
   ok("aucun endroit n'est sur une case bloquée", bad.length === 0, bad.slice(0, 8).map(s2 => `${s2.act}(${s2.x},${s2.y})`).join(" "));
 }
 {
+  /* ⚠️⚠️ ZIP 428 — LA VILLE EST-ELLE HABITÉE PARTOUT, OU SEULEMENT LÀ OÙ LE
+     GÉNÉRATEUR A POSÉ DU MOBILIER ? C'est le contrôle qui manquait au 427, et
+     son absence se voyait : sur 48 blocs ouverts de 28×28, TRENTE-TROIS
+     n'avaient aucun endroit de vie. Le verger, le lac, les artisans, la foire,
+     le parc et toutes les avenues étaient du décor traversé, jamais habité.
+     Rien ne le disait, parce que ce n'est un défaut d'AUCUNE ligne de code :
+     c'est un défaut de la SOMME, et seule une mesure agrégée le voit. */
+  const cell = 28;
+  const grid = new Map();
+  for (const s2 of spotList) grid.set(`${Math.floor(s2.x / cell)},${Math.floor(s2.y / cell)}`, true);
+  /* ⚠️⚠️ ON NE COMPTE QUE LES BLOCS BÂTIS, ET CETTE DÉFINITION EST LE CŒUR DU
+     CONTRÔLE. Premier jet : « tout bloc praticable doit avoir un endroit de
+     vie ». Il en trouvait dix-huit vides — et en les regardant, ils sont tous
+     de la PELOUSE NUE. Valley Town occupe une fraction de sa carte de 224×168 ;
+     le reste est de la prairie que personne n'a encore aménagée (c'est écrit
+     noir sur blanc dans CLAUDE.md §13 : « que met-on dans le sud-est ? »). Y
+     poser des endroits pour verdir un compteur, c'est fabriquer des résidents
+     qui vont contempler un champ vide — du remplissage, exactement ce que ce
+     projet refuse.
+     Un bloc est donc un QUARTIER s'il porte de l'aménagement : au moins 15 %
+     de ses cases praticables ne sont pas de l'herbe (dallage, chemin, parvis).
+     Ce que le contrôle dit alors est ce qu'on veut vraiment savoir : « tout
+     endroit que quelqu'un a construit a-t-il une raison qu'on y aille ? » */
+  let built = 0, meadow = 0; const dead = [];
+  for (let by = 0; by * cell < H; by++) for (let bx = 0; bx * cell < W; bx++) {
+    let free = 0, paved = 0;
+    for (let y = by * cell; y < Math.min(H, (by + 1) * cell); y++)
+      for (let x = bx * cell; x < Math.min(W, (bx + 1) * cell); x++) {
+        if (!walkable(x, y)) continue;
+        free++;
+        if (tw.ground[idx(x, y)] !== C.G_GRASS) paved++;
+      }
+    if (free <= cell * cell / 4) continue;
+    if (paved < free * 0.15) { meadow++; continue; }
+    built++; if (!grid.has(`${bx},${by}`)) dead.push(`${bx},${by}`);
+  }
+  ok(`chaque quartier bâti a une raison qu'on y aille (${built - dead.length}/${built})`,
+     dead.length === 0, (dead.length ? `blocs bâtis sans endroit : ${dead.join(" ")} · ` : "") + `${meadow} blocs de prairie non aménagée, hors compte`);
+  /* ⚠️ ET LA RÉPARTITION COMPTE AUTANT QUE LA COUVERTURE. Le tirage d'une
+     destination est uniforme sur cette liste : une famille d'endroits
+     sur-représentée devient l'endroit où tout le monde va. Au 427, seize des
+     soixante et un endroits étaient des TOMBES — un quart de la vie sociale de
+     Valley Town se passait au cimetière, sans que ce soit l'intention de
+     personne. */
+  const byAct = new Map();
+  for (const s2 of spotList) byAct.set(s2.act, (byAct.get(s2.act) || 0) + 1);
+  const worst = [...byAct.entries()].sort((a2, b2) => b2[1] - a2[1])[0];
+  ok("aucune activité n'écrase toutes les autres", worst[1] <= spotList.length * 0.2,
+     `la plus fréquente : ${worst[0]} ${worst[1]}/${spotList.length} (${(100 * worst[1] / spotList.length).toFixed(0)} %)`);
+}
+{
   const bad = spotList.filter(s2 => !seen[idx(s2.x, s2.y)]);
   ok("tous les endroits sont ATTEIGNABLES depuis la gare", bad.length === 0, bad.slice(0, 8).map(s2 => `${s2.act}(${s2.x},${s2.y})`).join(" "));
 }
 {
-  // Un banc doit être JUSTE AU NORD de son point d'assise : c'est ce que
-  // suppose le dessin « assis » (il pose le personnage sur la case du banc).
+  /* Une assise doit désigner un VRAI banc, ADJACENT à la case où l'on se tient.
+     ⚠️ « Juste au nord » était la règle du 427, et elle rendait inutilisables
+     les trois bancs de la promenade du lac (dont le sud est l'eau) — voir
+     E.townSpots. On vérifie donc l'adjacence, pas une direction. */
   const bad = (spotList.filter(s2 => s2.act === "sit")).filter(s2 => {
     if (s2.bx === undefined) return true;
-    if (s2.bx !== s2.x || s2.by !== s2.y - 1) return true;
+    if (Math.abs(s2.bx - s2.x) + Math.abs(s2.by - s2.y) !== 1) return true;
     return !tw.props.some(pr => pr.kind === "bench" && pr.x === s2.bx && pr.y === s2.by);
   });
-  ok("chaque assise correspond à un vrai banc, juste au nord", bad.length === 0, bad.slice(0, 6).map(s2 => `(${s2.x},${s2.y})`).join(" "));
+  ok("chaque assise correspond à un vrai banc adjacent", bad.length === 0, bad.slice(0, 6).map(s2 => `(${s2.x},${s2.y})`).join(" "));
+  /* ⚠️ ET TOUS LES BANCS DE LA VILLE DOIVENT ÊTRE ASSIABLES. C'est le contrôle
+     que le 427 n'avait pas : il vérifiait que chaque assise a un banc, jamais
+     que chaque banc a une assise. Trois bancs morts au bord du lac ont vécu un
+     zip entier dans cet angle. */
+  const benches = tw.props.filter(pr => pr.kind === "bench");
+  const seated = new Set(spotList.filter(s2 => s2.act === "sit").map(s2 => `${s2.bx},${s2.by}`));
+  const orphan = benches.filter(pr => !seated.has(`${pr.x},${pr.y}`));
+  ok(`les ${benches.length} bancs de la ville sont tous assiables`, orphan.length === 0,
+     orphan.slice(0, 6).map(pr => `(${pr.x},${pr.y})`).join(" "));
 }
 {
   /* ⚠️ AUCUN MEUBLE DEVANT UNE PORTE DE COMMERCE — la version « ville » du
@@ -449,73 +511,158 @@ ok("la ville a des endroits où s'arrêter", spotList.length > 20, `${spotList.l
   ok("aucun meuble ne bouche l'entrée d'un commerce", bad.length === 0, bad.slice(0, 8).join(" "));
 }
 
-section("Valley Town habitée — les itinéraires d'escalier");
-/* Le banc rejoue `townStairRoute` (recopiée ici depuis FermeGame.js : elle vit
-   dans le composant, donc elle n'est pas importable — c'est la SEULE
-   duplication de ce banc, et elle est signalée pour qu'on la corrige des deux
-   côtés le jour où la table des escaliers change). */
-function stairEnds(st) {
-  if (st.dir === "e") {
-    const cy = st.y + (st.w - 1) / 2;
-    return { low: { x: st.x - 1.5, y: cy }, high: { x: st.x + st.len + 0.5, y: cy } };
-  }
-  const cx = st.x + (st.w - 1) / 2;
-  return { low: { x: cx, y: st.y + st.len + 0.5 }, high: { x: cx, y: st.y - 1.5 } };
-}
-function stairRoute(fromE, toE, fx, fy) {
-  const out = [];
-  let cur = fromE, cx = fx, cy = fy;
-  for (let guard = 0; guard < 3 && Math.abs(cur - toE) > 0.01; guard++) {
-    const up = toE > cur;
-    let best = null, bestD = Infinity;
-    for (const st of C.TOWN_STAIRS) {
-      const entry = up ? st.from : st.to, exit = up ? st.to : st.from;
-      if (Math.abs(entry - cur) > 0.01) continue;
-      if (up ? exit > toE + 0.01 : exit < toE - 0.01) continue;
-      const ends = stairEnds(st);
-      const e0 = up ? ends.low : ends.high;
-      const d = Math.hypot(e0.x - cx, e0.y - cy);
-      if (d < bestD) { bestD = d; best = { st, ends, up, exit }; }
-    }
-    if (!best) break;
-    const a2 = best.up ? best.ends.low : best.ends.high;
-    const b2 = best.up ? best.ends.high : best.ends.low;
-    out.push(a2, b2); cur = best.exit; cx = b2.x; cy = b2.y;
-  }
-  return out;
-}
+section("Valley Town habitée — LA NAVIGATION, MESURÉE EN MARCHANT");
+/* ═══════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ ZIP 428 — CE CHAPITRE A REMPLACÉ « LES ITINÉRAIRES D'ESCALIER », ET LE
+   REMPLACEMENT EST LA LEÇON. Le 427 vérifiait ici que `townStairRoute`
+   produisait des paliers praticables — ce qui était VRAI, et qui n'a jamais
+   empêché quatre trajets sur cinq d'échouer. Le banc contrôlait la seule chose
+   qui marchait déjà.
+   Ce qu'il faut contrôler, c'est CE QU'ON PROMET AU JOUEUR : « les résidents se
+   déplacent en ville ». Donc on ne vérifie plus une table intermédiaire, on
+   REJOUE LE DÉPLACEMENT — le vrai suiveur, la vraie boîte de collision, la
+   vraie règle de dénivelé, à 60 images par seconde — et on compte les arrivées.
+   ⚠️ Et c'est la seule forme de contrôle qui aurait attrapé le défaut du 427 :
+   aucune assertion sur une structure de données ne pouvait le voir.
+   ═══════════════════════════════════════════════════════════════════════════ */
 const elevAt = (x, y) => tw.elev[idx(Math.round(x), Math.round(y))];
 {
-  // Tous les paliers d'escalier doivent être des cases où l'on peut SE TENIR,
-  // et à la bonne altitude : viser une marche, c'est s'arrêter dessus.
+  const nav = E.townNav(tw);
+  ok("la grille de navigation sort du moteur", !!nav && nav.walk.length === W * H);
+  /* Les POCHES. La ville doit en avoir UNE qui contient tout ce qui compte :
+     une seconde poche habitable serait une partie de la ville où l'on ne peut
+     ni entrer ni sortir, et personne ne le verrait avant d'y aller. */
+  const sizes = new Map();
+  for (let i = 0; i < nav.comp.length; i++) if (nav.comp[i] >= 0) sizes.set(nav.comp[i], (sizes.get(nav.comp[i]) || 0) + 1);
+  const ranked = [...sizes.entries()].sort((p, q) => q[1] - p[1]);
+  const strays = ranked.slice(1).filter(([, n]) => n > 8);
+  ok("la ville tient dans une seule poche praticable", strays.length === 0,
+     `principale ${ranked[0][1]} cases` + (strays.length ? ` · îlots : ${strays.map(([, n]) => n).join(",")}` : ""));
+  const spawnComp = nav.comp[idx(Math.round(C.TOWN_SPAWN.x), Math.round(C.TOWN_SPAWN.y))];
+  ok("le quai est dans la poche principale", spawnComp === ranked[0][0]);
+}
+/* ---- LE VRAI SUIVEUR, RECOPIÉ DEPUIS townResidentRoam ----------------------
+   ⚠️ C'EST UNE DUPLICATION, ELLE EST ASSUMÉE, ET ELLE EST SIGNALÉE. Le suiveur
+   vit dans le composant React, donc il n'est pas importable. La recopier, c'est
+   accepter qu'elle puisse diverger — mais un banc qui simulerait un déplacement
+   IDÉALISÉ ne vaudrait rien : il validerait des chemins que le jeu ne parcourt
+   pas, c'est-à-dire exactement le stub menteur du §10. Les trois lignes qui
+   comptent (boîte de collision, dénivelé relu par axe, recalage sur le point de
+   passage) sont donc ici mot pour mot. */
+function elevBox(x, y) {
+  const fx = Math.floor(x), fy = Math.floor(y);
+  if (fx < 0 || fy < 0 || fx >= W || fy >= H) return 0;
+  return tw.elev[idx(fx, fy)];
+}
+function canStandSim(x, y, fromE) {
+  const r = 0.3;
+  for (const [px, py] of [[x - r, y], [x + r, y], [x - r, y + 0.35], [x + r, y + 0.35]]) {
+    const fx = Math.floor(px), fy = Math.floor(py);
+    if (fx < 0 || fy < 0 || fx >= W || fy >= H) return false;
+    if (!walkable(fx, fy)) return false;
+    if (fromE !== undefined && Math.abs(tw.elev[idx(fx, fy)] - fromE) > C.TOWN_STEP_MAX) return false;
+  }
+  return true;
+}
+function walkTo(from, sp) {
+  let legs = E.townFindPath(tw, from.x, from.y, sp.x, sp.y);
+  if (!legs || !legs.length) return { ok: false, why: "aucun chemin" };
+  let x = from.x, y = from.y, li = 0, stuck = 0, t = 0, tries = 0;
+  const DT = 1 / 60, speed = C.VISITOR_SPEED * 0.7 * 0.9;
+  while (t < 240) {
+    const tgt = legs[li];
+    const dx = tgt.x - x, dy = tgt.y - y, d = Math.hypot(dx, dy);
+    if (d < C.TOWN_WP_ARRIVE) {           // recalage : voir townResidentRoam
+      x = tgt.x; y = tgt.y; li++;
+      if (li >= legs.length) return { ok: true, t, wp: legs.length };
+      continue;
+    }
+    const s = speed * DT, ux = dx / d, uy = dy / d;
+    // Les deux conditions de townResidentRoam (428) : la boîte est valide vue
+    // de la position PRÉCÉDENTE, et valide vue D'ELLE-MÊME.
+    const canGo = (px, py) => canStandSim(px, py, elevBox(x, y + 0.2)) && canStandSim(px, py, elevBox(px, py + 0.2));
+    let moved = false;
+    const nx = x + ux * s;
+    if (canGo(nx, y)) { x = nx; moved = true; }
+    const ny = y + uy * s;
+    if (canGo(x, ny)) { y = ny; moved = true; }
+    // Le rattrapage en diagonale : voir la note de townResidentRoam (428).
+    if (!moved && canGo(nx, ny)) { x = nx; y = ny; moved = true; }
+    if (!moved) {
+      stuck += DT;
+      // Le recalcul du garde anti-blocage, borné comme dans le jeu.
+      if (stuck > 1.2 && tries < C.TOWN_REPATH_TRIES) {
+        tries++; stuck = 0;
+        const again = E.townFindPath(tw, x, y, sp.x, sp.y);
+        if (again && again.length) { legs = again; li = 0; continue; }
+      }
+      if (stuck > 2.4) return { ok: false, why: `bloqué en (${x.toFixed(1)},${y.toFixed(1)}) vers ${sp.act}(${sp.x},${sp.y})` };
+    } else stuck = 0;
+    t += DT;
+  }
+  return { ok: false, why: "jamais arrivé" };
+}
+{
+  /* ⚠️⚠️ LE CONTRÔLE QUI COMPTE, ET IL EST EXHAUSTIF : chaque endroit vers
+     chaque autre. C'est ~3 700 trajets rejoués image par image, quelques
+     secondes de calcul, et c'est le prix d'une réponse qui n'est pas un
+     échantillon. Le 427 aurait affiché 24 % ici. */
+  const spawn = { x: C.TOWN_SPAWN.x, y: C.TOWN_SPAWN.y };
+  let done = 0, tot = 0; const why = [];
+  for (const sp of spotList) { tot++; const r = walkTo(spawn, sp); if (r.ok) done++; else why.push(r.why); }
+  ok(`depuis le quai, on atteint les ${tot} endroits`, done === tot, `${done}/${tot}` + (why.length ? " · " + why.slice(0, 3).join(" · ") : ""));
+  let d2 = 0, t2 = 0; const why2 = []; const wps = [];
+  for (const a2 of spotList) for (const b2 of spotList) {
+    if (a2 === b2) continue;
+    t2++; const r = walkTo(a2, b2);
+    if (r.ok) { d2++; wps.push(r.wp); } else if (why2.length < 4) why2.push(r.why);
+  }
+  const rate = 100 * d2 / t2;
+  /* ⚠️ LE SEUIL EST À 100 %, ET C'EST DÉLIBÉRÉ. Il a été tenu par cinq
+     corrections successives au 428, chacune trouvée PAR CE CONTRÔLE et par
+     aucun autre : l'heuristique inconsistante, le tas qui débordait en silence,
+     l'altitude de référence décalée d'un échantillon, la réduction qui pouvait
+     ne plus avancer, et la position dont on ne peut plus repartir. Aucune n'a
+     jamais levé la moindre erreur. Descendre le seuil « pour laisser du bruit »
+     reviendrait à s'interdire de les revoir : à 24 % (le taux du 427) comme à
+     99 %, ce banc dirait OK. Le taux est soit parfait, soit à comprendre. */
+  ok(`d'un endroit à un autre : ${rate.toFixed(1)} % d'arrivées`, d2 === t2, `${d2}/${t2}` + (why2.length ? " · " + why2.join(" · ") : ""));
+  wps.sort((p, q) => p - q);
+  /* ⚠️ LE NOMBRE DE POINTS DE PASSAGE EST UN CONTRÔLE RÉSEAU, PAS ESTHÉTIQUE.
+     Un chemin rendu case par case tiendrait dans le même message (la taille
+     n'est pas facturée, §3) mais donnerait un PNJ qui zigzague de centre de
+     case en centre de case chez l'invité, qui rejoue la ligne brisée telle
+     quelle. Si ce chiffre explose, c'est que la réduction ne réduit plus. */
+  ok("les chemins sont réduits à quelques points de passage", wps[wps.length - 1] <= 30,
+     `médiane ${wps[wps.length >> 1]}, max ${wps[wps.length - 1]}`);
+}
+{
+  // Les endroits EN HAUTEUR gardent leur contrôle propre : c'est le seul dont
+  // l'échec est parfaitement silencieux (« personne ne monte jamais » a l'air
+  // d'un choix de conception, pas d'un bogue). Il ne teste plus une table
+  // d'itinéraires, il fait monter quelqu'un.
+  const spawn = { x: C.TOWN_SPAWN.x, y: C.TOWN_SPAWN.y };
+  const highSpots = spotList.filter(s2 => elevAt(s2.x, s2.y) > 0.01);
+  ok("il y a bien des endroits en hauteur", highSpots.length > 0, `${highSpots.length}`);
+  const bad = highSpots.filter(sp => !walkTo(spawn, sp).ok);
+  ok(`on monte réellement vers les ${highSpots.length} endroits en hauteur`, bad.length === 0,
+     bad.slice(0, 5).map(s2 => `${s2.act}(${s2.x},${s2.y})`).join(" · "));
+}
+{
+  // Les paliers d'escalier restent contrôlés pour eux-mêmes : ils sont le seul
+  // endroit où la carte peut rendre la Haute-Ville inaccessible d'un coup.
   const bad = [];
   for (const st of C.TOWN_STAIRS) {
-    const e = stairEnds(st);
-    for (const [tag, pt, want] of [["bas", e.low, st.from], ["haut", e.high, st.to]]) {
-      const x = Math.round(pt.x), y = Math.round(pt.y);
+    const cx = st.dir === "e" ? st.x - 1 : st.x + ((st.w - 1) >> 1);
+    const cy = st.dir === "e" ? st.y + ((st.w - 1) >> 1) : st.y + st.len;
+    const hx = st.dir === "e" ? st.x + st.len : st.x + ((st.w - 1) >> 1);
+    const hy = st.dir === "e" ? st.y + ((st.w - 1) >> 1) : st.y - 1;
+    for (const [tag, x, y, want] of [["bas", cx, cy, st.from], ["haut", hx, hy, st.to]]) {
       if (!walkable(x, y)) bad.push(`${tag}(${x},${y}) bloqué`);
-      else if (Math.abs(elevAt(x, y) - want) > 0.01) bad.push(`${tag}(${x},${y}) alt ${elevAt(x, y)}≠${want}`);
+      else if (Math.abs(tw.elev[idx(x, y)] - want) > 0.01) bad.push(`${tag}(${x},${y}) alt ${tw.elev[idx(x, y)]}≠${want}`);
     }
   }
   ok("chaque volée a deux paliers libres, à la bonne altitude", bad.length === 0, bad.join(" · "));
-}
-{
-  /* L'ITINÉRAIRE COMPLET, depuis la gare vers chaque endroit en hauteur. C'est
-     LE contrôle du chapitre : sans lui, « aucun résident ne monte jamais » est
-     un comportement parfaitement silencieux. */
-  const bad = [];
-  const sx = Math.round(C.TOWN_SPAWN.x), sy = Math.round(C.TOWN_SPAWN.y);
-  const highSpots = spotList.filter(s2 => elevAt(s2.x, s2.y) > 0.01);
-  for (const sp of highSpots) {
-    const legs = stairRoute(elevAt(sx, sy), elevAt(sp.x, sp.y), sx, sy);
-    if (!legs.length) { bad.push(`${sp.act}(${sp.x},${sp.y}) sans itinéraire`); continue; }
-    for (const pt of legs) {
-      const x = Math.round(pt.x), y = Math.round(pt.y);
-      if (!walkable(x, y) || !seen[idx(x, y)]) { bad.push(`${sp.act} palier(${x},${y})`); break; }
-    }
-  }
-  ok(`les ${highSpots.length} endroits en hauteur ont un itinéraire praticable`, bad.length === 0, bad.slice(0, 6).join(" · "));
-  ok("il y a bien des endroits en hauteur", highSpots.length > 0, `${highSpots.length}`);
 }
 
 section("Valley Town habitée — la famille et la garde-robe");

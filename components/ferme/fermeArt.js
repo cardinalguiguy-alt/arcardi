@@ -1549,6 +1549,83 @@ export function decorSprite(id) {
   return c;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZIP 428 — LA POSE ASSISE, POUR DE BON. (demande explicite de Guillaume :
+   « je veux une position assise soignée quand on utilise un banc »)
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️⚠️ CE QUE FAISAIT LE 427 N'ÉTAIT PAS UNE POSE, C'ÉTAIT UNE COUPE. Il
+   dessinait les 17 pixels du HAUT de la feuille, quatre pixels plus bas, et
+   s'arrêtait là — un buste tronqué net à mi-cuisse, posé sur le banc. Ça se
+   défendait (« vu de dessus, les jambes sont cachées par l'assise »), et c'est
+   faux : à cette inclinaison de caméra on voit le devant du personnage, donc on
+   voit ses genoux. Un personnage sans jambes ne lit pas comme quelqu'un
+   d'assis, il lit comme quelqu'un qui s'enfonce dans le banc.
+
+   ⚠️⚠️ ET LES JAMBES SONT DÉCOUPÉES DANS SA PROPRE FEUILLE, JAMAIS REPEINTES.
+   C'est LA décision de ce dessin. Peindre des cuisses avec une couleur de
+   pantalon prise dans OUTFITS marcherait — jusqu'au premier article de la
+   garde-robe : la teinte du 427 est CUITE dans la feuille de sprite (c'est
+   même toute son astuce, cinq caractères qui servent de clé de cache). Deux
+   sources pour la même couleur, c'est la divergence en attente du §8, et le
+   symptôme aurait été « le pantalon acheté à la Maison Garfield ne se voit pas
+   quand on s'assoit ». En redécoupant la feuille, la pose hérite GRATUITEMENT
+   de la tenue, de la teinte, de la salopette, de la combinaison d'apiculteur
+   et de tout ce qu'on ajoutera.
+
+   La recette, en trois tranches prises dans les 24 px de la pose :
+     0..15  le buste et la tête, tels quels ;
+     16..20 les cuisses, ÉCRASÉES en 2 px : elles pointent vers la caméra, donc
+            elles sont vues en raccourci — c'est ce raccourci, et lui seul, qui
+            fait lire « assis » plutôt que « debout mais plus petit » ;
+     20..24 les mollets et les chaussures, RÉTRÉCIS en largeur : les genoux se
+            rapprochent, ce qui est ce que fait un corps assis.
+   Hauteur totale 18 px contre 24 debout — trois quarts, la proportion d'une
+   silhouette assise.
+
+   ⚠️ AUCUN `translate` NI `rotate` ICI. Le faux canevas du banc de rendu les
+   ignore (§10) : une pose qui en dépendrait s'y jugerait fausse, et on perdrait
+   le seul moyen de REGARDER ce dessin. Le miroir du profil est fait par
+   l'appelant, qui le fait déjà pour toutes les autres poses. */
+/* ⚠️⚠️ CES DÉCALAGES SONT DÉRIVÉS DE LA GÉOMÉTRIE DU BANC, PAS CHOISIS. Le
+   banc (plazaBench, 32×32) est dessiné bord bas sur (by+1)×16, donc à l'écran :
+       dossier   by×16 − 8 … by×16 + 6
+       ASSISE    by×16 + 4 … by×16 + 10
+       sol       by×16 + 14
+   L'assis, lui, est ancré à (by + 0,45), donc py = by×16 + 7. Il faut que ses
+   HANCHES tombent sur l'assise (by×16 + 7 ≈ py) et que ses PIEDS touchent le
+   sol juste devant le banc (by×16 + 18 ≈ py + 11). Tout le reste en découle.
+   ⚠️ Le premier jet posait le haut du crâne à py − 4 : la tête arrivait alors
+   AU NIVEAU DE L'ASSISE et les pieds dix pixels sous le banc — le personnage
+   n'était pas assis dessus, il était assis PAR TERRE DEVANT. Vu au banc de
+   rendu, invisible à la relecture, et c'est exactement pourquoi ce banc existe. */
+export const SEAT_POSE = {
+  headH: 16,      // hauteur de la tranche buste + tête
+  topY: -11,      // le haut du crâne, relativement à l'ancre du personnage
+  thighSrcY: 16, thighSrcH: 5,   // la tranche de cuisses prise dans la feuille
+  thighY: 4, thighH: 3, thighInset: 1,
+  shinSrcY: 19, shinSrcH: 5,     // mollets + chaussures
+  shinY: 7, shinH: 4, shinInset: 4,
+};
+export function drawSeated(ctx, sheet, row, px, py) {
+  const S2 = SEAT_POSE;
+  // 1. Buste et tête, sans retouche.
+  ctx.drawImage(sheet, 0, row * 24, 16, S2.headH, px, py + S2.topY, 16, S2.headH);
+  // 2. Les cuisses en raccourci. ⚠️ Elles CHEVAUCHENT volontairement le bas du
+  //    buste : sans ce recouvrement d'un pixel, la couture entre les deux
+  //    tranches se voit comme un trait clair en travers du bassin.
+  ctx.drawImage(sheet, 0, row * 24 + S2.thighSrcY, 16, S2.thighSrcH,
+                px + S2.thighInset, py + S2.thighY, 16 - S2.thighInset * 2, S2.thighH);
+  // 3. Les mollets, plus étroits — genoux rapprochés.
+  ctx.drawImage(sheet, 0, row * 24 + S2.shinSrcY, 16, S2.shinSrcH,
+                px + S2.shinInset, py + S2.shinY, 16 - S2.shinInset * 2, S2.shinH);
+  /* 4. ⚠️ LE CREUX SOUS LES GENOUX. Un pixel sombre à la jonction cuisse/mollet
+        est ce qui empêche les deux tranches de se lire comme un seul bloc de
+        pantalon. C'est le même rôle que le nez de marche éclairé du perron du
+        tribunal : une valeur, pas une forme. */
+  ctx.fillStyle = "rgba(0,0,0,0.30)";
+  ctx.fillRect(px + S2.shinInset, py + S2.shinY, 16 - S2.shinInset * 2, 1);
+}
+
 export function buildSprites() {
   const T = 16;
 

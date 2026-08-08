@@ -31,6 +31,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { noteSend } from "@/lib/realtimeQuota";
 import * as C from "./fermeConstants";
 import * as E from "./fermeEngine";
+import * as A from "./fermeArt";
 import { buildSprites, charPalette, drawBridgeTile, drawBridgeOverlay, drawCandyGroundTile, candySyrupColor } from "./fermeArt";
 import { fstr } from "./fermeStrings";
 
@@ -663,6 +664,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      ce fichier — voir devMenuOpenRef.
      { active, t0, fx, fy, tx, ty, e0, e1 } : le trajet est FIGÉ au décollage. */
   const townJumpRef = useRef({ active: false, t0: 0, fx: 0, fy: 0, tx: 0, ty: 0, e0: 0, e1: 0 });
+  /* Zip 428 — l'échelle courante de la vue de Valley Town. ⚠️ C'est un REF et
+     pas un state : il change à chaque image pendant un fondu, un state
+     re-rendrait tout React soixante fois par seconde pour une valeur que seule
+     la boucle de dessin lit. Voir townZoomNow. */
+  const townZoomRef = useRef({ v: 0 });
   // Transition en fondu au noir (aller ET retour) : { active, t0, toEvil,
   // swapped }. `swapped` marque le moment (mi-fondu, écran totalement noir)
   // où la téléportation réelle a lieu, pour qu'elle soit invisible.
@@ -5772,6 +5778,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        n'est porté, donc invisible pour la quasi-totalité des paquets. */
     const wlook = wardrobeLookOf(m.id);
     if (wlook) pub.look = wlook;
+    /* ⚠️ L'ASSISE VOYAGE ICI, dans le paquet qui part déjà, et elle porte la
+       CASE DU BANC plutôt qu'un booléen : le destinataire dessine la pose
+       alignée sur l'assise, exactement comme pour un résident (voir le champ
+       `s` de residentStops, 427). Deux octets, aucun `send()` de plus, et un
+       client d'avant ce zip ignore simplement le champ — il verra le joueur
+       debout au bon endroit, ce qui est le pire cas acceptable. */
+    if (m.sitOn) pub.sit = [m.sitOn.x, m.sitOn.y];
     pub.st = +performance.now().toFixed(1);
     if (pub.moving) { pub.vx = +(m.vx || 0).toFixed(2); pub.vy = +(m.vy || 0).toFixed(2); }
     // Monde maléfique MULTIJOUEUR (demande Guillaume 2026-07) : les
@@ -5810,10 +5823,30 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function netHasAudience() { return channelReadyRef.current && playersRef.current.size > 0; }
   // Zip 365 : la clé d'état de mouvement porte désormais le VECTEUR, plus le
   // seul `dir`. Explication ci-dessous dans maybeSendPos.
-  function posKeyOf(m) { return m && m.moving ? ("m" + (m.vx || 0).toFixed(1) + "," + (m.vy || 0).toFixed(1)) : "s"; }
+  /* ⚠️⚠️ ZIP 428 — LA CLÉ PORTE L'ASSISE, et l'oublier aurait refait le bogue
+     des diagonales du 365 mot pour mot. Cette clé décide s'il faut émettre :
+     elle ne change QUE quand ce que les autres voient change. S'asseoir ne
+     bouge ni la vitesse ni le fait d'être immobile — la clé serait restée "s",
+     aucun paquet ne serait parti, et l'autre joueur aurait continué de me voir
+     DEBOUT à côté du banc jusqu'au prochain keep-alive… qui n'arrive jamais à
+     l'arrêt (voir la ligne `m.moving &&` de maybeSendPos). Autrement dit : à
+     deux, personne n'aurait jamais vu personne s'asseoir. */
+  function posKeyOf(m) {
+    const seat = m && m.sitOn ? "@" + m.sitOn.x + "," + m.sitOn.y : "";
+    return m && m.moving ? ("m" + (m.vx || 0).toFixed(1) + "," + (m.vy || 0).toFixed(1)) : "s" + seat;
+  }
   function sendPos() { if (!netCanBroadcast()) return; const _m = meRef.current; if (_m) { lastPosSentRef.current = performance.now(); lastPosKeyRef.current = posKeyOf(_m); } channelRef.current?.send({ type: "broadcast", event: "pos", payload: pubMe() }); }
   // FIX 242 (AOI / zone d'intérêt) : rayon "même zone d'écran" dérivé du viewport réel + marge de pré-chargement.
-  function aoiRadiusTiles() { const c = canvasRef.current; if (!c) return 40; return Math.hypot(c.width, c.height) / (ZOOM * C.TILE) / 2 + C.AOI_MARGIN_TILES; }
+  /* ⚠️⚠️ ZIP 428 — L'AOI SUIT LE DÉZOOM, ET L'OUBLIER AURAIT ANNULÉ LE DÉZOOM.
+     Ce rayon dit « au-delà de quelle distance je cesse de diffuser / d'attendre
+     une entité », et il est DÉRIVÉ du champ de vision réel. Dézoomer élargit le
+     champ de vision : en gardant l'ancien rayon, on aurait montré au joueur un
+     tribunal entier avec, autour, une zone où les autres joueurs et les
+     résidents disparaissent — c'est-à-dire qu'on aurait rendu visible un vide
+     qu'on ne voyait pas avant. C'est le §8 dans sa forme la plus littérale : ce
+     rayon DOUBLE l'échelle de la caméra, donc il doit en être dérivé. */
+  function townZoomScale() { const m = meRef.current; return (m && m.zone === "town" && townZoomRef.current.v) || ZOOM; }
+  function aoiRadiusTiles() { const c = canvasRef.current; if (!c) return 40; return Math.hypot(c.width, c.height) / (townZoomScale() * C.TILE) / 2 + C.AOI_MARGIN_TILES; }
   // Distance (tuiles) au plus proche AUTRE joueur de la même zone ; Infinity si personne.
   function nearestOtherDist() { const m = meRef.current; if (!m) return Infinity; let best = Infinity; for (const p of playersRef.current.values()) { if (!p || (p.zone || "farm") !== m.zone) continue; const d = Math.hypot(p.x - m.x, p.y - m.y); if (d < best) best = d; } return best; }
   // Cadence de diffusion de MA position : plein débit si un autre joueur peut me voir, sinon débit "minimap" (personne ne me voit bouger de près).
@@ -8631,11 +8664,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      à côté qu'à l'autre bout de la ville) et par le MÉTIER — c'est ce qui fait
      que Tristan traîne au marché et que René regarde le lac, sans une seule
      ligne de code par personnage. */
+  /* ⚠️ ZIP 428 — LE GOÛT A ÉTÉ ÉTENDU AUX SIX NOUVEAUX QUARTIERS, sans quoi ils
+     auraient existé pour tout le monde de la même façon. Le principe ne change
+     pas (une ligne par MÉTIER, jamais par personnage) : ce qui fait qu'on
+     reconnaît Tristan au marché et René au bord de l'eau, c'est que le bûcheron
+     va voir le verger et l'apiculteur les fleurs. */
   const TOWN_SKILL_TASTE = {
-    lumberjack: ["stall", "well", "sit"], sugarworker: ["stall", "kiosk", "sit"],
-    baker: ["stall", "window", "board"], breadmaker: ["stall", "grave", "sit"],
-    cheesemaker: ["stall", "window", "fountain"], beekeeper: ["pier", "view", "pray"],
-    voyager: ["view", "pier", "board"], stylist: ["window", "view", "statue"],
+    lumberjack: ["stall", "well", "sit", "orchard", "craft"],
+    sugarworker: ["stall", "kiosk", "sit", "fair"],
+    baker: ["stall", "window", "board", "fair"],
+    breadmaker: ["stall", "grave", "sit", "orchard"],
+    cheesemaker: ["stall", "window", "fountain", "fair", "craft"],
+    beekeeper: ["pier", "view", "pray", "flowers", "orchard"],
+    voyager: ["view", "pier", "board", "shore", "stroll"],
+    stylist: ["window", "view", "statue", "flowers", "pond"],
   };
   function pickTownSpot(res, ro, tw) {
     const spots = E.townSpots(tw);
@@ -8649,6 +8691,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     for (let k = 0; k < 12; k++) {
       const sp = spots[Math.floor(Math.random() * spots.length)];
       if (res.lastSpot && sp.x === res.lastSpot.x && sp.y === res.lastSpot.y) continue;
+      /* ⚠️ ZIP 428 — LA POCHE AVANT LA DISTANCE. Le tirage se fait AVANT toute
+         recherche de chemin, donc c'est ici, et nulle part ailleurs, qu'on peut
+         écarter gratuitement une destination qui n'est pas dans la même partie
+         de la ville. Sans ce filtre, la seule façon de l'apprendre serait de
+         lancer l'A* et de le laisser explorer toute sa poche pour se rendre —
+         le seul cas où une recherche coûte cher (voir townNav). */
+      if (!E.townSameArea(tw, res.x, res.y, sp.x, sp.y)) continue;
       const d = Math.hypot(sp.x - res.x, sp.y - res.y);
       let score = -d / 40 + Math.random();
       if (taste && taste.includes(sp.act)) score += 0.9;
@@ -8659,9 +8708,27 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function townDecideDestination(res, ro, tw, now) {
     const sp = pickTownSpot(res, ro, tw);
     if (!sp) { res.nextRoamAt = now + 2000; return; }
-    const e0 = townElevAt(tw, res.x, res.y + 0.2), e1 = townElevAt(tw, sp.x, sp.y + 0.2);
-    const legs = townStairRoute(e0, e1, res.x, res.y);
-    legs.push({ x: sp.x, y: sp.y });
+    /* ⚠️⚠️ ZIP 428 — ICI VIVAIT `townStairRoute`, ET SA DISPARITION EST LE
+       CŒUR DE CE ZIP. Le 427 dérivait des points de passage de `TOWN_STAIRS`
+       pour compenser le fait qu'une ligne droite ne monte jamais un escalier.
+       Ça marchait pour les escaliers — et pour rien d'autre : mesuré au 428,
+       QUATRE TRAJETS SUR CINQ n'arrivaient pas, tués par les haies, les
+       bâtiments et l'étang bien avant le moindre dénivelé. Un vrai chemin
+       (E.townFindPath, en-tête de fermeEngine.js) traite l'escalier comme
+       n'importe quel passage : c'est le seul endroit où le dénivelé passe,
+       donc il y passe. Une table de moins à tenir d'accord avec la carte.
+       ⚠️ ET LE COÛT RÉSEAU N'A PAS BOUGÉ D'UN MESSAGE : le chemin est réduit à
+       une poignée de points de passage (médiane 7, maximum 16 mesurés sur la
+       ville entière) et part dans le MÊME `residentPaths` qu'avant. */
+    const legs = E.townFindPath(tw, res.x, res.y, sp.x, sp.y);
+    if (!legs || !legs.length) {
+      // Aucun chemin malgré le filtre de poche : on n'insiste pas sur CETTE
+      // destination, on en retire une autre au prochain tour. Silencieux mais
+      // sans conséquence — le résident reste disponible.
+      res.lastSpot = { x: sp.x, y: sp.y };
+      res.nextRoamAt = now + 1200;
+      return;
+    }
     res.townPath = legs;
     res.roamTarget = legs[0];
     res.lastSpot = { x: sp.x, y: sp.y };
@@ -8702,7 +8769,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (res.roamTarget) {
       const tgt = res.roamTarget;
       const dx = tgt.x - res.x, dy = tgt.y - res.y, d = Math.hypot(dx, dy);
-      if (d < 0.35) {
+      if (d < C.TOWN_WP_ARRIVE) {
+        /* ⚠️⚠️ ZIP 428 — ON SE RECALE SUR LE POINT DE PASSAGE, ET C'EST CE QUI
+           FAIT PASSER LE TAUX D'ARRIVÉE DE 93 % À 100 % (mesuré sur la ville
+           entière, six cents trajets). Chaque segment du chemin a été validé
+           DEPUIS SON POINT DE DÉPART EXACT ; l'accepter avec une tolérance,
+           c'est repartir d'ailleurs, donc parcourir un segment que personne n'a
+           validé. Sur le plat ça se voit à peine ; sur une volée d'escalier, un
+           cinquième de case suffit à se retrouver au pied du rebord au lieu de
+           la marche, et le résident abandonne. Le sympôme observable était
+           « certains ne montent toujours pas », c'est-à-dire à nouveau quelque
+           chose qui a l'air d'un choix.
+           ⚠️ Et ce n'est PAS une téléportation visible : le recalage vaut au
+           plus TOWN_WP_ARRIVE de case, soit trois pixels au zoom du jeu. Il
+           RAPPROCHE d'ailleurs l'hôte de ce que l'invité affiche, puisque
+           l'invité, lui, rejoue la ligne brisée exacte (walkPath). */
+        res.x = tgt.x; res.y = tgt.y;
         // Étape franchie. S'il en reste, on enchaîne SANS émettre : l'invité
         // rejoue déjà l'itinéraire complet reçu au départ.
         res.townPath = (res.townPath || []).slice(1);
@@ -8725,28 +8807,79 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          joueur (425). Sur une volée, un déplacement diagonal qui compare les
          deux axes à la MÊME altitude d'origine se voit refuser le second : le
          PNJ monte en crabe, une case sur deux, et finit par abandonner. */
+      /* ⚠️⚠️ ZIP 428 — UN RÉSIDENT NE S'ARRÊTE QUE LÀ OÙ IL POURRA REPARTIR, ET
+         C'EST LA DERNIÈRE DES ARRIVÉES MANQUANTES. Le test de collision ordinaire
+         compare la boîte NOUVELLE à l'altitude ANCIENNE ; il existe donc des
+         positions qu'on peut ATTEINDRE et plus quitter, parce que la boîte elle-
+         même (0,6 × 0,35, jusqu'à quatre cases) y enjambe plus d'une marche. Il
+         y en a exactement une en ville : un demi-pas au bas de l'escalier ouest
+         de la Haute-Ville, où les pieds débordent sur la rue restée à zéro. On
+         n'y entre que depuis l'altitude intermédiaire, et une fois dedans plus
+         AUCUNE direction ne passe. Le résident y restait planté.
+         `townCanStandSelf` ajoute la seule condition qui manque : la position
+         doit être valide VUE D'ELLE-MÊME. C'est la doctrine du §6 — « l'altitude
+         est une propriété de la case » — appliquée à la boîte entière.
+         ⚠️ ELLE NE S'APPLIQUE QU'AUX RÉSIDENTS, DÉLIBÉRÉMENT. Le joueur garde
+         son test historique : il a le saut de rebord (Espace) pour se sortir de
+         ce genre de recoin, et durcir sa collision serait un second changement
+         de comportement dans la même livraison. */
+      const canGo = (px, py) => townCanStand(tw, px, py, townElevAt(tw, res.x, res.y + 0.2))
+                             && townCanStand(tw, px, py, townElevAt(tw, px, py + 0.2));
       let moved = false;
       const nx = res.x + ux * sp;
-      if (townCanStand(tw, nx, res.y, townElevAt(tw, res.x, res.y + 0.2))) { res.x = nx; moved = true; }
+      if (canGo(nx, res.y)) { res.x = nx; moved = true; }
       const ny = res.y + uy * sp;
-      if (townCanStand(tw, res.x, ny, townElevAt(tw, res.x, res.y + 0.2))) { res.y = ny; moved = true; }
+      if (canGo(res.x, ny)) { res.y = ny; moved = true; }
+      /* ⚠️⚠️ ZIP 428 — SI AUCUN AXE NE PASSE, ON ESSAIE LA DIAGONALE ENTIÈRE,
+         ET CE N'EST PAS UNE RUSTINE. Avancer axe par axe donne le glissement
+         le long des murs, qu'on veut garder ; mais le point intermédiaire
+         (nx, y) N'EST PAS SUR LE SEGMENT. Au ras d'un rebord, la boîte du
+         personnage (0,6 × 0,35, donc jusqu'à quatre cases à la fois) peut
+         mordre sur une case d'une autre altitude à ce point intermédiaire-là
+         seulement : les deux axes sont refusés l'un après l'autre alors que le
+         déplacement complet, lui, est parfaitement valide. Le chemin était
+         juste, le suiveur ne pouvait pas le suivre.
+         Mesuré : douze trajets sur 3 660 mouraient là, TOUS à l'approche des
+         escaliers de la Haute-Ville — le seul endroit de la ville où l'on
+         longe un dénivelé en diagonale. */
+      if (!moved && canGo(nx, ny)) { res.x = nx; res.y = ny; moved = true; }
       res.moving = true;
       res.animT = (res.animT || 0) + dt * 9;
       if (Math.abs(ux) > Math.abs(uy)) res.dir = ux < 0 ? 2 : 3; else res.dir = uy < 0 ? 1 : 0;
-      /* ⚠️ LE GARDE ANTI-BLOCAGE EST OBLIGATOIRE, ET LA v363 EN EST LA PREUVE :
-         un trajet en ligne droite coupé par un bâtiment ne se termine JAMAIS, le
-         PNJ reste collé au mur pour toujours et rien ne le signale. Ici on
-         abandonne proprement : on s'arrête là où l'on est, on fait quand même
-         l'activité prévue (on regarde de loin — c'est exactement ce que fait
-         l'attroupement du 364 à l'expiration), et l'arrêt est diffusé. */
+      /* ⚠️ LE GARDE ANTI-BLOCAGE RESTE OBLIGATOIRE, ET LA v363 EN EST LA PREUVE :
+         un trajet coupé par un bâtiment ne se termine JAMAIS, le PNJ reste collé
+         au mur pour toujours et rien ne le signale.
+         ⚠️⚠️ MAIS ZIP 428 : IL RECALCULE AVANT D'ABANDONNER, ET C'EST LE
+         CHANGEMENT QUI COMPTE ICI. Avec un vrai chemin, être bloqué n'est plus
+         la NORME (79 % des trajets au 427) mais l'EXCEPTION (2 sur 3 660 en
+         mesure exhaustive, tous au ras d'un palier d'escalier, où le pas d'une
+         image et la boîte du personnage ne tombent pas d'accord au demi-pixel
+         près). Une exception se retente ; une norme ne se retentait pas, c'est
+         d'ailleurs pourquoi le 427 abandonnait tout de suite.
+         ⚠️ ET LE NOMBRE D'ESSAIS EST BORNÉ. Sans borne, un résident coincé dans
+         un cas qu'on n'a pas prévu rechercherait un chemin à chaque seconde,
+         pour toujours, chez l'hôte — un coût invisible qui ne se manifesterait
+         que par des images qui tombent. Après quoi on retombe sur le repli du
+         427, qui a l'avantage d'être discret : il fait sur place ce qu'il était
+         parti faire. */
       if (!moved) {
         res.stuckT = (res.stuckT || 0) + dt;
+        if (res.stuckT > 1.2 && (res.repath || 0) < C.TOWN_REPATH_TRIES) {
+          res.repath = (res.repath || 0) + 1;
+          res.stuckT = 0;
+          const again = res.townSpot ? E.townFindPath(tw, res.x, res.y, res.townSpot.x, res.townSpot.y) : null;
+          if (again && again.length) {
+            res.townPath = again; res.roamTarget = again[0];
+            queueTownResidentPath(res, again);   // l'invité doit voir le MÊME détour
+            return;
+          }
+        }
         if (res.stuckT > 2.4) {
           res.roamTarget = null; res.townPath = null; res.moving = false; res.sitOn = null;
           res.act = res.townAct || "sit"; res.actAt = now;
           res.actUntil = now + C.TOWN_ACT_MIN_MS;
         }
-      } else res.stuckT = 0;
+      } else { res.stuckT = 0; res.repath = 0; }
       return;
     }
     // 3. Rien à faire : on choisit une destination.
@@ -13628,12 +13761,78 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // evil map this zone is MULTIPLAYER: remote players with zone "town" are
     // lerped and drawn here (their real x/y travels in the normal pos
     // broadcast, see pubMe).
+    /* ╔══════════════════════════════════════════════════════════════════════
+       ║ ZIP 428 — LE DÉZOOM DES GRANDS BÂTIMENTS. (demande de Guillaume : « les
+       ║ grands bâtiments ne sont pas visibles en entier, s'approcher d'eux doit
+       ║ entraîner un zoom out pour en profiter, sans perturber le gameplay »)
+       ╚══════════════════════════════════════════════════════════════════════
+       ⚠️ LE PROBLÈME EST MESURABLE, ET IL EST STRUCTUREL. Le sprite du tribunal
+       fait 192×176 px, soit ONZE CASES de haut ; l'hôtel de ville neuf, l'église
+       huit. Le joueur est au centre de l'écran et se tient forcément AU PIED du
+       bâtiment : il n'en voit donc que `hauteur_fenêtre / 2 / 48` cases, c'est-
+       à-dire 9,4 sur une fenêtre de 900 px et 7,5 sur 720. Le fronton et le
+       beffroi sont hors champ, systématiquement, pour tout le monde.
+
+       ⚠️⚠️ ET « SANS PERTURBER LE GAMEPLAY » A UNE TRADUCTION PRÉCISE : AUCUN
+       RAYON D'INTERACTION N'EST EN PIXELS. `nearCivicDoor`, `nearTownProp`,
+       `nearTownRect`, la portée de la hache, le saut de rebord — tout est en
+       CASES, donc rien de tout cela ne bouge d'un iota quand l'échelle change.
+       Le seul calcul en pixels qui dépend du zoom est l'AOI réseau
+       (`aoiRadiusTiles`), et il DOIT suivre : dézoomer sans l'élargir ferait
+       disparaître les joueurs qu'on vient tout juste de rendre visibles.
+
+       ⚠️ LA VALEUR AU REPOS EST UN ENTIER, TOUJOURS. Un zoom fractionnaire sur
+       du pixel art fait grouiller la trame (des pixels de tailles inégales qui
+       changent de taille quand la caméra bouge). Ici l'échelle vaut exactement
+       TOWN_ZOOM_NEAR ou exactement ZOOM dès que le fondu est terminé : le
+       grouillement n'existe que pendant la demi-seconde de transition, où
+       l'image bouge de toute façon.
+       ⚠️ ET ON N'INTERPOLE PAS EN LIGNE DROITE. Un lissage exponentiel (le même
+       que smoothNpc) n'atteint jamais tout à fait sa cible : l'échelle
+       resterait à 2,004 pour toujours, donc fractionnaire pour toujours. On
+       accroche donc la valeur dès qu'elle est assez proche. */
+    function townZoomTarget(m) {
+      if (!m) return ZOOM;
+      /* Les lieux qui MÉRITENT d'être vus en entier. ⚠️ LA LISTE EST DÉRIVÉE
+         DES CONSTANTES DE BÂTIMENTS, jamais réécrite : ajouter un monument à la
+         ville, c'est l'ajouter ici en une ligne qui NOMME la constante, et le
+         jour où on le déplace il se déplace tout seul (§8). Les points de vue
+         (belvédère, ponton, place) y figurent parce que la demande était « en
+         profiter » : un belvédère dont on ne voit pas la vallée ne sert à rien,
+         et c'est très exactement le même défaut que le fronton coupé. */
+      for (const b of [C.TOWN_COURT, C.TOWN_HALL, C.TOWN_CHURCH, C.TOWN_BOUTIQUE, C.TOWN_SALON,
+                       C.TOWN_BELVEDERE, C.TOWN_PLAZA, C.TOWN_PIER,
+                       { x: C.TOWN_KIOSK.x, y: C.TOWN_KIOSK.y, w: 3, h: 3 }]) {
+        if (!b) continue;
+        const w = b.w || 3, h = b.h || 3;
+        // Marge en CASES autour de l'emprise : on veut que le dézoom soit déjà
+        // fini quand on arrive au pied, pas qu'il se déclenche une fois collé.
+        if (m.x >= b.x - C.TOWN_ZOOM_MARGIN && m.x <= b.x + w + C.TOWN_ZOOM_MARGIN
+         && m.y >= b.y - C.TOWN_ZOOM_MARGIN && m.y <= b.y + h + C.TOWN_ZOOM_MARGIN + 2) return C.TOWN_ZOOM_NEAR;
+      }
+      return ZOOM;
+    }
+    function townZoomNow(dt) {
+      const z = townZoomRef.current;
+      const want = townZoomTarget(meRef.current);
+      if (z.v === 0) z.v = want;                       // première image : pas de fondu
+      const k = Math.min(1, (dt || 0.016) / C.TOWN_ZOOM_MS * 1000);
+      z.v += (want - z.v) * k;
+      if (Math.abs(want - z.v) < 0.01) z.v = want;     // l'accrochage : voir la note
+      return z.v;
+    }
     function getCamTown() {
       const tw = townWorldRef.current, m = meRef.current;
-      const vw = canvas.width / ZOOM, vh = canvas.height / ZOOM;
+      const zm = townZoomRef.current.v || ZOOM;
+      const vw = canvas.width / zm, vh = canvas.height / zm;
       let cx = (m.x + 0.5) * T - vw / 2, cy = (m.y + 0.5) * T - vh / 2;
-      cx = Math.max(0, Math.min(tw.w * T - vw, cx)); cy = Math.max(0, Math.min(tw.h * T - vh, cy));
-      return { x: cx, y: cy, vw, vh };
+      /* ⚠️ LE RECADRAGE SUR LES BORDS N'EST PLUS INCONDITIONNEL. Dézoomé, la
+         vue peut devenir plus LARGE que la carte ; `Math.min(tw.w*T - vw, …)`
+         rendrait alors une borne négative et collerait la caméra hors du monde,
+         côté opposé. On centre dans ce cas, ce qui est la seule chose sensée. */
+      cx = tw.w * T <= vw ? (tw.w * T - vw) / 2 : Math.max(0, Math.min(tw.w * T - vw, cx));
+      cy = tw.h * T <= vh ? (tw.h * T - vh) / 2 : Math.max(0, Math.min(tw.h * T - vh, cy));
+      return { x: cx, y: cy, vw, vh, z: zm };
     }
     // Deterministic house assignment: every KNOWN farmer (farmersRef, i.e.
     // anyone who ever joined this world) sorted by id -> plots in order.
@@ -13806,6 +14005,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (keys["ArrowLeft"] || keys["KeyA"] || keys["KeyQ"]) dx -= 1;
         if (keys["ArrowRight"] || keys["KeyD"]) dx += 1;
       }
+      /* ⚠️⚠️ ZIP 428 — ASSIS : ON SE LÈVE EN MARCHANT, ET SEULEMENT COMME ÇA.
+         (demande de Guillaume : « une position assise soignée quand on utilise
+         un banc ».) Une seconde touche pour se relever serait une touche à
+         apprendre pour défaire quelque chose qu'on vient de faire ; la seule
+         intention qui compte, c'est « je repars ». C'est déjà la convention du
+         jeu pour porter un animal (changer d'outil le relâche).
+         ⚠️ ET ON SE LÈVE AVANT DE BOUGER, PAS PENDANT. Le déplacement de la
+         même image est ignoré : sinon la première pression de touche ferait à
+         la fois lever ET avancer d'un pas, et un joueur qui effleure une flèche
+         se retrouverait debout à côté du banc sans comprendre pourquoi. */
+      if (m.sitOn && (dx || dy)) { standUpTown(); return; }
+      if (m.sitOn) { m.moving = false; m.animT = 0; m.vx = 0; m.vy = 0; maybeSendPos(); return; }
       const moving = (dx || dy) && actAnimRef.current <= 0;
       if (moving) {
         const len = Math.hypot(dx, dy); dx /= len; dy /= len;
@@ -13836,8 +14047,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     function drawTownFrame(now, dt) {
       const tw = townWorldRef.current, m = meRef.current, sprites = spritesRef.current;
       if (!tw || !sprites) return;
+      /* ⚠️ ZIP 428 — L'ÉCHELLE EST AVANCÉE D'UNE IMAGE AVANT DE LIRE LA CAMÉRA,
+         et cet ordre est le seul juste : `getCamTown` calcule la taille du
+         champ de vision À PARTIR de l'échelle. Inversés, les deux seraient
+         décalés d'une image — invisible au repos, et visible comme une secousse
+         pendant tout le fondu, c'est-à-dire pile quand on regarde. */
+      townZoomNow(dt);
       const cam = getCamTown();
-      ctx.setTransform(ZOOM, 0, 0, ZOOM, -Math.round(cam.x * ZOOM), -Math.round(cam.y * ZOOM));
+      const zm = cam.z;
+      // ⚠️ La TRANSLATION reste arrondie au pixel écran même à échelle
+      // fractionnaire : sans cet arrondi, tout le décor tremble d'un demi-pixel
+      // à chaque image pendant le fondu.
+      ctx.setTransform(zm, 0, 0, zm, -Math.round(cam.x * zm), -Math.round(cam.y * zm));
       ctx.fillStyle = "#4c8f40";
       ctx.fillRect(cam.x, cam.y, cam.vw, cam.vh);
       const x0 = Math.max(0, Math.floor(cam.x / T)), x1 = Math.min(tw.w - 1, Math.ceil((cam.x + cam.vw) / T));
@@ -14408,7 +14629,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           // Assis : on se dessine SUR le banc, un poil au sud pour passer
           // devant lui au tri (voir la branche `p.sit` de drawCharacter).
           const dx2 = sitting ? res.sitOn.x : rx;
-          const dy2 = sitting ? res.sitOn.y + 0.45 : ry;
+          const dy2 = sitting ? res.sitOn.y + C.TOWN_SEAT_OFFSET : ry;
           const rDir = res.act ? (res.dir | 0) : (isHost ? (res.dir || 0) : (rp.dir != null ? rp.dir : 0));
           const rMoving = res.act ? false : (isHost ? !!res.moving : !!rp.moving);
           const rAnim = isHost ? (res.animT || 0) : (rp.animT || 0);
@@ -14551,7 +14772,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          pas suivant ; une plaque de bâtiment, elle, sera encore là dans dix
          secondes. Quand les deux se disputent le bandeau, c'est l'éphémère qui
          doit gagner — sinon on ne découvre jamais qu'on peut sauter. */
-      if (canTownJumpNow()) tpk = "townJump";
+      /* ⚠️ ZIP 428 — ASSIS, L'INVITE DIT COMMENT SE LEVER, et elle passe avant
+         tout le reste. C'est la règle du 425 sur le saut poussée d'un cran :
+         l'invite doit décrire l'action DISPONIBLE MAINTENANT. Assis devant le
+         tableau des nouvelles, proposer « E : lire » alors que E ne fera rien
+         tant qu'on est assis, c'est un jeu qui propose puis refuse — le défaut
+         que le 426 s'est juré de ne plus commettre. */
+      if (m.sitOn) tpk = "townStand";
+      else if (canTownJumpNow()) tpk = "townJump";
       else if (nearTile(C.TOWN_STATION_SIGN)) tpk = "trainBack";
       else if (nearBuildingDoor(C.TOWN_CHURCH)) tpk = "townChurch";
       else if (nearBuildingDoor(C.TOWN_HALL)) tpk = "townHall";
@@ -15290,7 +15518,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     function drawSelf(m) {
       // Zip 427 : ma tenue vient du même endroit que celle des autres (voir
       // wardrobeLookOf) — un joueur doit se voir exactement comme on le voit.
-      drawCharacter({ ...m, look: wardrobeLookOf(m.id) || m.look || null }, true);
+      /* ⚠️ ZIP 428 — `sit` EST UN BOOLÉEN POUR LE DESSIN, `sitOn` UNE CASE POUR
+         LE JEU. drawCharacter ne demande que « suis-je assis » ; la case du banc
+         ne l'intéresse pas, puisque la position du personnage est DÉJÀ celle du
+         point d'assise (voir sitOnBench). Les joueurs distants arrivent avec le
+         même champ `sit` rempli par pubMe, donc la même branche les dessine. */
+      drawCharacter({ ...m, sit: !!m.sitOn, look: wardrobeLookOf(m.id) || m.look || null }, true);
       if (actAnimRef.current > 0 && slotRef.current <= SLOT.can) {
         const sprites = spritesRef.current;
         const key = slotRef.current === SLOT.tools ? toolKindRef.current : "can";
@@ -15596,18 +15829,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         ctx.fillRect(10, 19, 4, 3);
         ctx.restore();
       } else if (p.sit) {
-        /* ⚠️ ZIP 427 — ASSIS SUR UN BANC : ON COUPE LES JAMBES, ON NE LES PLIE
-           PAS. Vu de dessus, un personnage assis sur un banc a ses jambes
-           CACHÉES par l'assise ; les dessiner pliées demanderait une pose de
-           plus dans la feuille de sprite (donc une variante par tenue, par
-           métier et par article de la garde-robe) pour un gain nul à 16 px.
-           On dessine donc les 17 pixels du haut — buste, tête, chapeau — posés
-           un cran plus bas. Le tri fait le reste : l'appelant place l'assis
-           légèrement au SUD du banc, il passe donc devant lui.
+        /* ⚠️ ZIP 428 — LA POSE ASSISE EST DESSINÉE PAR `A.drawSeated`, ET ELLE
+           A DÉMÉNAGÉ DANS fermeArt.js EXPRÈS. Elle vivait ici, dans la closure
+           de la boucle de rendu, donc elle n'était REGARDABLE QUE DANS LE JEU —
+           et c'est précisément comme ça qu'on garde trois zips durant un buste
+           tronqué en croyant avoir une pose. Chez fermeArt, le banc de rendu
+           (tools/render-assise.mjs) appelle la MÊME fonction : ce qu'il montre
+           est ce que le joueur verra, au pixel près. La recette et ses raisons
+           sont là-bas.
            ⚠️ Frame 0 imposée : un cycle de marche sur quelqu'un d'assis donne
            un gigotement permanent. */
-        if (flip) { ctx.translate(px + 16, py - 4); ctx.scale(-1, 1); ctx.drawImage(sheet, 0, row * 24, 16, 17, 0, 0, 16, 17); }
-        else ctx.drawImage(sheet, 0, row * 24, 16, 17, px, py - 4, 16, 17);
+        if (flip) { ctx.translate(px + 16, 0); ctx.scale(-1, 1); A.drawSeated(ctx, sheet, row, 0, py); }
+        else A.drawSeated(ctx, sheet, row, px, py);
       } else if (p.scale && p.scale !== 1) {
         /* Zip 427 — LES ENFANTS DE LA FAMILLE. Une simple mise à l'échelle
            ANCRÉE AUX PIEDS : le sprite rétrécit vers le bas, donc l'enfant reste
@@ -16077,10 +16310,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function targetTileTown() {
     const m = meRef.current, tw = townWorldRef.current, canvas = canvasRef.current;
     if (!m || !tw || !canvas) return { x: 0, y: 0 };
-    const vw = canvas.width / ZOOM, vh = canvas.height / ZOOM;
+    /* ⚠️⚠️ ZIP 428 — CETTE FONCTION RECALCULE LA CAMÉRA DE LA VILLE, ET C'EST
+       UN DOUBLON QUI DEVIENT DANGEREUX AVEC LE DÉZOOM. `getCamTown` vit dans la
+       closure de la boucle de rendu et n'est pas appelable d'ici ; le calcul est
+       donc recopié. Tant que l'échelle était une constante, les deux copies ne
+       pouvaient pas diverger. Maintenant elles le peuvent, et le symptôme serait
+       le pire de tous : la hache tomberait sur une AUTRE case que celle que le
+       liseré blanc désigne, dès qu'on est près d'un monument. La seule parade
+       tenable est que les deux lisent la MÊME source d'échelle — d'où le ref
+       plutôt qu'une variable locale de la boucle. Le clamp est recopié à
+       l'identique, cas « la vue est plus large que la carte » compris. */
+    const zm = townZoomRef.current.v || ZOOM;
+    const vw = canvas.width / zm, vh = canvas.height / zm;
     let cx = (m.x + 0.5) * C.TILE - vw / 2, cy = (m.y + 0.5) * C.TILE - vh / 2;
-    cx = Math.max(0, Math.min(tw.w * C.TILE - vw, cx)); cy = Math.max(0, Math.min(tw.h * C.TILE - vh, cy));
-    const wx = (mouseRef.current.x / ZOOM + cx) / C.TILE, wy = (mouseRef.current.y / ZOOM + cy) / C.TILE;
+    cx = tw.w * C.TILE <= vw ? (tw.w * C.TILE - vw) / 2 : Math.max(0, Math.min(tw.w * C.TILE - vw, cx));
+    cy = tw.h * C.TILE <= vh ? (tw.h * C.TILE - vh) / 2 : Math.max(0, Math.min(tw.h * C.TILE - vh, cy));
+    const wx = (mouseRef.current.x / zm + cx) / C.TILE, wy = (mouseRef.current.y / zm + cy) / C.TILE;
     const tx = Math.floor(wx), ty = Math.floor(wy);
     if (tx >= 0 && ty >= 0 && tx < tw.w && ty < tw.h && Math.abs(wx - (m.x + 0.5)) <= C.ACT_RANGE + 0.5 && Math.abs(wy - (m.y + 0.2)) <= C.ACT_RANGE + 0.5) return { x: tx, y: ty };
     return facingTile();
@@ -16454,6 +16699,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (fx < 0 || fy < 0 || fx >= tw.w || fy >= tw.h) return 0;
     return tw.elev[fy * tw.w + fx];
   }
+  /* ⚠️ ZIP 428 — IL Y A DEUX TESTS DE COLLISION EN VILLE, ET C'EST DÉLIBÉRÉ.
+     Celui-ci est le test D'EXÉCUTION : il lit `shared.townChop`, donc il sait
+     qu'un arbre abattu ne bloque plus. `E.townBoxFree`, côté moteur, est le
+     test DE NAVIGATION : il ignore la coupe, ce qui le rend PESSIMISTE — il
+     peut refuser une case que le jeu accepte, jamais l'inverse (un arbre est
+     toujours bloquant, une souche ne l'est jamais). C'est ce qui autorise la
+     grille de navigation à être calculée une fois pour toutes.
+     ⚠️ La BOÎTE, elle, est la même des deux côtés (0,6 × 0,35), et c'est le
+     seul chiffre qu'il faudrait changer aux deux endroits — il est signalé
+     là-bas aussi. Deux boîtes différentes donneraient des chemins que le jeu
+     refuse de parcourir : le défaut même que ce zip corrige. */
   function townCanStand(tw, x, y, fromE) {
     const r = 0.3;
     const pts = [[x - r, y], [x + r, y], [x - r, y + 0.35], [x + r, y + 0.35]];
@@ -16470,22 +16726,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function resZone(res) { return res && res.zone === "town" ? "town" : "farm"; }
 
   /* ---- LES ESCALIERS, VUS PAR UN PNJ ----------------------------------------
-     ⚠️⚠️ UN RÉSIDENT NE TROUVE PAS UN ESCALIER TOUT SEUL, ET IL NE FAUT SURTOUT
-     PAS LUI DONNER UN PATHFINDING POUR ÇA. Sa rôdaille est une ligne droite qui
-     glisse le long des obstacles (c'est le modèle de tout le jeu depuis le 252,
-     et c'est ce qui permet de décrire un trajet en DEUX POINTS dans un message).
-     Face à une falaise, cette ligne droite ne monte jamais : le résident se
-     colle au pied de l'à-pic et y reste jusqu'à l'expiration — c'est-à-dire
-     qu'aucun résident ne monterait JAMAIS en Haute-Ville, sans la moindre
-     erreur pour le dire.
-     La réponse n'est pas un A*, c'est un ITINÉRAIRE : la ville n'a que trois
-     volées, elles sont dans `TOWN_STAIRS`, et un trajet qui change d'altitude
-     passe forcément par l'une d'elles. On DÉRIVE donc les points de passage de
-     la table qui définit déjà les escaliers — jamais d'une seconde table de
-     « points de passage » qui divergerait au premier escalier déplacé (§8).
-     ⚠️ Et le trajet complet tient dans UN SEUL message : `residentPaths` accepte
-     une liste de points depuis le 364. Monter au belvédère coûte donc exactement
-     autant de `send()` que traverser la place. */
+     ⚠️⚠️ ZIP 428 — `townStairRoute` ET `townStairEnds` ONT ÉTÉ SUPPRIMÉES ICI,
+     ET LE 427 QUI LES DÉFENDAIT AVAIT TORT. Elles dérivaient des points de
+     passage de `TOWN_STAIRS` pour compenser le fait qu'une ligne droite ne
+     monte jamais un escalier — ce qu'elles faisaient correctement. Ce que
+     personne n'avait mesuré, c'est que les escaliers n'étaient pas le
+     problème : QUATRE TRAJETS SUR CINQ mouraient contre une haie, un mur ou
+     l'étang, bien avant le moindre dénivelé (les chiffres sont en tête de
+     fermeEngine.js, chapitre « la navigation de Valley Town »).
+     Un vrai chemin rend cette table inutile : le dénivelé est une contrainte
+     d'ARÊTE dans la recherche, donc l'escalier est emprunté parce que c'est le
+     seul endroit où l'on peut monter, pas parce qu'on l'a nommé. Une table de
+     moins à tenir d'accord avec la carte, et le §8 y gagne.
+     ⚠️ Ce qui n'a pas changé : le trajet complet tient toujours dans UN SEUL
+     message (`residentPaths` accepte une liste de points depuis le 364), parce
+     que le chemin est RÉDUIT à ses points de virage avant d'être émis. */
   /* ---- LES PROXIMITÉS DE VALLEY TOWN (zip 427) -----------------------------
      Même discipline que `nearCivicDoor` (426) : UNE définition par question,
      lue par l'invite ET par la touche E. Deux copies d'un seuil de proximité,
@@ -16498,6 +16753,40 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (Math.abs(m.x - pr.x) <= r && Math.abs(m.y - pr.y) <= r + 0.6) return pr;
     }
     return null;
+  }
+  /* ---- S'ASSEOIR (428) ------------------------------------------------------
+     ⚠️ LE JOUEUR S'ASSOIT EXACTEMENT OÙ S'ASSOIT UN RÉSIDENT : sur le point que
+     `E.townSpots` a dérivé du banc, jamais sur une position calculée ici. Deux
+     façons de s'asseoir sur le même banc, c'est un joueur et un PNJ qui ne sont
+     pas assis à la même hauteur, côte à côte, sur la même planche — et le §8
+     dit ce qu'il faut penser d'un second calcul pour la même chose.
+     ⚠️ `sitOn` PORTE LA CASE DU BANC, pas un booléen. Le dessin en a besoin (il
+     s'aligne sur l'assise) et c'est aussi ce qui interdit à deux joueurs de
+     s'asseoir au même endroit sans qu'on ait à inventer un verrou : ils
+     occuperaient la même case, ce qui se voit tout de suite. */
+  function sitOnBench(pr) {
+    const m = meRef.current;
+    /* ⚠️⚠️ ON MÉMORISE D'OÙ L'ON S'EST ASSIS, ET C'EST INDISPENSABLE DEPUIS QUE
+       LES BANCS S'ABORDENT PAR N'IMPORTE QUEL CÔTÉ (428). Se relever « d'un pas
+       vers le sud » était juste tant que le sud était forcément libre ; au bord
+       du lac, le sud est l'EAU. On se relève donc exactement là où l'on se
+       tenait, case dont on sait qu'elle est praticable puisqu'on y était. */
+    m.sitFrom = { x: m.x, y: m.y };
+    m.sitOn = { x: pr.x, y: pr.y };
+    m.x = pr.x; m.y = pr.y + C.TOWN_SEAT_OFFSET;
+    m.dir = 0; m.moving = false; m.animT = 0; m.vx = 0; m.vy = 0;
+    maybeSendPos();
+    pushToast(L.benchSitToast);
+  }
+  function standUpTown() {
+    const m = meRef.current;
+    if (!m.sitOn) return;
+    const back = m.sitFrom;
+    m.sitOn = null; m.sitFrom = null;
+    if (back) { m.x = back.x; m.y = back.y; }
+    else m.y = Math.min(m.y + (1 - C.TOWN_SEAT_OFFSET), C.TOWN_MAP_H - 1);  // repli : sauvegarde d'avant le 428
+    m.moving = false; m.animT = 0;
+    maybeSendPos();
   }
   function nearTownRect(x, y, w, h) {
     const m = meRef.current;
@@ -16559,45 +16848,6 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const pool = (L.townActLines || {})[res.act];
     if (!pool || !pool.length) return null;
     return pool[townHash(res.rid, res.actAt) % pool.length];
-  }
-  function townStairEnds(st) {
-    // `low`/`high` sont les cases de PALIER, une case au-delà de la volée : on
-    // vise le sol de départ et le sol d'arrivée, jamais une marche (viser une
-    // marche, c'est viser une altitude intermédiaire, donc s'arrêter dessus).
-    if (st.dir === "e") {
-      const cy = st.y + (st.w - 1) / 2;
-      return { low: { x: st.x - 1.5, y: cy }, high: { x: st.x + st.len + 0.5, y: cy } };
-    }
-    const cx = st.x + (st.w - 1) / 2;
-    return { low: { x: cx, y: st.y + st.len + 0.5 }, high: { x: cx, y: st.y - 1.5 } };
-  }
-  function townStairRoute(fromE, toE, fx, fy) {
-    const out = [];
-    let cur = fromE, cx = fx, cy = fy;
-    // Trois sauts au maximum : la ville a deux niveaux au-dessus de la rue, donc
-    // deux volées enchaînées suffisent toujours. La borne est là pour qu'une
-    // table d'escaliers mal fichue ne fasse pas boucler l'hôte.
-    for (let guard = 0; guard < 3 && Math.abs(cur - toE) > 0.01; guard++) {
-      const up = toE > cur;
-      let best = null, bestD = Infinity;
-      for (const st of C.TOWN_STAIRS) {
-        const entry = up ? st.from : st.to, exit = up ? st.to : st.from;
-        if (Math.abs(entry - cur) > 0.01) continue;
-        // Ne pas dépasser : une volée qui monte plus haut que la cible nous
-        // ferait redescendre par une autre, et le trajet deviendrait absurde.
-        if (up ? exit > toE + 0.01 : exit < toE - 0.01) continue;
-        const ends = townStairEnds(st);
-        const e0 = up ? ends.low : ends.high;
-        const d = Math.hypot(e0.x - cx, e0.y - cy);
-        if (d < bestD) { bestD = d; best = { st, ends, up, exit }; }
-      }
-      if (!best) break;   // aucune volée : le trajet restera plat, et c'est mieux qu'une boucle
-      const a = best.up ? best.ends.low : best.ends.high;
-      const b = best.up ? best.ends.high : best.ends.low;
-      out.push(a, b);
-      cur = best.exit; cx = b.x; cy = b.y;
-    }
-    return out;
   }
   /* ⚠️ ZIP 426 — CES TROIS-LÀ SONT AU NIVEAU DU COMPOSANT, ET PAS DANS LA
      BOUCLE DE RENDU, pour la même raison que nearCivicDoor juste dessous : elles
@@ -16695,6 +16945,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     // rien faire d'autre tant qu'il n'a pas déposé ou vendu l'animal, comme
     // le montre déjà `selectSlot` qui relâche l'animal au changement d'outil.
     if (m0 && m0.zone === "town") {
+      /* ⚠️ ZIP 428 — ASSIS, E RELÈVE, ET RIEN D'AUTRE. On promet les touches de
+         direction (voir promptTownStand), mais un joueur assis appuiera sur E :
+         c'est la touche avec laquelle il vient de s'asseoir. Laisser E tomber
+         dans la suite ouvrirait le tableau des nouvelles depuis un banc placé
+         devant, c'est-à-dire agir sans s'être levé. Une sortie unique et
+         évidente vaut mieux qu'une sortie exacte. */
+      if (m0.sitOn) { standUpTown(); return; }
       // Valley Town (zip 234): E at the sign rides the train home; E at a
       // house door just introduces the place (interiors deferred).
       if (nearTile(C.TOWN_STATION_SIGN)) { rideTrain(false); return; }
@@ -16719,7 +16976,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       }
       if (nearCivicDoor(C.TOWN_SALON)) { pushToast(L.salonToast); return; }
       if (nearTownProp("newsBoard", 1.7)) { setNewsBoardOpen(true); return; }
-      if (nearTownProp("bench", 1.2)) { pushToast(L.benchToast); return; }
+      /* ZIP 428 — LE BANC SE PREND. Il ne rendait qu'un message depuis le 427 :
+         sur onze interactions de la ville, quatre n'étaient qu'un toast, et
+         celle-ci était la plus frustrante — un banc est la seule chose au monde
+         dont l'usage est évident. */
+      { const bn = nearTownProp("bench", 1.2); if (bn) { sitOnBench(bn); return; } }
       if (nearTownRect(C.TOWN_FOUNTAIN.x - 1, C.TOWN_FOUNTAIN.y - 1, 4, 4)) { sendReq({ kind: "townWish" }); return; }
       if (nearTownProp("kiosk", 2.6)) {
         // Le kiosque joue quand quelqu'un est là pour l'entendre — c'est-à-dire
@@ -17462,7 +17723,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       </div>
 
       {/* Invite proximité */}
-      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townJump" ? L.promptTownJump : promptKey === "townChurch" ? L.promptTownChurch : promptKey === "townHall" ? L.promptTownHall : promptKey === "townCourt" ? L.promptTownCourt : promptKey === "townBoutique" ? L.promptTownBoutique : promptKey === "townBoutiqueShut" ? L.promptTownBoutiqueShut : promptKey === "townSalon" ? L.promptTownSalon : promptKey === "townNews" ? L.promptTownNews : promptKey === "townBench" ? L.promptTownBench : promptKey === "townWish" ? L.promptTownWish : promptKey === "townKiosk" ? L.promptTownKiosk : promptKey === "townPier" ? L.promptTownPier : promptKey === "townView" ? L.promptTownView : promptKey === "courtExit" ? L.promptCourtExit : promptKey === "courtBoard" ? L.promptCourtBoard : promptKey.startsWith("courtDoor:") ? L.promptCourtDoor(L.courtRoomName(promptKey.slice(10))) : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "mazePrize" ? L.promptMazePrize : promptKey.startsWith("passagePickup:") ? L.promptPassagePickup : L.promptBin}</div>}
+      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townJump" ? L.promptTownJump : promptKey === "townChurch" ? L.promptTownChurch : promptKey === "townHall" ? L.promptTownHall : promptKey === "townCourt" ? L.promptTownCourt : promptKey === "townBoutique" ? L.promptTownBoutique : promptKey === "townBoutiqueShut" ? L.promptTownBoutiqueShut : promptKey === "townSalon" ? L.promptTownSalon : promptKey === "townNews" ? L.promptTownNews : promptKey === "townBench" ? L.promptTownBench : promptKey === "townStand" ? L.promptTownStand : promptKey === "townWish" ? L.promptTownWish : promptKey === "townKiosk" ? L.promptTownKiosk : promptKey === "townPier" ? L.promptTownPier : promptKey === "townView" ? L.promptTownView : promptKey === "courtExit" ? L.promptCourtExit : promptKey === "courtBoard" ? L.promptCourtBoard : promptKey.startsWith("courtDoor:") ? L.promptCourtDoor(L.courtRoomName(promptKey.slice(10))) : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "mazePrize" ? L.promptMazePrize : promptKey.startsWith("passagePickup:") ? L.promptPassagePickup : L.promptBin}</div>}
       {mountPrompt && <div className="ferme-prompt ferme-prompt-mount">{mountPrompt === "mount" ? L.mountPrompt : L.dismountPrompt}</div>}
       {handHeldUI && !moveConfirmUI && <div className="ferme-prompt ferme-prompt-mount">{L.handHeldHint}</div>}
       {moveConfirmUI && (

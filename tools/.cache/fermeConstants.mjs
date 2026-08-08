@@ -3796,9 +3796,62 @@ export const TOWN_TRIP_MAX_MS = 10 * 60 * 1000;  // le plus long
    ⚠️ ELLE EST DIFFUSÉE DANS LE MESSAGE D'ARRÊT QUI EXISTE DÉJÀ (`residentStops`
    gagne un champ `a`), jamais dans un message à elle. Un résident qui s'assoit
    s'arrête forcément : l'information voyage donc avec l'arrêt, ou pas du tout. */
+// Plancher de durée d'activité : il ne sert QUE de repli, quand un résident abandonne son
+// trajet (obstacle) et fait sur place ce qu'il était parti faire. Les durées normales sont
+// dans TOWN_ACTS, activité par activité — un maximum global en plus serait un second réglage
+// pour la même chose, donc une divergence en attente (§8).
 export const TOWN_ACT_MIN_MS = 7 * 1000;
-export const TOWN_ACT_MAX_MS = 22 * 1000;
 export const TOWN_RES_BUBBLE_MS = 5200;    // durée d'affichage d'une réplique d'activité
+/* ⚠️⚠️ ZIP 428 — LA TOLÉRANCE D'ARRIVÉE SUR UN POINT DE PASSAGE, ET C'EST UN
+   RÉGLAGE MESURÉ, PAS UN GOÛT. Le suiveur avance en ligne droite d'un point au
+   suivant ; chaque segment a été validé DEPUIS SON DÉPART EXACT par
+   E.townFindPath. Accepter l'arrivée trop tôt, c'est repartir d'un point que
+   personne n'a validé. Mesuré sur ~600 trajets à travers toute la ville :
+
+       0,35 (valeur du 427) ............. 93,0 % d'arrivées
+       0,20 + recalage .................. 100 %
+       0,15 + recalage .................. 100 %
+
+   Le recalage (townResidentRoam pose x/y sur le point atteint) fait l'essentiel
+   du travail ; ce seuil-ci ne sert plus qu'à ne pas tourner autour du point une
+   image de trop. On le garde donc large plutôt que serré : un seuil PLUS PETIT
+   que le pas d'une image (vitesse × dt ≈ 0,025 case) ferait osciller. */
+export const TOWN_WP_ARRIVE = 0.2;
+/* Essais de recalcul avant d'abandonner un trajet (voir le garde anti-blocage de
+   townResidentRoam). Deux suffisent : le cas résiduel est un demi-pixel au ras
+   d'un palier, et un chemin recalculé depuis la position réelle en sort. La
+   borne existe pour qu'un cas non prévu ne fasse pas chercher un chemin par
+   seconde et par résident chez l'hôte, indéfiniment et sans bruit. */
+export const TOWN_REPATH_TRIES = 2;
+/* ⚠️ ZIP 428 — OÙ SE POSE QUELQU'UN D'ASSIS, EN CASES, AU SUD DE LA CASE DU
+   BANC. Ce nombre était écrit en dur (0,45) dans le rendu des résidents ; le
+   joueur pouvant maintenant s'asseoir lui aussi, il aurait fallu l'écrire une
+   seconde fois — donc un joueur et un PNJ assis côte à côte sur la MÊME planche
+   à deux hauteurs différentes, au premier ajustement. C'est le doublon du §8,
+   et la parade est la même : un seul endroit. La géométrie qui le justifie (le
+   dossier, l'assise et le sol du sprite de banc) est dans SEAT_POSE, côté
+   fermeArt — c'est là que se dessine, ici que se place. */
+export const TOWN_SEAT_OFFSET = 0.45;
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZIP 428 — LE DÉZOOM À L'APPROCHE DES GRANDS BÂTIMENTS.
+   ⚠️ TOWN_ZOOM_NEAR EST UN ENTIER, ET CE N'EST PAS NÉGOCIABLE. À 2, une case
+   fait 32 px et le sprite du tribunal (11 cases) tient dans 352 px : il passe
+   entier sur n'importe quelle fenêtre. À 2,5 il tiendrait aussi — mais une
+   échelle fractionnaire sur du pixel art donne des pixels de tailles inégales
+   qui CHANGENT de taille quand la caméra bouge, et ça grouille. La règle du
+   jeu est « au repos, l'échelle est entière » ; le fondu est le seul moment où
+   elle ne l'est pas, et à ce moment-là l'image bouge de toute façon.
+   ⚠️ Et on ne descend pas plus bas : à 1, un personnage fait 16 px de haut à
+   l'écran et on ne distingue plus qui est qui — la ville deviendrait lisible
+   au prix des gens qui l'habitent. */
+export const TOWN_ZOOM_NEAR = 2;
+export const TOWN_ZOOM_MS = 520;      // durée du fondu d'échelle
+/* Marge en CASES autour de l'emprise d'un monument. ⚠️ Elle est GÉNÉREUSE
+   exprès : le dézoom doit être TERMINÉ quand on arrive au pied du bâtiment. Un
+   fondu qui démarre au moment où l'on se colle à la porte donne l'impression
+   que la caméra recule parce qu'on a fait quelque chose, alors qu'elle doit
+   avoir l'air d'avoir toujours été là. */
+export const TOWN_ZOOM_MARGIN = 7;
 /* Les activités connues. `sit` = le personnage est dessiné ASSIS (buste seul,
    posé sur le banc) — c'est la seule qui change le dessin, les autres se
    contentent d'une pose immobile et d'une bulle.
@@ -3818,6 +3871,21 @@ export const TOWN_ACTS = {
   board:    { ms: [6000, 12000] },              // lire le tableau des nouvelles
   statue:   { ms: [6000, 12000] },
   pray:     { ms: [8000, 16000] },              // le parvis de l'église
+  /* ZIP 428 — LES SIX QUARTIERS QUI N'AVAIENT AUCUNE ACTIVITÉ. Voir la longue
+     note de E.townSpots : 33 des 48 blocs ouverts de la ville n'avaient aucun
+     endroit de vie, et un quart des endroits existants étaient des tombes.
+     ⚠️ LES DURÉES NE SONT PAS COPIÉES AU HASARD SUR LES ANCIENNES. Elles disent
+     ce qu'on vient faire : on s'accoude longtemps au bord d'un lac, on ne
+     s'arrête qu'un instant au coin d'une rue. C'est ce contraste de durées,
+     bien plus que le nombre d'endroits, qui fait qu'une ville a des quartiers
+     calmes et des quartiers de passage. */
+  shore:    { ms: [12000, 24000] },             // la promenade du lac, au bord de l'eau
+  pond:     { ms: [9000, 18000] },              // l'étang du parc
+  orchard:  { ms: [8000, 16000] },              // sous les arbres du verger municipal
+  craft:    { ms: [7000, 14000] },              // regarder travailler, chez les artisans
+  fair:     { ms: [6000, 13000] },              // traîner entre les rangées du champ de foire
+  flowers:  { ms: [7000, 15000] },              // les parterres de la place
+  stroll:   { ms: [3500, 8000] },               // ⚠️ COURT EXPRÈS : on ne s'arrête pas dans une rue, on y flâne
 };
 
 /* ---- LES RENCONTRES. C'est l'architecture sociale, et elle tient en une
@@ -3833,7 +3901,13 @@ export const TOWN_MEET_DIST = 3.4;             // distance de déclenchement
 export const TOWN_MEET_MS = 15 * 1000;         // durée d'une conversation
 export const TOWN_MEET_COOLDOWN_MS = 75 * 1000; // avant que les deux mêmes se reparlent
 export const TOWN_MEET_CHANCE = 0.55;
-export const TOWN_MEET_STAND = 1.15;           // distance à laquelle ils se plantent l'un face à l'autre
+/* ⚠️ PAS DE « DISTANCE DE RAPPROCHEMENT » ICI, ET C'EST UN CHOIX MESURÉ. Le premier
+   jet faisait converger les deux résidents l'un vers l'autre : un déplacement de plus à
+   diffuser, un risque de plus de rester coincé dans un mur, et à l'écran ça ne se lit pas
+   mieux qu'un face-à-face — ils sont déjà à trois cases. Ils se TOURNENT l'un vers l'autre,
+   ce qui ne coûte rien et se voit. Une constante que personne ne lit ment plus qu'elle
+   n'informe (leçon de TOWN_CORE au 426) : celle-là a donc été supprimée plutôt que gardée
+   « au cas où ». */
 /* ⚠️⚠️ LE DÉLAI DE GRÂCE À LA DESCENTE DU TRAIN, ET IL A ÉTÉ TROUVÉ EN JEU, PAS
    À LA RELECTURE. Sans lui, la vie sociale s'étrangle elle-même : cinq
    résidents descendent le même quai à la même seconde, donc tous à moins de
@@ -3987,7 +4061,6 @@ export const LEO_UPSELL_MS = 5200;
 export const TOWN_WISH_COST = 25;              // pièce jetée dans la fontaine
 export const TOWN_WISH_COOLDOWN_MS = DAY_REAL_MS; // un vœu par jour de jeu et par joueur
 export const TOWN_WISH_GOLD_MIN = 0, TOWN_WISH_GOLD_MAX = 400; // ce que la fontaine rend, parfois
-export const TOWN_SPYGLASS_MS = 6000;          // durée du message du belvédère
 export const TOWN_KIOSK_NOTE_MS = 380;         // cadence des notes de musique au kiosque
 
 /* ═══════════════════════════════════════════════════════════════════════════

@@ -1,5 +1,66 @@
 # ARCARDI 🎪
 
+> **ZIP 428 — ON A MESURÉ VALLEY TOWN, ET ELLE NE MARCHAIT PAS.**
+>
+> **Quatre trajets de résident sur cinq n'aboutissaient pas.** Pas « parfois » : 24 %
+> d'arrivées, mesuré en rejouant le vrai code de déplacement sur la vraie carte, image par
+> image. Et le symptôme MENTAIT — à l'abandon, le résident jouait quand même son activité sur
+> place, sept à vingt-six secondes. Un résident bloqué contre une haie n'avait pas l'air
+> bloqué : il avait l'air de contempler une haie. Ça a duré deux zips.
+>
+> La ville était pourtant parfaitement connexe (33 198 des 33 199 cases praticables
+> atteignables depuis le quai, détour médian 1,28× la ligne droite). Ce n'étaient pas les
+> escaliers — c'étaient les vingt-sept haies, les bâtiments et l'étang. Le zip 427 avait écrit
+> noir sur blanc « la parade n'est pas un A\*, c'est un itinéraire » ; il avait tort, et il
+> aura fallu un chiffre pour le savoir. **Les résidents ont maintenant un vrai chemin :
+> 100 % d'arrivées, sur les 16 002 trajets possibles d'un endroit à un autre, et pas un
+> message réseau de plus** (le chemin est réduit à sept points de passage en médiane avant de
+> partir dans le message qui partait déjà).
+>
+> **Cinq défauts ont été trouvés par le banc et par lui seul, aucun n'ayant jamais levé
+> d'erreur** : une heuristique de recherche inconsistante qui rendait « pas de chemin » comme
+> si c'était une réponse ; un tas qui débordait en silence hors des bornes d'un tableau typé ;
+> une altitude de référence décalée d'un échantillon, qui faisait franchir un escalier en
+> biais ; une réduction de chemin qui pouvait cesser d'avancer ; et une position, au bas des
+> marches, où l'on pouvait entrer mais plus jamais repartir.
+>
+> **La ville était aussi vide aux trois quarts, et personne ne l'avait compté.** 33 des 48
+> blocs ouverts n'avaient aucun endroit de vie ; seize des soixante et un endroits étaient des
+> tombes, si bien qu'un quart de la vie sociale de Valley Town se passait au cimetière — sans
+> que ce soit l'intention de personne. La promenade du lac, le verger, l'étang, les artisans,
+> la foire, les parterres et les carrefours en ont désormais. **127 endroits, tous dérivés de
+> la carte**, et un contrôle qui refuse qu'une seule activité écrase les autres (il a d'ailleurs
+> attrapé le premier jet, qui mettait 39 % des endroits sur le trottoir). **Les trois bancs du
+> bord du lac étaient morts** depuis toujours : on ne pouvait s'asseoir que par le sud, et au
+> bord de l'eau, le sud c'est le lac.
+>
+> **On s'assoit pour de bon.** Ce que faisait le 427 n'était pas une pose, c'était une coupe :
+> les dix-sept pixels du haut du sprite, posés quatre pixels plus bas. Un buste tronqué à
+> mi-cuisse. La vraie pose découpe trois tranches dans la feuille du personnage lui-même —
+> buste, cuisses en raccourci, mollets rétrécis — donc elle hérite gratuitement de la tenue, de
+> la salopette et des articles achetés chez Carla, dont la teinte est cuite dans la feuille.
+> **Et le joueur peut s'asseoir**, ce que le banc ne permettait pas : `E` sur un banc, une
+> touche de direction pour repartir.
+>
+> **Les grands bâtiments se voient enfin en entier.** Le tribunal fait onze cases de haut ; le
+> joueur, au centre de l'écran et au pied du perron, n'en voyait que neuf sur une fenêtre de
+> 900 px, sept et demie sur 720. La caméra recule à leur approche, et aux points de vue —
+> belvédère, ponton, place. Rien du gameplay ne bouge : aucun rayon d'interaction de ce jeu
+> n'est en pixels.
+>
+> **Et le banc de rendu mentait.** Son faux canevas n'implémentait `drawImage` qu'à trois
+> arguments et ignorait silencieusement les autres : toute découpe dans une feuille de sprite
+> — c'est-à-dire toute pose de personnage — y était rendue en dessinant la feuille entière.
+> Pas d'erreur, une image plausible, un verdict faux. C'est le défaut que le projet se répète
+> depuis des zips, cette fois dans l'outil censé nous en protéger.
+>
+> Enfin, `CLAUDE.md` **rétrécit pour la première fois** (507 → 490 lignes) : Valley Town, le
+> tribunal et leurs habitants ont leur propre fichier, `components/ferme/README.md`, à côté du
+> code qu'ils décrivent.
+>
+> **Décidé, pas construit** : le marché du champ de foire, les commissions du tableau des
+> nouvelles, les rendez-vous datés. Le socle sur lequel ils reposeront est en place et mesuré.
+
 > **ZIP 427 — VALLEY TOWN SE MET À VIVRE.**
 >
 > **Vingt résidents au lieu de dix, et zéro message réseau de plus.** La seule question

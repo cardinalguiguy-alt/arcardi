@@ -1583,6 +1583,14 @@ export const FERME_STR = {
       board: ["Tiens donc.", "Encore une réunion...", "Ah, ça, c'est nouveau."],
       statue: ["Il avait plus de cheveux que ça.", "On ne sait même plus qui c'était."],
       pray: ["Un peu de calme.", "Merci pour la récolte."],
+      // Zip 428 : les six quartiers rendus vivants (voir E.townSpots).
+      shore: ["L'autre rive a l'air plus verte.", "Il y a des jours où je resterais là.", "Ça sent la vase et c'est très bien."],
+      pond: ["Les canards ont doublé cette année.", "L'eau est basse.", "Il paraît qu'il y a des carpes."],
+      orchard: ["Elles seront mûres dans dix jours.", "Personne ne taille jamais celui-ci.", "Une par personne, c'est la règle."],
+      craft: ["Ça tape fort, là-dedans.", "Il travaille bien, ce garçon.", "J'aurais dû apprendre un métier comme ça."],
+      fair: ["C'est plus grand que dans mon souvenir.", "On monte les tréteaux jeudi.", "Il faudra revenir un jour de foire."],
+      flowers: ["Qui s'en occupe, au fait ?", "Elles tiennent bien, cette année.", "Ça sent bon jusqu'ici."],
+      stroll: ["Bon.", "Par où, déjà ?", "Il fait bon.", "Encore trois rues."],
       talk: [],
     },
     /* Les rencontres. Trois tons, et c'est TOUTE l'architecture sociale : on
@@ -1702,6 +1710,10 @@ export const FERME_STR = {
     ],
     benchToast: "🪑 Vous vous asseyez. Le monde continue sans vous, un moment.",
     townSitHint: "E : s'asseoir",
+    // Zip 428 : le banc s'utilise vraiment. Le message DIT comment se relever —
+    // une action dont on ne connaît pas la sortie est une action qu'on n'ose pas.
+    benchSitToast: "🪑 Vous vous asseyez. Une touche de direction pour repartir.",
+    promptTownStand: "↑ ↓ ← → : se lever",
   },
   en: {
     // --- 2026-07 station update (sea creatures, ducks, station, visitors, seasons) ---
@@ -2969,6 +2981,14 @@ export const FERME_STR = {
       board: ["Well now.", "Another meeting...", "Ah, that one's new."],
       statue: ["He had more hair than that.", "Nobody even remembers who it was."],
       pray: ["A bit of quiet.", "Thank you for the harvest."],
+      // Zip 428 : les six quartiers rendus vivants (voir E.townSpots).
+      shore: ["The far bank always looks greener.", "Some days I'd just stay here.", "Smells of silt, and that's fine by me."],
+      pond: ["Twice as many ducks this year.", "The water's low.", "They say there are carp in there."],
+      orchard: ["Ripe in ten days or so.", "Nobody ever prunes this one.", "One each, that's the rule."],
+      craft: ["They're hammering away in there.", "That lad does good work.", "I should have learned a trade like that."],
+      fair: ["Bigger than I remembered.", "Trestles go up on Thursday.", "We'll have to come back on a fair day."],
+      flowers: ["Who looks after these, anyway?", "They're holding up well this year.", "You can smell them from here."],
+      stroll: ["Right then.", "Which way was it again?", "Nice out.", "Three more streets."],
       talk: [],
     },
     townMeetAlly: [
@@ -3077,6 +3097,8 @@ export const FERME_STR = {
     ],
     benchToast: "🪑 You sit down. The world carries on without you for a moment.",
     townSitHint: "E: sit down",
+    benchSitToast: "🪑 You sit down. Any direction key to get going again.",
+    promptTownStand: "↑ ↓ ← → : stand up",
   },
 };
 

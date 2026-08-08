@@ -4,18 +4,21 @@
 Il remplace l'exploration du dépôt pour tout ce qui est global. Le README est un journal
 chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
-État à jour du **zip 427**. Chantier actif : **Valley Town habitée** (§6) — 20 résidents,
-séjours en ville, vie sociale, familles, la Maison Garfield et le salon de coiffure, la gare.
-**`candyluge` et `crystal` sont EN PAUSE.**
+État à jour du **zip 428**. Chantier actif : **Valley Town jouable** — la ville a été auditée
+en la MESURANT, et le socle refait : navigation des résidents, endroits de vie, pose assise,
+dézoom des monuments. Tout ce qui la concerne est dans **`components/ferme/README.md`**, qui
+fait autorité. **`candyluge` et `crystal` sont EN PAUSE.**
 
-⚠️⚠️ **LE FICHIER EST TOUJOURS TROP LONG, ET IL FAUT LE DIRE : 457 → 507 lignes** pour un
-plafond de 200. L'élagage du 427 a bien eu lieu, et il a été profond : la dette de `candyluge`
-est partie dans `public/candyluge/README.md` (§7 fait quatre lignes), §9 ne garde que ses cinq
-pièges, §4 a perdu tout ce qu'un banc de `tools/` attrape désormais, et §6 a perdu l'histoire
-du 425/426. Mais le chapitre « ville habitée » est un gros morceau de plus, et il annule le
-gain. **Ce qui doit partir au prochain zip est écrit en §14.2, et ce n'est plus optionnel :
-§6 doit se scinder** — la ville a maintenant assez de contenu pour mériter son propre fichier
-à côté du code (`components/ferme/README.md`), sur le modèle exact de `candyluge`.
+⚠️ **507 → 490 lignes** pour un plafond de 200. La scission ordonnée par le §14.2 a bien eu
+lieu : §6 est parti dans `components/ferme/README.md`, à côté du code, sur le modèle de
+`candyluge`. **C'est le premier zip depuis longtemps où ce fichier RÉTRÉCIT.** Il reste très
+au-dessus du plafond, et §14.2 dit ce qui part ensuite.
+
+⚠️⚠️ **CE ZIP A INVERSÉ UNE DÉCISION ÉCRITE ICI**, et c'est la chose la plus importante à en
+retenir : le 427 interdisait explicitement le pathfinding aux PNJ de la ville. La mesure a
+montré que **quatre trajets sur cinq n'aboutissaient pas**. Une doctrine ne survit pas à un
+chiffre — mais il fallait le chiffre, et personne ne l'avait pris pendant deux zips. **Avant
+de défendre une règle de ce fichier, mesurer.**
 
 ---
 
@@ -154,10 +157,21 @@ protection, alors que c'est le banc.
   RÉGULIÈRE.** 426 : les lampadaires « tous les 8 pas » sont tombés pile sur la nouvelle
   artère x = 196 et l'ont coupée. **On teste le sol (qui sait déjà tout), ou on laisse le
   générateur décider.**
-- ⚠️⚠️ **UN PNJ EN LIGNE DROITE NE TROUVERA JAMAIS UN ESCALIER** (427). Sa rôdaille glisse le
-  long des obstacles ; face à une falaise, elle se colle au pied et abandonne. Aucune erreur,
-  et le symptôme est « personne ne monte jamais en Haute-Ville », qui a tout l'air d'un choix.
-  La parade n'est pas un A\* mais un ITINÉRAIRE dérivé de `TOWN_STAIRS`.
+- ⚠️⚠️ **UN PNJ QUI ABANDONNE SON TRAJET N'A PAS L'AIR BLOQUÉ, IL A L'AIR D'AVOIR CHOISI**
+  (427, mesuré et corrigé au 428). La rôdaille en ligne droite du 252 échouait sur **79 % des
+  trajets de Valley Town** ; à l'abandon, le résident jouait quand même son activité SUR
+  PLACE, sept à vingt-six secondes. Personne n'a rien vu pendant deux zips, parce que le
+  symptôme ressemblait à de la contemplation. **Un repli plausible est plus dangereux qu'un
+  plantage** (§10, le stub menteur), et ça vaut pour le COMPORTEMENT, pas seulement pour le
+  code. La parade est un vrai chemin (`components/ferme/README.md` §2) — et surtout **une
+  mesure agrégée**, parce qu'aucune ligne de code n'était fausse.
+- ⚠️⚠️ **UN DÉFAUT DE LA SOMME NE SE VOIT DANS AUCUNE LIGNE DE CODE** (428). Deux exemples du
+  même zip : 33 des 48 blocs de la ville n'avaient AUCUN endroit de vie, et 16 des 61 endroits
+  étaient des tombes — donc un quart de la vie sociale se passait au cimetière, sans que ce
+  soit l'intention de personne (le cimetière est simplement le seul décor posé en seize
+  exemplaires). Relire le générateur ne l'aurait jamais montré. **Ce genre de défaut se
+  contrôle en comptant, et le contrôle doit exister AVANT l'ajout** — sinon on remplace un
+  déséquilibre par un autre (premier jet du 428 : 39 % des endroits sur le trottoir).
 - ⚠️⚠️ **UNE RÈGLE SOCIALE SANS DÉLAI DE GRÂCE S'ÉTRANGLE AU POINT D'ARRIVÉE** (427, trouvé
   en jeu). Cinq résidents descendent le même quai à la même seconde : tous à portée de
   conversation, donc tous appariés d'un coup, donc tous figés à se saluer en boucle. Personne
@@ -195,9 +209,10 @@ protection, alors que c'est le banc.
 | Fichier | Rôle |
 |---|---|
 | `components/ferme/FermeGame.js` | tout le jeu ferme + Valley Town + tribunal — **~20 500 l.** |
-| `components/ferme/fermeEngine.js` | règles pures · `generateTownWorld()` · `generateCourtWorld()` · **`townSpots()`** |
+| `components/ferme/fermeEngine.js` | règles pures · `generateTownWorld()` · `generateCourtWorld()` · `townSpots()` · **`townNav()` / `townFindPath()`** |
+| `components/ferme/README.md` | **Valley Town, le tribunal, les habitants — autorité (428)** |
 | `components/ferme/fermeConstants.js` | réglages · **tous les `TOWN_*`, `COURT_*`, `WARDROBE_*`** |
-| `components/ferme/fermeArt.js` | **tous** les sprites, en canevas procédural. Aucun PNG |
+| `components/ferme/fermeArt.js` | **tous** les sprites, en canevas procédural. Aucun PNG · **`drawSeated()`** |
 | `app/room/[code]/page.js` · `lib/gameSync.js` · `lib/realtimeQuota.js` | salon · synchro · quota |
 | `public/candyluge/README.md` | **la dette et les 18 règles de la luge — autorité (427)** |
 | `public/candyluge/js/` | `config.js` (tous les nombres) · `slope.js` (la piste) · `sled.js` · `world.js` |
@@ -209,98 +224,29 @@ autour, chercher les autres usages du symbole avant d'éditer.
 
 ---
 
-## 6. Valley Town — état au 427
+## 6. Valley Town, le tribunal, les habitants — **voir `components/ferme/README.md`**
 
-**Carte 224×168**, regénérée à graine fixe, **jamais persistée** — c'est ce qui autorise à
-tout refaire d'un bloc, sans migration.
+⚠️ **CE CHAPITRE A ÉTÉ SORTI D'ICI AU 428**, sur l'ordre laissé par le §14.2 du 427 et sur le
+modèle de `candyluge` : il fait autorité **à côté du code qu'il décrit**. Un chapitre qui
+grossit à chaque zip n'a rien à faire dans le fichier qu'on relit avant de travailler sur
+autre chose. On n'en garde ici que l'orientation ; les pièges qui valent pour TOUT le projet
+restent en §4, et rien n'est recopié aux deux endroits.
 
-**Ce qui existe.** Cinq avenues est-ouest (`TOWN_ST_ROWS`) et quatre nord-sud
-(`TOWN_ST_COLS`) · une place de 30×26 (fontaine, obélisque, parterres, **tableau des
-nouvelles**) · **27 parcelles** en jardin clos de haie · un parc avec étang et **kiosque à
-musique** · un verger · un **champ de foire** (10 étals, puits, caisses) · un **cimetière** ·
-un **lac au sud** avec promenade et ponton · le **quartier des artisans** à l'est · la
-**Haute-Ville** (terrasse à 1 unité) et son **belvédère** (2) · une **gare** (427).
-**Cinq bâtiments civiques ou commerciaux** en canevas procédural : `TOWN_CHURCH`,
-`TOWN_HALL`, `TOWN_COURT` (néoclassique, en Haute-Ville — il donne leur raison d'être aux
-escaliers), et depuis le 427 `TOWN_BOUTIQUE` + `TOWN_SALON`, en Haute-Ville eux aussi
-(« les hauteurs sont les belles adresses » — une boutique chic au ras de la rue n'est
-qu'une échoppe de plus ; un panneau au pied des marches l'annonce).
+**Ce qu'il faut savoir sans ouvrir le fichier :**
 
-**Le relief.** ⚠️ **L'ALTITUDE EST UNE PROPRIÉTÉ DE LA CASE, PAS DU PERSONNAGE** (tableau
-`elev`). Une seule règle — « pas plus de `TOWN_STEP_MAX` d'un pas » — fait tenir les falaises
-ET marcher les escaliers, sans aucun cas particulier. Le décalage à l'écran vaut
-`elev × TOWN_ELEV_PX`, donc collision et dessin ne peuvent pas diverger. **Espace saute d'un
-rebord**, jamais vers le haut. Rien de tout ça ne circule sur le réseau.
-
-### Le tribunal, dedans (426)
-
-**Trois niveaux, 17 pièces, une seule grille.** ⚠️⚠️ **LES ÉTAGES SONT EMPILÉS DANS LA MÊME
-CARTE et le niveau se DÉDUIT de `y`** (`E.courtFloorOf`) : aucun champ à diffuser, aucun état
-à réconcilier. Même raisonnement que l'altitude de la ville.
-RDC : hall, salle d'audience, témoins, greffe, vestiaire, accueil, panneau d'affichage ·
-Étage : juge, jury, bibliothèque, cadastre, permis, notaire, état civil · Sous-sol : archives,
-scellés, 3 cellules, objets trouvés, chaufferie.
-**Le plan est DÉDUIT DES USAGES à venir**, pas l'inverse. **Rien n'est opérationnel, et le jeu
-le DIT** (plaque par porte, « bientôt » sur E, panneau récapitulatif). Un bâtiment muet passe
-pour cassé.
-⚠️ **UNE CAGE D'ESCALIER EST UN LIEU, PAS UN TRAJET** : `COURT_STAIRWELLS` relie deux niveaux
-au même endroit, le sens se déduit des `alt`. Deux descriptions d'une même cage ne peuvent pas
-rester d'accord.
-
-### Couper du bois en ville (426)
-
-Coupe **partagée ET sauvegardée** (`shared.townChop` dans le JSON de `ferme_saves` — **aucune
-migration SQL**), **tous** les arbres coupables, **ça repousse**, seule la **hache** est
-réactivée. Une entrée vaut `{hp}` ou `{r}` : le dictionnaire ne garde que les EXCEPTIONS.
-
-### La ville habitée (427) — le chantier de ce zip
-
-**`MAX_RESIDENTS` passe de 10 à 20**, et la seule question qui comptait était « combien de
-`send()` en plus ? ». **Zéro** : tout ce qui bouge chez un résident passe par UN message
-groupé par image depuis le 364, et la taille n'est pas facturée (§3). Le vrai coût est du CPU
-chez l'hôte, et c'est le bon échange.
-
-⚠️⚠️ **UN RÉSIDENT A UNE ZONE, PAS DEUX POSITIONS.** `res.zone` vaut `"farm"` ou `"town"` et
-`res.x/res.y` sont ses coordonnées DANS CETTE ZONE. C'est la seule forme qui résiste au piège
-du §4 : avec deux couples de coordonnées, il existe forcément un chemin de code qui lit le
-mauvais. La zone voyage dans les messages qui partent déjà (`residentPaths`/`residentStops`
-gagnent `z`), l'activité aussi (`a` sur l'arrêt — un résident qui s'assoit s'arrête, par
-définition).
-
-**Ce que fait un résident en ville** : il descend du train (6 en même temps au plus, séjour de
-3 à 10 min, **il ne travaille pas pendant ce temps** — c'est le prix du voyage), il choisit un
-endroit, il y va, il y fait quelque chose, il en change. Les ENDROITS sont **dérivés de la
-carte** (`E.townSpots` lit `tw.props` et les constantes) : une table écrite à côté aurait tenu
-jusqu'au premier banc déplacé. Le goût vient du métier (`TOWN_SKILL_TASTE`), pas d'une ligne
-de code par personnage.
-
-**L'architecture sociale** tient en une phrase : deux résidents qui se croisent se parlent, et
-le TON vient de `RESIDENT_AFFINITIES` — la table qui existait depuis longtemps et que
-personne ne voyait jamais. Le **tableau des nouvelles** de la place la rend enfin lisible (qui
-est en ville, avec qui, qui ne se salue plus). ⚠️ L'hôte apparie, et lui seul.
-
-**La famille** (`RESIDENT_FAMILY`, nouveaux personnages) : un invité accompagne parfois un
-résident. ⚠️ **IL N'EST PAS UNE ENTITÉ** — sa position est DÉRIVÉE de celle du résident, comme
-Leo derrière Carla depuis le 376 (`trailFollow`, généralisé au 427). Zéro message, aucune
-collision propre, impossible de traverser un mur. Vingt résidents peuvent sortir accompagnés
-sans coûter un octet.
-
-**La Maison Garfield** (demande explicite) : Carla devient **recrutable** (`noStay` et
-`chatOnly` sautent, `skill: "stylist"` avec `SKILL_BUILDING` à `null` — son lieu de travail
-est en ville, pas un atelier de ferme), et sa boutique n'ouvre que si elle habite la vallée
-— sinon la porte le DIT. On y achète chapeaux, écharpes, tenues et couleurs, très cher, et
-Leo tient la caisse en approuvant tout. ⚠️ **TOUTE LA TENUE TIENT DANS UNE CHAÎNE** de cinq
-caractères (`wardrobeLook`), qui sert à la fois de champ dans le paquet de position déjà
-émis et de clé de cache de feuille de sprite. **Salon de coiffure** juste à côté, volontairement
-inachevé et qui l'annonce (banderole, vitrines blanchies, échafaudage).
-
-**La gare** : la ville réutilise `railL`/`railR`/`platform`/`station` **de la ferme, tels
-quels**. Elle peignait ses rails à la main depuis le 234 — deux dessins de la même voie
-ferrée, c'est-à-dire le doublon du §8.
-
-**Ce qui reste à faire, et c'est assumé** : aucun service du tribunal ne fonctionne · le salon
-n'a ni coiffeur ni mécanique · aucun PNJ n'habite la ville à demeure (les résidents la
-VISITENT) · pas d'intérieur de maison · le sud-est reste en pelouse.
+- **Carte 224×168**, graine fixe, **jamais persistée** — donc on peut tout refaire d'un bloc,
+  sans migration.
+- ⚠️ **L'ALTITUDE EST UNE PROPRIÉTÉ DE LA CASE** (`elev`), et **l'étage du tribunal se DÉDUIT
+  de `y`**. Deux applications de la même idée : rien ne circule sur le réseau, rien à
+  réconcilier.
+- ⚠️ **UN RÉSIDENT A UNE ZONE, PAS DEUX POSITIONS** (`res.zone` + `res.x/y`). C'est la seule
+  forme qui résiste au piège des deux cartes (§4).
+- ⚠️⚠️ **LE 428 A INVERSÉ UNE DÉCISION DU 427** : les résidents ont un **vrai chemin**
+  (`E.townFindPath`), pas un itinéraire d'escalier. Mesuré : **24 % → 100 %** d'arrivées, à
+  coût réseau **strictement identique**. `townStairRoute` a été supprimée.
+- **Ce qui n'est pas fait** : aucun service du tribunal, pas de coiffeur au salon, aucun PNJ
+  n'habite la ville à demeure, pas d'intérieur de maison, vingt blocs de prairie nue, et le
+  **marché / les commissions / les rendez-vous datés sont décidés mais pas construits**.
 
 ---
 
@@ -380,16 +326,23 @@ BUILD S'ARRÊTE APRÈS LA COMPILATION** sur `Error: supabaseUrl is required` (pr
 `✓ Compiled successfully` juste avant.**
 
 **Bancs `.mjs` — ce qui existe VRAIMENT** (§14.6) :
-- **`tools/verify-vallee.mjs` — 113 contrôles, 113/113 (427 ; 88 au 426).** Il importe le VRAI
-  moteur et parcourt la ville depuis la descente du train avec la règle de dénivelé du jeu :
-  rues, portes, repères, **murs invisibles ET décors traversables**, géométrie des bâtiments,
-  rebords sautables ; le tribunal pièce par pièce ; la coupe de bois (dont le contrôle qui
-  compte est « ça ne mute pas la carte en cache ») ; et depuis le 427 **les endroits où l'on
-  vit** (tous atteignables, chaque assise adossée à un vrai banc, aucun meuble devant une
-  entrée), **les itinéraires d'escalier** (sans eux, « personne ne monte jamais » est
-  silencieux), les familles et l'encodage de la garde-robe.
-  **Il a trouvé six défauts au 426 et les 80 murs invisibles des trois bâtiments du 427**,
-  avant qu'aucun ne parte en jeu.
+- **`tools/verify-vallee.mjs` — 122 contrôles, 122/122 (428 ; 113 au 427, 88 au 426).** Il
+  importe le VRAI moteur : circulation, murs invisibles ET décors traversables, géométrie des
+  bâtiments, rebords sautables, le tribunal pièce par pièce, la coupe de bois, les familles,
+  la garde-robe.
+  ⚠️⚠️ **DEPUIS LE 428 IL NE VÉRIFIE PLUS DES TABLES, IL REJOUE LE DÉPLACEMENT** — vrai
+  suiveur, vraie boîte de collision, vraie règle de dénivelé, 60 images par seconde, sur
+  **chaque endroit vers chaque autre** (~16 000 trajets). Le 427 contrôlait ici les
+  « itinéraires d'escalier », qui étaient justes : il validait la seule chose qui marchait
+  déjà, pendant que 79 % des trajets échouaient. **Aucune assertion sur une structure de
+  données ne pouvait voir ça.** Il contrôle aussi la couverture des quartiers BÂTIS (la
+  prairie non aménagée est comptée à part, pas ignorée) et la répartition des activités.
+  ⚠️ Son seuil d'arrivées est à **100 %, délibérément** : à 24 % comme à 99 %, un seuil plus
+  bas dirait OK. **Il a trouvé cinq défauts de navigation au 428**, dont deux — heuristique
+  inconsistante, tas qui déborde — étaient parfaitement muets.
+- **`tools/render-assise.mjs`** (428) — la pose assise **sur son banc**, debout/assis côte à
+  côte, sur les huit tenues. Elle vivait dans la closure du rendu, donc personne ne l'avait
+  jamais regardée : on a gardé trois zips un buste tronqué en croyant avoir une pose.
 - **`tools/render-tribunal.mjs`** — le mobilier, les décors de rue, les **bâtiments de la
   Haute-Ville** (sur du dallage, à côté de la gare : une cohérence se juge côte à côte) et **la
   garde-robe PORTÉE**. Il a montré la rangée d'étals monochrome (426), le haut-de-forme
@@ -402,6 +355,11 @@ BUILD S'ARRÊTE APRÈS LA COMPILATION** sur `Error: supabaseUrl is required` (pr
   `fillText`** : les trois poses d'une feuille de personnage s'y superposent, et un sprite qui
   dépend d'une transformation s'y juge faux. Ce n'est pas un bogue du jeu — mais il faut le
   savoir avant d'aller corriger un dessin qui n'a rien.
+  ⚠️⚠️ **ET IL N'IMPLÉMENTAIT `drawImage` QU'À TROIS ARGUMENTS jusqu'au 428**, en ignorant
+  silencieusement le reste : toute découpe dans une feuille de sprite y dessinait la feuille
+  ENTIÈRE. Pas d'erreur, une image plausible, un verdict faux — le stub menteur, **dans l'outil
+  censé nous en protéger**. Corrigé (3, 5 et 9 arguments, plus proche voisin). **Un banc de
+  rendu se vérifie aussi.**
 
 **Jouer en local** — deux échafaudages TEMPORAIRES, **à supprimer après** :
 1. un `.env.local` pointant sur un **faux Supabase** (un serveur HTTP qui répond `[]` sur
@@ -467,15 +425,35 @@ erreur** en choisissant mal.
   panneaux « à vendre » existent depuis le 234) ; le notaire est le plus utile à deux joueurs.
 - **Le salon de coiffure** (427) : **qui coiffe, et comment ça marche ?** Le bâtiment,
   l'enseigne et la banderole « ouverture prochaine » sont posés ; il manque la décision.
-- **Valley Town** (§6) : quels PNJ HABITENT la ville à demeure (les résidents ne font qu'y
-  passer) ? que met-on dans le sud-est ? achète-t-on une parcelle, et à quel guichet ?
+- **Valley Town** : quels PNJ HABITENT la ville à demeure (les résidents ne font qu'y passer) ?
+  achète-t-on une parcelle, et à quel guichet ?
+  ⚠️ **Et la prairie : VINGT blocs de 28×28 de la carte sont de l'herbe nue** (mesuré au 428).
+  Ce n'est plus une impression, c'est un chiffre. On n'y a délibérément posé AUCUN endroit de
+  vie : des résidents qui vont contempler un champ vide, c'est du remplissage. La question
+  n'est donc pas « comment les meubler » mais **« qu'est-ce qu'on construit là »**.
+- ⚠️ **LES TROIS CHANTIERS DE JOUABILITÉ DÉCIDÉS AU 428 ET NON CONSTRUITS.** Guillaume les a
+  choisis, le socle est posé et mesuré, il ne manque que le travail :
+  **1. le marché** — le champ de foire et ses dix étals deviennent l'endroit où l'on VEND sa
+  production de la ferme, à prix variables. C'est ce qui donnerait une raison économique de
+  prendre le train, donc ce qui relierait les deux cartes au lieu de les juxtaposer ;
+  **2. les commissions** — le tableau des nouvelles distribue des demandes de la ville, qu'on
+  remplit depuis la ferme, à deux, contre paiement ;
+  **3. les rendez-vous datés** — concert au kiosque, jour de marché, foire : des événements au
+  calendrier partagé qui rassemblent résidents ET joueurs au même endroit à la même heure.
+  ⚠️ **L'ordre compte** : le marché fait exister l'économie, les commissions s'appuient dessus,
+  les rendez-vous donnent une raison d'y être ENSEMBLE. Pris dans le désordre, chacun est un
+  menu de plus.
 - **La garde-robe** (427) : les prix sont volontairement très hauts. À jouer pour savoir si
   « très cher » veut dire « on économise pour » ou « on n'y va jamais ».
 - **`candyluge`** : voir `public/candyluge/README.md`, qui fait autorité. La décision qui
   manque est de CONCEPTION (le bonbon empoisonné), pas de technique.
 - **Gels de PNJ chez l'invité** (359-365) : encore observés ? Vérification demandée depuis le
-  419 — session réelle à 2, ferme peuplée, console de l'hôte ouverte. ⚠️ **Le 427 double la
-  population et ajoute une seconde carte peuplée : c'est le moment de refaire cette passe.**
+  419 — session réelle à 2, ferme peuplée, console de l'hôte ouverte. ⚠️⚠️ **C'EST LA PASSE LA
+  PLUS URGENTE DE CE FICHIER.** Le 427 a doublé la population et ajouté une seconde carte
+  peuplée ; le 428 fait circuler ces vingt résidents pour de bon (79 % de leurs trajets
+  n'aboutissaient pas) et fait diffuser un champ de plus dans le paquet de position (l'assise).
+  **Rien de tout ça n'a été vu à deux joueurs** — les bancs mesurent la simulation de l'hôte,
+  pas ce que voit l'invité.
 - **`crystal`** : le chapitre a **deux** segments jouables (`play run` et `play walk`).
   Retirer le second retire le seul endroit où l'on ramasse des éclats.
 - ⚠️ **VERCEL NE DÉPLOIE PLUS AUTOMATIQUEMENT depuis le 425**, et **ce n'est pas le dépôt** :
@@ -490,12 +468,17 @@ erreur** en choisissant mal.
 1. **Remplacer, ne jamais empiler.** Ce fichier décrit le **présent**. Une information périmée
    se supprime, elle ne se date pas.
 2. **200 lignes = passe d'élagage obligatoire. Ne pas relever le seuil.** L'élagage se fait
-   AVANT d'ajouter. Fait au 426 (insuffisant) et au 427 (profond : §7 est parti dans
+   AVANT d'ajouter. **Le 428 a exécuté l'ordre du 427 : §6 est parti dans
+   `components/ferme/README.md`, et le fichier RÉTRÉCIT pour la première fois (507 → 490).**
+   ⚠️ **L'ORDRE DU PROCHAIN ZIP : §4 SE SCINDE À SON TOUR.** C'est devenu le plus gros chapitre
+   (près de cent lignes), et il mélange deux choses qui n'ont rien à voir : les pièges de la
+   FERME/VILLE, qui appartiennent à `components/ferme/README.md` comme le reste, et les pièges
+   de JavaScript / three.js / canevas, qui sont les seuls réellement globaux. Ne garder ici que
+   les seconds. **Ne PAS y toucher avant d'avoir vérifié que chaque piège déplacé est toujours
+   vrai** — un piège périmé recopié ailleurs est pire qu'un piège supprimé.
+   Historique : fait au 426 (insuffisant) et au 427 (profond : §7 est parti dans
    `public/candyluge/README.md`, §9 réduit à ses cinq pièges, §4 débarrassé de tout ce qu'un
-   banc attrape). Ça n'a toujours pas suffi. **L'ordre du prochain zip est décidé : §6 SE
-   SCINDE** — Valley Town, le tribunal et la vie sociale partent dans
-   `components/ferme/README.md`, à côté du code qu'ils décrivent, sur le modèle exact de
-   `candyluge` ; il ne reste ici qu'un paragraphe d'orientation et les pièges de §4.
+   banc attrape).
 3. **Critère d'inclusion** : « est-ce vrai à l'échelle du projet, et invérifiable en ouvrant
    un seul fichier ? » Sinon, ça va dans un commentaire de code. **L'histoire d'un défaut
    corrigé n'y a pas sa place — seule sa LEÇON, en §4.**

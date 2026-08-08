@@ -209,14 +209,40 @@ export function makeCanvas(W, H) {
     restore() { const t = state.stack.pop(); if (t) state.tr = t; },
     translate() {}, scale() {}, rotate() {}, setTransform() {},
 
-    drawImage(src, dx = 0, dy = 0) {
-      const s = src && src.__px ? src : null;
-      if (!s) throw new Error("drawImage : source non reconnue");
-      for (let yy = 0; yy < s.height; yy++) for (let xx = 0; xx < s.width; xx++) {
-        const si = (yy * s.width + xx) * 4;
+    /* ⚠️⚠️ ZIP 428 — LES TROIS FORMES DE `drawImage` SONT IMPLÉMENTÉES, ET
+       L'ABSENCE DES DEUX AUTRES ÉTAIT UN STUB MENTEUR. Cette fonction
+       n'acceptait que `drawImage(src, dx, dy)` et IGNORAIT purement et
+       simplement les arguments suivants. Conséquence : tout dessin qui découpe
+       une tranche dans une feuille de sprite — c'est-à-dire toute pose de
+       personnage, puisqu'une feuille contient trois orientations et quatre
+       images de marche — était rendu ici en dessinant LA FEUILLE ENTIÈRE. Pas
+       d'erreur, une image plausible, et un verdict faux : très exactement ce
+       que CLAUDE.md §10 décrit (« un stub qui retombe sur une valeur
+       raisonnable ment mieux qu'un stub qui plante »), sauf qu'il était dans
+       l'outil censé nous protéger.
+       L'échantillonnage de l'agrandissement est au PLUS PROCHE VOISIN, et c'est
+       la seule interpolation admissible : le jeu tourne avec
+       `imageSmoothingEnabled = false`, un banc qui lisserait montrerait des
+       bords que le joueur ne verra jamais. */
+    drawImage(src, a1 = 0, a2 = 0, a3, a4, a5, a6, a7, a8) {
+      /* Deux formes de source cohabitent : les SPRITES (éléments <canvas> du
+         faux DOM, qui portent `__px`) et les SURFACES rendues par makeCanvas
+         (qui portent `px`). Un banc qui compose des vignettes se sert des deux ;
+         n'en accepter qu'une obligeait à recopier les pixels à la main. */
+      const raw = src && (src.__px || src.px) ? src : null;
+      if (!raw) throw new Error("drawImage : source non reconnue");
+      const s = { width: raw.width, height: raw.height, __px: raw.__px || raw.px };
+      let sx = 0, sy = 0, sw = s.width, sh = s.height, dx = a1, dy = a2, dw = s.width, dh = s.height;
+      if (a5 !== undefined) { sx = a1; sy = a2; sw = a3; sh = a4; dx = a5; dy = a6; dw = a7; dh = a8; }
+      else if (a3 !== undefined) { dw = a3; dh = a4; }
+      if (!(dw > 0) || !(dh > 0)) return;
+      for (let yy = 0; yy < dh; yy++) for (let xx = 0; xx < dw; xx++) {
+        const ux = sx + Math.floor(xx * sw / dw), uy = sy + Math.floor(yy * sh / dh);
+        if (ux < 0 || uy < 0 || ux >= s.width || uy >= s.height) continue;
+        const si = (uy * s.width + ux) * 4;
         const a = s.__px[si + 3] / 255;
         if (a <= 0) continue;
-        const X = dx + xx, Y = dy + yy;
+        const X = Math.round(dx) + xx, Y = Math.round(dy) + yy;
         if (X < 0 || Y < 0 || X >= W || Y >= H) continue;
         const di = (Y * W + X) * 4, ia = 1 - a;
         px[di] = s.__px[si] * a + px[di] * ia;
