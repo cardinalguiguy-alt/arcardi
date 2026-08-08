@@ -1594,6 +1594,13 @@ export function decorSprite(id) {
    L'assis, lui, est ancré à (by + 0,45), donc py = by×16 + 7. Il faut que ses
    HANCHES tombent sur l'assise (by×16 + 7 ≈ py) et que ses PIEDS touchent le
    sol juste devant le banc (by×16 + 18 ≈ py + 11). Tout le reste en découle.
+   ⚠️ ZIP 429 — LE BANC A RÉTRÉCI (22 → 18 px de haut, dossier ramené à hauteur
+   de hanche) et l'assise a suivi : sprite bord bas sur (by+1)×16, donc
+       dossier   by×16 + 2 … by×16 + 6
+       ASSISE    by×16 + 7 … by×16 + 11
+       sol       by×16 + 14
+   Les hanches tombent toujours sur l'assise sans qu'on ait touché à `topY` —
+   c'est le signe que le décalage était bien dérivé et non réglé à l'œil.
    ⚠️ Le premier jet posait le haut du crâne à py − 4 : la tête arrivait alors
    AU NIVEAU DE L'ASSISE et les pieds dix pixels sous le banc — le personnage
    n'était pas assis dessus, il était assis PAR TERRE DEVANT. Vu au banc de
@@ -1929,46 +1936,166 @@ export function buildSprites() {
   // dédié : bâtisse imposante à colonnades avec fronton, drapeau, horloge,
   // large volée de marches. Canevas 128x128 (2x une maison), ancré comme les
   // maisons par son bord bas.
+  /* ══════════════════════════════════════════════════════════════════════════
+     ZIP 429 — L'ÉGLISE, ENFIN DESSINÉE COMME UNE ÉGLISE.
+     ──────────────────────────────────────────────────────────────────────────
+     ⚠️⚠️ CE BÂTIMENT ÉTAIT UNE MAIRIE. Littéralement : le zip 235 avait dessiné
+     `townhallSprite` — fronton à colonnes, HORLOGE au centre, DRAPEAU sur le
+     toit — et le 425 l'a renommé « église » sans toucher un pixel, parce qu'il
+     venait d'en dessiner une vraie (`townHall2`) et qu'il fallait bien recaser
+     l'ancienne. La note de l'époque le dit noir sur blanc : « le dessin n'a pas
+     bougé d'un pixel ». Le résultat tenait quatre zips : Valley Town avait deux
+     mairies, dont l'une s'appelait église, et la seule chose qui en faisait un
+     lieu de culte était une chaîne de caractères.
+     C'est une variante du « bâtiment muet » du 426 (une porte qui ne dit rien
+     passe pour cassée), en plus sournoise : ici le bâtiment PARLE, et il ment.
+
+     ⚠️ CE QUI FAIT « ÉGLISE » — et aucun de ces quatre points n'était présent :
+       1. UN CLOCHER, c'est-à-dire une masse VERTICALE décalée sur le côté. Une
+          façade symétrique à fronton, c'est un temple civique ; une silhouette
+          asymétrique dominée par une tour, c'est une église. C'est la
+          silhouette qui identifie, pas le détail ;
+       2. UNE FLÈCHE ET UNE CROIX au sommet. C'est le seul élément littéral, et
+          il est indispensable : à cette taille, c'est lui qu'on lit de loin ;
+       3. UNE ROSACE en façade, ronde, à meneaux rayonnants. Une fenêtre ronde
+          ne se trouve nulle part ailleurs dans cette ville ;
+       4. DES OUVERTURES EN ARC BRISÉ, pas cintrées. L'arc plein cintre est
+          l'arc de la mairie et de la gare ; l'ogive n'appartient qu'ici.
+     ⚠️ Et le fronton, l'horloge et le drapeau ont été SUPPRIMÉS, pas déplacés :
+     ce sont exactement les trois signes qui disaient « mairie ».
+
+     ⚠️ AUCUN `translate` NI `rotate`, aucun `fillText` (§10) : le banc de rendu
+     doit pouvoir dessiner ce bâtiment, sinon on ne peut plus le regarder. La
+     flèche et les ogives sont donc des chemins en coordonnées absolues. */
   function townhallSprite() {
-    const W = 128, H = 128;
+    const W = 128, H = 152;
     const [c, g] = cv(W, H);
-    // Marches (soubassement large).
-    P(g, 6, 118, W - 12, 6, "#b0b0b8"); P(g, 6, 118, W - 12, 1, "#c8c8d0");
-    P(g, 10, 112, W - 20, 6, "#a4a4ac"); P(g, 10, 112, W - 20, 1, "#c0c0c8");
-    // Corps principal (murs crème clairs).
-    P(g, 18, 52, W - 36, 62, "#efe6cc"); P(g, 18, 52, W - 36, 2, "#f7efd8");
-    // Colonnes doriques (5, réparties devant la façade).
-    for (let i = 0; i < 5; i++) {
-      const cx = 24 + i * 18;
-      P(g, cx, 60, 6, 52, "#f4ecd4"); P(g, cx, 60, 1, 52, "#fff8e2"); P(g, cx + 5, 60, 1, 52, "#d4c69a");
-      P(g, cx - 1, 58, 8, 3, "#e6d8b0"); P(g, cx - 1, 110, 8, 3, "#c8b98a");
+    const ST = "#d6d0c0", ST_L = "#efe9d8", ST_D = "#b0aa9a", ST_XD = "#8d887a";
+    const ROOF = "#5c6b7e", ROOF_L = "#7a8a9e", ROOF_D = "#3f4c5c";
+    const WOOD = "#5a4028", WOOD_L = "#7d5c3c";
+    const GLASS = "#8fc7ec", GLASS_D = "#5f9ec6";
+    const GOLD = "#e0c060";
+    /* Les vitraux : trois couleurs seulement. ⚠️ Un vitrail « réaliste » à cette
+       échelle donne du bruit multicolore ; trois teintes saturées sur du plomb
+       sombre lisent « vitrail » à quinze pixels de large. */
+    const V1 = "#c8503c", V2 = "#3c76c8", V3 = "#e0b03c";
+
+    const BASE = H - 4;                 // le sol, 4 px de marge comme les autres monuments
+    const TOWER_X = 8, TOWER_W = 34;    // le clocher, à GAUCHE — l'asymétrie fait l'église
+    const NAVE_X = TOWER_X + TOWER_W, NAVE_W = W - NAVE_X - 8;
+
+    // ---- 1. LA NEF. Corps de pierre, plus bas que la tour.
+    const NAVE_TOP = BASE - 74;
+    P(g, NAVE_X, NAVE_TOP, NAVE_W, BASE - NAVE_TOP, ST);
+    P(g, NAVE_X, NAVE_TOP, NAVE_W, 2, ST_L);
+    P(g, W - 10, NAVE_TOP, 2, BASE - NAVE_TOP, ST_D);         // ombre du bord droit
+    // Contreforts : deux pilastres qui montent du sol au toit. Ce sont eux qui
+    // donnent l'épaisseur du mur, donc le poids.
+    for (const bx of [NAVE_X + 4, NAVE_X + NAVE_W - 10]) {
+      P(g, bx, NAVE_TOP + 6, 6, BASE - NAVE_TOP - 6, ST_D);
+      P(g, bx, NAVE_TOP + 6, 2, BASE - NAVE_TOP - 6, ST);
+      P(g, bx - 1, NAVE_TOP + 4, 8, 3, ST_L);                 // chapiteau
     }
-    // Fronton triangulaire (à colonnes).
-    g.fillStyle = "#c8b070";
-    g.beginPath(); g.moveTo(12, 55); g.lineTo(W / 2, 22); g.lineTo(W - 12, 55); g.fill();
-    g.fillStyle = "#e0c88c";
-    g.beginPath(); g.moveTo(16, 55); g.lineTo(W / 2, 27); g.lineTo(W - 16, 55); g.lineTo(W - 20, 55); g.lineTo(W / 2, 33); g.lineTo(20, 55); g.fill();
-    // Horloge ronde au centre du fronton.
-    g.fillStyle = "#2a2620"; g.beginPath(); g.arc(W / 2, 45, 8, 0, 7); g.fill();
-    g.fillStyle = "#f6f0e0"; g.beginPath(); g.arc(W / 2, 45, 6, 0, 7); g.fill();
-    P(g, (W / 2) | 0, 41, 1, 4, "#2a2620"); P(g, (W / 2) | 0, 45, 4, 1, "#2a2620");
-    // Toit plat au-dessus du fronton + drapeau.
-    P(g, 30, 20, 4, 8, "#7a5330"); // mât
-    P(g, 34, 20, 12, 6, "#3a6ec8"); P(g, 34, 22, 12, 2, "#e05050");
-    // Grande porte à double battant + fronton d'entrée.
-    const dw = 18, dx = (W - dw) / 2, dy = 82;
-    P(g, dx - 3, dy - 4, dw + 6, 4, "#8a6340"); P(g, dx - 3, dy - 5, dw + 6, 1, "#a68258");
-    P(g, dx, dy, dw, 30, "#4a3520"); P(g, dx + dw / 2, dy, 1, 30, "#2a1e12");
-    P(g, dx + 3, dy + 4, 5, 8, "#8fc7ec"); P(g, dx + dw - 8, dy + 4, 5, 8, "#8fc7ec"); // hublots
-    P(g, dx + 2, dy + 20, 2, 2, "#e8c860"); P(g, dx + dw - 4, dy + 20, 2, 2, "#e8c860");
-    // Fenêtres cintrées de chaque côté.
-    for (const wx of [24, W - 34]) {
-      P(g, wx, 66, 10, 20, "#5a4028");
-      P(g, wx + 1, 67, 8, 18, "#8fc7ec"); P(g, wx + 1, 67, 8, 2, "#a8d4f0");
-      P(g, wx + 4, 67, 1, 18, "#5a4028"); P(g, wx + 1, 76, 8, 1, "#5a4028");
-      g.fillStyle = "#5a4028"; g.beginPath(); g.arc(wx + 5, 67, 5, Math.PI, 2 * Math.PI); g.fill();
-      g.fillStyle = "#a8d4f0"; g.beginPath(); g.arc(wx + 5, 67, 4, Math.PI, 2 * Math.PI); g.fill();
+    // Soubassement mouluré, sur toute la largeur du bâtiment.
+    P(g, TOWER_X - 2, BASE - 8, W - TOWER_X - 4, 8, ST_D);
+    P(g, TOWER_X - 2, BASE - 8, W - TOWER_X - 4, 2, ST);
+
+    // ---- 2. LE TOIT À DEUX PENTES de la nef. Il DÉPASSE du mur : c'est
+    // l'avancée du toit qui fait l'ombre portée, donc le relief.
+    g.fillStyle = ROOF;
+    g.beginPath();
+    g.moveTo(NAVE_X - 4, NAVE_TOP + 2);
+    g.lineTo(NAVE_X + NAVE_W / 2, NAVE_TOP - 26);
+    g.lineTo(W - 4, NAVE_TOP + 2);
+    g.closePath(); g.fill();
+    g.fillStyle = ROOF_L;                                     // versant éclairé (gauche)
+    g.beginPath();
+    g.moveTo(NAVE_X - 4, NAVE_TOP + 2);
+    g.lineTo(NAVE_X + NAVE_W / 2, NAVE_TOP - 26);
+    g.lineTo(NAVE_X + NAVE_W / 2, NAVE_TOP - 20);
+    g.lineTo(NAVE_X + 4, NAVE_TOP + 2);
+    g.closePath(); g.fill();
+    P(g, NAVE_X - 4, NAVE_TOP + 2, NAVE_W + 8, 3, ROOF_D);    // corniche sous le toit
+
+    // ---- 3. LA ROSACE, en façade de nef. Ronde, à huit meneaux.
+    const RX = NAVE_X + NAVE_W / 2, RY = NAVE_TOP + 20;
+    g.fillStyle = ST_XD; g.beginPath(); g.arc(RX, RY, 12, 0, 7); g.fill();
+    g.fillStyle = GLASS_D; g.beginPath(); g.arc(RX, RY, 10, 0, 7); g.fill();
+    // Les quartiers colorés : quatre secteurs, posés en carrés (pas d'arcs
+    // partiels, qui bavent à cette taille).
+    P(g, RX - 8, RY - 4, 6, 8, V2); P(g, RX + 2, RY - 4, 6, 8, V1);
+    P(g, RX - 4, RY - 8, 8, 5, V3); P(g, RX - 4, RY + 3, 8, 5, V3);
+    g.fillStyle = ST_L;                                        // meneaux de pierre
+    P(g, RX - 10, RY - 1, 20, 2, ST_L); P(g, RX - 1, RY - 10, 2, 20, ST_L);
+    g.fillStyle = ST; g.beginPath(); g.arc(RX, RY, 3, 0, 7); g.fill();
+
+    // ---- 4. LE PORTAIL EN ARC BRISÉ. L'ogive est faite de deux segments
+    // droits : un arc de cercle donnerait un plein cintre, c'est-à-dire la
+    // porte de la mairie.
+    const DW = 26, DX = RX - DW / 2, DY = BASE - 42;
+    const ogive = (x0, y0, w, h, rise, col) => {
+      g.fillStyle = col;
+      g.beginPath();
+      g.moveTo(x0, y0 + h);
+      g.lineTo(x0, y0 + rise);
+      g.lineTo(x0 + w / 2, y0);
+      g.lineTo(x0 + w, y0 + rise);
+      g.lineTo(x0 + w, y0 + h);
+      g.closePath(); g.fill();
+    };
+    ogive(DX - 3, DY - 15, DW + 6, 57, 15, ST_XD);            // encadrement
+    ogive(DX, DY - 12, DW, 54, 12, WOOD);                     // vantaux
+    P(g, DX + DW / 2 - 1, DY, 2, 42, "#3a2818");              // joint central
+    for (let k = 0; k < 3; k++) {                             // ferrures
+      P(g, DX + 2, DY + 8 + k * 12, DW / 2 - 4, 2, WOOD_L);
+      P(g, DX + DW / 2 + 2, DY + 8 + k * 12, DW / 2 - 4, 2, WOOD_L);
     }
+    P(g, DX + DW / 2 - 5, DY + 20, 3, 3, GOLD);               // poignées
+    P(g, DX + DW / 2 + 2, DY + 20, 3, 3, GOLD);
+    // Trois marches devant le portail.
+    for (let k = 0; k < 3; k++) P(g, DX - 6 - k * 3, BASE - 2 - k * 2, DW + 12 + k * 6, 2, k % 2 ? ST_D : ST);
+
+    // ---- 5. LES BAIES EN OGIVE de la nef, de part et d'autre du portail.
+    for (const wx of [NAVE_X + 12, NAVE_X + NAVE_W - 24]) {
+      ogive(wx, NAVE_TOP + 30, 12, 26, 9, ST_XD);
+      ogive(wx + 2, NAVE_TOP + 32, 8, 22, 8, GLASS);
+      P(g, wx + 2, NAVE_TOP + 38, 8, 2, V1);                  // deux bandes de vitrail
+      P(g, wx + 2, NAVE_TOP + 46, 8, 2, V2);
+      P(g, wx + 5, NAVE_TOP + 34, 2, 20, ST_L);               // meneau
+    }
+
+    // ---- 6. LE CLOCHER. Il monte plus haut que tout le reste, et c'est LUI
+    // qui identifie le bâtiment de loin.
+    const TOP = 30;
+    P(g, TOWER_X, TOP, TOWER_W, BASE - TOP, ST);
+    P(g, TOWER_X, TOP, 3, BASE - TOP, ST_L);                  // arête éclairée
+    P(g, TOWER_X + TOWER_W - 3, TOP, 3, BASE - TOP, ST_D);
+    // Bandeaux horizontaux : ils étagent la tour, sinon elle lit comme une
+    // cheminée.
+    for (const by of [TOP + 26, TOP + 54]) { P(g, TOWER_X - 2, by, TOWER_W + 4, 4, ST_D); P(g, TOWER_X - 2, by, TOWER_W + 4, 1, ST_L); }
+    // La chambre des cloches : deux abat-sons en ogive, sombres (c'est du VIDE,
+    // pas du verre — une tour aux fenêtres vitrées est un immeuble).
+    for (const ax of [TOWER_X + 6, TOWER_X + 19]) {
+      ogive(ax, TOP + 8, 9, 17, 7, ST_XD);
+      ogive(ax + 2, TOP + 10, 5, 13, 5, "#2e2c2a");
+      for (let k = 0; k < 3; k++) P(g, ax + 2, TOP + 14 + k * 3, 5, 1, ST_D);   // lames de l'abat-son
+    }
+    // La grande baie basse, côté rue.
+    ogive(TOWER_X + 11, TOP + 62, 12, 24, 9, ST_XD);
+    ogive(TOWER_X + 13, TOP + 64, 8, 20, 8, GLASS);
+    P(g, TOWER_X + 13, TOP + 70, 8, 2, V3);
+
+    // ---- 7. LA FLÈCHE ET LA CROIX. Le point le plus haut de Valley Town.
+    g.fillStyle = ROOF_D;                                     // corniche du beffroi
+    P(g, TOWER_X - 4, TOP - 4, TOWER_W + 8, 5, ROOF_D);
+    P(g, TOWER_X - 4, TOP - 4, TOWER_W + 8, 1, ROOF_L);
+    const SPX = TOWER_X + TOWER_W / 2;
+    g.fillStyle = ROOF;                                       // la flèche
+    g.beginPath(); g.moveTo(TOWER_X - 2, TOP - 4); g.lineTo(SPX, 8); g.lineTo(TOWER_X + TOWER_W + 2, TOP - 4); g.closePath(); g.fill();
+    g.fillStyle = ROOF_L;                                     // arête éclairée de la flèche
+    g.beginPath(); g.moveTo(TOWER_X - 2, TOP - 4); g.lineTo(SPX, 8); g.lineTo(SPX - 4, TOP - 4); g.closePath(); g.fill();
+    P(g, SPX - 1, 1, 2, 8, GOLD);                             // la croix
+    P(g, SPX - 3, 3, 6, 2, GOLD);
     return c;
   }
 
@@ -2181,24 +2308,44 @@ export function buildSprites() {
      choix se fait par HACHAGE DE LA POSITION au rendu (jamais un tirage
      aléatoire, qui ferait scintiller la foire d'une image à l'autre).
      ══════════════════════════════════════════════════════════════════════════ */
+  /* ⚠️⚠️ ZIP 429 — L'ÉTAL A ÉTÉ AGRANDI DE MOITIÉ, ET C'ÉTAIT LE PIRE ÉCART DE
+     LA VILLE. Il faisait 30 px peints pour un personnage de 23 : **1,3 fois sa
+     taille**, alors qu'un étal de marché en fait 2,1 (on passe SOUS la bâche
+     sans se baisser, c'est même à ça qu'il sert). Concrètement, les dix étals
+     du champ de foire arrivaient à l'épaule d'un marchand — la foire ressemblait
+     à une rangée de tables d'enfants, et personne ne l'avait vu parce qu'on ne
+     les avait jamais regardés à côté de quelqu'un.
+     ⚠️ ON AGRANDIT LA BÂCHE ET LES MONTANTS, PAS LE PLATEAU. Un plateau à
+     hauteur de poitrine serait un comptoir de bar ; ce qui manquait, c'est la
+     HAUTEUR LIBRE sous la toile. Le plateau reste à hauteur de hanche, exactement
+     là où l'on pose la main.
+     ⚠️ Et la largeur suit (32 → 44) : une bâche haute et étroite fait une
+     guérite. Les proportions d'un étal sont plus larges que hautes. */
   function townStallSprite(variant) {
-    const [c, g] = cv(32, 40);
+    const W = 44, H = 54;
+    const [c, g] = cv(W, H);
     const AWNS = [["#c8503c", "#e0705c"], ["#3c76c8", "#5c96e0"], ["#c8a83c", "#e0c85c"], ["#3ca86a", "#5cc88a"]];
     const [AW, AW_L] = AWNS[variant % AWNS.length];
     const W1 = "#8a6038", W2 = "#a8794a", W3 = "#6a4726";
-    P(g, 3, 20, 26, 3, W3);                                    // plateau
-    for (let i = 0; i < 4; i++) P(g, 3, 23 + i * 3, 26, 2, i % 2 ? W1 : W2); // jupe de l'étal
-    P(g, 3, 20, 26, 1, "#c08f5e");
-    P(g, 4, 8, 2, 13, W3); P(g, 26, 8, 2, 13, W3);             // montants
+    const TOP = H - 26;                       // le plateau : hauteur de hanche
+    P(g, 4, TOP, W - 8, 3, W3);                                       // plateau
+    for (let i = 0; i < 6; i++) P(g, 4, TOP + 3 + i * 3, W - 8, 2, i % 2 ? W1 : W2); // jupe
+    P(g, 4, TOP, W - 8, 1, "#c08f5e");                                // nez éclairé
+    P(g, 5, 10, 2, TOP - 9, W3); P(g, W - 7, 10, 2, TOP - 9, W3);     // montants, bien plus hauts
     // La bâche : rayée, débordante, avec un lambrequin festonné. C'est le
     // débord qui fait l'ombre, donc le volume.
-    for (let i = 0; i < 6; i++) P(g, 1 + i * 5, 4, 5, 6, i % 2 ? AW : AW_L);
-    P(g, 1, 4, 30, 1, "#f2e6d2");
-    for (let i = 0; i < 6; i++) { g.fillStyle = i % 2 ? AW : AW_L; g.beginPath(); g.moveTo(1 + i * 5, 10); g.lineTo(6 + i * 5, 10); g.lineTo(3.5 + i * 5, 13); g.fill(); }
-    // La marchandise : trois cageots de couleurs, posés sur le plateau.
-    for (let i = 0; i < 3; i++) {
-      P(g, 6 + i * 7, 15, 6, 5, "#8a6a42"); P(g, 6 + i * 7, 15, 6, 1, "#a88a5e");
-      P(g, 7 + i * 7, 13, 4, 3, ["#d05a4a", "#6ab84a", "#e0b03c"][i]);
+    const bays = 8, bw = (W - 2) / bays;
+    for (let i = 0; i < bays; i++) P(g, 1 + i * bw, 4, bw + 1, 7, i % 2 ? AW : AW_L);
+    P(g, 1, 4, W - 2, 1, "#f2e6d2");
+    for (let i = 0; i < bays; i++) {
+      g.fillStyle = i % 2 ? AW : AW_L;
+      g.beginPath(); g.moveTo(1 + i * bw, 11); g.lineTo(1 + (i + 1) * bw, 11); g.lineTo(1 + (i + 0.5) * bw, 15); g.fill();
+    }
+    // La marchandise : quatre cageots de couleurs, posés sur le plateau.
+    for (let i = 0; i < 4; i++) {
+      const bx = 6 + i * 8;
+      P(g, bx, TOP - 5, 7, 5, "#8a6a42"); P(g, bx, TOP - 5, 7, 1, "#a88a5e");
+      P(g, bx + 1, TOP - 8, 5, 3, ["#d05a4a", "#6ab84a", "#e0b03c", "#c86ad0"][i]);
     }
     return c;
   }
@@ -2314,14 +2461,53 @@ export function buildSprites() {
     P(g, 15, 0, 2, 2, "#2e2e36");
     return c;
   }
+  /* ⚠️⚠️ ZIP 429 — LE BANC A ÉTÉ REDESSINÉ, ET C'EST UNE QUESTION D'ÉCHELLE,
+     PAS DE GOÛT. (retour de Guillaume : « attention à leur format, ils
+     paraissent parfois très gros par rapport au joueur »)
+     Mesure du sprite du 425 : 22 pixels de hauteur peinte, dossier compris,
+     pour un personnage qui en fait 23. **Le dossier arrivait au sommet du crâne
+     d'un adulte debout.** Ce n'était pas visible sur la planche de rendu, parce
+     qu'on n'y regardait que des meubles entre eux — c'est la leçon du fond de
+     `render-tribunal` poussée d'un cran : un meuble ne se juge pas contre
+     d'autres meubles, il se juge **contre le personnage qui s'en sert**. C'est
+     pour ça que `render-assise.mjs` met debout et assis côte à côte.
+     Repère réel : le dossier d'un banc public arrive à mi-cuisse / hanche d'un
+     adulte debout, soit environ 55 % de sa hauteur. À 23 px de personnage, ça
+     fait **13 px**, et non 22.
+
+     ⚠️ ET IL A ÉTÉ ÉLARGI À 52 px, ce qui est l'autre moitié de la demande
+     (« on doit pouvoir s'asseoir à deux, ou trois sur le même banc »). Trois
+     personnages de 16 px espacés de 11 px se chevauchent aux épaules — c'est
+     exactement ce à quoi ressemblent trois personnes sur un banc. À 32 px la
+     troisième place était une superposition, pas une place.
+     ⚠️⚠️ ET 52, PAS 40 : à 40, les trois occupants MANGENT LE BANC EN ENTIER
+     (ils s'étalent sur 38 px) et la scène se lit « trois personnes debout en
+     rang ». Vu au banc de rendu, invisible autrement — la planche ne dessinait
+     qu'un occupant jusqu'à ce zip, et un occupant unique au milieu d'un meuble
+     ne dit rien de ce à quoi ressemble un meuble PLEIN. Il faut que le banc
+     dépasse de part et d'autre : ce sont ces sept pixels d'accoudoir libres qui
+     disent « ils sont assis DESSUS ».
+     ⚠️ La case BLOQUANTE, elle, n'a pas changé : le banc en occupe toujours
+     UNE. Le sprite débordait déjà (32 px sur une case de 16), et toucher au
+     générateur pour 40 px, c'est risquer de refermer un passage — le piège du
+     verger, §4. Le débord est du décor, pas de la collision. */
   function plazaBenchSprite() {
-    const [c, g] = cv(32, 32);
+    const W = 52, H = 20;
+    const [c, g] = cv(W, H);
     const W1 = "#8a6038", W2 = "#a8794a", IR = "#3c3c44";
-    P(g, 4, 24, 3, 6, IR); P(g, 25, 24, 3, 6, IR);                   // pieds fonte
-    for (let i = 0; i < 3; i++) P(g, 3, 20 + i * 2, 26, 2, i % 2 ? W1 : W2); // assise
-    for (let i = 0; i < 3; i++) P(g, 3, 8 + i * 4, 26, 3, i % 2 ? W1 : W2);  // dossier
-    P(g, 3, 8, 3, 14, IR); P(g, 26, 8, 3, 14, IR);                   // montants
-    P(g, 3, 8, 26, 1, "#c08f5e");
+    // Pieds de fonte, écartés des bouts : un pied à l'extrémité exacte donne
+    // une table, pas un banc.
+    P(g, 5, 14, 3, 6, IR); P(g, W - 8, 14, 3, 6, IR);
+    // Assise : deux lattes, pas trois. À cette hauteur la troisième n'était
+    // plus qu'une ligne de bruit.
+    for (let i = 0; i < 2; i++) P(g, 3, 11 + i * 2, W - 6, 2, i % 2 ? W1 : W2);
+    P(g, 3, 11, W - 6, 1, "#c08f5e");                   // nez d'assise éclairé
+    // Dossier : deux lattes et un vide entre les deux — c'est ce jour qui fait
+    // lire « lattes » plutôt que « planche ».
+    P(g, 3, 2, W - 6, 3, W2);
+    P(g, 3, 7, W - 6, 3, W1);
+    P(g, 3, 2, W - 6, 1, "#c08f5e");
+    P(g, 3, 2, 3, 12, IR); P(g, W - 6, 2, 3, 12, IR);   // montants
     return c;
   }
   /* ══════════════════════════════════════════════════════════════════════════
@@ -2583,41 +2769,66 @@ export function buildSprites() {
      reflet animé de drawTownFrame). Peindre l'eau ici l'aurait figée, et il
      aurait fallu deux sources de vérité pour une même flaque.
      Canevas 56×64, ancré par son bord bas comme les bâtiments. */
+  /* ⚠️⚠️ ZIP 429 — LA GÉOMÉTRIE DE LA FONTAINE EST UNE TABLE, ET C'EST LE §8
+     APPLIQUÉ APRÈS COUP. Le canevas dessinait la margelle à `H − 16` et le
+     bouton du jet à `H − 51` ; drawTownFrame, lui, peignait l'eau à `fBy − 16`
+     et le jet à `fBy − 60` — les MÊMES cotes, recopiées à quatre cents lignes de
+     distance. Tant que le sprite n'a pas bougé, ça a tenu. En le rabaissant de
+     64 à 44 px, l'eau serait restée à mi-hauteur de l'air et le jet aurait
+     jailli VINGT PIXELS AU-DESSUS de sa colonne, sans la moindre erreur.
+     Les cotes sont comptées DEPUIS LE BAS du sprite, parce que c'est par le bas
+     qu'il est ancré des deux côtés : changer H ne les déplace plus. */
+  const FOUNTAIN_GEO = { basinY: 16, basinRX: 19, basinRY: 8, bowlY: 27, bowlRX: 8, bowlRY: 3.5, jetY: 39 };
+  /* ⚠️⚠️ ZIP 429 — LA FONTAINE A ÉTÉ RABAISSÉE, ET C'EST UNE MESURE. Elle
+     faisait 54 px peints pour un personnage de 23, soit **2,35 fois sa taille** ;
+     une fontaine de place, vasque haute comprise, fait environ 1,6 fois un
+     adulte (la margelle à la taille, la vasque à hauteur d'épaule, le jet
+     au-dessus de la tête). Elle DOMINAIT la place au lieu d'y trôner, et
+     dépassait même la hauteur d'une maison de ville rapportée à sa largeur.
+     ⚠️ La correction est prise sur la COLONNE et le PIED, jamais sur la
+     margelle : c'est le bassin qui dit « fontaine », et le rétrécir aurait
+     donné une vasque sur pied. On raccourcit ce qui est décoratif, on garde ce
+     qui est signifiant — c'est la même règle que le banc, dont on a baissé le
+     dossier sans toucher à la largeur de l'assise.
+     ⚠️ Et le sprite garde ses proportions relatives : tout est exprimé en
+     fractions de H, donc changer H suffit et rien ne se décale. */
   function plazaFountainSprite() {
-    const W = 56, H = 64;
+    const W = 56, H = 44;
+    const F = FOUNTAIN_GEO;
     const [c, g] = cv(W, H);
     const S = "#c6c2b6", SL = "#e2ded1", SD = "#9d9a8f", SXD = "#7c7a71";
     const cx = W / 2;
     // ---- La margelle octogonale, vue de trois quarts : deux ellipses de
     // pierre et un anneau d'ombre entre les deux.
     const ring = (ry, rx, col) => { g.fillStyle = col; g.beginPath(); g.ellipse(cx, ry, rx, rx * 0.42, 0, 0, 7); g.fill(); };
-    ring(H - 12, 26, SXD);          // socle, un peu débordant
-    ring(H - 14, 25, SD);
-    ring(H - 16, 24, S);
-    ring(H - 17, 23, SL);           // arête éclairée de la margelle
+    ring(H - F.basinY + 4, 26, SXD);   // socle, un peu débordant
+    ring(H - F.basinY + 2, 25, SD);
+    ring(H - F.basinY, 24, S);
+    ring(H - F.basinY - 1, 23, SL);    // arête éclairée de la margelle
     /* Le bassin lui-même : on DÉCOUPE, on ne peint pas du bleu. `destination-out`
        rend la zone transparente, l'eau animée des tuiles apparaît au travers. */
     g.globalCompositeOperation = "destination-out";
-    g.beginPath(); g.ellipse(cx, H - 16, 19, 8, 0, 0, 7); g.fill();
+    g.beginPath(); g.ellipse(cx, H - F.basinY, F.basinRX, F.basinRY, 0, 0, 7); g.fill();
     g.globalCompositeOperation = "source-over";
     // Un liseré sombre à l'intérieur de la margelle : c'est lui qui donne la
     // PROFONDEUR du bassin. Sans lui, l'eau a l'air posée par-dessus.
     g.strokeStyle = "rgba(40,44,38,0.45)"; g.lineWidth = 2;
-    g.beginPath(); g.ellipse(cx, H - 16, 19, 8, 0, 0, 7); g.stroke();
+    g.beginPath(); g.ellipse(cx, H - F.basinY, F.basinRX, F.basinRY, 0, 0, 7); g.stroke();
 
-    // ---- Le pied et la vasque haute.
-    P(g, cx - 4, H - 34, 8, 20, S); P(g, cx - 4, H - 34, 3, 20, SL); P(g, cx + 2, H - 34, 2, 20, SD);
-    ring(H - 34, 13, SD); ring(H - 36, 12, S); ring(H - 37, 11, SL);
+    // ---- Le pied et la vasque haute. Le fût passe de 20 px à 11 : c'est là
+    // que la fontaine était trop haute, et c'est la partie la moins parlante.
+    P(g, cx - 4, H - F.bowlY + 2, 8, 11, S); P(g, cx - 4, H - F.bowlY + 2, 3, 11, SL); P(g, cx + 2, H - F.bowlY + 2, 2, 11, SD);
+    ring(H - F.bowlY + 2, 13, SD); ring(H - F.bowlY, 12, S); ring(H - F.bowlY - 1, 11, SL);
     g.globalCompositeOperation = "destination-out";
-    g.beginPath(); g.ellipse(cx, H - 36, 8, 3.5, 0, 0, 7); g.fill();
+    g.beginPath(); g.ellipse(cx, H - F.bowlY, F.bowlRX, F.bowlRY, 0, 0, 7); g.fill();
     g.globalCompositeOperation = "source-over";
     g.strokeStyle = "rgba(40,44,38,0.40)"; g.lineWidth = 1;
-    g.beginPath(); g.ellipse(cx, H - 36, 8, 3.5, 0, 0, 7); g.stroke();
+    g.beginPath(); g.ellipse(cx, H - F.bowlY, F.bowlRX, F.bowlRY, 0, 0, 7); g.stroke();
     // ---- La colonne et le bouton d'où sort le jet (le jet lui-même est animé
     // dans drawTownFrame : il bouge, donc il ne peut pas vivre dans un canevas).
-    P(g, cx - 2, H - 50, 4, 15, S); P(g, cx - 2, H - 50, 1, 15, SL);
-    g.fillStyle = SL; g.beginPath(); g.arc(cx, H - 51, 4, 0, 7); g.fill();
-    g.fillStyle = SD; g.beginPath(); g.arc(cx + 1, H - 50, 2, 0, 7); g.fill();
+    P(g, cx - 2, H - F.jetY + 1, 4, 12, S); P(g, cx - 2, H - F.jetY + 1, 1, 12, SL);
+    g.fillStyle = SL; g.beginPath(); g.arc(cx, H - F.jetY, 4, 0, 7); g.fill();
+    g.fillStyle = SD; g.beginPath(); g.arc(cx + 1, H - F.jetY + 1, 2, 0, 7); g.fill();
     return c;
   }
 
@@ -5565,6 +5776,7 @@ house: house(),
     plazaTopiary: plazaTopiarySprite(),
     plazaMonument: plazaMonumentSprite(),
     plazaFountain: plazaFountainSprite(),
+    fountainGeo: FOUNTAIN_GEO,        // zip 429 : lue par drawTownFrame pour l'eau et le jet
     /* Zip 426 — le mobilier de l'agrandissement. ⚠️ Les étals sont un TABLEAU
        (quatre bâches) et non quatre clés : le rendu choisit par hachage de la
        position, ce qui restait impossible avec des noms distincts. */

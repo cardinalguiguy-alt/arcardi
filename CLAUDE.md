@@ -4,12 +4,13 @@
 Il remplace l'exploration du dépôt pour tout ce qui est global. Le README est un journal
 chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
-État à jour du **zip 428**. Chantier actif : **Valley Town jouable** — la ville a été auditée
+État à jour du **zip 429**. Chantier actif : **Valley Town jouable** — la ville a été auditée
 en la MESURANT, et le socle refait : navigation des résidents, endroits de vie, pose assise,
-dézoom des monuments. Tout ce qui la concerne est dans **`components/ferme/README.md`**, qui
-fait autorité. **`candyluge` et `crystal` sont EN PAUSE.**
+dézoom des monuments, ciel (nuit + météo), course, boussole GPS, revue d'échelle des décors.
+Tout ce qui la concerne est dans **`components/ferme/README.md`**, qui fait autorité.
+**`candyluge` et `crystal` sont EN PAUSE.**
 
-⚠️ **507 → 490 lignes** pour un plafond de 200. La scission ordonnée par le §14.2 a bien eu
+⚠️ **507 → 490 au 428, 518 au 429** pour un plafond de 200. La scission ordonnée par le §14.2 a bien eu
 lieu : §6 est parti dans `components/ferme/README.md`, à côté du code, sur le modèle de
 `candyluge`. **C'est le premier zip depuis longtemps où ce fichier RÉTRÉCIT.** Il reste très
 au-dessus du plafond, et §14.2 dit ce qui part ensuite.
@@ -124,6 +125,28 @@ protection, alors que c'est le banc.
   le 234 parce que `drawFullMap` n'était **jamais appelée** ; `actAnimRef` jamais décrémenté
   en ville, donc un seul coup de hache par visite). **À vérifier écran par écran et minuteur
   par minuteur, zone par zone.**
+- ⚠️⚠️ **TROISIÈME OCCURRENCE DE « LA ZONE QUI N'HÉRITE PAS » AU 429, ET IL FAUT LE COMPTER.**
+  Après la carte restée noire et le minuteur d'action jamais décrémenté (426), c'est le CIEL :
+  voile nocturne, halos de lampadaires, orage, teinte de saison et neige étaient écrits dans le
+  corps du rendu de la FERME. Valley Town, qui a sa propre boucle depuis le 234, n'en héritait
+  de rien — **midi de printemps perpétuel pendant quatre zips**, avec des dizaines de
+  lampadaires posés dans ses rues qui ne s'allumaient jamais. ⚠️ **UN DÉCOR QUI EXISTE POUR UNE
+  MÉCANIQUE ABSENTE EST PLUS TROMPEUR QU'UN DÉCOR MANQUANT.** La parade n'est pas de recopier
+  le bloc dans l'autre boucle (ce serait deux nuits à tenir d'accord) : c'est de le SORTIR.
+- ⚠️⚠️ **UN DÉCOR NE SE JUGE PAS CONTRE D'AUTRES DÉCORS, IL SE JUGE CONTRE LE PERSONNAGE QUI
+  S'EN SERT** (429). Tous les bancs de rendu du projet dessinaient les meubles ENTRE EUX : c'est
+  ce qu'il faut pour une palette et un ancrage, et ça ne dit RIEN d'une échelle — un objet deux
+  fois trop grand au milieu d'objets deux fois trop grands a l'air juste. Mesuré au 429 :
+  l'étal du marché faisait 1,3 fois la taille d'un adulte au lieu de 2,1, la fontaine 2,35 au
+  lieu de 1,6, et le dossier du banc arrivait au SOMMET DU CRÂNE. `tools/render-echelle.mjs`.
+  ⚠️ Corollaire : **vérifier le repère avant de corriger le dessin.** Le banc semblait faux de
+  40 % ; c'est le repère qui l'était — vu de trois quarts, la profondeur d'une assise se dépense
+  en pixels VERTICAUX, et un objet qui a du volume vers l'avant paraît toujours plus haut.
+- ⚠️⚠️ **RENOMMER UN BÂTIMENT NE LE REDESSINE PAS** (429). L'« église » de Valley Town était la
+  MAIRIE du 235 — fronton à colonnes, horloge, drapeau — renommée au 425 sans qu'un pixel
+  bouge, la note de l'époque le dit elle-même. La ville a eu deux mairies pendant quatre zips,
+  dont l'une s'appelait église. C'est le « bâtiment muet » du 426 en plus sournois : **ici le
+  bâtiment parle, et il ment.**
 - ⚠️⚠️ **UNE CARTE EN CACHE DE MODULE NE SE MUTE JAMAIS.** `getTownWorldCached` (et son
   jumeau du tribunal) rend un SINGLETON partagé par tous les remontages de l'onglet : y
   écrire ferait fuiter l'état d'une ferme à l'autre. Tout ce qui change vit dans l'état
@@ -210,7 +233,7 @@ protection, alors que c'est le banc.
 |---|---|
 | `components/ferme/FermeGame.js` | tout le jeu ferme + Valley Town + tribunal — **~20 500 l.** |
 | `components/ferme/fermeEngine.js` | règles pures · `generateTownWorld()` · `generateCourtWorld()` · `townSpots()` · **`townNav()` / `townFindPath()`** |
-| `components/ferme/README.md` | **Valley Town, le tribunal, les habitants — autorité (428)** |
+| `components/ferme/README.md` | **Valley Town, le tribunal, les habitants — autorité (428-429)** |
 | `components/ferme/fermeConstants.js` | réglages · **tous les `TOWN_*`, `COURT_*`, `WARDROBE_*`** |
 | `components/ferme/fermeArt.js` | **tous** les sprites, en canevas procédural. Aucun PNG · **`drawSeated()`** |
 | `app/room/[code]/page.js` · `lib/gameSync.js` · `lib/realtimeQuota.js` | salon · synchro · quota |
@@ -326,7 +349,7 @@ BUILD S'ARRÊTE APRÈS LA COMPILATION** sur `Error: supabaseUrl is required` (pr
 `✓ Compiled successfully` juste avant.**
 
 **Bancs `.mjs` — ce qui existe VRAIMENT** (§14.6) :
-- **`tools/verify-vallee.mjs` — 122 contrôles, 122/122 (428 ; 113 au 427, 88 au 426).** Il
+- **`tools/verify-vallee.mjs` — 123 contrôles, 123/123 (429 ; 113 au 427, 88 au 426).** Il
   importe le VRAI moteur : circulation, murs invisibles ET décors traversables, géométrie des
   bâtiments, rebords sautables, le tribunal pièce par pièce, la coupe de bois, les familles,
   la garde-robe.
@@ -342,7 +365,12 @@ BUILD S'ARRÊTE APRÈS LA COMPILATION** sur `Error: supabaseUrl is required` (pr
   inconsistante, tas qui déborde — étaient parfaitement muets.
 - **`tools/render-assise.mjs`** (428) — la pose assise **sur son banc**, debout/assis côte à
   côte, sur les huit tenues. Elle vivait dans la closure du rendu, donc personne ne l'avait
-  jamais regardée : on a gardé trois zips un buste tronqué en croyant avoir une pose.
+  jamais regardée : on a gardé trois zips un buste tronqué en croyant avoir une pose. ⚠️ Depuis
+  le 429 il en dessine **trois** par banc : un occupant unique au milieu d'un meuble ne dit rien
+  de ce à quoi ressemble un meuble PLEIN.
+- **`tools/render-echelle.mjs`** (429) — **chaque décor à côté d'une fermière**, sur la même
+  ligne de sol, avec le rapport de hauteur comparé au repère physique attendu. C'est le seul
+  banc qui puisse attraper une erreur d'ÉCHELLE (voir §4). Il en a trouvé trois du premier coup.
 - **`tools/render-tribunal.mjs`** — le mobilier, les décors de rue, les **bâtiments de la
   Haute-Ville** (sur du dallage, à côté de la gare : une cohérence se juge côte à côte) et **la
   garde-robe PORTÉE**. Il a montré la rangée d'étals monochrome (426), le haut-de-forme
@@ -469,7 +497,7 @@ erreur** en choisissant mal.
    se supprime, elle ne se date pas.
 2. **200 lignes = passe d'élagage obligatoire. Ne pas relever le seuil.** L'élagage se fait
    AVANT d'ajouter. **Le 428 a exécuté l'ordre du 427 : §6 est parti dans
-   `components/ferme/README.md`, et le fichier RÉTRÉCIT pour la première fois (507 → 490).**
+   `components/ferme/README.md`, et le fichier avait RÉTRÉCI pour la première fois (507 → 490) ; le 429 le remonte à 518.**
    ⚠️ **L'ORDRE DU PROCHAIN ZIP : §4 SE SCINDE À SON TOUR.** C'est devenu le plus gros chapitre
    (près de cent lignes), et il mélange deux choses qui n'ont rien à voir : les pièges de la
    FERME/VILLE, qui appartiennent à `components/ferme/README.md` comme le reste, et les pièges

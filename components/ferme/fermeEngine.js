@@ -4161,11 +4161,25 @@ export function townSpots(tw) {
      ⚠️ Le point rendu est celui où l'on SE TIENT ; `bx/by` reste la case du
      banc, et c'est elle que le dessin utilise pour poser l'assis. Les deux ne
      coïncident plus forcément — c'est justement ce qui rend le repli possible. */
+  /* ⚠️⚠️ ZIP 429 — UN BANC REND JUSQU'À TROIS ENDROITS, UN PAR PLACE. Le sprite
+     fait 40 px de large : à une seule assise, deux résidents ne pouvaient pas
+     s'y asseoir ensemble, et le seul banc du parc valait pour toute la ville.
+     Chaque place a SON point où l'on se tient (on rejoint sa place par le
+     côté, pas par le centre), et elles portent toutes le même `bx/by` — c'est
+     le banc qui est le meuble, la place n'est qu'un décalage (`seat`).
+     ⚠️ ON N'EXIGE PAS QUE LES TROIS SOIENT ACCESSIBLES. Un banc adossé à une
+     haie n'en offrira qu'une ou deux, et c'est très bien : mieux vaut un banc
+     à une place qu'un banc refusé. C'est la même règle que les quatre côtés
+     ci-dessous — on cherche, on garde ce qui passe. */
   const addBench = (pr) => {
-    for (const [dx, dy] of [[0, 1], [-1, 0], [1, 0], [0, -1]]) {
-      const before = list.length;
-      add(pr.x + dx, pr.y + dy, "sit", { bx: pr.x, by: pr.y });
-      if (list.length > before) return;
+    for (let k = 0; k < C.TOWN_SEATS_PER_BENCH; k++) {
+      const seat = k - (C.TOWN_SEATS_PER_BENCH - 1) / 2;      // -1, 0, +1
+      const ox = Math.round(seat * C.TOWN_SEAT_SPACING);      // la case la plus proche de la place
+      for (const [dx, dy] of [[ox, 1], [ox, -1], [ox - 1, 1], [ox + 1, 1], [-1, 0], [1, 0]]) {
+        const before = list.length;
+        add(pr.x + dx, pr.y + dy, "sit", { bx: pr.x, by: pr.y, seat });
+        if (list.length > before) break;
+      }
     }
   };
   // ---- Le mobilier (posé par le générateur, donc lu chez lui).

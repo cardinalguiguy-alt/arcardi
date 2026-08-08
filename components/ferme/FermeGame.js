@@ -596,6 +596,26 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // -------- Refs (état du jeu, lus par la boucle de rendu) --------
   const canvasRef = useRef(null);
   const mapCanvasRef = useRef(null);
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 429 — LA BOUSSOLE GPS. (demande de Guillaume : « ouvrir la map puis
+     ║ clic sur la destination voulue, avec un marqueur triangulaire élégant et
+     ║ une distance. Tout fait en local chez le joueur, rien n'est partagé. »)
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ RIEN NE PART SUR LE RÉSEAU, ET C'EST UNE PROPRIÉTÉ À PRÉSERVER, PAS
+     UNE ÉCONOMIE. Une destination est une INTENTION : elle n'a de sens que pour
+     celui qui l'a posée, elle change dix fois par minute, et deux joueurs
+     n'ont aucune raison de partager la leur. La diffuser coûterait des messages
+     (§3) pour un état que personne d'autre ne lit — et surtout, elle
+     deviendrait un état à RÉCONCILIER : que se passe-t-il si l'hôte recharge ?
+     Rien, justement, parce que ce ref-ci ne quitte jamais cet onglet.
+     ⚠️ ET ELLE PORTE SA ZONE. Une destination posée sur le plan de la ville n'a
+     aucun sens sur la carte de la ferme (§4, le piège des deux cartes) : le
+     marqueur ne s'affiche que si `gps.zone === m.zone`. Sans ça, une boussole
+     posée devant l'église pointerait, une fois rentré, vers un point au hasard
+     du champ de blé — et elle aurait l'air de marcher. */
+  const gpsRef = useRef(null);            // { zone, x, y } — jamais diffusé
+  const runDebtRef = useRef(0);           // zip 429 : fraction de point d'énergie non encore dépensée (voir isRunningNow)
+  const [gpsMark, setGpsMark] = useState(null);   // le même, pour que la carte et le HUD se redessinent
   // Canvas hors-écran dédié à l'overlay nocturne (correctif chantier
   // 2026-07, voir nightAlpha/lampsInView) : le voile sombre + les halos
   // "destination-out" des lampadaires sont composés ICI, séparément du
@@ -2421,6 +2441,26 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         else out.fx.push({ k: "chop", x: req.x | 0, y: req.y | 0, zone: "town" });
       }
       if (r.toast) out.toast = { id: f.id, key: r.toast };
+    } else if (req.kind === "spendEnergy") {
+      /* ZIP 429 — LA COURSE COÛTE DE L'ÉNERGIE, ET C'EST L'HÔTE QUI DÉBITE.
+         ⚠️ L'ÉNERGIE EST UN ÉTAT PARTAGÉ ET SAUVEGARDÉ : la décrémenter côté
+         client la ferait remonter à la première diffusion de l'hôte, en
+         clignotant. C'est la règle §3 sans exception (« l'hôte est l'autorité,
+         toujours »), la même que pour l'or de la Maison Garfield.
+         ⚠️ ET LE CLIENT L'AFFICHE QUAND MÊME TOUT DE SUITE, avant la réponse :
+         une jauge qui attend un aller-retour réseau pour bouger donne
+         l'impression que la course est gratuite pendant une demi-seconde. C'est
+         exactement le même compromis que l'énergie interpolée pendant le
+         sommeil (l'hôte tranche la valeur finale, le client montre la pente).
+         ⚠️ LE MONTANT EST BORNÉ ICI, PAS CHEZ L'ÉMETTEUR. Un client bricolé qui
+         demanderait −5 000 se verrait offrir de l'énergie infinie ; la borne est
+         posée du côté qui fait autorité, pas du côté qui demande. */
+      const amt = Math.max(0, Math.min(C.RUN_ENERGY_CLAMP, req.amount | 0));
+      if (amt > 0 && f.energy > 0) {
+        f.energy = Math.max(0, f.energy - amt);
+        out.farmer = { id: f.id, energy: f.energy };
+        dirtyRef.current = true;
+      }
     } else if (req.kind === "wardrobeBuy" || req.kind === "wardrobeWear") {
       /* ═══ ZIP 427 — LA MAISON GARFIELD, ARBITRÉE PAR L'HÔTE ═══
          ⚠️ L'OR EST TOUJOURS DÉPENSÉ CÔTÉ HÔTE, ET C'EST NON NÉGOCIABLE : c'est
@@ -5215,6 +5255,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (rs.d !== undefined) r.dir = rs.d | 0;
         r.meetTone = rs.t || null; r.meetWith = rs.m;
         r.sitOn = rs.s ? { x: rs.s[0], y: rs.s[1] } : null;
+        r.seat = rs.s && rs.s.length > 2 ? rs.s[2] : 0;   // zip 429
       }
     }
     if (p.visitorSim && !isHost) {
@@ -5784,7 +5825,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        `s` de residentStops, 427). Deux octets, aucun `send()` de plus, et un
        client d'avant ce zip ignore simplement le champ — il verra le joueur
        debout au bon endroit, ce qui est le pire cas acceptable. */
-    if (m.sitOn) pub.sit = [m.sitOn.x, m.sitOn.y];
+    if (m.sitOn) pub.sit = [m.sitOn.x, m.sitOn.y, m.seat || 0];
     pub.st = +performance.now().toFixed(1);
     if (pub.moving) { pub.vx = +(m.vx || 0).toFixed(2); pub.vy = +(m.vy || 0).toFixed(2); }
     // Monde maléfique MULTIJOUEUR (demande Guillaume 2026-07) : les
@@ -5832,7 +5873,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      l'arrêt (voir la ligne `m.moving &&` de maybeSendPos). Autrement dit : à
      deux, personne n'aurait jamais vu personne s'asseoir. */
   function posKeyOf(m) {
-    const seat = m && m.sitOn ? "@" + m.sitOn.x + "," + m.sitOn.y : "";
+    const seat = m && m.sitOn ? "@" + m.sitOn.x + "," + m.sitOn.y + "," + (m.seat || 0) : "";
     return m && m.moving ? ("m" + (m.vx || 0).toFixed(1) + "," + (m.vy || 0).toFixed(1)) : "s" + seat;
   }
   function sendPos() { if (!netCanBroadcast()) return; const _m = meRef.current; if (_m) { lastPosSentRef.current = performance.now(); lastPosKeyRef.current = posKeyOf(_m); } channelRef.current?.send({ type: "broadcast", event: "pos", payload: pubMe() }); }
@@ -5969,7 +6010,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       e.z = 1;
       if (res.act) { e.a = res.act; e.at = res.actAt || Date.now(); e.d = res.dir | 0; }
       if (res.act === "talk") { e.t = res.meetTone; e.m = res.meetWith; }
-      if (res.sitOn) e.s = [res.sitOn.x, res.sitOn.y];
+      /* ⚠️ ZIP 429 — LA PLACE EST LE TROISIÈME NOMBRE DU MÊME CHAMP, pas un
+         champ de plus. `s` disait « sur quel banc » ; il dit maintenant « sur
+         quel banc, à quelle place ». Un client d'avant ce zip lit les deux
+         premiers et ignore le reste : il verra tout le monde au centre du banc,
+         c'est-à-dire exactement l'ancien comportement. */
+      if (res.sitOn) e.s = [res.sitOn.x, res.sitOn.y, res.seat || 0];
     }
     resStopQueueRef.current.push(e);
   }
@@ -8679,7 +8725,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     voyager: ["view", "pier", "board", "shore", "stroll"],
     stylist: ["window", "view", "statue", "flowers", "pond"],
   };
-  function pickTownSpot(res, ro, tw) {
+  function pickTownSpot(res, ro, tw, peers) {
     const spots = E.townSpots(tw);
     if (!spots.length) return null;
     const taste = TOWN_SKILL_TASTE[ro.skill] || null;
@@ -8698,6 +8744,24 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          lancer l'A* et de le laisser explorer toute sa poche pour se rendre —
          le seul cas où une recherche coûte cher (voir townNav). */
       if (!E.townSameArea(tw, res.x, res.y, sp.x, sp.y)) continue;
+      /* ⚠️⚠️ ZIP 429 — UN ENDROIT DÉJÀ PRIS N'EST PLUS UN ENDROIT. Sans ce
+         filtre, rien n'empêchait deux résidents de viser la MÊME case : ils y
+         arrivaient tous les deux, se poussaient l'un l'autre en boucle
+         (chacun glisse sur l'autre, aucun n'avance), et le garde anti-blocage
+         les figeait sur place au bout de deux secondes. C'était déjà vrai au
+         427 pour les 61 endroits ; les bancs à trois places du 429 le rendent
+         PROBABLE, puisque trois destinations partagent désormais le même
+         meuble. C'est le même défaut que le décalage à la descente du train
+         (`startTownTrip`), une case plus loin.
+         ⚠️ La comparaison porte sur `lastSpot`, qui est la destination
+         CHOISIE, pas sur la position courante : réserver à l'arrivée serait
+         trop tard, les deux sont déjà en route. */
+      let taken = false;
+      for (const other of peers) {
+        if (!other || other === res || resZone(other) !== "town") continue;
+        if (other.lastSpot && other.lastSpot.x === sp.x && other.lastSpot.y === sp.y) { taken = true; break; }
+      }
+      if (taken) continue;
       const d = Math.hypot(sp.x - res.x, sp.y - res.y);
       let score = -d / 40 + Math.random();
       if (taste && taste.includes(sp.act)) score += 0.9;
@@ -8705,8 +8769,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     return best;
   }
-  function townDecideDestination(res, ro, tw, now) {
-    const sp = pickTownSpot(res, ro, tw);
+  function townDecideDestination(res, ro, tw, now, peers) {
+    const sp = pickTownSpot(res, ro, tw, peers || []);
     if (!sp) { res.nextRoamAt = now + 2000; return; }
     /* ⚠️⚠️ ZIP 428 — ICI VIVAIT `townStairRoute`, ET SA DISPARITION EST LE
        CŒUR DE CE ZIP. Le 427 dérivait des points de passage de `TOWN_STAIRS`
@@ -8796,8 +8860,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         res.actAt = now;                       // graine partagée de la réplique (voir townActLine)
         // Assis : on regarde ce qu'on est venu regarder, donc le banc est
         // derrière soi — la case du banc est au NORD du point où l'on se tient.
-        if (spec.sit && res.townSpot && res.townSpot.bx !== undefined) { res.sitOn = { x: res.townSpot.bx, y: res.townSpot.by }; res.dir = 0; }
-        else res.sitOn = null;
+        if (spec.sit && res.townSpot && res.townSpot.bx !== undefined) {
+          res.sitOn = { x: res.townSpot.bx, y: res.townSpot.by };
+          res.seat = res.townSpot.seat || 0;   // zip 429 : la place occupée sur le banc
+          res.dir = 0;
+        } else { res.sitOn = null; res.seat = 0; }
         return;
       }
       const gait = res.gait || (res.gait = 0.6 + Math.random() * 0.6);
@@ -8883,7 +8950,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       return;
     }
     // 3. Rien à faire : on choisit une destination.
-    if (now >= (res.nextRoamAt || 0)) townDecideDestination(res, ro, tw, now);
+    if (now >= (res.nextRoamAt || 0)) townDecideDestination(res, ro, tw, now, peers);
     else res.moving = false;
   }
   /* ---- LES RENCONTRES. L'architecture sociale tient dans cette fonction, et
@@ -12973,133 +13040,23 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         }
       }
 
-      const na = nightAlpha();
-      if (na > 0) {
-        // Correctif chantier 2026-07 ("les lampadaires restent éteints la
-        // nuit") : le voile sombre + les halos des lampadaires sont
-        // composés sur un canvas HORS-ÉCRAN dédié, PAS directement sur le
-        // canvas principal. Raison : "destination-out" efface les pixels
-        // sur lesquels il est appliqué ; utilisé directement sur le canvas
-        // principal, il n'aurait pas seulement percé le voile sombre mais
-        // aussi le terrain/les sprites déjà dessinés dessous, laissant un
-        // trou transparent (fond de page visible) au lieu d'un cercle
-        // éclairé. En composant d'abord sur un calque séparé, puis en le
-        // plaquant par-dessus (drawImage, composite normal), seul le voile
-        // est percé — le terrain en dessous reste intact et redevient
-        // visible, normalement éclairé.
-        let nc = nightCanvasRef.current;
-        if (!nc) { nc = document.createElement("canvas"); nightCanvasRef.current = nc; }
-        if (nc.width !== canvas.width || nc.height !== canvas.height) { nc.width = canvas.width; nc.height = canvas.height; }
-        const nctx = nc.getContext("2d");
-        nctx.setTransform(1, 0, 0, 1, 0, 0);
-        nctx.globalCompositeOperation = "source-over";
-        nctx.clearRect(0, 0, nc.width, nc.height);
-        nctx.fillStyle = `rgba(8,10,30,${na})`;
-        nctx.fillRect(0, 0, nc.width, nc.height);
-        if (lampsInView.length) {
-          // Halo lumineux : perce l'obscurité autour de chaque lampadaire
-          // allumé (composite "destination-out", dégradé radial du centre au
-          // bord pour une transition douce plutôt qu'un cercle net) — mais
-          // uniquement sur le calque nocturne hors-écran (voir ci-dessus).
-          nctx.save();
-          nctx.globalCompositeOperation = "destination-out";
-          for (const lamp of lampsInView) {
-            const radiusPx = (lamp.r || C.LAMP_LIGHT_RADIUS) * T * ZOOM;
-            const sx = (lamp.x * T - cam.x) * ZOOM, sy = (lamp.y * T - cam.y) * ZOOM;
-            const grad = nctx.createRadialGradient(sx, sy, 0, sx, sy, radiusPx);
-            grad.addColorStop(0, `rgba(0,0,0,${na})`);
-            grad.addColorStop(0.7, `rgba(0,0,0,${na * 0.9})`);
-            grad.addColorStop(1, "rgba(0,0,0,0)");
-            nctx.fillStyle = grad;
-            nctx.beginPath(); nctx.arc(sx, sy, radiusPx, 0, Math.PI * 2); nctx.fill();
-          }
-          nctx.restore();
-        }
-        // Zip 302 (correctif audit, demande Guillaume) : le brûleur allumé de
-        // la montgolfière perce le voile sombre EXACTEMENT comme un
-        // lampadaire (même calque hors-écran, même composite
-        // "destination-out"), au lieu d'être simplement peint dessous (bug :
-        // la lanterne restait assombrie comme le reste malgré son halo).
-        const bg = balloonGlowRef.current;
-        if (bg) {
-          nctx.save();
-          nctx.globalCompositeOperation = "destination-out";
-          const radiusPx = bg.radiusTiles * T * ZOOM;
-          const sx = (bg.x * T - cam.x) * ZOOM, sy = (bg.y * T - cam.y) * ZOOM;
-          const grad = nctx.createRadialGradient(sx, sy, 0, sx, sy, radiusPx);
-          grad.addColorStop(0, `rgba(0,0,0,${na})`);
-          grad.addColorStop(0.7, `rgba(0,0,0,${na * 0.85})`);
-          grad.addColorStop(1, "rgba(0,0,0,0)");
-          nctx.fillStyle = grad;
-          nctx.beginPath(); nctx.arc(sx, sy, radiusPx, 0, Math.PI * 2); nctx.fill();
-          nctx.restore();
-        }
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.globalCompositeOperation = "source-over";
-        ctx.drawImage(nc, 0, 0);
-      }
-
-      // Météo : jour orageux/pluvieux (chantier 2026-07, demande Guillaume :
-      // "des journées grises d'orages et pluie, une toutes les 7") —
-      // PUREMENT visuel, aucun effet sur la pousse/l'énergie/les animaux.
-      // Dessiné en espace ÉCRAN (transform déjà remis à l'identité juste
-      // au-dessus, comme le voile nocturne) : un voile gris semi-transparent
-      // plein écran + des traits de pluie qui tombent en continu. S'ajoute
-      // au voile nocturne s'il fait aussi nuit (les deux se cumulent tout
-      // simplement, pas de logique spéciale de mélange).
-      if (E.isStormyDay(sharedRef.current.day || 1)) {
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.globalCompositeOperation = "source-over";
-        ctx.fillStyle = `rgba(70,74,86,${C.STORM_TINT_ALPHA})`;
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        if (!rainDropsRef.current || rainDropsRef.current.length !== C.STORM_RAIN_COUNT) {
-          rainDropsRef.current = Array.from({ length: C.STORM_RAIN_COUNT }, () => ({
-            x: Math.random(), y: Math.random(), sp: 0.7 + Math.random() * 0.6,
-          }));
-        }
-        ctx.strokeStyle = "rgba(210,220,235,0.35)";
-        ctx.lineWidth = 1;
-        for (const d of rainDropsRef.current) {
-          d.y += (C.STORM_RAIN_SPEED / canvas.height) * dt * d.sp;
-          if (d.y > 1.05) { d.y = -0.05; d.x = Math.random(); }
-          const sx = d.x * canvas.width, sy = d.y * canvas.height;
-          ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx - 4, sy + C.STORM_RAIN_LEN); ctx.stroke();
-        }
-      }
-
-      // 2026-07 station update: seasonal tint, stacked exactly like the
-      // storm veil (screen space, purely visual).
-      // Zip 235 (Guillaume: "when it's winter, it snows"): winter also adds
-      // a fullscreen snowfall, same mechanic as the storm rain but slower
-      // and lighter. Snow flakes are recycled the same way rain drops are.
-      {
-        const se = E.seasonOf();
-        if (se.tint) {
-          ctx.setTransform(1, 0, 0, 1, 0, 0);
-          ctx.globalCompositeOperation = "source-over";
-          ctx.fillStyle = se.tint;
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-        }
-        if (se.key === "winter") {
-          ctx.setTransform(1, 0, 0, 1, 0, 0);
-          if (!snowFlakesRef.current || snowFlakesRef.current.length !== C.SNOW_COUNT) {
-            snowFlakesRef.current = Array.from({ length: C.SNOW_COUNT }, () => ({
-              x: Math.random(), y: Math.random(), sp: 0.6 + Math.random() * 0.9, sw: (Math.random() * 2 - 1) * 0.02,
-            }));
-          }
-          ctx.fillStyle = "rgba(240, 246, 255, 0.9)";
-          for (const d of snowFlakesRef.current) {
-            d.y += (C.SNOW_SPEED / canvas.height) * dt * d.sp;
-            d.x += d.sw * dt;
-            if (d.y > 1.05) { d.y = -0.05; d.x = Math.random(); }
-            const sx = d.x * canvas.width, sy = d.y * canvas.height;
-            ctx.fillRect(sx, sy, 2, 2);
-          }
-          // Fine white overlay to sell a bit of ground cover.
-          ctx.fillStyle = "rgba(240, 246, 255, 0.09)";
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-        }
-      }
+      /* ⚠️⚠️ ZIP 429 — LE CIEL EST DEVENU DEUX FONCTIONS PARTAGÉES, ET LE BLOC
+         QUI VIVAIT ICI ÉTAIT LA CAUSE EXACTE DU DÉFAUT. Le voile nocturne, les
+         halos de lampadaires, le voile d'orage, la teinte de saison et la neige
+         étaient écrits EN PLEIN MILIEU du rendu de la ferme. Valley Town, qui a
+         sa propre boucle depuis le 234, n'en héritait donc de rien : il y
+         faisait un midi de printemps perpétuel, avec des lampadaires posés dans
+         les rues qui ne s'allumaient jamais. C'est le §4 mot pour mot — « quand
+         une zone gagne sa propre boucle de rendu, elle hérite de tout ce que la
+         boucle commune faisait pour elle ».
+         La parade n'est pas de recopier le bloc là-bas (ce serait deux nuits à
+         tenir d'accord), c'est de le SORTIR : `drawNightVeil` prend la caméra,
+         l'échelle et ses sources de lumière ; `drawWeatherVeil` ne prend rien du
+         tout, puisqu'il travaille en espace écran. */
+      drawNightVeil(cam, ZOOM, lampsInView, balloonGlowRef.current);
+      drawWeatherVeil(dt);
+      drawGpsMarker(cam, ZOOM);   // zip 429 — après le voile : une boussole ne s'assombrit pas
+      gpsCheckArrival();
 
       // Invite boutique/bac
       let pk = null;
@@ -14026,7 +13983,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         // (PLAYER_SPEED, même bonus bonbon). Le cheval reste absent en ville.
         // Zip 365 : idem ferme — vitesse réelle (bonbon compris) mémorisée en
         // tuiles/seconde pour être diffusée, plutôt que devinée à l'arrivée.
-        const spSec = C.PLAYER_SPEED * (performance.now() < speedBuffUntilRef.current ? C.CANDY_SPEED_MUL : 1);
+        // Zip 429 : on court aussi en ville — c'est même là que ça compte, la
+        // carte fait 224×168 contre 96×72 pour la ferme.
+        const spSec = C.PLAYER_SPEED * (performance.now() < speedBuffUntilRef.current ? C.CANDY_SPEED_MUL : 1) * (isRunningNow(dt, uiBlocked) ? C.RUN_SPEED_MULT : 1);
         const sp = spSec * dt;
         m.vx = dx * spSec; m.vy = dy * spSec;
         const nx = m.x + dx * sp, ny = m.y + dy * sp;
@@ -14290,12 +14249,41 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            arrête ». Une haie dessinée à plat dans sa case ressemble à de la
            moquette verte, et on essaie de marcher dessus. */
         if (tw.hedge && tw.hedge[i]) {
+          /* ⚠️⚠️ ZIP 429 — LA HAIE SAIT MAINTENANT OÙ ELLE S'ARRÊTE. (revue
+             graphique demandée par Guillaume.) Le dessin du 425 peignait des
+             rectangles pleine case, tous identiques : une clôture de trente
+             cases se lisait comme UN MUR VERT LISSE, et — c'est le vrai
+             problème, il est pratique et pas esthétique — **on ne voyait pas
+             les passages**. Les 27 parcelles ont chacune une entrée percée dans
+             la haie (§4 : « on perce le passage avant de poser la clôture ») ;
+             sur un mur uniforme, ce trou d'une case ne se distinguait de rien.
+             On lisait la haie, on faisait demi-tour, et on longeait.
+             La parade tient en une ligne : une haie regarde ses VOISINES. Une
+             extrémité reçoit un bord arrondi et une ombre latérale ; une case
+             de milieu n'en reçoit pas. Du coup un passage est encadré par deux
+             bouts de haie visibles, et il se voit de loin. */
+          const hN = tw.hedge[i - tw.w], hS = tw.hedge[i + tw.w];
+          const hW = x > 0 && tw.hedge[i - 1], hE = x < tw.w - 1 && tw.hedge[i + 1];
           pushE((y + 1) * T, e, () => {
             const hx = x * T, hy = (y + 1) * T;
             ctx.fillStyle = "rgba(20,34,16,0.28)"; ctx.fillRect(hx, hy - 3, T, 3);   // ombre au pied
             ctx.fillStyle = "#2c5c2a"; ctx.fillRect(hx, hy - 20, T, 18);             // masse
             ctx.fillStyle = "#3d7a36"; ctx.fillRect(hx, hy - 20, T, 7);              // face éclairée
             ctx.fillStyle = "#55a047"; ctx.fillRect(hx, hy - 21, T, 3);              // crête taillée
+            /* Les BOUTS. Deux pixels ébréchés en haut de l'arête libre suffisent
+               à casser la ligne droite : c'est le même principe que le nez de
+               marche du perron du tribunal — une VALEUR, pas une forme. */
+            if (!hW) {
+              ctx.fillStyle = "rgba(18,44,16,0.40)"; ctx.fillRect(hx, hy - 20, 2, 18);
+              ctx.clearRect(hx, hy - 21, 2, 2);
+            }
+            if (!hE) {
+              ctx.fillStyle = "rgba(18,44,16,0.45)"; ctx.fillRect(hx + T - 2, hy - 20, 2, 18);
+              ctx.clearRect(hx + T - 2, hy - 21, 2, 2);
+            }
+            // Une haie isolée (aucune voisine) est un buisson : on lui arrondit
+            // les deux épaules, sinon elle a l'air d'un bout de mur tombé là.
+            if (!hN && !hS && !hW && !hE) { ctx.clearRect(hx, hy - 18, 1, 2); ctx.clearRect(hx + T - 1, hy - 18, 1, 2); }
             // Le feuillage : quelques touches déterministes (jamais aléatoires,
             // sinon la haie scintille d'une image à l'autre).
             for (let k = 0; k < 4; k++) {
@@ -14359,7 +14347,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              pulsation lente que la rivière de la ferme, pour que les deux eaux
              du jeu se ressemblent. */
           const wob = 0.5 + Math.sin(now / 900) * 0.5;
-          for (const [wy, wrx, wry] of [[fBy - 16, 19, 8], [fBy - 36, 8, 3.5]]) {
+          /* ⚠️ ZIP 429 — LES COTES VIENNENT DU SPRITE, ELLES NE SONT PLUS
+             RECOPIÉES ICI. Elles l'étaient, et rabaisser la fontaine aurait
+             laissé l'eau à mi-hauteur de l'air et le jet vingt pixels au-dessus
+             de sa colonne — sans erreur, comme toujours. Voir FOUNTAIN_GEO. */
+          const FG = sprites.fountainGeo;
+          for (const [wy, wrx, wry] of [[fBy - FG.basinY, FG.basinRX, FG.basinRY], [fBy - FG.bowlY, FG.bowlRX, FG.bowlRY]]) {
             ctx.fillStyle = "#3f7fd0";
             ctx.beginPath(); ctx.ellipse(fCx, wy, wrx, wry, 0, 0, 7); ctx.fill();
             ctx.fillStyle = `rgba(190, 225, 255, ${0.22 + wob * 0.16})`;
@@ -14369,12 +14362,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           // Le JET : il part du bouton de la colonne et retombe dans la vasque.
           const jet = 3 + Math.sin(now / 260) * 2;
           ctx.fillStyle = "rgba(226, 244, 255, 0.92)";
-          ctx.fillRect(fCx - 1, fBy - 60 - jet, 2, 10 + jet);
+          ctx.fillRect(fCx - 1, fBy - FG.jetY - 9 - jet, 2, 10 + jet);
           // ... et les gouttes, qui retombent en cloche des deux côtés.
           for (let d = 0; d < 8; d++) {
             const ph = ((now / 620) + d * 0.125) % 1;
             const sgn = d % 2 ? 1 : -1;
-            const dx2 = sgn * (2 + ph * 11), dy2 = -46 + ph * ph * 30;
+            // Les gouttes partent du bouton et retombent DANS la vasque : les
+            // deux cotes viennent donc de FOUNTAIN_GEO, comme le jet.
+            const dx2 = sgn * (2 + ph * 11), dy2 = -FG.jetY - 7 + ph * ph * (FG.jetY - FG.bowlY + 7);
             ctx.fillStyle = `rgba(226, 244, 255, ${0.85 * (1 - ph * 0.7)})`;
             ctx.fillRect(fCx + dx2, fBy + dy2, 2, 2);
           }
@@ -14628,7 +14623,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           const sitting = !!(res.act && res.sitOn && (C.TOWN_ACTS[res.act] || {}).sit);
           // Assis : on se dessine SUR le banc, un poil au sud pour passer
           // devant lui au tri (voir la branche `p.sit` de drawCharacter).
-          const dx2 = sitting ? res.sitOn.x : rx;
+          const dx2 = sitting ? res.sitOn.x + (res.seat || 0) * C.TOWN_SEAT_SPACING : rx;
           const dy2 = sitting ? res.sitOn.y + C.TOWN_SEAT_OFFSET : ry;
           const rDir = res.act ? (res.dir | 0) : (isHost ? (res.dir || 0) : (rp.dir != null ? rp.dir : 0));
           const rMoving = res.act ? false : (isHost ? !!res.moving : !!rp.moving);
@@ -14747,6 +14742,34 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // Zip 427 : la passe finale des bulles (voir queueTownBubble).
       townBubbles.sort((a, b) => a.by - b.by);
       for (const bq of townBubbles) { try { drawSpeechBubble(ctx, bq.cx, bq.by, bq.text, bq.major); } catch (e) { console.error("[FERME] bulle ville ignorée", e); } }
+      /* ╔══════════════════════════════════════════════════════════════════════
+         ║ ZIP 429 — VALLEY TOWN A ENFIN UN CIEL. (demande de Guillaume : « les
+         ║ logiques visuelles de météo et jour/nuit doivent être connectées à
+         ║ Valley Town aussi »)
+         ╚══════════════════════════════════════════════════════════════════════
+         ⚠️ IL Y FAISAIT UN MIDI DE PRINTEMPS PERPÉTUEL depuis le zip 234, et
+         ce n'était le choix de personne : le voile nocturne et la météo étaient
+         écrits dans le corps du rendu de la FERME, et la ville a sa propre
+         boucle. Le §4 le dit noir sur blanc — « quand une zone gagne sa propre
+         boucle de rendu, elle hérite de tout ce que la boucle commune faisait
+         pour elle ». Troisième occurrence après la carte et le minuteur
+         d'action du 426. C'est LE piège récurrent de ce fichier.
+
+         ⚠️⚠️ ET LE SYMPTÔME LE PLUS PARLANT ÉTAIT DÉJÀ DESSINÉ : le générateur
+         pose des dizaines de lampadaires le long des avenues, de la promenade
+         du lac et du quartier des artisans depuis le 425. Ils n'ont jamais
+         éclairé quoi que ce soit. Un décor qui existe POUR une mécanique
+         absente est plus trompeur qu'un décor manquant.
+
+         ⚠️ LES LAMPADAIRES DE LA VILLE SONT DES `props`, PAS DES `objects` :
+         c'est le générateur qui les pose (kind "lamp"), là où la ferme les
+         stocke dans sa grille d'objets parce qu'un joueur peut les poser et les
+         reprendre. Deux stockages, une seule question — d'où la liste construite
+         ici plutôt qu'un champ commun qu'il faudrait tenir d'accord.
+         ⚠️ ON NE PREND QUE CE QUI EST À L'ÉCRAN. Il y a beaucoup plus de
+         lampadaires en ville qu'à la ferme, et chaque halo est un dégradé
+         radial : les dessiner tous coûterait à chaque image une centaine de
+         gradients dont l'immense majorité tombe hors cadre. */
       /* ZIP 426 — LE CURSEUR DE VISÉE, en ville, quand la hache est en main.
          ⚠️ SANS LUI, LA COUPE EN VILLE EST INJOUABLE : à la ferme, un liseré
          blanc dit en permanence sur quelle case le clic va tomber ; ici il n'y
@@ -14764,6 +14787,38 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           ctx.strokeRect(ct.x * T + 0.5, ct.y * T + 0.5, T - 1, T - 1);
           ctx.restore();
         }
+      }
+      {
+        const lights = [];
+        if (torchOnRef.current) lights.push({ x: m.x + 0.5, y: m.y + 0.5, r: C.TORCH_LIGHT_RADIUS });
+        for (const p of playersRef.current.values()) {
+          if (p.torch && (p.zone || "farm") === "town") lights.push({ x: p.x + 0.5, y: p.y + 0.5, r: C.TORCH_LIGHT_RADIUS });
+        }
+        for (const pr of (tw.props || [])) {
+          if (pr.kind !== "lamp") continue;
+          if (pr.x < x0 - 6 || pr.x > x1 + 6 || pr.y < y0 - 6 || pr.y > yBot + 6) continue;
+          /* ⚠️ LE HALO SUIT LA CASE EN HAUTEUR. Un lampadaire de la Haute-Ville
+             est DESSINÉ `elev × TOWN_ELEV_PX` plus haut ; un halo posé sur sa
+             coordonnée brute serait resté trente pixels sous son propre
+             réverbère, en pleine rue. C'est le même décalage que tout le reste
+             du rendu de la ville, et il ne s'applique pas tout seul ici parce
+             que le voile nocturne travaille en espace écran. */
+          lights.push({ x: pr.x + 0.5, y: pr.y + 0.5 - elAt(pr.x, pr.y) * EP / T });
+        }
+        /* ⚠️ LA MONTGOLFIÈRE NE VOLE PAS AU-DESSUS DE LA VILLE : son halo est
+           en coordonnées de FERME, l'y passer dessinerait une tache lumineuse
+           à un point au hasard de Valley Town. C'est très exactement le piège
+           des deux cartes (§4), et il se glisse jusque dans un éclairage.
+           ⚠️ ET LE CIEL EST POSÉ APRÈS LE CURSEUR DE VISÉE, PAS AVANT. Ces deux
+           fonctions remettent la transformation à l'identité (elles travaillent
+           en espace écran) : appelées plus haut, elles laissaient le liseré de
+           visée se dessiner ensuite à des coordonnées de MONDE dans un repère
+           d'ÉCRAN — un rectangle blanc dans un coin, sans rapport avec la case
+           visée. Rien n'aurait planté. */
+        drawNightVeil(cam, zm, lights, null);
+        drawWeatherVeil(dt);
+        drawGpsMarker(cam, zm);   // zip 429
+        gpsCheckArrival();
       }
       // Prompts: E at the sign to ride home; near a house door, name it.
       let tpk = null;
@@ -14906,7 +14961,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         // Même vitesse qu'en ville et à la ferme (décision du zip 250 : « on ne
         // fait que marcher »). Le bonbon de vitesse reste actif — il n'y a
         // aucune raison qu'un couloir l'annule.
-        const spSec = C.PLAYER_SPEED * (performance.now() < speedBuffUntilRef.current ? C.CANDY_SPEED_MUL : 1);
+        /* ⚠️ ZIP 429 — ET ON COURT AUSSI DANS LE TRIBUNAL. La tentation était
+           de l'interdire (« on ne court pas dans un tribunal ») ; ce serait une
+           règle que le joueur découvrirait en appuyant sur une touche qui ne
+           fait rien, c'est-à-dire un bogue de son point de vue. Un bâtiment de
+           dix-sept pièces sur trois niveaux est justement un endroit où l'on
+           veut aller vite. */
+        const spSec = C.PLAYER_SPEED * (performance.now() < speedBuffUntilRef.current ? C.CANDY_SPEED_MUL : 1) * (isRunningNow(dt, uiBlocked) ? C.RUN_SPEED_MULT : 1);
         const sp = spSec * dt;
         m.vx = dx * spSec; m.vy = dy * spSec;
         const nx = m.x + dx * sp, ny = m.y + dy * sp;
@@ -15127,6 +15188,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       gvig.addColorStop(1, `rgba(8,6,10,${vig})`);
       ctx.fillStyle = gvig; ctx.fillRect(cam.x, cam.y, cam.vw, cam.vh);
 
+      /* ZIP 429 — la boussole marche aussi dans le tribunal. ⚠️ ET C'EST LÀ
+         QU'ELLE SERT LE PLUS : dix-sept pièces sur trois niveaux empilés dans
+         une seule grille, où le plan est le seul moyen de savoir où l'on va.
+         Elle ne fait AUCUN cas particulier de l'étage, parce qu'elle n'en a pas
+         besoin : le niveau se lit dans `y` (§6), donc une destination posée à
+         l'étage est simplement « plus haut sur la grille », et la distance
+         affichée reste juste. Une boussole qui aurait dû connaître les étages
+         aurait été le signe que l'empilement était une mauvaise idée. */
+      drawGpsMarker(cam, ZOOM);
+      gpsCheckArrival();
+
       // ---- Le bandeau d'étage, en espace ÉCRAN (il ne suit pas la caméra).
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       const fname = `${C.COURT_FLOORS[myFloor].emoji} ${L.courtFloorName(C.COURT_FLOORS[myFloor].key)}`;
@@ -15278,7 +15350,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         // pubMe). Tous les modificateurs — cheval, nage — y sont déjà
         // appliqués : le client distant n'a donc AUCUN calcul de vitesse à
         // refaire, ni aucune constante à connaître. Voir advanceRemote.
-        const spSec = C.PLAYER_SPEED * (mounted ? C.HORSE_SPEED_MULT : 1) / (swimming ? C.HORSE_WATER_SLOW : 1);
+        /* ⚠️ ZIP 429 — LA COURSE NE SE CUMULE PAS AVEC LE CHEVAL. Il est déjà
+           le mode rapide de la ferme (×HORSE_SPEED_MULT) ; les multiplier
+           ferait traverser la carte en quelques secondes, et surtout ferait
+           payer de l'énergie pour un gain qu'on a déjà acheté 800 or. */
+        const running = !mounted && isRunningNow(dt, uiBlocked);
+        const spSec = C.PLAYER_SPEED * (mounted ? C.HORSE_SPEED_MULT : (running ? C.RUN_SPEED_MULT : 1)) / (swimming ? C.HORSE_WATER_SLOW : 1);
         const sp = spSec * dt;
         m.vx = dx * spSec; m.vy = dy * spSec;
         const nx = m.x + dx * sp, ny = m.y + dy * sp;
@@ -15978,6 +16055,204 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       ctx.beginPath(); ctx.ellipse((flip ? -4 : 4), -8, 3.5, 2.5, 0, 0, 7); ctx.fill();
       ctx.restore();
     }
+    /* ══════════════════════════════════════════════════════════════════════
+       ZIP 429 — LE CIEL, POUR TOUTES LES ZONES QUI EN ONT UN.
+       ──────────────────────────────────────────────────────────────────────
+       ⚠️ CES DEUX FONCTIONS SONT LE MÊME CODE QU'AVANT, DÉPLACÉ — pas réécrit.
+       Elles étaient enfermées dans le rendu de la ferme ; la ville ne pouvait
+       donc ni faire nuit, ni pleuvoir, ni neiger. Le déplacement est la
+       correction : il n'y a toujours qu'UNE nuit et UNE météo dans le jeu.
+       ⚠️ L'INTÉRIEUR DU TRIBUNAL N'EN APPELLE AUCUNE, et c'est délibéré : il
+       n'a pas de ciel. Une pluie qui tombe dans les archives du sous-sol serait
+       la version météo du « bâtiment muet » du 426. */
+    function drawNightVeil(cam, zoom, lights, balloonGlow) {
+      const na = nightAlpha();
+      if (na <= 0) return;
+      // Correctif chantier 2026-07 ("les lampadaires restent éteints la
+      // nuit") : le voile sombre + les halos sont composés sur un canvas
+      // HORS-ÉCRAN dédié, PAS directement sur le canvas principal. Raison :
+      // "destination-out" efface les pixels sur lesquels il est appliqué ;
+      // utilisé directement, il n'aurait pas seulement percé le voile mais
+      // aussi le terrain et les sprites déjà dessinés dessous, laissant un
+      // trou transparent (fond de page visible) au lieu d'un cercle éclairé.
+      let nc = nightCanvasRef.current;
+      if (!nc) { nc = document.createElement("canvas"); nightCanvasRef.current = nc; }
+      if (nc.width !== canvas.width || nc.height !== canvas.height) { nc.width = canvas.width; nc.height = canvas.height; }
+      const nctx = nc.getContext("2d");
+      nctx.setTransform(1, 0, 0, 1, 0, 0);
+      nctx.globalCompositeOperation = "source-over";
+      nctx.clearRect(0, 0, nc.width, nc.height);
+      nctx.fillStyle = `rgba(8,10,30,${na})`;
+      nctx.fillRect(0, 0, nc.width, nc.height);
+      /* ⚠️ LE HALO EST EN PIXELS ÉCRAN, DONC IL DÉPEND DE L'ÉCHELLE — et c'est
+         pour ça que `zoom` est un ARGUMENT et non la constante `ZOOM`. Depuis
+         le dézoom des monuments (428), la ville ne dessine plus toujours à 3 :
+         un rayon calculé avec la constante aurait donné, près du tribunal, des
+         halos une fois et demie trop grands, glissant sur leur lampadaire à
+         mesure que la caméra recule. */
+      const pierce = (x, y, rTiles, soft) => {
+        const radiusPx = rTiles * T * zoom;
+        const sx = (x * T - cam.x) * zoom, sy = (y * T - cam.y) * zoom;
+        const grad = nctx.createRadialGradient(sx, sy, 0, sx, sy, radiusPx);
+        grad.addColorStop(0, `rgba(0,0,0,${na})`);
+        grad.addColorStop(0.7, `rgba(0,0,0,${na * soft})`);
+        grad.addColorStop(1, "rgba(0,0,0,0)");
+        nctx.fillStyle = grad;
+        nctx.beginPath(); nctx.arc(sx, sy, radiusPx, 0, Math.PI * 2); nctx.fill();
+      };
+      if (lights && lights.length) {
+        nctx.save();
+        nctx.globalCompositeOperation = "destination-out";
+        for (const lamp of lights) pierce(lamp.x, lamp.y, lamp.r || C.LAMP_LIGHT_RADIUS, 0.9);
+        nctx.restore();
+      }
+      // Zip 302 : le brûleur allumé de la montgolfière perce le voile
+      // EXACTEMENT comme un lampadaire (bug corrigé : la lanterne restait
+      // assombrie comme le reste malgré son halo).
+      if (balloonGlow) {
+        nctx.save();
+        nctx.globalCompositeOperation = "destination-out";
+        pierce(balloonGlow.x, balloonGlow.y, balloonGlow.radiusTiles, 0.85);
+        nctx.restore();
+      }
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.globalCompositeOperation = "source-over";
+      ctx.drawImage(nc, 0, 0);
+    }
+    /* La météo et la saison. ⚠️ TOUT EST EN ESPACE ÉCRAN, donc cette fonction
+       ne prend ni caméra ni échelle : c'est ce qui la rend utilisable telle
+       quelle par n'importe quelle zone à ciel ouvert. Purement visuel — aucun
+       effet sur la pousse, l'énergie ou les animaux, ni ici ni ailleurs. */
+    function drawWeatherVeil(dt) {
+      // Jour orageux (chantier 2026-07, demande Guillaume : "des journées
+      // grises d'orages et pluie, une toutes les 7"). S'ajoute au voile
+      // nocturne s'il fait aussi nuit : les deux se cumulent, sans logique
+      // spéciale de mélange.
+      if (E.isStormyDay(sharedRef.current.day || 1)) {
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.globalCompositeOperation = "source-over";
+        ctx.fillStyle = `rgba(70,74,86,${C.STORM_TINT_ALPHA})`;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        if (!rainDropsRef.current || rainDropsRef.current.length !== C.STORM_RAIN_COUNT) {
+          rainDropsRef.current = Array.from({ length: C.STORM_RAIN_COUNT }, () => ({
+            x: Math.random(), y: Math.random(), sp: 0.7 + Math.random() * 0.6,
+          }));
+        }
+        ctx.strokeStyle = "rgba(210,220,235,0.35)";
+        ctx.lineWidth = 1;
+        for (const d of rainDropsRef.current) {
+          d.y += (C.STORM_RAIN_SPEED / canvas.height) * dt * d.sp;
+          if (d.y > 1.05) { d.y = -0.05; d.x = Math.random(); }
+          const sx = d.x * canvas.width, sy = d.y * canvas.height;
+          ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx - 4, sy + C.STORM_RAIN_LEN); ctx.stroke();
+        }
+      }
+      // Teinte de saison, empilée exactement comme le voile d'orage, et la
+      // neige d'hiver (zip 235, Guillaume : "when it's winter, it snows").
+      const se = E.seasonOf();
+      if (se.tint) {
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.globalCompositeOperation = "source-over";
+        ctx.fillStyle = se.tint;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+      if (se.key === "winter") {
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        if (!snowFlakesRef.current || snowFlakesRef.current.length !== C.SNOW_COUNT) {
+          snowFlakesRef.current = Array.from({ length: C.SNOW_COUNT }, () => ({
+            x: Math.random(), y: Math.random(), sp: 0.6 + Math.random() * 0.9, sw: (Math.random() * 2 - 1) * 0.02,
+          }));
+        }
+        ctx.fillStyle = "rgba(240, 246, 255, 0.9)";
+        for (const d of snowFlakesRef.current) {
+          d.y += (C.SNOW_SPEED / canvas.height) * dt * d.sp;
+          d.x += d.sw * dt;
+          if (d.y > 1.05) { d.y = -0.05; d.x = Math.random(); }
+          const sx = d.x * canvas.width, sy = d.y * canvas.height;
+          ctx.fillRect(sx, sy, 2, 2);
+        }
+        // Fin voile blanc, pour vendre un peu de couverture au sol.
+        ctx.fillStyle = "rgba(240, 246, 255, 0.09)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+    }
+    /* ══════════════════════════════════════════════════════════════════════
+       ZIP 429 — LE MARQUEUR DE LA BOUSSOLE, EN ESPACE ÉCRAN.
+       ──────────────────────────────────────────────────────────────────────
+       ⚠️ IL EST DESSINÉ EN PIXELS D'ÉCRAN, PAS EN COORDONNÉES DE MONDE, et
+       c'est ce qui le rend indépendant du dézoom (428) : un triangle posé dans
+       le repère du monde grossirait et rétrécirait avec la caméra, alors qu'un
+       repère d'interface doit garder exactement la même taille — c'est à ça
+       qu'on le reconnaît comme faisant partie de l'écran et non du décor.
+       ⚠️ ET IL EST DESSINÉ APRÈS LE VOILE NOCTURNE, DONC IL NE S'ASSOMBRIT PAS.
+       Une boussole qui devient illisible la nuit est une boussole qui ne sert
+       que le jour, c'est-à-dire au moment où l'on se repère déjà tout seul.
+
+       Deux états, et un seul geste de lecture :
+         - la destination est HORS CHAMP : le triangle orbite autour du joueur,
+           pointe vers elle, et la distance s'affiche sous lui. On tourne sur
+           soi-même jusqu'à ce que le triangle soit devant, et on marche ;
+         - la destination est À L'ÉCRAN : le triangle se pose DESSUS, pointe
+           vers le bas, et respire doucement. Il n'y a plus rien à chercher.
+       ⚠️ Le second état est ce qui empêche le premier de mentir : sans lui, le
+       triangle continuerait de tourner autour du joueur une fois arrivé à trois
+       pas, en indiquant une direction qui change à chaque pas. */
+    function drawGpsMarker(cam, zoom) {
+      const g = gpsRef.current, m = meRef.current;
+      if (!g || !m || g.zone !== (m.zone || "farm")) return;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.globalCompositeOperation = "source-over";
+      const sx = (g.x * T - cam.x) * zoom, sy = (g.y * T - cam.y) * zoom;
+      const dist = Math.hypot(g.x - m.x, g.y - m.y);
+      const label = L.gpsDistance(Math.round(dist));
+      const onScreen = sx > 10 && sy > 10 && sx < canvas.width - 10 && sy < canvas.height - 10;
+      const beat = 1 + Math.sin(performance.now() / 320) * 0.10;
+      // La palette : ambre chaud sur contour sombre. ⚠️ Le contour n'est pas
+      // décoratif — sans lui, le marqueur disparaît sur le dallage clair de la
+      // Haute-Ville comme sur le blé mûr, qui sont exactement les deux endroits
+      // où l'on se perd.
+      const GOLD = "#ffce4d", GOLD_D = "#c8922a", INK = "rgba(20,16,10,0.72)";
+      const tri = (cx, cy, ang, size) => {
+        ctx.save();
+        ctx.translate(cx, cy); ctx.rotate(ang);
+        ctx.beginPath();
+        ctx.moveTo(0, -size);                 // la pointe
+        ctx.lineTo(size * 0.72, size * 0.62);
+        ctx.lineTo(0, size * 0.30);           // ⚠️ l'encoche arrière : c'est elle qui
+        ctx.lineTo(-size * 0.72, size * 0.62); //   fait lire « flèche » et non « losange »
+        ctx.closePath();
+        ctx.lineWidth = 3; ctx.strokeStyle = INK; ctx.stroke();
+        const grd = ctx.createLinearGradient(0, -size, 0, size * 0.62);
+        grd.addColorStop(0, GOLD); grd.addColorStop(1, GOLD_D);
+        ctx.fillStyle = grd; ctx.fill();
+        ctx.restore();
+      };
+      let lx, ly;
+      if (onScreen) {
+        const size = C.GPS_MARK_PX * 0.85 * beat;
+        // Posé au-dessus du point, pointe en bas : le sommet touche la cible.
+        tri(sx, sy - size * 1.6, Math.PI, size);
+        lx = sx; ly = sy - size * 2.6;
+      } else {
+        /* Le triangle orbite autour de MOI, à rayon fixe. ⚠️ Il n'est PAS collé
+           au bord de l'écran : un marqueur de bord se confond avec l'interface
+           (barre d'outils, jauges) et oblige à balayer tout le pourtour pour le
+           retrouver. Autour du personnage, il est toujours au même endroit du
+           regard — c'est-à-dire là où l'on regarde déjà. */
+        const mx = (m.x + 0.5) * T, my = (m.y + 0.5) * T;
+        const ang = Math.atan2(g.y - m.y, g.x - m.x);
+        const px = (mx * 1 - cam.x) * zoom, py = (my - cam.y) * zoom;
+        const r = C.GPS_ORBIT_PX;
+        const size = C.GPS_MARK_PX * beat;
+        lx = px + Math.cos(ang) * r; ly = py + Math.sin(ang) * r;
+        tri(lx, ly, ang + Math.PI / 2, size);
+        ly += size * 1.5;
+      }
+      ctx.font = "bold 11px monospace"; ctx.textAlign = "center";
+      ctx.lineWidth = 3; ctx.strokeStyle = INK; ctx.strokeText(label, lx, ly + 12);
+      ctx.fillStyle = "#fff4d0"; ctx.fillText(label, lx, ly + 12);
+      ctx.textAlign = "left";
+    }
     function nightAlpha() {
       // Demande Guillaume (chantier 2026-07) : lumière du jour qui revient
       // PROGRESSIVEMENT à l'aube (5h30-6h30, fondu symétrique au coucher de
@@ -16026,6 +16301,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (mc.width !== dispW || mc.height !== dispH) { mc.width = dispW; mc.height = dispH; }
       g.clearRect(0, 0, dispW, dispH);
       g.drawImage(base, 0, 0, w.w, w.h, 0, 0, dispW, dispH);
+      drawGpsOnMap(g, scale);
       // Joueurs (moi + distants), point + nom, actualisés en direct.
       const all = [meRef.current, ...playersRef.current.values()];
       for (const p of all) {
@@ -16147,6 +16423,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         g.fillStyle = "#000"; g.fillText(ro.name, px + 1, py - 6 + 1);
         g.fillStyle = "#cdf0d6"; g.fillText(ro.name, px, py - 6);
       }
+      drawGpsOnMap(g, scale);
       // Les joueurs présents EN VILLE (les autres sont ailleurs : les dessiner
       // reviendrait à afficher des coordonnées de ferme sur un plan de ville).
       const all = [meRef.current, ...playersRef.current.values()];
@@ -16216,6 +16493,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (f === 0) {
         g.fillStyle = "#f2e6c8";
         g.fillRect(C.COURT_ENTRY.x * scale, OY + C.COURT_ENTRY.y * scale, 2 * scale, scale);
+      }
+      /* ⚠️ LA CIBLE EST DESSINÉE SUR L'ÉTAGE OÙ ELLE A ÉTÉ POSÉE, ET SUR LUI
+         SEUL. Le plan du tribunal empile trois niveaux ; une cible affichée sur
+         les trois ferait croire à trois destinations. Le niveau se DÉDUIT de
+         `y`, comme pour tout le reste (§6) — il n'y a rien à stocker. */
+      if (gpsRef.current && gpsRef.current.zone === "court" && E.courtFloorOf(gpsRef.current.y) === f) {
+        drawGpsOnMap(g, scale, 0, OY - E.courtFloorY0(f) * scale);
       }
       // Les visiteurs du MÊME étage. Les autres sont réellement ailleurs.
       const all = [meRef.current, ...playersRef.current.values()];
@@ -16303,6 +16587,108 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const tx = Math.floor(wx), ty = Math.floor(wy);
     if (inMap(tx, ty) && Math.abs(wx - (m.x + 0.5)) <= C.ACT_RANGE + 0.5 && Math.abs(wy - (m.y + 0.2)) <= C.ACT_RANGE + 0.5) return { x: tx, y: ty };
     return facingTile();
+  }
+  /* ---- LA BOUSSOLE GPS, CÔTÉ JEU (429) --------------------------------------
+     ⚠️ L'ÉCHELLE DE LA CARTE EST RELUE SUR LE CANEVAS, PAS RECOPIÉE. Les trois
+     plans (ferme, ville, tribunal) n'ont ni la même taille ni le même facteur
+     d'agrandissement, et le canevas est en plus étiré par le CSS. Déduire la
+     case cliquée d'un facteur écrit en dur ici marcherait sur un plan et
+     décalerait sur les deux autres — le clic tomberait à côté, et on
+     accuserait la précision de la souris. On lit donc la boîte réelle de
+     l'élément et la largeur du monde correspondant : deux valeurs qui ne
+     peuvent pas mentir. */
+  function gpsWorldSize() {
+    const z = (meRef.current && meRef.current.zone) || "farm";
+    if (z === "town") { const tw = townWorldRef.current; return tw ? { w: tw.w, h: tw.h } : null; }
+    if (z === "court") return { w: C.COURT_MAP_W, h: C.COURT_MAP_H };
+    if (z === "evil") return null;   // la carte maléfique n'a pas de plan cliquable
+    const w = worldRef.current; return w ? { w: w.w, h: w.h } : null;
+  }
+  function onMapClick(ev) {
+    const mc = mapCanvasRef.current, sz = gpsWorldSize();
+    if (!mc || !sz) return;
+    const r = mc.getBoundingClientRect();
+    if (!r.width || !r.height) return;
+    const wx = ((ev.clientX - r.left) / r.width) * sz.w;
+    const wy = ((ev.clientY - r.top) / r.height) * sz.h;
+    if (wx < 0 || wy < 0 || wx >= sz.w || wy >= sz.h) return;
+    const zone = (meRef.current && meRef.current.zone) || "farm";
+    /* ⚠️ RECLIQUER AU MÊME ENDROIT EFFACE. C'est la seule façon d'annuler qui
+       ne demande ni bouton ni touche : on repose le doigt là où l'on avait
+       visé. Le seuil est en cases, donc il ne dépend pas du zoom du plan. */
+    const cur = gpsRef.current;
+    if (cur && cur.zone === zone && Math.hypot(cur.x - wx, cur.y - wy) < C.GPS_CLEAR_TILES) {
+      gpsRef.current = null; setGpsMark(null); pushToast(L.gpsCleared); return;
+    }
+    gpsRef.current = { zone, x: wx, y: wy };
+    setGpsMark({ zone, x: wx, y: wy });
+    pushToast(L.gpsSet(Math.round(gpsDistance() || 0)));
+  }
+  /* La cible sur le PLAN. ⚠️ Une croix, pas un point : un point de plus sur une
+     carte qui porte déjà des joueurs, des résidents et des repères se noie. La
+     croix et son cercle ne ressemblent à rien d'autre de cette carte, ce qui est
+     tout ce qu'on lui demande. */
+  function drawGpsOnMap(g, scale, ox = 0, oy = 0) {
+    const gp = gpsRef.current, m = meRef.current;
+    if (!gp || !m || gp.zone !== (m.zone || "farm")) return;
+    const px = gp.x * scale + ox, py = gp.y * scale + oy;
+    const r = 7;
+    g.save();
+    g.lineWidth = 3; g.strokeStyle = "rgba(20,16,10,0.75)";
+    g.beginPath(); g.arc(px, py, r, 0, 7); g.moveTo(px - r - 3, py); g.lineTo(px + r + 3, py);
+    g.moveTo(px, py - r - 3); g.lineTo(px, py + r + 3); g.stroke();
+    g.lineWidth = 1.4; g.strokeStyle = "#ffce4d";
+    g.beginPath(); g.arc(px, py, r, 0, 7); g.moveTo(px - r - 3, py); g.lineTo(px + r + 3, py);
+    g.moveTo(px, py - r - 3); g.lineTo(px, py + r + 3); g.stroke();
+    g.restore();
+  }
+  function gpsDistance() {
+    const g = gpsRef.current, m = meRef.current;
+    if (!g || !m || g.zone !== (m.zone || "farm")) return null;
+    return Math.hypot(g.x - m.x, g.y - m.y);
+  }
+  /* ⚠️ L'ARRIVÉE S'EFFACE TOUTE SEULE, ET ELLE LE DIT. Une boussole qui reste
+     allumée sur place devient un triangle qui tourne sur lui-même autour du
+     joueur : la seule chose qu'elle indique alors, c'est qu'on a oublié de
+     l'éteindre. Le rayon est celui d'une case ou deux, soit « je suis arrivé »
+     à l'échelle où l'on marche. */
+  function gpsCheckArrival() {
+    const d = gpsDistance();
+    if (d === null || d > C.GPS_ARRIVE_TILES) return;
+    gpsRef.current = null; setGpsMark(null);
+    pushToast(L.gpsArrived);
+  }
+  /* ---- LA COURSE (429) ------------------------------------------------------
+     ⚠️ UNE SEULE DÉFINITION, LUE PAR LES TROIS ZONES. La ferme, Valley Town et
+     le tribunal ont chacune leur boucle de déplacement (c'est le §4 : trois
+     boucles, trois occasions d'oublier). Écrire le test « est-ce que je cours »
+     trois fois, c'est se garantir qu'un jour on courra dans deux zones sur
+     trois — et que personne ne saura dire si c'est voulu.
+     ⚠️ ELLE CONSOMME ICI ET NULLE PART AILLEURS, pour la même raison : l'appel
+     est fait par la fonction qui répond, pas par chaque appelant.
+     ⚠️ ET LE MENU / LE CHAT NEUTRALISENT MAJ. Sans ça, taper une majuscule dans
+     le chat ferait courir le personnage — et pire, lui ferait dépenser de
+     l'énergie pendant qu'on écrit. */
+  function isRunningNow(dt, blocked) {
+    const keys = keysRef.current;
+    if (blocked) return false;
+    if (!(keys["ShiftLeft"] || keys["ShiftRight"])) return false;
+    if (energyRef.current <= C.RUN_MIN_ENERGY) return false;
+    if (dt > 0) {
+      runDebtRef.current += C.RUN_ENERGY_PER_SEC * dt;
+      /* ⚠️ ON NE DÉPENSE QU'EN POINTS ENTIERS, ET C'EST LA DETTE QUI PORTE LE
+         RESTE. `energy` est un entier partagé : le décrémenter d'un demi-point
+         par image le ferait tomber à `NaN` chez l'un et pas chez l'autre, ou
+         plus vicieusement partir en flottant dans la sauvegarde. La dette est
+         purement locale et ne quitte jamais cette image. */
+      if (runDebtRef.current >= 1) {
+        const spend = Math.floor(runDebtRef.current);
+        runDebtRef.current -= spend;
+        const next = Math.max(0, energyRef.current - spend);
+        if (next !== energyRef.current) { energyRef.current = next; setMyEnergy(next); sendReq({ kind: "spendEnergy", amount: spend }); }
+      }
+    }
+    return true;
   }
   function nearTile(tl, d = 2.5) { const m = meRef.current; return m && Math.abs(m.x - tl.x) <= d && Math.abs(m.y - tl.y) <= d; }
   // ---- Zip 251 : outil main (poser/déplacer/ranger décos + lampadaires) ----
@@ -16764,6 +17150,36 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      s'aligne sur l'assise) et c'est aussi ce qui interdit à deux joueurs de
      s'asseoir au même endroit sans qu'on ait à inventer un verrou : ils
      occuperaient la même case, ce qui se voit tout de suite. */
+  /* ⚠️ ZIP 429 — LE JOUEUR CHOISIT UNE PLACE LIBRE, il ne s'assoit pas
+     forcément au milieu. Trois places par banc ne servent à rien si tout le
+     monde se pose au centre : on prendrait la place de la personne déjà là, et
+     deux sprites superposés se lisent comme un bogue d'affichage. On lit les
+     occupants — résidents assis, autres joueurs assis — et on prend la place
+     libre la plus proche de l'endroit d'où l'on vient, ce qui fait qu'on
+     s'assoit naturellement « à côté » plutôt que d'aller à l'autre bout.
+     ⚠️ AUCUNE RÉSERVATION, AUCUN ARBITRAGE HÔTE. Deux joueurs qui s'assoient
+     à la même milliseconde sur la même place, ça se voit et ça se corrige en
+     se levant ; un verrou réseau pour un banc coûterait un aller-retour et
+     un état de plus à réconcilier, pour un défaut qui ne casse rien. */
+  function freeSeatOn(pr) {
+    const m = meRef.current;
+    const busy = new Set();
+    for (const res of ((sharedRef.current.station && sharedRef.current.station.residents) || [])) {
+      if (res && res.sitOn && res.sitOn.x === pr.x && res.sitOn.y === pr.y) busy.add(res.seat || 0);
+    }
+    for (const p of playersRef.current.values()) {
+      if (p && Array.isArray(p.sit) && p.sit[0] === pr.x && p.sit[1] === pr.y) busy.add(p.sit[2] || 0);
+    }
+    const half = (C.TOWN_SEATS_PER_BENCH - 1) / 2;
+    let best = null, bestD = Infinity;
+    for (let k = 0; k < C.TOWN_SEATS_PER_BENCH; k++) {
+      const seat = k - half;
+      if (busy.has(seat)) continue;
+      const d = Math.abs(pr.x + seat * C.TOWN_SEAT_SPACING - m.x);
+      if (d < bestD) { bestD = d; best = seat; }
+    }
+    return best;   // null = le banc est plein, et on le DIT plutôt que d'empiler
+  }
   function sitOnBench(pr) {
     const m = meRef.current;
     /* ⚠️⚠️ ON MÉMORISE D'OÙ L'ON S'EST ASSIS, ET C'EST INDISPENSABLE DEPUIS QUE
@@ -16771,9 +17187,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        vers le sud » était juste tant que le sud était forcément libre ; au bord
        du lac, le sud est l'EAU. On se relève donc exactement là où l'on se
        tenait, case dont on sait qu'elle est praticable puisqu'on y était. */
+    const seat = freeSeatOn(pr);
+    if (seat === null) { pushToast(L.benchFullToast); return; }
     m.sitFrom = { x: m.x, y: m.y };
-    m.sitOn = { x: pr.x, y: pr.y };
-    m.x = pr.x; m.y = pr.y + C.TOWN_SEAT_OFFSET;
+    m.sitOn = { x: pr.x, y: pr.y }; m.seat = seat;
+    m.x = pr.x + seat * C.TOWN_SEAT_SPACING; m.y = pr.y + C.TOWN_SEAT_OFFSET;
     m.dir = 0; m.moving = false; m.animT = 0; m.vx = 0; m.vy = 0;
     maybeSendPos();
     pushToast(L.benchSitToast);
@@ -16782,7 +17200,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     const m = meRef.current;
     if (!m.sitOn) return;
     const back = m.sitFrom;
-    m.sitOn = null; m.sitFrom = null;
+    m.sitOn = null; m.sitFrom = null; m.seat = 0;
     if (back) { m.x = back.x; m.y = back.y; }
     else m.y = Math.min(m.y + (1 - C.TOWN_SEAT_OFFSET), C.TOWN_MAP_H - 1);  // repli : sauvegarde d'avant le 428
     m.moving = false; m.animT = 0;
@@ -20411,8 +20829,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         <div className="ferme-map-ov" onClick={() => setMapOpen(false)}>
           <div className="ferme-map-box panel" onClick={e => e.stopPropagation()}>
             <h2>{L.mapTitle}</h2>
-            <canvas ref={mapCanvasRef} className="ferme-map-canvas" />
-            <div className="ferme-map-close">{L.mapClose}</div>
+            {/* ⚠️ ZIP 429 — LE CLIC POSE LA DESTINATION, ET LE CURSEUR LE DIT.
+                Sans `cursor: crosshair`, rien n'indique qu'une carte est
+                cliquable : on l'ouvre, on la lit, on la referme, et la boussole
+                n'existe pour personne. Une mécanique qu'on ne peut découvrir
+                que si on nous l'a dite n'existe pas (leçon des plaques du
+                tribunal, 426). */}
+            <canvas ref={mapCanvasRef} className="ferme-map-canvas" style={{ cursor: "crosshair" }} onClick={onMapClick} />
+            <div className="ferme-map-close">🧭 {L.gpsHint} &nbsp;·&nbsp; {L.mapClose}</div>
             <button className="ferme-btn" style={{ marginTop: 8 }} onClick={() => setMapOpen(false)}>✕</button>
           </div>
         </div>

@@ -50,7 +50,7 @@ const PAVE = [0xb3, 0xb2, 0xb8];
      - debout  : ancre à la case du dessous, sprite complet de 24 px.
    Tout écart avec ces trois lignes rendrait la vignette décorative. */
 function vignette(sheet, label, seated) {
-  const W = 44, H = 52;
+  const W = 62, H = 52;
   const v = makeCanvas(W, H);
   v.ctx.fillStyle = `rgba(${PAVE[0]},${PAVE[1]},${PAVE[2]},1)`;
   v.ctx.fillRect(0, 0, W, H);
@@ -64,7 +64,17 @@ function vignette(sheet, label, seated) {
   if (seated) {
     // py = (by + 0.45) * T avec (by + 1) * T = byPix  →  py = byPix - 0.55 * T
     const py = Math.round(byPix - 0.55 * T);
-    A.drawSeated(v.ctx, sheet, 0, px, py);
+    /* ⚠️ ZIP 429 — ON EN DESSINE TROIS, et c'est le seul moyen de juger la
+       largeur du banc. Une place seule au milieu d'un sprite de 40 px a l'air
+       parfaite ; c'est à trois qu'on voit si les épaules se chevauchent
+       agréablement ou si la troisième personne est assise dans le vide.
+       L'ordre gauche → droite fait que le recouvrement va toujours dans le
+       même sens, comme dans le jeu (tri par x à y égal). */
+    const half = (C.TOWN_SEATS_PER_BENCH - 1) / 2;
+    for (let k = 0; k < C.TOWN_SEATS_PER_BENCH; k++) {
+      const seat = k - half;
+      A.drawSeated(v.ctx, sheet, 0, Math.round(px + seat * C.TOWN_SEAT_SPACING * T), py);
+    }
   } else {
     // Debout, DEVANT le banc (une case plus au sud) : l'ancre est à byPix,
     // et le sprite complet monte de 8 px au-dessus, comme dans le jeu.
@@ -146,7 +156,7 @@ else console.log("\nToutes les poses assises tiennent dans les proportions atten
    ⚠️ Agrandie six fois. À l'échelle 1 on ne voit rien d'une pose de 18 px, et
    un banc de rendu qu'on ne peut pas lire ne sert à rien (leçon du 427). */
 {
-  const pad = 4, cellW = 44, cellH = 52;
+  const pad = 4, cellW = 62, cellH = 52;
   const cols = 4, rows = Math.ceil(CASES.length / cols);
   const sh = makeCanvas(cols * (cellW * 2 + pad * 2) + pad, rows * (cellH + pad + 8) + pad);
   sh.ctx.fillStyle = "rgba(60,60,66,1)"; sh.ctx.fillRect(0, 0, sh.width, sh.height);

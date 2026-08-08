@@ -1713,6 +1713,14 @@ export const FERME_STR = {
     // Zip 428 : le banc s'utilise vraiment. Le message DIT comment se relever —
     // une action dont on ne connaît pas la sortie est une action qu'on n'ose pas.
     benchSitToast: "🪑 Vous vous asseyez. Une touche de direction pour repartir.",
+    benchFullToast: "🪑 Le banc est complet. Il y en a d'autres.",
+    // Zip 429 : la boussole. ⚠️ Une distance sans unité ne se lit pas ; « m »
+    // (une case = un pas) suffit et n'a rien à réconcilier.
+    gpsDistance: (m) => m + " m",
+    gpsSet: (m) => "🧭 Destination fixée — " + m + " m. Reclic au même endroit pour annuler.",
+    gpsCleared: "🧭 Destination effacée.",
+    gpsArrived: "🧭 Vous y êtes.",
+    gpsHint: "Clic sur le plan : fixer une destination",
     promptTownStand: "↑ ↓ ← → : se lever",
   },
   en: {
@@ -3098,6 +3106,12 @@ export const FERME_STR = {
     benchToast: "🪑 You sit down. The world carries on without you for a moment.",
     townSitHint: "E: sit down",
     benchSitToast: "🪑 You sit down. Any direction key to get going again.",
+    benchFullToast: "🪑 That bench is full. There are others.",
+    gpsDistance: (m) => m + " m",
+    gpsSet: (m) => "🧭 Destination set — " + m + " m. Click it again to cancel.",
+    gpsCleared: "🧭 Destination cleared.",
+    gpsArrived: "🧭 You have arrived.",
+    gpsHint: "Click the map to set a destination",
     promptTownStand: "↑ ↓ ← → : stand up",
   },
 };

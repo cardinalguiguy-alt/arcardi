@@ -3832,6 +3832,66 @@ export const TOWN_REPATH_TRIES = 2;
    dossier, l'assise et le sol du sprite de banc) est dans SEAT_POSE, côté
    fermeArt — c'est là que se dessine, ici que se place. */
 export const TOWN_SEAT_OFFSET = 0.45;
+/* ZIP 429 — ON S'ASSOIT À PLUSIEURS SUR LE MÊME BANC (demande de Guillaume).
+   ⚠️ LES PLACES SONT DES DÉCALAGES, PAS DES CASES. Un banc occupe UNE case
+   bloquante et un sprite de 40 px : découper trois cases pour trois places
+   aurait obligé le générateur à réserver trois fois plus de place, donc à
+   refuser des bancs là où il en pose aujourd'hui. Une place est donc un
+   décalage horizontal en cases autour du centre du banc — le dessin s'y pose,
+   la collision ne connaît que la case.
+   ⚠️ L'ÉCART EST DÉRIVÉ DE LA LARGEUR DU SPRITE, pas choisi : 52 px de banc
+   dont 38 occupés par trois personnages, il reste sept pixels d'accoudoir de
+   chaque côté. Ce sont EUX qui disent « ils sont assis dessus » plutôt que
+   « ils sont debout en rang » — voir la note de plazaBenchSprite. */
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZIP 429 — LA BOUSSOLE GPS. ⚠️ TOUT EST LOCAL : aucune de ces valeurs ne
+   décrit un état partagé, et la destination elle-même ne quitte jamais le
+   client qui l'a posée (voir gpsRef, FermeGame.js).
+   ⚠️ LES TAILLES SONT EN PIXELS D'ÉCRAN, PAS EN CASES, et c'est délibéré : un
+   repère d'interface doit garder la même taille quel que soit le zoom, sans
+   quoi il se confond avec le décor. C'est l'inverse exact de la règle qui vaut
+   pour tout le reste du jeu (§« sans perturber le gameplay », zip 428). */
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZIP 429 — LA COURSE. (demande de Guillaume : « conçois un mode de
+   transportation plus rapide »)
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️⚠️ C'EST UN MODE DE DÉPLACEMENT, PAS UN VÉHICULE, ET LE CHOIX EST MOTIVÉ.
+   Un véhicule (vélo, omnibus, tramway) aurait demandé : un sprite par
+   orientation, un état PARTAGÉ « qui l'utilise » à arbitrer par l'hôte, des
+   points de stationnement à dériver de la carte, et une réconciliation quand
+   un joueur se déconnecte dessus. Soit exactement le genre de chantier que le
+   §0 range du côté « on en ajoute un de plus » plutôt que « on en finit un ».
+   La course ne coûte AUCUN de ces états : elle multiplie une vitesse qui
+   voyage DÉJÀ dans le paquet de position depuis le 365 (`vx`/`vy`, la
+   « réplication par intention »). Les autres joueurs voient donc quelqu'un
+   courir sans une ligne de réseau en plus, et sans qu'aucun client ait à
+   savoir ce qu'est la course.
+
+   ⚠️ ELLE COÛTE DE L'ÉNERGIE, ET C'EST CE QUI EN FAIT UN CHOIX. Gratuite, elle
+   deviendrait la vitesse par défaut : plus personne ne marcherait, et on
+   aurait simplement augmenté PLAYER_SPEED en ajoutant une touche à tenir. Le
+   débit est calibré pour qu'une traversée complète de Valley Town au pas de
+   course (~220 cases) coûte une dizaine de points — sensible, jamais punitif.
+   ⚠️ ET ELLE S'ARRÊTE À ZÉRO plutôt que d'entamer autre chose : un jeu qui
+   laisse courir jusqu'à l'épuisement oblige à surveiller une jauge au lieu de
+   regarder la ville.
+   ⚠️ Elle ne s'applique PAS à cheval : le cheval est déjà le mode rapide de la
+   ferme, et cumuler les deux ferait traverser la carte en quatre secondes. */
+export const RUN_SPEED_MULT = 1.75;        // ×1,75 la marche
+export const RUN_ENERGY_PER_SEC = 0.55;    // ~10 points pour traverser Valley Town
+export const RUN_MIN_ENERGY = 5;           // en dessous, on ne court plus (on ne s'écroule pas)
+/* ⚠️ LE PLAFOND D'UN DÉBIT, POSÉ CÔTÉ HÔTE. La course envoie des points entiers
+   au fil de l'eau ; ce plafond dit qu'aucune requête ne peut en réclamer plus
+   que ce qu'une seconde de course coûte, avec une marge. Il n'est pas là pour
+   la course elle-même (qui envoie 1 à la fois) mais pour ce que la requête
+   `spendEnergy` deviendra le jour où quelqu'un s'en resservira ailleurs. */
+export const RUN_ENERGY_CLAMP = 3;
+export const GPS_MARK_PX = 11;        // demi-hauteur du triangle
+export const GPS_ORBIT_PX = 46;       // rayon de l'orbite autour du joueur
+export const GPS_ARRIVE_TILES = 2.2;  // en deçà, on est arrivé et la boussole s'éteint
+export const GPS_CLEAR_TILES = 3;     // recliquer à moins de ça sur le plan efface la destination
+export const TOWN_SEATS_PER_BENCH = 3;
+export const TOWN_SEAT_SPACING = 0.69;   // 11 px sur les 52 du sprite (voir plazaBenchSprite)
 /* ═══════════════════════════════════════════════════════════════════════════
    ZIP 428 — LE DÉZOOM À L'APPROCHE DES GRANDS BÂTIMENTS.
    ⚠️ TOWN_ZOOM_NEAR EST UN ENTIER, ET CE N'EST PAS NÉGOCIABLE. À 2, une case

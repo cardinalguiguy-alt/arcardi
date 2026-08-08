@@ -1,5 +1,58 @@
 # ARCARDI 🎪
 
+> **ZIP 429 — LA VILLE A UN CIEL, DES JAMBES, ET UNE BOUSSOLE.**
+>
+> **Il faisait midi de printemps à Valley Town depuis le zip 234.** Pas par choix : le voile
+> de nuit, la pluie d'orage, la teinte de saison et la neige étaient écrits dans le corps du
+> rendu de la ferme, et la ville a sa propre boucle depuis qu'elle existe. Le symptôme était
+> pourtant déjà dessiné — le générateur pose des dizaines de lampadaires le long des avenues,
+> de la promenade du lac et du quartier des artisans depuis le 425, et **aucun n'a jamais
+> éclairé quoi que ce soit.** Un décor qui existe pour une mécanique absente est plus trompeur
+> qu'un décor manquant. C'est la troisième fois qu'une zone n'hérite pas de ce que la boucle
+> commune faisait pour elle ; cette fois le code a été SORTI plutôt que recopié.
+>
+> **On court** (Maj, ×1,75, dans les trois zones, contre de l'énergie). C'est un mode de
+> déplacement et pas un véhicule, et c'est un choix : un vélo aurait demandé un sprite par
+> orientation, un état partagé « qui l'utilise » à arbitrer par l'hôte, des stationnements et
+> une réconciliation à la déconnexion. La course ne coûte aucun de ces états — elle multiplie
+> une vitesse qui voyage déjà dans le paquet de position depuis le 365, donc **les autres
+> joueurs voient quelqu'un courir sans une ligne de réseau en plus.**
+>
+> **On ouvre le plan, on clique où l'on veut aller.** Un triangle ambré orbite autour du
+> personnage en pointant la destination, la distance dessous ; quand elle entre à l'écran, il
+> se pose dessus et respire. Reclic pour annuler, effacement à l'arrivée. **Rien ne part sur le
+> réseau** : une destination est une intention, elle n'a de sens que pour celui qui l'a posée,
+> et la diffuser en ferait un état à réconcilier pour rien. Elle porte sa zone — sans quoi une
+> boussole posée devant l'église pointerait, une fois rentré, un point au hasard du champ de
+> blé, en ayant l'air de marcher.
+>
+> **On s'assoit à trois sur un banc**, et le banc a été redessiné parce qu'il était **trop
+> grand** : 22 pixels de dossier pour un personnage qui en fait 23 — l'appui-dos arrivait au
+> sommet du crâne d'un adulte debout. Il fait maintenant 18 de haut et 52 de large, et trois
+> personnes s'y chevauchent aux épaules comme trois personnes sur un banc.
+>
+> **Ce défaut-là en cachait d'autres, et il a fallu un outil pour les voir.** Tous les bancs de
+> rendu du projet dessinaient les meubles ENTRE EUX : c'est ce qu'il faut pour juger une
+> palette, et ça ne dit rien d'une échelle — un objet deux fois trop grand au milieu d'objets
+> deux fois trop grands a l'air parfaitement juste. Un décor se juge **contre le personnage qui
+> s'en sert**. Mesuré : l'étal du marché faisait 1,3 fois la taille d'un adulte au lieu de 2,1
+> (les dix étals de la foire arrivaient à l'épaule du marchand), et la fontaine 2,35 au lieu de
+> 1,6. Corrigés. La fontaine a d'ailleurs révélé au passage que ses cotes étaient recopiées à
+> quatre cents lignes de distance : en la rabaissant, l'eau serait restée à mi-hauteur de l'air
+> et le jet aurait jailli vingt pixels au-dessus de sa colonne, sans la moindre erreur.
+>
+> **Et l'église était une mairie.** Littéralement : le dessin du zip 235 — fronton à colonnes,
+> horloge, drapeau — renommé « église » au 425 sans qu'un pixel bouge, sa propre note le dit.
+> Valley Town a eu deux mairies pendant quatre zips, dont l'une s'appelait église. Elle a
+> maintenant un clocher décalé, une flèche, une croix, une rosace et des arcs brisés — quatre
+> choses dont aucune n'était là, et dont la première suffit : c'est la silhouette qui identifie
+> un bâtiment, pas le détail.
+>
+> **Les haies, enfin, savent où elles s'arrêtent** — et c'était un défaut pratique, pas
+> esthétique. Trente cases de rectangles identiques se lisaient comme un mur vert lisse, et
+> **on ne voyait pas les passages** : les 27 parcelles ont chacune une entrée percée dans leur
+> haie, et ce trou d'une case ne se distinguait de rien. On longeait.
+
 > **ZIP 428 — ON A MESURÉ VALLEY TOWN, ET ELLE NE MARCHAIT PAS.**
 >
 > **Quatre trajets de résident sur cinq n'aboutissaient pas.** Pas « parfois » : 24 %

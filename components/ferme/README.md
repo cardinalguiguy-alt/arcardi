@@ -1,4 +1,4 @@
-# Valley Town, le tribunal, et la vie qui s'y passe — état au 428
+# Valley Town, le tribunal, et la vie qui s'y passe — état au 429
 
 Ce fichier est **l'autorité** sur la seconde carte du jeu et sur ses habitants. Il a été
 extrait de `CLAUDE.md` §6 au zip 428, sur l'ordre laissé par le §14.2 du 427 et sur le modèle
@@ -15,7 +15,12 @@ qu'un paragraphe d'orientation, et les pièges qui valent pour tout le projet re
   surtout. Ce n'est pas un oubli, c'est une question ouverte : voir `CLAUDE.md` §13 ;
 - **le marché, les commissions et les rendez-vous datés sont décidés mais pas construits**
   (zip 428, décision de Guillaume). Le socle sur lequel ils reposeront — navigation, endroits
-  de vie, assise — est en place et mesuré.
+  de vie, assise — est en place et mesuré ;
+- **les MAISONS et le LAC n'ont pas été retouchés au 429** alors que Guillaume les a nommés
+  dans sa revue. Leurs échelles sont justes (×3,48 et sans objet), et les défauts qu'on leur
+  trouve sont de CONTENU, pas de dessin : dix façades pour vingt-sept parcelles (donc des
+  jumelles côte à côte), et un lac qui n'a ni reflet, ni vaguelettes de rive, ni rien à y
+  faire. Les corriger demande des décisions, pas des pixels.
 
 ---
 
@@ -99,7 +104,7 @@ c'est le seul nombre qu'il faudrait changer aux deux endroits.
 
 ## 3. Les endroits où l'on vit
 
-**`E.townSpots(tw)` — 127 endroits, tous DÉRIVÉS de la carte**, jamais d'une table écrite à
+**`E.townSpots(tw)` — 167 points pour 127 destinations distinctes, tous DÉRIVÉS de la carte**, jamais d'une table écrite à
 côté (une table aurait tenu jusqu'au premier banc déplacé). Le mobilier vient de `tw.props`,
 les lieux de leurs constantes.
 
@@ -118,6 +123,17 @@ de la place, et les **carrefours** d'avenues.
 le long de chaque avenue → **58 endroits de rue sur 148, soit 39 %**. On venait de remplacer le
 cimetière par le trottoir. Le contrôle « aucune activité n'écrase les autres » avait été écrit
 avant, exprès.
+
+⚠️⚠️ **ZIP 429 — UN BANC REND JUSQU'À TROIS ENDROITS, UN PAR PLACE** (demande de Guillaume :
+« on doit pouvoir s'asseoir à deux, ou trois sur le même banc »). Une place est un **décalage**
+(`TOWN_SEAT_SPACING`, 11 px sur les 52 du sprite), pas une case : découper trois cases par banc
+aurait obligé le générateur à réserver trois fois plus de place, donc à refuser des bancs là où
+il en pose. Chaque place a SON point d'attente — deux places qui partageraient leur case
+feraient se pousser deux résidents indéfiniment.
+⚠️ **Le tirage d'une destination écarte désormais ce qu'un autre résident a déjà choisi.**
+Sans ça, deux résidents visaient la même case, s'y poussaient (chacun glisse sur l'autre,
+aucun n'avance) et le garde anti-blocage les figeait. C'était déjà possible au 427 ; les trois
+places par banc le rendaient probable.
 
 ⚠️ **LES TROIS BANCS DU LAC ÉTAIENT MORTS.** Le point d'assise était pris **au sud** du banc,
 sans alternative ; au bord de l'eau, le sud est le lac. `add` refusait en silence, et personne
@@ -270,3 +286,127 @@ silencieusement les autres. Tout dessin qui découpe une tranche dans une feuill
 c'est-à-dire **toute pose de personnage** — y était rendu en dessinant la feuille ENTIÈRE. Pas
 d'erreur, une image plausible, un verdict faux. Corrigé au 428 (3, 5 et 9 arguments, plus
 proche voisin). C'était le stub menteur du `CLAUDE.md` §10 **dans l'outil censé nous protéger**.
+
+
+---
+
+## 9. Le ciel, la course et la boussole (429)
+
+### La météo et le jour/nuit y arrivent enfin
+
+⚠️⚠️ **IL FAISAIT UN MIDI DE PRINTEMPS PERPÉTUEL À VALLEY TOWN DEPUIS LE ZIP 234**, et ce
+n'était le choix de personne. Le voile nocturne, les halos de lampadaires, le voile d'orage,
+la teinte de saison et la neige étaient écrits **dans le corps du rendu de la ferme** ; la
+ville a sa propre boucle. C'est le §4 mot pour mot — troisième occurrence après la carte et le
+minuteur d'action du 426. **C'est LE piège récurrent de ce projet.**
+
+Le symptôme le plus parlant était déjà dessiné : le générateur pose des dizaines de
+lampadaires le long des avenues, de la promenade du lac et du quartier des artisans depuis le
+425. **Ils n'ont jamais éclairé quoi que ce soit.** Un décor qui existe POUR une mécanique
+absente est plus trompeur qu'un décor manquant.
+
+`drawNightVeil` et `drawWeatherVeil` sont désormais deux fonctions partagées — le même code,
+déplacé, pas réécrit : il n'y a toujours qu'UNE nuit et UNE météo dans le jeu.
+⚠️ **L'intérieur du tribunal n'en appelle aucune** : il n'a pas de ciel.
+⚠️ Le halo prend le **zoom en argument**, pas la constante : depuis le dézoom (428), la ville
+ne dessine plus toujours à 3, et des halos figés auraient glissé sur leur réverbère.
+⚠️ Les lampadaires de la ville sont des **`props`**, ceux de la ferme des **`objects`** (un
+joueur peut poser les seconds) — d'où deux collectes, une seule question.
+⚠️ Le ciel est peint **après** le curseur de visée : les deux fonctions remettent la
+transformation à l'identité, et appelées avant elles laissaient le liseré de la hache se
+dessiner à des coordonnées de monde dans un repère d'écran.
+
+### La course — un mode, pas un véhicule
+
+**Maj** pour courir, ×1,75, dans les trois zones, **0,55 point d'énergie par seconde**
+(≈ 10 points pour traverser Valley Town). Pas à cheval : le cheval est déjà le mode rapide.
+
+⚠️ **LE CHOIX EST MOTIVÉ.** Un véhicule (vélo, omnibus) aurait demandé un sprite par
+orientation, un état PARTAGÉ « qui l'utilise » à arbitrer par l'hôte, des stationnements à
+dériver de la carte et une réconciliation à la déconnexion. La course ne coûte **aucun** de ces
+états : elle multiplie une vitesse qui voyage DÉJÀ dans le paquet de position depuis le 365
+(`vx`/`vy`). Les autres joueurs voient quelqu'un courir **sans une ligne de réseau en plus**.
+⚠️ **Elle coûte de l'énergie, et c'est ce qui en fait un choix** — gratuite, elle serait la
+vitesse par défaut, c'est-à-dire un `PLAYER_SPEED` relevé avec une touche à tenir en plus.
+⚠️ **L'hôte débite, le client affiche tout de suite.** L'énergie est partagée et sauvegardée
+(§3) ; la décrémenter côté client la ferait remonter en clignotant. Le montant est **borné du
+côté qui fait autorité**, pas du côté qui demande.
+⚠️ **La dépense se fait en points ENTIERS**, la fraction restante vit dans un ref local : un
+demi-point par image aurait fini en flottant dans la sauvegarde.
+
+### La boussole GPS — tout local
+
+**On ouvre le plan, on clique où l'on veut aller.** Un triangle ambré orbite autour du joueur
+en pointant la destination, avec la distance dessous ; quand elle est à l'écran, il se pose
+dessus et respire. Reclic au même endroit pour annuler, effacement automatique à l'arrivée.
+
+⚠️⚠️ **RIEN NE PART SUR LE RÉSEAU, ET C'EST UNE PROPRIÉTÉ À PRÉSERVER.** Une destination est
+une INTENTION : elle n'a de sens que pour celui qui l'a posée. La diffuser coûterait des
+messages pour un état que personne d'autre ne lit — et surtout, elle deviendrait un état à
+RÉCONCILIER.
+⚠️ **Elle porte sa zone.** Une destination posée sur le plan de la ville n'a aucun sens sur la
+carte de la ferme (§4) ; sans ce filtre, la boussole pointerait un point au hasard du champ de
+blé **en ayant l'air de marcher**.
+⚠️ **Le marqueur est en pixels d'écran**, donc indépendant du dézoom : un repère d'interface
+qui grossit avec la caméra se confond avec le décor. Et il est dessiné **après** le voile
+nocturne — une boussole illisible la nuit ne sert qu'au moment où l'on se repère déjà seul.
+⚠️ **L'échelle du plan est relue sur le canevas** (`getBoundingClientRect`), jamais recopiée :
+les trois plans n'ont ni la même taille ni le même agrandissement, et le CSS étire le canevas.
+⚠️ Dans le tribunal, la cible n'apparaît que sur **l'étage où elle a été posée** — le niveau se
+déduit de `y`, il n'y a rien à stocker.
+
+---
+
+## 10. La revue graphique (429)
+
+**`tools/render-echelle.mjs`** met chaque décor **à côté d'une fermière**, sur la même ligne de
+sol, et compare le rapport de hauteur au repère physique attendu.
+
+⚠️⚠️ **C'EST L'ANGLE MORT DE TOUS LES BANCS DE RENDU PRÉCÉDENTS** : ils dessinaient les meubles
+ENTRE EUX. C'est ce qu'il faut pour juger une palette et un ancrage, et ça ne dit **rien** d'une
+échelle — un banc deux fois trop grand au milieu de meubles deux fois trop grands a l'air juste.
+**Un décor se juge contre le personnage qui s'en sert**, seul repère invariant du jeu (23 px).
+
+Trois écarts mesurés, trois corrections :
+
+| décor | avant | attendu | après |
+|---|---|---|---|
+| **banc** | ×0,78 mais **22 px de dossier** pour un personnage de 23 | dossier à la hanche | redessiné, 18 px, **52 px de large** |
+| **étal** | ×1,30 | ×2,10 (on passe dessous) | 44×54, ×1,91 |
+| **fontaine** | ×2,35 | ×1,60 | fût raccourci, ×1,83 |
+
+⚠️ **Le repère du banc était faux, pas le dessin.** Un dossier fait physiquement 0,5 fois un
+adulte ; mais vu de trois quarts, la profondeur de l'assise se dépense en pixels VERTICAUX. Un
+objet plat tient son ratio, un objet qui a du volume vers l'avant paraît plus haut. Corriger
+le banc pour satisfaire le chiffre l'aurait écrasé — **le repère a été corrigé à 0,75**.
+
+⚠️⚠️ **ET LA FONTAINE A RÉVÉLÉ UN DOUBLON DU §8.** Le canevas dessinait la margelle à `H − 16`
+et le bouton du jet à `H − 51` ; `drawTownFrame` peignait l'eau à `fBy − 16` et le jet à
+`fBy − 60` — les mêmes cotes, recopiées à quatre cents lignes de distance. En rabaissant le
+sprite, l'eau serait restée à mi-hauteur de l'air et le jet aurait jailli vingt pixels au-dessus
+de sa colonne, **sans la moindre erreur**. Les cotes vivent maintenant dans `FOUNTAIN_GEO`.
+
+### L'église était une mairie
+
+⚠️⚠️ **LITTÉRALEMENT.** Le zip 235 avait dessiné `townhallSprite` — fronton à colonnes,
+**horloge** au centre, **drapeau** sur le toit — et le 425 l'a renommé « église » sans toucher
+un pixel, parce qu'il venait d'en dessiner une vraie et qu'il fallait recaser l'ancienne. Sa
+note le dit noir sur blanc : « le dessin n'a pas bougé d'un pixel ». Valley Town a donc eu
+**deux mairies pendant quatre zips**, dont l'une s'appelait église. C'est le « bâtiment muet »
+du 426 en plus sournois : ici le bâtiment parle, et il ment.
+
+Redessinée au 429 avec les quatre choses qui font une église, dont **aucune** n'était présente :
+un **clocher** décalé (une silhouette asymétrique dominée par une tour ; une façade symétrique
+à fronton, c'est un temple civique), une **flèche et une croix** (le seul élément littéral, et
+c'est lui qu'on lit de loin), une **rosace** (aucune autre fenêtre ronde dans cette ville) et
+des **arcs brisés** — l'arc plein cintre est celui de la mairie et de la gare, l'ogive
+n'appartient qu'ici. Fronton, horloge et drapeau **supprimés**, pas déplacés.
+
+### Les haies savent où elles s'arrêtent
+
+Le défaut était **pratique, pas esthétique** : trente cases de rectangles identiques se lisaient
+comme un mur vert lisse, et **on ne voyait pas les passages**. Les 27 parcelles ont chacune une
+entrée percée dans la haie ; sur un mur uniforme, ce trou d'une case ne se distinguait de rien.
+On lisait la haie, on faisait demi-tour, et on longeait. Une haie regarde désormais ses
+voisines : une extrémité reçoit un bord ébréché et une ombre latérale, une case de milieu non.
+Un passage est encadré par deux bouts visibles.

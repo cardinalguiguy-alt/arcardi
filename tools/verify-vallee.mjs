@@ -465,11 +465,22 @@ ok("la ville a des endroits où s'arrêter", spotList.length > 20, `${spotList.l
      soixante et un endroits étaient des TOMBES — un quart de la vie sociale de
      Valley Town se passait au cimetière, sans que ce soit l'intention de
      personne. */
-  const byAct = new Map();
-  for (const s2 of spotList) byAct.set(s2.act, (byAct.get(s2.act) || 0) + 1);
+  /* ⚠️ ON COMPTE LES DESTINATIONS, PAS LES POINTS — et la nuance est arrivée
+     avec les bancs à trois places (429). Trois places sur le MÊME banc, c'est
+     un seul endroit où aller : les compter trois fois faisait mécaniquement
+     passer « sit » à 36 % et rougir le contrôle sur un changement qui, lui,
+     était bon. Un déséquilibre de VARIÉTÉ se mesure en lieux distincts. */
+  const byAct = new Map(), seen2 = new Set();
+  for (const s2 of spotList) {
+    const key = s2.act === "sit" ? `sit@${s2.bx},${s2.by}` : `${s2.act}@${s2.x},${s2.y}`;
+    if (seen2.has(key)) continue;
+    seen2.add(key);
+    byAct.set(s2.act, (byAct.get(s2.act) || 0) + 1);
+  }
+  const dests = seen2.size;
   const worst = [...byAct.entries()].sort((a2, b2) => b2[1] - a2[1])[0];
-  ok("aucune activité n'écrase toutes les autres", worst[1] <= spotList.length * 0.2,
-     `la plus fréquente : ${worst[0]} ${worst[1]}/${spotList.length} (${(100 * worst[1] / spotList.length).toFixed(0)} %)`);
+  ok("aucune activité n'écrase toutes les autres", worst[1] <= dests * 0.2,
+     `la plus fréquente : ${worst[0]} ${worst[1]}/${dests} destinations (${(100 * worst[1] / dests).toFixed(0)} %)`);
 }
 {
   const bad = spotList.filter(s2 => !seen[idx(s2.x, s2.y)]);
@@ -480,12 +491,29 @@ ok("la ville a des endroits où s'arrêter", spotList.length > 20, `${spotList.l
      ⚠️ « Juste au nord » était la règle du 427, et elle rendait inutilisables
      les trois bancs de la promenade du lac (dont le sud est l'eau) — voir
      E.townSpots. On vérifie donc l'adjacence, pas une direction. */
+  /* ⚠️ ZIP 429 — LE CRITÈRE EST « À PORTÉE DU BANC », plus « collé au banc ».
+     Une place est un DÉCALAGE le long d'un sprite de 40 px : on rejoint la
+     place de gauche par la case de gauche, qui n'est plus adjacente à la case
+     du banc. Ce qu'il faut vraiment garantir, c'est qu'on ne s'assoit pas sur
+     un banc situé à l'autre bout de la rue. */
   const bad = (spotList.filter(s2 => s2.act === "sit")).filter(s2 => {
-    if (s2.bx === undefined) return true;
-    if (Math.abs(s2.bx - s2.x) + Math.abs(s2.by - s2.y) !== 1) return true;
+    if (s2.bx === undefined || s2.seat === undefined) return true;
+    if (Math.abs(s2.bx - s2.x) > 2 || Math.abs(s2.by - s2.y) > 1) return true;
     return !tw.props.some(pr => pr.kind === "bench" && pr.x === s2.bx && pr.y === s2.by);
   });
-  ok("chaque assise correspond à un vrai banc adjacent", bad.length === 0, bad.slice(0, 6).map(s2 => `(${s2.x},${s2.y})`).join(" "));
+  ok("chaque assise correspond à un vrai banc, à portée", bad.length === 0, bad.slice(0, 6).map(s2 => `(${s2.x},${s2.y})`).join(" "));
+  {
+    // ⚠️ ET DEUX PLACES DU MÊME BANC NE PARTAGENT PAS LEUR POINT D'ATTENTE :
+    // sinon deux résidents visent la même case, s'y poussent, et l'un des deux
+    // « s'assoit » sur la place de l'autre. Silencieux, et très visible.
+    const seen3 = new Set(); const dup = [];
+    for (const s2 of spotList) {
+      if (s2.act !== "sit") continue;
+      const k = `${s2.x},${s2.y}`;
+      if (seen3.has(k)) dup.push(k); else seen3.add(k);
+    }
+    ok("deux places d'un banc ne se marchent pas dessus", dup.length === 0, dup.slice(0, 6).join(" "));
+  }
   /* ⚠️ ET TOUS LES BANCS DE LA VILLE DOIVENT ÊTRE ASSIABLES. C'est le contrôle
      que le 427 n'avait pas : il vérifiait que chaque assise a un banc, jamais
      que chaque banc a une assise. Trois bancs morts au bord du lac ont vécu un
