@@ -4,21 +4,25 @@
 Il remplace l'exploration du dépôt pour tout ce qui est global. Le README est un journal
 chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
-État à jour du **zip 430**. Chantier actif : **relier les deux cartes et jouer sans clavier** —
-le marché du champ de foire donne enfin une raison ÉCONOMIQUE de prendre le train, et la ferme
-devient jouable au doigt. Tout ce qui concerne la ville et ses habitants est dans
+État à jour du **zip 431**. Chantier actif : **faire vivre l'économie des deux cartes** — la
+vente a quitté la ferme pour le marché de Valley Town, et le champ de foire ressemble enfin à
+une foire. Tout ce qui concerne la ville, ses habitants ET **ses pièges** est dans
 **`components/ferme/README.md`**, qui fait autorité. **`candyluge` et `crystal` sont EN PAUSE.**
 
-⚠️⚠️ **LA FERME ÉTAIT INJOUABLE SANS CLAVIER JUSQU'AU 430**, et personne ne l'avait écrit :
-aucun écouteur tactile dans tout son rendu. Un des trois joueurs les plus actifs devait
-brancher un clavier Bluetooth pour entrer dans le seul monde partagé du projet. **Une
-plateforme qui exige un périphérique n'a pas un défaut d'ergonomie, elle a un défaut d'accès.**
+⚠️⚠️ **LE SAUT DE REBORD ÉTAIT MORT DEPUIS LE 430, PARTOUT EN VILLE, ET RIEN NE LE DISAIT.**
+`tryTownJump` vit dans la closure de la boucle de rendu ; le 430 lui a donné deux appelants nés
+au niveau du composant. Chaque appui sur Espace levait un `ReferenceError`, **donc même le
+repli n'avait pas lieu**. Un zip entier sans qu'aucun banc ne puisse le voir : ils mesurent la
+simulation, pas les gestes du joueur. **Ce qui n'est vérifiable qu'en jouant doit être joué.**
 
-⚠️⚠️ **ET UN COMMENTAIRE PEUT MENTIR PENDANT TROIS ZIPS.** Celui qui décrivait le statut de
-Carla Garfield annonçait encore deux verrous retirés au 427, à quarante lignes de sa fiche qui
-disait l'inverse. §14.1 s'applique au CODE autant qu'à ce fichier : une information périmée se
-supprime, elle ne se date pas. **Et la seule chose qui ne ment pas sur un statut, c'est un
-contrôle qui le lit** — il y en a quatre désormais.
+⚠️⚠️ **ET DEUX DÉCALAGES ONT ÉTÉ TROUVÉS PAR GUILLAUME, EN JEU, DEVANT TROIS BANCS DE RENDU
+QUI LES REGARDAIENT SANS LES VOIR** : la rangée d'étals penchait d'une case et demie, et la
+colonnade du tribunal de six pixels — **depuis le 425**. Un défaut de symétrie ne se voit pas
+en regardant l'élément fautif : la rangée est impeccable, c'est son RAPPORT À L'AXE qui est
+faux. Toute position se DÉDUIT désormais d'un centre, et un contrôle de symétrie est entré au
+banc de rendu. **Corollaire général : une position réglée à la main est une position qui
+penchera.**
+
 
 ---
 
@@ -97,124 +101,24 @@ Jamais de fichier de doc autonome à la racine (`AUDIT-X.md`, `NOTES.md`…).
 
 ## 4. Pièges invisibles — les casser ne produit aucune erreur
 
-⚠️ **CE CHAPITRE A ÉTÉ ÉLAGUÉ AU 427 selon la règle du §14 : tout ce dont un banc de
-`tools/` s'occupe désormais en est SORTI** (les murs invisibles des haies, les décors
-traversables, les meubles devant une porte, les portes murées du tribunal, les colonnes du
-couloir). Ce n'est pas un oubli : un piège qu'un outil attrape à chaque lancement n'a plus
-besoin d'être retenu par un humain — et le laisser ici ferait croire que la liste est la
-protection, alors que c'est le banc.
+⚠️⚠️ **CE CHAPITRE A ÉTÉ SCINDÉ AU 431, SUR L'ORDRE LAISSÉ PAR LE §14.2 DU 430.** Les pièges
+de la FERME, de la VILLE et du TRIBUNAL sont partis dans **`components/ferme/README.md`**, qui
+fait déjà autorité sur ce code — ils y sont **à côté de ce qu'ils décrivent**, et ce chapitre
+avait atteint cent lignes en mélangeant deux sujets sans rapport. Il ne reste ici que ce qui
+est vrai à l'échelle du projet : **JavaScript, three.js, canevas**.
 
-**Ferme / Valley Town / tribunal**
-- **L'instance cachée.** Hôte hors ferme : `FermeGame` reste montée dans un `display:none`
-  (`fermeAway`), simule et diffuse toujours. `document.hidden` = `false`.
-- **La boucle de nuages tourne à vide volontairement** (`SKY_CLOUD_COUNT: 0`) : ses tirages
-  appartiennent au flux aléatoire partagé. Règle du 381.
-- **`netCanBroadcast()` vs `netHasAudience()`** : le premier teste `hiddenRef`, le second
-  non. Ne pas les fusionner. **`broadcastSnapshot()` reste en envoi direct.**
-- ⚠️⚠️ **UNE GARDE D'AUDIENCE ÉCRITE POUR UNE ZONE S'APPLIQUE À TOUTES, ET C'EST FAUX.**
-  `anyRemoteNear` renvoie toujours `false` pour le monde maléfique (filtre `zone === "farm"`,
-  lit `p.x/p.y`, or les spectateurs vivent en `p.ex/p.ey`). Même défaut au 427 avec les
-  résidents partis en ville : un joueur SEUL EN VILLE ne comptait plus comme audience, donc
-  l'hôte n'émettait rien, donc toute la ville restait figée pour lui — sans une erreur.
-  D'où `anyRemoteNearZoned`, qui compare les zones AVANT les distances.
-- ⚠️ **UN OUVREUR DE MINI-JEU APPELÉ À MI-FONDU NE DOIT PAS TESTER `zoneTransRef.active`.**
-  (Un changement de ZONE, lui, doit le tester : c'est le garde-fou de `enterCourt`.)
-- ⚠️⚠️ **QUAND UNE ZONE GAGNE SA PROPRE BOUCLE DE RENDU, ELLE HÉRITE DE TOUT CE QUE LA BOUCLE
-  COMMUNE FAISAIT POUR ELLE.** Deux occurrences au 426 (la carte, écran noir en ville depuis
-  le 234 parce que `drawFullMap` n'était **jamais appelée** ; `actAnimRef` jamais décrémenté
-  en ville, donc un seul coup de hache par visite). **À vérifier écran par écran et minuteur
-  par minuteur, zone par zone.**
-- ⚠️⚠️ **TROISIÈME OCCURRENCE DE « LA ZONE QUI N'HÉRITE PAS » AU 429, ET IL FAUT LE COMPTER.**
-  Après la carte restée noire et le minuteur d'action jamais décrémenté (426), c'est le CIEL :
-  voile nocturne, halos de lampadaires, orage, teinte de saison et neige étaient écrits dans le
-  corps du rendu de la FERME. Valley Town, qui a sa propre boucle depuis le 234, n'en héritait
-  de rien — **midi de printemps perpétuel pendant quatre zips**, avec des dizaines de
-  lampadaires posés dans ses rues qui ne s'allumaient jamais. ⚠️ **UN DÉCOR QUI EXISTE POUR UNE
-  MÉCANIQUE ABSENTE EST PLUS TROMPEUR QU'UN DÉCOR MANQUANT.** La parade n'est pas de recopier
-  le bloc dans l'autre boucle (ce serait deux nuits à tenir d'accord) : c'est de le SORTIR.
-- ⚠️⚠️ **UN DÉCOR NE SE JUGE PAS CONTRE D'AUTRES DÉCORS, IL SE JUGE CONTRE LE PERSONNAGE QUI
-  S'EN SERT** (429). Tous les bancs de rendu du projet dessinaient les meubles ENTRE EUX : c'est
-  ce qu'il faut pour une palette et un ancrage, et ça ne dit RIEN d'une échelle — un objet deux
-  fois trop grand au milieu d'objets deux fois trop grands a l'air juste. Mesuré au 429 :
-  l'étal du marché faisait 1,3 fois la taille d'un adulte au lieu de 2,1, la fontaine 2,35 au
-  lieu de 1,6, et le dossier du banc arrivait au SOMMET DU CRÂNE. `tools/render-echelle.mjs`.
-  ⚠️ Corollaire : **vérifier le repère avant de corriger le dessin.** Le banc semblait faux de
-  40 % ; c'est le repère qui l'était — vu de trois quarts, la profondeur d'une assise se dépense
-  en pixels VERTICAUX, et un objet qui a du volume vers l'avant paraît toujours plus haut.
-- ⚠️⚠️ **RENOMMER UN BÂTIMENT NE LE REDESSINE PAS** (429). L'« église » de Valley Town était la
-  MAIRIE du 235 — fronton à colonnes, horloge, drapeau — renommée au 425 sans qu'un pixel
-  bouge, la note de l'époque le dit elle-même. La ville a eu deux mairies pendant quatre zips,
-  dont l'une s'appelait église. C'est le « bâtiment muet » du 426 en plus sournois : **ici le
-  bâtiment parle, et il ment.**
-- ⚠️⚠️ **CE QUI EST UNE PURE FONCTION DU TEMPS NE SE STOCKE PAS** (430). Le cours du marché, le
-  jour de marché et le jour de service de Carla sont HACHÉS à partir du numéro de jour : deux
-  joueurs lisent le même chiffre sans qu'un octet ne circule. Stockés dans `shared`, chacun
-  aurait coûté un champ dans le JSON de sauvegarde, un compteur à faire tourner chez l'hôte, un
-  message pour le diffuser, une réconciliation à la connexion d'un invité, et une sauvegarde
-  d'avant le zip à rattraper. C'est l'astuce des répliques d'ambiance du 427, appliquée à
-  l'économie et au calendrier. ⚠️ **Corollaire vital : une telle valeur ne doit dépendre QUE du
-  temps.** Le jour où elle dépendra du stock d'un joueur ou de son or, les deux écrans
-  afficheront des chiffres différents **et chacun aura l'air cohérent avec lui-même**.
-- ⚠️⚠️ **UN SECOND CANAL D'ENTRÉE EST UN QUATRIÈME OUBLI EN PRÉPARATION** (430). Le pavé tactile
-  écrit dans `keysRef` — les mêmes booléens que les flèches — au lieu d'avoir son propre
-  vecteur. Sinon il aurait fallu modifier les TROIS boucles de déplacement, puis penser à la
-  quatrième le jour où une zone s'ajoute : très exactement le motif qui a produit la carte
-  noire, le minuteur d'action et le ciel absent. **En partageant la variable, le doigt ne PEUT
-  pas se comporter autrement que le clavier.**
-- ⚠️⚠️ **UNE CARTE EN CACHE DE MODULE NE SE MUTE JAMAIS.** `getTownWorldCached` (et son
-  jumeau du tribunal) rend un SINGLETON partagé par tous les remontages de l'onglet : y
-  écrire ferait fuiter l'état d'une ferme à l'autre. Tout ce qui change vit dans l'état
-  PARTAGÉ (`shared.townChop`, `shared.wardrobe`). Le banc le vérifie explicitement.
-  ⚠️ Corollaire du 427 : même une donnée DÉRIVÉE de la carte (la liste des endroits où l'on
-  s'arrête) se met en cache **à côté**, jamais dessus — `townSpots` a son propre cache.
-- ⚠️ **UN EFFET VISUEL PORTE SA ZONE.** Sans le filtre de `spawnFx` (426), un joueur resté à
-  la ferme voyait des copeaux jaillir d'un point au hasard de son champ à chaque coup de
-  hache donné en ville.
-- ⚠️ **TEINTER UN SPRITE AVEC UN `fillRect` DESSINE UNE BOÎTE.** Un sprite est transparent
-  partout sauf sur lui-même ; l'assombrir passe par `ctx.filter` (et il FAUT le remettre à
-  `"none"`, c'est un état du contexte). ⚠️ Même famille au 427 : teinter un VÊTEMENT ne se
-  fait pas en repeignant la feuille (on colorerait la peau et les cheveux), mais en
-  repeignant les blocs du vêtement à leurs coordonnées exactes.
-- ⚠️⚠️ **DEUX CARTES SANS REPÈRE COMMUN FINISSENT PAR SE MÉLANGER, et ça ne se voit que
-  quand la plus petite ne tient plus dans la grande.** C'est LE piège de ce projet, payé au
-  425 (un repli dessinait les résidents à leur parcelle *Valley Town* sur la carte de
-  *ferme*) et re-rencontré partout au 427 dès que les résidents ont pu descendre en ville :
-  rendu, AOI, soin d'un blessé, attroupement, disputes, plan de la ville. **La parade est
-  UNE position taguée par sa zone, jamais deux jeux de coordonnées.**
-- ⚠️⚠️ **UNE COUCHE QUI DÉCIDE D'UNE COLLISION DOIT SORTIR DU GÉNÉRATEUR** (425 : six cents
-  haies bloquantes que rien ne dessinait). *Toute case bloquante doit être dessinée par
-  quelqu'un*, et sa réciproque. **Désormais automatisé** — et il a resservi au 427, en
-  sortant les 80 cases de la boutique, du salon et de la gare avant qu'on aille en jeu.
-- ⚠️ **ON PERCE LE PASSAGE AVANT DE POSER LA CLÔTURE**, jamais l'inverse (le verger s'était
-  refermé sur 309 cases). « Clôturer sauf devant la porte » se casse au premier décalage.
-- ⚠️ **UN MONDE DOIT SORTIR COMPLET DE SON CONSTRUCTEUR.** `generateWorld` ne créait ni
-  `sucreries` ni `orchards` — **créer une ferme sur un code neuf plantait**, pour tout le
-  monde sauf nous.
-- ⚠️⚠️ **UN DÉCOR POSÉ SUR UNE TRAME RÉGULIÈRE RENCONTRERA UN JOUR UNE AUTRE TRAME
-  RÉGULIÈRE.** 426 : les lampadaires « tous les 8 pas » sont tombés pile sur la nouvelle
-  artère x = 196 et l'ont coupée. **On teste le sol (qui sait déjà tout), ou on laisse le
-  générateur décider.**
-- ⚠️⚠️ **UN PNJ QUI ABANDONNE SON TRAJET N'A PAS L'AIR BLOQUÉ, IL A L'AIR D'AVOIR CHOISI**
-  (427, mesuré et corrigé au 428). La rôdaille en ligne droite du 252 échouait sur **79 % des
-  trajets de Valley Town** ; à l'abandon, le résident jouait quand même son activité SUR
-  PLACE, sept à vingt-six secondes. Personne n'a rien vu pendant deux zips, parce que le
-  symptôme ressemblait à de la contemplation. **Un repli plausible est plus dangereux qu'un
-  plantage** (§10, le stub menteur), et ça vaut pour le COMPORTEMENT, pas seulement pour le
-  code. La parade est un vrai chemin (`components/ferme/README.md` §2) — et surtout **une
-  mesure agrégée**, parce qu'aucune ligne de code n'était fausse.
-- ⚠️⚠️ **UN DÉFAUT DE LA SOMME NE SE VOIT DANS AUCUNE LIGNE DE CODE** (428). Deux exemples du
-  même zip : 33 des 48 blocs de la ville n'avaient AUCUN endroit de vie, et 16 des 61 endroits
-  étaient des tombes — donc un quart de la vie sociale se passait au cimetière, sans que ce
-  soit l'intention de personne (le cimetière est simplement le seul décor posé en seize
-  exemplaires). Relire le générateur ne l'aurait jamais montré. **Ce genre de défaut se
-  contrôle en comptant, et le contrôle doit exister AVANT l'ajout** — sinon on remplace un
-  déséquilibre par un autre (premier jet du 428 : 39 % des endroits sur le trottoir).
-- ⚠️⚠️ **UNE RÈGLE SOCIALE SANS DÉLAI DE GRÂCE S'ÉTRANGLE AU POINT D'ARRIVÉE** (427, trouvé
-  en jeu). Cinq résidents descendent le même quai à la même seconde : tous à portée de
-  conversation, donc tous appariés d'un coup, donc tous figés à se saluer en boucle. Personne
-  ne quittait la gare. **Un débarquement n'est pas une rencontre.**
-- ⚠️ **`stopPropagation` N'ARRÊTE PAS LES AUTRES ÉCOUTEURS DE LA MÊME CIBLE** (il faut
-  `stopImmediatePropagation`).
+⚠️ **UN PIÈGE A ÉTÉ SUPPRIMÉ PLUTÔT QUE DÉPLACÉ, ET C'EST LE POINT DE LA VÉRIFICATION** : « la
+boucle de nuages tourne à vide (`SKY_CLOUD_COUNT: 0`) » ne correspondait plus à rien — le
+symbole n'existe nulle part dans le dépôt. Le §14.2 le disait : *un piège périmé recopié
+ailleurs est pire qu'un piège supprimé.*
+
+⚠️⚠️ **ET UN SEUL EST RESTÉ ICI BIEN QU'IL PARLE DES CARTES, parce qu'il a été payé QUATRE
+fois** (425, 427, 430, 431) et qu'il touche l'architecture entière : **DEUX CARTES SANS REPÈRE
+COMMUN FINISSENT PAR SE MÉLANGER, et ça ne se voit que quand la plus petite ne tient plus dans
+la grande.** Dernière occurrence au 431, la plus chère : le rectangle du marché de la VILLE
+tombe aussi au milieu des champs de la FERME, donc le contrôle « je suis au marché » passait
+depuis un pré. **La parade est UNE position taguée par sa zone, jamais deux jeux de
+coordonnées — et on teste la zone AVANT les distances.**
 
 **JavaScript / three.js / canevas**
 - ⚠️⚠️ **`chaîne.replace("X", …)` NE REMPLACE QUE LA PREMIÈRE OCCURRENCE.**
@@ -231,6 +135,17 @@ protection, alors que c'est le banc.
   ce dessin. Les textes des bâtiments s'écrivent VIVANTS, au rendu — ce qui les rend en plus
   bilingues, ce qu'un sprite baké ne peut pas être. Idem `translate`/`rotate` : le faux canvas
   les ignore, un sprite qui en dépend se juge faux.
+- ⚠️ **TEINTER UN SPRITE AVEC UN `fillRect` DESSINE UNE BOÎTE.** Un sprite est transparent
+  partout sauf sur lui-même ; l'assombrir passe par `ctx.filter` (et il FAUT le remettre à
+  `"none"`, c'est un état du contexte). ⚠️ Même famille au 427 : teinter un VÊTEMENT ne se
+  fait pas en repeignant la feuille (on colorerait la peau et les cheveux), mais en
+  repeignant les blocs du vêtement à leurs coordonnées exactes.
+- ⚠️⚠️ **`Array.prototype.sort` EST STABLE, MAIS UN ORDRE DE DESSIN NE SE FONDE PAS DESSUS**
+  (431). Les files de rendu du projet trient par ancrage au sol ; deux éléments à la même
+  hauteur gardent donc leur ordre d'insertion — jusqu'au jour où l'on réorganise une boucle,
+  sans rien casser de visible ailleurs. Ce qui doit passer devant le dit avec un epsilon.
+- ⚠️ **`stopPropagation` N'ARRÊTE PAS LES AUTRES ÉCOUTEURS DE LA MÊME CIBLE** (il faut
+  `stopImmediatePropagation`).
 - ⚠️ **UN EFFET À BOUFFÉES NE S'ÉTEINT PAS EN METTANT SON TAUX À ZÉRO.**
 - ⚠️ **`*/` DANS UN COMMENTAIRE DE BLOC LE FERME** — `COURT_STAIR_*/COURT_LINKS` a cassé le
   build du 426. Les commentaires denses de ce projet en sont friands.
@@ -247,8 +162,8 @@ protection, alors que c'est le banc.
 |---|---|
 | `components/ferme/FermeGame.js` | tout le jeu ferme + Valley Town + tribunal — **~20 500 l.** |
 | `components/ferme/fermeEngine.js` | règles pures · `generateTownWorld()` · `generateCourtWorld()` · `townSpots()` · **`townNav()` / `townFindPath()`** |
-| `components/ferme/README.md` | **Valley Town, le tribunal, les habitants — autorité (428-429)** |
-| `components/ferme/fermeConstants.js` | réglages · **tous les `TOWN_*`, `COURT_*`, `WARDROBE_*`** |
+| `components/ferme/README.md` | **Valley Town, le tribunal, les habitants, la VENTE et les PIÈGES de ces trois zones — autorité (428-431)** |
+| `components/ferme/fermeConstants.js` | réglages · **tous les `TOWN_*`, `COURT_*`, `WARDROBE_*`, `TOWN_STALL_TRADES`** |
 | `components/ferme/fermeArt.js` | **tous** les sprites, en canevas procédural. Aucun PNG · **`drawSeated()`** |
 | `app/room/[code]/page.js` · `lib/gameSync.js` · `lib/realtimeQuota.js` | salon · synchro · quota |
 | `public/candyluge/README.md` | **la dette et les 18 règles de la luge — autorité (427)** |
@@ -268,6 +183,9 @@ modèle de `candyluge` : il fait autorité **à côté du code qu'il décrit**. 
 grossit à chaque zip n'a rien à faire dans le fichier qu'on relit avant de travailler sur
 autre chose. On n'en garde ici que l'orientation ; les pièges qui valent pour TOUT le projet
 restent en §4, et rien n'est recopié aux deux endroits.
+⚠️ **DEPUIS LE 431 IL PORTE AUSSI LES PIÈGES DE LA FERME, DE LA VILLE ET DU TRIBUNAL** (§15
+là-bas), sortis de §4 sur l'ordre du §14.2 — et il décrit la vente, qui n'existe plus qu'au
+marché (§14 là-bas).
 
 **Ce qu'il faut savoir sans ouvrir le fichier :**
 
@@ -363,10 +281,17 @@ BUILD S'ARRÊTE APRÈS LA COMPILATION** sur `Error: supabaseUrl is required` (pr
 `✓ Compiled successfully` juste avant.**
 
 **Bancs `.mjs` — ce qui existe VRAIMENT** (§14.6) :
-- **`tools/verify-vallee.mjs` — 137 contrôles, 137/137 (430 ; 113 au 427, 88 au 426).** Il
+- **`tools/verify-vallee.mjs` — 172 contrôles, 172/172 (431 ; 137 au 430, 113 au 427).** Il
   importe le VRAI moteur : circulation, murs invisibles ET décors traversables, géométrie des
   bâtiments, rebords sautables, le tribunal pièce par pièce, la coupe de bois, les familles,
   la garde-robe.
+  ⚠️⚠️ **DEPUIS LE 431 IL JOUE DES VENTES ET COMPTE LES PIÈCES**, et c'est le seul endroit du
+  projet où un banc touche à de l'ARGENT — demande explicite de Guillaume (« l'argent doit bien
+  être récupéré »). Six contrôles rejouent une vente complète : l'or crédité, le stock retiré,
+  le panier multi-lignes, la barquette de verger **qui ne doit pas être payée deux fois** (trois
+  résolveurs créditent `shared.money` eux-mêmes, les autres non), et le refus depuis la ferme
+  qui ne doit RIEN changer — ni l'or, ni le stock. Un refus qui retire quand même la
+  marchandise serait le pire bogue possible, et il ne lèverait aucune erreur.
   ⚠️⚠️ **DEPUIS LE 428 IL NE VÉRIFIE PLUS DES TABLES, IL REJOUE LE DÉPLACEMENT** — vrai
   suiveur, vraie boîte de collision, vraie règle de dénivelé, 60 images par seconde, sur
   **chaque endroit vers chaque autre** (~16 000 trajets). Le 427 contrôlait ici les
@@ -384,11 +309,23 @@ BUILD S'ARRÊTE APRÈS LA COMPILATION** sur `Error: supabaseUrl is required` (pr
   de ce à quoi ressemble un meuble PLEIN.
 - **`tools/render-echelle.mjs`** (429) — **chaque décor à côté d'une fermière**, sur la même
   ligne de sol, avec le rapport de hauteur comparé au repère physique attendu. C'est le seul
-  banc qui puisse attraper une erreur d'ÉCHELLE (voir §4). Il en a trouvé trois du premier coup.
+  banc qui puisse attraper une erreur d'ÉCHELLE. Il en a trouvé trois du premier coup ; il
+  mesure les six métiers d'étal séparément depuis le 431 (ils partagent leur ossature, pas leur
+  marchandise).
+- **`tools/render-foire.mjs`** (431) — **la RANGÉE d'étals**, pas les étals un par un : avec ses
+  guirlandes, ses clients devant, l'arche découpée en deux moitiés comme le fait le jeu, et les
+  six métiers en gros plan. ⚠️ C'est le banc qui a montré que la balance du fromager se lisait
+  comme une fenêtre, que ses meules jaunes disparaissaient dans la bâche jaune, et que la
+  guirlande était mal placée **deux fois de suite**. Aucun des trois ne se voyait à la lecture.
 - **`tools/render-tribunal.mjs`** — le mobilier, les décors de rue, les **bâtiments de la
   Haute-Ville** (sur du dallage, à côté de la gare : une cohérence se juge côte à côte) et **la
   garde-robe PORTÉE**. Il a montré la rangée d'étals monochrome (426), le haut-de-forme
   décapité et deux défauts de façade du salon (427).
+  ⚠️⚠️ **ET IL MESURE LA SYMÉTRIE DES FAÇADES DEPUIS LE 431** : on replie l'image sur son axe
+  et on compte l'écart colonne par colonne. C'est ce qui manquait pour attraper la colonnade du
+  tribunal, décalée de six pixels **depuis le 425**. ⚠️ Il ne teste QUE les façades censées
+  être symétriques : l'hôtel de ville est asymétrique exprès (beffroi décalé) et l'église porte
+  son clocher sur le flanc — les y inscrire reviendrait à demander un jour qu'on les corrige.
 - `verify-constants` · `verify-objects` · `verify-strings` · `verify-syntax` · `verify-gates` ·
   `verify-cycle` · `verify-orchards` · `verify-scope` · `verify-vergers` · `render-fruits`.
 - ⚠️ **`verify-luge`, `verify-boot`, `preview-luge`, `preview.mjs`, `verify-perf` et
@@ -474,8 +411,9 @@ erreur** en choisissant mal.
   vie : des résidents qui vont contempler un champ vide, c'est du remplissage. La question
   n'est donc pas « comment les meubler » mais **« qu'est-ce qu'on construit là »**.
 - ⚠️ **DEUX DES TROIS CHANTIERS DE JOUABILITÉ RESTENT À CONSTRUIRE.** Le marché est livré au
-  430 (il fait exister l'économie, et son **jour de marché** hebdomadaire est déjà un
-  rendez-vous daté). Restent :
+  430 et **devenu le SEUL guichet au 431** : la ferme montre et transforme, la ville achète.
+  L'économie existe donc vraiment, et le **jour de marché** hebdomadaire est déjà un
+  rendez-vous daté. Restent :
   **1. les commissions** — le tableau des nouvelles distribue des demandes de la ville, qu'on
   remplit depuis la ferme, à deux, contre paiement. Elles s'appuient sur l'économie qui existe
   désormais ;
@@ -487,6 +425,12 @@ erreur** en choisissant mal.
   de la plateforme n'ont pas été audités au doigt. Certains ont déjà des `pointer*` (puzzle,
   naval, yahtzee), d'autres non — **personne ne sait lesquels**, et c'est exactement l'angle
   mort qui a laissé la ferme injouable pendant des années.
+- ⚠️⚠️ **LE VOYAGE EST-IL DEVENU UNE CORVÉE ?** (431, à jouer, c'est la question de ce zip.)
+  Vendre exige maintenant de prendre le train : c'est ce qui donne son sens à la ville, mais
+  personne ne l'a encore vécu sur une soirée entière. Deux réglages existent si c'est pénible —
+  élargir la portée du marché, ou raccourcir le trajet — et **aucun ne doit être touché avant
+  d'avoir joué**. On a délibérément conservé la prime de cours (jusqu'à +35 %) comme
+  contrepartie : le voyage doit PAYER, pas seulement coûter.
 - **La garde-robe** (427) : les prix sont volontairement très hauts. À jouer pour savoir si
   « très cher » veut dire « on économise pour » ou « on n'y va jamais ».
 - **`candyluge`** : voir `public/candyluge/README.md`, qui fait autorité. La décision qui
@@ -512,17 +456,21 @@ erreur** en choisissant mal.
 1. **Remplacer, ne jamais empiler.** Ce fichier décrit le **présent**. Une information périmée
    se supprime, elle ne se date pas.
 2. **200 lignes = passe d'élagage obligatoire. Ne pas relever le seuil.** L'élagage se fait
-   AVANT d'ajouter. **Le 428 a exécuté l'ordre du 427 : §6 est parti dans
-   `components/ferme/README.md`, et le fichier avait RÉTRÉCI pour la première fois (507 → 490) ; il est remonté à 534 depuis. **La scission de §4 n'est plus reportable.**
-   ⚠️ **L'ORDRE DU PROCHAIN ZIP : §4 SE SCINDE À SON TOUR.** C'est devenu le plus gros chapitre
-   (près de cent lignes), et il mélange deux choses qui n'ont rien à voir : les pièges de la
-   FERME/VILLE, qui appartiennent à `components/ferme/README.md` comme le reste, et les pièges
-   de JavaScript / three.js / canevas, qui sont les seuls réellement globaux. Ne garder ici que
-   les seconds. **Ne PAS y toucher avant d'avoir vérifié que chaque piège déplacé est toujours
-   vrai** — un piège périmé recopié ailleurs est pire qu'un piège supprimé.
-   Historique : fait au 426 (insuffisant) et au 427 (profond : §7 est parti dans
-   `public/candyluge/README.md`, §9 réduit à ses cinq pièges, §4 débarrassé de tout ce qu'un
-   banc attrape).
+   AVANT d'ajouter.
+   ⚠️ **LE 431 A EXÉCUTÉ L'ORDRE DU 430 : §4 EST SCINDÉ.** Les pièges de la ferme, de la ville
+   et du tribunal sont partis dans `components/ferme/README.md` §15 ; il ne reste ici que
+   JavaScript / three.js / canevas, plus le seul piège d'architecture (les deux cartes). Le
+   fichier est passé de **534 à 482 lignes** — deuxième rétrécissement de son histoire.
+   ⚠️⚠️ **ET LA VÉRIFICATION EXIGÉE PAR L'ORDRE A SERVI DÈS LA PREMIÈRE LIGNE** : « la boucle
+   de nuages tourne à vide (`SKY_CLOUD_COUNT: 0`) » ne correspondait à AUCUN symbole du dépôt.
+   Recopié ailleurs, il aurait survécu un zip de plus. **Relire chaque ligne contre le code
+   avant de la déplacer n'est pas une formalité : c'est là qu'on trouve les périmées.**
+   Historique : 426 (insuffisant), 427 (profond : §7 → `public/candyluge/README.md`, §9 réduit
+   à cinq pièges), 428 (§6 → `components/ferme/README.md`, 507 → 490), 431 (§4 scindé).
+   ⚠️ **L'ORDRE DU PROCHAIN ZIP : §10 EST LE PROCHAIN À GROSSIR.** La liste des bancs y occupe
+   déjà quarante lignes et gagne une entrée par zip. Le jour où elle dépasse la moitié du
+   chapitre, elle part dans un `tools/README.md` — en ne gardant ici QUE ce qui n'existe pas
+   (la liste des bancs absents, qui est la vraie protection contre le banc imaginaire du §14.6).
 3. **Critère d'inclusion** : « est-ce vrai à l'échelle du projet, et invérifiable en ouvrant
    un seul fichier ? » Sinon, ça va dans un commentaire de code. **L'histoire d'un défaut
    corrigé n'y a pas sa place — seule sa LEÇON, en §4.**

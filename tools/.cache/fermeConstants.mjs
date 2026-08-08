@@ -2747,6 +2747,27 @@ export const TOWN_PARK = { x: 108, y: 74, w: 34, h: 26 };     // le parc et son 
 export const TOWN_ORCHARD = { x: 12, y: 38, w: 18, h: 24 };   // le verger municipal
 export const TOWN_MARKET = { x: 38, y: 74, w: 26, h: 26 };    // le champ de foire, dallé et bordé d'arbres
 /* ═══════════════════════════════════════════════════════════════════════════
+   ZIP 431 — LES SIX MÉTIERS DU MARCHÉ.
+   ⚠️ LA TABLE VIT ICI ET NULLE PART AILLEURS, et ce n'est pas de la coquetterie
+   d'organisation : elle est lue par TROIS endroits qui ne se parlent pas — le
+   générateur (fermeEngine, qui distribue les métiers le long des deux rangées),
+   le dessin (fermeArt, qui peint la bâche et la marchandise) et le rendu
+   (FermeGame, qui choisit le sprite). Le 426 avait un `% 4` recopié dans chacun
+   des trois ; passer à six métiers en aurait donc demandé trois corrections, et
+   l'oubli d'une seule aurait posé une case SOLIDE sans sprite dessus, c'est-à-
+   dire un mur invisible — le défaut que le 425 a payé six cents fois.
+   ⚠️ Les couleurs sont ici avec les clés parce que la BÂCHE EST L'ENSEIGNE :
+   séparer « ce qu'on vend » de « la couleur du stand » serait exactement le
+   paramètre qui en double un autre (§8 de CLAUDE.md). */
+export const TOWN_STALL_TRADES = [
+  { aw: "#4a9a58", awL: "#6fbe7b", key: "veg" },     // primeur
+  { aw: "#3f79c0", awL: "#65a0e2", key: "fish" },    // poissonnier
+  { aw: "#c05442", awL: "#e07a63", key: "bread" },   // boulanger
+  { aw: "#c05c96", awL: "#e086bb", key: "flower" },  // fleuriste
+  { aw: "#c9a13a", awL: "#e8c463", key: "cheese" },  // fromager
+  { aw: "#3d9a9a", awL: "#63c0c0", key: "pot" },     // potier
+];
+/* ═══════════════════════════════════════════════════════════════════════════
    LES QUARTIERS DU ZIP 426 — ce qui remplit l'agrandissement.
    ───────────────────────────────────────────────────────────────────────────
    ⚠️ CHACUN RÉPOND À UN VIDE CONSTATÉ, pas à une envie de décor :

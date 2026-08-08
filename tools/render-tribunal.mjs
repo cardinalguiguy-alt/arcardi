@@ -160,4 +160,60 @@ for (const [n, im] of bldKinds) {
   const up = scale(sh.px, sh.width, sh.height, 5);
   writePNG(path.join(OUT, "garde-robe-427.png"), up.px, up.W, up.H);
 }
+/* ══════════════════════════════════════════════════════════════════════════
+   ZIP 431 — LA SYMÉTRIE DES FAÇADES, MESURÉE.
+   ──────────────────────────────────────────────────────────────────────────
+   ⚠️⚠️ CE CONTRÔLE EXISTE PARCE QUE GUILLAUME A VU EN JEU CE QU'AUCUN BANC NE
+   REGARDAIT (« même type de décalage pour l'architecture extérieure du
+   tribunal »). La colonnade du tribunal partait de x = 18 au lieu de 12 : huit
+   fûts parfaitement réguliers, mais SIX PIXELS à droite du fronton qui les
+   couronne. Le péristyle penchait donc par rapport à son propre bâtiment.
+
+   ⚠️ ET C'EST INVISIBLE EN REGARDANT LE DESSIN. Une planche de sprites montre
+   des colonnes bien alignées entre elles ; l'erreur n'est pas dans la rangée,
+   elle est dans son RAPPORT à l'axe. C'est la leçon du 429 (« un décor ne se
+   juge pas contre d'autres décors ») transposée à l'intérieur d'un seul sprite,
+   et la seule façon de l'attraper est de compter des pixels.
+
+   Méthode : on replie l'image sur son axe vertical et on somme, colonne par
+   colonne, l'écart entre une colonne et son miroir, rapporté au total peint.
+   ⚠️ ON NE MESURE QUE LES FAÇADES CENSÉES ÊTRE SYMÉTRIQUES. L'hôtel de ville
+   est ASYMÉTRIQUE EXPRÈS (beffroi décalé, c'est ce qui le rend reconnaissable —
+   note du 425) et l'église porte son clocher sur le flanc : les inscrire ici
+   reviendrait à demander un jour qu'on les « corrige », c'est-à-dire à détruire
+   ce qui les distingue. Un banc qui contrôle la mauvaise chose est pire qu'un
+   banc absent.
+   ══════════════════════════════════════════════════════════════════════════ */
+{
+  function asym(im) {
+    const px = im.__px || im.px;
+    const colW = new Array(im.width).fill(0);
+    for (let y = 0; y < im.height; y++) for (let x = 0; x < im.width; x++) {
+      if (px[(y * im.width + x) * 4 + 3] > 8) colW[x]++;
+    }
+    let diff = 0, tot = 0;
+    for (let x = 0; x < im.width; x++) { diff += Math.abs(colW[x] - colW[im.width - 1 - x]); tot += colW[x]; }
+    return tot ? (diff / tot) * 100 : 0;
+  }
+  const SYM = [
+    ["tribunal", S.courthouse, 1.0, "fronton, colonnade et perron sur le même axe"],
+    ["gare", S.station, 1.0, "un quai couvert, pignon centré"],
+    ["Maison Garfield", S.townBoutique, 1.0, "vitrine à deux battants"],
+    ["arche du marché", S.townMarketArch, 1.0, "deux poteaux, un panneau au milieu"],
+    ["fontaine", S.plazaFountain, 3.0, "vasque ronde, jet au centre"],
+  ];
+  console.log("\n=== zip 431 — la symétrie des façades qui doivent l'être ===\n");
+  console.log("façade               asym%   seuil   verdict");
+  let bad = 0;
+  for (const [n, im, lim, why] of SYM) {
+    if (!im) { console.log(`${n.padEnd(20)} SPRITE MANQUANT`); bad++; continue; }
+    const a = asym(im);
+    const okk = a <= lim;
+    if (!okk) bad++;
+    console.log(`${n.padEnd(20)}${a.toFixed(1).padStart(6)}${lim.toFixed(1).padStart(8)}   ${okk ? "OK" : "⚠️ PENCHE"}   ${why}`);
+  }
+  console.log(bad ? `\n⚠️  ${bad} façade(s) hors seuil.\n`
+                  : "\nToutes les façades symétriques le sont au pixel.\n");
+}
+
 console.log("\nÉcrit : tribunal-mobilier-{parquet,marbre,dalle}.png, ville-decors.png, ville-batiments-427.png, garde-robe-427.png\n");

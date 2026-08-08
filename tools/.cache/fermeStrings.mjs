@@ -609,7 +609,7 @@ export const FERME_STR = {
     jewelryMadeChat: (name, typeName) => `💍 ${name} a designé : ${typeName}.`,
     jewelrySoldChat: (gain) => `💰 Bijou vendu : +${gain} or.`,
     jewelryTypeName: (id) => ({ earrings: "Boucles d'oreilles", bracelet: "Bracelet", necklace: "Collier", chain: "Chaîne en or" }[id] || id),
-    jewelrySellTitle: "Bijoux à vendre (pool commun)",
+    jewelrySellTitle: "Bijoux en réserve (pool commun)",
     jewelryPieceTitle: (typeName, gemName) => `${typeName} (${gemName})`,
     jewelryMakerHint: (name) => `Designé par ${name}`,
     jewelrySellBtn: "Vendre",
@@ -916,7 +916,7 @@ export const FERME_STR = {
     fishTooSoon: "Trop tôt ! Il a filé.",
     // Invites de proximité
     promptShop: "[E] Boutique",
-    promptBin: "[E] Vendre",
+    promptBin: "[E] Réserves",
     promptBarn: "[E] Déposer à la grange",
     promptBarnBuild: "[E] Construire (mini-jeu)",
     promptSleep: "[E] Dormir",
@@ -1021,8 +1021,13 @@ export const FERME_STR = {
     // (comme la ruche/fromagerie/boulangerie/scierie), plus de chantier d'1h.
     sucrerieRowSub: () => `Transforme la canne à sucre déposée en sacs de sucre, tant que Jérôme Martial est installé — déplaçable comme les autres ateliers`,
     // Bac de vente
-    binTitle: "💰 Bac de vente",
-    binHint: "L'or gagné va dans la caisse commune de l'équipe.",
+    /* Zip 431 — le bac n'achète plus rien. ⚠️ IL GARDE SON NOM D'USAGE mais le
+       texte dit ce qu'il est devenu : l'inventaire complet de la ferme, à
+       consulter avant de prendre le train. Le renommer « inventaire » aurait
+       cassé le repère de deux joueurs qui disent « je passe au bac » depuis des
+       mois — c'est le lieu qui compte, pas l'étiquette. */
+    binTitle: "🧾 Réserves de la ferme",
+    binHint: "Tout ce que la ferme possède. La vente se fait désormais au marché du champ de foire, à Valley Town — prenez le train.",
     cropRowTitle: (name, n) => `${name} × ${n}`,
     cropRowSub: (cr, n) => `${cr.sell} or pièce · total ${n * cr.sell} or`,
     woodRowTitle: (n) => `Bois × ${n}`,
@@ -1725,7 +1730,28 @@ export const FERME_STR = {
        change chaque jour : un prix variable qu'on ne sait pas variable est un
        prix qui a l'air arbitraire. */
     marketTitle: "Marché du champ de foire",
-    marketHint: "Les cours changent chaque jour. Ici on paie toujours au moins le prix du bac de la ferme — jamais moins.",
+    marketHint: "Les cours changent chaque jour. C'est le SEUL endroit où l'on écoule sa production — et on n'y paie jamais moins qu'au vieux bac de la ferme.",
+    /* Zip 431 — les textes du panier. ⚠️ Ils DISENT le total, pas le prix
+       unitaire : la question du joueur devant un marché n'est jamais « combien
+       vaut un blé », c'est « combien je repars avec ». */
+    marketFamAll: "Tout",
+    marketMax: "Max",
+    marketNoneInFamily: "Rien de cette famille dans vos réserves.",
+    marketCartTotal: (n, or_) => n + (n > 1 ? " articles" : " article") + " · " + or_ + " or",
+    marketCartBonus: (b) => "dont +" + b + " or grâce aux cours du jour",
+    marketClear: "Vider",
+    marketAllMax: "Tout au max",
+    marketSellBtn: (or_) => "Vendre · " + or_ + " or",
+    marketBuildWarn: "⚠️ Sert aussi à construire (clôtures, murs, chemins).",
+    marketJewelryHint: "Prix fixé par son créateur — les cours ne s'y appliquent pas.",
+    marketNothing: "Rien à vendre dans ce panier.",
+    marketArchSign: "MARCHÉ",
+    punnetRowLabel: (nom, n) => "Barquette de " + nom.toLowerCase() + " (×" + n + ")",
+    sharedStockHint: "Réserve commune à la ferme.",
+    /* ⚠️ Le jeton qui remplace les boutons « Tout vendre » de la ferme. Il dit
+       OÙ, pas seulement NON : un refus qui n'indique pas la sortie passe pour
+       une panne. */
+    marketOnlyTag: "→ Marché de Valley Town",
     marketDayHint: "🎉 JOUR DE MARCHÉ. Les cours sont hauts aujourd'hui, toute la vallée est descendue.",
     marketEmpty: "Vos poches sont vides. Remontez avec quelque chose à vendre.",
     marketFamily: (f) => ({ crop: "Cultures", fish: "Pêche", product: "Ferme", forage: "Cueillette", material: "Matériaux" }[f] || f),
@@ -1742,7 +1768,11 @@ export const FERME_STR = {
       : "💅 Fermé. Carla ne tient boutique qu'un jour par semaine : rendez-vous dans " + d + " jour" + (d > 1 ? "s" : "") + ".",
     carlaOffDuty: "💅 Carla n'est pas de service aujourd'hui.",
     chatMarketSell: (gain, bonus, money) => "Vendu au marché : " + gain + " or (+" + bonus + " vs le bac). Caisse : " + money + ".",
-    toastFarMarket: "🎪 Il faut être au champ de foire pour vendre.",
+    /* Zip 431 — ⚠️ CE MESSAGE EST DEVENU LA RÉPONSE À TOUTE VENTE TENTÉE
+       DEPUIS LA FERME, pas seulement au marché mal placé. Il doit donc DIRE OÙ
+       ALLER : un « impossible ici » sans destination passe pour une panne. */
+    toastFarMarket: "🎪 On ne vend qu'au marché du champ de foire, à Valley Town. Prenez le train !",
+    toastMarketNothing: "🎪 Votre panier est vide.",
     promptTownStand: "↑ ↓ ← → : se lever",
   },
   en: {
@@ -2138,7 +2168,7 @@ export const FERME_STR = {
     jewelryMadeChat: (name, typeName) => `💍 ${name} designed: ${typeName}.`,
     jewelrySoldChat: (gain) => `💰 Jewelry sold: +${gain} gold.`,
     jewelryTypeName: (id) => ({ earrings: "Earrings", bracelet: "Bracelet", necklace: "Necklace", chain: "Gold chain" }[id] || id),
-    jewelrySellTitle: "Jewelry for sale (shared pool)",
+    jewelrySellTitle: "Jewelry in store (shared pool)",
     jewelryPieceTitle: (typeName, gemName) => `${typeName} (${gemName})`,
     jewelryMakerHint: (name) => `Designed by ${name}`,
     jewelrySellBtn: "Sell",
@@ -2427,7 +2457,7 @@ export const FERME_STR = {
     fishFail: "The fish got away...",
     fishTooSoon: "Too soon! It escaped.",
     promptShop: "[E] Shop",
-    promptBin: "[E] Sell",
+    promptBin: "[E] Stores",
     promptBarn: "[E] Deposit at barn",
     promptBarnBuild: "[E] Build (mini-game)",
     promptSleep: "[E] Sleep",
@@ -2517,8 +2547,8 @@ export const FERME_STR = {
     millRowSub: (n) => `Continuously turns deposited wheat into flour sacks (1 real hour to build) · in stock: ${n}`,
     sucrerieRowTitle: (cost) => `🏚️ Sugar mill: ${cost} gold`,
     sucrerieRowSub: () => `Continuously turns deposited sugar cane into sugar sacks, as long as Jérôme Martial lives there — movable like the other workshops`,
-    binTitle: "💰 Sell bin",
-    binHint: "Gold earned goes into the team's shared pot.",
+    binTitle: "🧾 Farm stores",
+    binHint: "Everything the farm owns. Selling now happens at the fairground market in Valley Town — take the train.",
     cropRowTitle: (name, n) => `${name} × ${n}`,
     cropRowSub: (cr, n) => `${cr.sell} gold each · total ${n * cr.sell} gold`,
     woodRowTitle: (n) => `Wood × ${n}`,
@@ -3135,7 +3165,22 @@ export const FERME_STR = {
     gpsArrived: "🧭 You have arrived.",
     gpsHint: "Click the map to set a destination",
     marketTitle: "Fairground market",
-    marketHint: "Prices move every day. You never get less here than at the farm bin — only more.",
+    marketHint: "Prices move every day. This is the ONLY place to sell your produce — and you never get less than the farm's old bin used to pay.",
+    marketFamAll: "All",
+    marketMax: "Max",
+    marketNoneInFamily: "Nothing from that family in your stores.",
+    marketCartTotal: (n, g) => n + (n > 1 ? " items" : " item") + " · " + g + " gold",
+    marketCartBonus: (b) => "including +" + b + " gold from today's prices",
+    marketClear: "Clear",
+    marketAllMax: "Everything, max",
+    marketSellBtn: (g) => "Sell · " + g + " gold",
+    marketBuildWarn: "⚠️ Also used for building (fences, walls, paths).",
+    marketJewelryHint: "Price set by its maker — market rates do not apply.",
+    marketNothing: "Nothing to sell in that basket.",
+    marketArchSign: "MARKET",
+    punnetRowLabel: (name, n) => name + " punnet (\u00d7" + n + ")",
+    sharedStockHint: "Shared farm store.",
+    marketOnlyTag: "\u2192 Valley Town market",
     marketDayHint: "🎉 MARKET DAY. Prices are high today, the whole valley came down.",
     marketEmpty: "Your pockets are empty. Come back with something to sell.",
     marketFamily: (f) => ({ crop: "Crops", fish: "Fishing", product: "Farm", forage: "Foraging", material: "Materials" }[f] || f),
@@ -3149,7 +3194,8 @@ export const FERME_STR = {
       : "💅 Closed. Carla only keeps shop one day a week: come back in " + d + " day" + (d > 1 ? "s" : "") + ".",
     carlaOffDuty: "💅 Carla is off duty today.",
     chatMarketSell: (gain, bonus, money) => "Sold at the market: " + gain + " gold (+" + bonus + " vs the bin). Till: " + money + ".",
-    toastFarMarket: "🎪 You need to be at the fairground to sell.",
+    toastFarMarket: "🎪 Selling only happens at the fairground market in Valley Town. Take the train!",
+    toastMarketNothing: "🎪 Your basket is empty.",
     promptTownStand: "↑ ↓ ← → : stand up",
   },
 };

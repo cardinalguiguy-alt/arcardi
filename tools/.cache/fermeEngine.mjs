@@ -2519,14 +2519,61 @@ export function resolveSell(f, m) {
    client bricolé pourrait choisir — l'or est partagé (§3), donc c'est l'hôte
    qui cote, comme c'est lui qui débite.
    ═══════════════════════════════════════════════════════════════════════════ */
-export function resolveTownSell(f, m, day) {
+/* ⚠️⚠️ ZIP 431 — CETTE FONCTION EST DEVENUE LE GUICHET UNIQUE DU MARCHÉ, et
+   c'est la conséquence directe de la demande de Guillaume : « nos produits
+   doivent être vendus exclusivement sur le marché de Valley Town ». Avant ce
+   zip, le jeu avait NEUF chemins de vente (le bac, les gemmes, la farine, le
+   sucre, les prises de Soan, les productions de Harald, les vergers, les
+   artisans, la bijouterie), chacun avec son propre test de proximité — ou
+   aucun. Les faire tous transiter par ici est la seule façon d'avoir UNE règle
+   de lieu, UNE cote et UN endroit à relire.
+   ⚠️ ET ON DÉLÈGUE, ON NE RECOPIE PAS. Chaque famille garde son résolveur
+   d'origine : eux seuls savent où vit le stock et ce que vaut la pièce. Cette
+   fonction n'ajoute que deux choses par-dessus — la PORTÉE et la COTE. Recopier
+   les prix ici aurait donné deux barèmes pour le même fromage, exactement le
+   doublon que le §8 de CLAUDE.md interdit.
+   ⚠️⚠️ ATTENTION AU DOUBLE CRÉDIT, c'est le piège de cette délégation : trois
+   résolveurs (fruits de verger, produits aux fruits, bijouterie) CRÉDITENT
+   `shared.money` eux-mêmes, les autres se contentent de renvoyer un
+   `moneyDelta` que l'appelant applique. Pour les premiers, on ne renvoie donc
+   que le BONUS ; pour les seconds, le total. `paid` porte cette distinction, et
+   se tromper ici paierait la vente deux fois sans lever la moindre erreur. */
+export function resolveTownSell(f, m, day, s) {
   normalizeFarmer(f);
-  const res = { moneyDelta: 0, earnedDelta: 0, invChanged: false, toast: null, gain: 0, base: 0 };
-  const px = +m.px, py = +m.py;
-  const mk = C.TOWN_MARKET, R = C.MARKET_RANGE_TILES;
-  const inMarket = Number.isFinite(px) && Number.isFinite(py)
-    && px >= mk.x - R && px <= mk.x + mk.w + R && py >= mk.y - R && py <= mk.y + mk.h + R;
-  if (!inMarket) { res.toast = "farMarket"; return res; }
+  const res = {
+    moneyDelta: 0, earnedDelta: 0, invChanged: false, toast: null, gain: 0, base: 0,
+    gemsChanged: false, flourChanged: false, sugarChanged: false, stockChanged: false,
+    craftChanged: false, jewelryChanged: false, sharedChanged: false, n: 0,
+  };
+  if (!atMarket(m)) { res.toast = "farMarket"; return res; }
+  /* ══════════════════════════════════════════════════════════════════════════
+     ZIP 431 — LE PANIER : UNE REQUÊTE, N LIGNES.
+     ⚠️⚠️ C'EST UNE CONTRAINTE RÉSEAU, PAS UN CONFORT D'INTERFACE. Le panneau du
+     marché peut contenir une quarantaine de lignes (neuf cultures, dix
+     poissons, les fruits de verger, les produits d'artisans…). Vendre « tout »
+     en émettant un `send()` par ligne ferait quarante messages en une seconde
+     contre un PLAFOND DUR DE DIX (§3 de CLAUDE.md), et le dépassement est
+     SILENCIEUX : la moitié du panier partirait dans le vide, l'or n'arriverait
+     pas, et rien ne le dirait. Une requête porte donc tout le panier.
+     ⚠️ ET LA PORTÉE EST VÉRIFIÉE UNE FOIS, EN TÊTE, pour le panier entier : les
+     lignes n'ont pas de position à elles, et leur en inventer une serait
+     rouvrir le piège des deux cartes. */
+  if (Array.isArray(m.lines)) {
+    for (const line of m.lines.slice(0, 64)) {
+      if (!line || Array.isArray(line.lines)) continue;   // pas de panier dans un panier
+      const r = resolveTownSell(f, { ...line, px: m.px, py: m.py, pz: m.pz }, day, s);
+      res.moneyDelta += r.moneyDelta; res.earnedDelta += r.earnedDelta;
+      res.gain += r.gain; res.base += r.base; res.n += r.n;
+      for (const k of ["invChanged", "gemsChanged", "flourChanged", "sugarChanged",
+                       "stockChanged", "craftChanged", "jewelryChanged"]) if (r[k]) res[k] = true;
+    }
+    /* ⚠️ ON NE REMONTE « TROP LOIN » QUE SI RIEN N'A ÉTÉ VENDU. Un panier
+       partiellement servi (un stock qui a bougé entre l'affichage et le clic)
+       est un succès partiel, pas une erreur : afficher un refus alors que l'or
+       est arrivé serait le pire des deux mondes. */
+    if (res.gain <= 0) res.toast = "marketNothing";
+    return res;
+  }
   /* ⚠️ LA QUANTITÉ ET LE STOCK SONT LUS EXACTEMENT COMME AU BAC. On recopie la
      forme de `resolveSell` plutôt que de l'appeler : l'appeler obligerait à
      court-circuiter son test de portée, c'est-à-dire à créer un chemin où une
@@ -2554,13 +2601,119 @@ export function resolveTownSell(f, m, day) {
   } else if (m.item === "product") {
     const pt = m.product | 0; if (pt < 0 || pt >= C.ANIMALS.length) return res;
     n = take(f.inv.products[pt], m.n); f.inv.products[pt] -= n; unit = C.ANIMALS[pt].sell;
-  } else return res;
+  } else return resolveTownSellShared(f, m, day, s, res);
   if (n <= 0) return res;
   const priced = marketPrice(day, m.item, unit);
   res.gain = res.moneyDelta = res.earnedDelta = n * priced;
   res.base = n * unit;
+  res.n = n;
   res.invChanged = true;
   return res;
+}
+/* Le second étage du guichet : tout ce qui ne vit pas dans `f.inv`. Séparé
+   pour que la fonction du dessus reste lisible, appelé par elle seule — la
+   portée a déjà été vérifiée quand on arrive ici, et c'est le SEUL appelant,
+   ce qui est la condition pour que ça reste vrai. */
+function resolveTownSellShared(f, m, day, s, res) {
+  if (!s) return res;
+  const it = m.item;
+  const rate = marketRate(day, marketFamilyOf(it) || "__none__");
+  /* `paid` = le résolveur a DÉJÀ crédité shared.money (voir l'avertissement de
+     l'en-tête). `base` = ce qu'il a rapporté au prix de la ferme. */
+  const finish = (base, paid, flag, n) => {
+    if (base <= 0) return res;
+    const total = Math.max(base, Math.ceil(base * rate));
+    res.base = base; res.gain = total; res.n = n || 1;
+    res.moneyDelta = res.earnedDelta = paid ? total - base : total;
+    if (flag) res[flag] = true;
+    return res;
+  };
+  if (it === "gem") {
+    const r = resolveSellGem(s.gems, m);
+    return finish(r.gain, false, r.gemsChanged ? "gemsChanged" : null, m.n);
+  }
+  if (it === "flour") {
+    const r = resolveSellFlour(s, m);
+    return finish(r.gain, false, r.flourChanged ? "flourChanged" : null, m.n);
+  }
+  if (it === "sugar") {
+    const r = resolveSellSugar(s, m);
+    return finish(r.gain, false, r.sugarChanged ? "sugarChanged" : null, m.n);
+  }
+  if (it === "commonFish" || it === "commonAnimal") {
+    const stock = s.gregStock; if (!stock) return res;
+    const r = it === "commonFish" ? resolveSellCommonFish(stock, m) : resolveSellCommonAnimal(stock, m);
+    return finish(r.gain, false, r.stockChanged ? "stockChanged" : null, m.n);
+  }
+  if (it === "craft") {
+    /* ⚠️ LE STOCK D'ARTISANS EST COMMUN À LA SALLE, comme les gemmes. Le prix
+       vient de `craftSellPrice`, qui est aussi ce que lit la requête `sellCraft`
+       — un seul barème (voir sa note). */
+    const stock = s.craftStock; if (!stock) return res;
+    const key = String(m.craft || "");
+    if (!CRAFT_SELL_ITEMS.includes(key)) return res;
+    const price = craftSellPrice(s, key);
+    const have = stock[key] | 0;
+    const n = Math.min(have, Math.max(1, (m.n | 0) || have));
+    if (price <= 0 || n <= 0) return res;
+    stock[key] = have - n;
+    return finish(n * price, false, "craftChanged", n);
+  }
+  if (it === "orchardFruit") {
+    /* ⚠️ LA BARQUETTE RESTE UNE VENTE À PART, PAS UNE QUANTITÉ. Six fruits
+       vendus par six ne font PAS une barquette : la barquette rapporte +25 %
+       (voir C.punnetPrice), c'est tout son objet depuis le 398. On boucle donc
+       sur des ventes entières plutôt que de multiplier un prix unitaire. */
+    const fid = String(m.fruit || "");
+    let base = 0, done = 0;
+    const want = Math.max(1, (m.n | 0) || 1);
+    for (let k = 0; k < want; k++) {
+      const r = resolveSellFruit(f, s, fid, !!m.punnet);
+      if (!r.ok) break;
+      base += r.gain; done++;
+    }
+    res.invChanged = done > 0;
+    return finish(base, true, null, done);
+  }
+  if (it === "fruitProduct") {
+    const pid = String(m.product || "");
+    let base = 0, done = 0;
+    const want = Math.max(1, (m.n | 0) || 1);
+    for (let k = 0; k < want; k++) {
+      const r = resolveSellFruitProduct(f, s, pid);
+      if (!r.ok) break;
+      base += r.gain; done++;
+    }
+    res.invChanged = done > 0;
+    return finish(base, true, null, done);
+  }
+  if (it === "jewelry") {
+    /* ⚠️ PAS DE COTE ICI : le prix est celui qu'un joueur a fixé (voir
+       marketFamilyOf). `paid` vaut true — resolveSellJewelry crédite lui-même —
+       donc `finish` ne renvoie que la différence, qui est nulle par
+       construction. C'est voulu : la pièce est déjà payée, on ne fait que
+       remonter le montant pour le chat et l'effet « +N or ». */
+    const r = resolveSellJewelry(s, s.station, m.jewelry | 0);
+    if (!r.ok) { res.toast = r.toast || null; return res; }
+    res.jewelryChanged = true;
+    return finish(r.gain, true, null, 1);
+  }
+  return res;
+}
+/* ⚠️ ZIP 431 — LA LISTE DES REQUÊTES QUI SONT DES VENTES DE PRODUITS. C'est
+   elle qui rend la règle « on ne vend qu'au marché » VRAIE plutôt
+   qu'affichée : l'interface de la ferme n'a plus de bouton vendre, mais un
+   client d'une version antérieure (ou bricolé) enverrait toujours ses vieilles
+   requêtes. Le contrôle est donc chez l'hôte, en un seul point d'entrée.
+   ⚠️ `visitorDeal` ET `visitorSwap` N'Y SONT PAS, ET C'EST LA DEMANDE : on peut
+   toujours vendre à un visiteur qui frappe à la porte, individuellement, pour
+   répondre à SA demande. Ce n'est pas écouler une récolte, c'est rendre service
+   — et c'est le seul commerce qui ait encore un sens à la ferme.
+   ⚠️ `sellAnimal` non plus : vendre une BÊTE n'est pas vendre une denrée, et
+   personne ne transporte une vache dans le train. */
+export const PRODUCE_SALE_KINDS = ["sell", "sellCraft", "sellFruit", "sellFruitProduct", "sellJewelry"];
+export function isProduceSale(req) {
+  return !!req && PRODUCE_SALE_KINDS.includes(req.kind);
 }
 
 // Vente d'une gemme depuis le pool COMMUN à la salle (chantier 2026-07,
@@ -2893,13 +3046,62 @@ export function marketHash(a, b) {
    peut ANTICIPER, et anticiper est tout l'intérêt d'un cours qui varie. */
 export const MARKET_FAMILIES = ["crop", "fish", "product", "forage", "material"];
 export function marketFamilyOf(item) {
-  if (item === "crop") return "crop";
-  if (item === "fish" || item === "sea") return "fish";
-  if (item === "product") return "product";
+  if (item === "crop" || item === "orchardFruit") return "crop";
+  if (item === "fish" || item === "sea" || item === "commonFish") return "fish";
+  if (item === "product" || item === "commonAnimal" || item === "flour"
+   || item === "sugar" || item === "craft" || item === "fruitProduct") return "product";
   if (item === "berry" || item === "fruit") return "forage";
-  if (item === "wood" || item === "stone") return "material";
+  if (item === "wood" || item === "stone" || item === "gem") return "material";
+  /* ⚠️⚠️ LA BIJOUTERIE N'A PAS DE FAMILLE, ET C'EST DÉLIBÉRÉ (zip 431). Le prix
+     d'une pièce est FIXÉ PAR LE JOUEUR qui l'a dessinée (voir resolveMakeJewelry).
+     Lui appliquer une cote reviendrait à multiplier un nombre choisi par un
+     humain : il suffirait d'afficher une pièce à 999 999 le jour où les
+     matériaux sont à +35 % pour transformer le marché en distributeur. Une
+     pièce se vend donc à son prix, ni plus ni moins — ce qui reste cohérent
+     avec le plancher promis (« jamais moins que le bac »). */
   return null;
 }
+/* ⚠️ ZIP 431 — LA PORTÉE DU MARCHÉ, EN UNE SEULE DÉFINITION. Elle était écrite
+   dans `resolveTownSell` (hôte) et recopiée dans `nearMarket` (client, pour
+   l'invite). Depuis ce zip elle décide AUSSI si une vente est légale, tous
+   guichets confondus — trois copies d'un même rectangle, c'est la garantie
+   qu'un jour le jeu propose de vendre puis refuse (le défaut que le 426 s'est
+   juré de ne plus commettre).
+   ⚠️ ELLE LIT `px/py` DE LA REQUÊTE, JAMAIS `f.x/f.y` : voir l'en-tête de
+   resolveTownSell — c'est le piège des deux cartes, et il coûte cher ici. */
+export function atMarket(m) {
+  /* ⚠️⚠️ LA ZONE D'ABORD, LES DISTANCES ENSUITE. C'est la règle
+     d'`anyRemoteNearZoned` (§4 de CLAUDE.md) appliquée à la vente, et elle est
+     ici VITALE : le champ de foire vit en x∈[34;68], y∈[70;104] de la carte de
+     VILLE — des coordonnées qui existent aussi au milieu des champs de la
+     ferme, qui fait 180×140. Sans ce test, un fermier debout au bon endroit de
+     son pré vendait « au marché » sans avoir pris le train, et rien ne l'aurait
+     jamais signalé : les deux cartes sont des grilles de nombres, elles ne
+     savent pas qu'elles sont deux.
+     ⚠️ ET ON REFUSE FAUTE DE ZONE, jamais l'inverse : un client d'avant le 431
+     n'envoie pas `pz`, et le laisser passer par tolérance rouvrirait le trou
+     pour tout le monde — il suffirait d'omettre le champ. */
+  if (m.pz !== "town") return false;
+  const px = +m.px, py = +m.py;
+  const mk = C.TOWN_MARKET, R = C.MARKET_RANGE_TILES;
+  return Number.isFinite(px) && Number.isFinite(py)
+    && px >= mk.x - R && px <= mk.x + mk.w + R && py >= mk.y - R && py <= mk.y + mk.h + R;
+}
+/* Le prix d'un produit d'artisan. ⚠️ IL VIT ICI DEPUIS LE 431 : la table était
+   écrite dans le corps de la requête `sellCraft` (FermeGame), donc invisible du
+   marché. Deux tables de prix pour le même fromage, c'est le doublon que le §8
+   interdit — et celui-là aurait donné DEUX PRIX DIFFÉRENTS selon le guichet. */
+export function craftSellPrice(shared, item) {
+  if (C.BAKERY_SELL_ITEMS.includes(item)) return bakeryItemPrice((shared.crafts || {}).bakery, item);
+  return {
+    honey: C.HONEY_SELL, cheeseWheel: C.CHEESE_WHEEL_SELL, cheesePortion: C.CHEESE_PORTION_SELL,
+    butter: C.BUTTER_SELL, yogurtNature: C.YOGURT_NATURE_SELL, yogurtVanilla: C.YOGURT_VANILLA_SELL,
+  }[item] || 0;
+}
+/* La liste des articles d'artisan vendables. ⚠️ DÉRIVÉE, pas recopiée : le
+   panneau du marché la parcourt, l'hôte la valide avec, et une denrée nouvelle
+   apparaît des deux côtés le jour où on l'ajoute ici. */
+export const CRAFT_SELL_ITEMS = ["honey", "cheeseWheel", "cheesePortion", "butter", "yogurtNature", "yogurtVanilla", ...C.BAKERY_SELL_ITEMS];
 /* Le cours du jour, en pourcentage du prix de la ferme.
    ⚠️ LE MARCHÉ EST TOUJOURS AU MOINS AUSSI CHER QUE LE BAC DE LA FERME, et
    c'est un choix de conception, pas un réglage. Si vendre en ville pouvait
@@ -3951,7 +4153,21 @@ export function generateTownWorld() {
   {
     const mk = C.TOWN_MARKET;
     rect(mk, (x, y, i) => { if (ground[i] === C.G_GRASS || ground[i] === C.G_TOWN_LAWN) ground[i] = C.G_PATH; });
-    rect({ x: mk.x + 2, y: mk.y + 2, w: mk.w - 4, h: mk.h - 4 }, (x, y, i) => { ground[i] = C.G_PATH_STONE; });
+    /* ⚠️⚠️ ZIP 431 — LE DALLAGE A UN NOMBRE IMPAIR DE COLONNES, ET C'EST CE QUI
+       PERMET DE CENTRER QUOI QUE CE SOIT DESSUS. Retour de Guillaume, en jeu :
+       « tout n'est pas bien centré, ça déborde un peu sur la gauche ». Il avait
+       raison, et la cause n'était pas la rangée d'étals seule.
+       Un décor est dessiné centré sur SA CASE, donc son axe tombe toujours sur
+       un demi-pixel de case (x + 0,5). Un dallage de 22 colonnes (mk.w − 4) a
+       son axe sur un JOINT entre deux cases : aucune rangée de décors ne peut
+       s'y aligner, et il reste fatalement huit pixels d'écart d'un côté. En
+       passant à 21 colonnes (mk.w − 5), l'axe du dallage EST une colonne — la
+       50 — et tout ce qui s'y aligne tombe juste au pixel.
+       ⚠️ La colonne perdue l'est à l'EST, sur la bordure de terre battue, qui
+       fait donc 2 cases à l'ouest et 3 à l'est. Personne ne mesure une bordure
+       de terre entre deux rangées d'arbres ; tout le monde voit un étal qui
+       dépasse du dallage. */
+    rect({ x: mk.x + 2, y: mk.y + 2, w: mk.w - 5, h: mk.h - 4 }, (x, y, i) => { ground[i] = C.G_PATH_STONE; });
     for (let x = mk.x; x < mk.x + mk.w; x += 5) { plantTree(x, mk.y - 1); plantTree(x + 2, mk.y + mk.h); }
     for (const [lx, ly] of [[mk.x + 1, mk.y + 1], [mk.x + mk.w - 2, mk.y + 1], [mk.x + 1, mk.y + mk.h - 2], [mk.x + mk.w - 2, mk.y + mk.h - 2]]) {
       if (inMap(lx, ly) && !solid[id(lx, ly)]) { props.push({ x: lx, y: ly, kind: "lamp" }); solid[id(lx, ly)] = 1; }
@@ -3981,20 +4197,92 @@ export function generateTownWorld() {
        lui, connaît l'INDICE de l'étal : il n'a pas à le deviner. C'est la règle
        du §8 de CLAUDE.md — ce qui peut être dérivé de la source ne se
        re-devine pas plus loin. */
+    /* ⚠️⚠️ ZIP 431 — LES MÉTIERS SE DISTRIBUENT, ILS NE SE RÉPÈTENT PAS. Le 426
+       faisait `stall++ % 4` sur dix étals : la rangée nord sortait 0,1,2,3,0 et
+       la rangée sud 1,2,3,0,1, donc CINQ paires se faisaient face avec deux
+       bâches consécutives identiques d'un côté. Avec six métiers et un décalage
+       de trois entre les deux rangées, aucun étal n'a le même métier que son
+       voisin NI que celui d'en face — c'est la seule chose qui compte, parce
+       qu'on lit une foire par contraste avec ce qui est juste à côté. */
+    /* ⚠️⚠️ ZIP 431 — L'AXE DE LA FOIRE EST UNE COLONNE, ET TOUT EN DÉCOULE.
+       Retour de Guillaume, en jeu : « ça déborde un peu sur la gauche ». Il
+       avait raison et le chiffre est net : la rangée commençait à une MARGE
+       FIXE (`mk.x + 3`), pas au centre. Cinq étals espacés de quatre cases
+       occupent seize cases de centres ; posés à partir de la colonne 41, leur
+       axe tombait à 1,5 case à l'ouest de l'axe du dallage, et le premier étal
+       — large de 52 px, donc débordant de 1,6 case de part et d'autre de sa
+       case — mordait sur le bord de la pierre.
+       ⚠️ LA LEÇON EST CELLE DU §8 : une position qui devrait être DÉDUITE d'un
+       centre ne se règle pas à la main. Tout ce qui suit part maintenant de
+       `AX`, la colonne médiane du dallage, et rien n'est recentré deux fois. */
+    const NT = C.TOWN_STALL_TRADES.length;
+    const NS = 5, GAP = 4;                    // cinq étals par rangée, un tous les quatre pas
+    const AX = mk.x + 2 + ((mk.w - 5) >> 1);  // la colonne médiane du dallage (voir sa note)
     let stall = 0;
     for (const row of [axis - 3, axis + 2]) {
-      for (let k = 0; k < 5; k++) {
-        const sx = mk.x + 3 + k * 4;
-        if (sx >= mk.x + mk.w - 2) break;
+      const shift = stall ? 3 : 0;
+      for (let k = 0; k < NS; k++) {
+        const sx = AX - (((NS - 1) * GAP) >> 1) + k * GAP;
         if (!inMap(sx, row) || solid[id(sx, row)]) continue;
-        props.push({ x: sx, y: row, kind: "stall", v: stall++ % 4 });
+        props.push({ x: sx, y: row, kind: "stall", v: (k + shift) % NT });
         solid[id(sx, row)] = 1;
       }
+      stall++;
     }
     // Le puits de la foire, au bout de l'allée : un point de rendez-vous, et
     // la raison pour laquelle un marché s'installe là plutôt qu'ailleurs.
-    addProp(mk.x + (mk.w >> 1), axis + 6, "townWell", true);
-    for (const [cx2, cy2] of [[mk.x + 3, axis + 6], [mk.x + mk.w - 4, axis + 6]]) addProp(cx2, cy2, "crate", true);
+    addProp(AX, axis + 6, "townWell", true);
+    for (const d of [-9, 9]) addProp(AX + d, axis + 6, "crate", true);
+    /* ═══════════════════════════════════════════════════════════════════════
+       ZIP 431 — L'ARCHE D'ENTRÉE, ET POURQUOI ELLE COMPTE POUR DEUX PROPS.
+       ───────────────────────────────────────────────────────────────────────
+       ⚠️⚠️ ON VEUT PASSER DESSOUS. Une arche dont l'emprise entière bloque est
+       un mur avec un trou dessiné dedans ; une arche qui ne bloque rien est un
+       décor traversable, que le banc refuse à juste titre (« aucun décor n'est
+       traversable »). La seule forme qui satisfait les deux est celle du monde
+       réel : ce sont les DEUX POTEAUX qui sont solides, et l'espace entre eux
+       ne l'est pas.
+       On pose donc deux props `marketArch`, un par poteau, chacun solide sur SA
+       case — donc chacun expliqué par le banc des murs invisibles — et chacun
+       dessinant SA MOITIÉ du même sprite. Les deux moitiés se rejoignent au
+       pixel parce qu'elles sont découpées dans une seule image, jamais dessinées
+       séparément : deux demi-arches réglées à la main auraient fini décalées.
+       ⚠️ ELLE EST AU NORD, pas au bout de l'allée. L'allée court d'est en ouest,
+       et les sprites de ce jeu sont des FAÇADES vues de face : une arche posée à
+       l'ouest de l'allée se présenterait de profil, c'est-à-dire de travers.
+       Au nord, elle est dans l'axe de l'arrivée depuis la rue — on entre PAR
+       elle, ce qui est tout son objet. */
+    {
+      /* ⚠️ L'ARCHE EST SUR LE MÊME AXE QUE LES ÉTALS (AX), et son sprite est
+         dessiné centré sur la CASE `cx` — pas sur son joint. Les deux poteaux
+         tombent alors exactement au milieu des cases AX±2, qui sont celles
+         qu'on rend solides : le dessin et la collision coïncident au pixel. */
+      const ay = mk.y + 2;
+      for (const side of [-1, 1]) {
+        const px2 = AX + side * 2;
+        if (!inMap(px2, ay) || solid[id(px2, ay)]) continue;
+        props.push({ x: px2, y: ay, kind: "marketArch", side, cx: AX });
+        solid[id(px2, ay)] = 1;
+      }
+    }
+    /* ⚠️ CE QUI TRAÎNE AUTOUR DES ÉTALS, ET C'EST LA MOITIÉ DU TRAVAIL. Dix
+       étals parfaitement alignés dans une esplanade vide se lisent comme un
+       salon professionnel, pas comme une foire. Ce qui fait le marché, c'est ce
+       que les marchands ont POSÉ à côté d'eux en déballant : une charrette
+       encore attelée, des tonneaux, des sacs entamés. Tout est contre le bord
+       des rangées, jamais dans l'allée — l'allée doit rester une allée. */
+    /* ⚠️ POSÉS EN ÉCART À L'AXE (±), jamais en marge depuis un bord : c'est ce
+       qui garantit qu'ils restent symétriques le jour où le champ de foire
+       change de taille — et c'est très exactement la faute qu'on vient de
+       corriger sur la rangée d'étals. */
+    for (const [dx2, oy, kind] of [
+      [-9, axis - 5, "flowerCart"],
+      [9, axis - 5, "barrel"],
+      [-9, axis + 4, "sacks"],
+      [9, axis + 4, "flowerCart"],
+      [-5, axis + 4, "barrel"],
+      [5, axis - 5, "sacks"],
+    ]) addProp(AX + dx2, oy, kind, true);
   }
   // ---- LE KIOSQUE À MUSIQUE, dans le parc. Il occupe 3×3 cases : son emprise
   // entière bloque, sinon on marcherait au travers de son estrade.

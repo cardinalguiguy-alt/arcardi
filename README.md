@@ -1,5 +1,70 @@
 # ARCARDI 🎪
 
+> **ZIP 431 — ON NE VEND PLUS DEPUIS SON CANAPÉ, ET LA FOIRE RESSEMBLE ENFIN À UNE FOIRE.**
+>
+> Le 430 avait ouvert le marché ; il restait un menu de plus. **La vente déménage
+> ENTIÈREMENT à Valley Town** : les neuf guichets de la ferme — le bac, les gemmes, la
+> farine, le sucre, les prises de Soan, les productions de Harald, les vergers, les
+> artisans, la bijouterie — n'achètent plus rien. Ils **montrent**. On consulte ses
+> réserves, on transforme (la meule, les parts de fromage, les confitures), et on prend le
+> train pour encaisser. Seuls les **visiteurs** achètent encore à la ferme, un à un, pour
+> répondre à leur demande — ce n'est pas écouler une récolte, c'est rendre service.
+>
+> **Retirer les boutons n'aurait rien garanti.** Un onglet resté ouvert sur la version
+> d'avant continuerait d'envoyer les vieilles requêtes, et l'or est partagé. Le verrou est
+> donc chez l'hôte, en **un seul point d'entrée**, avant les trois sous-traitants.
+> ⚠️ Et il a fallu boucher un trou au passage : le champ de foire occupe x∈[34;68],
+> y∈[70;104] **en coordonnées de ville** — des coordonnées qui existent aussi au milieu des
+> champs de la ferme, qui fait 180×140. Un fermier planté au bon endroit de son pré passait
+> le contrôle « je suis au marché » sans avoir jamais pris le train. La position transporte
+> désormais **sa zone**, et la zone se teste avant les distances.
+>
+> **Le comptoir devient un panier.** Le 430 vendait une ligne par clic, tout le stock d'un
+> coup : impossible de garder trois blés pour semer. Chaque ligne a maintenant son
+> sélecteur (− / champ libre / + / Max), son total vivant, et les cinq familles servent de
+> **filtre** en plus d'afficher le cours du jour. Le total du panier est affiché en
+> permanence, parce que la question devant un marché n'est jamais « combien vaut un blé »
+> mais « combien je repars avec ».
+> ⚠️ Et tout le panier part en **UNE requête**. Ce n'est pas du confort : quarante lignes
+> vendues une par une feraient quarante messages contre un plafond dur de dix par seconde,
+> **dépassé silencieusement** — la moitié du panier serait partie dans le vide, sans un mot.
+>
+> **La foire, elle, vendait la même chose dans quatre couleurs.** Les dix étals étaient
+> corrects — bonnes proportions, bâche festonnée — et l'ensemble restait un parking à
+> barnums, parce qu'on ne reconnaissait aucun commerce en passant devant. Ils sont
+> désormais **six métiers** : primeur, poissonnier, boulanger, fleuriste, fromager, potier,
+> lisibles à trois distances — la bâche donne la couleur, la marchandise **pendue** donne le
+> métier, l'étalage donne le détail. Deux voisins ne font jamais le même. S'y ajoutent une
+> **arche d'entrée** (deux poteaux solides, on passe entre eux, le nom écrit vivant sur son
+> panneau), des **guirlandes de fanions** tendues d'un étal à l'autre sur leurs mâts, une
+> charrette à fleurs, des tonneaux et des sacs de grain.
+>
+> **Guillaume a vu en jeu deux décalages que trois bancs regardaient sans les voir.** La
+> rangée d'étals commençait à une marge fixe et non au centre : elle penchait d'une case et
+> demie vers l'ouest, et le premier étal mordait sur le bord du dallage. Et la colonnade du
+> tribunal partait de x = 18 au lieu de 12 — huit fûts parfaitement réguliers, **six pixels à
+> droite du fronton qui les couronne**. Aucun des deux ne se voit en regardant l'élément
+> fautif : ce qui est faux, c'est son rapport à l'axe. Tout part maintenant d'un centre
+> DÉDUIT, le dallage a un nombre **impair** de colonnes pour que son axe soit une colonne et
+> pas un joint, et un contrôle de symétrie est entré au banc de rendu.
+>
+> **Le saut de rebord était mort depuis le 430, partout en ville.** `tryTownJump` vit dans la
+> closure de la boucle de rendu ; le 430 lui a donné deux appelants nés au niveau du
+> composant (la touche Espace, le bouton tactile). Chaque appui levait un
+> `ReferenceError` — donc le repli `doAction()` ne s'exécutait pas non plus. On l'a remarqué
+> au belvédère parce que c'est là qu'on essaie de sauter. Rien à l'écran ne le disait ; seule
+> la console en parlait.
+>
+> Et **l'herbe de Valley Town est plus sombre que celle de la ferme** : même dessin, même
+> grain, même graine de tirage, palette assombrie de 10 % avec un demi-pas vers le bleu.
+> Assez pour sentir qu'on a changé d'endroit en descendant du train, pas assez pour croire à
+> une autre saison.
+>
+> **Bancs : 172/172 sur `verify-vallee` (137 au 430)** — dont, pour la première fois, six
+> contrôles qui JOUENT une vente et comptent les pièces : l'or crédité, le stock retiré, le
+> panier multi-lignes, le double crédit de la barquette, et le refus depuis la ferme qui ne
+> doit RIEN changer. `tools/render-foire.mjs` est neuf.
+
 > **ZIP 430 — LE TRAIN A ENFIN UNE RAISON D'ÊTRE PRIS, ET L'IPAD N'A PLUS BESOIN DE CLAVIER.**
 >
 > **Valley Town était un beau décor qu'on visite.** On y montait par curiosité, on

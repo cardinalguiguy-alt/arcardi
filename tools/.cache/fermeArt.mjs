@@ -2177,8 +2177,22 @@ export function buildSprites() {
 
     // ---- 4. LES HUIT COLONNES. Fût cannelé (trois traits verticaux), base et
     // chapiteau débordants.
-    for (let i = 0; i < 8; i++) {
-      const cx = 18 + i * 22;
+    /* ⚠️⚠️ ZIP 431 — LA COLONNADE ÉTAIT DÉCALÉE DE SIX PIXELS VERS LA DROITE,
+       ET C'EST GUILLAUME QUI L'A VU EN JEU (« même type de décalage pour
+       l'architecture extérieure du tribunal »). Le 425 avait écrit le départ en
+       dur (`18 + i * 22`) au lieu de le DÉDUIRE : huit fûts de 14 px espacés de
+       22 occupent 7×22 + 14 = 168 px, qui se centrent dans 192 à partir de 12,
+       pas de 18. Tout le reste du bâtiment — fronton, entablement, porte,
+       perron, acrotères — est bâti sur W/2 ; seules les colonnes ne l'étaient
+       pas, donc le péristyle penchait par rapport à son propre fronton.
+       ⚠️ Un défaut de SYMÉTRIE ne se voit pas en regardant l'élément fautif :
+       la colonnade est parfaitement régulière, c'est son rapport au fronton qui
+       est faux. C'est la même famille que l'échelle du 429 — un objet ne se
+       juge pas seul. D'où le contrôle de symétrie ajouté au banc de rendu. */
+    const COLS = 8, COL_W = 14, COL_STEP = 22;
+    const COL_X0 = (W - ((COLS - 1) * COL_STEP + COL_W)) / 2;
+    for (let i = 0; i < COLS; i++) {
+      const cx = COL_X0 + i * COL_STEP;
       P(g, cx, 56, 14, H - 98, STONE);
       P(g, cx, 56, 3, H - 98, STONE_L);            // côté éclairé
       P(g, cx + 11, 56, 3, H - 98, STONE_D);       // côté à l'ombre
@@ -2194,7 +2208,16 @@ export function buildSprites() {
     P(g, 8, 50, W - 16, 2, STONE_D);
     // Denticules sous la corniche : quatre pixels sur deux, et le bâtiment
     // gagne d'un coup son siècle.
-    for (let x = 12; x < W - 12; x += 6) P(g, x, 52, 3, 3, STONE_D);
+    /* Les denticules, CENTRÉS eux aussi (431) : le pas de 6 px ne tombait pas
+       juste dans 168 px de course, et la rangée finissait 1,5 px à gauche. À
+       cette échelle c'est invisible seul — mais c'est ce genre d'écart cumulé
+       qui donne l'impression qu'un bâtiment « penche » sans qu'on sache dire
+       pourquoi. */
+    {
+      const DN_STEP = 6, DN_W = 3, DN_N = Math.floor((W - 24 + DN_STEP - DN_W) / DN_STEP);
+      const dx0 = (W - ((DN_N - 1) * DN_STEP + DN_W)) / 2;
+      for (let i = 0; i < DN_N; i++) P(g, dx0 + i * DN_STEP, 52, DN_W, 3, STONE_D);
+    }
     g.fillStyle = STONE_D;
     g.beginPath(); g.moveTo(4, 42); g.lineTo(W / 2, 6); g.lineTo(W - 4, 42); g.fill();
     g.fillStyle = STONE;
@@ -2321,32 +2344,412 @@ export function buildSprites() {
      là où l'on pose la main.
      ⚠️ Et la largeur suit (32 → 44) : une bâche haute et étroite fait une
      guérite. Les proportions d'un étal sont plus larges que hautes. */
+  /* ══════════════════════════════════════════════════════════════════════════
+     ZIP 431 — LES ÉTALS DEVIENNENT SIX MÉTIERS, PAS QUATRE COULEURS.
+     ──────────────────────────────────────────────────────────────────────────
+     Demande de Guillaume : « embellis le marché, vraiment plus mignon et
+     détaillé […] priorise le rendu final élégant et soigné ».
+
+     ⚠️⚠️ CE QUI MANQUAIT N'ÉTAIT PAS DU DÉTAIL, C'ÉTAIT DU SENS. L'étal du 429
+     était correct — bonnes proportions, bâche festonnée, quatre cageots — et
+     pourtant la foire restait un alignement de barnums, parce que les dix étals
+     vendaient LA MÊME CHOSE dans quatre couleurs. Ajouter des pixels à ce
+     dessin-là n'aurait rien changé : on aurait eu dix barnums plus fins.
+     Un marché se lit parce qu'on RECONNAÎT les commerces en passant devant —
+     le poissonnier à ses poissons pendus, le boulanger à ses baguettes debout,
+     la fleuriste à ses seaux. C'est le même raisonnement que les trois
+     bâtiments civiques du 425 (« la teinte suffit à les nommer »), appliqué au
+     mobilier : la silhouette d'abord, la couleur ensuite.
+
+     ⚠️ LES SIX MÉTIERS SONT CEUX QUE LE JEU PRODUIT DÉJÀ — légumes, poisson,
+     pain, fleurs, fromage, poterie. Un étal de marchandise qu'on ne peut ni
+     récolter ni fabriquer serait un décor qui promet ce que le jeu ne tient
+     pas, et le 429 s'est fait avoir exactement comme ça avec les lampadaires
+     qui ne s'allumaient jamais.
+
+     ⚠️ TROIS ÉTAGES DE LECTURE, ET ILS SE LISENT À DES DISTANCES DIFFÉRENTES :
+       1. la BÂCHE (visible de l'autre bout de la place) donne la couleur ;
+       2. les PENDUS sous la barre (visibles à trois cases) donnent le métier ;
+       3. la MARCHANDISE sur le plateau (visible quand on s'arrête) donne le
+          détail, et c'est elle qui récompense de s'être arrêté.
+
+     ⚠️ ÉCHELLE : 48 px peints pour un personnage de 23, soit ×2,09 — la cible
+     de `tools/render-echelle.mjs` (×2,10, « on passe dessous sans se baisser »).
+     Le 429 était à ×1,91, un peu court. La largeur passe de 44 à 52 : une bâche
+     haute et étroite fait une guérite, et il fallait de la place pour poser
+     autre chose que quatre cageots identiques.
+     ⚠️ ET RIEN N'EST ÉCRIT EN TEXTE ICI. `ctx.fillText` n'est pas rastérisable
+     hors navigateur (§4 de CLAUDE.md) : une enseigne cuite dans le sprite ferait
+     planter les bancs de rendu, c'est-à-dire qu'on perdrait le seul moyen de
+     REGARDER ce dessin. L'ardoise du marchand porte donc des gribouillis de
+     craie, ce qui est de toute façon ce qu'on lit à cette taille.
+     ══════════════════════════════════════════════════════════════════════════ */
+  /* Les six métiers. ⚠️ LA TABLE EST DEHORS et nommée : le générateur choisit
+     l'indice (voir le champ de foire dans fermeEngine), le rendu ne devine
+     rien. Règle du 426 — la bâche vient du générateur, pas d'un hachage. */
+  const STALL_TRADES = C.TOWN_STALL_TRADES;
   function townStallSprite(variant) {
-    const W = 44, H = 54;
+    const W = 52, H = 50;
     const [c, g] = cv(W, H);
-    const AWNS = [["#c8503c", "#e0705c"], ["#3c76c8", "#5c96e0"], ["#c8a83c", "#e0c85c"], ["#3ca86a", "#5cc88a"]];
-    const [AW, AW_L] = AWNS[variant % AWNS.length];
-    const W1 = "#8a6038", W2 = "#a8794a", W3 = "#6a4726";
-    const TOP = H - 26;                       // le plateau : hauteur de hanche
-    P(g, 4, TOP, W - 8, 3, W3);                                       // plateau
-    for (let i = 0; i < 6; i++) P(g, 4, TOP + 3 + i * 3, W - 8, 2, i % 2 ? W1 : W2); // jupe
-    P(g, 4, TOP, W - 8, 1, "#c08f5e");                                // nez éclairé
-    P(g, 5, 10, 2, TOP - 9, W3); P(g, W - 7, 10, 2, TOP - 9, W3);     // montants, bien plus hauts
-    // La bâche : rayée, débordante, avec un lambrequin festonné. C'est le
-    // débord qui fait l'ombre, donc le volume.
-    const bays = 8, bw = (W - 2) / bays;
-    for (let i = 0; i < bays; i++) P(g, 1 + i * bw, 4, bw + 1, 7, i % 2 ? AW : AW_L);
-    P(g, 1, 4, W - 2, 1, "#f2e6d2");
+    const tr = STALL_TRADES[((variant | 0) % STALL_TRADES.length + STALL_TRADES.length) % STALL_TRADES.length];
+    const AW = tr.aw, AW_L = tr.awL;
+    const W1 = "#8a6038", W2 = "#a8794a", W3 = "#6a4726", W4 = "#523618";
+    const CREAM = "#f2e6d2";
+    const TOP = H - 14;                 // le plateau : hauteur de hanche (11 px de sol)
+
+    /* ---- 1. LES MONTANTS ET LA BARRE DE FAÎTAGE. Ils sont dessinés AVANT la
+       bâche : c'est ce qui permet à la toile de les recouvrir en haut, donc de
+       passer devant, donc d'avoir une épaisseur. */
+    P(g, 4, 9, 3, TOP - 8, W3); P(g, 4, 9, 1, TOP - 8, W2);
+    P(g, W - 7, 9, 3, TOP - 8, W3); P(g, W - 7, 9, 1, TOP - 8, W2);
+    P(g, 3, 12, W - 6, 2, W4);                              // la barre où l'on pend la marchandise
+
+    /* ---- 2. LA BÂCHE. Deux pentes très courtes plutôt qu'un bandeau plat : le
+       faîte au milieu et les deux versants sont ce qui distingue une TOILE
+       TENDUE d'un auvent de magasin. */
+    const bays = 9, bw = (W - 2) / bays;
+    for (let i = 0; i < bays; i++) {
+      const bx = 1 + i * bw, col = i % 2 ? AW : AW_L;
+      P(g, bx, 3, bw + 1, 8, col);
+      P(g, bx, 3, bw + 1, 1, i % 2 ? AW_L : CREAM);         // le faîte prend la lumière
+      P(g, bx, 10, bw + 1, 1, "rgba(30,24,20,0.22)");       // l'ombre du débord
+    }
+    P(g, 0, 2, W, 2, "#f7ecd8");                            // la lisse de faîtage, crème sur toute la largeur
+    P(g, 0, 4, W, 1, "rgba(255,255,255,0.20)");
+    // Le lambrequin festonné. Une dent sur deux est claire : c'est ce qui rend
+    // la toile RAYÉE à distance, là où des dents unies feraient une frange.
     for (let i = 0; i < bays; i++) {
       g.fillStyle = i % 2 ? AW : AW_L;
-      g.beginPath(); g.moveTo(1 + i * bw, 11); g.lineTo(1 + (i + 1) * bw, 11); g.lineTo(1 + (i + 0.5) * bw, 15); g.fill();
+      g.beginPath(); g.moveTo(1 + i * bw, 11); g.lineTo(1 + (i + 1) * bw, 11); g.lineTo(1 + (i + 0.5) * bw, 16); g.fill();
+      P(g, (1 + (i + 0.5) * bw) | 0, 15, 1, 1, CREAM);      // le pompon de la pointe
     }
-    // La marchandise : quatre cageots de couleurs, posés sur le plateau.
-    for (let i = 0; i < 4; i++) {
-      const bx = 6 + i * 8;
-      P(g, bx, TOP - 5, 7, 5, "#8a6a42"); P(g, bx, TOP - 5, 7, 1, "#a88a5e");
-      P(g, bx + 1, TOP - 8, 5, 3, ["#d05a4a", "#6ab84a", "#e0b03c", "#c86ad0"][i]);
+
+    /* ---- 3. LE PLATEAU ET SA NAPPE. La nappe est à carreaux, et c'est elle
+       qui fait « marché » plutôt que « comptoir » : une jupe de bois brut se
+       lit comme un meuble, un tissu se lit comme un étalage installé le matin
+       et remballé le soir. */
+    P(g, 2, TOP, W - 4, 3, W3);
+    P(g, 2, TOP, W - 4, 1, "#c8975f");                      // nez de plateau éclairé
+    P(g, 2, TOP + 3, W - 4, 1, "rgba(30,20,10,0.30)");
+    const CL = AW, CL_L = AW_L, CL_W = "#f6ecda";
+    for (let y = TOP + 4; y < H - 2; y += 3) {
+      for (let x = 3; x < W - 3; x += 4) {
+        const k = (((x / 4) | 0) + ((y / 3) | 0)) % 2;
+        P(g, x, y, 4, 3, k ? CL_W : CL);
+      }
     }
+    P(g, 3, TOP + 4, W - 6, 1, "rgba(255,255,255,0.28)");   // pli de lumière sous le plateau
+    // L'ourlet dentelé de la nappe : quatre pointes, comme le lambrequin en
+    // plus petit — un rappel de forme entre le haut et le bas de l'étal.
+    for (let i = 0; i < 6; i++) {
+      g.fillStyle = i % 2 ? CL_L : CL;
+      const hx = 3 + i * ((W - 6) / 6);
+      g.beginPath(); g.moveTo(hx, H - 3); g.lineTo(hx + (W - 6) / 6, H - 3); g.lineTo(hx + (W - 6) / 12, H - 1); g.fill();
+    }
+    // Les pieds, visibles de part et d'autre de la nappe : sans eux la table
+    // flotte au-dessus du sol.
+    P(g, 4, TOP + 3, 2, H - TOP - 4, W4); P(g, W - 6, TOP + 3, 2, H - TOP - 4, W4);
+
+    /* ---- 4. CE QU'ON PEND À LA BARRE. C'est l'étage de lecture MOYENNE : à
+       trois cases, on ne distingue plus ce qui est sur le plateau, mais une
+       silhouette suspendue sur le fond clair de la toile, oui. */
+    const hangCord = (x, len) => P(g, x, 14, 1, len, "#6b5a3c");
+    if (tr.key === "veg") {
+      // Deux tresses d'ail et un chapelet d'oignons.
+      for (const hx of [10, 41]) {
+        hangCord(hx, 4);
+        for (let k = 0; k < 3; k++) { P(g, hx - 2, 17 + k * 3, 5, 3, "#efe6cf"); P(g, hx - 2, 17 + k * 3, 5, 1, "#fbf5e6"); }
+        P(g, hx - 1, 26, 3, 1, "#c9bda0");
+      }
+      hangCord(26, 3);
+      for (let k = 0; k < 3; k++) { P(g, 24, 16 + k * 3, 5, 3, "#b8763a"); P(g, 24, 16 + k * 3, 2, 3, "#d6924f"); }
+    } else if (tr.key === "fish") {
+      // Trois poissons pendus par la queue, tête en bas — la silhouette la plus
+      // reconnaissable du marché.
+      for (const [hx, col, lig] of [[12, "#8fa8bc", "#c2d4e2"], [26, "#7e9bb2", "#b4c9da"], [40, "#8fa8bc", "#c2d4e2"]]) {
+        hangCord(hx, 3);
+        P(g, hx - 3, 17, 7, 9, col); P(g, hx - 3, 17, 7, 3, lig);
+        P(g, hx - 2, 26, 5, 2, col);
+        g.fillStyle = col; g.beginPath(); g.moveTo(hx - 3, 28); g.lineTo(hx + 4, 28); g.lineTo(hx + 0.5, 32); g.fill();
+        P(g, hx - 1, 20, 1, 1, "#2e3238");                  // l'œil
+      }
+    } else if (tr.key === "bread") {
+      // Une couronne et deux tresses. Le trou de la couronne est ce qui la
+      // distingue d'une miche à cette taille.
+      hangCord(26, 3);
+      g.fillStyle = "#c9924e"; g.beginPath(); g.arc(26, 23, 7, 0, 7); g.fill();
+      g.fillStyle = "#e0ae68"; g.beginPath(); g.arc(26, 21, 6, Math.PI, 2 * Math.PI); g.fill();
+      g.globalCompositeOperation = "destination-out";
+      g.beginPath(); g.arc(26, 23, 3, 0, 7); g.fill();
+      g.globalCompositeOperation = "source-over";
+      for (const hx of [11, 41]) {
+        hangCord(hx, 3);
+        for (let k = 0; k < 4; k++) { P(g, hx - 3, 17 + k * 3, 6, 3, k % 2 ? "#c08a48" : "#dda861"); }
+      }
+    } else if (tr.key === "flower") {
+      // Bouquets séchés, la tête en bas : c'est comme ça qu'on les sèche, et ça
+      // donne une silhouette en cône que rien d'autre du marché n'a.
+      for (const [hx, col] of [[11, "#b06ad0"], [26, "#e0a04a"], [41, "#d05a7a"]]) {
+        hangCord(hx, 4);
+        P(g, hx - 1, 18, 3, 5, "#6f8a4a");
+        g.fillStyle = col; g.beginPath(); g.moveTo(hx - 5, 30); g.lineTo(hx + 5, 30); g.lineTo(hx, 21); g.fill();
+        P(g, hx - 3, 27, 2, 2, "#ffe8f2"); P(g, hx + 1, 25, 2, 2, "#ffe8f2");
+      }
+    } else if (tr.key === "cheese") {
+      /* ⚠️ PREMIER JET : UNE BALANCE À DEUX PLATEAUX, ET ELLE A ÉTÉ JETÉE APRÈS
+         L'AVOIR REGARDÉE au banc (tools/render-foire.mjs). L'idée était juste —
+         « on pèse ici » dit le métier mieux qu'un fromage de plus — mais à
+         cette taille son fléau de vingt pixels et ses deux plateaux formaient un
+         RECTANGLE GRIS au milieu de la bâche jaune : ça se lisait comme une
+         fenêtre, pas comme un instrument. Trois meules pendues dans leur filet
+         se reconnaissent instantanément, et c'est tout ce qu'on demande à
+         l'étage moyen de lecture. La leçon est celle du 429 : un dessin se juge
+         en le regardant, pas en le décrivant. */
+      /* ⚠️⚠️ DEUX MEULES, PAS TROIS, ET UNE CROÛTE SOMBRE — le deuxième jet
+         était encore illisible au banc. Trois disques jaunes de rayons 5 à 7
+         se touchaient et fusionnaient en une seule tache ; et surtout, du jaune
+         clair sur une BÂCHE JAUNE ne se détache pas. C'est la leçon du §8
+         appliquée au petit : une couleur ne se juge pas seule, elle se juge
+         contre son fond. La croûte brune règle les deux d'un coup — elle sépare
+         du fond ET donne aux meules leur silhouette de meule. */
+      for (const [hx, rr] of [[13, 6], [39, 5]]) {
+        hangCord(hx, 3);
+        g.fillStyle = "#8a5f22"; g.beginPath(); g.arc(hx, 17 + rr, rr, 0, 7); g.fill();       // la croûte
+        g.fillStyle = "#e8c463"; g.beginPath(); g.arc(hx, 17 + rr, rr - 1.5, 0, 7); g.fill(); // la pâte
+        g.fillStyle = "#f6dd94"; g.beginPath(); g.arc(hx - 1, 16 + rr, rr - 3, 0, 7); g.fill();
+        // Le filet : deux croisillons suffisent à dire « suspendu », et sans eux
+        // la meule a l'air de flotter.
+        for (const s of [-1, 1]) P(g, hx + s * ((rr / 2) | 0), 17 + rr - rr, 1, rr * 2, "rgba(60,44,18,0.45)");
+      }
+    } else {
+      // Le potier pend ses jarres à la barre : trois profils différents, parce
+      // qu'un potier qui ferait trois fois le même pot ne serait pas un potier.
+      for (const [hx, wd, ht, col, lig] of [[12, 8, 9, "#a85e42", "#c87c5c"], [26, 6, 11, "#8a6a9a", "#a888b6"], [40, 9, 7, "#5e8a7a", "#7cae9c"]]) {
+        hangCord(hx, 3);
+        P(g, hx - (wd >> 1), 17, wd, ht, col);
+        P(g, hx - (wd >> 1), 17, 2, ht, lig);
+        P(g, hx - (wd >> 1) - 1, 17, wd + 2, 2, lig);       // la lèvre débordante
+        P(g, hx - (wd >> 1), 17 + ht - 1, wd, 1, "rgba(30,20,16,0.35)");
+      }
+    }
+
+    /* ---- 5. LA MARCHANDISE SUR LE PLATEAU. Étage de lecture PROCHE : c'est ce
+       qu'on voit en s'arrêtant, et c'est là qu'on met les couleurs vives. Tout
+       est posé SUR le plateau (base à TOP), jamais flottant. */
+    const crate = (x, w2, h2) => {
+      P(g, x, TOP - h2, w2, h2, "#8a6a42");
+      P(g, x, TOP - h2, w2, 1, "#ab8a5e");
+      P(g, x, TOP - 1, w2, 1, "#6a4e2e");
+      for (let k = 2; k < w2 - 1; k += 3) P(g, x + k, TOP - h2 + 1, 1, h2 - 2, "#77592f");
+    };
+    if (tr.key === "veg") {
+      crate(4, 13, 5); crate(19, 13, 5); crate(34, 13, 5);
+      // Carottes en bottes, choux, tomates : trois formes, trois couleurs.
+      for (let k = 0; k < 3; k++) { P(g, 6 + k * 4, TOP - 9, 2, 5, "#e08234"); P(g, 5 + k * 4, TOP - 11, 4, 2, "#4f9a41"); }
+      for (let k = 0; k < 2; k++) { g.fillStyle = "#77b84e"; g.beginPath(); g.arc(23 + k * 6, TOP - 8, 3.5, 0, 7); g.fill(); P(g, 22 + k * 6, TOP - 10, 2, 2, "#9ad46e"); }
+      for (let k = 0; k < 3; k++) { g.fillStyle = "#cf4436"; g.beginPath(); g.arc(37 + k * 4, TOP - 8, 2.2, 0, 7); g.fill(); P(g, 36 + k * 4, TOP - 10, 2, 1, "#3f8a36"); }
+    } else if (tr.key === "fish") {
+      // Le lit de glace : un bac gris pâle, et les poissons couchés dessus.
+      P(g, 4, TOP - 6, 44, 6, "#9fb6c6"); P(g, 4, TOP - 6, 44, 2, "#cfe0ea");
+      for (let k = 0; k < 6; k++) P(g, 6 + k * 7, TOP - 5, 3, 2, "#eaf4fa");
+      for (let k = 0; k < 4; k++) {
+        const fx = 7 + k * 11;
+        P(g, fx, TOP - 10, 8, 4, k % 2 ? "#7e9bb2" : "#93aec2");
+        P(g, fx, TOP - 10, 8, 1, "#c6d8e6");
+        g.fillStyle = k % 2 ? "#7e9bb2" : "#93aec2"; g.beginPath(); g.moveTo(fx + 8, TOP - 10); g.lineTo(fx + 11, TOP - 12); g.lineTo(fx + 11, TOP - 5); g.fill();
+        P(g, fx + 2, TOP - 9, 1, 1, "#2e3238");
+      }
+      P(g, 40, TOP - 12, 7, 4, "#cf5a44"); P(g, 39, TOP - 13, 2, 2, "#cf5a44"); P(g, 46, TOP - 13, 2, 2, "#cf5a44"); // un crabe
+    } else if (tr.key === "bread") {
+      // Un panier de baguettes DEBOUT (la seule verticale du marché) et trois
+      // miches rondes farinées.
+      P(g, 5, TOP - 7, 12, 7, "#a8794a"); P(g, 5, TOP - 7, 12, 1, "#c49a66");
+      for (let k = 0; k < 4; k++) { P(g, 6 + k * 3, TOP - 18, 2, 12, k % 2 ? "#c9924e" : "#dda861"); P(g, 6 + k * 3, TOP - 18, 2, 2, "#e8bd7e"); }
+      for (let k = 0; k < 3; k++) {
+        g.fillStyle = "#c9924e"; g.beginPath(); g.ellipse(24 + k * 9, TOP - 4, 4.5, 3.5, 0, 0, 7); g.fill();
+        g.fillStyle = "#e2ae6a"; g.beginPath(); g.ellipse(24 + k * 9, TOP - 5, 4, 2.5, 0, 0, 7); g.fill();
+        P(g, 22 + k * 9, TOP - 6, 5, 1, "#f6e2c0");         // le coup de lame fariné
+      }
+    } else if (tr.key === "flower") {
+      // Quatre seaux de zinc, chacun d'une couleur. Les fleurs débordent du
+      // cadre du plateau vers le haut : c'est ce débordement qui fait « bouquet ».
+      /* ⚠️ LE BLANC A UNE OMBRE, sinon il fait une tache. Un pétale « blanc pur
+         sur blanc pur » n'a aucun contour à cette taille : au banc, le quatrième
+         seau devenait un pâté informe pendant que les trois autres se lisaient. */
+      const cols = [["#d0455e", "#f07d92"], ["#e0a832", "#f6cd6a"], ["#8a5cc0", "#b78ae0"], ["#cfd0dc", "#ffffff"]];
+      for (let k = 0; k < 4; k++) {
+        const bx = 5 + k * 11;
+        P(g, bx, TOP - 7, 9, 7, "#9aa2ac"); P(g, bx, TOP - 7, 9, 2, "#c2c8d0"); P(g, bx, TOP - 1, 9, 1, "#7a828c");
+        for (let f = 0; f < 4; f++) {
+          const fx = bx + 1 + (f % 3) * 3, fy = TOP - 12 - (f % 2) * 3;
+          P(g, fx, fy + 2, 1, 4, "#4f8a3e");
+          P(g, fx - 1, fy, 3, 3, cols[k][0]); P(g, fx, fy, 1, 1, cols[k][1]);
+        }
+      }
+    } else if (tr.key === "cheese") {
+      // Deux meules empilées, coupées, plus des portions alignées. La TRANCHE
+      // (le triangle plus clair) est ce qui fait lire « fromage » et pas
+      // « tonneau ».
+      /* Même remède qu'aux meules pendues : une CROÛTE brune autour de tout ce
+         qui est jaune, sans quoi la marchandise se noie dans la bâche. */
+      for (const [cx2, cy2, rr] of [[14, TOP - 5, 8], [14, TOP - 12, 8]]) {
+        g.fillStyle = "#8a5f22"; g.beginPath(); g.ellipse(cx2, cy2, rr, rr * 0.45, 0, 0, 7); g.fill();
+        P(g, cx2 - rr, cy2 - 4, rr * 2, 4, "#8a5f22");
+        P(g, cx2 - rr + 1, cy2 - 3, rr * 2 - 2, 3, "#e8c463");
+        P(g, cx2 - rr + 1, cy2 - 4, rr * 2 - 2, 1, "#f6dd94");
+      }
+      g.fillStyle = "#f3e0a4"; g.beginPath(); g.moveTo(14, TOP - 16); g.lineTo(22, TOP - 12); g.lineTo(14, TOP - 12); g.fill();
+      for (let k = 0; k < 3; k++) {
+        const wx = 28 + k * 7;
+        g.fillStyle = "#8a5f22"; g.beginPath(); g.moveTo(wx - 1, TOP - 1); g.lineTo(wx + 7, TOP - 1); g.lineTo(wx + 3, TOP - 9); g.fill();
+        g.fillStyle = "#f3e0a4"; g.beginPath(); g.moveTo(wx + 1, TOP - 2); g.lineTo(wx + 5, TOP - 2); g.lineTo(wx + 3, TOP - 7); g.fill();
+        P(g, wx + 2, TOP - 4, 1, 1, "#c9a13a"); P(g, wx + 3, TOP - 6, 1, 1, "#c9a13a");   // les yeux du fromage
+      }
+    } else {
+      // Poterie : jarres, bols empilés, une amphore. Trois hauteurs, sinon la
+      // rangée fait une palissade.
+      for (const [px2, wd, ht, col, lig] of [[5, 10, 12, "#a85e42", "#c87c5c"], [18, 8, 8, "#8a6a9a", "#a888b6"], [29, 12, 6, "#5e8a7a", "#7cae9c"]]) {
+        P(g, px2, TOP - ht, wd, ht, col);
+        P(g, px2, TOP - ht, 3, ht, lig);
+        P(g, px2 - 1, TOP - ht, wd + 2, 2, lig);
+        P(g, px2, TOP - 1, wd, 1, "rgba(30,20,16,0.35)");
+      }
+      for (let k = 0; k < 3; k++) { P(g, 42, TOP - 3 - k * 3, 8, 3, k % 2 ? "#cfa88a" : "#e0bfa4"); P(g, 42, TOP - 3 - k * 3, 8, 1, "#f0d8c2"); }
+    }
+
+    /* ---- 6. L'ARDOISE DU MARCHAND, posée contre le pied gauche. ⚠️ LES PRIX
+       SONT DES GRIBOUILLIS, PAS DU TEXTE (voir l'en-tête) : à cette taille un
+       chiffre écrit ne serait de toute façon qu'une tache, et `fillText` ferait
+       planter les bancs de rendu. */
+    P(g, 1, H - 13, 11, 12, "#4a3a2e");
+    P(g, 2, H - 12, 9, 10, "#2e3a34");
+    P(g, 1, H - 13, 11, 1, "#6a5442");
+    for (let k = 0; k < 3; k++) { P(g, 3, H - 10 + k * 3, 5, 1, "rgba(240,240,225,0.75)"); P(g, 9, H - 10 + k * 3, 2, 1, "rgba(240,225,180,0.85)"); }
+    return c;
+  }
+  /* ══════════════════════════════════════════════════════════════════════════
+     ZIP 431 — L'ARCHE D'ENTRÉE DU CHAMP DE FOIRE.
+     ⚠️ ELLE EXISTE POUR UNE RAISON DE LECTURE, PAS DE DÉCORATION : le champ de
+     foire est une esplanade dallée de 26 cases au milieu d'une ville qui en a
+     d'autres, et rien ne disait où il COMMENÇAIT. Une arche au bout de l'allée
+     centrale fait deux choses qu'aucun étal de plus ne ferait : elle cadre la
+     perspective (on voit la foire À TRAVERS elle) et elle donne à la place un
+     seuil, donc une entrée, donc un dedans.
+     ⚠️ SON PANNEAU EST VIDE ICI, ET C'EST VOULU : le nom est écrit VIVANT au
+     rendu (drawTownFrame), ce qui le rend bilingue — un sprite cuit ne peut pas
+     l'être — et garde ce fichier rastérisable hors navigateur (§4).
+     Canevas 96×72, ancré par son bord bas, centré sur DEUX cases. */
+  function townMarketArchSprite() {
+    const W = 96, H = 72;
+    const [c, g] = cv(W, H);
+    const W1 = "#8a6038", W2 = "#a8794a", W3 = "#6a4726", W4 = "#523618";
+    const CREAM = "#f2e6d2";
+    // Les deux poteaux, sur leur dé de pierre. Le dé n'est pas un détail : un
+    // poteau de bois planté dans le dallage a l'air tombé là.
+    for (const bx of [4, W - 16]) {
+      P(g, bx - 2, H - 8, 16, 8, "#b9b6ad"); P(g, bx - 2, H - 8, 16, 2, "#d4d1c6");
+      P(g, bx, 14, 12, H - 22, W1);
+      P(g, bx, 14, 3, H - 22, W2);                      // arête éclairée
+      P(g, bx + 9, 14, 3, H - 22, W3);                  // arête à l'ombre
+      for (let y = 20; y < H - 10; y += 7) P(g, bx, y, 12, 1, "rgba(60,40,20,0.25)");  // veinage
+      P(g, bx - 2, 10, 16, 5, W2); P(g, bx - 2, 10, 16, 1, "#c8975f");                 // chapiteau
+    }
+    // La traverse, et le petit fronton de bois au-dessus.
+    P(g, 2, 12, W - 4, 8, W1); P(g, 2, 12, W - 4, 2, W2); P(g, 2, 19, W - 4, 1, W4);
+    g.fillStyle = W2; g.beginPath(); g.moveTo(6, 12); g.lineTo(W / 2, 1); g.lineTo(W - 6, 12); g.fill();
+    g.fillStyle = W1; g.beginPath(); g.moveTo(12, 12); g.lineTo(W / 2, 5); g.lineTo(W - 12, 12); g.fill();
+    P(g, W / 2 - 2, 0, 4, 4, "#d8b45a");                // l'épi doré, comme le kiosque et la mairie
+    // Le panneau suspendu : deux chaînettes et une planche crème encadrée. Le
+    // NOM s'écrit dessus au rendu.
+    for (const sx of [W / 2 - 20, W / 2 + 19]) P(g, sx, 20, 1, 4, "#6a6a74");
+    P(g, W / 2 - 24, 24, 48, 16, "#5e4326");
+    P(g, W / 2 - 22, 26, 44, 12, CREAM);
+    P(g, W / 2 - 22, 26, 44, 1, "#fffaf0");
+    P(g, W / 2 - 22, 37, 44, 1, "#cdbfa4");
+    // Les fanions accrochés aux deux poteaux, qui retombent vers l'extérieur :
+    // ils prolongent l'arche dans la rangée d'étals, donc relient les deux.
+    const FLAGS = ["#c05442", "#e0c463", "#4a9a58", "#3f79c0", "#c05c96"];
+    for (const [x0, dir] of [[16, -1], [W - 16, 1]]) {
+      for (let k = 0; k < 3; k++) {
+        const fx = x0 + dir * (k * 5 + 2), fy = 22 + k * 3;
+        P(g, fx - (dir < 0 ? 5 : 0), fy - 1, 5, 1, "#6b5a3c");
+        g.fillStyle = FLAGS[(k + (dir < 0 ? 0 : 2)) % FLAGS.length];
+        g.beginPath(); g.moveTo(fx - 2, fy); g.lineTo(fx + 2, fy); g.lineTo(fx, fy + 5); g.fill();
+      }
+    }
+    return c;
+  }
+  /* La CHARRETTE DE FLEURS. ⚠️ ELLE A DEUX ROUES ET DES BRANCARDS, et c'est ce
+     qui la distingue d'une caisse fleurie : une charrette est un objet qui est
+     ARRIVÉ le matin et repartira le soir. Un marché, c'est d'abord des gens qui
+     ont apporté des choses. Canevas 40×40. */
+  function townFlowerCartSprite() {
+    const W = 40, H = 40;
+    const [c, g] = cv(W, H);
+    const W1 = "#9a6a3e", W2 = "#b98a58", W3 = "#6f4a24";
+    // Les roues (deux, décalées : celle du fond plus sombre et plus haute).
+    for (const [wx, wy, col] of [[9, 30, "#5e3f20"], [29, 32, "#7a5528"]]) {
+      g.fillStyle = col; g.beginPath(); g.arc(wx, wy, 7, 0, 7); g.fill();
+      g.fillStyle = "#c2a06a"; g.beginPath(); g.arc(wx, wy, 4.5, 0, 7); g.fill();
+      g.fillStyle = col; g.beginPath(); g.arc(wx, wy, 2, 0, 7); g.fill();
+      for (let k = 0; k < 4; k++) { const a = k * Math.PI / 4; P(g, (wx + Math.cos(a) * 3) | 0, (wy + Math.sin(a) * 3) | 0, 1, 1, col); }
+    }
+    // Le brancard, qui sort vers la droite et repose sur une béquille.
+    P(g, 30, 22, 9, 2, W3); P(g, 37, 24, 2, 10, W3);
+    // La caisse, en pente vers l'avant.
+    P(g, 4, 18, 30, 12, W1);
+    P(g, 4, 18, 30, 2, W2);
+    P(g, 4, 29, 30, 2, W3);
+    for (let x = 7; x < 33; x += 5) P(g, x, 20, 1, 9, "rgba(70,44,20,0.35)");
+    P(g, 2, 16, 34, 3, W2); P(g, 2, 16, 34, 1, "#d2a878");     // la lisse supérieure
+    // Les fleurs, en trois bancs de couleur qui débordent du bord.
+    const BQ = [["#d0455e", "#f07d92"], ["#e0a832", "#f6cd6a"], ["#8a5cc0", "#b78ae0"], ["#f0f0f6", "#ffffff"], ["#d05a9a", "#f08ac0"]];
+    for (let k = 0; k < 11; k++) {
+      const fx = 4 + k * 3, fy = 8 + ((k * 5) % 7);
+      const col = BQ[k % BQ.length];
+      P(g, fx + 1, fy + 3, 1, 14 - (fy - 8), "#4f8a3e");
+      P(g, fx, fy, 3, 3, col[0]); P(g, fx + 1, fy, 1, 1, col[1]);
+      P(g, fx - 1, fy + 1, 1, 1, col[0]);
+    }
+    // Deux seaux posés au sol contre la roue : la marchandise déborde toujours.
+    P(g, 18, 30, 8, 8, "#9aa2ac"); P(g, 18, 30, 8, 2, "#c2c8d0");
+    for (let k = 0; k < 3; k++) { P(g, 19 + k * 3, 25, 1, 5, "#4f8a3e"); P(g, 18 + k * 3, 23, 3, 3, BQ[k][0]); }
+    return c;
+  }
+  /* Le TONNEAU de la foire, avec des pommes dessus. Canevas 22×26. ⚠️ Ses
+     cercles de fer sont DÉCALÉS vers le haut et le bas, jamais réguliers : un
+     tonneau à cercles équidistants se lit comme un tuyau. */
+  function townBarrelSprite() {
+    const [c, g] = cv(22, 26);
+    P(g, 3, 6, 16, 18, "#9a6a3e");
+    P(g, 3, 6, 4, 18, "#b98a58");                       // douve éclairée
+    P(g, 16, 6, 3, 18, "#7a5228");
+    for (const y of [8, 13, 21]) { P(g, 2, y, 18, 2, "#5a5a62"); P(g, 2, y, 18, 1, "#8a8a94"); }
+    for (let x = 6; x < 18; x += 4) P(g, x, 10, 1, 10, "rgba(70,44,20,0.30)");
+    g.fillStyle = "#c9a06a"; g.beginPath(); g.ellipse(11, 6, 8, 3, 0, 0, 7); g.fill();
+    g.fillStyle = "#e0bd8a"; g.beginPath(); g.ellipse(11, 5, 7, 2.2, 0, 0, 7); g.fill();
+    for (const [ax, ay] of [[8, 3], [13, 3], [11, 1]]) {
+      g.fillStyle = "#cf4436"; g.beginPath(); g.arc(ax, ay + 1, 2.2, 0, 7); g.fill();
+      P(g, ax - 1, ay, 1, 1, "#f07a68"); P(g, ax, ay - 2, 1, 2, "#4f7a2e");
+    }
+    return c;
+  }
+  /* La PILE DE SACS de grain. Canevas 30×22. Trois sacs, dont un couché : une
+     pile de sacs tous debout ressemble à des quilles. */
+  function townSackPileSprite() {
+    const [c, g] = cv(30, 22);
+    const sack = (x, y, w2, h2, col, lig) => {
+      g.fillStyle = col; g.beginPath(); g.ellipse(x + w2 / 2, y + h2 / 2, w2 / 2, h2 / 2, 0, 0, 7); g.fill();
+      g.fillStyle = lig; g.beginPath(); g.ellipse(x + w2 / 2 - 1, y + h2 / 2 - 1, w2 / 2 - 2, h2 / 2 - 2, 0, Math.PI, 2 * Math.PI); g.fill();
+      P(g, x + (w2 >> 1) - 2, y - 1, 4, 3, "#c9bda0");      // le col ficelé
+      P(g, x + (w2 >> 1) - 1, y - 2, 2, 2, "#8a7f66");
+    };
+    sack(1, 8, 13, 13, "#c9b184", "#ded0ab");
+    sack(15, 10, 14, 11, "#bda876", "#d4c49c");
+    sack(6, 1, 13, 10, "#d2bc90", "#e8dcb8");
+    // Une poignée de grains renversés au pied : le détail qui dit que le sac
+    // est plein et qu'on y a puisé.
+    for (const [gx, gy] of [[3, 20], [5, 21], [24, 20], [26, 21], [14, 21]]) P(g, gx, gy, 1, 1, "#e8dcb8");
     return c;
   }
   /* LE KIOSQUE À MUSIQUE du parc. Trois cases sur trois : c'est le seul décor
@@ -3183,12 +3586,33 @@ export function buildSprites() {
     return c;
   }
 
-  function grassTile(variant) {
+  /* ⚠️⚠️ ZIP 431 — LA PALETTE EST UN PARAMÈTRE, ET C'EST LA SEULE FORME QUI
+     TIENNE. Demande de Guillaume : « l'herbe un peu plus sombre à Valley Town
+     qu'à la ferme ». Deux fonctions jumelles (une par zone) auraient été deux
+     dessins à garder d'accord le jour où l'on retouche la texture — le défaut
+     que le §8 de CLAUDE.md nomme « un paramètre qui double un autre paramètre ».
+     Ici il n'y a qu'UN dessin ; seules les six couleurs changent, et le tirage
+     pseudo-aléatoire est le MÊME (même graine), donc les deux herbes ont
+     rigoureusement le même grain. C'est ce qui rend l'écart lisible comme une
+     différence de LUMIÈRE et pas comme une autre texture.
+     ⚠️ Les jaunes (les petites fleurs de la variante 2) sont dans la palette eux
+     aussi : les laisser en dur aurait fait scintiller deux fleurs vives sur un
+     gazon assombri, seule chose que l'œil aurait vue. */
+  const GRASS_FARM = { base: "#59a84a", d1: "#4f9a41", l1: "#63b653", blade: "#3f8a36", tip: "#6fc25e", fleck: "#e8e05a" };
+  /* ⚠️ « TRÈS LÉGÈREMENT », ET LE CHIFFRE EST −10 % DE LUMINANCE avec un demi-pas
+     vers le bleu. Assez pour qu'un joueur qui descend du train sente qu'il a
+     changé d'endroit ; pas assez pour qu'il croie à une autre saison. La ville
+     est plus vieille, plus ombragée, plus tondue que le champ — c'est la lecture
+     qu'on cherche, et la hauteur d'herbe et les animations viendront plus tard
+     (voir §13). */
+  const GRASS_TOWN = { base: "#4e9745", d1: "#458a3d", l1: "#59a24d", blade: "#367c31", tip: "#61ad55", fleck: "#d6cf58" };
+  function grassTile(variant, pal) {
+    const p = pal || GRASS_FARM;
     const [c, g] = cv(T, T), r = makeRnd(77 + variant * 131);
-    P(g, 0, 0, T, T, "#59a84a");
-    for (let i = 0; i < 26; i++) P(g, (r() * T) | 0, (r() * T) | 0, 1, 1, r() < 0.5 ? "#4f9a41" : "#63b653");
-    for (let i = 0; i < 5; i++) { const x = (r() * 14) | 0, y = (r() * 13) | 0; P(g, x, y, 1, 2, "#3f8a36"); P(g, x + 1, y + 1, 1, 1, "#6fc25e"); }
-    if (variant === 2) { P(g, 4, 5, 1, 1, "#e8e05a"); P(g, 11, 10, 1, 1, "#e8e05a"); }
+    P(g, 0, 0, T, T, p.base);
+    for (let i = 0; i < 26; i++) P(g, (r() * T) | 0, (r() * T) | 0, 1, 1, r() < 0.5 ? p.d1 : p.l1);
+    for (let i = 0; i < 5; i++) { const x = (r() * 14) | 0, y = (r() * 13) | 0; P(g, x, y, 1, 2, p.blade); P(g, x + 1, y + 1, 1, 1, p.tip); }
+    if (variant === 2) { P(g, 4, 5, 1, 1, p.fleck); P(g, 11, 10, 1, 1, p.fleck); }
     return c;
   }
   function tilledTile(watered) {
@@ -5723,6 +6147,8 @@ export function buildSprites() {
   /* ---------------- Atlas ---------------- */
   const S = {
     grass: [grassTile(0), grassTile(1), grassTile(2)],
+    // Zip 431 : l'herbe de Valley Town, même grain, palette assombrie (voir GRASS_TOWN).
+    townGrass: [grassTile(0, GRASS_TOWN), grassTile(1, GRASS_TOWN), grassTile(2, GRASS_TOWN)],
     tilled: tilledTile(false),
     watered: tilledTile(true),
     water: [waterTile(0), waterTile(1)],
@@ -5780,7 +6206,17 @@ house: house(),
     /* Zip 426 — le mobilier de l'agrandissement. ⚠️ Les étals sont un TABLEAU
        (quatre bâches) et non quatre clés : le rendu choisit par hachage de la
        position, ce qui restait impossible avec des noms distincts. */
-    townStalls: [0, 1, 2, 3].map(i => townStallSprite(i)),
+    /* ⚠️ ZIP 431 — LA LONGUEUR VIENT DE LA TABLE DES MÉTIERS, elle n'est plus
+       écrite en dur. Le `[0,1,2,3]` du 426 était déjà le doublon d'un `% 4`
+       recopié dans le rendu ET dans le générateur : ajouter un sixième métier
+       aurait demandé de le corriger à trois endroits, et l'oubli d'un seul aurait
+       donné un étal manquant (donc invisible) sur une case pourtant solide —
+       le mur invisible du 425, en négatif. */
+    townStalls: STALL_TRADES.map((_, i) => townStallSprite(i)),
+    townMarketArch: townMarketArchSprite(),   // zip 431
+    townFlowerCart: townFlowerCartSprite(),   // zip 431
+    townBarrel: townBarrelSprite(),           // zip 431
+    townSacks: townSackPileSprite(),          // zip 431
     townKiosk: townKioskSprite(),
     townGrave: townGraveSprite(),
     townPlanter: townPlanterSprite(),

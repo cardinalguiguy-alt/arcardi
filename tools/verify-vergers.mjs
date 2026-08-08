@@ -316,8 +316,23 @@ if (typeof E.isChoppableOrchard === "function") {
      suivent dans le rendu, et c'est le seul découpage qui ne dépende pas d'un
      comptage d'accolades — que ce fichier, à seize mille lignes de JSX, rend
      impraticable. */
-  const bag = iBag >= 0 ? code.slice(iBag, iBin > iBag ? iBin : code.length) : "";
-  const bin = iBin >= 0 ? code.slice(iBin, iBag > iBin ? iBag : code.length) : "";
+  /* ⚠️⚠️ ZIP 431 — LE DÉCOUPAGE À DEUX PANNEAUX ÉTAIT FAUX DÈS QU'UN TROISIÈME
+     S'INTERCALE, et c'est arrivé : le panneau du MARCHÉ est écrit entre le sac
+     et le bac. « Du sac jusqu'au bac » englobait donc tout le marché, et le
+     contrôle « plus de barquette dans le sac » échouait en désignant… la
+     barquette du marché, qui est exactement ce qu'on voulait y voir. Un banc
+     qui accuse la bonne ligne d'être au mauvais endroit est pire qu'un banc
+     absent — on va corriger le jeu pour faire taire l'outil.
+     La borne d'un panneau est donc le PROCHAIN panneau, quel qu'il soit. */
+  const panelEnd = (from) => {
+    let end = code.length;
+    for (const m of code.matchAll(/\{[a-zA-Z]+Open &&/g)) {
+      if (m.index > from && m.index < end) end = m.index;
+    }
+    return end;
+  };
+  const bag = iBag >= 0 ? code.slice(iBag, panelEnd(iBag)) : "";
+  const bin = iBin >= 0 ? code.slice(iBin, panelEnd(iBin)) : "";
   /* ⚠️ ET CELUI-CI AUSSI AVAIT TORT — DE LA MÊME FAÇON QUE LE JEU.
      Il cherchait `sellFruit` dans le bac, et il le trouvait : le bac contient
      depuis toujours un bouton `sellFruit`… qui vend la POMME DES BOIS. Le
@@ -328,11 +343,30 @@ if (typeof E.isChoppableOrchard === "function") {
      On cherche donc `punnet:`, qui n'appartient QU'aux fruits de verger : la
      pomme des bois n'a pas de barquette. */
   const RAY = /punnet:/;
-  ok("⚠️ les fruits de verger se vendent au BAC", RAY.test(bin),
-     RAY.test(bin) ? "avec les cultures et les poissons" : "introuvables au bac");
-  ok("⚠️ ... et plus dans le sac", !RAY.test(bag),
+  /* ⚠️⚠️ ZIP 431 — CE CONTRÔLE A ÉTÉ RETOURNÉ, ET C'EST UNE DÉCISION DE JEU,
+     PAS UNE CONCESSION À UNE RÉGRESSION. Le 404 réclamait que les fruits de
+     verger DESCENDENT au bac, avec les cultures et les poissons ; le 431
+     déplace la vente TOUT ENTIÈRE au marché de Valley Town (demande de
+     Guillaume : « nos produits doivent être vendus exclusivement sur le marché
+     […] mais plus vendre » depuis la ferme). La règle du 404 tenait à « les
+     fruits doivent se vendre là où se vend le reste » — elle est donc TOUJOURS
+     respectée, simplement l'endroit a changé pour tout le monde en même temps.
+     Ce qui reste à vérifier, et qui compte autant qu'avant : que la barquette
+     n'a pas été OUBLIÉE en route. C'est la ligne la plus facile à perdre —
+     elle ne se distingue d'une vente ordinaire que par sa prime de +25 %, et
+     personne ne remarque une prime absente. */
+  const iMk = code.indexOf("{marketOpen &&");
+  const mk = iMk >= 0 ? code.slice(iMk, panelEnd(iMk)) : "";
+  ok("le panneau du marché existe", iMk >= 0);
+  ok("⚠️ les fruits de verger se vendent AU MARCHÉ", /orchardFruit/.test(mk),
+     /orchardFruit/.test(mk) ? "avec tout le reste de la production" : "introuvables au marché");
+  ok("⚠️ ... et ne se vendent plus au bac", !RAY.test(bin),
+     RAY.test(bin) ? "il en reste un bouton au bac" : "le bac ne fait plus que montrer");
+  ok("⚠️ ... ni dans le sac", !RAY.test(bag),
      RAY.test(bag) ? "il en reste une ligne" : "");
-  ok("la barquette a suivi les fruits", /punnet: true/.test(bin));
+  ok("la barquette a suivi les fruits au marché", /punnet: true/.test(mk));
+  ok("la barquette garde sa prime (une ligne à elle, pas une quantité)",
+     /punnetPrice/.test(mk), /punnetPrice/.test(mk) ? "" : "elle serait vendue au prix unitaire");
   /* La pomme des bois ne doit plus s'appeler comme eux DANS LE CODE non plus :
      tant que la fonction du bac s'appelle `sellFruit` et la requête des
      vergers `sellFruit`, tout grep sur ce mot ramène les deux. */

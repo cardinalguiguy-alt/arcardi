@@ -418,6 +418,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [immunityUntil, setImmunityUntil] = useState(0); // pommade de protection (chantier 2026-07) : horodatage de fin d'immunité/répulsion aux créatures maléfiques (0 = inactif), effet purement local, ne survit pas à un refresh
   const [shopOpen, setShopOpen] = useState(false);
   const [marketOpen, setMarketOpen] = useState(false);   // zip 430 : le marché du champ de foire
+  /* ⚠️ ZIP 431 — LE PANIER DU MARCHÉ, ET IL EST PUREMENT LOCAL. `{ clé: n }`,
+     rien de plus : il ne voyage pas, ne se sauvegarde pas, et se vide à la
+     fermeture du panneau. C'est un brouillon d'intention — la vente, elle, part
+     en UNE requête et c'est l'hôte qui arbitre (§3). Le stocker ailleurs, ou
+     pire le diffuser, serait ajouter un état partagé pour une case à cocher. */
+  const [marketCart, setMarketCart] = useState({});
+  const [marketFam, setMarketFam] = useState("all");     // filtre par famille de cours
   /* ╔══════════════════════════════════════════════════════════════════════════
      ║ ZIP 430 — JOUER SANS CLAVIER. (demande de Guillaume : l'un des trois
      ║ joueurs les plus actifs est sur iPad et voudrait ne pas avoir à brancher
@@ -710,6 +717,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      ce fichier — voir devMenuOpenRef.
      { active, t0, fx, fy, tx, ty, e0, e1 } : le trajet est FIGÉ au décollage. */
   const townJumpRef = useRef({ active: false, t0: 0, fx: 0, fy: 0, tx: 0, ty: 0, e0: 0, e1: 0 });
+  /* ⚠️⚠️ ZIP 431 — LE PONT VERS LES DEUX FONCTIONS DE SAUT, ET C'EST UN BOGUE
+     QU'IL RÉPARE, PAS UN CONFORT. `townJumpTarget` / `tryTownJump` /
+     `canTownJumpNow` sont déclarées DANS la closure de la boucle de rendu (elles
+     ont besoin de `elevTown`, `canStandTown`, `blockedTown`, qui y vivent). Le
+     430 leur a donné deux appelants NÉS AU NIVEAU DU COMPOSANT — `pressJumpOrAct`
+     (touche Espace) et `pressTouchAction` (bouton tactile) — et une fonction
+     déclarée dans une fonction imbriquée n'est PAS visible depuis l'extérieur :
+     chaque appui sur Espace en ville levait un `ReferenceError: tryTownJump is
+     not defined`, ce qui interrompait le gestionnaire de touche AVANT le repli
+     `doAction()`. Le saut de rebord était donc mort PARTOUT en ville depuis le
+     430 (on l'a remarqué au belvédère parce que c'est là qu'on essaie), et rien
+     ne le disait à l'écran — seule la console le signalait.
+     ⚠️ LE REF EST RÉASSIGNÉ À CHAQUE MONTAGE DE LA BOUCLE, jamais mis en cache :
+     les fonctions capturent `townWorldRef` & co. de leur closure, une copie
+     périmée sauterait dans l'ancienne carte. Même motif que persistFnRef. */
+  const townJumpApiRef = useRef(null);
   /* Zip 428 — l'échelle courante de la vue de Valley Town. ⚠️ C'est un REF et
      pas un state : il change à chaque image pendant un fondu, un state
      re-rendrait tout React soixante fois par seconde pour une valeur que seule
@@ -2022,6 +2045,30 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     let questId = null; // action réussie -> quête à valider éventuellement
     const px = typeof req.px === "number" ? req.px : f.x, py = typeof req.py === "number" ? req.py : f.y;
 
+    /* ══════════════════════════════════════════════════════════════════════
+       ZIP 431 — ON NE VEND PLUS DEPUIS LA FERME, ET C'EST VÉRIFIÉ ICI.
+       ──────────────────────────────────────────────────────────────────────
+       Demande de Guillaume : « nos produits doivent être vendus exclusivement
+       sur le marché de Valley Town ; on pourra toujours consulter nos stocks ou
+       les transformer depuis la ferme, mais plus vendre, sauf aux visiteurs ».
+
+       ⚠️⚠️ RETIRER LES BOUTONS NE SUFFIT PAS. Neuf requêtes de vente existent, et
+       une interface qui n'en émet plus aucune ne les empêche pas d'arriver : un
+       onglet resté ouvert sur la version d'avant, un invité qui n'a pas
+       rechargé, un client bricolé. C'est la règle du zip 385 — « un garde-fou
+       côté client ne protège pas un état qui compte », et l'or est partagé.
+       ⚠️ LE CONTRÔLE EST À L'ENTRÉE, avant les trois sous-traitants (station,
+       décors, artisans) : les ventes de bijoux et de produits d'artisans vivent
+       là-bas, et un verrou posé après eux ne les verrait jamais passer.
+       ⚠️ ET IL REFUSE EN LE DISANT. Un refus muet passe pour un bogue — c'est le
+       défaut que le 426 s'est juré de ne plus commettre, et il est d'autant plus
+       vicieux ici que le joueur vient de cliquer sur « vendre ».
+       ══════════════════════════════════════════════════════════════════════ */
+    if (E.isProduceSale(req) && !E.atMarket({ px, py, pz: req.pz })) {
+      hostSend({ type: "broadcast", event: "apply", payload: { toast: { id: f.id, key: "farMarket" } } });
+      return;
+    }
+
     // 2026-07 station update: station/visitor/repair requests are resolved in
     // a dedicated handler (returns true when the request was consumed).
     /* ⚠️ ZIP 398 — `out` LUI EST MAINTENANT PASSÉ, ET SA SORTIE EST ÉMISE.
@@ -2634,9 +2681,30 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          de la FERME — c'est-à-dire un « +240 » qui jaillit d'un coin de champ
          chez le joueur resté au champ (le défaut corrigé au 426 sur les copeaux
          de hache, mot pour mot). */
-      const r = E.resolveTownSell(f, req, s.day || 1);
+      /* ⚠️⚠️ ZIP 431 — TOUT PASSE PAR ICI DÉSORMAIS, y compris les pools COMMUNS
+         (gemmes, farine, sucre, prises de Soan, productions de Harald, produits
+         d'artisans, vergers, bijouterie). C'est pour ça que l'état partagé `s`
+         est passé au résolveur : il ne lisait que `f.inv`.
+         ⚠️ ET CHAQUE POOL A SON CHAMP DE DIFFUSION. En oublier un ne lève rien :
+         l'or arrive, le stock diminue chez l'hôte, et l'invité continue de voir
+         ses vieilles gemmes jusqu'à la prochaine sauvegarde. C'est exactement le
+         genre de défaut que seule une session à deux révèle (§13). */
+      const r = E.resolveTownSell(f, req, s.day || 1, s);
       if (r.moneyDelta) { s.money += r.moneyDelta; s.totalEarned += r.earnedDelta; out.state = shareState(); }
       if (r.invChanged) out.farmer = { id: f.id, energy: f.energy, tools: f.tools, inv: f.inv };
+      if (r.gemsChanged) out.gems = s.gems;
+      if (r.flourChanged) out.flour = s.flour;
+      if (r.sugarChanged) out.sugar = s.sugar;
+      if (r.stockChanged) out.gregStock = s.gregStock;
+      if (r.craftChanged) hostSend({ type: "broadcast", event: "apply", payload: { craftStock: s.craftStock } });
+      if (r.jewelryChanged) broadcastStation();
+      /* ⚠️ LA VENTE D'UN POOL COMMUN N'EST PAS TOUJOURS UN `state` : les trois
+         résolveurs qui créditent eux-mêmes `shared.money` (vergers, produits aux
+         fruits, bijouterie) peuvent rendre un `moneyDelta` NUL — le bonus de
+         cote y est nul par construction. Sans cette ligne, l'or changerait chez
+         l'hôte sans que personne ne l'apprenne. */
+      if (r.gain > 0 && !out.state) out.state = shareState();
+      if (r.gain > 0) dirtyRef.current = true;
       if (r.toast) out.toast = { id: f.id, key: r.toast };
       if (r.gain > 0) {
         out.fx.push({ k: "sell", x: Math.round(+req.px || 0), y: Math.round(+req.py || 0), gain: r.gain, zone: "town" });
@@ -4311,13 +4379,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     if (req.kind === "sellCraft") {
       const stock = s.craftStock || (s.craftStock = E.newCraftStock());
-      const bkPr = (s.crafts || {}).bakery;
       // Zip suivant (demande Guillaume) : les 8 produits de boulangerie
       // utilisent désormais le prix RÉGLÉ par le joueur (bkPr.prices),
       // les autres denrées (miel, fromage, beurre) gardent leur prix fixe.
-      const price = C.BAKERY_SELL_ITEMS.includes(req.item)
-        ? E.bakeryItemPrice(bkPr, req.item)
-        : { honey: C.HONEY_SELL, cheeseWheel: C.CHEESE_WHEEL_SELL, cheesePortion: C.CHEESE_PORTION_SELL, butter: C.BUTTER_SELL, yogurtNature: C.YOGURT_NATURE_SELL, yogurtVanilla: C.YOGURT_VANILLA_SELL }[req.item];
+      /* ⚠️ ZIP 431 — LE BARÈME A DÉMÉNAGÉ DANS LE MOTEUR (E.craftSellPrice). Il
+         était écrit ici, donc invisible du marché de Valley Town, qui vend les
+         mêmes denrées depuis ce zip : deux tables auraient donné deux prix pour
+         le même fromage selon le guichet. */
+      const price = E.craftSellPrice(s, req.item);
       if (!price || (stock[req.item] | 0) <= 0) return true;
       const n = Math.min(stock[req.item] | 0, req.n > 0 ? req.n : 9999);
       stock[req.item] -= n; const gain = n * price;
@@ -5446,7 +5515,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        c'est un COMPTE qui voyage, jamais une phrase formatée — elle serait
        figée dans la langue de l'hôte. */
     if (key === "gregChopDone") return L.toastGregChopDone(n | 0);
-    return { tired: L.toastTired, farShop: L.toastFarShop, farMarket: L.toastFarMarket, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, noMillStock: L.toastNoMillStock, millNotEmpty: L.toastMillNotEmpty, millPlaced: L.toastMillPlaced, millTaken: L.toastMillTaken, millGround: L.toastMillGround, millOccupied: L.toastMillOccupied, millOnCrop: L.toastMillOnCrop, noMillBuilt: L.toastNoMillBuilt, millBuilding: L.toastMillBuilding, noWheatToDeposit: L.toastNoWheatToDeposit, millFull: L.toastMillFull, noSucrerieStock: L.toastNoSucrerieStock, sucrerieNotEmpty: L.toastSucrerieNotEmpty, noCaneToDeposit: L.toastNoCaneToDeposit, sucrerieFull: L.toastSucrerieFull, actionFailed: L.toastActionFailed, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull, notInjured: L.toastNotInjured, noHealKit: L.toastNoHealKit, healTooFar: L.toastHealTooFar, gregNotHired: L.toastGregNotHired, gregOrderBusy: L.toastGregBusy, gregNoRoom: L.toastGregNoRoom, gregNoFertilizer: L.toastGregNoFertilizer, gregCoffeeCooldown: L.toastGregCoffeeCooldown, noCoffee: L.toastNoCoffee, soanNotHired: L.toastSoanNotHired, soanNoRiver: L.toastSoanNoRiver, soanCoffeeCooldown: L.toastSoanCoffeeCooldown, reneCoffeeCooldown: L.toastReneCoffeeCooldown, tristanNotHere: L.toastTristanNotHere, tristanCoffeeCooldown: L.toastTristanCoffeeCooldown, farCauldron: L.toastFarCauldron, noFishToDeposit: L.toastNoFishToDeposit, cauldronMissing: L.toastCauldronMissing, cauldronAlreadyTaken: L.toastCauldronAlreadyTaken, noCauldronStock: L.toastNoCauldronStock, cauldronNotEmpty: L.toastCauldronNotEmpty, cauldronBrewing: L.toastCauldronBrewing, cauldronNothingToCollect: L.toastCauldronNothingToCollect, cauldronHasEnough: L.toastCauldronHasEnough, visitorNotEnough: L.visitorNotEnough, decorNone: L.decorNone, decorPicked: L.decorPicked, objReturned: L.objReturned, residentNoRoom: L.residentNoRoom, artisanNoResident: L.artisanNoResident, voyagerBusy: L.voyagerBusyToast, kickVoted: L.kickVotedToast, kickRefused: L.kickRefused, jewelryNoGold: L.toastJewelryNoGold, jewelryNoGem: L.toastJewelryNoGem, cropWrongType: L.toastCropWrongType, cropMaxed: L.toastCropMaxed, beekeeperNoHive: L.toastBeekeeperNoHive, beekeeperBusy: L.toastBeekeeperBusy, balloonNotBoarding: L.toastBalloonNotBoarding, balloonFull: L.toastBalloonFull,
+    return { tired: L.toastTired, farShop: L.toastFarShop, farMarket: L.toastFarMarket, marketNothing: L.toastMarketNothing, farBin: L.toastFarBin, noGold: L.toastNoGold, toolMax: L.toastToolMax, needWater: L.toastNeedWater, penFull: L.penFull, noFence: L.toastNoFence, noWood: L.toastNoWood, noStone: L.toastNoStone, noWallStock: L.toastNoWallStock, noPathStock: L.toastNoPathStock, noLampStock: L.toastNoLampStock, noScarecrowStock: L.toastNoScarecrowStock, noGrassStock: L.toastNoGrassStock, noMillStock: L.toastNoMillStock, millNotEmpty: L.toastMillNotEmpty, millPlaced: L.toastMillPlaced, millTaken: L.toastMillTaken, millGround: L.toastMillGround, millOccupied: L.toastMillOccupied, millOnCrop: L.toastMillOnCrop, noMillBuilt: L.toastNoMillBuilt, millBuilding: L.toastMillBuilding, noWheatToDeposit: L.toastNoWheatToDeposit, millFull: L.toastMillFull, noSucrerieStock: L.toastNoSucrerieStock, sucrerieNotEmpty: L.toastSucrerieNotEmpty, noCaneToDeposit: L.toastNoCaneToDeposit, sucrerieFull: L.toastSucrerieFull, actionFailed: L.toastActionFailed, coopNothing: L.toastCoopNothing, barnMax: L.toastBarnMax, farBarn: L.toastFarBarn, barnReady: L.toastBarnReadyWait, barnNotReady: L.toastBarnNotReady, barnNeedMoney: L.toastBarnNeedMoney, sleepFull: L.toastSleepFull, notInjured: L.toastNotInjured, noHealKit: L.toastNoHealKit, healTooFar: L.toastHealTooFar, gregNotHired: L.toastGregNotHired, gregOrderBusy: L.toastGregBusy, gregNoRoom: L.toastGregNoRoom, gregNoFertilizer: L.toastGregNoFertilizer, gregCoffeeCooldown: L.toastGregCoffeeCooldown, noCoffee: L.toastNoCoffee, soanNotHired: L.toastSoanNotHired, soanNoRiver: L.toastSoanNoRiver, soanCoffeeCooldown: L.toastSoanCoffeeCooldown, reneCoffeeCooldown: L.toastReneCoffeeCooldown, tristanNotHere: L.toastTristanNotHere, tristanCoffeeCooldown: L.toastTristanCoffeeCooldown, farCauldron: L.toastFarCauldron, noFishToDeposit: L.toastNoFishToDeposit, cauldronMissing: L.toastCauldronMissing, cauldronAlreadyTaken: L.toastCauldronAlreadyTaken, noCauldronStock: L.toastNoCauldronStock, cauldronNotEmpty: L.toastCauldronNotEmpty, cauldronBrewing: L.toastCauldronBrewing, cauldronNothingToCollect: L.toastCauldronNothingToCollect, cauldronHasEnough: L.toastCauldronHasEnough, visitorNotEnough: L.visitorNotEnough, decorNone: L.decorNone, decorPicked: L.decorPicked, objReturned: L.objReturned, residentNoRoom: L.residentNoRoom, artisanNoResident: L.artisanNoResident, voyagerBusy: L.voyagerBusyToast, kickVoted: L.kickVotedToast, kickRefused: L.kickRefused, jewelryNoGold: L.toastJewelryNoGold, jewelryNoGem: L.toastJewelryNoGem, cropWrongType: L.toastCropWrongType, cropMaxed: L.toastCropMaxed, beekeeperNoHive: L.toastBeekeeperNoHive, beekeeperBusy: L.toastBeekeeperBusy, balloonNotBoarding: L.toastBalloonNotBoarding, balloonFull: L.toastBalloonFull,
       /* zip 398 — vergers et produits */
       orchardBusy: L.toastOrchardBusy, orchardGround: L.toastOrchardGround, orchardMax: L.toastOrchardMax,
       orchardNoSapling: L.toastOrchardNoSapling, orchardYoung: L.toastOrchardYoung,
@@ -6386,7 +6455,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   // confondus.
   function sendReq(payload) {
     const m = meRef.current;
-    const full = { ...payload, id: me.id, name: m.name, px: +m.x.toFixed(2), py: +m.y.toFixed(2) };
+    /* ⚠️⚠️ ZIP 431 — `pz` : LA ZONE VOYAGE AVEC LA POSITION, ET C'EST UN TROU
+       QU'ON BOUCHE. `px/py` seuls sont AMBIGUS — c'est le piège des deux cartes
+       (§4 de CLAUDE.md) dans sa forme la plus coûteuse. Le champ de foire occupe
+       x∈[34;68], y∈[70;104] en coordonnées de VILLE ; la ferme fait 180×140,
+       donc ces mêmes coordonnées existent aussi chez elle, au milieu des champs.
+       Un fermier planté au bon endroit de SON pré passait donc le contrôle
+       « je suis au marché » sans avoir jamais pris le train — et depuis ce zip
+       ce contrôle est la seule chose qui interdit de vendre à la ferme.
+       ⚠️ ON ÉCHOUE FERMÉ : une requête sans zone est refusée (voir E.atMarket).
+       Un client d'avant ce zip ne vendra donc plus jusqu'à ce qu'il recharge —
+       c'est le bon sens du refus quand l'or est partagé (§3). */
+    const full = { ...payload, id: me.id, name: m.name, px: +m.x.toFixed(2), py: +m.y.toFixed(2), pz: m.zone || "farm" };
     // FIX 244b : depuis self:false (zip 243), l'hote ne recoit PLUS l'echo de
     // ses propres broadcasts -> son propre "req" n'atteignait jamais
     // ch.on("req") (garde par isHost) et AUCUNE de ses actions n'etait traitee
@@ -14042,6 +14122,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       townJumpRef.current = { active: true, t0: performance.now(), fx: m.x, fy: m.y, ...t };
       return true;
     }
+    /* ⚠️ ZIP 431 — ON PUBLIE LES DEUX FONCTIONS POUR LES APPELANTS DU DEHORS.
+       Espace et le bouton tactile vivent au niveau du composant et ne peuvent
+       pas voir ce qui est déclaré ici (voir la note de townJumpApiRef, plus
+       haut) : depuis le 430 ils levaient une erreur de référence et le saut ne
+       partait jamais. On expose, on ne recopie pas — deux jeux de conditions
+       finiraient par diverger, ce que la note du 425 juste au-dessus interdit
+       explicitement. */
+    townJumpApiRef.current = { can: canTownJumpNow, jump: tryTownJump };
     /* Suis-je devant la porte d'un bâtiment civique ? La porte est au milieu de
        la façade sud, comme pour les maisons — les trois monuments sont dessinés
        ainsi (voir fermeArt.js), et c'est la seule façade qu'on peut approcher.
@@ -14188,7 +14276,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const px = x * T, py = y * T + oy;
         // Zip 235: use the real farm sprite tiles for a match with the farm
         // look (grass/path/stone), keeping the fountain water for the pool.
-        if (g === C.G_GRASS) ctx.drawImage(sprites.grass[(x * 37 + y * 17) % sprites.grass.length], px, py);
+        /* ⚠️ ZIP 431 — L'HERBE DE LA VILLE N'EST PLUS CELLE DE LA FERME. Même
+           dessin, palette assombrie de 10 % (voir GRASS_TOWN dans fermeArt.js).
+           Le repli sur `sprites.grass` n'est pas de la politesse : un vieux
+           client qui n'aurait pas ce zip doit continuer à peindre de l'herbe,
+           pas un trou noir — c'est la même prudence que partout ailleurs sur les
+           atlas de sprites. */
+        const gTiles = sprites.townGrass || sprites.grass;
+        if (g === C.G_GRASS) ctx.drawImage(gTiles[(x * 37 + y * 17) % gTiles.length], px, py);
         else if (g === C.G_PATH) ctx.drawImage(sprites.path, px, py);
         else if (g === C.G_PATH_STONE) {
           /* 425 : le dallage n'est plus un damier à deux gris. Un joint clair
@@ -14223,7 +14318,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         else if (g === C.G_TOWN_LAWN) {
           // 425 : gazon tondu des parterres — l'herbe de la ferme, assombrie et
           // rayée dans un seul sens, comme une pelouse qui vient d'être passée.
-          ctx.drawImage(sprites.grass[(x * 13 + y * 7) % sprites.grass.length], px, py);
+          ctx.drawImage(gTiles[(x * 13 + y * 7) % gTiles.length], px, py);
           ctx.fillStyle = (x % 2 === 0) ? "rgba(24,70,30,0.20)" : "rgba(120,190,110,0.14)";
           ctx.fillRect(px, py, T, T);
         }
@@ -14616,8 +14711,55 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          a marqué ces cases comme bloquantes, donc lui qui sait où elles sont.
          Dessiner ici une liste écrite à la main créerait deux vérités : des
          bancs invisibles qui bloquent, ou des bancs qu'on traverse. */
+      /* ⚠️⚠️ ZIP 431 — L'ARCHE DU MARCHÉ EST LE SEUL PROP DESSINÉ EN DEUX
+         MORCEAUX, et il ne passe donc pas par la table de sprites ci-dessous.
+         Deux props solides (un par poteau) découpent la MÊME image : c'est ce
+         qui permet de passer entre eux tout en gardant chaque case bloquante
+         expliquée par un décor (voir la note du générateur). Le découpage se
+         fait par `drawImage` à neuf arguments, jamais par deux dessins réglés à
+         la main — deux moitiés indépendantes finiraient décalées d'un pixel le
+         jour où l'on retouche le sprite.
+         ⚠️ ET LE NOM EST ÉCRIT VIVANT, PAS CUIT DANS LE SPRITE : `fillText` fait
+         planter les bancs de rendu hors navigateur (§4 de CLAUDE.md), et un
+         texte cuit ne pourrait pas être bilingue. C'est la règle des plaques de
+         bâtiments du 427, appliquée telle quelle. */
+      const drawMarketArch = (pr) => {
+        const im = sprites.townMarketArch; if (!im) return;
+        const half = im.width / 2, left = pr.side < 0;
+        /* ⚠️ ZIP 431 — LE CENTRE EST CELUI DE LA CASE `cx`, PAS SON BORD
+           GAUCHE. `cx * T` désigne le JOINT à gauche de la case ; les décors,
+           eux, sont tous dessinés sur `(x + 0,5) * T`. Un demi-pas d'écart
+           (huit pixels) suffit à décaler l'arche de l'axe des étals, et c'est
+           exactement le genre de décalage que Guillaume a vu en jeu. */
+        const cxw = ((pr.cx | 0) + 0.5) * T;               // le centre de l'arche, en pixels monde
+        const dx = cxw - half + (left ? 0 : half);
+        const by = (pr.y + 1) * T;
+        pushE(by, elAt(pr.x, pr.y), () => {
+          ctx.fillStyle = "rgba(20,26,16,0.22)";
+          ctx.beginPath(); ctx.ellipse(pr.x * T + T / 2, by - 2, 9, 3.5, 0, 0, 7); ctx.fill();
+          ctx.drawImage(im, left ? 0 : half, 0, half, im.height, dx, by - im.height, half, im.height);
+          /* Le nom, sur la moitié DROITE seulement.
+             ⚠️⚠️ ET C'EST BIEN LA DROITE, PAS LA GAUCHE — vu en jeu, l'enseigne
+             affichait « MAR ». Les deux moitiés sont mises en file dans l'ordre
+             où le générateur les a posées : la gauche d'abord, la droite
+             ensuite. Un texte écrit pendant la moitié GAUCHE se faisait donc
+             recouvrir sur sa moitié droite par l'image de la moitié suivante,
+             et le mot était coupé net au milieu. L'écrire pendant la SECONDE
+             moitié le met après les deux images.
+             ⚠️ Et il n'est écrit qu'UNE fois : deux passages au même endroit
+             donneraient un texte deux fois plus dense, donc sale. */
+          if (!left) {
+            const tx = cxw, ty = by - im.height + 35;
+            ctx.font = "bold 9px monospace"; ctx.textAlign = "center";
+            ctx.fillStyle = "#8a6a3a"; ctx.fillText(L.marketArchSign, tx + 1, ty + 1);
+            ctx.fillStyle = "#4a3320"; ctx.fillText(L.marketArchSign, tx, ty);
+            ctx.textAlign = "left";
+          }
+        });
+      };
       for (const pr of (tw.props || [])) {
         if (pr.x < x0 - 2 || pr.x > x1 + 2 || pr.y < y0 - 3 || pr.y > yBot + 2) continue;
+        if (pr.kind === "marketArch") { drawMarketArch(pr); continue; }
         /* Zip 426 : le mobilier nouveau. ⚠️ LES ÉTALS SE CHOISISSENT PAR
            HACHAGE DE LEUR POSITION, jamais par tirage : un `Math.random()` ici
            changerait de bâche à chaque image et la foire clignoterait. C'est la
@@ -14630,7 +14772,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const img = pr.kind === "lamp" ? sprites.plazaLamp
                   : pr.kind === "bench" ? sprites.plazaBench
                   : pr.kind === "topiary" ? sprites.plazaTopiary
-                  : pr.kind === "stall" ? (sprites.townStalls || [])[(pr.v | 0) % 4]
+                  /* ⚠️ ZIP 431 — LE MODULO SUIT LA TABLE, il n'est plus écrit en
+                     dur. `% 4` sur six métiers aurait rendu deux étals invisibles
+                     tout en laissant leur case solide : un mur invisible, le
+                     défaut du 425, créé par une constante recopiée. */
+                  : pr.kind === "stall" ? (sprites.townStalls || [])[(pr.v | 0) % Math.max(1, (sprites.townStalls || []).length)]
                   : pr.kind === "kiosk" ? sprites.townKiosk
                   : pr.kind === "grave" ? sprites.townGrave
                   : pr.kind === "planter" ? sprites.townPlanter
@@ -14638,6 +14784,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   : pr.kind === "statue" ? sprites.townStatue
                   : pr.kind === "townWell" ? sprites.townWell
                   : pr.kind === "crate" ? sprites.townCrate
+                  : pr.kind === "flowerCart" ? sprites.townFlowerCart      // zip 431
+                  : pr.kind === "barrel" ? sprites.townBarrel              // zip 431
+                  : pr.kind === "sacks" ? sprites.townSacks                // zip 431
                   : pr.kind === "newsBoard" ? sprites.townNewsBoard : null;   // zip 427
         if (!img) continue;
         const by = (pr.y + 1) * T, cxp = pr.x * T + T / 2;
@@ -14646,6 +14795,96 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           ctx.beginPath(); ctx.ellipse(cxp, by - 2, img.width * 0.28, 3.5, 0, 0, 7); ctx.fill();
           ctx.drawImage(img, cxp - img.width / 2, by - img.height);
         });
+      }
+      /* ══════════════════════════════════════════════════════════════════════
+         ZIP 431 — LES GUIRLANDES DE FANIONS, TENDUES D'UN ÉTAL À L'AUTRE.
+         ──────────────────────────────────────────────────────────────────────
+         ⚠️ ELLES NE SONT PAS DES PROPS, ET C'EST LE FOND DU SUJET : une
+         guirlande n'est pas POSÉE quelque part, elle RELIE deux choses. En faire
+         un décor à une case aurait demandé d'inventer une position pour un objet
+         qui n'en a pas, puis de la garder d'accord avec celle des deux étals le
+         jour où on les déplace. Ici elle se déduit des étals eux-mêmes : bouger
+         un étal déplace sa guirlande, et supprimer une rangée la supprime.
+         ⚠️⚠️ ET C'EST CE QUI FAIT LE PLUS POUR L'IMAGE, à un coût dérisoire.
+         Dix étals alignés restent dix objets séparés ; une corde qui court de
+         l'un à l'autre en fait UNE INSTALLATION — l'œil suit la courbe et lit la
+         rangée d'un coup. C'est le même effet que l'allée centrale du 426 (« des
+         étals semés ne font qu'un entrepôt »), un cran au-dessus.
+         ⚠️ LA COURBE EST UN SINUS, PAS UNE CHAÎNETTE. Une vraie caténaire
+         demanderait un cosinus hyperbolique pour une différence invisible à
+         cette taille ; ce qui compte est que la corde PENDE, donc qu'elle soit
+         basse au milieu et tendue aux extrémités.
+         ⚠️ ET ELLE EST MISE EN FILE APRÈS LES ÉTALS, à un demi-pixel sous eux
+         (`+0.01`) : la guirlande passe DEVANT les bâches. S'en remettre à la
+         stabilité du tri aurait marché aussi, mais un ordre qui dépend de
+         l'ordre d'insertion dans un tableau est un ordre qu'on casse sans le
+         voir en réorganisant une boucle. */
+      {
+        const stalls = (tw.props || []).filter(p => p.kind === "stall");
+        const rows = new Map();
+        for (const s of stalls) { if (!rows.has(s.y)) rows.set(s.y, []); rows.get(s.y).push(s); }
+        const FLAGS = ["#c05442", "#e0c463", "#4a9a58", "#3f79c0", "#c05c96", "#e08a3a"];
+        for (const [ry, list] of rows) {
+          if (ry < y0 - 4 || ry > yBot + 3) continue;
+          list.sort((a, b) => a.x - b.x);
+          for (let k = 0; k + 1 < list.length; k++) {
+            const a = list[k], b = list[k + 1];
+            if (b.x - a.x > 6) continue;                 // deux étals trop éloignés : pas de corde
+            if (b.x < x0 - 3 || a.x > x1 + 3) continue;
+            const ax = a.x * T + T / 2, bx = b.x * T + T / 2;
+            /* La corde part du sommet des deux montants. 38 px au-dessus du sol
+               = la hauteur de la barre de faîtage de l'étal (voir townStallSprite,
+               plateau à H−14 sur 50 px). ⚠️ Ce nombre est le SEUL lien en dur
+               entre le sprite et cette courbe ; il est ici plutôt que dans le
+               sprite parce que c'est la corde qui doit s'accrocher à l'étal, pas
+               l'inverse. */
+            /* ⚠️⚠️ DEUX RÉGLAGES FAUX AVANT CELUI-CI, ET LES DEUX N'ONT ÉTÉ
+               VUS QU'AU BANC (tools/render-foire.mjs), jamais à la lecture.
+               À 38 px la corde s'accrochait à la BARRE de l'étal : ses fanions
+               passaient pile devant la marchandise pendue, c'est-à-dire devant
+               l'étage de lecture qu'on venait d'ajouter. À 49 px elle traînait
+               sur les bâches et hachait leurs rayures.
+               ⚠️ IL N'EXISTE AUCUNE HAUTEUR INTERMÉDIAIRE QUI MARCHE, et c'est
+               de la géométrie : un étal fait 52 px de large pour 64 px de pas,
+               donc la toile occupe presque tout l'espace entre deux centres.
+               Une corde tendue de centre à centre passe forcément SUR quelque
+               chose. La seule sortie est de la monter FRANCHEMENT au-dessus des
+               toiles — ce qui est de toute façon la façon dont on tend une
+               guirlande dans une fête de village — et de lui donner ses mâts. */
+            const topY = (ry + 1) * T - 62;
+            pushE((ry + 1) * T + 0.01, elAt(a.x, ry), () => {
+              const seg = 14, sag = 8;
+              /* Les deux mâts. ⚠️ SANS EUX LA CORDE FLOTTE : une guirlande dont
+                 on ne voit pas ce qui la tient se lit comme un défaut d'affichage,
+                 pas comme un décor. Deux traits de bois suffisent. */
+              ctx.fillStyle = "#6a4726";
+              for (const mx of [ax, bx]) ctx.fillRect(mx - 1, topY, 2, (ry + 1) * T - 48 - topY);
+              ctx.fillStyle = "#d8b45a";
+              for (const mx of [ax, bx]) ctx.fillRect(mx - 1, topY - 2, 2, 2);
+              ctx.strokeStyle = "rgba(80,66,44,0.85)"; ctx.lineWidth = 1;
+              ctx.beginPath();
+              /* ⚠️ L'INDICE S'APPELLE `sg`, PAS `s`, ET C'EST UN OUTIL QUI L'A
+                 EXIGÉ : `verify-cycle` refuse toute comparaison `s === <chiffre>`
+                 dans ce fichier, parce que `s` y est le paramètre de `selectSlot`
+                 et qu'un indice de case écrit en dur a déjà lâché au sol l'animal
+                 qu'on portait (zip 404). Le banc ne peut pas savoir que ce `s`-ci
+                 est un segment de corde — et c'est très bien : un contrôle qui
+                 accepterait les exceptions n'en serait plus un. */
+              for (let sg = 0; sg <= seg; sg++) {
+                const t2 = sg / seg, cx2 = ax + (bx - ax) * t2, cy2 = topY + Math.sin(Math.PI * t2) * sag;
+                if (sg === 0) ctx.moveTo(cx2, cy2); else ctx.lineTo(cx2, cy2);
+              }
+              ctx.stroke();
+              for (let sg = 1; sg < seg; sg++) {
+                const t2 = sg / seg, cx2 = ax + (bx - ax) * t2, cy2 = topY + Math.sin(Math.PI * t2) * sag;
+                ctx.fillStyle = FLAGS[(k * 3 + sg) % FLAGS.length];
+                ctx.beginPath(); ctx.moveTo(cx2 - 2.5, cy2); ctx.lineTo(cx2 + 2.5, cy2); ctx.lineTo(cx2, cy2 + 6); ctx.fill();
+                ctx.fillStyle = "rgba(255,255,255,0.25)";
+                ctx.fillRect(cx2 - 2.5, cy2, 5, 1);
+              }
+            });
+          }
+        }
       }
       /* ZIP 427 — LE KIOSQUE JOUE. ⚠️ LA CONDITION EST UN ÉTAT PARTAGÉ, PAS UN
          MINUTEUR LOCAL : la musique se déclenche quand AU MOINS UN résident est
@@ -16814,18 +17053,25 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      pour vérifier que je suis bien au champ de foire — pas `f.x/f.y`, qui sont
      mes coordonnées de FERME et ne veulent rien dire pendant que je suis en
      ville. Voir la note de E.resolveTownSell. */
+  /* ⚠️ ZIP 431 — `item` PEUT ÊTRE NUL : le panneau envoie désormais un PANIER
+     (`extra.lines`), et une requête à N lignes n'a pas d'article unique. Une
+     seule requête pour tout le panier, parce que le plafond de dix messages par
+     seconde est dur et que le dépasser est silencieux (§3). */
   function sellAtMarket(item, extra) { sendReq({ kind: "townSell", item, ...(extra || {}) }); }
   /* La cote du jour, telle que le joueur la voit. ⚠️ ELLE EST CALCULÉE
      LOCALEMENT ET NE VOYAGE PAS : c'est une pure fonction du numéro de jour,
      donc tout le monde lit le même chiffre sans qu'un octet ne circule. Le
      prix qui fait foi reste celui que l'hôte recalcule à la vente. */
   function marketDay() { return (sharedRef.current && sharedRef.current.day) || 1; }
-  function marketUnit(item, base) { return E.marketPrice(marketDay(), item, base); }
+  /* ⚠️ ZIP 431 — LA PORTÉE VIENT DU MOTEUR, elle n'est plus recopiée ici. Le
+     rectangle était écrit deux fois (là et dans resolveTownSell) : l'invite et
+     l'arbitre pouvaient donc diverger d'une case, c'est-à-dire proposer une
+     vente que l'hôte refuse — le défaut que le 426 s'est juré de ne plus
+     commettre. `E.atMarket` lit `px/py`, on lui donne ma position de ZONE. */
   function nearMarket() {
     const m = meRef.current;
     if (!m || m.zone !== "town") return false;
-    const mk = C.TOWN_MARKET, R = C.MARKET_RANGE_TILES;
-    return m.x >= mk.x - R && m.x <= mk.x + mk.w + R && m.y >= mk.y - R && m.y <= mk.y + mk.h + R;
+    return E.atMarket({ px: m.x, py: m.y, pz: m.zone });
   }
   /* ---- CE QUE FONT ESPACE ET E, EN UN SEUL ENDROIT (430) --------------------
      ⚠️ LE BOUTON TACTILE APPELLE EXACTEMENT CES FONCTIONS, il n'en réimplémente
@@ -16834,7 +17080,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      déciderait tout seul de ce qu'il fait finirait par proposer une chose et en
      faire une autre, et cette fois-là sur l'appareil de quelqu'un qui n'a pas
      de clavier pour s'en sortir. */
-  function pressJumpOrAct() { if (!tryTownJump()) doAction(); }
+  /* ⚠️ ZIP 431 — LES DEUX APPELS PASSENT PAR LE REF, et le repli sur `false`
+     compte : la boucle de rendu peut ne pas être montée (écran de code de
+     ferme), et un `.jump()` sur `null` replanterait exactement le bogue qu'on
+     corrige. Hors ville, `can()` répond `false` de toute façon. */
+  function townJumpNow() { const a = townJumpApiRef.current; return !!(a && a.jump()); }
+  function townJumpReady() { const a = townJumpApiRef.current; return !!(a && a.can()); }
+  function pressJumpOrAct() { if (!townJumpNow()) doAction(); }
   /* Le bouton d'action tactile. ⚠️ IL SUIT LA MÊME PRIORITÉ QUE L'INVITE, et
      c'est ce qui le rend lisible : ce que le bandeau annonce est ce que le
      bouton fait. En ville, le saut de rebord passe avant l'interaction (règle du
@@ -16842,7 +17094,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   function pressTouchAction() {
     const m = meRef.current; if (!m) return;
     if (isInjured() || m.sleeping) { tryOpenNearby(); return; }   // endormi : E réveille
-    if (m.zone === "town" && canTownJumpNow()) { tryTownJump(); return; }
+    if (m.zone === "town" && townJumpReady()) { townJumpNow(); return; }
     tryOpenNearby();
   }
   /* ⚠️ LA COURSE EST UNE BASCULE AU DOIGT, ET UN MAINTIEN AU CLAVIER — même
@@ -19135,7 +19387,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                     <div className="ferme-craft-row" key={"cg" + gm.id}>
                       <Sprite img={spritesReady ? spritesRef.current.gemIcons[gm.id] : null} w={26} h={26} />
                       <span className="name">{(lang === "en" ? gm.nameEn : gm.name)} × {n}<br /><span className="cost">{L.perPiece(gm.sell)}</span></span>
-                      <button disabled={!n} onClick={() => sellGem(gm.id)}>{L.sellAll}</button>
+                      <MarketOnly label={L.marketOnlyTag} />
                     </div>
                   );
                 })}
@@ -19145,20 +19397,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               <div className="ferme-craft-row">
                 <Sprite img={spritesReady ? spritesRef.current.icons.flour : null} w={26} h={26} />
                 <span className="name">{L.flourItemName} × {flour || 0}<br /><span className="cost">{L.perPiece(C.FLOUR_SELL)}</span></span>
-                <button disabled={!flour} onClick={() => sellFlour()}>{L.sellAll}</button>
+                <MarketOnly label={L.marketOnlyTag} />
               </div>
             )}
             {craftMenuOpen === "sugar" && (
               <div className="ferme-craft-row">
                 <Sprite img={spritesReady ? spritesRef.current.icons.sugar : null} w={26} h={26} />
                 <span className="name">{L.sugarItemName} × {sugar || 0}<br /><span className="cost">{L.perPiece(C.SUGAR_SELL)}</span></span>
-                <button disabled={!sugar} onClick={() => sellSugar()}>{L.sellAll}</button>
+                <MarketOnly label={L.marketOnlyTag} />
               </div>
             )}
             {craftMenuOpen !== "gems" && craftMenuOpen !== "flour" && craftMenuOpen !== "sugar" && (
-              <button className="ferme-btn ferme-craft-sell"
-                disabled={!myInv || myInv[craftMenuOpen] === 0}
-                onClick={() => { sellItem(craftMenuOpen); setCraftMenuOpen(null); }}>{L.sellAll}</button>
+              <div style={{ textAlign: "center", marginTop: 8 }}><MarketOnly label={L.marketOnlyTag} /></div>
             )}
           </div>
         </div>
@@ -19700,9 +19950,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   <PixBtn sprites={spritesReady ? spritesRef.current : null} tone="plain" small
                     disabled={!!lack} label={lack ? L.productLack(lack) : L.productMakeBtn}
                     onClick={() => sendReq({ kind: "makeFruitProduct", product: p2.id })} />
-                  <PixBtn sprites={spritesReady ? spritesRef.current : null} tone="good" small
-                    disabled={have <= 0} label={L.sellOneBtn(p2.sell)}
-                    onClick={() => sendReq({ kind: "sellFruitProduct", product: p2.id })} />
+                  {/* Zip 431 : on FABRIQUE ici, on VEND au marché. C'est très
+                      exactement la ligne que Guillaume a tracée — un atelier
+                      reste un atelier. */}
+                  <MarketOnly label={L.marketOnlyTag} />
                 </div>
               );
             })}
@@ -20160,70 +20411,197 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           </div>
         </div>
       )}
-      {marketOpen && (
-        <div className="ferme-modal open" onClick={() => setMarketOpen(false)}>
+      {marketOpen && (() => {
+        /* ══════════════════════════════════════════════════════════════════
+           ZIP 431 — LE COMPTOIR DU MARCHÉ, RÉÉCRIT EN PANIER.
+           ──────────────────────────────────────────────────────────────────
+           Demande de Guillaume : « sophistiquer les options de vente ; cool
+           mais surtout pratique et complet, affichage clair, options claires
+           (sélection du nombre d'unités à vendre, etc.) ».
+
+           ⚠️⚠️ UN PANIER, PAS DIX BOUTONS « TOUT VENDRE ». Le 430 vendait une
+           ligne par clic, tout le stock d'un coup. Deux défauts, et le second
+           est grave : on ne pouvait pas garder trois blés pour semer (il
+           fallait tout vendre ou rien), et surtout, vendre quarante lignes
+           faisait QUARANTE `send()` — contre un plafond dur de dix par seconde,
+           dépassé SILENCIEUSEMENT (§3 de CLAUDE.md). Le panier règle les deux :
+           on choisit ligne par ligne, et tout part en UNE requête.
+           ⚠️ LE TOTAL EST AFFICHÉ EN PERMANENCE, et c'est ce qui rend l'écran
+           « pratique » plutôt que « complet » : la question du joueur n'est
+           jamais « combien vaut un blé », c'est « combien je repars avec ».
+           ⚠️ LES CINQ FAMILLES SERVENT DE FILTRE EN PLUS D'AFFICHER LE COURS.
+           Elles étaient déjà là (le 430 les montre même quand on ne porte
+           rien, pour qu'on puisse ANTICIPER en montant dans le train) : leur
+           donner le second rôle ne coûte rien et évite d'inventer une barre
+           d'onglets de plus.
+           ⚠️ ET LES PRIX AFFICHÉS RESTENT DES ESTIMATIONS. L'hôte recote à la
+           vente (voir resolveTownSell) : c'est lui qui débite l'or partagé. */
+        const day = marketDay();
+        const S = spritesReady ? spritesRef.current : null;
+        const cs = (sharedRef.current && sharedRef.current.craftStock) || {};
+        const jewels = (stationSt && stationSt.jewelry && stationSt.jewelry.items) || [];
+        /* ⚠️ UNE SEULE LIGNE GÉNÉRIQUE POUR TOUT CE QUI SE VEND, plutôt que la
+           suite de blocs du bac. Le bac a huit familles écrites huit fois ; y
+           ajouter une neuvième demande de penser à huit endroits. Ici la liste
+           est CONSTRUITE, donc un article qui devient vendable le devient
+           partout à la fois — et depuis ce zip, « partout » veut dire les
+           quatorze sortes de marchandise du jeu, pas huit. */
+        const rows = [];
+        const push = (key, img, label, stock, item, unit, extra, note) => {
+          if (!stock) return;
+          const fam = E.marketFamilyOf(item);
+          rows.push({ key, img, label, stock, item, unit, extra: extra || {}, note, fam,
+                      priced: E.marketPrice(day, item, unit) });
+        };
+        // --- ce que je porte
+        C.CROPS.forEach(cr => push("c" + cr.id, S && S.crops[cr.id][C.CROP_STAGES - 1], cropName(cr.id),
+          myInv ? myInv.crops[cr.id] : 0, "crop", cr.sell, { crop: cr.id }));
+        C.FISH.forEach(fs => push("f" + fs.id, S && S.fishIcons[fs.id], lang === "en" ? fs.nameEn : fs.name,
+          myInv && myInv.fish ? myInv.fish[fs.id] : 0, "fish", fs.sell, { fish: fs.id }));
+        C.SEA_CREATURES.forEach(sc => push("s" + sc.id, S && S.seaIcons[sc.id], lang === "en" ? sc.nameEn : sc.name,
+          myInv && myInv.seaCreatures ? myInv.seaCreatures[sc.id] : 0, "sea", sc.sell, { sea: sc.id }));
+        C.ANIMALS.forEach((an, i) => push("p" + i, S && S.products ? S.products[i] : null, lang === "en" ? an.prodEn : an.prod,
+          myInv && myInv.products ? myInv.products[i] : 0, "product", an.sell, { product: i }));
+        push("berry", S && S.berryBush, L.berryLabel, myInv ? (myInv.berries || 0) : 0, "berry", C.BERRY_SELL);
+        push("fruit", S && S.crops ? S.crops[0][C.CROP_STAGES - 1] : null, L.fruitLabel, myInv ? (myInv.fruit || 0) : 0, "fruit", C.FRUIT_SELL);
+        /* ⚠️ LE BOIS ET LA PIERRE SONT AUSSI DES MATÉRIAUX DE CONSTRUCTION.
+           Les proposer sans le dire, c'est laisser vendre au meilleur cours de
+           la semaine la clôture qu'on comptait poser le soir même.
+           L'avertissement suffit — on n'interdit pas, on prévient. */
+        push("wood", S && S.icons ? S.icons.axe : null, L.woodLabel, myInv ? (myInv.wood || 0) : 0, "wood", C.WOOD_SELL, null, L.marketBuildWarn);
+        push("stone", S && S.icons ? S.icons.pick : null, L.stoneLabel, myInv ? (myInv.stone || 0) : 0, "stone", C.STONE_SELL, null, L.marketBuildWarn);
+        // --- les vergers (zip 398) : à l'unité, et par barquette de six
+        C.FRUITS.forEach(fr => {
+          const n = ((myInv && myInv.fruits) || {})[fr.id] | 0;
+          const nm = lang === "en" ? fr.nameEn : fr.name;
+          push("of" + fr.id, S && S.fruits ? S.fruits[fr.id] : null, nm, n, "orchardFruit", fr.sell, { fruit: fr.id });
+          /* ⚠️ LA BARQUETTE EST UNE LIGNE À PART, PAS UNE QUANTITÉ. Six fruits
+             vendus par six ne font pas une barquette : elle rapporte +25 %, et
+             c'est tout ce qui la justifie depuis le 398. Son stock est donc le
+             nombre de barquettes COMPLÈTES qu'on peut composer. */
+          push("op" + fr.id, S && S.fruits ? S.fruits[fr.id] : null, L.punnetRowLabel(nm, C.PUNNET_SIZE),
+            Math.floor(n / C.PUNNET_SIZE), "orchardFruit", C.punnetPrice(fr.id), { fruit: fr.id, punnet: true });
+        });
+        /* ⚠️ UN PRODUIT AUX FRUITS N'A PAS DE SPRITE À LUI (il n'en a jamais eu) :
+           le sac montre déjà l'icône du FRUIT qui le compose, et on fait
+           pareil ici. Inventer un dessin par recette serait six sprites pour
+           six lignes de liste. */
+        C.FRUIT_PRODUCTS.forEach(p => push("fp" + p.id, S && S.fruits ? S.fruits[p.fruit] : null,
+          lang === "en" ? p.nameEn : p.name, ((myInv && myInv.fruitProducts) || {})[p.id] | 0, "fruitProduct", p.sell, { product: p.id }));
+        // --- les réserves COMMUNES à la salle
+        C.GEMS.forEach(gm => push("g" + gm.id, S && S.gemIcons[gm.id], lang === "en" ? gm.nameEn : gm.name,
+          gems ? gems[gm.id] : 0, "gem", gm.sell, { gem: gm.id }, L.gemsSharedHint));
+        push("flour", S && S.icons ? S.icons.flour : null, L.flourItemName, flour, "flour", C.FLOUR_SELL, null, L.sharedStockHint);
+        push("sugar", S && S.icons ? S.icons.sugar : null, L.sugarItemName, sugar, "sugar", C.SUGAR_SELL, null, L.sharedStockHint);
+        C.FISH.forEach(fs => push("cf" + fs.id, S && S.fishIcons[fs.id], lang === "en" ? fs.nameEn : fs.name,
+          gregStock.fish ? gregStock.fish[fs.id] : 0, "commonFish", fs.sell, { fish: fs.id }, L.soanFishSharedHint));
+        C.ANIMALS.forEach(a => push("ca" + a.id, S && S.products ? S.products[a.id] : null, lang === "en" ? a.prodEn : a.prod,
+          gregStock.animals ? gregStock.animals[a.id] : 0, "commonAnimal", a.sell, { animal: a.id }, L.haraldSharedHint));
+        E.CRAFT_SELL_ITEMS.forEach(k => push("cr" + k, S && S.craftIcons ? S.craftIcons[k] : null, L.craftName(k),
+          cs[k] | 0, "craft", E.craftSellPrice(sharedRef.current, k), { craft: k }, L.sharedStockHint));
+        /* ⚠️ LA BIJOUTERIE N'A PAS DE COTE (voir E.marketFamilyOf) : le prix est
+           celui qu'un joueur a fixé lui-même. Elle garde une ligne par PIÈCE —
+           deux colliers n'ont pas le même prix, donc pas la même ligne. */
+        jewels.forEach(it => {
+          const ty = C.JEWELRY_TYPES.find(t => t.id === it.type) || C.JEWELRY_TYPES[0];
+          const gm = C.GEMS[it.gemId] || C.GEMS[0];
+          push("jw" + it.id, null, L.jewelryPieceTitle(lang === "en" ? ty.nameEn : ty.name, lang === "en" ? gm.nameEn : gm.name),
+            1, "jewelry", it.price | 0, { jewelry: it.id }, L.marketJewelryHint);
+        });
+
+        const shown = marketFam === "all" ? rows : rows.filter(r => r.fam === marketFam);
+        const qtyOf = (r) => Math.min(r.stock, Math.max(0, marketCart[r.key] | 0));
+        const setQty = (r, n) => setMarketCart(c => ({ ...c, [r.key]: Math.max(0, Math.min(r.stock, n | 0)) }));
+        const lines = rows.filter(r => qtyOf(r) > 0);
+        const total = lines.reduce((a, r) => a + qtyOf(r) * r.priced, 0);
+        const totalBase = lines.reduce((a, r) => a + qtyOf(r) * r.unit, 0);
+        const nItems = lines.reduce((a, r) => a + qtyOf(r), 0);
+        const confirm = () => {
+          if (!lines.length) return;
+          /* ⚠️ UNE SEULE REQUÊTE POUR TOUT LE PANIER (voir resolveTownSell) :
+             une par ligne dépasserait le plafond de dix messages par seconde
+             dès qu'on vend une récolte complète, et le dépassement est muet. */
+          sellAtMarket(null, { lines: lines.map(r => ({ item: r.item, ...r.extra, n: qtyOf(r) })) });
+          setMarketCart({});
+        };
+        return (
+        <div className="ferme-modal open" onClick={() => { setMarketOpen(false); setMarketCart({}); }}>
           <div className="panel ferme-modal-panel" onClick={e => e.stopPropagation()}>
-            <button className="ferme-close-x" onClick={() => setMarketOpen(false)}>✕</button>
+            <button className="ferme-close-x" onClick={() => { setMarketOpen(false); setMarketCart({}); }}>✕</button>
             <h2>🎪 {L.marketTitle}</h2>
-            <div className="ferme-hint">{E.isMarketDay(marketDay()) ? L.marketDayHint : L.marketHint}</div>
-            <div className="ferme-shop-row" style={{ flexWrap: "wrap", gap: 8 }}>
+            <div className="ferme-hint">{E.isMarketDay(day) ? L.marketDayHint : L.marketHint}</div>
+            {/* Les cours du jour — et le filtre, d'un même geste. */}
+            <div className="ferme-shop-row" style={{ flexWrap: "wrap", gap: 6 }}>
+              <button onClick={() => setMarketFam("all")}
+                style={{ padding: "3px 10px", borderRadius: 6, fontWeight: "bold", cursor: "pointer",
+                  border: marketFam === "all" ? "2px solid #ffeec8" : "2px solid transparent",
+                  background: "#3a3226", color: "#ffeec8" }}>{L.marketFamAll}</button>
               {E.MARKET_FAMILIES.map(fam => {
-                const pct = Math.round((E.marketRate(marketDay(), fam) - 1) * 100);
+                const pct = Math.round((E.marketRate(day, fam) - 1) * 100);
+                const on = marketFam === fam;
                 return (
-                  <span key={fam} style={{ padding: "2px 8px", borderRadius: 6, fontWeight: "bold",
-                    background: pct >= 20 ? "#2f6b34" : pct >= 8 ? "#5a5a2e" : "#4a3a2e", color: "#ffeec8" }}>
+                  <button key={fam} onClick={() => setMarketFam(on ? "all" : fam)}
+                    style={{ padding: "3px 10px", borderRadius: 6, fontWeight: "bold", cursor: "pointer",
+                      border: on ? "2px solid #ffeec8" : "2px solid transparent",
+                      background: pct >= 20 ? "#2f6b34" : pct >= 8 ? "#5a5a2e" : "#4a3a2e", color: "#ffeec8" }}>
                     {L.marketFamily(fam)} +{pct} %
-                  </span>
+                  </button>
                 );
               })}
             </div>
-            {(() => {
-              /* ⚠️ UNE SEULE LIGNE GÉNÉRIQUE POUR TOUT CE QUI SE VEND, plutôt que
-                 la suite de blocs du bac. Le bac a huit familles écrites huit
-                 fois ; y ajouter une neuvième demande de penser à huit endroits.
-                 Ici la liste est CONSTRUITE, donc un article qui devient
-                 vendable le devient partout à la fois. */
-              const rows = [];
-              const push = (key, img, label, n, item, unit, extra) => {
-                if (!n) return;
-                rows.push({ key, img, label, n, item, unit, extra });
-              };
-              const S = spritesReady ? spritesRef.current : null;
-              C.CROPS.forEach(cr => push("c" + cr.id, S && S.crops[cr.id][C.CROP_STAGES - 1], cropName(cr.id),
-                myInv ? myInv.crops[cr.id] : 0, "crop", cr.sell, { crop: cr.id }));
-              C.FISH.forEach(fs => push("f" + fs.id, S && S.fishIcons[fs.id], lang === "en" ? fs.nameEn : fs.name,
-                myInv && myInv.fish ? myInv.fish[fs.id] : 0, "fish", fs.sell, { fish: fs.id }));
-              C.SEA_CREATURES.forEach(sc => push("s" + sc.id, S && S.seaIcons[sc.id], lang === "en" ? sc.nameEn : sc.name,
-                myInv && myInv.seaCreatures ? myInv.seaCreatures[sc.id] : 0, "sea", sc.sell, { sea: sc.id }));
-              C.ANIMALS.forEach((an, i) => push("p" + i, S && S.products ? S.products[i] : null, lang === "en" ? an.prodEn : an.prod,
-                myInv && myInv.products ? myInv.products[i] : 0, "product", an.sell, { product: i }));
-              push("berry", S && S.berryBush, L.berryLabel, myInv ? (myInv.berries || 0) : 0, "berry", C.BERRY_SELL);
-              push("fruit", S && S.crops ? S.crops[0][C.CROP_STAGES - 1] : null, L.fruitLabel, myInv ? (myInv.fruit || 0) : 0, "fruit", C.FRUIT_SELL);
-              push("wood", S && S.icons ? S.icons.axe : null, L.woodLabel, myInv ? (myInv.wood || 0) : 0, "wood", C.WOOD_SELL);
-              push("stone", S && S.icons ? S.icons.pick : null, L.stoneLabel, myInv ? (myInv.stone || 0) : 0, "stone", C.STONE_SELL);
-              /* ⚠️ LE BOIS ET LA PIERRE SONT AUSSI DES MATÉRIAUX DE CONSTRUCTION.
-                 Les proposer ici sans le dire, c'est laisser vendre au meilleur
-                 cours de la semaine la clôture qu'on comptait poser le soir même.
-                 L'avertissement suffit — on n'interdit pas, on prévient. */
-              if (!rows.length) return <div className="ferme-hint">{L.marketEmpty}</div>;
-              return rows.map(r => {
-                const unit = marketUnit(r.item, r.unit);
-                const bonus = unit - r.unit;
-                return (
-                  <div className="ferme-shop-row" key={"mk" + r.key}>
-                    <Sprite img={r.img} w={32} h={32} />
-                    <div className="info">
-                      <b>{r.label} × {r.n}</b>
-                      <span>{L.marketUnitLine(unit, r.unit)}{bonus > 0 ? " " + L.marketBonus(bonus) : ""}</span>
-                    </div>
-                    <button onClick={() => sellAtMarket(r.item, r.extra)}>{L.sellAll} · {unit * r.n}</button>
+            {!rows.length && <div className="ferme-hint">{L.marketEmpty}</div>}
+            {!!rows.length && !shown.length && <div className="ferme-hint">{L.marketNoneInFamily}</div>}
+            {shown.map(r => {
+              const q = qtyOf(r), bonus = r.priced - r.unit;
+              return (
+                <div className="ferme-shop-row" key={"mk" + r.key}>
+                  {r.img ? <Sprite img={r.img} w={32} h={32} />
+                         : <span style={{ width: 32, height: 32, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>💍</span>}
+                  <div className="info">
+                    <b>{r.label} × {r.stock}</b>
+                    <span>{L.marketUnitLine(r.priced, r.unit)}{bonus > 0 ? " " + L.marketBonus(bonus) : ""}</span>
+                    {r.note && <span className="ferme-usage">{r.note}</span>}
                   </div>
-                );
-              });
-            })()}
+                  {/* Le sélecteur. ⚠️ « MAX » EST UN BOUTON À PART ENTIÈRE : sans
+                      lui, écouler cent blés se ferait à coups de « + ». Et le
+                      champ reste saisissable, parce qu'« en garder trois pour
+                      semer » est le geste qui manquait au 430. */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                    <button style={{ minWidth: 26 }} disabled={q <= 0} onClick={() => setQty(r, q - 1)}>−</button>
+                    <input type="number" min={0} max={r.stock} value={q}
+                      onChange={e => setQty(r, +e.target.value)}
+                      style={{ width: 52, textAlign: "center", padding: "2px 4px" }} />
+                    <button style={{ minWidth: 26 }} disabled={q >= r.stock} onClick={() => setQty(r, q + 1)}>+</button>
+                    <button style={{ minWidth: 42 }} disabled={q >= r.stock} onClick={() => setQty(r, r.stock)}>{L.marketMax}</button>
+                    <span style={{ minWidth: 62, textAlign: "right", fontWeight: "bold", opacity: q ? 1 : 0.35 }}>
+                      {q * r.priced} {L.goldShort}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+            {/* Le pied de panneau : le total, toujours visible, et les trois
+                seules commandes qui portent sur l'ensemble. */}
+            {!!rows.length && (
+              <div style={{ position: "sticky", bottom: 0, marginTop: 10, paddingTop: 8,
+                borderTop: "2px solid rgba(255,238,200,0.25)", background: "inherit",
+                display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <div style={{ flex: 1, minWidth: 180 }}>
+                  <div style={{ fontWeight: "bold", fontSize: 16 }}>{L.marketCartTotal(nItems, total)}</div>
+                  {total > totalBase && <div className="ferme-hint" style={{ margin: 0 }}>{L.marketCartBonus(total - totalBase)}</div>}
+                </div>
+                <button disabled={!nItems} onClick={() => setMarketCart({})}>{L.marketClear}</button>
+                <button onClick={() => { const c = {}; for (const r of shown) c[r.key] = r.stock; setMarketCart(cur => ({ ...cur, ...c })); }}>
+                  {L.marketAllMax}
+                </button>
+                <PixBtn sprites={S} icon="check" tone="good" disabled={!nItems}
+                  label={L.marketSellBtn(total)} onClick={confirm} />
+              </div>
+            )}
           </div>
         </div>
-      )}
+        );
+      })()}
       {binOpen && (
         <div className="ferme-modal open" onClick={() => setBinOpen(false)}>
           <div className="panel ferme-modal-panel" onClick={e => e.stopPropagation()}>
@@ -20235,7 +20613,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 <div className="ferme-shop-row" key={"b" + cr.id}>
                   <Sprite img={spritesReady ? spritesRef.current.crops[cr.id][C.CROP_STAGES - 1] : null} w={32} h={32} />
                   <div className="info"><b>{L.cropRowTitle(cropName(cr.id), n)}</b><span>{L.cropRowSub(cr, n)}</span></div>
-                  <button disabled={n === 0} onClick={() => sellItem("crop", cr.id)}>{L.sellAll}</button>
+                  <MarketOnly label={L.marketOnlyTag} />
                 </div>
               );
             })}
@@ -20245,7 +20623,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 <div className="ferme-shop-row" key={"f" + fs.id}>
                   <Sprite img={spritesReady ? spritesRef.current.fishIcons[fs.id] : null} w={32} h={32} />
                   <div className="info"><b>{(lang === "en" ? fs.nameEn : fs.name)} × {n}</b><span>{L.perPiece(fs.sell)}</span></div>
-                  <button disabled={!n} onClick={() => sellFish(fs.id)}>{L.sellAll}</button>
+                  <MarketOnly label={L.marketOnlyTag} />
                 </div>
               );
             })}
@@ -20258,7 +20636,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 <div className="ferme-shop-row" key={"sea" + sc.id}>
                   <Sprite img={spritesReady ? spritesRef.current.seaIcons[sc.id] : null} w={32} h={32} />
                   <div className="info"><b>{(lang === "en" ? sc.nameEn : sc.name)} × {n}</b><span>{L.perPiece(sc.sell)}</span><span className="ferme-usage">{L.seaSectionHint}</span></div>
-                  <button disabled={!n} onClick={() => sellSea(sc.id)}>{L.sellAll}</button>
+                  <MarketOnly label={L.marketOnlyTag} />
                 </div>
               );
             })}
@@ -20268,14 +20646,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
               <div className="ferme-shop-row" key="berry">
                 <Sprite img={spritesReady ? spritesRef.current.berryBush : null} w={32} h={32} />
                 <div className="info"><b>{L.berryLabel} × {myInv.berries}</b><span>{L.perPiece(C.BERRY_SELL)}</span></div>
-                <button onClick={sellBerry}>{L.sellAll}</button>
+                <MarketOnly label={L.marketOnlyTag} />
               </div>
             )}
             {myInv && (myInv.fruit || 0) > 0 && (
               <div className="ferme-shop-row" key="fruit">
                 <Sprite img={spritesReady ? spritesRef.current.crops[0][C.CROP_STAGES - 1] : null} w={32} h={32} />
                 <div className="info"><b>{L.fruitLabel} × {myInv.fruit}</b><span>{L.perPiece(C.FRUIT_SELL)}</span></div>
-                <button onClick={sellWildApple}>{L.sellAll}</button>
+                <MarketOnly label={L.marketOnlyTag} />
               </div>
             )}
             {/* ================================================================
@@ -20315,13 +20693,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                       <b>{(lang === "en" ? f.nameEn : f.name) + " ×" + n}</b>
                       <span className="ferme-usage">{L.fruitRowSub(f.sell, C.PUNNET_SIZE, C.punnetPrice(f.id))}</span>
                     </div>
-                    <PixBtn sprites={spritesReady ? spritesRef.current : null} tone="plain" small
-                      label={L.sellOneBtn(f.sell)}
-                      onClick={() => sendReq({ kind: "sellFruit", fruit: f.id, punnet: false })} />
-                    <PixBtn sprites={spritesReady ? spritesRef.current : null} tone="good" small
-                      disabled={n < C.PUNNET_SIZE}
-                      label={L.sellPunnetBtn(C.punnetPrice(f.id))}
-                      onClick={() => sendReq({ kind: "sellFruit", fruit: f.id, punnet: true })} />
+                    {/* Zip 431 : la vente est montée au marché. La BARQUETTE
+                        aussi — elle y a sa propre ligne, avec sa prime de +25 %
+                        (voir le panneau du marché). */}
+                    <MarketOnly label={L.marketOnlyTag} />
                   </div>
                 );
               });
@@ -20340,7 +20715,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 <div className="ferme-shop-row" key={"cf" + fs.id}>
                   <Sprite img={spritesReady ? spritesRef.current.fishIcons[fs.id] : null} w={32} h={32} />
                   <div className="info"><b>{(lang === "en" ? fs.nameEn : fs.name)} × {n}</b><span>{L.perPiece(fs.sell)}</span><span className="ferme-usage">{L.soanFishSharedHint}</span></div>
-                  <button disabled={!n} onClick={() => sellCommonFish(fs.id)}>{L.sellAll}</button>
+                  <MarketOnly label={L.marketOnlyTag} />
                 </div>
               );
             })}
@@ -20354,7 +20729,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 <div className="ferme-shop-row" key={"ca" + a.id}>
                   <Sprite img={spritesReady ? spritesRef.current.products[a.id] : null} w={32} h={32} />
                   <div className="info"><b>{(lang === "en" ? a.prodEn : a.prod)} × {n}</b><span>{L.perPiece(a.sell)}</span><span className="ferme-usage">{L.haraldSharedHint}</span></div>
-                  <button disabled={!n} onClick={() => sellCommonAnimal(a.id)}>{L.sellAll}</button>
+                  <MarketOnly label={L.marketOnlyTag} />
                 </div>
               );
             })}
@@ -20365,7 +20740,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 <div className="ferme-shop-row" key={"g" + gm.id}>
                   <Sprite img={spritesReady ? spritesRef.current.gemIcons[gm.id] : null} w={32} h={32} />
                   <div className="info"><b>{(lang === "en" ? gm.nameEn : gm.name)} × {n}</b><span>{L.perPiece(gm.sell)}</span><span className="ferme-usage">{L.gemsSharedHint}</span></div>
-                  <button disabled={!n} onClick={() => sellGem(gm.id)}>{L.sellAll}</button>
+                  <MarketOnly label={L.marketOnlyTag} />
                 </div>
               );
             })}
@@ -20376,7 +20751,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 <div className="ferme-shop-row" key={"pr" + a.id}>
                   <Sprite img={spritesReady ? spritesRef.current.products[a.id] : null} w={32} h={32} />
                   <div className="info"><b>{L.prodRowTitle(lang === "en" ? a.prodEn : a.prod, n)}</b><span>{L.perPiece(a.sell)}</span></div>
-                  <button disabled={!n} onClick={() => sellProduct(a.id)}>{L.sellAll}</button>
+                  <MarketOnly label={L.marketOnlyTag} />
                 </div>
               );
             })}
@@ -20393,7 +20768,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   <div className="ferme-shop-row" key={"cs" + k}>
                     <Sprite img={spritesReady ? spritesRef.current.craftIcons[k] : null} w={32} h={32} />
                     <div className="info"><b>{L.craftRow(L.craftName(k), n)}</b><span>{L.perPiece(price)}</span></div>
-                    <button disabled={!n} onClick={() => sellCraft(k)}>{L.sellAll}</button>
+                    <MarketOnly label={L.marketOnlyTag} />
                   </div>
                 ); })}
                 {(cs.cheeseWheel | 0) > 0 && (
@@ -20419,7 +20794,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                     <div className="ferme-shop-row" key={"jw" + it.id}>
                       <span style={{ width: 32, height: 32, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{jewelryGlyph(shape.id)}</span>
                       <div className="info"><b>{L.jewelryPieceTitle(lang === "en" ? type.nameEn : type.name, lang === "en" ? gem.nameEn : gem.name)}</b><span>{L.perPiece(it.price)}</span>{it.maker && <span className="ferme-usage">{L.jewelryMakerHint(it.maker)}</span>}</div>
-                      <button onClick={() => sellJewelry(it.id)}>{L.jewelrySellBtn}</button>
+                      <MarketOnly label={L.marketOnlyTag} />
                     </div>
                   );
                 })}
@@ -21244,6 +21619,27 @@ function TouchPad({ onVec, onRelease }) {
          onPointerUp={up} onPointerCancel={up} onLostPointerCapture={up}>
       <div className="ring" style={knob ? { transform: `translate(${knob.x}px, ${knob.y}px)` } : undefined} />
     </div>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ZIP 431 — LE JETON « SE VEND AU MARCHÉ ».
+   ⚠️ IL REMPLACE UN BOUTON, IL NE LE MASQUE PAS. Guillaume a demandé que la
+   ferme garde la CONSULTATION des stocks et la transformation, mais plus la
+   vente. Retirer les boutons sans rien mettre à la place aurait donné des
+   panneaux muets où l'on cherche pendant dix minutes ce qui a bougé — et où
+   l'on finirait par croire que la vente est cassée. Le jeton dit à la fois ce
+   qui a changé ET où aller, à l'endroit exact où l'on cliquait avant.
+   ⚠️ IL EST GRIS ET NON CLIQUABLE, exprès : un bouton qui expliquerait qu'il
+   ne marche pas ici serait un bouton qui propose puis refuse.
+   ══════════════════════════════════════════════════════════════════════════ */
+function MarketOnly({ label }) {
+  return (
+    <span style={{
+      padding: "3px 9px", borderRadius: 6, whiteSpace: "nowrap",
+      background: "rgba(255,238,200,0.10)", border: "1px dashed rgba(255,238,200,0.35)",
+      color: "rgba(255,238,200,0.75)", fontSize: 11, fontWeight: 700,
+    }}>{label}</span>
   );
 }
 

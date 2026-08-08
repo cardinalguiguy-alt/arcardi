@@ -751,6 +751,180 @@ section("Valley Town — le marché du champ de foire (430)");
     ok("on atteint le centre du champ de foire depuis la gare", !!seen[idx(cx2, cy2)], `(${cx2},${cy2})`);
     const stalls = tw.props.filter(pr => pr.kind === "stall");
     ok("le champ de foire a bien ses étals", stalls.length >= 6, `${stalls.length} étals`);
+    /* ⚠️⚠️ ZIP 431 — LA ZONE AVANT LES DISTANCES, ET CE CONTRÔLE VAUT PLUS QUE
+       TOUS LES AUTRES DE CETTE SECTION. Le champ de foire occupe x∈[34;68],
+       y∈[70;104] en coordonnées de VILLE. La ferme fait 180×140 : ces mêmes
+       coordonnées existent chez elle, au milieu des champs. Tant que
+       `atMarket` ne lisait que px/py, un fermier planté au bon endroit de son
+       pré passait le contrôle « je suis au marché » — et depuis ce zip, ce
+       contrôle est la SEULE chose qui interdit de vendre depuis la ferme.
+       C'est le piège des deux cartes (§4 de CLAUDE.md) dans sa forme la plus
+       chère, et il ne lève évidemment aucune erreur. */
+    const inside = { px: cx2, py: cy2 };
+    ok("on vend au centre du champ de foire", E.atMarket({ ...inside, pz: "town" }));
+    ok("⚠️ la MÊME position, mais à la ferme, ne vend pas", !E.atMarket({ ...inside, pz: "farm" }));
+    ok("une requête sans zone est refusée (échec fermé)", !E.atMarket(inside));
+    ok("hors du champ de foire, on ne vend pas", !E.atMarket({ px: C.TOWN_SPAWN.x, py: C.TOWN_SPAWN.y, pz: "town" }));
+    /* ⚠️ CHAQUE MÉTIER D'ÉTAL DOIT AVOIR SON SPRITE. Le générateur distribue
+       des indices dans TOWN_STALL_TRADES ; un rendu qui modulerait sur une
+       autre longueur poserait des cases SOLIDES SANS DESSIN — un mur invisible,
+       le défaut du 425, recréé par une constante recopiée. */
+    ok("aucun étal ne sort de la table des métiers",
+       stalls.every(pr => (pr.v | 0) >= 0 && (pr.v | 0) < C.TOWN_STALL_TRADES.length),
+       `${C.TOWN_STALL_TRADES.length} métiers`);
+    ok("deux étals voisins ne font pas le même métier", (() => {
+      const rows = {};
+      for (const s2 of stalls) (rows[s2.y] = rows[s2.y] || []).push(s2);
+      for (const list of Object.values(rows)) {
+        list.sort((a, b) => a.x - b.x);
+        for (let k = 0; k + 1 < list.length; k++) if (list[k].v === list[k + 1].v) return false;
+      }
+      return true;
+    })());
+    /* L'arche : DEUX poteaux solides, et on passe ENTRE eux. Un seul prop
+       (donc une seule case) serait un portique infranchissable ; zéro case
+       solide serait un décor traversable, que le contrôle du dessus refuse. */
+    const arch = tw.props.filter(pr => pr.kind === "marketArch");
+    ok("l'arche du marché a ses deux poteaux", arch.length === 2, `${arch.length}`);
+    ok("on passe sous l'arche", arch.length === 2 && (() => {
+      const [a, b] = arch.sort((p, q) => p.x - q.x);
+      if (a.y !== b.y || b.x - a.x < 2) return false;
+      for (let x = a.x + 1; x < b.x; x++) if (tw.solid[idx(x, a.y)]) return false;
+      return true;
+    })());
+  }
+  {
+    /* ⚠️⚠️ ZIP 431 — TOUT CE QUI SE VEND DOIT ÊTRE VENDABLE AU MARCHÉ, parce
+       que c'est devenu le SEUL guichet. Un article oublié dans `marketFamilyOf`
+       ne lève rien : il se vend simplement au prix de la ferme, pour toujours,
+       et le joueur conclut que « le marché ne marche pas pour la farine ». */
+    const sellable = ["crop", "fish", "sea", "product", "berry", "fruit", "wood", "stone",
+                      "gem", "flour", "sugar", "commonFish", "commonAnimal", "craft",
+                      "orchardFruit", "fruitProduct"];
+    const orphan = sellable.filter(i2 => !E.marketFamilyOf(i2));
+    ok("les seize sortes de marchandise ont une famille au marché", orphan.length === 0, orphan.join(" "));
+    ok("la bijouterie n'a délibérément PAS de cote", E.marketFamilyOf("jewelry") === null);
+    /* ⚠️ LE PRIX D'UN PRODUIT D'ARTISAN N'A QU'UN SEUL BARÈME depuis le 431 : il
+       était écrit dans la requête `sellCraft` (donc invisible du marché). */
+    const sh = { crafts: {} };
+    const noPrice = E.CRAFT_SELL_ITEMS.filter(k => !(E.craftSellPrice(sh, k) > 0));
+    ok("chaque produit d'artisan a un prix", noPrice.length === 0, noPrice.join(" "));
+    /* ⚠️ LE VERROU DE VENTE EST UNE LISTE, ET ELLE DOIT COUVRIR LES ANCIENNES
+       REQUÊTES. Retirer les boutons de la ferme ne suffit pas : un onglet resté
+       ouvert sur la version d'avant enverrait toujours `sell`. */
+    for (const k of ["sell", "sellCraft", "sellFruit", "sellFruitProduct", "sellJewelry"]) {
+      ok(`« ${k} » est bien traitée comme une vente de produit`, E.isProduceSale({ kind: k }));
+    }
+    /* ⚠️ ET CELLES QUI DOIVENT RESTER POSSIBLES À LA FERME : vendre à un
+       visiteur qui frappe à la porte, c'est rendre service, pas écouler une
+       récolte — c'est la seule vente que Guillaume a demandé de garder. */
+    for (const k of ["visitorDeal", "visitorSwap", "sellAnimal", "sellDecor"]) {
+      ok(`« ${k} » reste possible à la ferme`, !E.isProduceSale({ kind: k }));
+    }
+  }
+  {
+    /* ═══════════════════════════════════════════════════════════════════════
+       ZIP 431 — ON VEND POUR DE VRAI, ET L'OR ARRIVE.
+       ⚠️⚠️ C'EST LE SEUL CONTRÔLE DE CETTE SECTION QUI PORTE SUR DE L'ARGENT,
+       et c'est la demande explicite de Guillaume : « attention de ne pas casser
+       la mécanique de vente par ces changements (l'argent doit bien être
+       récupéré et les opérations sauvegardées) ». Tout le reste de ce fichier
+       vérifie des règles ; ici on JOUE la vente et on compte les pièces.
+       ⚠️ Le piège que ça attrape est le double crédit : trois résolveurs
+       (vergers, produits aux fruits, bijouterie) créditent `shared.money`
+       eux-mêmes, les autres renvoient un `moneyDelta` que l'hôte applique. Se
+       tromper de famille paierait la vente deux fois — sans erreur, sans trace,
+       et l'or est partagé. */
+    const mk = C.TOWN_MARKET;
+    const HERE = { px: mk.x + (mk.w >> 1), py: mk.y + (mk.h >> 1), pz: "town" };
+    const day = 3;
+    const mkFarmer = () => {
+      const f = E.newFarmer("t1", "Test", "f", 0);
+      E.normalizeFarmer(f);
+      f.inv.crops[0] = 10; f.inv.wood = 7;
+      f.inv.fruits = { strawberry: 13 };
+      return f;
+    };
+    const mkShared = () => ({
+      money: 0, totalEarned: 0, gems: C.GEMS.map(() => 0), flour: 4, sugar: 0,
+      craftStock: { ...E.newCraftStock(), honey: 3 }, crafts: E.newCrafts(),
+      gregStock: { wood: 0, stone: 0, fertilizer: 0, gold: 0, fish: C.FISH.map(() => 0), animals: C.ANIMALS.map(() => 0) },
+      station: E.newStationState(),
+    });
+    /* Une vente = ce que l'hôte applique. On refait ici EXACTEMENT ce que fait
+       la branche `townSell` de FermeGame : `s.money += r.moneyDelta`. Si les
+       deux divergent un jour, c'est ce contrôle qui ment — d'où la note. */
+    const play = (f, s, m) => {
+      const r = E.resolveTownSell(f, { ...HERE, ...m }, day, s);
+      s.money += r.moneyDelta; s.totalEarned += r.earnedDelta;
+      return r;
+    };
+    {
+      const f = mkFarmer(), s = mkShared();
+      const r = play(f, s, { item: "crop", crop: 0, n: 4 });
+      const unit = E.marketPrice(day, "crop", C.CROPS[0].sell);
+      ok("vendre 4 récoltes retire 4 récoltes", f.inv.crops[0] === 6, `${f.inv.crops[0]} restantes`);
+      ok("... et crédite exactement le prix du jour", s.money === 4 * unit, `${s.money} or pour 4 × ${unit}`);
+      ok("... et compte dans le total gagné", s.totalEarned === s.money);
+      ok("... et le gain annoncé est celui payé", r.gain === s.money);
+    }
+    {
+      // Le PANIER : une requête, plusieurs lignes, un seul total.
+      const f = mkFarmer(), s = mkShared();
+      const r = play(f, s, { lines: [
+        { item: "crop", crop: 0, n: 2 },
+        { item: "wood", n: 3 },
+        { item: "flour", n: 2 },
+        { item: "gem", gem: 0, n: 9 },              // stock nul : la ligne ne rapporte rien
+      ] });
+      const want = 2 * E.marketPrice(day, "crop", C.CROPS[0].sell)
+                 + 3 * E.marketPrice(day, "wood", C.WOOD_SELL)
+                 + 2 * E.marketPrice(day, "flour", C.FLOUR_SELL);
+      ok("le panier vend toutes ses lignes en une requête", s.money === want, `${s.money} attendu ${want}`);
+      ok("... et retire chaque stock", f.inv.crops[0] === 8 && f.inv.wood === 4 && s.flour === 2,
+         `blé ${f.inv.crops[0]} · bois ${f.inv.wood} · farine ${s.flour}`);
+      ok("... et une ligne à stock nul ne casse pas le panier", r.gain === want);
+    }
+    {
+      /* ⚠️ LE DOUBLE CRÉDIT, contrôlé de front. `resolveSellFruit` crédite
+         `shared.money` lui-même : si `resolveTownSell` renvoyait AUSSI le total,
+         la barquette serait payée deux fois. */
+      const f = mkFarmer(), s = mkShared();
+      play(f, s, { item: "orchardFruit", fruit: "strawberry", punnet: true, n: 2 });
+      const base = 2 * C.punnetPrice("strawberry");
+      const want = Math.max(base, Math.ceil(base * E.marketRate(day, "crop")));
+      ok("une barquette de verger n'est PAS payée deux fois", s.money === want, `${s.money} attendu ${want}`);
+      ok("... et elle coûte bien six fruits pièce", (f.inv.fruits.strawberry | 0) === 13 - 2 * C.PUNNET_SIZE,
+         `${f.inv.fruits.strawberry} restants`);
+      ok("... et la barquette rapporte plus que six fruits vendus un par un",
+         C.punnetPrice("strawberry") > 6 * C.fruitSpec("strawberry").sell);
+    }
+    {
+      const f = mkFarmer(), s = mkShared();
+      play(f, s, { item: "craft", craft: "honey", n: 2 });
+      const want = 2 * E.marketPrice(day, "craft", E.craftSellPrice(s, "honey"));
+      ok("un produit d'artisan se vend au marché", s.money === want, `${s.money} attendu ${want}`);
+      ok("... et sort de la réserve commune", (s.craftStock.honey | 0) === 1);
+    }
+    {
+      /* ⚠️ LE REFUS EST LA MOITIÉ DE LA MÉCANIQUE : la vente ne doit RIEN
+         changer quand on n'est pas au marché — ni l'or, ni le stock. Un refus
+         qui retirerait quand même la marchandise serait le pire bogue possible. */
+      const f = mkFarmer(), s = mkShared();
+      const r = play(f, s, { item: "crop", crop: 0, n: 4, pz: "farm" });
+      ok("depuis la ferme, la vente est refusée", r.toast === "farMarket", r.toast || "aucun message");
+      ok("... et RIEN n'a bougé", s.money === 0 && f.inv.crops[0] === 10, `${s.money} or · ${f.inv.crops[0]} blé`);
+    }
+    {
+      // Le plancher, joué : au pire on touche le prix du bac, jamais moins.
+      let under = 0;
+      for (let d = 1; d <= 120; d++) {
+        const f = mkFarmer(), s = mkShared();
+        play(f, s, { item: "crop", crop: 0, n: 1 });
+        if (s.money < C.CROPS[0].sell) under++;
+      }
+      ok("sur 120 jours, jamais moins que le bac de la ferme", under === 0, `${under} jours sous le prix`);
+    }
   }
 }
 

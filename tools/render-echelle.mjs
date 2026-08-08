@@ -87,7 +87,15 @@ const CASES = [
   ["tombe", S.townGrave, 0.75, "une stèle arrive à la poitrine"],
   ["jardinière", S.townPlanter, 0.55, "on s'y assoit presque"],
   ["caisse", S.townCrate, 0.65, "on la porte à deux mains"],
-  ["étal", S.townStalls[0], 2.10, "on passe dessous sans se baisser"],
+  /* ⚠️ ZIP 431 — LES SIX ÉTALS SONT MESURÉS, PAS SEULEMENT LE PREMIER. Ils
+     partagent leur ossature mais pas leur marchandise : une jarre pendue trop
+     haut ou une pile de fromages trop grande dépasserait chez UN métier, et
+     mesurer l'étal « 0 » n'en dirait rien. */
+  ...S.townStalls.map((im, i) => [`étal ${["primeur", "poisson", "pain", "fleurs", "fromage", "poterie"][i] || i}`, im, 2.10, "on passe dessous sans se baisser"]),
+  ["arche du marché", S.townMarketArch, 3.10, "on passe dessous en groupe"],
+  ["charrette à fleurs", S.townFlowerCart, 1.70, "on la tire à bras, fleurs comprises"],
+  ["tonneau", S.townBarrel, 1.10, "il arrive à la poitrine, pommes dessus"],
+  ["sacs de grain", S.townSacks, 0.95, "une pile qu'on charge à deux"],
   ["kiosque", S.townKiosk, 3.20, "un pavillon où l'on tient debout"],
   ["panneau de rue", S.townStreetSign, 1.50, "on lit sans lever la tête"],
   ["statue", S.townStatue, 2.40, "socle plus figure"],
