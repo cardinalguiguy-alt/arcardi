@@ -11750,6 +11750,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          restée noire (§4) : une zone qui gagne sa boucle hérite de tout ce que
          la boucle commune faisait pour elle. */
       if (actAnimRef.current > 0 && (m.zone === "town" || m.zone === "court" || m.zone === "evil")) actAnimRef.current -= dt;
+      /* ⚠️⚠️ ZIP SUIVANT — L'INTERPOLATION D'ÉNERGIE DU SOMMEIL EST REMONTÉE ICI,
+         ET C'EST EXACTEMENT LE DÉFAUT DÉCRIT JUSTE AU-DESSUS, UNE TROISIÈME FOIS.
+         Dormir chez soi à Valley Town existe depuis le 235 (branche E à sa propre
+         porte, plus bas dans tryOpenNearby), mais ce bloc vivait APRÈS la sortie
+         anticipée de la ville : la jauge restait donc figée pendant les 60 s de
+         sommeil, et ne se remplissait d'un coup qu'au réveil, quand l'hôte
+         tranche. On dormait pour de vrai, sans qu'aucun retour à l'écran ne le
+         dise — l'option avait l'air morte alors qu'elle marchait.
+         Elle est SANS ZONE par nature : elle ne lit que l'horloge locale et
+         `sleepStartedAtRef`, jamais la carte. */
+      if (m.sleeping && sleepStartedAtRef.current) {
+        const frac = Math.min(1, (now - sleepStartedAtRef.current) / C.SLEEP_MS);
+        const disp = Math.round(sleepStartEnergyRef.current + (C.MAX_ENERGY - sleepStartEnergyRef.current) * frac);
+        if (disp !== energyRef.current) { energyRef.current = disp; setMyEnergy(disp); }
+      }
       // Valley Town (zip 234): same early-return pattern as the evil map; the
       // host sims above keep running on the farm world regardless.
       if (m.zone === "town") {
@@ -11774,14 +11789,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       checkWalkOverHarvest();
       checkWalkOverWater();
       checkWalkOverCollect();
-      // Sommeil : énergie interpolée localement en temps réel pendant les
-      // 60s (affichage fluide de la jauge), sans attendre l'hôte (qui, lui,
-      // ne tranche l'énergie finale qu'à la sortie, voir wakeUp/resolveSleepEnd).
-      if (m.sleeping && sleepStartedAtRef.current) {
-        const frac = Math.min(1, (now - sleepStartedAtRef.current) / C.SLEEP_MS);
-        const disp = Math.round(sleepStartEnergyRef.current + (C.MAX_ENERGY - sleepStartEnergyRef.current) * frac);
-        if (disp !== energyRef.current) { energyRef.current = disp; setMyEnergy(disp); }
-      }
+      // Sommeil : l'interpolation d'énergie vivait ici (60 s, affichage fluide
+      // de la jauge sans attendre l'hôte, qui ne tranche qu'à la sortie — voir
+      // wakeUp/resolveSleepEnd). Elle est remontée AVANT les sorties anticipées
+      // de zone : on dort aussi à Valley Town depuis le 235.
       if (actAnimRef.current > 0) actAnimRef.current -= dt;   // ⚠️ voir tickActAnim
       for (const p of playersRef.current.values()) {
         advanceRemote(p); // FIX 243
@@ -14923,6 +14934,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // "for sale" plate. Zip 235: 10 basic free façade styles — the owner
       // may cycle theirs with R at their door (see facadeStylesRef).
       const owners = townHouseOwners();
+      /* ⚠️ ZIP SUIVANT — QUI DORT EN VILLE, ET DANS QUELLE MAISON. La ferme
+         affiche des « Zzz » au-dessus de SA maison depuis toujours (voir le bloc
+         `anySleeping` du rendu ferme) ; la ville, qui a sa propre boucle depuis
+         le 234, n'en héritait pas — un dormeur y disparaissait simplement de la
+         carte, ce qui se lit comme une déconnexion, pas comme un sommeil.
+         ⚠️ ICI LES « Zzz » SONT PAR MAISON, pas globaux comme à la ferme : il y a
+         autant de maisons que de fermiers, donc dire QUI dort est gratuit et
+         « une maison au hasard s'endort » serait faux. Le flag `sleeping` voyage
+         déjà dans le paquet de position (§3) — aucun champ de plus. */
+      const sleepingOwnerIds = new Set();
+      if (m.sleeping) sleepingOwnerIds.add(me.id);
+      for (const p of playersRef.current.values()) if (p.sleeping && (p.zone || "farm") === "town") sleepingOwnerIds.add(p.id);
       for (let hi = 0; hi < owners.length; hi++) {
         const hsn = owners[hi];
         // Style: owner's saved choice if any, else deterministic default.
@@ -14956,6 +14979,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           ctx.fillStyle = "#f5eeda"; ctx.fillRect(tx2 - wpx / 2, ty2 - 8, wpx, 11);
           ctx.strokeStyle = "#6b4a2e"; ctx.lineWidth = 1; ctx.strokeRect(tx2 - wpx / 2 + 0.5, ty2 - 7.5, wpx - 1, 10);
           ctx.fillStyle = "#1d1d1d"; ctx.fillText(label, tx2, ty2);
+          // Les « Zzz », au-dessus des fenêtres, quand le propriétaire dort.
+          // Mêmes décalages et même respiration que la maison de la ferme :
+          // deux fenêtres, un sinus déphasé par l'abscisse.
+          if (hsn.ownerId && sleepingOwnerIds.has(hsn.ownerId)) {
+            ctx.font = "bold 10px monospace"; ctx.textAlign = "center";
+            for (const off of [{ dx: 23, dy: 58 }, { dx: 75, dy: 58 }]) {
+              const bob = Math.sin(now / 260 + off.dx) * 2;
+              const zx = bx + off.dx, zy = by - 96 + off.dy - 6 + bob;
+              ctx.fillStyle = "#00000090"; ctx.fillText("Zzz", zx + 1, zy + 1);
+              ctx.fillStyle = "#ffffff"; ctx.fillText("Zzz", zx, zy);
+            }
+          }
           ctx.textAlign = "left";
         });
       }
@@ -15214,7 +15249,21 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       else {
         for (const hsn of owners) {
           const doorX = hsn.x + C.TOWN_HOUSE_W / 2, doorY = hsn.y + C.TOWN_HOUSE_H + 0.5;
-          if (Math.abs(m.x + 0.5 - doorX) <= 1.6 && Math.abs(m.y - doorY) <= 1.4) { tpk = hsn.ownerName ? "townHouse:" + hsn.ownerName : "townHouseSale"; break; }
+          if (Math.abs(m.x + 0.5 - doorX) <= 1.6 && Math.abs(m.y - doorY) <= 1.4) {
+            /* ⚠️ ZIP SUIVANT — DEVANT SA PROPRE PORTE, L'INVITE DIT L'ACTION, PAS
+               LE NOM. Dormir chez soi en ville marche depuis le 235, mais
+               l'invite affichait « Maison de Guillaume » : une PLAQUE, pas une
+               action. Personne ne pouvait deviner que E faisait quelque chose
+               ici — c'est la règle du 425/428 appliquée une fois de plus (une
+               invite décrit ce qui est disponible MAINTENANT), et c'est ce qui
+               manquait pour que l'option existe vraiment.
+               La jauge pleine se dit AUSSI : proposer « dormir » puis répondre
+               par un refus (toastSleepFull) serait le « propose puis refuse »
+               que le 426 s'est juré de ne plus commettre. */
+            if (hsn.ownerId === me.id) tpk = energyRef.current >= C.MAX_ENERGY ? "townSleepFull" : "townSleep";
+            else tpk = hsn.ownerName ? "townHouse:" + hsn.ownerName : "townHouseSale";
+            break;
+          }
         }
       }
       setPromptKeyThrottled(tpk);
@@ -17767,6 +17816,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   }
   function tryOpenNearby() {
     const m0 = meRef.current;
+    /* ⚠️⚠️ ZIP SUIVANT — E RÉVEILLE, ET ÇA N'AVAIT JAMAIS ÉTÉ BRANCHÉ. Le
+       commentaire de `pressTouchAction` annonçait « endormi : E réveille »
+       depuis le 430, mais il déléguait ici, et rien ici ne réveillait :
+       `wakeUp(false)` n'avait AUCUN appelant (seul le minuteur des 60 s
+       appelait `wakeUp(true)`), et `toastSleepEarly` était une chaîne morte
+       traduite dans les deux langues. On dormait donc soixante secondes sans
+       aucun moyen d'en sortir — invisible tant que personne ne dormait, ce qui
+       était le cas depuis que le 233 a retiré le lit de la ferme.
+       ⚠️ EN PREMIER, AVANT TOUTE SORTIE ANTICIPÉE DE ZONE : le dormeur est chez
+       lui à Valley Town, donc la branche « ville » l'avalerait et le renverrait
+       sur sa propre porte, où `startSleep` refuse (il dort déjà) — c'est-à-dire
+       rien du tout, exactement le symptôme qu'on corrige. */
+    if (m0 && m0.sleeping) { wakeUp(false); return; }
     /* ---- INTÉRIEUR DU TRIBUNAL (zip 426). Sortie anticipée, comme la carte
        maléfique : les coordonnées de la ferme n'ont aucun sens ici, et une
        coïncidence de coordonnées ouvrirait la boutique depuis les archives. */
@@ -18620,7 +18682,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           expression que le bandeau, et pas ailleurs. Deux traductions du même
           `promptKey` finiraient par diverger d'un libellé, et la divergence
           tomberait sur l'appareil du joueur qui n'a QUE ce bouton. */}
-      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townJump" ? L.promptTownJump : promptKey === "townChurch" ? L.promptTownChurch : promptKey === "townHall" ? L.promptTownHall : promptKey === "townCourt" ? L.promptTownCourt : promptKey === "townBoutique" ? L.promptTownBoutique : promptKey === "townBoutiqueShut" ? L.promptTownBoutiqueShut : promptKey === "townSalon" ? L.promptTownSalon : promptKey === "townNews" ? L.promptTownNews : promptKey === "townMarket" ? L.promptTownMarket : promptKey === "townBench" ? L.promptTownBench : promptKey === "townStand" ? L.promptTownStand : promptKey === "townWish" ? L.promptTownWish : promptKey === "townKiosk" ? L.promptTownKiosk : promptKey === "townPier" ? L.promptTownPier : promptKey === "townView" ? L.promptTownView : promptKey === "courtExit" ? L.promptCourtExit : promptKey === "courtBoard" ? L.promptCourtBoard : promptKey.startsWith("courtDoor:") ? L.promptCourtDoor(L.courtRoomName(promptKey.slice(10))) : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "mazePrize" ? L.promptMazePrize : promptKey.startsWith("passagePickup:") ? L.promptPassagePickup : L.promptBin}</div>}
+      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townJump" ? L.promptTownJump : promptKey === "townChurch" ? L.promptTownChurch : promptKey === "townHall" ? L.promptTownHall : promptKey === "townCourt" ? L.promptTownCourt : promptKey === "townBoutique" ? L.promptTownBoutique : promptKey === "townBoutiqueShut" ? L.promptTownBoutiqueShut : promptKey === "townSalon" ? L.promptTownSalon : promptKey === "townNews" ? L.promptTownNews : promptKey === "townMarket" ? L.promptTownMarket : promptKey === "townBench" ? L.promptTownBench : promptKey === "townStand" ? L.promptTownStand : promptKey === "townWish" ? L.promptTownWish : promptKey === "townKiosk" ? L.promptTownKiosk : promptKey === "townPier" ? L.promptTownPier : promptKey === "townView" ? L.promptTownView : promptKey === "courtExit" ? L.promptCourtExit : promptKey === "courtBoard" ? L.promptCourtBoard : promptKey.startsWith("courtDoor:") ? L.promptCourtDoor(L.courtRoomName(promptKey.slice(10))) : promptKey === "townSleep" ? L.promptTownSleep : promptKey === "townSleepFull" ? L.promptTownSleepFull : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "mazePrize" ? L.promptMazePrize : promptKey.startsWith("passagePickup:") ? L.promptPassagePickup : L.promptBin}</div>}
       {mountPrompt && <div className="ferme-prompt ferme-prompt-mount">{mountPrompt === "mount" ? L.mountPrompt : L.dismountPrompt}</div>}
       {handHeldUI && !moveConfirmUI && <div className="ferme-prompt ferme-prompt-mount">{L.handHeldHint}</div>}
       {moveConfirmUI && (
