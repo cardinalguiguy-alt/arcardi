@@ -25,7 +25,7 @@
 
    Aucune migration Supabase : s'appuie sur rooms.game_state déjà existant.
    ========================================================================== */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { supabase } from "@/lib/supabaseClient";
 import { noteSend } from "@/lib/realtimeQuota";
@@ -593,6 +593,8 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   const [voyagerSellOpen, setVoyagerSellOpen] = useState(false);
   const [voyagerDraft, setVoyagerDraft] = useState({});
   const [residentCard, setResidentCard] = useState(null);  // zip 252 : rid du résident dont la fiche dialogue est ouverte (ou null)
+  const [townChatCard, setTownChatCard] = useState(null);  // zip 431 : { rid, greet, line } fiche de dialogue Q avec un résident EN VILLE (ou null)
+  const [devTeleportExpanded, setDevTeleportExpanded] = useState({}); // zip 431 : { town: bool, court: bool } — repli des téléports par quartier (menu dev)
   const [petChoice, setPetChoice] = useState(null);        // zip 252/388 : { petId, full } familier PROPOSÉ par un visiteur, en attente de réponse
   const [decorSell, setDecorSell] = useState(null);        // zip 388 : { deco, n } vente de décoration en attente de confirmation
   const [petRelease, setPetRelease] = useState(null);      // zip 388 : { index, petId } relâché de familier en attente de confirmation
@@ -11553,7 +11555,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // visitor card for the nearest one waiting within reach. NOTE: KeyQ is
       // ALSO move-left on AZERTY (ZQSD) - !e.repeat keeps a held Q from
       // re-opening the card; to test in browser, see the context file.
-      if (e.code === "KeyQ" && !e.repeat) { if (!uiOpen) { const vq = visitorPromptNearby(); if (vq) { setMyVote(null); setVisitorRid(vq.rid); setVisitorOpen(true); } else { const rq = residentPromptNearby(); if (rq) setResidentCard(rq.rid); else if (gregPromptNearby()) setGregCardOpen(true); } } } // FIX 246 : Q parle à Greg ; zip 252 : Q parle aussi aux résidents
+      if (e.code === "KeyQ" && !e.repeat) { if (!uiOpen) { const vq = visitorPromptNearby(); if (vq) { setMyVote(null); setVisitorRid(vq.rid); setVisitorOpen(true); } else { const rq = residentPromptNearby(); if (rq) setResidentCard(rq.rid); else if (gregPromptNearby()) setGregCardOpen(true); else { const trq = townResidentPromptNearby(); if (trq) setTownChatCard({ rid: trq.rid, ...townChatPick(trq) }); } } } } // FIX 246 : Q parle à Greg ; zip 252 : Q parle aussi aux résidents ; zip 431 : Q parle aussi aux résidents EN VILLE
       if (e.code === "KeyF") toggleMount();
       // Zip 251 : R avec l'outil main tenant un objet -> le remet dans le sac
       // (prioritaire sur le cycle de façade ville / d'orientation clôture).
@@ -17340,6 +17342,38 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     }
     return best;
   }
+  // Zip 431 (demande Guillaume : dialogues interactifs en ville) : pendant de
+  // residentPromptNearby, côté Valley Town — même portée (2.4), même filtre
+  // "en voyage" ; seule la zone testée change (resZone défini plus bas, mais
+  // les déclarations de fonction sont hissées dans cette closure de composant).
+  function townResidentPromptNearby() {
+    const m = meRef.current, st = sharedRef.current.station;
+    if (!m || !st || !Array.isArray(st.residents)) return null;
+    if (!m.zone || m.zone !== "town") return null;
+    let best = null, bestD = 2.4;
+    for (const res of st.residents) {
+      if (typeof res.x !== "number") continue;
+      if (resZone(res) !== "town") continue;
+      if (res.trip && res.trip.phase === "away") continue;
+      const d = Math.abs(m.x - res.x) + Math.abs(m.y - res.y);
+      if (d <= bestD) { bestD = d; best = res; }
+    }
+    return best;
+  }
+  // Zip 431 : le contenu de la fiche Q est tiré au hasard LOCALEMENT (pas de
+  // townHash) — contrairement aux bulles ambiantes de townActLine, cette
+  // réplique n'est vue que par le joueur qui a appuyé sur Q, donc rien
+  // n'a besoin d'être synchronisé entre clients. Une comm que sur l'activité
+  // EN COURS du résident (POI), avec un repli générique s'il n'en a aucune.
+  function townChatPick(res) {
+    const greetPool = L.townChatGreet || [];
+    const actPool = res && res.act && (L.townActLines || {})[res.act];
+    const genericPool = L.townChatGeneric || [];
+    const linePool = (actPool && actPool.length) ? actPool : genericPool;
+    const greet = greetPool.length ? greetPool[Math.floor(Math.random() * greetPool.length)] : "";
+    const line = linePool.length ? linePool[Math.floor(Math.random() * linePool.length)] : "";
+    return { greet, line };
+  }
   // Zip 253 (demande Guillaume : "que les résidents avec skills que nous avons
   // apparaissent dans l'onglet employés") : liste des résidents recrutés qui
   // portent un métier (skill). Ils travaillent pour la ferme comme Greg/Soan,
@@ -20189,6 +20223,33 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           </div>
         );
       })()}
+      {/* Zip 431 : fiche de dialogue Q avec un résident EN VILLE — pendant de la
+          fiche ci-dessus, en plus léger (pas de skill/atelier : un résident de
+          ville n'y travaille pas). Le contenu est tiré au hasard à l'OUVERTURE
+          (townChatPick), donc rappuyer sur Q après avoir fermé la fiche donne
+          une réplique différente : c'est le point même de cette fiche par
+          rapport à la bulle ambiante, hachée et donc toujours identique. */}
+      {townChatCard != null && (() => {
+        const ro = rosterOf(townChatCard.rid); if (!ro) return null;
+        return (
+          <div className="ferme-modal open" onClick={() => setTownChatCard(null)}>
+            <div className="panel ferme-modal-panel" onClick={e => e.stopPropagation()}>
+              <button className="ferme-close-x" onClick={() => setTownChatCard(null)}>✕</button>
+              <h2>{ro.name}</h2>
+              <div className="ferme-shop-row">
+                <Sprite img={spritesReady ? spritesRef.current.getChar(ro.gender, ro.outfit, ro.overalls, ro.cap, false, ro.skill === "lumberjack", ro.skill === "cheesemaker", ro.skill === "sugarworker", ro.look) : null} sx={16} sy={24} w={40} h={60} />
+                <div className="info">
+                  <b>{townChatCard.greet}</b>
+                  <span>{townChatCard.line}</span>
+                </div>
+              </div>
+              <div style={{ marginTop: 10, textAlign: "right" }}>
+                <PixBtn sprites={spritesReady ? spritesRef.current : null} tone="plain" label={L.residentCloseBtn} onClick={() => setTownChatCard(null)} />
+              </div>
+            </div>
+          </div>
+        );
+      })()}
       {/* Zip 252 : cadeau animal, sac plein -> libérer un compagnon ou refuser. */}
       {/* Zip 388 : confirmation de VENTE d'une décoration. Guillaume a répondu
           « sell with confirmation » — la confirmation fait partie de la
@@ -21512,11 +21573,37 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
 
               <h3 style={{ margin: "14px 0 6px" }}>{L.devTeleportSection}</h3>
               <div className="ferme-hint">{L.devTeleportHint}</div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {C.DEV_TELEPORTS.map(d => (
-                  <button key={"dev-t-" + d.key} onClick={() => devTeleport(d.key)}>{L.devTeleportName(d.key)}</button>
-                ))}
-              </div>
+              {/* Zip 431 (demande Guillaume) : les arrêts de Valley Town et du
+                  tribunal se replient derrière leur arrêt principal (gare /
+                  hall), avec un bouton "+" pour tout déplier. Sans ça, les dix
+                  arrêts du 425/426 s'affichent en permanence même depuis un
+                  monde qui n'a rien à voir — la ferme et la terre en cours,
+                  eux, restent toujours visibles au complet (deux arrêts
+                  chacun, rien à replier). */}
+              {(() => {
+                const townExtraCount = C.DEV_TELEPORTS.filter(d => d.key.startsWith("town") && d.key !== "town").length;
+                const courtExtraCount = C.DEV_TELEPORTS.filter(d => d.key.startsWith("court") && d.key !== "court").length;
+                const townOpen = !!devTeleportExpanded.town, courtOpen = !!devTeleportExpanded.court;
+                return (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {C.DEV_TELEPORTS.map(d => {
+                      if (d.key.startsWith("town") && d.key !== "town" && !townOpen) return null;
+                      if (d.key.startsWith("court") && d.key !== "court" && !courtOpen) return null;
+                      return (
+                        <Fragment key={"dev-t-" + d.key}>
+                          <button onClick={() => devTeleport(d.key)}>{L.devTeleportName(d.key)}</button>
+                          {d.key === "town" && townExtraCount > 0 && (
+                            <button className="ferme-btn" onClick={() => setDevTeleportExpanded(s => ({ ...s, town: !s.town }))}>{townOpen ? "−" : "+"}</button>
+                          )}
+                          {d.key === "court" && courtExtraCount > 0 && (
+                            <button className="ferme-btn" onClick={() => setDevTeleportExpanded(s => ({ ...s, court: !s.court }))}>{courtOpen ? "−" : "+"}</button>
+                          )}
+                        </Fragment>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
             </div>
           </div>
         );
