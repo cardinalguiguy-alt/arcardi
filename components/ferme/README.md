@@ -1,4 +1,4 @@
-# Valley Town, le tribunal, et la vie qui s'y passe — état au 430
+# Valley Town, le tribunal, et la vie qui s'y passe — état au 432
 
 Ce fichier est **l'autorité** sur la seconde carte du jeu et sur ses habitants. Il a été
 extrait de `CLAUDE.md` §6 au zip 428, sur l'ordre laissé par le §14.2 du 427 et sur le modèle
@@ -665,7 +665,25 @@ réellement globaux (JavaScript, three.js, canevas) sont restés là-bas, avec u
 qui touche l'architecture entière — les deux cartes.
 ⚠️ **Chaque ligne a été relue contre le dépôt avant d'être recopiée**, et une a été SUPPRIMÉE
 plutôt que déplacée (la boucle de nuages `SKY_CLOUD_COUNT`, dont le symbole n'existe plus).
-Ce qui suit est vrai au 431.
+Ce qui suit est vrai au 432.
+
+⚠️⚠️ **AJOUT DU 432 — LE MULTIJOUEUR DE LA VILLE ÉTAIT CASSÉ, ET AUCUN DE CES PIÈGES NE LE
+DISAIT.** Trois défauts, tous invisibles en jouant seul, tous trouvés en une séance à deux
+clients (`tools/fake-supabase.mjs`) :
+1. **`advanceRemote` appelait `canStandTown`, qui vit dans la closure du rendu.** Chaque image
+   où un joueur distant se DÉPLAÇAIT en ville levait un `ReferenceError` — au milieu de
+   `drawTownFrame` (image amputée) ou, chez un joueur resté à la ferme, **avant toute
+   peinture** (image perdue). Mesuré : 97 % d'images figées et 116 px de saut → 3 % et 6 px.
+   Le piège lui-même est monté en `CLAUDE.md` §4 : il vaut pour tout le projet.
+2. **Le tribunal n'avançait aucun joueur distant** : `advanceRemote` rendait `null` pour cette
+   zone et sortait, donc `p.tx/p.ty` n'étaient jamais recalculés. Le bâtiment est multijoueur
+   depuis le 426 ; personne n'y avait bougé à deux.
+3. **Le champ `sit` voyageait depuis le 428 sans être lu.** `pubMe` l'émettait, le handler
+   `pos` ne le recopiait nulle part : un joueur assis se dessinait DEBOUT sur son banc, et
+   `freeSeatOn` ne voyait aucune place occupée — deux joueurs s'asseyaient l'un dans l'autre.
+   **Un champ qui circule sans être lu ne lève aucune erreur : il coûte des octets et ne fait
+   rien.** À vérifier pour tout champ ajouté à `pubMe`.
+
 ⚠️ Ce qui est déjà attrapé par un banc de `tools/` n'y figure pas : un piège qu'un outil voit
 à chaque lancement n'a plus besoin d'être retenu par un humain, et le laisser ici ferait croire
 que la liste est la protection alors que c'est le banc.

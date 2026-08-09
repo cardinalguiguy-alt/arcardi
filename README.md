@@ -1,5 +1,40 @@
 # ARCARDI 🎪
 
+> **ZIP 432 — VALLEY TOWN ÉTAIT INJOUABLE À DEUX, ET LA CAUSE TENAIT EN UN MOT MANQUANT.**
+>
+> Retour de Guillaume : « à deux sur Valley Town ça lague les deux joueurs, les images
+> clignotent, apparaissent et disparaissent au mouvement ; et quand l'un est en ville et
+> l'autre à la ferme, ça fait buger celui qui est à la ferme ». Les trois symptômes n'en
+> font qu'un : **`advanceRemote` — qui rejoue le déplacement des joueurs distants et vit au
+> niveau du composant — appelait `canStandTown`, qui vit dans la closure de la boucle de
+> rendu.** Chaque image où un joueur distant se DÉPLAÇAIT en ville levait un
+> `ReferenceError: canStandTown is not defined`.
+>
+> Ce que ça faisait, exactement : chez un joueur EN VILLE, l'exception tombait au MILIEU de
+> `drawTownFrame` — tout ce qui se dessine après la boucle des joueurs (soi-même, les
+> décors, les effets, le ciel) disparaissait de l'image. Chez un joueur resté à la FERME,
+> c'était pire : sa boucle appelle `advanceRemote` pour TOUS les joueurs, zone comprise,
+> **avant de peindre quoi que ce soit** — l'image entière était perdue.
+>
+> ⚠️⚠️ **C'EST LE MÊME PIÈGE QUE LE SAUT DE REBORD DU 430, PAYÉ UNE SECONDE FOIS.** Il est
+> donc monté en §4 de `CLAUDE.md` : une fonction née dans la closure du rendu et appelée
+> depuis le composant ne lève rien à la compilation, rien au banc, et casse une image sur
+> deux en jeu.
+>
+> **Mesuré à deux clients réels** (relais Realtime local, deux onglets, une vraie liaison) :
+> avant, **485 images sur 499 (97 %)** avec l'avatar distant strictement immobile, puis des
+> sauts jusqu'à **116 px** ; après, **3 % d'images figées et 6 px de saut maximum**. Deux
+> défauts voisins sont tombés dans la même passe : les joueurs du **tribunal** n'étaient
+> JAMAIS avancés (`advanceRemote` sortait sur `null` pour cette zone), et le champ `sit`
+> **voyageait depuis le 428 sans être lu** — personne n'a jamais vu personne s'asseoir.
+>
+> Côté décor : **la ruche est redessinée en trois quarts** (modelée sous Blender, rampe et
+> profil MESURÉS sur le rendu, puis dessinée à la main — §9 : à cette taille on achète
+> l'éclairage, pas la géométrie), et **l'établi de l'apiculteur** s'installe à sa gauche.
+> Ses deux objets disent l'état du monde : l'enfumoir n'est sur la table que quand René
+> n'est pas en combi, les pots de miel que s'il y a vraiment du miel en stock. Rien de tout
+> ça ne circule sur le réseau : les deux se déduisent d'états déjà partagés.
+
 > **ZIP 431 — ON NE VEND PLUS DEPUIS SON CANAPÉ, ET LA FOIRE RESSEMBLE ENFIN À UNE FOIRE.**
 >
 > Le 430 avait ouvert le marché ; il restait un menu de plus. **La vente déménage

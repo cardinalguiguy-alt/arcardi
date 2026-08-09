@@ -4758,16 +4758,91 @@ export function buildSprites() {
       P(g, X, Y, W, 2, "#c2b088"); };
 
     if (id === "beehive") {
-      // Zip 264 (demande Guillaume : « réduire nettement la taille de la
-      // ruche ») : petit skep de paille, ~20 px de large (contre 32 avant),
-      // pour ne plus écraser le farm market voisin.
+      /* ╔══════════════════════════════════════════════════════════════════════
+         ║ ZIP SUIVANT — LA RUCHE EST REDESSINÉE EN VUE DE TROIS QUARTS.
+         ║ (demande de Guillaume, sur références fournies)
+         ╚══════════════════════════════════════════════════════════════════════
+         Ce qu'il y avait ici depuis le 264 : cinq rectangles empilés de plus en
+         plus étroits, plus trois lignes horizontales. Vu de face, sans épaisseur,
+         sans entrée lisible, sans pieds — une pile de planches jaunes.
+
+         ⚠️⚠️ LE MODÈLE VIENT DE BLENDER, LE DESSIN NON — ET C'EST §9 APPLIQUÉ À
+         LA LETTRE. Le skep a été modelé (solide de révolution ogival + un tore
+         par assise de paille, ombrage plat, deux lampes Soleil, courbe Standard,
+         filtre à 0,01 donc AUCUN anticrénelage), rendu en 44×50 sous l'azimut
+         exact de la vue 3/4, puis QUANTIFIÉ. Ce qu'on en garde est ce que §9 dit
+         qu'on achète à cette taille : **l'ÉCLAIRAGE**, c'est-à-dire la rampe
+         mesurée ci-dessous et le profil. Le rendu lui-même, transcrit tel quel,
+         donnait une trame bruitée où les assises de paille disparaissaient —
+         exactement le verdict du 426 sur la statue de la Justice. On dessine donc
+         à la main SUR des mesures, au lieu de deviner ou de recopier des pixels.
+
+         ⚠️ ET AUCUN PNG N'ENTRE DANS LE JEU (§9) : la ruche reste un canevas
+         procédural, donc elle reste regardable au banc de rendu, teintable par
+         les saisons et modifiable sans repasser par Blender. */
       const [c, g] = cv(28, 32);
-      P(g, 10, 28, 8, 3, "#7a5330");                    // socle bois
-      P(g, 5, 23, 18, 5, "#c99a4a");                    // base de la ruche
-      P(g, 6, 18, 16, 5, "#d8a94e"); P(g, 8, 14, 12, 5, "#e0b558"); P(g, 10, 10, 8, 4, "#e8c162"); P(g, 12, 7, 4, 3, "#efce76"); // paille empilée
-      for (let y = 9; y < 28; y += 3) P(g, 5, y, 18, 1, "#00000022"); // lignes de paille
-      P(g, 12, 24, 4, 3, "#3a2a18");                    // entrée
-      outlineSprite(g, 28, 32, "#5a3a1e");
+      // Rampe MESURÉE sur le rendu (k-moyennes, 8 tons, triés du sombre au clair).
+      // La lumière vient du HAUT-GAUCHE : l'index descend vers la droite.
+      const S8 = ["#332917", "#534222", "#7a5f2f", "#9c793e", "#b99147", "#d2a451", "#e7b65a", "#f6c362"];
+      const CX = 13.5, Y_TOP = 3, Y_BASE = 27, R_BASE = 10.5;
+      /* ⚠️ LE PROFIL EST OGIVAL, PAS CONIQUE, et c'est la première chose que la
+         référence impose : un skep est un DÔME posé, pas un chapeau pointu. La
+         première passe utilisait cos(t·π/2)^0.62 — mesuré sur le rendu, mais
+         mesuré au mauvais endroit (le rendu était cadré serré, donc lu comme
+         plus étroit qu'il n'est). Flancs presque droits jusqu'aux deux tiers,
+         puis épaulement rond. */
+      const halfAt = (y) => {
+        const t = Math.max(0, Math.min(1, (Y_BASE - y) / (Y_BASE - Y_TOP)));
+        return Math.max(1.2, R_BASE * Math.pow(1 - Math.pow(t, 2.7), 0.40));
+      };
+      /* LES ASSISES DE PAILLE SONT LE SUJET, PAS UNE TEXTURE. Une par deux
+         pixels : au-dessus le brin éclairé, en dessous le joint. C'est ce qui
+         fait lire « paille tressée » et pas « dôme jaune », et c'est la première
+         chose que la référence montre. */
+      for (let y = Y_TOP; y <= Y_BASE; y++) {
+        const r = halfAt(y), x0 = Math.round(CX - r), x1 = Math.round(CX + r);
+        const seam = ((y - Y_TOP) % 2) === 1;          // 1 rangée sur 2 = le joint
+        for (let x = x0; x <= x1; x++) {
+          const u = (x - (CX - r)) / (2 * r);          // 0 bord gauche, 1 bord droit
+          // Rampe horizontale mesurée : clair légèrement à gauche du centre,
+          // chute franche sur le quart droit, liseré sombre au bord.
+          let k = u < 0.06 ? 5 : u < 0.12 ? 6 : u < 0.46 ? 7 : u < 0.60 ? 6
+                : u < 0.71 ? 5 : u < 0.80 ? 4 : u < 0.88 ? 3 : u < 0.95 ? 2 : 1;
+          /* ⚠️ LE JOINT VAUT UN TON, PAS DEUX. À deux, les assises se lisaient
+             comme des RAYURES peintes — un dôme zébré, pas de la paille tressée.
+             Le tressage se voit au rythme, pas au contraste. */
+          if (seam) k = Math.max(2, k - 1);
+          P(g, x, y, 1, 1, S8[k]);
+        }
+        P(g, x0, y, 1, 1, S8[seam ? 1 : 2]);           // arête gauche
+        P(g, x1, y, 1, 1, S8[seam ? 0 : 1]);           // arête droite, plus sombre
+      }
+      /* ⚠️ PAS DE CALOTTE RAPPORTÉE AU SOMMET. Les deux premières passes en
+         posaient une, plus large que la dernière assise : ça faisait une POINTE
+         qui dépassait du dôme, exactement ce qu'un skep n'a pas. Le profil se
+         referme tout seul ; on se contente d'éclairer sa crête. */
+      P(g, Math.round(CX) - 1, Y_TOP, 2, 1, S8[7]);
+      /* L'ENTRÉE. ⚠️ ELLE EST DÉCENTRÉE VERS LA GAUCHE, pas au milieu : en trois
+         quarts, la face vue est celle qui regarde la caméra, et son centre n'est
+         pas le centre de la silhouette. Centrée, elle faisait lire la ruche de
+         face — c'est ce qui manquait le plus à l'ancien dessin. */
+      const EX = 12, EY = 19;
+      g.fillStyle = "#241a0d"; g.beginPath(); g.ellipse(EX, EY, 3.0, 2.3, 0, 0, 7); g.fill();
+      g.fillStyle = "#3d2c15"; g.beginPath(); g.ellipse(EX, EY - 0.6, 2.4, 1.4, 0, 0, 7); g.fill();
+      P(g, EX - 3, EY - 3, 6, 1, S8[1]);               // lèvre supérieure, à l'ombre
+      // La planche d'envol : étroite, collée sous l'entrée, en fuite à droite.
+      P(g, EX - 3, EY + 3, 6, 1, "#c99a5e"); P(g, EX - 3, EY + 4, 6, 1, "#8a5f36");
+      P(g, EX + 3, EY + 4, 2, 1, "#6a4526");
+      /* L'ABEILLE GRAVÉE (elle est sur la référence). ⚠️ ELLE RESTE DISCRÈTE :
+         au premier essai elle avait le contraste de l'entrée et se lisait comme
+         une SECONDE entrée — deux trous dans une ruche, personne ne comprend. */
+      P(g, EX - 1, EY - 7, 2, 2, "#6a5028"); P(g, EX - 1, EY - 6, 2, 1, "#a8863c");
+      P(g, EX - 2, EY - 7, 1, 1, "#00000030"); P(g, EX + 1, EY - 7, 1, 1, "#00000030");
+      // Quatre pieds : deux devant (nets), deux derrière (à peine visibles).
+      P(g, 6, 26, 2, 4, "#6a4526"); P(g, 19, 26, 2, 4, "#6a4526");
+      P(g, 6, 26, 1, 4, "#8a5f36"); P(g, 19, 26, 1, 4, "#8a5f36");
+      P(g, 11, 27, 2, 3, "#553719"); P(g, 16, 27, 2, 3, "#553719");
+      outlineSprite(g, 28, 32, "#4a2f16");
       return c;
     }
 
@@ -4826,6 +4901,79 @@ export function buildSprites() {
     // Fumée figée au-dessus de la cheminée (le mockup l'animait par rAF).
     const cx = chX + 4; g.fillStyle = "rgba(235,235,235,0.8)";
     g.beginPath(); g.arc(cx, Y - 20, 1.5, 0, 7); g.fill(); g.beginPath(); g.arc(cx + 1.6, Y - 25, 1.2, 0, 7); g.fill(); g.beginPath(); g.arc(cx - 1, Y - 30, 0.9, 0, 7); g.fill();
+    return c;
+  }
+
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP SUIVANT — L'ÉTABLI DE L'APICULTEUR. (demande de Guillaume, sur
+     ║ référence fournie : « la petite table de travail sera à côté de la ruche,
+     ║ sur la gauche ».)
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ TROIS CANEVAS, PAS UN SEUL AVEC DES DRAPEAUX. L'établi, l'enfumoir et
+     les pots de miel s'affichent indépendamment : l'enfumoir SEULEMENT quand
+     René n'est pas en combi (il l'a en main quand il travaille), les pots
+     SEULEMENT quand il y a vraiment du miel en stock. Un sprite unique aurait
+     demandé quatre variantes cuites (rien / enfumoir / miel / les deux), donc
+     quatre dessins à tenir d'accord — le doublon du §8. Trois calques
+     transparents empilés par un `drawImage` chacun : une seule description de
+     chaque objet, et la combinaison est gratuite.
+     ⚠️ ILS PARTAGENT LE MÊME CADRE (26×22) ET LA MÊME LIGNE DE SOL, sans quoi
+     l'appelant devrait connaître trois décalages — et le jour où l'établi
+     grandit, l'enfumoir flotterait. */
+  function beeTableSprite(layer) {
+    /* ⚠️ 26×24, ET LA HAUTEUR N'EST PAS RONDE PAR HASARD. En 26×22, le bec de
+       l'enfumoir touchait le bord haut : `outlineSprite` n'avait plus de place
+       pour son liseré et le canevas DÉCOUPAIT en silence — le piège du §4, celui
+       du haut-de-forme décapité du 427. Le plateau est donc descendu de deux
+       rangées pour dégager le dessus de la table, qui est justement l'endroit où
+       l'on pose des choses. */
+    const [c, g] = cv(26, 24);
+    const WOODD = "#6a4526", WOOD = "#8a5f36", WOODL = "#a87745", WOODH = "#c99a5e";
+    const TOP = 11;                                        // ligne du plateau
+    if (layer === "table") {
+      P(g, 1, TOP, 24, 3, WOODL); P(g, 1, TOP, 24, 1, WOODH);   // dessus, éclairé
+      P(g, 1, TOP + 3, 24, 3, WOOD);                            // chant, à l'ombre
+      P(g, 1, TOP + 5, 24, 1, WOODD);
+      for (const x of [6, 13, 19]) P(g, x, TOP, 1, 3, "#00000022"); // veines
+      P(g, 21, TOP + 4, 1, 1, WOODD);                           // nœud
+      // Deux pieds, l'ombre du côté opposé à la lumière (elle vient de gauche).
+      P(g, 4, TOP + 6, 3, 7, WOOD); P(g, 4, TOP + 6, 1, 7, WOODL);
+      P(g, 19, TOP + 6, 3, 7, WOOD); P(g, 19, TOP + 6, 1, 7, WOODL);
+      P(g, 4, TOP + 12, 3, 1, WOODD); P(g, 19, TOP + 12, 3, 1, WOODD);
+      outlineSprite(g, 26, 24, "#4a2f16");
+      return c;
+    }
+    if (layer === "smoker") {
+      /* L'ENFUMOIR : corps d'acier conique, soufflet de bois, bec recourbé.
+         Palette FROIDE assumée — c'est le seul objet métallique de la scène, et
+         c'est ce qui le distingue au premier coup d'œil des pots de miel. */
+      const STEEL = "#8fa6b4", STEELL = "#b6c8d4", STEELD = "#5d7280";
+      P(g, 5, 5, 6, 6, STEEL); P(g, 5, 5, 1, 6, STEELL); P(g, 10, 5, 1, 6, STEELD);
+      P(g, 5, 10, 6, 1, STEELD);                              // assise sur le plateau
+      P(g, 6, 3, 4, 2, STEEL); P(g, 6, 3, 4, 1, STEELL);      // couvercle
+      P(g, 7, 1, 3, 2, STEELD); P(g, 7, 1, 1, 2, STEEL);      // bec
+      P(g, 3, 4, 2, 7, WOOD); P(g, 3, 4, 1, 7, WOODL); P(g, 3, 10, 2, 1, WOODD); // soufflet
+      P(g, 4, 6, 1, 2, STEELD);                               // charnière
+      outlineSprite(g, 26, 24, "#3a4a55");
+      return c;
+    }
+    /* « honey » — LES POTS, et ils ne sont pas alignés : trois hauteurs, comme
+       sur la référence. ⚠️ ILS TIENNENT DANS LE CADRE, couvercle compris — un
+       couvercle qui déborde d'un pixel se fait couper sans un mot (§4). Le
+       reflet vertical est ce qui fait lire le VERRE : sans lui, ce sont des
+       cubes jaunes. */
+    const GLASS = "#f2c94b", GLASSD = "#d9a92e", GLASSL = "#ffe89a", LID = "#8a5a30", LIDL = "#a87745";
+    const jar = (x, h2) => {
+      const y = TOP - h2;
+      P(g, x, y, 4, h2, GLASS); P(g, x, y, 1, h2, GLASSD); P(g, x + 3, y, 1, h2, GLASSD);
+      P(g, x + 1, y + 1, 1, h2 - 2, GLASSL);
+      P(g, x, TOP - 1, 4, 1, GLASSD);
+      P(g, x - 1, y - 2, 6, 2, LID); P(g, x - 1, y - 2, 6, 1, LIDL);
+    };
+    /* ⚠️ ESPACÉS D'UN PIXEL : collés, les couvercles se soudaient en une barre
+       brune et on ne comptait plus les pots. */
+    jar(14, 5); jar(20, 8); jar(8, 6);
+    outlineSprite(g, 26, 24, "#5a3a1e");
     return c;
   }
 
@@ -6287,6 +6435,8 @@ house: house(),
   // (FermeGame.js) lit sprites.artisan.sucrerie et l'ignorait silencieusement
   // (bimg undefined -> tuile jamais dessinée) faute de cette clé.
   S.artisan = { beehive: artisanBuildingSprite("beehive"), fromagerie: artisanBuildingSprite("fromagerie"), bakery: artisanBuildingSprite("bakery"), sawmill: artisanBuildingSprite("sawmill"), sucrerie: S.sucrerie };
+  // Zip suivant : l'établi de l'apiculteur, en trois calques (voir beeTableSprite).
+  S.beeTable = { table: beeTableSprite("table"), smoker: beeTableSprite("smoker"), honey: beeTableSprite("honey") };
   S.craftIcons = { honey: craftIcon("honey"), cheeseWheel: craftIcon("cheeseWheel"), cheesePortion: craftIcon("cheesePortion"), eclairChoco: craftIcon("eclairChoco"), eclairVanilla: craftIcon("eclairVanilla"), flanVanilla: craftIcon("flanVanilla"), gateauBasque: craftIcon("gateauBasque"), butter: craftIcon("butter"), bread: craftIcon("bread"), croissant: craftIcon("croissant"), chocolatine: craftIcon("chocolatine"), painSuisse: craftIcon("painSuisse"), yogurtNature: craftIcon("yogurtNature"), yogurtVanilla: craftIcon("yogurtVanilla") };
   // Zip 236: one sprite per pet id in the catalog (individual pets).
   // Zip 388 : DEUX entrées, et c'est délibéré.

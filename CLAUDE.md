@@ -4,16 +4,27 @@
 Il remplace l'exploration du dépôt pour tout ce qui est global. Le README est un journal
 chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
-État à jour du **zip 431**. Chantier actif : **faire vivre l'économie des deux cartes** — la
+État à jour du **zip 432**. Chantier actif : **faire vivre l'économie des deux cartes** — la
 vente a quitté la ferme pour le marché de Valley Town, et le champ de foire ressemble enfin à
 une foire. Tout ce qui concerne la ville, ses habitants ET **ses pièges** est dans
 **`components/ferme/README.md`**, qui fait autorité. **`candyluge` et `crystal` sont EN PAUSE.**
 
-⚠️⚠️ **LE SAUT DE REBORD ÉTAIT MORT DEPUIS LE 430, PARTOUT EN VILLE, ET RIEN NE LE DISAIT.**
-`tryTownJump` vit dans la closure de la boucle de rendu ; le 430 lui a donné deux appelants nés
-au niveau du composant. Chaque appui sur Espace levait un `ReferenceError`, **donc même le
-repli n'avait pas lieu**. Un zip entier sans qu'aucun banc ne puisse le voir : ils mesurent la
-simulation, pas les gestes du joueur. **Ce qui n'est vérifiable qu'en jouant doit être joué.**
+⚠️⚠️⚠️ **LA CLOSURE DE LA BOUCLE DE RENDU A COÛTÉ DEUX FONCTIONNALITÉS EN DEUX ZIPS. C'EST
+DÉSORMAIS LE PIÈGE N°1 DU PROJET (§4).** Au 430, `tryTownJump` : le saut de rebord mort partout
+en ville, sans qu'un seul banc puisse le voir. Au 431, `canStandTown` appelée par
+`advanceRemote` : **Valley Town injouable à deux** — chaque image où un joueur distant se
+DÉPLAÇAIT levait un `ReferenceError` au milieu du dessin, donc l'image était amputée (en ville)
+ou perdue en entier (à la ferme, où `advanceRemote` tourne AVANT toute peinture). Mesuré à deux
+clients réels : **97 % d'images figées, sauts de 116 px** → **3 % et 6 px** après correction.
+**Une fonction déclarée dans la closure du rendu et appelée depuis le composant ne lève rien à
+la compilation, rien au banc, et casse une image sur deux en jeu. On EXPOSE par un ref
+(`townJumpApiRef`, `zoneCollideRef`), on ne recopie jamais.**
+
+⚠️⚠️ **ET LE MULTIJOUEUR DE LA VILLE N'AVAIT JAMAIS ÉTÉ JOUÉ À DEUX** — c'est ça, la vraie
+leçon. Deux autres défauts sont tombés dans la même passe, tous deux invisibles seul : les
+joueurs du **tribunal** n'étaient jamais avancés (`advanceRemote` sortait sur `null` pour cette
+zone), et le champ `sit` **voyageait depuis le 428 sans jamais être lu** — personne n'a jamais
+vu personne s'asseoir. **Un banc à deux clients est monté depuis** (§10).
 
 ⚠️⚠️ **ET DEUX DÉCALAGES ONT ÉTÉ TROUVÉS PAR GUILLAUME, EN JEU, DEVANT TROIS BANCS DE RENDU
 QUI LES REGARDAIENT SANS LES VOIR** : la rangée d'étals penchait d'une case et demie, et la
@@ -121,6 +132,18 @@ depuis un pré. **La parade est UNE position taguée par sa zone, jamais deux je
 coordonnées — et on teste la zone AVANT les distances.**
 
 **JavaScript / three.js / canevas**
+- ⚠️⚠️⚠️ **UNE FONCTION DÉCLARÉE DANS LA CLOSURE DE LA BOUCLE DE RENDU N'EXISTE PAS POUR LE
+  COMPOSANT** — payé au 430 (`tryTownJump`, saut de rebord mort) puis au 431
+  (`canStandTown` appelée par `advanceRemote`, Valley Town injouable à deux). Le hissage des
+  déclarations s'arrête à la fonction qui les contient ; l'appel depuis l'extérieur lève un
+  `ReferenceError` **à l'exécution seulement**, donc ni le build, ni le lint, ni aucun banc ne
+  le voient. Et l'exception ne s'arrête pas là où elle tombe : **elle emporte tout ce que la
+  frame devait encore dessiner.** ⚠️ La parade est de PUBLIER la fonction dans un ref réassigné
+  à chaque montage de la boucle (`townJumpApiRef`, `zoneCollideRef`) — jamais d'en écrire une
+  seconde copie au niveau du composant, qui divergerait au premier réglage.
+  ⚠️ **Corollaire de repli** : quand la carte d'une zone manque chez ce client, un test de
+  collision doit ACCEPTER, pas refuser. Refuser épingle l'entité distante à sa dernière
+  position connue — c'est-à-dire qu'on reproduit le bogue au lieu de le corriger.
 - ⚠️⚠️ **`chaîne.replace("X", …)` NE REMPLACE QUE LA PREMIÈRE OCCURRENCE.**
 - ⚠️⚠️ **UN `useProgram` QUI ÉCHOUE NE DÉLIE PAS LE PROGRAMME PRÉCÉDENT** : un shader qui ne
   compile pas fait dessiner l'objet SUIVANT avec les mauvais attributs. **Seul indice :
@@ -280,54 +303,17 @@ BUILD S'ARRÊTE APRÈS LA COMPILATION** sur `Error: supabaseUrl is required` (pr
 `/login` et `/signup`) — ce n'est PAS une régression. **Ce qui compte est
 `✓ Compiled successfully` juste avant.**
 
-**Bancs `.mjs` — ce qui existe VRAIMENT** (§14.6) :
-- **`tools/verify-vallee.mjs` — 172 contrôles, 172/172 (431 ; 137 au 430, 113 au 427).** Il
-  importe le VRAI moteur : circulation, murs invisibles ET décors traversables, géométrie des
-  bâtiments, rebords sautables, le tribunal pièce par pièce, la coupe de bois, les familles,
-  la garde-robe.
-  ⚠️⚠️ **DEPUIS LE 431 IL JOUE DES VENTES ET COMPTE LES PIÈCES**, et c'est le seul endroit du
-  projet où un banc touche à de l'ARGENT — demande explicite de Guillaume (« l'argent doit bien
-  être récupéré »). Six contrôles rejouent une vente complète : l'or crédité, le stock retiré,
-  le panier multi-lignes, la barquette de verger **qui ne doit pas être payée deux fois** (trois
-  résolveurs créditent `shared.money` eux-mêmes, les autres non), et le refus depuis la ferme
-  qui ne doit RIEN changer — ni l'or, ni le stock. Un refus qui retire quand même la
-  marchandise serait le pire bogue possible, et il ne lèverait aucune erreur.
-  ⚠️⚠️ **DEPUIS LE 428 IL NE VÉRIFIE PLUS DES TABLES, IL REJOUE LE DÉPLACEMENT** — vrai
-  suiveur, vraie boîte de collision, vraie règle de dénivelé, 60 images par seconde, sur
-  **chaque endroit vers chaque autre** (~16 000 trajets). Le 427 contrôlait ici les
-  « itinéraires d'escalier », qui étaient justes : il validait la seule chose qui marchait
-  déjà, pendant que 79 % des trajets échouaient. **Aucune assertion sur une structure de
-  données ne pouvait voir ça.** Il contrôle aussi la couverture des quartiers BÂTIS (la
-  prairie non aménagée est comptée à part, pas ignorée) et la répartition des activités.
-  ⚠️ Son seuil d'arrivées est à **100 %, délibérément** : à 24 % comme à 99 %, un seuil plus
-  bas dirait OK. **Il a trouvé cinq défauts de navigation au 428**, dont deux — heuristique
-  inconsistante, tas qui déborde — étaient parfaitement muets.
-- **`tools/render-assise.mjs`** (428) — la pose assise **sur son banc**, debout/assis côte à
-  côte, sur les huit tenues. Elle vivait dans la closure du rendu, donc personne ne l'avait
-  jamais regardée : on a gardé trois zips un buste tronqué en croyant avoir une pose. ⚠️ Depuis
-  le 429 il en dessine **trois** par banc : un occupant unique au milieu d'un meuble ne dit rien
-  de ce à quoi ressemble un meuble PLEIN.
-- **`tools/render-echelle.mjs`** (429) — **chaque décor à côté d'une fermière**, sur la même
-  ligne de sol, avec le rapport de hauteur comparé au repère physique attendu. C'est le seul
-  banc qui puisse attraper une erreur d'ÉCHELLE. Il en a trouvé trois du premier coup ; il
-  mesure les six métiers d'étal séparément depuis le 431 (ils partagent leur ossature, pas leur
-  marchandise).
-- **`tools/render-foire.mjs`** (431) — **la RANGÉE d'étals**, pas les étals un par un : avec ses
-  guirlandes, ses clients devant, l'arche découpée en deux moitiés comme le fait le jeu, et les
-  six métiers en gros plan. ⚠️ C'est le banc qui a montré que la balance du fromager se lisait
-  comme une fenêtre, que ses meules jaunes disparaissaient dans la bâche jaune, et que la
-  guirlande était mal placée **deux fois de suite**. Aucun des trois ne se voyait à la lecture.
-- **`tools/render-tribunal.mjs`** — le mobilier, les décors de rue, les **bâtiments de la
-  Haute-Ville** (sur du dallage, à côté de la gare : une cohérence se juge côte à côte) et **la
-  garde-robe PORTÉE**. Il a montré la rangée d'étals monochrome (426), le haut-de-forme
-  décapité et deux défauts de façade du salon (427).
-  ⚠️⚠️ **ET IL MESURE LA SYMÉTRIE DES FAÇADES DEPUIS LE 431** : on replie l'image sur son axe
-  et on compte l'écart colonne par colonne. C'est ce qui manquait pour attraper la colonnade du
-  tribunal, décalée de six pixels **depuis le 425**. ⚠️ Il ne teste QUE les façades censées
-  être symétriques : l'hôtel de ville est asymétrique exprès (beffroi décalé) et l'église porte
-  son clocher sur le flanc — les y inscrire reviendrait à demander un jour qu'on les corrige.
-- `verify-constants` · `verify-objects` · `verify-strings` · `verify-syntax` · `verify-gates` ·
-  `verify-cycle` · `verify-orchards` · `verify-scope` · `verify-vergers` · `render-fruits`.
+⚠️⚠️ **LES BANCS ONT DÉMÉNAGÉ DANS `tools/README.md` AU 432**, sur l'ordre laissé par le
+§14.2 du 431 : la liste occupait cinquante lignes et gagnait une entrée par zip. Ce qu'il faut
+savoir sans l'ouvrir : `verify-vallee.mjs` (**172/172**) rejoue le VRAI moteur — circulation,
+murs invisibles, tribunal, coupe de bois, et **des ventes complètes avec l'or compté** ; cinq
+bancs de RENDU dessinent ce qui n'est autrement regardable qu'en jouant (assise, échelle,
+foire, tribunal + **symétrie des façades**, ruche) ; **`fake-supabase.mjs` fait tourner deux
+clients en local**.
+
+⚠️ **CE QUI RESTE ICI EST LA LISTE DES BANCS QUI N'EXISTENT PAS, et c'est le point.** Une liste
+de ce qui existe se vérifie en la lançant ; une liste de ce qui n'existe pas ne se vérifie
+jamais — c'est elle, et elle seule, qui protège du banc imaginaire (§14.6) :
 - ⚠️ **`verify-luge`, `verify-boot`, `preview-luge`, `preview.mjs`, `verify-perf` et
   `preview-fps` N'EXISTENT PAS** dans `tools/`.
 - ⚠️ **Le faux canvas de `lib-canvas.mjs` IGNORE `translate`/`rotate` et ne connaît pas
@@ -340,9 +326,22 @@ BUILD S'ARRÊTE APRÈS LA COMPILATION** sur `Error: supabaseUrl is required` (pr
   censé nous en protéger**. Corrigé (3, 5 et 9 arguments, plus proche voisin). **Un banc de
   rendu se vérifie aussi.**
 
+⚠️⚠️ **JOUER À DEUX EN LOCAL EST DEVENU POSSIBLE AU 432 : `node tools/fake-supabase.mjs`.**
+REST bidon **+ relais Realtime**, donc deux onglets = deux joueurs, sans compte et sans
+consommer un message du quota. `LAT=90 JIT=60` simule une vraie liaison ; il imprime le débit
+réel PAR TYPE de message toutes les 5 s. **C'est lui qui a trouvé le défaut du 431**, et c'est
+lui qu'il faut lancer pour la passe « gels de PNJ » réclamée en §13 depuis le 419.
+⚠️ **Le piège si on le réécrit : le broadcast de supabase-js est BINAIRE**, pas JSON — un
+relais qui ne lit que les trames texte voit tout se connecter et rien passer.
+⚠️ **Et un onglet d'arrière-plan fausse TOUT** : `document.hidden` coupe `netCanBroadcast()`
+(zéro position émise) et `requestAnimationFrame` est suspendu. Pour observer deux clients dont
+un seul est au premier plan, il faut remplacer `rAF` par un **`MessageChannel`** (un
+`setTimeout` est plafonné à 1 Hz en arrière-plan) ET redéfinir `document.hidden` **avant** que
+le composant se monte — `hiddenRef` n'est relu que sur `visibilitychange`.
+
 **Jouer en local** — deux échafaudages TEMPORAIRES, **à supprimer après** :
-1. un `.env.local` pointant sur un **faux Supabase** (un serveur HTTP qui répond `[]` sur
-   `/rest/v1/*` suffit) ; sans lui on reste bloqué à l'écran « code de ferme » ;
+1. un `.env.local` pointant sur `http://127.0.0.1:54321` (voir `tools/fake-supabase.mjs`
+   ci-dessus) ; sans lui on reste bloqué à l'écran « code de ferme » ;
 2. une page jetable `app/<nom>/page.js` montant `<FermeGame room={{id}} me={{id,username}}
    players={[{profile_id, username, joined_at}]} isHost savedCode="XXXX" />`.
    ⚠️ **`players` EST OBLIGATOIRE** (`[...players]` plante sans lui). ⚠️ **Un dossier `app/`
@@ -441,7 +440,9 @@ erreur** en choisissant mal.
   peuplée ; le 428 fait circuler ces vingt résidents pour de bon (79 % de leurs trajets
   n'aboutissaient pas) et fait diffuser un champ de plus dans le paquet de position (l'assise).
   **Rien de tout ça n'a été vu à deux joueurs** — les bancs mesurent la simulation de l'hôte,
-  pas ce que voit l'invité.
+  pas ce que voit l'invité. ⚠️ **L'EXCUSE EST TOMBÉE AU 432** : `tools/fake-supabase.mjs` fait
+  tourner deux clients en local (§10). La première séance a immédiatement trouvé trois défauts
+  du multijoueur de la VILLE ; la ferme peuplée n'a toujours pas été passée au même crible.
 - **`crystal`** : le chapitre a **deux** segments jouables (`play run` et `play walk`).
   Retirer le second retire le seul endroit où l'on ramasse des éclats.
 - ⚠️ **VERCEL NE DÉPLOIE PLUS AUTOMATIQUEMENT depuis le 425**, et **ce n'est pas le dépôt** :
@@ -466,11 +467,19 @@ erreur** en choisissant mal.
    Recopié ailleurs, il aurait survécu un zip de plus. **Relire chaque ligne contre le code
    avant de la déplacer n'est pas une formalité : c'est là qu'on trouve les périmées.**
    Historique : 426 (insuffisant), 427 (profond : §7 → `public/candyluge/README.md`, §9 réduit
-   à cinq pièges), 428 (§6 → `components/ferme/README.md`, 507 → 490), 431 (§4 scindé).
-   ⚠️ **L'ORDRE DU PROCHAIN ZIP : §10 EST LE PROCHAIN À GROSSIR.** La liste des bancs y occupe
-   déjà quarante lignes et gagne une entrée par zip. Le jour où elle dépasse la moitié du
-   chapitre, elle part dans un `tools/README.md` — en ne gardant ici QUE ce qui n'existe pas
-   (la liste des bancs absents, qui est la vraie protection contre le banc imaginaire du §14.6).
+   à cinq pièges), 428 (§6 → `components/ferme/README.md`, 507 → 490), 431 (§4 scindé),
+   **432 (§10 → `tools/README.md`, 524 → 483)**.
+   ⚠️⚠️ **LE 432 A EXÉCUTÉ L'ORDRE DU 431, ET LE SEUIL A ÉTÉ FRANCHI EXACTEMENT COMME ANNONCÉ** :
+   deux entrées ajoutées (`render-ruche`, `fake-supabase`) ont porté la liste des bancs au-delà
+   de la moitié de §10. Elle est partie dans `tools/README.md` ; **il ne reste ici que la liste
+   des bancs ABSENTS**, qui est la vraie protection contre le banc imaginaire (§14.6) — une
+   liste de ce qui existe se vérifie en la lançant, une liste de ce qui n'existe pas ne se
+   vérifie jamais.
+   ⚠️ **L'ORDRE DU PROCHAIN ZIP : §13 EST LE PROCHAIN À GROSSIR.** Il fait quarante lignes de
+   questions ouvertes et n'en perd jamais : chaque zip en ajoute et aucun n'en retire, parce
+   qu'une question à laquelle on a répondu se transforme en fonctionnalité et sort du fichier
+   par une autre porte. **Le jour où il dépasse §4, il faut le RELIRE ligne à ligne contre le
+   dépôt** — comme le 431 l'a fait pour §4, où la première ligne relue était périmée.
 3. **Critère d'inclusion** : « est-ce vrai à l'échelle du projet, et invérifiable en ouvrant
    un seul fichier ? » Sinon, ça va dans un commentaire de code. **L'histoire d'un défaut
    corrigé n'y a pas sa place — seule sa LEÇON, en §4.**
