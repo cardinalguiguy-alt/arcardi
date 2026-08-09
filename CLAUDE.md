@@ -308,8 +308,9 @@ BUILD S'ARRÊTE APRÈS LA COMPILATION** sur `Error: supabaseUrl is required` (pr
 savoir sans l'ouvrir : `verify-vallee.mjs` (**172/172**) rejoue le VRAI moteur — circulation,
 murs invisibles, tribunal, coupe de bois, et **des ventes complètes avec l'or compté** ; cinq
 bancs de RENDU dessinent ce qui n'est autrement regardable qu'en jouant (assise, échelle,
-foire, tribunal + **symétrie des façades**, ruche) ; **`fake-supabase.mjs` fait tourner deux
-clients en local**.
+foire, tribunal + **symétrie des façades**, ruche — ce dernier **contrôle aussi que le vol des
+abeilles passe bien DERRIÈRE la ruche**, ce qu'aucune relecture ne peut voir) ;
+**`fake-supabase.mjs` fait tourner deux clients en local**.
 
 ⚠️ **CE QUI RESTE ICI EST LA LISTE DES BANCS QUI N'EXISTENT PAS, et c'est le point.** Une liste
 de ce qui existe se vérifie en la lançant ; une liste de ce qui n'existe pas ne se vérifie

@@ -12958,6 +12958,40 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           const leftX = bcx - faceX * sc;
           draws.push({ y: bby, fn: () => {
             drawBuildingShadow(ctx, bcx, bby, dw / 2);
+            /* ╔══════════════════════════════════════════════════════════════════
+               ║ ZIP SUIVANT — LES ABEILLES PASSENT DERRIÈRE LA RUCHE.
+               ║ (demande de Guillaume : « le vol des abeilles doit parfois
+               ║ passer derrière le sprite de la ruche »)
+               ╚══════════════════════════════════════════════════════════════════
+               ⚠️⚠️ ELLES NE POUVAIENT PAS, ET CE N'ÉTAIT PAS UN PROBLÈME D'ORDRE
+               DE DESSIN : leur trajectoire n'avait PAS DE PROFONDEUR. L'abscisse
+               suivait `cos(a)` et l'ordonnée `sin(a × 1,3)` — deux angles
+               différents, donc une figure de Lissajous, pas une orbite. Aucun
+               instant ne pouvait être qualifié de « derrière » : l'information
+               n'existait nulle part.
+               ⚠️ LA PROFONDEUR SE DÉDUIT DONC DU MÊME ANGLE QUE L'ABSCISSE
+               (`sin(a)` : négatif = côté opposé au joueur), et le vol devient une
+               vraie ellipse vue de trois quarts. C'est le §8 dans sa forme
+               habituelle — un paramètre qui DOUBLE un autre doit être DÉRIVÉ,
+               jamais réglé. Le battement vertical, lui, reste indépendant : c'est
+               ce qui empêche les quatre abeilles de décrire un rail. */
+            const bees = [];
+            if (bid === "beehive") {
+              const t = performance.now() / 1000;
+              for (let b = 0; b < 4; b++) {
+                const a = t * 2 + b * 1.6;
+                bees.push({
+                  x: bcx + Math.cos(a) * 13 * sc,
+                  y: bby - 20 * sc + Math.sin(a) * 4 * sc + Math.sin(t * 5 + b * 2.1) * 3 * sc,
+                  behind: Math.sin(a) < 0,
+                });
+              }
+            }
+            const paintBee = (be) => {
+              ctx.fillStyle = "#3a2a10"; ctx.fillRect(Math.round(be.x), Math.round(be.y), 2, 2);
+              ctx.fillStyle = "#e8c24a"; ctx.fillRect(Math.round(be.x), Math.round(be.y), 1, 1);
+            };
+            for (const be of bees) if (be.behind) paintBee(be);
             ctx.drawImage(bimg, Math.round(leftX), Math.round(topY), Math.round(dw), Math.round(dh));
             drawBuildingFooting(ctx, bcx, bby, dw / 2);
             /* ╔════════════════════════════════════════════════════════════════
@@ -12994,15 +13028,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                 if (!suited) ctx.drawImage(bt.smoker, tx2, ty2, Math.round(tw2), Math.round(th2));
                 if (((sharedRef.current.craftStock || {}).honey | 0) > 0) ctx.drawImage(bt.honey, tx2, ty2, Math.round(tw2), Math.round(th2));
               }
-            }
-            if (bid === "beehive") { // abeilles tournant autour de la ruche (offsets mis à l'échelle)
-              const t = performance.now() / 1000;
-              for (let b = 0; b < 4; b++) {
-                const a = t * 2 + b * 1.6, bx = bcx + Math.cos(a) * 12 * sc, byp = bby - 20 * sc + Math.sin(a * 1.3) * 8 * sc;
-                ctx.fillStyle = "#3a2a10"; ctx.fillRect(Math.round(bx), Math.round(byp), 2, 2);
-                ctx.fillStyle = "#e8c24a"; ctx.fillRect(Math.round(bx), Math.round(byp), 1, 1);
+              /* LA LAVANDE, à DROITE — côté opposé à l'établi. Elle n'est pas du
+                 remplissage : un rucher se plante à côté de ce qui fleurit, et
+                 c'est elle qui EXPLIQUE la ruche. Toujours présente, elle : une
+                 plante ne dépend d'aucun état de jeu. */
+              const lv = sprites.beeLavender;
+              if (lv) {
+                const lw = lv.width * sc, lh = lv.height * sc;
+                ctx.drawImage(lv, Math.round(leftX + dw - 2 * sc), Math.round(bby - lh + 1), Math.round(lw), Math.round(lh));
               }
             }
+            // Et la moitié qui repasse DEVANT, après le bâtiment et son mobilier.
+            for (const be of bees) if (!be.behind) paintBee(be);
             if (bid === "sucrerie") {
               // Chantier "sucrerie déplaçable" : jauges stock de canne/batch
               // en cours, miroir de l'ancien rendu O_SUCRERIE (mêmes teintes),

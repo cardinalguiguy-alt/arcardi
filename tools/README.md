@@ -43,12 +43,15 @@ jamais recopié d'un zip précédent sans relance.
   jamais regardée : on a gardé trois zips un buste tronqué en croyant avoir une pose. ⚠️ Depuis
   le 429 il en dessine **trois** par banc : un occupant unique au milieu d'un meuble ne dit rien
   de ce à quoi ressemble un meuble PLEIN.
-- **`tools/render-ruche.mjs`** (432) — **la ruche en trois quarts et l'établi de l'apiculteur
-  DANS SES QUATRE ÉTATS** (nu / enfumoir / pots de miel / les deux), à leur place réelle et à
+- **`tools/render-ruche.mjs`** (432) — **la ruche en trois quarts, l'établi de l'apiculteur
+  DANS SES QUATRE ÉTATS et le pot de lavande** (nu / enfumoir / pots de miel / les deux), à leur place réelle et à
   l'échelle de dessin réelle, avec une fermière comme repère. ⚠️ Il existe parce que trois de
   ces quatre états ne s'obtiennent en jeu qu'en attendant le bon moment de la journée de
-  René — c'est-à-dire jamais, à la relecture. ⚠️ Il n'écrit AUCUN texte : le faux canvas ne
-  connaît pas `fillText` (voir plus bas), les cas sont repérés par un témoin de couleur.
+  René — c'est-à-dire jamais, à la relecture. ⚠️ **Il ÉCHOUE si le vol des abeilles ne passe
+  jamais derrière la ruche** : la profondeur est dérivée du même angle que l'abscisse, et une
+  régression qui les remettrait toutes devant ne lèverait aucune erreur. ⚠️ Il n'écrit AUCUN
+  texte : le faux canvas ne connaît pas `fillText`, les cas sont repérés par un témoin de
+  couleur.
 - **`tools/render-echelle.mjs`** (429) — **chaque décor à côté d'une fermière**, sur la même
   ligne de sol, avec le rapport de hauteur comparé au repère physique attendu. C'est le seul
   banc qui puisse attraper une erreur d'ÉCHELLE. Il en a trouvé trois du premier coup ; il

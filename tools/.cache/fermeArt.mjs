@@ -4801,6 +4801,7 @@ export function buildSprites() {
          chose que la référence montre. */
       for (let y = Y_TOP; y <= Y_BASE; y++) {
         const r = halfAt(y), x0 = Math.round(CX - r), x1 = Math.round(CX + r);
+        const coil = ((y - Y_TOP) / 2) | 0;            // n° d'assise, pour décaler la couture
         const seam = ((y - Y_TOP) % 2) === 1;          // 1 rangée sur 2 = le joint
         for (let x = x0; x <= x1; x++) {
           const u = (x - (CX - r)) / (2 * r);          // 0 bord gauche, 1 bord droit
@@ -4811,7 +4812,29 @@ export function buildSprites() {
           /* ⚠️ LE JOINT VAUT UN TON, PAS DEUX. À deux, les assises se lisaient
              comme des RAYURES peintes — un dôme zébré, pas de la paille tressée.
              Le tressage se voit au rythme, pas au contraste. */
-          if (seam) k = Math.max(2, k - 1);
+          /* ⚠️⚠️ CHAQUE ASSISE EST UN BOUDIN ROND, PAS UNE BANDE PLATE, et c'est
+             ÇA le détail qui manquait — pas des pixels en plus. Deux rangées par
+             assise : le dessus prend la lumière (+1), le dessous est dans son
+             propre creux (−1). Le dôme cesse d'être un dégradé rayé pour devenir
+             un empilement de tubes, ce qu'un skep EST. */
+          k = seam ? Math.max(2, k - 1) : Math.min(7, k + 1);
+          /* ⚠️⚠️ LA LIGATURE, ET C'EST ELLE QUI MANQUAIT (« le sprite pas assez
+             détaillé »). Un skep n'est pas un dôme rainuré : c'est un boudin de
+             paille enroulé, COUSU tous les trois doigts par une éclisse. Sans
+             ces points, on lit un tour de potier ; avec, on lit de la vannerie.
+             ⚠️ ELLE NE VA QUE DANS LE CREUX (la rangée de joint) ET ELLE
+             ÉCLAIRCIT : l'éclisse est lisse, elle accroche la lumière là où la
+             paille est dans l'ombre. Un premier essai la semait en diagonale sur
+             tout le dôme — ça effaçait les assises et donnait du bruit, c'est-
+             à-dire l'inverse du détail. **Du détail, c'est une structure qu'on
+             voit mieux, pas des pixels en plus.**
+             ⚠️ ET LE PAS EST DÉCALÉ D'UNE ASSISE À L'AUTRE (`coil % 3`), sinon
+             les points s'alignent en colonnes et on retombe sur une trame. */
+          /* ⚠️ ET LA COUTURE RESTE RARE : un point tous les six pixels, d'un seul
+             ton. Deux essais l'ont semée tous les trois pixels — à 28 px de
+             large ça noie les assises sous du bruit, c'est-à-dire exactement
+             l'inverse de « plus détaillé ». */
+          if (seam && (((x - x0) + (coil % 3) * 2) % 6) === 0) k = Math.min(7, k + 2);
           P(g, x, y, 1, 1, S8[k]);
         }
         P(g, x0, y, 1, 1, S8[seam ? 1 : 2]);           // arête gauche
@@ -4822,6 +4845,13 @@ export function buildSprites() {
          qui dépassait du dôme, exactement ce qu'un skep n'a pas. Le profil se
          referme tout seul ; on se contente d'éclairer sa crête. */
       P(g, Math.round(CX) - 1, Y_TOP, 2, 1, S8[7]);
+      /* ⚠️ L'OCCLUSION AU PIED. Deux rangées assombries à la base : sans elles la
+         ruche est POSÉE SUR rien, et à l'échelle du jeu c'est ce qui la faisait
+         flotter au-dessus de son ombre portée. */
+      for (let y = Y_BASE - 1; y <= Y_BASE; y++) {
+        const r = halfAt(y), x0 = Math.round(CX - r), x1 = Math.round(CX + r);
+        g.fillStyle = "rgba(40,26,10,0.22)"; g.fillRect(x0, y, x1 - x0 + 1, 1);
+      }
       /* L'ENTRÉE. ⚠️ ELLE EST DÉCENTRÉE VERS LA GAUCHE, pas au milieu : en trois
          quarts, la face vue est celle qui regarde la caméra, et son centre n'est
          pas le centre de la silhouette. Centrée, elle faisait lire la ruche de
@@ -4921,59 +4951,106 @@ export function buildSprites() {
      l'appelant devrait connaître trois décalages — et le jour où l'établi
      grandit, l'enfumoir flotterait. */
   function beeTableSprite(layer) {
-    /* ⚠️ 26×24, ET LA HAUTEUR N'EST PAS RONDE PAR HASARD. En 26×22, le bec de
-       l'enfumoir touchait le bord haut : `outlineSprite` n'avait plus de place
-       pour son liseré et le canevas DÉCOUPAIT en silence — le piège du §4, celui
-       du haut-de-forme décapité du 427. Le plateau est donc descendu de deux
-       rangées pour dégager le dessus de la table, qui est justement l'endroit où
-       l'on pose des choses. */
-    const [c, g] = cv(26, 24);
+    /* ⚠️⚠️ 22×18, ET C'EST UNE RÉDUCTION DEMANDÉE EN JEU. La première version
+       faisait 26×24 : à l'écran, à côté d'un skep de 28×32, elle ne se lisait
+       plus comme un ÉTABLI mais comme un second meuble aussi imposant que la
+       ruche (« la table est trop grosse par rapport à la ruche »). Un plan de
+       travail est un accessoire : il doit faire environ la moitié de la hauteur
+       de ce à quoi il sert. C'est le corollaire de render-echelle.mjs — un objet
+       ne se juge pas seul, il se juge contre celui d'à côté.
+       ⚠️ LE CADRE RESTE COMMUN AUX TROIS CALQUES, avec la même ligne de sol :
+       sans ça l'appelant devrait connaître trois décalages, et le jour où
+       l'établi change de taille l'enfumoir flotterait.
+       ⚠️ ET LES DEUX OBJETS SE PARTAGENT LA TABLE PAR MOITIÉS (enfumoir à
+       gauche, pots à droite) : ils s'affichent indépendamment, donc ils doivent
+       pouvoir s'afficher ENSEMBLE sans se recouvrir. */
+    const [c, g] = cv(22, 18);
     const WOODD = "#6a4526", WOOD = "#8a5f36", WOODL = "#a87745", WOODH = "#c99a5e";
-    const TOP = 11;                                        // ligne du plateau
+    const TOP = 9;                                          // dessus du plateau
     if (layer === "table") {
-      P(g, 1, TOP, 24, 3, WOODL); P(g, 1, TOP, 24, 1, WOODH);   // dessus, éclairé
-      P(g, 1, TOP + 3, 24, 3, WOOD);                            // chant, à l'ombre
-      P(g, 1, TOP + 5, 24, 1, WOODD);
-      for (const x of [6, 13, 19]) P(g, x, TOP, 1, 3, "#00000022"); // veines
-      P(g, 21, TOP + 4, 1, 1, WOODD);                           // nœud
-      // Deux pieds, l'ombre du côté opposé à la lumière (elle vient de gauche).
-      P(g, 4, TOP + 6, 3, 7, WOOD); P(g, 4, TOP + 6, 1, 7, WOODL);
-      P(g, 19, TOP + 6, 3, 7, WOOD); P(g, 19, TOP + 6, 1, 7, WOODL);
-      P(g, 4, TOP + 12, 3, 1, WOODD); P(g, 19, TOP + 12, 3, 1, WOODD);
-      outlineSprite(g, 26, 24, "#4a2f16");
+      P(g, 1, TOP, 20, 2, WOODL); P(g, 1, TOP, 20, 1, WOODH);   // dessus, éclairé
+      P(g, 1, TOP + 2, 20, 2, WOOD);                            // chant, à l'ombre
+      P(g, 1, TOP + 4, 20, 1, WOODD);
+      for (const x of [6, 12, 17]) P(g, x, TOP, 1, 2, "#00000022"); // veines
+      P(g, 18, TOP + 3, 1, 1, WOODD);                           // nœud
+      // Deux pieds, l'arête claire du côté de la lumière (elle vient de gauche).
+      P(g, 3, TOP + 5, 2, 4, WOOD); P(g, 3, TOP + 5, 1, 4, WOODL);
+      P(g, 16, TOP + 5, 2, 4, WOOD); P(g, 16, TOP + 5, 1, 4, WOODL);
+      P(g, 3, TOP + 8, 2, 1, WOODD); P(g, 16, TOP + 8, 2, 1, WOODD);
+      // Une entretoise : c'est elle qui fait lire « établi » et pas « planche
+      // sur deux bâtons », et elle coûte trois pixels.
+      P(g, 5, TOP + 6, 11, 1, WOOD); P(g, 5, TOP + 6, 11, 1, WOODD);
+      outlineSprite(g, 22, 18, "#4a2f16");
       return c;
     }
     if (layer === "smoker") {
-      /* L'ENFUMOIR : corps d'acier conique, soufflet de bois, bec recourbé.
-         Palette FROIDE assumée — c'est le seul objet métallique de la scène, et
-         c'est ce qui le distingue au premier coup d'œil des pots de miel. */
+      /* L'ENFUMOIR, MOITIÉ GAUCHE. Palette FROIDE assumée : c'est le seul objet
+         métallique de la scène, et c'est ce qui le distingue au premier coup
+         d'œil des pots de miel. */
       const STEEL = "#8fa6b4", STEELL = "#b6c8d4", STEELD = "#5d7280";
-      P(g, 5, 5, 6, 6, STEEL); P(g, 5, 5, 1, 6, STEELL); P(g, 10, 5, 1, 6, STEELD);
-      P(g, 5, 10, 6, 1, STEELD);                              // assise sur le plateau
-      P(g, 6, 3, 4, 2, STEEL); P(g, 6, 3, 4, 1, STEELL);      // couvercle
-      P(g, 7, 1, 3, 2, STEELD); P(g, 7, 1, 1, 2, STEEL);      // bec
-      P(g, 3, 4, 2, 7, WOOD); P(g, 3, 4, 1, 7, WOODL); P(g, 3, 10, 2, 1, WOODD); // soufflet
-      P(g, 4, 6, 1, 2, STEELD);                               // charnière
-      outlineSprite(g, 26, 24, "#3a4a55");
+      P(g, 4, 5, 5, 4, STEEL); P(g, 4, 5, 1, 4, STEELL); P(g, 8, 5, 1, 4, STEELD);
+      P(g, 4, 8, 5, 1, STEELD);                             // assise sur le plateau
+      P(g, 5, 3, 3, 2, STEEL); P(g, 5, 3, 3, 1, STEELL);    // couvercle
+      P(g, 6, 1, 2, 2, STEELD); P(g, 6, 1, 1, 2, STEEL);    // bec
+      P(g, 2, 4, 2, 5, WOOD); P(g, 2, 4, 1, 5, WOODL); P(g, 2, 8, 2, 1, WOODD); // soufflet
+      P(g, 3, 6, 1, 1, STEELD);                             // charnière
+      outlineSprite(g, 22, 18, "#3a4a55");
       return c;
     }
-    /* « honey » — LES POTS, et ils ne sont pas alignés : trois hauteurs, comme
-       sur la référence. ⚠️ ILS TIENNENT DANS LE CADRE, couvercle compris — un
-       couvercle qui déborde d'un pixel se fait couper sans un mot (§4). Le
-       reflet vertical est ce qui fait lire le VERRE : sans lui, ce sont des
-       cubes jaunes. */
+    /* « honey » — LES POTS, MOITIÉ DROITE, trois hauteurs comme sur la
+       référence. ⚠️ COUVERCLES À FLEUR DU POT, pas débordants : à cette taille
+       un couvercle plus large que son bocal soude les trois pots en une barre
+       brune et on ne compte plus rien. Le reflet vertical est ce qui fait lire
+       le VERRE — sans lui, ce sont des cubes jaunes. */
     const GLASS = "#f2c94b", GLASSD = "#d9a92e", GLASSL = "#ffe89a", LID = "#8a5a30", LIDL = "#a87745";
     const jar = (x, h2) => {
       const y = TOP - h2;
-      P(g, x, y, 4, h2, GLASS); P(g, x, y, 1, h2, GLASSD); P(g, x + 3, y, 1, h2, GLASSD);
+      P(g, x, y, 3, h2, GLASS); P(g, x, y, 1, h2, GLASSD); P(g, x + 2, y, 1, h2, GLASSD);
       P(g, x + 1, y + 1, 1, h2 - 2, GLASSL);
-      P(g, x, TOP - 1, 4, 1, GLASSD);
-      P(g, x - 1, y - 2, 6, 2, LID); P(g, x - 1, y - 2, 6, 1, LIDL);
+      P(g, x, TOP - 1, 3, 1, GLASSD);                       // fond, plus dense
+      P(g, x, y - 2, 3, 2, LID); P(g, x, y - 2, 3, 1, LIDL);
     };
-    /* ⚠️ ESPACÉS D'UN PIXEL : collés, les couvercles se soudaient en une barre
-       brune et on ne comptait plus les pots. */
-    jar(14, 5); jar(20, 8); jar(8, 6);
-    outlineSprite(g, 26, 24, "#5a3a1e");
+    jar(11, 5); jar(15, 7); jar(19, 4);
+    outlineSprite(g, 22, 18, "#5a3a1e");
+    return c;
+  }
+
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP SUIVANT — LA LAVANDE, ET ELLE N'EST PAS DÉCORATIVE.
+     ╚══════════════════════════════════════════════════════════════════════════
+     Elle est sur les trois vues de la référence de Guillaume, et je l'avais
+     simplement oubliée. ⚠️ ELLE A UNE RAISON D'ÊTRE LÀ, ce qui est le seul
+     critère : un rucher se plante à côté de ce qui fleurit, et la lavande est la
+     fleur à abeilles par excellence. Elle explique la ruche autant qu'elle
+     l'accompagne — c'est pour ça qu'elle va du côté OPPOSÉ à l'établi (les
+     abeilles d'un côté, le travail de l'homme de l'autre) et non collée à lui.
+     ⚠️ ET L'ABEILLE PEINTE SUR LE POT VIENT DE LA RÉFÉRENCE, elle aussi. */
+  function beeLavenderSprite() {
+    /* ⚠️ 12×14, ET C'EST DÉLIBÉRÉMENT PETIT. Un premier jet en 14×18 montait à
+       hauteur de poitrine de la fermière : un pot de lavande n'est pas un
+       arbuste. Sur la référence il fait environ le tiers de la ruche — ici
+       14/32, ce qui est le même rapport. */
+    const [c, g] = cv(12, 14);
+    const POT = "#b5643c", POTL = "#cd7a4e", POTD = "#8c4526", SOIL = "#4a3320";
+    const STEM = "#5d7a44", STEML = "#7a9a58";
+    const LAV = "#8e6bc0", LAVL = "#b294dd", LAVD = "#6a4a99";
+    const SOIL_Y = 9;
+    // Le pot : tronconique, rebord débordant, arête claire du côté de la lumière.
+    P(g, 3, SOIL_Y + 1, 6, 4, POT); P(g, 3, SOIL_Y + 1, 1, 4, POTL); P(g, 8, SOIL_Y + 1, 1, 4, POTD);
+    P(g, 4, SOIL_Y + 4, 4, 1, POTD);
+    P(g, 2, SOIL_Y - 1, 8, 2, POT); P(g, 2, SOIL_Y - 1, 8, 1, POTL); P(g, 2, SOIL_Y, 8, 1, POTD); // rebord
+    P(g, 3, SOIL_Y + 1, 6, 1, SOIL);                                                              // terre
+    P(g, 5, SOIL_Y + 2, 2, 1, "#e8c24a"); P(g, 5, SOIL_Y + 3, 2, 1, "#3d2c15");                   // l'abeille peinte
+    /* LES ÉPIS. ⚠️ TROIS HAUTEURS ET TROIS INCLINAISONS : trois épis identiques
+       et verticaux font un peigne, pas un bouquet. Les tiges DESCENDENT jusqu'à
+       la terre — sans elles les fleurs flottent au-dessus du pot. */
+    const spike = (x, top, h2) => {
+      for (let i = 0; i < h2; i++) P(g, x, top + i, 1, 1, i === 0 ? LAVL : i < h2 - 1 ? LAV : LAVD);
+      P(g, x - 1, top + 1, 1, 1, LAVL); P(g, x + 1, top + 2, 1, 1, LAVD);
+      for (let y = top + h2; y < SOIL_Y + 1; y++) P(g, x, y, 1, 1, y % 2 ? STEM : STEML);
+    };
+    spike(4, 3, 4); spike(6, 1, 5); spike(8, 4, 3);
+    outlineSprite(g, 12, 14, "#4a2f16");
     return c;
   }
 
@@ -6437,6 +6514,7 @@ house: house(),
   S.artisan = { beehive: artisanBuildingSprite("beehive"), fromagerie: artisanBuildingSprite("fromagerie"), bakery: artisanBuildingSprite("bakery"), sawmill: artisanBuildingSprite("sawmill"), sucrerie: S.sucrerie };
   // Zip suivant : l'établi de l'apiculteur, en trois calques (voir beeTableSprite).
   S.beeTable = { table: beeTableSprite("table"), smoker: beeTableSprite("smoker"), honey: beeTableSprite("honey") };
+  S.beeLavender = beeLavenderSprite();   // le pot de lavande, à droite de la ruche
   S.craftIcons = { honey: craftIcon("honey"), cheeseWheel: craftIcon("cheeseWheel"), cheesePortion: craftIcon("cheesePortion"), eclairChoco: craftIcon("eclairChoco"), eclairVanilla: craftIcon("eclairVanilla"), flanVanilla: craftIcon("flanVanilla"), gateauBasque: craftIcon("gateauBasque"), butter: craftIcon("butter"), bread: craftIcon("bread"), croissant: craftIcon("croissant"), chocolatine: craftIcon("chocolatine"), painSuisse: craftIcon("painSuisse"), yogurtNature: craftIcon("yogurtNature"), yogurtVanilla: craftIcon("yogurtVanilla") };
   // Zip 236: one sprite per pet id in the catalog (individual pets).
   // Zip 388 : DEUX entrées, et c'est délibéré.

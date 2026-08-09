@@ -30,10 +30,21 @@
 >
 > Côté décor : **la ruche est redessinée en trois quarts** (modelée sous Blender, rampe et
 > profil MESURÉS sur le rendu, puis dessinée à la main — §9 : à cette taille on achète
-> l'éclairage, pas la géométrie), et **l'établi de l'apiculteur** s'installe à sa gauche.
-> Ses deux objets disent l'état du monde : l'enfumoir n'est sur la table que quand René
-> n'est pas en combi, les pots de miel que s'il y a vraiment du miel en stock. Rien de tout
-> ça ne circule sur le réseau : les deux se déduisent d'états déjà partagés.
+> l'éclairage, pas la géométrie), et **l'établi de l'apiculteur** s'installe à sa gauche, **le
+> pot de lavande à sa droite**. Ses deux objets disent l'état du monde : l'enfumoir n'est sur la
+> table que quand René n'est pas en combi, les pots de miel que s'il y a vraiment du miel en
+> stock. Rien de tout ça ne circule sur le réseau : les deux se déduisent d'états déjà partagés.
+>
+> ⚠️ **Trois corrections après essai en jeu, et les trois disent la même chose.** L'établi
+> était **trop gros** — un plan de travail est un accessoire, il fait la moitié de la hauteur
+> de ce à quoi il sert (26×24 → 22×18). Le dôme n'était **pas assez détaillé** : la réponse
+> n'était pas d'ajouter des pixels — deux essais l'ont semé de points et ont effacé les
+> assises — mais de donner à CHAQUE assise sa rondeur (dessus éclairé, dessous dans son creux)
+> et une couture d'éclisse rare. **Du détail, c'est une structure qu'on voit mieux, pas du
+> bruit.** Et **les abeilles ne pouvaient pas passer derrière la ruche** parce que leur vol
+> n'avait aucune profondeur : abscisse en `cos(a)`, ordonnée en `sin(a × 1,3)`, deux angles
+> différents — une figure de Lissajous, pas une orbite. La profondeur se DÉDUIT désormais du
+> même angle, et le banc échoue si elles repassent toutes devant.
 
 > **ZIP 431 — ON NE VEND PLUS DEPUIS SON CANAPÉ, ET LA FOIRE RESSEMBLE ENFIN À UNE FOIRE.**
 >
