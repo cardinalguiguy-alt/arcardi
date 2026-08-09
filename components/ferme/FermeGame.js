@@ -735,6 +735,36 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      les fonctions capturent `townWorldRef` & co. de leur closure, une copie
      périmée sauterait dans l'ancienne carte. Même motif que persistFnRef. */
   const townJumpApiRef = useRef(null);
+  /* ⚠️⚠️ ZIP SUIVANT — LE MÊME PIÈGE, LA MÊME PARADE, ET IL A COÛTÉ LE
+     MULTIJOUEUR DE VALLEY TOWN EN ENTIER.
+     ---------------------------------------------------------------------
+     `advanceRemote` vit AU NIVEAU DU COMPOSANT (il sert aux quatre zones) et
+     rejouait la collision d'un joueur distant avec `canStandTown` / `blockedTown`,
+     qui vivent dans la closure de la boucle de rendu — exactement la situation
+     décrite juste au-dessus pour `tryTownJump`. Chaque image où un joueur
+     distant se déplaçait EN VILLE levait donc un
+     `ReferenceError: canStandTown is not defined` :
+       * chez un joueur EN VILLE, l'exception tombait au MILIEU de
+         `drawTownFrame` — tout ce qui se dessine après la boucle des joueurs
+         (soi-même, les décors, les effets, le voile de nuit) disparaissait de
+         l'image. D'où « les images clignotent, apparaissent et disparaissent
+         AU MOUVEMENT » : le défaut ne se déclenche que quand l'autre bouge,
+         parce que la collision n'est rejouée que dans la branche
+         d'extrapolation ;
+       * chez un joueur resté à la FERME, c'est pire : sa boucle appelle
+         `advanceRemote` pour TOUS les joueurs, zone comprise, AVANT de peindre
+         quoi que ce soit — l'image entière était perdue à chaque frame.
+     Mesuré au banc à deux clients : 485 images sur 499 (97 %) avec l'avatar
+     distant strictement immobile, puis des sauts allant jusqu'à 116 px.
+     ⚠️ ON EXPOSE, ON NE RECOPIE PAS (même règle qu'au 431) : deux jeux de
+     collision finiraient par diverger, et le symptôme serait un joueur distant
+     qui traverse un mur que le joueur local ne traverse pas.
+     ⚠️ ET LE REPLI EST « ON ACCEPTE LA POSITION », PAS « ON REFUSE ». Un client
+     resté à la ferme n'a pas de carte de ville : refuser ÉPINGLE l'avatar à sa
+     dernière position reçue, c'est-à-dire qu'on reproduit le bogue au lieu de
+     le corriger. Un avatar distant qui frôle un mur pendant 40 ms ne se voit
+     pas ; un avatar qui se téléporte toutes les deux secondes, si. */
+  const zoneCollideRef = useRef(null);
   /* Zip 428 — l'échelle courante de la vue de Valley Town. ⚠️ C'est un REF et
      pas un state : il change à chaque image pendant un fondu, un state
      re-rendrait tout React soixante fois par seconde pour une valeur que seule
@@ -1683,6 +1713,16 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (r.tx === undefined) { r.tx = payload.x; r.ty = payload.y; r.x = payload.x; r.y = payload.y; }
       r.gender = payload.gender; r.outfit = payload.outfit; r.name = payload.name; r.sleeping = !!payload.sleeping;
       r.torch = !!payload.torch; r.zone = payload.zone || "farm";
+      /* ⚠️ ZIP SUIVANT — L'ASSISE ÉTAIT ÉMISE ET JAMAIS LUE. `pubMe` pose
+         `pub.sit = [x, y, place]` depuis le 428 (« à deux, personne n'aurait
+         jamais vu personne s'asseoir », dit sa note) — mais ce handler ne la
+         recopiait nulle part. `p.sit` restait donc éternellement indéfini, et
+         DEUX choses tombaient en silence : `drawCharacter` dessinait un joueur
+         assis DEBOUT sur son banc, et `freeSeatOn` ne voyait aucune place
+         occupée par un joueur, donc deux joueurs s'asseyaient l'un dans
+         l'autre. Un champ qui voyage sans être lu ne lève aucune erreur : il
+         coûte des octets et ne fait rien. */
+      r.sit = Array.isArray(payload.sit) ? payload.sit : null;
       if (Array.isArray(payload.pets)) r.pets = payload.pets; // zip 247: pets are now broadcast so everyone sees everyone's pets
       // Monde maléfique multijoueur (2026-07) : cible d'interpolation sur la
       // carte maléfique + drapeau d'immunité (lu par la simulation hôte).
@@ -6271,8 +6311,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   }
   function advanceRemote(p) {
     if (!p || !p.buf || !p.buf.length) return;
+    /* ⚠️ LES TESTS DE COLLISION DES CARTES INTÉRIEURES SONT LUS DANS
+       `zoneCollideRef`, PAS APPELÉS DIRECTEMENT — voir la longue note de ce ref
+       à sa déclaration : `canStandTown`/`canStandCourt` vivent dans la closure
+       de la boucle de rendu et cette fonction-ci vit au niveau du composant.
+       ⚠️ ET LE TRIBUNAL EST TRAITÉ ICI DEPUIS LE MÊME ZIP. Il rendait `null`,
+       donc `advanceRemote` sortait immédiatement : `p.tx/p.ty` n'étaient JAMAIS
+       recalculés à partir du tampon, et un joueur distant restait figé sur sa
+       toute première position reçue pendant toute la visite. Le bâtiment est
+       multijoueur depuis le 426 ; personne n'y avait bougé à deux. */
+    const api = zoneCollideRef.current;
     const collide = p.zone === "town"
-      ? (x, y) => { const tw = townWorldRef.current; return !!tw && canStandTown(tw, x, y); }
+      ? (x, y) => { const tw = townWorldRef.current; return !tw || !api ? true : api.town(tw, x, y); }
+      : p.zone === "court"
+      ? (x, y) => { const cw = courtWorldRef.current; return !cw || !api ? true : api.court(cw, x, y); }
       : (!p.zone || p.zone === "farm") ? (x, y) => { const w = worldRef.current; return !!w && canStand(w, x, y); } : null;
     if (!collide) return; // zone "evil" : voie de rendu distincte (ex/ey), hors périmètre
     const buf = p.buf;
@@ -12908,6 +12960,41 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
             drawBuildingShadow(ctx, bcx, bby, dw / 2);
             ctx.drawImage(bimg, Math.round(leftX), Math.round(topY), Math.round(dw), Math.round(dh));
             drawBuildingFooting(ctx, bcx, bby, dw / 2);
+            /* ╔════════════════════════════════════════════════════════════════
+               ║ ZIP SUIVANT — L'ÉTABLI DE L'APICULTEUR, À GAUCHE DE LA RUCHE.
+               ║ (demande de Guillaume, sur référence fournie)
+               ╚════════════════════════════════════════════════════════════════
+               ⚠️⚠️ LES DEUX OBJETS POSÉS DESSUS DISENT L'ÉTAT DU MONDE, ET C'EST
+               TOUT LEUR INTÉRÊT :
+                 * l'ENFUMOIR n'est sur la table que quand René n'est PAS en
+                   combi — parce qu'alors il l'a en main. C'est la même donnée
+                   qui habille le personnage (`residentBeeSuit`) : une seule
+                   source, donc l'établi ne peut pas contredire le sprite de
+                   René, ce qui serait le pire résultat possible ;
+                 * les POTS ne sont là que s'il y a vraiment du miel en stock
+                   (`craftStock.honey`). Des pots pleins devant un stock vide,
+                   c'est un décor qui ment sur l'économie.
+               ⚠️ ET ON NE DIFFUSE RIEN : les deux se DÉDUISENT d'états déjà
+               partagés (§3 de CLAUDE.md — ce qui peut se déduire ne se diffuse
+               pas). Chaque client peint donc la même table sans un octet.
+               ⚠️ L'ÉTABLI EST DANS LE MÊME `draw` QUE LA RUCHE, pas dans un
+               draw à lui : deux entrées à la même profondeur de tri ne gardent
+               leur ordre que par la stabilité de `sort` (§4, 431), et le jour où
+               l'on réorganise cette boucle la table passerait devant la ruche. */
+            if (bid === "beehive") {
+              const bt = sprites.beeTable;
+              if (bt) {
+                // Posée à gauche, sa ligne de sol calée sur celle de la ruche.
+                const tw2 = bt.table.width * sc, th2 = bt.table.height * sc;
+                const tx2 = Math.round(leftX - tw2 + 3 * sc), ty2 = Math.round(bby - th2 + 1);
+                ctx.drawImage(bt.table, tx2, ty2, Math.round(tw2), Math.round(th2));
+                const beeRes = ((sharedRef.current.station && sharedRef.current.station.residents) || [])
+                  .find(r2 => { const ro2 = rosterOf(r2.rid); return ro2 && ro2.skill === "beekeeper"; });
+                const suited = beeRes ? residentBeeSuit(beeRes, rosterOf(beeRes.rid)) : false;
+                if (!suited) ctx.drawImage(bt.smoker, tx2, ty2, Math.round(tw2), Math.round(th2));
+                if (((sharedRef.current.craftStock || {}).honey | 0) > 0) ctx.drawImage(bt.honey, tx2, ty2, Math.round(tw2), Math.round(th2));
+              }
+            }
             if (bid === "beehive") { // abeilles tournant autour de la ruche (offsets mis à l'échelle)
               const t = performance.now() / 1000;
               for (let b = 0; b < 4; b++) {
@@ -14143,6 +14230,17 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        finiraient par diverger, ce que la note du 425 juste au-dessus interdit
        explicitement. */
     townJumpApiRef.current = { can: canTownJumpNow, jump: tryTownJump };
+    /* Même publication, même raison, pour la collision des cartes intérieures :
+       `advanceRemote` (niveau composant) rejoue le déplacement des joueurs
+       distants et ne peut pas voir ces deux fonctions-ci. Voir zoneCollideRef.
+       ⚠️ `canStandCourt` est déclarée bien plus bas dans cette même closure :
+       une déclaration de fonction y est hissée, la ligne est donc valide.
+       ⚠️ ET ON PASSE `canStandTown` À TROIS ARGUMENTS, sans altitude de
+       référence : le rejeu d'un joueur distant ne doit vérifier que les murs.
+       Lui appliquer la règle de dénivelé demanderait son altitude de DÉPART,
+       qui ne circule pas (§6) — on la déduirait de sa position affichée, qui
+       est justement ce qu'on est en train de calculer. */
+    zoneCollideRef.current = { town: canStandTown, court: canStandCourt };
     /* Suis-je devant la porte d'un bâtiment civique ? La porte est au milieu de
        la façade sud, comme pour les maisons — les trois monuments sont dessinés
        ainsi (voir fermeArt.js), et c'est la seule façade qu'on peut approcher.
