@@ -5054,6 +5054,144 @@ export function buildSprites() {
     return c;
   }
 
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP SUIVANT — LE TAXI DE VALLEY TOWN.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ MODÉLISÉ SOUS BLENDER, DESSINÉ À LA MAIN — ET C'EST §9 QUI LE DIT, PAS
+     UNE FACILITÉ. La caisse a été montée en volumes (capot, habitacle, coffre,
+     ailes, roues, damier, enseigne), éclairée par deux Soleil, rendue à plat,
+     sans anticrénelage, sous l'azimut exact de chaque direction du jeu. Ce
+     qu'on en garde est ce que §9 dit qu'on achète à cette taille : **la RAMPE
+     et les PROPORTIONS**. Transcrit pixel à pixel, le rendu donnait une bouillie
+     où ni les roues ni la ceinture de caisse ne se lisaient — le verdict exact du
+     426 sur la statue de la Justice, et du zip précédent sur la ruche.
+     La rampe ci-dessous est MESURÉE (k-moyennes sur le rendu, 10 tons).
+
+     ⚠️ TROIS DIRECTIONS, PAS QUATRE. L'ouest est l'est retourné : une voiture
+     est symétrique, et deux dessins du même profil finiraient par diverger (§8).
+     Le retournement se fait au rendu, comme pour les personnages.
+
+     ⚠️ ET LE POT D'ÉCHAPPEMENT A UNE POSITION NOMMÉE (`exhaust`), pas devinée
+     par l'appelant : la fumée doit sortir du tuyau, et le tuyau n'est pas au
+     même endroit de face, de dos et de profil. Une position réglée à la main
+     dans la boucle de rendu est une position qui penchera (leçon du 431). */
+  function taxiSprite(dir) {
+    // Rampe mesurée sur le rendu Blender (du plus sombre au plus clair).
+    const Y0 = "#5a4817", Y1 = "#876b30", Y2 = "#b78f26", Y3 = "#d8ad32", Y4 = "#fbcb34", Y5 = "#ffd23a";
+    const GLS = "#434f56", GLSL = "#5f7280", TYR = "#141414", TYRL = "#242424";
+    const CHR = "#d5cdbe", CHRD = "#9a9488", BLK = "#1a1a18", RED = "#c0322a", LMP = "#ffe9a8";
+    /* ⚠️ LE PNEU DOIT DOMINER LA JANTE. Premier jet : jante à r−1,7 — à cette
+       taille elle mangeait la roue et on lisait deux disques blancs sous la
+       caisse, pas des roues. Une roue se reconnaît à sa GOMME ; le chrome n'est
+       qu'un reflet au centre. */
+    const wheel = (g2, cx, cy, r) => {
+      g2.fillStyle = TYR; g2.beginPath(); g2.ellipse(cx, cy, r, r, 0, 0, 7); g2.fill();
+      g2.fillStyle = TYRL; g2.beginPath(); g2.ellipse(cx, cy - 0.5, r - 0.9, r - 0.9, 0, 0, 7); g2.fill();
+      g2.fillStyle = CHRD; g2.beginPath(); g2.ellipse(cx, cy, r - 2.2, r - 2.2, 0, 0, 7); g2.fill();
+      g2.fillStyle = CHR; g2.beginPath(); g2.ellipse(cx - 0.4, cy - 0.4, r - 2.8, r - 2.8, 0, 0, 7); g2.fill();
+    };
+
+    if (dir === "e") {
+      /* PROFIL — LA VUE QU'ON VOIT LE PLUS (les avenues sont est-ouest).
+         ⚠️⚠️ LES PROPORTIONS SONT CELLES DU MONDE RÉEL, RAMENÉES AU PERSONNAGE.
+         Premier jet : 34×20. À l'écran, à côté d'un fermier de 23 px peints et
+         de bancs de deux cases, ça donnait une voiturette — « augmente la taille
+         du véhicule pour qu'elle soit cohérente avec l'environnement ».
+         Le repère n'est pas une intuition, c'est une mesure : une berline fait
+         ~4,2 m pour 1,5 m de haut, un adulte 1,70 m. Donc, avec un fermier à
+         23 px : LONGUEUR ≈ 2,4 × 23 ≈ 54 px, HAUTEUR DE TOIT ≈ 0,88 × 23 ≈ 20 px.
+         D'où 48×24 hors-tout (l'enseigne de toit dépasse au-dessus). Et ça
+         retombe juste sur l'autre repère, celui des infrastructures : trois
+         cases de long, la largeur exacte d'une chaussée de la ville. */
+      const [c, g] = cv(48, 24);
+      const SILL = 18, BELT = 11, ROOF = 4, WY = 19, WR = 4.0;
+      // Caisse : capot bas devant (droite), coffre bas derrière (gauche).
+      P(g, 3, BELT, 42, SILL - BELT, Y3);
+      P(g, 28, BELT - 1, 17, 1, Y4); P(g, 44, BELT - 1, 3, SILL - BELT + 1, Y2);
+      P(g, 1, BELT, 9, SILL - BELT, Y3); P(g, 1, BELT, 1, 4, Y2);
+      // Habitacle : montants inclinés, arête de toit éclairée.
+      P(g, 12, ROOF, 18, BELT - ROOF, Y4);
+      P(g, 30, ROOF + 1, 1, 2, Y3); P(g, 31, ROOF + 3, 1, 2, Y3); P(g, 32, ROOF + 5, 1, 2, Y3);
+      P(g, 11, ROOF + 2, 1, 2, Y3); P(g, 10, ROOF + 4, 1, 3, Y3);
+      P(g, 12, ROOF, 18, 1, Y5);
+      // Vitres latérales, séparées par le montant central.
+      P(g, 13, ROOF + 1, 8, 5, GLS); P(g, 13, ROOF + 1, 8, 1, GLSL);
+      P(g, 23, ROOF + 1, 6, 5, GLS); P(g, 23, ROOF + 1, 6, 1, GLSL);
+      P(g, 21, ROOF + 1, 2, 5, Y3);
+      /* ⚠️ LE DAMIER SE PLACE JUSTE SOUS LES VITRES : c'est là qu'il est sur une
+         vraie voiture, et la seule hauteur où il ne se confond pas avec l'ombre
+         du châssis. */
+      P(g, 3, BELT, 42, 1, CHRD);
+      for (let i = 0; i < 14; i++) P(g, 3 + i * 3, BELT + 1, 3, 3, i % 2 ? BLK : CHR);
+      P(g, 21, BELT + 4, 1, SILL - BELT - 4, Y1);            // ligne de portière
+      P(g, 3, SILL - 1, 42, 1, Y1);                          // bas de caisse, à l'ombre
+      // Pare-chocs, phare, feu arrière, poignées, pot.
+      P(g, 44, SILL - 3, 4, 3, CHR); P(g, 0, SILL - 3, 4, 3, CHR);
+      P(g, 45, BELT + 1, 3, 3, LMP); P(g, 0, BELT + 1, 3, 3, RED);
+      P(g, 18, BELT + 1, 3, 1, CHR); P(g, 27, BELT + 1, 3, 1, CHR);
+      P(g, 17, ROOF - 4, 9, 4, CHR); P(g, 18, ROOF - 3, 7, 2, BLK);   // enseigne de toit
+      P(g, 1, SILL, 3, 2, BLK);                                       // pot d'échappement
+      /* ⚠️⚠️ LES ROUES SE DESSINENT EN DERNIER, ET L'ORDRE EST LE SUJET. Passées
+         avant la caisse, le flanc les recouvrait aux trois quarts : il n'en
+         restait qu'un croissant au ras du sol et la voiture avait l'air posée
+         sur des patins. De profil, la roue est DEVANT le bas de caisse. */
+      for (const wx of [11, 35]) {
+        wheel(g, wx, WY, WR);
+        P(g, Math.round(wx - WR), SILL, Math.round(WR * 2), 1, "#0e0e0e");
+      }
+      outlineSprite(g, 48, 24, "#2a2110");
+      c.exhaust = { x: 0, y: SILL };
+      c.ground = 23;
+      return c;
+    }
+
+    if (dir === "s") {
+      /* DE FACE (la voiture vient vers le joueur). Ce qui la fait reconnaître :
+         deux phares ronds, la calandre, le pare-brise large, l'enseigne.
+         ⚠️ MÊME HAUTEUR ET MÊME LIGNE DE SOL QUE LE PROFIL — c'est le même
+         véhicule vu d'ailleurs, et `render-taxi.mjs` échoue si ça diverge. */
+      const [c, g] = cv(28, 24);
+      const SILL = 18, BELT = 11, ROOF = 4;
+      for (const wx of [4, 23]) wheel(g, wx, 19, 3.8);
+      P(g, 2, BELT, 24, SILL - BELT + 1, Y3);
+      P(g, 2, BELT, 24, 1, Y4);
+      P(g, 6, ROOF, 16, BELT - ROOF, Y4);
+      P(g, 6, ROOF, 16, 1, Y5);
+      P(g, 7, ROOF + 1, 14, 5, GLS); P(g, 7, ROOF + 1, 14, 1, GLSL);   // pare-brise
+      P(g, 13, ROOF + 1, 2, 5, Y3);                                     // rétroviseur
+      P(g, 9, BELT + 3, 10, 4, BLK);                                    // calandre
+      for (let i = 0; i < 5; i++) P(g, 10 + i * 2, BELT + 3, 1, 4, CHRD);
+      P(g, 2, BELT + 3, 4, 4, LMP); P(g, 22, BELT + 3, 4, 4, LMP);      // phares
+      P(g, 2, BELT + 3, 4, 1, "#fff8dd"); P(g, 22, BELT + 3, 4, 1, "#fff8dd");
+      P(g, 1, SILL + 1, 26, 3, CHR); P(g, 1, SILL + 3, 26, 1, CHRD);    // pare-chocs
+      P(g, 10, ROOF - 4, 8, 4, CHR); P(g, 11, ROOF - 3, 6, 2, BLK);     // enseigne
+      P(g, 2, BELT, 3, 1, Y2); P(g, 23, BELT, 3, 1, Y2);
+      outlineSprite(g, 28, 24, "#2a2110");
+      c.exhaust = { x: 5, y: SILL + 3 };
+      c.ground = 23;
+      return c;
+    }
+
+    /* DE DOS. Même gabarit, feux rouges, coffre, plaque — et le pot bien
+       visible : c'est de dos qu'on voit le plus longtemps la fumée. */
+    const [c, g] = cv(28, 24);
+    const SILL = 18, BELT = 11, ROOF = 4;
+    for (const wx of [4, 23]) wheel(g, wx, 19, 3.8);
+    P(g, 2, BELT, 24, SILL - BELT + 1, Y3); P(g, 2, BELT, 24, 1, Y4);
+    P(g, 6, ROOF, 16, BELT - ROOF, Y4); P(g, 6, ROOF, 16, 1, Y5);
+    P(g, 7, ROOF + 1, 14, 5, GLS); P(g, 7, ROOF + 1, 14, 1, GLSL);      // lunette
+    P(g, 9, BELT + 3, 10, 3, CHRD); P(g, 10, BELT + 3, 8, 1, CHR);      // plaque
+    P(g, 2, BELT + 3, 4, 4, RED); P(g, 22, BELT + 3, 4, 4, RED);        // feux
+    P(g, 2, BELT + 3, 4, 1, "#e8564a"); P(g, 22, BELT + 3, 4, 1, "#e8564a");
+    P(g, 1, SILL + 1, 26, 3, CHR); P(g, 1, SILL + 3, 26, 1, CHRD);
+    P(g, 10, ROOF - 4, 8, 4, CHR); P(g, 11, ROOF - 3, 6, 2, BLK);
+    P(g, 21, SILL + 4, 4, 1, BLK);                                      // pot d'échappement
+    outlineSprite(g, 28, 24, "#2a2110");
+    c.exhaust = { x: 23, y: SILL + 4 };
+    c.ground = 23;
+    return c;
+  }
+
   // Icônes de produits artisanaux (16x16).
   function craftIcon(id) {
     const [c, g] = cv(T, T);
@@ -6515,6 +6653,8 @@ house: house(),
   // Zip suivant : l'établi de l'apiculteur, en trois calques (voir beeTableSprite).
   S.beeTable = { table: beeTableSprite("table"), smoker: beeTableSprite("smoker"), honey: beeTableSprite("honey") };
   S.beeLavender = beeLavenderSprite();   // le pot de lavande, à droite de la ruche
+  // Le taxi de Valley Town : trois directions, l'ouest est l'est retourné au rendu.
+  S.taxi = { e: taxiSprite("e"), s: taxiSprite("s"), n: taxiSprite("n") };
   S.craftIcons = { honey: craftIcon("honey"), cheeseWheel: craftIcon("cheeseWheel"), cheesePortion: craftIcon("cheesePortion"), eclairChoco: craftIcon("eclairChoco"), eclairVanilla: craftIcon("eclairVanilla"), flanVanilla: craftIcon("flanVanilla"), gateauBasque: craftIcon("gateauBasque"), butter: craftIcon("butter"), bread: craftIcon("bread"), croissant: craftIcon("croissant"), chocolatine: craftIcon("chocolatine"), painSuisse: craftIcon("painSuisse"), yogurtNature: craftIcon("yogurtNature"), yogurtVanilla: craftIcon("yogurtVanilla") };
   // Zip 236: one sprite per pet id in the catalog (individual pets).
   // Zip 388 : DEUX entrées, et c'est délibéré.

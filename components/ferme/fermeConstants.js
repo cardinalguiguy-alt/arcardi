@@ -439,6 +439,39 @@ export const SPAWN = { x: 43, y: 37 }; // chemin devant la maison (cible du tél
 export const HORSE_COSTS = [800, 1500, 2500];
 export const HORSE_MAX_COUNT = HORSE_COSTS.length;
 export const HORSE_SPEED_MULT = 1.9; // vitesse à cheval
+
+/* ╔══════════════════════════════════════════════════════════════════════════
+   ║ ZIP 432 — LE TAXI DE VALLEY TOWN.
+   ╚══════════════════════════════════════════════════════════════════════════
+   ⚠️ LA VITESSE EST DÉRIVÉE DU CHEVAL, PAS RECOPIÉE. Demande de Guillaume :
+   « même vitesse que le cheval ». Un 9,88 écrit ici serait un nombre qui
+   DOUBLE `PLAYER_SPEED × HORSE_SPEED_MULT` — la divergence en attente du §8.
+   Le jour où le cheval change d'allure, le taxi le suit. */
+export const TAXI_SPEED = PLAYER_SPEED * HORSE_SPEED_MULT;
+/* Accélération et freinage, en tuiles/s². ⚠️ ILS NE SONT PAS SYMÉTRIQUES, et
+   c'est ce qui rend une conduite crédible : une voiture freine toujours plus
+   fort qu'elle n'accélère. Réglés pour que le démarrage prenne ~1,3 s et
+   l'arrêt ~0,8 s à pleine vitesse. */
+export const TAXI_ACCEL = 7.5;
+export const TAXI_BRAKE = 12.0;
+/* ⚠️ LE RALENTISSEMENT EN VIRAGE EST UNE VITESSE CIBLE, PAS UN COUP DE FREIN.
+   La cible est calculée à partir de l'angle du virage À VENIR (voir
+   taxiCornerSpeed) : plus il est serré, plus elle est basse. C'est ce qui donne
+   le « ralentit dans les virages, réaccélère en sortie » demandé — et ça sort
+   d'une seule formule au lieu d'une table de cas. */
+export const TAXI_CORNER_MIN = 0.34;      // fraction de TAXI_SPEED dans un angle droit
+export const TAXI_LOOKAHEAD = 3.2;        // tuiles : distance à laquelle on voit le virage
+export const TAXI_TURN_RATE = 9.5;        // rad/s : vivacité du volant (7,0 au premier jet : le banc a mesuré que la voiture mordait la pelouse dans les angles)
+export const TAXI_ARRIVE_R = 0.30;        // tuile : on considère le point atteint
+export const TAXI_CALL_RANGE = 7;         // tuiles : distance MAXI à une rue pour héler
+/* ⚠️ DISTANCE D'ARRIVÉE, MESURÉE LE LONG DE LA CHAUSSÉE (voir taxiSpawnFrom).
+   Assez loin pour qu'on le VOIE venir — un taxi qui apparaît devant soi n'est
+   pas un taxi, c'est un téléport — assez près pour ne pas attendre : ~18 tuiles
+   à 9,88 tuiles/s, virages compris, font une attente de l'ordre de 4 à 6 s. */
+export const TAXI_SPAWN_MAX = 18;
+export const TAXI_SMOKE_MS = 110;         // cadence des bouffées d'échappement
+export const TAXI_SMOKE_LIFE = 1.15;      // s : durée de vie d'une bouffée
+export const TAXI_BOARD_R = 1.6;          // tuiles : distance pour monter (touche E)
 // Traversée de la rivière à cheval (chantier 2026-07, demande Guillaume :
 // "on doit pouvoir traverser la rivière à cheval, mais le cheval ralentit
 // par 4 quand il est sur de l'eau") — s'applique au cheval monté ET aux

@@ -769,6 +769,33 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      pas un state : il change à chaque image pendant un fondu, un state
      re-rendrait tout React soixante fois par seconde pour une valeur que seule
      la boucle de dessin lit. Voir townZoomNow. */
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 432 — LE TAXI DE VALLEY TOWN. (demande de Guillaume)
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ IL EST LOCAL, ET C'EST UNE DÉCISION DE §3, PAS UNE ÉCONOMIE DE CODE.
+     Un taxi est un transport PERSONNEL : on l'appelle pour soi, on monte seul.
+     Le diffuser image par image coûterait le flux le plus cher du jeu pour une
+     information qui se DÉDUIT — pendant la course, le passager EST à la place du
+     véhicule, donc sa position circule déjà dans le paquet `pos` habituel. Les
+     autres clients dessinent la voiture SOUS lui grâce au seul drapeau `taxi`
+     du paquet (un caractère, aucun `send()` de plus).
+     ⚠️ ET C'EST CE QUI REND LA CAMÉRA GRATUITE : on ne pilote pas une caméra de
+     véhicule, on déplace le joueur. Tout ce qui suit un joueur — cadrage, AOI,
+     réplication, voile de nuit — suit le taxi sans une ligne.
+
+     Phases : null → "coming" (il vient nous chercher) → "waiting" (à l'arrêt,
+     moteur tournant) → "asking" (on est monté, le chauffeur demande) →
+     "riding" (la course) → "leaving" (il repart à vide). */
+  /* ⚠️ LA ZONE COURANTE EN ÉTAT REACT, et uniquement pour l'INTERFACE. Le jeu
+     lit `meRef.current.zone` soixante fois par seconde ; un state re-rendrait
+     tout React autant de fois. Ce miroir n'est écrit QUE quand la zone change
+     (même garde que setPromptKeyThrottled), donc au plus une fois par voyage. */
+  const [uiZone, setUiZone] = useState("farm");
+  const uiZoneRef = useRef("farm");
+  const taxiRef = useRef(null);
+  const [taxiMenu, setTaxiMenu] = useState(false);   // le panneau « Où allez-vous ? »
+  const taxiMenuRef = useRef(false);
+  const [taxiPhase, setTaxiPhase] = useState(null);  // miroir React, pour le bouton
   const townZoomRef = useRef({ v: 0 });
   // Transition en fondu au noir (aller ET retour) : { active, t0, toEvil,
   // swapped }. `swapped` marque le moment (mi-fondu, écran totalement noir)
@@ -1723,6 +1750,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          l'autre. Un champ qui voyage sans être lu ne lève aucune erreur : il
          coûte des octets et ne fait rien. */
       r.sit = Array.isArray(payload.sit) ? payload.sit : null;
+      r.taxi = typeof payload.taxi === "string" ? payload.taxi : null;   // zip 432
       if (Array.isArray(payload.pets)) r.pets = payload.pets; // zip 247: pets are now broadcast so everyone sees everyone's pets
       // Monde maléfique multijoueur (2026-07) : cible d'interpolation sur la
       // carte maléfique + drapeau d'immunité (lu par la simulation hôte).
@@ -6009,6 +6037,12 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        client d'avant ce zip ignore simplement le champ — il verra le joueur
        debout au bon endroit, ce qui est le pire cas acceptable. */
     if (m.sitOn) pub.sit = [m.sitOn.x, m.sitOn.y, m.seat || 0];
+    /* ⚠️ ZIP 432 — LE TAXI VOYAGE EN UN CARACTÈRE, dans le paquet qui part
+       déjà. Pendant une course le passager EST à la place du véhicule : ses x/y
+       suffisent, il ne manque que « ce que vous voyez glisser est une voiture ».
+       Sans ce drapeau, l'autre joueur verrait quelqu'un traverser la ville à
+       vitesse de cheval, debout, sans rien sous les pieds. */
+    { const tx0 = taxiRef.current; if (tx0 && tx0.phase === "riding") pub.taxi = tx0.dir || "e"; }
     pub.st = +performance.now().toFixed(1);
     if (pub.moving) { pub.vx = +(m.vx || 0).toFixed(2); pub.vy = +(m.vy || 0).toFixed(2); }
     // Monde maléfique MULTIJOUEUR (demande Guillaume 2026-07) : les
@@ -6430,6 +6464,197 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     let dir = 0;
     if (Math.abs(dx) > 0.02 || Math.abs(dy) > 0.02) dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 3 : 2) : (dy > 0 ? 0 : 1);
     return { x: lx, y: ly, dir, moving: !!moving };
+  }
+  /* ══════════════════════════════════════════════════════════════════════════
+     ZIP 432 — LE TAXI : APPEL, CONDUITE, DÉPOSE.
+     ──────────────────────────────────────────────────────────────────────────
+     Tout vit au NIVEAU DU COMPOSANT, et ce n'est pas un détail de rangement :
+     le bouton, la touche E et le panneau de destination y vivent aussi. Une
+     seule de ces fonctions déclarée dans la closure de la boucle de rendu et on
+     rejouait le `ReferenceError` de `canStandTown` (§4). Rien ici n'appelle
+     `canStandTown`/`blockedTown` : la route est vérifiée par le MOTEUR
+     (`E.townRoadNav`), qui ne connaît que la carte.
+     ══════════════════════════════════════════════════════════════════════════ */
+  function taxiWorld() { return townWorldRef.current; }
+  /* Peut-on héler ici ? Rend le point de prise en charge, ou une raison. */
+  function taxiHailSpot() {
+    const m = meRef.current, tw = taxiWorld();
+    if (!m || m.zone !== "town" || !tw) return { err: "taxiNotHere" };
+    const near = E.townRoadNear(tw, m.x, m.y, C.TAXI_CALL_RANGE, true);
+    if (!near) return { err: "taxiNoRoad" };
+    return { spot: near };
+  }
+  /* Le point de DÉPART du taxi : une case de rue à bonne distance du client, de
+     préférence hors de l'écran, pour qu'on le voie arriver au lieu de le voir
+     apparaître. ⚠️ On le cherche SUR LE CHEMIN, pas au hasard : on demande un
+     trajet vers un arrêt lointain et on remonte la liste jusqu'à la bonne
+     distance. Une case tirée au sort pourrait être dans une poche isolée. */
+  function taxiSpawnFrom(tw, spot) {
+    /* ⚠️⚠️ ON REMONTE LA RUE DEPUIS LE CLIENT, ON NE PART PAS D'UN ARRÊT.
+       Premier jet : le taxi partait de l'arrêt situé à ~30 tuiles à vol d'oiseau.
+       Mesuré en jeu, l'attente montait à plus de vingt secondes — parce qu'à vol
+       d'oiseau ne veut rien dire sur un réseau de rues : trente tuiles d'écart,
+       c'est parfois cent tuiles de trajet en contournant le parc. On prend donc
+       un point situé à la bonne distance LE LONG DE LA CHAUSSÉE, ce qui borne
+       l'attente pour de bon. */
+    const stops = E.townTaxiStops(tw);
+    let far = null, farD = -1;
+    for (const st of stops) {
+      const d = Math.hypot(st.x - spot.x, st.y - spot.y);
+      if (d > farD) { farD = d; far = st; }
+    }
+    if (!far) return spot;
+    const path = E.townRoadPath(tw, spot.x, spot.y, far.x, far.y);
+    if (!path || path.length < 2) return far;
+    // On avance sur ce chemin jusqu'à TAXI_SPAWN_MAX tuiles parcourues.
+    let d = 0;
+    for (let k = 1; k < path.length; k++) {
+      d += Math.hypot(path[k].x - path[k - 1].x, path[k].y - path[k - 1].y);
+      if (d >= C.TAXI_SPAWN_MAX) return { x: path[k].x, y: path[k].y };
+    }
+    return path[path.length - 1];
+  }
+  function callTaxi() {
+    if (taxiRef.current) { cancelTaxi(); return; }
+    const h = taxiHailSpot();
+    if (h.err) { pushToast(L[h.err] || h.err); return; }
+    const tw = taxiWorld(), spot = h.spot;
+    const from = taxiSpawnFrom(tw, spot);
+    const path = E.townRoadPath(tw, from.x, from.y, spot.x, spot.y);
+    if (!path || path.length < 2) { pushToast(L.taxiUnreachable); return; }
+    taxiRef.current = {
+      phase: "coming", x: path[0].x, y: path[0].y, ang: 0, spd: 0,
+      path, i: 1, pickup: spot, smoke: [], smokeAt: 0, dir: "e", bubbleAt: 0,
+    };
+    setTaxiPhase("coming");
+    pushToast(L.taxiCalled);
+  }
+  function cancelTaxi() {
+    const t = taxiRef.current; if (!t) return;
+    if (t.phase === "riding") return;          // on ne saute pas d'un taxi en marche
+    if (t.phase === "asking") { taxiAlight(false); return; }
+    taxiRef.current = null; setTaxiPhase(null); setTaxiMenu(false);
+  }
+  /* Monter : le passager DEVIENT le véhicule (voir la note de taxiRef). */
+  function taxiBoard() {
+    const t = taxiRef.current, m = meRef.current;
+    if (!t || t.phase !== "waiting" || !m) return false;
+    if (Math.hypot(m.x - t.x, m.y - t.y) > C.TAXI_BOARD_R + 0.9) return false;
+    t.phase = "asking"; t.bubbleAt = performance.now();
+    setTaxiPhase("asking"); setTaxiMenu(true);
+    return true;
+  }
+  /* Descendre. `arrived` distingue la fin de course de l'annulation : dans les
+     deux cas on repose le joueur SUR LE TROTTOIR, jamais au milieu de la rue. */
+  function taxiAlight(arrived) {
+    const t = taxiRef.current, m = meRef.current, tw = taxiWorld();
+    if (!t || !m) return;
+    if (tw) {
+      /* ⚠️ ON CHERCHE UNE CASE OÙ L'ON TIENT DEBOUT, pas seulement une case
+         libre : le trottoir d'à côté peut être une haie. `townBoxFree` est la
+         MÊME boîte que celle du jeu (elle vit dans le moteur exprès). */
+      let put = null;
+      for (let r = 1; r <= 4 && !put; r++) {
+        for (let a = 0; a < 12; a++) {
+          const an = (a / 12) * Math.PI * 2;
+          const px = t.x + Math.cos(an) * r, py = t.y + Math.sin(an) * r;
+          if (E.townBoxFree(tw, px, py)) { put = { x: px, y: py }; break; }
+        }
+      }
+      if (put) { m.x = put.x; m.y = put.y; }
+    }
+    m.moving = false; m.vx = 0; m.vy = 0;
+    t.phase = "leaving"; t.leaveAt = performance.now();
+    setTaxiPhase("leaving"); setTaxiMenu(false);
+    pushToast(arrived ? L.taxiArrived : L.taxiDropped);
+    sendPos();
+  }
+  /* Lancer la course vers l'arrêt choisi. */
+  function taxiGoTo(stopKey) {
+    const t = taxiRef.current, tw = taxiWorld();
+    if (!t || t.phase !== "asking" || !tw) return;
+    const st = E.townTaxiStops(tw).find(z => z.key === stopKey);
+    if (!st) return;
+    const path = E.townRoadPath(tw, t.x, t.y, st.x, st.y);
+    if (!path || path.length < 2) { pushToast(L.taxiUnreachable); return; }
+    t.path = path; t.i = 1; t.phase = "riding"; t.dest = st;
+    setTaxiPhase("riding"); setTaxiMenu(false);
+  }
+  /* ══════════════════════════════════════════════════════════════════════════
+     LA CONDUITE. Trois vitesses cibles, et on retient la plus BASSE :
+       · la vitesse de croisière (celle du cheval, dérivée) ;
+       · celle qu'autorise le VIRAGE À VENIR, lue sur le chemin quelques tuiles
+         plus loin — c'est elle qui fait ralentir en entrée de courbe et
+         réaccélérer en sortie, sans aucune table de cas ;
+       · celle qu'autorise la DISTANCE RESTANTE (v = √(2·a·d)), qui est la
+         formule du freinage : elle donne un ralentissement progressif et un
+         arrêt PILE au point d'arrivée, quelle que soit la vitesse d'approche.
+     La vitesse réelle rejoint la cible à TAXI_ACCEL ou TAXI_BRAKE selon le
+     sens — un véhicule freine plus fort qu'il n'accélère, et c'est ce qui
+     s'entend le plus dans une conduite.
+     ⚠️ LE CAP EST LISSÉ SÉPARÉMENT (TAXI_TURN_RATE) : sans volant, la voiture
+     pivoterait d'un coup à chaque point de passage et le sprite clignoterait
+     d'une direction à l'autre.
+     ══════════════════════════════════════════════════════════════════════════ */
+  /* ⚠️ LA CONDUITE VIT DANS LE MOTEUR (`E.taxiStep`), PAS ICI, et c'est pour
+     pouvoir la MESURER : `tools/verify-taxi.mjs` la rejoue sur les 132 trajets
+     réels de la ville et compte les arrivées. Une conduite regardée à l'œil a
+     toujours l'air de marcher — et tourne en rond une fois sur cent. Ce qui
+     reste ici est la MACHINE À ÉTATS (qui vient, qui attend, qui roule), c'est-
+     à-dire ce qui touche au joueur ; la physique n'a rien à y faire.
+     ⚠️ Le réglage est passé en argument plutôt que lu dans `C` par le moteur :
+     le banc peut ainsi éprouver une conduite plus nerveuse sans toucher au jeu. */
+  const TAXI_CFG = {
+    SPEED: C.TAXI_SPEED, ACCEL: C.TAXI_ACCEL, BRAKE: C.TAXI_BRAKE,
+    CORNER_MIN: C.TAXI_CORNER_MIN, LOOKAHEAD: C.TAXI_LOOKAHEAD,
+    TURN_RATE: C.TAXI_TURN_RATE, ARRIVE_R: C.TAXI_ARRIVE_R,
+  };
+  function updateTaxi(dt) {
+    const t = taxiRef.current; if (!t) return;
+    const now = performance.now();
+    // Les bouffées d'échappement vivent leur vie même à l'arrêt (moteur tournant).
+    for (let k = t.smoke.length - 1; k >= 0; k--) {
+      const p = t.smoke[k]; p.t += dt;
+      if (p.t > C.TAXI_SMOKE_LIFE) { t.smoke.splice(k, 1); continue; }
+      p.x += p.vx * dt; p.y += p.vy * dt; p.vy -= 0.15 * dt;
+    }
+    if (t.phase === "leaving" && now - t.leaveAt > 5200) { taxiRef.current = null; setTaxiPhase(null); return; }
+    const driving = t.phase === "coming" || t.phase === "riding" || t.phase === "leaving";
+    if (!driving) { t.spd = Math.max(0, t.spd - C.TAXI_BRAKE * dt); taxiPuff(t, now, dt); return; }
+    const done = E.taxiStep(t, dt, TAXI_CFG);
+    /* La direction du SPRITE : l'axe dominant du cap. ⚠️ Avec une hystérésis —
+       sur une diagonale parfaite, un cap qui oscille d'un dixième de degré
+       ferait alterner deux sprites à chaque image. */
+    const cs = Math.cos(t.ang), sn = Math.sin(t.ang);
+    t.dir = (Math.abs(cs) > Math.abs(sn) * 1.15 ? (cs > 0 ? "e" : "w")
+          : Math.abs(sn) > Math.abs(cs) * 1.15 ? (sn > 0 ? "s" : "n") : t.dir) || t.dir;
+    taxiPuff(t, now, dt);
+    if (done) {
+      if (t.phase === "coming") { t.phase = "waiting"; t.spd = 0; setTaxiPhase("waiting"); }
+      else if (t.phase === "riding") { t.spd = 0; taxiAlight(true); }
+      else if (t.phase === "leaving") { taxiRef.current = null; setTaxiPhase(null); }
+    }
+  }
+  /* La fumée sort DU POT, et le pot n'est pas au même endroit selon la vue :
+     sa position est portée par le sprite (`c.exhaust`), jamais devinée ici. */
+  function taxiPuff(t, now, dt) {
+    if (now - t.smokeAt < C.TAXI_SMOKE_MS) return;
+    t.smokeAt = now;
+    const sp = spritesRef.current && spritesRef.current.taxi;
+    const im = sp && (sp[t.dir === "w" ? "e" : t.dir] || sp.e);
+    if (!im || !im.exhaust) return;
+    const flip = t.dir === "w";
+    const ex = (flip ? (im.width - im.exhaust.x) : im.exhaust.x) - im.width / 2;
+    const ey = im.exhaust.y - im.ground;
+    // Plus on roule vite, plus la bouffée part en arrière et s'étire.
+    const back = 0.10 + (t.spd / C.TAXI_SPEED) * 0.35;
+    t.smoke.push({
+      x: t.x + ex / C.TILE - Math.cos(t.ang) * back,
+      y: t.y + ey / C.TILE - Math.sin(t.ang) * back * 0.5,
+      vx: -Math.cos(t.ang) * 0.5 + (Math.random() - 0.5) * 0.2,
+      vy: -0.28 + (Math.random() - 0.5) * 0.15,
+      t: 0, r: 0.9 + Math.random() * 0.5,
+    });
   }
   function smoothNpc(key, sx, sy, dt, glide, moving, collide) {
     const M = npcSmoothRef.current, tnow = performance.now();
@@ -11820,6 +12045,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       // Valley Town (zip 234): same early-return pattern as the evil map; the
       // host sims above keep running on the farm world regardless.
       if (m.zone === "town") {
+        /* ⚠️ LE TAXI AVANCE AVANT LA SORTIE `overlayUp`, comme toute simulation :
+           couper la PEINTURE ne doit jamais couper le MONDE (règle du 425). */
+        updateTaxi(dt);
         if (overlayUp) return;   // zip 425, même raison exactement
         drawTownFrame(now, dt);
         if (mapOpenRef.current) drawFullMap();   // zip 426 : la carte marche enfin en ville
@@ -14290,6 +14518,25 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     function updateMeTown(dt) {
       const m = meRef.current, tw = townWorldRef.current, keys = keysRef.current;
       if (!tw) return;
+      /* ╔══════════════════════════════════════════════════════════════════════
+         ║ ZIP 432 — EN COURSE, LE PASSAGER EST LE VÉHICULE.
+         ╚══════════════════════════════════════════════════════════════════════
+         ⚠️ ON NE PILOTE PAS UNE CAMÉRA DE TAXI : on recopie la position de la
+         voiture sur le joueur. Tout ce qui suit un joueur — cadrage, AOI, voile
+         de nuit, réplication réseau — suit alors le taxi SANS UNE LIGNE de plus.
+         ⚠️ ET ON RENSEIGNE `vx/vy` : c'est la vitesse transmise dans le paquet
+         `pos`, celle avec laquelle l'autre client extrapole entre deux paquets
+         (§ advanceRemote). Sans elle, le passager sauterait de deux secondes en
+         deux secondes sur l'écran d'en face — le défaut même corrigé plus haut. */
+      const tx = taxiRef.current;
+      if (tx && (tx.phase === "riding" || tx.phase === "asking")) {
+        m.x = tx.x; m.y = tx.y;
+        m.moving = tx.phase === "riding" && tx.spd > 0.05;
+        m.vx = Math.cos(tx.ang) * tx.spd; m.vy = Math.sin(tx.ang) * tx.spd;
+        m.animT = 0; m.sitOn = null;
+        maybeSendPos();
+        return;
+      }
       /* ---- LE SAUT EN COURS (425). Il prend la main sur les commandes : on ne
          pilote pas en l'air, et la trajectoire est décidée au décollage (voir
          tryTownJump). ⚠️ On interpole la POSITION, pas la vitesse : une
@@ -15192,6 +15439,36 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           });
         }
       }
+      /* ╔══════════════════════════════════════════════════════════════════════
+         ║ ZIP 432 — LE TAXI À L'ÉCRAN : ombre, fumée, caisse, bulle.
+         ╚══════════════════════════════════════════════════════════════════════
+         ⚠️ L'ORDRE EST LE SUJET, comme pour les abeilles de la ruche : la fumée
+         sort DERRIÈRE la voiture, donc elle se peint AVANT elle. Peinte après,
+         elle passerait devant le coffre et on la lirait comme du brouillard.
+         ⚠️ ET LE TAXI ENTRE DANS LA FILE `pushE` COMME TOUT LE RESTE : il est
+         trié par sa ligne de sol et porte l'altitude de sa case. Un véhicule
+         dessiné hors file passerait devant les bâtiments qu'il longe. */
+      const drawTaxiAt = (tx2, dir2, smoke, alpha) => {
+        const sp = sprites.taxi; if (!sp) return;
+        const flip = dir2 === "w";
+        const im = sp[flip ? "e" : dir2] || sp.e;
+        const px2 = Math.round(tx2.x * T - im.width / 2), py2 = Math.round(tx2.y * T - im.ground);
+        if (alpha !== undefined) ctx.globalAlpha = alpha;
+        // La fumée d'abord (elle est derrière), puis l'ombre portée, puis la caisse.
+        if (smoke) for (const q of smoke) {
+          const k = 1 - q.t / C.TAXI_SMOKE_LIFE;
+          ctx.globalAlpha = (alpha === undefined ? 1 : alpha) * k * 0.42;
+          ctx.fillStyle = "#dcdcd6";
+          const rr = q.r * (1 + (1 - k) * 2.2);
+          ctx.beginPath(); ctx.ellipse(q.x * T, q.y * T, rr, rr * 0.8, 0, 0, 7); ctx.fill();
+          ctx.globalAlpha = alpha === undefined ? 1 : alpha;
+        }
+        ctx.fillStyle = "rgba(0,0,0,0.24)";
+        ctx.beginPath(); ctx.ellipse(tx2.x * T, tx2.y * T - 1, im.width * 0.40, 2.4, 0, 0, 7); ctx.fill();
+        if (flip) { ctx.save(); ctx.translate(px2 + im.width, py2); ctx.scale(-1, 1); ctx.drawImage(im, 0, 0); ctx.restore(); }
+        else ctx.drawImage(im, px2, py2);
+        if (alpha !== undefined) ctx.globalAlpha = 1;
+      };
       // Remote players in town: their pos broadcast carries real town coords
       // (zone "town"); lerp locally exactly like the farm loop does — the
       // farm loop early-returns before its own lerp while we are here.
@@ -15213,8 +15490,13 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
            plus, c'est surtout un champ à réconcilier). Un client d'avant ce zip
            voit donc les autres au bon endroit, simplement à plat. */
         const pe = playerElevTown(tw, p);
-        pushE((p.y + 0.9) * T, pe, () => drawRemotePets(p, dt));
-        pushE((p.y + 1) * T, pe, () => drawCharacter(p, false));
+        if (!p.taxi) pushE((p.y + 0.9) * T, pe, () => drawRemotePets(p, dt));
+        /* ⚠️ ZIP 432 — UN JOUEUR EN TAXI SE DESSINE COMME UN TAXI. Le drapeau
+           tient dans le paquet `pos` (un caractère) et la position est déjà là :
+           aucune donnée de véhicule ne circule, et personne ne voit un camarade
+           traverser la ville debout à vitesse de cheval. */
+        if (p.taxi) pushE((p.y + 0.5) * T, pe, () => drawTaxiAt(p, p.taxi, null));
+        else pushE((p.y + 1) * T, pe, () => drawCharacter(p, false));
       }
       /* MON altitude. Pendant un saut, elle s'interpole du rebord au sol ET
          reçoit la cloche : c'est la seule animation du saut, et elle est
@@ -15226,8 +15508,24 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         const k = Math.min(1, (performance.now() - jpv.t0) / C.TOWN_JUMP_MS);
         myE = jpv.e0 + (jpv.e1 - jpv.e0) * k + (Math.sin(Math.PI * k) * C.TOWN_JUMP_ARC_PX) / C.TOWN_ELEV_PX;
       }
-      if (!m.sleeping) pushE((m.y + 0.9) * T, myE, () => drawMyPets(m, dt));
-      pushE((m.y + 1) * T, myE, () => drawSelf(m));
+      const myTaxi = taxiRef.current;
+      const inCar = !!(myTaxi && (myTaxi.phase === "riding" || myTaxi.phase === "asking"));
+      if (!m.sleeping && !inCar) pushE((m.y + 0.9) * T, myE, () => drawMyPets(m, dt));
+      /* ⚠️ ON NE DESSINE PAS LE PASSAGER : il est DANS la voiture. Le laisser
+         donnerait un fermier debout sur le toit — et comme sa position est
+         exactement celle du véhicule, on ne le verrait même pas dépasser, on
+         verrait juste un taxi avec une tête qui sort du capot. */
+      if (!inCar) pushE((m.y + 1) * T, myE, () => drawSelf(m));
+      if (myTaxi) {
+        const te = elevTown(tw, myTaxi.x, myTaxi.y);
+        pushE((myTaxi.y + 0.5) * T, te, () => drawTaxiAt(myTaxi, myTaxi.dir, myTaxi.smoke));
+        /* La bulle du chauffeur. Elle passe par la file des bulles, comme celles
+           des résidents : peinte dans son `draw`, le premier bâtiment plus bas
+           la recouvrirait (voir queueTownBubble). */
+        if (myTaxi.phase === "asking") {
+          queueTownBubble(Math.round(myTaxi.x * T), Math.round(myTaxi.y * T) - 26 - te * C.TOWN_ELEV_PX, L.taxiAsk, true);
+        }
+      }
       // Zip 251 : décorations posées en Valley Town (même liste partagée,
       // filtrée sur zone "town" ; persistées avec la ferme).
       for (const e of (sharedRef.current.decor || [])) {
@@ -15361,7 +15659,18 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          tableau des nouvelles, proposer « E : lire » alors que E ne fera rien
          tant qu'on est assis, c'est un jeu qui propose puis refuse — le défaut
          que le 426 s'est juré de ne plus commettre. */
-      if (m.sitOn) tpk = "townStand";
+      /* ⚠️ ZIP 432 — LE TAXI QUI ATTEND PASSE AVANT TOUT. C'est la règle du
+         425 poussée d'un cran : l'invite décrit l'action disponible MAINTENANT,
+         et un taxi à l'arrêt moteur tournant est ce qu'il y a de plus éphémère
+         à l'écran. Une plaque de bâtiment sera encore là dans dix secondes. */
+      const tw2 = taxiRef.current;
+      /* ⚠️ EN VOITURE, AUCUNE INVITE. Le passager est à la position du véhicule :
+         sans cette coupure, traverser la place proposait « E : faire un vœu » à
+         quarante à l'heure, et E ne fait rien — le « propose puis refuse » que le
+         426 s'est juré de ne plus commettre, à chaque carrefour. */
+      if (tw2 && (tw2.phase === "riding" || tw2.phase === "asking")) tpk = null;
+      else if (tw2 && tw2.phase === "waiting" && Math.hypot(m.x - tw2.x, m.y - tw2.y) <= C.TAXI_BOARD_R + 0.9) tpk = "taxiBoard";
+      else if (m.sitOn) tpk = "townStand";
       else if (canTownJumpNow()) tpk = "townJump";
       else if (nearTile(C.TOWN_STATION_SIGN)) tpk = "trainBack";
       else if (nearBuildingDoor(C.TOWN_CHURCH)) tpk = "townChurch";
@@ -15856,6 +16165,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         }
         worldRef.current.artisanBlocks = abs;
       }
+      { const z = m.zone || "farm"; if (uiZoneRef.current !== z) { uiZoneRef.current = z; setUiZone(z); } }
       if (m.zone === "evil") { updateMeEvil(dt); return; }
       if (m.zone === "town") { updateMeTown(dt); return; } // Valley Town (zip 234)
       if (m.zone === "court") { updateMeCourt(dt); return; } // intérieur du tribunal (zip 426)
@@ -17964,6 +18274,11 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
        sur sa propre porte, où `startSleep` refuse (il dort déjà) — c'est-à-dire
        rien du tout, exactement le symptôme qu'on corrige. */
     if (m0 && m0.sleeping) { wakeUp(false); return; }
+    /* ⚠️ ZIP 432 — E MONTE DANS LE TAXI, ET C'EST PRIORITAIRE. Il est garé sur
+       la chaussée, donc à portée d'une porte, d'un banc ou d'une vitrine : sans
+       cette priorité, appuyer sur E devant un taxi qui attend ouvrirait la
+       boutique d'à côté. `taxiBoard` refuse tout seul s'il n'attend pas. */
+    if (taxiBoard()) return;
     /* ---- INTÉRIEUR DU TRIBUNAL (zip 426). Sortie anticipée, comme la carte
        maléfique : les coordonnées de la ferme n'ont aucun sens ici, et une
        coïncidence de coordonnées ouvrirait la boutique depuis les archives. */
@@ -18761,8 +19076,33 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       {/* Sifflet à chevaux (chantier 2026-07, demande Guillaume) : bouton
           dédié à gauche de l'écran, icône cheval. Rappelle tous les chevaux
           libres de la ferme, qui reviennent en courant vers qui a sifflé. */}
-      <button className="ferme-whistle-btn" title={L.whistleTip} onClick={whistleHorses}>
-        <Sprite img={spritesReady ? spritesRef.current.horse : null} w={36} h={30} />
+      {/* ⚠️⚠️ ZIP 432 — UN SEUL BOUTON, ET L'ACTION NE PASSE PAS PAR L'ÉTAT REACT.
+          Le même emplacement sert de sifflet à la ferme et de borne de taxi en
+          ville (demande de Guillaume : « le bouton cheval sur la ferme est
+          remplacé par un bouton taxi ») — un second bouton flottant aurait
+          encombré l'écran d'un rappel de chevaux inutile en ville et d'un taxi
+          inutile à la ferme. Le geste est le même : « fais venir mon moyen de
+          transport ».
+
+          ⚠️⚠️ MAIS LE PREMIER JET UTILISAIT UN TERNAIRE SUR UN ÉTAT REACT, ET ÇA
+          A COÛTÉ UNE HEURE. Deux `<button>` alternés au même endroit : React a
+          réutilisé le MÊME nœud du DOM, l'icône était bien celle du taxi… et le
+          `onClick` restait celui du sifflet. Cliquer ne faisait donc RIEN, sans
+          erreur, sans message — le bouton montrait une voiture et rappelait des
+          chevaux. **Un bouton dont l'action dépend d'un miroir React est un
+          bouton qui mentira le jour où le miroir a une image de retard.**
+          ⚠️ LA PARADE : UN SEUL BOUTON, et l'action décidée AU CLIC sur la
+          source de vérité (`meRef.current.zone`), pas sur le miroir. L'icône et
+          l'infobulle, elles, peuvent bien retarder d'une image — personne ne le
+          voit ; une action qui retarde, si. */}
+      <button className={"ferme-whistle-btn" + (taxiPhase ? " on" : "")}
+              title={uiZone === "town" ? (taxiPhase ? L.taxiBtnCancel : L.taxiBtnCall) : L.whistleTip}
+              onClick={() => {
+                if ((meRef.current && meRef.current.zone) === "town") callTaxi();
+                else whistleHorses();
+              }}>
+        <Sprite img={spritesReady ? (uiZone === "town" ? spritesRef.current.taxi.e : spritesRef.current.horse) : null}
+                w={uiZone === "town" ? 40 : 36} h={uiZone === "town" ? 24 : 30} />
       </button>
       <button className={"ferme-torch-btn" + (torchOn ? " lit" : "")} title={torchOn ? L.torchTipOn : L.torchTipOff} onClick={toggleTorch}>
         <Sprite img={spritesReady ? spritesRef.current.torch : null} w={22} h={30} />
@@ -18817,7 +19157,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           expression que le bandeau, et pas ailleurs. Deux traductions du même
           `promptKey` finiraient par diverger d'un libellé, et la divergence
           tomberait sur l'appareil du joueur qui n'a QUE ce bouton. */}
-      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townJump" ? L.promptTownJump : promptKey === "townChurch" ? L.promptTownChurch : promptKey === "townHall" ? L.promptTownHall : promptKey === "townCourt" ? L.promptTownCourt : promptKey === "townBoutique" ? L.promptTownBoutique : promptKey === "townBoutiqueShut" ? L.promptTownBoutiqueShut : promptKey === "townSalon" ? L.promptTownSalon : promptKey === "townNews" ? L.promptTownNews : promptKey === "townMarket" ? L.promptTownMarket : promptKey === "townBench" ? L.promptTownBench : promptKey === "townStand" ? L.promptTownStand : promptKey === "townWish" ? L.promptTownWish : promptKey === "townKiosk" ? L.promptTownKiosk : promptKey === "townPier" ? L.promptTownPier : promptKey === "townView" ? L.promptTownView : promptKey === "courtExit" ? L.promptCourtExit : promptKey === "courtBoard" ? L.promptCourtBoard : promptKey.startsWith("courtDoor:") ? L.promptCourtDoor(L.courtRoomName(promptKey.slice(10))) : promptKey === "townSleep" ? L.promptTownSleep : promptKey === "townSleepFull" ? L.promptTownSleepFull : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "mazePrize" ? L.promptMazePrize : promptKey.startsWith("passagePickup:") ? L.promptPassagePickup : L.promptBin}</div>}
+      {promptKey && <div className="ferme-prompt">{promptKey === "sellAnimal" ? L.promptSellAnimal(Math.round(((C.ANIMALS[(sharedRef.current.animals[heldAnimalRef.current] || {}).type] || {}).cost || 0) / 3)) : promptKey === "station" ? L.promptStation : promptKey === "trainRide" ? L.promptTrainRide : promptKey === "trainBack" ? L.promptTrainBack : promptKey === "townJump" ? L.promptTownJump : promptKey === "townChurch" ? L.promptTownChurch : promptKey === "townHall" ? L.promptTownHall : promptKey === "townCourt" ? L.promptTownCourt : promptKey === "townBoutique" ? L.promptTownBoutique : promptKey === "townBoutiqueShut" ? L.promptTownBoutiqueShut : promptKey === "townSalon" ? L.promptTownSalon : promptKey === "townNews" ? L.promptTownNews : promptKey === "townMarket" ? L.promptTownMarket : promptKey === "townBench" ? L.promptTownBench : promptKey === "townStand" ? L.promptTownStand : promptKey === "townWish" ? L.promptTownWish : promptKey === "townKiosk" ? L.promptTownKiosk : promptKey === "townPier" ? L.promptTownPier : promptKey === "townView" ? L.promptTownView : promptKey === "courtExit" ? L.promptCourtExit : promptKey === "courtBoard" ? L.promptCourtBoard : promptKey.startsWith("courtDoor:") ? L.promptCourtDoor(L.courtRoomName(promptKey.slice(10))) : promptKey === "taxiBoard" ? L.promptTaxiBoard : promptKey === "townSleep" ? L.promptTownSleep : promptKey === "townSleepFull" ? L.promptTownSleepFull : promptKey === "townHouseSale" ? L.promptTownHouseSale : promptKey.startsWith("townHouse:") ? L.promptTownHouse(promptKey.slice(10)) : promptKey.startsWith("visitor:") ? L.promptVisitor(rosterOf(+promptKey.slice(8)).name || "?") : promptKey === "shop" ? L.promptShop : promptKey === "barn" ? L.promptBarn : promptKey === "barnBuild" ? L.promptBarnBuild : promptKey === "cauldron" ? L.promptCauldron : promptKey === "cauldronIgnite" ? L.promptCauldronIgnite : promptKey === "cauldronBrewing" ? L.promptCauldronBrewing(brewSecs) : promptKey === "cauldronCollect" ? L.promptCauldronCollect : promptKey === "evilCauldronPickup" ? L.promptEvilCauldronPickup : promptKey === "mazePrize" ? L.promptMazePrize : promptKey.startsWith("passagePickup:") ? L.promptPassagePickup : L.promptBin}</div>}
       {mountPrompt && <div className="ferme-prompt ferme-prompt-mount">{mountPrompt === "mount" ? L.mountPrompt : L.dismountPrompt}</div>}
       {handHeldUI && !moveConfirmUI && <div className="ferme-prompt ferme-prompt-mount">{L.handHeldHint}</div>}
       {moveConfirmUI && (
@@ -20669,6 +21009,40 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           </div>
         </div>
       )}
+      {/* ╔══════════════════════════════════════════════════════════════════════
+           ║ ZIP 432 — « OÙ ALLEZ-VOUS ? »
+           ╚══════════════════════════════════════════════════════════════════════
+           ⚠️ LA LISTE EST DÉRIVÉE DE LA CARTE (E.townTaxiStops), pas écrite ici :
+           ajouter un monument à la ville, c'est l'ajouter dans le moteur en une
+           ligne qui NOMME sa constante, et il apparaît dans ce menu tout seul.
+           ⚠️ ET CHAQUE ARRÊT DIT SA MARCHE FINALE. Le taxi dépose au trottoir le
+           plus proche : annoncer « ≈ 6 pas à pied » évite la seule déception
+           possible ici, arriver « au tribunal » et se retrouver en bas des
+           marches sans comprendre pourquoi. */}
+      {taxiMenu && (() => {
+        const tw3 = townWorldRef.current;
+        const stops = tw3 ? E.townTaxiStops(tw3) : [];
+        return (
+          <div className="ferme-modal open" onClick={() => { setTaxiMenu(false); taxiAlight(false); }}>
+            <div className="panel ferme-modal-panel" onClick={e => e.stopPropagation()}>
+              <h2>🚕 {L.taxiTitle}</h2>
+              <div className="ferme-hint">{L.taxiHint}</div>
+              <div className="ferme-taxi-list">
+                {stops.map(st => (
+                  <button key={"taxi-" + st.key} className="ferme-taxi-stop" onClick={() => taxiGoTo(st.key)}>
+                    <b>{L.taxiStop(st.key)}</b>
+                    <span>{L.taxiWalk(Math.round(st.walk || 0))}</span>
+                  </button>
+                ))}
+              </div>
+              <div style={{ marginTop: 10, textAlign: "right" }}>
+                <PixBtn sprites={spritesReady ? spritesRef.current : null} tone="plain"
+                        label={L.taxiCancel} onClick={() => { setTaxiMenu(false); taxiAlight(false); }} />
+              </div>
+            </div>
+          </div>
+        );
+      })()}
       {marketOpen && (() => {
         /* ══════════════════════════════════════════════════════════════════
            ZIP 431 — LE COMPTOIR DU MARCHÉ, RÉÉCRIT EN PANIER.

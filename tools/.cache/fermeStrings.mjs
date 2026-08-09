@@ -162,6 +162,29 @@ export const FERME_STR = {
        une invite affichée en permanence deviendrait du décor, et une invite qui
        ment une fois n'est plus jamais crue. */
     promptTownJump: "Espace : sauter du rebord",
+    /* Zip 432 — le taxi. Les noms d'arrêts sont indexés par la CLÉ que
+       townTaxiStops dérive des constantes de lieux : ajouter un monument,
+       c'est ajouter une ligne ici, et rien d'autre. */
+    promptTaxiBoard: "E : monter dans le taxi",
+    taxiBtn: "Taxi", taxiBtnCall: "Appeler un taxi", taxiBtnCancel: "Annuler la course",
+    taxiCalled: "🚕 Taxi appelé — il arrive.",
+    taxiNoRoad: "Il faut être au bord d'une rue pavée pour héler un taxi.",
+    taxiNotHere: "Le taxi ne circule qu'à Valley Town.",
+    taxiUnreachable: "Aucune rue accessible d'ici pour le taxi.",
+    taxiAsk: "Où allez-vous ?",
+    taxiTitle: "Où allez-vous ?",
+    taxiHint: "Le taxi vous dépose au trottoir le plus proche.",
+    taxiCancel: "Annuler",
+    taxiArrived: "🚕 Nous y voilà. Bonne journée !",
+    taxiDropped: "🚕 Vous descendez du taxi.",
+    taxiStop: (k) => ({
+      station: "La gare", plaza: "La grand-place", market: "Le champ de foire",
+      hall: "L'hôtel de ville", church: "L'église", court: "Le tribunal",
+      boutique: "La Maison Garfield", park: "Le parc et son kiosque",
+      lake: "Le lac et son ponton", belvedere: "Le belvédère",
+      artisans: "Le quartier des artisans", cemetery: "Le cimetière",
+    })[k] || k,
+    taxiWalk: (n) => n <= 1 ? "au pied" : ("≈ " + n + " pas à pied"),
     /* ═══════════════════════════════════════════════════════════════════════
        ZIP 426 — L'INTÉRIEUR DU TRIBUNAL.
        ⚠️ CHAQUE PIÈCE DIT CE QU'ELLE FERA, ET DIT QU'ELLE NE LE FAIT PAS
@@ -1913,6 +1936,26 @@ export const FERME_STR = {
     promptTownHall: "🏛️ Town hall",
     promptTownCourt: "⚖️ Valley Town courthouse",
     promptTownJump: "Space: jump off the ledge",
+    promptTaxiBoard: "E: get in the taxi",
+    taxiBtn: "Taxi", taxiBtnCall: "Call a taxi", taxiBtnCancel: "Cancel the ride",
+    taxiCalled: "🚕 Taxi called — on its way.",
+    taxiNoRoad: "You must stand by a paved street to hail a taxi.",
+    taxiNotHere: "Taxis only run in Valley Town.",
+    taxiUnreachable: "No street the taxi can reach from here.",
+    taxiAsk: "Where to?",
+    taxiTitle: "Where to?",
+    taxiHint: "The taxi drops you at the nearest kerb.",
+    taxiCancel: "Cancel",
+    taxiArrived: "🚕 Here we are. Have a good one!",
+    taxiDropped: "🚕 You step out of the taxi.",
+    taxiStop: (k) => ({
+      station: "The station", plaza: "The main square", market: "The fairground",
+      hall: "The town hall", church: "The church", court: "The courthouse",
+      boutique: "Maison Garfield", park: "The park and bandstand",
+      lake: "The lake and pier", belvedere: "The belvedere",
+      artisans: "The artisan quarter", cemetery: "The cemetery",
+    })[k] || k,
+    taxiWalk: (n) => n <= 1 ? "right there" : ("≈ " + n + " steps away"),
     // Zip 426 — courthouse interior. Voir la longue note côté français : chaque
     // pièce annonce son service ET son ouverture à venir.
     promptCourtEnter: "E: enter the courthouse",

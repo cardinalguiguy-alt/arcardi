@@ -5051,6 +5051,355 @@ function townSimplifyPath(tw, raw, W, tx, ty, from0) {
   }
   return out;
 }
+/* ╔══════════════════════════════════════════════════════════════════════════
+   ║ ZIP 432 — LE RÉSEAU ROUTIER DE VALLEY TOWN (le taxi).
+   ╚══════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ UN DEUXIÈME GRAPHE, ET C'EST DÉLIBÉRÉ. `townNav` décrit où l'on PEUT
+   MARCHER : l'herbe, les parterres, la prairie. Un taxi n'y va pas — demande de
+   Guillaume, « il faut se trouver à proximité d'une route pavée car le taxi ne
+   roule pas sur l'herbe ». Filtrer le chemin après coup ne marcherait pas :
+   l'A* trouverait la ligne droite à travers le parc et on la rejetterait sans
+   avoir d'alternative. La contrainte doit être DANS le graphe.
+
+   ⚠️ IL RÉUTILISE EXACTEMENT LA MÊME MACHINERIE que `townNav` (mêmes tampons,
+   mêmes composantes connexes, même A*, même réduction en points de passage) —
+   seul le test « cette case est-elle praticable » change. Écrire un second A*
+   « comme l'autre mais pour les routes » aurait été le doublon du §8, et le
+   symptôme serait un taxi qui monte les escaliers le jour où l'on corrige un
+   bogue dans un seul des deux.
+
+   ⚠️ LES MARCHES ET LES PONTS SONT EXCLUS. Une volée d'escalier est dallée : la
+   laisser passer, c'est un taxi qui grimpe à la Haute-Ville par les marches.
+   Le dénivelé est de toute façon refusé arête par arête (TOWN_STEP_MAX), mais
+   l'exclusion explicite dit POURQUOI, ce qu'un seuil ne dit pas. */
+const TOWN_ROAD_CACHE = { w: null, nav: null };
+function townRoadDrivable(tw, i) {
+  const g = tw.ground[i];
+  if (g !== C.G_PATH && g !== C.G_PATH_STONE) return false;
+  if (tw.solid && tw.solid[i]) return false;
+  const o = tw.objects[i];
+  if (o === C.O_TREE || o === C.O_TREE2 || o === C.O_STUMP) return false;
+  return true;
+}
+export function townRoadNav(tw) {
+  if (!tw) return null;
+  if (TOWN_ROAD_CACHE.w === tw && TOWN_ROAD_CACHE.nav) return TOWN_ROAD_CACHE.nav;
+  const W = tw.w, H = tw.h, N = W * H;
+  const walk = new Uint8Array(N);
+  for (let i = 0; i < N; i++) if (townRoadDrivable(tw, i)) walk[i] = 1;
+  // Composantes connexes : même rôle que dans townNav — un A* qui ÉCHOUE est le
+  // seul qui coûte cher, savoir avant de partir qu'on ne peut pas y aller le
+  // ramène à deux entiers comparés.
+  const comp = new Int32Array(N).fill(-1);
+  const stack = new Int32Array(N);
+  let nComp = 0;
+  for (let s0 = 0; s0 < N; s0++) {
+    if (!walk[s0] || comp[s0] >= 0) continue;
+    const id = nComp++;
+    let sp = 0; stack[sp++] = s0; comp[s0] = id;
+    while (sp > 0) {
+      const i = stack[--sp], x = i % W, y = (i / W) | 0, e = tw.elev[i];
+      for (let k = 0; k < 4; k++) {
+        const nx = x + (k === 0 ? 1 : k === 1 ? -1 : 0), ny = y + (k === 2 ? 1 : k === 3 ? -1 : 0);
+        if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+        const j = ny * W + nx;
+        if (!walk[j] || comp[j] >= 0) continue;
+        if (Math.abs(tw.elev[j] - e) > C.TOWN_STEP_MAX) continue;
+        comp[j] = id; stack[sp++] = j;
+      }
+    }
+  }
+  /* ⚠️⚠️ LA « GRANDE » COMPOSANTE EST RETENUE, ET C'EST LA MESURE QUI L'A IMPOSÉ.
+     Le dallage de la ville forme SEPT poches, pas une : les avenues (4 207
+     cases), le champ de foire (651), la Haute-Ville (212 + 28), le parc (116),
+     le cimetière (32). Les places sont dallées mais on y accède par l'herbe.
+     Résultat du premier jet : 32 trajets réussis sur 132, et le MARCHÉ — la
+     destination qui justifie le taxi — était injoignable.
+     ⚠️ LA PARADE N'EST PAS D'ÉLARGIR LE GRAPHE (un taxi qui coupe par la pelouse
+     n'est plus un taxi) : c'est de DÉPOSER AU TROTTOIR. Chaque arrêt est snappé
+     sur le RÉSEAU DE RUES, et on finit à pied — ce que fait un vrai taxi. */
+  let main = -1, mainN = 0;
+  { const size = new Int32Array(nComp);
+    for (let i = 0; i < N; i++) if (comp[i] >= 0) size[comp[i]]++;
+    for (let k = 0; k < nComp; k++) if (size[k] > mainN) { mainN = size[k]; main = k; } }
+  const nav = { w: W, h: H, walk, comp, nComp, main, mainN,
+    g: new Float32Array(N), f: new Float32Array(N),
+    from: new Int32Array(N), stamp: new Int32Array(N), closed: new Uint8Array(N),
+    run: 0, heap: [], heapKey: [] };
+  TOWN_ROAD_CACHE.w = tw; TOWN_ROAD_CACHE.nav = nav;
+  return nav;
+}
+/* La case roulable la plus proche, en anneaux croissants. Sert DEUX fois, et
+   c'est pour ça qu'elle est ici : dire au joueur « vous êtes trop loin d'une
+   route » et choisir où le taxi vient se ranger. Deux réponses différentes à la
+   même question, ce serait un taxi qui se gare là où le joueur n'a pas le droit
+   de l'appeler. */
+export function townRoadNear(tw, x, y, maxR, mainOnly) {
+  const nav = townRoadNav(tw); if (!nav) return null;
+  const W = nav.w, H = nav.h, cx = Math.floor(x), cy = Math.floor(y);
+  const R = Math.max(1, maxR | 0);
+  let best = null, bestD = Infinity;
+  for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) {
+    const fx = cx + dx, fy = cy + dy;
+    if (fx < 0 || fy < 0 || fx >= W || fy >= H) continue;
+    const i = fy * W + fx;
+    if (!nav.walk[i]) continue;
+    // ⚠️ `mainOnly` : la case doit être sur le RÉSEAU DE RUES, pas sur un îlot
+    // de dallage isolé — sinon on hèle un taxi qui ne peut pas venir.
+    if (mainOnly && nav.comp[i] !== nav.main) continue;
+    const d = Math.hypot(fx + 0.5 - x, fy + 0.5 - y);
+    if (d < bestD) { bestD = d; best = { x: fx + 0.5, y: fy + 0.5, d }; }
+  }
+  return best;
+}
+export function townRoadSameArea(tw, x0, y0, x1, y1) {
+  const nav = townRoadNav(tw); if (!nav) return false;
+  const W = nav.w;
+  const a = nav.comp[Math.floor(y0) * W + Math.floor(x0)];
+  const b = nav.comp[Math.floor(y1) * W + Math.floor(x1)];
+  return a >= 0 && a === b;
+}
+/* Le trajet du taxi. Même A* octile que `townFindPath`, sur le graphe routier.
+   ⚠️ IL N'EST PAS RÉDUIT EN POINTS DE PASSAGE : le taxi doit SUIVRE la rue,
+   virage par virage, pour qu'on puisse ralentir dans les courbes. Une réduction
+   en ligne de visée couperait les angles et le véhicule roulerait en diagonale
+   à travers un pâté de maisons. C'est l'inverse du besoin des piétons. */
+export function townRoadPath(tw, x0, y0, x1, y1) {
+  const nav = townRoadNav(tw); if (!nav) return null;
+  const W = nav.w, H = nav.h;
+  const sx = Math.floor(x0), sy = Math.floor(y0), gx = Math.floor(x1), gy = Math.floor(y1);
+  if (sx < 0 || sy < 0 || sx >= W || sy >= H || gx < 0 || gy < 0 || gx >= W || gy >= H) return null;
+  const start = sy * W + sx, goal = gy * W + gx;
+  if (!nav.walk[start] || !nav.walk[goal]) return null;
+  if (start === goal) return [{ x: gx + 0.5, y: gy + 0.5 }];
+  if (nav.comp[start] !== nav.comp[goal]) return null;
+  const run = ++nav.run;
+  const { g, f, from, stamp, closed, heap, heapKey, walk } = nav;
+  const elev = tw.elev;
+  heap.length = 0; heapKey.length = 0;
+  const push = (i, key) => {
+    heap.push(i); heapKey.push(key);
+    let c = heap.length - 1;
+    while (c > 0) { const p = (c - 1) >> 1; if (heapKey[p] <= heapKey[c]) break;
+      [heap[p], heap[c]] = [heap[c], heap[p]]; [heapKey[p], heapKey[c]] = [heapKey[c], heapKey[p]]; c = p; }
+  };
+  const pop = () => {
+    const top = heap[0]; const li = heap.length - 1;
+    heap[0] = heap[li]; heapKey[0] = heapKey[li]; heap.pop(); heapKey.pop();
+    let c = 0;
+    for (;;) { const l = c * 2 + 1, r = l + 1; let m = c;
+      if (l < heap.length && heapKey[l] < heapKey[m]) m = l;
+      if (r < heap.length && heapKey[r] < heapKey[m]) m = r;
+      if (m === c) break;
+      [heap[m], heap[c]] = [heap[c], heap[m]]; [heapKey[m], heapKey[c]] = [heapKey[c], heapKey[m]]; c = m; }
+    return top;
+  };
+  /* ⚠️ HEURISTIQUE OCTILE, PAS MANHATTAN — le 428 a payé ce détail : une
+     heuristique non consistante rouvre des nœuds sans fin et finit par rendre
+     `null`, ce qui a l'air d'une réponse. */
+  const hOf = (x, y) => { const dx = Math.abs(x - gx), dy = Math.abs(y - gy);
+    return (dx + dy) + (Math.SQRT2 - 2) * Math.min(dx, dy); };
+  stamp[start] = run; g[start] = 0; f[start] = hOf(sx, sy); closed[start] = 0; from[start] = -1;
+  push(start, f[start]);
+  let guard = 0;
+  while (heap.length) {
+    if (++guard > 60000) return null;
+    const cur = pop();
+    if (closed[cur] === 1 && stamp[cur] === run) continue;
+    closed[cur] = 1;
+    if (cur === goal) break;
+    const cx2 = cur % W, cy2 = (cur / W) | 0, ce = elev[cur];
+    for (let k = 0; k < 8; k++) {
+      const dx = k < 4 ? [1, -1, 0, 0][k] : [1, 1, -1, -1][k - 4];
+      const dy = k < 4 ? [0, 0, 1, -1][k] : [1, -1, 1, -1][k - 4];
+      const nx = cx2 + dx, ny = cy2 + dy;
+      if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+      const nb = ny * W + nx;
+      if (!walk[nb]) continue;
+      if (Math.abs(elev[nb] - ce) > C.TOWN_STEP_MAX) continue;
+      // ⚠️ PAS DE DIAGONALE QUI COUPE UN COIN : une voiture ne passe pas entre
+      // deux angles de trottoir, et un chemin qui le fait se voit tout de suite.
+      if (dx && dy && (!walk[cy2 * W + nx] || !walk[ny * W + cx2])) continue;
+      const step = (dx && dy) ? Math.SQRT2 : 1;
+      const ng = (stamp[cur] === run ? g[cur] : 0) + step;
+      if (stamp[nb] !== run) { stamp[nb] = run; g[nb] = Infinity; closed[nb] = 0; from[nb] = -1; }
+      if (ng < g[nb]) { g[nb] = ng; from[nb] = cur; f[nb] = ng + hOf(nx, ny); push(nb, f[nb]); }
+    }
+  }
+  if (stamp[goal] !== run || from[goal] === -1) return null;
+  const pts = [];
+  let i2 = goal;
+  while (i2 !== -1) { pts.unshift({ x: (i2 % W) + 0.5, y: ((i2 / W) | 0) + 0.5 }); i2 = from[i2]; }
+  return townRoadSimplify(tw, pts);
+}
+/* ⚠️⚠️ LE CHEMIN BRUT ZIGZAGUE, ET UNE VOITURE NE ZIGZAGUE PAS. L'A* rend une
+   suite de CENTRES DE CASES : sur une avenue en diagonale, c'est un escalier de
+   45°, et le volant (TURN_RATE) passe son temps à corriger — mesuré au banc,
+   105 trajets sur 132 finissaient par mordre la pelouse dans les angles.
+   On réduit donc en points de passage par ligne de visée, mais — et c'est tout
+   le point — **la corde n'est acceptée que si elle reste ENTIÈREMENT sur du
+   dallage**. Une réduction géométrique naïve couperait à travers un pâté de
+   maisons ; celle-ci ne peut, par construction, que suivre la rue.
+   ⚠️ ET ELLE GARDE LES VRAIS VIRAGES : un angle de rue n'est jamais visible en
+   ligne droite depuis l'avant-dernier point, donc il survit à la réduction.
+   C'est ce qui laisse au ralentissement en courbe quelque chose à ralentir. */
+export function townRoadSimplify(tw, pts) {
+  const nav = townRoadNav(tw);
+  if (!nav || !pts || pts.length < 3) return pts;
+  const W = nav.w;
+  const clear = (a, b) => {
+    const n = Math.max(2, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) * 4));
+    for (let k = 0; k <= n; k++) {
+      const x = a.x + (b.x - a.x) * (k / n), y = a.y + (b.y - a.y) * (k / n);
+      // La caisse a une largeur : on éprouve l'axe ET ses deux bords.
+      for (const [ox, oy] of [[0, 0], [0.34, 0], [-0.34, 0], [0, 0.34], [0, -0.34]]) {
+        const fx = Math.floor(x + ox), fy = Math.floor(y + oy);
+        if (fx < 0 || fy < 0 || fx >= nav.w || fy >= nav.h) return false;
+        if (!nav.walk[fy * W + fx]) return false;
+      }
+    }
+    return true;
+  };
+  const out = [pts[0]];
+  let i = 0;
+  while (i < pts.length - 1) {
+    let j = pts.length - 1;
+    // Corde bornée : au-delà, on perd le tracé réel de la rue et la voiture
+    // couperait un carrefour entier en ligne droite.
+    const maxJ = Math.min(pts.length - 1, i + 14);
+    for (j = maxJ; j > i + 1; j--) if (clear(pts[i], pts[j])) break;
+    out.push(pts[j]);
+    i = j;
+  }
+  return out;
+}
+
+/* ╔══════════════════════════════════════════════════════════════════════════
+   ║ LES DESTINATIONS DU TAXI — DÉRIVÉES, JAMAIS ÉCRITES À CÔTÉ.
+   ╚══════════════════════════════════════════════════════════════════════════
+   ⚠️ CHAQUE ARRÊT EST LA CASE ROULABLE LA PLUS PROCHE D'UN LIEU EXISTANT. Une
+   table de coordonnées écrite à la main aurait tenu jusqu'au premier bâtiment
+   déplacé — c'est exactement la leçon de `townSpots` (§3 du README de la ferme).
+   Ajouter un monument à la ville, c'est l'ajouter ici en UNE ligne qui NOMME sa
+   constante ; le jour où on le bouge, son arrêt le suit tout seul.
+   ⚠️ ET UN LIEU SANS ROUTE À PORTÉE N'EST PAS PROPOSÉ. Proposer une destination
+   qu'on ne peut pas atteindre, c'est le « propose puis refuse » que le 426 s'est
+   juré de ne plus commettre. */
+const TOWN_TAXI_CACHE = { w: null, list: null };
+export function townTaxiStops(tw) {
+  if (!tw) return [];
+  if (TOWN_TAXI_CACHE.w === tw && TOWN_TAXI_CACHE.list) return TOWN_TAXI_CACHE.list;
+  const src = [
+    ["station",  C.TOWN_STATION.x + C.TOWN_STATION.w / 2, C.TOWN_STATION.y + C.TOWN_STATION.h + 2],
+    ["plaza",    C.TOWN_PLAZA.x + C.TOWN_PLAZA.w / 2,     C.TOWN_PLAZA.y + C.TOWN_PLAZA.h - 2],
+    ["market",   C.TOWN_MARKET.x + C.TOWN_MARKET.w / 2,   C.TOWN_MARKET.y + C.TOWN_MARKET.h - 2],
+    ["hall",     C.TOWN_HALL.x + C.TOWN_HALL.w / 2,       C.TOWN_HALL.y + C.TOWN_HALL.h + 2],
+    ["church",   C.TOWN_CHURCH.x + C.TOWN_CHURCH.w / 2,   C.TOWN_CHURCH.y + C.TOWN_CHURCH.h + 2],
+    ["court",    C.TOWN_COURT.x + C.TOWN_COURT.w / 2,     C.TOWN_COURT.y + C.TOWN_COURT.h + 2],
+    ["boutique", C.TOWN_BOUTIQUE.x + C.TOWN_BOUTIQUE.w / 2, C.TOWN_BOUTIQUE.y + C.TOWN_BOUTIQUE.h + 2],
+    ["park",     C.TOWN_KIOSK.x + 1,                      C.TOWN_KIOSK.y + 4],
+    ["lake",     C.TOWN_PIER.x + C.TOWN_PIER.w / 2,       C.TOWN_LAKE.y - 3],
+    ["belvedere",C.TOWN_BELVEDERE.x + C.TOWN_BELVEDERE.w / 2, C.TOWN_BELVEDERE.y + C.TOWN_BELVEDERE.h + 2],
+    ["artisans", C.TOWN_ARTISANS.x + 3,                   C.TOWN_ARTISANS.y + C.TOWN_ARTISANS.h / 2],
+    ["cemetery", C.TOWN_CEMETERY.x + C.TOWN_CEMETERY.w / 2, C.TOWN_CEMETERY.y + C.TOWN_CEMETERY.h + 2],
+  ];
+  const list = [];
+  for (const [key, x, y] of src) {
+    /* Rayon large et RÉSEAU DE RUES imposé : on cherche le trottoir le plus
+       proche du lieu, pas la première dalle venue (voir townRoadNav/main). */
+    const near = townRoadNear(tw, x, y, 26, true);
+    if (near) list.push({ key, x: near.x, y: near.y, walk: +near.d.toFixed(1) });
+  }
+  TOWN_TAXI_CACHE.w = tw; TOWN_TAXI_CACHE.list = list;
+  return list;
+}
+
+/* ╔══════════════════════════════════════════════════════════════════════════
+   ║ ZIP 432 — LA CONDUITE DU TAXI, EN RÈGLE PURE.
+   ╚══════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ ELLE EST DANS LE MOTEUR, PAS DANS LA BOUCLE DE RENDU, ET C'EST POUR
+   POUVOIR LA MESURER. Une conduite « réaliste » — accélération progressive,
+   ralentissement en virage, freinage pile au point d'arrivée — est faite de
+   trois vitesses cibles qui se contredisent : regardée à l'œil, elle a
+   toujours l'air de marcher, et elle tourne en rond une fois sur cent. Ici,
+   `tools/verify-taxi.mjs` la rejoue sur les 132 trajets réels de la ville et
+   compte les arrivées. Écrite dans FermeGame, elle n'aurait été jugeable qu'en
+   regardant une voiture pendant une minute.
+
+   Trois vitesses cibles, on retient la plus BASSE :
+     · la croisière (dérivée du cheval, voir TAXI_SPEED) ;
+     · celle qu'autorise le VIRAGE À VENIR, lu sur le chemin quelques tuiles plus
+       loin — d'où « ralentit en entrée de courbe, réaccélère en sortie », sans
+       aucune table de cas ;
+     · celle qu'autorise la DISTANCE RESTANTE, v = √(2·a·d), qui est la formule
+       du freinage : arrêt PILE au but, quelle que soit la vitesse d'approche.
+   ⚠️ ET ON PASSE AU POINT SUIVANT QUAND ON L'A DÉPASSÉ, pas seulement quand on
+   est dedans. Un rayon d'arrivée seul, c'est un véhicule qui rate sa cible d'un
+   demi-pixel à pleine vitesse et tourne autour indéfiniment — le défaut classe
+   de tous les suiveurs de chemin, et il ne lève aucune erreur. */
+export function taxiRemaining(t) {
+  if (!t.path || t.i >= t.path.length) return 0;
+  let d = Math.hypot(t.path[t.i].x - t.x, t.path[t.i].y - t.y);
+  for (let k = t.i; k < t.path.length - 1; k++) d += Math.hypot(t.path[k + 1].x - t.path[k].x, t.path[k + 1].y - t.path[k].y);
+  return d;
+}
+export function taxiCornerSpeed(t, cfg) {
+  let d = 0, turn = 0, prev = t.ang, px = t.x, py = t.y;
+  for (let k = t.i; k < t.path.length && d < cfg.LOOKAHEAD; k++) {
+    const nx = t.path[k].x, ny = t.path[k].y;
+    const seg = Math.hypot(nx - px, ny - py);
+    if (seg > 0.001) {
+      const a = Math.atan2(ny - py, nx - px);
+      let da = a - prev; while (da > Math.PI) da -= 2 * Math.PI; while (da < -Math.PI) da += 2 * Math.PI;
+      turn += Math.abs(da); prev = a; d += seg;
+    }
+    px = nx; py = ny;
+  }
+  const k2 = Math.max(0, 1 - turn / (Math.PI * 0.9));
+  return cfg.SPEED * (cfg.CORNER_MIN + (1 - cfg.CORNER_MIN) * k2);
+}
+/* Un pas de conduite. Rend `true` quand le dernier point est atteint.
+   `cfg` = { SPEED, ACCEL, BRAKE, CORNER_MIN, LOOKAHEAD, TURN_RATE, ARRIVE_R }. */
+export function taxiStep(t, dt, cfg) {
+  if (!t.path || t.i >= t.path.length) { t.spd = Math.max(0, t.spd - cfg.BRAKE * dt); return true; }
+  const tgt = t.path[t.i];
+  const dx = tgt.x - t.x, dy = tgt.y - t.y;
+  const dist = Math.hypot(dx, dy);
+  if (dist > 0.0001) {
+    const want = Math.atan2(dy, dx);
+    let da = want - t.ang; while (da > Math.PI) da -= 2 * Math.PI; while (da < -Math.PI) da += 2 * Math.PI;
+    const maxTurn = cfg.TURN_RATE * dt;
+    t.ang += Math.abs(da) < maxTurn ? da : Math.sign(da) * maxTurn;
+  }
+  const rest = taxiRemaining(t);
+  const vBrake = Math.sqrt(Math.max(0, 2 * cfg.BRAKE * Math.max(0, rest - cfg.ARRIVE_R * 0.5)));
+  const vTarget = Math.min(cfg.SPEED, taxiCornerSpeed(t, cfg), vBrake);
+  /* ⚠️⚠️ BANDE MORTE, ET SANS ELLE LA VOITURE FREINE EN LIGNE DROITE. Le test
+     `vTarget > t.spd` est FAUX quand les deux sont égaux — c'est-à-dire tout le
+     temps une fois la vitesse de croisière atteinte : le véhicule passait alors
+     en freinage, ralentissait, réaccélérait, et broutait en permanence. Trouvé
+     par le banc (« il lève le pied à 19,8 tuiles de l'arrivée »), invisible à
+     l'œil. Un comparateur strict entre deux flottants qui convergent est une
+     oscillation en attente. */
+  const dv = vTarget - t.spd;
+  if (Math.abs(dv) > 0.05) t.spd += (dv > 0 ? cfg.ACCEL : -cfg.BRAKE) * dt;
+  else t.spd = vTarget;
+  t.spd = Math.max(0, Math.min(cfg.SPEED, t.spd));
+  const px0 = t.x, py0 = t.y;
+  t.x += Math.cos(t.ang) * t.spd * dt;
+  t.y += Math.sin(t.ang) * t.spd * dt;
+  /* Point atteint : on est DANS le rayon, ou bien on vient de le DÉPASSER —
+     le produit scalaire change de signe entre l'avant et l'après. */
+  const before = (tgt.x - px0) * Math.cos(t.ang) + (tgt.y - py0) * Math.sin(t.ang);
+  const after = (tgt.x - t.x) * Math.cos(t.ang) + (tgt.y - t.y) * Math.sin(t.ang);
+  const newDist = Math.hypot(tgt.x - t.x, tgt.y - t.y);
+  if (newDist <= cfg.ARRIVE_R || (before > 0 && after <= 0)) {
+    t.i++;
+    if (t.i >= t.path.length) { t.i = t.path.length; return true; }
+  }
+  return false;
+}
+
 /* La boîte du personnage, en dur : c'est celle de townCanStand côté jeu.
    ⚠️ ELLE EST ÉCRITE ICI ET LUE LÀ-BAS, pas l'inverse — deux boîtes réglées
    séparément, c'est la divergence en attente du §8. */
