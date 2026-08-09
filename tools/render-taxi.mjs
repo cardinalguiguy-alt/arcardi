@@ -27,7 +27,13 @@ const A = mods.fermeArt;
 const S = A.buildSprites();
 const CHAR = S.getChar("f", 1, false, false, false, false, false, false, null);
 
-const views = [["profil (est)", S.taxi.e], ["de face (sud)", S.taxi.s], ["de dos (nord)", S.taxi.n]];
+/* ⚠️ LES CINQ DESSINS, DANS L'ORDRE D'UN VIRAGE : dos → 3/4 dos → profil →
+   3/4 face → face. C'est cette suite-là qu'on regarde, pas cinq images isolées :
+   un virage se juge à la CONTINUITÉ de la silhouette, et une vue qui saute se
+   voit immédiatement quand elles sont côte à côte dans le bon ordre. */
+const views = [["de dos (nord)", S.taxi.n], ["3/4 dos (nord-est)", S.taxi.ne],
+               ["profil (est)", S.taxi.e], ["3/4 face (sud-est)", S.taxi.se],
+               ["de face (sud)", S.taxi.s]];
 
 /* ---- la planche : dallage, ligne de sol commune, fermière comme repère ---- */
 const PAD = 6, H = 34, GROUND = 26;

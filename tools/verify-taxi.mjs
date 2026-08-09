@@ -100,6 +100,69 @@ ok(slowest < 120, "aucune course interminable", "la plus longue : " + slowest.to
 ok(fastest > 1.0, "aucune course instantanée", "la plus courte : " + fastest.toFixed(1) + " s");
 console.log("       durée moyenne : " + (sumT / Math.max(1, arrived)).toFixed(1) + " s"
             + "   vitesse de croisière : " + C.TAXI_SPEED.toFixed(2) + " tuiles/s (= le cheval)");
+/* ⚠️ ET IL ROULE AU MILIEU. Mesure directe : le dégagement moyen sous les roues
+   pendant les 132 courses. Un taxi qui longe le trottoir a un dégagement de 1 ;
+   l'axe d'une avenue en vaut 3 ou plus. C'est LA plainte qui a produit la carte
+   de chanfrein, donc c'est elle qu'on mesure — pas « le chemin existe ». */
+{
+  let sum = 0, n2 = 0, hugging = 0, offAxis = 0, n3 = 0;
+  const roadAt = (x, y) => { const fx = Math.floor(x), fy = Math.floor(y);
+    return fx >= 0 && fy >= 0 && fx < nav.w && fy < nav.h && !!nav.walk[fy * nav.w + fx]; };
+  /* ⚠️ LA MESURE COMPTE DES CASES, ELLE NE SONDE PAS PAR DEMI-PAS. Premier jet :
+     on avançait de 0,5 en 0,5 et on s'arrêtait sur le dernier échantillon
+     ROULABLE — donc on ratait le bord d'un demi-pas, et une voiture PARFAITEMENT
+     centrée sur une rue de deux cases mesurait 0,25 d'écart. Le banc accusait la
+     conduite d'un défaut qui était le sien. Un banc de mesure se vérifie aussi
+     (§10). */
+  const axisOffset = (x, y, ang) => {
+    const fx = Math.floor(x), fy = Math.floor(y);
+    if (!roadAt(x, y)) return null;
+    const horiz = Math.abs(Math.cos(ang)) > Math.abs(Math.sin(ang));
+    let nPos = 0, nNeg = 0;
+    const R = (ax, ay) => roadAt(ax + 0.5, ay + 0.5);
+    if (horiz) {
+      while (nPos < 6 && R(fx, fy + nPos + 1)) nPos++;
+      while (nNeg < 6 && R(fx, fy - nNeg - 1)) nNeg++;
+    } else {
+      while (nPos < 6 && R(fx + nPos + 1, fy)) nPos++;
+      while (nNeg < 6 && R(fx - nNeg - 1, fy)) nNeg++;
+    }
+    if (nPos >= 6 || nNeg >= 6) return null;         // esplanade : pas d'axe
+    const base = horiz ? fy : fx;
+    const mid = (base - nNeg + base + nPos + 1) / 2;
+    return Math.abs((horiz ? y : x) - mid);
+  };
+  for (const a of stops) for (const b of stops) {
+    if (a === b) continue;
+    const p = E.townRoadPath(tw, a.x, a.y, b.x, b.y);
+    if (!p) continue;
+    const t = { x: p[0].x, y: p[0].y, ang: Math.atan2(p[1].y - p[0].y, p[1].x - p[0].x), spd: 0, path: p, i: 1 };
+    let sec = 0, done = false;
+    while (sec < MAX_S && !done) {
+      done = E.taxiStep(t, DT, CFG); sec += DT;
+      if (((sec * 60) | 0) % 6 === 0) {
+        const fx = Math.floor(t.x), fy = Math.floor(t.y);
+        if (fx >= 0 && fy >= 0 && fx < nav.w && fy < nav.h) {
+          const cl = nav.clear[fy * nav.w + fx];
+          sum += cl; n2++; if (cl <= 1) hugging++;
+          const off2 = axisOffset(t.x, t.y, t.ang);
+          if (off2 !== null) { offAxis += off2; n3++; }
+        }
+      }
+    }
+  }
+  /* ⚠️ LA BONNE MESURE N'EST PAS LE DÉGAGEMENT, C'EST L'ÉCART À L'AXE. 85 % des
+     rues de la ville font une à deux cases de large : exiger « trois cases de
+     dégagement » serait exiger une ville qui n'existe pas. Ce qu'on veut, c'est
+     que la voiture soit au MILIEU de la bande, quelle que soit sa largeur — donc
+     on sonde perpendiculairement sous les roues et on mesure de combien elle est
+     décentrée. Zéro = pile sur l'axe ; 0,5 = collée à un bord d'une rue de deux
+     cases, c'est-à-dire le défaut d'origine. */
+  const avg = sum / Math.max(1, n2);
+  ok(offAxis / Math.max(1, n3) < 0.22, "⚠️ il roule sur l'AXE de la chaussée",
+     "écart moyen à l'axe : " + (offAxis / Math.max(1, n3)).toFixed(2) + " case (0,5 = collé au bord)");
+  console.log("       dégagement moyen sous les roues : " + avg.toFixed(2) + " cases");
+}
 ok(corners > 0 && cornerSlow / corners > 0.8, "⚠️ il RALENTIT dans les virages",
    corners ? (cornerSlow + "/" + corners + " virages pris en dessous de la vitesse de croisière") : "aucun virage rencontré");
 

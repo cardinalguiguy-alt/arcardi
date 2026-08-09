@@ -469,6 +469,17 @@ export const TAXI_CALL_RANGE = 7;         // tuiles : distance MAXI à une rue p
    pas un taxi, c'est un téléport — assez près pour ne pas attendre : ~18 tuiles
    à 9,88 tuiles/s, virages compris, font une attente de l'ordre de 4 à 6 s. */
 export const TAXI_SPAWN_MAX = 18;
+/* ⚠️ ET SURTOUT : HORS CHAMP. La distance ci-dessus est un confort (l'attente) ;
+   ce qui compte vraiment est qu'on ne VOIE PAS le taxi apparaître — une voiture
+   qui se matérialise à l'écran n'est pas une voiture, c'est un téléport. Le
+   rayon d'apparition est donc DÉRIVÉ du champ de vision réel (comme l'AOI du
+   §3), jamais réglé : dézoomer ne doit pas faire apparaître le taxi à l'écran.
+   Cette marge s'ajoute au demi-diagonal du viewport. */
+export const TAXI_OFFSCREEN_MARGIN = 4;
+/* Le temps qu'il reste à quai après la dépose, avant de repartir se garer hors
+   champ (demande de Guillaume). Assez pour qu'on le voie s'arrêter, pas assez
+   pour qu'il devienne du décor. */
+export const TAXI_PARK_MS = 5000;
 export const TAXI_SMOKE_MS = 110;         // cadence des bouffées d'échappement
 export const TAXI_SMOKE_LIFE = 1.15;      // s : durée de vie d'une bouffée
 export const TAXI_BOARD_R = 1.6;          // tuiles : distance pour monter (touche E)

@@ -5073,6 +5073,8 @@ function townSimplifyPath(tw, raw, W, tx, ty, from0) {
    Le dénivelé est de toute façon refusé arête par arête (TOWN_STEP_MAX), mais
    l'exclusion explicite dit POURQUOI, ce qu'un seuil ne dit pas. */
 const TOWN_ROAD_CACHE = { w: null, nav: null };
+const CENTER_WANT = 3;      // dégagement visé, en cases : l'axe d'une avenue
+const CENTER_COST = 0.55;   // surcoût par case de dégagement manquante
 function townRoadDrivable(tw, i) {
   const g = tw.ground[i];
   if (g !== C.G_PATH && g !== C.G_PATH_STONE) return false;
@@ -5122,7 +5124,33 @@ export function townRoadNav(tw) {
   { const size = new Int32Array(nComp);
     for (let i = 0; i < N; i++) if (comp[i] >= 0) size[comp[i]]++;
     for (let k = 0; k < nComp; k++) if (size[k] > mainN) { mainN = size[k]; main = k; } }
-  const nav = { w: W, h: H, walk, comp, nComp, main, mainN,
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ LA CARTE DE DÉGAGEMENT — c'est elle qui fait rouler AU MILIEU.
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ UN A* CHERCHE LE PLUS COURT, ET LE PLUS COURT LONGE LE TROTTOIR. Sur
+     une avenue de six cases, le chemin optimal colle le bord intérieur des
+     virages : le taxi roulait sur la bordure, ce qui se voit immédiatement
+     (« il roule pas au centre des chemins dallés »). Aucun réglage de conduite
+     ne corrige ça — le défaut est dans le CHEMIN, pas dans le volant.
+     La parade est une distance de chanfrein : pour chaque case roulable, à quelle
+     distance est le bord de la chaussée. L'A* paie ensuite un supplément pour
+     les cases peu dégagées, donc il PRÉFÈRE l'axe de la rue sans jamais s'y
+     enfermer — dans une ruelle d'une case de large, le supplément est le même
+     partout et le chemin passe quand même. */
+  const clear = new Int32Array(N).fill(1e9);
+  { const q = new Int32Array(N); let qh = 0, qt = 0;
+    for (let i = 0; i < N; i++) if (!walk[i]) { clear[i] = 0; q[qt++] = i; }
+    while (qh < qt) {
+      const i = q[qh++], x = i % W, y = (i / W) | 0, d = clear[i];
+      for (let k = 0; k < 4; k++) {
+        const nx = x + (k === 0 ? 1 : k === 1 ? -1 : 0), ny = y + (k === 2 ? 1 : k === 3 ? -1 : 0);
+        if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+        const j = ny * W + nx;
+        if (clear[j] > d + 1) { clear[j] = d + 1; q[qt++] = j; }
+      }
+    }
+  }
+  const nav = { w: W, h: H, walk, comp, nComp, main, mainN, clear,
     g: new Float32Array(N), f: new Float32Array(N),
     from: new Int32Array(N), stamp: new Int32Array(N), closed: new Uint8Array(N),
     run: 0, heap: [], heapKey: [] };
@@ -5164,6 +5192,64 @@ export function townRoadSameArea(tw, x0, y0, x1, y1) {
    virage par virage, pour qu'on puisse ralentir dans les courbes. Une réduction
    en ligne de visée couperait les angles et le véhicule roulerait en diagonale
    à travers un pâté de maisons. C'est l'inverse du besoin des piétons. */
+/* ╔══════════════════════════════════════════════════════════════════════════
+   ║ RECENTRER SUR LA BANDE PAVÉE — et c'est la VRAIE réponse à « il roule pas
+   ║ au centre des chemins dallés ».
+   ╚══════════════════════════════════════════════════════════════════════════
+   ⚠️⚠️ MESURE D'ABORD : **85 % des cases de rue de Valley Town ont un dégagement
+   de 1**, autrement dit la ville est faite de rues d'une à deux cases de large.
+   Il n'y a donc pas de « milieu de la chaussée » à trouver par un surcoût de
+   bordure : sur une rue de DEUX cases, le milieu visuel est la LIGNE ENTRE les
+   deux cases (x entier), et l'A* — qui passe par des CENTRES de cases (x + 0,5)
+   — roule par construction sur une moitié de rue, c'est-à-dire collé au bord.
+   ⚠️ LA PARADE EST GÉOMÉTRIQUE, PAS HEURISTIQUE : à chaque point de passage on
+   sonde PERPENDICULAIREMENT au sens de marche jusqu'aux deux bords de la bande
+   pavée, et on repose le point au milieu de ce segment. Une rue de deux cases
+   place la voiture sur la ligne mitoyenne, une avenue de six la place à trois
+   cases du trottoir, et une ruelle d'une case ne bouge pas. Une seule règle,
+   aucun cas particulier, et elle se mesure (voir verify-taxi.mjs). */
+export function townRoadCenter(tw, pts) {
+  const nav = townRoadNav(tw);
+  if (!nav || !pts || pts.length < 2) return pts;
+  const W = nav.w, H = nav.h;
+  const road = (fx, fy) => fx >= 0 && fy >= 0 && fx < W && fy < H && !!nav.walk[fy * W + fx];
+  const MAXT = 6;                       // au-delà, c'est une esplanade, pas une rue
+  const out = pts.map(p => ({ x: p.x, y: p.y }));
+  for (let i = 1; i < out.length - 1; i++) {
+    const a2 = out[i - 1], b2 = out[i + 1];
+    const dx = b2.x - a2.x, dy = b2.y - a2.y;
+    if (Math.hypot(dx, dy) < 0.001) continue;
+    /* ⚠️ ON NE SONDE QUE SUR L'AXE PERPENDICULAIRE DOMINANT. Les rues de la
+       ville sont orthogonales ; sonder en diagonale compterait des cases de
+       biais et recentrerait de travers. Sur un segment diagonal (un raccord de
+       carrefour), on ne touche à rien : deux points recentrés de part et d'autre
+       suffisent à tenir la trajectoire. */
+    const horiz = Math.abs(dx) > Math.abs(dy) * 1.2;
+    const vert = Math.abs(dy) > Math.abs(dx) * 1.2;
+    if (!horiz && !vert) continue;
+    const p = pts[i];
+    const fx = Math.floor(p.x), fy = Math.floor(p.y);
+    if (!road(fx, fy)) continue;
+    /* Combien de cases de rue de chaque côté, PUIS les bords en coordonnées
+       monde. C'est le comptage en cases qui rend la mesure exacte : mon premier
+       jet sondait par demi-cases et s'arrêtait sur le dernier échantillon
+       ROULABLE, pas sur le bord — il ratait donc systématiquement d'un demi-pas,
+       et une rue de deux cases restait décentrée (mesuré : 0,36 case d'écart). */
+    let nPos = 0, nNeg = 0;
+    if (horiz) {
+      while (nPos < MAXT && road(fx, fy + nPos + 1)) nPos++;
+      while (nNeg < MAXT && road(fx, fy - nNeg - 1)) nNeg++;
+    } else {
+      while (nPos < MAXT && road(fx + nPos + 1, fy)) nPos++;
+      while (nNeg < MAXT && road(fx - nNeg - 1, fy)) nNeg++;
+    }
+    if (nPos >= MAXT || nNeg >= MAXT) continue;
+    const base = horiz ? fy : fx;
+    const mid = (base - nNeg + base + nPos + 1) / 2;   // milieu de la bande, en monde
+    if (horiz) out[i].y = mid; else out[i].x = mid;
+  }
+  return out;
+}
 export function townRoadPath(tw, x0, y0, x1, y1) {
   const nav = townRoadNav(tw); if (!nav) return null;
   const W = nav.w, H = nav.h;
@@ -5220,8 +5306,15 @@ export function townRoadPath(tw, x0, y0, x1, y1) {
       // ⚠️ PAS DE DIAGONALE QUI COUPE UN COIN : une voiture ne passe pas entre
       // deux angles de trottoir, et un chemin qui le fait se voit tout de suite.
       if (dx && dy && (!walk[cy2 * W + nx] || !walk[ny * W + cx2])) continue;
+      /* ⚠️ LE SUPPLÉMENT DE BORDURE. `CENTER_WANT` est le dégagement visé (3
+         cases du bord = l'axe d'une avenue) ; en dessous, chaque case coûte plus
+         cher. Le facteur est volontairement du même ordre que le pas lui-même :
+         plus fort, le taxi ferait des détours absurdes pour rester au milieu ;
+         plus faible, il retournerait au trottoir. */
       const step = (dx && dy) ? Math.SQRT2 : 1;
-      const ng = (stamp[cur] === run ? g[cur] : 0) + step;
+      const cl = nav.clear[nb];
+      const edge = cl >= CENTER_WANT ? 0 : (CENTER_WANT - cl) * CENTER_COST;
+      const ng = (stamp[cur] === run ? g[cur] : 0) + step + edge;
       if (stamp[nb] !== run) { stamp[nb] = run; g[nb] = Infinity; closed[nb] = 0; from[nb] = -1; }
       if (ng < g[nb]) { g[nb] = ng; from[nb] = cur; f[nb] = ng + hOf(nx, ny); push(nb, f[nb]); }
     }
@@ -5230,7 +5323,13 @@ export function townRoadPath(tw, x0, y0, x1, y1) {
   const pts = [];
   let i2 = goal;
   while (i2 !== -1) { pts.unshift({ x: (i2 % W) + 0.5, y: ((i2 / W) | 0) + 0.5 }); i2 = from[i2]; }
-  return townRoadSimplify(tw, pts);
+  /* ⚠️ ON RECENTRE AVANT DE RÉDUIRE, ET L'ORDRE EST LE SUJET. Réduire d'abord
+     ne laisse que quelques points de passage : recentrer ceux-là recentre la
+     voiture aux angles et la laisse dériver vers le trottoir entre deux (mesuré :
+     0,36 case d'écart moyen contre 0,5 collé au bord — mieux, pas bon). Recentré
+     case par case, l'axe est décrit sur toute la longueur, et la réduction qui
+     suit ne garde que des cordes qui restent dessus. */
+  return townRoadSimplify(tw, townRoadCenter(tw, pts));
 }
 /* ⚠️⚠️ LE CHEMIN BRUT ZIGZAGUE, ET UNE VOITURE NE ZIGZAGUE PAS. L'A* rend une
    suite de CENTRES DE CASES : sur une avenue en diagonale, c'est un escalier de
@@ -5252,10 +5351,15 @@ export function townRoadSimplify(tw, pts) {
     for (let k = 0; k <= n; k++) {
       const x = a.x + (b.x - a.x) * (k / n), y = a.y + (b.y - a.y) * (k / n);
       // La caisse a une largeur : on éprouve l'axe ET ses deux bords.
-      for (const [ox, oy] of [[0, 0], [0.34, 0], [-0.34, 0], [0, 0.34], [0, -0.34]]) {
+      /* ⚠️ LA CORDE DOIT AUSSI RESTER DÉGAGÉE, pas seulement roulable : une
+         réduction qui coupe au ras du trottoir défait le travail de la carte de
+         chanfrein juste au-dessus, et c'est le tracé RÉDUIT que la voiture suit. */
+      for (const [ox, oy] of [[0, 0], [0.5, 0], [-0.5, 0], [0, 0.5], [0, -0.5]]) {
         const fx = Math.floor(x + ox), fy = Math.floor(y + oy);
         if (fx < 0 || fy < 0 || fx >= nav.w || fy >= nav.h) return false;
-        if (!nav.walk[fy * W + fx]) return false;
+        const j = fy * W + fx;
+        if (!nav.walk[j]) return false;
+        if (nav.clear[j] < 2) return false;
       }
     }
     return true;

@@ -5192,6 +5192,101 @@ export function buildSprites() {
     return c;
   }
 
+  /* ╔══════════════════════════════════════════════════════════════════════════
+     ║ ZIP 432 — LES DEUX VUES DE TROIS QUARTS (le virage).
+     ╚══════════════════════════════════════════════════════════════════════════
+     ⚠️⚠️ QUATRE DIRECTIONS NE FONT PAS UN VIRAGE. Avec profil / face / dos
+     seulement, une voiture qui tourne SAUTE d'un sprite à l'autre : elle est de
+     profil, puis d'un coup de face. C'est le défaut que Guillaume a vu. Il faut
+     les diagonales — et huit directions sont exactement ce que le jeu produit
+     déjà pour les personnages.
+     ⚠️ ON EN DESSINE DEUX, PAS QUATRE : nord-est et sud-est. Les deux autres
+     sont leur miroir, comme l'ouest est le miroir de l'est. Une voiture est
+     symétrique ; deux dessins du même trois-quarts finiraient par diverger (§8).
+
+     LA CONSTRUCTION : la caisse est décrite comme une SUITE DE TRANCHES
+     VERTICALES le long d'un axe incliné. C'est ce qui donne une fuite juste sans
+     jamais dessiner un trapèze à la main — et c'est la même caisse que le profil
+     (mêmes hauteurs de ceinture et de toit), simplement raccourcie par la
+     perspective et penchée. */
+  function taxiQuarterSprite(front) {
+    const Y0 = "#5a4817", Y1 = "#876b30", Y2 = "#b78f26", Y3 = "#d8ad32", Y4 = "#fbcb34", Y5 = "#ffd23a";
+    const GLS = "#434f56", GLSL = "#5f7280", TYR = "#141414", TYRL = "#242424";
+    const CHR = "#d5cdbe", CHRD = "#9a9488", BLK = "#1a1a18", RED = "#c0322a", LMP = "#ffe9a8";
+    const [c, g] = cv(40, 24);
+    const wheel = (cx, cy, r) => {
+      g.fillStyle = TYR; g.beginPath(); g.ellipse(cx, cy, r, r * 0.92, 0, 0, 7); g.fill();
+      g.fillStyle = TYRL; g.beginPath(); g.ellipse(cx, cy - 0.5, r - 0.9, r - 1.1, 0, 0, 7); g.fill();
+      g.fillStyle = CHRD; g.beginPath(); g.ellipse(cx, cy, r - 2.1, r - 2.3, 0, 0, 7); g.fill();
+    };
+    /* L'axe de la caisse. `front` = on voit l'AVANT (cap sud-est) : le nez est en
+       bas à droite, donc plus PRÈS de la caméra, donc plus bas à l'écran. Cap
+       nord-est : c'est l'arrière qui est en bas à droite. */
+    const X0 = 4, X1 = 35;                 // extrémités de la caisse, en x
+    const yAt = (x) => 8 + ((x - X0) / (X1 - X0)) * 5;   // la fuite : +5 px sur la longueur
+    const BODY = 5, ROOFH = 6;             // hauteur de flanc, hauteur d'habitacle
+    // ---- flanc, tranche par tranche
+    for (let x = X0; x <= X1; x++) {
+      const y = Math.round(yAt(x));
+      const near = (x - X0) / (X1 - X0);
+      P(g, x, y, 1, BODY, near > 0.72 ? Y2 : Y3);        // l'extrémité proche est à l'ombre
+      P(g, x, y, 1, 1, Y4);                              // arête de ceinture
+      P(g, x, y + BODY - 1, 1, 1, Y1);                   // bas de caisse
+    }
+    // ---- habitacle : plus court, centré, posé au-dessus
+    const GX0 = X0 + 8, GX1 = X1 - 10;
+    for (let x = GX0; x <= GX1; x++) {
+      const y = Math.round(yAt(x)) - ROOFH;
+      P(g, x, y, 1, ROOFH, Y4); P(g, x, y, 1, 1, Y5);
+    }
+    // ---- vitres du flanc + la vitre de bout (pare-brise ou lunette)
+    for (let x = GX0 + 2; x <= GX1 - 2; x++) {
+      const y = Math.round(yAt(x)) - ROOFH + 1;
+      P(g, x, y, 1, 4, GLS); P(g, x, y, 1, 1, GLSL);
+    }
+    { const xm = Math.round((GX0 + GX1) / 2);
+      P(g, xm, Math.round(yAt(xm)) - ROOFH + 1, 1, 4, Y3); }   // montant central
+    // ---- le bout proche : face avant ou face arrière, en biais
+    const NX = X1, NY = Math.round(yAt(NX));
+    if (front) {
+      P(g, NX - 1, NY - 4, 4, BODY + 3, Y3); P(g, NX - 1, NY - 4, 4, 1, Y4);   // capot + calandre
+      P(g, NX, NY + 1, 3, 3, BLK);
+      for (let i = 0; i < 3; i++) P(g, NX + i, NY + 1, 1, 3, CHRD);
+      P(g, NX - 2, NY - 2, 3, 3, LMP); P(g, NX - 2, NY - 2, 3, 1, "#fff8dd");  // phare visible
+      P(g, NX - 1, NY + BODY - 1, 4, 2, CHR);                                   // pare-chocs
+      // le pare-brise déborde sur la face
+      P(g, GX1 + 1, Math.round(yAt(GX1)) - ROOFH + 1, 2, 4, GLS);
+    } else {
+      P(g, NX - 1, NY - 3, 4, BODY + 2, Y3); P(g, NX - 1, NY - 3, 4, 1, Y4);   // coffre
+      P(g, NX - 2, NY - 1, 3, 3, RED); P(g, NX - 2, NY - 1, 3, 1, "#e8564a");  // feu arrière
+      P(g, NX, NY + 1, 3, 2, CHRD);                                             // plaque
+      P(g, NX - 1, NY + BODY - 1, 4, 2, CHR);
+      P(g, GX1 + 1, Math.round(yAt(GX1)) - ROOFH + 1, 2, 4, GLS);              // lunette
+    }
+    // ---- le bout lointain, plus petit (perspective)
+    { const FX = X0, FY = Math.round(yAt(FX));
+      P(g, FX - 2, FY, 3, BODY - 1, Y2); P(g, FX - 2, FY, 3, 1, Y3);
+      if (front) { P(g, FX - 2, FY + 1, 2, 2, RED); }
+      else { P(g, FX - 2, FY + 1, 2, 2, LMP); }
+      P(g, FX - 2, FY + BODY - 2, 3, 2, CHRD); }
+    // ---- le damier, qui suit la fuite : c'est lui qui vend le trois-quarts
+    for (let x = X0; x <= X1; x++) {
+      const y = Math.round(yAt(x)) + 1;
+      P(g, x, y, 1, 2, (((x - X0) / 3) | 0) % 2 ? BLK : CHR);
+    }
+    // ---- enseigne de toit, penchée elle aussi
+    { const sx = Math.round((GX0 + GX1) / 2) - 3, sy = Math.round(yAt(sx)) - ROOFH - 4;
+      P(g, sx, sy, 7, 4, CHR); P(g, sx + 1, sy + 1, 5, 2, BLK); }
+    // ---- roues : la proche est plus grande et plus basse
+    { const rx1 = X1 - 6, rx0 = X0 + 6;
+      wheel(rx0, Math.round(yAt(rx0)) + BODY, 3.2);
+      wheel(rx1, Math.round(yAt(rx1)) + BODY + 1, 3.8); }
+    outlineSprite(g, 40, 24, "#2a2110");
+    c.exhaust = front ? { x: X0 - 2, y: Math.round(yAt(X0)) + BODY } : { x: NX + 1, y: NY + BODY };
+    c.ground = 23;
+    return c;
+  }
+
   // Icônes de produits artisanaux (16x16).
   function craftIcon(id) {
     const [c, g] = cv(T, T);
@@ -6654,7 +6749,10 @@ house: house(),
   S.beeTable = { table: beeTableSprite("table"), smoker: beeTableSprite("smoker"), honey: beeTableSprite("honey") };
   S.beeLavender = beeLavenderSprite();   // le pot de lavande, à droite de la ruche
   // Le taxi de Valley Town : trois directions, l'ouest est l'est retourné au rendu.
-  S.taxi = { e: taxiSprite("e"), s: taxiSprite("s"), n: taxiSprite("n") };
+  /* Huit directions, cinq dessins : l'ouest, le nord-ouest et le sud-ouest sont
+     les miroirs de leurs symétriques (voir taxiQuarterSprite). */
+  S.taxi = { e: taxiSprite("e"), s: taxiSprite("s"), n: taxiSprite("n"),
+             ne: taxiQuarterSprite(false), se: taxiQuarterSprite(true) };
   S.craftIcons = { honey: craftIcon("honey"), cheeseWheel: craftIcon("cheeseWheel"), cheesePortion: craftIcon("cheesePortion"), eclairChoco: craftIcon("eclairChoco"), eclairVanilla: craftIcon("eclairVanilla"), flanVanilla: craftIcon("flanVanilla"), gateauBasque: craftIcon("gateauBasque"), butter: craftIcon("butter"), bread: craftIcon("bread"), croissant: craftIcon("croissant"), chocolatine: craftIcon("chocolatine"), painSuisse: craftIcon("painSuisse"), yogurtNature: craftIcon("yogurtNature"), yogurtVanilla: craftIcon("yogurtVanilla") };
   // Zip 236: one sprite per pet id in the catalog (individual pets).
   // Zip 388 : DEUX entrées, et c'est délibéré.

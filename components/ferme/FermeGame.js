@@ -6489,6 +6489,14 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
      apparaître. ⚠️ On le cherche SUR LE CHEMIN, pas au hasard : on demande un
      trajet vers un arrêt lointain et on remonte la liste jusqu'à la bonne
      distance. Une case tirée au sort pourrait être dans une poche isolée. */
+  /* Le rayon au-delà duquel on est HORS CHAMP, dérivé du champ de vision réel —
+     même principe que `aoiRadiusTiles` (§3) : un rayon qui DOUBLE l'échelle de
+     la caméra doit en être dérivé, jamais réglé. */
+  function taxiOffscreenR() {
+    const c2 = canvasRef.current;
+    if (!c2) return 22;
+    return Math.hypot(c2.width, c2.height) / (townZoomScale() * C.TILE) / 2 + C.TAXI_OFFSCREEN_MARGIN;
+  }
   function taxiSpawnFrom(tw, spot) {
     /* ⚠️⚠️ ON REMONTE LA RUE DEPUIS LE CLIENT, ON NE PART PAS D'UN ARRÊT.
        Premier jet : le taxi partait de l'arrêt situé à ~30 tuiles à vol d'oiseau.
@@ -6510,7 +6518,9 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     let d = 0;
     for (let k = 1; k < path.length; k++) {
       d += Math.hypot(path[k].x - path[k - 1].x, path[k].y - path[k - 1].y);
-      if (d >= C.TAXI_SPAWN_MAX) return { x: path[k].x, y: path[k].y };
+      // ⚠️ La plus GRANDE des deux exigences : assez loin pour l'attente, et de
+      // toute façon hors du champ de vision.
+      if (d >= Math.max(C.TAXI_SPAWN_MAX, taxiOffscreenR())) return { x: path[k].x, y: path[k].y };
     }
     return path[path.length - 1];
   }
@@ -6538,7 +6548,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
   /* Monter : le passager DEVIENT le véhicule (voir la note de taxiRef). */
   function taxiBoard() {
     const t = taxiRef.current, m = meRef.current;
-    if (!t || t.phase !== "waiting" || !m) return false;
+    if (!t || (t.phase !== "waiting" && t.phase !== "parked") || !m) return false;
     if (Math.hypot(m.x - t.x, m.y - t.y) > C.TAXI_BOARD_R + 0.9) return false;
     t.phase = "asking"; t.bubbleAt = performance.now();
     setTaxiPhase("asking"); setTaxiMenu(true);
@@ -6564,10 +6574,34 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (put) { m.x = put.x; m.y = put.y; }
     }
     m.moving = false; m.vx = 0; m.vy = 0;
-    t.phase = "leaving"; t.leaveAt = performance.now();
-    setTaxiPhase("leaving"); setTaxiMenu(false);
+    /* ⚠️ ZIP 432 — IL RESTE CINQ SECONDES À QUAI AVANT DE REPARTIR (demande de
+       Guillaume). Sans cette pause, la voiture repartait dans le même souffle
+       que la dépose : on n'avait pas le temps de comprendre qu'on était arrivé,
+       et le taxi avait l'air de fuir. `parked` est une phase À PART entière et
+       pas un minuteur greffé sur « leaving » : c'est elle qui autorise à
+       remonter (le taxi est encore là), ce qu'un taxi qui s'en va n'autorise pas. */
+    t.phase = "parked"; t.parkedAt = performance.now(); t.spd = 0;
+    setTaxiPhase("parked"); setTaxiMenu(false);
     pushToast(arrived ? L.taxiArrived : L.taxiDropped);
     sendPos();
+  }
+  /* Repartir se garer hors du champ, puis disparaître. ⚠️ ON NE DESPAWNE JAMAIS
+     À L'ÉCRAN : une voiture qui s'évapore devant le joueur défait tout le soin
+     mis dans la conduite. On lui donne donc une vraie destination — l'arrêt le
+     plus lointain — et on l'efface quand elle est sortie du cadre. */
+  function taxiLeave() {
+    const t = taxiRef.current, tw = taxiWorld();
+    if (!t) return;
+    let path = null;
+    if (tw) {
+      const stops = E.townTaxiStops(tw);
+      let far = null, fd = -1;
+      for (const st of stops) { const d = Math.hypot(st.x - t.x, st.y - t.y); if (d > fd) { fd = d; far = st; } }
+      if (far) path = E.townRoadPath(tw, t.x, t.y, far.x, far.y);
+    }
+    if (!path || path.length < 2) { taxiRef.current = null; setTaxiPhase(null); return; }
+    t.path = path; t.i = 1; t.phase = "leaving"; t.leaveAt = performance.now();
+    setTaxiPhase("leaving");
   }
   /* Lancer la course vers l'arrêt choisi. */
   function taxiGoTo(stopKey) {
@@ -6618,21 +6652,42 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
       if (p.t > C.TAXI_SMOKE_LIFE) { t.smoke.splice(k, 1); continue; }
       p.x += p.vx * dt; p.y += p.vy * dt; p.vy -= 0.15 * dt;
     }
-    if (t.phase === "leaving" && now - t.leaveAt > 5200) { taxiRef.current = null; setTaxiPhase(null); return; }
+    /* À quai : moteur tournant (la fumée continue), puis on file se garer HORS
+       CHAMP — pas de disparition à l'écran, jamais. */
+    if (t.phase === "parked") {
+      taxiPuff(t, now, dt);
+      if (now - t.parkedAt >= C.TAXI_PARK_MS) taxiLeave();
+      return;
+    }
     const driving = t.phase === "coming" || t.phase === "riding" || t.phase === "leaving";
     if (!driving) { t.spd = Math.max(0, t.spd - C.TAXI_BRAKE * dt); taxiPuff(t, now, dt); return; }
     const done = E.taxiStep(t, dt, TAXI_CFG);
     /* La direction du SPRITE : l'axe dominant du cap. ⚠️ Avec une hystérésis —
        sur une diagonale parfaite, un cap qui oscille d'un dixième de degré
        ferait alterner deux sprites à chaque image. */
-    const cs = Math.cos(t.ang), sn = Math.sin(t.ang);
-    t.dir = (Math.abs(cs) > Math.abs(sn) * 1.15 ? (cs > 0 ? "e" : "w")
-          : Math.abs(sn) > Math.abs(cs) * 1.15 ? (sn > 0 ? "s" : "n") : t.dir) || t.dir;
+    /* ⚠️ HUIT DIRECTIONS, ET C'EST CE QUI FAIT LE VIRAGE. À quatre, la voiture
+       SAUTE du profil à la face : on ne voit pas tourner, on voit changer. Les
+       diagonales sont les images intermédiaires — exactement ce que le jeu fait
+       déjà pour les personnages.
+       ⚠️ ET LE SECTEUR EST PRIS AVEC HYSTÉRÉSIS : pile sur une limite, un cap qui
+       oscille d'un dixième de degré ferait clignoter deux sprites à chaque image.
+       On ne change de secteur que si le nouveau est franchement mieux. */
+    { const TAU = Math.PI * 2;
+      const a2 = ((t.ang % TAU) + TAU) % TAU;
+      const DIRS = ["e", "se", "s", "sw", "w", "nw", "n", "ne"];   // sens horaire, y vers le bas
+      const k = a2 / (TAU / 8);
+      const want = DIRS[Math.round(k) % 8];
+      const frac = Math.abs(k - Math.round(k));
+      if (!t.dir || want === t.dir || frac < 0.36) t.dir = want; }
     taxiPuff(t, now, dt);
     if (done) {
       if (t.phase === "coming") { t.phase = "waiting"; t.spd = 0; setTaxiPhase("waiting"); }
       else if (t.phase === "riding") { t.spd = 0; taxiAlight(true); }
       else if (t.phase === "leaving") { taxiRef.current = null; setTaxiPhase(null); }
+    }
+    if (t.phase === "leaving") {
+      const m2 = meRef.current;
+      if (m2 && Math.hypot(t.x - m2.x, t.y - m2.y) > taxiOffscreenR()) { taxiRef.current = null; setTaxiPhase(null); }
     }
   }
   /* La fumée sort DU POT, et le pot n'est pas au même endroit selon la vue :
@@ -6641,9 +6696,10 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
     if (now - t.smokeAt < C.TAXI_SMOKE_MS) return;
     t.smokeAt = now;
     const sp = spritesRef.current && spritesRef.current.taxi;
-    const im = sp && (sp[t.dir === "w" ? "e" : t.dir] || sp.e);
+    const MIR = { w: "e", nw: "ne", sw: "se" };
+    const im = sp && (sp[MIR[t.dir] || t.dir] || sp.e);
     if (!im || !im.exhaust) return;
-    const flip = t.dir === "w";
+    const flip = !!MIR[t.dir];
     const ex = (flip ? (im.width - im.exhaust.x) : im.exhaust.x) - im.width / 2;
     const ey = im.exhaust.y - im.ground;
     // Plus on roule vite, plus la bouffée part en arrière et s'étire.
@@ -15448,10 +15504,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          ⚠️ ET LE TAXI ENTRE DANS LA FILE `pushE` COMME TOUT LE RESTE : il est
          trié par sa ligne de sol et porte l'altitude de sa case. Un véhicule
          dessiné hors file passerait devant les bâtiments qu'il longe. */
+      /* ⚠️ TROIS DIRECTIONS SUR HUIT SONT DES MIROIRS, et le miroir se fait ICI,
+         au rendu — jamais dans fermeArt. Dessiner les huit, ce serait huit
+         réglages à tenir d'accord pour un objet symétrique (§8). */
+      const TAXI_MIRROR = { w: "e", nw: "ne", sw: "se" };
       const drawTaxiAt = (tx2, dir2, smoke, alpha) => {
         const sp = sprites.taxi; if (!sp) return;
-        const flip = dir2 === "w";
-        const im = sp[flip ? "e" : dir2] || sp.e;
+        const src = TAXI_MIRROR[dir2];
+        const flip = !!src;
+        const im = sp[src || dir2] || sp.e;
         const px2 = Math.round(tx2.x * T - im.width / 2), py2 = Math.round(tx2.y * T - im.ground);
         if (alpha !== undefined) ctx.globalAlpha = alpha;
         // La fumée d'abord (elle est derrière), puis l'ombre portée, puis la caisse.
@@ -15669,7 +15730,7 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
          quarante à l'heure, et E ne fait rien — le « propose puis refuse » que le
          426 s'est juré de ne plus commettre, à chaque carrefour. */
       if (tw2 && (tw2.phase === "riding" || tw2.phase === "asking")) tpk = null;
-      else if (tw2 && tw2.phase === "waiting" && Math.hypot(m.x - tw2.x, m.y - tw2.y) <= C.TAXI_BOARD_R + 0.9) tpk = "taxiBoard";
+      else if (tw2 && (tw2.phase === "waiting" || tw2.phase === "parked") && Math.hypot(m.x - tw2.x, m.y - tw2.y) <= C.TAXI_BOARD_R + 0.9) tpk = "taxiBoard";
       else if (m.sitOn) tpk = "townStand";
       else if (canTownJumpNow()) tpk = "townJump";
       else if (nearTile(C.TOWN_STATION_SIGN)) tpk = "trainBack";
