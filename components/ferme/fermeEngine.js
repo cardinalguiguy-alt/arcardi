@@ -5086,22 +5086,46 @@ export function generateTownWorld() {
        déjà posé), et `addProp` ne vérifie rien — c'est le mur invisible du 425
        en version décor, dit en toutes lettres au-dessus d'`addGarden`. */
     {
-      // Derrière la promenade maçonnée : la bande de prairie du 437, meublée.
-      const KIT = ["goldBush", "flowerTrough", "potReeds", "woodBox", "goldBush", "lowWall"];
+      /* ═══ 1. LE QUAI MAÇONNÉ = « FLORAL HAVEN » ═══
+         C'est la première des deux scènes que Guillaume a demandé de recopier.
+         Ce qui la caractérise n'est pas la liste de ses objets, c'est leur
+         DENSITÉ et leur alternance : sur la planche, il n'y a jamais deux fois
+         le même bac de suite, il y a toujours une masse fleurie entre deux
+         objets construits, et rien n'est aligné sur un pas régulier.
+         ⚠️ D'OÙ LE PAS DE 4 ET LA ROUE DE SEPT : à pas 5 et roue de 6, les deux
+         périodes se resynchronisent toutes les trente cases et la rive se met à
+         se répéter visiblement. Deux périodes PREMIÈRES ENTRE ELLES ne le font
+         qu'au bout de vingt-huit objets, c'est-à-dire jamais sur ce quai. */
+      const FLORAL = ["flowerTrough", "goldBush", "roseBox", "lavender", "potPink", "goldBush", "bonsai"];
       let k = 0;
-      for (let x = x0 + 3; x < x1 - 3; x += 5) {
+      for (let x = x0 + 3; x < x1 - 3; x += 4) {
         if (quayMix(x) <= 0.5 || tops[x] === null) continue;
         const by = tops[x] - C.TOWN_QUAY_H - 1;
         if (by <= AVE) continue;
-        /* ⚠️ LE MURET SE POSE PAR DEUX CASES ET JAMAIS PLUS. Une rangée
-           continue de muret le long du quai le fermerait à la circulation
-           venant de l'avenue : le joueur verrait une jolie rive et ne pourrait
-           plus y descendre. Deux cases se contournent ; dix, non. */
-        const kind = KIT[k++ % KIT.length];
-        if (addGarden(x, by, kind) && kind === "lowWall") addGarden(x + 1, by, "lowWall");
+        addGarden(x, by, FLORAL[k++ % FLORAL.length]);
       }
-      /* LE COIN DU PÊCHEUR, à la racine du ponton. Canne posée, seau, coffre :
-         c'est une SCÈNE, pas trois objets — ils ne veulent rien dire séparés.
+      /* La haie derrière, en fond — c'est elle qui ferme la scène de la planche
+         et qui empêche la bande fleurie de flotter au milieu de la pelouse.
+         ⚠️ ELLE EST LACUNAIRE (une case sur trois) et POSÉE PLUS HAUT : continue,
+         elle couperait l'accès du quai depuis l'avenue du sud — le mur invisible
+         du 425, en version jardin. */
+      for (let x = x0 + 5; x < x1 - 5; x += 3) {
+        if (quayMix(x) <= 0.5 || tops[x] === null) continue;
+        const hy = tops[x] - C.TOWN_QUAY_H - 3;
+        if (hy <= AVE + 1 || ((x / 3 | 0) % 3) === 0) continue;
+        addGarden(x, hy, "hedgeRow");
+      }
+      /* Et la lampe à huile, rare : sur la planche il y en a UNE. Un objet
+         ponctuel semé partout cesse d'être ponctuel. */
+      for (let x = x0 + 9; x < x1 - 9; x += 23) {
+        if (quayMix(x) <= 0.5 || tops[x] === null) continue;
+        addGarden(x + 1, tops[x] - C.TOWN_QUAY_H - 1, "oilLamp");
+      }
+      /* ═══ 2. LE COIN DU PÊCHEUR, à la racine du ponton ═══
+         La quatrième scène de la planche (« Active Picnic Spot ») tient en
+         trois objets posés ensemble : canne, seau, coffre. C'est une SCÈNE —
+         ils ne veulent rien dire séparés, et c'est pour ça qu'ils sont placés
+         par rapport au ponton et non semés le long du quai.
          ⚠️ Décor seul (décision de Guillaume) : rien ne se ramasse. */
       const px0 = C.TOWN_PIER.x, pTop = (tops[px0] !== null ? tops[px0] : lk.y) - C.TOWN_QUAY_H;
       if (freeQuay(px0 - 1, pTop)) addProp(px0 - 1, pTop, "rod", true);
@@ -5116,25 +5140,72 @@ export function generateTownWorld() {
         if (tops[sx] === null || !inMap(sx, tops[sx] + 1)) continue;
         addProp(sx, tops[sx] + 1 + (n & 1), "stepStones", false);
       }
-      /* LA TABLE, sur la rive sauvage de l'est, dos aux saules. Deux tabourets
-         de part et d'autre — un seul se lirait comme un objet oublié. */
+      /* ═══ 2 bis. LES HERBIERS, SUR L'EAU ═══
+         ⚠️⚠️ CE SONT DES DÉCORS ET PAS UNE TUILE, ET C'EST LA CORRECTION LA
+         PLUS INSTRUCTIVE DU ZIP. Le premier jet peignait les nénuphars de la
+         planche DANS la tuile d'eau, une case sur neuf : `render-eau.mjs` a
+         mesuré le saut de valeur à la couture des cases passer de ×1,00 à ×1,57
+         de son voisinage — la grille de 16 px redessinée par le décor, le
+         défaut que trois zips ont effacé. Un dessin de 41×37 posé par une
+         boucle qui balaye des cases de 16 se coupe forcément sur une couture ;
+         ce n'est pas un réglage, c'est le mauvais mécanisme. En prop, il est
+         dessiné dans la file triée par profondeur et déborde librement.
+         ⚠️ ET ILS SE POSENT EN HERBIERS, PAS EN SEMIS : trois ou quatre au même
+         endroit, au calme d'une anse. Un nénuphar isolé au large ne veut rien
+         dire — c'est une plante qui pousse en colonie, et c'est ainsi que la
+         planche « Natural Wilderness » les montre. */
+      for (let x = x0 + 6; x < x1 - 6; x += 13) {
+        if (tops[x] === null || quayMix(x) > 0.05) continue;
+        const h = (townHash2(x, 577) * 1000) | 0;
+        for (let n = 0; n < 3 + (h % 3); n++) {
+          const lx = x + ((h >> (n * 2)) % 5), ly = tops[x] + 1 + ((h >> (n * 3 + 1)) % 4);
+          if (!inMap(lx, ly) || ground[id(lx, ly)] !== C.G_WATER) continue;
+          addProp(lx, ly, "lily", false);
+        }
+        // Et sa touffe de roseaux, à la racine de l'herbier, sur la vase.
+        if (inMap(x, tops[x]) && ground[id(x, tops[x])] === C.G_WATER) addProp(x, tops[x], "reedsWater", false);
+      }
+      /* ═══ 3. LA RIVE SAUVAGE = « NATURAL WILDERNESS » ═══
+         La seconde scène. Ce qui l'oppose à la première n'est pas d'avoir moins
+         d'objets — c'est de n'en avoir aucun de CONSTRUIT : des touffes, des
+         massifs, des pierres, et le bois seulement pour ce qui sert (le pont,
+         un bac oublié, une table). C'est la règle du 437 (« on oppose une ligne
+         construite à une ligne qui ne l'est pas ») portée du tracé au mobilier.
+         ⚠️ LES POSITIONS VIENNENT DU HACHAGE DE LA COLONNE, comme le rivage
+         lui-même : rien n'est tiré, donc les deux joueurs voient la même rive
+         (§3) et elle ne bouge pas d'une image à l'autre. */
+      const WILD = ["grassTuft", "clump", "goldBush", "grassTuft", "lavender", "reedTuft", "clump"];
+      for (let x = x0 + 2; x < x1 - 2; x++) {
+        if (tops[x] === null || quayMix(x) > 0.05) continue;
+        const r = trailRow(x);
+        if (r === null) continue;
+        const h = (townHash2(x, 313) * 1000) | 0;
+        // Entre le sentier et l'eau : ce qui pousse les pieds dans la vase.
+        if ((h % 5) === 0 && r + 2 < tops[x]) addGarden(x, r + 2, WILD[(h >> 3) % WILD.length]);
+        // Derrière le sentier : la frange haute.
+        if ((h % 7) === 2 && r - 2 > AVE) addGarden(x, r - 2, WILD[(h >> 5) % WILD.length]);
+      }
+      /* LA TABLE, sur la rive sauvage de l'est, dos aux saules. Elle vient avec
+         ses deux tabourets — c'est UN sprite sur la planche (voir l'atlas). */
       for (let x = x1 - 12; x > x1 - 26; x--) {
         const r = trailRow(x);
         if (r === null || quayMix(x) > 0.05) continue;
         if (!addGarden(x, r - 2, "table")) continue;
-        addGarden(x - 1, r - 2, "stool"); addGarden(x + 1, r - 2, "stool");
-        addGarden(x + 2, r - 3, "hangLamp");
+        addGarden(x + 3, r - 2, "woodBox");
+        addGarden(x - 3, r - 3, "hangLamp");
         break;
       }
       /* LA CLÔTURE, seulement là où le sentier passe AU RAS de l'eau. C'est un
          garde-corps : posée partout, elle transformerait la rive sauvage en
-         enclos, ce qui est exactement le contraire de ce que le 437 a cherché
-         (« on oppose une ligne construite à une ligne qui ne l'est pas »). */
-      for (let x = x0 + 2; x < x1 - 2; x++) {
+         enclos, ce qui est exactement le contraire de ce que le 437 a cherché.
+         ⚠️ ELLE EST LARGE DE DEUX CASES (le sprite en fait 67 px, soit quatre) :
+         posée toutes les trois cases, ses sections se CHEVAUCHAIENT au lieu de
+         se suivre, ce qui donnait un empilement de piquets. Le pas se déduit de
+         la largeur du dessin, il ne se choisit pas. */
+      for (let x = x0 + 2; x < x1 - 2; x += 4) {
         if (tops[x] === null || quayMix(x) > 0.05) continue;
         const r = trailRow(x);
         if (r === null || tops[x] - r > 3) continue;      // le chemin n'est pas au bord
-        if ((x % 3) !== 0) continue;                      // une case sur trois : une clôture a des trous
         addGarden(x, r + 2, "fence");
       }
     }
@@ -5616,14 +5687,38 @@ export function townSpots(tw) {
      haie n'en offrira qu'une ou deux, et c'est très bien : mieux vaut un banc
      à une place qu'un banc refusé. C'est la même règle que les quatre côtés
      ci-dessous — on cherche, on garde ce qui passe. */
+  /* ⚠️⚠️ ZIP 439 — LES DEUX PLACES NE PEUVENT PLUS PARTAGER LEUR CASE, ET IL A
+     FALLU PASSER À DEUX PLACES POUR VOIR QUE RIEN NE L'INTERDISAIT. Le point
+     d'attente était `round(seat × TOWN_SEAT_SPACING)` : à trois places
+     (seat = −1, 0, +1) il donnait trois cases distinctes et tout allait bien ;
+     à deux (seat = ±0,5 après le passage au banc de la planche), il donne
+     `round(±0,345) = 0` DES DEUX CÔTÉS — les deux places visent la même case,
+     deux résidents s'y poussent, et l'un « s'assoit » sur la place de l'autre.
+     ⚠️ LE VRAI DÉFAUT ÉTAIT DE CONFONDRE DEUX GRANDEURS : l'écartement des
+     places est une quantité de DESSIN (des pixels le long d'un sprite), la case
+     où l'on se tient est une quantité de CIRCULATION. Les faire dériver l'une
+     de l'autre marchait par accident tant que l'arrondi séparait. On garde donc
+     l'écartement pour le dessin, et on IMPOSE ici que les cases diffèrent — la
+     liste de replis existait déjà, il lui manquait seulement de savoir ce que
+     la place précédente avait pris.
+     C'est le contrôle « deux places d'un banc ne se marchent pas dessus » de
+     `verify-vallee.mjs` qui l'a dit, à la seconde où le banc a changé de
+     largeur. Il avait été écrit au 429 pour un défaut voisin ; il a attrapé
+     celui-ci dix zips plus tard, sans une ligne de changement. */
   const addBench = (pr) => {
+    const taken = new Set();
     for (let k = 0; k < C.TOWN_SEATS_PER_BENCH; k++) {
-      const seat = k - (C.TOWN_SEATS_PER_BENCH - 1) / 2;      // -1, 0, +1
+      const seat = k - (C.TOWN_SEATS_PER_BENCH - 1) / 2;      // ±0,5 à deux places
       const ox = Math.round(seat * C.TOWN_SEAT_SPACING);      // la case la plus proche de la place
-      for (const [dx, dy] of [[ox, 1], [ox, -1], [ox - 1, 1], [ox + 1, 1], [-1, 0], [1, 0]]) {
+      // Le côté à essayer EN PREMIER dépend du signe de la place : sans ça, les
+      // deux places d'un banc partent chercher leur repli du même côté.
+      const away = seat < 0 ? -1 : 1;
+      for (const [dx, dy] of [[ox, 1], [ox + away, 1], [ox, -1], [ox + away, -1], [away, 0], [-away, 0]]) {
+        const key = (pr.x + dx) + "," + (pr.y + dy);
+        if (taken.has(key)) continue;
         const before = list.length;
         add(pr.x + dx, pr.y + dy, "sit", { bx: pr.x, by: pr.y, seat });
-        if (list.length > before) break;
+        if (list.length > before) { taken.add(key); break; }
       }
     }
   };

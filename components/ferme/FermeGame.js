@@ -14903,11 +14903,26 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
              couvre), puis les planches et leur ombre portée. Sans l'eau
              dessous, le ponton flotterait sur du vert. */
           ctx.fillStyle = "#3f7fd0"; ctx.fillRect(px, py, T, T);
-          ctx.fillStyle = "#a9834f"; ctx.fillRect(px, py, T, T);
-          for (let k = 0; k < 4; k++) {
-            ctx.fillStyle = (k % 2) ? "#b78f58" : "#9c7746";
-            ctx.fillRect(px, py + k * 4, T, 4);
-            ctx.fillStyle = "rgba(60,40,24,0.30)"; ctx.fillRect(px, py + k * 4 + 3, T, 1);
+          /* ⚠️⚠️ ZIP 439 — LA LAME EST CELLE DE LA PLANCHE DE RÉFÉRENCE, ET LE
+             DESSIN QU'ELLE REMPLACE ÉTAIT QUATRE BANDES DE COULEUR. Écrit au
+             426, jamais regardé depuis : `#b78f58` / `#9c7746` en alternance
+             tous les quatre pixels, plus un trait d'ombre. À côté des décors
+             importés, le ponton se lisait comme une RAMPE DE CARTON — c'est le
+             deuxième défaut le plus visible d'une capture du lac, après la
+             haie, et il est de la même famille (un dessin qui vit dans la
+             closure du rendu et que personne ne peut regarder, §4).
+             ⚠️ La tuile vient du TABLIER du pont de la planche, transposée à
+             l'import : les lames d'un ponton sont perpendiculaires à la marche,
+             et le ponton du lac court nord-sud quand le pont de la planche
+             court est-ouest. Le raisonnement est sur `deckPlank`. */
+          if (sprites.townDeck) ctx.drawImage(sprites.townDeck, px, py);
+          else {
+            ctx.fillStyle = "#a9834f"; ctx.fillRect(px, py, T, T);
+            for (let k = 0; k < 4; k++) {
+              ctx.fillStyle = (k % 2) ? "#b78f58" : "#9c7746";
+              ctx.fillRect(px, py + k * 4, T, 4);
+              ctx.fillStyle = "rgba(60,40,24,0.30)"; ctx.fillRect(px, py + k * 4 + 3, T, 1);
+            }
           }
           ctx.fillStyle = "rgba(20,40,70,0.30)"; ctx.fillRect(px, py + T - 2, T, 2);
         }
@@ -15042,30 +15057,34 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           const hW = x > 0 && tw.hedge[i - 1], hE = x < tw.w - 1 && tw.hedge[i + 1];
           pushE((y + 1) * T, e, () => {
             const hx = x * T, hy = (y + 1) * T;
-            ctx.fillStyle = "rgba(20,34,16,0.28)"; ctx.fillRect(hx, hy - 3, T, 3);   // ombre au pied
-            ctx.fillStyle = "#2c5c2a"; ctx.fillRect(hx, hy - 20, T, 18);             // masse
-            ctx.fillStyle = "#3d7a36"; ctx.fillRect(hx, hy - 20, T, 7);              // face éclairée
-            ctx.fillStyle = "#55a047"; ctx.fillRect(hx, hy - 21, T, 3);              // crête taillée
-            /* Les BOUTS. Deux pixels ébréchés en haut de l'arête libre suffisent
-               à casser la ligne droite : c'est le même principe que le nez de
-               marche du perron du tribunal — une VALEUR, pas une forme. */
-            if (!hW) {
-              ctx.fillStyle = "rgba(18,44,16,0.40)"; ctx.fillRect(hx, hy - 20, 2, 18);
-              ctx.clearRect(hx, hy - 21, 2, 2);
-            }
-            if (!hE) {
-              ctx.fillStyle = "rgba(18,44,16,0.45)"; ctx.fillRect(hx + T - 2, hy - 20, 2, 18);
-              ctx.clearRect(hx + T - 2, hy - 21, 2, 2);
-            }
-            // Une haie isolée (aucune voisine) est un buisson : on lui arrondit
-            // les deux épaules, sinon elle a l'air d'un bout de mur tombé là.
-            if (!hN && !hS && !hW && !hE) { ctx.clearRect(hx, hy - 18, 1, 2); ctx.clearRect(hx + T - 1, hy - 18, 1, 2); }
-            // Le feuillage : quelques touches déterministes (jamais aléatoires,
-            // sinon la haie scintille d'une image à l'autre).
-            for (let k = 0; k < 4; k++) {
-              const ox = ((x * 7 + y * 13 + k * 5) % 13);
-              ctx.fillStyle = (k % 2) ? "rgba(120,190,90,0.45)" : "rgba(18,44,16,0.35)";
-              ctx.fillRect(hx + ox, hy - 18 + ((x + k) % 3) * 5, 2, 2);
+            /* ⚠️⚠️ ZIP 439 — LA HAIE EST CELLE DE LA PLANCHE DE RÉFÉRENCE.
+               Ce qu'il y avait ici était SIX `fillRect` écrits au 425, retouchés
+               au 429, et jamais regardés depuis : trois bandes vertes pleine
+               case plus deux ombres latérales. C'est le constat de tête de
+               CLAUDE.md dans sa forme exacte — *un dessin qu'aucun banc ne peut
+               appeler ne se dégrade pas, il reste au niveau du jour où il a été
+               écrit pendant que tout ce qui est mesuré monte.* Posé à côté des
+               décors importés de la planche, il ne se lisait plus comme une haie
+               mais comme un ruban de peinture verte, et c'est le premier défaut
+               qui saute aux yeux sur une capture du jeu.
+               ⚠️ ET C'EST LE DÉCOR LE PLUS RÉPANDU DE LA VILLE : il entoure les
+               vingt-sept parcelles. Le corriger vaut plus, à l'image, que
+               n'importe quel objet de rive.
+               ⚠️ LE DESSIN EST CHOISI PAR LE VOISINAGE, comme au 429 et pour la
+               même raison pratique : chaque parcelle a une entrée PERCÉE dans sa
+               haie, et sur un tronçon uniforme ce trou d'une case ne se voit
+               pas. Un bout dessiné de chaque côté du passage le rend lisible de
+               loin. */
+            const HG = sprites.townHedge;
+            if (HG) {
+              const im = (!hW && !hE) ? HG.solo : !hW ? HG.w : !hE ? HG.e : HG.mid;
+              ctx.drawImage(im, hx, hy - im.height);
+            } else {
+              // Repli : l'ancien dessin, si l'atlas n'a pas la haie de la planche.
+              ctx.fillStyle = "rgba(20,34,16,0.28)"; ctx.fillRect(hx, hy - 3, T, 3);
+              ctx.fillStyle = "#2c5c2a"; ctx.fillRect(hx, hy - 20, T, 18);
+              ctx.fillStyle = "#3d7a36"; ctx.fillRect(hx, hy - 20, T, 7);
+              ctx.fillStyle = "#55a047"; ctx.fillRect(hx, hy - 21, T, 3);
             }
           });
         }
@@ -15336,6 +15355,22 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
           }
         });
       };
+      /* ⚠️ LA LISTE DES DÉCORS QUI PORTENT DÉJÀ LEUR OMBRE. Elle est écrite ici
+         plutôt que déduite d'un champ du sprite parce qu'un canevas ne sait pas
+         dire d'où il vient : `plancheSprite` rend un `<canvas>` comme tous les
+         autres. Un booléen sur le sprite serait plus propre — et il faudrait
+         alors le porter sur les cent-vingt sprites du fichier pour en marquer
+         trente. Le jour où tout le décor vient de la planche, cette liste
+         disparaît et le test s'inverse. */
+      const PLANCHE_PROPS = new Set(["archBridge", "fence", "woodBox", "lowWall", "stoneBlock",
+        "stoneBench", "benchWall", "hangLamp", "stepStones", "chest", "bucket", "rod", "potReeds",
+        "flowerTrough", "bonsai", "roseBox", "potPink", "oilLamp", "table", "reedTuft", "reedsWater",
+        "hedgeRow", "grassTuft", "flatStone", "goldBush", "lavender", "clump", "lily", "bench"]);
+      /* ZIP 439 — la variante d'un décor à plusieurs dessins. Deux nombres
+         premiers différents de ceux du 437 (7/13) : réutiliser les mêmes ferait
+         tomber le buisson d'or et le buisson fleuri sur la même variante à
+         chaque case, et les deux se retrouveraient toujours appariés. */
+      const pick = (arr, pr) => (arr || [])[((pr.x * 11 + pr.y * 17) >>> 0) % Math.max(1, (arr || []).length)];
       for (const pr of (tw.props || [])) {
         if (pr.x < x0 - 2 || pr.x > x1 + 2 || pr.y < y0 - 3 || pr.y > yBot + 2) continue;
         if (pr.kind === "marketArch") { drawMarketArch(pr); continue; }
@@ -15369,15 +15404,19 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                      changeraient de couleur à chaque image. */
                   : pr.kind === "shrub" ? (sprites.townShrub || [])[((pr.x * 7 + pr.y * 13) >>> 0) % Math.max(1, (sprites.townShrub || []).length)]
                   : pr.kind === "boulder" ? (sprites.townBoulder || [])[((pr.x * 11 + pr.y * 5) >>> 0) % Math.max(1, (sprites.townBoulder || []).length)]
-                  /* ZIP 439 — le mobilier de rive, copié sur la planche de
-                     référence de Guillaume. ⚠️ LE BUISSON D'OR PREND SA TAILLE
-                     DE SA POSITION et non d'un tirage, comme le buisson du 437 :
-                     trois tailles semées au hasard changeraient à chaque image. */
+                  /* ══ ZIP 439 — LE MOBILIER DE RIVE, SPRITES DE LA PLANCHE ══
+                     ⚠️ LES VARIANTES SE TIRENT DE LA POSITION, jamais d'un
+                     `Math.random()` : un buisson qui change de taille à chaque
+                     image clignote, et deux joueurs ne verraient pas la même
+                     rive (§3 — ce qui se déduit ne se diffuse pas). Même règle
+                     que les étals du 426 et les buissons du 437. */
                   : pr.kind === "archBridge" ? sprites.townArchBridge
                   : pr.kind === "fence" ? sprites.townFence
                   : pr.kind === "woodBox" ? sprites.townWoodBox
                   : pr.kind === "lowWall" ? sprites.townLowWall
+                  : pr.kind === "stoneBlock" ? sprites.townStoneBlock
                   : pr.kind === "stoneBench" ? sprites.townStoneBench
+                  : pr.kind === "benchWall" ? sprites.townBenchWall
                   : pr.kind === "hangLamp" ? sprites.townHangLamp
                   : pr.kind === "stepStones" ? sprites.townStepStones
                   : pr.kind === "chest" ? sprites.townChest
@@ -15385,9 +15424,20 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
                   : pr.kind === "rod" ? sprites.townRod
                   : pr.kind === "potReeds" ? sprites.townPotReeds
                   : pr.kind === "flowerTrough" ? sprites.townFlowerTrough
+                  : pr.kind === "bonsai" ? sprites.townBonsai
+                  : pr.kind === "roseBox" ? sprites.townRoseBox
+                  : pr.kind === "potPink" ? sprites.townPotPink
+                  : pr.kind === "oilLamp" ? sprites.townOilLamp
                   : pr.kind === "table" ? sprites.townTable
-                  : pr.kind === "stool" ? sprites.townStool
-                  : pr.kind === "goldBush" ? (sprites.townGoldBush || [])[((pr.x * 5 + pr.y * 9) >>> 0) % Math.max(1, (sprites.townGoldBush || []).length)]
+                  : pr.kind === "reedTuft" ? sprites.townReedTuft
+                  : pr.kind === "reedsWater" ? sprites.townReedsWater
+                  : pr.kind === "hedgeRow" ? sprites.townHedgeRow
+                  : pr.kind === "grassTuft" ? sprites.townGrassTuft
+                  : pr.kind === "flatStone" ? sprites.townFlatStone
+                  : pr.kind === "goldBush" ? pick(sprites.townGoldBush, pr)
+                  : pr.kind === "lavender" ? pick(sprites.townLavender, pr)
+                  : pr.kind === "clump" ? pick(sprites.townFlowerClump, pr)
+                  : pr.kind === "lily" ? pick(sprites.townLilyPads, pr)
                   : pr.kind === "flowerCart" ? sprites.townFlowerCart      // zip 431
                   : pr.kind === "barrel" ? sprites.townBarrel              // zip 431
                   : pr.kind === "sacks" ? sprites.townSacks                // zip 431
@@ -15395,8 +15445,15 @@ export default function FermeGame({ room, me, isHost, players, t, lang, onFinish
         if (!img) continue;
         const by = (pr.y + 1) * T, cxp = pr.x * T + T / 2;
         pushE(by, elAt(pr.x, pr.y), () => {
-          ctx.fillStyle = "rgba(20,26,16,0.22)";
-          ctx.beginPath(); ctx.ellipse(cxp, by - 2, img.width * 0.28, 3.5, 0, 0, 7); ctx.fill();
+          /* ⚠️⚠️ ZIP 439 — LES DÉCORS DE LA PLANCHE PORTENT DÉJÀ LEUR OMBRE, et
+             la leur est DESSINÉE (une tache irrégulière qui épouse le pied de
+             l'objet), pas une ellipse. En rajouter une par-dessus donne deux
+             ombres décalées sous chaque objet — le genre de défaut qu'on ne
+             nomme pas en jouant mais qui fait dire « ça fait sale ». */
+          if (!PLANCHE_PROPS.has(pr.kind)) {
+            ctx.fillStyle = "rgba(20,26,16,0.22)";
+            ctx.beginPath(); ctx.ellipse(cxp, by - 2, img.width * 0.28, 3.5, 0, 0, 7); ctx.fill();
+          }
           ctx.drawImage(img, cxp - img.width / 2, by - img.height);
         });
       }

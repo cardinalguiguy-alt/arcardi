@@ -67,27 +67,24 @@ const PROP_IMG = (p) => (
   p.kind === "kiosk" ? S.townKiosk :
   p.kind === "shrub" ? S.townShrub[((p.x * 7 + p.y * 13) >>> 0) % S.townShrub.length] :
   p.kind === "boulder" ? S.townBoulder[((p.x * 11 + p.y * 5) >>> 0) % S.townBoulder.length] :
-  /* ZIP 439 — le mobilier de rive. ⚠️ CETTE TABLE DOIT RESTER IDENTIQUE À
-     CELLE DE `drawTownFrame` : c'est une recopie, donc une divergence en
-     attente (§8). Elle est ici parce que l'alternative — ne pas dessiner les
-     nouveaux décors — donnerait une planche où la rive paraît vide alors
-     qu'elle est meublée, ce qui est un verdict FAUX, pas une approximation.
-     C'est exactement ce que la première passe de ce zip a produit. */
-  p.kind === "archBridge" ? S.townArchBridge :
-  p.kind === "fence" ? S.townFence :
-  p.kind === "woodBox" ? S.townWoodBox :
-  p.kind === "lowWall" ? S.townLowWall :
-  p.kind === "stoneBench" ? S.townStoneBench :
-  p.kind === "hangLamp" ? S.townHangLamp :
-  p.kind === "stepStones" ? S.townStepStones :
-  p.kind === "chest" ? S.townChest :
-  p.kind === "bucket" ? S.townBucket :
-  p.kind === "rod" ? S.townRod :
-  p.kind === "potReeds" ? S.townPotReeds :
-  p.kind === "flowerTrough" ? S.townFlowerTrough :
-  p.kind === "table" ? S.townTable :
-  p.kind === "stool" ? S.townStool :
-  p.kind === "goldBush" ? S.townGoldBush[((p.x * 5 + p.y * 9) >>> 0) % S.townGoldBush.length] : null);
+  /* ZIP 439 — le mobilier de rive, sprites de la planche. ⚠️ CETTE TABLE DOIT
+     RESTER IDENTIQUE À CELLE DE `drawTownFrame`, variantes comprises : c'est
+     une recopie, donc une divergence en attente (§8). Elle est ici parce que
+     l'alternative — ne pas dessiner les nouveaux décors — donnerait une planche
+     où la rive paraît vide alors qu'elle est meublée, c'est-à-dire un verdict
+     FAUX et non une approximation. C'est ce que la première passe a produit. */
+  ((k) => k ? k : null)(
+    { archBridge: S.townArchBridge, fence: S.townFence, woodBox: S.townWoodBox,
+      lowWall: S.townLowWall, stoneBlock: S.townStoneBlock, stoneBench: S.townStoneBench,
+      benchWall: S.townBenchWall, hangLamp: S.townHangLamp, stepStones: S.townStepStones,
+      chest: S.townChest, bucket: S.townBucket, rod: S.townRod, potReeds: S.townPotReeds,
+      flowerTrough: S.townFlowerTrough, bonsai: S.townBonsai, roseBox: S.townRoseBox,
+      potPink: S.townPotPink, oilLamp: S.townOilLamp, table: S.townTable,
+      reedTuft: S.townReedTuft, reedsWater: S.townReedsWater, hedgeRow: S.townHedgeRow,
+      grassTuft: S.townGrassTuft, flatStone: S.townFlatStone }[p.kind]
+    || ({ goldBush: S.townGoldBush, lavender: S.townLavender,
+          clump: S.townFlowerClump, lily: S.townLilyPads }[p.kind] || [])[((p.x * 11 + p.y * 17) >>> 0) % 4]
+  ));
 
 function paint(v, now) {
   const sh = makeCanvas(v.w * T, v.h * T);
@@ -228,7 +225,7 @@ console.log("\n=== 4. rien n'a les pieds dans l'eau, rien ne bouche une allée =
        ce contrôle cherche des décors NOYÉS PAR ACCIDENT (le buisson que le
        creusement de l'anse a rattrapé), pas des décors dont la place est l'eau.
        Le reste de la règle est intact. */
-    if (q.kind !== "stepStones" && tw.ground[i] === C.G_WATER) drowned++;
+    if (!["stepStones", "lily", "reedsWater"].includes(q.kind) && tw.ground[i] === C.G_WATER) drowned++;
     /* ⚠️ ON NE TESTE QUE LES DÉCORS DE JARDIN (`gard`), PAS TOUT CE QUI
        RESSEMBLE À UNE JARDINIÈRE. Le premier jet comptait les huit jardinières
        de la place centrale, posées sur du dallage depuis le 425 et parfaitement
@@ -239,6 +236,48 @@ console.log("\n=== 4. rien n'a les pieds dans l'eau, rien ne bouche une allée =
   }
   ok(drowned === 0, "aucun décor sur l'eau", drowned + " décor(s)");
   ok(onPath === 0, "aucun buisson, bloc ou jardinière au milieu d'une allée", onPath + " décor(s)");
+  /* ⚠️⚠️ ZIP 439 — ET AUCUN ARBRE DONT LE HOUPPIER FLOTTE SUR L'EAU.
+     Ce contrôle existe à cause d'un défaut que tous les autres ont laissé
+     passer : le lac du sud s'arrêtait deux rangées avant le bord de la carte,
+     ces deux rangées étaient de l'herbe, le semis d'arbres — qui ne connaît que
+     « est-ce de l'herbe ? » — y avait planté QUATRE-VINGT-SEPT arbres, et leurs
+     houppiers de 64 px couvraient quatre rangées d'eau. En jeu : une rangée
+     d'arbres qui flottent sur le lac.
+
+     ⚠️ LA MESURE ÉVIDENTE RÉPOND « TOUT VA BIEN ». « Un arbre est-il sur une
+     case d'eau ? » — non, et à juste titre : la case était bien de l'herbe.
+     C'est le §10 de CLAUDE.md dans sa forme la plus pure : *un banc qui passe ne
+     dit pas que la chose est bonne, il dit qu'on mesure autre chose.*
+
+     ⚠️⚠️ ET LA DEUXIÈME MESURE ESSAYÉE ÉTAIT FAUSSE AUSSI — elle est écrite ici
+     parce qu'elle a l'air juste. « Un arbre sur une terre INACCESSIBLE » :
+     séduisant, général, et muet sur ce cas précis. La bande de deux rangées
+     était parfaitement accessible, en contournant le lac par l'est ou par
+     l'ouest. Vérifié en remettant `TOWN_LAKE.h` à 12 : le contrôle disait OK.
+     Un contrôle qu'on n'a pas vu ÉCHOUER sur le défaut qu'il est censé attraper
+     n'est pas un contrôle, c'est une décoration (§14.6).
+
+     La bonne grandeur est celle que le défaut nomme lui-même : ce que le sprite
+     COUVRE. Un arbre fait 44 px de houppier sur 52 de haut, soit trois cases de
+     large et trois et demie de haut au-dessus de son ancre. On compte l'eau
+     là-dedans : au-delà de la moitié, l'arbre ne se lit plus comme un arbre au
+     bord de l'eau, il se lit comme un arbre DANS l'eau. */
+  {
+    let floating = 0; const sample = [];
+    for (let y = 0; y < tw.h; y++) for (let x = 0; x < tw.w; x++) {
+      const o = tw.objects[y * tw.w + x];
+      if (o !== C.O_TREE && o !== C.O_TREE2) continue;
+      let wet = 0, seen2 = 0;
+      for (let dy = -3; dy <= 0; dy++) for (let dx = -1; dx <= 1; dx++) {
+        const nx = x + dx, ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= tw.w || ny >= tw.h) continue;
+        seen2++;
+        if (tw.ground[ny * tw.w + nx] === C.G_WATER) wet++;
+      }
+      if (seen2 && wet / seen2 > 0.5) { floating++; if (sample.length < 6) sample.push(`(${x},${y})`); }
+    }
+    ok(floating === 0, "aucun houppier ne flotte sur l'eau", floating + " arbre(s) " + sample.join(" "));
+  }
   // Le sentier de la rive doit être continu : on le suit d'ouest en est.
   let holes = 0;
   for (let x = lk.x + 1; x < lk.x + lk.w - 1; x++) {

@@ -3072,7 +3072,23 @@ export const TOWN_STALL_TRADES = [
    ⚠️ AUCUN NE MORD SUR UNE RUE NI SUR UNE PARCELLE — même règle qu'au 425, et
    c'est le générateur qui l'applique (il refuse toute case déjà pavée). */
 export const TOWN_CEMETERY = { x: 46, y: 40, w: 14, h: 16 };  // l'enclos de l'église, à l'ouest de son parvis
-export const TOWN_LAKE = { x: 56, y: 154, w: 96, h: 12 };     // le lac du sud + sa promenade (voir TOWN_QUAY_H)
+/* ⚠️⚠️ ZIP 439 — LA HAUTEUR EST PASSÉE DE 12 À 14, ET C'EST UN BOGUE CORRIGÉ,
+   PAS UN AGRANDISSEMENT. Le générateur du lac dit en toutes lettres, depuis le
+   437, que « le lac touche le bas de la carte » — c'est même la justification
+   d'un cas particulier dans ses deux passes de lissage (« hors du rectangle, on
+   compte de l'eau au sud »). Il ne le touchait pas : à `y = 154` et `h = 12`,
+   l'eau s'arrêtait à la rangée 165 et laissait DEUX RANGÉES D'HERBE entre elle
+   et le bord de la carte (`TOWN_MAP_H = 168`).
+   Ces deux rangées étaient inaccessibles — cernées d'eau et du bord du monde —
+   et le semis d'arbres, qui ne connaît que « est-ce de l'herbe ? », y avait
+   planté QUATRE-VINGT-SEPT ARBRES. Vus en jeu, leurs houppiers de 64 px de haut
+   couvraient quatre rangées d'eau : une rangée d'arbres qui flottent sur le lac.
+   ⚠️ ET AUCUN CONTRÔLE NE POUVAIT LE VOIR, parce que la mesure évidente — « un
+   arbre est-il sur une case d'eau ? » — répondait NON, et à juste titre : la
+   case était bien de l'herbe. Ce qui manquait n'était pas le test, c'était la
+   distinction entre la case d'un décor et la surface qu'il COUVRE. Un banc de
+   plus est entré avec ce zip (voir `tools/render-parc.mjs`). */
+export const TOWN_LAKE = { x: 56, y: 154, w: 96, h: 14 };     // le lac du sud + sa promenade (voir TOWN_QUAY_H)
 export const TOWN_QUAY_H = 2;                                 // rangées de dallage entre l'avenue du sud et l'eau
 export const TOWN_PIER = { x: 100, y: 154, w: 4, h: 8 };      // le ponton de bois, plein sud, dans l'axe de l'artère centrale
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -4365,7 +4381,17 @@ export const MARKET_DAY_EVERY = 7;     // un jour de marché par semaine de jeu
    visiblement au marché. Une portée qui refuse alors que le jeu propose est le
    défaut que le 426 s'est juré de ne plus commettre. */
 export const MARKET_RANGE_TILES = 4;
-export const TOWN_SEATS_PER_BENCH = 3;
+/* ⚠️⚠️ ZIP 439 — PASSÉ DE 3 À 2, ET C'EST UNE CONSÉQUENCE DU DESSIN, PAS UN
+   RÉGLAGE. Le banc de bois est désormais celui de la planche de référence de
+   Guillaume (36 px de large) et non plus celui du 429 (52 px). Trois places
+   espacées de 0,69 case font 38 px d'occupants : elles débordaient du banc des
+   deux côtés — exactement le défaut que le 429 avait corrigé en l'élargissant,
+   retrouvé par l'autre bout. Deux places tiennent en 27 px et laissent quatre
+   pixels d'accoudoir libres de chaque côté, ce qui est la proportion que le 429
+   avait mesurée comme juste.
+   ⚠️ CE NOMBRE SE DÉDUIT DE LA LARGEUR DU SPRITE : le jour où le banc change de
+   dessin, c'est ici qu'il faut revenir. `tools/render-assise.mjs` le montre. */
+export const TOWN_SEATS_PER_BENCH = 2;
 export const TOWN_SEAT_SPACING = 0.69;   // 11 px sur les 52 du sprite (voir plazaBenchSprite)
 /* ═══════════════════════════════════════════════════════════════════════════
    ZIP 428 — LE DÉZOOM À L'APPROCHE DES GRANDS BÂTIMENTS.

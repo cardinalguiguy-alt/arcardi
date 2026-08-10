@@ -291,10 +291,23 @@ export function makeCanvas(W, H) {
 export async function loadFerme(root, names) {
   const dir = path.join(root, "tools", ".cache");
   fs.mkdirSync(dir, { recursive: true });
-  for (const n of names) {
+  /* ⚠️⚠️ ZIP 439 — LES DÉPENDANCES SE SUIVENT, ELLES NE SE LISTENT PLUS. Chaque
+     banc nommait les trois modules qu'il voulait ; le jour où `fermeArt.js` a
+     importé `planche.js` (les sprites de la planche de référence), les ONZE
+     bancs se sont mis à jeter `ERR_MODULE_NOT_FOUND` d'un coup — pour un
+     fichier qu'aucun d'eux n'avait à connaître. Un outil qui oblige à le
+     remettre à jour à chaque `import` ajouté est un outil qui sera cassé la
+     prochaine fois aussi. On part donc des noms demandés et on suit les
+     `from "./x"` de proche en proche. */
+  const seen = new Set();
+  const copy = (n) => {
+    if (seen.has(n)) return;
+    seen.add(n);
     const src = fs.readFileSync(path.join(root, "components", "ferme", n + ".js"), "utf8");
     fs.writeFileSync(path.join(dir, n + ".mjs"), src.replace(/from "\.\/([A-Za-z0-9_]+)"/g, 'from "./$1.mjs"'));
-  }
+    for (const m of src.matchAll(/from "\.\/([A-Za-z0-9_]+)"/g)) copy(m[1]);
+  };
+  for (const n of names) copy(n);
   const out = {};
   for (const n of names) out[n] = await import("file://" + path.join(dir, n + ".mjs"));
   return out;

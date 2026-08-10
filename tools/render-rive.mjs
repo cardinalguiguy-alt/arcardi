@@ -59,20 +59,35 @@ const CASES = [
   ["clôture", S.townFence],
   ["bac en planches", S.townWoodBox],
   ["muret", S.townLowWall],
+  ["bloc de pierre", S.townStoneBlock],
   ["banc de pierre", S.townStoneBench],
-  ["banc de bois (429)", S.plazaBench],
+  ["banc adossé", S.townBenchWall],
+  ["banc de bois", S.plazaBench],
   ["lampadaire à suspensions", S.townHangLamp],
-  ["pas japonais", S.townStepStones],
+  ["galets", S.townStepStones],
   ["coffre", S.townChest],
   ["seau", S.townBucket],
   ["canne à pêche", S.townRod],
   ["massettes en pot", S.townPotReeds],
+  ["bonsaï", S.townBonsai],
+  ["bac de roses", S.townRoseBox],
+  ["pot rose", S.townPotPink],
+  ["lampe à huile", S.townOilLamp],
+  ["jardinière fleurie", S.townFlowerTrough],
+  ["table et tabourets", S.townTable],
   ["buisson d'or (grand)", S.townGoldBush[0]],
   ["buisson d'or (moyen)", S.townGoldBush[1]],
   ["buisson d'or (petit)", S.townGoldBush[2]],
-  ["jardinière fleurie", S.townFlowerTrough],
-  ["table", S.townTable],
-  ["tabouret", S.townStool],
+  ["lavande", S.townLavender[0]],
+  ["touffe fleurie", S.townFlowerClump[2]],
+  ["nénuphars", S.townLilyPads[1]],
+  ["roseaux d'eau", S.townReedsWater],
+  ["roseaux", S.townReedTuft],
+  ["touffe d'herbe", S.townGrassTuft],
+  ["haie — tronçon", S.townHedge.mid],
+  ["haie — bout", S.townHedge.w],
+  ["haie — isolée", S.townHedge.solo],
+  ["lame de ponton", S.townDeck],
 ];
 
 /* ------------------------------------------------------------------ mesures */
@@ -85,75 +100,28 @@ const at = (b, x, y) => {
   const o = (y * b.w + x) * 4;
   return b.px[o + 3] > 8 ? [b.px[o], b.px[o + 1], b.px[o + 2]] : null;
 };
+/* ⚠️⚠️ DEUX CONTRÔLES ONT ÉTÉ SUPPRIMÉS D'ICI AU 439, ET C'EST LE MÊME
+   RAISONNEMENT LES DEUX FOIS : ils étaient justes tant que ces objets étaient
+   DESSINÉS par nous, ils sont devenus faux le jour où ils ont été IMPORTÉS de
+   la planche de Guillaume.
 
-console.log("\n=== 1. rien ne touche le bord du canevas (§4) ===\n");
-{
-  /* ⚠️ LE BANC DE BOIS DU 429 EST HORS MESURE, ET C'EST DÉLIBÉRÉ : il n'a pas
-     de cerne, sa dernière rangée peinte EST sa ligne de sol, et l'agrandir d'un
-     pixel le remonterait d'un pixel partout en ville. Il est dans la planche
-     parce qu'on veut le voir à côté du banc de pierre, pas parce qu'on le
-     remesure. */
-  const bad = [];
-  for (const [name, img] of CASES) {
-    if (name.includes("429")) continue;
-    const b = pixelsOf(img);
-    let hit = 0;
-    for (let x = 0; x < b.w; x++) { if (at(b, x, 0)) hit++; if (at(b, x, b.h - 1)) hit++; }
-    for (let y = 0; y < b.h; y++) { if (at(b, 0, y)) hit++; if (at(b, b.w - 1, y)) hit++; }
-    if (hit) bad.push(name + " (" + hit + ")");
-  }
-  ok(bad.length === 0, "aucun pixel peint sur le bord des " + CASES.length + " sprites",
-     bad.length ? bad.join(", ") : "0 débord");
-}
+     * « aucun pixel peint sur le bord du canevas » (§4, le piège n°1 des
+       sprites) protégeait d'un canevas trop petit pour ce qu'on y peint. Un
+       sprite importé est recadré au plus juste sur son contenu : il touche donc
+       ses quatre bords PAR DÉFINITION, et la règle accusait les trente-trois
+       objets d'un coup. Le risque n'a pas disparu, il s'est déplacé d'un cran
+       en amont — ce n'est plus le canevas qui peut couper, c'est la BOÎTE DU
+       CATALOGUE — et il est mesuré là où il vit désormais, dans
+       `import-planche.mjs`, par connexité du dessin hors de sa boîte.
 
-console.log("\n=== 2. les points perdus dans un aplat (le contrôle du 438) ===\n");
-{
-  const NB8 = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
-  const dirt = (img) => {
-    const b = pixelsOf(img);
-    const key = (x, y) => { const c = at(b, x, y); return c ? c.join(",") : null; };
-    const seen = new Uint8Array(b.w * b.h);
-    let area = 0, specks = 0;
-    for (let y = 1; y < b.h - 1; y++) for (let x = 1; x < b.w - 1; x++) {
-      const c = key(x, y);
-      if (!c) continue;
-      area++;
-      if (seen[y * b.w + x]) continue;
-      const st = [[x, y]], cells = [];
-      seen[y * b.w + x] = 1;
-      while (st.length) {
-        const [cx, cy] = st.pop(); cells.push([cx, cy]);
-        for (const [dx, dy] of NB8) {
-          const nx = cx + dx, ny = cy + dy;
-          if (nx < 1 || ny < 1 || nx >= b.w - 1 || ny >= b.h - 1) continue;
-          if (seen[ny * b.w + nx] || key(nx, ny) !== c) continue;
-          seen[ny * b.w + nx] = 1; st.push([nx, ny]);
-        }
-      }
-      if (cells.length <= 2) {
-        const around = new Set();
-        for (const [ax, ay] of cells) for (const [dx, dy] of NB8) {
-          const k2 = key(ax + dx, ay + dy);
-          if (k2 && k2 !== c) around.add(k2);
-        }
-        if (around.size === 1) specks += cells.length;
-      }
-    }
-    return area ? +(specks / area * 100).toFixed(1) : 0;
-  };
-  /* ⚠️⚠️ LA CANNE À PÊCHE EST HORS MESURE, ET C'EST EXACTEMENT LE PIÈGE DU 437
-     (« un banc qui appelle défaut quelque chose de VOULU pousse à casser du
-     juste pour faire taire une mesure », dit là-bas à propos de la terrasse du
-     belvédère). Son fil est un pointillé d'un pixel sur deux — c'est la
-     définition d'un fil de pêche, c'est ainsi que la planche le dessine, et
-     c'est ce que ce contrôle appelle « point perdu dans un aplat ». Le lisser
-     ferait disparaître le fil sur l'eau. On l'exclut, on ne le corrige pas. */
-  const vals = CASES.filter(c => !c[0].startsWith("canne")).map(([n, im]) => [n, dirt(im)]);
-  console.log("        " + vals.map(([n, v]) => n + " " + v).join(" · "));
-  const worst = Math.max(...vals.map(v => v[1]));
-  ok(worst <= 1.0, "aucun objet ne dépasse 1 % de points perdus dans un aplat",
-     "le plus sale : " + vals.find(v => v[1] === worst)[0] + " à " + worst + " %");
-}
+     * « les points perdus dans un aplat » (le contrôle réécrit quatre fois au
+       438) mesurait la propreté de MON trait. Appliqué au dessin de Guillaume,
+       il le NOTE — et il le note mal : 1,2 % sur un bout de haie, qui est son
+       tramage à lui. Un banc n'a pas à arbitrer contre la référence qu'on a
+       reçu l'ordre de recopier.
+
+   ⚠️ Ce qui reste est ce qui vaut encore pour un sprite importé : il doit avoir
+   du volume. Le reste de ce fichier est une PLANCHE — on regarde. */
 
 console.log("\n=== 3. aucun objet n'est un aplat ===\n");
 {
@@ -166,26 +134,19 @@ console.log("\n=== 3. aucun objet n'est un aplat ===\n");
   ok(worst >= 4, "au moins quatre tons par objet", "le plus pauvre : " + who + " avec " + worst);
 }
 
-console.log("\n=== 4. le bois est le même bois, la pierre la même pierre ===\n");
-{
-  /* ⚠️ ON NE COMPTE QUE LES OBJETS DÉCLARÉS « DE BOIS » ET « DE PIERRE », et on
-     exclut ce qui porte une charge d'une autre matière (le lampadaire porte une
-     lanterne de fer et des fleurs, la jardinière porte des fleurs). Ce contrôle
-     cherche une DIVERGENCE de palette, pas une richesse de dessin. */
-  const tones = (names) => {
-    const set = new Set();
-    for (const nm of names) {
-      const img = CASES.find(c => c[0] === nm)[1], b = pixelsOf(img);
-      for (let y = 0; y < b.h; y++) for (let x = 0; x < b.w; x++) { const c = at(b, x, y); if (c) set.add(c.join(",")); }
-    }
-    return set.size;
-  };
-  const bois = tones(["clôture", "bac en planches", "table", "tabouret"]);
-  const pierre = tones(["muret", "banc de pierre", "pas japonais"]);
-  console.log("        bois : " + bois + " teintes · pierre : " + pierre + " teintes");
-  ok(bois <= 7, "les quatre objets de bois partagent une palette de six", bois + " teintes");
-  ok(pierre <= 8, "les trois objets de pierre partagent une palette de six", pierre + " teintes");
-}
+/* ⚠️⚠️ LE CONTRÔLE « LE BOIS EST LE MÊME BOIS » A ÉTÉ SUPPRIMÉ AU 439, ET IL
+   FAUT DIRE POURQUOI PLUTÔT QUE DE LE LAISSER PASSER À VIDE. Il comptait les
+   teintes employées par les objets de bois et refusait qu'elles dépassent la
+   palette déclarée : c'était le bon contrôle tant que ces objets étaient
+   TRANSCRITS à la main, où deux dessins « du même bois » divergent au premier
+   réglage (le paramètre qui double un paramètre, §8). Depuis que les sprites
+   viennent de la planche, chaque objet porte la palette que le dessinateur lui
+   a donnée — seize teintes pour le pont, dix pour le seau — et l'unité de
+   matière est celle de la planche, pas d'une constante du code. Mesurer une
+   divergence qui ne peut plus se produire, c'est décorer.
+   ⚠️ Ce qui l'a REMPLACÉ est ailleurs et vaut mieux : `import-planche.mjs`
+   imprime, pour chaque sprite, le nombre de couleurs gardées et celui d'où on
+   part. C'est là que se voit une quantification qui déraille. */
 
 /* ------------------------------------------------------------------ planches */
 const T = 16;

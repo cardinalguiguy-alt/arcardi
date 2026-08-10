@@ -188,6 +188,7 @@ markRect({ x: C.TOWN_MONUMENT.x, y: C.TOWN_MONUMENT.y }, 2, 2);
          du G_BRIDGE, exactement comme le ponton du 437, et le décor n'est que
          son garde-corps. C'est le seul objet du jeu dont la traversabilité est
          la raison d'être.
+       * `lily` et `reedsWater` — mêmes que `stepStones` : ils flottent.
        * `stepStones` — ils sont posés SUR l'eau, qui est déjà infranchissable.
          Les marquer solides ne changerait rien au jeu et rendrait leur case
          « bloquante sans raison visible », c'est-à-dire qu'ils échoueraient au
@@ -195,7 +196,7 @@ markRect({ x: C.TOWN_MONUMENT.x, y: C.TOWN_MONUMENT.y }, 2, 2);
      Le reste de la règle est intact : tout autre décor doit bloquer. Ce qu'on
      a écarté, ce n'est pas la mesure, c'est deux objets dont on peut nommer la
      raison — le contraire de ce qui s'est passé au 434 avec le seuil du taxi. */
-  const WALKABLE = new Set(["kiosk", "archBridge", "stepStones"]);
+  const WALKABLE = new Set(["kiosk", "archBridge", "stepStones", "lily", "reedsWater"]);
   const ghosts = tw.props.filter(p => !WALKABLE.has(p.kind) && !tw.solid[idx(p.x, p.y)]);
   ok("aucun décor n'est traversable", ghosts.length === 0, ghosts.slice(0, 8).map(p => `${p.kind}(${p.x},${p.y})`).join(" "));
 }
