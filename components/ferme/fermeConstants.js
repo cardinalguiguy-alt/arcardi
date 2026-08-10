@@ -2877,6 +2877,13 @@ export const TR_NONE = 0;      // terre battue : allées de maison, parvis, cham
 export const TR_ASPHALT = 1;   // la grande artère : goudron + ligne blanche discontinue
 export const TR_COBBLE = 2;    // pavés gris, toutes les autres rues
 export const TR_BRICK = 3;     // briques : l'allée du cimetière
+/* ⚠️ 437 — LE GRAVIER : les allées du parc et le sentier de la rive sauvage du
+   lac. Il est arrivé le jour où l'on a voulu un sentier au bord de l'eau, et
+   il montre au passage que l'arbitrage du 434 était le bon : une valeur de plus
+   dans une couche de PEINTURE ne rouvre aucun des quarante tests
+   `ground === G_PATH` du moteur. Un `G_TOWN_GRAVEL` les aurait tous rouverts
+   pour une différence purement visuelle. */
+export const TR_GRAVEL = 4;    // gravier clair : promenades de parc et de rive, jamais une voie
 /* ⚠️ LA CHAUSSÉE S'ÉLARGIT SANS DÉPLACER SON AXE, et ce n'est pas un hasard :
    la bande passe de 2 à 4 cases EN GARDANT SON MILIEU (rangées 69..72 au lieu
    de 70..71, milieu à y = 71,0 dans les deux cas). C'est ce qui rend
@@ -2910,7 +2917,21 @@ export const TOWN_MONUMENT = { x: 92, y: 78 };      // 2x2, obélisque + vasques
    banc de rendu le contrôle (« aucun bâtiment ne coupe une rue »), mais rien ne
    contrôle l'inverse. Les hauteurs sont donc calées pour s'arrêter AVANT les
    rangées de maisons du sud (y = 102) : 74 + 26 = 100. */
-export const TOWN_PARK = { x: 108, y: 74, w: 34, h: 26 };     // le parc et son étang
+/* ⚠️⚠️ ZIP 437 — LE PARC RECULE DE HUIT CASES VERS L'EST (108 → 116). Retour de
+   Guillaume : « trop collé au centre ». C'était exact au sens propre — la place
+   finit en x = 107 (78 + 30 - 1) et le parc commençait en 108 : PAS UNE SEULE
+   case entre le dallage de la place et la pelouse du parc, donc deux espaces
+   publics qui se touchent et se lisent comme un seul, immense et mou. Huit
+   cases de pelouse libre entre les deux suffisent à les séparer, et le parc
+   vient alors s'appuyer sur l'avenue x = 150 — un parc bordé d'une rue sur son
+   flanc est un parc, un parc collé à une place est une esplanade.
+   ⚠️ ET C'EST LA SEULE LIGNE QU'IL A FALLU TOUCHER, ce qui est tout l'intérêt
+   des deux constantes suivantes : l'étang et le kiosque sont désormais DÉRIVÉS
+   du parc. Avant le 437 ils portaient leurs coordonnées absolues (115,6 / 80,5
+   et 122 / 84) — c'est-à-dire le paramètre qui en DOUBLE un autre (§8 de
+   CLAUDE.md), et un déménagement du parc aurait laissé son étang et son kiosque
+   sur place, dans l'herbe, sans qu'aucune erreur ne le dise. */
+export const TOWN_PARK = { x: 116, y: 74, w: 34, h: 26 };     // le parc et son étang
 /* ═══════════════════════════════════════════════════════════════════════════
    ZIP 435 — L'ÉTANG DU PARC : UN CONTOUR, PAS UNE ÉQUATION.
    ───────────────────────────────────────────────────────────────────────────
@@ -2944,13 +2965,40 @@ export const TOWN_PARK = { x: 108, y: 74, w: 34, h: 26 };     // le parc et son 
    ⚠️ ET ÇA LIBÈRE LA PLACE QUI MANQUAIT : à 5,9 le contour venait à une case de
    l'allée en croix, donc les quatre massifs et les deux bancs étaient serrés
    contre l'eau. `tools/render-eau.mjs` les compte. */
-export const TOWN_POND = { cx: 115.6, cy: 80.5, rx: 4.3, ry: 3.1 };
+export const TOWN_POND = { cx: TOWN_PARK.x + 7.6, cy: TOWN_PARK.y + 6.5, rx: 4.3, ry: 3.1 };
 export const TOWN_POND_LOBES = [       // { k: harmonique, a: amplitude, p: phase }
   { k: 1, a: 0.190, p: 0.80 },         // décentre la masse : une rive plus longue que l'autre
   { k: 2, a: 0.130, p: 2.35 },         // le haricot
   { k: 3, a: 0.085, p: 5.10 },         // les criques
   { k: 5, a: 0.045, p: 1.15 },         // le grain de rive, juste sous la case
 ];
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZIP 437 — LES MASSIFS FLEURIS : UNE COUCHE, PAS UN SOL, PAS UN DÉCOR.
+   ───────────────────────────────────────────────────────────────────────────
+   Demande de Guillaume : un parc « plus fleuri et intéressant ». Trois formes
+   étaient possibles, et deux sont des pièges déjà payés par ce projet :
+     * un `G_*` de plus (G_TOWN_FLOWERS) rouvrirait les quarante tests
+       `ground === G_PATH` / `G_TOWN_LAWN` du moteur — la leçon du 434 sur les
+       revêtements, mot pour mot ;
+     * un PROP par touffe : le parc en demande deux cents, et chacune serait un
+       objet à trier par ancrage à chaque image, pour un dessin qui tient dans
+       la case et ne dépasse jamais.
+   ⚠️ La bonne forme est donc la troisième, celle de `road` et de `hedge` : un
+   tableau parallèle lu à l'index qu'on a déjà, en même temps que le sol. Il ne
+   bloque rien (on marche dans un massif : le contraire obligerait à réserver
+   des cases solides au milieu d'une pelouse, donc des murs invisibles — le
+   défaut que le 425 a payé six cents fois).
+   ⚠️ ET IL SE PEINT EN AVANT-DERNIÈRE PASSE, juste avant le revêtement : il ne
+   marque que ce qui est ENCORE de la pelouse, donc tout ce qu'une allée, un
+   kiosque ou un étang a recouvert entre-temps s'exclut tout seul. Zéro cas
+   particulier — c'est l'ordre qui fait le travail, comme pour `road` (434). */
+export const BL_NONE = 0;
+export const BL_DAISY = 1;      // marguerites et pâquerettes : le tapis blanc, le plus discret
+export const BL_TULIP = 2;      // tulipes rouges et roses, en rangs — le massif dessiné
+export const BL_LAVENDER = 3;   // lavande et sauge : des épis violets, hauts
+export const BL_GOLD = 4;       // forsythia et souci : la tache jaune de l'image de référence
+export const BL_WILD = 5;       // la prairie fleurie : semis lâche, pour les bords et la rive du lac
+export const BL_KINDS = 5;
 /* Largeur de la berge, en cases, autour de TOUTE eau de la ville (couche
    `world.shore`). 2 = une rangée mouillée au ras de l'eau + une rangée sèche.
    ⚠️ C'est la même valeur que `LAKE_SHORE_BAND` du lac du monde sombre (375) —
@@ -2978,6 +3026,15 @@ export const TOWN_SHORE_BAND = 2;
    dessinait un ANNEAU PÂLE de deux cases et demie tout autour — un lac qui a
    l'air peint au pochoir. Une berge se voit sur une case. */
 export const TOWN_WATER_SHELF = 1.5;
+/* ⚠️ 437 — LE PLATEAU RESPIRE LE LONG DE LA RIVE. Sa largeur est multipliée
+   par 1 ± TOWN_SHELF_VAR selon un bruit lisse de période TOWN_SHELF_PER : une
+   anse s'ensable et fait une plage, un cap plonge. Sans ça, le haut-fond est un
+   liseré de largeur constante — le lac cerné d'un halo régulier, peint au
+   pochoir. Le POURQUOI complet est dans la passe de profondeur (fermeEngine).
+   ⚠️ 0,55 et pas plus : à 0,8 le plateau disparaît par endroits et la rive
+   redevient une falaise sous-marine, ce que `render-eau.mjs` compte. */
+export const TOWN_SHELF_VAR = 0.55;
+export const TOWN_SHELF_PER = 13;   // en cases : la longueur d'une anse, pas celle d'une vague
 export const TOWN_ORCHARD = { x: 12, y: 38, w: 18, h: 24 };   // le verger municipal
 export const TOWN_MARKET = { x: 38, y: 74, w: 26, h: 26 };    // le champ de foire, dallé et bordé d'arbres
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -3018,7 +3075,68 @@ export const TOWN_CEMETERY = { x: 46, y: 40, w: 14, h: 16 };  // l'enclos de l'�
 export const TOWN_LAKE = { x: 56, y: 154, w: 96, h: 12 };     // le lac du sud + sa promenade (voir TOWN_QUAY_H)
 export const TOWN_QUAY_H = 2;                                 // rangées de dallage entre l'avenue du sud et l'eau
 export const TOWN_PIER = { x: 100, y: 154, w: 4, h: 8 };      // le ponton de bois, plein sud, dans l'axe de l'artère centrale
-export const TOWN_KIOSK = { x: 122, y: 84 };                  // kiosque à musique du parc (3×3, case nord-ouest)
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZIP 437 — LE RIVAGE DU LAC DU SUD. UN CHAMP, PAS UNE LIGNE.
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️⚠️ CE QUI EST REMPLACÉ, ET LE 435 LE DÉSIGNAIT DÉJÀ NOMMÉMENT : `shore(x)`,
+   deux sinus, donc une FONCTION DE x. Une fonction de x ne peut pas revenir sur
+   elle-même : pas de crique qui se referme, pas de presqu'île, pas d'îlot, et
+   surtout une pente de rive qui ne dépasse jamais un demi-quart de case par
+   colonne — c'est-à-dire un trait tiré à la règle qu'on aurait légèrement
+   cintré. Le 435 a corrigé l'étang du parc et a laissé le lac ; Guillaume l'a
+   vu tout de suite (« le rebord est toujours totalement droit »).
+   ⚠️ LA PARADE EST DE PASSER À UN CHAMP SIGNÉ s(x,y) : la rive est l'isoligne
+   s = 0 d'un champ qui dépend AUSSI de y. Dès que la pente du bruit en y
+   dépasse 1, l'isoligne se replie — et c'est de là que viennent les criques
+   fermées, les langues de terre et les îlots. Même famille que les harmoniques
+   de `TOWN_POND` (435), mais en géométrie ouverte : un lac n'a pas de centre
+   autour duquel tourner un rayon.
+   ⚠️ AUCUN TIRAGE ALÉATOIRE, POUR LA RAISON DU 435 : `generateTownWorld`
+   partage un seul générateur, y puiser un nombre déplacerait tout le mobilier
+   posé après le lac. Le bruit est un HACHAGE de coordonnées entières, pur et
+   identique chez les deux joueurs. */
+export const TOWN_LAKE_EDGE = 4.6;      // recul moyen de la rive sous le bord nord du rectangle, en cases
+/* ⚠️ LES PÉRIODES SONT COURTES DEVANT LA LONGUEUR DU LAC, ET C'EST MESURÉ.
+   Premier jet : 57 et 134 cases pour un lac qui en fait 96 — une seule grande
+   courbure, donc une rive qui ne change pas d'avis sur vingt cases d'affilée.
+   `render-eau.mjs` le compte désormais (la plus longue suite de colonnes dont
+   la rive est à la même rangée) : 24 colonnes au premier jet, contre 8 après. */
+export const TOWN_LAKE_BAYS = [         // les baies : { p: période en cases, a: amplitude, ph: phase }
+  { p: 43, a: 1.7, ph: 0.7 },           // les grandes anses
+  { p: 19, a: 1.0, ph: 2.1 },           // et leurs redents
+];
+export const TOWN_LAKE_NOISE = [        // le bruit de valeur, trois octaves : { p: période, a: amplitude }
+  { p: 9, a: 2.9 },                     // les criques et les pointes
+  { p: 4.2, a: 1.5 },                   // les redents de crique
+  { p: 2.3, a: 0.65 },                   // le grain de rive, juste au-dessus de la case
+];
+/* ⚠️⚠️ LA PROMENADE DE PIERRE NE COURT PLUS SUR TOUTE LA LONGUEUR, ET C'EST LE
+   FOND DE LA REMARQUE DE GUILLAUME. Un quai maçonné EST droit — c'est un
+   ouvrage, il a été construit à la règle, et c'est même ce qui le fait lire
+   comme un quai. Ce qui ne va pas, c'est que la ville en avait posé quatre-
+   vingt-seize cases : à ce compte, le lac entier devient un bassin de jardin
+   public et il n'a plus une seule berge naturelle. On garde donc la pierre
+   AUTOUR DU PONTON — là où la ville touche l'eau, là où l'on descend de
+   l'avenue centrale — et on rend les deux ailes à la nature : sentier de terre
+   qui serpente, blocs erratiques, roselières, saules.
+   L'emprise est DÉRIVÉE du ponton (jamais deux descriptions du même milieu :
+   §8), et le raccord se fait sur `TOWN_QUAY_FADE` cases pour qu'un quai ne
+   s'arrête pas net dans un roseau. */
+export const TOWN_QUAY_HALF = 21;       // demi-longueur de l'esplanade, de part et d'autre de l'axe du ponton
+export const TOWN_QUAY_FADE = 7;        // longueur du raccord entre la rive maçonnée et la rive naturelle
+export const TOWN_QUAY_EDGE = 4.2;      // recul de la rive DEVANT le quai : droite, parce qu'un quai est droit
+/* Le sentier de la rive sauvage. ⚠️ IL NE SUIT PAS L'EAU, ET C'EST TOUT LE
+   POINT : une allée tracée à distance constante du rivage EST le rivage,
+   redessiné une case plus haut — on aurait remplacé une ligne droite par une
+   seconde ligne parallèle. Il ondule pour son compte, tantôt au ras de l'eau,
+   tantôt à quatre cases, et ce qui reste entre lui et le lac est de la berge. */
+export const TOWN_TRAIL_MARGIN = 1;     // il ne s'approche jamais plus près que ça de l'eau
+/* ⚠️ DES PÉRIODES LONGUES : 29 et 13 cases. À 9, le sentier changeait de rangée
+   tous les quatre pas et se lisait comme un escalier — le contraire d'un chemin.
+   Ce qui doit onduler vite, c'est la RIVE ; le chemin, lui, est tracé par des
+   gens qui vont quelque part. */
+export const TOWN_TRAIL_WAVE = [{ p: 29, a: 1.8, ph: 1.9 }, { p: 13, a: 0.7, ph: 4.4 }];
+export const TOWN_KIOSK = { x: TOWN_PARK.x + 14, y: TOWN_PARK.y + 10 };  // kiosque à musique du parc (3×3, case nord-ouest) — DÉRIVÉ du parc depuis le 437
 export const TOWN_ARTISANS = { x: 190, y: 36, w: 32, h: 96 }; // le quartier de l'est, le long de l'artère x=196
 /* Le CŒUR URBAIN : au-dedans, on ne sème PAS d'arbres au hasard. C'est la
    correction la plus efficace du deuxième jet — des arbres épars entre les rues
@@ -3216,6 +3334,12 @@ export const TRAIN_BOARD = { x: 5, y: 30 };         // farm-side boarding spot o
 
    Forme d'une entrée, indexée par case : `{ hp }` = arbre entamé, encore debout ;
    `{ r }` = arbre abattu, souche visible et TRAVERSABLE, qui repousse à `r`. */
+/* ⚠️ 438 — LA CADENCE DU SOUFFLE. 430 ms par image, quatre images en boucle,
+   soit 1,7 s par respiration. Plus vite, l'arbre grelotte ; plus lentement, on
+   ne voit plus qu'un saut de pixel de temps en temps, ce qui se lit comme un
+   défaut. La PHASE, elle, est tirée du hachage de la case (voir townTreeImg) :
+   c'est elle qui empêche la ville de battre d'un seul bloc. */
+export const TOWN_TREE_SWAY_MS = 430;
 export const TOWN_TREE_REGROW_MS = 2 * DAY_REAL_MS;  // deux jours de jeu (32 min réelles)
 /* ⚠️ LA SOUCHE NE BLOQUE PAS, contrairement à celle de la ferme. Deux raisons,
    et la seconde est la vraie : d'abord un arbre abattu doit OUVRIR le passage,
@@ -3264,7 +3388,6 @@ export const COURT_FLOOR_W = 46;    // largeur d'un niveau, en cases (murs compr
 export const COURT_FLOOR_H = 28;    // hauteur d'un niveau
 export const COURT_FLOOR_GAP = 3;   // rangées de vide entre deux niveaux empilés
 export const COURT_MAP_W = COURT_FLOOR_W;
-export const COURT_MAP_H = 3 * (COURT_FLOOR_H + COURT_FLOOR_GAP);
 // Les niveaux, du haut de la grille vers le bas. ⚠️ L'ORDRE EST LE PLAN : le
 // rez-de-chaussée d'abord (c'est là qu'on entre), puis l'étage, puis le
 // sous-sol — et non l'ordre physique (sous-sol en bas), qui obligerait à des
@@ -3273,11 +3396,31 @@ export const COURT_MAP_H = 3 * (COURT_FLOOR_H + COURT_FLOOR_GAP);
    elle qui décide si une volée se dessine « qui monte » ou « qui descend »,
    DÉDUIT au lieu d'être écrit deux fois. L'ordre du tableau, lui, reste l'ordre
    du plan (on entre par le rez-de-chaussée), pas l'ordre physique. */
+/* ⚠️⚠️ ZIP 438 — LA MAIRIE EST DANS LA MÊME GRILLE QUE LE TRIBUNAL, ET C'EST
+   LA DÉCISION STRUCTURANTE DE CE ZIP. Un second intérieur pouvait se faire de
+   deux façons :
+     1. une ZONE de plus (`m.zone === "hall"`). Vingt-cinq endroits de
+        `FermeGame.js` testent `zone === "court"` : il aurait fallu les
+        retrouver TOUS, et en oublier un ne lève rien — c'est le piège n°1 du
+        projet, appliqué à l'architecture ;
+     2. deux niveaux de plus dans la MÊME carte, sous ceux du tribunal.
+   La seconde ne coûte RIEN : la zone reste « court », les vingt-cinq tests
+   restent vrais, `courtFloorOf(y)` continue de dire où l'on est — et, surtout,
+   **deux joueurs dans deux bâtiments différents ne peuvent pas se confondre**,
+   parce que leurs `y` diffèrent. C'est exactement le raisonnement du 426 (« les
+   trois niveaux tiennent dans une seule grille, le niveau se lit dans y »),
+   étendu d'un bâtiment. Rien de plus ne circule sur le réseau.
+   ⚠️ `bld` DIT À QUEL BÂTIMENT APPARTIENT LE NIVEAU. C'est la seule donnée
+   nouvelle, et elle sert à trois choses : la matière du sol, l'emplacement du
+   seuil, et la porte de ville par laquelle on ressort. */
 export const COURT_FLOORS = [
-  { key: "ground",   emoji: "⚖️", alt: 0 },
-  { key: "upper",    emoji: "🗂️", alt: 1 },
-  { key: "basement", emoji: "🔒", alt: -1 },
+  { key: "ground",   emoji: "⚖️", alt: 0,  bld: "court" },
+  { key: "upper",    emoji: "🗂️", alt: 1,  bld: "court" },
+  { key: "basement", emoji: "🔒", alt: -1, bld: "court" },
+  { key: "hall",     emoji: "🏛️", alt: 0,  bld: "hall" },
+  { key: "hallUp",   emoji: "📜", alt: 1,  bld: "hall" },
 ];
+export const COURT_MAP_H = COURT_FLOORS.length * (COURT_FLOOR_H + COURT_FLOOR_GAP);
 // Sol / structure. ⚠️ ENUM PROPRE À L'INTÉRIEUR, jamais les G_* de la ferme :
 // ces valeurs ne sortent pas du tribunal (carte regénérée, jamais persistée),
 // donc rien à migrer — et un G_ de plus, lui, se paierait sur les sauvegardes.
@@ -3333,6 +3476,37 @@ export const COURT_ROOMS = [
   { floor: 2, key: "cells",     kind: "cells",     x: 27, y: 0, w: 19, h: 14, doors: [{ x: 27, y: 9 }] },
   { floor: 2, key: "lostfound", kind: "storage",   x: 27, y: 13, w: 19, h: 9, doors: [{ x: 27, y: 17 }] },
   { floor: 2, key: "boiler",    kind: "boiler",    x: 27, y: 21, w: 19, h: 7, doors: [{ x: 27, y: 24 }] },
+  /* ═══════════ ZIP 438 — L'HÔTEL DE VILLE. ═══════════════════════════════
+     ⚠️ SON PLAN N'EST PAS CELUI DU TRIBUNAL, ET C'EST LE POINT. Le tribunal est
+     un couloir bordé de portes closes : c'est ce qu'est un palais de justice,
+     et c'est ce qui le rend un peu inquiétant. Une mairie est l'inverse — un
+     GRAND HALL public où l'on entre, où l'on lit les affiches, où l'on fait la
+     queue au guichet. Les deux pièces du rez-de-chaussée s'ouvrent donc
+     LARGEMENT sur ce hall (deux portes chacune), et la salle des cours n'a même
+     pas de mur côté hall : c'est une alcôve, on y entre en passant.
+     ⚠️ Et l'étage est l'inverse du rez-de-chaussée : trois portes, trois
+     pièces où l'on ne va que si on y est invité. C'est ce contraste qui fait
+     lire « bâtiment public » plutôt que « niveau de jeu ».
+     ───────── rez-de-chaussée (niveau 3) : ce qui est ouvert à tous. */
+  { floor: 3, key: "cadastre", kind: "cadastre", x: 0, y: 0, w: 19, h: 15,
+    doors: [{ x: 18, y: 5 }, { x: 18, y: 10 }] },
+  { floor: 3, key: "civil",    kind: "civil",    x: 0, y: 14, w: 19, h: 14,
+    doors: [{ x: 18, y: 19 }, { x: 18, y: 24 }] },
+  { floor: 3, key: "prices",   kind: "prices",   x: 27, y: 0, w: 19, h: 15,
+    doors: [{ x: 27, y: 5 }, { x: 27, y: 10 }] },
+  { floor: 3, key: "welcome",  kind: "counter",  x: 27, y: 14, w: 19, h: 14,
+    doors: [{ x: 27, y: 19 }, { x: 27, y: 24 }] },
+  /* ───────── étage (niveau 4) : ce qui se décide. */
+  /* ⚠️ LES PORTES DE L'ÉTAGE ÉVITENT LES RANGÉES DE COLONNES du couloir (y = 7,
+     12, 17, 22, et une case de garde autour). Ce n'est pas une coquetterie : le
+     générateur REFUSE de poser un meuble devant une porte, donc une porte mal
+     placée ne bloque pas le passage — elle SUPPRIME une colonne ou une étagère,
+     en silence, et la pièce s'appauvrit sans que rien ne le dise.
+     `render-mairie.mjs` compte ces refus et exige zéro. */
+  { floor: 4, key: "council",  kind: "council",  x: 0, y: 0, w: 19, h: 16, doors: [{ x: 18, y: 9 }] },
+  { floor: 4, key: "mayor",    kind: "mayor",    x: 0, y: 15, w: 19, h: 13, doors: [{ x: 18, y: 24 }] },
+  { floor: 4, key: "cityarch", kind: "archive",  x: 27, y: 0, w: 19, h: 14, doors: [{ x: 27, y: 5 }] },
+  { floor: 4, key: "surveyor", kind: "office",   x: 27, y: 13, w: 19, h: 15, doors: [{ x: 27, y: 19 }] },
 ];
 /* ═══════════════════════════════════════════════════════════════════════════
    LES CAGES D'ESCALIER. ⚠️ UNE CAGE EST UN LIEU, PAS UN TRAJET — et c'est la
@@ -3353,9 +3527,21 @@ export const COURT_ROOMS = [
 export const COURT_STAIRWELLS = [
   { x: 20, y: 2, w: 2, h: 3, a: 0, b: 1 },   // la cage ouest : rez-de-chaussée ↔ étage
   { x: 24, y: 2, w: 2, h: 3, a: 0, b: 2 },   // la cage est : rez-de-chaussée ↔ sous-sol
+  // 438 — la mairie : un seul escalier d'honneur, dans l'axe du hall.
+  { x: 22, y: 2, w: 2, h: 4, a: 3, b: 4 },
 ];
 export const COURT_ENTRY = { x: 22, y: 27 };  // le seuil, deux cases (x et x+1) au mur sud du RDC
 export const COURT_SPAWN = { x: 22.5, y: 25 }; // où l'on se retrouve en entrant
+/* ⚠️ 438 — LES BÂTIMENTS DE L'INTÉRIEUR. `entry`/`spawn` sont donnés en
+   coordonnées de NIVEAU (le générateur y ajoute l'origine du niveau), `town`
+   nomme la constante du bâtiment en ville — c'est elle, et elle seule, qui dit
+   où l'on ressort. Une position de sortie écrite en dur serait la divergence en
+   attente du §8 : le jour où l'hôtel de ville bouge, on ressortirait dans un
+   pré. */
+export const COURT_BUILDINGS = {
+  court: { ground: 0, floors: [0, 1, 2], entry: { x: 22, y: 27 }, spawn: { x: 22.5, y: 25 } },
+  hall:  { ground: 3, floors: [3, 4],    entry: { x: 22, y: 27 }, spawn: { x: 22.5, y: 25 } },
+};
 export const COURT_ELEV_PX = 6;   // relief de l'estrade, en pixels d'écran
 // Les services annoncés, dans l'ordre du panneau d'affichage du hall. Le libellé
 // et le détail vivent dans fermeStrings (courtRoom*), jamais ici : ce tableau

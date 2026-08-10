@@ -913,9 +913,34 @@ export function drawTownRoadTile(ctx, S, tw, x, y, px, py) {
   /* La case découpée dans le pavé de 4×4 tuiles : c'est `x % sup` qui fait que
      les pierres TRAVERSENT les bords de case au lieu de s'arrêter dessus. Toute
      la différence avec l'ancienne tuile unique est là. */
-  const atlas = rd === C.TR_ASPHALT ? RS.asphalt : rd === C.TR_BRICK ? RS.brick : RS.cobble;
+  const atlas = rd === C.TR_ASPHALT ? RS.asphalt : rd === C.TR_BRICK ? RS.brick
+              : (rd === C.TR_GRAVEL && RS.gravel) ? RS.gravel : RS.cobble;
   const ax = (x % sup) * T, ay = (y % sup) * T;
   ctx.drawImage(atlas, ax, ay, T, T, px, py, T, T);
+  /* ⚠️ ZIP 437 — LE GRAVIER N'A PAS DE BORDURE, ET IL SORT DONC ICI, AVANT
+     ELLE. Un sentier de parc ou de rive n'est pas bordé de pierres de taille :
+     il se DISSOUT dans l'herbe. On lui pose à la place un semis qui se raréfie
+     vers le bord, du côté de ce qui n'est pas dallé — la même parade que la
+     berge du 435 (« la couverture est une densité, pas un demi-plan »), et pour
+     la même raison : un bord net est un second contour. */
+  if (rd === C.TR_GRAVEL) {
+    const soft = (xx, yy, dx, dy) => {
+      if (xx < 0 || yy < 0 || xx >= tw.w || yy >= tw.h) return true;
+      const gg = tw.ground[yy * tw.w + xx];
+      return !(gg === C.G_PATH || gg === C.G_PATH_STONE || gg === C.G_BRIDGE);
+    };
+    for (let k = 0; k < 22; k++) {
+      const h = waterHash(x * 7 + k, y * 13 + 3);
+      const qx = h % T, qy = (h >>> 5) % T;
+      const nearN = qy < 4 && soft(x, y - 1), nearS = qy >= T - 4 && soft(x, y + 1);
+      const nearW = qx < 4 && soft(x - 1, y), nearE = qx >= T - 4 && soft(x + 1, y);
+      if (!(nearN || nearS || nearW || nearE)) continue;
+      if (((h >>> 11) & 3) === 0) continue;                     // le semis, pas un liseré
+      ctx.fillStyle = "rgba(94,110,62,0.55)";                   // l'herbe qui reprend
+      ctx.fillRect(px + qx, py + qy, 1, 1);
+    }
+    return true;
+  }
 
   // LA LIGNE BLANCHE, à cheval sur l'axe de la chaussée — un pixel au sud de la
   // rangée du dessus, un pixel au nord de celle du dessous. L'axe est DÉRIVÉ,
@@ -1254,6 +1279,142 @@ export function drawTownWaterTile(ctx, S, tw, x, y, px, py, now) {
   } else if (SW.lily && d >= WAT_SHOAL && ((hh >>> 3) % 100) < 11) {
     ctx.drawImage(SW.lily[(hh >>> 11) % SW.lily.length], px, py);
   }
+  return true;
+}
+
+/* ZIP 438 — L'HERBE DE VALLEY TOWN. Même découpe que les revêtements : la case
+   est prise dans un pavé de 4×4 tuiles, donc les touffes et les plaques
+   TRAVERSENT les bords de case au lieu de s'arrêter dessus.
+   ⚠️ Elle rend `false` si l'atlas manque, et l'appelant repose alors ses trois
+   vieilles tuiles — même contrat que `drawTownRoadTile`. */
+export function drawTownGrassTile(ctx, S, tw, x, y, px, py) {
+  const RS = S && S.townRoad;
+  if (!RS || !RS.grass) return false;
+  const T = SPR_T, sup = RS.sup;
+  ctx.drawImage(RS.grass, (x % sup) * T, (y % sup) * T, T, T, px, py, T, T);
+  return true;
+}
+
+/* ZIP 437 — LE MASSIF FLEURI, SUR LA PELOUSE. Il se pose APRÈS le sol et AVANT
+   tout le reste : c'est une couche de peinture, pas un décor (voir `BL_*`).
+   ⚠️ LA VARIANTE VIENT DU HACHAGE DE LA CASE, jamais d'un tirage : deux cases
+   voisines doivent différer, et la même case doit être identique chez les deux
+   joueurs et d'une image à l'autre. */
+export function drawTownBloomTile(ctx, S, tw, x, y, px, py) {
+  const BS = S && S.townBloom;
+  const b = (BS && tw.bloom) ? tw.bloom[y * tw.w + x] : 0;
+  if (!b || !BS[b - 1]) return false;
+  /* ⚠️⚠️ ZIP 438 — UN MASSIF A DE LA TERRE ET UNE BORDURE, sinon ce sont des
+     fleurs POSÉES SUR DU GAZON : c'est ce que le 437 dessinait, et c'est
+     exactement pourquoi le parc avait l'air d'une friche fleurie plutôt que
+     d'un jardin. Ce qui dit « quelqu'un s'en occupe », ce n'est pas la fleur,
+     c'est la TERRE RETOURNÉE en dessous et la pierre qui la retient.
+     ⚠️ ET LES DEUX SE DÉDUISENT DU VOISINAGE, pas d'une donnée de plus : une
+     case dont les quatre voisines fleurissent est au CŒUR du massif, les autres
+     sont sur son pourtour. Zéro octet en plus, et le massif garde sa bordure le
+     jour où l'on change sa forme. La prairie sauvage (BL_WILD) n'a ni l'une ni
+     l'autre — une prairie n'a pas de bord, c'est sa définition. */
+  const wild = b === C.BL_WILD;
+  if (!wild) {
+    const at = (xx, yy) => (xx < 0 || yy < 0 || xx >= tw.w || yy >= tw.h) ? 0 : (tw.bloom[yy * tw.w + xx] && tw.bloom[yy * tw.w + xx] !== C.BL_WILD ? 1 : 0);
+    const n = at(x, y - 1), so = at(x, y + 1), w = at(x - 1, y), e = at(x + 1, y);
+    // La terre, en deux bruns, avec un grain de mottes tiré du hachage de la case.
+    ctx.fillStyle = "#5d4630"; ctx.fillRect(px, py, SPR_T, SPR_T);
+    for (let k = 0; k < 26; k++) {
+      const h = waterHash(x * 31 + k, y * 47 + 5);
+      ctx.fillStyle = (h & 1) ? "#6b5238" : "#4e3a27";
+      ctx.fillRect(px + (h % SPR_T), py + ((h >>> 5) % SPR_T), 1 + ((h >>> 10) & 1), 1);
+    }
+    // La bordure de pierre, du côté où le massif s'arrête. Deux tons : l'arête
+    // prend la lumière du nord-ouest comme tout le reste du jeu.
+    const kerb = (bx, by, bw, bh, lit) => {
+      ctx.fillStyle = "#9a9184"; ctx.fillRect(px + bx, py + by, bw, bh);
+      ctx.fillStyle = lit ? "#b8b0a2" : "#6f695f";
+      ctx.fillRect(px + bx, py + by, lit ? bw : bw, 1);
+    };
+    if (!n) kerb(0, 0, SPR_T, 3, true);
+    if (!so) kerb(0, SPR_T - 3, SPR_T, 3, false);
+    if (!w) { ctx.fillStyle = "#9a9184"; ctx.fillRect(px, py, 3, SPR_T); ctx.fillStyle = "#b8b0a2"; ctx.fillRect(px, py, 1, SPR_T); }
+    if (!e) { ctx.fillStyle = "#9a9184"; ctx.fillRect(px + SPR_T - 3, py, 3, SPR_T); ctx.fillStyle = "#6f695f"; ctx.fillRect(px + SPR_T - 1, py, 1, SPR_T); }
+  }
+  const set = BS[b - 1];
+  ctx.drawImage(set[waterHash(x * 9 + 2, y * 15 + 6) % set.length], px, py);
+  return true;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ZIP 437 — QUELLE ESSENCE POUSSE ICI ? UNE DÉDUCTION, PAS UN CHAMP.
+   ──────────────────────────────────────────────────────────────────────────
+   ⚠️⚠️ RIEN N'EST STOCKÉ ET RIEN NE CIRCULE, et c'est la règle du §3 appliquée
+   telle quelle : ce qui peut se déduire ne se diffuse pas. L'essence se lit
+   dans ce que la case a DÉJÀ — son objet (feuillu ou conifère, donc la
+   collision et la coupe restent identiques au 426), sa berge, son quartier —
+   plus un hachage pur pour le reste. Deux joueurs voient donc le même arbre
+   sans un octet de réseau, et couper un arbre continue de marcher sans que
+   personne ait à savoir que les essences existent.
+   ⚠️ L'ORDRE DES TESTS EST L'ORDRE DES PRIORITÉS, et le LIEU passe avant le
+   hachage : un saule au bord de l'eau et un pommier au verger ne sont pas des
+   variantes décoratives, ce sont les deux endroits où l'essence DIT quelque
+   chose. Le hachage ne sert qu'à mélanger ce qui reste.
+   ⚠️ LA ZONE EST TESTÉE AVANT LES DISTANCES (§4, le piège des deux cartes) :
+   cette fonction ne s'appelle que sur la carte de la ville, d'où le `tw.shore`
+   en garde — la ferme n'a pas cette couche, et un arbre de ferme passé ici par
+   erreur rendrait `null` au lieu de dessiner un saule au milieu d'un champ. */
+export const TT = { OAK: 0, MAPLE: 1, BIRCH: 2, WILLOW: 3, MAGNOLIA: 4, CHERRY: 5, MIMOSA: 6, APPLE: 7, FIR: 8, PINE: 9, CYPRESS: 10 };
+const TT_IN = (r, x, y) => x >= r.x && y >= r.y && x < r.x + r.w && y < r.y + r.h;
+export function townTreeKind(tw, x, y, obj) {
+  if (!tw || !tw.shore) return null;
+  const i = y * tw.w + x;
+  const h = waterHash(x * 23 + 5, y * 41 + 9);
+  const wet = tw.shore[i] > 0;                       // la berge : 2 cases autour de toute eau
+  const conifer = obj === C.O_TREE2;
+  if (conifer) {
+    // Le cyprès est un arbre de cimetière et de terrasse : il ne pousse nulle
+    // part ailleurs, sinon il cesse de vouloir dire quelque chose.
+    if (TT_IN(C.TOWN_CEMETERY, x, y) || TT_IN(C.TOWN_UPPER, x, y)) return TT.CYPRESS;
+    if (wet) return TT.FIR;
+    return (h % 5) === 0 ? TT.PINE : TT.FIR;
+  }
+  if (wet) return (h % 4) === 0 ? TT.BIRCH : TT.WILLOW;
+  if (TT_IN(C.TOWN_ORCHARD, x, y)) return TT.APPLE;
+  if (TT_IN(C.TOWN_PARK, x, y)) {
+    const k = h % 10;
+    return k < 3 ? TT.CHERRY : k < 6 ? TT.MAGNOLIA : k < 8 ? TT.MIMOSA : k < 9 ? TT.APPLE : TT.MAPLE;
+  }
+  const k = h % 8;
+  return k < 4 ? TT.OAK : k < 7 ? TT.MAPLE : TT.BIRCH;
+}
+/* L'image, saison ET souffle de vent compris. ⚠️ ELLE REND `null` PLUTÔT QUE DE
+   DEVINER : le repli (les sprites du 232) reste chez l'appelant, comme pour les
+   revêtements et la pierre — un atlas manquant doit rendre l'ancien arbre, pas
+   un trou dans le décor.
+   ⚠️⚠️ LA PHASE VIENT DU HACHAGE DE LA CASE, ET C'EST TOUT LE SUJET DE
+   L'ANIMATION. Sans elle, les huit cents arbres de la ville changent d'image à
+   la même milliseconde : la ville entière bat comme un cœur, ce qui ne se lit
+   pas comme du vent mais comme un défaut d'affichage — exactement le voile
+   `sin(x + y)` du 425 sur l'eau, en pire. Avec elle, chaque arbre a son souffle,
+   et rien ne circule sur le réseau (§3 : ce qui se déduit ne se diffuse pas). */
+const TREE_SWAY = [1, 2, 1, 0];      // aller-retour : 0 et 2 sont les extrêmes, 1 le repos
+export function townTreeImg(S, tw, x, y, seasonKey, obj, now) {
+  const set = S && S.townTrees;
+  if (!set) return null;
+  const k = townTreeKind(tw, x, y, obj);
+  if (k === null || !set[k]) return null;
+  const frames = set[k][seasonKey === "autumn" ? "autumn" : seasonKey === "spring" ? "spring" : "summer"];
+  if (!now) return frames[1];
+  const ph = waterHash(x * 13 + 7, y * 29 + 3) % 1000 / 1000;
+  return frames[TREE_SWAY[Math.floor(now / C.TOWN_TREE_SWAY_MS + ph * 4) & 3]];
+}
+/* Le dessin complet, ancrage compris. ⚠️ L'ANCRAGE VIT ICI ET PAS CHEZ
+   L'APPELANT : le gabarit est passé de 32×48 à 48×64 au 438, et un décalage
+   écrit en dur dans la boucle de rendu aurait planté les arbres vingt pixels
+   trop haut sans qu'aucune erreur ne le dise. `S.townTrees[k].base` porte la
+   ligne de sol du canevas ; le rendu n'a rien à savoir. */
+export function drawTownTree(ctx, S, tw, x, y, px, py, seasonKey, obj, now) {
+  const img = townTreeImg(S, tw, x, y, seasonKey, obj, now);
+  if (!img) return false;
+  const m = S.townTrees[0];
+  ctx.drawImage(img, px + SPR_T / 2 - m.w / 2, py + SPR_T - m.base);
   return true;
 }
 
@@ -3890,6 +4051,11 @@ export function buildSprites() {
     "locker", "table", "mirror", "judgeBench", "judgeBench2", "flag", "witnessBox",
     "juryBench", "railing", "pew", "bunk", "stoolC", "crate", "boiler", "board",
     "justice", "justice2",
+    // ZIP 438 — l'hôtel de ville. Même gabarit (16 de large, ce qui dépasse
+    // dépasse vers le haut) et même palette : les deux bâtiments doivent avoir
+    // été MEUBLÉS PAR LA MÊME VILLE, sinon on lit deux jeux différents.
+    "cityModel", "cityModel2", "wallMap", "planChest", "priceBoard",
+    "portrait", "globe", "lectern", "urn", "ovalTable", "ovalTable2",
   ];
   function courtPropSprite(kind) {
     const W1 = "#7a5232", W2 = "#9c6b42", W3 = "#5a3b26", W4 = "#b98a58";  // bois : mat, clair, ombre, éclairé
@@ -4081,6 +4247,169 @@ export function buildSprites() {
           for (let l = 2; l < ph - 1; l += 2) P(g, px + 1, py + l, pw - 2, 1, "#8a8478");
           P(g, px + (pw >> 1), py, 1, 1, "#c83c3c");                      // la punaise
         }
+        return c;
+      }
+      /* ═══ ZIP 438 — LE MOBILIER DE L'HÔTEL DE VILLE ══════════════════════
+         ⚠️ MÊME PALETTE ET MÊME GABARIT QUE LE TRIBUNAL, et ce n'est pas de la
+         paresse : les deux bâtiments doivent avoir été meublés PAR LA MÊME
+         VILLE. Un mobilier de mairie dessiné dans une autre gamme se lirait
+         comme un autre jeu, exactement comme les deux ronds verts du 232 à côté
+         d'une rue au motif de 64 px. Ce qui change, ce sont les OBJETS. */
+      /* LA MAQUETTE DE LA VILLE, en deux moitiés d'une case comme la statue de
+         la Justice. C'est le point de fuite du hall, et il fallait qu'elle se
+         lise en une seconde : pas une carte à plat mais des VOLUMES — des
+         maisons à toit rouge sur un plateau vert, sous une vitrine. Un visiteur
+         doit savoir dans quel bâtiment il est avant de lire la moindre plaque. */
+      case "cityModel": case "cityModel2": {
+        const right = kind === "cityModel2";
+        const [c, g] = cv(16, 40);
+        /* ⚠️ LA TABLE D'ABORD, ET ELLE A DES PIEDS. Premier jet : un socle plein
+           et un plateau vert — regardé sur `render-mairie.mjs`, ça donnait une
+           JARDINIÈRE. Ce qui fait lire « maquette », ce n'est pas la maquette,
+           c'est le meuble qui la porte : un plateau à hauteur d'homme, des pieds
+           tournés, et une vitrine par-dessus. */
+        P(g, right ? 2 : 11, 30, 3, 10, W1); P(g, right ? 2 : 11, 30, 1, 10, W4);
+        P(g, right ? 1 : 10, 38, 5, 2, W3);
+        P(g, 0, 26, 16, 5, W2); P(g, 0, 26, 16, 1, W4); P(g, 0, 30, 16, 1, W3);
+        // Le terrain : herbe, la rivière qui traverse les deux moitiés, une route.
+        P(g, 0, 18, 16, 8, "#4e7f46"); P(g, 0, 18, 16, 1, "#63a05a");
+        P(g, 0, 22, 16, 2, "#3f79c0"); P(g, 0, 22, 16, 1, "#65a0e2");
+        P(g, right ? 5 : 9, 18, 2, 8, "#a89c78");
+        // Les bâtiments, en volumes de trois quarts : mur clair, toit rouge,
+        // une fenêtre. La moitié droite porte le beffroi, la gauche l'église —
+        // deux repères que le joueur vient de voir en ville.
+        const HS = right ? [[1, 12, 4, 8], [8, 15, 5, 5], [12, 10, 3, 6]] : [[2, 15, 4, 5], [7, 11, 5, 8], [12, 14, 3, 5]];
+        for (const [hx, hy, hw, hh] of HS) {
+          P(g, hx, hy + 2, hw, hh, "#d8cdb8"); P(g, hx, hy + 2, 1, hh, "#efe6d2");
+          P(g, hx + hw - 1, hy + 2, 1, hh, "#b4a992");
+          P(g, hx - 1, hy, hw + 2, 3, "#b3453a"); P(g, hx - 1, hy, hw + 2, 1, "#d0685a");
+          P(g, hx + 1, hy + 4, 1, 2, "#5f6f86");
+        }
+        if (right) { P(g, 2, 6, 2, 7, "#d8cdb8"); P(g, 1, 3, 4, 3, "#b3453a"); P(g, 2, 8, 2, 2, "#e8d67a"); }  // le beffroi et son horloge
+        else { P(g, 8, 5, 2, 7, "#e6e0d2"); P(g, 8, 2, 2, 3, "#8a8f96"); P(g, 7, 3, 4, 1, "#8a8f96"); }        // le clocher de l'église
+        // La vitrine : montants aux deux bouts, traverse en haut. Un pixel, pas
+        // un aplat translucide — le faux canevas des bancs ignore l'alpha fin.
+        P(g, right ? 15 : 0, 1, 1, 26, "#cfd6dc");
+        P(g, 0, 1, 16, 1, "#cfd6dc");
+        return c;
+      }
+      /* LE PLAN MURAL DU CADASTRE. Il est ACCROCHÉ — la tringle et les deux
+         cordons sont ce qui le distingue d'une fenêtre. Ce qui est dessiné
+         dessus n'est pas décoratif : des parcelles jointives séparées par des
+         traits, le lac au sud, l'artère centrale en rouge. */
+      case "wallMap": {
+        const [c, g] = cv(16, 26);
+        P(g, 0, 2, 16, 1, IR);
+        P(g, 3, 0, 1, 3, IR); P(g, 12, 0, 1, 3, IR);
+        P(g, 0, 3, 16, 20, "#e6dfc8"); P(g, 0, 3, 16, 1, "#f5efdc");
+        P(g, 0, 22, 16, 2, W3);
+        const PARC = [[1, 5, 6, 5], [8, 5, 7, 4], [1, 11, 4, 6], [6, 10, 4, 5], [11, 10, 4, 4], [6, 16, 9, 5]];
+        for (const [px2, py2, pw, ph] of PARC) {
+          P(g, px2, py2, pw, ph, "#d8d0b4");
+          P(g, px2, py2, pw, 1, "#a89c78"); P(g, px2, py2, 1, ph, "#a89c78");
+        }
+        P(g, 1, 18, 4, 4, "#6f9fce"); P(g, 1, 18, 4, 1, "#8fbde6");
+        P(g, 7, 4, 1, 19, "#b3453a");
+        return c;
+      }
+      // LE CARTONNIER À PLANS : un meuble bas à tiroirs PLATS et larges, avec
+      // une poignée centrale. Il dit « ici on range des cartes » sans un mot.
+      case "planChest": {
+        const [c, g] = cv(16, 20);
+        P(g, 0, 4, 16, 15, W1); P(g, 0, 4, 16, 1, W4); P(g, 0, 18, 16, 2, W3);
+        for (let k = 0; k < 4; k++) {
+          const y = 6 + k * 3;
+          P(g, 1, y, 14, 2, W2); P(g, 1, y + 2, 14, 1, W3);
+          P(g, 7, y, 2, 1, BR);
+        }
+        P(g, 1, 2, 14, 2, "#e6dfc8"); P(g, 2, 1, 12, 1, "#c9c0a4");
+        return c;
+      }
+      /* LE TABLEAU DES COURS. Une ardoise encadrée, des lignes à la craie, une
+         colonne de chiffres jaunes. ⚠️ AUCUN VRAI TEXTE ICI (§4 : `fillText`
+         n'est pas rastérisable hors navigateur, donc un sprite qui en contient
+         n'est plus regardable par un banc) — le texte vivant est dans le
+         panneau qu'on ouvre, ce qui le rend en plus bilingue. */
+      case "priceBoard": {
+        const [c, g] = cv(16, 30);
+        P(g, 0, 0, 16, 26, W1); P(g, 0, 0, 16, 1, W4); P(g, 0, 25, 16, 3, W3);
+        P(g, 2, 2, 12, 22, "#2b3330"); P(g, 2, 2, 12, 1, "#3d4744");
+        for (let k = 0; k < 5; k++) {
+          const y = 5 + k * 4;
+          P(g, 3, y, 5 + (k % 3), 1, "#d8e2d8");
+          P(g, 11, y, 2 + (k % 2), 1, "#e8d67a");
+        }
+        P(g, 3, 23, 10, 1, "#8a9a90");
+        P(g, 6, 28, 4, 2, W3);
+        return c;
+      }
+      // LE PORTRAIT OFFICIEL. À cette taille un visage détaillé fait une tache ;
+      // une SILHOUETTE se lit. Cadre doré, fond sombre, épaules.
+      case "portrait": {
+        const [c, g] = cv(16, 22);
+        P(g, 1, 1, 14, 20, BR); P(g, 1, 1, 14, 1, "#d8b45c");
+        P(g, 3, 3, 10, 16, "#2f3a44");
+        P(g, 6, 6, 4, 4, "#d8b08a"); P(g, 6, 6, 2, 4, "#e8c4a0");
+        P(g, 4, 10, 8, 8, "#3c4c66"); P(g, 4, 10, 2, 8, "#4e6182");
+        P(g, 7, 11, 2, 5, "#d8d2c2");
+        return c;
+      }
+      // LE GLOBE : une sphère ombrée sur un pied de bois. Le dégradé est en
+      // TROIS tons seuillés, jamais un fondu — la règle de tout ce fichier.
+      case "globe": {
+        const [c, g] = cv(16, 22);
+        P(g, 6, 17, 4, 4, W1); P(g, 4, 20, 8, 2, W3);
+        P(g, 5, 15, 6, 2, BR);
+        for (let y = 3; y < 15; y++) {
+          const dy = (y - 9) / 6, hw = Math.round(Math.sqrt(Math.max(0, 1 - dy * dy)) * 6);
+          for (let x = 8 - hw; x <= 7 + hw; x++) {
+            const dx = (x - 7.5) / 6;
+            P(g, x, y, 1, 1, (-dx - dy) > 0.45 ? "#7fb6dd" : (dx + dy) > 0.55 ? "#2f5f88" : "#4e8cba");
+          }
+        }
+        P(g, 4, 8, 9, 1, "#8fc9e8");
+        P(g, 6, 5, 4, 3, "#5e9c58"); P(g, 9, 10, 3, 3, "#5e9c58");
+        return c;
+      }
+      // LE PUPITRE. C'est l'INCLINAISON du plan qui le distingue d'une table,
+      // et elle se dessine en trois marches d'un pixel.
+      case "lectern": {
+        const [c, g] = cv(16, 22);
+        P(g, 6, 12, 4, 8, W1); P(g, 4, 19, 8, 3, W3);
+        P(g, 2, 8, 12, 2, W2); P(g, 3, 6, 10, 2, W1); P(g, 4, 4, 8, 2, W2);
+        P(g, 2, 8, 12, 1, W4);
+        P(g, 5, 3, 7, 2, "#e6dfc8");
+        return c;
+      }
+      // L'URNE FLEURIE : le décor qui dit « bâtiment public entretenu ». Les
+      // fleurs sont des CROIX de cinq pixels, comme celles des arbres (438).
+      case "urn": {
+        const [c, g] = cv(16, 24);
+        P(g, 4, 16, 8, 6, S); P(g, 4, 16, 3, 6, SL); P(g, 4, 21, 8, 2, SD);
+        P(g, 3, 14, 10, 3, S); P(g, 3, 14, 10, 1, SL);
+        P(g, 4, 12, 8, 3, GR); P(g, 4, 12, 8, 1, "#3f8a48");
+        for (const [fx, fy, col] of [[5, 9, "#c9455a"], [8, 7, "#e0d24a"], [10, 10, "#b06fc0"], [6, 6, "#e6e0d2"]]) {
+          P(g, fx, fy + 1, 1, 4, GR);
+          P(g, fx - 1, fy, 3, 1, col); P(g, fx, fy - 1, 1, 3, col);
+          P(g, fx, fy, 1, 1, "#f4ecd0");
+        }
+        return c;
+      }
+      /* LA TABLE OVALE DU CONSEIL, en deux sprites : le BORD (avec son épaisseur
+         et son ombre) et le CENTRE (plateau nu). Le générateur choisit lequel
+         poser, comme pour le siège du juge — le rendu n'a jamais à connaître un
+         meuble de douze cases. */
+      case "ovalTable": {
+        const [c, g] = cv(16, 20);
+        P(g, 0, 4, 16, 12, W2); P(g, 0, 4, 16, 2, W4); P(g, 0, 15, 16, 3, W3);
+        P(g, 0, 6, 16, 1, "#8f6142");
+        return c;
+      }
+      case "ovalTable2": {
+        const [c, g] = cv(16, 20);
+        P(g, 0, 4, 16, 12, W2); P(g, 0, 4, 16, 1, W4);
+        P(g, 3, 7, 4, 3, "#e6dfc8"); P(g, 10, 9, 4, 2, "#e6dfc8");
+        P(g, 7, 6, 2, 2, "#7f9f8a");
         return c;
       }
       case "justice": case "justice2": {
@@ -4366,6 +4695,222 @@ export function buildSprites() {
      coûteuse : le rang décalé (aucun joint vertical continu), le biseau
      (lumière au nord-ouest, ombre au sud-est — le pavé est bombé), et la
      teinte tirée par pierre (une rue n'est pas monochrome). */
+  /* ZIP 437 — LE GRAVIER DES PROMENADES (parc, sentier de rive). ⚠️ IL SE
+     DISTINGUE DES PAVÉS PAR L'ABSENCE DE JOINT, pas par sa couleur : un pavage
+     est un assemblage de pièces (donc un réseau de lignes), un gravier est un
+     TAS (donc pas une seule ligne). Peint comme des petites pierres avec des
+     joints, il aurait juste eu l'air de pavés plus petits — et le motif de
+     16 px serait revenu par la porte de derrière (§4 : « l'œil voit la période
+     avant le dessin »). D'où un semis sur toute la période de 64 px, sans
+     structure de rangs. */
+  /* ══════════════════════════════════════════════════════════════════════
+     ZIP 437 — LES MASSIFS FLEURIS, LES BUISSONS ET LES BLOCS ERRATIQUES.
+     ──────────────────────────────────────────────────────────────────────
+     ⚠️ LE MASSIF EST UNE TUILE, PAS UN DÉCOR. Il se pose sur la pelouse et il
+     est TRANSPARENT partout ailleurs : l'herbe continue de se voir au travers,
+     ce qui est la différence entre un parterre et une moquette de fleurs. Voir
+     `BL_*` dans fermeConstants pour le pourquoi de la couche.
+     ⚠️ ET IL NE TOUCHE PAS LE BORD DE LA CASE. Une tige peinte en x = 0 se
+     colle à la tige de la case voisine et redessine la grille de 16 px — le
+     défaut que ce zip corrige partout ailleurs. Une case fleurie garde donc un
+     pixel de marge, et c'est le semis qui fait la continuité, pas le contact. */
+  const BLOOM_KINDS = [
+    // marguerites : tapis bas, blanc et jaune, feuillage sombre
+    { leaf: ["#2f6b2a", "#3f8033"], n: 9, h: [2, 3], pet: ["#f4f1e6", "#ffffff"], core: "#e8c93c", big: false },
+    // tulipes : hautes, rouges et roses, en touffes serrées
+    { leaf: ["#2c6b34", "#3d8442"], n: 7, h: [4, 6], pet: ["#cf3a34", "#e0625a", "#d9628f"], core: "#8c1f1c", big: true },
+    // lavande et sauge : épis violets, feuillage gris-vert
+    { leaf: ["#5a7a58", "#6d8f68"], n: 8, h: [5, 7], pet: ["#8a6fc4", "#a189d8", "#6f57a8"], core: null, big: false },
+    // forsythia et souci : la tache jaune de l'image de référence
+    { leaf: ["#356e33", "#47883f"], n: 8, h: [3, 5], pet: ["#eec22c", "#f7dc5e", "#d9a41f"], core: "#a06c12", big: true },
+    // la prairie : semis lâche, quatre couleurs, rien d'aligné
+    { leaf: ["#3d7a36", "#4f8f42"], n: 5, h: [2, 4], pet: ["#f0efe2", "#e8c93c", "#d97a8e", "#9a86cf"], core: null, big: false },
+  ];
+  function townBloomTile(kind, vr) {
+    const [c, g] = cv(T, T), r = makeRnd(0x6b21 + kind * 419 + vr * 37);
+    const K = BLOOM_KINDS[kind - 1];
+    /* ⚠️ 438 — DENSITÉ DOUBLÉE. Sur terre nue (voir `drawTownBloomTile`), neuf
+       tiges par case laissaient voir plus de terre que de fleurs : un massif
+       qui vient d'être planté, pas un massif en fleurs. */
+    const n = K.n * 2 + ((r() * 4) | 0);
+    for (let k = 0; k < n; k++) {
+      const x = 2 + ((r() * (T - 4)) | 0);
+      /* ⚠️ LA HAUTEUR DE PIED BALAIE TOUTE LA CASE. Premier jet : entre 9 et 14,
+         donc toutes les fleurs de toutes les cases alignées sur la même
+         base — un massif se lisait en RANGS HORIZONTAUX de 16 px, c'est-à-dire
+         la grille de la carte, redessinée en fleurs. C'est le défaut du §4
+         (« l'œil voit la période avant le dessin »), attrapé une fois de plus. */
+      const base = 3 + ((r() * 12) | 0);
+      const h = K.h[0] + ((r() * (K.h[1] - K.h[0] + 1)) | 0);
+      const top = Math.max(1, base - h);
+      const stem = K.leaf[(r() * K.leaf.length) | 0];
+      for (let y = top; y <= base; y++) P(g, x, y, 1, 1, stem);
+      // Deux feuilles à mi-hauteur : sans elles, une tige est un trait.
+      if (h > 3) { P(g, x - 1, base - 1, 1, 1, K.leaf[1]); P(g, x + 1, base - 2, 1, 1, K.leaf[0]); }
+      const pet = K.pet[(r() * K.pet.length) | 0];
+      if (K.big) { P(g, x - 1, top - 1, 3, 2, pet); if (K.core) P(g, x, top, 1, 1, K.core); }
+      else { P(g, x, top - 1, 1, 1, pet); if (r() < 0.5) P(g, x + (r() < 0.5 ? -1 : 1), top, 1, 1, pet); if (K.core) P(g, x, top - 1, 1, 1, K.core); }
+    }
+    return c;
+  }
+  /* Le buisson fleuri. ⚠️ 24 px DE HAUT POUR UNE CASE DE 16 : il DÉBORDE vers
+     le nord, comme la haie du 425, et c'est ce débord qui lui donne du volume.
+     Le rendu l'ancre par le bas (voir la file de props). */
+  function townShrubSprite(vr) {
+    const [c, g] = cv(20, 22), r = makeRnd(0x51d3 + vr * 97);
+    const PAL = [
+      { l: ["#3f8a37", "#57a84c", "#265e22"], f: "#f2ce3c", fl: "#ffe873" },
+      { l: ["#417f4a", "#589a5f", "#28572f"], f: "#e07aa8", fl: "#f7aecb" },
+      { l: ["#4a8a3a", "#65a850", "#2c5f24"], f: "#f0efe2", fl: "#ffffff" },
+    ][vr % 3];
+    const m = new Uint8Array(20 * 22);
+    for (const [bx, by, rx, ry] of [[10, 13, 8.5, 7.5], [6, 10, 5.5, 5], [14, 11, 5.5, 5]]) {
+      for (let y = 1; y < 21; y++) for (let x = 1; x < 19; x++) {
+        const dx = (x + 0.5 - bx) / rx, dy = (y + 0.5 - by) / ry, d = Math.hypot(dx, dy);
+        const th = Math.atan2(dy, dx);
+        if (d <= 1 + 0.16 * Math.sin(th * 5 + bx)) m[y * 20 + x] = 1;
+      }
+    }
+    const on = (x, y) => (x < 0 || y < 0 || x >= 20 || y >= 22) ? 0 : m[y * 20 + x];
+    for (let y = 0; y < 22; y++) for (let x = 0; x < 20; x++) if (m[y * 20 + x]) P(g, x, y, 1, 1, PAL.l[0]);
+    for (let k = 0; k < 34; k++) {
+      const x = (r() * 20) | 0, y = (r() * 22) | 0;
+      if (!m[y * 20 + x]) continue;
+      P(g, x, y, 1 + ((r() * 2) | 0), 1, r() < 0.55 ? PAL.l[1] : PAL.l[2]);
+    }
+    for (let y = 0; y < 22; y++) for (let x = 0; x < 20; x++) {
+      if (!m[y * 20 + x]) continue;
+      if (on(x + 1, y) && on(x - 1, y) && on(x, y + 1) && on(x, y - 1)) continue;
+      let nx = 0, ny = 0;
+      for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) if (!on(x + dx, y + dy)) { nx -= dx; ny -= dy; }
+      P(g, x, y, 1, 1, (nx + ny * 1.15) > 1.5 ? PAL.l[1] : PAL.l[2]);
+    }
+    for (let k = 0; k < 14; k++) {
+      const x = 1 + ((r() * 18) | 0), y = 1 + ((r() * 20) | 0);
+      if (!m[y * 20 + x]) continue;
+      P(g, x, y, 2, 2, PAL.f); P(g, x, y, 1, 1, PAL.fl);
+    }
+    return c;
+  }
+  /* Le bloc erratique de la rive du lac. ⚠️ IL EST GRIS-BLEU ET IL A UNE LIGNE
+     DE FLOTTAISON : une pierre posée au bord de l'eau est mouillée à sa base.
+     Sans cette ligne, on ne sait pas si elle est dans le lac ou à côté. */
+  function townBoulderSprite(vr) {
+    const [c, g] = cv(22, 18), r = makeRnd(0x2c88 + vr * 131);
+    const ROC = ["#8b8880", "#7a7770", "#96938b"], LIT = "#aeaaa1", DRK = "#5f5c57";
+    const blocks = [[[3, 5, 12, 10]], [[2, 6, 9, 8], [11, 4, 9, 11]], [[4, 3, 13, 12], [1, 9, 7, 6]]][vr % 3];
+    for (const [bx, by, bw, bh] of blocks) {
+      for (let y = by; y < by + bh; y++) for (let x = bx; x < bx + bw; x++) {
+        const u = (x - bx) / bw - 0.5, v = (y - by) / bh - 0.5;
+        if (u * u + v * v * 1.15 > 0.27) continue;         // un galet, pas une brique
+        P(g, x, y, 1, 1, ROC[(r() * ROC.length) | 0]);
+      }
+      for (let x = bx; x < bx + bw; x++) {                 // l'arête qui prend la lumière du nord-ouest
+        for (let y = by; y < by + bh; y++) {
+          const u = (x - bx) / bw - 0.5, v = (y - by) / bh - 0.5;
+          if (u * u + v * v * 1.15 > 0.27) continue;
+          P(g, x, y, 1, 1, (u + v) < -0.35 ? LIT : (u + v) > 0.30 ? DRK : ROC[0]);
+          break;
+        }
+      }
+      P(g, bx + 1, by + bh - 2, bw - 2, 1, "#4e5a5e");     // la ligne de flottaison
+    }
+    for (let k = 0; k < 10; k++) {                          // fissures et lichen
+      const x = 2 + ((r() * 18) | 0), y = 3 + ((r() * 13) | 0);
+      P(g, x, y, 1, 1 + ((r() * 2) | 0), r() < 0.5 ? DRK : "#6f7a55");
+    }
+    return c;
+  }
+  /* ══════════════════════════════════════════════════════════════════════
+     ZIP 438 — L'HERBE DE VALLEY TOWN : UN PAVÉ DE 64 px, PLUS UNE TUILE.
+     ──────────────────────────────────────────────────────────────────────
+     ⚠️⚠️ « ON DIRAIT UNE FRICHE » (Guillaume, sur le parc du 437). Une friche,
+     c'est de l'herbe sans SOIN : une teinte, un grain régulier, rien qui dise
+     que quelqu'un s'en occupe. Or l'herbe de la ville était trois tuiles de
+     16 px tirées par `(x*37+y*17)%3` — donc, à l'échelle d'un parc de 34 cases,
+     un damier de trois motifs qui se répète cinquante fois. C'est le §4 mot
+     pour mot : *l'œil voit la période avant le dessin*.
+     ⚠️ LA PARADE EST CELLE DES REVÊTEMENTS (434) : un pavé de 4×4 tuiles peint
+     d'un seul tenant, où l'on découpe la case (`x % 4`, `y % 4`). Il porte des
+     PLAQUES d'herbe (de larges taches douces de deux verts voisins) que ne
+     peut pas porter une tuile de 16 px, et c'est très exactement ce qui manque
+     à une pelouse pour ne plus ressembler à un tapis de billard.
+     ⚠️ ET LES TOUFFES SONT PLACÉES SUR UNE SUITE À FAIBLE DISCRÉPANCE, pas
+     tirées : un tirage uniforme laisse des paquets et des vides (c'est ce qui
+     fait le grain sale), une suite d'or les répartit sans jamais s'aligner. */
+  function townGrassSurface() {
+    const [c, g] = cv(ROAD_N, ROAD_N);
+    const BASE = "#4c9740", P1 = "#54a047", P2 = "#448c3a", P3 = "#5aa94c";
+    P(g, 0, 0, ROAD_N, ROAD_N, BASE);
+    /* LES PLAQUES. Des disques doux de deux verts voisins, assez grands pour
+       qu'on ne les compte pas — c'est le relief de la pelouse, pas un motif. */
+    const PATCH = [[14, 12, 17, P1], [46, 20, 15, P2], [26, 44, 19, P1], [56, 52, 13, P3],
+                   [6, 34, 12, P2], [38, 6, 11, P3], [60, 8, 10, P1], [10, 58, 12, P2]];
+    for (const [px0, py0, rr, col] of PATCH) {
+      for (let y = py0 - rr; y <= py0 + rr; y++) for (let x = px0 - rr; x <= px0 + rr; x++) {
+        const dx = x - px0, dy = (y - py0) * 1.15;
+        const d = Math.sqrt(dx * dx + dy * dy) / rr;
+        if (d > 1) continue;
+        // ⚠️ Le bord de la plaque est DENTELÉ par une harmonique, jamais un
+        // dégradé alpha : à cette échelle un dégradé fait une auréole de gras.
+        const th = Math.atan2(dy, dx);
+        if (d > 0.82 + 0.18 * Math.sin(th * 3 + px0)) continue;
+        P(g, (x + ROAD_N) % ROAD_N, (y + ROAD_N) % ROAD_N, 1, 1, col);
+      }
+    }
+    /* LES TOUFFES. Un V de trois pixels : deux brins qui montent en s'écartant.
+       Deux tons, l'un clair l'autre sombre, et le sombre est posé UN PIXEL plus
+       bas — c'est l'ombre du brin, et c'est ce qui donne du volume à un gazon.
+       ⚠️ La suite d'or (0,618) répartit sans grille et sans paquet ; elle boucle
+       en modulo, donc le pavé se raccorde à lui-même. */
+    /* ⚠️⚠️ SUITE R2, PAS DEUX SUITES D'OR. Premier jet : `x = frac(k·φ)` et
+       `y = frac(k·φ²·7)`. Deux suites unidimensionnelles dont le rapport est
+       presque rationnel ne remplissent pas le plan : elles alignent les points
+       sur des DROITES. Résultat vu sur `render-parc.mjs` : la pelouse rayée
+       verticalement d'un bout à l'autre du parc, pire que la tuile qu'on
+       remplaçait. Les deux constantes ci-dessous sont celles du nombre
+       plastique, faites pour le plan — c'est le même genre d'erreur que la
+       distance de Manhattan prise pour l'euclidienne au 435. */
+    const R2X = 0.7548776662, R2Y = 0.5698402910;
+    const LIT = ["#67b357", "#71bd60"], DRK = ["#3c7f33", "#35722d"];
+    for (let k = 1; k <= 260; k++) {
+      const x = Math.floor(((k * R2X) % 1) * ROAD_N);
+      const y = Math.floor(((k * R2Y) % 1) * ROAD_N);
+      const lit = LIT[k % 2], drk = DRK[k % 2];
+      P(g, x, y, 1, 2, drk);
+      P(g, (x + 1) % ROAD_N, y - 1 < 0 ? ROAD_N - 1 : y - 1, 1, 2, lit);
+      if (k % 3 === 0) P(g, (x + 2) % ROAD_N, y, 1, 2, drk);
+    }
+    // Quelques fleurs des champs, très rares : une par case en moyenne serait
+    // une prairie, pas une pelouse de ville.
+    const FL = ["#e8e05a", "#f2f0e2", "#e8e05a"];
+    for (let k = 300; k < 311; k++) {
+      const x = Math.floor(((k * R2X) % 1) * ROAD_N), y = Math.floor(((k * R2Y) % 1) * ROAD_N);
+      P(g, x, y, 1, 1, FL[k % FL.length]);
+      if (k % 2) P(g, (x + 1) % ROAD_N, (y + 1) % ROAD_N, 1, 1, FL[k % FL.length]);
+    }
+    return c;
+  }
+  function townGravelSurface() {
+    const [c, g] = cv(ROAD_N, ROAD_N), r = makeRnd(0x37c1);
+    P(g, 0, 0, ROAD_N, ROAD_N, "#b2a891");                       // la terre tassée du fond
+    for (let i = 0; i < 2600; i++) P(g, (r() * ROAD_N) | 0, (r() * ROAD_N) | 0, 1, 1, r() < 0.5 ? "#bcb29a" : "#a89e88");
+    // Les cailloux : trois tailles, quatre teintes, et un pixel d'ombre au sud
+    // sur les plus gros — c'est cette ombre qui donne du RELIEF à un tas.
+    const ST = ["#cdc6b3", "#c3bba7", "#d6cfbd", "#b9b09b", "#c8c9be"];
+    for (let i = 0; i < 900; i++) {
+      const x = (r() * ROAD_N) | 0, y = (r() * ROAD_N) | 0;
+      const w = 1 + ((r() * 2) | 0), h = 1 + ((r() * 2) | 0);
+      P(g, x, y, w, h, ST[(r() * ST.length) | 0]);
+      if (w > 1 && r() < 0.5) P(g, x, y + h, w, 1, "rgba(88,80,66,0.30)");
+    }
+    // Quelques passages tassés plus clairs : un chemin s'use là où l'on marche.
+    for (let i = 0; i < 26; i++) {
+      const x = (r() * ROAD_N) | 0, y = (r() * ROAD_N) | 0, w = 5 + ((r() * 12) | 0);
+      P(g, x, y, w, 1 + ((r() * 2) | 0), "rgba(214,206,188,0.30)");
+    }
+    return c;
+  }
   function townCobbleSurface() {
     const [c, g] = cv(ROAD_N, ROAD_N), r = makeRnd(0x5a17);
     const MORTAR = "#403f47";
@@ -5349,6 +5894,423 @@ export function buildSprites() {
     P(g, 15, 2, 2, 4, l);
     return c;
   }
+  /* ════════════════════════════════════════════════════════════════════════
+     ZIP 438 — LES ARBRES, REFAITS UNE SECONDE FOIS, ET LE PROCÉDÉ A CHANGÉ.
+     ────────────────────────────────────────────────────────────────────────
+     ⚠️⚠️⚠️ VERDICT DE GUILLAUME SUR LA VERSION 437 : « c'est dégueulasse […]
+     on dirait une friche […] ton rendu est vraiment sale ». Il avait raison, et
+     la cause est identifiable : le 437 dessinait une SILHOUETTE (un masque
+     elliptique lobé) puis la texturait par TIRAGES — trente disques, vingt-six
+     pixels épars, un cerne. À 32 px, un semis de pixels de tons voisins ne fait
+     pas de la matière : il fait du BRUIT. C'est le mot exact de Guillaume,
+     « sale », et c'est mesurable — le banc du 437 mesurait un « grain » élevé
+     et le prenait pour de la qualité. **Le grain montait, la propreté baissait,
+     et le banc applaudissait.** (§10 : un banc qui passe ne dit pas que la
+     chose est bonne, il dit qu'on mesure autre chose.)
+     ⚠️⚠️ LE PROCÉDÉ EST DONC INVERSÉ : LA SILHOUETTE N'EST PLUS DESSINÉE, ELLE
+     EST LE RÉSULTAT. Un houppier est l'UNION D'UNE DIZAINE DE BOUQUETS, et
+     chaque bouquet est une forme PLEINE, cernée, ombrée en trois tons francs.
+     Aucun pixel n'est tiré au hasard nulle part dans ce fichier-ci : tout ce
+     qu'on voit est le bord d'une forme. C'est ce qui distingue le pixel art
+     propre du bruit — et c'est ce que font les références que Guillaume a
+     données, qu'il suffit de regarder de près pour voir qu'elles ne contiennent
+     AUCUN pixel isolé.
+     ⚠️ TROIS CONSÉQUENCES DIRECTES :
+       1. le contour extérieur est FESTONNÉ tout seul (c'est l'union des
+          bouquets), on n'a plus à le fabriquer avec des harmoniques ;
+       2. chaque bouquet porte son propre arc d'ombre, donc on LIT les masses,
+          alors qu'un semis les recolle en un coussin ;
+       3. les fleurs deviennent des FLEURS (une croix de cinq pixels et un cœur)
+          au lieu de confettis de deux pixels.
+     ⚠️ LE GABARIT PASSE DE 32×48 À 48×64 (2×3 cases → 3×4). À 32 px de large,
+     dix bouquets de six pixels ne tiennent pas : on ne pouvait dessiner que des
+     ronds. C'est la vraie raison pour laquelle le 437 a échoué — pas le talent,
+     la place. Un arbre de Stardew fait trois cases de large.
+     ⚠️ ET ILS BOUGENT (demande : « une vraie texture en légère animation »).
+     Trois images par essence et par saison, où les bouquets HAUTS se décalent
+     d'un pixel et les bas ne bougent pas — un arbre plie par la cime. La phase
+     vient du hachage de la case : deux arbres voisins ne respirent jamais
+     ensemble, sinon toute la forêt bat comme un cœur.
+     ════════════════════════════════════════════════════════════════════════ */
+  const TW_ = 48, TH_ = 64;        // 3 cases de large, 4 de haut
+  const TBASE_ = 58;               // la ligne de sol dans le canevas
+  const TFRAMES_ = 3;
+  /* Le tronc. ⚠️ DESSINÉ AVANT LA COURONNE, donc il déborde dessous : peint
+     après, il couperait le feuillage en deux ; arrêté au ras des feuilles, il
+     laisserait voir le fond entre les deux. */
+  function treeTrunk(g, sp) {
+    const [bark, barkL, barkD] = sp.trunk;
+    const w = sp.tw, x0 = 24 - (w >> 1), top = sp.trunkTop, bot = TBASE_;
+    for (let y = top; y < bot; y++) {
+      const t = (y - top) / (bot - top);
+      // L'évasement du pied : sans lui, un tronc est un poteau planté.
+      const flare = t > 0.80 ? Math.round((t - 0.80) * 5 * 3) : 0;
+      const lean = sp.lean ? Math.round(sp.lean * (1 - t) * 3) : 0;
+      const ww = w + flare * 2;
+      P(g, x0 - flare + lean, y, ww, 1, bark);
+      P(g, x0 - flare + lean, y, Math.max(1, ww >> 2), 1, barkL);   // lumière du nord-ouest
+      P(g, x0 - flare + lean + ww - 1, y, 1, 1, barkD);
+    }
+    // Deux contreforts de racine, taillés en escalier plutôt que tirés au sort.
+    P(g, x0 - 4, bot - 2, 4, 2, bark); P(g, x0 - 5, bot - 1, 5, 1, barkD);
+    P(g, x0 + w, bot - 2, 4, 2, barkD); P(g, x0 + w, bot - 1, 5, 1, barkD);
+    // L'écorce : des tirets VERTICAUX à pas régulier, jamais un semis.
+    for (let k = 0; k < 3; k++) {
+      const xx = x0 + 1 + k * Math.max(1, (w - 1) >> 1);
+      if (xx >= x0 + w) break;
+      for (let y = top + 3 + k; y < bot - 3; y += 5) P(g, xx, y, 1, 3, barkD);
+    }
+    if (sp.birchBands) {                        // le bouleau et ses cicatrices noires
+      for (let y = top + 4; y < bot - 3; y += 6) {
+        P(g, x0, y, w, 1, "#3a3630"); P(g, x0 + 1, y + 1, Math.max(1, w - 2), 1, "#57524a");
+      }
+    }
+  }
+  /* Les bouquets : une couronne de masses posées sur une ellipse, plus
+     quelques-unes au cœur. ⚠️ LEURS POSITIONS SONT CALCULÉES, PAS TIRÉES —
+     c'est ce qui permet de les DÉCALER d'une image à l'autre sans que la
+     silhouette change de nature, et c'est aussi ce qui rend le dessin
+     reproductible chez les deux joueurs sans un octet de réseau. */
+  function crownClumps(sp, frame) {
+    const out = [];
+    const { cx, cy, rx, ry, n, rad, radVar } = sp.crown;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + sp.crown.phase;
+      const r = rad + radVar * Math.sin(i * 2.399 + sp.crown.phase * 3);
+      const bx = cx + Math.cos(a) * rx, by = cy + Math.sin(a) * ry * 0.95;
+      out.push({ x: bx, y: by, r });
+    }
+    for (const [ix, iy, ir] of (sp.crown.inner || [])) out.push({ x: cx + ix, y: cy + iy, r: ir });
+    if (frame) {
+      /* LE VENT. Le décalage est proportionnel à la HAUTEUR du bouquet dans la
+         couronne : la cime prend un pixel, le bas ne bouge pas. Un arbre entier
+         qui glisse d'un pixel, c'est un arbre qui saute. */
+      const top = Math.min(...out.map(o => o.y - o.r)), bot = Math.max(...out.map(o => o.y + o.r));
+      for (const o of out) {
+        const h = 1 - (o.y - top) / Math.max(1, bot - top);
+        o.x += frame * h * h * 1.9;
+      }
+    }
+    return out;
+  }
+  function townTreeSprite(sp, season, frame) {
+    const [c, g] = cv(TW_, TH_);
+    const pal = (season === "autumn" && sp.autumn) ? Object.assign({}, sp, sp.autumn)
+              : (season === "spring" && sp.spring) ? Object.assign({}, sp, sp.spring) : sp;
+    /* L'OMBRE PORTÉE AU SOL, cuite dans le sprite. Deux ellipses concentriques
+       et pas un dégradé : à cette échelle un dégradé alpha se lit comme une
+       tache de gras. C'est le détail qui POSE l'arbre — sans lui il flotte. */
+    for (let y = TBASE_ - 3; y < TBASE_ + 4; y++) for (let x = 6; x < TW_ - 6; x++) {
+      const u = (x - 24) / 15, v = (y - (TBASE_ + 0.5)) / 3.4;
+      const d = u * u + v * v;
+      if (d > 1) continue;
+      P(g, x, y, 1, 1, "rgba(24,42,20,0.22)");
+    }
+    if (sp.conifer) { townConifer(g, sp, pal, frame); return c; }
+    treeTrunk(g, sp);
+    const clumps = crownClumps(sp, frame);
+    const [leaf, leafL, leafD] = pal.leaf;
+    const mask = new Uint8Array(TW_ * TH_);
+    const inClump = (o, x, y) => {
+      const dx = x + 0.5 - o.x, dy = (y + 0.5 - o.y) * 1.06;
+      return dx * dx + dy * dy <= o.r * o.r;
+    };
+    for (const o of clumps) {
+      const yA = Math.max(1, Math.floor(o.y - o.r)), yB = Math.min(TH_ - 2, Math.ceil(o.y + o.r));
+      const xA = Math.max(1, Math.floor(o.x - o.r)), xB = Math.min(TW_ - 2, Math.ceil(o.x + o.r));
+      for (let y = yA; y <= yB; y++) for (let x = xA; x <= xB; x++) if (inClump(o, x, y)) mask[y * TW_ + x] = 1;
+    }
+    /* ⚠️⚠️ ON BOUCHE LES TROUS D'UN PIXEL AVANT DE CERNER, ET C'EST LA CAUSE
+       N°1 DES POINTS PERDUS. Là où deux bouquets se rejoignent en angle rentrant,
+       l'union laisse parfois UNE case vide au fond de l'angle. Elle est
+       techniquement « dehors », donc la passe de cerne y peint un point noir —
+       au MILIEU du feuillage. Vingt et un par arbre, comptés par
+       `render-arbres.mjs` : c'est très exactement la saleté que Guillaume a vue.
+       Une fermeture morphologique d'un pixel les supprime tous, et ne change
+       rien à la silhouette (un trou d'une case n'est pas une forme). */
+    for (let y = 2; y < TH_ - 2; y++) for (let x = 2; x < TW_ - 2; x++) {
+      if (mask[y * TW_ + x]) continue;
+      if (mask[y * TW_ + x + 1] && mask[y * TW_ + x - 1] && mask[(y + 1) * TW_ + x] && mask[(y - 1) * TW_ + x]) mask[y * TW_ + x] = 2;
+    }
+    const on = (x, y) => (x < 1 || y < 1 || x >= TW_ - 1 || y >= TH_ - 1) ? 0 : mask[y * TW_ + x];
+    /* ⚠️ LES BOUQUETS SE PEIGNENT DU HAUT VERS LE BAS. En vue de dessus, ce qui
+       est plus bas est plus PRÈS : peint après, il recouvre — et son arc d'ombre
+       vient mordre sur celui du dessus. Peints dans le désordre, les arcs se
+       coupent et la couronne redevient un coussin. */
+    const order = clumps.slice().sort((a, b) => a.y - b.y);
+    for (const o of order) {
+      const yA = Math.max(1, Math.floor(o.y - o.r)), yB = Math.min(TH_ - 2, Math.ceil(o.y + o.r));
+      const xA = Math.max(1, Math.floor(o.x - o.r)), xB = Math.min(TW_ - 2, Math.ceil(o.x + o.r));
+      for (let y = yA; y <= yB; y++) for (let x = xA; x <= xB; x++) {
+        if (!inClump(o, x, y)) continue;
+        const dx = (x + 0.5 - o.x) / o.r, dy = (y + 0.5 - o.y) / o.r;
+        const lit = (-dx * 0.62 - dy * 0.78);
+        /* ⚠️⚠️ LE TON SE DÉCIDE SUR UNE SEULE GRANDEUR, ET C'EST CE QUI REND LE
+           DESSIN PROPRE. Premier jet : deux conditions croisées (« clair si
+           éclairé ET pas trop loin du centre », « sombre si loin ET peu
+           éclairé »). L'intersection de deux courbes différentes donne une
+           frontière DENTELÉE, donc des pixels perdus tout au long — c'est-à-
+           dire du tramage involontaire, exactement ce que Guillaume appelle
+           « sale ». Une seule grandeur seuillée deux fois donne deux croissants
+           à bord LISSE, parce que la frontière est une droite coupant un
+           disque. `render-arbres.mjs` compte la différence. */
+        P(g, x, y, 1, 1, lit > 0.34 ? leafL : lit < -0.26 ? leafD : leaf);
+      }
+      /* L'ARC D'OMBRE sous chaque bouquet : c'est LUI qui détache une masse de
+         la suivante. Sans lui, dix bouquets clairs se recollent en une tache. */
+      /* ⚠️ L'ARC SE PARCOURT AU PIXEL, PAS AU DEGRÉ. Un pas angulaire fixe
+         laisse des TROUS sur les grands rayons et repeint dix fois le même
+         pixel sur les petits : l'arc devient un pointillé, c'est-à-dire de la
+         saleté. On avance d'un pas assez fin pour que deux échantillons soient
+         toujours voisins, et on ne repeint pas deux fois la même case. */
+      let lastA = -1;
+      const step = 0.9 / Math.max(2, o.r);
+      for (let t = 0.35; t <= 2.79; t += step) {
+        const x = Math.round(o.x + Math.cos(t) * (o.r - 0.6)), y = Math.round(o.y + Math.sin(t) * (o.r - 0.6));
+        const key = y * TW_ + x;
+        if (key === lastA || !on(x, y)) continue;
+        lastA = key;
+        P(g, x, y, 1, 1, pal.edge);
+      }
+    }
+    for (let y = 1; y < TH_ - 1; y++) for (let x = 1; x < TW_ - 1; x++) {
+      if (mask[y * TW_ + x] === 2) P(g, x, y, 1, 1, leaf);
+    }
+    /* LE CERNE EXTÉRIEUR. Un pixel tout autour de l'union — c'est la netteté
+       que Guillaume demande (« net et bien détaillé ») : sans cerne, deux
+       arbres qui se chevauchent fondent l'un dans l'autre. */
+    for (let y = 1; y < TH_ - 1; y++) for (let x = 1; x < TW_ - 1; x++) {
+      if (!mask[y * TW_ + x]) continue;
+      if (on(x + 1, y) && on(x - 1, y) && on(x, y + 1) && on(x, y - 1)) continue;
+      P(g, x, y, 1, 1, pal.out);
+    }
+    /* LES NERVURES. Deux ou trois traits courts par bouquet, DANS le sens de la
+       courbure, du ton clair. Ce sont des feuilles vues de dessus, pas du
+       grain : elles suivent une direction, donc l'œil les lit comme un motif. */
+    for (const o of order) {
+      for (let k = 0; k < 3; k++) {
+        const a = -2.3 + k * 0.55;
+        const rr = o.r * 0.52;
+        const x0 = Math.round(o.x + Math.cos(a) * rr), y0 = Math.round(o.y + Math.sin(a) * rr);
+        /* ⚠️ UNE NERVURE EST UN TRAIT CONTINU. Écrite « trois pixels dont le
+           troisième décalé d'une rangée », elle se coupait en deux morceaux
+           reliés par un coin — donc un pixel perdu par nervure, vingt par
+           arbre. Un L plein tient la continuité et lit mieux la courbure. */
+        const vein = pal.vein || leafL;
+        for (let q = 0; q < 3; q++) if (on(x0 + q, y0) && on(x0 + q, y0 - 1)) P(g, x0 + q, y0, 1, 1, vein);
+        if (on(x0 + 2, y0 + 1) && on(x0 + 2, y0)) P(g, x0 + 2, y0 + 1, 1, 1, vein);
+      }
+    }
+    /* LES FLEURS. Une CROIX de cinq pixels et un cœur d'une autre couleur —
+       c'est le dessin de fleur des références de Guillaume, et il est lisible
+       à 100 % de zoom. Le 437 posait des carrés de deux pixels : à cette
+       taille, ça ne se lit pas comme une fleur, ça se lit comme une salissure.
+       Elles se posent sur la COQUE (le bord du houppier) : une fleur pousse au
+       bout d'une branche. */
+    if (pal.petal) {
+      let k = 0;
+      for (const o of order) {
+        const nb = pal.petalPer || 2;
+        for (let i = 0; i < nb; i++) {
+          const a = (k * 2.399 + i * 1.7);
+          k++;
+          const x = Math.round(o.x + Math.cos(a) * o.r * 0.72), y = Math.round(o.y + Math.sin(a) * o.r * 0.72);
+          if (!on(x, y) || !on(x - 1, y) || !on(x + 1, y) || !on(x, y - 1) || !on(x, y + 1)) continue;
+          P(g, x - 1, y, 3, 1, pal.petal); P(g, x, y - 1, 1, 3, pal.petal);
+          P(g, x, y, 1, 1, pal.petalC || pal.petal);
+          if (pal.petalBig) { P(g, x - 1, y - 1, 1, 1, pal.petal); P(g, x + 1, y + 1, 1, 1, pal.petal); }
+        }
+      }
+    }
+    if (pal.fruit) {
+      let k = 0;
+      for (const o of order) {
+        if ((k++ % 2)) continue;
+        const a = 0.9 + k * 1.9;
+        const x = Math.round(o.x + Math.cos(a) * o.r * 0.66), y = Math.round(o.y + Math.sin(a) * o.r * 0.66);
+        if (!on(x, y) || !on(x + 1, y + 1) || !on(x - 1, y - 1)) continue;
+        P(g, x - 1, y, 3, 3, pal.fruit);
+        P(g, x - 1, y - 1, 1, 1, pal.fruitL); P(g, x, y - 1, 1, 1, pal.fruitL);
+        P(g, x + 1, y + 1, 1, 1, pal.fruitD);
+        P(g, x, y - 2, 1, 1, "#4a3a22");                     // le pédoncule
+      }
+    }
+    /* LE PORT RETOMBANT DU SAULE : des rameaux d'UN pixel, longs, qui partent du
+       bord inférieur de la couronne. Ils sont espacés RÉGULIÈREMENT (tous les
+       deux pixels) et leur longueur suit une onde : un semis de rameaux fait un
+       rideau de perles, ce que le 437 a produit. */
+    if (sp.weep) {
+      /* ⚠️ UN RAMEAU PAR COLONNE, PAS UNE COLONNE SUR DEUX. Espacés, ils se
+         lisent comme des gouttes qui tombent ; serrés, comme un rideau — et
+         c'est un rideau, un saule. Leur longueur suit une onde lente : ce qui
+         doit varier est l'ourlet du rideau, pas la présence des fils. */
+      for (let x = 4; x < TW_ - 4; x++) {
+        let low = -1;
+        for (let y = 1; y < TH_ - 1; y++) if (mask[y * TW_ + x]) low = y;
+        if (low < 0) continue;
+        const edgeF = 0.45 + 0.55 * Math.sin((x - 24) / 13 * 1.6 + 1.57);   // long au centre, court aux bouts
+        const len = Math.round(sp.weep * Math.max(0.22, edgeF) * (0.78 + 0.22 * Math.sin(x * 1.7 + frame)));
+        const col = (x % 3 === 0) ? leafD : (x % 3 === 1) ? leaf : leafL;
+        for (let q = 1; q <= len && low + q < TBASE_ - 2; q++) {
+          const xx = x + ((q > len * 0.62) ? (x < 24 ? -1 : 1) : 0);
+          if (xx < 1 || xx >= TW_ - 1) break;
+          P(g, xx, low + q, 1, 1, q === len ? pal.out : col);
+        }
+      }
+    }
+    return c;
+  }
+  /* LES CONIFÈRES. ⚠️ CE QUI FAIT LIRE « SAPIN » EST LE FESTON DES BRANCHES,
+     pas l'empilement de triangles — c'est ce que faisait `pineTree` depuis le
+     zip 232, et ça se lit comme un arbre de Noël en carton. Chaque étage a donc
+     un bord inférieur en DENTS, un côté clair, un côté sombre et un cerne. */
+  function townConifer(g, sp, pal, frame) {
+    const [nd, ndL, ndD] = pal.leaf;
+    const bot = TBASE_, top = sp.crownTop, tiers = sp.tiers;
+    P(g, 24 - (sp.tw >> 1), bot - sp.bare, sp.tw, sp.bare, sp.trunk[0]);
+    P(g, 24 - (sp.tw >> 1), bot - sp.bare, 1, sp.bare, sp.trunk[2]);
+    P(g, 24 - (sp.tw >> 1) + sp.tw - 1, bot - sp.bare, 1, sp.bare, sp.trunk[2]);
+    P(g, 19, bot - 2, 10, 2, sp.trunk[2]);
+    const span = bot - sp.bare - top;
+    const mask = new Uint8Array(TW_ * TH_);
+    for (let i = 0; i < tiers; i++) {
+      const yT = top + Math.round(i * span / tiers) - (i ? sp.overlap : 0);
+      const yB = top + Math.round((i + 1) * span / tiers) + sp.overlap;
+      const half = sp.halfTop + (sp.halfBot - sp.halfTop) * ((i + 1) / tiers);
+      const sway = frame * (1 - i / tiers) * 1.6;
+      for (let y = yT; y <= yB && y < TH_ - 1; y++) {
+        const t = (y - yT) / Math.max(1, yB - yT);
+        const hw = half * (0.22 + 0.78 * t);
+        const cxs = 24 + sway * (1 - t);
+        for (let x = Math.max(1, Math.round(cxs - hw) - 2); x <= Math.min(TW_ - 2, Math.round(cxs + hw) + 2); x++) {
+          // Le feston : la branche dépasse de zéro à deux pixels, colonne par
+          // colonne, selon une dent de scie CALCULÉE — même colonne, même dent,
+          // donc les étages s'empilent au lieu de grésiller.
+          const jag = (t > 0.72) ? (((x * 3) % 7 < 3) ? 2 : 0) : 0;
+          if (Math.abs(x - cxs) > hw + jag) continue;
+          const d = (x - cxs) / Math.max(1, hw);
+          P(g, x, y, 1, 1, d < -0.30 ? ndL : d > 0.42 ? ndD : nd);
+          mask[y * TW_ + x] = 1;
+        }
+      }
+      // L'ombre portée de l'étage sur celui du dessous : c'est elle qui creuse.
+      for (let x = Math.max(1, Math.round(24 - half)); x <= Math.min(TW_ - 2, Math.round(24 + half)); x++) {
+        const yy = Math.min(TH_ - 2, yB);
+        if (mask[yy * TW_ + x]) P(g, x, yy, 1, 1, pal.edge);
+      }
+    }
+    const on = (x, y) => (x < 1 || y < 1 || x >= TW_ - 1 || y >= TH_ - 1) ? 0 : mask[y * TW_ + x];
+    for (let y = 1; y < TH_ - 1; y++) for (let x = 1; x < TW_ - 1; x++) {
+      if (!mask[y * TW_ + x]) continue;
+      if (on(x + 1, y) && on(x - 1, y) && on(x, y + 1) && on(x, y - 1)) continue;
+      P(g, x, y, 1, 1, pal.out);
+    }
+    // La flèche, bornée à y = 1 : le §4 en flagrant délit au 437 (elle sortait).
+    const spY = Math.max(1, top - 3);
+    P(g, 24 + Math.round(frame * 1.4), spY, 1, 4, ndL);
+    if (pal.cone) for (let i = 0; i < tiers - 1; i++) {
+      const y = top + Math.round((i + 0.8) * span / tiers);
+      const x = 24 + (i % 2 ? 4 + i : -5 - i);
+      if (on(x, y)) { P(g, x, y, 2, 3, pal.cone); P(g, x, y, 1, 1, "#8a6d47"); }
+    }
+  }
+
+  /* LA TABLE DES ESSENCES. Une ligne par arbre, et rien d'autre que ce qui le
+     distingue : la couronne (centre, rayons de l'ellipse porteuse, nombre et
+     taille des bouquets), la palette, la floraison, le fruit, le port.
+     ⚠️ L'ORDRE EST CELUI DE `TT` (module) et il ne se réarrange pas : c'est
+     l'indice qui désigne l'essence.
+     ⚠️ `out` EST LE CERNE EXTÉRIEUR ET `edge` L'ARC D'OMBRE INTERNE — deux
+     valeurs distinctes, et c'est important : un cerne aussi sombre que les
+     ombres internes ferme le dessin comme un autocollant, un cerne trop clair
+     et l'arbre n'a plus de bord. */
+  const TREE_SPECS = [
+    { id: "oak", tw: 8, trunkTop: 31,
+      crown: { cx: 24, cy: 23, rx: 11.4, ry: 9.6, n: 9, rad: 7.6, radVar: 1.0, phase: 0.35,
+               inner: [[-4, 1, 7], [5, 2, 6.6], [0, -4, 6.2]] },
+      trunk: ["#6b4b2d", "#8a6640", "#432c19"],
+      leaf: ["#3f8a37", "#63bb52", "#28601f"], edge: "#1c4716", out: "#123309", vein: "#7ccb63",
+      autumn: { leaf: ["#c07c26", "#e8ad3c", "#8a4d12"], edge: "#5c320a", out: "#3d2007", vein: "#f7cd6a" },
+      spring: { leaf: ["#4a9b3d", "#6fc95c", "#2e6c24"], edge: "#215019", out: "#153a0d", vein: "#8ada6f" } },
+    { id: "maple", tw: 7, trunkTop: 29,
+      crown: { cx: 24, cy: 21, rx: 10.2, ry: 10.8, n: 9, rad: 7.2, radVar: 1.2, phase: 1.15,
+               inner: [[-3, 3, 6.8], [4, 3, 6.4], [0, -5, 6.4]] },
+      trunk: ["#66452e", "#84603f", "#3f2a1a"],
+      leaf: ["#4a9134", "#6fbc4d", "#2d6420"], edge: "#1e4a15", out: "#123207", vein: "#88d160",
+      autumn: { leaf: ["#c2512a", "#ec8340", "#872c11"], edge: "#521c07", out: "#361105", vein: "#f7a866" },
+      spring: { leaf: ["#54a03c", "#7ac957", "#357528"], edge: "#245418", out: "#163c0c", vein: "#93dd72" } },
+    { id: "birch", tw: 5, trunkTop: 24, lean: 1, birchBands: true,
+      crown: { cx: 24, cy: 19, rx: 7.6, ry: 10.0, n: 8, rad: 7.0, radVar: 0.9, phase: 2.5,
+               /* ⚠️ TROIS BOUQUETS AU CŒUR, ET C'EST OBLIGATOIRE quand l'ellipse
+                  porteuse est étroite : à huit bouquets sur un anneau de 7,6 de
+                  rayon, le centre n'est couvert par personne et le houppier sort
+                  en BEIGNET — vu sur `render-arbres.mjs` à la première passe. */
+               inner: [[-2, 3, 6.4], [3, 1, 6.2], [0, -3, 6.0], [0, 5, 5.8]] },
+      trunk: ["#e2ded2", "#f7f4ec", "#8b867c"],
+      leaf: ["#63ac45", "#8ad462", "#3f8129"], edge: "#2a5c1c", out: "#1a3d0f", vein: "#a3e17c",
+      autumn: { leaf: ["#d3b033", "#f4dd5d", "#96721a"], edge: "#63470b", out: "#402d05", vein: "#fbec8b" },
+      spring: { leaf: ["#71ba4c", "#9adc70", "#4c9432"], edge: "#316a20", out: "#204512", vein: "#b0e98a" } },
+    { id: "willow", tw: 7, trunkTop: 36, weep: 22,
+      crown: { cx: 24, cy: 19, rx: 11.6, ry: 7.6, n: 10, rad: 7.6, radVar: 0.9, phase: 3.0,
+               inner: [[-4, 2, 6.8], [5, 2, 6.6], [0, -2, 6.4]] },
+      trunk: ["#6a5537", "#877049", "#443521"],
+      leaf: ["#7cae46", "#a4da65", "#55842c"], edge: "#3a641c", out: "#254210", vein: "#bde881",
+      autumn: { leaf: ["#c3ac3a", "#e6d55f", "#8b7616"], edge: "#5d4a0b", out: "#3c3006", vein: "#f4e58a" },
+      spring: { leaf: ["#8fbe4f", "#b5e372", "#66993a"], edge: "#457621", out: "#2c4e13", vein: "#cbef95" } },
+    { id: "magnolia", tw: 7, trunkTop: 30,
+      crown: { cx: 24, cy: 22, rx: 10.6, ry: 10.0, n: 9, rad: 7.2, radVar: 1.0, phase: 0.8,
+               inner: [[-3, 2, 6.6], [4, 3, 6.2], [1, -4, 6.0]] },
+      trunk: ["#5d4837", "#7b6349", "#3a2a1e"],
+      leaf: ["#3f8a45", "#5fb267", "#27612d"], edge: "#164321", out: "#0e2c16", vein: "#7ac783",
+      petal: "#f6f2ea", petalC: "#efce56", petalPer: 2, petalBig: true,
+      autumn: { leaf: ["#b98a35", "#dcb554", "#7c5514"], edge: "#4c3308", out: "#312105", vein: "#f0cf78", petal: null },
+      spring: { leaf: ["#4a9450", "#6cbb74", "#2f6935"], edge: "#1c4c26", out: "#123219", vein: "#88d190",
+                petal: "#fbf7f2", petalC: "#efce56", petalPer: 3, petalBig: true } },
+    { id: "cherry", tw: 7, trunkTop: 31,
+      crown: { cx: 24, cy: 22, rx: 10.8, ry: 9.8, n: 9, rad: 7.2, radVar: 1.0, phase: 1.9,
+               inner: [[-3, 3, 6.4], [4, 2, 6.4], [0, -4, 6.0]] },
+      trunk: ["#59422f", "#775c46", "#372619"],
+      leaf: ["#469049", "#68b96c", "#2b6631"], edge: "#194723", out: "#0f2f17", vein: "#82cd88",
+      petal: "#f2a9c6", petalC: "#fbe0ec", petalPer: 3, petalBig: true,
+      autumn: { leaf: ["#c06a3a", "#e29a5f", "#833d17"], edge: "#4d2409", out: "#331706", vein: "#f0b183", petal: null },
+      spring: { leaf: ["#5aa055", "#7fc87c", "#3a763c"], edge: "#245328", out: "#17371a", vein: "#9bd897",
+                petal: "#f79ec2", petalC: "#ffe4f0", petalPer: 4, petalBig: true } },
+    { id: "mimosa", tw: 6, trunkTop: 32,
+      crown: { cx: 24, cy: 23, rx: 11.0, ry: 8.8, n: 9, rad: 7.0, radVar: 1.1, phase: 5.4,
+               inner: [[-4, 1, 6.4], [4, 2, 6.2], [0, -4, 5.8]] },
+      trunk: ["#67573a", "#847148", "#413425"],
+      leaf: ["#4f8f52", "#72b876", "#2f6334"], edge: "#1c4622", out: "#122d16", vein: "#8ecd92",
+      petal: "#f3cd35", petalC: "#fff08a", petalPer: 4, petalBig: true,
+      autumn: { petal: "#dfbc32", petalC: "#f8dd6c", petalPer: 2 },
+      spring: { petal: "#f8db4a", petalC: "#fff6a4", petalPer: 5, petalBig: true } },
+    { id: "apple", tw: 7, trunkTop: 32,
+      crown: { cx: 24, cy: 23, rx: 10.8, ry: 9.4, n: 9, rad: 7.2, radVar: 0.9, phase: 2.2,
+               inner: [[-3, 2, 6.6], [4, 3, 6.2], [0, -4, 6.0]] },
+      trunk: ["#68482c", "#87643f", "#432c18"],
+      leaf: ["#3d8639", "#5fb251", "#26601f"], edge: "#164318", out: "#0e2c0d", vein: "#79c667",
+      fruit: "#cb332c", fruitL: "#ee6a60", fruitD: "#7f1714",
+      autumn: { leaf: ["#bf8c2c", "#e0b34a", "#7f5713"], edge: "#4d3308", out: "#312005", vein: "#f2cf72",
+                fruit: "#b4271d", fruitL: "#d75a50", fruitD: "#6d120f" },
+      spring: { leaf: ["#4a9440", "#6fbe5f", "#2f6a2a"], edge: "#1e4c1a", out: "#13320f", vein: "#88d178",
+                fruit: null, petal: "#fbeef2", petalC: "#f3d76a", petalPer: 3, petalBig: true } },
+    { id: "fir", conifer: true, tw: 6, bare: 6, crownTop: 5, tiers: 6,
+      halfTop: 4.0, halfBot: 17.5, overlap: 2,
+      trunk: ["#5b432b", "#75593b", "#3a2a1a"],
+      leaf: ["#2f6c4c", "#489c70", "#194030"], edge: "#123528", out: "#0a2118", cone: "#6a5334",
+      autumn: { leaf: ["#2c6446", "#438f66", "#173a2b"], edge: "#0f2e22", out: "#081c14" },
+      spring: { leaf: ["#357a56", "#54ae7d", "#1d4b37"], edge: "#153c2c", out: "#0b261b" } },
+    { id: "pine", conifer: true, tw: 6, bare: 22, crownTop: 4, tiers: 3,
+      halfTop: 5.0, halfBot: 15.0, overlap: 3,
+      trunk: ["#7c5531", "#9a6d42", "#4e3320"],
+      leaf: ["#356b3c", "#519d5b", "#1c4423"], edge: "#123020", out: "#0a1c12", cone: "#6f5230",
+      autumn: { leaf: ["#33663a", "#4d9556", "#1a3f21"], edge: "#102c1d", out: "#09190f" },
+      spring: { leaf: ["#3d7a44", "#5cae67", "#214d28"], edge: "#153724", out: "#0c2214" } },
+    { id: "cypress", conifer: true, tw: 4, bare: 4, crownTop: 4, tiers: 7,
+      halfTop: 3.0, halfBot: 8.0, overlap: 2,
+      trunk: ["#52432e", "#6b5940", "#352a1c"],
+      leaf: ["#2a5c3f", "#3d8557", "#163828"], edge: "#0e2a1a", out: "#071810" },
+  ];
+
   // Arbre mort, sans feuilles (chantier 2026-07, demande Guillaume : arbres
   // morts pour l'ambiance de la carte maléfique) : même gabarit 32x48 que
   // oakTree/pineTree (mêmes offsets d'ancrage dans drawEvilFrame), mais tronc
@@ -8762,7 +9724,24 @@ export function buildSprites() {
       kerbBrick: { n: townKerbStrip("n", KERB_BRICK), s: townKerbStrip("s", KERB_BRICK), e: townKerbStrip("e", KERB_BRICK), w: townKerbStrip("w", KERB_BRICK) },
       // ZIP 436 — le dallage des esplanades, dernier damier de 16 px de la ville.
       flag: townFlagSurface(),
+      // ZIP 437 — le gravier des promenades de parc et de rive.
+      gravel: townGravelSurface(),
+      // ZIP 438 — l'herbe de la ville, même pavé de 64 px que les rues.
+      grass: townGrassSurface(),
     },
+    /* ZIP 437 — LES MASSIFS FLEURIS DU PARC ET LA PRAIRIE DES RIVES. Cinq
+       espèces × quatre variantes : quatre suffisent parce que la case est
+       choisie par hachage et qu'une cinquième ne se verrait pas — c'est le même
+       compte que les variantes de berge (435). */
+    /* ⚠️ HUIT VARIANTES ET PAS QUATRE. À quatre, un parterre de six cases sur
+       trois répète deux fois chaque tuile, et les répétitions tombent côte à
+       côte assez souvent pour dessiner des RANGS — un massif qui a l'air semé
+       au cordeau, c'est-à-dire un champ. Huit suffisent : à cette densité, l'œil
+       ne retrouve plus la période. */
+    townBloom: Array.from({ length: C.BL_KINDS }, (_, k) =>
+      Array.from({ length: 8 }, (__, v) => townBloomTile(k + 1, v))),
+    townShrub: [0, 1, 2].map(v => townShrubSprite(v)),
+    townBoulder: [0, 1, 2].map(v => townBoulderSprite(v)),
     /* ZIP 436 — LA PIERRE DE LA HAUTE-VILLE : marches, parement de falaise,
        limons. Même forme que `townRoad` (un objet, sa période voyage avec) et
        même raison d'être ici plutôt que dans la boucle de rendu — voir la note
@@ -8798,6 +9777,20 @@ export function buildSprites() {
     },
     oak: oakTree(),
     pine: pineTree(),
+    /* ZIP 437 — les onze essences de Valley Town, en trois saisons. ⚠️ ELLES NE
+       REMPLACENT PAS `oak`/`pine` : la FERME et la carte maléfique continuent
+       de les employer, et ce zip ne touche pas à la ferme (décision du 424 :
+       ne pas mêler deux changements visuels dans la même livraison). */
+    /* ⚠️ TROIS IMAGES PAR ESSENCE ET PAR SAISON : c'est l'animation de vent
+       (§ note du moule). 11 × 3 × 3 = 99 canevas de 48×64, cuits une fois au
+       chargement comme tout le reste de ce fichier — le rendu ne fait qu'un
+       `drawImage` par arbre et par image, exactement comme avant. */
+    townTrees: TREE_SPECS.map(sp => ({
+      w: TW_, h: TH_, base: TBASE_,
+      summer: [-1, 0, 1].map(f => townTreeSprite(sp, "summer", f)),
+      spring: [-1, 0, 1].map(f => townTreeSprite(sp, "spring", f)),
+      autumn: [-1, 0, 1].map(f => townTreeSprite(sp, "autumn", f)),
+    })),
     deadTree: deadTree(),
     stump: stump(),
     rock: rock(),

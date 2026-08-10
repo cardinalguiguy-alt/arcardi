@@ -329,14 +329,32 @@ for (let f = 0; f < C.COURT_FLOORS.length; f++) {
   // Toutes les pièces doivent être joignables : une cage manquante isolerait un
   // étage entier, et le parcours par niveau ci-dessus ne le verrait PAS (il part
   // du couloir de chaque niveau, justement).
-  const linked = new Set([0]);
-  for (let k = 0; k < C.COURT_FLOORS.length; k++) {
+  /* ⚠️⚠️ ZIP 438 — « RELIÉ AU REZ-DE-CHAUSSÉE » VEUT DIRE « CELUI DE SON
+     BÂTIMENT ». Écrit `new Set([0])`, ce contrôle affirmait que TOUS les niveaux
+     de la carte se rejoignent — c'était vrai tant qu'il n'y avait qu'un
+     bâtiment, et c'est devenu FAUX le jour où la mairie a pris deux niveaux de
+     plus dans la même grille : ses étages ne communiquent pas avec le sous-sol
+     du tribunal, et c'est heureux. Le contrôle aurait poussé à percer un
+     couloir entre deux bâtiments pour se taire. On vérifie donc, bâtiment par
+     bâtiment, que chacun de ses niveaux est joignable depuis SON seuil — ce qui
+     est la vraie question : peut-on ressortir de là où l'on est monté ? */
+  const orphans = [];
+  for (const [bk, bd] of Object.entries(C.COURT_BUILDINGS)) {
+    const linked = new Set([bd.ground]);
+    for (let k = 0; k < C.COURT_FLOORS.length; k++) {
+      for (const sw of C.COURT_STAIRWELLS) {
+        if (linked.has(sw.a)) linked.add(sw.b);
+        if (linked.has(sw.b)) linked.add(sw.a);
+      }
+    }
+    for (const f of bd.floors) if (!linked.has(f)) orphans.push(`${bk}/${C.COURT_FLOORS[f].key}`);
+    // ... et qu'aucun escalier ne franchit la frontière entre deux bâtiments :
+    // deux immeubles reliés par une cage seraient un seul immeuble.
     for (const sw of C.COURT_STAIRWELLS) {
-      if (linked.has(sw.a)) linked.add(sw.b);
-      if (linked.has(sw.b)) linked.add(sw.a);
+      if (C.COURT_FLOORS[sw.a].bld !== C.COURT_FLOORS[sw.b].bld) orphans.push(`cage ${sw.a}↔${sw.b} traverse deux bâtiments`);
     }
   }
-  ok("les trois niveaux sont reliés au rez-de-chaussée", linked.size === C.COURT_FLOORS.length, `${linked.size}/${C.COURT_FLOORS.length}`);
+  ok("chaque niveau est relié au seuil de SON bâtiment", orphans.length === 0, orphans.length ? orphans.join(" · ") : `${C.COURT_FLOORS.length} niveaux, ${Object.keys(C.COURT_BUILDINGS).length} bâtiments`);
   ok("le panneau d'affichage existe", cw.props.some(p => p.kind === "board"));
 }
 {

@@ -19,6 +19,61 @@ jamais recopié d'un zip précédent sans relance.
 
 ## Ce qui existe
 
+- **`tools/render-mairie.mjs` — l'intérieur de l'hôtel de ville, 9 contrôles (438).** Un intérieur
+  ne se vérifie pas en le lisant : le tribunal du 426 a livré **six pièces inaccessibles sur
+  dix-sept** — une colonne posée devant une porte, écrites à cent lignes l'une de l'autre — et
+  personne ne l'avait vu à la relecture. Celui-ci DESSINE le plan de chaque niveau et contrôle ce
+  que la connexité ne dit pas : chaque pièce est meublée (une pièce nue dans un bâtiment public se
+  lit comme une pièce oubliée), **aucun meuble n'a été refusé** par le garde-fou des portes (un
+  refus n'est pas un incident, c'est une pièce appauvrie **en silence** — il a trouvé deux portes
+  de l'étage posées sur une rangée de colonnes), et surtout **la mairie ne ressemble pas au
+  tribunal** : on compte les meubles qu'elle ne partage pas avec lui (11 sur 23). À zéro, on aurait
+  dessiné deux fois le même couloir.
+  ⚠️ Il rejoue le générateur en interceptant `console.warn` : c'est la seule façon de compter les
+  refus sans recopier la règle qui refuse.
+
+
+- **`tools/render-arbres.mjs` — 11 essences × 3 saisons, 9 contrôles (437).** Il existe parce
+  que `oakTree` (trois `arc()`) et `pineTree` (quatre triangles) n'avaient **jamais** été
+  regardés : écrits dans les premiers zips, jamais retouchés, pendant que la rue prenait un
+  motif de 64 px (434) et la falaise ses assises (436). C'est le constat de tête de
+  `CLAUDE.md` appliqué aux arbres.
+  ⚠️⚠️ **SON CONTRÔLE CENTRAL A ÉTÉ ÉCRIT QUATRE FOIS, ET C'EST LA LEÇON DU 438.** Le 437
+  mesurait le « grain » — le nombre de frontières de ton par pixel — **en le prenant pour de la
+  qualité**. Verdict de Guillaume sur le résultat : « c'est dégueulasse […] vraiment sale ». *Le
+  grain montait, la propreté baissait, et le banc applaudissait.* Trois rédactions ont suivi :
+  « le pixel isolé » (elle accusait la pointe d'un rameau de saule et le cœur d'une fleur —
+  **elle interdisait le pixel art**), « les îlots de moins de quatre pixels » (elle accusait les
+  éclats d'un dégradé, 20 % sur des dessins propres), et enfin la bonne : **les îlots qui flottent
+  dans un APLAT**, tout leur pourtour d'une seule couleur, en connexité à **huit** voisins — à
+  quatre, un cerne d'un pixel en diagonale n'est plus connexe et le banc accuse le contour
+  lui-même. Mesuré : ancien chêne **1,3 %**, nouvelles essences **0 à 0,4 %**.
+  Il contrôle aussi qu'aucun pixel ne touche le bord du canevas (le piège n°1 des sprites, §4) et
+  que les trois silhouettes saisonnières sont identiques au pixel près (**un arbre qui change de
+  forme en changeant de couleur se lit comme un autre arbre**).
+  ⚠️ Il appelle `A.townTreeKind` sur les **859 arbres de la carte** : aucun saule loin de
+  l'eau, aucun pommier hors du verger, aucune essence au-delà de 39 % du total.
+  ⚠️ **Il a trouvé trois défauts à la première passe** : la flèche du cyprès sortait du canevas
+  par le haut (rabotée en silence), le liseré clair faisait le TOUR du houppier au lieu de son
+  seul bord nord-ouest (l'arbre était détouré en vert vif), et le bouleau sortait **en beignet**
+  — huit bouquets sur un anneau étroit ne couvrent pas le centre.
+
+- **`tools/render-parc.mjs` — le parc et les deux rives du lac du sud, 15 contrôles (437).**
+  ⚠️⚠️ **C'EST LA PREMIÈRE PLANCHE DU PROJET OÙ L'ON VOIT UN MORCEAU DE VILLE À PEU PRÈS
+  COMME LE JOUEUR LE VOIT**, et c'est une réponse partielle à l'angle mort nommé en §10 de
+  `CLAUDE.md`. Les six bancs du 434-436 peignent chacun SA surface et approximent le reste ;
+  celui-ci assemble tout ce qui vit hors de la closure — herbe, revêtement (gravier compris),
+  massifs fleuris, berge, eau, arbres — et ne refait que la mise en FILE des props.
+  Ce qu'il mesure : la plus longue suite de colonnes dont la rive est à la même rangée (**24
+  au premier jet, 4 aujourd'hui**, quai maçonné exclu — un ouvrage EST droit) ; le nombre de
+  criques profondes et de replis, **ce dont une `shore(x)` est incapable par construction** ;
+  l'écart-type de la largeur du haut-fond (**0,91 case** : à zéro, le lac est peint au
+  pochoir) ; l'écart parc↔place ; la surface fleurie et le nombre d'espèces ; et surtout
+  **qu'aucun des cinquante décors semés n'a les pieds dans l'eau ni ne bouche une allée**.
+  ⚠️ **Il a trouvé trois défauts** : la promenade de l'étang en escalier d'une case, le
+  sentier de rive qui épousait chaque encoche de crique, et un buisson enterré sous le parvis
+  du kiosque — posé sur de l'herbe, dallé par une passe ultérieure, resté SOLIDE.
+
 - **`tools/verify-vallee.mjs` — 172 contrôles, 172/172 (431 ; 137 au 430, 113 au 427).** Il
   importe le VRAI moteur : circulation, murs invisibles ET décors traversables, géométrie des
   bâtiments, rebords sautables, le tribunal pièce par pièce, la coupe de bois, les familles,

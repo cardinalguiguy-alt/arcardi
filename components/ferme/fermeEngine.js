@@ -3848,6 +3848,35 @@ export function farmPopularity(s, w) {
    ⚠️ Corollaire : tout ce qui bloque doit être marqué ICI. Un décor ajouté
    plus tard et dessiné sans être marqué serait TRAVERSABLE, sans erreur.
    ═══════════════════════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════════════════════
+   ZIP 437 — LE BRUIT DE VALEUR DU RIVAGE, ET POURQUOI CE N'EST PAS UN TIRAGE.
+   ───────────────────────────────────────────────────────────────────────────
+   ⚠️ `generateTownWorld` partage UN générateur (graine 0x7041) entre tout ce
+   qu'elle pose : y puiser un nombre de plus décalerait la suite du flux, donc
+   TOUS les arbres et TOUT le mobilier posés après le lac. Le rivage se lit donc
+   dans un HACHAGE de coordonnées entières — même entrée, même sortie, chez
+   l'hôte comme chez l'invité, et zéro consommation du flux partagé. C'est
+   exactement l'arbitrage déjà écrit pour les harmoniques de `TOWN_POND` (435),
+   poussé d'un cran : là-bas quatre nombres en clair suffisaient, ici il faut un
+   champ à deux dimensions.
+   ⚠️ INTERPOLATION LISSÉE (3t²−2t³) ET PAS LINÉAIRE : une interpolation
+   linéaire laisse une CASSURE DE PENTE à chaque nœud de la grille du bruit,
+   c'est-à-dire un pli tous les 7 pixels le long de la rive — la grille, encore,
+   déplacée dans le bruit. */
+function townHash2(x, y) {
+  let n = (Math.imul(x | 0, 73856093) ^ Math.imul(y | 0, 19349663)) | 0;
+  n ^= n >>> 13; n = Math.imul(n, 0x5bd1e995); n ^= n >>> 15;
+  return (n >>> 0) / 4294967295;
+}
+function townNoise(x, y, per, salt) {
+  const gx = Math.floor(x / per), gy = Math.floor(y / per);
+  const fx = x / per - gx, fy = y / per - gy;
+  const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+  const h = (ix, iy) => townHash2(ix * 131 + salt * 7919, iy * 197 + salt * 104729) * 2 - 1;
+  const a = h(gx, gy), b = h(gx + 1, gy), c = h(gx, gy + 1), d = h(gx + 1, gy + 1);
+  return (a + (b - a) * sx) * (1 - sy) + (c + (d - c) * sx) * sy;
+}
+
 export function generateTownWorld() {
   const W = C.TOWN_MAP_W, H = C.TOWN_MAP_H;
   const rnd = makeRng(0x7041); // fixed seed: one Valley Town for everyone
@@ -3875,6 +3904,20 @@ export function generateTownWorld() {
      les cases au moment où on les pave. Tableau plat (x, y, x, y…) : c'est du
      jetable interne, il ne sort pas de la fonction. */
   const alleys = [];
+  /* ⚠️ 437 — LES MASSIFS SE NOTENT AUSSI, ET POUR LA MÊME RAISON QUE LES ALLÉES
+     (voir juste au-dessus). Ils sont DÉCRITS pendant qu'on compose le parc — au
+     moment où l'on sait ce qu'on dessine — et PEINTS en toute fin de fonction,
+     là où le sol est définitif : un massif ne marque que ce qui est encore de
+     la pelouse, donc une allée, un kiosque ou une berge tracés entre-temps
+     l'effacent tout seuls. Le pourquoi de la couche est sur `BL_*`. */
+  const beds = [];
+  /* ⚠️ 437 — ET LES ALLÉES DE PROMENADE SE NOTENT À PART DES ALLÉES DE
+     DESSERTE. Les deux sont du `G_PATH`, mais une allée de maison rejoint une
+     rue (elle est donc pavée comme elle, 434) tandis qu'un sentier de rive ou
+     une allée de parc est du GRAVIER. Les distinguer au moment du revêtement
+     aurait demandé de retrouver leur nature depuis leur position — deux
+     descriptions du même chemin, la divergence en attente du §8. */
+  const gravel = [];
   const id = (x, y) => y * W + x;
   const inMap = (x, y) => x >= 0 && y >= 0 && x < W && y < H;
   const rect = (r, fn) => {
@@ -4137,20 +4180,51 @@ export function generateTownWorld() {
      vides du centre. Il en reste d'autres, et c'est assumé — la parité avec la
      ferme est un chantier de plusieurs sessions, pas une case à cocher.
      ═══════════════════════════════════════════════════════════════════════ */
-  const plantTree = (x, y) => {
+  /* ⚠️⚠️ 437 — LA PART DE CONIFÈRES EST UN PARAMÈTRE, ET ELLE NE CHANGE PAS LE
+     NOMBRE DE TIRAGES. La moitié des arbres du parc étaient des sapins : un
+     jardin public planté comme une forêt. Corriger ça ne coûte qu'un SEUIL.
+     ⚠️ Ce qu'il ne faut surtout pas faire, et qui a été fait puis défait dans
+     ce zip : consommer un nombre aussi sur les refus, pour « stabiliser » le
+     flux. C'est l'inverse qui se produit — les refus n'en consommaient pas, en
+     ajouter décale tout ce que `rnd()` pose APRÈS (arbres épars, mobilier), et
+     `verify-vallee.mjs` l'a vu tout de suite : un arbre tombé sur un endroit de
+     vie du champ de foire, donc un quartier bâti sans raison d'y aller. Le seul
+     flux stable est celui qu'on ne touche pas. */
+  const plantTree = (x, y, conif = 0.5) => {
     if (!inMap(x, y)) return;
     const i = id(x, y);
     if (solid[i] || objects[i] !== C.O_NONE) return;
     if (ground[i] === C.G_PATH || ground[i] === C.G_PATH_STONE || ground[i] === C.G_WATER || ground[i] === C.G_TOWN_STAIR) return;
-    objects[i] = rnd() < 0.5 ? C.O_TREE : C.O_TREE2; objHp.set(i, C.TREE_HP);
+    objects[i] = rnd() < conif ? C.O_TREE2 : C.O_TREE; objHp.set(i, C.TREE_HP);
+  };
+  /* ⚠️ 437 — UN DÉCOR DE JARDIN SE POSE SUR DE L'HERBE, ET IL FAUT LE DIRE.
+     `addProp` ne vérifie RIEN : il empile et marque solide. C'est tenable pour
+     un mobilier de place, posé sur des axes dallés connus ; ça ne l'est pas
+     pour les cinquante buissons, lanternes et jardinières semés le long d'une
+     allée et d'une rive — un seul qui tombe sur l'allée en fait un obstacle au
+     milieu du passage, un seul qui tombe sur l'eau flotte, et aucun des deux ne
+     lève quoi que ce soit. C'est le mur invisible du 425, en version décor. */
+  const addGarden = (x, y, kind) => {
+    if (!inMap(x, y)) return false;
+    const i = id(x, y);
+    if (solid[i] || hedge[i] || objects[i] !== C.O_NONE) return false;
+    if (ground[i] !== C.G_GRASS && ground[i] !== C.G_TOWN_LAWN) return false;
+    // `gard` marque le décor comme posé PAR CETTE FONCTION : c'est lui, et lui
+    // seul, que le balayage de fin de génération est autorisé à retirer.
+    props.push({ x, y, kind, gard: 1 }); solid[i] = 1;
+    return true;
   };
   // LE PARC : gazon, un étang, une allée en croix, des bancs au bord de l'eau.
   {
     const p = C.TOWN_PARK;
     rect(p, (x, y, i) => { if (ground[i] === C.G_GRASS) ground[i] = C.G_TOWN_LAWN; });
     const cx = p.x + (p.w >> 1), cy = p.y + (p.h >> 1);
-    for (let x = p.x; x < p.x + p.w; x++) for (const dy of [0, 1]) ground[id(x, cy + dy)] = C.G_PATH;
-    for (let y = p.y; y < p.y + p.h; y++) for (const dx of [0, 1]) ground[id(cx + dx, y)] = C.G_PATH;
+    /* ⚠️ 437 — L'ALLÉE EN CROIX PASSE AU GRAVIER (voir `gravel`). Elle était de
+       la terre battue, c'est-à-dire la tuile de 16 px du zip 232 : à côté d'une
+       rue pavée au motif de 64 px (434), un parc en terre nue avait l'air d'un
+       terrain vague avec des arbres dessus. */
+    for (let x = p.x; x < p.x + p.w; x++) for (const dy of [0, 1]) { ground[id(x, cy + dy)] = C.G_PATH; gravel.push(x, cy + dy); }
+    for (let y = p.y; y < p.y + p.h; y++) for (const dx of [0, 1]) { ground[id(cx + dx, y)] = C.G_PATH; gravel.push(cx + dx, y); }
     /* ═══════════════════════════════════════════════════════════════════════
        ZIP 435 — L'ÉTANG. UN RAYON MODULÉ, PUIS DEUX PASSES DE LISSAGE.
        ─────────────────────────────────────────────────────────────────────
@@ -4237,8 +4311,10 @@ export function generateTownWorld() {
       }
     }
     // Bordure d'arbres + bancs face à l'étang.
-    for (let x = p.x; x < p.x + p.w; x += 3) { plantTree(x, p.y); plantTree(x + 1, p.y + p.h - 1); }
-    for (let y = p.y + 2; y < p.y + p.h - 2; y += 4) { plantTree(p.x, y); plantTree(p.x + p.w - 1, y + 1); }
+    // ⚠️ 437 : un parc se plante en FEUILLUS. Un sapin sur cinq suffit à donner
+    // du vert sombre en hiver ; un sur deux faisait une pinède avec un kiosque.
+    for (let x = p.x; x < p.x + p.w; x += 3) { plantTree(x, p.y, 0.2); plantTree(x + 1, p.y + p.h - 1, 0.2); }
+    for (let y = p.y + 2; y < p.y + p.h - 2; y += 4) { plantTree(p.x, y, 0.2); plantTree(p.x + p.w - 1, y + 1, 0.2); }
     /* ⚠️ LES BANCS SE POSENT SUR LA RIVE TROUVÉE, PAS SUR UNE LIGNE ÉCRITE.
        Ils étaient calés sur `py0 + ph + 1`, c'est-à-dire sur le bas de la BOÎTE
        de l'ancien ovale : avec une rive qui monte et descend, un banc écrit à
@@ -4247,16 +4323,186 @@ export function generateTownWorld() {
        sèche, et on recule d'une pour laisser passer la berge. C'est le §8 :
        une position qui DOUBLE une autre description est une divergence en
        attente — ici, la rive est la seule description. */
-    for (const bx of [Math.round(pond.cx) - 3, Math.round(pond.cx) + 2]) {
-      let by = Math.round(pond.cy);
-      while (by < p.y + p.h - 1 && inMap(bx, by) && ground[id(bx, by)] === C.G_WATER) by++;
-      by += 1;                                   // une case de berge entre l'eau et le banc
-      if (inMap(bx, by) && !solid[id(bx, by)] && ground[id(bx, by)] === C.G_TOWN_LAWN) {
-        props.push({ x: bx, y: by, kind: "bench" }); solid[id(bx, by)] = 1;
-      }
-    }
+    /* ⚠️⚠️ ZIP 437 — CES DEUX BANCS-LÀ ONT DISPARU, ET C'EST UNE SUPPRESSION
+       VOULUE. Le belvédère posé plus bas met deux bancs SUR une terrasse au
+       bord de l'eau, c'est-à-dire au même endroit et en mieux. Les garder tous
+       les quatre faisait se chevaucher leurs PLACES ASSISES (trois par banc,
+       espacées de 0,69 case) : deux résidents s'asseyaient au même pixel, ce
+       que `verify-vallee.mjs` refuse depuis le 428. Deux descriptions du même
+       « où s'assied-on au bord de l'étang », donc une de trop — §8. */
     for (const [tx, ty] of [[cx - 3, cy + 4], [cx + 4, cy + 4], [cx - 3, cy - 4], [cx + 4, cy - 4]]) {
       if (inMap(tx, ty) && !solid[id(tx, ty)] && ground[id(tx, ty)] !== C.G_WATER) { props.push({ x: tx, y: ty, kind: "topiary" }); solid[id(tx, ty)] = 1; }
+    }
+    /* ═══════════════════════════════════════════════════════════════════════
+       ZIP 437 — CE QUI FAIT D'UNE PELOUSE UN PARC.
+       ─────────────────────────────────────────────────────────────────────
+       Demande de Guillaume : « à redessiner pour le rendre plus fleuri et
+       intéressant ». Ce qu'il y avait : trente-quatre cases sur vingt-six de
+       gazon uni, une croix de terre battue, un étang, deux bancs, quatre
+       massifs taillés et une bordure d'arbres tous les trois pas. Autrement
+       dit, un TERRAIN, pas un jardin — et le mot juste est celui de
+       Guillaume : rien n'y était *intéressant*, parce que rien n'y demandait
+       d'aller quelque part.
+       ⚠️ CE QU'ON AJOUTE EST DONC DE LA DESTINATION, pas de la décoration :
+       un tour d'étang qu'on peut suivre, un belvédère au bord de l'eau où
+       s'asseoir, quatre parterres dessinés qui donnent une couleur à chaque
+       quartier du parc, et une frange de prairie fleurie sous les arbres du
+       pourtour. Le reste (bancs, kiosque, massifs) ne bouge pas.
+       ⚠️⚠️ ET TOUT SE DÉDUIT DE L'ÉTANG DÉJÀ CREUSÉ, jamais de coordonnées
+       écrites à la main : c'est la leçon des étals qui penchaient (433) prise
+       à l'endroit. Le tour d'étang est l'ensemble des cases à trois pas de
+       l'eau — donc une courbe parallèle à une rive irrégulière, ce qu'aucune
+       ellipse écrite à la main n'aurait donné — et le belvédère se pose sur la
+       première case sèche sous le centre de l'étang. */
+    {
+      /* 1. LE TOUR D'ÉTANG. Parcours en largeur depuis l'eau, borné au parc.
+         ⚠️ EN HUIT VOISINS : à quatre, l'ensemble « à trois pas » d'une forme
+         ronde est un LOSANGE (distance de Manhattan), c'est-à-dire un chemin à
+         quatre angles droits autour d'une mare — le défaut que le 435 a corrigé
+         dans l'eau, reproduit sur l'allée qui la longe. */
+      const RING = 4;
+      const dpond = new Int16Array(W * H).fill(-1);
+      let ring = [];
+      rect(p, (x, y, i) => { if (ground[i] === C.G_WATER) { dpond[i] = 0; ring.push(i); } });
+      for (let step = 1; step <= RING && ring.length; step++) {
+        const next = [];
+        for (const i of ring) {
+          const x = i % W, y = (i / W) | 0;
+          for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+            const nx = x + dx, ny = y + dy;
+            if (nx < p.x || ny < p.y || nx >= p.x + p.w || ny >= p.y + p.h) continue;
+            const j = id(nx, ny);
+            if (dpond[j] >= 0 || ground[j] === C.G_WATER) continue;
+            dpond[j] = step; next.push(j);
+          }
+        }
+        ring = next;
+      }
+      /* ⚠️ L'ALLÉE NE FAIT PAS LE TOUR COMPLET, ET C'EST VOLONTAIRE. Un anneau
+         fermé autour d'une mare de neuf cases se lit comme une piste
+         d'athlétisme ; et à l'ouest il sortirait du parc (l'étang est dans le
+         quadrant nord-ouest). On garde l'arc SUD-EST — celui qui regarde le
+         reste du parc — et il rejoint l'allée en croix, donc il MÈNE quelque
+         part. Une allée qui ne rejoint rien est un motif au sol. */
+      let arcMaxX = -1, arcMaxY = 0, arcMinX = 1e9, arcMinY = 0;
+      for (let y = p.y; y < p.y + p.h; y++) for (let x = p.x; x < p.x + p.w; x++) {
+        const i = id(x, y);
+        if (dpond[i] < RING - 1 || dpond[i] > RING || solid[i] || ground[i] !== C.G_TOWN_LAWN) continue;
+        /* ⚠️ LA PROMENADE NE LONGE QUE LA RIVE SUD, ET DEUX CASES DE LARGE.
+           Premier jet : un anneau d'une case tout autour, à trois pas de l'eau.
+           Regardé sur `render-parc.mjs`, c'était un ESCALIER — l'ensemble des
+           cases à distance constante d'une forme ronde, sur une grille, monte
+           en marches d'une case, et une allée d'une case de large ne montre
+           que ça. Deux cases masquent la marche (elle devient un élargissement),
+           et s'en tenir à la rive sud évite en plus de sortir du parc à
+           l'ouest, où l'étang n'est qu'à sept cases du bord. */
+        if (y < pond.cy - 2) continue;
+        /* ⚠️ ET ELLE NE TOUCHE PAS LE BORD DU PARC. Sans cette marge, la
+           promenade venait buter contre la limite ouest de la pelouse et s'y
+           écrasait en une bande verticale parfaitement droite : le parcours de
+           l'étang finissait en mur de gravier. Une allée qui touche une clôture
+           n'est plus une allée, c'est un trottoir. */
+        if (x < p.x + 3 || x > p.x + p.w - 4) continue;
+        ground[i] = C.G_PATH; gravel.push(x, y);
+        if (x > arcMaxX) { arcMaxX = x; arcMaxY = y; }
+        if (x < arcMinX) { arcMinX = x; arcMinY = y; }
+      }
+      for (let x = arcMaxX + 1; x >= 0 && x < cx; x++) {       // le raccord à l'allée en croix
+        const i = id(x, arcMaxY);
+        if (solid[i] || ground[i] === C.G_WATER) break;
+        ground[i] = C.G_PATH; gravel.push(x, arcMaxY);
+      }
+      /* ⚠️ ET LE BOUT OUEST DESCEND SUR L'ALLÉE EST-OUEST. Sans ce second
+         raccord, la promenade s'arrêtait NET au milieu de la pelouse : un
+         chemin qui ne mène nulle part, ce qui est pire qu'une pelouse nue —
+         l'œil le suit et se cogne. Les deux bouts d'une allée doivent aboutir. */
+      for (let y = arcMinY + 1; arcMinX < 1e9 && y <= cy; y++) {
+        for (const dx of [0, 1]) {
+          const i = id(arcMinX + dx, y);
+          if (!inMap(arcMinX + dx, y) || solid[i] || ground[i] === C.G_WATER) continue;
+          ground[i] = C.G_PATH; gravel.push(arcMinX + dx, y);
+        }
+      }
+      /* 2. LE BELVÉDÈRE. Une terrasse dallée qui avance jusqu'au bord, deux
+         bancs qui regardent l'eau, deux lanternes. ⚠️ SA RANGÉE SE TROUVE EN
+         DESCENDANT DEPUIS LE CENTRE DE L'ÉTANG jusqu'à la première case sèche,
+         exactement comme les bancs du 435 : une hauteur écrite à la main
+         aurait les pieds dans l'eau au premier réglage des harmoniques. */
+      /* ⚠️ ON CHERCHE UNE PLACE, ON N'EN DÉCRÈTE PAS UNE. Écrit sur une seule
+         colonne, le belvédère tombait sur le banc que le 435 pose au sud de
+         l'étang : la terrasse n'était alors pas posée DU TOUT, et rien ne le
+         disait — un décor absent ne lève rien. On essaie donc quatre décalages
+         autour de l'axe de l'étang, du plus centré au moins centré. */
+      let bx0 = -1, by0 = 0;
+      for (const off of [-1, -2, 0, 1, -3, 2]) {
+        const bx = Math.round(pond.cx) + off;
+        let by = Math.round(pond.cy);
+        while (by < p.y + p.h - 3 && inMap(bx, by) && ground[id(bx, by)] === C.G_WATER) by++;
+        let free = true;
+        for (let x = bx; x < bx + 4; x++) for (let y = by; y < by + 2; y++) {
+          if (!inMap(x, y) || solid[id(x, y)] || ground[id(x, y)] === C.G_WATER) free = false;
+        }
+        if (free) { bx0 = bx; by0 = by; break; }
+      }
+      if (bx0 >= 0) {
+        for (let x = bx0; x < bx0 + 4; x++) for (let y = by0; y < by0 + 2; y++) {
+          ground[id(x, y)] = C.G_PATH_STONE; objects[id(x, y)] = C.O_NONE; objHp.delete(id(x, y));
+        }
+        /* ⚠️ LES DEUX BANCS SONT AUX DEUX BOUTS DE LA TERRASSE, PAS CÔTE À
+           CÔTE. Un banc porte TOWN_SEATS_PER_BENCH places espacées de 0,69
+           case : deux bancs voisins partagent donc une place, et deux résidents
+           s'assoient au même endroit. `verify-vallee.mjs` le voit (« deux
+           places d'un banc ne se marchent pas dessus ») ; en jeu, on aurait vu
+           deux personnages superposés. */
+        addProp(bx0, by0 + 1, "bench", true);
+        addProp(bx0 + 3, by0 + 1, "bench", true);
+        addProp(bx0 - 1, by0, "lamp", true);
+        addProp(bx0 + 4, by0, "lamp", true);
+      }
+      /* 3. LES PARTERRES. Un par quadrant, une espèce par parterre : c'est ce
+         qui donne au parc quatre COINS distincts au lieu d'une pelouse uniforme
+         semée de fleurs. Chacun est bordé de marguerites — la bordure basse est
+         ce qui fait lire « massif dessiné » plutôt que « touffes ».
+         ⚠️ L'ORDRE DES POUSSÉES EST L'ORDRE DE PEINTURE : la bordure d'abord,
+         le cœur ensuite, sinon la bordure recouvre ce qu'elle borde. */
+      const parterre = (x, y, w, h, kind) => {
+        beds.push({ x: x - 1, y: y - 1, w: w + 2, h: h + 2, kind: C.BL_DAISY });
+        beds.push({ x, y, w, h, kind });
+      };
+      parterre(p.x + 3, cy + 4, 6, 3, C.BL_TULIP);        // sud-ouest : le massif rouge
+      parterre(cx + 5, cy + 4, 6, 3, C.BL_LAVENDER);      // sud-est : les épis violets
+      parterre(cx + 5, p.y + 3, 6, 3, C.BL_GOLD);         // nord-est : la tache jaune
+      parterre(p.x + 2, p.y + p.h - 6, 4, 3, C.BL_GOLD);  // et un petit au sud-ouest du kiosque
+      parterre(cx + 5, p.y + 9, 5, 2, C.BL_TULIP);        // le nord-est était le quadrant le plus vide
+      parterre(p.x + 3, cy + 9, 5, 2, C.BL_LAVENDER);
+      /* 4. LA FRANGE DE PRAIRIE. Sous les arbres du pourtour, un semis lâche
+         qui empêche la bordure de se lire comme une clôture d'arbres plantée
+         dans du gazon de stade. `dens` la rend lacunaire : une prairie n'a pas
+         de bord. */
+      beds.push({ x: p.x, y: p.y, w: p.w, h: 2, kind: C.BL_WILD, dens: 0.42 });
+      beds.push({ x: p.x, y: p.y + p.h - 2, w: p.w, h: 2, kind: C.BL_WILD, dens: 0.42 });
+      beds.push({ x: p.x, y: p.y, w: 2, h: p.h, kind: C.BL_WILD, dens: 0.42 });
+      beds.push({ x: p.x + p.w - 2, y: p.y, w: 2, h: p.h, kind: C.BL_WILD, dens: 0.42 });
+      /* 5. LE MOBILIER D'ALLÉE. Lanternes et buissons fleuris le long de la
+         croix : c'est ce qui donne son ÉPAISSEUR à une allée. Une allée sans
+         rien sur ses côtés est une rayure. */
+      for (let x = p.x + 4; x < p.x + p.w - 3; x += 7) {
+        if (Math.abs(x - cx) < 3) continue;
+        addGarden(x, cy - 1, (x / 7 | 0) % 2 ? "lamp" : "shrub");
+        addGarden(x + 2, cy + 2, "shrub");
+      }
+      for (let y = p.y + 4; y < p.y + p.h - 3; y += 8) {
+        if (Math.abs(y - cy) < 3) continue;
+        addGarden(cx - 1, y, "shrub");
+        addGarden(cx + 2, y + 2, (y / 8 | 0) % 2 ? "shrub" : "lamp");
+      }
+      // Deux jardinières encadrent le carrefour des deux allées.
+      addGarden(cx - 1, cy - 1, "planter"); addGarden(cx + 2, cy + 2, "planter");
+      /* Deux bancs de plus, le long de l'allée est-ouest et face aux parterres.
+         ⚠️ ILS SONT À SIX CASES L'UN DE L'AUTRE : trois places par banc espacées
+         de 0,69 case, donc deux bancs à moins de trois cases partagent une
+         place assise (voir le belvédère). Six est confortable. */
+      addGarden(p.x + 6, cy - 1, "bench"); addGarden(p.x + 6 + 6, cy + 2, "bench");
     }
   }
   // LE VERGER : des arbres EN RANGS. C'est l'alignement qui dit « planté par
@@ -4481,26 +4727,167 @@ export function generateTownWorld() {
      est la définition d'un décor faux.
      Il n'y a donc qu'UNE seule description du rivage — `shore(x)` — et la
      promenade, les bancs, les lampadaires et le ponton s'y accrochent tous. */
+  /* ⚠️⚠️ ZIP 437 — ET « UNE SEULE DESCRIPTION » NE VEUT PAS DIRE « UNE
+     FONCTION DE x ». C'est la moitié de la leçon qui manquait au 426 : le
+     rivage était bien une description unique, mais `shore(x)` — deux sinus —
+     rend UN y par colonne. Une telle courbe ne peut pas se replier, donc pas de
+     crique qui se referme, pas de langue de terre, pas d'îlot, et une pente
+     bornée par l'amplitude des deux sinus : à l'écran, un trait tiré à la règle
+     et cintré à la main. Guillaume l'a nommé au 436 (« le rebord est toujours
+     totalement droit »), et le 435 l'avait DÉJÀ écrit noir sur blanc en
+     corrigeant l'étang du parc — 75 colonnes plates sur 95 — sans venir le
+     corriger ici. Un défaut mesuré et laissé en place revient toujours.
+     ⚠️ LA RIVE EST DONC L'ISOLIGNE D'UN CHAMP s(x,y) (voir `TOWN_LAKE_*`), et
+     tout le reste continue de s'y accrocher : ce qui était juste au 426 le
+     reste. La promenade, le sentier, le ponton, les bancs et les lampadaires ne
+     lisent QUE la carte d'eau une fois creusée — plus une seule de ces cinq
+     choses ne rappelle la formule. */
   {
     const lk = C.TOWN_LAKE;
-    // Une ondulation lente et déterministe : deux sinus, jamais un tirage par
-    // case (qui ferait de l'écume, pas une berge).
-    const shore = (x) => lk.y + Math.round(Math.sin(x * 0.21) * 1.6 + Math.sin(x * 0.07 + 1.3) * 1.2);
-    for (let x = lk.x; x < lk.x + lk.w; x++) {
-      const sy = shore(x);
-      for (let y = sy; y < lk.y + lk.h; y++) {
-        if (!inMap(x, y)) continue;
+    const x0 = lk.x, x1 = lk.x + lk.w, yBot = Math.min(H, lk.y + lk.h);
+    /* L'AXE DU PONTON gouverne tout ce quartier : c'est par là que la ville
+       descend au lac (l'artère centrale tombe dessus), donc c'est là et
+       seulement là qu'elle a maçonné un quai. `quayMix` vaut 1 devant
+       l'esplanade, 0 sur la rive sauvage, et se raccorde en douceur.
+       ⚠️ LE RACCORD EST CUBIQUE, PAS LINÉAIRE : une rampe droite laisse un
+       ANGLE à ses deux bouts, et un angle sur une rive se lit comme une erreur
+       de tracé — précisément ce qu'on est en train de corriger. */
+    const axis = C.TOWN_PIER.x + C.TOWN_PIER.w / 2;
+    const quayMix = (x) => {
+      const d = Math.abs(x + 0.5 - axis);
+      if (d <= C.TOWN_QUAY_HALF) return 1;
+      if (d >= C.TOWN_QUAY_HALF + C.TOWN_QUAY_FADE) return 0;
+      const t = (d - C.TOWN_QUAY_HALF) / C.TOWN_QUAY_FADE;
+      return 1 - t * t * (3 - 2 * t);
+    };
+    /* Le champ signé. Positif = eau. ⚠️ LE BRUIT EST ÉTEINT DEVANT LE QUAI
+       (`* (1 - q)`) et pas seulement atténué : un quai maçonné EST droit, c'est
+       ce qui le fait lire comme un ouvrage. Le naturel de la rive ne s'obtient
+       pas en mettant du désordre PARTOUT — il s'obtient en opposant une ligne
+       construite à une ligne qui ne l'est pas. */
+    const field = (x, y) => {
+      const q = quayMix(x);
+      let e = lk.y + C.TOWN_LAKE_EDGE;
+      for (const b of C.TOWN_LAKE_BAYS) e += b.a * Math.sin((x / b.p) * 2 * Math.PI + b.ph);
+      e = e * (1 - q) + (lk.y + C.TOWN_QUAY_EDGE) * q;
+      let n = 0;
+      for (const o of C.TOWN_LAKE_NOISE) n += o.a * townNoise(x, y, o.p, 3);
+      return (y + 0.5) - e - n * (1 - q);
+    };
+    const wet = new Set();
+    for (let x = x0; x < x1; x++) for (let y = lk.y; y < yBot; y++) {
+      if (!inMap(x, y)) continue;
+      const i = id(x, y);
+      if (solid[i] || ground[i] === C.G_PATH || ground[i] === C.G_PATH_STONE) continue;
+      if (field(x, y) > 0) wet.add(i);
+    }
+    /* Les mêmes deux passes de lissage que l'étang (435), et pour la même
+       raison : un contour organique rastérisé sème des ergots et des encoches
+       d'une seule case, qui se lisent comme des pixels oubliés et non comme une
+       rive découpée. ⚠️ Ici la règle du bas est bornée au rectangle du lac,
+       sinon le comblement remonterait dans la pelouse au fond des criques. */
+    for (let pass = 0; pass < 2; pass++) {
+      const add = [], del = [];
+      for (let x = x0; x < x1; x++) for (let y = lk.y; y < yBot; y++) {
         const i = id(x, y);
-        if (solid[i] || ground[i] === C.G_PATH) continue;
-        ground[i] = C.G_WATER; objects[i] = C.O_NONE; objHp.delete(i);
+        let n = 0;
+        for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const nx = x + dx, ny = y + dy;
+          // ⚠️ HORS DU RECTANGLE, ON COMPTE DE L'EAU AU SUD ET DE LA TERRE
+          // AILLEURS : le lac touche le bas de la carte, et sans ça sa dernière
+          // rangée se croirait au bord d'une rive et se ferait effacer.
+          if (ny >= yBot) { n++; continue; }
+          if (nx < x0 || nx >= x1 || ny < lk.y) continue;
+          if (wet.has(id(nx, ny))) n++;
+        }
+        if (wet.has(i)) { if (n < 2) del.push(i); }
+        else if (n >= 3 && !solid[i] && ground[i] !== C.G_PATH && ground[i] !== C.G_PATH_STONE) add.push(i);
       }
-      // La promenade : elle SUIT le rivage, deux rangées au-dessus de l'eau.
-      for (let y = sy - C.TOWN_QUAY_H; y < sy; y++) {
+      for (const i of del) wet.delete(i);
+      for (const i of add) wet.add(i);
+    }
+    for (const i of wet) { ground[i] = C.G_WATER; objects[i] = C.O_NONE; objHp.delete(i); }
+    /* ⚠️ LA PREMIÈRE RANGÉE D'EAU SE LIT SUR LA CARTE, PLUS JAMAIS DANS LA
+       FORMULE. Tout ce qui suit (promenade, sentier, ponton, mobilier) passe
+       par `waterTop` : le jour où l'on retouche le champ, le quartier suit tout
+       seul. `null` = cette colonne n'a pas d'eau du tout. */
+    const waterTop = (x) => {
+      if (x < 0 || x >= W) return null;
+      for (let y = lk.y; y < yBot; y++) if (ground[id(x, y)] === C.G_WATER) return y;
+      return null;
+    };
+    const tops = new Array(W).fill(null);
+    for (let x = x0; x < x1; x++) tops[x] = waterTop(x);
+    /* ---- LA PROMENADE MAÇONNÉE, devant le ponton seulement. */
+    for (let x = x0; x < x1; x++) {
+      if (quayMix(x) <= 0.5 || tops[x] === null) continue;
+      for (let y = tops[x] - C.TOWN_QUAY_H; y < tops[x]; y++) {
         if (!inMap(x, y)) continue;
         const i = id(x, y);
         if (solid[i] || ground[i] === C.G_WATER) continue;
         ground[i] = C.G_PATH_STONE; objects[i] = C.O_NONE; objHp.delete(i);
       }
+    }
+    /* ---- LE SENTIER DE LA RIVE SAUVAGE. ⚠️ IL N'EST PAS PARALLÈLE À L'EAU,
+       et c'est écrit en toutes lettres sur `TOWN_TRAIL_*` : une allée tracée à
+       distance constante du rivage EST le rivage, recopié une case plus haut.
+       Il ondule pour son compte et se fait seulement RABATTRE par le lac quand
+       celui-ci monte — ce qui donne des passages au ras de l'eau et des
+       passages qui s'en écartent, c'est-à-dire un chemin. */
+    const AVE = C.TOWN_ST_ROWS[C.TOWN_ST_ROWS.length - 1] + 2;   // première rangée libre sous l'avenue du sud
+    /* ⚠️⚠️ LE SENTIER SE RABAT SUR UNE RIVE LISSÉE, PAS SUR LA RIVE ELLE-MÊME.
+       C'est la troisième fois de ce zip que le même défaut se présente, et sous
+       une forme nouvelle : borné par `tops[x]` colonne par colonne, le chemin
+       ÉPOUSE chaque encoche de la crique — donc il monte et descend d'une case
+       tous les deux pas, et il redevient un escalier alors que c'est le rivage
+       qui est découpé, pas lui. Un vrai sentier CONTOURNE une anse ; il n'en
+       fait pas le tour au centimètre. On prend donc le minimum sur une fenêtre
+       de sept colonnes : le chemin s'écarte de toute la crique d'un coup. */
+    const topsSafe = (x) => {
+      let m = null;
+      for (let k = -3; k <= 3; k++) {
+        const t = tops[x + k];
+        if (t === null || t === undefined) continue;
+        if (m === null || t < m) m = t;
+      }
+      return m;
+    };
+    const trailRow = (x) => {
+      if (tops[x] === null) return null;
+      let w = 0;
+      for (const s of C.TOWN_TRAIL_WAVE) w += s.a * (0.5 + 0.5 * Math.sin((x / s.p) * 2 * Math.PI + s.ph));
+      const r = tops[x] - C.TOWN_TRAIL_MARGIN - 1 - Math.round(w);
+      return Math.max(AVE, Math.min(topsSafe(x) - 2, r));
+    };
+    const paveTrail = (x, y) => {
+      if (!inMap(x, y)) return false;
+      const i = id(x, y);
+      if (solid[i] || ground[i] === C.G_WATER || ground[i] === C.G_PATH_STONE) return false;
+      ground[i] = C.G_PATH; objects[i] = C.O_NONE; objHp.delete(i);
+      gravel.push(x, y);                     // il reçoit le gravier au revêtement (437)
+      return true;
+    };
+    let prev = null;
+    for (let x = x0; x < x1; x++) {
+      if (quayMix(x) > 0.5) { prev = null; continue; }
+      const r = trailRow(x);
+      if (r === null) { prev = null; continue; }
+      /* ⚠️⚠️ DEUX RANGÉES, ET C'EST LA MÊME LEÇON QUE LA PROMENADE DE L'ÉTANG,
+         PAYÉE LE MÊME JOUR : une allée d'une seule case qui monte et descend ne
+         montre que ses MARCHES — chaque changement de rangée est un décrochement
+         d'une case de haut sur une case de large, et l'œil ne voit plus que ça.
+         À deux cases de large, le même décrochement se lit comme un
+         élargissement du chemin. On ne lisse donc pas le tracé (ce serait
+         revenir à la ligne droite) : on l'épaissit. */
+      paveTrail(x, r); paveTrail(x, r + 1);
+      /* ⚠️ LE RACCORD EST OBLIGATOIRE : deux colonnes voisines dont la rangée
+         diffère de 1 donnent un sentier en DIAGONALE, c'est-à-dire deux cases
+         qui ne se touchent que par un coin. Ça se voit comme un pointillé. */
+      if (prev !== null) for (let y = Math.min(prev, r); y <= Math.max(prev, r) + 1; y++) paveTrail(x, y);
+      prev = r;
+      // Une descente au bord de l'eau de loin en loin : c'est ce qui fait que
+      // le sentier LONGE le lac au lieu de passer à côté.
+      if (x % 17 === 3) for (let y = r + 1; y < tops[x]; y++) paveTrail(x, y);
     }
     /* LE PONTON, POSÉ AVANT LE MOBILIER. Du bois SUR l'eau : il part de la
        promenade et s'avance. Il ne bloque pas — c'est le seul endroit d'où l'on
@@ -4508,20 +4895,58 @@ export function generateTownWorld() {
        ⚠️ L'ORDRE N'EST PAS UN DÉTAIL : il EFFACE `solid` sur son emprise. Posé
        après les bancs, il en libérait un — un banc qu'on traverse, dessiné au
        milieu du ponton. Le banc de contrôle l'a vu (« aucun décor n'est
-       traversable ») ; à l'œil, on aurait juste trouvé le ponton encombré. */
-    const pierTop = shore(C.TOWN_PIER.x) - C.TOWN_QUAY_H;
+       traversable ») ; à l'œil, on aurait juste trouvé le ponton encombré.
+       ⚠️ 437 : il part de la case d'eau la plus HAUTE de son emprise (et non de
+       celle de sa colonne de gauche), sinon une rive qui descend d'une case
+       sous ses quatre colonnes laisserait son premier tronçon en l'air. */
+    let pierTop = yBot;
+    for (let x = C.TOWN_PIER.x; x < C.TOWN_PIER.x + C.TOWN_PIER.w; x++) {
+      if (tops[x] !== null) pierTop = Math.min(pierTop, tops[x]);
+    }
+    pierTop -= C.TOWN_QUAY_H;
     for (let y = pierTop; y < pierTop + C.TOWN_PIER.h + C.TOWN_QUAY_H; y++) {
       for (let x = C.TOWN_PIER.x; x < C.TOWN_PIER.x + C.TOWN_PIER.w; x++) {
-        if (!inMap(x, y) || y >= lk.y + lk.h) continue;
+        if (!inMap(x, y) || y >= yBot) continue;
         ground[id(x, y)] = C.G_BRIDGE; solid[id(x, y)] = 0; objects[id(x, y)] = C.O_NONE;
       }
     }
+    /* ---- LE MOBILIER. ⚠️ IL SE POSE SUR CE QU'IL Y A, PAS SUR UNE RANGÉE :
+       bancs et lampadaires le long du quai maçonné, blocs erratiques, buissons
+       et saules sur la rive sauvage. Deux ambiances, une seule carte lue. */
     const freeQuay = (x, y) => inMap(x, y) && !solid[id(x, y)] && ground[id(x, y)] !== C.G_BRIDGE && ground[id(x, y)] !== C.G_WATER;
-    for (let x = lk.x + 4; x < lk.x + lk.w - 4; x += 8) {
-      const sy = shore(x);
-      if (freeQuay(x, sy - 1)) addProp(x, sy - 1, "bench", true);
-      const lx = x + 4, ly = shore(lx) - 2;
-      if (((x - lk.x) / 8) % 2 === 0 && freeQuay(lx, ly)) addProp(lx, ly, "lamp", true);
+    for (let x = x0 + 4; x < x1 - 4; x += 8) {
+      if (tops[x] === null) continue;
+      if (quayMix(x) > 0.5) {
+        if (freeQuay(x, tops[x] - 1)) addProp(x, tops[x] - 1, "bench", true);
+        const lx = x + 4;
+        if (tops[lx] !== null && ((x - x0) / 8) % 2 === 0 && freeQuay(lx, tops[lx] - 2)) addProp(lx, tops[lx] - 2, "lamp", true);
+      }
+    }
+    /* La rive sauvage. Les blocs erratiques se posent AU RAS de l'eau (c'est là
+       qu'ils ont un sens : une pierre au milieu d'un pré n'est pas un rocher,
+       c'est un caillou), les saules et les buissons derrière le sentier.
+       ⚠️ Aucun tirage : la position vient du hachage de la colonne, comme le
+       rivage lui-même. */
+    for (let x = x0 + 2; x < x1 - 2; x++) {
+      if (tops[x] === null || quayMix(x) > 0.05) continue;
+      const h = (townHash2(x, 91) * 1000) | 0;
+      const r = trailRow(x);
+      if (h % 11 === 0) addGarden(x, tops[x] - 1, "boulder");
+      else if (h % 7 === 0 && r !== null && r - 1 > AVE) {
+        // Un rideau de saules et de buissons : ce qui donne son épaisseur à une
+        // rive naturelle, c'est ce qui pousse DERRIÈRE elle.
+        if ((h >> 3) % 3 === 0) plantTree(x, r - 1); else addGarden(x, r - 1, "shrub");
+      }
+      // Le semis de fleurs des prés, entre le sentier et l'eau.
+      if (r !== null) beds.push({ x, y: r + 1, w: 1, h: Math.max(1, tops[x] - r - 1), kind: C.BL_WILD, dens: 0.5 });
+    }
+    /* Et la même prairie DERRIÈRE le quai maçonné. ⚠️ Ce n'est pas de la
+       décoration de remplissage : entre l'avenue du sud et l'esplanade il reste
+       trois à quatre rangées de pelouse rase, et une pelouse rase de quatre
+       rangées sur quarante de long est la définition d'un terre-plein. */
+    for (let x = x0; x < x1; x++) {
+      if (quayMix(x) <= 0.5 || tops[x] === null) continue;
+      beds.push({ x, y: AVE, w: 1, h: Math.max(1, tops[x] - C.TOWN_QUAY_H - AVE), kind: C.BL_WILD, dens: 0.34 });
     }
   }
   // ---- LE QUARTIER DES ARTISANS, à l'est. Trois parcelles (TOWN_HOUSES) plus
@@ -4740,6 +5165,11 @@ export function generateTownWorld() {
   //    quartier pavé. Le champ de foire, lui, garde sa terre battue — c'est un
   //    pré qu'on dalle un jour par semaine, pas une voie.
   for (let k = 0; k < alleys.length; k += 2) surface(alleys[k], alleys[k + 1], C.TR_COBBLE);
+  // 2 bis. LE GRAVIER (437) : les allées de PROMENADE — le parc et le sentier
+  //    de la rive sauvage. Ce ne sont pas des voies : rien n'y roule, on y
+  //    marche. Des pavés y auraient mis de la ville dans ce qui doit lire
+  //    comme un jardin ; la terre battue du 232 n'y mettait rien du tout.
+  for (let k = 0; k < gravel.length; k += 2) surface(gravel[k], gravel[k + 1], C.TR_GRAVEL);
   // 3. LE GOUDRON, par-dessus les pavés : la seule artère de la ville. Elle est
   //    peinte APRÈS pour n'avoir à décrire sa bande qu'une fois.
   for (let x = 0; x < W; x++) for (let dy = 0; dy < C.TOWN_MAIN_ST_W; dy++) surface(x, C.TOWN_MAIN_ST_Y0 + dy, C.TR_ASPHALT);
@@ -4750,6 +5180,57 @@ export function generateTownWorld() {
   {
     const cm = C.TOWN_CEMETERY, gateW = 2, gateX = cm.x + ((cm.w - gateW) >> 1);
     for (let y = cm.y + 1; y <= cm.y + cm.h; y++) for (let dx = 0; dx < gateW; dx++) surface(gateX + dx, y, C.TR_BRICK);
+  }
+  /* ═══════════════════════════════════════════════════════════════════════
+     ZIP 437 — LES MASSIFS, PEINTS APRÈS TOUT LE RESTE (voir `BL_*` et `beds`).
+     ─────────────────────────────────────────────────────────────────────────
+     ⚠️ ILS NE MARQUENT QUE DE LA PELOUSE. Ce seul test remplace un cas
+     particulier par allée, par kiosque, par banc et par berge : ce qui a été
+     recouvert entre-temps n'est plus de la pelouse, donc ne fleurit pas. Et
+     c'est aussi ce qui empêche un massif de pousser sous un décor solide.
+     ⚠️ LA DENSITÉ EST TIRÉE D'UN HACHAGE, PAS D'UN GÉNÉRATEUR : un massif
+     dessiné (`dens` absent) est plein, un semis de prairie est lacunaire — et
+     dans les deux cas la carte est la même chez les deux joueurs sans un octet
+     de réseau. */
+  /* ⚠️⚠️ ZIP 437 — LE BALAYAGE DES DÉCORS DE JARDIN, ET C'EST UN GARDE-FOU
+     GÉNÉRAL, PAS UN RATTRAPAGE. `addGarden` refuse de poser un buisson
+     ailleurs que sur de l'herbe — mais il le vérifie AU MOMENT OÙ IL POSE, et
+     une passe ultérieure peut très bien daller la case sous lui : c'est
+     exactement ce qui est arrivé à la jardinière du parc, enterrée sous le
+     parvis du kiosque, posé plus bas dans cette fonction. Le décor restait dans
+     la liste ET marquait sa case solide : un buisson invisible au milieu d'un
+     dallage, c'est-à-dire le mur invisible du 425, une fois de plus.
+     ⚠️ ON NE RÉORDONNE PAS LES PASSES POUR AUTANT. L'ordre du générateur est
+     déjà porteur de sens (le relief d'abord, le revêtement en dernier) ; le
+     rendre dépendant du mobilier le figerait. Un balayage final coûte une
+     boucle et vaut pour tout ce qu'on ajoutera. */
+  {
+    /* ⚠️⚠️ ON NE BALAYE QUE CE QUE `addGarden` A POSÉ, ET LE PREMIER JET NE LE
+       FAISAIT PAS. Écrit « tout prop de type jardinière / buisson / bloc », il
+       a emporté LES HUIT JARDINIÈRES DE LA PLACE CENTRALE — posées sur du
+       dallage depuis le 425, donc « pas sur de l'herbe », donc supprimées, avec
+       leur case rendue franchissable. Aucune erreur, aucune trace : juste une
+       place qui perd son mobilier. C'est `verify-vallee.mjs` qui l'a vu, et pas
+       par le mobilier — par un quartier bâti qui n'avait plus de raison qu'on y
+       aille. Un filtre par TYPE dit ce qu'une chose EST ; il fallait dire d'où
+       elle VIENT. */
+    for (let k = props.length - 1; k >= 0; k--) {
+      const q = props[k];
+      if (!q.gard) continue;
+      const i = id(q.x, q.y), g = ground[i];
+      if (g === C.G_GRASS || g === C.G_TOWN_LAWN) continue;
+      props.splice(k, 1); solid[i] = 0;
+    }
+  }
+  const bloom = new Uint8Array(W * H);
+  for (const b of beds) {
+    for (let y = b.y; y < b.y + b.h; y++) for (let x = b.x; x < b.x + b.w; x++) {
+      if (!inMap(x, y)) continue;
+      const i = id(x, y);
+      if (ground[i] !== C.G_TOWN_LAWN || solid[i] || objects[i] !== C.O_NONE || hedge[i]) continue;
+      if (b.dens !== undefined && townHash2(x * 3 + 17, y * 5 + 29) > b.dens) continue;
+      bloom[i] = b.kind;
+    }
   }
   /* ═══════════════════════════════════════════════════════════════════════
      ZIP 435 — LA PROFONDEUR ET LA BERGE, DEUX COUCHES DÉRIVÉES, APRÈS TOUT.
@@ -4812,11 +5293,27 @@ export function generateTownWorld() {
       if (x < W - 1 && y < H - 1) relax(i, id(x + 1, y + 1), DIA);
       if (x > 0 && y < H - 1) relax(i, id(x - 1, y + 1), DIA);
     }
-    for (let i = 0; i < W * H; i++) {
+    /* ⚠️⚠️ ZIP 437 — LE PLATEAU N'A PLUS LA MÊME LARGEUR TOUT AUTOUR DU LAC,
+       ET C'EST L'AUTRE MOITIÉ DE LA REMARQUE DE GUILLAUME. Un plateau de
+       largeur CONSTANTE dessine un liseré pâle qui suit le rivage à distance
+       fixe : le lac se retrouve cerné d'un halo régulier, c'est-à-dire peint au
+       pochoir — vu sur `eau-lac-sud.png` du 435, un anneau de deux cases et
+       demie sur toute la longueur. Corriger la forme de la rive sans corriger
+       ça, c'est remplacer un trait droit par un trait courbe et garder le
+       pochoir.
+       ⚠️ Dans la nature, un fond ne descend pas partout à la même pente : une
+       anse s'ensable et fait une plage, un cap plonge. On module donc la
+       LARGEUR DU PLATEAU par le même genre de bruit lisse que le rivage —
+       jamais par la profondeur elle-même, qui est mesurée et juste. L'échelle
+       reste ABSOLUE (§ note de TOWN_WATER_SHELF) : c'est la largeur qui varie
+       le long de la rive, pas l'unité. */
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const i = id(x, y);
       if (ground[i] !== C.G_WATER) continue;
-      // Le plateau est atteint à TOWN_WATER_SHELF cases, au-delà la teinte ne
-      // bouge plus. `dist` est en cinquièmes de case (le poids orthogonal).
-      const t = Math.min(1, (dist[i] / ORT - 1) / C.TOWN_WATER_SHELF);
+      // Le plateau est atteint à TOWN_WATER_SHELF cases (modulées), au-delà la
+      // teinte ne bouge plus. `dist` est en cinquièmes de case (poids ORT).
+      const shelf = Math.max(0.5, C.TOWN_WATER_SHELF * (1 + C.TOWN_SHELF_VAR * townNoise(x, y, C.TOWN_SHELF_PER, 5)));
+      const t = Math.min(1, (dist[i] / ORT - 1) / shelf);
       depth[i] = Math.round(Math.max(0, t) * 255);
     }
     // Berge : même vague, dans l'autre sens, sur la terre meuble uniquement.
@@ -4853,7 +5350,7 @@ export function generateTownWorld() {
       }
     }
   }
-  return { w: W, h: H, ground, objects, objHp, elev, solid, props, hedge, road, depth, shore };
+  return { w: W, h: H, ground, objects, objHp, elev, solid, props, hedge, road, bloom, depth, shore };
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -6320,7 +6817,10 @@ export function generateCourtWorld() {
       for (let y = sw.y; y < sw.y + sw.h + 1; y++) for (let x = sw.x; x < sw.x + sw.w; x++) doorGuard.add(`${x},${fy + y}`);
     }
   }
-  for (const dx of [0, 1]) for (const dy of [0, -1]) doorGuard.add(`${C.COURT_ENTRY.x + dx},${C.COURT_ENTRY.y + dy}`);
+  for (const b of Object.values(C.COURT_BUILDINGS)) {
+    const gy = courtFloorY0(b.ground);
+    for (const dx of [0, 1]) for (const dy of [0, -1, -2]) doorGuard.add(`${b.entry.x + dx},${gy + b.entry.y + dy}`);
+  }
   const addProp = (x, y, kind, blocks, extra) => {
     if (!inMap(x, y)) return;
     if (blocks && doorGuard.has(`${x},${y}`)) {
@@ -6333,7 +6833,13 @@ export function generateCourtWorld() {
 
   for (let f = 0; f < C.COURT_FLOORS.length; f++) {
     const y0 = courtFloorY0(f);
-    const groundFloor = f === 0, basement = f === 2;
+    /* ⚠️ 438 — « REZ-DE-CHAUSSÉE » VEUT DIRE « CELUI DE SON BÂTIMENT ». Écrit
+       `f === 0`, le test aurait donné à la mairie ni seuil, ni statue, ni
+       panneau — et surtout AUCUNE SORTIE : on serait entré dans un bâtiment
+       dont on ne peut plus ressortir, sans qu'aucune erreur ne le dise. */
+    const fl = C.COURT_FLOORS[f], bld = C.COURT_BUILDINGS[fl.bld] || C.COURT_BUILDINGS.court;
+    const isHall = fl.bld === "hall";
+    const groundFloor = bld.ground === f, basement = f === 2;
     // ---- L'ENVELOPPE : le couloir occupe tout le niveau, les pièces viennent
     // le découper. On pose donc le sol partout puis le mur d'enceinte.
     fill(0, y0, C.COURT_FLOOR_W, C.COURT_FLOOR_H, basement ? C.CT_STONE : C.CT_MARBLE);
@@ -6352,7 +6858,13 @@ export function generateCourtWorld() {
       if (r.floor !== f) continue;
       const rx = r.x, ry = y0 + r.y;
       border(rx, ry, r.w, r.h, C.CT_WALL);
-      fill(rx + 1, ry + 1, r.w - 2, r.h - 2, basement ? C.CT_STONE : (r.kind === "courtroom" ? C.CT_CARPET : C.CT_WOOD));
+      /* ⚠️ 438 — LE TAPIS EST UNE MATIÈRE D'APPARAT, PAS UNE DÉCORATION. Il ne
+         se pose que là où la ville reçoit : le prétoire, la salle du conseil, le
+         bureau du maire, la salle des mariages. Partout ailleurs c'est du
+         parquet — et c'est ce contraste qui dit lesquelles de ces huit portes
+         comptent, sans une plaque. */
+      const POSH = { courtroom: 1, council: 1, mayor: 1, civil: 1 };
+      fill(rx + 1, ry + 1, r.w - 2, r.h - 2, basement ? C.CT_STONE : (POSH[r.kind] ? C.CT_CARPET : C.CT_WOOD));
       for (const d of r.doors) {
         set(d.x, y0 + d.y, C.CT_DOOR);
         doors.push({ x: d.x, y: y0 + d.y, floor: f, room: r.key });
@@ -6384,18 +6896,36 @@ export function generateCourtWorld() {
     if (groundFloor) {
       // LE SEUIL. Deux cases au mur sud : c'est par là qu'on entre et qu'on
       // ressort, et c'est la seule ouverture du bâtiment.
-      set(C.COURT_ENTRY.x, y0 + C.COURT_ENTRY.y, C.CT_EXIT);
-      set(C.COURT_ENTRY.x + 1, y0 + C.COURT_ENTRY.y, C.CT_EXIT);
-      // La statue de la Justice entre les deux volées, au fond du hall : le
-      // point de fuite du couloir. Sans elle, on entre face à un mur nu.
-      addProp(22, y0 + 4, "justice", true);
-      addProp(23, y0 + 4, "justice2", true);   // moitié droite (le sprite fait deux cases)
-      // Le PANNEAU D'AFFICHAGE, à droite en entrant : c'est lui qui annonce
-      // l'ouverture prochaine des services (voir COURT_BOARD_ORDER).
-      addProp(26, y0 + 20, "board", true);   // hors de l'axe des portes (voir doorGuard)
-      addProp(19, y0 + 20, "plant", true);
+      set(bld.entry.x, y0 + bld.entry.y, C.CT_EXIT);
+      set(bld.entry.x + 1, y0 + bld.entry.y, C.CT_EXIT);
+      if (isHall) {
+        /* LA MAQUETTE DE LA VILLE, au fond du hall, dans l'axe de la porte.
+           ⚠️ C'EST LE POINT DE FUITE DE LA MAIRIE, et il fallait qu'il ne
+           ressemble en rien à la statue de la Justice du tribunal : un visiteur
+           qui entre doit savoir dans quel bâtiment il est AVANT de lire la
+           moindre plaque. Une maquette dit « ici on s'occupe de la ville ». */
+        addProp(20, y0 + 7, "cityModel", true);
+        addProp(21, y0 + 7, "cityModel2", true);
+        addProp(24, y0 + 7, "cityModel", true);
+        addProp(25, y0 + 7, "cityModel2", true);
+        // Le tableau des cours, à droite en entrant : c'est LUI le service qui
+        // marche (voir hallRates). Deux cases, comme le panneau du tribunal.
+        addProp(26, y0 + 21, "priceBoard", true);
+        addProp(19, y0 + 21, "urn", true);
+        addProp(19, y0 + 13, "bench", true); addProp(26, y0 + 13, "bench", true);
+      } else {
+        // La statue de la Justice entre les deux volées, au fond du hall : le
+        // point de fuite du couloir. Sans elle, on entre face à un mur nu.
+        addProp(22, y0 + 4, "justice", true);
+        addProp(23, y0 + 4, "justice2", true);   // moitié droite (le sprite fait deux cases)
+        // Le PANNEAU D'AFFICHAGE, à droite en entrant : c'est lui qui annonce
+        // l'ouverture prochaine des services (voir COURT_BOARD_ORDER).
+        addProp(26, y0 + 20, "board", true);   // hors de l'axe des portes (voir doorGuard)
+        addProp(19, y0 + 20, "plant", true);
+      }
     }
     if (f === 1) addProp(22, y0 + 4, "plant", true);
+    if (f === 4) { addProp(20, y0 + 8, "urn", true); addProp(25, y0 + 8, "urn", true); addProp(22, y0 + 12, "portrait", true); }
     if (basement) { addProp(22, y0 + 4, "crate", true); addProp(23, y0 + 5, "crate", true); }
   }
   return { w: W, h: H, tile, solid, props, doors, rooms: C.COURT_ROOMS };
@@ -6440,6 +6970,100 @@ function courtFurnish(r, rx, ry, addProp, set, fill) {
       }
       break;
     }
+    /* ═══════════ ZIP 438 — LES PIÈCES DE LA MAIRIE. ══════════════════════
+       ⚠️ MÊME RÈGLE QUE LES AUTRES : tout se DÉRIVE du rectangle. Les pièces de
+       l'hôtel de ville ont changé trois fois de taille pendant l'écriture du
+       plan, et pas une position de meuble n'a eu à être retouchée. */
+    case "cadastre": {
+      /* LE CADASTRE. Un guichet en L : le comptoir barre la pièce, et le
+         GRAND PLAN MURAL est au fond, visible depuis le hall par la porte —
+         c'est lui qu'on vient voir. Les cartonniers à plans (les meubles à
+         tiroirs plats) disent le métier mieux qu'une plaque. */
+      for (let x = ix + 3; x < ix + iw - 1; x++) addProp(x, iy + 6, "counter", true);
+      addProp(ix + 2, iy + 6, "chair", true);
+      for (let k = 0; k < 4; k++) addProp(ix + 2 + k * 3, iy, "wallMap", true);
+      for (let k = 0; k < 3; k++) addProp(ix + iw - 1, iy + 2 + k * 3, "planChest", true);
+      addProp(ix, iy + 1, "planChest", true);
+      addProp(ix + 1, iy + ih - 1, "plant", true);
+      addProp(ix + iw - 1, iy + ih - 1, "plant", true);
+      // La salle de consultation, sous le comptoir : des tables où l'on déroule
+      // les plans, et les bancs qui vont avec. Sans elles, la moitié sud de la
+      // pièce est un parquet nu de dix cases sur six.
+      for (let k = 0; k < 3; k++) {
+        addProp(ix + 2 + k * 5, iy + 9, "table", true);
+        addProp(ix + 2 + k * 5, iy + 8, "chair", true);
+        addProp(ix + 2 + k * 5, iy + 11, "bench", true);
+      }
+      break;
+    }
+    case "civil": {
+      /* L'ÉTAT CIVIL, c'est-à-dire la salle des mariages. Des rangs de chaises
+         face à une estrade et à un pupitre : le seul endroit de Valley Town
+         dessiné pour qu'il s'y passe quelque chose entre DEUX joueurs. Il n'est
+         pas encore branché sur une mécanique — mais il est prêt, et il se lit. */
+      fill(ix + 2, iy + 1, iw - 4, 3, C.CT_DAIS);
+      addProp(cx, iy + 2, "lectern", true);
+      addProp(cx - 3, iy + 2, "urn", true); addProp(cx + 3, iy + 2, "urn", true);
+      addProp(cx - 4, iy + 1, "flag", true); addProp(cx + 4, iy + 1, "flag", true);
+      for (let k = 0; iy + 6 + k * 2 < iy + ih - 1; k++) {
+        addProp(cx - 4, iy + 6 + k * 2, "pew", true);
+        addProp(cx + 2, iy + 6 + k * 2, "pew", true);
+      }
+      addProp(ix, iy + ih - 1, "plant", true); addProp(ix + iw - 1, iy + ih - 1, "plant", true);
+      break;
+    }
+    case "prices": {
+      /* LA SALLE DES COURS. Le grand tableau au fond, un pupitre de criée, des
+         bancs devant : on y vient LIRE, donc tout regarde dans la même
+         direction. C'est la seule pièce des deux bâtiments qui rende un
+         service qui marche aujourd'hui (voir `hallRates` / le panneau). */
+      for (let k = 0; k < 3; k++) { addProp(cx - 2 + k * 2, iy, "priceBoard", true); }
+      addProp(cx, iy + 3, "lectern", true);
+      for (let k = 0; iy + 6 + k * 2 < iy + ih - 1; k++) {
+        addProp(cx - 4, iy + 6 + k * 2, "bench", true);
+        addProp(cx + 3, iy + 6 + k * 2, "bench", true);
+      }
+      addProp(ix, iy + 1, "cabinet", true); addProp(ix + iw - 1, iy + 1, "cabinet", true);
+      addProp(ix + iw - 1, iy + ih - 1, "plant", true); addProp(ix, iy + ih - 1, "plant", true);
+      addProp(ix + 1, iy + 3, "urn", true); addProp(ix + iw - 2, iy + 3, "urn", true);
+      for (let k = 0; k < 2; k++) { addProp(ix + 1, iy + 6 + k * 4, "planChest", true); addProp(ix + iw - 2, iy + 6 + k * 4, "planChest", true); }
+      break;
+    }
+    case "council": {
+      /* LA SALLE DU CONSEIL. Une table OVALE : c'est la seule forme qui dise
+         « on délibère » plutôt que « on juge ». Elle est faite de deux sprites
+         (le tour et le centre) assemblés par le générateur, comme le siège du
+         juge — le rendu n'a rien à savoir d'un meuble à cheval sur douze cases. */
+      const tw2 = iw - 6, th2 = 5, tx = ix + 3, ty = iy + 4;
+      for (let y = ty; y < ty + th2; y++) for (let x = tx; x < tx + tw2; x++) {
+        const edge = (y === ty || y === ty + th2 - 1 || x === tx || x === tx + tw2 - 1);
+        const corner = (y === ty || y === ty + th2 - 1) && (x <= tx + 1 || x >= tx + tw2 - 2);
+        if (corner) continue;                      // les angles coupés font l'ovale
+        addProp(x, y, edge ? "ovalTable" : "ovalTable2", true);
+      }
+      for (let x = tx + 2; x < tx + tw2 - 2; x += 3) {
+        addProp(x, ty - 1, "chair", true); addProp(x, ty + th2, "chair", true);
+      }
+      addProp(cx - 5, iy + 1, "flag", true); addProp(cx + 4, iy + 1, "flag", true);
+      addProp(cx, iy + 1, "portrait", true);
+      addProp(ix, iy + ih - 1, "plant", true); addProp(ix + iw - 1, iy + ih - 1, "plant", true);
+      break;
+    }
+    case "mayor": {
+      /* LE BUREAU DU MAIRE. Même triangle que les bureaux du tribunal (bureau,
+         fauteuil, deux chaises), mais en GRAND et avec ce qui distingue un élu
+         d'un fonctionnaire : le globe, le portrait, la bibliothèque pleine. */
+      addProp(cx, iy + 3, "desk", true); addProp(cx + 1, iy + 3, "desk", true);
+      addProp(cx, iy + 2, "chair", true);
+      addProp(cx - 2, iy + 6, "chair", true); addProp(cx + 3, iy + 6, "chair", true);
+      addProp(cx + 3, iy + 2, "globe", true);
+      addProp(cx, iy, "portrait", true);
+      for (let k = 0; k < 5; k++) addProp(ix + k, iy, "shelf", true);
+      addProp(ix, iy + ih - 1, "plant", true);
+      addProp(ix + iw - 1, iy + 1, "cabinet", true);
+      addProp(ix + iw - 2, iy + ih - 1, "planChest", true);
+      break;
+    }
     case "office": {
       // Bureau, fauteuil derrière, deux chaises de visiteur devant : c'est ce
       // triangle qui dit « on vient y demander quelque chose ».
@@ -6460,6 +7084,16 @@ function courtFurnish(r, rx, ry, addProp, set, fill) {
       for (let k = 0; k < 3; k++) addProp(ix + iw - 1 - k, iy, "cabinet", true);
       addProp(ix, iy + ih - 1, "plant", true);
       for (let k = 0; k < 2; k++) addProp(ix + 2 + k * 4, iy + ih - 2, "bench", true);
+      /* ⚠️ 438 — DEUX RANGÉES D'ATTENTE DE PLUS, ET DES PLANTES AUX ANGLES.
+         Regardé sur `render-mairie.mjs` : une pièce de dix-sept cases sur
+         treize avec un comptoir et deux bancs est un HANGAR. Ce qui remplit un
+         guichet public, ce sont les gens qui attendent — donc les sièges. */
+      for (let k = 0; iy + 5 + k * 3 < iy + ih - 3; k++) {
+        addProp(ix + 2, iy + 5 + k * 3, "bench", true);
+        addProp(ix + iw - 3, iy + 5 + k * 3, "bench", true);
+      }
+      addProp(ix + iw - 1, iy + ih - 1, "plant", true);
+      addProp(cx, iy + ih - 1, "board", true);
       break;
     }
     case "robing": {

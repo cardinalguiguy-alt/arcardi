@@ -1410,3 +1410,236 @@ doivent décrire le même véhicule.
   bouclants qu'un rendu ne sait pas fabriquer, et un PNG dans `fermeArt` ouvrirait un troisième
   pipeline. **La contrainte « tout en `fillRect` » n'est pas de l'ascèse : c'est ce qui rend les
   bancs possibles**, et ce zip vient de montrer ce que coûte un dessin qu'aucun banc ne voit.
+
+
+---
+
+## 20. ZIP 437 — LA RIVE, LE PARC, LES ARBRES
+
+Demande de Guillaume, en trois morceaux et une phrase de méthode : « l'effet de profondeur des
+lacs et étangs n'a pas vraiment de cohérence ou de réalisme si le rebord est toujours totalement
+droit, tracé comme à la règle, **vérifie ton biais** » ; le parc « à redessiner pour le rendre
+plus fleuri et intéressant, et à décaler un bloc plus loin car trop collé au centre » ; et « plus
+de feuilles, et des formes différentes sans perdre l'identité générale » pour les arbres, sur le
+modèle des essences d'une image de référence (sapin, saule, magnolia, mimosa, pommier). Plus une
+contrainte de rendu : « net et bien détaillé, **pas d'effet blur ou sale** ».
+
+### ⚠️⚠️ LE BIAIS ÉTAIT ÉCRIT DANS LE DÉPÔT, EN TOUTES LETTRES, DEPUIS DEUX ZIPS
+
+Le 435 avait corrigé l'étang du parc et **nommé** le défaut du lac du sud dans le même
+commentaire : *« son rivage est `sin(x)`, donc une FONCTION DE x, donc incapable de revenir sur
+elle-même — 75 colonnes plates sur 95 »*. Le 436 a refait la pierre et a écrit noir sur blanc,
+dans « ce que ça ne fait pas », que **le lac gardait sa forme**. Deux zips ont donc mesuré le
+défaut, l'ont documenté, et sont passés à côté.
+
+> **Un défaut mesuré et laissé en place revient toujours, et il revient par la bouche de
+> Guillaume.** La ligne « ce que ça ne fait pas » n'est pas un aveu qui absout : c'est une dette
+> datée. Le biais n'était pas de ne pas voir — c'était de croire qu'écrire suffisait.
+
+### La rive : un CHAMP, plus une ligne
+
+`shore(x)` rendait un `y` par colonne. Une telle courbe ne peut pas se replier : ni crique qui se
+referme, ni langue de terre, ni îlot, et une pente bornée par l'amplitude de ses deux sinus. Elle
+est remplacée par **l'isoligne d'un champ signé `s(x, y)`** (voir `TOWN_LAKE_*`) : dès que la
+pente du bruit en `y` dépasse 1, l'isoligne se replie. Deux passes de lissage cellulaire — les
+mêmes qu'au 435 pour l'étang, pour la même raison (un contour organique rastérisé sème des ergots
+d'une case, qui se lisent comme des pixels oubliés).
+
+⚠️ **ET LE QUAI RESTE DROIT, DÉLIBÉRÉMENT.** Un ouvrage maçonné EST droit — c'est ce qui le fait
+lire comme un quai. Ce qui n'allait pas, c'est que la ville en avait posé **quatre-vingt-seize
+cases**, donc pas une seule berge naturelle sur tout le lac. La pierre ne court plus qu'**autour
+du ponton** (emprise dérivée de `TOWN_PIER`, raccord cubique sur sept cases), et les deux ailes
+sont rendues à la nature : **sentier de gravier, blocs erratiques, roselières, saules, prairie
+fleurie**. Mesuré par `render-parc.mjs`, hors quai : plus longue rive plate **24 → 4 colonnes**,
+**10 criques profondes**, la rive parcourt **7 rangées**.
+
+⚠️⚠️ **ET LA PROFONDEUR AUSSI ÉTAIT UN POCHOIR.** Un plateau de largeur constante dessine un
+liseré pâle qui suit le rivage à distance fixe : corriger la forme de la rive sans corriger ça,
+c'est remplacer un trait droit par un trait courbe et **garder le pochoir**. La largeur du
+plateau est désormais modulée par un bruit lisse (`TOWN_SHELF_VAR`) — une anse s'ensable, un cap
+plonge. Écart-type mesuré : **0,91 case** pour une moyenne de 4,4.
+
+### Le parc : huit cases plus loin, et quatre couleurs
+
+`TOWN_PARK` passe de x=108 à x=116. La place finit en x=107 : il n'y avait **pas une seule case**
+entre le dallage de la place et la pelouse du parc, donc deux espaces publics qui se lisaient
+comme un seul, immense et mou. ⚠️ **Et c'est la seule ligne qu'il a fallu toucher** :
+`TOWN_POND` et `TOWN_KIOSK` sont désormais **dérivés** de `TOWN_PARK`. Avant, ils portaient leurs
+coordonnées absolues — le paramètre qui en double un autre, et un déménagement du parc les aurait
+laissés sur place, dans l'herbe, sans qu'aucune erreur ne le dise.
+
+Ce qu'on y ajoute est de la **destination**, pas de la décoration : un tour d'étang qu'on peut
+suivre (dérivé de l'eau déjà creusée, pas d'une ellipse écrite à la main), un **belvédère** dallé
+avec deux bancs face à l'eau, **quatre parterres** d'espèces différentes — un par quadrant, pour
+que le parc ait quatre coins distincts — et une frange de prairie fleurie sous les arbres du
+pourtour. Le sol des allées passe de la terre battue du zip 232 au **gravier** (`TR_GRAVEL`).
+
+⚠️ **LES MASSIFS SONT UNE COUCHE, PAS UN SOL NI UN DÉCOR** (`bloom`, comme `road` et `hedge`).
+Un `G_*` de plus aurait rouvert les quarante tests `ground === G_PATH` du moteur ; deux cents
+props auraient été deux cents objets à trier par ancrage à chaque image. Et la couche se peint en
+avant-dernière passe : elle ne marque que ce qui est **encore** de la pelouse, donc une allée, un
+kiosque ou une berge tracés entre-temps l'effacent tout seuls.
+
+### Les arbres : un moule, onze essences
+
+`oakTree` était trois `arc()` et douze pixels épars ; `pineTree`, quatre triangles. Onze essences
+les remplacent **à Valley Town seulement** (la ferme n'est pas touchée — décision du 424 : ne pas
+mêler deux changements visuels dans la même livraison), toutes cuites sur **un seul moule** qui
+fixe la lumière et la matière ; la table ne décrit que ce qui distingue une essence : silhouette,
+palette, floraison, port retombant.
+
+⚠️ **L'ESSENCE SE DÉDUIT, ELLE NE SE DIFFUSE PAS ET NE SE STOCKE PAS.** Elle se lit dans ce que la
+case a déjà — son objet (`O_TREE`/`O_TREE2`, donc collision et coupe **inchangées**), sa berge,
+son quartier — plus un hachage pur. Un saule au bord de l'eau, un pommier au verger, un cyprès au
+cimetière et sur la terrasse : les trois endroits où l'essence **dit** quelque chose.
+
+⚠️ **CE QUI FAIT LE FEUILLAGE EST LE CROISSANT D'OMBRE.** Premier jet : des paquets de deux ou
+trois pixels tirés au hasard — un coussin vert avec du grain dessus, c'est-à-dire exactement
+l'effet « sale » que Guillaume avait exclu. Un houppier est un **empilement de masses** : des
+disques de 2 à 4 px, chacun avec un arc plus sombre en dessous. Sans cet arc, trente disques
+clairs se recollent en une seule tache.
+
+### Ce que ça ne fait pas
+
+- **la ferme n'est touchée par rien.** Ses chemins restent sur la tuile de 16 px du zip 232, ses
+  arbres restent les deux ronds verts du 232, et **aucun banc ne regarde le sol de la ferme** ;
+- **les trois autres bords du lac** (est, ouest, sud) restent les coupes droites du rectangle :
+  seul le rivage NORD, celui qu'on longe, a été refait. Le sud touche le bas de la carte ;
+- **rien ne flotte sur le lac.** Pas de barque, pas de canard, pas de pêcheur — le lac est un but
+  de promenade, pas encore un lieu ;
+- **le kiosque à musique n'a toujours aucun usage** : il a sa place, ses allées et son parvis, et
+  c'est un rendez-vous daté qui manque (`CLAUDE.md` §13), pas un décor ;
+- **aucun sprite n'est passé par Blender**, proposé par Guillaume, refusé pour la raison du §9 :
+  à 32 px ce qu'on achèterait est l'éclairage, et un PNG dans `fermeArt` ouvrirait un troisième
+  pipeline — c'est la contrainte « tout en `fillRect` » qui rend les bancs possibles.
+
+
+---
+
+## 21. ZIP 438 — LES ARBRES REFAITS (SECONDE FOIS), L'HERBE, ET L'HÔTEL DE VILLE
+
+### ⚠️⚠️⚠️ « C'EST DÉGUEULASSE » — ET LE BANC DU 437 APPLAUDISSAIT
+
+Verdict de Guillaume sur les arbres du 437 : « c'est dégueulasse […] on dirait une friche […] ton
+rendu est vraiment sale ». Il avait raison, et la cause est nommable :
+
+> Le 437 dessinait une SILHOUETTE (un masque elliptique lobé) puis la texturait par TIRAGES —
+> trente disques, vingt-six pixels épars, un cerne. À 32 px, un semis de pixels de tons voisins ne
+> fait pas de la matière : il fait du BRUIT. Et son banc mesurait le « grain » — le nombre de
+> frontières de ton par pixel — **en le prenant pour de la qualité**. Le grain montait, la propreté
+> baissait, et le banc applaudissait.
+
+C'est le §10 de `CLAUDE.md` retourné : *un banc qui PASSE pendant que Guillaume voit un défaut ne
+dit pas que la chose est bonne — il dit qu'on mesure autre chose.* Le contrôle a donc été
+remplacé, et il a fallu **trois** rédactions pour trouver la bonne grandeur :
+
+| version | ce qu'elle mesurait | pourquoi elle était fausse |
+|---|---|---|
+| 437 | le grain (frontières de ton / pixel) | récompensait le bruit |
+| 438-a | le pixel isolé | accusait la pointe d'un rameau, le cœur d'une fleur — **elle interdisait le pixel art** |
+| 438-b | les îlots de moins de 4 px | accusait les éclats d'un dégradé (20 % sur des dessins propres) |
+| 438-c | **les îlots flottant dans un APLAT** (tout leur pourtour d'une seule couleur), en **huit** voisins | c'est exactement ce que l'œil appelle « sale » |
+
+⚠️ La connexité à huit voisins n'est pas un détail : à quatre, un cerne d'un pixel qui descend en
+diagonale est une suite de pixels qui ne se touchent que par les coins — le banc accusait le
+contour lui-même, 45 « points perdus » sur un sapin impeccable.
+
+Mesuré, ancien chêne **1,3 %** de points perdus, nouvelles essences **0 à 0,4 %**.
+
+### Le procédé a changé : la silhouette n'est plus dessinée, elle est le RÉSULTAT
+
+Un houppier est **l'union d'une dizaine de bouquets**, et chaque bouquet est une forme pleine,
+cernée, ombrée en trois tons francs. Aucun pixel n'est tiré au hasard : tout ce qu'on voit est le
+bord d'une forme. Trois conséquences :
+
+1. le contour extérieur est festonné tout seul — plus d'harmoniques à régler ;
+2. **chaque bouquet porte son propre arc d'ombre**, et c'est LUI qui détache une masse de la
+   suivante. Sans cet arc, dix bouquets clairs se recollent en un coussin ;
+3. les fleurs deviennent des fleurs — une croix de cinq pixels et un cœur — au lieu de confettis.
+
+⚠️ **LE GABARIT PASSE DE 32×48 À 48×64**, et c'est la vraie raison de l'échec du 437 : à 32 px de
+large, dix bouquets de six pixels ne tiennent pas, on ne pouvait dessiner que des ronds.
+
+⚠️ **ET ILS BOUGENT.** Trois images par essence et par saison ; les bouquets HAUTS se décalent d'un
+pixel, les bas ne bougent pas — un arbre plie par la cime. La phase vient du hachage de la case :
+sans elle, les 856 arbres de la ville changent d'image à la même milliseconde et la ville bat comme
+un cœur. Rien ne circule sur le réseau.
+
+### Trois défauts trouvés par le banc, à la première passe
+
+* la flèche du cyprès **sortait du canevas** par le haut et se faisait raboter (§4, le piège n°1) ;
+* le liseré clair faisait **le tour** du houppier au lieu de son seul bord nord-ouest : l'arbre
+  était détouré en vert vif. La cause : « si la case de gauche OU celle du dessus est vide, c'est
+  le nord-ouest » — vrai d'à peu près tout le contour d'une forme ronde. On somme désormais les
+  directions VIDES sur un disque de rayon 2 ;
+* le bouleau sortait **en beignet** : huit bouquets sur un anneau étroit ne couvrent pas le centre.
+
+### L'herbe : un pavé de 64 px, plus une tuile
+
+« On dirait une friche » visait aussi le sol. L'herbe de la ville était trois tuiles de 16 px
+tirées par `(x*37+y*17)%3` : sur un parc de 34 cases, un damier de trois motifs répété cinquante
+fois. Elle passe au **pavé de 4×4 tuiles**, comme les revêtements (434), avec de larges **plaques**
+de verts voisins qu'une tuile de 16 px ne peut pas porter.
+
+⚠️ **ET LES TOUFFES SONT SUR UNE SUITE R2, PAS SUR DEUX SUITES D'OR.** Premier jet :
+`x = frac(k·φ)`, `y = frac(k·φ²·7)`. Deux suites unidimensionnelles dont le rapport est presque
+rationnel **alignent les points sur des droites** : la pelouse est sortie rayée verticalement d'un
+bout à l'autre du parc, pire que la tuile qu'on remplaçait.
+
+### Les massifs ont enfin de la terre et une bordure
+
+Le 437 posait des fleurs SUR DU GAZON : c'est pourquoi le parc avait l'air d'une friche fleurie et
+non d'un jardin. Ce qui dit « quelqu'un s'en occupe », ce n'est pas la fleur — c'est la **terre
+retournée** dessous et la **pierre** qui la retient. Les deux se déduisent du voisinage (une case
+dont les quatre voisines fleurissent est au cœur du massif), donc zéro octet de données en plus.
+La prairie sauvage, elle, n'a ni l'une ni l'autre : une prairie n'a pas de bord.
+
+### L'HÔTEL DE VILLE, second intérieur de Valley Town
+
+⚠️⚠️ **IL EST DANS LA MÊME GRILLE QUE LE TRIBUNAL, ET C'EST LA DÉCISION STRUCTURANTE.** Deux voies
+existaient : une ZONE de plus (`m.zone === "hall"`), ou deux NIVEAUX de plus dans la carte du
+tribunal. La première demandait de retrouver les **vingt-cinq** endroits de `FermeGame.js` qui
+testent `zone === "court"` — et en oublier un ne lève rien. La seconde ne coûte rien : la zone
+reste « court », les vingt-cinq tests restent vrais, `courtFloorOf(y)` continue de dire où l'on
+est, et **deux joueurs dans deux bâtiments différents ne peuvent pas se confondre puisque leurs
+`y` diffèrent**. C'est le raisonnement du 426 (« les trois niveaux tiennent dans une seule grille,
+le niveau se lit dans y ») étendu d'un bâtiment, sans un octet de réseau en plus.
+
+**Le plan n'est pas celui du tribunal, et c'est le point.** Un palais de justice est un couloir
+bordé de portes closes ; une mairie est un grand hall public. Les quatre pièces du rez-de-chaussée
+ont donc **deux portes chacune** sur le hall, et l'étage n'en a qu'une par pièce — c'est ce
+contraste qui fait lire « bâtiment public » plutôt que « niveau de jeu ». Huit pièces :
+
+| niveau | pièces |
+|---|---|
+| rez-de-chaussée | 🗺️ cadastre · 💍 salle des mariages · 📈 **salle des cours** · 💁 accueil |
+| étage | 🏛️ salle du conseil · 🎩 bureau du maire · 🗄️ archives municipales · 📐 bureau du géomètre |
+
+Onze meubles neufs qu'on ne voit pas au tribunal : la **maquette de la ville** sous vitrine (le
+point de fuite du hall — il fallait qu'on sache dans quel bâtiment on est avant de lire une
+plaque), le plan mural du cadastre, les cartonniers à plans, le tableau des cours, la table ovale
+du conseil, le globe, le pupitre, les urnes fleuries, le portrait officiel.
+
+### 📈 LE TABLEAU DES COURS — le premier service public de Valley Town qui MARCHE
+
+⚠️ Il ne coûte **ni schéma, ni réseau, ni état** : les cours sont une pure fonction du numéro de
+jour (`E.marketRate`), donc identiques chez les deux joueurs par construction. C'est le patron déjà
+écrit trois fois (jour de marché, jour de service de Carla, jour d'orage).
+
+⚠️ **ET IL ANNONCE LES QUATRE PROCHAINS JOURS**, ce qui est tout l'intérêt. Le panneau du marché
+dit déjà les cours du jour — mais on le lit une fois arrivé au marché, c'est-à-dire trop tard pour
+décider ce qu'on charge. Un tableau qui dit « le poisson sera à +24 dans deux jours » transforme le
+voyage en **décision**, et c'est la question ouverte du §13 de `CLAUDE.md` (« le voyage est-il
+devenu une corvée ? ») prise par l'autre bout : on ne raccourcit pas le trajet, on donne une raison
+de le planifier. Quatre jours et pas dix — au-delà on ne lit plus un tableau, on lit un tableur.
+
+### Ce que ça ne fait pas
+
+- **l'église n'a toujours pas d'intérieur**, et elle continue de le dire plutôt que de laisser
+  croire à une porte cassée ;
+- **le cadastre, l'état civil et le conseil sont des PIÈCES, pas des services.** Ils sont dessinés,
+  meublés, nommés et décrits — le seul guichet qui rende quelque chose est la salle des cours ;
+- **la ferme n'est toujours touchée par rien** : ses chemins ET ses arbres restent ceux du zip 232.
+  L'écart de finition entre les deux cartes est maintenant frappant, et c'est assumé (décision du
+  424) — mais c'est la dette la plus visible du projet ;
+- **aucun résident n'entre dans les deux bâtiments.** Les intérieurs sont vides de monde.

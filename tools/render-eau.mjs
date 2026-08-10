@@ -150,7 +150,21 @@ console.log("\n=== 1. la rectitude du rivage ===\n");
    unité dans laquelle « la rive traverse la case » veut dire quelque chose, et
    c'est aussi ce qui rend la mesure comparable à l'ancien rendu (qui ne pouvait
    pas descendre sous 16). */
-function shoreRuns(sh, W, H) {
+/* ⚠️⚠️ 437 — ON NE MESURE PLUS LA RIVE LÀ OÙ ELLE EST MAÇONNÉE, et c'est la
+   même correction que celle appliquée au lac du sud dans `render-parc.mjs` : un
+   OUVRAGE est droit, c'est ce qui le fait lire comme un ouvrage. Le belvédère
+   du 437 pose quatre cases de terrasse au bord de l'étang, donc 64 px de rive
+   parfaitement rectiligne — et le banc a crié, à juste titre selon sa règle,
+   sur quelque chose de voulu. Compter ça comme un défaut aurait poussé à tordre
+   une terrasse, c'est-à-dire à casser du juste pour faire taire une mesure.
+   La zone exclue est passée en pixels, dérivée de la carte : aucune coordonnée
+   n'est réécrite ici. */
+function shoreRuns(sh, W, H, skip) {
+  const skipped = (x, y) => {
+    if (!skip) return false;
+    for (const s2 of skip) if (x >= s2.x && x < s2.x + s2.w && y >= s2.y - 2 && y < s2.y + s2.h + 2) return true;
+    return false;
+  };
   const isW = (x, y) => {
     if (x < 0 || y < 0 || x >= W || y >= H) return false;
     const i = (y * W + x) * 4, r = sh.px[i], g = sh.px[i + 1], b = sh.px[i + 2];
@@ -159,6 +173,7 @@ function shoreRuns(sh, W, H) {
   };
   const edgeH = new Uint8Array(W * H), edgeV = new Uint8Array(W * H);
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    if (skipped(x, y)) continue;
     if (isW(x, y) !== isW(x, y + 1)) edgeH[y * W + x] = 1;   // frontière horizontale
     if (isW(x, y) !== isW(x + 1, y)) edgeV[y * W + x] = 1;   // frontière verticale
   }
@@ -168,7 +183,15 @@ function shoreRuns(sh, W, H) {
   return { hRun, vRun };
 }
 {
-  const W = VP.w * T, H = VP.h * T, r = shoreRuns(etang, W, H);
+  // Les cases DALLÉES qui touchent l'étang, en pixels de la planche : elles
+  // sont trouvées sur la carte, jamais écrites à la main.
+  const built = [];
+  for (let y = VP.y; y < VP.y + VP.h; y++) for (let x = VP.x; x < VP.x + VP.w; x++) {
+    if (x < 0 || y < 0 || x >= tw.w || y >= tw.h) continue;
+    if (tw.ground[y * tw.w + x] !== C.G_PATH_STONE) continue;
+    built.push({ x: (x - VP.x) * T, y: (y - VP.y) * T, w: T, h: T });
+  }
+  const W = VP.w * T, H = VP.h * T, r = shoreRuns(etang, W, H, built);
   /* ⚠️ LE SEUIL EST EXPRIMÉ EN PIXELS ET IL EST ABSOLU — c'est voulu, et c'est
      l'inverse de la leçon du 434 (« un seuil dans une unité qui dépend du décor
      devient faux quand le décor change »). Ici l'unité NE dépend pas du décor :
@@ -307,7 +330,12 @@ console.log("\n=== 5. l'étang n'a rien noyé ===\n");
      levé — il y avait juste trois massifs au lieu de quatre, et il aurait fallu
      les compter pour s'en apercevoir. C'est ce que fait cette ligne. */
   ok(kinds.topiary === 4, "les quatre massifs taillés sont posés", `${kinds.topiary || 0} massif(s)`);
-  ok(kinds.bench === 2, "les deux bancs de l'étang sont posés", `${kinds.bench || 0} banc(s)`);
+  /* ⚠️ 437 — « AU MOINS DEUX » ET PLUS « EXACTEMENT DEUX ». Le parc a gagné un
+     belvédère et deux bancs d'allée ; un contrôle qui fige un NOMBRE interdit
+     d'en ajouter, alors que ce qu'on veut savoir est « peut-on s'asseoir au
+     bord de l'eau ». Le compte exact reste juste pour les massifs taillés, qui
+     sont quatre par construction (un par quadrant). */
+  ok((kinds.bench || 0) >= 2, "on peut s'asseoir au bord de l'étang", `${kinds.bench || 0} banc(s)`);
   let dry = 0;
   for (const q of tw.props) if (inPark(q) && tw.ground[q.y * tw.w + q.x] === C.G_WATER) dry++;
   ok(dry === 0, "aucun décor du parc n'a les pieds dans l'eau", `${dry} décor(s) noyé(s)`);

@@ -4,12 +4,14 @@
 Il remplace l'exploration du dépôt pour tout ce qui est global. Le README est un journal
 chronologique inversé : c'est de l'**histoire**, pas de l'orientation.
 
-État à jour du **zip 436**. Chantier actif : **rendre Valley Town habitable au regard** — le
+État à jour du **zip 438**. Chantier actif : **rendre Valley Town habitable au regard** — le
 taxi y roule droit et est enfin dessiné comme une voiture, l'hôtel de ville tient debout, la
-place a des pigeons, les rues ont un revêtement (434), l'eau a une rive et un fond (435), et
-**toute la pierre de la Haute-Ville est refaite** (436 : marches, falaise, limon, dallage).
-Tout ce qui concerne la ville, ses habitants ET **ses pièges** est dans
-**`components/ferme/README.md`**, qui fait autorité ; les bancs sont dans **`tools/README.md`**.
+place a des pigeons, les rues ont un revêtement (434), l'eau a une rive et un fond (435), toute
+la pierre de la Haute-Ville est refaite (436), le lac du sud a enfin une vraie rive et le parc est
+fleuri (437), et **les arbres, l'herbe et les massifs sont refaits pendant que l'HÔTEL DE VILLE
+ouvre ses huit pièces** (438). Tout ce qui concerne la ville, ses habitants
+ET **ses pièges** est dans **`components/ferme/README.md`**, qui fait autorité ; les bancs sont
+dans **`tools/README.md`**.
 **`candyluge` et `crystal` sont EN PAUSE.**
 
 ⚠️⚠️⚠️ **LA CLOSURE DE LA BOUCLE DE RENDU A COÛTÉ DEUX FONCTIONNALITÉS EN DEUX ZIPS. C'EST
@@ -35,6 +37,72 @@ sont exactement celles que Guillaume a nommées (« un écart flagrant de qualit
 c'est un écart de DATE, et il se lit sur une carte du dépôt sans regarder une image. ⚠️ Corollaire
 opérationnel : **la question « ce dessin est-il regardable par un banc ? » est une question de
 QUALITÉ, pas d'outillage**, et elle se pose avant d'écrire le premier `fillRect`.
+
+⚠️⚠️⚠️ **UN BANC PEUT MESURER L'EXACT CONTRAIRE DE CE QU'ON VEUT, ET APPLAUDIR PENDANT QUE LE
+DESSIN SE DÉGRADE** (438). Le 437 a livré des arbres que Guillaume a jugés « dégueulasses […]
+vraiment sales » ; son banc, lui, mesurait le **grain** — le nombre de frontières de ton par
+pixel — et le prenait pour de la qualité. *Le grain montait, la propreté baissait, et le banc
+applaudissait.* ⚠️ **Le contrôle a dû être écrit QUATRE fois avant de mesurer la bonne chose** :
+« le pixel isolé » interdisait le pixel art (elle accusait la pointe d'un rameau et le cœur d'une
+fleur) ; « les îlots de moins de quatre pixels » accusait les éclats d'un dégradé ; la bonne
+grandeur est **l'îlot qui flotte dans un APLAT**, en connexité à **huit** voisins — à quatre, un
+cerne d'un pixel en diagonale n'est plus connexe et le banc accuse le contour lui-même.
+⚠️⚠️ **ET LA LEÇON DE DESSIN QUI VA AVEC, VRAIE PARTOUT : ON NE TEXTURE PAS UNE SILHOUETTE, ON
+ASSEMBLE DES FORMES.** Dessiner un contour puis le remplir de tirages donne du bruit à toutes les
+échelles ; dessiner dix masses pleines, cernées, chacune avec son arc d'ombre, donne une matière —
+et la silhouette sort toute seule, festonnée. Aucun pixel tiré au hasard nulle part. C'est aussi ce
+que contiennent les références de Guillaume, qu'il suffit de regarder de près : **pas un pixel
+isolé**.
+
+⚠️⚠️ **ET DEUX SUITES À FAIBLE DISCRÉPANCE NE FONT PAS UNE RÉPARTITION DANS LE PLAN** (438). Semer
+des touffes d'herbe avec `x = frac(k·φ)` et `y = frac(k·φ²·7)` aligne les points sur des DROITES
+dès que le rapport des deux constantes est presque rationnel : la pelouse est sortie rayée
+verticalement d'un bout à l'autre du parc, pire que la tuile de 16 px qu'on remplaçait. On emploie
+une suite faite pour le plan (R2, les constantes du nombre plastique). Même famille que la distance
+de Manhattan prise pour l'euclidienne au 435 : *une bonne propriété en dimension 1 ne se transporte
+pas gratuitement en dimension 2.*
+
+⚠️⚠️ **UN SECOND INTÉRIEUR NE SE PAIE PAS EN ZONES, IL SE PAIE EN NIVEAUX** (438). L'hôtel de ville
+partage la carte du tribunal : deux niveaux de plus dans la même grille. Une zone de plus aurait
+demandé de retrouver les **vingt-cinq** endroits de `FermeGame.js` qui testent `zone === "court"`,
+et en oublier un ne lève rien. Deux niveaux ne coûtent rien : la zone reste la même, tous les tests
+restent vrais, et **deux joueurs dans deux bâtiments différents ne peuvent pas se confondre
+puisque leurs `y` diffèrent** — donc rien de plus à diffuser. C'est la règle du 426 (« le niveau se
+lit dans y ») portée d'un cran. ⚠️ Corollaire de banc : un contrôle écrit « tous les niveaux sont
+reliés au rez-de-chaussée » devient FAUX le jour où la carte porte deux bâtiments, et il pousse
+alors à percer un couloir entre eux pour se taire. **Ce qu'on veut savoir est : peut-on ressortir
+de là où l'on est monté ?**
+
+⚠️⚠️⚠️ **ET UN DÉFAUT MESURÉ, DOCUMENTÉ, PUIS LAISSÉ EN PLACE REVIENT TOUJOURS — PAR LA BOUCHE
+DE GUILLAUME** (437). Il a demandé « vérifie ton biais » sur les rives droites : le biais était
+trouvable **sans regarder une seule image**. Le 435 avait corrigé l'étang du parc et NOMMÉ le
+défaut du lac du sud dans le même commentaire (« son rivage est `sin(x)`, donc une FONCTION DE x,
+donc incapable de revenir sur elle-même — 75 colonnes plates sur 95 ») ; le 436 avait écrit dans
+son « ce que ça ne fait pas » que le lac gardait sa forme. **Deux zips ont mesuré le défaut, l'ont
+écrit, et sont passés à côté.** ⚠️ La section « ce que ça ne fait pas » n'absout pas : c'est une
+**dette datée**, et la première chose à faire en ouvrant un chantier est de relire celle du zip
+précédent. ⚠️ Corollaire de dessin, vrai partout : **une courbe écrite `f(x)` ne peut pas se
+replier** — pas de crique, pas de presqu'île, pas d'îlot. Une rive, un contour, une côte se
+décrivent par un CHAMP `s(x,y)` dont on prend l'isoligne, jamais par une hauteur par colonne.
+
+⚠️⚠️ **ET LE NATUREL NE S'OBTIENT PAS EN METTANT DU DÉSORDRE PARTOUT** (437). Le lac du sud avait
+quatre-vingt-seize cases de quai maçonné : le défaut n'était pas que le quai soit droit — **un
+ouvrage EST droit, c'est ce qui le fait lire comme un ouvrage** — mais qu'il n'y ait plus une
+seule berge naturelle en face. La pierre a été réduite à l'abord du ponton, le reste rendu au
+sentier et aux roseaux. **On oppose une ligne construite à une ligne qui ne l'est pas ; tordre
+l'ouvrage aurait donné deux lignes molles.** ⚠️ Même piège côté banc : `render-eau.mjs` a crié sur
+la terrasse du belvédère, à juste titre selon sa règle et à tort dans les faits. **Un banc qui
+appelle « défaut » quelque chose de voulu pousse à casser du juste pour faire taire une mesure**
+— on exclut la zone bâtie de la mesure, on ne tord pas la terrasse.
+
+⚠️⚠️ **ET UNE ALLÉE D'UNE CASE DE LARGE NE MONTRE QUE SES MARCHES — PAYÉ QUATRE FOIS DANS LE SEUL
+ZIP 437.** Tour d'étang, sentier de rive, sentier rabattu sur chaque encoche de crique, massifs
+fleuris tous alignés sur la même base : quatre fois la grille de 16 px **redessinée par ce qui
+était censé la casser**. C'est la famille de défauts la plus répétitive du projet (le 435 l'a
+payée trois fois sur l'eau seule). ⚠️ **Et la parade n'est JAMAIS de lisser le tracé** — ce serait
+revenir à la ligne droite qu'on corrige. On l'ÉPAISSIT (deux cases, la marche devient un
+élargissement), ou on l'ÉCARTE de tout l'accident d'un coup (minimum glissant sur sept colonnes),
+ou on décale la phase par case.
 
 ⚠️⚠️ **ET ENRICHIR UNE TEXTURE REND VISIBLES LES ERREURS DE GÉOMÉTRIE QU'ELLE CACHAIT** (436).
 En passant les marches du gris uni à la pierre, on a découvert que **22 des 52 cases d'escalier
@@ -387,18 +455,22 @@ jamais — c'est elle, et elle seule, qui protège du banc imaginaire (§14.6) :
 - ⚠️ **`verify-luge`, `verify-boot`, `preview-luge`, `preview.mjs`, `verify-perf` et
   `preview-fps` N'EXISTENT PAS** dans `tools/`.
 - ⚠️ **AUCUN BANC NE REGARDE LA FERME EN IMAGE** : `render-echelle`, `render-foire`,
-  `render-tribunal`, `render-oiseaux`, `render-taxi`, `render-rues`, `render-eau` et
-  `render-escaliers` ne dessinent que Valley Town et ses habitants. Un décor de la ferme mal
-  proportionné n'a, à ce jour, aucun endroit où se voir. ⚠️ **Et le SOL de la ferme non plus** :
-  `render-rues` (434) peint les rues de la ville, pas les chemins de la ferme, qui restent sur
-  la tuile unique de 16 px du zip 232 — **c'est désormais le sol le plus pauvre du projet**,
-  puisque la ville a fini de refaire les siens au 436.
-- ⚠️ **AUCUN BANC NE REGARDE UNE FENÊTRE COMPLÈTE DE VALLEY TOWN.** Les six bancs de rendu de
-  la ville peignent chacun SA surface (les rues, l'eau, la pierre) et approximent le reste à sa
-  teinte moyenne, parce que les bâtiments, les props et les personnages se dessinent dans la
-  closure. Il n'existe donc aucun endroit où l'on voie la ville comme le joueur la voit —
-  seulement des morceaux, chacun mesuré chez lui. C'est le prochain angle mort, et il est
-  connu.
+  `render-tribunal`, `render-oiseaux`, `render-taxi`, `render-rues`, `render-eau`,
+  `render-escaliers`, `render-arbres`, `render-parc` et `render-mairie` ne dessinent que Valley Town et ses
+  habitants. Un décor de la ferme mal proportionné n'a, à ce jour, aucun endroit où se voir.
+  ⚠️ **Et le SOL de la ferme non plus** : `render-rues` (434) peint les rues de la ville, pas les
+  chemins de la ferme, qui restent sur la tuile unique de 16 px du zip 232.
+  ⚠️⚠️ **AU 438 L'ÉCART EST DEVENU FRAPPANT, ET IL FAUT LE DIRE : la ferme garde les deux arbres
+  du zip 232** (trois `arc()` et quatre triangles) **et son herbe en tuile de 16 px**, pendant que
+  la ville a onze essences animées de 48×64 et un gazon au pavé de 64 px. C'est délibéré (décision du 424 : ne pas mêler deux changements
+  visuels dans la même livraison) et c'est **la dette la plus visible du projet** — un joueur qui
+  prend le train voit maintenant deux niveaux de finition.
+- ⚠️ **AUCUN BANC NE REGARDE UNE FENÊTRE COMPLÈTE DE VALLEY TOWN — mais `render-parc.mjs` (437)
+  en approche, et `render-mairie.mjs` (438) fait le même travail pour les intérieurs.** Il assemble tout ce qui vit hors de la closure (herbe, revêtement, massifs,
+  berge, eau, arbres) et ne refait que la mise en FILE des props : c'est la première planche où
+  l'on voit un morceau de ville à peu près comme le joueur le voit. **Ce qui manque encore est
+  ce qui reste dans la closure : les BÂTIMENTS et les personnages.** Les cinq autres bancs de
+  rendu de la ville, eux, approximent toujours le décor autour de leur surface.
 - ⚠️ **Le faux canvas de `lib-canvas.mjs` IGNORE `translate`/`rotate` et ne connaît pas
   `fillText`** : les trois poses d'une feuille de personnage s'y superposent, et un sprite qui
   dépend d'une transformation s'y juge faux. Ce n'est pas un bogue du jeu — mais il faut le
@@ -488,7 +560,8 @@ erreur** en choisissant mal.
   l'enseigne et la banderole « ouverture prochaine » sont posés ; il manque la décision.
 - **Valley Town** : quels PNJ HABITENT la ville à demeure (les résidents ne font qu'y passer) ?
   achète-t-on une parcelle, et à quel guichet ?
-  ⚠️ **Et la prairie : VINGT blocs de 28×28 de la carte sont de l'herbe nue** (mesuré au 428).
+  ⚠️ **Et la prairie : VINGT ET UN blocs de 28×28 de la carte sont de l'herbe nue** (compté par
+  `verify-vallee.mjs` à chaque exécution ; vingt au 428, le parc en a libéré un au 437).
   Ce n'est plus une impression, c'est un chiffre. On n'y a délibérément posé AUCUN endroit de
   vie : des résidents qui vont contempler un champ vide, c'est du remplissage. La question
   n'est donc pas « comment les meubler » mais **« qu'est-ce qu'on construit là »**.
@@ -562,6 +635,19 @@ erreur** en choisissant mal.
    Historique : 426 (insuffisant), 427 (profond : §7 → `public/candyluge/README.md`, §9 réduit
    à cinq pièges), 428 (§6 → `components/ferme/README.md`, 507 → 490), 431 (§4 scindé),
    **432 (§10 → `tools/README.md`, 524 → 483)**.
+   ⚠️⚠️⚠️ **LE 437 N'A PAS ÉLAGUÉ NON PLUS, ET L'ORDRE DU 433 EST DÉSORMAIS TROIS FOIS REPORTÉ.**
+   Il ajoute trois blocs en §4 (le défaut mesuré-puis-laissé ; le naturel qui s'obtient par
+   opposition ; l'allée d'une case qui ne montre que ses marches) et corrige deux entrées de la
+   liste des bancs absents ; tout le reste part dans les deux fichiers qui font autorité
+   (`components/ferme/README.md` gagne son §20, `tools/README.md` deux bancs).
+   ⚠️ **MAIS LA RELECTURE DE §13 A ENFIN ÉTÉ FAITE, ET SON RÉSULTAT EST INSTRUCTIF** : les deux
+   lignes que le 436 annonçait périmées **n'existaient déjà plus** — elles avaient été corrigées
+   sans que la note qui les dénonçait le soit. Autrement dit, *l'avertissement avait survécu à
+   son objet*, et il a fait perdre du temps à qui le lisait. Une seule vraie correction restait :
+   « vingt blocs de prairie nue », que `verify-vallee.mjs` compte à **vingt et un** — et c'est le
+   genre de chiffre qui doit renvoyer au banc qui le mesure plutôt que d'être recopié.
+   **Leçon, et elle vaut pour ce chapitre entier : une note qui dénonce une ligne périmée est
+   elle-même une ligne à vérifier.**
    ⚠️⚠️ **LE 436 N'A PAS ÉLAGUÉ NON PLUS, ET LA DETTE EST MAINTENANT NOMMÉE.** Il ajoute deux
    blocs en §4 (la closure qui fait vieillir ; enrichir une texture révèle la géométrie) et deux
    entrées à la liste des bancs absents ; tout le reste part dans les deux fichiers qui font
